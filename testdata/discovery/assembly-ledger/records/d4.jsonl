@@ -9,7 +9,7 @@
 {"module":"github.com/goatnetwork/go-ethereum","version":"v0.4.2","status":"pending"}
 {"module":"github.com/goccy/pythonwasm2go","version":"v0.4.0","status":"pending"}
 {"module":"github.com/ihciah/rust2go","version":"v0.0.0-20260917005040-4ba6b181fb38","status":"pending"}
-{"module":"github.com/klauspost/crc32","version":"v1.3.0","status":"pending"}
+{"module":"github.com/klauspost/crc32","version":"v1.3.0","status":"failed"}
 {"module":"github.com/lukechampine/advent","version":"v0.0.0-20251212160748-4fd4ab4bde0e","status":"pending"}
 {"module":"github.com/microsoft/TypeScript/tsc","version":"v0.0.0-20260922205721-fafb768713d8","status":"pending"}
 {"module":"github.com/mu-l/matrixone","version":"v0.1.0","status":"pending"}
