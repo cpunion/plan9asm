@@ -26,9 +26,11 @@ The original two-worker combined root run at `ae0eee75` closes failed at its
 The original owners are gone; strict independent readback rejects the timed-out
 owner instead of granting a complete pass. Retain that failure. The preceding
 root-part/parsed-grammar batch and its focused gates remain frozen at `eb8a8779`.
-The current successor is `codex/pr40-root-parts-runtime-integration-20261009`,
-which also includes the GNU label and VMOV lifecycle repairs below. Freeze it
-before its own complete gates; component passes do not transfer to this head.
+The frozen `8f095690` successor includes the GNU label and VMOV lifecycle
+repairs below. The new development successor is
+`codex/pr40-oracle-module-integration-20261009`, which also includes the complete
+strict assembler-oracle repair. Freeze it before its own complete gates;
+component passes do not transfer to this head.
 
 No local background index/discovery/external corpus. Inventory stays on the
 designated source-only scanner; external compilation/execution belongs on a
@@ -167,15 +169,24 @@ scope (13 roots/202 children each, no skip/failure/incomplete). The original
 checks remain intact. This lifecycle repair grants no new instruction or ABI
 permission, and does not replace the required Linux runtime counterpart.
 
-Unintegrated development branches retain two further counterexamples:
+The assembler-oracle component and SDK development retain these distinct scopes:
 
-- `codex/pr40-arm64-decoder-oracle-boundary-red-20261009` at `431452b9`
-  reproduces the decoder script's false source-rejection/object-acceptance
-  decisions: two actual-Go positive controls pass and twenty regressions fail.
-  The shared strict process/source oracle and retained per-case producer are
-  under development. Do not accept any nonzero exit as source rejection;
-  a stale, empty or non-object artifact is not assembly success. The complete
-  794-case gate must run again after the repair; no baseline change is implied.
+- The ordered assembler-oracle chain ending at `1fd11b98` is integrated into
+  the development successor. Original real-tool REDs remain preserved. Its
+  shared strict observer binds exit status, complete separate streams and
+  original statement positions; accepted cases require complete actual objects.
+  Whole identifiers follow Go's lexer rather than mnemonic-name membership.
+  Component ordinary/race each close 24 roots and 140 children, zero skips.
+  Independent readers reconstruct split output records and recheck every
+  instrumented owner; the root scope has no individual inner-owner records.
+  The original complete decoder script closes with 703 accepted objects and
+  91 concrete source refusals across all 794 cases, zero unknown failures;
+  all 800 recorded query/case owners are absent and the baseline is unchanged.
+  This is not combined-head, LLVM/runtime, SDK or external-module success.
+  Its ignored launcher lacks a total owner timer and reviewed cleanup guard;
+  the actual source/object result does not certify that harness contract.
+  The two current-SDK producer tests still need a real Go-1.20 RED and explicit
+  build-role split, keeping portable framework checks untagged and never Skip.
 - SDK literal-read models remain query-only. At `85d36df1`, the complete
   statement/listing grammar scope closes ordinary and race with 20 roots and
   346 children each; the actual Go-1.20 framework closes 18 roots/238 children.
