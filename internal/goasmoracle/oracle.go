@@ -155,6 +155,18 @@ func SourceDiagnosticLine(source, output string, focus int) bool {
 // physical-source/path/line/focus/canonical-PC checks as the strict default.
 // Its lexical inputs are diagnostic observations, not instruction authority.
 func SourceDiagnosticLineWithListing(source, output string, focus int, match func(original, listing []string) bool) bool {
+	return sourceDiagnosticLine(source, output, focus, match, false)
+}
+
+// WasmSourceDiagnosticLine explicitly selects Go's wasm frontend word role.
+// Unlike the other supported targets, wasm does not consume opcode suffixes
+// before deciding whether the first identifier is a pending label. This is a
+// source diagnostic observation, never instruction or execution authority.
+func WasmSourceDiagnosticLine(source, output string, focus int) bool {
+	return sourceDiagnosticLine(source, output, focus, nil, true)
+}
+
+func sourceDiagnosticLine(source, output string, focus int, match func(original, listing []string) bool, wasmWord bool) bool {
 	data, ok := ReadSource(source)
 	if !ok || focus < 0 {
 		return false
@@ -228,7 +240,7 @@ func SourceDiagnosticLineWithListing(source, output string, focus int, match fun
 		if column, detail, found := strings.Cut(message, ":"); found &&
 			(column == "" || strings.ContainsRune("+-0123456789", rune(column[0]))) {
 			if value, valid := positivePosition(column); valid && value <= len([]rune(lines[number-1])) && strings.TrimSpace(detail) != "" {
-				if known, bound := frontendDiagnostic(data, number, value, strings.TrimSpace(detail)); known {
+				if known, bound := frontendDiagnostic(data, number, value, strings.TrimSpace(detail), wasmWord); known {
 					if bound {
 						return true
 					}
@@ -238,7 +250,7 @@ func SourceDiagnosticLineWithListing(source, output string, focus int, match fun
 			}
 			continue
 		}
-		if known, bound := frontendDiagnostic(data, number, 0, message); known {
+		if known, bound := frontendDiagnostic(data, number, 0, message, wasmWord); known {
 			if bound {
 				return true
 			}

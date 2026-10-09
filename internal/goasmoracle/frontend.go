@@ -42,7 +42,10 @@ func tokenTexts(tokens []diagnosticToken) []string {
 }
 
 // A recognized frontend diagnostic never falls back to an arbitrary message.
-func frontendDiagnostic(data []byte, line, column int, message string) (known, bound bool) {
+func frontendDiagnostic(data []byte, line, column int, message string, wasmWord bool) (known, bound bool) {
+	if strings.HasPrefix(message, "unrecognized instruction") {
+		return true, unrecognizedInstructionAt(data, line, column, message, wasmWord)
+	}
 	const expected = "expected identifier, found "
 	if strings.HasPrefix(message, "expected identifier") {
 		tokens, ok := diagnosticTokens(strings.Split(string(data), "\n")[line-1])
@@ -83,6 +86,55 @@ func frontendDiagnostic(data []byte, line, column int, message string) (known, b
 		return true, duplicateLabelAt(data, line, name)
 	}
 	return false, false
+}
+
+// Replay only statement-start word/label roles. Go's actual exit and concrete
+// message establish rejection separately. Operand, comment and string tokens
+// cannot impersonate the frontend's original word. Whole-source lexing retains
+// multiline-comment identity and physical token positions.
+func unrecognizedInstructionAt(data []byte, line, column int, message string, wasmWord bool) bool {
+	all, ok := diagnosticTokens(string(data))
+	if !ok {
+		return false
+	}
+	var tokens []diagnosticToken
+	for _, token := range all {
+		if token.line == line {
+			tokens = append(tokens, token)
+		}
+	}
+	for len(tokens) > 0 {
+		if tokens[0].kind == ';' || tokens[0].kind == '\n' {
+			tokens = tokens[1:]
+			continue
+		}
+		word := tokens[0]
+		if word.kind != scanner.Ident {
+			return false // The Go frontend stops at an invalid initial token.
+		}
+		next := 1
+		if !wasmWord {
+			for next < len(tokens) && tokens[next].kind == '.' {
+				next++
+				if next == len(tokens) || tokens[next].kind != scanner.Ident {
+					return false
+				}
+				next++
+			}
+		}
+		if next < len(tokens) && tokens[next].kind == ':' {
+			tokens = tokens[next+1:]
+			continue
+		}
+		if message == "unrecognized instruction "+strconv.Quote(word.text) &&
+			(column == 0 || column == word.column) {
+			return true
+		}
+		for len(tokens) > 0 && tokens[0].kind != ';' && tokens[0].kind != '\n' {
+			tokens = tokens[1:]
+		}
+	}
+	return false
 }
 
 // Replay label attachment, not instruction validity. Actual exit 1 and Go's
