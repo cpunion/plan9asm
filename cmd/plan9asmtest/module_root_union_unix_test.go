@@ -31,6 +31,27 @@ func runRootSplitFixture(t *testing.T, binary, dir, out, inputs, profile string,
 	}
 }
 
+func rootSplitRetainFile(t *testing.T, path string) []byte {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := os.WriteFile(path, data, 0600); err != nil {
+			t.Error(err)
+		}
+	})
+	return data
+}
+
+func rootSplitRequireRejected(t *testing.T, expected moduleReport, inputs string) {
+	t.Helper()
+	if _, err := checkedModuleArtifacts(expected, inputs); err == nil {
+		t.Fatal("incomplete/foreign evidence became a complete module pass")
+	}
+}
+
 func TestModuleRootPartitionActualCompleteUnionAndCoverage(t *testing.T) {
 	moduleFixtureEnvironment(t)
 	binary := parallelFixtureCLI(t)
@@ -151,7 +172,197 @@ func TestModuleRootPartitionActualCompleteUnionAndCoverage(t *testing.T) {
 			t.Fatal("missing whole root part became pass")
 		}
 	})
+	packagePath := filepath.Join(partPath, "package-0000")
+	for _, suffix := range []string{"module.json", filepath.Join("package-0000", "partition.json"),
+		filepath.Join("package-0000", "shard-0000.stdout")} {
+		t.Run("trailing-EOF-"+suffix, func(t *testing.T) {
+			path := filepath.Join(partPath, suffix)
+			data := rootSplitRetainFile(t, path)
+			if err := os.WriteFile(path, append(data, []byte("\n{}\n")...), 0600); err != nil {
+				t.Fatal(err)
+			}
+			rootSplitRequireRejected(t, expected, inputs)
+		})
+	}
+	for _, name := range []string{"unowned-pass", "unowned-command", "unowned-terminal", "missing-child", "duplicate-index"} {
+		t.Run(name, func(t *testing.T) {
+			path := filepath.Join(packagePath, "partition.json")
+			rootSplitRetainFile(t, path)
+			var suite suiteReport
+			if err := ciReadJSON(path, &suite); err != nil {
+				t.Fatal(err)
+			}
+			switch name {
+			case "unowned-pass":
+				suite.Shards[1].Status = "passed"
+			case "unowned-command":
+				suite.Shards[1].Command = append([]string(nil), suite.Shards[0].Command...)
+			case "unowned-terminal":
+				suite.Shards[1].Outcomes = map[string]string{suite.Shards[1].Names[0]: "pass"}
+			case "missing-child":
+				removed := false
+				for child := range suite.Shards[0].Outcomes {
+					if strings.Contains(child, "/") {
+						delete(suite.Shards[0].Outcomes, child)
+						removed = true
+						break
+					}
+				}
+				if !removed {
+					t.Fatal("actual first-party shard had no child terminal")
+				}
+			case "duplicate-index":
+				suite.Shards[8].Index = 0
+			}
+			if err := ciWriteJSON(path, suite); err != nil {
+				t.Fatal(err)
+			}
+			rootSplitRequireRejected(t, expected, inputs)
+		})
+	}
+	t.Run("paired-list-and-plan-shrink", func(t *testing.T) {
+		// Both stored denominators change together; the independent aggregate
+		// list, not a producer's matching hash, must still reject the deletion.
+		path := filepath.Join(packagePath, "partition.json")
+		rootSplitRetainFile(t, path)
+		var suite suiteReport
+		if err := ciReadJSON(path, &suite); err != nil {
+			t.Fatal(err)
+		}
+		removed := suite.Names[0]
+		suite.Names = suite.Names[1:]
+		suite.InventorySHA = ciNamesSHA(suite.Names)
+		listingPath := filepath.Join(packagePath, "inventory.stdout")
+		listing := rootSplitRetainFile(t, listingPath)
+		listing = []byte(strings.Replace(string(listing), removed+"\n", "", 1))
+		if err := os.WriteFile(listingPath, listing, 0600); err != nil {
+			t.Fatal(err)
+		}
+		if err := ciWriteJSON(path, suite); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := checkedModuleArtifacts(expected, inputs); err == nil ||
+			!strings.Contains(err.Error(), "fresh complete root denominator") {
+			t.Fatalf("producer-paired deletion bypassed fresh denominator: %v", err)
+		}
+	})
+	for _, suffix := range []string{"stdout", "stderr", "cover"} {
+		t.Run("unowned-artifact-"+suffix, func(t *testing.T) {
+			path := filepath.Join(packagePath, "shard-0001."+suffix)
+			if err := os.WriteFile(path, []byte("foreign\n"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() {
+				if err := os.Remove(path); err != nil {
+					t.Error(err)
+				}
+			})
+			rootSplitRequireRejected(t, expected, inputs)
+		})
+	}
+	t.Run("extra-part", func(t *testing.T) {
+		path := filepath.Join(inputs, "owner-0000", "part-0008")
+		if err := os.Mkdir(path, 0700); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() {
+			if err := os.Remove(path); err != nil {
+				t.Error(err)
+			}
+		})
+		rootSplitRequireRejected(t, expected, inputs)
+	})
 	if _, err := checkedModuleArtifacts(expected, inputs); err != nil {
 		t.Fatalf("independent controls changed original evidence: %v", err)
+	}
+}
+
+func TestModuleRootPartitionActualSparseAndEmptyPackageRoles(t *testing.T) {
+	moduleFixtureEnvironment(t)
+	binary := parallelFixtureCLI(t)
+	for _, role := range []string{"sparse", "benchmark", "no-test"} {
+		t.Run(role, func(t *testing.T) {
+			dir := moduleFixture(t, false)
+			path := filepath.Join(dir, "value_test.go")
+			if role == "no-test" {
+				if err := os.Remove(path); err != nil {
+					t.Fatal(err)
+				}
+			} else if role == "benchmark" {
+				source := `package fixture
+import ("flag"; "fmt"; "os"; "testing")
+func TestMain(m *testing.M) {
+    flag.Parse()
+    if flag.Lookup("test.list").Value.String() == "" {
+        fmt.Println("ROOT_UNFILTERED_EXECUTION")
+    }
+    os.Exit(m.Run())
+}
+func BenchmarkNotRun(b *testing.B) { b.Fatal("benchmark executed") }
+`
+				if err := os.WriteFile(path, []byte(source), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			inputs := t.TempDir()
+			if err := os.Mkdir(filepath.Join(inputs, "owner-0000"), 0700); err != nil {
+				t.Fatal(err)
+			}
+			executed, empty, passedRoots := 0, 0, 0
+			for part := 0; part < 8; part++ {
+				out := filepath.Join(inputs, "owner-0000", fmt.Sprintf("part-%04d", part))
+				runRootSplitFixture(t, binary, dir, out, "", "", 0, part)
+				var suite suiteReport
+				if err := ciReadJSON(filepath.Join(out, "package-0000", "partition.json"), &suite); err != nil {
+					t.Fatal(err)
+				}
+				passedRoots += suite.RootPassed
+				if suite.Status == "completed_empty" {
+					empty++
+				}
+				for _, shard := range suite.Shards {
+					if len(shard.Command) == 0 {
+						continue
+					}
+					executed++
+					if role != "sparse" && (part != 0 || !suite.FullPackage || len(suite.Shards) != 1 ||
+						len(shard.Outcomes) != 0 || strings.Contains(strings.Join(shard.Command, " "), "-run=")) {
+						t.Fatalf("empty inventory gained filtered/foreign/named execution: %+v", suite)
+					}
+					if role == "benchmark" {
+						data, err := os.ReadFile(filepath.Join(out, "package-0000", "shard-0000.stdout"))
+						if err != nil || strings.Count(string(data), "ROOT_UNFILTERED_EXECUTION") != 1 {
+							t.Fatalf("part zero did not execute exactly one actual unfiltered TestMain: %v\n%s", err, data)
+						}
+					}
+				}
+				listing, err := os.ReadFile(filepath.Join(out, "package-0000", "inventory.stdout"))
+				if err != nil || strings.Contains(string(listing), "ROOT_UNFILTERED_EXECUTION") {
+					t.Fatalf("listing observation was mislabeled as execution: %v\n%s", err, listing)
+				}
+			}
+			if role == "sparse" {
+				if empty == 0 || executed > 4 || passedRoots != 4 {
+					t.Fatalf("sparse assignment fabricated execution: commands=%d empty=%d roots=%d", executed, empty, passedRoots)
+				}
+			} else if executed != 1 || empty != 7 || passedRoots != 0 {
+				t.Fatalf("empty package was executed repeatedly or invented test passes: commands=%d empty=%d roots=%d", executed, empty, passedRoots)
+			}
+			for owner := 1; owner < moduleOwners; owner++ {
+				out := filepath.Join(inputs, fmt.Sprintf("owner-%04d", owner))
+				runRootSplitFixture(t, binary, dir, out, "", "", owner, -1)
+			}
+			out := filepath.Join(t.TempDir(), "aggregate")
+			runRootSplitFixture(t, binary, dir, out, inputs, "", -1, -1)
+			var report moduleReport
+			if err := ciReadJSON(filepath.Join(out, "module.json"), &report); err != nil {
+				t.Fatal(err)
+			}
+			if report.Status != "passed" || report.RootInventory == nil ||
+				report.RootInventory.FullPackage != (role != "sparse") ||
+				report.RootInventory.NoTestFiles != (role == "no-test") {
+				t.Fatalf("fresh full-package role differs: %+v", report)
+			}
+		})
 	}
 }
