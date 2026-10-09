@@ -62,6 +62,9 @@ func installDiscoveryHeaderPlanning(ctx context.Context, plan *discoveryOrdinary
 				return err
 			}
 		}
+		if err := verifyDiscoveryOrdinaryDependencySnapshots(plan); err != nil {
+			return err
+		}
 		if role := plan.HeaderPlanning; role != nil && len(role.ImportedSources) != 0 {
 			hashes := make(map[string]string, len(role.ImportedSources))
 			for file, text := range role.ImportedSources {
@@ -237,6 +240,18 @@ func installDiscoveryHeaderPlanning(ctx context.Context, plan *discoveryOrdinary
 		})
 		copy := *plan
 		copy.HeaderPlanning, copy.headerPlanningInventory = role, inventory
+		// Source capture ran against a temporary selection plan. Successful
+		// header replay must carry its independently owned dependencies into
+		// the surviving plan, including query-only imports/assets. Keep the
+		// publication atomic and never share a mutable guard slice backing.
+		copy.ordinaryDependencyContext = ctx
+		copy.ordinaryDependencyGuards = append([]discoveryOrdinaryDependencyGuard(nil), plan.ordinaryDependencyGuards...)
+		for _, source := range queryPlan.ordinaryDependencyGuards {
+			source.Context = ctx
+			if err := retainDiscoveryOrdinaryDependencyGuard(&copy, source); err != nil {
+				return nil, err
+			}
+		}
 		header, err = replayDiscoveryPlanningHeader(&copy, request, assembly, tags)
 		if err != nil {
 			if gotoolprofile.NativeHeaderSourceDomainUnsupported(err) {
@@ -245,6 +260,7 @@ func installDiscoveryHeaderPlanning(ctx context.Context, plan *discoveryOrdinary
 			return nil, err
 		}
 		plan.HeaderPlanning, plan.headerPlanningInventory = role, inventory
+		plan.ordinaryDependencyContext, plan.ordinaryDependencyGuards = copy.ordinaryDependencyContext, copy.ordinaryDependencyGuards
 		return header, nil
 	}
 	return nil

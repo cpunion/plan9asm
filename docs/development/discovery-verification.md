@@ -696,6 +696,12 @@ the original inputs. Missing owners, incomplete closures and metadata v1 are
 rejected by current readers; historical reports require their frozen tools.
 Source-only evidence adds no translation PASS or object count.
 
+Successful planning-only queries retain those same private live guards in the
+surviving plan, even when an import or asset is absent from every final object
+scope. Cached header replay and later execution phases recheck these inputs;
+neither a temporary query-plan copy nor mutable report projections may replace
+the original dependency owner.
+
 Generated-header planning privately retains cost-only negative source preflights
 for one candidate operation, keyed by the complete requested profile, assembly
 file and custom tags. Retention is bounded to 4,096 entries and 16 MiB of keys
