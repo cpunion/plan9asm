@@ -1,224 +1,136 @@
 # Current work: PR 40 verification repairs
 
 Read [validation](validation.md), [instruction families](instructions.md), and
-[discovery verification](discovery-verification.md). Inspect actual HEAD/status,
-the frozen report inputs and terminal owners before continuing. This checkpoint
-is not a current-head completion certificate; preserve historical failed evidence.
+[discovery verification](discovery-verification.md). This checkpoint is not a
+completion certificate. Inspect actual source, report inputs and terminal owners;
+retain original failures and never transfer a component pass to a combined head.
 
 ## Contribution and execution boundaries
 
 Stage repairs in fork Draft [PR 4](https://github.com/cpunion/plan9asm/pull/4),
 targeting `codex/expand-ecosystem-corpus-20260913`. Push only to cpunion.
-Upstream [PR 40](https://github.com/xgo-dev/plan9asm/pull/40) stays Draft. Do not
-promote its upstream-connected fork head until current-head fork CI and review
+Upstream [PR 40](https://github.com/xgo-dev/plan9asm/pull/40) stays Draft.
+Do not update its upstream-connected head until current-head fork CI and review
 pass. Root alone publishes assembly-ledger updates.
 
 Published `c09eff1e`, run `37711752851`, finished failed naturally: four
 priority shards failed and two reached the deadline. Aggregate/completion checks
-failed; skipped downstream suites are not passes. Inspect the original reports
-with their frozen tools. Batch the successor before pushing.
+failed; skipped downstream suites are not passes. Batch repairs before pushing.
 
-Continue integration on `codex/pr40-next-batch-20261009`, based on `2c943968`.
-The preceding integration branch and component gates remain frozen
-in separate persistent worktrees. Do not add overlapping focused passes into a
-full-suite total or transfer their certificates to a later combined head.
+The frozen preceding integration head is `ab5302a1`, on
+`codex/pr40-next-batch-20261009`. Continue the new combined batch on
+`codex/pr40-carrier-literal-sleep-integration-20261009`. Preserve the preceding
+integration and component worktrees; do not mutate a checkout with live consumers.
 
-No local background index/discovery/external corpus. Inventory remains on its
+No local background index/discovery/external corpus. Inventory stays on the
 designated source-only scanner; external compilation/execution belongs on a
 separate disposable validator, never the inventory server. Local first-party
 fixtures and corpus-driver unit tests remain allowed.
 
-## Latest integrated batch
+## Independently closed preceding integration
 
-The preceding batch already contains the complete register/GP-SIMD, shift,
-broadcast, horizontal/dword-product, raw encoding, source-CFG/result and frame
-rule-class repairs. Preserve independent Go bytes, native numerical/fault/canary
-and LLVM optimization axes. Logical FP bytes never grant native backing.
+At the exact frozen `ab5302a1` head:
 
-The following components are now integrated through `2c943968`:
+- Complete ordinary root: all 32 partitions close, with 5,217 roots and
+  97,101 children passing, 39 explicitly named host-inapplicable root skips,
+  and zero failure/incomplete nodes. This diagnostic used four workers;
+  the original CI two-worker timing and required cross-runtime counterparts
+  remain separate gates.
+- Complete corpus-driver ordinary: all 32 partitions close, with 637 roots
+  and 2,309 children passing, zero failure/skip/incomplete. The successor uses
+  the original two workers, `-p=2`, GOMAXPROCS=2 and 45-minute budgets.
+  Preserve the preceding four-worker run's three real fixture timeouts.
+- All 16 other main-module packages: 552 roots and 3,351 children pass,
+  zero failure/skip/incomplete.
+- Nested CLI ordinary: plan9asm passes 23 roots/14 children;
+  plan9asmll passes 229 roots/1,721 children.
+- Official five-arch classification and the complete required ARM64 decoder
+  gate pass separately. Context forms and decoder-only Go rejection do not
+  establish complete LLVM object or runtime coverage.
 
-- Downloaded frames: exact source/ZIP/member/selection, independently captured
-  compiler/assembler objects, Windows auxiliary SEH closure, fixed-local binding
-  and CLI transport. The frozen `53797b7c` family closes 176 roots and 5,654
-  total nodes in ordinary/race scopes. Framework `8754ea0c` removes a Go-1.20
-  incompatible test-only Chdir call; current/historical focused scopes pass.
-- Numerical SB reads: live complete original declarations/options, exact
-  instruction/code/PC/ordered relocation joins, typed storage owners and
-  post-consumer revocation. The `1380e2fe` component ordinary/race each passes
-  404 nodes; later cancellation-cause and Linux C-label fixes are integrated.
-  A mutable extent is not initialization, an SB address, pointer or write grant.
-- Numerical fault resources: `ab6ab6c8` ordinary/race each passes 41 nodes.
-  Every generated fault child checks both core limits before protection/call.
-  The lock-free signal-safe handler accepts only synchronous faults inside the
-  exact protected region; unrelated faults, raised signals and normal returns
-  fail. This host diagnostic does not certify Linux/386 execution.
-- ARM64 same-carrier results: `e1fc500a` ordinary/race each passes 78 roots
-  and 1,219 children; full storage and Go-1.20 framework scopes also close.
-  Nine wider stores plus the exact-width control retain original typed value,
-  native tail bytes and canary through all three APIs at LLVM O0/O2. Five-OS
-  objects pass. The explicit private scalar consumer uses the actual same
-  outgoing backing, complete native entry/body effects and original bounded
-  lease. Its data capacity is Auto-16, excluding both frame-chain cells.
-- Mixed authorities: actual `cb988eb3` regressions demonstrate ARM64 dispatch
-  silently ignoring a numerical token, factory minting mixed options and a
-  private numerical seal omitting the foreign ARM64 role. `bac7ec91` fixes
-  the whole class; ordinary/race each passes 18 nodes. Entry, factory and
-  independent post/shape guards reject mixed roles before callbacks/output and
-  permanently revoke actual original owners, without nested source locks.
-- Explicit SDK source observation: `1284d26f` closes ordinary/race storage
-  scopes of 224 nodes and source/factory scopes of 161 nodes, with independent
-  SDK object-reader replays. The default owned role still rejects SDK sources.
-  Standard/module-free selection, physical installation, whole selected source,
-  import graph, object flags and original capture lifetime remain separately
-  sealed. No SDK numerical binding, generated-header or DATA permission passes.
+These scopes have independently read source/SDK/tool/binary identities,
+complete raw EOF, actual inventories and closed owners. Different module-owner
+worker plans are not one coherent full-module certificate. Complete current-head
+race, historical framework, strict SDK/benchmark and native CI remain pending.
 
-Additional integrated repairs distinguish the existing 64-MiB tool-read role
-from the unchanged 16-MiB source/export/ZIP limits. Original Windows objects
-and shared frame fixtures bind canonical physical directories; an explicit
-aliased-temporary-parent regression covers the whole source-join path.
-Production physical-input checks and all shared budgets remain unchanged.
+The head includes complete typed instruction/caller/frame repairs, downloaded
+original source/object joins, tool-fixture isolation, bounded per-validation CPP
+indexes, ARM64 syscall/virtual-NZCV/carry grammar and live SDK DATA/TEXT
+observation. Observation is not numerical-read or native-entry authority.
 
-Root independently reread the component source/tool/binary/raw inventories and
-terminal owners before integration. These are component certificates, not
-combined-head full-suite, whole SDK, external-library or CI completion.
+## Current component batch
 
-The successor `131df166` also integrates the complete SDK namespace and
-referenced-metadata repairs. Current-head ordinary storage and SDK/owned-reader
-scopes close 757 nodes; disjoint race scopes close the same 757 nodes, with
-independent frozen-input, stamped-binary, complete-EOF and owner replays. The
-earlier combined race selector really exhausted its six-minute budget and
-failed two nodes. Preserve that failure; the disjoint reruns keep the original
-budgets and do not establish full-suite or CI completion.
+The additional two-scalar ARM64 carrier component is integrated from
+`585c67ce`, `16d3a828`, `7a0e0247`. Its original component head independently
+closes 63 roots/947 children in both ordinary and race, actual Go-1.20 framework
+28 roots/650 children, and required Linux original-Go/three-API LLVM O0/O2
+runtime (760 checks per lane, one root/six children). All nine wider native-store
+result combinations and the exact-width control retain declared values, native
+bytes and canaries. The second parameter initializes only its four bytes,
+not the following gap. SDK, pointers, R2/R3 and Or32/And32 are not granted.
+Original producer-P/consumer-RED, reused-PID reader failure and Docker setup
+failure remain retained; new independently closed readers do not rewrite them.
 
-## Current batch and next work
+Two components are still awaiting complete handoff before integration:
 
-The successor now integrates fixture isolation, offline ASM DATA observation,
-typed CLI extraction and target-bound ARM64 syscall effects through `7ef9b796`.
-Root independently replayed each component before integration:
+- SDK readonly literal initializers: `df06fc81` plus test-lifecycle successor
+  `b574efa3`. Actual original/mapped/archive DATA, original Go objects and ELF
+  bytes are checked. Private integer/float/string and zero-tail bytes do not
+  grant pointers, mutation, DUPok, relocation or native-vector permissions.
+  Initializer observation alone is not SDK numerical consumption or CRC32 success.
+- ARM64 nanosleep private input: `170c90a8`, based on `ab5302a1`.
+  Exact Linux SVC0/R8=101/R1=NULL consumes a fully initialized private
+  16-byte timespec, without native-frame or result/NZCV permission.
+  Ordinary/race each close 81 roots/1,253 children and actual Go-1.20 closes
+  nine roots/279 children. Actual Linux kernel/LLVM execution and the complete
+  13-file runtime SDK counterpart remain independently pending.
 
-- Tool fixtures copy complete bounded dependency bytes instead of hard-linking
-  the host LLVM inode, bind the actual relocated loader and require cross
-  `ld.lld`. At `f329c0f2`, all other main-module packages close 552 roots and
-  3,351 children without failure, skip or incomplete execution.
-- Canonical typed opcode/instruction bindings, scoped aliases, assignment
-  ordinals and opcode-indexed maps replace lexical CLI guesses. Frozen
-  `69818c09` ordinary/race each closes 51 roots and 168 children; nested builds
-  and vet also pass. Mutation, foreign members and arbitrary strings do not
-  acquire opcode authority.
-- Offline DATA/GLOBL Phase A retains complete two-x86 forms, object-local
-  static/hashed/DUPok identity, ordered relocations and original object joins.
-  Indexed joins avoid repeated symbol scans. At `c60eceec`, disjoint ordinary
-  and race scopes each close 963 nodes. Its later live SDK/CPP observation
-  source is integrated through `4ee1cfc9`, but grants no initializer, numerical
-  read, mutable byte owner or native-vector permission. CRC32 is not a pass.
-- ARM64 syscall lowering, native effects and ordered four-bit CFG flow use one
-  explicit target-bound grammar. Linux normal returns preserve defined non-R0
-  GP/NZCV; Darwin secondary results and unavailable flag bits remain rejected.
-  Original `01635e4d` Linux Go/kernel axes pass 10 cases and LLVM's three APIs
-  at O0/O2 pass 60 numerical leaves. The isolated integration `7ef9b796` omits
-  unfinished sleep observation; ordinary/race each closes 185 roots and 1,568
-  children, and 24 auxiliary stages pass. No Linux or historical-Go certificate
-  is transferred to this changed combined head.
+## Required next gates and remaining rule classes
 
-All original failures, including host-inode changes, typed CLI extraction,
-kernel GP/NZCV mismatches and the missing test-helper integration dependency,
-remain frozen. Component certificates are not a combined-head full-suite or
-external-module pass. Saved-frame SVC, sleep, SDK and native permissions remain
-unchanged. Next:
-
-1. Repair remaining SDK reads, dynamic reflect frames, native entry/TLS/
-   continuations, result padding and complete body closure by rule class with
-   independent first-party regressions, not library-name instruction exceptions.
-2. Diagnose slow corpus aggregation using first-party fixtures. Preserve complete
-   report, missing-shard and consumer-proof checks; do not load the full scan
-   ledger or increase deadlines to conceal repeated work.
-3. Freeze the combined head, then run affected ordinary/race, exhaustive root,
-   all other main-module packages, both nested CLIs, Go-1.20 framework,
+1. Complete and independently read each component handoff; cherry-pick only
+   its ordered commits into the persistent successor. Freeze the combined head
+   before testing. Do not relabel earlier certificates.
+2. Run combined affected ordinary/race, exhaustive root with the original
+   two-worker plan, all other packages, both nested CLIs, Go-1.20 framework,
    official encoder/decoder, strict stdlib/benchmark and required native CI.
-   Full-root budgets stay 45m, race 60m; bounded disjoint partitions and one
-   collector are allowed. Dispose modules before Contexts and wait for all
-   owned processes before cleaning exact owned caches.
+   Root budgets stay 45 minutes ordinary and 60 minutes race. Bounded exhaustive
+   disjoint partitions retain full inventories and one collector.
+3. Repair SDK numerical reads, dynamic reflect frames, native entry/TLS/
+   continuations, full original result carriers and complete body effects
+   by typed rule class with independent regressions. Do not use library-name
+   instruction exceptions or infer authority from spelling, hashes or flags.
+4. Run the discovering samples and all 64 external shards on the designated
+   validators, then automatically publish matching complete schema-11 reports.
+   Push one verified batch to the fork and let failure-first CI finish.
 
-The independently closed strict five-target SDK baseline `2c943968`
-attempts all 184 files: 167 pass and 17 fail, without skip/N/A/unattempted files.
-Benchmark and standard target matrix therefore fail. Official five-arch
-classification and ARM64 decoder gates pass separately, not as 100% object or
-runtime coverage. Remaining classes include SDK reads, dynamic reflect frames,
-native entry/TLS/continuations, padding and complete SDK body closure.
-Never bless a new coverage fingerprint to hide them.
+The frozen strict five-target SDK baseline `2c943968` attempts all 184 files:
+167 pass and 17 fail, with zero skip/N/A/unattempted. Thus strict benchmark and
+stdlib matrix still fail. Successful isolated bodies do not certify full SDK
+files. Never bless a coverage fingerprint to hide failures or increase budgets
+to conceal repeated work.
 
-The preceding `7e00cab4` complete ordinary root run attempts all 32 partitions:
-5,196 roots and 96,174 children close, with two roots and three children failing
-at Windows aliases. Its 39 named skips remain skips. At `2c943968`, the repaired
-Windows/frame scope closes 132 nodes in each ordinary/race lane; historical
-Go-1.20 closes 73. These focused passes are not a complete root-suite pass.
-The frozen `2c943968` Linux numerical matrix closes three roots and 18 children,
-including the unchanged 386 fault/canary checks, with no skip/incomplete nodes.
-Native ARM64 QEMU-i386 avoids nested-emulation deadlines while Go 1.27.1,
-LLVM 22.1.8 and budgets stay pinned. This is not physical native x86 execution
-or the whole cross-runtime matrix.
-
-The later combined `6451d2d1` ordinary root owner reaches its unchanged 45m
-deadline: 4,785 roots pass, four fail, 38 explicitly skip and 393 remain
-incomplete. Preserve that failed run; it is not complete coverage. Its three
-stale ARM64 flag fixtures and the DIT virtual-flag/physical-scratch bank failure
-are repaired through `fd552af1`: virtual NZCV effects retain ordered flag flow
-but cannot masquerade as physical GP scratch. The frozen component closes 226
-roots and 1,726 children in ordinary and exact disjoint race scopes. Root's
-fresh independent readers also close the actual Go-1.20 scope and auxiliary
-gates. Missing flags and copied physical scratch remain rejected.
-
-The complete ADC/SBC/NGC family is integrated through `f60007c6`. Only a typed
-single-form probe introduces its real CMP carry producer; sequences and full
-source still need reaching original flags. Independent replays close current
-ordinary/race scopes of 45 roots and 938 children and actual Go-1.20's nine
-roots and 343 children. Complete Go-1.20–1.27 Optab schemas are checked, not
-guessed from row length. Historical classifier comparison proves the baseline
-changes are only two AL forms per SDK; the decoder adds 15 unconditional AL
-forms. The original two scripts pass and execute 794 required decoder probes,
-703 accepted by native Go. Context and decoder-only rejection are not runtime,
-strict SDK, external-library, combined-head or CI passes.
-
-Scanner repairs `ba4b1212`/`2a402151` retain the original 4-MiB JSON event-line
-limit while reducing the initial buffer to 4 KiB. Portable CPP validation then
-reproduces repeated per-unit lexing at `886e12a3`. The `3268951e` repair keeps
-fresh full-original lexer indexes local to each validation call, never mutating
-the caller or caching a passed receipt. Fourteen affected roots and 13 children
-close in both ordinary/race scopes without skip or incomplete execution. The
-16-unit fixture falls from 1,527,097 to 410,526 allocations per complete
-validation. These are component regressions, not peak-memory, aggregate-CI,
-external-module or later combined-head completion certificates.
-
-The `1abd1f60` live SDK component closes package-qualified disjoint unions of
-391 roots and 2,980 children in each ordinary/race lane, plus actual vet/build.
-Root independently rereads all 13 scopes, reruns 116 complete original/mapped/
-archive DATA/TEXT SDK oracle checks per lane and all 41 storage oracle checks
-per lane. Private CPP positions retain whole TEXT parity; caller callbacks run
-outside operation locks, the original deadline is sealed and changes revoke
-the source permanently. Historical reentry, deadline, harness and vet failures
-remain preserved. This completes observation only, not the unresolved SDK
-numerical/native classes or combined-head full-suite/CI gates.
+Dispose LLVM modules before Contexts. Serialize heavy Docker/full-suite gates
+on a resource-constrained host. Preserve selected lazy Go tool binaries inside
+their recorded cache paths for readback; do not delete an entire cache merely
+because its test process has closed. Clean only exact owned, unreferenced data
+after all consumers and independent readers have closed.
 
 ## Inventory and ledger
 
-The committed assembly ledger still has three historical Snappy passes and
-6,064 pending, no complete shard, complete=false and verified=false. Only the
-automatic publisher may promote complete schema-11 reports with matching
-frozen source, scan, tool, file/target/profile and consumer proofs. First-party
-instruction tests, observation-only sources and runtime examples never
-hand-upgrade a module.
+Committed assembly ledger: three historical Snappy passes, 6,064 pending,
+zero complete shards; complete=false and verified=false. Only the automatic
+publisher can promote complete schema-11 reports with matching frozen source,
+scan, tool, file/target/profile and consumer proofs. First-party instruction,
+observation or runtime tests never hand-upgrade a module.
 
-Committed inventory retains 215 continuous ranges, the 2025-10-01 cutoff and
-head 2026-09-22T22:43:08Z. The cutoff is reached; history_complete instead means
-the entire official index to its epoch. The bounded standalone two-worker
-incremental service has newer unsynchronized records. Inspect its actual owner,
-manifest and journal; do not hot-replace its binary, duplicate the writer or
-merge a live unvalidated snapshot. Streaming inventory repair is separate from
-the running service. cgo records stay outside this repository.
-Sharded status, batch lookup and publication stream records rather than
-retaining the complete ledger payload; legacy monolithic imports remain explicit.
+Committed inventory retains 215 continuous ranges, cutoff 2025-10-01 and head
+2026-09-22T22:43:08Z. The cutoff is reached; history_complete instead means the
+entire index to its epoch. Newer remote records are not synchronized. Inspect
+actual owner, manifest and journal before importing; do not duplicate the writer
+or hot-replace its binary. cgo records stay outside this repository.
+Sharded status, batch lookup and publication stream records instead of retaining
+the whole ledger payload. Legacy monolithic imports remain explicit.
 
-Recheck discovering samples and all 64 shards after systematic repairs.
-Partial reports, Context and provisional exclusions are not passes. Keep scan
-and coverage funnel tables in the PR body, not this checkpoint. Do not claim
-CI/review/coverage completion until all required current-head gates close.
+Keep scan/coverage funnel tables in the PR body, derived from validated reports.
+Partial reports, Context and provisional exclusions are not passes. CI/review/
+coverage completion requires every required current-head gate to close.
