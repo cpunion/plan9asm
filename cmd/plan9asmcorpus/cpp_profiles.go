@@ -22,6 +22,13 @@ func planDiscoveryCPPFeaturePair(plan *discoveryOrdinarySelectionPlan, ctx build
 }
 
 func planDiscoveryCPPFeaturePairWithMode(plan *discoveryOrdinarySelectionPlan, ctx build.Context, baseline *discoveryTargetFeatures, asmFile, goFile string, initial discoveryFeatureProfileRequest, mode *discoveryInstrumentationSelectionModel, contexts ...context.Context) ([]discoveryFeatureProfileRequest, error) {
+	return planDiscoveryCPPFeaturePairWithIndex(plan, ctx, baseline, asmFile, goFile, initial,
+		mode, &discoveryCPPPlanningSourceIndex{}, contexts...)
+}
+
+func planDiscoveryCPPFeaturePairWithIndex(plan *discoveryOrdinarySelectionPlan, ctx build.Context, baseline *discoveryTargetFeatures,
+	asmFile, goFile string, initial discoveryFeatureProfileRequest, mode *discoveryInstrumentationSelectionModel,
+	sourceIndex *discoveryCPPPlanningSourceIndex, contexts ...context.Context) ([]discoveryFeatureProfileRequest, error) {
 	if err := checkDiscoveryProfilePlanningContext(contexts); err != nil {
 		return nil, err
 	}
@@ -178,7 +185,7 @@ func planDiscoveryCPPFeaturePairWithMode(plan *discoveryOrdinarySelectionPlan, c
 	}
 	conditionFree := false
 	if mode == nil && fullReplay && !deferredPresence && len(covered) == 0 {
-		conditionFree, err = discoveryCPPConditionFree(plan, *unit, observedHeader, contexts...)
+		conditionFree, err = discoveryCPPConditionFreeWithIndex(plan, *unit, observedHeader, sourceIndex, contexts...)
 		if err != nil {
 			return nil, err
 		}
@@ -207,7 +214,7 @@ func planDiscoveryCPPFeaturePairWithMode(plan *discoveryOrdinarySelectionPlan, c
 			// MatchFile above still models every original Go pair/CPU proposal.
 			// Recheck the full graph after caller-controlled OpenFile callbacks,
 			// even for a nonmatching pair. An earlier empty set is not a proof.
-			conditionFree, err = discoveryCPPConditionFree(plan, *unit, observedHeader, contexts...)
+			conditionFree, err = discoveryCPPConditionFreeWithIndex(plan, *unit, observedHeader, sourceIndex, contexts...)
 			if err != nil {
 				return nil, err
 			}

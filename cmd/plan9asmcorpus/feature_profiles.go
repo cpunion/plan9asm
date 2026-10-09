@@ -130,6 +130,7 @@ func planDiscoveryFeatureProfiles(plan *discoveryOrdinarySelectionPlan, asmFiles
 		return nil
 	}
 	seenTargets := make(map[string]bool)
+	cppSources := &discoveryCPPPlanningSourceIndex{}
 	for _, baseline := range baselines {
 		if err := checkDiscoveryProfilePlanningContext(contexts); err != nil {
 			return nil, err
@@ -193,7 +194,8 @@ func planDiscoveryFeatureProfiles(plan *discoveryOrdinarySelectionPlan, asmFiles
 					if err := add(request); err != nil {
 						return nil, err
 					}
-					cppRequests, err := planDiscoveryCPPFeaturePair(plan, ctx, baseline, asmFile, goFile, request, contexts...)
+					cppRequests, err := planDiscoveryCPPFeaturePairWithIndex(plan, ctx, baseline, asmFile, goFile,
+						request, nil, cppSources, contexts...)
 					if err != nil {
 						return nil, fmt.Errorf("CPP profiles for %s + %s on %s: %w", asmFile, goFile, baseline.Target, err)
 					}

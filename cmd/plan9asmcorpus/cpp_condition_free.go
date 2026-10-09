@@ -14,13 +14,19 @@ import (
 // baseline header query and all Go source-pair/profile consumers remain required.
 func discoveryCPPConditionFree(plan *discoveryOrdinarySelectionPlan, unit discoveryCPPUnit,
 	header *gotoolprofile.GeneratedHeaderProof, contexts ...context.Context) (bool, error) {
+	return discoveryCPPConditionFreeWithIndex(plan, unit, header, nil, contexts...)
+}
+
+func discoveryCPPConditionFreeWithIndex(plan *discoveryOrdinarySelectionPlan, unit discoveryCPPUnit,
+	header *gotoolprofile.GeneratedHeaderProof, sourceIndex *discoveryCPPPlanningSourceIndex,
+	contexts ...context.Context) (bool, error) {
 	if err := checkDiscoveryProfilePlanningContext(contexts); err != nil {
 		return false, err
 	}
 	if plan == nil || plan.CPPInputs == nil {
 		return false, fmt.Errorf("condition-free query omitted complete CPP inputs")
 	}
-	if err := validateDiscoveryReplayCPPInputs(plan.CPPInputs, plan, []string{unit.File}); err != nil {
+	if err := validateDiscoveryReplayCPPInputsWithIndex(plan.CPPInputs, plan, []string{unit.File}, sourceIndex); err != nil {
 		return false, err
 	}
 	used := make(map[string]bool)

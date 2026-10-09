@@ -239,15 +239,21 @@ func discoveryReplayCPPUnitRegistration(inputs *discoveryCPPInputs, unit discove
 }
 
 func validateDiscoveryReplayCPPInputs(inputs *discoveryCPPInputs, plan *discoveryOrdinarySelectionPlan, files []string) error {
+	return validateDiscoveryReplayCPPInputsWithIndex(inputs, plan, files, nil)
+}
+
+func validateDiscoveryReplayCPPInputsWithIndex(inputs *discoveryCPPInputs, plan *discoveryOrdinarySelectionPlan,
+	files []string, sourceIndex *discoveryCPPPlanningSourceIndex) error {
 	if plan == nil || inputs.Module != plan.Module || inputs.Version != plan.Version ||
 		inputs.ModuleSum != plan.ModuleSum || inputs.ZipSHA256 != plan.ZipSHA256 ||
 		len(inputs.Sources) == 0 || len(inputs.Sources) > 512 {
 		return fmt.Errorf("full CPP graph differs from original archive scope")
 	}
 	// JSON deliberately has no private lexer indexes. Reuse only the indexes
-	// derived below from this call's complete original-source parses. Keep
-	// them query-local: this is not a validation receipt or a shared cache,
-	// and every public source/edge check still runs on every invocation.
+	// derived below from complete original-source parses. The planner may own
+	// a same-call pure parser index; ordinary validators receive nil and parse
+	// from scratch. Neither path reuses validation receipts: every public
+	// source/edge check still runs on every invocation.
 	indexed := *inputs
 	indexed.Sources = make(map[string]discoveryCPPSource, len(inputs.Sources))
 	total := 0
@@ -257,11 +263,11 @@ func validateDiscoveryReplayCPPInputs(inputs *discoveryCPPInputs, plan *discover
 			return fmt.Errorf("full CPP source is missing or unbounded: %s", id)
 		}
 		total += len(*source.Original)
-		actual, err := discoveryReplayCPPSource(file, []byte(*source.Original))
-		if err != nil || !equalDiscoveryCPPSource(source, actual) {
+		resources, err := sourceIndex.validate(file, source)
+		if err != nil {
 			return fmt.Errorf("CPP raw inventory/full SHA differs from original replay: %s: %v", id, err)
 		}
-		source.resourceIndex = actual.resourceIndex
+		source.resourceIndex = resources
 		indexed.Sources[id] = source
 	}
 	// The same structural origin/edge checks retain physical source positions.
