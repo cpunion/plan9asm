@@ -64,7 +64,7 @@ class ARM64Plan9OracleTests(unittest.TestCase):
                 json.dump(cls.records, stream, indent=2, ensure_ascii=False)
                 stream.write("\n")
 
-    def probe(self, program=None, instruction="MOVD R0,R1"):
+    def probe(self, program=None, instruction="MOVD R0,R1", first_go=False):
         with tempfile.TemporaryDirectory(prefix="arm64-decoder-oracle-") as temporary:
             root = pathlib.Path(temporary)
             source, obj = root / "probe.s", root / "probe.o"
@@ -73,7 +73,7 @@ class ARM64Plan9OracleTests(unittest.TestCase):
             def run(argv, **kwargs):
                 requested.append(kwargs)
                 command = [self.go, *argv[1:]]
-                if program is not None:
+                if program is not None and not (first_go and len(requested) == 1):
                     command = [sys.executable, "-c", program, str(source), str(obj)]
                 environment = kwargs["env"].copy()
                 environment["GOTOOLCHAIN"] = "local"
@@ -93,9 +93,16 @@ class ARM64Plan9OracleTests(unittest.TestCase):
                 finally:
                     with contextlib.suppress(ProcessLookupError):
                         os.killpg(pgid, signal.SIGKILL)
+                try:
+                    os.killpg(pgid, 0)
+                    group_absent = False
+                except ProcessLookupError:
+                    group_absent = True
+                self.assertTrue(group_absent, "actual first-party child group not closed")
                 self.records.append({
                     "test": self.id(), "kind": "actual-stock-Go" if program is None else "controlled-infrastructure-tool",
                     "argv": command, "pid": child.pid, "pgid": pgid,
+                    "child_waited": True, "group_absent": group_absent,
                     "exit": child.returncode, "duration_seconds": time.monotonic() - start,
                     "source_sha256": hashlib.sha256(source.read_bytes()).hexdigest(),
                     "source": source.read_text(encoding="utf-8"),
@@ -110,6 +117,8 @@ class ARM64Plan9OracleTests(unittest.TestCase):
                 "subprocess": types.SimpleNamespace(run=run, DEVNULL=subprocess.DEVNULL),
             }
             namespace["env"].update({"GOOS": "linux", "GOARCH": "arm64"})
+            if first_go:
+                namespace["selected"].append("00000000 | " + instruction)
             exec(self.loop, namespace)
             object_info = None
             if obj.exists():
@@ -156,6 +165,24 @@ class ARM64Plan9OracleTests(unittest.TestCase):
     def test_wrong_instruction_listing(self):
         self.assert_infrastructure_failure("import sys; sys.stderr.write('asm: bad constant for MOVK\\n00000 ('+sys.argv[1]+':3) MOVK $65537,R0\\n'); raise SystemExit(1)")
 
+    def test_foreign_prefix_contains_exact_fixture_path(self):
+        self.assert_infrastructure_failure("import sys; sys.stderr.write('foreign'+sys.argv[1]+':3: bad operand\\n'); raise SystemExit(1)")
+
+    def test_source_line_out_of_range(self):
+        self.assert_infrastructure_failure("import sys; sys.stderr.write(sys.argv[1]+':9999: bad operand\\n'); raise SystemExit(1)")
+
+    def test_source_blank_line(self):
+        self.assert_infrastructure_failure("import sys; sys.stderr.write(sys.argv[1]+':5: bad operand\\n'); raise SystemExit(1)")
+
+    def test_source_header_not_probe_statement(self):
+        self.assert_infrastructure_failure("import sys; sys.stderr.write(sys.argv[1]+':1: bad operand\\n'); raise SystemExit(1)")
+
+    def test_noncanonical_listing_pc(self):
+        self.assert_infrastructure_failure("import sys; sys.stderr.write('asm: illegal combination: not-a-pc ('+sys.argv[1]+':3) MOVD R0,R1\\n'); raise SystemExit(1)")
+
+    def test_zero_column(self):
+        self.assert_infrastructure_failure("import sys; sys.stderr.write(sys.argv[1]+':3:0: bad operand\\n'); raise SystemExit(1)")
+
     def test_success_missing_object(self):
         self.assert_infrastructure_failure("raise SystemExit(0)")
 
@@ -164,6 +191,12 @@ class ARM64Plan9OracleTests(unittest.TestCase):
 
     def test_success_nonregular_object(self):
         self.assert_infrastructure_failure("import pathlib,sys; pathlib.Path(sys.argv[2]).mkdir()")
+
+    def test_stale_object_from_previous_case(self):
+        accepted, rejected, _, obj = self.probe("raise SystemExit(0)", first_go=True)
+        self.assertTrue(obj and obj["regular"] and obj["size"] > 0)
+        self.assertEqual((len(accepted), len(rejected)), (1, 0),
+                         "second case borrowed the first actual Go object's success")
 
     def test_per_probe_deadline(self):
         _, _, calls, _ = self.probe()
