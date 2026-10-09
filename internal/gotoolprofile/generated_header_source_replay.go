@@ -235,10 +235,16 @@ func parseNativeHeaderSources(packagePath, target, language string, sources map[
 			nodes++
 			return nodes <= 100000
 		})
+		functionDocs := make(map[*ast.CommentGroup]bool)
+		for _, declaration := range file.Decls {
+			if function, ok := declaration.(*ast.FuncDecl); ok && function.Doc != nil {
+				functionDocs[function.Doc] = true
+			}
+		}
 		for _, group := range file.Comments {
 			for _, comment := range group.List {
 				if strings.HasPrefix(comment.Text, "//go:") && !strings.HasPrefix(comment.Text, "//go:build ") {
-					closed = false
+					closed = closed && functionDocs[group] && nativeHeaderOrdinaryFunctionDirective(comment.Text)
 				}
 			}
 		}
@@ -254,6 +260,21 @@ func parseNativeHeaderSources(packagePath, target, language string, sources map[
 		return nil, nil, 0, err
 	}
 	return set, files, word, nil
+}
+
+// This finite ordinary function-code domain cannot add constants, named types
+// or native layout fields. Require the original function attachment, not just
+// a matching comment anywhere in a file. Compiler-special, linkage, generated
+// data and unknown directives retain their independent unclosed source roles.
+// A property query does not confer these directives' code or ABI semantics;
+// actual compiler/header and final object consumers still run on original bytes.
+func nativeHeaderOrdinaryFunctionDirective(text string) bool {
+	switch strings.TrimSpace(text) {
+	case "//go:noinline", "//go:nosplit", "//go:noescape", "//go:norace", "//go:nocheckptr", "//go:uintptrescapes":
+		return true
+	default:
+		return false
+	}
 }
 
 // This native model deliberately does not use the framework's SizesFor: old

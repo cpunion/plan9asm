@@ -68,6 +68,26 @@ func Probe()
 	})
 }
 
+func TestCPPOrdinaryFunctionDirectivesGeneratedHeaderFullDefaultOriginalObjects(t *testing.T) {
+	testCPPActiveGeneratedHeaderFullDefaultOriginalObjects(t, `package header
+import dep "example.invalid/active-header/dependency"
+type Record struct { Value uint64 }
+const Value = 7
+var UnusedByHeader = dep.New("initializer")
+//go:noinline
+//go:nosplit
+func Holder() uintptr { return 7 }
+//go:norace
+//go:nocheckptr
+//go:uintptrescapes
+func Identity(value uintptr) uintptr { return value }
+//go:noescape
+func Probe()
+`, map[string]string{
+		"dependency/value.go": "package dependency\nfunc New(value string) string { return value }\n",
+	})
+}
+
 func testCPPActiveGeneratedHeaderFullDefaultOriginalObjects(t *testing.T, source string, extras ...map[string]string) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)

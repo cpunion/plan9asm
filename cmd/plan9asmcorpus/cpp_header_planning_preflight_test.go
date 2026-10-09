@@ -28,7 +28,7 @@ func TestCPPHeaderPlanningSourcePreflightRetainsOriginalBindings(t *testing.T) {
 	profile := discoveryFeatureProfile{Observed: fixture.Observed["linux/amd64"],
 		Request: discoveryFeatureProfileRequest{Target: "linux/amd64", Baseline: true}}
 	profile.ID = discoveryFeatureProfileID(profile.Observed)
-	for _, axis := range []string{"closed", "builtin unsafe", "irrelevant imports", "imports", "generic", "directive", "source", "archive", "selection", "language", "profile"} {
+	for _, axis := range []string{"closed", "builtin unsafe", "irrelevant imports", "imports", "generic", "directive", "linkage directive", "source", "archive", "selection", "language", "profile"} {
 		t.Run(axis, func(t *testing.T) {
 			source := "package header\nconst Value = 7\nfunc probe() uint64\n"
 			switch axis {
@@ -42,6 +42,8 @@ func TestCPPHeaderPlanningSourcePreflightRetainsOriginalBindings(t *testing.T) {
 				source += "type Record[T any] struct { Value T }\n"
 			case "directive":
 				source += "//go:noinline\nfunc unused() {}\n"
+			case "linkage directive":
+				source += "//go:linkname unused other.unused\nfunc unused() {}\n"
 			}
 			candidate := discoveryCandidate{Module: "example.invalid/header", Version: "v1.0.0", AsmFiles: []string{"probe.s"}}
 			download := fixtureProfileModuleDownload(t, candidate, map[string]string{
@@ -84,11 +86,11 @@ func TestCPPHeaderPlanningSourcePreflightRetainsOriginalBindings(t *testing.T) {
 			}
 			err = preflightDiscoveryHeaderQuery(plan, selected, download, "probe.s", nil)
 			unsupported := gotoolprofile.NativeHeaderSourceDomainUnsupported(err)
-			if axis == "closed" || axis == "builtin unsafe" || axis == "irrelevant imports" || axis == "generic" {
+			if axis == "closed" || axis == "builtin unsafe" || axis == "irrelevant imports" || axis == "generic" || axis == "directive" {
 				if err != nil || plan.HeaderPlanning != nil || plan.headerPlanningQueryStarts != 0 {
 					t.Fatalf("unmodified preflight must not create query authority: %v", err)
 				}
-			} else if axis == "imports" || axis == "directive" {
+			} else if axis == "imports" || axis == "linkage directive" {
 				if !unsupported || plan.HeaderPlanning != nil || plan.headerPlanningQueryStarts != 0 {
 					t.Fatalf("exact unclosed domain must retain all candidates without query authority: %v", err)
 				}
