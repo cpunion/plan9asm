@@ -35,15 +35,17 @@ func x86CallerScalarLaneStep(ins *Instr, f x86ScalarLaneForm, state *x86SourceSt
 func x86ResultScalarLaneStep(ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string) (bool, bool) {
 	f, known, err := x86ScalarLaneProperties(ins, arch)
 	if !known {
-		// INSERTPS and EXTRACTPS use their existing, independently validated
-		// imm8 source/target/zero selectors; wider block transfers stay outside
-		// this low-X observer.
+		// Scalar and block transfers share the validated imm8/source/target
+		// grammar, but select bytes from their distinct physical widths.
 		ps, recognized, failure := x86InsertExtractProperties(ins, arch)
-		if !recognized || !ps.spec.scalar {
+		if !recognized {
 			return false, false
 		}
 		if failure != nil {
 			return false, true
+		}
+		if !ps.spec.scalar {
+			return x86ResultBlockTransfer(ins, ps, state, owned, resultOffset, arch), true
 		}
 		return x86ResultScalarPSLaneStep(ins, ps, state, owned, resultOffset, arch), true
 	}
