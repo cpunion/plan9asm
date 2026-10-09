@@ -902,8 +902,11 @@ deletion errors for at most two seconds; persistent errors still fail and keep
 the previous complete report. The required Windows job runs these concurrent
 publication and external-reader regressions before the full suite.
 
-Long shard jobs publish a partial report before the first candidate and every
-eight completed candidates. A runner cancellation can therefore leave
+Long shard jobs publish a partial report before the first candidate, every
+eight completed candidates, and after any candidate finishes at least one
+minute after the previous checkpoint. This records a slow completed candidate
+before the next candidate starts; it does not credit an in-progress candidate.
+A runner cancellation can therefore leave
 auditable passed/failed/N/A results instead of losing the entire shard.
 Partial reports mark all unreported candidates and the shard itself pending;
 they never satisfy the complete-coverage gate. Publication remains atomic,

@@ -1849,8 +1849,19 @@ func runDiscoveryCorpus(cfg discoveryCorpusConfig) (runErr error) {
 			return err
 		}
 	}
+	checkpointNow := cfg.checkpointNow
+	if checkpointNow == nil {
+		checkpointNow = time.Now
+	}
+	lastCheckpoint := checkpointNow()
 	checkpoint := func(completed int) error {
-		if !report.Partial || completed%8 != 0 || completed >= len(selected) || cfg.ReportPath == "" {
+		if !report.Partial || completed >= len(selected) || cfg.ReportPath == "" {
+			return nil
+		}
+		// Amortize provenance scans for quick candidates, but publish the
+		// completed prefix before another long candidate can hide it for
+		// hours. This never reports the still-running candidate as passed.
+		if completed%8 != 0 && checkpointNow().Sub(lastCheckpoint) < time.Minute {
 			return nil
 		}
 		// Never publish a pass after a source, ledger or tool mutation.
@@ -1864,6 +1875,7 @@ func runDiscoveryCorpus(cfg discoveryCorpusConfig) (runErr error) {
 		if report.Provenance.Invalidated != "" {
 			return fmt.Errorf("discovery provenance invalidated during checkpoint: %s (capture error: %v)", report.Provenance.Invalidated, provenanceErr)
 		}
+		lastCheckpoint = checkpointNow()
 		return nil
 	}
 	for i, candidate := range selected {
