@@ -126,7 +126,7 @@ func installDiscoveryHeaderPlanning(ctx context.Context, plan *discoveryOrdinary
 			// complete original source/ZIP bytes on every negative reuse; it
 			// cannot authorize a query or register an executed profile.
 			profile := discoveryFeatureProfile{ID: discoveryFeatureProfileID(observed), Request: request, Observed: observed}
-			queryPlan, err := discoveryHeaderQuerySourcePlan(plan, profile)
+			queryPlan, err := discoveryHeaderQuerySourcePlan(plan, profile, assembly, tags)
 			if err != nil {
 				return nil, err
 			}
@@ -145,7 +145,7 @@ func installDiscoveryHeaderPlanning(ctx context.Context, plan *discoveryOrdinary
 			return nil, err
 		}
 		profile := discoveryFeatureProfile{ID: discoveryFeatureProfileID(observed), Request: request, Observed: observed}
-		queryPlan, err := discoveryHeaderQuerySourcePlan(plan, profile)
+		queryPlan, err := discoveryHeaderQuerySourcePlan(plan, profile, assembly, tags)
 		if err != nil {
 			return nil, err
 		}

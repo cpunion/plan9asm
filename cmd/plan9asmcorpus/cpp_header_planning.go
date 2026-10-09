@@ -1,9 +1,13 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"go/build/constraint"
+	"io"
 	"path"
+	"path/filepath"
 	"reflect"
 	"strings"
 
@@ -106,7 +110,7 @@ func discoveryPlanningHeader(plan *discoveryOrdinarySelectionPlan, request disco
 	if err != nil {
 		return nil, err
 	}
-	queryPlan, err := discoveryHeaderQuerySourcePlan(plan, profile)
+	queryPlan, err := discoveryHeaderQuerySourcePlan(plan, profile, assembly, tags)
 	if err != nil {
 		return nil, err
 	}
@@ -197,13 +201,65 @@ func discoveryHeaderPlanningLanguage(plan *discoveryOrdinarySelectionPlan) (stri
 // A planning profile need not be one of the final executed profiles. Replay
 // its complete package selection directly, without recursively requesting the
 // final CPP profile denominator or borrowing another profile's decisions.
-func discoveryHeaderQuerySourcePlan(plan *discoveryOrdinarySelectionPlan, profile discoveryFeatureProfile) (*discoveryOrdinarySelectionPlan, error) {
+func discoveryHeaderQuerySourcePlan(plan *discoveryOrdinarySelectionPlan, profile discoveryFeatureProfile, assembly string, tags []string) (*discoveryOrdinarySelectionPlan, error) {
+	if plan == nil || profile.Observed == nil || !containsTargetFeature(plan.TestedAsmFiles, assembly) ||
+		len(tags) > 16 || !equalDiscoveryStrings(tags, uniqueSortedDiscoveryStrings(tags)) {
+		return nil, fmt.Errorf("native planning query lacks its canonical package/tag scope")
+	}
+	for _, tag := range tags {
+		expression, err := constraint.Parse("//go:build " + tag)
+		name, single := expression.(*constraint.TagExpr)
+		if err != nil || !single || name.Tag != tag || gotoolprofile.ReservedTag(tag) {
+			return nil, fmt.Errorf("native planning custom tag cannot impersonate a source expression or tool profile: %q", tag)
+		}
+	}
 	copy := *plan
 	copy.Targets = []string{profile.Observed.Target}
 	copy.ToolTags = append([]string(nil), profile.Observed.ToolTags...)
 	decisions, selected, err := replayOrdinarySelection(&copy, plan.TestedAsmFiles, profile.Observed)
 	if err != nil {
 		return nil, err
+	}
+	// A Go partner may require a custom tag combination that no assembly
+	// file proposed. Bind this query's actual scope before closing siblings;
+	// do not borrow a different tag profile or alter final execution scopes.
+	possible := false
+	for key := range selected {
+		if key.File == assembly {
+			possible = true
+		}
+	}
+	if !possible {
+		return nil, fmt.Errorf("native planning query assembly has no original ordinary package role")
+	}
+	sources, _, err := ordinarySelectionBytes(&copy)
+	if err != nil {
+		return nil, err
+	}
+	ctx, err := discoveryContextForFeatureProfile(profile.Observed)
+	if err != nil {
+		return nil, err
+	}
+	ctx.BuildTags = append([]string(nil), tags...)
+	ctx.OpenFile = func(file string) (io.ReadCloser, error) {
+		data, found := sources[filepath.ToSlash(file)]
+		if !found {
+			return nil, fmt.Errorf("native planning query lacks original selection bytes: %s", file)
+		}
+		return io.NopCloser(bytes.NewReader(data)), nil
+	}
+	active, err := ctx.MatchFile(filepath.FromSlash(path.Dir(assembly)), path.Base(assembly))
+	if err != nil || !active {
+		return nil, fmt.Errorf("native planning query assembly is not selected by its exact tags: %s: %v", assembly, err)
+	}
+	key := nativeLayoutKey(assembly, profile.Observed.Target, tags)
+	if !selected[key] {
+		selected[key] = true
+		decisions = append(decisions, ordinarySelectionDecision{
+			AsmFiles: []string{assembly}, Targets: []string{profile.Observed.Target},
+			BuildTags: append([]string(nil), tags...), Kind: nativeLayoutSelected,
+			Diagnostic: "Go MatchFile selects this original assembly for the exact package/custom-tag metadata query; no LLVM execution scope is granted",
+		})
 	}
 	decisions, err = closeOrdinaryPackageTagScopes(&copy, plan.TestedAsmFiles, decisions, selected, profile.Observed)
 	if err != nil {

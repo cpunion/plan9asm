@@ -82,7 +82,7 @@ func validateDiscoveryGeneratedHeaderQueries(plan *discoveryOrdinarySelectionPla
 		if err != nil {
 			return err
 		}
-		input := ordinaryProfileConsumerInput(plan, *profile, module, "", query.AsmFiles)
+		input := ordinaryProfileConsumerInput(plan, *profile, module, "", query.AsmFiles, query.BuildTags)
 		input.GeneratedHeaders = nil
 		if err := gotoolprofile.ValidateMetadata(input, query.Metadata, query.BuildTags); err != nil {
 			return err
