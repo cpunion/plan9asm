@@ -17,7 +17,7 @@ func (c *amd64Ctx) lowerPackedUnsignedAverage(op Op, ins Instr) (bool, bool, err
 		// This family does not add a caller or fixed-local backing permission.
 		virtual := first.Kind == OpFP
 		if first.Kind == OpMem {
-			virtual = first.Mem.Base == SP || first.Mem.Base == BP || first.Mem.Index == SP || first.Mem.Index == BP
+			virtual = !x86OrdinaryNativeMemoryOperand(first, c.goarch)
 		}
 		if virtual {
 			return true, false, fmt.Errorf("%w: legacy packed average m128 needs original native storage, not virtual FP/SP/BP alignment", ErrProbeNeedsContext)

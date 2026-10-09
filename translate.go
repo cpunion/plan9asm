@@ -342,7 +342,7 @@ func translateIRText(file *File, opt Options) (_ string, result error) {
 	attrRegistry := newFeatureAttrRegistry()
 	// Build the immutable emitted-storage directory once per file. Repeating
 	// the global/signature scan for each TEXT would be quadratic in a corpus.
-	scalarData := x86LoweredScalarDataReads(file, resolve, opt.Sigs)
+	scalarData := x86LoweredScalarDataReads(file, resolve, opt.Sigs, opt.Goarch)
 	for i := range file.Funcs {
 		fn := &file.Funcs[i]
 		name := resolve(fn.Sym)

@@ -16,6 +16,9 @@ func x86ResultAUTOExtent(fn Func, arch string) (int, error) {
 	needed := false
 	for _, ins := range fn.Instrs {
 		for _, arg := range ins.Args {
+			if _, static := x86SBMemoryAddressRole(arg, arch); static {
+				continue // A 386 named Reg annotation is not a logical AUTO base.
+			}
 			needed = needed || arg.Kind == OpMem && arg.Mem.Base == SP
 		}
 	}
@@ -54,6 +57,9 @@ func x86ResultAUTOExtent(fn Func, arch string) (int, error) {
 	}
 	for _, ins := range fn.Instrs {
 		for index, arg := range ins.Args {
+			if _, static := x86SBMemoryAddressRole(arg, arch); static {
+				continue
+			}
 			if arg.Kind != OpMem || arg.Mem.Base != SP {
 				continue
 			}

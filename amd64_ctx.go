@@ -81,12 +81,12 @@ type amd64Ctx struct {
 	fpParams         map[int64]FrameSlot // off(FP) -> slot
 	fpParamAlloca    map[int64]string    // off(FP) -> mutable parameter shadow
 	fpResults        []FrameSlot
-	fpResAllocaOff   map[int64]string // off(FP) -> alloca
-	fpResAllocaIdx   map[int]string   // result index -> alloca
-	fpResWritten     map[int]bool     // result index -> whether written via +off(FP)
-	fpResAddrTaken   map[int]bool     // result index -> address of fp_ret_* escaped
-	fpScalarSource   Func             // source for all-path checks of new scalar result views
-	fpScalarData     map[string]int64 // exact SB spelling -> available emitted numerical bytes
+	fpResAllocaOff   map[int64]string             // off(FP) -> alloca
+	fpResAllocaIdx   map[int]string               // result index -> alloca
+	fpResWritten     map[int]bool                 // result index -> whether written via +off(FP)
+	fpResAddrTaken   map[int]bool                 // result index -> address of fp_ret_* escaped
+	fpScalarSource   Func                         // source for all-path checks of new scalar result views
+	fpScalarData     map[x86StaticSBAddress]int64 // exact effective SB address -> available emitted numerical bytes
 	fpScalarChecked  bool
 	fpScalarCheckErr error
 }
@@ -267,9 +267,13 @@ func (c *amd64Ctx) scanUsedRegs() {
 		case OpReg:
 			markReg(op.Reg)
 		case OpMem:
-			markReg(op.Mem.Base)
-			if op.Mem.Index != "" {
-				markReg(op.Mem.Index)
+			memory := op.Mem
+			if named, valid := x86SBMemoryAddressRole(op, c.goarch); valid {
+				memory = named // An ignored Reg must not allocate a virtual stack.
+			}
+			markReg(memory.Base)
+			if memory.Index != "" {
+				markReg(memory.Index)
 			}
 		case OpRegList:
 			for _, r := range op.RegList {
@@ -824,6 +828,9 @@ func (c *amd64Ctx) stackOffsetRange() (minOff, maxOff int64) {
 		for _, ins := range block.instrs {
 			for _, arg := range ins.Args {
 				if arg.Kind != OpMem || arg.Mem.Base != SP {
+					continue
+				}
+				if _, static := x86SBMemoryAddressRole(arg, c.goarch); static {
 					continue
 				}
 				if arg.Mem.Off < minOff {

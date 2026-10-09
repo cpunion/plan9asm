@@ -151,8 +151,8 @@ func TestX86LoweredScalarResultDataResolvedObjectIdentity(t *testing.T) {
 		}
 		return strings.TrimPrefix(sym, "·")
 	}
-	operand := "table<>+16(SB)"
-	if reads := x86LoweredScalarDataReads(file, resolve, nil); reads[operand] != 16 {
+	address := x86StaticSBAddress{symbol: "table<>", offset: 16}
+	if reads := x86LoweredScalarDataReads(file, resolve, nil, "amd64"); reads[address] != 16 {
 		t.Fatal("actual resolved DATA object lost its complete range", reads)
 	}
 	for _, change := range []string{"alias relocation", "alias unresolved extent", "alias function", "signature symbol", "signature LLVM name"} {
@@ -174,7 +174,7 @@ func TestX86LoweredScalarResultDataResolvedObjectIdentity(t *testing.T) {
 			case "signature LLVM name":
 				sigs = map[string]FuncSig{"other": {Name: "table<>", Ret: Void}}
 			}
-			if reads := x86LoweredScalarDataReads(&mutated, resolve, sigs); len(reads) != 0 {
+			if reads := x86LoweredScalarDataReads(&mutated, resolve, sigs, "amd64"); len(reads) != 0 {
 				t.Fatal("raw name bypassed complete resolved object validation", reads)
 			}
 		})
@@ -182,7 +182,7 @@ func TestX86LoweredScalarResultDataResolvedObjectIdentity(t *testing.T) {
 }
 
 func TestX86LoweredScalarResultDataReadScopeDoesNotEscape(t *testing.T) {
-	state := x86ResultState{loweredStaticReads: map[string]int64{"table<>(SB)": 16}}
+	state := x86ResultState{loweredStaticReads: map[x86StaticSBAddress]int64{{symbol: "table<>"}: 16}}
 	read := Operand{Kind: OpSym, Sym: "table<>(SB)"}
 	if !x86ResultRead(read, 16, &state, nil, "amd64") || x86ResultRead(read, 17, &state, nil, "amd64") {
 		t.Fatal("ephemeral reader did not enforce exact complete width")
@@ -195,7 +195,7 @@ func TestX86LoweredScalarResultDataReadScopeDoesNotEscape(t *testing.T) {
 	_, file, sig, _ := x86ResultInitializationFixture(t, "amd64", "func Value() uint32",
 		"MOVOU table<>(SB),X1\nPEXTRD $0,X1,AX\nMOVL AX,ret0+0(FP)\nRET")
 	ctx := &amd64Ctx{fpScalarSource: file.Funcs[0], sig: sig, goarch: "amd64",
-		fpScalarData: map[string]int64{"table<>(SB)": 16}}
+		fpScalarData: map[x86StaticSBAddress]int64{{symbol: "table<>"}: 16}}
 	if err := ctx.checkLoweredScalarFPResultInitialization(); err != nil {
 		t.Fatal("ephemeral DATA read did not close the lowering-only result", err)
 	}

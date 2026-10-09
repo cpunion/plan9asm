@@ -52,7 +52,7 @@ func (c *amd64Ctx) lowerHorizontalInteger(op Op, ins Instr) (ok bool, terminated
 	}
 	firstOperand := ins.Args[form.first]
 	if !spec.vector && form.memory >= 0 && (firstOperand.Kind == OpFP || ins.x86AddressBits != 0 ||
-		firstOperand.Kind == OpMem && (firstOperand.Mem.Base == SP || firstOperand.Mem.Base == BP || firstOperand.Mem.Index == SP || firstOperand.Mem.Index == BP)) {
+		firstOperand.Kind == OpMem && !x86OrdinaryNativeMemoryOperand(firstOperand, c.goarch)) {
 		return true, false, fmt.Errorf("%w: legacy horizontal m128 needs original native backing/alignment", ErrProbeNeedsContext)
 	}
 	second, err := c.loadHorizontalIntegerOperand(ins.Args[form.second], byteWidth, spec.laneBits)

@@ -169,7 +169,7 @@ func (c *amd64Ctx) lowerSignedPackedIntegerFloat(op Op, ins Instr) (bool, bool, 
 		}
 		return true, false, fmt.Errorf("%w: %s packed FP source lacks original native backing", ErrProbeNeedsContext, ins.Op)
 	}
-	if ins.x86AddressBits != 0 || source.Kind == OpMem && (source.Mem.Base == SP || source.Mem.Base == BP || source.Mem.Index == BP) {
+	if ins.x86AddressBits != 0 || source.Kind == OpMem && !x86OrdinaryNativeMemoryOperand(source, c.goarch) {
 		return true, false, fmt.Errorf("%w: %s packed memory lacks original native address binding", ErrProbeNeedsContext, ins.Op)
 	}
 	return true, false, c.emitSignedPackedIntegerFloat(ins, f)

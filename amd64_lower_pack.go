@@ -34,7 +34,7 @@ func (c *amd64Ctx) lowerPackedSaturatingNarrow(op Op, ins Instr) (bool, bool, er
 	if form.legacy && !form.mmx && form.memory >= 0 {
 		virtual := first.Kind == OpFP
 		if first.Kind == OpMem && !x86CallerMemoryCertified(ins, form.memory) && !c.fixedLocalMemoryCertified(ins, form.memory) {
-			virtual = first.Mem.Base == SP || first.Mem.Base == BP || first.Mem.Index == SP || first.Mem.Index == BP
+			virtual = !x86OrdinaryNativeMemoryOperand(first, c.goarch)
 		}
 		if virtual {
 			return true, false, fmt.Errorf("%w: legacy pack m128 needs original native storage, not virtual FP/SP/BP alignment", ErrProbeNeedsContext)

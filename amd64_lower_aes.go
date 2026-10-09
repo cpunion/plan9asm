@@ -39,7 +39,7 @@ func (c *amd64Ctx) lowerAES(rawOp Op, ins Instr) (ok bool, terminated bool, err 
 		// AES Type4 has no alignment requirement. Complete numerical logical
 		// FP views retain their existing byte-read contract, not native backing.
 		if source.Kind == OpMem &&
-			(source.Mem.Base == SP || source.Mem.Base == BP || source.Mem.Index == SP || source.Mem.Index == BP) &&
+			!x86OrdinaryNativeMemoryOperand(source, c.goarch) &&
 			!x86CallerMemoryCertified(ins, f.memory) && !c.fixedLocalMemoryCertified(ins, f.memory) {
 			return true, false, fmt.Errorf("%w: AES native stack source has no original storage certificate", ErrProbeNeedsContext)
 		}

@@ -28,7 +28,7 @@ func (c *amd64Ctx) lowerPackedLogicalFamily(op Op, ins Instr) (bool, bool, error
 		}
 		virtual := first.Kind == OpFP
 		if first.Kind == OpMem && !x86CallerMemoryCertified(ins, form.memory) && !c.fixedLocalMemoryCertified(ins, form.memory) {
-			virtual = first.Mem.Base == SP || first.Mem.Base == BP || first.Mem.Index == SP || first.Mem.Index == BP
+			virtual = !x86OrdinaryNativeMemoryOperand(first, c.goarch)
 		}
 		if virtual {
 			return true, false, fmt.Errorf("%w: legacy packed logical m128 needs original native storage, not virtual FP/SP/BP alignment", ErrProbeNeedsContext)

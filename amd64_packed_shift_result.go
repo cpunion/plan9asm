@@ -80,7 +80,7 @@ func x86ResultPackedShiftStep(ins Instr, state *x86ResultState, owned []bool, ar
 		// lowering's ephemeral same-file DATA directory can provide an SB
 		// input here; logical FP/AUTO storage still cannot stand in for it.
 		memory := ins.Args[form.memory]
-		if form.legacy && memory.Kind != OpSym {
+		if _, static := x86StaticSBReadAddress(memory, arch); form.legacy && !static {
 			return false, true
 		}
 		if !x86ResultRead(memory, int64(form.memoryBytes), state, owned, arch) {

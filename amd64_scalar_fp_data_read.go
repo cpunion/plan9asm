@@ -1,11 +1,9 @@
 package plan9asm
 
-import "strings"
-
 // This map describes actual same-module numeric storage, not external Go
 // variables or a reusable source/return certificate. All typed read consumers
 // still request their complete native width, independently of a selected lane.
-func x86LoweredScalarDataReads(file *File, resolve func(string) string, sigs map[string]FuncSig) map[string]int64 {
+func x86LoweredScalarDataReads(file *File, resolve func(string) string, sigs map[string]FuncSig, arch string) map[x86StaticSBAddress]int64 {
 	if file == nil || file.Arch != ArchAMD64 || resolve == nil {
 		return nil
 	}
@@ -52,20 +50,17 @@ func x86LoweredScalarDataReads(file *File, resolve func(string) string, sigs map
 			objects[symbol] = current
 		}
 	}
-	reads := make(map[string]int64)
+	reads := make(map[x86StaticSBAddress]int64)
 	for _, function := range file.Funcs {
 		for _, ins := range function.Instrs {
 			for _, operand := range ins.Args {
-				if operand.Kind != OpSym || !strings.HasSuffix(strings.TrimSpace(operand.Sym), "(SB)") {
+				address, valid := x86StaticSBReadAddress(operand, arch)
+				if !valid {
 					continue
 				}
-				base, offset, valid := parseSBRef(operand.Sym)
-				if !valid || offset < 0 || strings.IndexAny(base, "$+(),[] \t") >= 0 {
-					continue
-				}
-				current := objects[resolveAssemblyDataSymbol(base, resolve)]
-				if !current.invalid && current.size > 0 && current.size <= maxDataGlobalSize && offset < current.size {
-					reads[operand.Sym] = current.size - offset
+				current := objects[resolveAssemblyDataSymbol(address.symbol, resolve)]
+				if !current.invalid && current.size > 0 && current.size <= maxDataGlobalSize && address.offset < current.size {
+					reads[address] = current.size - address.offset
 				}
 			}
 		}

@@ -31,7 +31,7 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 			defer func() { state.loweredStaticReads = nil }()
 			form, known, err := x86LegacyPackedMoveProperties(ins.Op, ins, arch)
 			if known && err == nil && form.memory == 0 && form.source.Kind == OpMem &&
-				x86LegacyPackedMoveOrdinaryNativeMemory(form.source) {
+				form.source.Mem.Sym == "" && x86OrdinaryNativeMemoryOperand(form.source, arch) {
 				// This same typed form selects the original sideeffect opcode
 				// in lowerLegacyPackedMove. Only reaching incoming-pointer
 				// identity and initialized numerical indexes supply an address.
@@ -50,15 +50,4 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 			}
 			return x86LoweredPureGPUnknownTransfer(ins, state, arch)
 		}, true)
-}
-
-// The ordinary native branch is shared with the actual emitter. Certificates
-// can additionally bind physical SP/BP in that emitter; they are not admitted
-// by the independent incoming-pointer result rule above.
-func x86LegacyPackedMoveOrdinaryNativeMemory(memory Operand) bool {
-	if memory.Kind == OpSym {
-		return true
-	}
-	return memory.Kind == OpMem && memory.Mem.Base != SP && memory.Mem.Base != BP &&
-		memory.Mem.Index != SP && memory.Mem.Index != BP
 }

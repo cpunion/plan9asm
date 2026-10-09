@@ -39,7 +39,7 @@ func (c *amd64Ctx) loadConditionalMoveSource(form x86ConditionalMoveForm, ins In
 	if source.Kind == OpReg {
 		return c.evalIntSized(source, amd64IntegerTypeForBits(form.bits))
 	}
-	if source.Kind == OpMem && (source.Mem.Base == SP || source.Mem.Base == BP || source.Mem.Index == SP || source.Mem.Index == BP) &&
+	if source.Kind == OpMem && !x86OrdinaryNativeMemoryOperand(source, c.goarch) &&
 		!x86CallerMemoryCertified(ins, 0) && !c.fixedLocalMemoryCertified(ins, 0) {
 		return "", fmt.Errorf("%w: CMOV native stack source lacks its original storage certificate", ErrProbeNeedsContext)
 	}

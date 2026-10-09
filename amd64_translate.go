@@ -535,7 +535,7 @@ func emitX86RelocationAnchor(b *strings.Builder, fn Func, sig FuncSig, resolve f
 }
 
 type x86FunctionSource struct {
-	scalarData    map[string]int64
+	scalarData    map[x86StaticSBAddress]int64
 	lockNamespace string
 }
 

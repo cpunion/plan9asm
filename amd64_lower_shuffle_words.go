@@ -116,7 +116,7 @@ func amd64PackedWordShuffleRequiresEVEX(source, destination Operand, byteWidth i
 func (c *amd64Ctx) lowerLegacyImmediateShuffleMemory(ins Instr, form x86ImmediateShuffleForm) error {
 	source := form.source
 	if source.Kind == OpFP || ins.x86AddressBits != 0 || ins.x86UnboundAddressOverride ||
-		source.Kind == OpMem && (source.Mem.Base == SP || source.Mem.Base == BP || source.Mem.Index == SP || source.Mem.Index == BP) {
+		source.Kind == OpMem && !x86OrdinaryNativeMemoryOperand(source, c.goarch) {
 		return fmt.Errorf("%w: legacy immediate shuffle m128 needs original native backing/alignment", ErrProbeNeedsContext)
 	}
 	pointer, pointerType, _, err := c.packedVectorMemoryPointer(source)

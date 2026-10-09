@@ -183,6 +183,15 @@ func inferFuncTargetFeaturesForGOARCH(arch Arch, goarch string, fn Func) string 
 					add("+sse4.1")
 				}
 			}
+			if form, known, err := x86PackedSADProperties(ins, goarch); known && err == nil &&
+				form.legacy && form.memory >= 0 && ins.Args[form.memory].Kind != OpFP {
+				// The exact legacy m128 opcode needs an XMM carrier on i386.
+				// In particular PSADBW cannot borrow SSE2 from a sibling move.
+				add("+sse2")
+				if form.spec.kind == amd64PackedSADMultiple {
+					add("+sse4.1")
+				}
+			}
 			if goarch == "386" {
 				// The signed default-rounding scalar bridge must use MXCSR,
 				// rather than LLVM's default i386 x87 conversion. Admit only
