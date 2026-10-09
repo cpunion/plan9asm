@@ -62,7 +62,9 @@ func TestCrossLinuxRuntimeMatrixARM64NanosleepPrivateInput(t *testing.T) {
 // unchanged, and maps the raw kernel return to libc's errno contract. The source
 // has a void return: neither this driver nor its proof authorizes observing R0
 // or native NZCV in the translated assembly.
-const arm64NanosleepRuntimeDriver = `#include <errno.h>
+const arm64NanosleepRuntimeDriver = `#define _GNU_SOURCE
+#include <errno.h>
+#include <poll.h>
 #include <signal.h>
 #include <stdarg.h>
 #include <stdint.h>
@@ -79,6 +81,7 @@ struct request { int64_t seconds, nanoseconds; };
 _Static_assert(sizeof(struct request)==16,"actual A64 kernel timespec width");
 static uint32_t expected;
 static int mode, forced_error, calls;
+static int start_fd=-1;
 static volatile sig_atomic_t interrupted;
 
 static void interrupt_handler(int signo) { if(signo==SIGUSR1) interrupted=1; }
@@ -110,6 +113,10 @@ long syscall(long number,...) {
         errno=EINTR;
         return forced_error ? -1 : 0;
     }
+    if(mode==2) {
+        const char ready='R';
+        if(start_fd<0 || write(start_fd,&ready,1)!=1) abort();
+    }
     long raw=original_kernel(request);
     if(memcmp(&before,request,sizeof(before))) abort();
     if((mode==1 && raw!=0) || (mode==2 && (raw!=-EINTR || !interrupted))) abort();
@@ -138,14 +145,48 @@ int main(void) {
     memset(&action,0,sizeof(action));
     action.sa_handler=interrupt_handler;
     if(sigemptyset(&action.sa_mask) || sigaction(SIGUSR1,&action,0)) return 1;
-    pid_t parent=getpid(), child=fork();
+    int ready[2], done[2];
+    if(pipe(ready) || pipe(done)) return 2;
+    pid_t parent=getpid();
+    if(gettid()!=parent) return 3;
+    pid_t child=fork();
     if(child<0) return 2;
-    if(child==0) { usleep(10000); _exit(kill(parent,SIGUSR1) ? 1 : 0); }
+    if(child==0) {
+        close(ready[1]);
+        close(done[1]);
+        char token;
+        if(read(ready[0],&token,1)!=1 || token!='R') _exit(1);
+        struct pollfd complete={.fd=done[0],.events=POLLIN};
+        for(unsigned attempt=0;attempt<250;attempt++) {
+            // A parent that failed/aborted is no longer this signal owner.
+            if(getppid()!=parent || tgkill(parent,parent,SIGUSR1)) _exit(2);
+            int result=poll(&complete,1,2);
+            if(result<0) _exit(3);
+            if(result>0) {
+                if(complete.revents!=POLLIN || read(done[0],&token,1)!=1 || token!='D') _exit(4);
+                close(ready[0]);
+                close(done[0]);
+                _exit(0);
+            }
+        }
+        _exit(5);
+    }
+    close(ready[0]);
+    close(done[0]);
+    start_fd=ready[1];
     mode=2;
     expected=1000000;
     translated_sleep(expected);
+    const char complete='D';
+    if(write(done[1],&complete,1)!=1) return 4;
     int status;
-    if(waitpid(child,&status,0)!=child || !WIFEXITED(status) || WEXITSTATUS(status)!=0) return 3;
+    pid_t joined;
+    do {
+        joined=waitpid(child,&status,0);
+    } while(joined<0 && errno==EINTR);
+    if(joined!=child || !WIFEXITED(status) || WEXITSTATUS(status)!=0) return 5;
+    close(ready[1]);
+    close(done[1]);
     if(calls!=14 || !interrupted) return 4;
     puts("ACTUAL_NANOSLEEP_INPUT_KERNEL_COMPLETE values=10 kernel=3 EINTR=1 NULLrem=1");
     return 0;

@@ -25,6 +25,7 @@ func arm64NanosleepRuntimeFixture(t *testing.T) (directory, packagePath, declara
 	declarations = "package sleepinput\nfunc sleep(usec uint32)\n"
 	const original = `package sleepinput
 import (
+    "fmt"
     "os"
     "os/signal"
     "runtime"
@@ -47,14 +48,29 @@ func TestOriginalNanosleepInput(t *testing.T) {
     signal.Notify(signals,syscall.SIGUSR1)
     defer signal.Stop(signals)
     thread := syscall.Gettid()
+    stop := make(chan struct{})
     done := make(chan error,1)
     go func() {
-        time.Sleep(10*time.Millisecond)
-        done <- syscall.Tgkill(os.Getpid(),thread,syscall.SIGUSR1)
+        ticker := time.NewTicker(2*time.Millisecond)
+        defer ticker.Stop()
+        for attempt:=0;attempt<250;attempt++ {
+            select {
+            case <-stop:
+                done <- nil
+                return
+            case <-ticker.C:
+            }
+            if err := syscall.Tgkill(os.Getpid(),thread,syscall.SIGUSR1); err!=nil {
+                done <- err
+                return
+            }
+        }
+        done <- fmt.Errorf("bounded exact-thread interrupt sender exhausted")
     }()
     start := time.Now()
     sleep(1000000)
     elapsed := time.Since(start)
+    close(stop)
     if err := <-done; err != nil { t.Fatal(err) }
     if elapsed < 0 || elapsed > 500*time.Millisecond {
         t.Fatal("original NULL-rem interrupted continuation did not return",elapsed)
