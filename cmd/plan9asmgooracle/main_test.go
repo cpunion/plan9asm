@@ -268,3 +268,15 @@ func TestWholeFamilySelectorPreservesRows(t *testing.T) {
 		t.Fatalf("complete selection changed row order/denominator: %q", got)
 	}
 }
+
+func TestRetainResultRefusesUnownedCaseDirectory(t *testing.T) {
+	dir := canonicalTemp(t)
+	r := report{Selected: 1}
+	item := result{Status: "failed", Failure: "case directory never acquired"}
+	if retainResult(&r, dir, item) == nil {
+		t.Fatal("result written into a directory without the case's owned identity")
+	}
+	if _, err := os.Lstat(filepath.Join(dir, "result.json")); !os.IsNotExist(err) {
+		t.Fatalf("unowned result target was accessed/written: %v", err)
+	}
+}

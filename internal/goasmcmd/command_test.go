@@ -137,3 +137,12 @@ func TestActualGoCommandRequiresLiveContext(t *testing.T) {
 		}
 	}
 }
+
+func TestObservationEarlyCancellationRetainsCause(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	value, err := Observe(ctx, t.TempDir(), nil, "must-not-start")
+	if !errors.Is(err, context.Canceled) || value.ExitCode != -1 || value.PID != 0 || value.Waited {
+		t.Fatalf("early cancellation lost actual cause/no-child outcome: %+v %v", value, err)
+	}
+}
