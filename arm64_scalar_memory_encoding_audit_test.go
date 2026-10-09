@@ -47,15 +47,25 @@ func TestARM64ScalarMemoryAuditCompleteGoOptabs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	count, err := arm64ScalarMemoryLegacyGoRows(string(source))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("actual Go asm7 SHA256 %x; four base mnemonics × %d memory rows, unsigned aliases expand to seven × %d", sha256.Sum256(source), count, count)
+}
+
+// This exposes the original count-only audit unchanged in scope, so its
+// attribute blind spots can be tested against the same source bytes.
+func arm64ScalarMemoryLegacyGoRows(source string) (int, error) {
 	expected := map[int]int{20: 4, 21: 4, 30: 4, 31: 4, 22: 2, 23: 2, 98: 1, 99: 1, 64: 1, 65: 1}
 	// This is an audit of the actual Go table, not a production encoder guess.
 	// Go 1.20 has no separate LAUTOPOOL/LOREGPOOL rows. Its case body
 	// chooses the literal pool after selecting the two ordinary long rows.
-	if !strings.Contains(string(source), "C_LAUTOPOOL") {
+	if !strings.Contains(source, "C_LAUTOPOOL") {
 		expected[30], expected[31] = 2, 2
 	}
 	rows := make(map[string]map[int]int)
-	for _, line := range strings.Split(string(source), "\n") {
+	for _, line := range strings.Split(source, "\n") {
 		line = strings.TrimSpace(line)
 		if end := strings.IndexByte(line, '}'); end >= 0 {
 			line = line[:end+1]
@@ -69,11 +79,11 @@ func TestARM64ScalarMemoryAuditCompleteGoOptabs(t *testing.T) {
 			continue
 		}
 		if len(fields) != 10 && len(fields) != 11 {
-			t.Fatalf("unknown actual Go optab shape: %s", line)
+			return 0, fmt.Errorf("unknown actual Go optab shape: %s", line)
 		}
 		kind, err := strconv.Atoi(strings.TrimSpace(fields[len(fields)-5]))
 		if err != nil {
-			t.Fatal(err)
+			return 0, err
 		}
 		if _, memory := expected[kind]; !memory {
 			continue
@@ -83,23 +93,24 @@ func TestARM64ScalarMemoryAuditCompleteGoOptabs(t *testing.T) {
 		}
 		rows[name][kind]++
 	}
+	var failures []error
 	for _, name := range []string{"AMOVB", "AMOVH", "AMOVW", "AMOVD"} {
 		for kind, count := range expected {
 			if got := rows[name][kind]; got != count {
-				t.Errorf("actual %s case %d has %d rows, want %d", name, kind, got, count)
+				failures = append(failures, fmt.Errorf("actual %s case %d has %d rows, want %d", name, kind, got, count))
 			}
 		}
 	}
 	for _, alias := range []string{"AMOVBU", "AMOVHU", "AMOVWU"} {
-		if !strings.Contains(string(source), "oprangeset("+alias+", t)") {
-			t.Fatalf("missing actual Go unsigned MOV alias: %s", alias)
+		if !strings.Contains(source, "oprangeset("+alias+", t)") {
+			failures = append(failures, fmt.Errorf("missing actual Go unsigned MOV alias: %s", alias))
 		}
 	}
 	count := 0
 	for _, rows := range expected {
 		count += rows
 	}
-	t.Logf("actual Go asm7 SHA256 %x; four base mnemonics × %d memory rows, unsigned aliases expand to seven × %d", sha256.Sum256(source), count, count)
+	return count, errors.Join(failures...)
 }
 
 type arm64MemoryAuditForm struct {
