@@ -185,8 +185,12 @@ The assembler-oracle component and SDK development retain these distinct scopes:
   This is not combined-head, LLVM/runtime, SDK or external-module success.
   Its ignored launcher lacks a total owner timer and reviewed cleanup guard;
   the actual source/object result does not certify that harness contract.
-  The two current-SDK producer tests still need a real Go-1.20 RED and explicit
-  build-role split, keeping portable framework checks untagged and never Skip.
+  A separate real Go-1.20 run retains three portable roots passing and the two
+  fixed-current-SDK producer roots failing the object-schema pin. The successor
+  integrates their explicit `go1.27` build-role split without changing either
+  test body; shared helpers and all portable checks stay untagged, never Skip.
+  Fresh split-head current/historical inventories and complete gates remain
+  required; the preceding component results cannot establish them.
 - SDK literal-read models remain query-only. At `85d36df1`, the complete
   statement/listing grammar scope closes ordinary and race with 20 roots and
   346 children each; the actual Go-1.20 framework closes 18 roots/238 children.
