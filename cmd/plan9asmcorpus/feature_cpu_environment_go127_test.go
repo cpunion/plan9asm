@@ -115,7 +115,7 @@ func TestFeatureObserverForeignCPUOverridesRemainRejected(t *testing.T) {
 			}
 			for _, route := range []string{"capture", "cache"} {
 				t.Run(target.target+"/"+inactive.key+"/"+route, func(t *testing.T) {
-					ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+					ctx, cancel := featureCPUEnvironmentTestContext(t)
 					defer cancel()
 					env := featureCPUEnvironmentPollutedBase()
 					overrides := map[string]string{inactive.key: inactive.inherited}
@@ -165,7 +165,7 @@ func captureFeatureCPUEnvironment(t *testing.T, route, target string, env []stri
 	if featureCPUEnvironmentRoute(env)["GOARM64"] != "v8.0" {
 		t.Fatal("original GOARM64=v8.0 host contamination was removed from the fixture")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	ctx, cancel := featureCPUEnvironmentTestContext(t)
 	defer cancel()
 	binary := featureCPUEnvironmentGoBinary(t)
 	var actualQueries []map[string]string
@@ -251,6 +251,15 @@ func featureCPUEnvironmentRoute(env []string) map[string]string {
 		}
 	}
 	return result
+}
+
+func featureCPUEnvironmentTestContext(t *testing.T) (context.Context, context.CancelFunc) {
+	t.Helper()
+	deadline := time.Now().Add(time.Minute)
+	if testDeadline, bounded := t.Deadline(); bounded && testDeadline.Before(deadline) {
+		deadline = testDeadline
+	}
+	return context.WithDeadline(context.Background(), deadline)
 }
 
 func logFeatureCPUEnvironment(t *testing.T, label string, value any) {
