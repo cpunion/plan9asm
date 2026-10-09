@@ -33,6 +33,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 			if accepted, recognized := x86LoweredBlockInsertRead(ins, state, owned, resultOffset, arch); recognized {
 				return accepted
 			}
+			if accepted, known := c.scalarCompareNativeResultTransfer(ins, state, owned, arch); known {
+				return accepted
+			}
 			if form, known, err := amd64PackedVectorMoveProperties(ins, arch); known && err == nil &&
 				form.memory == 0 && form.ordinaryMemory(ins, arch) &&
 				x86ResultIncomingPointerAddressIdentity(ins.Args[0], state, arch) {

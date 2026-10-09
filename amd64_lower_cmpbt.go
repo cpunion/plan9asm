@@ -9,62 +9,50 @@ func (c *amd64Ctx) lowerCmpBt(op Op, ins Instr) (ok bool, terminated bool, err e
 	if ok, terminated, err := c.lowerBitTestFamily(op, ins); ok {
 		return ok, terminated, err
 	}
-	switch op {
-	case "CMPB", "CMPW", "CMPL", "CMPQ":
-		if len(ins.Args) != 2 {
-			return true, false, fmt.Errorf("amd64 CMPQ expects 2 operands: %q", ins.Raw)
-		}
-		ty := I64
-		switch op {
-		case "CMPB":
-			ty = I8
-		case "CMPW":
-			ty = I16
-		case "CMPL":
-			ty = I32
-		case "CMPQ":
-			ty = I64
-		}
-		a, err := c.evalIntSized(ins.Args[0], ty)
-		if err != nil {
-			return true, false, err
-		}
-		b, err := c.evalIntSized(ins.Args[1], ty)
-		if err != nil {
-			return true, false, err
-		}
-		c.setCmpFlagsSized(ty, a, b)
-		return true, false, nil
-
-	case "TESTB", "TESTW", "TESTL", "TESTQ":
-		// TEST* a,b sets flags based on (a & b) without storing the result.
-		if len(ins.Args) != 2 {
-			return true, false, fmt.Errorf("amd64 %s expects 2 operands: %q", op, ins.Raw)
-		}
-		ty := I64
-		switch op {
-		case "TESTB":
-			ty = I8
-		case "TESTW":
-			ty = I16
-		case "TESTL":
-			ty = I32
-		case "TESTQ":
-			ty = I64
-		}
-		a, err := c.evalIntSized(ins.Args[0], ty)
-		if err != nil {
-			return true, false, err
-		}
-		b, err := c.evalIntSized(ins.Args[1], ty)
-		if err != nil {
-			return true, false, err
-		}
-		c.setTestFlagsSized(ty, a, b)
-		return true, false, nil
-
+	arch := c.goarch
+	if arch == "" {
+		arch = "amd64"
 	}
-	return false, false, nil
+	form, known, err := x86ScalarCompareProperties(op, ins, arch)
+	if !known || err != nil {
+		return known, false, err
+	}
+	for index, operand := range form.args {
+		if operand.Kind == OpReg && operand.Reg == SP && ins.Args[index].Reg != SP {
+			return true, false, fmt.Errorf("%w: Go REX byte view needs the original physical SP", ErrProbeNeedsContext)
+		}
+	}
+	native := form.memory >= 0 && (x86OrdinaryNativeMemoryOperand(form.args[form.memory], arch) ||
+		x86CallerMemoryCertified(ins, form.memory) || c.fixedLocalMemoryCertified(ins, form.memory))
+	if native && (ins.x86AddressBits != 0 || ins.x86UnboundAddressOverride) {
+		return true, false, fmt.Errorf("%w: scalar comparison needs its original native address size", ErrProbeNeedsContext)
+	}
+	typ := LLVMType(fmt.Sprintf("i%d", form.bits))
+	var values [2]string
+	for index, operand := range form.args {
+		if index == form.memory && native {
+			pointer, pointerType, _, pointerErr := c.packedVectorMemoryPointer(operand)
+			if pointerErr != nil {
+				return true, false, pointerErr
+			}
+			loaded := c.newTmp()
+			// A compare whose flags are dead must still perform the exact
+			// native read (and fault). No backing/alignment assumption follows.
+			fmt.Fprintf(c.b, "  %%%s = load volatile %s, %s %s, align 1\n", loaded, typ, pointerType, pointer)
+			values[index] = "%" + loaded
+		} else {
+			values[index], err = c.evalIntSized(operand, typ)
+			if err != nil {
+				return true, false, err
+			}
+		}
+	}
+	if form.test {
+		c.setTestFlagsSized(typ, values[0], values[1])
+	} else {
+		c.setCmpFlagsSized(typ, values[0], values[1])
+	}
+	return true, false, nil
 }
 
 func (c *amd64Ctx) setCmpFlagsSized(ty LLVMType, a, b string) {

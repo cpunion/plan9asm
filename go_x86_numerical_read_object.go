@@ -58,10 +58,13 @@ func x86NumericalSBReadProperties(ins Instr, arch string) (x86NumericalSBReadFor
 		}
 		form.spec.sourceBytes = int64(extension.spec.sourceBits / 8)
 		form.spec.gpBytes = int64(extension.spec.destinationBits / 8)
-	} else {
-		if spec.compare && ins.Args[1].Kind == OpSym && ins.Args[0].Kind == OpReg {
-			form.operand, form.partner = 1, 0
+	} else if spec.compare {
+		comparison, recognized, err := x86ScalarCompareProperties(ins.Op, ins, arch)
+		if !recognized || err != nil || comparison.memory < 0 {
+			return x86NumericalSBReadForm{}, false
 		}
+		form.operand, form.partner = comparison.memory, 1-comparison.memory
+	} else {
 		partner := ins.Args[form.partner]
 		switch partner.Kind {
 		case OpReg:
@@ -70,11 +73,6 @@ func x86NumericalSBReadProperties(ins Instr, arch string) (x86NumericalSBReadFor
 				valid = isGoYmbRegisterForArch(partner.Reg, arch)
 			}
 			if !valid {
-				return x86NumericalSBReadForm{}, false
-			}
-		case OpImm:
-			if !spec.compare || form.operand != 0 || partner.ImmRaw != "" || partner.ImmIsFloat ||
-				arch == "amd64" && (partner.Imm < -2147483648 || partner.Imm > 4294967295) {
 				return x86NumericalSBReadForm{}, false
 			}
 		default:

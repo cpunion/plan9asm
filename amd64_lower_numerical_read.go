@@ -33,12 +33,10 @@ func (c *amd64Ctx) lowerNumericalRead(ins Instr) (bool, error) {
 	fmt.Fprintf(c.b, "  %%%s = load volatile %s, ptr %s, align 1\n", loaded, sourceType, pointer)
 	value := "%" + loaded
 	if form.spec.compare {
-		partner := ins.Args[form.partner]
-		// Go's CMPQ imm32 is sign-extended by the actual native encoding.
-		// An accepted unsigned Yi32 spelling is not a positive i64 value.
-		if sourceType == I64 && partner.Kind == OpImm {
-			partner.Imm = int64(int32(partner.Imm))
-		}
+		// Certification already checked this shared complete operand grammar.
+		// Preserve Go's immediate truncation/sign extension and byte views.
+		comparison, _, _ := x86ScalarCompareProperties(ins.Op, ins, c.goarch)
+		partner := comparison.args[form.partner]
 		other, err := c.evalIntSized(partner, sourceType)
 		if err != nil {
 			return true, err

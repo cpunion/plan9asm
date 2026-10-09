@@ -546,25 +546,18 @@ func x86ResultTransfer(ins Instr, state *x86ResultState, owned []bool, resultOff
 		}
 		return x86ResultStore(last, width, state, owned, resultOffset, arch)
 	}
-	name := string(ins.Op)
-	if len(name) < 2 {
-		return false
-	}
-	base := name[:len(name)-1]
-	width := map[byte]int64{'B': 1, 'W': 2, 'L': 4, 'Q': 8}[name[len(name)-1]]
-	if width == 0 || width == 8 && arch == "386" || len(ins.Args) != 2 {
-		return false
-	}
 	// Registered scalar RMW instructions are handled by the typed effect above.
-	// Only the nonwriting comparison rows retain this independent fallback.
-	if base != "CMP" && base != "TEST" {
+	// Comparisons share the emitter's complete grammar and physical byte views.
+	comparison, recognized, err := x86ScalarCompareProperties(ins.Op, ins, arch)
+	if !recognized || err != nil {
 		return false
 	}
-	if !x86ResultRead(ins.Args[0], width, state, owned, arch) || !x86ResultRead(ins.Args[1], width, state, owned, arch) {
+	width := int64(comparison.bits / 8)
+	if !x86ResultRead(comparison.args[0], width, state, owned, arch) || !x86ResultRead(comparison.args[1], width, state, owned, arch) {
 		return false
 	}
 	state.flags = x86ByteFlagsAll
-	if base == "TEST" {
+	if comparison.test {
 		state.flags &^= x86ByteFlagAF // The architecture leaves AF undefined.
 	}
 	return true

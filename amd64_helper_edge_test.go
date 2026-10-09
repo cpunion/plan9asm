@@ -1369,7 +1369,7 @@ func TestAMD64CmpBtCoverage(t *testing.T) {
 		}
 	}
 
-	check("CMPB", Instr{Raw: "CMPB $1, AX", Args: []Operand{{Kind: OpImm, Imm: 1}, {Kind: OpReg, Reg: AX}}})
+	check("CMPB", Instr{Raw: "CMPB AX, $1", Args: []Operand{{Kind: OpReg, Reg: AX}, {Kind: OpImm, Imm: 1}}})
 	check("CMPW", Instr{Raw: "CMPW 4(BX), CX", Args: []Operand{{Kind: OpMem, Mem: MemRef{Base: BX, Off: 4}}, {Kind: OpReg, Reg: CX}}})
 	check("CMPL", Instr{Raw: "CMPL arg+0(FP), DI", Args: []Operand{{Kind: OpFP, FPOffset: 0}, {Kind: OpReg, Reg: DI}}})
 	check("CMPQ", Instr{Raw: "CMPQ example.global(SB), SI", Args: []Operand{{Kind: OpSym, Sym: "example.global(SB)"}, {Kind: OpReg, Reg: SI}}})
@@ -1420,7 +1420,7 @@ func TestAMD64CmpBtCoverage(t *testing.T) {
 		"store i1 false, ptr %flags_cf",
 		"lshr i64",
 		"shl i64 1",
-		"load i64, ptr @\"example.global\"",
+		"load volatile i64, ptr @\"example.global\"",
 	} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("missing %q in output:\n%s", want, out)
