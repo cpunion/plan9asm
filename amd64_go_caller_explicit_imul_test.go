@@ -36,8 +36,8 @@ func x86CallerExplicitIMULFixture(t *testing.T, body string) (GoPackage, *File, 
 	if err != nil {
 		t.Fatal(err)
 	}
-	sigs, err = BindGoX86RawReturnCallerRegions(pkg, file, "amd64", resolve, sigs)
-	if err != nil || sigs["caller.kernel"].x86CallerRegions == nil {
+	// goSigsForAsmFile already binds the complete actual SourceSelection.
+	if sigs["caller.kernel"].x86CallerRegions == nil {
 		t.Fatalf("actual complete typed caller precondition failed: %v", err)
 	}
 	if !x86CallerRegionSourceMatches(sigs["caller.kernel"], file.Funcs[0], "amd64") {
