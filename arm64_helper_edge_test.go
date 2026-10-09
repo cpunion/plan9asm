@@ -786,8 +786,8 @@ func TestARM64FPOpsCoverage(t *testing.T) {
 
 	out := b.String()
 	for _, want := range []string{
-		"fcmp oeq double",
-		"fcmp uno double",
+		"fcmp ${1:d}, ${2:d}",
+		"mrs $0, nzcv",
 		"select i1",
 		"fadd double",
 		"fsub double",
