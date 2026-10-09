@@ -21,6 +21,12 @@ type GoX86NumericalReadCaptureRequest struct {
 	GoBinary, Directory, PackagePath, AssemblyFile, Target string
 	Environment                                            []string
 	Owners                                                 []*GoNumericalStorageOwner
+
+	// ReadonlyLiterals explicitly selects the same live SDK assembly source's
+	// independent private literal initializer role. Nil retains the TEXT-only
+	// boundary. Ordinary owned-main capture cannot consume this SDK role.
+	// This is not a numerical variable, pointer, caller or native-entry owner.
+	ReadonlyLiterals *GoX86SDKReadonlyLiteralDataOwner
 }
 
 // GoX86NumericalReadSource is a sealed source/native-instruction/numerical-owner
