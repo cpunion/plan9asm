@@ -22,11 +22,12 @@ type ordinaryDependencyOwner struct {
 	Proof    *gotoolprofile.OrdinaryDependencyProof
 	Packages map[string]ordinaryDependencyPackage
 	Modules  map[string]*ordinaryDependencyModule
+	Roots    map[string]string
 }
 
 type ordinaryDependencyPackage struct {
-	Source gotoolprofile.SourcePackageProof
-	Root   string
+	Source             gotoolprofile.SourcePackageProof
+	Root, ObservedRoot string
 }
 
 type ordinaryDependencyModule struct {
@@ -40,6 +41,7 @@ func (consumer *featureConsumer) captureOrdinaryDependencies(pkgs []*packages.Pa
 	owner := &ordinaryDependencyOwner{
 		Proof:    &gotoolprofile.OrdinaryDependencyProof{Protocol: gotoolprofile.OrdinaryDependencyProtocol},
 		Packages: make(map[string]ordinaryDependencyPackage), Modules: make(map[string]*ordinaryDependencyModule),
+		Roots: make(map[string]string),
 	}
 	var captureErr error
 	packages.Visit(pkgs, func(pkg *packages.Package) bool {
@@ -64,7 +66,7 @@ func (consumer *featureConsumer) captureOrdinaryDependencies(pkgs []*packages.Pa
 			captureErr = err
 			return false
 		}
-		owner.Packages[pkg.PkgPath] = ordinaryDependencyPackage{Source: source, Root: root}
+		owner.Packages[pkg.PkgPath] = ordinaryDependencyPackage{Source: source, Root: root, ObservedRoot: ordinaryDependencyActualRoot(consumer, pkg)}
 		return true
 	}, nil)
 	if captureErr != nil {
@@ -128,11 +130,16 @@ func (consumer *featureConsumer) captureOrdinaryDependencyPackage(owner *ordinar
 			id = proof.SourceModule + "@" + proof.SourceVersion
 		}
 	}
+	observedRoot := root
 	var err error
 	root, err = filepath.EvalSymlinks(root)
 	if err != nil || !filepath.IsAbs(root) || id == "" && root != consumer.Dir {
 		return result, "", fmt.Errorf("ordinary dependency has a different actual source root")
 	}
+	if previous, present := owner.Roots[observedRoot]; present && previous != root {
+		return result, "", fmt.Errorf("ordinary dependency observed source root changed")
+	}
+	owner.Roots[observedRoot] = root
 	var inventory *gotoolprofile.SourceInventory
 	if id == "" {
 		inventory = &owner.Proof.Candidate
@@ -166,7 +173,11 @@ func (consumer *featureConsumer) captureOrdinaryDependencyPackage(owner *ordinar
 	if len(actual.GoFiles) == 0 {
 		return result, "", fmt.Errorf("ordinary dependency lacks original Go sources")
 	}
-	if err := gotoolprofile.CaptureSourceDirectory(consumer.Context, inventory, root, filepath.Dir(actual.GoFiles[0]), len(actual.EmbedPatterns) != 0); err != nil {
+	directory, err := ordinaryDependencyOriginalPath(observedRoot, root, filepath.Dir(actual.GoFiles[0]))
+	if err != nil {
+		return result, "", err
+	}
+	if err := gotoolprofile.CaptureSourceDirectory(consumer.Context, inventory, root, directory, len(actual.EmbedPatterns) != 0); err != nil {
 		return result, "", err
 	}
 	capture := func(files []string, assembly bool) ([]string, error) {
@@ -174,6 +185,10 @@ func (consumer *featureConsumer) captureOrdinaryDependencyPackage(owner *ordinar
 		for _, filename := range files {
 			if assembly && filepath.Ext(filename) != ".s" {
 				continue
+			}
+			filename, err := ordinaryDependencyOriginalPath(observedRoot, root, filename)
+			if err != nil {
+				return nil, err
 			}
 			name, err := filepath.Rel(root, filename)
 			name = filepath.ToSlash(name)
@@ -215,7 +230,7 @@ func (consumer *featureConsumer) captureOrdinaryDependencyPackage(owner *ordinar
 		result.ImportMap[spelling] = dep.PkgPath
 	}
 	result.Package, result.SourceRootID = proof, id
-	result.Embed, err = captureTestPackageEmbedSelection(proof, root, actual)
+	result.Embed, err = captureOrdinaryPackageEmbedSelection(proof, observedRoot, root, actual)
 	return result, root, err
 }
 
@@ -284,6 +299,14 @@ func (consumer *featureConsumer) verifyOrdinaryOwner(owner *ordinaryDependencyOw
 	if owner.Proof == nil || owner.Proof.Protocol != gotoolprofile.OrdinaryDependencyProtocol || len(owner.Packages) == 0 {
 		return fmt.Errorf("ordinary dependency source owner is incomplete")
 	}
+	if len(owner.Roots) == 0 {
+		return fmt.Errorf("ordinary dependency source owner lacks its actual root identity")
+	}
+	for observed, canonical := range owner.Roots {
+		if _, err := ordinaryDependencyOriginalPath(observed, canonical, observed); err != nil {
+			return err
+		}
+	}
 	if err := gotoolprofile.VerifySourceInventory(consumer.Context, owner.Proof.Candidate, consumer.Dir); err != nil {
 		return err
 	}
@@ -316,7 +339,10 @@ func (consumer *featureConsumer) verifyOrdinaryEmbedPackage(pkg *packages.Packag
 	if !present || pkg.ID != pkg.PkgPath || isTestVariantPackage(pkg) {
 		return fmt.Errorf("ordinary dependency embed package changed its role")
 	}
-	actual, err := captureTestPackageEmbedSelection(bound.Source.Package, bound.Root, pkg)
+	if ordinaryDependencyActualRoot(consumer, pkg) != bound.ObservedRoot {
+		return fmt.Errorf("ordinary dependency actual module source root changed")
+	}
+	actual, err := captureOrdinaryPackageEmbedSelection(bound.Source.Package, bound.ObservedRoot, bound.Root, pkg)
 	if err != nil {
 		return err
 	}
