@@ -1,141 +1,118 @@
 # Current work: PR 40 verification repairs
 
 Read [validation](validation.md), [instruction families](instructions.md), and
-[discovery verification](discovery-verification.md). This checkpoint is not a
-completion certificate. Inspect actual owners, clean revisions, complete raw
-reports and frozen tools before accepting any result.
+[discovery verification](discovery-verification.md). Inspect actual clean
+revisions, frozen tools and complete raw reports before accepting results.
+Component tests and namespace classification are not current-head CI.
 
-## Contribution and active owners
+## Contribution and owners
 
 Stage repairs in fork Draft [PR 4](https://github.com/cpunion/plan9asm/pull/4),
 targeting `codex/expand-ecosystem-corpus-20260913`. Push only to `cpunion`.
-Do not update the upstream-connected head until fork current-head CI and review
-pass; never push to, approve, merge or close upstream PR 40.
+Do not promote the upstream-connected head before fork current-head CI/review
+pass. Never push to, approve, merge or close upstream PR 40.
 
-Published `c09eff1e`, run `37711752851`, remains the last completed fork run:
-four priority shards failed and two reached their deadlines. Downstream skips
-and failed aggregate checks are not passes. Batch fixes before pushing again.
+Published `c09eff1e`, completed run `37711752851`, remains failed: four priority
+shards failed and two reached deadlines. Downstream skips and failed completion
+aggregates are not passes. Batch verified repairs before pushing.
 
-Development is on `codex/pr40-result-effects-20261009`, integrated through
-`55b71af0`. Independent owners retain these immutable snapshots:
+Development is on `codex/pr40-result-effects-followup-20261010`, integrated
+through `741ccef4`. Independent owners have complete scalar CMP/TEST and SDK
+literal/numerical joins in progress. Root alone publishes the assembly ledger.
+Never edit, rebase or import into running snapshots.
 
-- `codex/pr40-result-effects-verify-20261010`, `0529fa9c`: complete ordinary
-  main-module run under `_out/result-effects-module/`. The root inventory has
-  5,385 roots and 32 two-worker partitions. Subsequent DATA, shift and pure-GP
-  commits are not in this snapshot. Let the entire module owner finish,
-  including failures; inspect the final report, not only progress messages.
-- `codex/pr40-cpp-register-matrix-20261009`, `3e82acad`: fixed external sample
-  under `_out/broad-external-sample-20261009/`. `selection.json` fixes 21 exact
-  candidates across 19 existing 64-way shards before outcomes. The current
-  collector writes `reports-final/` and `run-remaining.log`.
-  An earlier shell-variable error ran shard 5 successfully, then rejected CLI
-  arguments before further candidate execution. Original failed reports remain;
-  a stopped duplicate retry remains incomplete. Only the independently
-  validated original shard-5 report was copied verbatim into the final set.
-  Do not mix failed/incomplete journals into final aggregation.
+## Integrated systematic repairs
 
-Root alone publishes the assembly ledger. Never rebase/edit/import into a
-running snapshot or supply replacement tools.
+The batch extends earlier native whole128 moves, aligned DATA, complete CLMUL,
+packed shifts, bounded numerical DATA reads and pure-GP scratch propagation:
 
-## Integrated rules and verification
+- Full X/Y/Z byte definedness, wider-alias preserve/zero rules and CFG joins.
+  Low-X initialization cannot establish unknown wider bytes.
+- Complete mode32 static-SB address roles: Go ignores base annotations but
+  retains indexes. No frame, bounds or pointer authority follows.
+- Twenty non-scalar INSERT/EXTRACT names: all chunk, immediate, alias and mask
+  axes. Masked extraction requires independent read and store authority.
+- Complete VPTERNLOGD/Q forms and all 256 alias-aware truth tables. Dead
+  outputs never erase required memory effects.
+- Twelve packed-move result families. Seven unaligned forms preserve full
+  volatile or guarded masked-lane reads. Five aligned forms use the original
+  side-effecting opcode to preserve native alignment and fault behavior.
+- Private conditional availability paired with full block-insertion reads,
+  including zero-mask/dead E6NF tuples. Public observers and raw/frame/store
+  contracts remain separate.
+- Bounded negative header-preflight reuse with repeated source/tool guards,
+  mutation invalidation and cancellation. Cached queries are not test credit.
 
-Earlier integration repaired diagnostic joins, raw/AUTO replay, complete
-GP/X/MMX FP widths and physical CPP register aliases. Alias filtering permits
-only an exact emitted bare-symbol to register rewrite; result-name filtering
-still requires complete source identity and the result CFG.
+At `6d356caa`, combined family tests passed in 83.066 seconds. Block-native
+reads at `b1dbf01d` passed their 13.465-second complete gate and Go 1.20 gate.
+Aligned packed moves at `2b280b82` passed 45-root component, 39-root legacy/raw
+and Go 1.20 gates before integration. Logs stay in each owner's ignored
+`_out/`. These are finite scopes: portable/Rosetta tests and compiled native
+oracles do not replace required Linux/amd64 native AVX512 runtime roots.
 
-The current batch adds:
+## Frozen verification
 
-- Original native side-effecting opcodes for all seven legacy whole128 moves,
-  shared by both dispatchers, preserving dead-load faults and native alignment.
-  Each declares its own SSE/SSE2 features. Logical FP/AUTO storage acquires no
-  native backing/alignment from this change.
-- Go source DATA/GLOBL alignment on all five architectures, checked against
-  actual linked Go objects, both LLVM emitters and runtime addresses. Private
-  synthesized literal pools retain their separate rules.
-- Complete CLMUL grammar, selected-qword byte dependencies and correct wider
-  alias writes. The actual-Go format matrix covers 1,653 accepted witnesses.
-- All 24 packed logical/byte/per-lane shift names share byte dependencies.
-  Independent tests cover every imm8 and width/count axis; 30,628 actual-Go
-  accepted witnesses and 336 mode32 high-Z rejections pass. Floating immediates
-  are rejected; mode32 truncation follows Go without rewriting source.
-- A lowering-only numerical result check pairs exact native whole128 loads
-  with reaching incoming-pointer identity. It supplies no bounds, nonaliasing,
-  alignment, initialized Go pointee or raw/caller-entry permission.
-- One immutable per-file directory describes the emitted DATA/GLOBL numerical
-  allocation, including zero-filled holes. Complete resolved objects reject
-  relocations, unresolved extents and function/signature collisions across
-  aliases. Typed consumers require full native widths, including legacy m128
-  shift counts. The temporary directory cannot escape into CFG state or public
-  queries. Isolated transfer clones restore it only inside the same callback.
-  Building once avoids quadratic global/signature scans per TEXT.
-- Closed nontrapping pure-GP operations propagate unknown scratch bytes into
-  unknown dependent outputs/flags. Later branches, addresses, stores or results
-  still require defined inputs. Failed ordinary transfers use isolated clones.
-  No GP entry initialization or pointer-as-number permission is added; ordinary
-  GP MOV remains outside this closed fallback.
+- `codex/pr40-result-effects-verify-20261010`, `0529fa9c`:
+  `_out/result-effects-module/reports/module.json` completed: 19/20 packages
+  passed, root 31/32 partitions passed. The sole root failure was the obsolete
+  MOVAPD assertion fixed by `5a438791`. Preserve that failed historical report.
+- `codex/pr40-wide-result-verify-20261010`, `6d356caa`:
+  `_out/wide-result-verification-20261010/reports/shard-4.json` proves
+  `github.com/klauspost/crc32@v1.3.0` passed eleven-target planning, two
+  applicable ASM files and six LLVM objects (three OSes times amd64/arm64).
+  It does not prove runtime or other shard candidates. Strict SDK benchmark
+  attempted 184 files: 167 pass, 17 fail, zero skip/N/A/unattempted. Time
+  budgets passed but correctness did not.
+- `codex/pr40-cpp-register-matrix-20261009`, `3e82acad`:
+  `_out/broad-external-sample-20261009/selection.json` fixes 21 exact versions
+  across 18 shards before outcomes. Independent final readback confirms
+  12 passes, two source N/A, four failures, 129 ordinary plus seven
+  instrumentation translations. Sourcegraph was interrupted by low disk and
+  remains incomplete; gd and Beeketing/snappy were not started. No whole shard
+  is complete. Preserve original failed/aborted journals and final-set reports.
+  Math32 includes actual five-architecture objects, not merely planned targets.
+- `codex/pr40-header-preflight-reuse-20261010`, `a95b9713`:
+  `_out/planning-performance-validation-20261010/` reruns the two planning
+  failures with unchanged sixty-minute candidate bounds. Purego completed
+  planning but failed actual ARM64 call/native-scratch ABI contracts.
+  Inspect coroutine's final owner/report; a retained resource-interruption
+  note disqualifies clean timing comparisons.
 
-Logs remain under `_out/legacy-move-native/`, `_out/scalar-result-data/` and
-`_out/result-effects-combined/`. Combined families at `01010e38` pass in
-100.901 seconds; combined DATA/pure-GP/polynomial tests pass in 34.155 seconds
-before `55b71af0` commits the tested callback adjustment. These are finite
-scopes, not a full-suite pass. Earlier misspelled VEX fixture failures remain;
-corrected explicit Go names establish the actual legacy-count RED and GREEN.
+The official five-arch classification gate passed at `6d356caa` with zero
+unsupported/parse errors. Context forms are not semantic/ABI/runtime passes.
+Remaining strict SDK failures involve original frames/entry state, ABIInternal
+transport, numerical globals and alignment; unbound storage is not a fix.
 
-The polynomial composition compares identical original Go assembly and an
-independent reference over 1,156 cases, then all three LLVM APIs at O0/O2:
-pointer reads, aligned constants, CLMUL, shifts, loops, joins and scalar returns.
-Missing-proof mutations remain errors. Pure-GP tests cover 235 amd64 and 169
-mode32 programs; 227 non-BMI2 runtime programs compare original Go and LLVM.
-Exact Go 1.20 and focused race scopes pass at their component revisions.
-BMI2 and true native alignment require their Linux/amd64 runtime counterparts;
-local Rosetta transport is not a native execution certificate.
+## Next steps
 
-## Next work
-
-1. Finish and independently read both running owners, preserving failures and
-   incomplete reports. Rerun current-head combined gates after successors;
-   old component passes do not transfer automatically.
-2. Validate the discovering CRC library on a clean integrated disposable
-   validator. Its failure involved native reads, DATA, CLMUL, shifts and an
-   unused undefined DI update. Independent rules now compose; this is not yet
-   an external CRC pass or a current standard-library CRC pass.
-3. Complete mode32 static-SB address roles: Go ignores base annotations but not
-   indexes. An SP/BP annotation must not become virtual-frame storage. Preserve
-   dynamic-index bounds, segment/raw/pointer and amd64 rejection boundaries.
-4. Investigate repeated Go tool/source/profile planning queries in external
-   verification. Reuse only within a validated operation; retain mutation,
-   tool-identity, cleanup and profile-scope checks. Do not change a running
-   validator or remove applicable instrumentation scopes.
-5. Run nested CLIs, vet/build, strict SDK/benchmark, required native/cross
-   runtime and current-head fork CI. Refresh upstream before final promotion.
-
-The five-arch official classification gate at `01010e38` passes with zero
-unsupported/parse errors but includes Context forms, not 100% semantics or ABI.
-The last strict SDK benchmark attempted 184 files: 167 pass, 17 fail, no
-skip/N/A/unattempted. Rerun it; changes do not retroactively change that report.
+1. Finish/review complete CMP/TEST formats, physical byte views, immediate
+   semantics and dead-read tests. Correct the independent byte-budget fixture
+   for the wider vector domain without increasing production limits.
+2. Join existing live SDK read-only DATA initializer ownership to exact
+   source/CPP/native numerical reads. Original SDK CRC needs DATA/header/
+   namespace and EVEX-boundary closure; bypassing guards cannot provide it.
+3. Collect frozen results, resume unfinished fixed samples on a clean bounded
+   executor, and rerun integrated, nested CLI, compatibility, race, SDK and
+   native/cross-runtime gates before publishing the fork batch.
 
 ## Inventory, ledger and resources
 
-No local background index/discovery/external corpus. Inventory stays on the
-source-only scanner; compilation/execution uses separate disposable validators.
-Local first-party tests are allowed. cgo inventory stays outside this repo.
+Inventory remains on the source-only scanner; compilation/execution uses
+separate disposable validators. No local background index scanner. cgo
+inventory stays outside this repository.
 
-At `3e82acad`, automatic assembly evidence records five complete candidate
-passes (xxhash/v2, websocket and three snappy modules), one CRC failure and
-6,061 pending candidates. Reports: `_out/cpp-register-matrix/discovery-reports/`.
-The ledger is incomplete/unverified, not evidence for a changed translator.
+At `3e82acad`, committed assembly evidence records five candidate passes, one
+old CRC failure and 6,061 pending. Neither old passes nor the newer CRC report
+may be relabeled current-head evidence. Publish only automatic matching
+schema-11 source/scan/tool/file/target/profile evidence; never mix revisions.
 
-The rebuilt streaming path-plus-major remerge retains 21,257,856 contiguous
-index entries, 1,051,454 unique paths, 6,700 assembly versions and 84,225 files
-in independent staging. It restored 126 remote-only major-line records and one
-historical local-only record. Discovery is not imported/compiled coverage;
-the committed assembly denominator is 6,067. Do not rescan old ranges or import
-outputs normalized by the obsolete path-only tool.
+Independent staging retains 21,257,856 contiguous index entries, 1,051,454
+unique paths, 6,700 assembly versions and 84,225 files after path-plus-major
+remerge. This is not imported translation coverage; the committed denominator
+remains 6,067. Do not rescan old ranges with obsolete path-only deduplication.
+Keep funnel tables in the PR body.
 
-Publish only automatic matching schema-11/source/scan/tool/file/target/profile
-evidence. Context, source N/A, first-party tests and provisional exclusions are
-not module passes. Keep funnel tables in the PR body. Inspect owners/disk before
-launching heavy gates or cleanup. Release LLVM modules before contexts and
-remove only validated owned caches after all consumers close; never selected
-shared tools. Never rewrite historical failures into successes.
+Disk exhaustion interrupted the broad sample. Preserve all reports, selections
+and tool/source hashes. Clean only exact owned derived caches after every
+consumer closes, never shared/live caches. Compile one test binary for grouped
+gates and avoid concurrent large cold builds.
