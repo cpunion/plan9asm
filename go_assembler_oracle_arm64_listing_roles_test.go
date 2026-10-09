@@ -55,8 +55,22 @@ func TestGoAssemblerOracleARM64CompleteBranchListingRoles(t *testing.T) {
 
 func TestGoAssemblerOracleARM64BranchListingRejectsUnboundMetadata(t *testing.T) {
 	source := x86DiagnosticFixture(t, "BL R0")
+	// Go 1.20 prints four complete DRconv classes; current Go prints five.
+	// Both are diagnostic schemas, not accepted instruction or ABI authority.
+	for _, schema := range []struct{ name, tail string }{
+		{"historical_four", "NONE NONE NONE REG, 0 7"},
+		{"historical_four_reg_third", "NONE NONE REG NONE, 0 7"},
+		{"current_five", "NONE NONE NONE REG NONE, 0 7"},
+	} {
+		t.Run(schema.name, func(t *testing.T) {
+			if !goAssemblerOracleARM64SourceDiagnostic(source, "arm64", arm64BranchDiagnostic(source, "CALL R0", schema.tail)) {
+				t.Fatalf("complete diagnostic schema lost: %q", schema.tail)
+			}
+		})
+	}
+
 	for _, tail := range []string{
-		"", "NONE NONE REG NONE, 0 7", "NONE NONE NONE REG NONE NONE, 0 7",
+		"", "NONE NONE REG, 0 7", "NONE NONE NONE REG NONE NONE, 0 7",
 		"NONE NONE NONE C_?? NONE, 0 7", "NONE NONE NONE UNKNOWN NONE, 0 7",
 		"NONE NONE NONE REG NONE, -1 7", "NONE NONE NONE REG NONE, 15 7",
 		"NONE NONE NONE REG NONE, 0 15", "NONE NONE NONE REG NONE, 00 7",
