@@ -21,9 +21,9 @@ func TestOrdinaryCPPFormalIncludeOperandsDefaultTargetsAndReaders(t *testing.T) 
 }
 
 func TestOrdinaryCPPFormalGeneratedHeaderUsesActualNativeProducer(t *testing.T) {
-	// This additional first-party header scope is not full-default coverage.
-	// A full11 header proposal exceeds the unchanged 64-profile budget; its
-	// actual failure is retained separately, not relabeled as passing evidence.
+	// This single-target first-party scope independently exercises query-only
+	// header observations and the missing-inventory negative. It is not
+	// full-default coverage; profiles are bounded per actual target.
 	checkOrdinaryCPPFormalIncludes(t, "linux/amd64", true)
 }
 
