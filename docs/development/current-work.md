@@ -1,277 +1,115 @@
 # Current work: PR 40 verification repairs
 
 Read [validation](validation.md), [instruction families](instructions.md), and
-[discovery verification](discovery-verification.md). This checkpoint is not a
-completion certificate. Inspect actual source, report inputs and terminal owners;
-retain original failures and never transfer a component pass to a combined head.
+[discovery verification](discovery-verification.md). This checkpoint is a
+handoff, not a completion certificate. Inspect the actual frozen HEAD, complete
+raw reports, inventories and terminal owners before accepting a result.
 
-## Contribution and execution boundaries
+## Contribution boundary
 
 Stage repairs in fork Draft [PR 4](https://github.com/cpunion/plan9asm/pull/4),
 targeting `codex/expand-ecosystem-corpus-20260913`. Push only to cpunion.
-Upstream [PR 40](https://github.com/xgo-dev/plan9asm/pull/40) stays Draft.
-Do not update its upstream-connected head until current-head fork CI and review
-pass. Root alone publishes assembly-ledger updates.
+Do not update the upstream-connected head until fork current-head CI and review
+pass; never push to or merge upstream [PR 40](https://github.com/xgo-dev/plan9asm/pull/40).
+Root alone publishes assembly-ledger updates.
 
-Published `c09eff1e`, run `37711752851`, finished failed naturally: four
-priority shards failed and two reached the deadline. Aggregate/completion checks
-failed; skipped downstream suites are not passes. Batch repairs before pushing.
+Published `c09eff1e`, run `37711752851`, finished failed: four priority shards
+failed and two reached their deadlines. Downstream skips and failed aggregate
+checks are not passes. Batch verified repairs before another push.
 
-The frozen preceding integration head is `ab5302a1`, on
-`codex/pr40-next-batch-20261009`. Preserve preceding integration and component
-worktrees; do not mutate a checkout with live consumers.
+## Frozen evidence and development branch
 
-The original two-worker combined root run at `ae0eee75` closes failed at its
-45-minute outer deadline: 31/32 shards pass, the last remains incomplete.
-The original owners are gone; strict independent readback rejects the timed-out
-owner instead of granting a complete pass. Retain that failure. The preceding
-root-part/parsed-grammar batch and its focused gates remain frozen at `eb8a8779`.
-The frozen `8f095690` successor includes the GNU label and VMOV lifecycle
-repairs below. The new development successor is
-`codex/pr40-oracle-module-integration-20261009`, which also includes the complete
-strict assembler-oracle repair. Freeze it before its own complete gates;
-component passes do not transfer to this head.
+The complete ordinary module run at `2ae09eb7` naturally closed **failed**.
+All eight root parts, corpus/rest owners and aggregate finished; no timeout or
+cleanup failure obscures its source/SDK/tool-stable result. Its 54 failed root
+tests, 34 failed corpus-driver roots and four failed gotoolprofile roots remain
+regressions. Do not overwrite this checkout or its original reports.
+
+The next integration branch is `codex/pr40-ci-family-batch-20261009`, based on
+`e50f590a`. It is still a development integration, not a verified combined head.
+Keep component worktrees frozen; inspect this branch's actual commits before
+starting gates. Earlier passes establish only their exact component revisions:
+
+- `4617d12d`: complete explicit IMUL source/caller family, zero-operand
+  diagnostics, actual ARM64 lazy-tool routes and backend physical-source prefix.
+- `8c60cde3`: complete x86 aliases, scalar positive-zero rewrites, frontend
+  physical-line/label roles and mode32 operand-class diagnostic metadata.
+- `e50f590a`: exact MOVL/Q address-to-LEAL/Q diagnostic joins, including I386's
+  distinct EXTERN/STATIC role. Three affected roots pass; no ISA/ABI permission
+  is obtained from a diagnostic spelling.
+- `7b05cb4c`: an explicit trailing backend-diagnostic route binds complete
+  ARM64 TEXT attributes, frame/argument values and the exact unaligned-frame
+  error. Original 34-node RED becomes 34-node GREEN. The complete ordinary
+  oracle package passes separately; its default diagnostic route is unchanged.
+- `e34c78c6`: shared target CPU command-environment construction fixes foreign
+  inherited CPU keys without sanitizing output or weakening profile validation.
+  Seven focused roots and the original four instrumentation roots pass.
+  The complete original 34-root corpus-driver rerun is a separate pending gate;
+  it has exposed a real generated-header fixture deadline failure.
+- `8061bd59`: explicit wasm unknown-word lexical roles preserve complete
+  original statement/suffix binding. Component ordinary/race/Go-1.20 oracle
+  scopes pass; this is not wasm runtime or LLVM object coverage.
+
+Two further components have independent TDD evidence but must complete their
+own matrices before integration and current-head reruns:
+
+- ARM64 branch diagnostics at `348e27b9`: B/BL aliases, canonical P/W suffixes,
+  complete historical four-class/current five-class directories, and actual
+  selected-SDK bare From versus register/special-operand lexical roles. A bare
+  From symbol prints zero offset; it is not a resolved label-PC permission.
+- Private x86 whole128 observer at `7d931314`: exact same-Void-source/private
+  caller/normalized-ordinal read16 joins. Its 402-node new family passes, but
+  the larger original gate fails on missing old MOVOA diagnostic aliases.
+  Successor `dc2e4918` integrates the complete previously verified oracle chain
+  and is rerunning the full affected scope. Public/direct/nonVoid, aligned,
+  scalar/half, native-store and unknown-extent boundaries remain unchanged.
+
+## Next work, in order
+
+1. Let each active finite gate finish, including failures. Recheck actual
+   source/tools/binaries, full raw EOF, all listed root/subtest outcomes and
+   owned processes independently. Incomplete or killed tests remain failures.
+2. Diagnose the generated-header fixture's last actual command, repeated build
+   work and owned resource lifetime. Reproduce with the original finite budget;
+   optimize the cause, never conceal it by enlarging deadlines or skipping.
+3. Finish affected ordinary/race and actual Go-1.20 component matrices. Integrate
+   only their reviewed ordered commits, preserving the original RED evidence.
+   Replace this checkpoint once the next integration is ready to freeze.
+4. Freeze the combined source and rerun all original failed roots, complete
+   affected families, the exhaustive original two-worker module plan, nested
+   CLIs, vet/build, official encoder/decoder, strict SDK/benchmark and required
+   native CI. Component passes never transfer to a new combined HEAD.
+5. Continue the SDK numerical source/object seam, dynamic reflect frames,
+   native entry/TLS/continuations and full result/body contracts by typed rule
+   class. Then run discovering libraries and all 64 external shards on the
+   designated validators and publish only matching complete schema-11 reports.
+
+The strict five-target SDK baseline still attempts all 184 files: 167 pass and
+17 fail, with zero skip/N/A/unattempted. Official five-arch classification has
+zero unsupported/parse errors but includes Context forms; classification is
+not complete LLVM, ABI or runtime success. SDK numerical capture remains
+query-only: its genuine CRC consumer failure is not integrated or promoted.
+
+## Resource and ledger rules
 
 No local background index/discovery/external corpus. Inventory stays on the
-designated source-only scanner; external compilation/execution belongs on a
-separate disposable validator, never the inventory server. Local first-party
-fixtures and corpus-driver unit tests remain allowed.
+designated source-only scanner; external compilation/execution belongs on
+separate disposable validators. Local first-party fixtures and corpus-driver
+unit tests remain allowed. cgo inventory stays outside this repository.
 
-## Independently closed preceding integration
+Use task-owned caches for new verification. A selected shared lazy tool vanished
+and disk exhaustion caused real reader/setup failures; retain those failures.
+Check available disk before compilation. Do not delete selected tools or cache
+entries until every consumer and independent reader closes. A prior cache size
+or manifest does not authenticate its current bytes. Dispose LLVM modules before
+Contexts and serialize heavy full-suite/container gates when resources are tight.
 
-At the exact frozen `ab5302a1` head:
+The committed inventory reaches the requested cutoff, but newer remote records
+are not synchronized. Inspect its actual writer, manifest and journal before
+importing; never duplicate a writer or replace its live binary. Status, lookup
+and publication stream sharded records rather than loading the ledger payload.
 
-- Complete ordinary root: all 32 partitions close, with 5,217 roots and
-  97,101 children passing, 39 explicitly named host-inapplicable root skips,
-  and zero failure/incomplete nodes. This diagnostic used four workers;
-  the original CI two-worker timing and required cross-runtime counterparts
-  remain separate gates.
-- Complete corpus-driver ordinary: all 32 partitions close, with 637 roots
-  and 2,309 children passing, zero failure/skip/incomplete. The successor uses
-  the original two workers, `-p=2`, GOMAXPROCS=2 and 45-minute budgets.
-  Preserve the preceding four-worker run's three real fixture timeouts.
-- All 16 other main-module packages: 552 roots and 3,351 children pass,
-  zero failure/skip/incomplete.
-- Nested CLI ordinary: plan9asm passes 23 roots/14 children;
-  plan9asmll passes 229 roots/1,721 children.
-- Official five-arch classification and the complete required ARM64 decoder
-  gate pass separately. Context forms and decoder-only Go rejection do not
-  establish complete LLVM object or runtime coverage.
-
-These scopes have independently read source/SDK/tool/binary identities,
-complete raw EOF, actual inventories and closed owners. Different module-owner
-worker plans are not one coherent full-module certificate. Complete current-head
-race, historical framework, strict SDK/benchmark and native CI remain pending.
-
-The head includes complete typed instruction/caller/frame repairs, downloaded
-original source/object joins, tool-fixture isolation, bounded per-validation CPP
-indexes, ARM64 syscall/virtual-NZCV/carry grammar and live SDK DATA/TEXT
-observation. Observation is not numerical-read or native-entry authority.
-
-## Current component batch
-
-The additional two-scalar ARM64 carrier component is integrated from
-`585c67ce`, `16d3a828`, `7a0e0247`. Its original component head independently
-closes 63 roots/947 children in both ordinary and race, actual Go-1.20 framework
-28 roots/650 children, and required Linux original-Go/three-API LLVM O0/O2
-runtime (760 checks per lane, one root/six children). All nine wider native-store
-result combinations and the exact-width control retain declared values, native
-bytes and canaries. The second parameter initializes only its four bytes,
-not the following gap. SDK, pointers, R2/R3 and Or32/And32 are not granted.
-Original producer-P/consumer-RED, reused-PID reader failure and Docker setup
-failure remain retained; new independently closed readers do not rewrite them.
-
-SDK readonly literal initializers are integrated from the seven-commit chain
-ending at `b574efa3`. Root independently replays the exact ordinary/race union:
-123 roots and 1,088 children pass per lane, plus Go-1.20's five roots/65 children
-and actual Go27/Go20 vet/build. Every required original/mapped/archive DATA/TEXT,
-Go object and linked ELF initializer reader closes. Private integer/float/string
-and zero-tail bytes do not grant pointers, mutation, DUPok, relocation or
-native-vector permission. Initializer observation is not SDK numerical
-consumption or CRC32 success. Earlier callback-timer, Go20 metadata and exact
-Darwin linker-warning harness failures remain separately retained.
-
-ARM64 nanosleep is integrated from the 13-commit chain ending at `19b60584`:
-
-- Private input: `170c90a8`, based on `ab5302a1`.
-  Exact Linux SVC0/R8=101/R1=NULL consumes a fully initialized private
-  16-byte timespec, without native-frame or result/NZCV permission.
-  Ordinary/race each close 81 roots/1,253 children and actual Go-1.20 closes
-  nine roots/279 children. Actual Linux original-Go kernel axes pass, but the
-  six LLVM runtime children initially fail compiling the C driver's unquoted
-  ELF package/path label. The test-only `19b60584` quotes that unchanged symbol;
-  its actual Linux rerun and root's independent reader close one root and nine
-  children without fail/skip/incomplete. Each LLVM lane checks the intercepted
-  input equation, three short real sleeps and a real EINTR with NULL rem.
-  The initial Linux failure remains retained. The complete actual runtime SDK
-  counterpart selects 11 assembly files (13 archive members include the two
-  compiler members): seven compile and four fail, with zero N/A. Whole-file
-  sys_linux_arm64.s now advances past usleep to walltime's native saved-frame
-  context failure; asm_arm64.s, preempt_arm64.s and tls_arm64.s also fail.
-  This partial result and every changed combined-head gate remain separate.
-
-The parsed-op diagnostics component, `codex/pr40-parsed-op-diagnostics-20261009`,
-retains actual RED macro/target-report cases and 30 Go-accepted quoted-DATA
-parser failures. Its `01d44f6f` source checkpoint derives hints from the complete
-actual parsed input, clears them per file, and preserves whole quoted tokens
-when splitting semicolon statements. Focused ordinary/race and Go-1.20 parser
-gates pass; 30 DATA fixtures retain exact padded bytes through three APIs and
-LLVM 22 object compilation on all five targets. Nested diagnostic ordinary/race
-passes separately. These are not complete-module or external-ledger passes.
-
-The CI root-parts executor component retains its original RED fixtures. Its
-`f0177658` checkpoint adds eight root jobs, once-only corpus/rest jobs, fresh
-aggregate inventories and strict raw/coverage union checks. Its bounded rerun
-and root's independent reader close six roots/38 children, the existing CI
-policy root, Node policy, actionlint and shell checks. Earlier setup and exact
-Go temporary-prefix-map nonce wrapper failures remain retained; the new wrapper
-normalizes only the actual direct-child uint32 nonce and preserves raw input.
-These commits are integrated into the successor; complete legacy runner,
-race/Go-1.20 results are recorded below; other changed combined-head gates
-remain required.
-
-At exact combined head `8f095690`, the complete runner package now closes
-ordinary and race with 59 roots/155 children each, zero failure/skip/incomplete,
-and actual Go-1.20 framework with ten roots/six children. Root's fresh independent
-readback verifies the complete actual inventories, raw EOF and closed owners.
-The 35 Node policy tests, actionlint, shell checks and runner build/vet also
-close. This is the runner package, not the complete root/module, native CI,
-SDK benchmark or an external-library pass. The original timeout remains failed.
-
-The actual eight-part module run at that head remains failed: part zero closes
-with 648 roots passing and seven named host skips, but part one is interrupted
-by its owner's one-second process-query timeout. The remaining six parts,
-corpus/rest owners and aggregate were not attempted. Read-only process and
-source checks close the observed failed generation, not the module certificate.
-Repair the bounded observer and rerun the complete plan on the next frozen
-integration head; never reuse this partial pass or enlarge test deadlines.
-
-At the same frozen head, the original five-architecture official inventory
-script closes naturally, and root independently replays its unchanged Python
-checker against all five retained complete reports. Source, SDK, selected tools
-and report generations remain stable. All original fingerprints match and
-unsupported/parse-error counts are zero, but 260 forms still require context.
-This inventory check is not complete LLVM object, ABI or runtime coverage.
-
-The GNU C-label component retains its actual Linux compiler RED at `f6e7ea58`.
-The test-only `ebfce45f` keeps the exact LLVM symbol while distinguishing
-Clang's raw symbol from GNU's assembler quoting layer. Root's independent Linux
-readback closes one root/14 children: ordinary, slash-qualified and nested-path
-symbols compile, link and execute with both actual compilers; old GNU rejection
-controls remain. The discovering CMOV Linux/ARM64 GCC path is still a separate
-required runtime gate, not certified by these tiny AMD64 fixtures.
-
-VMOV's original Go runtime command now uses the shared deadline and owned
-process-group lifecycle. `54a7918c` first fails its newly added AST regression;
-`bdea351d` closes affected ordinary tests and the complete focused race/Go-1.20
-scope (13 roots/202 children each, no skip/failure/incomplete). The original
-506-form matrix, four LLVM targets, three APIs and actual host Go/LLVM runtime
-checks remain intact. This lifecycle repair grants no new instruction or ABI
-permission, and does not replace the required Linux runtime counterpart.
-
-The assembler-oracle component and SDK development retain these distinct scopes:
-
-- The ordered assembler-oracle chain ending at `1fd11b98` is integrated into
-  the development successor. Original real-tool REDs remain preserved. Its
-  shared strict observer binds exit status, complete separate streams and
-  original statement positions; accepted cases require complete actual objects.
-  Whole identifiers follow Go's lexer rather than mnemonic-name membership.
-  Component ordinary/race each close 24 roots and 140 children, zero skips.
-  Independent readers reconstruct split output records and recheck every
-  instrumented owner; the root scope has no individual inner-owner records.
-  The original complete decoder script closes with 703 accepted objects and
-  91 concrete source refusals across all 794 cases, zero unknown failures;
-  all 800 recorded query/case owners are absent and the baseline is unchanged.
-  This is not combined-head, LLVM/runtime, SDK or external-module success.
-  Its ignored launcher lacks a total owner timer and reviewed cleanup guard;
-  the actual source/object result does not certify that harness contract.
-  A separate real Go-1.20 run retains three portable roots passing and the two
-  fixed-current-SDK producer roots failing the object-schema pin. The successor
-  integrates their explicit `go1.27` build-role split without changing either
-  test body; shared helpers and all portable checks stay untagged, never Skip.
-  Fresh split-head current/historical inventories and complete gates remain
-  required; the preceding component results cannot establish them.
-- SDK literal-read models remain query-only. At `85d36df1`, the complete
-  statement/listing grammar scope closes ordinary and race with 20 roots and
-  346 children each; the actual Go-1.20 framework closes 18 roots/238 children.
-  Original fixture and canonical-number failures remain retained. The real
-  whole-source join at `136336a2` still fails after its complete original CRC
-  source, initializer and same-SDK CPU prerequisites pass. Root independently
-  checks all six original/mapped/archive DATA/TEXT readers. Public numerical
-  capture remains Context and borrowed owners/commands are unchanged. Connect
-  this actual source/tape/listing/object seam before numerical consumption;
-  do not integrate the retained failing consumer or claim CRC runtime success.
-
-## Required next gates and remaining rule classes
-
-The next local batch is `codex/pr40-verified-grammar-batch-20261009`, based
-on frozen `2ae09eb7`. Its preceding complete module run is still running and
-has real diagnostic/tool-route failures; do not edit that live checkout or
-transfer its partial results. This successor integrates three reviewed classes:
-
-- Complete zero-operand source/listing joins from `ef503ae4`. Component race
-  and actual Go-1.20 oracle scopes pass; six original discovering root tests
-  pass on each SDK. One later ordinary reader rejects a reused child PID:
-  its original assembly command closed before the unrelated process started.
-  Preserve that reader failure; never kill the unrelated process or pretend
-  the PID is absent.
-- Explicit IMUL source/caller effects from `f55f450a`: 35 affected roots and
-  1,602 children pass in both ordinary and race, independently read back.
-  This does not supply unknown pointee bytes or a native/result ABI contract.
-- Actual ARM64 lazy tool/export cache routing from `efddfd9b`: the new two
-  roots/16 children and four original failing roots/54 children close normally.
-  Physical source paths and asm/compile SDK roles remain strict; only actual
-  Go-selected cache routes are canonicalized and their sealed bytes rechecked.
-  This is path/byte identity, not cross-observation inode continuity.
-
-These are component certificates only. Freeze and test the combined head;
-alias/scalar-rewrite/frontend diagnostic successors and SDK numerical reads
-remain separate work. Ledger promotion and current-head CI remain pending.
-
-1. Complete and independently read each component handoff; cherry-pick only
-   its ordered commits into the persistent successor. Freeze the combined head
-   before testing. Do not relabel earlier certificates.
-2. Run combined affected ordinary/race, exhaustive root with the original
-   two-worker plan, all other packages, both nested CLIs, Go-1.20 framework,
-   official encoder/decoder, strict stdlib/benchmark and required native CI.
-   Root budgets stay 45 minutes ordinary and 60 minutes race. Bounded exhaustive
-   disjoint partitions retain full inventories and one collector.
-3. Repair SDK numerical reads, dynamic reflect frames, native entry/TLS/
-   continuations, full original result carriers and complete body effects
-   by typed rule class with independent regressions. Do not use library-name
-   instruction exceptions or infer authority from spelling, hashes or flags.
-4. Run the discovering samples and all 64 external shards on the designated
-   validators, then automatically publish matching complete schema-11 reports.
-   Push one verified batch to the fork and let failure-first CI finish.
-
-The frozen strict five-target SDK baseline `2c943968` attempts all 184 files:
-167 pass and 17 fail, with zero skip/N/A/unattempted. Thus strict benchmark and
-stdlib matrix still fail. Successful isolated bodies do not certify full SDK
-files. Never bless a coverage fingerprint to hide failures or increase budgets
-to conceal repeated work.
-
-Dispose LLVM modules before Contexts. Serialize heavy Docker/full-suite gates
-on a resource-constrained host. Preserve selected lazy Go tool binaries inside
-their recorded cache paths for readback; do not delete an entire cache merely
-because its test process has closed. Clean only exact owned, unreferenced data
-after all consumers and independent readers have closed.
-
-## Inventory and ledger
-
-Committed assembly ledger: three historical Snappy passes, 6,064 pending,
-zero complete shards; complete=false and verified=false. Only the automatic
-publisher can promote complete schema-11 reports with matching frozen source,
-scan, tool, file/target/profile and consumer proofs. First-party instruction,
-observation or runtime tests never hand-upgrade a module.
-
-Committed inventory retains 215 continuous ranges, cutoff 2025-10-01 and head
-2026-09-22T22:43:08Z. The cutoff is reached; history_complete instead means the
-entire index to its epoch. Newer remote records are not synchronized. Inspect
-actual owner, manifest and journal before importing; do not duplicate the writer
-or hot-replace its binary. cgo records stay outside this repository.
-Sharded status, batch lookup and publication stream records instead of retaining
-the whole ledger payload. Legacy monolithic imports remain explicit.
-
-Keep scan/coverage funnel tables in the PR body, derived from validated reports.
-Partial reports, Context and provisional exclusions are not passes. CI/review/
-coverage completion requires every required current-head gate to close.
+The assembly ledger is incomplete and unverified. Only automatic publication
+of complete, matching source/scan/tool/file/target/profile/consumer proofs may
+promote entries. First-party passes, Context and provisional exclusions are not
+module passes. Keep scan/coverage funnel tables in the PR body, not this guide.
