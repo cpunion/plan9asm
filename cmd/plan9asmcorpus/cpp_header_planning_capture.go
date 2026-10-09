@@ -64,6 +64,7 @@ func installDiscoveryHeaderPlanning(ctx context.Context, plan *discoveryOrdinary
 	}
 	plan.headerPlanningInventory = newDiscoveryFeatureInventory()
 	plan.headerPlanningRecheck = check
+	var unsupported discoveryHeaderPreflightReuse
 	plan.headerPlanningCapture = func(request discoveryFeatureProfileRequest, assembly string, tags []string) (header *gotoolprofile.GeneratedHeaderProof, result error) {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -71,9 +72,22 @@ func installDiscoveryHeaderPlanning(ctx context.Context, plan *discoveryOrdinary
 		if err := check(); err != nil {
 			return nil, err
 		}
+		key := discoveryHeaderPlanningKey(request, assembly, tags)
 		defer func() {
-			if err := check(); err != nil {
+			guardErr := check()
+			if err := errors.Join(guardErr, ctx.Err()); err != nil {
+				// A caller catches Unsupported to retain all CPU proposals. Do
+				// not leave that classification reachable through a joined
+				// cancellation or changed-input error.
+				var unsupported *discoveryHeaderPlanningUnsupported
+				if errors.As(result, &unsupported) {
+					result = fmt.Errorf("native header source preflight: %s", result)
+				}
 				header, result = nil, errors.Join(result, err)
+			}
+			var sourceUnsupported *discoveryHeaderPlanningUnsupported
+			if result != nil && !errors.As(result, &sourceUnsupported) {
+				unsupported.remove(key)
 			}
 		}()
 		if rules == nil {
@@ -90,12 +104,32 @@ func installDiscoveryHeaderPlanning(ctx context.Context, plan *discoveryOrdinary
 			if len(plan.HeaderPlanning.Queries) >= 4096 {
 				return nil, fmt.Errorf("native header planning exceeds its explicit query bound")
 			}
-			key := discoveryHeaderPlanningKey(request, assembly, tags)
 			for _, query := range plan.HeaderPlanning.Queries {
 				if discoveryHeaderPlanningKey(query.Profile.Request, query.Assembly, query.BuildTags) == key {
 					return replayDiscoveryPlanningHeader(plan, request, assembly, tags)
 				}
 			}
+		}
+		if observed, err := unsupported.lookup(key); err != nil {
+			return nil, err
+		} else if observed != nil {
+			// A retained observation is only a source-predicate input. Recheck
+			// complete original source/ZIP bytes on every negative reuse; it
+			// cannot authorize a query or register an executed profile.
+			profile := discoveryFeatureProfile{ID: discoveryFeatureProfileID(observed), Request: request, Observed: observed}
+			queryPlan, err := discoveryHeaderQuerySourcePlan(plan, profile)
+			if err != nil {
+				return nil, err
+			}
+			if err := preflightDiscoveryHeaderQuery(queryPlan, profile, download, assembly, tags); err != nil {
+				if gotoolprofile.NativeHeaderSourceDomainUnsupported(err) {
+					return nil, &discoveryHeaderPlanningUnsupported{err.Error()}
+				}
+				return nil, err
+			}
+			// A now-closed domain must obtain fresh actual tool observations
+			// before generating any header or other successful proof.
+			unsupported.remove(key)
 		}
 		observed, err := cache.observe(ctx, goBinary, markers, env, request.Target, request.Overrides)
 		if err != nil {
@@ -108,6 +142,9 @@ func installDiscoveryHeaderPlanning(ctx context.Context, plan *discoveryOrdinary
 		}
 		if err := preflightDiscoveryHeaderQuery(queryPlan, profile, download, assembly, tags); err != nil {
 			if gotoolprofile.NativeHeaderSourceDomainUnsupported(err) {
+				if err := unsupported.remember(key, observed); err != nil {
+					return nil, err
+				}
 				return nil, &discoveryHeaderPlanningUnsupported{err.Error()}
 			}
 			return nil, err
@@ -200,10 +237,21 @@ func readDiscoveryHeaderPlanningSource(name string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
+	return readDiscoveryHeaderPlanningInput(file)
+}
+
+func readDiscoveryHeaderPlanningInput(file io.ReadCloser) (data []byte, result error) {
+	defer func() {
+		if err := file.Close(); err != nil {
+			data, result = nil, errors.Join(result, err)
+		}
+	}()
 	data, err := io.ReadAll(io.LimitReader(file, 2<<20+1))
-	if err != nil || len(data) > 2<<20 {
-		return nil, fmt.Errorf("planning source is unreadable or exceeds its byte bound: %v", err)
+	if err != nil {
+		return nil, fmt.Errorf("planning source is unreadable: %w", err)
+	}
+	if len(data) > 2<<20 {
+		return nil, fmt.Errorf("planning source exceeds its byte bound")
 	}
 	return data, nil
 }

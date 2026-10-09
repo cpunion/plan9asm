@@ -673,6 +673,18 @@ and export hashes, actual header/object hashes and canonical full definitions.
 Offline replay relies on frozen producer provenance; production compares
 the actual compiler bytes and full definitions independently. Metadata queries
 alone never discharge a translation scope.
+Generated-header planning privately retains cost-only negative source preflights
+for one candidate operation, keyed by the complete requested profile, assembly
+file and custom tags. Retention is bounded to 4,096 entries and 16 MiB of keys
+and serialized observations; exceeding the bound simply performs fresh work.
+Every reuse rechecks complete original source/ZIP bytes, source selection and
+language, plus the SDK and owned workspace before and after the attempt. It
+grants no header, profile, object or N/A credit. A now-supported source domain
+requires a fresh actual tool observation and query; final executed profiles
+always retain their independent actual producer checks. Ordinary errors are not
+cached. Cancellation, changed-input and source-close failures stay fatal even
+when the source model also reports an unsupported domain.
+
 An explicit consumer input may register this metadata for a later translation.
 That consumer independently reloads the same source/profile/import roles and
 recompiles the full header before translating; self-consistent changed JSON is
