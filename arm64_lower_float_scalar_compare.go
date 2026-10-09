@@ -18,12 +18,10 @@ func (c *arm64Ctx) lowerARM64ScalarFloatCompare(op Op, ins Instr) (ok bool, term
 	}
 
 	bits := 64
-	typeName := "double"
 	if op == "FCMPS" || op == "FCMPES" {
 		bits = 32
-		typeName = "float"
 	}
-	right := formatLLVMFloat64Literal(0)
+	right := ""
 	if ins.Args[0].Kind == OpReg {
 		right, err = c.loadARM64ScalarFloatReg(ins.Args[0].Reg, bits)
 		if err != nil {
@@ -34,7 +32,7 @@ func (c *arm64Ctx) lowerARM64ScalarFloatCompare(op Op, ins Instr) (ok bool, term
 	if err != nil {
 		return true, false, err
 	}
-	c.setARM64FloatCompareFlags(typeName, left, right)
+	c.emitARM64ScalarFloatCompare(bits, op == "FCMPES" || op == "FCMPED", left, right)
 	return true, false, nil
 }
 
@@ -49,22 +47,40 @@ func arm64ScalarFloatCompareSource(operand Operand) bool {
 	return operand.Kind == OpImm && operand.ImmRaw == "" && operand.ImmIsFloat
 }
 
-func (c *arm64Ctx) setARM64FloatCompareFlags(typeName, left, right string) {
-	equal := c.newTmp()
-	less := c.newTmp()
-	greater := c.newTmp()
-	unordered := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = fcmp oeq %s %s, %s\n", equal, typeName, left, right)
-	fmt.Fprintf(c.b, "  %%%s = fcmp olt %s %s, %s\n", less, typeName, left, right)
-	fmt.Fprintf(c.b, "  %%%s = fcmp ogt %s %s, %s\n", greater, typeName, left, right)
-	fmt.Fprintf(c.b, "  %%%s = fcmp uno %s %s, %s\n", unordered, typeName, left, right)
-	greaterOrEqual := c.newTmp()
-	carry := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = or i1 %%%s, %%%s\n", greaterOrEqual, greater, equal)
-	fmt.Fprintf(c.b, "  %%%s = or i1 %%%s, %%%s\n", carry, greaterOrEqual, unordered)
+// DDI0602 FCMP/FCMPE differ for quiet NaNs and both consume FPCR and update
+// FPSR even when NZCV is dead. Execute the exact operation, capturing NZCV in
+// the same asm block. The memory barrier orders existing native MRS/MSR;
+// it grants no memory, source-layout or machine-entry permission. All virtual
+// source reads were recorded by loadARM64ScalarFloatReg, and no SIMD bits change.
+// An empty right operand represents the architecture's immediate-zero form.
+func (c *arm64Ctx) emitARM64ScalarFloatCompare(bits int, signaling bool, left, right string) {
+	opcode := "fcmp"
+	if signaling {
+		opcode = "fcmpe"
+	}
+	typeName, modifier := "double", "d"
+	if bits == 32 {
+		typeName, modifier = "float", "s"
+	} else if bits == 16 {
+		typeName, modifier = "half", "h"
+	}
+	assembly := fmt.Sprintf("%s ${1:%s}, #0.0\\0Amrs $0, nzcv", opcode, modifier)
+	constraints := "=r,w,~{cc},~{memory}"
+	arguments := typeName + " " + left
+	if right != "" {
+		assembly = fmt.Sprintf("%s ${1:%s}, ${2:%s}\\0Amrs $0, nzcv", opcode, modifier, modifier)
+		constraints = "=r,w,w,~{cc},~{memory}"
+		arguments += ", " + typeName + " " + right
+	}
+	nzcv := c.newTmp()
+	// Assembly already contains an LLVM newline escape rather than a literal
+	// newline: do not quote it through %q a second time.
+	c.emitMachineNeutralNativeIR("  %%%s = call i64 asm sideeffect \"%s\", %q(%s)\n", nzcv, assembly, constraints, arguments)
 	c.flagsWritten = true
-	c.storeFlag(c.flagsNSlot, "%"+less)
-	c.storeFlag(c.flagsZSlot, "%"+equal)
-	c.storeFlag(c.flagsCSlot, "%"+carry)
-	c.storeFlag(c.flagsVSlot, "%"+unordered)
+	for index, slot := range []string{c.flagsVSlot, c.flagsCSlot, c.flagsZSlot, c.flagsNSlot} {
+		shifted, flag := c.newTmp(), c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = lshr i64 %%%s, %d\n", shifted, nzcv, 28+index)
+		fmt.Fprintf(c.b, "  %%%s = trunc i64 %%%s to i1\n", flag, shifted)
+		c.storeFlag(slot, "%"+flag)
+	}
 }

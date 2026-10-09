@@ -50,7 +50,7 @@ func TestTranslateARM64ScalarFloatCompareCompleteGoAssemblerForms(t *testing.T) 
 			if err != nil {
 				t.Fatal(err)
 			}
-			for _, want := range []string{"fcmp oeq float", "fcmp uno float", "fcmp oeq double", "fcmp uno double"} {
+			for _, want := range []string{`asm sideeffect "fcmp ${1:s}`, `asm sideeffect "fcmpe ${1:s}`, `asm sideeffect "fcmp ${1:d}`, `asm sideeffect "fcmpe ${1:d}`} {
 				if !strings.Contains(ir, want) {
 					t.Fatalf("scalar floating compare lowering omitted %q:\n%s", want, ir)
 				}

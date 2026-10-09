@@ -81,6 +81,23 @@ func arm64ScalarCompareActualGo(t *testing.T, source, main, goos string, runner 
 	t.Log(strings.TrimSpace(string(output)))
 }
 
+func arm64CompareGoObject(t *testing.T, source, goos string) {
+	t.Helper()
+	directory := t.TempDir()
+	assembly, object := filepath.Join(directory, "compare.s"), filepath.Join(directory, "compare.o")
+	if err := os.WriteFile(assembly, []byte(source), 0600); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := runtimeOracleStageContext(t)
+	defer cancel()
+	command := exec.CommandContext(ctx, "go", "tool", "asm", "-p", "compare", "-o", object, assembly)
+	command.Env = append(os.Environ(), "GOOS="+goos, "GOARCH=arm64", "CGO_ENABLED=0", "GOTOOLCHAIN=local")
+	output, err := runtimeOracleCombinedOutput(ctx, command)
+	if failure := goAssemblerOracleOutcome(assembly, object, output, err, ctx.Err(), true, "arm64"); failure != nil {
+		t.Fatalf("actual Go %s object: %v\n%s", goos, failure, output)
+	}
+}
+
 func arm64ScalarCompareDeadRuntime(t *testing.T, triple, goos string, compiler, runner []string) {
 	t.Helper()
 	llc := findLLVM22Tool("llc")

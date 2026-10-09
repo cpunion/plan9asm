@@ -109,15 +109,15 @@ func TestTranslateARM64RawScalarFloatCompareCompleteArchitectureFamily(t *testin
 				t.Fatal(err)
 			}
 			for _, want := range []string{
-				"fcmp oeq half", "fcmp oeq float", "fcmp oeq double",
-				"fcmp uno half", `"target-features"="+fullfp16"`,
+				`asm sideeffect "fcmp ${1:h}`, `asm sideeffect "fcmp ${1:s}`, `asm sideeffect "fcmp ${1:d}`,
+				`asm sideeffect "fcmpe ${1:h}`, `"target-features"="+fullfp16"`,
 			} {
 				if !strings.Contains(ir, want) {
 					t.Fatalf("raw scalar float-compare IR omitted %q:\n%s", want, ir)
 				}
 			}
-			if got := strings.Count(ir, "fcmp oeq"); got != 12 {
-				t.Fatalf("raw scalar float-compare emitted %d equality tests, want 12:\n%s", got, ir)
+			if got := strings.Count(ir, `asm sideeffect "fcmp`); got != 12 {
+				t.Fatalf("raw scalar float-compare emitted %d native comparisons, want 12:\n%s", got, ir)
 			}
 
 			llc := findLLVM22Tool("llc")

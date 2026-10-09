@@ -50,7 +50,7 @@ func decodeARM64RawScalarFloatCompare(word uint32) (arm64RawScalarFloatCompare, 
 }
 
 func (c *arm64Ctx) lowerRawScalarFloatCompare(form arm64RawScalarFloatCompare) error {
-	floatType, _, ok := arm64ScalarFloatType(form.bits)
+	_, _, ok := arm64ScalarFloatType(form.bits)
 	if !ok {
 		return fmt.Errorf("arm64 unsupported scalar float width %d", form.bits)
 	}
@@ -58,13 +58,13 @@ func (c *arm64Ctx) lowerRawScalarFloatCompare(form arm64RawScalarFloatCompare) e
 	if err != nil {
 		return err
 	}
-	right := formatLLVMFloat64Literal(0)
+	right := ""
 	if !form.zero {
 		right, err = c.loadARM64ScalarFloatReg(Reg(fmt.Sprintf("F%d", form.second)), form.bits)
 		if err != nil {
 			return err
 		}
 	}
-	c.setARM64FloatCompareFlags(floatType, left, right)
+	c.emitARM64ScalarFloatCompare(form.bits, form.signaling, left, right)
 	return nil
 }
