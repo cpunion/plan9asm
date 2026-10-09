@@ -30,6 +30,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		func(_ int, ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string) bool {
 			state.loweredStaticReads = c.fpScalarData
 			defer func() { state.loweredStaticReads = nil }()
+			if accepted, recognized := x86LoweredBlockInsertRead(ins, state, owned, resultOffset, arch); recognized {
+				return accepted
+			}
 			if form, known, err := amd64PackedVectorMoveProperties(ins, arch); known && err == nil &&
 				form.memory == 0 && form.unalignedOrdinaryMemory(ins, arch) &&
 				x86ResultIncomingPointerAddressIdentity(ins.Args[0], state, arch) {
