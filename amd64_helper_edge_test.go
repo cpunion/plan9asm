@@ -1325,7 +1325,9 @@ func TestAMD64FPMovCoverage(t *testing.T) {
 		"store i32",
 		"store i16",
 		"store i8",
-		`load <16 x i8>, ptr @"example.vec"`,
+		// Native MOVAPD must retain its aligned opcode and dead-read fault;
+		// an ordinary LLVM load is no longer the correct lowering contract.
+		`call <4 x float> asm sideeffect "movapd ($1), $0", "=x,r,~{memory}"(ptr @"example.vec")`,
 	} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("missing %q in output:\n%s", want, out)
