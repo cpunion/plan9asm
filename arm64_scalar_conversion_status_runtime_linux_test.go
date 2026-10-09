@@ -46,19 +46,17 @@ func arm64ScalarConversionKnownObservation(index int, fixture arm64ScalarConvers
 		if control>>22&3 == 1 && flags != 0 {
 			result++ // Round toward positive infinity; other modes round down here.
 		}
-		if fixture.simd {
-			row.input[12] = value
-		} else {
-			row.input[64] = value
-		}
-	} else {
-		row.input[12] = value
+	}
+	row.input[fixture.sourceWord()] = value
+	if fixture.zero && fixture.toFloat {
+		result, flags = 0, 0
 	}
 	copy(row.want[:66], row.input[:66])
 	if !fixture.dead {
 		if fixture.toFloat || fixture.simd {
-			row.want[46], row.want[47] = result, 0
-		} else {
+			word := fixture.resultWord()
+			row.want[word], row.want[word+1] = result, 0
+		} else if !fixture.zero {
 			row.want[65] = result
 		}
 	}
@@ -170,7 +168,7 @@ int main(void) {
 	return original.String(), driver.String()
 }
 
-func TestCrossLinuxRuntimeMatrixARM64ScalarConversionNativeStatus(t *testing.T) {
+func runARM64ScalarConversionObservations(t *testing.T, fixtures []arm64ScalarConversionFixture, rows []arm64ScalarConversionObservation) {
 	if os.Getenv("PLAN9ASM_CROSS_EXEC") != "1" {
 		t.Skip("native FPCR/FPSR execution belongs to the required Linux/QEMU matrix")
 	}
@@ -187,22 +185,6 @@ func TestCrossLinuxRuntimeMatrixARM64ScalarConversionNativeStatus(t *testing.T) 
 		}
 	}
 	t.Setenv("QEMU_CPU", "max")
-	fixtures := arm64ScalarConversionFixtures()
-	for _, fixture := range append([]arm64ScalarConversionFixture(nil), fixtures...) {
-		fixture.dead = true
-		fixtures = append(fixtures, fixture)
-	}
-	var rows []arm64ScalarConversionObservation
-	for index, fixture := range fixtures {
-		for rounding := 0; rounding < 4; rounding++ {
-			for flush := 0; flush < 2; flush++ {
-				for defaultNaN := 0; defaultNaN < 2; defaultNaN++ {
-					control := uint64(rounding)<<22 | uint64(flush)<<24 | uint64(defaultNaN)<<25
-					rows = append(rows, arm64ScalarConversionKnownObservation(index, fixture, control))
-				}
-			}
-		}
-	}
 	source, sigs := arm64ScalarConversionSource(fixtures)
 	original, driver := arm64ScalarConversionPrograms(fixtures, rows)
 	dir := t.TempDir()
@@ -243,4 +225,49 @@ func TestCrossLinuxRuntimeMatrixARM64ScalarConversionNativeStatus(t *testing.T) 
 			})
 		}
 	}
+}
+
+func TestCrossLinuxRuntimeMatrixARM64ScalarConversionNativeStatus(t *testing.T) {
+	fixtures := arm64ScalarConversionFixtures()
+	for _, fixture := range append([]arm64ScalarConversionFixture(nil), fixtures...) {
+		fixture.dead = true
+		fixtures = append(fixtures, fixture)
+	}
+	var rows []arm64ScalarConversionObservation
+	for index, fixture := range fixtures {
+		for rounding := 0; rounding < 4; rounding++ {
+			for flush := 0; flush < 2; flush++ {
+				for defaultNaN := 0; defaultNaN < 2; defaultNaN++ {
+					control := uint64(rounding)<<22 | uint64(flush)<<24 | uint64(defaultNaN)<<25
+					rows = append(rows, arm64ScalarConversionKnownObservation(index, fixture, control))
+				}
+			}
+		}
+	}
+	runARM64ScalarConversionObservations(t, fixtures, rows)
+}
+
+func TestCrossLinuxRuntimeMatrixARM64ScalarConversionBanksAliasesAndZR(t *testing.T) {
+	var fixtures []arm64ScalarConversionFixture
+	for _, fixture := range arm64ScalarConversionFixtures() {
+		if fixture.simd {
+			for source := 0; source < 32; source++ {
+				for _, destination := range []int{source, 31 - source} {
+					alias := fixture
+					alias.word = alias.word&^uint32(31<<5|31) | uint32(source)<<5 | uint32(destination)
+					fixtures = append(fixtures, alias)
+				}
+			}
+		} else {
+			fixture.zero = true
+			fixtures = append(fixtures, fixture)
+		}
+	}
+	var rows []arm64ScalarConversionObservation
+	for index, fixture := range fixtures {
+		for _, control := range []uint64{0, 0x03400000} {
+			rows = append(rows, arm64ScalarConversionKnownObservation(index, fixture, control))
+		}
+	}
+	runARM64ScalarConversionObservations(t, fixtures, rows)
 }

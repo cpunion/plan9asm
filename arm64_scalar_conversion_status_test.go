@@ -15,7 +15,28 @@ type arm64ScalarConversionFixture struct {
 	word                          uint32
 	floatBits, integerBits        int
 	toFloat, unsigned, simd, dead bool
+	zero                          bool
 	rounding                      int // N, A, P, M, Z in architecture order below.
+}
+
+func (fixture arm64ScalarConversionFixture) sourceWord() int {
+	if fixture.toFloat && !fixture.simd {
+		return 64
+	}
+	if fixture.word != 0 {
+		return int(fixture.word>>5&31) * 2
+	}
+	return 12
+}
+
+func (fixture arm64ScalarConversionFixture) resultWord() int {
+	if !fixture.toFloat && !fixture.simd {
+		return 65
+	}
+	if fixture.word != 0 {
+		return int(fixture.word&31) * 2
+	}
+	return 46
 }
 
 func arm64ScalarConversionFixtures() []arm64ScalarConversionFixture {
@@ -103,13 +124,7 @@ func arm64ScalarConversionSource(fixtures []arm64ScalarConversionFixture) (strin
 		}
 		source.WriteString("MOVD (R0),R2\nMOVD 8(R0),R3\nMRS FPCR,R10\nMRS FPSR,R11\n")
 		source.WriteString("MOVD 16(R0),R12\nMSR R12,FPCR\nMOVD 24(R0),R12\nMSR R12,FPSR\n")
-		if fixture.word != 0 {
-			fmt.Fprintf(&source, "WORD $%#08x\n", fixture.word)
-		} else if fixture.toFloat {
-			fmt.Fprintf(&source, "%s R2,F23\n", fixture.name)
-		} else {
-			fmt.Fprintf(&source, "%s F6,R3\n", fixture.name)
-		}
+		source.WriteString(arm64ScalarConversionInstruction(fixture) + "\n")
 		if fixture.dead {
 			source.WriteString("SUB $512,R0,R4\n")
 			for register := 0; register < 32; register++ {

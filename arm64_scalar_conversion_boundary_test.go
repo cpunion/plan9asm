@@ -44,10 +44,25 @@ func arm64ScalarConversionAPI(t *testing.T, api, source, triple string) (string,
 
 func arm64ScalarConversionInstruction(fixture arm64ScalarConversionFixture) string {
 	if fixture.word != 0 {
-		return fmt.Sprintf("WORD $%#08x", fixture.word)
+		word := fixture.word
+		if fixture.zero && !fixture.simd {
+			if fixture.toFloat {
+				word = word&^uint32(31<<5) | 31<<5
+			} else {
+				word |= 31
+			}
+		}
+		return fmt.Sprintf("WORD $%#08x", word)
 	}
+	gp := "R2"
 	if fixture.toFloat {
-		return fixture.name + " R2,F23"
+		if fixture.zero {
+			gp = "ZR"
+		}
+		return fixture.name + " " + gp + ",F23"
+	}
+	if fixture.zero {
+		return fixture.name + " F6,ZR"
 	}
 	return fixture.name + " F6,R3"
 }
@@ -112,6 +127,18 @@ func TestARM64ScalarConversionDoesNotDefineUnknownMergedLanes(t *testing.T) {
 			}
 			if !initialize && !strings.Contains(err.Error(), "read") {
 				t.Fatalf("missing high-lane proof failed for unrelated reason: %v", err)
+			}
+		}
+	}
+}
+
+func TestARM64ScalarConversionDecoderSpellingsAreNotGoSource(t *testing.T) {
+	for _, name := range []string{"SCVTFDD", "SCVTFSS", "UCVTFDD", "UCVTFSS"} {
+		source := "TEXT conversion(SB),4,$0-0\n" + name + " F0,F1\nRET\n"
+		requireARM64GoAssemblerResult(t, source, false)
+		for _, api := range []string{"text", "module", "Go"} {
+			if _, err := arm64ScalarConversionAPI(t, api, source, "aarch64-unknown-linux-gnu"); err == nil {
+				t.Errorf("%s accepted decoder-only %s as public Go source", api, name)
 			}
 		}
 	}
