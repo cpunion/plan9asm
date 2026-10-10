@@ -32,29 +32,16 @@ func validateARM64ScalarConversionNativeTarget(file *File, options Options) erro
 	for _, function := range file.Funcs {
 		for _, instruction := range function.Instrs {
 			if instruction.Op == OpWORD {
+				if err := arm64RawWordPreflightError(instruction); err != nil && rawError == nil {
+					rawError = err
+				}
 				if len(instruction.Args) != 1 || instruction.Args[0].Kind != OpImm ||
 					instruction.Args[0].ImmRaw != "" || instruction.Args[0].ImmIsFloat {
-					if rawError == nil {
-						rawError = fmt.Errorf("arm64 WORD expects exactly one resolved integer constant: %q", instruction.Raw)
-					}
 					continue
 				}
 				word := uint32(instruction.Args[0].Imm)
 				if arm64RawScalarConversion(word) {
 					needsNative = true
-					continue
-				}
-				if _, valid := arm64RawContinuationEffectsForWord(word); valid {
-					continue
-				}
-				if _, valid := arm64RawSVEEffects(word); valid {
-					continue
-				}
-				// A syntax-only placeholder lets the decoder check actual PC
-				// encodings here. It grants no edge/layout proof: the original
-				// source still takes the normal complete PC normalization path.
-				if _, err := decodeARM64RawWordInstructionTarget(instruction, "preflight"); err != nil && rawError == nil {
-					rawError = err
 				}
 				continue
 			}
