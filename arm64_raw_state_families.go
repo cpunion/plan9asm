@@ -4,6 +4,11 @@ package plan9asm
 // In particular, "~{memory}" on an inline asm is a compiler ordering barrier,
 // not evidence that an instruction stores to arbitrary source stack memory.
 var arm64RawStateFamilies = [...]arm64RawFamily{
+	arm64RawForm(decodeARM64RawNZCV, (*arm64Ctx).lowerARM64NZCV,
+		func(form arm64NZCVForm) arm64RawContinuationEffects {
+			reads, writes := form.gpEffects()
+			return arm64RawContinuationEffects{gpReads: reads, gpWrites: writes}
+		}),
 	arm64RawForm(decodeARM64RawDCZVA, (*arm64Ctx).lowerARM64CacheForm,
 		func(form arm64CacheForm) arm64RawContinuationEffects {
 			index, gp := arm64StackIndex(form.address)

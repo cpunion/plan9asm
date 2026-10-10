@@ -136,6 +136,11 @@ func TestARM64MRSCompleteGoSystemRegisterTable(t *testing.T) {
 			t.Fatalf("typed register metadata disagrees with Go: %s", row[0])
 		}
 		if spec.readable {
+			if row[1] == "NZCV" {
+				// Other system-register callouts above do not supply source
+				// NZCV. Seed this exact modeled read without granting entry flags.
+				source.WriteString("CMP R0,R0\n")
+			}
 			fmt.Fprintf(&source, "MRS %s, R0\n", row[1])
 			native = append(native, "mrs x0, "+arm64CanonicalSysReg(row[1]))
 			expected = append(expected, 0xd5300000|uint32(encoding))
@@ -175,10 +180,10 @@ func TestARM64MRSCompleteGoSystemRegisterTable(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if count := strings.Count(ir, `asm sideeffect "mrs $0, `); count != reads {
+			if count := strings.Count(ir, `asm sideeffect "mrs $0, `); count != reads-1 {
 				t.Fatalf("real reads=%d, Go-readable registers=%d", count, reads)
 			}
-			if count := strings.Count(ir, `asm sideeffect "msr `); count != writes {
+			if count := strings.Count(ir, `asm sideeffect "msr `); count != writes-1 {
 				t.Fatalf("real writes=%d, Go-writable registers=%d", count, writes)
 			}
 			compileLLVMToObject(t, llc, triple, "mrs-table.ll", "mrs-table.o", ir)

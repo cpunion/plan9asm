@@ -159,7 +159,7 @@ func TestARM64TypedNativeEffectsUnknownStateRemainsContext(t *testing.T) {
 		"MRS SCTLR_EL1,R0",
 		"MSR R0,TPIDR_EL0",
 		"WORD $0xd5300000",
-		"WORD $0xd51b4200",
+		"WORD $0xd51bd040", // MSR R0,TPIDR_EL0 stays outside this typed role.
 		fmt.Sprintf("WORD $0x%08x", uint32(0xd5300000)|uint32(spec.encoding)<<5|18),
 		fmt.Sprintf("WORD $0x%08x", uint32(0xd5300000)|uint32(spec.encoding)<<5|28),
 	} {

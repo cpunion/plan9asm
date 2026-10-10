@@ -36,6 +36,13 @@ func (c *arm64Ctx) lowerRawSystemRegister(form arm64RawSystemRegister) error {
 	if control, matched := arm64RawFPControl(form); matched {
 		return c.lowerARM64FPControl(control)
 	}
+	if form.encoding == arm64NZCVEncoding {
+		reg := ZR
+		if form.reg != 31 {
+			reg = Reg(fmt.Sprintf("R%d", form.reg))
+		}
+		return c.lowerARM64NZCV(arm64NZCVForm{read: form.read, reg: reg})
+	}
 	sysreg := arm64EncodedSystemRegisterName(form.encoding)
 	if form.read {
 		dst := ZR

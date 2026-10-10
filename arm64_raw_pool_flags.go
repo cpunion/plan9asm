@@ -117,6 +117,9 @@ func arm64RawPoolSVEPreservesNZCV(word uint32) bool {
 }
 
 func arm64RawPoolInstructionPreservesNZCV(instruction arm64asm.Inst) bool {
+	if form, valid := decodeARM64RawNZCV(instruction.Enc); valid {
+		return form.read
+	}
 	if form, valid := decodeARM64RawScalarRegister(instruction.Enc); valid {
 		return !form.flags
 	}

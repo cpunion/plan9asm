@@ -41,6 +41,10 @@ func arm64ScratchArgumentReads(argument arm64asm.Arg) (bool, bool) {
 func arm64ScratchNativeEffect(instruction arm64asm.Inst) (arm64ScratchEffect, bool) {
 	const scratch = uint32(1 << 27)
 	word := instruction.Enc
+	if form, valid := decodeARM64RawNZCV(word); valid {
+		reads, writes := form.gpEffects()
+		return arm64ScratchEffect{reads: reads&scratch != 0, defines: writes&scratch != 0}, true
+	}
 	if form, valid := decodeARM64RawScalarRegister(word); valid {
 		reads, writes, _ := form.gpEffects()
 		return arm64ScratchEffect{reads: reads&scratch != 0, defines: writes&scratch != 0}, true

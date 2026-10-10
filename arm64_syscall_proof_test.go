@@ -145,9 +145,9 @@ func TestARM64SyscallUnmodeledFlagsCannotBorrowCMP(t *testing.T) {
 	for _, api := range []string{"text", "module", "Go"} {
 		t.Run(api, func(t *testing.T) {
 			_, err := arm64SyscallEffectAPI(t, api, "aarch64-unknown-linux-gnu",
-				arm64SyscallEffectSource("CMP R2,R1\nMSR R3,NZCV\nSVC\nCSET CS,R2"))
+				arm64SyscallEffectSource("CMP R2,R1\nMSR R3,TPIDR_EL0\nSVC\nCSET CS,R2"))
 			if !errors.Is(err, ErrProbeNeedsContext) {
-				t.Fatalf("unregistered native NZCV cannot retain old CMP witness through SVC: %v", err)
+				t.Fatalf("unregistered native state cannot retain old CMP witness through SVC: %v", err)
 			}
 		})
 	}
@@ -157,7 +157,7 @@ func TestARM64FlagsUnmodeledNativeCalloutWithoutSyscall(t *testing.T) {
 	for _, api := range []string{"text", "module", "Go"} {
 		for _, observation := range []string{"CSET CS,R2", "JMP observe\nobserve:\nCSET EQ,R2", "ADC R2,R3"} {
 			t.Run(api+"/"+observation, func(t *testing.T) {
-				source := arm64SyscallEffectSource("CMP R2,R1\nMSR R3,NZCV\n" + observation)
+				source := arm64SyscallEffectSource("CMP R2,R1\nMSR R3,TPIDR_EL0\n" + observation)
 				requireARM64GoAssemblerResult(t, source, true)
 				_, err := arm64SyscallEffectAPI(t, api, "aarch64-unknown-linux-gnu", source)
 				if !errors.Is(err, ErrProbeNeedsContext) {
@@ -170,7 +170,7 @@ func TestARM64FlagsUnmodeledNativeCalloutWithoutSyscall(t *testing.T) {
 
 func TestARM64FlagsOnlyNativeObservationHasNoEntryOrDuplicateCFG(t *testing.T) {
 	for _, body := range []string{
-		"MOVD $3,R3\nMSR R3,NZCV",                 // Unobserved native flags remain object-only.
+		"MOVD $3,R3\nMSR R3,NZCV",                 // Exact source NZCV write needs no entry flags.
 		"CMP R2,R1\nMRS DCZID_EL0,R4\nCSET CS,R2", // Exact registered preservation.
 		"MSR R3,NZCV\nCMP R2,R1\nCSET CS,R2",      // A real later producer restores flags.
 	} {
