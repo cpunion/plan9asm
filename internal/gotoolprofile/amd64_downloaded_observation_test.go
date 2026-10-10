@@ -16,6 +16,8 @@ import (
 // GOSUMDB=off here is not a production source-authentication certificate.
 func amd64DownloadedObservationFixture(t *testing.T, variant string) (AMD64OriginalObservationRequest, string, string) {
 	t.Helper()
+	withoutGo := strings.HasSuffix(variant, "-no-go")
+	variant = strings.TrimSuffix(variant, "-no-go")
 	baseVariant := variant
 	if variant == "nested-import" || variant == "nested-foreign" {
 		baseVariant = "nested"
@@ -104,8 +106,12 @@ func amd64DownloadedObservationFixture(t *testing.T, variant string) (AMD64Origi
 	if variant == "foreign" || variant == "nested-foreign" {
 		foreignRoot := t.TempDir()
 		foreignModule := "example.invalid/foreign-observation"
+		foreignGoMod := "module " + foreignModule + "\ngo 1.20\n"
+		if withoutGo {
+			foreignGoMod = "module " + foreignModule + "\n"
+		}
 		for name, data := range map[string]string{
-			"go.mod":   "module " + foreignModule + "\ngo 1.20\n",
+			"go.mod":   foreignGoMod,
 			"shape.go": "package shape\ntype Word uint64\n",
 		} {
 			if err := os.WriteFile(filepath.Join(foreignRoot, name), []byte(data), 0600); err != nil {
@@ -125,6 +131,20 @@ func amd64DownloadedObservationFixture(t *testing.T, variant string) (AMD64Origi
 			"mod", "download", "-json", foreignModule+"@"+version)
 		if err != nil || len(stderr) != 0 {
 			t.Fatalf("actual generated foreign module download: %v; %s", err, stderr)
+		}
+	}
+	if withoutGo {
+		name := filepath.Join(root, "go.mod")
+		data, err := os.ReadFile(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(data), "\ngo 1.20\n") {
+			t.Fatal("first-party fixture lost its explicit language control")
+		}
+		data = []byte(strings.Replace(string(data), "\ngo 1.20\n", "\n", 1))
+		if err := os.WriteFile(name, data, 0600); err != nil {
+			t.Fatal(err)
 		}
 	}
 	method := uint16(zip.Deflate)

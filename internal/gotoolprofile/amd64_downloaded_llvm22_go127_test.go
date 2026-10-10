@@ -28,7 +28,12 @@ type amd64DownloadedLLVMFixture struct {
 
 func captureAMD64DownloadedLLVMFixture(t *testing.T, ctx context.Context, goos, triple string) amd64DownloadedLLVMFixture {
 	t.Helper()
-	request, pkg, exact := amd64DownloadedFramePublicFixture(t, "fixed-local")
+	return captureAMD64DownloadedLLVMVariantFixture(t, ctx, goos, triple, "fixed-local")
+}
+
+func captureAMD64DownloadedLLVMVariantFixture(t *testing.T, ctx context.Context, goos, triple, variant string) amd64DownloadedLLVMFixture {
+	t.Helper()
+	request, pkg, exact := amd64DownloadedFramePublicFixture(t, variant)
 	request.Target = goos + "/amd64"
 	request.Environment = replaceEnv(request.Environment, map[string]string{"GOOS": goos})
 	observed, err := captureAMD64DownloadedForTest(ctx, request, exact.SourceModule, exact.SourceVersion)
