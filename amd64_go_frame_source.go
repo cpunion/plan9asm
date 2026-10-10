@@ -301,7 +301,13 @@ func captureGoAMD64FrameSource(ctx context.Context, pkg GoPackage, request GoAMD
 		if source.numericalBinding != nil {
 			assemblyInput = filepath.Join(request.Directory, name)
 		}
-		listing, err := source.run(ctx, "tool", "asm", "-S", "-p", pkg.Path, "-I", request.Directory, "-I", filepath.Join(source.env["GOROOT"], "pkg", "include"), "-o", object, assemblyInput)
+		// Match the actual cmd/go ordinary target/profile definitions. The
+		// source preprocessor still rejects conditional/generated CPP without
+		// its own mapping; a CPU profile is not that separate authority.
+		listing, err := source.run(ctx, "tool", "asm", "-S", "-p", pkg.Path,
+			"-I", request.Directory, "-I", filepath.Join(source.env["GOROOT"], "pkg", "include"),
+			"-D", "GOOS_"+source.env["GOOS"], "-D", "GOARCH_amd64",
+			"-D", "GOAMD64_"+source.env["GOAMD64"], "-o", object, assemblyInput)
 		if err != nil {
 			return nil, err
 		}
@@ -647,9 +653,17 @@ func (source *GoAMD64FrameSource) observe(ctx context.Context) error {
 	if err := json.Unmarshal(data, &env); err != nil {
 		return err
 	}
-	if env["GOOS"]+"/"+env["GOARCH"] != source.request.Target || env["GOFLAGS"] != "" || env["GOEXPERIMENT"] != "" || env["GOAMD64"] != "v1" ||
+	if env["GOOS"]+"/"+env["GOARCH"] != source.request.Target || env["GOFLAGS"] != "" || env["GOEXPERIMENT"] != "" ||
 		filepath.Join(env["GOROOT"], "bin", "go") != source.request.GoBinary {
 		return goAMD64FrameContext("actual driver/target/CPU/source routing needs a separate audited contract")
+	}
+	switch env["GOAMD64"] {
+	case "v1", "v2", "v3", "v4":
+		// Each actual profile retains its own selected original Go sources,
+		// exports and object bytes. Verify compares this environment exactly;
+		// no capture is relabeled or reused across different CPU profiles.
+	default:
+		return goAMD64FrameContext("unregistered actual GOAMD64 profile %q", env["GOAMD64"])
 	}
 	version, err := source.read(filepath.Join(env["GOROOT"], "VERSION"))
 	if err != nil || strings.Split(string(version), "\n")[0] != env["GOVERSION"] {

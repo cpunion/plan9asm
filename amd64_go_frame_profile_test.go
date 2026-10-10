@@ -13,6 +13,11 @@ import (
 )
 
 func TestGoAMD64FrameSourceActualCPUProfiles(t *testing.T) {
+	// Share only this root's owned build cache. Go 1.27 builds its objdump
+	// helper there; rebuilding that tool for every profile adds no coverage.
+	// Every fixture retains its own source/module/temp directories and still
+	// runs actual Go selection, export, object and post-capture verification.
+	t.Setenv("GOCACHE", t.TempDir())
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc required")
@@ -78,6 +83,7 @@ func TestGoAMD64FrameSourceActualCPUProfiles(t *testing.T) {
 }
 
 func TestGoAMD64FrameSourceCPUProfileRevocation(t *testing.T) {
+	t.Setenv("GOCACHE", t.TempDir())
 	for _, profile := range []string{"v1", "v2", "v3", "v4"} {
 		t.Run(profile, func(t *testing.T) {
 			pkg, request := goAMD64FrameSourceFixture(t)
@@ -103,6 +109,7 @@ func TestGoAMD64FrameSourceCPUProfileRevocation(t *testing.T) {
 }
 
 func TestGoAMD64FrameSourceCPUProfilesDoNotGrantConditionalCPP(t *testing.T) {
+	t.Setenv("GOCACHE", t.TempDir())
 	for _, profile := range []string{"v1", "v2", "v3", "v4"} {
 		t.Run(profile, func(t *testing.T) {
 			pkg, request := goAMD64FrameSourceFixture(t)

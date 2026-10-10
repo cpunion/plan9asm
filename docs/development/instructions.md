@@ -718,7 +718,17 @@ requires the frame factory's own exact Go-download/whole-ZIP observation,
 canonical module/package/metadata/language identity and complete compiler
 source/export consumption. Replacements and unobserved version changes fail;
 restoring changed dependency bytes cannot revive a revoked observation.
-The source-role extension grants no new native instruction/memory effects,
-CPU profiles or dynamic-frame permission. Keep the original
-Go objects and three-API LLVM 22 O0/O2 objects on all AMD64 targets separate
-from actual external-library success.
+The source-role extension grants no new native instruction/memory effects or
+dynamic-frame permission. Keep the original Go objects and three-API LLVM 22
+O0/O2 objects on all AMD64 targets separate from external-library success.
+
+Ordinary fixed-local capture observes Go's actual AMD64 v1/v2/v3/v4 profiles
+independently. Original feature-tagged source selection, compiler exports,
+target/CPU environment and native objects stay bound to that exact capture;
+changing and restoring a profile cannot revive a revoked observation. The
+owned assembler uses cmd/go's GOOS, GOARCH and GOAMD64 definitions. Conditional
+or generated CPP still requires its separate source mapping. A higher profile
+is neither a native CPU execution certificate nor new memory permission.
+The focused profile tests own one disposable build cache per test root so
+Go 1.27's objdump helper is not rebuilt for every case; sources, modules and
+temporary artifacts remain separate, and every case reruns the actual driver.

@@ -59,7 +59,19 @@ with unrelated speculative implementation. Keep correctness gates unchanged.
   and exact foreign modules now have independent source/export/ZIP handoffs,
   with actual four-role RED/GREEN controls, three-API O0/O2 objects and
   metadata/source mutation negatives. CPU-profile and complete native frame
-  contracts remain separate; this is not crypto replay closure.
+  contracts remain separate; this is not crypto replay closure. At `fd57caf0`,
+  the Linux original-import/nested-object roots passed (337.394s), as did four
+  shared SDK/frame regression roots. Original x/crypto replay is terminal:
+  zero passes, one failure at the unrelated local `XOF` interface declaration.
+  The former root/import failures are absent, but this is not library closure.
+- The AMD64 fixed-local observer's v1-only gate has an independent RED for all
+  nine Go-accepted v2/v3/v4 combinations across Linux, Darwin and Windows.
+  All twelve target/profile combinations now pass actual source/export and
+  three-API LLVM object controls (72 objects), with profile-revocation and
+  conditional-CPP negatives. Actual Go 1.20 all-target profiles and existing
+  numerical/frame joins passed too. A test-root-owned build cache reduced this
+  focused current-Go suite from 140.877s to 62.199s without removing cases;
+  this is not a corpus-wide performance or external-library pass.
 - ARM64 FPCR/FPSR, NZCV, scalar binary operations and RNDR named/raw effects
   have independent original-Go and LLVM runtime evidence. Min/max's original
   full Linux run failed at the 45-minute deadline, without an observed value
@@ -100,6 +112,10 @@ and clean only exact owned caches after every consumer has closed.
   v0.0.0-20260609182332-5f2de1a9f1e2 and x/crypto v0.57.0, using stamped tools,
   fresh reports/events and one disposable validator. Earlier failed diagnostic
   runs remain in their original worktrees.
+- `codex/pr40-ci-closure-20261011`, `fd57caf0` (terminal):
+  `_out/ci-closure/imports-replay/` retains the original exact x/crypto v0.57.0
+  failure at local `XOF`, after independent Linux source/import gate passes.
+  Its candidate cache was cleaned after every consumer closed.
 - `codex/pr40-refill-sample-20261010`, `02c9ebbb`:
   `_out/refill-sample/` continues the fixed 53-candidate, 37-shard sample with
   four workers. This older revision cannot update the current-head ledger.
