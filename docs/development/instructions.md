@@ -515,6 +515,22 @@ callee ABI nor its native frame, continuation and result transport.
 
 ## Semantic and raw-encoding checks
 
+Packed low-product W/D/Q multiplication consumes the shared binary grammar;
+W retains the word family's separate MMX bank. D/Q shape, lowering, caller
+effects, memory tuples and result definedness must agree. Legacy PMULLD m128
+keeps its observable SSE4.1 opcode and original alignment; virtual FP/SP/BP
+storage cannot supply native backing. VEX/EVEX writes clear wider aliases,
+and E4 masks suppress inactive source reads without shrinking the independently
+proved possible caller envelope. Numerical FP/AUTO observations alone grant
+no native memory permission. Preserve unknown inputs, merge bytes and masks.
+VEX.WIG never selects a qword product; only EVEX.W does. Physical low-bank
+mode32 EVEX masking is distinct from Go's named three-operand limit, and high
+banks remain unbound. Keep complete Go rows/attributes, raw-byte parity,
+five-target three-API objects and independent all-byte/mask/FLAGS execution.
+Portable LLVM execution, including Rosetta, is not original AVX512 execution.
+See Intel SDM Vol. 2B, PMULLD/PMULLQ and E4 exception class:
+[instruction reference](https://www.intel.com/content/dam/www/public/us/en/documents/manuals/64-ia-32-architectures-software-developer-vol-2b-manual.pdf).
+
 The nine scalar POPCNT/LZCNT/TZCNT W/L/Q forms share one Go-table grammar,
 lowerer and typed byte-effect descriptor. Inputs are read before destination
 overwrite; W preserves upper GP bytes and L zero-extends in mode64. POPCNT

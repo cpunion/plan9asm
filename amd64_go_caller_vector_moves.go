@@ -3,6 +3,9 @@ package plan9asm
 import "fmt"
 
 func x86CallerVectorMoveKnown(ins Instr) bool {
+	if _, known, err := x86PackedLowMultiplyProperties(ins.Op, ins, "amd64"); known {
+		return err == nil
+	}
 	if form, known, err := x86PackedConversionProperties(ins, "amd64"); known {
 		return err == nil && !form.mmx
 	}
@@ -160,6 +163,9 @@ func x86CallerVectorMoveStep(ins *Instr, state *x86SourceStackState, proof *x86G
 	}
 	if form, known, err := x86PackedNarrowProperties(*ins, "amd64"); known {
 		return err == nil && x86CallerPackedNarrowStep(ins, form, state, proof)
+	}
+	if form, known, err := x86PackedLowMultiplyProperties(ins.Op, *ins, "amd64"); known {
+		return err == nil && x86CallerPackedLaneArithmeticStep(ins, form.x86PackedBinaryForm, form.spec.laneBits, state, proof)
 	}
 	if form, known, err := x86PackedWordMultiplyProperties(ins.Op, *ins, "amd64"); known {
 		return err == nil && x86CallerPackedLaneArithmeticStep(ins, form.x86PackedBinaryForm, 16, state, proof)
@@ -337,6 +343,9 @@ func x86InstructionMemoryShape(ins Instr, index int, arch string) (width int64, 
 	}
 	if form, known, err := x86ImmediateShuffleProperties(ins, arch); known {
 		return int64(form.memoryBytes), false, err == nil && !form.spec.legacy && form.memory == index
+	}
+	if form, known, err := x86PackedLowMultiplyProperties(ins.Op, ins, arch); known {
+		return int64(form.memoryBytes), false, err == nil && form.memory == index
 	}
 	if form, known, err := x86PackedWordMultiplyProperties(ins.Op, ins, arch); known {
 		return int64(form.memoryBytes), false, err == nil && !form.mmx && form.memory == index

@@ -76,7 +76,8 @@ func TestX86GoCallerWordMultiplyUnknownAndMemoryPermissionsRemainContext(t *test
 }
 
 func TestX86GoCallerWordMultiplyFullReadCertificatesAndByteAliases(t *testing.T) {
-	for _, name := range x86WordMultiplyNames {
+	names := append(append([]string(nil), x86WordMultiplyNames...), "PMULLD", "VPMULLD", "VPMULLQ")
+	for _, name := range names {
 		row, result := name+" (DI),X0", "X0"
 		if strings.HasPrefix(name, "V") {
 			row, result = name+".Z (DI),Z0,K1,Z2", "X2"
@@ -95,7 +96,7 @@ func TestX86GoCallerWordMultiplyFullReadCertificatesAndByteAliases(t *testing.T)
 		}
 		found := false
 		for _, ins := range normalized.Funcs[0].Instrs {
-			form, known, err := x86PackedWordMultiplyProperties(ins.Op, ins, "amd64")
+			form, known, err := x86LowAndWordMultiplyTestForm(ins)
 			if !known || err != nil || form.memory < 0 {
 				continue
 			}
@@ -135,7 +136,7 @@ func TestX86GoCallerWordMultiplyFullReadCertificatesAndByteAliases(t *testing.T)
 			t.Fatal("no multiply memory proof")
 		}
 	}
-	for _, name := range x86WordMultiplyNames {
+	for _, name := range names {
 		operands := "X0,X1"
 		if strings.HasPrefix(name, "V") {
 			operands = "X0,X1,X2"
@@ -145,7 +146,7 @@ func TestX86GoCallerWordMultiplyFullReadCertificatesAndByteAliases(t *testing.T)
 			t.Fatal(err)
 		}
 		ins := file.Funcs[0].Instrs[1]
-		form, _, err := x86PackedWordMultiplyProperties(ins.Op, ins, "amd64")
+		form, _, err := x86LowAndWordMultiplyTestForm(ins)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -154,6 +155,11 @@ func TestX86GoCallerWordMultiplyFullReadCertificatesAndByteAliases(t *testing.T)
 			t.Fatal("registered pure vector effect missing")
 		}
 		want := uint64(0xfffc) // One absent source byte kills its whole word.
+		if name == "PMULLD" || name == "VPMULLD" {
+			want = 0xfff0
+		} else if name == "VPMULLQ" {
+			want = 0xff00
+		}
 		if !form.legacy {
 			want |= ^uint64(0xffff)
 		}
@@ -161,4 +167,12 @@ func TestX86GoCallerWordMultiplyFullReadCertificatesAndByteAliases(t *testing.T)
 			t.Fatal(fmt.Sprintf("incorrect word-byte/upper alias transfer %s got=%x want=%x", name, got, want))
 		}
 	}
+}
+
+func x86LowAndWordMultiplyTestForm(ins Instr) (x86PackedBinaryForm, bool, error) {
+	if form, known, err := x86PackedLowMultiplyProperties(ins.Op, ins, "amd64"); known {
+		return form.x86PackedBinaryForm, known, err
+	}
+	form, known, err := x86PackedWordMultiplyProperties(ins.Op, ins, "amd64")
+	return form.x86PackedBinaryForm, known, err
 }

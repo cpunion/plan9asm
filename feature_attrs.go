@@ -217,6 +217,9 @@ func inferFuncTargetFeaturesForGOARCH(arch Arch, goarch string, fn Func) string 
 					add("+ssse3")
 				}
 			}
+			if form, known, err := x86PackedLowMultiplyProperties(ins.Op, ins, goarch); known && err == nil && form.legacy && form.memory >= 0 {
+				add("+sse2", "+sse4.1")
+			}
 			if form, known, err := x86PackedWordMultiplyProperties(ins.Op, ins, goarch); known && err == nil && form.legacy && !form.mmx && form.memory >= 0 && ins.Args[form.memory].Kind != OpFP {
 				add("+sse2")
 				if form.spec.mode == amd64PackedWordMultiplyRoundedSignedHigh {

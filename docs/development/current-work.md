@@ -15,13 +15,14 @@ The integration branch is `codex/pr40-ci-closure-20261011`. Stop opening new
 instruction-family audits until this repair batch has run in CI. Preserve the
 separate scalar-FMA development branch; it is not part of this batch.
 
-Published PR head `cb8b2ad3` is running fork CI 38018079008. Policy preflight
-passed; all six priority shards failed. Shards 36/42 hit the 330-minute deadline
-and retained partial reports. The strict aggregate is still running: let it
-finish before updating this PR head. The 32-commit repair snapshot `9f9c1225`
-is already saved on fork branch `codex/pr40-ci-closure-20261011`, without a new
-PR or CI run. Later aggregate phase diagnostics are local until the next batch.
-No current-head corpus or full CI pass is established.
+Old fork CI 38018079008 finished naturally with failure. All six priority
+shards failed; 36/42 hit the 330-minute deadline and retained partial reports.
+The guarded publisher then fast-forwarded only fork PR 4 to `aedfac9b`, a
+35-commit repair batch. New fork CI 38043255488 has passed policy preflight
+and started all six priority shards. Let that run finish. Its head and the
+integration worktree remain frozen; the upstream-connected branch is unchanged.
+No current-head corpus or full CI pass is established. Further observed-failure
+repairs live separately on `codex/pr40-failed-gates-20261010`.
 
 A guarded local publisher is prepared under ignored `_out/ci-closure/` as
 `publish-after-ci.sh`. Before launching another watcher or changing the
@@ -49,6 +50,31 @@ New counterexamples join the root-cause list; do not interrupt every batch
 with unrelated speculative implementation. Keep correctness gates unchanged.
 
 ## Included repairs and retained evidence
+
+- The next, not-yet-published batch closes shard 5's low-product caller-effect
+  gap. Independent original-Go W/D/Q controls reproduced unregistered D/Q
+  effects; replacing only the old lowerers also reproduced incorrect upper
+  aliases at LLVM O0/O2. D/Q now share typed shape, lowering, caller/result
+  effects and memory tuples with complete Go-table attributes. E4 masked reads,
+  legacy native storage, VEX.WIG and physical-versus-named mode32 masks remain
+  distinct. The word family is reused, not replaced. All 68 related current-Go
+  roots plus the independent malformed-axis root pass; 15 focused Go 1.20
+  roots, CLI extraction, vet and the unchanged five-architecture official
+  classification gate pass too. Three-API/five-target objects and 110 portable
+  runtime kernels cover full aliases, masks, FLAGS, canaries and inactive NULL
+  inputs. This is not original AVX512 execution or external-library closure.
+  Keep the original discovering candidates failed until frozen remote replay.
+- The new full root run exposed a deadline-fixture startup race: the two-second
+  stage allowance could expire before two nested LLVM-linked test binaries
+  published a child PID. The failure-only shim now starts a lightweight real
+  pipe-holding child while retaining the same deadline, error/output witnesses
+  and owned-process cleanup assertion. Three repeated lifecycle runs and the
+  actual Go 1.20 check pass. Commit `7579e5d2` is separate from published CI.
+  Evidence for both repairs is under `_out/failed-gates/` in the follow-up tree.
+  Preserve the failed link attempt caused by disk exhaustion. Nine confirmed
+  inactive, task-owned compilation archives were cleaned; reports and source
+  were retained. Do not interpret resource failure or a focused rerun as a full
+  suite pass.
 
 - Downloaded-source binding, per-target feature-profile bounds and x86 typed
   effects are already integrated, together with earlier ARM/VFP/NEON and Wasm
@@ -272,17 +298,24 @@ and clean only exact owned caches after every consumer has closed.
   and one failed `carte7000/crypto` replay. The missing go-directive refusal
   is gone, but complete original TEXT/frame observation still fails. The
   disposable validator closed and its owned cache was cleaned.
-- Detached `4c90703f` in that reused tree (active):
+- Detached `4c90703f` in that reused tree (terminal):
   `_out/module-exhaustive-4c90703f/` is a complete main-module unit run with
   actual package/root inventories, 32 root partitions and two workers. Do not
-  change its source while it runs. Host-inapplicable runtime roots retain
+  reinterpret its failed source snapshot. Host-inapplicable runtime roots retain
   explicit skip counters and still require their cross-runtime counterparts;
   this is not a native Linux, nested CLI, external corpus or current-head pass.
   The later scalar bit-count change is not part of this frozen run.
   Its root package is now terminal: 5,706 passed, seven failed, 39 skipped and
   zero incomplete out of 5,752 roots. All seven failed roots pass the current
-  focused rerun; the original report remains failed. Other module packages
-  continue. Both nested CLI suites separately passed in the integration tree.
+  focused rerun; the original report remains failed. The full module run is
+  terminal with 19/20 packages passed and only those seven root failures.
+  Both nested CLI suites separately passed in the integration tree.
+- Frozen `aedfac9b` in the integration tree (active):
+  `_out/root-exhaustive-aedfac9b/` is a fresh 32-partition/two-worker root run.
+  Do not modify that tree. Partition 12 failed the deadline fixture above;
+  partitions 15/16 failed during disk exhaustion, including the compressed
+  disp8 source oracle and two fixed-local frame roots. These reports remain
+  failed and need independent reruns; no result or ledger is upgraded manually.
 
 The older whole-module run at `044bb668` failed: 18/20 packages passed, root
 had one obsolete assertion failure and the corpus driver had three fixture
@@ -290,7 +323,7 @@ timeouts. Those regressions have newer repairs, not a retroactive pass.
 
 ## Ordered next gates
 
-1. Let published `cb8b2ad3` finish its priority matrix; do not interrupt it.
+1. Let published `aedfac9b` finish its priority matrix; do not interrupt it.
 2. Finish the package/source binding repairs, retaining the original examples
    as failed until each complete replay succeeds. Commit locally in batches.
 3. Compare new CI failures with the original eight classes. Fix each class with

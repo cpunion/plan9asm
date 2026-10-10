@@ -6,7 +6,8 @@ import (
 )
 
 // Go 1.27's packed-multiply rows share _yvandnpd's operand grammar. The
-// opcode/map selects the lane operation; W selects Q only for opcode 40/0F38.
+// opcode/map selects the lane operation; EVEX.W selects Q for opcode 40/0F38.
+// VEX.W is ignored, including VPMULLD; it cannot select a VEX qword form.
 // The word operations have no broadcast row, whereas D/Q permit it.
 type x86PackedMultiplyForm struct {
 	mapID         byte
@@ -62,7 +63,7 @@ func decodedX86PackedMultiplyInstruction(code []byte, mode int) (instruction Ins
 		return Instr{}, 0, false, nil
 	}
 	form, recognized := x86PackedMultiplyFormFor(byte(p.mapNumber), byte(p.opcode))
-	if !recognized || p.w && form.opcode == 0x40 {
+	if !recognized {
 		return Instr{}, 0, false, nil
 	}
 	ok = true
@@ -96,7 +97,7 @@ func decodedX86PackedMultiplyInstruction(code []byte, mode int) (instruction Ins
 		Args: []Operand{firstSource, secondSource, destination},
 		Raw:  fmt.Sprintf("%s %s, %s, %s", form.vexOp, firstSource.String(), secondSource.String(), destination.String()),
 	}
-	instruction.x86Encoded = form.broadcastByte == 0
+	instruction.x86Encoded = true
 	return instruction, modRMIndex + consumed, true, nil
 }
 
@@ -135,9 +136,6 @@ func decodedX86EVEXPackedMultiplyInstruction(code []byte, i, mode int, segment R
 	zeroing := p2&0x80 != 0
 	if zeroing && maskNumber == 0 {
 		return Instr{}, 0, true, fmt.Errorf("EVEX zeroing requires a nonzero mask")
-	}
-	if mode == 32 && maskNumber != 0 && form.broadcastByte != 0 {
-		return Instr{}, 0, true, fmt.Errorf("EVEX masking is unavailable for 386 packed multiply forms")
 	}
 
 	rExt := int(^p0>>7) & 1
@@ -188,5 +186,5 @@ func decodedX86EVEXPackedMultiplyInstruction(code []byte, i, mode int, segment R
 		rawArgs[index] = args[index].String()
 	}
 	return Instr{Op: op, Args: args, Raw: fmt.Sprintf("%s %s", op, strings.Join(rawArgs, ", ")),
-		x86Encoded: form.broadcastByte == 0}, modRMIndex + consumed, true, nil
+		x86Encoded: true}, modRMIndex + consumed, true, nil
 }

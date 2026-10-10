@@ -2,6 +2,7 @@ package plan9asm
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 )
 
@@ -23,7 +24,7 @@ func TestTranslateX86PackedQwordMultiplyCompleteGoAssemblerForms(t *testing.T) {
 				lastZ = 7
 			}
 			source := fmt.Sprintf(`
-TEXT packedqwordmultiplyforms(SB),NOSPLIT,$0-0
+TEXT packedqwordmultiplyforms(SB),4,$0-0
 	VPMULLQ X1, X20, X21
 	VPMULLQ 8(AX), Y20, Y21
 	VPMULLQ Z1, Z2, Z%d
@@ -39,6 +40,13 @@ TEXT packedqwordmultiplyforms(SB),NOSPLIT,$0-0
 `
 			}
 			source += "\tRET\n"
+			if target.goarch == "386" {
+				// Go accepts these high X/Y spellings, but syntax acceptance
+				// does not provide a physical high register in 32-bit mode.
+				// Their separate Context regression retains the original forms.
+				source = strings.NewReplacer("X20", "X6", "X21", "X7", "Y20", "Y6", "Y21", "Y7").Replace(source)
+			}
+			goAssemblerOracleOutput(t, target.goarch, source, "", true)
 			file, err := Parse(ArchAMD64, source)
 			if err != nil {
 				t.Fatal(err)

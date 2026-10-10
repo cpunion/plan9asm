@@ -5,7 +5,8 @@ func x86CallerPackedWrappingAddStep(ins *Instr, form x86PackedAddForm, state *x8
 }
 
 // Each complete input lane determines one output lane for wrapping or
-// saturating integer add/subtract. Form sharing grants no address permission.
+// saturating integer add/subtract or low-product multiplication. Form sharing
+// grants no address permission.
 func x86CallerPackedLaneArithmeticStep(ins *Instr, form x86PackedBinaryForm, bits int, state *x86SourceStackState, proof *x86GoCallerRegionProof) bool {
 	if form.mmx || form.mask >= 0 && !state.masks[ins.Args[form.mask].Reg] {
 		return false

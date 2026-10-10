@@ -150,7 +150,6 @@ func TestDecodedX86PackedMultiplyLowMemoryAndInvalidForms(t *testing.T) {
 		"truncated":    {0xc4, 0xe2},
 		"wrong map":    {0xc4, 0xe1, 0x79, 0x40, 0xc0},
 		"wrong pp":     {0xc4, 0xe2, 0x78, 0x40, 0xc0},
-		"VEX qword":    {0xc4, 0xe2, 0xf9, 0x40, 0xc0},
 		"wrong opcode": {0xc4, 0xe2, 0x79, 0x41, 0xc0},
 	} {
 		if instruction, _, matched, decodeErr := decodedX86PackedMultiplyLowInstruction(code, 64); matched || decodeErr != nil {
