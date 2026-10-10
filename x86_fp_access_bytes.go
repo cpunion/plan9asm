@@ -30,6 +30,14 @@ func X86FPAccessBytes(ins Instr, index int, arch string) (width int64, write, kn
 		}
 		return int64(form.bits / 8), false, true
 	}
+	// Broadcast memory reads have their scalar/block width, not the width of
+	// the vector destination. Mask-data broadcasts have no memory form at all.
+	if form, recognized, err := x86BroadcastProperties(ins.Op, ins, arch); recognized {
+		if err != nil || index != 0 || form.kind == x86BroadcastMask {
+			return 0, false, false
+		}
+		return int64(form.sourceBytes), false, true
+	}
 	if effect, recognized, err := x86TypedInstructionByteEffect(ins.Op, ins, arch); recognized {
 		if err != nil {
 			return 0, false, false

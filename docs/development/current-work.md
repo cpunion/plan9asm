@@ -94,6 +94,16 @@ with unrelated speculative implementation. Keep correctness gates unchanged.
   pass three targets, three translation APIs and LLVM 22 O0/O2 objects. This
   does not enlarge the separate selected-package source/parser budget or prove
   an external candidate passed; original-library replay remains required.
+- Two FP-alias consumers omitted existing complete typed grammars: CMP/TEST
+  and scalar/block BROADCAST. They now reuse those grammars for read-only byte
+  widths; no suffix guessing, parameter writes or result initialization is
+  introduced. Independent original-Go REDs cover both architectures, all
+  widths/directions and vector/mask formats. Current Go and Go 1.20 consumer
+  gates, real asmdecl aliases and five-target object regressions pass. The old
+  Go maskless `.Z` encoder defect has an explicit reserved-byte observation,
+  never an accepted translation or a skipped test. The five-architecture
+  official classification gate remains unchanged and passes. Original failing
+  libraries remain failures until their complete frozen replay succeeds.
 - ARM64 FPCR/FPSR, NZCV, scalar binary operations and RNDR named/raw effects
   have independent original-Go and LLVM runtime evidence. Min/max's original
   full Linux run failed at the 45-minute deadline, without an observed value
@@ -138,6 +148,11 @@ and clean only exact owned caches after every consumer has closed.
   `_out/ci-closure/imports-replay/` retains the original exact x/crypto v0.57.0
   failure at local `XOF`, after independent Linux source/import gate passes.
   Its candidate cache was cleaned after every consumer closed.
+- Detached `191f2cab` (active; archive-bound and CMP/TEST repairs):
+  `_out/origin-archive/linux-replay/` retains the Linux first-party passes
+  and exact cbysal/go-ethereum v1.17.5 and enceve/crypto replay. Its source,
+  tools and ledger are frozen; inspect terminal reports before crediting any
+  candidate. The later BROADCAST repair is not part of this snapshot.
 - `codex/pr40-refill-sample-20261010`, `02c9ebbb`:
   `_out/refill-sample/` continues the fixed 53-candidate, 37-shard sample with
   four workers. This older revision cannot update the current-head ledger.

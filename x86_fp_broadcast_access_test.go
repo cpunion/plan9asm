@@ -1,7 +1,11 @@
 package plan9asm
 
 import (
+	"bytes"
 	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -68,7 +72,11 @@ func TestX86FPAccessBytesBroadcastRejectedForms(t *testing.T) {
 		} {
 			t.Run(arch+"/"+row, func(t *testing.T) {
 				source := "TEXT f(SB),4,$0-32\n" + row + "\nRET\n"
-				goAssemblerOracleOutput(t, arch, source, "", false)
+				if row == "VPBROADCASTQ.Z a+0(FP),Y0" {
+					x86FPBroadcastReservedZeroMaskGoObservation(t, arch, source)
+				} else {
+					goAssemblerOracleOutput(t, arch, source, "", false)
+				}
 				file, err := Parse(ArchAMD64, source)
 				if err != nil {
 					t.Fatal(err)
@@ -82,4 +90,42 @@ func TestX86FPAccessBytesBroadcastRejectedForms(t *testing.T) {
 			})
 		}
 	}
+}
+
+// Go 1.20 emitted EVEX.z=1/aaa=0 for this unchanged source. Current Go
+// diagnoses the absent mask (issue 57952). Neither outcome grants FP bytes:
+// record the actual rejected source or accepted reserved bytes, never execute.
+func x86FPBroadcastReservedZeroMaskGoObservation(t *testing.T, arch, source string) {
+	t.Helper()
+	directory := t.TempDir()
+	assembly, object := filepath.Join(directory, "reserved.s"), filepath.Join(directory, "reserved.o")
+	if err := os.WriteFile(assembly, []byte(source), 0600); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := runtimeOracleStageContext(t)
+	defer cancel()
+	command := exec.CommandContext(ctx, "go", "tool", "asm", "-o", object, assembly)
+	command.Env = append(os.Environ(), "GOOS=linux", "GOARCH="+arch, "GOTOOLCHAIN=local", "GOENV=off", "GOWORK=off")
+	output, err := runtimeOracleCombinedOutput(ctx, command)
+	if failure := goAssemblerOracleOutcome(assembly, object, output, err, ctx.Err(), err == nil, arch); failure != nil {
+		t.Fatal("unbound original zero-mask outcome", failure)
+	}
+	if err != nil {
+		if !bytes.Contains(output, []byte("mask register must be specified for .Z instructions")) {
+			t.Fatalf("unknown original zero-mask rejection: %s", output)
+		}
+		return
+	}
+	code := assembleX87ControlBytes(t, arch, source)
+	if !bytes.HasPrefix(code, []byte{0x62, 0xf2, 0xfd, 0xa8, 0x59}) || code[len(code)-1] != 0xc3 {
+		t.Fatalf("accepted original reserved broadcast bytes changed: %x", code)
+	}
+	mode := 64
+	if arch == "386" {
+		mode = 32
+	}
+	if _, _, known, err := decodedX86VEXPackedBroadcastInstruction(code, mode); !known || err == nil {
+		t.Fatal("reserved original EVEX bytes acquired semantics", known, err)
+	}
+	t.Logf("ORIGINAL_RESERVED_BROADCAST_OBJECT arch=%s code=%x; not executed or admitted", arch, code)
 }
