@@ -3,6 +3,10 @@ package plan9asm
 import (
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
+	"regexp"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -14,7 +18,7 @@ func TestARM64RawWordRejectsVCONBeforeTruncation(t *testing.T) {
 		for _, value := range []int64{word + (1 << 32), word - (1 << 33)} {
 			line := fmt.Sprintf("WORD $%d", value)
 			source := "TEXT comparison(SB),516,$0-0\n" + line + "\nRET\n"
-			requireARM64GoAssemblerResult(t, source, false)
+			goAssemblerOracleOutput(t, "arm64", source, "", false)
 			instruction := arm64ImmediateTestInstruction(t, line)
 			if err := arm64RawWordPreflightError(instruction); err == nil || errors.Is(err, ErrProbeNeedsContext) {
 				t.Errorf("Go-rejected C_VCON became a native instruction: %s: %v", line, err)
@@ -54,7 +58,7 @@ func TestARM64RawWordWideLCONStillAccepted(t *testing.T) {
 	for _, value := range []int64{0, 0xffff, 1 << 32, 0x1234 << 32, 0x1234 << 48, 0x0000ffff0000ffff} {
 		line := fmt.Sprintf("WORD $%d", value)
 		source := "TEXT comparison(SB),516,$0-0\n" + line + "\nRET\n"
-		requireARM64GoAssemblerResult(t, source, true)
+		goAssemblerOracleOutput(t, "arm64", source, "", true)
 		if err := arm64RawWordPreflightError(arm64ImmediateTestInstruction(t, line)); err != nil {
 			t.Fatalf("Go-accepted wide LCON rejected: %s: %v", line, err)
 		}
@@ -83,7 +87,7 @@ func TestARM64RawWordConstantClassesMatchGo(t *testing.T) {
 	} {
 		for _, value := range group.values {
 			line := fmt.Sprintf("WORD $%d", value)
-			requireARM64GoAssemblerResult(t, "TEXT original(SB),516,$0-0\n"+line+"\nRET\n", group.accepted)
+			goAssemblerOracleOutput(t, "arm64", "TEXT original(SB),516,$0-0\n"+line+"\nRET\n", "", group.accepted)
 			word, err := arm64RawWordValue(arm64ImmediateTestInstruction(t, line))
 			if group.accepted {
 				if err != nil || word != uint32(value) {
@@ -93,5 +97,46 @@ func TestARM64RawWordConstantClassesMatchGo(t *testing.T) {
 				t.Errorf("Go-rejected constant acquired a decoder word: %s: %#x, %v", line, word, err)
 			}
 		}
+	}
+}
+
+func TestARM64RawWordConstantEncoderRow(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join(runtime.GOROOT(), "src", "cmd", "internal", "obj", "arm64", "asm7.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Both actual compatibility SDKs retain the same constant class, encoder
+	// case, byte size and attributes. Only the extra NONE column differs.
+	row := regexp.MustCompile(`\{AWORD,\s*C_NONE,\s*C_NONE,\s*C_NONE,\s*C_LCON,\s*(?:C_NONE,\s*)?14,\s*4,\s*0,\s*0,\s*0\}`)
+	if matches := row.FindAll(data, -1); len(matches) != 1 {
+		t.Fatalf("actual Go WORD constant encoder row changed: matched %d", len(matches))
+	}
+}
+
+func TestARM64RawWordWideLCONObjects(t *testing.T) {
+	var source strings.Builder
+	signatures := make(map[string]FuncSig)
+	for index, value := range []int64{1 << 32, 0x1234 << 32, 0x1234 << 48, 0x0000ffff0000ffff} {
+		name := fmt.Sprintf("constant%d", index)
+		fmt.Fprintf(&source, "TEXT %s(SB),516,$0-0\nWORD $%d\nRET\n", name, value)
+		signatures[name] = FuncSig{Name: name, Ret: Void}
+	}
+	goAssemblerOracleOutput(t, "arm64", source.String(), "", true)
+	file, err := Parse(ArchARM64, source.String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM 22 llc not found")
+	}
+	for _, triple := range []string{"aarch64-apple-darwin", "aarch64-unknown-linux-gnu", "aarch64-pc-windows-msvc"} {
+		t.Run(triple, func(t *testing.T) {
+			ir, err := Translate(file, Options{Goarch: "arm64", TargetTriple: triple, Sigs: signatures})
+			if err != nil {
+				t.Fatal(err)
+			}
+			compileLLVMToObject(t, llc, triple, "word.ll", "word.o", ir)
+		})
 	}
 }

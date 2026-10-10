@@ -76,9 +76,11 @@ with unrelated speculative implementation. Keep correctness gates unchanged.
   `C_LCON` check before native preflight, decoding and lowering. Rejected
   64-bit constants can no longer become valid low-word opcodes, including
   dead source and missing/foreign targets. Legal wide MOV/bitmask classes
-  remain accepted. The independent Go-oracle RED and seven focused GREEN
-  roots are retained under `_out/ci-closure/word-class-*`; broader gates are
-  next, without importing the separate unfinished scalar-FMA branch.
+  remain accepted. The independent Go-oracle RED and nine focused GREEN
+  roots are retained under `_out/ci-closure/word-class-*`, including actual
+  Go 1.20/1.27 constant oracles and three-target LLVM objects. The current
+  five-architecture official corpus gate passed without changing its baseline.
+  The separate unfinished scalar-FMA branch is still not integrated.
 
 ## Active frozen validation
 
