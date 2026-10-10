@@ -19,10 +19,25 @@ func TestLLVMObjectHelperDeadlineFixture(t *testing.T) {
 	if mode == "" {
 		return
 	}
-	// This failure-only shim launches the existing pipe-holding descendant.
-	// It never emits an object or impersonates successful Go/LLVM output.
+	// The helper's five-second test deadline leaves two seconds before its
+	// cleanup reserve. Do not spend that window starting two more copies of
+	// the large LLVM-linked test binary just to hold an output pipe.
+	// This failure-only shim creates one real pipe-holding child; it never
+	// emits an object or impersonates successful Go/LLVM output.
+	sleep, err := exec.LookPath("sleep")
+	if err != nil {
+		t.Fatal("deadline fixture requires sleep:", err)
+	}
+	t.Setenv("PLAN9ASM_OBJECT_HELPER_SLEEP", sleep)
 	shim := filepath.Join(t.TempDir(), "go")
-	if err := os.WriteFile(shim, []byte("#!/bin/sh\nexec \"$PLAN9ASM_OBJECT_HELPER_TEST_BINARY\" -test.run=^TestRuntimeOracleCommandFixture$\n"), 0700); err != nil {
+	const script = `#!/bin/sh
+"$PLAN9ASM_OBJECT_HELPER_SLEEP" 30 &
+child=$!
+printf '%s' "$child" > "$PLAN9ASM_RUNTIME_COMMAND_CHILD_PID" || exit 1
+printf '%s\n' "owned child holds its parent's output pipe"
+wait "$child"
+`
+	if err := os.WriteFile(shim, []byte(script), 0700); err != nil {
 		t.Fatal(err)
 	}
 	switch mode {
@@ -50,8 +65,6 @@ func TestLLVMObjectHelperDeadlineCleansOwnedDescendant(t *testing.T) {
 				"-test.run=^TestLLVMObjectHelperDeadlineFixture$", "-test.timeout=5s", "-test.v")
 			command.Env = append(os.Environ(),
 				"PLAN9ASM_OBJECT_HELPER_FIXTURE="+mode,
-				"PLAN9ASM_OBJECT_HELPER_TEST_BINARY="+os.Args[0],
-				"PLAN9ASM_RUNTIME_COMMAND_FIXTURE=parent",
 				"PLAN9ASM_RUNTIME_COMMAND_CHILD_PID="+pidFile,
 			)
 			output, err := runtimeOracleCombinedOutput(ctx, command)
