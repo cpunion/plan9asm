@@ -15,36 +15,36 @@ The integration branch is `codex/pr40-ci-closure-20261011`. Stop opening new
 instruction-family audits until this repair batch has run in CI. Preserve the
 separate scalar-FMA development branch; it is not part of this batch.
 
-Old fork CI 38018079008 finished naturally with failure. All six priority
-shards failed; 36/42 hit the 330-minute deadline and retained partial reports.
-The guarded publisher then fast-forwarded only fork PR 4 to `aedfac9b`, a
-35-commit repair batch. New fork CI 38043255488 has passed policy preflight
-and started all six priority shards. Let that run finish. Its head and the
-integration worktree remain frozen; the upstream-connected branch is unchanged.
-No current-head corpus or full CI pass is established. Further observed-failure
-repairs now live on `codex/pr40-ci-failure-replay-20261010`, based on `b5af3a10`.
-The earlier `codex/pr40-failed-gates-20261010` tree is frozen for broad local
-verification; do not edit it while those first-party tests are running.
+Fork CI 38043255488 at `aedfac9b` finished naturally with failure, as did its
+predecessor 38018079008. Policy preflight passed but all six priority shards
+failed; 36/42 again reached the unchanged 330-minute deadline. Their six reports
+retain 540 versions: 224 passes, 235 failures, 78 source N/A and three explicit
+skips, with 2,679 ordinary translations. The remaining 5,527 versions are not
+reported. These partial diagnostic outcomes cannot update the assembly ledger.
+Artifacts are in the earlier follow-up tree's
+`_out/failed-gates/ci-38043255488/`.
 
-Current CI shards 5/29/39 finished with 131 passes, 128 failures, 39 source
-N/A and one invalid-source skip across 299 versions. Their candidate statuses
-are unchanged from the previous run. Shards 36/38/42 are still running. Fresh
-artifacts are retained in the earlier follow-up tree under
-`_out/failed-gates/ci-38043255488/`; these three reports cannot update the ledger.
-The prior watcher died during disk exhaustion. Its publisher had already
-finished; do not restart that publisher. A read-only `gh run watch` now writes
-the integration tree's `_out/ci-closure/watch-aedfac9b-after-cleanup.log`.
+The aggregate completed its audit in 4,778 seconds and failed because six
+reports are not 64 complete shards. Downstream module/cross completion gates
+also correctly failed for missing owner reports after priority failure prevented
+those tests from running; these are not newly observed unit-test failures.
+Do not bypass their strict completeness checks. The unpublished bounded CPP
+index repair specifically addresses the slow portable-report audit.
 
-A guarded local publisher is prepared under ignored `_out/ci-closure/` as
-`publish-after-ci.sh`. Before launching another watcher or changing the
-integration tree, inspect its `publish-after-ci.log`, owned process and
-`published-ci.json` if present. It pins one complete source revision, the prior
-run/head, fork owner, Draft PR 4 and both branch names. It waits for the prior
-run's terminal failure, then rechecks clean source and unchanged destinations
-before a normal fast-forward push. Any mismatch stops publication. It never
-cancels, force-pushes, merges/closes a PR or writes upstream. Keep the integration
-tree frozen while it waits; use a separate tree for further development. A new
-CI run is only a started gate, never a pass or ledger update.
+The five-commit follow-up batch through `a873e240` is on
+`codex/pr40-ci-failure-replay-20261010`. It includes the deadline fixture,
+low-product family, portable CPP index, broadcast memory result and native
+extension result repairs. The full root run at frozen `b5af3a10` now passed;
+new broadcast/extension code has its separate focused evidence below. Batch
+publication may proceed only after rechecking the allowed fork, unchanged Draft
+PR 4 head, clean source and fast-forward ancestry. Keep the upstream-connected
+branch unchanged until fresh fork CI and review pass. A newly started CI is
+not a pass or ledger update.
+
+The integration tree remains the historical `aedfac9b` snapshot. Its old
+`_out/ci-closure/publish-after-ci.sh` already completed publication and is not
+a reusable publisher for this batch. The replacement read-only watcher is now
+terminal; retain its log and all earlier disk-exhaustion evidence.
 
 Earlier `c09eff1e` failed run 37711752851: priority shards 5/29/38/39 failed,
 36/42 were canceled, and downstream gates did not complete. The four failed
@@ -383,13 +383,15 @@ and clean only exact owned caches after every consumer has closed.
   additional confirmed inactive integration-build archives were cleaned, not
   source or reports. Subsequent user cleanup restored ample headroom. Do not
   clean unrelated caches or interfere with other builds.
-- Frozen `b5af3a10` in `codex/pr40-failed-gates-20261010` (running):
-  `_out/root-exhaustive-b5af3a10/` is the fresh 32-partition/two-worker root
-  rerun. The separate `_out/failed-gates/cpp-b5af3a10-full-retry.jsonl` is now
+- Frozen `b5af3a10` in `codex/pr40-failed-gates-20261010` (terminal pass):
+  `_out/root-exhaustive-b5af3a10/` completed all 32 partitions: 5,741 root passes,
+  zero failures, 39 explicit host-inapplicable skips and zero incomplete roots;
+  130,423 subtests/seeds passed. Native cross-runtime counterparts remain required.
+  The separate `_out/failed-gates/cpp-b5af3a10-full-retry.jsonl` is now
   terminal: all 104 CPP-prefix roots passed. These are first-party tests, not
   local index scans or external-library compilation. New broadcast and native
-  extension repairs are not in this frozen snapshot. Preserve raw reports and
-  inspect the root runner's actual terminal outcome before claiming completion.
+  extension repairs are not in this frozen snapshot. Preserve raw reports;
+  neither result is complete current-head cross-runtime or ecosystem coverage.
 
 The older whole-module run at `044bb668` failed: 18/20 packages passed, root
 had one obsolete assertion failure and the corpus driver had three fixture
@@ -397,7 +399,8 @@ timeouts. Those regressions have newer repairs, not a retroactive pass.
 
 ## Ordered next gates
 
-1. Let published `aedfac9b` finish its priority matrix; do not interrupt it.
+1. Publish the verified follow-up batch only to fork Draft PR 4 after the
+   terminal `aedfac9b` run; let its new priority matrix finish naturally.
 2. Finish the package/source binding repairs, retaining the original examples
    as failed until each complete replay succeeds. Commit locally in batches.
 3. Compare new CI failures with the original eight classes. Fix each class with
