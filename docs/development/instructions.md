@@ -626,6 +626,12 @@ ordinary Go sources, retaining only bodyless integer, finite pointer and slice
 assembly declarations. Stock-SDK imports bind the actual compiler-selected
 source/export graph; bodies, values and imports themselves grant no native
 permission. Foreign module dependencies still need their own source handoff.
+SDK dependency macro registrations remain guarded compiler inputs, not ordinary
+target CPP authority. Retain their bounded literal-include closure using Go's
+fixed package-CWD search, including shared fallbacks and directory shadowing.
+Dynamic directives, root escape and changed source fail. Only the actual
+compiler/source/export role supplies a generated header; no expanded CPP or
+private-frame permission is created by this source-only capture.
 The observer then binds
 all selected ASM, headers,
 actual Go tool/source routes, original object bytes and complete source positions.

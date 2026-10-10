@@ -17,11 +17,12 @@ shards failed and two reached deadlines. Downstream skips and failed completion
 aggregates are not passes. Batch verified repairs before pushing.
 
 Development is on `codex/pr40-result-effects-followup-20261010`, integrated
-through `e262afce`. Packed x86 conversions, x86/ARM scalar comparisons,
+through `6b448609`. Packed x86 conversions, x86/ARM scalar comparisons,
 Wasm float comparisons/minmax and complete ordinary Go-partner tag scopes
-join the preceding repairs. ARM32's expanded runtime matrix passes. The original
-observer's SDK macro/include roles and ARM64 conditional compares remain active
-with independent TDD owners. Current official classification passes; see below.
+join the preceding repairs. ARM32's expanded runtime matrix, ARM64 conditional
+comparisons and the original observer's SDK macro/include roles pass their
+component gates. Scalar ARM64 min/max has a separate independent TDD owner.
+Current official classification passes; see below.
 Root alone publishes the assembly ledger.
 Never edit, rebase or import into running snapshots.
 
@@ -180,6 +181,17 @@ packed shifts, bounded numerical DATA reads and pure-GP scratch propagation:
 - ARM64 scalar comparisons retain native FPCR/FPSR/NZCV, including signaling,
   zero/register operands and raw H/S/D widths. The original-Go runtime matrix
   covers 165,888 observations; target preflight retains malformed/dead errors.
+- Four named ARM64 FCCMP/E operations and raw H/S/D forms now gate the native
+  FP comparison itself, not merely its result flags. The independent RED
+  observes an erroneous Invalid exception on a false predicate. Complete Go
+  rows, 5,128 actual words, 7,680 raw witnesses, full flag/byte/CFG effects and
+  three-API three-target objects pass. Native Darwin and Linux/QEMU each pass
+  655,360 original-Go whole-state rows against all three LLVM APIs and four
+  optimization axes. No trap-handler claim follows. Current Go and Go 1.20
+  each pass 67 combined plus one supplemental root; race, vet, CLI extraction
+  and five-arch classification pass. The fifteen merged form/effect/target
+  roots pass in 5.485 seconds. The closed Linux run had no OOM, although cold
+  compilation reached its three-GiB limit and caused reclaim events.
 - All sixteen Wasm F32/F64 comparisons and min/max use a typed stack grammar.
   Comparisons produce i32. Min/max quiet NaNs through an integer-bit result
   check because LLVM22 O2 can fold minimum(x,x) to a signaling input unchanged.
@@ -212,6 +224,14 @@ packed shifts, bounded numerical DATA reads and pure-GP scratch propagation:
   LLVM objects, not the former six; no historical report is relabeled.
   The merged `dd55f82f` gate independently passes all 64 roots in 411.441
   seconds, vet and unchanged-source guards.
+- Original AMD64 observations retain actual SDK dependency macro registrations
+  as guarded compiler-source inputs, not ordinary target CPP permissions.
+  A bounded literal-include closure guards sibling headers, shared fallbacks
+  and directory shadowing under Go's fixed package-CWD search. Unknown dynamic
+  includes, root escape and changed sources fail. No expanded source, private
+  frame or caller permission follows. The complete component passes 31 current
+  roots in 878.240 seconds, 27 Go 1.20 roots, fourteen race executions and vet.
+  The external crypto recheck still requires a fresh frozen report.
 
 The merged `2ddd94da` instruction gate passes 146 roots on both current Go
 (170.817 seconds) and Go 1.20 (161.545 seconds), plus CLI table extraction and
@@ -338,11 +358,18 @@ forms, all 1,280 selected immediate witnesses and every instruction-byte cut.
 - `codex/pr40-wide-sample-verify-20261010`, `961968b1`:
   `_out/wide-sample/selection.json` fixes fifty new stratified exact versions
   and three published-CI examples, before outcomes, across 37 shards. The
-  isolated bounded batch remains active. Three crypto terminal failures share
+  owner canceled this old diagnostic batch after four hours: its batch barrier
+  left one slow TLS candidate blocking idle workers. The independent offline
+  reader validates five passes, ten failures and 52 objects; all other
+  candidates remain pending. Exit 137 was explicit cancellation, not OOM or
+  success. Reports/binaries remain; the closed five-GB cache is reclaimed.
+  Three crypto terminal failures share
   native local-frame/alignment requirements; libc exposes an ARM64 indirect
   callee ABI. Gnark reached its unchanged sixty-minute planning deadline on
-  this pre-optimization revision. Its failed journal is retained while later
-  shards continue. No ledger credit or whole-shard completion follows from logs.
+  this pre-optimization revision. Its failed journal is retained. The separate
+  `codex/pr40-refill-sample-20261010` snapshot will repeat the identical fixed
+  selection with four refillable workers and the newly integrated repairs.
+  No ledger credit or whole-shard completion follows from logs.
 - `codex/pr40-pragma-performance-verify-20261010`, `10e83020`:
   the coroutine repeat is terminal: all 112 eligible profile/object scopes
   pass, with no N/A/skip, after 775-second planning and 8,701 seconds total.
@@ -405,13 +432,16 @@ transport, numerical globals, TLS and alignment; unbound storage is not a fix.
 
 1. Finish the next isolated TDD batches and their merged gates. Preserve actual
    native counterparts; do not equate table names with semantics.
-2. Close ordinary header-planning source rejections and the complete Go-only
-   tag denominator, then the original observer's SDK dependency macro roles.
-   Recheck the fixed external failures on a fresh frozen revision.
-3. Finish the independent ARM32 complete format/status runtime matrix and
-   ARM64 conditional compare audit, retaining native NaN/status effects.
-   The twenty-form official drift is reviewed and its classification gate
-   passes; it did not create twenty missing instruction implementations.
+2. Recheck the fixed external failures on a fresh frozen revision with the
+   closed header/tag denominator and SDK dependency macro/include repairs.
+3. Finish the scalar ARM64 min/max family, retaining native NaN/status and
+   actual NEP effects. Its independent matrix also exposed virtual/physical
+   NZCV transport through MRS; a separate owner must close that complete
+   MRS/MSR family before claiming it solved. ARM32 full-state and ARM64
+   conditional compares are terminal and passing, not still-running gates.
+   Eleven x86 Linux native AVX512 runtime roots remain unexecuted: the current
+   local executor and QEMU lack the required hardware. A real compatible
+   executor is requested; object success cannot replace those gates.
 4. Finish the fixed broad sample, recheck repaired classes on a fresh snapshot,
    and rerun integrated compatibility/race/SDK/native gates before publishing
    the fork batch. Do not combine revisions into a ledger.
