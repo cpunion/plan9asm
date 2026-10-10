@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 	"strings"
@@ -79,6 +80,30 @@ func TestX86FPAccessBytesScalarCompareRejectedForms(t *testing.T) {
 					if width, write, known := X86FPAccessBytes(ins, index, arch); known || write || width != 0 {
 						t.Fatal("rejected original compare acquired a byte span", width, write, known)
 					}
+				}
+			})
+		}
+	}
+}
+
+func TestX86FPCompareWidthDoesNotInitializeResult(t *testing.T) {
+	for _, arch := range []string{"386", "amd64"} {
+		for _, compare := range []string{"CMPL ret0+0(FP),$7", "TESTL $7,ret0+0(FP)"} {
+			t.Run(arch+"/"+compare, func(t *testing.T) {
+				body := compare + "\nMOVL $1,ret0+0(FP)\nRET"
+				_, file, sig, source := x86ResultInitializationFixture(t, arch, "func Value() uint32", body)
+				goAssemblerOracleOutput(t, arch, source, "", true)
+				for index, operand := range file.Funcs[0].Instrs[1].Args {
+					if operand.Kind != OpFP {
+						continue
+					}
+					width, write, known := X86FPAccessBytes(file.Funcs[0].Instrs[1], index, arch)
+					if !known || width != 4 || write {
+						t.Fatal("complete read lost its width", width, write, known)
+					}
+				}
+				if err := CheckX86ABI0ResultInitialization(file.Funcs[0], sig, arch); !errors.Is(err, ErrProbeNeedsContext) {
+					t.Fatal("read-only width observation initialized an unwritten result", err)
 				}
 			})
 		}

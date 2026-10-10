@@ -21,6 +21,15 @@ func X86FPAccessBytes(ins Instr, index int, arch string) (width int64, write, kn
 	if op := Op(normalizeInstructionOpcode(ins.Op)); x86RawReturnScalarMoveBytes(op) != 0 && ins.Op != op {
 		return 0, false, false
 	}
+	// CMP/TEST have two read-only operands, with opposite immediate positions.
+	// Reuse the complete lowering grammar; observing these widths supplies
+	// neither initialized flags/results nor permission to access native memory.
+	if form, recognized, err := x86ScalarCompareProperties(ins.Op, ins, arch); recognized {
+		if err != nil || form.memory != index {
+			return 0, false, false
+		}
+		return int64(form.bits / 8), false, true
+	}
 	if effect, recognized, err := x86TypedInstructionByteEffect(ins.Op, ins, arch); recognized {
 		if err != nil {
 			return 0, false, false
