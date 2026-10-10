@@ -740,6 +740,15 @@ Same-module imported Go inputs are hashed before loading, compared with the exac
 original ZIP, and guarded through final objects. Reports and ledger replay reject
 missing, duplicate, changed or unexecuted metadata scopes; no header is an empty
 stub and no query increases translation counts.
+
+One planning invocation may reuse pure parse and condition-free lexical results
+keyed by complete original text and filename. Each of the two private maps is bounded to
+512 entries and 64 MiB; it is neither serialized nor shared across invocations.
+Eviction only affects cost. Every query still checks current public projections,
+the complete source graph, generated-header roles and cancellation. Do not cache
+those validation results or remove CPU/source-pair proposals. Retain mutation,
+eviction, concurrent-isolation and allocation regressions when changing this path.
+
 Macro-only and inactive CPP variants may produce a symbol-free LLVM object only
 after the actual Go assembler accepts the original source, creates a nonempty
 object, and emits an empty `-S` symbol/data listing under the same target,

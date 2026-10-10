@@ -48,7 +48,7 @@ func discoveryCPPConditionFreeWithIndex(plan *discoveryOrdinarySelectionPlan, un
 		if source.Original == nil {
 			return false, fmt.Errorf("condition-free query omitted complete CPP original")
 		}
-		if !discoveryCPPConditionFreeText(*source.Original, id) {
+		if !sourceIndex.conditionFreeText(*source.Original, id) {
 			return false, nil
 		}
 	}
@@ -62,7 +62,7 @@ func discoveryCPPConditionFreeWithIndex(plan *discoveryOrdinarySelectionPlan, un
 		if err != nil {
 			return false, err
 		}
-		if !discoveryCPPConditionFreeText(string(canonical), "<observed-go_asm.h>") {
+		if !sourceIndex.conditionFreeText(string(canonical), "<observed-go_asm.h>") {
 			return false, nil
 		}
 	}

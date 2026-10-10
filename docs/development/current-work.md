@@ -160,9 +160,9 @@ with unrelated speculative implementation. Keep correctness gates unchanged.
   caller cache isolation, exhaustive priority order, sticky shard failures and
   a mandatory final aggregate. All 36 Node tests and the three actual-child
   Go queue tests pass; the original three policy failures remain recorded.
-- The frozen full unit run found six failed roots: two stale RNG assertions,
-  the earlier WORD preflight's unresolved-constant diagnostic, and two raw-pool
-  object fixture classes (three roots). RNG tests now account separately for the two side-effecting
+- The frozen full unit run found seven failed roots: two stale RNG assertions,
+  the earlier WORD preflight's unresolved-constant diagnostic, and four raw-pool
+  object fixtures. RNG tests now account separately for the two side-effecting
   intrinsics, while unknown GP inputs still reject. WORD retains the original
   unresolved-symbol diagnostic before decoding. Native preflight now consumes
   only the existing bounded appended-pool proof, not arbitrary dead WORDs as
@@ -172,6 +172,16 @@ with unrelated speculative implementation. Keep correctness gates unchanged.
   (88.734s), as do ten Go 1.20 roots (11.219s). The failed broad attempt that
   treated dead source as data remains recorded and was corrected. These
   focused passes do not relabel the still-running frozen full suite.
+- Shard 38's phase journal reports 30–41-minute ordinary-planning phases and
+  a 63-minute capture timeout. A first-party profile identifies repeated pure
+  condition-free lexical scans outside the existing parser index. The independent
+  RED measured 2,460 warm-query allocations; the bounded, complete-text/filename
+  lexical index reduces this to 10 without caching source/graph validity. All
+  CPU/source pairs, mutation checks, generated-header roles and cancellations
+  remain. Twenty-two related roots pass, along with focused race and actual
+  Go 1.20 checks. A single-iteration local 8-ASM/4-Go benchmark changed from
+  217 ms / 476 MB allocated to 43 ms / 67 MB. This is not a measured CI or
+  original-library improvement; the next frozen run must establish that.
 - Shard 38 is terminal with 35 passes, 41 failures and 18 source N/A outcomes
   out of 94 versions, at the still-published old revision. Its hex decoder
   exposed the six-name move-mask family's missing result effects. The complete
