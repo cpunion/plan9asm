@@ -7,12 +7,26 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
 // A normal first-party numeric package imports these SDK packages without
 // requiring native/generated code or granting a private frame capability.
 func TestAMD64OriginalObservationActualSDKGraphBudget(t *testing.T) {
+	for _, crypto := range []bool{false, true} {
+		name := "driver-collision"
+		if crypto {
+			name = "recursive-sdk"
+		}
+		t.Run(name, func(t *testing.T) {
+			amd64OriginalActualSDKGraphBudget(t, crypto)
+		})
+	}
+}
+
+func amd64OriginalActualSDKGraphBudget(t *testing.T, crypto bool) {
+	t.Helper()
 	request := amd64OriginalObservationFixture(t, "sdk-import")
 	source := `package observation
 import (
@@ -27,6 +41,9 @@ func Decode(p []byte) (uint64,error) {
  return binary.LittleEndian.Uint64(p),nil
 }
 `
+	if crypto {
+		source = strings.Replace(source, "import (", "import (\n _ \"crypto\"", 1)
+	}
 	if err := os.WriteFile(filepath.Join(request.Directory, "value.go"), []byte(source), 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -40,7 +57,7 @@ func Decode(p []byte) (uint64,error) {
 	// Independent accounting of the actual graph, not a replacement for the
 	// producer's role/lifetime checks. Macro-source inputs can add further bytes.
 	seen := make(map[string]bool)
-	var sourceBytes, exportBytes int64
+	var sourceBytes, packageLocalBytes, exportBytes int64
 	packages := 0
 	decoder := json.NewDecoder(bytes.NewReader(output))
 	for {
@@ -51,6 +68,20 @@ func Decode(p []byte) (uint64,error) {
 			t.Fatal(err)
 		}
 		packages++
+		entries, err := os.ReadDir(pkg.Dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, entry := range entries {
+			if entry.IsDir() {
+				continue
+			}
+			info, err := entry.Info()
+			if err != nil {
+				t.Fatal(err)
+			}
+			packageLocalBytes += info.Size()
+		}
 		var packageBytes int64
 		if err := filepath.WalkDir(pkg.Dir, func(path string, entry fs.DirEntry, err error) error {
 			if err != nil || entry.IsDir() || seen[path] {
@@ -90,6 +121,8 @@ func Decode(p []byte) (uint64,error) {
 	}
 	t.Logf("actual graph packages=%d complete-source=%d exports=%d driver=%d total-floor=%d (registered macro sources additional)",
 		packages, sourceBytes, exportBytes, driver.Size(), sourceBytes+exportBytes+driver.Size())
+	t.Logf("actual graph direct package members=%d; local-members/exports/driver floor=%d (SDK include closure additional)",
+		packageLocalBytes, packageLocalBytes+exportBytes+driver.Size())
 	observed, err := CaptureAMD64OriginalPackageObservation(ctx, request, RunBounded)
 	if err != nil {
 		t.Fatalf("original-Go accepted SDK graph must retain a complete bounded observation: %v", err)
