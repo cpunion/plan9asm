@@ -669,6 +669,7 @@ func TestARM64FPOpsCoverage(t *testing.T) {
 			arm64RegOp("F0"), arm64RegOp("F1"), arm64RegOp("F2"), arm64RegOp("F3"), arm64RegOp("F4"),
 		},
 	}}}, sig, nil)
+	c.targetTriple = "aarch64-unknown-linux-gnu"
 	check := func(kind string, ins Instr, ok bool, err error) {
 		t.Helper()
 		if err != nil {
@@ -789,11 +790,11 @@ func TestARM64FPOpsCoverage(t *testing.T) {
 		"fcmp ${1:d}, ${2:d}",
 		"mrs $0, nzcv",
 		"select i1",
-		"fadd double",
-		"fsub double",
-		"fmul double",
-		"fdiv double",
-		"fneg double",
+		"fadd ${0:d}, ${1:d}, ${2:d}",
+		"fsub ${0:d}, ${1:d}, ${2:d}",
+		"fmul ${0:d}, ${1:d}, ${2:d}",
+		"fdiv ${0:d}, ${1:d}, ${2:d}",
+		"fnmul ${0:d}, ${1:d}, ${2:d}",
 		"@llvm.maximum.f64",
 		"@llvm.minimum.f64",
 		"@llvm.fabs.f64",

@@ -66,7 +66,9 @@ func TestARM64ScalarBinaryCompleteGoTableAndBytes(t *testing.T) {
 	}
 	for kind, operation := range arm64BinaryTestKinds {
 		for width, suffix := range []string{"S", "D"} {
-			encoding := fmt.Sprintf(`case A%s%s:\s*op = FPOP2S\(0, 0, %d, %d\)`, operation.name, suffix, width, []int{2, 3, 0, 8, 1}[kind])
+			// Older Go returns the encoding directly; current Go assigns it
+			// before the shared epilogue. The complete attributes stay exact.
+			encoding := fmt.Sprintf(`case A%s%s:\s*(?:op =|return) FPOP2S\(0, 0, %d, %d\)`, operation.name, suffix, width, []int{2, 3, 0, 8, 1}[kind])
 			if !regexp.MustCompile(encoding).MatchString(sdk) {
 				t.Fatalf("Go changed %s%s opcode attributes", operation.name, suffix)
 			}
