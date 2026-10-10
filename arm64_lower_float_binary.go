@@ -11,16 +11,6 @@ func arm64ScalarFloatBinaryKind(op Op) (kind string, bits int, ok bool) {
 		bits = 64
 	}
 	switch op {
-	case "FADDS", "FADDD":
-		return "add", bits, true
-	case "FSUBS", "FSUBD":
-		return "sub", bits, true
-	case "FMULS", "FMULD":
-		return "mul", bits, true
-	case "FNMULS", "FNMULD":
-		return "nmul", bits, true
-	case "FDIVS", "FDIVD":
-		return "div", bits, true
 	case "FMAXS", "FMAXD":
 		return "maximum", bits, true
 	case "FMINS", "FMIND":
@@ -85,6 +75,12 @@ func (c *arm64Ctx) storeARM64ScalarFloatReg(reg Reg, bits int, value string) err
 }
 
 func (c *arm64Ctx) lowerARM64ScalarFloatBinary(op Op, ins Instr) (ok bool, terminated bool, err error) {
+	if form, known, err := parseARM64ScalarBinary(op, ins); known {
+		if err != nil {
+			return true, false, err
+		}
+		return true, false, c.lowerARM64ScalarBinary(form)
+	}
 	kind, bits, handled := arm64ScalarFloatBinaryKind(op)
 	if !handled {
 		return false, false, nil
@@ -122,12 +118,6 @@ func (c *arm64Ctx) lowerARM64ScalarFloatBinaryValues(
 	}
 	result := c.newTmp()
 	switch kind {
-	case "add", "sub", "mul", "div":
-		fmt.Fprintf(c.b, "  %%%s = f%s %s %s, %s\n", result, kind, floatType, lhs, rhs)
-	case "nmul":
-		product := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = fmul %s %s, %s\n", product, floatType, lhs, rhs)
-		fmt.Fprintf(c.b, "  %%%s = fneg %s %%%s\n", result, floatType, product)
 	case "maximum", "minimum", "maxnum", "minnum":
 		fmt.Fprintf(c.b, "  %%%s = call %s @llvm.%s.%s(%s %s, %s %s)\n", result, floatType, kind, suffix, floatType, lhs, floatType, rhs)
 	case "fabd", "fmulx":
@@ -137,6 +127,8 @@ func (c *arm64Ctx) lowerARM64ScalarFloatBinaryValues(
 		}
 		fmt.Fprintf(c.b, "  %%%s = call %s @llvm.aarch64.%s.%s.%s(%s %s, %s %s)\n",
 			result, floatType, family, kind, suffix, floatType, lhs, floatType, rhs)
+	default:
+		return fmt.Errorf("arm64 unsupported pure scalar float operation %q", kind)
 	}
 	return c.storeARM64ScalarFloatReg(destination, bits, "%"+result)
 }

@@ -65,6 +65,12 @@ func decodeARM64RawScalarFloatBinary(word uint32) (arm64RawScalarFloatBinary, bo
 }
 
 func (c *arm64Ctx) lowerRawScalarFloatBinary(form arm64RawScalarFloatBinary) error {
+	if opcode := arm64ScalarBinaryOpcode(form.kind); opcode != "" {
+		return c.lowerARM64ScalarBinary(arm64ScalarBinaryForm{
+			arm64ScalarBinarySpec{opcode, form.bits},
+			Reg(fmt.Sprintf("F%d", form.first)), Reg(fmt.Sprintf("F%d", form.second)), Reg(fmt.Sprintf("F%d", form.destination)),
+		})
+	}
 	lhs, err := c.loadARM64ScalarFloatReg(Reg(fmt.Sprintf("F%d", form.first)), form.bits)
 	if err != nil {
 		return err

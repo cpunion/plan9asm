@@ -84,7 +84,7 @@ func arm64ScalarBinaryDeadRuntime(t *testing.T, triple, goos string, compiler, r
 	fmt.Fprintf(&original, "fmt.Println(\"ARM64_COMPARE_ORIGINAL_PASS binary dead %d rows\")\n}\n", count)
 	driver.WriteString("return 0;\n}\n")
 	arm64ScalarCompareActualGo(t, source, original.String(), goos, runner)
-	for api, ir := range arm64CompareMatrixIRs(t, source, declarations, triple) {
+	for api, ir := range arm64BinaryMatrixIRs(t, source, declarations, triple) {
 		for _, variant := range []struct{ name, ir string }{{"none", ir}, {"O2", armFloatEffectOptimizedIR(t, ir)}} {
 			for _, level := range []int{0, 2} {
 				t.Run(fmt.Sprintf("api%d/IR_%s/backend_O%d", api, variant.name, level), func(t *testing.T) {

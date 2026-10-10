@@ -505,6 +505,15 @@ callee ABI nor its native frame, continuation and result transport.
 
 ## Semantic and raw-encoding checks
 
+ARM64 scalar FADD/FSUB/FMUL/FNMUL/FDIV share the complete two-row Go
+case-54 grammar and the raw H/S/D decoder. Their native side effects must
+survive dead values and optimization: ordinary LLVM arithmetic is not an
+FPCR/FPSR contract. FPCR.NEP merges the first source's full V128, not the old
+destination. Copy sparse definedness without inventing upper bits; preserve
+source NZCV and reject missing inputs across CFG joins. Keep original Go
+state/canary oracles, all three translation APIs plus typed Go, bounded batches,
+and required Linux/QEMU NEP/AH execution separate from object-only coverage.
+
 Go's original `reflect.makeFuncStub` and `methodValueCall` have empty source
 declarations but physical dynamic callers; their native TEXT retains
 `ArgsSizeUnknown`. Local outgoing-call storage, the argument-only `argLen`,

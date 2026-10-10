@@ -58,6 +58,15 @@ func (state *arm64MachineState) applyVectorSpan(effect arm64MachineEffect) error
 		effect.vectorOffset < 0 || effect.width <= 0 || effect.width > 128 || effect.vectorOffset > 128-effect.width {
 		return arm64GoABIContext("invalid SIMD defined-bit span at %q", effect.source)
 	}
+	if effect.copyFrom != "" {
+		if _, valid := arm64ParseVReg(Reg(effect.copyFrom)); !valid || !effect.write || effect.vectorOffset != 0 || effect.width != 128 {
+			return arm64GoABIContext("invalid complete SIMD defined-bit copy at %q", effect.source)
+		}
+		definition := state.vectorDefinition(effect.copyFrom)
+		definition.scalable = true // The architectural write clears scalable upper bits.
+		state.setVectorDefinition(effect.register, definition)
+		return nil
+	}
 	definition := state.vectorDefinition(effect.register)
 	mask := arm64MachineVectorMask(effect.vectorOffset, effect.width)
 	if effect.write {

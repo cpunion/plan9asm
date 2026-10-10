@@ -266,7 +266,8 @@ func TestTranslateARM64ScalarFloatBinaryFamilyCompleteGoAssemblerForms(t *testin
 		t.Fatal(err)
 	}
 	for _, want := range []string{
-		"fadd float", "fadd double", "fsub float", "fmul float", "fneg float", "fdiv float",
+		`asm sideeffect "fadd ${0:s}`, `asm sideeffect "fadd ${0:d}`, `asm sideeffect "fsub ${0:s}`,
+		`asm sideeffect "fmul ${0:s}`, `asm sideeffect "fnmul ${0:s}`, `asm sideeffect "fdiv ${0:s}`,
 		"@llvm.maximum.f32", "@llvm.minimum.f64", "@llvm.maxnum.f32", "@llvm.minnum.f64",
 	} {
 		if !strings.Contains(ll, want) {

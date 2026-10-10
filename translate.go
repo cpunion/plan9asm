@@ -253,6 +253,9 @@ func translateIRText(file *File, opt Options) (_ string, result error) {
 	if err := validateARM64NativeTargets(file, opt); err != nil {
 		return "", err
 	}
+	if err := validateARM64ScalarBinaryTarget(file, opt); err != nil {
+		return "", err
+	}
 	if !opt.X87Mode.valid() {
 		return "", fmt.Errorf("invalid x87 mode %d", opt.X87Mode)
 	}

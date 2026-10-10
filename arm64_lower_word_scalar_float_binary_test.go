@@ -62,8 +62,8 @@ func TestTranslateARM64RawScalarFloatBinaryCompleteArchitectureFamily(t *testing
 				t.Fatal(err)
 			}
 			for _, want := range []string{
-				"fadd half", "fadd float", "fadd double",
-				"fsub half", "fmul half", "fdiv half", "fneg half",
+				`asm sideeffect "fadd ${0:h}`, `asm sideeffect "fadd ${0:s}`, `asm sideeffect "fadd ${0:d}`,
+				`asm sideeffect "fsub ${0:h}`, `asm sideeffect "fmul ${0:h}`, `asm sideeffect "fdiv ${0:h}`, `asm sideeffect "fnmul ${0:h}`,
 				"@llvm.maximum.f16", "@llvm.minimum.f16",
 				"@llvm.maxnum.f16", "@llvm.minnum.f16",
 				`"target-features"="+fullfp16"`,
