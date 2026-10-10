@@ -8,6 +8,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestRuntimeExecAMD64Add(t *testing.T) {
@@ -367,7 +368,9 @@ func compileAndRunRuntimeTestWithCompiler(t *testing.T, llc string, compiler []s
 	llcArgs = append(llcArgs, llPath, "-o", objPath)
 	ctx, cancel := runtimeOracleStageContext(t)
 	llcCmd := exec.CommandContext(ctx, llc, llcArgs...)
+	started := time.Now()
 	out, err := runtimeOracleCombinedOutput(ctx, llcCmd)
+	t.Logf("phase=LLVM-backend elapsed=%s", time.Since(started))
 	cancel()
 	if err != nil {
 		s := string(out)
@@ -387,7 +390,9 @@ func compileAndRunRuntimeTestWithCompiler(t *testing.T, llc string, compiler []s
 	}
 	ctx, cancel = runtimeOracleStageContext(t)
 	compilerCmd := exec.CommandContext(ctx, compiler[0], compilerArgs...)
+	started = time.Now()
 	out, err = runtimeOracleCombinedOutput(ctx, compilerCmd)
+	t.Logf("phase=compile-link elapsed=%s", time.Since(started))
 	cancel()
 	if err != nil {
 		t.Fatalf("compile/link with %s failed: %v\n%s", compiler[0], err, string(out))
@@ -396,7 +401,9 @@ func compileAndRunRuntimeTestWithCompiler(t *testing.T, llc string, compiler []s
 	runArgs := runtimeOracleGuestArguments(t, runPrefix, exePath)
 	ctx, cancel = runtimeOracleStageContext(t)
 	runCmd := exec.CommandContext(ctx, runArgs[0], runArgs[1:]...)
+	started = time.Now()
 	out, err = runtimeOracleCombinedOutput(ctx, runCmd)
+	t.Logf("phase=guest-execution elapsed=%s", time.Since(started))
 	cancel()
 	if err != nil {
 		t.Fatalf("run failed: %v\n%s", err, string(out))
