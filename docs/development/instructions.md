@@ -505,6 +505,17 @@ callee ABI nor its native frame, continuation and result transport.
 
 ## Semantic and raw-encoding checks
 
+ARM64 RNDR/RNDRRS reads share the complete MRS/MOVD C_SPR-to-C_ZREG grammar
+and raw Rt/reseed decoder. Named aliases must infer the same `+rand` feature
+and define the same four virtual NZCV bits as WORD, including ZR/dead reads.
+The LLVM intrinsic is side-effecting; never replace it with an untracked MRS.
+Physical platform/g writes remain unbound at typed entries. Required Linux
+tests execute original Go and all four LLVM consumers/optimization axes, using
+independent allowed-value/status invariants rather than comparing random values
+from different executions. Report observed failures honestly: no natural failure
+is not a tested forced-failure path. Complete syntax/object coverage of reserved
+register banks is separate from an executable caller-entry contract.
+
 ARM64 scalar FADD/FSUB/FMUL/FNMUL/FDIV share the complete two-row Go
 case-54 grammar and the raw H/S/D decoder. Their native side effects must
 survive dead values and optimization: ordinary LLVM arithmetic is not an

@@ -1576,6 +1576,12 @@ func (c *arm64Ctx) lowerInstr(bi int, ins Instr, emitBr arm64EmitBr, emitCondBr 
 		return term, err
 	}
 
+	if form, matched, err := parseARM64RNDR(ins); matched {
+		if err != nil {
+			return false, err
+		}
+		return false, c.lowerRawRNDR(form)
+	}
 	if ok, term, err := c.lowerPCRelativeAddress(bi, op, ins); ok {
 		return term, err
 	}

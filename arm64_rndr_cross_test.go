@@ -33,6 +33,8 @@ func TestCrossLinuxRuntimeMatrixARM64RNDR(t *testing.T) {
 		[]string{"aarch64-linux-gnu-gcc"}, "arm64_rndr_status", triple, ir,
 		arm64RNDRStatusOracleC,
 		[]string{"qemu-aarch64", "-cpu", "max", "-L", "/usr/aarch64-linux-gnu"})
+	arm64RNDRFullStateRuntime(t, llc, []string{"aarch64-linux-gnu-gcc"},
+		[]string{"qemu-aarch64", "-cpu", "max", "-L", "/usr/aarch64-linux-gnu"})
 }
 
 func TestARM64RNDRStatusFixtureLLVM22Object(t *testing.T) {

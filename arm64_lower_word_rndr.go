@@ -20,6 +20,15 @@ func decodeARM64RawRNDR(word uint32) (arm64RawRNDR, bool) {
 }
 
 func (c *arm64Ctx) lowerRawRNDR(form arm64RawRNDR) error {
+	if form.reg < 0 || form.reg > 31 {
+		return fmt.Errorf("arm64 invalid RNG destination %d", form.reg)
+	}
+	if !arm64ScalarConversionNativeTarget(c.targetTriple) {
+		return fmt.Errorf("%w: ARM64 RNG requires an explicit native little-endian AArch64 target", ErrProbeNeedsContext)
+	}
+	if flow := c.machineAvailability; flow != nil && !flow.flagsOnly && (form.reg == 18 || form.reg == 28) {
+		return arm64GoABIContext("RNG numerical output cannot replace a platform/g entry identity")
+	}
 	intrinsic := "rndr"
 	if form.reseed {
 		intrinsic = "rndrrs"

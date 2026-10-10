@@ -159,7 +159,7 @@ func TestARM64FPControlRetainsTypedEntryBoundaries(t *testing.T) {
 		"MSR R9,FPSR",
 		"MRS FPCR,R18_PLATFORM", "MRS FPSR,g", "MRS FPCR,R30",
 		"MRS FPSR,R0\nCSET EQ,R0", // A status read does not define NZCV.
-		"CMP R0,R0\nMRS RNDR,R1\nCSET EQ,R0",
+		"CMP R0,R0\nMRS TPIDR_EL0,R1\nCSET EQ,R0",
 		"CMP R0,R0\nMSR R0,TPIDR_EL0\nCSET EQ,R0",
 	} {
 		file, err := Parse(ArchARM64, arm64TypedNativeSource(body))

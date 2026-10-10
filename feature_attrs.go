@@ -414,6 +414,9 @@ func inferFuncTargetFeaturesForGOARCH(arch Arch, goarch string, fn Func) string 
 				add("+aes")
 			}
 		case ArchARM64:
+			if _, matched, err := parseARM64RNDR(ins); matched && err == nil {
+				add("+rand")
+			}
 			if op == "SMC" || op == "DCPS3" {
 				add("+el3")
 			}
@@ -1104,9 +1107,6 @@ func inferFuncTargetFeaturesForGOARCH(arch Arch, goarch string, fn Func) string 
 			}
 			if op == "WORD" && len(ins.Args) == 1 && ins.Args[0].Kind == OpImm && ins.Args[0].ImmRaw == "" {
 				word := uint32(ins.Args[0].Imm)
-				if _, ok := decodeARM64RawRNDR(word); ok {
-					add("+rand")
-				}
 				if decoded, err := decodeARM64RawWordInstruction(ins); err == nil {
 					decodedFeatures := inferFuncTargetFeaturesForGOARCH(ArchARM64, goarch, Func{Instrs: []Instr{decoded}})
 					add(strings.Split(decodedFeatures, ",")...)
