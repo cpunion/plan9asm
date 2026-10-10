@@ -104,6 +104,14 @@ with unrelated speculative implementation. Keep correctness gates unchanged.
   never an accepted translation or a skipped test. The five-architecture
   official classification gate remains unchanged and passes. Original failing
   libraries remain failures until their complete frozen replay succeeds.
+- CI's UTF-16 example exposed another consumer gap: exact literal/CPP result
+  comparison refused bound integer constant expansion. Ten actual Go cases
+  across both x86 architectures independently reproduced it. The consumer now
+  accepts the closed integer value from the original CPP replay, preserving
+  every other operand, opcode, label, address and result-byte obligation. Seven
+  actual negative source/result cases and operand metadata mutations remain
+  rejected. Current-Go full alias regressions and focused Go 1.20 pass; this
+  repairs diagnostic consumption, not an external-library or runtime pass.
 - ARM64 FPCR/FPSR, NZCV, scalar binary operations and RNDR named/raw effects
   have independent original-Go and LLVM runtime evidence. Min/max's original
   full Linux run failed at the 45-minute deadline, without an observed value
@@ -148,11 +156,13 @@ and clean only exact owned caches after every consumer has closed.
   `_out/ci-closure/imports-replay/` retains the original exact x/crypto v0.57.0
   failure at local `XOF`, after independent Linux source/import gate passes.
   Its candidate cache was cleaned after every consumer closed.
-- Detached `191f2cab` (active; archive-bound and CMP/TEST repairs):
+- Detached `191f2cab` (terminal; archive-bound and CMP/TEST repairs):
   `_out/origin-archive/linux-replay/` retains the Linux first-party passes
-  and exact cbysal/go-ethereum v1.17.5 and enceve/crypto replay. Its source,
-  tools and ledger are frozen; inspect terminal reports before crediting any
-  candidate. The later BROADCAST repair is not part of this snapshot.
+  and two original failures. cbysal/go-ethereum v1.17.5 passed its former ZIP
+  bound but failed mixed TEXT/DATA frame observation. enceve/crypto passed its
+  former CMP FP alias refusal but failed PADDQ's native SP storage contract.
+  Neither is a pass. All consumers closed and owned candidate caches were
+  cleaned. The later BROADCAST and CPP constant repairs are not in this snapshot.
 - `codex/pr40-refill-sample-20261010`, `02c9ebbb`:
   `_out/refill-sample/` continues the fixed 53-candidate, 37-shard sample with
   four workers. This older revision cannot update the current-head ledger.

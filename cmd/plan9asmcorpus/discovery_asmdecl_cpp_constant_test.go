@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/xgo-dev/plan9asm"
 )
 
 // The instruction and result address remain literal. Only an integer operand
@@ -69,6 +71,45 @@ func TestDiscoveryAsmDeclResultAliasCPPConstantsActualGo(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+func TestDiscoveryAsmDeclResultAliasCPPConstantOperandBoundary(t *testing.T) {
+	resolved := plan9asm.Operand{Kind: plan9asm.OpImm, Imm: 7}
+	for _, expression := range []string{"value", "value(4)", "value(base + 1)", "(base << 2 | 3)", "(-base)", "base &^ mask", "'a'"} {
+		t.Run(expression, func(t *testing.T) {
+			literal := plan9asm.Operand{Kind: plan9asm.OpSym, Sym: "$" + expression}
+			if !resultAliasCPPConstantOperand(literal, resolved) {
+				t.Fatal("integer CPP expression was not registered")
+			}
+			if literal.Sym != "$"+expression || resolved.Imm != 7 {
+				t.Fatal("operand comparison mutated caller inputs")
+			}
+		})
+	}
+	for _, expression := range []string{"symbol(SB)", "value(FP)", "value(SP)", "value(PC)", "value<>(SB)", "(AX)(CX*2)", "&value", "*value", "value.field", "value[0]", "value()...", "value(args...)", "1.5", "\"text\"", "base == 7", "base && mask", "base +"} {
+		t.Run("reject/"+expression, func(t *testing.T) {
+			if resultAliasCPPConstantOperand(plan9asm.Operand{Kind: plan9asm.OpSym, Sym: "$" + expression}, resolved) {
+				t.Fatal("noninteger or native-address syntax acquired constant authority")
+			}
+		})
+	}
+	for name, mutate := range map[string]func(*plan9asm.Operand){
+		"floating":    func(o *plan9asm.Operand) { o.ImmIsFloat = true },
+		"unresolved":  func(o *plan9asm.Operand) { o.ImmRaw = "$unknown" },
+		"register":    func(o *plan9asm.Operand) { o.Reg = "AX" },
+		"FP name":     func(o *plan9asm.Operand) { o.FPName = "result" },
+		"FP offset":   func(o *plan9asm.Operand) { o.FPOffset = 8 },
+		"memory base": func(o *plan9asm.Operand) { o.Mem.Base = "SP" },
+		"symbol":      func(o *plan9asm.Operand) { o.Sym = "other" },
+	} {
+		t.Run(name, func(t *testing.T) {
+			changed := resolved
+			mutate(&changed)
+			if resultAliasCPPConstantOperand(plan9asm.Operand{Kind: plan9asm.OpImm, ImmRaw: "$(value)"}, changed) {
+				t.Fatal("changed operand metadata borrowed an integer expansion")
+			}
+		})
 	}
 }
 

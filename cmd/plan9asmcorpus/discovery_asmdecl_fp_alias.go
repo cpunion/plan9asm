@@ -2,6 +2,9 @@ package main
 
 import (
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"go/types"
 	"reflect"
 	"regexp"
@@ -174,9 +177,11 @@ func asmDeclFPComponents(declaration resultAliasDeclaration) (map[string]*asmDec
 }
 
 // The analyzer sees the original literal instruction, whereas cmd/asm sees
-// CPP output. Exact whole-function replay prevents a macro-redefined opcode,
+// CPP output. Whole-function replay prevents a macro-redefined opcode,
 // register, label or FP token from borrowing the literal's native-width proof.
-// Directive/macro-bearing bodies remain unclosed, not guessed or excluded.
+// An unresolved integer immediate may consume its fully evaluated value from
+// the caller's bound original CPP replay; result effects use that expanded
+// function, never the unresolved literal. Other differences remain unclosed.
 func resultAliasLiteralCPPFunction(source []byte, expanded plan9asm.Func) error {
 	lines := discoveryAsmDeclUncommentedLines(source)
 	start, end := -1, len(lines)
@@ -212,11 +217,80 @@ func resultAliasLiteralCPPFunction(source []byte, expanded plan9asm.Func) error 
 		return fmt.Errorf("literal/expanded function shape differs")
 	}
 	for i, ins := range left.Instrs {
-		if ins.Op != expanded.Instrs[i].Op || !reflect.DeepEqual(ins.Args, expanded.Instrs[i].Args) {
+		right := expanded.Instrs[i]
+		if ins.Op != right.Op || len(ins.Args) != len(right.Args) {
 			return fmt.Errorf("literal/expanded instruction %d differs (%s / %s)", i, ins.Op, expanded.Instrs[i].Op)
+		}
+		for index, operand := range ins.Args {
+			if !resultAliasCPPConstantOperand(operand, right.Args[index]) {
+				return fmt.Errorf("literal/expanded instruction %d operand %d differs (%s)", i, index, ins.Op)
+			}
 		}
 	}
 	return nil
+}
+
+func resultAliasCPPConstantOperand(literal, expanded plan9asm.Operand) bool {
+	if reflect.DeepEqual(literal, expanded) {
+		return true
+	}
+	// The assembly parser retains a bare $name or $macro(args) as a symbol,
+	// while parenthesized unresolved arithmetic is an immediate placeholder.
+	// Only integer-expression syntax can cross that representation boundary;
+	// effective addresses, selectors and relocations cannot borrow this role.
+	if literal.Kind == plan9asm.OpSym && strings.HasPrefix(literal.Sym, "$") &&
+		resultAliasCPPIntegerExpression(strings.TrimPrefix(literal.Sym, "$")) {
+		literal.Kind, literal.ImmRaw, literal.Sym = plan9asm.OpImm, literal.Sym, ""
+	}
+	if literal.Kind != plan9asm.OpImm || literal.ImmRaw == "" || literal.ImmIsFloat ||
+		expanded.Kind != plan9asm.OpImm || expanded.ImmRaw != "" || expanded.ImmIsFloat {
+		return false
+	}
+	// Only the integer value may differ. Symbolic addresses, registers, FP
+	// displacements, floating encodings and any other operand metadata retain
+	// their exact identity. This helper supplies no initialization by itself.
+	literal.ImmRaw = ""
+	literal.Imm = expanded.Imm
+	return reflect.DeepEqual(literal, expanded)
+}
+
+func resultAliasCPPIntegerExpression(text string) bool {
+	expression, err := parser.ParseExpr(text)
+	if err != nil {
+		return false
+	}
+	valid := true
+	ast.Inspect(expression, func(node ast.Node) bool {
+		if !valid || node == nil {
+			return false
+		}
+		switch node := node.(type) {
+		case *ast.ParenExpr:
+		case *ast.Ident:
+			switch node.Name {
+			case "FP", "SP", "SB", "PC":
+				valid = false
+			}
+		case *ast.BasicLit:
+			valid = node.Kind == token.INT || node.Kind == token.CHAR
+		case *ast.UnaryExpr:
+			valid = node.Op == token.ADD || node.Op == token.SUB || node.Op == token.XOR
+		case *ast.BinaryExpr:
+			switch node.Op {
+			case token.ADD, token.SUB, token.MUL, token.QUO, token.REM,
+				token.AND, token.OR, token.XOR, token.AND_NOT, token.SHL, token.SHR:
+			default:
+				valid = false
+			}
+		case *ast.CallExpr:
+			_, valid = node.Fun.(*ast.Ident)
+			valid = valid && !node.Ellipsis.IsValid()
+		default:
+			valid = false
+		}
+		return valid
+	})
+	return valid
 }
 
 // Parameter aliases require only a full native read of an actual declaration
