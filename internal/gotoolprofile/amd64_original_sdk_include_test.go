@@ -41,7 +41,7 @@ func sdkDependencyIncludeFixture(t *testing.T, assembly string) (amd64OriginalLi
 	pkg := amd64OriginalListPackage{Standard: true}
 	pkg.ImportPath, pkg.Dir, pkg.SFiles = "fixture/sdk", filepath.Join(root, "src", "fixture", "sdk"), []string{"value_amd64.s"}
 	files := newAMD64OriginalObservationFiles()
-	if err := files.directory(pkg.Dir, true); err != nil {
+	if err := retainAMD64OriginalPackageDirectory(pkg, pkg.Dir, files); err != nil {
 		t.Fatal(err)
 	}
 	return pkg, root, profile, files
@@ -65,10 +65,11 @@ func sdkIncludeSourceFixture(t *testing.T, assembly string, sources map[string]s
 	pkg.ImportPath, pkg.Dir = "fixture/sdk", filepath.Join(root, "src", "fixture", "sdk")
 	pkg.SFiles = []string{"value_amd64.s"}
 	files := newAMD64OriginalObservationFiles()
-	for _, directory := range []string{pkg.Dir, filepath.Join(root, "pkg", "include")} {
-		if err := files.directory(directory, true); err != nil {
-			t.Fatal(err)
-		}
+	if err := retainAMD64OriginalPackageDirectory(pkg, pkg.Dir, files); err != nil {
+		t.Fatal(err)
+	}
+	if err := files.directory(filepath.Join(root, "pkg", "include"), true); err != nil {
+		t.Fatal(err)
 	}
 	return pkg, root, files
 }

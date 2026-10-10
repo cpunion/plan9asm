@@ -154,7 +154,7 @@ func captureAMD64OriginalGraph(ctx context.Context, request AMD64OriginalObserva
 		if goFiles == nil || len(goFiles) == 0 || !reflect.DeepEqual(goFiles, compiled) || len(goFiles) > 32768 {
 			return nil, fmt.Errorf("%w: original graph lacks complete ordinary compiler files", plan9asm.ErrProbeNeedsContext)
 		}
-		if err := files.directory(dir, true); err != nil {
+		if err := retainAMD64OriginalPackageDirectory(pkg, dir, files); err != nil {
 			return nil, err
 		}
 		if err := replayAMD64OriginalSelection(pkg, dir, profile); err != nil {

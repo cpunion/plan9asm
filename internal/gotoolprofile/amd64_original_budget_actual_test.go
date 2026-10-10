@@ -132,6 +132,15 @@ func Decode(p []byte) (uint64,error) {
 			t.Error(err)
 		}
 	}()
+	if crypto {
+		if _, exists := observed.state.packages["crypto/tls"]; exists {
+			t.Fatal("fixture unexpectedly imports the unrelated descendant package")
+		}
+		root := observed.state.environment["GOROOT"]
+		if observed.state.files.hashes[filepath.Join(root, "src", "crypto", "tls", "tls.go")] != "" {
+			t.Fatal("SDK ancestor imported an unrelated descendant's contents")
+		}
+	}
 	if err := observed.Verify(ctx); err != nil {
 		t.Fatal(err)
 	}
