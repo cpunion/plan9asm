@@ -829,14 +829,14 @@ func (source *GoAMD64FrameSource) typedDeclarationsForArch(pkg GoPackage, numeri
 	for _, name := range typed.Scope().Names() {
 		if named, ok := typed.Scope().Lookup(name).(*types.TypeName); ok {
 			previous, supplied := pkg.Types.Scope().Lookup(name).(*types.TypeName)
-			actual, err := goAMD64FrameLanguageType(named.Type(), sizes)
-			prior, priorErr := "", error(nil)
-			if supplied {
-				prior, priorErr = goAMD64FrameLanguageType(previous.Type(), sizes)
-			}
-			if !supplied || named.IsAlias() != previous.IsAlias() || err != nil || priorErr != nil || actual != prior {
+			if !supplied || named.IsAlias() != previous.IsAlias() {
 				return nil, goAMD64FrameContext("actual local type declaration differs: %s", name)
 			}
+			// The complete original Go program has already been typechecked.
+			// Unrelated interfaces, callbacks, maps or recursive/generic types
+			// do not cross an assembly ABI and must not enter its restricted
+			// transport grammar. Every type reachable from an actual assembly
+			// parameter/result is independently compared in full below.
 			continue
 		}
 		// Bodies and values are independently typechecked, but only original

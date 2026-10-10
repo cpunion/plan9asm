@@ -679,7 +679,13 @@ These observations grant no input extent, alias or GC contract. The bounded
 fixed-local consumer separately proves scalar/component transport. Its Binder
 re-typechecks the complete original typed declaration and retains that
 language identity; each consumer checks it against the live factory declaration
-and object role/signature before and after translation. By-value aggregates,
+and object role/signature before and after translation. The restricted
+transport grammar applies to types reachable from assembly parameters/results,
+not unrelated Go declarations such as an XOF interface or callback type.
+All original Go sources are still independently typechecked; complete scope
+names and local type/alias roles remain bound. Unrelated ordinary types cannot
+create assembly signatures or bypass signedness, alias RHS, pointee or field
+checks on a real assembly signature. By-value aggregates,
 recursive/generic types, noninteger/nonboolean elements and nonordinary roles remain Context.
 Opaque incoming pointers may only be copied through full-width GP/private cells
 and pointer results. They never become numerical bytes, private-SP addresses,

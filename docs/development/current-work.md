@@ -72,6 +72,17 @@ with unrelated speculative implementation. Keep correctness gates unchanged.
   numerical/frame joins passed too. A test-root-owned build cache reduced this
   focused current-Go suite from 140.877s to 62.199s without removing cases;
   this is not a corpus-wide performance or external-library pass.
+- The XOF counterexample exposed an unrelated-Go-type/assembly-transport
+  boundary error, not a missing mnemonic. Eight independent interface,
+  callback, map, channel, floating, recursive, generic and alias cases reproduce
+  the refusal. Complete original Go typechecking and declaration roles remain
+  mandatory; restricted transport/layout comparison now applies to every
+  actual assembly signature's reachable type tree. Seventeen identity
+  mutations and fifteen unsupported signature roles still reject. Focused
+  current-Go and Go 1.20 gates and three-target, three-API LLVM objects pass.
+  The prepared `_out/ci-closure/types-replay/` reruns the original exact crypto
+  version with both type and CPU-profile repairs; inspect its frozen report
+  before claiming any external closure.
 - ARM64 FPCR/FPSR, NZCV, scalar binary operations and RNDR named/raw effects
   have independent original-Go and LLVM runtime evidence. Min/max's original
   full Linux run failed at the 45-minute deadline, without an observed value
