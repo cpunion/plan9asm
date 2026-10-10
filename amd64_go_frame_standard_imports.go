@@ -10,8 +10,9 @@ import (
 )
 
 // SDK imports supply actual compiler types, never caller-memory permissions.
-// Foreign modules and nonordinary compiler roles need their own handoff.
-func (source *GoAMD64FrameSource) loadStandardDeclarationImports(ctx context.Context) (map[string]goAMD64FrameSelection, error) {
+// Exact downloaded modules have their own independent archive handoff;
+// nonordinary compiler roles remain separate.
+func (source *GoAMD64FrameSource) loadOriginalDeclarationImports(ctx context.Context) (map[string]goAMD64FrameSelection, error) {
 	if len(source.selection.Imports) == 0 {
 		return nil, nil
 	}
@@ -19,12 +20,15 @@ func (source *GoAMD64FrameSource) loadStandardDeclarationImports(ctx context.Con
 	if err != nil {
 		return nil, err
 	}
-	return source.bindStandardDeclarationImports(output)
+	if err := source.captureDownloadedDeclarationOrigins(ctx, output); err != nil {
+		return nil, err
+	}
+	return source.bindOriginalDeclarationImports(output)
 }
 
 // A caller retaining the actual command bytes may share the same complete
 // graph decoder. This routine observes files/exports, not frame authority.
-func (source *GoAMD64FrameSource) bindStandardDeclarationImports(output []byte) (map[string]goAMD64FrameSelection, error) {
+func (source *GoAMD64FrameSource) bindOriginalDeclarationImports(output []byte) (map[string]goAMD64FrameSelection, error) {
 	if len(output) > 16<<20 {
 		return nil, goAMD64FrameContext("declaration import graph exceeds its bound")
 	}
@@ -59,14 +63,20 @@ func (source *GoAMD64FrameSource) bindStandardDeclarationImports(output []byte) 
 			originalFound = true
 			continue
 		}
-		if _, duplicate := graph[selected.ImportPath]; duplicate || !selected.Standard || selected.Module != nil ||
+		if _, duplicate := graph[selected.ImportPath]; duplicate ||
 			!filepath.IsLocal(filepath.FromSlash(selected.ImportPath)) {
 			return nil, goAMD64FrameContext("foreign or duplicate declaration dependency needs authenticated handoff")
 		}
 		dir, err := filepath.EvalSymlinks(selected.Dir)
-		wanted, wantedErr := filepath.EvalSymlinks(filepath.Join(root, "src", filepath.FromSlash(selected.ImportPath)))
+		var wanted string
+		var wantedErr error
+		if selected.Standard && selected.Module == nil {
+			wanted, wantedErr = filepath.EvalSymlinks(filepath.Join(root, "src", filepath.FromSlash(selected.ImportPath)))
+		} else {
+			wanted, wantedErr = source.downloadedDeclarationDirectory(selected)
+		}
 		if err != nil || wantedErr != nil || dir != wanted {
-			return nil, goAMD64FrameContext("actual declaration dependency escaped its SDK source origin")
+			return nil, goAMD64FrameContext("actual declaration dependency escaped its original source origin: %v", wantedErr)
 		}
 		compiled := append([]string(nil), selected.CompiledGoFiles...)
 		for index, file := range compiled {

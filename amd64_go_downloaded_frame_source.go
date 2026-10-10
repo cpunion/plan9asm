@@ -27,8 +27,8 @@ type goAMD64DownloadedIdentity struct {
 
 // CaptureGoAMD64DownloadedFrameSource independently executes stock Go and
 // closes the original ZIP, extracted members, declarations and whole objects.
-// Downloaded roles are flat, import-free packages in the primary module and numeric
-// or void ABI0 declarations. Capture itself grants no memory permission.
+// Downloaded roles retain their primary module and independently observed
+// original import graph. Capture itself grants no memory permission.
 func CaptureGoAMD64DownloadedFrameSource(ctx context.Context, pkg GoPackage, request GoAMD64DownloadedFrameCaptureRequest) (*GoAMD64FrameSource, error) {
 	if module.Check(request.SourceModule, request.SourceVersion) != nil ||
 		module.CanonicalVersion(request.SourceVersion) != request.SourceVersion {
@@ -47,9 +47,26 @@ func (source *GoAMD64FrameSource) captureDownloadedOrigin(ctx context.Context, e
 	if err != nil {
 		return err
 	}
-	boundary, err := gooriginalsrc.NewDownloadBoundary(temporary, "plan9asm-frame-download-", "example.invalid/plan9asm-frame-download")
+	original, err := source.observeDownloadedModule(ctx, origins, exact, temporary)
 	if err != nil {
 		return err
+	}
+	if _, err := goAMD64DownloadedPackagePath(original, source.request.Directory); err != nil {
+		return err
+	}
+	source.downloadedOrigin, source.downloadedModule = origins, &original
+	return source.verifyDownloadedOrigin()
+}
+
+func (source *GoAMD64FrameSource) observeDownloadedModule(ctx context.Context, origins *gooriginalsrc.OriginSet,
+	exact goAMD64DownloadedIdentity, temporary string,
+) (_ gooriginalsrc.Module, result error) {
+	if module.Check(exact.module, exact.version) != nil || module.CanonicalVersion(exact.version) != exact.version {
+		return gooriginalsrc.Module{}, goAMD64FrameContext("downloaded dependency requires a canonical exact source identity")
+	}
+	boundary, err := gooriginalsrc.NewDownloadBoundary(temporary, "plan9asm-frame-download-", "example.invalid/plan9asm-frame-download")
+	if err != nil {
+		return gooriginalsrc.Module{}, err
 	}
 	defer func() {
 		result = errors.Join(result, boundary.Close())
@@ -57,7 +74,7 @@ func (source *GoAMD64FrameSource) captureDownloadedOrigin(ctx context.Context, e
 	// This private command boundary is not a copied main/source module. Its
 	// sole purpose is to prevent stock Go mutating an ancestor go.mod/go.sum.
 	if err := boundary.Prepare(); err != nil {
-		return err
+		return gooriginalsrc.Module{}, err
 	}
 	commandContext, cancel := context.WithTimeout(ctx, time.Minute)
 	defer cancel()
@@ -65,26 +82,22 @@ func (source *GoAMD64FrameSource) captureDownloadedOrigin(ctx context.Context, e
 		source.request.GoBinary, "mod", "download", "-json", exact.module+"@"+exact.version)
 	err = errors.Join(err, commandContext.Err())
 	if err != nil {
-		return err
+		return gooriginalsrc.Module{}, err
 	}
 	decoder := json.NewDecoder(bytes.NewReader(data))
 	var receipt gooriginalsrc.DownloadReceipt
 	if err := decoder.Decode(&receipt); err != nil {
-		return err
+		return gooriginalsrc.Module{}, err
 	}
 	var extra any
 	if decoder.Decode(&extra) != io.EOF {
-		return goAMD64FrameContext("actual exact download receipt has incomplete or additional JSON")
+		return gooriginalsrc.Module{}, goAMD64FrameContext("actual exact download receipt has incomplete or additional JSON")
 	}
 	original, err := origins.Observe(ctx, exact.module, exact.version, receipt)
 	if err != nil {
-		return errors.Join(goAMD64FrameContext("exact original archive/source is not closed"), err)
+		return gooriginalsrc.Module{}, errors.Join(goAMD64FrameContext("exact original archive/source is not closed"), err)
 	}
-	if _, err := goAMD64DownloadedPackagePath(original, source.request.Directory); err != nil {
-		return err
-	}
-	source.downloadedOrigin, source.downloadedModule = origins, &original
-	return source.verifyDownloadedOrigin()
+	return original, nil
 }
 
 func (source *GoAMD64FrameSource) verifyDownloadedOrigin() error {

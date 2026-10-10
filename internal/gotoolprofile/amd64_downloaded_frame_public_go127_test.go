@@ -180,8 +180,8 @@ func TestAMD64DownloadedFramePublicRejectedRoles(t *testing.T) {
 			if !errors.Is(err, plan9asm.ErrProbeNeedsContext) || source != nil {
 				t.Fatal("broader source role acquired a downloaded frame", err)
 			}
-			if (variant == "import" || variant == "foreign") && !strings.Contains(err.Error(), "import-free primary module package") {
-				t.Fatal("import role refusal was not based on actual complete Go selection", err)
+			if (variant == "import" || variant == "foreign") && !strings.Contains(err.Error(), "actual selected declarations differ") {
+				t.Fatal("unbound supplied types were not rejected by the independent source typecheck", err)
 			}
 		})
 	}

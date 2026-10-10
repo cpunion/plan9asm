@@ -117,7 +117,7 @@ func (source *GoX86SDKASMDataSource) capture(ctx context.Context, provided map[s
 	if err != nil {
 		return err
 	}
-	imports, err := source.guard.bindStandardDeclarationImports(graph)
+	imports, err := source.guard.bindOriginalDeclarationImports(graph)
 	if err != nil {
 		return err
 	}

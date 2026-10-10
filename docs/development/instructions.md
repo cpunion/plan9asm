@@ -708,12 +708,17 @@ the caller's original alias does not change that source. Explicit cache roots
 remain caller-owned; capture does not authenticate ownership or delete them.
 
 Exact downloaded frame capture distinguishes the selected package directory
-from its original module root. A flat, import-free subpackage may bind its
+from its original module root. A flat subpackage may bind its
 declared path only through the independently guarded whole ZIP and original
 go.mod; archive namespace aliases do not replace that declared namespace.
 Actual Go selection must retain the same module root, metadata, language and
 package path. Ancestor metadata or source changes revoke the capability.
-This source-role extension grants no new native instruction/memory effects,
-CPU profiles, foreign imports or dynamic-frame permission. Keep the original
+SDK imports retain the actual SDK source/export graph. Each foreign module
+requires the frame factory's own exact Go-download/whole-ZIP observation,
+canonical module/package/metadata/language identity and complete compiler
+source/export consumption. Replacements and unobserved version changes fail;
+restoring changed dependency bytes cannot revive a revoked observation.
+The source-role extension grants no new native instruction/memory effects,
+CPU profiles or dynamic-frame permission. Keep the original
 Go objects and three-API LLVM 22 O0/O2 objects on all AMD64 targets separate
 from actual external-library success.

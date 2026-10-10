@@ -61,6 +61,7 @@ type GoAMD64FrameSource struct {
 	origins            map[string]int
 	downloadedOrigin   *gooriginalsrc.OriginSet
 	downloadedModule   *gooriginalsrc.Module
+	downloadedImports  map[string]gooriginalsrc.Module
 	numericalBinding   *GoX86NumericalReadBinding
 	numericalOrigin    *GoAMD64FrameSource
 	numericalSeal      [32]byte
@@ -246,11 +247,11 @@ func captureGoAMD64FrameSource(ctx context.Context, pkg GoPackage, request GoAMD
 			return nil, err
 		}
 		if selected.Module.Path != original.ModulePath || selected.Module.GoVersion != original.GoVersion ||
-			selected.ImportPath != path || len(selected.Imports) != 0 || len(selected.ImportMap) != 0 {
-			return nil, goAMD64FrameContext("exact downloaded capture requires its import-free primary module package")
+			selected.ImportPath != path {
+			return nil, goAMD64FrameContext("exact downloaded capture requires its original primary module package")
 		}
 	}
-	source.imports, err = source.loadStandardDeclarationImports(ctx)
+	source.imports, err = source.loadOriginalDeclarationImports(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -441,7 +442,7 @@ func (source *GoAMD64FrameSource) verifyFrameOnly(ctx context.Context) (verifyEr
 	if !reflect.DeepEqual(source.selection, selected) {
 		return goAMD64FrameContext("actual complete package selection/export changed")
 	}
-	imports, err := source.loadStandardDeclarationImports(ctx)
+	imports, err := source.loadOriginalDeclarationImports(ctx)
 	if err != nil && source.numericalOrigin != nil {
 		return err
 	}

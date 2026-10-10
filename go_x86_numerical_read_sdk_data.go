@@ -263,7 +263,7 @@ func (source *GoX86NumericalReadSource) captureSDKLiteralSourceRole(ctx context.
 	// Rebind the actual driver graph, not its diagnostic JSON projection.
 	// A nil json.RawMessage is serialized as null and decodes as the bytes
 	// "null"; that report round trip must not impersonate a driver Error field.
-	imports, err := source.guard.bindStandardDeclarationImports(observation.Graph)
+	imports, err := source.guard.bindOriginalDeclarationImports(observation.Graph)
 	if err != nil {
 		return err
 	}

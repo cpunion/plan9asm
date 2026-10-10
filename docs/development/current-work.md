@@ -55,8 +55,11 @@ with unrelated speculative implementation. Keep correctness gates unchanged.
   ZIP/go.mod. The independent first-party fixture reproduced the old refusal
   on Linux, Darwin and Windows; all three translation APIs now produce LLVM 22
   O0/O2 objects for each target. Ancestor metadata changes permanently revoke
-  the capability. Current Go and focused Go 1.20 gates passed. Imported-source
-  and CPU-profile contracts remain separate; this is not crypto replay closure.
+  the capability. Current Go and focused Go 1.20 gates passed. Imported SDK
+  and exact foreign modules now have independent source/export/ZIP handoffs,
+  with actual four-role RED/GREEN controls, three-API O0/O2 objects and
+  metadata/source mutation negatives. CPU-profile and complete native frame
+  contracts remain separate; this is not crypto replay closure.
 - ARM64 FPCR/FPSR, NZCV, scalar binary operations and RNDR named/raw effects
   have independent original-Go and LLVM runtime evidence. Min/max's original
   full Linux run failed at the 45-minute deadline, without an observed value

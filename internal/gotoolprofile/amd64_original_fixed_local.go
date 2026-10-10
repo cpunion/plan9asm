@@ -13,10 +13,10 @@ import (
 // The query-only observation does not become a frame certificate: the existing
 // root factory and binder independently check every source/declaration/object
 // and all native initialization, address, CFG and relocation requirements.
-// This first handoff deliberately retains that factory's numeric, flat,
-// owned-main scope. SDK imports are independently source/export-bound by that
-// factory; foreign imports, DATA, composite and external roles cannot obtain a
-// capability through this method.
+// The owned-main route retains its existing source domain. The distinct
+// downloaded route independently binds complete exact module/ZIP origins,
+// imported sources and compiler exports. Neither route grants new DATA,
+// dynamic-frame, native-entry or pointee permissions.
 type AMD64OriginalFixedLocalBinding struct {
 	mu         sync.Mutex
 	owner      *AMD64OriginalPackageObservation

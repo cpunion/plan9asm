@@ -110,7 +110,7 @@ func (source *GoX86NumericalReadSource) captureSourceRole(ctx context.Context) e
 	if err != nil {
 		return err
 	}
-	imports, err := source.guard.bindStandardDeclarationImports(graph)
+	imports, err := source.guard.bindOriginalDeclarationImports(graph)
 	if err != nil {
 		return err
 	}
@@ -232,7 +232,7 @@ func (source *GoX86NumericalReadSource) verifySDKObservation(ctx context.Context
 	if err != nil {
 		return err
 	}
-	imports, err := source.guard.bindStandardDeclarationImports(graph)
+	imports, err := source.guard.bindOriginalDeclarationImports(graph)
 	if err != nil {
 		return numericalSBContext("complete SDK source/export graph cannot be rebound: %v", err)
 	}

@@ -73,6 +73,41 @@ func TestAMD64DownloadedFrameOriginalImportGraphs(t *testing.T) {
 			if err := source.Verify(ctx); err != nil {
 				t.Fatal(err)
 			}
+			data, err := os.ReadFile(filepath.Join(request.Directory, "value_amd64.s"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			expanded := strings.Replace(string(data), "#include \"textflag.h\"", "#define NOSPLIT 4", 1)
+			file, err := plan9asm.Parse(plan9asm.ArchAMD64, expanded)
+			if err != nil {
+				t.Fatal(err)
+			}
+			sig, err := plan9asm.DeriveGoFuncABI0Signature(pkg.Path+".Value",
+				typed.Scope().Lookup("Value").(*types.Func), "amd64", types.SizesFor("gc", "amd64"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			bound, err := source.BindFixedLocal(ctx, pkg, file, plan9asm.Options{
+				Goarch: "amd64", TargetTriple: "x86_64-unknown-linux-gnu",
+				ResolveSym: func(name string) string { return strings.Replace(name, "·", pkg.Path+".", 1) },
+				Sigs:       map[string]plan9asm.FuncSig{sig.Name: sig},
+			})
+			if err != nil {
+				t.Fatal("independent imported source did not bind its actual frame", err)
+			}
+			fixture := amd64DownloadedLLVMFixture{request: request, pkg: pkg, file: file, options: bound, assembly: expanded}
+			llc := amd64DownloadedLLVM22Tool(t, ctx, fixture, "llc")
+			for _, api := range []string{"Translate", "Module", "GoModule"} {
+				t.Run(api, func(t *testing.T) {
+					ir := fixture.ir(t, api)
+					for _, level := range []string{"-O0", "-O2"} {
+						fixture.object(t, ctx, llc, ir, level)
+					}
+				})
+			}
+			if err := source.Verify(ctx); err != nil {
+				t.Fatal(err)
+			}
 			if !strings.Contains(variant, "foreign") {
 				return
 			}
