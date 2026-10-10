@@ -123,3 +123,26 @@ test('aggregate rejects unsafe output before mkdir or status collection', (t) =>
   assert.ok(invocations[0].includes('-discovery-progress-directory'));
   assert.equal(fs.existsSync(reports), false);
 });
+
+for (const mode of ['pass', 'partial', 'invalid', 'preflight failure']) {
+  test(`aggregate ${mode} exposes each running phase without polluting JSON`, (t) => {
+    const { result, invocations, reports } = verifyFixture(t, mode);
+    const phases = mode === 'preflight failure'
+      ? ['directory-preflight']
+      : ['directory-preflight', 'scan-ledger', 'report-audit'];
+    const lines = result.stderr.split('\n').filter(line => line.startsWith('discovery verification:'));
+    assert.equal(lines.length, phases.length * 2, result.stderr);
+    for (const [index, phase] of phases.entries()) {
+      assert.equal(lines[index * 2], `discovery verification: ${phase} started`);
+      const failed = index === phases.length - 1 && mode !== 'pass';
+      assert.match(lines[index * 2 + 1], new RegExp(
+        `^discovery verification: ${phase} finished status=${failed ? 1 : 0} elapsed=[0-9]+s$`));
+    }
+    assert.equal(invocations.length, phases.length);
+    assert.equal(result.stdout, '');
+    if (mode !== 'preflight failure') {
+      assert.deepEqual(JSON.parse(fs.readFileSync(path.join(reports, 'scan-status.json'), 'utf8')),
+        { index_entries: 12 });
+    }
+  });
+}
