@@ -15,7 +15,11 @@ The integration branch is `codex/pr40-ci-closure-20261011`. Stop opening new
 instruction-family audits until this repair batch has run in CI. Preserve the
 separate scalar-FMA development branch; it is not part of this batch.
 
-Published `c09eff1e` failed run 37711752851: priority shards 5/29/38/39 failed,
+Published `cb8b2ad3` is running fork CI 38018079008. Policy preflight passed;
+the six priority shards are still running. Let this run finish before pushing
+the next repair batch. No current-head corpus or full CI pass is established.
+
+Earlier `c09eff1e` failed run 37711752851: priority shards 5/29/38/39 failed,
 36/42 were canceled, and downstream gates did not complete. The four failed
 shard logs contain 110 failed candidates (31/23/25/31 respectively). Initial
 diagnostic grouping is eight rule classes, not 110 missing instructions:
@@ -42,8 +46,17 @@ with unrelated speculative implementation. Keep correctness gates unchanged.
   plus a 17,142,188-byte Go driver, exceeding the former 64-MiB shared bound.
   The shared streaming inventory now has a finite 128-MiB bound, with source/
   tool boundary and mutation regressions. Current Go, Go 1.20, race and Linux
-  component gates passed. The original three crypto versions are rerunning;
-  no external pass follows until each complete report succeeds.
+  component gates passed. The original three crypto versions completed with
+  zero passes and three failures: runZeroInc/excrypto at actual source/CPU
+  routing, tdv/crypto and x/crypto at exact package-versus-module-root binding.
+  These are still failures, not approved skips or library passes.
+- Downloaded fixed-local capture now distinguishes a selected subpackage from
+  its original module root, deriving its declared import path from the guarded
+  ZIP/go.mod. The independent first-party fixture reproduced the old refusal
+  on Linux, Darwin and Windows; all three translation APIs now produce LLVM 22
+  O0/O2 objects for each target. Ancestor metadata changes permanently revoke
+  the capability. Current Go and focused Go 1.20 gates passed. Imported-source
+  and CPU-profile contracts remain separate; this is not crypto replay closure.
 - ARM64 FPCR/FPSR, NZCV, scalar binary operations and RNDR named/raw effects
   have independent original-Go and LLVM runtime evidence. Min/max's original
   full Linux run failed at the 45-minute deadline, without an observed value
@@ -53,7 +66,8 @@ with unrelated speculative implementation. Keep correctness gates unchanged.
   NM roots failed the final assertion because its AH signed-zero counter is
   only populated by non-NM instructions. The scoped witness repair keeps all
   comparisons and requires actual NEP for every family. Its independent RED/
-  GREEN passes; rerun the two failed full NM roots before runtime closure.
+  GREEN passes. Both fresh full Linux NM roots passed at published `cb8b2ad3`
+  (678.94s/679.10s), retaining every original comparison.
 - CI policy's old shared-batch-cache fixture is updated for the refill queue:
   caller cache isolation, exhaustive priority order, sticky shard failures and
   a mandatory final aggregate. All 36 Node tests and the three actual-child
@@ -65,12 +79,12 @@ Do not edit tracked source, tools or ledger in these trees while consumers run.
 Paths below are relative to their named worktree. Preserve terminal reports
 and clean only exact owned caches after every consumer has closed.
 
-- `codex/pr40-result-effects-followup-20261010`, `e693532a`:
+- `codex/pr40-result-effects-followup-20261010`, `e693532a` (terminal):
   `_out/minmax-partitions/` is terminal with two passes and two assertion
   failures above. The integration tree's `_out/ci-closure/` holds the scoped
-  regression and fresh required Linux NM rerun; do not relabel old logs.
-- `codex/pr40-original-graph-budget-20261011`, `e8d58a41`:
-  `_out/graph-budget/` reruns runZeroInc/excrypto v0.43.3, tdv/crypto
+  regression and successful required Linux NM reruns; do not relabel old logs.
+- `codex/pr40-original-graph-budget-20261011`, `e8d58a41` (terminal):
+  `_out/graph-budget/` retains failures for runZeroInc/excrypto v0.43.3, tdv/crypto
   v0.0.0-20260609182332-5f2de1a9f1e2 and x/crypto v0.57.0, using stamped tools,
   fresh reports/events and one disposable validator. Earlier failed diagnostic
   runs remain in their original worktrees.
@@ -84,10 +98,10 @@ timeouts. Those regressions have newer repairs, not a retroactive pass.
 
 ## Ordered next gates
 
-1. Finish the in-flight original-example checks and bounded min/max run.
-2. Run merged focused, workflow and compatibility gates on the fixed batch;
-   push once to the fork repair head and let its priority matrix finish.
-3. Compare new failures with the original eight classes. Fix each class with
+1. Let published `cb8b2ad3` finish its priority matrix; do not interrupt it.
+2. Finish the package/source binding repairs, retaining the original examples
+   as failed until each complete replay succeeds. Commit locally in batches.
+3. Compare new CI failures with the original eight classes. Fix each class with
    independent RED/GREEN tests and original-example replay; batch the next push.
 4. After priority success, let all remaining current-head gates run. Publish
    only matching, complete reports through the automatic ledger writer.

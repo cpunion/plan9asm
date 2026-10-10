@@ -698,3 +698,14 @@ replaced or redirected directories are never recursively cleaned. The package
 root is fixed to its resolved canonical source at capture: a later change to
 the caller's original alias does not change that source. Explicit cache roots
 remain caller-owned; capture does not authenticate ownership or delete them.
+
+Exact downloaded frame capture distinguishes the selected package directory
+from its original module root. A flat, import-free subpackage may bind its
+declared path only through the independently guarded whole ZIP and original
+go.mod; archive namespace aliases do not replace that declared namespace.
+Actual Go selection must retain the same module root, metadata, language and
+package path. Ancestor metadata or source changes revoke the capability.
+This source-role extension grants no new native instruction/memory effects,
+CPU profiles, foreign imports or dynamic-frame permission. Keep the original
+Go objects and three-API LLVM 22 O0/O2 objects on all AMD64 targets separate
+from actual external-library success.

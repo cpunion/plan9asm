@@ -46,11 +46,13 @@ func amd64DownloadedFramePublicFixture(t *testing.T, variant string) (AMD64Origi
 }
 
 func TestAMD64DownloadedFramePublicFactoryAndIdentity(t *testing.T) {
-	for _, operation := range []string{"Verify", "Close", "archive namespace alias"} {
+	for _, operation := range []string{"Verify", "Close", "archive namespace alias", "nested package"} {
 		t.Run(operation, func(t *testing.T) {
 			variant := "fixed-local"
 			if operation == "archive namespace alias" {
 				variant = "alias"
+			} else if operation == "nested package" {
+				variant = "nested"
 			}
 			request, pkg, capture := amd64DownloadedFramePublicFixture(t, variant)
 			ctx, cancel := amd64OriginalObservationContext(t)
@@ -66,6 +68,9 @@ func TestAMD64DownloadedFramePublicFactoryAndIdentity(t *testing.T) {
 			}()
 			if err := source.Verify(ctx); err != nil {
 				t.Fatal("actual exact original source/object did not verify", err)
+			}
+			if operation == "nested package" {
+				return
 			}
 			if operation == "archive namespace alias" {
 				if pkg.Path == capture.SourceModule {
@@ -161,7 +166,7 @@ func TestAMD64DownloadedFramePublicSourceRevocation(t *testing.T) {
 }
 
 func TestAMD64DownloadedFramePublicRejectedRoles(t *testing.T) {
-	for _, variant := range []string{"import", "foreign", "data", "nested"} {
+	for _, variant := range []string{"import", "foreign", "data"} {
 		t.Run(variant, func(t *testing.T) {
 			_, pkg, capture := amd64DownloadedFramePublicFixture(t, variant)
 			ctx, cancel := amd64OriginalObservationContext(t)
@@ -175,7 +180,7 @@ func TestAMD64DownloadedFramePublicRejectedRoles(t *testing.T) {
 			if !errors.Is(err, plan9asm.ErrProbeNeedsContext) || source != nil {
 				t.Fatal("broader source role acquired a downloaded frame", err)
 			}
-			if (variant == "import" || variant == "foreign") && !strings.Contains(err.Error(), "import-free primary module root") {
+			if (variant == "import" || variant == "foreign") && !strings.Contains(err.Error(), "import-free primary module package") {
 				t.Fatal("import role refusal was not based on actual complete Go selection", err)
 			}
 		})

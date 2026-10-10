@@ -27,7 +27,7 @@ type goAMD64DownloadedIdentity struct {
 
 // CaptureGoAMD64DownloadedFrameSource independently executes stock Go and
 // closes the original ZIP, extracted members, declarations and whole objects.
-// Initial downloaded roles are flat, import-free primary modules and numeric
+// Downloaded roles are flat, import-free packages in the primary module and numeric
 // or void ABI0 declarations. Capture itself grants no memory permission.
 func CaptureGoAMD64DownloadedFrameSource(ctx context.Context, pkg GoPackage, request GoAMD64DownloadedFrameCaptureRequest) (*GoAMD64FrameSource, error) {
 	if module.Check(request.SourceModule, request.SourceVersion) != nil ||
@@ -80,8 +80,8 @@ func (source *GoAMD64FrameSource) captureDownloadedOrigin(ctx context.Context, e
 	if err != nil {
 		return errors.Join(goAMD64FrameContext("exact original archive/source is not closed"), err)
 	}
-	if original.Root != source.request.Directory {
-		return goAMD64FrameContext("downloaded capture must retain the actual exact primary cache root")
+	if _, err := goAMD64DownloadedPackagePath(original, source.request.Directory); err != nil {
+		return err
 	}
 	source.downloadedOrigin, source.downloadedModule = origins, &original
 	return source.verifyDownloadedOrigin()
@@ -91,12 +91,32 @@ func (source *GoAMD64FrameSource) verifyDownloadedOrigin() error {
 	if source.downloadedOrigin == nil && source.downloadedModule == nil {
 		return nil
 	}
-	if source.downloadedOrigin == nil || source.downloadedModule == nil ||
-		source.downloadedModule.Root != source.request.Directory {
+	if source.downloadedOrigin == nil || source.downloadedModule == nil {
 		return goAMD64FrameContext("missing exact original download/source role")
+	}
+	if _, err := goAMD64DownloadedPackagePath(*source.downloadedModule, source.request.Directory); err != nil {
+		return err
 	}
 	if err := source.downloadedOrigin.Verify(); err != nil {
 		return errors.Join(goAMD64FrameContext("exact original source was changed or revoked"), err)
 	}
 	return nil
+}
+
+// The original archive namespace and the declared Go package namespace are
+// distinct. Derive the latter only from the guarded module's own go.mod and
+// the actual canonical package directory, never from an import-path prefix.
+func goAMD64DownloadedPackagePath(original gooriginalsrc.Module, directory string) (string, error) {
+	relative, err := filepath.Rel(original.Root, directory)
+	if err != nil || !filepath.IsAbs(original.Root) || !filepath.IsAbs(directory) || !filepath.IsLocal(relative) {
+		return "", goAMD64FrameContext("downloaded package must remain inside its actual exact primary cache root")
+	}
+	path := original.ModulePath
+	if relative != "." {
+		path += "/" + filepath.ToSlash(relative)
+	}
+	if module.CheckImportPath(path) != nil {
+		return "", goAMD64FrameContext("downloaded package has an invalid original module-relative identity")
+	}
+	return path, nil
 }

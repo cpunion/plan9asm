@@ -227,19 +227,27 @@ func captureGoAMD64FrameSource(ctx context.Context, pkg GoPackage, request GoAMD
 	if source.numericalBinding != nil && (len(selected.SFiles) != 1 || selected.SFiles[0] != request.AssemblyFile) {
 		return nil, goAMD64FrameContext("numerical frame join requires one complete original assembly selection")
 	}
+	moduleRoot := request.Directory
+	if source.downloadedModule != nil {
+		moduleRoot = source.downloadedModule.Root
+	}
 	if selected.Dir != request.Directory || selected.ImportPath != pkg.Path || selected.ForTest != "" || selected.Module == nil ||
-		!selected.Module.Main || selected.Module.Version != "" || selected.Module.Dir != request.Directory || len(selected.Module.Replace) != 0 && string(selected.Module.Replace) != "null" ||
+		!selected.Module.Main || selected.Module.Version != "" || selected.Module.Dir != moduleRoot || len(selected.Module.Replace) != 0 && string(selected.Module.Replace) != "null" ||
 		selected.nonordinaryRole() || len(selected.GoFiles) == 0 || len(selected.SFiles) == 0 {
 		return nil, goAMD64FrameContext("capture needs complete ordinary original module sources")
 	}
-	if selected.Module.GoMod != filepath.Join(request.Directory, "go.mod") {
+	if selected.Module.GoMod != filepath.Join(moduleRoot, "go.mod") {
 		return nil, goAMD64FrameContext("actual module metadata is outside the original source directory")
 	}
 	if source.downloadedModule != nil {
 		original := source.downloadedModule
+		path, err := goAMD64DownloadedPackagePath(*original, selected.Dir)
+		if err != nil {
+			return nil, err
+		}
 		if selected.Module.Path != original.ModulePath || selected.Module.GoVersion != original.GoVersion ||
-			selected.Dir != original.Root || len(selected.Imports) != 0 || len(selected.ImportMap) != 0 {
-			return nil, goAMD64FrameContext("initial exact downloaded capture requires its import-free primary module root")
+			selected.ImportPath != path || len(selected.Imports) != 0 || len(selected.ImportMap) != 0 {
+			return nil, goAMD64FrameContext("exact downloaded capture requires its import-free primary module package")
 		}
 	}
 	source.imports, err = source.loadStandardDeclarationImports(ctx)
