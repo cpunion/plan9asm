@@ -15,7 +15,11 @@ import (
 // GOSUMDB=off here is not a production source-authentication certificate.
 func amd64DownloadedObservationFixture(t *testing.T, variant string) (AMD64OriginalObservationRequest, string, string) {
 	t.Helper()
-	request := amd64OriginalObservationFixture(t, variant)
+	baseVariant := variant
+	if variant == "nested-import" || variant == "nested-foreign" {
+		baseVariant = "nested"
+	}
+	request := amd64OriginalObservationFixture(t, baseVariant)
 	fixedNested := variant == "fixed-local-nested"
 	if variant == "fixed-local" || fixedNested {
 		request, _, _, _, _ = amd64OriginalFixedLocalFixture(t)
@@ -48,8 +52,15 @@ func amd64DownloadedObservationFixture(t *testing.T, variant string) (AMD64Origi
 			}
 		}
 	}
-	if variant == "nested" {
+	if baseVariant == "nested" {
 		root = filepath.Dir(filepath.Dir(root))
+	}
+	if variant == "nested-import" {
+		data := "package observation\nimport \"math/bits\"\nfunc Value(a uint64) uint64\n" +
+			"func Reference(a uint64) uint64 { return bits.RotateLeft64(a, 1) }\n"
+		if err := os.WriteFile(filepath.Join(request.Directory, "value.go"), []byte(data), 0600); err != nil {
+			t.Fatal(err)
+		}
 	}
 	t.Cleanup(func() {
 		if err := filepath.WalkDir(cache, func(name string, entry os.DirEntry, err error) error {
@@ -69,7 +80,7 @@ func amd64DownloadedObservationFixture(t *testing.T, variant string) (AMD64Origi
 	})
 	ctx, cancel := amd64OriginalObservationContext(t)
 	defer cancel()
-	if variant == "foreign" {
+	if variant == "foreign" || variant == "nested-foreign" {
 		foreignRoot := t.TempDir()
 		foreignModule := "example.invalid/foreign-observation"
 		for name, data := range map[string]string{
@@ -85,7 +96,7 @@ func amd64DownloadedObservationFixture(t *testing.T, variant string) (AMD64Origi
 			[]byte("module example.invalid/observation\ngo 1.20\nrequire "+foreignModule+" "+version+"\n"), 0600); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(filepath.Join(root, "value.go"),
+		if err := os.WriteFile(filepath.Join(request.Directory, "value.go"),
 			[]byte("package observation\nimport shape \""+foreignModule+"\"\nfunc Value(a shape.Word) uint64\n"), 0600); err != nil {
 			t.Fatal(err)
 		}
@@ -107,7 +118,7 @@ func amd64DownloadedObservationFixture(t *testing.T, variant string) (AMD64Origi
 		t.Fatalf("actual Go omitted its exact downloaded source identity: %v", err)
 	}
 	request.Directory = downloaded.Dir
-	if variant == "nested" || fixedNested {
+	if baseVariant == "nested" || fixedNested {
 		request.Directory = filepath.Join(downloaded.Dir, "internal", "kernel")
 	}
 	return request, modulePath, version
