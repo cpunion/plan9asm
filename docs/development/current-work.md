@@ -112,6 +112,14 @@ with unrelated speculative implementation. Keep correctness gates unchanged.
   actual negative source/result cases and operand metadata mutations remain
   rejected. Current-Go full alias regressions and focused Go 1.20 pass; this
   repairs diagnostic consumption, not an external-library or runtime pass.
+- CI's historical crypto mirror exposed an implicit-module-language gap.
+  Actual Go accepts an original go.mod without a go line: its main query uses
+  1.16, while dependency metadata keeps an empty field. Independent primary/
+  dependency and three-target REDs reproduce the old blanket rejection. The
+  shared role comparison now retains that distinction, without changing source
+  files, declaration/ZIP hashes or revocation. Eighteen three-API LLVM 22 O0/O2
+  objects, current-Go source regressions and actual Go 1.20 checks pass. This
+  source-role repair is not an original-library pass; its replay remains due.
 - ARM64 FPCR/FPSR, NZCV, scalar binary operations and RNDR named/raw effects
   have independent original-Go and LLVM runtime evidence. Min/max's original
   full Linux run failed at the 45-minute deadline, without an observed value
@@ -163,9 +171,20 @@ and clean only exact owned caches after every consumer has closed.
   former CMP FP alias refusal but failed PADDQ's native SP storage contract.
   Neither is a pass. All consumers closed and owned candidate caches were
   cleaned. The later BROADCAST and CPP constant repairs are not in this snapshot.
-- `codex/pr40-refill-sample-20261010`, `02c9ebbb`:
-  `_out/refill-sample/` continues the fixed 53-candidate, 37-shard sample with
-  four workers. This older revision cannot update the current-head ledger.
+- Detached `2ec32e65` (original-library replays terminal):
+  `_out/cpp-constant-replay/` has two failures: GoETW passed literal/CPP constant
+  comparison but fails a native MOVOU input read; parquet passed the broadcast
+  width gate but fails a native FP span including padding. The separate
+  `_out/compare-library-replay/` BLAS failure is now at floating result proof,
+  not CMP/TEST alias widths. No passes were promoted; owned caches were cleaned.
+  `_out/driver-exhaustive-2ec/` is an active two-worker, complete 704-root unit
+  rerun. The integration tree retains its prior 45-minute full-package timeout
+  in `_out/ci-closure/cpp-constants/full-driver.log`; it was not a pass.
+- `codex/pr40-refill-sample-20261010`, `02c9ebbb` (terminal):
+  `_out/refill-sample/` retains the complete fixed 53-candidate, 37-shard sample.
+  Every consumer closed and owned caches were cleaned. Its historical partial
+  shard reports cannot update the current-head ledger. This idle worktree may
+  now be reused only after preserving its artifacts and checking the new owner.
 
 The older whole-module run at `044bb668` failed: 18/20 packages passed, root
 had one obsolete assertion failure and the corpus driver had three fixture

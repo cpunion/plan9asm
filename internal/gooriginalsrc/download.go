@@ -28,7 +28,19 @@ type DownloadReceipt struct {
 type Module struct {
 	SourceModule, SourceVersion string
 	Root, GoMod, ModulePath     string
-	GoVersion                   string
+	// GoVersion preserves the original directive, including its absence.
+	GoVersion string
+}
+
+// SelectedGoVersion models cmd/go's module metadata, not a caller-supplied
+// language override. A main module without a go line has the fixed 1.16
+// default; dependency metadata retains the absent directive as an empty field.
+// Consumers must still match the actual Go query and guard the original bytes.
+func SelectedGoVersion(declared string, main bool) string {
+	if declared == "" && main {
+		return "1.16"
+	}
+	return declared
 }
 
 // OriginSet shares the original graph-wide inventory bounds across exact modules.
@@ -150,11 +162,14 @@ func (set *OriginSet) Observe(ctx context.Context, path, version string, receipt
 		return Module{}, fmt.Errorf("original module metadata differs from actual Go download h1")
 	}
 	parsed, err := modfile.Parse(goMod, modData, nil)
-	if err != nil || parsed.Module == nil || parsed.Go == nil {
+	if err != nil || parsed.Module == nil {
 		return Module{}, ErrUnclosedModuleDeclaration
 	}
 	observed := Module{SourceModule: path, SourceVersion: version, Root: root,
-		GoMod: prefix + ".mod", ModulePath: parsed.Module.Mod.Path, GoVersion: parsed.Go.Version}
+		GoMod: prefix + ".mod", ModulePath: parsed.Module.Mod.Path}
+	if parsed.Go != nil {
+		observed.GoVersion = parsed.Go.Version
+	}
 	set.modules[key] = observed
 	if err := ctx.Err(); err != nil {
 		return Module{}, err

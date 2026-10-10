@@ -83,7 +83,8 @@ func (source *GoAMD64FrameSource) downloadedDeclarationDirectory(selected goAMD6
 	root, rootErr := filepath.EvalSymlinks(actual.Dir)
 	metadata, metadataErr := filepath.EvalSymlinks(actual.GoMod)
 	if rootErr != nil || metadataErr != nil || root != original.Root ||
-		actual.Path != original.ModulePath || actual.Version != version || actual.GoVersion != original.GoVersion ||
+		actual.Path != original.ModulePath || actual.Version != version ||
+		actual.GoVersion != gooriginalsrc.SelectedGoVersion(original.GoVersion, actual.Main) ||
 		metadata != original.GoMod && metadata != filepath.Join(original.Root, "go.mod") {
 		return "", goAMD64FrameContext("declaration dependency differs from its original module metadata")
 	}

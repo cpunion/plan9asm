@@ -246,7 +246,7 @@ func captureGoAMD64FrameSource(ctx context.Context, pkg GoPackage, request GoAMD
 		if err != nil {
 			return nil, err
 		}
-		if selected.Module.Path != original.ModulePath || selected.Module.GoVersion != original.GoVersion ||
+		if selected.Module.Path != original.ModulePath || selected.Module.GoVersion != gooriginalsrc.SelectedGoVersion(original.GoVersion, true) ||
 			selected.ImportPath != path {
 			return nil, goAMD64FrameContext("exact downloaded capture requires its original primary module package")
 		}

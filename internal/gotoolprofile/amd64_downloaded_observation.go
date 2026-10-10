@@ -180,7 +180,7 @@ func (sources *amd64DownloadedSources) verify() error {
 
 func (source *amd64DownloadedModule) matches(actual *amd64OriginalListModule, primary bool) bool {
 	if source == nil || actual == nil || actual.Replace != nil || actual.Main != primary ||
-		actual.Path != source.modulePath || actual.GoVersion != source.goVersion {
+		actual.Path != source.modulePath || actual.GoVersion != gooriginalsrc.SelectedGoVersion(source.goVersion, primary) {
 		return false
 	}
 	wantedVersion := source.sourceVersion

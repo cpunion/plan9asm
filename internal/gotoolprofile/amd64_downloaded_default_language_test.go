@@ -35,10 +35,22 @@ func TestAMD64DownloadedDefaultLanguageActualGo(t *testing.T) {
 					t.Error(err)
 				}
 			}()
+			for _, wrong := range []string{"", "1.20", "1.27.1"} {
+				changed := *actual.Module
+				changed.GoVersion = wrong
+				if observed.downloaded.primary.matches(&changed, true) {
+					t.Fatalf("implicit main language accepted foreign metadata %q", wrong)
+				}
+			}
 			if variant == "foreign-no-go" {
 				foreign := observed.state.packages["example.invalid/foreign-observation"]
 				if foreign.Module == nil || foreign.Module.Main || foreign.Module.GoVersion != "" || foreign.Export == "" {
 					t.Fatal("missing-language dependency was changed to a main-module role")
+				}
+				changed := *foreign.Module
+				changed.GoVersion = "1.16"
+				if _, err := observed.downloaded.module(&changed); err == nil {
+					t.Fatal("dependency borrowed the main-module default metadata")
 				}
 			}
 			if err := observed.Verify(ctx); err != nil {
@@ -65,5 +77,29 @@ func TestAMD64DownloadedDefaultLanguageActualGo(t *testing.T) {
 				t.Fatal("restoring absent language revived a revoked observation")
 			}
 		})
+	}
+}
+
+func TestAMD64OriginalDefaultLanguageActualGo(t *testing.T) {
+	request := amd64OriginalObservationFixture(t, "numeric")
+	if err := os.WriteFile(filepath.Join(request.Directory, "go.mod"), []byte("module "+request.PackagePath+"\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := amd64OriginalObservationContext(t)
+	defer cancel()
+	observed, err := CaptureAMD64OriginalPackageObservation(ctx, request, RunBounded)
+	if err != nil {
+		t.Fatal("owned original module lost actual implicit language", err)
+	}
+	defer func() {
+		if err := observed.Close(); err != nil {
+			t.Error(err)
+		}
+	}()
+	if observed.state.packages[request.PackagePath].Module.GoVersion != "1.16" {
+		t.Fatal("original observation did not retain actual Go main language")
+	}
+	if err := observed.Verify(ctx); err != nil {
+		t.Fatal(err)
 	}
 }

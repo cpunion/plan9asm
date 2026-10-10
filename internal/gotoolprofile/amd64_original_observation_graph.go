@@ -18,6 +18,7 @@ import (
 	"strings"
 
 	"github.com/xgo-dev/plan9asm"
+	"github.com/xgo-dev/plan9asm/internal/gooriginalsrc"
 	"golang.org/x/mod/modfile"
 )
 
@@ -102,7 +103,11 @@ func captureAMD64OriginalGraph(ctx context.Context, request AMD64OriginalObserva
 	if err != nil || parsed.Module == nil || parsed.Module.Mod.Path != module.Path {
 		return nil, fmt.Errorf("actual main module declaration differs from Go selection")
 	}
-	if parsed.Go == nil || parsed.Go.Version != module.GoVersion {
+	declaredVersion := ""
+	if parsed.Go != nil {
+		declaredVersion = parsed.Go.Version
+	}
+	if gooriginalsrc.SelectedGoVersion(declaredVersion, true) != module.GoVersion {
 		return nil, fmt.Errorf("%w: actual module language is not closed by its original go.mod", plan9asm.ErrProbeNeedsContext)
 	}
 	if err := files.directory(root, false); err != nil {

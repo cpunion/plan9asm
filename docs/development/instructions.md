@@ -719,6 +719,13 @@ declared path only through the independently guarded whole ZIP and original
 go.mod; archive namespace aliases do not replace that declared namespace.
 Actual Go selection must retain the same module root, metadata, language and
 package path. Ancestor metadata or source changes revoke the capability.
+Preserve a missing `go` directive as missing in the original module record.
+Match its actual cmd/go metadata by role: the main module has the fixed 1.16
+default, while a dependency retains an empty GoVersion. Do not rewrite go.mod,
+normalize dependency metadata into a main role, or borrow the current SDK's
+language version. The actual compiler/source/export checks and independent
+main-source typecheck still enforce that language; malformed or changed
+metadata remains rejected. Keep current-Go and Go 1.20 producer regressions.
 SDK imports retain the actual SDK source/export graph. Each foreign module
 requires the frame factory's own exact Go-download/whole-ZIP observation,
 canonical module/package/metadata/language identity and complete compiler
