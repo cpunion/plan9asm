@@ -33,6 +33,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 			if accepted, recognized := x86LoweredBlockInsertRead(ins, state, owned, resultOffset, arch); recognized {
 				return accepted
 			}
+			if accepted, recognized := x86LoweredScalarExtensionRead(ins, state, owned, resultOffset, arch); recognized {
+				return accepted
+			}
 			if accepted, known := c.scalarCompareNativeResultTransfer(ins, state, owned, arch); known {
 				return accepted
 			}

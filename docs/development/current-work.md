@@ -62,6 +62,21 @@ with unrelated speculative implementation. Keep correctness gates unchanged.
 
 ## Included repairs and retained evidence
 
+- Shards 5/29/39 exposed ordinary pointer `MOVBQZX` reads missing from the
+  lowering-only result observer. Independent REDs cover the entire fourteen-name
+  extension family; a second RED finds dead native loads being removable.
+  The existing typed grammar now pairs exact-width volatile native reads with
+  conditional numerical destination bytes. No pointer validity, pointee extent,
+  caller, frame or standalone declaration permission follows. Complete Go encoder
+  attributes, five-target three-API objects, unknown/address/raw negatives and
+  whole-register byte effects pass. Twenty-eight live/dead kernels compare actual
+  original Go machine code and LLVM against an independent byte reference and
+  NULL/guard-page fault observations through three APIs at O0/O2. Local AMD64
+  execution uses Rosetta, not native Linux evidence. Sixty-four current-Go roots,
+  nine actual Go 1.20 roots, CLI extraction, vet and unchanged five-architecture
+  official classification pass. Retain `_out/ci-failure-replay/extension-native-*`.
+  Original exact-version replay and current-head CI remain required; no library
+  pass or ledger status is inferred from these first-party checks.
 - Shard 5's exact packdb version exposed a missing broadcast memory consumer,
   not a new opcode: the result observer accepted only register inputs despite
   the complete shared grammar. Independent REDs reproduce the failure without
@@ -92,9 +107,10 @@ with unrelated speculative implementation. Keep correctness gates unchanged.
   Go objects, 26 Go 1.20 roots, race and vet. Preserve the earlier overlay-only
   old-vet virtual-file failure as diagnostic evidence. The broader CPP attempt timed out at
   12 minutes after 52 root passes; it is not a complete suite pass. After the
-  user's disk cleanup, the frozen `b5af3a10` retry is running with the normal
-  45-minute budget in `cpp-b5af3a10-full-retry.jsonl`. Preserve the older timeout
-  and disk failures; neither a running suite nor focused passes closes them.
+  user's disk cleanup, the frozen `b5af3a10` retry passed all 104 roots in
+  1,233.229s under the normal 45-minute budget, with no failures or skips.
+  Evidence is `cpp-b5af3a10-full-retry.jsonl`. Preserve the older timeout and
+  disk failures; this fresh result does not relabel those failed attempts.
   This is a local audit optimization, not a current CI or external-library pass.
 - The next, not-yet-published batch closes shard 5's low-product caller-effect
   gap. Independent original-Go W/D/Q controls reproduced unregistered D/Q
@@ -369,11 +385,11 @@ and clean only exact owned caches after every consumer has closed.
   clean unrelated caches or interfere with other builds.
 - Frozen `b5af3a10` in `codex/pr40-failed-gates-20261010` (running):
   `_out/root-exhaustive-b5af3a10/` is the fresh 32-partition/two-worker root
-  rerun. The separate `_out/failed-gates/cpp-b5af3a10-full-retry.jsonl` runs the
-  complete CPP prefix at 45 minutes. These are first-party tests, not local
-  index scans or external-library compilation. New broadcast repairs are not
-  in this frozen snapshot. Preserve raw reports and inspect actual terminal
-  outcomes before reporting completion.
+  rerun. The separate `_out/failed-gates/cpp-b5af3a10-full-retry.jsonl` is now
+  terminal: all 104 CPP-prefix roots passed. These are first-party tests, not
+  local index scans or external-library compilation. New broadcast and native
+  extension repairs are not in this frozen snapshot. Preserve raw reports and
+  inspect the root runner's actual terminal outcome before claiming completion.
 
 The older whole-module run at `044bb668` failed: 18/20 packages passed, root
 had one obsolete assertion failure and the corpus driver had three fixture

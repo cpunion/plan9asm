@@ -515,6 +515,18 @@ callee ABI nor its native frame, continuation and result transport.
 
 ## Semantic and raw-encoding checks
 
+All fourteen scalar sign/zero-extension moves retain their shared Go grammar
+and native source width, including word-to-word aliases and mode32 MOVLQZX.
+Ordinary native and certified caller/frame reads use exact-width volatile loads,
+even with a dead result. The lowering-only result observer may consume a known
+incoming pointer plus initialized numerical index if the paired load continues;
+it asserts no backing, bounds, alignment or reusable memory authority. W preserves
+unknown high bytes, L clears the upper half and all forms preserve FLAGS. Public
+declaration/raw-return proofs stay independent. Keep actual Go encoder attributes,
+all-five-target objects and original-byte/LLVM numerical and fault oracles paired.
+See [LLVM 22 volatile accesses](https://releases.llvm.org/22.1.0/docs/LangRef.html#volatile-memory-accesses);
+volatile access does not establish validity for a later nonvolatile read.
+
 Packed low-product W/D/Q multiplication consumes the shared binary grammar;
 W retains the word family's separate MMX bank. D/Q shape, lowering, caller
 effects, memory tuples and result definedness must agree. Legacy PMULLD m128
