@@ -166,6 +166,21 @@ func TestGoAMD64FrameTypedSourceLanguageIdentityMutations(t *testing.T) {
 		{"embedded identity", "type Count uint64\ntype Packet struct { Count }\nfunc Value(a *Packet) uint64", "type Count uint64\ntype Packet struct { Count Count }\nfunc Value(a *Packet) uint64"},
 		{"parameter name", "func Value(a *uint64) uint64", "func Value(b *uint64) uint64"},
 		{"result pointee", "func Value(a *uint64) *uint64", "func Value(a *uint64) *int64"},
+		{
+			"unrelated interface does not hide signedness",
+			"type XOF interface { Clone() XOF }\nfunc Value(a *uint64) uint64",
+			"type XOF interface { Clone() XOF }\nfunc Value(a *int64) uint64",
+		},
+		{
+			"unrelated recursive type does not hide extent",
+			"type Node struct { Next *Node }\nfunc Value(a *[16]byte) uint64",
+			"type Node struct { Next *Node }\nfunc Value(a *[32]byte) uint64",
+		},
+		{
+			"unrelated callback does not hide alias RHS",
+			"type Callback func()\ntype A uint64\ntype B uint64\ntype Choice = A\nfunc Value(a *Choice) uint64",
+			"type Callback func()\ntype A uint64\ntype B uint64\ntype Choice = B\nfunc Value(a *Choice) uint64",
+		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			pkg, request := goAMD64FrameTypedFixture(t, test.original, "TEXT ·Value(SB),4,$160-16\nRET\n")

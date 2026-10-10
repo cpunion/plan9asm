@@ -19,12 +19,23 @@ import (
 // Original Go compilation is the acceptance oracle. Additional ordinary Go
 // declarations do not themselves grant caller memory or fixed-local backing.
 func TestGoAMD64FrameSourceCompleteOrdinaryGoDeclarations(t *testing.T) {
+	// Reuse only this root's owned compiler cache, not source identities.
+	// Every case still executes actual Go and consumes its selected export.
+	t.Setenv("GOCACHE", t.TempDir())
 	for _, fixture := range []struct {
 		name, imports, declarations string
 	}{
 		{"body", "", "func Reference(a uint64) uint64 { return a + 1 }"},
 		{"values", "", "const Bias uint64 = 1\nvar Counter uint64"},
 		{"unused-type", "", "type Record struct { Bytes []byte; Value uint64 }"},
+		{"unused-interface", "", "type XOF interface { Read([]byte) (int, error); Clone() XOF }"},
+		{"unused-function", "", "type Callback func([]byte) error"},
+		{"unused-map", "", "type Cache map[string][]byte"},
+		{"unused-channel", "", "type Queue chan []byte"},
+		{"unused-float", "", "type Scalar float64"},
+		{"unused-recursive", "", "type Node struct { Next *Node; Value uint64 }"},
+		{"unused-generic", "", "type Box[T any] struct { Value T }"},
+		{"unused-interface-alias", "", "type XOF = interface { Read([]byte) (int, error) }"},
 		{"sdk-import", "import \"math/bits\"", "func Reference(a uint64) uint64 { return bits.RotateLeft64(a, 1) }"},
 		{"unrelated-body-transport", "", "func Reference(a float64) float64 { return a + 1 }"},
 		{"combined", "import \"math/bits\"", "const Bias = 1\nvar Counter uint64\nfunc Reference(a uint64) uint64 { return bits.RotateLeft64(a, Bias) }"},
