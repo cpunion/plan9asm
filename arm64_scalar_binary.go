@@ -114,8 +114,12 @@ func validateARM64ScalarBinaryTarget(file *File, options Options) error {
 		return nil
 	}
 	needsNative := false
+	var rawError error
 	for _, function := range file.Funcs {
 		for _, instruction := range function.Instrs {
+			if instruction.Op == OpWORD && rawError == nil {
+				rawError = arm64RawWordPreflightError(instruction)
+			}
 			_, matched, err := parseARM64ScalarBinary(arm64ControlOp(instruction), instruction)
 			if err != nil {
 				return err
@@ -135,6 +139,9 @@ func validateARM64ScalarBinaryTarget(file *File, options Options) error {
 				needsNative = true
 			}
 		}
+	}
+	if needsNative && rawError != nil {
+		return rawError // Illegal/dead WORD syntax is not native-target Context.
 	}
 	if needsNative && (!arm64ScalarConversionNativeTarget(options.TargetTriple) || options.Goarch != "" && options.Goarch != "arm64") {
 		return fmt.Errorf("%w: ARM64 scalar binary requires an explicit native little-endian AArch64 FPCR/FPSR target, got %q/%q",
