@@ -124,10 +124,16 @@ func testInstrumentationCorpusOriginalSource(t *testing.T, root, translator, gua
 		t.Fatal(err)
 	}
 	workDir := filepath.Join(t.TempDir(), "candidate")
+	started := time.Now()
 	matrix, _, configs, err := runDiscoveryCandidate(discoveryCorpusConfig{
 		RepoRoot: root, Translator: translator, LLC: llc, Targets: []string{target},
-		CandidateTimeout: 3 * time.Minute,
+		// Header-bearing ARM64 fixtures execute all 32 independent CPU queries.
+		// The former whole-planning three-minute bound expired at query 25--31,
+		// before object checks. Keep the full correctness fixture under the
+		// six-minute phase bound used by the complete CPP-union fixture.
+		CandidateTimeout: 6 * time.Minute,
 	}, candidate, workDir)
+	t.Logf("original-mode corpus target=%s phase_budget=6m elapsed=%s", target, time.Since(started))
 	if !wantObjects {
 		if err == nil || matrix.InstrumentationTranslations != 0 || matrix.Success != 0 || matrix.OrdinarySelectionPlan == nil {
 			t.Fatalf("early target rejection became completion or lost the complete source denominator: matrix=%+v, error=%v", matrix, err)
@@ -206,6 +212,9 @@ func testInstrumentationCorpusOriginalSource(t *testing.T, root, translator, gua
 	}
 	if len(archive) == 1 {
 		mode := result.OrdinarySelectionPlan.InstrumentationPlan
+		if assembly == "" {
+			testInstrumentationAliasHeaderQueryScopes(t, mode, cgo)
+		}
 		if mode.ModuleMetadata != sources["go.mod"] || mode.Sources["."].ModuleMetadata != sources["go.mod"] {
 			t.Fatal("mode lost complete original alias metadata")
 		}
