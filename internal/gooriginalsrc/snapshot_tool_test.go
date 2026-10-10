@@ -117,8 +117,17 @@ func TestSnapshotTypedToolLimits(t *testing.T) {
 			if err := observer.RetainTool(tool); err != nil {
 				t.Fatal(err)
 			}
-			if err := snapshot.Retain(source); err != nil || snapshot.bytes != totalByteLimit {
+			if err := snapshot.Retain(source); err != nil || snapshot.bytes != 64<<20 {
 				t.Fatal("source/tool observations do not share the original total", err)
+			}
+			for index := 0; index < 4; index++ {
+				member := makeOriginalToolExtent(t, root, fmt.Sprintf("member-%d", index), 16<<20)
+				if err := snapshot.Retain(member); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if snapshot.bytes != totalByteLimit {
+				t.Fatal("source/tool graph no longer reaches its shared boundary")
 			}
 			extra := makeOriginalToolExtent(t, root, "extra", 1)
 			if err := snapshot.Retain(extra); err == nil {

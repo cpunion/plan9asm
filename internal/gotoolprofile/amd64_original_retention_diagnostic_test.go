@@ -13,24 +13,30 @@ func TestAMD64OriginalObservationDriverBudgetPreservesCause(t *testing.T) {
 	// These complete, inert package members fit the original source budget.
 	// The separately selected real Go executable takes the combined graph
 	// over its existing limit. No source, tool bytes or identity are changed.
-	const sourceBytes = 4 * (13 << 20)
+	const graphLimit = int64(128 << 20)
 	info, err := os.Stat(request.GoBinary)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if sourceBytes+info.Size() <= 64<<20 {
-		t.Fatal("fixture no longer reaches the shared graph byte bound", info.Size())
+	sourceBytes := graphLimit - info.Size() + 1
+	if sourceBytes <= 0 {
+		t.Fatal("actual driver exceeds the complete source/tool fixture budget", info.Size())
 	}
-	for index := 0; index < 4; index++ {
+	for index, remaining := 0, sourceBytes; remaining > 0; index++ {
+		extent := int64(16 << 20)
+		if remaining < extent {
+			extent = remaining
+		}
 		file, err := os.Create(filepath.Join(request.Directory, fmt.Sprintf("padding-%d.dat", index)))
 		if err != nil {
 			t.Fatal(err)
 		}
-		err = file.Truncate(13 << 20)
+		err = file.Truncate(extent)
 		closeErr := file.Close()
 		if err != nil || closeErr != nil {
 			t.Fatal(err, closeErr)
 		}
+		remaining -= extent
 	}
 	ctx, cancel := amd64OriginalObservationContext(t)
 	defer cancel()
@@ -45,7 +51,7 @@ func TestAMD64OriginalObservationDriverBudgetPreservesCause(t *testing.T) {
 		t.Fatal("over-budget observation acquired a source token")
 	}
 	if err == nil || !strings.Contains(err.Error(), "retain actual Go driver") ||
-		!strings.Contains(err.Error(), "byte bound: retained=") || !strings.Contains(err.Error(), "limit=67108864") ||
+		!strings.Contains(err.Error(), "byte bound: retained=") || !strings.Contains(err.Error(), "limit=134217728") ||
 		strings.Contains(err.Error(), "driver changed") {
 		t.Fatalf("retention limit must not impersonate a driver identity mutation: %v", err)
 	}

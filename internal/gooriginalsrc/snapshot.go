@@ -21,7 +21,11 @@ const (
 	directoryLimit = 4096
 	fileByteLimit  = 16 << 20
 	toolByteLimit  = 64 << 20
-	totalByteLimit = 64 << 20
+	// A current ordinary cross-target SDK source/export graph plus its
+	// independently selected Go driver exceeds 64 MiB (71,297,622 bytes in
+	// the measured crypto witness). Keep one finite shared 128 MiB budget.
+	// Hashing remains streaming; per-file and role/count bounds are unchanged.
+	totalByteLimit = 128 << 20
 )
 
 type originalFileRole uint8

@@ -20,14 +20,20 @@ func TestAMD64OriginalObservationActualSDKGraphBudget(t *testing.T) {
 			name = "recursive-sdk"
 		}
 		t.Run(name, func(t *testing.T) {
-			amd64OriginalActualSDKGraphBudget(t, crypto)
+			amd64OriginalActualSDKGraphBudget(t, crypto, "linux")
 		})
 	}
 }
 
-func amd64OriginalActualSDKGraphBudget(t *testing.T, crypto bool) {
+func TestAMD64OriginalObservationCrossTargetSDKGraphBudget(t *testing.T) {
+	amd64OriginalActualSDKGraphBudget(t, true, "darwin")
+}
+
+func amd64OriginalActualSDKGraphBudget(t *testing.T, crypto bool, goos string) {
 	t.Helper()
 	request := amd64OriginalObservationFixture(t, "sdk-import")
+	request.Target = goos + "/amd64"
+	request.Environment = replaceEnv(request.Environment, map[string]string{"GOOS": goos})
 	source := `package observation
 import (
  "encoding/binary"
