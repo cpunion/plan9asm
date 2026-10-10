@@ -95,3 +95,20 @@ func TestARM64ScalarMinMaxFamilyPartitionsComplete(t *testing.T) {
 		t.Fatal("unknown family borrowed another partition")
 	}
 }
+
+func TestARM64ScalarMinMaxAFPPartitionWitnesses(t *testing.T) {
+	// The original oracle increments AH only for the ordinary min/max signed-
+	// zero witness. NM partitions retain their full AH input matrix but cannot
+	// acquire that counter from a different partition's instruction family.
+	for _, family := range []string{"", "FMAX", "FMIN", "FMAXNM", "FMINNM"} {
+		numeric := family == "FMAXNM" || family == "FMINNM"
+		for _, counts := range [][2]int{{0, 0}, {0, 40}, {1025, 0}, {1025, 40}} {
+			nep, ah := counts[0], counts[1]
+			want := nep > 0 && (numeric || ah > 0)
+			err := arm64MinMaxAFPObservationError(family, nep, ah)
+			if (err == nil) != want {
+				t.Errorf("family=%q NEP=%d AH=%d: error=%v; want accepted=%t", family, nep, ah, err, want)
+			}
+		}
+	}
+}

@@ -368,10 +368,19 @@ func arm64MinMaxStateRuntimeFamily(t *testing.T, triple, goos string, compiler, 
 	if total != expected {
 		t.Fatal("changed complete min/max runtime denominator", total)
 	}
-	if requireAFP && (nep == 0 || ah == 0) {
-		t.Fatalf("required actual AFP semantic effects missing: NEP=%d AH=%d", nep, ah)
+	if requireAFP {
+		if err := arm64MinMaxAFPObservationError(family, nep, ah); err != nil {
+			t.Fatal(err)
+		}
 	}
 	t.Logf("ARM64_MINMAX_FULL_STATE_PASS family=%q original=%d LLVM=%d NEP=%d AH=%d", family, total, total*12, nep, ah)
+}
+
+func arm64MinMaxAFPObservationError(family string, nep, ah int) error {
+	if nep == 0 || ah == 0 {
+		return fmt.Errorf("required actual AFP semantic effects missing for %q: NEP=%d AH=%d", family, nep, ah)
+	}
+	return nil
 }
 
 func TestARM64ScalarMinMaxFullStateNativeRuntime(t *testing.T) {
