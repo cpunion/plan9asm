@@ -23,6 +23,17 @@ is already saved on fork branch `codex/pr40-ci-closure-20261011`, without a new
 PR or CI run. Later aggregate phase diagnostics are local until the next batch.
 No current-head corpus or full CI pass is established.
 
+A guarded local publisher is prepared under ignored `_out/ci-closure/` as
+`publish-after-ci.sh`. Before launching another watcher or changing the
+integration tree, inspect its `publish-after-ci.log`, owned process and
+`published-ci.json` if present. It pins one complete source revision, the prior
+run/head, fork owner, Draft PR 4 and both branch names. It waits for the prior
+run's terminal failure, then rechecks clean source and unchanged destinations
+before a normal fast-forward push. Any mismatch stops publication. It never
+cancels, force-pushes, merges/closes a PR or writes upstream. Keep the integration
+tree frozen while it waits; use a separate tree for further development. A new
+CI run is only a started gate, never a pass or ledger update.
+
 Earlier `c09eff1e` failed run 37711752851: priority shards 5/29/38/39 failed,
 36/42 were canceled, and downstream gates did not complete. The four failed
 shard logs contain 110 failed candidates (31/23/25/31 respectively). Initial
