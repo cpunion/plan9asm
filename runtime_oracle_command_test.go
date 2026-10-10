@@ -240,6 +240,7 @@ func TestRuntimeOracleCommandConsumersRetainOwnedExecution(t *testing.T) {
 		"arm64_raw_context_runtime_test.go",
 		"arm64_sm3_runtime_test.go",
 		"arm64_raw_self_bl_runtime_test.go",
+		"arm64_scalar_minmax_state_test.go",
 		"arm64_scalar_memory_encoding_audit_test.go",
 		"arm64_fp_pair_observation_test.go",
 		"arm64_fp_padding_runtime_test.go",

@@ -71,6 +71,13 @@ func (c *arm64Ctx) lowerRawScalarFloatBinary(form arm64RawScalarFloatBinary) err
 			Reg(fmt.Sprintf("F%d", form.first)), Reg(fmt.Sprintf("F%d", form.second)), Reg(fmt.Sprintf("F%d", form.destination)),
 		})
 	}
+	if opcode := arm64ScalarMinMaxOpcode(form.kind); opcode != "" {
+		return c.lowerARM64ScalarMinMax(arm64ScalarMinMaxForm{
+			arm64ScalarMinMaxSpec{opcode, form.bits},
+			Reg(fmt.Sprintf("F%d", form.first)), Reg(fmt.Sprintf("F%d", form.second)),
+			Reg(fmt.Sprintf("F%d", form.destination)),
+		})
+	}
 	lhs, err := c.loadARM64ScalarFloatReg(Reg(fmt.Sprintf("F%d", form.first)), form.bits)
 	if err != nil {
 		return err

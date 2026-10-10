@@ -81,6 +81,12 @@ func (c *arm64Ctx) lowerARM64ScalarFloatBinary(op Op, ins Instr) (ok bool, termi
 		}
 		return true, false, c.lowerARM64ScalarBinary(form)
 	}
+	if form, matched, err := parseARM64ScalarMinMax(op, ins); matched {
+		if err != nil {
+			return true, false, err
+		}
+		return true, false, c.lowerARM64ScalarMinMax(form)
+	}
 	kind, bits, handled := arm64ScalarFloatBinaryKind(op)
 	if !handled {
 		return false, false, nil
@@ -118,8 +124,6 @@ func (c *arm64Ctx) lowerARM64ScalarFloatBinaryValues(
 	}
 	result := c.newTmp()
 	switch kind {
-	case "maximum", "minimum", "maxnum", "minnum":
-		fmt.Fprintf(c.b, "  %%%s = call %s @llvm.%s.%s(%s %s, %s %s)\n", result, floatType, kind, suffix, floatType, lhs, floatType, rhs)
 	case "fabd", "fmulx":
 		family := "neon"
 		if kind == "fabd" {
@@ -128,7 +132,7 @@ func (c *arm64Ctx) lowerARM64ScalarFloatBinaryValues(
 		fmt.Fprintf(c.b, "  %%%s = call %s @llvm.aarch64.%s.%s.%s(%s %s, %s %s)\n",
 			result, floatType, family, kind, suffix, floatType, lhs, floatType, rhs)
 	default:
-		return fmt.Errorf("arm64 unsupported pure scalar float operation %q", kind)
+		return fmt.Errorf("arm64 scalar binary kind %q requires its typed native form", kind)
 	}
 	return c.storeARM64ScalarFloatReg(destination, bits, "%"+result)
 }

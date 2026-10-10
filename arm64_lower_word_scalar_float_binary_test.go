@@ -64,8 +64,8 @@ func TestTranslateARM64RawScalarFloatBinaryCompleteArchitectureFamily(t *testing
 			for _, want := range []string{
 				`asm sideeffect "fadd ${0:h}`, `asm sideeffect "fadd ${0:s}`, `asm sideeffect "fadd ${0:d}`,
 				`asm sideeffect "fsub ${0:h}`, `asm sideeffect "fmul ${0:h}`, `asm sideeffect "fdiv ${0:h}`, `asm sideeffect "fnmul ${0:h}`,
-				"@llvm.maximum.f16", "@llvm.minimum.f16",
-				"@llvm.maxnum.f16", "@llvm.minnum.f16",
+				`asm sideeffect "fmax ${0:h}`, `asm sideeffect "fmin ${0:h}`,
+				`asm sideeffect "fmaxnm ${0:h}`, `asm sideeffect "fminnm ${0:h}`,
 				`"target-features"="+fullfp16"`,
 			} {
 				if !strings.Contains(ir, want) {
