@@ -3754,6 +3754,10 @@ func classifyDiscoveryAsmDeclFailure(moduleDir string, asmFiles, candidateFiles 
 	if isDiscoveryInfrastructureFailure(err) {
 		return nil, err
 	}
+	if discoveryAsmDeclOnlyUnprovedResults(moduleDir, asmFiles, err) &&
+		discoveryAsmDeclLocationsBelongToCandidate(moduleDir, candidateFiles, err) {
+		return nil, fmt.Errorf("go vet unproved_result_initialization (still failed, not source N/A): %w", err)
+	}
 	lines, complete := discoveryAsmDeclCompleteABIDiagnostics(candidateFiles, err)
 	if !complete || !discoveryAsmDeclLocationsBelongToCandidate(moduleDir, candidateFiles, err) {
 		return nil, fmt.Errorf("go vet failed without a complete attributable ABI-only analysis: %w", err)

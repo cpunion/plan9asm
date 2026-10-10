@@ -6,6 +6,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -112,5 +114,84 @@ func TestDiscoveryAsmDeclUnprovedResultDiagnosticActualGo(t *testing.T) {
 		if got == nil || strings.Contains(got.Error(), "unproved_result_initialization") {
 			t.Fatalf("foreign package result was assigned to current source: %v", got)
 		}
+	}
+}
+
+func TestDiscoveryAsmDeclUnprovedResultDiagnosticActualBatch(t *testing.T) {
+	root := discoveryAsmDeclRetryPhysicalTemp(t)
+	writeTestFile(t, filepath.Join(root, "go.mod"), "module example.invalid/result-batch\n\ngo 1.20\n")
+	files := []string{"one/decl_amd64.s", "two/decl_amd64.s"}
+	for _, file := range files {
+		if err := os.MkdirAll(filepath.Join(root, filepath.Dir(file)), 0755); err != nil {
+			t.Fatal(err)
+		}
+		writeTestFile(t, filepath.Join(root, filepath.Dir(file), "decl.go"), "package result\nfunc Value() uint64\n")
+		writeTestFile(t, filepath.Join(root, file), "TEXT ·Value(SB),4,$0-8\nRET\n")
+	}
+	env := replaceEnv(discoveryAsmDeclDirectFixtureEnv(t, root), map[string]string{"GOFLAGS": "", "GOEXPERIMENT": ""})
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+	plan, err := captureDiscoveryAsmDeclDirect(ctx, root, env, nil, []string{"./..."}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := plan.close(); err != nil {
+			t.Error(err)
+		}
+	}()
+	original := plan.run(ctx)
+	failures, observed := discoveryAsmDeclObservedFailures(original)
+	if !observed || len(failures) != 2 {
+		t.Fatalf("missing independently completed actual two-unit batch: %v", original)
+	}
+	if rejected, got := classifyDiscoveryAsmDeclFailure(root, files, files, original); len(rejected) != 0 ||
+		got == nil || !errors.Is(got, original) || !strings.Contains(got.Error(), "unproved_result_initialization") {
+		t.Fatalf("complete result-only batch did not retain its precise failure: %v %v", rejected, got)
+	}
+
+	// Preserve the actual exit-two tool failure, then use its Wait status as
+	// a negative-only receipt mutation. Neither may borrow exit-one meaning.
+	_, toolErr := runCapturedCommandOutput(ctx, root, env, plan.GoBinary, "env", "-plan9asm-invalid-flag")
+	var toolFailure *discoveryCapturedCommandError
+	if !errors.As(toolErr, &toolFailure) {
+		t.Fatalf("missing actual tool failure: %v", toolErr)
+	}
+	exit, observed := toolFailure.cause.(*exec.ExitError)
+	if !observed || exit.ExitCode() != 2 {
+		t.Fatalf("stock Go did not establish the actual exit-two control: %v", toolErr)
+	}
+	copy := *failures[0]
+	copy.cause = toolFailure.cause
+	for _, failure := range []error{toolErr, &copy, errors.Join(original, context.Canceled)} {
+		_, got := classifyDiscoveryAsmDeclFailure(root, files, files, failure)
+		if got == nil || !errors.Is(got, failure) || strings.Contains(got.Error(), "unproved_result_initialization") {
+			t.Fatalf("tool/cancel failure acquired a result-only reason: %v", got)
+		}
+	}
+
+	for name, extra := range map[string]string{
+		"another result alias": ":2:1: [amd64] Other: unknown variable ret0; offset 0 is ret+0(FP)\n",
+		"parameter alias":      ":2:1: [amd64] Value: unknown variable arg0; offset 0 is x+0(FP)\n",
+		"different offset":     ":2:1: [amd64] Value: unknown variable ret0; offset 8 is ret+8(FP)\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			copy := *failures[0]
+			copy.output += filepath.Join(root, files[0]) + extra
+			_, got := classifyDiscoveryAsmDeclFailure(root, files, files, &copy)
+			if got == nil || strings.Contains(got.Error(), "unproved_result_initialization") {
+				t.Fatalf("unrelated alias was hidden by another RET: %v", got)
+			}
+		})
+	}
+
+	writeTestFile(t, filepath.Join(root, files[0]), "TEXT ·Value(SB),4,$0-8\nMOVQ $1,ret+0(FP)\nRET\n")
+	changed := plan.run(ctx)
+	if changed == nil || !strings.Contains(changed.Error(), "changed") {
+		t.Fatalf("actual source mutation did not revoke the observed plan: %v", changed)
+	}
+	_, got := classifyDiscoveryAsmDeclFailure(root, files, files, changed)
+	if got == nil || !errors.Is(got, changed) || strings.Contains(got.Error(), "unproved_result_initialization") {
+		t.Fatalf("changed original source gained a stale result reason: %v", got)
 	}
 }
