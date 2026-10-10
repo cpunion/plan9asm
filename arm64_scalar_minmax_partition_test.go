@@ -111,4 +111,7 @@ func TestARM64ScalarMinMaxAFPPartitionWitnesses(t *testing.T) {
 			}
 		}
 	}
+	if err := arm64MinMaxAFPObservationError("unknown", 1025, 40); err == nil {
+		t.Fatal("unknown partition inherited another family's witnesses")
+	}
 }

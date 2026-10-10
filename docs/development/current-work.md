@@ -48,8 +48,16 @@ with unrelated speculative implementation. Keep correctness gates unchanged.
   have independent original-Go and LLVM runtime evidence. Min/max's original
   full Linux run failed at the 45-minute deadline, without an observed value
   mismatch. Keep that failed log. Four disjoint FMAX/FMIN/FMAXNM/FMINNM roots
-  now retain the full denominator and the same per-root deadline. The new
-  required Linux run must finish before claiming its runtime closure.
+  now retain the full denominator and the same per-root deadline. All four
+  completed their Go/LLVM comparisons at `e693532a`; FMAX/FMIN passed, while
+  NM roots failed the final assertion because its AH signed-zero counter is
+  only populated by non-NM instructions. The scoped witness repair keeps all
+  comparisons and requires actual NEP for every family. Its independent RED/
+  GREEN passes; rerun the two failed full NM roots before runtime closure.
+- CI policy's old shared-batch-cache fixture is updated for the refill queue:
+  caller cache isolation, exhaustive priority order, sticky shard failures and
+  a mandatory final aggregate. All 36 Node tests and the three actual-child
+  Go queue tests pass; the original three policy failures remain recorded.
 
 ## Active frozen validation
 
@@ -58,7 +66,9 @@ Paths below are relative to their named worktree. Preserve terminal reports
 and clean only exact owned caches after every consumer has closed.
 
 - `codex/pr40-result-effects-followup-20261010`, `e693532a`:
-  `_out/minmax-partitions/` runs the four complete required Linux roots.
+  `_out/minmax-partitions/` is terminal with two passes and two assertion
+  failures above. The integration tree's `_out/ci-closure/` holds the scoped
+  regression and fresh required Linux NM rerun; do not relabel old logs.
 - `codex/pr40-original-graph-budget-20261011`, `e8d58a41`:
   `_out/graph-budget/` reruns runZeroInc/excrypto v0.43.3, tdv/crypto
   v0.0.0-20260609182332-5f2de1a9f1e2 and x/crypto v0.57.0, using stamped tools,

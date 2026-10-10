@@ -377,7 +377,14 @@ func arm64MinMaxStateRuntimeFamily(t *testing.T, triple, goos string, compiler, 
 }
 
 func arm64MinMaxAFPObservationError(family string, nep, ah int) error {
-	if nep == 0 || ah == 0 {
+	// AH counts the ordinary FMAX/FMIN signed-zero witness, not every row
+	// with AH enabled. Numeric partitions must still execute their complete
+	// AH matrix and compare every result/status byte with the original Go.
+	needsAH := family == "" || family == "FMAX" || family == "FMIN"
+	if !needsAH && family != "FMAXNM" && family != "FMINNM" {
+		return fmt.Errorf("unknown min/max AFP witness partition %q", family)
+	}
+	if nep <= 0 || ah < 0 || (needsAH && ah == 0) {
 		return fmt.Errorf("required actual AFP semantic effects missing for %q: NEP=%d AH=%d", family, nep, ah)
 	}
 	return nil
