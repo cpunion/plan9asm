@@ -937,6 +937,11 @@ requires complete shard coverage and zero failures. Do not promote the
 snapshot to a current pass after source or scan-ledger changes. cgo scan
 records remain in the separate inventory, never in this repository.
 
+The aggregate script logs `directory-preflight`, `scan-ledger` and `report-audit`
+start/end markers, elapsed seconds and actual exits on stderr. These identify a
+slow phase without contaminating canonical-path or JSON stdout. A completed
+phase is diagnostic information, not a successful corpus or ledger certificate.
+
 CI compares two independently verified snapshots semantically, not by physical
 host tool or output-object bytes. Each original retains its exact LLVM version
 and tool hash. The comparison preserves Go versions, the verified LLVM 22 major

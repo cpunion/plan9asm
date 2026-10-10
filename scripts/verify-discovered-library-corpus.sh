@@ -1,6 +1,19 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Diagnostics stay on stderr: preflight stdout is a canonical directory and
+# scan stdout becomes JSON. A completed phase is not a coverage certificate.
+run_verification_phase() {
+  local phase=$1
+  shift
+  local started=$SECONDS status=0
+  printf 'discovery verification: %s started\n' "$phase" >&2
+  "$@" || status=$?
+  printf 'discovery verification: %s finished status=%s elapsed=%ss\n' \
+    "$phase" "$status" "$((SECONDS - started))" >&2
+  return "$status"
+}
+
 repo_root=$(cd "$(dirname "$0")/.." && pwd)
 progress=0
 if [[ "${1:-}" == --progress ]]; then
@@ -18,7 +31,8 @@ if (( progress )); then
   if [[ "$reports_dir" != /* ]]; then
     reports_dir="$PWD/$reports_dir"
   fi
-  reports_dir=$(go run -C "$repo_root" ./cmd/plan9asmcorpus \
+  reports_dir=$(run_verification_phase directory-preflight \
+    go run -C "$repo_root" ./cmd/plan9asmcorpus \
     -repo-root "$repo_root" \
     -discovery-ledger "$repo_root/testdata/discovery/ledger" \
     -compare-assembly-ledger "$repo_root/testdata/discovery/assembly-ledger" \
@@ -63,7 +77,7 @@ if (( progress )); then
     exit "$status"
   }
   trap cleanup_status EXIT
-  go run -C "$repo_root" ./cmd/plan9asmdiscover \
+  run_verification_phase scan-ledger go run -C "$repo_root" ./cmd/plan9asmdiscover \
     -status -out-dir "$repo_root/testdata/discovery/ledger" \
     >&9
   if ! [[ "$(status_identity "$pending_dir")" == "$directory_identity" &&
@@ -79,7 +93,8 @@ if (( progress )); then
   # nonzero for incomplete/failed reports or a committed-ledger mismatch.
   corpus_args+=(-discovery-progress-output "$reports_dir/assembly-progress.json")
   status=0
-  go run -C "$repo_root" ./cmd/plan9asmcorpus "${corpus_args[@]}" || status=$?
+  run_verification_phase report-audit \
+    go run -C "$repo_root" ./cmd/plan9asmcorpus "${corpus_args[@]}" || status=$?
   if (( status == 0 )) && ! [[ -f "$reports_dir/assembly-progress.json" ]]; then
     echo "strict reader returned success without its requested progress output" >&2
     exit 1
@@ -87,7 +102,7 @@ if (( progress )); then
   exit "$status"
 fi
 
-go run -C "$repo_root" ./cmd/plan9asmdiscover \
+run_verification_phase scan-ledger go run -C "$repo_root" ./cmd/plan9asmdiscover \
   -status \
   -out-dir "$repo_root/testdata/discovery/ledger"
-go run -C "$repo_root" ./cmd/plan9asmcorpus "${corpus_args[@]}"
+run_verification_phase report-audit go run -C "$repo_root" ./cmd/plan9asmcorpus "${corpus_args[@]}"

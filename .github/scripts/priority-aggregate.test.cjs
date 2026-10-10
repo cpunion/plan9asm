@@ -43,6 +43,10 @@ if (args.includes('-discovery-progress-directory')) {
   }
   process.stdout.write(path.resolve(args[args.indexOf('-discovery-progress-directory') + 1]) + '\\n');
 } else if (args.includes('./cmd/plan9asmdiscover')) {
+  if (process.env.FIXTURE_MODE === 'scan failure') {
+    process.stderr.write('scan fixture failed\\n');
+    process.exit(7);
+  }
   if (process.env.FIXTURE_MODE === 'late scan') {
     fs.writeFileSync(process.env.FIXTURE_REPORTS + '/scan-status.json', '{"original":"scan"}\\n', {flag: 'wx'});
   }
@@ -66,6 +70,7 @@ if (args.includes('-discovery-progress-directory')) {
   process.stderr.write('expected one combined strict/progress invocation\\n');
   process.exit(9);
 }
+
 `, { mode: 0o755 });
   const result = spawnSync('bash', [path.join(scripts, 'verify-discovered-library-corpus.sh'), '--progress', reports], {
     encoding: 'utf8', timeout: 10000,
@@ -75,6 +80,16 @@ if (args.includes('-discovery-progress-directory')) {
   const invocations = fs.existsSync(calls) ? fs.readFileSync(calls, 'utf8').trim().split('\n').map(JSON.parse) : [];
   return { result, invocations, reports };
 }
+
+test('aggregate phase logging preserves a scan failure exit and cleans only its temporary output', (t) => {
+  const { result, invocations, reports } = verifyFixture(t, 'scan failure');
+  assert.equal(result.status, 7, result.stderr);
+  assert.equal(invocations.length, 2);
+  assert.match(result.stderr, /discovery verification: scan-ledger finished status=7 elapsed=[0-9]+s/);
+  assert.doesNotMatch(result.stderr, /discovery verification: report-audit/);
+  assert.equal(result.stdout, '');
+  assert.deepEqual(fs.readdirSync(reports), []);
+});
 
 for (const mode of ['late scan', 'late progress']) {
   test(`aggregate refuses to overwrite a ${mode} destination`, (t) => {

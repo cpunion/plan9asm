@@ -15,9 +15,13 @@ The integration branch is `codex/pr40-ci-closure-20261011`. Stop opening new
 instruction-family audits until this repair batch has run in CI. Preserve the
 separate scalar-FMA development branch; it is not part of this batch.
 
-Published `cb8b2ad3` is running fork CI 38018079008. Policy preflight passed;
-shards 5/29/38/39 failed and two priority shards are still running. Let it finish before pushing
-the next repair batch. No current-head corpus or full CI pass is established.
+Published PR head `cb8b2ad3` is running fork CI 38018079008. Policy preflight
+passed; all six priority shards failed. Shards 36/42 hit the 330-minute deadline
+and retained partial reports. The strict aggregate is still running: let it
+finish before updating this PR head. The 32-commit repair snapshot `9f9c1225`
+is already saved on fork branch `codex/pr40-ci-closure-20261011`, without a new
+PR or CI run. Later aggregate phase diagnostics are local until the next batch.
+No current-head corpus or full CI pass is established.
 
 Earlier `c09eff1e` failed run 37711752851: priority shards 5/29/38/39 failed,
 36/42 were canceled, and downstream gates did not complete. The four failed
@@ -160,6 +164,12 @@ with unrelated speculative implementation. Keep correctness gates unchanged.
   caller cache isolation, exhaustive priority order, sticky shard failures and
   a mandatory final aggregate. All 36 Node tests and the three actual-child
   Go queue tests pass; the original three policy failures remain recorded.
+- Live aggregate logs did not distinguish tool startup, scan-ledger validation
+  and report auditing. The script now logs each phase's start, finish, elapsed
+  seconds and actual exit on stderr; canonical paths and JSON stdout remain
+  untouched. Independent RED/GREEN fixtures retain failed scans, partial/invalid
+  reports, refusal to overwrite and exact cleanup/exit behavior. All 41 Node
+  scheduling tests, root CI policy, strict entrypoint tests and shell syntax pass.
 - The frozen full unit run found seven failed roots: two stale RNG assertions,
   the earlier WORD preflight's unresolved-constant diagnostic, and four raw-pool
   object fixtures. RNG tests now account separately for the two side-effecting
@@ -258,6 +268,10 @@ and clean only exact owned caches after every consumer has closed.
   explicit skip counters and still require their cross-runtime counterparts;
   this is not a native Linux, nested CLI, external corpus or current-head pass.
   The later scalar bit-count change is not part of this frozen run.
+  Its root package is now terminal: 5,706 passed, seven failed, 39 skipped and
+  zero incomplete out of 5,752 roots. All seven failed roots pass the current
+  focused rerun; the original report remains failed. Other module packages
+  continue. Both nested CLI suites separately passed in the integration tree.
 
 The older whole-module run at `044bb668` failed: 18/20 packages passed, root
 had one obsolete assertion failure and the corpus driver had three fixture
@@ -273,8 +287,8 @@ timeouts. Those regressions have newer repairs, not a retroactive pass.
 4. After priority success, let all remaining current-head gates run. Publish
    only matching, complete reports through the automatic ledger writer.
 
-Known later gates remain real failures/blockers: the latest strict SDK report
-has 163/184 passes, with frame/entry/ABIInternal/TLS/global/alignment gaps;
+Known later gates remain real failures/blockers: the fresh strict SDK report at
+`9f9c1225` still has 163/184 passes, with frame/entry/ABIInternal/TLS/global/alignment gaps;
 eleven required Linux AMD64 AVX512 runtime roots need compatible hardware.
 Neither portable execution nor LLVM object success replaces native execution.
 Keep the PR draft; there is no current-head completion or ready claim.
