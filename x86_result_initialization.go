@@ -472,7 +472,7 @@ func x86ResultTransfer(ins Instr, state *x86ResultState, owned []bool, resultOff
 	if accepted, recognized := x86ResultNumericalReadStep(ins, state, owned, resultOffset, arch); recognized {
 		return accepted
 	}
-	if accepted, known := x86ResultBroadcastStep(ins, state, arch); known {
+	if accepted, known := x86ResultBroadcastStep(ins, state, owned, arch); known {
 		return accepted
 	}
 	if accepted, known := x86ResultSwapStep(ins, state, arch); known {

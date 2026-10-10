@@ -110,12 +110,12 @@ func x86BroadcastProperties(op Op, ins Instr, arch string) (x86BroadcastForm, bo
 
 // A broadcast reads its exact scalar/block source and defines the complete
 // destination width. A low-X source cannot stand in for a wider block input.
-func x86ResultBroadcastStep(ins Instr, state *x86ResultState, arch string) (bool, bool) {
+func x86ResultBroadcastStep(ins Instr, state *x86ResultState, owned []bool, arch string) (bool, bool) {
 	f, known, err := x86BroadcastProperties(ins.Op, ins, arch)
 	if !known {
 		return false, false
 	}
-	if err != nil || ins.Args[0].Kind != OpReg || f.kind == x86BroadcastMask {
+	if err != nil || f.kind == x86BroadcastMask {
 		return false, true
 	}
 	dst, valid := amd64VectorRegisterIndex(ins.Args[f.destination].Reg, f.byteWidth)
@@ -130,7 +130,16 @@ func x86ResultBroadcastStep(ins Instr, state *x86ResultState, arch string) (bool
 	}
 	required := x86CallerVectorByteMask(int64(f.sourceBytes))
 	src := ins.Args[0]
-	if index, valid := amd64VectorRegisterIndex(src.Reg, amd64VectorByteWidth(src.Reg)); valid {
+	if src.Kind != OpReg {
+		// Reuse the exact initialized FP/AUTO bytes or the lowering-only
+		// same-file DATA extent. The tuple is the scalar/block input, not
+		// the wider destination. A mask cannot waive any potential input.
+		// This grants neither an ordinary pointer read nor a raw address role.
+		if !isAMD64MemoryOperand(src) || ins.x86AddressBits != 0 || ins.x86UnboundAddressOverride ||
+			!x86ResultRead(src, int64(f.sourceBytes), state, owned, arch) {
+			return false, true
+		}
+	} else if index, valid := amd64VectorRegisterIndex(src.Reg, amd64VectorByteWidth(src.Reg)); valid {
 		if index >= len(state.xmm) || state.vectorBytes(index)&required != required {
 			return false, true
 		}

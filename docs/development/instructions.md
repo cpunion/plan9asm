@@ -798,3 +798,13 @@ is neither a native CPU execution certificate nor new memory permission.
 The focused profile tests own one disposable build cache per test root so
 Go 1.27's objdump helper is not rebuilt for every case; sources, modules and
 temporary artifacts remain separate, and every case reruns the actual driver.
+
+Broadcast result-byte consumers share the complete scalar/block grammar with
+lowering. Read exactly its source tuple, not the destination width, from existing
+initialized FP/AUTO bytes or the lowering-only same-file DATA directory. The
+mask may preserve unknown destination bytes but cannot authorize missing source
+bytes or native pointer storage. Standalone declaration queries have no DATA
+owner; source/raw address overrides retain their separate contracts. Keep the
+eighteen memory members, full Go rows, five-target objects, mask/extent negatives
+and portable numerical execution together. Historical Go maskless `.Z` objects
+are reserved-encoding observations, not accepted forms or runtime passes.

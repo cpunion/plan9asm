@@ -387,7 +387,16 @@ func TestX86BroadcastAuthorityAndGrammarControls(t *testing.T) {
 			"VPBROADCASTW.Z X0,X1", "VPBROADCASTW X0,K0,X1",
 		} {
 			t.Run(arch+"/"+row, func(t *testing.T) {
-				goAssemblerOracleOutput(t, arch, "TEXT f(SB),4,$0-0\n"+row+"\nRET\n", "", false)
+				source := "TEXT f(SB),4,$0-0\n" + row + "\nRET\n"
+				if row == "VPBROADCASTW.Z X0,X1" {
+					// Go 1.20 emits reserved EVEX.z=1/aaa=0. Observe the
+					// complete original bytes and require raw rejection too;
+					// this is never a supported form or an executable test.
+					x86BroadcastReservedZeroMaskGoObservation(t, arch, source,
+						[]byte{0x62, 0xf2, 0x7d, 0x88, 0x79, 0xc8, 0xc3}, true)
+				} else {
+					goAssemblerOracleOutput(t, arch, source, "", false)
+				}
 				ins := x86YMMReadSource(t, row)
 				if _, known, err := x86BroadcastProperties(ins.Op, ins, arch); !known || err == nil {
 					t.Fatal("Go-rejected form acquired typed effect")

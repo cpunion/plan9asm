@@ -22,7 +22,18 @@ The guarded publisher then fast-forwarded only fork PR 4 to `aedfac9b`, a
 and started all six priority shards. Let that run finish. Its head and the
 integration worktree remain frozen; the upstream-connected branch is unchanged.
 No current-head corpus or full CI pass is established. Further observed-failure
-repairs live separately on `codex/pr40-failed-gates-20261010`.
+repairs now live on `codex/pr40-ci-failure-replay-20261010`, based on `b5af3a10`.
+The earlier `codex/pr40-failed-gates-20261010` tree is frozen for broad local
+verification; do not edit it while those first-party tests are running.
+
+Current CI shards 5/29/39 finished with 131 passes, 128 failures, 39 source
+N/A and one invalid-source skip across 299 versions. Their candidate statuses
+are unchanged from the previous run. Shards 36/38/42 are still running. Fresh
+artifacts are retained in the earlier follow-up tree under
+`_out/failed-gates/ci-38043255488/`; these three reports cannot update the ledger.
+The prior watcher died during disk exhaustion. Its publisher had already
+finished; do not restart that publisher. A read-only `gh run watch` now writes
+the integration tree's `_out/ci-closure/watch-aedfac9b-after-cleanup.log`.
 
 A guarded local publisher is prepared under ignored `_out/ci-closure/` as
 `publish-after-ci.sh`. Before launching another watcher or changing the
@@ -51,6 +62,25 @@ with unrelated speculative implementation. Keep correctness gates unchanged.
 
 ## Included repairs and retained evidence
 
+- Shard 5's exact packdb version exposed a missing broadcast memory consumer,
+  not a new opcode: the result observer accepted only register inputs despite
+  the complete shared grammar. Independent REDs reproduce the failure without
+  the library. All eighteen memory broadcast names now consume existing exact
+  initialized FP/AUTO bytes or lowering-owned same-file DATA extents. Masks
+  cannot hide missing inputs; native pointers, unknown masks/merges, negative
+  offsets and address overrides still reject. The 104 memory forms have actual
+  Go objects and three-API LLVM 22 objects on five x86 targets, in batches of at
+  most 64 functions. Portable execution compares 624 dynamic-mask calls per API
+  and optimization level against an independent byte reference; it does not
+  claim original AVX512 execution. Forty current-Go family/regression roots pass
+  (66.031s). Eight actual Go 1.20 roots pass after repairing an existing test's
+  maskless `.Z` assumption: old Go's exact reserved bytes remain rejected,
+  never supported or skipped. Two current-Go reserved-encoding roots, CLI
+  extraction, vet and the unchanged five-architecture official gate pass.
+  Evidence is under `_out/ci-failure-replay/` in the new development tree.
+  Original exact-version replay and current-head CI remain pending; no ledger
+  status was promoted. The 58 mixed-TEXT/frame refusals in the three completed
+  shards are a separate, still-unrepaired boundary, not broadcast closure.
 - Follow-up CPP planning repairs are under `_out/failed-gates/`: offline JSON
   lost private resource indexes and repeatedly lexed complete originals. The
   independent allocation RED and original shard 38 CPU profile reproduce it.
@@ -61,9 +91,10 @@ with unrelated speculative implementation. Keep correctness gates unchanged.
   tracked-file checks pass: 27 current-Go roots with actual five-architecture
   Go objects, 26 Go 1.20 roots, race and vet. Preserve the earlier overlay-only
   old-vet virtual-file failure as diagnostic evidence. The broader CPP attempt timed out at
-  12 minutes after 52 root passes; it is not a complete suite pass. Local disk
-  exhaustion now prevents reliable broad verification. Preserve all evidence,
-  obtain safe headroom, then finish under the normal 45-minute suite budget.
+  12 minutes after 52 root passes; it is not a complete suite pass. After the
+  user's disk cleanup, the frozen `b5af3a10` retry is running with the normal
+  45-minute budget in `cpp-b5af3a10-full-retry.jsonl`. Preserve the older timeout
+  and disk failures; neither a running suite nor focused passes closes them.
   This is a local audit optimization, not a current CI or external-library pass.
 - The next, not-yet-published batch closes shard 5's low-product caller-effect
   gap. Independent original-Go W/D/Q controls reproduced unregistered D/Q
@@ -334,8 +365,15 @@ and clean only exact owned caches after every consumer has closed.
   source-stack scalar-move and missing architecture-group terminals separately
   pass (1.446s). Neither focused retry repairs the failed full report. Twenty-four
   additional confirmed inactive integration-build archives were cleaned, not
-  source or reports. The shared disk still needs headroom before further large
-  local suites; do not clean unrelated caches or interfere with other builds.
+  source or reports. Subsequent user cleanup restored ample headroom. Do not
+  clean unrelated caches or interfere with other builds.
+- Frozen `b5af3a10` in `codex/pr40-failed-gates-20261010` (running):
+  `_out/root-exhaustive-b5af3a10/` is the fresh 32-partition/two-worker root
+  rerun. The separate `_out/failed-gates/cpp-b5af3a10-full-retry.jsonl` runs the
+  complete CPP prefix at 45 minutes. These are first-party tests, not local
+  index scans or external-library compilation. New broadcast repairs are not
+  in this frozen snapshot. Preserve raw reports and inspect actual terminal
+  outcomes before reporting completion.
 
 The older whole-module run at `044bb668` failed: 18/20 packages passed, root
 had one obsolete assertion failure and the corpus driver had three fixture

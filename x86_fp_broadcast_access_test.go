@@ -97,6 +97,11 @@ func TestX86FPAccessBytesBroadcastRejectedForms(t *testing.T) {
 // record the actual rejected source or accepted reserved bytes, never execute.
 func x86FPBroadcastReservedZeroMaskGoObservation(t *testing.T, arch, source string) {
 	t.Helper()
+	x86BroadcastReservedZeroMaskGoObservation(t, arch, source, []byte{0x62, 0xf2, 0xfd, 0xa8, 0x59}, false)
+}
+
+func x86BroadcastReservedZeroMaskGoObservation(t *testing.T, arch, source string, expected []byte, exact bool) {
+	t.Helper()
 	directory := t.TempDir()
 	assembly, object := filepath.Join(directory, "reserved.s"), filepath.Join(directory, "reserved.o")
 	if err := os.WriteFile(assembly, []byte(source), 0600); err != nil {
@@ -117,7 +122,7 @@ func x86FPBroadcastReservedZeroMaskGoObservation(t *testing.T, arch, source stri
 		return
 	}
 	code := assembleX87ControlBytes(t, arch, source)
-	if !bytes.HasPrefix(code, []byte{0x62, 0xf2, 0xfd, 0xa8, 0x59}) || code[len(code)-1] != 0xc3 {
+	if len(code) == 0 || !bytes.HasPrefix(code, expected) || code[len(code)-1] != 0xc3 || exact && !bytes.Equal(code, expected) {
 		t.Fatalf("accepted original reserved broadcast bytes changed: %x", code)
 	}
 	mode := 64
