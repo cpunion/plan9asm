@@ -1033,6 +1033,7 @@ func TestExtractSupportedOpsFindsCompleteAddedInstructionFamilies(t *testing.T) 
 		t.Fatal(err)
 	}
 	want := []string{
+		"PMOVMSKB", "VPMOVMSKB", "MOVMSKPS", "MOVMSKPD", "VMOVMSKPS", "VMOVMSKPD",
 		"VPMOVM2B", "VPMOVM2W", "VPMOVM2D", "VPMOVM2Q",
 		"VPMOVB2M", "VPMOVW2M", "VPMOVD2M", "VPMOVQ2M",
 		"PADDB", "PADDW", "PADDL", "PADDD", "PADDQ", "PADDSB", "PADDSW", "PADDUSB", "PADDUSW",

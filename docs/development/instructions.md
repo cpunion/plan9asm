@@ -526,6 +526,15 @@ undefined result and packed counts remain separate families. Keep complete
 Go encoder-row checks, original accept/reject witnesses, result/flag negatives,
 five-target objects and runtime regressions together when changing the model.
 
+The six packed byte/floating move-mask names share their complete legacy/VEX
+register grammar across lowering, intrinsic feature inference and result
+definedness. Legacy mode32 X8-X15 is Go-rejected; VEX syntax acceptance does
+not grant that physical bank to the result observer. Initialized X/Y bytes
+produce a zero-extended GP mask without changing vector aliases or FLAGS.
+Unknown/partial inputs and unbound MMX state remain Context. Test each
+function's own LLVM feature requirements: a sibling PMOVMSKB must not supply
+the SSE2 feature needed by an isolated VPMOVMSKB intrinsic on 386.
+
 ARM64 RNDR/RNDRRS reads share the complete MRS/MOVD C_SPR-to-C_ZREG grammar
 and raw Rt/reseed decoder. Named aliases must infer the same `+rand` feature
 and define the same four virtual NZCV bits as WORD, including ZR/dead reads.

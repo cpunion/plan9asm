@@ -3,6 +3,8 @@ package plan9asm
 import (
 	"errors"
 	"fmt"
+	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -11,6 +13,41 @@ var x86ResultMoveMaskForms = []string{
 	"VPMOVMSKB X0,AX", "VPMOVMSKB Y0,AX",
 	"VMOVMSKPS X0,AX", "VMOVMSKPS Y0,AX",
 	"VMOVMSKPD X0,AX", "VMOVMSKPD Y0,AX",
+}
+
+func TestX86ResultMoveMaskEveryByteAndPreservedState(t *testing.T) {
+	for _, line := range x86ResultMoveMaskForms {
+		file, err := Parse(ArchAMD64, "TEXT f(SB),4,$0-0\n"+line+"\nRET\n")
+		if err != nil {
+			t.Fatal(err)
+		}
+		instruction := file.Funcs[0].Instrs[1]
+		width := 16
+		if strings.Contains(line, " Y") {
+			width = 32
+		}
+		for missing := -1; missing < width; missing++ {
+			state := x86ResultState{flags: x86ByteFlagCF | x86ByteFlagOF}
+			state.xmm[0], state.vectorUpper[0] = 0xffff, ^uint64(0xffff)
+			if missing >= 0 && missing < 16 {
+				state.xmm[0] &^= 1 << uint(missing)
+			} else if missing >= 16 {
+				state.vectorUpper[0] &^= 1 << uint(missing)
+			}
+			before := state
+			accepted, known := x86ResultMoveMaskStep(instruction, &state, nil, 0, "amd64")
+			if !known || accepted != (missing == -1) {
+				t.Fatalf("%s missing byte=%d: accepted=%t known=%t", line, missing, accepted, known)
+			}
+			want := before
+			if accepted {
+				want.gp[0] = 0xff // r32 result defines the complete zero-extended RAX.
+			}
+			if !reflect.DeepEqual(state, want) {
+				t.Fatalf("%s changed vector/FLAGS/other GP state at missing byte=%d", line, missing)
+			}
+		}
+	}
 }
 
 func TestX86ABI0ResultMoveMaskWholeFamily(t *testing.T) {

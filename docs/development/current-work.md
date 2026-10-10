@@ -160,9 +160,9 @@ with unrelated speculative implementation. Keep correctness gates unchanged.
   caller cache isolation, exhaustive priority order, sticky shard failures and
   a mandatory final aggregate. All 36 Node tests and the three actual-child
   Go queue tests pass; the original three policy failures remain recorded.
-- The frozen full unit run found five failed roots: two stale RNG assertions,
+- The frozen full unit run found six failed roots: two stale RNG assertions,
   the earlier WORD preflight's unresolved-constant diagnostic, and two raw-pool
-  object fixtures. RNG tests now account separately for the two side-effecting
+  object fixture classes (three roots). RNG tests now account separately for the two side-effecting
   intrinsics, while unknown GP inputs still reject. WORD retains the original
   unresolved-symbol diagnostic before decoding. Native preflight now consumes
   only the existing bounded appended-pool proof, not arbitrary dead WORDs as
@@ -172,6 +172,18 @@ with unrelated speculative implementation. Keep correctness gates unchanged.
   (88.734s), as do ten Go 1.20 roots (11.219s). The failed broad attempt that
   treated dead source as data remains recorded and was corrected. These
   focused passes do not relabel the still-running frozen full suite.
+- Shard 38 is terminal with 35 passes, 41 failures and 18 source N/A outcomes
+  out of 94 versions, at the still-published old revision. Its hex decoder
+  exposed the six-name move-mask family's missing result effects. The complete
+  Go rows, 672 actual format witnesses, numerical byte/FLAGS negatives and
+  five-target three-API LLVM 22 O0/O2 objects now pass. Isolated cases also
+  reproduced legacy 386 high-X overacceptance and an LLVM 22 abort caused by
+  VPMOVMSKB borrowing SSE2 from sibling instructions. Shape, lowering, feature
+  inference and result observation now share the grammar. Forty-five related
+  current-Go roots pass (36.612s), with a separate instruction-local feature
+  and helper gate; thirteen actual Go 1.20 roots pass (10.591s). CLI extraction,
+  vet and unchanged official classification pass. Original external replay and
+  current-head CI still own closure, not these component checks.
 - The known ARM64 WORD truncation counterexample now uses one shared Go
   `C_LCON` check before native preflight, decoding and lowering. Rejected
   64-bit constants can no longer become valid low-word opcodes, including

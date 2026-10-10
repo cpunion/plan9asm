@@ -72,6 +72,12 @@ func inferFuncTargetFeaturesForGOARCH(arch Arch, goarch string, fn Func) string 
 			if moveArch == "" {
 				moveArch = "amd64"
 			}
+			if form, known, err := x86MoveMaskProperties(ins.Op, ins, moveArch); known && err == nil &&
+				moveArch == "386" && form.floatingLaneBits == 0 && form.byteWidth >= 16 {
+				// Both packed byte-mask widths lower through the SSE2 i128
+				// intrinsic, even when no sibling instruction enables SSE2.
+				add("+sse2")
+			}
 			if form, known, err := x86COMIProperties(ins, moveArch); known && err == nil {
 				if form.evex {
 					add("+avx512f")

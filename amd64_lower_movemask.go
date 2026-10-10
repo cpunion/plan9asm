@@ -23,57 +23,71 @@ var amd64MoveMaskSpecs = map[Op]amd64MoveMaskSpec{
 	"VMOVMSKPD": {opcode: 0x50, prefix: 1, vector: true, floatingLaneBits: 64},
 }
 
-// lowerPackedMoveMask implements Go 1.27's complete packed move-mask family:
-// PMOVMSKB, VPMOVMSKB, MOVMSKPS/PD, and VMOVMSKPS/PD. None of their tables
-// contains EVEX, mask-register, suffix, or memory-source forms.
-func (c *amd64Ctx) lowerPackedMoveMask(op Op, ins Instr) (ok bool, terminated bool, err error) {
+type x86MoveMaskForm struct {
+	amd64MoveMaskSpec
+	byteWidth int
+}
+
+// Shape is shared by lowering and result definedness. Acceptance supplies no
+// initialized vector, MMX state, physical mode32 bank or caller permission.
+func x86MoveMaskProperties(op Op, ins Instr, arch string) (x86MoveMaskForm, bool, error) {
 	rawOp := strings.ToUpper(string(op))
 	baseOp := rawOp
 	if dot := strings.IndexByte(rawOp, '.'); dot >= 0 {
 		baseOp = rawOp[:dot]
 	}
 	spec, recognized := amd64MoveMaskSpecs[Op(baseOp)]
+	form := x86MoveMaskForm{amd64MoveMaskSpec: spec}
 	if !recognized {
-		return false, false, nil
+		return form, false, nil
 	}
-	vector := spec.vector
-	floatingLaneBits := spec.floatingLaneBits
-	if rawOp != baseOp {
-		return true, false, fmt.Errorf("amd64 %s has no instruction suffixes in Go 1.27's optab: %q", baseOp, ins.Raw)
+	if arch != "amd64" && arch != "386" || rawOp != baseOp ||
+		ins.Op != "" && !strings.EqualFold(string(ins.Op), baseOp) {
+		return form, true, fmt.Errorf("%s %s has an unbound mode, dispatch or suffix: %q", arch, baseOp, ins.Raw)
 	}
 	if len(ins.Args) != 2 || ins.Args[0].Kind != OpReg || ins.Args[1].Kind != OpReg {
-		return true, false, fmt.Errorf("amd64 %s expects vector-or-MMX source and GP destination: %q", baseOp, ins.Raw)
+		return form, true, fmt.Errorf("%s %s expects vector-or-MMX source and GP destination: %q", arch, baseOp, ins.Raw)
 	}
-	if !isX86YrlRegisterForArch(ins.Args[1].Reg, c.goarch) {
-		return true, false, fmt.Errorf("amd64 %s destination is outside Go 1.27's Yrl class: %q", baseOp, ins.Raw)
+	if !isX86YrlRegisterForArch(ins.Args[1].Reg, arch) {
+		return form, true, fmt.Errorf("%s %s destination is outside Go's Yrl class: %q", arch, baseOp, ins.Raw)
 	}
+	limit := 15
+	if !spec.vector && arch == "386" {
+		limit = 7
+	}
+	if index, valid := amd64ParseXReg(ins.Args[0].Reg); valid && index <= limit {
+		form.byteWidth = 16
+	} else if index, valid := amd64ParseYReg(ins.Args[0].Reg); spec.vector && valid && index <= 15 {
+		form.byteWidth = 32
+	} else if _, valid := amd64ParseMReg(ins.Args[0].Reg); !spec.vector && spec.floatingLaneBits == 0 && valid {
+		form.byteWidth = 8
+	} else {
+		return form, true, fmt.Errorf("%s %s source is outside its Go table: %q", arch, baseOp, ins.Raw)
+	}
+	return form, true, nil
+}
 
-	if floatingLaneBits != 0 {
-		byteWidth := 0
-		if xIndex, x := amd64ParseXReg(ins.Args[0].Reg); x {
-			limit := 15
-			if !vector && c.goarch == "386" {
-				limit = 7
-			}
-			if xIndex > limit {
-				return true, false, fmt.Errorf("amd64 %s source is outside its Go 1.27 register class: %q", baseOp, ins.Raw)
-			}
-			byteWidth = 16
-		} else if yIndex, y := amd64ParseYReg(ins.Args[0].Reg); vector && y && yIndex <= 15 {
-			byteWidth = 32
-		} else {
-			return true, false, fmt.Errorf("amd64 %s source is outside its Go 1.27 table: %q", baseOp, ins.Raw)
-		}
-		value, err := c.loadPackedCompareBytes(ins.Args[0], byteWidth)
+// No Go move-mask row accepts EVEX, mask-register, suffix or memory forms.
+func (c *amd64Ctx) lowerPackedMoveMask(op Op, ins Instr) (ok bool, terminated bool, err error) {
+	arch := c.goarch
+	if arch == "" {
+		arch = "amd64"
+	}
+	form, known, err := x86MoveMaskProperties(op, ins, arch)
+	if !known || err != nil {
+		return known, false, err
+	}
+	if form.floatingLaneBits != 0 {
+		value, err := c.loadPackedCompareBytes(ins.Args[0], form.byteWidth)
 		if err != nil {
 			return true, false, err
 		}
-		mask32 := c.floatingMoveMask(value, byteWidth, floatingLaneBits)
+		mask32 := c.floatingMoveMask(value, form.byteWidth, form.floatingLaneBits)
 		return true, false, c.storeRegSized(ins.Args[1].Reg, I32, mask32)
 	}
 
 	var mask32 string
-	if xIndex, x := amd64ParseXReg(ins.Args[0].Reg); x && xIndex <= 15 {
+	if form.byteWidth == 16 {
 		value, err := c.loadX(ins.Args[0].Reg)
 		if err != nil {
 			return true, false, err
@@ -81,7 +95,7 @@ func (c *amd64Ctx) lowerPackedMoveMask(op Op, ins Instr) (ok bool, terminated bo
 		mask := c.newTmp()
 		fmt.Fprintf(c.b, "  %%%s = call i32 @llvm.x86.sse2.pmovmskb.128(<16 x i8> %s)\n", mask, value)
 		mask32 = "%" + mask
-	} else if yIndex, y := amd64ParseYReg(ins.Args[0].Reg); vector && y && yIndex <= 15 {
+	} else if form.byteWidth == 32 {
 		value, err := c.loadY(ins.Args[0].Reg)
 		if err != nil {
 			return true, false, err
@@ -99,7 +113,7 @@ func (c *amd64Ctx) lowerPackedMoveMask(op Op, ins Instr) (ok bool, terminated bo
 		combined := c.newTmp()
 		fmt.Fprintf(c.b, "  %%%s = or i32 %%%s, %%%s\n", combined, shifted, lowMask)
 		mask32 = "%" + combined
-	} else if _, mmx := amd64ParseMReg(ins.Args[0].Reg); !vector && mmx {
+	} else {
 		value, err := c.loadReg(ins.Args[0].Reg)
 		if err != nil {
 			return true, false, err
@@ -113,8 +127,6 @@ func (c *amd64Ctx) lowerPackedMoveMask(op Op, ins Instr) (ok bool, terminated bo
 		widened := c.newTmp()
 		fmt.Fprintf(c.b, "  %%%s = zext i8 %%%s to i32\n", widened, mask8)
 		mask32 = "%" + widened
-	} else {
-		return true, false, fmt.Errorf("amd64 %s source is outside its Go 1.27 table: %q", baseOp, ins.Raw)
 	}
 
 	return true, false, c.storeRegSized(ins.Args[1].Reg, I32, mask32)
