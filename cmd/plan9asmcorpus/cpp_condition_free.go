@@ -26,11 +26,12 @@ func discoveryCPPConditionFreeWithIndex(plan *discoveryOrdinarySelectionPlan, un
 	if plan == nil || plan.CPPInputs == nil {
 		return false, fmt.Errorf("condition-free query omitted complete CPP inputs")
 	}
-	if err := validateDiscoveryReplayCPPInputsWithIndex(plan.CPPInputs, plan, []string{unit.File}, sourceIndex); err != nil {
+	inputs, err := validatedDiscoveryReplayCPPInputsWithIndex(plan.CPPInputs, plan, []string{unit.File}, sourceIndex)
+	if err != nil {
 		return false, err
 	}
 	used := make(map[string]bool)
-	if _, err := discoveryCPPUnitDirectives(plan.CPPInputs, unit, used); err != nil {
+	if _, err := discoveryCPPUnitDirectives(inputs, unit, used); err != nil {
 		return false, err
 	}
 	needsHeader := false
@@ -44,7 +45,7 @@ func discoveryCPPConditionFreeWithIndex(plan *discoveryOrdinarySelectionPlan, un
 		if err := checkDiscoveryProfilePlanningContext(contexts); err != nil {
 			return false, err
 		}
-		source := plan.CPPInputs.Sources[id]
+		source := inputs.Sources[id]
 		if source.Original == nil {
 			return false, fmt.Errorf("condition-free query omitted complete CPP original")
 		}

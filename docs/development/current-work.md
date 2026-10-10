@@ -51,6 +51,20 @@ with unrelated speculative implementation. Keep correctness gates unchanged.
 
 ## Included repairs and retained evidence
 
+- Follow-up CPP planning repairs are under `_out/failed-gates/`: offline JSON
+  lost private resource indexes and repeatedly lexed complete originals. The
+  independent allocation RED and original shard 38 CPU profile reproduce it.
+  A bounded per-invocation index now serves registration, active replay and
+  condition-free queries; immutable text shares bytes, never mutable pointers.
+  The same 94-candidate accounting audit improved from a five-minute timeout
+  to 86 seconds, without dropping source hashes or graph/scope checks. Final
+  tracked-file checks pass: 27 current-Go roots with actual five-architecture
+  Go objects, 26 Go 1.20 roots, race and vet. Preserve the earlier overlay-only
+  old-vet virtual-file failure as diagnostic evidence. The broader CPP attempt timed out at
+  12 minutes after 52 root passes; it is not a complete suite pass. Local disk
+  exhaustion now prevents reliable broad verification. Preserve all evidence,
+  obtain safe headroom, then finish under the normal 45-minute suite budget.
+  This is a local audit optimization, not a current CI or external-library pass.
 - The next, not-yet-published batch closes shard 5's low-product caller-effect
   gap. Independent original-Go W/D/Q controls reproduced unregistered D/Q
   effects; replacing only the old lowerers also reproduced incorrect upper
@@ -310,12 +324,18 @@ and clean only exact owned caches after every consumer has closed.
   focused rerun; the original report remains failed. The full module run is
   terminal with 19/20 packages passed and only those seven root failures.
   Both nested CLI suites separately passed in the integration tree.
-- Frozen `aedfac9b` in the integration tree (active):
-  `_out/root-exhaustive-aedfac9b/` is a fresh 32-partition/two-worker root run.
-  Do not modify that tree. Partition 12 failed the deadline fixture above;
+- Frozen `aedfac9b` in the integration tree (terminal failure):
+  `_out/root-exhaustive-aedfac9b/` attempted a 32-partition/two-worker root run.
+  Preserve that tree for published CI. Partition 12 failed the fixture above;
   partitions 15/16 failed during disk exhaustion, including the compressed
-  disp8 source oracle and two fixed-local frame roots. These reports remain
-  failed and need independent reruns; no result or ledger is upgraded manually.
+  disp8 source oracle and two fixed-local frame roots. Those three roots now
+  separately pass (77.226s). Another disk exhaustion interrupted partition 26
+  and truncated the aggregate report; partitions 27–32 were not reached. Its
+  source-stack scalar-move and missing architecture-group terminals separately
+  pass (1.446s). Neither focused retry repairs the failed full report. Twenty-four
+  additional confirmed inactive integration-build archives were cleaned, not
+  source or reports. The shared disk still needs headroom before further large
+  local suites; do not clean unrelated caches or interfere with other builds.
 
 The older whole-module run at `044bb668` failed: 18/20 packages passed, root
 had one obsolete assertion failure and the corpus driver had three fixture

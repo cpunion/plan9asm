@@ -25,9 +25,15 @@ const discoveryReplayCPPGraphBytes = 64 << 20
 // replayed by the shared executor; these controls are never executed as a
 // substitute macro program. Physical and recorded macro strings stay distinct.
 func discoveryReplayCPPSource(file string, data []byte) (discoveryCPPSource, error) {
-	text := string(data)
+	return discoveryReplayCPPSourceText(file, string(data))
+}
+
+// Keep immutable text by value. The parameter owns a separate string slot;
+// no public *string or directive slice becomes part of the private parse.
+// Sharing backing bytes also makes repeated equality checks inexpensive.
+func discoveryReplayCPPSourceText(file, text string) (discoveryCPPSource, error) {
 	result := discoveryCPPSource{
-		File: file, SHA256: discoveryFeatureBytesSHA256(data), Original: &text,
+		File: file, SHA256: discoveryFeatureBytesSHA256([]byte(text)), Original: &text,
 		Directives: []discoveryCPPDirective{},
 	}
 	physical, err := plan9asm.InspectAssemblyCPPSource(text, file, nil)
@@ -244,10 +250,36 @@ func validateDiscoveryReplayCPPInputs(inputs *discoveryCPPInputs, plan *discover
 
 func validateDiscoveryReplayCPPInputsWithIndex(inputs *discoveryCPPInputs, plan *discoveryOrdinarySelectionPlan,
 	files []string, sourceIndex *discoveryCPPPlanningSourceIndex) error {
-	if plan == nil || inputs.Module != plan.Module || inputs.Version != plan.Version ||
+	_, err := validatedDiscoveryReplayCPPInputsWithIndex(inputs, plan, files, sourceIndex)
+	return err
+}
+
+func validatedDiscoveryReplayCPPInputsWithIndex(inputs *discoveryCPPInputs, plan *discoveryOrdinarySelectionPlan,
+	files []string, sourceIndex *discoveryCPPPlanningSourceIndex) (*discoveryCPPInputs, error) {
+	if plan == nil || inputs == nil || inputs.Module != plan.Module || inputs.Version != plan.Version ||
 		inputs.ModuleSum != plan.ModuleSum || inputs.ZipSHA256 != plan.ZipSHA256 ||
 		len(inputs.Sources) == 0 || len(inputs.Sources) > 512 {
-		return fmt.Errorf("full CPP graph differs from original archive scope")
+		return nil, fmt.Errorf("full CPP graph differs from original archive scope")
+	}
+	indexed, err := indexDiscoveryReplayCPPSources(inputs, sourceIndex)
+	if err != nil {
+		return nil, err
+	}
+	// The same structural origin/edge checks retain physical source positions.
+	// New full replay never borrows the historical control executor.
+	if err := validateDiscoveryCPPInputStructure(indexed, plan, files); err != nil {
+		return nil, err
+	}
+	return indexed, nil
+}
+
+// Each query owns a fresh source map. Reuse only pure parses, never a previous
+// projection or graph validation. This also lets offline planning use bounded
+// private resource indexes after JSON has deliberately discarded them.
+func indexDiscoveryReplayCPPSources(inputs *discoveryCPPInputs, sourceIndex *discoveryCPPPlanningSourceIndex) (*discoveryCPPInputs, error) {
+	if inputs == nil || inputs.Protocol != discoveryReplayCPPInputsProtocol ||
+		len(inputs.Sources) == 0 || len(inputs.Sources) > 512 {
+		return nil, fmt.Errorf("full CPP source indexing lacks a bounded original graph")
 	}
 	// JSON deliberately has no private lexer indexes. Reuse only the indexes
 	// derived below from complete original-source parses. The planner may own
@@ -260,19 +292,17 @@ func validateDiscoveryReplayCPPInputsWithIndex(inputs *discoveryCPPInputs, plan 
 	for id, source := range inputs.Sources {
 		_, file, err := discoveryCPPSourceIdentity(id)
 		if err != nil || source.Original == nil || len(*source.Original) > discoveryReplayCPPGraphBytes-total {
-			return fmt.Errorf("full CPP source is missing or unbounded: %s", id)
+			return nil, fmt.Errorf("full CPP source is missing or unbounded: %s", id)
 		}
 		total += len(*source.Original)
 		resources, err := sourceIndex.validate(file, source)
 		if err != nil {
-			return fmt.Errorf("CPP raw inventory/full SHA differs from original replay: %s: %v", id, err)
+			return nil, fmt.Errorf("CPP raw inventory/full SHA differs from original replay: %s: %v", id, err)
 		}
 		source.resourceIndex = resources
 		indexed.Sources[id] = source
 	}
-	// The same structural origin/edge checks retain physical source positions.
-	// New full replay never borrows the historical control executor.
-	return validateDiscoveryCPPInputStructure(&indexed, plan, files)
+	return &indexed, nil
 }
 
 func verifyDiscoveryReplayCPPZIP(inputs *discoveryCPPInputs, plan *discoveryOrdinarySelectionPlan, archivePath string) error {

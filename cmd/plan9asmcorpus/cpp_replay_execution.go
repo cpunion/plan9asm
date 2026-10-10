@@ -14,8 +14,20 @@ import (
 // registration includes inactive edges; only this execution decides active
 // inputs, branches and output. Defines retain their exact ordered -D text.
 func replayDiscoveryOriginalCPP(inputs *discoveryCPPInputs, unit discoveryCPPUnit, header *gotoolprofile.GeneratedHeaderProof, defines []string) (plan9asm.AssemblyCPPObservation, map[string]string, error) {
+	return replayDiscoveryOriginalCPPWithIndex(inputs, unit, header, defines, nil)
+}
+
+func replayDiscoveryOriginalCPPWithIndex(inputs *discoveryCPPInputs, unit discoveryCPPUnit,
+	header *gotoolprofile.GeneratedHeaderProof, defines []string, sourceIndex *discoveryCPPPlanningSourceIndex) (plan9asm.AssemblyCPPObservation, map[string]string, error) {
 	if inputs == nil || inputs.Protocol != discoveryReplayCPPInputsProtocol {
 		return plan9asm.AssemblyCPPObservation{}, nil, fmt.Errorf("missing full original CPP replay protocol")
+	}
+	if sourceIndex != nil {
+		var err error
+		inputs, err = indexDiscoveryReplayCPPSources(inputs, sourceIndex)
+		if err != nil {
+			return plan9asm.AssemblyCPPObservation{}, nil, err
+		}
 	}
 	// The public replay executor performs mandatory whole-graph validation.
 	// Construct fresh inputs without hashing the same complete originals twice.

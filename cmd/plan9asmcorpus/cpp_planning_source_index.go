@@ -53,7 +53,7 @@ func (index *discoveryCPPPlanningSourceIndex) validate(file string, source disco
 	}
 	if !found {
 		var err error
-		actual, err = discoveryReplayCPPSource(file, []byte(key.text))
+		actual, err = discoveryReplayCPPSourceText(file, key.text)
 		if err != nil {
 			return nil, err
 		}

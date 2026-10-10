@@ -78,6 +78,11 @@ func TestCPPOriginalReplayOrderedDriverDefinitionsFiveActualArchitectures(t *tes
 			if err := validateDiscoveryCPPInputs(&restored, plan, []string{file}); err != nil {
 				t.Fatal(err)
 			}
+			index := &discoveryCPPPlanningSourceIndex{}
+			indexed, indexedUsed, err := replayDiscoveryOriginalCPPWithIndex(&restored, restored.Units[0], nil, defines, index)
+			if err != nil || !reflect.DeepEqual(indexed, observation) || !reflect.DeepEqual(indexedUsed, used) {
+				t.Fatalf("indexed portable replay differs from actual Go control: %v", err)
+			}
 			for _, changed := range [][]string{
 				{"ORDER=1", "DEFAULT", "EMPTY="}, {"ORDER=2", "ORDER=1", "DEFAULT", "EMPTY="},
 				{"ORDER=1", "ORDER=2", "EMPTY="}, {"ORDER=1", "ORDER=2", "DEFAULT", "EMPTY=RET"},
@@ -85,6 +90,13 @@ func TestCPPOriginalReplayOrderedDriverDefinitionsFiveActualArchitectures(t *tes
 				other, _, err := replayDiscoveryOriginalCPP(&restored, restored.Units[0], nil, changed)
 				if err == nil && other.Output == observation.Output {
 					t.Fatalf("independently changed ordered driver inputs silently retained output: %v", changed)
+				}
+				indexed, indexedUsed, indexedErr := replayDiscoveryOriginalCPPWithIndex(&restored, restored.Units[0], nil, changed, index)
+				if err != nil || indexedErr != nil || !reflect.DeepEqual(indexed, other) {
+					t.Fatalf("warm lexer index changed the complete ordered driver replay: plain=%v indexed=%v", err, indexedErr)
+				}
+				if len(indexedUsed) != 1 {
+					t.Fatal("warm lexer index changed actual source consumption")
 				}
 			}
 			t.Logf("actual %s %s original_source_sha=%s object_sha=%s full_output_sha=%s",

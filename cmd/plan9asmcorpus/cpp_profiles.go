@@ -73,7 +73,15 @@ func planDiscoveryCPPFeaturePairWithIndex(plan *discoveryOrdinarySelectionPlan, 
 	if unit == nil {
 		return nil, fmt.Errorf("source-required ASM pair lacks its exact CPP unit: %s", asmFile)
 	}
-	directives, err := discoveryCPPUnitDirectives(plan.CPPInputs, *unit, make(map[string]bool))
+	registration := plan.CPPInputs
+	if sourceIndex != nil && registration.Protocol == discoveryReplayCPPInputsProtocol {
+		var err error
+		registration, err = indexDiscoveryReplayCPPSources(registration, sourceIndex)
+		if err != nil {
+			return nil, err
+		}
+	}
+	directives, err := discoveryCPPUnitDirectives(registration, *unit, make(map[string]bool))
 	if err != nil {
 		return nil, err
 	}
@@ -119,7 +127,7 @@ func planDiscoveryCPPFeaturePairWithIndex(plan *discoveryOrdinarySelectionPlan, 
 		}
 		var keys map[string]bool
 		if fullReplay {
-			observation, _, err := replayDiscoveryOriginalCPP(plan.CPPInputs, *unit, nil, defines)
+			observation, _, err := replayDiscoveryOriginalCPPWithIndex(plan.CPPInputs, *unit, nil, defines, sourceIndex)
 			if err != nil {
 				// No fabricated native header is a planning input. Every legal
 				// CPU proposal is retained when actual header presence is needed;
@@ -144,7 +152,7 @@ func planDiscoveryCPPFeaturePairWithIndex(plan *discoveryOrdinarySelectionPlan, 
 						return false, queryErr
 					}
 					observedHeader = header
-					observation, _, err = replayDiscoveryOriginalCPP(plan.CPPInputs, *unit, header, defines)
+					observation, _, err = replayDiscoveryOriginalCPPWithIndex(plan.CPPInputs, *unit, header, defines, sourceIndex)
 				}
 				if err != nil {
 					return false, fmt.Errorf("full original CPP planning replay: %w", err)

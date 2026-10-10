@@ -748,6 +748,11 @@ Eviction only affects cost. Every query still checks current public projections,
 the complete source graph, generated-header roles and cancellation. Do not cache
 those validation results or remove CPU/source-pair proposals. Retain mutation,
 eviction, concurrent-isolation and allocation regressions when changing this path.
+JSON-restored reports use that same invocation-owned parser index for resource
+registration, active replay and condition-free queries. Each query owns fresh
+source maps and still validates every public projection and graph relationship.
+Immutable text may share backing bytes, never a caller's mutable string pointer
+or directive slice. No private index is serialized into reports or the ledger.
 
 Macro-only and inactive CPP variants may produce a symbol-free LLVM object only
 after the actual Go assembler accepts the original source, creates a nonempty
