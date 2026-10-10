@@ -48,8 +48,13 @@ func TestCPPHeaderPlanningQueryGoOnlyTagsActualEmbed(t *testing.T) {
 		t.Fatal(err)
 	}
 	targets := []string{"darwin/amd64", "linux/amd64", "windows/amd64"}
+	// Each target retains all original baseline, embed and combined-tag
+	// queries, followed by nine final object consumers. The former three-
+	// minute whole-candidate budget expired during the last target's planning.
+	// This is a correctness-fixture budget, not a production or benchmark limit.
+	started := time.Now()
 	matrix, _, configs, err := runDiscoveryCandidate(discoveryCorpusConfig{
-		RepoRoot: root, Translator: binary, LLC: llc, Targets: targets, CandidateTimeout: 3 * time.Minute,
+		RepoRoot: root, Translator: binary, LLC: llc, Targets: targets, CandidateTimeout: 6 * time.Minute,
 	}, candidate, filepath.Join(t.TempDir(), "candidate"))
 	if err != nil {
 		t.Fatalf("Go-only tag planning must bind actual original dependency embeds and registration: %v", err)
@@ -135,5 +140,6 @@ func TestCPPHeaderPlanningQueryGoOnlyTagsActualEmbed(t *testing.T) {
 			}
 		})
 	}
-	t.Logf("query-tag closure: %d actual metadata queries, %d LLVM22 objects, %d targets", len(seen), matrix.Success, len(targets))
+	t.Logf("query-tag closure: %d actual metadata queries, %d LLVM22 objects, %d targets; candidate elapsed %s",
+		len(seen), matrix.Success, len(targets), time.Since(started))
 }
