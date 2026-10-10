@@ -32,6 +32,11 @@ func arm64RawWordPreflightError(instruction Instr) error {
 // uint32. Wide MOV/bitmask constants can satisfy that row; arbitrary C_VCON
 // values cannot, even when their low word happens to encode a valid opcode.
 func arm64RawWordValue(instruction Instr) (uint32, error) {
+	for _, operand := range instruction.Args {
+		if err := unresolvedSymbolicImmediateError(operand); err != nil {
+			return 0, fmt.Errorf("arm64 WORD: %w", err)
+		}
+	}
 	if len(instruction.Args) != 1 || instruction.Args[0].Kind != OpImm ||
 		instruction.Args[0].ImmRaw != "" || instruction.Args[0].ImmIsFloat {
 		return 0, fmt.Errorf("arm64 WORD expects exactly one resolved integer constant: %q", instruction.Raw)

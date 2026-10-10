@@ -180,8 +180,16 @@ func TestARM64MRSCompleteGoSystemRegisterTable(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if count := strings.Count(ir, `asm sideeffect "mrs $0, `); count != reads-1 {
+			// NZCV is the modeled flag state; RNDR/RNDRRS use observable
+			// intrinsics that also define NZCV. Every other read is native MRS.
+			if count := strings.Count(ir, `asm sideeffect "mrs $0, `); count != reads-3 {
 				t.Fatalf("real reads=%d, Go-readable registers=%d", count, reads)
+			}
+			for _, intrinsic := range []string{"rndr", "rndrrs"} {
+				want := "call { i64, i1 } @llvm.aarch64." + intrinsic + "()"
+				if count := strings.Count(ir, want); count != 1 {
+					t.Fatalf("%s native RNG reads=%d, want 1", intrinsic, count)
+				}
 			}
 			if count := strings.Count(ir, `asm sideeffect "msr `); count != writes-1 {
 				t.Fatalf("real writes=%d, Go-writable registers=%d", count, writes)
