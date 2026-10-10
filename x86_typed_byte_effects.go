@@ -111,6 +111,9 @@ func x86TypedGPByteEffect(op Op, ins Instr, arch string) (x86TypedByteEffect, bo
 	if effect, known, err := x86TypedScalarShiftByteEffect(op, ins, arch); known {
 		return effect, known, err
 	}
+	if effect, known, err := x86TypedScalarBitCountByteEffect(op, ins, arch); known {
+		return effect, known, err
+	}
 	if effect, known, err := x86TypedConditionalMoveByteEffect(op, ins, arch); known {
 		return effect, known, err
 	}

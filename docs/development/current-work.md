@@ -147,6 +147,15 @@ with unrelated speculative implementation. Keep correctness gates unchanged.
   comparisons and requires actual NEP for every family. Its independent RED/
   GREEN passes. Both fresh full Linux NM roots passed at published `cb8b2ad3`
   (678.94s/679.10s), retaining every original comparison.
+- Shard 5's BloomFilter result proof exposed missing scalar bit-count effects,
+  not a missing LLVM instruction. Independent original-Go REDs cover all nine
+  POPCNT/LZCNT/TZCNT W/L/Q forms and their defined FLAGS. Shape, lowering and
+  byte effects now share one typed family, reducing production code by 25
+  lines. Unknown numerical/pointer/AUTO/native inputs and undefined FLAGS
+  remain rejected. Forty-five current-Go result/family regression roots and
+  fifteen Go 1.20 roots pass, including 30 five-target three-API objects and
+  existing runtime checks. CLI opcode extraction also passes. The discovering
+  external candidate remains failed until its complete current-source replay.
 - CI policy's old shared-batch-cache fixture is updated for the refill queue:
   caller cache isolation, exhaustive priority order, sticky shard failures and
   a mandatory final aggregate. All 36 Node tests and the three actual-child
@@ -208,6 +217,13 @@ and clean only exact owned caches after every consumer has closed.
   and one failed `carte7000/crypto` replay. The missing go-directive refusal
   is gone, but complete original TEXT/frame observation still fails. The
   disposable validator closed and its owned cache was cleaned.
+- Detached `4c90703f` in that reused tree (active):
+  `_out/module-exhaustive-4c90703f/` is a complete main-module unit run with
+  actual package/root inventories, 32 root partitions and two workers. Do not
+  change its source while it runs. Host-inapplicable runtime roots retain
+  explicit skip counters and still require their cross-runtime counterparts;
+  this is not a native Linux, nested CLI, external corpus or current-head pass.
+  The later scalar bit-count change is not part of this frozen run.
 
 The older whole-module run at `044bb668` failed: 18/20 packages passed, root
 had one obsolete assertion failure and the corpus driver had three fixture

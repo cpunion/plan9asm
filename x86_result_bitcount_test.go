@@ -45,6 +45,14 @@ func TestX86ABI0ResultBitCountCompleteByteEffects(t *testing.T) {
 
 func TestX86ABI0ResultBitCountFlagsAndUnknownBytes(t *testing.T) {
 	for _, family := range []string{"POPCNT", "LZCNT", "TZCNT"} {
+		t.Run(family+"/opaque-pointer-is-not-numerical", func(t *testing.T) {
+			body := "MOVQ x+0(FP),AX\n" + family + "Q AX,BX\nMOVQ BX,ret0+8(FP)\nRET"
+			_, file, sig, source := x86ResultInitializationFixture(t, "amd64", "func Value(x *byte) uint64", body)
+			goAssemblerOracleOutput(t, "amd64", source, "", true)
+			if err := CheckX86ABI0ResultInitialization(file.Funcs[0], sig, "amd64"); !errors.Is(err, ErrProbeNeedsContext) {
+				t.Fatalf("opaque pointer became countable numerical bytes: %v", err)
+			}
+		})
 		for _, condition := range []string{"CC", "CS", "EQ", "NE", "HI", "LS", "GE", "LT", "GT", "LE", "MI", "PL", "OC", "OS", "PC", "PS"} {
 			t.Run(family+"/"+condition, func(t *testing.T) {
 				body := "MOVL $3,AX\nCMPL AX,$0\n" + family + "L AX,BX\nSET" + condition + " ret0+0(FP)\nRET"

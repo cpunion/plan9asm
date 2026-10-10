@@ -237,7 +237,7 @@ func (c *amd64Ctx) lowerArith(op Op, ins Instr) (ok bool, terminated bool, err e
 	if ok, terminated, err := c.lowerADX(op, ins); ok {
 		return ok, terminated, err
 	}
-	if ok, terminated, err := c.lowerLeadingZeroCount(op, ins); ok {
+	if ok, terminated, err := c.lowerScalarBitCount(op, ins); ok {
 		return ok, terminated, err
 	}
 	if ok, terminated, err := c.lowerBMI2VariableShift(op, ins); ok {
@@ -1038,93 +1038,6 @@ func (c *amd64Ctx) lowerArith(op Op, ins Instr) (ok bool, terminated bool, err e
 		default:
 			return true, false, fmt.Errorf("amd64 %s unsupported src: %q", op, ins.Raw)
 		}
-
-	case "POPCNTW", "POPCNTL", "POPCNTQ":
-		// All three widths use Go 1.27's yml_rl table: a Yml GP-or-memory
-		// source and a Yrl GP destination. POPCNTQ requires 64-bit mode.
-		if len(ins.Args) != 2 || ins.Args[1].Kind != OpReg {
-			return true, false, fmt.Errorf("amd64 %s expects src, dstReg: %q", op, ins.Raw)
-		}
-		if op == "POPCNTQ" && c.goarch != "amd64" {
-			return true, false, fmt.Errorf("amd64 %s requires GOARCH=amd64: %q", op, ins.Raw)
-		}
-		validFullReg := func(r Reg) bool {
-			return isX86YrlRegisterForArch(r, c.goarch)
-		}
-		if !validFullReg(ins.Args[1].Reg) {
-			return true, false, fmt.Errorf("amd64 %s destination is outside Go 1.27's Yrl class: %q", op, ins.Raw)
-		}
-		src := ins.Args[0]
-		switch src.Kind {
-		case OpReg:
-			if !validFullReg(src.Reg) {
-				return true, false, fmt.Errorf("amd64 %s source is outside Go 1.27's Yml class: %q", op, ins.Raw)
-			}
-		case OpMem, OpFP, OpSym:
-		default:
-			return true, false, fmt.Errorf("amd64 %s source is outside Go 1.27's Yml class: %q", op, ins.Raw)
-		}
-		bits := 64
-		typ := I64
-		switch op {
-		case "POPCNTW":
-			bits, typ = 16, I16
-		case "POPCNTL":
-			bits, typ = 32, I32
-		}
-		srcv, err := c.evalIntSized(src, typ)
-		if err != nil {
-			return true, false, err
-		}
-		call := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = call i%d @llvm.ctpop.i%d(i%d %s)\n", call, bits, bits, bits, srcv)
-		zero := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = icmp eq i%d %s, 0\n", zero, bits, srcv)
-		fmt.Fprintf(c.b, "  store i1 %%%s, ptr %s\n", zero, c.flagsZSlot)
-		c.clearX86StatusFlags(x86StatusAll &^ x86StatusZF)
-		return true, false, c.storeRegSized(ins.Args[1].Reg, typ, "%"+call)
-
-	case "TZCNTW", "TZCNTL", "TZCNTQ":
-		// All widths share Go 1.27's ycrc32l table: Yml source and Yrl
-		// destination. TZCNTQ requires 64-bit mode.
-		if len(ins.Args) != 2 || ins.Args[1].Kind != OpReg {
-			return true, false, fmt.Errorf("amd64 %s expects src, dstReg: %q", op, ins.Raw)
-		}
-		if op == "TZCNTQ" && c.goarch != "amd64" {
-			return true, false, fmt.Errorf("amd64 TZCNTQ requires GOARCH=amd64: %q", ins.Raw)
-		}
-		if !isX86YrlRegisterForArch(ins.Args[1].Reg, c.goarch) {
-			return true, false, fmt.Errorf("amd64 %s destination is outside Go 1.27's Yrl class: %q", op, ins.Raw)
-		}
-		source := ins.Args[0]
-		if source.Kind == OpReg {
-			if !isX86YrlRegisterForArch(source.Reg, c.goarch) {
-				return true, false, fmt.Errorf("amd64 %s source is outside Go 1.27's Yml class: %q", op, ins.Raw)
-			}
-		} else if !isAMD64MemoryOperand(source) {
-			return true, false, fmt.Errorf("amd64 %s source is outside Go 1.27's Yml class: %q", op, ins.Raw)
-		}
-		bits := 64
-		typ := I64
-		switch op {
-		case "TZCNTW":
-			bits, typ = 16, I16
-		case "TZCNTL":
-			bits, typ = 32, I32
-		}
-		sourceValue, err := c.evalIntSized(source, typ)
-		if err != nil {
-			return true, false, err
-		}
-		count := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = call i%d @llvm.cttz.i%d(i%d %s, i1 false)\n", count, bits, bits, bits, sourceValue)
-		carry := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = icmp eq i%d %s, 0\n", carry, bits, sourceValue)
-		fmt.Fprintf(c.b, "  store i1 %%%s, ptr %s\n", carry, c.flagsCFSlot)
-		zero := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = icmp eq i%d %%%s, 0\n", zero, bits, count)
-		fmt.Fprintf(c.b, "  store i1 %%%s, ptr %s\n", zero, c.flagsZSlot)
-		return true, false, c.storeRegSized(ins.Args[1].Reg, typ, "%"+count)
 
 	case "BSFW", "BSRW":
 		if len(ins.Args) != 2 || ins.Args[1].Kind != OpReg {

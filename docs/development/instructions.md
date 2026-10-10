@@ -515,6 +515,17 @@ callee ABI nor its native frame, continuation and result transport.
 
 ## Semantic and raw-encoding checks
 
+The nine scalar POPCNT/LZCNT/TZCNT W/L/Q forms share one Go-table grammar,
+lowerer and typed byte-effect descriptor. Inputs are read before destination
+overwrite; W preserves upper GP bytes and L zero-extends in mode64. POPCNT
+defines all six status flags, whereas LZCNT/TZCNT define only CF/ZF and kill
+knowledge of the others. Numerical result/caller consumers must check source
+bytes independently; a count cannot turn an opaque pointer, unbound native
+read or unknown AUTO byte into numerical knowledge. BSF/BSR's zero-input
+undefined result and packed counts remain separate families. Keep complete
+Go encoder-row checks, original accept/reject witnesses, result/flag negatives,
+five-target objects and runtime regressions together when changing the model.
+
 ARM64 RNDR/RNDRRS reads share the complete MRS/MOVD C_SPR-to-C_ZREG grammar
 and raw Rt/reseed decoder. Named aliases must infer the same `+rand` feature
 and define the same four virtual NZCV bits as WORD, including ZR/dead reads.
