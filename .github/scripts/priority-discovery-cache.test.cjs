@@ -10,7 +10,8 @@ const source = fs.readFileSync(
   'utf8',
 );
 
-function runCorpusFixture(t, failedShard = '', priorityShards = '', phaseEvents = '0') {
+function runCorpusFixture(t, failedShard = '', priorityShards = '', phaseEvents = '0',
+  aggregateFails = false) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'plan9asm-cache-test-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const scripts = path.join(root, 'scripts');
@@ -19,16 +20,24 @@ function runCorpusFixture(t, failedShard = '', priorityShards = '', phaseEvents 
   fs.mkdirSync(bin);
   const calls = path.join(root, 'calls');
   const verified = path.join(root, 'verified');
+  const dispatch = path.join(root, 'dispatch');
   const caches = path.join(root, 'caches');
   fs.mkdirSync(caches);
+  const callerCache = path.join(root, 'caller-cache');
+  fs.mkdirSync(callerCache);
+  fs.writeFileSync(path.join(callerCache, 'keep'), 'caller-owned');
   const runner = path.join(scripts, 'check-discovered-library-corpus.sh');
   fs.writeFileSync(runner, source, { mode: 0o755 });
   fs.writeFileSync(path.join(bin, 'xargs'), `#!/usr/bin/env bash
 set -euo pipefail
+if [[ -n "\${PLAN9ASM_DISCOVERY_BUILD_CACHE+x}" ]]; then
+  echo 'queue inherited a shared build cache' >&2
+  exit 91
+fi
+printf '%s\\n' "$@" >> "$FIXTURE_DISPATCH"
 status=0
 while IFS= read -r shard; do
-  test -d "$PLAN9ASM_DISCOVERY_BUILD_CACHE"
-  printf '%s\t%s\n' "$shard" "$PLAN9ASM_DISCOVERY_BUILD_CACHE" >> "$FIXTURE_CALLS"
+  printf '%s\\n' "$shard" >> "$FIXTURE_CALLS"
   if [[ "$shard" == "$FIXTURE_FAILED_SHARD" ]]; then
     status=123
   fi
@@ -38,6 +47,7 @@ exit "$status"
   fs.writeFileSync(path.join(scripts, 'verify-discovered-library-corpus.sh'), `#!/usr/bin/env bash
 set -euo pipefail
 printf 'verified\n' >> "$FIXTURE_VERIFIED"
+test "$FIXTURE_AGGREGATE_FAIL" = 0
 `, { mode: 0o755 });
   const result = spawnSync('bash', [runner, 'all', '5'], {
     encoding: 'utf8',
@@ -49,34 +59,44 @@ printf 'verified\n' >> "$FIXTURE_VERIFIED"
       PLAN9ASM_DISCOVERY_PARALLELISM: '2',
       PLAN9ASM_DISCOVERY_PRIORITY_SHARDS: priorityShards,
       PLAN9ASM_DISCOVERY_EVENTS: phaseEvents,
+      PLAN9ASM_DISCOVERY_BUILD_CACHE: callerCache,
       FIXTURE_CALLS: calls,
+      FIXTURE_DISPATCH: dispatch,
       FIXTURE_VERIFIED: verified,
       FIXTURE_FAILED_SHARD: failedShard,
+      FIXTURE_AGGREGATE_FAIL: aggregateFails ? '1' : '0',
     },
   });
   assert.ifError(result.error);
   const records = fs.existsSync(calls)
     ? fs.readFileSync(calls, 'utf8').trim().split('\n')
-      .map((line) => line.split('\t'))
     : [];
-  return { result, records, caches, verified };
+  const dispatchArgs = fs.existsSync(dispatch)
+    ? fs.readFileSync(dispatch, 'utf8').trim().split('\n')
+    : [];
+  assert.equal(fs.readFileSync(path.join(callerCache, 'keep'), 'utf8'), 'caller-owned');
+  return { result, records, dispatchArgs, runner, root, caches, verified };
 }
 
-test('discovery shares a cache only within each bounded parallel batch', (t) => {
-  const { result, records, caches, verified } = runCorpusFixture(t);
+// The Go TestDiscoveryAllQueue* fixtures execute real concurrent children and
+// prove immediate refill. This cheap policy fixture checks the shell handoff,
+// not the old batch barrier or the corpus process's own cache implementation.
+test('discovery dispatches one bounded refill queue without a shared caller cache', (t) => {
+  const { result, records, dispatchArgs, runner, root, caches, verified } = runCorpusFixture(t);
   assert.equal(result.status, 0, result.stderr);
-  assert.deepEqual(records.map(([shard]) => shard), ['0', '1', '2', '3', '4']);
-  assert.equal(records[0][1], records[1][1]);
-  assert.equal(records[2][1], records[3][1]);
-  assert.equal(new Set(records.map(([, cache]) => cache)).size, 3);
+  assert.deepEqual(records, ['0', '1', '2', '3', '4']);
+  assert.deepEqual(dispatchArgs, [
+    '-P', '2', '-I', '{}', runner, '{}', '5',
+    path.join(root, '_out/discovered-library-corpus/shard-{}.json'),
+  ]);
   assert.deepEqual(fs.readdirSync(caches), []);
   assert.equal(fs.readFileSync(verified, 'utf8'), 'verified\n');
 });
 
-test('failed discovery batches keep failures, clean caches and run the final gate', (t) => {
+test('failed discovery shards retain failures, drain the queue and run the final gate', (t) => {
   const { result, records, caches, verified } = runCorpusFixture(t, '2');
   assert.notEqual(result.status, 0);
-  assert.deepEqual(records.map(([shard]) => shard), ['0', '1', '2', '3', '4']);
+  assert.deepEqual(records, ['0', '1', '2', '3', '4']);
   assert.deepEqual(fs.readdirSync(caches), []);
   assert.equal(fs.readFileSync(verified, 'utf8'), 'verified\n');
 });
@@ -84,11 +104,15 @@ test('failed discovery batches keep failures, clean caches and run the final gat
 test('priority shards run first without omitting or repeating other shards', (t) => {
   const { result, records, caches, verified } = runCorpusFixture(t, '', '4,2');
   assert.equal(result.status, 0, result.stderr);
-  assert.deepEqual(records.map(([shard]) => shard), ['4', '2', '0', '1', '3']);
-  assert.equal(records[0][1], records[1][1]);
-  assert.equal(records[2][1], records[3][1]);
-  assert.equal(new Set(records.map(([, cache]) => cache)).size, 3);
+  assert.deepEqual(records, ['4', '2', '0', '1', '3']);
   assert.deepEqual(fs.readdirSync(caches), []);
+  assert.equal(fs.readFileSync(verified, 'utf8'), 'verified\n');
+});
+
+test('successful shards cannot hide a failed final aggregate', (t) => {
+  const { result, records, verified } = runCorpusFixture(t, '', '', '0', true);
+  assert.notEqual(result.status, 0);
+  assert.deepEqual(records, ['0', '1', '2', '3', '4']);
   assert.equal(fs.readFileSync(verified, 'utf8'), 'verified\n');
 });
 
