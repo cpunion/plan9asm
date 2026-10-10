@@ -16,7 +16,7 @@ instruction-family audits until this repair batch has run in CI. Preserve the
 separate scalar-FMA development branch; it is not part of this batch.
 
 Published `cb8b2ad3` is running fork CI 38018079008. Policy preflight passed;
-shards 29/39 failed and four priority shards are still running. Let it finish before pushing
+shards 5/29/39 failed and three priority shards are still running. Let it finish before pushing
 the next repair batch. No current-head corpus or full CI pass is established.
 
 Earlier `c09eff1e` failed run 37711752851: priority shards 5/29/38/39 failed,
@@ -119,7 +119,23 @@ with unrelated speculative implementation. Keep correctness gates unchanged.
   shared role comparison now retains that distinction, without changing source
   files, declaration/ZIP hashes or revocation. Eighteen three-API LLVM 22 O0/O2
   objects, current-Go source regressions and actual Go 1.20 checks pass. This
-  source-role repair is not an original-library pass; its replay remains due.
+  source-role repair is not an original-library pass. Frozen `3145792e` Linux
+  first-party controls pass, but the original mirror still fails complete
+  assembly TEXT/frame observation. Its terminal report and clean tool stamps
+  are retained; no ledger status changed.
+- Shard 5 exposed an inert raw-NOP field being sent to the physical memory
+  handoff. Independent original-Go REDs cover both x86 modes, the complete
+  ModRM/SIB axis, prefixes, five targets and all three APIs. NOP now retains
+  its actual byte length without acquiring a memory or PC-address effect.
+  The pinned decoder's absent REX.W NOP row has a bounded opcode-specific
+  adapter. Invalid prefixes, reserved extensions, interior branch targets and
+  real-memory handoff mismatches remain rejected. The 614 encoding witnesses,
+  30 LLVM 22 objects, portable state oracle and related regressions pass:
+  33 current-Go roots, seven Go 1.20 roots, vet and the unchanged five-target
+  official classification gate. Rosetta's original-register
+  NOP SIGILL is retained as a failed diagnostic; required native Linux
+  AMD64/386 roots, not Rosetta, own the original execution gate. Original
+  external replay and current-head CI remain required.
 - ARM64 FPCR/FPSR, NZCV, scalar binary operations and RNDR named/raw effects
   have independent original-Go and LLVM runtime evidence. Min/max's original
   full Linux run failed at the 45-minute deadline, without an observed value
@@ -177,14 +193,21 @@ and clean only exact owned caches after every consumer has closed.
   width gate but fails a native FP span including padding. The separate
   `_out/compare-library-replay/` BLAS failure is now at floating result proof,
   not CMP/TEST alias widths. No passes were promoted; owned caches were cleaned.
-  `_out/driver-exhaustive-2ec/` is an active two-worker, complete 704-root unit
-  rerun. The integration tree retains its prior 45-minute full-package timeout
+  `_out/driver-exhaustive-2ec/` is terminal: the two-worker complete 704-root
+  unit rerun passed every root and all 2,826 subtests/seeds, with zero skips.
+  This proves frozen `2ec32e65`, not later source changes. The integration tree
+  retains its prior 45-minute full-package timeout
   in `_out/ci-closure/cpp-constants/full-driver.log`; it was not a pass.
 - `codex/pr40-refill-sample-20261010`, `02c9ebbb` (terminal):
   `_out/refill-sample/` retains the complete fixed 53-candidate, 37-shard sample.
   Every consumer closed and owned caches were cleaned. Its historical partial
   shard reports cannot update the current-head ledger. This idle worktree may
   now be reused only after preserving its artifacts and checking the new owner.
+- Detached `3145792e` in the reused sample tree (terminal):
+  `_out/default-language-replay/` retains passing Linux source/object controls
+  and one failed `carte7000/crypto` replay. The missing go-directive refusal
+  is gone, but complete original TEXT/frame observation still fails. The
+  disposable validator closed and its owned cache was cleaned.
 
 The older whole-module run at `044bb668` failed: 18/20 packages passed, root
 had one obsolete assertion failure and the corpus driver had three fixture

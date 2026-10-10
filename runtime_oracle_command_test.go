@@ -108,6 +108,7 @@ func TestRuntimeOracleCommandConsumersRetainOwnedExecution(t *testing.T) {
 		"runtime_oracle_fault_core_unix_test.go",
 		"amd64_go_caller_lea_test.go",
 		"amd64_raw_operand_handoff_test.go",
+		"amd64_raw_nop_handoff_test.go",
 		"amd64_scalar_lane_original_go_test.go",
 		"amd64_scalar_lane_mode32_test.go",
 		"amd64_source_integer_address_index_test.go",

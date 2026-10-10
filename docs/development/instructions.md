@@ -142,6 +142,16 @@ Environment and packed-BCD consumers preserve the pointer's address space
 through every load, store and GEP. These conversions confer no new caller,
 native-memory, extent, raw-return or source-syntax permissions.
 
+Raw x86 NOP's ModRM/SIB, segment and PC-relative fields encode length, not a
+memory access. Validate the complete instruction and prefixes before consuming
+it as an operand-free NOP, retaining its original length for CFG boundaries.
+The pinned decoder's missing REX.W 0F 1F /0 row has a narrowly scoped width
+adapter; it cannot rewrite another opcode, reserved extension or invalid
+prefix. Keep real-memory handoff failures and XCHG/PAUSE effects unchanged.
+Go NOPW/NOPL rows, original literal bytes, five-target objects and portable LLVM
+state tests are distinct from required native Linux AMD64/386 execution.
+Rosetta rejects some valid register NOPs and cannot certify that native axis.
+
 An x86 raw-return caller-region producer is a separate, bounded source proof,
 not a pointer-type or `noescape` nonalias promise. It requires the same actual
 selected Go/ASM inventory, typed syntax, actual numerical/pointer sizes and

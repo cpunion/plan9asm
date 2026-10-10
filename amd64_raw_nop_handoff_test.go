@@ -72,7 +72,11 @@ func TestX86RawNOPPhysicalFieldsAreInert(t *testing.T) {
 		for _, code := range forms {
 			t.Run(fmt.Sprintf("mode%d/%x", mode, code), func(t *testing.T) {
 				physical, err := x86asm.Decode(code, mode)
-				if err != nil || physical.Op != x86asm.NOP || physical.Len != len(code) {
+				// The independent literal object and runtime oracle cover the
+				// pinned decoder's missing REX.W NOP row; do not use the
+				// production adapter as its own acceptance oracle.
+				missingWidth := mode == 64 && code[0]&0xf8 == 0x48
+				if !missingWidth && (err != nil || physical.Op != x86asm.NOP || physical.Len != len(code)) {
 					t.Fatalf("independent NOP encoding: %+v %v", physical, err)
 				}
 				instructions, err := decodeX86RawDirectiveGroup(code, mode, 0, "NOP witness", map[string]bool{})
@@ -88,12 +92,13 @@ func TestX86RawNOPPhysicalFieldsAreInert(t *testing.T) {
 	}
 }
 
-func TestX86RawNOPGoEncoderAndPaddingWitnesses(t *testing.T) {
+func TestX86RawNOPGoEncoderWitnesses(t *testing.T) {
 	table, err := os.ReadFile(filepath.Join(runtime.GOROOT(), "src/cmd/internal/obj/x86/asm6.go"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, registration := range []string{
+		"var ydivl = []ytab{\n\t{Zm_o, 2, argList{Yml}},\n}",
 		"{ANOPW, ydivl, Pe, opBytes{0x0f, 0x1f, 00}}",
 		"{ANOPL, ydivl, Px, opBytes{0x0f, 0x1f, 00}}",
 	} {
@@ -120,10 +125,21 @@ func TestX86RawNOPDoesNotEraseOtherEffectsOrBoundaries(t *testing.T) {
 	for _, mode := range []int{32, 64} {
 		for _, code := range [][]byte{
 			{0xf0, 0x90}, {0xf0, 0x0f, 0x1f, 0x00},
+			{0xf0, 0x48, 0x0f, 0x1f, 0x00},
 			{0x0f}, {0x0f, 0x1f}, {0x0f, 0x1f, 0x84, 0x00},
+			{0x48, 0x0f, 0x1f, 0x84, 0x00},
 		} {
 			if _, err := decodeX86RawDirectiveGroup(code, mode, 0, "invalid NOP", map[string]bool{}); err == nil {
 				t.Fatalf("mode %d accepted invalid/truncated bytes %x", mode, code)
+			}
+		}
+		for extension := byte(1); extension < 8; extension++ {
+			code := []byte{0x0f, 0x1f, extension << 3}
+			if _, err := decodeX86RawDirectiveGroup(code, mode, 0, "reserved NOP extension", map[string]bool{}); err == nil {
+				t.Fatalf("reserved /%d NOP accepted", extension)
+			}
+			if _, ok := decodedX86REXWNOP(append([]byte{0x48}, code...)); ok {
+				t.Fatalf("REX.W adapter accepted reserved /%d", extension)
 			}
 		}
 		for _, code := range [][]byte{{0xf3, 0x90}, {0x87, 0xc0}, {0x8b, 0x00}} {

@@ -2606,6 +2606,11 @@ func decodeX86RawDirectiveGroupWithOpaque(
 			}
 
 			inst, err := x86asm.Decode(code[offset:], mode)
+			if err != nil && mode == 64 {
+				if nop, ok := decodedX86REXWNOP(code[offset:]); ok {
+					inst, err = nop, nil
+				}
+			}
 			if err != nil || inst.Len <= 0 || inst.Op == 0 {
 				if err == nil {
 					if inst.Len <= 0 {
@@ -2626,6 +2631,16 @@ func decodeX86RawDirectiveGroupWithOpaque(
 			syntax, err := decodedX86GoSyntax(inst, code[offset:offset+inst.Len])
 			if err != nil {
 				return nil, fmt.Errorf("convert decoded raw x86 instruction at instruction %d byte %d: %w: %q", start, offset, err, rawGroup)
+			}
+			if inst.Op == x86asm.NOP {
+				// Prefix/encoding checks above still apply. A multi-byte NOP's
+				// ModRM/SIB fields encode its length, not a memory access or
+				// PC-relative reference. Keep that length for branch boundaries,
+				// but do not send inert fields to the physical memory handoff.
+				instruction := Instr{Op: "NOP", Raw: fmt.Sprintf("NOP /* decoded from %s */", rawGroup)}
+				decodedByOffset[offset] = x86RawDecodedInstruction{length: inst.Len, instrs: []Instr{instruction}}
+				offset += inst.Len
+				continue
 			}
 			opName := strings.Fields(syntax)[0]
 			op := Op(strings.ToUpper(opName))
@@ -10419,7 +10434,7 @@ func decodedX86GoSyntax(inst x86asm.Inst, encoding []byte) (string, error) {
 		return "", err
 	}
 	for _, argument := range inst.Args {
-		if memory, ok := argument.(x86asm.Mem); ok && memory.Base == x86asm.EIP {
+		if memory, ok := argument.(x86asm.Mem); ok && memory.Base == x86asm.EIP && inst.Op != x86asm.NOP {
 			// The pinned decoder leaves PCRel unset for 67-prefixed EIP
 			// addressing. Its wrapped native instruction address is not a
 			// numerical GP input or a proved source-group RIP relocation.

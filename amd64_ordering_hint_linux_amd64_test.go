@@ -10,6 +10,27 @@ import (
 // Required Linux/amd64 CI runs the actual static ELF32 objects directly. The
 // host/ELF checks reject emulation; no local Rosetta run establishes this axis.
 func TestCrossLinuxRuntimeMatrixX86OrderingHintsNative386(t *testing.T) {
+	declarations, assembly, driver, reference := x86OrderingHintRuntimeFixture(32)
+	x86OrderingHintNative386(t, declarations, assembly, driver, reference)
+}
+
+func TestCrossLinuxRuntimeMatrixX86RawNOPNative386(t *testing.T) {
+	declarations, assembly, driver, reference := x86RawNOPRuntimeFixture(32)
+	x86OrderingHintNative386(t, declarations, assembly, driver, reference)
+}
+
+func TestCrossLinuxRuntimeMatrixX86RawNOPOriginalAMD64(t *testing.T) {
+	x87IA32RequireNativeHost(t)
+	declarations, assembly, driver, _ := x86RawNOPRuntimeFixture(64)
+	original := x86OrderingHintBuildOriginal(t, t.TempDir(), "linux", "amd64", declarations, assembly, driver)
+	if output := x86FloatCompareCaptureCommand(t, exec.Command(original)); string(output) != "original ordering observations 256\n" {
+		t.Fatalf("actual original Go AMD64 NOP state/no-memory oracle: %q", output)
+	}
+	x87IA32RequireNativeHost(t)
+}
+
+func x86OrderingHintNative386(t *testing.T, declarations, assembly, driver, reference string) {
+	t.Helper()
 	x87IA32RequireNativeHost(t)
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
@@ -19,7 +40,6 @@ func TestCrossLinuxRuntimeMatrixX86OrderingHintsNative386(t *testing.T) {
 	if err != nil {
 		t.Fatal("required native IA32 static C compiler:", err)
 	}
-	declarations, assembly, driver, reference := x86OrderingHintRuntimeFixture(32)
 	dir := t.TempDir()
 	original := x86OrderingHintBuildOriginal(t, dir, "linux", "386", declarations, assembly, driver)
 	sealed, err := x87IA32StaticExecutable(original)
