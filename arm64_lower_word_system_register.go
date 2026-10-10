@@ -33,6 +33,9 @@ func arm64EncodedSystemRegisterName(encoding uint16) string {
 }
 
 func (c *arm64Ctx) lowerRawSystemRegister(form arm64RawSystemRegister) error {
+	if control, matched := arm64RawFPControl(form); matched {
+		return c.lowerARM64FPControl(control)
+	}
 	sysreg := arm64EncodedSystemRegisterName(form.encoding)
 	if form.read {
 		dst := ZR

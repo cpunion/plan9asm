@@ -6,6 +6,12 @@ import (
 )
 
 func (c *arm64Ctx) lowerArith(op Op, ins Instr) (ok bool, terminated bool, err error) {
+	if form, handled, err := parseARM64FPControl(op, ins); handled {
+		if err != nil {
+			return true, false, err
+		}
+		return true, false, c.lowerARM64FPControl(form)
+	}
 	if ok, terminated, err := c.lowerARM64GPImmediate(op, ins); ok {
 		return ok, terminated, err
 	}

@@ -155,8 +155,6 @@ func TestARM64TypedNativeEffectsUnknownStateRemainsContext(t *testing.T) {
 		"MRS DCZID_EL0,g",
 		"MRS DCZID_EL0,R9\nB (R9)",
 		"MRS NZCV,R0",
-		"MRS FPCR,R0",
-		"MRS FPSR,R0",
 		"MRS RNDR,R0",
 		"MRS SCTLR_EL1,R0",
 		"MSR R0,TPIDR_EL0",

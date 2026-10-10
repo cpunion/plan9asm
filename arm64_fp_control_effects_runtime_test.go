@@ -2,10 +2,37 @@ package plan9asm
 
 import (
 	"fmt"
+	"go/types"
 	"runtime"
 	"strings"
 	"testing"
 )
+
+// Retain all three translation entry points and the separate typed-Go
+// consumer. Public TranslateModule uses the global LLVM context; its module
+// is disposed immediately, while the shared helper owns its private context.
+func arm64FPControlIRs(t *testing.T, source, declarations, triple string) []string {
+	t.Helper()
+	irs := arm64CompareMatrixIRs(t, source, declarations, triple)
+	file, err := Parse(ArchARM64, source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pkg := mustGoPackage(t, "compare", declarations)
+	sizes := types.SizesFor("gc", "arm64")
+	resolve := func(symbol string) string { return strings.TrimPrefix(symbol, "·") }
+	sigs, err := goSigsForAsmFile(pkg, file, resolve, "arm64", sizes, sizes, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	module, err := TranslateModule(file, Options{Goarch: "arm64", TargetTriple: triple, Sigs: sigs, ResolveSym: resolve})
+	if err != nil {
+		t.Fatal(err)
+	}
+	irs = append(irs, module.String())
+	module.Dispose()
+	return irs
+}
 
 // Go asm7 case35/36 and Arm's MRS/MSR register encodings. The instruction
 // under test transfers FPCR/FPSR, not NZCV; the preceding integer comparison
@@ -90,7 +117,7 @@ func arm64FPControlFlagsRuntime(t *testing.T, triple, goos string, compiler, run
 	}
 	source, declarations, original, driver := arm64FPControlFlagFixture()
 	arm64ScalarCompareActualGo(t, source, original, goos, runner)
-	irs := arm64CompareMatrixIRs(t, source, declarations, triple)
+	irs := arm64FPControlIRs(t, source, declarations, triple)
 	for api, ir := range irs {
 		for _, variant := range []struct{ name, ir string }{
 			{"none", ir}, {"O2", armFloatEffectOptimizedIR(t, ir)},

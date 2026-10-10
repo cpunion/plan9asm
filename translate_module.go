@@ -80,6 +80,9 @@ func TranslateModuleInContext(ctx llvm.Context, file *File, opt Options) (result
 	if err := validateARM64ScalarCompareTarget(file, opt); err != nil {
 		return llvm.Module{}, err
 	}
+	if err := validateARM64FPControlTarget(file, opt); err != nil {
+		return llvm.Module{}, err
+	}
 	resolve := opt.ResolveSym
 	if resolve == nil {
 		resolve = func(symbol string) string { return symbol }
