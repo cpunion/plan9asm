@@ -16,7 +16,7 @@ instruction-family audits until this repair batch has run in CI. Preserve the
 separate scalar-FMA development branch; it is not part of this batch.
 
 Published `cb8b2ad3` is running fork CI 38018079008. Policy preflight passed;
-shards 5/29/39 failed and three priority shards are still running. Let it finish before pushing
+shards 5/29/38/39 failed and two priority shards are still running. Let it finish before pushing
 the next repair batch. No current-head corpus or full CI pass is established.
 
 Earlier `c09eff1e` failed run 37711752851: priority shards 5/29/38/39 failed,
@@ -160,6 +160,18 @@ with unrelated speculative implementation. Keep correctness gates unchanged.
   caller cache isolation, exhaustive priority order, sticky shard failures and
   a mandatory final aggregate. All 36 Node tests and the three actual-child
   Go queue tests pass; the original three policy failures remain recorded.
+- The frozen full unit run found five failed roots: two stale RNG assertions,
+  the earlier WORD preflight's unresolved-constant diagnostic, and two raw-pool
+  object fixtures. RNG tests now account separately for the two side-effecting
+  intrinsics, while unknown GP inputs still reject. WORD retains the original
+  unresolved-symbol diagnostic before decoding. Native preflight now consumes
+  only the existing bounded appended-pool proof, not arbitrary dead WORDs as
+  data, using a private source view. Independent REDs retain code/data and
+  six-family target boundaries, original Go acceptance, four-API three-target
+  objects and mutation negatives. All 76 related current-Go roots pass
+  (88.734s), as do ten Go 1.20 roots (11.219s). The failed broad attempt that
+  treated dead source as data remains recorded and was corrected. These
+  focused passes do not relabel the still-running frozen full suite.
 - The known ARM64 WORD truncation counterexample now uses one shared Go
   `C_LCON` check before native preflight, decoding and lowering. Rejected
   64-bit constants can no longer become valid low-word opcodes, including

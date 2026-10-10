@@ -593,6 +593,13 @@ accept/reject controls, exact low-word tests, and live/dead source rejection
 through all four API consumers. A valid decoded opcode cannot repair an
 original `C_VCON` operand; symbolic relocation roles remain separate.
 
+Native-family preflight checks that constant class even for data, then uses a
+private code view for the existing bounded raw-routine/append-pool proof.
+Proved data bytes do not acquire instruction grammar or CPU-target requirements.
+Dead WORDs after a source RET alone remain subject to those requirements.
+The view changes no original source, branch, caller role or memory permission;
+later lowering independently repeats its complete source/layout proof.
+
 Use independent-axis tests for shared operand grammars rather than repeating
 the same huge Cartesian product for every mnemonic. See
 [validation](validation.md) for the required gates.

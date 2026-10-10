@@ -51,11 +51,52 @@ func TestARM64NativeTargetPreflightPreservesProvenPoolData(t *testing.T) {
 	if !reflect.DeepEqual(file, original) {
 		t.Fatal("preflight changed the original source consumed by later proofs")
 	}
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM 22 llc not found")
+	}
 	for _, target := range []string{"aarch64-unknown-linux-gnu", "aarch64-apple-darwin", "aarch64-pc-windows-msvc"} {
+		for _, consumer := range arm64NZCVConsumerIRs(t, source, "package compare\nfunc comparison()\n", target) {
+			t.Run(target+"/"+consumer.name, func(t *testing.T) {
+				compileLLVMToObject(t, llc, target, "pool.ll", "pool.o", consumer.ir)
+			})
+		}
+	}
+}
+
+func TestARM64NativeTargetPreflightDataKeepsSourceAndNativeGates(t *testing.T) {
+	source := arm64NativeTargetPoolSource(t, []uint32{0x1eaf9499, 0xffffffff})
+	for _, instruction := range []string{
+		"SCVTFD R0,F0", "FCMPD F0,F0", "MRS FPCR,R0",
+		"FADDD F0,F0", "FMAXD F0,F0", "MRS RNDR,R0",
+	} {
+		withNative := strings.Replace(source, "$0-0\n", "$0-0\n"+instruction+"\n", 1)
+		requireARM64GoAssemblerResult(t, withNative, true)
+		file, err := Parse(ArchARM64, withNative)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := validateARM64NativeTargets(file, Options{}); !errors.Is(err, ErrProbeNeedsContext) {
+			t.Errorf("data damaged %s native-target requirement: %v", instruction, err)
+		}
+		if err := validateARM64NativeTargets(file, Options{TargetTriple: "aarch64-unknown-linux-gnu"}); err != nil {
+			t.Errorf("data damaged %s native-target acceptance: %v", instruction, err)
+		}
+	}
+	for _, changed := range []string{
+		strings.Replace(source, "WORD $0x1eaf9499", "WORD $0x11eaf9499", 1),
+		strings.Replace(source, "WORD $0x1eaf9499", "WORD $(missing_data)", 1),
+		strings.Replace(source, "WORD $0x1eaf9499", "WORD $(1.0)", 1),
+		// A pool address still live at return is not a closed data proof.
+		strings.Replace(source, "WORD $0xaa1f03e9", "WORD $0xd503201f", 1),
+	} {
+		if changed == source {
+			t.Fatal("negative fixture did not mutate the original source")
+		}
 		for _, api := range []string{"text", "module", "Go", "public-module"} {
-			present, err := arm64FPControlTargetAPI(t, api, source, target)
-			if !present || err != nil {
-				t.Errorf("%s %s rejected proven pool data: %v", target, api, err)
+			present, err := arm64FPControlTargetAPI(t, api, changed, "aarch64-unknown-linux-gnu")
+			if present || err == nil {
+				t.Errorf("%s invalid/unproved data became successful translation: %v", api, err)
 			}
 		}
 	}

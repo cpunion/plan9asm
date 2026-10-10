@@ -22,6 +22,7 @@ func validateARM64NativeTargets(file *File, options Options) error {
 			}
 		}
 	}
+	file = arm64NativeTargetCodeView(file)
 	var targetError error
 	for _, validate := range []func(*File, Options) error{
 		validateARM64ScalarConversionNativeTarget,
@@ -52,4 +53,55 @@ func validateARM64NativeTargets(file *File, options Options) error {
 		}
 	}
 	return targetError
+}
+
+// WORD's source constant class applies to code and data alike, but native
+// instruction grammars apply only to code. Reuse the lowerer's bounded raw
+// routine/pool proof, without a caller return-clobber permission, to mark
+// appended data. Unlike later emission, preflight must not classify a dead
+// source WORD as data merely because it follows RET.
+//
+// This is a private inspection copy, not the source consumed by translation.
+// If the proof cannot close, leave the original function intact. Do not
+// rewrite any branch or other instruction in this syntax-only view.
+func arm64NativeTargetCodeView(file *File) *File {
+	view := *file
+	view.Funcs = append([]Func(nil), file.Funcs...)
+	for index, function := range file.Funcs {
+		hasWord := false
+		for _, instruction := range function.Instrs {
+			if instruction.Op == OpWORD {
+				hasWord = true
+				break
+			}
+		}
+		if !hasWord {
+			continue
+		}
+		points := make([]arm64RawLayoutPoint, len(function.Instrs))
+		knownLabels := make(map[string]bool)
+		point := arm64RawLayoutPoint{}
+		for at, instruction := range function.Instrs {
+			points[at] = point
+			if instruction.Op == OpLABEL && len(instruction.Args) == 1 && instruction.Args[0].Kind == OpLabel {
+				knownLabels[instruction.Args[0].Sym] = true
+			}
+			width, known := arm64RawKnownSourceWidth(function, instruction)
+			if !known {
+				point.segment++
+				point.offset = 0
+			} else {
+				point.offset += width
+			}
+		}
+		data, _, _ := identifyARM64UnlabelledPool(function, points, knownLabels, 0)
+		if len(data) == 0 {
+			continue
+		}
+		view.Funcs[index].Instrs = append([]Instr(nil), function.Instrs...)
+		for at := range data {
+			view.Funcs[index].Instrs[at].Op = arm64RawDataOp
+		}
+	}
+	return &view
 }
