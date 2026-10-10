@@ -7,9 +7,8 @@ import (
 	"testing"
 )
 
-func arm64NZCVTransportMatrix() (source, original, driver string, sigs map[string]FuncSig) {
+func arm64NZCVTransportMatrix() (source, original, driver, declarations string) {
 	var assembly, goDeclarations, cDeclarations, goTable, cTable strings.Builder
-	sigs = make(map[string]FuncSig)
 	forms := 0
 	for _, raw := range []bool{false, true} {
 		for reg := 0; reg < 32; reg++ {
@@ -22,7 +21,6 @@ func arm64NZCVTransportMatrix() (source, original, driver string, sigs map[strin
 			fmt.Fprintf(&cDeclarations, "extern void %s(uint64_t*,uint64_t*);\n", name)
 			fmt.Fprintf(&goTable, "{%s,%v},\n", name, reg == 31)
 			fmt.Fprintf(&cTable, "{%s,%d},\n", name, map[bool]int{true: 1, false: 0}[reg == 31])
-			sigs[name] = arm64SM3Signature(name)
 			// Keep each address, canary and temporary independent of the tested
 			// alias. This also covers every ordinary bank register, including
 			// R27, without relying on the Go assembler's implicit scratch value.
@@ -107,7 +105,7 @@ int main(void) {
  return 0;
 }
 `
-	return assembly.String(), original, driver, sigs
+	return assembly.String(), original, driver, "package compare\n" + goDeclarations.String()
 }
 
 func arm64NZCVMatrixRuntime(t *testing.T, triple, goos string, compiler, runner []string) {
@@ -116,23 +114,9 @@ func arm64NZCVMatrixRuntime(t *testing.T, triple, goos string, compiler, runner 
 	if llc == "" {
 		t.Fatal("LLVM 22 llc not found")
 	}
-	source, original, driver, sigs := arm64NZCVTransportMatrix()
+	source, original, driver, declarations := arm64NZCVTransportMatrix()
 	arm64ScalarCompareActualGo(t, source, original, goos, runner)
-	file, err := Parse(ArchARM64, source)
-	if err != nil {
-		t.Fatal(err)
-	}
-	ir, err := Translate(file, Options{Goarch: "arm64", TargetTriple: triple, Sigs: sigs})
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, variant := range []struct{ name, ir string }{{"none", ir}, {"O2", armFloatEffectOptimizedIR(t, ir)}} {
-		for _, level := range []int{0, 2} {
-			t.Run(fmt.Sprintf("IR_%s/backend_O%d", variant.name, level), func(t *testing.T) {
-				compileAndRunRuntimeTestWithCompiler(t, llc, compiler, "nzcv_matrix", triple, variant.ir, driver, runner, level)
-			})
-		}
-	}
+	arm64NZCVRunConsumers(t, llc, compiler, "nzcv_matrix", triple, source, declarations, driver, runner)
 	t.Log("56 named/raw ordinary-GP/ZR alias forms × 16 NZCV states × 4 ignored-bit patterns = 3584 rows per executable")
 }
 

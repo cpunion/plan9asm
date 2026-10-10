@@ -209,6 +209,10 @@ func TestARM64NZCVTypedControlFlowAndBoundary(t *testing.T) {
 			for _, target := range arm64TypedNativeTargets {
 				opt := arm64TypedNativeOptions(t, target)
 				_, textErr := Translate(file, opt)
+				public, publicErr := TranslateModule(file, opt)
+				if publicErr == nil {
+					public.Dispose()
+				}
 				ctx := llvm.NewContext()
 				module, moduleErr := TranslateModuleInContext(ctx, file, opt)
 				if moduleErr == nil {
@@ -222,7 +226,7 @@ func TestARM64NZCVTypedControlFlowAndBoundary(t *testing.T) {
 					bound.Module.Dispose()
 				}
 				ctx.Dispose()
-				for index, err := range []error{textErr, moduleErr, goErr} {
+				for index, err := range []error{textErr, publicErr, moduleErr, goErr} {
 					if fixture.closed && err != nil || !fixture.closed && !errors.Is(err, ErrProbeNeedsContext) {
 						t.Errorf("%s API%d closed=%v: %v", target, index, fixture.closed, err)
 					}
@@ -264,6 +268,12 @@ func TestARM64NZCVTypedAllAPIsAndObjects(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			public, err := TranslateModule(file, opt)
+			if err != nil {
+				t.Fatal(err)
+			}
+			publicIR := public.String()
+			public.Dispose()
 			ctx := llvm.NewContext()
 			defer ctx.Dispose()
 			module, err := TranslateModuleInContext(ctx, file, opt)
@@ -281,7 +291,7 @@ func TestARM64NZCVTypedAllAPIsAndObjects(t *testing.T) {
 			}
 			goIR := bound.Module.String()
 			bound.Module.Dispose()
-			for api, ir := range []string{text, moduleIR, goIR} {
+			for api, ir := range []string{text, publicIR, moduleIR, goIR} {
 				if strings.Contains(ir, "mrs ") || strings.Contains(ir, "msr ") {
 					t.Fatal("NZCV transport must not observe incidental backend physical flags")
 				}
