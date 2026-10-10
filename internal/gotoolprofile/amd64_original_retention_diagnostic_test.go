@@ -44,7 +44,9 @@ func TestAMD64OriginalObservationDriverBudgetPreservesCause(t *testing.T) {
 		_ = observed.Close()
 		t.Fatal("over-budget observation acquired a source token")
 	}
-	if err == nil || !strings.Contains(err.Error(), "byte bound") || strings.Contains(err.Error(), "driver changed") {
+	if err == nil || !strings.Contains(err.Error(), "retain actual Go driver") ||
+		!strings.Contains(err.Error(), "byte bound: retained=") || !strings.Contains(err.Error(), "limit=67108864") ||
+		strings.Contains(err.Error(), "driver changed") {
 		t.Fatalf("retention limit must not impersonate a driver identity mutation: %v", err)
 	}
 }

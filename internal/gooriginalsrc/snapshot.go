@@ -140,7 +140,8 @@ func (snapshot *Snapshot) retain(name string, role originalFileRole) error {
 		}
 	} else {
 		if info.Size() > totalByteLimit-snapshot.bytes {
-			return fmt.Errorf("original source/export inventory exceeds its byte bound")
+			return fmt.Errorf("original source/export inventory exceeds its byte bound: retained=%d incoming=%d limit=%d",
+				snapshot.bytes, info.Size(), totalByteLimit)
 		}
 		snapshot.bytes += info.Size()
 	}

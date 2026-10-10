@@ -209,8 +209,11 @@ func captureAMD64OriginalObservationState(ctx context.Context, request AMD64Orig
 		return nil, err
 	}
 	after, err := captureAMD64OriginalGraph(ctx, request, actual, profile, state.files, downloaded, true, run)
-	if err != nil || !equalAMD64OriginalSelections(before, after) {
-		return nil, fmt.Errorf("original package selection changed during export: %v", err)
+	if err != nil {
+		return nil, fmt.Errorf("capture original package selection after export: %w", err)
+	}
+	if !equalAMD64OriginalSelections(before, after) {
+		return nil, fmt.Errorf("original package selection changed during export")
 	}
 	state.packages = after
 	state.declarations, err = checkAMD64OriginalDeclarations(after, request.PackagePath)
@@ -218,20 +221,33 @@ func captureAMD64OriginalObservationState(ctx context.Context, request AMD64Orig
 		return nil, err
 	}
 	now, nowContext, err := instrumentationObserverEnvironment(ctx, request.GoBinary, request.Directory, request.Environment, run)
-	if err != nil || !reflect.DeepEqual(now, actual) || !reflect.DeepEqual(nowContext, commandContext) {
-		return nil, fmt.Errorf("original package environment changed during capture: %v", err)
+	if err != nil {
+		return nil, fmt.Errorf("recapture original package environment: %w", err)
+	}
+	if !reflect.DeepEqual(now, actual) || !reflect.DeepEqual(nowContext, commandContext) {
+		return nil, fmt.Errorf("original package environment changed during capture")
 	}
 	tools, err := captureDiscoveryFeatureSubtools(ctx, request.GoBinary, request.Environment, actual, run)
-	if err != nil || tools.directory != profile.ToolDirectory || tools.routing != profile.ToolRoutingSHA256 || tools.dispatcher != profile.ToolDispatcherSHA256 ||
+	if err != nil {
+		return nil, fmt.Errorf("recapture original Go tools: %w", err)
+	}
+	if tools.directory != profile.ToolDirectory || tools.routing != profile.ToolRoutingSHA256 || tools.dispatcher != profile.ToolDispatcherSHA256 ||
 		!reflect.DeepEqual(tools.digests, profile.ToolBinarySHA256) || !reflect.DeepEqual(tools.origins, profile.ToolBinaryOrigins) {
-		return nil, fmt.Errorf("actual Go tool routing/bytes changed during export: %v", err)
+		return nil, fmt.Errorf("actual Go tool routing/bytes changed during export")
 	}
 	for file, digest := range profile.ToolSourceSHA256 {
-		if err := state.files.retain(filepath.Join(actual["GOROOT"], filepath.FromSlash(file))); err != nil || state.files.hashes[filepath.Join(actual["GOROOT"], filepath.FromSlash(file))] != digest {
+		path := filepath.Join(actual["GOROOT"], filepath.FromSlash(file))
+		if err := state.files.retain(path); err != nil {
+			return nil, fmt.Errorf("retain registered SDK source %s: %w", file, err)
+		}
+		if state.files.hashes[path] != digest {
 			return nil, fmt.Errorf("registered SDK source changed: %s", file)
 		}
 	}
-	if err := state.files.retainTool(request.GoBinary); err != nil || state.files.hashes[request.GoBinary] != profile.DriverSHA256 {
+	if err := state.files.retainTool(request.GoBinary); err != nil {
+		return nil, fmt.Errorf("retain actual Go driver: %w", err)
+	}
+	if state.files.hashes[request.GoBinary] != profile.DriverSHA256 {
 		return nil, fmt.Errorf("actual Go driver changed during capture")
 	}
 	if downloaded != nil {
