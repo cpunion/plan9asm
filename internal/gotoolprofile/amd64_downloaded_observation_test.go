@@ -16,7 +16,8 @@ import (
 func amd64DownloadedObservationFixture(t *testing.T, variant string) (AMD64OriginalObservationRequest, string, string) {
 	t.Helper()
 	request := amd64OriginalObservationFixture(t, variant)
-	if variant == "fixed-local" {
+	fixedNested := variant == "fixed-local-nested"
+	if variant == "fixed-local" || fixedNested {
 		request, _, _, _, _ = amd64OriginalFixedLocalFixture(t)
 	}
 	modulePath, version := "example.invalid/observation", "v1.0.0"
@@ -35,6 +36,18 @@ func amd64DownloadedObservationFixture(t *testing.T, variant string) (AMD64Origi
 		t.Fatal(err)
 	}
 	root := request.Directory
+	if fixedNested {
+		request.Directory = filepath.Join(root, "internal", "kernel")
+		request.PackagePath += "/internal/kernel"
+		if err := os.MkdirAll(request.Directory, 0700); err != nil {
+			t.Fatal(err)
+		}
+		for _, name := range []string{"value.go", "value_amd64.s", "local.h"} {
+			if err := os.Rename(filepath.Join(root, name), filepath.Join(request.Directory, name)); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
 	if variant == "nested" {
 		root = filepath.Dir(filepath.Dir(root))
 	}
@@ -94,7 +107,7 @@ func amd64DownloadedObservationFixture(t *testing.T, variant string) (AMD64Origi
 		t.Fatalf("actual Go omitted its exact downloaded source identity: %v", err)
 	}
 	request.Directory = downloaded.Dir
-	if variant == "nested" {
+	if variant == "nested" || fixedNested {
 		request.Directory = filepath.Join(downloaded.Dir, "internal", "kernel")
 	}
 	return request, modulePath, version
