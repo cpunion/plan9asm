@@ -194,8 +194,10 @@ func TestARM64NZCVTypedControlFlowAndBoundary(t *testing.T) {
 		{"partial-join", "CBZ R0,read\nMSR R0,NZCV\nread:\nMRS NZCV,R0", false},
 		{"backedge-only", "loop:\nMRS NZCV,R1\nMSR R0,NZCV\nCBNZ R0,loop\nMOVD R1,R0", false},
 		{"discard-does-not-define", "MRS NZCV,ZR\nMRS NZCV,R0", false},
-		{"opaque-between", "MSR R0,NZCV\nMRS FPCR,R1\nMRS NZCV,R0", false},
-		{"opaque-raw-between", "MSR R0,NZCV\nWORD $0xd53b4401\nMRS NZCV,R0", false},
+		{"fp-control-between", "MSR R0,NZCV\nMRS FPCR,R1\nMRS NZCV,R0", true},
+		{"fp-control-raw-between", "MSR R0,NZCV\nWORD $0xd53b4401\nMRS NZCV,R0", true},
+		{"opaque-between", "MSR R0,NZCV\nMRS TPIDR_EL0,R1\nMRS NZCV,R0", false},
+		{"opaque-raw-between", "MSR R0,NZCV\nWORD $0xd53bd041\nMRS NZCV,R0", false},
 		{"closed-local-ret-preserves", "MSR R0,NZCV\nBL helper\nMRS NZCV,R0\nRET\nhelper:\nRET", true},
 		{"local-ret-does-not-supply-entry", "BL helper\nMRS NZCV,R0\nRET\nhelper:\nRET", false},
 	} {

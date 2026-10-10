@@ -250,13 +250,7 @@ func translateIRText(file *File, opt Options) (_ string, result error) {
 	if err := validateARMWordFloatNativeTarget(file, opt); err != nil {
 		return "", err
 	}
-	if err := validateARM64ScalarConversionNativeTarget(file, opt); err != nil {
-		return "", err
-	}
-	if err := validateARM64ScalarCompareTarget(file, opt); err != nil {
-		return "", err
-	}
-	if err := validateARM64FPControlTarget(file, opt); err != nil {
+	if err := validateARM64NativeTargets(file, opt); err != nil {
 		return "", err
 	}
 	if !opt.X87Mode.valid() {

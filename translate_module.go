@@ -74,13 +74,7 @@ func TranslateModuleInContext(ctx llvm.Context, file *File, opt Options) (result
 	if err := validateARMWordFloatNativeTarget(file, opt); err != nil {
 		return llvm.Module{}, err
 	}
-	if err := validateARM64ScalarConversionNativeTarget(file, opt); err != nil {
-		return llvm.Module{}, err
-	}
-	if err := validateARM64ScalarCompareTarget(file, opt); err != nil {
-		return llvm.Module{}, err
-	}
-	if err := validateARM64FPControlTarget(file, opt); err != nil {
+	if err := validateARM64NativeTargets(file, opt); err != nil {
 		return llvm.Module{}, err
 	}
 	resolve := opt.ResolveSym
