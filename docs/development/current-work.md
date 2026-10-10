@@ -15,7 +15,7 @@ Never push to, approve, merge or close upstream PR 40.
 Published `c09eff1e` still has four failed priority shards (5/29/38/39), two
 canceled (36/42), and incomplete downstream gates. No newer component result
 changes that outcome. Develop on `codex/pr40-result-effects-followup-20261010`,
-integrated through `1d3bad34`. Root alone publishes the assembly ledger.
+including the RNG and fixture repairs below. Root alone publishes the assembly ledger.
 Never change tracked files, tools or ledger in a running frozen snapshot.
 
 Earlier x86 typed conversions/compares/moves, ARM VFP/NEON, Wasm comparisons/
@@ -59,7 +59,7 @@ clean only exact owned caches after every consumer closes.
   extraction and vet pass. `_out/rndr-named/linux-runtime.log` runs original
   Go/QEMU allowed-state invariants across 64 forms and all four consumers.
   It does not compare independent random values or claim forced RNG failure.
-  Preserve platform/g entry boundaries. Not yet integrated; RED is `93b6c4a6`.
+  Preserve platform/g entry boundaries. Integrated; RED is `93b6c4a6`.
 - `codex/pr40-original-budget-20261011`, `37eadcf8`:
   `_out/original-budget/` contains SDK graph RED/GREEN/negative gates.
   `_out/crypto-recheck/` reruns exact shard-39 versions runZeroInc/excrypto
@@ -76,7 +76,7 @@ clean only exact owned caches after every consumer closes.
   three-minute REDs. Complete 32-CPU-query alias gate passes. The combined
   modes/emission/Go-only gate now passes in 968.633 seconds. Go-only retains
   all 18 queries and nine objects. Six-minute fixture budgets do not change
-  production/benchmark limits. Commit the final fixture and integrate both.
+  production/benchmark limits. Both fixture commits are now integrated.
 - `codex/pr40-full-family-verify-20261010`, `044bb668`:
   `_out/full-family/reports/` is terminal: 18/20 packages pass. Root has
   5,617 pass, one obsolete helper-assertion failure, 39 host-runtime exclusions;
@@ -89,8 +89,8 @@ Closed component evidence remains under `_out/fp-control-effects/`,
 
 ## Next completion gates
 
-1. Close min/max and RNG native runs; integrate RNG and the final fixture
-   repair; run merged gates. Do not confuse component and combined evidence.
+1. Close min/max and RNG native runs; finish merged gates. Do not confuse
+   component and combined evidence.
 2. Finish the broad sample and repaired crypto repeat. Each counterexample
    needs an independent complete family/rule regression and original recheck.
 3. Audit remaining native FP operators by whole families. Scalar ARM64 FMA
