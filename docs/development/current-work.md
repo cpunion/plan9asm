@@ -72,6 +72,13 @@ with unrelated speculative implementation. Keep correctness gates unchanged.
   caller cache isolation, exhaustive priority order, sticky shard failures and
   a mandatory final aggregate. All 36 Node tests and the three actual-child
   Go queue tests pass; the original three policy failures remain recorded.
+- The known ARM64 WORD truncation counterexample now uses one shared Go
+  `C_LCON` check before native preflight, decoding and lowering. Rejected
+  64-bit constants can no longer become valid low-word opcodes, including
+  dead source and missing/foreign targets. Legal wide MOV/bitmask classes
+  remain accepted. The independent Go-oracle RED and seven focused GREEN
+  roots are retained under `_out/ci-closure/word-class-*`; broader gates are
+  next, without importing the separate unfinished scalar-FMA branch.
 
 ## Active frozen validation
 

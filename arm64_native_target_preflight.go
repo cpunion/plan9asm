@@ -11,6 +11,17 @@ func validateARM64NativeTargets(file *File, options Options) error {
 	if file == nil || file.Arch != ArchARM64 {
 		return nil
 	}
+	// Check the source class before any native-family matching, dead-code
+	// filtering or raw PC/data normalization can consume a truncated word.
+	for _, function := range file.Funcs {
+		for _, instruction := range function.Instrs {
+			if instruction.Op == OpWORD {
+				if _, err := arm64RawWordValue(instruction); err != nil {
+					return err
+				}
+			}
+		}
+	}
 	var targetError error
 	for _, validate := range []func(*File, Options) error{
 		validateARM64ScalarConversionNativeTarget,

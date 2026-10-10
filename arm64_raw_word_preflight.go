@@ -9,11 +9,10 @@ func arm64RawWordPreflightError(instruction Instr) error {
 	if instruction.Op != OpWORD {
 		return nil
 	}
-	if len(instruction.Args) != 1 || instruction.Args[0].Kind != OpImm ||
-		instruction.Args[0].ImmRaw != "" || instruction.Args[0].ImmIsFloat {
-		return fmt.Errorf("arm64 WORD expects exactly one resolved integer constant: %q", instruction.Raw)
+	word, err := arm64RawWordValue(instruction)
+	if err != nil {
+		return err
 	}
-	word := uint32(instruction.Args[0].Imm)
 	if arm64RawScalarConversion(word) {
 		return nil
 	}
@@ -25,6 +24,21 @@ func arm64RawWordPreflightError(instruction Instr) error {
 	}
 	// The placeholder only lets the decoder check PC-relative syntax. It is
 	// never an edge or source-location witness consumed by translation.
-	_, err := decodeARM64RawWordInstructionTarget(instruction, "preflight")
+	_, err = decodeARM64RawWordInstructionTarget(instruction, "preflight")
 	return err
+}
+
+// Go's AWORD constant row is C_LCON, classified before case 14 truncates to
+// uint32. Wide MOV/bitmask constants can satisfy that row; arbitrary C_VCON
+// values cannot, even when their low word happens to encode a valid opcode.
+func arm64RawWordValue(instruction Instr) (uint32, error) {
+	if len(instruction.Args) != 1 || instruction.Args[0].Kind != OpImm ||
+		instruction.Args[0].ImmRaw != "" || instruction.Args[0].ImmIsFloat {
+		return 0, fmt.Errorf("arm64 WORD expects exactly one resolved integer constant: %q", instruction.Raw)
+	}
+	value := instruction.Args[0].Imm
+	if !arm64GoLCON(value) {
+		return 0, fmt.Errorf("arm64 WORD constant does not satisfy Go's C_LCON operand class: %q", instruction.Raw)
+	}
+	return uint32(value), nil
 }

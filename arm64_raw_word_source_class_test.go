@@ -66,3 +66,32 @@ func TestARM64RawWordWideLCONStillAccepted(t *testing.T) {
 		}
 	}
 }
+
+func TestARM64RawWordConstantClassesMatchGo(t *testing.T) {
+	accepted := []int64{0, 1, 0xfff, 0x123000, 0xfff000, 0xffffff, 0x11223344,
+		-0x7fffffff, 0xffffffff, 0x00ff00ff00ff00ff, 0x5555555555555555, 0x7fffffffffffffff, -1 << 63}
+	for _, shift := range []uint{0, 16, 32, 48} {
+		value := int64(uint64(0x1234) << shift)
+		accepted = append(accepted, value, ^value)
+	}
+	for _, group := range []struct {
+		accepted bool
+		values   []int64
+	}{
+		{true, accepted},
+		{false, []int64{0x1122334455667788, -0x1122334455667788, 0x1d503201f, -0x12afcdfe1}},
+	} {
+		for _, value := range group.values {
+			line := fmt.Sprintf("WORD $%d", value)
+			requireARM64GoAssemblerResult(t, "TEXT original(SB),516,$0-0\n"+line+"\nRET\n", group.accepted)
+			word, err := arm64RawWordValue(arm64ImmediateTestInstruction(t, line))
+			if group.accepted {
+				if err != nil || word != uint32(value) {
+					t.Errorf("Go-accepted constant lost its exact low word: %s: %#x, %v", line, word, err)
+				}
+			} else if err == nil || errors.Is(err, ErrProbeNeedsContext) {
+				t.Errorf("Go-rejected constant acquired a decoder word: %s: %#x, %v", line, word, err)
+			}
+		}
+	}
+}

@@ -564,6 +564,14 @@ execution is not evidence that the host implements FEAT_SM3.
 - Demonstrate that the old implementation fails the new runtime oracle where
   practical. Use an isolated checkout/overlay, not a running frozen tree.
 
+ARM64 literal WORD validates Go's complete `C_LCON` source class before its
+low 32 bits reach any native preflight, decoder, lowerer or PC/data rewrite.
+This is not an int32/uint32 range check: Go also accepts wide MOV and bitmask
+constant classes. Reuse the shared constant classifier and retain actual-Go
+accept/reject controls, exact low-word tests, and live/dead source rejection
+through all four API consumers. A valid decoded opcode cannot repair an
+original `C_VCON` operand; symbolic relocation roles remain separate.
+
 Use independent-axis tests for shared operand grammars rather than repeating
 the same huge Cartesian product for every mnemonic. See
 [validation](validation.md) for the required gates.
