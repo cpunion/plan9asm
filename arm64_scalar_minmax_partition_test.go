@@ -56,3 +56,42 @@ func TestARM64ScalarMinMaxBoundedRuntimeRoots(t *testing.T) {
 		t.Fatal("45-minute root needs exhaustive independently schedulable families", want)
 	}
 }
+
+func TestARM64ScalarMinMaxFamilyPartitionsComplete(t *testing.T) {
+	total := 0
+	for _, banks := range []bool{true, false} {
+		seen := make(map[arm64MinMaxStateCase]bool)
+		for _, family := range []string{"FMAX", "FMIN", "FMAXNM", "FMINNM"} {
+			rows := arm64MinMaxFamilyStateCases(banks, family)
+			expected := 205
+			if !banks {
+				expected = 10
+			}
+			if len(rows) != expected {
+				t.Fatal("changed full family denominator", family, banks, len(rows))
+			}
+			for _, row := range rows {
+				if seen[row] {
+					t.Fatal("duplicate cross-partition runtime form", row)
+				}
+				seen[row] = true
+				total += len(arm64MinMaxSamples(row.bits, banks))
+			}
+		}
+		original := arm64MinMaxStateCases(banks)
+		if len(seen) != len(original) {
+			t.Fatal("partition union differs from original complete grammar")
+		}
+		for _, row := range original {
+			if !seen[row] {
+				t.Fatal("original runtime form was omitted", row)
+			}
+		}
+	}
+	if total != 14600 {
+		t.Fatal("partitioning removed original Go/LLVM state comparisons", total)
+	}
+	if len(arm64MinMaxFamilyStateCases(true, "unknown")) != 0 {
+		t.Fatal("unknown family borrowed another partition")
+	}
+}

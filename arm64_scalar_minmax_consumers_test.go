@@ -35,8 +35,8 @@ func TestARM64ScalarMinMaxRuntimeMatrixOwnership(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := map[string]string{
-		"TestCrossLinuxRuntimeMatrixARM64ScalarMinMaxDeadNative":      "arm64MinMaxDeadRuntime",
-		"TestCrossLinuxRuntimeMatrixARM64ScalarMinMaxFullStateNative": "arm64MinMaxStateRuntime",
+		"TestCrossLinuxRuntimeMatrixARM64ScalarMinMaxDeadNative": "arm64MinMaxDeadRuntime",
+		"arm64MinMaxLinuxFamilyRuntime":                          "arm64MinMaxStateRuntimeFamily",
 	}
 	for _, declaration := range syntax.Decls {
 		function, ok := declaration.(*ast.FuncDecl)
@@ -55,7 +55,7 @@ func TestARM64ScalarMinMaxRuntimeMatrixOwnership(t *testing.T) {
 			}
 			if name, ok := call.Fun.(*ast.Ident); ok && name.Name == helper {
 				calls++
-				if helper == "arm64MinMaxStateRuntime" {
+				if helper == "arm64MinMaxStateRuntimeFamily" {
 					last, ok := call.Args[len(call.Args)-1].(*ast.Ident)
 					if !ok || last.Name != "true" {
 						t.Error("required Linux owner lost actual NEP/AH effect requirement")

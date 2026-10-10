@@ -292,13 +292,32 @@ func arm64MinMaxCheckOriginalState(t *testing.T, cases []arm64MinMaxStateCase, b
 
 func arm64MinMaxStateRuntime(t *testing.T, triple, goos string, compiler, runner []string, requireAFP bool) {
 	t.Helper()
+	arm64MinMaxStateRuntimeFamily(t, triple, goos, compiler, runner, "", requireAFP)
+}
+
+func arm64MinMaxFamilyStateCases(banks bool, family string) []arm64MinMaxStateCase {
+	var selected []arm64MinMaxStateCase
+	for _, row := range arm64MinMaxStateCases(banks) {
+		name := strings.TrimSuffix(strings.TrimSuffix(row.name, "S"), "D")
+		if family == "" || name == family {
+			selected = append(selected, row)
+		}
+	}
+	return selected
+}
+
+func arm64MinMaxStateRuntimeFamily(t *testing.T, triple, goos string, compiler, runner []string, family string, requireAFP bool) {
+	t.Helper()
+	if family != "" && family != "FMAX" && family != "FMIN" && family != "FMAXNM" && family != "FMINNM" {
+		t.Fatal("unknown min/max runtime partition", family)
+	}
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc required")
 	}
 	total, nep, ah := 0, 0, 0
 	for _, banks := range []bool{true, false} {
-		cases := arm64MinMaxStateCases(banks)
+		cases := arm64MinMaxFamilyStateCases(banks, family)
 		for first := 0; first < len(cases); first += 32 {
 			last := first + 32
 			if last > len(cases) {
@@ -342,13 +361,17 @@ func arm64MinMaxStateRuntime(t *testing.T, triple, goos string, compiler, runner
 			})
 		}
 	}
-	if total != 14600 {
+	expected := 14600
+	if family != "" {
+		expected /= 4
+	}
+	if total != expected {
 		t.Fatal("changed complete min/max runtime denominator", total)
 	}
 	if requireAFP && (nep == 0 || ah == 0) {
 		t.Fatalf("required actual AFP semantic effects missing: NEP=%d AH=%d", nep, ah)
 	}
-	t.Logf("ARM64_MINMAX_FULL_STATE_PASS original=%d LLVM=%d NEP=%d AH=%d", total, total*12, nep, ah)
+	t.Logf("ARM64_MINMAX_FULL_STATE_PASS family=%q original=%d LLVM=%d NEP=%d AH=%d", family, total, total*12, nep, ah)
 }
 
 func TestARM64ScalarMinMaxFullStateNativeRuntime(t *testing.T) {
