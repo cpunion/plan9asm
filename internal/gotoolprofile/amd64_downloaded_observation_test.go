@@ -2,9 +2,10 @@ package gotoolprofile
 
 import (
 	"archive/zip"
-	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -20,7 +21,7 @@ func amd64DownloadedObservationFixture(t *testing.T, variant string) (AMD64Origi
 		baseVariant = "nested"
 	}
 	request := amd64OriginalObservationFixture(t, baseVariant)
-	fixedNested := variant == "fixed-local-nested"
+	fixedNested := strings.HasPrefix(variant, "fixed-local-nested")
 	if variant == "fixed-local" || fixedNested {
 		request, _, _, _, _ = amd64OriginalFixedLocalFixture(t)
 	}
@@ -54,6 +55,26 @@ func amd64DownloadedObservationFixture(t *testing.T, variant string) (AMD64Origi
 	}
 	if baseVariant == "nested" {
 		root = filepath.Dir(filepath.Dir(root))
+	}
+	if strings.HasSuffix(variant, "-large-archive") || strings.HasSuffix(variant, "-large-payload") {
+		directory := filepath.Join(root, "payload")
+		if err := os.Mkdir(directory, 0700); err != nil {
+			t.Fatal(err)
+		}
+		members, extent := 3, int64(8<<20)
+		if strings.HasSuffix(variant, "-large-payload") {
+			members, extent = 1, 17<<20
+		}
+		for index := 0; index < members; index++ {
+			file, err := os.Create(filepath.Join(directory, string(rune('a'+index))+".bin"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			// A sparse zero-filled first-party payload needs no large allocation.
+			if err := errors.Join(file.Truncate(extent), file.Close()); err != nil {
+				t.Fatal(err)
+			}
+		}
 	}
 	if variant == "nested-import" {
 		data := "package observation\nimport \"math/bits\"\nfunc Value(a uint64) uint64\n" +
@@ -106,7 +127,11 @@ func amd64DownloadedObservationFixture(t *testing.T, variant string) (AMD64Origi
 			t.Fatalf("actual generated foreign module download: %v; %s", err, stderr)
 		}
 	}
-	writeAMD64ObservationModuleProxy(t, proxy, modulePath, version, root)
+	method := uint16(zip.Deflate)
+	if strings.HasSuffix(variant, "-large-archive") {
+		method = zip.Store
+	}
+	writeAMD64ObservationModuleProxyWithMethod(t, proxy, modulePath, version, root, method)
 	data, stderr, err := RunBounded(ctx, root, request.Environment, request.GoBinary,
 		"mod", "download", "-json", modulePath+"@"+version)
 	if err != nil || len(stderr) != 0 {
@@ -126,9 +151,21 @@ func amd64DownloadedObservationFixture(t *testing.T, variant string) (AMD64Origi
 
 func writeAMD64ObservationModuleProxy(t *testing.T, proxy, modulePath, version, root string) {
 	t.Helper()
-	var archive bytes.Buffer
-	w := zip.NewWriter(&archive)
-	err := filepath.WalkDir(root, func(name string, entry os.DirEntry, err error) error {
+	writeAMD64ObservationModuleProxyWithMethod(t, proxy, modulePath, version, root, zip.Deflate)
+}
+
+func writeAMD64ObservationModuleProxyWithMethod(t *testing.T, proxy, modulePath, version, root string, method uint16) {
+	t.Helper()
+	dir := filepath.Join(proxy, modulePath, "@v")
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	archive, err := os.Create(filepath.Join(dir, version+".zip"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := zip.NewWriter(archive)
+	err = filepath.WalkDir(root, func(name string, entry os.DirEntry, err error) error {
 		if err != nil || entry.IsDir() {
 			return err
 		}
@@ -136,33 +173,28 @@ func writeAMD64ObservationModuleProxy(t *testing.T, proxy, modulePath, version, 
 		if err != nil {
 			return err
 		}
-		member, err := w.Create(modulePath + "@" + version + "/" + filepath.ToSlash(relative))
+		member, err := w.CreateHeader(&zip.FileHeader{
+			Name: modulePath + "@" + version + "/" + filepath.ToSlash(relative), Method: method,
+		})
 		if err != nil {
 			return err
 		}
-		data, err := os.ReadFile(name)
+		input, err := os.Open(name)
 		if err != nil {
 			return err
 		}
-		_, err = member.Write(data)
-		return err
+		_, copyErr := io.Copy(member, input)
+		return errors.Join(copyErr, input.Close())
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := w.Close(); err != nil {
+	if err := errors.Join(err, w.Close(), archive.Close()); err != nil {
 		t.Fatal(err)
 	}
 	goMod, err := os.ReadFile(filepath.Join(root, "go.mod"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	dir := filepath.Join(proxy, modulePath, "@v")
-	if err := os.MkdirAll(dir, 0700); err != nil {
-		t.Fatal(err)
-	}
 	for suffix, data := range map[string][]byte{
-		".zip": archive.Bytes(), ".mod": goMod,
+		".mod":  goMod,
 		".info": []byte(`{"Version":"` + version + `","Time":"2026-10-01T00:00:00Z"}`),
 	} {
 		if err := os.WriteFile(filepath.Join(dir, version+suffix), data, 0600); err != nil {

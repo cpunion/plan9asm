@@ -12,6 +12,8 @@ import (
 	"path/filepath"
 	"reflect"
 	"sync"
+
+	modzip "golang.org/x/mod/zip"
 )
 
 var originalHashBuffers = sync.Pool{New: func() any { return new([64 << 10]byte) }}
@@ -33,6 +35,7 @@ type originalFileRole uint8
 const (
 	originalSourceFile originalFileRole = iota + 1
 	originalToolFile
+	originalModuleArtifact
 )
 
 func (role originalFileRole) byteLimit() int64 {
@@ -43,6 +46,8 @@ func (role originalFileRole) byteLimit() int64 {
 		// This is the existing Go frame driver/subtool physical-read limit.
 		// Sources, exports and ZIP members do not acquire the tool role.
 		return toolByteLimit
+	case originalModuleArtifact:
+		return modzip.MaxZipFile
 	default:
 		return -1
 	}
@@ -51,15 +56,16 @@ func (role originalFileRole) byteLimit() int64 {
 // Snapshot retains complete physical files and directory membership. It has no
 // serialized constructor, command callback, frame, signature or permission.
 type Snapshot struct {
-	hashes, paths  map[string]string
-	entries        map[string][]string
-	directories    map[string]os.FileInfo
-	files          map[string]os.FileInfo
-	retainedRoles  map[string]originalFileRole
-	tools          map[string]os.FileInfo
-	fileRoles      map[string]bool
-	directoryRoles map[string]bool
-	bytes          int64
+	hashes, paths   map[string]string
+	entries         map[string][]string
+	directories     map[string]os.FileInfo
+	files           map[string]os.FileInfo
+	retainedRoles   map[string]originalFileRole
+	tools           map[string]os.FileInfo
+	fileRoles       map[string]bool
+	directoryRoles  map[string]bool
+	bytes           int64
+	moduleArtifacts bool
 }
 
 // SnapshotView is the existing producer's observation data. These maps expose
@@ -86,7 +92,29 @@ func (snapshot *Snapshot) View() SnapshotView {
 }
 
 func (snapshot *Snapshot) Retain(name string) error {
+	if snapshot != nil && snapshot.moduleArtifacts {
+		return snapshot.retain(name, originalModuleArtifact)
+	}
 	return snapshot.retain(name, originalSourceFile)
+}
+
+// Only the exact module-origin factory uses this inventory. It retains a
+// complete Go-bounded archive and extracted tree, not a larger source/parser
+// buffer. The ordinary SDK/source/export inventory keeps its existing limits.
+func newModuleSnapshot() *Snapshot {
+	snapshot := NewSnapshot()
+	snapshot.moduleArtifacts = true
+	return snapshot
+}
+
+func (snapshot *Snapshot) byteLimit() int64 {
+	if snapshot.moduleArtifacts {
+		// One finite graph budget can hold a maximum-size Go module's ZIP
+		// and extracted tree plus the existing tool/metadata budget. Each
+		// module is also checked against Go's independent 500 MiB limits.
+		return 2*modzip.MaxZipFile + totalByteLimit
+	}
+	return totalByteLimit
 }
 
 // RetainTool observes an explicitly selected original driver/subtool, using
@@ -114,7 +142,7 @@ func (snapshot *Snapshot) retain(name string, role originalFileRole) error {
 	// Tools are a small explicitly selected inventory. Check their original
 	// inode as well as the path so hard links and case/parent aliases cannot
 	// turn the same physical file into the other observation role.
-	if role == originalSourceFile {
+	if role != originalToolFile {
 		for _, tool := range snapshot.tools {
 			if os.SameFile(tool, info) {
 				return fmt.Errorf("original tool inode cannot be relabeled as source")
@@ -122,7 +150,7 @@ func (snapshot *Snapshot) retain(name string, role originalFileRole) error {
 		}
 	} else {
 		for prior, file := range snapshot.files {
-			if snapshot.retainedRoles[prior] == originalSourceFile && os.SameFile(file, info) {
+			if snapshot.retainedRoles[prior] != originalToolFile && os.SameFile(file, info) {
 				return fmt.Errorf("original source inode cannot be relabeled as tool")
 			}
 		}
@@ -143,9 +171,9 @@ func (snapshot *Snapshot) retain(name string, role originalFileRole) error {
 			return fmt.Errorf("original source/export changed during capture")
 		}
 	} else {
-		if info.Size() > totalByteLimit-snapshot.bytes {
+		if info.Size() > snapshot.byteLimit()-snapshot.bytes {
 			return fmt.Errorf("original source/export inventory exceeds its byte bound: retained=%d incoming=%d limit=%d",
-				snapshot.bytes, info.Size(), totalByteLimit)
+				snapshot.bytes, info.Size(), snapshot.byteLimit())
 		}
 		snapshot.bytes += info.Size()
 	}
@@ -265,10 +293,13 @@ func (snapshot *Snapshot) Verify() error {
 	return nil
 }
 
-// ReadRetained reads only an independently retained physical file. It consumes
-// the same 16 MiB bound and complete EOF guard as hashing; the returned bytes
-// are observations, not frame or source permissions.
+// ReadRetained reads only an independently retained physical file, using a
+// 16 MiB source-buffer bound and the streaming hash's complete EOF guard.
+// Larger module artifacts remain stream-only; these bytes grant no permission.
 func (snapshot *Snapshot) ReadRetained(name string) ([]byte, error) {
+	if snapshot == nil || snapshot.files[name] == nil || snapshot.files[name].Size() > fileByteLimit {
+		return nil, fmt.Errorf("retained source buffer exceeds its byte bound")
+	}
 	reader, err := snapshot.OpenRetained(name)
 	if err != nil {
 		return nil, err
@@ -281,8 +312,10 @@ func (snapshot *Snapshot) ReadRetained(name string) ([]byte, error) {
 	return buffer.bytes, nil
 }
 
-// OpenRetained exposes only an observed member's strict physical stream. Its
-// complete EOF and close errors must be consumed; it does not mint permissions.
+// OpenRetained exposes only an observed source/member's strict physical stream
+// under its own role's limit, never a compiler tool. Complete EOF and close
+// errors must be consumed; this does not enlarge ReadRetained's buffer limit
+// or mint source/frame permissions.
 func (snapshot *Snapshot) OpenRetained(name string) (io.ReadCloser, error) {
 	if snapshot == nil || !filepath.IsAbs(name) {
 		return nil, fmt.Errorf("missing retained original file role")
@@ -291,13 +324,14 @@ func (snapshot *Snapshot) OpenRetained(name string) (io.ReadCloser, error) {
 	digest, retained := snapshot.hashes[name]
 	physical, err := filepath.EvalSymlinks(name)
 	if !retained || expected == nil || err != nil || physical != snapshot.paths[name] ||
-		snapshot.retainedRoles[name] != originalSourceFile {
+		snapshot.retainedRoles[name] != originalSourceFile && snapshot.retainedRoles[name] != originalModuleArtifact {
 		return nil, fmt.Errorf("original file was not retained at its physical role")
 	}
-	if expected.Size() < 0 || expected.Size() > fileByteLimit {
+	role := snapshot.retainedRoles[name]
+	if expected.Size() < 0 || expected.Size() > role.byteLimit() {
 		return nil, fmt.Errorf("retained original file exceeds its byte bound")
 	}
-	return openOriginalFile(name, expected, physical, digest)
+	return openOriginalRoleFile(name, expected, physical, digest, role)
 }
 
 // A fixed extent prevents io.Copy from allocating extra storage if an original

@@ -16,13 +16,26 @@ import (
 // A package is not its module root. The original archive must authenticate
 // both, without copying the subpackage into a synthetic main module.
 func TestAMD64DownloadedNestedFrameOriginalObjects(t *testing.T) {
+	testAMD64DownloadedNestedFrameObjects(t, "fixed-local-nested")
+}
+
+func TestAMD64DownloadedLargeModuleOriginalObjects(t *testing.T) {
+	for _, variant := range []string{"fixed-local-nested-large-archive", "fixed-local-nested-large-payload"} {
+		t.Run(variant, func(t *testing.T) {
+			testAMD64DownloadedNestedFrameObjects(t, variant)
+		})
+	}
+}
+
+func testAMD64DownloadedNestedFrameObjects(t *testing.T, variant string) {
+	t.Helper()
 	for _, target := range []struct{ goos, triple string }{
 		{"linux", "x86_64-unknown-linux-gnu"},
 		{"darwin", "x86_64-apple-darwin"},
 		{"windows", "x86_64-pc-windows-msvc"},
 	} {
 		t.Run(target.goos, func(t *testing.T) {
-			request, pkg, capture := amd64DownloadedFramePublicFixture(t, "fixed-local-nested")
+			request, pkg, capture := amd64DownloadedFramePublicFixture(t, variant)
 			request.Target = target.goos + "/amd64"
 			request.Environment = replaceEnv(request.Environment, map[string]string{"GOOS": target.goos})
 			capture.Original.Target = request.Target

@@ -46,7 +46,7 @@ func NewOriginSet(cache, goBinary string) (*OriginSet, error) {
 	if !filepath.IsAbs(cache) || !filepath.IsAbs(goBinary) {
 		return nil, fmt.Errorf("exact source guard requires bounded absolute cache/tool roles")
 	}
-	set := &OriginSet{cache: cache, files: NewSnapshot(),
+	set := &OriginSet{cache: cache, files: newModuleSnapshot(),
 		directories: make(map[string]os.FileInfo), modules: make(map[string]Module)}
 	if err := set.retainCacheDirectory(cache); err != nil {
 		return nil, err

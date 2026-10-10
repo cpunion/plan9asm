@@ -2,9 +2,7 @@ package gooriginalsrc
 
 import (
 	"archive/zip"
-	"bytes"
 	"context"
-	"crypto/sha256"
 	"errors"
 	"fmt"
 	"io"
@@ -16,18 +14,16 @@ import (
 	modzip "golang.org/x/mod/zip"
 )
 
-func (set *OriginSet) moduleHashes(ctx context.Context, root, path, version, archive string) (string, string, error) {
-	data, err := set.files.ReadRetained(archive)
-	if err != nil {
-		return "", "", err
-	}
-	if err := set.checkOriginalZIP(module.Version{Path: path, Version: version}, data); err != nil {
-		return "", "", err
-	}
-	reader, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
-	if err != nil {
-		return "", "", err
-	}
+func (set *OriginSet) moduleHashes(ctx context.Context, root, path, version, archive string) (zipSum, dirSum string, result error) {
+	result = set.withOriginalZIP(ctx, module.Version{Path: path, Version: version}, archive, func(reader *zip.Reader) error {
+		var err error
+		zipSum, dirSum, err = set.moduleReaderHashes(ctx, root, path, version, reader)
+		return err
+	})
+	return
+}
+
+func (set *OriginSet) moduleReaderHashes(ctx context.Context, root, path, version string, reader *zip.Reader) (string, string, error) {
 	if len(reader.File) > fileLimit {
 		return "", "", fmt.Errorf("original ZIP member inventory exceeds its count bound")
 	}
@@ -43,7 +39,7 @@ func (set *OriginSet) moduleHashes(ctx context.Context, root, path, version, arc
 		physical[member] = name
 		treeBytes += info.Size()
 	}
-	if treeBytes > set.files.bytes || set.files.bytes > totalByteLimit {
+	if treeBytes > modzip.MaxZipFile || treeBytes > set.files.bytes || set.files.bytes > set.files.byteLimit() {
 		return "", "", fmt.Errorf("original ZIP/tree escaped its shared inventory byte bound")
 	}
 	members := make(map[string]*zip.File)
@@ -58,7 +54,7 @@ func (set *OriginSet) moduleHashes(ctx context.Context, root, path, version, arc
 			return "", "", fmt.Errorf("original ZIP member has no complete retained tree role")
 		}
 		extent := set.files.files[original].Size()
-		if extent < 0 || member.UncompressedSize64 > fileByteLimit || member.UncompressedSize64 != uint64(extent) {
+		if extent < 0 || member.UncompressedSize64 > modzip.MaxZipFile || member.UncompressedSize64 != uint64(extent) {
 			return "", "", fmt.Errorf("original ZIP member extent differs from its bounded retained tree role")
 		}
 		zipBytes += extent
@@ -95,9 +91,10 @@ func (set *OriginSet) moduleHashes(ctx context.Context, root, path, version, arc
 	return zipSum, dirSum, err
 }
 
-// The official path-only validator receives a private metadata scratch, never
-// a replacement source/module root. It cannot grant frame/object authority.
-func (set *OriginSet) checkOriginalZIP(identity module.Version, data []byte) (result error) {
+// Stream the retained archive into a private validation scratch. Both Go's
+// path-only validator and ZIP member consumers use those same guarded bytes,
+// without buffering a whole module ZIP in memory or replacing its source root.
+func (set *OriginSet) withOriginalZIP(ctx context.Context, identity module.Version, archive string, consume func(*zip.Reader) error) (result error) {
 	owned, err := os.MkdirTemp(set.cache, "plan9asm-original-zip-check-")
 	if err != nil {
 		return err
@@ -140,19 +137,20 @@ func (set *OriginSet) checkOriginalZIP(identity module.Version, data []byte) (re
 	if err != nil {
 		return errors.Join(err, file.Close())
 	}
-	count, writeErr := file.Write(data)
-	if count != len(data) {
-		writeErr = errors.Join(writeErr, io.ErrShortWrite)
+	reader, err := set.files.OpenRetained(archive)
+	if err != nil {
+		return errors.Join(err, file.Close())
 	}
+	writeErr := copyOriginalFile(file, &originalContextReader{ReadCloser: reader, ctx: ctx})
 	if err := errors.Join(writeErr, file.Close()); err != nil {
 		return err
 	}
 	afterWrite, err := os.Lstat(name)
-	if err != nil || !afterWrite.Mode().IsRegular() || !os.SameFile(fileInfo, afterWrite) || afterWrite.Size() != int64(len(data)) {
+	if err != nil || !afterWrite.Mode().IsRegular() || !os.SameFile(fileInfo, afterWrite) || afterWrite.Size() != set.files.files[archive].Size() {
 		return errors.Join(err, fmt.Errorf("owned ZIP validation file changed while writing"))
 	}
 	fileInfo = afterWrite
-	expected := fmt.Sprintf("%x", sha256.Sum256(data))
+	expected := set.files.hashes[archive]
 	verify := func() error {
 		actualDirectory, statErr := os.Lstat(owned)
 		entries, _, readErr := ReadDirectory(owned, 1)
@@ -160,7 +158,7 @@ func (set *OriginSet) checkOriginalZIP(identity module.Version, data []byte) (re
 			len(entries) != 1 || entries[0].Name() != "original.zip" {
 			return errors.Join(statErr, readErr, fmt.Errorf("owned ZIP validation directory/inventory changed"))
 		}
-		actual, err := originalFileSHA256(name, fileInfo)
+		actual, err := originalRoleFileSHA256(name, fileInfo, originalModuleArtifact)
 		if err != nil || actual != expected {
 			return errors.Join(err, fmt.Errorf("owned ZIP validation bytes changed"))
 		}
@@ -170,7 +168,15 @@ func (set *OriginSet) checkOriginalZIP(identity module.Version, data []byte) (re
 		return err
 	}
 	_, checkErr := modzip.CheckZip(identity, name)
-	return errors.Join(checkErr, verify())
+	if err := errors.Join(checkErr, verify()); err != nil {
+		return err
+	}
+	zipReader, err := zip.OpenReader(name)
+	if err != nil {
+		return err
+	}
+	consumeErr := consume(&zipReader.Reader)
+	return errors.Join(consumeErr, zipReader.Close(), verify(), ctx.Err())
 }
 
 // Go Hash1 intentionally ignores Close errors. Accumulate them independently

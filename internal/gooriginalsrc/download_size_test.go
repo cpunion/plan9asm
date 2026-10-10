@@ -62,7 +62,53 @@ func TestOriginSetGoAcceptedArchiveAndPayloadExtents(t *testing.T) {
 			if err := set.Verify(); err != nil {
 				t.Fatal(err)
 			}
+			large := receipt.Zip
+			if role == "payload member" {
+				large = filepath.Join(receipt.Dir, "a.bin")
+			}
+			if _, err := set.files.ReadRetained(large); err == nil {
+				t.Fatal("module artifact was allocated as an enlarged source buffer")
+			}
+			if err := NewSnapshot().Retain(large); err == nil {
+				t.Fatal("ordinary source inventory borrowed the module artifact bound")
+			}
+			if err := set.files.RetainTool(large); err == nil {
+				t.Fatal("module artifact was relabeled as a compiler tool")
+			}
+			file, err := os.OpenFile(large, os.O_RDWR, 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer file.Close()
+			info, err = file.Stat()
+			if err != nil {
+				t.Fatal(err)
+			}
+			var tail [1]byte
+			if _, err := file.ReadAt(tail[:], info.Size()-1); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := file.WriteAt([]byte{tail[0] ^ 1}, info.Size()-1); err != nil {
+				t.Fatal(err)
+			}
+			if err := set.Verify(); err == nil {
+				t.Fatal("changed complete large module bytes retained their origin")
+			}
+			if _, err := file.WriteAt(tail[:], info.Size()-1); err != nil {
+				t.Fatal(err)
+			}
+			if err := set.Verify(); err == nil {
+				t.Fatal("restoring large module bytes revived a revoked origin")
+			}
 		})
+	}
+}
+
+func TestModuleArtifactBoundDoesNotExceedGoZIPLimit(t *testing.T) {
+	root := originalToolFixtureRoot(t)
+	name := makeOriginalToolExtent(t, root, "too-large", modzip.MaxZipFile+1)
+	if err := newModuleSnapshot().Retain(name); err == nil {
+		t.Fatal("module artifact exceeded Go's complete archive/member bound")
 	}
 }
 

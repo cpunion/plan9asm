@@ -16,7 +16,7 @@ instruction-family audits until this repair batch has run in CI. Preserve the
 separate scalar-FMA development branch; it is not part of this batch.
 
 Published `cb8b2ad3` is running fork CI 38018079008. Policy preflight passed;
-the six priority shards are still running. Let this run finish before pushing
+shards 29/39 failed and four priority shards are still running. Let it finish before pushing
 the next repair batch. No current-head corpus or full CI pass is established.
 
 Earlier `c09eff1e` failed run 37711752851: priority shards 5/29/38/39 failed,
@@ -80,9 +80,20 @@ with unrelated speculative implementation. Keep correctness gates unchanged.
   actual assembly signature's reachable type tree. Seventeen identity
   mutations and fifteen unsupported signature roles still reject. Focused
   current-Go and Go 1.20 gates and three-target, three-API LLVM objects pass.
-  The prepared `_out/ci-closure/types-replay/` reruns the original exact crypto
-  version with both type and CPU-profile repairs; inspect its frozen report
-  before claiming any external closure.
+  At `814de5ce`, the Linux first-party roots passed (533.700s). The original
+  exact crypto replay in `_out/ci-closure/types-replay/` is terminal with zero
+  passes and one failure: mixed TEXT/DATA is outside the frame observer's
+  closed contract. Its package/type gates are not external-library closure.
+- CI's new archive/member rejections exposed a second, distinct bound: whole
+  module ZIPs and unrelated payloads had inherited the 16-MiB source-buffer
+  limit. Origin inventory now streams complete artifacts under Go's 500-MiB
+  ZIP/tree checks and one finite graph budget. Ordinary source/export buffers,
+  tool roles, exact ZIP/tree hashes and permanent mutation revocation remain
+  strict. Independent large-archive/member REDs, race and actual Go 1.20
+  component gates pass. Actual original Go downloads of both large fixtures
+  pass three targets, three translation APIs and LLVM 22 O0/O2 objects. This
+  does not enlarge the separate selected-package source/parser budget or prove
+  an external candidate passed; original-library replay remains required.
 - ARM64 FPCR/FPSR, NZCV, scalar binary operations and RNDR named/raw effects
   have independent original-Go and LLVM runtime evidence. Min/max's original
   full Linux run failed at the 45-minute deadline, without an observed value
