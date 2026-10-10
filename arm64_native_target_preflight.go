@@ -17,6 +17,7 @@ func validateARM64NativeTargets(file *File, options Options) error {
 		validateARM64ScalarCompareTarget,
 		validateARM64FPControlTarget,
 		validateARM64ScalarBinaryTarget,
+		validateARM64ScalarMinMaxTarget,
 	} {
 		if err := validate(file, options); err != nil {
 			if !errors.Is(err, ErrProbeNeedsContext) {
