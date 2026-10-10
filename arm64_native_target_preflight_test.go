@@ -14,6 +14,8 @@ func TestARM64NativeTargetPreflightComposesFamilyErrors(t *testing.T) {
 		{"SCVTFD R0,F0", "MSR $1,FPCR"},
 		{"FCMPD F0,F0", "MSR $1,FPSR"},
 		{"FCMPD F0,F0", "WORD $0xffffffff"},
+		{"FCMPD F0,F0", "FADDD F0,R0"},
+		{"FADDD F0,F0", "MSR $1,FPCR"},
 	} {
 		requireARM64GoAssemblerResult(t, "TEXT comparison(SB),4,$0-0\n"+pair[0]+"\nRET\n", true)
 		if pair[1] != "WORD $0xffffffff" {
