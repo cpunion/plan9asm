@@ -354,11 +354,11 @@ func compileAndRunRuntimeTestWithCompiler(t *testing.T, llc string, compiler []s
 		// by CI does not provide it when linking these freestanding test objects.
 		mainC = "int _fltused = 0;\n" + mainC
 	}
-	if err := os.WriteFile(mainPath, []byte(mainC), 0644); err != nil {
+	if err := os.WriteFile(mainPath, []byte(runtimeOracleProcessSetupC+mainC), 0644); err != nil {
 		t.Fatal(err)
 	}
 
-	llcArgs := []string{"-mtriple=" + triple, "-filetype=obj"}
+	llcArgs := []string{"-mtriple=" + triple, "-relocation-model=pic", "-filetype=obj"}
 	if len(optimization) > 1 || len(optimization) == 1 && optimization[0] != 0 && optimization[0] != 2 {
 		t.Fatal("runtime LLVM optimization must be exactly O0 or O2")
 	}
