@@ -41,10 +41,14 @@ headers to the producer's exact patch. ARM64 actual-source, CRC32 three-API
 LLVM 22 objects, static-storage and marker mutation guards pass; Go 1.27.1 and
 Go 1.20.14 focused compatibility checks pass. Unknown patches remain rejected.
 
-The ordinary CLI now resolves its pure-Go defaults and actual cache paths
+The ordinary CLI now resolves its actual cache paths and explicit defaults
 before package loading, then hands that same environment to source observers.
 Explicit nonordinary options remain visible, not silently normalized away.
-Default-invocation, explicit-profile, overlay and source-selection tests pass.
+Go's actual target-specific CGO default is retained, so native package inventories
+do not shrink. Pure-Go source proofs still require a compatible explicit profile.
+Implicit workspaces, saved Go flags and automatically discovered package drivers
+are preserved too; ordinary proofs cannot disable those selection inputs.
+Default-cache, explicit-profile, overlay and source-selection tests pass.
 The twelve ARM64 undefined-byte cases now share only a test-owned build cache;
 their source/temp/observation state remains independent. Local elapsed time
 was 32.52 seconds before and 12.72 seconds after, without removing any cases.
@@ -52,6 +56,12 @@ was 32.52 seconds before and 12.72 seconds after, without removing any cases.
 CI run `38131270471` finished with failures. Its standard-library benchmark
 compiled 163 of 185 files; its 68-second target total is not a complete-success
 performance result. Keep the PR draft and preserve failed evidence.
+
+The full translator CLI suite passed on `def6e64b` in 1037.56 seconds.
+Subsequent environment-selection repairs have focused regression passes, not
+a current-head full-suite receipt. The local cross-target benchmark on that
+revision compiled 163/184 files with 21 real context/ABI failures; its inventory
+is not the native Linux CI inventory. Neither result establishes CI completion.
 
 ## Remaining delivery gates
 
@@ -66,12 +76,19 @@ their own revisions. Retain their evidence when retiring inactive worktrees;
 never promote old or incomplete reports to current-head success.
 
 The five-architecture official Go classification gate passes after the split.
-The supplementary x/arch ARM64 decoder baseline remains failed: 774 supported
-and 271 unsupported forms, versus the baseline's 778 and 267. An actual replay
-using the published pre-cleanup `77a70d89` dependency reproduces the identical
-`ff28d1d7ad89967b24ed2dfe813716569960ecc942c9b87994fb6a963c4b1be1`
-fingerprint. This is a pre-existing gate failure, not a migration pass or a
-reason to edit the baseline. Preserve the before/after reports under `_out/`.
+The supplementary ARM64 decoder baseline now records the audited rejection of
+four decoder-only spellings: SCVTFDD, SCVTFSS, UCVTFDD and UCVTFSS. Both Go 1.20
+and 1.27 assemblers reject them. Reclassifying only those four forms reproduces
+the entire prior fingerprint; no accepted source form was removed. The separate
+actual-Go-accepted corpus gate remains mandatory.
+
+CRC32/PCLMUL feature inference now has a small independent Go-accepted fixture
+on all Go versions and hosts, replacing the raw-SDK test with handwritten frames
+and unresolved generated constants. Complete current-SDK CRC32 coverage remains
+in its three-API source/header/CPU/literal-object oracle, including the feature
+assertions. Historical SDK lanes test the portable instruction contract, not
+full SDK CRC32 compatibility. Both use bounded LLVM 22 object emission; neither
+test establishes native CRC execution.
 
 Use [instruction-family development](instructions.md) and
 [validation](validation.md). Keep old detailed progress narratives in Git

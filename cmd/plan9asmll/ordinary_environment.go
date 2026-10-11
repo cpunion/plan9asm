@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -13,7 +14,7 @@ import (
 	"github.com/xgo-dev/plan9asm/gotoolprofile"
 )
 
-// Resolve the ordinary pure-Go profile before packages.Load. Its later source
+// Resolve the ordinary load environment before packages.Load. Its later source
 // observers receive this exact environment, never defaults reconstructed from
 // the process after selection. Explicit nonordinary settings remain visible
 // and cannot acquire an ordinary source proof.
@@ -27,13 +28,17 @@ func ordinaryPackageEnvironment(goos, goarch string, input []string) ([]string, 
 		values[key] = value
 	}
 	values["GOOS"], values["GOARCH"] = goos, goarch
-	for key, value := range map[string]string{
-		"GOENV": "off", "GOWORK": "off", "GOTOOLCHAIN": "local",
-		"CGO_ENABLED": "0", "GOPACKAGESDRIVER": "off", "GOFLAGS": "",
-	} {
-		if values[key] == "" {
-			values[key] = value
+	if values["GOTOOLCHAIN"] == "" {
+		values["GOTOOLCHAIN"] = "local"
+	}
+	if values["GOPACKAGESDRIVER"] == "" {
+		// Match packages.Load's automatic discovery, including its use of
+		// the process PATH. A discovered driver is not an ordinary Go load.
+		driver, err := exec.LookPath("gopackagesdriver")
+		if err != nil {
+			driver = "off"
 		}
+		values["GOPACKAGESDRIVER"] = driver
 	}
 	encode := func() []string {
 		result := make([]string, 0, len(values))
@@ -46,13 +51,27 @@ func ordinaryPackageEnvironment(goos, goarch string, input []string) ([]string, 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 	stdout, stderr, err := gotoolprofile.RunBounded(ctx, "", encode(), "go",
-		"env", "-json", "GOCACHE", "GOMODCACHE", "GOPATH")
+		"env", "-json", "GOCACHE", "GOMODCACHE", "GOPATH", "CGO_ENABLED", "GOENV", "GOWORK", "GOFLAGS")
 	if err != nil || len(stderr) != 0 {
 		return nil, fmt.Errorf("resolve package-load cache environment: %v (stderr: %s)", err, stderr)
 	}
 	var actual map[string]string
 	if err := json.Unmarshal(stdout, &actual); err != nil {
 		return nil, fmt.Errorf("decode package-load cache environment: %w", err)
+	}
+	// Stock Go selects its cgo default for the requested target. Forcing zero
+	// here would silently drop selected assembly (including runtime/cgo).
+	// Pure-Go source proofs still require an explicitly compatible profile.
+	if actual["CGO_ENABLED"] != "0" && actual["CGO_ENABLED"] != "1" {
+		return nil, fmt.Errorf("invalid effective package-load CGO_ENABLED")
+	}
+	values["CGO_ENABLED"] = actual["CGO_ENABLED"]
+	values["GOFLAGS"] = actual["GOFLAGS"]
+	for _, key := range []string{"GOENV", "GOWORK"} {
+		values[key] = actual[key]
+		if values[key] == "" {
+			values[key] = "off"
+		}
 	}
 	for _, key := range []string{"GOCACHE", "GOMODCACHE", "GOPATH"} {
 		if !filepath.IsAbs(actual[key]) {

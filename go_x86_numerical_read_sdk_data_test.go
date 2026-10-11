@@ -146,6 +146,7 @@ func TestGoX86SDKNumericalReadLiteralOriginalCRC32LLVM22(t *testing.T) {
 	for _, api := range []string{"text", "module", "go-module"} {
 		t.Run(api, func(t *testing.T) {
 			ir := numericalFamilyTranslate(t, api, pkg, file, bound)
+			requireCRC32TargetFeatures(t, ir)
 			if !strings.Contains(ir, "load volatile i8") || !strings.Contains(ir, "external global [") ||
 				strings.Count(ir, "internal constant [") != 4 || !strings.Contains(ir, "align 32") {
 				t.Fatal("original mutable CPU read/private literal roles differ", ir)

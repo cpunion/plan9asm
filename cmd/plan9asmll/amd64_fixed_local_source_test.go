@@ -150,12 +150,14 @@ func TestCompileOneAMD64FixedLocalCompleteOrdinaryGoSource(t *testing.T) {
 	}
 }
 
-func TestRunOneTargetFixedLocalWithDefaultEnvironment(t *testing.T) {
+func TestRunOneTargetFixedLocalWithDefaultCacheEnvironment(t *testing.T) {
 	pkg, _, config := amd64FixedLocalCLIFixture(t, "PADDL 16(SP),X0")
 	// The existing direct compileOne fixtures supply every environment key.
 	// An ordinary CLI invocation does not: its loader must resolve these
 	// defaults before capturing the selection, not repair them afterward.
-	for _, key := range []string{"GOENV", "GOWORK", "CGO_ENABLED", "GOTOOLCHAIN", "GOCACHE", "GOMODCACHE", "GOPATH", "GOTMPDIR"} {
+	// Keep the fixture's explicit GOENV=off and CGO_ENABLED=0. A source proof
+	// cannot silently replace saved user settings or a native cgo profile.
+	for _, key := range []string{"GOWORK", "GOTOOLCHAIN", "GOCACHE", "GOMODCACHE", "GOPATH", "GOTMPDIR"} {
 		t.Setenv(key, "")
 	}
 	t.Chdir(pkg.Dir)

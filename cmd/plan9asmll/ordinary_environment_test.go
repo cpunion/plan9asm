@@ -4,11 +4,44 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 
+	"github.com/xgo-dev/plan9asm/gotoolprofile"
 	"golang.org/x/tools/go/packages"
 )
+
+func TestOrdinaryPackageEnvironmentPreservesGoDefaultCGO(t *testing.T) {
+	for _, target := range [][2]string{{runtime.GOOS, runtime.GOARCH}, {"js", "wasm"}} {
+		t.Run(target[0]+"/"+target[1], func(t *testing.T) {
+			input := append(os.Environ(), "GOENV=off", "GOWORK=off", "GOTOOLCHAIN=local",
+				"GOOS="+target[0], "GOARCH="+target[1], "CGO_ENABLED=")
+			stdout, stderr, err := gotoolprofile.RunBounded(arm64PrivateCLIContext(t), "", input,
+				"go", "env", "CGO_ENABLED")
+			if err != nil || len(stderr) != 0 {
+				t.Fatalf("actual Go default CGO: %v; %s", err, stderr)
+			}
+			want := strings.TrimSpace(string(stdout))
+			if want != "0" && want != "1" {
+				t.Fatalf("invalid Go CGO setting %q", want)
+			}
+			env, err := ordinaryPackageEnvironment(target[0], target[1], input)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, item := range env {
+				if key, value, _ := strings.Cut(item, "="); key == "CGO_ENABLED" {
+					if value != want {
+						t.Fatalf("package inventory changed: CGO_ENABLED=%s, actual Go default=%s", value, want)
+					}
+					return
+				}
+			}
+			t.Fatal("actual CGO setting was not captured")
+		})
+	}
+}
 
 func TestOrdinaryPackageEnvironmentRetainsExplicitSelection(t *testing.T) {
 	input := append(os.Environ(), "GOENV=off", "GOWORK=off", "GOTOOLCHAIN=local",
@@ -44,6 +77,46 @@ func TestOrdinaryPackageEnvironmentRetainsExplicitSelection(t *testing.T) {
 	}
 }
 
+func TestOrdinaryPackageEnvironmentPreservesWorkspaceAndSavedFlags(t *testing.T) {
+	dir := t.TempDir()
+	workspace := filepath.Join(dir, "go.work")
+	goenv := filepath.Join(dir, "goenv")
+	for name, source := range map[string]string{
+		"go.work": "go 1.20\nuse ./module\n",
+		"goenv":   "GOFLAGS=-tags=saved_profile\n",
+	} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(source), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.Mkdir(filepath.Join(dir, "module"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "module", "go.mod"),
+		[]byte("module example.invalid/selection\n\ngo 1.20\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(dir)
+	input := append(os.Environ(), "GOENV="+goenv, "GOWORK=", "GOFLAGS=", "GOTOOLCHAIN=local")
+	env, err := ordinaryPackageEnvironment(runtime.GOOS, runtime.GOARCH, input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	values := make(map[string]string)
+	for _, item := range env {
+		key, value, _ := strings.Cut(item, "=")
+		values[key] = value
+	}
+	actualWorkspace, err := filepath.EvalSymlinks(values["GOWORK"])
+	wantWorkspace, wantErr := filepath.EvalSymlinks(workspace)
+	if err != nil || wantErr != nil || actualWorkspace != wantWorkspace {
+		t.Errorf("implicit workspace discarded: got %q; %v", values["GOWORK"], err)
+	}
+	if values["GOFLAGS"] != "-tags=saved_profile" || values["GOENV"] != goenv {
+		t.Errorf("actual saved selection was not captured: GOENV=%q GOFLAGS=%q", values["GOENV"], values["GOFLAGS"])
+	}
+}
+
 func TestCallerSelectionRetainsActualLoadEnvironment(t *testing.T) {
 	pkg := &packages.Package{Name: "example", PkgPath: "example.invalid/p"}
 	env := []string{"GOOS=linux", "GOARCH=amd64", "GOFLAGS=", "GOPACKAGESDRIVER=off"}
@@ -54,4 +127,29 @@ func TestCallerSelectionRetainsActualLoadEnvironment(t *testing.T) {
 	if !reflect.DeepEqual(selected.env, want) {
 		t.Fatal("selection reconstructed ambient defaults or borrowed a mutable environment")
 	}
+}
+
+func TestOrdinaryPackageEnvironmentRetainsDiscoveredDriver(t *testing.T) {
+	dir := t.TempDir()
+	name := "gopackagesdriver"
+	if runtime.GOOS == "windows" {
+		name += ".exe"
+	}
+	driver := filepath.Join(dir, name)
+	// Resolution must not execute this driver while resolving Go's environment.
+	if err := os.WriteFile(driver, []byte("not an executable program\n"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	input := append(os.Environ(), "GOENV=off", "GOWORK=off", "GOTOOLCHAIN=local", "GOPACKAGESDRIVER=")
+	env, err := ordinaryPackageEnvironment(runtime.GOOS, runtime.GOARCH, input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, item := range env {
+		if item == "GOPACKAGESDRIVER="+driver {
+			return
+		}
+	}
+	t.Fatal("automatic package driver was disabled or not captured")
 }
