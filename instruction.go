@@ -423,6 +423,11 @@ func ProbeInstruction(arch Arch, goarch string, ins Instr) error {
 		}
 	}
 	for _, arg := range ins.Args {
+		if arch == ArchAMD64 {
+			if err := validateX86SymbolDisplacement(arg); err != nil {
+				return fmt.Errorf("%s: %w", ins.Raw, err)
+			}
+		}
 		if err := unresolvedSymbolicImmediateErrorForArch(arg, arch); err != nil {
 			return fmt.Errorf("%w: %s needs resolved assembler constants: %v", ErrProbeNeedsContext, ins.Raw, err)
 		}

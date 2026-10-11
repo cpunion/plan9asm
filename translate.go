@@ -470,6 +470,11 @@ func validateResolvedImmediates(arch Arch, fn Func) error {
 			}
 		}
 		for _, arg := range ins.Args {
+			if arch == ArchAMD64 {
+				if err := validateX86SymbolDisplacement(arg); err != nil {
+					return err
+				}
+			}
 			if err := unresolvedSymbolicImmediateErrorForArch(arg, arch); err != nil {
 				return err
 			}
