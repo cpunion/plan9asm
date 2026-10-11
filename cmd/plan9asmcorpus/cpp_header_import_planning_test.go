@@ -3,7 +3,7 @@ package main
 import (
 	"testing"
 
-	"github.com/xgo-dev/plan9asm/internal/gotoolprofile"
+	"github.com/xgo-dev/plan9asm/gotoolprofile"
 )
 
 // This is an original-source planning model, not an actual compiler/header or

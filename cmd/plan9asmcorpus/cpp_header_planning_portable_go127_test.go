@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/xgo-dev/plan9asm/internal/gotoolprofile"
+	"github.com/xgo-dev/plan9asm/gotoolprofile"
 )
 
 func assertCPPHeaderPlanningActualPortable(t *testing.T, candidate discoveryCandidate, matrix matrixReport, configs []discoveryBuildConfiguration, targets []string) {

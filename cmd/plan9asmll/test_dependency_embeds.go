@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"reflect"
 
-	"github.com/xgo-dev/plan9asm/internal/gotoolprofile"
+	"github.com/xgo-dev/plan9asm/gotoolprofile"
 	"golang.org/x/tools/go/packages"
 )
 

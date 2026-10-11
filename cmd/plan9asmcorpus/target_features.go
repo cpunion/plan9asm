@@ -4,7 +4,7 @@ import (
 	"context"
 	"go/build"
 
-	"github.com/xgo-dev/plan9asm/internal/gotoolprofile"
+	"github.com/xgo-dev/plan9asm/gotoolprofile"
 )
 
 type discoveryTargetFeatures = gotoolprofile.Observation

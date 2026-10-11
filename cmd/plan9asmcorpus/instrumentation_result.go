@@ -5,7 +5,7 @@ import (
 	"path"
 	"reflect"
 
-	"github.com/xgo-dev/plan9asm/internal/gotoolprofile"
+	"github.com/xgo-dev/plan9asm/gotoolprofile"
 )
 
 func validateDiscoveryInstrumentationObservation(requirement discoveryInstrumentationRequirement, profiles []discoveryFeatureProfile, observed *gotoolprofile.InstrumentationExportObservation) error {

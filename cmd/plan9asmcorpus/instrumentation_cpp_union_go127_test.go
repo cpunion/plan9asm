@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/xgo-dev/plan9asm/internal/gotoolprofile"
+	"github.com/xgo-dev/plan9asm/gotoolprofile"
 )
 
 // Every profile first has its own original stock-Go export. The corpus must

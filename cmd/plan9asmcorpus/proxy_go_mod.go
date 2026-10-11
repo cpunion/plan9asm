@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/xgo-dev/plan9asm/internal/gotoolprofile"
+	"github.com/xgo-dev/plan9asm/gotoolprofile"
 )
 
 func captureDiscoveryProxyGoMod(ctx context.Context, plan *discoveryOrdinarySelectionPlan, download moduleDownloadInfo, dir string, env []string) error {

@@ -7,7 +7,7 @@ import (
 	"strconv"
 
 	"github.com/xgo-dev/plan9asm"
-	"github.com/xgo-dev/plan9asm/internal/gotoolprofile"
+	"github.com/xgo-dev/plan9asm/gotoolprofile"
 )
 
 // Replay full originals with the same executor as the actual CLI. Resource

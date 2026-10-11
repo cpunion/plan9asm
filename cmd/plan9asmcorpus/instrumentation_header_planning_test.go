@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/xgo-dev/plan9asm/internal/gotoolprofile"
+	"github.com/xgo-dev/plan9asm/gotoolprofile"
 )
 
 func TestInstrumentationNativeHeaderOutputCoverageBindsUnitCorrespondence(t *testing.T) {

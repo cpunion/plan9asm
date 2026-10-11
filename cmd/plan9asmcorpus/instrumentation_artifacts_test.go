@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/xgo-dev/plan9asm/internal/gotoolprofile"
+	"github.com/xgo-dev/plan9asm/gotoolprofile"
 )
 
 func TestDiscoveryInstrumentationGeneratedArtifactsHaveIndependentBounds(t *testing.T) {

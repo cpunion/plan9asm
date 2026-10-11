@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/xgo-dev/plan9asm/internal/gotoolprofile"
+	"github.com/xgo-dev/plan9asm/gotoolprofile"
 )
 
 // The dependency changes a header constant, not a root CPP branch. The owned

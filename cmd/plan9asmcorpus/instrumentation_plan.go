@@ -9,7 +9,7 @@ import (
 	"reflect"
 	"sort"
 
-	"github.com/xgo-dev/plan9asm/internal/gotoolprofile"
+	"github.com/xgo-dev/plan9asm/gotoolprofile"
 )
 
 const discoveryInstrumentationPlanProtocol = "exact_source_instrumentation_denominator_v4"

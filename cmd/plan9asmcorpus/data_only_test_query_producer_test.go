@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/xgo-dev/plan9asm/internal/gotoolprofile"
+	"github.com/xgo-dev/plan9asm/gotoolprofile"
 )
 
 func checkDataOnlyQueryReaderMutants(t *testing.T, result discoveryCorpusResult, targets []string, inventory *discoveryFeatureInventory) {

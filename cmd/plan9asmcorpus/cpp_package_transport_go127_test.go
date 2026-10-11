@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/xgo-dev/plan9asm/internal/gotoolprofile"
+	"github.com/xgo-dev/plan9asm/gotoolprofile"
 )
 
 // The archive and actual Go package selection are independent of the transport

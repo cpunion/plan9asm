@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/xgo-dev/plan9asm/internal/gotoolprofile"
+	"github.com/xgo-dev/plan9asm/gotoolprofile"
 )
 
 func runDiscoveryMachineCommand(ctx context.Context, dir string, env []string, name string, args ...string) ([]byte, []byte, error) {

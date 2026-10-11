@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"github.com/xgo-dev/plan9asm"
-	"github.com/xgo-dev/plan9asm/internal/gotoolprofile"
+	"github.com/xgo-dev/plan9asm/gotoolprofile"
 )
 
 // Keep the preferred outside-module path inside this fixture's own temporary

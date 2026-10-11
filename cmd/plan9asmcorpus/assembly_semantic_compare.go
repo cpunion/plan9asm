@@ -8,7 +8,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/xgo-dev/plan9asm/internal/gotoolprofile"
+	"github.com/xgo-dev/plan9asm/gotoolprofile"
 )
 
 // This private comparison view is never evidence and cannot pass a report or

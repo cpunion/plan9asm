@@ -7,7 +7,7 @@ import (
 	"path"
 	"strings"
 
-	"github.com/xgo-dev/plan9asm/internal/gotoolprofile"
+	"github.com/xgo-dev/plan9asm/gotoolprofile"
 )
 
 func validateDiscoveryInstrumentationTargetExclusion(plan *discoveryOrdinarySelectionPlan, requirement discoveryInstrumentationRequirement, outcome discoveryInstrumentationOutcome, profiles []discoveryFeatureProfile) error {

@@ -4,7 +4,7 @@ import (
 	"context"
 	"reflect"
 
-	"github.com/xgo-dev/plan9asm/internal/gotoolprofile"
+	"github.com/xgo-dev/plan9asm/gotoolprofile"
 )
 
 var discoveryFeatureSubtools = []string{"asm", "compile", "link", "nm", "vet"}

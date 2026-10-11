@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/xgo-dev/plan9asm/internal/gotoolprofile"
+	"github.com/xgo-dev/plan9asm/gotoolprofile"
 )
 
 const discoveryInstrumentationHeaderPlanningProtocol = "same_mode_native_header_planning_query_v1"

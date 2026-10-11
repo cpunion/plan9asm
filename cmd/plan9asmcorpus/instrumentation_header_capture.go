@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/xgo-dev/plan9asm/internal/gotoolprofile"
+	"github.com/xgo-dev/plan9asm/gotoolprofile"
 )
 
 func captureDiscoveryInstrumentationHeaderPlanning(ctx context.Context, cfg discoveryCorpusConfig, candidate discoveryCandidate, download moduleDownloadInfo,

@@ -5,7 +5,7 @@ import (
 	"path"
 	"strconv"
 
-	"github.com/xgo-dev/plan9asm/internal/gotoolprofile"
+	"github.com/xgo-dev/plan9asm/gotoolprofile"
 )
 
 // This is an inventory walk, not a macro execution trace. Each original source

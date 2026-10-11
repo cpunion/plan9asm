@@ -30,7 +30,7 @@ import (
 
 	"github.com/xgo-dev/plan9asm/internal/discoverymeta"
 	"github.com/xgo-dev/plan9asm/internal/gotoolchain"
-	"github.com/xgo-dev/plan9asm/internal/gotoolprofile"
+	"github.com/xgo-dev/plan9asm/gotoolprofile"
 	"golang.org/x/mod/modfile"
 	"golang.org/x/mod/module"
 )

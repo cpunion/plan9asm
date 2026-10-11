@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/xgo-dev/plan9asm/internal/gotoolprofile"
+	"github.com/xgo-dev/plan9asm/gotoolprofile"
 )
 
 // This explicit fixture oracle is independent of the planner's CPU catalog.

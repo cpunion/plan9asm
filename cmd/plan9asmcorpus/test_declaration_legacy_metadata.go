@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"path"
 
-	"github.com/xgo-dev/plan9asm/internal/gotoolprofile"
+	"github.com/xgo-dev/plan9asm/gotoolprofile"
 )
 
 func captureDiscoveryTestModuleGoMod(ctx context.Context, capture *discoveryTestModuleCapture, dir string, env []string) error {

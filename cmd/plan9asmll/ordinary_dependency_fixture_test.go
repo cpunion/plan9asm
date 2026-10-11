@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/xgo-dev/plan9asm/internal/gotoolprofile"
+	"github.com/xgo-dev/plan9asm/gotoolprofile"
 )
 
 // An exact synthetic module served by an owned file proxy exercises the same

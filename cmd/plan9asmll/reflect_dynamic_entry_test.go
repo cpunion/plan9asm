@@ -18,7 +18,7 @@ import (
 	"time"
 
 	"github.com/xgo-dev/plan9asm"
-	"github.com/xgo-dev/plan9asm/internal/gotoolprofile"
+	"github.com/xgo-dev/plan9asm/gotoolprofile"
 )
 
 // These stubs have zero declared parameters, but their physical callers have

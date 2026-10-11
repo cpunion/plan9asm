@@ -6,12 +6,12 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/xgo-dev/plan9asm/internal/gotoolprofile"
+	"github.com/xgo-dev/plan9asm/gotoolprofile"
 )
 
 func fixtureAuthenticatedProxyGoMod(t *testing.T) *gotoolprofile.ProxyGoModProof {
 	t.Helper()
-	data, err := os.ReadFile("../../internal/gotoolprofile/testdata/aez_proxy_go_mod.json")
+	data, err := os.ReadFile("../../gotoolprofile/testdata/aez_proxy_go_mod.json")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -140,7 +140,7 @@ func TestLegacyProxyMetadataGuardRetainsPreLoadHash(t *testing.T) {
 func TestLegacyProxyMetadataComparesIndependentSignedCheckpoints(t *testing.T) {
 	first := fixtureLegacyProxyProgress(t)
 	later := cloneSemanticProgress(t, first)
-	data, err := os.ReadFile("../../internal/gotoolprofile/testdata/aez_proxy_go_mod_later_tree.json")
+	data, err := os.ReadFile("../../gotoolprofile/testdata/aez_proxy_go_mod_later_tree.json")
 	if err != nil {
 		t.Fatal(err)
 	}

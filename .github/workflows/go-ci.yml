@@ -760,8 +760,8 @@ jobs:
           set -euo pipefail
           test "$(go env GOHOSTOS)/$(go env GOHOSTARCH)" = linux/amd64
           scope='^TestAMD64DownloadedFixedLocalLLVM22Numerical$'
-          go test ./internal/gotoolprofile -list="$scope" | rg -x 'TestAMD64DownloadedFixedLocalLLVM22Numerical'
-          go test ./internal/gotoolprofile -run="$scope" -count=1 -timeout=10m
+          go test ./gotoolprofile -list="$scope" | rg -x 'TestAMD64DownloadedFixedLocalLLVM22Numerical'
+          go test ./gotoolprofile -run="$scope" -count=1 -timeout=10m
 
       - name: Retain complete module owner evidence (Ubuntu)
         if: ${{ !cancelled() && runner.os != 'Windows' }}

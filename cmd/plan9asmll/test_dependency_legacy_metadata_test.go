@@ -7,11 +7,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/xgo-dev/plan9asm/internal/gotoolprofile"
+	"github.com/xgo-dev/plan9asm/gotoolprofile"
 )
 
 func TestTestModuleConsumerCachedLegacyMetadataCannotDisappear(t *testing.T) {
-	data, err := os.ReadFile("../../internal/gotoolprofile/testdata/aez_proxy_go_mod.json")
+	data, err := os.ReadFile("../../gotoolprofile/testdata/aez_proxy_go_mod.json")
 	if err != nil {
 		t.Fatal(err)
 	}

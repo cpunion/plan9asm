@@ -10,7 +10,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/xgo-dev/plan9asm/internal/gotoolprofile"
+	"github.com/xgo-dev/plan9asm/gotoolprofile"
 	"golang.org/x/mod/module"
 	"golang.org/x/tools/go/packages"
 )

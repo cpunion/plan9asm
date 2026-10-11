@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"github.com/xgo-dev/plan9asm"
-	"github.com/xgo-dev/plan9asm/internal/gotoolprofile"
+	"github.com/xgo-dev/plan9asm/gotoolprofile"
 )
 
 // These are possible String operands, never synthetic literal controls. The

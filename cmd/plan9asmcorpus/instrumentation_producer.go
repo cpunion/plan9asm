@@ -11,7 +11,7 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/xgo-dev/plan9asm/internal/gotoolprofile"
+	"github.com/xgo-dev/plan9asm/gotoolprofile"
 )
 
 // Instrumented packages have their own actual driver/export/metadata/CPP/LLVM

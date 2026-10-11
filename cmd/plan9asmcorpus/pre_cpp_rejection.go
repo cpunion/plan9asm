@@ -15,7 +15,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/xgo-dev/plan9asm/internal/gotoolprofile"
+	"github.com/xgo-dev/plan9asm/gotoolprofile"
 )
 
 const discoveryPreCPPRejectionProtocol = "original_first_cpp_control_asm_rejection_v1"

@@ -17,7 +17,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/xgo-dev/plan9asm/internal/gotoolprofile"
+	"github.com/xgo-dev/plan9asm/gotoolprofile"
 )
 
 // Syntax here only avoids unnecessary ordinary-type/CPP queries. No name,

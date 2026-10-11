@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"reflect"
 
-	"github.com/xgo-dev/plan9asm/internal/gotoolprofile"
+	"github.com/xgo-dev/plan9asm/gotoolprofile"
 )
 
 // A guard belongs to one synchronous pre/post-object snapshot invocation.

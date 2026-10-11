@@ -5,7 +5,7 @@ import (
 	"path"
 	"strings"
 
-	"github.com/xgo-dev/plan9asm/internal/gotoolprofile"
+	"github.com/xgo-dev/plan9asm/gotoolprofile"
 )
 
 // A metadata query has no translation count. Its exact selected package and

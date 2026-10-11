@@ -16,7 +16,7 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/xgo-dev/plan9asm/internal/gotoolprofile"
+	"github.com/xgo-dev/plan9asm/gotoolprofile"
 )
 
 const discoveryFortranLoaderProtocol = "original_cgo0_fortran_loader_rejection_v1"

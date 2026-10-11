@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/xgo-dev/plan9asm/internal/gotoolprofile"
+	"github.com/xgo-dev/plan9asm/gotoolprofile"
 )
 
 // This tests only the private comparison projection, not proof acceptance.

@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/xgo-dev/plan9asm/internal/gotoolprofile"
+	"github.com/xgo-dev/plan9asm/gotoolprofile"
 )
 
 func TestTestDeclarationDependencyProducerOriginalPureGoClosure(t *testing.T) {

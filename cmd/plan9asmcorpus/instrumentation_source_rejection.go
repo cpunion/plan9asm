@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"reflect"
 
-	"github.com/xgo-dev/plan9asm/internal/gotoolprofile"
+	"github.com/xgo-dev/plan9asm/gotoolprofile"
 )
 
 // Resolve only the exact already authenticated root into this new owned

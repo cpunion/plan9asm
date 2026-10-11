@@ -7,7 +7,7 @@ import (
 	"reflect"
 	"sort"
 
-	"github.com/xgo-dev/plan9asm/internal/gotoolprofile"
+	"github.com/xgo-dev/plan9asm/gotoolprofile"
 )
 
 // Original Go/ASM constraints define the base denominator. The separately

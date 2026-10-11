@@ -12,7 +12,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/xgo-dev/plan9asm/internal/gotoolprofile"
+	"github.com/xgo-dev/plan9asm/gotoolprofile"
 )
 
 // These Go 1.27.1 baseline/registration bytes were captured with the real

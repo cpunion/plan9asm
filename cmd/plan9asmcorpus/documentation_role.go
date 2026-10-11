@@ -16,7 +16,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/xgo-dev/plan9asm/internal/gotoolprofile"
+	"github.com/xgo-dev/plan9asm/gotoolprofile"
 )
 
 const discoveryDocumentationProtocol = "original_always_documentation_role_v1"

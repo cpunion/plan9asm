@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"github.com/xgo-dev/plan9asm"
-	"github.com/xgo-dev/plan9asm/internal/gotoolprofile"
+	"github.com/xgo-dev/plan9asm/gotoolprofile"
 )
 
 // CPP has a separate feature namespace: for example GOAMD64_v3 is exclusive,
