@@ -21,7 +21,7 @@ if [[ "${1:-}" == --progress ]]; then
   shift
 fi
 reports_dir=${1:-"$repo_root/_out/discovered-library-corpus"}
-shard_count=${2:-64}
+shard_count=${2:-128}
 if (( $# > 2 )) || ! [[ "$shard_count" =~ ^[1-9][0-9]*$ ]]; then
   echo "usage: $0 [--progress] [reports-directory] [shard-count]" >&2
   exit 2

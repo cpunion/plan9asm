@@ -28,18 +28,26 @@ function stepSection(section, name) {
   return section.slice(start, next < 0 ? section.length : next);
 }
 
-test('priority and remaining matrices partition all 64 shards exactly once', () => {
+test('priority and remaining matrices partition all 128 shards exactly once', () => {
   const priority = shards(jobSection('discovered_library_priority'));
   const remaining = shards(jobSection('discovered_library_corpus'));
-  // Retain instruction/ABI regressions and the cache cleanup failure from
-  // fork run 36509240233.
-  assert.deepEqual(priority, [5, 29, 36, 38, 39, 42]);
+  // Each former priority shard splits into two children. Both retain their
+  // failure-first role, including the repeatedly timed-out parents 36/42.
+  assert.deepEqual(priority, [5, 29, 36, 38, 39, 42, 69, 93, 100, 102, 103, 106]);
   assert.deepEqual([...priority, ...remaining].sort((a, b) => a - b),
-    Array.from({ length: 64 }, (_, index) => index));
+    Array.from({ length: 128 }, (_, index) => index));
   for (const name of ['discovered_library_priority', 'discovered_library_corpus']) {
     const section = jobSection(name);
-    assert.match(section, /discovered-corpus \(shard \$\{\{ matrix\.shard \}\}\/64\)/);
-    assert.match(section, /check-discovered-library-corpus\.sh "\$\{\{ matrix\.shard \}\}" 64/);
+    assert.match(section, /discovered-corpus \(shard \$\{\{ matrix\.shard \}\}\/128\)/);
+    assert.match(section, /check-discovered-library-corpus\.sh "\$\{\{ matrix\.shard \}\}" 128/);
+  }
+});
+
+test('both children of every old priority shard retain priority ownership', () => {
+  const priority = new Set(shards(jobSection('discovered_library_priority')));
+  const oldPriority = new Set([5, 29, 36, 38, 39, 42]);
+  for (let child = 0; child < 128; child++) {
+    assert.equal(priority.has(child), oldPriority.has(child % 64), `child ${child}`);
   }
 });
 
@@ -55,7 +63,7 @@ test('failed exact versions rehash into priority shards', () => {
     'github.com/intel/ixl-go@v0.0.0-20260223204051-3e809238f558',
   ]) {
     const hash = createHash('sha256').update(exactVersion).digest();
-    const shard = Number(hash.readBigUInt64BE(0) % 64n);
+    const shard = Number(hash.readBigUInt64BE(0) % 128n);
     assert.ok(priority.includes(shard), `${exactVersion} belongs to shard ${shard}`);
   }
 });
@@ -79,11 +87,12 @@ test('discovery matrices have no explicit concurrency cap', () => {
 test('local discovery helpers use the CI shard count by default', () => {
   for (const name of [
     'check-discovered-library-corpus.sh',
+    'verify-discovered-library-corpus.sh',
     'discovery-status.sh',
     'update-assembly-ledger.sh',
   ]) {
     const script = fs.readFileSync(path.join(__dirname, '../../scripts', name), 'utf8');
-    assert.match(script, /shard_count=\$\{2:-64\}/, name);
+    assert.match(script, /shard_count=\$\{2:-128\}/, name);
   }
 });
 
@@ -111,7 +120,7 @@ test('discovery matrices reuse the task-owned restored Go build cache', () => {
       /^          PLAN9ASM_DISCOVERY_BUILD_CACHE: \$\{\{ runner\.temp \}\}\/go-build-cache$/m,
       `${name} bypasses the restored task-owned Go cache`);
     assert.match(compile,
-      /^        run: scripts\/check-discovered-library-corpus\.sh "\$\{\{ matrix\.shard \}\}" 64$/m);
+      /^        run: scripts\/check-discovered-library-corpus\.sh "\$\{\{ matrix\.shard \}\}" 128$/m);
   }
 });
 

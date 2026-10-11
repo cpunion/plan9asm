@@ -46,7 +46,7 @@ func TestProfileProtocolEntryPointsUseStrictCurrentReaders(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(guide), "all 64 schema-11 reports") || strings.Contains(string(guide), "all 64 schema-10 reports") {
+	if !strings.Contains(string(guide), "all 128 schema-11 reports") || strings.Contains(string(guide), "schema-10 reports") {
 		t.Fatal("frozen validation guide requires an obsolete discovery protocol")
 	}
 }

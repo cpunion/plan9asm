@@ -12,13 +12,13 @@ results. `matched` additionally retains assembly paths. `failure` remains
 retryable and does not prove absence. Retain all architecture hints for future
 platform queries, not only currently supported targets.
 
-For a complete local replay, optional scheduling priorities do not reduce
+On a disposable validation executor, optional scheduling priorities do not reduce
 coverage or reuse old reports:
 
 ```sh
 PLAN9ASM_DISCOVERY_PRIORITY_SHARDS=25,26,39 \
   PLAN9ASM_DISCOVERY_PARALLELISM=4 \
-  scripts/check-discovered-library-corpus.sh all 64
+  scripts/check-discovered-library-corpus.sh all 128
 ```
 
 The priority indices must be unique and in range. Every remaining shard runs
@@ -292,18 +292,20 @@ read with that snapshot's reader; current verification does not upgrade or
 rewrite them. First-party synthetic file-proxy tests without SumDB certificates
 are mechanism fixtures, not authentication of external modules.
 
-Corpus sharding is `sha256(module@version) % 64`, independent of module-hashed
-ledger files. Parallel shards read one frozen ledger and write distinct reports:
+Corpus sharding uses the first eight SHA-256 bytes of `module@version`, read as
+an unsigned big-endian integer modulo 128. It is independent of the 256
+module-hashed ledger files. Parallel shards read one frozen ledger and write
+distinct reports:
 
 ```sh
 PLAN9ASM_DISCOVERY_PARALLELISM=4 \
-  scripts/check-discovered-library-corpus.sh all 64
+  scripts/check-discovered-library-corpus.sh all 128
 scripts/verify-discovered-library-corpus.sh _out/discovered-library-corpus
 ```
 
 To replay particular exact ledger candidates, invoke `plan9asmcorpus` with
 repeatable `-discovery-exact-candidate=module@version`, the normal
-`-discovery-shard-count=64` and their matching `-discovery-shard-index`. Keep a
+`-discovery-shard-count=128` and their matching `-discovery-shard-index`. Keep a
 fresh report directory and pass the usual manifest, ledger, repository,
 translator, LLVM and report paths. Requests must be unique current ledger
 matches in that shard; reader modes and target filters reject this option.

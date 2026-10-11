@@ -11,7 +11,7 @@ const source = fs.readFileSync(
 );
 
 function runCorpusFixture(t, failedShard = '', priorityShards = '', phaseEvents = '0',
-  aggregateFails = false) {
+  aggregateFails = false, shardCount = '5') {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'plan9asm-cache-test-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const scripts = path.join(root, 'scripts');
@@ -20,6 +20,7 @@ function runCorpusFixture(t, failedShard = '', priorityShards = '', phaseEvents 
   fs.mkdirSync(bin);
   const calls = path.join(root, 'calls');
   const verified = path.join(root, 'verified');
+  const aggregateArgsFile = path.join(root, 'aggregate-args');
   const dispatch = path.join(root, 'dispatch');
   const caches = path.join(root, 'caches');
   fs.mkdirSync(caches);
@@ -47,9 +48,12 @@ exit "$status"
   fs.writeFileSync(path.join(scripts, 'verify-discovered-library-corpus.sh'), `#!/usr/bin/env bash
 set -euo pipefail
 printf 'verified\n' >> "$FIXTURE_VERIFIED"
+printf '%s\\n' "$@" > "$FIXTURE_AGGREGATE_ARGS"
 test "$FIXTURE_AGGREGATE_FAIL" = 0
 `, { mode: 0o755 });
-  const result = spawnSync('bash', [runner, 'all', '5'], {
+  const args = [runner, 'all'];
+  if (shardCount !== null) args.push(shardCount);
+  const result = spawnSync('bash', args, {
     encoding: 'utf8',
     timeout: 10000,
     env: {
@@ -63,6 +67,7 @@ test "$FIXTURE_AGGREGATE_FAIL" = 0
       FIXTURE_CALLS: calls,
       FIXTURE_DISPATCH: dispatch,
       FIXTURE_VERIFIED: verified,
+      FIXTURE_AGGREGATE_ARGS: aggregateArgsFile,
       FIXTURE_FAILED_SHARD: failedShard,
       FIXTURE_AGGREGATE_FAIL: aggregateFails ? '1' : '0',
     },
@@ -74,8 +79,11 @@ test "$FIXTURE_AGGREGATE_FAIL" = 0
   const dispatchArgs = fs.existsSync(dispatch)
     ? fs.readFileSync(dispatch, 'utf8').trim().split('\n')
     : [];
+  const aggregateArgs = fs.existsSync(aggregateArgsFile)
+    ? fs.readFileSync(aggregateArgsFile, 'utf8').trim().split('\n')
+    : [];
   assert.equal(fs.readFileSync(path.join(callerCache, 'keep'), 'utf8'), 'caller-owned');
-  return { result, records, dispatchArgs, runner, root, caches, verified };
+  return { result, records, dispatchArgs, aggregateArgs, runner, root, caches, verified };
 }
 
 // The Go TestDiscoveryAllQueue* fixtures execute real concurrent children and
@@ -107,6 +115,20 @@ test('priority shards run first without omitting or repeating other shards', (t)
   assert.deepEqual(records, ['4', '2', '0', '1', '3']);
   assert.deepEqual(fs.readdirSync(caches), []);
   assert.equal(fs.readFileSync(verified, 'utf8'), 'verified\n');
+});
+
+test('default split queue and aggregate agree on all 128 shards', (t) => {
+  const priority = [5, 29, 36, 38, 39, 42, 69, 93, 100, 102, 103, 106];
+  const { result, records, dispatchArgs, aggregateArgs, root } =
+    runCorpusFixture(t, '', priority.join(','), '0', false, null);
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(records.slice(0, priority.length), priority.map(String));
+  assert.deepEqual(records.map(Number).sort((a, b) => a - b),
+    Array.from({ length: 128 }, (_, index) => index));
+  assert.equal(dispatchArgs[6], '128');
+  assert.deepEqual(aggregateArgs, [
+    path.join(root, '_out/discovered-library-corpus'), '128',
+  ]);
 });
 
 test('successful shards cannot hide a failed final aggregate', (t) => {

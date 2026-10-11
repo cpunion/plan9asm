@@ -167,8 +167,11 @@ roots pass. Partition 21's opcode-only feature fixture is corrected by
 not. Twenty-five current-Go and three Go 1.20 roots pass. Preserve
 `_out/vector-dispatch-regressions/` in the reused scalar-lane development tree,
 including the original failures and the corrected NOSPLIT test fixture.
-The frozen report remains failed and still runs its remaining partitions;
-these component repairs do not relabel it or replace fresh complete CI.
+The frozen root report is now terminal: 28/32 partitions pass, with 5,796 root
+passes, five failures, 39 explicit host-inapplicable skips and zero incomplete
+roots. All five failed roots have the focused repairs above. The main-module
+runner continues its other packages. Component repairs do not relabel the old
+report or replace fresh complete CI and required cross-runtime counterparts.
 
 The reused development branch is `codex/pr40-packed-arithmetic-effects-20261011`.
 Packdb's VPSUBB counterexample reproduces the missing numerical result consumer
@@ -249,6 +252,21 @@ PCALIGN producer and historical literal-NOP matrix have distinct SDK roles,
 not runtime skips. The final four current-Go roots pass after that split.
 This local follow-up is not in run 38116495799; no gofiber or ledger pass is
 claimed, and Rosetta is not native Linux evidence.
+
+The next local follow-up splits discovery CI from 64 to 128 hash shards after
+parents 36/42 repeatedly exhausted the unchanged 330-minute compile budget.
+Both children of all six former priority shards remain failure-first; all 128
+reports are mandatory, with unchanged test steps, targets and strict readers.
+A streaming read-only count of the same 6,067 candidates reduces the maximum
+shard size from 117 to 67. Parent 36 splits 116 into 56/60; parent 42 splits
+104 into 47/57. These counts are not measured CI speedups or new ledger passes.
+Keep the current 64-shard run 38116495799 unchanged until it finishes. Historical
+reports cannot be relabeled for the new partition layout. Scheduling RED/GREEN
+evidence is under `_out/discovery-shard-split/`.
+All 43 Node scheduling tests, nine focused current-Go roots, seven Go 1.20
+roots, three race roots, root CI policy, actionlint, shell syntax and vet pass.
+The independent split test checks both children of every old parent; the reader
+regression rejects old-count reports instead of promoting historical evidence.
 
 The historical `aedfac9b` tree's old
 `_out/ci-closure/publish-after-ci.sh` already completed publication and is not
@@ -685,10 +703,10 @@ timeouts. Those regressions have newer repairs, not a retroactive pass.
 
 ## Ordered next gates
 
-1. Let published `0c61d468` CI 38096927749 finish naturally. Retain all six
+1. Let published `46fa4bca` CI 38116495799 finish naturally. Retain all six
    priority reports and compare exact failures before the next fork-only push.
-2. Finish the package/source binding repairs, retaining the original examples
-   as failed until each complete replay succeeds. Commit locally in batches.
+2. Finish local follow-up gates, including NOP result composition and discovery
+   job splitting. Keep original examples failed until complete replay succeeds.
 3. Compare new CI failures with the original eight classes. Fix each class with
    independent RED/GREEN tests and original-example replay; batch the next push.
 4. After priority success, let all remaining current-head gates run. Publish

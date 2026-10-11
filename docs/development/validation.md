@@ -123,7 +123,7 @@ consumer has closed. On a validation executor, the required corpus commands are:
 ```sh
 scripts/check-reported-library-corpus.sh all
 PLAN9ASM_DISCOVERY_PARALLELISM=4 \
-  scripts/check-discovered-library-corpus.sh all 64
+  scripts/check-discovered-library-corpus.sh all 128
 ```
 
 ## Official coverage and benchmark
@@ -171,7 +171,7 @@ unchanged until corpus verification finishes. A separate persistent worktree
 allows development to continue. Reports under `_out/` may be written without
 changing tracked source.
 
-The aggregate requires all 64 schema-11 reports, exact candidate ownership and
+The aggregate requires all 128 schema-11 reports, exact candidate ownership and
 one identical source/ledger/tool provenance. Ordinary file/target/profile-ID/
 custom-tag scopes retain actual Go/package-role, CPP and LLVM object proofs in
 progress schema 3 and assembly-ledger v3. Old reports cannot be relabeled.
@@ -240,7 +240,8 @@ exclusions separately, keep Draft, and resolve their review before promotion.
 
 Let the active full run finish before publishing another batch. A cheap
 `ci_policy` job first checks workflow scheduling and root CI policy tests.
-The repair matrix then runs the six previously failing discovery shards.
+The repair matrix then runs both children of each of the six previously failing
+discovery shards, for twelve priority jobs in the 128-shard layout.
 Every other entry job has a native `needs` dependency on that matrix: **all
 priority shards must succeed**, not merely start, before the remaining jobs
 run. Fail-fast is disabled so every failed shard is checked.
@@ -248,8 +249,15 @@ There is no polling job consuming a runner while waiting.
 
 The strict aggregate still runs after a failed priority matrix and reports the
 missing/failed coverage; skipped downstream work cannot make the run green.
-All 64 shards remain required, with identical compilation and artifact steps.
+All 128 shards remain required, with identical compilation and artifact steps.
 No old-source artifact can replace a current-head rerun.
+
+The split preserves candidate ownership: each former modulo-64 shard `p`
+becomes modulo-128 children `p` and `p + 64`. This reduces individual job work,
+not the total candidate or target denominator. Compilation/job deadlines are
+unchanged. Old 64-shard reports remain historical evidence; read them with
+their frozen tools and explicit count, never relabel or combine them with new
+128-shard reports. The independent 256-file ledger layout is unchanged.
 
 When changing the priority set, update both workflow matrices and
 the scheduling regression tests together. Validate their exhaustive,

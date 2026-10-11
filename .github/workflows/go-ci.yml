@@ -44,13 +44,14 @@ jobs:
         run: go test . -run '^TestCI' -count=1
 
   discovered_library_priority:
-    name: discovered-corpus (shard ${{ matrix.shard }}/64)
+    name: discovered-corpus (shard ${{ matrix.shard }}/128)
     needs: ci_policy
     timeout-minutes: 360
     runs-on: ${{ github.repository_owner == 'xgo-dev' && fromJSON('["qiniu", "ubuntu-24.04-large"]') || 'ubuntu-latest' }}
     strategy:
       fail-fast: false
-      # Require every previously failing shard to pass before other work.
+      # Split all former priority shards into both modulo-128 children.
+      # Require every child to pass before releasing the remaining work.
       matrix:
         shard:
           - 5
@@ -59,6 +60,12 @@ jobs:
           - 38
           - 39
           - 42
+          - 69
+          - 93
+          - 100
+          - 102
+          - 103
+          - 106
 
     steps:
       - name: Checkout
@@ -89,7 +96,7 @@ jobs:
           # some module proxies return 404 for checksum tiles they advertise.
           GOPROXY: https://proxy.golang.org,https://goproxy.cn,direct
           GOSUMDB: ${{ github.repository_owner == 'xgo-dev' && 'sum.golang.google.cn' || 'sum.golang.org https://sum.golang.org' }}
-        run: scripts/check-discovered-library-corpus.sh "${{ matrix.shard }}" 64
+        run: scripts/check-discovered-library-corpus.sh "${{ matrix.shard }}" 128
 
       - name: Upload shard report
         if: always()
@@ -266,7 +273,7 @@ jobs:
   discovered_library_corpus:
     needs: discovered_library_priority
     timeout-minutes: 360
-    name: discovered-corpus (shard ${{ matrix.shard }}/64)
+    name: discovered-corpus (shard ${{ matrix.shard }}/128)
     runs-on: ${{ github.repository_owner == 'xgo-dev' && fromJSON('["qiniu", "ubuntu-24.04-large"]') || 'ubuntu-latest' }}
     strategy:
       fail-fast: false
@@ -330,6 +337,64 @@ jobs:
           - 61
           - 62
           - 63
+          - 64
+          - 65
+          - 66
+          - 67
+          - 68
+          - 70
+          - 71
+          - 72
+          - 73
+          - 74
+          - 75
+          - 76
+          - 77
+          - 78
+          - 79
+          - 80
+          - 81
+          - 82
+          - 83
+          - 84
+          - 85
+          - 86
+          - 87
+          - 88
+          - 89
+          - 90
+          - 91
+          - 92
+          - 94
+          - 95
+          - 96
+          - 97
+          - 98
+          - 99
+          - 101
+          - 104
+          - 105
+          - 107
+          - 108
+          - 109
+          - 110
+          - 111
+          - 112
+          - 113
+          - 114
+          - 115
+          - 116
+          - 117
+          - 118
+          - 119
+          - 120
+          - 121
+          - 122
+          - 123
+          - 124
+          - 125
+          - 126
+          - 127
 
     steps:
       - name: Checkout
@@ -360,7 +425,7 @@ jobs:
           # some module proxies return 404 for checksum tiles they advertise.
           GOPROXY: https://proxy.golang.org,https://goproxy.cn,direct
           GOSUMDB: ${{ github.repository_owner == 'xgo-dev' && 'sum.golang.google.cn' || 'sum.golang.org https://sum.golang.org' }}
-        run: scripts/check-discovered-library-corpus.sh "${{ matrix.shard }}" 64
+        run: scripts/check-discovered-library-corpus.sh "${{ matrix.shard }}" 128
 
       - name: Upload shard report
         if: always()

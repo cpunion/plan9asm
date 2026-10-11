@@ -184,7 +184,7 @@ touch "$events/done-$index"
 const discoveryQueueFakeAggregate = `#!/usr/bin/env bash
 set -euo pipefail
 events="$QUEUE_ROOT/events"
-count=${2:-64}
+count=${2:?missing expected shard count}
 touch "$events/aggregate-$count"
 for (( index=0; index<count; index++ )); do
   test -f "$events/done-$index"
