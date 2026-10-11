@@ -18,6 +18,7 @@ type x86PackedConversionFaultRow struct {
 	masked     bool
 	floating   bool
 	precision  bool
+	aligned    bool
 	conversion string
 }
 
@@ -32,7 +33,7 @@ func x86PackedConversionFaultRows(wide bool) []x86PackedConversionFaultRow {
 			floating := strings.Contains(strings.Split(spec.name, "2")[0], "PS") || strings.Contains(strings.Split(spec.name, "2")[0], "PD")
 			precision := floating || spec.input > map[int]int{32: 24, 64: 53}[spec.output]
 			rows = append(rows, x86PackedConversionFaultRow{name: spec.name, width: shape.lanes * spec.input / 8, laneBytes: spec.input / 8,
-				floating: floating, precision: precision, conversion: spec.name + " (DI)," + destination})
+				floating: floating, precision: precision, aligned: spec.legacy, conversion: spec.name + " (DI)," + destination})
 			if !spec.legacy {
 				rows = append(rows,
 					x86PackedConversionFaultRow{name: spec.name + ".Z", width: shape.lanes * spec.input / 8, laneBytes: spec.input / 8, masked: true,
@@ -125,8 +126,9 @@ func x86PackedConversionDeadFaults(t *testing.T, wide, nativeTraps bool) {
 				}
 				fmt.Fprintf(&native, "__asm__(%q);\n", ".text\n.globl "+symbol+"\n"+symbol+":\n.byte "+strings.Join(octets, ",")+"\n")
 				fmt.Fprintf(&prototypes, "extern void %s(uint64_t*,uint32_t*,uint32_t),%s(uint64_t*,uint32_t*,uint32_t);\n", name, reference)
-				fmt.Fprintf(&pairs, "{%s,%s,%d,%d,%d,%d,%d},\n", reference, name, row.width, row.laneBytes,
-					x86FloatAddSubBoolInt(row.masked), x86FloatAddSubBoolInt(row.floating), x86FloatAddSubBoolInt(row.precision))
+				fmt.Fprintf(&pairs, "{%s,%s,%d,%d,%d,%d,%d,%d},\n", reference, name, row.width, row.laneBytes,
+					x86FloatAddSubBoolInt(row.masked), x86FloatAddSubBoolInt(row.floating),
+					x86FloatAddSubBoolInt(row.precision), x86FloatAddSubBoolInt(row.aligned))
 			}
 			goAssemblerOracleOutput(t, "amd64", source.String(), "", true)
 			driver := fmt.Sprintf("#define NATIVE_TRAPS %d\n", x86FloatAddSubBoolInt(nativeTraps)) + `#include <stdint.h>
@@ -139,7 +141,7 @@ func x86PackedConversionDeadFaults(t *testing.T, wide, nativeTraps bool) {
 #include <unistd.h>
 ` + native.String() + prototypes.String() + `
 typedef void (*program)(uint64_t*,uint32_t*,uint32_t);
-static const struct {program original,translated;int width,lane,masked,floating,precision;} pairs[]={
+static const struct {program original,translated;int width,lane,masked,floating,precision,aligned;} pairs[]={
 ` + pairs.String() + `};
 static int outcome(program fn,uint8_t *p,uint32_t csr,uint32_t mask) {
     pid_t child=fork();if(child<0) return -1;
@@ -163,6 +165,11 @@ int main(void) {
             uint32_t mask=m==0?0xffff:(m==1?0:1);
             int expected=limits[n]<(m==1?0:(m==2?pairs[i].lane:pairs[i].width));
             int a=outcome(pairs[i].original,p+page-limits[n],0x1f80,mask),b=outcome(pairs[i].translated,p+page-limits[n],0x1f80,mask);
+            int unaligned=pairs[i].aligned&&((uintptr_t)(p+page-limits[n])%16)!=0;
+            if(unaligned&&NATIVE_TRAPS) expected=1;
+            // Rosetta's legacy axis is differential only. The native owner
+            // above must enforce the legacy m128 alignment exception too.
+            if(unaligned&&!NATIVE_TRAPS&&!expected&&(a==0||a==1)) expected=a;
             if(a!=expected||b!=expected) {fprintf(stderr,"dead read=%u available=%d mask=%x Go=%d LLVM=%d expected=%d\n",i,limits[n],mask,a,b,expected);return 3;}
         }
         for(int event=0;NATIVE_TRAPS&&event<2;event++) {

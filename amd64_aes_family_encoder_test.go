@@ -237,8 +237,9 @@ func TestX86AESFamilyLogicalFPNumericalSpanContracts(t *testing.T) {
 					for _, api := range []string{"text", "module", "Go"} {
 						t.Run(api, func(t *testing.T) {
 							ir, err := x86ScalarFPBitViewAPI(t, source, "func F("+contract.parameters+")\n", target.arch, target.triple, api)
-							if (err == nil) != contract.accepted || !contract.accepted && ir != "" {
-								t.Fatal("complete numeric logical FP bytes must not acquire holes, pointer or native backing authority", contract.accepted, err)
+							accepted := contract.accepted && strings.HasPrefix(name, "V")
+							if (err == nil) != accepted || !accepted && ir != "" {
+								t.Fatal("numeric FP bytes cannot supply native legacy AES alignment, holes or pointer backing", accepted, err)
 							}
 						})
 					}
@@ -449,6 +450,10 @@ func TestX86AESFamilyThreeAPIsFiveTargetNumericResults(t *testing.T) {
 						first, params, offset = "a+0(FP)", "a,b uint64", 16
 					}
 					row, destination := x86AESOracleRow(name, first, "X")
+					if memory && !strings.HasPrefix(name, "V") {
+						row, destination = x86AESOracleRow(name, "X3", "X")
+						row = "MOVOU a+0(FP),X3\n" + row
+					}
 					fmt.Fprintf(&source, "TEXT ·F%d(SB),4,$0-%d\nMOVL $1,AX\nMOVL AX,X0\nMOVL AX,X1\n%s\nMOVQ X%d,ret+%d(FP)\nRET\n", count, offset+8, row, destination, offset)
 					fmt.Fprintf(&declarations, "func F%d(%s) uint64\n", count, params)
 					count++

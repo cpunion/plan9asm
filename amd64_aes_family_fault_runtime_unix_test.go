@@ -4,6 +4,7 @@ package plan9asm
 
 import (
 	"fmt"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -61,7 +62,11 @@ func TestCrossLinuxRuntimeMatrixX86AESFamilyLiveDeadFaultEnvelopes(t *testing.T)
 	}
 	goAssemblerOracleOutput(t, "amd64", source.String(), "", true)
 	ir := x86NarrowOracleIR(t, source.String(), declarations.String(), execution.triple)
-	reference := fmt.Sprintf(x86AESFaultC, prototypes.String(), originals.String(), rows.String())
+	// Rosetta is a differential diagnostic, not the native alignment oracle.
+	// The Linux AMD64 owner must additionally enforce the architectural fault.
+	nativeAlignment := runtime.GOOS == "linux" && runtime.GOARCH == "amd64"
+	reference := fmt.Sprintf("#define NATIVE_ALIGNMENT %d\n", x86FloatAddSubBoolInt(nativeAlignment)) +
+		fmt.Sprintf(x86AESFaultC, prototypes.String(), originals.String(), rows.String())
 	for _, pipeline := range []struct{ name, backend, ir string }{{"backend_O0", "-O0", ir}, {"backend_O2", "-O2", ir}, {"IR_O2/backend_O2", "-O2", x86DwordProductIROptimize(t, ir)}} {
 		t.Run(pipeline.name, func(t *testing.T) {
 			output := execution.compileAndRunLLVM(t, "aes-fault", pipeline.ir, reference, pipeline.backend)
@@ -117,10 +122,14 @@ int main(void){unsigned count=0;
  if(observe(missing,16,2)!=0||observe(short_read,64,4)!=0||observe(over_read,16,5)!=1||observe(missing_prefix,16,7)!=0)return 4;
  for(unsigned i=0;i<sizeof(kernels)/sizeof(kernels[0]);i++)for(unsigned a=0;a<9;a++){
   Kernel k=kernels[i];int want=a==2||a==3||a==4||a>=7;
-  // Independently check original Go bytes first. AES Type4 has no alignment
-  // requirement; unaligned full-width reads are positive, not fault oracles.
+  // Intel SDM Table 2-21: legacy SSE memory operands retain #GP for a
+  // non-16-byte-aligned address; VEX/EVEX do not inherit that exception.
+  int unaligned=k.legacy&&(a==1||a==6);
+  if(unaligned&&NATIVE_ALIGNMENT)want=1;
   for(int original=1;original>=0;original--){if(original&&!k.original)continue;
    int got=observe(original?k.original:k.translated,k.width,a);count++;
+   // Diagnostic hosts still require exact original/translated agreement.
+   if(original&&unaligned&&!NATIVE_ALIGNMENT&&(got==0||got==1))want=got;
    if(got!=want){fprintf(stderr,"AES kernel%%u width%%u address%%u original%%d got%%d want%%d\n",i,k.width,a,original,got,want);return 1;}
   }
  }

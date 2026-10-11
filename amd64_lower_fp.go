@@ -539,21 +539,9 @@ func (c *amd64Ctx) loadXVecOperand(op Operand) (string, error) {
 		fmt.Fprintf(c.b, "  %%%s = load <16 x i8>, ptr %s, align 1\n", t, p)
 		return "%" + t, nil
 	case OpFP:
-		low, err := c.evalFPToI64(op.FPOffset)
-		if err != nil {
-			return "", err
-		}
-		high, err := c.evalFPToI64(op.FPOffset + 8)
-		if err != nil {
-			return "", err
-		}
-		lowLane := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = insertelement <2 x i64> zeroinitializer, i64 %s, i32 0\n", lowLane, low)
-		both := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = insertelement <2 x i64> %%%s, i64 %s, i32 1\n", both, lowLane, high)
-		bytesValue := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = bitcast <2 x i64> %%%s to <16 x i8>\n", bytesValue, both)
-		return "%" + bytesValue, nil
+		// ABI0 fields need not be two contiguous uint64 values. Assemble
+		// every declared byte, including adjacent float32 and narrow fields.
+		return c.loadFPVectorBytes(op.FPOffset, 16)
 	default:
 		return "", fmt.Errorf("amd64: unsupported X-vector operand %s", op.String())
 	}

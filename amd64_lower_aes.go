@@ -36,8 +36,12 @@ func (c *amd64Ctx) lowerAES(rawOp Op, ins Instr) (ok bool, terminated bool, err 
 	}
 	if f.memory >= 0 {
 		// Native stack bytes need their independent exact backing certificate.
-		// AES Type4 has no alignment requirement. Complete numerical logical
-		// FP views retain their existing byte-read contract, not native backing.
+		// Type 4 retains a 16-byte alignment exception for legacy SSE. A
+		// logical FP value is not the original physical address and cannot
+		// preserve that exception. VAES has no corresponding alignment fault.
+		if !f.spec.vector && source.Kind == OpFP {
+			return true, false, fmt.Errorf("%w: legacy AES FP source needs its original native storage and alignment", ErrProbeNeedsContext)
+		}
 		if source.Kind == OpMem &&
 			!x86OrdinaryNativeMemoryOperand(source, c.goarch) &&
 			!x86CallerMemoryCertified(ins, f.memory) && !c.fixedLocalMemoryCertified(ins, f.memory) {
@@ -99,7 +103,7 @@ func (c *amd64Ctx) lowerAES(rawOp Op, ins Instr) (ok bool, terminated bool, err 
 }
 
 // Retain the original legacy opcode and its complete memory envelope even
-// when the result is dead. Type4 AES permits unaligned memory references.
+// when the result is dead, including legacy SSE's Type 4 alignment exception.
 func (c *amd64Ctx) emitAESNativeMemory(ins Instr, f x86AESForm) (string, error) {
 	source := f.sourceOperand
 	if f.spec.operation < x86AESInverseMix {

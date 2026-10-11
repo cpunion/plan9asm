@@ -184,6 +184,13 @@ func TestCrossLinuxRuntimeMatrixX86AESFamilyLogicalFloatBitPayloads(t *testing.T
 			fn := fmt.Sprintf("FloatAES%d", count)
 			count++
 			row, destination := x86AESOracleRow(name, "a+0(FP)", "X")
+			if !strings.HasPrefix(name, "V") {
+				// This is a logical bit-payload oracle, not native FP backing.
+				// Use Go's unaligned move before the legacy register operation;
+				// the separate memory oracle checks its alignment exceptions.
+				row, destination = x86AESOracleRow(name, "X3", "X")
+				row = "MOVOU a+0(FP),X3\n" + row
+			}
 			fmt.Fprintf(&source, "TEXT ·%s(SB),4,$0-24\nVPXORD Z0,Z0,Z0\nVPXORD Z1,Z1,Z1\nVPXORD Z2,Z2,Z2\n%s\nMOVQ out+16(FP),AX\nVMOVUPS Z%d,(AX)\nRET\n", fn, row, destination)
 			if bits == 32 {
 				checks.WriteString("for(unsigned j=0;j<4;j++){uint32_t v=payloads32[(sample+j)%8];memcpy(key+j*4,&v,4);}\n")
@@ -196,7 +203,18 @@ func TestCrossLinuxRuntimeMatrixX86AESFamilyLogicalFloatBitPayloads(t *testing.T
 				fmt.Fprintf(&reference, "extern void %s(double,double,uint8_t*);\n", fn)
 				fmt.Fprintf(&checks, "{double f[2];memcpy(f,key,16);%s(f[0],f[1],out.value);}\n", fn)
 			}
-			fmt.Fprintf(&checks, "aes(expected,(const uint8_t[16]){0},key,%d,27);if(memcmp(out.value,expected,64)||_mm_getcsr()!=csr)return 1;for(int j=0;j<64;j++)if(out.before[j]!=0xc3||out.after[j]!=0xc3)return 2;for(int j=64;j<80;j++)if(out.value[j]!=0xc3)return 3;memset(&out,0xc3,sizeof(out));\n", op%6)
+			fmt.Fprintf(&checks, "aes(expected,(const uint8_t[16]){0},key,%d,27);\n", op%6)
+			fmt.Fprintf(&checks, `if (memcmp(out.value,expected,64) || _mm_getcsr()!=csr) {
+ fprintf(stderr,"%s sample%%u csr%%x want%%x\n",sample,_mm_getcsr(),csr);
+ for(int j=0;j<64;j++) if(out.value[j]!=expected[j])
+  fprintf(stderr,"byte%%d got%%x want%%x\n",j,out.value[j],expected[j]);
+ return 1;
+}
+`, fn)
+			checks.WriteString(`for(int j=0;j<64;j++) if(out.before[j]!=0xc3 || out.after[j]!=0xc3) return 2;
+for(int j=64;j<80;j++) if(out.value[j]!=0xc3) return 3;
+memset(&out,0xc3,sizeof(out));
+`)
 		}
 	}
 	reference.WriteString(`
