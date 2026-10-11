@@ -127,7 +127,7 @@ func TestX86ScalarCompareIncomingPointerDoesNotGrantOtherEffects(t *testing.T) {
 				{"numeric-not-pointer", move + " $1234,DX\n", "(DX)", "$1", ""},
 				{"unknown-numerical-input", "", "(DX)", "AX", ""},
 				{"opaque-numerical-input", move + " p+0(FP),AX\n", "(DX)", "AX", ""},
-				{"no-backing-credit", "", "(DX)", "$1", "MOVL (DX),AX\n"},
+				{"no-reusable-backing-credit", "", "(DX)", "$1", "MOVL (DX),DX\nMOVL (DX),AX\n"},
 				{"no-write-credit", "", "(DX)", "$1", "MOVL $1,(DX)\n"},
 				{"no-segment-credit", "", "(FS)", "$1", ""},
 			} {
@@ -148,5 +148,41 @@ func TestX86ScalarCompareIncomingPointerDoesNotGrantOtherEffects(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+// The compare's continuation grants no credit to another read. Ordinary MOVL
+// now has its own paired volatile load and numerical effect; both operations
+// must survive even though the MOVL result is dead. Overwriting DX above still
+// revokes the pointer before a later access.
+func TestX86ScalarCompareAndMoveRetainIndependentNativeReads(t *testing.T) {
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM 22 llc required")
+	}
+	for _, target := range x86RawReturnTargets {
+		t.Run(target.triple, func(t *testing.T) {
+			var source, declarations strings.Builder
+			names := x86ScalarCompareNames(target.arch)
+			for index, op := range names {
+				name := fmt.Sprintf("CompareMove%d", index)
+				compare := x86ScalarCompareInstruction(op, "(DX)", "$1")
+				source.WriteString(x86ScalarComparePointerSource(target.arch, name, "", compare, "MOVL (DX),AX\n"))
+				fmt.Fprintf(&declarations, "func %s(p *byte) uint32\n", name)
+			}
+			x86LEAActualTargetGoObject(t, target.arch, target.triple, source.String())
+			for _, api := range []string{"text", "module", "Go"} {
+				ir, err := x86ScalarFPBitViewAPI(t, source.String(), declarations.String(), target.arch, target.triple, api)
+				if err != nil {
+					t.Fatal("separately paired native reads rejected", api, err)
+				}
+				for level, text := range []string{ir, x86MulDivRoundOptimize(t, ir)} {
+					if got := strings.Count(text, "load volatile"); got < 2*len(names) {
+						t.Fatal("a native read borrowed earlier backing or was discarded", api, level, got)
+					}
+					x86ResultInitializationObject(t, llc, target.triple, text, fmt.Sprintf("compare-move-%s-O%d", api, level*2))
+				}
+			}
+		})
 	}
 }
