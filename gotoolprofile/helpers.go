@@ -93,7 +93,10 @@ func discoveryModeledCPUFeatures(tags []string, arch, value string, minor int) [
 				selected = int(candidate[len(candidate)-1]-'0') <= int(level[len(level)-1]-'0')+5
 			}
 		case "wasm":
-			selected = minor >= 27 || containsTargetFeature(strings.Split(value, ","), strings.TrimPrefix(candidate, "wasm."))
+			// Go 1.26's gogoarchTags registers both unconditionally, even
+			// when go env GOWASM is empty. The source/actual-marker proof
+			// remains independent of this versioned expectation.
+			selected = minor >= 26 || containsTargetFeature(strings.Split(value, ","), strings.TrimPrefix(candidate, "wasm."))
 		}
 		if selected {
 			modeled = append(modeled, candidate)
