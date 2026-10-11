@@ -328,6 +328,32 @@ Rosetta diagnostics, not native Linux evidence. External versions retain their
 failed status until whole-version remote replay. No local external batch or
 ledger promotion accompanied this repair.
 
+The result-tuple follow-up in the same development branch addresses shard 38's
+knoxdb `regSumAndZerosAVX2/AVX512` named-FP alias counterexample. The existing
+byte/CFG proof already handles scalar result tuples; its public entry still
+rejected every declaration with more than one field. Remove only that count
+restriction, retaining exact types, indices, bounded nonoverlapping slots,
+all-path initialization and the strict public effect consumer. The existing
+Go signature derivation also flattens numerical arrays/structs into scalar
+results; pointer-containing aggregates remain unclosed. This does not change
+the separate single-result textual RET-warning filter or confer native-memory,
+frame, caller or runtime permission. Knoxdb's other native/loop obligations
+remain; do not promote that external version from these component checks.
+
+Retain `_out/result-tuple/`: independent five-target and actual amd64/386
+producer REDs, fourteen scalar types with two/fourteen-result tuples, numerical
+aggregate layouts, all-path/byte/mutation controls, and three-API LLVM 22 objects
+before/after IR O2. Actual Go producer tests retain the original failed analyzer
+receipts and reject twenty unclosed cases. Early negative-test failures retain
+the corrected plain-versus-joined error assertion and numerical-aggregate
+expectation; they were not production guard relaxations. The final current-Go
+family run passes 57 roots (21 root-package and 36 corpus-driver), with no
+failures or skips; twelve adjacent roots also pass. The actual Go 1.20 final
+rerun passes 21 roots, and vet and unchanged official classifications pass. These are
+compile/proof tests, not new external or native execution passes. The frozen
+full-module run at `fe553bff` continues separately; neither it nor the ledger
+may be relabeled with this new source.
+
 The historical `aedfac9b` tree's old
 `_out/ci-closure/publish-after-ci.sh` already completed publication and is not
 a reusable publisher. Its replacement old-run watcher is terminal. The current

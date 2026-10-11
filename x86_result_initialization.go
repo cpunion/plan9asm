@@ -6,8 +6,8 @@ import (
 	"strings"
 )
 
-// CheckX86ABI0ResultInitialization checks only byte initialization of one
-// ordinary scalar ABI0 result. It supplies no source authentication, native
+// CheckX86ABI0ResultInitialization checks only byte initialization of one or
+// more scalar ABI0 result fields. It supplies no source authentication, native
 // frame, caller-memory, return-continuation or translation permission. The
 // caller must derive sig from the actual selected Go declaration and bind the
 // complete original CPP source independently. Unknown effects fail closed.
@@ -33,8 +33,7 @@ func checkX86ABI0ResultInitializationAtSource(fn Func, sig FuncSig, goarch strin
 	privateVoid := scalarViews && sig.Ret == Void && len(sig.Frame.Results) == 0
 	if goarch != "amd64" && goarch != "386" || strings.Contains(fn.Sym, "<") ||
 		len(sig.ArgRegs) != 0 || sig.ARMEntry != nil || sig.WASMContext != "" ||
-		len(sig.Frame.Results) == 0 && !privateVoid ||
-		!scalarViews && len(sig.Frame.Results) != 1 {
+		len(sig.Frame.Results) == 0 && !privateVoid {
 		return fail("requires an ordinary x86 scalar ABI0 declaration")
 	}
 	resultOffset := int64(0)

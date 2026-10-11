@@ -138,6 +138,13 @@ For each target/tag/package group:
    nonempty actual GOFLAGS/GOEXPERIMENT or standard-package assembler contexts;
    those keep their original failures. This narrow filter proves neither
    return-continuation safety nor translation or object success.
+   Result-byte checks cover every scalar ABI0 field, not only one Go return
+   value. The existing signature derivation also flattens purely numerical
+   arrays/structs into such fields. Require every occupied result byte on every
+   returning path; padding is not initialized storage. Pointer fields, unbound
+   aggregate metadata, unknown/native effects and partial results remain
+   unclosed. A complete named-offset tuple proof does not broaden the separate
+   single-result textual RET-warning rule or discard its actual analyzer receipt.
 3. Translate every applicable saved `.s` file and compile every result with
    LLVM 22 at `-O0`. IR is verified before `llc`, and an object must be
    generated; optimization is unnecessary for this compile-only corpus and

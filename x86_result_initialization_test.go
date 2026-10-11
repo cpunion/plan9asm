@@ -19,7 +19,12 @@ func x86ResultInitializationFixture(t *testing.T, arch, declaration, body string
 	if err != nil {
 		t.Fatal(err)
 	}
-	args := sig.Frame.Results[0].Offset + x86FrameScalarBytes(sig.Frame.Results[0].Type, arch)
+	var args int64
+	for _, slot := range sig.Frame.Results {
+		if end := slot.Offset + x86FrameScalarBytes(slot.Type, arch); end > args {
+			args = end
+		}
+	}
 	source := fmt.Sprintf("TEXT ·Value(SB),4,$0-%d\n%s\n", args, body)
 	file, err := Parse(ArchAMD64, source)
 	if err != nil {
