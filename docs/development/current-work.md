@@ -43,15 +43,21 @@ shards started. Let it finish naturally before publishing the next batch.
 Keep the upstream-connected branch unchanged until fresh fork CI and review
 pass. A running CI is not a pass or ledger update.
 
-The next development tree is `codex/pr40-scalar-lane-native-20261011`, based on
-the published head. Its `_out/scalar-lane-native/` and `_out/gp-x-native/` contain
-independent RED/GREEN evidence for two complete result-read families below.
-PINSR/INSERTPS is committed as `2dcf6471`; the following GP/X repair reuses its
-private continuation rule and independent runtime harness. No external library
-was compiled locally and no ledger status changed. Read-only triage also found
-seven failures at the original-ZIP/go.mod metadata comparison; absence versus
-mismatched bytes still needs exact original-source verification. The existing
-signed legacy-proxy metadata role must not be replaced by an unchecked fallback.
+Local commits `2dcf6471` and `dc3e53d8` close the scalar-insertion and GP/X
+result-read families. Their tree `codex/pr40-scalar-lane-native-20261011` is
+frozen for the running 32-partition/two-worker full root gate under
+`_out/root-exhaustive-dc3e53d8/`; do not edit it. Focused evidence remains in
+`_out/scalar-lane-native/` and `_out/gp-x-native/`.
+
+Development continues in `codex/pr40-byte-shuffle-20261011`, with the next
+original CI class and its independent RED/GREEN evidence in `_out/byte-shuffle/`.
+No external library was compiled locally and no ledger status changed.
+Read-only triage also found seven original-ZIP/go.mod comparison failures. A
+bounded public-proxy directory read confirms that the exact bford/golang-x-crypto
+archive has no root go.mod, while its separate metadata is a module directive.
+This is diagnostic evidence, not complete archive authentication or a frame
+source role. The other six originals still need inspection. Reuse the existing
+signed legacy-proxy mechanism; never introduce an unchecked metadata fallback.
 
 The integration tree remains the historical `aedfac9b` snapshot. Its old
 `_out/ci-closure/publish-after-ci.sh` already completed publication and is not
@@ -76,6 +82,21 @@ with unrelated speculative implementation. Keep correctness gates unchanged.
 
 ## Included repairs and retained evidence
 
+- Shard 38's ClarkQAQ/uw hex decoder exposed missing PSHUFB/VPSHUFB result
+  effects. The complete family now shares the binary grammar across lowering,
+  caller/result effects, native memory tuples and per-function features.
+  Independent REDs additionally reproduce removable dead reads, stale upper
+  aliases, isolated `.Z` LLVM selection failure, WIG refusal and the conflated
+  physical/named mode32 mask limits. Original legacy m128 preserves its native
+  alignment/fault opcode; E4NF vector reads retain their entire volatile tuple.
+  Unknown bytes, masks, physical high banks and virtual legacy storage remain
+  constrained. Complete Go rows, five-target three-API objects, 56 portable
+  numerical/alias kernels and 20 live/dead fault kernels pass, including actual
+  original legacy Go bytes. Native VEX/EVEX execution is not inferred.
+  All 77 current-Go family/adjacent roots pass (190.413s), as do fifteen actual
+  Go 1.20 roots, CLI extraction, vet and unchanged official classification.
+  Exact-version remote replay and current-head CI still own library closure;
+  this local repair is not part of the running published CI.
 - Shard 5's go-simd/base32 decode counterexample exposed the same omitted
   lowering-only memory consumer in the complete GP/X transfer family. Actual
   Go accepts the independent REDs, while all five targets and three translator

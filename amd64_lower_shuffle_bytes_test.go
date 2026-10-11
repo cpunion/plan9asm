@@ -26,9 +26,11 @@ func TestTranslateX86PackedByteShuffleCompleteGoAssemblerForms(t *testing.T) {
 		t.Run(target.name, func(t *testing.T) {
 			legacyLast := 15
 			zLast := 21
+			vectorData, vectorDestination := 20, 21
 			if target.goarch == "386" {
 				legacyLast = 7
 				zLast = 7
+				vectorData, vectorDestination = 6, 7
 			}
 			var src strings.Builder
 			src.WriteString("TEXT packedbyteshuffleforms(SB),NOSPLIT,$0-0\n")
@@ -36,7 +38,7 @@ func TestTranslateX86PackedByteShuffleCompleteGoAssemblerForms(t *testing.T) {
 			fmt.Fprintf(&src, "\tPSHUFB (AX), X%d\n", legacyLast)
 			for _, width := range []string{"X", "Y"} {
 				fmt.Fprintf(&src, "\tVPSHUFB %s0, %s1, %s2\n", width, width, width)
-				fmt.Fprintf(&src, "\tVPSHUFB (AX), %s20, %s21\n", width, width)
+				fmt.Fprintf(&src, "\tVPSHUFB (AX), %s%d, %s%d\n", width, vectorData, width, vectorDestination)
 			}
 			fmt.Fprintf(&src, "\tVPSHUFB Z0, Z1, Z%d\n", zLast)
 			fmt.Fprintf(&src, "\tVPSHUFB (AX), Z6, Z%d\n", zLast)

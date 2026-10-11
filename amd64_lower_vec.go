@@ -518,52 +518,6 @@ func (c *amd64Ctx) lowerVec(op Op, ins Instr) (ok bool, terminated bool, err err
 		}
 		return false, false, nil
 
-	case "VPSHUFB":
-		// VPSHUFB Ymask, Ysrc, Ydst
-		if len(ins.Args) != 3 || ins.Args[2].Kind != OpReg {
-			return true, false, fmt.Errorf("amd64 VPSHUFB expects Ymask, Ysrc, Ydst: %q", ins.Raw)
-		}
-		if _, ok := amd64ParseYReg(ins.Args[2].Reg); ok {
-			mask, err := c.loadYVecOperand(ins.Args[0])
-			if err != nil {
-				return true, false, err
-			}
-			src, err := c.loadYVecOperand(ins.Args[1])
-			if err != nil {
-				return true, false, err
-			}
-			// Emulate 256-bit PSHUFB by lane-splitting into two 128-bit shuffles.
-			srcLo := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = shufflevector <32 x i8> %s, <32 x i8> zeroinitializer, <16 x i32> %s\n", srcLo, src, llvmI32RangeMask(0, 16))
-			srcHi := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = shufflevector <32 x i8> %s, <32 x i8> zeroinitializer, <16 x i32> %s\n", srcHi, src, llvmI32RangeMask(16, 16))
-			maskLo := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = shufflevector <32 x i8> %s, <32 x i8> zeroinitializer, <16 x i32> %s\n", maskLo, mask, llvmI32RangeMask(0, 16))
-			maskHi := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = shufflevector <32 x i8> %s, <32 x i8> zeroinitializer, <16 x i32> %s\n", maskHi, mask, llvmI32RangeMask(16, 16))
-			outLo := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = call <16 x i8> @llvm.x86.ssse3.pshuf.b.128(<16 x i8> %%%s, <16 x i8> %%%s)\n", outLo, srcLo, maskLo)
-			outHi := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = call <16 x i8> @llvm.x86.ssse3.pshuf.b.128(<16 x i8> %%%s, <16 x i8> %%%s)\n", outHi, srcHi, maskHi)
-			out := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = shufflevector <16 x i8> %%%s, <16 x i8> %%%s, <32 x i32> %s\n", out, outLo, outHi, llvmI32RangeMask(0, 32))
-			return true, false, c.storeY(ins.Args[2].Reg, "%"+out)
-		}
-		if _, ok := amd64ParseXReg(ins.Args[2].Reg); ok {
-			mask, err := c.loadXVecOperand(ins.Args[0])
-			if err != nil {
-				return true, false, err
-			}
-			src, err := c.loadXVecOperand(ins.Args[1])
-			if err != nil {
-				return true, false, err
-			}
-			call := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = call <16 x i8> @llvm.x86.ssse3.pshuf.b.128(<16 x i8> %s, <16 x i8> %s)\n", call, src, mask)
-			return true, false, c.storeX(ins.Args[2].Reg, "%"+call)
-		}
-		return false, false, nil
-
 	case "VPSLLD", "VPSLLQ", "VPSLLW", "VPSRAD", "VPSRAW", "VPSRLD", "VPSRLQ", "VPSRLW":
 		// Go's x86 assembler uses _yvpslld for this whole family:
 		//   $imm8, X|Y|Z src/mem, [Kmask,] X|Y|Z dst
@@ -2030,26 +1984,6 @@ func (c *amd64Ctx) lowerVec(op Op, ins Instr) (ok bool, terminated bool, err err
 		z := c.newTmp()
 		fmt.Fprintf(c.b, "  %%%s = zext i32 %%%s to i64\n", z, call)
 		return true, false, c.storeReg(ins.Args[1].Reg, "%"+z)
-
-	case "PSHUFB":
-		// PSHUFB Xmask, Xdst
-		if len(ins.Args) != 2 || ins.Args[1].Kind != OpReg {
-			return true, false, fmt.Errorf("amd64 PSHUFB expects Xmask, Xdst: %q", ins.Raw)
-		}
-		if _, ok := amd64ParseXReg(ins.Args[1].Reg); !ok {
-			return false, false, nil
-		}
-		mask, err := c.loadXVecOperand(ins.Args[0])
-		if err != nil {
-			return true, false, err
-		}
-		dst, err := c.loadX(ins.Args[1].Reg)
-		if err != nil {
-			return true, false, err
-		}
-		call := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = call <16 x i8> @llvm.x86.ssse3.pshuf.b.128(<16 x i8> %s, <16 x i8> %s)\n", call, dst, mask)
-		return true, false, c.storeX(ins.Args[1].Reg, "%"+call)
 
 	case "PEXTRB":
 		// PEXTRB $imm, Xsrc, dst

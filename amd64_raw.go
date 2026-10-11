@@ -7856,9 +7856,8 @@ vectorPrefix:
 		if vex1&3 != 1 {
 			return Instr{}, 0, true, fmt.Errorf("VEX.pp must be 66")
 		}
-		if vex1&0x80 != 0 {
-			return Instr{}, 0, true, fmt.Errorf("VEX.W must be zero")
-		}
+		// Intel PSHUFB specifies WIG for both VEX and EVEX. Go emits W0,
+		// but that encoding choice cannot reject independently decoded W1.
 		if len(code) <= i+4 {
 			return Instr{}, 0, true, fmt.Errorf("missing ModRM byte")
 		}
@@ -7883,9 +7882,10 @@ vectorPrefix:
 		data := Operand{Kind: OpReg, Reg: Reg(fmt.Sprintf("%s%d", vectorName, dataNumber))}
 		destination := Operand{Kind: OpReg, Reg: Reg(fmt.Sprintf("%s%d", vectorName, destinationNumber))}
 		return Instr{
-			Op:   "VPSHUFB",
-			Args: []Operand{control, data, destination},
-			Raw:  fmt.Sprintf("VPSHUFB %s, %s, %s", control.String(), data.String(), destination.String()),
+			Op:         "VPSHUFB",
+			Args:       []Operand{control, data, destination},
+			Raw:        fmt.Sprintf("VPSHUFB %s, %s, %s", control.String(), data.String(), destination.String()),
+			x86Encoded: true,
 		}, modRMIndex + consumed, true, nil
 	}
 
@@ -7897,9 +7897,6 @@ vectorPrefix:
 		return Instr{}, 0, true, fmt.Errorf("address-size override is not source-layout safe")
 	}
 	p0, p1, p2 := code[i+1], code[i+2], code[i+3]
-	if p1&0x80 != 0 {
-		return Instr{}, 0, true, fmt.Errorf("EVEX.W must be zero")
-	}
 	vectorBits := (p2 >> 5) & 3
 	if vectorBits == 3 {
 		return Instr{}, 0, true, fmt.Errorf("reserved EVEX vector length")
@@ -7913,9 +7910,6 @@ vectorPrefix:
 	zeroing := p2&0x80 != 0
 	if zeroing && maskNumber == 0 {
 		return Instr{}, 0, true, fmt.Errorf("EVEX zeroing requires a nonzero mask")
-	}
-	if mode == 32 && maskNumber != 0 {
-		return Instr{}, 0, true, fmt.Errorf("386 VPSHUFB mask form exceeds the Go assembler frontend's operand limit")
 	}
 
 	rExt := int(^p0>>7) & 1
@@ -7951,7 +7945,7 @@ vectorPrefix:
 	for index := range args {
 		rawArgs[index] = args[index].String()
 	}
-	return Instr{Op: op, Args: args, Raw: fmt.Sprintf("%s %s", op, strings.Join(rawArgs, ", "))}, modRMIndex + consumed, true, nil
+	return Instr{Op: op, Args: args, Raw: fmt.Sprintf("%s %s", op, strings.Join(rawArgs, ", ")), x86Encoded: true}, modRMIndex + consumed, true, nil
 }
 
 type decodedX86PackedExtendProperties struct {

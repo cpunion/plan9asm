@@ -1,114 +1,58 @@
 package plan9asm
 
-import (
-	"fmt"
-	"strings"
-)
+import "fmt"
 
 // lowerPackedByteShuffle implements all Go 1.27 PSHUFB/VPSHUFB forms.
 // VPSHUFB applies the byte shuffle independently to each 128-bit lane; EVEX
 // writemasks operate at byte granularity.
 func (c *amd64Ctx) lowerPackedByteShuffle(op Op, ins Instr) (ok bool, terminated bool, err error) {
-	rawOp := strings.ToUpper(string(op))
-	baseOp := rawOp
-	suffix := ""
-	if dot := strings.IndexByte(rawOp, '.'); dot >= 0 {
-		baseOp, suffix = rawOp[:dot], rawOp[dot+1:]
+	form, known, err := x86ByteShuffleProperties(op, ins, c.goarch)
+	if !known || err != nil {
+		return known, false, err
 	}
-	switch baseOp {
-	case "PSHUFB":
-		return c.lowerLegacyPackedByteShuffle(suffix, ins)
-	case "VPSHUFB":
-		return c.lowerVectorPackedByteShuffle(suffix, ins)
-	default:
-		return false, false, nil
-	}
-}
-
-func (c *amd64Ctx) lowerLegacyPackedByteShuffle(suffix string, ins Instr) (bool, bool, error) {
-	if suffix != "" {
-		return true, false, fmt.Errorf("%s PSHUFB has no instruction suffixes in Go 1.27's ymshufb table: %q", c.goarch, ins.Raw)
-	}
-	if len(ins.Args) != 2 || ins.Args[1].Kind != OpReg || !c.isGoLegacyXReg(ins.Args[1].Reg) {
-		return true, false, fmt.Errorf("%s PSHUFB expects X/m128, X: %q", c.goarch, ins.Raw)
-	}
-	if ins.Args[0].Kind == OpReg {
-		if !c.isGoLegacyXReg(ins.Args[0].Reg) {
-			return true, false, fmt.Errorf("%s PSHUFB source is outside Go 1.27's legacy X class: %q", c.goarch, ins.Raw)
+	first, second, destination := ins.Args[form.first], ins.Args[form.second], ins.Args[form.destination]
+	if form.legacy && form.memory >= 0 {
+		virtual := first.Kind == OpFP
+		if first.Kind == OpMem && !x86CallerMemoryCertified(ins, form.memory) && !c.fixedLocalMemoryCertified(ins, form.memory) {
+			virtual = !x86OrdinaryNativeMemoryOperand(first, c.goarch)
 		}
-	} else if !isAMD64MemoryOperand(ins.Args[0]) {
-		return true, false, fmt.Errorf("%s PSHUFB source must be X or memory: %q", c.goarch, ins.Raw)
-	}
-	control, err := c.loadPackedCompareBytes(ins.Args[0], 16)
-	if err != nil {
-		return true, false, err
-	}
-	data, err := c.loadX(ins.Args[1].Reg)
-	if err != nil {
-		return true, false, err
-	}
-	result := c.emitPackedByteShuffle(16, data, control)
-	return true, false, c.storeX(ins.Args[1].Reg, result)
-}
-
-func (c *amd64Ctx) lowerVectorPackedByteShuffle(suffix string, ins Instr) (bool, bool, error) {
-	zeroing := false
-	switch suffix {
-	case "":
-	case "Z":
-		zeroing = true
-	default:
-		return true, false, fmt.Errorf("%s VPSHUFB suffix is absent from Go 1.27's _yvandnpd table: %q", c.goarch, ins.Raw)
-	}
-	if len(ins.Args) != 3 && len(ins.Args) != 4 {
-		return true, false, fmt.Errorf("%s VPSHUFB expects control, data, [K mask,] destination: %q", c.goarch, ins.Raw)
-	}
-	masked := len(ins.Args) == 4
-	if c.goarch == "386" && masked {
-		return true, false, fmt.Errorf("386 VPSHUFB mask forms exceed the Go assembler frontend's three-operand limit: %q", ins.Raw)
-	}
-	if zeroing && !masked {
-		return true, false, fmt.Errorf("%s VPSHUFB zeroing requires a K1-K7 mask: %q", c.goarch, ins.Raw)
-	}
-	if masked && !amd64NonzeroKOperand(ins.Args[2]) {
-		return true, false, fmt.Errorf("%s VPSHUFB masked form expects K1-K7: %q", c.goarch, ins.Raw)
-	}
-
-	destination := ins.Args[len(ins.Args)-1]
-	if destination.Kind != OpReg {
-		return true, false, fmt.Errorf("%s VPSHUFB destination must be X, Y, or Z: %q", c.goarch, ins.Raw)
-	}
-	byteWidth := amd64VectorByteWidth(destination.Reg)
-	if byteWidth != 16 && byteWidth != 32 && byteWidth != 64 || !c.isGoVPSHUFBRegister(destination, byteWidth) {
-		return true, false, fmt.Errorf("%s VPSHUFB destination is outside Go 1.27's vector-register class: %q", c.goarch, ins.Raw)
-	}
-	if !c.isGoVPSHUFBRegister(ins.Args[1], byteWidth) {
-		return true, false, fmt.Errorf("%s VPSHUFB data source must match the destination width: %q", c.goarch, ins.Raw)
-	}
-	if ins.Args[0].Kind == OpReg {
-		if !c.isGoVPSHUFBRegister(ins.Args[0], byteWidth) {
-			return true, false, fmt.Errorf("%s VPSHUFB control source must match the destination width: %q", c.goarch, ins.Raw)
+		if virtual {
+			return true, false, fmt.Errorf("%w: legacy byte shuffle m128 needs original native storage, not virtual FP/SP/BP", ErrProbeNeedsContext)
 		}
-	} else if !isAMD64MemoryOperand(ins.Args[0]) {
-		return true, false, fmt.Errorf("%s VPSHUFB control source must be a vector register or memory: %q", c.goarch, ins.Raw)
 	}
-
-	data, err := c.loadPackedCompareBytes(ins.Args[1], byteWidth)
+	if form.memory >= 0 && first.Kind == OpFP {
+		if err := c.validateX86PackedShiftFPSpan(first.FPOffset, form.memoryBytes); err != nil {
+			return true, false, err
+		}
+	}
+	byteWidth := form.byteWidth
+	data, err := c.loadPackedCompareBytes(second, byteWidth)
 	if err != nil {
 		return true, false, err
 	}
 	var result string
-	if ins.x86RIPLiteral && len(ins.x86RIPLiteralData) == byteWidth {
+	if form.legacy && form.memory >= 0 {
+		// Keep the original opcode, including m128 alignment and dead faults.
+		// The portable E4NF reader alone cannot reproduce this legacy effect.
+		result, err = c.emitPackedBinaryNativeMemory(first, 8, data, "pshufb")
+	} else if ins.x86RIPLiteral && len(ins.x86RIPLiteralData) == byteWidth {
 		result = c.emitPackedByteShuffleLiteral(byteWidth, data, ins.x86RIPLiteralData)
 	} else {
-		control, err := c.loadPackedCompareBytes(ins.Args[0], byteWidth)
+		// E4NF: all control bytes are read, even with a dead or zero-masked
+		// result. Reuse the exact full-tuple reader, not the E4 lane reader.
+		control, err := c.loadPackedUnpackSource(first, x86PackedUnpackForm{
+			x86PackedBinaryForm: form, spec: x86PackedUnpackSpec{laneBits: 8},
+		})
 		if err != nil {
 			return true, false, err
 		}
 		result = c.emitPackedByteShuffle(byteWidth, data, control)
 	}
-	if masked {
-		mask, err := c.loadK(ins.Args[2].Reg)
+	if err != nil {
+		return true, false, err
+	}
+	if form.mask >= 0 {
+		mask, err := c.loadK(ins.Args[form.mask].Reg)
 		if err != nil {
 			return true, false, err
 		}
@@ -116,9 +60,12 @@ func (c *amd64Ctx) lowerVectorPackedByteShuffle(suffix string, ins Instr) (bool,
 		if err != nil {
 			return true, false, err
 		}
-		result = amd64ApplyIntegerLaneMask(c, byteWidth, 8, result, old, mask, zeroing)
+		result = amd64ApplyIntegerLaneMask(c, byteWidth, 8, result, old, mask, form.zeroing)
 	}
-	return true, false, c.storeVectorBytes(destination.Reg, byteWidth, result)
+	if form.legacy {
+		return true, false, c.storeLegacyPackedLogical(destination, result)
+	}
+	return true, false, c.storePackedMoveOperand(destination, byteWidth, result)
 }
 
 func (c *amd64Ctx) emitPackedByteShuffleLiteral(byteWidth int, data string, control []byte) string {
@@ -134,17 +81,6 @@ func (c *amd64Ctx) emitPackedByteShuffleLiteral(byteWidth int, data string, cont
 	fmt.Fprintf(c.b, "  %%%s = shufflevector <%d x i8> %s, <%d x i8> zeroinitializer, <%d x i32> %s\n",
 		result, byteWidth, data, byteWidth, byteWidth, llvmI32Mask(indices))
 	return "%" + result
-}
-
-func (c *amd64Ctx) isGoVPSHUFBRegister(arg Operand, byteWidth int) bool {
-	if !amd64EVEXVectorRegister(arg, byteWidth) {
-		return false
-	}
-	if c.goarch == "386" && byteWidth == 64 {
-		index, _ := amd64VectorRegisterIndex(arg.Reg, byteWidth)
-		return index < 8
-	}
-	return true
 }
 
 func (c *amd64Ctx) emitPackedByteShuffle(byteWidth int, data, control string) string {

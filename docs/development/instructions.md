@@ -132,6 +132,18 @@ Go 1.20's maskless `.Z` acceptance is a historical encoder defect, not another
 legal format. Observe its exact reserved EVEX.z/aaa=0 bytes and still require
 both named and raw rejection through all APIs; current Go must reject source.
 
+PSHUFB/VPSHUFB use the shared binary grammar without MMX, broadcast or SAE.
+Dynamic control bytes depend on every potentially selected byte in their own
+128-bit data lane; sparse caller/result knowledge must retain that dependency.
+Legacy memory keeps the original m128 opcode and alignment, while vector E4NF
+reads retain the complete tuple even with zero masks or dead outputs. VEX/EVEX
+clears wider aliases and both raw encodings are WIG; Go's W0 emission and named
+386 operand cap do not restrict a validated physical encoding. Feature inference
+must recognize isolated `.Z`, not borrow SSSE3 from a sibling function. Keep the
+bounded raw-literal proof separate from ordinary native reads. See Intel's
+[PSHUFB instruction reference](https://cdrdv2-public.intel.com/789581/325383-sdm-vol-2abcd.pdf)
+and [E4NF exception tables](https://cdrdv2-public.intel.com/858446/253666-088-sdm-vol-2a.pdf).
+
 The private x86 raw decoder hands off actual physical memory operands without
 reinterpreting formatter DS/ES/FS/GS or RIP spellings as public Go source
 register groups. Only actual `PrefixIgnored` metadata permits removing a
