@@ -139,6 +139,11 @@ CI repairs in an existing idle worktree, not the frozen verification tree.
 That complete module run is now active at frozen `4856910c`, under
 `_out/module-exhaustive-4856910c/`, with 32 partitions and two workers.
 Do not edit the integration tree while it runs.
+Partition 4 has a real stale-negative failure: its compare test still rejects
+an ordinary MOVL native read, which now has its own paired volatile effect.
+Commit `33cfbd73` retains two independent reads through LLVM O2 on all five
+x86 targets and replaces that obsolete expectation with a destroyed-pointer
+negative. Current Go and actual Go 1.20 pass; the frozen full report stays failed.
 
 The reused development branch is `codex/pr40-packed-arithmetic-effects-20261011`.
 Packdb's VPSUBB counterexample reproduces the missing numerical result consumer
@@ -155,6 +160,20 @@ mode32 Z-register fixture failure and the initial missing-import build failure.
 These first-party component passes do not update the external assembly ledger.
 The legacy source-only inspection cache was reclaimed after its consumers
 closed; authentication/query logs and the probe remain available.
+
+Shard 29's goav1 PMOVZX counterexample now has the complete twelve-name,
+six-ratio result/read repair in the same development tree. Caller and result
+observers share only the pure byte dependency; their memory authority remains
+separate. Native reads retain the exact shrinking tuple and E5 mask suppression.
+The independent runtime detects the old optimized live-read width loss at a
+guard page, in addition to the original result-consumer/dead-read REDs.
+All 88 related current-Go roots pass (377 seconds, zero failures/skips), including
+78 bounded live/dead/masked kernels through three APIs and O0/O2. Nine actual
+Go 1.20 roots, nested CLI extraction, vet and unchanged five-architecture official
+classification pass. Retain `_out/packed-widen-effects/`, including the corrected
+impossible pointer/numeric test state and old-lowering overlay RED. Original
+legacy Go/Rosetta and portable masked references are not native AVX512 execution.
+No discovering external version or ledger status is promoted by these checks.
 
 The historical `aedfac9b` tree's old
 `_out/ci-closure/publish-after-ci.sh` already completed publication and is not

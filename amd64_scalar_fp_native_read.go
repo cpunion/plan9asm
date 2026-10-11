@@ -30,6 +30,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		func(_ int, ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string) bool {
 			state.loweredStaticReads = c.fpScalarData
 			defer func() { state.loweredStaticReads = nil }()
+			if accepted, known := x86ResultPackedZeroExtendStep(ins, state, owned, arch, true); known {
+				return accepted
+			}
 			if accepted, recognized := x86LoweredBlockInsertRead(ins, state, owned, resultOffset, arch); recognized {
 				return accepted
 			}
@@ -81,8 +84,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 }
 
 // Only the lowering observer may consume a paired exact-width volatile load
-// from the typed scalar insertion or GP/X transfer emitter. Continued execution
-// supplies its numerical source bytes, even if a later selector discards them.
+// from a typed emitter. Continued execution supplies active numerical source
+// bytes, even if a later selector discards them; masked inactive bytes keep
+// the family's independent merge/zero rule.
 // Family-specific lane/zero/alias effects remain independent. This grants no
 // validity, bounds, write, frame, caller or raw-entry permission.
 func x86ResultReadWithNativeContinuation(ins Instr, source Operand, width int64, state *x86ResultState, owned []bool, arch string, conditionalNativeRead bool) bool {

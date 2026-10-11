@@ -16,7 +16,23 @@ func x86CallerPackedZeroExtendStep(ins *Instr, form x86PackedZeroExtendForm, sta
 	} else {
 		input = state.vectors[x86CallerVectorRoot(ins.Args[0].Reg)]
 	}
-	known := uint64(0)
+	destination := x86CallerVectorRoot(ins.Args[form.destination].Reg)
+	old := state.vectors[destination]
+	known := x86PackedZeroExtendDefinedBytes(form, input, old)
+	width := x86CallerVectorByteMask(int64(form.byteWidth))
+	if form.spec.vector {
+		state.vectors[destination] = ^width | known
+	} else {
+		state.vectors[destination] = old&^width | known
+	}
+	return true
+}
+
+// This pure byte dependency grants no memory or caller permission. Upper
+// zero bits are known independently of input bytes; mask/alias writes remain
+// distinct from the register and memory observations that precede this step.
+func x86PackedZeroExtendDefinedBytes(form x86PackedZeroExtendForm, input, old uint64) uint64 {
+	var known uint64
 	inputBytes, outputBytes := form.spec.inputBits/8, form.spec.outputBits/8
 	for output := 0; output < form.byteWidth; output++ {
 		part := output % outputBytes
@@ -24,16 +40,8 @@ func x86CallerPackedZeroExtendStep(ins *Instr, form x86PackedZeroExtendForm, sta
 			known |= uint64(1) << uint(output)
 		}
 	}
-	destination := x86CallerVectorRoot(ins.Args[form.destination].Reg)
-	old := state.vectors[destination]
-	width := x86CallerVectorByteMask(int64(form.byteWidth))
 	if form.mask >= 0 && !form.zeroing {
 		known &= old // An initialized mask is not an all-active mask promise.
 	}
-	if form.spec.vector {
-		state.vectors[destination] = ^width | known
-	} else {
-		state.vectors[destination] = old&^width | known
-	}
-	return true
+	return known
 }

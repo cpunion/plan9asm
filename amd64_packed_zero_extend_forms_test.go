@@ -86,15 +86,16 @@ func TestX86PackedZeroExtendSpecsBindCompleteGoTables(t *testing.T) {
 			t.Fatalf("Go changed %s's complete VEX/EVEX operand table", table)
 		}
 	}
-	for _, ratio := range x86ZeroExtendTestRatios {
+	for index, ratio := range x86ZeroExtendTestRatios {
+		opcode := byte(0x30 + index)
 		for _, prefix := range []string{"P", "VP"} {
 			name := prefix + "MOVZX" + ratio.suffix
 			spec, present := x86PackedZeroExtendSpecs[Op(name)]
-			if !present || spec.inputBits != ratio.input*8 || spec.outputBits != ratio.output*8 || spec.vector != (prefix == "VP") {
+			if !present || spec.inputBits != ratio.input*8 || spec.outputBits != ratio.output*8 || spec.vector != (prefix == "VP") || spec.opcode != opcode {
 				t.Fatalf("independent unsigned ratio/encoding mismatch: %s %+v", name, spec)
 			}
 			if prefix == "P" {
-				want := fmt.Sprintf("{A%s, yxm_q4, Pq4, opBytes{0x%02x}}", name, spec.opcode)
+				want := fmt.Sprintf("{A%s, yxm_q4, Pq4, opBytes{0x%02x}}", name, opcode)
 				if !strings.Contains(string(legacy), want) {
 					t.Fatalf("missing exact Go legacy row: %s", want)
 				}
@@ -110,22 +111,15 @@ func TestX86PackedZeroExtendSpecsBindCompleteGoTables(t *testing.T) {
 				t.Fatalf("missing exact Go AVX family row: %s", marker)
 			}
 			row := strings.SplitN(string(avx)[start:], "\n\t}},", 2)[0]
-			if strings.Count(row, "avxEscape | vex") != 2 || strings.Count(row, "avxEscape | evex") != 3 {
-				t.Fatalf("changed Go encoding shapes: %s", row)
+			want := marker
+			for _, width := range []int{128, 256} {
+				want += fmt.Sprintf("\n\t\tavxEscape | vex%d | vex66 | vex0F38 | vexW0, 0x%02x,", width, opcode)
 			}
-			for _, line := range strings.Split(row, "\n") {
-				if strings.Contains(line, "avxEscape | evex") {
-					width := 16
-					if strings.Contains(line, "evex256") {
-						width = 32
-					} else if strings.Contains(line, "evex512") {
-						width = 64
-					}
-					want := fmt.Sprintf("evexN%d | evexZeroingEnabled, 0x%02x", width*ratio.input/ratio.output, spec.opcode)
-					if !strings.Contains(line, want) || strings.Contains(line, "evexBcst") || strings.Contains(line, "evexSae") || strings.Contains(line, "evexRounding") {
-						t.Fatalf("changed native width or unsupported AVX attribute: %s", line)
-					}
-				}
+			for _, width := range []int{128, 256, 512} {
+				want += fmt.Sprintf("\n\t\tavxEscape | evex%d | evex66 | evex0F38 | evexW0, evexN%d | evexZeroingEnabled, 0x%02x,", width, width/8*ratio.input/ratio.output, opcode)
+			}
+			if row != want {
+				t.Fatalf("changed complete Go prefix/opcode/width/exception attributes:\n%s\nwant:\n%s", row, want)
 			}
 		}
 	}

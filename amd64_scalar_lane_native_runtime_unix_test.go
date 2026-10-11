@@ -80,7 +80,7 @@ func TestCrossLinuxRuntimeMatrixX86ScalarLaneNativeResultsAndFaults(t *testing.T
 	}
 }
 
-// Scalar insertion and GP/X transfer regressions share only their byte-read
+// Scalar insertion, widening and GP/X transfer regressions share only their byte-read
 // reference and process/fault harness, not their generated Go/LLVM programs.
 const x86NativeScalarReadRuntimeC = `
 #include <stdint.h>
@@ -97,6 +97,7 @@ typedef uint64_t (*Program)(const uint8_t*);
 typedef struct {
     Program translated, original;
     unsigned width, discarded;
+    unsigned input_bytes, output_bytes;
 } Kernel;
 static const Kernel kernels[] = {%s};
 
@@ -104,6 +105,16 @@ static uint64_t reference(Kernel k, const uint8_t *p) {
     if (k.discarded == 1) return UINT64_C(0x87654321fedcba98);
     if (k.discarded == 2) return 0;
     uint64_t value = 0;
+    if (k.output_bytes) {
+        for (unsigned b = 0; b < 8; b++) {
+            unsigned part = b %% k.output_bytes;
+            if (part < k.input_bytes) {
+                unsigned source = b / k.output_bytes * k.input_bytes + part;
+                value |= (uint64_t)p[source] << (8*b);
+            }
+        }
+        return value;
+    }
     for (unsigned b = 0; b < k.width; b++) value |= (uint64_t)p[b] << (8*b);
     return value;
 }
@@ -140,7 +151,7 @@ int main(void) {
     for (unsigned i = 0; i < sizeof(kernels)/sizeof(kernels[0]); i++) {
         Kernel k = kernels[i];
         for (unsigned pattern = 0; pattern < 64; pattern++) {
-            uint8_t bytes[16], before[16];
+            uint8_t bytes[64], before[64];
             for (unsigned b = 0; b < sizeof(bytes); b++) bytes[b] = (uint8_t)(pattern*37+b*11);
             memcpy(before, bytes, sizeof(bytes));
             const uint8_t *p = bytes+(pattern&1);
@@ -152,9 +163,9 @@ int main(void) {
             numerical += 2;
         }
         for (unsigned address = 0; address < 6; address++) {
-            unsigned available[] = {0, 0, k.width-1, k.width, k.width+1, 0};
+            unsigned available[] = {0, 0, k.width ? k.width-1 : 0, k.width, k.width+1, 0};
             const uint8_t *p = address == 0 ? NULL : address == 5 ? memory+1 : memory+page-available[address];
-            int want = address < 3;
+            int want = k.width != 0 && address < 3;
             if (fault(k.original, p) != want || fault(k.translated, p) != want) {
                 fprintf(stderr, "kernel %%u address %%u expected fault %%d\n", i, address, want);
                 return 5;

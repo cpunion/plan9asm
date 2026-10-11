@@ -115,6 +115,13 @@ func TestX86GoCallerPackedZeroExtendIndependentByteKnowledge(t *testing.T) {
 							input, old := uint64(seed)*0x391072d5e64b8a0f, uint64(seed+7)*0x6a89e14f30725bc1
 							initial := map[Reg]uint64{"Z0": input, "Z1": old}
 							before := initial[Reg(fmt.Sprintf("Z%d", destination))]
+							result := x86ResultState{flags: x86ByteFlagsAll}
+							result.writeVector(0, 64, input, false)
+							result.writeVector(1, 64, old, false)
+							result.masks[1] = true
+							if !x86ResultTransfer(ins, &result, nil, 0, "amd64") {
+								t.Fatal("independent result observer lacks widening byte effects", row)
+							}
 							state := x86SourceStackState{vectors: initial, masks: map[Reg]bool{"K1": true}}
 							if !x86CallerPackedZeroExtendStep(&ins, form, &state, nil) {
 								t.Fatal("register byte effect refused")
@@ -137,6 +144,10 @@ func TestX86GoCallerPackedZeroExtendIndependentByteKnowledge(t *testing.T) {
 							}
 							if got := state.vectors[Reg(fmt.Sprintf("Z%d", destination))]; got != want {
 								t.Fatalf("%s seed%d: defined bytes %#x want %#x", row, seed, got, want)
+							}
+							if result.vectorBytes(destination) != want || result.flags != x86ByteFlagsAll ||
+								result.vectorBytes(1-destination) != map[int]uint64{0: input, 1: old}[1-destination] {
+								t.Fatalf("%s seed%d: result bytes %#x want %#x, or changed another register/FLAGS", row, seed, result.vectorBytes(destination), want)
 							}
 							if state.vectors[Reg(fmt.Sprintf("Z%d", 1-destination))] != map[int]uint64{0: input, 1: old}[1-destination] {
 								t.Fatal("widening changed another SIMD register")

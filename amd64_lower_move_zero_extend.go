@@ -37,10 +37,11 @@ func (c *amd64Ctx) lowerPackedZeroExtendMove(op Op, ins Instr) (bool, bool, erro
 		if err == nil {
 			inputs = c.bitcastVectorBytesToIntegerLanes(form.memoryBytes, lanes, form.spec.inputBits, bytes)
 		}
-	case form.memory >= 0 && mask != "":
-		// E5 inactive lanes suppress reads. A select after a full load does
-		// not preserve fault behavior for NULL or page-boundary operands.
-		inputs, err = c.loadMaskedPackedCompareLanes(source, form.memoryBytes, form.spec.inputBits, false, mask)
+	case form.memory >= 0:
+		// E5 inactive lanes suppress reads; active accesses remain observable
+		// even if the widened result is dead. Read the shrinking source tuple,
+		// not its larger physical vector container or widened destination.
+		inputs, err = c.loadX86PackedShiftLanes(source, form.memoryBytes, form.spec.inputBits, false, mask)
 	default:
 		inputs, err = c.loadPackedExtendInputs(source, form.sourceRegisterBytes, lanes, form.spec.inputBits)
 	}

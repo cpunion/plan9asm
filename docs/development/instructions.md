@@ -697,8 +697,8 @@ mask canaries. See Intel SDM Vol. 2C VZEROALL/VZEROUPPER in the linked manual;
 portable LLVM execution does not prove native AVX execution.
 
 The six unsigned packed widening ratios have a separate PMOVZX/VPMOVZX typed
-grammar and caller byte effect; their existence does not authorize signed
-PMOVSX callers. Bind legacy `yxm_q4` and both complete AVX operand tables, the
+grammar and shared pure caller/result byte dependency; their existence does not
+authorize signed PMOVSX callers. Bind legacy `yxm_q4` and both complete AVX operand tables, the
 shrinking source tuple, K1-K7 and `.Z`; low-bank masked 386 forms are accepted
 by Go, while high named X/Y registers still need a physical mode32 contract.
 Read independent FP fields byte by byte, rejecting any missing byte before
@@ -708,6 +708,13 @@ from EVEX's DQ-only W0 requirement. Keep complete-byte, NULL/guard-page and
 flags/MXCSR oracles: E5 inactive lanes suppress source reads, but a known mask
 does not itself grant caller memory bounds. Original legacy execution and
 portable LLVM VEX/EVEX semantics are separate from native AVX512 execution.
+The lowering-only result observer may consume its paired conditional native
+read, never invent pointer backing or caller/frame authority. Retain the exact
+shrinking tuple with volatile active reads: even a live low-lane result cannot
+justify removing unobserved native input bytes. Dead outputs and E5 inactive
+lanes need separate fault controls. Public queries, source joins, pointer/index
+identity and raw-entry contracts remain strict. Bound runtime batches and compare
+original legacy Go bytes, independent byte references and LLVM O0/O2 separately.
 
 GP/X scalar bit transfers share one typed grammar for MOVL, MOVQ, Go's MOVD
 alias (64-bit), VMOVD and VMOVQ. The grammar feeds original-source validation,
