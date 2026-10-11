@@ -168,6 +168,13 @@ prefix. Keep real-memory handoff failures and XCHG/PAUSE effects unchanged.
 Go NOPW/NOPL rows, original literal bytes, five-target objects and portable LLVM
 state tests are distinct from required native Linux AMD64/386 execution.
 Rosetta rejects some valid register NOPs and cannot certify that native axis.
+The lowering-only result observer may compose this sealed operand-free NOP
+handoff with independently paired named native reads. Check both original and
+normalized NOP identity; another raw opcode, native TEXT, return, address-size,
+source-stack or fixed-local role keeps its original boundary. Inert padding
+does not grant caller memory or a standalone declaration-query permission.
+Current-Go PCALIGN source is a separate producer fixture; the complete literal
+NOP/read matrix still runs on the historical SDK, which lacks that directive.
 
 An x86 raw-return caller-region producer is a separate, bounded source proof,
 not a pointer-type or `noescape` nonalias promise. It requires the same actual

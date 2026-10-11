@@ -12,10 +12,15 @@ Do not promote the upstream-connected branch before fork CI and review pass.
 Never push to, approve, merge or close upstream PR 40.
 
 The integration branch `codex/pr40-ci-closure-20261011` remains its historical
-`aedfac9b` snapshot. The published repair source is
+`aedfac9b` snapshot. The previous repair source is
 `codex/pr40-ci-failure-replay-20261010` at `0c61d468`. Preserve both and the
 separate scalar-FMA development branch. Only original CI failure classes,
 not speculative instruction-family audits, belong to the next repair batch.
+The twenty-commit follow-up through `46fa4bca` is now published in fork PR 4
+at `codex/pr40-latest-per-path-20260930`; its upstream-connected base remains
+`b93666f5`. Fresh run 38116495799 passed policy preflight and has all six priority
+shards running. Let it finish naturally before another push. PR body now
+contains the batched repairs, terminal old-run funnel and remaining gates.
 
 Fork CI 38043255488 at `aedfac9b` finished naturally with failure, as did its
 predecessor 38018079008. Policy preflight passed but all six priority shards
@@ -51,10 +56,9 @@ controlled speedup. Reports contain 2,559 ordinary translations. Artifacts and
 terminal aggregate log remain in the integration tree's
 `_out/frame-data/ci-38096927749/`; no report or ledger is promoted.
 Many failures still stop at the mixed TEXT/DATA, legacy module-origin and
-native result effects repaired only in local unpublished commits. Shard 5's
-packdb result observer also refuses VPSUBB; repair the complete packed integer
-add/subtract consumer family with independent tests. Let the run finish
-naturally before the next batch.
+native result effects repaired in the newly published follow-up. Shard 5's
+packdb VPSUBB result counterexample has the complete packed add/subtract repair
+described below. Original exact-version replay still owns candidate closure.
 Keep the upstream-connected branch unchanged until fresh fork CI and review
 pass. A running CI is not a pass or ledger update.
 
@@ -227,8 +231,24 @@ The integrated CPP/dispatcher run at `52c577a6` passes all 24 selected root test
 and three shared-registration roots (84 seconds), with vet and the unchanged
 official gate also passing. The feature-fixture follow-up has the independent
 checks above. Development remains on the reused packed-arithmetic branch;
-stage this complete repair batch only in fork PR 4 after the old CI's terminal
+the repair batch was published only in fork PR 4 after the old CI's terminal
 status. Do not update the upstream-connected branch or assembly ledger.
+
+Local continuation now uses `codex/pr40-inert-nop-result-20261011` in the same
+development worktree. Shard 42's gofiber utils v2.5.3 source combines native
+reads with raw NOP padding. An independent five-target RED reproduces the
+function-wide raw-origin rejection at VMOVDQU. Only the physical decoder's
+sealed operand-free NOP handoff may now compose with the separately paired
+named read; other raw instructions and native entry/frame contracts remain
+unchanged. Sixteen related current-Go roots, four Go 1.20 roots, vet, CLI
+extraction and unchanged official classification pass. Four scalar/vector
+live/dead kernels independently compare original Go bytes and all three LLVM
+APIs at O0/O2: 512 numerical and 48 fault outcomes per lane. Retain
+`_out/inert-nop-result/`, including the Go 1.20 PCALIGN rejection. The current
+PCALIGN producer and historical literal-NOP matrix have distinct SDK roles,
+not runtime skips. The final four current-Go roots pass after that split.
+This local follow-up is not in run 38116495799; no gofiber or ledger pass is
+claimed, and Rosetta is not native Linux evidence.
 
 The historical `aedfac9b` tree's old
 `_out/ci-closure/publish-after-ci.sh` already completed publication and is not

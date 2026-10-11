@@ -21,9 +21,19 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		return strictErr
 	}
 	for _, ins := range fn.Instrs {
-		if ins.x86Encoded || ins.x86SourceRaw != nil || ins.x86RawNearReturn != nil ||
+		if ins.x86Encoded || ins.x86RawNearReturn != nil ||
 			ins.x86AddressBits != 0 || ins.x86UnboundAddressOverride {
 			return strictErr
+		}
+		if origin := ins.x86SourceRaw; origin != nil {
+			// The physical decoder already validated the complete NOP and
+			// its prefixes before discarding inert ModRM/SIB address fields.
+			// Ordinary padding has no memory, register, FLAGS or entry effect.
+			// Preserve the sealed original/normalized identity; no other raw
+			// instruction may borrow a named load's conditional result rule.
+			if origin.op != "NOP" || len(origin.args) != 0 || ins.Op != "NOP" || len(ins.Args) != 0 {
+				return strictErr
+			}
 		}
 	}
 	return checkX86ABI0ResultInitializationAtSource(fn, sig, arch,
