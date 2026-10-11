@@ -108,7 +108,7 @@ func TestGoAMD64FrameSourceCPUProfileRevocation(t *testing.T) {
 	}
 }
 
-func TestGoAMD64FrameSourceCPUProfilesDoNotGrantConditionalCPP(t *testing.T) {
+func TestGoAMD64FrameSourceCPUProfilesDoNotGrantGeneratedCPP(t *testing.T) {
 	t.Setenv("GOCACHE", t.TempDir())
 	for _, profile := range []string{"v1", "v2", "v3", "v4"} {
 		t.Run(profile, func(t *testing.T) {
@@ -119,7 +119,7 @@ func TestGoAMD64FrameSourceCPUProfilesDoNotGrantConditionalCPP(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			conditional := fmt.Sprintf("#ifdef GOAMD64_%s\n%s\n#endif\n", profile, original)
+			conditional := fmt.Sprintf("#ifdef GOAMD64_%s\n#include \"go_asm.h\"\n%s\n#endif\n", profile, original)
 			if err := os.WriteFile(name, []byte(conditional), 0600); err != nil {
 				t.Fatal(err)
 			}
@@ -128,10 +128,10 @@ func TestGoAMD64FrameSourceCPUProfilesDoNotGrantConditionalCPP(t *testing.T) {
 			source, err := CaptureGoAMD64FrameSource(ctx, pkg, request)
 			if source != nil {
 				source.Close()
-				t.Fatal("conditional CPP acquired an ordinary profile observation")
+				t.Fatal("conditional generated header acquired an ordinary profile observation")
 			}
-			if !errors.Is(err, ErrProbeNeedsContext) || !strings.Contains(err.Error(), "conditional CPP") {
-				t.Fatal("conditional CPP needs its own actual macro mapping, not CPU rejection", err)
+			if !errors.Is(err, ErrProbeNeedsContext) || !strings.Contains(err.Error(), "qualified metadata") {
+				t.Fatal("generated CPP still needs its own source mapping, not CPU rejection", err)
 			}
 		})
 	}

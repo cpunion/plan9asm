@@ -38,9 +38,12 @@ to fork Draft PR 4 after the previous run finished naturally. They include the
 deadline fixture, low-product family, portable CPP index, broadcast memory result and native
 extension result repairs. The full root run at frozen `b5af3a10` now passed;
 new broadcast/extension code has its separate focused evidence below.
-Fresh CI 38096927749 is running: policy preflight passed; shards 5/29/38/39
-are terminal failures, with 167 passes, 168 failures, 57 source N/A and one
-invalid-source skip among their 393 versions. Shards 36/42 remain running.
+Fresh CI 38096927749 has terminal failures in all six priority shards; the
+strict aggregate is still running. Policy preflight passed. The six reports
+retain 528 versions: 218 passes, 230 failures, 77 source N/A and three explicit
+skips. Shards 36/42 again hit the unchanged deadline and retain partial reports;
+the other 5,539 versions are unreported. Downstream owner-completion failures
+reflect their missing reports after priority failure, not new unit failures.
 Many failures still stop at the mixed TEXT/DATA, legacy module-origin and
 native result effects repaired only in local unpublished commits. Shard 5's
 packdb result observer also refuses VPSUBB; repair the complete packed integer
@@ -185,6 +188,23 @@ dependency observations, repeat queries and mutation revocation. All 23 related
 planning roots pass (313 seconds, zero failures/skips); four actual Go 1.20
 framework roots and vet also pass. Retain `_out/header-query-patch/`. This is
 not an external tamago compilation pass or source exclusion.
+
+Shard 38's chacha8-go conditional CPP failure independently reproduces with
+ordinary GOOS/GOARCH/GOAMD64 macros. The frame observer now shares the existing
+complete actual-Go registration AST checks with the portable profile producer
+through `internal/goasmmacros`, retaining original input hashes and permanent
+revocation. No registration fingerprint or portable schema was relaxed. Both
+assembler and preprocessor consume the same observed definitions; generated
+headers, special package roles and unregistered numerical/frame effects remain
+Context. Twelve OS/profile cases independently check original Go object values
+and all three LLVM APIs at O0/O2. Current Go and actual Go 1.20 pass, as do the
+adjacent source/profile lifecycle tests, registration/race tests, vet and the
+unchanged official gate. Both nested CLI suites pass; plan9asmll has 258 passing
+roots (1,191 seconds, zero failures/skips). Shared registration statement coverage
+is 86.7%, not whole-project coverage approval. Preserve `_out/frame-macros/`,
+including the original rejection, invalid relative package RED, corrected
+numeric-permission fixture and current/old-Go MOV encoding assertion. No external
+version or ledger status is promoted by these component checks.
 
 The historical `aedfac9b` tree's old
 `_out/ci-closure/publish-after-ci.sh` already completed publication and is not

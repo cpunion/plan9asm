@@ -167,7 +167,7 @@ func TestGoAMD64FrameSourceRefusesSelfReportedSelection(t *testing.T) {
 			case "custom flags":
 				request.Environment = append(request.Environment, "GOFLAGS=-tags=custom")
 			case "conditional CPP":
-				if err := os.WriteFile(filepath.Join(request.Directory, request.AssemblyFile), []byte("#ifdef GOAMD64_v1\nTEXT ·Value(SB),4,$160-16\nRET\n#endif\n"), 0600); err != nil {
+				if err := os.WriteFile(filepath.Join(request.Directory, request.AssemblyFile), []byte("#ifdef GOARCH_amd64\n#include \"go_asm.h\"\nTEXT ·Value(SB),4,$160-16\nRET\n#endif\n"), 0600); err != nil {
 					t.Fatal(err)
 				}
 			case "raw RET":

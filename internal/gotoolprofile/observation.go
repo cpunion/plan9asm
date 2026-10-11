@@ -4,8 +4,8 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
-	"strconv"
-	"strings"
+
+	"github.com/xgo-dev/plan9asm/internal/goasmmacros"
 )
 
 // Observation is the canonical source/tool-provenance feature evidence shared
@@ -41,26 +41,5 @@ func bytesSHA256(data []byte) string {
 }
 
 func goMinor(version string) (int, error) {
-	if !strings.HasPrefix(version, "go1.") {
-		return 0, fmt.Errorf("invalid ordinary Go selection version")
-	}
-	parts := strings.Split(strings.TrimPrefix(version, "go1."), ".")
-	if len(parts) > 2 || len(parts) == 0 {
-		return 0, fmt.Errorf("invalid ordinary Go selection version")
-	}
-	for _, part := range parts {
-		if part == "" {
-			return 0, fmt.Errorf("invalid ordinary Go selection version")
-		}
-		for _, char := range part {
-			if char < '0' || char > '9' {
-				return 0, fmt.Errorf("invalid ordinary Go selection version")
-			}
-		}
-	}
-	minor, err := strconv.Atoi(parts[0])
-	if err != nil || minor < 1 || minor > 100 {
-		return 0, fmt.Errorf("invalid ordinary Go selection version")
-	}
-	return minor, nil
+	return goasmmacros.GoMinor(version)
 }

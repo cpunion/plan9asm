@@ -789,8 +789,13 @@ actual Go tool/source routes, original object bytes and complete source position
 The caller selects the trusted stock-Go installation and explicit private command
 caches; a public selection record, manual signature or JSON cannot recreate its
 token. Both conventional BP producers are recognized from actual machine bytes,
-not from a Go version guess. Unknown generated/foreign/test/conditional/unwind
-roles remain Context, including current Windows auxiliary SEH records. Every
+not from a Go version guess. Ordinary conditional CPP additionally binds the
+actual SDK's complete macro-registration ASTs through the shared
+`internal/goasmmacros` reader. Both the independent Go assembler and source
+preprocessor consume that same observed target/profile definition list; header
+changes permanently revoke the source observation. Environment strings alone
+are not macro-source authority. Unknown generated/foreign/test/unwind roles
+remain Context, including current Windows auxiliary SEH records. Every
 Verify rechecks bytes, complete inventory and actual export/selection before and
 after commands; failure or Close revokes the token. The observer alone has no
 allocator, caller certificate, native-memory grant or compiler adapter.
@@ -891,8 +896,10 @@ Ordinary fixed-local capture observes Go's actual AMD64 v1/v2/v3/v4 profiles
 independently. Original feature-tagged source selection, compiler exports,
 target/CPU environment and native objects stay bound to that exact capture;
 changing and restoring a profile cannot revive a revoked observation. The
-owned assembler uses cmd/go's GOOS, GOARCH and GOAMD64 definitions. Conditional
-or generated CPP still requires its separate source mapping. A higher profile
+owned assembler uses cmd/go's GOOS, GOARCH and GOAMD64 definitions, with ordinary
+conditionals closed by the shared actual-source registration above. Generated
+headers still require their separate source mapping; macro selection grants
+no unregistered numerical, frame or memory effects. A higher profile
 is neither a native CPU execution certificate nor new memory permission.
 The focused profile tests own one disposable build cache per test root so
 Go 1.27's objdump helper is not rebuilt for every case; sources, modules and

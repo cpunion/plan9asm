@@ -27,6 +27,7 @@ import (
 
 	"github.com/xgo-dev/plan9asm/internal/goabi"
 	"github.com/xgo-dev/plan9asm/internal/goasmcmd"
+	"github.com/xgo-dev/plan9asm/internal/goasmmacros"
 	"github.com/xgo-dev/plan9asm/internal/gooriginalsrc"
 	"github.com/xgo-dev/plan9asm/internal/gostaticstorage"
 	"golang.org/x/arch/x86/x86asm"
@@ -50,6 +51,7 @@ type GoAMD64FrameSource struct {
 	request            GoAMD64FrameCaptureRequest
 	selection          goAMD64FrameSelection
 	env                map[string]string
+	assemblerDefines   []string
 	inputs             map[string][32]byte
 	entries            []string
 	directoryInfo      os.FileInfo
@@ -265,6 +267,14 @@ func captureGoAMD64FrameSource(ctx context.Context, pkg GoPackage, request GoAMD
 	if err != nil {
 		return nil, err
 	}
+	rules, err := goasmmacros.Capture(source.env["GOROOT"], source.env["GOVERSION"], selected.ImportPath, source.read)
+	if err != nil || rules.PackageRole != "ordinary_path" && rules.PackageRole != "legacy_no_experiment_macros" {
+		return nil, goAMD64FrameContext("ordinary assembler macro source registration: %v", err)
+	}
+	source.assemblerDefines, err = GoAssemblerDefinesForEnvironment(source.env["GOOS"], source.env["GOARCH"], source.env)
+	if err != nil {
+		return nil, err
+	}
 	source.owned, err = os.MkdirTemp(provided["TMPDIR"], "plan9asm-go-frame-object-")
 	if err != nil {
 		return nil, err
@@ -307,13 +317,16 @@ func captureGoAMD64FrameSource(ctx context.Context, pkg GoPackage, request GoAMD
 		if source.numericalBinding != nil {
 			assemblyInput = filepath.Join(request.Directory, name)
 		}
-		// Match the actual cmd/go ordinary target/profile definitions. The
-		// source preprocessor still rejects conditional/generated CPP without
-		// its own mapping; a CPU profile is not that separate authority.
-		listing, err := source.run(ctx, "tool", "asm", "-S", "-p", pkg.Path,
-			"-I", request.Directory, "-I", filepath.Join(source.env["GOROOT"], "pkg", "include"),
-			"-D", "GOOS_"+source.env["GOOS"], "-D", "GOARCH_amd64",
-			"-D", "GOAMD64_"+source.env["GOAMD64"], "-o", object, assemblyInput)
+		// The independent actual assembler and source preprocessor consume
+		// the same registered ordinary profile macros. Generated headers keep
+		// their separate source mapping; CPU identity grants no memory role.
+		args := []string{"tool", "asm", "-S", "-p", pkg.Path,
+			"-I", request.Directory, "-I", filepath.Join(source.env["GOROOT"], "pkg", "include")}
+		for _, define := range source.assemblerDefines {
+			args = append(args, "-D", define)
+		}
+		args = append(args, "-o", object, assemblyInput)
+		listing, err := source.run(ctx, args...)
 		if err != nil {
 			return nil, err
 		}
@@ -1135,18 +1148,16 @@ func goAMD64FrameIsAlias(typ types.Type) bool {
 }
 
 func (source *GoAMD64FrameSource) preprocess(name string, original []byte) (string, error) {
+	if len(source.assemblerDefines) == 0 {
+		return "", goAMD64FrameContext("CPP lacks its actual assembler macro registration")
+	}
 	source.origins[filepath.Join(source.request.Directory, name)] = bytes.Count(original, []byte("\n")) + 1
 	// The owned asm command passes this exact basename from the canonical
 	// package directory; stock Go can retain that relative spelling in -S.
 	source.origins[name] = source.origins[filepath.Join(source.request.Directory, name)]
 	var expand func(string, []byte) (string, error)
 	expand = func(name string, data []byte) (string, error) {
-		for _, line := range strings.Split(string(data), "\n") {
-			if strings.HasPrefix(strings.TrimSpace(line), "#if") || strings.HasPrefix(strings.TrimSpace(line), "#else") {
-				return "", goAMD64FrameContext("conditional CPP requires actual profile macro registration")
-			}
-		}
-		return PreprocessAssemblySource(string(data), AssemblyPreprocessOptions{FileName: name, ReadInclude: func(parent, include string) (string, []byte, error) {
+		return PreprocessAssemblySource(string(data), AssemblyPreprocessOptions{FileName: name, Defines: source.assemblerDefines, ReadInclude: func(parent, include string) (string, []byte, error) {
 			if filepath.Base(include) != include || include == "go_asm.h" {
 				return "", nil, goAMD64FrameContext("generated/relative CPP origin requires qualified metadata")
 			}
@@ -1159,11 +1170,6 @@ func (source *GoAMD64FrameSource) preprocess(name string, original []byte) (stri
 				return "", nil, err
 			}
 			source.origins[file] = bytes.Count(data, []byte("\n")) + 1
-			for _, line := range strings.Split(string(data), "\n") {
-				if strings.HasPrefix(strings.TrimSpace(line), "#if") {
-					return "", nil, goAMD64FrameContext("conditional header requires profile registration")
-				}
-			}
 			return file, data, nil
 		}})
 	}
