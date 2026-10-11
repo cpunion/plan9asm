@@ -81,7 +81,7 @@ func x86ScalarExtensionProperties(op Op, ins Instr, arch string) (x86ScalarExten
 			}
 		}
 	} else if !isAMD64MemoryOperand(source) ||
-		source.Kind == OpSym && strings.HasPrefix(strings.TrimSpace(source.Sym), "$") {
+		source.Kind == OpSym && !x86PackedShiftMemoryValid(source, arch) {
 		return fail("expects a register or memory source")
 	}
 	if source.Kind == OpMem && !x86MemoryRegistersValidForArch(source.Mem, arch) {

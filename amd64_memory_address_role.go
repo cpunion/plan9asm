@@ -34,6 +34,8 @@ func x86SBMemoryAddressRole(operand Operand, arch string) (MemRef, bool) {
 
 // Native emitters may additionally possess a checked physical SP/BP token.
 // This ordinary branch does not create one, including for an effective Index.
+// It classifies already validated operands; the typed instruction grammar must
+// first reject a bare name or malformed address instead of inventing storage.
 func x86OrdinaryNativeMemoryOperand(operand Operand, arch string) bool {
 	if operand.Kind == OpSym {
 		return true

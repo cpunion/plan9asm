@@ -57,8 +57,13 @@ Byte-shuffle repair `6430b7f8` is committed locally. Development continues in
 The frozen `dc3e53d8` full-root run has a real failure in partition 20:
 `TestAMD64MovSyscallAndCRC32Coverage` admits a bare MOVLQSX symbol. Repair its
 shared operand class, retaining that failed full-run evidence. Do not edit the
-frozen tree or relabel it. The current-Go DATA/adjacent suite is still running;
-focused actual Go 1.20, vet, CLI extraction and official classification passed.
+frozen tree or relabel it. The shared extension grammar now rejects bare names
+before creating LLVM storage; independent Go oracles cover all fourteen members
+and retain legal SB/absolute controls. All 22 current-Go focused roots and eight
+actual Go 1.20 roots pass, as does vet. The original failed full report stays
+failed. The current-Go DATA/adjacent suite completed with 59 passing roots and
+zero failures/skips; focused actual Go 1.20, CLI extraction and unchanged official
+classification also passed.
 Independent ordinary MOV native-result and dead-read REDs are retained in
 `_out/scalar-move-native/`; their implementation follows the failed gate repair.
 No external library was compiled locally and no ledger status changed.
@@ -106,7 +111,7 @@ with unrelated speculative implementation. Keep correctness gates unchanged.
   Rosetta is a legacy SSE diagnostic, not native Linux or AVX512 execution.
   The independent whole-object reader and source/listing mutation controls pass.
   Sixteen actual Go 1.20 roots, vet, CLI extraction and unchanged five-target
-  classification pass. The broader current-Go suite is ongoing; original exact-
+  classification pass. All 59 broader current-Go roots pass; original exact-
   version remote replay and current-head CI still own library closure.
 - Shard 38's ClarkQAQ/uw hex decoder exposed missing PSHUFB/VPSHUFB result
   effects. The complete family now shares the binary grammar across lowering,
