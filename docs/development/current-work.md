@@ -57,11 +57,11 @@ CI run `38131270471` finished with failures. Its standard-library benchmark
 compiled 163 of 185 files; its 68-second target total is not a complete-success
 performance result. Keep the PR draft and preserve failed evidence.
 
-The full translator CLI suite passed on `def6e64b` in 1037.56 seconds.
-Subsequent environment-selection repairs have focused regression passes, not
-a current-head full-suite receipt. The local cross-target benchmark on that
-revision compiled 163/184 files with 21 real context/ABI failures; its inventory
-is not the native Linux CI inventory. Neither result establishes CI completion.
+Both complete CLI suites and every non-root main-module package passed on
+`fa9cbfee`. The translator CLI took 1431.87 seconds and `gotoolprofile` took
+1294.84 seconds. That snapshot's local cross-target benchmark compiled 163/184
+files with 21 real context/ABI failures in 78 target-seconds; its inventory is
+not the native Linux CI inventory. Neither result establishes CI completion.
 
 ## Remaining delivery gates
 
@@ -98,13 +98,32 @@ four-uint32 return regression previously produced 3 instead of 2 in field one.
 The complete move-family tests pass on Go 1.27.2 and focused Go 1.20.14 tests,
 including three APIs, five-target objects and O0/O2 tuple-result execution.
 
-The monolithic `41d50b0d` root run exhausted its 45-minute budget; cascading
-deadline errors are infrastructure failures, not instruction rejections.
-`gotoolprofile` and `cmd/plan9asmtest` full suites passed in that snapshot.
-Two internal packages also exposed stale authenticated-fixture paths after
-the profile migration; both are repaired and their full suites pass. Use the
-exhaustive partition runner for the next complete root receipt. The timeout
-report remains failed and cannot certify the current head.
+The old monolithic `41d50b0d` root run exhausted its 45-minute budget; cascading
+deadline errors remain infrastructure failures, not instruction rejections.
+Two stale authenticated-fixture paths after the profile migration are repaired.
+The exhaustive 32-part `fa9cbfee` run completed all 5897 roots: 5857 passed,
+39 host-inapplicable skips, and one TLS classification failure. `db371c8c`
+repairs the whole scalar arithmetic TLS class without inventing native backing;
+615 actual-Go address rows, malformed controls, three-API/five-target objects,
+Go 1.20 checks, the official classification gate and vet pass. Replaying the
+entire original failed shard on that revision retained all 204 roots: 203
+passed, one host-inapplicable skip, no failure or missing root. The original
+failed report remains failed; this replay is not a new complete-suite receipt.
+
+Generated logical and insert/extract numerical oracles no longer return large
+case IDs as process status: an injected wrong result previously returned 256
+and appeared successful on Unix. Both mutation regressions pass. The logical
+oracle retains all 472 formats and 7552 inputs in eight bounded batches, with
+non-inlined independent checks. Local whole-test time fell from 88.49 to 15.59
+seconds; Linux-container execution passed in 37.41 seconds. Go 1.20 and the
+complete 278-format insert/extract numerical matrix also pass. Container and
+Rosetta observations do not certify native AVX512 execution.
+
+The remaining 21 standard-library failures require actual runtime/reflect
+entry, TLS, hidden-register, caller-storage or SDK source contracts. Do not
+erase them, clip observable result padding, or fabricate frames to pass the
+benchmark. Runtime/compiler integration is a separate scope decision; keep
+the contribution draft until the required native CI and these gates pass.
 
 The migration PR is draft. Its historical assembly ledger remains incomplete;
 this does not change translator coverage or certify any external module.

@@ -357,6 +357,10 @@ receive a fresh five-minute budget, limited by the existing test deadline minus
 three seconds for cleanup; this is not a five-minute whole-suite budget. An
 exhausted budget fails without launching another command. Release LLVM modules
 before their contexts and before each fixture's temporary files are removed.
+Generated C oracles must keep case IDs in diagnostics, never in process exit
+codes: Unix truncates 256 to success. Use fixed nonzero failure status and
+wrong-result mutation tests. Bound large fixture batches, check their complete
+disjoint union, and prevent optimization from recreating one giant C function.
 
 A typical x86 investigation starts with the Go 1.27 tables and an assembler
 probe:
