@@ -29,12 +29,17 @@ review found these concrete issues to address before another publication:
   source/object validation instead of merely relaxing version checks.
 - Bind the CLI's package load and original-source observers to one effective
   environment, including their explicit GOENV and cache requirements.
-- Install required IA32 tools wherever native tests execute. Do not turn
-  missing dependencies into skips.
-- Correct the ARM cross-runtime fixture's invalid memory-source ADD, retaining
-  independent original-Go acceptance/rejection checks.
 - Reuse disposable build caches within test roots while keeping each source,
   observation and revocation state independent. Measure before wider changes.
+
+The first repair batch fixes the ARM memory-source ADD and the ARM64 branch
+label that collided with a vector register. Runtime and portable preflight
+tests share their four-architecture fixtures. Their actual Go objects and
+LLVM 22 objects pass on Go 1.27.2 and Go 1.20.14; native Linux execution still
+requires the cross-runtime lane. Ordinary, race and coverage jobs now install
+the required IA32 compiler/libc, with an independent ordering regression.
+Workflow policy tests and actionlint pass; the split CLI import formatting is
+also corrected. RED evidence is retained locally, not converted into a pass.
 
 CI run `38131270471` finished with failures. Its standard-library benchmark
 compiled 163 of 185 files; its 68-second target total is not a complete-success

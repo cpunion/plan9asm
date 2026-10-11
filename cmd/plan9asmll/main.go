@@ -25,9 +25,9 @@ import (
 
 	"github.com/xgo-dev/llvm"
 	"github.com/xgo-dev/plan9asm"
+	"github.com/xgo-dev/plan9asm/gotoolprofile"
 	"github.com/xgo-dev/plan9asm/internal/asmsig"
 	"github.com/xgo-dev/plan9asm/internal/goabi"
-	"github.com/xgo-dev/plan9asm/gotoolprofile"
 	"golang.org/x/tools/go/packages"
 )
 

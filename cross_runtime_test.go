@@ -274,59 +274,7 @@ func TestCrossLinuxRuntimeMatrix(t *testing.T) {
 			"scalar_abd_mul", triple, ir, main, []string{"qemu-aarch64", "-cpu", "max", "-L", "/usr/aarch64-linux-gnu"})
 	})
 
-	type target struct {
-		goarch    string
-		arch      Arch
-		triple    string
-		asm       string
-		sig       FuncSig
-		compiler  []string
-		runPrefix []string
-		mainC     string
-	}
-	targets := []target{
-		{
-			goarch:   "amd64",
-			arch:     ArchAMD64,
-			triple:   "x86_64-unknown-linux-gnu",
-			asm:      "TEXT add2(SB),NOSPLIT,$0-24\nMOVQ a+0(FP), AX\nADDQ b+8(FP), AX\nMOVQ AX, ret+16(FP)\nRET\n\nTEXT isneg(SB),NOSPLIT,$0-16\nMOVQ x+0(FP), AX\nCMPQ AX, $0\nJL V1\nMOVQ $0, AX\nMOVQ AX, ret+8(FP)\nRET\nV1:\nMOVQ $1, AX\nMOVQ AX, ret+8(FP)\nRET\n",
-			sig:      crossAddSig("amd64"),
-			compiler: []string{"cc"},
-			mainC:    "extern long long add2(long long, long long); extern long long isneg(long long); int main(void) { if (add2(19, 23) != 42) return 11; if (isneg(-1) != 1 || isneg(1) != 0) return 21; return 0; }\n",
-		},
-		{
-			goarch:    "386",
-			arch:      ArchAMD64,
-			triple:    "i386-unknown-linux-gnu",
-			asm:       "TEXT add2(SB),NOSPLIT,$0-12\nMOVL a+0(FP), AX\nADDL b+4(FP), AX\nMOVL AX, ret+8(FP)\nRET\n\nTEXT isneg(SB),NOSPLIT,$0-8\nMOVL x+0(FP), AX\nCMPL AX, $0\nJL V1\nMOVL $0, AX\nMOVL AX, ret+4(FP)\nRET\nV1:\nMOVL $1, AX\nMOVL AX, ret+4(FP)\nRET\n",
-			sig:       crossAddSig("386"),
-			compiler:  []string{"i686-linux-gnu-gcc"},
-			runPrefix: []string{"qemu-i386", "-L", "/usr/i686-linux-gnu"},
-			mainC:     "extern int add2(int, int); extern int isneg(int); int main(void) { if (add2(19, 23) != 42) return 12; if (isneg(-1) != 1 || isneg(1) != 0) return 22; return 0; }\n",
-		},
-		{
-			goarch:    "arm",
-			arch:      ArchARM,
-			triple:    "armv7-unknown-linux-gnueabihf",
-			asm:       "TEXT add2(SB),NOSPLIT,$0-12\nMOVW a+0(FP), R0\nADD b+4(FP), R0\nMOVW R0, ret+8(FP)\nRET\n\nTEXT isneg(SB),NOSPLIT,$0-8\nMOVW x+0(FP), R0\nCMP $0, R0\nBLT V1\nMOVW $0, R0\nMOVW R0, ret+4(FP)\nRET\nV1:\nMOVW $1, R0\nMOVW R0, ret+4(FP)\nRET\n",
-			sig:       crossAddSig("arm"),
-			compiler:  []string{"arm-linux-gnueabihf-gcc"},
-			runPrefix: []string{"qemu-arm", "-L", "/usr/arm-linux-gnueabihf"},
-			mainC:     "extern int add2(int, int); extern int isneg(int); int main(void) { if (add2(19, 23) != 42) return 13; if (isneg(-1) != 1 || isneg(1) != 0) return 23; return 0; }\n",
-		},
-		{
-			goarch:    "arm64",
-			arch:      ArchARM64,
-			triple:    "aarch64-unknown-linux-gnu",
-			asm:       "TEXT add2(SB),NOSPLIT,$0-24\nMOVD a+0(FP), R0\nMOVD b+8(FP), R1\nADD R1, R0\nMOVD R0, ret+16(FP)\nRET\n\nTEXT isneg(SB),NOSPLIT,$0-16\nMOVD x+0(FP), R0\nCMP $0, R0\nBLT V1\nMOVD $0, R0\nMOVD R0, ret+8(FP)\nRET\nV1:\nMOVD $1, R0\nMOVD R0, ret+8(FP)\nRET\n",
-			sig:       crossAddSig("arm64"),
-			compiler:  []string{"aarch64-linux-gnu-gcc"},
-			runPrefix: []string{"qemu-aarch64", "-L", "/usr/aarch64-linux-gnu"},
-			mainC:     "extern long long add2(long long, long long); extern long long isneg(long long); int main(void) { if (add2(19, 23) != 42) return 14; if (isneg(-1) != 1 || isneg(1) != 0) return 24; return 0; }\n",
-		},
-	}
-
-	for _, tc := range targets {
+	for _, tc := range crossArithmeticTargets() {
 		t.Run(tc.goarch, func(t *testing.T) {
 			tools := []string{tc.compiler[0]}
 			if len(tc.runPrefix) != 0 {
@@ -337,25 +285,176 @@ func TestCrossLinuxRuntimeMatrix(t *testing.T) {
 					t.Fatalf("required cross-execution tool %q not found", tool)
 				}
 			}
-			file, err := Parse(tc.arch, tc.asm)
-			if err != nil {
-				t.Fatal(err)
-			}
-			sigs := map[string]FuncSig{
-				"add2":  tc.sig,
-				"isneg": crossUnarySig(tc.goarch, "isneg"),
-			}
-			ll, err := Translate(file, Options{
-				TargetTriple: tc.triple,
-				Goarch:       tc.goarch,
-				Sigs:         sigs,
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			ll := crossArithmeticIR(t, tc)
 			compileAndRunRuntimeTestWithCompiler(t, llc, tc.compiler, "cross_add2_"+tc.goarch, tc.triple, ll, tc.mainC, tc.runPrefix)
 		})
 	}
+}
+
+type crossArithmeticTarget struct {
+	goarch    string
+	arch      Arch
+	triple    string
+	asm       string
+	sig       FuncSig
+	compiler  []string
+	runPrefix []string
+	mainC     string
+}
+
+func crossArithmeticTargets() []crossArithmeticTarget {
+	return []crossArithmeticTarget{
+		{
+			goarch: "amd64",
+			arch:   ArchAMD64,
+			triple: "x86_64-unknown-linux-gnu",
+			asm: `TEXT add2(SB),NOSPLIT,$0-24
+	MOVQ a+0(FP), AX
+	ADDQ b+8(FP), AX
+	MOVQ AX, ret+16(FP)
+	RET
+
+TEXT isneg(SB),NOSPLIT,$0-16
+	MOVQ x+0(FP), AX
+	CMPQ AX, $0
+	JL negative
+	MOVQ $0, AX
+	MOVQ AX, ret+8(FP)
+	RET
+negative:
+	MOVQ $1, AX
+	MOVQ AX, ret+8(FP)
+	RET
+`,
+			sig:      crossAddSig("amd64"),
+			compiler: []string{"cc"},
+			mainC:    "extern long long add2(long long, long long); extern long long isneg(long long); int main(void) { if (add2(19, 23) != 42) return 11; if (isneg(-1) != 1 || isneg(1) != 0) return 21; return 0; }\n",
+		},
+		{
+			goarch: "386",
+			arch:   ArchAMD64,
+			triple: "i386-unknown-linux-gnu",
+			asm: `TEXT add2(SB),NOSPLIT,$0-12
+	MOVL a+0(FP), AX
+	ADDL b+4(FP), AX
+	MOVL AX, ret+8(FP)
+	RET
+
+TEXT isneg(SB),NOSPLIT,$0-8
+	MOVL x+0(FP), AX
+	CMPL AX, $0
+	JL negative
+	MOVL $0, AX
+	MOVL AX, ret+4(FP)
+	RET
+negative:
+	MOVL $1, AX
+	MOVL AX, ret+4(FP)
+	RET
+`,
+			sig:       crossAddSig("386"),
+			compiler:  []string{"i686-linux-gnu-gcc"},
+			runPrefix: []string{"qemu-i386", "-L", "/usr/i686-linux-gnu"},
+			mainC:     "extern int add2(int, int); extern int isneg(int); int main(void) { if (add2(19, 23) != 42) return 12; if (isneg(-1) != 1 || isneg(1) != 0) return 22; return 0; }\n",
+		},
+		{
+			goarch: "arm",
+			arch:   ArchARM,
+			triple: "armv7-unknown-linux-gnueabihf",
+			asm: `TEXT add2(SB),NOSPLIT,$0-12
+	MOVW a+0(FP), R0
+	MOVW b+4(FP), R1
+	ADD R1, R0
+	MOVW R0, ret+8(FP)
+	RET
+
+TEXT isneg(SB),NOSPLIT,$0-8
+	MOVW x+0(FP), R0
+	CMP $0, R0
+	BLT negative
+	MOVW $0, R0
+	MOVW R0, ret+4(FP)
+	RET
+negative:
+	MOVW $1, R0
+	MOVW R0, ret+4(FP)
+	RET
+`,
+			sig:       crossAddSig("arm"),
+			compiler:  []string{"arm-linux-gnueabihf-gcc"},
+			runPrefix: []string{"qemu-arm", "-L", "/usr/arm-linux-gnueabihf"},
+			mainC:     "extern int add2(int, int); extern int isneg(int); int main(void) { if (add2(19, 23) != 42) return 13; if (isneg(-1) != 1 || isneg(1) != 0) return 23; return 0; }\n",
+		},
+		{
+			goarch: "arm64",
+			arch:   ArchARM64,
+			triple: "aarch64-unknown-linux-gnu",
+			asm: `TEXT add2(SB),NOSPLIT,$0-24
+	MOVD a+0(FP), R0
+	MOVD b+8(FP), R1
+	ADD R1, R0
+	MOVD R0, ret+16(FP)
+	RET
+
+TEXT isneg(SB),NOSPLIT,$0-16
+	MOVD x+0(FP), R0
+	CMP $0, R0
+	BLT negative
+	MOVD $0, R0
+	MOVD R0, ret+8(FP)
+	RET
+negative:
+	MOVD $1, R0
+	MOVD R0, ret+8(FP)
+	RET
+`,
+			sig:       crossAddSig("arm64"),
+			compiler:  []string{"aarch64-linux-gnu-gcc"},
+			runPrefix: []string{"qemu-aarch64", "-L", "/usr/aarch64-linux-gnu"},
+			mainC:     "extern long long add2(long long, long long); extern long long isneg(long long); int main(void) { if (add2(19, 23) != 42) return 14; if (isneg(-1) != 1 || isneg(1) != 0) return 24; return 0; }\n",
+		},
+	}
+}
+
+// Validate the runtime inputs on every host, before a Linux cross-runtime
+// owner needs its native toolchain. Both checks consume the same fixtures.
+func TestCrossArithmeticFixtures(t *testing.T) {
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM 22 llc is required")
+	}
+	for _, tc := range crossArithmeticTargets() {
+		t.Run(tc.goarch, func(t *testing.T) {
+			t.Run("go_assembler", func(t *testing.T) {
+				source := strings.ReplaceAll(tc.asm, "NOSPLIT", "4")
+				goAssemblerOracleOutput(t, tc.goarch, source, "", true)
+			})
+			t.Run("llvm_object", func(t *testing.T) {
+				ll := crossArithmeticIR(t, tc)
+				compileLLVMToObject(t, llc, tc.triple, "arithmetic.ll", "arithmetic.o", ll)
+			})
+		})
+	}
+}
+
+func crossArithmeticIR(t *testing.T, tc crossArithmeticTarget) string {
+	t.Helper()
+	file, err := Parse(tc.arch, tc.asm)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ll, err := Translate(file, Options{
+		TargetTriple: tc.triple,
+		Goarch:       tc.goarch,
+		Sigs: map[string]FuncSig{
+			"add2":  tc.sig,
+			"isneg": crossUnarySig(tc.goarch, "isneg"),
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return ll
 }
 
 func crossUnarySig(goarch, name string) FuncSig {

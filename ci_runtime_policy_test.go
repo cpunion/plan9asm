@@ -52,6 +52,29 @@ func TestCIFullSuitesInstallWASMExecutionRuntime(t *testing.T) {
 	}
 }
 
+func TestCIFullSuitesInstallIA32ExecutionToolchain(t *testing.T) {
+	data, err := os.ReadFile(".github/workflows/go-ci.yml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"test", "race", "coverage"} {
+		t.Run(name, func(t *testing.T) {
+			job, found := ciWorkflowJob(string(data), name)
+			if !found {
+				t.Fatalf("full-suite job %s is missing", name)
+			}
+			// These suites include native Linux/386 tests even when the
+			// optional cross-execution matrix is not enabled.
+			install := "bash scripts/install-ci-llvm22-ubuntu.sh gcc-i686-linux-gnu libc6-dev-i386-cross"
+			installer := strings.Index(job, install)
+			runner := strings.Index(job, "bash scripts/test-module-ci.sh")
+			if installer < 0 || runner < 0 || installer >= runner {
+				t.Fatal("required IA32 compiler and libc must be installed before the complete module suite")
+			}
+		})
+	}
+}
+
 func TestCICrossRuntimeUsesPinnedQEMU(t *testing.T) {
 	data, err := os.ReadFile(".github/workflows/go-ci.yml")
 	if err != nil {

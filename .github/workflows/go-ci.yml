@@ -381,7 +381,7 @@ jobs:
       - name: Install LLVM 22 (Ubuntu)
         if: runner.os == 'Linux'
         timeout-minutes: 14
-        run: bash scripts/install-ci-llvm22-ubuntu.sh
+        run: bash scripts/install-ci-llvm22-ubuntu.sh gcc-i686-linux-gnu libc6-dev-i386-cross
 
       - name: Install LLVM 22 (Windows)
         if: runner.os == 'Windows'
@@ -557,7 +557,7 @@ jobs:
 
       - name: Install LLVM 22
         timeout-minutes: 14
-        run: bash scripts/install-ci-llvm22-ubuntu.sh
+        run: bash scripts/install-ci-llvm22-ubuntu.sh gcc-i686-linux-gnu libc6-dev-i386-cross
 
       - name: Setup required wasm execution runtime
         uses: actions/setup-node@v6
@@ -611,7 +611,7 @@ jobs:
 
       - name: Install LLVM 22
         timeout-minutes: 14
-        run: bash scripts/install-ci-llvm22-ubuntu.sh
+        run: bash scripts/install-ci-llvm22-ubuntu.sh gcc-i686-linux-gnu libc6-dev-i386-cross
 
       - name: Setup required wasm execution runtime
         uses: actions/setup-node@v6

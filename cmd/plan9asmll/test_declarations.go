@@ -16,8 +16,8 @@ import (
 	"strings"
 
 	"github.com/xgo-dev/plan9asm"
-	"github.com/xgo-dev/plan9asm/internal/asmsig"
 	"github.com/xgo-dev/plan9asm/gotoolprofile"
+	"github.com/xgo-dev/plan9asm/internal/asmsig"
 	"golang.org/x/tools/go/packages"
 )
 
