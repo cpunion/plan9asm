@@ -110,11 +110,16 @@ func x86LockScalarRMWProperties(op Op, ins Instr, arch string) (x86LockScalarRMW
 			form.source.Imm = amd64ScalarAddSubImmediateInt64(form.source.Imm, spec.bits)
 		}
 	}
+	needsTLS := false
 	for _, operand := range ins.Args {
 		if operand.Kind == OpImm && (operand.ImmRaw != "" || operand.ImmIsFloat) {
 			return fail("requires a resolved integer immediate")
 		}
 		if operand.Kind != OpMem {
+			continue
+		}
+		if x86SourceTLSMemoryRole(operand, arch) {
+			needsTLS = true
 			continue
 		}
 		memory := operand.Mem
@@ -129,6 +134,12 @@ func x86LockScalarRMWProperties(op Op, ins Instr, arch string) (x86LockScalarRMW
 			memory.Off != int64(int32(memory.Off)) && !(arch == "386" && memory.Off == int64(uint32(memory.Off))) {
 			return fail("has an unencodable or unresolved native memory operand")
 		}
+	}
+	if needsTLS {
+		// Validate the complete operand row before preserving TLS's source
+		// role. It is not an ordinary SIB address or a native memory grant.
+		return form, true, fmt.Errorf("%w: %s %s TLS memory needs its actual Go OS/arch/shared address contract: %q",
+			ErrProbeNeedsContext, arch, op, ins.Raw)
 	}
 	if arch == "amd64" && spec.bits == 8 && x86CompareExchangeHasREXByteView(x86CompareExchangeForm{
 		source: form.source, destination: form.destination,
