@@ -41,15 +41,20 @@ func TestX86LogicalRuntimeBatchesRetainCompleteInventory(t *testing.T) {
 // not an instruction-semantics pass. Its former return code was 256, which a
 // Unix parent observes as success. A large case ID must remain diagnostic data.
 func TestX86LogicalRuntimeOracleCannotWrapFailureToSuccess(t *testing.T) {
-	execution := x86FloatCompareExecutionTools(t)
 	fixture := x86LogicalRuntimeFixtures(t)[245]
-	dir := t.TempDir()
-	source, executable := filepath.Join(dir, "mutation.c"), filepath.Join(dir, "mutation")
 	program := x86LogicalRuntimeC([]x86LogicalRuntimeFixture{fixture}) + fmt.Sprintf(`
 void %s(uint8_t *out, const uint8_t *a, const uint8_t *b, uint64_t mask) {
     memset(out, 0, 65);
 }
 `, fixture.name)
+	requireX86GeneratedOracleFailure(t, program, fixture.name+" numerical/canary failure")
+}
+
+func requireX86GeneratedOracleFailure(t *testing.T, program, diagnostic string) {
+	t.Helper()
+	execution := x86FloatCompareExecutionTools(t)
+	dir := t.TempDir()
+	source, executable := filepath.Join(dir, "mutation.c"), filepath.Join(dir, "mutation")
 	if err := os.WriteFile(source, []byte(program), 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -62,7 +67,7 @@ void %s(uint8_t *out, const uint8_t *a, const uint8_t *b, uint64_t mask) {
 	if !errors.As(err, &failure) || failure.ExitCode() != 1 {
 		t.Fatalf("wrong result must terminate with failure 1, got %v; output=%s", err, output)
 	}
-	if !strings.Contains(string(output), fixture.name+" numerical/canary failure") {
+	if !strings.Contains(string(output), diagnostic) {
 		t.Fatalf("failure diagnostic lost the exact fixture: %s", output)
 	}
 }

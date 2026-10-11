@@ -52,10 +52,7 @@ int main(void) {
 	compileAndRunRuntimeTestForTarget(t, llc, clang, "insert-extract-independent-fp", triple, ir, reference, prefix)
 }
 
-func TestCrossLinuxRuntimeMatrixX86InsertExtractByteSemantics(t *testing.T) {
-	llc, clang, triple, prefix := x86FloatAddSubRuntimeTools(t)
-	var source, declarations, checks strings.Builder
-	sigs := map[string]FuncSig{}
+func x86InsertExtractNumericalRows() []string {
 	rows := x86InsertExtractFormats()
 	// Actual source/destination aliases plus every imm8 selector bit for the
 	// PS forms. Chunk immediates ignore their high bits, independently tested.
@@ -78,6 +75,26 @@ func TestCrossLinuxRuntimeMatrixX86InsertExtractByteSemantics(t *testing.T) {
 		rows = append(rows, fmt.Sprintf("EXTRACTPS $%d,X1,R8", lane))
 	}
 	rows = append(rows, "INSERTPS $128,X1,X1", "INSERTPS $192,X1,X0", "INSERTPS $64,X0,X0")
+	return rows
+}
+
+func x86InsertExtractRuntimeCheck(name string, parameters ...int) string {
+	var call strings.Builder
+	fmt.Fprintf(&call, "if(check(%s", name)
+	for _, parameter := range parameters {
+		fmt.Fprintf(&call, ",%d", parameter)
+	}
+	// Preserve the case identity in text; a process exit status must never
+	// wrap a large generated index to zero on Unix.
+	fmt.Fprintf(&call, ")) { fprintf(stderr, %q); return 1; }\n", name+" numerical/canary failure\n")
+	return call.String()
+}
+
+func TestCrossLinuxRuntimeMatrixX86InsertExtractByteSemantics(t *testing.T) {
+	llc, clang, triple, prefix := x86FloatAddSubRuntimeTools(t)
+	var source, declarations, checks strings.Builder
+	sigs := map[string]FuncSig{}
+	rows := x86InsertExtractNumericalRows()
 	for index, row := range rows {
 		file, err := Parse(ArchAMD64, "TEXT f(SB),4,$0-0\n"+row+"\nRET\n")
 		if err != nil {
@@ -121,10 +138,10 @@ func TestCrossLinuxRuntimeMatrixX86InsertExtractByteSemantics(t *testing.T) {
 			{Offset: 0, Type: Ptr, Index: 0, Field: -1}, {Offset: 8, Type: Ptr, Index: 1, Field: -1}, {Offset: 16, Type: Ptr, Index: 2, Field: -1}, {Offset: 24, Type: I64, Index: 3, Field: -1},
 		}}}
 		fmt.Fprintf(&declarations, "extern void %s(void*,const void*,const void*,uint64_t);\n", name)
-		fmt.Fprintf(&checks, "if(check(%s,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d))return %d;\n", name,
+		checks.WriteString(x86InsertExtractRuntimeCheck(name,
 			x86FloatAddSubBoolInt(insert), x86FloatAddSubBoolInt(scalar), chunk, width, laneBytes, int(ins.Args[0].Imm),
 			x86FloatAddSubBoolInt(memory), x86FloatAddSubBoolInt(masked), x86FloatAddSubBoolInt(strings.Contains(op, ".Z")), x86FloatAddSubBoolInt(destination.Kind == OpReg), x86FloatAddSubBoolInt(!strings.HasPrefix(op, "V")),
-			x86FloatAddSubBoolInt(ins.Args[1].Reg == "X1"), x86FloatAddSubBoolInt(!strings.HasPrefix(op, "V") && destination.Reg == "X0"), index+1)
+			x86FloatAddSubBoolInt(ins.Args[1].Reg == "X1"), x86FloatAddSubBoolInt(!strings.HasPrefix(op, "V") && destination.Reg == "X0")))
 	}
 	goAssemblerOracleOutput(t, "amd64", source.String(), "", true)
 	file, err := Parse(ArchAMD64, source.String())
