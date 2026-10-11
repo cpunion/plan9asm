@@ -5,16 +5,20 @@ import (
 	"strings"
 )
 
-func (c *amd64Ctx) lowerPackedWrappingAdd(op Op, ins Instr) (bool, bool, error) {
+func (c *amd64Ctx) lowerPackedIntegerAddForm(op Op, ins Instr) (bool, bool, error) {
 	base, _, _ := strings.Cut(strings.ToUpper(string(op)), ".")
-	if _, known := x86PackedWrappingAddSpecs[Op(base)]; !known {
+	if _, known := amd64PackedAddSpecs[Op(base)]; !known {
 		return false, false, nil
 	}
 	if ins.Op != "" && strings.ToUpper(string(ins.Op)) != strings.ToUpper(string(op)) {
 		return true, false, fmt.Errorf("packed add dispatch/source opcode mismatch: %s/%s", op, ins.Op)
 	}
 	ins.Op = op
-	form, known, err := x86PackedWrappingAddProperties(ins, c.goarch)
+	arch := c.goarch
+	if arch == "" {
+		arch = "amd64"
+	}
+	form, known, err := x86PackedIntegerAddProperties(ins, arch)
 	if err != nil || !known {
 		return known, false, err
 	}
@@ -49,7 +53,7 @@ func (c *amd64Ctx) lowerPackedWrappingAdd(op Op, ins Instr) (bool, bool, error) 
 		if err != nil {
 			return true, false, err
 		}
-		value := c.emitPackedIntegerAdd(lanes, bits, c.bitcastI64ToIntegerLanes(lanes, bits, a), c.bitcastI64ToIntegerLanes(lanes, bits, b), amd64PackedAddWrap)
+		value := c.emitPackedIntegerAdd(lanes, bits, c.bitcastI64ToIntegerLanes(lanes, bits, a), c.bitcastI64ToIntegerLanes(lanes, bits, b), form.spec.mode)
 		out := c.newTmp()
 		fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i%d> %s to i64\n", out, lanes, bits, value)
 		return true, false, c.storeReg(destination.Reg, "%"+out)
@@ -66,7 +70,11 @@ func (c *amd64Ctx) lowerPackedWrappingAdd(op Op, ins Instr) (bool, bool, error) 
 		}
 	}
 	if form.legacy && form.memory >= 0 {
-		value, err = c.emitPackedAddNativeMemory(first, bits, b)
+		mnemonic := strings.ToLower(string(form.spec.canonical))
+		if mnemonic == "paddl" {
+			mnemonic = "paddd"
+		}
+		value, err = c.emitPackedBinaryNativeMemory(first, bits, b, mnemonic)
 	} else {
 		// PADD's EVEX E4/E4.nb suppresses inactive native source lanes,
 		// unlike PMADDWD's E4NF. Virtual FP still needs its complete span.
@@ -77,7 +85,7 @@ func (c *amd64Ctx) lowerPackedWrappingAdd(op Op, ins Instr) (bool, bool, error) 
 		a, loadErr := c.loadX86PackedShiftLanes(first, form.byteWidth, bits, form.broadcast, mask)
 		err = loadErr
 		if err == nil {
-			value = c.emitPackedIntegerAdd(lanes, bits, a, b, amd64PackedAddWrap)
+			value = c.emitPackedIntegerAdd(lanes, bits, a, b, form.spec.mode)
 		}
 	}
 	if err != nil {
@@ -99,11 +107,6 @@ func (c *amd64Ctx) lowerPackedWrappingAdd(op Op, ins Instr) (bool, bool, error) 
 		return true, false, c.storeLegacyPackedLogical(destination, "%"+out)
 	}
 	return true, false, c.storePackedMoveOperand(destination, form.byteWidth, "%"+out)
-}
-
-func (c *amd64Ctx) emitPackedAddNativeMemory(source Operand, bits int, data string) (string, error) {
-	name := map[int]string{8: "paddb", 16: "paddw", 32: "paddd", 64: "paddq"}[bits]
-	return c.emitPackedBinaryNativeMemory(source, bits, data, name)
 }
 
 // The caller supplies a registered legacy mnemonic. Keeping its memory form

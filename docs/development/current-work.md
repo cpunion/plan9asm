@@ -136,6 +136,26 @@ the metadata/query repairs through `4b739b56` and min/max shard-spread guard.
 Commit the checkpoint before its new bounded complete main-module verification;
 retain that exact frozen revision in the output directory. Develop subsequent
 CI repairs in an existing idle worktree, not the frozen verification tree.
+That complete module run is now active at frozen `4856910c`, under
+`_out/module-exhaustive-4856910c/`, with 32 partitions and two workers.
+Do not edit the integration tree while it runs.
+
+The reused development branch is `codex/pr40-packed-arithmetic-effects-20261011`.
+Packdb's VPSUBB counterexample reproduces the missing numerical result consumer
+for all sixteen vector add/subtract names. Independent REDs also show saturating
+adds losing conditional native reads when their outputs are dead. Complete add
+lowering now shares the existing typed binary grammar/read/alias path rather
+than its separate saturating implementation; no caller permission is added.
+The bounded first-party X/Y/Z runtime, native SSE/masked-read fault oracle,
+five-target result objects, actual Go 1.20, CLI extraction, vet and unchanged
+official classification pass. The broader affected-family suite completed
+successfully in 323 seconds, with no failed or skipped roots. Preserve
+`_out/packed-arithmetic-effects/`, including the corrected
+mode32 Z-register fixture failure and the initial missing-import build failure.
+These first-party component passes do not update the external assembly ledger.
+The legacy source-only inspection cache was reclaimed after its consumers
+closed; authentication/query logs and the probe remain available.
+
 The historical `aedfac9b` tree's old
 `_out/ci-closure/publish-after-ci.sh` already completed publication and is not
 a reusable publisher. Its replacement old-run watcher is terminal. The current

@@ -15,10 +15,17 @@ func x86ResultPackedLowMultiplyStep(ins Instr, state *x86ResultState, owned []bo
 	if err != nil || form.mmx {
 		return false, true
 	}
+	return x86ResultPackedLaneArithmeticStep(ins, form, bits, state, owned, arch), true
+}
+
+// A lane is numerical only when every byte of both input lanes is known.
+// This dependency rule is shared by low products and wrapping/saturating
+// arithmetic, not their operations or their independent memory permissions.
+func x86ResultPackedLaneArithmeticStep(ins Instr, form x86PackedBinaryForm, bits int, state *x86ResultState, owned []bool, arch string) bool {
 	if form.mask >= 0 {
 		index, valid := amd64ParseKReg(ins.Args[form.mask].Reg)
 		if !valid || !state.masks[index] {
-			return false, true
+			return false
 		}
 	}
 	if form.memory >= 0 {
@@ -26,7 +33,7 @@ func x86ResultPackedLowMultiplyStep(ins Instr, state *x86ResultState, owned []bo
 		// Logical FP/AUTO bytes can establish numerical dependence, not the
 		// original native alignment. Legacy lowering checks that separately.
 		if !x86ResultRead(memory, int64(form.memoryBytes), state, owned, arch) {
-			return false, true
+			return false
 		}
 	}
 	bytes := func(index int) uint64 {
@@ -50,5 +57,5 @@ func x86ResultPackedLowMultiplyStep(ins Instr, state *x86ResultState, owned []bo
 		initialized &= state.vectorBytes(destination)
 	}
 	state.writeVector(destination, form.byteWidth, initialized, form.legacy)
-	return true, true
+	return true
 }

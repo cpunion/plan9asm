@@ -566,6 +566,17 @@ Portable LLVM execution, including Rosetta, is not original AVX512 execution.
 See Intel SDM Vol. 2B, PMULLD/PMULLQ and E4 exception class:
 [instruction reference](https://www.intel.com/content/dam/www/public/us/en/documents/manuals/64-ia-32-architectures-software-developer-vol-2b-manual.pdf).
 
+Packed integer add/subtract result analysis consumes every Go VEX/EVEX form,
+including signed/unsigned saturation. Reuse the lowerer's typed operation and
+lane widths, not a separate mnemonic allowlist. A numerical lane requires all
+input-lane bytes; merging also requires its old destination bytes. Unknown masks,
+native memory and mode32 physical banks do not gain authority. Complete add
+lowering shares one grammar and read path: retain legacy native m128 alignment,
+conditional volatile E4 reads even for dead results, and coherent VEX/EVEX
+upper-zeroing. Keep caller permissions separate from that numerical observer.
+Check complete Go encoder attributes, sparse byte holes, all aliases, flags,
+mask/fault behavior and five-target three-API objects independently.
+
 The nine scalar POPCNT/LZCNT/TZCNT W/L/Q forms share one Go-table grammar,
 lowerer and typed byte-effect descriptor. Inputs are read before destination
 overwrite; W preserves upper GP bytes and L zero-extends in mode64. POPCNT

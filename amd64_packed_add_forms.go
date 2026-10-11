@@ -27,22 +27,43 @@ type x86PackedAddForm struct {
 	spec x86PackedAddSpec
 }
 
+type x86PackedIntegerAddForm struct {
+	x86PackedBinaryForm
+	spec amd64PackedAddSpec
+}
+
+// Wrapping and saturating adds have the same Go operand grammar, but retain
+// distinct arithmetic modes. Sharing a form does not extend caller authority.
+func x86PackedIntegerAddProperties(ins Instr, goarch string) (x86PackedIntegerAddForm, bool, error) {
+	base, _, _ := strings.Cut(strings.ToUpper(string(ins.Op)), ".")
+	spec, known := amd64PackedAddSpecs[Op(base)]
+	if !known {
+		return x86PackedIntegerAddForm{}, false, nil
+	}
+	if spec.form != amd64PackedAddVEXEVEX {
+		form, _, err := x86LegacyIntegerArithmeticProperties(ins.Op, ins, goarch)
+		if err == nil {
+			err = x86LegacyIntegerArithmeticEmitterContext(form, ins)
+		}
+		return x86PackedIntegerAddForm{form.x86PackedBinaryForm, spec}, true, err
+	}
+	grammar := x86PackedBinarySpec{encoding: x86PackedLogicalVEXOrEVEX, zeroing: true}
+	if spec.allowBroadcast {
+		grammar.broadcastBytes = spec.laneBits / 8
+	}
+	form, err := x86PackedBinaryProperties(ins, goarch, grammar)
+	if err == nil {
+		err = x86Mode32VectorRegisterContext(ins, goarch)
+	}
+	return x86PackedIntegerAddForm{form, spec}, true, err
+}
+
 func x86PackedWrappingAddProperties(ins Instr, goarch string) (x86PackedAddForm, bool, error) {
 	base, _, _ := strings.Cut(strings.ToUpper(string(ins.Op)), ".")
 	spec, known := x86PackedWrappingAddSpecs[Op(base)]
 	if !known {
 		return x86PackedAddForm{}, false, nil
 	}
-	if spec.encoding == x86PackedLogicalLegacyInteger || spec.encoding == x86PackedLogicalLegacyFP {
-		form, _, err := x86LegacyIntegerArithmeticProperties(ins.Op, ins, goarch)
-		if err == nil {
-			err = x86LegacyIntegerArithmeticEmitterContext(form, ins)
-		}
-		return x86PackedAddForm{form.x86PackedBinaryForm, spec}, true, err
-	}
-	form, err := x86PackedBinaryProperties(ins, goarch, spec.x86PackedBinarySpec)
-	if err == nil {
-		err = x86Mode32VectorRegisterContext(ins, goarch)
-	}
-	return x86PackedAddForm{form, spec}, true, err
+	form, _, err := x86PackedIntegerAddProperties(ins, goarch)
+	return x86PackedAddForm{form.x86PackedBinaryForm, spec}, true, err
 }

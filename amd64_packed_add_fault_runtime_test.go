@@ -9,13 +9,28 @@ import (
 )
 
 func TestCrossLinuxRuntimeMatrixX86PackedWrappingAddNativeMemoryStatus(t *testing.T) {
+	x86PackedAddNativeMemoryStatus(t, x86WrappingAddOpcodes, []int{8, 16, 32, 64, 8, 16, 32, 64})
+}
+
+func TestCrossLinuxRuntimeMatrixX86PackedSaturatingAddNativeMemoryStatus(t *testing.T) {
+	x86PackedAddNativeMemoryStatus(t, []string{
+		"PADDSB", "PADDSW", "PADDUSB", "PADDUSW",
+		"VPADDSB", "VPADDSW", "VPADDUSB", "VPADDUSW",
+	}, []int{8, 16, 8, 16, 8, 16, 8, 16})
+}
+
+func x86PackedAddNativeMemoryStatus(t *testing.T, opcodes []string, laneBits []int) {
+	t.Helper()
+	if len(opcodes) != len(laneBits) {
+		t.Fatal("opcode/lane inventory differs")
+	}
 	llc, clang, triple, prefix := x86FloatAddSubRuntimeTools(t)
 	var source, declarations, references, checks strings.Builder
 	sigs := map[string]FuncSig{}
 	index := 0
-	for opcodeIndex, opcode := range x86WrappingAddOpcodes {
+	for opcodeIndex, opcode := range opcodes {
 		legacy := !strings.HasPrefix(opcode, "V")
-		bits := 8 << uint(opcodeIndex%4)
+		bits := laneBits[opcodeIndex]
 		modes := []int{-1}
 		if !legacy {
 			modes = []int{-1, 0, 1}
@@ -39,7 +54,10 @@ func TestCrossLinuxRuntimeMatrixX86PackedWrappingAddNativeMemoryStatus(t *testin
 			fmt.Fprintf(&declarations, "extern void %s(const uint8_t*);\n", name)
 			reference := fmt.Sprintf("reference%d", index)
 			if legacy {
-				mnemonic := map[int]string{8: "paddb", 16: "paddw", 32: "paddd", 64: "paddq"}[bits]
+				mnemonic := strings.ToLower(opcode)
+				if mnemonic == "paddl" {
+					mnemonic = "paddd"
+				}
 				fmt.Fprintf(&references, "__attribute__((noinline)) static void %s(const uint8_t*p){typedef int32_t V __attribute__((vector_size(16)));V v={0,0,0,0};__asm__ volatile(\"%s (%%1),%%0\":\"+x\"(v):\"r\"(p):\"memory\");}\n", reference, mnemonic)
 			} else {
 				width := 64
