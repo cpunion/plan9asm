@@ -29,7 +29,7 @@ function step(body, name) {
 
 const roles = [
   ...Array.from({ length: 8 }, (_, index) => `root-${index}`),
-  'corpus',
+  'profile',
   'other',
 ];
 
@@ -41,15 +41,15 @@ test('each module flavor splits only root into eight exhaustive job roles', () =
     assert.deepEqual(match[1].split(',').map(value => value.trim()), roles);
 
     const mappings = Array.from(body.matchAll(
-      /^          - \{module-role: (root-[0-7]|corpus|other), module-owner: ([012]), root-partition: (-?\d+)\}$/gm,
+      /^          - \{module-role: (root-[0-7]|profile|other), module-owner: ([012]), root-partition: (-?\d+)\}$/gm,
     ), ([, role, owner, part]) => [role, Number(owner), Number(part)]);
     assert.deepEqual(mappings, [
       ...Array.from({ length: 8 }, (_, index) => [`root-${index}`, 0, index]),
-      ['corpus', 1, -1],
+      ['profile', 1, -1],
       ['other', 2, -1],
     ], `${name}: role mapping repeats or loses package/shard ownership`);
     assert.doesNotMatch(body, /^        module-owner: \[/m,
-      `${name}: Cartesian ownership repeats corpus/rest`);
+      `${name}: Cartesian ownership repeats profile/rest`);
     assert.match(body, /^      fail-fast: false$/m);
     assert.doesNotMatch(body, /max-parallel:|continue-on-error:/);
   }
@@ -101,7 +101,7 @@ test('each root part has an exact separate artifact and strict download destinat
       `^          path: _out/module-\\$\\{\\{ matrix\\.flavor \\}\\}-owners/owner-0000/part-000${part}$`, 'm',
     ));
   }
-  assert.match(step(aggregate, 'Download corpus owner'), /-corpus$/m);
+  assert.match(step(aggregate, 'Download profile owner'), /-profile$/m);
   assert.match(step(aggregate, 'Download remaining-package owner'), /-other$/m);
   assert.doesNotMatch(aggregate, /merge-multiple:|pattern:/);
   assert.match(aggregate, /needs: \[test, race, coverage\]/);

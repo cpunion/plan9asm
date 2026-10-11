@@ -146,7 +146,7 @@ func moduleOwner(pkg modulePackage) int {
 	if pkg.Directory == "." {
 		return 0
 	}
-	if pkg.Directory == "cmd/plan9asmcorpus" {
+	if pkg.Directory == "gotoolprofile" {
 		return 1
 	}
 	return 2

@@ -28,7 +28,7 @@ func TestModuleRootPartitionCLIRejectsInvalidRolesBeforeIO(t *testing.T) {
 	}{
 		{"missing-part", []string{"-module", "-module-owner=0", "-module-root-partitions=8"}},
 		{"out-of-range", []string{"-module", "-module-owner=0", "-module-root-partitions=8", "-module-root-partition=8"}},
-		{"corpus-part", []string{"-module", "-module-owner=1", "-module-root-partitions=8", "-module-root-partition=0"}},
+		{"profile-part", []string{"-module", "-module-owner=1", "-module-root-partitions=8", "-module-root-partition=0"}},
 		{"other-part", []string{"-module", "-module-owner=2", "-module-root-partitions=8", "-module-root-partition=0"}},
 		{"ordinary-part", []string{"-module-root-partitions=8", "-module-root-partition=0"}},
 		{"local-part", []string{"-module", "-module-root-partitions=8", "-module-root-partition=0"}},

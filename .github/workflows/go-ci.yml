@@ -43,81 +43,9 @@ jobs:
       - name: CI policy tests
         run: go test . -run '^TestCI' -count=1
 
-  discovered_library_priority:
-    name: discovered-corpus (shard ${{ matrix.shard }}/128)
-    needs: ci_policy
-    timeout-minutes: 360
-    runs-on: ${{ github.repository_owner == 'xgo-dev' && fromJSON('["qiniu", "ubuntu-24.04-large"]') || 'ubuntu-latest' }}
-    strategy:
-      fail-fast: false
-      # Split all former priority shards into both modulo-128 children.
-      # Require every child to pass before releasing the remaining work.
-      matrix:
-        shard:
-          - 5
-          - 29
-          - 36
-          - 38
-          - 39
-          - 42
-          - 69
-          - 93
-          - 100
-          - 102
-          - 103
-          - 106
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Install LLVM 22
-        timeout-minutes: 14
-        run: bash scripts/install-ci-llvm22-ubuntu.sh
-
-      - name: Setup Go
-        uses: ./.github/actions/setup-go
-        with:
-          # Discovery reports and the audited assembly ledger pin this exact
-          # compiler/assembler version; do not silently advance to 1.27.2.
-          go-version: '1.27.1'
-          cache: true
-
-      - name: Translate and compile discovered assembly
-        # Leave a separate budget for the latest atomic partial checkpoint.
-        timeout-minutes: 330
-        env:
-          # Reuse only compiled Go objects from this task's restored cache.
-          # Source/tool observations and LLVM objects are still checked afresh.
-          PLAN9ASM_DISCOVERY_BUILD_CACHE: ${{ runner.temp }}/go-build-cache
-          PLAN9ASM_DISCOVERY_EVENTS: '1'
-          # Retained exact versions can outlive their public origin and the
-          # first proxy's cache. Verify against the signed database directly;
-          # some module proxies return 404 for checksum tiles they advertise.
-          GOPROXY: https://proxy.golang.org,https://goproxy.cn,direct
-          GOSUMDB: ${{ github.repository_owner == 'xgo-dev' && 'sum.golang.google.cn' || 'sum.golang.org https://sum.golang.org' }}
-        run: scripts/check-discovered-library-corpus.sh "${{ matrix.shard }}" 128
-
-      - name: Upload shard report
-        if: always()
-        timeout-minutes: 10
-        uses: actions/upload-artifact@v6
-        with:
-          name: discovered-corpus-shard-${{ matrix.shard }}
-          path: _out/discovered-library-corpus/shard-${{ matrix.shard }}.json
-          if-no-files-found: error
-
-      - name: Upload shard phase journal
-        if: always()
-        timeout-minutes: 10
-        uses: actions/upload-artifact@v6
-        with:
-          name: discovered-corpus-events-${{ matrix.shard }}
-          path: _out/discovered-library-corpus/shard-${{ matrix.shard }}.events.jsonl
-          if-no-files-found: error
 
   fmt:
-    needs: discovered_library_priority
+    needs: ci_policy
     runs-on: ${{ github.repository_owner == 'xgo-dev' && fromJSON('["qiniu", "ubuntu-24.04-large"]') || 'ubuntu-latest' }}
 
     steps:
@@ -140,7 +68,7 @@ jobs:
           fi
 
   build:
-    needs: discovered_library_priority
+    needs: ci_policy
     runs-on: ${{ github.repository_owner == 'xgo-dev' && fromJSON('["qiniu", "ubuntu-24.04-large"]') || 'ubuntu-latest' }}
 
     steps:
@@ -171,20 +99,9 @@ jobs:
       - name: ARM64 Plan 9 reference corpus
         run: scripts/check-arm64-plan9-corpus.sh
 
-      - name: Validate committed discovery ledgers
-        run: |
-          go run ./cmd/plan9asmdiscover -status \
-            -out-dir testdata/discovery/ledger >/dev/null
-          go run ./cmd/plan9asmcorpus \
-            -manifest testdata/corpus/reported-libraries.json \
-            -repo-root . \
-            -discovery-ledger testdata/discovery/ledger \
-            -assembly-ledger-status testdata/discovery/assembly-ledger \
-            -require-verified-assembly-ledger \
-            >/dev/null
 
   benchmark:
-    needs: discovered_library_priority
+    needs: ci_policy
     name: compile benchmark (Go 1.27, LLVM 22)
     runs-on: ${{ github.repository_owner == 'xgo-dev' && fromJSON('["qiniu", "ubuntu-24.04-large"]') || 'ubuntu-latest' }}
     timeout-minutes: 35
@@ -217,278 +134,12 @@ jobs:
           path: _out/compile-benchmark
           if-no-files-found: error
 
-  reported_library_list:
-    needs: discovered_library_priority
-    name: Third-party corpus matrix
-    runs-on: ${{ github.repository_owner == 'xgo-dev' && fromJSON('["qiniu", "ubuntu-24.04-large"]') || 'ubuntu-latest' }}
-    outputs:
-      libraries: ${{ steps.matrix.outputs.libraries }}
 
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
 
-      - name: Read third-party library manifest
-        id: matrix
-        run: |
-          manifest=testdata/corpus/reported-libraries.json
-          if ! jq -e '.libraries | length > 0 and all(.[]; (.id | test("^[a-z0-9]+(-[a-z0-9]+)*$")))' "$manifest" >/dev/null; then
-            echo "third-party library ids must match ^[a-z0-9]+(-[a-z0-9]+)*$" >&2
-            exit 1
-          fi
-          libraries=$(jq -c '[.libraries[].id]' "$manifest")
-          printf '%s\n' "libraries=$libraries" >> "$GITHUB_OUTPUT"
 
-  reported_library_corpus:
-    name: third-party-corpus (${{ matrix.library }})
-    needs: reported_library_list
-    runs-on: ${{ github.repository_owner == 'xgo-dev' && fromJSON('["qiniu", "ubuntu-24.04-large"]') || 'ubuntu-latest' }}
-    strategy:
-      fail-fast: false
-      matrix:
-        library: ${{ fromJSON(needs.reported_library_list.outputs.libraries) }}
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Install LLVM 22
-        timeout-minutes: 14
-        run: bash scripts/install-ci-llvm22-ubuntu.sh
-
-      - name: Setup Go
-        uses: ./.github/actions/setup-go
-        with:
-          go-version: '1.27.x'
-          cache: true
-
-      - name: Compile pinned complete asm corpus
-        env:
-          REPORTED_LIBRARY: ${{ matrix.library }}
-          # CI must validate the committed exact version. Incremental discovery
-          # tracks newly published versions without making old commits flaky.
-          PLAN9ASM_CORPUS_CHECK_LATEST: 'false'
-        run: scripts/check-reported-library-corpus.sh "$REPORTED_LIBRARY"
-
-  discovered_library_corpus:
-    needs: discovered_library_priority
-    timeout-minutes: 360
-    name: discovered-corpus (shard ${{ matrix.shard }}/128)
-    runs-on: ${{ github.repository_owner == 'xgo-dev' && fromJSON('["qiniu", "ubuntu-24.04-large"]') || 'ubuntu-latest' }}
-    strategy:
-      fail-fast: false
-      matrix:
-        shard:
-          - 0
-          - 1
-          - 2
-          - 3
-          - 4
-          - 6
-          - 7
-          - 8
-          - 9
-          - 10
-          - 11
-          - 12
-          - 13
-          - 14
-          - 15
-          - 16
-          - 17
-          - 18
-          - 19
-          - 20
-          - 21
-          - 22
-          - 23
-          - 24
-          - 25
-          - 26
-          - 27
-          - 28
-          - 30
-          - 31
-          - 32
-          - 33
-          - 34
-          - 35
-          - 37
-          - 40
-          - 41
-          - 43
-          - 44
-          - 45
-          - 46
-          - 47
-          - 48
-          - 49
-          - 50
-          - 51
-          - 52
-          - 53
-          - 54
-          - 55
-          - 56
-          - 57
-          - 58
-          - 59
-          - 60
-          - 61
-          - 62
-          - 63
-          - 64
-          - 65
-          - 66
-          - 67
-          - 68
-          - 70
-          - 71
-          - 72
-          - 73
-          - 74
-          - 75
-          - 76
-          - 77
-          - 78
-          - 79
-          - 80
-          - 81
-          - 82
-          - 83
-          - 84
-          - 85
-          - 86
-          - 87
-          - 88
-          - 89
-          - 90
-          - 91
-          - 92
-          - 94
-          - 95
-          - 96
-          - 97
-          - 98
-          - 99
-          - 101
-          - 104
-          - 105
-          - 107
-          - 108
-          - 109
-          - 110
-          - 111
-          - 112
-          - 113
-          - 114
-          - 115
-          - 116
-          - 117
-          - 118
-          - 119
-          - 120
-          - 121
-          - 122
-          - 123
-          - 124
-          - 125
-          - 126
-          - 127
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Install LLVM 22
-        timeout-minutes: 14
-        run: bash scripts/install-ci-llvm22-ubuntu.sh
-
-      - name: Setup Go
-        uses: ./.github/actions/setup-go
-        with:
-          # Discovery reports and the audited assembly ledger pin this exact
-          # compiler/assembler version; do not silently advance to 1.27.2.
-          go-version: '1.27.1'
-          cache: true
-
-      - name: Translate and compile discovered assembly
-        # Leave a separate budget for the latest atomic partial checkpoint.
-        timeout-minutes: 330
-        env:
-          # Reuse only compiled Go objects from this task's restored cache.
-          # Source/tool observations and LLVM objects are still checked afresh.
-          PLAN9ASM_DISCOVERY_BUILD_CACHE: ${{ runner.temp }}/go-build-cache
-          PLAN9ASM_DISCOVERY_EVENTS: '1'
-          # Retained exact versions can outlive their public origin and the
-          # first proxy's cache. Verify against the signed database directly;
-          # some module proxies return 404 for checksum tiles they advertise.
-          GOPROXY: https://proxy.golang.org,https://goproxy.cn,direct
-          GOSUMDB: ${{ github.repository_owner == 'xgo-dev' && 'sum.golang.google.cn' || 'sum.golang.org https://sum.golang.org' }}
-        run: scripts/check-discovered-library-corpus.sh "${{ matrix.shard }}" 128
-
-      - name: Upload shard report
-        if: always()
-        timeout-minutes: 10
-        uses: actions/upload-artifact@v6
-        with:
-          name: discovered-corpus-shard-${{ matrix.shard }}
-          path: _out/discovered-library-corpus/shard-${{ matrix.shard }}.json
-          if-no-files-found: error
-
-      - name: Upload shard phase journal
-        if: always()
-        timeout-minutes: 10
-        uses: actions/upload-artifact@v6
-        with:
-          name: discovered-corpus-events-${{ matrix.shard }}
-          path: _out/discovered-library-corpus/shard-${{ matrix.shard }}.events.jsonl
-          if-no-files-found: error
-
-  discovered_library_corpus_verify:
-    name: discovered-corpus aggregate verification
-    needs: [discovered_library_priority, discovered_library_corpus]
-    if: ${{ !cancelled() }}
-    # The readers do not translate candidates here, but their Go binaries
-    # link plan9asm's LLVM library and still require the exact LLVM 22 setup.
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Install LLVM 22
-        timeout-minutes: 14
-        run: bash scripts/install-ci-llvm22-ubuntu.sh
-
-      - name: Setup Go
-        uses: ./.github/actions/setup-go
-        with:
-          go-version: '1.27.1'
-          cache: true
-
-      - name: Download shard reports
-        uses: actions/download-artifact@v8
-        with:
-          pattern: discovered-corpus-shard-*
-          path: _out/discovered-library-corpus
-          merge-multiple: true
-
-      - name: Verify complete coverage and report progress
-        if: ${{ !cancelled() }}
-        run: scripts/verify-discovered-library-corpus.sh --progress
-
-      - name: Upload discovery progress
-        if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v6
-        with:
-          name: discovery-progress
-          path: |
-            _out/discovered-library-corpus/scan-status.json
-            _out/discovered-library-corpus/assembly-progress.json
-          if-no-files-found: error
 
   stdlib-corpus:
-    needs: discovered_library_priority
+    needs: ci_policy
     name: stdlib-corpus (${{ matrix.os }}, Go ${{ matrix.go-version }})
     runs-on: ${{ github.repository_owner == 'xgo-dev' && matrix.runner || matrix.os }}
     strategy:
@@ -571,7 +222,7 @@ jobs:
           scripts/check-go-asm-coverage.sh
 
   cross-runtime:
-    needs: discovered_library_priority
+    needs: ci_policy
     name: cross compile, link, and run (Linux)
     runs-on: ${{ github.repository_owner == 'xgo-dev' && fromJSON('["qiniu", "ubuntu-24.04-large"]') || 'ubuntu-latest' }}
     strategy:
@@ -679,7 +330,7 @@ jobs:
           if-no-files-found: error
 
   test:
-    needs: discovered_library_priority
+    needs: ci_policy
     name: test (${{ matrix.os }}, ${{ matrix.go-version }}, ${{ matrix.module-role }})
     timeout-minutes: 60
     permissions:
@@ -692,7 +343,7 @@ jobs:
       matrix:
         os: [ubuntu-latest]
         go-version: ['1.20.x', '1.21.x', '1.22.x', '1.23.x', '1.24.x', '1.25.x', '1.26.x', '1.27.x']
-        module-role: [root-0, root-1, root-2, root-3, root-4, root-5, root-6, root-7, corpus, other]
+        module-role: [root-0, root-1, root-2, root-3, root-4, root-5, root-6, root-7, profile, other]
         include:
           - {module-role: root-0, module-owner: 0, root-partition: 0}
           - {module-role: root-1, module-owner: 0, root-partition: 1}
@@ -702,7 +353,7 @@ jobs:
           - {module-role: root-5, module-owner: 0, root-partition: 5}
           - {module-role: root-6, module-owner: 0, root-partition: 6}
           - {module-role: root-7, module-owner: 0, root-partition: 7}
-          - {module-role: corpus, module-owner: 1, root-partition: -1}
+          - {module-role: profile, module-owner: 1, root-partition: -1}
           - {module-role: other, module-owner: 2, root-partition: -1}
           - {os: ubuntu-latest, runner: [qiniu, ubuntu-24.04-large], nested_modules: false}
           - {go-version: '1.24.x', nested_modules: true}
@@ -781,13 +432,6 @@ jobs:
         run: go test -timeout=30m ./...
         working-directory: cmd/plan9asmll
 
-      - name: Discovery publication regressions (Windows)
-        if: runner.os == 'Windows'
-        shell: bash
-        run: >-
-          go test ./cmd/plan9asmcorpus
-          -run 'TestDiscovery(CorpusReportAtomicPublication|Windows|FileRetries)'
-          -count=10 -timeout=2m
 
       - name: Go test with coverage (Windows)
         if: runner.os == 'Windows' && matrix.go-version == '1.27.x'
@@ -829,7 +473,7 @@ jobs:
           verbose: true
 
   arm-scan:
-    needs: discovered_library_priority
+    needs: ci_policy
     runs-on: ${{ github.repository_owner == 'xgo-dev' && fromJSON('["qiniu", "ubuntu-24.04-large"]') || 'ubuntu-latest' }}
     strategy:
       fail-fast: false
@@ -881,14 +525,14 @@ jobs:
           PY
 
   race:
-    needs: discovered_library_priority
+    needs: ci_policy
     name: race (${{ matrix.module-role }})
     runs-on: ${{ github.repository_owner == 'xgo-dev' && fromJSON('["qiniu", "ubuntu-24.04-large"]') || 'ubuntu-latest' }}
     timeout-minutes: 75
     strategy:
       fail-fast: false
       matrix:
-        module-role: [root-0, root-1, root-2, root-3, root-4, root-5, root-6, root-7, corpus, other]
+        module-role: [root-0, root-1, root-2, root-3, root-4, root-5, root-6, root-7, profile, other]
         include:
           - {module-role: root-0, module-owner: 0, root-partition: 0}
           - {module-role: root-1, module-owner: 0, root-partition: 1}
@@ -898,7 +542,7 @@ jobs:
           - {module-role: root-5, module-owner: 0, root-partition: 5}
           - {module-role: root-6, module-owner: 0, root-partition: 6}
           - {module-role: root-7, module-owner: 0, root-partition: 7}
-          - {module-role: corpus, module-owner: 1, root-partition: -1}
+          - {module-role: profile, module-owner: 1, root-partition: -1}
           - {module-role: other, module-owner: 2, root-partition: -1}
 
     steps:
@@ -932,14 +576,14 @@ jobs:
           if-no-files-found: error
 
   coverage:
-    needs: discovered_library_priority
+    needs: ci_policy
     name: coverage (${{ matrix.module-role }})
     runs-on: ${{ github.repository_owner == 'xgo-dev' && fromJSON('["qiniu", "ubuntu-24.04-large"]') || 'ubuntu-latest' }}
     timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
-        module-role: [root-0, root-1, root-2, root-3, root-4, root-5, root-6, root-7, corpus, other]
+        module-role: [root-0, root-1, root-2, root-3, root-4, root-5, root-6, root-7, profile, other]
         include:
           - {module-role: root-0, module-owner: 0, root-partition: 0}
           - {module-role: root-1, module-owner: 0, root-partition: 1}
@@ -949,7 +593,7 @@ jobs:
           - {module-role: root-5, module-owner: 0, root-partition: 5}
           - {module-role: root-6, module-owner: 0, root-partition: 6}
           - {module-role: root-7, module-owner: 0, root-partition: 7}
-          - {module-role: corpus, module-owner: 1, root-partition: -1}
+          - {module-role: profile, module-owner: 1, root-partition: -1}
           - {module-role: other, module-owner: 2, root-partition: -1}
     permissions:
       contents: read
@@ -1083,11 +727,11 @@ jobs:
         with:
           name: module-${{ matrix.flavor }}-${{ matrix.go-version }}-root-7
           path: _out/module-${{ matrix.flavor }}-owners/owner-0000/part-0007
-      - name: Download corpus owner
+      - name: Download profile owner
         if: ${{ !cancelled() }}
         uses: actions/download-artifact@v8
         with:
-          name: module-${{ matrix.flavor }}-${{ matrix.go-version }}-corpus
+          name: module-${{ matrix.flavor }}-${{ matrix.go-version }}-profile
           path: _out/module-${{ matrix.flavor }}-owners/owner-0001
       - name: Download remaining-package owner
         if: ${{ !cancelled() }}

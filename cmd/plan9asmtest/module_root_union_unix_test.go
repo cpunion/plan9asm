@@ -87,7 +87,7 @@ func TestModuleRootPartitionActualCompleteUnionAndCoverage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"modulefixture/value.go:", "modulefixture/cmd/plan9asmcorpus/value.go:", "modulefixture/internal/other/value.go:"} {
+	for _, name := range []string{"modulefixture/value.go:", "modulefixture/gotoolprofile/value.go:", "modulefixture/internal/other/value.go:"} {
 		if !strings.Contains(string(data), name) {
 			t.Fatalf("complete module coverage lost %s: %s", name, data)
 		}

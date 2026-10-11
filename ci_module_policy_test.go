@@ -26,7 +26,7 @@ func TestCIModuleSuitesKeepExhaustiveUnixAndWindowsRoles(t *testing.T) {
 		if !found || !strings.Contains(job, command) || !strings.Contains(string(script), item.flags) {
 			t.Errorf("%s must keep the complete actual module inventory/flags using bounded partition ownership", item.job)
 		}
-		for _, required := range []string{"module-role: [root-0, root-1, root-2, root-3, root-4, root-5, root-6, root-7, corpus, other]", "fail-fast: false", "actions/upload-artifact@v6"} {
+		for _, required := range []string{"module-role: [root-0, root-1, root-2, root-3, root-4, root-5, root-6, root-7, profile, other]", "fail-fast: false", "actions/upload-artifact@v6"} {
 			if !strings.Contains(job, required) {
 				t.Errorf("%s missing exhaustive scheduling/artifact requirement %q", item.job, required)
 			}

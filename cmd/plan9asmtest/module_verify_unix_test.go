@@ -61,7 +61,7 @@ func TestModuleThreeOwnersActualGoAndStrictAggregate(t *testing.T) {
 		t.Fatal(errorsWithActualOutput(err, stem))
 	}
 	data, err := os.ReadFile(profile)
-	if err != nil || !strings.Contains(string(data), "modulefixture/internal/other/value.go:") || !strings.Contains(string(data), "modulefixture/cmd/plan9asmcorpus/value.go:") {
+	if err != nil || !strings.Contains(string(data), "modulefixture/internal/other/value.go:") || !strings.Contains(string(data), "modulefixture/gotoolprofile/value.go:") {
 		t.Fatalf("checked cross-owner coverage lost packages: %v\n%s", err, data)
 	}
 

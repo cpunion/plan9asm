@@ -29,10 +29,10 @@ Selected cross-runtime CI owners remain serial and reject `-workers` above one.
 
 Unix test/race/coverage CI uses `scripts/test-module-ci.sh`. Its three package
 owners share the complete actual `go list -json ./...` package inventory:
-owner zero runs the root, owner one runs `cmd/plan9asmcorpus`, and owner two
+owner zero runs the root, owner one runs `gotoolprofile`, and owner two
 runs every other package. CI splits only owner zero into eight jobs. Part `p`
 owns global shard indices `i` where `i % 8 == p`, retaining the original
-32-shard plan and two-worker limit. Corpus and other packages execute once;
+32-shard plan and two-worker limit. Shared-profile and other packages execute once;
 they are not repeated for each root part. Every other
 package runs complete ordinary `go test` without `-run`, including packages
 with no tests or only benchmarks/TestMain. Every package has its own actual
@@ -47,7 +47,7 @@ bash scripts/test-module-ci.sh race execute 0 0
 # Run root parts 1..7 as separate jobs with owner 0 and their exact part number.
 bash scripts/test-module-ci.sh race execute 1 -1
 bash scripts/test-module-ci.sh race execute 2 -1
-# Download root-p artifacts into owner-0000/part-000p, and corpus/rest into
+# Download root-p artifacts into owner-0000/part-000p, and profile/rest into
 # owner-0001 and owner-0002. All ten roles are required for completion.
 bash scripts/test-module-ci.sh race complete
 ```
@@ -105,15 +105,15 @@ outside a nongit first-party fixture's source tree. Source-changing compiler
 flags (`-overlay`, `-modfile`, `-gcflags`, `-asmflags`, `-ldflags`) remain
 available in ordinary package mode but are not source-indexed by module mode.
 
-The large corpus-driver test package can use the same complete mechanism:
+The large shared-profile test package can use the same complete mechanism:
 
 ```sh
 GOFLAGS= go run ./cmd/plan9asmtest \
-  -package github.com/xgo-dev/plan9asm/cmd/plan9asmcorpus \
-  -out _out/corpus-test-partitions -shards 32 -workers 2 -timeout 45m -- -race -p=1
+  -package github.com/xgo-dev/plan9asm/gotoolprofile \
+  -out _out/profile-test-partitions -shards 32 -workers 2 -timeout 45m -- -race -p=1
 ```
 
-This runs the corpus driver's Go tests, not the discovered-library corpus.
+This runs the shared-profile package's Go tests, not the discovered-library corpus.
 
 Ordinary single-package mode covers **only its selected package**, not root
 `./...`, the nested CLI modules, strict stdlib/object gates or cross-runtime

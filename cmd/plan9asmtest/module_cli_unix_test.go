@@ -31,8 +31,8 @@ func TestWorkerOne(t *testing.T) { if Value() != 7 { t.Fatal("value") } }
 func ExampleValue() { fmt.Println(Value()); /* Output: 7 */ }
 func FuzzValue(f *testing.F) { f.Add(1); f.Fuzz(func(t *testing.T, n int) { if Value() != 7 { t.Fatal(n) } }) }
 `,
-		"cmd/plan9asmcorpus/value.go": "package corpus\nfunc Value() int { return 9 }\n",
-		"cmd/plan9asmcorpus/value_test.go": `package corpus
+		"gotoolprofile/value.go": "package profile\nfunc Value() int { return 9 }\n",
+		"gotoolprofile/value_test.go": `package profile
 import "testing"
 func TestAlpha(t *testing.T) { if Value() != 9 { t.Fatal("value") } }
 func TestWorkerOne(t *testing.T) { if Value() != 9 { t.Fatal("value") } }
@@ -115,7 +115,7 @@ func TestModuleCLIActualInventoryAndAllPackageCoverage(t *testing.T) {
 		t.Fatalf("complete actual module denominator: %s (%v)", data, err)
 	}
 	for _, pkg := range report.Packages {
-		partitioned := pkg.Package == "example.org/modulefixture" || strings.HasSuffix(pkg.Package, "/cmd/plan9asmcorpus")
+		partitioned := pkg.Package == "example.org/modulefixture" || strings.HasSuffix(pkg.Package, "/gotoolprofile")
 		if pkg.Status != "passed" || partitioned && (pkg.Shards != 2 || pkg.Workers != 2) ||
 			!partitioned && (pkg.Shards != 1 || pkg.Workers != 1) {
 			t.Fatalf("package role or complete execution changed: %+v", pkg)
@@ -125,7 +125,7 @@ func TestModuleCLIActualInventoryAndAllPackageCoverage(t *testing.T) {
 	if err != nil || !strings.HasPrefix(string(coverage), "mode: atomic\n") {
 		t.Fatalf("actual module-wide coverage absent: %v\n%s", err, coverage)
 	}
-	for _, name := range []string{"modulefixture/value.go:", "modulefixture/cmd/plan9asmcorpus/value.go:", "modulefixture/internal/other/value.go:", "modulefixture/bench/value.go:"} {
+	for _, name := range []string{"modulefixture/value.go:", "modulefixture/gotoolprofile/value.go:", "modulefixture/internal/other/value.go:", "modulefixture/bench/value.go:"} {
 		if !strings.Contains(string(coverage), name) {
 			t.Errorf("coverage silently became root-only or lost a test-bearing package: %s\n%s", name, coverage)
 		}

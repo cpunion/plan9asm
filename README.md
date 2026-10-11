@@ -127,11 +127,10 @@ checks selected source hashes and package-role macros, and records CPP/LLVM
 output hashes. Source directories and module replacements must match the
 artifact's exact source root. Special and test-only package roles remain
 outside this mode. Without the flag, existing CLI behavior is unchanged.
-Schema-11 ordinary discovery records each `(file, target, profile ID, custom
-tags)` scope, using that same observed CPU environment for Go export/vet and
-translation. Progress schema 3 and assembly-ledger v3 preserve the shared
-inventory and actual consumer proof; old reports cannot be relabeled. These
-are translation/object checks, not operand-form or runtime coverage.
+The external runner in [llgo-compat/plan9asm](https://github.com/llgo-compat/plan9asm)
+owns module discovery, ledger records and third-party compatibility CI. It pins
+this translator and the shared `gotoolprofile` package; translation/object
+checks remain distinct from operand-form and runtime coverage.
 
 ## Output behavior
 

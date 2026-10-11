@@ -1,126 +1,56 @@
-# plan9asm development guide
+# plan9asm development
 
-plan9asm translates Go Plan 9 assembly to LLVM IR. A change is complete only
-when its accepted forms match Go, LLVM 22 compiles the affected targets, and
-tests establish the relevant runtime semantics.
+plan9asm translates Go Plan 9 assembly to LLVM IR. This repository owns the
+translator, shared Go source/tool observations, official instruction coverage
+and independent regression tests. External scanning, ledgers and compatibility
+batches live in [llgo-compat/plan9asm](https://github.com/llgo-compat/plan9asm).
 
 ## Start here
 
-1. Inspect `git status --short`, `git worktree list`, and `git remote -v`.
-   Preserve existing changes and use a persistent development worktree.
-2. Read [current work](docs/development/current-work.md) when continuing PR 40.
-3. Read the guide for the task before editing:
-   - [Instruction families](docs/development/instructions.md): TDD, Go tables,
-     typed grammars, raw decoding, platform and semantic tests.
-   - [Validation and PR completion](docs/development/validation.md): tool setup,
-     full tests, benchmark, frozen reports, CI and review gates.
-   - [Discovery operations](testdata/discovery/README.md): scanning, automatic
-     deduplication/sorting, bidirectional cursors, traffic and ledger format.
-   - [Discovery verification](docs/development/discovery-verification.md):
-     standalone inventory, imports, applicability, cache cleanup and provenance.
+1. Inspect `git status --short`, `git worktree list` and `git remote -v`.
+   Preserve existing work and reuse a persistent idle worktree.
+2. Read [current work](docs/development/current-work.md),
+   [instruction families](docs/development/instructions.md) and
+   [validation](docs/development/validation.md) for the task.
 
-## Non-negotiable rules
+## Rules
 
-- Inspect the destination remote before writing. Push this contribution only
-  to the allowed `cpunion` fork, never to `origin` or `xgo-dev`. Do not merge,
-  approve or close upstream PRs, publish tags/releases, or change upstream
-  settings. Creating/updating this contribution PR is allowed.
-- Keep code and fixtures readable: use multi-line control flow and moderate
-  blank lines between logical phases. Use `apply_patch`, then `gofmt`.
-- Never commit personal paths, private hostnames/accounts or deployment
-  settings. Use relative paths, configurable variables and placeholders.
-- Develop with current Go 1.27 and LLVM 22 **only**. Never fall back to another
-  LLVM release. Missing required compilers, linkers or backends fail tests.
-- All five architectures are supported: `386`, `amd64`, `arm`, `arm64`,
-  `wasm`. Do not skip a form because it differs from the host architecture.
-  Host-inapplicable runtime tests need a required cross-runtime counterpart.
-- Run tests with Go while llgo support is incomplete; do not add `!llgo` tags.
+- Push only to an allowed `cpunion` or `dastai` fork. Create/update the
+  contribution PR; do not directly push, merge, approve or close upstream PRs.
+- Use current Go 1.27 and LLVM 22. Never fall back to another LLVM version;
+  missing required tools/backends fail, never skip.
+- Support all five architectures: 386, amd64, arm, arm64 and wasm.
+  Host-inapplicable runtime tests require an explicit cross-runtime counterpart.
   Never generate LLVM `blockaddress` for wasm.
-- Use TDD and implement complete instruction families and Go operand formats,
-  not just an observed spelling. Consult full Go tables before implementation.
-- For each external-library failure, explain why systematic Go-rule coverage
-  missed it, repair its entire rule class and add an independent regression
-  that detects it without the discovering library.
-- Never disguise unsupported instructions, translation/LLVM failures, missing
-  tools or infrastructure errors as success or source N/A.
-- An exact external module version may be `skipped_invalid_source` only when
-  `testdata/corpus/invalid-machine-code.json` pins the source SHA-256 and
-  executable evidence: either LLVM 22 rejects the evaluated raw ARM64 WORD,
-  or Go's own object places an unrelocated raw AMD64 RIP target outside every
-  TEXT symbol with its named constant absent. The report/ledger retain the
-  reason. A skip is never a pass.
-- A frozen historical mirror/fork may be `skipped_superseded` only when
-  `testdata/corpus/superseded-modules.json` names an exact newer version
-  already in the scan ledger and gives reviewable project-identity evidence.
-  This is separate from both source N/A and assembly success; the replacement
-  is independently scanned and, if it has assembly, tested.
-- A private-extension gap may be `skipped_private_extension` only for the
-  exact file and target pinned in `testdata/corpus/private-extensions.json`.
-  Verify the source hash and current Go assembler, compile every other
-  applicable file, and count the candidate separately from passes.
-- A native-byte-layout/JIT gap requires an explicitly reviewed exception
-  policy before promotion. A proposal may be tested in the fork Draft PR,
-  clearly labeled provisional. Pin its module, version, file and targets in
-  `testdata/corpus/native-layout.json`. Recheck source SHA-256 and Go object
-  bytes for each target; compile all other assembly and count the skip outside
-  passes. Do not use this for an ordinary unsupported instruction.
-- Freeze source, tools and ledger during corpus verification. A changed input
-  invalidates the run. Do not rebase, rewrite or import records into that tree
-  while tests are running; use a separate persistent worktree for development.
-- Reuse idle development worktrees; do not create a new checkout for each
-  RED/GREEN attempt. After integration, retain reports and remove inactive clean
-  worktrees and merged local branches. Preserve unmerged refs and dirty trees;
-  reclaim only verified idle, owned build caches, never ledger or test evidence.
-- Run index scans and external corpus batches on the designated remote
-  executors, not as local background `plan9asmcorpus`/discovery processes.
-  Local first-party fixtures and corpus-driver unit tests remain allowed.
-  Never compile or execute external code on the inventory server.
-- Keep reports/binaries under ignored `_out/`. Never commit caches, ZIPs,
-  compressed discovery results or obsolete per-run ledgers, even in history.
-- Ordinary profile coverage uses report schema 11, progress schema 3 and
-  assembly-ledger v3: preserve file/target/profile-ID/custom-tag scopes, actual
-  Go/tool/package-role and CPP/LLVM consumer proofs. Do not relabel old reports
-  or treat feature-only files, unknown diagnostics or unconsumed variants as N/A.
-  Exact official instrumentation target exclusions are separate zero-object
-  scopes; every eligible scope still needs its normal compiler/object proofs.
-  Read old reports with their frozen historical tools; never copy old passes
-  or overwrite a v2 ledger as a v3 migration.
-- Commit verified development promptly. Keep PR 40 draft until current-head
-  tests, CI, review and coverage meet the completion gates.
-- Stage PR 40 repairs in a separate branch and Draft PR inside `cpunion`.
-  Do not update its upstream-connected head until fork CI passes. Follow
-  [the fork validation procedure](docs/development/validation.md#fork-first-ci).
+- Use TDD. Consult complete official Go tables and implement typed instruction
+  families and operand formats. Each ecosystem-discovered defect must have an
+  independent regression and a rule-class fix, not a library-specific patch.
+- Run tests with Go while llgo support is incomplete; do not add `!llgo` tags.
+- Keep rejection, source context, translation, LLVM compilation and executed
+  semantics distinct. Infrastructure failures never establish source rejection.
+- Use `apply_patch`, readable multi-line code and moderate blank lines, then
+  `gofmt`. Release LLVM objects and owned subprocess resources promptly.
+- Do not commit private paths/hosts, package caches, binaries or reports.
+  Keep evidence under ignored `_out/`; preserve failed reports as failed.
+- Freeze source and tools during validation, even documentation. Never edit a
+  running snapshot or reuse its report to certify a changed revision.
+- Commit verified batches promptly. Stage repairs in the allowed fork; retain
+  draft status until current-head tests, CI, review and coverage pass.
 
-## Common commands
+## Commands
 
-Run from the repository root after selecting the tools described in
-[validation](docs/development/validation.md). Keep focused red/green logs.
+After selecting the tools documented in validation:
 
 ```sh
 go test . -run '<focused-family-regex>' -count=1
 go test ./... -count=1 -timeout=45m
 (cd cmd/plan9asm && go test ./... -count=1)
 (cd cmd/plan9asmll && go test ./... -count=1)
-
 scripts/check-go-asm-coverage.sh
 scripts/check-arm64-plan9-corpus.sh
 scripts/check-stdlib-corpus.sh
 scripts/benchmark-compile.sh
-
-go run ./cmd/plan9asmdiscover -status -out-dir testdata/discovery/ledger
-bash scripts/discovery-status.sh
-scripts/update-assembly-ledger.sh
 ```
 
-New external-library scans and compilation use current Go 1.27, not the whole
-Go 1.20–1.27 matrix. That compatibility matrix belongs to the official corpus.
-Discovery records prove inspection; corpus reports prove translation/object
-compilation; runtime tests prove only their executed semantics. Keep these
-claims separate.
-
-## Documentation maintenance
-
-Keep this file a short entry point. Put durable procedures in the linked
-guides and replace, rather than append to, the current-work checkpoint. Keep
-scan/coverage funnel tables in the PR body; derive them from validated reports.
-Old progress narratives remain in Git history, not in this guide.
+Do not reintroduce external discovery jobs or ledger gates into translator CI.
+Keep this entry point short; durable procedures belong in linked documents.

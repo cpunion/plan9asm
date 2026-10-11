@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# One actual main-module inventory: eight root parts, corpus and rest once.
+# One actual main-module inventory: eight root parts, profile and rest once.
 # Nested CLI modules keep their independent steps; Windows does not use this.
 flavor=${1:?test, race or coverage required}
 phase=${2:?execute or complete required}
@@ -28,7 +28,7 @@ case "$phase" in
       exit 1
     fi
     if [[ $3 == 0 && ! $4 =~ ^[0-7]$ ]] || [[ $3 != 0 && $4 != -1 ]]; then
-      echo "root owner requires part 0..7; corpus/rest require -1" >&2
+      echo "root owner requires part 0..7; profile/rest require -1" >&2
       exit 1
     fi
     args+=("-module-owner=$3" "-module-root-partition=$4")

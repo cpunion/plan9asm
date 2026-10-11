@@ -13,44 +13,33 @@ function jobSection(name) {
   return next < 0 ? rest : rest.slice(0, next + 1);
 }
 
-test('all other entry jobs require successful priority completion', () => {
+test('translator jobs require policy preflight, not external compatibility', () => {
   for (const name of [
-    'fmt', 'build', 'benchmark', 'reported_library_list', 'discovered_library_corpus',
+    'fmt', 'build', 'benchmark',
     'stdlib-corpus', 'cross-runtime', 'test', 'arm-scan', 'race', 'coverage',
   ]) {
     const section = jobSection(name);
-    assert.match(section, /^    needs: discovered_library_priority$/m, name);
+    assert.match(section, /^    needs: ci_policy$/m, name);
     // Native needs success gating must not be bypassed by always()/!cancelled().
     assert.doesNotMatch(section, /^    if:/m, name);
   }
-  assert.doesNotMatch(workflow, /^  priority_started:/m);
+  assert.doesNotMatch(workflow, /discovered_library|reported_library|testdata\/discovery/);
 });
 
-test('all failed shards run and no priority failure can become success', () => {
-  const priority = jobSection('discovered_library_priority');
-  assert.match(priority, /^      fail-fast: false$/m);
-  assert.doesNotMatch(priority, /continue-on-error:/);
-  assert.match(priority, /^    needs: ci_policy$/m);
-  assert.doesNotMatch(priority, /^    if:/m);
+test('all translator matrix failures remain failures', () => {
+  for (const name of ['test', 'race', 'coverage', 'cross-runtime']) {
+    const job = jobSection(name);
+    assert.match(job, /^      fail-fast: false$/m);
+    assert.doesNotMatch(job, /continue-on-error:/);
+  }
 });
 
-test('cheap CI policy checks pass before expensive corpus or test jobs start', () => {
+test('cheap CI policy checks pass before instruction and official corpus jobs', () => {
   const policy = jobSection('ci_policy');
   assert.match(policy, /bash scripts\/install-ci-llvm22-ubuntu\.sh/);
   assert.match(policy, /node --test \.github\/scripts\/priority-\*\.test\.cjs/);
   assert.match(policy, /go test \. -run '\^TestCI' -count=1/);
   assert.doesNotMatch(policy, /^    (needs|if):/m);
   assert.ok(workflow.indexOf('\n  ci_policy:\n') <
-    workflow.indexOf('\n  discovered_library_priority:\n'));
-});
-
-test('aggregate verification installs LLVM 22 before building its Go readers', () => {
-  const aggregate = jobSection('discovered_library_corpus_verify');
-  const install = aggregate.indexOf('run: bash scripts/install-ci-llvm22-ubuntu.sh');
-  assert.ok(install >= 0, 'aggregate Go readers link plan9asm and require LLVM 22');
-  const command = 'run: scripts/verify-discovered-library-corpus.sh --progress';
-  assert.ok(aggregate.indexOf(command) > install,
-    `LLVM 22 must be available before ${command}`);
-  assert.match(aggregate, /^    if: \$\{\{ !cancelled\(\) \}\}$/m);
-  assert.doesNotMatch(aggregate, /continue-on-error:|CGO_ENABLED:.*0/);
+    workflow.indexOf('\n  test:\n'));
 });
