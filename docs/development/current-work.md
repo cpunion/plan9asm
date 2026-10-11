@@ -1,4 +1,4 @@
-# Current work: separate external compatibility from PR 40
+# Current work: consolidate and repair PR 40
 
 External scanning, ledgers and corpus verification have moved to Draft
 [llgo-compat/plan9asm#1](https://github.com/llgo-compat/plan9asm/pull/1).
@@ -19,17 +19,38 @@ owns subsequent inventory imports, cursors, external failures and ledger updates
   the moved corpus driver. Every actual package still has exactly one owner;
   root partitions and the strict complete-module aggregate remain mandatory.
 
+## Consolidated repair checkpoint
+
+`3dc36d71` contains the instruction repairs and external-corpus separation.
+Continue from this integrated source, not an older family worktree. The latest
+review found these concrete issues to address before another publication:
+
+- Align actual SDK observations with supported Go patch releases; preserve
+  source/object validation instead of merely relaxing version checks.
+- Bind the CLI's package load and original-source observers to one effective
+  environment, including their explicit GOENV and cache requirements.
+- Install required IA32 tools wherever native tests execute. Do not turn
+  missing dependencies into skips.
+- Correct the ARM cross-runtime fixture's invalid memory-source ADD, retaining
+  independent original-Go acceptance/rejection checks.
+- Reuse disposable build caches within test roots while keeping each source,
+  observation and revocation state independent. Measure before wider changes.
+
+CI run `38131270471` finished with failures. Its standard-library benchmark
+compiled 163 of 185 files; its 68-second target total is not a complete-success
+performance result. Keep the PR draft and preserve failed evidence.
+
 ## Remaining delivery gates
 
 The migration PR is draft. Its historical assembly ledger remains incomplete;
 this does not change translator coverage or certify any external module.
-Verify the source split, scheduler/CI regressions, shared package and both CLIs.
-Then publish the cleanup to the allowed fork and update the existing PR 40
-contribution. Do not merge or close upstream PRs.
+The split is already published to PR 40. Verify the new repairs with focused
+RED/GREEN cases, the shared package, both CLIs and affected full gates, then
+publish a verified batch to the allowed fork. Do not merge or close upstream PRs.
 
-Do not modify the separate frozen `fe553bff` module run or fork run 38116495799.
-Their results belong to their own revisions. Preserve their terminal evidence,
-but do not interpret them as verification of the split revision.
+Historical runs, including `fe553bff` and fork run `38116495799`, certify only
+their own revisions. Retain their evidence when retiring inactive worktrees;
+never promote old or incomplete reports to current-head success.
 
 The five-architecture official Go classification gate passes after the split.
 The supplementary x/arch ARM64 decoder baseline remains failed: 774 supported
