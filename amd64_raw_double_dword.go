@@ -10,12 +10,16 @@ import (
 // selects the vector width except when EVEX.b enables rounding or SAE on a
 // register-source 512-bit double-to-dword form.
 func decodedX86PackedDoubleDwordInstruction(code []byte, mode int) (Instr, int, bool, error) {
+	return decodedX86PackedDoubleDwordInstructionWithMemory(code, mode, x86RawMemoryDecoder{})
+}
+
+func decodedX86PackedDoubleDwordInstructionWithMemory(code []byte, mode int, memory x86RawMemoryDecoder) (Instr, int, bool, error) {
 	p, matched := decodeX86RawVectorEncoding(code)
 	if !matched || p.mapNumber != 1 || p.opcode != 0xe6 || (p.pp != 1 && p.pp != 2 && p.pp != 3) {
 		return Instr{}, 0, false, nil
 	}
 	if p.pp != 2 && (!p.evex || p.w) {
-		return decodedX86PackedNumericConversionInstruction(code, mode)
+		return decodedX86PackedNumericConversionInstructionWithMemory(code, mode, memory)
 	}
 	fail := func(message string) (Instr, int, bool, error) {
 		return Instr{}, 0, true, fmt.Errorf("packed double/dword conversion: %s", message)
@@ -131,9 +135,9 @@ func decodedX86PackedDoubleDwordInstruction(code []byte, mode int) (Instr, int, 
 	var consumed int
 	var err error
 	if p.evex {
-		source, consumed, err = decodedX86EVEXRMOperand(code[p.modRM:], mode, p.b, p.x, p.segment, sourcePrefix, memoryScale)
+		source, consumed, err = memory.evex(code[p.modRM:], mode, p.b, p.x, p.segment, sourcePrefix, memoryScale)
 	} else {
-		source, consumed, err = decodedX86VEXVectorRMOperand(code[p.modRM:], mode, p.b, p.x, p.segment, sourcePrefix)
+		source, consumed, err = memory.vex(code[p.modRM:], mode, p.b, p.x, p.segment, sourcePrefix)
 	}
 	if err != nil {
 		return Instr{}, 0, true, err

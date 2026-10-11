@@ -28,9 +28,13 @@ func decodedX86SameWidthConversionOpcode(opcode, pp byte) (decodedX86SameWidthCo
 // memory, masking, zeroing, broadcasts, embedded rounding, SAE, and compressed
 // displacements before the generic decoder can consume an incorrect length.
 func decodedX86SameWidthConversionInstruction(code []byte, mode int) (instruction Instr, length int, ok bool, err error) {
+	return decodedX86SameWidthConversionInstructionWithMemory(code, mode, x86RawMemoryDecoder{})
+}
+
+func decodedX86SameWidthConversionInstructionWithMemory(code []byte, mode int, memory x86RawMemoryDecoder) (instruction Instr, length int, ok bool, err error) {
 	if p, valid := decodeX86RawVectorEncoding(code); valid && p.mapNumber == 1 && p.opcode == 0x5b &&
 		(p.pp == 1 || p.pp == 2) && (!p.evex || !p.w) {
-		return decodedX86PackedNumericConversionInstruction(code, mode)
+		return decodedX86PackedNumericConversionInstructionWithMemory(code, mode, memory)
 	}
 	i := 0
 	segment := Reg("")
@@ -56,7 +60,7 @@ vectorPrefix:
 		return Instr{}, 0, false, nil
 	}
 	if len(code) > i && code[i] == 0x62 {
-		return decodedX86EVEXSameWidthConversionInstruction(code, i, mode, segment, addressOverride)
+		return decodedX86EVEXSameWidthConversionInstructionWithMemory(code, i, mode, segment, addressOverride, memory)
 	}
 
 	var vexLength, rExt, xExt, bExt int
@@ -108,7 +112,7 @@ vectorPrefix:
 	if mode == 32 && (destinationNumber >= 8 || modRM>>6 == 3 && int(modRM&7)+bExt*8 >= 8) {
 		return Instr{}, 0, true, fmt.Errorf("extended vector register in 32-bit mode")
 	}
-	source, consumed, decodeErr := decodedX86VEXVectorRMOperand(code[modRMIndex:], mode, bExt, xExt, segment, vectorPrefix)
+	source, consumed, decodeErr := memory.vex(code[modRMIndex:], mode, bExt, xExt, segment, vectorPrefix)
 	if decodeErr != nil {
 		return Instr{}, 0, true, decodeErr
 	}
@@ -122,6 +126,10 @@ vectorPrefix:
 }
 
 func decodedX86EVEXSameWidthConversionInstruction(code []byte, i, mode int, segment Reg, addressOverride bool) (instruction Instr, length int, ok bool, err error) {
+	return decodedX86EVEXSameWidthConversionInstructionWithMemory(code, i, mode, segment, addressOverride, x86RawMemoryDecoder{})
+}
+
+func decodedX86EVEXSameWidthConversionInstructionWithMemory(code []byte, i, mode int, segment Reg, addressOverride bool, memory x86RawMemoryDecoder) (instruction Instr, length int, ok bool, err error) {
 	if len(code) < i+6 {
 		return Instr{}, 0, false, nil
 	}
@@ -189,7 +197,7 @@ func decodedX86EVEXSameWidthConversionInstruction(code []byte, i, mode int, segm
 	if mode == 32 && (maskNumber != 0 && !half && properties.op != "VCVTDQ2PS" || destinationNumber >= 8 || modRM>>6 == 3 && int(modRM&7)+bExt*8+xExt*16 >= 8) {
 		return Instr{}, 0, true, fmt.Errorf("extended vector register or mask in 32-bit mode")
 	}
-	source, consumed, decodeErr := decodedX86EVEXRMOperand(code[modRMIndex:], mode, bExt, xExt, segment, vectorPrefix, disp8Scale)
+	source, consumed, decodeErr := memory.evex(code[modRMIndex:], mode, bExt, xExt, segment, vectorPrefix, disp8Scale)
 	if decodeErr != nil {
 		return Instr{}, 0, true, decodeErr
 	}

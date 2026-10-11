@@ -237,8 +237,9 @@ checks above. Development remains on the reused packed-arithmetic branch;
 the repair batch was published only in fork PR 4 after the old CI's terminal
 status. Do not update the upstream-connected branch or assembly ledger.
 
-Local continuation now uses `codex/pr40-inert-nop-result-20261011` in the same
-development worktree. Shard 42's gofiber utils v2.5.3 source combines native
+Local continuation now uses `codex/pr40-packed-conversion-frame-20261011` in
+the reused development worktree. The NOP repair is retained in local commit
+`6f4f262c`. Shard 42's gofiber utils v2.5.3 source combines native
 reads with raw NOP padding. An independent five-target RED reproduces the
 function-wide raw-origin rejection at VMOVDQU. Only the physical decoder's
 sealed operand-free NOP handoff may now compose with the separately paired
@@ -253,7 +254,7 @@ not runtime skips. The final four current-Go roots pass after that split.
 This local follow-up is not in run 38116495799; no gofiber or ledger pass is
 claimed, and Rosetta is not native Linux evidence.
 
-The next local follow-up splits discovery CI from 64 to 128 hash shards after
+Local commit `cd59c78b` splits discovery CI from 64 to 128 hash shards after
 parents 36/42 repeatedly exhausted the unchanged 330-minute compile budget.
 Both children of all six former priority shards remain failure-first; all 128
 reports are mandatory, with unchanged test steps, targets and strict readers.
@@ -267,6 +268,33 @@ All 43 Node scheduling tests, nine focused current-Go roots, seven Go 1.20
 roots, three race roots, root CI policy, actionlint, shell syntax and vet pass.
 The independent split test checks both children of every old parent; the reader
 regression rejects old-count reports instead of promoting historical evidence.
+
+The packed-conversion continuation addresses shard 29/42's algo-vecmath
+`VCVTDQ2PD` private-stack counterexample as a complete effect/consumer family.
+The existing 42-name typed conversion grammar now supplies the fixed-local
+shape, exact input/merge byte effects and candidate query. Only the complete
+actual-Go source/frame proof authorizes private native storage. Physical
+conversion byte-boundary observation is separate from raw RIP or scalar-read
+permission. Source MMX, unbound FP/SP/BP and incoming pointers remain strict.
+The original library also has loops, a floating declaration and input writes:
+this bounded repair is not a whole-library pass, and does not update ledger.
+
+Retain `_out/packed-conversion-frame/`: independent family and boundary REDs,
+the failed full-object attempt, and the corrected fixture's CPP/raw-text
+mismatch. No production fingerprint guard was relaxed. All 741 non-MMX format
+witnesses now pass actual Go capture on Linux/Darwin/Windows AMD64 and all
+three LLVM 22 APIs at O0/O2, in 36 batches of at most 64 functions. The 17-root
+family run passes in 367 seconds; the 85-root adjacent regression run passes
+in 455 seconds, both without failures or skips. Six final byte/tuple/owner
+roots, eleven Go 1.20 focused roots, four final Go 1.20 roots (including six
+representative actual-object batches), 44 CLI extraction roots, vet and the
+unchanged official classification gate pass. Forty-eight original-Go/LLVM SSE
+kernels compare 12,288 value/MXCSR/canary states per API/optimization lane.
+That Rosetta result is not native AVX512 execution: the required Linux owner
+retains all 336 full-family live/dead/canary kernels and is not locally passed.
+These commits are not part of running fork CI 38116495799. Keep them local
+until that run finishes naturally; then replay original failures before
+promoting any external outcome.
 
 The historical `aedfac9b` tree's old
 `_out/ci-closure/publish-after-ci.sh` already completed publication and is not
@@ -705,8 +733,9 @@ timeouts. Those regressions have newer repairs, not a retroactive pass.
 
 1. Let published `46fa4bca` CI 38116495799 finish naturally. Retain all six
    priority reports and compare exact failures before the next fork-only push.
-2. Finish local follow-up gates, including NOP result composition and discovery
-   job splitting. Keep original examples failed until complete replay succeeds.
+2. Retain the verified local NOP, discovery-split and packed-conversion batches.
+   Finish the frozen main-module runner's remaining packages; keep its five old
+   root failures failed. Original examples need complete new-source replay.
 3. Compare new CI failures with the original eight classes. Fix each class with
    independent RED/GREEN tests and original-example replay; batch the next push.
 4. After priority success, let all remaining current-head gates run. Publish

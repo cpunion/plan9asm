@@ -74,6 +74,7 @@ func x86NumericalVectorPrefix(code []byte, mode int) bool {
 func x86NumericalVectorBoundary(code []byte, mode int) (int, error) {
 	memory := x86RawMemoryDecoder{physicalPC: true}
 	decoders := [...]func([]byte, int, x86RawMemoryDecoder) (Instr, int, bool, error){
+		decodedX86NumericalConversionBoundary,
 		decodedX86AESInstructionWithMemory,
 		decodedX86MaskMoveInstructionWithMemory,
 		decodedX86PackedMoveInstructionWithMemory,
@@ -109,4 +110,20 @@ func x86NumericalVectorBoundary(code []byte, mode int) (int, error) {
 		return length, err
 	}
 	return 0, numericalSBContext("unregistered or truncated whole native VEX/EVEX encoding")
+}
+
+func decodedX86NumericalConversionBoundary(code []byte, mode int, memory x86RawMemoryDecoder) (Instr, int, bool, error) {
+	if ins, length, known, err := decodedX86PackedNumericConversionInstructionWithMemory(code, mode, memory); known || err != nil {
+		return ins, length, known, err
+	}
+	p, known := decodeX86RawVectorEncoding(code)
+	if known && p.mapNumber == 1 {
+		switch {
+		case p.opcode == 0x5b && p.pp == 0:
+			return decodedX86SameWidthConversionInstructionWithMemory(code, mode, memory)
+		case p.opcode == 0xe6 && p.pp == 2:
+			return decodedX86PackedDoubleDwordInstructionWithMemory(code, mode, memory)
+		}
+	}
+	return Instr{}, 0, false, nil
 }

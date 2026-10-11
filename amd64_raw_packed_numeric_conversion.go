@@ -67,6 +67,10 @@ func x86RawPackedNumericName(p x86RawVectorEncoding) Op {
 }
 
 func decodedX86PackedNumericConversionInstruction(code []byte, mode int) (Instr, int, bool, error) {
+	return decodedX86PackedNumericConversionInstructionWithMemory(code, mode, x86RawMemoryDecoder{})
+}
+
+func decodedX86PackedNumericConversionInstructionWithMemory(code []byte, mode int, memory x86RawMemoryDecoder) (Instr, int, bool, error) {
 	p, matched := decodeX86RawVectorEncoding(code)
 	if !matched {
 		return Instr{}, 0, false, nil
@@ -112,9 +116,9 @@ func decodedX86PackedNumericConversionInstruction(code []byte, mode int) (Instr,
 	var consumed int
 	var err error
 	if p.evex {
-		source, consumed, err = decodedX86EVEXRMOperand(code[p.modRM:], mode, p.b, p.x, p.segment, prefix[shape.sourceBytes], width)
+		source, consumed, err = memory.evex(code[p.modRM:], mode, p.b, p.x, p.segment, prefix[shape.sourceBytes], width)
 	} else {
-		source, consumed, err = decodedX86VEXVectorRMOperand(code[p.modRM:], mode, p.b, p.x, p.segment, prefix[shape.sourceBytes])
+		source, consumed, err = memory.vex(code[p.modRM:], mode, p.b, p.x, p.segment, prefix[shape.sourceBytes])
 	}
 	if err != nil {
 		return Instr{}, 0, true, err
@@ -141,7 +145,16 @@ func decodedX86PackedNumericConversionInstruction(code []byte, mode int) (Instr,
 	if mode == 32 {
 		arch = "386"
 	}
-	_, _, err = x86PackedConversionProperties(ins, arch)
+	shapeInput := ins
+	if memory.physicalPC && source.Kind == OpMem && source.Mem.Base == "RIP" {
+		// The physical decoder has already checked the complete disp32.
+		// Check the conversion's memory class, not a Go source RIP spelling.
+		// Return the original physical operand; only a boundary observer may
+		// request this mode and it discards all decoded operands.
+		shapeInput.Args = append([]Operand(nil), ins.Args...)
+		shapeInput.Args[0] = Operand{Kind: OpMem, Mem: MemRef{Base: AX}}
+	}
+	_, _, err = x86PackedConversionProperties(shapeInput, arch)
 	if err != nil {
 		return Instr{}, 0, true, err
 	}

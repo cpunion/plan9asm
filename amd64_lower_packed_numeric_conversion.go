@@ -102,7 +102,8 @@ func (c *amd64Ctx) lowerPackedNumericConversion(op Op, ins Instr) (bool, bool, e
 		}
 		return true, false, fmt.Errorf("%w: packed FP conversion source lacks original native backing", ErrProbeNeedsContext)
 	}
-	if ins.x86AddressBits != 0 || source.Kind == OpMem && !x86OrdinaryNativeMemoryOperand(source, c.goarch) {
+	if ins.x86AddressBits != 0 || source.Kind == OpMem &&
+		!x86OrdinaryNativeMemoryOperand(source, c.goarch) && !c.fixedLocalMemoryCertified(ins, form.memory) {
 		return true, false, fmt.Errorf("%w: packed conversion lacks original native address binding", ErrProbeNeedsContext)
 	}
 	base = strings.ToLower(base)

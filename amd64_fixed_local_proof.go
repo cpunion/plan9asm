@@ -176,6 +176,9 @@ func fixedLocalRelocationAliases(accesses map[int]map[int]x86FixedLocalAccess) e
 }
 
 func fixedLocalInstructionShape(ins Instr) bool {
+	if form, known, err := fixedLocalConversionProperties(ins); known {
+		return err == nil && !form.mmx
+	}
 	if _, known, err := x86ConditionalSetProperties(ins.Op, ins, "amd64"); known {
 		return err == nil
 	}
@@ -543,6 +546,9 @@ func fixedLocalStep(ins *Instr, state *x86FixedLocalState, sig FuncSig, proof *x
 		return err
 	}
 	if known, err := fixedLocalMaskMoveStep(ins, state, proof, residue); known {
+		return err
+	}
+	if known, err := fixedLocalConversionStep(ins, state, proof, residue); known {
 		return err
 	}
 	return fixedLocalVectorStep(ins, state, proof, residue)

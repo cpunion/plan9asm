@@ -233,7 +233,8 @@ out-of-range inputs become poison. Keep each whole conversion `sideeffect`
 even when its numerical result is dead. Its caller effects require every potential
 input byte and merge byte; masks do not authorize a missing memory envelope.
 Packed FP fields and virtual SP/BP lack original native backing and remain
-Context. Mode32 high banks likewise cannot borrow a software register view.
+Context without a separate source-bound storage proof. Mode32 high banks
+likewise cannot borrow a software register view.
 Go's MMX-to-X forms (including GP spellings admitted to Ymm) and X-to-MMX
 destinations remain Context:
 no current producer closes physical MMX identity, x87 Tag/TOS, pending
@@ -252,6 +253,20 @@ through a synchronous subtest. Primary references are
 (conversion instruction pages and exception classes) and the
 [LLVM 22 LangRef](https://releases.llvm.org/22.1.0/docs/LangRef.html)
 (`fptosi` poison and inline-assembly constraints), not software-value parity alone.
+
+The AMD64 fixed-local observer consumes those same two typed conversion
+grammars for all 42 names, not another mnemonic list. Its complete original
+Go frame binding may supply only initialized private memory: retain the exact
+source tuple, legacy m128 alignment, active merge bytes, narrowing zero padding
+and legacy versus VEX/EVEX wider aliases. A zero mask cannot excuse missing
+storage. Unbound FP/SP/BP, physical MMX, caller pointers and source escapes keep
+their existing failures; this adds neither a loop nor a floating ABI contract.
+The actual-object boundary observer separately measures complete VEX/EVEX
+conversion encodings, including physical RIP operands. It discards operands
+and supplies no raw-source or scalar-read permission. Keep default raw RIP
+rejection, every truncation and reserved-field controls. Native Linux execution
+owns the full conversion family; original-Go/LLVM SSE value, MXCSR and private
+canary comparisons on Rosetta remain explicitly narrower evidence.
 
 All eight scalar COMI/UCOMI names share Go's twelve complete encoder rows,
 read-only scalar input widths and native MXCSR/FLAGS effects. A pure LLVM
