@@ -55,9 +55,9 @@ frozen for the running 32-partition/two-worker full root gate under
 Byte-shuffle repair `6430b7f8` is committed locally. Development continues in
 `codex/pr40-frame-data-20261011`, with mixed DATA evidence in `_out/frame-data/`.
 The frozen `dc3e53d8` full-root run has a real failure in partition 20:
-`TestAMD64MovSyscallAndCRC32Coverage` admits a bare MOVLQSX symbol. Repair its
-shared operand class, retaining that failed full-run evidence. Do not edit the
-frozen tree or relabel it. The shared extension grammar now rejects bare names
+`TestAMD64MovSyscallAndCRC32Coverage` admits a bare MOVLQSX symbol. Commit
+`7d4603f9` repairs its shared operand class, retaining that failed full-run
+evidence. Do not edit the frozen tree or relabel it. The grammar rejects bare names
 before creating LLVM storage; independent Go oracles cover all fourteen members
 and retain legal SB/absolute controls. All 22 current-Go focused roots and eight
 actual Go 1.20 roots pass, as does vet. The original failed full report stays
@@ -65,7 +65,20 @@ failed. The current-Go DATA/adjacent suite completed with 59 passing roots and
 zero failures/skips; focused actual Go 1.20, CLI extraction and unchanged official
 classification also passed.
 Independent ordinary MOV native-result and dead-read REDs are retained in
-`_out/scalar-move-native/`; their implementation follows the failed gate repair.
+`_out/scalar-move-native/`. The five B/W/L/Q/D spellings now share their native
+register-addressed load shape, exact volatile read and lowering-only byte
+effect. Complete Go tables, public/source/CFG boundaries and sparse byte/FLAGS/pointer tests
+remain independent. Actual Go REX bytes additionally expose high-byte aliases;
+the consumer tracks their real low-byte destination and refuses implicit
+physical SP/BP writes. Twenty-one current-Go related roots and nine actual
+Go 1.20 roots pass. Fourteen original-Go/LLVM live/dead kernels pass all three
+APIs at O0/O2: 1,792 numerical and 168 fault/continuation outcomes per lane.
+Rosetta remains a diagnostic, not native Linux execution. Eight final roots
+pass, including five-target O0/O2 objects; CLI and unchanged five-architecture
+classification also pass. All sixteen final named-address/family regression
+roots and final vet pass, retaining Go's distinct SB role. The last actual Go
+1.20 family rerun also passes all eight roots. Original exact-version replay
+still owns candidate closure.
 No external library was compiled locally and no ledger status changed.
 Read-only triage also found seven original-ZIP/go.mod comparison failures. A
 bounded public-proxy directory read confirms that the exact bford/golang-x-crypto
@@ -80,6 +93,15 @@ a reusable publisher. Its replacement old-run watcher is terminal. The current
 read-only watcher is in the published tree at
 `_out/ci-failure-replay/watch-0c61d468.log`; it has no publication action.
 Retain all terminal logs and earlier disk-exhaustion evidence.
+
+The local cleanup consolidated 1,084 inactive clean worktrees and removed 333
+merged local branch refs. Unmerged refs and all reports were preserved; dirty,
+current development and running verification trees were not removed. Historical
+`_out` paths in this checkpoint may now live under the original worktree basename
+in the sibling `plan9asm-cleanup-evidence-20261011` directory. Its recovery journals
+retain exact commits and refs; the source checkout can be reconstructed with
+`git worktree add`. Only authenticated idle Go build caches were cleaned. Do not
+mistake removal of redundant checkouts for an updated test result or ledger.
 
 Earlier `c09eff1e` failed run 37711752851: priority shards 5/29/38/39 failed,
 36/42 were canceled, and downstream gates did not complete. The four failed

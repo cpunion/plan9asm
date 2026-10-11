@@ -283,6 +283,9 @@ func (c *amd64Ctx) scanUsedRegs() {
 
 	for _, blk := range c.blocks {
 		for _, ins := range blk.instrs {
+			if form, known, err := x86ScalarNativeLoadProperties(ins.Op, ins, c.goarch); known && err == nil {
+				markReg(form.destination)
+			}
 			if effect, known, err := x86TypedPackedIntegerCompareByteEffect(ins.Op, ins, c.goarch); known && err == nil {
 				for _, operand := range effect.operands {
 					markOp(operand.operand)

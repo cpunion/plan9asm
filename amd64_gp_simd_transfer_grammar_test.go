@@ -20,6 +20,13 @@ func TestX86GPSIMDTransferCompleteLegacyOriginalTables(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, table := range []struct{ op, name, prefix, bytes, rows string }{
+		{"MOVB", "ymovb", "Pb", "0x88,0x8a,0xb0,0xc6,00", `
+		{Zr_m,1,argList{Yrb,Ymb}},{Zm_r,1,argList{Ymb,Yrb}},
+		{Zib_rp,1,argList{Yi32,Yrb}},{Zibo_m,2,argList{Yi32,Ymb}},`},
+		{"MOVW", "ymovw", "Pe", "0x89,0x8b,0xb8,0xc7,00,0", `
+		{Zr_m,1,argList{Yrl,Yml}},{Zm_r,1,argList{Yml,Yrl}},
+		{Zil_rp,1,argList{Yi32,Yrl}},{Zilo_m,2,argList{Yi32,Yml}},
+		{Zaut_r,2,argList{Yiauto,Yrl}},`},
 		{"MOVL", "ymovl", "Px", "0x89,0x8b,0xb8,0xc7,00,0x6e,0x7e,Pe,0x6e,Pe,0x7e,0", `
 		{Zr_m,1,argList{Yrl,Yml}},{Zm_r,1,argList{Yml,Yrl}},
 		{Zil_rp,1,argList{Yi32,Yrl}},{Zilo_m,2,argList{Yi32,Yml}},

@@ -1540,7 +1540,7 @@ func TestAMD64MovSyscallAndCRC32Coverage(t *testing.T) {
 	if ok, term, err := cBadMem.lowerMov("MOVW", Instr{Raw: "MOVW arg+0(FP), 8(BAD)", Args: []Operand{{Kind: OpFP, FPOffset: 0}, {Kind: OpMem, Mem: MemRef{Base: Reg("BAD"), Off: 8}}}}); !ok || term || err != nil {
 		t.Fatalf("MOVW bad dst mem = (%v, %v, %v)", ok, term, err)
 	}
-	if ok, term, err := cBadMem.lowerMov("MOVQ", Instr{Raw: "MOVQ 8(BAD), AX", Args: []Operand{{Kind: OpMem, Mem: MemRef{Base: Reg("BAD"), Off: 8}}, {Kind: OpReg, Reg: AX}}}); !ok || term || err != nil {
+	if ok, term, err := cBadMem.lowerMov("MOVQ", Instr{Raw: "MOVQ 8(BAD), AX", Args: []Operand{{Kind: OpMem, Mem: MemRef{Base: Reg("BAD"), Off: 8}}, {Kind: OpReg, Reg: AX}}}); !ok || term || err == nil {
 		t.Fatalf("MOVQ bad src mem = (%v, %v, %v)", ok, term, err)
 	}
 	if ok, term, err := cBadMem.lowerMov("MOVL", Instr{Raw: "MOVL 24(BAD), example.dest(SB)", Args: []Operand{{Kind: OpMem, Mem: MemRef{Base: Reg("BAD"), Off: 24}}, {Kind: OpSym, Sym: "example.dest(SB)"}}}); !ok || term || err != nil {

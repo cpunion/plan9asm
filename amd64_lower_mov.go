@@ -27,6 +27,12 @@ func (c *amd64Ctx) lowerMov(op Op, ins Instr) (ok bool, terminated bool, err err
 	if _, ok := amd64ScalarExtensionMoveSpecs[op]; ok {
 		return true, false, c.lowerScalarExtensionMove(op, ins)
 	}
+	if form, known, err := x86ScalarNativeLoadProperties(op, ins, c.goarch); known {
+		if err != nil {
+			return true, false, err
+		}
+		return true, false, c.lowerScalarNativeLoad(form, ins)
+	}
 	src, dst := ins.Args[0], ins.Args[1]
 	if op == "MOVD" {
 		op = "MOVQ"

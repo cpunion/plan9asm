@@ -539,6 +539,17 @@ all-five-target objects and original-byte/LLVM numerical and fault oracles paire
 See [LLVM 22 volatile accesses](https://releases.llvm.org/22.1.0/docs/LangRef.html#volatile-memory-accesses);
 volatile access does not establish validity for a later nonvolatile read.
 
+Ordinary register-addressed native MOVB/W/L/Q and Go's qword MOVD alias use one
+typed load row for lowering and the private result observer. Exact-width
+volatile reads retain dead faults; B/W preserve other bytes and L clears the
+upper half. Continuing the paired load establishes only numerical result bytes,
+not pointee, caller, frame or raw-entry authority. Keep the complete Go MOV
+tables separate from the MMX/X, system, immediate, static-symbol, FP/AUTO and
+store consumers.
+Actual REX changes AH/CH/DH/BH ModRM spellings to SP/BP/SI/DI low bytes;
+register allocation and effects must agree with Go's bytes. An implicit
+physical SP/BP write remains Context without its native contract.
+
 Packed low-product W/D/Q multiplication consumes the shared binary grammar;
 W retains the word family's separate MMX bank. D/Q shape, lowering, caller
 effects, memory tuples and result definedness must agree. Legacy PMULLD m128
