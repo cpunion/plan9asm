@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/xgo-dev/plan9asm/internal/gooriginalsrc"
 )
 
 // The file proxy contains only this repository's generated first-party code.
@@ -98,8 +100,12 @@ func amd64DownloadedObservationFixture(t *testing.T, variant string) (AMD64Origi
 			t.Error(err)
 		}
 	})
+	proxyURL, err := gooriginalsrc.FileProxyURL(proxy)
+	if err != nil {
+		t.Fatal(err)
+	}
 	request.Environment = replaceEnv(request.Environment, map[string]string{
-		"GOPROXY": "file://" + proxy, "GOMODCACHE": cache,
+		"GOPROXY": proxyURL, "GOMODCACHE": cache,
 	})
 	ctx, cancel := amd64OriginalObservationContext(t)
 	defer cancel()

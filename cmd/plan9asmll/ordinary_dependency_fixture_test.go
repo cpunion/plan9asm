@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/xgo-dev/plan9asm/gotoolprofile"
+	"github.com/xgo-dev/plan9asm/internal/gooriginalsrc"
 )
 
 // An exact synthetic module served by an owned file proxy exercises the same
@@ -59,7 +60,11 @@ func ordinaryFixtureDependencyOrigin(t *testing.T, input *featureInput, module s
 			t.Fatal(err)
 		}
 	}
-	t.Setenv("GOPROXY", "file://"+proxy)
+	proxyURL, err := gooriginalsrc.FileProxyURL(proxy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("GOPROXY", proxyURL)
 	t.Setenv("GOSUMDB", "off")
 	t.Setenv("GOMODCACHE", cache)
 	t.Setenv("GOPATH", t.TempDir())

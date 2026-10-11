@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/xgo-dev/plan9asm/gotoolprofile"
+	"github.com/xgo-dev/plan9asm/internal/gooriginalsrc"
 	"golang.org/x/tools/go/packages"
 )
 
@@ -368,8 +369,12 @@ func instrumentationVersionedFixture(t *testing.T, ctx context.Context, input *g
 			t.Errorf("owned fileproxy cache cleanup: %v", err)
 		}
 	})
+	proxyURL, err := gooriginalsrc.FileProxyURL(proxy)
+	if err != nil {
+		t.Fatal(err)
+	}
 	env := featureEnvironment(os.Environ(), map[string]string{
-		"GOPROXY": "file://" + filepath.ToSlash(proxy), "GOSUMDB": "off",
+		"GOPROXY": proxyURL, "GOSUMDB": "off",
 		"GOMODCACHE": modules, "GOPATH": t.TempDir(),
 	})
 	stdout, stderr, err := gotoolprofile.RunBounded(ctx, invocation, env, "go", "mod", "download", "-json", input.Original.Module+"@"+input.Original.Version)

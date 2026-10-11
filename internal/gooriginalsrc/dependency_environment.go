@@ -2,7 +2,6 @@ package gooriginalsrc
 
 import (
 	"fmt"
-	"net/url"
 	"path/filepath"
 	"strings"
 )
@@ -29,13 +28,9 @@ func DependencyQueryEnvironment(environment []string) ([]string, error) {
 	if !filepath.IsAbs(cache) {
 		return nil, fmt.Errorf("dependency query requires an absolute observed module cache")
 	}
-	path := filepath.ToSlash(filepath.Join(cache, "cache", "download"))
-	if !strings.HasPrefix(path, "/") {
-		path = "/" + path // Go's Windows file:///C:/... proxy spelling.
+	proxy, err := FileProxyURL(filepath.Join(cache, "cache", "download"))
+	if err != nil {
+		return nil, err
 	}
-	proxy := (&url.URL{Scheme: "file", Path: path}).String()
-	// GOPROXY splits these separators before parsing each URL. A literal
-	// cache directory name must not create an extra proxy or direct fallback.
-	proxy = strings.NewReplacer(",", "%2C", "|", "%7C").Replace(proxy)
 	return append(result, "GOPROXY="+proxy, "GONOPROXY=none"), nil
 }

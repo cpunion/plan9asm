@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/xgo-dev/plan9asm/gotoolprofile"
+	"github.com/xgo-dev/plan9asm/internal/gooriginalsrc"
 	"golang.org/x/tools/go/packages"
 )
 
@@ -66,8 +67,12 @@ func TestInstrumentationForeignOriginalSourcesCLIRecaptureAndFinalGuard(t *testi
 	})
 	// Only this owned synthetic file proxy has no SumDB certificate. It does
 	// not substitute for the production original ZIP/mod authentication.
+	proxyURL, err := gooriginalsrc.FileProxyURL(proxy)
+	if err != nil {
+		t.Fatal(err)
+	}
 	env := featureEnvironment(os.Environ(), map[string]string{
-		"GOPROXY": "file://" + proxy, "GOSUMDB": "off", "GOMODCACHE": cache, "GOPATH": t.TempDir(),
+		"GOPROXY": proxyURL, "GOSUMDB": "off", "GOMODCACHE": cache, "GOPATH": t.TempDir(),
 	})
 	mod := input.Original.SourceRoot + "/go.mod"
 	modBytes, err := os.ReadFile(mod)

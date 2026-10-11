@@ -17,6 +17,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/xgo-dev/plan9asm/internal/gooriginalsrc"
 )
 
 // This proxy is a first-party mechanics fixture, NOT official SumDB source
@@ -146,8 +148,12 @@ func TestInstrumentationForeignTypeSourceActualDualModule(t *testing.T) {
 			}
 			foreignSource += "const Words=2\ntype Header struct { Lo uint32; Pad [Words]byte; Hi uint16 }\n"
 			instrumentationForeignFixtureProxy(t, proxy, archive, "v1.0.0", foreignSource)
+			proxyURL, err := gooriginalsrc.FileProxyURL(proxy)
+			if err != nil {
+				t.Fatal(err)
+			}
 			env := replaceEnv(os.Environ(), map[string]string{
-				"GOPROXY": "file://" + proxy, "GOSUMDB": "off", "GONOSUMDB": "", "GOPRIVATE": "",
+				"GOPROXY": proxyURL, "GOSUMDB": "off", "GONOSUMDB": "", "GOPRIVATE": "",
 				"GOMODCACHE": cache, "GOPATH": instrumentationMarkerDirectory(t),
 			})
 			marker, err := CaptureInstrumentationExportObservation(ctx, binary, instrumentationMarkerDirectory(t), env,
