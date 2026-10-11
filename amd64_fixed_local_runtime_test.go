@@ -17,11 +17,6 @@ import (
 	"testing"
 )
 
-var fixedLocalNativeOperations = []string{
-	"PADDB 16(SP),X0", "PADDW 16(SP),X0", "PADDL 16(SP),X0", "PADDQ 16(SP),X0",
-	"PMADDWL 16(SP),X0", "CMPPS 16(SP),X0,$0", "CMPPD 16(SP),X0,$0",
-}
-
 func fixedLocalCompleteFixture(t *testing.T, target string) (GoPackage, GoAMD64FrameCaptureRequest, *File, Options, string) {
 	t.Helper()
 	_, request := goAMD64FrameSourceFixture(t)
