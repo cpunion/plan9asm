@@ -41,8 +41,72 @@ func TestCrossLinuxRuntimeMatrixX86PackedLogicalCompleteSemantics(t *testing.T) 
 	if crossRosetta {
 		prefix = []string{"/usr/bin/arch", "-x86_64"}
 	}
-	var assembly, declarations, checks strings.Builder
-	sigs := map[string]FuncSig{}
+	fixtures := x86LogicalRuntimeFixtures(t)
+	for index, batch := range x86LogicalRuntimeBatches(fixtures) {
+		t.Run(fmt.Sprintf("batch-%02d", index), func(t *testing.T) {
+			var assembly strings.Builder
+			sigs := make(map[string]FuncSig, len(batch))
+			for _, fixture := range batch {
+				assembly.WriteString(fixture.assembly)
+				sigs[fixture.name] = fixture.signature
+			}
+			requireX86GoAssemblerResult(t, "amd64", assembly.String(), true)
+			file, err := Parse(ArchAMD64, assembly.String())
+			if err != nil {
+				t.Fatal(err)
+			}
+			ir, err := Translate(file, Options{Goarch: "amd64", TargetTriple: triple, Sigs: sigs})
+			if err != nil {
+				t.Fatal(err)
+			}
+			compileAndRunRuntimeTestForTarget(t, llc, clang, "logical_complete_semantics",
+				triple, ir, x86LogicalRuntimeC(batch), prefix)
+		})
+	}
+	t.Logf("%d exact opcode/width/memory/mask programs; 16 independently expected numerical/canary inputs each", len(fixtures))
+}
+
+type x86LogicalRuntimeFixture struct {
+	name, assembly, declaration, checks string
+	signature                           FuncSig
+}
+
+func x86LogicalRuntimeBatches(fixtures []x86LogicalRuntimeFixture) [][]x86LogicalRuntimeFixture {
+	const batchSize = 64
+	var batches [][]x86LogicalRuntimeFixture
+	for start := 0; start < len(fixtures); start += batchSize {
+		end := start + batchSize
+		if end > len(fixtures) {
+			end = len(fixtures)
+		}
+		batches = append(batches, fixtures[start:end])
+	}
+	return batches
+}
+
+func x86LogicalRuntimeC(fixtures []x86LogicalRuntimeFixture) string {
+	var declarations, checks, calls strings.Builder
+	for _, fixture := range fixtures {
+		declarations.WriteString(fixture.declaration)
+		// Keep independent reference loops out of one giant optimizer graph.
+		// noinline also prevents -O2 from reconstructing that graph in main.
+		fmt.Fprintf(&checks, "static __attribute__((noinline)) int check_%s(void) {\n", fixture.name)
+		checks.WriteString("const uint64_t masks[]={0,1,0x55aa55aa55aa55aaULL,~0ULL};\n")
+		checks.WriteString(fixture.checks)
+		checks.WriteString("return 0;\n}\n")
+		// Case IDs belong in diagnostics, not process exit codes: Unix keeps
+		// only eight bits and would report return 256 as successful execution.
+		fmt.Fprintf(&calls, "if (check_%s()) { fprintf(stderr, \"%s numerical/canary failure\\n\"); return 1; }\n",
+			fixture.name, fixture.name)
+	}
+	return "#include <stdint.h>\n#include <stdio.h>\n#include <string.h>\n" +
+		declarations.String() + checks.String() +
+		"int main(void) {\n" + calls.String() + "return 0;\n}\n"
+}
+
+func x86LogicalRuntimeFixtures(t *testing.T) []x86LogicalRuntimeFixture {
+	t.Helper()
+	var fixtures []x86LogicalRuntimeFixture
 	count := 0
 	for _, opcode := range x86LogicalOpcodeNames() {
 		spec := x86PackedLogicalSpecs[opcode]
@@ -63,6 +127,7 @@ func TestCrossLinuxRuntimeMatrixX86PackedLogicalCompleteSemantics(t *testing.T) 
 					if mode != "unmasked" && spec.broadcastBytes == 0 {
 						continue
 					}
+					var assembly, declarations, checks strings.Builder
 					name := fmt.Sprintf("logical%d", count)
 					count++
 					legacy := spec.encoding <= x86PackedLogicalLegacyInteger
@@ -93,7 +158,7 @@ func TestCrossLinuxRuntimeMatrixX86PackedLogicalCompleteSemantics(t *testing.T) 
 					}
 					assembly.WriteString("KMOVQ DX,K1\nSTC\n" + row + "\n")
 					fmt.Fprintf(&assembly, "VMOVUPS Z%d,(AX)\nSETCS 64(AX)\nRET\n", destination)
-					sigs[name] = FuncSig{Name: name, Args: []LLVMType{Ptr, Ptr, Ptr, I64}, Ret: Void, Frame: FrameLayout{Params: []FrameSlot{
+					signature := FuncSig{Name: name, Args: []LLVMType{Ptr, Ptr, Ptr, I64}, Ret: Void, Frame: FrameLayout{Params: []FrameSlot{
 						{Offset: 0, Type: Ptr, Index: 0, Field: -1}, {Offset: 8, Type: Ptr, Index: 1, Field: -1}, {Offset: 16, Type: Ptr, Index: 2, Field: -1}, {Offset: 24, Type: I64, Index: 3, Field: -1},
 					}}}
 					fmt.Fprintf(&declarations, "extern void %s(uint8_t*,const uint8_t*,const uint8_t*,uint64_t);\n", name)
@@ -143,22 +208,15 @@ func TestCrossLinuxRuntimeMatrixX86PackedLogicalCompleteSemantics(t *testing.T) 
  for(int i=0;i<64;++i) { uint8_t want=i<%[2]d ? (%[3]s) : 0; if(out[i]!=want) return %[4]d; } }
 `, name, width, map[string]string{"merge": "0x5a", "zero": "0"}[mode], count+10)
 					}
+					fixtures = append(fixtures, x86LogicalRuntimeFixture{
+						name: name, assembly: assembly.String(), declaration: declarations.String(),
+						checks: checks.String(), signature: signature,
+					})
 				}
 			}
 		}
 	}
-	requireX86GoAssemblerResult(t, "amd64", assembly.String(), true)
-	file, err := Parse(ArchAMD64, assembly.String())
-	if err != nil {
-		t.Fatal(err)
-	}
-	ir, err := Translate(file, Options{Goarch: "amd64", TargetTriple: triple, Sigs: sigs})
-	if err != nil {
-		t.Fatal(err)
-	}
-	mainC := "#include <stdint.h>\n#include <string.h>\n" + declarations.String() + "int main(void) { const uint64_t masks[]={0,1,0x55aa55aa55aa55aaULL,~0ULL};\n" + checks.String() + "return 0;\n}\n"
-	compileAndRunRuntimeTestForTarget(t, llc, clang, "logical_complete_semantics", triple, ir, mainC, prefix)
-	t.Logf("%d exact opcode/width/memory/mask programs; 16 independently expected numerical/canary inputs each", count)
+	return fixtures
 }
 
 func TestX86PackedLogicalXWritesClearWiderAliases(t *testing.T) {
