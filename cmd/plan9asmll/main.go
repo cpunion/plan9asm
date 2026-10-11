@@ -463,20 +463,22 @@ func runOneTarget(spec targetSpec, pats, buildTags, exactAsmFiles []string, modu
 		strictLoad = true
 	}
 	var pkgs []*packages.Package
+	var loadEnvironment []string
 	if ccfg.Feature != nil && ccfg.Feature.Input.GeneratedHeaders != nil {
 		pkgs, err = loadGeneratedHeaderPackages(ccfg.Feature, pats, buildTags)
+		loadEnvironment = ccfg.Feature.Env
 	} else {
 		// Go treats _test.go specially, not similarly named assembly files.
 		// An explicit ordinary profile always loads non-test packages and
 		// proves their actual role below. Keep the legacy test-declaration
 		// lookup heuristic separate from that evidence-producing path.
 		includeTests := ccfg.Feature == nil && containsTestAssembly(exactAsmFiles)
-		pkgs, err = loadPkgsForFeature(spec.Goos, spec.Goarch, pats, buildTags, modulePath, strictLoad, includeTests, ccfg.Feature)
+		pkgs, loadEnvironment, err = loadPkgsInEnvironment(spec.Goos, spec.Goarch, pats, buildTags, modulePath, strictLoad, includeTests, ccfg.Feature)
 	}
 	if err != nil {
 		return runReport{}, nil, fmt.Errorf("load packages: %w", err)
 	}
-	ccfg.x86CallerSelections = captureX86CallerSelections(pkgs, spec.Goos+"/"+spec.Goarch, ccfg.Feature)
+	ccfg.x86CallerSelections = captureX86CallerSelectionsInEnvironment(pkgs, spec.Goos+"/"+spec.Goarch, loadEnvironment)
 	if ccfg.Feature != nil {
 		if err := ccfg.Feature.capturePackages(pkgs); err != nil {
 			return runReport{}, nil, err
@@ -1100,6 +1102,11 @@ func loadPkgs(goos, goarch string, patterns, buildTags []string, modulePath stri
 }
 
 func loadPkgsForFeature(goos, goarch string, patterns, buildTags []string, modulePath string, strict, includeTests bool, feature *featureConsumer) ([]*packages.Package, error) {
+	pkgs, _, err := loadPkgsInEnvironment(goos, goarch, patterns, buildTags, modulePath, strict, includeTests, feature)
+	return pkgs, err
+}
+
+func loadPkgsInEnvironment(goos, goarch string, patterns, buildTags []string, modulePath string, strict, includeTests bool, feature *featureConsumer) ([]*packages.Package, []string, error) {
 	cfg := &packages.Config{
 		Mode: packages.NeedName |
 			packages.NeedFiles |
@@ -1109,10 +1116,6 @@ func loadPkgsForFeature(goos, goarch string, patterns, buildTags []string, modul
 			packages.NeedImports |
 			packages.NeedTypes |
 			packages.NeedTypesSizes,
-		Env: append(os.Environ(),
-			"GOOS="+goos,
-			"GOARCH="+goarch,
-		),
 		Tests: includeTests,
 	}
 	if feature != nil {
@@ -1121,24 +1124,30 @@ func loadPkgsForFeature(goos, goarch string, patterns, buildTags []string, modul
 		// The producer's export/vet gates use this explicit module mode too.
 		// Do not pass it through GOFLAGS, where it could hide selection tags.
 		cfg.BuildFlags = append(cfg.BuildFlags, "-mod=mod")
+	} else {
+		var err error
+		cfg.Env, err = ordinaryPackageEnvironment(goos, goarch, os.Environ())
+		if err != nil {
+			return nil, nil, err
+		}
 	}
 	if len(buildTags) != 0 {
 		cfg.BuildFlags = append(cfg.BuildFlags, "-tags="+strings.Join(buildTags, ","))
 	}
 	pkgs, err := packages.Load(cfg, patterns...)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	pkgs = filterPackagesByModule(pkgs, modulePath)
 	if count := packages.PrintErrors(pkgs); strict && count != 0 {
-		return nil, fmt.Errorf("%d package loading error(s)", count)
+		return nil, nil, fmt.Errorf("%d package loading error(s)", count)
 	}
 	for _, pkg := range pkgs {
 		if err := loadLinknameSyntax(pkg); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
-	return pkgs, nil
+	return pkgs, append([]string(nil), cfg.Env...), nil
 }
 
 // Only target packages need source comments for go:linkname resolution. Loading

@@ -150,6 +150,23 @@ func TestCompileOneAMD64FixedLocalCompleteOrdinaryGoSource(t *testing.T) {
 	}
 }
 
+func TestRunOneTargetFixedLocalWithDefaultEnvironment(t *testing.T) {
+	pkg, _, config := amd64FixedLocalCLIFixture(t, "PADDL 16(SP),X0")
+	// The existing direct compileOne fixtures supply every environment key.
+	// An ordinary CLI invocation does not: its loader must resolve these
+	// defaults before capturing the selection, not repair them afterward.
+	for _, key := range []string{"GOENV", "GOWORK", "CGO_ENABLED", "GOTOOLCHAIN", "GOCACHE", "GOMODCACHE", "GOPATH", "GOTMPDIR"} {
+		t.Setenv(key, "")
+	}
+	t.Chdir(pkg.Dir)
+	report, _, err := runOneTarget(targetSpec{Goos: "linux", Goarch: "amd64"},
+		[]string{"."}, nil, nil, pkg.Module.Path, t.TempDir(), false, 0, false,
+		false, true, "", config)
+	if err != nil || report.TotalAsm != 1 || report.Success != 1 || report.Failed != 0 {
+		t.Fatalf("ordinary actual-load/frame environment differs: %v; %+v", err, report)
+	}
+}
+
 func TestAMD64FixedLocalCompleteSourceRetainsActualLoadIdentity(t *testing.T) {
 	for _, axis := range []string{"dependency-types", "missing-dependency", "extra-captured-import", "target", "source-bytes"} {
 		t.Run(axis, func(t *testing.T) {

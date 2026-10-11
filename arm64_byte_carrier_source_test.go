@@ -203,12 +203,25 @@ func TestARM64ByteCarrierActualMainPackageIdentity(t *testing.T) {
 
 func arm64ByteCarrierRequest(t *testing.T, directory, packagePath string) GoARM64ByteCarrierCaptureRequest {
 	t.Helper()
+	return arm64ByteCarrierRequestWithBuildCache(t, directory, packagePath, "")
+}
+
+func arm64ByteCarrierRequestWithBuildCache(t *testing.T, directory, packagePath, buildCache string) GoARM64ByteCarrierCaptureRequest {
+	t.Helper()
 	provided := make(map[string]string)
 	for _, pair := range os.Environ() {
 		key, value, _ := strings.Cut(pair, "=")
 		provided[key] = value
 	}
 	for _, key := range []string{"GOCACHE", "GOMODCACHE", "GOPATH", "TMPDIR", "GOTMPDIR"} {
+		if key == "GOCACHE" && buildCache != "" {
+			root, err := filepath.EvalSymlinks(buildCache)
+			if err != nil || !filepath.IsAbs(root) {
+				t.Fatalf("shared owned build cache must be absolute: %v", err)
+			}
+			provided[key] = root
+			continue
+		}
 		root, err := filepath.EvalSymlinks(t.TempDir())
 		if err != nil {
 			t.Fatal(err)
@@ -230,6 +243,32 @@ func arm64ByteCarrierRequest(t *testing.T, directory, packagePath string) GoARM6
 	return GoARM64ByteCarrierCaptureRequest{
 		GoBinary: filepath.Join(runtime.GOROOT(), "bin", "go"), Directory: directory,
 		PackagePath: packagePath, AssemblyFile: "original_arm64.s", Target: "linux/arm64", Environment: environment,
+	}
+}
+
+func TestARM64ByteCarrierSharedBuildCacheKeepsRequestsIndependent(t *testing.T) {
+	cache := t.TempDir()
+	first := arm64ByteCarrierRequestWithBuildCache(t, t.TempDir(), "example.invalid/first", cache)
+	second := arm64ByteCarrierRequestWithBuildCache(t, t.TempDir(), "example.invalid/second", cache)
+	environment := func(request GoARM64ByteCarrierCaptureRequest) map[string]string {
+		values := make(map[string]string)
+		for _, item := range request.Environment {
+			key, value, _ := strings.Cut(item, "=")
+			values[key] = value
+		}
+		return values
+	}
+	a, b := environment(first), environment(second)
+	if a["GOCACHE"] != b["GOCACHE"] || a["GOCACHE"] == "" {
+		t.Fatal("subtests must reuse the parent's owned build cache")
+	}
+	for _, key := range []string{"GOMODCACHE", "GOPATH", "TMPDIR", "GOTMPDIR"} {
+		if a[key] == b[key] || a[key] == a["GOCACHE"] || b[key] == b["GOCACHE"] {
+			t.Fatalf("source observation state shares %s", key)
+		}
+	}
+	if first.Directory == second.Directory || first.PackagePath == second.PackagePath {
+		t.Fatal("independent original source roles were reused")
 	}
 }
 

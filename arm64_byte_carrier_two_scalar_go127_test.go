@@ -254,6 +254,9 @@ func TestARM64ByteCarrierTwoScalarNativeWidthConsumers(t *testing.T) {
 }
 
 func TestARM64ByteCarrierTwoScalarConsumersRejectUndefinedBytes(t *testing.T) {
+	// Only immutable Go build artifacts are shared. Each case still captures
+	// its own original source, temporary outputs and revocable observation.
+	buildCache := t.TempDir()
 	width := arm64NativeResultTailCase{op: "MOVH", resultBits: 8, storeBits: 16}
 	for _, test := range []struct {
 		name, before, after string
@@ -280,7 +283,8 @@ func TestARM64ByteCarrierTwoScalarConsumersRejectUndefinedBytes(t *testing.T) {
 				}
 				lease, release := runtimeOracleStageContext(t)
 				defer release()
-				source, err := CaptureGoARM64ByteCarrierSource(lease, arm64ByteCarrierRequest(t, directory, packagePath))
+				request := arm64ByteCarrierRequestWithBuildCache(t, directory, packagePath, buildCache)
+				source, err := CaptureGoARM64ByteCarrierSource(lease, request)
 				if err != nil {
 					t.Fatalf("original producer precondition: %v", err)
 				}

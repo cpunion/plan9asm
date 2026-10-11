@@ -88,20 +88,25 @@ func x86CallerSizes(sizes types.Sizes) []int64 {
 }
 
 func captureX86CallerSelections(pkgs []*packages.Package, target string, feature *featureConsumer) map[*packages.Package]*x86CallerPackageSelection {
-	result := make(map[*packages.Package]*x86CallerPackageSelection, len(pkgs))
-	goFlags, driver := os.Getenv("GOFLAGS"), os.Getenv("GOPACKAGESDRIVER")
 	env := append([]string(nil), os.Environ()...)
 	goos, goarch, _ := strings.Cut(target, "/")
 	env = append(env, "GOOS="+goos, "GOARCH="+goarch)
 	if feature != nil {
 		env = append([]string(nil), feature.Env...)
-		for _, value := range feature.Env {
-			if strings.HasPrefix(value, "GOFLAGS=") {
-				goFlags = strings.TrimPrefix(value, "GOFLAGS=")
-			}
-			if strings.HasPrefix(value, "GOPACKAGESDRIVER=") {
-				driver = strings.TrimPrefix(value, "GOPACKAGESDRIVER=")
-			}
+	}
+	return captureX86CallerSelectionsInEnvironment(pkgs, target, env)
+}
+
+func captureX86CallerSelectionsInEnvironment(pkgs []*packages.Package, target string, environment []string) map[*packages.Package]*x86CallerPackageSelection {
+	result := make(map[*packages.Package]*x86CallerPackageSelection, len(pkgs))
+	env := append([]string(nil), environment...)
+	var goFlags, driver string
+	for _, value := range env {
+		if strings.HasPrefix(value, "GOFLAGS=") {
+			goFlags = strings.TrimPrefix(value, "GOFLAGS=")
+		}
+		if strings.HasPrefix(value, "GOPACKAGESDRIVER=") {
+			driver = strings.TrimPrefix(value, "GOPACKAGESDRIVER=")
 		}
 	}
 	defaultDriver := false

@@ -23,12 +23,8 @@ owns subsequent inventory imports, cursors, external failures and ledger updates
 
 `3dc36d71` contains the instruction repairs and external-corpus separation.
 Continue from this integrated source, not an older family worktree. The latest
-review found these concrete issues to address before another publication:
-
-- Bind the CLI's package load and original-source observers to one effective
-  environment, including their explicit GOENV and cache requirements.
-- Reuse disposable build caches within test roots while keeping each source,
-  observation and revocation state independent. Measure before wider changes.
+review's SDK, environment, tool provisioning, fixture and cache findings have
+focused repairs below; broader CI gates still need current-head completion.
 
 The first repair batch fixes the ARM memory-source ADD and the ARM64 branch
 label that collided with a vector register. Runtime and portable preflight
@@ -44,6 +40,14 @@ registers its two changed native-header source files and binds object/archive
 headers to the producer's exact patch. ARM64 actual-source, CRC32 three-API
 LLVM 22 objects, static-storage and marker mutation guards pass; Go 1.27.1 and
 Go 1.20.14 focused compatibility checks pass. Unknown patches remain rejected.
+
+The ordinary CLI now resolves its pure-Go defaults and actual cache paths
+before package loading, then hands that same environment to source observers.
+Explicit nonordinary options remain visible, not silently normalized away.
+Default-invocation, explicit-profile, overlay and source-selection tests pass.
+The twelve ARM64 undefined-byte cases now share only a test-owned build cache;
+their source/temp/observation state remains independent. Local elapsed time
+was 32.52 seconds before and 12.72 seconds after, without removing any cases.
 
 CI run `38131270471` finished with failures. Its standard-library benchmark
 compiled 163 of 185 files; its 68-second target total is not a complete-success
