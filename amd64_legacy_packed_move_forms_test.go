@@ -163,9 +163,13 @@ func TestX86LegacyPackedMoveThreeAPIFiveTargetObjects(t *testing.T) {
 	} {
 		for _, op := range x86LegacyPackedMoveTestNames {
 			t.Run(target.triple+"/"+op, func(t *testing.T) {
-				// Whole FP reads cover two actual adjacent i64 fields. This
-				// object fixture makes no native FP alignment/fault claim.
-				body := "MOVSD c+16(FP),X1\n" + op + " a+0(FP),X0\n" + op + " X1,X0\n" + op + " X0,X0\nMOVSD X0,ret0+32(FP)\nRET"
+				// This is the numerical FP/result contract. Native memory
+				// opcodes have their own complete three-API object matrix.
+				fpMove := op
+				if op == "MOVO" || op == "MOVOA" || op == "MOVAPS" || op == "MOVAPD" {
+					fpMove = "MOVOU"
+				}
+				body := "MOVSD c+16(FP),X1\n" + fpMove + " a+0(FP),X0\n" + op + " X1,X0\n" + op + " X0,X0\nMOVSD X0,ret0+32(FP)\nRET"
 				pkg, file, sig, source := x86ResultInitializationFixture(t, target.arch, "func Value(a,b,c,d uint64) uint64", body)
 				goAssemblerOracleOutput(t, target.arch, source, "", true)
 				if err := CheckX86ABI0ResultInitialization(file.Funcs[0], sig, target.arch); err != nil {

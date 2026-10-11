@@ -23,6 +23,9 @@ func (c *amd64Ctx) lowerLegacyPackedMove(op Op, ins Instr) (bool, bool, error) {
 	}
 	if form.memory >= 0 {
 		memory := ins.Args[form.memory]
+		if memory.Kind == OpFP && form.aligned {
+			return true, false, fmt.Errorf("%w: %s FP operand needs its original native alignment", ErrProbeNeedsContext, op)
+		}
 		// Existing checked virtual FP/AUTO views are not native addresses.
 		// They keep their independent layout handling; this rule gives them
 		// neither native alignment nor permission to read adjacent storage.

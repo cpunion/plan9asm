@@ -569,16 +569,7 @@ func (c *amd64Ctx) storeXVecOperand(op Operand, value string) error {
 		fmt.Fprintf(c.b, "  store <16 x i8> %s, ptr %s, align 1\n", value, p)
 		return nil
 	case OpFP:
-		lanes := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = bitcast <16 x i8> %s to <2 x i64>\n", lanes, value)
-		low := c.newTmp()
-		high := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = extractelement <2 x i64> %%%s, i32 0\n", low, lanes)
-		fmt.Fprintf(c.b, "  %%%s = extractelement <2 x i64> %%%s, i32 1\n", high, lanes)
-		if err := c.storeFPResult(op.FPOffset, I64, "%"+low); err != nil {
-			return err
-		}
-		return c.storeFPResult(op.FPOffset+8, I64, "%"+high)
+		return c.storeFPVectorBytes(op.FPOffset, 16, value, "")
 	default:
 		return fmt.Errorf("unsupported X-vector destination %s", op.String())
 	}
