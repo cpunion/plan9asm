@@ -13,6 +13,8 @@ import (
 	"reflect"
 	"sort"
 	"strings"
+
+	"github.com/xgo-dev/plan9asm/internal/gotoolchain"
 )
 
 // Scope equality excludes disposable cache/workspace spelling, not compiler,
@@ -54,7 +56,7 @@ func captureCIScope(ctx context.Context, cfg config, stem string) (ciScope, erro
 	if err != nil {
 		return scope, err
 	}
-	sdkDriver, err := os.Stat(filepath.Join(environment["GOROOT"], "bin", "go"))
+	sdkDriver, err := os.Stat(filepath.Join(environment["GOROOT"], "bin", gotoolchain.HostExecutable("go")))
 	if err != nil || !os.SameFile(actualDriver, sdkDriver) {
 		return scope, fmt.Errorf("selected executable is not actual SDK driver: %v", err)
 	}

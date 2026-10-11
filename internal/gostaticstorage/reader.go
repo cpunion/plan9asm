@@ -394,7 +394,7 @@ func ValidateReport(report Report) error {
 	}
 	if len(report.RawEnvironment) > 64<<10 || len(report.RawSelection) > 4<<20 ||
 		!reflect.DeepEqual(report.CommandArguments, arguments) || !filepath.IsAbs(report.CommandDirectory) ||
-		report.CommandBinary != filepath.Join(report.Environment["GOROOT"], "bin", "go") ||
+		report.CommandBinary != filepath.Join(report.Environment["GOROOT"], "bin", gotoolchain.HostExecutable("go")) ||
 		len(report.Tools) != toolCount || len(report.CommandEnvironment) != environmentCount {
 		return contextError("report command/tool inventory differs")
 	}

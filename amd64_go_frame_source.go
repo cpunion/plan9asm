@@ -704,7 +704,7 @@ func (source *GoAMD64FrameSource) observe(ctx context.Context) error {
 		return err
 	}
 	if env["GOOS"]+"/"+env["GOARCH"] != source.request.Target || env["GOFLAGS"] != "" || env["GOEXPERIMENT"] != "" ||
-		filepath.Join(env["GOROOT"], "bin", "go") != source.request.GoBinary {
+		filepath.Join(env["GOROOT"], "bin", gotoolchain.HostExecutable("go")) != source.request.GoBinary {
 		return goAMD64FrameContext("actual driver/target/CPU/source routing needs a separate audited contract")
 	}
 	switch env["GOAMD64"] {
@@ -720,21 +720,22 @@ func (source *GoAMD64FrameSource) observe(ctx context.Context) error {
 		return goAMD64FrameContext("actual driver differs from source VERSION")
 	}
 	for _, tool := range []string{"asm", "compile", "objdump"} {
+		executable := gotoolchain.HostExecutable(tool)
 		data, err := source.run(ctx, "tool", "-n", tool)
 		if err != nil {
 			return err
 		}
 		name := strings.TrimSpace(string(data))
-		if !filepath.IsAbs(name) || strings.ContainsAny(name, "\r\n") || tool != "objdump" && name != filepath.Join(env["GOTOOLDIR"], tool) {
+		if !filepath.IsAbs(name) || strings.ContainsAny(name, "\r\n") || tool != "objdump" && name != filepath.Join(env["GOTOOLDIR"], executable) {
 			return goAMD64FrameContext("unrecognized actual %s route", tool)
 		}
 		resolved, err := filepath.EvalSymlinks(name)
 		if err != nil {
 			return err
 		}
-		if tool == "objdump" && name != filepath.Join(env["GOTOOLDIR"], tool) {
+		if tool == "objdump" && name != filepath.Join(env["GOTOOLDIR"], executable) {
 			cache, err := filepath.EvalSymlinks(env["GOCACHE"])
-			if err != nil || !goAssemblyPathWithinRoot(cache, resolved) || filepath.Base(resolved) != tool {
+			if err != nil || !goAssemblyPathWithinRoot(cache, resolved) || filepath.Base(resolved) != executable {
 				return goAMD64FrameContext("unknown builtin object observer origin")
 			}
 		}

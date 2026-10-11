@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/xgo-dev/plan9asm/internal/gostaticstorage"
+	"github.com/xgo-dev/plan9asm/internal/gotoolchain"
 )
 
 func (source *GoX86SDKASMDataSource) verifySDKDirectory() error {
@@ -41,7 +42,7 @@ func (source *GoX86SDKASMDataSource) capture(ctx context.Context, provided map[s
 	var env map[string]string
 	if json.Unmarshal(raw, &env) != nil || !strings.HasPrefix(env["GOVERSION"], "go1.27.") ||
 		env["GOOS"]+"/"+env["GOARCH"] != source.request.Target ||
-		filepath.Join(env["GOROOT"], "bin", "go") != source.request.GoBinary ||
+		filepath.Join(env["GOROOT"], "bin", gotoolchain.HostExecutable("go")) != source.request.GoBinary ||
 		env["GOAMD64"] != "v1" || env["GOARCH"] == "386" && env["GO386"] != "sse2" ||
 		env["GOFLAGS"] != "" || env["GOEXPERIMENT"] != "" ||
 		env["GOCACHE"] != provided["GOCACHE"] || env["GOMODCACHE"] != provided["GOMODCACHE"] {
@@ -66,7 +67,7 @@ func (source *GoX86SDKASMDataSource) capture(ctx context.Context, provided map[s
 		if err != nil {
 			return err
 		}
-		if strings.TrimSpace(string(route)) != filepath.Join(env["GOTOOLDIR"], tool) {
+		if strings.TrimSpace(string(route)) != filepath.Join(env["GOTOOLDIR"], gotoolchain.HostExecutable(tool)) {
 			return sdkASMDataContext("actual %s route differs from the invoked SDK", tool)
 		}
 		if _, err := source.guard.read(strings.TrimSpace(string(route))); err != nil {

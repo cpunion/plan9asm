@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/xgo-dev/plan9asm/internal/goasmcmd"
+	"github.com/xgo-dev/plan9asm/internal/gotoolchain"
 )
 
 const fixtureModule = "example.invalid/staticstorage"
@@ -193,7 +194,7 @@ func officialReaderForSource(t *testing.T, binary, source string) string {
 	if err := os.WriteFile(filepath.Join(dir, "importcfg"), config, 0600); err != nil {
 		t.Fatal(err)
 	}
-	tool := filepath.Join(dir, "official-reader")
+	tool := filepath.Join(dir, gotoolchain.HostExecutable("official-reader"))
 	run(t, binary, dir, env, "tool", "compile", "-p", "main", "-importcfg", "importcfg", "-o", "main.o", "main.go")
 	run(t, binary, dir, env, "tool", "link", "-importcfg", "importcfg", "-o", tool, "main.o")
 	if artifact := os.Getenv("PLAN9ASM_STATIC_STORAGE_ARTIFACT_DIR"); artifact != "" {
@@ -219,7 +220,11 @@ func officialReaderForSource(t *testing.T, binary, source string) string {
 			t.Fatal(err)
 		}
 		inputs := map[string]string{}
-		for role, file := range map[string]string{"go": binary, "compile": filepath.Join(actual["GOTOOLDIR"], "compile"), "link": filepath.Join(actual["GOTOOLDIR"], "link")} {
+		for role, file := range map[string]string{
+			"go":      binary,
+			"compile": filepath.Join(actual["GOTOOLDIR"], gotoolchain.HostExecutable("compile")),
+			"link":    filepath.Join(actual["GOTOOLDIR"], gotoolchain.HostExecutable("link")),
+		} {
 			data, err := os.ReadFile(file)
 			if err != nil {
 				t.Fatal(err)

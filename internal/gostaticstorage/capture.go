@@ -335,7 +335,7 @@ func (o *Observation) observe(ctx context.Context) error {
 	var env map[string]string
 	if err := json.Unmarshal(raw, &env); err != nil || !gotoolchain.AuditedGo127(env["GOVERSION"]) ||
 		env["GOOS"]+"/"+env["GOARCH"] != o.request.Target || env["GOFLAGS"] != "" || env["GOEXPERIMENT"] != "" ||
-		env["CGO_ENABLED"] != "0" || env["GOWORK"] != "off" || filepath.Join(env["GOROOT"], "bin", "go") != o.request.GoBinary {
+		env["CGO_ENABLED"] != "0" || env["GOWORK"] != "off" || filepath.Join(env["GOROOT"], "bin", gotoolchain.HostExecutable("go")) != o.request.GoBinary {
 		return contextError("actual Go driver/profile/target differs")
 	}
 	if env["GOMODCACHE"] != o.report.CommandEnvironment["GOMODCACHE"] {
@@ -356,13 +356,13 @@ func (o *Observation) observe(ctx context.Context) error {
 	o.report.Environment, o.report.RawEnvironment = env, raw
 	paths := map[string]string{"go": o.request.GoBinary, "VERSION": filepath.Join(env["GOROOT"], "VERSION")}
 	route, err := o.run(ctx, "tool", "-n", "compile")
-	if err != nil || strings.TrimSpace(string(route)) != filepath.Join(env["GOTOOLDIR"], "compile") {
+	if err != nil || strings.TrimSpace(string(route)) != filepath.Join(env["GOTOOLDIR"], gotoolchain.HostExecutable("compile")) {
 		return contextError("unknown actual compile route")
 	}
 	paths["compile"] = strings.TrimSpace(string(route))
 	if o.report.Protocol == SDKCPUProtocol {
 		route, err := o.run(ctx, "tool", "-n", "asm")
-		if err != nil || strings.TrimSpace(string(route)) != filepath.Join(env["GOTOOLDIR"], "asm") {
+		if err != nil || strings.TrimSpace(string(route)) != filepath.Join(env["GOTOOLDIR"], gotoolchain.HostExecutable("asm")) {
 			return contextError("unknown actual SDK assembly route")
 		}
 		paths["asm"] = strings.TrimSpace(string(route))

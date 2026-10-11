@@ -179,7 +179,7 @@ func captureGoX86NumericalReadSource(ctx context.Context, request GoX86Numerical
 			return nil, numericalStorageFailure(ctx, "capture numerical read owner readback", err)
 		}
 		if report.Target != request.Target || report.Tools["go"] != source.toolHash(request.GoBinary) ||
-			report.Tools["compile"] != source.toolHash(filepath.Join(source.guard.env["GOTOOLDIR"], "compile")) {
+			report.Tools["compile"] != source.toolHash(filepath.Join(source.guard.env["GOTOOLDIR"], gotoolchain.HostExecutable("compile"))) {
 			return nil, numericalSBContext("owner source/tool/profile differs")
 		}
 		if report.Protocol != gostaticstorage.SDKCPUProtocol {
@@ -275,7 +275,7 @@ func (source *GoX86NumericalReadSource) observe(ctx context.Context, provided ma
 	}
 	var env map[string]string
 	if json.Unmarshal(raw, &env) != nil || !gotoolchain.AuditedGo127(env["GOVERSION"]) || env["GOOS"]+"/"+env["GOARCH"] != source.request.Target ||
-		filepath.Join(env["GOROOT"], "bin", "go") != source.request.GoBinary || env["GOAMD64"] != "v1" ||
+		filepath.Join(env["GOROOT"], "bin", gotoolchain.HostExecutable("go")) != source.request.GoBinary || env["GOAMD64"] != "v1" ||
 		env["GOARCH"] == "386" && env["GO386"] != "sse2" || env["GOFLAGS"] != "" || env["GOEXPERIMENT"] != "" ||
 		env["GOCACHE"] != provided["GOCACHE"] || env["GOMODCACHE"] != provided["GOMODCACHE"] {
 		return numericalSBContext("actual SDK/tool/profile differs")
@@ -302,7 +302,7 @@ func (source *GoX86NumericalReadSource) observe(ctx context.Context, provided ma
 		if err != nil {
 			return err
 		}
-		if strings.TrimSpace(string(route)) != filepath.Join(env["GOTOOLDIR"], tool) {
+		if strings.TrimSpace(string(route)) != filepath.Join(env["GOTOOLDIR"], gotoolchain.HostExecutable(tool)) {
 			return numericalSBContext("unknown actual %s route", tool)
 		}
 		if _, err := source.guard.read(strings.TrimSpace(string(route))); err != nil {

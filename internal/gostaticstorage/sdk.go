@@ -10,6 +10,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/xgo-dev/plan9asm/internal/gotoolchain"
 )
 
 const SDKCPUProtocol = "actual_go_sdk_cpu_numeric_storage_prototype_v1"
@@ -122,7 +124,7 @@ func sdkCPUPackages(report Report) (map[string]Package, error) {
 	root := report.Environment["GOROOT"]
 	dir := filepath.Join(root, "src", "internal", "cpu")
 	if !sdkCPUTarget(report.Target) || report.PackagePath != "internal/cpu" || report.CommandDirectory != dir ||
-		report.CommandBinary != filepath.Join(root, "bin", "go") || sdkCPUSource(report.Source) != nil {
+		report.CommandBinary != filepath.Join(root, "bin", gotoolchain.HostExecutable("go")) || sdkCPUSource(report.Source) != nil {
 		return nil, contextError("unbound original SDK CPU owner/target/source role")
 	}
 	decoder := json.NewDecoder(bytes.NewReader(report.RawSelection))
