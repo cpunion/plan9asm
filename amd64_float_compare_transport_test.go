@@ -106,7 +106,7 @@ func (execution x86FloatCompareExecution) compileAndRunLLVM(t *testing.T, name, 
 	if strings.Contains(execution.triple, "windows") {
 		main = "int _fltused = 0;\n" + main
 	}
-	main = runtimeOracleProcessSetupC + main
+	process := runtimeOracleProcessSource(t, dir)
 	for path, contents := range map[string]string{input: ir, source: main} {
 		if err := os.WriteFile(path, []byte(contents), 0600); err != nil {
 			t.Fatal(err)
@@ -115,7 +115,7 @@ func (execution x86FloatCompareExecution) compileAndRunLLVM(t *testing.T, name, 
 	x86FloatCompareCaptureCommand(t, exec.Command(execution.llc, level,
 		"-mtriple="+execution.triple, "-relocation-model=pic", "-filetype=obj", input, "-o", object))
 	compiler := append([]string(nil), execution.compiler...)
-	compiler = append(compiler, object, source, "-O2", "-o", executable)
+	compiler = append(compiler, object, source, process, "-O2", "-o", executable)
 	if !strings.Contains(execution.triple, "windows") {
 		compiler = append(compiler, "-lm")
 	}

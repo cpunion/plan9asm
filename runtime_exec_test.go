@@ -354,9 +354,10 @@ func compileAndRunRuntimeTestWithCompiler(t *testing.T, llc string, compiler []s
 		// by CI does not provide it when linking these freestanding test objects.
 		mainC = "int _fltused = 0;\n" + mainC
 	}
-	if err := os.WriteFile(mainPath, []byte(runtimeOracleProcessSetupC+mainC), 0644); err != nil {
+	if err := os.WriteFile(mainPath, []byte(mainC), 0644); err != nil {
 		t.Fatal(err)
 	}
+	processPath := runtimeOracleProcessSource(t, tmp)
 
 	llcArgs := []string{"-mtriple=" + triple, "-relocation-model=pic", "-filetype=obj"}
 	if len(optimization) > 1 || len(optimization) == 1 && optimization[0] != 0 && optimization[0] != 2 {
@@ -381,7 +382,7 @@ func compileAndRunRuntimeTestWithCompiler(t *testing.T, llc string, compiler []s
 	}
 
 	compilerArgs := append([]string(nil), compiler[1:]...)
-	compilerArgs = append(compilerArgs, objPath, mainPath, "-O2", "-o", exePath)
+	compilerArgs = append(compilerArgs, objPath, mainPath, processPath, "-O2", "-o", exePath)
 	if !strings.Contains(triple, "windows") {
 		// LLVM may lower floating intrinsics such as roundeven and fma to the C
 		// math library. Darwin provides those symbols through libSystem, while
