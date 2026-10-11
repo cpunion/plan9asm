@@ -59,11 +59,17 @@ FMAXNM and FMINNM its own native root, matching the existing Linux owners.
 The disjoint union still checks all 14,600 original states and twelve LLVM
 lanes; no bank, sample, API or optimization axis was removed. The independent
 owner/union RED and five structural GREEN roots, including actual Go 1.20,
-are retained under `_out/minmax-runtime-partitions/`. All four new native
-roots still require execution; structural checks are not runtime passes.
+are retained under `_out/minmax-runtime-partitions/`. The frozen native run at
+`1d0ce3a0` passed FMAX (638 seconds) and FMIN (702 seconds); NM roots remain
+running. An integration follow-up also checks the actual runner's hash
+partition: the initial names collided in two shards, so the names now use
+`TestARM64ScalarMinMaxNativeRuntime*` and occupy four distinct ordinary shards.
+Retain `_out/minmax-shard-spread/` RED/GREEN logs. Structural checks alone are
+not runtime passes, and frozen native reports retain their original revision.
 Keep the old timeout failed. The redundant full-root attempt at `2fbf0011`
 was canceled locally under severe host load and is incomplete, not green;
-its separate nested-CLI/internal-package checks remain frozen and running.
+its separate nested-CLI/internal-package checks both finished successfully
+(12 internal packages passed; the header helper has no test files).
 
 Byte-shuffle repair `6430b7f8` is committed locally. Development continues in
 `codex/pr40-frame-data-20261011`, with mixed DATA evidence in `_out/frame-data/`.

@@ -15,7 +15,7 @@ func TestARM64ScalarMinMaxBoundedRuntimeRoots(t *testing.T) {
 
 func TestARM64ScalarMinMaxDarwinBoundedRuntimeRoots(t *testing.T) {
 	checkARM64MinMaxRuntimeOwners(t, "arm64_scalar_minmax_state_test.go",
-		"arm64MinMaxDarwinFamilyRuntime", "TestARM64ScalarMinMaxNative")
+		"arm64MinMaxDarwinFamilyRuntime", "TestARM64ScalarMinMaxNativeRuntime")
 }
 
 func checkARM64MinMaxRuntimeOwners(t *testing.T, filename, helper, prefix string) {

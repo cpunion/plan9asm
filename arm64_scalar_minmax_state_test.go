@@ -383,19 +383,19 @@ func arm64MinMaxAFPObservationError(family string, nep, ah int) error {
 
 // Keep the same complete native denominator as the Linux owners, split into
 // independently schedulable roots rather than one 45-minute package occupant.
-func TestARM64ScalarMinMaxNativeFMAX(t *testing.T) {
+func TestARM64ScalarMinMaxNativeRuntimeFMAX(t *testing.T) {
 	arm64MinMaxDarwinFamilyRuntime(t, "FMAX")
 }
 
-func TestARM64ScalarMinMaxNativeFMIN(t *testing.T) {
+func TestARM64ScalarMinMaxNativeRuntimeFMIN(t *testing.T) {
 	arm64MinMaxDarwinFamilyRuntime(t, "FMIN")
 }
 
-func TestARM64ScalarMinMaxNativeFMAXNM(t *testing.T) {
+func TestARM64ScalarMinMaxNativeRuntimeFMAXNM(t *testing.T) {
 	arm64MinMaxDarwinFamilyRuntime(t, "FMAXNM")
 }
 
-func TestARM64ScalarMinMaxNativeFMINNM(t *testing.T) {
+func TestARM64ScalarMinMaxNativeRuntimeFMINNM(t *testing.T) {
 	arm64MinMaxDarwinFamilyRuntime(t, "FMINNM")
 }
 
