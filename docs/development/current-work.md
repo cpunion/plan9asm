@@ -38,12 +38,18 @@ to fork Draft PR 4 after the previous run finished naturally. They include the
 deadline fixture, low-product family, portable CPP index, broadcast memory result and native
 extension result repairs. The full root run at frozen `b5af3a10` now passed;
 new broadcast/extension code has its separate focused evidence below.
-Fresh CI 38096927749 has terminal failures in all six priority shards; the
-strict aggregate is still running. Policy preflight passed. The six reports
+CI 38096927749 finished naturally with failures in all six priority shards.
+Policy preflight passed. The six reports
 retain 528 versions: 218 passes, 230 failures, 77 source N/A and three explicit
 skips. Shards 36/42 again hit the unchanged deadline and retain partial reports;
 the other 5,539 versions are unreported. Downstream owner-completion failures
 reflect their missing reports after priority failure, not new unit failures.
+The strict report audit took 1,116 seconds and rejected six reports instead of
+64 complete shards; the previous run's audit took 4,778 seconds. These runs have
+different partial subsets, so retain the measurements rather than claiming a
+controlled speedup. Reports contain 2,559 ordinary translations. Artifacts and
+terminal aggregate log remain in the integration tree's
+`_out/frame-data/ci-38096927749/`; no report or ledger is promoted.
 Many failures still stop at the mixed TEXT/DATA, legacy module-origin and
 native result effects repaired only in local unpublished commits. Shard 5's
 packdb result observer also refuses VPSUBB; repair the complete packed integer
@@ -136,8 +142,7 @@ required: no affected library or assembly-ledger status is promoted here.
 
 The active integration branch is `codex/pr40-frame-data-20261011`, including
 the metadata/query repairs through `4b739b56` and min/max shard-spread guard.
-Commit the checkpoint before its new bounded complete main-module verification;
-retain that exact frozen revision in the output directory. Develop subsequent
+Retain that exact frozen revision in the output directory. Develop subsequent
 CI repairs in an existing idle worktree, not the frozen verification tree.
 That complete module run is now active at frozen `4856910c`, under
 `_out/module-exhaustive-4856910c/`, with 32 partitions and two workers.
@@ -147,6 +152,19 @@ an ordinary MOVL native read, which now has its own paired volatile effect.
 Commit `33cfbd73` retains two independent reads through LLVM O2 on all five
 x86 targets and replaces that obsolete expectation with a destroyed-pointer
 negative. Current Go and actual Go 1.20 pass; the frozen full report stays failed.
+Partitions 16/17 also exposed a dropped legacy vector dispatcher for the complete
+byte-shuffle family and an obsolete nonvolatile segment-load assertion.
+Commit `52c577a6` delegates both vector entry points to the same typed grammar;
+illegal shapes produce handled errors before IR. The segment check now retains
+both actual address spaces and volatile reads through three APIs and O0/O2
+LLVM objects. All related byte-shuffle roots and five focused current/old-Go
+roots pass. Partition 21's opcode-only feature fixture is corrected by
+`3fc5299b`: complete isolated forms supply SSSE3, incomplete/rejected forms do
+not. Twenty-five current-Go and three Go 1.20 roots pass. Preserve
+`_out/vector-dispatch-regressions/` in the reused scalar-lane development tree,
+including the original failures and the corrected NOSPLIT test fixture.
+The frozen report remains failed and still runs its remaining partitions;
+these component repairs do not relabel it or replace fresh complete CI.
 
 The reused development branch is `codex/pr40-packed-arithmetic-effects-20261011`.
 Packdb's VPSUBB counterexample reproduces the missing numerical result consumer
@@ -205,6 +223,12 @@ is 86.7%, not whole-project coverage approval. Preserve `_out/frame-macros/`,
 including the original rejection, invalid relative package RED, corrected
 numeric-permission fixture and current/old-Go MOV encoding assertion. No external
 version or ledger status is promoted by these component checks.
+The integrated CPP/dispatcher run at `52c577a6` passes all 24 selected root tests
+and three shared-registration roots (84 seconds), with vet and the unchanged
+official gate also passing. The feature-fixture follow-up has the independent
+checks above. Development remains on the reused packed-arithmetic branch;
+stage this complete repair batch only in fork PR 4 after the old CI's terminal
+status. Do not update the upstream-connected branch or assembly ledger.
 
 The historical `aedfac9b` tree's old
 `_out/ci-closure/publish-after-ci.sh` already completed publication and is not
