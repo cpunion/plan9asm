@@ -290,11 +290,6 @@ func arm64MinMaxCheckOriginalState(t *testing.T, cases []arm64MinMaxStateCase, b
 	return nep, ah
 }
 
-func arm64MinMaxStateRuntime(t *testing.T, triple, goos string, compiler, runner []string, requireAFP bool) {
-	t.Helper()
-	arm64MinMaxStateRuntimeFamily(t, triple, goos, compiler, runner, "", requireAFP)
-}
-
 func arm64MinMaxFamilyStateCases(banks bool, family string) []arm64MinMaxStateCase {
 	var selected []arm64MinMaxStateCase
 	for _, row := range arm64MinMaxStateCases(banks) {
@@ -308,7 +303,7 @@ func arm64MinMaxFamilyStateCases(banks bool, family string) []arm64MinMaxStateCa
 
 func arm64MinMaxStateRuntimeFamily(t *testing.T, triple, goos string, compiler, runner []string, family string, requireAFP bool) {
 	t.Helper()
-	if family != "" && family != "FMAX" && family != "FMIN" && family != "FMAXNM" && family != "FMINNM" {
+	if family != "FMAX" && family != "FMIN" && family != "FMAXNM" && family != "FMINNM" {
 		t.Fatal("unknown min/max runtime partition", family)
 	}
 	llc := findLLVM22Tool("llc")
@@ -361,11 +356,7 @@ func arm64MinMaxStateRuntimeFamily(t *testing.T, triple, goos string, compiler, 
 			})
 		}
 	}
-	expected := 14600
-	if family != "" {
-		expected /= 4
-	}
-	if total != expected {
+	if total != 3650 {
 		t.Fatal("changed complete min/max runtime denominator", total)
 	}
 	if requireAFP {
@@ -390,7 +381,26 @@ func arm64MinMaxAFPObservationError(family string, nep, ah int) error {
 	return nil
 }
 
-func TestARM64ScalarMinMaxFullStateNativeRuntime(t *testing.T) {
+// Keep the same complete native denominator as the Linux owners, split into
+// independently schedulable roots rather than one 45-minute package occupant.
+func TestARM64ScalarMinMaxNativeFMAX(t *testing.T) {
+	arm64MinMaxDarwinFamilyRuntime(t, "FMAX")
+}
+
+func TestARM64ScalarMinMaxNativeFMIN(t *testing.T) {
+	arm64MinMaxDarwinFamilyRuntime(t, "FMIN")
+}
+
+func TestARM64ScalarMinMaxNativeFMAXNM(t *testing.T) {
+	arm64MinMaxDarwinFamilyRuntime(t, "FMAXNM")
+}
+
+func TestARM64ScalarMinMaxNativeFMINNM(t *testing.T) {
+	arm64MinMaxDarwinFamilyRuntime(t, "FMINNM")
+}
+
+func arm64MinMaxDarwinFamilyRuntime(t *testing.T, family string) {
+	t.Helper()
 	if runtime.GOOS != "darwin" || runtime.GOARCH != "arm64" {
 		t.Skip("Darwin native counterpart; required Linux/QEMU owner covers other hosts")
 	}
@@ -398,5 +408,5 @@ func TestARM64ScalarMinMaxFullStateNativeRuntime(t *testing.T) {
 	if clang == "" {
 		t.Fatal("LLVM 22 clang required")
 	}
-	arm64MinMaxStateRuntime(t, "aarch64-apple-darwin", "darwin", []string{clang}, nil, false)
+	arm64MinMaxStateRuntimeFamily(t, "aarch64-apple-darwin", "darwin", []string{clang}, nil, family, false)
 }

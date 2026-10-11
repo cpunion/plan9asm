@@ -48,9 +48,22 @@ pass. A running CI is not a pass or ledger update.
 
 Local commits `2dcf6471` and `dc3e53d8` close the scalar-insertion and GP/X
 result-read families. Their tree `codex/pr40-scalar-lane-native-20261011` is
-frozen for the running 32-partition/two-worker full root gate under
+frozen for the 32-partition/two-worker full root gate under
 `_out/root-exhaustive-dc3e53d8/`; do not edit it. Focused evidence remains in
 `_out/scalar-lane-native/` and `_out/gp-x-native/`.
+
+That full run also reproduced a 45-minute timeout in the monolithic Darwin
+ARM64 min/max state owner (partition 27). The repair on
+`codex/pr40-minmax-runtime-partitions-20261011` gives each of FMAX, FMIN,
+FMAXNM and FMINNM its own native root, matching the existing Linux owners.
+The disjoint union still checks all 14,600 original states and twelve LLVM
+lanes; no bank, sample, API or optimization axis was removed. The independent
+owner/union RED and five structural GREEN roots, including actual Go 1.20,
+are retained under `_out/minmax-runtime-partitions/`. All four new native
+roots still require execution; structural checks are not runtime passes.
+Keep the old timeout failed. The redundant full-root attempt at `2fbf0011`
+was canceled locally under severe host load and is incomplete, not green;
+its separate nested-CLI/internal-package checks remain frozen and running.
 
 Byte-shuffle repair `6430b7f8` is committed locally. Development continues in
 `codex/pr40-frame-data-20261011`, with mixed DATA evidence in `_out/frame-data/`.

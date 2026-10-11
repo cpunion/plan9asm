@@ -4,27 +4,45 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"strings"
 	"testing"
 )
 
 func TestARM64ScalarMinMaxBoundedRuntimeRoots(t *testing.T) {
-	syntax, err := parser.ParseFile(token.NewFileSet(), "arm64_scalar_minmax_runtime_linux_test.go", nil, 0)
+	checkARM64MinMaxRuntimeOwners(t, "arm64_scalar_minmax_runtime_linux_test.go",
+		"arm64MinMaxLinuxFamilyRuntime", "TestCrossLinuxRuntimeMatrixARM64ScalarMinMax")
+}
+
+func TestARM64ScalarMinMaxDarwinBoundedRuntimeRoots(t *testing.T) {
+	checkARM64MinMaxRuntimeOwners(t, "arm64_scalar_minmax_state_test.go",
+		"arm64MinMaxDarwinFamilyRuntime", "TestARM64ScalarMinMaxNative")
+}
+
+func checkARM64MinMaxRuntimeOwners(t *testing.T, filename, helper, prefix string) {
+	t.Helper()
+	syntax, err := parser.ParseFile(token.NewFileSet(), filename, nil, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
 	want := map[string]string{
-		"TestCrossLinuxRuntimeMatrixARM64ScalarMinMaxFMAX":   "FMAX",
-		"TestCrossLinuxRuntimeMatrixARM64ScalarMinMaxFMIN":   "FMIN",
-		"TestCrossLinuxRuntimeMatrixARM64ScalarMinMaxFMAXNM": "FMAXNM",
-		"TestCrossLinuxRuntimeMatrixARM64ScalarMinMaxFMINNM": "FMINNM",
+		prefix + "FMAX":   "FMAX",
+		prefix + "FMIN":   "FMIN",
+		prefix + "FMAXNM": "FMAXNM",
+		prefix + "FMINNM": "FMINNM",
 	}
 	for _, declaration := range syntax.Decls {
 		function, ok := declaration.(*ast.FuncDecl)
 		if !ok {
 			continue
 		}
+		if function.Name.Name == "TestARM64ScalarMinMaxFullStateNativeRuntime" {
+			t.Fatal("monolithic native owner duplicates the bounded family roots")
+		}
 		family, required := want[function.Name.Name]
 		if !required {
+			if strings.HasPrefix(function.Name.Name, prefix) && function.Name.Name != prefix+"DeadNative" {
+				t.Fatal("unexpected or duplicate min/max runtime owner", function.Name.Name)
+			}
 			continue
 		}
 		calls := 0
@@ -34,7 +52,7 @@ func TestARM64ScalarMinMaxBoundedRuntimeRoots(t *testing.T) {
 				return true
 			}
 			name, ok := call.Fun.(*ast.Ident)
-			if !ok || name.Name != "arm64MinMaxLinuxFamilyRuntime" {
+			if !ok || name.Name != helper {
 				return true
 			}
 			calls++
