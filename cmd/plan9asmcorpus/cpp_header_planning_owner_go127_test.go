@@ -15,11 +15,20 @@ import (
 )
 
 func TestCPPHeaderPlanningRetainsQueryOnlyOrdinaryOwner(t *testing.T) {
+	testCPPHeaderPlanningRetainsQueryOnlyOrdinaryOwner(t, "1.20")
+}
+
+func TestCPPHeaderPlanningRetainsCurrentPatchRequirement(t *testing.T) {
+	testCPPHeaderPlanningRetainsQueryOnlyOrdinaryOwner(t, strings.TrimPrefix(runtime.Version(), "go"))
+}
+
+func testCPPHeaderPlanningRetainsQueryOnlyOrdinaryOwner(t *testing.T, language string) {
+	t.Helper()
 	compilerEnv := os.Environ()
 	candidate := discoveryCandidate{Module: "example.invalid/planning-owner", Version: "v1.0.0", AsmFiles: []string{"probe_amd64.s"}}
 	dependency := discoveryCandidate{Module: "example.invalid/planning-assets", Version: "v1.0.0"}
 	sources := map[string]string{
-		"go.mod":        "module " + candidate.Module + "\ngo 1.20\nrequire " + dependency.Module + " v1.0.0\n",
+		"go.mod":        "module " + candidate.Module + "\ngo " + language + "\nrequire " + dependency.Module + " v1.0.0\n",
 		"probe.go":      "package owner\nimport _ \"" + dependency.Module + "\"\nconst Answer=7\nfunc Probe() uint64\n",
 		"probe_amd64.s": "#include \"go_asm.h\"\nTEXT ·Probe(SB),4,$0-8\nMOVQ $const_Answer,ret+0(FP)\nRET\n",
 	}

@@ -161,7 +161,7 @@ These first-party component passes do not update the external assembly ledger.
 The legacy source-only inspection cache was reclaimed after its consumers
 closed; authentication/query logs and the probe remain available.
 
-Shard 29's goav1 PMOVZX counterexample now has the complete twelve-name,
+Shard 38's goav1 VPMOVZX counterexample now has the complete twelve-name,
 six-ratio result/read repair in the same development tree. Caller and result
 observers share only the pure byte dependency; their memory authority remains
 separate. Native reads retain the exact shrinking tuple and E5 mask suppression.
@@ -174,6 +174,17 @@ classification pass. Retain `_out/packed-widen-effects/`, including the correcte
 impossible pointer/numeric test state and old-lowering overlay RED. Original
 legacy Go/Rosetta and portable masked references are not native AVX512 execution.
 No discovering external version or ledger status is promoted by these checks.
+
+Shard 29's tamago query failure independently reproduces with a first-party
+module requiring the current SDK patch. Its owned planning main previously
+used `go 1.27`, which cmd/go rewrote during dependency compilation, correctly
+tripping the frozen-byte guard. The query now retains the full observed SDK
+version before capture without changing original module bytes or weakening
+the guard. Both old-language/current-patch fixtures preserve exact pins,
+dependency observations, repeat queries and mutation revocation. All 23 related
+planning roots pass (313 seconds, zero failures/skips); four actual Go 1.20
+framework roots and vet also pass. Retain `_out/header-query-patch/`. This is
+not an external tamago compilation pass or source exclusion.
 
 The historical `aedfac9b` tree's old
 `_out/ci-closure/publish-after-ci.sh` already completed publication and is not

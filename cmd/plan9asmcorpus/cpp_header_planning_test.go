@@ -5,7 +5,37 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"golang.org/x/mod/modfile"
 )
+
+func TestCPPHeaderPlanningQueryModuleRetainsSDKPatchAndExactPins(t *testing.T) {
+	source := "module plan9asm.local/discovery\n\ngo 1.27\n\nrequire example.invalid/original v1.2.3\n\nreplace example.invalid/original => example.invalid/fork v1.2.4\n"
+	for _, version := range []string{"go1.20", "go1.20.14", "go1.27.0", "go1.27.1", "go1.27.2"} {
+		text, err := discoveryHeaderQueryGoMod(source, version)
+		if err != nil {
+			t.Fatal(version, err)
+		}
+		module, err := modfile.Parse("go.mod", []byte(text), nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if module.Go.Version != strings.TrimPrefix(version, "go") || module.Module.Mod.Path != "plan9asm.local/discovery" ||
+			len(module.Require) != 1 || module.Require[0].Mod.Path != "example.invalid/original" || module.Require[0].Mod.Version != "v1.2.3" ||
+			len(module.Replace) != 1 || module.Replace[0].Old.Path != "example.invalid/original" ||
+			module.Replace[0].New.Path != "example.invalid/fork" || module.Replace[0].New.Version != "v1.2.4" {
+			t.Fatal("query SDK formatting changed exact original/fork pins", text)
+		}
+	}
+	for _, version := range []string{"", "1.27.1", "go1.27rc1", "devel go1.28", "go1.27.1-extra", "go1.27.1+meta", "go1.27.1\nreplace x => y"} {
+		if _, err := discoveryHeaderQueryGoMod(source, version); err == nil {
+			t.Fatal("unbound SDK version supplied a query module", version)
+		}
+	}
+	if _, err := discoveryHeaderQueryGoMod("module\n", "go1.27.1"); err == nil {
+		t.Fatal("malformed exact query configuration was repaired")
+	}
+}
 
 func TestCPPHeaderPlanningWorkspaceRejectsLateReplacementAndBytes(t *testing.T) {
 	for _, mutation := range []string{"bytes", "file", "directory", "alias"} {

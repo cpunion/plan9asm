@@ -11,6 +11,8 @@ import (
 	"strings"
 
 	"github.com/xgo-dev/plan9asm/internal/gotoolprofile"
+	"golang.org/x/mod/modfile"
+	"golang.org/x/mod/semver"
 )
 
 func installDiscoveryHeaderPlanning(ctx context.Context, plan *discoveryOrdinarySelectionPlan, candidate discoveryCandidate, download moduleDownloadInfo, dir, goRoot, goBinary, markers, translator string, env []string, cache *discoveryFeatureObservationCache, events ...*discoveryPhaseJournal) error {
@@ -42,14 +44,18 @@ func installDiscoveryHeaderPlanning(ctx context.Context, plan *discoveryOrdinary
 	if err != nil {
 		return err
 	}
+	queryModule, err := discoveryHeaderQueryGoMod(execution.GoMod, plan.GoVersion)
+	if err != nil {
+		return err
+	}
 	queryDir, err := os.MkdirTemp(dir, "native-header-planning-")
 	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(filepath.Join(queryDir, "go.mod"), []byte(execution.GoMod), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(queryDir, "go.mod"), []byte(queryModule), 0600); err != nil {
 		return err
 	}
-	guard, err := captureDiscoveryHeaderQueryWorkspace(queryDir, execution.GoMod)
+	guard, err := captureDiscoveryHeaderQueryWorkspace(queryDir, queryModule)
 	if err != nil {
 		return err
 	}
@@ -296,6 +302,27 @@ func installDiscoveryHeaderPlanning(ctx context.Context, plan *discoveryOrdinary
 	return nil
 }
 
+// This is the independently owned query main, never the downloaded module.
+// A minor-only go directive can be rewritten by cmd/go when an exact dependency
+// requires the running SDK's patch release, invalidating the frozen workspace.
+// Preserve the full observed SDK version before capture; the ordinary profile
+// observation still authenticates that version and original dependency roles.
+func discoveryHeaderQueryGoMod(source, goVersion string) (string, error) {
+	version := strings.TrimPrefix(goVersion, "go")
+	if !strings.HasPrefix(goVersion, "go1.") || strings.ContainsAny(version, "-+") || !semver.IsValid("v"+version) {
+		return "", fmt.Errorf("planning query lacks a stable Go SDK version")
+	}
+	module, err := modfile.Parse("go.mod", []byte(source), nil)
+	if err != nil {
+		return "", err
+	}
+	if err := module.AddGoStmt(version); err != nil {
+		return "", err
+	}
+	data, err := module.Format()
+	return string(data), err
+}
+
 func readDiscoveryHeaderPlanningSource(name string) ([]byte, error) {
 	file, err := os.Open(name)
 	if err != nil {
@@ -368,8 +395,11 @@ func (guard *discoveryHeaderQueryWorkspace) verify() error {
 		return fmt.Errorf("planning query module identity changed")
 	}
 	data, err := readDiscoveryHeaderPlanningSource(name)
-	if err != nil || string(data) != guard.goMod {
-		return fmt.Errorf("planning query module bytes changed: %v", err)
+	if err != nil {
+		return fmt.Errorf("read planning query module: %w", err)
+	}
+	if string(data) != guard.goMod {
+		return fmt.Errorf("planning query module bytes changed")
 	}
 	return nil
 }
