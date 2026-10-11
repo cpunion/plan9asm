@@ -39,6 +39,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 			if accepted, recognized := x86ResultScalarLaneStepWithRead(ins, state, owned, resultOffset, arch, true); recognized {
 				return accepted
 			}
+			if form, known, err := x86GPSIMDTransferProperties(ins, arch); known && err == nil && form.memory == 0 {
+				return x86ResultGPSIMDTransferWithRead(ins, form, state, owned, resultOffset, arch, true)
+			}
 			if accepted, known := c.scalarCompareNativeResultTransfer(ins, state, owned, arch); known {
 				return accepted
 			}
@@ -72,4 +75,19 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 			}
 			return x86LoweredPureGPUnknownTransfer(ins, state, arch)
 		}, true)
+}
+
+// Only the lowering observer may consume a paired exact-width volatile load
+// from the typed scalar insertion or GP/X transfer emitter. Continued execution
+// supplies its numerical source bytes, even if a later selector discards them.
+// Family-specific lane/zero/alias effects remain independent. This grants no
+// validity, bounds, write, frame, caller or raw-entry permission.
+func x86ResultReadWithNativeContinuation(ins Instr, source Operand, width int64, state *x86ResultState, owned []bool, arch string, conditionalNativeRead bool) bool {
+	if x86ResultRead(source, width, state, owned, arch) {
+		return true
+	}
+	return conditionalNativeRead && source.Kind == OpMem && source.Mem.Sym == "" &&
+		ins.x86NumericalRead == nil && !ins.x86Encoded && ins.x86SourceRaw == nil && ins.x86RawNearReturn == nil &&
+		ins.x86AddressBits == 0 && !ins.x86UnboundAddressOverride && ins.x86SegmentPrefix == 0 &&
+		x86OrdinaryNativeMemoryOperand(source, arch) && x86ResultIncomingPointerAddressIdentity(source, state, arch)
 }

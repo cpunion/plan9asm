@@ -44,8 +44,10 @@ Keep the upstream-connected branch unchanged until fresh fork CI and review
 pass. A running CI is not a pass or ledger update.
 
 The next development tree is `codex/pr40-scalar-lane-native-20261011`, based on
-the published head. Its `_out/scalar-lane-native/` contains independent RED/GREEN
-evidence for the PINSR/INSERTPS result-read repair below. No external library
+the published head. Its `_out/scalar-lane-native/` and `_out/gp-x-native/` contain
+independent RED/GREEN evidence for two complete result-read families below.
+PINSR/INSERTPS is committed as `2dcf6471`; the following GP/X repair reuses its
+private continuation rule and independent runtime harness. No external library
 was compiled locally and no ledger status changed. Read-only triage also found
 seven failures at the original-ZIP/go.mod metadata comparison; absence versus
 mismatched bytes still needs exact original-source verification. The existing
@@ -74,6 +76,23 @@ with unrelated speculative implementation. Keep correctness gates unchanged.
 
 ## Included repairs and retained evidence
 
+- Shard 5's go-simd/base32 decode counterexample exposed the same omitted
+  lowering-only memory consumer in the complete GP/X transfer family. Actual
+  Go accepts the independent REDs, while all five targets and three translator
+  APIs initially refuse their native numerical results. MOVL/MOVQ/MOVD and
+  VMOVD/VMOVQ now reuse the scalar-insertion continuation check with their own
+  shared typed widths, zero fill and legacy/VEX/EVEX alias effects. Public
+  declarations, pointers/indexes, source joins, writes, raw origins and frame
+  contracts stay strict. The 248 target/form functions have original Go and
+  LLVM objects, including all four X128 dwords; each module stays below 64
+  functions. Ten live/dead kernels pass original legacy-Go/LLVM numerical and
+  fault comparisons through three APIs and O0/O2 (1,280 numerical outcomes,
+  120 fault/continuation outcomes per lane). Native VEX/EVEX execution is not
+  inferred. All 46 current-Go family/adjacent roots pass (84.697s), including
+  the shared scalar insertion runtime rerun; thirteen actual Go 1.20 roots,
+  CLI extraction, vet and unchanged official classification pass. Retain
+  `_out/gp-x-native/`; the original full library remains failed until remote
+  exact-version replay, and this local commit is not in running CI.
 - Shards 5/42's exact marcelocantos/hash and frozen versions exposed the
   lowering-only observer's missing native scalar insertion read, not missing
   encodings. Independent REDs reproduce it across all five x86 targets and
@@ -160,7 +179,7 @@ with unrelated speculative implementation. Keep correctness gates unchanged.
   published a child PID. The failure-only shim now starts a lightweight real
   pipe-holding child while retaining the same deadline, error/output witnesses
   and owned-process cleanup assertion. Three repeated lifecycle runs and the
-  actual Go 1.20 check pass. Commit `7579e5d2` is separate from published CI.
+  actual Go 1.20 check pass. Commit `7579e5d2` is included in `0c61d468` CI.
   Evidence for both repairs is under `_out/failed-gates/` in the follow-up tree.
   Preserve the failed link attempt caused by disk exhaustion. Nine confirmed
   inactive, task-owned compilation archives were cleaned; reports and source

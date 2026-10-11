@@ -8,6 +8,11 @@ import "strings"
 // caller permission or numerical pointer bytes.
 func x86ResultGPSIMDTransfer(ins Instr, form x86GPSIMDTransferForm, state *x86ResultState,
 	owned []bool, resultOffset int64, arch string) bool {
+	return x86ResultGPSIMDTransferWithRead(ins, form, state, owned, resultOffset, arch, false)
+}
+
+func x86ResultGPSIMDTransferWithRead(ins Instr, form x86GPSIMDTransferForm, state *x86ResultState,
+	owned []bool, resultOffset int64, arch string, conditionalNativeRead bool) bool {
 	if form.mmx || form.spec.rawOnly {
 		return false
 	}
@@ -18,7 +23,7 @@ func x86ResultGPSIMDTransfer(ins Instr, form x86GPSIMDTransferForm, state *x86Re
 		if !valid || state.xmm[index]&lowMask != lowMask {
 			return false
 		}
-	} else if !x86ResultRead(ins.Args[0], width, state, owned, arch) {
+	} else if !x86ResultReadWithNativeContinuation(ins, ins.Args[0], width, state, owned, arch, conditionalNativeRead) {
 		return false
 	}
 	if form.destinationX {

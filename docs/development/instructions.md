@@ -688,6 +688,13 @@ dead volatile memory reads, original-Go NULL/guard-page faults, all register/
 address axes, complete vector/GP canaries and the three-API five-target objects.
 Accepted operand shapes never grant pointer permission or initialized data.
 
+For ordinary GP/X native loads, the lowering-only result observer consumes the
+same exact-width volatile read as scalar lane insertion. MOVL/MOVQ/MOVD and
+VMOVD/VMOVQ retain loaded low bytes, known-zero X128 remainder and distinct
+legacy/VEX/EVEX wider aliases. Memory Q remains eight bytes on 386, unlike its
+GP-register WIG form. This continuation rule cannot replace public declaration,
+caller, raw/frame, MMX or physical-bank contracts, and never authorizes a store.
+
 Scalar integer lane insert/extract shares `x86ScalarLaneProperties` across the
 original-source validator, lowerer, caller-region effects and ABI0 result-byte
 observer: all PINSRB/W/D/Q and PEXTRB/W/D/Q names, plus their V forms. A lane

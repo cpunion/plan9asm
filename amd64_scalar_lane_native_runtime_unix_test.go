@@ -56,7 +56,7 @@ func TestCrossLinuxRuntimeMatrixX86ScalarLaneNativeResultsAndFaults(t *testing.T
 		t.Fatal("incomplete live/dead/zero scalar insertion family", count)
 	}
 	goAssemblerOracleOutput(t, "amd64", source.String(), "", true)
-	driver := fmt.Sprintf(x86ScalarLaneNativeRuntimeC, prototypes.String(), originals.String(), rows.String())
+	driver := fmt.Sprintf(x86NativeScalarReadRuntimeC, prototypes.String(), originals.String(), rows.String())
 	for _, api := range []string{"text", "module", "Go"} {
 		t.Run(api, func(t *testing.T) {
 			ir, err := x86ScalarFPBitViewAPI(t, source.String(), declarations.String(), "amd64", execution.triple, api)
@@ -70,7 +70,7 @@ func TestCrossLinuxRuntimeMatrixX86ScalarLaneNativeResultsAndFaults(t *testing.T
 						text, level = x86MulDivRoundOptimize(t, ir), "-O2"
 					}
 					output := execution.compileAndRunLLVM(t, "scalar-lane-native", text, driver, level)
-					if string(output) != "22 scalar insertion kernels: numerical 2816, faults 264, tripwires 2; failures 0\n" {
+					if string(output) != "22 native scalar kernels: numerical 2816, faults 264, tripwires 2; failures 0\n" {
 						t.Fatal("original/LLVM scalar insertion results or read widths differ:", string(output))
 					}
 					t.Log(strings.TrimSpace(string(output)))
@@ -80,7 +80,9 @@ func TestCrossLinuxRuntimeMatrixX86ScalarLaneNativeResultsAndFaults(t *testing.T
 	}
 }
 
-const x86ScalarLaneNativeRuntimeC = `
+// Scalar insertion and GP/X transfer regressions share only their byte-read
+// reference and process/fault harness, not their generated Go/LLVM programs.
+const x86NativeScalarReadRuntimeC = `
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -161,7 +163,8 @@ int main(void) {
         }
     }
     if (munmap(memory, 2*page)) return 6;
-    printf("22 scalar insertion kernels: numerical %%u, faults %%u, tripwires 2; failures 0\n", numerical, faults);
+    printf("%%zu native scalar kernels: numerical %%u, faults %%u, tripwires 2; failures 0\n",
+           sizeof(kernels)/sizeof(kernels[0]), numerical, faults);
     return 0;
 }
 `

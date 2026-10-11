@@ -60,7 +60,7 @@ func x86ResultScalarLaneStepWithRead(ins Instr, state *x86ResultState, owned []b
 	low := x86CallerVectorByteMask(width)
 	if f.insert {
 		if f.memory >= 0 {
-			if !x86ResultScalarLaneRead(ins, ins.Args[f.source], width, state, owned, arch, conditionalNativeRead) {
+			if !x86ResultReadWithNativeContinuation(ins, ins.Args[f.source], width, state, owned, arch, conditionalNativeRead) {
 				return false, true
 			}
 		} else {
@@ -94,7 +94,7 @@ func x86ResultScalarLaneStepWithRead(ins Instr, state *x86ResultState, owned []b
 func x86ResultScalarPSLaneStep(ins Instr, f x86InsertExtractForm, state *x86ResultState, owned []bool, resultOffset int64, arch string, conditionalNativeRead bool) bool {
 	source := uint16(0)
 	if f.memory >= 0 {
-		if f.spec.insert && !x86ResultScalarLaneRead(ins, ins.Args[f.memory], 4, state, owned, arch, conditionalNativeRead) {
+		if f.spec.insert && !x86ResultReadWithNativeContinuation(ins, ins.Args[f.memory], 4, state, owned, arch, conditionalNativeRead) {
 			return false
 		}
 		source = 0xf
@@ -123,19 +123,4 @@ func x86ResultScalarPSLaneStep(ins Instr, f x86InsertExtractForm, state *x86Resu
 	}
 	state.writeVector(destination, 16, uint64(known), f.spec.legacy)
 	return true
-}
-
-// Only the lowering observer may consume the paired exact-width volatile load
-// in PINSR/INSERTPS. Continued execution supplies its selected numerical bytes,
-// even when INSERTPS subsequently zeros them; it grants no validity, bounds,
-// write, frame, caller or raw-entry permission. Untouched bytes retain their
-// prior definedness; unknown bytes do not become numerical inputs.
-func x86ResultScalarLaneRead(ins Instr, source Operand, width int64, state *x86ResultState, owned []bool, arch string, conditionalNativeRead bool) bool {
-	if x86ResultRead(source, width, state, owned, arch) {
-		return true
-	}
-	return conditionalNativeRead && source.Kind == OpMem && source.Mem.Sym == "" &&
-		ins.x86NumericalRead == nil && !ins.x86Encoded && ins.x86SourceRaw == nil && ins.x86RawNearReturn == nil &&
-		ins.x86AddressBits == 0 && !ins.x86UnboundAddressOverride && ins.x86SegmentPrefix == 0 &&
-		x86OrdinaryNativeMemoryOperand(source, arch) && x86ResultIncomingPointerAddressIdentity(source, state, arch)
 }
