@@ -36,6 +36,16 @@ func TestCIFullSuitesHaveExplicitTimeout(t *testing.T) {
 	}
 }
 
+func TestCIShellScriptsUseLFOnEveryHost(t *testing.T) {
+	attributes, err := os.ReadFile(".gitattributes")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(attributes), "*.sh text eol=lf") {
+		t.Fatal("executed and inspected shell scripts require LF checkout on Windows too")
+	}
+}
+
 func TestCIFullSuitesInstallWASMExecutionRuntime(t *testing.T) {
 	data, err := os.ReadFile(".github/workflows/go-ci.yml")
 	if err != nil {

@@ -1,4 +1,2 @@
-# Discovery records are generated, diffable source data. Keep manifests visible
-# by default so reviewers can inspect counts, cursors and evidence provenance.
-testdata/discovery/ledger/records/*.jsonl linguist-generated
-testdata/discovery/assembly-ledger/records/*.jsonl linguist-generated
+# Shell scripts are executed and inspected verbatim on every CI host.
+*.sh text eol=lf
