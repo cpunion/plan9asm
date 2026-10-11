@@ -10,6 +10,7 @@ func TestInferFuncTargetFeatures(t *testing.T) {
 		name string
 		arch Arch
 		ops  []Op
+		rows []string
 		want string
 	}{
 		{
@@ -27,7 +28,7 @@ func TestInferFuncTargetFeatures(t *testing.T) {
 		{
 			name: "amd64 pshufb",
 			arch: ArchAMD64,
-			ops:  []Op{"PSHUFB", "VPSHUFB"},
+			rows: []string{"PSHUFB X0,X1", "VPSHUFB X0,X1,X2"},
 			want: "+ssse3",
 		},
 		{
@@ -81,7 +82,8 @@ func TestInferFuncTargetFeatures(t *testing.T) {
 		{
 			name: "amd64 combined sorted deduped",
 			arch: ArchAMD64,
-			ops:  []Op{"AESENC", "CRC32L", "PCLMULQDQ", "PSHUFB", "CRC32Q", "AESDEC", "VPSHUFB"},
+			ops:  []Op{"AESENC", "CRC32L", "PCLMULQDQ", "CRC32Q", "AESDEC"},
+			rows: []string{"PSHUFB X0,X1", "VPSHUFB X0,X1,X2"},
 			want: "+aes,+crc32,+pclmul,+sse4.1,+sse4.2,+ssse3",
 		},
 		{
@@ -104,10 +106,34 @@ func TestInferFuncTargetFeatures(t *testing.T) {
 			for i, op := range tt.ops {
 				fn.Instrs[i] = Instr{Op: op}
 			}
+			for _, row := range tt.rows {
+				fn.Instrs = append(fn.Instrs, x86ScalarLaneInstruction(t, row))
+			}
 			if got := inferFuncTargetFeatures(tt.arch, fn); got != tt.want {
-				t.Fatalf("inferFuncTargetFeatures(%q, %v) = %q, want %q", tt.arch, tt.ops, got, tt.want)
+				t.Fatalf("inferFuncTargetFeatures(%q, %v, %v) = %q, want %q", tt.arch, tt.ops, tt.rows, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestInferByteShuffleTargetFeaturesRequireCompleteForms(t *testing.T) {
+	for _, arch := range []string{"amd64", "386"} {
+		for _, row := range x86ByteShuffleFormatRows(arch) {
+			fn := Func{Instrs: []Instr{x86ScalarLaneInstruction(t, row)}}
+			if got := inferFuncTargetFeaturesForGOARCH(ArchAMD64, arch, fn); got != "+ssse3" {
+				t.Fatal("isolated complete form lost its intrinsic feature", arch, row, got)
+			}
+		}
+		for _, row := range []string{
+			"PSHUFB", "VPSHUFB", "VPSHUFB.Z", "PSHUFB Y0,X1",
+			"VPSHUFB X0,Y1,Y2", "VPSHUFB.Z X0,X1,X2",
+			"VPSHUFB.BCST (AX),X1,X2", "VPSHUFB.SAE X0,X1,X2",
+		} {
+			fn := Func{Instrs: []Instr{x86ScalarLaneInstruction(t, row)}}
+			if got := inferFuncTargetFeaturesForGOARCH(ArchAMD64, arch, fn); got != "" {
+				t.Fatal("incomplete or rejected form supplied a feature", arch, row, got)
+			}
+		}
 	}
 }
 
