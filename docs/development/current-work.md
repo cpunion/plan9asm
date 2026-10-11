@@ -38,18 +38,22 @@ to fork Draft PR 4 after the previous run finished naturally. They include the
 deadline fixture, low-product family, portable CPP index, broadcast memory result and native
 extension result repairs. The full root run at frozen `b5af3a10` now passed;
 new broadcast/extension code has its separate focused evidence below.
-Fresh CI 38096927749 is running: policy preflight passed; shards 29/39 are
-terminal failures, with 94 passes, 85 failures, 23 source N/A and one invalid-
-source skip among their 203 versions. Those totals match their prior run;
-38 failures still stop at mixed TEXT/DATA observation. The other four priority
-shards remain running. Let the run finish naturally before the next batch.
+Fresh CI 38096927749 is running: policy preflight passed; shards 5/29/38/39
+are terminal failures, with 167 passes, 168 failures, 57 source N/A and one
+invalid-source skip among their 393 versions. Shards 36/42 remain running.
+Many failures still stop at the mixed TEXT/DATA, legacy module-origin and
+native result effects repaired only in local unpublished commits. Shard 5's
+packdb result observer also refuses VPSUBB; repair the complete packed integer
+add/subtract consumer family with independent tests. Let the run finish
+naturally before the next batch.
 Keep the upstream-connected branch unchanged until fresh fork CI and review
 pass. A running CI is not a pass or ledger update.
 
 Local commits `2dcf6471` and `dc3e53d8` close the scalar-insertion and GP/X
 result-read families. Their tree `codex/pr40-scalar-lane-native-20261011` is
-frozen for the 32-partition/two-worker full root gate under
-`_out/root-exhaustive-dc3e53d8/`; do not edit it. Focused evidence remains in
+retains the terminal 32-partition/two-worker full root gate under
+`_out/root-exhaustive-dc3e53d8/`: 30 shards passed and two failed. Its original
+report remains failed. Focused evidence remains in
 `_out/scalar-lane-native/` and `_out/gp-x-native/`.
 
 That full run also reproduced a 45-minute timeout in the monolithic Darwin
@@ -60,8 +64,10 @@ The disjoint union still checks all 14,600 original states and twelve LLVM
 lanes; no bank, sample, API or optimization axis was removed. The independent
 owner/union RED and five structural GREEN roots, including actual Go 1.20,
 are retained under `_out/minmax-runtime-partitions/`. The frozen native run at
-`1d0ce3a0` passed FMAX (638 seconds) and FMIN (702 seconds); NM roots remain
-running. An integration follow-up also checks the actual runner's hash
+`1d0ce3a0` passed all four families: FMAX (638 seconds), FMIN (702 seconds),
+FMAXNM (603 seconds) and FMINNM (553 seconds). Together they retain all 14,600
+original states and 175,200 LLVM comparisons. An integration follow-up also
+checks the actual runner's hash
 partition: the initial names collided in two shards, so the names now use
 `TestARM64ScalarMinMaxNativeRuntime*` and occupy four distinct ordinary shards.
 Retain `_out/minmax-shard-spread/` RED/GREEN logs. Structural checks alone are
@@ -125,7 +131,12 @@ compiler exports across fresh temporary boundaries. Rosetta numerical results
 are not native Linux execution. Original external compiler/object replay remains
 required: no affected library or assembly-ledger status is promoted here.
 
-The integration tree remains the historical `aedfac9b` snapshot. Its old
+The active integration branch is `codex/pr40-frame-data-20261011`, including
+the metadata/query repairs through `4b739b56` and min/max shard-spread guard.
+Commit the checkpoint before its new bounded complete main-module verification;
+retain that exact frozen revision in the output directory. Develop subsequent
+CI repairs in an existing idle worktree, not the frozen verification tree.
+The historical `aedfac9b` tree's old
 `_out/ci-closure/publish-after-ci.sh` already completed publication and is not
 a reusable publisher. Its replacement old-run watcher is terminal. The current
 read-only watcher is in the published tree at
