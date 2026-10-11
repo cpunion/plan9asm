@@ -387,6 +387,11 @@ jobs:
         if: runner.os == 'Windows'
         uses: ./.github/actions/setup-windows-llvm22
 
+      - name: Install required 386 execution runtime
+        if: runner.os == 'Linux' && matrix.module-owner == 0 && matrix.go-version == '1.27.x'
+        timeout-minutes: 5
+        run: bash scripts/install-ci-qemu.sh
+
       - name: LLVM tools info
         shell: bash
         run: |
@@ -564,6 +569,11 @@ jobs:
         with:
           node-version: '22'
 
+      - name: Install required 386 execution runtime
+        if: matrix.module-owner == 0
+        timeout-minutes: 5
+        run: bash scripts/install-ci-qemu.sh
+
       - name: Go test (race)
         run: bash scripts/test-module-ci.sh race execute ${{ matrix.module-owner }} ${{ matrix.root-partition }}
 
@@ -617,6 +627,11 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: '22'
+
+      - name: Install required 386 execution runtime
+        if: matrix.module-owner == 0
+        timeout-minutes: 5
+        run: bash scripts/install-ci-qemu.sh
 
       - name: Go test with coverage
         run: bash scripts/test-module-ci.sh coverage execute ${{ matrix.module-owner }} ${{ matrix.root-partition }}

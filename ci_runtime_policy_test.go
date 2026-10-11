@@ -105,6 +105,26 @@ func TestCICrossRuntimeUsesPinnedQEMU(t *testing.T) {
 	}
 }
 
+func TestCIFullSuitesInstallRequiredQEMU(t *testing.T) {
+	data, err := os.ReadFile(".github/workflows/go-ci.yml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"test", "race", "coverage"} {
+		t.Run(name, func(t *testing.T) {
+			job, found := ciWorkflowJob(string(data), name)
+			if !found {
+				t.Fatal("missing complete suite", name)
+			}
+			install := strings.Index(job, "bash scripts/install-ci-qemu.sh")
+			runner := strings.Index(job, "bash scripts/test-module-ci.sh")
+			if install < 0 || runner < 0 || install >= runner {
+				t.Fatal("complete Linux suites require pinned QEMU before their 386 runtime tests")
+			}
+		})
+	}
+}
+
 func ciWorkflowJob(source, name string) (string, bool) {
 	source = strings.ReplaceAll(source, "\r\n", "\n")
 	_, job, found := strings.Cut(source, "\n  "+name+":\n")
