@@ -1,4 +1,4 @@
-package gotoolprofile
+package golegacymod
 
 import (
 	"context"

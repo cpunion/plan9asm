@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 
 	"github.com/xgo-dev/plan9asm"
@@ -25,7 +26,7 @@ type AMD64DownloadedObservationRequest struct {
 type amd64DownloadedModule struct {
 	sourceModule, sourceVersion string
 	root, goMod, modulePath     string
-	goVersion                   string
+	goVersion, goModOrigin      string
 }
 
 type amd64DownloadedSources struct {
@@ -158,7 +159,15 @@ func (sources *amd64DownloadedSources) captureModule(ctx context.Context, reques
 	if err := json.Unmarshal(data, &receipt); err != nil {
 		return nil, fmt.Errorf("actual module download returned malformed exact identity: %w", err)
 	}
-	original, err := sources.origins.Observe(ctx, path, version, receipt)
+	var proxyMetadata *ProxyGoModProof
+	if _, err := os.Lstat(filepath.Join(receipt.Dir, "go.mod")); os.IsNotExist(err) {
+		proxyMetadata, _, err = CaptureDownloadedProxyGoMod(ctx, request.GoBinary,
+			marker, request.Environment, path, version, receipt.Sum, receipt.GoModSum, receipt.GoMod, nil)
+		if err != nil {
+			return nil, err
+		}
+	}
+	original, err := sources.origins.ObserveLegacy(ctx, path, version, receipt, proxyMetadata)
 	if errors.Is(err, gooriginalsrc.ErrUnclosedModuleDeclaration) {
 		return nil, fmt.Errorf("%w: %v", plan9asm.ErrProbeNeedsContext, err)
 	}
@@ -166,7 +175,8 @@ func (sources *amd64DownloadedSources) captureModule(ctx context.Context, reques
 		return nil, err
 	}
 	source := &amd64DownloadedModule{sourceModule: original.SourceModule, sourceVersion: original.SourceVersion,
-		root: original.Root, goMod: original.GoMod, modulePath: original.ModulePath, goVersion: original.GoVersion}
+		root: original.Root, goMod: original.GoMod, modulePath: original.ModulePath,
+		goVersion: original.GoVersion, goModOrigin: original.GoModOrigin}
 	sources.modules[key] = source
 	return source, sources.verify()
 }
@@ -183,12 +193,20 @@ func (source *amd64DownloadedModule) matches(actual *amd64OriginalListModule, pr
 		actual.Path != source.modulePath || actual.GoVersion != gooriginalsrc.SelectedGoVersion(source.goVersion, primary) {
 		return false
 	}
+	if source.goModOrigin == ProxyGoModProtocol && primary {
+		// Metadata outside a ZIP cannot supply the cache-CWD main role.
+		// A legacy primary needs a separately owned exact-version query.
+		return false
+	}
 	wantedVersion := source.sourceVersion
 	if primary {
 		wantedVersion = "" // Preserve Go's actual cached-CWD main role, not a version fiction.
 	}
 	root, err := filepath.EvalSymlinks(actual.Dir)
 	goMod, modErr := filepath.EvalSymlinks(actual.GoMod)
+	if source.goModOrigin == ProxyGoModProtocol && goMod != source.goMod {
+		return false
+	}
 	return err == nil && modErr == nil && root == source.root && actual.Version == wantedVersion &&
 		(goMod == source.goMod || goMod == filepath.Join(source.root, "go.mod"))
 }

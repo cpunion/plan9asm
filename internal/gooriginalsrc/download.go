@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"sync"
 
+	"github.com/xgo-dev/plan9asm/internal/golegacymod"
 	"golang.org/x/mod/modfile"
 	"golang.org/x/mod/module"
 	"golang.org/x/mod/sumdb/dirhash"
@@ -28,6 +29,9 @@ type DownloadReceipt struct {
 type Module struct {
 	SourceModule, SourceVersion string
 	Root, GoMod, ModulePath     string
+	// GoModOrigin distinguishes an original ZIP member from independently
+	// authenticated proxy metadata; the latter must never become a ZIP file.
+	GoModOrigin string
 	// GoVersion preserves the original directive, including its absence.
 	GoVersion string
 }
@@ -72,6 +76,18 @@ func NewOriginSet(cache, goBinary string) (*OriginSet, error) {
 // Observe validates the complete original ZIP, metadata and extracted tree.
 // The caller must independently execute its actual exact-download command.
 func (set *OriginSet) Observe(ctx context.Context, path, version string, receipt DownloadReceipt) (_ Module, result error) {
+	return set.observe(ctx, path, version, receipt, nil)
+}
+
+// ObserveLegacy retains exactly the same whole-ZIP/tree/tool checks as Observe.
+// The separate public SumDB proof may supply only canonical metadata absent
+// from that complete ZIP. A proof, receipt or Module alone grants no package
+// selection, compiler, native-frame or assembly capability.
+func (set *OriginSet) ObserveLegacy(ctx context.Context, path, version string, receipt DownloadReceipt, proof *golegacymod.ProxyGoModProof) (Module, error) {
+	return set.observe(ctx, path, version, receipt, proof)
+}
+
+func (set *OriginSet) observe(ctx context.Context, path, version string, receipt DownloadReceipt, proof *golegacymod.ProxyGoModProof) (_ Module, result error) {
 	if set == nil || ctx == nil {
 		return Module{}, fmt.Errorf("exact source observation requires a live origin set and context")
 	}
@@ -129,6 +145,9 @@ func (set *OriginSet) Observe(ctx context.Context, path, version string, receipt
 			}
 		}
 	}
+	// The actual receipt may spell a validated ancestor alias. All retained
+	// source roles below use the independently checked canonical cache paths.
+	receipt.Dir, receipt.Zip, receipt.GoMod = root, prefix+".zip", prefix+".mod"
 	if err := set.files.Directory(root, true); err != nil {
 		return Module{}, err
 	}
@@ -147,11 +166,7 @@ func (set *OriginSet) Observe(ctx context.Context, path, version string, receipt
 	if dirSum != zipSum {
 		return Module{}, fmt.Errorf("complete original cache directory differs from original ZIP h1")
 	}
-	goMod := filepath.Join(root, "go.mod")
-	if set.files.hashes[goMod] == "" || set.files.hashes[goMod] != set.files.hashes[prefix+".mod"] {
-		return Module{}, fmt.Errorf("original ZIP go.mod differs from exact downloaded module metadata")
-	}
-	modData, err := set.files.ReadRetained(goMod)
+	modData, origin, err := set.moduleMetadata(path, version, receipt, proof)
 	if err != nil {
 		return Module{}, err
 	}
@@ -161,12 +176,12 @@ func (set *OriginSet) Observe(ctx context.Context, path, version string, receipt
 	if err != nil || modSum != receipt.GoModSum {
 		return Module{}, fmt.Errorf("original module metadata differs from actual Go download h1")
 	}
-	parsed, err := modfile.Parse(goMod, modData, nil)
+	parsed, err := modfile.Parse(receipt.GoMod, modData, nil)
 	if err != nil || parsed.Module == nil {
 		return Module{}, ErrUnclosedModuleDeclaration
 	}
 	observed := Module{SourceModule: path, SourceVersion: version, Root: root,
-		GoMod: prefix + ".mod", ModulePath: parsed.Module.Mod.Path}
+		GoMod: prefix + ".mod", ModulePath: parsed.Module.Mod.Path, GoModOrigin: origin}
 	if parsed.Go != nil {
 		observed.GoVersion = parsed.Go.Version
 	}
@@ -175,6 +190,43 @@ func (set *OriginSet) Observe(ctx context.Context, path, version string, receipt
 		return Module{}, err
 	}
 	return observed, set.verifyLocked()
+}
+
+// OriginalZIPGoMod identifies metadata retained as an actual archive member.
+const OriginalZIPGoMod = "original_zip_go_mod"
+
+// Called only after the complete extracted tree and original ZIP hashes agree.
+// The metadata proof does not replace either source observation. The complete
+// retained directory inventory detects a subsequently added go.mod too.
+func (set *OriginSet) moduleMetadata(path, version string, receipt DownloadReceipt, proof *golegacymod.ProxyGoModProof) ([]byte, string, error) {
+	goMod := filepath.Join(receipt.Dir, "go.mod")
+	memberHash := set.files.hashes[goMod]
+	if memberHash != "" {
+		if proof != nil || memberHash != set.files.hashes[receipt.GoMod] {
+			return nil, "", fmt.Errorf("original ZIP go.mod differs from exact downloaded module metadata")
+		}
+		data, err := set.files.ReadRetained(goMod)
+		return data, OriginalZIPGoMod, err
+	}
+	if proof == nil {
+		return nil, "", fmt.Errorf("original ZIP lacks go.mod and authenticated legacy proxy metadata")
+	}
+	if _, err := os.Lstat(goMod); !os.IsNotExist(err) {
+		return nil, "", fmt.Errorf("legacy metadata requires an absent original go.mod path: %v", err)
+	}
+	if err := golegacymod.ValidateProxyGoMod(proof); err != nil {
+		return nil, "", err
+	}
+	data, err := set.files.ReadRetained(receipt.GoMod)
+	if err != nil {
+		return nil, "", err
+	}
+	if proof.Module != path || proof.Version != version || proof.ModuleSum != receipt.Sum ||
+		proof.GoModSum != receipt.GoModSum || proof.SHA256 != set.files.hashes[receipt.GoMod] ||
+		proof.Contents != string(data) {
+		return nil, "", fmt.Errorf("legacy proxy metadata differs from exact original ZIP/download identity")
+	}
+	return data, golegacymod.ProxyGoModProtocol, nil
 }
 
 func (set *OriginSet) retainCacheDirectory(name string) error {

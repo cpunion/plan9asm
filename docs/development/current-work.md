@@ -93,12 +93,20 @@ roots and final vet pass, retaining Go's distinct SB role. The last actual Go
 1.20 family rerun also passes all eight roots. Original exact-version replay
 still owns candidate closure.
 No external library was compiled locally and no ledger status changed.
-Read-only triage also found seven original-ZIP/go.mod comparison failures. A
-bounded public-proxy directory read confirms that the exact bford/golang-x-crypto
-archive has no root go.mod, while its separate metadata is a module directive.
-This is diagnostic evidence, not complete archive authentication or a frame
-source role. The other six originals still need inspection. Reuse the existing
-signed legacy-proxy mechanism; never introduce an unchecked metadata fallback.
+Seven CI candidates stop at the original-ZIP/go.mod comparison. The repair
+branch `codex/pr40-legacy-module-origin-20261011` shares the existing public
+SumDB signature/inclusion implementation with the whole-ZIP observer. An
+absent root go.mod now has a distinct authenticated metadata role, never a
+copied ZIP member or fabricated main package. Actual canonical cache paths,
+full ZIP/tree hashes and permanent mutation revocation remain checked.
+Source-only exact aez inspection reproduced the old failure and passed the
+new observation/authentication/revocation checks without compiling external
+code; logs remain under `_out/legacy-module-origin/`. First-party metadata,
+source-origin and consumer-role regressions retain their RED/GREEN evidence.
+This closes the metadata layer only: legacy primary modules still need a
+separately owned exact-version dependency query. They remain failed until
+that compiler/source/object consumer and remote exact-version replay pass.
+No assembly-ledger status is promoted by this component repair.
 
 The integration tree remains the historical `aedfac9b` snapshot. Its old
 `_out/ci-closure/publish-after-ci.sh` already completed publication and is not

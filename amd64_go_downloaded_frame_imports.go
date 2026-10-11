@@ -7,6 +7,7 @@ import (
 	"io"
 	"path/filepath"
 
+	"github.com/xgo-dev/plan9asm/internal/golegacymod"
 	"github.com/xgo-dev/plan9asm/internal/gooriginalsrc"
 )
 
@@ -87,6 +88,9 @@ func (source *GoAMD64FrameSource) downloadedDeclarationDirectory(selected goAMD6
 		actual.GoVersion != gooriginalsrc.SelectedGoVersion(original.GoVersion, actual.Main) ||
 		metadata != original.GoMod && metadata != filepath.Join(original.Root, "go.mod") {
 		return "", goAMD64FrameContext("declaration dependency differs from its original module metadata")
+	}
+	if original.GoModOrigin == golegacymod.ProxyGoModProtocol && (actual.Main || metadata != original.GoMod) {
+		return "", goAMD64FrameContext("legacy proxy metadata requires its exact dependency role")
 	}
 	directory, err := filepath.EvalSymlinks(selected.Dir)
 	if err != nil {

@@ -849,6 +849,13 @@ requires the frame factory's own exact Go-download/whole-ZIP observation,
 canonical module/package/metadata/language identity and complete compiler
 source/export consumption. Replacements and unobserved version changes fail;
 restoring changed dependency bytes cannot revive a revoked observation.
+An archive without go.mod may retain canonical proxy metadata only through
+the shared public SumDB signature and record-inclusion verifier, bound to the
+actual exact ZIP h1, metadata h1 and bytes. It remains external metadata,
+never an invented ZIP member or a cache-CWD main module. Full ZIP/tree checks
+and permanent mutation revocation remain required. A legacy primary still
+needs its separately owned dependency query before any frame capability;
+metadata authentication alone does not close that missing consumer.
 The source-role extension grants no new native instruction/memory effects or
 dynamic-frame permission. Keep the original Go objects and three-API LLVM 22
 O0/O2 objects on all AMD64 targets separate from external-library success.

@@ -72,6 +72,9 @@ func writeOriginalZIPFixture(t *testing.T, name, key string, files map[string][]
 	var output bytes.Buffer
 	writer := zip.NewWriter(&output)
 	for _, member := range []string{"go.mod", "value.s"} {
+		if _, present := files[member]; !present {
+			continue
+		}
 		entry, err := writer.CreateHeader(&zip.FileHeader{Name: key + "/" + member, Method: zip.Deflate})
 		if err != nil {
 			t.Fatal(err)

@@ -6,10 +6,12 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"os"
 	"path/filepath"
 	"time"
 
 	"github.com/xgo-dev/plan9asm/internal/goasmcmd"
+	"github.com/xgo-dev/plan9asm/internal/golegacymod"
 	"github.com/xgo-dev/plan9asm/internal/gooriginalsrc"
 	"golang.org/x/mod/module"
 )
@@ -93,7 +95,19 @@ func (source *GoAMD64FrameSource) observeDownloadedModule(ctx context.Context, o
 	if decoder.Decode(&extra) != io.EOF {
 		return gooriginalsrc.Module{}, goAMD64FrameContext("actual exact download receipt has incomplete or additional JSON")
 	}
-	original, err := origins.Observe(ctx, exact.module, exact.version, receipt)
+	var proxyMetadata *golegacymod.ProxyGoModProof
+	if _, err := os.Lstat(filepath.Join(receipt.Dir, "go.mod")); os.IsNotExist(err) {
+		// Source capture pins GOPROXY=off, but authenticated public checksum
+		// metadata remains independently readable. This neither creates a ZIP
+		// member nor turns a legacy dependency into an original main module.
+		proxyMetadata, _, err = golegacymod.CaptureCachedProxyGoMod(commandContext,
+			source.env["GOMODCACHE"], "off", exact.module, exact.version,
+			receipt.Sum, receipt.GoModSum, receipt.GoMod, nil)
+		if err != nil {
+			return gooriginalsrc.Module{}, err
+		}
+	}
+	original, err := origins.ObserveLegacy(ctx, exact.module, exact.version, receipt, proxyMetadata)
 	if err != nil {
 		return gooriginalsrc.Module{}, errors.Join(goAMD64FrameContext("exact original archive/source is not closed"), err)
 	}
