@@ -90,6 +90,22 @@ still need their required owners: Rosetta does not reproduce the precision
 trap, and QEMU's diagnostic AVX-512 attempt failed its ISA execution. Neither
 failure is reclassified as a pass or a source rejection.
 
+The independent exported SSE fault program passed on native Linux x86_64;
+this is not a complete native CI-owner receipt. The seven legacy packed moves
+now distinguish logical FP fields from native alignment on both reads and
+writes. Packed FP stores use complete byte-field writes too: an executed
+four-uint32 return regression previously produced 3 instead of 2 in field one.
+The complete move-family tests pass on Go 1.27.2 and focused Go 1.20.14 tests,
+including three APIs, five-target objects and O0/O2 tuple-result execution.
+
+The monolithic `41d50b0d` root run exhausted its 45-minute budget; cascading
+deadline errors are infrastructure failures, not instruction rejections.
+`gotoolprofile` and `cmd/plan9asmtest` full suites passed in that snapshot.
+Two internal packages also exposed stale authenticated-fixture paths after
+the profile migration; both are repaired and their full suites pass. Use the
+exhaustive partition runner for the next complete root receipt. The timeout
+report remains failed and cannot certify the current head.
+
 The migration PR is draft. Its historical assembly ledger remains incomplete;
 this does not change translator coverage or certify any external module.
 The split is already published to PR 40. Verify the new repairs with focused
