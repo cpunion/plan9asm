@@ -144,6 +144,11 @@ bounded raw-literal proof separate from ordinary native reads. See Intel's
 [PSHUFB instruction reference](https://cdrdv2-public.intel.com/789581/325383-sdm-vol-2abcd.pdf)
 and [E4NF exception tables](https://cdrdv2-public.intel.com/858446/253666-088-sdm-vol-2a.pdf).
 
+The main instruction dispatcher and legacy vector entry must both delegate to
+that same complete byte-shuffle lowerer, including handled errors before IR.
+Keep direct-dispatch tests as well as public API tests when extracting a family;
+an old helper entry cannot silently fall through after its switch body moves.
+
 The private x86 raw decoder hands off actual physical memory operands without
 reinterpreting formatter DS/ES/FS/GS or RIP spellings as public Go source
 register groups. Only actual `PrefixIgnored` metadata permits removing a

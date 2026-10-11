@@ -6,39 +6,45 @@ import (
 )
 
 func TestTranslateAMD64SegmentMemory(t *testing.T) {
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM 22 llc required")
+	}
 	src := `
-TEXT loadGS(SB),NOSPLIT,$0-0
+TEXT ·loadGS(SB),4,$0-0
 	MOVQ 0x30(GS), DI
 	MOVQ DI, 0(CX)(GS)
 	MOVQ -8(FS), AX
 	RET
 `
-	file, err := Parse(ArchAMD64, src)
-	if err != nil {
-		t.Fatal(err)
-	}
-	ir, err := Translate(file, Options{
-		TargetTriple: "x86_64-pc-windows-msvc",
-		Sigs: map[string]FuncSig{
-			"loadGS": {Name: "loadGS", Ret: Void},
-		},
-		Goarch: "amd64",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, want := range []string{
-		"load i64, ptr addrspace(256)",
-		"store i64",
-		"ptr addrspace(256)",
-		"load i64, ptr addrspace(257)",
-	} {
-		if !strings.Contains(ir, want) {
-			t.Fatalf("segment-relative output missing %q:\n%s", want, ir)
-		}
-	}
-	if strings.Contains(ir, "0x30(GS)") {
-		t.Fatalf("segment-relative memory was emitted as a symbol:\n%s", ir)
+	triple := "x86_64-pc-windows-msvc"
+	x86LEAActualTargetGoObject(t, "amd64", triple, src)
+	for _, api := range []string{"text", "module", "Go"} {
+		t.Run(api, func(t *testing.T) {
+			ir, err := x86ScalarFPBitViewAPI(t, src, "func loadGS()", "amd64", triple, api)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, optimized := range []bool{false, true} {
+				output, name := ir, "segment"
+				if optimized {
+					output, name = x86MulDivRoundOptimize(t, ir), "segment-optimized"
+				}
+				for _, want := range []string{
+					"load volatile i64, ptr addrspace(256)",
+					"store i64",
+					"load volatile i64, ptr addrspace(257)",
+				} {
+					if !strings.Contains(output, want) {
+						t.Fatalf("segment-relative output missing %q:\n%s", want, output)
+					}
+				}
+				if strings.Contains(output, "0x30(GS)") {
+					t.Fatalf("segment-relative memory was emitted as a symbol:\n%s", output)
+				}
+				compileLLVMToObject(t, llc, triple, name+".ll", name+".o", output)
+			}
+		})
 	}
 }
 

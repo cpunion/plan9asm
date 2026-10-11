@@ -153,3 +153,44 @@ func TestX86ByteShuffleInvalidFormsAndSourceIdentity(t *testing.T) {
 		}
 	}
 }
+
+func TestX86ByteShuffleVectorDispatcherUsesCompleteGrammar(t *testing.T) {
+	for _, row := range []string{
+		"PSHUFB Y0,X0", "PSHUFB X0", "PSHUFB.Z X0,X1",
+		"VPSHUFB Y0,Y1,AX", "VPSHUFB X0,Y1,Y2",
+		"VPSHUFB X0,X1,K0,X2", "VPSHUFB.BCST (AX),X1,X2",
+	} {
+		goAssemblerOracleOutput(t, "amd64", "TEXT f(SB),4,$0-0\n"+row+"\nRET\n", "", false)
+		for _, keepOpcode := range []bool{false, true} {
+			ins := x86ScalarLaneInstruction(t, row)
+			op := ins.Op
+			if !keepOpcode {
+				ins.Op = ""
+			}
+			var output strings.Builder
+			ctx := amd64Ctx{goarch: "amd64", b: &output}
+			known, terminated, err := ctx.lowerVec(op, ins)
+			if !known || terminated || err == nil || output.Len() != 0 {
+				t.Fatalf("vector dispatcher bypassed byte-shuffle grammar for %q: (%v, %v, %v), IR %q", row, known, terminated, err, output.String())
+			}
+		}
+	}
+	for _, row := range []string{
+		"PSHUFB X0,X1", "VPSHUFB X0,X1,X2", "VPSHUFB Y0,Y1,Y2",
+		"VPSHUFB Z0,Z1,Z2", "VPSHUFB X0,X1,K7,X2", "VPSHUFB.Z Z0,Z1,K7,Z2",
+	} {
+		ins := x86ScalarLaneInstruction(t, row)
+		function := Func{Instrs: []Instr{ins}}
+		family, familyOutput := newAMD64CtxWithFuncForTest(t, function, FuncSig{Name: "shuffle", Ret: Void}, nil)
+		dispatch, dispatchOutput := newAMD64CtxWithFuncForTest(t, function, FuncSig{Name: "shuffle", Ret: Void}, nil)
+		if known, terminated, err := family.lowerPackedByteShuffle(ins.Op, ins); !known || terminated || err != nil {
+			t.Fatal("independent family entry", row, known, terminated, err)
+		}
+		if known, terminated, err := dispatch.lowerVec(ins.Op, ins); !known || terminated || err != nil {
+			t.Fatal("vector family entry", row, known, terminated, err)
+		}
+		if familyOutput.String() != dispatchOutput.String() {
+			t.Fatal("vector dispatcher changed the family's emitted effects", row)
+		}
+	}
+}

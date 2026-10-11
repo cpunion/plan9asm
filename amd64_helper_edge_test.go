@@ -2015,7 +2015,7 @@ func TestAMD64VectorAliasAndErrorCoverage(t *testing.T) {
 		{"VPCOMPRESSQ", Instr{Raw: "VPCOMPRESSQ Z0, AX, Z1", Args: []Operand{{Kind: OpReg, Reg: Reg("Z0")}, {Kind: OpReg, Reg: AX}, {Kind: OpReg, Reg: Reg("Z1")}}}, "wrong mask", true},
 		{"VPCOMPRESSQ", Instr{Raw: "VPCOMPRESSQ Z0, K1, Y0", Args: []Operand{{Kind: OpReg, Reg: Reg("Z0")}, {Kind: OpReg, Reg: Reg("K1")}, {Kind: OpReg, Reg: Reg("Y0")}}}, "wrong dst", true},
 		{"VPXORQ", Instr{Raw: "VPXORQ Z0, Z1, Y0", Args: []Operand{{Kind: OpReg, Reg: Reg("Z0")}, {Kind: OpReg, Reg: Reg("Z1")}, {Kind: OpReg, Reg: Reg("Y0")}}}, "wrong z dst", true},
-		{"VPSHUFB", Instr{Raw: "VPSHUFB Y0, Y1, AX", Args: []Operand{{Kind: OpReg, Reg: Reg("Y0")}, {Kind: OpReg, Reg: Reg("Y1")}, {Kind: OpReg, Reg: AX}}}, "wrong dst", false},
+		{"VPSHUFB", Instr{Raw: "VPSHUFB Y0, Y1, AX", Args: []Operand{{Kind: OpReg, Reg: Reg("Y0")}, {Kind: OpReg, Reg: Reg("Y1")}, {Kind: OpReg, Reg: AX}}}, "wrong dst", true},
 		{"VPSHUFD", Instr{Raw: "VPSHUFD $1, X0, Y0", Args: []Operand{{Kind: OpImm, Imm: 1}, {Kind: OpReg, Reg: Reg("X0")}, {Kind: OpReg, Reg: Reg("Y0")}}}, "wrong src class", true},
 		{"VPSLLD", Instr{Raw: "VPSLLD Y0, Y1", Args: []Operand{{Kind: OpReg, Reg: Reg("Y0")}, {Kind: OpReg, Reg: Reg("Y1")}}}, "short form", true},
 		{"VPERM2I128", Instr{Raw: "VPERM2I128 $1, Y0, Y1, X0", Args: []Operand{{Kind: OpImm, Imm: 1}, {Kind: OpReg, Reg: Reg("Y0")}, {Kind: OpReg, Reg: Reg("Y1")}, {Kind: OpReg, Reg: Reg("X0")}}}, "wrong dst", true},

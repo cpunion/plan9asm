@@ -58,6 +58,9 @@ func (c *amd64Ctx) lowerVec(op Op, ins Instr) (ok bool, terminated bool, err err
 	if ok, term, err := c.lowerPackedWordShuffle(rawOp, ins); ok {
 		return ok, term, err
 	}
+	if ok, term, err := c.lowerPackedByteShuffle(rawOp, ins); ok {
+		return ok, term, err
+	}
 	if ok, term, err := c.lowerPackedBitCount(rawOp, ins); ok {
 		return ok, term, err
 	}
