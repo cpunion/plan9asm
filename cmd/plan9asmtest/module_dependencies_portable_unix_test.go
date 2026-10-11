@@ -19,10 +19,7 @@ func TestModuleActualDependencyArtifactsSurviveProducerOriginRemoval(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	configBinary, err := exec.LookPath(os.Getenv("LLVM_CONFIG"))
-	if err != nil {
-		t.Fatal(err)
-	}
+	configBinary := moduleFixtureLLVMConfig(t)
 	// llvm-config reports its physical relocatable prefix. Keep the fixture's
 	// own installation in that same namespace, including Darwin's /var alias.
 	producerRoot, err := filepath.EvalSymlinks(t.TempDir())

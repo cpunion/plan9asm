@@ -114,14 +114,7 @@ func captureCIScope(ctx context.Context, cfg config, stem string) (ciScope, erro
 		}
 		bindir := ""
 		if os.Getenv("LLVM_CONFIG") != "" || cfg.Module {
-			requested := os.Getenv("LLVM_CONFIG")
-			if requested == "" {
-				requested = "llvm-config"
-				if versioned, err := exec.LookPath("llvm-config-22"); err == nil {
-					requested = versioned
-				}
-			}
-			configPath, err := exec.LookPath(requested)
+			configPath, err := resolveCIConfigExecutable()
 			if err != nil {
 				return scope, err
 			}

@@ -198,10 +198,7 @@ func TestModuleActualCLIRejectsMissingNodeConsumer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	llvmConfig, err := exec.LookPath(os.Getenv("LLVM_CONFIG"))
-	if err != nil {
-		t.Fatal(err)
-	}
+	llvmConfig := moduleFixtureLLVMConfig(t)
 	git, err := exec.LookPath("git")
 	if err != nil {
 		t.Fatal(err)

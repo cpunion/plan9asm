@@ -93,10 +93,7 @@ func TestModuleRelocatedProducerDoesNotMutateHostTools(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	configBinary, err := exec.LookPath(os.Getenv("LLVM_CONFIG"))
-	if err != nil {
-		t.Fatal(err)
-	}
+	configBinary := moduleFixtureLLVMConfig(t)
 	cfg := config{Go: goBinary, Timeout: 2 * time.Minute}
 	data, err := moduleDependencyCommand(context.Background(), cfg,
 		filepath.Join(t.TempDir(), "actual-host-libraries"), configBinary, "--libfiles", "--link-shared")
