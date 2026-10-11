@@ -75,6 +75,25 @@ func TestCrossLinuxRuntimeMatrixX86SignedPackedIntegerFloatSSE(t *testing.T) {
 
 func runX86SignedPackedIntegerFloatNativeReadAndPrecisionFaults(t *testing.T) {
 	llc, clang, triple, prefix := x86FloatAddSubRuntimeTools(t)
+	ir := x86SignedPackedIntegerFloatFaultIR(t, triple)
+	compileAndRunRuntimeTestForTarget(t, llc, clang, "signed-packed-native-fault", triple, ir, x86SignedPackedFloatFaultOracle, prefix)
+}
+
+func TestX86SignedPackedIntegerFloatFaultEffectsObjects(t *testing.T) {
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM 22 llc required")
+	}
+	for _, triple := range []string{"x86_64-unknown-linux-gnu", "x86_64-apple-darwin", "x86_64-pc-windows-msvc"} {
+		t.Run(triple, func(t *testing.T) {
+			ir := x86SignedPackedIntegerFloatFaultIR(t, triple)
+			compileLLVMToObject(t, llc, triple, "signed-packed-fault.ll", "signed-packed-fault.o", ir)
+		})
+	}
+}
+
+func x86SignedPackedIntegerFloatFaultIR(t *testing.T, triple string) string {
+	t.Helper()
 	var source strings.Builder
 	sigs := map[string]FuncSig{}
 	for _, tc := range []struct{ name, op string }{{"packedPS", "CVTPL2PS"}, {"packedPD", "CVTPL2PD"}, {"packedDeadPS", "CVTPL2PS"}} {
@@ -97,10 +116,18 @@ func runX86SignedPackedIntegerFloatNativeReadAndPrecisionFaults(t *testing.T) {
 		t.Fatal(err)
 	}
 	ir = x86SignedIntegerFloatOptimize(t, ir)
-	if strings.Count(ir, "asm sideeffect") != 3 {
-		t.Fatal("dead conversion lost native precision or memory faults")
+	// Native output moves are side effects too. Count the conversion family,
+	// not unrelated stores, while requiring the dead conversion to survive O2.
+	for _, function := range []struct{ name, opcode string }{
+		{"packedPS", "cvtdq2ps"}, {"packedPD", "cvtdq2pd"}, {"packedDeadPS", "cvtdq2ps"},
+	} {
+		_, body, found := strings.Cut(ir, "define void @"+function.name+"(")
+		body, _, ended := strings.Cut(body, "\n}")
+		if !found || !ended || strings.Count(body, `asm sideeffect "`+function.opcode+` `) != 1 {
+			t.Fatalf("%s lost its native precision or memory faults:\n%s", function.name, ir)
+		}
 	}
-	compileAndRunRuntimeTestForTarget(t, llc, clang, "signed-packed-native-fault", triple, ir, x86SignedPackedFloatFaultOracle, prefix)
+	return ir
 }
 
 // Both the native-fault oracle and its non-faulting resource test execute
