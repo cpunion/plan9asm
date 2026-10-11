@@ -232,12 +232,18 @@ func captureGoAMD64FrameSource(ctx context.Context, pkg GoPackage, request GoAMD
 	if source.downloadedModule != nil {
 		moduleRoot = source.downloadedModule.Root
 	}
+	mainRole, moduleVersion := true, ""
+	metadata := filepath.Join(moduleRoot, "go.mod")
+	if source.legacyDownloadedModule() {
+		mainRole, moduleVersion = false, source.downloadedModule.SourceVersion
+		metadata = source.downloadedModule.GoMod
+	}
 	if selected.Dir != request.Directory || selected.ImportPath != pkg.Path || selected.ForTest != "" || selected.Module == nil ||
-		!selected.Module.Main || selected.Module.Version != "" || selected.Module.Dir != moduleRoot || len(selected.Module.Replace) != 0 && string(selected.Module.Replace) != "null" ||
+		selected.Module.Main != mainRole || selected.Module.Version != moduleVersion || selected.Module.Dir != moduleRoot || len(selected.Module.Replace) != 0 && string(selected.Module.Replace) != "null" ||
 		selected.nonordinaryRole() || len(selected.GoFiles) == 0 || len(selected.SFiles) == 0 {
 		return nil, goAMD64FrameContext("capture needs complete ordinary original module sources")
 	}
-	if selected.Module.GoMod != filepath.Join(moduleRoot, "go.mod") {
+	if selected.Module.GoMod != metadata {
 		return nil, goAMD64FrameContext("actual module metadata is outside the original source directory")
 	}
 	if source.downloadedModule != nil {
@@ -246,7 +252,7 @@ func captureGoAMD64FrameSource(ctx context.Context, pkg GoPackage, request GoAMD
 		if err != nil {
 			return nil, err
 		}
-		if selected.Module.Path != original.ModulePath || selected.Module.GoVersion != gooriginalsrc.SelectedGoVersion(original.GoVersion, true) ||
+		if selected.Module.Path != original.ModulePath || selected.Module.GoVersion != gooriginalsrc.SelectedGoVersion(original.GoVersion, mainRole) ||
 			selected.ImportPath != path {
 			return nil, goAMD64FrameContext("exact downloaded capture requires its original primary module package")
 		}
@@ -582,7 +588,13 @@ func (source *GoAMD64FrameSource) run(ctx context.Context, args ...string) ([]by
 	}
 	ctx, cancel := context.WithTimeout(ctx, time.Minute)
 	defer cancel()
-	output, err := goasmcmd.Run(ctx, source.request.Directory, source.request.Environment, source.request.GoBinary, args...)
+	var output []byte
+	var err error
+	if source.legacyDownloadedModule() && len(args) > 0 && args[0] == "list" {
+		output, err = source.runDownloadedList(ctx, args)
+	} else {
+		output, err = goasmcmd.Run(ctx, source.request.Directory, source.request.Environment, source.request.GoBinary, args...)
+	}
 	if source.numericalCapturing {
 		source.numericalCommands = append(source.numericalCommands, numericalSBCommand{
 			Directory: source.request.Directory, Binary: source.request.GoBinary,
@@ -842,7 +854,11 @@ func (source *GoAMD64FrameSource) typedDeclarationsForArch(pkg GoPackage, numeri
 		}
 		return io.NopCloser(bytes.NewReader(data)), nil
 	})
-	typed, err := (&types.Config{Sizes: sizes, Importer: actualImporter}).Check(pkg.Path, fset, syntax, nil)
+	config := &types.Config{Sizes: sizes, Importer: actualImporter}
+	if source.legacyDownloadedModule() {
+		config.GoVersion = "go1.16"
+	}
+	typed, err := config.Check(pkg.Path, fset, syntax, nil)
 	if err != nil {
 		return nil, err
 	}

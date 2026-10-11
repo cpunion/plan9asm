@@ -853,9 +853,18 @@ An archive without go.mod may retain canonical proxy metadata only through
 the shared public SumDB signature and record-inclusion verifier, bound to the
 actual exact ZIP h1, metadata h1 and bytes. It remains external metadata,
 never an invented ZIP member or a cache-CWD main module. Full ZIP/tree checks
-and permanent mutation revocation remain required. A legacy primary still
-needs its separately owned dependency query before any frame capability;
-metadata authentication alone does not close that missing consumer.
+and permanent mutation revocation remain required. A legacy primary uses a
+separately owned exact-version dependency query, not cache-CWD main inference.
+Its private metadata preparation can resolve only versions already in the
+observed download cache's file-proxy index; disable direct/network fallback.
+Only registered stock-Go resolution progress is permitted during preparation.
+Then freeze that private configuration and repeat the complete actual query
+read-only; unknown diagnostics, changed pins, replacements and query/cleanup
+failures remain errors. Retain the dependency's absent GoVersion metadata and
+the compiler's implicit Go 1.16 language, not the query main's language.
+Both frame factories still independently check every selected exact ZIP,
+original source, compiler export and object. The temporary query provides no
+numerical-command, memory, native-entry or source-exclusion permission.
 The source-role extension grants no new native instruction/memory effects or
 dynamic-frame permission. Keep the original Go objects and three-API LLVM 22
 O0/O2 objects on all AMD64 targets separate from external-library success.

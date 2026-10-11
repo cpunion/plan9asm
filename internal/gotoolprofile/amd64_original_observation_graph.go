@@ -39,7 +39,7 @@ func captureAMD64OriginalGraph(ctx context.Context, request AMD64OriginalObserva
 	if export {
 		args = append(args, "-export")
 	}
-	stdout, stderr, err := run(ctx, request.Directory, request.Environment, request.GoBinary, append(args, request.PackagePath)...)
+	stdout, stderr, err := downloaded.runList(ctx, request, run, append(args, request.PackagePath)...)
 	if err != nil || len(stderr) != 0 || len(stdout) == 0 || len(stdout) > commandOutputLimit {
 		return nil, fmt.Errorf("actual original Go graph failed: %v; %s", err, stderr)
 	}
@@ -65,7 +65,9 @@ func captureAMD64OriginalGraph(ctx context.Context, request AMD64OriginalObserva
 		packages[pkg.ImportPath] = pkg
 	}
 	selected, present := packages[request.PackagePath]
-	if !present || selected.Standard || selected.Module == nil || !selected.Module.Main || selected.Module.Version != "" || selected.Module.Replace != nil {
+	legacy := downloaded != nil && downloaded.primary.legacy()
+	if !present || selected.Standard || selected.Module == nil || selected.Module.Replace != nil ||
+		!legacy && (!selected.Module.Main || selected.Module.Version != "") {
 		return nil, fmt.Errorf("%w: original observation needs an owned main, not external/foreign/SDK source identity", plan9asm.ErrProbeNeedsContext)
 	}
 	module := selected.Module
@@ -79,17 +81,21 @@ func captureAMD64OriginalGraph(ctx context.Context, request AMD64OriginalObserva
 			return nil, err
 		}
 		if relative, err := filepath.Rel(physical, root); err == nil && filepath.IsLocal(relative) {
-			if downloaded != nil && forbidden != actual["GOROOT"] && downloaded.primary.matches(module, true) {
+			if downloaded != nil && forbidden != actual["GOROOT"] && downloaded.primary.matchesPrimary(module) {
 				continue
 			}
 			return nil, fmt.Errorf("%w: cached external or SDK source cannot acquire an owned-main role", plan9asm.ErrProbeNeedsContext)
 		}
 	}
-	if downloaded != nil && !downloaded.primary.matches(module, true) {
+	if downloaded != nil && !downloaded.primary.matchesPrimary(module) {
 		return nil, fmt.Errorf("actual primary source differs from the exact original download handoff")
 	}
 	goMod, err := filepath.EvalSymlinks(module.GoMod)
-	if err != nil || goMod != filepath.Join(root, "go.mod") {
+	wantedGoMod := filepath.Join(root, "go.mod")
+	if legacy {
+		wantedGoMod = downloaded.primary.goMod
+	}
+	if err != nil || goMod != wantedGoMod {
 		return nil, fmt.Errorf("actual main module lost its original go.mod")
 	}
 	if err := files.retain(goMod); err != nil {
@@ -107,7 +113,7 @@ func captureAMD64OriginalGraph(ctx context.Context, request AMD64OriginalObserva
 	if parsed.Go != nil {
 		declaredVersion = parsed.Go.Version
 	}
-	if gooriginalsrc.SelectedGoVersion(declaredVersion, true) != module.GoVersion {
+	if gooriginalsrc.SelectedGoVersion(declaredVersion, !legacy) != module.GoVersion {
 		return nil, fmt.Errorf("%w: actual module language is not closed by its original go.mod", plan9asm.ErrProbeNeedsContext)
 	}
 	if err := files.directory(root, false); err != nil {
@@ -238,6 +244,9 @@ func checkAMD64OriginalDeclarations(packages map[string]amd64OriginalListPackage
 		return os.Open(dependency.Export)
 	})
 	version := "go" + pkg.Module.GoVersion // Independently matched to original go.mod.
+	if pkg.Module.GoVersion == "" {
+		version = "go1.16" // Actual dependency default, not the query main's language.
+	}
 	typed, err := (&types.Config{Importer: actualImporter, Sizes: types.SizesFor("gc", "amd64"), GoVersion: version}).Check(path, set, syntax, nil)
 	if err != nil {
 		return nil, fmt.Errorf("original full compiler-source typecheck failed: %w", err)

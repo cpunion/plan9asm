@@ -109,10 +109,21 @@ Source-only exact aez inspection reproduced the old failure and passed the
 new observation/authentication/revocation checks without compiling external
 code; logs remain under `_out/legacy-module-origin/`. First-party metadata,
 source-origin and consumer-role regressions retain their RED/GREEN evidence.
-This closes the metadata layer only: legacy primary modules still need a
-separately owned exact-version dependency query. They remain failed until
-that compiler/source/object consumer and remote exact-version replay pass.
-No assembly-ledger status is promoted by this component repair.
+Legacy primary queries now run from independent exact-version modules, using
+only the existing cache's file-proxy index. A separate metadata-preparation
+phase accepts registered Go module-resolution progress, then the actual
+read-only query retains its original dependency role, implicit Go 1.16 language
+and exact original package directory. Both frame factories independently
+observe the complete actual source/export graph; the query grants no frame or
+numerical permission. Actual aez source-only inspection reproduces both the
+cache-CWD and GOPROXY=off failures and passes the cache-only query, without
+compiling external code. First-party query and source-origin race tests,
+actual Go 1.20 checks and vet pass. All 32 broader current-Go original-source,
+LLVM 22 object and numerical roots pass without failures/skips (640 seconds
+for the profile package). The independent query-repeat check also preserves
+compiler exports across fresh temporary boundaries. Rosetta numerical results
+are not native Linux execution. Original external compiler/object replay remains
+required: no affected library or assembly-ledger status is promoted here.
 
 The integration tree remains the historical `aedfac9b` snapshot. Its old
 `_out/ci-closure/publish-after-ci.sh` already completed publication and is not

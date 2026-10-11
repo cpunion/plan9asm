@@ -81,7 +81,7 @@ func captureAMD64DownloadedSources(ctx context.Context, request AMD64DownloadedO
 		return nil, err
 	}
 	sources.primary = primary
-	data, stderr, err := run(ctx, original.Directory, original.Environment, original.GoBinary,
+	data, stderr, err := sources.runList(ctx, original, run,
 		"list", "-deps", "-compiled", "-json", "-mod=readonly", original.PackagePath)
 	if err != nil || len(stderr) != 0 || len(data) == 0 || len(data) > commandOutputLimit {
 		return nil, fmt.Errorf("actual downloaded source graph failed: %v; %s", err, stderr)
@@ -101,7 +101,7 @@ func captureAMD64DownloadedSources(ctx context.Context, request AMD64DownloadedO
 		seen[pkg.ImportPath] = true
 		if pkg.ImportPath == original.PackagePath {
 			selected = true
-			if !primary.matches(pkg.Module, true) {
+			if !primary.matchesPrimary(pkg.Module) {
 				return nil, fmt.Errorf("downloaded primary source differs from actual original package role")
 			}
 		}
@@ -186,6 +186,35 @@ func (sources *amd64DownloadedSources) verify() error {
 		return fmt.Errorf("missing exact downloaded source observation")
 	}
 	return sources.origins.Verify()
+}
+
+func (source *amd64DownloadedModule) legacy() bool {
+	return source != nil && source.goModOrigin == ProxyGoModProtocol
+}
+
+func (source *amd64DownloadedModule) matchesPrimary(actual *amd64OriginalListModule) bool {
+	return source.matches(actual, !source.legacy())
+}
+
+func (sources *amd64DownloadedSources) runList(ctx context.Context, request AMD64OriginalObservationRequest,
+	run Runner, args ...string,
+) (stdout, stderr []byte, result error) {
+	if sources == nil || !sources.primary.legacy() {
+		return run(ctx, request.Directory, request.Environment, request.GoBinary, args...)
+	}
+	if len(args) == 0 || args[0] != "list" {
+		return nil, nil, fmt.Errorf("legacy source query must retain its actual list command")
+	}
+	env, err := gooriginalsrc.DependencyQueryEnvironment(request.Environment)
+	if err != nil {
+		return nil, nil, err
+	}
+	stdout, result = gooriginalsrc.RunDependencyList(ctx,
+		originalObservationEnvironment(request.Environment, "GOTMPDIR"),
+		sources.primary.sourceModule, sources.primary.sourceVersion, args, func(directory string, arguments []string) ([]byte, []byte, error) {
+			return run(ctx, directory, env, request.GoBinary, arguments...)
+		})
+	return stdout, stderr, result
 }
 
 func (source *amd64DownloadedModule) matches(actual *amd64OriginalListModule, primary bool) bool {

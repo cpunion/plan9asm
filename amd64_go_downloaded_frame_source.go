@@ -57,7 +57,39 @@ func (source *GoAMD64FrameSource) captureDownloadedOrigin(ctx context.Context, e
 		return err
 	}
 	source.downloadedOrigin, source.downloadedModule = origins, &original
+	source.downloadedImports = map[string]gooriginalsrc.Module{original.SourceModule + "@" + original.SourceVersion: original}
 	return source.verifyDownloadedOrigin()
+}
+
+func (source *GoAMD64FrameSource) legacyDownloadedModule() bool {
+	return source.downloadedModule != nil && source.downloadedModule.GoModOrigin == golegacymod.ProxyGoModProtocol
+}
+
+func (source *GoAMD64FrameSource) runDownloadedList(ctx context.Context, args []string) ([]byte, error) {
+	if source.numericalBinding != nil {
+		return nil, goAMD64FrameContext("legacy dependency query needs its separate numerical-command binding")
+	}
+	original := source.downloadedModule
+	path, err := goAMD64DownloadedPackagePath(*original, source.request.Directory)
+	if err != nil {
+		return nil, err
+	}
+	env, err := gooriginalsrc.DependencyQueryEnvironment(source.request.Environment)
+	if err != nil {
+		return nil, err
+	}
+	arguments := append([]string(nil), args...)
+	for index, argument := range arguments {
+		switch argument {
+		case ".":
+			arguments[index] = path
+		}
+	}
+	return gooriginalsrc.RunDependencyList(ctx, source.env["GOTMPDIR"],
+		original.SourceModule, original.SourceVersion, arguments, func(directory string, arguments []string) ([]byte, []byte, error) {
+			observed, err := goasmcmd.Observe(ctx, directory, env, source.request.GoBinary, arguments...)
+			return observed.Stdout, observed.Stderr, err
+		})
 }
 
 func (source *GoAMD64FrameSource) observeDownloadedModule(ctx context.Context, origins *gooriginalsrc.OriginSet,
