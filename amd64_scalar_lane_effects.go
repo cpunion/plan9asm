@@ -1,7 +1,7 @@
 package plan9asm
 
-// These are defined-byte effects only. Native reads still require the existing
-// caller-region proof; result reads still require owned initialized FP/AUTO.
+// These are defined-byte effects only. Caller-region native reads retain their
+// independent bounds proof; declaration-only results require initialized bytes.
 func x86CallerScalarLaneStep(ins *Instr, f x86ScalarLaneForm, state *x86SourceStackState, proof *x86GoCallerRegionProof) bool {
 	width := int64(f.bits / 8)
 	if f.memory >= 0 && !x86CallerOrdinaryMemoryStep(ins, f.memory, state, proof, width, !f.insert) {
@@ -33,6 +33,10 @@ func x86CallerScalarLaneStep(ins *Instr, f x86ScalarLaneForm, state *x86SourceSt
 }
 
 func x86ResultScalarLaneStep(ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string) (bool, bool) {
+	return x86ResultScalarLaneStepWithRead(ins, state, owned, resultOffset, arch, false)
+}
+
+func x86ResultScalarLaneStepWithRead(ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string, conditionalNativeRead bool) (bool, bool) {
 	f, known, err := x86ScalarLaneProperties(ins, arch)
 	if !known {
 		// Scalar and block transfers share the validated imm8/source/target
@@ -47,7 +51,7 @@ func x86ResultScalarLaneStep(ins Instr, state *x86ResultState, owned []bool, res
 		if !ps.spec.scalar {
 			return x86ResultBlockTransfer(ins, ps, state, owned, resultOffset, arch), true
 		}
-		return x86ResultScalarPSLaneStep(ins, ps, state, owned, resultOffset, arch), true
+		return x86ResultScalarPSLaneStep(ins, ps, state, owned, resultOffset, arch, conditionalNativeRead), true
 	}
 	if err != nil {
 		return false, true
@@ -56,7 +60,7 @@ func x86ResultScalarLaneStep(ins Instr, state *x86ResultState, owned []bool, res
 	low := x86CallerVectorByteMask(width)
 	if f.insert {
 		if f.memory >= 0 {
-			if !x86ResultRead(ins.Args[f.source], width, state, owned, arch) {
+			if !x86ResultScalarLaneRead(ins, ins.Args[f.source], width, state, owned, arch, conditionalNativeRead) {
 				return false, true
 			}
 		} else {
@@ -87,10 +91,10 @@ func x86ResultScalarLaneStep(ins Instr, state *x86ResultState, owned []bool, res
 	return x86ResultStore(destination, width, state, owned, resultOffset, arch), true
 }
 
-func x86ResultScalarPSLaneStep(ins Instr, f x86InsertExtractForm, state *x86ResultState, owned []bool, resultOffset int64, arch string) bool {
+func x86ResultScalarPSLaneStep(ins Instr, f x86InsertExtractForm, state *x86ResultState, owned []bool, resultOffset int64, arch string, conditionalNativeRead bool) bool {
 	source := uint16(0)
 	if f.memory >= 0 {
-		if f.spec.insert && !x86ResultRead(ins.Args[f.memory], 4, state, owned, arch) {
+		if f.spec.insert && !x86ResultScalarLaneRead(ins, ins.Args[f.memory], 4, state, owned, arch, conditionalNativeRead) {
 			return false
 		}
 		source = 0xf
@@ -119,4 +123,19 @@ func x86ResultScalarPSLaneStep(ins Instr, f x86InsertExtractForm, state *x86Resu
 	}
 	state.writeVector(destination, 16, uint64(known), f.spec.legacy)
 	return true
+}
+
+// Only the lowering observer may consume the paired exact-width volatile load
+// in PINSR/INSERTPS. Continued execution supplies its selected numerical bytes,
+// even when INSERTPS subsequently zeros them; it grants no validity, bounds,
+// write, frame, caller or raw-entry permission. Untouched bytes retain their
+// prior definedness; unknown bytes do not become numerical inputs.
+func x86ResultScalarLaneRead(ins Instr, source Operand, width int64, state *x86ResultState, owned []bool, arch string, conditionalNativeRead bool) bool {
+	if x86ResultRead(source, width, state, owned, arch) {
+		return true
+	}
+	return conditionalNativeRead && source.Kind == OpMem && source.Mem.Sym == "" &&
+		ins.x86NumericalRead == nil && !ins.x86Encoded && ins.x86SourceRaw == nil && ins.x86RawNearReturn == nil &&
+		ins.x86AddressBits == 0 && !ins.x86UnboundAddressOverride && ins.x86SegmentPrefix == 0 &&
+		x86OrdinaryNativeMemoryOperand(source, arch) && x86ResultIncomingPointerAddressIdentity(source, state, arch)
 }

@@ -11,9 +11,11 @@ targeting `codex/expand-ecosystem-corpus-20260913`. Push only to `cpunion`.
 Do not promote the upstream-connected branch before fork CI and review pass.
 Never push to, approve, merge or close upstream PR 40.
 
-The integration branch is `codex/pr40-ci-closure-20261011`. Stop opening new
-instruction-family audits until this repair batch has run in CI. Preserve the
-separate scalar-FMA development branch; it is not part of this batch.
+The integration branch `codex/pr40-ci-closure-20261011` remains its historical
+`aedfac9b` snapshot. The published repair source is
+`codex/pr40-ci-failure-replay-20261010` at `0c61d468`. Preserve both and the
+separate scalar-FMA development branch. Only original CI failure classes,
+not speculative instruction-family audits, belong to the next repair batch.
 
 Fork CI 38043255488 at `aedfac9b` finished naturally with failure, as did its
 predecessor 38018079008. Policy preflight passed but all six priority shards
@@ -28,23 +30,33 @@ The aggregate completed its audit in 4,778 seconds and failed because six
 reports are not 64 complete shards. Downstream module/cross completion gates
 also correctly failed for missing owner reports after priority failure prevented
 those tests from running; these are not newly observed unit-test failures.
-Do not bypass their strict completeness checks. The unpublished bounded CPP
+Do not bypass their strict completeness checks. The published bounded CPP
 index repair specifically addresses the slow portable-report audit.
 
-The five-commit follow-up batch through `a873e240` is on
-`codex/pr40-ci-failure-replay-20261010`. It includes the deadline fixture,
-low-product family, portable CPP index, broadcast memory result and native
+The five code repairs plus checkpoint through `0c61d468` were published only
+to fork Draft PR 4 after the previous run finished naturally. They include the
+deadline fixture, low-product family, portable CPP index, broadcast memory result and native
 extension result repairs. The full root run at frozen `b5af3a10` now passed;
-new broadcast/extension code has its separate focused evidence below. Batch
-publication may proceed only after rechecking the allowed fork, unchanged Draft
-PR 4 head, clean source and fast-forward ancestry. Keep the upstream-connected
-branch unchanged until fresh fork CI and review pass. A newly started CI is
-not a pass or ledger update.
+new broadcast/extension code has its separate focused evidence below.
+Fresh CI 38096927749 is running: policy preflight passed and all six priority
+shards started. Let it finish naturally before publishing the next batch.
+Keep the upstream-connected branch unchanged until fresh fork CI and review
+pass. A running CI is not a pass or ledger update.
+
+The next development tree is `codex/pr40-scalar-lane-native-20261011`, based on
+the published head. Its `_out/scalar-lane-native/` contains independent RED/GREEN
+evidence for the PINSR/INSERTPS result-read repair below. No external library
+was compiled locally and no ledger status changed. Read-only triage also found
+seven failures at the original-ZIP/go.mod metadata comparison; absence versus
+mismatched bytes still needs exact original-source verification. The existing
+signed legacy-proxy metadata role must not be replaced by an unchecked fallback.
 
 The integration tree remains the historical `aedfac9b` snapshot. Its old
 `_out/ci-closure/publish-after-ci.sh` already completed publication and is not
-a reusable publisher for this batch. The replacement read-only watcher is now
-terminal; retain its log and all earlier disk-exhaustion evidence.
+a reusable publisher. Its replacement old-run watcher is terminal. The current
+read-only watcher is in the published tree at
+`_out/ci-failure-replay/watch-0c61d468.log`; it has no publication action.
+Retain all terminal logs and earlier disk-exhaustion evidence.
 
 Earlier `c09eff1e` failed run 37711752851: priority shards 5/29/38/39 failed,
 36/42 were canceled, and downstream gates did not complete. The four failed
@@ -62,6 +74,24 @@ with unrelated speculative implementation. Keep correctness gates unchanged.
 
 ## Included repairs and retained evidence
 
+- Shards 5/42's exact marcelocantos/hash and frozen versions exposed the
+  lowering-only observer's missing native scalar insertion read, not missing
+  encodings. Independent REDs reproduce it across all five x86 targets and
+  three APIs. The existing shared grammar now consumes the paired exact-width
+  volatile load for all eight PINSR/VPINSR names and INSERTPS/VINSERTPS; sparse
+  lane definitions and upper aliases stay distinct. Public declaration,
+  pointer/index, source-CFG, stores and raw/frame-entry boundaries remain strict.
+  The 106 target/form functions have actual Go and LLVM objects. Twenty-two
+  live/dead/zero-selector kernels pass three-API LLVM O0/O2 numerical and fault
+  comparisons against original legacy Go machine code and an independent byte
+  reference. Each runtime lane checks 2,816 numerical outcomes and 264 native
+  faults/continuations; Rosetta is not native Linux or VEX/EVEX execution.
+  The 71-root current-Go family/regression run passed (174.590s), followed by
+  ten final roots including the whole-source negatives and adjacent lowering
+  fallback/raw-boundary regressions (54.759s). Thirteen actual Go 1.20 roots,
+  CLI extraction, vet and unchanged official five-architecture classification
+  passed. Exact discovering-version remote replay and current-head CI still
+  own library closure; neither original candidate is promoted to a pass.
 - Shards 5/29/39 exposed ordinary pointer `MOVBQZX` reads missing from the
   lowering-only result observer. Independent REDs cover the entire fourteen-name
   extension family; a second RED finds dead native loads being removable.
@@ -112,7 +142,7 @@ with unrelated speculative implementation. Keep correctness gates unchanged.
   Evidence is `cpp-b5af3a10-full-retry.jsonl`. Preserve the older timeout and
   disk failures; this fresh result does not relabel those failed attempts.
   This is a local audit optimization, not a current CI or external-library pass.
-- The next, not-yet-published batch closes shard 5's low-product caller-effect
+- The published follow-up batch closes shard 5's low-product caller-effect
   gap. Independent original-Go W/D/Q controls reproduced unregistered D/Q
   effects; replacing only the old lowerers also reproduced incorrect upper
   aliases at LLVM O0/O2. D/Q now share typed shape, lowering, caller/result
@@ -399,8 +429,8 @@ timeouts. Those regressions have newer repairs, not a retroactive pass.
 
 ## Ordered next gates
 
-1. Publish the verified follow-up batch only to fork Draft PR 4 after the
-   terminal `aedfac9b` run; let its new priority matrix finish naturally.
+1. Let published `0c61d468` CI 38096927749 finish naturally. Retain all six
+   priority reports and compare exact failures before the next fork-only push.
 2. Finish the package/source binding repairs, retaining the original examples
    as failed until each complete replay succeeds. Commit locally in batches.
 3. Compare new CI failures with the original eight classes. Fix each class with

@@ -713,6 +713,16 @@ alias canaries and flags/MXCSR observations. Portable LLVM execution and Darwin
 Rosetta observations do not establish native Linux or AVX512 execution. An
 unknown AES effect is still unknown even after PINSRD is registered.
 
+The lowering-only result observer additionally consumes the paired native
+PINSRB/W/D/Q, VPINSRB/W/D/Q and INSERTPS/VINSERTPS loads. Continuing past their
+exact-width volatile read defines only the selected bytes, with the existing
+lane/zero-selector and upper-alias rules. Even a dead result or an INSERTPS zero
+selector retains the native access. Incoming pointer identity and numerical
+indexes are not bounds, validity or initialized-pointee facts; declaration-only,
+caller, native-store and raw/frame observers remain strict. Keep the complete
+Go rows, five-target objects and original legacy-Go/LLVM numerical and fault
+oracles separate from a claim of physical VEX/EVEX execution.
+
 `CaptureGoAMD64FrameSource` is an initial, sealed **observation**, not a frame
 permission. It independently selects and exports a flat main module's complete
 ordinary Go sources, retaining only bodyless integer, finite pointer and slice
