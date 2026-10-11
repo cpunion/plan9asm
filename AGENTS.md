@@ -67,6 +67,10 @@ tests establish the relevant runtime semantics.
 - Freeze source, tools and ledger during corpus verification. A changed input
   invalidates the run. Do not rebase, rewrite or import records into that tree
   while tests are running; use a separate persistent worktree for development.
+- Reuse idle development worktrees; do not create a new checkout for each
+  RED/GREEN attempt. After integration, retain reports and remove inactive clean
+  worktrees and merged local branches. Preserve unmerged refs and dirty trees;
+  reclaim only verified idle, owned build caches, never ledger or test evidence.
 - Run index scans and external corpus batches on the designated remote
   executors, not as local background `plan9asmcorpus`/discovery processes.
   Local first-party fixtures and corpus-driver unit tests remain allowed.
