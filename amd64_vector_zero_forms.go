@@ -65,14 +65,20 @@ func (c *amd64Ctx) lowerVectorZero(op Op, ins Instr) (bool, bool, error) {
 				continue
 			}
 			pointer := slot
+			alignment := view.bytes
 			if form.spec.firstByte != 0 {
 				tail := c.newTmp()
 				fmt.Fprintf(c.b, "  %%%s = getelementptr i8, ptr %s, i64 %d\n", tail, slot, form.spec.firstByte)
 				pointer = "%" + tail
+				alignment = form.spec.firstByte
 			}
 			// A narrow tail store preserves the low X bytes independently in
 			// every live alias. No initial SIMD value or native memory is read.
-			fmt.Fprintf(c.b, "  store <%d x i8> zeroinitializer, ptr %s\n", view.bytes-form.spec.firstByte, pointer)
+			// Omitting align lets LLVM infer 64 for the 48-byte Z tail,
+			// although slot+16 is only 16-aligned. That can produce a
+			// faulting aligned YMM store even to our own stack allocation.
+			fmt.Fprintf(c.b, "  store <%d x i8> zeroinitializer, ptr %s, align %d\n",
+				view.bytes-form.spec.firstByte, pointer, alignment)
 		}
 	}
 	return true, false, nil

@@ -103,6 +103,49 @@ func TestX86VectorZeroDispatchAndImplicitModeRangeBeforeEmission(t *testing.T) {
 	}
 }
 
+func TestX86VectorZeroTailAlignment(t *testing.T) {
+	for _, arch := range []string{"386", "amd64"} {
+		for _, opcode := range []Op{"VZEROUPPER", "VZEROALL"} {
+			t.Run(arch+"/"+string(opcode), func(t *testing.T) {
+				var output strings.Builder
+				ctx := &amd64Ctx{
+					b: &output, goarch: arch,
+					xRegSlot: map[int]string{0: "%x0"},
+					yRegSlot: map[int]string{0: "%y0"},
+					zRegSlot: map[int]string{0: "%z0"},
+				}
+				if _, _, err := ctx.lowerVectorZero(opcode, Instr{Op: opcode}); err != nil {
+					t.Fatal(err)
+				}
+				stores := 0
+				for _, line := range strings.Split(output.String(), "\n") {
+					var width int
+					if _, err := fmt.Sscanf(line, "  store <%d x i8>", &width); err != nil {
+						continue
+					}
+					stores++
+					alignment := width
+					if opcode == "VZEROUPPER" {
+						// Both 32- and 64-byte slots advance by 16. Neither
+						// tail may inherit the full slot's natural alignment.
+						alignment = 16
+					}
+					if !strings.HasSuffix(line, fmt.Sprintf(", align %d", alignment)) {
+						t.Fatalf("tail store overstates or omits its alignment: %s", line)
+					}
+				}
+				want := 3
+				if opcode == "VZEROUPPER" {
+					want = 2
+				}
+				if stores != want {
+					t.Fatalf("got %d live stores, want %d", stores, want)
+				}
+			})
+		}
+	}
+}
+
 func TestX86VectorZeroCompleteGoFormsFiveObjects(t *testing.T) {
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
