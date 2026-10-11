@@ -25,8 +25,6 @@ owns subsequent inventory imports, cursors, external failures and ledger updates
 Continue from this integrated source, not an older family worktree. The latest
 review found these concrete issues to address before another publication:
 
-- Align actual SDK observations with supported Go patch releases; preserve
-  source/object validation instead of merely relaxing version checks.
 - Bind the CLI's package load and original-source observers to one effective
   environment, including their explicit GOENV and cache requirements.
 - Reuse disposable build caches within test roots while keeping each source,
@@ -40,6 +38,12 @@ requires the cross-runtime lane. Ordinary, race and coverage jobs now install
 the required IA32 compiler/libc, with an independent ordering regression.
 Workflow policy tests and actionlint pass; the split CLI import formatting is
 also corrected. RED evidence is retained locally, not converted into a pass.
+
+Go 1.27.2 observation support now retains the audited format pins, separately
+registers its two changed native-header source files and binds object/archive
+headers to the producer's exact patch. ARM64 actual-source, CRC32 three-API
+LLVM 22 objects, static-storage and marker mutation guards pass; Go 1.27.1 and
+Go 1.20.14 focused compatibility checks pass. Unknown patches remain rejected.
 
 CI run `38131270471` finished with failures. Its standard-library benchmark
 compiled 163 of 185 files; its 68-second target total is not a complete-success

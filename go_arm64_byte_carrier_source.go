@@ -19,6 +19,7 @@ import (
 	"sync"
 
 	"github.com/xgo-dev/plan9asm/internal/gostaticstorage"
+	"github.com/xgo-dev/plan9asm/internal/gotoolchain"
 )
 
 type GoARM64ByteCarrierCaptureRequest struct {
@@ -250,7 +251,7 @@ func (source *GoARM64ByteCarrierSource) observe(ctx context.Context) error {
 	if err := source.guard.observe(ctx); err != nil {
 		return err
 	}
-	if source.guard.env["GOVERSION"] != "go1.27.1" {
+	if !gotoolchain.AuditedGo127(source.guard.env["GOVERSION"]) {
 		return arm64ByteCarrierContext("unobserved original SDK version")
 	}
 	for _, name := range []string{source.guard.env["GOROOT"], source.guard.env["GOTOOLDIR"], filepath.Join(source.guard.env["GOROOT"], "pkg/include")} {

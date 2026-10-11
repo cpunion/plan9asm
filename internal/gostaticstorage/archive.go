@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+
+	"github.com/xgo-dev/plan9asm/internal/gotoolchain"
 )
 
 var ErrContext = errors.New("static storage needs actual source context")
@@ -97,14 +99,37 @@ func objectBody(object []byte, target string) ([]byte, error) {
 	if end < 0 || end > 4096 {
 		return nil, contextError("invalid compiler object text header")
 	}
-	goos, goarch, valid := strings.Cut(target, "/")
-	line, _, _ := strings.Cut(string(object[:end+3]), "\n")
-	words := strings.Fields(line)
-	if !valid || len(words) < 5 || words[0] != "go" || words[1] != "object" ||
-		words[2] != goos || words[3] != goarch || words[4] != "go1.27.1" {
-		return nil, contextError("object target/version differs from selected compiler")
+	if _, err := objectVersion(object, target); err != nil {
+		return nil, err
 	}
 	return object[end+3:], nil
+}
+
+func objectVersion(object []byte, target string) (string, error) {
+	end := bytes.IndexByte(object, '\n')
+	if end < 0 || end > 4096 {
+		return "", contextError("invalid compiler object version header")
+	}
+	goos, goarch, valid := strings.Cut(target, "/")
+	words := strings.Fields(string(object[:end]))
+	if !valid || len(words) < 5 || words[0] != "go" || words[1] != "object" ||
+		words[2] != goos || words[3] != goarch || !gotoolchain.AuditedGo127(words[4]) {
+		return "", contextError("object target/version differs from selected compiler")
+	}
+	return words[4], nil
+}
+
+// ValidateObjectVersion binds an object (or compiler export member) to its
+// producer's exact patch release. Shared format support alone is not a match.
+func ValidateObjectVersion(object []byte, target, version string) error {
+	actual, err := objectVersion(object, target)
+	if err != nil {
+		return err
+	}
+	if actual != version {
+		return contextError("object version differs from its actual producer")
+	}
+	return nil
 }
 
 // These byte roles are pinned to Go 1.27.1 cmd/internal/goobj/objfile.go, rather

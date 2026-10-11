@@ -42,7 +42,9 @@ func TestActualGoProbeAndCompleteObjectGuards(t *testing.T) {
 		{"wrong-target", func(data []byte) []byte {
 			return []byte(strings.Replace(string(data), "linux arm64", "linux amd64", 1))
 		}},
-		{"wrong-version", func(data []byte) []byte { return []byte(strings.Replace(string(data), "go1.27.1", "go1.26.1", 1)) }},
+		{"wrong-version", func(data []byte) []byte {
+			return []byte(strings.Replace(string(data), accepted.ObjectVersion, "go1.26.1", 1))
+		}},
 		{"truncated", func(data []byte) []byte { return data[:len(data)-1] }},
 		{"extra-EOF", func(data []byte) []byte { return append(data, 0) }},
 	} {

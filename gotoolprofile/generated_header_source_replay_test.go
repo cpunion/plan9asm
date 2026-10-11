@@ -31,7 +31,7 @@ func TestGeneratedHeaderSourceRuleRegistrationBindsActualSDKAndCompleteSourceSet
 	}
 	version := strings.TrimSpace(string(output))
 	proof, err := CaptureNativeHeaderSourceRules(root, version)
-	if nativeHeaderSourceRegistration[version] == nil {
+	if nativeHeaderSourceHashes(version) == nil {
 		if !NativeHeaderSourceDomainUnsupported(err) || proof != nil {
 			t.Fatalf("unknown actual SDK acquired registered omission authority: %v", err)
 		}

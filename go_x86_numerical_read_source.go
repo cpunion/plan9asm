@@ -15,6 +15,7 @@ import (
 	"sync"
 
 	"github.com/xgo-dev/plan9asm/internal/gostaticstorage"
+	"github.com/xgo-dev/plan9asm/internal/gotoolchain"
 )
 
 type GoX86NumericalReadCaptureRequest struct {
@@ -273,7 +274,7 @@ func (source *GoX86NumericalReadSource) observe(ctx context.Context, provided ma
 		return err
 	}
 	var env map[string]string
-	if json.Unmarshal(raw, &env) != nil || env["GOVERSION"] != "go1.27.1" || env["GOOS"]+"/"+env["GOARCH"] != source.request.Target ||
+	if json.Unmarshal(raw, &env) != nil || !gotoolchain.AuditedGo127(env["GOVERSION"]) || env["GOOS"]+"/"+env["GOARCH"] != source.request.Target ||
 		filepath.Join(env["GOROOT"], "bin", "go") != source.request.GoBinary || env["GOAMD64"] != "v1" ||
 		env["GOARCH"] == "386" && env["GO386"] != "sse2" || env["GOFLAGS"] != "" || env["GOEXPERIMENT"] != "" ||
 		env["GOCACHE"] != provided["GOCACHE"] || env["GOMODCACHE"] != provided["GOMODCACHE"] {

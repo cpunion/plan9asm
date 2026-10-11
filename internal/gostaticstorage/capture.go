@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/xgo-dev/plan9asm/internal/goasmcmd"
+	"github.com/xgo-dev/plan9asm/internal/gotoolchain"
 )
 
 const Protocol = "actual_go_static_numeric_storage_prototype_v1"
@@ -332,7 +333,7 @@ func (o *Observation) observe(ctx context.Context) error {
 		return err
 	}
 	var env map[string]string
-	if err := json.Unmarshal(raw, &env); err != nil || env["GOVERSION"] != "go1.27.1" ||
+	if err := json.Unmarshal(raw, &env); err != nil || !gotoolchain.AuditedGo127(env["GOVERSION"]) ||
 		env["GOOS"]+"/"+env["GOARCH"] != o.request.Target || env["GOFLAGS"] != "" || env["GOEXPERIMENT"] != "" ||
 		env["CGO_ENABLED"] != "0" || env["GOWORK"] != "off" || filepath.Join(env["GOROOT"], "bin", "go") != o.request.GoBinary {
 		return contextError("actual Go driver/profile/target differs")
@@ -376,7 +377,7 @@ func (o *Observation) observe(ctx context.Context) error {
 		data, err := readRegular(name, 64<<20)
 		if err != nil || formatSources[role] != "" && digest(data) != formatSources[role] ||
 			sdkCPUFormatSources[role] != "" && digest(data) != sdkCPUFormatSources[role] ||
-			role == "VERSION" && strings.Split(string(data), "\n")[0] != "go1.27.1" {
+			role == "VERSION" && strings.Split(string(data), "\n")[0] != env["GOVERSION"] {
 			return contextError("actual SDK/tool/object-format source differs")
 		}
 		if previous := o.inputs[name]; previous != "" && previous != digest(data) {

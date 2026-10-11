@@ -7,7 +7,7 @@ matrix retains Go 1.20–1.27. Put the selected Go binary on PATH: subprocesses
 deliberately use `GOTOOLCHAIN=local`.
 
 ```sh
-go127_root=$(GOTOOLCHAIN=go1.27.1 go env GOROOT)
+go127_root=$(GOTOOLCHAIN=go1.27.2 go env GOROOT)
 export PATH="$go127_root/bin:$PATH"
 export GOTOOLCHAIN=local
 source scripts/llvm22.sh

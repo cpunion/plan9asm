@@ -122,7 +122,10 @@ func probe(ctx context.Context, dir string, inputs *inputTransaction, index int,
 		if err != nil {
 			return fail(err)
 		}
-		item.ObjectKind, item.ObjectTarget, item.ObjectVersion = "GoAssemblyUnlinkable", "linux/arm64", "go1.27.1"
+		item.ObjectKind, item.ObjectTarget, item.ObjectVersion = "GoAssemblyUnlinkable", "linux/arm64", inputs.record.Identity.Environment["GOVERSION"]
+		if err := gostaticstorage.ValidateObjectVersion(object, item.ObjectTarget, item.ObjectVersion); err != nil {
+			return fail(err)
+		}
 		item.ObjectPhysical = guard.View().Paths[item.Object]
 		item.ObjectIdentity = generation(objectInfo)
 		item.ObjectSHA256 = fmt.Sprintf("%x", sha256.Sum256(object))

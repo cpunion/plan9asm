@@ -8,10 +8,11 @@ import (
 	"strings"
 
 	"github.com/xgo-dev/plan9asm/internal/gostaticstorage"
+	"github.com/xgo-dev/plan9asm/internal/gotoolchain"
 )
 
 func (source *GoAMD64FrameSource) frameDataObject(expanded string, object []byte) (*gostaticstorage.AMD64AssemblyData, error) {
-	if source.env["GOVERSION"] != "go1.27.1" || source.numericalBinding != nil {
+	if !gotoolchain.AuditedGo127(source.env["GOVERSION"]) || source.numericalBinding != nil {
 		return nil, goAMD64FrameContext("mixed DATA needs its independent actual Go object producer")
 	}
 	builtin, err := source.read(filepath.Join(source.env["GOROOT"], "src/cmd/internal/goobj/builtinlist.go"))

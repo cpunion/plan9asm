@@ -17,7 +17,7 @@ func TestInstrumentationExportEnvironmentCompleteSourcesAndDefaults(t *testing.T
 		"legacy protocol": func(p *InstrumentationExportEnvironment) {
 			p.Protocol = "actual_go_instrumentation_marker_export_routing_v1"
 		},
-		"future SDK":     func(p *InstrumentationExportEnvironment) { p.GoVersion = "go1.27.2" },
+		"future SDK":     func(p *InstrumentationExportEnvironment) { p.GoVersion = "go1.27.3" },
 		"missing source": func(p *InstrumentationExportEnvironment) { delete(p.SourceSHA256, "src/cmd/go/internal/cfg/cfg.go") },
 		"changed complete source": func(p *InstrumentationExportEnvironment) {
 			p.SourceSHA256["src/cmd/go/internal/work/shell.go"] = strings.Repeat("0", 64)

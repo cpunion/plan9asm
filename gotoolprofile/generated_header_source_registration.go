@@ -77,11 +77,12 @@ func CaptureNativeHeaderSourceRules(root, version string) (*NativeHeaderSourceRu
 	if err != nil || strings.SplitN(string(actualVersion), "\n", 2)[0] != version {
 		return nil, fmt.Errorf("native header source rules differ from actual SDK VERSION: %v", err)
 	}
-	if nativeHeaderSourceRegistration[version] == nil {
+	registration := nativeHeaderSourceHashes(version)
+	if registration == nil {
 		return nil, &nativeHeaderUnsupportedDomain{"actual SDK has no registered native header property query model"}
 	}
 	proof := &NativeHeaderSourceRules{Protocol: nativeHeaderSourceRulesProtocol, GoVersion: version, SourceSHA256: make(map[string]string)}
-	for name := range nativeHeaderSourceRegistration[version] {
+	for name := range registration {
 		data, err := readInstrumentationRegistration(filepath.Join(root, filepath.FromSlash(name)))
 		if err != nil {
 			return nil, err
@@ -95,11 +96,28 @@ func CaptureNativeHeaderSourceRules(root, version string) (*NativeHeaderSourceRu
 }
 
 func ValidateNativeHeaderSourceRules(proof *NativeHeaderSourceRules, version string) error {
-	wanted := nativeHeaderSourceRegistration[version]
+	wanted := nativeHeaderSourceHashes(version)
 	if proof == nil || proof.Protocol != nativeHeaderSourceRulesProtocol || proof.GoVersion != version || wanted == nil || !reflect.DeepEqual(wanted, proof.SourceSHA256) {
 		return fmt.Errorf("native generated-header rule registration is missing, changed or unaudited")
 	}
 	return nil
+}
+
+func nativeHeaderSourceHashes(version string) map[string]string {
+	if version != "go1.27.2" {
+		return nativeHeaderSourceRegistration[version]
+	}
+	// The patch adds method-order fields to unified export data. It changes
+	// neither these header layout rules nor their complete source inventory.
+	// Keep the two changed files pinned separately instead of duplicating the
+	// unchanged registration or treating every future patch as compatible.
+	result := make(map[string]string, len(nativeHeaderSourceRegistration["go1.27.1"]))
+	for name, hash := range nativeHeaderSourceRegistration["go1.27.1"] {
+		result[name] = hash
+	}
+	result["src/cmd/compile/internal/noder/reader.go"] = "10051996ac541466c4f0f3ccfb3ca7181c38726050d49d2c113ab784119d8be6"
+	result["src/cmd/compile/internal/noder/writer.go"] = "53550393cf60bd31892e18a4a79715670a7243289445b57919faa69163a256e0"
+	return result
 }
 
 func RecheckNativeHeaderSourceRules(root string, proof *NativeHeaderSourceRules) error {

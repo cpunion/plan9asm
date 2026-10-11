@@ -15,6 +15,7 @@ import (
 	"github.com/xgo-dev/plan9asm/internal/goasmoracle"
 	"github.com/xgo-dev/plan9asm/internal/gooriginalsrc"
 	"github.com/xgo-dev/plan9asm/internal/gostaticstorage"
+	"github.com/xgo-dev/plan9asm/internal/gotoolchain"
 )
 
 type fileInput struct {
@@ -181,12 +182,12 @@ func captureInputs(ctx context.Context, opt options) (inputs *inputTransaction, 
 	if err := json.Unmarshal(data, &environment); err != nil {
 		return inputs, err
 	}
-	if len(environment) != 10 || environment["GOROOT"] != opt.goroot || environment["GOVERSION"] != "go1.27.1" ||
+	if len(environment) != 10 || environment["GOROOT"] != opt.goroot || !gotoolchain.AuditedGo127(environment["GOVERSION"]) ||
 		environment["GOOS"] != "linux" || environment["GOARCH"] != "arm64" || environment["GOARM64"] != "v8.0" || environment["GOTOOLCHAIN"] != "local" {
 		return inputs, fmt.Errorf("actual selected Go SDK/version/target differs")
 	}
 	version, err := inputs.snapshot.ReadRetained(filepath.Join(opt.goroot, "VERSION"))
-	if err != nil || !strings.HasPrefix(string(version), "go1.27.1\n") {
+	if err != nil || !strings.HasPrefix(string(version), environment["GOVERSION"]+"\n") {
 		return inputs, fmt.Errorf("original SDK VERSION differs")
 	}
 	asm, err := inputs.command(ctx, "tool", "-n", "asm")
@@ -204,7 +205,7 @@ func captureInputs(ctx context.Context, opt options) (inputs *inputTransaction, 
 		return inputs, err
 	}
 	asmVersion, err := inputs.command(ctx, "tool", "asm", "-V=full")
-	if err != nil || string(asmVersion) != "asm version go1.27.1\n" {
+	if err != nil || string(asmVersion) != "asm version "+environment["GOVERSION"]+"\n" {
 		return inputs, fmt.Errorf("actual ASM version differs: %q: %w", asmVersion, err)
 	}
 	inputs.corpus, err = inputs.snapshot.ReadRetained(opt.cases)

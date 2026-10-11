@@ -12,6 +12,8 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+
+	"github.com/xgo-dev/plan9asm/internal/gotoolchain"
 )
 
 // This is a projection of complete registered Go driver declarations, not
@@ -33,7 +35,7 @@ type InstrumentationExportEnvironment struct {
 const instrumentationExportEnvironmentProtocol = "actual_go_marker_changed_environment_v1"
 const instrumentationBootstrapSource = "src/internal/buildcfg/zbootstrap.go"
 
-// Complete audited Go 1.27.1 driver files. Pinning these alongside the
+// Complete audited Go 1.27.1/1.27.2 driver files (byte-identical). Pinning these alongside the
 // projected ASTs prevents accepting a rewritten, self-consistent projection
 // with fabricated whole-source digests. Future SDK changes need a fresh audit.
 var instrumentationExportEnvironmentSourceRegistration = map[string]string{
@@ -176,7 +178,7 @@ func validateInstrumentationExportEnvironment(proof *InstrumentationExportEnviro
 		return fmt.Errorf("missing actual marker changed-environment source protocol")
 	}
 	minor, err := goMinor(proof.GoVersion)
-	if err != nil || minor != 27 || proof.GoVersion != "go1.27.1" ||
+	if err != nil || minor != 27 || !gotoolchain.AuditedGo127(proof.GoVersion) ||
 		len(proof.SourceDeclarations) != len(instrumentationExportEnvironmentRegistrations) ||
 		!reflect.DeepEqual(proof.RegistrationSHA256, instrumentationExportEnvironmentRegistrations) {
 		return fmt.Errorf("incomplete or unregistered marker changed-environment source projections")

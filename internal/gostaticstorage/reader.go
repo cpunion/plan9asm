@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	"github.com/xgo-dev/plan9asm/internal/gosym"
+	"github.com/xgo-dev/plan9asm/internal/gotoolchain"
 	"golang.org/x/mod/modfile"
 )
 
@@ -364,7 +365,7 @@ func numericBytes(typ types.Type, sizes types.Sizes, bytes []bool, base int64, d
 // actual source/tool/command guards remain Observation.Verify's obligation.
 func ValidateReport(report Report) error {
 	sdkCPU := report.Protocol == SDKCPUProtocol
-	if report.Protocol != Protocol && !sdkCPU || report.Environment["GOVERSION"] != "go1.27.1" ||
+	if report.Protocol != Protocol && !sdkCPU || !gotoolchain.AuditedGo127(report.Environment["GOVERSION"]) ||
 		report.Environment["GOOS"]+"/"+report.Environment["GOARCH"] != report.Target ||
 		report.Environment["GOFLAGS"] != "" || report.Environment["GOEXPERIMENT"] != "" ||
 		report.Environment["CGO_ENABLED"] != "0" || report.Environment["GOWORK"] != "off" ||
@@ -446,6 +447,15 @@ func ValidateReport(report Report) error {
 	for name, data := range report.Archives {
 		if len(data) > archiveLimit || digest(data) != report.ArchiveSHA256[name] {
 			return contextError("retained actual archive bytes/hash changed")
+		}
+		members, err := archiveMembers(data)
+		if err != nil {
+			return err
+		}
+		for _, member := range members {
+			if err := ValidateObjectVersion(member.data, report.Target, report.Environment["GOVERSION"]); err != nil {
+				return err
+			}
 		}
 		total += len(data)
 	}

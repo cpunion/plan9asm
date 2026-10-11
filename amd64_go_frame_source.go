@@ -30,6 +30,7 @@ import (
 	"github.com/xgo-dev/plan9asm/internal/goasmmacros"
 	"github.com/xgo-dev/plan9asm/internal/gooriginalsrc"
 	"github.com/xgo-dev/plan9asm/internal/gostaticstorage"
+	"github.com/xgo-dev/plan9asm/internal/gotoolchain"
 	"golang.org/x/arch/x86/x86asm"
 )
 
@@ -375,7 +376,7 @@ func captureGoAMD64FrameSource(ctx context.Context, pkg GoPackage, request GoAMD
 			if err == nil && unwind != nil {
 				err = goAMD64FrameWindowsUnwindFunctions(functions, source.origins, source.request.Directory, *unwind)
 			}
-		} else if source.request.Target == "windows/amd64" && source.env["GOVERSION"] == "go1.27.1" {
+		} else if source.request.Target == "windows/amd64" && gotoolchain.AuditedGo127(source.env["GOVERSION"]) {
 			unwind, readErr := source.observeWindowsUnwind(objectBytes)
 			if readErr != nil {
 				return nil, readErr
