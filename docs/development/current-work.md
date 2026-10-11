@@ -123,13 +123,30 @@ The verified repairs through `575c5962` are now published to the allowed fork;
 PR 40's new CI run is `38182744838`. Its fmt and build jobs pass, but the
 standard-library gates still fail and the complete run is not yet a pass.
 
-The next AMD64 repair separates explicit scalar ABIInternal register results
+The AMD64 repair now separates explicit scalar ABIInternal register results
 from ABI0 FP initialization while sharing the existing all-path byte analysis.
 The eight insertion names, all 60 lane formats, three APIs, three-target O0/O2
 objects and portable byte-reference execution pass. Go 1.20 focused checks and
 the shared result regressions pass too. Real SDK maps replay still fails on
 immediate-shuffle result analysis and the independent AES global-storage role;
 neither source file is promoted to a corpus pass.
+
+The next verified local batch fixes empty LLVM_CONFIG handling in isolated
+module fixtures, Go 1.26's unconditional wasm feature tags and Linux C oracle
+header/identifier collisions. Process setup now uses a separate translation
+unit; its dumpability check and all eight ARM64 MRS execution combinations pass
+in the Linux container. Complete Linux root owners now install pinned QEMU;
+the actual installer and original-Go/LLVM 386 mutable-read matrix pass locally.
+These changes do not establish native AVX512 execution or a complete CI pass.
+
+Windows repairs share escaped local proxy URLs and host executable suffixes,
+keep shell checkouts LF, and move shared fixed-local definitions out of Unix-only
+files. The Windows helper-selection RED/GREEN, Go 1.20/current-Go source and
+object matrices, portable transport execution, CLI regressions and vet pass.
+Windows native execution still requires CI. Continue with historical Go Windows
+SEH schemas, ARM64 bytealg PCALIGN/tail-transport cases and Windows canonical
+input-path failures. Keep their existing failures; do not loosen source guards.
+The local repair batch has not been pushed while run `38182744838` is active.
 
 The remaining 21 standard-library failures require actual runtime/reflect
 entry, TLS, hidden-register, caller-storage or SDK source contracts. Do not
