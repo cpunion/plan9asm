@@ -65,6 +65,31 @@ is not the native Linux CI inventory. Neither result establishes CI completion.
 
 ## Remaining delivery gates
 
+The next local repair batch rejects unresolved x86 SB displacements before
+all three translation APIs can emit a wrong symbol. The 386 standard-library
+scan now reports zero unsupported forms, but its translation gate still fails
+on the independent runtime storage/ABI contracts; it is not a corpus pass.
+
+Runtime oracle objects now use PIC to match Linux's PIE links. Their standalone
+C processes disable Linux core-pipe collection before fault children run,
+without changing host settings. Focused Linux-container link/process tests pass.
+Legacy AES keeps its native alignment exception and rejects unbacked logical
+FP addresses; logical numerical tests use an explicit unaligned move. Shared
+128-bit FP reads now assemble every scalar field instead of losing adjacent
+float32 fields. AES/legacy-move object and diagnostic execution tests pass.
+
+VZEROUPPER's slot+16 tail stores now explicitly retain 16-byte alignment.
+Previously LLVM inferred 64 for a 48-byte store and emitted misaligned YMM
+stores in the packed double/dword fixture. RED/GREEN alignment tests, five-target
+objects and portable execution pass. Conversion-fault assertions now require
+one surviving native conversion in each function, independently of output
+stores. Three-target objects, the five-architecture official classification
+gate, focused Go 1.20 checks and vet pass. Current-Go Windows downloaded-frame
+object tests also pass. Native Linux precision/alignment and AVX-512 execution
+still need their required owners: Rosetta does not reproduce the precision
+trap, and QEMU's diagnostic AVX-512 attempt failed its ISA execution. Neither
+failure is reclassified as a pass or a source rejection.
+
 The migration PR is draft. Its historical assembly ledger remains incomplete;
 this does not change translator coverage or certify any external module.
 The split is already published to PR 40. Verify the new repairs with focused
