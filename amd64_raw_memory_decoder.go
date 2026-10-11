@@ -1,7 +1,7 @@
 package plan9asm
 
 // The zero value retains the raw source decoder's layout restrictions. Only
-// x86NumericalNativeBoundaries selects physicalPC: it observes whole native
+// original native byte observers select physicalPC: they observe whole native
 // instruction boundaries and discards these operands. A physical RIP+disp32
 // is not a source symbol, bounded literal, numerical value, or read permission.
 type x86RawMemoryDecoder struct {

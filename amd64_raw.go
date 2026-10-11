@@ -2939,6 +2939,10 @@ opcode:
 // split these bytes into unrelated legacy instructions, so recover all four
 // _ykmovb operand rows before consulting the generic decoder.
 func decodedX86MaskMoveInstruction(code []byte, mode int) (instruction Instr, length int, ok bool, err error) {
+	return decodedX86MaskMoveInstructionWithMemory(code, mode, x86RawMemoryDecoder{})
+}
+
+func decodedX86MaskMoveInstructionWithMemory(code []byte, mode int, memory x86RawMemoryDecoder) (instruction Instr, length int, ok bool, err error) {
 	i := 0
 	segment := Reg("")
 	addressOverride := false
@@ -3057,7 +3061,7 @@ vex:
 		if mod == 3 {
 			src, err = kReg(rmNumber)
 		} else {
-			src, consumed, err = decodedX86VEXRMSource(code[modRMIndex:], mode, bExt, xExt, segment)
+			src, consumed, err = memory.vex(code[modRMIndex:], mode, bExt, xExt, segment, "X")
 		}
 	case 0x91: // K -> memory
 		if mod == 3 {
@@ -3065,7 +3069,7 @@ vex:
 		}
 		src, err = kReg(regNumber)
 		if err == nil {
-			dst, consumed, err = decodedX86VEXRMSource(code[modRMIndex:], mode, bExt, xExt, segment)
+			dst, consumed, err = memory.vex(code[modRMIndex:], mode, bExt, xExt, segment, "X")
 		}
 	case 0x92: // GP -> K
 		if mod != 3 {

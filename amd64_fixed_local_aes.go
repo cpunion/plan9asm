@@ -11,7 +11,7 @@ func fixedLocalAESByteStep(ins *Instr, state *x86FixedLocalState, proof *x86Fixe
 	width := uint64(65535)
 	source := state.vectors[x86CallerVectorRoot(f.sourceOperand.Reg)] & width
 	if f.memory >= 0 {
-		if _, err := fixedLocalMemory(ins, f.memory, state, proof, residue, 16, 1, false, false); err != nil {
+		if _, _, err := fixedLocalReadMemory(ins, f.memory, state, proof, residue, 16, 1); err != nil {
 			return true, err
 		}
 		source = width

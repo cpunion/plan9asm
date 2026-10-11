@@ -86,7 +86,7 @@ func proveX86FixedLocal(fn Func, sig FuncSig) (Func, error) {
 	}
 	copyFn := fn
 	copyFn.Instrs = append([]Instr(nil), fn.Instrs...)
-	proof := &x86FixedLocalProof{frame: fn.FrameSize, accesses: make(map[int]map[int]x86FixedLocalAccess)}
+	proof := &x86FixedLocalProof{binding: sig.x86FixedLocal, frame: fn.FrameSize, accesses: make(map[int]map[int]x86FixedLocalAccess)}
 	for index := range copyFn.Instrs {
 		copyFn.Instrs[index].Args = append([]Operand(nil), fn.Instrs[index].Args...)
 		copyFn.Instrs[index].x86FixedLocalMemory = nil
@@ -614,6 +614,10 @@ func fixedLocalMove(ins *Instr, state *x86FixedLocalState, sig FuncSig, proof *x
 		} else if slot.Type == I1 {
 			booleans = 1
 		}
+	case OpSym:
+		if _, _, err := fixedLocalReadMemory(ins, 0, state, proof, residue, width, 1); err != nil {
+			return err
+		}
 	case OpMem:
 		memory, err := fixedLocalMemoryAddress(*ins, 0, proof.frame)
 		if err != nil {
@@ -730,7 +734,7 @@ func fixedLocalVectorStep(ins *Instr, state *x86FixedLocalState, proof *x86Fixed
 		return goAMD64FrameContext("fixed local vector operation reads undefined destination bytes")
 	}
 	if memory >= 0 {
-		if _, err := fixedLocalMemory(ins, memory, state, proof, residue, 16, 16, false, false); err != nil {
+		if _, _, err := fixedLocalReadMemory(ins, memory, state, proof, residue, 16, 16); err != nil {
 			return err
 		}
 	} else if state.vectors[x86CallerVectorRoot(ins.Args[first].Reg)]&width != width {

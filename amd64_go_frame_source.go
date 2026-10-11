@@ -293,7 +293,7 @@ func captureGoAMD64FrameSource(ctx context.Context, pkg GoPackage, request GoAMD
 			return nil, err
 		}
 		file, err := ParseWithDefines(ArchAMD64, expanded, nil)
-		if err != nil || len(file.Funcs) == 0 || len(file.Data)+len(file.Globl)+len(file.UnlinkedPrelude) != 0 {
+		if err != nil || len(file.Funcs) == 0 || len(file.UnlinkedPrelude) != 0 {
 			return nil, goAMD64FrameContext("full original assembly lacks complete TEXT: %v", err)
 		}
 		object := filepath.Join(source.owned, name+".o")
@@ -332,7 +332,31 @@ func captureGoAMD64FrameSource(ctx context.Context, pkg GoPackage, request GoAMD
 			}
 		}
 		var functions map[string]goAMD64FrameFunction
-		if source.request.Target == "windows/amd64" && source.env["GOVERSION"] == "go1.27.1" {
+		if len(file.Data)+len(file.Globl) != 0 {
+			observed, readErr := source.frameDataObject(expanded, objectBytes)
+			if readErr != nil {
+				return nil, readErr
+			}
+			filtered, readErr := goAMD64FrameDataListing(listing, observed)
+			if readErr != nil {
+				return nil, readErr
+			}
+			var unwind *gostaticstorage.WindowsAMD64AssemblyUnwind
+			if source.request.Target == "windows/amd64" {
+				value, readErr := source.observeWindowsUnwind(objectBytes)
+				if readErr != nil {
+					return nil, readErr
+				}
+				unwind = &value
+			}
+			functions, err = goAMD64FrameListingWithDataObject(filtered, file, pkg, source.origins, observed, unwind)
+			if err == nil {
+				err = goAMD64FrameDataTextJoin(functions, observed, source.request.Directory, source.origins)
+			}
+			if err == nil && unwind != nil {
+				err = goAMD64FrameWindowsUnwindFunctions(functions, source.origins, source.request.Directory, *unwind)
+			}
+		} else if source.request.Target == "windows/amd64" && source.env["GOVERSION"] == "go1.27.1" {
 			unwind, readErr := source.observeWindowsUnwind(objectBytes)
 			if readErr != nil {
 				return nil, readErr
@@ -1152,6 +1176,17 @@ func goAMD64FrameListingWithObservations(listing []byte, file *File, pkg GoPacka
 	if texts != nil && unwind != nil {
 		return nil, goAMD64FrameContext("mixed target-specific object observation roles")
 	}
+	return goAMD64FrameListingRecords(listing, file, pkg, origins, texts, unwind, nil)
+}
+
+func goAMD64FrameListingWithDataObject(listing []byte, file *File, pkg GoPackage, origins map[string]int, data *gostaticstorage.AMD64AssemblyData, unwind *gostaticstorage.WindowsAMD64AssemblyUnwind) (map[string]goAMD64FrameFunction, error) {
+	if data == nil || unwind != nil && !reflect.DeepEqual(data.Member.Texts, unwind.Texts) {
+		return nil, goAMD64FrameContext("mixed DATA/Windows complete object TEXT observations differ")
+	}
+	return goAMD64FrameListingRecords(listing, file, pkg, origins, data.Member.Texts, unwind, data)
+}
+
+func goAMD64FrameListingRecords(listing []byte, file *File, pkg GoPackage, origins map[string]int, texts []gostaticstorage.TextRecord, unwind *gostaticstorage.WindowsAMD64AssemblyUnwind, data *gostaticstorage.AMD64AssemblyData) (map[string]goAMD64FrameFunction, error) {
 	functions := make(map[string]goAMD64FrameFunction)
 	metadata := make(map[string][]byte)
 	seenMetadata := make(map[string]bool)
@@ -1229,7 +1264,14 @@ func goAMD64FrameListingWithObservations(listing []byte, file *File, pkg GoPacka
 		fn := functions[name]
 		if strings.HasPrefix(strings.TrimSpace(line), "rel ") && texts != nil {
 			relocations := texts[textIndex].Relocations
-			if relocationIndex >= len(relocations) || strings.Join(strings.Fields(line), " ") != goAMD64FrameNumericalRelocationLine(relocations[relocationIndex]) {
+			if relocationIndex >= len(relocations) {
+				return nil, goAMD64FrameContext("extra actual object/listing relocation")
+			}
+			expectedLine := goAMD64FrameNumericalRelocationLine(relocations[relocationIndex])
+			if data != nil {
+				expectedLine = goAMD64FrameDataRelocationLine(relocations[relocationIndex], data)
+			}
+			if expectedLine == "" || strings.Join(strings.Fields(line), " ") != expectedLine {
 				return nil, goAMD64FrameContext("foreign, duplicate or reordered actual object/listing relocation")
 			}
 			relocationIndex++
@@ -1347,20 +1389,7 @@ func goAMD64FrameMachineShape(fn goAMD64FrameFunction, frame int64) error {
 	starts := make(map[int]bool)
 	for pc := 0; pc < len(fn.code); {
 		var ins x86asm.Inst
-		if _, length, aes, err := decodedX86AESInstruction(fn.code[pc:], 64); aes {
-			if err != nil || length <= 0 {
-				return goAMD64FrameContext("unbound original AES machine instruction")
-			}
-			// This observer needs exact instruction boundaries, not an AES
-			// semantic substitute. The pinned generic decoder predates VAES.
-			// Op remains zero: it cannot masquerade as a BP/SP or RET opcode.
-			ins.Len = length
-		} else if _, length, mask, err := decodedX86MaskMoveInstruction(fn.code[pc:], 64); mask {
-			if err != nil || length <= 0 {
-				return goAMD64FrameContext("unbound original mask-move machine instruction")
-			}
-			ins.Len = length
-		} else if x86NumericalVectorPrefix(fn.code[pc:], 64) {
+		if x86NumericalVectorPrefix(fn.code[pc:], 64) {
 			length, err := x86NumericalVectorBoundary(fn.code[pc:], 64)
 			if err != nil || length <= 0 {
 				return goAMD64FrameContext("unbound original vector machine instruction: %v", err)

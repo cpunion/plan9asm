@@ -94,8 +94,11 @@ func fixedLocalConditionalMoveStep(ins *Instr, state *x86FixedLocalState, proof 
 	if !fixedLocalNumericRead(destination.operand, destination.width, state) || x86SourceGRegister(destination.operand.Reg) {
 		return fail()
 	}
-	if source.operand.Kind == OpMem {
-		if _, err := fixedLocalMemory(ins, source.index, state, proof, residue, source.width, 1, false, false); err != nil {
+	literal := false
+	if source.operand.Kind == OpMem || source.operand.Kind == OpSym {
+		var err error
+		_, literal, err = fixedLocalReadMemory(ins, source.index, state, proof, residue, source.width, 1)
+		if err != nil {
 			return true, err
 		}
 	} else if !fixedLocalNumericRead(source.operand, source.width, state) {
@@ -105,6 +108,8 @@ func fixedLocalConditionalMoveStep(ins *Instr, state *x86FixedLocalState, proof 
 	booleans := fixedLocalBooleanRead(destination.operand, destination.width, state)
 	if source.operand.Kind == OpReg {
 		booleans &= fixedLocalBooleanRead(source.operand, source.width, state)
+	} else if literal {
+		booleans = 0 // Numerical literal bytes are not a boolean proof.
 	} else {
 		// The source read was proved above; its actual private offset is
 		// retained in this same residue's instruction-bound certificate.

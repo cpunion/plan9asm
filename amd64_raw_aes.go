@@ -8,6 +8,10 @@ import (
 // VAES is absent from the pinned generic decoder. Decode its complete actual
 // Go VEX/EVEX family without lending another instruction's operand/PC proof.
 func decodedX86AESInstruction(code []byte, mode int) (Instr, int, bool, error) {
+	return decodedX86AESInstructionWithMemory(code, mode, x86RawMemoryDecoder{})
+}
+
+func decodedX86AESInstructionWithMemory(code []byte, mode int, memory x86RawMemoryDecoder) (Instr, int, bool, error) {
 	if mode != 32 && mode != 64 {
 		return Instr{}, 0, false, nil
 	}
@@ -104,7 +108,14 @@ prefix:
 	if evex {
 		disp8Scale = width
 	}
-	source, consumed, err := decodedX86VectorRMSource(code[modRMIndex:], mode, bExt, xExt, rmHigh, width, segment, disp8Scale)
+	var source Operand
+	var consumed int
+	var err error
+	if code[modRMIndex]>>6 == 3 {
+		source, consumed, err = decodedX86VectorRMSource(code[modRMIndex:], mode, bExt, xExt, rmHigh, width, segment, disp8Scale)
+	} else {
+		source, consumed, err = decodedX86RMSourceWithPC(code[modRMIndex:], mode, bExt, xExt, segment, disp8Scale, memory.physicalPC)
+	}
 	if err != nil {
 		return Instr{}, 0, true, err
 	}

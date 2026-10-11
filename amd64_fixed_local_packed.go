@@ -1,8 +1,8 @@
 package plan9asm
 
 // Reuse the complete source grammars and their byte effects. This adapter adds
-// only the independently replayed private-frame memory role; it never supplies
-// a caller, FP, static-data, incoming-pointer or raw-instruction capability.
+// independently replayed private-frame memory and separately bound literal
+// reads; it never supplies a caller, FP, incoming-pointer or raw capability.
 func fixedLocalPackedMoveStep(ins *Instr, state *x86FixedLocalState, proof *x86FixedLocalProof, residue int) (bool, error) {
 	form, known, err := amd64PackedVectorMoveProperties(*ins, "amd64")
 	legacy := false
@@ -35,7 +35,7 @@ func fixedLocalPackedMoveStep(ins *Instr, state *x86FixedLocalState, proof *x86F
 		// The private proof does not model runtime mask values: require every
 		// possible read byte. Lowering still executes the original masked
 		// opcode, including its alignment and masked fault behavior.
-		if _, err := fixedLocalMemory(ins, 0, state, proof, residue, width, alignment, false, false); err != nil {
+		if _, _, err := fixedLocalReadMemory(ins, 0, state, proof, residue, width, alignment); err != nil {
 			return true, err
 		}
 	} else {
@@ -90,8 +90,8 @@ func fixedLocalMaskMoveStep(ins *Instr, state *x86FixedLocalState, proof *x86Fix
 	}
 	width := int64(bits / 8)
 	source, destination := ins.Args[0], ins.Args[1]
-	if source.Kind == OpMem {
-		if _, err := fixedLocalMemory(ins, 0, state, proof, residue, width, 1, false, false); err != nil {
+	if source.Kind == OpMem || source.Kind == OpSym {
+		if _, _, err := fixedLocalReadMemory(ins, 0, state, proof, residue, width, 1); err != nil {
 			return true, err
 		}
 	} else if amd64IsKOperand(source) {

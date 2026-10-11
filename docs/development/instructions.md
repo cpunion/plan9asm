@@ -789,8 +789,21 @@ multiple results require every exact ABI0 component to be initialized. A bool
 occupies one physical byte but returns LLVM i1: only proved zero/one bytes,
 including complete SETcc and canonical CMOV alternatives, may enter that slot.
 The eight mod64 residues, independent byte-alias replay and complete DAG remain
-mandatory. DATA, loops, helpers, stack splitting and input-buffer access do not
-gain any new permission from this transport contract.
+mandatory. Loops, helpers, stack splitting and input-buffer access do not gain
+any new permission from this transport contract.
+Mixed TEXT/DATA requires a separate complete current-Go source/object/listing
+observation on each AMD64 OS. Bind every DATA definition, byte, zero tail,
+relocation and original TEXT position; Windows unwind retains its independent
+complete-object join. Observing mutable/BSS/address DATA grants no memory use.
+The fixed-local consumer separately admits bounded private, relocation-free
+readonly literals whose actual Go bytes equal the entire LLVM initializer.
+Retain exact symbol identity, native extent/alignment and live source guards;
+reject coalesced definitions, stores, address escape, and zero-mask out-of-bounds
+reads. Only already registered typed numerical operands consume this proof;
+literal reads never receive private-frame certificates. Complete KMOV/VAES byte
+boundaries use the shared physical decoder without borrowing raw RIP translation
+permission. Original-Go/LLVM execution and all-target objects remain distinct
+from an original external-library replay or ledger pass.
 The runtime oracle independently snapshots original Go ABI0 bool bytes and
 adjacent canaries. Its LLVM caller uses an explicit i1-to-i32 shim: these tests
 do not certify C `_Bool` return attributes or a new foreign-call ABI.

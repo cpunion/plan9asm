@@ -38,8 +38,11 @@ to fork Draft PR 4 after the previous run finished naturally. They include the
 deadline fixture, low-product family, portable CPP index, broadcast memory result and native
 extension result repairs. The full root run at frozen `b5af3a10` now passed;
 new broadcast/extension code has its separate focused evidence below.
-Fresh CI 38096927749 is running: policy preflight passed and all six priority
-shards started. Let it finish naturally before publishing the next batch.
+Fresh CI 38096927749 is running: policy preflight passed; shards 29/39 are
+terminal failures, with 94 passes, 85 failures, 23 source N/A and one invalid-
+source skip among their 203 versions. Those totals match their prior run;
+38 failures still stop at mixed TEXT/DATA observation. The other four priority
+shards remain running. Let the run finish naturally before the next batch.
 Keep the upstream-connected branch unchanged until fresh fork CI and review
 pass. A running CI is not a pass or ledger update.
 
@@ -49,8 +52,15 @@ frozen for the running 32-partition/two-worker full root gate under
 `_out/root-exhaustive-dc3e53d8/`; do not edit it. Focused evidence remains in
 `_out/scalar-lane-native/` and `_out/gp-x-native/`.
 
-Development continues in `codex/pr40-byte-shuffle-20261011`, with the next
-original CI class and its independent RED/GREEN evidence in `_out/byte-shuffle/`.
+Byte-shuffle repair `6430b7f8` is committed locally. Development continues in
+`codex/pr40-frame-data-20261011`, with mixed DATA evidence in `_out/frame-data/`.
+The frozen `dc3e53d8` full-root run has a real failure in partition 20:
+`TestAMD64MovSyscallAndCRC32Coverage` admits a bare MOVLQSX symbol. Repair its
+shared operand class, retaining that failed full-run evidence. Do not edit the
+frozen tree or relabel it. The current-Go DATA/adjacent suite is still running;
+focused actual Go 1.20, vet, CLI extraction and official classification passed.
+Independent ordinary MOV native-result and dead-read REDs are retained in
+`_out/scalar-move-native/`; their implementation follows the failed gate repair.
 No external library was compiled locally and no ledger status changed.
 Read-only triage also found seven original-ZIP/go.mod comparison failures. A
 bounded public-proxy directory read confirms that the exact bford/golang-x-crypto
@@ -82,6 +92,22 @@ with unrelated speculative implementation. Keep correctness gates unchanged.
 
 ## Included repairs and retained evidence
 
+- Shards 29/39's mixed TEXT/DATA refusals now have an independent complete
+  current-Go DATA/source/object observation for all three AMD64 OS targets,
+  preserving TEXT positions, relocations and Windows unwind identity. This
+  alone grants no memory permission. The fixed-local consumer separately binds
+  bounded private readonly, relocation-free tables to their actual Go bytes,
+  native extent/alignment and immutable LLVM symbol resolution. Source/consumer
+  mutation, coalesced definitions, out-of-bounds, writes and address escape
+  remain rejected. The complete KMOV/VAES physical-boundary observer shares
+  decoding without widening raw RIP translation. The 119 registered literal
+  operations passed three-target, three-API LLVM 22 O0/O2 objects; eight original
+  Go/LLVM kernels passed 2,048 numerical outcomes per API/optimization lane.
+  Rosetta is a legacy SSE diagnostic, not native Linux or AVX512 execution.
+  The independent whole-object reader and source/listing mutation controls pass.
+  Sixteen actual Go 1.20 roots, vet, CLI extraction and unchanged five-target
+  classification pass. The broader current-Go suite is ongoing; original exact-
+  version remote replay and current-head CI still own library closure.
 - Shard 38's ClarkQAQ/uw hex decoder exposed missing PSHUFB/VPSHUFB result
   effects. The complete family now shares the binary grammar across lowering,
   caller/result effects, native memory tuples and per-function features.

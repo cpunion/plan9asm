@@ -74,6 +74,8 @@ func x86NumericalVectorPrefix(code []byte, mode int) bool {
 func x86NumericalVectorBoundary(code []byte, mode int) (int, error) {
 	memory := x86RawMemoryDecoder{physicalPC: true}
 	decoders := [...]func([]byte, int, x86RawMemoryDecoder) (Instr, int, bool, error){
+		decodedX86AESInstructionWithMemory,
+		decodedX86MaskMoveInstructionWithMemory,
 		decodedX86PackedMoveInstructionWithMemory,
 		decodedX86EVEXPackedIntegerMoveInstructionWithMemory,
 		decodedX86VEXNonTemporalMoveInstructionWithMemory,
