@@ -93,7 +93,7 @@ struct Case {
 };
 static const struct Case cases[]={
 ` + cases.String() + `};
-static uint64_t read(const uint8_t *bytes,unsigned width) {
+static uint64_t read_shift_bytes(const uint8_t *bytes,unsigned width) {
     uint64_t value=0;
     for(unsigned i=0;i<width;i++) value|=(uint64_t)bytes[i]<<(i*8);
     return value;
@@ -115,14 +115,14 @@ int main(void) {
         for(unsigned output=0;output<128;output++) {
             unsigned base=output/test->bits*test->bits;
             uint64_t shift=test->immediate>=0?(unsigned)test->immediate:
-                test->perlane?read(count+base/8,test->bits/8):read(count,8);
+                test->perlane?read_shift_bytes(count+base/8,test->bits/8):read_shift_bytes(count,8);
             if(shift>=test->bits) continue;
             int from=(int)(output%test->bits)+(test->left?-(int)shift:(int)shift);
             if(from<0 || from>=(int)test->bits) continue;
             unsigned input=base+(unsigned)from;
             want[output/8]|=((data[input/8]>>(input%8))&1)<<(output%8);
         }
-        uint32_t expected=(uint32_t)read(want+test->lane*4,4);
+        uint32_t expected=(uint32_t)read_shift_bytes(want+test->lane*4,4);
         uint32_t got=test->translated(inputs[sample],counts[n]);
         if(got!=expected) {
             fprintf(stderr,"%s sample=%u count=%u LLVM=%x want=%x\n",test->row,sample,counts[n],got,expected);
@@ -130,7 +130,7 @@ int main(void) {
         }
         if(test->original) {
             test->original(count,data,original);
-            if(read(original+test->lane*4,4)!=expected) {
+            if(read_shift_bytes(original+test->lane*4,4)!=expected) {
                 fprintf(stderr,"%s original Go selected output differs\n",test->row);
                 return 2;
             }
