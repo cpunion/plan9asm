@@ -36,7 +36,7 @@ func (c *amd64Ctx) lowerScalarADCSBB(op Op, ins Instr) (ok bool, terminated bool
 	if source.Kind == OpImm {
 		sourceValue = amd64ScalarAddSubImmediate(source.Imm, bits)
 	} else {
-		sourceValue, err = c.evalIntSized(source, typ)
+		sourceValue, destination, err = c.evalScalarArithmeticSource(ins, typ)
 		if err != nil {
 			return true, false, err
 		}

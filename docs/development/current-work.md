@@ -18,8 +18,15 @@ separate scalar-FMA development branch. Only original CI failure classes,
 not speculative instruction-family audits, belong to the next repair batch.
 The twenty-commit follow-up through `46fa4bca` is now published in fork PR 4
 at `codex/pr40-latest-per-path-20260930`; its upstream-connected base remains
-`b93666f5`. Fresh run 38116495799 passed policy preflight and has all six priority
-shards running. Let it finish naturally before another push. PR body now
+`b93666f5`. Fresh run 38116495799 passed policy preflight; shards 29/39 have
+finished with failure and the other four priority shards are still running.
+Shard 29 has 54 passes, 39 failures, twelve source N/A and one invalid-source
+skip; shard 39 has 41 passes, 45 failures and eleven source N/A. The exact
+`github.com/usbarmory/tamago@v1.27.1` changed from failed to passed; shard 39's
+whole-version counts are unchanged. These two partial reports do not update
+the ledger. Retain their artifacts under `_out/ci-38116495799/` in the respective
+conversion and arithmetic development trees. Let the run finish naturally
+before another push. PR body now
 contains the batched repairs, terminal old-run funnel and remaining gates.
 
 Fork CI 38043255488 at `aedfac9b` finished naturally with failure, as did its
@@ -148,9 +155,12 @@ The active integration branch is `codex/pr40-frame-data-20261011`, including
 the metadata/query repairs through `4b739b56` and min/max shard-spread guard.
 Retain that exact frozen revision in the output directory. Develop subsequent
 CI repairs in an existing idle worktree, not the frozen verification tree.
-That complete module run is now active at frozen `4856910c`, under
+That complete module run finished at frozen `4856910c`, under
 `_out/module-exhaustive-4856910c/`, with 32 partitions and two workers.
-Do not edit the integration tree while it runs.
+Twenty of its 21 packages passed; the root package retains the five failures
+below. The corpus driver passed all 709 roots, and the profile package passed
+all 265 roots. Preserve the failed full-module report and its strict final
+verification error; focused repairs cannot relabel it.
 Partition 4 has a real stale-negative failure: its compare test still rejects
 an ordinary MOVL native read, which now has its own paired volatile effect.
 Commit `33cfbd73` retains two independent reads through LLVM O2 on all five
@@ -169,8 +179,7 @@ not. Twenty-five current-Go and three Go 1.20 roots pass. Preserve
 including the original failures and the corrected NOSPLIT test fixture.
 The frozen root report is now terminal: 28/32 partitions pass, with 5,796 root
 passes, five failures, 39 explicit host-inapplicable skips and zero incomplete
-roots. All five failed roots have the focused repairs above. The main-module
-runner continues its other packages. Component repairs do not relabel the old
+roots. All five failed roots have the focused repairs above. Component repairs do not relabel the old
 report or replace fresh complete CI and required cross-runtime counterparts.
 
 The reused development branch is `codex/pr40-packed-arithmetic-effects-20261011`.
@@ -237,8 +246,12 @@ checks above. Development remains on the reused packed-arithmetic branch;
 the repair batch was published only in fork PR 4 after the old CI's terminal
 status. Do not update the upstream-connected branch or assembly ledger.
 
-Local continuation now uses `codex/pr40-packed-conversion-frame-20261011` in
-the reused development worktree. The NOP repair is retained in local commit
+The conversion snapshot `fe553bff` on
+`codex/pr40-packed-conversion-frame-20261011` is now frozen for a fresh complete
+module run in `_out/module-exhaustive-fe553bff/`, with 32 partitions and two
+workers. Do not edit that tree while its owner runs. Development reuses the
+idle scalar-lane tree on `codex/pr40-scalar-arithmetic-native-20261011`, retaining
+its old dispatcher reports. The NOP repair is retained in local commit
 `6f4f262c`. Shard 42's gofiber utils v2.5.3 source combines native
 reads with raw NOP padding. An independent five-target RED reproduces the
 function-wide raw-origin rejection at VMOVDQU. Only the physical decoder's
@@ -296,11 +309,31 @@ These commits are not part of running fork CI 38116495799. Keep them local
 until that run finishes naturally; then replay original failures before
 promoting any external outcome.
 
+Fresh shards 29/39 expose six sing-tun/wireguard versions reaching an ordinary
+`ADDQ (DX),AX` after the earlier MOV repair. The complete ADD/SUB/ADC/SBB B/W/L/Q
+family now pairs its existing Go-table grammar with exact volatile native
+reads and lowering-only numerical effects. Destination bytes and incoming
+carry remain independently required; no public declaration, native store,
+raw entry, pointer arithmetic or frame permission follows. Physical REX byte
+aliases come from that same grammar, with SP/BP aliases still rejected.
+
+Retain `_out/scalar-arithmetic-native/`: the original result/read RED, seven
+passing family/runtime roots, 26 adjacent roots, thirteen actual Go 1.20 roots,
+CLI extraction, vet and unchanged official classification. The initial status
+runtime fixture used SETPC for even parity; its failed original-Go comparison
+remains recorded, and the corrected SETPS fixture passes. Two required cross
+roots cover 112 live/dead/status/REX kernels in bounded 64/48-function batches,
+through all three APIs at O0/O2. Their local original-Go/LLVM executions are
+Rosetta diagnostics, not native Linux evidence. External versions retain their
+failed status until whole-version remote replay. No local external batch or
+ledger promotion accompanied this repair.
+
 The historical `aedfac9b` tree's old
 `_out/ci-closure/publish-after-ci.sh` already completed publication and is not
 a reusable publisher. Its replacement old-run watcher is terminal. The current
-read-only watcher is in the published tree at
-`_out/ci-failure-replay/watch-0c61d468.log`; it has no publication action.
+read-only watcher retains its log at
+`_out/packed-conversion-frame/ci-38116495799-watch.log` in the conversion tree;
+it has no publication action. The prior `watch-0c61d468.log` is terminal.
 Retain all terminal logs and earlier disk-exhaustion evidence.
 
 The local cleanup consolidated 1,084 inactive clean worktrees and removed 333
@@ -733,9 +766,9 @@ timeouts. Those regressions have newer repairs, not a retroactive pass.
 
 1. Let published `46fa4bca` CI 38116495799 finish naturally. Retain all six
    priority reports and compare exact failures before the next fork-only push.
-2. Retain the verified local NOP, discovery-split and packed-conversion batches.
-   Finish the frozen main-module runner's remaining packages; keep its five old
-   root failures failed. Original examples need complete new-source replay.
+2. Retain the verified local NOP, discovery-split, packed-conversion and scalar
+   arithmetic batches. Finish the new frozen `fe553bff` module run; keep the
+   old `4856910c` failures failed. Original examples need complete remote replay.
 3. Compare new CI failures with the original eight classes. Fix each class with
    independent RED/GREEN tests and original-example replay; batch the next push.
 4. After priority success, let all remaining current-head gates run. Publish

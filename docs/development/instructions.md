@@ -176,6 +176,17 @@ does not grant caller memory or a standalone declaration-query permission.
 Current-Go PCALIGN source is a separate producer fixture; the complete literal
 NOP/read matrix still runs on the historical SDK, which lacks that directive.
 
+Scalar ADD/SUB/ADC/SBB native memory-to-register reads reuse the existing
+complete B/W/L/Q grammar for widths, carry and physical REX byte aliases. The
+paired lowerer must retain an exact volatile load even for dead data/FLAGS;
+the lowering-only result consumer additionally requires the old destination
+bytes and ADC/SBB's incoming CF. Continued execution does not prove pointer
+validity, extent or alignment. Native writes, unknown or numerical addresses,
+pointer-as-data, physical SP/BP aliases, raw entries and standalone declaration
+queries keep their separate contracts. Execute live/dead, carry/borrow, width,
+status, alias and guard-page controls against actual original Go bytes; portable
+objects and Rosetta execution do not replace the required native Linux owner.
+
 An x86 raw-return caller-region producer is a separate, bounded source proof,
 not a pointer-type or `noescape` nonalias promise. It requires the same actual
 selected Go/ASM inventory, typed syntax, actual numerical/pointer sizes and
