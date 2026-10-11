@@ -113,6 +113,27 @@ func checkX86ABI0ResultInitializationAtSource(fn Func, sig FuncSig, goarch strin
 	if (fn.ArgSize != 0 || privateVoid) && (fn.ArgSize < int64(frame) || fn.ArgSize > 4096) {
 		return fail("TEXT argument extent disagrees with the typed result")
 	}
+	return checkX86ResultSourceFlow(fn, initial, owned, resultOffset, goarch, transfer,
+		func(state x86ResultState, pc int) error {
+			for offset := int(resultOffset); offset < frame; offset++ {
+				if owned[offset] && !state.fp[offset] {
+					return fail(fmt.Sprintf("result byte %d is not written on every path to RET %d", offset, pc))
+				}
+			}
+			return nil
+		})
+}
+
+type x86ResultSourceTransfer func(int, Instr, *x86ResultState, []bool, int64, string) bool
+
+// The ABI owns entry bytes and the required return bytes. Instruction effects,
+// dead-source validation, joins and fixed-point budgets are shared, so a new
+// entry role cannot weaken the existing ABI0 result proof.
+func checkX86ResultSourceFlow(fn Func, initial x86ResultState, owned []bool, resultOffset int64, goarch string,
+	transfer x86ResultSourceTransfer, checkReturn func(x86ResultState, int) error) error {
+	fail := func(reason string) error {
+		return fmt.Errorf("%w: result initialization: %s", ErrProbeNeedsContext, reason)
+	}
 	labels := make(map[string]int)
 	var instructions []Instr
 	var ordinals []int
@@ -145,7 +166,7 @@ func checkX86ABI0ResultInitializationAtSource(fn Func, sig FuncSig, goarch strin
 		8*len(initial.xmm) + len(initial.masks) + 1 + len(initial.pointerGP) + 1
 	const byteWorkLimit = 64 << 20
 	byteWork := len(instructions) * byteState
-	if autoExtent != 0 && byteWork > byteWorkLimit/8 {
+	if len(initial.auto) != 0 && byteWork > byteWorkLimit/8 {
 		return fail("combined FP/AUTO source-CFG byte budget exhausted")
 	}
 	// Validate effects and all static successors source-wide. Definedness is
@@ -216,7 +237,7 @@ func checkX86ABI0ResultInitializationAtSource(fn Func, sig FuncSig, goarch strin
 		if visits >= 16384 {
 			return fail("must-defined fixed-point budget exhausted")
 		}
-		if autoExtent != 0 {
+		if len(initial.auto) != 0 {
 			byteWork += 8 * byteState // conservative bound for copies and joins
 			if byteWork > byteWorkLimit {
 				return fail("combined FP/AUTO must-defined byte budget exhausted")
@@ -256,10 +277,8 @@ func checkX86ABI0ResultInitializationAtSource(fn Func, sig FuncSig, goarch strin
 		if instructions[pc].Op != OpRET {
 			continue
 		}
-		for offset := int(resultOffset); offset < frame; offset++ {
-			if owned[offset] && !state.fp[offset] {
-				return fail(fmt.Sprintf("result byte %d is not written on every path to RET %d", offset, pc))
-			}
+		if err := checkReturn(state, pc); err != nil {
+			return err
 		}
 	}
 	return nil

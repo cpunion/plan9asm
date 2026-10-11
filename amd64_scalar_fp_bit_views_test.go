@@ -14,7 +14,7 @@ import (
 func x86ScalarFPBitViewAPI(t *testing.T, source, declaration, arch, triple, api string) (string, error) {
 	t.Helper()
 	pkg := mustGoPackage(t, "bitview", "package bitview\n"+declaration)
-	resolve := func(symbol string) string { return strings.TrimPrefix(symbol, "·") }
+	resolve := func(symbol string) string { return strings.TrimPrefix(goStripABISuffix(symbol), "·") }
 	ctx := llvm.NewContext()
 	defer ctx.Dispose()
 	if api == "Go" {

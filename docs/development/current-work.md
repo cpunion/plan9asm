@@ -119,11 +119,23 @@ seconds; Linux-container execution passed in 37.41 seconds. Go 1.20 and the
 complete 278-format insert/extract numerical matrix also pass. Container and
 Rosetta observations do not certify native AVX512 execution.
 
+The verified repairs through `575c5962` are now published to the allowed fork;
+PR 40's new CI run is `38182744838`. Its fmt and build jobs pass, but the
+standard-library gates still fail and the complete run is not yet a pass.
+
+The next AMD64 repair separates explicit scalar ABIInternal register results
+from ABI0 FP initialization while sharing the existing all-path byte analysis.
+The eight insertion names, all 60 lane formats, three APIs, three-target O0/O2
+objects and portable byte-reference execution pass. Go 1.20 focused checks and
+the shared result regressions pass too. Real SDK maps replay still fails on
+immediate-shuffle result analysis and the independent AES global-storage role;
+neither source file is promoted to a corpus pass.
+
 The remaining 21 standard-library failures require actual runtime/reflect
 entry, TLS, hidden-register, caller-storage or SDK source contracts. Do not
 erase them, clip observable result padding, or fabricate frames to pass the
-benchmark. Runtime/compiler integration is a separate scope decision; keep
-the contribution draft until the required native CI and these gates pass.
+benchmark. Keep runtime/compiler integration explicit and separately tested;
+retain the contribution draft until the required native CI and these gates pass.
 
 The migration PR is draft. Its historical assembly ledger remains incomplete;
 this does not change translator coverage or certify any external module.

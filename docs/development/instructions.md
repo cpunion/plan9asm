@@ -794,6 +794,12 @@ or mask permission.
 Any integer-lane instruction with declared integer FP results consumes the
 whole original-function must-initialized byte proof before lowering, including
 later GP-to-FP stores and all RET paths. A final-opcode-only check is inadequate.
+An explicit AMD64 ABIInternal scalar entry uses the same bounded source CFG,
+but initializes only the declared bytes in Go's nine integer argument registers
+and checks its scalar AX result at every RET. It does not initialize ABI0 FP
+fields, spill slots, hidden g/closure state or unspecified upper argument bytes.
+Pointer arguments remain opaque identities; aggregates, floating/boolean
+transport, multiple results and raw/native entries need their separate contracts.
 Narrow byte/word FP views require unique actual numeric field bytes; pointer,
 padding, input stores, partial results and unknown effects remain Context.
 Native memory uses its exact volatile byte width and existing caller bounds;

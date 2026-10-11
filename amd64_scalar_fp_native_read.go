@@ -1,5 +1,7 @@
 package plan9asm
 
+import "strings"
+
 // This is a lowering-only numerical availability check. A paired original
 // opcode or volatile unaligned load either faults or produces its active
 // destination bytes; masked inactive bytes retain their separate rule. It does not
@@ -12,6 +14,13 @@ package plan9asm
 func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 	fn, sig, arch := c.fpScalarSource, c.sig, c.goarch
 	strictErr := checkX86ScalarFPResultInitialization(fn, sig, arch)
+	registerEntry := arch == "amd64" && strings.HasSuffix(fn.Sym, "<ABIInternal>")
+	if registerEntry {
+		strictErr = checkAMD64RegisterResultInitialization(fn, sig,
+			func(_ int, ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string) bool {
+				return x86ScalarFPResultTransfer(ins, state, owned, resultOffset, arch)
+			})
+	}
 	if strictErr == nil {
 		return nil
 	}
@@ -36,64 +45,67 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 			}
 		}
 	}
-	return checkX86ABI0ResultInitializationAtSource(fn, sig, arch,
-		func(_ int, ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string) bool {
-			state.loweredStaticReads = c.fpScalarData
-			defer func() { state.loweredStaticReads = nil }()
-			if accepted, known := x86ResultPackedZeroExtendStep(ins, state, owned, arch, true); known {
-				return accepted
-			}
-			if accepted, recognized := x86LoweredBlockInsertRead(ins, state, owned, resultOffset, arch); recognized {
-				return accepted
-			}
-			if accepted, recognized := x86LoweredScalarExtensionRead(ins, state, owned, resultOffset, arch); recognized {
-				return accepted
-			}
-			if accepted, recognized := x86LoweredScalarNativeLoad(ins, state, owned, resultOffset, arch); recognized {
-				return accepted
-			}
-			if accepted, recognized := x86LoweredScalarArithmeticNativeRead(ins, state, owned, resultOffset, arch); recognized {
-				return accepted
-			}
-			if accepted, recognized := x86ResultScalarLaneStepWithRead(ins, state, owned, resultOffset, arch, true); recognized {
-				return accepted
-			}
-			if form, known, err := x86GPSIMDTransferProperties(ins, arch); known && err == nil && form.memory == 0 {
-				return x86ResultGPSIMDTransferWithRead(ins, form, state, owned, resultOffset, arch, true)
-			}
-			if accepted, known := c.scalarCompareNativeResultTransfer(ins, state, owned, arch); known {
-				return accepted
-			}
-			if form, known, err := amd64PackedVectorMoveProperties(ins, arch); known && err == nil &&
-				form.memory == 0 && form.ordinaryMemory(ins, arch) &&
-				x86ResultIncomingPointerAddressIdentity(ins.Args[0], state, arch) {
-				// The emitter preserves the original aligned opcode, or the
-				// unaligned full/guarded tuple with volatile accesses. If it continues,
-				// active bytes are numerical; inactive bytes still require the
-				// typed merge/zero rule. No pointer validity is asserted.
-				return x86ResultPackedVectorMoveTransfer(ins, form, state, owned, resultOffset, arch, true)
-			}
-			form, known, err := x86LegacyPackedMoveProperties(ins.Op, ins, arch)
-			if known && err == nil && form.memory == 0 && form.source.Kind == OpMem &&
-				form.source.Mem.Sym == "" && x86OrdinaryNativeMemoryOperand(form.source, arch) {
-				// This same typed form selects the original sideeffect opcode
-				// in lowerLegacyPackedMove. Only reaching incoming-pointer
-				// identity and initialized numerical indexes supply an address.
-				// No native store, static symbol, virtual frame or unknown base
-				// gains a numerical input from this load-only rule.
-				return x86ResultIncomingPointerAddressIdentity(form.source, state, arch) &&
-					x86ResultStore(form.destination, 16, state, owned, resultOffset, arch)
-			}
-			next := state.clone()
-			// A reaching-state clone deliberately drops temporary readers.
-			// This isolated attempt is still inside the same lowering transfer.
-			next.loweredStaticReads = state.loweredStaticReads
-			if x86ScalarFPResultTransfer(ins, &next, owned, resultOffset, arch) {
-				*state = next
-				return true
-			}
-			return x86LoweredPureGPUnknownTransfer(ins, state, arch)
-		}, true)
+	transfer := func(_ int, ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string) bool {
+		state.loweredStaticReads = c.fpScalarData
+		defer func() { state.loweredStaticReads = nil }()
+		if accepted, known := x86ResultPackedZeroExtendStep(ins, state, owned, arch, true); known {
+			return accepted
+		}
+		if accepted, recognized := x86LoweredBlockInsertRead(ins, state, owned, resultOffset, arch); recognized {
+			return accepted
+		}
+		if accepted, recognized := x86LoweredScalarExtensionRead(ins, state, owned, resultOffset, arch); recognized {
+			return accepted
+		}
+		if accepted, recognized := x86LoweredScalarNativeLoad(ins, state, owned, resultOffset, arch); recognized {
+			return accepted
+		}
+		if accepted, recognized := x86LoweredScalarArithmeticNativeRead(ins, state, owned, resultOffset, arch); recognized {
+			return accepted
+		}
+		if accepted, recognized := x86ResultScalarLaneStepWithRead(ins, state, owned, resultOffset, arch, true); recognized {
+			return accepted
+		}
+		if form, known, err := x86GPSIMDTransferProperties(ins, arch); known && err == nil && form.memory == 0 {
+			return x86ResultGPSIMDTransferWithRead(ins, form, state, owned, resultOffset, arch, true)
+		}
+		if accepted, known := c.scalarCompareNativeResultTransfer(ins, state, owned, arch); known {
+			return accepted
+		}
+		if form, known, err := amd64PackedVectorMoveProperties(ins, arch); known && err == nil &&
+			form.memory == 0 && form.ordinaryMemory(ins, arch) &&
+			x86ResultIncomingPointerAddressIdentity(ins.Args[0], state, arch) {
+			// The emitter preserves the original aligned opcode, or the
+			// unaligned full/guarded tuple with volatile accesses. If it continues,
+			// active bytes are numerical; inactive bytes still require the
+			// typed merge/zero rule. No pointer validity is asserted.
+			return x86ResultPackedVectorMoveTransfer(ins, form, state, owned, resultOffset, arch, true)
+		}
+		form, known, err := x86LegacyPackedMoveProperties(ins.Op, ins, arch)
+		if known && err == nil && form.memory == 0 && form.source.Kind == OpMem &&
+			form.source.Mem.Sym == "" && x86OrdinaryNativeMemoryOperand(form.source, arch) {
+			// This same typed form selects the original sideeffect opcode
+			// in lowerLegacyPackedMove. Only reaching incoming-pointer
+			// identity and initialized numerical indexes supply an address.
+			// No native store, static symbol, virtual frame or unknown base
+			// gains a numerical input from this load-only rule.
+			return x86ResultIncomingPointerAddressIdentity(form.source, state, arch) &&
+				x86ResultStore(form.destination, 16, state, owned, resultOffset, arch)
+		}
+		next := state.clone()
+		// A reaching-state clone deliberately drops temporary readers.
+		// This isolated attempt is still inside the same lowering transfer.
+		next.loweredStaticReads = state.loweredStaticReads
+		if x86ScalarFPResultTransfer(ins, &next, owned, resultOffset, arch) {
+			*state = next
+			return true
+		}
+		return x86LoweredPureGPUnknownTransfer(ins, state, arch)
+	}
+	if registerEntry {
+		return checkAMD64RegisterResultInitialization(fn, sig, transfer)
+	}
+	return checkX86ABI0ResultInitializationAtSource(fn, sig, arch, transfer, true)
 }
 
 // Only the lowering observer may consume a paired exact-width volatile load
