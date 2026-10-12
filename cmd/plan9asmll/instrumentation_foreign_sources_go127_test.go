@@ -9,12 +9,14 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strings"
 	"testing"
 
 	"github.com/xgo-dev/plan9asm/gotoolprofile"
 	"github.com/xgo-dev/plan9asm/internal/gooriginalsrc"
+	"github.com/xgo-dev/plan9asm/internal/sourcepath"
 	"golang.org/x/tools/go/packages"
 )
 
@@ -160,6 +162,27 @@ func TestInstrumentationForeignOriginalSourcesCLIRecaptureAndFinalGuard(t *testi
 		input, []gotoolprofile.TestModuleSource{resource}, gotoolprofile.RunBounded)
 	if err != nil {
 		t.Fatal(err)
+	}
+	// The actual consumer uses a physical invocation directory. Re-observing
+	// that same source must preserve all portable fields, including exports.
+	physical, err := sourcepath.Resolve(input.Original.SourceRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	recaptured, err := gotoolprofile.CaptureInstrumentationTypeSources(ctx, binary, physical, modeEnv, input, gotoolprofile.RunBounded)
+	if err != nil {
+		t.Fatal(err)
+	}
+	expectedJSON, err := json.Marshal(input.TypeSources)
+	if err != nil {
+		t.Fatal(err)
+	}
+	actualJSON, err := json.Marshal(recaptured)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(input.TypeSources, recaptured) {
+		t.Fatalf("same-source type recapture changed:\nexpected: %s\nactual: %s", expectedJSON, actualJSON)
 	}
 	consumer, err := captureInstrumentationMetadata(ctx, input, input.Original.SourceRoot, env, t.TempDir(), packages.Load)
 	if err != nil {

@@ -25,7 +25,10 @@ func TestARM64NativeScratchObjectSourceMetadataRequiresCapturedPhysicalInput(t *
 	// Explicit metadata unit input, not a live factory or source permission.
 	source := &GoARM64ScratchSource{filePrefix: "gofile..", settings: map[string]string{"GOROOT": root},
 		inputs: map[string][32]byte{input: sha256.Sum256(data)}}
-	for _, name := range []string{input, "gofile.." + input, "$GOROOT/src/input.s", "gofile..$GOROOT/src/input.s"} {
+	for _, name := range []string{
+		input, "gofile.." + input, filepath.ToSlash(input), "gofile.." + filepath.ToSlash(input),
+		"$GOROOT/src/input.s", "gofile..$GOROOT/src/input.s",
+	} {
 		if physical, valid := source.originalObjectSource(name); !valid || physical != input {
 			t.Fatalf("exact captured physical source metadata %q rejected: %q", name, physical)
 		}
