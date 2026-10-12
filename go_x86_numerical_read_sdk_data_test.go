@@ -208,6 +208,14 @@ func TestGoX86SDKNumericalReadLiteralRequestBoundaries(t *testing.T) {
 func TestGoX86SDKNumericalReadLiteralCompleteBindingBoundaries(t *testing.T) {
 	ctx, request, observed := numericalSDKLiteralFixture(t)
 	pkg, original, originalOptions := numericalSDKLiteralPackage(t, observed, request.AssemblyFile)
+	// These cases mutate only caller-owned file/options copies, not the SDK
+	// source, owners or capture profile. Keep one live observation and actually
+	// reverify it per case instead of recapturing the complete SDK each time.
+	source, err := CaptureGoX86SDKNumericalReadSource(ctx, request)
+	if err != nil {
+		t.Fatal("actual joined SDK source precondition", err)
+	}
+	defer closeNumericalConsumerSource(t, source)
 	for _, test := range []struct {
 		name   string
 		mutate func(*File, *Options)
@@ -271,11 +279,11 @@ func TestGoX86SDKNumericalReadLiteralCompleteBindingBoundaries(t *testing.T) {
 		}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			source, err := CaptureGoX86SDKNumericalReadSource(ctx, request)
-			if err != nil {
+			// An expired/revoked source must never impersonate the intended
+			// source-shape rejection, including after an earlier bad request.
+			if err := source.Verify(ctx); err != nil {
 				t.Fatal("actual joined SDK source precondition", err)
 			}
-			defer closeNumericalConsumerSource(t, source)
 			file := *original
 			file.Data = append([]DataStmt(nil), original.Data...)
 			file.Globl = append([]GloblStmt(nil), original.Globl...)
@@ -287,6 +295,10 @@ func TestGoX86SDKNumericalReadLiteralCompleteBindingBoundaries(t *testing.T) {
 				t.Fatal("changed complete source/initializer/namespace acquired a binding", err)
 			}
 		})
+	}
+	bound, err := source.BindNumericalReads(ctx, pkg, original, originalOptions)
+	if err != nil || bound.NumericalReads == nil {
+		t.Fatal("unchanged original must still bind after all caller-only rejections", err)
 	}
 }
 

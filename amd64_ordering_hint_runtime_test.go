@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"debug/pe"
 	"fmt"
 	"os"
 	"os/exec"
@@ -9,6 +10,22 @@ import (
 	"strings"
 	"testing"
 )
+
+func TestX86OrderingHintsOriginalWindowsExecutable(t *testing.T) {
+	declarations, assembly, driver, _ := x86OrderingHintRuntimeFixture(64)
+	original := x86OrderingHintBuildOriginal(t, t.TempDir(), "windows", "amd64", declarations, assembly, driver)
+	if filepath.Ext(original) != ".exe" {
+		t.Fatal("Windows original oracle requires its exact executable suffix", original)
+	}
+	object, err := pe.Open(original)
+	if err != nil {
+		t.Fatal("actual Windows oracle executable", err)
+	}
+	defer object.Close()
+	if object.Machine != pe.IMAGE_FILE_MACHINE_AMD64 || object.Characteristics&pe.IMAGE_FILE_EXECUTABLE_IMAGE == 0 {
+		t.Fatal("original Windows oracle is not an AMD64 executable")
+	}
+}
 
 // These observations establish exact GP, six status bits and MXCSR retention,
 // not an empirical proof of the architecture's concurrent memory model.
@@ -45,6 +62,9 @@ func x86OrderingHintBuildOriginal(t *testing.T, dir, goos, arch, declarations, a
 		}
 	}
 	executable := filepath.Join(dir, "original-go")
+	if goos == "windows" {
+		executable += ".exe"
+	}
 	command := exec.Command(filepath.Join(runtime.GOROOT(), "bin/go"), "build", "-p=2", "-o", executable, ".")
 	command.Dir = dir
 	command.Env = append(os.Environ(), "GOOS="+goos, "GOARCH="+arch,

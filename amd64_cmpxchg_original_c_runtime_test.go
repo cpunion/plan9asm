@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/xgo-dev/plan9asm/internal/gotoolchain"
 )
 
 func x86CMPXCHGOriginalCNumerical(t *testing.T, execution x86FloatCompareExecution) {
@@ -62,7 +64,8 @@ func x86CMPXCHGOriginalCSource() string {
 func x86CMPXCHGCompileOriginalC(t *testing.T, execution x86FloatCompareExecution, sourceText, level string) []byte {
 	t.Helper()
 	directory := t.TempDir()
-	source, executable := filepath.Join(directory, "original.c"), filepath.Join(directory, "original")
+	source := filepath.Join(directory, "original.c")
+	executable := filepath.Join(directory, gotoolchain.HostExecutable("original"))
 	if err := os.WriteFile(source, []byte(sourceText), 0600); err != nil {
 		t.Fatal(err)
 	}
