@@ -124,9 +124,21 @@ func goAMD64WindowsUnwindSourcePCs(text gostaticstorage.TextRecord, fn goAMD64Fr
 		}
 		return filepath.Clean(name)
 	}
+	// Go object file tables use slash paths on Windows, while captured
+	// origins retain host paths and the command's relative source spelling.
+	// Compare their already-bound paths consistently with the listing join;
+	// aliases must still agree on the complete original source extent.
+	linesByPath := make(map[string]int, len(origins))
+	for name, lines := range origins {
+		path := normalize(name)
+		if previous, found := linesByPath[path]; found && previous != lines {
+			return goAMD64FrameContext("Windows source origin aliases disagree on their original extent")
+		}
+		linesByPath[path] = lines
+	}
 	var previous int64
 	for _, span := range text.Positions {
-		if span.File == "" || span.Line <= 0 || int(span.Line) > origins[span.File] || span.Start < 0 ||
+		if span.File == "" || span.Line <= 0 || int(span.Line) > linesByPath[normalize(span.File)] || span.Start < 0 ||
 			span.Start != previous || span.End <= span.Start || span.End > int64(len(fn.code)) {
 			return goAMD64FrameContext("Windows object source-PC interval lacks its original file/line/extent")
 		}

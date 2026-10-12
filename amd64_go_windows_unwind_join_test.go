@@ -71,8 +71,46 @@ func goAMD64WindowsUnwindCompleteObjectListingJoinGuards(t *testing.T) {
 			t.Fatal("object substituted another actual producer", version, err)
 		}
 	}
-	if _, err := goAMD64FrameWindowsUnwindListing(listing, file, pkg, source.origins, request.Directory, observed); err != nil {
+	functions, err := goAMD64FrameWindowsUnwindListing(listing, file, pkg, source.origins, request.Directory, observed)
+	if err != nil {
 		t.Fatal("independent actual original metadata join control failed", err)
+	}
+	for _, spelling := range []string{"absolute", "slash absolute", "relative", "conflicting extent", "foreign directory"} {
+		t.Run("source origins/"+spelling, func(t *testing.T) {
+			origins := make(map[string]int)
+			for name, lines := range source.origins {
+				if !filepath.IsAbs(name) {
+					name = filepath.Join(request.Directory, name)
+				}
+				if spelling == "slash absolute" {
+					name = filepath.ToSlash(name)
+				}
+				if spelling == "relative" {
+					var err error
+					name, err = filepath.Rel(request.Directory, name)
+					if err != nil {
+						t.Fatal(err)
+					}
+				}
+				if spelling == "foreign directory" {
+					name = filepath.Join(request.Directory, "foreign", filepath.Base(name))
+				}
+				origins[name] = lines
+			}
+			if spelling == "conflicting extent" {
+				origins[request.AssemblyFile] = source.origins[request.AssemblyFile] + 1
+			}
+			for _, text := range observed.Texts {
+				err := goAMD64WindowsUnwindSourcePCs(text, functions[text.Name], request.Directory, origins)
+				if spelling == "conflicting extent" || spelling == "foreign directory" {
+					if !errors.Is(err, ErrProbeNeedsContext) {
+						t.Fatal("unbound or contradictory source origin acquired a PC witness", err)
+					}
+				} else if err != nil {
+					t.Fatal("actual source origin was lost through its host path spelling", err)
+				}
+			}
+		})
 	}
 	serialized, err := json.Marshal(observed)
 	if err != nil {
