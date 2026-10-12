@@ -77,27 +77,10 @@ func (source *GoX86SDKASMDataSource) captureHeader(ctx context.Context) error {
 		return err
 	}
 
-	var importConfig strings.Builder
-	paths := append([]string(nil), guard.selection.Imports...)
-	sort.Strings(paths)
-	for _, path := range paths {
-		if path == "unsafe" {
-			continue
-		}
-		mapped := path
-		if target, present := guard.selection.ImportMap[path]; present {
-			mapped = target
-		}
-		dependency, present := guard.imports[mapped]
-		if !present || dependency.Export == "" || strings.ContainsAny(path+mapped+dependency.Export, "\r\n=\\") {
-			return sdkASMDataContext("header compiler lacks an exact actual dependency export")
-		}
-		if mapped != path {
-			fmt.Fprintf(&importConfig, "importmap %s=%s\n", path, mapped)
-		}
-		fmt.Fprintf(&importConfig, "packagefile %s=%s\n", mapped, dependency.Export)
+	config, err := sdkASMDataImportConfig(guard.selection, guard.imports)
+	if err != nil {
+		return err
 	}
-	config := []byte(importConfig.String())
 	configFile, err := source.artifact("importcfg", config)
 	if err != nil {
 		return err
@@ -142,6 +125,37 @@ func (source *GoX86SDKASMDataSource) captureHeader(ctx context.Context) error {
 	source.observation.Header = sdkASMDataHeaderObservation{LanguageVersion: language, Definitions: definitions,
 		Actual: actual, Typed: typed, Canonical: canonical, CompilerObject: compilerObject, ImportConfig: config, SymABI: symABI}
 	return nil
+}
+
+func sdkASMDataImportConfig(selected goAMD64FrameSelection, imports map[string]goAMD64FrameSelection) ([]byte, error) {
+	var config strings.Builder
+	paths := append([]string(nil), selected.Imports...)
+	sort.Strings(paths)
+	for _, path := range paths {
+		if path == "unsafe" {
+			continue
+		}
+		mapped := path
+		if target, present := selected.ImportMap[path]; present {
+			mapped = target
+		}
+		dependency, present := imports[mapped]
+		// cmd/compile's readImportCfg splits only at the first '='. The
+		// filename is literal, not a quoted Go string or import path: native
+		// Windows separators, embedded spaces and '=' must remain unchanged.
+		// TrimSpace applies to the whole line, so a trailing filename space
+		// cannot be represented faithfully; newlines/NUL cannot be inputs.
+		if !present || path == "" || mapped == "" || strings.ContainsAny(path+mapped, "\x00\r\n=\\ \t") ||
+			dependency.Export == "" || strings.ContainsAny(dependency.Export, "\x00\r\n") ||
+			strings.TrimSpace(dependency.Export) != dependency.Export {
+			return nil, sdkASMDataContext("header compiler lacks an exact actual dependency export")
+		}
+		if mapped != path {
+			fmt.Fprintf(&config, "importmap %s=%s\n", path, mapped)
+		}
+		fmt.Fprintf(&config, "packagefile %s=%s\n", mapped, dependency.Export)
+	}
+	return []byte(config.String()), nil
 }
 
 func (source *GoX86SDKASMDataSource) typedHeader(language string) ([]byte, error) {

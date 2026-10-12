@@ -110,16 +110,25 @@ The reload now uses one physical SDK root and package directory. Its comparison
 projection resolves every selected source without rewriting original package
 snapshots; byte-identical foreign files retain distinct identities. The new
 local alias-identity regression is RED/GREEN, and the complete CRC32 explicit/
-default-profile test passed in 81.877 seconds. Native verification is pending;
-do not call the namespace diagnostic or previous 259/260 result a complete pass.
+default-profile test passed in 81.877 seconds. Native
+[38318470610](https://github.com/cpunion/plan9asm/actions/runs/38318470610)
+confirmed the namespace repair and reached the next CRC32 failure: the header
+import-config writer rejected Windows export filenames containing backslashes.
+The writer now distinguishes import-path grammar from literal export filenames,
+matching the compiler's first-equals-sign split. Newline/NUL injection, invalid
+imports and missing exports remain rejected. Portable path controls are
+RED/GREEN on Go 1.27 and pass on Go 1.20; root vet and the complete local CRC32
+explicit/default-profile regression pass (91.653 seconds). Native verification
+of this follow-up remains required; neither local success nor the previous
+259/260 diagnostic result establishes a complete Windows pass.
 
 The next metadata repair shares ARM64/x86 object-source spelling validation.
 Four local RED controls reproduced ARM64 accepting `$GOROOT` dot/repeated-slash
 aliases after Join cleaned them. Check spelling before joining; normalize only
 Windows separators, then retain each consumer's captured file/hash checks.
 Go 1.27 metadata and actual SDK/object position regressions passed, as did the
-Go 1.20 metadata counterpart. The new x86 slash-spelling control still needs
-native Windows confirmation. Reports are `object-source-alias-red.log` and
+Go 1.20 metadata counterpart. Both metadata controls also passed in native
+run 38318470610. Reports are `object-source-alias-red.log` and
 `object-source-path-*.log`; this is not a new complete-head pass.
 
 The complete local Go 1.27 `gotoolprofile` suite passed in 1031.912 seconds on
