@@ -32,15 +32,15 @@ func captureDiscoveryFeatureSubtools(ctx context.Context, binary string, env []s
 	}
 	resolvedRoot, err := filepath.EvalSymlinks(root)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("resolve actual Go GOROOT: %w", err)
 	}
 	resolvedDirectory, err := filepath.EvalSymlinks(directory)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("resolve actual Go GOTOOLDIR: %w", err)
 	}
 	resolvedCache, err := filepath.EvalSymlinks(cache)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("resolve actual Go GOCACHE: %w", err)
 	}
 	relative, err := filepath.Rel(resolvedRoot, resolvedDirectory)
 	if err != nil || !validDiscoveryFeatureToolDirectory(filepath.ToSlash(relative)) {
