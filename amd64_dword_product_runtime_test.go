@@ -197,15 +197,17 @@ func TestOriginal(t *testing.T) {
  for i:=range a {a[i]=0xa7;b[i]=0xb9;out[i]=0xc3}
  for i:=0;i<64;i+=4 {x,y:=edges[(sample+i/4)%8],edges[(sample/8+i*3)%8];for j:=0;j<4;j++ {ap[i+j]=byte(x>>uint(j*8));bp[i+j]=byte(y>>uint(j*8))}}
  originalA,originalB:=a,b
- profile:=uint32(0x1f80|((sample%4)<<13)|(sample%64));SetCSR(profile)
+ profile:=uint32(0x1f80|((sample%4)<<13)|(sample%64))
 `)
 	count := 0
 	for _, name := range x86DwordProductOracleNames[:2] {
 		for _, source := range []string{"X0", "X1", "(DI)"} {
 			fn := fmt.Sprintf("S%d", count)
 			count++
-			fmt.Fprintf(&declarations, "func %s(out,a,b *[64]byte,flags *uint64,csr *uint32,seed uint64)\n", fn)
-			fmt.Fprintf(&assembly, "TEXT ·%s(SB),4,$0-48\nMOVQ out+0(FP),DX\nMOVQ a+8(FP),DI\nMOVQ b+16(FP),SI\nMOVQ flags+24(FP),CX\nMOVQ csr+32(FP),BX\nMOVOU (DI),X0\nMOVOU (SI),X1\nPUSHQ seed+40(FP)\nPOPFQ\n%s %s,X1\nMOVOU X1,(DX)\nPUSHFQ\nPOPQ AX\nMOVQ AX,(CX)\nSTMXCSR (BX)\nRET\n", fn, name, source)
+			fmt.Fprintf(&declarations, "func %s(out,a,b *[64]byte,flags *uint64,csr *uint32,seed uint64,profile uint32)\n", fn)
+			// Own the complete state window in assembly. A Go allocation (even
+			// on a locked thread) can set MXCSR.PE in runtime heap sampling.
+			fmt.Fprintf(&assembly, "TEXT ·%s(SB),4,$0-52\nMOVQ out+0(FP),DX\nMOVQ a+8(FP),DI\nMOVQ b+16(FP),SI\nMOVQ flags+24(FP),CX\nMOVQ csr+32(FP),BX\nMOVOU (DI),X0\nMOVOU (SI),X1\nLDMXCSR profile+48(FP)\nPUSHQ seed+40(FP)\nPOPFQ\n%s %s,X1\nMOVOU X1,(DX)\nPUSHFQ\nPOPQ AX\nMOVQ AX,(CX)\nSTMXCSR (BX)\nRET\n", fn, name, source)
 			alias, signed := 0, 0
 			if source == "X1" {
 				alias = 1
@@ -215,7 +217,10 @@ func TestOriginal(t *testing.T) {
 			}
 			fmt.Fprintf(&tests, `{
  flags:=struct{before,value,after uint64}{0x11223344,0,0x44332211};csr:=struct{before,value,after uint32}{0x55667788,0,0x88776655}
- %s(op,ap,bp,&flags.value,&csr.value,seed)
+ // This deliberate prior-state difference makes loss of per-kernel setup
+ // deterministic, without relying on when the runtime happens to sample.
+ SetCSR(profile^0x20)
+ %s(op,ap,bp,&flags.value,&csr.value,seed,profile)
  after:=ReadCSR()
  if flags.value&0x8d5!=seed||csr.value!=profile||after!=profile||flags.before!=0x11223344||flags.after!=0x44332211||csr.before!=0x55667788||csr.after!=0x88776655||a!=originalA||b!=originalB {
   t.Fatalf("%s sample%%d flags=%%x want=%%x csr=%%x after=%%x want=%%x flagCanaries=%%x/%%x csrCanaries=%%x/%%x inputChanges=%%t/%%t",
