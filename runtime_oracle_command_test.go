@@ -12,7 +12,20 @@ import (
 	"os/exec"
 	"testing"
 	"time"
+
+	"github.com/xgo-dev/plan9asm/internal/goasmcmd"
 )
+
+// Machine-readable Go output must not include download progress from stderr.
+// Keep both streams and the actual exit through the existing bounded, owned
+// process implementation. This test helper does not relax production Run.
+func runtimeOracleMachineOutput(ctx context.Context, command *exec.Cmd) ([]byte, []byte, error) {
+	if command == nil || len(command.Args) == 0 || command.Stdin != nil || command.Stdout != nil || command.Stderr != nil {
+		return nil, nil, fmt.Errorf("machine-output oracle requires an unstarted command without stream overrides")
+	}
+	observed, err := goasmcmd.Observe(ctx, command.Dir, command.Env, command.Path, command.Args[1:]...)
+	return observed.Stdout, observed.Stderr, err
+}
 
 // Keep command output and the original exit, but never wait indefinitely for
 // an emulator retaining its parent's pipe. Unix also owns the fresh group.
@@ -305,7 +318,7 @@ func TestRuntimeOracleCommandConsumersRetainOwnedExecution(t *testing.T) {
 				}
 				if function, ok := call.Fun.(*ast.Ident); ok {
 					switch function.Name {
-					case "runtimeOracleCombinedOutput", "goAssemblerOracleOutput", "x86FloatCompareCaptureCommand", "numericalLocalRuntimeCommand":
+					case "runtimeOracleCombinedOutput", "runtimeOracleMachineOutput", "goAssemblerOracleOutput", "x86FloatCompareCaptureCommand", "numericalLocalRuntimeCommand":
 						consumers++
 						return true
 					}

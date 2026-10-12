@@ -29,9 +29,9 @@ func arm64BytealgCountSDKPackage(t *testing.T) GoPackage {
 	defer cancel()
 	command := exec.CommandContext(ctx, "go", "list", "-p=2", "-compiled", "-export", "-deps", "-json", "internal/bytealg")
 	command.Env = append(os.Environ(), "GOOS=linux", "GOARCH=arm64", "CGO_ENABLED=0")
-	output, err := runtimeOracleCombinedOutput(ctx, command)
+	output, diagnostics, err := runtimeOracleMachineOutput(ctx, command)
 	if err != nil {
-		t.Fatalf("actual SDK Count selection/export: %v\n%s", err, output)
+		t.Fatalf("actual SDK Count selection/export: %v\n%s\n%s", err, output, diagnostics)
 	}
 	type selectedPackage struct {
 		Dir, ImportPath, Name, Export string

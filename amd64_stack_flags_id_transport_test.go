@@ -31,10 +31,18 @@ func TestX86StackFlagsIDOriginalGoBuildRoles(t *testing.T) {
 		{"linux", "386", true, false},
 	} {
 		t.Run(target.goos+"/"+target.arch, func(t *testing.T) {
-			command := exec.Command(filepath.Join(runtime.GOROOT(), "bin/go"), "list", "-json", ".")
+			ctx, cancel := runtimeOracleStageContext(t)
+			defer cancel()
+			command := exec.CommandContext(ctx, filepath.Join(runtime.GOROOT(), "bin/go"), "list", "-json", ".")
 			command.Env = append(os.Environ(), "GOOS="+target.goos, "GOARCH="+target.arch,
 				"CGO_ENABLED=0", "GOTOOLCHAIN=local", "GOENV=off", "GOWORK=off", "GOFLAGS=", "GOEXPERIMENT=")
-			output := x86FloatCompareCaptureCommand(t, command)
+			output, diagnostics, err := runtimeOracleMachineOutput(ctx, command)
+			if err != nil {
+				t.Fatalf("actual SDK source selection: %v\n%s", err, diagnostics)
+			}
+			if len(diagnostics) != 0 {
+				t.Logf("actual Go selection diagnostics: %s", diagnostics)
+			}
 			var selected struct {
 				Dir         string
 				TestGoFiles []string

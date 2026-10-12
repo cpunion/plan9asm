@@ -54,9 +54,9 @@ func TestGoAMD64FrameSourceCompleteOrdinaryGoDeclarations(t *testing.T) {
 			command := exec.CommandContext(ctx, request.GoBinary,
 				"list", "-deps", "-export", "-compiled", "-json", "-mod=readonly", ".")
 			command.Dir, command.Env = request.Directory, env
-			output, err := runtimeOracleCombinedOutput(ctx, command)
+			output, diagnostics, err := runtimeOracleMachineOutput(ctx, command)
 			if err != nil {
-				t.Fatalf("original Go rejected complete ordinary source: %v\n%s", err, output)
+				t.Fatalf("original Go rejected complete ordinary source: %v\n%s\n%s", err, output, diagnostics)
 			}
 			var selected goAMD64FrameSelection
 			exports := make(map[string]string)

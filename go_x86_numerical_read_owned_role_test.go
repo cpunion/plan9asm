@@ -122,11 +122,11 @@ func numericalCachedFixtureWithAlias(t *testing.T, assembly, alias bool) GoX86Nu
 		defer cancel()
 		command := exec.CommandContext(ctx, template.GoBinary, arguments...)
 		command.Dir, command.Env = directory, env
-		output, err := runtimeOracleCombinedOutput(ctx, command)
+		output, diagnostics, err := runtimeOracleMachineOutput(ctx, command)
 		if err != nil {
-			t.Fatalf("actual first-party cache fixture command %q: %v\n%s", arguments, err, output)
+			t.Fatalf("actual first-party cache fixture command %q: %v\n%s\n%s", arguments, err, output, diagnostics)
 		}
-		t.Logf("ACTUAL_FIRST_PARTY_CACHE_COMMAND directory=%q binary=%q argv=%q stdout=%q", directory, template.GoBinary, arguments, output)
+		t.Logf("ACTUAL_FIRST_PARTY_CACHE_COMMAND directory=%q binary=%q argv=%q stdout=%q stderr=%q", directory, template.GoBinary, arguments, output, diagnostics)
 		return output
 	}
 	data := run(template.Directory, downloadEnvironment, "mod", "download", "-json", pkg.Path+"@"+version)
