@@ -7,12 +7,13 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/xgo-dev/plan9asm/internal/gooriginalsrc"
 )
 
 // The proxy contains only generated first-party fixture code. Actual Go
@@ -26,6 +27,13 @@ func numericalCachedFixtureWithAlias(t *testing.T, assembly, alias bool) GoX86Nu
 	pkg, template, _, _ := numericalSBFixture(t, "amd64")
 	proxy, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
+		t.Fatal(err)
+	}
+	// A comma is a GOPROXY separator unless the local path is escaped. The
+	// suffix deliberately says "off", so a broken fixture cannot use network
+	// fallback while this regression reproduces the parsing failure.
+	proxy = filepath.Join(proxy, "proxy,off")
+	if err := os.Mkdir(proxy, 0700); err != nil {
 		t.Fatal(err)
 	}
 	cache, err := filepath.EvalSymlinks(t.TempDir())
@@ -99,9 +107,13 @@ func numericalCachedFixtureWithAlias(t *testing.T, assembly, alias bool) GoX86Nu
 	}
 	environment = append(environment, "GOMODCACHE="+cache, "GOSUMDB=off")
 	downloadEnvironment := append([]string(nil), environment...)
+	proxyURL, err := gooriginalsrc.FileProxyURL(proxy)
+	if err != nil {
+		t.Fatal(err)
+	}
 	for index, pair := range downloadEnvironment {
 		if strings.HasPrefix(pair, "GOPROXY=") {
-			downloadEnvironment[index] = "GOPROXY=" + (&url.URL{Scheme: "file", Path: filepath.ToSlash(proxy)}).String()
+			downloadEnvironment[index] = "GOPROXY=" + proxyURL
 		}
 	}
 	run := func(directory string, env []string, arguments ...string) []byte {
