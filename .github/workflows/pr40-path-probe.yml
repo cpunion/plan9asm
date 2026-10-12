@@ -27,3 +27,5 @@ jobs:
       - name: Go 1.24 module defaults
         working-directory: cmd/plan9asmll
         run: go run ../../.github/path-probe
+      - name: Required actual junction regression
+        run: go test ./internal/sourcepath -count=1 -v
