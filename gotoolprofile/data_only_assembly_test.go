@@ -1,9 +1,47 @@
 package gotoolprofile
 
 import (
+	"fmt"
 	"reflect"
+	"strings"
 	"testing"
 )
+
+func TestDataOnlyNativeListingRequiresSelectedProducerGrammar(t *testing.T) {
+	const legacy = "pkg.data SDATA size=8\n" +
+		"\t0x0000 00 00 00 00 00 00 00 00                          ........\n" +
+		"pkg.zero SBSS size=16\n"
+	current := strings.ReplaceAll(strings.ReplaceAll(legacy, "size=8\n", "size=8 align=0x0\n"),
+		"size=16\n", "size=16 align=0x0\n")
+	for minor := 20; minor <= 27; minor++ {
+		version := fmt.Sprintf("go1.%d.1", minor)
+		t.Run(version, func(t *testing.T) {
+			accepted, refused := legacy, current
+			if minor == 27 {
+				accepted, refused = current, legacy
+			}
+			got, err := DataOnlySymbolsFromListingForGoVersion([]byte(accepted), version)
+			want := []DataOnlySymbol{{Name: "pkg.data", Kind: "SDATA", Size: 8}, {Name: "pkg.zero", Kind: "SBSS", Size: 16}}
+			if err != nil || !reflect.DeepEqual(got, want) {
+				t.Fatalf("producer inventory mismatch: %+v %v", got, err)
+			}
+			for _, malformed := range []string{refused, accepted + refused,
+				strings.Replace(accepted, "SDATA", "STEXT", 1), accepted + "tool warning\n"} {
+				if _, err := DataOnlySymbolsFromListingForGoVersion([]byte(malformed), version); err == nil {
+					t.Fatal("wrong producer or non-data listing accepted", malformed)
+				}
+			}
+		})
+	}
+	for _, version := range []string{"", "go1.19.13", "go1.28.1", "unknown"} {
+		if _, err := DataOnlySymbolsFromListingForGoVersion([]byte(current), version); err == nil {
+			t.Fatal("unknown producer acquired a listing grammar", version)
+		}
+	}
+	if _, err := DataOnlySymbolsFromListing([]byte(legacy)); err == nil {
+		t.Fatal("current-only entry silently accepted a missing alignment field")
+	}
+}
 
 func TestDataOnlyNativeListingCompleteGrammar(t *testing.T) {
 	const listing = "pkg.data SDATA size=8 align=0x0\n\t0x0000 f0 de bc 9a 78 56 34 12                          ....xV4.\n" +

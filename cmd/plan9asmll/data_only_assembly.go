@@ -13,9 +13,9 @@ func proveDataOnlyAssembly(pkg *packages.Package, task asmTask, file *plan9asm.F
 		return nil, fmt.Errorf("data-only source requires global declarations and no TEXT")
 	}
 	var symbols []gotoolprofile.DataOnlySymbol
-	native, err := proveAssemblyListing(pkg, task, target, defines, cfg, func(listing []byte) error {
+	native, err := proveAssemblyListing(pkg, task, target, defines, cfg, func(listing []byte, version string) error {
 		var err error
-		symbols, err = gotoolprofile.DataOnlySymbolsFromListing(listing)
+		symbols, err = gotoolprofile.DataOnlySymbolsFromListingForGoVersion(listing, version)
 		return err
 	})
 	if err != nil {

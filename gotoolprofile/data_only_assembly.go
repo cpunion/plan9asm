@@ -39,6 +39,7 @@ func (symbol DataOnlySymbol) Key() string {
 }
 
 var dataSymbolHeader = regexp.MustCompile(`^(\S+) (S[A-Z0-9]+) (static )?(dupok )?(cfunc )?size=([0-9]+) align=0x[0-9a-f]+$`)
+var legacyDataSymbolHeader = regexp.MustCompile(`^(\S+) (S[A-Z0-9]+) (static )?(dupok )?(cfunc )?size=([0-9]+)$`)
 var dataListingBytes = regexp.MustCompile(`^\t0x[0-9a-f]+( [0-9a-f]{2}){1,16} {2,}`)
 var dataListingRelocation = regexp.MustCompile(`^\trel -?[0-9]+\+[0-9]+ t=R_[A-Za-z0-9_:]+ .+\+-?[0-9a-f]+$`)
 
@@ -52,6 +53,26 @@ func isDataOnlySymbolKind(kind string) bool {
 }
 
 func DataOnlySymbolsFromListing(listing []byte) ([]DataOnlySymbol, error) {
+	return dataOnlySymbolsFromListing(listing, dataSymbolHeader)
+}
+
+// DataOnlySymbolsFromListingForGoVersion selects the actual producer's header
+// grammar. Go 1.20-1.26 print alignment only for TEXT; Go 1.27 also prints it
+// for DATA. A missing current field or an extra historical field is not valid.
+// This parses an inventory, not a source, memory or object capability.
+func DataOnlySymbolsFromListingForGoVersion(listing []byte, version string) ([]DataOnlySymbol, error) {
+	minor, err := goMinor(version)
+	if err != nil || minor < 20 || minor > 27 {
+		return nil, fmt.Errorf("data-only listing requires a supported actual Go producer version")
+	}
+	header := dataSymbolHeader
+	if minor < 27 {
+		header = legacyDataSymbolHeader
+	}
+	return dataOnlySymbolsFromListing(listing, header)
+}
+
+func dataOnlySymbolsFromListing(listing []byte, header *regexp.Regexp) ([]DataOnlySymbol, error) {
 	if len(listing) == 0 || len(listing) > 4<<20 || listing[len(listing)-1] != '\n' {
 		return nil, fmt.Errorf("data-only native listing is empty, incomplete or too large")
 	}
@@ -66,7 +87,7 @@ func DataOnlySymbolsFromListing(listing []byte) ([]DataOnlySymbol, error) {
 			}
 			continue
 		}
-		match := dataSymbolHeader.FindStringSubmatch(line)
+		match := header.FindStringSubmatch(line)
 		if match == nil || !isDataOnlySymbolKind(match[2]) {
 			return nil, fmt.Errorf("native data-only listing contains TEXT or an unknown symbol kind")
 		}

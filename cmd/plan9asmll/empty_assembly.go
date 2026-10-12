@@ -18,7 +18,7 @@ import (
 // particular, macros, conditional definitions and invalid source still need
 // the actual assembler and its exact package/CPU definitions.
 func proveEmptyAssembly(pkg *packages.Package, task asmTask, target string, defines []string, cfg compileConfig) (_ *gotoolprofile.EmptyAssemblyProof, proofErr error) {
-	return proveAssemblyListing(pkg, task, target, defines, cfg, func(listing []byte) error {
+	return proveAssemblyListing(pkg, task, target, defines, cfg, func(listing []byte, _ string) error {
 		if len(listing) != 0 {
 			return fmt.Errorf("actual Go assembler did not emit an empty symbol/data listing\n%s", listing)
 		}
@@ -28,7 +28,7 @@ func proveEmptyAssembly(pkg *packages.Package, task asmTask, target string, defi
 
 // Both empty and data-only proofs require an independently accepted original
 // Go object. Their listing predicates differ; neither replaces LLVM output.
-func proveAssemblyListing(pkg *packages.Package, task asmTask, target string, defines []string, cfg compileConfig, accept func([]byte) error) (_ *gotoolprofile.EmptyAssemblyProof, proofErr error) {
+func proveAssemblyListing(pkg *packages.Package, task asmTask, target string, defines []string, cfg compileConfig, accept func([]byte, string) error) (_ *gotoolprofile.EmptyAssemblyProof, proofErr error) {
 	ctx := cfg.Context
 	if ctx == nil {
 		ctx = context.Background()
@@ -85,11 +85,15 @@ func proveAssemblyListing(pkg *packages.Package, task asmTask, target string, de
 		}
 	}
 	if root == "" {
-		output, _, err := gotoolprofile.RunBounded(ctx, "", env, binary, "env", "GOROOT")
+		output, stderr, err := gotoolprofile.RunBounded(ctx, "", env, binary, "env", "GOROOT", "GOVERSION")
 		if err != nil {
 			return nil, err
 		}
-		root = strings.TrimSpace(string(output))
+		fields := strings.Split(strings.TrimSpace(string(output)), "\n")
+		if len(stderr) != 0 || len(fields) != 2 {
+			return nil, fmt.Errorf("original assembly listing lacks its actual SDK root/version")
+		}
+		root, proof.GoVersion = strings.TrimSuffix(fields[0], "\r"), fields[1]
 	}
 	if !filepath.IsAbs(root) {
 		return nil, fmt.Errorf("empty object assembler requires the actual absolute GOROOT")
@@ -165,7 +169,7 @@ func proveAssemblyListing(pkg *packages.Package, task asmTask, target string, de
 	if len(stderr) != 0 {
 		return nil, fmt.Errorf("actual Go assembler emitted unexpected diagnostics: %s", stderr)
 	}
-	if err := accept(listing); err != nil {
+	if err := accept(listing, proof.GoVersion); err != nil {
 		return nil, err
 	}
 	if info, err := os.Stat(object); err != nil || !info.Mode().IsRegular() || info.Size() == 0 {
