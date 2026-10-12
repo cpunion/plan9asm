@@ -63,12 +63,54 @@ func TestX86InsertExtractActualSDKTablesAreMandatory(t *testing.T) {
 			if !os.IsNotExist(missingErr) {
 				t.Fatalf("missing-table fixture changed during the child: %v", missingErr)
 			}
-			pattern := fmt.Sprintf(`\A--- FAIL: %s \([0-9]+\.[0-9]+s\)\n    amd64_insert_extract_forms_test\.go:[0-9]+: %s\nFAIL\n\z`,
-				rootName, regexp.QuoteMeta(missingErr.Error()))
-			if !regexp.MustCompile(pattern).Match(output) {
+			if !x86InsertExtractMissingTableOutput(output, rootName, missingErr.Error(), testing.CoverMode() != "") {
 				t.Fatalf("unbound actual SDK-table failure (want %s):\n%s", missing, output)
 			}
 			t.Logf("actual %s child: plain exit 1, exact %s diagnostic\n%s", runtime.Version(), name, output)
 		})
+	}
+}
+
+func x86InsertExtractMissingTableOutput(output []byte, root, diagnostic string, covered bool) bool {
+	pattern := fmt.Sprintf(`\A--- FAIL: %s \([0-9]+\.[0-9]+s\)\n    amd64_insert_extract_forms_test\.go:[0-9]+: %s\nFAIL\n`,
+		regexp.QuoteMeta(root), regexp.QuoteMeta(diagnostic))
+	if covered {
+		// The child is this same instrumented test binary. Require Go's one
+		// coverage trailer only in that role; never strip arbitrary output.
+		// Go 1.20's coverage writer also prints this exact package prefix.
+		pattern += `(?:\tgithub\.com/xgo-dev/plan9asm\t)?coverage: (?:(?:[0-9]|[1-9][0-9])\.[0-9]|100\.0)% of statements\n`
+	}
+	return regexp.MustCompile(pattern + `\z`).Match(output)
+}
+
+func TestX86InsertExtractMissingTableOutputGrammar(t *testing.T) {
+	const root, diagnostic = "TestActualTable", "open exact/asm6.go: missing table"
+	base := "--- FAIL: " + root + " (0.01s)\n    amd64_insert_extract_forms_test.go:66: " + diagnostic + "\nFAIL\n"
+	const trailer = "coverage: 0.2% of statements\n"
+	for _, covered := range []bool{false, true} {
+		valid := base
+		if covered {
+			valid += trailer
+		}
+		if !x86InsertExtractMissingTableOutput([]byte(valid), root, diagnostic, covered) {
+			t.Fatalf("exact original failure rejected (coverage=%v)", covered)
+		}
+		for _, invalid := range []string{
+			valid + "PASS\n", "panic: unrelated\n" + valid, valid + trailer,
+			strings.Replace(valid, "exact/asm6.go", "other/asm6.go", 1),
+			strings.Replace(valid, root, "TestAnotherRoot", 1),
+		} {
+			if x86InsertExtractMissingTableOutput([]byte(invalid), root, diagnostic, covered) {
+				t.Fatalf("unbound child failure accepted (coverage=%v): %q", covered, invalid)
+			}
+		}
+	}
+	if x86InsertExtractMissingTableOutput([]byte(base), root, diagnostic, true) ||
+		x86InsertExtractMissingTableOutput([]byte(base+trailer), root, diagnostic, false) {
+		t.Fatal("child borrowed the wrong coverage instrumentation role")
+	}
+	if !x86InsertExtractMissingTableOutput([]byte(base+"\tgithub.com/xgo-dev/plan9asm\t"+trailer), root, diagnostic, true) ||
+		x86InsertExtractMissingTableOutput([]byte(base+"\tother/package\t"+trailer), root, diagnostic, true) {
+		t.Fatal("historical coverage trailer lost its exact package identity")
 	}
 }
