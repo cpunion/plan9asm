@@ -78,7 +78,16 @@ func goAMD64FrameSourceFixture(t *testing.T) (GoPackage, GoAMD64FrameCaptureRequ
 	if err != nil {
 		t.Fatal(err)
 	}
-	env := os.Environ()
+	// This independent pure-Go module does not inherit the translator test
+	// binary's build tags (notably Windows' LLVM byollvm tag). Remove rather
+	// than shadow them: production capture rejects repeated forbidden flags.
+	var env []string
+	for _, entry := range os.Environ() {
+		if !strings.HasPrefix(entry, "GOFLAGS=") {
+			env = append(env, entry)
+		}
+	}
+	env = append(env, "GOFLAGS=")
 	for _, key := range []string{"GOPATH", "GOMODCACHE", "GOCACHE", "TMPDIR", "GOTMPDIR"} {
 		if !filepath.IsAbs(os.Getenv(key)) {
 			env = append(env, key+"="+t.TempDir())
