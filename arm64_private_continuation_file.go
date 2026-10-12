@@ -8,6 +8,7 @@ import "strings"
 // regain that identity through newly added source after its initial audit.
 func validateARM64PrivateContinuationFile(file *File) error {
 	removed := make(map[string]bool)
+	hasCallContinuation := false
 	add := func(helpers []Func) {
 		for _, helper := range helpers {
 			removed[helper.Sym] = true
@@ -15,6 +16,7 @@ func validateARM64PrivateContinuationFile(file *File) error {
 	}
 	for _, fn := range file.Funcs {
 		if proof := fn.arm64PrivateCallSource; proof != nil {
+			hasCallContinuation = true
 			add(proof.helpers)
 		}
 		if proof := fn.arm64PrivateTailSource; proof != nil {
@@ -49,8 +51,14 @@ func validateARM64PrivateContinuationFile(file *File) error {
 			return arm64GoABIContext("private continuation file redefines removed helper %q", fn.Sym)
 		}
 		for _, ins := range fn.Instrs {
+			// Tail-only files independently exclude native PC/raw/address
+			// observers below, so validated NOP padding has no data effect.
+			// CALL continuations retain their stricter layout contract.
+			if _, alignment, err := arm64PCAlignment(ins); alignment && (err != nil || hasCallContinuation) {
+				return arm64GoABIContext("private continuation file has unproved alignment at %q", ins.Raw)
+			}
 			switch ins.Op {
-			case OpWORD, "DWORD", "ADR", "ADRP", "PCALIGN":
+			case OpWORD, "DWORD", "ADR", "ADRP":
 				return arm64GoABIContext("private continuation file observes native layout at %q", ins.Raw)
 			}
 			for _, arg := range ins.Args {

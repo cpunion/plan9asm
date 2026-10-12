@@ -144,9 +144,19 @@ keep shell checkouts LF, and move shared fixed-local definitions out of Unix-onl
 files. The Windows helper-selection RED/GREEN, Go 1.20/current-Go source and
 object matrices, portable transport execution, CLI regressions and vet pass.
 Windows native execution still requires CI. Continue with historical Go Windows
-SEH schemas, ARM64 bytealg PCALIGN/tail-transport cases and Windows canonical
-input-path failures. Keep their existing failures; do not loosen source guards.
+SEH schemas and Windows canonical input-path failures. Keep their existing
+failures; do not loosen source guards.
 The local repair batch has not been pushed while run `38182744838` is active.
+
+ARM64 bytealg private fixture signatures now describe explicit register
+transport without fabricated ABI0 frames. Go 1.20/current-Go objects pass;
+the missing R26 closure entry remains a negative. PCALIGN/PCALIGNMAX now use
+the complete Go operand grammar, retain function alignment and permit NOP
+padding in tail-only continuations whose whole-file audit excludes native
+PC/raw/address observers. CALL continuation guards remain separate. The 27
+format cases pass all three APIs and five target objects; historical SDK Count,
+source mutation guards, Go 1.20 checks and vet pass. PCALIGN loop execution
+passes original-Go and independent LLVM/C references under ARM64 QEMU.
 
 The remaining 21 standard-library failures require actual runtime/reflect
 entry, TLS, hidden-register, caller-storage or SDK source contracts. Do not

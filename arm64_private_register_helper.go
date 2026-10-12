@@ -32,7 +32,7 @@ func arm64PrivateRegisterLeaf(fn Func) error {
 	if !valid || offset != 0 || name != fn.Sym || err != nil || frame != fn.FrameSize || args != fn.ArgSize {
 		return arm64GoABIContext("private helper %q changed its complete TEXT identity", fn.Sym)
 	}
-	if err := arm64PrivateContinuationBody(fn, arm64PrivateCallDataRegister, arm64PrivateCallImmediateScratch); err != nil {
+	if err := arm64PrivateContinuationBody(fn, arm64PrivateCallDataRegister, arm64PrivateCallImmediateScratch, false); err != nil {
 		return err
 	}
 	return arm64PrivateCallAcyclic(fn)
@@ -192,7 +192,8 @@ func coalesceARM64PrivateCallRegisterHelpers(file *File, remaining *int) (*File,
 			// Folding removes the helper's standalone native TEXT identity.
 			// A sibling excluded by KeepFunc must not hide an observation of
 			// that original byte layout or a raw branch into the helper.
-			if ins.Op == OpWORD || ins.Op == "DWORD" || ins.Op == "ADR" || ins.Op == "ADRP" || ins.Op == "PCALIGN" {
+			_, alignment, _ := arm64PCAlignment(ins)
+			if ins.Op == OpWORD || ins.Op == "DWORD" || ins.Op == "ADR" || ins.Op == "ADRP" || alignment {
 				return nil, arm64GoABIContext("private helper file requires native byte-layout effects at %q", ins.Raw)
 			}
 			for ai, arg := range ins.Args {
@@ -288,7 +289,8 @@ func coalesceARM64PrivateCallRegisterHelpers(file *File, remaining *int) (*File,
 			return label
 		}
 		for i, ins := range copyFn.Instrs {
-			if ins.Op == OpWORD || ins.Op == "ADR" || ins.Op == "ADRP" || ins.Op == "PCALIGN" {
+			_, alignment, _ := arm64PCAlignment(ins)
+			if ins.Op == OpWORD || ins.Op == "ADR" || ins.Op == "ADRP" || alignment {
 				return nil, arm64GoABIContext("private helper root %q requires native byte-layout effects at %q", fn.Sym, ins.Raw)
 			}
 			for _, arg := range ins.Args {

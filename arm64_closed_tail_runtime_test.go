@@ -16,6 +16,7 @@ TEXT foldbody<>(SB),%s
 MOVD $0,R3
 CBZ R1,done
 loop:
+PCALIGN $16
 MOVD.P 8(R0),R4
 ADD R4,R3,R3
 SUB $1,R1

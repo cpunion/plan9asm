@@ -899,13 +899,16 @@ func translateFuncARM64WithSourceCalls(b *strings.Builder, fn Func, sig FuncSig,
 // mutation of a declaration-backed source signature. Validate its exact input
 // fields and emit the separately computed group without granting ABI rights.
 func translateFuncARM64WithSourceCallsAndAttrs(b *strings.Builder, fn Func, sig FuncSig, resolve func(string) string, sigs map[string]FuncSig, target string, data []DataStmt, annotateSource bool, sourceCalls map[string]arm64SourceNoopCall, emissionAttrs string) error {
+	alignment, err := arm64FunctionPCAlignment(fn)
+	if err != nil {
+		return err
+	}
 	if err := validateARM64PrivateCallSource(fn); err != nil {
 		return err
 	}
 	if err := validateARM64ABI0TailSource(fn, sig); err != nil {
 		return err
 	}
-	var err error
 	if err := validateARM64PrivateTailSource(fn, sig); err != nil {
 		return err
 	}
@@ -1005,6 +1008,9 @@ func translateFuncARM64WithSourceCallsAndAttrs(b *strings.Builder, fn Func, sig 
 		fmt.Fprintf(b, "%s %%arg%d", t, i)
 	}
 	b.WriteString(")")
+	if alignment != 0 {
+		fmt.Fprintf(b, " align %d", alignment)
+	}
 	if emissionAttrs != "" {
 		b.WriteString(" " + emissionAttrs)
 	}
@@ -1203,7 +1209,10 @@ func (c *arm64Ctx) lowerInstr(bi int, ins Instr, emitBr arm64EmitBr, emitCondBr 
 	case "END":
 		// Go's assembler end-of-file directive emits no instruction.
 		return false, nil
-	case "PCALIGN", "NO_LOCAL_POINTERS", "PCDATA", "FUNCDATA":
+	case "PCALIGN", "PCALIGNMAX":
+		_, _, err := arm64PCAlignment(ins)
+		return false, err
+	case "NO_LOCAL_POINTERS", "PCDATA", "FUNCDATA":
 		return false, nil
 	}
 	if ok, term, err := c.lowerARM64Barrier(op, ins); ok {

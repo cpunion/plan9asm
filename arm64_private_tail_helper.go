@@ -149,13 +149,13 @@ func arm64PrivateTailBody(fn Func) error {
 	if err := arm64PrivateTailZeroFrame(fn, false); err != nil {
 		return err
 	}
-	return arm64PrivateContinuationBody(fn, arm64PrivateTailDataRegister, nil)
+	return arm64PrivateContinuationBody(fn, arm64PrivateTailDataRegister, nil, true)
 }
 
 // Operand purity is shared by CALL and tail continuations, but their entry and
 // return contracts remain separate. This grammar grants neither initialized
 // inputs nor pointer bounds: the complete root's independent proofs own those.
-func arm64PrivateContinuationBody(fn Func, dataRegister func(Reg) bool, scratchContract func(Op, Instr, arm64GPDataForm) bool) error {
+func arm64PrivateContinuationBody(fn Func, dataRegister func(Reg) bool, scratchContract func(Op, Instr, arm64GPDataForm) bool, allowAlignment bool) error {
 	labels := map[string]bool{}
 	for _, ins := range fn.Instrs[1:] {
 		if ins.Op == OpLABEL {
@@ -167,6 +167,12 @@ func arm64PrivateContinuationBody(fn Func, dataRegister func(Reg) bool, scratchC
 	}
 	returns := 0
 	for _, ins := range fn.Instrs[1:] {
+		if _, alignment, err := arm64PCAlignment(ins); alignment {
+			if err != nil || !allowAlignment {
+				return arm64GoABIContext("private continuation %q has unproved alignment at %q", fn.Sym, ins.Raw)
+			}
+			continue
+		}
 		if ins.Op == OpTEXT || ins.Op == "CALL" || ins.Op == "BL" || ins.Op == "BLR" {
 			return arm64GoABIContext("private continuation %q is not a call-free complete source at %q", fn.Sym, ins.Raw)
 		}
@@ -321,8 +327,11 @@ func coalesceARM64PrivateTailHelpersWithABI0(file *File, remaining *int, sigs ma
 			return nil, arm64GoABIContext("private tail file has an incomplete TEXT body")
 		}
 		for _, ins := range fn.Instrs[1:] {
+			if _, _, err := arm64PCAlignment(ins); err != nil {
+				return nil, err
+			}
 			switch ins.Op {
-			case OpWORD, "DWORD", "ADR", "ADRP", "PCALIGN":
+			case OpWORD, "DWORD", "ADR", "ADRP":
 				return nil, arm64GoABIContext("private tail file observes native layout at %q", ins.Raw)
 			}
 			for _, arg := range ins.Args {
