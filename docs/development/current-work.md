@@ -18,7 +18,10 @@ independent regressions, official coverage and benchmarks. `gotoolprofile` is
 public for the separate harness. Exhaustive runner owners remain root 0,
 profile 1 and other packages 2, with mandatory disjoint, complete aggregation.
 
-The last full CI evaluated `346cec2f`; [run 38187769673](https://github.com/xgo-dev/plan9asm/actions/runs/38187769673)
+The published head is `432796c7`; [run 38193906662](https://github.com/xgo-dev/plan9asm/actions/runs/38193906662)
+is still running. Its standard-library and benchmark jobs have already failed;
+let the remaining jobs finish before the next batch push. The last completed
+full CI evaluated `346cec2f`; [run 38187769673](https://github.com/xgo-dev/plan9asm/actions/runs/38187769673)
 finished with 83 successful and 65 failed jobs, including aggregates. Its benchmark compiled
 164/185 files, with 21 failures; wasm passed 19/19. Neither its timing nor the
 five-architecture classification gate establishes complete compilation or
@@ -84,9 +87,27 @@ Receipts certify only their exact frozen source and tool snapshots.
 
 ## Remaining failure work
 
+The main working branch now also contains the composed proof-factory leases,
+actual Go cache-copy quoting/source registration, Windows oracle executable
+paths, and normalized Windows source-PC origin joins. The source-PC family
+passes Go 1.23 and 1.27, including the broader 485-second source/object suite.
+The quoted-cache worktree retains a frozen complete nested-CLI validation;
+do not edit it until that process finishes. Its commits are already integrated.
+
+The Linux race replay passed the complete profile guards (751.72 seconds) and
+readonly deadline/cancellation matrix (525.26 seconds), but its SDK API reentry
+root failed the old two-second timer. The report remains failed. The next
+repair isolates each real reentry case in a bounded, owned child, requires
+the callback and completion receipt, and removes the leaked-worker timeout.
+Windows test-only repairs additionally preserve exact killed exits, bind file
+IDs before replacement, and avoid cross-volume relative-path assumptions.
+These latest changes need their own frozen verification; earlier reports do
+not certify them. Evidence is under `_out/register-result-repair/` and the
+temporary repair worktrees' `_out/ci-proof-lifetimes/` / `_out/ci-quoted-cache/`.
+
 1. Collect actual root and nested CLI failures separately. A successful main
    artifact does not establish nested CLI success. The repairs above still
-   require a new full CI run; preserve the old failed receipts.
+   require current-head CI; preserve the old failed receipts.
 2. Windows job `114614102112` has remaining raw-machine-code test bridges that
    assume SysV registers instead of the Windows calling convention, POSIX-only
    fault helpers, and source/path/ownership failures. Its raw log is retained
