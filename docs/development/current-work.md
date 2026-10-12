@@ -60,6 +60,14 @@ These are that frozen run's results, not certification of the following repairs.
   rejection. Module replacement roots normalize separators only, not dot
   segments. Native Windows confirmation remains required. Expanded ARM64 source
   metadata and same-source type-recapture tests diagnose the other failures.
+- `e7bfc99b` / `ba02841e`: native Windows
+  [38268632096](https://github.com/cpunion/plan9asm/actions/runs/38268632096)
+  passed portable selection and ordinary/test declaration groups. Its ARM64
+  metadata regression reproduced rejection of Go's actual `C:/...` source
+  spelling; `objabi.AbsFile` explicitly emits forward slashes on Windows.
+  Normalize only those separators before the existing canonical-file/digest
+  checks. Local Go 1.27 scratch source/SDK/call-result tests passed in 266.515
+  seconds; Go 1.20 metadata checks passed. Native confirmation is still pending.
 - `43d64b2a`: downloaded artifacts showed module aggregates differed from root
   owners in PATH because only root jobs installed QEMU. Every Linux role now
   installs the same pinned QEMU before Node; exact environment/source comparisons
