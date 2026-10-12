@@ -7,6 +7,9 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
+	"regexp"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -51,48 +54,7 @@ func TestGoX86SDKASMDataLiveValidationAPIReentry(t *testing.T) {
 	for _, route := range []string{"verification", "original"} {
 		for _, api := range []string{"Verify", "Readback", "CheckReadback"} {
 			t.Run(route+"/"+api, func(t *testing.T) {
-				ctx, request := sdkASMDataRequest(t, "amd64", "internal/cpu")
-				reentrant := &sdkASMDataReentrantContext{Context: ctx}
-				captureContext := ctx
-				if route == "original" {
-					captureContext = reentrant
-				}
-				source, err := CaptureGoX86SDKASMDataSource(captureContext, request)
-				if err != nil {
-					t.Fatal("actual SDK source precondition", err)
-				}
-				t.Cleanup(func() { source.Close() })
-				raw, err := source.Readback(ctx)
-				if err != nil {
-					t.Fatal(err)
-				}
-				var nested error
-				reentrant.callback = func() {
-					switch api {
-					case "Verify":
-						nested = source.Verify(ctx)
-					case "Readback":
-						_, nested = source.Readback(ctx)
-					case "CheckReadback":
-						nested = source.CheckReadback(ctx, raw)
-					}
-				}
-				reentrant.armed.Store(true)
-				done := make(chan error, 1)
-				go func() {
-					err := source.Verify(reentrant)
-					done <- errors.Join(err, nested)
-				}()
-				select {
-				case err := <-done:
-					if err != nil {
-						t.Fatal("live original/nested observation failed", err)
-					}
-				case <-time.After(2 * time.Second):
-					// A test-process-local functional RED: a bounded context
-					// cannot interrupt a synchronous Err callback deadlock.
-					t.Fatal(fmt.Sprintf("%s Err callback permanently blocked reentrant %s", route, api))
-				}
+				sdkASMDataCheckIsolatedReentry(t, route, "Err", api)
 			})
 		}
 	}
@@ -103,40 +65,69 @@ func TestGoX86SDKASMDataLiveContextMethodReentry(t *testing.T) {
 		for _, method := range []string{"Deadline", "Done"} {
 			for _, api := range []string{"Verify", "Readback", "CheckReadback"} {
 				t.Run(route+"/"+method+"/"+api, func(t *testing.T) {
-					ctx, request := sdkASMDataRequest(t, "amd64", "internal/cpu")
-					reentrant := &sdkASMDataReentrantContext{Context: ctx, method: method}
-					captureContext := ctx
-					if route == "original" {
-						captureContext = reentrant
-					}
-					source, err := CaptureGoX86SDKASMDataSource(captureContext, request)
-					if err != nil {
-						t.Fatal("actual SDK source precondition", err)
-					}
-					t.Cleanup(func() { source.Close() })
-					raw, err := source.Readback(ctx)
-					if err != nil {
-						t.Fatal(err)
-					}
-					var nested error
-					reentrant.callback = func() {
-						switch api {
-						case "Verify":
-							nested = source.Verify(ctx)
-						case "Readback":
-							_, nested = source.Readback(ctx)
-						case "CheckReadback":
-							nested = source.CheckReadback(ctx, raw)
-						}
-					}
-					reentrant.armed.Store(true)
-					if err := errors.Join(source.Verify(reentrant), nested); err != nil {
-						t.Fatal("caller method reentry failed", err)
-					}
+					sdkASMDataCheckIsolatedReentry(t, route, method, api)
 				})
 			}
 		}
 	}
+}
+
+func sdkASMDataCheckIsolatedReentry(t *testing.T, route, method, api string) {
+	t.Helper()
+	const childKey = "PLAN9ASM_SDK_DATA_REENTRY_CHILD"
+	receipt := "sdk-data-reentry-ok:" + t.Name() + "\n"
+	if os.Getenv(childKey) != t.Name() {
+		// A context cannot interrupt a synchronous callback holding a mutex.
+		// Own a child instead of mistaking slow source verification for deadlock
+		// or leaving an in-process worker blocked during source.Close cleanup.
+		ctx, cancel := runtimeOracleStageContext(t)
+		defer cancel()
+		deadline, _ := ctx.Deadline()
+		parts := strings.Split(t.Name(), "/")
+		for index, part := range parts {
+			parts[index] = "^" + regexp.QuoteMeta(part) + "$"
+		}
+		command := exec.CommandContext(ctx, os.Args[0], "-test.run="+strings.Join(parts, "/"),
+			"-test.count=1", "-test.timeout="+(time.Until(deadline)+runtimeOracleStageCleanupReserve).String())
+		command.Env = append(os.Environ(), childKey+"="+t.Name())
+		output, err := runtimeOracleCombinedOutput(ctx, command)
+		if err != nil || strings.Count(string(output), receipt) != 1 {
+			t.Fatalf("bounded actual SDK reentry child failed or did not complete: %v\n%s", err, output)
+		}
+		return
+	}
+
+	ctx, request := sdkASMDataRequest(t, "amd64", "internal/cpu")
+	reentrant := &sdkASMDataReentrantContext{Context: ctx, method: method}
+	captureContext := ctx
+	if route == "original" {
+		captureContext = reentrant
+	}
+	source, err := CaptureGoX86SDKASMDataSource(captureContext, request)
+	if err != nil {
+		t.Fatal("actual SDK source precondition", err)
+	}
+	t.Cleanup(func() {
+		if err := source.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+	raw, err := source.Readback(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var nested error
+	reentrant.callback = func() {
+		_, nested = sdkASMDataInvoke(t, api, source, ctx, raw)
+	}
+	reentrant.armed.Store(true)
+	if err := errors.Join(source.Verify(reentrant), nested); err != nil {
+		t.Fatal("live original/nested observation failed", err)
+	}
+	if reentrant.armed.Load() {
+		t.Fatal("actual verification did not invoke the context reentry callback")
+	}
+	fmt.Print(receipt)
 }
 
 func TestGoX86SDKASMDataLiveLostOriginalDeadline(t *testing.T) {
