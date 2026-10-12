@@ -84,6 +84,34 @@ These are that frozen run's results, not certification of the following repairs.
   preserves strict production environment rejection. Native instrumentation
   verification is still required; its CLI step was not reached in that run.
 
+Native instrumentation then passed
+[38271832444](https://github.com/cpunion/plan9asm/actions/runs/38271832444)
+at `c94f30eb`: the physical type-source fixture and all four previously failing
+CLI roots passed, including imported SDK/same-module and foreign original-source
+recapture. Complete local LLVM CLI also passed at that frozen revision in
+1061.421 seconds; its complete local profile suite passed in 926.033 seconds. Fork-only
+[38273415720](https://github.com/cpunion/plan9asm/actions/runs/38273415720)
+diagnoses every actual Windows CLI/profile inventory root in four disjoint
+groups per package; raw inventories/outcomes remain artifacts, not a replacement
+for the complete contribution gates or Windows process-ownership implementation.
+That native run finished without missing/skipped roots: CLI 259/260 and profile
+261/262 passed. Remaining roots were the actual CRC32 numerical source reload
+and the quoted-path instrumentation export. The latter normalizes native archive
+paths but missed Go's slash-spelled object source names; exact observed roots
+now normalize both spellings without relaxing the nm symbol grammar. Local
+Go 1.27 actual export and Go 1.20 grammar controls pass. The CRC32 reload error
+now includes the actual package/type/error fields; this is diagnosis, not a fix.
+Its complete local explicit/default-profile regression passed in 84.189 seconds.
+
+The next metadata repair shares ARM64/x86 object-source spelling validation.
+Four local RED controls reproduced ARM64 accepting `$GOROOT` dot/repeated-slash
+aliases after Join cleaned them. Check spelling before joining; normalize only
+Windows separators, then retain each consumer's captured file/hash checks.
+Go 1.27 metadata and actual SDK/object position regressions passed, as did the
+Go 1.20 metadata counterpart. The new x86 slash-spelling control still needs
+native Windows confirmation. Reports are `object-source-alias-red.log` and
+`object-source-path-*.log`; this is not a new complete-head pass.
+
 The complete local Go 1.27 `gotoolprofile` suite passed in 1031.912 seconds on
 the frozen `ba02841e` checkout. Later type-invocation and fixture repairs have
 focused receipts, not a new complete-module certification.

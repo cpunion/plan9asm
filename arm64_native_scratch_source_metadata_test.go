@@ -45,6 +45,8 @@ func TestARM64NativeScratchObjectSourceMetadataRequiresCapturedPhysicalInput(t *
 		foreign, alias, "input.s", "gofile..input.s", "gofile..gofile.." + input,
 		filepath.Join(directory, "missing.s"), directory, "$GOROOT/../outside.s",
 		directory + "/../src/input.s", "unknown-prefix" + input,
+		"$GOROOT/src/../src/input.s", "$GOROOT/src/./input.s",
+		"$GOROOT//src/input.s", "gofile..$GOROOT/src/../src/input.s",
 	} {
 		t.Run(name, func(t *testing.T) {
 			if _, valid := source.originalObjectSource(name); valid {

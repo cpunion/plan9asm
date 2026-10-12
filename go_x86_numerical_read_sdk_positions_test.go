@@ -153,7 +153,7 @@ func TestGoX86SDKNumericalReadLiteralObjectSourceNames(t *testing.T) {
 			}},
 		}
 	}
-	for _, name := range []string{assembly, "$GOROOT/src/sample/input.s"} {
+	for _, name := range []string{assembly, filepath.ToSlash(assembly), "$GOROOT/src/sample/input.s"} {
 		if actual, valid := newSource().sdkLiteralObjectSource(name); !valid || actual != assembly {
 			t.Fatal("exact captured SDK/CPP source spelling rejected", name, actual, valid)
 		}

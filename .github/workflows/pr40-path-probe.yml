@@ -1,4 +1,4 @@
-name: PR40 Windows inventory diagnostic
+name: PR40 Windows remaining failures
 on:
   push:
     branches: [codex/pr40-windows-path-probe-20261012]
@@ -7,12 +7,11 @@ permissions:
 jobs:
   integration:
     runs-on: windows-latest
-    timeout-minutes: 45
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
-        role: [cli, profile]
-        part: [0, 1, 2, 3]
+        role: [metadata-and-crc, quoted-export]
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-go
@@ -26,13 +25,22 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: '22'
-      - name: Diagnose every actual inventory root in disjoint groups
-        shell: pwsh
-        run: python .github/scripts/pr40-inventory-probe.py '${{ matrix.role }}' '${{ matrix.part }}'
-      - name: Retain actual inventory and raw outcomes
-        if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v6
-        with:
-          name: windows-${{ matrix.role }}-${{ matrix.part }}
-          path: _out/windows-${{ matrix.role }}-${{ matrix.part }}/
-          if-no-files-found: error
+      - name: Exact original object source spellings
+        if: matrix.role == 'metadata-and-crc'
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test . -run '^(TestARM64NativeScratchObjectSourceMetadataRequiresCapturedPhysicalInput|TestGoX86SDKNumericalReadLiteralObjectSourceNames)$' -count=1 -v -timeout=10m
+      - name: Actual SDK CRC32 source reload and objects
+        if: ${{ !cancelled() && matrix.role == 'metadata-and-crc' }}
+        shell: bash
+        working-directory: cmd/plan9asmll
+        run: |
+          set -euo pipefail
+          go test . -run '^TestCompileOneX86SDKOriginalCRC32NumericalDataJoin$' -count=1 -v -timeout=15m
+      - name: Actual quoted original export and strict nm grammar
+        if: matrix.role == 'quoted-export'
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test ./gotoolprofile -run '^(TestInstrumentationExportNM.*|TestInstrumentationExportActualGoQuotedOwnedPath)$' -count=1 -v -timeout=10m

@@ -158,18 +158,8 @@ func (source *GoARM64ScratchSource) originalObjectSource(name string) (string, b
 	if source.filePrefix != "" && strings.HasPrefix(name, source.filePrefix) {
 		name = strings.TrimPrefix(name, source.filePrefix)
 	}
-	if strings.HasPrefix(name, "$GOROOT/") {
-		root := source.settings["GOROOT"]
-		name = filepath.Join(root, strings.TrimPrefix(name, "$GOROOT/"))
-		if !goAssemblyPathWithinRoot(root, name) {
-			return "", false
-		}
-	}
-	// cmd/internal/objabi.AbsFile emits '/' on a Windows producer. Convert
-	// only separators before checking canonicality and the captured identity;
-	// dot segments, aliases and uncaptured equal-byte files remain rejected.
-	name = filepath.FromSlash(name)
-	if !filepath.IsAbs(name) || filepath.Clean(name) != name {
+	name, valid := originalGoObjectSourcePath(name, source.settings["GOROOT"])
+	if !valid {
 		return "", false
 	}
 	physical, err := sourcepath.Resolve(name)

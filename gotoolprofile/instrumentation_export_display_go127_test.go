@@ -31,11 +31,14 @@ func TestInstrumentationExportActualGoQuotedOwnedPath(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Setenv("GOCACHE", cache)
-	var trace []byte
+	var trace, nm []byte
 	run := func(ctx context.Context, dir string, env []string, name string, args ...string) ([]byte, []byte, error) {
 		stdout, stderr, err := RunBounded(ctx, dir, env, name, args...)
 		if len(args) > 2 && args[0] == "list" && args[1] == "-a" && args[2] == "-x" {
 			trace = append([]byte(nil), stderr...)
+		}
+		if len(args) == 3 && args[0] == "tool" && args[1] == "nm" {
+			nm = append([]byte(nil), stdout...)
 		}
 		return stdout, stderr, err
 	}
@@ -45,6 +48,7 @@ func TestInstrumentationExportActualGoQuotedOwnedPath(t *testing.T) {
 		InstrumentationRace, "0", nil, run)
 	if err != nil {
 		t.Logf("actual original export -x trace:\n%s", trace)
+		t.Logf("actual original export nm output:\n%s", nm)
 		t.Fatal(err)
 	}
 	if !strings.Contains(string(trace), "owned marker with spaces") || !strings.Contains(string(trace), `"`) {

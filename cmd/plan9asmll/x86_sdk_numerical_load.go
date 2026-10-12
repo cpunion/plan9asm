@@ -105,9 +105,15 @@ func loadX86SDKNumericalPackage(ctx context.Context, binary string, pkg *package
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	if len(loaded) != 1 || loaded[0].Module != nil || loaded[0].IllTyped || len(loaded[0].Errors) != 0 ||
+	if len(loaded) != 1 {
+		return nil, nil, nil, fmt.Errorf("%w: SDK numerical reload selected %d packages, want only %q",
+			plan9asm.ErrProbeNeedsContext, len(loaded), pkg.PkgPath)
+	}
+	if loaded[0].Module != nil || loaded[0].IllTyped || len(loaded[0].Errors) != 0 ||
 		loaded[0].PkgPath != pkg.PkgPath || loaded[0].Types == nil || isTestVariantPackage(loaded[0]) {
-		return nil, nil, nil, fmt.Errorf("%w: SDK numerical actual reload is not the same ordinary SDK package", plan9asm.ErrProbeNeedsContext)
+		return nil, nil, nil, fmt.Errorf("%w: SDK numerical actual reload is not the same ordinary SDK package: want=%q actual=%q module=%t typed=%t test=%t ill-typed=%t errors=%v",
+			plan9asm.ErrProbeNeedsContext, pkg.PkgPath, loaded[0].PkgPath, loaded[0].Module != nil,
+			loaded[0].Types != nil, isTestVariantPackage(loaded[0]), loaded[0].IllTyped, loaded[0].Errors)
 	}
 	reloaded := loaded[0]
 	after, err := x86SDKLoadGraph(reloaded)
