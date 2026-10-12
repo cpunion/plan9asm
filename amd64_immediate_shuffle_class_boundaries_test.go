@@ -36,6 +36,13 @@ func TestX86ImmediateShuffleRejectsNonIntegerClassesEveryConsumer(t *testing.T) 
 					if x86CallerVectorMoveKnown(ins) || x86CallerVectorMoveStep(&ins, &state, nil) || !reflect.DeepEqual(state, before) {
 						t.Error("non-integer class acquired caller effects or changed state", arch)
 					}
+					result := x86ResultState{}
+					result.writeVector(0, 64, ^uint64(0), false)
+					result.writeVector(1, 64, ^uint64(0), false)
+					beforeResult := result.clone()
+					if x86ResultTransfer(ins, &result, nil, 0, arch) || !reflect.DeepEqual(result, beforeResult) {
+						t.Error("non-integer class acquired result effects or changed state", arch)
+					}
 				}
 				file, err := Parse(ArchAMD64, assembly)
 				if err != nil {

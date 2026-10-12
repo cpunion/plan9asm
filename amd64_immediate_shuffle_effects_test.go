@@ -108,6 +108,18 @@ func TestX86ImmediateShuffleByteKnowledgeAndUnaffectedState(t *testing.T) {
 									}
 								}
 								want.vectors[Reg(fmt.Sprint("Z", destination))] = expected
+								// The independent result observer must consume the same
+								// family, not reject it after correct caller/lowering work.
+								result := x86ResultState{flags: 0x3f, fp: []bool{true, false}, auto: []bool{false, true}}
+								result.gp[0], result.pointerGP[7], result.masks[1] = 0xff, true, true
+								for _, index := range []int{0, 1, 31} {
+									result.writeVector(index, 64, initial.vectors[Reg(fmt.Sprint("Z", index))], false)
+								}
+								wantResult := result.clone()
+								wantResult.writeVector(destination, 64, expected, false)
+								if !x86ResultTransfer(ins, &result, nil, 0, "amd64") || !reflect.DeepEqual(result, wantResult) {
+									t.Fatalf("%s seed=%d lost result bytes or unrelated state: got=%+v want=%+v", row, seed, result, wantResult)
+								}
 								if !x86CallerVectorMoveStep(&ins, &state, nil) || !reflect.DeepEqual(state, want) {
 									t.Fatalf("%s seed=%d changed byte dependencies or unrelated state: got=%+v want=%+v", row, seed, state, want)
 								}
@@ -116,6 +128,11 @@ func TestX86ImmediateShuffleByteKnowledgeAndUnaffectedState(t *testing.T) {
 								before := x86CloneCallerState(state)
 								if mode != "plain" && (x86CallerVectorMoveStep(&ins, &state, nil) || !reflect.DeepEqual(state, before)) {
 									t.Fatal("unknown mask acquired data or mutated state")
+								}
+								result.masks[1] = false
+								beforeResult := result.clone()
+								if mode != "plain" && (x86ResultTransfer(ins, &result, nil, 0, "amd64") || !reflect.DeepEqual(result, beforeResult)) {
+									t.Fatal("unknown result mask acquired data or mutated state")
 								}
 							}
 						})
