@@ -93,20 +93,39 @@ func x86CMPXCHGRunFaultCollector(t *testing.T, execution x86FloatCompareExecutio
 	if err != nil {
 		t.Fatal(err)
 	}
-	requireNative := 0
-	if native {
-		requireNative = 1
-	}
-	reference := fmt.Sprintf(x86CMPXCHGFaultReference, prototypes.String(), originals.String(), cases.String(), requireNative)
+	reference := fmt.Sprintf(x86CMPXCHGFaultReference, prototypes.String(), originals.String(), cases.String())
 	for _, level := range []string{"-O0", "-O2"} {
 		t.Run(level, func(t *testing.T) {
-			output := execution.compileAndRunLLVM(t, "cmpxchg-fault", ir, reference, level)
-			if strings.Count(string(output), "CMPXCHG opcode outcomes 96\n") != 1 ||
-				!strings.HasSuffix(string(output), "CMPXCHG outcome failures 0\n") ||
-				native && !strings.Contains(string(output), "CMPXCHG ISA deviations 0\n") {
-				t.Fatalf("complete native opcode/fault/access observer: %s", output)
+			executable := execution.compileLLVM(t, "cmpxchg-fault", ir, reference, level)
+			observations, deviations := 0, 0
+			for index := 0; index < len(x86CMPXCHGOriginalRows)*2; index++ {
+				for address := 0; address < 4; address++ {
+					original, err := x86CMPXCHGObserveFault(t, execution, executable, index, address, 1)
+					if err != nil {
+						t.Fatal(err)
+					}
+					translated, err := x86CMPXCHGObserveFault(t, execution, executable, index, address, 0)
+					if err != nil {
+						t.Fatal(err)
+					}
+					if original != translated {
+						t.Fatalf("kernel %d address %d: original %s, translated %s", index, address, original, translated)
+					}
+					misalignedPair := x86CMPXCHGOriginalRows[index/2].bits == 128 && address == 1
+					fault := address >= 2 || misalignedPair
+					if fault && original != "segv" && original != "bus" || !fault && original != "return" {
+						deviations++
+					}
+					if native && misalignedPair && original != "segv" {
+						t.Fatal("native Linux misaligned CMPXCHG16B did not report #GP as SIGSEGV")
+					}
+					observations += 2
+				}
 			}
-			t.Log(string(output))
+			if observations != 96 || native && deviations != 0 {
+				t.Fatalf("CMPXCHG opcode outcomes %d, ISA deviations %d", observations, deviations)
+			}
+			t.Logf("CMPXCHG opcode outcomes %d; ISA deviations %d; outcome failures 0", observations, deviations)
 		})
 	}
 }
@@ -115,12 +134,11 @@ const x86CMPXCHGFaultReference = `
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
-#include <signal.h>
 #include <stdlib.h>
-#include <unistd.h>
-#include <sys/mman.h>
+#ifndef _WIN32
 #include <sys/resource.h>
-#include <sys/wait.h>
+#endif
+` + x86TestGuardPagesC + `
 
 %s
 %s
@@ -130,100 +148,67 @@ typedef struct {
     unsigned width, family;
 } Kernel;
 
-static int observe(Kernel kernel, unsigned address, int original) {
-    pid_t child = fork();
-    if (child < 0) return -1;
-    if (child == 0) {
-        struct rlimit no_core = {0, 0};
-        if (setrlimit(RLIMIT_CORE, &no_core)) _exit(120);
-
-        _Alignas(16) unsigned char raw[64];
-        memset(raw, 0xa7, sizeof(raw));
-        unsigned char *p = raw + 16;
-        if (address == 1) p++;
-        if (address == 2) p = NULL;
-        if (address == 3) {
-            long page = sysconf(_SC_PAGESIZE);
-            if (page <= 0) _exit(81);
-            void *mapping = mmap(NULL, 2 * (size_t)page, PROT_READ | PROT_WRITE,
-                MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-            if (mapping == MAP_FAILED) _exit(82);
-            memset(mapping, 0xa7, (size_t)page);
-            if (mprotect((unsigned char *)mapping + page, (size_t)page, PROT_NONE)) _exit(83);
-            p = (unsigned char *)mapping + page - (kernel.width - 1);
-        }
-        unsigned char expected[16] = {0};
-        uint64_t low = 2, high = 5, desired_low = 3, desired_high = 4;
-        if (kernel.family == 4) {
-            uint32_t pair[2] = {2, 5}, desired[2] = {3, 4};
-            memcpy(expected, desired, 8);
-            if (address < 2) memcpy(p, pair, 8);
-        } else if (kernel.family == 5) {
-            memcpy(expected, &desired_low, 8);
-            memcpy(expected + 8, &desired_high, 8);
-            if (address < 2) {
-                memcpy(p, &low, 8);
-                memcpy(p + 8, &high, 8);
-            }
-        } else {
-            memcpy(expected, &desired_high, kernel.width);
-            if (address < 2) memcpy(p, &low, kernel.width);
-        }
-        if (original) kernel.original(p);
-        else kernel.translated(p);
-        if (address >= 2) _exit(84);
-        if (memcmp(p, expected, kernel.width)) _exit(85);
-        size_t begin = (size_t)(p - raw);
-        for (size_t i = 0; i < sizeof(raw); i++) {
-            if ((i < begin || i >= begin + kernel.width) && raw[i] != 0xa7) _exit(86);
-        }
-        _exit(0);
+static int exercise(Kernel kernel, unsigned index, unsigned address, unsigned original) {
+    _Alignas(16) unsigned char raw[64];
+    memset(raw, 0xa7, sizeof(raw));
+    unsigned char *p = raw + 16;
+    if (address == 1) p++;
+    if (address == 2) p = NULL;
+    if (address == 3) {
+        if (setup_guard()) return 82;
+        memset(guard, 0xa7, page);
+        p = guard + page - (kernel.width - 1);
     }
-    int status;
-    if (waitpid(child, &status, 0) != child) return -2;
-    if (WIFSIGNALED(status)) return 128 + WTERMSIG(status);
-    if (WIFEXITED(status)) return WEXITSTATUS(status);
-    return -3;
+    unsigned char expected[16] = {0};
+    uint64_t low = 2, high = 5, desired_low = 3, desired_high = 4;
+    if (kernel.family == 4) {
+        uint32_t pair[2] = {2, 5}, desired[2] = {3, 4};
+        memcpy(expected, desired, 8);
+        if (address < 2) memcpy(p, pair, 8);
+    } else if (kernel.family == 5) {
+        memcpy(expected, &desired_low, 8);
+        memcpy(expected + 8, &desired_high, 8);
+        if (address < 2) {
+            memcpy(p, &low, 8);
+            memcpy(p + 8, &high, 8);
+        }
+    } else {
+        memcpy(expected, &desired_high, kernel.width);
+        if (address < 2) memcpy(p, &low, kernel.width);
+    }
+    if (printf("CMPXCHG enter %%u %%u %%u\n", index, address, original) < 0 || fflush(stdout)) return 87;
+    if (original) kernel.original(p);
+    else kernel.translated(p);
+    if (address == 3 && free_guard()) return 83;
+    if (address >= 2) return 84;
+    if (memcmp(p, expected, kernel.width)) return 85;
+    size_t begin = (size_t)(p - raw);
+    for (size_t i = 0; i < sizeof(raw); i++) {
+        if ((i < begin || i >= begin + kernel.width) && raw[i] != 0xa7) return 86;
+    }
+    if (puts("CMPXCHG complete") < 0 || fflush(stdout)) return 88;
+    return 0;
 }
 
-int main(void) {
+int main(int argc, char **argv) {
+#ifdef _WIN32
+    SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
+#else
+    struct rlimit no_core = {0, 0};
+    if (setrlimit(RLIMIT_CORE, &no_core)) return 120;
+#endif
     Kernel kernels[] = {
 %s
     };
-    const unsigned require_native = %d;
-    unsigned observations = 0;
-    unsigned failures = 0, deviations = 0;
-    for (unsigned index = 0; index < 12; index++) {
-        for (unsigned address = 0; address < 4; address++) {
-            int original = observe(kernels[index], address, 1);
-            int translated = observe(kernels[index], address, 0);
-            printf("kernel=%%u address=%%u original=%%d translated=%%d\n",
-                index, address, original, translated);
-            if (original != translated) failures++;
-            /* Exit codes from setup, bounds, canary or wait failures never
-               become an accepted outcome, even when both paths agree. */
-            if (original != 0 && original != 128 + SIGSEGV &&
-                    original != 128 + SIGBUS && original != 128 + SIGILL) failures++;
-            if (translated != 0 && translated != 128 + SIGSEGV &&
-                    translated != 128 + SIGBUS && translated != 128 + SIGILL) failures++;
-            int fault = address >= 2 || (kernels[index].width == 16 && address == 1);
-            if (fault) {
-                if (original != 128 + SIGSEGV && original != 128 + SIGBUS) deviations++;
-                /* The required Linux native axis observes #GP as SIGSEGV.
-                   Rosetta's unprefixed normal return remains a deviation. */
-                if (require_native && kernels[index].width == 16 && address == 1 &&
-                        original != 128 + SIGSEGV) failures++;
-            } else if (original != 0) {
-                /* In particular an actual SIGILL is not a CPUID-based skip. */
-                deviations++;
-            }
-            observations += 2;
-        }
+    if (argc != 4 || strlen(argv[1]) > 2 || strlen(argv[2]) != 1 || strlen(argv[3]) != 1) return 80;
+    unsigned long values[3];
+    for (unsigned i = 0; i < 3; i++) {
+        char *end;
+        if (argv[i+1][0] < '0' || argv[i+1][0] > '9') return 80;
+        values[i] = strtoul(argv[i+1], &end, 10);
+        if (*end) return 80;
     }
-    printf("CMPXCHG opcode outcomes %%u\n", observations);
-    printf("CMPXCHG ISA deviations %%u\n", deviations);
-    if (require_native && deviations) failures++;
-    printf("CMPXCHG outcome failures %%u\n", failures);
-    return failures ? 1 : 0;
+    if (values[0] >= sizeof(kernels)/sizeof(kernels[0]) || values[1] >= 4 || values[2] >= 2) return 80;
+    return exercise(kernels[values[0]], (unsigned)values[0], (unsigned)values[1], (unsigned)values[2]);
 }
 `

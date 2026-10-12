@@ -94,6 +94,14 @@ func (execution x86FloatCompareExecution) run(t *testing.T, executable string, a
 // own bounded lifecycle; no LLVM module or context survives between fixtures.
 func (execution x86FloatCompareExecution) compileAndRunLLVM(t *testing.T, name, ir, main, level string) []byte {
 	t.Helper()
+	return execution.run(t, execution.compileLLVM(t, name, ir, main, level))
+}
+
+// The caller owns this test's temporary directory until all independent
+// invocations finish. Fault observers need the executable, not a helper that
+// treats every genuine native exception as an ordinary command failure.
+func (execution x86FloatCompareExecution) compileLLVM(t *testing.T, name, ir, main, level string) string {
+	t.Helper()
 	if execution.llc == "" || len(execution.compiler) == 0 {
 		t.Fatal("comparison runtime requires its actual LLVM22 and C compiler")
 	}
@@ -104,7 +112,7 @@ func (execution x86FloatCompareExecution) compileAndRunLLVM(t *testing.T, name, 
 	input := filepath.Join(dir, name+".ll")
 	object := filepath.Join(dir, name+".o")
 	source := filepath.Join(dir, "main.c")
-	executable := filepath.Join(dir, "comparison")
+	executable := filepath.Join(dir, gotoolchain.HostExecutable("comparison"))
 	if strings.Contains(execution.triple, "windows") {
 		main = "int _fltused = 0;\n" + main
 	}
@@ -122,7 +130,7 @@ func (execution x86FloatCompareExecution) compileAndRunLLVM(t *testing.T, name, 
 		compiler = append(compiler, "-lm")
 	}
 	x86FloatCompareCaptureCommand(t, exec.Command(compiler[0], compiler[1:]...))
-	return execution.run(t, executable)
+	return executable
 }
 
 func (execution x86FloatCompareExecution) requireAVX(t *testing.T) {
