@@ -14,6 +14,8 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+
+	"github.com/xgo-dev/plan9asm/internal/sourcepath"
 )
 
 const instrumentationSourceRejectionProtocol = "original_instrumented_package_redeclaration_v1"
@@ -233,7 +235,7 @@ func validateInstrumentationRedeclarationDiagnostic(data []byte, invocationDir s
 		if err != nil {
 			return false
 		}
-		resolved, err := filepath.EvalSymlinks(filename)
+		resolved, err := sourcepath.Resolve(filename)
 		return err == nil && resolved == physical
 	}
 	for index, declaration := range declarations {
@@ -255,7 +257,7 @@ func (metadata instrumentationRejectedMetadata) verify() error {
 	if err != nil || !info.Mode().IsRegular() || info.Size() > 2<<20 {
 		return fmt.Errorf("actual rejected module metadata is missing, redirected or over-bound")
 	}
-	physical, err := filepath.EvalSymlinks(metadata.path)
+	physical, err := sourcepath.Resolve(metadata.path)
 	if err != nil || physical != metadata.physical {
 		return fmt.Errorf("actual rejected module metadata changed its physical origin")
 	}
@@ -288,11 +290,11 @@ func validateInstrumentationRejectedSelection(data []byte, input *ConsumerInput,
 	if err := json.Unmarshal(data, &selected); err != nil {
 		return nil, err
 	}
-	root, err := filepath.EvalSymlinks(input.SourceRoot)
+	root, err := sourcepath.Resolve(input.SourceRoot)
 	if err != nil {
 		return nil, err
 	}
-	directory, err := filepath.EvalSymlinks(selected.Dir)
+	directory, err := sourcepath.Resolve(selected.Dir)
 	if err != nil || directory != filepath.Join(root, filepath.FromSlash(plan.PackageDirectory)) ||
 		selected.ImportPath != plan.PackagePath || selected.Name != plan.PackageName || selected.ForTest != "" ||
 		selected.Export != "" || selected.BuildID != "" || selected.Incomplete || len(selected.Error) != 0 || len(selected.DepsErrors) != 0 ||
@@ -321,18 +323,18 @@ func validateInstrumentationRejectedSelection(data []byte, input *ConsumerInput,
 		if owner.Replace == nil || owner.Replace.Path != input.SourceModule || owner.Replace.Version != input.Version || len(owner.Replace.Replace) != 0 {
 			return nil, fmt.Errorf("source refusal lacks its exact versioned namespace replacement")
 		}
-		replaced, err := filepath.EvalSymlinks(owner.Replace.Dir)
+		replaced, err := sourcepath.Resolve(owner.Replace.Dir)
 		if err != nil || replaced != root {
 			return nil, fmt.Errorf("source refusal changed original replaced archive root")
 		}
 	} else if owner.Replace != nil {
 		return nil, fmt.Errorf("source refusal has an unregistered replacement")
 	}
-	owned, err := filepath.EvalSymlinks(owner.Dir)
+	owned, err := sourcepath.Resolve(owner.Dir)
 	if err != nil || owned != root {
 		return nil, fmt.Errorf("source refusal changed original module root")
 	}
-	physical, err := filepath.EvalSymlinks(owner.GoMod)
+	physical, err := sourcepath.Resolve(owner.GoMod)
 	if err != nil || !discoverySHA256Pattern.MatchString(input.Sources["go.mod"]) {
 		return nil, fmt.Errorf("rejected package metadata lacks its original physical/byte identity")
 	}

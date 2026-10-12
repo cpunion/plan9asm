@@ -6,6 +6,8 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+
+	"github.com/xgo-dev/plan9asm/internal/sourcepath"
 )
 
 // SourceInventory is shared byte/membership evidence. Its capture and replay
@@ -23,7 +25,7 @@ func CaptureSourceDirectory(ctx context.Context, inventory *SourceInventory, roo
 	if ctx == nil || ctx.Err() != nil || inventory == nil {
 		return fmt.Errorf("source inventory capture requires a live context")
 	}
-	resolved, err := filepath.EvalSymlinks(root)
+	resolved, err := sourcepath.Resolve(root)
 	if err != nil || resolved != root || !filepath.IsAbs(root) {
 		return fmt.Errorf("source inventory root is missing or redirected")
 	}
@@ -32,7 +34,7 @@ func CaptureSourceDirectory(ctx context.Context, inventory *SourceInventory, roo
 	if err != nil || name != "." && !testSourceLocalPath(name) {
 		return fmt.Errorf("source inventory directory escapes its bound root")
 	}
-	resolved, err = filepath.EvalSymlinks(directory)
+	resolved, err = sourcepath.Resolve(directory)
 	if err != nil || resolved != directory {
 		return fmt.Errorf("source inventory directory is redirected")
 	}

@@ -13,6 +13,7 @@ import (
 	"github.com/xgo-dev/plan9asm/internal/goasmcmd"
 	"github.com/xgo-dev/plan9asm/internal/golegacymod"
 	"github.com/xgo-dev/plan9asm/internal/gooriginalsrc"
+	"github.com/xgo-dev/plan9asm/internal/sourcepath"
 	"golang.org/x/mod/module"
 )
 
@@ -41,7 +42,7 @@ func CaptureGoAMD64DownloadedFrameSource(ctx context.Context, pkg GoPackage, req
 }
 
 func (source *GoAMD64FrameSource) captureDownloadedOrigin(ctx context.Context, exact goAMD64DownloadedIdentity, temporary string) (result error) {
-	cache, err := filepath.EvalSymlinks(source.env["GOMODCACHE"])
+	cache, err := sourcepath.Resolve(source.env["GOMODCACHE"])
 	if err != nil {
 		return err
 	}

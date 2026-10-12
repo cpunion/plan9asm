@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/xgo-dev/plan9asm/gotoolprofile"
+	"github.com/xgo-dev/plan9asm/internal/sourcepath"
 )
 
 // Resolve the ordinary load environment before packages.Load. Its later source
@@ -96,7 +97,7 @@ func ordinaryPackageEnvironment(goos, goarch string, input []string) ([]string, 
 		if err != nil {
 			return nil, err
 		}
-		values[key], err = filepath.EvalSymlinks(path)
+		values[key], err = sourcepath.Resolve(path)
 		if err != nil {
 			return nil, fmt.Errorf("resolve package-load %s: %w", key, err)
 		}

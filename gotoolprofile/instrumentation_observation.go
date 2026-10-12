@@ -9,6 +9,8 @@ import (
 	"reflect"
 	"sort"
 	"strings"
+
+	"github.com/xgo-dev/plan9asm/internal/sourcepath"
 )
 
 const instrumentationEarlyObservationProtocol = "actual_go_instrumentation_early_observation_v2"
@@ -73,7 +75,7 @@ func CaptureInstrumentationEarlyObservation(ctx context.Context, binary, ownedDi
 	if !filepath.IsAbs(binary) || !filepath.IsAbs(ownedDir) {
 		return nil, fmt.Errorf("instrumentation driver and owned directory must be absolute")
 	}
-	ownedDir, err = filepath.EvalSymlinks(ownedDir)
+	ownedDir, err = sourcepath.Resolve(ownedDir)
 	if err != nil {
 		return nil, err
 	}

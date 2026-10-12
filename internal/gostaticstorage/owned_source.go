@@ -3,6 +3,8 @@ package gostaticstorage
 import (
 	"os"
 	"path/filepath"
+
+	"github.com/xgo-dev/plan9asm/internal/sourcepath"
 )
 
 // SourceDirectoryWithinRoot is a physical relationship query, not a source
@@ -12,7 +14,7 @@ func SourceDirectoryWithinRoot(directory, root string) (bool, error) {
 	if !filepath.IsAbs(directory) || !filepath.IsAbs(root) {
 		return false, contextError("physical source relationship requires absolute roots")
 	}
-	physical, err := filepath.EvalSymlinks(directory)
+	physical, err := sourcepath.Resolve(directory)
 	if err != nil {
 		return false, err
 	}
@@ -47,7 +49,7 @@ func ValidateOwnedSourceDirectory(directory, goRoot, moduleCache string) error {
 	if !filepath.IsAbs(directory) || !filepath.IsAbs(goRoot) || !filepath.IsAbs(moduleCache) {
 		return contextError("owned source lacks actual absolute SDK/cache/source roots")
 	}
-	physicalDirectory, err := filepath.EvalSymlinks(directory)
+	physicalDirectory, err := sourcepath.Resolve(directory)
 	if err != nil {
 		return err
 	}

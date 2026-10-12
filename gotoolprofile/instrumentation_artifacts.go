@@ -7,6 +7,8 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+
+	"github.com/xgo-dev/plan9asm/internal/sourcepath"
 )
 
 const (
@@ -83,7 +85,7 @@ func CaptureInstrumentationLLVMArtifacts(root string, index int, budget *Instrum
 	if budget == nil || index < 0 || budget.ordinal != index || !filepath.IsAbs(root) {
 		return nil, fmt.Errorf("generated LLVM artifacts lack a canonical invocation origin/ordinal")
 	}
-	physicalRoot, err := filepath.EvalSymlinks(root)
+	physicalRoot, err := sourcepath.Resolve(root)
 	if err != nil {
 		return nil, err
 	}
@@ -114,7 +116,7 @@ func CaptureInstrumentationLLVMArtifacts(root string, index int, budget *Instrum
 	if err != nil {
 		return nil, err
 	}
-	afterRoot, err := filepath.EvalSymlinks(root)
+	afterRoot, err := sourcepath.Resolve(root)
 	if err != nil || afterRoot != physicalRoot {
 		return nil, fmt.Errorf("generated LLVM artifact origin changed during readback: %v", err)
 	}
@@ -153,7 +155,7 @@ func captureInstrumentationLLVMArtifact(root, name, role string, limit int64, re
 		return result, fmt.Errorf("generated LLVM artifact changed or exceeded its streaming bound: %s: %v", name, err)
 	}
 	after, err := os.Lstat(path)
-	resolved, resolveErr := filepath.EvalSymlinks(path)
+	resolved, resolveErr := sourcepath.Resolve(path)
 	if err != nil || resolveErr != nil || resolved != path || !os.SameFile(before, after) ||
 		after.Size() != before.Size() || !after.ModTime().Equal(before.ModTime()) || !after.Mode().IsRegular() {
 		return result, fmt.Errorf("generated LLVM artifact was replaced or changed: %s: %v", name, errors.Join(err, resolveErr))
@@ -163,7 +165,7 @@ func captureInstrumentationLLVMArtifact(root, name, role string, limit int64, re
 
 func instrumentationLLVMArtifactInfo(root, name, role string, limit int64) (os.FileInfo, error) {
 	path := filepath.Join(root, name)
-	resolved, err := filepath.EvalSymlinks(path)
+	resolved, err := sourcepath.Resolve(path)
 	if err != nil || resolved != path {
 		return nil, fmt.Errorf("generated LLVM artifact is missing or redirected: %s: %v", name, err)
 	}

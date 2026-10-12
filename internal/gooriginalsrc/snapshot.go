@@ -13,6 +13,7 @@ import (
 	"reflect"
 	"sync"
 
+	"github.com/xgo-dev/plan9asm/internal/sourcepath"
 	modzip "golang.org/x/mod/zip"
 )
 
@@ -155,7 +156,7 @@ func (snapshot *Snapshot) retain(name string, role originalFileRole) error {
 			}
 		}
 	}
-	physical, err := filepath.EvalSymlinks(name)
+	physical, err := sourcepath.Resolve(name)
 	if err != nil {
 		return err
 	}
@@ -193,7 +194,7 @@ func (snapshot *Snapshot) Directory(name string, recursive bool) error {
 	if _, retained := snapshot.directories[name]; !retained && len(snapshot.directories) >= directoryLimit {
 		return fmt.Errorf("original source directory inventory exceeds its count bound")
 	}
-	physical, err := filepath.EvalSymlinks(name)
+	physical, err := sourcepath.Resolve(name)
 	if err != nil {
 		return err
 	}
@@ -262,7 +263,7 @@ func (snapshot *Snapshot) Verify() error {
 	}
 	for name, digest := range snapshot.hashes {
 		info, err := os.Lstat(name)
-		physical, resolveErr := filepath.EvalSymlinks(name)
+		physical, resolveErr := sourcepath.Resolve(name)
 		if err != nil || resolveErr != nil || !info.Mode().IsRegular() ||
 			physical != snapshot.paths[name] || !os.SameFile(snapshot.files[name], info) {
 			return fmt.Errorf("original source/export physical identity changed")
@@ -276,7 +277,7 @@ func (snapshot *Snapshot) Verify() error {
 		}
 	}
 	for name := range snapshot.directories {
-		physical, err := filepath.EvalSymlinks(name)
+		physical, err := sourcepath.Resolve(name)
 		entries, info, readErr := ReadDirectory(name, fileLimit+directoryLimit)
 		if err != nil || readErr != nil || physical != snapshot.paths[name] ||
 			!os.SameFile(snapshot.directories[name], info) {
@@ -322,7 +323,7 @@ func (snapshot *Snapshot) OpenRetained(name string) (io.ReadCloser, error) {
 	}
 	expected := snapshot.files[name]
 	digest, retained := snapshot.hashes[name]
-	physical, err := filepath.EvalSymlinks(name)
+	physical, err := sourcepath.Resolve(name)
 	if !retained || expected == nil || err != nil || physical != snapshot.paths[name] ||
 		snapshot.retainedRoles[name] != originalSourceFile && snapshot.retainedRoles[name] != originalModuleArtifact {
 		return nil, fmt.Errorf("original file was not retained at its physical role")
@@ -355,7 +356,7 @@ func originalFileSHA256(name string, expected os.FileInfo) (string, error) {
 }
 
 func originalRoleFileSHA256(name string, expected os.FileInfo, role originalFileRole) (string, error) {
-	physical, err := filepath.EvalSymlinks(name)
+	physical, err := sourcepath.Resolve(name)
 	if err != nil {
 		return "", err
 	}
@@ -398,7 +399,7 @@ func openOriginalRoleFile(name string, expected os.FileInfo, physical, digest st
 		return nil, fmt.Errorf("original source file has no bounded physical extent")
 	}
 	before, err := os.Lstat(name)
-	resolved, resolveErr := filepath.EvalSymlinks(name)
+	resolved, resolveErr := sourcepath.Resolve(name)
 	if err != nil || resolveErr != nil || resolved != physical || !before.Mode().IsRegular() ||
 		!os.SameFile(expected, before) || before.Size() != expected.Size() {
 		return nil, fmt.Errorf("original source file identity or extent changed before opening")
@@ -435,7 +436,7 @@ func (reader *originalFileReader) Read(data []byte) (int, error) {
 		err = fmt.Errorf("original source file grew beyond its retained extent")
 	} else if err == io.EOF {
 		after, statErr := os.Lstat(reader.name)
-		physical, resolveErr := filepath.EvalSymlinks(reader.name)
+		physical, resolveErr := sourcepath.Resolve(reader.name)
 		if statErr != nil || resolveErr != nil || physical != reader.physical || !after.Mode().IsRegular() ||
 			!os.SameFile(reader.expected, after) || reader.count != reader.expected.Size() || reader.count != after.Size() ||
 			reader.digest != "" && fmt.Sprintf("%x", reader.hash.Sum(nil)) != reader.digest {

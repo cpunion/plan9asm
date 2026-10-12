@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/xgo-dev/plan9asm/internal/sourcepath"
 	"golang.org/x/mod/module"
 )
 
@@ -39,7 +40,7 @@ func CaptureCachedProxyGoMod(ctx context.Context, cache, proxy, name, version, z
 	if err != nil || !info.Mode().IsRegular() {
 		return nil, "", fmt.Errorf("proxy metadata is not a regular exact-version download file")
 	}
-	canonical, err := filepath.EvalSymlinks(wanted)
+	canonical, err := sourcepath.Resolve(wanted)
 	if err != nil {
 		return nil, "", err
 	}

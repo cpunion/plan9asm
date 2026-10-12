@@ -14,6 +14,8 @@ import (
 	"reflect"
 	"sort"
 	"strings"
+
+	"github.com/xgo-dev/plan9asm/internal/sourcepath"
 )
 
 // This is an original-input capture, separate from the metadata query. The
@@ -88,7 +90,7 @@ func captureInstrumentationTypeSources(ctx context.Context, binary, directory st
 		}
 	}
 	for file, expected := range after.hashes {
-		resolved, err := filepath.EvalSymlinks(file)
+		resolved, err := sourcepath.Resolve(file)
 		if err != nil || resolved != after.paths[file] {
 			return nil, fmt.Errorf("actual imported source/export path changed during capture")
 		}
@@ -128,7 +130,7 @@ func captureInstrumentationTypeSources(ctx context.Context, binary, directory st
 		return nil, err
 	}
 	for file, expected := range after.hashes {
-		resolved, err := filepath.EvalSymlinks(file)
+		resolved, err := sourcepath.Resolve(file)
 		if err != nil || resolved != after.paths[file] {
 			return nil, fmt.Errorf("actual original type source path changed during AST capture")
 		}
@@ -220,8 +222,8 @@ func captureInstrumentationTypeGraph(ctx context.Context, binary, directory stri
 		}
 		seen[pkg.ImportPath] = true
 		if pkg.ImportPath == "unsafe" {
-			actualRoot, rootErr := filepath.EvalSymlinks(filepath.Join(actual["GOROOT"], "src", "unsafe"))
-			actualDir, dirErr := filepath.EvalSymlinks(pkg.Dir)
+			actualRoot, rootErr := sourcepath.Resolve(filepath.Join(actual["GOROOT"], "src", "unsafe"))
+			actualDir, dirErr := sourcepath.Resolve(pkg.Dir)
 			if pkg.Module != nil || pkg.Name != "unsafe" || rootErr != nil || dirErr != nil || actualDir != actualRoot {
 				return nil, fmt.Errorf("builtin unsafe package acquired an external role")
 			}
@@ -273,11 +275,11 @@ func instrumentationTypeNames(names []string, directory, root string) []string {
 	if !filepath.IsAbs(root) || !filepath.IsAbs(directory) {
 		return nil
 	}
-	root, err := filepath.EvalSymlinks(root)
+	root, err := sourcepath.Resolve(root)
 	if err != nil {
 		return nil
 	}
-	directory, err = filepath.EvalSymlinks(directory)
+	directory, err = sourcepath.Resolve(directory)
 	if err != nil {
 		return nil
 	}
@@ -293,7 +295,7 @@ func instrumentationTypeNames(names []string, directory, root string) []string {
 		if !filepath.IsAbs(name) {
 			name = filepath.Join(directory, name)
 		}
-		parent, err := filepath.EvalSymlinks(filepath.Dir(name))
+		parent, err := sourcepath.Resolve(filepath.Dir(name))
 		if err != nil {
 			return nil
 		}
@@ -351,8 +353,8 @@ func captureInstrumentationTypePackage(input *InstrumentationConsumerInput, actu
 			} else if input.Original.SourceModule != "" && input.Original.SourceModule != module.Path {
 				return entry, fmt.Errorf("original type graph lost its exact archive namespace replacement")
 			}
-			resolved, err := filepath.EvalSymlinks(root)
-			original, originalErr := filepath.EvalSymlinks(input.Original.SourceRoot)
+			resolved, err := sourcepath.Resolve(root)
+			original, originalErr := sourcepath.Resolve(input.Original.SourceRoot)
 			if err != nil || originalErr != nil || resolved != original {
 				return entry, fmt.Errorf("actual imported module root differs from the authenticated original source")
 			}
@@ -366,11 +368,11 @@ func captureInstrumentationTypePackage(input *InstrumentationConsumerInput, actu
 			graph.recordModuleMetadataPath("original", metadata)
 		}
 	}
-	root, err := filepath.EvalSymlinks(root)
+	root, err := sourcepath.Resolve(root)
 	if err != nil {
 		return entry, err
 	}
-	directory, err := filepath.EvalSymlinks(pkg.Dir)
+	directory, err := sourcepath.Resolve(pkg.Dir)
 	packageDirectory := strings.TrimPrefix(strings.TrimPrefix(pkg.ImportPath, entry.Dependency.Source.ModulePath), "/")
 	if packageDirectory == "" {
 		packageDirectory = "."
@@ -443,7 +445,7 @@ func captureInstrumentationTypePackage(input *InstrumentationConsumerInput, actu
 		if err := graph.retain(pkg.Export); err != nil {
 			return entry, fmt.Errorf("original imported package lacks its actual export: %v", err)
 		}
-		cache, err := filepath.EvalSymlinks(actual["GOCACHE"])
+		cache, err := sourcepath.Resolve(actual["GOCACHE"])
 		rel, relErr := filepath.Rel(cache, graph.paths[pkg.Export])
 		if err != nil || relErr != nil || !filepath.IsLocal(rel) {
 			return entry, fmt.Errorf("original imported export is outside the actual Go build cache")
@@ -498,7 +500,7 @@ func (graph *instrumentationTypeGraph) retain(name string) error {
 	if !filepath.IsAbs(name) || strings.ContainsAny(name, "\x00\r\n") {
 		return fmt.Errorf("actual original source/export has no absolute path")
 	}
-	resolved, err := filepath.EvalSymlinks(name)
+	resolved, err := sourcepath.Resolve(name)
 	if err != nil {
 		return err
 	}

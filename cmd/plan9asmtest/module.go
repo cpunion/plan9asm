@@ -13,6 +13,8 @@ import (
 	"reflect"
 	"sort"
 	"strings"
+
+	"github.com/xgo-dev/plan9asm/internal/sourcepath"
 )
 
 const moduleProtocol = "actual_go_complete_module_v1"
@@ -216,7 +218,7 @@ func runModule(ctx context.Context, cfg config) error {
 	if err != nil {
 		return err
 	}
-	cfg.Dir, err = filepath.EvalSymlinks(cfg.Dir)
+	cfg.Dir, err = sourcepath.Resolve(cfg.Dir)
 	if err != nil {
 		return err
 	}

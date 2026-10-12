@@ -20,6 +20,7 @@ import (
 
 	"github.com/xgo-dev/plan9asm/internal/gostaticstorage"
 	"github.com/xgo-dev/plan9asm/internal/gotoolchain"
+	"github.com/xgo-dev/plan9asm/internal/sourcepath"
 )
 
 type GoARM64ByteCarrierCaptureRequest struct {
@@ -142,7 +143,7 @@ func CaptureGoARM64ByteCarrierSource(ctx context.Context, request GoARM64ByteCar
 		Target: request.Target, Environment: request.Environment,
 	})
 	for _, name := range []string{request.Directory, provided["GOCACHE"], provided["GOMODCACHE"], provided["GOPATH"], provided["TMPDIR"], provided["GOTMPDIR"]} {
-		physical, err := filepath.EvalSymlinks(name)
+		physical, err := sourcepath.Resolve(name)
 		info, statErr := os.Lstat(name)
 		if !filepath.IsAbs(name) || err != nil || physical != name || statErr != nil || !info.IsDir() {
 			return nil, arm64ByteCarrierContext("missing or redirected source/command root")
@@ -255,7 +256,7 @@ func (source *GoARM64ByteCarrierSource) observe(ctx context.Context) error {
 		return arm64ByteCarrierContext("unobserved original SDK version")
 	}
 	for _, name := range []string{source.guard.env["GOROOT"], source.guard.env["GOTOOLDIR"], filepath.Join(source.guard.env["GOROOT"], "pkg/include")} {
-		physical, err := filepath.EvalSymlinks(name)
+		physical, err := sourcepath.Resolve(name)
 		info, statErr := os.Lstat(name)
 		if err != nil || physical != name || statErr != nil || !info.IsDir() {
 			return arm64ByteCarrierContext("actual SDK root is redirected or unavailable")
@@ -505,7 +506,7 @@ func (source *GoARM64ByteCarrierSource) Verify(ctx context.Context) (verifyErr e
 		return arm64ByteCarrierContext("sealed complete original observation changed")
 	}
 	for name, before := range source.dirs {
-		physical, err := filepath.EvalSymlinks(name)
+		physical, err := sourcepath.Resolve(name)
 		after, statErr := os.Lstat(name)
 		if err != nil || physical != name || statErr != nil || !after.IsDir() || !os.SameFile(before, after) {
 			return arm64ByteCarrierContext("source/cache/temporary root identity changed")

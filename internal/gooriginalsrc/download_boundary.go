@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/xgo-dev/plan9asm/internal/sourcepath"
 	"golang.org/x/mod/module"
 )
 
@@ -55,7 +56,7 @@ func NewDownloadBoundary(temporary, prefix, modulePath string) (_ *DownloadBound
 			result = errors.Join(result, boundary.Close())
 		}
 	}()
-	physical, err := filepath.EvalSymlinks(created)
+	physical, err := sourcepath.Resolve(created)
 	if err != nil {
 		return nil, err
 	}

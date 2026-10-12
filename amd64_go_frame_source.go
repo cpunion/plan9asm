@@ -31,6 +31,7 @@ import (
 	"github.com/xgo-dev/plan9asm/internal/gooriginalsrc"
 	"github.com/xgo-dev/plan9asm/internal/gostaticstorage"
 	"github.com/xgo-dev/plan9asm/internal/gotoolchain"
+	"github.com/xgo-dev/plan9asm/internal/sourcepath"
 	"golang.org/x/arch/x86/x86asm"
 )
 
@@ -161,7 +162,7 @@ func captureGoAMD64FrameSource(ctx context.Context, pkg GoPackage, request GoAMD
 		return nil, goAMD64FrameContext("initial object capture supports ordinary AMD64 targets only")
 	}
 	var err error
-	request.Directory, err = filepath.EvalSymlinks(request.Directory)
+	request.Directory, err = sourcepath.Resolve(request.Directory)
 	if err != nil {
 		return nil, err
 	}
@@ -289,7 +290,7 @@ func captureGoAMD64FrameSource(ctx context.Context, pkg GoPackage, request GoAMD
 	if err != nil {
 		return nil, err
 	}
-	canonicalOwned, err := filepath.EvalSymlinks(source.owned)
+	canonicalOwned, err := sourcepath.Resolve(source.owned)
 	if err != nil {
 		return nil, err
 	}
@@ -623,7 +624,7 @@ func (source *GoAMD64FrameSource) run(ctx context.Context, args ...string) ([]by
 }
 
 func goAMD64FrameRead(name string) (_ []byte, readErr error) {
-	resolved, err := filepath.EvalSymlinks(name)
+	resolved, err := sourcepath.Resolve(name)
 	if err != nil || resolved != name {
 		return nil, goAMD64FrameContext("input path is redirected or inaccessible: %s", filepath.Base(name))
 	}
@@ -665,7 +666,7 @@ func (source *GoAMD64FrameSource) read(name string) ([]byte, error) {
 }
 
 func (source *GoAMD64FrameSource) snapshotDirectory() error {
-	resolved, err := filepath.EvalSymlinks(source.request.Directory)
+	resolved, err := sourcepath.Resolve(source.request.Directory)
 	if err != nil || resolved != source.request.Directory {
 		return goAMD64FrameContext("requires canonical actual package directory")
 	}
@@ -730,12 +731,12 @@ func (source *GoAMD64FrameSource) observe(ctx context.Context) error {
 		if !filepath.IsAbs(name) || strings.ContainsAny(name, "\r\n") || tool != "objdump" && name != filepath.Join(env["GOTOOLDIR"], executable) {
 			return goAMD64FrameContext("unrecognized actual %s route", tool)
 		}
-		resolved, err := filepath.EvalSymlinks(name)
+		resolved, err := sourcepath.Resolve(name)
 		if err != nil {
 			return err
 		}
 		if tool == "objdump" && name != filepath.Join(env["GOTOOLDIR"], executable) {
-			cache, err := filepath.EvalSymlinks(env["GOCACHE"])
+			cache, err := sourcepath.Resolve(env["GOCACHE"])
 			if err != nil || !goAssemblyPathWithinRoot(cache, resolved) || filepath.Base(resolved) != executable {
 				return goAMD64FrameContext("unknown builtin object observer origin")
 			}
@@ -777,8 +778,8 @@ func (source *GoAMD64FrameSource) loadWithRaw(ctx context.Context) (goAMD64Frame
 	if selected.Export == "" {
 		return selected, data, goAMD64FrameContext("actual package has no compiled export")
 	}
-	selected.Export, err = filepath.EvalSymlinks(selected.Export)
-	cache, cacheErr := filepath.EvalSymlinks(source.env["GOCACHE"])
+	selected.Export, err = sourcepath.Resolve(selected.Export)
+	cache, cacheErr := sourcepath.Resolve(source.env["GOCACHE"])
 	if err != nil || cacheErr != nil || !goAssemblyPathWithinRoot(cache, selected.Export) {
 		return selected, data, goAMD64FrameContext("compiled export is outside the actual build cache")
 	}

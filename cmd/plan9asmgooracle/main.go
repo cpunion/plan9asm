@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/xgo-dev/plan9asm/internal/gooriginalsrc"
+	"github.com/xgo-dev/plan9asm/internal/sourcepath"
 )
 
 type options struct {
@@ -141,7 +142,7 @@ func retainResult(value *report, caseDir string, item result) error {
 		err = fmt.Errorf("case directory never acquired an owned identity")
 	} else {
 		current, statErr := os.Lstat(caseDir)
-		physical, pathErr := filepath.EvalSymlinks(caseDir)
+		physical, pathErr := sourcepath.Resolve(caseDir)
 		if statErr != nil || pathErr != nil || !current.IsDir() || !os.SameFile(item.directory, current) || physical != caseDir {
 			err = fmt.Errorf("case directory identity changed before report")
 		}

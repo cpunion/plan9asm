@@ -12,6 +12,7 @@ import (
 
 	"github.com/xgo-dev/plan9asm"
 	"github.com/xgo-dev/plan9asm/internal/gooriginalsrc"
+	"github.com/xgo-dev/plan9asm/internal/sourcepath"
 	"golang.org/x/mod/module"
 )
 
@@ -53,7 +54,7 @@ func CaptureAMD64DownloadedPackageObservation(ctx context.Context, request AMD64
 
 func captureAMD64DownloadedSources(ctx context.Context, request AMD64DownloadedObservationRequest, run Runner) (_ *amd64DownloadedSources, result error) {
 	original := request.Original
-	cache, err := filepath.EvalSymlinks(originalObservationEnvironment(original.Environment, "GOMODCACHE"))
+	cache, err := sourcepath.Resolve(originalObservationEnvironment(original.Environment, "GOMODCACHE"))
 	if err != nil {
 		return nil, err
 	}
@@ -231,8 +232,8 @@ func (source *amd64DownloadedModule) matches(actual *amd64OriginalListModule, pr
 	if primary {
 		wantedVersion = "" // Preserve Go's actual cached-CWD main role, not a version fiction.
 	}
-	root, err := filepath.EvalSymlinks(actual.Dir)
-	goMod, modErr := filepath.EvalSymlinks(actual.GoMod)
+	root, err := sourcepath.Resolve(actual.Dir)
+	goMod, modErr := sourcepath.Resolve(actual.GoMod)
 	if source.goModOrigin == ProxyGoModProtocol && goMod != source.goMod {
 		return false
 	}

@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/xgo-dev/plan9asm/internal/sourcepath"
 	"golang.org/x/mod/module"
 	"golang.org/x/mod/sumdb/dirhash"
 	modzip "golang.org/x/mod/zip"
@@ -107,7 +108,7 @@ func (set *OriginSet) withOriginalZIP(ctx context.Context, identity module.Versi
 	var fileInfo os.FileInfo
 	defer func() {
 		actual, statErr := os.Lstat(owned)
-		physical, resolveErr := filepath.EvalSymlinks(owned)
+		physical, resolveErr := sourcepath.Resolve(owned)
 		entries, _, readErr := ReadDirectory(owned, 1)
 		if statErr != nil || resolveErr != nil || readErr != nil || physical != owned ||
 			!actual.IsDir() || !os.SameFile(directoryInfo, actual) {

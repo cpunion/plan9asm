@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/xgo-dev/plan9asm"
+	"github.com/xgo-dev/plan9asm/internal/sourcepath"
 	"golang.org/x/tools/go/packages"
 )
 
@@ -45,15 +46,15 @@ func prepareARM64NativeScratchSource(pkg *packages.Package, file *plan9asm.File,
 	if err != nil {
 		return nil, nil, err
 	}
-	binary, err = filepath.EvalSymlinks(binary)
+	binary, err = sourcepath.Resolve(binary)
 	if err != nil {
 		return nil, nil, err
 	}
-	directory, err := filepath.EvalSymlinks(pkg.Dir)
+	directory, err := sourcepath.Resolve(pkg.Dir)
 	if err != nil {
 		return nil, nil, err
 	}
-	original, err := filepath.EvalSymlinks(asm)
+	original, err := sourcepath.Resolve(asm)
 	if err != nil || filepath.Dir(original) != directory {
 		return nil, nil, fmt.Errorf("%w: native scratch original assembly root changed", plan9asm.ErrProbeNeedsContext)
 	}

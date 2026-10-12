@@ -17,6 +17,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/xgo-dev/plan9asm/internal/sourcepath"
 	"golang.org/x/mod/module"
 	"golang.org/x/mod/sumdb/dirhash"
 )
@@ -260,7 +261,7 @@ func VerifySourceInventory(ctx context.Context, source SourceInventory, root str
 	if err := ValidateSourceInventory(source); err != nil {
 		return err
 	}
-	resolved, err := filepath.EvalSymlinks(root)
+	resolved, err := sourcepath.Resolve(root)
 	if err != nil || !filepath.IsAbs(root) || resolved != root {
 		return fmt.Errorf("test dependency source root is missing or redirected")
 	}

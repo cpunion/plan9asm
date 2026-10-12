@@ -9,6 +9,7 @@ import (
 
 	"github.com/xgo-dev/plan9asm/internal/golegacymod"
 	"github.com/xgo-dev/plan9asm/internal/gooriginalsrc"
+	"github.com/xgo-dev/plan9asm/internal/sourcepath"
 )
 
 // The frame factory independently observes exact dependency downloads. The
@@ -81,8 +82,8 @@ func (source *GoAMD64FrameSource) downloadedDeclarationDirectory(selected goAMD6
 		}
 		version = original.SourceVersion
 	}
-	root, rootErr := filepath.EvalSymlinks(actual.Dir)
-	metadata, metadataErr := filepath.EvalSymlinks(actual.GoMod)
+	root, rootErr := sourcepath.Resolve(actual.Dir)
+	metadata, metadataErr := sourcepath.Resolve(actual.GoMod)
 	if rootErr != nil || metadataErr != nil || root != original.Root ||
 		actual.Path != original.ModulePath || actual.Version != version ||
 		actual.GoVersion != gooriginalsrc.SelectedGoVersion(original.GoVersion, actual.Main) ||
@@ -92,7 +93,7 @@ func (source *GoAMD64FrameSource) downloadedDeclarationDirectory(selected goAMD6
 	if original.GoModOrigin == golegacymod.ProxyGoModProtocol && (actual.Main || metadata != original.GoMod) {
 		return "", goAMD64FrameContext("legacy proxy metadata requires its exact dependency role")
 	}
-	directory, err := filepath.EvalSymlinks(selected.Dir)
+	directory, err := sourcepath.Resolve(selected.Dir)
 	if err != nil {
 		return "", err
 	}

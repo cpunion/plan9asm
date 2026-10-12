@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/xgo-dev/plan9asm/gotoolprofile"
+	"github.com/xgo-dev/plan9asm/internal/sourcepath"
 	"golang.org/x/mod/module"
 	"golang.org/x/tools/go/packages"
 )
@@ -132,7 +133,7 @@ func (consumer *featureConsumer) captureOrdinaryDependencyPackage(owner *ordinar
 	}
 	observedRoot := root
 	var err error
-	root, err = filepath.EvalSymlinks(root)
+	root, err = sourcepath.Resolve(root)
 	if err != nil || !filepath.IsAbs(root) || id == "" && root != consumer.Dir {
 		return result, "", fmt.Errorf("ordinary dependency has a different actual source root")
 	}
@@ -160,7 +161,7 @@ func (consumer *featureConsumer) captureOrdinaryDependencyPackage(owner *ordinar
 			bound.Source.Sources, bound.Source.Headers, bound.Source.Directories = view.Sources, view.Headers, view.Directories
 		}()
 		if metadata != "" {
-			canonical, err := filepath.EvalSymlinks(metadata)
+			canonical, err := sourcepath.Resolve(metadata)
 			if err != nil {
 				return result, "", err
 			}
@@ -254,7 +255,7 @@ func (consumer *featureConsumer) captureOrdinaryModule(pkg gotoolprofile.Package
 	if err := json.Unmarshal(data, &download); err != nil || download.Error != "" || download.Path != pkg.SourceModule || download.Version != pkg.SourceVersion {
 		return nil, fmt.Errorf("ordinary dependency download has a different exact module identity")
 	}
-	directory, err := filepath.EvalSymlinks(download.Dir)
+	directory, err := sourcepath.Resolve(download.Dir)
 	if err != nil || directory != root {
 		return nil, fmt.Errorf("ordinary dependency download has a different actual source root")
 	}
@@ -318,7 +319,7 @@ func (consumer *featureConsumer) verifyOrdinaryOwner(owner *ordinaryDependencyOw
 			return err
 		}
 		for filename, canonical := range bound.Metadata {
-			actual, err := filepath.EvalSymlinks(filename)
+			actual, err := sourcepath.Resolve(filename)
 			if err != nil || actual != canonical {
 				return fmt.Errorf("ordinary dependency metadata path changed")
 			}

@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/xgo-dev/plan9asm/gotoolprofile"
+	"github.com/xgo-dev/plan9asm/internal/sourcepath"
 	"golang.org/x/mod/module"
 	"golang.org/x/tools/go/packages"
 )
@@ -30,7 +31,7 @@ func (consumer *featureConsumer) foreignTestSourcePackage(actual *packages.Packa
 			return gotoolprofile.TestSourcePackage{}, fmt.Errorf("test dependency lacks an actual Go source/tool root")
 		}
 		var err error
-		root, err = filepath.EvalSymlinks(filepath.Join(consumer.Root, "src"))
+		root, err = sourcepath.Resolve(filepath.Join(consumer.Root, "src"))
 		if err != nil {
 			return gotoolprofile.TestSourcePackage{}, err
 		}
@@ -44,7 +45,7 @@ func (consumer *featureConsumer) foreignTestSourcePackage(actual *packages.Packa
 			return gotoolprofile.TestSourcePackage{}, fmt.Errorf("foreign test dependency has a different actual module role")
 		}
 		var err error
-		root, err = filepath.EvalSymlinks(metadata.Dir)
+		root, err = sourcepath.Resolve(metadata.Dir)
 		if err != nil || !filepath.IsAbs(root) {
 			return gotoolprofile.TestSourcePackage{}, fmt.Errorf("foreign test dependency has an inaccessible actual module directory")
 		}
@@ -55,7 +56,7 @@ func (consumer *featureConsumer) foreignTestSourcePackage(actual *packages.Packa
 			if module.Check(replacement.Path, replacement.Version) != nil {
 				return gotoolprofile.TestSourcePackage{}, fmt.Errorf("foreign test dependency has an unsupported local/unknown replacement")
 			}
-			replacedRoot, err := filepath.EvalSymlinks(replacement.Dir)
+			replacedRoot, err := sourcepath.Resolve(replacement.Dir)
 			if err != nil || replacedRoot != root {
 				return gotoolprofile.TestSourcePackage{}, fmt.Errorf("foreign test replacement has a different actual source root")
 			}
@@ -87,7 +88,7 @@ func (consumer *featureConsumer) foreignTestSourcePackage(actual *packages.Packa
 			if assemblyOnly && filepath.Ext(filename) != ".s" {
 				continue
 			}
-			filename, err := filepath.EvalSymlinks(filename)
+			filename, err := sourcepath.Resolve(filename)
 			if err != nil {
 				return nil, err
 			}
@@ -197,7 +198,7 @@ func (consumer *featureConsumer) bindTestModuleSource(source gotoolprofile.TestM
 			download.Sum != source.ModuleSum || download.GoModSum != source.GoModSum {
 			return fmt.Errorf("actual foreign dependency download differs from exact pre-load ZIP/mod identity: %v", err)
 		}
-		actualRoot, err := filepath.EvalSymlinks(download.Dir)
+		actualRoot, err := sourcepath.Resolve(download.Dir)
 		if err != nil || actualRoot != root {
 			return fmt.Errorf("actual foreign dependency download has a different module directory")
 		}
@@ -207,7 +208,7 @@ func (consumer *featureConsumer) bindTestModuleSource(source gotoolprofile.TestM
 			return err
 		}
 	} else {
-		actualRoot, err := filepath.EvalSymlinks(filepath.Join(consumer.Root, "src"))
+		actualRoot, err := sourcepath.Resolve(filepath.Join(consumer.Root, "src"))
 		if err != nil || actualRoot != root || source.GoVersion != consumer.Observed.GoVersion {
 			return fmt.Errorf("stdlib dependency must use the actual reobserved Go source/tool root")
 		}
@@ -226,7 +227,7 @@ func (consumer *featureConsumer) bindTestModuleMetadata(guard *testDependencyMod
 	paths := []string{metadata, guard.GoMod}
 	canonical := make([]string, len(paths))
 	for index, filename := range paths {
-		resolved, err := filepath.EvalSymlinks(filename)
+		resolved, err := sourcepath.Resolve(filename)
 		if err != nil {
 			return fmt.Errorf("actual foreign dependency metadata path is inaccessible: %w", err)
 		}
@@ -267,7 +268,7 @@ func (consumer *featureConsumer) verifyTestModuleSources() error {
 				if err := consumer.Context.Err(); err != nil {
 					return err
 				}
-				resolved, err := filepath.EvalSymlinks(filename)
+				resolved, err := sourcepath.Resolve(filename)
 				if err != nil || resolved != canonical {
 					return fmt.Errorf("final test dependency metadata path changed: %s", guard.Source.ID())
 				}

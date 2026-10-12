@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/xgo-dev/plan9asm/internal/sourcepath"
 )
 
 // VerifyTestModuleGoModMetadata binds actual Go Module.GoMod to the independent
@@ -22,7 +24,7 @@ func VerifyTestModuleGoModMetadata(source TestModuleSource, root, actual, downlo
 		if err != nil || !filepath.IsAbs(filename) || !info.Mode().IsRegular() {
 			return "", fmt.Errorf("actual dependency metadata is not a regular absolute source")
 		}
-		resolved, err := filepath.EvalSymlinks(filename)
+		resolved, err := sourcepath.Resolve(filename)
 		if err != nil {
 			return "", fmt.Errorf("actual dependency metadata is missing or redirected")
 		}

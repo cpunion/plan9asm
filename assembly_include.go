@@ -5,10 +5,10 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"runtime"
 	"strings"
 
 	"github.com/xgo-dev/plan9asm/internal/gotoolchain"
+	"github.com/xgo-dev/plan9asm/internal/sourcepath"
 )
 
 var quotedGoAssemblyIncludeRE = regexp.MustCompile(`^#include[ \t]+"([^"\r\n]+)"[ \t]*(?://.*)?$`)
@@ -22,7 +22,7 @@ func ReadGoAssemblySource(asmFile, sourceRoot string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("resolve assembly source root: %w", err)
 	}
-	root, err = evalGoAssemblyPath(root)
+	root, err = sourcepath.Resolve(root)
 	if err != nil {
 		return nil, fmt.Errorf("resolve assembly source root symlinks: %w", err)
 	}
@@ -30,7 +30,7 @@ func ReadGoAssemblySource(asmFile, sourceRoot string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("resolve assembly path: %w", err)
 	}
-	file, err = evalGoAssemblyPath(file)
+	file, err = sourcepath.Resolve(file)
 	if err != nil {
 		return nil, fmt.Errorf("resolve assembly path symlinks: %w", err)
 	}
@@ -68,7 +68,7 @@ func expandGoAssemblyIncludes(file, sourceRoot string, active map[string]bool, d
 		var included []byte
 		var includeErr error
 		if localAllowed {
-			resolvedPath, err := evalGoAssemblyPath(includedPath)
+			resolvedPath, err := sourcepath.Resolve(includedPath)
 			if err == nil {
 				if !goAssemblyPathWithinRoot(sourceRoot, resolvedPath) {
 					return nil, fmt.Errorf("assembly include %q escapes source root %s through symlink %s", match[1], sourceRoot, resolvedPath)
@@ -84,14 +84,14 @@ func expandGoAssemblyIncludes(file, sourceRoot string, active map[string]bool, d
 			if err != nil {
 				return nil, err
 			}
-			goRoot, err = evalGoAssemblyPath(filepath.Clean(goRoot))
+			goRoot, err = sourcepath.Resolve(filepath.Clean(goRoot))
 			if err != nil {
 				return nil, fmt.Errorf("resolve GOROOT symlinks: %w", err)
 			}
 			goIncludeRoot := filepath.Join(goRoot, "pkg", "include")
 			goIncludedPath := filepath.Clean(filepath.Join(goIncludeRoot, filepath.FromSlash(match[1])))
 			if goAssemblyPathWithinRoot(goRoot, goIncludedPath) {
-				resolvedPath, err := evalGoAssemblyPath(goIncludedPath)
+				resolvedPath, err := sourcepath.Resolve(goIncludedPath)
 				if err == nil {
 					if !goAssemblyPathWithinRoot(goRoot, resolvedPath) {
 						return nil, fmt.Errorf("assembly include %q escapes GOROOT %s through symlink %s", match[1], goRoot, resolvedPath)
@@ -121,42 +121,6 @@ func expandGoAssemblyIncludes(file, sourceRoot string, active map[string]bool, d
 		}
 	}
 	return []byte(out.String()), nil
-}
-
-// evalGoAssemblyPath canonicalizes symlinks before containment checks. The
-// Windows hosted toolcache exposes GOROOT through a cross-volume directory
-// link which filepath.EvalSymlinks cannot always traverse even though the path
-// is readable. In that one trusted tree, retain the absolute path after proving
-// it exists; module and arbitrary source roots still require full resolution.
-func evalGoAssemblyPath(path string) (string, error) {
-	goRoot := runtime.GOROOT()
-	if goRoot == "" && runtime.GOOS == "windows" {
-		var err error
-		goRoot, err = gotoolchain.Root()
-		if err != nil {
-			return "", err
-		}
-	}
-	return evalGoAssemblyPathForOS(path, runtime.GOOS, goRoot, filepath.EvalSymlinks)
-}
-
-func evalGoAssemblyPathForOS(path, goos, goRoot string, eval func(string) (string, error)) (string, error) {
-	resolved, err := eval(path)
-	if err == nil || goos != "windows" {
-		return resolved, err
-	}
-	absPath, absErr := filepath.Abs(path)
-	if absErr != nil {
-		return "", err
-	}
-	absRoot, absErr := filepath.Abs(goRoot)
-	if absErr != nil || !goAssemblyPathWithinRoot(filepath.Clean(absRoot), filepath.Clean(absPath)) {
-		return "", err
-	}
-	if _, statErr := os.Stat(absPath); statErr != nil {
-		return "", err
-	}
-	return filepath.Clean(absPath), nil
 }
 
 func goAssemblyPathWithinRoot(root, candidate string) bool {

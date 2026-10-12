@@ -14,6 +14,7 @@ import (
 
 	"github.com/xgo-dev/plan9asm"
 	"github.com/xgo-dev/plan9asm/gotoolprofile"
+	"github.com/xgo-dev/plan9asm/internal/sourcepath"
 	"golang.org/x/tools/go/packages"
 )
 
@@ -42,7 +43,7 @@ func loadX86SDKNumericalPackage(ctx context.Context, binary string, pkg *package
 	if selected.mode != nil && *selected.mode != actual["GOFLAGS"] {
 		return nil, nil, nil, fmt.Errorf("%w: SDK numerical effective source flags changed after selection", plan9asm.ErrProbeNeedsContext)
 	}
-	cache, err := filepath.EvalSymlinks(actual["GOCACHE"])
+	cache, err := sourcepath.Resolve(actual["GOCACHE"])
 	if err != nil || !filepath.IsAbs(cache) {
 		return nil, nil, nil, fmt.Errorf("%w: SDK numerical build cache is not an existing absolute directory", plan9asm.ErrProbeNeedsContext)
 	}
@@ -65,7 +66,7 @@ func loadX86SDKNumericalPackage(ctx context.Context, binary string, pkg *package
 			result = errors.Join(result, close())
 		}
 	}()
-	workspace, err = filepath.EvalSymlinks(workspace)
+	workspace, err = sourcepath.Resolve(workspace)
 	if err != nil {
 		return nil, nil, nil, err
 	}

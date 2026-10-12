@@ -19,6 +19,7 @@ import (
 
 	"github.com/xgo-dev/plan9asm"
 	"github.com/xgo-dev/plan9asm/internal/gooriginalsrc"
+	"github.com/xgo-dev/plan9asm/internal/sourcepath"
 	"golang.org/x/mod/modfile"
 )
 
@@ -71,12 +72,12 @@ func captureAMD64OriginalGraph(ctx context.Context, request AMD64OriginalObserva
 		return nil, fmt.Errorf("%w: original observation needs an owned main, not external/foreign/SDK source identity", plan9asm.ErrProbeNeedsContext)
 	}
 	module := selected.Module
-	root, err := filepath.EvalSymlinks(module.Dir)
+	root, err := sourcepath.Resolve(module.Dir)
 	if err != nil {
 		return nil, err
 	}
 	for _, forbidden := range []string{actual["GOROOT"], originalObservationEnvironment(request.Environment, "GOMODCACHE")} {
-		physical, err := filepath.EvalSymlinks(forbidden)
+		physical, err := sourcepath.Resolve(forbidden)
 		if err != nil {
 			return nil, err
 		}
@@ -90,7 +91,7 @@ func captureAMD64OriginalGraph(ctx context.Context, request AMD64OriginalObserva
 	if downloaded != nil && !downloaded.primary.matchesPrimary(module) {
 		return nil, fmt.Errorf("actual primary source differs from the exact original download handoff")
 	}
-	goMod, err := filepath.EvalSymlinks(module.GoMod)
+	goMod, err := sourcepath.Resolve(module.GoMod)
 	wantedGoMod := filepath.Join(root, "go.mod")
 	if legacy {
 		wantedGoMod = downloaded.primary.goMod
@@ -152,8 +153,8 @@ func captureAMD64OriginalGraph(ctx context.Context, request AMD64OriginalObserva
 		if !filepath.IsLocal(filepath.FromSlash(relative)) {
 			return nil, fmt.Errorf("original package path escapes its actual source root")
 		}
-		dir, err := filepath.EvalSymlinks(pkg.Dir)
-		wanted, wantedErr := filepath.EvalSymlinks(filepath.Join(base, filepath.FromSlash(relative)))
+		dir, err := sourcepath.Resolve(pkg.Dir)
+		wanted, wantedErr := sourcepath.Resolve(filepath.Join(base, filepath.FromSlash(relative)))
 		if err != nil || wantedErr != nil || dir != wanted {
 			return nil, fmt.Errorf("original package physical directory does not match actual source identity")
 		}
@@ -181,8 +182,8 @@ func captureAMD64OriginalGraph(ctx context.Context, request AMD64OriginalObserva
 			}
 		}
 		if export && path != "unsafe" {
-			cache, cacheErr := filepath.EvalSymlinks(actual["GOCACHE"])
-			resolved, resolveErr := filepath.EvalSymlinks(pkg.Export)
+			cache, cacheErr := sourcepath.Resolve(actual["GOCACHE"])
+			resolved, resolveErr := sourcepath.Resolve(pkg.Export)
 			rel, relErr := filepath.Rel(cache, resolved)
 			if cacheErr != nil || resolveErr != nil || relErr != nil || !filepath.IsLocal(rel) {
 				return nil, fmt.Errorf("original actual export is missing or outside its bound cache")
@@ -202,8 +203,8 @@ func captureAMD64OriginalGraph(ctx context.Context, request AMD64OriginalObserva
 			}
 		}
 	}
-	selectedDir, err := filepath.EvalSymlinks(selected.Dir)
-	requestedDir, requestErr := filepath.EvalSymlinks(request.Directory)
+	selectedDir, err := sourcepath.Resolve(selected.Dir)
+	requestedDir, requestErr := sourcepath.Resolve(request.Directory)
 	if err != nil || requestErr != nil || selectedDir != requestedDir || len(selected.SFiles) == 0 {
 		return nil, fmt.Errorf("original selected assembly package differs from the requested directory")
 	}

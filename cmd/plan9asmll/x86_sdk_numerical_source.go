@@ -13,6 +13,7 @@ import (
 
 	"github.com/xgo-dev/plan9asm"
 	"github.com/xgo-dev/plan9asm/gotoolprofile"
+	"github.com/xgo-dev/plan9asm/internal/sourcepath"
 	"golang.org/x/tools/go/packages"
 )
 
@@ -151,7 +152,7 @@ func captureX86SDKNumericalSource(pkg *packages.Package, file *plan9asm.File, as
 	if err != nil {
 		return nil, nil, err
 	}
-	binary, err = filepath.EvalSymlinks(binary)
+	binary, err = sourcepath.Resolve(binary)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -167,11 +168,11 @@ func captureX86SDKNumericalSource(pkg *packages.Package, file *plan9asm.File, as
 			result = errors.Join(result, source.close())
 		}
 	}()
-	directory, err := filepath.EvalSymlinks(pkg.Dir)
+	directory, err := sourcepath.Resolve(pkg.Dir)
 	if err != nil {
 		return nil, nil, err
 	}
-	actualAsm, err := filepath.EvalSymlinks(asm)
+	actualAsm, err := sourcepath.Resolve(asm)
 	if err != nil || filepath.Dir(actualAsm) != directory {
 		return nil, nil, fmt.Errorf("%w: SDK numerical assembly origin differs: %v", plan9asm.ErrProbeNeedsContext, err)
 	}
@@ -194,7 +195,7 @@ func captureX86SDKNumericalSource(pkg *packages.Package, file *plan9asm.File, as
 	if err != nil || len(stderr) != 0 {
 		return nil, nil, fmt.Errorf("observe actual SDK root: %w", errors.Join(err, numericalCLIStderr(stderr)))
 	}
-	rootPath, err := filepath.EvalSymlinks(strings.TrimSpace(string(root)))
+	rootPath, err := sourcepath.Resolve(strings.TrimSpace(string(root)))
 	if err != nil || !filepath.IsAbs(rootPath) {
 		return nil, nil, fmt.Errorf("%w: SDK numerical root is not canonical: %v", plan9asm.ErrProbeNeedsContext, err)
 	}

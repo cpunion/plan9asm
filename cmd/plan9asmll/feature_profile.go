@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/xgo-dev/plan9asm/gotoolprofile"
+	"github.com/xgo-dev/plan9asm/internal/sourcepath"
 	"golang.org/x/tools/go/packages"
 )
 
@@ -81,14 +82,14 @@ func loadFeatureConsumer(ctx context.Context, filename, output, target, module s
 	if err != nil {
 		return nil, err
 	}
-	workDir, err := filepath.EvalSymlinks(dir)
+	workDir, err := sourcepath.Resolve(dir)
 	if err != nil {
 		return nil, err
 	}
 	if !filepath.IsAbs(input.SourceRoot) {
 		return nil, fmt.Errorf("feature consumer requires an explicit absolute source root")
 	}
-	dir, err = filepath.EvalSymlinks(input.SourceRoot)
+	dir, err = sourcepath.Resolve(input.SourceRoot)
 	if err != nil {
 		return nil, err
 	}
@@ -197,7 +198,7 @@ func (consumer *featureConsumer) verifySources() error {
 		if _, err := os.Stat(filepath.Join(consumer.Dir, "go.mod")); !os.IsNotExist(err) {
 			return fmt.Errorf("proxy metadata cannot impersonate original ZIP go.mod")
 		}
-		resolved, err := filepath.EvalSymlinks(consumer.Input.ProxyGoModPath)
+		resolved, err := sourcepath.Resolve(consumer.Input.ProxyGoModPath)
 		if err != nil || resolved != consumer.Input.ProxyGoModPath {
 			return fmt.Errorf("authenticated proxy metadata is missing or redirected")
 		}
@@ -232,7 +233,7 @@ func (consumer *featureConsumer) verifySources() error {
 			return fmt.Errorf("unsafe feature source identity %q", file)
 		}
 		filename := filepath.Join(consumer.Dir, filepath.FromSlash(file))
-		resolved, err := filepath.EvalSymlinks(filename)
+		resolved, err := sourcepath.Resolve(filename)
 		if err != nil || resolved != filename {
 			return fmt.Errorf("feature source cannot be a redirected path: %s", file)
 		}
@@ -308,12 +309,12 @@ func (consumer *featureConsumer) captureSourcePackage(pkg *packages.Package, cap
 	if pkg == nil || pkg.Module == nil || pkg.Module.Path != consumer.Input.Module || pkg.Module.Version != consumer.Input.Version || isTestVariantPackage(pkg) || captureMacros == nil {
 		return proof, fmt.Errorf("actual package role/module differs from the explicit source scope")
 	}
-	moduleDir, err := filepath.EvalSymlinks(pkg.Module.Dir)
+	moduleDir, err := sourcepath.Resolve(pkg.Module.Dir)
 	if err != nil || moduleDir != consumer.Dir {
 		return proof, fmt.Errorf("actual package module directory differs from the explicit source proof")
 	}
 	if pkg.Module.Replace != nil {
-		replacement, err := filepath.EvalSymlinks(pkg.Module.Replace.Dir)
+		replacement, err := sourcepath.Resolve(pkg.Module.Replace.Dir)
 		if err != nil || replacement != consumer.Dir {
 			return proof, fmt.Errorf("actual Go module replacement differs from the exact owned source root")
 		}
@@ -335,7 +336,7 @@ func (consumer *featureConsumer) captureSourcePackage(pkg *packages.Package, cap
 		if pkg.Module.Replace != nil {
 			used = pkg.Module.Replace.GoMod
 		}
-		resolved, err := filepath.EvalSymlinks(used)
+		resolved, err := sourcepath.Resolve(used)
 		if err != nil || resolved != consumer.Input.ProxyGoModPath {
 			return proof, fmt.Errorf("actual package used different proxy go.mod metadata")
 		}
@@ -400,7 +401,7 @@ func (consumer *featureConsumer) sourceName(filename string) (string, error) {
 // directory need not be a selected Go package or its ancestor. Go package
 // capture still uses sourceName and retains its separate membership check.
 func (consumer *featureConsumer) moduleSourceName(filename string) (string, error) {
-	filename, err := filepath.EvalSymlinks(filename)
+	filename, err := sourcepath.Resolve(filename)
 	if err != nil {
 		return "", err
 	}

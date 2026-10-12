@@ -13,12 +13,13 @@ import (
 
 	"github.com/xgo-dev/plan9asm/internal/gostaticstorage"
 	"github.com/xgo-dev/plan9asm/internal/gotoolchain"
+	"github.com/xgo-dev/plan9asm/internal/sourcepath"
 )
 
 func (source *GoX86SDKASMDataSource) verifySDKDirectory() error {
 	root := source.guard.env["GOROOT"]
 	wanted := filepath.Join(root, "src", filepath.FromSlash(source.request.PackagePath))
-	resolved, err := filepath.EvalSymlinks(wanted)
+	resolved, err := sourcepath.Resolve(wanted)
 	actual, actualErr := os.Lstat(source.request.Directory)
 	physical, physicalErr := os.Lstat(wanted)
 	if err != nil || resolved != wanted || actualErr != nil || physicalErr != nil ||
@@ -108,7 +109,7 @@ func (source *GoX86SDKASMDataSource) capture(ctx context.Context, provided map[s
 	if !reflect.DeepEqual(compiled, selected.GoFiles) {
 		return sdkASMDataContext("generated compiler source mapping is not original SDK Go")
 	}
-	export, exportErr := filepath.EvalSymlinks(selected.Export)
+	export, exportErr := sourcepath.Resolve(selected.Export)
 	if exportErr != nil || selected.Export != export || !goAssemblyPathWithinRoot(env["GOCACHE"], export) {
 		return sdkASMDataContext("actual selected export is not its canonical compiler cache object")
 	}
