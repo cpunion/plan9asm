@@ -69,6 +69,12 @@ func amd64OriginalObservationFixture(t *testing.T, variant string) AMD64Original
 	if err != nil {
 		t.Fatal(err)
 	}
+	// The actual-object factory retains this exact physical input path.
+	// PATH may contain symlinks or noncanonical Windows path casing.
+	binary, err = filepath.EvalSymlinks(binary)
+	if err != nil {
+		t.Fatal(err)
+	}
 	env := os.Environ()
 	for _, key := range []string{"GOPATH", "GOMODCACHE", "GOCACHE", "TMPDIR", "GOTMPDIR"} {
 		if !filepath.IsAbs(os.Getenv(key)) {
