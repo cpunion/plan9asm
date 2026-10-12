@@ -169,6 +169,26 @@ func TestRunOneTargetFixedLocalWithDefaultCacheEnvironment(t *testing.T) {
 	}
 }
 
+func TestRunOneTargetFixedLocalWithFreshModuleCache(t *testing.T) {
+	pkg, _, config := amd64FixedLocalCLIFixture(t, "PADDL 16(SP),X0")
+	parent, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A pure-Go local package need not cause cmd/go to create GOPATH or its
+	// default module cache. The ordinary CLI must prepare them before capture.
+	path := filepath.Join(parent, "fresh-gopath")
+	t.Setenv("GOPATH", path)
+	t.Setenv("GOMODCACHE", "")
+	t.Chdir(pkg.Dir)
+	report, _, err := runOneTarget(targetSpec{Goos: "linux", Goarch: "amd64"},
+		[]string{"."}, nil, nil, pkg.Module.Path, t.TempDir(), false, 0, false,
+		false, true, "", config)
+	if err != nil || report.TotalAsm != 1 || report.Success != 1 || report.Failed != 0 {
+		t.Fatalf("fresh actual-load/frame cache environment differs: %v; %+v", err, report)
+	}
+}
+
 func TestAMD64FixedLocalCompleteSourceRetainsActualLoadIdentity(t *testing.T) {
 	for _, axis := range []string{"dependency-types", "missing-dependency", "extra-captured-import", "target", "source-bytes"} {
 		t.Run(axis, func(t *testing.T) {

@@ -77,6 +77,12 @@ func ordinaryPackageEnvironment(goos, goarch string, input []string) ([]string, 
 		if !filepath.IsAbs(actual[key]) {
 			return nil, fmt.Errorf("package-load %s must resolve to an absolute path", key)
 		}
+		// A local module may never download a dependency, so cmd/go need not
+		// create GOPATH or GOMODCACHE. Prepare the selected paths before the
+		// load captures their identity; do not repair a later source proof.
+		if err := os.MkdirAll(actual[key], 0755); err != nil {
+			return nil, fmt.Errorf("prepare package-load %s: %w", key, err)
+		}
 		values[key] = actual[key]
 	}
 	for _, key := range []string{"TMPDIR", "GOTMPDIR"} {

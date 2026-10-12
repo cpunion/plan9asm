@@ -77,6 +77,46 @@ func TestOrdinaryPackageEnvironmentRetainsExplicitSelection(t *testing.T) {
 	}
 }
 
+func TestOrdinaryPackageEnvironmentCreatesSelectedCacheDirectories(t *testing.T) {
+	parent := t.TempDir()
+	input := append(os.Environ(), "GOENV=off", "GOWORK=off", "GOTOOLCHAIN=local")
+	paths := make(map[string]string)
+	for _, key := range []string{"GOPATH", "GOMODCACHE", "GOCACHE"} {
+		paths[key] = filepath.Join(parent, strings.ToLower(key), "fresh")
+		input = append(input, key+"="+paths[key])
+	}
+	env, err := ordinaryPackageEnvironment(runtime.GOOS, runtime.GOARCH, input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for key, path := range paths {
+		found := false
+		for _, entry := range env {
+			found = found || entry == key+"="+path
+		}
+		if !found {
+			t.Fatalf("selected %s path changed", key)
+		}
+		if info, err := os.Stat(path); err != nil || !info.IsDir() {
+			t.Errorf("selected %s must exist before package/source capture: %v", key, err)
+		}
+	}
+}
+
+func TestOrdinaryPackageEnvironmentRejectsNonDirectoryCache(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "not-a-directory")
+	if err := os.WriteFile(file, []byte("original"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	input := append(os.Environ(), "GOENV=off", "GOWORK=off", "GOTOOLCHAIN=local", "GOMODCACHE="+file)
+	if _, err := ordinaryPackageEnvironment(runtime.GOOS, runtime.GOARCH, input); err == nil {
+		t.Fatal("non-directory cache was accepted")
+	}
+	if data, err := os.ReadFile(file); err != nil || string(data) != "original" {
+		t.Fatal("cache setup replaced caller data", err)
+	}
+}
+
 func TestOrdinaryPackageEnvironmentPreservesWorkspaceAndSavedFlags(t *testing.T) {
 	dir := t.TempDir()
 	workspace := filepath.Join(dir, "go.work")

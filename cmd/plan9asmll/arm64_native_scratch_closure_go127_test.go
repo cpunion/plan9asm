@@ -46,8 +46,11 @@ func arm64NativeScratchClosureFixture(t *testing.T, source, declarations string)
 		}
 	}
 	context := arm64PrivateCLIContext(t)
-	environment := append(os.Environ(), "GOOS=linux", "GOARCH=arm64", "CGO_ENABLED=0",
-		"GOENV=off", "GOWORK=off", "GOFLAGS=", "GOEXPERIMENT=", "GOTOOLCHAIN=local", "GOPACKAGESDRIVER=off")
+	environment, err := ordinaryPackageEnvironment("linux", "arm64", append(os.Environ(), "CGO_ENABLED=0",
+		"GOENV=off", "GOWORK=off", "GOFLAGS=", "GOEXPERIMENT=", "GOTOOLCHAIN=local", "GOPACKAGESDRIVER=off"))
+	if err != nil {
+		t.Fatal(err)
+	}
 	stdout, stderr, err := gotoolprofile.RunBounded(context, directory, environment, "go",
 		"list", "-export", "-compiled", "-mod=readonly", "-json", ".")
 	if err != nil || len(stderr) != 0 {
