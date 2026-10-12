@@ -118,9 +118,24 @@ The writer now distinguishes import-path grammar from literal export filenames,
 matching the compiler's first-equals-sign split. Newline/NUL injection, invalid
 imports and missing exports remain rejected. Portable path controls are
 RED/GREEN on Go 1.27 and pass on Go 1.20; root vet and the complete local CRC32
-explicit/default-profile regression pass (91.653 seconds). Native verification
-of this follow-up remains required; neither local success nor the previous
-259/260 diagnostic result establishes a complete Windows pass.
+explicit/default-profile regression pass (91.653 seconds). Native
+[38319672694](https://github.com/cpunion/plan9asm/actions/runs/38319672694)
+passed the complete CRC32 explicit/default-profile test in 142.000 seconds at
+`01accd6f`, including rejection controls and actual LLVM object outputs.
+Follow-up [38320341678](https://github.com/cpunion/plan9asm/actions/runs/38320341678)
+rechecks the complete Windows CLI/profile inventory and the earlier root
+CMPXCHG/conversion failures. It is still running, not a complete Windows pass.
+
+The frozen `3b4c246f` local complete CLI and profile suites passed in
+1168.046 and 1041.168 seconds respectively; these predate the header-config fix.
+At `01accd6f`, all internal-package tests and the Go 1.20/1.27 five-architecture
+official coverage gates passed. The Go 1.20 historical unsupported form remains
+explicit; classification is not runtime execution. Native diagnostic timings
+explain the CLI's global deadline failure: the prior complete list totals
+2440.65 seconds across roots, exceeding its 1800-second direct-suite budget.
+Four exhaustive diagnostic groups take 489.56–713.05 seconds each. Formal
+partitioning still needs complete-inventory/coverage aggregation; do not extend
+the deadline or promote diagnostic-only receipts into the contribution gate.
 
 The next metadata repair shares ARM64/x86 object-source spelling validation.
 Four local RED controls reproduced ARM64 accepting `$GOROOT` dot/repeated-slash
