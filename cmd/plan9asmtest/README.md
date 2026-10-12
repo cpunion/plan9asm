@@ -30,8 +30,9 @@ Selected cross-runtime CI owners remain serial and reject `-workers` above one.
 Unix test/race/coverage CI uses `scripts/test-module-ci.sh`. Its three package
 owners share the complete actual `go list -json ./...` package inventory:
 owner zero runs the root, owner one runs `gotoolprofile`, and owner two
-runs every other package. CI splits only owner zero into eight jobs. Part `p`
-owns global shard indices `i` where `i % 8 == p`, retaining the original
+runs every other package. CI splits only owner zero into eight jobs for test/
+coverage and sixteen for race. Part `p` owns global shard indices `i` where
+`i % parts == p`, retaining the original
 32-shard plan and two-worker limit. Shared-profile and other packages execute once;
 they are not repeated for each root part. Every other
 package runs complete ordinary `go test` without `-run`, including packages
@@ -44,11 +45,12 @@ suites and does not use this scheduling mechanism.
 ```sh
 # Each command is a separate CI job, not concurrent local invocations.
 bash scripts/test-module-ci.sh race execute 0 0
-# Run root parts 1..7 as separate jobs with owner 0 and their exact part number.
+# Run race root parts 1..15 as separate jobs with owner 0 and their exact number.
 bash scripts/test-module-ci.sh race execute 1 -1
 bash scripts/test-module-ci.sh race execute 2 -1
 # Download root-p artifacts into owner-0000/part-000p, and profile/rest into
-# owner-0001 and owner-0002. All ten roles are required for completion.
+# owner-0001 and owner-0002. All eighteen race roles are required for completion;
+# test/coverage still require their eight root parts plus profile/rest.
 bash scripts/test-module-ci.sh race complete
 ```
 
