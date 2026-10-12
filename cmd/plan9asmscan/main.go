@@ -197,11 +197,11 @@ func main() {
 	)
 	switch *corpus {
 	case "std":
-		pkgs, err = listStdPackages(*goos, *goarch)
+		pkgs, err = listStdPackagesAtGOROOT(*goos, *goarch, *goroot)
 		if err != nil {
 			fatalf("list std packages: %v", err)
 		}
-		ops, forms, parseErrs, pkgWithSFiles, asmFiles, err = scanPackages(pkgs, arch, *goarch, *goroot)
+		ops, forms, parseErrs, pkgWithSFiles, asmFiles, err = scanPackages(pkgs, arch, *goarch, *goroot, plan9asm.GoAssemblerDefines(*goos, *goarch)...)
 	case "go-asm":
 		if *goarch == "wasm" {
 			// Go has no cmd/asm end-to-end testdata or operand-class encoder
@@ -210,7 +210,7 @@ func main() {
 			// comes from cmd/internal/obj/wasm below.
 			pkgs, err = listStdPackagesAtGOROOT(*goos, *goarch, *goroot)
 			if err == nil {
-				ops, forms, parseErrs, pkgWithSFiles, asmFiles, err = scanPackages(pkgs, arch, *goarch, *goroot)
+				ops, forms, parseErrs, pkgWithSFiles, asmFiles, err = scanPackages(pkgs, arch, *goarch, *goroot, plan9asm.GoAssemblerDefines(*goos, *goarch)...)
 			}
 		} else {
 			ops, forms, parseErrs, asmFiles, err = scanGoAssemblerTestdata(*goroot, arch, *goarch)
@@ -354,7 +354,7 @@ func listStdPackagesWithCommand(goCommand, goos, goarch string, extraEnv []strin
 	return outPkgs, nil
 }
 
-func scanPackages(pkgs []pkgJSON, arch plan9asm.Arch, goarch, goRoot string) (map[string]*opStat, map[string]*formStat, []parseErr, int, int, error) {
+func scanPackages(pkgs []pkgJSON, arch plan9asm.Arch, goarch, goRoot string, defines ...string) (map[string]*opStat, map[string]*formStat, []parseErr, int, int, error) {
 	ops := map[string]*opStat{}
 	forms := map[string]*formStat{}
 	var parseErrs []parseErr
@@ -371,14 +371,14 @@ func scanPackages(pkgs []pkgJSON, arch plan9asm.Arch, goarch, goRoot string) (ma
 		}
 		pkgWithSFiles++
 		for _, path := range sfiles {
-			src, err := os.ReadFile(path)
+			src, err := plan9asm.ReadGoAssemblySourceAtGOROOT(path, p.Dir, goRoot)
 			if err != nil {
 				return nil, nil, nil, 0, 0, fmt.Errorf("read %s: %w", path, err)
 			}
 			asmFiles++
 			rel := shortStdPath(path, goRoot)
 
-			file, err := plan9asm.Parse(arch, string(src))
+			file, err := plan9asm.ParseWithDefines(arch, string(src), defines)
 			if err != nil {
 				if strings.Contains(err.Error(), "no TEXT directive found") {
 					continue
@@ -423,6 +423,17 @@ func scanPackages(pkgs []pkgJSON, arch plan9asm.Arch, goarch, goRoot string) (ma
 			}
 			if len(file.Globl) > 0 {
 				addOpStat(ops, "GLOBL", rel, p.ImportPath, len(file.Globl))
+				for _, global := range file.Globl {
+					if global.SizeRaw != "" {
+						addFormStat(forms, arch, goarch, plan9asm.Instr{
+							Op: "GLOBL", Raw: "GLOBL " + global.Sym + "(SB)," + global.SizeRaw,
+							Args: []plan9asm.Operand{
+								{Kind: plan9asm.OpSym, Sym: global.Sym + "(SB)"},
+								{Kind: plan9asm.OpImm, ImmRaw: global.SizeRaw},
+							},
+						}, rel)
+					}
+				}
 			}
 		}
 	}
