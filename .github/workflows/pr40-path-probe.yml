@@ -25,3 +25,7 @@ jobs:
       - name: After LLVM (Bash)
         shell: bash
         run: go run ./.github/path-probe
+      - name: Actual CLI feature capture
+        shell: bash
+        working-directory: cmd/plan9asmll
+        run: go test -run '^TestCompileOneExplicitCPUProfileUsesActualAssemblerMacros$' -count=1 -v
