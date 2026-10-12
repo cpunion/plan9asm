@@ -2,7 +2,6 @@ package plan9asm
 
 import (
 	"fmt"
-	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -157,14 +156,8 @@ func (source *GoX86NumericalReadSource) sdkLiteralObjectSource(name string) (str
 	if source.literals == nil {
 		return "", false
 	}
-	if strings.HasPrefix(name, "$GOROOT/") {
-		tail := strings.TrimPrefix(name, "$GOROOT/")
-		if !filepath.IsLocal(tail) || filepath.ToSlash(filepath.Clean(tail)) != tail {
-			return "", false
-		}
-		name = filepath.Join(source.guard.env["GOROOT"], filepath.FromSlash(tail))
-	}
-	if !filepath.IsAbs(name) || filepath.Clean(name) != name {
+	name, valid := originalGoObjectSourcePath(name, source.guard.env["GOROOT"])
+	if !valid {
 		return "", false
 	}
 	digest, captured := source.guard.inputs[name]
