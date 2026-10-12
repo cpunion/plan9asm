@@ -119,7 +119,7 @@ test('owner-two side gates run once and Windows remains a complete independent s
   }
   assert.match(body,
     /\{os: windows-latest, go-version: '1\.27\.x', module-role: other, module-owner: 2, root-partition: -1, nested_modules: true\}/);
-  assert.match(step(body, 'Go test with coverage (Windows)'), /go test -timeout=30m \.\/\.\.\./);
+  assert.match(step(body, 'Go test with coverage (Windows)'), /go test -count=1 -timeout=30m \.\/\.\.\./);
   assert.match(body,
     /go-version: \['1\.20\.x', '1\.21\.x', '1\.22\.x', '1\.23\.x', '1\.24\.x', '1\.25\.x', '1\.26\.x', '1\.27\.x'\]/);
 });

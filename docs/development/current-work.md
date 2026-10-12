@@ -18,14 +18,13 @@ independent regressions, official coverage and benchmarks. `gotoolprofile` is
 public for the separate harness. Exhaustive runner owners remain root 0,
 profile 1 and other packages 2, with mandatory disjoint, complete aggregation.
 
-The published head is `432796c7`; [run 38193906662](https://github.com/xgo-dev/plan9asm/actions/runs/38193906662)
-is still running. Its standard-library and benchmark jobs have already failed;
-let the remaining jobs finish before the next batch push. The last completed
-full CI evaluated `346cec2f`; [run 38187769673](https://github.com/xgo-dev/plan9asm/actions/runs/38187769673)
-finished with 83 successful and 65 failed jobs, including aggregates. Its benchmark compiled
-164/185 files, with 21 failures; wasm passed 19/19. Neither its timing nor the
-five-architecture classification gate establishes complete compilation or
-runtime coverage. Previous run `38182744838` remains failed.
+The pre-repair head `432796c7` completed [run 38193906662](https://github.com/xgo-dev/plan9asm/actions/runs/38193906662)
+with 98 successful, 49 failed and one cancelled job, including aggregates.
+Its benchmark compiled 164/185 files, with 21 failures; wasm passed 19/19.
+The local repair batch below needs fresh CI after publication. Inspect the
+actual contribution head/run rather than treating these older results as its
+outcome. Neither classification nor benchmark timing establishes complete
+compilation or runtime coverage. Earlier failed reports remain failed.
 
 ## Verified local repairs after publication
 
@@ -146,22 +145,41 @@ The failing 50-repeat report retains two exact PE mismatches; the repair passes
 50 repetitions on Go 1.22 and five each on Go 1.20/current. State comparisons
 were not masked, retried or removed. Current root-module vet also passes.
 
+The CMPXCHG fault observer now runs bounded, owned leaf processes instead of
+requiring POSIX fork/mmap on Windows. Native signals/Windows exception codes
+need an exact pre-operation receipt; setup failures, ordinary exits, timeouts
+and joined cleanup errors are not accepted as faults. Windows uses real guard
+pages; Unix direct-child core limits are independently executed and checked.
+At frozen `0527ded5`, the complete focused Go 1.27 suite passes in 43.100 seconds
+and Go 1.20 checks in 6.103 seconds. Linux-container checks pass in 12.039 seconds
+but retain a Rosetta ISA deviation: they are not native Linux certification.
+
+Both complete CLI suites pass at `0527ded5`: `plan9asm` in 0.998 seconds and
+`plan9asmll` in 1028.540 seconds. Three additional formerly failing source/read
+race roots pass on Darwin/arm64 in 686.625 seconds; this is not Linux-race
+evidence. Root vet, all five current-Go classification gates, the actual-Go
+accepted ARM64 decoder-family gate, 12 scheduling tests and actionlint pass.
+Windows CLI suites now have independent complete jobs; root failure cannot
+suppress them. Windows' main-module direct-suite timeout remains unresolved.
+
 Evidence is under `_out/register-result-repair/`, `_out/ci-proof-lifetimes/`
 and `_out/ci-quoted-cache/`, all in the main working tree. The first includes
 `sysv-canonical-final-go127.log`, `sysv-bridge-linux-failed.log`,
 `cpp-canonical-cwd-go*.log` and `dword-product-go*-sampling-*.log`.
+The latest batch uses `ci-final-*`, `cmpxchg-ci-final-*`,
+`cmpxchg-fault-ci-linux-container.log` and `ci-race-composed-final-go127.log`.
 Receipts certify their exact frozen snapshots, not later source edits.
 
 1. Collect actual root and nested CLI failures separately. A successful main
    artifact does not establish nested CLI success. The repairs above still
    require current-head CI; preserve the old failed receipts.
-2. Finish collecting current Windows/race failures. The old Windows log is
-   `ci-346-windows-job.log`; its CMPXCHG fault helper still assumes POSIX
-   mmap/fork and needs an actual Windows fault observer, not a host skip.
-   Separate already repaired transport/source failures from new evidence.
-   Audit remaining race artifacts too; passing numerical proof lifetimes
-   does not certify every race root. Windows' complete direct-suite budget
-   also needs attention without dropping tests from the denominator.
+2. Recheck Windows/race on the new head. The five failed race-owner artifacts
+   from `432796c7` were read back: failures are in the repaired composed-proof
+   lifetimes and API reentry. The cancelled owner is still unknown. Native
+   Windows CMPXCHG execution still needs CI, and Windows' complete main-module
+   direct suite needs bounded partitions without dropping inventory. Do not
+   enable the Unix-only exhaustive runner on Windows without real descendant
+   ownership and its platform-specific tool/source observations.
 3. The 21 standard-library failures need actual runtime/reflect entry, TLS,
    hidden-register, caller-storage or SDK source contracts. Maps' immediate
    shuffle result analysis is repaired; AES mutable-global storage remains

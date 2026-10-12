@@ -52,7 +52,7 @@ func TestCIModuleSuitesKeepExhaustiveUnixAndWindowsRoles(t *testing.T) {
 		}
 	}
 	test, _ := ciWorkflowJob(string(data), "test")
-	if !strings.Contains(test, "go test -timeout=30m ./... -coverprofile=coverage-windows-root.out") {
+	if !strings.Contains(test, "go test -count=1 -timeout=30m ./... -coverprofile=coverage-windows-root.out") {
 		t.Error("Windows main-module suite must remain complete")
 	}
 	windowsCLI, found := ciWorkflowJob(string(data), "windows-cli")
