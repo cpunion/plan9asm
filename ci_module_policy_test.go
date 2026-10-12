@@ -52,14 +52,15 @@ func TestCIModuleSuitesKeepExhaustiveUnixAndWindowsRoles(t *testing.T) {
 		}
 	}
 	test, _ := ciWorkflowJob(string(data), "test")
-	for _, command := range []string{
-		"go test -timeout=30m ./... -coverprofile=coverage-windows-root.out",
-		"(cd cmd/plan9asm && go test -timeout=30m ./... -coverprofile=../../coverage-windows-plan9asm.out)",
-		"(cd cmd/plan9asmll && go test -timeout=30m ./... -coverprofile=../../coverage-windows-plan9asmll.out)",
-	} {
-		if !strings.Contains(test, command) {
-			t.Errorf("existing full Windows role changed: %s", command)
-		}
+	if !strings.Contains(test, "go test -timeout=30m ./... -coverprofile=coverage-windows-root.out") {
+		t.Error("Windows main-module suite must remain complete")
+	}
+	windowsCLI, found := ciWorkflowJob(string(data), "windows-cli")
+	if !found || !strings.Contains(windowsCLI, "needs: ci_policy") ||
+		!strings.Contains(windowsCLI, "command: [plan9asm, plan9asmll]") ||
+		!strings.Contains(windowsCLI, "working-directory: cmd/${{ matrix.command }}") ||
+		!strings.Contains(windowsCLI, "go test -count=1 -timeout=30m ./... -coverprofile=../../coverage-windows-${{ matrix.command }}.out") {
+		t.Error("both complete Windows CLI suites need independent jobs, unaffected by root failures")
 	}
 	if !strings.Contains(test, "!cancelled() && runner.os != 'Windows' && matrix.nested_modules && matrix.module-owner == 2") {
 		t.Error("both nested CLI roles must still execute after a main-module failure")

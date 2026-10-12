@@ -444,17 +444,6 @@ jobs:
         run: |
           set -euo pipefail
           go test -timeout=30m ./... -coverprofile=coverage-windows-root.out
-          (cd cmd/plan9asm && go test -timeout=30m ./... -coverprofile=../../coverage-windows-plan9asm.out)
-          (cd cmd/plan9asmll && go test -timeout=30m ./... -coverprofile=../../coverage-windows-plan9asmll.out)
-
-      - name: Go test (Windows)
-        if: runner.os == 'Windows' && matrix.go-version != '1.27.x'
-        shell: bash
-        run: |
-          set -euo pipefail
-          go test -timeout=30m ./...
-          (cd cmd/plan9asm && go test -timeout=30m ./...)
-          (cd cmd/plan9asmll && go test -timeout=30m ./...)
 
       - name: Setup Python for Windows coverage upload
         if: runner.os == 'Windows' && matrix.go-version == '1.27.x'
@@ -467,13 +456,66 @@ jobs:
         uses: codecov/codecov-action@v7
         with:
           # The binary path downloads a GPG key from cli.codecov.io, which
-          # failed on Windows after all three Go coverage suites passed.
+          # failed on Windows after the Go coverage suites passed.
           use_pypi: true
           use_oidc: true
-          files: ./coverage-windows-root.out,./coverage-windows-plan9asm.out,./coverage-windows-plan9asmll.out
+          files: ./coverage-windows-root.out
           disable_search: true
           flags: windows
           name: windows-go1.27
+          fail_ci_if_error: true
+          verbose: true
+
+  # A root test failure/timeout must not prevent either nested module from
+  # running. Each CLI owns its full suite, job budget and coverage result.
+  windows-cli:
+    needs: ci_policy
+    name: test (windows-latest, 1.27.x, ${{ matrix.command }})
+    runs-on: windows-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        command: [plan9asm, plan9asmll]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Go
+        uses: ./.github/actions/setup-go
+        with:
+          go-version: '1.27.x'
+          cache: true
+
+      - name: Setup Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.x'
+
+      - name: Install LLVM 22
+        uses: ./.github/actions/setup-windows-llvm22
+
+      - name: Setup required wasm execution runtime
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+
+      - name: Run complete CLI suite with coverage
+        working-directory: cmd/${{ matrix.command }}
+        run: go test -count=1 -timeout=30m ./... -coverprofile=../../coverage-windows-${{ matrix.command }}.out
+
+      - name: Upload Windows CLI coverage to Codecov
+        uses: codecov/codecov-action@v7
+        with:
+          use_pypi: true
+          use_oidc: true
+          files: ./coverage-windows-${{ matrix.command }}.out
+          disable_search: true
+          flags: windows
+          name: windows-go1.27-${{ matrix.command }}
           fail_ci_if_error: true
           verbose: true
 

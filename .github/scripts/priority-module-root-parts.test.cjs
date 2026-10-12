@@ -130,3 +130,21 @@ test('selected native CI remains a separate sixteen-owner serial protocol', () =
   assert.match(body, /-ci-owner \$\{\{ matrix.owner \}\} -shards 16 -timeout 20m/);
   assert.doesNotMatch(body, /module-root-partition|module-owner|(?:^|\s)-workers(?:=|\s)/);
 });
+
+test('Windows CLI suites cannot be suppressed by the root package timeout', () => {
+  const body = job('windows-cli');
+  assert.match(body, /^    needs: ci_policy$/m);
+  assert.match(body, /^    runs-on: windows-latest$/m);
+  assert.match(body, /^      fail-fast: false$/m);
+  assert.match(body, /^        command: \[plan9asm, plan9asmll\]$/m);
+  assert.doesNotMatch(body, /max-parallel:|continue-on-error:/);
+
+  const execute = step(body, 'Run complete CLI suite with coverage');
+  assert.match(execute, /working-directory: cmd\/\$\{\{ matrix\.command \}\}/);
+  assert.match(execute,
+    /go test -count=1 -timeout=30m \.\/\.\.\. -coverprofile=\.\.\/\.\.\/coverage-windows-\$\{\{ matrix\.command \}\}\.out/);
+  assert.doesNotMatch(execute, /-run[=\s]|-skip[=\s]/);
+  assert.match(step(body, 'Upload Windows CLI coverage to Codecov'),
+    /files: \.\/coverage-windows-\$\{\{ matrix\.command \}\}\.out/);
+  assert.doesNotMatch(job('test'), /cd cmd\/plan9asm.*coverage-windows/);
+});
