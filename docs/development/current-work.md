@@ -102,6 +102,16 @@ now normalize both spellings without relaxing the nm symbol grammar. Local
 Go 1.27 actual export and Go 1.20 grammar controls pass. The CRC32 reload error
 now includes the actual package/type/error fields; this is diagnosis, not a fix.
 Its complete local explicit/default-profile regression passed in 84.189 seconds.
+Native [38317575302](https://github.com/cpunion/plan9asm/actions/runs/38317575302)
+passed the quoted-path export and both ARM64/x86 object-source metadata controls.
+CRC32's actual error was `std/hash/crc32` with an illegal internal import:
+different SDK-root/package-directory spellings changed cmd/go's namespace.
+The reload now uses one physical SDK root and package directory. Its comparison
+projection resolves every selected source without rewriting original package
+snapshots; byte-identical foreign files retain distinct identities. The new
+local alias-identity regression is RED/GREEN, and the complete CRC32 explicit/
+default-profile test passed in 81.877 seconds. Native verification is pending;
+do not call the namespace diagnostic or previous 259/260 result a complete pass.
 
 The next metadata repair shares ARM64/x86 object-source spelling validation.
 Four local RED controls reproduced ARM64 accepting `$GOROOT` dot/repeated-slash
