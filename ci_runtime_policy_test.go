@@ -131,6 +131,18 @@ func TestCIFullSuitesInstallRequiredQEMU(t *testing.T) {
 			if install < 0 || runner < 0 || install >= runner {
 				t.Fatal("complete Linux suites require pinned QEMU before their 386 runtime tests")
 			}
+			stepStart := strings.LastIndex(job[:install], "\n      - ")
+			if stepStart < 0 {
+				t.Fatal("QEMU installer has no actual workflow step")
+			}
+			step := job[stepStart:install]
+			condition := "if: matrix.module-owner == 0\n"
+			if name == "test" {
+				condition = "if: runner.os == 'Linux' && matrix.module-owner == 0\n"
+			}
+			if !strings.Contains(step, condition) {
+				t.Fatal("every Go version's Linux root role requires QEMU; a version filter omits real runtime tests")
+			}
 		})
 	}
 }

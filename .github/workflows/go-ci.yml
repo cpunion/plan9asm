@@ -388,7 +388,7 @@ jobs:
         uses: ./.github/actions/setup-windows-llvm22
 
       - name: Install required 386 execution runtime
-        if: runner.os == 'Linux' && matrix.module-owner == 0 && matrix.go-version == '1.27.x'
+        if: runner.os == 'Linux' && matrix.module-owner == 0
         timeout-minutes: 5
         run: bash scripts/install-ci-qemu.sh
 
