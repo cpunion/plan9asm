@@ -129,6 +129,11 @@ func validateAMD64ScalarAddSubOperands(goarch, baseOp string, bits int, source, 
 		if !registerAllowed(source.Reg) {
 			return fmt.Errorf("%s %s source is outside Go 1.27's Yrb/Yrl classes: %q", goarch, baseOp, ins.Raw)
 		}
+	case OpSym:
+		if x86AbsoluteRelocationSource(source, goarch, bits) {
+			return nil // Yi32 address, not a TYPE_MEM read; retain the source operand.
+		}
+		fallthrough
 	default:
 		if !isAMD64MemoryOperand(source) || !destinationRegister {
 			return fmt.Errorf("%s %s operands do not match Go 1.27's register/memory rows: %q", goarch, baseOp, ins.Raw)

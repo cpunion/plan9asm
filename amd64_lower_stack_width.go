@@ -162,7 +162,7 @@ func (c *amd64Ctx) lowerStackWidth(op Op, ins Instr) (ok bool, terminated bool, 
 				return true, false, fmt.Errorf("%s %s source is outside Go 1.27's Yrl class: %q", c.goarch, baseOp, ins.Raw)
 			}
 		} else if operand.Kind != OpImm && !isAMD64MemoryOperand(operand) &&
-			!x86StackAbsoluteRelocationSource(operand, c.goarch, spec.bits) {
+			!x86AbsoluteRelocationSource(operand, c.goarch, spec.bits) {
 			return true, false, fmt.Errorf("%s %s expects Yrl/memory/immediate src: %q", c.goarch, baseOp, ins.Raw)
 		}
 		if operand.Kind == OpMem && !x86MemoryRegistersValidForArch(operand.Mem, c.goarch) {
@@ -190,33 +190,6 @@ func (c *amd64Ctx) lowerStackWidth(op Op, ins Instr) (ok bool, terminated bool, 
 		return true, false, err
 	}
 	return true, false, c.storeStackWidth(operand, spec.bits, value)
-}
-
-// Go's non-shared 386 TYPE_ADDR EXTERN/STATIC class is Yi32. Only the
-// PUSHL/Zil_ row has a four-byte relocation sink: PUSHW's Pe emitter passes
-// no relocation storage, and ordinary amd64 named addresses are Yiauto.
-// This source class grants neither memory access nor a native stack contract.
-func x86StackAbsoluteRelocationSource(operand Operand, goarch string, bits int) bool {
-	if goarch != "386" || bits != 32 || operand.Kind != OpSym {
-		return false
-	}
-	source := strings.TrimSpace(operand.Sym)
-	if !strings.HasPrefix(source, "$") {
-		return false
-	}
-	source = strings.TrimSpace(strings.TrimPrefix(source, "$"))
-	if memory, matched, err := parseX86SymbolIndexedMemory(source); matched {
-		if err != nil {
-			return false
-		}
-		source = memory.Sym
-	}
-	if !strings.HasSuffix(source, "(SB)") {
-		return false
-	}
-	name, _, valid := parseFP(strings.TrimSuffix(source, "(SB)") + "(FP)")
-	return valid && name != "" && !(name[0] >= '0' && name[0] <= '9') &&
-		strings.IndexAny(name, "*/&|^%=!$:[]") < 0
 }
 
 func (c *amd64Ctx) validateOrdinaryStackWidthMode(op string, bits int, ins Instr) error {

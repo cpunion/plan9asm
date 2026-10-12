@@ -290,14 +290,14 @@ func TestX86StackNamedAddressSourceClassDoesNotGrantMemory(t *testing.T) {
 		"$·cell(SB)(AX)", "$·cell(SB)(R8)(X1*4)",
 	} {
 		operand, err := parseOperandForArch(ArchAMD64, strings.TrimSpace(spelling))
-		if err != nil || !x86StackAbsoluteRelocationSource(operand, "386", 32) || isAMD64MemoryOperand(operand) {
+		if err != nil || !x86AbsoluteRelocationSource(operand, "386", 32) || isAMD64MemoryOperand(operand) {
 			t.Fatalf("independent absolute source class changed: %s: %v", spelling, err)
 		}
 		before := operand
 		for _, arch := range []string{"386", "amd64", "arm64"} {
 			for _, bits := range []int{8, 16, 32, 64} {
 				want := arch == "386" && bits == 32
-				if x86StackAbsoluteRelocationSource(operand, arch, bits) != want || !reflect.DeepEqual(operand, before) {
+				if x86AbsoluteRelocationSource(operand, arch, bits) != want || !reflect.DeepEqual(operand, before) {
 					t.Fatal("pure source classification changed operand identity or source mode")
 				}
 			}
@@ -308,7 +308,7 @@ func TestX86StackNamedAddressSourceClassDoesNotGrantMemory(t *testing.T) {
 		"$16(SB)", "$·cell*(SB)", "$$·cell(SB)",
 	} {
 		operand, err := parseOperandForArch(ArchAMD64, spelling)
-		if err == nil && x86StackAbsoluteRelocationSource(operand, "386", 32) {
+		if err == nil && x86AbsoluteRelocationSource(operand, "386", 32) {
 			t.Fatal("unregistered source role acquired relocation permission:", spelling)
 		}
 	}

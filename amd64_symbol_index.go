@@ -5,6 +5,33 @@ import (
 	"strings"
 )
 
+// Non-shared 386 TYPE_ADDR EXTERN/STATIC is Yi32. The registered scalar-L
+// arithmetic and PUSHL rows have a four-byte relocation sink; B/W emitters
+// have none, and ordinary amd64 named addresses are Yiauto. This shared source
+// class grants neither memory access, native stack nor caller permission.
+func x86AbsoluteRelocationSource(operand Operand, goarch string, bits int) bool {
+	if goarch != "386" || bits != 32 || operand.Kind != OpSym {
+		return false
+	}
+	source := strings.TrimSpace(operand.Sym)
+	if !strings.HasPrefix(source, "$") {
+		return false
+	}
+	source = strings.TrimSpace(strings.TrimPrefix(source, "$"))
+	if memory, matched, err := parseX86SymbolIndexedMemory(source); matched {
+		if err != nil {
+			return false
+		}
+		source = memory.Sym
+	}
+	if !strings.HasSuffix(source, "(SB)") {
+		return false
+	}
+	name, _, valid := parseFP(strings.TrimSuffix(source, "(SB)") + "(FP)")
+	return valid && name != "" && !(name[0] >= '0' && name[0] <= '9') &&
+		strings.IndexAny(name, "*/&|^%=!$:[]") < 0
+}
+
 func x86SymbolIndexedControlError(ins Instr) error {
 	switch normalizeInstructionOpcode(ins.Op) {
 	case "CALL", "JMP", "RET":
