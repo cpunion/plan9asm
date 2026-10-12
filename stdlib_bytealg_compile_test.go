@@ -56,13 +56,6 @@ func TestStdlibInternalBytealg_ARM64_PartialFunctionObjectsAndClosureContext(t *
 		if err != nil {
 			t.Fatalf("parse %s: %v", path, err)
 		}
-		if sig, ok := sigs["internal/bytealg.cmpbody"]; ok {
-			// This private source helper's documented register inputs and R0
-			// result are an explicit fixture contract, not a Go ABI0 Frame.
-			sig.ArgRegs = []Reg{"R0", "R1", "R2", "R3"}
-			sig.Frame = FrameLayout{}
-			sigs[sig.Name] = sig
-		}
 		// These manually reviewed Go transport types are an explicit fixture
 		// contract only for source ABIInternal entries. A classic Frame alone
 		// remains insufficient. This gate compiles objects, not all bytealg
@@ -131,7 +124,10 @@ func stdlibBytealgARM64Sigs(goroot string) map[string]map[string]FuncSig {
 		filepath.Join(goroot, "src", "internal", "bytealg", "compare_arm64.s"): {
 			"internal/bytealg.Compare": sigWithClassicFrame("internal/bytealg.Compare", []LLVMType{"{ ptr, i64, i64 }", "{ ptr, i64, i64 }"}, I64),
 			"runtime.cmpstring":        sigWithClassicFrame("runtime.cmpstring", []LLVMType{"{ ptr, i64 }", "{ ptr, i64 }"}, I64),
-			"internal/bytealg.cmpbody": sigWithClassicFrame("internal/bytealg.cmpbody", []LLVMType{Ptr, I64, Ptr, I64}, I64),
+			"internal/bytealg.cmpbody": {
+				Name: "internal/bytealg.cmpbody", Args: []LLVMType{Ptr, I64, Ptr, I64},
+				Ret: I64, ArgRegs: []Reg{"R0", "R1", "R2", "R3"},
+			},
 		},
 		filepath.Join(goroot, "src", "internal", "bytealg", "count_arm64.s"): {
 			"internal/bytealg.Count":       sigWithClassicFrame("internal/bytealg.Count", []LLVMType{"{ ptr, i64, i64 }", "i8"}, I64),
@@ -168,25 +164,29 @@ func stdlibBytealgARM64Sigs(goroot string) map[string]map[string]FuncSig {
 		sfiles[path][resolved] = sig
 	}
 
+	// Private source helpers have documented physical register inputs, not
+	// independently allocated ABI0 argument/result frames. In particular,
+	// memeqbody returns in R0 while the search/count helpers write through
+	// their explicit result pointer. These are test-owned partial contracts.
 	addIfPresent(
 		filepath.Join(goroot, "src", "internal", "bytealg", "equal_arm64.s"),
 		"memeqbody<>",
-		sigWithClassicFrame("internal/bytealg.memeqbody", []LLVMType{Ptr, Ptr, I64}, I1),
+		FuncSig{Args: []LLVMType{Ptr, Ptr, I64}, Ret: I1, ArgRegs: []Reg{"R0", "R1", "R2"}},
 	)
 	addIfPresent(
 		filepath.Join(goroot, "src", "internal", "bytealg", "index_arm64.s"),
 		"indexbody<>",
-		withArgRegs(sigWithClassicFrame("internal/bytealg.indexbody", []LLVMType{Ptr, I64, Ptr, I64, Ptr}, Void), []Reg{"R0", "R1", "R2", "R3", "R9"}),
+		FuncSig{Args: []LLVMType{Ptr, I64, Ptr, I64, Ptr}, Ret: Void, ArgRegs: []Reg{"R0", "R1", "R2", "R3", "R9"}},
 	)
 	addIfPresent(
 		filepath.Join(goroot, "src", "internal", "bytealg", "indexbyte_arm64.s"),
 		"indexbytebody<>",
-		withArgRegs(sigWithClassicFrame("internal/bytealg.indexbytebody", []LLVMType{Ptr, "i8", I64, Ptr}, Void), []Reg{"R0", "R1", "R2", "R8"}),
+		FuncSig{Args: []LLVMType{Ptr, "i8", I64, Ptr}, Ret: Void, ArgRegs: []Reg{"R0", "R1", "R2", "R8"}},
 	)
 	addIfPresent(
 		filepath.Join(goroot, "src", "internal", "bytealg", "count_arm64.s"),
 		"countbytebody<>",
-		withArgRegs(sigWithClassicFrame("internal/bytealg.countbytebody", []LLVMType{Ptr, I64, "i8", Ptr}, Void), []Reg{"R0", "R2", "R1", "R8"}),
+		FuncSig{Args: []LLVMType{Ptr, I64, "i8", Ptr}, Ret: Void, ArgRegs: []Reg{"R0", "R2", "R1", "R8"}},
 	)
 
 	for path := range sfiles {
