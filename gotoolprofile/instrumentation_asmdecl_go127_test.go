@@ -53,7 +53,7 @@ func TestInstrumentationOriginalAsmdeclRetainsExactOrdinarySourceUnit(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	env := replaceEnv(os.Environ(), marker.Early.Environment)
+	env := instrumentationFixtureEnvironment(os.Environ(), marker.Early)
 	_, stderr, err := RunBounded(ctx, input.SourceRoot, env, binary, "vet", "-race", "-asmdecl",
 		"-tests=false", "-p=1", "-mod=readonly", plan.PackagePath)
 	if err == nil || !strings.Contains(string(stderr), "test-dependency-missing") {

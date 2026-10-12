@@ -67,13 +67,26 @@ These are that frozen run's results, not certification of the following repairs.
   spelling; `objabi.AbsFile` explicitly emits forward slashes on Windows.
   Normalize only those separators before the existing canonical-file/digest
   checks. Local Go 1.27 scratch source/SDK/call-result tests passed in 266.515
-  seconds; Go 1.20 metadata checks passed. Native confirmation is still pending.
+  seconds; Go 1.20 metadata checks passed. Native metadata, SDK body and actual
+  CLI scratch closure then passed in
+  [38270866927](https://github.com/cpunion/plan9asm/actions/runs/38270866927)
+  with `b7f3309f`'s separator repair.
   The complete native diagnostic run also passed the CPP/generated-header group
   (32 top-level tests, 592.455 seconds). Instrumentation retained four failures:
   the CLI test binary lacked `.exe`, and short/physical invocation names changed
   actual same-module exports. A local failing command-directory regression now
   covers producer/consumer physical invocation consistency; do not relax export
-  equality. The next fork batch verifies these and the ARM64 metadata repair.
+  equality. `d4db4086` binds the physical invocation and uses the host executable
+  suffix. The native follow-up exposed an older fixture-only GOFLAGS leak:
+  test source replay copied mode features but not the observed command context,
+  retaining the runner's `-tags=byollvm`. Five fixture callers now share the
+  captured context and explicit GOENV=off; a local ambient-tag RED/GREEN test
+  preserves strict production environment rejection. Native instrumentation
+  verification is still required; its CLI step was not reached in that run.
+
+The complete local Go 1.27 `gotoolprofile` suite passed in 1031.912 seconds on
+the frozen `ba02841e` checkout. Later type-invocation and fixture repairs have
+focused receipts, not a new complete-module certification.
 - `43d64b2a`: downloaded artifacts showed module aggregates differed from root
   owners in PATH because only root jobs installed QEMU. Every Linux role now
   installs the same pinned QEMU before Node; exact environment/source comparisons

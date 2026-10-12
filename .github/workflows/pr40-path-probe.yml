@@ -11,7 +11,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        role: [arm64-scratch, instrumentation-cli]
+        role: [instrumentation-cli]
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-go
@@ -65,7 +65,7 @@ jobs:
           set -euo pipefail
           go test ./gotoolprofile -run '^TestInstrumentationTypeSourceCaptureActualLogicalRoot$' -count=1 -v -timeout=10m
       - name: Same-source type recapture and instrumentation
-        if: matrix.role == 'instrumentation-cli'
+        if: ${{ !cancelled() && matrix.role == 'instrumentation-cli' }}
         working-directory: cmd/plan9asmll
         shell: bash
         run: |

@@ -10,6 +10,17 @@ import (
 	"time"
 )
 
+func instrumentationFixtureEnvironment(base []string, early *InstrumentationEarlyObservation) []string {
+	observed := copyInstrumentationHashes(early.Environment)
+	for key, value := range early.CommandContext {
+		observed[key] = value
+	}
+	// `go env GOENV` reports an empty value for the observer's explicit off
+	// policy. Do not restore a user's environment file for fixture commands.
+	observed["GOENV"] = "off"
+	return replaceEnv(base, observed)
+}
+
 func captureActualInstrumentationEarly(t *testing.T, target string, mode InstrumentationMode, cgo string) *InstrumentationEarlyObservation {
 	t.Helper()
 	binary, err := exec.LookPath("go")

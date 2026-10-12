@@ -20,6 +20,7 @@ import (
 )
 
 func TestInstrumentationTypeSourceCaptureActualLogicalRoot(t *testing.T) {
+	t.Setenv("GOFLAGS", "-tags=plan9asm_fixture_ambient")
 	binary, err := exec.LookPath("go")
 	if err != nil {
 		t.Fatal(err)
@@ -84,7 +85,7 @@ func TestInstrumentationTypeSourceCaptureActualLogicalRoot(t *testing.T) {
 		}
 		return stdout, stderr, nil
 	}
-	env := replaceEnv(os.Environ(), marker.Early.Environment)
+	env := instrumentationFixtureEnvironment(os.Environ(), marker.Early)
 	proof, err := CaptureInstrumentationTypeSources(ctx, binary, alias, env, input, run)
 	if err != nil {
 		t.Fatal(err)

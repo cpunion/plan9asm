@@ -54,7 +54,7 @@ func TestInstrumentationTypeSourceCaptureActualGoAndOriginMutation(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	env := replaceEnv(os.Environ(), marker.Early.Environment)
+	env := instrumentationFixtureEnvironment(os.Environ(), marker.Early)
 	proof, err := CaptureInstrumentationTypeSources(ctx, binary, original.SourceRoot, env, input, RunBounded)
 	if err != nil {
 		t.Fatal(err)
