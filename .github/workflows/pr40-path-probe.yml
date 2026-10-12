@@ -1,4 +1,4 @@
-name: PR40 Windows path diagnostic
+name: PR40 Windows inventory diagnostic
 on:
   push:
     branches: [codex/pr40-windows-path-probe-20261012]
@@ -7,11 +7,12 @@ permissions:
 jobs:
   integration:
     runs-on: windows-latest
-    timeout-minutes: 60
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
-        role: [instrumentation-cli]
+        role: [cli, profile]
+        part: [0, 1, 2, 3]
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-go
@@ -25,49 +26,13 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: '22'
-      - name: Portable original source selection and mutation controls
-        if: matrix.role == 'portable-selection'
-        shell: bash
-        run: |
-          set -euo pipefail
-          go test ./gotoolprofile -run '^(TestPortableSelection.*|TestOrdinaryDependencyCompleteClosureRejectsMutation|TestOrdinarySourceInventoryLiveGuards|TestTest.*Embed.*)$' -count=1 -v -timeout=15m
-      - name: Actual source metadata slash regression
-        if: matrix.role == 'arm64-scratch'
-        shell: bash
-        run: |
-          set -euo pipefail
-          go test . -run '^(TestARM64NativeScratchObjectSourceMetadataRequiresCapturedPhysicalInput|TestARM64NativeScratchSDKHiddenEntryActualObject|TestARM64NativeScratchActualSDKBodyInputContract)$' -count=1 -v -timeout=10m
-      - name: CPP and generated headers on all targets
-        if: matrix.role == 'cpp-cli'
-        working-directory: cmd/plan9asmll
-        shell: bash
-        run: |
-          set -euo pipefail
-          go test . -run '^(TestFeatureCPP.*|TestGeneratedHeader.*|TestAMD64DownloadedFixedLocalActualProfileCLI)$' -count=1 -v -timeout=25m
-      - name: Ordinary actual source and supplemental test declarations
-        if: matrix.role == 'ordinary-cli'
-        working-directory: cmd/plan9asmll
-        shell: bash
-        run: |
-          set -euo pipefail
-          go test . -run '^(TestOrdinary.*|TestTest.*)$' -count=1 -v -timeout=25m
-      - name: Actual ARM64 source and native scratch closure
-        if: ${{ !cancelled() && matrix.role == 'arm64-scratch' }}
-        working-directory: cmd/plan9asmll
-        shell: bash
-        run: |
-          set -euo pipefail
-          go test . -run '^TestCompileOneARM64NativeScratch.*$' -count=1 -v -timeout=15m
-      - name: Physical original type capture through actual source alias
-        if: matrix.role == 'instrumentation-cli'
-        shell: bash
-        run: |
-          set -euo pipefail
-          go test ./gotoolprofile -run '^TestInstrumentationTypeSourceCaptureActualLogicalRoot$' -count=1 -v -timeout=10m
-      - name: Same-source type recapture and instrumentation
-        if: ${{ !cancelled() && matrix.role == 'instrumentation-cli' }}
-        working-directory: cmd/plan9asmll
-        shell: bash
-        run: |
-          set -euo pipefail
-          go test . -run '^(TestInstrumentationCLIActualMetadataAndObjectInvocation|TestInstrumentationForeignOriginalSourcesCLIRecaptureAndFinalGuard|TestInstrumentationImported.*)$' -count=1 -v -timeout=25m
+      - name: Diagnose every actual inventory root in disjoint groups
+        shell: pwsh
+        run: python .github/scripts/pr40-inventory-probe.py '${{ matrix.role }}' '${{ matrix.part }}'
+      - name: Retain actual inventory and raw outcomes
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: windows-${{ matrix.role }}-${{ matrix.part }}
+          path: _out/windows-${{ matrix.role }}-${{ matrix.part }}/
+          if-no-files-found: error
