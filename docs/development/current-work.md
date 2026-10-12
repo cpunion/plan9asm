@@ -18,8 +18,8 @@ independent regressions, official coverage and benchmarks. `gotoolprofile` is
 public for the separate harness. Exhaustive runner owners remain root 0,
 profile 1 and other packages 2, with mandatory disjoint, complete aggregation.
 
-Published head is `346cec2f`; [CI run 38187769673](https://github.com/xgo-dev/plan9asm/actions/runs/38187769673)
-has failures and is still active at this checkpoint. Its benchmark compiled
+The last full CI evaluated `346cec2f`; [run 38187769673](https://github.com/xgo-dev/plan9asm/actions/runs/38187769673)
+finished with 83 successful and 65 failed jobs, including aggregates. Its benchmark compiled
 164/185 files, with 21 failures; wasm passed 19/19. Neither its timing nor the
 five-architecture classification gate establishes complete compilation or
 runtime coverage. Previous run `38182744838` remains failed.
@@ -65,6 +65,16 @@ minor versions. The discovering fixed-local Windows LLVM object matrices pass
 on 1.23.12 and 1.27.2. Evidence uses the `windows-seh-` prefix in the same
 ignored report directory; no historical or native runtime result is implied.
 
+The subsequent repair batch also passes focused coverage/ordinary tests on
+Go 1.20 and 1.27, and the CLI environment/identity matrix with TMPDIR unset.
+It retains Go's exact coverage trailer grammar, prepares selected cache roots
+before loading, and supplies direct scratch fixtures the ordinary environment.
+Original frame fixtures isolate the harness's Windows `byollvm` build tag;
+explicit caller-supplied foreign flags remain rejected. C oracle process setup
+now selects binary stdout/stderr on Windows instead of normalizing captured
+bytes. Windows-target IR, host byte-protocol execution and actual Linux
+process/header tests pass; Windows CRT execution still needs CI.
+
 Evidence lives under ignored `_out/register-result-repair/`, including
 `numerical-local-race-lifetime-green.log`, `embed-separator-go124-green.log`,
 `go-json-stream-green.log`, `scalar-relocation-family-green.log`,
@@ -74,17 +84,15 @@ Receipts certify only their exact frozen source and tool snapshots.
 
 ## Remaining failure work
 
-1. Let the published CI run finish and collect actual root and nested CLI
-   failures separately. A successful main-module artifact does not establish
-   that the same job's nested CLI passed. The local repairs above have not yet
-   received a new full CI run.
-2. Repair the remaining coverage/CLI environment failures: the mandatory SDK
-   table negative oracle rejects Go's legitimate coverage trailer; direct
-   ARM64 scratch fixtures lack an explicit temporary environment on Linux;
-   ordinary CLI cache defaults may refer to directories not yet created.
-   Preserve exact source failures, prepare environments before selection, and
-   never repair an already captured source identity. Windows native execution
-   still requires its actual CI owner.
+1. Collect actual root and nested CLI failures separately. A successful main
+   artifact does not establish nested CLI success. The repairs above still
+   require a new full CI run; preserve the old failed receipts.
+2. Windows job `114614102112` has remaining raw-machine-code test bridges that
+   assume SysV registers instead of the Windows calling convention, POSIX-only
+   fault helpers, and source/path/ownership failures. Its raw log is retained
+   as `ci-346-windows-job.log`. Fix shared transport contracts, not individual
+   expected values or broad host skips. Audit remaining race artifacts too;
+   the two repaired numerical proof lifetimes do not certify every race root.
 3. The 21 standard-library failures need actual runtime/reflect entry, TLS,
    hidden-register, caller-storage or SDK source contracts. Maps' immediate
    shuffle result analysis is repaired; AES mutable-global storage remains

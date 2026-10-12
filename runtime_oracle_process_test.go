@@ -55,7 +55,16 @@ int main(void) {
 // Keep each child's checked zero rlimit as well for the other Unix platforms.
 // See https://man7.org/linux/man-pages/man5/core.5.html.
 const runtimeOracleProcessSetupC = `
-#if defined(__linux__)
+#if defined(_WIN32)
+#include <stdio.h>
+#include <io.h>
+#include <fcntl.h>
+#include <process.h>
+__attribute__((constructor)) static void plan9asm_oracle_process_setup(void) {
+    if (_setmode(_fileno(stdout), _O_BINARY) == -1 ||
+        _setmode(_fileno(stderr), _O_BINARY) == -1) _exit(125);
+}
+#elif defined(__linux__)
 #include <sys/prctl.h>
 #include <unistd.h>
 __attribute__((constructor)) static void plan9asm_oracle_process_setup(void) {
