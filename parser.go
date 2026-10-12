@@ -474,14 +474,17 @@ func parseGLOBLStmt(rest string) (GloblStmt, error) {
 	if sym == "" {
 		return GloblStmt{}, fmt.Errorf("GLOBL empty symbol: %q", "GLOBL "+rest)
 	}
-	sz, ok := parseImm(sizePart)
-	if (!ok || sz < 0) && strings.HasPrefix(sizePart, "$(") && strings.HasSuffix(sizePart, ")") {
-		// Some platform asm uses symbolic struct-size macros in GLOBL sizes
-		// (e.g. $(machTimebaseInfo__size)). We don't evaluate include-time
-		// macros here, so keep a conservative non-zero placeholder size.
-		sz, ok = 64, true
+	if !strings.HasPrefix(sizePart, "$") {
+		return GloblStmt{}, fmt.Errorf("GLOBL size must be an immediate: %q", sizePart)
 	}
-	if !ok || sz < 0 {
+	expression := strings.TrimSpace(strings.TrimPrefix(sizePart, "$"))
+	sz, ok := parseImmExpr(expression)
+	if !ok && memoryOffsetExpressionNeedsContext(expression) {
+		// Retain generated layout syntax for inventory, never a guessed
+		// zero or 64-byte allocation. Both lowering paths reject SizeRaw.
+		return GloblStmt{Sym: sym, Flags: flags, SizeRaw: sizePart}, nil
+	}
+	if !ok || int64(sz) < 0 {
 		return GloblStmt{}, fmt.Errorf("GLOBL invalid size %q: %q", sizePart, "GLOBL "+rest)
 	}
 	return GloblStmt{Sym: sym, Flags: flags, Size: int64(sz)}, nil

@@ -547,6 +547,9 @@ func translateFuncLinearModule(mod llvm.Module, arch Arch, fn Func, sig FuncSig)
 }
 
 func emitDataGlobalsModule(mod llvm.Module, file *File, resolve func(string) string) error {
+	if err := validateResolvedGloblSizes(file); err != nil {
+		return err
+	}
 	for _, data := range file.Data {
 		if data.Addr != "" {
 			// The shared textual route emits real packed relocation constants.

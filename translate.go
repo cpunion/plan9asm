@@ -495,9 +495,24 @@ func validateFileResolvedImmediates(file *File) error {
 	if file == nil {
 		return fmt.Errorf("nil file")
 	}
+	if err := validateResolvedGloblSizes(file); err != nil {
+		return err
+	}
 	for _, fn := range file.Funcs {
 		if err := validateResolvedImmediates(file.Arch, fn); err != nil {
 			return fmt.Errorf("%s: %w", fn.Sym, err)
+		}
+	}
+	return nil
+}
+
+func validateResolvedGloblSizes(file *File) error {
+	for _, global := range file.Globl {
+		if global.SizeRaw != "" {
+			return fmt.Errorf("%w: GLOBL %s requires its generated size %q", ErrProbeNeedsContext, global.Sym, global.SizeRaw)
+		}
+		if global.Size < 0 {
+			return fmt.Errorf("GLOBL %s has a negative size", global.Sym)
 		}
 	}
 	return nil
@@ -741,6 +756,9 @@ func emitDataGlobals(b *strings.Builder, file *File, resolve func(string) string
 }
 
 func emitDataGlobalsWithSigs(b *strings.Builder, file *File, resolve func(string) string, sigs map[string]FuncSig, wasmABI WASMABI) error {
+	if err := validateResolvedGloblSizes(file); err != nil {
+		return err
+	}
 	// Merge DATA and GLOBL into resolved symbol -> bytes.
 	type symData struct {
 		size      int64
