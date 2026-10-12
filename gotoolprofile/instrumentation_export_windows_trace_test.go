@@ -20,7 +20,7 @@ GOAMD64='v2' "C:\\Go SDK\\pkg\\tool\\windows_amd64\\compile.exe" -o "$WORK\\b001
 GOAMD64='v2' "C:\\Go SDK\\pkg\\tool\\windows_amd64\\asm.exe" -p example.invalid/instrumentation-export -trimpath "$WORK\\b001=>" -I "$WORK\\b001\\" -I "C:\\Go SDK\\pkg\\include" -D GOOS_linux -D GOARCH_amd64 -D GOAMD64_v2 -o "$WORK\\b001\\mode_race.o" "C:\\owned task\\export\\mode_race.s"
 go tool pack r "$WORK\\b001\\_pkg_.a" "$WORK\\b001\\mode_race.o" # internal
 go tool buildid -w "$WORK\\b001\\_pkg_.a" # internal
-cp $WORK\b001\_pkg_.a C:\cache root\aa\artifact-d # internal
+cp "$WORK\\b001\\_pkg_.a" "C:\\cache root\\aa\\artifact-d" # internal
 `
 
 func instrumentationWindowsTraceInputs() (*InstrumentationToolState, *InstrumentationBuildPlan, []string, map[string]string) {
@@ -78,6 +78,10 @@ func TestInstrumentationExportRoutingWindowsDisplayKeepsUnknownOutputFailed(t *t
 		"extra warning":            func(trace string) string { return trace + "unknown warning\n" },
 		"incorrect WORK escape":    func(trace string) string { return strings.ReplaceAll(trace, `$WORK\\b001`, `$WORK\b001`) },
 		"incorrect WORK separator": func(trace string) string { return strings.ReplaceAll(trace, `$WORK\\b001`, `$WORK/b001`) },
+		"unquoted cache copy": func(trace string) string {
+			return strings.Replace(trace, `cp "$WORK\\b001\\_pkg_.a" "C:\\cache root\\aa\\artifact-d"`,
+				`cp $WORK\b001\_pkg_.a C:\cache root\aa\artifact-d`, 1)
+		},
 		"relative WORK": func(trace string) string {
 			return strings.Replace(trace, `WORK=C:\tmp\go-build1234`, `WORK=tmp\go-build1234`, 1)
 		},
@@ -135,7 +139,7 @@ func TestInstrumentationExportRoutingHostIdentityNotTargetExecutableSuffix(t *te
 }
 
 func TestInstrumentationExportRoutingWindowsDisplayNeedsBoundWholeSDKSource(t *testing.T) {
-	for _, key := range []string{"src/cmd/go/internal/work/shell.go", "src/cmd/go/internal/work/gc.go"} {
+	for _, key := range []string{"src/cmd/go/internal/work/shell.go", "src/cmd/go/internal/work/gc.go", "src/cmd/go/internal/work/buildid.go"} {
 		t.Run(key, func(t *testing.T) {
 			tools, plan, defines, actual := instrumentationWindowsTraceInputs()
 			source := instrumentationExportEnvironmentFixture(t)

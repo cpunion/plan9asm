@@ -6,8 +6,9 @@ import (
 	"strings"
 )
 
-// This finite renderer is bound to the complete Go 1.27.1 shell.go and gc.go
-// registrations in InstrumentationExportEnvironment. It models runOut's
+// This finite renderer is bound to the complete Go 1.27.1/1.27.2 shell.go,
+// gc.go and buildid.go registrations in InstrumentationExportEnvironment.
+// It models updateBuildID's cache-copy display as well as runOut's
 // joinUnambiguously, fmtCmd and ShowCmd, not a shell parser or normalizer for
 // arbitrary observed commands. Only a whole exact rendered marker trace may
 // be projected into the existing portable routing protocol.
@@ -120,7 +121,7 @@ func instrumentationRenderedExportTrace(plan *InstrumentationBuildPlan, defines 
 	show(paths.marker, instrumentationExportCommandPrefix(environment)+instrumentationExportDisplayArgs(object))
 	show(paths.marker, instrumentationExportDisplayArgs([]string{"go", "tool", "pack", "r", objdir + "_pkg_.a", objdir + "mode_" + mode + ".o"})+" # internal")
 	show("", instrumentationExportDisplayArgs([]string{"go", "tool", "buildid", "-w", objdir + "_pkg_.a"})+" # internal")
-	show("", "cp "+objdir+"_pkg_.a "+paths.archive+" # internal")
+	show("", instrumentationExportDisplayArgs([]string{"cp", objdir + "_pkg_.a", paths.archive})+" # internal")
 	return strings.Join(lines, "\n") + "\n"
 }
 

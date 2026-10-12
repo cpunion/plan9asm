@@ -39,13 +39,15 @@ const instrumentationBootstrapSource = "src/internal/buildcfg/zbootstrap.go"
 // projected ASTs prevents accepting a rewritten, self-consistent projection
 // with fabricated whole-source digests. Future SDK changes need a fresh audit.
 var instrumentationExportEnvironmentSourceRegistration = map[string]string{
-	"src/cmd/go/internal/work/init.go":  "cd86d5c8fecb90d9db58ed3c98d0869ff6b5220c445025051d366818859a0963",
-	"src/cmd/go/internal/cfg/cfg.go":    "8eb038ac6df168fe5af971cd768d99dd3c64224273072a4160dcc5f51eacae9d",
-	"src/cmd/go/internal/work/shell.go": "ffc69d476c2cde44a64c26693b2c9aeb42830ac2777f9f538ef268c86d57be2f",
-	"src/cmd/go/internal/work/gc.go":    "13359b8707e78300e8e0ec880b9a8d1af4bafdf32140b56df5f041a52fbc1325",
+	"src/cmd/go/internal/work/buildid.go": "6de8324513d2a5f9f629e8ae7ede623d1e87ef7b826fd1441265fc845a256555",
+	"src/cmd/go/internal/work/init.go":    "cd86d5c8fecb90d9db58ed3c98d0869ff6b5220c445025051d366818859a0963",
+	"src/cmd/go/internal/cfg/cfg.go":      "8eb038ac6df168fe5af971cd768d99dd3c64224273072a4160dcc5f51eacae9d",
+	"src/cmd/go/internal/work/shell.go":   "ffc69d476c2cde44a64c26693b2c9aeb42830ac2777f9f538ef268c86d57be2f",
+	"src/cmd/go/internal/work/gc.go":      "13359b8707e78300e8e0ec880b9a8d1af4bafdf32140b56df5f041a52fbc1325",
 }
 
 var instrumentationExportEnvironmentRegistrations = map[string]string{
+	"src/cmd/go/internal/work/buildid.go#updateBuildID":   "749e831a261f6638b3dfd4e3d6f77321276dfd530a8b906b7353343db9790858",
 	"src/cmd/go/internal/cfg/cfg.go#EnvOrAndChanged":      "496696c1fba2c248d479f6a60125bdd1e349a2fc0f6936aa50c17da5ef4f416a",
 	"src/cmd/go/internal/cfg/cfg.go#GOAMD64":              "802d8ea0ab395ea9620f0b9ce1d5e07cc08c5d947238d95d54286d7a04af53ab",
 	"src/cmd/go/internal/cfg/cfg.go#GOARM64":              "5699ca3bb24f5c90ba510c5d95233e2e74858490766f7252d22574f48c667a03",

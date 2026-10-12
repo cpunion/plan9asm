@@ -23,6 +23,14 @@ func TestInstrumentationExportActualGoQuotedOwnedPath(t *testing.T) {
 	if err := os.Mkdir(owned, 0700); err != nil {
 		t.Fatal(err)
 	}
+	// The final archive-cache copy is a separate command-display producer
+	// from the compiler and assembler. Exercise its actual quoting on every
+	// host, not only Windows (where each backslash also requires quoting).
+	cache := filepath.Join(t.TempDir(), "cache with spaces")
+	if err := os.Mkdir(cache, 0700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("GOCACHE", cache)
 	var trace []byte
 	run := func(ctx context.Context, dir string, env []string, name string, args ...string) ([]byte, []byte, error) {
 		stdout, stderr, err := RunBounded(ctx, dir, env, name, args...)
@@ -69,5 +77,30 @@ func TestInstrumentationExportCommandDisplayActualRegisteredSDKSource(t *testing
 			t.Fatal(err)
 		}
 		t.Logf("GO_EXPORT_DISPLAY_SOURCE %s", receipt)
+	}
+}
+
+func TestInstrumentationExportCacheCopyActualRegisteredSDKSource(t *testing.T) {
+	const name = "src/cmd/go/internal/work/buildid.go"
+	const declaration = "updateBuildID"
+	data, err := readInstrumentationRegistration(filepath.Join(runtime.GOROOT(), filepath.FromSlash(name)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	text, digest, err := instrumentationExportDeclaration(name, data, declaration)
+	if err != nil {
+		t.Fatal(err)
+	}
+	receipt, err := json.Marshal(map[string]string{
+		"source_ref": name + "#" + declaration, "source_sha256": bytesSHA256(data),
+		"source_declaration": text, "ast_sha256": digest,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("GO_EXPORT_CACHE_SOURCE %s", receipt)
+	if bytesSHA256(data) != instrumentationExportEnvironmentSourceRegistration[name] ||
+		digest != instrumentationExportEnvironmentRegistrations[name+"#"+declaration] {
+		t.Fatal("complete actual cache-copy producer is not registered")
 	}
 }

@@ -15,7 +15,7 @@ import (
 // runtime certificate, and never changes the installed SDK.
 func TestInstrumentationExportEnvironmentActualSDKPostCaptureGuards(t *testing.T) {
 	for _, scenario := range []string{
-		"unchanged", "driver bytes", "bootstrap bytes", "bootstrap default",
+		"unchanged", "driver bytes", "cache-copy producer bytes", "bootstrap bytes", "bootstrap default",
 		"SDK environment bytes", "SDK environment removed",
 		"absent environment created empty", "empty environment removed",
 	} {
@@ -41,6 +41,10 @@ func TestInstrumentationExportEnvironmentActualSDKPostCaptureGuards(t *testing.T
 			}
 
 			switch scenario {
+			case "cache-copy producer bytes":
+				instrumentationExportRewriteOwnedFile(t, root, "src/cmd/go/internal/work/buildid.go", func(data string) string {
+					return data + "\n// changed after capture\n"
+				})
 			case "driver bytes":
 				instrumentationExportRewriteOwnedFile(t, root, "src/cmd/go/internal/work/shell.go", func(data string) string {
 					return data + "\n// changed after capture\n"
