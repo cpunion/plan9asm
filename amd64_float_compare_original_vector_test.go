@@ -12,6 +12,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/xgo-dev/plan9asm/internal/gotoolchain"
 )
 
 type x86FloatCompareOriginalVector struct {
@@ -233,7 +235,7 @@ func main(){
 			t.Fatal(err)
 		}
 	}
-	goExecutable := filepath.Join(dir, "original-go")
+	goExecutable := filepath.Join(dir, gotoolchain.HostExecutable("original-go"))
 	command := exec.Command("go", "build", "-p=2", "-o", goExecutable, ".")
 	command.Dir = dir
 	command.Env = append(os.Environ(), "GOOS="+runtime.GOOS, "GOARCH=amd64", "CGO_ENABLED=0",

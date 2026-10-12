@@ -16,6 +16,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/xgo-dev/plan9asm/internal/gotoolchain"
 )
 
 // This is a test oracle for the invoked stock assembler, not an alternative
@@ -32,7 +34,7 @@ func x86ScalarLiteralActualGoRewriteSet(t *testing.T) bool {
 		t.Fatal(err)
 	}
 	driver, err = filepath.EvalSymlinks(driver)
-	if err != nil || driver != filepath.Join(root, "bin", "go") {
+	if err != nil || driver != filepath.Join(root, "bin", gotoolchain.HostExecutable("go")) {
 		t.Fatalf("literal oracle requires this toolchain's stock Go driver: %v", err)
 	}
 	run := func(arguments ...string) string {

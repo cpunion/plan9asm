@@ -69,7 +69,9 @@ func TestX86FloatingComparePreflightWindowsResourceBoundary(t *testing.T) {
 		// A plain concrete compiler rejection, not a timeout/cleanup/tool error,
 		// proves POSIX still consumes the very header forbidden under _WIN32.
 		exit, ok := err.(*exec.ExitError)
-		if !ok || exit.ExitCode() != 1 || !strings.Contains(string(output), filepath.Join(dir, "sys", "resource.h")+":1:2: error: plan9asm_portability_poison_resource_header") {
+		// Clang joins the exact -I argument with the slash-spelled include,
+		// also on Windows; filepath.Join would invent backslashes in the tail.
+		if !ok || exit.ExitCode() != 1 || !strings.Contains(string(output), dir+"/sys/resource.h:1:2: error: plan9asm_portability_poison_resource_header") {
 			t.Fatalf("lost exact POSIX header-selection witness: %v\n%s", err, output)
 		}
 	})

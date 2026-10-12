@@ -10,6 +10,8 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/xgo-dev/plan9asm/internal/gotoolchain"
 )
 
 type x86FloatCompareExecution struct {
@@ -180,7 +182,7 @@ func x86FloatCompareVerifyArguments(t *testing.T, execution x86FloatCompareExecu
 			t.Fatal(err)
 		}
 	}
-	executable := filepath.Join(dir, "arguments")
+	executable := filepath.Join(dir, gotoolchain.HostExecutable("arguments"))
 	command := exec.Command("go", "build", "-p=2", "-o", executable, ".")
 	command.Dir = dir
 	command.Env = append(os.Environ(), "GOOS="+runtime.GOOS, "GOARCH=amd64", "CGO_ENABLED=0",

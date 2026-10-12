@@ -8,6 +8,8 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/xgo-dev/plan9asm/internal/gotoolchain"
 )
 
 // Intel SDM Vol.2A Table 3-1 supplies the relation truth columns and signaling
@@ -19,8 +21,6 @@ const x86FloatCompareIndependentC = `
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
-#include <sys/mman.h>
-#include <unistd.h>
 static const unsigned relation_truth[32]={
  4,2,6,8,11,13,9,7,12,10,14,0,3,5,1,15,
  4,2,6,8,11,13,9,7,12,10,14,0,3,5,1,15};
@@ -188,7 +188,7 @@ func main(){
 			t.Fatal(err)
 		}
 	}
-	goExecutable := filepath.Join(dir, "original-go")
+	goExecutable := filepath.Join(dir, gotoolchain.HostExecutable("original-go"))
 	command := exec.Command("go", "build", "-p=2", "-o", goExecutable, ".")
 	command.Dir = dir
 	command.Env = append(os.Environ(), "GOOS="+runtime.GOOS, "GOARCH=amd64", "CGO_ENABLED=0", "GOWORK=off", "GOENV=off", "GOTOOLCHAIN=local")

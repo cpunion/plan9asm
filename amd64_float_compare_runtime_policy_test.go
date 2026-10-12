@@ -171,13 +171,17 @@ func TestX86FloatingCompareLinuxCISelectorCannotBorrowAnotherJob(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	workflow := string(contents)
+	// ciWorkflowJob accepts LF and CRLF but returns an LF job. Keep the
+	// mutation input in the same representation, then exercise both formats.
+	workflow := strings.ReplaceAll(string(contents), "\r\n", "\n")
 	job, found := ciWorkflowJob(workflow, "cross-runtime")
 	if !found {
 		t.Fatal("original cross-runtime job is missing")
 	}
-	if _, err := x86FloatCompareLinuxCISelector(workflow); err != nil {
-		t.Fatal(err)
+	for _, source := range []string{workflow, strings.ReplaceAll(workflow, "\n", "\r\n")} {
+		if _, err := x86FloatCompareLinuxCISelector(source); err != nil {
+			t.Fatal(err)
+		}
 	}
 	for _, mutation := range []struct {
 		name string
@@ -208,8 +212,10 @@ func TestX86FloatingCompareLinuxCISelectorCannotBorrowAnotherJob(t *testing.T) {
 			if changed == workflow {
 				t.Fatal("mutation did not change the actual workflow")
 			}
-			if _, err := x86FloatCompareLinuxCISelector(changed); err == nil {
-				t.Fatal("absent, foreign or invalid runtime execution was accepted")
+			for _, source := range []string{changed, strings.ReplaceAll(changed, "\n", "\r\n")} {
+				if _, err := x86FloatCompareLinuxCISelector(source); err == nil {
+					t.Fatal("absent, foreign or invalid runtime execution was accepted")
+				}
 			}
 		})
 	}
