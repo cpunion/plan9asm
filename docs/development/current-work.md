@@ -91,18 +91,35 @@ The main working branch now also contains the composed proof-factory leases,
 actual Go cache-copy quoting/source registration, Windows oracle executable
 paths, and normalized Windows source-PC origin joins. The source-PC family
 passes Go 1.23 and 1.27, including the broader 485-second source/object suite.
-The quoted-cache worktree retains a frozen complete nested-CLI validation;
-do not edit it until that process finishes. Its commits are already integrated.
+The quoted-cache snapshot passed the complete Go 1.27 nested CLI in 1282 seconds;
+its later producer-format repair has a separate Go 1.24 full CLI running.
+Do not edit a frozen repair worktree until its process finishes.
 
 The Linux race replay passed the complete profile guards (751.72 seconds) and
 readonly deadline/cancellation matrix (525.26 seconds), but its SDK API reentry
-root failed the old two-second timer. The report remains failed. The next
-repair isolates each real reentry case in a bounded, owned child, requires
-the callback and completion receipt, and removes the leaked-worker timeout.
+root failed the old two-second timer. That report remains failed. The repair
+isolates each real reentry case in a bounded, owned child, requires the callback
+and completion receipt, and removes the leaked-worker timeout. All 18 original
+and verification Err/Deadline/Done API combinations now pass on the host and
+under Linux/amd64 race checking (920.553 seconds).
 Windows test-only repairs additionally preserve exact killed exits, bind file
 IDs before replacement, and avoid cross-volume relative-path assumptions.
-These latest changes need their own frozen verification; earlier reports do
-not certify them. Evidence is under `_out/register-result-repair/` and the
+Host Go 1.20/current identity tests pass; Windows-native execution still needs
+CI. IA32 artifacts retain complete ELF/identity checks without requiring Unix
+execute bits from Windows. Stream tests check the OS's live-rename refusal,
+complete EOF, then actual replacement/reopen rejection after close.
+
+Latest-run failures also exposed three distinct version boundaries: DATA
+headers require actual-version-selected pre-1.27 versus current grammar;
+Go 1.26.9 has the exact same eight pinned SEH inputs as 1.26.8; and ARM64's
+five-class diagnostic arity predates its renamed AUTO class. Retain complete
+schemas, not mixed optional fields. The DATA family passes Go 1.24/current,
+and actual Go 1.26.9 SEH/schema mutation and CPU-profile objects pass. All Linux
+root lanes now provision pinned QEMU: historical lanes execute the new scalar
+relocation runtime too. The policy regression reproduces the old version-filter
+failure. The diagnostic/policy multi-SDK suite still needs its final results.
+
+Evidence is under `_out/register-result-repair/` and the
 temporary repair worktrees' `_out/ci-proof-lifetimes/` / `_out/ci-quoted-cache/`.
 
 1. Collect actual root and nested CLI failures separately. A successful main
