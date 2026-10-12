@@ -2,8 +2,10 @@ package main
 
 import (
 	"context"
+	"go/build"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -17,6 +19,7 @@ func TestTestDependencyEmbedActualOrdinaryRole(t *testing.T) {
 	}{
 		{name: "file", directive: "//go:embed defaults.bin", file: "defaults.bin"},
 		{name: "all directory", directive: "//go:embed all:assets", file: "assets/.defaults.bin"},
+		{name: "Unicode pattern whitespace", directive: "//go:embed \u00a0defaults.bin", file: "defaults.bin"},
 		{name: "Unicode separator", directive: "//go:embed\u00a0defaults.bin", file: "defaults.bin"},
 	} {
 		t.Run(axis.name, func(t *testing.T) {
@@ -55,11 +58,22 @@ func testDependencyEmbedActualOrdinaryRole(t *testing.T, directive, asset string
 		t.Fatalf("actual Go embed selection: %v %#v", err, selected)
 	}
 	pkg := selected[0]
-	if isTestVariantPackage(pkg) || len(pkg.EmbedPatterns) != 1 || len(pkg.EmbedFiles) != 1 {
+	// Go 1.25 and earlier recognize only space/tab immediately after the
+	// directive name. Compare the actual SDK's independent source reader;
+	// ignored comments must not acquire the newer parser's embedded files.
+	original, err := build.Default.ImportDir(dir, 0)
+	if err != nil {
+		t.Fatal("independent SDK source selection", err)
+	}
+	want := len(original.EmbedPatterns)
+	if want != 1 && !(want == 0 && strings.HasPrefix(directive, "//go:embed\u00a0")) {
+		t.Fatal("unexpected SDK directive selection", original.EmbedPatterns)
+	}
+	if isTestVariantPackage(pkg) || len(pkg.EmbedPatterns) != want || len(pkg.EmbedFiles) != want {
 		t.Fatalf("ordinary exact Go embed selection was not retained: %#v", pkg)
 	}
-	if _, err := captureTypedSourceLoadGuard(ctx, selected, nil); err == nil {
-		t.Fatal("unqualified ordinary load acquired an unbound embed role")
+	if _, err := captureTypedSourceLoadGuard(ctx, selected, nil); (err != nil) != (want != 0) {
+		t.Fatal("unqualified ordinary load changed its actual embed role", err)
 	}
 	source := gotoolprofile.TestSourcePackage{
 		Package: gotoolprofile.PackageProof{
@@ -78,6 +92,20 @@ func testDependencyEmbedActualOrdinaryRole(t *testing.T, directive, asset string
 	guard, err := consumer.captureTestSourceLoadGuard(ctx, selected, nil)
 	if err != nil {
 		t.Fatalf("actual ordinary role with explicit bound original sources: %v", err)
+	}
+	if want == 0 {
+		if len(source.Embed.Patterns) != 0 || len(source.Embed.Files) != 0 || guard.Sources[filepath.Join(dir, asset)] != "" {
+			t.Fatal("ignored directive acquired an embedded input")
+		}
+		changed := strings.Replace(sourceText, "//go:embed\u00a0", "//go:embed ", 1)
+		if err := os.WriteFile(filepath.Join(dir, "defaults.go"), []byte(changed), 0600); err != nil {
+			t.Fatal(err)
+		}
+		if err := consumer.verifyTestEmbedPackage(pkg); err == nil {
+			t.Fatal("changed directive revived the original empty selection")
+		}
+		t.Log("actual SDK ignores the directive boundary; empty selection and source mutation verified")
+		return
 	}
 	if guard.Sources[pkg.EmbedFiles[0]] != source.Embed.Files[asset] {
 		t.Fatal("private pre/post guard omitted the actual embedded bytes")
