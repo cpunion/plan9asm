@@ -14,6 +14,7 @@ import (
 
 	"github.com/xgo-dev/plan9asm"
 	"github.com/xgo-dev/plan9asm/gotoolprofile"
+	"github.com/xgo-dev/plan9asm/internal/gotoolchain"
 	"golang.org/x/tools/go/packages"
 )
 
@@ -92,7 +93,7 @@ func testInstrumentationCLIActualInvocation(t *testing.T, target string, mode go
 	if err := os.WriteFile(profile, data, 0600); err != nil {
 		t.Fatal(err)
 	}
-	binary := filepath.Join(output, "plan9asmll")
+	binary := filepath.Join(output, gotoolchain.HostExecutable("plan9asmll"))
 	goBinary, err := exec.LookPath("go")
 	if err != nil {
 		t.Fatal(err)

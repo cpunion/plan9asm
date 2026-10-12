@@ -47,6 +47,13 @@ func captureInstrumentationTypeSources(ctx context.Context, binary, directory st
 	if ctx == nil || ctx.Err() != nil || run == nil || !filepath.IsAbs(binary) || !filepath.IsAbs(directory) || input == nil || input.Plan == nil {
 		return nil, fmt.Errorf("original type source capture needs a live bounded actual Go invocation")
 	}
+	// The consumer also compiles from the physical invocation directory.
+	// Windows short/long spellings can change compiler-recorded source names
+	// and export bytes even when both routes select the same original files.
+	directory, err := sourcepath.Resolve(directory)
+	if err != nil {
+		return nil, err
+	}
 	if err := ValidateInstrumentationConsumerInput(input, input.Plan.PackageDirectory, input.Plan.CustomTags); err != nil {
 		return nil, err
 	}

@@ -15,6 +15,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/xgo-dev/plan9asm/internal/sourcepath"
 )
 
 func TestInstrumentationTypeSourceCaptureActualLogicalRoot(t *testing.T) {
@@ -29,7 +31,7 @@ func TestInstrumentationTypeSourceCaptureActualLogicalRoot(t *testing.T) {
 		t.Fatal(err)
 	}
 	original := instrumentationOriginalFixture(t, marker.Early)
-	physical, err := filepath.EvalSymlinks(original.SourceRoot)
+	physical, err := sourcepath.Resolve(original.SourceRoot)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -52,6 +54,10 @@ func TestInstrumentationTypeSourceCaptureActualLogicalRoot(t *testing.T) {
 	}
 	observed := 0
 	run := func(ctx context.Context, directory string, env []string, command string, args ...string) ([]byte, []byte, error) {
+		// SDK tool-route queries deliberately have no source working directory.
+		if directory != "" && directory != physical {
+			return nil, nil, fmt.Errorf("type capture must use one physical invocation directory, got %q", directory)
+		}
 		stdout, stderr, err := RunBounded(ctx, directory, env, command, args...)
 		if err != nil || len(args) == 0 || args[0] != "list" {
 			return stdout, stderr, err
