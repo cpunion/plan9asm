@@ -123,8 +123,17 @@ explicit/default-profile regression pass (91.653 seconds). Native
 passed the complete CRC32 explicit/default-profile test in 142.000 seconds at
 `01accd6f`, including rejection controls and actual LLVM object outputs.
 Follow-up [38320341678](https://github.com/cpunion/plan9asm/actions/runs/38320341678)
-rechecks the complete Windows CLI/profile inventory and the earlier root
-CMPXCHG/conversion failures. It is still running, not a complete Windows pass.
+completed all nine diagnostic jobs successfully at the same code revision.
+Raw inventory/outcome unions contain CLI 261/261 and profile 263/263 passed
+roots, with no missing/duplicate roots or unterminated children. Profile's 2024
+root/child executions have no skips; CLI's 2129 include one explicit native
+ARM64-only child skip on Windows/amd64. Its complete-argument execution
+counterpart passed on native Darwin/arm64 at `cf18ec55` (1.583 seconds, no skips),
+including all three target objects. Do not count the Windows skip as execution.
+The original Windows CMPXCHG Go/C observation and rejection controls passed;
+741 conversion forms also passed three Go targets, three LLVM APIs and O0/O2,
+as did the readonly DATA three-target objects. These are native diagnostics,
+not the full main-module/coverage/race or benchmark contribution gates.
 
 The frozen `3b4c246f` local complete CLI and profile suites passed in
 1168.046 and 1041.168 seconds respectively; these predate the header-config fix.
@@ -136,6 +145,8 @@ explain the CLI's global deadline failure: the prior complete list totals
 Four exhaustive diagnostic groups take 489.56–713.05 seconds each. Formal
 partitioning still needs complete-inventory/coverage aggregation; do not extend
 the deadline or promote diagnostic-only receipts into the contribution gate.
+At `cf18ec55`, the complete SDK ASM DATA test family passed in 89.244 seconds,
+as did `go vet ./...` and all thirteen workflow scheduling regressions.
 
 The next metadata repair shares ARM64/x86 object-source spelling validation.
 Four local RED controls reproduced ARM64 accepting `$GOROOT` dot/repeated-slash
@@ -185,31 +196,29 @@ tools; later edits do not inherit a complete-head pass.
 
 ## Remaining work, in priority order
 
-1. Rerun affected complete gates and both CLIs, publish to the existing
-   allowed-fork contribution ref, then inspect fresh CI. No upstream manual
-   cancellation/rerun is authorized. Native Windows executable/coverage fixes
-   require their real host jobs; diagnostics alone do not resolve bugs.
-2. Validate the common Windows junction repair through the complete CLI, actual
-   SDK routes and CPP rejection controls. A standalone path test is not complete
-   compilation/linking or source-proof validation.
-3. Windows' complete main-module suite exhausts its thirty-minute deadline.
+1. Windows' complete main-module and LLVM CLI suites exceed the thirty-minute deadline.
    Partition without losing actual inventory. Do not enable the Unix-only
    exhaustive runner without real descendant ownership and Windows tool/source
-   scope. The sixteen-part Linux race schedule completed every owner; the
+   scope. Keep complete coverage aggregation. The local current root inventory
+   contains 5942 roots; four selected native regressions are not its full suite.
+2. Rerun affected complete gates and both CLIs, publish to the existing
+   allowed-fork contribution ref, then inspect fresh CI. No upstream manual
+   cancellation/rerun is authorized. The sixteen-part Linux race schedule
+   completed every owner; the
    remaining callback-timer repair still needs the full current-head race gate.
-4. Darwin stdlib compile replay at `ba02841e` clears inventory parsing but fails
+3. Darwin stdlib compile replay at `ba02841e` clears inventory parsing but fails
    at CRC32's CPU-feature SB comparison/result initialization in the simple
    `plan9asm` CLI. Its richer `plan9asmll` counterpart has a separate actual SDK
    numerical-source binding. Do not turn the missing binding into initialized
    bytes or a skip. Other runtime/frame contracts remain; missing generated CPP
    headers stay unresolved, never ignored/no-op macros.
-5. The 21 benchmark failures still require runtime/reflect entry, TLS,
+4. The 21 benchmark failures still require runtime/reflect entry, TLS,
    hidden-register, caller-storage or source contracts. Dynamic reflect frames
    cannot be inferred from `func()`. ARM64 result-tail bytes are observable by
    assembly callers. Maps AES mutable-global storage remains separate from its
    repaired shuffle effects. Do not force CGO_ENABLED=0 in ordinary loading:
    that changes selected runtime/cgo source and hides a different contract.
-6. Required LLVM 22 tools fail if missing. Official opcode/form classification,
+5. Required LLVM 22 tools fail if missing. Official opcode/form classification,
    LLVM object success and executed semantics remain separate claims.
 
 Earlier complete CLI receipts at `0527ded5` were 0.998 seconds (`plan9asm`) and
