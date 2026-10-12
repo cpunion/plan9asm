@@ -92,8 +92,10 @@ actual Go cache-copy quoting/source registration, Windows oracle executable
 paths, and normalized Windows source-PC origin joins. The source-PC family
 passes Go 1.23 and 1.27, including the broader 485-second source/object suite.
 The quoted-cache snapshot passed the complete Go 1.27 nested CLI in 1282 seconds;
-its later producer-format repair has a separate Go 1.24 full CLI running.
-Do not edit a frozen repair worktree until its process finishes.
+its later producer-format repair passed the complete Go 1.24 CLI in 263 seconds
+and the affected Go 1.27 DATA family separately. The two temporary repair
+worktrees were removed after their commits and complete reports were retained
+in the main working tree. Do not edit a snapshot while its tests run.
 
 The Linux race replay passed the complete profile guards (751.72 seconds) and
 readonly deadline/cancellation matrix (525.26 seconds), but its SDK API reentry
@@ -117,20 +119,49 @@ schemas, not mixed optional fields. The DATA family passes Go 1.24/current,
 and actual Go 1.26.9 SEH/schema mutation and CPU-profile objects pass. All Linux
 root lanes now provision pinned QEMU: historical lanes execute the new scalar
 relocation runtime too. The policy regression reproduces the old version-filter
-failure. The diagnostic/policy multi-SDK suite still needs its final results.
+failure. The complete diagnostic/policy suite now passes actual Go 1.20, 1.22, 1.23,
+1.24 and 1.27. These checks did not remove historical coverage.
 
-Evidence is under `_out/register-result-repair/` and the
-temporary repair worktrees' `_out/ci-proof-lifetimes/` / `_out/ci-quoted-cache/`.
+`509c5946` retains SysV in both declarations and function-pointer types for
+the original AES, bit-test and CMOV byte wrappers. Translated calls keep their
+ordinary target ABI; mixed-ABI pointer ternaries became explicit branches.
+The five affected host runtime roots pass, as do actual LLVM 22 IR/objects
+for Windows MSVC/MinGW, Linux and Darwin. Go 1.20 and current tool/lifecycle
+checks pass. Windows-native execution still needs CI. The Linux-container
+replay remains failed: original Go/native AES and CMOV FLAGS observations
+differ there, including AF in original Go itself. Do not call that replay
+native Linux evidence or silently discard its failures.
+
+`c3dd8e4b` makes CPP tests invoke Go at the same canonical command directory
+as the capture factory. The unresolved alias remains an independent control
+with Windows' lexical-parent behavior; source absence checks remain strict.
+Go 1.20/current CPP tests and actual frame-factory canonical-root checks pass.
+
+`c5614ac6` fixes a separately reproduced Go 1.22 original-SSE oracle flake:
+heap sampling between kernels can set MXCSR.PE while results, flags, inputs
+and canaries remain correct. All six dword-product kernels now load their
+own complete MXCSR profile immediately before the tested instruction. A
+deliberately different prior PE bit makes a lost setup fail deterministically.
+The failing 50-repeat report retains two exact PE mismatches; the repair passes
+50 repetitions on Go 1.22 and five each on Go 1.20/current. State comparisons
+were not masked, retried or removed. Current root-module vet also passes.
+
+Evidence is under `_out/register-result-repair/`, `_out/ci-proof-lifetimes/`
+and `_out/ci-quoted-cache/`, all in the main working tree. The first includes
+`sysv-canonical-final-go127.log`, `sysv-bridge-linux-failed.log`,
+`cpp-canonical-cwd-go*.log` and `dword-product-go*-sampling-*.log`.
+Receipts certify their exact frozen snapshots, not later source edits.
 
 1. Collect actual root and nested CLI failures separately. A successful main
    artifact does not establish nested CLI success. The repairs above still
    require current-head CI; preserve the old failed receipts.
-2. Windows job `114614102112` has remaining raw-machine-code test bridges that
-   assume SysV registers instead of the Windows calling convention, POSIX-only
-   fault helpers, and source/path/ownership failures. Its raw log is retained
-   as `ci-346-windows-job.log`. Fix shared transport contracts, not individual
-   expected values or broad host skips. Audit remaining race artifacts too;
-   the two repaired numerical proof lifetimes do not certify every race root.
+2. Finish collecting current Windows/race failures. The old Windows log is
+   `ci-346-windows-job.log`; its CMPXCHG fault helper still assumes POSIX
+   mmap/fork and needs an actual Windows fault observer, not a host skip.
+   Separate already repaired transport/source failures from new evidence.
+   Audit remaining race artifacts too; passing numerical proof lifetimes
+   does not certify every race root. Windows' complete direct-suite budget
+   also needs attention without dropping tests from the denominator.
 3. The 21 standard-library failures need actual runtime/reflect entry, TLS,
    hidden-register, caller-storage or SDK source contracts. Maps' immediate
    shuffle result analysis is repaired; AES mutable-global storage remains
