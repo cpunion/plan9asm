@@ -263,6 +263,7 @@ func validatePackageSourceClosure(input *ConsumerInput, local, external []Source
 		return err
 	}
 	ctx := build.Default
+	ctx.JoinPath = path.Join // Original-source maps use portable module-relative keys.
 	ctx.GOOS, ctx.GOARCH, ctx.Compiler, ctx.CgoEnabled = input.Observed.Environment["GOOS"], input.Observed.Environment["GOARCH"], "gc", false
 	ctx.BuildTags, ctx.ToolTags, ctx.ReleaseTags = tags, input.Observed.ToolTags, nil
 	for version := 1; version <= minor; version++ {

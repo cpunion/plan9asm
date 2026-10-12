@@ -23,6 +23,11 @@ func ordinaryDependencyActualRoot(consumer *featureConsumer, pkg *packages.Packa
 // Preserve its relative source identity before resolving anything below it:
 // blindly canonicalizing a selected file would hide source-internal redirects.
 func ordinaryDependencyOriginalPath(observed, root, filename string) (string, error) {
+	// go.mod replacement roots may keep '/' on Windows. Normalize separators
+	// only; Clean below must still reject dot segments and other changed paths.
+	observed = filepath.FromSlash(observed)
+	root = filepath.FromSlash(root)
+	filename = filepath.FromSlash(filename)
 	for _, name := range []string{observed, root, filename} {
 		if !filepath.IsAbs(name) || filepath.Clean(name) != name {
 			return "", fmt.Errorf("ordinary dependency has an unbound original source path")

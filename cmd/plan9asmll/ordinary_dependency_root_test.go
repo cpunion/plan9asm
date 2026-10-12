@@ -46,13 +46,24 @@ func TestOrdinaryDependencyRootPathRoles(t *testing.T) {
 		{"outside", filepath.Join(parent, "outside.go"), ""},
 	} {
 		t.Run(row.name, func(t *testing.T) {
-			got, err := ordinaryDependencyOriginalPath(observed, root, row.filename)
-			if row.want == "" {
-				if err == nil || got != "" {
-					t.Fatalf("unbound source path acquired ownership: %s", got)
-				}
-			} else if err != nil || got != row.want {
-				t.Fatalf("same original root spelling: got %s; %v", got, err)
+			for _, spelling := range []struct {
+				name, observed, root, file string
+			}{
+				{"native", observed, root, row.filename},
+				{"module replacement slash", filepath.ToSlash(observed), root, row.filename},
+				{"selected source slash", observed, root, filepath.ToSlash(row.filename)},
+				{"all slash", filepath.ToSlash(observed), filepath.ToSlash(root), filepath.ToSlash(row.filename)},
+			} {
+				t.Run(spelling.name, func(t *testing.T) {
+					got, err := ordinaryDependencyOriginalPath(spelling.observed, spelling.root, spelling.file)
+					if row.want == "" {
+						if err == nil || got != "" {
+							t.Fatalf("unbound source path acquired ownership: %s", got)
+						}
+					} else if err != nil || got != row.want {
+						t.Fatalf("same original root spelling: got %s; %v", got, err)
+					}
+				})
 			}
 		})
 	}

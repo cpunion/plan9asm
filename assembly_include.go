@@ -18,6 +18,22 @@ var quotedGoAssemblyIncludeRE = regexp.MustCompile(`^#include[ \t]+"([^"\r\n]+)"
 // headers which do not exist yet (notably go_asm.h) remain directives so the
 // type-aware expansion path can provide their values later.
 func ReadGoAssemblySource(asmFile, sourceRoot string) ([]byte, error) {
+	return readGoAssemblySource(asmFile, sourceRoot, "")
+}
+
+// ReadGoAssemblySourceAtGOROOT expands the same source inventory using the
+// explicitly selected Go installation. It does not substitute the host SDK's
+// headers when inspecting another compiler version. Missing generated headers
+// remain unresolved, just as in ReadGoAssemblySource; this is not a complete
+// compiler-backed CPP or translation observation.
+func ReadGoAssemblySourceAtGOROOT(asmFile, sourceRoot, goRoot string) ([]byte, error) {
+	if goRoot == "" {
+		return nil, fmt.Errorf("assembly source inventory requires an explicit GOROOT")
+	}
+	return readGoAssemblySource(asmFile, sourceRoot, goRoot)
+}
+
+func readGoAssemblySource(asmFile, sourceRoot, goRoot string) ([]byte, error) {
 	root, err := filepath.Abs(sourceRoot)
 	if err != nil {
 		return nil, fmt.Errorf("resolve assembly source root: %w", err)
@@ -37,10 +53,10 @@ func ReadGoAssemblySource(asmFile, sourceRoot string) ([]byte, error) {
 	if !goAssemblyPathWithinRoot(root, file) {
 		return nil, fmt.Errorf("assembly source %s escapes source root %s", file, root)
 	}
-	return expandGoAssemblyIncludes(file, root, make(map[string]bool), 0)
+	return expandGoAssemblyIncludes(file, root, goRoot, make(map[string]bool), 0)
 }
 
-func expandGoAssemblyIncludes(file, sourceRoot string, active map[string]bool, depth int) ([]byte, error) {
+func expandGoAssemblyIncludes(file, sourceRoot, goRoot string, active map[string]bool, depth int) ([]byte, error) {
 	if depth > 32 {
 		return nil, fmt.Errorf("assembly include depth exceeds 32 at %s", file)
 	}
@@ -77,12 +93,14 @@ func expandGoAssemblyIncludes(file, sourceRoot string, active map[string]bool, d
 			} else if !os.IsNotExist(err) {
 				return nil, fmt.Errorf("resolve assembly include %q from %s: %w", match[1], file, err)
 			}
-			included, includeErr = expandGoAssemblyIncludes(includedPath, sourceRoot, active, depth+1)
+			included, includeErr = expandGoAssemblyIncludes(includedPath, sourceRoot, goRoot, active, depth+1)
 		}
 		if !localAllowed || os.IsNotExist(includeErr) {
-			goRoot, err := gotoolchain.Root()
-			if err != nil {
-				return nil, err
+			if goRoot == "" {
+				goRoot, err = gotoolchain.Root()
+				if err != nil {
+					return nil, err
+				}
 			}
 			goRoot, err = sourcepath.Resolve(filepath.Clean(goRoot))
 			if err != nil {
@@ -100,7 +118,7 @@ func expandGoAssemblyIncludes(file, sourceRoot string, active map[string]bool, d
 				} else if !os.IsNotExist(err) {
 					return nil, fmt.Errorf("resolve Go assembly include %q: %w", match[1], err)
 				}
-				included, includeErr = expandGoAssemblyIncludes(goIncludedPath, goRoot, active, depth+1)
+				included, includeErr = expandGoAssemblyIncludes(goIncludedPath, goRoot, goRoot, active, depth+1)
 			} else if !localAllowed {
 				return nil, fmt.Errorf("assembly include %q escapes source root %s and GOROOT %s", match[1], sourceRoot, goRoot)
 			}

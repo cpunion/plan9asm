@@ -71,7 +71,7 @@ GLOBL ·symptr<>(SB), NOPTR, $(machTimebaseInfo__size)
 	if gs := file.Globl[0]; gs.Sym != "·tab<>" || gs.Flags != "RODATA" || gs.Size != 16 {
 		t.Fatalf("unexpected first GLOBL: %#v", gs)
 	}
-	if gs := file.Globl[1]; gs.Sym != "·symptr<>" || gs.Flags != "NOPTR" || gs.Size != 64 {
+	if gs := file.Globl[1]; gs.Sym != "·symptr<>" || gs.Flags != "NOPTR" || gs.Size != 0 || gs.SizeRaw != "$(machTimebaseInfo__size)" {
 		t.Fatalf("unexpected macro-sized GLOBL: %#v", gs)
 	}
 

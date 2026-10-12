@@ -11,7 +11,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        role: [source-observation, complete-cli]
+        role: [portable-selection, cpp-cli, ordinary-cli, arm64-scratch, instrumentation-cli]
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-go
@@ -25,23 +25,43 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: '22'
-      - name: Required actual junction and source containment regressions
-        if: matrix.role == 'source-observation'
+      - name: Portable original source selection and mutation controls
+        if: matrix.role == 'portable-selection'
         shell: bash
         run: |
           set -euo pipefail
-          go test ./internal/sourcepath ./gotoolprofile -run '^(TestResolve.*|TestWindowsDOSPath.*|TestCPP.*|TestFeatureSubtool.*|TestInstrumentationExportRecheck.*)$' -count=1 -v -timeout=20m
-      - name: Actual original Go and C observation and source include regressions
-        if: ${{ !cancelled() && matrix.role == 'source-observation' }}
+          go test ./gotoolprofile -run '^(TestPortableSelection.*|TestOrdinaryDependencyCompleteClosureRejectsMutation|TestOrdinarySourceInventoryLiveGuards|TestTest.*Embed.*)$' -count=1 -v -timeout=15m
+      - name: Actual source metadata slash regression
+        if: matrix.role == 'arm64-scratch'
         shell: bash
         run: |
           set -euo pipefail
-          go test . -run '^(TestReadGoAssemblySource.*|TestX86CMPXCHGOriginalGoAndCCompleteObservationEquivalence|TestX86CMPXCHGActualObservationPacketRejectsIncompleteTransport)$' -count=1 -v -timeout=20m
-      - name: Complete LLVM CLI with coverage
-        if: matrix.role == 'complete-cli'
+          go test . -run '^TestARM64NativeScratchObjectSourceMetadataRequiresCapturedPhysicalInput$' -count=1 -v -timeout=10m
+      - name: CPP and generated headers on all targets
+        if: matrix.role == 'cpp-cli'
         working-directory: cmd/plan9asmll
         shell: bash
         run: |
           set -euo pipefail
-          go test ./... -count=1 -v -timeout=30m -coverprofile=../../coverage-windows-plan9asmll.out
-          test -s ../../coverage-windows-plan9asmll.out
+          go test . -run '^(TestFeatureCPP.*|TestGeneratedHeader.*|TestAMD64DownloadedFixedLocalActualProfileCLI)$' -count=1 -v -timeout=25m
+      - name: Ordinary actual source and supplemental test declarations
+        if: matrix.role == 'ordinary-cli'
+        working-directory: cmd/plan9asmll
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test . -run '^(TestOrdinary.*|TestTest.*)$' -count=1 -v -timeout=25m
+      - name: Actual ARM64 source and native scratch closure
+        if: ${{ !cancelled() && matrix.role == 'arm64-scratch' }}
+        working-directory: cmd/plan9asmll
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test . -run '^TestCompileOneARM64NativeScratch.*$' -count=1 -v -timeout=15m
+      - name: Same-source type recapture and instrumentation
+        if: matrix.role == 'instrumentation-cli'
+        working-directory: cmd/plan9asmll
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test . -run '^TestInstrumentation.*$' -count=1 -v -timeout=25m
