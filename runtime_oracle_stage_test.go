@@ -48,6 +48,36 @@ func TestRuntimeOracleStageBudgetsAreIndependent(t *testing.T) {
 	}
 }
 
+func TestRuntimeOracleProofLifetimeKeepsStageAndOverallBounds(t *testing.T) {
+	now := time.Unix(1700000000, 0)
+	whole := now.Add(30 * time.Minute)
+	lease := runtimeOracleBoundedDeadline(now, whole, true, runtimeOracleProofTimeout)
+	if !lease.Equal(now.Add(20 * time.Minute)) {
+		t.Fatal("composed proof lost its finite multi-stage lifetime", lease)
+	}
+	for _, elapsed := range []time.Duration{0, 4 * time.Minute, 8 * time.Minute} {
+		stage := runtimeOracleStageDeadline(now.Add(elapsed), lease, true)
+		if !stage.Equal(now.Add(elapsed + 5*time.Minute)) {
+			t.Fatal("proof lifetime enlarged or consumed a stage budget", elapsed, stage)
+		}
+	}
+	for _, remaining := range []time.Duration{8 * time.Minute, 2 * time.Second, -time.Second} {
+		deadline := runtimeOracleBoundedDeadline(now, now.Add(remaining), true, runtimeOracleProofTimeout)
+		if !deadline.Equal(now.Add(remaining - runtimeOracleStageCleanupReserve)) {
+			t.Fatal("proof lease exceeded the overall deadline or lost cleanup", remaining, deadline)
+		}
+	}
+	ctx, cancel := runtimeOracleProofContext(t)
+	deadline, has := ctx.Deadline()
+	if !has || deadline.After(time.Now().Add(runtimeOracleProofTimeout)) {
+		t.Fatal("actual proof context is unbounded", deadline, has)
+	}
+	cancel()
+	if !errors.Is(ctx.Err(), context.Canceled) {
+		t.Fatal("proof cancellation was lost", ctx.Err())
+	}
+}
+
 func TestRuntimeOracleStageContextUsesActualTestDeadline(t *testing.T) {
 	before := time.Now()
 	ctx, cancel := runtimeOracleStageContext(t)

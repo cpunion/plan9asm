@@ -265,7 +265,7 @@ func numericalLocalFactoryWithContext(t *testing.T, wrap func(context.Context) c
 	if err != nil {
 		t.Fatal(err)
 	}
-	ctx, cancel := runtimeOracleStageContext(t)
+	ctx, cancel := runtimeOracleProofContext(t)
 	t.Cleanup(cancel)
 	if wrap != nil {
 		ctx = wrap(ctx)

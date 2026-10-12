@@ -35,6 +35,7 @@ func runtimeOracleCombinedOutput(ctx context.Context, command *exec.Cmd) ([]byte
 
 const (
 	runtimeOracleStageTimeout        = 5 * time.Minute
+	runtimeOracleProofTimeout        = 20 * time.Minute
 	runtimeOracleStageCleanupReserve = 3 * time.Second
 )
 
@@ -45,7 +46,22 @@ func runtimeOracleStageContext(t *testing.T) (context.Context, context.CancelFun
 }
 
 func runtimeOracleStageDeadline(now, testDeadline time.Time, hasTestDeadline bool) time.Time {
-	deadline := now.Add(runtimeOracleStageTimeout)
+	return runtimeOracleBoundedDeadline(now, testDeadline, hasTestDeadline, runtimeOracleStageTimeout)
+}
+
+// Composed source proofs retain one context identity through owner capture,
+// independent object capture, binding and final API/runtime verification.
+// That lease spans multiple stages; it must not expire after the first stage's
+// budget. Individual subprocess/stage limits and cancellation remain intact.
+func runtimeOracleProofContext(t *testing.T) (context.Context, context.CancelFunc) {
+	t.Helper()
+	deadline, hasDeadline := t.Deadline()
+	return context.WithDeadline(context.Background(),
+		runtimeOracleBoundedDeadline(time.Now(), deadline, hasDeadline, runtimeOracleProofTimeout))
+}
+
+func runtimeOracleBoundedDeadline(now, testDeadline time.Time, hasTestDeadline bool, budget time.Duration) time.Time {
+	deadline := now.Add(budget)
 	if hasTestDeadline {
 		// Reserve the existing bounded pipe/group cleanup before testing's
 		// overall deadline. An exhausted budget stays expired: do not launch.
