@@ -10,9 +10,21 @@ import (
 	"go/token"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"testing"
 )
+
+func TestX87IA32ArtifactModeSeparatesHostAndELFPermissions(t *testing.T) {
+	for _, host := range []string{"linux", "darwin", "windows"} {
+		for _, mode := range []os.FileMode{0600, 0700, os.ModeDir | 0700, os.ModeSymlink | 0700} {
+			want := mode.IsRegular() && (host == "windows" || mode&0111 != 0)
+			if got := x87IA32ArtifactMode(mode, host); got != want {
+				t.Errorf("host %s mode %v: got %t, want %t", host, mode, got, want)
+			}
+		}
+	}
+}
 
 func TestX87IA32RequiredNativeTransportSource(t *testing.T) {
 	file, err := parser.ParseFile(token.NewFileSet(), "amd64_x87_flag_compare_linux_amd64_test.go", nil, 0)
@@ -172,8 +184,13 @@ func TestX87IA32StaticELFGuardsChangedBytesAndIdentity(t *testing.T) {
 	if err := os.Chmod(name, 0600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := x87IA32StaticExecutable(name); err == nil {
-		t.Fatal("non executable file was accepted")
+	_, err = x87IA32StaticExecutable(name)
+	if runtime.GOOS == "windows" {
+		if err != nil {
+			t.Fatal("compiled ELF depends on nonexistent Windows Unix execute bits", err)
+		}
+	} else if err == nil {
+		t.Fatal("native Unix executable lost its required execute permission")
 	}
 	file, err := os.Create(filepath.Join(dir, "oversize"))
 	if err != nil {

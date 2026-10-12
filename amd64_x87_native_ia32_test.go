@@ -23,12 +23,24 @@ type x87IA32Executable struct {
 	info os.FileInfo
 }
 
+func x87IA32ArtifactMode(mode os.FileMode, host string) bool {
+	// Windows can inspect a cross-compiled ELF but does not expose Unix
+	// execute bits. Native Unix runs still require them; ELF PF_X, entry,
+	// identity, complete bytes and static linkage are checked on every host.
+	return mode.IsRegular() && (host == "windows" || mode&0111 != 0)
+}
+
 func x87IA32StaticExecutable(name string) (x87IA32Executable, error) {
 	var result x87IA32Executable
 	info, err := os.Lstat(name)
-	if err != nil || !info.Mode().IsRegular() || info.Mode()&0111 == 0 ||
+	if err != nil || !x87IA32ArtifactMode(info.Mode(), runtime.GOOS) ||
 		info.Size() <= 0 || info.Size() > 64<<20 {
 		return result, fmt.Errorf("IA32 executable must be a bounded regular file: %v", err)
+	}
+	// Resolve Windows' lazy Lstat file ID before opening a read descriptor;
+	// its identity lookup otherwise conflicts with that descriptor's sharing.
+	if !os.SameFile(info, info) {
+		return result, fmt.Errorf("IA32 executable physical identity is unavailable")
 	}
 	physical, err := filepath.EvalSymlinks(name)
 	if err != nil {
