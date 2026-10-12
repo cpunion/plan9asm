@@ -37,8 +37,8 @@ func x87IA32StaticExecutable(name string) (x87IA32Executable, error) {
 		info.Size() <= 0 || info.Size() > 64<<20 {
 		return result, fmt.Errorf("IA32 executable must be a bounded regular file: %v", err)
 	}
-	// Resolve Windows' lazy Lstat file ID before opening a read descriptor;
-	// its identity lookup otherwise conflicts with that descriptor's sharing.
+	// Bind Windows' lazy Lstat file ID while the path still names the original,
+	// before comparing it with the independently opened descriptor.
 	if !os.SameFile(info, info) {
 		return result, fmt.Errorf("IA32 executable physical identity is unavailable")
 	}
