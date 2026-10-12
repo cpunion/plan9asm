@@ -39,7 +39,8 @@ func TestCrossLinuxRuntimeMatrixX86CMOVFPBitViewsWholeBytes(t *testing.T) {
 					symbol = "_" + symbol
 				}
 				fmt.Fprintf(&originals, "__asm__(%q);\n", ".text\n.globl "+symbol+"\n"+symbol+":\n.byte "+strings.Join(bytes, ",")+"\n")
-				fmt.Fprintf(&prototypes, "extern void %s(uint8_t*,%s,uint64_t,uint64_t);\nextern void %s(uint8_t*,%s,uint64_t,uint64_t);\n", fn, ctype, original, ctype)
+				fmt.Fprintf(&prototypes, "extern void %s(uint8_t*,%s,uint64_t,uint64_t);\n", fn, ctype)
+				prototypes.WriteString(x86OriginalSysVDeclaration("void", original, "uint8_t*,"+ctype+",uint64_t,uint64_t"))
 				if size == 32 {
 					fmt.Fprintf(&rows, "{%s,%s,0,0,%d,%d,32},\n", fn, original, map[string]int{"W": 2, "L": 4, "Q": 8}[width], condition)
 					fmt.Fprintf(&goRows, "{%s,nil,%d,%d,32},\n", fn, map[string]int{"W": 2, "L": 4, "Q": 8}[width], condition)
@@ -72,17 +73,19 @@ func TestCrossLinuxRuntimeMatrixX86CMOVFPBitViewsWholeBytes(t *testing.T) {
 	t.Logf("%d actual original Go ABI0 floating-source kernels ×64 flag seeds ×8 IEEE edge payloads; native host execution is not strict native Linux evidence", count)
 }
 
-const x86CMOVFPWholeBytesC = `
+var x86CMOVFPWholeBytesC = `
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 #include <xmmintrin.h>
-` + x86CMOVConditionC + `
+` + x86CMOVConditionC +
+	x86OriginalSysVPointer("void", "OriginalProgram32", "uint8_t*,float,uint64_t,uint64_t") +
+	x86OriginalSysVPointer("void", "OriginalProgram64", "uint8_t*,double,uint64_t,uint64_t") + `
 %s
 %s
 typedef void(*Program32)(uint8_t*,float,uint64_t,uint64_t);
 typedef void(*Program64)(uint8_t*,double,uint64_t,uint64_t);
-typedef struct {Program32 f32,o32;Program64 f64,o64;unsigned width,condition,bits;} Kernel;
+typedef struct {Program32 f32;OriginalProgram32 o32;Program64 f64;OriginalProgram64 o64;unsigned width,condition,bits;} Kernel;
 static Kernel kernels[]={%s};
 int main(void) {
  const uint32_t bits32[]={0,0x80000000,0x7fc00001,0x7f800001,0xffc12345,0x7f800000,0xffffffff,0x00000001};
@@ -92,8 +95,23 @@ int main(void) {
   Kernel kernel=kernels[k];uint8_t out[80];memset(out,0xa7,sizeof(out));
   uint64_t source=kernel.bits==32?bits32[v]:bits64[v],old=UINT64_C(0x87654321fedcba98)^((uint64_t)v<<40),flags=seed(f),got,afterFlags;
   uint32_t csr=0x1f80|((f%%4)<<13)|(f&63),saved=_mm_getcsr();_mm_setcsr(csr);
-  if(kernel.bits==32) {float value;memcpy(&value,bits32+v,4);(native?kernel.o32:kernel.f32)(out+32,value,old,flags);}
-  else {double value;memcpy(&value,bits64+v,8);(native?kernel.o64:kernel.f64)(out+32,value,old,flags);}
+  if(kernel.bits==32) {
+   float value;
+   memcpy(&value,bits32+v,4);
+   if(native) {
+    kernel.o32(out+32,value,old,flags);
+   } else {
+    kernel.f32(out+32,value,old,flags);
+   }
+  } else {
+   double value;
+   memcpy(&value,bits64+v,8);
+   if(native) {
+    kernel.o64(out+32,value,old,flags);
+   } else {
+    kernel.f64(out+32,value,old,flags);
+   }
+  }
   uint32_t after=_mm_getcsr();_mm_setcsr(saved);
   memcpy(&got,out+32,8);memcpy(&afterFlags,out+40,8);
   uint64_t mask=kernel.width==8?UINT64_MAX:((UINT64_C(1)<<(kernel.width*8))-1);

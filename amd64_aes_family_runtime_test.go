@@ -143,7 +143,8 @@ func TestCrossLinuxRuntimeMatrixX86AESFamilyOriginalGoFullX128Bytes(t *testing.T
 				if strings.Contains(execution.triple, "apple") {
 					symbol = "_" + symbol
 				}
-				fmt.Fprintf(&original, "extern void %s(uint8_t*,const uint8_t*,const uint8_t*,const uint8_t*,uint64_t,uint32_t);\n__asm__(%q);\n", fn, ".text\n.globl "+symbol+"\n"+symbol+":\n.byte "+strings.Join(encoded, ",")+"\n")
+				original.WriteString(x86OriginalSysVDeclaration("void", fn, "uint8_t*,const uint8_t*,const uint8_t*,const uint8_t*,uint64_t,uint32_t"))
+				fmt.Fprintf(&original, "__asm__(%q);\n", ".text\n.globl "+symbol+"\n"+symbol+":\n.byte "+strings.Join(encoded, ",")+"\n")
 				fmt.Fprintf(&checks, "if(nativecheck(%s,%q,%d))return 1;\n", fn, row, op)
 			}
 		}
@@ -157,8 +158,9 @@ func TestCrossLinuxRuntimeMatrixX86AESFamilyOriginalGoFullX128Bytes(t *testing.T
 	t.Log(strings.TrimSpace(string(output)))
 }
 
-const x86AESNativeCheckC = `
-static int nativecheck(Program p,const char *name,int op){
+var x86AESNativeCheckC = x86OriginalSysVPointer("void", "OriginalProgram",
+	"uint8_t*,const uint8_t*,const uint8_t*,const uint8_t*,uint64_t,uint32_t") + `
+static int nativecheck(OriginalProgram p,const char *name,int op){
  for(int sample=0;sample<37;sample++)for(int profile=0;profile<2;profile++){
   struct Aligned a,b,old,out;memset(&a,0xa7,sizeof(a));memset(&b,0xb9,sizeof(b));memset(&old,0x6d,sizeof(old));memset(&out,0xc3,sizeof(out));
   for(int i=0;i<64;i++){a.value[i]=(uint8_t)(sample*19+i*37);b.value[i]=(uint8_t)(sample*71+i*11);old.value[i]=(uint8_t)(sample*97+i*3);}

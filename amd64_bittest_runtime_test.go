@@ -48,7 +48,8 @@ func TestCrossLinuxRuntimeMatrixX86BitTestNumericalAndAliases(t *testing.T) {
 					symbol = "_" + symbol
 				}
 				fmt.Fprintf(&native, "__asm__(%q);\n", ".text\n.globl "+symbol+"\n"+symbol+":\n.byte "+strings.Join(bytes, ",")+"\n")
-				fmt.Fprintf(&prototypes, "extern uint64_t %s(uint8_t*,int64_t,uint64_t),%s(uint8_t*,int64_t,uint64_t);\n", name, original)
+				fmt.Fprintf(&prototypes, "extern uint64_t %s(uint8_t*,int64_t,uint64_t);\n", name)
+				prototypes.WriteString(x86OriginalSysVDeclaration("uint64_t", original, "uint8_t*,int64_t,uint64_t"))
 				fmt.Fprintf(&pairs, "{%s,%s,%d,%d,%d,%d,%d},\n", original, name, width, operation, memoryFlag, mode, immediate)
 				count++
 			}
@@ -59,9 +60,10 @@ func TestCrossLinuxRuntimeMatrixX86BitTestNumericalAndAliases(t *testing.T) {
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
-` + prototypes.String() + native.String() + `
+` + prototypes.String() + native.String() +
+		x86OriginalSysVPointer("uint64_t", "originalProgram", "uint8_t*,int64_t,uint64_t") + `
 typedef uint64_t (*program)(uint8_t*,int64_t,uint64_t);
-static const struct { program original,translated; int width,op,memory,mode,immediate; } pairs[]={
+static const struct { originalProgram original; program translated; int width,op,memory,mode,immediate; } pairs[]={
 ` + pairs.String() + `};
 int main(void) {
     const int64_t indexes[]={-255,-129,-128,-65,-64,-33,-32,-17,-16,-1,0,1,15,16,31,32,63,64,65,127,255};

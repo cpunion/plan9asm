@@ -32,7 +32,8 @@ func TestCrossLinuxRuntimeMatrixX86CMOVIndependentWholeBytes(t *testing.T) {
 					symbol = "_" + symbol
 				}
 				fmt.Fprintf(&originals, "__asm__(%q);\n", ".text\n.globl "+symbol+"\n"+symbol+":\n.byte "+strings.Join(bytes, ",")+"\n")
-				fmt.Fprintf(&prototypes, "extern void %s(uint8_t*,const uint8_t*,uint64_t,uint64_t);\nextern void %s(uint8_t*,const uint8_t*,uint64_t,uint64_t);\n", fn, original)
+				fmt.Fprintf(&prototypes, "extern void %s(uint8_t*,const uint8_t*,uint64_t,uint64_t);\n", fn)
+				prototypes.WriteString(x86OriginalSysVDeclaration("void", original, "uint8_t*,const uint8_t*,uint64_t,uint64_t"))
 				fmt.Fprintf(&rows, "{%s,%s,%d,%d,%d},\n", fn, original, map[string]int{"W": 2, "L": 4, "Q": 8}[width], condition, mode)
 			}
 		}
@@ -70,16 +71,17 @@ static uint64_t seed(unsigned n) {
 }
 `
 
-const x86CMOVWholeBytesC = `
+var x86CMOVWholeBytesC = `
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 #include <xmmintrin.h>
-` + x86CMOVConditionC + `
+` + x86CMOVConditionC +
+	x86OriginalSysVPointer("void", "OriginalProgram", "uint8_t*,const uint8_t*,uint64_t,uint64_t") + `
 %s
 %s
 typedef void(*Program)(uint8_t*,const uint8_t*,uint64_t,uint64_t);
-typedef struct {Program translated,original;unsigned width,condition,mode;} Kernel;
+typedef struct {Program translated;OriginalProgram original;unsigned width,condition,mode;} Kernel;
 static Kernel kernels[]={%s};
 struct Guard {uint8_t before[32],value[16],after[32];};
 int main(void) {
@@ -91,7 +93,11 @@ int main(void) {
   uint64_t source=edges[(v+1)%%3],old=edges[v],flags=seed(f),got=0,afterFlags=0;
   memcpy(input+1,&source,8);memcpy(copy,input,sizeof(input));
   uint32_t csr=0x1f80|((f%%4)<<13)|(f&63),saved=_mm_getcsr();_mm_setcsr(csr);
-  (native?kernel.original:kernel.translated)(out.value,input+1,old,flags);
+  if(native) {
+   kernel.original(out.value,input+1,old,flags);
+  } else {
+   kernel.translated(out.value,input+1,old,flags);
+  }
   uint32_t after=_mm_getcsr();_mm_setcsr(saved);
   memcpy(&got,out.value,8);memcpy(&afterFlags,out.value+8,8);
   uint64_t mask=kernel.width==8?UINT64_MAX:((UINT64_C(1)<<(kernel.width*8))-1);

@@ -27,8 +27,8 @@ func TestCrossLinuxRuntimeMatrixX86AESFamilyScalarInsertResult(t *testing.T) {
 		"\n.globl " + bridge + "\n" + bridge + ":\nsubq $24,%rsp\nmovl %edi,0(%rsp)\nmovl %esi,4(%rsp)\nmovl $0xc3c3c3c3,8(%rsp)\nmovl $0x6d6d6d6d,12(%rsp)\ncall " + original + "\nmovq 8(%rsp),%rax\naddq $24,%rsp\nret\n"
 	// This reference uses independent FIPS-197 arithmetic. It does not reuse
 	// the production grammar, LLVM AES intrinsic or byte-definedness model.
-	reference := x86AESIndependentC + fmt.Sprintf("\n__asm__(%q);\n", assembly) + `
-extern uint64_t OriginalGoAESScalarBridge(uint32_t,uint32_t);
+	reference := x86AESIndependentC + fmt.Sprintf("\n__asm__(%q);\n", assembly) +
+		x86OriginalSysVDeclaration("uint64_t", "OriginalGoAESScalarBridge", "uint32_t,uint32_t") + `
 extern uint32_t view(uint32_t,uint32_t);
 int main(void){
  for(unsigned sample=0;sample<64;sample++){
