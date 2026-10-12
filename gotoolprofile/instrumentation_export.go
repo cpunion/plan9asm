@@ -143,7 +143,7 @@ func CaptureInstrumentationExportObservation(ctx context.Context, binary, ownedD
 	if commandErr != nil || len(stderr) != 0 {
 		return nil, fmt.Errorf("actual exported assembly nm failed or emitted unregistered diagnostics: %v", commandErr)
 	}
-	proof.NMOutput = strings.ReplaceAll(strings.ReplaceAll(string(stdout), archive, "@export"), markerDir, "@marker")
+	proof.NMOutput = instrumentationExportNMOutput(string(stdout), archive, markerDir)
 	proof.NMSHA256 = bytesSHA256([]byte(proof.NMOutput))
 	stdout, stderr, commandErr = run(ctx, markerDir, modeEnv, binary, proof.VetArgs...)
 	if commandErr != nil || len(stdout) != 0 || len(stderr) != 0 {
@@ -285,6 +285,17 @@ func decodeInstrumentationExport(data []byte, directory, cache string, mode Inst
 		return "", nil, fmt.Errorf("actual export archive is absent or outside the observed cache")
 	}
 	return pkg.Export, selection, nil
+}
+
+func instrumentationExportNMOutput(output, archive, directory string) string {
+	// nm prints the invoked archive path verbatim, but original Go object
+	// source symbols follow objabi.AbsFile's slash convention on Windows.
+	// Replace only these exact observed roots, not arbitrary whitespace or
+	// unknown symbol names. The complete output grammar remains strict.
+	return strings.NewReplacer(
+		archive, "@export", filepath.ToSlash(archive), "@export",
+		directory, "@marker", filepath.ToSlash(directory), "@marker",
+	).Replace(output)
 }
 
 func validateInstrumentationExportNM(output string, mode InstrumentationMode) error {

@@ -89,11 +89,19 @@ Native instrumentation then passed
 at `c94f30eb`: the physical type-source fixture and all four previously failing
 CLI roots passed, including imported SDK/same-module and foreign original-source
 recapture. Complete local LLVM CLI also passed at that frozen revision in
-1061.421 seconds. Its full local profile suite is still running. Fork-only
+1061.421 seconds; its complete local profile suite passed in 926.033 seconds. Fork-only
 [38273415720](https://github.com/cpunion/plan9asm/actions/runs/38273415720)
 diagnoses every actual Windows CLI/profile inventory root in four disjoint
 groups per package; raw inventories/outcomes remain artifacts, not a replacement
 for the complete contribution gates or Windows process-ownership implementation.
+That native run finished without missing/skipped roots: CLI 259/260 and profile
+261/262 passed. Remaining roots were the actual CRC32 numerical source reload
+and the quoted-path instrumentation export. The latter normalizes native archive
+paths but missed Go's slash-spelled object source names; exact observed roots
+now normalize both spellings without relaxing the nm symbol grammar. Local
+Go 1.27 actual export and Go 1.20 grammar controls pass. The CRC32 reload error
+now includes the actual package/type/error fields; this is diagnosis, not a fix.
+Its complete local explicit/default-profile regression passed in 84.189 seconds.
 
 The next metadata repair shares ARM64/x86 object-source spelling validation.
 Four local RED controls reproduced ARM64 accepting `$GOROOT` dot/repeated-slash
