@@ -166,3 +166,23 @@ func TestGoAssemblerOracleARM64HistoricalDiagnosticMetadata(t *testing.T) {
 		})
 	}
 }
+
+func TestGoAssemblerOracleARM64TransitionalDiagnosticMetadata(t *testing.T) {
+	source := x86DiagnosticFixture(t, "BL R0")
+	for _, test := range []struct {
+		tail string
+		want bool
+	}{
+		{"NONE NONE NONE UAUTO32K_8 REG, 0 7", true},
+		{"LAUTOPOOL LOREGPOOL NONE UAUTO32K_8 REG, 0 7", true},
+		{"LAUTOPOOL LOREGPOOL NONE UAUTO32K_16 REG, 0 7", true},
+		{"UAUTO32K_8 UAUTO32K_16 NONE NONE REG, 0 7", false},
+		{"LAUTOPOOL NONE UAUTO32K_8 REG, 0 7", false},
+		{"NONE NONE NONE UAUTO32K_8 REG NONE, 0 7", false},
+	} {
+		got := goAssemblerOracleARM64SourceDiagnostic(source, "arm64", arm64BranchDiagnostic(source, "CALL R0", test.tail))
+		if got != test.want {
+			t.Errorf("complete producer schema %q: got %t, want %t", test.tail, got, test.want)
+		}
+	}
+}

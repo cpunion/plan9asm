@@ -34,15 +34,25 @@ var goAssemblerOracleARM64Classes = func() map[string]bool {
 	return result
 }()
 
-var goAssemblerOracleARM64HistoricalClasses = func() map[string]bool {
+// Go 1.22-1.23 already print five classes and pool names, but retain the
+// UAUTO32K_8 spelling. Class spelling and diagnostic arity changed separately.
+var goAssemblerOracleARM64TransitionalClasses = func() map[string]bool {
 	result := make(map[string]bool, len(goAssemblerOracleARM64Classes))
 	for name := range goAssemblerOracleARM64Classes {
 		result[name] = true
 	}
-	delete(result, "LAUTOPOOL")
-	delete(result, "LOREGPOOL")
 	delete(result, "UAUTO32K_16")
 	result["UAUTO32K_8"] = true
+	return result
+}()
+
+var goAssemblerOracleARM64HistoricalClasses = func() map[string]bool {
+	result := make(map[string]bool, len(goAssemblerOracleARM64TransitionalClasses))
+	for name := range goAssemblerOracleARM64TransitionalClasses {
+		result[name] = true
+	}
+	delete(result, "LAUTOPOOL")
+	delete(result, "LOREGPOOL")
 	return result
 }()
 
@@ -85,24 +95,27 @@ func goAssemblerOracleARM64Suffix(suffix string) (string, bool) {
 }
 
 func goAssemblerOracleARM64Listing(original, listing []string) bool {
-	for _, slots := range []int{5, 4} {
-		if goAssemblerOracleARM64ListingSchema(original, listing, slots) {
+	for _, schema := range []struct {
+		slots   int
+		classes map[string]bool
+	}{
+		{5, goAssemblerOracleARM64Classes},
+		{5, goAssemblerOracleARM64TransitionalClasses},
+		{4, goAssemblerOracleARM64HistoricalClasses},
+	} {
+		if goAssemblerOracleARM64ListingSchema(original, listing, schema.slots, schema.classes) {
 			return true
 		}
 	}
 	return false
 }
 
-func goAssemblerOracleARM64ListingSchema(original, listing []string, slots int) bool {
+func goAssemblerOracleARM64ListingSchema(original, listing []string, slots int, classes map[string]bool) bool {
 	tailSize := slots + 3 // Complete class directory, comma, From.Type, To.Type.
 	if len(listing) <= tailSize {
 		return false
 	}
 	tail := listing[len(listing)-tailSize:]
-	classes := goAssemblerOracleARM64Classes
-	if slots == 4 {
-		classes = goAssemblerOracleARM64HistoricalClasses
-	}
 	for _, class := range tail[:slots] {
 		if !classes[class] {
 			return false
