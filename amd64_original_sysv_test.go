@@ -47,7 +47,7 @@ func TestX86OriginalSysVDirectAndPointerTransport(t *testing.T) {
 		fmt.Fprintf(&source, "void Check%d(%s pointer,%s) { %s(%s); pointer(%s); Translated%d(%s); }\n",
 			index, pointer, signature.parameters, name, signature.arguments, signature.arguments, index, signature.arguments)
 	}
-	for _, target := range []string{"x86_64-pc-windows-msvc", "x86_64-unknown-linux-gnu", "x86_64-apple-darwin"} {
+	for _, target := range []string{"x86_64-pc-windows-msvc", "x86_64-w64-windows-gnu", "x86_64-unknown-linux-gnu", "x86_64-apple-darwin"} {
 		t.Run(target, func(t *testing.T) {
 			directory := t.TempDir()
 			input, output := filepath.Join(directory, "transport.c"), filepath.Join(directory, "transport.ll")

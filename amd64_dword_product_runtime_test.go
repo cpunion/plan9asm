@@ -212,7 +212,11 @@ func TestOriginal(t *testing.T) {
 			fmt.Fprintf(&tests, `{
  flags:=struct{before,value,after uint64}{0x11223344,0,0x44332211};csr:=struct{before,value,after uint32}{0x55667788,0,0x88776655}
  %s(op,ap,bp,&flags.value,&csr.value,seed)
- if flags.value&0x8d5!=seed||csr.value!=profile||ReadCSR()!=profile||flags.before!=0x11223344||flags.after!=0x44332211||csr.before!=0x55667788||csr.after!=0x88776655||a!=originalA||b!=originalB {t.Fatal("%s flags/CSR/input/canary")}
+ after:=ReadCSR()
+ if flags.value&0x8d5!=seed||csr.value!=profile||after!=profile||flags.before!=0x11223344||flags.after!=0x44332211||csr.before!=0x55667788||csr.after!=0x88776655||a!=originalA||b!=originalB {
+  t.Fatalf("%s sample%%d flags=%%x want=%%x csr=%%x after=%%x want=%%x flagCanaries=%%x/%%x csrCanaries=%%x/%%x inputChanges=%%t/%%t",
+   sample,flags.value,seed,csr.value,after,profile,flags.before,flags.after,csr.before,csr.after,a!=originalA,b!=originalB)
+ }
  for i,value:=range out {want:=byte(0xc3);if i>=offset&&i<offset+16 {
   index:=i-offset;at:=index/8*8
   read:=func(p *[64]byte)uint32{return uint32(p[at])|uint32(p[at+1])<<8|uint32(p[at+2])<<16|uint32(p[at+3])<<24}
