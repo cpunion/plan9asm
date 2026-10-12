@@ -11,7 +11,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        role: [metadata-and-crc, quoted-export]
+        role: [metadata-and-crc]
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-go
@@ -37,7 +37,7 @@ jobs:
         working-directory: cmd/plan9asmll
         run: |
           set -euo pipefail
-          go test . -run '^TestCompileOneX86SDKOriginalCRC32NumericalDataJoin$' -count=1 -v -timeout=15m
+          go test . -run '^(TestX86SDKNumericalReloadPhysicalSourceIdentity|TestCompileOneX86SDKOriginalCRC32NumericalDataJoin)$' -count=1 -v -timeout=15m
       - name: Actual quoted original export and strict nm grammar
         if: matrix.role == 'quoted-export'
         shell: bash

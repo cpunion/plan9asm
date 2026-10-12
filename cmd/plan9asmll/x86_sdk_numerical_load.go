@@ -47,6 +47,16 @@ func loadX86SDKNumericalPackage(ctx context.Context, binary string, pkg *package
 	if err != nil || !filepath.IsAbs(cache) {
 		return nil, nil, nil, fmt.Errorf("%w: SDK numerical build cache is not an existing absolute directory", plan9asm.ErrProbeNeedsContext)
 	}
+	root, err := sourcepath.Resolve(actual["GOROOT"])
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	directory, err := sourcepath.Resolve(pkg.Dir)
+	if err != nil || !filepath.IsLocal(filepath.FromSlash(pkg.PkgPath)) ||
+		directory != filepath.Join(root, "src", filepath.FromSlash(pkg.PkgPath)) {
+		return nil, nil, nil, fmt.Errorf("%w: SDK numerical selected package is not inside the invoked SDK: %v",
+			plan9asm.ErrProbeNeedsContext, err)
+	}
 	before, err := x86SDKLoadGraph(pkg)
 	if err != nil {
 		return nil, nil, nil, err
@@ -82,7 +92,7 @@ func loadX86SDKNumericalPackage(ctx context.Context, binary string, pkg *package
 		"GOENV": "off", "GOWORK": "off", "GOTOOLCHAIN": "local", "GOPROXY": "off",
 		"GOFLAGS": "", "GOEXPERIMENT": "", "CGO_ENABLED": "0", "GOPACKAGESDRIVER": "off",
 		"GOOS": "linux", "GOARCH": arch, "GOAMD64": "v1", "GO386": "sse2",
-		"GOROOT": actual["GOROOT"], "GOCACHE": cache,
+		"GOROOT": root, "GOCACHE": cache,
 	} {
 		values[key] = value
 	}
@@ -98,7 +108,10 @@ func loadX86SDKNumericalPackage(ctx context.Context, binary string, pkg *package
 		environment = append(environment, key+"="+value)
 	}
 	sort.Strings(environment)
-	loaded, err := packages.Load(&packages.Config{Context: ctx, Dir: pkg.Dir, Env: environment,
+	// cmd/go recognizes standard-library directories relative to GOROOT.
+	// Both must use the same physical spelling; mixing a junction/short path
+	// with the physical root turns hash/crc32 into the unrelated std module.
+	loaded, err := packages.Load(&packages.Config{Context: ctx, Dir: directory, Env: environment,
 		Mode: packages.NeedName | packages.NeedFiles | packages.NeedCompiledGoFiles |
 			packages.NeedModule | packages.NeedDeps | packages.NeedImports | packages.NeedTypes | packages.NeedTypesSizes,
 	}, ".")
@@ -144,7 +157,10 @@ func x86SDKLoadGraph(pkg *packages.Package) (map[string]string, error) {
 		if current == nil || current.IllTyped || len(current.Errors) != 0 || current.Types == nil || current.Module != nil {
 			return fmt.Errorf("%w: SDK numerical import graph is incomplete or not standard", plan9asm.ErrProbeNeedsContext)
 		}
-		identity := x86CallerSelectionIdentity(current)
+		identity, err := x86SDKPhysicalSelectionIdentity(current)
+		if err != nil {
+			return err
+		}
 		if existing, seen := graph[current.PkgPath]; seen {
 			if existing != identity {
 				return fmt.Errorf("%w: SDK numerical import graph has conflicting package identities", plan9asm.ErrProbeNeedsContext)
@@ -165,18 +181,51 @@ func x86SDKLoadGraph(pkg *packages.Package) (map[string]string, error) {
 	return graph, visit(pkg)
 }
 
+// A comparison projection only: original package/type snapshots stay intact.
+// Resolve every original file rather than replacing a textual GOROOT prefix,
+// so a redirected or equal-byte foreign file cannot borrow the SDK identity.
+func x86SDKPhysicalSelectionIdentity(pkg *packages.Package) (string, error) {
+	physical := *pkg
+	var err error
+	physical.Dir, err = sourcepath.Resolve(pkg.Dir)
+	if err != nil {
+		return "", err
+	}
+	for _, files := range []*[]string{&physical.GoFiles, &physical.CompiledGoFiles, &physical.OtherFiles} {
+		resolved := make([]string, len(*files))
+		seen := make(map[string]bool, len(resolved))
+		for index, name := range *files {
+			filename, err := sourcepath.Resolve(name)
+			if err != nil || filepath.Dir(filename) != physical.Dir || seen[filename] {
+				return "", fmt.Errorf("%w: SDK numerical selection has a missing, redirected or duplicate source: %v",
+					plan9asm.ErrProbeNeedsContext, err)
+			}
+			seen[filename], resolved[index] = true, filename
+		}
+		*files = resolved
+	}
+	return x86CallerSelectionIdentity(&physical), nil
+}
+
 func x86SDKSelectedSourceHashes(pkg *packages.Package) (map[string]string, error) {
 	files := append(append([]string(nil), pkg.CompiledGoFiles...), pkg.OtherFiles...)
 	if len(files) == 0 || len(files) > 512 {
 		return nil, fmt.Errorf("%w: SDK numerical selected source inventory is unbounded", plan9asm.ErrProbeNeedsContext)
 	}
 	result := make(map[string]string, len(files))
-	for _, path := range files {
-		digest, err := gotoolprofile.FileSHA256(path)
+	for _, name := range files {
+		physical, err := sourcepath.Resolve(name)
 		if err != nil {
 			return nil, err
 		}
-		result[path] = digest
+		if _, duplicate := result[physical]; duplicate {
+			return nil, fmt.Errorf("%w: SDK numerical source hash inventory has duplicate physical files", plan9asm.ErrProbeNeedsContext)
+		}
+		digest, err := gotoolprofile.FileSHA256(physical)
+		if err != nil {
+			return nil, err
+		}
+		result[physical] = digest
 	}
 	return result, nil
 }
