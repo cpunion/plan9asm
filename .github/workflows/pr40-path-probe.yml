@@ -30,7 +30,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          go test . -run '^(TestARM64NativeScratchObjectSourceMetadataRequiresCapturedPhysicalInput|TestGoX86SDKNumericalReadLiteralObjectSourceNames)$' -count=1 -v -timeout=10m
+          go test . -run '^(TestARM64NativeScratchObjectSourceMetadataRequiresCapturedPhysicalInput|TestGoX86SDKNumericalReadLiteralObjectSourceNames|TestGoX86SDKASMDataImportConfigNativePaths)$' -count=1 -v -timeout=10m
       - name: Actual SDK CRC32 source reload and objects
         if: ${{ !cancelled() && matrix.role == 'metadata-and-crc' }}
         shell: bash
