@@ -7,6 +7,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -62,8 +63,14 @@ func TestActualObservationRetainsExitAndSeparateStreams(t *testing.T) {
 				t.Fatalf("actual child not waited: %+v", value)
 			}
 			if mode == "cancel" {
-				if !errors.Is(err, context.DeadlineExceeded) || value.ExitCode != -1 {
-					t.Fatalf("deadline/signal lost: %+v %v", value, err)
+				killedExit := -1
+				if runtime.GOOS == "windows" {
+					// os.Process.Kill uses TerminateProcess(handle, 1), not a
+					// Unix signal. Preserve the exact observed exit and cause.
+					killedExit = 1
+				}
+				if !errors.Is(err, context.DeadlineExceeded) || value.ExitCode != killedExit {
+					t.Fatalf("deadline/killed exit lost: %+v %v", value, err)
 				}
 				return
 			}

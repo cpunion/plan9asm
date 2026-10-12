@@ -55,7 +55,7 @@ func TestAMD64DownloadedFixedLocalIndependentObjectHandoff(t *testing.T) {
 	if actual.Dir != request.Directory || actual.Module == nil || !actual.Module.Main ||
 		actual.Module.Version != "" || observed.downloaded.primary.sourceModule != sourceModule ||
 		observed.downloaded.primary.sourceVersion != sourceVersion ||
-		!strings.HasSuffix(request.Directory, sourceModule+"@"+sourceVersion) {
+		!strings.HasSuffix(request.Directory, filepath.FromSlash(sourceModule+"@"+sourceVersion)) {
 		t.Fatal("exact source identity or Go's actual cached-CWD role was lost")
 	}
 	set := token.NewFileSet()

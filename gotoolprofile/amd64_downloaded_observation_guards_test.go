@@ -362,6 +362,11 @@ func TestAMD64DownloadedObservationRejectsSameBytesFileReplacement(t *testing.T)
 			if err != nil {
 				t.Fatal(err)
 			}
+			// Windows Lstat defers the file ID lookup until SameFile. Bind it
+			// before replacement, while this path still names the original.
+			if !os.SameFile(before, before) {
+				t.Fatal("original physical identity could not be observed")
+			}
 			if err := os.Chmod(filepath.Dir(name), 0700); err != nil {
 				t.Fatal(err)
 			}
