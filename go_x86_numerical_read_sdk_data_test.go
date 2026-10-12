@@ -279,11 +279,6 @@ func TestGoX86SDKNumericalReadLiteralCompleteBindingBoundaries(t *testing.T) {
 		}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			// An expired/revoked source must never impersonate the intended
-			// source-shape rejection, including after an earlier bad request.
-			if err := source.Verify(ctx); err != nil {
-				t.Fatal("actual joined SDK source precondition", err)
-			}
 			file := *original
 			file.Data = append([]DataStmt(nil), original.Data...)
 			file.Globl = append([]GloblStmt(nil), original.Globl...)
@@ -291,6 +286,15 @@ func TestGoX86SDKNumericalReadLiteralCompleteBindingBoundaries(t *testing.T) {
 			options := originalOptions
 			test.mutate(&file, &options)
 			bound, err := source.BindNumericalReads(ctx, pkg, &file, options)
+			// Bind already performs the complete live Verify. A failed Verify
+			// permanently revokes the source; distinguish that failure from
+			// rejecting this caller-only mutation without duplicating the I/O.
+			source.mu.Lock()
+			live := source.ready && source.identity == source
+			source.mu.Unlock()
+			if !live || ctx.Err() != nil {
+				t.Fatal("actual joined SDK source expired or was revoked", err, ctx.Err())
+			}
 			if bound.NumericalReads != nil || !errors.Is(err, ErrProbeNeedsContext) {
 				t.Fatal("changed complete source/initializer/namespace acquired a binding", err)
 			}
