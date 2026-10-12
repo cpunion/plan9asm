@@ -11,7 +11,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        role: [portable-selection, cpp-cli, ordinary-cli, arm64-scratch, instrumentation-cli]
+        role: [arm64-scratch, instrumentation-cli]
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-go
@@ -36,7 +36,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          go test . -run '^TestARM64NativeScratchObjectSourceMetadataRequiresCapturedPhysicalInput$' -count=1 -v -timeout=10m
+          go test . -run '^(TestARM64NativeScratchObjectSourceMetadataRequiresCapturedPhysicalInput|TestARM64NativeScratchSDKHiddenEntryActualObject|TestARM64NativeScratchActualSDKBodyInputContract)$' -count=1 -v -timeout=10m
       - name: CPP and generated headers on all targets
         if: matrix.role == 'cpp-cli'
         working-directory: cmd/plan9asmll
@@ -58,10 +58,16 @@ jobs:
         run: |
           set -euo pipefail
           go test . -run '^TestCompileOneARM64NativeScratch.*$' -count=1 -v -timeout=15m
+      - name: Physical original type capture through actual source alias
+        if: matrix.role == 'instrumentation-cli'
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test ./gotoolprofile -run '^TestInstrumentationTypeSourceCaptureActualLogicalRoot$' -count=1 -v -timeout=10m
       - name: Same-source type recapture and instrumentation
         if: matrix.role == 'instrumentation-cli'
         working-directory: cmd/plan9asmll
         shell: bash
         run: |
           set -euo pipefail
-          go test . -run '^TestInstrumentation.*$' -count=1 -v -timeout=25m
+          go test . -run '^(TestInstrumentationCLIActualMetadataAndObjectInvocation|TestInstrumentationForeignOriginalSourcesCLIRecaptureAndFinalGuard|TestInstrumentationImported.*)$' -count=1 -v -timeout=25m

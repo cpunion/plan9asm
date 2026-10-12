@@ -98,7 +98,7 @@ func TestARM64NativeScratchSDKHiddenEntryActualObject(t *testing.T) {
 			if !present {
 				t.Fatal("original complete native body missing")
 			}
-			if body.source != input && body.source != "gofile.."+input {
+			if filepath.FromSlash(strings.TrimPrefix(body.source, "gofile..")) != input {
 				t.Fatalf("actual native source position does not bind unchanged fixture: %q", body.source)
 			}
 			// This unit isolates machine-input admission, not object source-name

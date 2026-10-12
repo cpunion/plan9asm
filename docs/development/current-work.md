@@ -60,6 +60,20 @@ These are that frozen run's results, not certification of the following repairs.
   rejection. Module replacement roots normalize separators only, not dot
   segments. Native Windows confirmation remains required. Expanded ARM64 source
   metadata and same-source type-recapture tests diagnose the other failures.
+- `e7bfc99b` / `ba02841e`: native Windows
+  [38268632096](https://github.com/cpunion/plan9asm/actions/runs/38268632096)
+  passed portable selection and ordinary/test declaration groups. Its ARM64
+  metadata regression reproduced rejection of Go's actual `C:/...` source
+  spelling; `objabi.AbsFile` explicitly emits forward slashes on Windows.
+  Normalize only those separators before the existing canonical-file/digest
+  checks. Local Go 1.27 scratch source/SDK/call-result tests passed in 266.515
+  seconds; Go 1.20 metadata checks passed. Native confirmation is still pending.
+  The complete native diagnostic run also passed the CPP/generated-header group
+  (32 top-level tests, 592.455 seconds). Instrumentation retained four failures:
+  the CLI test binary lacked `.exe`, and short/physical invocation names changed
+  actual same-module exports. A local failing command-directory regression now
+  covers producer/consumer physical invocation consistency; do not relax export
+  equality. The next fork batch verifies these and the ARM64 metadata repair.
 - `43d64b2a`: downloaded artifacts showed module aggregates differed from root
   owners in PATH because only root jobs installed QEMU. Every Linux role now
   installs the same pinned QEMU before Node; exact environment/source comparisons
@@ -108,9 +122,12 @@ tools; later edits do not inherit a complete-head pass.
    exhaustive runner without real descendant ownership and Windows tool/source
    scope. The sixteen-part Linux race schedule completed every owner; the
    remaining callback-timer repair still needs the full current-head race gate.
-4. Rerun the full stdlib compile gate after the include/GLOBL repairs. Zero
-   inventory parse failures do not discharge runtime source/frame contracts.
-   Missing generated CPP headers remain unresolved, never ignored/no-op macros.
+4. Darwin stdlib compile replay at `ba02841e` clears inventory parsing but fails
+   at CRC32's CPU-feature SB comparison/result initialization in the simple
+   `plan9asm` CLI. Its richer `plan9asmll` counterpart has a separate actual SDK
+   numerical-source binding. Do not turn the missing binding into initialized
+   bytes or a skip. Other runtime/frame contracts remain; missing generated CPP
+   headers stay unresolved, never ignored/no-op macros.
 5. The 21 benchmark failures still require runtime/reflect entry, TLS,
    hidden-register, caller-storage or source contracts. Dynamic reflect frames
    cannot be inferred from `func()`. ARM64 result-tail bytes are observable by

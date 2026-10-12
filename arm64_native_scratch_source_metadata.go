@@ -165,6 +165,10 @@ func (source *GoARM64ScratchSource) originalObjectSource(name string) (string, b
 			return "", false
 		}
 	}
+	// cmd/internal/objabi.AbsFile emits '/' on a Windows producer. Convert
+	// only separators before checking canonicality and the captured identity;
+	// dot segments, aliases and uncaptured equal-byte files remain rejected.
+	name = filepath.FromSlash(name)
 	if !filepath.IsAbs(name) || filepath.Clean(name) != name {
 		return "", false
 	}
