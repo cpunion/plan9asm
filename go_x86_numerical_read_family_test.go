@@ -96,7 +96,7 @@ func numericalExecutionFixture(t *testing.T, arch string) (GoPackage, *File, Opt
 	if err := os.Mkdir(profile.Directory, 0700); err != nil {
 		t.Fatal(err)
 	}
-	ctx, cancel := runtimeOracleStageContext(t)
+	ctx, cancel := runtimeOracleProofContext(t)
 	t.Cleanup(cancel)
 	cases := numericalExecutionCases(arch)
 	move, word, seed := "MOVQ", "uint64", "0x8877665544332211"

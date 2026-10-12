@@ -44,7 +44,7 @@ func TestGoX86SDKASMDataLiveOriginalCRC32Red(t *testing.T) {
 func sdkASMDataRequest(t *testing.T, arch, pkg string) (context.Context, GoX86SDKASMDataCaptureRequest) {
 	t.Helper()
 	_, profile, _, _ := numericalSBFixture(t, arch)
-	ctx, cancel := runtimeOracleStageContext(t)
+	ctx, cancel := runtimeOracleProofContext(t)
 	t.Cleanup(cancel)
 	return ctx, GoX86SDKASMDataCaptureRequest{GoBinary: profile.GoBinary,
 		Directory:   filepath.Join(filepath.Dir(filepath.Dir(profile.GoBinary)), "src", filepath.FromSlash(pkg)),

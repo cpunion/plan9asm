@@ -78,6 +78,53 @@ func TestRuntimeOracleProofLifetimeKeepsStageAndOverallBounds(t *testing.T) {
 	}
 }
 
+func TestRuntimeOracleSourceProofFixturesUseComposedLifetimes(t *testing.T) {
+	// These factories retain live owners after returning. Their consumers run
+	// multiple capture, binding and API checks against the same context; a
+	// command-stage lease incorrectly expires partway through that proof.
+	for _, fixture := range []struct{ file, function string }{
+		{"go_x86_numerical_read_consumer_guard_test.go", "numericalConsumerFactory"},
+		{"go_x86_numerical_read_family_test.go", "numericalExecutionFixture"},
+		{"go_x86_numerical_read_local_test.go", "numericalLocalFactoryWithContext"},
+		{"go_x86_numerical_read_sdk_test.go", "numericalSDKCRC32Request"},
+		{"go_x86_numerical_read_sdk_test.go", "numericalSDKCPURequest"},
+		{"go_x86_sdk_asm_data_live_test.go", "sdkASMDataRequest"},
+	} {
+		t.Run(fixture.function, func(t *testing.T) {
+			file, err := parser.ParseFile(token.NewFileSet(), fixture.file, nil, 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			proofs, stages, found := 0, 0, false
+			for _, declaration := range file.Decls {
+				function, ok := declaration.(*ast.FuncDecl)
+				if !ok || function.Name.Name != fixture.function {
+					continue
+				}
+				found = true
+				ast.Inspect(function.Body, func(node ast.Node) bool {
+					call, ok := node.(*ast.CallExpr)
+					if !ok {
+						return true
+					}
+					if name, ok := call.Fun.(*ast.Ident); ok {
+						switch name.Name {
+						case "runtimeOracleProofContext":
+							proofs++
+						case "runtimeOracleStageContext":
+							stages++
+						}
+					}
+					return true
+				})
+			}
+			if !found || proofs != 1 || stages != 0 {
+				t.Fatalf("source-proof factory has found=%v proof leases=%d command-stage leases=%d", found, proofs, stages)
+			}
+		})
+	}
+}
+
 func TestRuntimeOracleStageContextUsesActualTestDeadline(t *testing.T) {
 	before := time.Now()
 	ctx, cancel := runtimeOracleStageContext(t)

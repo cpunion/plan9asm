@@ -224,7 +224,7 @@ func TestGoX86NumericalSBReadGoWrapperHeaderTOCTOU(t *testing.T) {
 func numericalConsumerFactory(t *testing.T, arch string) (GoPackage, *File, Options, func(*testing.T) (*GoX86NumericalReadSource, Options)) {
 	t.Helper()
 	pkg, request, file, options := numericalSBFixture(t, arch)
-	ctx, cancel := runtimeOracleStageContext(t)
+	ctx, cancel := runtimeOracleProofContext(t)
 	t.Cleanup(cancel)
 	owner, err := CaptureGoNumericalStorageOwner(ctx, GoNumericalStorageCaptureRequest{
 		GoBinary: request.GoBinary, Directory: filepath.Join(filepath.Dir(filepath.Dir(request.GoBinary)), "src", "internal", "cpu"),

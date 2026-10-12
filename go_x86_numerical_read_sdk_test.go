@@ -22,7 +22,7 @@ import (
 func numericalSDKCRC32Request(t *testing.T) (context.Context, GoX86NumericalReadCaptureRequest, *GoNumericalStorageOwner) {
 	t.Helper()
 	_, profile, _, _ := numericalSBFixture(t, "amd64")
-	ctx, cancel := runtimeOracleStageContext(t)
+	ctx, cancel := runtimeOracleProofContext(t)
 	t.Cleanup(cancel)
 	root := filepath.Dir(filepath.Dir(profile.GoBinary))
 	owner, err := CaptureGoNumericalStorageOwner(ctx, GoNumericalStorageCaptureRequest{
@@ -74,7 +74,7 @@ func numericalSDKCRC32Request(t *testing.T) (context.Context, GoX86NumericalRead
 func numericalSDKCPURequest(t *testing.T, arch string) (context.Context, GoX86NumericalReadCaptureRequest, *GoNumericalStorageOwner) {
 	t.Helper()
 	_, profile, _, _ := numericalSBFixture(t, arch)
-	ctx, cancel := runtimeOracleStageContext(t)
+	ctx, cancel := runtimeOracleProofContext(t)
 	t.Cleanup(cancel)
 	root := filepath.Dir(filepath.Dir(profile.GoBinary))
 	directory := filepath.Join(root, "src", "internal", "cpu")
