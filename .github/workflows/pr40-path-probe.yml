@@ -14,18 +14,16 @@ jobs:
         with:
           go-version: '1.27.2'
           cache: false
-      - name: Before LLVM (PowerShell)
+      - name: Go 1.20 module defaults
         run: go run ./.github/path-probe
-      - name: Before LLVM (Bash)
-        shell: bash
+      - name: Current junction behavior
+        env:
+          GODEBUG: winsymlink=1,winreadlinkvolume=1
         run: go run ./.github/path-probe
-      - uses: ./.github/actions/setup-windows-llvm22
-      - name: After LLVM (PowerShell)
+      - name: Current junction and legacy volume behavior
+        env:
+          GODEBUG: winsymlink=1,winreadlinkvolume=0
         run: go run ./.github/path-probe
-      - name: After LLVM (Bash)
-        shell: bash
-        run: go run ./.github/path-probe
-      - name: Actual CLI feature capture
-        shell: bash
+      - name: Go 1.24 module defaults
         working-directory: cmd/plan9asmll
-        run: go test -run '^TestCompileOneExplicitCPUProfileUsesActualAssemblerMacros$' -count=1 -v
+        run: go run ../../.github/path-probe
