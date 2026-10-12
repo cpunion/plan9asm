@@ -188,3 +188,25 @@ int main(int argc, char **argv) {
 		})
 	}
 }
+
+// CMPXCHG launches the C driver directly instead of forking. Exercise that
+// driver's actual entry setup with a harmless callback, before any real fault.
+func TestX86CMPXCHGFaultChildCoreLimit(t *testing.T) {
+	execution := x86FloatCompareExecutionTools(t)
+	const callback = `
+static void inspect_limits(unsigned char *p) {
+    struct rlimit limit;
+    if (getrlimit(RLIMIT_CORE, &limit) || limit.rlim_cur || limit.rlim_max) exit(91);
+    *p = 4;
+}
+`
+	source := fmt.Sprintf(x86CMPXCHGFaultReference, "", callback,
+		"{inspect_limits, inspect_limits, 1, 0},")
+	executable := execution.compileLLVM(t, "cmpxchg-core-limit", "", source, "-O2")
+	for _, original := range []int{0, 1} {
+		got, err := x86CMPXCHGObserveFault(t, execution, executable, 0, 0, original)
+		if err != nil || got != "return" {
+			t.Fatalf("actual direct child core limits, original=%d: %s, %v", original, got, err)
+		}
+	}
+}
