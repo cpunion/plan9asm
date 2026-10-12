@@ -1,6 +1,8 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const os = require('node:os');
+const { spawnSync } = require('node:child_process');
 const { test } = require('node:test');
 
 const workflow = fs.readFileSync(
@@ -27,24 +29,23 @@ function step(body, name) {
   return body.slice(start, end < 0 ? body.length : end);
 }
 
-const roles = [
-  ...Array.from({ length: 8 }, (_, index) => `root-${index}`),
-  'profile',
-  'other',
-];
-
-test('each module flavor splits only root into eight exhaustive job roles', () => {
+test('race uses one two-shard wave; ordinary flavors retain eight root roles', () => {
   for (const name of ['test', 'race', 'coverage']) {
+    const count = name === 'race' ? 16 : 8;
+    const roles = [
+      ...Array.from({ length: count }, (_, index) => `root-${index}`),
+      'profile', 'other',
+    ];
     const body = job(name);
     const match = body.match(/^        module-role: \[([^\]]+)\]$/m);
     assert.ok(match, `${name}: missing explicit module scheduling roles`);
     assert.deepEqual(match[1].split(',').map(value => value.trim()), roles);
 
     const mappings = Array.from(body.matchAll(
-      /^          - \{module-role: (root-[0-7]|profile|other), module-owner: ([012]), root-partition: (-?\d+)\}$/gm,
+      /^          - \{module-role: (root-\d+|profile|other), module-owner: ([012]), root-partition: (-?\d+)\}$/gm,
     ), ([, role, owner, part]) => [role, Number(owner), Number(part)]);
     assert.deepEqual(mappings, [
-      ...Array.from({ length: 8 }, (_, index) => [`root-${index}`, 0, index]),
+      ...Array.from({ length: count }, (_, index) => [`root-${index}`, 0, index]),
       ['profile', 1, -1],
       ['other', 2, -1],
     ], `${name}: role mapping repeats or loses package/shard ownership`);
@@ -57,7 +58,7 @@ test('each module flavor splits only root into eight exhaustive job roles', () =
 
 test('root job fanout retains original workers, per-command and job budgets', () => {
   assert.match(script, /test\) timeout=45m ;;/);
-  assert.match(script, /race\) timeout=60m; flags=\(-race\) ;;/);
+  assert.match(script, /race\) timeout=60m; flags=\(-race\); root_partitions=16 ;;/);
   assert.match(script, /coverage\) timeout=45m; flags=\(-coverprofile=coverage-root\.out\) ;;/);
   assert.match(script, /-shards=32 -workers=2/);
   assert.match(script, /GOMAXPROCS=2/);
@@ -85,6 +86,38 @@ test('executor and completion both request the same explicit root partition coun
     /bash scripts\/test-module-ci\.sh \$\{\{ matrix\.flavor \}\} complete/);
 });
 
+test('actual shell dispatch validates flavor-specific part bounds before launching Go', t => {
+  // This is only an argument-transport fixture, never compiler/test evidence.
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'module-ci-args-'));
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(directory, 'go'),
+    '#!/usr/bin/env bash\nprintf "%s\\n" SYNTHETIC_GO "$@"\n', { mode: 0o700 });
+  const run = (...args) => spawnSync('bash', [
+    path.join(__dirname, '../../scripts/test-module-ci.sh'), ...args,
+  ], {
+    cwd: directory,
+    env: { ...process.env, PATH: directory + path.delimiter + process.env.PATH, GOFLAGS: '' },
+    encoding: 'utf8',
+    timeout: 5000,
+  });
+  for (const [flavor, count] of [['test', 8], ['coverage', 8], ['race', 16]]) {
+    for (const args of [['execute', '0', String(count - 1)], ['execute', '2', '-1'], ['complete']]) {
+      const actual = run(flavor, ...args);
+      assert.equal(actual.status, 0, actual.stderr || String(actual.error));
+      const fields = actual.stdout.trim().split('\n');
+      assert.equal(fields[0], 'SYNTHETIC_GO');
+      assert.ok(fields.includes(`-module-root-partitions=${count}`));
+      assert.ok(fields.includes('-shards=32'));
+      assert.ok(fields.includes('-workers=2'));
+    }
+    for (const part of [String(count), '-1', '01', '1+1', '999999999999999999999']) {
+      const actual = run(flavor, 'execute', '0', part);
+      assert.equal(actual.status, 1, `${flavor}/${part}: ${actual.stderr}`);
+      assert.doesNotMatch(actual.stdout, /SYNTHETIC_GO/);
+    }
+  }
+});
+
 test('each root part has an exact separate artifact and strict download destination', () => {
   for (const name of ['test', 'race', 'coverage']) {
     const body = job(name);
@@ -92,14 +125,19 @@ test('each root part has an exact separate artifact and strict download destinat
     assert.match(body, /if-no-files-found: error/);
   }
   const aggregate = job('module-completion');
-  for (let part = 0; part < 8; part++) {
+  for (let part = 0; part < 16; part++) {
     const download = step(aggregate, `Download root part ${part}`);
     assert.match(download, new RegExp(
       `^          name: module-\\$\\{\\{ matrix\\.flavor \\}\\}-\\$\\{\\{ matrix\\.go-version \\}\\}-root-${part}$`, 'm',
     ));
     assert.match(download, new RegExp(
-      `^          path: _out/module-\\$\\{\\{ matrix\\.flavor \\}\\}-owners/owner-0000/part-000${part}$`, 'm',
+      `^          path: _out/module-\\$\\{\\{ matrix\\.flavor \\}\\}-owners/owner-0000/part-${String(part).padStart(4, '0')}$`, 'm',
     ));
+    if (part >= 8) {
+      assert.match(download, /if: \$\{\{ !cancelled\(\) && matrix\.flavor == 'race' \}\}/);
+    } else {
+      assert.doesNotMatch(download, /matrix\.flavor ==/);
+    }
   }
   assert.match(step(aggregate, 'Download profile owner'), /-profile$/m);
   assert.match(step(aggregate, 'Download remaining-package owner'), /-other$/m);

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# One actual main-module inventory: eight root parts, profile and rest once.
+# One actual inventory: eight root parts (sixteen for race), profile/rest once.
 # Nested CLI modules keep their independent steps; Windows does not use this.
 flavor=${1:?test, race or coverage required}
 phase=${2:?execute or complete required}
@@ -9,7 +9,7 @@ flags=()
 root_partitions=8
 case "$flavor" in
   test) timeout=45m ;;
-  race) timeout=60m; flags=(-race) ;;
+  race) timeout=60m; flags=(-race); root_partitions=16 ;;
   coverage) timeout=45m; flags=(-coverprofile=coverage-root.out) ;;
   *) echo "unknown module suite role" >&2; exit 1 ;;
 esac
@@ -27,8 +27,13 @@ case "$phase" in
       echo "execute requires one owner and its root part (or -1)" >&2
       exit 1
     fi
-    if [[ $3 == 0 && ! $4 =~ ^[0-7]$ ]] || [[ $3 != 0 && $4 != -1 ]]; then
-      echo "root owner requires part 0..7; profile/rest require -1" >&2
+    if [[ $3 == 0 ]]; then
+      if ! [[ $4 =~ ^([0-9]|[1-9][0-9])$ ]] || (( $4 >= root_partitions )); then
+        echo "root owner requires part 0..$((root_partitions - 1))" >&2
+        exit 1
+      fi
+    elif [[ $4 != -1 ]]; then
+      echo "profile/rest require part -1" >&2
       exit 1
     fi
     args+=("-module-owner=$3" "-module-root-partition=$4")

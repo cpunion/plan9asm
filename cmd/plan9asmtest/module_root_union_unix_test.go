@@ -12,9 +12,9 @@ import (
 	"time"
 )
 
-func runRootSplitFixture(t *testing.T, binary, dir, out, inputs, profile string, owner, part int) {
+func runRootSplitFixture(t *testing.T, binary, dir, out, inputs, profile string, owner, part, count int) {
 	t.Helper()
-	args := []string{"-module", "-module-root-partitions=8", "-dir", dir, "-out", out,
+	args := []string{"-module", fmt.Sprintf("-module-root-partitions=%d", count), "-dir", dir, "-out", out,
 		"-shards=32", "-workers=2", "-timeout=2m"}
 	if inputs != "" {
 		args = append(args, "-verify-module", inputs)
@@ -61,24 +61,24 @@ func TestModuleRootPartitionActualCompleteUnionAndCoverage(t *testing.T) {
 		t.Fatal(err)
 	}
 	profile := filepath.Join(t.TempDir(), "whole.cover")
-	for part := 0; part < 8; part++ {
+	for part := 0; part < 16; part++ {
 		out := filepath.Join(inputs, "owner-0000", fmt.Sprintf("part-%04d", part))
-		runRootSplitFixture(t, binary, dir, out, "", profile, 0, part)
+		runRootSplitFixture(t, binary, dir, out, "", profile, 0, part, 16)
 	}
 	for owner := 1; owner < moduleOwners; owner++ {
 		out := filepath.Join(inputs, fmt.Sprintf("owner-%04d", owner))
-		runRootSplitFixture(t, binary, dir, out, "", profile, owner, -1)
+		runRootSplitFixture(t, binary, dir, out, "", profile, owner, -1, 16)
 	}
 	if _, err := os.Lstat(profile); !os.IsNotExist(err) {
 		t.Fatalf("an owner published partial uploadable module coverage: %v", err)
 	}
 	verified := filepath.Join(t.TempDir(), "aggregate")
-	runRootSplitFixture(t, binary, dir, verified, inputs, profile, -1, -1)
+	runRootSplitFixture(t, binary, dir, verified, inputs, profile, -1, -1, 16)
 	var expected moduleReport
 	if err := ciReadJSON(filepath.Join(verified, "module.json"), &expected); err != nil {
 		t.Fatal(err)
 	}
-	if expected.Protocol != moduleRootPartsProtocol || expected.Status != "passed" ||
+	if expected.Protocol != moduleRootPartsProtocol || expected.Status != "passed" || expected.RootPartitions != 16 ||
 		expected.RootInventory == nil || len(expected.RootInventory.Names) != 36 || len(expected.Packages) != 5 ||
 		expected.Packages[0].Shards != 32 {
 		t.Fatalf("complete fresh denominator/package union lost: %+v", expected)
@@ -261,7 +261,7 @@ func TestModuleRootPartitionActualCompleteUnionAndCoverage(t *testing.T) {
 		})
 	}
 	t.Run("extra-part", func(t *testing.T) {
-		path := filepath.Join(inputs, "owner-0000", "part-0008")
+		path := filepath.Join(inputs, "owner-0000", "part-0016")
 		if err := os.Mkdir(path, 0700); err != nil {
 			t.Fatal(err)
 		}
@@ -311,7 +311,7 @@ func BenchmarkNotRun(b *testing.B) { b.Fatal("benchmark executed") }
 			executed, empty, passedRoots := 0, 0, 0
 			for part := 0; part < 8; part++ {
 				out := filepath.Join(inputs, "owner-0000", fmt.Sprintf("part-%04d", part))
-				runRootSplitFixture(t, binary, dir, out, "", "", 0, part)
+				runRootSplitFixture(t, binary, dir, out, "", "", 0, part, 8)
 				var suite suiteReport
 				if err := ciReadJSON(filepath.Join(out, "package-0000", "partition.json"), &suite); err != nil {
 					t.Fatal(err)
@@ -350,10 +350,10 @@ func BenchmarkNotRun(b *testing.B) { b.Fatal("benchmark executed") }
 			}
 			for owner := 1; owner < moduleOwners; owner++ {
 				out := filepath.Join(inputs, fmt.Sprintf("owner-%04d", owner))
-				runRootSplitFixture(t, binary, dir, out, "", "", owner, -1)
+				runRootSplitFixture(t, binary, dir, out, "", "", owner, -1, 8)
 			}
 			out := filepath.Join(t.TempDir(), "aggregate")
-			runRootSplitFixture(t, binary, dir, out, inputs, "", -1, -1)
+			runRootSplitFixture(t, binary, dir, out, inputs, "", -1, -1, 8)
 			var report moduleReport
 			if err := ciReadJSON(filepath.Join(out, "module.json"), &report); err != nil {
 				t.Fatal(err)

@@ -6,7 +6,7 @@ import (
 )
 
 func TestModuleRootShardPartsAreExhaustiveAndDisjoint(t *testing.T) {
-	for _, count := range []int{1, 3, 8, 32} {
+	for _, count := range []int{1, 3, 8, 16, 32} {
 		parts, err := moduleRootShardParts(32, count)
 		if err != nil || len(parts) != count {
 			t.Fatalf("32/%d plan: %v %v", count, parts, err)
@@ -30,6 +30,9 @@ func TestModuleRootShardPartsAreExhaustiveAndDisjoint(t *testing.T) {
 		}
 		if count == 8 && !reflect.DeepEqual(parts[0], []int{0, 8, 16, 24}) {
 			t.Fatalf("CI root part zero changed original shard indices: %v", parts[0])
+		}
+		if count == 16 && !reflect.DeepEqual(parts[1], []int{1, 17}) {
+			t.Fatalf("race root part must fit one two-worker wave: %v", parts[1])
 		}
 	}
 	for _, invalid := range [][2]int{{0, 1}, {1025, 1}, {32, 0}, {32, -1}, {32, 33}} {

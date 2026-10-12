@@ -16,17 +16,25 @@ func TestCIModuleSuitesKeepExhaustiveUnixAndWindowsRoles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, item := range []struct{ job, flags string }{
-		{"test", "test) timeout=45m"},
-		{"race", "race) timeout=60m; flags=(-race)"},
-		{"coverage", "coverage) timeout=45m; flags=(-coverprofile=coverage-root.out)"},
+	for _, item := range []struct {
+		job, flags string
+		parts      int
+	}{
+		{"test", "test) timeout=45m", 8},
+		{"race", "race) timeout=60m; flags=(-race); root_partitions=16", 16},
+		{"coverage", "coverage) timeout=45m; flags=(-coverprofile=coverage-root.out)", 8},
 	} {
 		job, found := ciWorkflowJob(string(data), item.job)
 		command := "bash scripts/test-module-ci.sh " + item.job + " execute ${{ matrix.module-owner }} ${{ matrix.root-partition }}"
 		if !found || !strings.Contains(job, command) || !strings.Contains(string(script), item.flags) {
 			t.Errorf("%s must keep the complete actual module inventory/flags using bounded partition ownership", item.job)
 		}
-		for _, required := range []string{"module-role: [root-0, root-1, root-2, root-3, root-4, root-5, root-6, root-7, profile, other]", "fail-fast: false", "actions/upload-artifact@v6"} {
+		var roles []string
+		for part := 0; part < item.parts; part++ {
+			roles = append(roles, fmt.Sprintf("root-%d", part))
+		}
+		roles = append(roles, "profile", "other")
+		for _, required := range []string{"module-role: [" + strings.Join(roles, ", ") + "]", "fail-fast: false", "actions/upload-artifact@v6"} {
 			if !strings.Contains(job, required) {
 				t.Errorf("%s missing exhaustive scheduling/artifact requirement %q", item.job, required)
 			}
@@ -40,7 +48,7 @@ func TestCIModuleSuitesKeepExhaustiveUnixAndWindowsRoles(t *testing.T) {
 		!strings.Contains(aggregate, "owner-0000") || !strings.Contains(aggregate, "owner-0001") || !strings.Contains(aggregate, "owner-0002") {
 		t.Error("missing mandatory complete cross-owner readback")
 	}
-	for part := 0; part < 8; part++ {
+	for part := 0; part < 16; part++ {
 		if !strings.Contains(aggregate, fmt.Sprintf("Download root part %d", part)) ||
 			!strings.Contains(aggregate, fmt.Sprintf("-owners/owner-0000/part-%04d", part)) {
 			t.Errorf("missing exact root part %d download", part)
