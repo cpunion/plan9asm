@@ -62,6 +62,13 @@ func TestCIModuleSuitesKeepExhaustiveUnixAndWindowsRoles(t *testing.T) {
 		!strings.Contains(windowsCLI, "go test -count=1 -timeout=30m ./... -coverprofile=../../coverage-windows-${{ matrix.command }}.out") {
 		t.Error("both complete Windows CLI suites need independent jobs, unaffected by root failures")
 	}
+	if !strings.Contains(windowsCLI, "working-directory: cmd/${{ matrix.command }}\n        shell: bash\n") ||
+		!strings.Contains(windowsCLI, "test -s ../../coverage-windows-${{ matrix.command }}.out") {
+		t.Error("Windows CLI coverage requires explicit Bash argument handling and a nonempty profile before upload")
+	}
+	if !strings.Contains(test, "| grep -Fx 'TestAMD64DownloadedFixedLocalLLVM22Numerical'") {
+		t.Error("required numerical inventory must use the provisioned fixed-line filter, not optional ripgrep")
+	}
 	if !strings.Contains(test, "!cancelled() && runner.os != 'Windows' && matrix.nested_modules && matrix.module-owner == 2") {
 		t.Error("both nested CLI roles must still execute after a main-module failure")
 	}

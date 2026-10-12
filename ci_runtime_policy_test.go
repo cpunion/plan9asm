@@ -51,7 +51,7 @@ func TestCIFullSuitesInstallWASMExecutionRuntime(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"test", "race", "coverage"} {
+	for _, name := range []string{"test", "race", "coverage", "module-completion"} {
 		job, found := ciWorkflowJob(string(data), name)
 		if !found {
 			t.Fatalf("full-suite job %s is missing", name)
@@ -120,7 +120,7 @@ func TestCIFullSuitesInstallRequiredQEMU(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"test", "race", "coverage"} {
+	for _, name := range []string{"test", "race", "coverage", "module-completion"} {
 		t.Run(name, func(t *testing.T) {
 			job, found := ciWorkflowJob(string(data), name)
 			if !found {
@@ -136,12 +136,18 @@ func TestCIFullSuitesInstallRequiredQEMU(t *testing.T) {
 				t.Fatal("QEMU installer has no actual workflow step")
 			}
 			step := job[stepStart:install]
-			condition := "if: matrix.module-owner == 0\n"
+			// Scope comparison binds the actual process PATH. Every owner and
+			// its aggregate must install the same runtimes in the same order.
+			condition := ""
 			if name == "test" {
-				condition = "if: runner.os == 'Linux' && matrix.module-owner == 0\n"
+				condition = "if: runner.os == 'Linux'\n"
 			}
-			if !strings.Contains(step, condition) {
-				t.Fatal("every Go version's Linux root role requires QEMU; a version filter omits real runtime tests")
+			if !strings.Contains(step, condition) || strings.Contains(step, "matrix.") ||
+				condition == "" && strings.Contains(step, "if:") {
+				t.Fatal("all module owners and the aggregate need identical QEMU provisioning")
+			}
+			if node := strings.Index(job, "uses: actions/setup-node@v6"); node < 0 || install >= node {
+				t.Fatal("all module roles must install QEMU before Node to retain identical PATH order")
 			}
 		})
 	}

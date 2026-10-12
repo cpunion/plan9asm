@@ -388,7 +388,7 @@ jobs:
         uses: ./.github/actions/setup-windows-llvm22
 
       - name: Install required 386 execution runtime
-        if: runner.os == 'Linux' && matrix.module-owner == 0
+        if: runner.os == 'Linux'
         timeout-minutes: 5
         run: bash scripts/install-ci-qemu.sh
 
@@ -416,7 +416,7 @@ jobs:
           set -euo pipefail
           test "$(go env GOHOSTOS)/$(go env GOHOSTARCH)" = linux/amd64
           scope='^TestAMD64DownloadedFixedLocalLLVM22Numerical$'
-          go test ./gotoolprofile -list="$scope" | rg -x 'TestAMD64DownloadedFixedLocalLLVM22Numerical'
+          go test ./gotoolprofile -list="$scope" | grep -Fx 'TestAMD64DownloadedFixedLocalLLVM22Numerical'
           go test ./gotoolprofile -run="$scope" -count=1 -timeout=10m
 
       - name: Retain complete module owner evidence (Ubuntu)
@@ -505,7 +505,11 @@ jobs:
 
       - name: Run complete CLI suite with coverage
         working-directory: cmd/${{ matrix.command }}
-        run: go test -count=1 -timeout=30m ./... -coverprofile=../../coverage-windows-${{ matrix.command }}.out
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test -count=1 -timeout=30m ./... -coverprofile=../../coverage-windows-${{ matrix.command }}.out
+          test -s ../../coverage-windows-${{ matrix.command }}.out
 
       - name: Upload Windows CLI coverage to Codecov
         uses: codecov/codecov-action@v7
@@ -606,15 +610,14 @@ jobs:
         timeout-minutes: 14
         run: bash scripts/install-ci-llvm22-ubuntu.sh gcc-i686-linux-gnu libc6-dev-i386-cross
 
+      - name: Install required 386 execution runtime
+        timeout-minutes: 5
+        run: bash scripts/install-ci-qemu.sh
+
       - name: Setup required wasm execution runtime
         uses: actions/setup-node@v6
         with:
           node-version: '22'
-
-      - name: Install required 386 execution runtime
-        if: matrix.module-owner == 0
-        timeout-minutes: 5
-        run: bash scripts/install-ci-qemu.sh
 
       - name: Go test (race)
         run: bash scripts/test-module-ci.sh race execute ${{ matrix.module-owner }} ${{ matrix.root-partition }}
@@ -665,15 +668,14 @@ jobs:
         timeout-minutes: 14
         run: bash scripts/install-ci-llvm22-ubuntu.sh gcc-i686-linux-gnu libc6-dev-i386-cross
 
+      - name: Install required 386 execution runtime
+        timeout-minutes: 5
+        run: bash scripts/install-ci-qemu.sh
+
       - name: Setup required wasm execution runtime
         uses: actions/setup-node@v6
         with:
           node-version: '22'
-
-      - name: Install required 386 execution runtime
-        if: matrix.module-owner == 0
-        timeout-minutes: 5
-        run: bash scripts/install-ci-qemu.sh
 
       - name: Go test with coverage
         run: bash scripts/test-module-ci.sh coverage execute ${{ matrix.module-owner }} ${{ matrix.root-partition }}
@@ -732,7 +734,10 @@ jobs:
           cache: true
       - name: Install LLVM 22
         timeout-minutes: 14
-        run: bash scripts/install-ci-llvm22-ubuntu.sh
+        run: bash scripts/install-ci-llvm22-ubuntu.sh gcc-i686-linux-gnu libc6-dev-i386-cross
+      - name: Install required 386 execution runtime
+        timeout-minutes: 5
+        run: bash scripts/install-ci-qemu.sh
       - name: Setup required wasm execution runtime
         uses: actions/setup-node@v6
         with:
