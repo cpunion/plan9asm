@@ -174,7 +174,7 @@ func TestInstrumentationForeignTypeSourceActualDualModule(t *testing.T) {
 				writeInstrumentationFixture(t, original.SourceRoot, name, []byte(source))
 				original.Sources[name], original.Headers[name] = bytesSHA256([]byte(source)), source
 			}
-			env = replaceEnv(env, marker.Early.Environment)
+			env = instrumentationFixtureEnvironment(env, marker.Early)
 			download, downloadStderr, downloadErr := RunBounded(ctx, original.SourceRoot, env, binary,
 				"mod", "download", "-json", archive+"@v1.0.0")
 			if downloadErr != nil {

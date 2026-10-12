@@ -143,7 +143,7 @@ func TestInstrumentationOrdinaryAsmdeclOwnedDirectoryCompletion(t *testing.T) {
 				}
 				return stdout, stderr, toolErr
 			}
-			modeEnv := replaceEnv(os.Environ(), marker.Early.Environment)
+			modeEnv := instrumentationFixtureEnvironment(os.Environ(), marker.Early)
 			err = runInstrumentationOrdinaryAsmdecl(ctx, binary, input.SourceRoot, modeEnv, input, plan, &proof.Package,
 				map[string]string{proof.Package.PackagePath: proof.ArchiveSHA256}, run, remove)
 			if !actualToolCompleted {
