@@ -184,6 +184,10 @@ func TestCrossLinuxRuntimeMatrixX86DwordProductOriginalGoSSE(t *testing.T) {
 import("testing";"unsafe";"runtime")
 func TestOriginal(t *testing.T) {
  runtime.LockOSThread();defer runtime.UnlockOSThread()
+ // Exercise the runtime's floating-point heap-sampling path between kernels.
+ // LockOSThread alone does not preserve MXCSR across ordinary Go allocations.
+ oldRate:=runtime.MemProfileRate;runtime.MemProfileRate=2
+ defer func(){runtime.MemProfileRate=oldRate}()
  saved:=ReadCSR();defer SetCSR(saved)
  edges:=[...]uint32{0,1,2,0x7fffffff,0x80000000,0x80000001,0xfffffffe,0xffffffff}
  for sample:=0;sample<97;sample++ {for _,seed:=range []uint64{0,0x8d5} {
