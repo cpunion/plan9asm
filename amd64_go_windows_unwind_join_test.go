@@ -1,4 +1,4 @@
-//go:build go1.27
+//go:build go1.23
 
 package plan9asm
 
@@ -59,6 +59,18 @@ func goAMD64WindowsUnwindCompleteObjectListingJoinGuards(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	for _, version := range []string{"go1.27.1", "go1.27.2", "go1.99.1"} {
+		if version == observed.Version {
+			continue
+		}
+		changed := bytes.Replace(object, []byte(observed.Version+" "), []byte(version+" "), 1)
+		if bytes.Equal(changed, object) {
+			t.Fatal("object version mutation did not replace its producer")
+		}
+		if _, err := source.observeWindowsUnwind(changed); !errors.Is(err, ErrProbeNeedsContext) {
+			t.Fatal("object substituted another actual producer", version, err)
+		}
+	}
 	if _, err := goAMD64FrameWindowsUnwindListing(listing, file, pkg, source.origins, request.Directory, observed); err != nil {
 		t.Fatal("independent actual original metadata join control failed", err)
 	}
@@ -84,7 +96,13 @@ func goAMD64WindowsUnwindCompleteObjectListingJoinGuards(t *testing.T) {
 			return bytes.Replace(v, []byte("SSEHUNWINDINFO dupok"), []byte("SSEHUNWINDINFO"), 1)
 		},
 		"wrong metadata alignment": func(v []byte, _ *gostaticstorage.WindowsAMD64AssemblyUnwind) []byte {
-			return bytes.Replace(v, []byte("size=12 align=0x4"), []byte("size=12 align=0x8"), 1)
+			return bytes.Replace(v, []byte("SSEHUNWINDINFO dupok size=12"), []byte("SSEHUNWINDINFO dupok size=12 align=0x8"), 1)
+		},
+		"other SDK alignment spelling": func(v []byte, _ *gostaticstorage.WindowsAMD64AssemblyUnwind) []byte {
+			if observed.ListingAlignment {
+				return bytes.Replace(v, []byte("size=12 align=0x4"), []byte("size=12"), 1)
+			}
+			return bytes.Replace(v, []byte("SSEHUNWINDINFO dupok size=12"), []byte("SSEHUNWINDINFO dupok size=12 align=0x4"), 1)
 		},
 		"wrong metadata byte": func(v []byte, _ *gostaticstorage.WindowsAMD64AssemblyUnwind) []byte {
 			return bytes.Replace(v, []byte("01 04 02 05"), []byte("02 04 02 05"), 1)
@@ -142,7 +160,7 @@ func goAMD64WindowsUnwindCompleteObjectListingJoinGuards(t *testing.T) {
 			}
 			metadata.Name = "go:sehuw.12." + base64.StdEncoding.EncodeToString(metadata.Data)
 			for index := range o.Texts[0].Auxiliary {
-				if o.Texts[0].Auxiliary[index].Type == 14 {
+				if o.Texts[0].Auxiliary[index].Type == o.AuxType {
 					o.Texts[0].Auxiliary[index].Target.Name = metadata.Name
 				}
 			}

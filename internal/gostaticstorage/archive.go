@@ -106,6 +106,19 @@ func objectBody(object []byte, target string) ([]byte, error) {
 }
 
 func objectVersion(object []byte, target string) (string, error) {
+	version, err := objectHeaderVersion(object, target)
+	if err != nil {
+		return "", err
+	}
+	if !gotoolchain.AuditedGo127(version) {
+		return "", contextError("object target/version differs from selected compiler")
+	}
+	return version, nil
+}
+
+// The caller must separately admit and bind the exact producer. Parsing this
+// header alone does not register a compiler object format.
+func objectHeaderVersion(object []byte, target string) (string, error) {
 	end := bytes.IndexByte(object, '\n')
 	if end < 0 || end > 4096 {
 		return "", contextError("invalid compiler object version header")
@@ -113,7 +126,7 @@ func objectVersion(object []byte, target string) (string, error) {
 	goos, goarch, valid := strings.Cut(target, "/")
 	words := strings.Fields(string(object[:end]))
 	if !valid || len(words) < 5 || words[0] != "go" || words[1] != "object" ||
-		words[2] != goos || words[3] != goarch || !gotoolchain.AuditedGo127(words[4]) {
+		words[2] != goos || words[3] != goarch {
 		return "", contextError("object target/version differs from selected compiler")
 	}
 	return words[4], nil

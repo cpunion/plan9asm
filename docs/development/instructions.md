@@ -843,7 +843,12 @@ actual SDK's complete macro-registration ASTs through the shared
 preprocessor consume that same observed target/profile definition list; header
 changes permanently revoke the source observation. Environment strings alone
 are not macro-source authority. Unknown generated/foreign/test/unwind roles
-remain Context, including current Windows auxiliary SEH records. Every
+remain Context. Closed fixed-local Windows metadata has a separate complete
+object/listing/prologue/source-PC join. Its exact SDK schema binds all eight
+producer inputs: hashed SEH definitions from Go 1.23 onward have different
+symbol/Aux enums, linkname flags and alignment listing syntax. Use the selected
+producer's schema, never optional formatting or global object-version widening.
+Native exception handlers remain outside that observation. Every
 Verify rechecks bytes, complete inventory and actual export/selection before and
 after commands; failure or Close revokes the token. The observer alone has no
 allocator, caller certificate, native-memory grant or compiler adapter.

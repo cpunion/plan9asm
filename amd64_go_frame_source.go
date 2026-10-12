@@ -376,7 +376,8 @@ func captureGoAMD64FrameSource(ctx context.Context, pkg GoPackage, request GoAMD
 			if err == nil && unwind != nil {
 				err = goAMD64FrameWindowsUnwindFunctions(functions, source.origins, source.request.Directory, *unwind)
 			}
-		} else if source.request.Target == "windows/amd64" && gotoolchain.AuditedGo127(source.env["GOVERSION"]) {
+		} else if source.request.Target == "windows/amd64" && (gotoolchain.AuditedGo127(source.env["GOVERSION"]) ||
+			bytes.Contains(listing, []byte(" SSEHUNWINDINFO "))) {
 			unwind, readErr := source.observeWindowsUnwind(objectBytes)
 			if readErr != nil {
 				return nil, readErr
@@ -1213,6 +1214,7 @@ func goAMD64FrameListingWithDataObject(listing []byte, file *File, pkg GoPackage
 func goAMD64FrameListingRecords(listing []byte, file *File, pkg GoPackage, origins map[string]int, texts []gostaticstorage.TextRecord, unwind *gostaticstorage.WindowsAMD64AssemblyUnwind, data *gostaticstorage.AMD64AssemblyData) (map[string]goAMD64FrameFunction, error) {
 	functions := make(map[string]goAMD64FrameFunction)
 	metadata := make(map[string][]byte)
+	metadataHeaders := make(map[string]string)
 	seenMetadata := make(map[string]bool)
 	if unwind != nil {
 		for _, record := range unwind.Unwind {
@@ -1220,6 +1222,11 @@ func goAMD64FrameListingRecords(listing []byte, file *File, pkg GoPackage, origi
 				return nil, goAMD64FrameContext("duplicate actual Windows metadata definition")
 			}
 			metadata[record.Name] = record.Data
+			header := record.Name + " SSEHUNWINDINFO dupok size=12"
+			if unwind.ListingAlignment {
+				header += " align=0x4"
+			}
+			metadataHeaders[header] = record.Name
 		}
 	}
 	scanner := bufio.NewScanner(bytes.NewReader(listing))
@@ -1264,13 +1271,13 @@ func goAMD64FrameListingRecords(listing []byte, file *File, pkg GoPackage, origi
 			functions[name] = goAMD64FrameFunction{locals: locals, args: args, positions: make(map[int]string), sourcePositions: make(map[int][]goAMD64FrameSourcePosition)}
 			continue
 		}
-		if header := goAMD64WindowsUnwindHeader.FindStringSubmatch(line); header != nil {
-			if unwind == nil || seenMetadata[header[1]] || metadata[header[1]] == nil ||
+		if header, exists := metadataHeaders[line]; exists {
+			if seenMetadata[header] || metadata[header] == nil ||
 				name != "" && int64(len(functions[name].code)) != expected ||
 				metadataName != "" && !bytes.Equal(metadataBytes, metadata[metadataName]) {
 				return nil, goAMD64FrameContext("unbound, duplicate or incomplete Windows metadata listing")
 			}
-			metadataName, name, metadataBytes = header[1], "", nil
+			metadataName, name, metadataBytes = header, "", nil
 			seenMetadata[metadataName] = true
 			continue
 		}

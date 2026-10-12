@@ -68,7 +68,11 @@ type TextMember struct {
 }
 
 func textBuiltins(source []byte) ([]TextReference, error) {
-	if digest(source) != formatSources[builtinSourceRole] {
+	return textBuiltinsForDigest(source, formatSources[builtinSourceRole])
+}
+
+func textBuiltinsForDigest(source []byte, expected string) ([]TextReference, error) {
+	if digest(source) != expected {
 		return nil, contextError("TEXT builtin source differs from the selected SDK")
 	}
 	file, err := parser.ParseFile(token.NewFileSet(), builtinSourceRole, source, 0)
@@ -175,6 +179,10 @@ func readTextObject(data []byte, target string, flags uint32, empty bool, builti
 }
 
 func readTextObjectReferences(data []byte, target string, flags uint32, empty bool, builtins []TextReference, referenced sdkReferencedSymbols) ([]TextRecord, error) {
+	return readTextObjectKinds(data, target, flags, empty, builtins, referenced, true)
+}
+
+func readTextObjectKinds(data []byte, target string, flags uint32, empty bool, builtins []TextReference, referenced sdkReferencedSymbols, fipsText bool) ([]TextRecord, error) {
 	object, err := checkedObject(data, flags, empty)
 	if err != nil {
 		return nil, err
@@ -222,7 +230,7 @@ func readTextObjectReferences(data []byte, target string, flags uint32, empty bo
 	var result []TextRecord
 	for index := 0; index < object.count; index++ {
 		definition := definitions[index]
-		if definition.Kind != 1 && definition.Kind != 2 { // Go IsText, not an inference from the name.
+		if definition.Kind != 1 && !(fipsText && definition.Kind == 2) { // Go IsText, not a symbol-name inference.
 			continue
 		}
 		value := TextRecord{Index: uint32(index), Namespace: definition.Namespace, Relative: definition.Relative,

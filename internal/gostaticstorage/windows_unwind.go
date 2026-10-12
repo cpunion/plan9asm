@@ -1,6 +1,7 @@
 package gostaticstorage
 
 import (
+	"bytes"
 	"encoding/base64"
 	"encoding/binary"
 	"strings"
@@ -16,8 +17,12 @@ type WindowsAMD64UnwindRecord struct {
 }
 
 type WindowsAMD64AssemblyUnwind struct {
-	Texts  []TextRecord
-	Unwind []WindowsAMD64UnwindRecord
+	Texts            []TextRecord
+	Unwind           []WindowsAMD64UnwindRecord
+	Version          string
+	AuxType          uint8
+	TextFlags2       uint8
+	ListingAlignment bool
 }
 
 // ObserveWindowsAMD64AssemblyUnwind is a read-only, bounded object observation.
@@ -28,19 +33,49 @@ func ObserveWindowsAMD64AssemblyUnwind(data, builtinSource []byte) (WindowsAMD64
 	if len(data) == 0 || len(data) > archiveLimit {
 		return result, contextError("Windows assembly object exceeds its byte bound")
 	}
-	builtins, err := textBuiltins(builtinSource)
+	version, err := objectHeaderVersion(data, "windows/amd64")
 	if err != nil {
 		return result, err
 	}
-	body, err := objectBody(data, "windows/amd64")
+	schema, ok := windowsUnwindFormat(version)
+	if !ok {
+		return result, contextError("unregistered Windows unwind object producer")
+	}
+	builtins, err := textBuiltinsForDigest(builtinSource, schema.builtin)
 	if err != nil {
 		return result, err
 	}
+	end := bytes.Index(data, []byte("\n!\n"))
+	if end < 0 || end > 4096 {
+		return result, contextError("invalid Windows assembly object text header")
+	}
+	body := data[end+3:]
 	object, err := checkedObject(body, 4, false)
 	if err != nil {
 		return result, err
 	}
-	texts, err := readTextObject(body, "windows/amd64", 4, false, builtins)
+	// Record widths/indexing are identical, but old symbol/Aux enums are not.
+	// Reject unknown historical values before invoking the shared byte reader.
+	for _, index := range []int{3, 4, 5, 6, 7} {
+		for pos := 0; pos < len(object.block(index)); pos += 21 {
+			kind := object.block(index)[pos+10]
+			if kind > schema.kind || schema.kind >= 24 && kind == 2 {
+				return result, contextError("unknown or FIPS Windows assembly symbol kind")
+			}
+		}
+	}
+	for pos := 0; pos < len(object.block(15)); pos += 9 {
+		if object.block(15)[pos] > schema.aux {
+			return result, contextError("unknown Windows assembly auxiliary kind")
+		}
+	}
+	for pos := 0; pos < len(object.block(14)); pos += 23 {
+		kind := binary.LittleEndian.Uint16(object.block(14)[pos+5:])
+		if !(kind >= 1 && kind <= schema.relocationMax || kind == 0x8001 || kind == 0x8005) {
+			return result, contextError("unknown Windows assembly relocation kind")
+		}
+	}
+	texts, err := readTextObjectKinds(body, "windows/amd64", 4, false, builtins, nil, false)
 	if err != nil {
 		return result, err
 	}
@@ -67,11 +102,11 @@ func ObserveWindowsAMD64AssemblyUnwind(data, builtinSource []byte) (WindowsAMD64
 			names[name] = true
 		}
 		for n := object.indices[1][index]; n < object.indices[1][index+1]; n++ {
-			if block(15)[int(n)*9] == 14 && symbol[10] != 1 {
+			if block(15)[int(n)*9] == schema.aux && symbol[10] != 1 {
 				return result, contextError("Windows SEH auxiliary belongs to a non-TEXT definition")
 			}
 		}
-		if symbol[10] != 25 {
+		if symbol[10] != schema.kind {
 			if strings.HasPrefix(name, "go:sehuw.") {
 				return result, contextError("Windows unwind name lacks its actual metadata kind")
 			}
@@ -79,7 +114,7 @@ func ObserveWindowsAMD64AssemblyUnwind(data, builtinSource []byte) (WindowsAMD64
 		}
 		start, end := object.indices[2][index], object.indices[2][index+1]
 		if index < hashedStart || index >= hashedEnd || binary.LittleEndian.Uint16(symbol[8:]) != 0 ||
-			symbol[11] != 3 || symbol[12] != 0 || binary.LittleEndian.Uint32(symbol[13:]) != 12 ||
+			symbol[11] != 3 || symbol[12] != schema.flag2 || binary.LittleEndian.Uint32(symbol[13:]) != 12 ||
 			binary.LittleEndian.Uint32(symbol[17:]) != 4 || end-start != 12 {
 			return result, contextError("Windows unwind symbol/block/extent role differs")
 		}
@@ -106,13 +141,14 @@ func ObserveWindowsAMD64AssemblyUnwind(data, builtinSource []byte) (WindowsAMD64
 	used := make(map[uint32]bool)
 	textNames := make(map[string]bool)
 	for _, text := range texts {
-		if text.Name == "" || textNames[text.Name] || text.Kind != 1 || text.ABI != 0 {
+		if text.Name == "" || textNames[text.Name] || text.Kind != 1 || text.ABI != 0 ||
+			text.Flags != 16 || text.Flags2 != schema.flag2 {
 			return WindowsAMD64AssemblyUnwind{}, contextError("Windows closed-local metadata needs complete distinct ABI0 TEXTs")
 		}
 		textNames[text.Name] = true
 		links := 0
 		for _, aux := range text.Auxiliary {
-			if aux.Type != 14 {
+			if aux.Type != schema.aux {
 				continue
 			}
 			links++
@@ -135,5 +171,7 @@ func ObserveWindowsAMD64AssemblyUnwind(data, builtinSource []byte) (WindowsAMD64
 		return WindowsAMD64AssemblyUnwind{}, contextError("Windows unwind inventory has an orphan definition")
 	}
 	result.Texts = texts
+	result.Version, result.AuxType = version, schema.aux
+	result.TextFlags2, result.ListingAlignment = schema.flag2, schema.listingAlignment
 	return result, nil
 }

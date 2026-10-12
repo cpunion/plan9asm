@@ -56,6 +56,15 @@ operand forms and parse errors across 41 assembly files. This is classification,
 not a complete standard-library compilation pass. The five-architecture
 official classification gate also passes without baseline edits.
 
+Historical Windows SEH now has independently pinned Go 1.23.12, 1.24.13,
+1.25.14 and 1.26.8 producer schemas, alongside 1.27.1/1.27.2. Each schema
+binds all eight source inputs, builtin indexes, symbol/Aux enums, flags and
+listing grammar; generic archive/DATA admission remains unchanged. Actual SDK
+object readers and complete source/listing mutation checks pass on all five
+minor versions. The discovering fixed-local Windows LLVM object matrices pass
+on 1.23.12 and 1.27.2. Evidence uses the `windows-seh-` prefix in the same
+ignored report directory; no historical or native runtime result is implied.
+
 Evidence lives under ignored `_out/register-result-repair/`, including
 `numerical-local-race-lifetime-green.log`, `embed-separator-go124-green.log`,
 `go-json-stream-green.log`, `scalar-relocation-family-green.log`,
@@ -69,14 +78,13 @@ Receipts certify only their exact frozen source and tool snapshots.
    failures separately. A successful main-module artifact does not establish
    that the same job's nested CLI passed. The local repairs above have not yet
    received a new full CI run.
-2. Audit historical Go 1.21–1.26 Windows SEH producers. Current observation
-   supports only the independently pinned Go 1.27 schema. Historical listing
-   headers omit alignment, but optional regex syntax alone is not a repair:
-   bind the complete producer, builtin table, symbol/Aux schema, alignment,
-   listing, physical prologue and source-PC inventory. Start with
-   `amd64_go_windows_unwind.go`, `amd64_go_frame_source.go` and
-   `internal/gostaticstorage/windows_unwind.go`. Windows native source-path and
-   executable handling still require their actual CI owner.
+2. Repair the remaining coverage/CLI environment failures: the mandatory SDK
+   table negative oracle rejects Go's legitimate coverage trailer; direct
+   ARM64 scratch fixtures lack an explicit temporary environment on Linux;
+   ordinary CLI cache defaults may refer to directories not yet created.
+   Preserve exact source failures, prepare environments before selection, and
+   never repair an already captured source identity. Windows native execution
+   still requires its actual CI owner.
 3. The 21 standard-library failures need actual runtime/reflect entry, TLS,
    hidden-register, caller-storage or SDK source contracts. Maps' immediate
    shuffle result analysis is repaired; AES mutable-global storage remains
