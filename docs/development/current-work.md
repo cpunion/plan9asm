@@ -39,8 +39,27 @@ These are that frozen run's results, not certification of the following repairs.
   All source/tool consumers now use the shared resolver; no lexical GOROOT
   fallback remains. Focused main-module/source/CPP/tool tests passed with
   Go 1.27 and Go 1.20, and the Windows helper cross-build passed with Go 1.20.
-  Full CLI/integration verification is still required. Diagnostic-only
-  workflows stay on the fork probe branch, outside the contribution history.
+  Complete local LLVM CLI passed in 1062.169 seconds at `0d90f0cd`.
+  Native Windows source-observation integration passed in
+  [38262857492](https://github.com/cpunion/plan9asm/actions/runs/38262857492),
+  but its complete CLI failed and exhausted thirty minutes. Remaining failures
+  include portable selection paths, physical SDK versus junction roots,
+  slash-spelled replacement roots, ARM64 scratch and imported type recapture.
+  Diagnostic-only workflows stay on the fork probe branch, outside the PR.
+- `f18f3e97`: unresolved GLOBL sizes retain `SizeRaw` and fail translation
+  with Context; no guessed 64-byte or zero-byte storage remains. Resolved
+  integer sizes pass actual-Go and LLVM 22 objects on all five architectures.
+- `26475c2a`: stdlib inventory expands literal includes using the selected SDK
+  and target macros. All ten Go 1.27 target scans have zero parse/unsupported
+  failures. This is inventory, not complete stdlib compilation. Official gates
+  pass on Go 1.20 and 1.27; eight wasm baselines add only the previously omitted
+  FUNCDATA form. Go 1.20's historical unsupported form remains explicit.
+- The next Windows repair gives all five virtual `go/build` contexts portable
+  joins and computes active CPP tool identity relative to the resolved SDK.
+  Independent local RED/GREEN tests retain missing, changed and escaping source
+  rejection. Module replacement roots normalize separators only, not dot
+  segments. Native Windows confirmation remains required. Expanded ARM64 source
+  metadata and same-source type-recapture tests diagnose the other failures.
 - `43d64b2a`: downloaded artifacts showed module aggregates differed from root
   owners in PATH because only root jobs installed QEMU. Every Linux role now
   installs the same pinned QEMU before Node; exact environment/source comparisons
@@ -89,12 +108,9 @@ tools; later edits do not inherit a complete-head pass.
    exhaustive runner without real descendant ownership and Windows tool/source
    scope. The sixteen-part Linux race schedule completed every owner; the
    remaining callback-timer repair still needs the full current-head race gate.
-4. The final macOS stdlib job reproduces two scan parse errors at unresolved
-   `PUSH_REGS_HOST_TO_ABI0()` in `runtime/asm_amd64.s` and
-   `runtime/sys_darwin_amd64.s`. `scanPackages` ignores includes and the token-aware
-   opcode parser sees `()` as an operand. Do not restore an ignored/no-op macro
-   path or bypass malformed operand validation. Real CPP expansion and its
-   source context are separate from opcode coverage.
+4. Rerun the full stdlib compile gate after the include/GLOBL repairs. Zero
+   inventory parse failures do not discharge runtime source/frame contracts.
+   Missing generated CPP headers remain unresolved, never ignored/no-op macros.
 5. The 21 benchmark failures still require runtime/reflect entry, TLS,
    hidden-register, caller-storage or source contracts. Dynamic reflect frames
    cannot be inferred from `func()`. ARM64 result-tail bytes are observable by

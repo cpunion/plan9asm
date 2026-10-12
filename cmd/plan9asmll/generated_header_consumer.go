@@ -151,7 +151,13 @@ func (consumer *featureConsumer) preprocessCPPSource(asm, packagePath string, de
 			if err != nil {
 				return "", nil, err
 			}
-			name, err = filepath.Rel(consumer.Root, resolved)
+			// Both operands need the same physical root. The driver's GOROOT
+			// may retain an ancestor alias (including a cross-volume junction).
+			root, err := sourcepath.Resolve(consumer.Root)
+			if err != nil {
+				return "", nil, err
+			}
+			name, err = filepath.Rel(root, resolved)
 			name = filepath.ToSlash(name)
 			if err != nil || !gotoolprofile.CPPLocalSource(name) {
 				return "", nil, fmt.Errorf("active CPP include lacks original module/tool provenance")

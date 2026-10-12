@@ -188,6 +188,7 @@ func validateTestDeclaration(input *ConsumerInput, packages []PackageProof, test
 		return err
 	}
 	ctx := build.Default
+	ctx.JoinPath = path.Join
 	ctx.GOOS, ctx.GOARCH, ctx.Compiler, ctx.CgoEnabled = observed.Environment["GOOS"], observed.Environment["GOARCH"], "gc", false
 	ctx.BuildTags, ctx.ToolTags, ctx.ReleaseTags = tags, observed.ToolTags, nil
 	for version := 1; version <= minor; version++ {

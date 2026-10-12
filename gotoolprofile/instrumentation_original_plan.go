@@ -215,6 +215,7 @@ func instrumentationOriginalBuildContext(sources *InstrumentationOriginalSourceI
 		return build.Context{}, err
 	}
 	ctx := build.Default
+	ctx.JoinPath = path.Join
 	ctx.GOOS, ctx.GOARCH = early.Environment["GOOS"], early.Environment["GOARCH"]
 	ctx.Compiler, ctx.CgoEnabled = "gc", early.CGOEnabled == "1"
 	ctx.BuildTags = append([]string(nil), tags...)
@@ -227,7 +228,7 @@ func instrumentationOriginalBuildContext(sources *InstrumentationOriginalSourceI
 		ctx.ReleaseTags = append(ctx.ReleaseTags, fmt.Sprintf("go1.%d", version))
 	}
 	ctx.OpenFile = func(file string) (io.ReadCloser, error) {
-		header, found := sources.Contents[filepath.ToSlash(file)]
+		header, found := sources.Contents[file]
 		if !found {
 			return nil, fmt.Errorf("uncaptured original selection input: %s", file)
 		}

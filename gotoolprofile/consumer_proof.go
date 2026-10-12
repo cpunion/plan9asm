@@ -5,7 +5,6 @@ import (
 	"go/build"
 	"io"
 	"path"
-	"path/filepath"
 	"reflect"
 	"sort"
 	"strings"
@@ -177,6 +176,7 @@ func ordinaryPackageSelectionContext(input *ConsumerInput, tags []string) (build
 		return build.Context{}, err
 	}
 	ctx := build.Default
+	ctx.JoinPath = path.Join
 	ctx.GOOS, ctx.GOARCH = input.Observed.Environment["GOOS"], input.Observed.Environment["GOARCH"]
 	ctx.Compiler, ctx.CgoEnabled, ctx.BuildTags = "gc", false, tags
 	ctx.ToolTags, ctx.ReleaseTags = input.Observed.ToolTags, nil
@@ -184,7 +184,7 @@ func ordinaryPackageSelectionContext(input *ConsumerInput, tags []string) (build
 		ctx.ReleaseTags = append(ctx.ReleaseTags, fmt.Sprintf("go1.%d", version))
 	}
 	ctx.OpenFile = func(name string) (io.ReadCloser, error) {
-		header, found := input.Headers[filepath.ToSlash(name)]
+		header, found := input.Headers[name]
 		if !found {
 			return nil, fmt.Errorf("actual Go file has no original selection header: %s", name)
 		}

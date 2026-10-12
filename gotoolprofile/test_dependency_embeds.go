@@ -85,6 +85,7 @@ func (name testEmbedFileInfo) Sys() any           { return nil }
 
 func testEmbedPatterns(pkg PackageProof, directives, headers map[string]string) ([]string, error) {
 	ctx := build.Default
+	ctx.JoinPath = path.Join
 	ctx.UseAllFiles, ctx.CgoEnabled = true, false
 	ctx.ReadDir = func(string) ([]fs.FileInfo, error) {
 		var files []fs.FileInfo
@@ -94,7 +95,7 @@ func testEmbedPatterns(pkg PackageProof, directives, headers map[string]string) 
 		return files, nil
 	}
 	ctx.OpenFile = func(filename string) (io.ReadCloser, error) {
-		file := path.Join(path.Dir(pkg.GoFiles[0]), filepath.Base(filename))
+		file := path.Join(path.Dir(pkg.GoFiles[0]), path.Base(filename))
 		header, present := headers[file]
 		if !present {
 			return nil, fmt.Errorf("embed source lacks its original selection/import header")
