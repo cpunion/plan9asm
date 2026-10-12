@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 	"text/scanner"
+
+	"github.com/xgo-dev/plan9asm/internal/sourcepath"
 )
 
 const CPPPackageSearchMissProtocol = "actual_go_fixed_include_search_miss_v1"
@@ -103,12 +105,12 @@ func CPPPreferredPackageInclude(moduleRoot, assembly, include string) (string, e
 	if _, _, err := CPPIncludeCandidates(assembly, include); err != nil {
 		return "", err
 	}
-	root, err := filepath.EvalSymlinks(moduleRoot)
+	root, err := sourcepath.Resolve(moduleRoot)
 	if err != nil || !filepath.IsAbs(root) {
 		return "", fmt.Errorf("CPP search has no actual canonical module origin")
 	}
 	packageDir := filepath.Join(root, filepath.FromSlash(path.Dir(assembly)))
-	physicalDir, err := filepath.EvalSymlinks(packageDir)
+	physicalDir, err := sourcepath.Resolve(packageDir)
 	if err != nil || physicalDir != packageDir {
 		return "", fmt.Errorf("CPP package directory is missing or redirected")
 	}
@@ -190,12 +192,12 @@ func CPPRegularSource(root, file string) (string, error) {
 	if !filepath.IsAbs(root) || !CPPLocalSource(file) {
 		return "", fmt.Errorf("unsafe exact CPP source identity")
 	}
-	resolvedRoot, err := filepath.EvalSymlinks(root)
+	resolvedRoot, err := sourcepath.Resolve(root)
 	if err != nil {
 		return "", err
 	}
 	name := filepath.Join(resolvedRoot, filepath.FromSlash(file))
-	resolved, err := filepath.EvalSymlinks(name)
+	resolved, err := sourcepath.Resolve(name)
 	if err != nil {
 		return "", fmt.Errorf("CPP source is missing: %s: %w", file, err)
 	}

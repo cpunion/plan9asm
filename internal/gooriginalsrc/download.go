@@ -11,6 +11,7 @@ import (
 	"sync"
 
 	"github.com/xgo-dev/plan9asm/internal/golegacymod"
+	"github.com/xgo-dev/plan9asm/internal/sourcepath"
 	"golang.org/x/mod/modfile"
 	"golang.org/x/mod/module"
 	"golang.org/x/mod/sumdb/dirhash"
@@ -128,7 +129,7 @@ func (set *OriginSet) observe(ctx context.Context, path, version string, receipt
 		{receipt.Dir, root}, {receipt.Zip, prefix + ".zip"}, {receipt.GoMod, prefix + ".mod"},
 	}
 	for _, role := range roles {
-		physical, err := filepath.EvalSymlinks(role.actual)
+		physical, err := sourcepath.Resolve(role.actual)
 		if err != nil || physical != role.expected {
 			return Module{}, fmt.Errorf("actual exact download escaped its canonical cache source role")
 		}
@@ -236,7 +237,7 @@ func (set *OriginSet) retainCacheDirectory(name string) error {
 	if _, retained := set.directories[name]; !retained && len(set.directories) >= directoryLimit {
 		return fmt.Errorf("downloaded cache directory inventory exceeds its count bound")
 	}
-	physical, err := filepath.EvalSymlinks(name)
+	physical, err := sourcepath.Resolve(name)
 	info, statErr := os.Lstat(name)
 	if err != nil || statErr != nil || physical != name || !info.IsDir() {
 		return fmt.Errorf("downloaded source cache directory is missing, redirected or over-bound")
@@ -266,7 +267,7 @@ func (set *OriginSet) verifyLocked() error {
 		return fmt.Errorf("exact original source guard is permanently revoked")
 	}
 	for name, expected := range set.directories {
-		physical, err := filepath.EvalSymlinks(name)
+		physical, err := sourcepath.Resolve(name)
 		actual, statErr := os.Lstat(name)
 		if err != nil || statErr != nil || physical != name || !actual.IsDir() || !os.SameFile(expected, actual) {
 			return fmt.Errorf("downloaded source cache directory identity changed")

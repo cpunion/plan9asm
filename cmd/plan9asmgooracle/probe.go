@@ -16,6 +16,7 @@ import (
 	"github.com/xgo-dev/plan9asm/internal/goasmoracle"
 	"github.com/xgo-dev/plan9asm/internal/gooriginalsrc"
 	"github.com/xgo-dev/plan9asm/internal/gostaticstorage"
+	"github.com/xgo-dev/plan9asm/internal/sourcepath"
 )
 
 func probe(ctx context.Context, dir string, inputs *inputTransaction, index int, row string) result {
@@ -29,7 +30,7 @@ func probe(ctx context.Context, dir string, inputs *inputTransaction, index int,
 	if err := os.Mkdir(dir, 0700); err != nil {
 		return fail(err)
 	}
-	physical, err := filepath.EvalSymlinks(dir)
+	physical, err := sourcepath.Resolve(dir)
 	if err != nil || physical != dir {
 		return fail(fmt.Errorf("owned case directory was redirected"))
 	}
@@ -80,7 +81,7 @@ func probe(ctx context.Context, dir string, inputs *inputTransaction, index int,
 	endedSource, valid := goasmoracle.ReadSource(item.Source)
 	after, sourceErr := os.Lstat(item.Source)
 	endedDirectory, directoryErr := os.Lstat(dir)
-	endedPhysical, physicalErr := filepath.EvalSymlinks(dir)
+	endedPhysical, physicalErr := sourcepath.Resolve(dir)
 	if !valid || sourceErr != nil || guard.Verify() != nil || !os.SameFile(before, after) ||
 		!reflect.DeepEqual(generation(before), generation(after)) || !bytes.Equal(endedSource, source) ||
 		directoryErr != nil || !os.SameFile(directory, endedDirectory) || physicalErr != nil || endedPhysical != dir {

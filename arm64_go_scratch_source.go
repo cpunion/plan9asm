@@ -23,6 +23,7 @@ import (
 
 	"github.com/xgo-dev/plan9asm/internal/goasmcmd"
 	"github.com/xgo-dev/plan9asm/internal/gosym"
+	"github.com/xgo-dev/plan9asm/internal/sourcepath"
 )
 
 // GoARM64ScratchCaptureRequest describes actual stock-Go inputs. No field is
@@ -138,7 +139,7 @@ func CaptureGoARM64ScratchSource(ctx context.Context, pkg GoPackage, request GoA
 		return nil, arm64ScratchContext("target is outside the ordinary ARM64 object domain")
 	}
 	var err error
-	request.Directory, err = filepath.EvalSymlinks(request.Directory)
+	request.Directory, err = sourcepath.Resolve(request.Directory)
 	if err != nil {
 		return nil, err
 	}
@@ -183,7 +184,7 @@ func CaptureGoARM64ScratchSource(ctx context.Context, pkg GoPackage, request GoA
 	if settings["CGO_ENABLED"] != "0" {
 		return nil, arm64ScratchContext("actual CGO role needs an independent native closure")
 	}
-	root, err := filepath.EvalSymlinks(settings["GOROOT"])
+	root, err := sourcepath.Resolve(settings["GOROOT"])
 	if err != nil || !filepath.IsAbs(root) || !goAssemblyPathWithinRoot(root, request.GoBinary) {
 		return nil, arm64ScratchContext("actual Go binary and SDK differ")
 	}
@@ -275,7 +276,7 @@ func CaptureGoARM64ScratchSource(ctx context.Context, pkg GoPackage, request GoA
 	}()
 	// Request TMPDIR may be an alias. Bind only this newly created factory
 	// directory to its physical path; original/tool inputs remain strict.
-	canonicalOwned, err := filepath.EvalSymlinks(source.owned)
+	canonicalOwned, err := sourcepath.Resolve(source.owned)
 	if err != nil {
 		return nil, err
 	}

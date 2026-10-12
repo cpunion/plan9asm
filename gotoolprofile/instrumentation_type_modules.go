@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/xgo-dev/plan9asm/internal/sourcepath"
 	"golang.org/x/mod/module"
 )
 
@@ -90,7 +91,7 @@ func BindInstrumentationTypeModuleSources(ctx context.Context, binary, directory
 			download.Sum != source.ModuleSum || download.GoModSum != source.GoModSum {
 			return nil, fmt.Errorf("instrumentation source download differs from its exact ZIP/mod identity: %v", err)
 		}
-		root, err := filepath.EvalSymlinks(download.Dir)
+		root, err := sourcepath.Resolve(download.Dir)
 		if err != nil || !filepath.IsAbs(root) {
 			return nil, fmt.Errorf("instrumentation foreign source lacks an actual canonical root")
 		}
@@ -108,7 +109,7 @@ func (guard *InstrumentationTypeModuleGuard) bindMetadata(binding *instrumentati
 	if err := VerifyTestModuleGoModMetadata(binding.source, binding.root, filename, binding.downloadedMod); err != nil {
 		return err
 	}
-	resolved, err := filepath.EvalSymlinks(filename)
+	resolved, err := sourcepath.Resolve(filename)
 	if err != nil {
 		return err
 	}
@@ -129,7 +130,7 @@ func (guard *InstrumentationTypeModuleGuard) bindPackage(pkg instrumentationType
 	source.ModulePath, source.Version = actual.Path, actual.Version
 	source.SourceModule, source.SourceVersion, source.SourceRole = actual.Path, actual.Version, "module"
 	metadata := actual.GoMod
-	root, err := filepath.EvalSymlinks(actual.Dir)
+	root, err := sourcepath.Resolve(actual.Dir)
 	if err != nil {
 		return nil, source, err
 	}
@@ -137,7 +138,7 @@ func (guard *InstrumentationTypeModuleGuard) bindPackage(pkg instrumentationType
 		if replacement.Main || replacement.Replace != nil || module.Check(replacement.Path, replacement.Version) != nil {
 			return nil, source, fmt.Errorf("instrumentation foreign source has unknown/local/nested replacement")
 		}
-		replaced, err := filepath.EvalSymlinks(replacement.Dir)
+		replaced, err := sourcepath.Resolve(replacement.Dir)
 		if err != nil || root != replaced {
 			return nil, source, fmt.Errorf("instrumentation replacement changed its actual source root")
 		}
@@ -165,7 +166,7 @@ func (guard *InstrumentationTypeModuleGuard) Verify(ctx context.Context) error {
 			return err
 		}
 		for name, wanted := range binding.metadata {
-			actual, err := filepath.EvalSymlinks(name)
+			actual, err := sourcepath.Resolve(name)
 			if err != nil || actual != wanted {
 				return fmt.Errorf("instrumentation foreign metadata path changed after loading")
 			}

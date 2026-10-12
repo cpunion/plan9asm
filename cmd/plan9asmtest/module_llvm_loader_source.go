@@ -10,6 +10,8 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+
+	"github.com/xgo-dev/plan9asm/internal/sourcepath"
 )
 
 type moduleLLVMProbeSource struct {
@@ -41,7 +43,7 @@ func prepareModuleLLVMProbeSource(ctx context.Context, stem string) (input modul
 	if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 || !filepath.IsAbs(parent) {
 		return input, fmt.Errorf("LLVM probe requires an owned regular artifact parent: %v", err)
 	}
-	physical, err := filepath.EvalSymlinks(parent)
+	physical, err := sourcepath.Resolve(parent)
 	if err != nil {
 		return input, err
 	}

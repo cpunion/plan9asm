@@ -15,6 +15,7 @@ import (
 
 	"github.com/xgo-dev/plan9asm/internal/goasmcmd"
 	"github.com/xgo-dev/plan9asm/internal/gostaticstorage"
+	"github.com/xgo-dev/plan9asm/internal/sourcepath"
 )
 
 // GoX86SDKASMDataCaptureRequest selects one physical package in the invoked
@@ -118,7 +119,7 @@ func CaptureGoX86SDKASMDataSource(ctx context.Context, request GoX86SDKASMDataCa
 			result = errors.Join(result, source.Close())
 		}
 	}()
-	canonical, err := filepath.EvalSymlinks(owned)
+	canonical, err := sourcepath.Resolve(owned)
 	info, statErr := os.Lstat(canonical)
 	if err != nil || statErr != nil || !info.IsDir() || !os.SameFile(info, source.guard.ownedInfo) ||
 		!goAssemblyPathWithinRoot(provided["TMPDIR"], canonical) {
@@ -168,7 +169,7 @@ func sdkASMDataEnvironment(request GoX86SDKASMDataCaptureRequest) (map[string]st
 }
 
 func (source *GoX86SDKASMDataSource) retainDirectory(directory string) error {
-	resolved, err := filepath.EvalSymlinks(directory)
+	resolved, err := sourcepath.Resolve(directory)
 	info, statErr := os.Lstat(directory)
 	if !filepath.IsAbs(directory) || err != nil || resolved != directory || statErr != nil || !info.IsDir() {
 		return sdkASMDataContext("missing or redirected source/command directory")
@@ -179,7 +180,7 @@ func (source *GoX86SDKASMDataSource) retainDirectory(directory string) error {
 
 func (source *GoX86SDKASMDataSource) verifyDirectories() error {
 	for directory, before := range source.directories {
-		resolved, err := filepath.EvalSymlinks(directory)
+		resolved, err := sourcepath.Resolve(directory)
 		after, statErr := os.Lstat(directory)
 		if err != nil || resolved != directory || statErr != nil || !after.IsDir() || !os.SameFile(before, after) {
 			return sdkASMDataContext("source/command directory identity changed")

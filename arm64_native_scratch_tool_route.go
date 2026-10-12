@@ -3,6 +3,8 @@ package plan9asm
 import (
 	"path/filepath"
 	"strings"
+
+	"github.com/xgo-dev/plan9asm/internal/sourcepath"
 )
 
 // Only paths actually returned by the stock driver for its builtin tools or
@@ -15,11 +17,11 @@ func (source *GoARM64ScratchSource) readObservedCacheFile(name string) ([]byte, 
 		!filepath.IsAbs(cache) || !goAssemblyPathWithinRoot(cache, name) {
 		return nil, arm64ScratchContext("unrecognized driver-generated cache input")
 	}
-	physicalCache, err := filepath.EvalSymlinks(cache)
+	physicalCache, err := sourcepath.Resolve(cache)
 	if err != nil {
 		return nil, err
 	}
-	physical, err := filepath.EvalSymlinks(name)
+	physical, err := sourcepath.Resolve(name)
 	if err != nil || !goAssemblyPathWithinRoot(physicalCache, physical) {
 		return nil, arm64ScratchContext("driver-generated input escaped its actual cache")
 	}
@@ -70,7 +72,7 @@ func (source *GoARM64ScratchSource) readObservedExport(pkg arm64ScratchPackage) 
 
 func (source *GoARM64ScratchSource) verifyGeneratedPaths() error {
 	for original, expected := range source.generatedPaths {
-		actual, err := filepath.EvalSymlinks(original)
+		actual, err := sourcepath.Resolve(original)
 		if err != nil || actual != expected {
 			return arm64ScratchContext("driver-generated cache input was redirected")
 		}

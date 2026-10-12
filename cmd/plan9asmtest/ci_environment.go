@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"github.com/xgo-dev/plan9asm/internal/sourcepath"
 )
 
 // This is an observation, not a trusted index. Both the producer and the
@@ -32,7 +34,7 @@ var ciProcessControls = []string{
 func captureCIEnvironmentContext(directory string, environment map[string]string) (ciEnvironmentContext, error) {
 	observation := ciEnvironmentContext{Directory: directory, Process: map[string]string{}}
 	var err error
-	observation.Physical, err = filepath.EvalSymlinks(directory)
+	observation.Physical, err = sourcepath.Resolve(directory)
 	if err != nil {
 		return observation, err
 	}

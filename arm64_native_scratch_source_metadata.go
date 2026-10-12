@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/xgo-dev/plan9asm/internal/gosym"
+	"github.com/xgo-dev/plan9asm/internal/sourcepath"
 )
 
 func (source *GoARM64ScratchSource) captureObjectSourceMetadata(root string) error {
@@ -167,7 +168,7 @@ func (source *GoARM64ScratchSource) originalObjectSource(name string) (string, b
 	if !filepath.IsAbs(name) || filepath.Clean(name) != name {
 		return "", false
 	}
-	physical, err := filepath.EvalSymlinks(name)
+	physical, err := sourcepath.Resolve(name)
 	if err != nil || physical != name {
 		return "", false
 	}

@@ -7,6 +7,8 @@ import (
 	"io"
 	"path/filepath"
 	"reflect"
+
+	"github.com/xgo-dev/plan9asm/internal/sourcepath"
 )
 
 // SDK imports supply actual compiler types, never caller-memory permissions.
@@ -32,11 +34,11 @@ func (source *GoAMD64FrameSource) bindOriginalDeclarationImports(output []byte) 
 	if len(output) > 16<<20 {
 		return nil, goAMD64FrameContext("declaration import graph exceeds its bound")
 	}
-	root, err := filepath.EvalSymlinks(source.env["GOROOT"])
+	root, err := sourcepath.Resolve(source.env["GOROOT"])
 	if err != nil {
 		return nil, err
 	}
-	cache, err := filepath.EvalSymlinks(source.env["GOCACHE"])
+	cache, err := sourcepath.Resolve(source.env["GOCACHE"])
 	if err != nil {
 		return nil, err
 	}
@@ -56,7 +58,7 @@ func (source *GoAMD64FrameSource) bindOriginalDeclarationImports(output []byte) 
 			return nil, goAMD64FrameContext("incomplete or nonordinary declaration import graph")
 		}
 		if selected.ImportPath == source.selection.ImportPath {
-			selected.Export, err = filepath.EvalSymlinks(selected.Export)
+			selected.Export, err = sourcepath.Resolve(selected.Export)
 			if err != nil || originalFound || !reflect.DeepEqual(selected, source.selection) {
 				return nil, goAMD64FrameContext("declaration graph lost the actual original package")
 			}
@@ -67,11 +69,11 @@ func (source *GoAMD64FrameSource) bindOriginalDeclarationImports(output []byte) 
 			!filepath.IsLocal(filepath.FromSlash(selected.ImportPath)) {
 			return nil, goAMD64FrameContext("foreign or duplicate declaration dependency needs authenticated handoff")
 		}
-		dir, err := filepath.EvalSymlinks(selected.Dir)
+		dir, err := sourcepath.Resolve(selected.Dir)
 		var wanted string
 		var wantedErr error
 		if selected.Standard && selected.Module == nil {
-			wanted, wantedErr = filepath.EvalSymlinks(filepath.Join(root, "src", filepath.FromSlash(selected.ImportPath)))
+			wanted, wantedErr = sourcepath.Resolve(filepath.Join(root, "src", filepath.FromSlash(selected.ImportPath)))
 		} else {
 			wanted, wantedErr = source.downloadedDeclarationDirectory(selected)
 		}
@@ -111,7 +113,7 @@ func (source *GoAMD64FrameSource) bindOriginalDeclarationImports(output []byte) 
 			}
 		}
 		if selected.ImportPath != "unsafe" {
-			selected.Export, err = filepath.EvalSymlinks(selected.Export)
+			selected.Export, err = sourcepath.Resolve(selected.Export)
 			if err != nil || !goAssemblyPathWithinRoot(cache, selected.Export) {
 				return nil, goAMD64FrameContext("declaration compiler export is outside its actual cache")
 			}

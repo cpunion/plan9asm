@@ -3,6 +3,8 @@ package gotoolprofile
 import (
 	"fmt"
 	"path/filepath"
+
+	"github.com/xgo-dev/plan9asm/internal/sourcepath"
 )
 
 // SDK dependencies supply actual compiler exports and their complete guarded
@@ -16,8 +18,8 @@ func captureAMD64OriginalSDKDependency(pkg amd64OriginalListPackage, goRoot stri
 	if !pkg.Standard || pkg.Module != nil || !CPPLocalSource(pkg.ImportPath) {
 		return fmt.Errorf("original SDK dependency lacks its actual standard package role")
 	}
-	wanted, err := filepath.EvalSymlinks(filepath.Join(goRoot, "src", filepath.FromSlash(pkg.ImportPath)))
-	directory, dirErr := filepath.EvalSymlinks(pkg.Dir)
+	wanted, err := sourcepath.Resolve(filepath.Join(goRoot, "src", filepath.FromSlash(pkg.ImportPath)))
+	directory, dirErr := sourcepath.Resolve(pkg.Dir)
 	if err != nil || dirErr != nil || directory != wanted || files.directories[directory] == nil {
 		return fmt.Errorf("original SDK dependency lacks its complete bound source directory")
 	}

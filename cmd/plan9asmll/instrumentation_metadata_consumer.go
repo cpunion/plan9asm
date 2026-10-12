@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/xgo-dev/plan9asm/gotoolprofile"
+	"github.com/xgo-dev/plan9asm/internal/sourcepath"
 	"golang.org/x/tools/go/packages"
 )
 
@@ -39,11 +40,11 @@ func captureInstrumentationMetadata(ctx context.Context, input *gotoolprofile.In
 	if len(plan.CgoFiles) != 0 {
 		return nil, fmt.Errorf("mode metadata cannot bind generated cgo compiler inputs without their original source mapping")
 	}
-	dir, err := filepath.EvalSymlinks(input.Original.SourceRoot)
+	dir, err := sourcepath.Resolve(input.Original.SourceRoot)
 	if err != nil {
 		return nil, err
 	}
-	invocation, err = filepath.EvalSymlinks(invocation)
+	invocation, err = sourcepath.Resolve(invocation)
 	if err != nil {
 		return nil, err
 	}

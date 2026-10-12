@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 
 	"github.com/xgo-dev/plan9asm/gotoolprofile"
+	"github.com/xgo-dev/plan9asm/internal/sourcepath"
 	"golang.org/x/tools/go/packages"
 )
 
@@ -27,11 +28,11 @@ func ordinaryDependencyOriginalPath(observed, root, filename string) (string, er
 			return "", fmt.Errorf("ordinary dependency has an unbound original source path")
 		}
 	}
-	resolved, err := filepath.EvalSymlinks(observed)
+	resolved, err := sourcepath.Resolve(observed)
 	if err != nil || resolved != root {
 		return "", fmt.Errorf("ordinary dependency observed source root changed")
 	}
-	resolved, err = filepath.EvalSymlinks(root)
+	resolved, err = sourcepath.Resolve(root)
 	if err != nil || resolved != root {
 		return "", fmt.Errorf("ordinary dependency canonical source root changed")
 	}
@@ -48,11 +49,11 @@ func ordinaryDependencyOriginalPath(observed, root, filename string) (string, er
 		}
 	}
 	canonical := filepath.Join(root, relative)
-	resolved, err = filepath.EvalSymlinks(canonical)
+	resolved, err = sourcepath.Resolve(canonical)
 	if err != nil || resolved != canonical {
 		return "", fmt.Errorf("ordinary dependency source is internally redirected")
 	}
-	resolved, err = filepath.EvalSymlinks(filename)
+	resolved, err = sourcepath.Resolve(filename)
 	if err != nil || resolved != canonical {
 		return "", fmt.Errorf("ordinary dependency original source identity changed")
 	}

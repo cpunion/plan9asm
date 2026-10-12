@@ -14,15 +14,33 @@ updates. Do not restore those workloads or promote historical outcomes here.
 The translator retains instruction families, shared source/tool observations,
 independent regressions, official coverage and benchmarks.
 
-Published `2a04a4b2` completed [run 38211857025](https://github.com/xgo-dev/plan9asm/actions/runs/38211857025)
-with 120 successful, 29 failed and one cancelled job. All sixteen cross-runtime
-execution owners and their aggregate passed. All ten coverage execution owners
-passed, but coverage aggregation failed. Benchmark compilation remained 164/185:
+Published `24851df2` completed [run 38236001451](https://github.com/xgo-dev/plan9asm/actions/runs/38236001451)
+with 143 successful and 15 failed jobs, down from 29 failures and one cancellation.
+Ordinary module and coverage aggregates passed, as did the Windows `plan9asm`
+CLI. Race root 0 failed one reentry test; its aggregate correctly failed too.
+Benchmark compilation remained 164/185:
 386 29/33, amd64 49/56, arm 27/30, arm64 40/47 and wasm 19/19.
 These are that frozen run's results, not certification of the following repairs.
 
 ## Latest local repair batch
 
+- `7bdc112a`: Windows C text-mode CRLF now retains the exact observation
+  fields; bare/embedded CR and all incomplete packets still fail. Reentry checks
+  the Frame lock at the actual external callback instead of imposing ten seconds
+  on complete source replay. Go 1.27 focused tests passed in 53.327 seconds,
+  Go 1.20 protocol checks and vet passed, and Linux/amd64 container race passed
+  all three lifecycle cases in 845.246 seconds. This is not native ISA evidence.
+- Windows native diagnostics reproduced the junction failure with
+  `winsymlink=1`, independent of LLVM installation. The new `internal/sourcepath`
+  uses the opened file's normalized Windows final path and rechecks file identity;
+  Unix retains EvalSymlinks. Its native junction RED/GREEN runs are
+  [38261044890](https://github.com/cpunion/plan9asm/actions/runs/38261044890) and
+  [38261402328](https://github.com/cpunion/plan9asm/actions/runs/38261402328).
+  All source/tool consumers now use the shared resolver; no lexical GOROOT
+  fallback remains. Focused main-module/source/CPP/tool tests passed with
+  Go 1.27 and Go 1.20, and the Windows helper cross-build passed with Go 1.20.
+  Full CLI/integration verification is still required. Diagnostic-only
+  workflows stay on the fork probe branch, outside the contribution history.
 - `43d64b2a`: downloaded artifacts showed module aggregates differed from root
   owners in PATH because only root jobs installed QEMU. Every Linux role now
   installs the same pinned QEMU before Node; exact environment/source comparisons
@@ -63,14 +81,14 @@ tools; later edits do not inherit a complete-head pass.
    allowed-fork contribution ref, then inspect fresh CI. No upstream manual
    cancellation/rerun is authorized. Native Windows executable/coverage fixes
    require their real host jobs; diagnostics alone do not resolve bugs.
-2. Windows `plan9asmll` has a common bare path error during feature capture and
-   SDK CPP fallback. Use directory-origin diagnostics to locate it; do not
-   replace failed source/tool observations with guessed paths or skips.
+2. Validate the common Windows junction repair through the complete CLI, actual
+   SDK routes and CPP rejection controls. A standalone path test is not complete
+   compilation/linking or source-proof validation.
 3. Windows' complete main-module suite exhausts its thirty-minute deadline.
    Partition without losing actual inventory. Do not enable the Unix-only
    exhaustive runner without real descendant ownership and Windows tool/source
-   scope. The cancelled Linux race root hit its 75-minute job budget; the new
-   sixteen-part schedule still needs current-head CI confirmation.
+   scope. The sixteen-part Linux race schedule completed every owner; the
+   remaining callback-timer repair still needs the full current-head race gate.
 4. The final macOS stdlib job reproduces two scan parse errors at unresolved
    `PUSH_REGS_HOST_TO_ABI0()` in `runtime/asm_amd64.s` and
    `runtime/sys_darwin_amd64.s`. `scanPackages` ignores includes and the token-aware

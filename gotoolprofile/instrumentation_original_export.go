@@ -12,6 +12,8 @@ import (
 	"reflect"
 	"sort"
 	"strings"
+
+	"github.com/xgo-dev/plan9asm/internal/sourcepath"
 )
 
 const instrumentationOriginalExportProtocol = "actual_go_instrumentation_original_export_v1"
@@ -224,11 +226,11 @@ func decodeInstrumentationOriginalExport(data []byte, input *ConsumerInput, plan
 	if err := decoder.Decode(new(any)); err != io.EOF {
 		return "", nil, fmt.Errorf("actual original export contains multiple packages or trailing text")
 	}
-	root, err := filepath.EvalSymlinks(input.SourceRoot)
+	root, err := sourcepath.Resolve(input.SourceRoot)
 	if err != nil {
 		return "", nil, err
 	}
-	actualDir, dirErr := filepath.EvalSymlinks(pkg.Dir)
+	actualDir, dirErr := sourcepath.Resolve(pkg.Dir)
 	if dirErr != nil || actualDir != filepath.Join(root, filepath.FromSlash(plan.PackageDirectory)) || pkg.ImportPath != plan.PackagePath ||
 		pkg.Name != plan.PackageName || pkg.BuildID == "" || pkg.Incomplete || len(pkg.Error) != 0 || len(pkg.DepsErrors) != 0 ||
 		len(pkg.CgoFiles)+len(pkg.CFiles)+len(pkg.CXXFiles)+len(pkg.FFiles)+len(pkg.SwigFiles)+len(pkg.SwigCXXFiles) != 0 {
@@ -241,7 +243,7 @@ func decodeInstrumentationOriginalExport(data []byte, input *ConsumerInput, plan
 		pkg.Module.Main != (input.SourceModule == "") || input.SourceModule != "" && input.SourceModule != input.Module {
 		return "", nil, fmt.Errorf("actual original export module/version/main/replacement differs from immutable source identity")
 	}
-	moduleDir, err := filepath.EvalSymlinks(pkg.Module.Dir)
+	moduleDir, err := sourcepath.Resolve(pkg.Module.Dir)
 	if err != nil || moduleDir != root {
 		return "", nil, fmt.Errorf("actual module directory differs from the original source root")
 	}
@@ -294,11 +296,11 @@ func decodeInstrumentationOriginalExport(data []byte, input *ConsumerInput, plan
 	if hash, err := FileSHA256(pkg.Module.GoMod); err != nil || hash != expectedMod || expectedMod == "" {
 		return "", nil, fmt.Errorf("actual module metadata differs from the immutable original origin")
 	}
-	resolvedCache, err := filepath.EvalSymlinks(cache)
+	resolvedCache, err := sourcepath.Resolve(cache)
 	if err != nil {
 		return "", nil, err
 	}
-	archive, err := filepath.EvalSymlinks(pkg.Export)
+	archive, err := sourcepath.Resolve(pkg.Export)
 	relative, relErr := filepath.Rel(resolvedCache, archive)
 	if err != nil || relErr != nil || !filepath.IsAbs(pkg.Export) || !filepath.IsLocal(relative) {
 		return "", nil, fmt.Errorf("actual original export is absent or outside its observed owned cache")
@@ -310,7 +312,7 @@ func recheckInstrumentationOriginalSources(input *ConsumerInput) error {
 	if input == nil || !filepath.IsAbs(input.SourceRoot) || len(input.Sources) == 0 || len(input.Sources) > 65536 || len(input.Directories) == 0 {
 		return fmt.Errorf("missing bounded original source inventory")
 	}
-	root, err := filepath.EvalSymlinks(input.SourceRoot)
+	root, err := sourcepath.Resolve(input.SourceRoot)
 	if err != nil {
 		return err
 	}
@@ -319,7 +321,7 @@ func recheckInstrumentationOriginalSources(input *ConsumerInput) error {
 			return fmt.Errorf("original directory escapes its source root")
 		}
 		physical := filepath.Join(root, filepath.FromSlash(directory))
-		resolved, err := filepath.EvalSymlinks(physical)
+		resolved, err := sourcepath.Resolve(physical)
 		if err != nil || resolved != physical {
 			return fmt.Errorf("original directory is absent or redirected: %s", directory)
 		}

@@ -17,6 +17,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/xgo-dev/plan9asm/internal/sourcepath"
 	"golang.org/x/mod/module"
 )
 
@@ -325,7 +326,7 @@ func CaptureTestEmbedSelection(pkg PackageProof, root string, patterns, files []
 		if !filepath.IsAbs(filename) {
 			filename = filepath.Join(root, filepath.FromSlash(file))
 		}
-		filename, err := filepath.EvalSymlinks(filename)
+		filename, err := sourcepath.Resolve(filename)
 		if err != nil {
 			return nil, fmt.Errorf("actual embed file has no canonical original source: %w", err)
 		}

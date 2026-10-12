@@ -16,6 +16,7 @@ import (
 	"github.com/xgo-dev/plan9asm/internal/gooriginalsrc"
 	"github.com/xgo-dev/plan9asm/internal/gostaticstorage"
 	"github.com/xgo-dev/plan9asm/internal/gotoolchain"
+	"github.com/xgo-dev/plan9asm/internal/sourcepath"
 )
 
 type fileInput struct {
@@ -129,7 +130,7 @@ func captureInputs(ctx context.Context, opt options) (inputs *inputTransaction, 
 		if !filepath.IsAbs(name) {
 			return inputs, fmt.Errorf("original input must be absolute")
 		}
-		physical, err := filepath.EvalSymlinks(name)
+		physical, err := sourcepath.Resolve(name)
 		if err != nil || physical != name {
 			return inputs, fmt.Errorf("original input path must be canonical and accessible: %s", filepath.Base(name))
 		}

@@ -13,6 +13,8 @@ import (
 	"reflect"
 	"sort"
 	"strings"
+
+	"github.com/xgo-dev/plan9asm/internal/sourcepath"
 )
 
 // go vet always resolves test packages, including with -tests=false: that
@@ -144,7 +146,7 @@ func runInstrumentationOrdinaryAsmdecl(ctx context.Context, binary, invocation s
 		return fmt.Errorf("ordinary asmdecl created directory identity unavailable: %w", err)
 	}
 	workspace := &instrumentationAsmdeclWorkspace{name: owned, identity: identity}
-	workspace.physical, err = filepath.EvalSymlinks(owned)
+	workspace.physical, err = sourcepath.Resolve(owned)
 	defer func() {
 		if cleanupErr := workspace.close(remove); cleanupErr != nil {
 			result = errors.Join(result, cleanupErr)
@@ -191,11 +193,11 @@ func bindInstrumentationAsmdeclSource(input *ConsumerInput, plan *Instrumentatio
 		return err
 	}
 	expectedDir := filepath.Join(input.SourceRoot, filepath.FromSlash(plan.PackageDirectory))
-	expectedDir, err := filepath.EvalSymlinks(expectedDir)
+	expectedDir, err := sourcepath.Resolve(expectedDir)
 	if err != nil {
 		return err
 	}
-	actualDir, err := filepath.EvalSymlinks(pkg.Dir)
+	actualDir, err := sourcepath.Resolve(pkg.Dir)
 	if err != nil || actualDir != expectedDir || pkg.Module == nil || pkg.Module.Path != selected.ModulePath ||
 		pkg.Module.Version != selected.ModuleVersion || pkg.Module.Main != (selected.SourceRole == "main") {
 		return fmt.Errorf("ordinary asmdecl package/module identity changed")
@@ -211,12 +213,12 @@ func bindInstrumentationAsmdeclSource(input *ConsumerInput, plan *Instrumentatio
 	} else if module.Replace != nil || selected.SourceRole != "main" && selected.SourceRole != "module" {
 		return fmt.Errorf("ordinary asmdecl has an unknown or local replacement role")
 	}
-	expectedRoot, err := filepath.EvalSymlinks(input.SourceRoot)
+	expectedRoot, err := sourcepath.Resolve(input.SourceRoot)
 	if err != nil {
 		return fmt.Errorf("ordinary asmdecl original module root is unavailable: %w", err)
 	}
 	for _, root := range []string{pkg.Module.Dir, module.Dir} {
-		physical, err := filepath.EvalSymlinks(root)
+		physical, err := sourcepath.Resolve(root)
 		if err != nil || physical != expectedRoot {
 			return fmt.Errorf("ordinary asmdecl actual module root differs from original source")
 		}
@@ -271,7 +273,7 @@ func bindInstrumentationAsmdeclSource(input *ConsumerInput, plan *Instrumentatio
 
 func recheckInstrumentationAsmdeclGuards(guards *instrumentationTypeGraph) error {
 	for filename, expected := range guards.hashes {
-		physical, err := filepath.EvalSymlinks(filename)
+		physical, err := sourcepath.Resolve(filename)
 		if err != nil || physical != guards.paths[filename] {
 			return fmt.Errorf("ordinary asmdecl source/configuration/export path changed: %s", filename)
 		}

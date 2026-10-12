@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/xgo-dev/plan9asm"
+	"github.com/xgo-dev/plan9asm/internal/sourcepath"
 )
 
 const instrumentationExportModule = "example.invalid/instrumentation-export"
@@ -51,7 +52,7 @@ func CaptureInstrumentationExportObservation(ctx context.Context, binary, ownedD
 	if !filepath.IsAbs(ownedDir) {
 		return nil, fmt.Errorf("export observation requires an absolute owned directory")
 	}
-	ownedDir, err := filepath.EvalSymlinks(ownedDir)
+	ownedDir, err := sourcepath.Resolve(ownedDir)
 	if err != nil {
 		return nil, err
 	}
@@ -274,11 +275,11 @@ func decodeInstrumentationExport(data []byte, directory, cache string, mode Inst
 		!reflect.DeepEqual(selection, instrumentationExpectedExportSelection(mode)) {
 		return "", nil, fmt.Errorf("actual export selected incomplete, foreign or mismatched original marker sources")
 	}
-	resolvedCache, err := filepath.EvalSymlinks(cache)
+	resolvedCache, err := sourcepath.Resolve(cache)
 	if err != nil {
 		return "", nil, err
 	}
-	resolved, err := filepath.EvalSymlinks(pkg.Export)
+	resolved, err := sourcepath.Resolve(pkg.Export)
 	relative, relErr := filepath.Rel(resolvedCache, resolved)
 	if err != nil || relErr != nil || !filepath.IsAbs(pkg.Export) || !filepath.IsLocal(relative) {
 		return "", nil, fmt.Errorf("actual export archive is absent or outside the observed cache")

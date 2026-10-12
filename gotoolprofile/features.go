@@ -15,6 +15,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/xgo-dev/plan9asm/internal/sourcepath"
 )
 
 // The target-driver foundation is integrated with profile scopes separately;
@@ -38,7 +40,7 @@ func captureDiscoveryTargetFeatures(ctx context.Context, goBinary, markerDir str
 	if !filepath.IsAbs(goBinary) || !filepath.IsAbs(markerDir) {
 		return nil, fmt.Errorf("feature driver and owned marker directory must be absolute")
 	}
-	resolvedDir, err := filepath.EvalSymlinks(markerDir)
+	resolvedDir, err := sourcepath.Resolve(markerDir)
 	if err != nil {
 		return nil, err
 	}
@@ -430,7 +432,7 @@ func decodeDiscoveryFeatureMarkers(data []byte, dir string, tags []string) (map[
 	if err := json.Unmarshal(data, &pkg); err != nil {
 		return nil, fmt.Errorf("decode actual feature marker selection: %w", err)
 	}
-	actualDir, err := filepath.EvalSymlinks(pkg.Dir)
+	actualDir, err := sourcepath.Resolve(pkg.Dir)
 	if err != nil || actualDir != dir || pkg.ImportPath != discoveryFeatureMarkerModule || pkg.Error != nil || len(pkg.SFiles) != 0 {
 		return nil, fmt.Errorf("Go driver returned a different or invalid marker package")
 	}

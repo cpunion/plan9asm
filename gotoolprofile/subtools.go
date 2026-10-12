@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+
+	"github.com/xgo-dev/plan9asm/internal/sourcepath"
 )
 
 var discoveryFeatureSubtools = []string{"asm", "compile", "link", "nm", "vet"}
@@ -30,15 +32,15 @@ func captureDiscoveryFeatureSubtools(ctx context.Context, binary string, env []s
 	if !filepath.IsAbs(root) || !filepath.IsAbs(directory) || !filepath.IsAbs(cache) {
 		return nil, fmt.Errorf("actual Go subtool root/directory/cache must be absolute")
 	}
-	resolvedRoot, err := filepath.EvalSymlinks(root)
+	resolvedRoot, err := sourcepath.Resolve(root)
 	if err != nil {
 		return nil, fmt.Errorf("resolve actual Go GOROOT: %w", err)
 	}
-	resolvedDirectory, err := filepath.EvalSymlinks(directory)
+	resolvedDirectory, err := sourcepath.Resolve(directory)
 	if err != nil {
 		return nil, fmt.Errorf("resolve actual Go GOTOOLDIR: %w", err)
 	}
-	resolvedCache, err := filepath.EvalSymlinks(cache)
+	resolvedCache, err := sourcepath.Resolve(cache)
 	if err != nil {
 		return nil, fmt.Errorf("resolve actual Go GOCACHE: %w", err)
 	}
@@ -64,7 +66,7 @@ func captureDiscoveryFeatureSubtools(ctx context.Context, binary string, env []s
 		if !filepath.IsAbs(file) || strings.ContainsAny(file, "\r\n") {
 			return nil, fmt.Errorf("actual Go %s route is not one absolute executable", name)
 		}
-		resolved, err := filepath.EvalSymlinks(file)
+		resolved, err := sourcepath.Resolve(file)
 		if err != nil {
 			return nil, fmt.Errorf("actual Go %s executable: %w", name, err)
 		}

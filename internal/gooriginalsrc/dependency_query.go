@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/xgo-dev/plan9asm/internal/sourcepath"
 	"golang.org/x/mod/modfile"
 	"golang.org/x/mod/module"
 )
@@ -36,7 +37,7 @@ func RunDependencyQuery(ctx context.Context, temporary, path, version string, ru
 	defer func() {
 		result = errors.Join(result, closeDependencyQuery(directory, identity, path, version))
 	}()
-	physical, err := filepath.EvalSymlinks(directory)
+	physical, err := sourcepath.Resolve(directory)
 	if err != nil {
 		return nil, err
 	}

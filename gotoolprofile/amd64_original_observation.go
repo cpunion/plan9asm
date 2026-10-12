@@ -11,6 +11,7 @@ import (
 	"sync"
 
 	"github.com/xgo-dev/plan9asm"
+	"github.com/xgo-dev/plan9asm/internal/sourcepath"
 )
 
 // AMD64OriginalObservationRequest observes an owned main module, not a signed
@@ -192,7 +193,7 @@ func captureAMD64OriginalObservationState(ctx context.Context, request AMD64Orig
 			result = errors.Join(result, err)
 		}
 	}()
-	marker, err = filepath.EvalSymlinks(created)
+	marker, err = sourcepath.Resolve(created)
 	if err != nil {
 		return nil, err
 	}

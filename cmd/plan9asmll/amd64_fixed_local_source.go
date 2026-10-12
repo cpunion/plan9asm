@@ -15,6 +15,7 @@ import (
 
 	"github.com/xgo-dev/plan9asm"
 	"github.com/xgo-dev/plan9asm/gotoolprofile"
+	"github.com/xgo-dev/plan9asm/internal/sourcepath"
 	"golang.org/x/tools/go/packages"
 )
 
@@ -140,15 +141,15 @@ func prepareAMD64FixedLocalSource(pkg *packages.Package, file *plan9asm.File, as
 	if err != nil {
 		return nil, nil, err
 	}
-	binary, err = filepath.EvalSymlinks(binary)
+	binary, err = sourcepath.Resolve(binary)
 	if err != nil {
 		return nil, nil, err
 	}
-	dir, err := filepath.EvalSymlinks(pkg.Dir)
+	dir, err := sourcepath.Resolve(pkg.Dir)
 	if err != nil {
 		return nil, nil, err
 	}
-	actualAsm, err := filepath.EvalSymlinks(asm)
+	actualAsm, err := sourcepath.Resolve(asm)
 	if err != nil || filepath.Dir(actualAsm) != dir {
 		return nil, nil, fmt.Errorf("%w: fixed-local original assembly origin differs", plan9asm.ErrProbeNeedsContext)
 	}

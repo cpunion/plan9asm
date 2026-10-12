@@ -16,6 +16,7 @@ import (
 
 	"github.com/xgo-dev/plan9asm/internal/gostaticstorage"
 	"github.com/xgo-dev/plan9asm/internal/gotoolchain"
+	"github.com/xgo-dev/plan9asm/internal/sourcepath"
 )
 
 type GoX86NumericalReadCaptureRequest struct {
@@ -119,7 +120,7 @@ func captureGoX86NumericalReadSource(ctx context.Context, request GoX86Numerical
 	source.guard = newGoOriginalInputGuard(GoAMD64FrameCaptureRequest{GoBinary: request.GoBinary, Directory: request.Directory,
 		AssemblyFile: request.AssemblyFile, Target: request.Target, Environment: request.Environment})
 	for _, directory := range append([]string{request.Directory}, provided["GOCACHE"], provided["GOMODCACHE"], provided["GOPATH"], provided["TMPDIR"], provided["GOTMPDIR"]) {
-		resolved, err := filepath.EvalSymlinks(directory)
+		resolved, err := sourcepath.Resolve(directory)
 		info, statErr := os.Lstat(directory)
 		if !filepath.IsAbs(directory) || err != nil || resolved != directory || statErr != nil || !info.IsDir() {
 			return nil, numericalSBContext("redirected or missing command/source root")
@@ -144,7 +145,7 @@ func captureGoX86NumericalReadSource(ctx context.Context, request GoX86Numerical
 		}
 	}()
 	// Canonicalize only the freshly factory-created directory, never caller inputs.
-	canonicalOwned, err := filepath.EvalSymlinks(owned)
+	canonicalOwned, err := sourcepath.Resolve(owned)
 	info, statErr := os.Lstat(canonicalOwned)
 	if err != nil || statErr != nil || !info.IsDir() || !os.SameFile(source.guard.ownedInfo, info) || !goAssemblyPathWithinRoot(provided["TMPDIR"], canonicalOwned) {
 		return nil, numericalSBContext("new factory artifact role changed during canonicalization")
@@ -290,7 +291,7 @@ func (source *GoX86NumericalReadSource) observe(ctx context.Context, provided ma
 	source.guard.env = env
 	source.rawEnvironment = append([]byte(nil), raw...)
 	for _, directory := range []string{env["GOROOT"], env["GOTOOLDIR"], filepath.Join(env["GOROOT"], "pkg", "include")} {
-		resolved, err := filepath.EvalSymlinks(directory)
+		resolved, err := sourcepath.Resolve(directory)
 		info, statErr := os.Lstat(directory)
 		if err != nil || resolved != directory || statErr != nil || !info.IsDir() {
 			return numericalSBContext("SDK directory role is missing or redirected")
@@ -427,7 +428,7 @@ func (source *GoX86NumericalReadSource) verifyNumericalSource(ctx context.Contex
 		return fail(numericalSBContext("sealed source/native/read join changed"))
 	}
 	for directory, before := range source.dirs {
-		resolved, err := filepath.EvalSymlinks(directory)
+		resolved, err := sourcepath.Resolve(directory)
 		now, statErr := os.Lstat(directory)
 		if err != nil || resolved != directory || statErr != nil || !now.IsDir() || !os.SameFile(before, now) {
 			return fail(numericalSBContext("source/cache/temp directory role changed"))

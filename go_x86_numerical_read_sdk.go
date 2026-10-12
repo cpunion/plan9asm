@@ -14,6 +14,7 @@ import (
 	"sort"
 
 	"github.com/xgo-dev/plan9asm/internal/gostaticstorage"
+	"github.com/xgo-dev/plan9asm/internal/sourcepath"
 )
 
 type numericalSBSourceRole uint8
@@ -53,7 +54,7 @@ func (source *GoX86NumericalReadSource) verifySDKDirectory(root string) error {
 		return numericalSBContext("SDK source needs an exact canonical package path")
 	}
 	wanted := filepath.Join(root, "src", filepath.FromSlash(path))
-	resolved, err := filepath.EvalSymlinks(wanted)
+	resolved, err := sourcepath.Resolve(wanted)
 	actual, actualErr := os.Lstat(source.request.Directory)
 	physical, physicalErr := os.Lstat(wanted)
 	if err != nil || resolved != wanted || actualErr != nil || physicalErr != nil ||

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"path/filepath"
 	"reflect"
+
+	"github.com/xgo-dev/plan9asm/internal/sourcepath"
 )
 
 // Private to one actual bounded rejection invocation. It never memoizes a
@@ -23,14 +25,14 @@ type instrumentationRejectionGuard struct {
 }
 
 func newInstrumentationRejectionGuard(ctx context.Context, binary, directory string, env []string, input *ConsumerInput, marker *InstrumentationExportObservation, run Runner) (*instrumentationRejectionGuard, error) {
-	directory, err := filepath.EvalSymlinks(directory)
+	directory, err := sourcepath.Resolve(directory)
 	if err != nil {
 		return nil, err
 	}
 	if err := recheckInstrumentationOriginalSources(input); err != nil {
 		return nil, err
 	}
-	sourceRoot, err := filepath.EvalSymlinks(input.SourceRoot)
+	sourceRoot, err := sourcepath.Resolve(input.SourceRoot)
 	if err != nil {
 		return nil, err
 	}
@@ -68,7 +70,7 @@ func (guard *instrumentationRejectionGuard) verify(ctx context.Context) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
-	sourceRoot, err := filepath.EvalSymlinks(guard.input.SourceRoot)
+	sourceRoot, err := sourcepath.Resolve(guard.input.SourceRoot)
 	if err != nil || sourceRoot != guard.sourceRoot {
 		return fmt.Errorf("rejected-source original physical root changed")
 	}
@@ -107,7 +109,7 @@ func (guard *instrumentationRejectionGuard) verify(ctx context.Context) error {
 	}
 	// The original invocation is an existing owned directory; reject a late
 	// redirect rather than using a different configuration with equal contents.
-	resolved, err := filepath.EvalSymlinks(guard.directory)
+	resolved, err := sourcepath.Resolve(guard.directory)
 	if err != nil || resolved != filepath.Clean(guard.directory) {
 		return fmt.Errorf("rejected-source invocation directory was redirected")
 	}

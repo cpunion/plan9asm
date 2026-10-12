@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+
+	"github.com/xgo-dev/plan9asm/internal/sourcepath"
 )
 
 // This identity belongs only to the temporary native analyzer invocation. It
@@ -22,7 +24,7 @@ func (owned *instrumentationAsmdeclWorkspace) verify() error {
 	if err != nil || !actual.IsDir() || actual.Mode()&os.ModeSymlink != 0 || !os.SameFile(owned.identity, actual) {
 		return fmt.Errorf("ordinary asmdecl owned directory was removed or replaced: %v", err)
 	}
-	physical, err := filepath.EvalSymlinks(owned.name)
+	physical, err := sourcepath.Resolve(owned.name)
 	if err != nil || physical != owned.physical {
 		return fmt.Errorf("ordinary asmdecl owned directory alias changed: %v", err)
 	}

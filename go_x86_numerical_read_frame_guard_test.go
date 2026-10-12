@@ -174,6 +174,14 @@ func TestGoX86NumericalSBReadFrameProducerReentryAndContextCauses(t *testing.T) 
 		wrapped.mu.Lock()
 		wrapped.closeFrame = func() {
 			callbackReached <- struct{}{}
+			// Check the lock at the callback, not the duration of the full
+			// source/object replay. Race instrumentation can make that replay
+			// exceed ten seconds even after this reentrant Close succeeded.
+			if !frame.mu.TryLock() {
+				t.Error("Frame lock survived an external numerical verification callback")
+				return
+			}
+			frame.mu.Unlock()
 			if err := frame.Close(); err != nil {
 				t.Error(err)
 			}
@@ -182,18 +190,12 @@ func TestGoX86NumericalSBReadFrameProducerReentryAndContextCauses(t *testing.T) 
 		if err := wrapped.Err(); err != nil || len(callbackReached) != 0 {
 			t.Fatal("ordinary context observation invoked the reentry callback", err)
 		}
-		closed := make(chan error, 1)
-		go func() { closed <- frame.Verify(ctx) }()
-		select {
-		case err := <-closed:
-			if len(callbackReached) != 1 {
-				t.Fatal("reentry fixture never reached the numerical owner callback", err)
-			}
-			if !errors.Is(err, ErrProbeNeedsContext) || !errors.Is(frame.Verify(context.Background()), ErrProbeNeedsContext) {
-				t.Fatal("reentrant owner guard published or revived the frame", err)
-			}
-		case <-time.After(10 * time.Second):
-			t.Fatal("Frame lock survived an external numerical verification callback")
+		err = frame.Verify(ctx)
+		if len(callbackReached) != 1 {
+			t.Fatal("reentry fixture never reached the numerical owner callback", err)
+		}
+		if !errors.Is(err, ErrProbeNeedsContext) || !errors.Is(frame.Verify(context.Background()), ErrProbeNeedsContext) {
+			t.Fatal("reentrant owner guard published or revived the frame", err)
 		}
 	})
 	for _, cause := range []string{"cancelled", "deadline"} {

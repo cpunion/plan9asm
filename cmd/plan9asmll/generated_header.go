@@ -12,6 +12,7 @@ import (
 
 	"github.com/xgo-dev/plan9asm"
 	"github.com/xgo-dev/plan9asm/gotoolprofile"
+	"github.com/xgo-dev/plan9asm/internal/sourcepath"
 	"golang.org/x/tools/go/packages"
 )
 
@@ -366,12 +367,12 @@ func generatedHeaderImportsForRole(consumer *featureConsumer, pkg *packages.Pack
 				}
 			}
 		}
-		root, err = filepath.EvalSymlinks(root)
+		root, err = sourcepath.Resolve(root)
 		if err != nil {
 			return nil, nil, "", nil, err
 		}
 		for _, file := range dep.CompiledGoFiles {
-			resolved, err := filepath.EvalSymlinks(file)
+			resolved, err := sourcepath.Resolve(file)
 			if err != nil {
 				return nil, nil, "", nil, err
 			}

@@ -194,6 +194,11 @@ func x86CMPXCHGParseActualPacket(output []byte) (x86CMPXCHGActualPacket, error) 
 	if len(output) > 1<<20 || len(lines) != 578 || lines[577] != "" {
 		return packet, fmt.Errorf("incomplete, extra or over-bound actual observation output")
 	}
+	// Windows C stdio emits CRLF. Accept that text transport without
+	// trimming field whitespace or discarding malformed embedded CR bytes.
+	for index := range lines {
+		lines[index] = strings.TrimSuffix(lines[index], "\r")
+	}
 	parse := func(text string, base, bits int) (uint64, error) {
 		value, err := strconv.ParseUint(text, base, bits)
 		if err != nil || strconv.FormatUint(value, base) != text {
@@ -305,7 +310,21 @@ func TestX86CMPXCHGActualObservationPacketRejectsIncompleteTransport(t *testing.
 	if err != nil || packet.deviations != 0 {
 		t.Fatalf("complete synthetic protocol control: %v", err)
 	}
+	for name, output := range map[string]string{
+		"CRLF":  strings.ReplaceAll(valid, "\n", "\r\n"),
+		"mixed": strings.Replace(valid, "\n", "\r\n", 1),
+	} {
+		t.Run(name, func(t *testing.T) {
+			actual, err := x86CMPXCHGParseActualPacket([]byte(output))
+			if err != nil || actual != packet {
+				t.Fatalf("text-mode line endings changed the complete observation: %v", err)
+			}
+		})
+	}
 	for name, mutation := range map[string]string{
+		"bare-CR":         strings.Replace(valid, "\n", "\r", 1),
+		"double-CR":       strings.Replace(valid, "\n", "\r\r\n", 1),
+		"embedded-CR":     strings.Replace(valid, "OBS 0", "OBS\r 0", 1),
 		"missing":         strings.TrimSuffix(valid, "END 576 0 0\n"),
 		"unknown":         valid + "unknown\n",
 		"duplicate":       strings.Replace(valid, "OBS 0 0 0 1", "OBS 0 0 0 0", 1),

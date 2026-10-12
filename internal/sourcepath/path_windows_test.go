@@ -88,3 +88,24 @@ func TestResolveWindowsLongPathAndHandleRelease(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestWindowsDOSPathRetainsOnlyNativeAbsoluteRoutes(t *testing.T) {
+	for native, want := range map[string]string{
+		`\\?\C:\source\file.s`:        `C:\source\file.s`,
+		`\\?\C:\`:                     `C:\`,
+		`\\?\UNC\server\share\file.s`: `\\server\share\file.s`,
+	} {
+		if got, err := windowsDOSPath(native); err != nil || got != want {
+			t.Fatalf("normalized native route %q: got=%q want=%q error=%v", native, got, want, err)
+		}
+	}
+	for _, native := range []string{
+		"", `C:\source`, `\\.\C:\source`, `\\?\C:source`,
+		`\\?\Volume{unbound}\source`, `\\?\C:\source\..\file.s`,
+		"\\\\?\\C:\\source\x00hidden", "\\\\?\\C:\\source\nline",
+	} {
+		if got, err := windowsDOSPath(native); err == nil || got != "" {
+			t.Fatalf("unknown/noncanonical native route accepted: %q => %q (%v)", native, got, err)
+		}
+	}
+}

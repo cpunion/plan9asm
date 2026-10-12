@@ -1,7 +1,6 @@
 package plan9asm
 
 import (
-	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -72,35 +71,18 @@ func main() {
 	}
 }
 
-func TestEvalGoAssemblyPathWindowsGOROOTLinkFallback(t *testing.T) {
-	goRoot := t.TempDir()
-	file := filepath.Join(goRoot, "src", "runtime", "asm.s")
-	if err := os.MkdirAll(filepath.Dir(file), 0o700); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(file, []byte("RET\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	evalErr := errors.New("cross-volume link cannot be evaluated")
-	failingEval := func(string) (string, error) { return "", evalErr }
-	got, err := evalGoAssemblyPathForOS(file, "windows", goRoot, failingEval)
-	if err != nil {
-		t.Fatalf("trusted existing GOROOT path fallback error = %v", err)
-	}
-	want, err := filepath.Abs(file)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got != filepath.Clean(want) {
-		t.Fatalf("trusted existing GOROOT path fallback = %q, want %q", got, want)
-	}
-
+func TestReadGoAssemblySourceRejectsEscapedSourceAlias(t *testing.T) {
+	root := t.TempDir()
 	outside := filepath.Join(t.TempDir(), "outside.s")
-	if err := os.WriteFile(outside, []byte("RET\n"), 0o600); err != nil {
+	if err := os.WriteFile(outside, []byte("TEXT ·Probe(SB),$0-0\nRET\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := evalGoAssemblyPathForOS(outside, "windows", goRoot, failingEval); !errors.Is(err, evalErr) {
-		t.Fatalf("outside-GOROOT fallback error = %v, want %v", err, evalErr)
+	alias := filepath.Join(root, "alias.s")
+	if err := os.Symlink(outside, alias); err != nil {
+		t.Fatal(err)
+	}
+	if source, err := ReadGoAssemblySource(alias, root); err == nil || len(source) != 0 {
+		t.Fatalf("existing source outside its resolved root was accepted: %v", err)
 	}
 }
 

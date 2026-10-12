@@ -17,6 +17,7 @@ import (
 
 	"github.com/xgo-dev/plan9asm/internal/goasmcmd"
 	"github.com/xgo-dev/plan9asm/internal/gotoolchain"
+	"github.com/xgo-dev/plan9asm/internal/sourcepath"
 )
 
 const Protocol = "actual_go_static_numeric_storage_prototype_v1"
@@ -112,7 +113,7 @@ func digest(data []byte) string {
 }
 
 func readRegular(name string, limit int64) ([]byte, error) {
-	resolved, resolveErr := filepath.EvalSymlinks(name)
+	resolved, resolveErr := sourcepath.Resolve(name)
 	info, err := os.Lstat(name)
 	if resolveErr != nil || resolved != name || err != nil || !info.Mode().IsRegular() || info.Size() < 0 || info.Size() > limit {
 		return nil, contextError("missing, redirected or oversized regular input: " + name)
@@ -183,7 +184,7 @@ func capture(ctx context.Context, request Request, sdkCPU bool) (*Observation, e
 		goos != "linux" && goos != "darwin" && goos != "windows" && !(goos == "js" && arch == "wasm") {
 		return nil, contextError("unknown target")
 	}
-	root, err := filepath.EvalSymlinks(request.Directory)
+	root, err := sourcepath.Resolve(request.Directory)
 	if err != nil || root != request.Directory {
 		return nil, contextError("source root must be canonical")
 	}
@@ -248,7 +249,7 @@ func capture(ctx context.Context, request Request, sdkCPU bool) (*Observation, e
 		directories = append(directories, filepath.Dir(filepath.Dir(request.GoBinary)))
 	}
 	for _, name := range directories {
-		resolved, err := filepath.EvalSymlinks(name)
+		resolved, err := sourcepath.Resolve(name)
 		info, statErr := os.Lstat(name)
 		if err != nil || resolved != name || statErr != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
 			return nil, contextError("actual command input/cache/temp root is redirected or missing")
@@ -441,7 +442,7 @@ func (o *Observation) Verify(ctx context.Context) error {
 
 func (o *Observation) verifyDirectories() error {
 	for name, original := range o.dirs {
-		resolved, resolveErr := filepath.EvalSymlinks(name)
+		resolved, resolveErr := sourcepath.Resolve(name)
 		info, err := os.Lstat(name)
 		if err != nil || resolveErr != nil || resolved != name || !info.IsDir() || !os.SameFile(info, original) {
 			return contextError("actual command/source/cache/temp root identity changed")

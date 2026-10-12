@@ -10,6 +10,7 @@ import (
 
 	"github.com/xgo-dev/plan9asm"
 	"github.com/xgo-dev/plan9asm/gotoolprofile"
+	"github.com/xgo-dev/plan9asm/internal/sourcepath"
 	"golang.org/x/tools/go/packages"
 )
 
@@ -146,7 +147,7 @@ func (consumer *featureConsumer) preprocessCPPSource(asm, packagePath string, de
 		name, sourceErr := consumer.moduleSourceName(file)
 		id, wanted := "module/"+name, consumer.Input.Sources[name]
 		if sourceErr != nil {
-			resolved, err := filepath.EvalSymlinks(file)
+			resolved, err := sourcepath.Resolve(file)
 			if err != nil {
 				return "", nil, err
 			}
