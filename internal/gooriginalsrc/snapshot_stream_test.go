@@ -2,14 +2,46 @@ package gooriginalsrc
 
 import (
 	"bytes"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
+	"syscall"
 	"testing"
 )
 
 type retainedSourceOpener interface {
 	OpenRetained(string) (io.ReadCloser, error)
+}
+
+// Returns whether replacement happened while the original stream was open.
+// Windows' ordinary read handle denies deletion/rename. Require that exact
+// protection, consume and close the unchanged stream, then still exercise the
+// same-byte replacement against the retained snapshot after closing it.
+func renameOriginalStreamMember(t *testing.T, snapshot *Snapshot, reader io.ReadCloser, name, backup string, remaining int64) bool {
+	t.Helper()
+	err := os.Rename(name, backup)
+	if err == nil {
+		return true
+	}
+	const sharingViolation = syscall.Errno(32) // Windows ERROR_SHARING_VIOLATION.
+	if runtime.GOOS != "windows" || !errors.Is(err, sharingViolation) {
+		t.Fatal("unexpected original stream rename failure", err)
+	}
+	count, readErr := io.Copy(io.Discard, reader)
+	closeErr := reader.Close()
+	if readErr != nil || closeErr != nil || count != remaining {
+		t.Fatal("OS-protected unchanged stream did not reach complete EOF", readErr, closeErr)
+	}
+	if err := snapshot.Verify(); err != nil {
+		t.Fatal("denied rename changed the original snapshot", err)
+	}
+	if err := os.Rename(name, backup); err != nil {
+		t.Fatal("closed stream still prevented the actual replacement", err)
+	}
+	t.Log("OS denied live rename; checking actual replacement after complete stream close")
+	return false
 }
 
 func TestSnapshotRetainedStreamPhysicalClosure(t *testing.T) {
@@ -55,11 +87,20 @@ func TestSnapshotRetainedStreamPhysicalClosure(t *testing.T) {
 					t.Fatal("the actual open member did not grow at the same inode", err)
 				}
 			case "replacement":
-				if err := os.Rename(name, filepath.Join(t.TempDir(), "original")); err != nil {
-					t.Fatal(err)
-				}
+				live := renameOriginalStreamMember(t, snapshot, reader, name,
+					filepath.Join(t.TempDir(), "original"), int64(len(original)-1))
 				if err := os.WriteFile(name, original, 0600); err != nil {
 					t.Fatal(err)
+				}
+				if !live {
+					if err := snapshot.Verify(); err == nil {
+						t.Fatal("closed stream's same-byte replacement retained the snapshot")
+					}
+					if replacement, err := opener.OpenRetained(name); err == nil {
+						replacement.Close()
+						t.Fatal("replacement reopened as the original retained stream")
+					}
+					return
 				}
 			case "tail byte":
 				changed := append([]byte(nil), original...)

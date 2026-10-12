@@ -352,13 +352,21 @@ func TestSnapshotTypedToolStreamPhysicalClosure(t *testing.T) {
 				}
 			case "replacement", "symlink":
 				backup := filepath.Join(originalToolFixtureRoot(t), "original")
-				if err := os.Rename(name, backup); err != nil {
-					t.Fatal(err)
-				}
+				live := renameOriginalStreamMember(t, snapshot, reader, name, backup, before.Size()-1)
 				if role == "replacement" {
 					makeOriginalToolExtent(t, root, "go", before.Size())
 				} else if err := os.Symlink(backup, name); err != nil {
 					t.Fatal(err)
+				}
+				if !live {
+					if err := snapshot.Verify(); err == nil {
+						t.Fatal("closed stream replacement retained the tool snapshot")
+					}
+					if replacement, err := openOriginalRoleFile(name, before, snapshot.paths[name], snapshot.hashes[name], originalToolFile); err == nil {
+						replacement.Close()
+						t.Fatal("replacement reopened as the original tool stream")
+					}
+					return
 				}
 			case "incomplete close":
 				if err := reader.Close(); err == nil {
