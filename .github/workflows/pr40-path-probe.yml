@@ -1,0 +1,27 @@
+name: PR40 Windows path diagnostic
+on:
+  push:
+    branches: [codex/pr40-windows-path-probe-20261012]
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-go
+        with:
+          go-version: '1.27.2'
+          cache: false
+      - name: Before LLVM (PowerShell)
+        run: go run ./.github/path-probe
+      - name: Before LLVM (Bash)
+        shell: bash
+        run: go run ./.github/path-probe
+      - uses: ./.github/actions/setup-windows-llvm22
+      - name: After LLVM (PowerShell)
+        run: go run ./.github/path-probe
+      - name: After LLVM (Bash)
+        shell: bash
+        run: go run ./.github/path-probe
