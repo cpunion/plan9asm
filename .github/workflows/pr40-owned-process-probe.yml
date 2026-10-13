@@ -23,7 +23,19 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p _out/native-x86-oracles
-          go test . -run '^(TestX86RawReturnStaticReadNumericOracle|TestX86OriginalSysVDirectAndPointerTransport|TestCrossLinuxRuntimeMatrixX86(MADDTypedOriginalLegacy|PackedNarrowOriginalLegacyOracle|ScalarFPBitViewsOriginalBitsAndCanaries|PureGPUnknownDeadOutputs|SignedIntegerScalarFloatTranslatedFPFields|ScalarCompareFlags|RawReturnSourceAddressNumerical|FloatingCompareOriginalLegacyPredicates|TimestampOriginalAndLLVM|PackedWordMultiplySoftwareMaskedMemory|PackedAverageInactiveMemory|PackedZeroExtendCompleteBytes))$' -v -count=1 -timeout=8m 2>&1 | tee _out/native-x86-oracles/native.log
+          roots='TestX86RawReturnStaticReadNumericOracle|TestX86OriginalSysVDirectAndPointerTransport'
+          roots+='|TestX86MemoryFault.*|TestX86CMPXCHGFault.*|TestX86CMPXCHGWindowsFaultCodes'
+          roots+='|TestX86NativeWindowsPrecisionFaultCode|TestX86SignedConversionFaultWindowsHeaderBoundary'
+          roots+='|TestX86GoPackedStoreFaultDiagnostic|TestRuntimeOracleFault.*'
+          families='MADDTypedOriginalLegacy|PackedNarrowOriginalLegacyOracle|ScalarFPBitViewsOriginalBitsAndCanaries'
+          families+='|PureGPUnknownDeadOutputs|SignedIntegerScalarFloatTranslatedFPFields|ScalarCompareFlags'
+          families+='|RawReturnSourceAddressNumerical|FloatingCompareOriginalLegacyPredicates|TimestampOriginalAndLLVM'
+          families+='|PackedWordMultiplySoftwareMaskedMemory|PackedAverageInactiveMemory|PackedZeroExtendCompleteBytes'
+          families+='|InsertInactiveMemoryStillFaults|PackedUnpackZeroMaskStillFaults|PackedNarrowIndependentE4NF'
+          families+='|PackedShiftNativeReadFaults|PackedUnpackMMXNativeMemoryAndFP|PackedZeroMemoryStoreFault'
+          families+='|SignedIntegerScalarFloatNativeReadExtentAndPrecision|SignedIntegerScalarFloatNativeLinuxPrecisionSignal'
+          go test . -run "^($roots|TestCrossLinuxRuntimeMatrixX86($families))$" \
+            -v -count=1 -timeout=8m 2>&1 | tee _out/native-x86-oracles/native.log
       - name: Preserve original and translated observations
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v6
