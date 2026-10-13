@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -16,9 +17,11 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/xgo-dev/plan9asm"
 	"github.com/xgo-dev/plan9asm/internal/asmsig"
+	"github.com/xgo-dev/plan9asm/internal/sdkfrontend"
 	"golang.org/x/tools/go/packages"
 )
 
@@ -235,7 +238,7 @@ func transpilePackageMode(patterns []string, outDir, goos, goarch string, annota
 		}
 
 		for _, sfile := range sfiles {
-			tr, ok, err := translateAsmForPackage(pkg, sfile, goos, goarch, annotate)
+			tr, ok, err := translateAsmForPackage(pkg.Package, sfile, goos, goarch, annotate, pkg.selected)
 			if err != nil {
 				return fmt.Errorf("transpile %s: %w", sfile, err)
 			}
@@ -308,7 +311,7 @@ func transpileSingleFileMode(inFile, outFile, goos, goarch string, annotate bool
 		return err
 	}
 
-	tr, ok, err := translateAsmForPackage(pkg, asmPath, goos, goarch, annotate)
+	tr, ok, err := translateAsmForPackage(pkg.Package, asmPath, goos, goarch, annotate, pkg.selected)
 	if err != nil {
 		return err
 	}
@@ -342,7 +345,7 @@ func transpileSingleFileMode(inFile, outFile, goos, goarch string, annotate bool
 	return nil
 }
 
-func translateAsmForPackage(pkg *packages.Package, asmPath, goos, goarch string, annotate bool) (translation, bool, error) {
+func translateAsmForPackage(pkg *packages.Package, asmPath, goos, goarch string, annotate bool, selections ...*sdkfrontend.Selection) (translation, bool, error) {
 	sourceRoot := filepath.Dir(asmPath)
 	if pkg != nil && pkg.Module != nil && pkg.Module.Dir != "" {
 		sourceRoot = pkg.Module.Dir
@@ -432,6 +435,16 @@ func translateAsmForPackage(pkg *packages.Package, asmPath, goos, goarch string,
 		AnnotateSource: annotate,
 	})
 	if err != nil {
+		if errors.Is(err, plan9asm.ErrProbeNeedsContext) && sdkfrontend.CPUOwnerRequested(sdkPackageView(pkg), file, goos+"/"+goarch) {
+			var selected *sdkfrontend.Selection
+			if len(selections) == 1 {
+				selected = selections[0]
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+			defer cancel()
+			tr, err := translateSDKSource(ctx, pkg, selected, file, asmPath, goos+"/"+goarch, annotate)
+			return tr, err == nil, err
+		}
 		return translation{}, false, err
 	}
 	fns := collectFunctionInfo(file, sigs, resolve)
@@ -531,17 +544,26 @@ func targetTriple(goos, goarch string) string {
 	return ""
 }
 
-func loadPackage(pkgPath, goos, goarch string) (*packages.Package, error) {
+func loadPackage(pkgPath, goos, goarch string) (*loadedPackage, error) {
+	environment, err := sdkfrontend.OrdinaryEnvironment(goos, goarch, os.Environ())
+	if err != nil {
+		return nil, err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
 	cfg := &packages.Config{
+		Context: ctx,
 		Mode: packages.NeedName |
 			packages.NeedFiles |
+			packages.NeedCompiledGoFiles |
+			packages.NeedModule |
 			packages.NeedDeps |
 			packages.NeedImports |
 			packages.NeedSyntax |
 			packages.NeedTypes |
 			packages.NeedTypesSizes |
 			packages.NeedTypesInfo,
-		Env: append(os.Environ(), "GOOS="+goos, "GOARCH="+goarch),
+		Env: environment,
 	}
 	pkgs, err := packages.Load(cfg, pkgPath)
 	if err != nil {
@@ -560,14 +582,14 @@ func loadPackage(pkgPath, goos, goarch string) (*packages.Package, error) {
 			if p.Types == nil || p.Types.Scope() == nil {
 				return nil, fmt.Errorf("package %s loaded without types", pkgPath)
 			}
-			return p, nil
+			return &loadedPackage{p, sdkfrontend.CaptureSelection(sdkPackageView(p), goos+"/"+goarch, environment, nil)}, nil
 		}
 	}
 	p := pkgs[0]
 	if p.Types == nil || p.Types.Scope() == nil {
 		return nil, fmt.Errorf("package %s loaded without types", p.PkgPath)
 	}
-	return p, nil
+	return &loadedPackage{p, sdkfrontend.CaptureSelection(sdkPackageView(p), goos+"/"+goarch, environment, nil)}, nil
 }
 
 func resolvePath(path string) (string, error) {
@@ -591,10 +613,9 @@ func resolvePath(path string) (string, error) {
 func goListPackages(query, goos, goarch string) ([]goListPackage, error) {
 	args := []string{"list", "-json", query}
 	cmd := exec.Command("go", args...)
-	// Package discovery only needs metadata. Disabling cgo prevents a host C
-	// toolchain from being used while listing a different target (for example,
-	// Windows-hosted tooling inspecting Linux standard-library assembly).
-	cmd.Env = append(os.Environ(), "CGO_ENABLED=0", "GOOS="+goos, "GOARCH="+goarch)
+	// Metadata discovery and the later typed load must observe the same target
+	// selection, including Go's actual cgo default and explicit user settings.
+	cmd.Env = append(os.Environ(), "GOOS="+goos, "GOARCH="+goarch)
 
 	out, err := cmd.Output()
 	if err != nil {
@@ -1109,6 +1130,10 @@ func tryDeclSig(scope *types.Scope, sym, resolved string, linknames map[string]s
 	sig := fn.Type().(*types.Signature)
 	if sig.Recv() != nil || sig.Variadic() {
 		return plan9asm.FuncSig{}, false, nil
+	}
+	if goarch == "amd64" || goarch == "386" {
+		actual, err := plan9asm.DeriveGoFuncABI0Signature(resolved, fn, goarch, sz)
+		return actual, err == nil, err
 	}
 
 	args, frameParams, nextOff, err := llvmArgsAndFrameSlotsForTuple(sig.Params(), goarch, sz, 0, false)

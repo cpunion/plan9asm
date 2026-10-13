@@ -15,6 +15,30 @@ import (
 	"golang.org/x/tools/go/packages"
 )
 
+func TestX86DeclaredSignatureRetainsCanonicalABI0ResultNames(t *testing.T) {
+	for _, arch := range []string{"amd64", "386"} {
+		t.Run(arch, func(t *testing.T) {
+			pkg := types.NewPackage("example.com/sample", "sample")
+			parameters := types.NewTuple(types.NewVar(token.NoPos, pkg, "input", types.NewSlice(types.Typ[types.Uint8])))
+			results := types.NewTuple(
+				types.NewVar(token.NoPos, pkg, "first", types.Typ[types.Uint32]),
+				types.NewVar(token.NoPos, pkg, "second", types.Typ[types.Uint32]),
+			)
+			fn := types.NewFunc(token.NoPos, pkg, "Probe", types.NewSignatureType(nil, nil, nil, parameters, results, false))
+			pkg.Scope().Insert(fn)
+			sizes := types.SizesFor("gc", arch)
+			want, err := plan9asm.DeriveGoFuncABI0Signature(pkg.Path()+".Probe", fn, arch, sizes)
+			if err != nil {
+				t.Fatal(err)
+			}
+			actual, found, err := tryDeclSig(pkg.Scope(), "·Probe", want.Name, nil, arch, sizes)
+			if err != nil || !found || !reflect.DeepEqual(actual, want) {
+				t.Fatalf("actual declaration layout differs from the shared ABI0 builder: %v\nactual=%+v\nwant=%+v", err, actual, want)
+			}
+		})
+	}
+}
+
 func TestPackageSFilesAbsFiltersNonPlan9Asm(t *testing.T) {
 	dir := t.TempDir()
 	abs := filepath.Join(t.TempDir(), "abs", "keep.s")
@@ -430,13 +454,13 @@ func TestInterfaceTupleUsesTwoPhysicalFrameSlots(t *testing.T) {
 	}
 }
 
-func TestGoListPackagesDisablesCgo(t *testing.T) {
+func TestGoListPackagesPreservesDefaultAndExplicitCgo(t *testing.T) {
 	dir := t.TempDir()
 	name := "go"
-	script := "#!/bin/sh\nprintf '%s\\n' \"{\\\"ImportPath\\\":\\\"$CGO_ENABLED\\\"}\"\n"
+	script := "#!/bin/sh\nprintf '%s\\n' \"{\\\"ImportPath\\\":\\\"cgo=$CGO_ENABLED\\\"}\"\n"
 	if runtime.GOOS == "windows" {
 		name = "go.cmd"
-		script = "@echo off\r\necho {\"ImportPath\":\"%CGO_ENABLED%\"}\r\n"
+		script = "@echo off\r\necho {\"ImportPath\":\"cgo=%CGO_ENABLED%\"}\r\n"
 	}
 	path := filepath.Join(dir, name)
 	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
@@ -449,11 +473,21 @@ func TestGoListPackagesDisablesCgo(t *testing.T) {
 	}
 	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
 
-	pkgs, err := goListPackages("std", "linux", "amd64")
-	if err != nil {
-		t.Fatalf("goListPackages() error = %v", err)
-	}
-	if len(pkgs) != 1 || pkgs[0].ImportPath != "0" {
-		t.Fatalf("goListPackages() = %#v, want one package with CGO disabled", pkgs)
+	for _, value := range []string{"0", "1", ""} {
+		t.Run("cgo="+value, func(t *testing.T) {
+			t.Setenv("CGO_ENABLED", value)
+			if value == "" {
+				if err := os.Unsetenv("CGO_ENABLED"); err != nil {
+					t.Fatal(err)
+				}
+			}
+			pkgs, err := goListPackages("std", "linux", "amd64")
+			if err != nil {
+				t.Fatalf("goListPackages() error = %v", err)
+			}
+			if len(pkgs) != 1 || pkgs[0].ImportPath != "cgo="+value {
+				t.Fatalf("goListPackages() changed selected CGO_ENABLED=%q: %#v", value, pkgs)
+			}
+		})
 	}
 }
