@@ -807,6 +807,12 @@ func (source *GoAMD64FrameSource) typedDeclarations(pkg GoPackage, numericOnly b
 // The numerical SB binding also observes 386 declarations. This helper only
 // rechecks language/ABI0 identity; it does not extend the AMD64 frame factory.
 func (source *GoAMD64FrameSource) typedDeclarationsForArch(pkg GoPackage, numericOnly bool, arch string) (map[string]goAMD64FrameDeclaration, error) {
+	return source.typedDeclarationsForArchRole(pkg, numericOnly, arch, false, nil)
+}
+
+func (source *GoAMD64FrameSource) typedDeclarationsForArchRole(pkg GoPackage, numericOnly bool, arch string,
+	opaqueUnsafePointer bool, entries map[string]bool,
+) (map[string]goAMD64FrameDeclaration, error) {
 	fset := token.NewFileSet()
 	var syntax []*ast.File
 	var compiled []string
@@ -901,6 +907,12 @@ func (source *GoAMD64FrameSource) typedDeclarationsForArch(pkg GoPackage, numeri
 		if !bodyless[name] {
 			continue
 		}
+		if entries != nil && !entries[name] {
+			// All original sources, bodies, declarations and complete scope
+			// names were independently checked above. An unrelated bodyless
+			// runtime declaration does not enter this selected ASM entry set.
+			continue
+		}
 		fn, ok := typed.Scope().Lookup(name).(*types.Func)
 		previous, supplied := pkg.Types.Scope().Lookup(name).(*types.Func)
 		if !ok || !supplied {
@@ -923,7 +935,7 @@ func (source *GoAMD64FrameSource) typedDeclarationsForArch(pkg GoPackage, numeri
 				typ := tuple.At(i).Type()
 				switch underlying := typ.Underlying().(type) {
 				case *types.Basic:
-					if underlying.Kind() == types.Bool {
+					if underlying.Kind() == types.Bool || opaqueUnsafePointer && underlying.Kind() == types.UnsafePointer {
 						role = goAMD64FrameCompositeTransport
 					} else if underlying.Info()&types.IsInteger == 0 {
 						return nil, goAMD64FrameContext("observation excludes noninteger scalar transport")
@@ -933,7 +945,7 @@ func (source *GoAMD64FrameSource) typedDeclarationsForArch(pkg GoPackage, numeri
 				default:
 					return nil, goAMD64FrameContext("by-value aggregate transport needs a separate observation contract")
 				}
-				identity, err := goAMD64FrameLanguageType(typ, sizes)
+				identity, err := goAMD64FrameLanguageTypeRole(typ, sizes, opaqueUnsafePointer)
 				if err != nil {
 					return nil, err
 				}
@@ -957,7 +969,7 @@ func (source *GoAMD64FrameSource) typedDeclarationsForArch(pkg GoPackage, numeri
 			}
 			priorLanguage.WriteString("[")
 			for i := 0; i < tuple.Len(); i++ {
-				identity, err := goAMD64FrameLanguageType(tuple.At(i).Type(), sizes)
+				identity, err := goAMD64FrameLanguageTypeRole(tuple.At(i).Type(), sizes, opaqueUnsafePointer)
 				if err != nil {
 					return nil, err
 				}
@@ -978,6 +990,9 @@ func (source *GoAMD64FrameSource) typedDeclarationsForArch(pkg GoPackage, numeri
 		}
 		declarations[actual.Name] = goAMD64FrameDeclaration{signature: actual, transport: role, languageType: language.String()}
 	}
+	if entries != nil && len(declarations) != len(entries) {
+		return nil, goAMD64FrameContext("complete selected ASM entry declaration inventory differs")
+	}
 	return declarations, nil
 }
 
@@ -987,6 +1002,13 @@ func (source *GoAMD64FrameSource) typedDeclarationsForArch(pkg GoPackage, numeri
 // padding (Go1.20 StdSizes differs from its compiler). Only pointer/slice ABI0
 // slots are bound to the actual object. No pointee extent, alias or GC grant.
 func goAMD64FrameLanguageType(typ types.Type, sizes types.Sizes) (string, error) {
+	return goAMD64FrameLanguageTypeRole(typ, sizes, false)
+}
+
+// The SDK numerical declaration observer may retain an unsafe.Pointer only as
+// an opaque language identity. The ordinary frame observer remains strict;
+// no pointee, extent, numerical bytes, GC or physical frame follows from it.
+func goAMD64FrameLanguageTypeRole(typ types.Type, sizes types.Sizes, opaqueUnsafePointer bool) (string, error) {
 	if sizes == nil {
 		return "", goAMD64FrameContext("missing target language layout")
 	}
@@ -1005,7 +1027,8 @@ func goAMD64FrameLanguageType(typ types.Type, sizes types.Sizes) (string, error)
 		// for type parameters. An unknown or generic role is not a layout.
 		switch concrete := typ.(type) {
 		case *types.Basic:
-			if concrete.Info()&(types.IsInteger|types.IsBoolean) == 0 || concrete.Info()&types.IsUntyped != 0 {
+			if concrete.Info()&(types.IsInteger|types.IsBoolean) == 0 && !(opaqueUnsafePointer && concrete.Kind() == types.UnsafePointer) ||
+				concrete.Info()&types.IsUntyped != 0 {
 				return goAMD64FrameContext("unsupported noninteger or untyped language type")
 			}
 		case *types.Named:
@@ -1038,7 +1061,9 @@ func goAMD64FrameLanguageType(typ types.Type, sizes types.Sizes) (string, error)
 		fmt.Fprintf(&output, "(%q:", spelling)
 		switch typ := typ.(type) {
 		case *types.Basic:
-			if typ.Kind() == types.Bool {
+			if opaqueUnsafePointer && typ.Kind() == types.UnsafePointer {
+				output.WriteString("opaque_unsafe_pointer")
+			} else if typ.Kind() == types.Bool {
 				output.WriteString("bool")
 			} else if typ.Info()&types.IsInteger != 0 {
 				fmt.Fprintf(&output, "integer%d", typ.Kind())

@@ -104,18 +104,18 @@ func numericalSDKLiteralPackage(t *testing.T, source *GoX86SDKASMDataSource, nam
 	}
 	options := Options{Goarch: arch, TargetTriple: "x86_64-unknown-linux-gnu",
 		Sigs: make(map[string]FuncSig), ResolveSym: func(symbol string) string {
-			return numericalNativeName(symbol, pkg.Path)
+			return numericalNativeName(goStripABISuffix(symbol), pkg.Path)
 		}}
 	if arch == "386" {
 		options.TargetTriple = "i386-unknown-linux-gnu"
 	}
 	for _, fn := range file.Funcs {
-		name := strings.TrimPrefix(fn.Sym, "·")
+		name := strings.TrimPrefix(goStripABISuffix(fn.Sym), "·")
 		declaration, ok := typed.Scope().Lookup(name).(*types.Func)
 		if !ok {
 			t.Fatal("original TEXT lacks its actual Go function declaration", fn.Sym)
 		}
-		name = numericalNativeName(fn.Sym, pkg.Path)
+		name = numericalNativeName(goStripABISuffix(fn.Sym), pkg.Path)
 		sig, err := DeriveGoFuncABI0Signature(name, declaration, arch, sizes)
 		if err != nil {
 			t.Fatal(err)

@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	"github.com/xgo-dev/plan9asm/internal/gotoolchain"
+	"github.com/xgo-dev/plan9asm/internal/sourcepath"
 )
 
 // This producer independently authenticates ordinary Go-defined variables in
@@ -133,8 +134,9 @@ func (o *Observation) captureSDKGlobalDependencies(ctx context.Context) error {
 		return err
 	}
 	for _, pkg := range packages {
-		info, err := os.Lstat(pkg.Dir)
-		if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+		resolved, resolveErr := sourcepath.Resolve(pkg.Dir)
+		info, err := sourcepath.Lstat(pkg.Dir)
+		if resolveErr != nil || resolved != pkg.Dir || err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
 			return contextError("SDK global selected directory is redirected/missing")
 		}
 		o.dirs[pkg.Dir] = info

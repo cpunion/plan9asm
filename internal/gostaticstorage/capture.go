@@ -116,7 +116,7 @@ func digest(data []byte) string {
 
 func readRegular(name string, limit int64) ([]byte, error) {
 	resolved, resolveErr := sourcepath.Resolve(name)
-	info, err := os.Lstat(name)
+	info, err := sourcepath.Lstat(name)
 	if resolveErr != nil || resolved != name || err != nil || !info.Mode().IsRegular() || info.Size() < 0 || info.Size() > limit {
 		return nil, contextError("missing, redirected or oversized regular input: " + name)
 	}
@@ -266,7 +266,7 @@ func captureRole(ctx context.Context, request Request, protocol string) (*Observ
 	}
 	for _, name := range directories {
 		resolved, err := sourcepath.Resolve(name)
-		info, statErr := os.Lstat(name)
+		info, statErr := sourcepath.Lstat(name)
 		if err != nil || resolved != name || statErr != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
 			return nil, contextError("actual command input/cache/temp root is redirected or missing")
 		}
@@ -466,7 +466,7 @@ func (o *Observation) Verify(ctx context.Context) error {
 func (o *Observation) verifyDirectories() error {
 	for name, original := range o.dirs {
 		resolved, resolveErr := sourcepath.Resolve(name)
-		info, err := os.Lstat(name)
+		info, err := sourcepath.Lstat(name)
 		if err != nil || resolveErr != nil || resolved != name || !info.IsDir() || !os.SameFile(info, original) {
 			return contextError("actual command/source/cache/temp root identity changed")
 		}
