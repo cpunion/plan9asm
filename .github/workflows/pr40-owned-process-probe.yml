@@ -27,6 +27,7 @@ jobs:
           roots+='|TestX86MemoryFault.*|TestX86CMPXCHGFault.*|TestX86CMPXCHGWindowsFaultCodes'
           roots+='|TestX86NativeWindowsPrecisionFaultCode|TestX86SignedConversionFaultWindowsHeaderBoundary'
           roots+='|TestX86GoPackedStoreFaultDiagnostic|TestRuntimeOracleFault.*'
+          roots+='|TestCrossLinuxRuntimeMatrixX86TLSNoopPreservesWideGP'
           families='MADDTypedOriginalLegacy|PackedNarrowOriginalLegacyOracle|ScalarFPBitViewsOriginalBitsAndCanaries'
           families+='|PureGPUnknownDeadOutputs|SignedIntegerScalarFloatTranslatedFPFields|ScalarCompareFlags'
           families+='|RawReturnSourceAddressNumerical|FloatingCompareOriginalLegacyPredicates|TimestampOriginalAndLLVM'
