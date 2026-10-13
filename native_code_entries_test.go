@@ -99,7 +99,11 @@ func TestNativeCodeEntryTailStubFamily(t *testing.T) {
 									t.Fatal(err)
 								}
 								exe := filepath.Join(dir, "probe")
-								if out, err := exec.Command(clang, "-O2", harness, filepath.Join(dir, "llvm.o"), "-o", exe).CombinedOutput(); err != nil {
+								ctx, cancel := runtimeOracleStageContext(t)
+								command := runtimeOracleNativeCCommand(t, ctx, clang, "-O2", harness, filepath.Join(dir, "llvm.o"), "-o", exe)
+								out, err := runtimeOracleCombinedOutput(ctx, command)
+								cancel()
+								if err != nil {
 									t.Fatalf("native C link: %v\n%s", err, out)
 								}
 								if out, err := exec.Command(exe).CombinedOutput(); err != nil {

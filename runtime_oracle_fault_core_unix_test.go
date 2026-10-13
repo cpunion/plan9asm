@@ -169,7 +169,7 @@ int main(int argc, char **argv) {
 		t.Fatal(err)
 	}
 	ctx, cancel := runtimeOracleStageContext(t)
-	output, err := runtimeOracleCombinedOutput(ctx, exec.CommandContext(ctx, clang, "-O2", cPath, "-o", executable))
+	output, err := runtimeOracleCombinedOutput(ctx, runtimeOracleNativeCCommand(t, ctx, clang, "-O2", cPath, "-o", executable))
 	cancel()
 	if err != nil {
 		t.Fatalf("compile actual fault helper: %v\n%s", err, output)

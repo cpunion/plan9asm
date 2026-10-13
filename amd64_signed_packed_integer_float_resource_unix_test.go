@@ -23,7 +23,7 @@ func TestX86SignedPackedFloatFaultChildDisablesCore(t *testing.T) {
 		t.Fatal(err)
 	}
 	ctx, cancel := runtimeOracleStageContext(t)
-	output, err := runtimeOracleCombinedOutput(ctx, exec.CommandContext(ctx, clang, "-std=c11", "-O2", source, "-o", executable))
+	output, err := runtimeOracleCombinedOutput(ctx, runtimeOracleNativeCCommand(t, ctx, clang, "-std=c11", "-O2", source, "-o", executable))
 	cancel()
 	if err != nil {
 		t.Fatalf("compile core-limit observer: %v\n%s", err, output)

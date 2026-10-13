@@ -20,6 +20,18 @@ These skips are not executed semantics. This verifies the frozen fork run, not
 the full contribution's Linux/race/stdlib/benchmark gates. PR 40's published
 head is still `24851df2`, not these staged fixes.
 
+The following fork [38456568476](https://github.com/cpunion/plan9asm/actions/runs/38456568476)
+tests frozen `05367452` (contribution `d0f0701a`, plus the fork-only workflow).
+It naturally finishes failed: both Windows ownership SDK lanes and the native
+Linux suite pass, as does the LLVM priority inventory. All 40 selected native
+roots pass in 26.663 seconds without skips, including canonical bool instruction
+bytes and the genuine Go ABI0 byte-representation counterpart. The simple SDK
+priority cohort times out at eight minutes after both CRC32 source roots pass
+and file/package publication succeeds; remaining publication controls and maps
+are incomplete, not passed. Complete Windows modules correctly do not start.
+Split these slow priority roots into independent lanes with the original
+per-command budgets, keeping exact inventories and the complete-module barrier.
+
 At frozen `b3755a3e`, the complete local LLVM CLI passes in 862.415 seconds and
 the complete new SDK literal-alignment producer's race cohort passes in 440.062
 seconds. `4818b84c` selects the actual Darwin SDK for independent LLVM 22 C
@@ -100,6 +112,17 @@ neither an opcode classification pass nor a local CLI test pass closes it.
 The current Go 1.27 and official Go 1.20 five-architecture classification gates
 also pass at this frozen head; the older AMD64 baseline still has one explicit
 unsupported form.
+
+An independently reproduced native C-driver SDK omission affects numerical
+fault observation and two core-limit helpers. Explicit native-host commands now
+share the actual Darwin SDK selection while retaining LLVM 22 and owned bounded
+contexts; cross-target object commands are unchanged. Complete repaired
+fault/core-limit/native-entry/header/link controls pass Go 1.27 in 33.764 seconds
+and Go 1.20 in 10.482 seconds. Neither this repair nor the SDK frame factory
+certifies a broad Go 1.27 cohort that failed after 2,097.742 seconds: that receipt
+also retains missing-Rosetta diagnostics and subsequent deadline exhaustion.
+Split complete inventories instead of increasing the timeout or treating those
+infrastructure failures as successful source exclusions.
 
 Inventory runs only on the server. Streaming ledger status and a complete
 five-minute incremental window have been verified before restoring catch-up;
