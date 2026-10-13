@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -79,8 +80,8 @@ func runSuite(ctx context.Context, cfg config) error {
 		cfg.rootPart.Count != cfg.ModuleRootPartitions || cfg.rootPart.Index != cfg.ModuleRootPartition) {
 		return fmt.Errorf("root partition scheduling requires its exact module role")
 	}
-	if os.Getenv("GOFLAGS") != "" {
-		return fmt.Errorf("GOFLAGS must be empty; pass supported build/instrumentation flags explicitly after --")
+	if err := validateRunnerGoFlags(runtime.GOOS, os.Getenv("GOFLAGS"), cfg.Flags); err != nil {
+		return err
 	}
 	if cfg.Timeout <= 0 || cfg.Package == "" || strings.ContainsAny(cfg.Package, " \t\r\n*?[") || strings.Contains(cfg.Package, "...") {
 		return fmt.Errorf("positive timeout and one exact package required")

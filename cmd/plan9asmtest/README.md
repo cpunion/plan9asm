@@ -160,8 +160,11 @@ Failed runs retain their separate profiles, not a misleading merged result.
 Supported flags are `-race`, `-cover`, `-covermode`, `-coverpkg`, `-tags`, `-p`,
 `-gcflags`, `-asmflags`, `-ldflags`, `-mod`, `-modfile`, `-overlay`, `-trimpath`,
 `-asan`, `-msan` and `-work`. Filters, `-count`, `-fuzz`, benchmarks, custom
-executors and test arguments are rejected. `GOFLAGS` must be empty: pass its
-supported build flags explicitly instead of allowing hidden test filters.
+executors and test arguments are rejected. `GOFLAGS` must be empty, except that
+Windows may inherit exactly `-tags=byollvm` when the same tag is explicitly
+passed after `--`. This preserves the LLVM binding selection in nested Go
+commands. Missing, conflicting or duplicate tags fail before execution; no
+other inherited flags are accepted. Module scope retains the actual environment.
 The runner forces `-count=1`; successful cached runs cannot replace execution.
 
 ## Proof and failure behavior

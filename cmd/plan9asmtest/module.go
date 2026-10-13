@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"sort"
 	"strings"
 
@@ -189,8 +190,11 @@ func runModule(ctx context.Context, cfg config) error {
 	}
 	if !cfg.Module || cfg.Package != "." || cfg.CISelector != "" || cfg.CIIsolate != "" || cfg.CIVerify != "" || cfg.CIOwner != -1 ||
 		cfg.Timeout <= 0 || cfg.Shards < 1 || cfg.Shards > 1024 || cfg.Workers < 1 || cfg.Workers > 32 || cfg.Workers > cfg.Shards ||
-		cfg.ModuleOwner < -1 || cfg.ModuleOwner >= moduleOwners || os.Getenv("GOFLAGS") != "" {
-		return fmt.Errorf("module mode requires exhaustive '.', valid bounded scheduling and no selected-CI options/GOFLAGS")
+		cfg.ModuleOwner < -1 || cfg.ModuleOwner >= moduleOwners {
+		return fmt.Errorf("module mode requires exhaustive '.', valid bounded scheduling and no selected-CI options")
+	}
+	if err := validateRunnerGoFlags(runtime.GOOS, os.Getenv("GOFLAGS"), cfg.Flags); err != nil {
+		return err
 	}
 	if cfg.ModuleVerify != "" && cfg.ModuleOwner != -1 {
 		return fmt.Errorf("module aggregate cannot also execute an owner")
