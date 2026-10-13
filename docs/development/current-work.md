@@ -185,6 +185,19 @@ native x86 instruction execution or the complete race gate. The test-only
 destination-bank audit. Its complete simple CLI passes in 128.133 seconds.
 Logs are `official-go*-c36bb835.log`, `sdk-source-reentry-race-c36bb835.log`
 and `simple-cli-complete-bank-batch.log`.
+`01f75845`/`c9098d62` repair the SDK-global source inventory boundary without
+omitting nested packages, testdata or unselected original files. Its finite
+4,096-file/64-MiB role budget applies to capture, Verify and offline validation;
+ordinary and pinned CPU sources keep 256 files/16 MiB. New unique dependency
+members are checked before retention with linear accounting, not repeated
+whole-map sums. Complete Go 1.27 storage passed in 143.572 seconds and the
+Go 1.20 counterpart in 1.511 seconds; integrated five-target original runtime
+and typed-global/boundary regressions pass. The genuine runtime fixture retains
+1,204 original files plus its selected dependencies and only observes the
+pointer-free `worldsema` definition. The actual amd64 benchmark remains 49/55:
+its runtime files now reach the separate pointer/linkname storage boundary,
+not the old misleading missing-module error. Preserve that failed replay in
+the SDK snapshot worktree's `sdk-storage-snapshot/benchmark-8f65e3de/`.
 Ownership logs are
 `windows-owned-process-*-0428ee36.log`, under the report directory below.
 
@@ -378,9 +391,9 @@ tools; later edits do not inherit a complete-head pass.
    bytes or a skip. Other runtime/frame contracts remain; missing generated CPP
    headers stay unresolved, never ignored/no-op macros.
 4. The 20 benchmark failures still require runtime/reflect entry, TLS,
-   hidden-register, caller-storage or source contracts. SDK runtime storage
-   capture must retain the actual source-inventory failure instead of replacing
-   it with a generic missing-module diagnostic. Dynamic reflect frames
+   hidden-register, caller-storage or source contracts. SDK runtime's repaired
+   complete inventory supplies neither pointer/linkname global authority nor
+   a physical native-entry contract. Dynamic reflect frames
    cannot be inferred from `func()`. ARM64 result-tail bytes are observable by
    assembly callers. Maps AES mutable-global storage remains separate from its
    repaired shuffle effects. Do not force CGO_ENABLED=0 in ordinary loading:
