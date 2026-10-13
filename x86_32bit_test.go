@@ -656,6 +656,14 @@ func TestTranslate386ClassicAggregateFrame(t *testing.T) {
 }
 
 func TestTranslate386InstructionFamilies(t *testing.T) {
+	// Go's 386 MMX-to-GP transfer is MOVL (the physical MOVD), not the
+	// MOVQ source family or its MOVD/MOVDQ2Q aliases. Check both actual
+	// encoder outcomes before using that transfer in the lowering fixture.
+	goAssemblerOracleOutput(t, "386", "TEXT ·valid(SB),4,$0-0\nMOVL M0,AX\nEMMS\nRET\n", "", true)
+	for _, opcode := range []string{"MOVQ", "MOVD", "MOVDQ2Q"} {
+		goAssemblerOracleOutput(t, "386", "TEXT ·invalid(SB),4,$0-0\n"+opcode+" M0,AX\nEMMS\nRET\n", "", false)
+	}
+
 	src := `
 TEXT arith(SB),NOSPLIT,$0-12
 	MOVL a+0(FP), AX
@@ -730,7 +738,7 @@ TEXT atomic64(SB),NOSPLIT,$0-0
 
 TEXT mmxload(SB),NOSPLIT,$0-0
 	MOVQ (SI), M0
-	MOVQ M0, AX
+	MOVL M0, AX
 	EMMS
 	RET
 
@@ -846,7 +854,7 @@ TEXT frameAddress(SB),NOSPLIT,$0-12
 			Name: "atomic64", Args: []LLVMType{Ptr, I32, I32, I32, I32}, Ret: I1,
 			ArgRegs: []Reg{SI, AX, DX, BX, CX},
 		},
-		"mmxload":   {Name: "mmxload", Args: []LLVMType{Ptr}, Ret: I64, ArgRegs: []Reg{SI}},
+		"mmxload":   {Name: "mmxload", Args: []LLVMType{Ptr}, Ret: I32, ArgRegs: []Reg{SI}},
 		"vectorlow": {Name: "vectorlow", Args: []LLVMType{Ptr}, Ret: I32, ArgRegs: []Reg{SI}},
 		"split64": {
 			Name: "split64", Args: []LLVMType{I64}, Ret: I64,
