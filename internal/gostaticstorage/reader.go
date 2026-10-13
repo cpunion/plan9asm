@@ -392,10 +392,13 @@ func ValidateReport(report Report) error {
 		(!sdkCPU && !sdkGlobals && report.Environment["CGO_ENABLED"] != "0" ||
 			(sdkCPU || sdkGlobals) && report.Environment["CGO_ENABLED"] != "0" && report.Environment["CGO_ENABLED"] != "1") ||
 		report.Environment["CGO_ENABLED"] != report.CommandEnvironment["CGO_ENABLED"] || report.Environment["GOWORK"] != "off" ||
-		len(report.Source) == 0 || len(report.Source) > 256 || len(report.Source) != len(report.SourceSHA256) ||
+		len(report.Source) == 0 || len(report.Source) != len(report.SourceSHA256) ||
 		len(report.Archives) == 0 || len(report.Archives) > 64 || len(report.Archives) != len(report.ArchiveSHA256) ||
 		len(report.Variables) == 0 || len(report.Variables) > 32 {
 		return contextError("report lacks bounded complete original inputs")
+	}
+	if err := validateSourceInventory(report.Source, report.Protocol); err != nil {
+		return err
 	}
 	arguments, toolCount, environmentCount := selectionArguments(), 3+len(formatSources), 16
 	if sdkCPU || sdkGlobals {
@@ -462,17 +465,12 @@ func ValidateReport(report Report) error {
 			return contextError("report uses unknown object-format source rules")
 		}
 	}
-	total := 0
 	for name, data := range report.Source {
 		if name == "" || strings.Contains(name, "\\") || filepath.IsAbs(name) || filepath.ToSlash(filepath.Clean(name)) != name || name == ".." || strings.HasPrefix(name, "../") || digest(data) != report.SourceSHA256[name] {
 			return contextError("retained source bytes/name/hash changed")
 		}
-		total += len(data)
 	}
-	if total > 16<<20 {
-		return contextError("retained source byte bound exceeded")
-	}
-	total = 0
+	total := 0
 	for name, data := range report.Archives {
 		if len(data) > archiveLimit || digest(data) != report.ArchiveSHA256[name] {
 			return contextError("retained actual archive bytes/hash changed")
