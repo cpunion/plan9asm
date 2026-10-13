@@ -5,6 +5,8 @@ package main
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/json"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -13,10 +15,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/xgo-dev/plan9asm"
 	"github.com/xgo-dev/plan9asm/gotoolprofile"
 )
 
-func TestTranslateOriginalSDKCRC32NumericalSource(t *testing.T) {
+func setSimpleSDKProfile(t *testing.T) {
+	t.Helper()
 	for key, value := range map[string]string{
 		"GOENV": "off", "GOWORK": "off", "GOTOOLCHAIN": "local",
 		"GOFLAGS": "", "GOEXPERIMENT": "", "GOPACKAGESDRIVER": "off",
@@ -31,6 +35,10 @@ func TestTranslateOriginalSDKCRC32NumericalSource(t *testing.T) {
 		}
 	}
 	t.Setenv("GOCACHE", t.TempDir())
+}
+
+func TestTranslateOriginalSDKCRC32NumericalSource(t *testing.T) {
+	setSimpleSDKProfile(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 	input := filepath.Join(runtime.GOROOT(), "src", "hash", "crc32", "crc32_amd64.s")
@@ -65,6 +73,80 @@ func TestTranslateOriginalSDKCRC32NumericalSource(t *testing.T) {
 		t.Fatal("selected original SDK bytes changed", err)
 	}
 	t.Logf("original SDK SHA256=%x; LLVM22 object bytes=%d", sha256.Sum256(original), info.Size())
+}
+
+func TestSimpleCLIOriginalSDKCRC32PublicationAndRejection(t *testing.T) {
+	setSimpleSDKProfile(t)
+	input := filepath.Join(runtime.GOROOT(), "src", "hash", "crc32", "crc32_amd64.s")
+	original, err := os.ReadFile(input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, mode := range []string{"file", "package"} {
+		t.Run(mode, func(t *testing.T) {
+			folder := t.TempDir()
+			meta := filepath.Join(folder, "metadata.json")
+			output := filepath.Join(folder, "crc32.ll")
+			args := []string{"-goos=linux", "-goarch=amd64", "-meta=" + meta}
+			if mode == "file" {
+				args = append(args, "-i="+input, "-o="+output)
+			} else {
+				args = append(args, "-dir="+folder, "hash/crc32")
+				output = filepath.Join(folder, "crc32_amd64.s.ll")
+			}
+			if err := runTranspile(args); err != nil {
+				t.Fatalf("public %s entry point rejected unchanged SDK source: %v", mode, err)
+			}
+			ir, err := os.ReadFile(output)
+			if err != nil || !strings.Contains(string(ir), "hash/crc32.r2r1<>") ||
+				!strings.Contains(string(ir), "internal/cpu.X86") || strings.Contains(string(ir), "hash/crc32.r2r1$local") {
+				t.Fatalf("public SDK result lost the original native namespace: %v", err)
+			}
+			raw, err := os.ReadFile(meta)
+			if err != nil || !json.Valid(raw) || !strings.Contains(string(raw), `"package": "hash/crc32"`) ||
+				!strings.Contains(string(raw), `"resolved": "hash/crc32.ieeeCLMUL"`) {
+				t.Fatalf("public SDK metadata is absent/incomplete: %v\n%s", err, raw)
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+			defer cancel()
+			object := filepath.Join(folder, "crc32.o")
+			stdout, stderr, err := gotoolprofile.RunBounded(ctx, folder, os.Environ(), sdkLLVM22LLC(t, ctx),
+				"-filetype=obj", "-o", object, output)
+			if err != nil || len(stderr) != 0 {
+				t.Fatalf("public SDK LLVM22 object: %v\n%s%s", err, stdout, stderr)
+			}
+			if info, err := os.Stat(object); err != nil || info.Size() == 0 {
+				t.Fatal("public SDK object is absent", err)
+			}
+		})
+	}
+	for _, row := range []struct{ key, value string }{{"GOAMD64", "v2"}, {"GOFLAGS", "-tags=unobserved_sdk_profile"}} {
+		t.Run("reject-"+row.key, func(t *testing.T) {
+			t.Setenv(row.key, row.value)
+			folder := t.TempDir()
+			output, meta := filepath.Join(folder, "rejected.ll"), filepath.Join(folder, "rejected.json")
+			const retained = "preexisting output\n"
+			for _, name := range []string{output, meta} {
+				if err := os.WriteFile(name, []byte(retained), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			err := runTranspile([]string{"-goos=linux", "-goarch=amd64", "-i=" + input, "-o=" + output, "-meta=" + meta})
+			if !errors.Is(err, plan9asm.ErrProbeNeedsContext) {
+				t.Fatalf("unobserved profile was not rejected with its missing source contract: %v", err)
+			}
+			for _, name := range []string{output, meta} {
+				actual, err := os.ReadFile(name)
+				if err != nil || string(actual) != retained {
+					t.Fatalf("failed source observation published/overwrote output: %v", err)
+				}
+			}
+		})
+	}
+	after, err := os.ReadFile(input)
+	if err != nil || sha256.Sum256(after) != sha256.Sum256(original) {
+		t.Fatal("public CLI changed original selected SDK source", err)
+	}
 }
 
 func sdkLLVM22LLC(t *testing.T, ctx context.Context) string {
