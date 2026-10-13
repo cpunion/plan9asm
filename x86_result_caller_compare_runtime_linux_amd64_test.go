@@ -91,10 +91,10 @@ func TestCrossLinuxRuntimeMatrixGoX86CallerAddressCMPABI0Representation(t *testi
 		name string
 		bits int
 	}{{"B", 8}, {"W", 16}, {"L", 32}, {"Q", 64}} {
-		fmt.Fprintf(&assembly, "TEXT ·Compare%s(SB),4,$0-20\nMOVQ p+0(FP),AX\nMOVQ q+8(FP),BX\nCMP%s AX,BX\nSETEQ DX\nMOVBLZX DX,DX\nMOVL DX,ret+16(FP)\nRET\n", width.name, width.name)
+		fmt.Fprintf(&assembly, "TEXT ·Compare%s(SB),4,$0-17\nMOVQ p+0(FP),AX\nMOVQ q+8(FP),BX\nCMP%s AX,BX\nSETEQ DX\nMOVB DX,ret+16(FP)\nRET\n", width.name, width.name)
 		fmt.Fprintf(&assembly, "TEXT ·Observe%s(SB),4,$32-48\nMOVQ p+0(FP),AX\nMOVQ AX,0(SP)\nMOVQ q+8(FP),AX\nMOVQ AX,8(SP)\nMOVQ $0x5a5a5a5a5a5a5a5a,AX\nMOVQ AX,16(SP)\nMOVQ $0x6b6b6b6b6b6b6b6b,AX\nMOVQ AX,24(SP)\nCALL ·Compare%s(SB)\nMOVQ 16(SP),AX\nMOVQ AX,raw+16(FP)\nMOVQ 24(SP),AX\nMOVQ AX,adjacent+24(FP)\nMOVQ 0(SP),AX\nMOVQ AX,inputP+32(FP)\nMOVQ 8(SP),AX\nMOVQ AX,inputQ+40(FP)\nRET\n", width.name, width.name)
-		fmt.Fprintf(&declarations, "func Compare%s(p,q *byte) uint32\nfunc Observe%s(p,q *byte)(raw,adjacent,inputP,inputQ uintptr)\n", width.name, width.name)
-		fmt.Fprintf(&checks, "{bits:=uint(%d);mask:=uint64(^uint64(0));if bits<64{mask=uint64(1)<<bits-1};want:=uintptr(0);if uint64(a)&mask==uint64(b)&mask{want=1};if Compare%s(p,q)!=uint32(want){t.Fatal(\"actual Go ABI0 CMP %s\",offset,other)};raw,adjacent,inputP,inputQ:=Observe%s(p,q);if raw!=0x5a5a5a5a00000000|want||adjacent!=0x6b6b6b6b6b6b6b6b||inputP!=a||inputQ!=b{t.Fatalf(\"%s raw/stack/input canaries: %%x %%x %%x %%x\",raw,adjacent,inputP,inputQ)}}\n", width.bits, width.name, width.name, width.name, width.name)
+		fmt.Fprintf(&declarations, "func Compare%s(p,q *byte) bool\nfunc Observe%s(p,q *byte)(raw,adjacent,inputP,inputQ uintptr)\n", width.name, width.name)
+		fmt.Fprintf(&checks, "{bits:=uint(%d);mask:=uint64(^uint64(0));if bits<64{mask=uint64(1)<<bits-1};want:=uintptr(0);if uint64(a)&mask==uint64(b)&mask{want=1};if Compare%s(p,q)!=(want==1){t.Fatal(\"actual Go ABI0 CMP %s\",offset,other)};raw,adjacent,inputP,inputQ:=Observe%s(p,q);if raw!=0x5a5a5a5a5a5a5a00|want||adjacent!=0x6b6b6b6b6b6b6b6b||inputP!=a||inputQ!=b{t.Fatalf(\"%s raw bool byte/stack/input canaries: %%x %%x %%x %%x\",raw,adjacent,inputP,inputQ)}}\n", width.bits, width.name, width.name, width.name, width.name)
 	}
 	oracle := `package framefixture
 import("testing";"unsafe")
