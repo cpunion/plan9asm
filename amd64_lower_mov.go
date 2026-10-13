@@ -13,7 +13,7 @@ func (c *amd64Ctx) lowerMov(op Op, ins Instr) (ok bool, terminated bool, err err
 		return ok, terminated, err
 	}
 	switch op {
-	case "MOVQ", "MOVD", "MOVL", "MOVB", "MOVW", "CMOVQLT",
+	case "MOVQ", "MOVD", "MOVDQ2Q", "MOVL", "MOVB", "MOVW", "CMOVQLT",
 		"MOVBWSX", "MOVBWZX", "MOVBLSX", "MOVBLZX", "MOVBQSX", "MOVBQZX",
 		"MOVWLSX", "MOVWLZX", "MOVWQSX", "MOVWQZX", "MOVLQSX", "MOVLQZX",
 		"MOVSWW", "MOVZWW":
@@ -34,9 +34,9 @@ func (c *amd64Ctx) lowerMov(op Op, ins Instr) (ok bool, terminated bool, err err
 		return true, false, c.lowerScalarNativeLoad(form, ins)
 	}
 	src, dst := ins.Args[0], ins.Args[1]
-	if op == "MOVD" {
-		op = "MOVQ"
-	}
+	dispatch := ins
+	dispatch.Op = op
+	op = x86GoMOVQSourceInstruction(dispatch).Op
 
 	// Vector moves are handled in lowerVec.
 	if dst.Kind == OpReg {

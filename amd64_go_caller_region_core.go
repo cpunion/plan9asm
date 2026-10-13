@@ -266,7 +266,7 @@ func x86CallerScalarStep(ins *Instr, state *x86SourceStackState, proof *x86GoCal
 	if _, known, err := x86OrderingHintProperties(ins.Op, *ins, "amd64"); known {
 		return false, err == nil
 	}
-	op := Op(normalizeInstructionOpcode(ins.Op))
+	op := Op(normalizeInstructionOpcode(x86GoMOVQSourceInstruction(*ins).Op))
 	if op == OpTEXT || op == OpLABEL || op == OpRET || op == OpJMP || isAMD64ConditionalBranch(op) {
 		return false, !isAMD64CounterZeroBranch(op) || x86CallerNumericRead(Operand{Kind: OpReg, Reg: CX}, 8, state)
 	}

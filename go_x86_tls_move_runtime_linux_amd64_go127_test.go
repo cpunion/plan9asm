@@ -21,7 +21,7 @@ func TestCrossLinuxRuntimeMatrixX86TLSNoopPreservesWideGP(t *testing.T) {
 	execution := x86FloatCompareExecution{llc: llc, triple: "x86_64-unknown-linux-gnu",
 		compiler: []string{clang, "-target", "x86_64-unknown-linux-gnu"}}
 	pkg, file, options, original, request := x86TLSMoveSourceFixture(t, "linux/amd64", false,
-		"func Value(a uint64) uint64", "MOVQ a+0(FP),CX\nMOVL TLS,CX\nMOVQ TLS,CX\nMOVD TLS,CX\nMOVQ CX,ret+8(FP)\nRET")
+		"func Value(a uint64) uint64", "MOVQ a+0(FP),CX\nMOVL TLS,CX\nMOVQ TLS,CX\nMOVD TLS,CX\nMOVDQ2Q TLS,CX\nMOVQ CX,ret+8(FP)\nRET")
 	ctx, cancel := runtimeOracleStageContext(t)
 	defer cancel()
 	observed, err := CaptureGoX86TLSMoveSource(ctx, request)
@@ -29,7 +29,7 @@ func TestCrossLinuxRuntimeMatrixX86TLSNoopPreservesWideGP(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer observed.Close()
-	if len(observed.noops) != 3 || len(observed.texts[0]) != 1 || len(observed.texts[0][0].Relocations) != 0 {
+	if len(observed.noops) != 4 || len(observed.texts[0]) != 1 || len(observed.texts[0][0].Relocations) != 0 {
 		t.Fatal("runtime oracle lacks its complete relocation-free original NOP body")
 	}
 	bound, err := observed.BindTLSMoves(ctx, file, options)

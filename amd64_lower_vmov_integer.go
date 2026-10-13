@@ -15,6 +15,11 @@ func (c *amd64Ctx) lowerVectorScalarIntegerMove(op Op, ins Instr) (ok bool, term
 	if !known || err != nil {
 		return known, false, err
 	}
+	if f.mmx && (ins.x86Encoded || ins.x86SourceRaw != nil) {
+		// A physical X-to-MMX destination remains native x87/MMX state;
+		// no source-compatible spelling grants a virtual GP register slot.
+		return true, false, fmt.Errorf("%w: raw Intel MOVDQ2Q requires its physical MMX/x87 entry and caller-state contract: %q", ErrProbeNeedsContext, ins.Raw)
+	}
 	src, dst := ins.Args[0], ins.Args[1]
 	if f.memory >= 0 && ins.Args[f.memory].Kind == OpFP {
 		if _, err := c.scalarFPSpan(ins.Args[f.memory].FPOffset, f.bits); err != nil {

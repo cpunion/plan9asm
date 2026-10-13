@@ -410,9 +410,10 @@ selects their meaning.
 expanded source with its actual Go tool, OS, architecture and shared flag.
 It binds every TEXT body, ordered relocation, frame/argument header and original
 source position. `BindTLSMoves` consumes only observed zero-width NOP rewrites
-of MOVL/MOVQ/MOVD TLS-to-GP rows, including Go's complete pre-encoding AX..R15
-range on 386. Such a NOP preserves both initialized and unknown destination
-bytes; the complete existing source/result proof still runs before lowering.
+of MOVL/MOVQ and its MOVD/MOVDQ2Q source aliases' TLS-to-GP rows, including
+Go's complete pre-encoding AX..R15 range on 386. Such a NOP preserves both
+initialized and unknown destination bytes; the complete existing source/result
+proof still runs before lowering.
 The source observer supplies no package selection, signature, native frame,
 thread, TLS address or g identity. ELF LE/IE relocations, Windows/Android runtime
 offsets, Plan 9 private storage and actual TLS memory remain Context without
@@ -772,7 +773,19 @@ identity and raw-entry contracts remain strict. Bound runtime batches and compar
 original legacy Go bytes, independent byte references and LLVM O0/O2 separately.
 
 GP/X scalar bit transfers share one typed grammar for MOVL, MOVQ, Go's MOVD
-alias (64-bit), VMOVD and VMOVQ. The grammar feeds original-source validation,
+and MOVDQ2Q source aliases (64-bit), VMOVD and VMOVQ. Named aliases preserve
+their original `Op` and `Raw` identity and use every MOVQ scalar, memory, GP/X,
+machine register and TLS row; they are not Intel opcode restrictions. Actual raw
+F2 0F D6 remains an X-to-MMX native effect, independent of source-compatible
+formatter spellings, and requires physical MMX/x87 entry and caller state.
+Source normalization cannot wash away that origin or establish initialized
+bytes. Canonicalize only local dispatch copies, not the complete source bound
+by caller, raw-return or frame fingerprints. Go's FLOAT-immediate class has no
+MOVQ or alias row and cannot become a zero integer. The required
+Linux AMD64 `TestCrossLinuxRuntimeMatrixX86MOVQSourceAliasesOriginalAndLLVM`
+counterpart executes original Go bytes and LLVM with separate GP, GP/X,
+X128-clearing, native eight-byte read and address effects.
+The grammar feeds original-source validation,
 CFG routing, lowering, private FP-result initialization and caller byte effects;
 the direct scalar module prototype cannot bypass it. Legacy writes preserve
 upper vector aliases, while VEX/EVEX writes clear them. Mode32 VEX GP transfers

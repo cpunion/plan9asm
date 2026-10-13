@@ -1023,6 +1023,40 @@ func TestReadAsmSourceResolvesGoIncludePathRelativeToPkgInclude(t *testing.T) {
 	}
 }
 
+func TestExtractSupportedOpsFindsCompleteMOVQSourceAliasRegistry(t *testing.T) {
+	repoRoot, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	source, err := os.ReadFile(filepath.Join(repoRoot, "amd64_movq_source_alias.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	isolated := t.TempDir()
+	for name, content := range map[string][]byte{
+		"amd64_movq_source_alias.go": source,
+		"translate.go":               []byte("package plan9asm\n"),
+	} {
+		if err := os.WriteFile(filepath.Join(isolated, name), content, 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// The actual new registry must advertise the aliases on its own, without
+	// borrowing MOVDQ2Q from the old physical MMX helper's narrower map.
+	for _, arch := range []string{"386", "amd64", "arm", "arm64", "wasm"} {
+		supported, err := extractSupportedOps(isolated, arch)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, alias := range []string{"MOVD", "MOVDQ2Q"} {
+			_, registered := supported[alias]
+			if registered != (arch == "386" || arch == "amd64") {
+				t.Fatalf("actual source alias registry leaked or omitted %s on %s", alias, arch)
+			}
+		}
+	}
+}
+
 func TestExtractSupportedOpsFindsCompleteAddedInstructionFamilies(t *testing.T) {
 	repoRoot, err := filepath.Abs(filepath.Join("..", ".."))
 	if err != nil {
@@ -1043,7 +1077,7 @@ func TestExtractSupportedOpsFindsCompleteAddedInstructionFamilies(t *testing.T) 
 		"VANDPS", "VANDPD", "VANDNPS", "VANDNPD", "VORPS", "VORPD", "VXORPS", "VXORPD",
 		"PAND", "PANDN", "POR", "PXOR", "VPAND", "VPANDN", "VPOR", "VPXOR",
 		"VPANDD", "VPANDQ", "VPANDND", "VPANDNQ", "VPORD", "VPORQ", "VPXORD", "VPXORQ",
-		"MOVD", "VMOVW", "VMOVD", "VMOVQ", "PREFETCHNTA", "PREFETCHT0", "PREFETCHT1", "PREFETCHT2", "UD2",
+		"MOVD", "MOVDQ2Q", "VMOVW", "VMOVD", "VMOVQ", "PREFETCHNTA", "PREFETCHT0", "PREFETCHT1", "PREFETCHT2", "UD2",
 		"CVTSL2SS", "CVTSL2SD", "CVTSQ2SS", "CVTSQ2SD", "CVTPL2PS", "CVTPL2PD",
 		"VBROADCASTSS", "VBROADCASTSD",
 		"VADDPH", "VSUBPH", "VMULPH", "VDIVPH", "VMINPH", "VMAXPH",
@@ -1078,7 +1112,7 @@ func TestExtractSupportedOpsFindsCompleteAddedInstructionFamilies(t *testing.T) 
 		"VMOVDQA32", "VMOVDQA64", "VMOVDQU8", "VMOVDQU16", "VMOVDQU32", "VMOVDQU64",
 		"MOVNTO", "MOVNTPD", "MOVNTPS", "MOVNTDQA",
 		"VMOVNTDQ", "VMOVNTPD", "VMOVNTPS", "VMOVNTDQA",
-		"MOVNTQ", "MOVNTDQ", "MOVQOZX", "MOVDQ2Q", "PSHUFW",
+		"MOVNTQ", "MOVNTDQ", "MOVQOZX", "PSHUFW",
 		"VINSERTF128", "VINSERTI128",
 		"VINSERTF32X4", "VINSERTF64X2", "VINSERTI32X4", "VINSERTI64X2",
 		"VINSERTF32X8", "VINSERTF64X4", "VINSERTI32X8", "VINSERTI64X4",

@@ -97,7 +97,17 @@ func TestX86GoCallerRegionCoreDoesNotCertifyBadStackOrWrites(t *testing.T) {
 				assembly = strings.Replace(assembly, "BYTE $0xc3", "SUBQ $8,SP\nBYTE $0xc3", 1)
 			}
 			pkg, _ := x86CallerCoreFixture(t, x86CallerFixtureSource, assembly)
-			if err := x86CallerCoreTranslate(t, pkg, assembly, "x86_64-unknown-linux-gnu"); !errors.Is(err, ErrProbeNeedsContext) {
+			err := x86CallerCoreTranslate(t, pkg, assembly, "x86_64-unknown-linux-gnu")
+			if name == "floating immediate" {
+				// Go's FLOAT class has no MOVQ row; this is invalid source,
+				// not a native caller privilege that a later producer can grant.
+				goAssemblerOracleOutput(t, "amd64", assembly, "", false)
+				if err == nil || errors.Is(err, ErrProbeNeedsContext) {
+					t.Fatalf("Go-rejected FLOAT source became Context or success: %v", err)
+				}
+				return
+			}
+			if !errors.Is(err, ErrProbeNeedsContext) {
 				t.Fatalf("bad source acquired caller-region continuation: %v", err)
 			}
 		})

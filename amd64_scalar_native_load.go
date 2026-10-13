@@ -13,10 +13,9 @@ type x86ScalarNativeLoadForm struct {
 }
 
 func x86ScalarNativeLoadProperties(op Op, ins Instr, arch string) (x86ScalarNativeLoadForm, bool, error) {
-	canonical := op
-	if canonical == "MOVD" {
-		canonical = "MOVQ" // Go's source alias is a qword, not Intel MOVD.
-	}
+	local := ins
+	local.Op = op
+	canonical := x86GoMOVQSourceInstruction(local).Op
 	width := x86RawReturnScalarMoveBytes(canonical)
 	if width == 0 || len(ins.Args) != 2 || ins.Args[0].Kind != OpMem || ins.Args[1].Kind != OpReg {
 		return x86ScalarNativeLoadForm{}, false, nil

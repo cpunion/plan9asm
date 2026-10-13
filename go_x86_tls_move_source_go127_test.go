@@ -82,7 +82,7 @@ func TestGoX86TLSMoveActualNOPBindingThreeAPIsObjects(t *testing.T) {
 	for _, target := range []string{"linux/amd64", "darwin/amd64", "freebsd/386"} {
 		t.Run(target, func(t *testing.T) {
 			pkg, file, options, original, request := x86TLSMoveSourceFixture(t, target, false, "func Value(a uint32) uint32",
-				"MOVL a+0(FP),CX\nMOVL TLS,CX\nMOVQ TLS,CX\nMOVD TLS,CX\nMOVL CX,ret+8(FP)\nRET")
+				"MOVL a+0(FP),CX\nMOVL TLS,CX\nMOVQ TLS,CX\nMOVD TLS,CX\nMOVDQ2Q TLS,CX\nMOVL CX,ret+8(FP)\nRET")
 			if options.Goarch == "386" {
 				original = bytes.ReplaceAll(original, []byte("ret+8"), []byte("ret+4"))
 				var err error
@@ -108,7 +108,7 @@ func TestGoX86TLSMoveActualNOPBindingThreeAPIsObjects(t *testing.T) {
 					t.Error(err)
 				}
 			}()
-			if len(observed.noops) != 3 {
+			if len(observed.noops) != 4 {
 				t.Fatalf("native direct-TLS rewrite inventory: %+v", observed.noops)
 			}
 			bound, err := observed.BindTLSMoves(ctx, file, options)
@@ -264,7 +264,7 @@ func TestGoX86TLSMoveNOPCompleteSourceRegisterRange(t *testing.T) {
 	for _, target := range []string{"linux/amd64", "freebsd/386"} {
 		t.Run(target, func(t *testing.T) {
 			var body strings.Builder
-			for _, op := range []string{"MOVL", "MOVQ", "MOVD"} {
+			for _, op := range []string{"MOVL", "MOVQ", "MOVD", "MOVDQ2Q"} {
 				for _, register := range []string{"AX", "CX", "DX", "BX", "SP", "BP", "SI", "DI", "R8", "R9", "R10", "R11", "R12", "R13", "R14", "R15"} {
 					fmt.Fprintf(&body, "%s TLS,%s\n", op, register)
 				}
@@ -278,7 +278,7 @@ func TestGoX86TLSMoveNOPCompleteSourceRegisterRange(t *testing.T) {
 				t.Fatal(err)
 			}
 			defer observed.Close()
-			if len(observed.noops) != 48 || !bytes.Equal(observed.texts[0][0].Code, []byte{0xc3}) {
+			if len(observed.noops) != 64 || !bytes.Equal(observed.texts[0][0].Code, []byte{0xc3}) {
 				t.Fatalf("complete native NOP register range changed: noops=%d native=%x", len(observed.noops), observed.texts[0][0].Code)
 			}
 			bound, err := observed.BindTLSMoves(ctx, file, options)

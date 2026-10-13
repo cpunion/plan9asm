@@ -508,12 +508,10 @@ func x86ResultTransfer(ins Instr, state *x86ResultState, owned []bool, resultOff
 	if accepted, known := x86ResultSwapStep(ins, state, arch); known {
 		return accepted
 	}
-	// cmd/asm's MOVD alias has the complete MOVQ operand/effect grammar,
+	// cmd/asm's source aliases have the complete MOVQ operand/effect grammar,
 	// including its mode32 GP restriction. Change only this local dispatch
 	// copy; the original source and any native certificates stay untouched.
-	if ins.Op == "MOVD" {
-		ins.Op = "MOVQ"
-	}
+	ins = x86GoMOVQSourceInstruction(ins)
 	if form, known, err := x86GPSIMDTransferProperties(ins, arch); known &&
 		len(ins.Args) == 2 && ins.Args[0].Kind == OpReg && ins.Args[1].Kind == OpReg {
 		// Share numerical register effects, not the private observer's

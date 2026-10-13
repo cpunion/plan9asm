@@ -508,7 +508,7 @@ func x86SourceStackInstructionKnown(ins Instr, nativeMove Op, suffix, arch strin
 	if _, known, err := x86OrderingHintProperties(ins.Op, ins, arch); known {
 		return err == nil
 	}
-	op := Op(normalizeInstructionOpcode(ins.Op))
+	op := Op(normalizeInstructionOpcode(x86GoMOVQSourceInstruction(ins).Op))
 	if _, recognized, err := x86ConditionalSetProperties(ins.Op, ins, arch); recognized {
 		return err == nil
 	}
@@ -721,7 +721,7 @@ func x86SourceStackFlagsStepForArch(ins Instr, state *x86SourceStackState, arch 
 }
 
 func x86SourceStackAddressStep(ins *Instr, state *x86SourceStackState, nativeMove Op, suffix string, word int64) bool {
-	op := Op(normalizeInstructionOpcode(ins.Op))
+	op := Op(normalizeInstructionOpcode(x86GoMOVQSourceInstruction(*ins).Op))
 	arch := "amd64"
 	if word == 4 {
 		arch = "386"
