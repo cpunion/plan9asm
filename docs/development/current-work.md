@@ -98,15 +98,16 @@ follow-up passed in 14.167 seconds. Native Linux precision trapping is a separat
 required axis, not certified by container emulation. Go 1.20 header/diagnostic
 controls passed in 0.848 seconds. Root vet and the Go 1.27 five-architecture
 official gate passed at `c4ff4f3b`; classification does not certify execution.
-These three commits are staged locally on the fork probe branch but not pushed:
-run 38386789839 must finish first. Both CLIs' execution owners and the main
+These three commits are staged locally on the fork probe branch but not pushed.
+Run 38386789839 finished with 19 successful and 9 failed jobs. Both complete
+CLI execution/coverage aggregates and the main
 profile/rest owners pass. All eight main-root parts completed their 5,840-root
 inventory: 5,541 passed, 36 failed, 263 host-inapplicable skips and zero incomplete.
 The skips are not runtime passes. Preserve all eight raw partitions under
 `windows-complete-38386789839`. Failures are seven fault-oracle roots repaired by
 the staged commits and twenty-nine ARM64 source/consumer roots reaching the
-same byte-carrier call/source-PC path join. Complete-module aggregates still
-await runners; keep the root aggregate failed until the actual roots pass.
+same byte-carrier call/source-PC path join. The main aggregate correctly rejects
+those failed partitions; retain it as failed until the actual roots pass.
 The byte-carrier repair decodes Go's Windows object-source slash spelling
 through the shared canonical-path reader, without an SDK alias. Exact file,
 source line, instruction text, PC range and the original position record remain
@@ -129,9 +130,25 @@ configuration becomes explicit `off`; existing settings and user-selected paths
 remain selected. CGO still follows the actual compiler default. All affected
 Linux environment/fixed-local regressions passed in 87.001 seconds; host profile
 controls and LLVM CLI vet passed. A fresh complete benchmark is still required.
-Current-head simple-CLI Linux CRC32 replay also remains failed at the CPU-feature
-SB comparison; its log is `simple-cli-crc32-linux-0428ee36.log`. Ownership logs
-are `windows-owned-process-*-0428ee36.log`, under the report directory below.
+`65ad1a65`/`73ddf781` share the real SDK numerical-source reload/binder across
+both frontends, preserve actual CGO defaults and retain eager owned-directory
+identity. `79f2a2e7` checks the public file/package entrypoints, real LLVM 22
+objects and rejected-profile no-overwrite behavior. The integrated complete
+simple CLI passed in 99.508 seconds; richer source/environment regression passed
+in 37.526 seconds before the following core extension. The earlier Linux CRC32
+failure stays preserved as `simple-cli-crc32-linux-0428ee36.log`, not current
+head's result. Non-Linux x86 source roles and the complete stdlib gate remain
+unresolved. Logs for current integration are `sdk-*-integrated-go127.log` and
+`sdk-publication-integrated-go127.log`.
+`9cd81fe3` adds an independent typed SDK-global observation and complete AES/
+logical numerical-read consumers with original source/PC/relocation joins.
+Actual SDK storage/profile guards passed in 8.441 seconds; the complete vector
+family's four APIs/five x86 backend/optimization objects passed in 26.899 seconds.
+Complete `gostaticstorage` passed Go 1.27/1.20 in 78.373/0.481 seconds; the shared
+frontend passed Go 1.20 in 0.436 seconds, and root vet passed. This does not yet
+close maps' native ABIInternal entry, caller loops or private literal contracts;
+keep those benchmark failures explicit. Ownership logs are
+`windows-owned-process-*-0428ee36.log`, under the report directory below.
 
 - `7bdc112a`: Windows C text-mode CRLF now retains the exact observation
   fields; bare/embedded CR and all incomplete packets still fail. Reentry checks
