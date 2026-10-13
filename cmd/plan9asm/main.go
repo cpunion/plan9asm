@@ -435,7 +435,7 @@ func translateAsmForPackage(pkg *packages.Package, asmPath, goos, goarch string,
 		AnnotateSource: annotate,
 	})
 	if err != nil {
-		if errors.Is(err, plan9asm.ErrProbeNeedsContext) && sdkfrontend.CPUOwnerRequested(sdkPackageView(pkg), file, goos+"/"+goarch) {
+		if errors.Is(err, plan9asm.ErrProbeNeedsContext) && sdkfrontend.NumericalOwnerRequested(sdkPackageView(pkg), file, goos+"/"+goarch) {
 			var selected *sdkfrontend.Selection
 			if len(selections) == 1 {
 				selected = selections[0]

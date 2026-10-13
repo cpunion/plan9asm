@@ -96,13 +96,17 @@ func x86SDKCPUOwnerRequested(pkg *packages.Package, file *plan9asm.File, target 
 	return sdkfrontend.CPUOwnerRequested(sdkPackageView(pkg), file, target)
 }
 
+func x86SDKNumericalOwnerRequested(pkg *packages.Package, file *plan9asm.File, target string) bool {
+	return sdkfrontend.NumericalOwnerRequested(sdkPackageView(pkg), file, target)
+}
+
 func captureX86SDKNumericalSource(pkg *packages.Package, file *plan9asm.File, asm, target string,
 	config compileConfig,
 ) (_ *plan9asm.File, _ *x86SDKNumericalCLISource, result error) {
 	if !config.acquireSDKNumerical {
 		return file, nil, nil
 	}
-	if config.Feature != nil || !x86SDKCPUOwnerRequested(pkg, file, target) {
+	if config.Feature != nil || !x86SDKNumericalOwnerRequested(pkg, file, target) {
 		return nil, nil, fmt.Errorf("%w: SDK numerical retry no longer has its original candidate role", plan9asm.ErrProbeNeedsContext)
 	}
 	selected := config.x86CallerSelections[pkg]
@@ -190,6 +194,7 @@ func captureX86SDKNumericalSource(pkg *packages.Package, file *plan9asm.File, as
 	actual, observed, err := sdkfrontend.Capture(ctx, sdkfrontend.CaptureRequest{
 		GoBinary: binary, Root: rootPath, Directory: directory, PackagePath: pkg.PkgPath,
 		AssemblyFile: actualAsm, Target: target, Environment: environment,
+		Package: sdkPackageView(pkg),
 	}, file)
 	if err != nil {
 		return nil, nil, err

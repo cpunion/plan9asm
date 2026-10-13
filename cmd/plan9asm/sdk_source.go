@@ -101,6 +101,7 @@ func translateSDKSource(ctx context.Context, pkg *packages.Package, selected *sd
 	file, source, err := sdkfrontend.Capture(ctx, sdkfrontend.CaptureRequest{
 		GoBinary: binary, Root: values["GOROOT"], Directory: actual.Dir, PackagePath: actual.PkgPath,
 		AssemblyFile: asmPath, Target: target, Environment: observed.Environment(),
+		Package: sdkPackageView(actual),
 	}, file)
 	if err != nil {
 		return translation{}, err

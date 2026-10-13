@@ -932,7 +932,7 @@ func compileOneAttempt(pkg *packages.Package, arch plan9asm.Arch, goos, goarch, 
 	// request an independent SDK observation. A partially published chunked
 	// compilation never reaches this seam, and non-context errors stay errors.
 	if !ccfg.acquireSDKNumerical && ccfg.Feature == nil && errors.Is(err, plan9asm.ErrProbeNeedsContext) &&
-		x86SDKCPUOwnerRequested(pkg, file, goos+"/"+goarch) {
+		x86SDKNumericalOwnerRequested(pkg, file, goos+"/"+goarch) {
 		return &x86SDKNumericalRetryError{cause: err}
 	}
 	return annotateUnboundCallerFrame(file, resolve, sigs, declaredArgSizes, err)

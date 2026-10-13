@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"errors"
+	"go/types"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -17,6 +18,7 @@ import (
 
 	"github.com/xgo-dev/plan9asm"
 	"github.com/xgo-dev/plan9asm/gotoolprofile"
+	"github.com/xgo-dev/plan9asm/internal/sdkfrontend"
 )
 
 func setSimpleSDKProfile(t *testing.T) {
@@ -82,13 +84,16 @@ func TestSimpleCLIOriginalSDKCRC32PublicationAndRejection(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, mode := range []string{"file", "package"} {
+	for _, mode := range []string{"file", "package", "file-cgo"} {
 		t.Run(mode, func(t *testing.T) {
+			if mode == "file-cgo" {
+				t.Setenv("CGO_ENABLED", "1")
+			}
 			folder := t.TempDir()
 			meta := filepath.Join(folder, "metadata.json")
 			output := filepath.Join(folder, "crc32.ll")
 			args := []string{"-goos=linux", "-goarch=amd64", "-meta=" + meta}
-			if mode == "file" {
+			if strings.HasPrefix(mode, "file") {
 				args = append(args, "-i="+input, "-o="+output)
 			} else {
 				args = append(args, "-dir="+folder, "hash/crc32")
@@ -147,6 +152,45 @@ func TestSimpleCLIOriginalSDKCRC32PublicationAndRejection(t *testing.T) {
 	if err != nil || sha256.Sum256(after) != sha256.Sum256(original) {
 		t.Fatal("public CLI changed original selected SDK source", err)
 	}
+}
+
+func TestSimpleSDKVariableQueryUsesOriginalMapsSource(t *testing.T) {
+	setSimpleSDKProfile(t)
+	pkg, err := loadPackage("internal/runtime/maps", "linux", "amd64")
+	if err != nil {
+		t.Fatal(err)
+	}
+	input := filepath.Join(pkg.Dir, "memhash_amd64.s")
+	selected := false
+	for _, name := range pkg.OtherFiles {
+		selected = selected || name == input
+	}
+	if !selected {
+		t.Fatal("the actual original SDK load did not select its AES source")
+	}
+	source, err := plan9asm.ReadGoAssemblySource(input, pkg.Dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	file, err := plan9asm.ParseWithDefines(plan9asm.ArchAMD64, string(source), plan9asm.GoAssemblerDefines("linux", "amd64"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	view := sdkPackageView(pkg.Package)
+	if sdkfrontend.CPUOwnerRequested(view, file, "linux/amd64") || !sdkfrontend.NumericalOwnerRequested(view, file, "linux/amd64") {
+		t.Fatal("the original SDK's Go-variable source still depends on the CPU-only cost query")
+	}
+	queries := sdkfrontend.OwnerRequests(view, file, "linux/amd64")
+	if len(queries) != 1 || queries[0].CPU || queries[0].PackagePath != pkg.PkgPath || len(queries[0].Variables) != 1 ||
+		queries[0].Variables[0].Name != "aeskeysched" {
+		t.Fatalf("original typed Go-variable query is incomplete: %+v", queries)
+	}
+	variable, valid := pkg.Types.Scope().Lookup("aeskeysched").(*types.Var)
+	if !valid || pkg.TypesSizes.Sizeof(variable.Type()) != 128 {
+		t.Fatal("actual compiler-selected variable/type extent differs")
+	}
+	// This original-source/type query is not an ABIInternal/native-entry join
+	// or successful maps translation. Those remain independent core contracts.
 }
 
 func sdkLLVM22LLC(t *testing.T, ctx context.Context) string {
