@@ -1,6 +1,7 @@
 package gostaticstorage
 
 import (
+	"fmt"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -62,16 +63,20 @@ func sdkReferencedArchiveSymbols(archives map[string]SDKReferencedArchive, targe
 			return nil, err
 		}
 		for index, member := range members[1:] {
-			flags := uint32(16)
+			flags := sdkCompilerObjectFlags(target)
 			if index != 0 {
 				if member.name != names[index-1] {
 					return nil, contextError("SDK referenced source/member route differs")
 				}
 				flags |= 4
 			}
-			body, err := objectBody(member.data, target)
+			reader := objectBody
+			if index == 0 {
+				reader = sdkObjectBody
+			}
+			body, err := reader(member.data, target)
 			if err != nil {
-				return nil, err
+				return nil, contextError(fmt.Sprintf("SDK referenced package=%s member=%s object header: %v", path, member.name, err))
 			}
 			object, err := checkedSDKIndexedMetadata(body, flags, index != 0)
 			if err != nil {

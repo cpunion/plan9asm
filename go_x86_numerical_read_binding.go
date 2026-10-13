@@ -67,8 +67,8 @@ func (source *GoX86NumericalReadSource) BindNumericalReads(ctx context.Context, 
 	if file == nil || options.ResolveSym == nil || pkg.Types == nil || pkg.Path != source.request.PackagePath || pkg.Types.Path() != pkg.Path || pkg.SourceSelection != nil {
 		return Options{}, numericalSBContext("binding lacks complete original declarations/source/resolver")
 	}
-	arch := strings.TrimPrefix(source.request.Target, "linux/")
-	triple := map[string]string{"386": "i386-unknown-linux-gnu", "amd64": "x86_64-unknown-linux-gnu"}[arch]
+	_, arch, _ := strings.Cut(source.request.Target, "/")
+	triple := numericalSDKTargetTriple(source.request.Target)
 	if options.Goarch != arch || options.TargetTriple != triple || options.WASMABI != WASMABIDirect || len(options.X86TailGroups) != 0 || options.NumericalReads != nil {
 		return Options{}, numericalSBContext("binding profile or existing authority differs")
 	}
@@ -590,7 +590,7 @@ func verifyGoNumericalReadInputs(binding *GoX86NumericalReadBinding, pkg GoPacka
 	}
 	if pkg.Path != binding.packageInput.Path || pkg.Types != binding.originalTypes || pkg.SourceSelection != nil ||
 		!numericalSameImports(pkg.Imports, binding.originalImports) ||
-		opt.GOOS != "linux" || opt.GOARCH != binding.options.Goarch || opt.TargetTriple != binding.options.TargetTriple ||
+		opt.GOOS+"/"+opt.GOARCH != binding.source.request.Target || opt.GOARCH != binding.options.Goarch || opt.TargetTriple != binding.options.TargetTriple ||
 		opt.WASMABI != binding.options.WASMABI || opt.X87Mode != binding.options.X87Mode || opt.AnnotateSource != binding.options.AnnotateSource ||
 		opt.Sizes != nil || opt.FrameSizes != nil ||
 		opt.ResolveSym == nil || opt.KeepFunc != nil || opt.ManualSig != nil || len(opt.ARM64ClosureABIs) != 0 ||

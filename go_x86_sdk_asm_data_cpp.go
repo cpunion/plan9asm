@@ -21,7 +21,7 @@ func (source *GoX86SDKASMDataSource) captureAssembly(ctx context.Context, ordina
 		return result, cpp, err
 	}
 	cpp, positions, err := observeSDKAssemblyCPP(string(raw), AssemblyPreprocessOptions{FileName: file,
-		Defines: GoAssemblerDefinesWithEnv("linux", source.guard.env["GOARCH"], source.guard.env),
+		Defines: GoAssemblerDefinesWithEnv(source.guard.env["GOOS"], source.guard.env["GOARCH"], source.guard.env),
 		ReadInclude: func(parent, header string) (string, []byte, error) {
 			if filepath.Base(header) != header {
 				return "", nil, sdkASMDataContext("relative/foreign include needs another source route")

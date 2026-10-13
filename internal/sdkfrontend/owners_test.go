@@ -52,7 +52,14 @@ RET
 		t.Fatal("a foreign module borrowed the stock SDK cost route")
 	}
 	pkg.Module = false
-	if len(OwnerRequests(pkg, file, "darwin/amd64")) != 0 {
-		t.Fatal("an unobserved target borrowed the Linux SDK source role")
+	for _, target := range []string{"linux/386", "darwin/amd64", "windows/386", "windows/amd64"} {
+		if !reflect.DeepEqual(OwnerRequests(pkg, file, target), want) {
+			t.Fatalf("%s cost query lost the original typed SDK variable roles", target)
+		}
+	}
+	for _, target := range []string{"darwin/386", "freebsd/amd64", "linux/arm64", "unknown/amd64"} {
+		if len(OwnerRequests(pkg, file, target)) != 0 {
+			t.Fatalf("%s borrowed an unobserved x86 SDK source role", target)
+		}
 	}
 }

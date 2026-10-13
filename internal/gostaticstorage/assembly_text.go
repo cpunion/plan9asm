@@ -36,7 +36,7 @@ func arm64AssemblyObservationTarget(target string) bool {
 // It is an offline observation: neither these bytes nor its return value create
 // an Observation, a live source lease or a memory/entry permission.
 func ObserveX86AssemblyText(data, builtinSource []byte, target string) ([]TextRecord, error) {
-	if target != "linux/386" && target != "linux/amd64" {
+	if !X86SDKTarget(target) {
 		return nil, contextError("unobserved x86 assembly target")
 	}
 	return observeAssemblyText(data, builtinSource, target)
@@ -63,7 +63,7 @@ func ObserveX86AssemblyArchive(data, builtinSource []byte, target string, source
 }
 
 func observeX86AssemblyArchive(data, builtinSource []byte, target string, sources []string, sdk bool) ([]TextMember, error) {
-	if target != "linux/386" && target != "linux/amd64" {
+	if !X86SDKTarget(target) || !sdk && target != "linux/386" && target != "linux/amd64" {
 		return nil, contextError("unobserved x86 assembly archive target")
 	}
 	return observeAssemblyArchive(data, builtinSource, target, sources, sdk)
@@ -96,13 +96,9 @@ func observeAssemblyArchiveReferences(data, builtinSource []byte, target string,
 	definitions := make(map[string]bool)
 	storage := make(map[string]bool)
 	sdkDefinitions := make(sdkAssemblyNamedDefinitions)
-	// Go 1.27.1 work/init.go passes -shared for default PIE on Darwin.
-	// Windows default PIE does not pass it. This exact archive role is not
-	// inherited by direct tool asm objects or the Linux x86 observation APIs.
-	compilerFlags := uint32(0)
-	if target == "darwin/arm64" {
-		compilerFlags = 1
-	}
+	// Preserve the independent archive role; direct tool asm observations
+	// below still require their own exact flags instead of this profile.
+	compilerFlags := sdkCompilerObjectFlags(target) &^ 16
 	result := []TextMember{{Name: members[0].name, Offset: members[0].offset, Size: int64(len(members[0].data))}}
 	for index, member := range members[1:] {
 		flags := compilerFlags
@@ -121,7 +117,11 @@ func observeAssemblyArchiveReferences(data, builtinSource []byte, target string,
 			seenSources[name] = true
 			flags |= 4
 		}
-		body, err := objectBody(member.data, target)
+		reader := objectBody
+		if sdk && index == 0 {
+			reader = sdkObjectBody
+		}
+		body, err := reader(member.data, target)
 		if err != nil {
 			return nil, err
 		}
@@ -196,7 +196,7 @@ type SDKReferencedArchive struct {
 // ObserveX86SDKAssemblyArchiveReferences additionally observes indexed
 // references through separately retained actual dependency archives.
 func ObserveX86SDKAssemblyArchiveReferences(data, builtinSource []byte, target string, sources []string, referenced map[string]SDKReferencedArchive) ([]TextMember, error) {
-	if target != "linux/386" && target != "linux/amd64" {
+	if !X86SDKTarget(target) {
 		return nil, contextError("unobserved SDK indexed-reference target")
 	}
 	symbols, err := sdkReferencedArchiveSymbols(referenced, target)

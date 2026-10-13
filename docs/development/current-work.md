@@ -214,8 +214,13 @@ family passes in 4.639 seconds; Go 1.20 diagnostics pass in 0.824 seconds.
 Fresh native [38419176385](https://github.com/cpunion/plan9asm/actions/runs/38419176385)
 now passes that actual original-Go/LLVM fault root on both Go 1.20 and 1.27;
 their complete packed-store suites take 2.841/2.123 seconds. Ownership, source
-paths and repeated real process-tree checks also pass both SDKs. The complete
-Windows modules are still running; retain the prior failed run as failed.
+paths and repeated real process-tree checks also pass both SDKs. The run has
+finished with all 28 jobs successful, including the three complete Windows
+modules and their coverage aggregates. All eight main-root parts retain the
+5,868-root inventory: 5,605 passed, zero failed, 263 host-inapplicable skips and
+zero incomplete. The skips are not execution passes. Raw partitions and the
+independent completion artifact remain in `windows-complete-38419176385-all/`
+and `windows-complete-38419176385-completion/`; retain the older run as failed.
 The intermediate fork-only ownership step in 38418570567 failed before tests
 because it omitted the explicit `byollvm` tag; `3b796b07` corrects that step,
 without changing production source or treating the infrastructure error as a pass.
@@ -228,6 +233,28 @@ three-API objects pass. Its integrated root regressions pass in 16.439 seconds;
 the complete local simple CLI passes in 171.127 seconds. The new native alias
 root and counted-loop/fixed-local consumers still need the next fork batch;
 38419176385 predates this alias implementation and cannot certify it.
+`c832dad9` completes counted provenance, fixed-local widths, caller shapes and
+carry initialization; affected Go 1.27/1.20 suites pass in 847.549/419.507 seconds.
+`73e582f5`/`17659d69` bind bounded private SDK literal address/index reads and the
+same source aliases, retaining original identities and all source functions.
+Maps still reaches Context at linked address-bit observations, not an invented
+alignment guarantee. Their isolated broad/final guards pass; integrated current
+head validation is required before publishing the next batch.
+The SDK numerical source now independently observes Darwin/amd64 and Windows
+x86 profiles rather than borrowing Linux metadata. Exact default PIE/shared
+object flags, original CPU NonpkgDefs and complete compiler directive prologues
+retain their typed source/object joins; none supplies native imports or calls.
+The original unchanged CRC32 source first failed on both platforms, then passed
+LLVM 22 objects in 49.739 seconds. Integrated core/source/literal/alias guards
+pass in 361.220 seconds and the complete simple CLI in 194.169 seconds. The
+first complete storage run retained one stale fixture failure because it still
+called now-supported Windows an unknown target; the genuinely unsupported
+FreeBSD case replaces that input while cross-target report/profile mismatches
+remain rejected. The final complete storage/frontend suites pass Go 1.27 in
+111.924/0.529 seconds and Go 1.20 in 1.400/0.368 seconds; root vet passes too.
+The complete Darwin corpus now advances past original CRC32 to maps' independent
+linked-address-bit boundary. Preserve `stdlib-darwin-sdk-platform-final.log` as
+failed, not as complete corpus or benchmark success.
 Ownership logs are
 `windows-owned-process-*-0428ee36.log`, under the report directory below.
 
@@ -403,12 +430,11 @@ tools; later edits do not inherit a complete-head pass.
 
 ## Remaining work, in priority order
 
-1. Let 38419176385 complete the main-module aggregate. The previously failing
-   packed-store root now passes fresh native Windows on both SDKs. Partitioning
-   retains inventory and the thirty-minute budgets; both complete CLIs,
-   process ownership, source-path repairs and the other fault drivers now pass.
-   The latest 5,867 main-root outcomes are retained above. Selected native
-   regressions are not complete-module certification.
+1. Publish and verify the next integrated source-alias/literal batch on the
+   allowed fork. Frozen 38419176385 is now fully green for its selected native
+   Linux roots and complete Windows modules, but predates these new repairs.
+   Both new native MOVQ alias roots must execute, not merely match a regex.
+   Retain the complete inventories and unchanged thirty-minute budgets.
 2. Rerun affected complete gates and both CLIs, publish to the existing
    allowed-fork contribution ref, then inspect fresh CI. No upstream manual
    cancellation/rerun is authorized. The sixteen-part Linux race schedule

@@ -46,7 +46,10 @@ func (source *GoX86SDKASMDataSource) artifact(name string, data []byte) (string,
 func (source *GoX86SDKASMDataSource) asmArguments(include string) []string {
 	args := []string{"tool", "asm", "-p", source.request.PackagePath, "-std", "-I", include,
 		"-I", filepath.Join(source.guard.env["GOROOT"], "pkg", "include")}
-	for _, define := range GoAssemblerDefinesWithEnv("linux", source.guard.env["GOARCH"], source.guard.env) {
+	if source.guard.env["GOOS"] == "darwin" {
+		args = append(args, "-shared")
+	}
+	for _, define := range GoAssemblerDefinesWithEnv(source.guard.env["GOOS"], source.guard.env["GOARCH"], source.guard.env) {
 		args = append(args, "-D", define)
 	}
 	return args
@@ -92,6 +95,9 @@ func (source *GoX86SDKASMDataSource) captureHeader(ctx context.Context) error {
 	args = []string{"tool", "compile", "-p", source.request.PackagePath, "-std", "-lang=" + language,
 		"-goversion", guard.env["GOVERSION"], "-symabis", symabis, "-importcfg", configFile,
 		"-asmhdr", headerFile, "-o", objectFile}
+	if guard.env["GOOS"] == "darwin" {
+		args = append(args, "-shared")
+	}
 	for _, name := range guard.selection.GoFiles {
 		args = append(args, filepath.Join(source.request.Directory, name))
 	}

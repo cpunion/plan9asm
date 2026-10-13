@@ -87,7 +87,10 @@ func (source *GoX86NumericalReadSource) bindNative(ctx context.Context, variable
 			arguments = []string{"tool", "asm", "-S", "-p", source.request.PackagePath, "-std",
 				"-I", source.literals.source.guard.owned, "-I", filepath.Join(guard.env["GOROOT"], "pkg", "include")}
 		}
-		for _, define := range GoAssemblerDefinesWithEnv("linux", arch, environment) {
+		if source.role == numericalSBSDKSource && environment["GOOS"] == "darwin" {
+			arguments = append(arguments, "-shared")
+		}
+		for _, define := range GoAssemblerDefinesWithEnv(environment["GOOS"], arch, environment) {
 			arguments = append(arguments, "-D", define)
 		}
 		arguments = append(arguments, "-o", output, input)

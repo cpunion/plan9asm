@@ -78,6 +78,8 @@ func (source *GoX86SDKASMDataSource) capture(ctx context.Context, provided map[s
 	}
 	for _, role := range []string{"src/cmd/internal/goobj/builtinlist.go", "src/cmd/internal/obj/x86/asm6.go",
 		"src/cmd/internal/obj/x86/obj6.go", "src/cmd/go/internal/work/gc.go", "src/cmd/go/internal/load/pkg.go",
+		"src/cmd/go/internal/work/init.go", "src/internal/platform/supported.go",
+		"src/cmd/compile/internal/gc/obj.go", "src/cmd/link/internal/ld/go.go",
 		"src/cmd/asm/main.go", "src/cmd/asm/internal/lex/input.go", "src/cmd/asm/internal/lex/stack.go",
 		"src/cmd/asm/internal/lex/tokenizer.go", "src/cmd/compile/internal/typecheck/subr.go"} {
 		if _, err := source.guard.read(filepath.Join(env["GOROOT"], filepath.FromSlash(role))); err != nil {

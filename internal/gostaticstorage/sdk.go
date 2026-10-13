@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"reflect"
 	"sort"
-	"strconv"
 	"strings"
 
 	"github.com/xgo-dev/plan9asm/internal/gotoolchain"
@@ -20,7 +19,11 @@ const SDKCPUProtocol = "actual_go_sdk_cpu_numeric_storage_prototype_v1"
 // actual .o member. Bind that SDK rule as well as the observed asm route; the
 // filename suffix by itself is not a source-to-object certificate.
 var sdkCPUFormatSources = map[string]string{
-	"src/cmd/go/internal/work/gc.go": "13359b8707e78300e8e0ec880b9a8d1af4bafdf32140b56df5f041a52fbc1325",
+	"src/cmd/go/internal/work/gc.go":     "13359b8707e78300e8e0ec880b9a8d1af4bafdf32140b56df5f041a52fbc1325",
+	"src/cmd/go/internal/work/init.go":   "cd86d5c8fecb90d9db58ed3c98d0869ff6b5220c445025051d366818859a0963",
+	"src/internal/platform/supported.go": "b2ee50eb1857a0dfd98cbfbd0c8a6c78f3a3e334cfc56557a24c8517681bc442",
+	"src/cmd/compile/internal/gc/obj.go": "dfed5fe0bee6e0dab23e3fd3c1327c12273895cf8141ad4b896cef8bc73269f2",
+	"src/cmd/link/internal/ld/go.go":     "1035a2c6ca034d8a47ae6ee3a4be530e0b32170120d527d75fc46df29be68c84",
 }
 
 // CaptureSDKCPU observes only the original selected Go 1.27.1 internal/cpu
@@ -35,8 +38,11 @@ func sdkCPUArguments() []string {
 }
 
 func sdkCPUTarget(target string) bool {
+	if X86SDKTarget(target) {
+		return true
+	}
 	switch target {
-	case "linux/386", "linux/amd64", "linux/arm", "linux/arm64", "js/wasm":
+	case "linux/arm", "linux/arm64", "js/wasm":
 		return true
 	}
 	return false
@@ -45,7 +51,7 @@ func sdkCPUTarget(target string) bool {
 func sdkCPUProfile(target string) map[string]string {
 	profile := map[string]string{"GO386": "", "GOARM": "", "GOARM64": "", "GOWASM": ""}
 	switch target {
-	case "linux/386":
+	case "linux/386", "windows/386":
 		profile["GO386"] = "sse2"
 	case "linux/arm":
 		profile["GOARM"] = "7,hardfloat"
@@ -204,58 +210,8 @@ func readSDKCPUArchive(data []byte, target string, sources []string) (map[string
 	if !sdkCPUTarget(target) {
 		return nil, contextError("unobserved SDK CPU archive target")
 	}
-	members, err := archiveMembers(data)
-	if err != nil {
-		return nil, err
-	}
-	if len(members) != len(sources)+2 || len(members) < 2 || members[0].name != "__.PKGDEF" || members[1].name != "_go_.o" {
-		return nil, contextError("SDK archive member inventory differs from selected sources")
-	}
-	var compiler map[string]dataRecord
-	definitions := make(map[string]bool)
-	for i, member := range members[1:] {
-		flags := uint32(16) // ObjFlagStd, from the pinned SDK goobj format.
-		assembly := i != 0
-		if assembly {
-			source := sources[i-1]
-			if filepath.Base(source) != source || !strings.HasSuffix(source, ".s") ||
-				member.name != strings.TrimSuffix(source, ".s")+".o" {
-				return nil, contextError("SDK assembly member differs from selected source")
-			}
-			flags |= 4 // ObjFlagFromAssembly.
-		}
-		body, err := objectBody(member.data, target)
-		if err != nil {
-			return nil, err
-		}
-		records, err := readObjectRole(body, flags, assembly)
-		if err != nil {
-			return nil, err
-		}
-		if !assembly {
-			compiler = records
-			for name, record := range records {
-				definitions[name+"\x00"+strconv.Itoa(int(record.ABI))] = true
-			}
-			continue
-		}
-		for name, record := range records {
-			identity := name + "\x00" + strconv.Itoa(int(record.ABI))
-			if definitions[identity] {
-				return nil, contextError("duplicate SDK same-ABI member definition")
-			}
-			definitions[identity] = true
-			if previous, present := compiler[name]; present {
-				// Actual compiler ABI wrappers and assembly entry definitions may share
-				// TEXT names. They never authorize storage. Any storage collision rejects.
-				if record.Kind != 1 || previous.Kind != 1 || record.ABI == previous.ABI {
-					return nil, contextError("duplicate SDK native storage or same-ABI definition")
-				}
-			}
-			if record.Kind != 1 {
-				return nil, contextError("assembly data backing outside SDK storage prototype")
-			}
-		}
-	}
-	return compiler, nil
+	// Keep ABI/index identity until after structural validation. Go's Darwin
+	// compiler emits same-named ABI0/ABIInternal TEXT wrappers; neither can
+	// supply a Go variable. CPU assembly storage remains expressly forbidden.
+	return readSDKCompilerStorageArchive(data, target, sources, true)
 }

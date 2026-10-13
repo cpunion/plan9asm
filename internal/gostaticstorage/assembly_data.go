@@ -151,14 +151,14 @@ func ObserveX86SDKASMDataListingObjects(request SDKASMDataObservationRequest, or
 	if err != nil {
 		return nil, nil, err
 	}
-	original, err := observeASMDataObject(originalBytes, request.BuiltinSource, request.Target, 20, referenced)
+	original, err := observeASMDataObject(originalBytes, request.BuiltinSource, request.Target, sdkAssemblyObjectFlags(request.Target), referenced)
 	if err != nil {
 		return nil, nil, err
 	}
 	if !reflect.DeepEqual(original, observation.Sources[ordinal].Original) {
 		return nil, nil, contextError("original listing object differs from complete authenticated source metadata")
 	}
-	expanded, err := observeASMDataObject(expandedBytes, request.BuiltinSource, request.Target, 20, referenced)
+	expanded, err := observeASMDataObject(expandedBytes, request.BuiltinSource, request.Target, sdkAssemblyObjectFlags(request.Target), referenced)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -178,7 +178,7 @@ func ObserveX86SDKASMDataListingObjects(request SDKASMDataObservationRequest, or
 }
 
 func observeX86SDKASMData(request SDKASMDataObservationRequest, cpp bool) (*SDKASMDataObservation, error) {
-	if request.Target != "linux/386" && request.Target != "linux/amd64" || request.PackagePath == "" ||
+	if !X86SDKTarget(request.Target) || request.PackagePath == "" ||
 		strings.ContainsAny(request.PackagePath, "\x00\r\n") || len(request.PackagePath) > 4096 {
 		return nil, contextError("unobserved SDK DATA target or package identity")
 	}
@@ -232,7 +232,7 @@ func observeX86SDKASMData(request SDKASMDataObservationRequest, cpp bool) (*SDKA
 		value := ASMDataMember{Name: member.name, NameBytes: []byte(member.name), Ordinal: ordinal,
 			Offset: member.offset, Size: int64(len(member.data))}
 		if ordinal != 0 {
-			flags := uint32(16)
+			flags := sdkCompilerObjectFlags(request.Target)
 			if ordinal > 1 {
 				if member.name != memberNames[ordinal-2] {
 					return nil, contextError("SDK DATA archive/source ordinal or exact byte-truncated member name differs")
@@ -241,7 +241,7 @@ func observeX86SDKASMData(request SDKASMDataObservationRequest, cpp bool) (*SDKA
 			}
 			value, err = observeASMDataObject(member.data, request.BuiltinSource, request.Target, flags, referenced)
 			if err != nil {
-				return nil, err
+				return nil, contextError(fmt.Sprintf("SDK DATA member=%s: %v", member.name, err))
 			}
 			value.Name, value.NameBytes, value.Ordinal, value.Offset, value.Size = member.name, []byte(member.name), ordinal, member.offset, int64(len(member.data))
 			value.ObjectOffset += member.offset
@@ -278,13 +278,13 @@ func observeX86SDKASMData(request SDKASMDataObservationRequest, cpp bool) (*SDKA
 		if err != nil {
 			return nil, err
 		}
-		original, err := observeASMDataObject(source.OriginalObject, request.BuiltinSource, request.Target, 20, referenced)
+		original, err := observeASMDataObject(source.OriginalObject, request.BuiltinSource, request.Target, sdkAssemblyObjectFlags(request.Target), referenced)
 		if err != nil {
-			return nil, err
+			return nil, contextError(fmt.Sprintf("SDK DATA original source=%s: %v", source.Name, err))
 		}
-		expanded, err := observeASMDataObject(source.ExpandedObject, request.BuiltinSource, request.Target, 20, referenced)
+		expanded, err := observeASMDataObject(source.ExpandedObject, request.BuiltinSource, request.Target, sdkAssemblyObjectFlags(request.Target), referenced)
 		if err != nil {
-			return nil, err
+			return nil, contextError(fmt.Sprintf("SDK DATA expanded source=%s: %v", source.Name, err))
 		}
 		if err := joinASMSourceTexts(originalGrammar, request.PackagePath, original); err != nil {
 			return nil, err

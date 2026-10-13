@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/xgo-dev/plan9asm"
+	"github.com/xgo-dev/plan9asm/internal/gostaticstorage"
 	"github.com/xgo-dev/plan9asm/internal/sourcepath"
 )
 
@@ -45,7 +46,7 @@ func Resolve(packagePath, symbol string) string {
 // producers authenticate package role, variable layout and every native read.
 func CPUOwnerRequested(pkg *Package, file *plan9asm.File, target string) bool {
 	if pkg == nil || pkg.Module || file == nil || file.Arch != plan9asm.ArchAMD64 ||
-		(target != "linux/amd64" && target != "linux/386") {
+		!gostaticstorage.X86SDKTarget(target) {
 		return false
 	}
 	for _, fn := range file.Funcs {

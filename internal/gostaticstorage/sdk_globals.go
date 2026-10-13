@@ -252,6 +252,10 @@ func sdkGlobalPointerFree(typ types.Type, depth int) bool {
 // Only compiler SymbolDefs supply Go-defined storage. Assembly data, hashed
 // namespaces and exported-type records never supply a requested variable.
 func readSDKGlobalArchive(data []byte, target string, sources []string) (map[string]dataRecord, error) {
+	return readSDKCompilerStorageArchive(data, target, sources, false)
+}
+
+func readSDKCompilerStorageArchive(data []byte, target string, sources []string, cpu bool) (map[string]dataRecord, error) {
 	members, err := archiveMembers(data)
 	names, namesErr := sdkAssemblyMemberNames(sources)
 	if err != nil || namesErr != nil || len(members) != len(sources)+2 ||
@@ -261,14 +265,18 @@ func readSDKGlobalArchive(data []byte, target string, sources []string) (map[str
 	var compiler *sdkIndexedMetadataObject
 	definitions := make(map[string]bool)
 	for index, member := range members[1:] {
-		flags := uint32(16)
+		flags := sdkCompilerObjectFlags(target)
 		if index != 0 {
 			if member.name != names[index-1] {
 				return nil, contextError("SDK global assembly source/member identity differs")
 			}
 			flags |= 4
 		}
-		body, err := objectBody(member.data, target)
+		reader := objectBody
+		if index == 0 {
+			reader = sdkObjectBody
+		}
+		body, err := reader(member.data, target)
 		if err != nil {
 			return nil, err
 		}
@@ -276,13 +284,16 @@ func readSDKGlobalArchive(data []byte, target string, sources []string) (map[str
 		if err != nil {
 			return nil, err
 		}
-		symbols, err := object.selfSymbols()
+		symbols, err := object.storageSymbols(cpu)
 		if err != nil {
 			return nil, err
 		}
 		for _, symbol := range symbols {
 			if symbol.Name == "" {
 				continue // Anonymous records retain indexed identity and cannot name a variable.
+			}
+			if cpu && index != 0 && symbol.Kind != 1 {
+				return nil, contextError(fmt.Sprintf("assembly data backing outside SDK CPU storage role: member=%s symbol=%q kind=%d ABI=%d", member.name, symbol.Name, symbol.Kind, symbol.ABI))
 			}
 			identity := symbol.Name + "\x00" + string(rune(symbol.ABI))
 			if definitions[identity] {
@@ -295,21 +306,21 @@ func readSDKGlobalArchive(data []byte, target string, sources []string) (map[str
 		}
 	}
 	result := make(map[string]dataRecord)
-	block := compiler.block(3)
-	for index := 0; index < len(block)/21; index++ {
-		symbol := block[index*21 : (index+1)*21]
-		name, err := compiler.stringAt(symbol)
-		if err != nil {
-			return nil, err
-		}
-		if name == "" || symbol[10] == 1 {
+	symbols, err := compiler.storageSymbols(cpu)
+	if err != nil {
+		return nil, err
+	}
+	for _, symbol := range symbols {
+		name, index := symbol.Name, symbol.Index
+		if name == "" || symbol.Kind == 1 {
 			continue // Anonymous/type metadata and TEXT never provide Go variable storage.
 		}
 		if result[name].Name != "" {
 			return nil, contextError("SDK compiler storage has an empty/duplicate original definition")
 		}
-		record := dataRecord{Name: name, Member: "_go_.o", Index: uint32(index), ABI: binary.LittleEndian.Uint16(symbol[8:]), Kind: symbol[10], Flags: symbol[11], Flags2: symbol[12],
-			Size: int64(binary.LittleEndian.Uint32(symbol[13:])), Align: int64(binary.LittleEndian.Uint32(symbol[17:]))}
+		record := dataRecord{Name: name, Member: "_go_.o", Index: index, ABI: symbol.ABI,
+			Kind: symbol.Kind, Flags: symbol.Flags, Flags2: symbol.Flags2,
+			Size: int64(symbol.Size), Align: int64(symbol.Align)}
 		start := binary.LittleEndian.Uint32(compiler.block(13)[index*4:])
 		end := binary.LittleEndian.Uint32(compiler.block(13)[(index+1)*4:])
 		record.Data = append([]byte(nil), compiler.block(16)[start:end]...)
@@ -343,7 +354,7 @@ func sdkGlobalMembers(report Report, packages map[string]Package) (map[string][]
 		for index, member := range members {
 			flags := uint32(0)
 			if index > 0 {
-				flags = 16
+				flags = sdkCompilerObjectFlags(report.Target)
 			}
 			if index > 1 {
 				flags |= 4

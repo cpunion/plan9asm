@@ -979,6 +979,19 @@ The source-role extension grants no new native instruction/memory effects or
 dynamic-frame permission. Keep the original Go objects and three-API LLVM 22
 O0/O2 objects on all AMD64 targets separate from external-library success.
 
+The independent x86 SDK numerical/data observation uses exact Linux x86,
+Darwin/amd64 and Windows x86 profiles. Source macros, baseline CPU settings,
+CGO defaults, LLVM triples and every native member remain target-bound;
+ordinary owned numerical capture retains its separate Linux-only boundary.
+Default Darwin PIE carries exact shared compiler/assembler flags; Windows PIE
+does not. CPU variables' original self-linkname NonpkgDefs remain a CPU-only
+storage role, never a generic-global or external-function permission. SDK
+compiler metadata may include the complete bounded JSON directive prologue
+from the pinned Go writer/linker grammar. Observe its rows without applying
+imports, linker flags or calls; standalone/owned objects retain their old bound.
+Keep full original CRC32 source/object checks on each added platform and
+cross-target, malformed-row, ABI/index and source-lifetime rejection controls.
+
 Ordinary fixed-local capture observes Go's actual AMD64 v1/v2/v3/v4 profiles
 independently. Original feature-tagged source selection, compiler exports,
 target/CPU environment and native objects stay bound to that exact capture;
