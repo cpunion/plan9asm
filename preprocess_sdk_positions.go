@@ -97,6 +97,19 @@ func observeSDKAssemblyCPP(src string, opt AssemblyPreprocessOptions) (AssemblyC
 func sdkCPPMappedAssembly(tokens []sdkCPPPositionToken, remainingBytes int) (string, error) {
 	var mapped strings.Builder
 	var statement []sdkCPPPositionToken
+	var currentFile string
+	var nextLine uint
+	haveBase := false
+	write := func(part string) error {
+		if len(part) > remainingBytes-mapped.Len() {
+			return fmt.Errorf("SDK mapped CPP exceeds its byte bound: retained=%d additional=%d limit=%d", mapped.Len(), len(part), remainingBytes)
+		}
+		mapped.WriteString(part)
+		return nil
+	}
+	if remainingBytes < 0 {
+		return "", fmt.Errorf("SDK mapped CPP has no remaining byte budget")
+	}
 	for _, token := range tokens {
 		if token.Kind != '\n' {
 			statement = append(statement, token)
@@ -121,15 +134,27 @@ func sdkCPPMappedAssembly(tokens []sdkCPPPositionToken, remainingBytes int) (str
 		if line >= uint(^uint(0)>>1) {
 			return "", fmt.Errorf("SDK mapped CPP line overflows")
 		}
-		fmt.Fprintf(&mapped, "#line %d %q\n", line+1, base.File)
+		// One physical output line advances the existing logical base by one.
+		// Only reset for a discontinuity (including multiple statements on one
+		// original line), so long physical SDK paths are not repeated for every
+		// consecutive instruction. The original position tape stays complete.
+		if !haveBase || currentFile != base.File || nextLine != line {
+			if err := write(fmt.Sprintf("#line %d %q\n", line+1, base.File)); err != nil {
+				return "", err
+			}
+		}
 		for _, item := range statement {
-			mapped.WriteString(item.Text)
-			mapped.WriteByte(' ')
+			if err := write(item.Text); err != nil {
+				return "", err
+			}
+			if err := write(" "); err != nil {
+				return "", err
+			}
 		}
-		mapped.WriteByte('\n')
-		if mapped.Len() > remainingBytes {
-			return "", fmt.Errorf("SDK mapped CPP exceeds the existing byte bound")
+		if err := write("\n"); err != nil {
+			return "", err
 		}
+		haveBase, currentFile, nextLine = true, base.File, line+1
 		statement = nil
 	}
 	if len(statement) != 0 {

@@ -5,6 +5,84 @@ worktrees. Inspect status, worktrees and remotes. Push only to an allowed fork;
 keep the contribution draft until current-head CI, review and coverage pass.
 Let active frozen CI runs finish before publishing another batch.
 
+## Current checkpoint: 2026-10-14
+
+Fork [38441921522](https://github.com/cpunion/plan9asm/actions/runs/38441921522)
+tests frozen `19e74032` (contribution source `b3755a3e`, plus fork-only workflow).
+The run completed with 28/28 successful jobs. Both Windows ownership lanes and
+the selected native x86 suite pass. The three
+previous actual failed roots execute and pass before the complete modules:
+the 386 instruction fixture, sink return/teardown protocol and LLVM CLI platform
+query. Complete Windows inventories and strict aggregates pass: main
+5,906 roots = 5,643 passed + 263 explicit platform skips; simple CLI 29/29 and
+LLVM CLI 262/262 roots pass. The latter retains one native ARM64-only child skip.
+These skips are not executed semantics. This verifies the frozen fork run, not
+the full contribution's Linux/race/stdlib/benchmark gates. PR 40's published
+head is still `24851df2`, not these staged fixes.
+
+At frozen `b3755a3e`, the complete local LLVM CLI passes in 862.415 seconds and
+the complete new SDK literal-alignment producer's race cohort passes in 440.062
+seconds. `4818b84c` selects the actual Darwin SDK for independent LLVM 22 C
+oracles; the earlier 899.925-second missing-SDK failure remains failed.
+The official complete Go 1.20.14 SDK also passes all six existing alignment
+roots (five architectures, no skips) in 1.922 seconds. Its original wasm assets
+are required; the downloaded-module SDK's missing-asset failure remains failed.
+
+`b3755a3e` observes minimum alignment of uniquely retained original SDK literals
+through the complete original archive graph and ordinary Go linker. It grants
+neither numeric addresses nor read/call permission. `9e7879f2` preserves the
+SDK vendor namespace/import aliases and compacts consecutive CPP position
+markers within unchanged budgets. The complete untouched chacha source retains
+all three TEXTs; this source observation is not translation or execution success.
+An independent alignment regression also reproduces `go list runtime .` using
+the vendor directory's unrelated namespace. Both capture and live verification
+now query the original logical package path. The genuine empty-main link still
+rejects unretained literals; the focused regression passes in 7.542 seconds.
+These later source repairs are not in the active frozen CI run.
+
+At `df5348d7`, the combined SDK source/literal/bool/result class passes Go 1.27
+in 203.695 seconds and its Go 1.20 counterpart in 13.322 seconds. Both official
+five-architecture classification gates and root vet pass. Go 1.20 retains its
+explicit historical unsupported form; do not describe that baseline as zero
+unsupported. [Canonical bool results](x86-register-bool-result.md) require a
+separate initialized/canonical byte must-fact through every public lowerer.
+The standalone original instruction-byte and genuine Go ABI0 representation
+oracles passed under Linux emulation; native x86 execution is still required.
+
+The SDK-primary frame observer now consumes the original selected config/CGO
+profile and complete native TEXT/frame inventory, without granting owned-main
+frame permissions. Its GOENV identity uses the shared eager handle capture on
+Windows. Full original chacha helper and split-stack functions remain present;
+their caller/entry/frame contracts are not bypassed. The integrated observer
+and new native bool roots still need the following frozen validation/CI batch.
+
+The complete `e6bf0bf6` CLI replay found a genuine namespace convergence
+regression: simple CLI 25/29 passed in 36.141 seconds; LLVM CLI 269/270 passed
+in 813.834 seconds. All five failed roots compare complete numerical/literal
+SDK selections. DATA queried the logical package but numerical capture/verify
+still queried `.`; the raw `Match` fields therefore genuinely differed.
+`21121e24` uses one logical selector for SDK capture, live verification and
+dependency graphs, keeping ordinary owned queries at `.` and retaining strict
+raw-field comparisons. Independent RED/GREEN and actual complete CRC32
+three-API/O0/O2 object tests pass in 64.683 seconds. Do not erase `Match` or
+rewrite either failed complete receipt.
+
+At `515cd1d2`, complete simple CLI passes in 195.264 seconds, the SDK numerical/
+literal/profile join class in 265.576 seconds, and portable Go 1.20 controls in
+2.694 seconds. All five actual previously failed CLI roots also pass their
+priority inventory; the following complete LLVM CLI replay is still running.
+The SDK-primary direct inventory now binds all root members and child-directory
+identities without treating child generators as selected source. Existing
+ordinary flat inventory, byte/member bounds and relative-include rejection stay
+unchanged.
+
+Inventory runs only on the server. Streaming ledger status and a complete
+five-minute incremental window have been verified before restoring catch-up;
+the trusted contiguous head now advances through 2026-10-08T12:22:43Z.
+The requested historical cutoff remains 2025-10-01; subsequent hourly windows
+publish only after their complete scan. Real source failures remain retryable,
+not pass/skip. No local index/ledger scan is needed for translator work.
+
 ## Scope and completed CI checkpoint
 
 External scanning, ledgers and compatibility batches moved to Draft
@@ -279,12 +357,14 @@ slow process teardown and supplies immediate continuation markers through both
 original-Go and LLVM C drivers. Five complete sink/protocol repetitions pass
 in 39.605 seconds; Go 1.20 and Go 1.27 race counterparts pass in 8.947/10.092
 seconds. The observation window and direct-child exit checks are unchanged.
-Complete native confirmation of all three root repairs is still required.
+Complete native confirmation of all three root repairs passes the priority gates
+in 38441921522; its complete-module validation is still in progress.
 The complete local LLVM CLI retains a separate infrastructure failure after
 899.925 seconds: two native ARM64 C oracles select the Homebrew clang default
 configuration's absent SDK. Explicit CGO flags and SDKROOT do not fix those
-direct C commands. Keep that receipt failed while actual Darwin SDK arguments
-are repaired; never fall back from LLVM 22 or modify global tool configuration.
+direct C commands. Keep that receipt failed; the shared actual-SDK repair and
+subsequent complete pass are recorded in the current checkpoint above. Never
+fall back from LLVM 22 or modify global tool configuration.
 The fresh five-target benchmark at `3f437f3a` remains 164/184, 20 failed and zero
 N/A/unattempted. Build is nine seconds and target total 123 seconds, within the
 unchanged 300/900-second budgets. Its updated failures still expose actual SDK
@@ -465,12 +545,12 @@ tools; later edits do not inherit a complete-head pass.
 
 ## Remaining work, in priority order
 
-1. Verify the three actual root repairs from completed 38429537721 on the allowed
-   fork, prioritizing those inventoried roots before the complete Windows modules.
-   Its new native MOVQ alias roots pass; the previous failed receipts remain
-   failed until the following run executes the repairs. Retain complete inventories
-   and unchanged thirty-minute budgets. Repair the independent Darwin native C
-   tool configuration before replaying the complete local LLVM CLI.
+1. Finish the frozen repaired LLVM CLI replay after the five real namespace
+   failures pass priority execution. Integrate only closed instruction/proof
+   families, rerun their affected joins, then batch the next fork push. Include
+   all five prior CLI roots, actual new native bool roots and SDK/profile
+   controls in explicit inventories before complete Windows modules. Retain
+   strict aggregates, platform classifications and thirty-minute budgets.
 2. Rerun affected complete gates and both CLIs, publish to the existing
    allowed-fork contribution ref, then inspect fresh CI. No upstream manual
    cancellation/rerun is authorized. The sixteen-part Linux race schedule

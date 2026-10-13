@@ -40,12 +40,18 @@ type GoX86SDKASMDataSource struct {
 	context          context.Context
 	originalContext  context.Context
 	originalDeadline time.Time
-	directories      map[string]os.FileInfo
-	misses           map[string]bool
-	observation      sdkASMDataLiveObservation
-	report           []byte
-	seal             [32]byte
-	stateSeal        [32]byte
+	// Only the distinct SDK-primary frame factory can select this role.
+	// Public ASM DATA/numerical source producers retain their strict profile.
+	originalProfile   bool
+	originalConfig    string
+	originalConfigID  os.FileInfo
+	frameListingBytes int
+	directories       map[string]os.FileInfo
+	misses            map[string]bool
+	observation       sdkASMDataLiveObservation
+	report            []byte
+	seal              [32]byte
+	stateSeal         [32]byte
 }
 
 type sdkASMDataLiveObservation struct {
@@ -60,6 +66,8 @@ type sdkASMDataLiveObservation struct {
 	Positions                    []sdkCPPPositionObservation
 	ObjectInputs                 gostaticstorage.SDKASMDataObservationRequest
 	Objects                      *gostaticstorage.SDKASMDataObservation
+	Frames                       []sdkAMD64FrameNativeObservation `json:",omitempty"`
+	FrameListingBytes            int                              `json:",omitempty"`
 	Commands                     []numericalSBCommand
 }
 
@@ -71,6 +79,10 @@ func sdkASMDataContext(format string, args ...any) error {
 // Successful capture does not make DATA initialized storage or authorize any
 // instruction to read it. Existing owned and numerical factories stay strict.
 func CaptureGoX86SDKASMDataSource(ctx context.Context, request GoX86SDKASMDataCaptureRequest) (_ *GoX86SDKASMDataSource, result error) {
+	return captureGoX86SDKASMDataSource(ctx, request, false)
+}
+
+func captureGoX86SDKASMDataSource(ctx context.Context, request GoX86SDKASMDataCaptureRequest, originalProfile bool) (_ *GoX86SDKASMDataSource, result error) {
 	if ctx != nil && ctx.Err() != nil {
 		return nil, fmt.Errorf("capture SDK ASM DATA: %w", ctx.Err())
 	}
@@ -85,11 +97,17 @@ func CaptureGoX86SDKASMDataSource(ctx context.Context, request GoX86SDKASMDataCa
 		return nil, sdkASMDataContext("requires a bounded original capture context")
 	}
 	request.Environment = append([]string(nil), request.Environment...)
-	provided, err := sdkASMDataEnvironment(request)
+	var provided map[string]string
+	var err error
+	if originalProfile {
+		provided, err = sdkAMD64FrameEnvironment(request)
+	} else {
+		provided, err = sdkASMDataEnvironment(request)
+	}
 	if err != nil {
 		return nil, err
 	}
-	source := &GoX86SDKASMDataSource{request: request, context: ctx, originalContext: ctx,
+	source := &GoX86SDKASMDataSource{request: request, context: ctx, originalContext: ctx, originalProfile: originalProfile,
 		originalDeadline: deadline,
 		directories:      make(map[string]os.FileInfo), misses: make(map[string]bool)}
 	source.identity = source
@@ -102,7 +120,11 @@ func CaptureGoX86SDKASMDataSource(ctx context.Context, request GoX86SDKASMDataCa
 			return nil, err
 		}
 	}
-	if err := source.guard.snapshotDirectory(); err != nil {
+	snapshot := source.guard.snapshotDirectory
+	if originalProfile {
+		snapshot = source.snapshotSDKPrimaryDirectory
+	}
+	if err := snapshot(); err != nil {
 		return nil, err
 	}
 	owned, err := os.MkdirTemp(provided["TMPDIR"], "plan9asm-sdk-asm-data-")
@@ -126,6 +148,11 @@ func CaptureGoX86SDKASMDataSource(ctx context.Context, request GoX86SDKASMDataCa
 		return nil, sdkASMDataContext("factory artifact identity changed")
 	}
 	source.guard.owned = canonical
+	if originalProfile && provided["GOENV"] != "off" {
+		if err := source.captureSDKFrameConfig(provided["GOENV"]); err != nil {
+			return nil, err
+		}
+	}
 	if err := source.capture(ctx, provided); err != nil {
 		return nil, err
 	}
@@ -182,9 +209,17 @@ func (source *GoX86SDKASMDataSource) retainDirectory(directory string) error {
 }
 
 func (source *GoX86SDKASMDataSource) verifyDirectories() error {
+	if source.originalConfig != "" {
+		resolved, err := sourcepath.Resolve(source.originalConfig)
+		info, statErr := sourcepath.Lstat(source.originalConfig)
+		if err != nil || resolved != source.originalConfig || statErr != nil || !info.Mode().IsRegular() || info.Size() > sdkAMD64FrameConfigBytes ||
+			source.originalConfigID == nil || !os.SameFile(source.originalConfigID, info) {
+			return sdkASMDataContext("SDK-primary original GOENV identity changed")
+		}
+	}
 	for directory, before := range source.directories {
 		resolved, err := sourcepath.Resolve(directory)
-		after, statErr := os.Lstat(directory)
+		after, statErr := sourcepath.Lstat(directory)
 		if err != nil || resolved != directory || statErr != nil || !after.IsDir() || !os.SameFile(before, after) {
 			return sdkASMDataContext("source/command directory identity changed")
 		}
@@ -239,6 +274,14 @@ func (source *GoX86SDKASMDataSource) runCommand(ctx context.Context, arguments .
 	defer cancel()
 	stdout, err := goasmcmd.Run(commandContext, source.request.Directory, source.request.Environment, source.request.GoBinary, arguments...)
 	err = errors.Join(err, commandContext.Err(), source.guard.verifyInputs(), source.verifyDirectories())
+	if err == nil && source.originalProfile && len(arguments) > 1 && arguments[0] == "tool" && arguments[1] == "asm" {
+		for _, argument := range arguments[2:] {
+			if argument == "-S" {
+				err = source.retainSDKFrameListingBytes(len(stdout))
+				break
+			}
+		}
+	}
 	if err == nil {
 		source.observation.Commands = append(source.observation.Commands, numericalSBCommand{
 			Directory: source.request.Directory, Binary: source.request.GoBinary,
@@ -258,18 +301,22 @@ func cloneSDKASMDataInputs(inputs map[string][32]byte) map[string][32]byte {
 
 func (source *GoX86SDKASMDataSource) digest() ([32]byte, error) {
 	raw, err := json.Marshal(struct {
-		Request          GoX86SDKASMDataCaptureRequest
-		Guard            GoAMD64FrameCaptureRequest
-		Selection        goAMD64FrameSelection
-		Env              map[string]string
-		Imports          map[string]goAMD64FrameSelection
-		Inputs           map[string][32]byte
-		Entries          []string
-		Misses           map[string]bool
-		Observation      sdkASMDataLiveObservation
-		OriginalDeadline time.Time
+		Request           GoX86SDKASMDataCaptureRequest
+		Guard             GoAMD64FrameCaptureRequest
+		Selection         goAMD64FrameSelection
+		Env               map[string]string
+		Imports           map[string]goAMD64FrameSelection
+		Inputs            map[string][32]byte
+		Entries           []string
+		Misses            map[string]bool
+		Observation       sdkASMDataLiveObservation
+		OriginalDeadline  time.Time
+		OriginalProfile   bool
+		OriginalConfig    string
+		FrameListingBytes int
 	}{source.request, source.guard.request, source.guard.selection, source.guard.env, source.guard.imports,
-		source.guard.inputs, source.guard.entries, source.misses, source.observation, source.originalDeadline})
+		source.guard.inputs, source.guard.entries, source.misses, source.observation, source.originalDeadline,
+		source.originalProfile, source.originalConfig, source.frameListingBytes})
 	return sha256.Sum256(raw), err
 }
 
@@ -347,7 +394,7 @@ func (source *GoX86SDKASMDataSource) verifyState(ctx context.Context) error {
 	// original command inventory while checking current actual graph bytes.
 	commands := source.observation.Commands
 	defer func() { source.observation.Commands = commands }()
-	raw, err := source.runCommand(ctx, "list", "-deps", "-compiled", "-export", "-json", "-mod=readonly", ".")
+	raw, err := source.runCommand(ctx, "list", "-deps", "-compiled", "-export", "-json", "-mod=readonly", source.request.PackagePath)
 	if err != nil {
 		return err
 	}

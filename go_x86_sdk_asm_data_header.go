@@ -135,9 +135,11 @@ func (source *GoX86SDKASMDataSource) captureHeader(ctx context.Context) error {
 
 func sdkASMDataImportConfig(selected goAMD64FrameSelection, imports map[string]goAMD64FrameSelection) ([]byte, error) {
 	var config strings.Builder
-	paths := append([]string(nil), selected.Imports...)
-	sort.Strings(paths)
-	for _, path := range paths {
+	resolved := make(map[string]goAMD64FrameSelection)
+	validPath := func(path string) bool {
+		return path != "" && !strings.ContainsAny(path, "\x00\r\n=\\ \t")
+	}
+	for _, path := range selected.Imports {
 		if path == "unsafe" {
 			continue
 		}
@@ -151,15 +153,37 @@ func sdkASMDataImportConfig(selected goAMD64FrameSelection, imports map[string]g
 		// Windows separators, embedded spaces and '=' must remain unchanged.
 		// TrimSpace applies to the whole line, so a trailing filename space
 		// cannot be represented faithfully; newlines/NUL cannot be inputs.
-		if !present || path == "" || mapped == "" || strings.ContainsAny(path+mapped, "\x00\r\n=\\ \t") ||
+		if !present || !validPath(path) || !validPath(mapped) ||
 			dependency.Export == "" || strings.ContainsAny(dependency.Export, "\x00\r\n") ||
 			strings.TrimSpace(dependency.Export) != dependency.Export {
 			return nil, sdkASMDataContext("header compiler lacks an exact actual dependency export")
 		}
-		if mapped != path {
+		resolved[mapped] = dependency
+	}
+	// cmd/go's Imports can already contain resolved vendored paths while
+	// ImportMap retains the source spellings needed by cmd/compile. Consume
+	// every actual map edge, not only maps keyed by an Imports list entry.
+	var aliases []string
+	for path := range selected.ImportMap {
+		aliases = append(aliases, path)
+	}
+	sort.Strings(aliases)
+	for _, path := range aliases {
+		mapped := selected.ImportMap[path]
+		if !validPath(path) || !validPath(mapped) || resolved[mapped].Export == "" {
+			return nil, sdkASMDataContext("source import-map edge lacks its selected actual export")
+		}
+		if path != mapped {
 			fmt.Fprintf(&config, "importmap %s=%s\n", path, mapped)
 		}
-		fmt.Fprintf(&config, "packagefile %s=%s\n", mapped, dependency.Export)
+	}
+	var paths []string
+	for path := range resolved {
+		paths = append(paths, path)
+	}
+	sort.Strings(paths)
+	for _, path := range paths {
+		fmt.Fprintf(&config, "packagefile %s=%s\n", path, resolved[path].Export)
 	}
 	return []byte(config.String()), nil
 }

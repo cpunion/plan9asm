@@ -158,13 +158,13 @@ func captureGoX86NumericalReadSource(ctx context.Context, request GoX86Numerical
 	if err := source.observe(ctx, provided); err != nil {
 		return nil, err
 	}
-	selected, rawSelection, err := source.guard.loadWithRaw(ctx)
+	selected, rawSelection, err := source.guard.loadWithRawPackage(ctx, source.packageQuery())
 	if err != nil {
 		return nil, err
 	}
 	source.guard.selection = selected
 	source.rawSelection = append([]byte(nil), rawSelection...)
-	source.recordCommand(rawSelection, "list", "-json", "-compiled", "-export", "-mod=readonly", ".")
+	source.recordCommand(rawSelection, "list", "-json", "-compiled", "-export", "-mod=readonly", source.packageQuery())
 	if selected.ImportPath != request.PackagePath || selected.Dir != request.Directory || selected.ForTest != "" || selected.nonordinaryRole() ||
 		len(selected.GoFiles) == 0 || len(selected.SFiles) == 0 || len(selected.SFiles) > 32 {
 		return nil, numericalSBContext("consumer needs complete original source selection")
@@ -466,7 +466,7 @@ func (source *GoX86NumericalReadSource) verifyNumericalSource(ctx context.Contex
 			return fail(numericalSBContext("joined read owner identity changed"))
 		}
 	}
-	selected, raw, err := source.guard.loadWithRaw(ctx)
+	selected, raw, err := source.guard.loadWithRawPackage(ctx, source.packageQuery())
 	if err != nil {
 		return fail(err)
 	}

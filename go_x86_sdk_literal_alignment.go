@@ -196,7 +196,7 @@ func (observed *GoX86SDKLiteralAlignment) capture(ctx context.Context) error {
 	if err := verifyGoLiteralDefaultPIE(rule[10]); err != nil {
 		return err
 	}
-	graph, err := observed.run(ctx, "list", "-deps", "-compiled", "-export", "-json", "-mod=readonly", "runtime", ".")
+	graph, err := observed.run(ctx, "list", "-deps", "-compiled", "-export", "-json", "-mod=readonly", "runtime", observed.observation.PackagePath)
 	if err != nil {
 		return err
 	}
@@ -453,7 +453,7 @@ func (observed *GoX86SDKLiteralAlignment) verifyState(ctx context.Context) error
 	}
 	commands := observed.observation.Commands
 	defer func() { observed.observation.Commands = commands }()
-	graph, err := observed.run(ctx, "list", "-deps", "-compiled", "-export", "-json", "-mod=readonly", "runtime", ".")
+	graph, err := observed.run(ctx, "list", "-deps", "-compiled", "-export", "-json", "-mod=readonly", "runtime", observed.observation.PackagePath)
 	if err != nil {
 		return err
 	}

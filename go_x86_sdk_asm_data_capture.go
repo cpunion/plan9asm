@@ -35,8 +35,13 @@ func (source *GoX86SDKASMDataSource) capture(ctx context.Context, provided map[s
 	if _, err := source.guard.read(source.request.GoBinary); err != nil {
 		return err
 	}
-	raw, err := source.run(ctx, "env", "-json", "GOROOT", "GOTOOLDIR", "GOVERSION", "GOOS", "GOARCH",
-		"GOAMD64", "GO386", "GOFLAGS", "GOEXPERIMENT", "GOCACHE", "GOMODCACHE", "CGO_ENABLED")
+	arguments := []string{"env", "-json", "GOROOT", "GOTOOLDIR", "GOVERSION", "GOOS", "GOARCH",
+		"GOAMD64", "GO386", "GOFLAGS", "GOEXPERIMENT", "GOCACHE", "GOMODCACHE", "CGO_ENABLED"}
+	if source.originalProfile {
+		arguments = append(arguments, "GOENV", "GOWORK", "GOTOOLCHAIN", "GOPROXY")
+		source.observation.Protocol = "actual_go_sdk_primary_frame_source_observation_v1"
+	}
+	raw, err := source.run(ctx, arguments...)
 	if err != nil {
 		return err
 	}
@@ -52,6 +57,15 @@ func (source *GoX86SDKASMDataSource) capture(ctx context.Context, provided map[s
 	}
 	source.guard.env = env
 	source.observation.RawEnvironment = raw
+	if source.originalProfile {
+		wanted := provided["GOENV"]
+		if wanted == "off" {
+			wanted = "" // cmd/go reports an explicitly disabled config as empty.
+		}
+		if env["GOENV"] != wanted || env["GOWORK"] != provided["GOWORK"] || env["GOTOOLCHAIN"] != provided["GOTOOLCHAIN"] {
+			return sdkASMDataContext("actual SDK-primary original default/config profile differs")
+		}
+	}
 	if err := source.verifySDKDirectory(); err != nil {
 		return err
 	}
@@ -86,7 +100,7 @@ func (source *GoX86SDKASMDataSource) capture(ctx context.Context, provided map[s
 			return err
 		}
 	}
-	raw, err = source.run(ctx, "list", "-json", "-compiled", "-export", "-mod=readonly", ".")
+	raw, err = source.run(ctx, "list", "-json", "-compiled", "-export", "-mod=readonly", source.request.PackagePath)
 	if err != nil {
 		return err
 	}
@@ -118,7 +132,7 @@ func (source *GoX86SDKASMDataSource) capture(ctx context.Context, provided map[s
 	}
 	source.guard.selection = selected
 	source.observation.RawSelection = raw
-	graph, err := source.run(ctx, "list", "-deps", "-compiled", "-export", "-json", "-mod=readonly", ".")
+	graph, err := source.run(ctx, "list", "-deps", "-compiled", "-export", "-json", "-mod=readonly", source.request.PackagePath)
 	if err != nil {
 		return err
 	}
@@ -173,5 +187,8 @@ func (source *GoX86SDKASMDataSource) capture(ctx context.Context, provided map[s
 		return sdkASMDataContext("complete original/expanded/compiler DATA/TEXT join differs: %v", err)
 	}
 	source.observation.ObjectInputs, source.observation.Objects = objectInputs, objects
+	if source.originalProfile {
+		return source.captureSDKFrameListings(ctx)
+	}
 	return nil
 }

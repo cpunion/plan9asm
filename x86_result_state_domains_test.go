@@ -30,6 +30,7 @@ func TestX86ABI0ResultInitializationAllStateDomainJoins(t *testing.T) {
 	right := x86ResultState{}
 	for index := range left.gp {
 		left.gp[index], right.gp[index] = 0xff, 0x0f
+		left.canonicalGP[index], right.canonicalGP[index] = 0x55, 0x33
 		left.pointerGP[index] = true
 		right.pointerGP[index] = index%2 == 0
 	}
@@ -42,7 +43,7 @@ func TestX86ABI0ResultInitializationAllStateDomainJoins(t *testing.T) {
 	}
 	merged := left.intersect(right)
 	for index := range merged.gp {
-		if merged.gp[index] != 0x0f || merged.pointerGP[index] != (index%2 == 0) {
+		if merged.gp[index] != 0x0f || merged.canonicalGP[index] != 0x11 || merged.pointerGP[index] != (index%2 == 0) {
 			t.Errorf("GP/pointer join %d: %+v", index, merged)
 		}
 	}

@@ -1,0 +1,123 @@
+package plan9asm
+
+import (
+	"bufio"
+	"bytes"
+	"context"
+	"fmt"
+	"path/filepath"
+	"reflect"
+	"regexp"
+	"strconv"
+	"strings"
+
+	"github.com/xgo-dev/plan9asm/internal/gostaticstorage"
+)
+
+type sdkAMD64FrameNativeRecord struct {
+	Symbol               string
+	Static, NoSplit, ASM bool
+	Size, Locals         uint64
+	Args                 int64
+	ArgsKnown            bool
+}
+
+type sdkAMD64FrameNativeObservation struct {
+	Source                         string
+	OriginalListing, MappedListing []byte
+	Records                        []sdkAMD64FrameNativeRecord
+}
+
+// Both native listings share one explicit SDK-primary representation bound.
+// Ordinary/CPU source, CPP, event and token budgets are unchanged. Charge a
+// complete command result before retaining its command or frame projection.
+const sdkAMD64FrameListingBytes = 16 << 20
+
+func (source *GoX86SDKASMDataSource) retainSDKFrameListingBytes(bytes int) error {
+	if bytes < 0 || source.frameListingBytes < 0 || bytes > sdkAMD64FrameListingBytes-source.frameListingBytes {
+		return sdkASMDataContext("SDK-primary native listings exceed their explicit byte bound")
+	}
+	source.frameListingBytes += bytes
+	source.observation.FrameListingBytes = source.frameListingBytes
+	return nil
+}
+
+// This only decodes actual listing metadata. Independently complete original,
+// mapped and compiler objects authenticate its native TEXT inventory and code;
+// none of these fields is a local backing or source-entry transport permission.
+var sdkAMD64FrameNativeHeader = regexp.MustCompile(`^(\S+) STEXT(?: (static))?(?: (nosplit))?(?: (asm))? size=([0-9]+) (?:align=0x[0-9a-f]+ )?args=0x([0-9a-f]+) locals=0x([0-9a-f]+)(?: funcid=0x[0-9a-f]+)?(?: align=0x[0-9a-f]+)?$`)
+
+func sdkAMD64FrameNativeRecords(listing []byte, texts []gostaticstorage.TextRecord) ([]sdkAMD64FrameNativeRecord, error) {
+	var records []sdkAMD64FrameNativeRecord
+	scanner := bufio.NewScanner(bytes.NewReader(listing))
+	scanner.Buffer(nil, 4<<20)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if !strings.Contains(line, " STEXT ") {
+			continue // Complete native objects validate every other record.
+		}
+		header := sdkAMD64FrameNativeHeader.FindStringSubmatch(line)
+		if header == nil || len(records) >= len(texts) {
+			return nil, sdkASMDataContext("SDK-primary native frame header has an unbound role or inventory")
+		}
+		size, sizeErr := strconv.ParseUint(header[5], 10, 64)
+		args, argsErr := strconv.ParseUint(header[6], 16, 64)
+		locals, localsErr := strconv.ParseUint(header[7], 16, 32)
+		text := texts[len(records)]
+		if sizeErr != nil || argsErr != nil || localsErr != nil || text.Size < 0 ||
+			header[1] != text.Name || size != uint64(text.Size) || size != uint64(len(text.Code)) ||
+			int64(args) < 0 && int64(args) != -0x80000000 {
+			return nil, sdkASMDataContext("SDK-primary complete native frame/object TEXT differs")
+		}
+		records = append(records, sdkAMD64FrameNativeRecord{Symbol: header[1], Static: header[2] != "", NoSplit: header[3] != "", ASM: header[4] != "",
+			Size: size, Args: int64(args), Locals: locals, ArgsKnown: int64(args) != -0x80000000})
+	}
+	if err := scanner.Err(); err != nil || len(records) != len(texts) {
+		return nil, sdkASMDataContext("SDK-primary native frame inventory is incomplete: %v", err)
+	}
+	return records, nil
+}
+
+func (source *GoX86SDKASMDataSource) captureSDKFrameListings(ctx context.Context) error {
+	for _, role := range []string{"src/internal/abi/symtab.go", "src/cmd/asm/internal/asm/asm.go", "src/cmd/internal/obj/objfile.go"} {
+		if _, err := source.guard.read(filepath.Join(source.guard.env["GOROOT"], filepath.FromSlash(role))); err != nil {
+			return err
+		}
+	}
+	for ordinal, input := range source.observation.ObjectInputs.Sources {
+		var objects, listings [2][]byte
+		paths := [2]string{filepath.Join(source.request.Directory, input.Name), filepath.Join(source.guard.owned, fmt.Sprintf("expanded-%d.s", ordinal))}
+		for role, path := range paths {
+			object := filepath.Join(source.guard.owned, fmt.Sprintf("frame-%d-%d.o", ordinal, role))
+			args := append(source.asmArguments(source.guard.owned), "-S", "-o", object, path)
+			listing, err := source.run(ctx, args...)
+			if err != nil {
+				return err
+			}
+			objects[role], err = source.guard.read(object)
+			if err != nil {
+				return err
+			}
+			if _, err := source.artifact(fmt.Sprintf("frame-%d-%d.listing", ordinal, role), listing); err != nil {
+				return err
+			}
+			listings[role] = listing
+		}
+		original, mapped, err := gostaticstorage.ObserveX86SDKASMDataListingObjects(source.observation.ObjectInputs, ordinal, objects[0], objects[1])
+		if err != nil {
+			return sdkASMDataContext("SDK-primary original/mapped/archive complete frame object join: %v", err)
+		}
+		first, err := sdkAMD64FrameNativeRecords(listings[0], original)
+		if err != nil {
+			return err
+		}
+		second, err := sdkAMD64FrameNativeRecords(listings[1], mapped)
+		if err != nil || !reflect.DeepEqual(first, second) {
+			return sdkASMDataContext("SDK-primary original/mapped complete native frame metadata differs: %v", err)
+		}
+		source.observation.Frames = append(source.observation.Frames, sdkAMD64FrameNativeObservation{
+			Source: input.Name, OriginalListing: listings[0], MappedListing: listings[1], Records: first,
+		})
+	}
+	return nil
+}

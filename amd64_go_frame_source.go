@@ -624,6 +624,10 @@ func (source *GoAMD64FrameSource) run(ctx context.Context, args ...string) ([]by
 }
 
 func goAMD64FrameRead(name string) (_ []byte, readErr error) {
+	return goAMD64FrameReadBound(name, 64<<20)
+}
+
+func goAMD64FrameReadBound(name string, maximum int64) (_ []byte, readErr error) {
 	resolved, err := sourcepath.Resolve(name)
 	if err != nil || resolved != name {
 		return nil, goAMD64FrameContext("input path is redirected or inaccessible: %s", filepath.Base(name))
@@ -638,11 +642,11 @@ func goAMD64FrameRead(name string) (_ []byte, readErr error) {
 	}
 	defer func() { readErr = errors.Join(readErr, file.Close()) }()
 	info, err := file.Stat()
-	if err != nil || !info.Mode().IsRegular() || !os.SameFile(before, info) || info.Size() > 64<<20 {
+	if err != nil || !info.Mode().IsRegular() || !os.SameFile(before, info) || maximum < 0 || maximum > 64<<20 || info.Size() > maximum {
 		return nil, goAMD64FrameContext("input is not a bounded regular file")
 	}
-	data, err := io.ReadAll(io.LimitReader(file, 64<<20+1))
-	if err != nil || len(data) > 64<<20 {
+	data, err := io.ReadAll(io.LimitReader(file, maximum+1))
+	if err != nil || int64(len(data)) > maximum {
 		return nil, goAMD64FrameContext("input byte bound/read failure: %v", err)
 	}
 	after, err := os.Lstat(name)
@@ -762,8 +766,12 @@ func (source *GoAMD64FrameSource) load(ctx context.Context) (goAMD64FrameSelecti
 }
 
 func (source *GoAMD64FrameSource) loadWithRaw(ctx context.Context) (goAMD64FrameSelection, []byte, error) {
+	return source.loadWithRawPackage(ctx, ".")
+}
+
+func (source *GoAMD64FrameSource) loadWithRawPackage(ctx context.Context, packageQuery string) (goAMD64FrameSelection, []byte, error) {
 	var selected goAMD64FrameSelection
-	data, err := source.run(ctx, "list", "-json", "-compiled", "-export", "-mod=readonly", ".")
+	data, err := source.run(ctx, "list", "-json", "-compiled", "-export", "-mod=readonly", packageQuery)
 	if err != nil {
 		return selected, data, err
 	}

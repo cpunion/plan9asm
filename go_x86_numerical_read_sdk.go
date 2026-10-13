@@ -24,6 +24,16 @@ const (
 	numericalSBSDKSource
 )
 
+// Owned sources retain their actual directory query. All SDK observers use
+// the same original logical package selector, including its raw Match field;
+// a directory query can otherwise select a different module/vendor namespace.
+func (source *GoX86NumericalReadSource) packageQuery() string {
+	if source.role == numericalSBSDKSource {
+		return source.request.PackagePath
+	}
+	return "."
+}
+
 // This is input/object observation, not an instruction certificate. It cannot
 // create a numerical source by deserialization, Standard, or a matching hash.
 type numericalSBSDKObservation struct {
@@ -107,7 +117,7 @@ func (source *GoX86NumericalReadSource) captureSourceRole(ctx context.Context) e
 	if source.literals != nil {
 		return source.captureSDKLiteralSourceRole(ctx)
 	}
-	graph, err := source.run(ctx, "list", "-deps", "-compiled", "-export", "-json", "-mod=readonly", ".")
+	graph, err := source.run(ctx, "list", "-deps", "-compiled", "-export", "-json", "-mod=readonly", source.packageQuery())
 	if err != nil {
 		return err
 	}
@@ -229,7 +239,7 @@ func (source *GoX86NumericalReadSource) verifySDKObservation(ctx context.Context
 	if err := source.guard.verifyInputs(); err != nil {
 		return err
 	}
-	graph, err := source.guard.run(ctx, "list", "-deps", "-compiled", "-export", "-json", "-mod=readonly", ".")
+	graph, err := source.guard.run(ctx, "list", "-deps", "-compiled", "-export", "-json", "-mod=readonly", source.packageQuery())
 	if err != nil {
 		return err
 	}

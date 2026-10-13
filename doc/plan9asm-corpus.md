@@ -57,11 +57,12 @@ supported release, through these increasingly strong layers:
 6. Reduced real-world issue and pull-request regressions
    - each case links back to its report in the conformance manifest
    - the reduced instruction must first be accepted by the native Go assembler
-7. Public Go module ecosystem assembly
-   - `index.golang.org` supplies the chronological public module-version feed
-   - `proxy.golang.org/cached-only` supplies ZIP metadata without executing code
-   - discovered modules are resolved to `@latest`, then their complete package
-     and target matrix is checked before a version is pinned
+7. Reduced public Go module ecosystem regressions
+   - independent instruction-family cases retain their original report/source
+     provenance here, rather than requiring an external module download
+   - module discovery, version policy, ledgers and complete external-package
+     compatibility batches belong to
+     [llgo-compat/plan9asm](https://github.com/llgo-compat/plan9asm)
 8. Executable semantic conformance cases
    - `testdata/conformance`
    - the same assembly is run once with the native Go assembler and once after
