@@ -13,8 +13,13 @@ duplicate/missing records and exchanged physical indices are Context. This is
 metadata only, not entry, caller, register, result or memory authority. Complete
 original/expanded/compiler object and code/PC/relocation equality is still required.
 
-The native listing producer consumes this mapping rather than reordering its
-original records. A downstream frame consumer must also use `ObjectOrdinal`;
+The native listing producer and SDK numerical listing consumer use this mapping
+rather than reordering original records. The numerical consumer replays both
+complete source/member associations, checks the sealed tuple inventory and keeps
+all code, PC and relocation evidence equal before selecting `ObjectOrdinal`.
+Mutation permanently revokes the original numerical source; metadata supplies no
+static-helper or foreign-entry declaration. A downstream frame consumer must
+also use `ObjectOrdinal`;
 its existing ABI0/no-private/no-static declaration restrictions are not relaxed.
 Mixed-namespace/private/ABI-selector frame binding still needs its own complete
 entry and signature model.

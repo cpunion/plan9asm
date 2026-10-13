@@ -34,8 +34,11 @@ per-command budgets, keeping exact inventories and the complete-module barrier.
 
 Fork [38466545308](https://github.com/cpunion/plan9asm/actions/runs/38466545308)
 tests frozen `192cacc9` (contribution `37fe7732`, plus fork-only priorities).
-All 46 selected native x86 roots and the expanded SDK source priority lane pass;
-the remaining priorities are still running. Three jobs fail before any tests:
+It naturally finishes failed: seven jobs pass, three fail installation and the
+complete Windows barrier correctly does not start. All 46 selected native x86
+roots pass in 87.864 seconds with no skips, failures, duplicates or omissions.
+All six independently inventoried simple/source/frame SDK lanes also pass.
+Three jobs fail before any tests:
 two MSYS2 database upgrades and one pinned-package dependency download hit the
 mirror's ten-second low-speed limit. Preserve them as infrastructure failures,
 not source rejections or test passes. The following installer repair retries
@@ -44,7 +47,7 @@ most three times. The last bootstrap failure is fatal; exhausted transactions
 return the final exit code, and the exact version check precedes build flags.
 Local actual-script fault injection covers early success, retry success, full
 exhaustion and LLVM 23 rejection. This is not Windows installation evidence;
-let the frozen run finish before publishing the repair batch.
+the completed failed run is unchanged and the repair needs the next native batch.
 
 At frozen `b3755a3e`, the complete local LLVM CLI passes in 862.415 seconds and
 the complete new SDK literal-alignment producer's race cohort passes in 440.062
@@ -183,7 +186,20 @@ negative controls and permanent revocation. Its seven-root Go 1.27 cohort passes
 in 120.713 seconds, race in 316.756 seconds and portable Go 1.20 controls in
 3.224 seconds. Production permissions are unchanged. Preserve the broad failed
 receipt and rerun its exact inventory; these mixed snapshots are not a complete
-277-root current-head certification.
+277-root current-head certification. The exact failed 51-root inventory is then
+replayed at `91fabe98`, source-identical to `37fe7732`: all 51 roots and 717
+children pass in 912.491 seconds with zero skips, missing, duplicate or foreign
+roots. This closes that cohort, not the remaining complete SDK inventory.
+
+`15f31a2e` extends the exact source/object TEXT association to the numerical
+native consumer. Original/expanded whole tuples and live owner revocation stay
+strict; physical records are never reordered and no tail/closure/entry role is
+added. Its independent complete class passes 37 roots/216 children in 533.639
+seconds, race in 102.722 seconds and Go 1.20 controls in 1.021 seconds. Parent
+integration runs all five exact roots in 12.081 seconds, portable controls in
+0.845 seconds and vet successfully. Whole bytealg still has one actual failed
+file: equal's same-file helper tail, hidden DX closure and no-DATA handoff remain
+unresolved; do not promote metadata or this consumer repair to a whole-file pass.
 
 Inventory runs only on the server. Streaming ledger status and a complete
 five-minute incremental window have been verified before restoring catch-up;
