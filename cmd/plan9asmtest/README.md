@@ -188,8 +188,14 @@ Combined stdout/stderr capture is bounded at 64 MiB per command. On Unix every
 child owns a process group, terminated on cancellation **and ordinary exit**,
 with a bounded output-pipe wait. Interrupt, TERM and HUP cancel owned groups.
 This releases LLVM contexts between shards on Linux and Darwin.
-The initial tool intentionally fails on non-Unix systems until equivalent
-descendant-cleanup proof exists; it does not pretend Windows execution passed.
+Windows ordinary package partitions use a private non-breakaway Job Object.
+The leader starts suspended and joins that job before its initial thread runs;
+cancellation and ordinary exit terminate all descendants, including inherited
+output-pipe holders. Cleanup checks the actual job's active-process count and
+retains cleanup errors. Unrelated processes never belong to that job.
+Other non-Unix systems still fail explicitly. The complete Windows module/CI
+protocol is not enabled by this package-execution support: native dependency
+observations and formal complete-module aggregation remain separate work.
 
 Freeze source, environment and tools throughout a real suite run. Reports
 describe the invoked Go tests, not assembly-ledger or external-module coverage.
