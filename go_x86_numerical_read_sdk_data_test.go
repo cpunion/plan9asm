@@ -104,7 +104,7 @@ func numericalSDKLiteralPackage(t *testing.T, source *GoX86SDKASMDataSource, nam
 	}
 	options := Options{Goarch: arch, TargetTriple: "x86_64-unknown-linux-gnu",
 		Sigs: make(map[string]FuncSig), ResolveSym: func(symbol string) string {
-			return numericalNativeName(goStripABISuffix(symbol), pkg.Path)
+			return numericalNativeName(goTextSymbolForResolution(symbol), pkg.Path)
 		}}
 	if arch == "386" {
 		options.TargetTriple = "i386-unknown-linux-gnu"

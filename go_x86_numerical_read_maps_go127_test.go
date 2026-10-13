@@ -61,7 +61,6 @@ func TestGoX86NumericalReadOriginalSDKMapsScalarRegisterEntry(t *testing.T) {
 	}
 	pkg, _, options := numericalSDKLiteralPackage(t, source.literals.source, source.request.AssemblyFile)
 	file := source.file
-	options.ResolveSym = func(symbol string) string { return numericalNativeName(goStripABISuffix(symbol), pkg.Path) }
 	for name, args := range map[string][]LLVMType{"memHash32AES": {I32, I64}, "memHash64AES": {I64, I64}} {
 		sig := options.Sigs[pkg.Path+"."+name]
 		declaration := pkg.Types.Scope().Lookup(name).(*types.Func).Type().(*types.Signature)
