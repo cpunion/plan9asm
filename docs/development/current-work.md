@@ -211,7 +211,23 @@ under `windows-complete-38407134879-all/`, not as successful root coverage.
 fatal-header separation, while rejecting incomplete signal fields, invalid
 source positions and bare CR. Go 1.27's complete packed-zero object/diagnostic
 family passes in 4.639 seconds; Go 1.20 diagnostics pass in 0.824 seconds.
-Fresh native Windows confirmation is required before promoting that root.
+Fresh native [38419176385](https://github.com/cpunion/plan9asm/actions/runs/38419176385)
+now passes that actual original-Go/LLVM fault root on both Go 1.20 and 1.27;
+their complete packed-store suites take 2.841/2.123 seconds. Ownership, source
+paths and repeated real process-tree checks also pass both SDKs. The complete
+Windows modules are still running; retain the prior failed run as failed.
+The intermediate fork-only ownership step in 38418570567 failed before tests
+because it omitted the explicit `byollvm` tag; `3b796b07` corrects that step,
+without changing production source or treating the infrastructure error as a pass.
+
+`7011ea62` completes Go's named MOVQ aliases, MOVD and MOVDQ2Q, through shared
+source-only dispatch. Original opcode/text and caller/frame certificate identity
+remain unchanged; encoded MMX instructions retain their separate native-state
+boundary. Independent complete Go MOVQ rows, source/raw rejection controls and
+three-API objects pass. Its integrated root regressions pass in 16.439 seconds;
+the complete local simple CLI passes in 171.127 seconds. The new native alias
+root and counted-loop/fixed-local consumers still need the next fork batch;
+38419176385 predates this alias implementation and cannot certify it.
 Ownership logs are
 `windows-owned-process-*-0428ee36.log`, under the report directory below.
 
@@ -387,8 +403,8 @@ tools; later edits do not inherit a complete-head pass.
 
 ## Remaining work, in priority order
 
-1. Confirm the single remaining Windows packed-store diagnostic failure in a
-   fresh native run, then complete the main-module aggregate. Partitioning
+1. Let 38419176385 complete the main-module aggregate. The previously failing
+   packed-store root now passes fresh native Windows on both SDKs. Partitioning
    retains inventory and the thirty-minute budgets; both complete CLIs,
    process ownership, source-path repairs and the other fault drivers now pass.
    The latest 5,867 main-root outcomes are retained above. Selected native
@@ -398,12 +414,11 @@ tools; later edits do not inherit a complete-head pass.
    cancellation/rerun is authorized. The sixteen-part Linux race schedule
    completed every owner; the
    remaining callback-timer repair still needs the full current-head race gate.
-3. Darwin stdlib compile replay at `ba02841e` clears inventory parsing but fails
-   at CRC32's CPU-feature SB comparison/result initialization in the simple
-   `plan9asm` CLI. Its richer `plan9asmll` counterpart has a separate actual SDK
-   numerical-source binding. Do not turn the missing binding into initialized
-   bytes or a skip. Other runtime/frame contracts remain; missing generated CPP
-   headers stay unresolved, never ignored/no-op macros.
+3. Rerun the complete stdlib compilation gate with the shared SDK numerical
+   binder now integrated in both frontends. The old `ba02841e` CRC32 failure is
+   not current-head evidence; focused original CRC32 source/objects and the
+   complete simple CLI now pass. Other runtime/frame contracts remain; missing
+   generated CPP headers stay unresolved, never ignored/no-op macros.
 4. The 20 benchmark failures still require runtime/reflect entry, TLS,
    hidden-register, caller-storage or source contracts. SDK runtime's repaired
    complete inventory supplies neither pointer/linkname global authority nor
