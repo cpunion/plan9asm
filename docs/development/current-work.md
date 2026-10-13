@@ -24,6 +24,32 @@ These are that frozen run's results, not certification of the following repairs.
 
 ## Latest local repair batch
 
+Windows partition execution now has a prepared process-ownership repair:
+`28a0f922` adds real leader/child/grandchild, inherited-pipe, failure,
+cancellation and unrelated-peer regressions; `0428ee36` creates each leader
+suspended, assigns a private non-breakaway Job Object, then resumes it. Cleanup
+waits for zero active members before returning. `8cb6b2a7` additionally verifies
+the opened thread's actual process identity before resuming it, rather than
+trusting a recyclable snapshot ID. Actual Go inventory/seed/child and coverage
+regressions retain failed shards and refuse complete coverage after failure.
+Go 1.20/1.27 Windows cross-builds (386/amd64/arm64 across the two toolchains)
+and Windows vet pass. At frozen `0428ee36`, complete Darwin `plan9asmtest`
+passed in 524.317 seconds and `internal/ownedprocess` in 2.352 seconds;
+Go 1.20 focused ownership/runner controls also pass. These are not Windows
+execution receipts. The initial test-only native
+[run 38332958829](https://github.com/cpunion/plan9asm/actions/runs/38332958829)
+is still queued with no assigned runner, so neither native RED nor GREEN has
+been observed. The repair plus expanded diagnostic workflow is committed
+locally on `codex/pr40-windows-owned-process-probe-20261013`; only its earlier
+test-only head is published. Let that run complete, then push the prepared
+repair to the same allowed-fork diagnostic branch. Do not sync it to PR40 or
+enable formal Windows partitions without native validation. The remaining
+Windows module dependency/coverage scope and inherited `byollvm` build context
+still need their own complete CI integration; package execution is not that gate.
+Current-head simple-CLI Linux CRC32 replay also remains failed at the CPU-feature
+SB comparison; its log is `simple-cli-crc32-linux-0428ee36.log`. Ownership logs
+are `windows-owned-process-*-0428ee36.log`, under the report directory below.
+
 - `7bdc112a`: Windows C text-mode CRLF now retains the exact observation
   fields; bare/embedded CR and all incomplete packets still fail. Reentry checks
   the Frame lock at the actual external callback instead of imposing ten seconds
@@ -197,9 +223,9 @@ tools; later edits do not inherit a complete-head pass.
 ## Remaining work, in priority order
 
 1. Windows' complete main-module and LLVM CLI suites exceed the thirty-minute deadline.
-   Partition without losing actual inventory. Do not enable the Unix-only
-   exhaustive runner without real descendant ownership and Windows tool/source
-   scope. Keep complete coverage aggregation. The local current root inventory
+   Partition without losing actual inventory. The prepared Windows Job Object
+   implementation still needs native validation and Windows tool/source scope
+   before formal CI integration. Keep complete coverage aggregation. The local current root inventory
    contains 5942 roots; four selected native regressions are not its full suite.
 2. Rerun affected complete gates and both CLIs, publish to the existing
    allowed-fork contribution ref, then inspect fresh CI. No upstream manual
