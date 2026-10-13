@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/xgo-dev/plan9asm/internal/gotoolchain"
 )
 
 func x86ScalarFPBitRuntimeSources() (string, string) {
@@ -223,7 +225,8 @@ func x86ScalarFPBitRuntime(t *testing.T, llc, clang, triple, ir, level string, p
 	t.Helper()
 	dir := t.TempDir()
 	input, object := filepath.Join(dir, "view.ll"), filepath.Join(dir, "view.o")
-	source, executable := filepath.Join(dir, "oracle.c"), filepath.Join(dir, "oracle")
+	source, executable := filepath.Join(dir, "oracle.c"), filepath.Join(dir, gotoolchain.HostExecutable("oracle"))
+	process := runtimeOracleProcessSource(t, dir)
 	for path, text := range map[string]string{input: ir, source: x86ScalarFPBitCOracle} {
 		if err := os.WriteFile(path, []byte(text), 0600); err != nil {
 			t.Fatal(err)
@@ -231,7 +234,7 @@ func x86ScalarFPBitRuntime(t *testing.T, llc, clang, triple, ir, level string, p
 	}
 	for _, command := range []*exec.Cmd{
 		exec.Command(llc, level, "-mtriple="+triple, "-filetype=obj", input, "-o", object),
-		exec.Command(clang, "-target", triple, level, object, source, "-o", executable),
+		exec.Command(clang, "-target", triple, level, object, source, process, "-o", executable),
 	} {
 		x86FloatCompareCaptureCommand(t, command)
 	}

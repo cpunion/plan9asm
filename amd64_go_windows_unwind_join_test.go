@@ -78,6 +78,7 @@ func goAMD64WindowsUnwindCompleteObjectListingJoinGuards(t *testing.T) {
 	for _, spelling := range []string{"absolute", "slash absolute", "relative", "conflicting extent", "foreign directory"} {
 		t.Run("source origins/"+spelling, func(t *testing.T) {
 			origins := make(map[string]int)
+			relativeNames := 0
 			for name, lines := range source.origins {
 				if !filepath.IsAbs(name) {
 					name = filepath.Join(request.Directory, name)
@@ -86,16 +87,26 @@ func goAMD64WindowsUnwindCompleteObjectListingJoinGuards(t *testing.T) {
 					name = filepath.ToSlash(name)
 				}
 				if spelling == "relative" {
-					var err error
-					name, err = filepath.Rel(request.Directory, name)
+					relative, err := filepath.Rel(request.Directory, name)
 					if err != nil {
-						t.Fatal(err)
+						// A Windows SDK can live on another volume. That
+						// header must remain absolute; own assembly inputs
+						// below still exercise actual relative spellings.
+						if filepath.VolumeName(request.Directory) == filepath.VolumeName(name) {
+							t.Fatal(err)
+						}
+					} else {
+						name = relative
+						relativeNames++
 					}
 				}
 				if spelling == "foreign directory" {
 					name = filepath.Join(request.Directory, "foreign", filepath.Base(name))
 				}
 				origins[name] = lines
+			}
+			if spelling == "relative" && relativeNames == 0 {
+				t.Fatal("relative-source control did not exercise any relative path")
 			}
 			if spelling == "conflicting extent" {
 				origins[request.AssemblyFile] = source.origins[request.AssemblyFile] + 1

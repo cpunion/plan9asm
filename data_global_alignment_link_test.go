@@ -177,7 +177,6 @@ func TestDataGlobalAlignmentActualGoLinkedFiveArchitectures(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			command.Env = append(os.Environ(), "GOMAXPROCS=1")
 			output, err := runtimeOracleCombinedOutput(ctx, command)
 			if err != nil || strings.TrimSpace(string(output)) != "actual Go assembly alignment and bytes PASS" {
 				t.Fatalf("actual Go wasm linked addresses/bytes: %v\n%s", err, output)
@@ -236,7 +235,17 @@ func TestDataGlobalAlignmentLLVMObjectsAndLinkedAddresses(t *testing.T) {
 				dataGlobalAlignmentCommand(t, directory, nil, llc, "-O0", "-filetype=obj", input, "-o", object)
 				if target.arch != ArchWASM {
 					dataGlobalAlignmentELF(t, object, target.goarch, target.maximum, false)
-					dataGlobalAlignmentCommand(t, directory, nil, linker, "-shared", object, "-o", linked)
+					// MinGW builds default ld.lld to PE unless -m explicitly
+					// selects an ELF emulation. The object and linked symbols
+					// are still independently checked by the ELF reader.
+					emulation := map[string]string{
+						"386": "elf_i386", "amd64": "elf_x86_64",
+						"arm": "armelf_linux_eabi", "arm64": "aarch64linux",
+					}[target.goarch]
+					if emulation == "" {
+						t.Fatal("missing explicit ELF linker target", target.goarch)
+					}
+					dataGlobalAlignmentCommand(t, directory, nil, linker, "-m", emulation, "-shared", object, "-o", linked)
 					dataGlobalAlignmentELF(t, linked, target.goarch, target.maximum, true)
 					return
 				}

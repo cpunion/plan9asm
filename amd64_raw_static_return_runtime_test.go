@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/xgo-dev/llvm"
+	"github.com/xgo-dev/plan9asm/internal/gotoolchain"
 )
 
 // The Go oracle uses an ordinary declared result slot. It does not pretend
@@ -97,7 +98,7 @@ func runX86StaticReadNumericOracle(t *testing.T, arch, triple string, compiler, 
 			t.Fatal(err)
 		}
 	}
-	executable := filepath.Join(project, "oracle")
+	executable := filepath.Join(project, gotoolchain.HostExecutable("oracle"))
 	cmd := exec.Command("go", "build", "-o", executable, ".")
 	cmd.Dir = project
 	goos := runtime.GOOS

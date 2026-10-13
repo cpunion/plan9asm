@@ -43,7 +43,8 @@ func x86PureGPUnknownRuntime(t *testing.T, bmi2 bool) {
 			symbol = "_" + symbol
 		}
 		fmt.Fprintf(&originals, "__asm__(%q);\n", ".text\n.globl "+symbol+"\n"+symbol+":\n.byte "+strings.Join(bytes, ",")+"\n")
-		fmt.Fprintf(&prototypes, "extern uint32_t %s(uint64_t,uint64_t);\nextern uint32_t %s(uint64_t,uint64_t);\n", name, original)
+		fmt.Fprintf(&prototypes, "extern uint32_t %s(uint64_t,uint64_t);\n", name)
+		prototypes.WriteString(x86OriginalSysVDeclaration("uint32_t", original, "uint64_t,uint64_t"))
 		fmt.Fprintf(&pairs, "{%s,%s},\n", name, original)
 	}
 	goAssemblerOracleOutput(t, "amd64", source.String(), "", true)
@@ -55,9 +56,9 @@ func x86PureGPUnknownRuntime(t *testing.T, bmi2 bool) {
 #include <stdint.h>
 #include <stdio.h>
 #include <xmmintrin.h>
-` + prototypes.String() + originals.String() + `
+` + prototypes.String() + originals.String() + x86OriginalSysVPointer("uint32_t", "original_program", "uint64_t,uint64_t") + `
 typedef uint32_t (*program)(uint64_t,uint64_t);
-struct pair { program translated,original; };
+struct pair { program translated; original_program original; };
 static const struct pair pairs[]={
 ` + pairs.String() + `};
 int main(void) {

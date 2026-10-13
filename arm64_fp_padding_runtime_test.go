@@ -10,6 +10,8 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/xgo-dev/plan9asm/internal/gotoolchain"
 )
 
 func arm64PaddingRuntimeInputs() []uint64 {
@@ -278,7 +280,7 @@ func main() {
 		}
 	}
 
-	runner := filepath.Join(dir, "exec runner")
+	runner := filepath.Join(dir, gotoolchain.HostExecutable("exec runner"))
 	ctx, cancel := runtimeOracleStageContext(t)
 	defer cancel()
 	command := exec.CommandContext(ctx, "go", "build", "-p=1", "-o", runner, "./runner")

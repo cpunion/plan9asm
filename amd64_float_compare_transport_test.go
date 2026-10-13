@@ -79,7 +79,8 @@ func x86FloatCompareExecutionTools(t *testing.T) x86FloatCompareExecution {
 func (execution x86FloatCompareExecution) compileC(t *testing.T, source, output string) {
 	t.Helper()
 	command := append([]string(nil), execution.compiler...)
-	command = append(command, "-O2", source, "-o", output)
+	process := runtimeOracleProcessSource(t, filepath.Dir(output))
+	command = append(command, "-O2", source, process, "-o", output)
 	x86FloatCompareCaptureCommand(t, exec.Command(command[0], command[1:]...))
 }
 

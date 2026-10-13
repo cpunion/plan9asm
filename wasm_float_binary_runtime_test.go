@@ -270,7 +270,6 @@ func TestWASMFloatBinaryOriginalGoRuntime(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cmd.Env = append(os.Environ(), "GOMAXPROCS=1")
 	output, err := runtimeOracleCombinedOutput(ctx, cmd)
 	if err != nil || strings.TrimSpace(string(output)) != "actual Go Wasm float binary PASS 25600" {
 		t.Fatalf("original Go runtime: %v\n%s", err, output)

@@ -14,6 +14,9 @@ import (
 // This oracle uses the selected Go compiler and that same toolchain's runtime
 // helper. Missing helper files are hard failures, not version-based skips.
 func TestWASMPackedFunctionAddressActualGoRuntime(t *testing.T) {
+	// Hosted runners carry large unrelated environments. The actual Go wasm
+	// runtime has a bounded argv/environment area, unlike the native host.
+	t.Setenv("PLAN9ASM_UNRELATED_HOST_CONTEXT", strings.Repeat("x", 16384))
 	ctx, cancel := runtimeOracleStageContext(t)
 	defer cancel()
 	source, _, goSource := wasmPackedRuntimeFixture(t)
@@ -33,9 +36,6 @@ func TestWASMPackedFunctionAddressActualGoRuntime(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Go wasm has no native OS-thread creation; the build concurrency setting
-	// must not request two runtime Ps in this single-thread host.
-	cmd.Env = append(os.Environ(), "GOMAXPROCS=1")
 	result, err := runtimeOracleCombinedOutput(ctx, cmd)
 	if err != nil {
 		t.Fatalf("actual Go wasm runtime: %v\n%s", err, result)
@@ -85,7 +85,18 @@ func wasmPackedGoRuntimeCommand(ctx context.Context, root, node, wasm string) (*
 		if complete {
 			// These are the arguments of Go's go_js_wasm_exec wrapper,
 			// without invoking its POSIX shell or requiring execute bits.
-			return exec.CommandContext(ctx, node, "--stack-size=8192", "-e", wasmPackedNodeBootstrap, filepath.Join(dir, "wasm_exec_node.js"), wasm), nil
+			command := exec.CommandContext(ctx, node, "--stack-size=8192", "-e", wasmPackedNodeBootstrap, filepath.Join(dir, "wasm_exec_node.js"), wasm)
+			// These self-contained Go oracles need only a single runtime P
+			// and the host's temporary/system directories. Forwarding CI's
+			// build flags, PATH and unrelated variables overflows Go wasm's
+			// small startup environment area; none are program inputs here.
+			command.Env = []string{"GOMAXPROCS=1"}
+			for _, key := range []string{"SYSTEMROOT", "WINDIR", "TMP", "TEMP", "TMPDIR"} {
+				if value, ok := os.LookupEnv(key); ok {
+					command.Env = append(command.Env, key+"="+value)
+				}
+			}
+			return command, nil
 		}
 	}
 	return nil, fmt.Errorf("selected Go toolchain lacks its required lib/misc wasm runtime JavaScript files")

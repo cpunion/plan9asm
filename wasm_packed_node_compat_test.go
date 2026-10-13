@@ -139,9 +139,11 @@ func wasmPackedNodeBindingRefused(ctx context.Context, output []byte, err error)
 	// Only the actual plain Node exit and its exact bootstrap error line can
 	// establish this refusal, before the selected helper starts executing.
 	exit, ok := err.(*exec.ExitError)
+	text := strings.ReplaceAll(string(output), "\r\n", "\n")
 	return ctx != nil && ctx.Err() == nil && ok && exit.ExitCode() == 1 &&
-		strings.Count(string(output), "\n"+wasmPackedImmutableBindingDiagnostic+"\n") == 1 &&
-		!strings.Contains(string(output), `"companion":"same-sdk"`)
+		!strings.Contains(text, "\r") &&
+		strings.Count(text, "\n"+wasmPackedImmutableBindingDiagnostic+"\n") == 1 &&
+		!strings.Contains(text, `"companion":"same-sdk"`)
 }
 
 func TestWASMPackedGoRuntimeHelperRejectsUnknownNodeFailures(t *testing.T) {
@@ -168,6 +170,9 @@ func TestWASMPackedGoRuntimeHelperRejectsUnknownNodeFailures(t *testing.T) {
 		accepted bool
 	}{
 		{"known_plain_exit", ctx, diagnostic, exitOne, true},
+		{"native_CRLF", ctx, []byte("\r\n" + wasmPackedImmutableBindingDiagnostic + "\r\n"), exitOne, true},
+		{"bare_CR", ctx, []byte("\r" + wasmPackedImmutableBindingDiagnostic + "\r"), exitOne, false},
+		{"embedded_CR", ctx, []byte("\n" + wasmPackedImmutableBindingDiagnostic + "\rforeign\n"), exitOne, false},
 		{"no_context", nil, diagnostic, exitOne, false},
 		{"canceled_context", expired, diagnostic, exitOne, false},
 		{"joined_cleanup", ctx, diagnostic, errors.Join(exitOne, errors.New("owned cleanup failure")), false},

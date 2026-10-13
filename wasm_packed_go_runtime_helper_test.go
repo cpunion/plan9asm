@@ -5,10 +5,12 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 )
 
 func TestWASMPackedGoRuntimeHelperUsesPortableNodeCommand(t *testing.T) {
+	t.Setenv("PLAN9ASM_UNRELATED_HOST_CONTEXT", strings.Repeat("x", 16384))
 	for _, directory := range []string{"lib", "misc"} {
 		t.Run(directory, func(t *testing.T) {
 			root := t.TempDir()
@@ -32,6 +34,17 @@ func TestWASMPackedGoRuntimeHelperUsesPortableNodeCommand(t *testing.T) {
 			want := []string{node, "--stack-size=8192", "-e", wasmPackedNodeBootstrap, filepath.Join(dir, "wasm_exec_node.js"), wasm}
 			if cmd.Path != node || !reflect.DeepEqual(cmd.Args, want) {
 				t.Fatalf("must invoke Node directly with separate arguments, got path=%q args=%q", cmd.Path, cmd.Args)
+			}
+			if cmd.Env == nil || !strings.Contains(strings.Join(cmd.Env, "\n"), "GOMAXPROCS=1") {
+				t.Fatal("Go wasm must explicitly retain its single-P environment")
+			}
+			for _, pair := range cmd.Env {
+				key, _, _ := strings.Cut(pair, "=")
+				switch key {
+				case "GOMAXPROCS", "SYSTEMROOT", "WINDIR", "TMP", "TEMP", "TMPDIR":
+				default:
+					t.Fatalf("unrelated host context leaked into Go wasm: %s", key)
+				}
 			}
 		})
 	}

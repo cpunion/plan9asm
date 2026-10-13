@@ -5,6 +5,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"testing"
+
+	"github.com/xgo-dev/plan9asm/internal/gotoolchain"
 )
 
 func TestCrossLinuxRuntimeMatrixX86TimestampOriginalAndLLVM(t *testing.T) {
@@ -67,7 +69,7 @@ func main() {
 			t.Fatal(err)
 		}
 	}
-	executable := filepath.Join(dir, "original-go")
+	executable := filepath.Join(dir, gotoolchain.HostExecutable("original-go"))
 	command := exec.Command("go", "build", "-p=1", "-o", executable, ".")
 	command.Dir = dir
 	command.Env = append(os.Environ(), "CGO_ENABLED=0", "GOARCH=amd64", "GOTOOLCHAIN=local")

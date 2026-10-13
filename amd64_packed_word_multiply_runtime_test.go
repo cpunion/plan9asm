@@ -402,8 +402,6 @@ RET
 		t.Fatal(err)
 	}
 	const maskedReference = `
-#include <sys/mman.h>
-#include <unistd.h>
 static int checkMasked(Program program,const char *name,int width,int zero,int mode,const uint8_t *pageTail) {
  const uint64_t mask[]={0,1,UINT64_C(1)<<32};
  for(int state=0;state<2;state++) for(int m=0;m<3;m++) {
@@ -433,15 +431,14 @@ static int checkMasked(Program program,const char *name,int width,int zero,int m
  return 0;
 }
 `
-	main := x86WordMultiplyCReference + external.String() + maskedReference + `
+	main := x86WordMultiplyCReference + external.String() + x86TestGuardPagesC + maskedReference + `
 int main(void) {
- long page=sysconf(_SC_PAGESIZE);
- if(page<64) return 4;
- uint8_t *base=mmap(NULL,(size_t)page*2,PROT_READ|PROT_WRITE,MAP_PRIVATE|MAP_ANONYMOUS,-1,0);
- if(base==MAP_FAILED||mprotect(base+page,(size_t)page,PROT_NONE)) return 5;
- uint8_t *p=base+page-2;p[0]=0;p[1]=0x80;
+ if (setup_guard() || page < 64) return 5;
+ uint8_t *p = guard + page - 2;
+ p[0] = 0;
+ p[1] = 0x80;
 ` + checks.String() + `
- if(munmap(base,(size_t)page*2)) return 6;
+ if (free_guard()) return 6;
  return 0;
 }
 `
