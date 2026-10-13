@@ -99,8 +99,21 @@ required axis, not certified by container emulation. Go 1.20 header/diagnostic
 controls passed in 0.848 seconds. Root vet and the Go 1.27 five-architecture
 official gate passed at `c4ff4f3b`; classification does not certify execution.
 These three commits are staged locally on the fork probe branch but not pushed:
-run 38386789839 must finish first. Its three completed jobs pass and twenty-two
-complete-module jobs still await a Windows runner, with no test failures/logs yet.
+run 38386789839 must finish first. Both CLIs' execution owners and the main
+profile/rest owners pass. All eight main-root parts completed their 5,840-root
+inventory: 5,541 passed, 36 failed, 263 host-inapplicable skips and zero incomplete.
+The skips are not runtime passes. Preserve all eight raw partitions under
+`windows-complete-38386789839`. Failures are seven fault-oracle roots repaired by
+the staged commits and twenty-nine ARM64 source/consumer roots reaching the
+same byte-carrier call/source-PC path join. Complete-module aggregates still
+await runners; keep the root aggregate failed until the actual roots pass.
+The byte-carrier repair decodes Go's Windows object-source slash spelling
+through the shared canonical-path reader, without an SDK alias. Exact file,
+source line, instruction text, PC range and the original position record remain
+required. Go 1.27 actual source/entry/five-target object and consumer regressions
+passed in 195.235 seconds; Go 1.20 spelling/boundary controls passed in 0.700
+seconds. Native Windows confirmation remains pending. Logs are
+`byte-carrier-position-go127-green.log` and `byte-carrier-position-go120-green.log`.
 The frozen local Go 1.27.2/LLVM 22 benchmark replay, with ordinary host source
 selection, remains failed: 163/184 files, 21 failures, zero N/A/unattempted, build
 8 seconds and target total 49 seconds. Counts are 29/33, 48/55, 27/30, 40/47 and

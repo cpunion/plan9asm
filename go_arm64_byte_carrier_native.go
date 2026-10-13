@@ -214,7 +214,10 @@ func (source *GoARM64ByteCarrierSource) callPosition(text gostaticstorage.TextRe
 	filename := filepath.Join(source.request.Directory, source.request.AssemblyFile)
 	lines := strings.Split(string(source.report.Sources[source.request.AssemblyFile]), "\n")
 	for _, position := range text.Positions {
-		if position.Start <= pc && position.End >= pc+4 && position.File == filename && position.Line > 0 && int(position.Line) <= len(lines) &&
+		// The original Go object uses slash spelling on Windows. Decode only
+		// that spelling, without granting an SDK alias or cleaning source paths.
+		physical, valid := originalGoObjectSourcePath(position.File, "")
+		if valid && position.Start <= pc && position.End >= pc+4 && physical == filename && position.Line > 0 && int(position.Line) <= len(lines) &&
 			strings.TrimSpace(lines[position.Line-1]) == raw {
 			return position, nil
 		}
