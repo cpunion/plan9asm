@@ -97,31 +97,50 @@ jobs:
         include:
           - lane: llvm
             module: cmd/plan9asmll
-            roots: TestX86SDKNumericalOwnerQueryIsNotPackageExemption|TestCompileOneX86SDKOriginalCRC32NumericalDataJoin
+            roots:
+              - TestX86SDKNumericalOwnerQueryIsNotPackageExemption
+              - TestCompileOneX86SDKOriginalCRC32NumericalDataJoin
             timeout: 5m
           - lane: crc32-linux
             module: cmd/plan9asm
-            roots: TestTranslateOriginalSDKCRC32NumericalSource
+            roots:
+              - TestTranslateOriginalSDKCRC32NumericalSource
             timeout: 8m
           - lane: crc32-nonlinux
             module: cmd/plan9asm
-            roots: TestTranslateOriginalSDKCRC32NumericalSourceNonLinux
+            roots:
+              - TestTranslateOriginalSDKCRC32NumericalSourceNonLinux
             timeout: 8m
           - lane: crc32-publication
             module: cmd/plan9asm
-            roots: TestSimpleCLIOriginalSDKCRC32PublicationAndRejection
+            roots:
+              - TestSimpleCLIOriginalSDKCRC32PublicationAndRejection
             timeout: 8m
           - lane: maps
             module: cmd/plan9asm
-            roots: TestSimpleCLIOriginalSDKMapsScalarRegisterSource
+            roots:
+              - TestSimpleCLIOriginalSDKMapsScalarRegisterSource
             timeout: 8m
           - lane: source
             module: '.'
-            roots: TestGoX86SDKASMDataOriginalVendorPackageNamespace|TestGoX86SDKNumericalReadPackageQueryMatchesOriginalLiteralSource|TestSDKAMD64OriginalFrameConfigGuardEagerIdentity|TestSDKAMD64OriginalFrameProfileRejectsEqualByteConfigReplacement|TestSDKAMD64PrimaryInventoryActualCompleteMD5|TestGoX86SDKASMDataOriginalBytealgTextSourceOrder|TestSDKAMD64NativeFrameMixedNamespaceSourceOrder
+            roots:
+              - TestGoX86SDKASMDataOriginalVendorPackageNamespace
+              - TestGoX86SDKNumericalReadPackageQueryMatchesOriginalLiteralSource
+              - TestSDKAMD64OriginalFrameConfigGuardEagerIdentity
+              - TestSDKAMD64OriginalFrameProfileRejectsEqualByteConfigReplacement
+              - TestSDKAMD64PrimaryInventoryActualCompleteMD5
+              - TestGoX86SDKASMDataOriginalBytealgTextSourceOrder
+              - TestSDKAMD64NativeFrameMixedNamespaceSourceOrder
+              - TestGoX86SDKNumericalNativeOriginalMixedTextOrder
+              - TestGoX86SDKNumericalNativeTextOrderLiveRevocation
             timeout: 5m
           - lane: frame-context
             module: '.'
-            roots: TestGoAMD64SDKFrameBindContextCallbacksMayClose|TestGoAMD64FrameVerifyContextCallbacksMayClose|TestGoAMD64FramePrivateContextExactLifetime|TestGoX86NumericalSBReadFrameProducerObserverCancellationCause
+            roots:
+              - TestGoAMD64SDKFrameBindContextCallbacksMayClose
+              - TestGoAMD64FrameVerifyContextCallbacksMayClose
+              - TestGoAMD64FramePrivateContextExactLifetime
+              - TestGoX86NumericalSBReadFrameProducerObserverCancellationCause
             timeout: 5m
     steps:
       - uses: actions/checkout@v7
@@ -141,7 +160,7 @@ jobs:
           GOFLAGS: ''
           GOENV: 'off'
           GOWORK: 'off'
-          SDK_PRIORITY_ROOTS: ${{ matrix.roots }}
+          SDK_PRIORITY_ROOTS: ${{ join(matrix.roots, '|') }}
           SDK_PRIORITY_TIMEOUT: ${{ matrix.timeout }}
         run: |
           set -euo pipefail
