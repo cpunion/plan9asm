@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 
@@ -129,8 +130,21 @@ func (source *GoX86NumericalReadSource) bindNative(ctx context.Context, variable
 	if err != nil {
 		return err
 	}
+	var textOrder []int
+	if source.literals != nil {
+		observed := source.literals.Observation.Objects.Sources[source.literals.SourceOrdinal]
+		textOrder, err = numericalSDKNativeTextOrder(source.cpp.Output, source.request.PackagePath,
+			observed, proof.OriginalText, proof.ExpandedText)
+		if err != nil {
+			return err
+		}
+	}
 	for index, fn := range source.file.Funcs {
-		text, expandedText := proof.OriginalText[index], proof.ExpandedText[index]
+		objectOrdinal := index
+		if textOrder != nil {
+			objectOrdinal = textOrder[index]
+		}
+		text, expandedText := proof.OriginalText[objectOrdinal], proof.ExpandedText[objectOrdinal]
 		name, abi, valid := numericalFunctionSourceIdentity(fn.Sym, source.request.PackagePath, arch, source.role)
 		if !valid || text.Name != name || text.ABI != abi || expandedText.Name != name || expandedText.ABI != abi ||
 			!bytes.Equal(text.Code, expandedText.Code) || text.Size != expandedText.Size || !numericalRelocationEqual(text.Relocations, expandedText.Relocations) {
@@ -356,6 +370,34 @@ func (source *GoX86NumericalReadSource) bindNative(ctx context.Context, variable
 		}
 	}
 	return nil
+}
+
+// A source ordinal and a physical goobj ordinal are separate identities. This
+// consumes the already authenticated complete SDK member, retaining every native
+// code/PC/relocation record in its original order. It supplies no entry, helper,
+// closure, declaration or numerical read authority.
+func numericalSDKNativeTextOrder(program, packagePath string, observed gostaticstorage.ASMDataSourceObservation,
+	original, expanded []gostaticstorage.TextRecord,
+) ([]int, error) {
+	if len(original) == 0 || !reflect.DeepEqual(original, observed.Original.Texts) ||
+		!reflect.DeepEqual(expanded, observed.Expanded.Texts) {
+		return nil, numericalSBContext("native TEXT records differ from the complete original SDK member")
+	}
+	first, second := observed.Original, observed.Expanded
+	first.Texts, second.Texts = original, expanded
+	actual, err := gostaticstorage.ASMSourceTextOrder([]byte(program), packagePath, first)
+	if err != nil {
+		return nil, numericalSBContext("original native source TEXT association differs: %v", err)
+	}
+	replayed, err := gostaticstorage.ASMSourceTextOrder([]byte(program), packagePath, second)
+	if err != nil || !reflect.DeepEqual(actual, replayed) || !reflect.DeepEqual(actual, observed.TextOrder) {
+		return nil, numericalSBContext("complete source/original/expanded TEXT association differs: %v", err)
+	}
+	order := make([]int, len(original))
+	for ordinal, association := range actual {
+		order[ordinal] = association.ObjectOrdinal
+	}
+	return order, nil
 }
 
 // This binds an explicit source ABI selector to the original native object.
