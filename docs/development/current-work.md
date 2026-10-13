@@ -255,6 +255,19 @@ remain rejected. The final complete storage/frontend suites pass Go 1.27 in
 The complete Darwin corpus now advances past original CRC32 to maps' independent
 linked-address-bit boundary. Preserve `stdlib-darwin-sdk-platform-final.log` as
 failed, not as complete corpus or benchmark success.
+The integrated batch is published only on the allowed fork probe as `0ba4cf94`.
+[38429537721](https://github.com/cpunion/plan9asm/actions/runs/38429537721)
+passes the selected native Linux suite in 29.409 seconds. Both independently
+inventoried MOVQ alias roots execute: the direct root takes 1.290 seconds and
+the counted-provenance root 1.960 seconds, with 9,216 original-Go calls and
+independent LLVM O0/O2 references. Native TLS parity also passes in 5.690 seconds.
+Complete Windows simple CLI execution/coverage passes. The LLVM CLI retains
+one failed root: its old cost-query fixture still labels Darwin unsupported.
+`c90920ed` independently reproduces that failure locally, adds Darwin/Windows
+positive controls and keeps FreeBSD and unavailable Darwin/386 negative controls;
+the complete focused SDK-numerical group passes in 0.608 seconds. This repair
+is not in the active frozen run. Preserve its native failed partition and local
+RED/GREEN logs; wait for the remaining Windows main-root owners before publishing.
 Ownership logs are
 `windows-owned-process-*-0428ee36.log`, under the report directory below.
 
@@ -430,11 +443,11 @@ tools; later edits do not inherit a complete-head pass.
 
 ## Remaining work, in priority order
 
-1. Publish and verify the next integrated source-alias/literal batch on the
-   allowed fork. Frozen 38419176385 is now fully green for its selected native
-   Linux roots and complete Windows modules, but predates these new repairs.
-   Both new native MOVQ alias roots must execute, not merely match a regex.
-   Retain the complete inventories and unchanged thirty-minute budgets.
+1. Finish collecting frozen 38429537721, repair every actual failure and verify
+   the next integrated batch on the allowed fork. Its new native MOVQ alias
+   roots pass, but the stale LLVM CLI fixture is still a recorded native failure
+   until the following run executes the repair. Retain complete inventories and
+   unchanged thirty-minute budgets; older 38419176385 is not current-head evidence.
 2. Rerun affected complete gates and both CLIs, publish to the existing
    allowed-fork contribution ref, then inspect fresh CI. No upstream manual
    cancellation/rerun is authorized. The sixteen-part Linux race schedule
