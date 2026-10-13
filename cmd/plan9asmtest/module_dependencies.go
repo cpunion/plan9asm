@@ -74,10 +74,10 @@ func moduleSharedLibraries(data []byte) ([]string, error) {
 	}
 	seen := map[string]bool{}
 	for _, file := range files {
-		if !filepath.IsAbs(file) || filepath.Clean(file) != file || seen[file] || strings.ContainsAny(file, "\x00\r\n\"'") {
+		if !ciAbsolutePath(file) || seen[filepath.FromSlash(file)] || strings.ContainsAny(file, "\"'") {
 			return nil, fmt.Errorf("invalid/duplicate actual LLVM shared-library origin")
 		}
-		seen[file] = true
+		seen[filepath.FromSlash(file)] = true
 	}
 	return files, nil
 }
