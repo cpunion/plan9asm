@@ -42,12 +42,14 @@ type Variable struct {
 	Size, Alignment    int64 // zero object Alignment means unspecified, not inferred
 	Kind               uint8
 	Numerical          []Span
+	DefinitionMember   string
+	DefinitionIndex    uint32
 }
 
 type Package struct {
 	Dir, ImportPath, Name, Export, ForTest                      string
 	Root                                                        string
-	GoFiles, CompiledGoFiles, SFiles, CgoFiles, Imports         []string
+	GoFiles, CompiledGoFiles, SFiles, HFiles, CgoFiles, Imports []string
 	EmbedFiles, EmbedPatterns, CFiles, CXXFiles, MFiles, FFiles []string
 	SwigFiles, SwigCXXFiles, SysoFiles                          []string
 	Standard                                                    bool
@@ -175,6 +177,16 @@ func Capture(ctx context.Context, request Request) (*Observation, error) {
 }
 
 func capture(ctx context.Context, request Request, sdkCPU bool) (*Observation, error) {
+	protocol := Protocol
+	if sdkCPU {
+		protocol = SDKCPUProtocol
+	}
+	return captureRole(ctx, request, protocol)
+}
+
+func captureRole(ctx context.Context, request Request, protocol string) (*Observation, error) {
+	sdkCPU, sdkGlobals := protocol == SDKCPUProtocol, protocol == SDKGlobalsProtocol
+	sdk := sdkCPU || sdkGlobals
 	if ctx == nil || ctx.Err() != nil || !filepath.IsAbs(request.GoBinary) || !filepath.IsAbs(request.Directory) ||
 		request.PackagePath == "" || len(request.Variables) == 0 || len(request.Variables) > 32 {
 		return nil, contextError("missing actual source context or bounded variable request")
@@ -191,6 +203,9 @@ func capture(ctx context.Context, request Request, sdkCPU bool) (*Observation, e
 	if sdkCPU && (request.PackagePath != "internal/cpu" || !sdkCPUTarget(request.Target) ||
 		root != filepath.Join(filepath.Dir(filepath.Dir(request.GoBinary)), "src", "internal", "cpu")) {
 		return nil, contextError("SDK producer requires exact original CPU owner")
+	}
+	if sdkGlobals && (!sdkCPUTarget(request.Target) || !sdkGlobalDirectory(request.GoBinary, root, request.PackagePath)) {
+		return nil, contextError("SDK global producer requires this invoked installation's exact original package")
 	}
 	provided := make(map[string]string)
 	for _, pair := range request.Environment {
@@ -212,9 +227,12 @@ func capture(ctx context.Context, request Request, sdkCPU bool) (*Observation, e
 		}
 	}
 	for key, value := range map[string]string{"GOOS": goos, "GOARCH": arch, "GOAMD64": "v1", "GOTOOLCHAIN": "local", "GOENV": "off", "GOWORK": "off", "CGO_ENABLED": "0", "GOPROXY": "off"} {
+		if key == "CGO_ENABLED" && sdk && (provided[key] == "0" || provided[key] == "1") {
+			continue // Preserve the explicitly observed SDK profile; sources stay pure Go.
+		}
 		provided[key] = value
 	}
-	if sdkCPU {
+	if sdk {
 		for key, value := range sdkCPUProfile(request.Target) {
 			provided[key] = value
 		}
@@ -232,7 +250,7 @@ func capture(ctx context.Context, request Request, sdkCPU bool) (*Observation, e
 		}
 	}
 	source, err := snapshot(root)
-	if err != nil || !sdkCPU && source["go.mod"] == nil || sdkCPU && sdkCPUSource(source) != nil {
+	if err != nil || !sdk && source["go.mod"] == nil || sdkCPU && sdkCPUSource(source) != nil {
 		return nil, contextError("missing complete original module sources")
 	}
 	o := &Observation{request: request, inputs: make(map[string]string), report: Report{
@@ -240,12 +258,10 @@ func capture(ctx context.Context, request Request, sdkCPU bool) (*Observation, e
 		Source: source, SourceSHA256: make(map[string]string), Archives: make(map[string][]byte),
 		ArchiveSHA256: make(map[string]string), Tools: make(map[string]string),
 	}}
-	if sdkCPU {
-		o.report.Protocol = SDKCPUProtocol
-	}
+	o.report.Protocol = protocol
 	o.dirs = make(map[string]os.FileInfo)
 	directories := []string{request.Directory, provided["GOCACHE"], provided["GOMODCACHE"], provided["GOPATH"], provided["TMPDIR"], provided["GOTMPDIR"]}
-	if sdkCPU {
+	if sdk {
 		directories = append(directories, filepath.Dir(filepath.Dir(request.GoBinary)))
 	}
 	for _, name := range directories {
@@ -271,13 +287,18 @@ func capture(ctx context.Context, request Request, sdkCPU bool) (*Observation, e
 	for _, key := range []string{"GOROOT", "GOCACHE", "GOPATH", "GOMODCACHE", "TMPDIR", "GOTMPDIR", "GOOS", "GOARCH", "GOAMD64", "GOTOOLCHAIN", "GOENV", "GOWORK", "CGO_ENABLED", "GOPROXY", "GOFLAGS", "GOEXPERIMENT"} {
 		o.report.CommandEnvironment[key] = provided[key]
 	}
-	if sdkCPU {
+	if sdk {
 		for key, value := range sdkCPUProfile(request.Target) {
 			o.report.CommandEnvironment[key] = value
 		}
 	}
 	if err := o.observe(ctx); err != nil {
 		return nil, err
+	}
+	if sdkGlobals {
+		if err := o.captureSDKGlobalDependencies(ctx); err != nil {
+			return nil, err
+		}
 	}
 	raw, err := o.run(ctx, o.selectionArguments()...)
 	if err != nil {
@@ -326,7 +347,7 @@ func (o *Observation) run(ctx context.Context, args ...string) ([]byte, error) {
 
 func (o *Observation) observe(ctx context.Context) error {
 	arguments := []string{"env", "-json", "GOROOT", "GOTOOLDIR", "GOVERSION", "GOCACHE", "GOMODCACHE", "GOOS", "GOARCH", "GOAMD64", "GOFLAGS", "GOEXPERIMENT", "CGO_ENABLED", "GOWORK"}
-	if o.report.Protocol == SDKCPUProtocol {
+	if sdkStorageProtocol(o.report.Protocol) {
 		arguments = append(arguments, "GO386", "GOARM", "GOARM64", "GOWASM")
 	}
 	raw, err := o.run(ctx, arguments...)
@@ -336,18 +357,20 @@ func (o *Observation) observe(ctx context.Context) error {
 	var env map[string]string
 	if err := json.Unmarshal(raw, &env); err != nil || !gotoolchain.AuditedGo127(env["GOVERSION"]) ||
 		env["GOOS"]+"/"+env["GOARCH"] != o.request.Target || env["GOFLAGS"] != "" || env["GOEXPERIMENT"] != "" ||
-		env["CGO_ENABLED"] != "0" || env["GOWORK"] != "off" || filepath.Join(env["GOROOT"], "bin", gotoolchain.HostExecutable("go")) != o.request.GoBinary {
+		env["CGO_ENABLED"] != o.report.CommandEnvironment["CGO_ENABLED"] ||
+		!sdkStorageProtocol(o.report.Protocol) && env["CGO_ENABLED"] != "0" ||
+		env["GOWORK"] != "off" || filepath.Join(env["GOROOT"], "bin", gotoolchain.HostExecutable("go")) != o.request.GoBinary {
 		return contextError("actual Go driver/profile/target differs")
 	}
 	if env["GOMODCACHE"] != o.report.CommandEnvironment["GOMODCACHE"] {
 		return contextError("actual Go module cache differs from the explicit command role")
 	}
-	if o.report.Protocol != SDKCPUProtocol {
+	if !sdkStorageProtocol(o.report.Protocol) {
 		if err := ValidateOwnedSourceDirectory(o.request.Directory, env["GOROOT"], env["GOMODCACHE"]); err != nil {
 			return err
 		}
 	}
-	if o.report.Protocol == SDKCPUProtocol {
+	if sdkStorageProtocol(o.report.Protocol) {
 		for key, expected := range sdkCPUProfile(o.request.Target) {
 			if env[key] != expected {
 				return contextError("actual SDK target tuning differs")
@@ -361,7 +384,7 @@ func (o *Observation) observe(ctx context.Context) error {
 		return contextError("unknown actual compile route")
 	}
 	paths["compile"] = strings.TrimSpace(string(route))
-	if o.report.Protocol == SDKCPUProtocol {
+	if sdkStorageProtocol(o.report.Protocol) {
 		route, err := o.run(ctx, "tool", "-n", "asm")
 		if err != nil || strings.TrimSpace(string(route)) != filepath.Join(env["GOTOOLDIR"], gotoolchain.HostExecutable("asm")) {
 			return contextError("unknown actual SDK assembly route")
@@ -409,7 +432,7 @@ func (o *Observation) Verify(ctx context.Context) error {
 	if sha256.Sum256(encoded) != o.seal {
 		return fail(contextError("sealed producer report changed"))
 	}
-	source, err := snapshot(o.request.Directory)
+	source, err := o.snapshotSource()
 	if err != nil || !reflect.DeepEqual(source, o.report.Source) {
 		return fail(contextError("complete original source inventory changed"))
 	}
@@ -424,7 +447,7 @@ func (o *Observation) Verify(ctx context.Context) error {
 		return fail(contextError("actual selected package/import/export changed"))
 	}
 	// The final command is not an exemption from the source/export guards.
-	final, err := snapshot(o.request.Directory)
+	final, err := o.snapshotSource()
 	if err != nil || !reflect.DeepEqual(final, o.report.Source) {
 		return fail(contextError("source changed during actual final selection"))
 	}
@@ -460,6 +483,9 @@ func selectionArguments() []string {
 func (o *Observation) selectionArguments() []string {
 	if o.report.Protocol == SDKCPUProtocol {
 		return sdkCPUArguments()
+	}
+	if o.report.Protocol == SDKGlobalsProtocol {
+		return sdkGlobalsArguments(o.report.PackagePath)
 	}
 	return selectionArguments()
 }

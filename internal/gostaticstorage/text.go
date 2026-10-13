@@ -120,6 +120,9 @@ func textBuiltinsForDigest(source []byte, expected string) ([]TextReference, err
 }
 
 func textArchives(report Report, packages map[string]Package) (map[string][]TextMember, error) {
+	if report.Protocol == SDKGlobalsProtocol {
+		return sdkGlobalMembers(report, packages)
+	}
 	builtins, err := textBuiltins(report.TextBuiltinSource)
 	if err != nil {
 		return nil, err

@@ -107,6 +107,9 @@ func captureGoX86NumericalReadSource(ctx context.Context, request GoX86Numerical
 	_, arch, _ := strings.Cut(request.Target, "/")
 	for key, value := range map[string]string{"GOOS": "linux", "GOARCH": arch, "GOAMD64": "v1", "GO386": "sse2",
 		"CGO_ENABLED": "0", "GOTOOLCHAIN": "local", "GOENV": "off", "GOWORK": "off", "GOFLAGS": "", "GOEXPERIMENT": "", "GOPROXY": "off"} {
+		if key == "CGO_ENABLED" && role == numericalSBSDKSource && (provided[key] == "0" || provided[key] == "1") {
+			continue // Complete selected SDK graph still rejects every cgo/generated source.
+		}
 		if provided[key] != value {
 			return nil, numericalSBContext("unbound actual command profile: %s", key)
 		}
@@ -183,7 +186,12 @@ func captureGoX86NumericalReadSource(ctx context.Context, request GoX86Numerical
 			report.Tools["compile"] != source.toolHash(filepath.Join(source.guard.env["GOTOOLDIR"], gotoolchain.HostExecutable("compile"))) {
 			return nil, numericalSBContext("owner source/tool/profile differs")
 		}
-		if report.Protocol != gostaticstorage.SDKCPUProtocol {
+		if report.Protocol == gostaticstorage.SDKGlobalsProtocol {
+			if role != numericalSBSDKSource || report.PackagePath != request.PackagePath || report.CommandDirectory != request.Directory ||
+				report.CommandBinary != request.GoBinary || report.Environment["CGO_ENABLED"] != provided["CGO_ENABLED"] {
+				return nil, numericalSBContext("SDK Go global owner differs from this complete original selected package/profile")
+			}
+		} else if report.Protocol != gostaticstorage.SDKCPUProtocol {
 			if role != numericalSBOwnedSource || report.CommandDirectory != selected.Module.Dir || report.PackagePath != selected.Module.Path {
 				return nil, numericalSBContext("numerical owner is not the actual same main module")
 			}
@@ -270,7 +278,7 @@ func (source *GoX86NumericalReadSource) observe(ctx context.Context, provided ma
 	if _, err := source.guard.read(source.request.GoBinary); err != nil {
 		return err
 	}
-	raw, err := source.run(ctx, "env", "-json", "GOROOT", "GOTOOLDIR", "GOVERSION", "GOOS", "GOARCH", "GOAMD64", "GO386", "GOFLAGS", "GOEXPERIMENT", "GOCACHE", "GOMODCACHE")
+	raw, err := source.run(ctx, "env", "-json", "GOROOT", "GOTOOLDIR", "GOVERSION", "GOOS", "GOARCH", "GOAMD64", "GO386", "GOFLAGS", "GOEXPERIMENT", "GOCACHE", "GOMODCACHE", "CGO_ENABLED")
 	if err != nil {
 		return err
 	}
@@ -280,6 +288,9 @@ func (source *GoX86NumericalReadSource) observe(ctx context.Context, provided ma
 		env["GOARCH"] == "386" && env["GO386"] != "sse2" || env["GOFLAGS"] != "" || env["GOEXPERIMENT"] != "" ||
 		env["GOCACHE"] != provided["GOCACHE"] || env["GOMODCACHE"] != provided["GOMODCACHE"] {
 		return numericalSBContext("actual SDK/tool/profile differs")
+	}
+	if env["CGO_ENABLED"] != provided["CGO_ENABLED"] {
+		return numericalSBContext("actual selected SDK cgo profile differs from the original command")
 	}
 	if source.role == numericalSBOwnedSource {
 		if err := gostaticstorage.ValidateOwnedSourceDirectory(source.request.Directory, env["GOROOT"], env["GOMODCACHE"]); err != nil {

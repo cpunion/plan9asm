@@ -344,7 +344,7 @@ func (source *GoX86NumericalReadSource) numericalDeclarations(ctx context.Contex
 		if err != nil {
 			return nil, numericalStorageFailure(ctx, "declaration owner readback", err)
 		}
-		if report.Protocol == gostaticstorage.SDKCPUProtocol {
+		if report.Protocol == gostaticstorage.SDKCPUProtocol || report.Protocol == gostaticstorage.SDKGlobalsProtocol {
 			continue
 		}
 		decoder := json.NewDecoder(bytes.NewReader(report.RawSelection))

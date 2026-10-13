@@ -29,6 +29,8 @@ type dataRecord struct {
 	Size, Align   int64
 	Data          []byte
 	Relocations   []relocation
+	Member        string
+	Index         uint32
 }
 
 const archiveLimit = 16 << 20

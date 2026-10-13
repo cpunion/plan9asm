@@ -16,6 +16,9 @@ func checkX86ScalarFPResultInitialization(fn Func, sig FuncSig, arch string) err
 }
 
 func x86ScalarFPResultTransfer(ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string) bool {
+	if accepted, known := x86ResultNumericalReadStep(ins, state, owned, resultOffset, arch); known {
+		return accepted
+	}
 	if form, known, err := amd64PackedVectorMoveProperties(ins, arch); known {
 		return err == nil && x86ResultPackedVectorMoveTransfer(ins, form, state, owned, resultOffset, arch, false)
 	}

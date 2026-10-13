@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	"github.com/xgo-dev/plan9asm/internal/gostaticstorage"
-	"golang.org/x/arch/x86/x86asm"
 )
 
 type numericalSBNativeProof struct {
@@ -180,7 +179,7 @@ func (source *GoX86NumericalReadSource) bindNative(ctx context.Context, variable
 		// The full native stream must have trusted instruction boundaries,
 		// including vector instructions and unreachable bytes. Only the
 		// independent scalar decoder map can supply a numerical read below.
-		_, decoded, err := x86NumericalNativeBoundaries(text.Code, mode)
+		decoded, err := numericalNativeReads(text.Code, mode)
 		if err != nil {
 			return err
 		}
@@ -287,41 +286,29 @@ func (source *GoX86NumericalReadSource) bindNative(ctx context.Context, variable
 							}
 						}
 					}
-					if originalMatches != 1 || native.MemBytes != int(width) || native.AddrSize != mode {
+					if originalMatches != 1 || native.width != int(width) || native.addressBits != mode {
 						var locations []string
 						for _, position := range text.Positions {
 							if position.Start <= pc && pc < position.End {
 								locations = append(locations, fmt.Sprintf("%s:%d", position.File, position.Line))
 							}
 						}
-						return numericalSBContext("native read width/source-PC role differs: source matches=%d width=%d/%d address=%d/%d listing=%s binary=%v", originalMatches, native.MemBytes, width, native.AddrSize, mode, row.position, locations)
+						return numericalSBContext("native read width/source-PC role differs: source matches=%d width=%d/%d address=%d/%d listing=%s binary=%v", originalMatches, native.width, width, native.addressBits, mode, row.position, locations)
 					}
-					for _, prefix := range native.Prefix {
-						value := uint8(prefix)
-						if value != 0 && value != 0x66 && !(arch == "amd64" && value >= 0x40 && value <= 0x4f) {
-							return numericalSBContext("read has an unregistered native prefix role")
-						}
+					if !native.matchesSource(ins, operandIndex, arch) {
+						return numericalSBContext("read has unbound native opcode/segment/index/base role")
 					}
-					memory, memories := x86asm.Mem{}, 0
-					for _, argument := range native.Args {
-						if value, ok := argument.(x86asm.Mem); ok {
-							memory, memories = value, memories+1
-						}
-					}
-					if memories != 1 || memory.Segment != 0 || memory.Index != 0 || memory.Scale != 0 ||
-						arch == "amd64" && memory.Base != x86asm.RIP || arch == "386" && memory.Base != 0 {
-						return numericalSBContext("read has unbound segment/index/base role")
-					}
-					relocation, physicalOffset, err := numericalInstructionRelocation(text, pc, native, arch)
+					relocation, physicalOffset, err := native.relocation(text, pc, arch)
 					if err != nil || physicalOffset != offset || relocation.Target.Name != owner.variable.NativeName {
-						return numericalSBContext("whole native address/addend/owner differs: %v", err)
+						return numericalSBContext("whole native address/addend/owner differs: source=%s code=%x field=%d offset=%d/%d: %v", ins.Raw,
+							text.Code[pc:pc+int64(native.length)], native.addressField, physicalOffset, offset, err)
 					}
 					matches++
 					read := owner
 					read.function, read.instruction, read.original = name, ordinal, ins
 					read.operand = operandIndex
 					read.pc, read.offset, read.width, read.relocation = pc, offset, width, relocation
-					read.code = append([]byte(nil), text.Code[pc:pc+int64(native.Len)]...)
+					read.code = append([]byte(nil), text.Code[pc:pc+int64(native.length)]...)
 					source.reads = append(source.reads, read)
 				}
 			}

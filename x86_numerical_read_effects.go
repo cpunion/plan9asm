@@ -8,6 +8,22 @@ func x86NumericalReadEffect(ins Instr, arch string) (x86TypedByteEffect, bool) {
 	if !valid {
 		return x86TypedByteEffect{}, false
 	}
+	if form.spec.vector == x86NumericalSBAES {
+		effect, known, err := x86TypedAESByteEffect(ins.Op, ins, arch)
+		if !known || err != nil {
+			return x86TypedByteEffect{}, false
+		}
+		return numericalVectorRegisterEffect(effect, form.operand), true
+	}
+	if form.spec.vector == x86NumericalSBLogical {
+		logical, _, _ := x86PackedLogicalProperties(ins, arch)
+		effect := x86TypedByteEffect{operands: []x86TypedByteOperand{
+			{index: logical.second, operand: ins.Args[logical.second], width: int64(logical.byteWidth), read: true},
+			{index: logical.destination, operand: ins.Args[logical.destination], width: int64(logical.byteWidth),
+				read: logical.mask >= 0 && !logical.zeroing, write: true},
+		}}
+		return effect, true
+	}
 	partner := x86TypedByteOperand{index: form.partner, operand: ins.Args[form.partner], width: form.spec.gpBytes,
 		read: form.spec.compare, write: !form.spec.compare}
 	effect := x86TypedByteEffect{operands: []x86TypedByteOperand{partner}}
@@ -17,9 +33,23 @@ func x86NumericalReadEffect(ins Instr, arch string) (x86TypedByteEffect, bool) {
 	return effect, true
 }
 
+func numericalVectorRegisterEffect(effect x86TypedByteEffect, memory int) x86TypedByteEffect {
+	registers := effect.operands[:0]
+	for _, operand := range effect.operands {
+		if operand.index != memory {
+			registers = append(registers, operand)
+		}
+	}
+	effect.operands = registers
+	return effect
+}
+
 func x86ResultNumericalReadStep(ins Instr, state *x86ResultState, owned []bool, offset int64, arch string) (bool, bool) {
 	if ins.x86NumericalRead == nil {
 		return false, false
+	}
+	if _, form, valid := numericalCertifiedRead(ins, arch); valid && form.spec.vector != x86NumericalSBScalar {
+		return x86ResultNumericalVectorStep(ins, state, arch, form)
 	}
 	effect, valid := x86NumericalReadEffect(ins, arch)
 	if !valid {
@@ -38,6 +68,9 @@ func x86ResultNumericalReadStep(ins Instr, state *x86ResultState, owned []bool, 
 func x86CallerNumericalReadStep(ins Instr, state *x86SourceStackState) (bool, bool) {
 	if ins.x86NumericalRead == nil {
 		return false, false
+	}
+	if _, form, valid := numericalCertifiedRead(ins, "amd64"); valid && form.spec.vector != x86NumericalSBScalar {
+		return numericalVectorMapStep(ins, "amd64", form, state.vectors, state.masks), true
 	}
 	effect, valid := x86NumericalReadEffect(ins, "amd64")
 	if !valid {

@@ -72,6 +72,9 @@ func reportPackages(report Report, root string) (map[string]Package, error) {
 	if report.Protocol == SDKCPUProtocol {
 		return sdkCPUPackages(report)
 	}
+	if report.Protocol == SDKGlobalsProtocol {
+		return sdkGlobalsPackages(report)
+	}
 	if err := ValidateOwnedSourceDirectory(root, report.Environment["GOROOT"], report.Environment["GOMODCACHE"]); err != nil {
 		return nil, err
 	}
@@ -188,18 +191,29 @@ func bindVariables(report Report, packages map[string]Package, references []Refe
 		var syntax []*ast.File
 		selfLinknames := make(map[string]bool)
 		sourceRoot := pkg.Dir
-		if report.Protocol != SDKCPUProtocol {
+		if !sdkStorageProtocol(report.Protocol) {
 			sourceRoot = pkg.Module.Dir
 		}
 		for _, file := range pkg.CompiledGoFiles {
 			rel, _ := filepath.Rel(sourceRoot, file)
-			parsed, err := parser.ParseFile(fset, file, report.Source[filepath.ToSlash(rel)], parser.ParseComments)
+			key := filepath.ToSlash(rel)
+			if report.Protocol == SDKGlobalsProtocol {
+				key = sdkGlobalSourceKey(report.PackagePath, pkg, filepath.Base(file))
+			}
+			parsed, err := parser.ParseFile(fset, file, report.Source[key], parser.ParseComments)
 			if err != nil {
 				return nil, contextError("complete selected Go source cannot be parsed")
 			}
 			// Linknames need an independently bound aliased backing producer.
 			for _, group := range parsed.Comments {
 				for _, comment := range group.List {
+					if report.Protocol == SDKGlobalsProtocol && (strings.HasPrefix(comment.Text, "//go:linkname") || strings.HasPrefix(comment.Text, "//go:linknamestd")) {
+						words := strings.Fields(comment.Text)
+						if len(words) < 2 || len(words) > 3 || !token.IsIdentifier(words[1]) || words[1] == ref.Name {
+							return nil, contextError("requested SDK global has an aliased/linkname storage role")
+						}
+						continue // Unrelated function directives confer no variable backing.
+					}
 					if strings.HasPrefix(comment.Text, "//go:linkname") && report.Protocol == SDKCPUProtocol {
 						words := strings.Fields(comment.Text)
 						if len(words) != 2 || words[0] != "//go:linkname" || !token.IsIdentifier(words[1]) || selfLinknames[words[1]] {
@@ -230,6 +244,9 @@ func bindVariables(report Report, packages map[string]Package, references []Refe
 		if !exists || object.Pkg() == nil || object.Pkg().Path() != ref.PackagePath {
 			return nil, contextError("requested object is not an actual package variable")
 		}
+		if report.Protocol == SDKGlobalsProtocol && (ref.PackagePath != report.PackagePath || !sdkGlobalPointerFree(object.Type(), 0)) {
+			return nil, contextError("SDK global requires its original entry-package pointer-free variable")
+		}
 		if ref.PackagePath != report.PackagePath || report.Protocol == SDKCPUProtocol {
 			// For an imported owner, require the actual selected export's Var,
 			// not merely a same-spelled source declaration in another directory.
@@ -254,7 +271,9 @@ func bindVariables(report Report, packages map[string]Package, references []Refe
 			return nil, err
 		}
 		var records map[string]dataRecord
-		if report.Protocol == SDKCPUProtocol {
+		if report.Protocol == SDKGlobalsProtocol {
+			records, err = readSDKGlobalArchive(report.Archives[ref.PackagePath], report.Target, pkg.SFiles)
+		} else if report.Protocol == SDKCPUProtocol {
 			records, err = readSDKCPUArchive(report.Archives[ref.PackagePath], report.Target, pkg.SFiles)
 		} else {
 			records, err = readArchive(report.Archives[ref.PackagePath], report.Target)
@@ -313,7 +332,8 @@ func bindVariables(report Report, packages map[string]Package, references []Refe
 		}
 		result = append(result, Variable{Reference: ref, NativeName: name,
 			GoType: types.TypeString(object.Type(), func(pkg *types.Package) string { return pkg.Path() }),
-			Size:   size, Alignment: record.Align, Kind: record.Kind, Numerical: spans})
+			Size:   size, Alignment: record.Align, Kind: record.Kind, Numerical: spans,
+			DefinitionMember: record.Member, DefinitionIndex: record.Index})
 	}
 	return result, nil
 }
@@ -365,18 +385,24 @@ func numericBytes(typ types.Type, sizes types.Sizes, bytes []bool, base int64, d
 // actual source/tool/command guards remain Observation.Verify's obligation.
 func ValidateReport(report Report) error {
 	sdkCPU := report.Protocol == SDKCPUProtocol
-	if report.Protocol != Protocol && !sdkCPU || !gotoolchain.AuditedGo127(report.Environment["GOVERSION"]) ||
+	sdkGlobals := report.Protocol == SDKGlobalsProtocol
+	if report.Protocol != Protocol && !sdkCPU && !sdkGlobals || !gotoolchain.AuditedGo127(report.Environment["GOVERSION"]) ||
 		report.Environment["GOOS"]+"/"+report.Environment["GOARCH"] != report.Target ||
 		report.Environment["GOFLAGS"] != "" || report.Environment["GOEXPERIMENT"] != "" ||
-		report.Environment["CGO_ENABLED"] != "0" || report.Environment["GOWORK"] != "off" ||
+		(!sdkCPU && !sdkGlobals && report.Environment["CGO_ENABLED"] != "0" ||
+			(sdkCPU || sdkGlobals) && report.Environment["CGO_ENABLED"] != "0" && report.Environment["CGO_ENABLED"] != "1") ||
+		report.Environment["CGO_ENABLED"] != report.CommandEnvironment["CGO_ENABLED"] || report.Environment["GOWORK"] != "off" ||
 		len(report.Source) == 0 || len(report.Source) > 256 || len(report.Source) != len(report.SourceSHA256) ||
 		len(report.Archives) == 0 || len(report.Archives) > 64 || len(report.Archives) != len(report.ArchiveSHA256) ||
 		len(report.Variables) == 0 || len(report.Variables) > 32 {
 		return contextError("report lacks bounded complete original inputs")
 	}
 	arguments, toolCount, environmentCount := selectionArguments(), 3+len(formatSources), 16
-	if sdkCPU {
+	if sdkCPU || sdkGlobals {
 		arguments, toolCount = sdkCPUArguments(), toolCount+1+len(sdkCPUFormatSources)
+		if sdkGlobals {
+			arguments = sdkGlobalsArguments(report.PackagePath)
+		}
 		environmentCount += 4
 		for key, expected := range sdkCPUProfile(report.Target) {
 			if report.CommandEnvironment[key] != expected || report.Environment[key] != expected {
@@ -404,6 +430,9 @@ func ValidateReport(report Report) error {
 		}
 	}
 	for key, value := range map[string]string{"GOTOOLCHAIN": "local", "GOENV": "off", "GOWORK": "off", "CGO_ENABLED": "0", "GOPROXY": "off", "GOFLAGS": "", "GOEXPERIMENT": "", "GOAMD64": "v1"} {
+		if key == "CGO_ENABLED" && (sdkCPU || sdkGlobals) {
+			continue // The exact observed value was checked against its command above.
+		}
 		if report.CommandEnvironment[key] != value {
 			return contextError("report effective command profile differs")
 		}
@@ -476,6 +505,9 @@ func ValidateReport(report Report) error {
 	root := ""
 	if sdkCPU {
 		root = filepath.Join(report.Environment["GOROOT"], "src", "internal", "cpu")
+	}
+	if sdkGlobals {
+		root = filepath.Join(report.Environment["GOROOT"], "src", filepath.FromSlash(report.PackagePath))
 	}
 	for _, pkg := range packagesRaw {
 		if pkg.ImportPath == report.PackagePath && pkg.Module != nil {

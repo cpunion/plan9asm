@@ -158,6 +158,9 @@ func sdkASMDataEnvironment(request GoX86SDKASMDataCaptureRequest) (map[string]st
 	_, arch, _ := strings.Cut(request.Target, "/")
 	for key, value := range map[string]string{"GOOS": "linux", "GOARCH": arch, "GOAMD64": "v1", "GO386": "sse2",
 		"CGO_ENABLED": "0", "GOTOOLCHAIN": "local", "GOENV": "off", "GOWORK": "off", "GOFLAGS": "", "GOEXPERIMENT": "", "GOPROXY": "off"} {
+		if key == "CGO_ENABLED" && (provided[key] == "0" || provided[key] == "1") {
+			continue // Actual SDK graph still requires complete ordinary uncgo sources.
+		}
 		if actual, present := provided[key]; !present || actual != value {
 			return nil, sdkASMDataContext("unbound command profile: %s", key)
 		}
