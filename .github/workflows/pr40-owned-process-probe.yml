@@ -265,6 +265,27 @@ jobs:
           done
           go test -tags=byollvm . -run "^($roots)$" -count=1 -timeout=5m -v \
             2>&1 | tee _out/windows-ownership/portable.log
+      - name: Check actual shared command paths on both SDKs
+        shell: bash
+        env:
+          GOTOOLCHAIN: local
+          GOFLAGS: ''
+          GOENV: 'off'
+          GOWORK: 'off'
+        run: |
+          set -euo pipefail
+          mkdir -p _out/windows-ownership
+          roots='TestGoEnvFileSelection'
+          roots+='|TestOrdinaryEnvironmentActualCommandPathIdentity'
+          roots+='|TestOrdinaryEnvironmentCommandPathRejectionPreservesInputs'
+          roots+='|TestOrdinaryEnvironmentRetainsGOPATHComponentSelection'
+          go test -tags=byollvm ./internal/sdkfrontend -list "^($roots)$" \
+            > _out/windows-ownership/command-path-inventory.log
+          for root in ${roots//|/ }; do
+            grep -Fx "$root" _out/windows-ownership/command-path-inventory.log
+          done
+          go test -tags=byollvm ./internal/sdkfrontend -run "^($roots)$" \
+            -count=1 -timeout=5m -v 2>&1 | tee _out/windows-ownership/command-path-tests.log
       - name: Real process-tree and exhaustive runner regressions
         shell: bash
         env:
