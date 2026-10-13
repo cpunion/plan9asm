@@ -198,6 +198,20 @@ pointer-free `worldsema` definition. The actual amd64 benchmark remains 49/55:
 its runtime files now reach the separate pointer/linkname storage boundary,
 not the old misleading missing-module error. Preserve that failed replay in
 the SDK snapshot worktree's `sdk-storage-snapshot/benchmark-8f65e3de/`.
+Run 38407134879 has now finished: 26 successful jobs and two failed jobs.
+Both complete Windows CLIs and coverage aggregates pass. All eight main-root
+parts completed their 5,867-root inventory: 5,603 passed, one failed, 263
+host-inapplicable skips and zero incomplete. The main aggregate correctly fails
+because `TestCrossLinuxRuntimeMatrixX86PackedZeroMemoryStoreFault` rejects the
+actual Windows Go fatal header's one newline where its fixture demanded two.
+The original exception is #UD (`0xc000001d`) in the exact tested ASM frame;
+LLVM's native #UD counterpart already passes. Preserve all eight partitions
+under `windows-complete-38407134879-all/`, not as successful root coverage.
+`1b01c408` adds the independent LF/CRLF RED controls and accepts either legal
+fatal-header separation, while rejecting incomplete signal fields, invalid
+source positions and bare CR. Go 1.27's complete packed-zero object/diagnostic
+family passes in 4.639 seconds; Go 1.20 diagnostics pass in 0.824 seconds.
+Fresh native Windows confirmation is required before promoting that root.
 Ownership logs are
 `windows-owned-process-*-0428ee36.log`, under the report directory below.
 
@@ -373,11 +387,11 @@ tools; later edits do not inherit a complete-head pass.
 
 ## Remaining work, in priority order
 
-1. Confirm the repaired Windows main-root failures in a fresh complete native
-   run. Partitioning retains inventory and the thirty-minute budgets; both
-   complete CLI execution/coverage aggregates and process ownership passed the
-   last frozen run. Its 5,840 main-root outcomes are retained above. New source
-   and fault-driver receipts still require actual native execution; selected
+1. Confirm the single remaining Windows packed-store diagnostic failure in a
+   fresh native run, then complete the main-module aggregate. Partitioning
+   retains inventory and the thirty-minute budgets; both complete CLIs,
+   process ownership, source-path repairs and the other fault drivers now pass.
+   The latest 5,867 main-root outcomes are retained above. Selected native
    regressions are not complete-module certification.
 2. Rerun affected complete gates and both CLIs, publish to the existing
    allowed-fork contribution ref, then inspect fresh CI. No upstream manual
