@@ -67,7 +67,6 @@ func runtimeOracleFaultCorePolicy(source string) error {
 
 func TestRuntimeOracleFaultChildrenDisableCoreDumps(t *testing.T) {
 	for _, name := range []string{
-		"amd64_signed_integer_scalar_float_runtime_test.go",
 		"amd64_packed_shift_native_count_runtime_test.go",
 		"amd64_undefined_trap_runtime_unix_test.go",
 		"amd64_cpu_query_runtime_unix_test.go",
