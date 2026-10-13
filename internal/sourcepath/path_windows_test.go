@@ -30,6 +30,14 @@ func TestResolveWindowsJunctionIdentity(t *testing.T) {
 	if output, err := command.CombinedOutput(); err != nil {
 		t.Fatalf("create required native directory junction: %v\n%s", err, output)
 	}
+	linkInfo, err := Lstat(alias)
+	if err != nil {
+		t.Fatal(err)
+	}
+	targetInfo, err := Lstat(actual)
+	if err != nil || os.SameFile(linkInfo, targetInfo) {
+		t.Fatalf("identity capture followed the final junction: %v", err)
+	}
 	for _, mode := range []string{"0", "1"} {
 		t.Run("winsymlink="+mode, func(t *testing.T) {
 			t.Setenv("GODEBUG", "winsymlink="+mode+",winreadlinkvolume=1")
@@ -70,6 +78,9 @@ func TestResolveWindowsLongPathAndHandleRelease(t *testing.T) {
 		t.Fatal(err)
 	}
 	for i := 0; i < 16; i++ {
+		if _, err := Lstat(name); err != nil {
+			t.Fatal("long-path identity capture", err)
+		}
 		resolved, err := Resolve(name)
 		if err != nil {
 			t.Fatal(err)

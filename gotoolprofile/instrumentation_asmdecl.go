@@ -141,7 +141,7 @@ func runInstrumentationOrdinaryAsmdecl(ctx context.Context, binary, invocation s
 	if err != nil {
 		return err
 	}
-	identity, err := os.Lstat(owned)
+	identity, err := sourcepath.Lstat(owned)
 	if err != nil {
 		return fmt.Errorf("ordinary asmdecl created directory identity unavailable: %w", err)
 	}

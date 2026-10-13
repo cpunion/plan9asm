@@ -265,6 +265,15 @@ func (source *GoX86NumericalReadSource) bindNative(ctx context.Context, variable
 									if !valid {
 										continue
 									}
+								} else {
+									// Go's object writer uses forward slashes on Windows.
+									// Decode spelling only; the exact CPP input join below
+									// still establishes source identity and PC ownership.
+									var valid bool
+									objectFile, valid = originalGoObjectSourcePath(objectFile, "")
+									if !valid {
+										continue
+									}
 								}
 								colon := strings.LastIndexByte(path, ':')
 								line, err := strconv.Atoi(path[colon+1:])

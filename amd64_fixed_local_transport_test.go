@@ -100,6 +100,7 @@ func TestGoAMD64FixedLocalTransportActualObjects(t *testing.T) {
 		{"linux/amd64", "x86_64-unknown-linux-gnu"},
 		{"darwin/amd64", "x86_64-apple-darwin"},
 		{"windows/amd64", "x86_64-pc-windows-msvc"},
+		{"windows/amd64", "x86_64-w64-windows-gnu"},
 	} {
 		t.Run(target.name, func(t *testing.T) {
 			pkg, request, _, options := fixedLocalTransportFixture(t, assembly.String(), declarations.String(), target.name, target.triple)

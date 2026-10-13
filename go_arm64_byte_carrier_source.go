@@ -144,7 +144,7 @@ func CaptureGoARM64ByteCarrierSource(ctx context.Context, request GoARM64ByteCar
 	})
 	for _, name := range []string{request.Directory, provided["GOCACHE"], provided["GOMODCACHE"], provided["GOPATH"], provided["TMPDIR"], provided["GOTMPDIR"]} {
 		physical, err := sourcepath.Resolve(name)
-		info, statErr := os.Lstat(name)
+		info, statErr := sourcepath.Lstat(name)
 		if !filepath.IsAbs(name) || err != nil || physical != name || statErr != nil || !info.IsDir() {
 			return nil, arm64ByteCarrierContext("missing or redirected source/command root")
 		}
@@ -158,7 +158,7 @@ func CaptureGoARM64ByteCarrierSource(ctx context.Context, request GoARM64ByteCar
 		return nil, err
 	}
 	source.guard.owned, source.guard.ownedInfo = owned, nil
-	source.guard.ownedInfo, err = os.Lstat(owned)
+	source.guard.ownedInfo, err = sourcepath.Lstat(owned)
 	if err != nil {
 		return nil, err
 	}
@@ -211,7 +211,7 @@ func CaptureGoARM64ByteCarrierSource(ctx context.Context, request GoARM64ByteCar
 	}
 	source.report.Inputs = source.guard.inputs
 	for name := range source.guard.inputs {
-		info, err := os.Lstat(name)
+		info, err := sourcepath.Lstat(name)
 		if err != nil || !info.Mode().IsRegular() {
 			return nil, arm64ByteCarrierContext("original input identity changed before sealing")
 		}
@@ -257,7 +257,7 @@ func (source *GoARM64ByteCarrierSource) observe(ctx context.Context) error {
 	}
 	for _, name := range []string{source.guard.env["GOROOT"], source.guard.env["GOTOOLDIR"], filepath.Join(source.guard.env["GOROOT"], "pkg/include")} {
 		physical, err := sourcepath.Resolve(name)
-		info, statErr := os.Lstat(name)
+		info, statErr := sourcepath.Lstat(name)
 		if err != nil || physical != name || statErr != nil || !info.IsDir() {
 			return arm64ByteCarrierContext("actual SDK root is redirected or unavailable")
 		}

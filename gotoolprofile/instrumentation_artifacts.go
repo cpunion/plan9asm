@@ -89,7 +89,7 @@ func CaptureInstrumentationLLVMArtifacts(root string, index int, budget *Instrum
 	if err != nil {
 		return nil, err
 	}
-	rootInfo, err := os.Stat(physicalRoot)
+	rootInfo, err := sourcepath.Lstat(physicalRoot)
 	if err != nil || !rootInfo.IsDir() {
 		return nil, fmt.Errorf("generated LLVM artifact origin is not an actual directory: %v", err)
 	}
@@ -169,7 +169,7 @@ func instrumentationLLVMArtifactInfo(root, name, role string, limit int64) (os.F
 	if err != nil || resolved != path {
 		return nil, fmt.Errorf("generated LLVM artifact is missing or redirected: %s: %v", name, err)
 	}
-	info, err := os.Lstat(path)
+	info, err := sourcepath.Lstat(path)
 	if err != nil || !info.Mode().IsRegular() || info.Size() <= 0 || info.Size() > limit {
 		return nil, fmt.Errorf("generated %s must be a nonempty bounded regular artifact: %s: %v", role, name, err)
 	}

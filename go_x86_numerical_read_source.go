@@ -121,7 +121,7 @@ func captureGoX86NumericalReadSource(ctx context.Context, request GoX86Numerical
 		AssemblyFile: request.AssemblyFile, Target: request.Target, Environment: request.Environment})
 	for _, directory := range append([]string{request.Directory}, provided["GOCACHE"], provided["GOMODCACHE"], provided["GOPATH"], provided["TMPDIR"], provided["GOTMPDIR"]) {
 		resolved, err := sourcepath.Resolve(directory)
-		info, statErr := os.Lstat(directory)
+		info, statErr := sourcepath.Lstat(directory)
 		if !filepath.IsAbs(directory) || err != nil || resolved != directory || statErr != nil || !info.IsDir() {
 			return nil, numericalSBContext("redirected or missing command/source root")
 		}
@@ -134,7 +134,7 @@ func captureGoX86NumericalReadSource(ctx context.Context, request GoX86Numerical
 	if err != nil {
 		return nil, err
 	}
-	source.guard.ownedInfo, err = os.Lstat(owned)
+	source.guard.ownedInfo, err = sourcepath.Lstat(owned)
 	if err != nil {
 		return nil, err
 	}
@@ -292,7 +292,7 @@ func (source *GoX86NumericalReadSource) observe(ctx context.Context, provided ma
 	source.rawEnvironment = append([]byte(nil), raw...)
 	for _, directory := range []string{env["GOROOT"], env["GOTOOLDIR"], filepath.Join(env["GOROOT"], "pkg", "include")} {
 		resolved, err := sourcepath.Resolve(directory)
-		info, statErr := os.Lstat(directory)
+		info, statErr := sourcepath.Lstat(directory)
 		if err != nil || resolved != directory || statErr != nil || !info.IsDir() {
 			return numericalSBContext("SDK directory role is missing or redirected")
 		}

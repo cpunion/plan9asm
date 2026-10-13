@@ -56,8 +56,14 @@ the aggregate. Native complete runner suites took 144.827/168.959 seconds
 parts still fail; a real root failure does not suppress later packages or publish
 uploadable coverage. Tests are integrated as `ab72f4c0`/`df29b71e`.
 Local Unix dependency regressions passed at `25173f37` in 184.667 seconds.
-Formal Windows workflow partitioning is the next change; keep the diagnostic
-workflow out of the contribution branch.
+Formal Windows workflow partitioning is integrated in `3a48e00d`. Complete
+native [38380889962](https://github.com/cpunion/plan9asm/actions/runs/38380889962)
+has passed the simple CLI and its coverage aggregate; root and LLVM CLI results
+are still being collected. Root failures expose Windows lazy file identity,
+ordinary x86 source-position separators, a fixture's missing host executable
+suffix and the fixed-local Windows GNU target join. Preserve its raw failures
+under `windows-complete-38380889962`; they are not coverage passes. Keep the
+fork diagnostic workflow out of the contribution branch.
 Current-head simple-CLI Linux CRC32 replay also remains failed at the CPU-feature
 SB comparison; its log is `simple-cli-crc32-linux-0428ee36.log`. Ownership logs
 are `windows-owned-process-*-0428ee36.log`, under the report directory below.
@@ -237,7 +243,8 @@ tools; later edits do not inherit a complete-head pass.
 1. Windows' complete main-module and LLVM CLI suites exceed the thirty-minute deadline.
    Partition without losing actual inventory. Windows Job ownership and actual
    dependency scope, complete-module execution and coverage aggregation passed
-   native diagnostics; formal CI integration remains. The local current root inventory
+   native diagnostics and are wired into formal CI; full native validation is
+   running and its actual failures need repair. The local current root inventory
    contains 5942 roots; four selected native regressions are not its full suite.
 2. Rerun affected complete gates and both CLIs, publish to the existing
    allowed-fork contribution ref, then inspect fresh CI. No upstream manual
