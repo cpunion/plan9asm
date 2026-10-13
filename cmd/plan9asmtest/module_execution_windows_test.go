@@ -98,15 +98,17 @@ func TestWindowsModuleActualPartitionsAndCoverage(t *testing.T) {
 		}
 		for part := 0; part < parts; part++ {
 			child := cfg
+			wantStatus := "passed"
 			child.ModuleOwner = owner
 			child.Out = filepath.Join(inputs, fmt.Sprintf("owner-%04d", owner))
 			if owner == 0 {
+				wantStatus = "completed_owned"
 				child.ModuleRootPartition = part
 				child.Out = filepath.Join(child.Out, fmt.Sprintf("part-%04d", part))
 			}
 			report, err := windowsModuleExecutionReport(t, child)
-			if err != nil || report.Status != "passed" || len(report.Inventory) != 4 {
-				t.Fatalf("Windows module owner %d part %d: %+v; %v", owner, part, report, err)
+			if err != nil || report.Status != wantStatus || len(report.Inventory) != 4 {
+				t.Fatalf("Windows module owner %d part %d: status=%s, inventory=%d; %v", owner, part, report.Status, len(report.Inventory), err)
 			}
 		}
 	}
@@ -117,7 +119,7 @@ func TestWindowsModuleActualPartitionsAndCoverage(t *testing.T) {
 	report, err := windowsModuleExecutionReport(t, cfg)
 	if err != nil || report.Status != "passed" || len(report.Packages) != 4 ||
 		report.RootInventory == nil || len(report.RootInventory.Names) != 4 {
-		t.Fatalf("Windows complete actual package/root union: %+v; %v", report, err)
+		t.Fatalf("Windows complete actual package/root union: status=%s, packages=%d, roots=%+v; %v", report.Status, len(report.Packages), report.RootInventory, err)
 	}
 	coverage, err := os.ReadFile(profile)
 	if err != nil {
@@ -157,7 +159,7 @@ func TestWindowsModuleActualFailureKeepsRemainingPackages(t *testing.T) {
 	report, err := windowsModuleExecutionReport(t, cfg)
 	if err == nil || report.Status != "failed" || len(report.Packages) != 4 ||
 		report.Packages[0].Status != "failed" {
-		t.Fatalf("actual Windows source failure lost: %+v; %v", report, err)
+		t.Fatalf("actual Windows source failure lost: status=%s, packages=%+v; %v", report.Status, report.Packages, err)
 	}
 	for _, pkg := range report.Packages[1:] {
 		if pkg.Status != "passed" {
