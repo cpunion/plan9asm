@@ -1,25 +1,34 @@
 package plan9asm
 
-// Only TEST's register/immediate read-only rows observe actual incoming
-// caller addresses. The same physical typed byte view and original immediate
+// TEST and CMP's register/immediate read-only rows observe actual incoming
+// caller addresses. CMP requires caller provenance for every register operand;
+// a numerical register is not a second address participant. The same physical
+// typed byte view and original immediate
 // encoding are used by lowering. This does not initialize GP bytes, prove a
 // pointee, or authorize a numerical/address result, store or native entry.
 func x86ResultCallerAddressTest(ins Instr, state *x86ResultState, owned []bool, arch string) (bool, bool) {
 	form, known, err := x86ScalarCompareProperties(ins.Op, ins, arch)
-	if !known || err != nil || !form.test {
+	if !known || err != nil {
 		return false, false
 	}
 	address, valid := false, true
 	for _, operand := range form.args {
 		if operand.Kind == OpReg {
 			root, _, physical := x86ResultGP(operand.Reg, int64(form.bits/8), arch)
-			if physical && state.callerAddressGP[root] {
+			// Source-wide shape validation sees all registered numerical
+			// registers together. It supplies no reaching caller provenance;
+			// the same operands must pass this gate again with shapeOnly=false.
+			if physical && (state.callerAddressGP[root] || !form.test && state.shapeOnly) {
 				address = true
 				continue
 			}
 		}
-		valid = valid && (operand.Kind == OpReg || operand.Kind == OpImm) &&
-			x86ResultRead(operand, int64(form.bits/8), state, owned, arch)
+		if form.test {
+			valid = valid && (operand.Kind == OpReg || operand.Kind == OpImm) &&
+				x86ResultRead(operand, int64(form.bits/8), state, owned, arch)
+		} else {
+			valid = valid && operand.Kind == OpImm && x86ResultRead(operand, int64(form.bits/8), state, owned, arch)
+		}
 	}
 	if !address {
 		return false, false
@@ -28,7 +37,10 @@ func x86ResultCallerAddressTest(ins Instr, state *x86ResultState, owned []bool, 
 		ins.x86AddressBits != 0 || ins.x86UnboundAddressOverride || ins.x86SegmentPrefix != 0 {
 		return false, true
 	}
-	state.flags = x86ByteFlagsAll &^ x86ByteFlagAF
+	state.flags = x86ByteFlagsAll
+	if form.test {
+		state.flags &^= x86ByteFlagAF
+	}
 	return true, true
 }
 
