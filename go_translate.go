@@ -53,6 +53,7 @@ type GoModuleOptions struct {
 	X87Mode        X87Mode
 	AnnotateSource bool
 	NumericalReads *GoX86NumericalReadBinding
+	X86TLSMoves    *GoX86TLSMoveBinding
 
 	// ARM64ByteCarrierSource retains the original bounded capture lease.
 	// LLVM Context controls resources, not cancellation or native authority.
@@ -156,6 +157,21 @@ func translateGoModuleInContext(ctx llvm.Context, pkg GoPackage, src []byte, opt
 	}
 	originalSource := src
 	originalSourceDigest := sha256.Sum256(src)
+	if binding := opt.X86TLSMoves; binding != nil {
+		var err error
+		src, err = tlsGoAssemblyInput(binding, pkg, src, opt)
+		if err != nil {
+			return nil, err
+		}
+		defer func() {
+			if err := finishTLSGoInput(binding, pkg, originalSource, originalSourceDigest, opt); err != nil {
+				if result != nil && !result.Module.IsNil() {
+					result.Module.Dispose()
+				}
+				result, resultErr = nil, errors.Join(resultErr, err)
+			}
+		}()
+	}
 	if binding := opt.NumericalReads; binding != nil {
 		if err := verifyGoNumericalReadInputs(binding, pkg, opt); err != nil {
 			return nil, err
@@ -212,7 +228,7 @@ func translateGoModuleInContext(ctx llvm.Context, pkg GoPackage, src []byte, opt
 		resolve = func(sym string) string { return goStripABISuffix(sym) }
 	}
 
-	if opt.NumericalReads == nil {
+	if opt.NumericalReads == nil && opt.X86TLSMoves == nil {
 		src = ExpandGoAssemblySource(pkg, src, opt.GOARCH)
 	}
 
@@ -275,6 +291,7 @@ func translateGoModuleInContext(ctx llvm.Context, pkg GoPackage, src []byte, opt
 		X87Mode:                opt.X87Mode,
 		AnnotateSource:         opt.AnnotateSource,
 		NumericalReads:         opt.NumericalReads,
+		X86TLSMoves:            opt.X86TLSMoves,
 		ARM64ByteCarrierSource: opt.ARM64ByteCarrierSource,
 	})
 	if err != nil {

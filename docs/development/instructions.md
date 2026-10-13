@@ -406,6 +406,19 @@ TLS memory progedit and segment Index operands remain Context without their
 native address/source-encoder contracts. In particular TYPE_ADDR segment Index
 prefixes differ in the actual Go 1.20 and 1.27 encoders; no build-version guess
 selects their meaning.
+`CaptureGoX86TLSMoveSource` independently assembles the complete original and
+expanded source with its actual Go tool, OS, architecture and shared flag.
+It binds every TEXT body, ordered relocation, frame/argument header and original
+source position. `BindTLSMoves` consumes only observed zero-width NOP rewrites
+of MOVL/MOVQ/MOVD TLS-to-GP rows, including Go's complete pre-encoding AX..R15
+range on 386. Such a NOP preserves both initialized and unknown destination
+bytes; the complete existing source/result proof still runs before lowering.
+The source observer supplies no package selection, signature, native frame,
+thread, TLS address or g identity. ELF LE/IE relocations, Windows/Android runtime
+offsets, Plan 9 private storage and actual TLS memory remain Context without
+their native entry/thread/storage producer. Keep live before/after source,
+object, target and callback guards, and the required native Linux AMD64
+`TestCrossLinuxRuntimeMatrixX86TLSNoopPreservesWideGP` execution counterpart.
 Grouped SB CALL/JMP/RET operands have Go's TYPE_BRANCH role, not a native
 indexed read; they remain Context without a bound branch/entry contract.
 

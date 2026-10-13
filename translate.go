@@ -166,6 +166,10 @@ func (m X87Mode) valid() bool {
 type Options struct {
 	TargetTriple string
 
+	// X86TLSMoves binds only actual source-encoder NOP effects. It grants no
+	// native TLS address, thread, entry-register, storage or caller contract.
+	X86TLSMoves *GoX86TLSMoveBinding
+
 	// NumericalReads is an opaque live source/object/typed-storage binding.
 	// Only GoX86NumericalReadSource.BindNumericalReads can construct it. It
 	// authorizes its exact scalar reads, never SB addresses, writes or pointers.
