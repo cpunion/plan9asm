@@ -27,6 +27,18 @@ func Run(command *exec.Cmd) (result error) {
 	}
 	owner := &windowsJob{handle: job}
 	defer func() { result = errors.Join(result, owner.close()) }()
+	owner.port, err = windows.CreateIoCompletionPort(windows.InvalidHandle, 0, 0, 1)
+	if err != nil {
+		return err
+	}
+	completion := struct {
+		Key  uintptr
+		Port windows.Handle
+	}{uintptr(job), owner.port}
+	if _, err := windows.SetInformationJobObject(job, windows.JobObjectAssociateCompletionPortInformation,
+		uintptr(unsafe.Pointer(&completion)), uint32(unsafe.Sizeof(completion))); err != nil {
+		return err
+	}
 	limits := windows.JOBOBJECT_EXTENDED_LIMIT_INFORMATION{}
 	limits.BasicLimitInformation.LimitFlags = windows.JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
 	if _, err := windows.SetInformationJobObject(job, windows.JobObjectExtendedLimitInformation,
@@ -81,6 +93,7 @@ func Run(command *exec.Cmd) (result error) {
 type windowsJob struct {
 	mu       sync.Mutex
 	handle   windows.Handle
+	port     windows.Handle
 	assigned bool
 	stopped  bool
 }
@@ -185,42 +198,54 @@ func (owner *windowsJob) close() error {
 	if owner.assigned {
 		err = windows.TerminateJobObject(owner.handle, 1)
 		if err == nil {
-			err = waitWindowsJobEmpty(owner.handle)
+			err = waitWindowsJobEmpty(owner.handle, owner.port)
 		}
 	}
 	// KILL_ON_JOB_CLOSE is also the fallback when explicit cleanup fails.
 	err = errors.Join(err, windows.CloseHandle(owner.handle))
 	owner.handle = 0
+	if owner.port != 0 {
+		err = errors.Join(err, windows.CloseHandle(owner.port))
+		owner.port = 0
+	}
 	if err != nil {
 		return fmt.Errorf("%w: %w", ErrCleanup, err)
 	}
 	return nil
 }
 
-func waitWindowsJobEmpty(job windows.Handle) error {
-	// JOBOBJECT_BASIC_ACCOUNTING_INFORMATION has the same fixed layout on
-	// Windows 386, amd64 and arm64 (four LARGE_INTEGERs, four DWORDs).
-	var accounting struct {
-		User, Kernel, PeriodUser, PeriodKernel int64
-		PageFaults, Total, Active, Terminated  uint32
-	}
+var getJobCompletion = windows.NewLazySystemDLL("kernel32.dll").NewProc("GetQueuedCompletionStatus")
+
+const jobObjectMsgActiveProcessZero = 4 // winnt.h: JOB_OBJECT_MSG_ACTIVE_PROCESS_ZERO
+
+func waitWindowsJobEmpty(job, port windows.Handle) error {
+	// TerminateJobObject is asynchronous. ActiveProcesses accounting can reach
+	// zero before the processes finish exiting. The private completion port is
+	// attached before the first assignment, so no exit notification is missed.
 	deadline := time.Now().Add(5 * time.Second)
 	for {
-		var size uint32
-		err := windows.QueryInformationJobObject(job, windows.JobObjectBasicAccountingInformation,
-			uintptr(unsafe.Pointer(&accounting)), uint32(unsafe.Sizeof(accounting)), &size)
-		if err != nil {
-			return err
+		remaining := time.Until(deadline)
+		if remaining <= 0 {
+			return fmt.Errorf("owned job did not complete process termination")
 		}
-		if size != uint32(unsafe.Sizeof(accounting)) {
-			return fmt.Errorf("incomplete owned job accounting: %d bytes", size)
+		var message uint32
+		// Job packets use the OVERLAPPED field as an integer process ID, not a
+		// Go pointer. Do not expose that ID to the GC as *windows.Overlapped.
+		var key, id uintptr
+		ok, _, err := getJobCompletion.Call(uintptr(port), uintptr(unsafe.Pointer(&message)),
+			uintptr(unsafe.Pointer(&key)), uintptr(unsafe.Pointer(&id)),
+			uintptr((remaining+time.Millisecond-1)/time.Millisecond))
+		if ok == 0 {
+			return fmt.Errorf("wait for owned job termination: %w", err)
 		}
-		if accounting.Active == 0 {
+		if key != uintptr(job) {
+			return fmt.Errorf("foreign completion in private owned job port")
+		}
+		if message == jobObjectMsgActiveProcessZero {
+			if id != 0 {
+				return fmt.Errorf("invalid process identity in empty-job completion")
+			}
 			return nil
 		}
-		if time.Now().After(deadline) {
-			return fmt.Errorf("owned job still has %d active processes after termination", accounting.Active)
-		}
-		time.Sleep(10 * time.Millisecond)
 	}
 }
