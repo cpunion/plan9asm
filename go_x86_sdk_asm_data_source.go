@@ -120,7 +120,11 @@ func captureGoX86SDKASMDataSource(ctx context.Context, request GoX86SDKASMDataCa
 			return nil, err
 		}
 	}
-	if err := source.guard.snapshotDirectory(); err != nil {
+	snapshot := source.guard.snapshotDirectory
+	if originalProfile {
+		snapshot = source.snapshotSDKPrimaryDirectory
+	}
+	if err := snapshot(); err != nil {
 		return nil, err
 	}
 	owned, err := os.MkdirTemp(provided["TMPDIR"], "plan9asm-sdk-asm-data-")
@@ -215,7 +219,7 @@ func (source *GoX86SDKASMDataSource) verifyDirectories() error {
 	}
 	for directory, before := range source.directories {
 		resolved, err := sourcepath.Resolve(directory)
-		after, statErr := os.Lstat(directory)
+		after, statErr := sourcepath.Lstat(directory)
 		if err != nil || resolved != directory || statErr != nil || !after.IsDir() || !os.SameFile(before, after) {
 			return sdkASMDataContext("source/command directory identity changed")
 		}
