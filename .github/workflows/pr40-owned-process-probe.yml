@@ -27,6 +27,7 @@ jobs:
           roots+='|TestX86MemoryFault.*|TestX86CMPXCHGFault.*|TestX86CMPXCHGWindowsFaultCodes'
           roots+='|TestX86NativeWindowsPrecisionFaultCode|TestX86SignedConversionFaultWindowsHeaderBoundary'
           roots+='|TestX86GoPackedStoreFaultDiagnostic|TestRuntimeOracleFault.*'
+          roots+='|TestRuntimeOracleNativeCActualHeadersAndLink|TestGoX86NumericalSBReadRuntimeFaultObservation'
           roots+='|TestCrossLinuxRuntimeMatrixX86TLSNoopPreservesWideGP'
           alias_roots='TestCrossLinuxRuntimeMatrixX86MOVQSourceAliasesOriginalAndLLVM'
           alias_roots+='|TestCrossLinuxRuntimeMatrixX86MOVQSourceAliasesCountedProvenance'
@@ -42,6 +43,13 @@ jobs:
             grep -Fx "$root" _out/native-x86-oracles/bool-inventory.log
           done
           roots+="|$bool_roots"
+          numerical_roots='TestCrossLinuxRuntimeMatrixX86NumericalSBReadMutableAMD64'
+          numerical_roots+='|TestCrossLinuxRuntimeMatrixX86NumericalSBReadMutableLocalAMD64'
+          go test . -list "^($numerical_roots)$" > _out/native-x86-oracles/numerical-inventory.log
+          for root in ${numerical_roots//|/ }; do
+            grep -Fx "$root" _out/native-x86-oracles/numerical-inventory.log
+          done
+          roots+="|$numerical_roots"
           families='MADDTypedOriginalLegacy|PackedNarrowOriginalLegacyOracle|ScalarFPBitViewsOriginalBitsAndCanaries'
           families+='|PureGPUnknownDeadOutputs|SignedIntegerScalarFloatTranslatedFPFields|ScalarCompareFlags'
           families+='|RawReturnSourceAddressNumerical|FloatingCompareOriginalLegacyPredicates|TimestampOriginalAndLLVM'
