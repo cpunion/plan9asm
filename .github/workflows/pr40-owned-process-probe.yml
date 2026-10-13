@@ -27,6 +27,14 @@ jobs:
           set -euo pipefail
           mkdir -p _out/windows-ownership
           go test ./internal/ownedprocess ./cmd/plan9asmtest -run '^TestWindows' -count=1 -timeout=8m -v 2>&1 | tee _out/windows-ownership/native.log
+      - name: Repeat real process termination races
+        shell: bash
+        env:
+          GOTOOLCHAIN: local
+          GOFLAGS: ''
+        run: |
+          set -euo pipefail
+          go test ./cmd/plan9asmtest -run '^TestWindowsOwnedCommand' -count=25 -timeout=8m -v 2>&1 | tee _out/windows-ownership/repeated.log
       - name: Preserve native results
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v6
