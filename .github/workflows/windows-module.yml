@@ -1,0 +1,165 @@
+name: Complete Windows module
+
+on:
+  workflow_call:
+    inputs:
+      module:
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  root-parts:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        part: ${{ fromJSON(inputs.module == 'root' && '[0,1,2,3,4,5,6,7]' || '[0,1,2,3]') }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-go
+        with:
+          go-version: '1.27.x'
+          cache: true
+      - uses: ./.github/actions/setup-windows-llvm22
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+      - name: Execute disjoint root assignment
+        shell: bash
+        run: bash scripts/test-windows-module-ci.sh ${{ inputs.module }} execute 0 ${{ matrix.part }}
+      - name: Retain actual root evidence
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: windows-module-${{ inputs.module }}-root-${{ matrix.part }}
+          path: _out/windows-module-${{ inputs.module }}/
+          if-no-files-found: error
+
+  other-owners:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        owner: [1, 2]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-go
+        with:
+          go-version: '1.27.x'
+          cache: true
+      - uses: ./.github/actions/setup-windows-llvm22
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+      - name: Execute complete profile or remaining packages
+        shell: bash
+        run: bash scripts/test-windows-module-ci.sh ${{ inputs.module }} execute ${{ matrix.owner }} -1
+      - name: Retain actual package evidence
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: windows-module-${{ inputs.module }}-owner-${{ matrix.owner }}
+          path: _out/windows-module-${{ inputs.module }}/
+          if-no-files-found: error
+
+  complete:
+    needs: [root-parts, other-owners]
+    if: ${{ !cancelled() }}
+    runs-on: windows-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-go
+        with:
+          go-version: '1.27.x'
+          cache: true
+      - uses: ./.github/actions/setup-windows-llvm22
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+      - name: Download root part 0
+        uses: actions/download-artifact@v6
+        with:
+          name: windows-module-${{ inputs.module }}-root-0
+          path: _out/windows-module-${{ inputs.module }}-owners/owner-0000/part-0000
+      - name: Download root part 1
+        uses: actions/download-artifact@v6
+        with:
+          name: windows-module-${{ inputs.module }}-root-1
+          path: _out/windows-module-${{ inputs.module }}-owners/owner-0000/part-0001
+      - name: Download root part 2
+        uses: actions/download-artifact@v6
+        with:
+          name: windows-module-${{ inputs.module }}-root-2
+          path: _out/windows-module-${{ inputs.module }}-owners/owner-0000/part-0002
+      - name: Download root part 3
+        uses: actions/download-artifact@v6
+        with:
+          name: windows-module-${{ inputs.module }}-root-3
+          path: _out/windows-module-${{ inputs.module }}-owners/owner-0000/part-0003
+      - name: Download root part 4
+        if: ${{ inputs.module == 'root' }}
+        uses: actions/download-artifact@v6
+        with:
+          name: windows-module-${{ inputs.module }}-root-4
+          path: _out/windows-module-${{ inputs.module }}-owners/owner-0000/part-0004
+      - name: Download root part 5
+        if: ${{ inputs.module == 'root' }}
+        uses: actions/download-artifact@v6
+        with:
+          name: windows-module-${{ inputs.module }}-root-5
+          path: _out/windows-module-${{ inputs.module }}-owners/owner-0000/part-0005
+      - name: Download root part 6
+        if: ${{ inputs.module == 'root' }}
+        uses: actions/download-artifact@v6
+        with:
+          name: windows-module-${{ inputs.module }}-root-6
+          path: _out/windows-module-${{ inputs.module }}-owners/owner-0000/part-0006
+      - name: Download root part 7
+        if: ${{ inputs.module == 'root' }}
+        uses: actions/download-artifact@v6
+        with:
+          name: windows-module-${{ inputs.module }}-root-7
+          path: _out/windows-module-${{ inputs.module }}-owners/owner-0000/part-0007
+      - name: Download profile owner
+        uses: actions/download-artifact@v6
+        with:
+          name: windows-module-${{ inputs.module }}-owner-1
+          path: _out/windows-module-${{ inputs.module }}-owners/owner-0001
+      - name: Download remaining-package owner
+        uses: actions/download-artifact@v6
+        with:
+          name: windows-module-${{ inputs.module }}-owner-2
+          path: _out/windows-module-${{ inputs.module }}-owners/owner-0002
+      - name: Verify complete module and publish coverage
+        shell: bash
+        run: bash scripts/test-windows-module-ci.sh ${{ inputs.module }} complete
+      - name: Retain independent completion evidence
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: windows-module-${{ inputs.module }}-completion
+          path: _out/windows-module-${{ inputs.module }}-verified/
+          if-no-files-found: error
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.x'
+      - name: Upload verified complete Windows module coverage
+        uses: codecov/codecov-action@v7
+        with:
+          use_pypi: true
+          use_oidc: true
+          files: ./coverage-windows-${{ inputs.module }}.out
+          disable_search: true
+          flags: windows
+          name: windows-go1.27-${{ inputs.module }}
+          fail_ci_if_error: true
+          verbose: true

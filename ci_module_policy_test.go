@@ -60,19 +60,15 @@ func TestCIModuleSuitesKeepExhaustiveUnixAndWindowsRoles(t *testing.T) {
 		}
 	}
 	test, _ := ciWorkflowJob(string(data), "test")
-	if !strings.Contains(test, "go test -count=1 -timeout=30m ./... -coverprofile=coverage-windows-root.out") {
-		t.Error("Windows main-module suite must remain complete")
+	windows, found := ciWorkflowJob(string(data), "windows-module")
+	if !found || !strings.Contains(windows, "needs: ci_policy") ||
+		!strings.Contains(windows, "module: [root, plan9asm, plan9asmll]") ||
+		!strings.Contains(windows, "uses: ./.github/workflows/windows-module.yml") ||
+		!strings.Contains(windows, "fail-fast: false") {
+		t.Error("all Windows modules need independent exhaustive partition/aggregate workflows")
 	}
-	windowsCLI, found := ciWorkflowJob(string(data), "windows-cli")
-	if !found || !strings.Contains(windowsCLI, "needs: ci_policy") ||
-		!strings.Contains(windowsCLI, "command: [plan9asm, plan9asmll]") ||
-		!strings.Contains(windowsCLI, "working-directory: cmd/${{ matrix.command }}") ||
-		!strings.Contains(windowsCLI, "go test -count=1 -timeout=30m ./... -coverprofile=../../coverage-windows-${{ matrix.command }}.out") {
-		t.Error("both complete Windows CLI suites need independent jobs, unaffected by root failures")
-	}
-	if !strings.Contains(windowsCLI, "working-directory: cmd/${{ matrix.command }}\n        shell: bash\n") ||
-		!strings.Contains(windowsCLI, "test -s ../../coverage-windows-${{ matrix.command }}.out") {
-		t.Error("Windows CLI coverage requires explicit Bash argument handling and a nonempty profile before upload")
+	if strings.Contains(test, "os: windows-latest") || strings.Contains(windows, "continue-on-error:") {
+		t.Error("Windows complete module roles must not duplicate direct suites or hide failures")
 	}
 	if !strings.Contains(test, "| grep -Fx 'TestAMD64DownloadedFixedLocalLLVM22Numerical'") {
 		t.Error("required numerical inventory must use the provisioned fixed-line filter, not optional ripgrep")
@@ -83,5 +79,48 @@ func TestCIModuleSuitesKeepExhaustiveUnixAndWindowsRoles(t *testing.T) {
 	coverage, _ := ciWorkflowJob(string(data), "coverage")
 	if strings.Contains(coverage, "codecov/codecov-action") || !strings.Contains(aggregate, "files: ./coverage-root.out") {
 		t.Error("coverage upload must use complete module union, never one owner's partial file")
+	}
+}
+
+func TestCIWindowsModulesKeepCompleteCoverageAndBudgets(t *testing.T) {
+	data, err := os.ReadFile(".github/workflows/windows-module.yml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"root-parts", "other-owners", "complete"} {
+		job, found := ciWorkflowJob(string(data), name)
+		if !found || !strings.Contains(job, "runs-on: windows-latest") ||
+			!strings.Contains(job, "uses: ./.github/actions/setup-windows-llvm22") ||
+			!strings.Contains(job, "node-version: '22'") {
+			t.Fatalf("Windows %s must retain identical native tool/runtime setup", name)
+		}
+		if strings.Contains(job, "max-parallel:") || strings.Contains(job, "continue-on-error:") {
+			t.Fatalf("Windows %s masks or throttles required execution", name)
+		}
+	}
+	complete, _ := ciWorkflowJob(string(data), "complete")
+	if !strings.Contains(complete, "needs: [root-parts, other-owners]") ||
+		!strings.Contains(complete, "if: ${{ !cancelled() }}") ||
+		!strings.Contains(complete, "test-windows-module-ci.sh ${{ inputs.module }} complete") {
+		t.Fatal("Windows completion must independently reject missing/failed owners")
+	}
+	for part := 0; part < 8; part++ {
+		if !strings.Contains(complete, fmt.Sprintf("-owners/owner-0000/part-%04d", part)) {
+			t.Fatalf("missing Windows root part %d artifact", part)
+		}
+	}
+	for _, owner := range []string{"owner-0001", "owner-0002"} {
+		if !strings.Contains(complete, "-owners/"+owner) {
+			t.Fatalf("missing Windows %s artifact", owner)
+		}
+	}
+	script, err := os.ReadFile("scripts/test-windows-module-ci.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, required := range []string{"-module", "-timeout=30m", "-workers=2", "-module-root-partitions=$parts", "-tags=byollvm", "-verify-module="} {
+		if !strings.Contains(string(script), required) {
+			t.Fatalf("Windows module driver lost %s", required)
+		}
 	}
 }

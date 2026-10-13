@@ -12,11 +12,11 @@ const script = fs.readFileSync(
   path.join(__dirname, '../../scripts/test-module-ci.sh'), 'utf8',
 );
 
-function job(name) {
+function job(name, source = workflow) {
   const marker = `\n  ${name}:\n`;
-  const start = workflow.indexOf(marker);
+  const start = source.indexOf(marker);
   assert.notEqual(start, -1, `missing job ${name}`);
-  const body = workflow.slice(start + marker.length);
+  const body = source.slice(start + marker.length);
   const end = body.search(/^  [a-zA-Z][a-zA-Z0-9_-]*:\s*$/m);
   return end < 0 ? body : body.slice(0, end);
 }
@@ -146,7 +146,7 @@ test('each root part has an exact separate artifact and strict download destinat
   assert.match(aggregate, /^    if: \$\{\{ !cancelled\(\) \}\}$/m);
 });
 
-test('owner-two side gates run once and Windows remains a complete independent suite', () => {
+test('owner-two side gates run once and Windows has independent complete modules', () => {
   const body = job('test');
   for (const title of [
     'Required exact downloaded AMD64 numerical fixture',
@@ -155,9 +155,8 @@ test('owner-two side gates run once and Windows remains a complete independent s
   ]) {
     assert.match(step(body, title), /matrix\.module-owner == 2/);
   }
-  assert.match(body,
-    /\{os: windows-latest, go-version: '1\.27\.x', module-role: other, module-owner: 2, root-partition: -1, nested_modules: true\}/);
-  assert.match(step(body, 'Go test with coverage (Windows)'), /go test -count=1 -timeout=30m \.\/\.\.\./);
+  assert.doesNotMatch(body, /os: windows-latest/);
+  assert.match(job('windows-module'), /uses: \.\/\.github\/workflows\/windows-module\.yml/);
   assert.match(body,
     /go-version: \['1\.20\.x', '1\.21\.x', '1\.22\.x', '1\.23\.x', '1\.24\.x', '1\.25\.x', '1\.26\.x', '1\.27\.x'\]/);
 });
@@ -169,20 +168,92 @@ test('selected native CI remains a separate sixteen-owner serial protocol', () =
   assert.doesNotMatch(body, /module-root-partition|module-owner|(?:^|\s)-workers(?:=|\s)/);
 });
 
-test('Windows CLI suites cannot be suppressed by the root package timeout', () => {
-  const body = job('windows-cli');
+test('Windows modules retain disjoint scheduling and complete coverage readback', () => {
+  const body = job('windows-module');
   assert.match(body, /^    needs: ci_policy$/m);
-  assert.match(body, /^    runs-on: windows-latest$/m);
   assert.match(body, /^      fail-fast: false$/m);
-  assert.match(body, /^        command: \[plan9asm, plan9asmll\]$/m);
+  assert.match(body, /^        module: \[root, plan9asm, plan9asmll\]$/m);
   assert.doesNotMatch(body, /max-parallel:|continue-on-error:/);
 
-  const execute = step(body, 'Run complete CLI suite with coverage');
-  assert.match(execute, /working-directory: cmd\/\$\{\{ matrix\.command \}\}/);
-  assert.match(execute,
-    /go test -count=1 -timeout=30m \.\/\.\.\. -coverprofile=\.\.\/\.\.\/coverage-windows-\$\{\{ matrix\.command \}\}\.out/);
-  assert.doesNotMatch(execute, /-run[=\s]|-skip[=\s]/);
-  assert.match(step(body, 'Upload Windows CLI coverage to Codecov'),
-    /files: \.\/coverage-windows-\$\{\{ matrix\.command \}\}\.out/);
-  assert.doesNotMatch(job('test'), /cd cmd\/plan9asm.*coverage-windows/);
+  const native = fs.readFileSync(path.join(__dirname, '../workflows/windows-module.yml'), 'utf8');
+  const roots = job('root-parts', native);
+  assert.match(roots, /inputs.module == 'root' && '\[0,1,2,3,4,5,6,7\]' \|\| '\[0,1,2,3\]'/);
+  assert.match(roots, /execute 0 \$\{\{ matrix.part \}\}/);
+  const others = job('other-owners', native);
+  assert.match(others, /owner: \[1, 2\]/);
+  assert.match(others, /execute \$\{\{ matrix.owner \}\} -1/);
+  for (const owner of [roots, others]) {
+    assert.match(owner, /fail-fast: false/);
+    assert.match(owner, /timeout-minutes: 60/);
+    assert.match(owner, /if-no-files-found: error/);
+    assert.doesNotMatch(owner, /max-parallel:|continue-on-error:|codecov-action/);
+  }
+  const complete = job('complete', native);
+  assert.match(complete, /needs: \[root-parts, other-owners\]/);
+  assert.match(complete, /^    if: \$\{\{ !cancelled\(\) \}\}$/m);
+  assert.doesNotMatch(complete, /merge-multiple:|pattern:/);
+  for (let part = 0; part < 8; part++) {
+    const download = step(complete, `Download root part ${part}`);
+    assert.match(download, new RegExp(`-root-${part}$`, 'm'));
+    assert.match(download, new RegExp(`owner-0000/part-${String(part).padStart(4, '0')}$`, 'm'));
+    if (part >= 4) assert.match(download, /if: \$\{\{ inputs.module == 'root' \}\}/);
+    else assert.doesNotMatch(download, /if:/);
+  }
+  assert.match(step(complete, 'Download profile owner'), /owner-0001$/m);
+  assert.match(step(complete, 'Download remaining-package owner'), /owner-0002$/m);
+  assert.match(step(complete, 'Verify complete module and publish coverage'),
+    /test-windows-module-ci.sh \$\{\{ inputs.module \}\} complete/);
+  assert.match(step(complete, 'Upload verified complete Windows module coverage'),
+    /files: \.\/coverage-windows-\$\{\{ inputs.module \}\}\.out/);
+});
+
+test('Windows shell transports complete module roles and rejects hidden build flags', t => {
+  // Argument transport only; native Go execution is covered by the Windows
+  // module fixture, not by this synthetic command.
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'windows-module-ci-args-'));
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(directory, 'go'), `#!/usr/bin/env bash
+if [[ "$*" == 'env GOHOSTOS' ]]; then
+  echo windows
+else
+  printf '%s\\n' SYNTHETIC_GO "$@"
+fi
+`, { mode: 0o700 });
+  fs.writeFileSync(path.join(directory, 'cygpath'), '#!/usr/bin/env bash\necho C:/fixture\n', { mode: 0o700 });
+  const run = (flags, ...args) => spawnSync('bash', [
+    path.join(__dirname, '../../scripts/test-windows-module-ci.sh'), ...args,
+  ], {
+    cwd: directory,
+    env: { ...process.env, PATH: directory + path.delimiter + process.env.PATH, GOFLAGS: flags },
+    encoding: 'utf8',
+    timeout: 5000,
+  });
+  for (const [module, parts, shards] of [['root', 8, 32], ['plan9asm', 4, 8], ['plan9asmll', 4, 8]]) {
+    for (const args of [['execute', '0', String(parts - 1)], ['execute', '1', '-1'], ['execute', '2', '-1']]) {
+      const actual = run('-tags=byollvm', module, ...args);
+      assert.equal(actual.status, 0, actual.stderr || String(actual.error));
+      const fields = actual.stdout.trim().split('\n');
+      for (const field of ['-module', '-timeout=30m', '-workers=2', '-tags=byollvm',
+        `-shards=${shards}`, `-module-root-partitions=${parts}`, `-coverprofile=C:/fixture/coverage-windows-${module}.out`]) {
+        assert.ok(fields.includes(field), `missing ${field}: ${actual.stdout}`);
+      }
+      assert.doesNotMatch(actual.stdout, /-run[=\s]|-skip[=\s]/);
+    }
+    for (const args of [['execute', '0', String(parts)], ['execute', '0', '01'], ['execute', '1', '0'], ['complete', '0']]) {
+      const actual = run('-tags=byollvm', module, ...args);
+      assert.equal(actual.status, 1, `${module}/${args}: ${actual.stderr}`);
+      assert.doesNotMatch(actual.stdout, /SYNTHETIC_GO/);
+    }
+    const missing = run('-tags=byollvm', module, 'complete');
+    assert.equal(missing.status, 1, 'completion without an actual profile must fail');
+    fs.writeFileSync(path.join(directory, `coverage-windows-${module}.out`), 'fixture\n');
+    const complete = run('-tags=byollvm', module, 'complete');
+    assert.equal(complete.status, 0, complete.stderr);
+    assert.match(complete.stdout, new RegExp(`-verify-module=_out/windows-module-${module}-owners`));
+  }
+  for (const flags of ['', '-tags=foreign', '-tags=byollvm -run=TestOnly']) {
+    const actual = run(flags, 'root', 'execute', '0', '0');
+    assert.equal(actual.status, 1, actual.stderr);
+    assert.doesNotMatch(actual.stdout, /SYNTHETIC_GO/);
+  }
 });

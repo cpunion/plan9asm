@@ -39,8 +39,9 @@ package runs complete ordinary `go test` without `-run`, including packages
 with no tests or only benchmarks/TestMain. Every package has its own actual
 `-list=.` receipt, including runnable examples/fuzz targets and separately
 recorded benchmarks. Nested CLI modules are not main-module packages; their
-existing independent workflow steps remain required. Windows keeps its full
-suites and does not use this scheduling mechanism.
+independent complete-module workflows remain required. Windows uses the same
+strict module protocol with eight root parts for the main module and four for
+each CLI, preserving profile/rest ownership and the thirty-minute command budget.
 
 ```sh
 # Each command is a separate CI job, not concurrent local invocations.
@@ -194,11 +195,13 @@ This releases LLVM contexts between shards on Linux and Darwin.
 Windows ordinary package partitions use a private non-breakaway Job Object.
 The leader starts suspended and joins that job before its initial thread runs;
 cancellation and ordinary exit terminate all descendants, including inherited
-output-pipe holders. Cleanup checks the actual job's active-process count and
-retains cleanup errors. Unrelated processes never belong to that job.
-Other non-Unix systems still fail explicitly. The complete Windows module/CI
-protocol is not enabled by this package-execution support: native dependency
-observations and formal complete-module aggregation remain separate work.
+output-pipe holders. Cleanup waits for the actual Job's completion-port exit
+notification, not merely accounting zero, and retains cleanup errors. Unrelated
+processes never belong to that job. Other non-Unix systems still fail explicitly.
+Windows module scope observes the real Go LLVM consumer's imported DLL, exact
+LLVM 22 tools, source inventory and inherited/explicit `byollvm` selection. Only
+the independent complete-module aggregate publishes coverage; partial root
+ownership is `completed_owned`, never a whole-module pass.
 
 Freeze source, environment and tools throughout a real suite run. Reports
 describe the invoked Go tests, not assembly-ledger or external-module coverage.
