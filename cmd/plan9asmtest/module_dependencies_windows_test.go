@@ -1,0 +1,86 @@
+package main
+
+import (
+	"context"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"reflect"
+	"strings"
+	"testing"
+	"time"
+)
+
+func TestWindowsModuleActualLLVMDependencyScope(t *testing.T) {
+	t.Setenv("GOFLAGS", "-tags=byollvm")
+	t.Setenv("GOENV", "off")
+	t.Setenv("GOWORK", "off")
+	t.Setenv("GOTOOLCHAIN", "local")
+	dir := t.TempDir()
+	for name, source := range map[string]string{
+		"go.mod": "module example.org/windows-llvm-consumer\n\ngo 1.20\nrequire github.com/xgo-dev/llvm v0.9.9\n",
+		"consumer.go": `package consumer
+import "github.com/xgo-dev/llvm"
+func Context() llvm.Context { return llvm.NewContext() }
+`,
+	} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(source), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	sum, err := os.ReadFile(filepath.Join("..", "..", "go.sum"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "go.sum"), sum, 0600); err != nil {
+		t.Fatal(err)
+	}
+	driver, err := exec.LookPath("go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := t.TempDir()
+	defer func() {
+		if !t.Failed() {
+			return
+		}
+		entries, _ := os.ReadDir(out)
+		for _, entry := range entries {
+			if !strings.HasSuffix(entry.Name(), ".stderr") {
+				continue
+			}
+			data, err := os.ReadFile(filepath.Join(out, entry.Name()))
+			if err == nil && len(data) > 0 {
+				t.Logf("%s:\n%s", entry.Name(), data)
+			}
+		}
+	}()
+	cfg := config{Go: driver, Dir: dir, Module: true, Flags: []string{"-tags=byollvm"}, Timeout: 2 * time.Minute}
+	before, err := captureCIScope(context.Background(), cfg, filepath.Join(out, "before"))
+	if err != nil {
+		t.Fatal("actual Windows module dependency capture", err)
+	}
+	after, err := captureCIScope(context.Background(), cfg, filepath.Join(out, "after"))
+	if err != nil || !reflect.DeepEqual(before, after) {
+		t.Fatal("unchanged Windows source/tool/loader scopes differ", err)
+	}
+	if before.Environment["GOFLAGS"] != "-tags=byollvm" || before.Tools["llvm-loaded"] == "" {
+		t.Fatal("actual inherited selection or loaded DLL identity is missing")
+	}
+	if err := verifyModuleDependencyArtifacts(out, moduleReport{Scope: before}); err != nil {
+		t.Fatal("actual Windows dependency artifact readback", err)
+	}
+	path := filepath.Join(out, "before-llvm-loaded-library.json")
+	var loaded moduleLoadedLibrary
+	if err := ciReadJSON(path, &loaded); err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("actual Go LLVM binding loaded %s", loaded.Path)
+	loaded.Path = filepath.Join(out, "foreign.dll")
+	if err := ciWriteJSON(path, loaded); err != nil {
+		t.Fatal(err)
+	}
+	if err := verifyModuleDependencyArtifacts(out, moduleReport{Scope: before}); err == nil {
+		t.Fatal("foreign loaded-library path became valid evidence")
+	}
+}
