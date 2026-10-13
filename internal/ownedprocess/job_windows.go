@@ -152,7 +152,27 @@ func suspendedWindowsThread(pid uint32) (thread windows.Handle, result error) {
 	if id == 0 {
 		return 0, fmt.Errorf("suspended command initial thread is missing")
 	}
-	return windows.OpenThread(windows.THREAD_SUSPEND_RESUME, false, id)
+	thread, err = windows.OpenThread(windows.THREAD_SUSPEND_RESUME|windows.THREAD_QUERY_LIMITED_INFORMATION, false, id)
+	if err != nil {
+		return 0, err
+	}
+	// A snapshot ID is not ownership: an external termination can recycle a
+	// thread ID before OpenThread. Recheck the opened handle while the leader's
+	// process handle still pins its identity, before touching the thread state.
+	return thread, verifyWindowsThreadOwner(thread, pid)
+}
+
+var getProcessIDOfThread = windows.NewLazySystemDLL("kernel32.dll").NewProc("GetProcessIdOfThread")
+
+func verifyWindowsThreadOwner(thread windows.Handle, pid uint32) error {
+	actual, _, err := getProcessIDOfThread.Call(uintptr(thread))
+	if actual == 0 {
+		return fmt.Errorf("query opened thread ownership: %w", err)
+	}
+	if pid <= 1 || actual != uintptr(pid) {
+		return fmt.Errorf("opened thread belongs to process %d, not owned process %d", actual, pid)
+	}
+	return nil
 }
 
 func (owner *windowsJob) close() error {
