@@ -58,7 +58,10 @@ func captureCIEnvironmentContext(directory string, environment map[string]string
 }
 
 func ciAbsolutePath(path string) bool {
-	return filepath.IsAbs(path) && filepath.Clean(path) == path && !strings.ContainsAny(path, "\x00\r\n")
+	// Windows Go environments can retain forward or mixed separators (for
+	// example setup-go's cache roots). Only separator spelling is equivalent;
+	// dot segments, repeated separators and relative roots still fail.
+	return filepath.IsAbs(path) && filepath.Clean(path) == filepath.FromSlash(path) && !strings.ContainsAny(path, "\x00\r\n")
 }
 
 func normalizeCIEnvironment(environment map[string]string, observation ciEnvironmentContext) (map[string]string, error) {
@@ -126,7 +129,7 @@ func normalizeCIEnvironment(environment map[string]string, observation ciEnviron
 		if key == "PATH" {
 			parts := filepath.SplitList(value)
 			for index, path := range parts {
-				if path == filepath.Join(root, "bin") {
+				if filepath.FromSlash(path) == filepath.Join(root, "bin") {
 					parts[index] = "<sdk>/bin"
 				}
 			}
@@ -134,7 +137,7 @@ func normalizeCIEnvironment(environment map[string]string, observation ciEnviron
 		}
 		if key == "TMPDIR" || key == "TMP" || key == "TEMP" {
 			if value != "" {
-				if !ciAbsolutePath(strings.TrimSuffix(value, string(filepath.Separator))) && value != string(filepath.Separator) {
+				if !ciAbsolutePath(strings.TrimSuffix(filepath.FromSlash(value), string(filepath.Separator))) && value != string(filepath.Separator) {
 					return nil, fmt.Errorf("invalid process temporary root %s", key)
 				}
 				value = "<" + strings.ToLower(key) + ">"
