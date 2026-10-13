@@ -50,6 +50,13 @@ jobs:
             grep -Fx "$root" _out/native-x86-oracles/numerical-inventory.log
           done
           roots+="|$numerical_roots"
+          caller_roots='TestCrossLinuxRuntimeMatrixX86CallerAddressInstructionBytesAndLLVM'
+          caller_roots+='|TestCrossLinuxRuntimeMatrixGoX86CallerAddressABI0Representation'
+          go test . -list "^($caller_roots)$" > _out/native-x86-oracles/caller-inventory.log
+          for root in ${caller_roots//|/ }; do
+            grep -Fx "$root" _out/native-x86-oracles/caller-inventory.log
+          done
+          roots+="|$caller_roots"
           families='MADDTypedOriginalLegacy|PackedNarrowOriginalLegacyOracle|ScalarFPBitViewsOriginalBitsAndCanaries'
           families+='|PureGPUnknownDeadOutputs|SignedIntegerScalarFloatTranslatedFPFields|ScalarCompareFlags'
           families+='|RawReturnSourceAddressNumerical|FloatingCompareOriginalLegacyPredicates|TimestampOriginalAndLLVM'
@@ -109,7 +116,11 @@ jobs:
             timeout: 8m
           - lane: source
             module: '.'
-            roots: TestGoX86SDKASMDataOriginalVendorPackageNamespace|TestGoX86SDKNumericalReadPackageQueryMatchesOriginalLiteralSource|TestSDKAMD64OriginalFrameConfigGuardEagerIdentity|TestSDKAMD64OriginalFrameProfileRejectsEqualByteConfigReplacement|TestSDKAMD64PrimaryInventoryActualCompleteMD5
+            roots: TestGoX86SDKASMDataOriginalVendorPackageNamespace|TestGoX86SDKNumericalReadPackageQueryMatchesOriginalLiteralSource|TestSDKAMD64OriginalFrameConfigGuardEagerIdentity|TestSDKAMD64OriginalFrameProfileRejectsEqualByteConfigReplacement|TestSDKAMD64PrimaryInventoryActualCompleteMD5|TestGoX86SDKASMDataOriginalBytealgTextSourceOrder|TestSDKAMD64NativeFrameMixedNamespaceSourceOrder
+            timeout: 5m
+          - lane: frame-context
+            module: '.'
+            roots: TestGoAMD64SDKFrameBindContextCallbacksMayClose|TestGoAMD64FrameVerifyContextCallbacksMayClose|TestGoAMD64FramePrivateContextExactLifetime|TestGoX86NumericalSBReadFrameProducerObserverCancellationCause
             timeout: 5m
     steps:
       - uses: actions/checkout@v7
