@@ -88,6 +88,19 @@ retain that distinction. The integrated literal/numerical/bool family passes in
 278.822 seconds. Complete original maps source still needs a separate typed
 caller-address contract; do not promote this predicate repair to a file pass.
 
+The following frozen `05aea382` five-target compile benchmark remains failed:
+163/184 assembly files compile, with 21 failures and zero N/A/unattempted.
+Counts are 29/33, 48/55, 27/30, 40/47 and 19/19; build takes ten seconds and
+target total 120 seconds, within unchanged 300/900-second budgets. Compared
+with `3f437f3a`, the additional failed file is `internal/bytealg/equal_amd64.s`:
+the canonical bool result check now reaches an unresolved whole-source helper
+branch, and the SDK fallback lacks its exact cross-namespace/native ABI TEXT
+join. Keep canonical bool requirements and this actual failed receipt intact;
+neither an opcode classification pass nor a local CLI test pass closes it.
+The current Go 1.27 and official Go 1.20 five-architecture classification gates
+also pass at this frozen head; the older AMD64 baseline still has one explicit
+unsupported form.
+
 Inventory runs only on the server. Streaming ledger status and a complete
 five-minute incremental window have been verified before restoring catch-up;
 the trusted contiguous head now advances through 2026-10-08T12:22:43Z.
@@ -370,7 +383,7 @@ original-Go and LLVM C drivers. Five complete sink/protocol repetitions pass
 in 39.605 seconds; Go 1.20 and Go 1.27 race counterparts pass in 8.947/10.092
 seconds. The observation window and direct-child exit checks are unchanged.
 Complete native confirmation of all three root repairs passes the priority gates
-in 38441921522; its complete-module validation is still in progress.
+and complete-module validation in 38441921522, as recorded above.
 The complete local LLVM CLI retains a separate infrastructure failure after
 899.925 seconds: two native ARM64 C oracles select the Homebrew clang default
 configuration's absent SDK. Explicit CGO flags and SDKROOT do not fix those
