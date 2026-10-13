@@ -101,6 +101,15 @@ official gate passed at `c4ff4f3b`; classification does not certify execution.
 These three commits are staged locally on the fork probe branch but not pushed:
 run 38386789839 must finish first. Its three completed jobs pass and twenty-two
 complete-module jobs still await a Windows runner, with no test failures/logs yet.
+The frozen local Go 1.27.2/LLVM 22 benchmark replay, with ordinary host source
+selection, remains failed: 163/184 files, 21 failures, zero N/A/unattempted, build
+8 seconds and target total 49 seconds. Counts are 29/33, 48/55, 27/30, 40/47 and
+19/19 for 386, amd64, arm, arm64 and wasm. Do not compare its host-dependent
+inventory to the earlier CI's 185-file denominator as a pass regression.
+Reports are in the fork probe worktree under
+`_out/register-result-repair/benchmark-portability-c4ff4f3b/`.
+Besides the native runtime/frame contracts below, its chacha20poly1305 fixed-local
+capture lacks an explicit GOENV profile; keep that failure visible, not excluded.
 Current-head simple-CLI Linux CRC32 replay also remains failed at the CPU-feature
 SB comparison; its log is `simple-cli-crc32-linux-0428ee36.log`. Ownership logs
 are `windows-owned-process-*-0428ee36.log`, under the report directory below.
