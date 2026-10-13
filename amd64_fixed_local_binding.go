@@ -103,6 +103,7 @@ func (source *GoAMD64FrameSource) bindFixedLocalLocked(ctx context.Context, pkg 
 		"x86_64-apple-darwin":      "darwin/amd64",
 		"x86_64-apple-macosx":      "darwin/amd64",
 		"x86_64-pc-windows-msvc":   "windows/amd64",
+		"x86_64-w64-windows-gnu":   "windows/amd64",
 	}
 	if targets[options.TargetTriple] != source.request.Target || options.WASMABI != WASMABIDirect ||
 		len(file.UnlinkedPrelude)+len(options.X86TailGroups) != 0 {

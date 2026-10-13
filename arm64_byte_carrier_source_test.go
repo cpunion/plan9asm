@@ -19,6 +19,8 @@ import (
 	"testing"
 
 	"github.com/xgo-dev/plan9asm/internal/gostaticstorage"
+	"github.com/xgo-dev/plan9asm/internal/gotoolchain"
+	"github.com/xgo-dev/plan9asm/internal/sourcepath"
 )
 
 // Reuse the native-width family, not Or32 or a fabricated allocation. All
@@ -240,8 +242,12 @@ func arm64ByteCarrierRequestWithBuildCache(t *testing.T, directory, packagePath,
 		environment = append(environment, key+"="+value)
 	}
 	sort.Strings(environment)
+	binary, err := sourcepath.Resolve(filepath.Join(runtime.GOROOT(), "bin", gotoolchain.HostExecutable("go")))
+	if err != nil {
+		t.Fatal("resolve the actual host Go driver", err)
+	}
 	return GoARM64ByteCarrierCaptureRequest{
-		GoBinary: filepath.Join(runtime.GOROOT(), "bin", "go"), Directory: directory,
+		GoBinary: binary, Directory: directory,
 		PackagePath: packagePath, AssemblyFile: "original_arm64.s", Target: "linux/arm64", Environment: environment,
 	}
 }

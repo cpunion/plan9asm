@@ -110,7 +110,7 @@ func CaptureGoX86SDKASMDataSource(ctx context.Context, request GoX86SDKASMDataCa
 		return nil, err
 	}
 	source.guard.owned = owned
-	source.guard.ownedInfo, err = os.Lstat(owned)
+	source.guard.ownedInfo, err = sourcepath.Lstat(owned)
 	if err != nil {
 		return nil, err
 	}
@@ -170,7 +170,7 @@ func sdkASMDataEnvironment(request GoX86SDKASMDataCaptureRequest) (map[string]st
 
 func (source *GoX86SDKASMDataSource) retainDirectory(directory string) error {
 	resolved, err := sourcepath.Resolve(directory)
-	info, statErr := os.Lstat(directory)
+	info, statErr := sourcepath.Lstat(directory)
 	if !filepath.IsAbs(directory) || err != nil || resolved != directory || statErr != nil || !info.IsDir() {
 		return sdkASMDataContext("missing or redirected source/command directory")
 	}

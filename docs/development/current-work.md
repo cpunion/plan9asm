@@ -24,6 +24,50 @@ These are that frozen run's results, not certification of the following repairs.
 
 ## Latest local repair batch
 
+Windows ownership and dependency scope now have native Go 1.20/1.27 evidence.
+The test-only [38332958829](https://github.com/cpunion/plan9asm/actions/runs/38332958829)
+reproduced the unsupported process-tree boundary. Suspended leaders enter a
+private non-breakaway Job before resume; actual thread ownership is rechecked.
+Accounting zero did not guarantee signaled process handles, reproduced by
+[38345922514](https://github.com/cpunion/plan9asm/actions/runs/38345922514).
+`9524c3d6` waits for the Job completion-port exit notification instead.
+[38346249492](https://github.com/cpunion/plan9asm/actions/runs/38346249492)
+passed both SDKs, including 25 repeated real-tree regressions each.
+
+Inherited `-tags=byollvm` has an exact Windows-only explicit-flag handoff;
+undeclared/conflicting/hidden flags still fail before execution. Complete native
+runner packages passed [38346896685](https://github.com/cpunion/plan9asm/actions/runs/38346896685).
+At frozen `582934e7`, complete local runner/ownership suites passed in
+640.906/1.987 seconds. Actual Windows module dependencies subsequently exposed
+mixed native separators, Node CRLF and the Unix-only DLL loader probe.
+`f69465e7`, `7b222c49` and `4e3f8dee` retain exact path/packet identity while
+observing the Windows imported function's real owning DLL. Full native runner
+and dependency tests passed both SDKs in
+[38348037017](https://github.com/cpunion/plan9asm/actions/runs/38348037017).
+Local dependency/environment regressions passed at `7b222c49` in 263.070 seconds;
+that receipt predates the new Windows/Unix loader source split.
+
+Actual Windows complete-module partition/coverage and sticky-failure tests now
+pass both SDKs in [38354976736](https://github.com/cpunion/plan9asm/actions/runs/38354976736).
+The first fixture incorrectly demanded full `passed` status from a partial root
+owner; its correction requires `completed_owned`, retaining `passed` only for
+the aggregate. Native complete runner suites took 144.827/168.959 seconds
+(Go 1.27/1.20), followed by 25 real process-tree repetitions each. Missing root
+parts still fail; a real root failure does not suppress later packages or publish
+uploadable coverage. Tests are integrated as `ab72f4c0`/`df29b71e`.
+Local Unix dependency regressions passed at `25173f37` in 184.667 seconds.
+Formal Windows workflow partitioning is integrated in `3a48e00d`. Complete
+native [38380889962](https://github.com/cpunion/plan9asm/actions/runs/38380889962)
+has passed the simple CLI and its coverage aggregate; root and LLVM CLI results
+are still being collected. Root failures expose Windows lazy file identity,
+ordinary x86 source-position separators, a fixture's missing host executable
+suffix and the fixed-local Windows GNU target join. Preserve its raw failures
+under `windows-complete-38380889962`; they are not coverage passes. Keep the
+fork diagnostic workflow out of the contribution branch.
+Current-head simple-CLI Linux CRC32 replay also remains failed at the CPU-feature
+SB comparison; its log is `simple-cli-crc32-linux-0428ee36.log`. Ownership logs
+are `windows-owned-process-*-0428ee36.log`, under the report directory below.
+
 - `7bdc112a`: Windows C text-mode CRLF now retains the exact observation
   fields; bare/embedded CR and all incomplete packets still fail. Reentry checks
   the Frame lock at the actual external callback instead of imposing ten seconds
@@ -197,9 +241,10 @@ tools; later edits do not inherit a complete-head pass.
 ## Remaining work, in priority order
 
 1. Windows' complete main-module and LLVM CLI suites exceed the thirty-minute deadline.
-   Partition without losing actual inventory. Do not enable the Unix-only
-   exhaustive runner without real descendant ownership and Windows tool/source
-   scope. Keep complete coverage aggregation. The local current root inventory
+   Partition without losing actual inventory. Windows Job ownership and actual
+   dependency scope, complete-module execution and coverage aggregation passed
+   native diagnostics and are wired into formal CI; full native validation is
+   running and its actual failures need repair. The local current root inventory
    contains 5942 roots; four selected native regressions are not its full suite.
 2. Rerun affected complete gates and both CLIs, publish to the existing
    allowed-fork contribution ref, then inspect fresh CI. No upstream manual

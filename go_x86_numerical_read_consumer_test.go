@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/xgo-dev/llvm"
+	"github.com/xgo-dev/plan9asm/internal/sourcepath"
 )
 
 func TestGoX86NumericalSBReadBoundConsumer(t *testing.T) {
@@ -144,7 +145,7 @@ func TestGoX86NumericalConsumerCleanupReportsActualCloseOutcome(t *testing.T) {
 
 			if replacement {
 				owned := source.guard.owned
-				identity, err := os.Lstat(owned)
+				identity, err := sourcepath.Lstat(owned)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -154,7 +155,7 @@ func TestGoX86NumericalConsumerCleanupReportsActualCloseOutcome(t *testing.T) {
 				if err := os.Mkdir(foreign, 0700); err != nil {
 					t.Fatal(err)
 				}
-				foreignIdentity, err := os.Lstat(foreign)
+				foreignIdentity, err := sourcepath.Lstat(foreign)
 				if err != nil {
 					t.Fatal(err)
 				}

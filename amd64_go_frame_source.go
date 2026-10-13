@@ -286,7 +286,7 @@ func captureGoAMD64FrameSource(ctx context.Context, pkg GoPackage, request GoAMD
 			captureErr = errors.Join(captureErr, source.Close())
 		}
 	}()
-	source.ownedInfo, err = os.Lstat(source.owned)
+	source.ownedInfo, err = sourcepath.Lstat(source.owned)
 	if err != nil {
 		return nil, err
 	}
