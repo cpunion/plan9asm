@@ -33,16 +33,26 @@ const x86TestGuardPagesC = `
 
 static uint8_t *guard;
 static size_t page;
+static uint8_t *guard_mapping;
+static size_t guard_pages;
 
-static int setup_guard(void) {
+static int free_guard(void);
+
+static int setup_guard_before(unsigned leading) {
+    if (leading > 1) return 1;
+    guard_pages = 2 + leading;
 #ifdef _WIN32
     SYSTEM_INFO info;
     GetSystemInfo(&info);
     page = info.dwPageSize;
 
-    guard = VirtualAlloc(NULL, page * 2, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+    guard_mapping = VirtualAlloc(NULL, page * guard_pages, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+    if (!guard_mapping) return 1;
+    guard = guard_mapping + leading * page;
     DWORD old;
-    if (!guard || !VirtualProtect(guard + page, page, PAGE_NOACCESS, &old)) {
+    if ((leading && !VirtualProtect(guard_mapping, page, PAGE_NOACCESS, &old)) ||
+            !VirtualProtect(guard + page, page, PAGE_NOACCESS, &old)) {
+        free_guard();
         return 1;
     }
 #else
@@ -52,19 +62,27 @@ static int setup_guard(void) {
     }
     page = (size_t)p;
 
-    guard = mmap(NULL, page * 2, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-    if (guard == MAP_FAILED || mprotect(guard + page, page, PROT_NONE)) {
+    guard_mapping = mmap(NULL, page * guard_pages, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (guard_mapping == MAP_FAILED) return 1;
+    guard = guard_mapping + leading * page;
+    if ((leading && mprotect(guard_mapping, page, PROT_NONE)) ||
+            mprotect(guard + page, page, PROT_NONE)) {
+        free_guard();
         return 1;
     }
 #endif
     return 0;
 }
 
+static int setup_guard(void) {
+    return setup_guard_before(0);
+}
+
 static int free_guard(void) {
 #ifdef _WIN32
-    return !VirtualFree(guard, 0, MEM_RELEASE);
+    return !VirtualFree(guard_mapping, 0, MEM_RELEASE);
 #else
-    return munmap(guard, page * 2);
+    return munmap(guard_mapping, page * guard_pages);
 #endif
 }
 `

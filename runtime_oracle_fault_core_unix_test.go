@@ -68,7 +68,6 @@ func runtimeOracleFaultCorePolicy(source string) error {
 func TestRuntimeOracleFaultChildrenDisableCoreDumps(t *testing.T) {
 	for _, name := range []string{
 		"amd64_signed_integer_scalar_float_runtime_test.go",
-		"amd64_packed_shift_fault_test.go",
 		"amd64_packed_shift_native_count_runtime_test.go",
 		"amd64_undefined_trap_runtime_unix_test.go",
 		"amd64_cpu_query_runtime_unix_test.go",
@@ -122,21 +121,26 @@ oracle();
 	}
 }
 
-// Execute the actual shift fault helper with a harmless callback. Inheriting
+// Execute the actual legacy shift fault helper with a harmless callback. Inheriting
 // a nonzero core limit fails without raising a signal or creating a core file.
 func TestRuntimeOracleFaultChildCoreLimitInheritance(t *testing.T) {
 	_, clang, ok := findLlcAndClang(t)
 	if !ok {
 		t.Fatal("LLVM 22 tools required")
 	}
-	source := runtimeOracleFaultC(t, "amd64_packed_shift_fault_test.go")
+	source := x86PackedShiftLegacyCountCHeader +
+		runtimeOracleFaultC(t, "amd64_packed_shift_native_count_runtime_test.go")
 	source += `
 #include <sys/resource.h>
 
-static void inspect_limits(uint8_t *out, const uint8_t *data, const uint8_t *count) {
+static void inspect_limits(uint8_t *out, const uint8_t *data, const uint8_t *count, uint64_t seed) {
+    (void)out;
+    (void)data;
+    (void)count;
+    (void)seed;
     struct rlimit limit;
     if (getrlimit(RLIMIT_CORE, &limit) || limit.rlim_cur || limit.rlim_max) _exit(91);
-    memset(out, 0, 32);
+    _exit(0);
 }
 
 int main(int argc, char **argv) {
@@ -149,9 +153,9 @@ int main(int argc, char **argv) {
         parent.rlim_cur = parent.rlim_max < 4096 ? parent.rlim_max : 4096;
     }
     if (setrlimit(RLIMIT_CORE, &parent)) return 11;
-    long page = sysconf(_SC_PAGESIZE);
-    if (page <= 0) return 12;
-    int result = check_fault(inspect_limits, 0, 0, (size_t)page);
+    uint8_t count[32] = {0};
+    int status = observe_count(inspect_limits, 0, 0, 0, count, 0);
+    int result = status < 0 || !WIFEXITED(status) || WEXITSTATUS(status) != 0;
     if (getrlimit(RLIMIT_CORE, &after) || after.rlim_cur != parent.rlim_cur ||
         after.rlim_max != parent.rlim_max) return 13;
     if (argc == 1 && setrlimit(RLIMIT_CORE, &original)) return 14;

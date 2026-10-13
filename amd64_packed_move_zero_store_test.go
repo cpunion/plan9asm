@@ -304,12 +304,63 @@ int main(int argc, char **argv) {
 		output, err := command.CombinedOutput()
 		cancel()
 		exit, ok := err.(*exec.ExitError)
-		expectedDiagnostic := "SIGILL: illegal instruction"
-		if runtime.GOOS == "windows" {
-			expectedDiagnostic = "Exception 0xc000001d"
-		}
-		if !ok || exit.ExitCode() != 2 || !strings.Contains(string(output), expectedDiagnostic) {
+		if !ok || exit.ExitCode() != 2 || !x86GoPackedStoreFaultDiagnostic(runtime.GOOS, name, string(output)) {
 			t.Fatalf("original Go %s did not deliver SIGILL: %v\n%s", name, err, output)
 		}
+	}
+}
+
+func x86GoPackedStoreFaultDiagnostic(goos, name, output string) bool {
+	output = strings.ReplaceAll(output, "\r\n", "\n")
+	if strings.Contains(output, "\r") {
+		return false
+	}
+	matched := strings.HasPrefix(output, "SIGILL: illegal instruction\n")
+	if goos == "windows" {
+		// Current Go converts the native exception to sigpanic; older SDKs
+		// print the unhandled exception directly. Both must identify #UD,
+		// not an ordinary panic, access violation or just an exit status 2.
+		matched = strings.HasPrefix(output, "Exception 0xc000001d ") ||
+			strings.HasPrefix(output, "fatal error: fault\n\n[signal 0xc000001d code=")
+	}
+	if !matched {
+		return false
+	}
+	lines := strings.Split(output, "\n")
+	for index, line := range lines {
+		if line == "main."+name+"()" && index+1 < len(lines) {
+			location := strings.ReplaceAll(lines[index+1], "\\", "/")
+			_, position, found := strings.Cut(location, "/fault_amd64.s:")
+			if found && len(position) > 0 && position[0] >= '1' && position[0] <= '9' {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func TestX86GoPackedStoreFaultDiagnostic(t *testing.T) {
+	const stack = "\nmain.faultVMOVAPDX()\n\tC:/fixture/fault_amd64.s:2 fp=0x123 pc=0x456\n"
+	const modern = "fatal error: fault\n\n[signal 0xc000001d code=0x0 addr=0x0 pc=0x456]\n"
+	for _, test := range []struct {
+		name, goos, output string
+		valid              bool
+	}{
+		{"Unix", "linux", "SIGILL: illegal instruction\nPC=0x456\n" + stack, true},
+		{"Windows exception", "windows", "Exception 0xc000001d 0x0 0x0 0x456\n" + stack, true},
+		{"Windows sigpanic", "windows", modern + stack, true},
+		{"Windows native newlines", "windows", strings.ReplaceAll(modern+stack, "\n", "\r\n"), true},
+		{"ordinary panic", "windows", "panic: Exception 0xc000001d\n" + stack, false},
+		{"different signal", "windows", strings.ReplaceAll(modern+stack, "0xc000001d", "0xc0000005"), false},
+		{"partial exception code", "windows", "Exception 0xc000001d0\n" + stack, false},
+		{"missing tested frame", "windows", modern, false},
+		{"wrong tested frame", "windows", modern + strings.ReplaceAll(stack, "faultVMOVAPDX", "faultOther"), false},
+		{"wrong source", "windows", modern + strings.ReplaceAll(stack, "fault_amd64.s", "main.go"), false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if got := x86GoPackedStoreFaultDiagnostic(test.goos, "faultVMOVAPDX", test.output); got != test.valid {
+				t.Fatalf("actual Go illegal-instruction diagnostic: got %t, want %t", got, test.valid)
+			}
+		})
 	}
 }
