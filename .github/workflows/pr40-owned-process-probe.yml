@@ -5,6 +5,19 @@ on:
 permissions:
   contents: read
 jobs:
+  complete-windows:
+    needs: ownership
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        module: [root, plan9asm, plan9asmll]
+    uses: ./.github/workflows/windows-module.yml
+    with:
+      module: ${{ matrix.module }}
+
   ownership:
     runs-on: windows-latest
     timeout-minutes: 15
