@@ -64,8 +64,9 @@ raw outcomes and strict complete-module aggregate remain required. Owner 0 owns
 the root package, owner 1 `gotoolprofile`, owner 2 all remaining packages.
 Ordinary suites may use `-workers 2`; one collector owns report/coverage writes.
 Root scheduling parts do not change the test denominator. Windows keeps all
-three modules independent: eight root parts for the main module, four per CLI,
-and one profile/rest owner each. Every command retains the thirty-minute budget;
+three modules independent: sixteen root parts for the main module over the same
+32 hash shards (two shards per part), four parts per CLI, and one profile/rest
+owner each. Every command retains the thirty-minute budget;
 only complete cross-owner verification publishes the module's coverage. The
 Windows driver binds inherited and explicit `-tags=byollvm` without fallback.
 

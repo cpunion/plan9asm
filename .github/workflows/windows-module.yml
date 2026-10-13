@@ -17,7 +17,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        part: ${{ fromJSON(inputs.module == 'root' && '[0,1,2,3,4,5,6,7]' || '[0,1,2,3]') }}
+        part: ${{ fromJSON(inputs.module == 'root' && '[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15]' || '[0,1,2,3]') }}
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-go
@@ -129,6 +129,54 @@ jobs:
         with:
           name: windows-module-${{ inputs.module }}-root-7
           path: _out/windows-module-${{ inputs.module }}-owners/owner-0000/part-0007
+      - name: Download root part 8
+        if: ${{ inputs.module == 'root' }}
+        uses: actions/download-artifact@v6
+        with:
+          name: windows-module-${{ inputs.module }}-root-8
+          path: _out/windows-module-${{ inputs.module }}-owners/owner-0000/part-0008
+      - name: Download root part 9
+        if: ${{ inputs.module == 'root' }}
+        uses: actions/download-artifact@v6
+        with:
+          name: windows-module-${{ inputs.module }}-root-9
+          path: _out/windows-module-${{ inputs.module }}-owners/owner-0000/part-0009
+      - name: Download root part 10
+        if: ${{ inputs.module == 'root' }}
+        uses: actions/download-artifact@v6
+        with:
+          name: windows-module-${{ inputs.module }}-root-10
+          path: _out/windows-module-${{ inputs.module }}-owners/owner-0000/part-0010
+      - name: Download root part 11
+        if: ${{ inputs.module == 'root' }}
+        uses: actions/download-artifact@v6
+        with:
+          name: windows-module-${{ inputs.module }}-root-11
+          path: _out/windows-module-${{ inputs.module }}-owners/owner-0000/part-0011
+      - name: Download root part 12
+        if: ${{ inputs.module == 'root' }}
+        uses: actions/download-artifact@v6
+        with:
+          name: windows-module-${{ inputs.module }}-root-12
+          path: _out/windows-module-${{ inputs.module }}-owners/owner-0000/part-0012
+      - name: Download root part 13
+        if: ${{ inputs.module == 'root' }}
+        uses: actions/download-artifact@v6
+        with:
+          name: windows-module-${{ inputs.module }}-root-13
+          path: _out/windows-module-${{ inputs.module }}-owners/owner-0000/part-0013
+      - name: Download root part 14
+        if: ${{ inputs.module == 'root' }}
+        uses: actions/download-artifact@v6
+        with:
+          name: windows-module-${{ inputs.module }}-root-14
+          path: _out/windows-module-${{ inputs.module }}-owners/owner-0000/part-0014
+      - name: Download root part 15
+        if: ${{ inputs.module == 'root' }}
+        uses: actions/download-artifact@v6
+        with:
+          name: windows-module-${{ inputs.module }}-root-15
+          path: _out/windows-module-${{ inputs.module }}-owners/owner-0000/part-0015
       - name: Download profile owner
         uses: actions/download-artifact@v6
         with:
