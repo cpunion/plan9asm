@@ -48,6 +48,34 @@ func (source *GoX86SDKASMDataSource) retainSDKFrameListingBytes(bytes int) error
 var sdkAMD64FrameNativeHeader = regexp.MustCompile(`^(\S+) STEXT(?: (static))?(?: (nosplit))?(?: (asm))? size=([0-9]+) (?:align=0x[0-9a-f]+ )?args=0x([0-9a-f]+) locals=0x([0-9a-f]+)(?: funcid=0x[0-9a-f]+)?(?: align=0x[0-9a-f]+)?$`)
 
 func sdkAMD64FrameNativeRecords(listing []byte, texts []gostaticstorage.TextRecord) ([]sdkAMD64FrameNativeRecord, error) {
+	return sdkAMD64FrameNativeRecordsInOrder(listing, texts, nil)
+}
+
+func sdkAMD64FrameNativeRecordsForSource(listing []byte, texts []gostaticstorage.TextRecord, order []gostaticstorage.ASMSourceText) ([]sdkAMD64FrameNativeRecord, error) {
+	if len(order) != len(texts) {
+		return nil, sdkASMDataContext("SDK-primary native source/object ordinal association is incomplete")
+	}
+	indices := make([]int, len(order))
+	seen := make(map[int]bool, len(order))
+	for ordinal, association := range order {
+		index := association.ObjectOrdinal
+		if association.SourceOrdinal != ordinal || index < 0 || index >= len(texts) || seen[index] {
+			return nil, sdkASMDataContext("SDK-primary native source/object ordinal association is duplicate or unbound")
+		}
+		text := texts[index]
+		if association.Name != text.Name || association.ABI != text.ABI || association.Namespace != text.Namespace ||
+			association.Relative != text.Relative || association.Index != text.Index {
+			return nil, sdkASMDataContext("SDK-primary native source/object physical association differs")
+		}
+		indices[ordinal], seen[index] = index, true
+	}
+	return sdkAMD64FrameNativeRecordsInOrder(listing, texts, indices)
+}
+
+// nil indices is the existing format-only diagnostic helper. Production SDK
+// capture always supplies the independently source-derived association; no
+// original TextRecord is reordered or rewritten to resemble source evidence.
+func sdkAMD64FrameNativeRecordsInOrder(listing []byte, texts []gostaticstorage.TextRecord, indices []int) ([]sdkAMD64FrameNativeRecord, error) {
 	var records []sdkAMD64FrameNativeRecord
 	scanner := bufio.NewScanner(bytes.NewReader(listing))
 	scanner.Buffer(nil, 4<<20)
@@ -63,11 +91,18 @@ func sdkAMD64FrameNativeRecords(listing []byte, texts []gostaticstorage.TextReco
 		size, sizeErr := strconv.ParseUint(header[5], 10, 64)
 		args, argsErr := strconv.ParseUint(header[6], 16, 64)
 		locals, localsErr := strconv.ParseUint(header[7], 16, 32)
-		text := texts[len(records)]
+		index := len(records)
+		if indices != nil {
+			index = indices[index]
+		}
+		text := texts[index]
 		if sizeErr != nil || argsErr != nil || localsErr != nil || text.Size < 0 ||
 			header[1] != text.Name || size != uint64(text.Size) || size != uint64(len(text.Code)) ||
 			int64(args) < 0 && int64(args) != -0x80000000 {
 			return nil, sdkASMDataContext("SDK-primary complete native frame/object TEXT differs")
+		}
+		if indices != nil && (header[2] != "") != (text.ABI == 65535) {
+			return nil, sdkASMDataContext("SDK-primary native listing static/ABI source role differs")
 		}
 		records = append(records, sdkAMD64FrameNativeRecord{Symbol: header[1], Static: header[2] != "", NoSplit: header[3] != "", ASM: header[4] != "",
 			Size: size, Args: int64(args), Locals: locals, ArgsKnown: int64(args) != -0x80000000})
@@ -107,11 +142,12 @@ func (source *GoX86SDKASMDataSource) captureSDKFrameListings(ctx context.Context
 		if err != nil {
 			return sdkASMDataContext("SDK-primary original/mapped/archive complete frame object join: %v", err)
 		}
-		first, err := sdkAMD64FrameNativeRecords(listings[0], original)
+		order := source.observation.Objects.Sources[ordinal].TextOrder
+		first, err := sdkAMD64FrameNativeRecordsForSource(listings[0], original, order)
 		if err != nil {
 			return err
 		}
-		second, err := sdkAMD64FrameNativeRecords(listings[1], mapped)
+		second, err := sdkAMD64FrameNativeRecordsForSource(listings[1], mapped, order)
 		if err != nil || !reflect.DeepEqual(first, second) {
 			return sdkASMDataContext("SDK-primary original/mapped complete native frame metadata differs: %v", err)
 		}

@@ -45,34 +45,8 @@ func asmDataProgramFingerprint(source []byte) (string, error) {
 }
 
 func joinASMSourceTexts(source []byte, packagePath string, member ASMDataMember) error {
-	statements, err := asmDataStatements(source)
-	if err != nil {
-		return err
-	}
-	var names []ASMDataAddressValue
-	for _, statement := range statements {
-		if statement[0].text != "TEXT" {
-			continue
-		}
-		operands := asmDataOperands(statement[1:])
-		if len(operands) != 2 && len(operands) != 3 {
-			return contextError("source TEXT declaration has an invalid operand inventory")
-		}
-		symbol, err := asmDataSymbol(operands[0], packagePath)
-		if err != nil || symbol.Addend != 0 {
-			return contextError("source TEXT declaration lacks its exact symbol/ABI")
-		}
-		names = append(names, symbol)
-	}
-	if len(names) != len(member.Texts) {
-		return contextError("source TEXT declaration inventory differs from the complete actual object")
-	}
-	for ordinal, symbol := range names {
-		if member.Texts[ordinal].Name != symbol.Name || member.Texts[ordinal].ABI != symbol.ABI {
-			return contextError("source TEXT symbol/ABI/ordinal differs from the exact original body")
-		}
-	}
-	return nil
+	_, err := ASMSourceTextOrder(source, packagePath, member)
+	return err
 }
 
 func asmDataStatements(source []byte) ([][]asmDataToken, error) {

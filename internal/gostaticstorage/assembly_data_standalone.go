@@ -5,8 +5,9 @@ import "strings"
 // AMD64AssemblyData is a complete standalone object/source observation. It is
 // not an SDK role or a certificate for storage, reads, addresses or native ABI.
 type AMD64AssemblyData struct {
-	Member  ASMDataMember
-	Layouts []ASMGlobalLayout
+	Member    ASMDataMember
+	Layouts   []ASMGlobalLayout
+	TextOrder []ASMSourceText
 }
 
 // ObserveAMD64AssemblyData reuses the same typed DATA grammar and complete
@@ -29,7 +30,8 @@ func ObserveAMD64AssemblyData(source, object, builtin []byte, packagePath, targe
 	if err != nil {
 		return AMD64AssemblyData{}, err
 	}
-	if err := joinASMSourceTexts(source, packagePath, result.Member); err != nil {
+	result.TextOrder, err = ASMSourceTextOrder(source, packagePath, result.Member)
+	if err != nil {
 		return AMD64AssemblyData{}, err
 	}
 	result.Layouts, err = joinASMDataLayouts(states, result.Member)

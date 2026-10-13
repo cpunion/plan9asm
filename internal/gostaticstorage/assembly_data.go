@@ -109,6 +109,7 @@ type ASMDataSourceObservation struct {
 	Layouts                        []ASMGlobalLayout
 	ExpandedLayouts                []ASMGlobalLayout
 	Original, Expanded             ASMDataMember
+	TextOrder                      []ASMSourceText
 }
 
 type SDKASMDataObservation struct {
@@ -286,10 +287,15 @@ func observeX86SDKASMData(request SDKASMDataObservationRequest, cpp bool) (*SDKA
 		if err != nil {
 			return nil, contextError(fmt.Sprintf("SDK DATA expanded source=%s: %v", source.Name, err))
 		}
-		if err := joinASMSourceTexts(originalGrammar, request.PackagePath, original); err != nil {
+		textOrder, err := ASMSourceTextOrder(originalGrammar, request.PackagePath, original)
+		if err != nil {
 			return nil, err
 		}
-		if err := joinASMSourceTexts(expandedGrammar, request.PackagePath, expanded); err != nil {
+		expandedOrder, err := ASMSourceTextOrder(expandedGrammar, request.PackagePath, expanded)
+		if err != nil || !reflect.DeepEqual(textOrder, expandedOrder) {
+			if err == nil {
+				err = contextError("original/expanded source TEXT physical associations differ")
+			}
 			return nil, err
 		}
 		layouts, err := joinASMDataLayouts(originalStates, original)
@@ -337,7 +343,7 @@ func observeX86SDKASMData(request SDKASMDataObservationRequest, cpp bool) (*SDKA
 			OriginalSHA256: digest(source.Original), ExpandedSHA256: digest(source.Expanded),
 			OriginalObjectSHA256: digest(source.OriginalObject), ExpandedObjectSHA256: digest(source.ExpandedObject),
 			OriginalProgramSHA256: originalProgram, ExpandedProgramSHA256: expandedProgram,
-			Layouts: layouts, ExpandedLayouts: expandedLayouts, Original: original, Expanded: expanded})
+			Layouts: layouts, ExpandedLayouts: expandedLayouts, Original: original, Expanded: expanded, TextOrder: textOrder})
 	}
 	return observation, nil
 }
