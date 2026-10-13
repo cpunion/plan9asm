@@ -17,21 +17,26 @@ type x86SDKLiteralAccess struct {
 	Maximum     int64
 	Width       int64
 	Address     bool
+	LowBits     *x86SDKLiteralLowBits
 }
 
 type x86SDKLiteralValue struct {
-	width   int64
-	minimum uint64
-	maximum uint64
-	symbol  string // A literal identity is never numerical register data.
-	bad     bool   // A partial write retains may-literal taint, not authority.
+	width                    int64
+	minimum                  uint64
+	maximum                  uint64
+	symbol                   string // A literal identity is never numerical register data.
+	bad                      bool   // A partial write retains may-literal taint, not authority.
+	lowMask, lowValue        uint64 // Only the guaranteed minimum's address bits.
+	hasMinimum               bool
+	bitsOnly, lowIndependent bool // Neither state is a dereferenceable origin.
 }
 
 type x86SDKLiteralState struct {
-	gp         [16]x86SDKLiteralValue
-	comparison int
-	constant   uint64
-	compared   bool
+	gp          [16]x86SDKLiteralValue
+	comparison  int
+	constant    uint64
+	compared    bool
+	opaqueFlags uint8 // May depend on uncovered address bits, not merely undefined.
 }
 
 // This is a path-sensitive, literal-only proof. It neither runs a caller proof
@@ -39,6 +44,10 @@ type x86SDKLiteralState struct {
 // future literal operation can be left to the independent whole-source result
 // proof; a cycle which could participate in literal use remains Context.
 func proveX86SDKLiteralAccesses(fn Func, sig FuncSig, arch string, literals map[string]int64) ([]x86SDKLiteralAccess, error) {
+	return proveX86SDKLiteralAccessesAtMinimum(fn, sig, arch, literals, nil)
+}
+
+func proveX86SDKLiteralAccessesAtMinimum(fn Func, sig FuncSig, arch string, literals map[string]int64, minima map[string]uint32) ([]x86SDKLiteralAccess, error) {
 	fail := func(reason string) ([]x86SDKLiteralAccess, error) {
 		return nil, numericalSBContext("private literal source proof: %s", reason)
 	}
@@ -154,8 +163,12 @@ func proveX86SDKLiteralAccesses(fn Func, sig FuncSig, arch string, literals map[
 		path[pc] = true
 		defer func() { path[pc] = false }()
 		ins := fn.Instrs[pc]
+		if minima != nil && state.opaqueFlags&x86SDKLiteralFlagReads(ins, arch) != 0 {
+			return numericalSBContext("private literal FLAG reader observes uncovered linked address bits: %s", ins.Raw)
+		}
 		if ins.Op == OpRET {
-			if arch == "amd64" && strings.HasSuffix(fn.Sym, "<ABIInternal>") && sig.Ret != Void && state.gp[0].symbol != "" {
+			if arch == "amd64" && strings.HasSuffix(fn.Sym, "<ABIInternal>") && sig.Ret != Void && state.gp[0].symbol != "" &&
+				!(minima != nil && sig.Ret == I1 && state.gp[0].lowIndependent) {
 				return numericalSBContext("private literal pointer escapes through the logical result")
 			}
 			return nil
@@ -236,8 +249,35 @@ func proveX86SDKLiteralAccesses(fn Func, sig FuncSig, arch string, literals map[
 				}
 				root, _, _ := x86ResultGP(ins.Args[1].Reg, word, arch)
 				state.gp[root] = x86SDKLiteralValue{symbol: form.symbol, minimum: uint64(minimum), maximum: uint64(maximum)}
+				if floor := minima[form.symbol]; floor != 0 {
+					state.gp[root].hasMinimum = true
+					state.gp[root].lowMask = uint64(floor - 1)
+					state.gp[root].lowValue = uint64(minimum) & uint64(floor-1)
+				}
 				if state.comparison == root {
 					state.compared = false
+				}
+				for _, target := range edges[pc] {
+					if err := walk(target, state); err != nil {
+						return err
+					}
+				}
+				return nil
+			}
+		}
+		if minima != nil {
+			lowBits, known, err := x86SDKLiteralLowBitStep(ins, &state, fn, sig, arch)
+			if err != nil {
+				return err
+			}
+			if known {
+				if lowBits != nil {
+					fact := x86SDKLiteralAccess{Function: sig.Name, Instruction: pc, Operand: 1, Original: ins,
+						Symbol: lowBits.Symbol, Width: lowBits.Bytes, LowBits: lowBits}
+					if previous, found := facts[pc]; found && !reflect.DeepEqual(previous, fact) {
+						return numericalSBContext("private literal low-bit operation has mixed path guarantees")
+					}
+					facts[pc] = fact
 				}
 				for _, target := range edges[pc] {
 					if err := walk(target, state); err != nil {
@@ -254,6 +294,9 @@ func proveX86SDKLiteralAccesses(fn Func, sig FuncSig, arch string, literals map[
 		if err := x86SDKLiteralTransfer(ins, &state, sig, arch, literalRead); err != nil {
 			return err
 		}
+		if minima != nil {
+			x86SDKLiteralIndependentFlagWrites(ins, &state, arch)
+		}
 		for _, target := range edges[pc] {
 			if err := walk(target, state); err != nil {
 				return err
@@ -266,7 +309,7 @@ func proveX86SDKLiteralAccesses(fn Func, sig FuncSig, arch string, literals map[
 	}
 	ordinals := make([]int, 0, len(facts))
 	for ordinal := range facts {
-		if !facts[ordinal].Address && nonliteral[ordinal] {
+		if !facts[ordinal].Address && facts[ordinal].LowBits == nil && nonliteral[ordinal] {
 			return fail("private literal read has an incoming/mixed origin on another feasible path")
 		}
 		ordinals = append(ordinals, ordinal)

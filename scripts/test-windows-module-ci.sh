@@ -4,7 +4,7 @@ set -euo pipefail
 module=${1:?root, plan9asm or plan9asmll required}
 phase=${2:?execute or complete required}
 case "$module" in
-  root) directory=.; parts=8; shards=32 ;;
+  root) directory=.; parts=16; shards=32 ;;
   plan9asm|plan9asmll) directory="cmd/$module"; parts=4; shards=8 ;;
   *) echo 'unknown Windows module' >&2; exit 1 ;;
 esac
@@ -15,7 +15,7 @@ case "$phase" in
       exit 1
     fi
     if [[ $3 == 0 ]]; then
-      if ! [[ $4 =~ ^[0-7]$ ]] || (( $4 >= parts )); then
+      if ! [[ $4 =~ ^([0-9]|[1-9][0-9])$ ]] || (( $4 >= parts )); then
         echo 'invalid Windows root partition' >&2
         exit 1
       fi

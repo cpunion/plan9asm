@@ -12,6 +12,10 @@ type x86SDKLiteralCertificate struct {
 }
 
 func (source *GoX86NumericalReadSource) bindSDKLiteralAccesses(file *File, sigs map[string]FuncSig, symbols map[string]string, arch string) ([]x86SDKLiteralAccess, error) {
+	return source.bindSDKLiteralAccessesAtMinimum(file, sigs, symbols, arch, nil)
+}
+
+func (source *GoX86NumericalReadSource) bindSDKLiteralAccessesAtMinimum(file *File, sigs map[string]FuncSig, symbols map[string]string, arch string, minimum *numericalSDKLiteralMinimumJoin) ([]x86SDKLiteralAccess, error) {
 	if source.literals == nil {
 		return nil, nil
 	}
@@ -33,7 +37,11 @@ func (source *GoX86NumericalReadSource) bindSDKLiteralAccesses(file *File, sigs 
 		if !candidate {
 			continue // Existing fixed-offset consumers retain their own byte proof.
 		}
-		facts, err := proveX86SDKLiteralAccesses(fn, sigs[symbols[fn.Sym]], arch, literals)
+		var floors map[string]uint32
+		if minimum != nil {
+			floors = minimum.Minima
+		}
+		facts, err := proveX86SDKLiteralAccessesWithMinima(fn, sigs[symbols[fn.Sym]], arch, literals, floors)
 		if err != nil {
 			return nil, err
 		}
@@ -95,10 +103,15 @@ func certifiedSDKLiteralAccess(ins Instr, arch string) (x86SDKLiteralAccess, boo
 			extent = int64(len(image.Initial))
 		}
 	}
-	if extent < 0 || fact.Width < 0 || fact.Width > extent || fact.Maximum > extent-fact.Width {
+	if extent < 0 || fact.Width < 0 || fact.LowBits == nil && (fact.Width > extent || fact.Maximum > extent-fact.Width) {
 		return x86SDKLiteralAccess{}, false
 	}
-	if fact.Address {
+	if fact.LowBits != nil {
+		if !cert.binding.literalMinimum.live() || fact.LowBits.Symbol != fact.Symbol ||
+			fact.Width != fact.LowBits.Bytes || fact.LowBits.Operation != ins.Op || !validSDKLiteralLowBitForm(ins, fact.LowBits, arch) {
+			return x86SDKLiteralAccess{}, false
+		}
+	} else if fact.Address {
 		form, valid := x86SDKLiteralOperandProperties(ins, fact.Operand, arch)
 		if !valid || !form.address || form.symbol != fact.Symbol || fact.Width != 0 {
 			return x86SDKLiteralAccess{}, false
@@ -141,6 +154,9 @@ func x86ResultSDKLiteralStep(ins Instr, state *x86ResultState, owned []bool, res
 	fact, valid := certifiedSDKLiteralAccess(ins, arch)
 	if !valid {
 		return false, true
+	}
+	if fact.LowBits != nil {
+		return x86ResultSDKLiteralLowBitStep(ins, fact.LowBits, state, arch), true
 	}
 	if fact.Address {
 		root, _, valid := x86ResultGP(ins.Args[1].Reg, x86ResultPointerWord(arch), arch)

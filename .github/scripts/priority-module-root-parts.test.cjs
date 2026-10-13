@@ -177,7 +177,7 @@ test('Windows modules retain disjoint scheduling and complete coverage readback'
 
   const native = fs.readFileSync(path.join(__dirname, '../workflows/windows-module.yml'), 'utf8');
   const roots = job('root-parts', native);
-  assert.match(roots, /inputs.module == 'root' && '\[0,1,2,3,4,5,6,7\]' \|\| '\[0,1,2,3\]'/);
+  assert.match(roots, /inputs.module == 'root' && '\[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15\]' \|\| '\[0,1,2,3\]'/);
   assert.match(roots, /execute 0 \$\{\{ matrix.part \}\}/);
   const others = job('other-owners', native);
   assert.match(others, /owner: \[1, 2\]/);
@@ -192,7 +192,10 @@ test('Windows modules retain disjoint scheduling and complete coverage readback'
   assert.match(complete, /needs: \[root-parts, other-owners\]/);
   assert.match(complete, /^    if: \$\{\{ !cancelled\(\) \}\}$/m);
   assert.doesNotMatch(complete, /merge-multiple:|pattern:/);
-  for (let part = 0; part < 8; part++) {
+  assert.deepEqual(Array.from(complete.matchAll(
+    /^      - name: Download root part (\d+)$/gm,
+  ), ([, part]) => Number(part)), Array.from({ length: 16 }, (_, part) => part));
+  for (let part = 0; part < 16; part++) {
     const download = step(complete, `Download root part ${part}`);
     assert.match(download, new RegExp(`-root-${part}$`, 'm'));
     assert.match(download, new RegExp(`owner-0000/part-${String(part).padStart(4, '0')}$`, 'm'));
@@ -228,18 +231,25 @@ fi
     encoding: 'utf8',
     timeout: 5000,
   });
-  for (const [module, parts, shards] of [['root', 8, 32], ['plan9asm', 4, 8], ['plan9asmll', 4, 8]]) {
-    for (const args of [['execute', '0', String(parts - 1)], ['execute', '1', '-1'], ['execute', '2', '-1']]) {
+  for (const [module, parts, shards] of [['root', 16, 32], ['plan9asm', 4, 8], ['plan9asmll', 4, 8]]) {
+    const rootRoles = Array.from({ length: parts }, (_, part) => ['execute', '0', String(part)]);
+    for (const args of [...rootRoles, ['execute', '1', '-1'], ['execute', '2', '-1']]) {
       const actual = run('-tags=byollvm', module, ...args);
       assert.equal(actual.status, 0, actual.stderr || String(actual.error));
       const fields = actual.stdout.trim().split('\n');
+      assert.ok(fields.includes(`-module-owner=${args[1]}`));
+      assert.ok(fields.includes(`-module-root-partition=${args[2]}`));
       for (const field of ['-module', '-timeout=30m', '-workers=2', '-tags=byollvm',
         `-shards=${shards}`, `-module-root-partitions=${parts}`, `-coverprofile=C:/fixture/coverage-windows-${module}.out`]) {
         assert.ok(fields.includes(field), `missing ${field}: ${actual.stdout}`);
       }
       assert.doesNotMatch(actual.stdout, /-run[=\s]|-skip[=\s]/);
     }
-    for (const args of [['execute', '0', String(parts)], ['execute', '0', '01'], ['execute', '1', '0'], ['complete', '0']]) {
+    const invalidParts = [String(parts), '-1', '-0', '+1', '01', '08', '1+1', '999999999999999999999'];
+    for (const args of [
+      ...invalidParts.map(part => ['execute', '0', part]),
+      ['execute', '1', '0'], ['complete', '0'],
+    ]) {
       const actual = run('-tags=byollvm', module, ...args);
       assert.equal(actual.status, 1, `${module}/${args}: ${actual.stderr}`);
       assert.doesNotMatch(actual.stdout, /SYNTHETIC_GO/);
