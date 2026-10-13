@@ -9,11 +9,15 @@ Let active frozen CI runs finish before publishing another batch.
 
 Fork [38441921522](https://github.com/cpunion/plan9asm/actions/runs/38441921522)
 tests frozen `19e74032` (contribution source `b3755a3e`, plus fork-only workflow).
-Both Windows ownership lanes and the selected native x86 suite pass. The three
+The run completed with 28/28 successful jobs. Both Windows ownership lanes and
+the selected native x86 suite pass. The three
 previous actual failed roots execute and pass before the complete modules:
 the 386 instruction fixture, sink return/teardown protocol and LLVM CLI platform
-query. Complete Windows modules are still running; do not claim complete CI or
-promote the 263 earlier host-inapplicable skips to execution. PR 40's published
+query. Complete Windows inventories and strict aggregates pass: main
+5,906 roots = 5,643 passed + 263 explicit platform skips; simple CLI 29/29 and
+LLVM CLI 262/262 roots pass. The latter retains one native ARM64-only child skip.
+These skips are not executed semantics. This verifies the frozen fork run, not
+the full contribution's Linux/race/stdlib/benchmark gates. PR 40's published
 head is still `24851df2`, not these staged fixes.
 
 At frozen `b3755a3e`, the complete local LLVM CLI passes in 862.415 seconds and
@@ -52,9 +56,29 @@ Windows. Full original chacha helper and split-stack functions remain present;
 their caller/entry/frame contracts are not bypassed. The integrated observer
 and new native bool roots still need the following frozen validation/CI batch.
 
+The complete `e6bf0bf6` CLI replay found a genuine namespace convergence
+regression: simple CLI 25/29 passed in 36.141 seconds; LLVM CLI 269/270 passed
+in 813.834 seconds. All five failed roots compare complete numerical/literal
+SDK selections. DATA queried the logical package but numerical capture/verify
+still queried `.`; the raw `Match` fields therefore genuinely differed.
+`21121e24` uses one logical selector for SDK capture, live verification and
+dependency graphs, keeping ordinary owned queries at `.` and retaining strict
+raw-field comparisons. Independent RED/GREEN and actual complete CRC32
+three-API/O0/O2 object tests pass in 64.683 seconds. Do not erase `Match` or
+rewrite either failed complete receipt.
+
+At `515cd1d2`, complete simple CLI passes in 195.264 seconds, the SDK numerical/
+literal/profile join class in 265.576 seconds, and portable Go 1.20 controls in
+2.694 seconds. All five actual previously failed CLI roots also pass their
+priority inventory; the following complete LLVM CLI replay is still running.
+The SDK-primary direct inventory now binds all root members and child-directory
+identities without treating child generators as selected source. Existing
+ordinary flat inventory, byte/member bounds and relative-include rejection stay
+unchanged.
+
 Inventory runs only on the server. Streaming ledger status and a complete
 five-minute incremental window have been verified before restoring catch-up;
-the trusted contiguous head advances from 2026-10-08T11:17:43Z to 11:22:43Z.
+the trusted contiguous head now advances through 2026-10-08T12:22:43Z.
 The requested historical cutoff remains 2025-10-01; subsequent hourly windows
 publish only after their complete scan. Real source failures remain retryable,
 not pass/skip. No local index/ledger scan is needed for translator work.
@@ -521,11 +545,12 @@ tools; later edits do not inherit a complete-head pass.
 
 ## Remaining work, in priority order
 
-1. Let 38441921522's complete Windows modules finish, verify their raw inventory
-   unions and repair any actual remaining leaf failures. Its three previous
-   failures already pass the priority gates. The current checkpoint records the
-   separate complete local CLI repair. Retain complete inventories, explicit
-   host-inapplicable classifications and unchanged thirty-minute budgets.
+1. Finish the frozen repaired LLVM CLI replay after the five real namespace
+   failures pass priority execution. Integrate only closed instruction/proof
+   families, rerun their affected joins, then batch the next fork push. Include
+   all five prior CLI roots, actual new native bool roots and SDK/profile
+   controls in explicit inventories before complete Windows modules. Retain
+   strict aggregates, platform classifications and thirty-minute budgets.
 2. Rerun affected complete gates and both CLIs, publish to the existing
    allowed-fork contribution ref, then inspect fresh CI. No upstream manual
    cancellation/rerun is authorized. The sixteen-part Linux race schedule
