@@ -347,7 +347,7 @@ func (source *GoX86SDKASMDataSource) verifyState(ctx context.Context) error {
 	// original command inventory while checking current actual graph bytes.
 	commands := source.observation.Commands
 	defer func() { source.observation.Commands = commands }()
-	raw, err := source.runCommand(ctx, "list", "-deps", "-compiled", "-export", "-json", "-mod=readonly", ".")
+	raw, err := source.runCommand(ctx, "list", "-deps", "-compiled", "-export", "-json", "-mod=readonly", source.request.PackagePath)
 	if err != nil {
 		return err
 	}

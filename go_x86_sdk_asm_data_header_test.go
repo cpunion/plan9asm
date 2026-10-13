@@ -2,6 +2,7 @@ package plan9asm
 
 import (
 	"errors"
+	"strings"
 	"testing"
 )
 
@@ -34,6 +35,28 @@ func TestGoX86SDKASMDataImportConfigNativePaths(t *testing.T) {
 		imports := map[string]goAMD64FrameSelection{path: {Export: "/cache/object.a"}}
 		if _, err := sdkASMDataImportConfig(selected, imports); !errors.Is(err, ErrProbeNeedsContext) {
 			t.Fatalf("invalid import path %q accepted: %v", path, err)
+		}
+	}
+}
+
+func TestGoX86SDKASMDataImportConfigResolvedSourceAliases(t *testing.T) {
+	selected := goAMD64FrameSelection{
+		Imports:   []string{"encoding/binary", "vendor/golang.org/x/crypto/internal/alias"},
+		ImportMap: map[string]string{"golang.org/x/crypto/internal/alias": "vendor/golang.org/x/crypto/internal/alias"},
+	}
+	imports := map[string]goAMD64FrameSelection{
+		"encoding/binary": {Export: "/cache/binary.a"},
+		"vendor/golang.org/x/crypto/internal/alias": {Export: "/cache/alias.a"},
+	}
+	config, err := sdkASMDataImportConfig(selected, imports)
+	if err != nil || !strings.Contains(string(config), "importmap golang.org/x/crypto/internal/alias=vendor/golang.org/x/crypto/internal/alias\n") ||
+		!strings.Contains(string(config), "packagefile vendor/golang.org/x/crypto/internal/alias=/cache/alias.a\n") {
+		t.Fatal("compiler lost its original source import after actual Go resolved the selected dependency", string(config), err)
+	}
+	for _, target := range []string{"missing/dependency", "bad\nnamespace", "bad=namespace"} {
+		selected.ImportMap["golang.org/x/crypto/internal/alias"] = target
+		if _, err := sdkASMDataImportConfig(selected, imports); !errors.Is(err, ErrProbeNeedsContext) {
+			t.Fatal("unobserved source import alias acquired a compiler route", target, err)
 		}
 	}
 }

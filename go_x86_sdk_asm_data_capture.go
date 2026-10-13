@@ -86,7 +86,7 @@ func (source *GoX86SDKASMDataSource) capture(ctx context.Context, provided map[s
 			return err
 		}
 	}
-	raw, err = source.run(ctx, "list", "-json", "-compiled", "-export", "-mod=readonly", ".")
+	raw, err = source.run(ctx, "list", "-json", "-compiled", "-export", "-mod=readonly", source.request.PackagePath)
 	if err != nil {
 		return err
 	}
@@ -118,7 +118,7 @@ func (source *GoX86SDKASMDataSource) capture(ctx context.Context, provided map[s
 	}
 	source.guard.selection = selected
 	source.observation.RawSelection = raw
-	graph, err := source.run(ctx, "list", "-deps", "-compiled", "-export", "-json", "-mod=readonly", ".")
+	graph, err := source.run(ctx, "list", "-deps", "-compiled", "-export", "-json", "-mod=readonly", source.request.PackagePath)
 	if err != nil {
 		return err
 	}
