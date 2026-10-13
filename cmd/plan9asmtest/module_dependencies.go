@@ -15,7 +15,7 @@ import (
 )
 
 var ciLLVM22Version = regexp.MustCompile(`(?im)(?:\bLLVM|\bclang) version 22(?:\.|$)|\bLLD 22(?:\.|$)`)
-var ciNodeVersion = regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+(?:-[A-Za-z0-9.-]+)?\n$`)
+var ciNodeVersion = regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+(?:-[A-Za-z0-9.-]+)?\r?\n$`)
 
 func validateModuleNodeEnvironment(process map[string]string) error {
 	for _, key := range []string{"NODE_OPTIONS", "NODE_PATH", "NODE_ICU_DATA"} {
