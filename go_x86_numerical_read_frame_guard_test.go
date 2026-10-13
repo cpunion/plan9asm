@@ -10,6 +10,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -46,6 +47,10 @@ type numericalFrameObserverCancelContext struct {
 	context.Context
 	cancel context.CancelFunc
 	once   sync.Once
+	method string
+	frame  *GoAMD64FrameSource
+	called atomic.Bool
+	locked atomic.Bool
 }
 
 func TestGoX86NumericalSBReadSourceCopyCannotBorrowGeneration(t *testing.T) {
@@ -82,12 +87,52 @@ func TestGoX86NumericalSBReadSourceCopyCannotBorrowGeneration(t *testing.T) {
 	}
 }
 
-func (ctx *numericalFrameObserverCancelContext) Err() error {
-	pc, _, _, valid := runtime.Caller(1)
-	if valid && strings.HasSuffix(runtime.FuncForPC(pc).Name(), "(*GoAMD64FrameSource).verifyFrameOnly") {
-		ctx.once.Do(ctx.cancel)
+func numericalFrameObserverRoute(owner string) bool {
+	// The public owner may sample through a private lifetime helper. Follow
+	// the complete route, including inlined frames, while retaining the exact
+	// observer role: an unrelated or outer numerical callback cannot trigger it.
+	var callers [32]uintptr
+	count := runtime.Callers(2, callers[:])
+	frames := runtime.CallersFrames(callers[:count])
+	for {
+		frame, more := frames.Next()
+		if strings.HasSuffix(frame.Function, owner) {
+			return true
+		}
+		if !more {
+			return false
+		}
 	}
+}
+
+func (ctx *numericalFrameObserverCancelContext) observe(method string) {
+	if method != ctx.method || !numericalFrameObserverRoute("(*GoAMD64FrameSource).verifyFrameOnly") {
+		return
+	}
+	ctx.once.Do(func() {
+		ctx.called.Store(true)
+		if !ctx.frame.mu.TryLock() {
+			ctx.locked.Store(true)
+		} else {
+			ctx.frame.mu.Unlock()
+		}
+		ctx.cancel()
+	})
+}
+
+func (ctx *numericalFrameObserverCancelContext) Err() error {
+	ctx.observe("Err")
 	return ctx.Context.Err()
+}
+
+func (ctx *numericalFrameObserverCancelContext) Deadline() (time.Time, bool) {
+	ctx.observe("Deadline")
+	return ctx.Context.Deadline()
+}
+
+func (ctx *numericalFrameObserverCancelContext) Done() <-chan struct{} {
+	ctx.observe("Done")
+	return ctx.Context.Done()
 }
 
 func TestGoX86NumericalSBReadFrameProducerCopiedFrameCannotBorrowGeneration(t *testing.T) {
@@ -114,21 +159,36 @@ func TestGoX86NumericalSBReadFrameProducerCopiedFrameCannotBorrowGeneration(t *t
 }
 
 func TestGoX86NumericalSBReadFrameProducerObserverCancellationCause(t *testing.T) {
-	ctx, pkg, request, _, bound, _, _ := numericalLocalFactory(t)
-	request.NumericalReads = bound.NumericalReads
-	frame, err := CaptureGoAMD64FrameSource(ctx, pkg, request)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer frame.Close()
-	inner, cancel := context.WithCancel(ctx)
-	defer cancel()
-	wrapped := &numericalFrameObserverCancelContext{Context: inner, cancel: cancel}
-	if err := frame.Verify(wrapped); !errors.Is(err, context.Canceled) || errors.Is(err, ErrProbeNeedsContext) {
-		t.Fatal("joined observer cancellation was relabeled as a source exclusion", err)
-	}
-	if !errors.Is(frame.Verify(ctx), ErrProbeNeedsContext) {
-		t.Fatal("fresh context revived the cancelled frame generation")
+	for _, method := range []string{"Err", "Deadline", "Done"} {
+		t.Run(method, func(t *testing.T) {
+			ctx, pkg, request, _, bound, _, _ := numericalLocalFactory(t)
+			request.NumericalReads = bound.NumericalReads
+			frame, err := CaptureGoAMD64FrameSource(ctx, pkg, request)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer frame.Close()
+			inner, cancel := context.WithCancel(ctx)
+			defer cancel()
+			wrapped := &numericalFrameObserverCancelContext{Context: inner, cancel: cancel, method: method, frame: frame}
+			if err := wrapped.Err(); err != nil {
+				t.Fatal("ordinary context sample was cancelled", err)
+			}
+			wrapped.Deadline()
+			wrapped.Done()
+			if wrapped.called.Load() {
+				t.Fatal("ordinary context samples reached an unrelated frame observer")
+			}
+			if err := frame.Verify(wrapped); !errors.Is(err, context.Canceled) || errors.Is(err, ErrProbeNeedsContext) {
+				t.Fatal("joined observer cancellation was relabeled as a source exclusion", err)
+			}
+			if !wrapped.called.Load() || wrapped.locked.Load() {
+				t.Fatal("actual inner observer callback was absent or sampled under the frame lock")
+			}
+			if !errors.Is(frame.Verify(ctx), ErrProbeNeedsContext) {
+				t.Fatal("fresh context revived the cancelled frame generation")
+			}
+		})
 	}
 }
 
@@ -136,23 +196,8 @@ func (ctx *numericalFrameReentryContext) Err() error {
 	ctx.mu.Lock()
 	callback := ctx.closeFrame
 	ctx.mu.Unlock()
-	if callback != nil {
-		// Verify dispatches to source-role-specific helpers. Observe the
-		// public owner's complete call route (including inlined frames), not
-		// the incidental helper that currently checks the context directly.
-		var callers [32]uintptr
-		count := runtime.Callers(2, callers[:])
-		frames := runtime.CallersFrames(callers[:count])
-		for {
-			frame, more := frames.Next()
-			if strings.HasSuffix(frame.Function, "(*GoX86NumericalReadSource).Verify") {
-				ctx.once.Do(callback)
-				break
-			}
-			if !more {
-				break
-			}
-		}
+	if callback != nil && numericalFrameObserverRoute("(*GoX86NumericalReadSource).Verify") {
+		ctx.once.Do(callback)
 	}
 	return ctx.Context.Err()
 }
