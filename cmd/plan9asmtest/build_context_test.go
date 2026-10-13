@@ -33,6 +33,7 @@ func TestRunnerInheritedBuildContextIsExplicitAndNarrow(t *testing.T) {
 		nil, {"-tags"}, {"-tags=foreign"}, {"-tags=byollvm,foreign"},
 		{"-tags=byollvm", "-tags=byollvm"}, {"-tags=byollvm", "-tags=foreign"},
 		{"-tags=byollvm", "-run=TestOne"}, {"-tags=byollvm", "-count=0"},
+		{"-gcflags", "-tags=byollvm"}, {"-ldflags", "-tags=byollvm"},
 	} {
 		if err := validateRunnerGoFlags("windows", "-tags=byollvm", flags); err == nil {
 			t.Fatalf("undeclared/conflicting/filtered build selection accepted: %v", flags)
