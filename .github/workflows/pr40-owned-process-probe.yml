@@ -18,6 +18,10 @@ jobs:
         with:
           go-version: ${{ matrix.go }}
           cache: false
+      - uses: ./.github/actions/setup-windows-llvm22
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
       - name: Real process-tree and exhaustive runner regressions
         shell: bash
         env:
