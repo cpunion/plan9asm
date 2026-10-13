@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
@@ -310,6 +311,8 @@ int main(int argc, char **argv) {
 	}
 }
 
+var x86GoPackedStoreFatalFault = regexp.MustCompile(`^fatal error: fault\n\n?\[signal 0xc000001d code=0x[0-9a-f]+ addr=0x[0-9a-f]+ pc=0x[0-9a-f]+\]\n`)
+
 func x86GoPackedStoreFaultDiagnostic(goos, name, output string) bool {
 	output = strings.ReplaceAll(output, "\r\n", "\n")
 	if strings.Contains(output, "\r") {
@@ -320,8 +323,9 @@ func x86GoPackedStoreFaultDiagnostic(goos, name, output string) bool {
 		// Current Go converts the native exception to sigpanic; older SDKs
 		// print the unhandled exception directly. Both must identify #UD,
 		// not an ordinary panic, access violation or just an exit status 2.
-		matched = strings.HasPrefix(output, "Exception 0xc000001d ") ||
-			strings.HasPrefix(output, "fatal error: fault\n\n[signal 0xc000001d code=")
+		// Go's fatal header can have either one newline or a separating
+		// blank line before the complete native signal record.
+		matched = strings.HasPrefix(output, "Exception 0xc000001d ") || x86GoPackedStoreFatalFault.MatchString(output)
 	}
 	if !matched {
 		return false
@@ -331,7 +335,12 @@ func x86GoPackedStoreFaultDiagnostic(goos, name, output string) bool {
 		if line == "main."+name+"()" && index+1 < len(lines) {
 			location := strings.ReplaceAll(lines[index+1], "\\", "/")
 			_, position, found := strings.Cut(location, "/fault_amd64.s:")
-			if found && len(position) > 0 && position[0] >= '1' && position[0] <= '9' {
+			fields := strings.Fields(position)
+			if !found || len(fields) == 0 {
+				continue
+			}
+			lineNumber, err := strconv.ParseUint(fields[0], 10, 31)
+			if err == nil && lineNumber > 0 {
 				return true
 			}
 		}
@@ -349,13 +358,22 @@ func TestX86GoPackedStoreFaultDiagnostic(t *testing.T) {
 		{"Unix", "linux", "SIGILL: illegal instruction\nPC=0x456\n" + stack, true},
 		{"Windows exception", "windows", "Exception 0xc000001d 0x0 0x0 0x456\n" + stack, true},
 		{"Windows sigpanic", "windows", modern + stack, true},
+		{"Windows native sigpanic", "windows", strings.Replace(modern, "fault\n\n", "fault\n", 1) + stack, true},
 		{"Windows native newlines", "windows", strings.ReplaceAll(modern+stack, "\n", "\r\n"), true},
+		{"Windows native sigpanic CRLF", "windows", strings.ReplaceAll(strings.Replace(modern, "fault\n\n", "fault\n", 1)+stack, "\n", "\r\n"), true},
+		{"extra fatal blank line", "windows", strings.Replace(modern, "fault\n\n", "fault\n\n\n", 1) + stack, false},
+		{"malformed signal record", "windows", strings.Replace(modern, " pc=0x456]", " pc=unobserved]", 1) + stack, false},
+		{"unterminated signal record", "windows", strings.Replace(modern, "0x456]", "0x456", 1) + stack, false},
+		{"missing fault address", "windows", strings.Replace(modern, " addr=0x0", "", 1) + stack, false},
 		{"ordinary panic", "windows", "panic: Exception 0xc000001d\n" + stack, false},
 		{"different signal", "windows", strings.ReplaceAll(modern+stack, "0xc000001d", "0xc0000005"), false},
 		{"partial exception code", "windows", "Exception 0xc000001d0\n" + stack, false},
 		{"missing tested frame", "windows", modern, false},
 		{"wrong tested frame", "windows", modern + strings.ReplaceAll(stack, "faultVMOVAPDX", "faultOther"), false},
 		{"wrong source", "windows", modern + strings.ReplaceAll(stack, "fault_amd64.s", "main.go"), false},
+		{"malformed source position", "windows", modern + strings.ReplaceAll(stack, ".s:2 ", ".s:2invalid "), false},
+		{"zero source position", "windows", modern + strings.ReplaceAll(stack, ".s:2 ", ".s:0 "), false},
+		{"bare native carriage return", "windows", modern + strings.ReplaceAll(stack, "fp=", "\rfp="), false},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			if got := x86GoPackedStoreFaultDiagnostic(test.goos, "faultVMOVAPDX", test.output); got != test.valid {
