@@ -5,6 +5,44 @@ worktrees. Inspect status, worktrees and remotes. Push only to an allowed fork;
 keep the contribution draft until current-head CI, review and coverage pass.
 Let active frozen CI runs finish before publishing another batch.
 
+## Current checkpoint: 2026-10-14
+
+Fork [38441921522](https://github.com/cpunion/plan9asm/actions/runs/38441921522)
+tests frozen `19e74032` (contribution source `b3755a3e`, plus fork-only workflow).
+Both Windows ownership lanes and the selected native x86 suite pass. The three
+previous actual failed roots execute and pass before the complete modules:
+the 386 instruction fixture, sink return/teardown protocol and LLVM CLI platform
+query. Complete Windows modules are still running; do not claim complete CI or
+promote the 263 earlier host-inapplicable skips to execution. PR 40's published
+head is still `24851df2`, not these staged fixes.
+
+At frozen `b3755a3e`, the complete local LLVM CLI passes in 862.415 seconds and
+the complete new SDK literal-alignment producer's race cohort passes in 440.062
+seconds. `4818b84c` selects the actual Darwin SDK for independent LLVM 22 C
+oracles; the earlier 899.925-second missing-SDK failure remains failed.
+The official complete Go 1.20.14 SDK also passes all six existing alignment
+roots (five architectures, no skips) in 1.922 seconds. Its original wasm assets
+are required; the downloaded-module SDK's missing-asset failure remains failed.
+
+`b3755a3e` observes minimum alignment of uniquely retained original SDK literals
+through the complete original archive graph and ordinary Go linker. It grants
+neither numeric addresses nor read/call permission. `9e7879f2` preserves the
+SDK vendor namespace/import aliases and compacts consecutive CPP position
+markers within unchanged budgets. The complete untouched chacha source retains
+all three TEXTs; this source observation is not translation or execution success.
+An independent alignment regression also reproduces `go list runtime .` using
+the vendor directory's unrelated namespace. Both capture and live verification
+now query the original logical package path. The genuine empty-main link still
+rejects unretained literals; the focused regression passes in 7.542 seconds.
+These later source repairs are not in the active frozen CI run.
+
+Inventory runs only on the server. Streaming ledger status and a complete
+five-minute incremental window have been verified before restoring catch-up;
+the trusted contiguous head advances from 2026-10-08T11:17:43Z to 11:22:43Z.
+The requested historical cutoff remains 2025-10-01; subsequent hourly windows
+publish only after their complete scan. Real source failures remain retryable,
+not pass/skip. No local index/ledger scan is needed for translator work.
+
 ## Scope and completed CI checkpoint
 
 External scanning, ledgers and compatibility batches moved to Draft
@@ -279,12 +317,14 @@ slow process teardown and supplies immediate continuation markers through both
 original-Go and LLVM C drivers. Five complete sink/protocol repetitions pass
 in 39.605 seconds; Go 1.20 and Go 1.27 race counterparts pass in 8.947/10.092
 seconds. The observation window and direct-child exit checks are unchanged.
-Complete native confirmation of all three root repairs is still required.
+Complete native confirmation of all three root repairs passes the priority gates
+in 38441921522; its complete-module validation is still in progress.
 The complete local LLVM CLI retains a separate infrastructure failure after
 899.925 seconds: two native ARM64 C oracles select the Homebrew clang default
 configuration's absent SDK. Explicit CGO flags and SDKROOT do not fix those
-direct C commands. Keep that receipt failed while actual Darwin SDK arguments
-are repaired; never fall back from LLVM 22 or modify global tool configuration.
+direct C commands. Keep that receipt failed; the shared actual-SDK repair and
+subsequent complete pass are recorded in the current checkpoint above. Never
+fall back from LLVM 22 or modify global tool configuration.
 The fresh five-target benchmark at `3f437f3a` remains 164/184, 20 failed and zero
 N/A/unattempted. Build is nine seconds and target total 123 seconds, within the
 unchanged 300/900-second budgets. Its updated failures still expose actual SDK
@@ -465,12 +505,11 @@ tools; later edits do not inherit a complete-head pass.
 
 ## Remaining work, in priority order
 
-1. Verify the three actual root repairs from completed 38429537721 on the allowed
-   fork, prioritizing those inventoried roots before the complete Windows modules.
-   Its new native MOVQ alias roots pass; the previous failed receipts remain
-   failed until the following run executes the repairs. Retain complete inventories
-   and unchanged thirty-minute budgets. Repair the independent Darwin native C
-   tool configuration before replaying the complete local LLVM CLI.
+1. Let 38441921522's complete Windows modules finish, verify their raw inventory
+   unions and repair any actual remaining leaf failures. Its three previous
+   failures already pass the priority gates. The current checkpoint records the
+   separate complete local CLI repair. Retain complete inventories, explicit
+   host-inapplicable classifications and unchanged thirty-minute budgets.
 2. Rerun affected complete gates and both CLIs, publish to the existing
    allowed-fork contribution ref, then inspect fresh CI. No upstream manual
    cancellation/rerun is authorized. The sixteen-part Linux race schedule
