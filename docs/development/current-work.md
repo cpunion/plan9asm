@@ -266,8 +266,30 @@ one failed root: its old cost-query fixture still labels Darwin unsupported.
 `c90920ed` independently reproduces that failure locally, adds Darwin/Windows
 positive controls and keeps FreeBSD and unavailable Darwin/386 negative controls;
 the complete focused SDK-numerical group passes in 0.608 seconds. This repair
-is not in the active frozen run. Preserve its native failed partition and local
-RED/GREEN logs; wait for the remaining Windows main-root owners before publishing.
+is not in that frozen run. It finished with 23 successful jobs and five failed
+jobs: three actual failed roots and two correctly failed module aggregates.
+The complete main-root inventory is 5,896: 5,631 passed, two failed, 263
+host-inapplicable skips and zero incomplete. Raw partitions remain under
+`windows-complete-38429537721-all/`; do not promote their skipped or failed roots.
+`3f3b7dbe` corrects the old 386 fixture's Go-rejected `MOVQ M0,AX` to the actual
+MOVL dword transfer and a dword result. Actual Go accepts MOVL and rejects MOVQ
+and both source aliases; the affected complete family passes Go 1.27/1.20 in
+33.503/28.205 seconds. `33027aed` reproduces sink-return misclassification during
+slow process teardown and supplies immediate continuation markers through both
+original-Go and LLVM C drivers. Five complete sink/protocol repetitions pass
+in 39.605 seconds; Go 1.20 and Go 1.27 race counterparts pass in 8.947/10.092
+seconds. The observation window and direct-child exit checks are unchanged.
+Complete native confirmation of all three root repairs is still required.
+The complete local LLVM CLI retains a separate infrastructure failure after
+899.925 seconds: two native ARM64 C oracles select the Homebrew clang default
+configuration's absent SDK. Explicit CGO flags and SDKROOT do not fix those
+direct C commands. Keep that receipt failed while actual Darwin SDK arguments
+are repaired; never fall back from LLVM 22 or modify global tool configuration.
+The fresh five-target benchmark at `3f437f3a` remains 164/184, 20 failed and zero
+N/A/unattempted. Build is nine seconds and target total 123 seconds, within the
+unchanged 300/900-second budgets. Its updated failures still expose actual SDK
+linked literal addresses, runtime/frame contracts and the fixed-local SDK role;
+`benchmark-platform-3f437f3a/` is a failed report, not current-head completion.
 Ownership logs are
 `windows-owned-process-*-0428ee36.log`, under the report directory below.
 
@@ -443,11 +465,12 @@ tools; later edits do not inherit a complete-head pass.
 
 ## Remaining work, in priority order
 
-1. Finish collecting frozen 38429537721, repair every actual failure and verify
-   the next integrated batch on the allowed fork. Its new native MOVQ alias
-   roots pass, but the stale LLVM CLI fixture is still a recorded native failure
-   until the following run executes the repair. Retain complete inventories and
-   unchanged thirty-minute budgets; older 38419176385 is not current-head evidence.
+1. Verify the three actual root repairs from completed 38429537721 on the allowed
+   fork, prioritizing those inventoried roots before the complete Windows modules.
+   Its new native MOVQ alias roots pass; the previous failed receipts remain
+   failed until the following run executes the repairs. Retain complete inventories
+   and unchanged thirty-minute budgets. Repair the independent Darwin native C
+   tool configuration before replaying the complete local LLVM CLI.
 2. Rerun affected complete gates and both CLIs, publish to the existing
    allowed-fork contribution ref, then inspect fresh CI. No upstream manual
    cancellation/rerun is authorized. The sixteen-part Linux race schedule
