@@ -14,6 +14,15 @@ import (
 )
 
 func TestRunOneTargetSDKFixedLocalPreservesActualDefaultProfile(t *testing.T) {
+	runSDKFixedLocalDefaultProfile(t, false)
+}
+
+func TestRunOneTargetSDKFixedLocalCanonicalCommandPaths(t *testing.T) {
+	runSDKFixedLocalDefaultProfile(t, true)
+}
+
+func runSDKFixedLocalDefaultProfile(t *testing.T, commandPaths bool) {
+	t.Helper()
 	for _, profile := range []string{"off", "original-config"} {
 		t.Run(profile, func(t *testing.T) {
 			for key, value := range map[string]string{
@@ -43,6 +52,21 @@ func TestRunOneTargetSDKFixedLocalPreservesActualDefaultProfile(t *testing.T) {
 				}
 			}
 			t.Setenv("GOENV", configPath)
+			if commandPaths {
+				parent := t.TempDir()
+				for _, key := range []string{"GOCACHE", "GOMODCACHE", "GOPATH", "TMPDIR", "GOTMPDIR"} {
+					// Unlike filepath.Join, this preserves the original command
+					// spelling until the real load-boundary resolver observes it.
+					path := parent + string(filepath.Separator) + "." + string(filepath.Separator) + strings.ToLower(key)
+					if runtime.GOOS == "windows" {
+						path = filepath.ToSlash(path)
+					}
+					if err := os.MkdirAll(path, 0700); err != nil {
+						t.Fatal(err)
+					}
+					t.Setenv(key, path)
+				}
+			}
 			const path = "vendor/golang.org/x/crypto/chacha20poly1305"
 			input := filepath.Join(runtime.GOROOT(), "src", filepath.FromSlash(path), "chacha20poly1305_amd64.s")
 			original, err := os.ReadFile(input)
