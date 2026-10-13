@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"sort"
 	"strings"
 
@@ -68,8 +69,11 @@ func captureCIScope(ctx context.Context, cfg config, stem string) (ciScope, erro
 	if err != nil || !os.SameFile(actualDriver, pathInfo) {
 		return scope, fmt.Errorf("nested Go test helpers must resolve the same actual SDK driver: %v", err)
 	}
-	if os.Getenv("GOENV") != "off" || os.Getenv("GOWORK") != "off" || os.Getenv("GOTOOLCHAIN") != "local" || environment["GOFLAGS"] != "" {
-		return scope, fmt.Errorf("CI scope requires explicit GOENV=off, GOWORK=off, GOTOOLCHAIN=local and empty GOFLAGS")
+	if os.Getenv("GOENV") != "off" || os.Getenv("GOWORK") != "off" || os.Getenv("GOTOOLCHAIN") != "local" {
+		return scope, fmt.Errorf("CI scope requires explicit GOENV=off, GOWORK=off and GOTOOLCHAIN=local")
+	}
+	if err := validateRunnerGoFlags(runtime.GOOS, environment["GOFLAGS"], cfg.Flags); err != nil {
+		return scope, err
 	}
 	toolDir := environment["GOTOOLDIR"]
 	root := environment["GOROOT"]
