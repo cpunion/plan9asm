@@ -35,6 +35,7 @@ type GoX86NumericalReadBinding struct {
 	declarations    map[string]goAMD64FrameDeclaration
 	reads           []numericalSBReadFact
 	literalAccesses []x86SDKLiteralAccess
+	literalMinimum  *numericalSDKLiteralMinimumJoin
 	capabilities    map[string]numericalSignatureCapabilities
 	seal            [32]byte
 }
@@ -56,6 +57,10 @@ func numericalCapabilities(sigs map[string]FuncSig) map[string]numericalSignatur
 // original source and actual native reads. It returns independent Options;
 // declarations alone, JSON, pointer types and a numerical owner cannot bind.
 func (source *GoX86NumericalReadSource) BindNumericalReads(ctx context.Context, pkg GoPackage, file *File, options Options) (Options, error) {
+	return source.bindNumericalReads(ctx, pkg, file, options, nil)
+}
+
+func (source *GoX86NumericalReadSource) bindNumericalReads(ctx context.Context, pkg GoPackage, file *File, options Options, minimum *GoX86SDKLiteralAlignment) (Options, error) {
 	if carrier := options.ARM64ByteCarrierSource; carrier != nil {
 		source.revokeNumericalSource()
 		carrier.revokeCarrier()
@@ -154,7 +159,11 @@ func (source *GoX86NumericalReadSource) BindNumericalReads(ctx context.Context, 
 			}
 		}
 	}
-	literalAccesses, err := source.bindSDKLiteralAccesses(file, sigs, symbols, arch)
+	joinedMinimum, err := captureNumericalSDKLiteralMinimum(ctx, source, minimum)
+	if err != nil {
+		return Options{}, err
+	}
+	literalAccesses, err := source.bindSDKLiteralAccessesAtMinimum(file, sigs, symbols, arch, joinedMinimum)
 	if err != nil {
 		return Options{}, err
 	}
@@ -162,7 +171,7 @@ func (source *GoX86NumericalReadSource) BindNumericalReads(ctx context.Context, 
 	binding := &GoX86NumericalReadBinding{source: source, originalSource: source, context: ctx, originalContext: ctx, packageInput: pkg,
 		originalTypes: pkg.Types, originalImports: numericalImportIdentities(pkg.Imports), file: actual,
 		options: options, symbols: symbols, declarations: declarations, reads: source.readFacts(), literalAccesses: literalAccesses,
-		capabilities: numericalCapabilities(sigs)}
+		capabilities: numericalCapabilities(sigs), literalMinimum: joinedMinimum}
 	binding.originalBinding = binding
 	binding.seal, err = binding.digest()
 	if err != nil {
@@ -276,8 +285,9 @@ func (binding *GoX86NumericalReadBinding) digest() ([32]byte, error) {
 		Symbols      map[string]string
 		Reads        []numericalSBReadFact
 		Literals     []x86SDKLiteralAccess
+		Minimum      *numericalSDKLiteralMinimumJoin
 	}{binding.file, binding.options.TargetTriple, binding.options.Goarch, binding.options.WASMABI, binding.options.X87Mode,
-		binding.options.AnnotateSource, binding.options.Sigs, binding.options.X86TailGroups, binding.symbols, binding.reads, binding.literalAccesses})
+		binding.options.AnnotateSource, binding.options.Sigs, binding.options.X86TailGroups, binding.symbols, binding.reads, binding.literalAccesses, binding.literalMinimum})
 	return sha256.Sum256(data), err
 }
 
@@ -307,6 +317,11 @@ func (binding *GoX86NumericalReadBinding) verify() error {
 	}
 	if err := binding.source.Verify(binding.context); err != nil {
 		return err
+	}
+	if binding.literalMinimum != nil {
+		if err := binding.literalMinimum.verify(binding.context, binding.source); err != nil {
+			return fail(err)
+		}
 	}
 	sum, err := binding.digest()
 	if err != nil || sum != binding.seal || !numericalSameCapabilities(binding.options.Sigs, binding.capabilities) {

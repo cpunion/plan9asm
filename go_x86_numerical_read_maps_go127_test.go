@@ -12,7 +12,17 @@ import (
 
 func numericalSDKMapsReadCapture(t *testing.T, arch, name string) (*GoX86NumericalReadSource, error) {
 	t.Helper()
-	ctx, request := sdkASMDataRequest(t, arch, "internal/runtime/maps")
+	goos, selectedArch, target := "linux", arch, "linux/"+arch
+	if os, architecture, paired := strings.Cut(arch, "/"); paired {
+		goos, selectedArch, target = os, architecture, arch
+	}
+	ctx, request := sdkASMDataRequest(t, selectedArch, "internal/runtime/maps")
+	request.Target = target
+	for index, pair := range request.Environment {
+		if strings.HasPrefix(pair, "GOOS=") {
+			request.Environment[index] = "GOOS=" + goos
+		}
+	}
 	owner, err := CaptureGoNumericalStorageOwner(ctx, GoNumericalStorageCaptureRequest{
 		GoBinary: request.GoBinary, Directory: request.Directory, PackagePath: request.PackagePath, Target: request.Target,
 		Environment: request.Environment, SDKGlobals: true,

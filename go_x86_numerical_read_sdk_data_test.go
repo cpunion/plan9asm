@@ -76,7 +76,10 @@ func numericalSDKLiteralPackage(t *testing.T, source *GoX86SDKASMDataSource, nam
 		}
 		return os.Open(selected.Export)
 	})
-	arch := strings.TrimPrefix(source.request.Target, "linux/")
+	_, arch, paired := strings.Cut(source.request.Target, "/")
+	if !paired || numericalSDKTargetTriple(source.request.Target) == "" {
+		t.Fatal("missing actual SDK target", source.request.Target)
+	}
 	sizes := types.SizesFor("gc", arch)
 	typed, err := (&types.Config{Sizes: sizes, Importer: imports, GoVersion: "go1.27"}).Check(source.request.PackagePath, fset, syntax, nil)
 	if err != nil {
@@ -102,13 +105,10 @@ func numericalSDKLiteralPackage(t *testing.T, source *GoX86SDKASMDataSource, nam
 	if err != nil {
 		t.Fatal(err)
 	}
-	options := Options{Goarch: arch, TargetTriple: "x86_64-unknown-linux-gnu",
+	options := Options{Goarch: arch, TargetTriple: numericalSDKTargetTriple(source.request.Target),
 		Sigs: make(map[string]FuncSig), ResolveSym: func(symbol string) string {
 			return numericalNativeName(goTextSymbolForResolution(symbol), pkg.Path)
 		}}
-	if arch == "386" {
-		options.TargetTriple = "i386-unknown-linux-gnu"
-	}
 	for _, fn := range file.Funcs {
 		name := strings.TrimPrefix(goStripABISuffix(fn.Sym), "·")
 		declaration, ok := typed.Scope().Lookup(name).(*types.Func)
