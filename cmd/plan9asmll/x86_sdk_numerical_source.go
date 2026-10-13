@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"go/types"
@@ -13,6 +12,7 @@ import (
 
 	"github.com/xgo-dev/plan9asm"
 	"github.com/xgo-dev/plan9asm/gotoolprofile"
+	"github.com/xgo-dev/plan9asm/internal/sdkfrontend"
 	"github.com/xgo-dev/plan9asm/internal/sourcepath"
 	"golang.org/x/tools/go/packages"
 )
@@ -40,11 +40,7 @@ func (err *x86SDKNumericalRetryError) Unwrap() error { return err.cause }
 // suffixes. Ordinary CLI $local aliases remain unchanged outside this exact
 // observed complete-file route. This mapping grants no storage/read identity.
 func (source *x86SDKNumericalCLISource) resolve(symbol string) string {
-	symbol = strings.ReplaceAll(strings.ReplaceAll(symbol, "∕", "/"), "·", ".")
-	if strings.HasPrefix(symbol, ".") {
-		return source.pkg.PkgPath + symbol
-	}
-	return symbol
+	return sdkfrontend.Resolve(source.pkg.PkgPath, symbol)
 }
 
 // Deferred source guards may join another error after translation. Such a
@@ -97,28 +93,7 @@ func (source *x86SDKNumericalCLISource) verify(ctx context.Context) error {
 // supported SDK owner producer, rather than a package-name exemption, checks
 // the complete actual internal/cpu variable and every native read separately.
 func x86SDKCPUOwnerRequested(pkg *packages.Package, file *plan9asm.File, target string) bool {
-	if pkg == nil || pkg.Module != nil || file == nil || file.Arch != plan9asm.ArchAMD64 ||
-		(target != "linux/amd64" && target != "linux/386") {
-		return false
-	}
-	resolve := resolveSymFunc(pkg.PkgPath)
-	for _, fn := range file.Funcs {
-		for _, instruction := range fn.Instrs {
-			for _, operand := range instruction.Args {
-				if operand.Kind != plan9asm.OpSym || !strings.HasSuffix(operand.Sym, "(SB)") {
-					continue
-				}
-				name := strings.TrimSuffix(operand.Sym, "(SB)")
-				if offset := strings.IndexAny(name, "+-"); offset >= 0 {
-					name = name[:offset]
-				}
-				if resolve(name) == "internal/cpu.X86" {
-					return true
-				}
-			}
-		}
-	}
-	return false
+	return sdkfrontend.CPUOwnerRequested(sdkPackageView(pkg), file, target)
 }
 
 func captureX86SDKNumericalSource(pkg *packages.Package, file *plan9asm.File, asm, target string,
@@ -212,56 +187,15 @@ func captureX86SDKNumericalSource(pkg *packages.Package, file *plan9asm.File, as
 	// complete declaration syntax required by the independent numerical binder.
 	pkg.Syntax = syntax
 	source.goPackage = plan9asm.GoPackage{Path: pkg.PkgPath, Types: pkg.Types, Syntax: syntax, Imports: imports}
-	owner, err := plan9asm.CaptureGoNumericalStorageOwner(ctx, plan9asm.GoNumericalStorageCaptureRequest{
-		GoBinary: binary, Directory: filepath.Join(rootPath, "src", "internal", "cpu"),
-		PackagePath: "internal/cpu", Target: target, Environment: environment, SDKCPU: true,
-		Variables: []plan9asm.GoNumericalStorageReference{{PackagePath: "internal/cpu", Name: "X86"}},
-	})
+	actual, observed, err := sdkfrontend.Capture(ctx, sdkfrontend.CaptureRequest{
+		GoBinary: binary, Root: rootPath, Directory: directory, PackagePath: pkg.PkgPath,
+		AssemblyFile: actualAsm, Target: target, Environment: environment,
+	}, file)
 	if err != nil {
 		return nil, nil, err
 	}
-	source.cleanup = append(source.cleanup, func() error {
-		owner.Close()
-		return nil
-	})
-	request := plan9asm.GoX86NumericalReadCaptureRequest{
-		GoBinary: binary, Directory: directory, PackagePath: pkg.PkgPath, AssemblyFile: filepath.Base(actualAsm),
-		Target: target, Environment: environment, Owners: []*plan9asm.GoNumericalStorageOwner{owner},
-	}
-	if len(file.Data)+len(file.Globl) != 0 {
-		data, err := plan9asm.CaptureGoX86SDKASMDataSource(ctx, plan9asm.GoX86SDKASMDataCaptureRequest{
-			GoBinary: binary, Directory: directory, PackagePath: pkg.PkgPath, Target: target, Environment: environment,
-		})
-		if err != nil {
-			return nil, nil, err
-		}
-		source.cleanup = append(source.cleanup, data.Close)
-		literal, err := plan9asm.CaptureGoX86SDKReadonlyLiteralDataOwner(ctx, data)
-		if err != nil {
-			return nil, nil, err
-		}
-		source.cleanup = append(source.cleanup, literal.Close)
-		request.ReadonlyLiterals = literal
-	}
-	source.numerical, err = plan9asm.CaptureGoX86SDKNumericalReadSource(ctx, request)
-	if err != nil {
-		return nil, nil, err
-	}
-	source.cleanup = append(source.cleanup, source.numerical.Close)
-	raw, err := source.numerical.Readback(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-	var observed struct {
-		CPP plan9asm.AssemblyCPPObservation
-	}
-	if err := json.Unmarshal(raw, &observed); err != nil {
-		return nil, nil, err
-	}
-	actual, err := plan9asm.Parse(plan9asm.ArchAMD64, observed.CPP.Output)
-	if err != nil {
-		return nil, nil, err
-	}
+	source.numerical = observed.Numerical
+	source.cleanup = append(source.cleanup, observed.Close)
 	if err := source.verify(ctx); err != nil {
 		return nil, nil, err
 	}
