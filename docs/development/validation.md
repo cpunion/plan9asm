@@ -53,10 +53,11 @@ first-party tests without sampling. Its actual inventory, disjoint ownership,
 raw outcomes and strict complete-module aggregate remain required. Owner 0 owns
 the root package, owner 1 `gotoolprofile`, owner 2 all remaining packages.
 Ordinary suites may use `-workers 2`; one collector owns report/coverage writes.
-Root scheduling parts do not change the test denominator. Windows keeps its
-complete direct main-module role with `-count=1`; each nested CLI has a separate
-complete job and coverage result so root failure cannot suppress it. The
-main-module direct-suite timeout still needs partitioning, not test removal.
+Root scheduling parts do not change the test denominator. Windows keeps all
+three modules independent: eight root parts for the main module, four per CLI,
+and one profile/rest owner each. Every command retains the thirty-minute budget;
+only complete cross-owner verification publishes the module's coverage. The
+Windows driver binds inherited and explicit `-tags=byollvm` without fallback.
 
 ```sh
 go run ./cmd/plan9asmtest -module -out _out/module-suite \
