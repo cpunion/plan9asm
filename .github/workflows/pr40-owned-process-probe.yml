@@ -161,6 +161,28 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: '22'
+      - name: Check shared command-path identities
+        if: ${{ matrix.lane == 'llvm' }}
+        shell: bash
+        working-directory: internal/sdkfrontend
+        env:
+          GOTOOLCHAIN: local
+          GOFLAGS: ''
+          GOENV: 'off'
+          GOWORK: 'off'
+        run: |
+          set -euo pipefail
+          report="$GITHUB_WORKSPACE/_out/windows-sdk-priority"
+          mkdir -p "$report"
+          roots='TestOrdinaryEnvironmentActualCommandPathIdentity'
+          roots+='|TestOrdinaryEnvironmentCommandPathRejectionPreservesInputs'
+          roots+='|TestOrdinaryEnvironmentRetainsGOPATHComponentSelection'
+          go test -tags=byollvm . -list "^($roots)$" > "$report/shared-path-inventory.log"
+          for root in ${roots//|/ }; do
+            grep -Fx "$root" "$report/shared-path-inventory.log"
+          done
+          go test -tags=byollvm . -run "^($roots)$" -count=1 -timeout=5m -v \
+            2>&1 | tee "$report/shared-path-tests.log"
       - name: Check exact SDK priority inventory (${{ matrix.lane }})
         shell: bash
         working-directory: ${{ matrix.module }}
