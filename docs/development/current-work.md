@@ -156,7 +156,12 @@ namespace fixture regression stays failed in its earlier receipt.
 frontends. Integrated public CRC32/CGO1 and complete original nosimd maps CLI,
 metadata and LLVM 22 O0/O2 tests passed in 125.158 seconds; root vet passed.
 Full memhash amd64/386 private addresses, indexed reads and caller/pointer/loop
-contracts remain unresolved. A fresh complete benchmark is still required.
+contracts remain unresolved. The frozen `05a664d7` benchmark replay now passes
+164/184 files, with 20 failures and zero N/A/unattempted: 29/33, 49/55, 27/30,
+40/47 and 19/19 for 386, amd64, arm, arm64 and wasm. Build time is two seconds;
+the target total is 82 seconds, within the unchanged 300/900-second budgets.
+This is one additional complete original nosimd file, not a complete benchmark
+pass. Reports remain in `benchmark-sdk-05a664d7/` under the ignored report root.
 `a1eb6dc2` independently binds actual Go TLS direct-NOP source rewrites; no
 native thread, TLS address, g or entry permission is created. Integrated
 three-API objects, unknown-state/callback and owned-command guards passed in
@@ -164,7 +169,14 @@ three-API objects, unknown-state/callback and owned-command guards passed in
 vets and tracked Go formatting passed before the scalar-entry follow-up; final
 root vet passed after it. Native Ubuntu TLS byte parity is required in the fork
 probe workflow, alongside all seven repaired memory/precision fault roots.
-Native Windows and native Linux confirmation of this batch remain pending.
+The batch is published only on the allowed fork probe ref as `094fac7b`.
+[38407134879](https://github.com/cpunion/plan9asm/actions/runs/38407134879)
+passes the complete selected native Linux oracle suite in 25.032 seconds,
+including all seven repaired fault/precision roots and the actual original-Go/
+LLVM TLS byte comparison in 5.570 seconds. Both Windows ownership SDK lanes
+also pass; the complete Windows modules are still running. Preserve the native
+artifact as `native-x86-38407134879/native.log`; selected native roots do not
+certify the complete main module, race gate or upstream PR head.
 Ownership logs are
 `windows-owned-process-*-0428ee36.log`, under the report directory below.
 
@@ -357,8 +369,10 @@ tools; later edits do not inherit a complete-head pass.
    numerical-source binding. Do not turn the missing binding into initialized
    bytes or a skip. Other runtime/frame contracts remain; missing generated CPP
    headers stay unresolved, never ignored/no-op macros.
-4. The 21 benchmark failures still require runtime/reflect entry, TLS,
-   hidden-register, caller-storage or source contracts. Dynamic reflect frames
+4. The 20 benchmark failures still require runtime/reflect entry, TLS,
+   hidden-register, caller-storage or source contracts. SDK runtime storage
+   capture must retain the actual source-inventory failure instead of replacing
+   it with a generic missing-module diagnostic. Dynamic reflect frames
    cannot be inferred from `func()`. ARM64 result-tail bytes are observable by
    assembly callers. Maps AES mutable-global storage remains separate from its
    repaired shuffle effects. Do not force CGO_ENABLED=0 in ordinary loading:
