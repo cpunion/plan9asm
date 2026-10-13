@@ -55,6 +55,36 @@ func TestSDKAMD64OriginalFrameConfigExactByteBoundary(t *testing.T) {
 	}
 }
 
+func TestSDKAMD64OriginalFrameConfigGuardEagerIdentity(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "env")
+	data := []byte("GOPROXY=off\n")
+	if err := os.WriteFile(path, data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	path, err := sourcepath.Resolve(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := &GoX86SDKASMDataSource{guard: newGoOriginalInputGuard(GoAMD64FrameCaptureRequest{})}
+	if err := source.captureSDKFrameConfig(path); err != nil {
+		t.Fatal(err)
+	}
+	if err := source.verifyDirectories(); err != nil {
+		t.Fatal("unchanged eager config identity", err)
+	}
+	// Capture retained an open-handle ID. Byte equality cannot substitute for
+	// that identity when the next verification observes a new file at the path.
+	if err := os.Rename(path, path+".original"); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := source.verifyDirectories(); !errors.Is(err, ErrProbeNeedsContext) {
+		t.Fatal("equal-byte replacement acquired retained original config identity", err)
+	}
+}
+
 func TestSDKAMD64OriginalFrameProfileRejectsUnboundRoles(t *testing.T) {
 	for _, bad := range []string{"GOENV=", "GOENV=relative", "CGO_ENABLED=", "CGO_ENABLED=2", "GOFLAGS=-overlay=foreign.json",
 		"GOTOOLCHAIN=auto", "GOWORK=workspace", "GOEXPERIMENT=foreign", "GOPACKAGESDRIVER=foreign"} {

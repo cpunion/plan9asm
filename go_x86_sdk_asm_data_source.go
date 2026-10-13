@@ -207,7 +207,7 @@ func (source *GoX86SDKASMDataSource) retainDirectory(directory string) error {
 func (source *GoX86SDKASMDataSource) verifyDirectories() error {
 	if source.originalConfig != "" {
 		resolved, err := sourcepath.Resolve(source.originalConfig)
-		info, statErr := os.Lstat(source.originalConfig)
+		info, statErr := sourcepath.Lstat(source.originalConfig)
 		if err != nil || resolved != source.originalConfig || statErr != nil || !info.Mode().IsRegular() || info.Size() > sdkAMD64FrameConfigBytes ||
 			source.originalConfigID == nil || !os.SameFile(source.originalConfigID, info) {
 			return sdkASMDataContext("SDK-primary original GOENV identity changed")

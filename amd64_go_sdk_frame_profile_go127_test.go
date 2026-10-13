@@ -70,6 +70,9 @@ func TestSDKAMD64OriginalFrameProfileActualCompleteSource(t *testing.T) {
 	if err := copy.Verify(ctx); !errors.Is(err, ErrProbeNeedsContext) {
 		t.Fatal("copied SDK-primary observation acquired original lifetime", err)
 	}
+	if data, err := copy.Readback(ctx); !errors.Is(err, ErrProbeNeedsContext) || data != nil {
+		t.Fatal("copied SDK-primary observation published original source/frame readback", err)
+	}
 	if err := copy.Close(); !errors.Is(err, ErrProbeNeedsContext) {
 		t.Fatal("copied SDK-primary observation removed original artifacts", err)
 	}
