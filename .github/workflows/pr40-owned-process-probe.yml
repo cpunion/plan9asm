@@ -99,7 +99,7 @@ jobs:
           grep -Fx "$root" ../../_out/windows-ownership/sdk-query-inventory.log
           go test -tags=byollvm . -run "^$root$" -count=1 -timeout=2m -v \
             2>&1 | tee ../../_out/windows-ownership/sdk-query.log
-      - name: Check the previous native packed-store failure first
+      - name: Check the previous native root failures first
         shell: bash
         env:
           GOTOOLCHAIN: local
@@ -108,7 +108,13 @@ jobs:
           set -euo pipefail
           mkdir -p _out/windows-ownership
           roots='TestCrossLinuxRuntimeMatrixX86PackedZeroMemoryStoreFault|TestX86GoPackedStoreFaultDiagnostic'
-          go test -tags=byollvm . -run "^($roots)$" -count=1 -timeout=5m -v 2>&1 | tee _out/windows-ownership/packed-store.log
+          roots+='|TestTranslate386InstructionFamilies|TestRuntimeOracleSinkRejectsMissingEntryAndEarlyExit'
+          go test -tags=byollvm . -list "^($roots)$" > _out/windows-ownership/priority-inventory.log
+          for root in ${roots//|/ }; do
+            grep -Fx "$root" _out/windows-ownership/priority-inventory.log
+          done
+          go test -tags=byollvm . -run "^($roots)$" -count=1 -timeout=5m -v \
+            2>&1 | tee _out/windows-ownership/priority-roots.log
       - name: Real process-tree and exhaustive runner regressions
         shell: bash
         env:
