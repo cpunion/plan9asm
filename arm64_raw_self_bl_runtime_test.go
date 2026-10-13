@@ -109,6 +109,7 @@ func main() {
 	if os.Getenv("SELF_BL_SINK") == "1" {
 		fmt.Println("entered")
 		terminal(&input[0], &output[0])
+		fmt.Println("returned")
 		panic("sink returned")
 	}
 	seed := uint64(0x0123456789abcdef)
@@ -185,6 +186,8 @@ int main(void) {
     puts("entered");
     fflush(stdout);
     terminal(input, output);
+    puts("returned");
+    fflush(stdout);
     return 99;
   }
   const unsigned offsets[] = {0, 1, 3, 7, 17};

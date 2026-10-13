@@ -16,6 +16,8 @@ import (
 // Startup and observation have independent bounds. Only a consumed caller-ready
 // marker starts the complete nonreturning window; it does not identify an ASM PC.
 // Parent expiry or an exit without our direct-child kill witness never passes.
+// Drivers must publish a continuation marker immediately if the target returns:
+// process teardown can outlive the window and is not target nonreturning behavior.
 func runtimeOracleObserveSink(parent context.Context, command func(context.Context) *exec.Cmd, startup, window time.Duration) ([]byte, error) {
 	if parent == nil || command == nil || startup <= 0 || window <= 0 {
 		return nil, fmt.Errorf("sink requires its parent, command and positive bounds")
@@ -201,22 +203,38 @@ func TestRuntimeOracleSinkFixture(t *testing.T) {
 		time.Sleep(5 * time.Second)
 		os.Exit(0)
 	}
+	if mode == "early-exit" {
+		os.Exit(0)
+	}
 	if mode == "bad-marker" {
 		fmt.Println("not entered")
 	} else if mode == "split-marker" {
 		fmt.Print("enter")
 		time.Sleep(10 * time.Millisecond)
 		fmt.Print("ed\n")
+	} else if mode == "returned" || mode == "returned-delayed-exit" {
+		// Publish the completed control path in one write. Neither a slow
+		// Windows process teardown nor scheduling after readiness may turn
+		// this completed target into a successful nonreturning observation.
+		fmt.Print("entered\nreturned\n")
+	} else if mode == "trapped" {
+		fmt.Print("entered\ntrapped\n")
 	} else {
 		fmt.Println("entered")
 	}
 	switch mode {
 	case "returned":
 		os.Exit(0)
+	case "returned-delayed-exit":
+		// Simulate teardown after the observed call has returned. Process
+		// liveness alone cannot distinguish this from the target's sink.
+		time.Sleep(300 * time.Millisecond)
+		os.Exit(0)
 	case "trapped":
 		os.Exit(23)
 	case "late-return":
 		time.Sleep(30 * time.Millisecond)
+		fmt.Println("returned")
 		os.Exit(0)
 	case "extra-output":
 		fmt.Fprintln(os.Stderr, "unexpected continuation")
@@ -231,13 +249,18 @@ func TestRuntimeOracleSinkFixture(t *testing.T) {
 }
 
 func TestRuntimeOracleSinkRejectsMissingEntryAndEarlyExit(t *testing.T) {
-	for _, mode := range []string{"missing", "bad-marker", "returned", "trapped", "late-return", "extra-output", "overflow"} {
+	for _, mode := range []string{"missing", "bad-marker", "early-exit", "returned", "returned-delayed-exit", "trapped", "late-return", "extra-output", "overflow"} {
 		t.Run(mode, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 			defer cancel()
 			output, err := runtimeOracleObserveSink(ctx, runtimeOracleSinkFixtureCommand(mode), time.Second, 100*time.Millisecond)
 			if err == nil {
 				t.Fatalf("invalid sink accepted: %s output=%q", mode, output)
+			}
+			if mode == "returned" || mode == "returned-delayed-exit" || mode == "late-return" {
+				if string(output) != "entered\nreturned\n" || ctx.Err() != nil {
+					t.Fatalf("return witness was lost or replaced by infrastructure failure: %v output=%q", err, output)
+				}
 			}
 			if mode == "extra-output" && !strings.Contains(string(output), "unexpected continuation") {
 				t.Fatalf("sink failure lost its output: %q", output)
