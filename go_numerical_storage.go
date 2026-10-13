@@ -18,6 +18,9 @@ type GoNumericalStorageCaptureRequest struct {
 	// SDKCPU requests the separate exact original Go1.27.1 internal/cpu role.
 	// It does not admit another Standard or Module=nil package.
 	SDKCPU bool
+	// SDKGlobals requests independently selected original SDK Go variables.
+	// It is separate from the exact CPU producer and creates no read permission.
+	SDKGlobals bool
 }
 
 // GoNumericalStorageOwner is an opaque live typed data observation. It is not
@@ -36,7 +39,12 @@ func CaptureGoNumericalStorageOwner(ctx context.Context, request GoNumericalStor
 	}
 	var observation *gostaticstorage.Observation
 	var err error
-	if request.SDKCPU {
+	if request.SDKCPU && request.SDKGlobals {
+		return nil, numericalSBContext("storage producer roles are mutually exclusive")
+	}
+	if request.SDKGlobals {
+		observation, err = gostaticstorage.CaptureSDKGlobals(ctx, actual)
+	} else if request.SDKCPU {
 		observation, err = gostaticstorage.CaptureSDKCPU(ctx, actual)
 	} else {
 		observation, err = gostaticstorage.Capture(ctx, actual)

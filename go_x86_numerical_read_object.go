@@ -20,6 +20,7 @@ type x86NumericalSBReadSpec struct {
 	sourceBytes, gpBytes int64
 	compare, extension   bool
 	rejectedOn386        bool
+	vector               x86NumericalSBVectorKind
 }
 
 type x86NumericalSBReadForm struct {
@@ -46,6 +47,9 @@ var x86NumericalSBReadSpecs = func() map[Op]x86NumericalSBReadSpec {
 }()
 
 func x86NumericalSBReadProperties(ins Instr, arch string) (x86NumericalSBReadForm, bool) {
+	if form, known := x86NumericalSBVectorReadProperties(ins, arch); known {
+		return form, true
+	}
 	spec, known := x86NumericalSBReadSpecs[ins.Op]
 	if !known || len(ins.Args) != 2 || arch != "amd64" && arch != "386" || arch == "386" && spec.rejectedOn386 {
 		return x86NumericalSBReadForm{}, false
@@ -123,7 +127,7 @@ func numericalSameInstruction(a, b Instr, pkg, arch string) bool {
 	}
 	for i, operand := range a.Args {
 		other := b.Args[i]
-		if operand.Kind == OpReg && other.Kind == OpReg {
+		if operand.Kind == OpReg && other.Kind == OpReg && form.spec.vector == x86NumericalSBScalar {
 			width := form.spec.gpBytes
 			root, valid := amd64FullRegBase(operand.Reg)
 			otherRoot, otherValid := amd64FullRegBase(other.Reg)
@@ -245,6 +249,9 @@ func numericalInstructionRelocation(text gostaticstorage.TextRecord, pc int64, n
 		modrm := prefix + 1
 		if code[prefix] == 0x0f {
 			modrm++
+			if prefix+1 < len(code) && (code[prefix+1] == 0x38 || code[prefix+1] == 0x3a) {
+				modrm++
+			}
 		}
 		if modrm >= len(code) || code[modrm]&0xc7 != 5 {
 			return r, 0, numericalSBContext("unbound absolute scalar ModRM")

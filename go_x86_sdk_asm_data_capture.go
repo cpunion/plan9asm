@@ -36,7 +36,7 @@ func (source *GoX86SDKASMDataSource) capture(ctx context.Context, provided map[s
 		return err
 	}
 	raw, err := source.run(ctx, "env", "-json", "GOROOT", "GOTOOLDIR", "GOVERSION", "GOOS", "GOARCH",
-		"GOAMD64", "GO386", "GOFLAGS", "GOEXPERIMENT", "GOCACHE", "GOMODCACHE")
+		"GOAMD64", "GO386", "GOFLAGS", "GOEXPERIMENT", "GOCACHE", "GOMODCACHE", "CGO_ENABLED")
 	if err != nil {
 		return err
 	}
@@ -46,7 +46,8 @@ func (source *GoX86SDKASMDataSource) capture(ctx context.Context, provided map[s
 		filepath.Join(env["GOROOT"], "bin", gotoolchain.HostExecutable("go")) != source.request.GoBinary ||
 		env["GOAMD64"] != "v1" || env["GOARCH"] == "386" && env["GO386"] != "sse2" ||
 		env["GOFLAGS"] != "" || env["GOEXPERIMENT"] != "" ||
-		env["GOCACHE"] != provided["GOCACHE"] || env["GOMODCACHE"] != provided["GOMODCACHE"] {
+		env["GOCACHE"] != provided["GOCACHE"] || env["GOMODCACHE"] != provided["GOMODCACHE"] ||
+		env["CGO_ENABLED"] != provided["CGO_ENABLED"] {
 		return sdkASMDataContext("actual SDK/compiler/profile is outside this registered observation")
 	}
 	source.guard.env = env
