@@ -40,9 +40,9 @@ func TestCrossLinuxRuntimeMatrixX86RawReturnSourceAddressNumerical(t *testing.T)
 				}
 				fmt.Fprintf(&bytes, "0x%02x", value)
 			}
+			oracle.WriteString(x86OriginalSysVDeclaration("uint64_t", "original"+name, "uint64_t,uint64_t"))
 			fmt.Fprintf(&oracle, `
 extern uint64_t %[1]s(uint64_t,uint64_t);
-extern uint64_t original%[1]s(uint64_t,uint64_t);
 __asm__(".text\n.globl " LABEL("original%[1]s") "\n"
         LABEL("original%[1]s") ":\n"
         "movq %%rdi,%%rax\nmovq %%rsi,%%rcx\n.byte %[2]s\n");

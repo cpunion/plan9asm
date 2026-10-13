@@ -58,12 +58,25 @@ uploadable coverage. Tests are integrated as `ab72f4c0`/`df29b71e`.
 Local Unix dependency regressions passed at `25173f37` in 184.667 seconds.
 Formal Windows workflow partitioning is integrated in `3a48e00d`. Complete
 native [38380889962](https://github.com/cpunion/plan9asm/actions/runs/38380889962)
-has passed the simple CLI and its coverage aggregate; root and LLVM CLI results
-are still being collected. Root failures expose Windows lazy file identity,
+finished with 17 successful and 10 failed jobs. Both complete CLIs and their
+coverage aggregates passed; all eight main-root parts and the profile owner
+failed, so the main-module aggregate correctly failed. Root failures expose Windows lazy file identity,
 ordinary x86 source-position separators, a fixture's missing host executable
 suffix and the fixed-local Windows GNU target join. Preserve its raw failures
 under `windows-complete-38380889962`; they are not coverage passes. Keep the
 fork diagnostic workflow out of the contribution branch.
+`4838d597` captures Windows file identity from an open handle, normalizes only
+actual object-source separators and adds the Windows GNU fixed-local join.
+Its focused Go 1.27 source regressions passed in 68.195 seconds; Go 1.20 portable
+checks and the Windows helper cross-build passed. Native confirmation is pending.
+The following test-oracle batch fixes host executable suffixes, SysV byte-code
+calls, logical LLVM aggregate transport, Bash paths and bounded wasm startup
+environments. Three masked-memory families reuse native Windows/Unix guard pages.
+Local portable/wasm/source regressions passed in 46.326 seconds and the Linux
+container's three guard-page families passed in 13.772 seconds. The broader
+container runtime run remains failed: original MADD/PACK/timestamp and scalar
+comparison observations disagree on AF under emulation. Preserve the failed
+receipt and require native x86 confirmation; do not weaken flag checks.
 Current-head simple-CLI Linux CRC32 replay also remains failed at the CPU-feature
 SB comparison; its log is `simple-cli-crc32-linux-0428ee36.log`. Ownership logs
 are `windows-owned-process-*-0428ee36.log`, under the report directory below.

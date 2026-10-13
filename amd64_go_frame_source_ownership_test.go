@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/xgo-dev/plan9asm/internal/sourcepath"
 )
 
 func TestGoAMD64FrameSourceCloseRejectsReplacedOwnedDirectory(t *testing.T) {
@@ -16,7 +18,7 @@ func TestGoAMD64FrameSourceCloseRejectsReplacedOwnedDirectory(t *testing.T) {
 	request.Environment = append(request.Environment, "TMPDIR="+temporary, "GOTMPDIR="+temporary)
 	source := requireGoAMD64FrameCapture(t, pkg, request)
 	owned := source.owned
-	original, err := os.Stat(owned)
+	original, err := sourcepath.Lstat(owned)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -29,7 +31,7 @@ func TestGoAMD64FrameSourceCloseRejectsReplacedOwnedDirectory(t *testing.T) {
 	if err := os.Mkdir(owned, 0700); err != nil {
 		t.Fatal(err)
 	}
-	replacement, err := os.Stat(owned)
+	replacement, err := sourcepath.Lstat(owned)
 	if err != nil || os.SameFile(original, replacement) {
 		t.Fatalf("fixture did not replace directory identity: %v", err)
 	}

@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/xgo-dev/llvm"
+	"github.com/xgo-dev/plan9asm/internal/gotoolchain"
 )
 
 // Portable compile control for the unchanged native CI reference, not an
@@ -28,7 +29,7 @@ func TestX86Timestamp386OriginalNativeReferenceCompiles(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	executable := filepath.Join(dir, "original-go")
+	executable := filepath.Join(dir, gotoolchain.HostExecutable("original-go"))
 	command := exec.Command(filepath.Join(runtime.GOROOT(), "bin", "go"), "build", "-p=2", "-o", executable, ".")
 	command.Dir = dir
 	command.Env = append(os.Environ(), "GOOS=linux", "GOARCH=386", "CGO_ENABLED=0",

@@ -231,21 +231,18 @@ func TestCrossLinuxRuntimeMatrixX86PackedAverageInactiveMemory(t *testing.T) {
 	// Unlike a post-load select, an E4.nb masked read cannot touch the guard
 	// page. With mask 1 only the first byte/word is accessible; mask 0 has no
 	// accessible source bytes. Full virtual FP spans are tested separately.
-	const main = `#include <sys/mman.h>
+	const main = x86TestGuardPagesC + `
+#ifndef _WIN32
 #include <sys/resource.h>
-#include <unistd.h>
+#endif
 int main(void) {
+#ifndef _WIN32
   struct rlimit core = {0, 0};
   if (setrlimit(RLIMIT_CORE, &core)) {
     return 9;
   }
-  long size = sysconf(_SC_PAGESIZE);
-  if (size <= 0) {
-    return 10;
-  }
-  uint8_t *page =
-      mmap(0, (size_t)size * 2, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON, -1, 0);
-  if (page == MAP_FAILED || mprotect(page + size, (size_t)size, PROT_NONE)) {
+#endif
+  if (setup_guard()) {
     return 11;
   }
 
@@ -254,7 +251,7 @@ int main(void) {
   for (unsigned row = 0; row < sizeof(cases) / sizeof(cases[0]); row++) {
     for (int active = 0; active < 2; active++) {
       memset(out, 0xc3, 80);
-      uint8_t *a = page + size - (active ? cases[row].bytes : 0);
+      uint8_t *a = guard + page - (active ? cases[row].bytes : 0);
       if (active) {
         memset(a, 0xff, (size_t)cases[row].bytes);
       }
@@ -280,7 +277,7 @@ int main(void) {
       }
     }
   }
-  if (munmap(page, (size_t)size * 2)) {
+  if (free_guard()) {
     return 14;
   }
   puts("inactive guard-page reads suppressed");

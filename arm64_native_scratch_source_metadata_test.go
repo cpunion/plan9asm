@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"testing"
+
+	"github.com/xgo-dev/plan9asm/internal/sourcepath"
 )
 
 func TestARM64NativeScratchObjectSourceMetadataRequiresCapturedPhysicalInput(t *testing.T) {
@@ -66,7 +68,11 @@ func TestARM64NativeScratchBuiltinObjectVersionMetadataIsNotABIAdmission(t *test
 	// This unit reads the actual selected SDK table. It deliberately has no
 	// live capture, source selection, native body or declaration permission.
 	source := &GoARM64ScratchSource{inputs: make(map[string][32]byte)}
-	if err := source.captureBuiltinObjectVersions(runtime.GOROOT()); err != nil {
+	root, err := sourcepath.Resolve(runtime.GOROOT())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := source.captureBuiltinObjectVersions(root); err != nil {
 		t.Fatal(err)
 	}
 	if actual := source.originalObjectCallTarget("runtime.memmove<1>"); actual != "runtime.memmove" {

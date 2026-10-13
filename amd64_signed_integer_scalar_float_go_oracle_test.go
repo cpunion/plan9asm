@@ -117,7 +117,7 @@ func TestCrossLinuxRuntimeMatrixX86SignedIntegerScalarFloatTranslatedFPFields(t 
 	if err != nil {
 		t.Fatal(err)
 	}
-	var declarations, checks strings.Builder
+	var declarations, checks, wrappers strings.Builder
 	for _, op := range []string{"CVTSL2SS", "CVTSL2SD", "CVTSQ2SS", "CVTSQ2SD", "VCVTSI2SSL", "VCVTSI2SDL", "VCVTSI2SSQ", "VCVTSI2SDQ"} {
 		sourceBits, resultBits := 32, 32
 		if strings.Contains(op, "Q") {
@@ -127,18 +127,40 @@ func TestCrossLinuxRuntimeMatrixX86SignedIntegerScalarFloatTranslatedFPFields(t 
 			resultBits = 64
 		}
 		name := strings.ToLower(op)
-		fmt.Fprintf(&declarations, "typedef struct {uint64_t value;uint32_t flags;} result_%s;extern result_%s %s(uint8_t,uint8_t,uint8_t,uint8_t,uint8_t,uint8_t,uint8_t,uint8_t,uint32_t);\n", name, name, name)
+		// LLVM's logical multi-result aggregate is not C's struct-return
+		// ABI (notably Win64's hidden sret pointer). Keep that call entirely
+		// inside LLVM, crossing into C only through scalar/pointer arguments.
+		fmt.Fprintf(&declarations, "extern void observe_%s(uint64_t*,uint32_t*,uint64_t,uint32_t);\n", name)
+		fmt.Fprintf(&wrappers, "define void @observe_%s(ptr %%value, ptr %%flags, i64 %%input, i32 %%csr) {\nentry:\n", name)
+		var arguments []string
+		for index := 0; index < 8; index++ {
+			fmt.Fprintf(&wrappers, "  %%shift%d = lshr i64 %%input, %d\n", index, index*8)
+			fmt.Fprintf(&wrappers, "  %%byte%d = trunc i64 %%shift%d to i8\n", index, index)
+			arguments = append(arguments, fmt.Sprintf("i8 %%byte%d", index))
+		}
+		arguments = append(arguments, "i32 %csr")
+		fmt.Fprintf(&wrappers, "  %%result = call {i64, i32} @%s(%s)\n", name, strings.Join(arguments, ", "))
+		wrappers.WriteString(`  %v = extractvalue {i64, i32} %result, 0
+  %f = extractvalue {i64, i32} %result, 1
+  store i64 %v, ptr %value
+  store i32 %f, ptr %flags
+  ret void
+}
+`)
 		fmt.Fprintf(&checks, `for(unsigned sample=0;sample<256;sample++)for(unsigned mode=0;mode<4;mode++){
  uint64_t input=UINT64_C(0xd31733a6287fbbc3)*sample+UINT64_C(0x1000001);unsigned csr=0x9fc5|(mode<<13),before,after;
  __asm__ volatile("stmxcsr %%0":"=m"(before));
  uint64_t want=sse_convert(input,%d,%d,csr);unsigned wantCSR=sse_csr;
- result_%s got=%s(input,input>>8,input>>16,input>>24,input>>32,input>>40,input>>48,input>>56,csr);
+ struct {uint64_t before,value,after;} result={UINT64_C(0x123456789abcdef),0,UINT64_C(0xfedcba987654321)};
+ struct {uint32_t before,value,after;} flags={0x12345678,0,0x87654321};
+ observe_%s(&result.value,&flags.value,input,csr);
  __asm__ volatile("stmxcsr %%0":"=m"(after));
- if(got.value!=want||got.flags!=wantCSR||after!=before){fprintf(stderr,"FP %s input=%%llx got=%%llx want=%%llx flags=%%x want=%%x after=%%x before=%%x\n",(unsigned long long)input,(unsigned long long)got.value,(unsigned long long)want,got.flags,wantCSR,after,before);return 1;}
+ if(result.before!=UINT64_C(0x123456789abcdef)||result.after!=UINT64_C(0xfedcba987654321)||flags.before!=0x12345678||flags.after!=0x87654321)return 2;
+ if(result.value!=want||flags.value!=wantCSR||after!=before){fprintf(stderr,"FP %s input=%%llx got=%%llx want=%%llx flags=%%x want=%%x after=%%x before=%%x\n",(unsigned long long)input,(unsigned long long)result.value,(unsigned long long)want,flags.value,wantCSR,after,before);return 1;}
 }
-`, sourceBits, resultBits, name, name, name)
+`, sourceBits, resultBits, name, name)
 	}
-	compileAndRunRuntimeTestForTarget(t, llc, clang, "signed-conversion-fp", triple, x86SignedIntegerFloatOptimize(t, ir), x86SignedIntegerFloatSSEOracle+declarations.String()+"int main(void){"+checks.String()+"return 0;}\n", prefix)
+	compileAndRunRuntimeTestForTarget(t, llc, clang, "signed-conversion-fp", triple, x86SignedIntegerFloatOptimize(t, ir+wrappers.String()), x86SignedIntegerFloatSSEOracle+declarations.String()+"int main(void){"+checks.String()+"return 0;}\n", prefix)
 }
 
 func TestX86SignedIntegerScalarFloatMode32PreservesNativeMXCSRInstruction(t *testing.T) {

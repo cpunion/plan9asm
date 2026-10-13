@@ -46,7 +46,8 @@ func TestCrossLinuxRuntimeMatrixX86ScalarCompareFlags(t *testing.T) {
 				symbol = "_" + symbol
 			}
 			fmt.Fprintf(&native, "__asm__(%q);\n", ".text\n.globl "+symbol+"\n"+symbol+":\n.byte "+strings.Join(bytes, ",")+"\n")
-			fmt.Fprintf(&prototypes, "extern uint64_t %s(uint8_t*,uint64_t),%s(uint8_t*,uint64_t);\n", name, original)
+			fmt.Fprintf(&prototypes, "extern uint64_t %s(uint8_t*,uint64_t);\n", name)
+			prototypes.WriteString(x86OriginalSysVDeclaration("uint64_t", original, "uint8_t*,uint64_t"))
 			fmt.Fprintf(&pairs, "{%s,%s},\n", original, name)
 			count++
 		}
@@ -56,9 +57,9 @@ func TestCrossLinuxRuntimeMatrixX86ScalarCompareFlags(t *testing.T) {
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
-` + prototypes.String() + native.String() + `
+` + prototypes.String() + native.String() + x86OriginalSysVPointer("uint64_t", "original_program", "uint8_t*,uint64_t") + `
 typedef uint64_t (*program)(uint8_t*,uint64_t);
-static const struct { program original,translated; } pairs[]={
+static const struct { original_program original; program translated; } pairs[]={
 ` + pairs.String() + `};
 int main(void) {
     const uint64_t patterns[]={0,1,15,16,127,128,255,256,32767,32768,65535,65536,

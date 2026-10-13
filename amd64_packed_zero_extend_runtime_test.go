@@ -78,19 +78,11 @@ static int checkExtend(
             }
             if (result[0] != 0xc3 || result[73] != 0xc3 || result[65] != 1 || result[66] != 0) return 1;
         }
-        const long pageSize = sysconf(_SC_PAGESIZE);
-        if (pageSize <= 0) return 1;
-        uint8_t *pages = mmap(NULL, (size_t)pageSize * 2, PROT_READ | PROT_WRITE,
-                              MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-        if (pages == MAP_FAILED) return 1;
-        if (mprotect(pages + pageSize, (size_t)pageSize, PROT_NONE)) {
-            munmap(pages, (size_t)pageSize * 2);
-            return 1;
-        }
+        if (setup_guard()) return 1;
         // An unmasked source uses its shrinking native tuple width, not a
         // complete X/Y allocation. A masked source needs one active element.
         unsigned sourceBytes = mode == 0 ? width * input / output : input;
-        uint8_t *last = pages + pageSize - sourceBytes;
+        uint8_t *last = guard + page - sourceBytes;
         for (unsigned i = 0; i < sourceBytes; i++) ((volatile uint8_t *)last)[i] = (uint8_t)(0xd0 + i);
         fn(result + 1, last, b, 1);
         int failed = result[0] != 0xc3 || result[73] != 0xc3 || result[65] != 1 || result[66] != 0;
@@ -102,7 +94,7 @@ static int checkExtend(
                            mode == 1 ? 0x59 : 0;
             if (result[i + 1] != want || b[i] != 0x59) failed = 1;
         }
-        if (munmap(pages, (size_t)pageSize * 2)) return 1;
+        if (free_guard()) return 1;
         if (failed) return 1;
     }
     return 0;
@@ -178,7 +170,9 @@ func TestCrossLinuxRuntimeMatrixX86PackedZeroExtendCompleteBytes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	oracle := "#include <stdint.h>\n#include <stdio.h>\n#include <string.h>\n#include <sys/mman.h>\n#include <unistd.h>\n" + declarations.String() + x86ZeroExtendByteOracle + "\nint main(void) {\n" + checks.String() + "    return 0;\n}\n"
+	oracle := "#include <stdint.h>\n#include <stdio.h>\n#include <string.h>\n" +
+		declarations.String() + x86TestGuardPagesC + x86ZeroExtendByteOracle +
+		"\nint main(void) {\n" + checks.String() + "    return 0;\n}\n"
 	compileAndRunRuntimeTestForTarget(t, llc, clang, "zero-extend-bytes", triple, ir, oracle, prefix)
 	t.Logf("%d ratio/width/register-memory/mask/self-alias programs, 16 complete-byte flags/MXCSR/canary inputs each; inactive NULL and page-boundary reads", count)
 }

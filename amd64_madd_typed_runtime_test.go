@@ -8,6 +8,8 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/xgo-dev/plan9asm/internal/gotoolchain"
 )
 
 type x86MADDOracleRow struct {
@@ -414,7 +416,7 @@ func TestOriginal(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	executable := filepath.Join(dir, "original")
+	executable := filepath.Join(dir, gotoolchain.HostExecutable("original"))
 	command := exec.Command("go", "test", "-c", "-p=2", "-vet=off", "-o", executable, ".")
 	command.Dir = dir
 	command.Env = append(os.Environ(), "GOOS="+runtime.GOOS, "GOARCH=amd64", "CGO_ENABLED=0", "GOENV=off", "GOWORK=off", "GOTOOLCHAIN=local", "GOMAXPROCS=2")

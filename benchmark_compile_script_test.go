@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -136,13 +137,31 @@ func newCompileBenchmarkScriptFixture(t *testing.T, mode string) compileBenchmar
 		directory: dir, report: filepath.Join(dir, "reports"),
 		trace: filepath.Join(dir, "trace.txt"), script: filepath.Join(scripts, "benchmark-compile.sh"),
 	}
+	// The command directory remains native; Bash inputs and PATH must use
+	// that shell's actual path mapping, not Windows' semicolon search list.
+	paths := []string{bin, filepath.Dir(jq), translator, fixture.trace, fixture.script, fixture.report}
+	if runtime.GOOS == "windows" {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		args := append([]string{"-c", `for name in "$@"; do cygpath -u -- "$name" || exit; done`, "fixture-paths"}, paths...)
+		output, err := exec.CommandContext(ctx, "bash", args...).CombinedOutput()
+		if err != nil {
+			t.Fatalf("resolve native paths for the actual Bash fixture: %v\n%s", err, output)
+		}
+		converted := strings.Split(strings.TrimSuffix(string(output), "\n"), "\n")
+		if len(converted) != len(paths) {
+			t.Fatalf("incomplete shell path mapping: %q", output)
+		}
+		paths = converted
+	}
+	fixture.script = paths[4]
 	fixture.environment = append(os.Environ(),
-		"PATH="+bin+string(os.PathListSeparator)+filepath.Dir(jq)+":/usr/bin:/bin",
-		"PLAN9ASM_BENCH_TEST_TRANSLATOR="+translator,
+		"PATH="+paths[0]+":"+paths[1]+":/usr/bin:/bin",
+		"PLAN9ASM_BENCH_TEST_TRANSLATOR="+paths[2],
 		"PLAN9ASM_BENCH_TEST_MODE="+mode,
-		"PLAN9ASM_BENCH_TEST_TRACE="+fixture.trace,
+		"PLAN9ASM_BENCH_TEST_TRACE="+paths[3],
 		"PLAN9ASM_BENCHMARK_TARGETS="+strings.Join(compileBenchmarkScriptTargets, ","),
-		"PLAN9ASM_BENCHMARK_REPORT_DIR="+fixture.report,
+		"PLAN9ASM_BENCHMARK_REPORT_DIR="+paths[5],
 		"PLAN9ASM_BENCHMARK_MAX_TARGET_SECONDS=300",
 		"PLAN9ASM_BENCHMARK_MAX_TOTAL_SECONDS=900",
 		"GITHUB_ACTIONS=true", "GITHUB_STEP_SUMMARY=",
@@ -157,7 +176,7 @@ func (fixture compileBenchmarkScriptFixture) run(t *testing.T) (string, error) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	command := exec.CommandContext(ctx, "/bin/bash", fixture.script)
+	command := exec.CommandContext(ctx, "bash", fixture.script)
 	command.Dir, command.Env = fixture.directory, fixture.environment
 	output, err := command.CombinedOutput()
 	if ctx.Err() != nil {
@@ -174,7 +193,7 @@ func TestCompileBenchmarkRetainsWholeFailedTargetMatrix(t *testing.T) {
 	}
 	data, err := os.ReadFile(fixture.trace)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("benchmark fixture did not execute its target matrix: %v\n%s", err, output)
 	}
 	var want []string
 	for _, target := range compileBenchmarkScriptTargets {

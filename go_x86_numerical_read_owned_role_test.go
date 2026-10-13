@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/xgo-dev/plan9asm/internal/gooriginalsrc"
+	"github.com/xgo-dev/plan9asm/internal/sourcepath"
 )
 
 // The proxy contains only generated first-party fixture code. Actual Go
@@ -201,9 +202,22 @@ func testNumericalCachedSourceCannotAcquireOwnedRole(t *testing.T, alias bool) {
 		}
 		ctx, cancel := runtimeOracleStageContext(t)
 		defer cancel()
+		// The separate positive SDK owner requires canonical command roots.
+		// Preserve the alias in request itself: that is the negative source
+		// admission input, not a reason to break this independent control.
+		ownerEnvironment := append([]string(nil), request.Environment...)
+		for index, pair := range ownerEnvironment {
+			if strings.HasPrefix(pair, "GOMODCACHE=") {
+				physical, err := sourcepath.Resolve(strings.TrimPrefix(pair, "GOMODCACHE="))
+				if err != nil {
+					t.Fatal(err)
+				}
+				ownerEnvironment[index] = "GOMODCACHE=" + physical
+			}
+		}
 		owner, err := CaptureGoNumericalStorageOwner(ctx, GoNumericalStorageCaptureRequest{
 			GoBinary: request.GoBinary, Directory: filepath.Join(filepath.Dir(filepath.Dir(request.GoBinary)), "src", "internal", "cpu"),
-			PackagePath: "internal/cpu", Target: request.Target, Environment: request.Environment, SDKCPU: true,
+			PackagePath: "internal/cpu", Target: request.Target, Environment: ownerEnvironment, SDKCPU: true,
 			Variables: []GoNumericalStorageReference{{PackagePath: "internal/cpu", Name: "X86"}},
 		})
 		if err != nil {

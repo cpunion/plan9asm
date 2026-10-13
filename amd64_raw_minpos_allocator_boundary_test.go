@@ -101,7 +101,11 @@ func TestX86RawMinimumPositionHugeSPAllocatorBoundaryObservation(t *testing.T) {
 						diagnostic := "error: <unknown>:0:0: 64-bit offset calculated but target is 32-bit"
 						warning := regexp.MustCompile(`^warning: <unknown>:0:0: stack frame size \(([0-9]+)\) exceeds limit \(4294967295\) in function 'giant'$`)
 						errors, warnings := 0, 0
-						for _, line := range strings.Split(strings.TrimSpace(string(output)), "\n") {
+						text := strings.ReplaceAll(string(output), "\r\n", "\n")
+						if strings.Contains(text, "\r") {
+							t.Fatalf("malformed diagnostic line endings: %q", output)
+						}
+						for _, line := range strings.Split(strings.TrimSpace(text), "\n") {
 							if line == diagnostic {
 								errors++
 								continue
