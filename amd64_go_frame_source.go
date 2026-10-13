@@ -762,8 +762,12 @@ func (source *GoAMD64FrameSource) load(ctx context.Context) (goAMD64FrameSelecti
 }
 
 func (source *GoAMD64FrameSource) loadWithRaw(ctx context.Context) (goAMD64FrameSelection, []byte, error) {
+	return source.loadWithRawPackage(ctx, ".")
+}
+
+func (source *GoAMD64FrameSource) loadWithRawPackage(ctx context.Context, packageQuery string) (goAMD64FrameSelection, []byte, error) {
 	var selected goAMD64FrameSelection
-	data, err := source.run(ctx, "list", "-json", "-compiled", "-export", "-mod=readonly", ".")
+	data, err := source.run(ctx, "list", "-json", "-compiled", "-export", "-mod=readonly", packageQuery)
 	if err != nil {
 		return selected, data, err
 	}
