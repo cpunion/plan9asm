@@ -109,7 +109,9 @@ int main(void) {
 	}
 	for _, level := range []string{"-O0", "-O2"} {
 		t.Run(level, func(t *testing.T) {
-			x86FloatCompareCaptureCommand(t, exec.Command(clang, level, input, "-o", executable))
+			ctx, cancel := runtimeOracleStageContext(t)
+			defer cancel()
+			x86FloatCompareCaptureCommand(t, runtimeOracleNativeCCommand(t, ctx, clang, level, input, "-o", executable))
 			if output := x86FloatCompareCaptureCommand(t, exec.Command(executable)); len(output) != 0 {
 				t.Fatal("unexpected numerical fault-observation output", string(output))
 			}
