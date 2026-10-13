@@ -7,6 +7,39 @@ Let active frozen CI runs finish before publishing another batch.
 
 ## Current checkpoint: 2026-10-14
 
+Fork [38469815846](https://github.com/cpunion/plan9asm/actions/runs/38469815846)
+tests frozen `dd35c7c1` (contribution `7251abd3`, plus fork-only priorities).
+It naturally finishes failed with 41/43 successful jobs. The main root's exact
+5,974-root inventory has 5,711 passes and 263 explicit platform skips; all 21
+other main-module packages pass. Simple CLI passes all 29 roots. Raw terminal
+unions, fresh inventories, source/tool identities and coverage merges agree,
+without missing, duplicate or incomplete outcomes. LLVM CLI has 262/263 passing
+roots: `TestRunOneTargetSDKFixedLocalPreservesActualDefaultProfile` fails both
+profiles at the strict original command-directory identity guard. Its aggregate
+correctly fails and does not publish coverage. All ten priority/native jobs pass;
+the installer retry mechanisms do not convert a test failure into success.
+
+`91b8d174` independently reproduces that command-path class and canonicalizes
+the actual selected caches, SDK root, temporary directories and existing GOENV
+file before package loading. GOPATH components retain their original order and
+physical targets; explicit missing configurations and actual CGO/config defaults
+stay visible. Strict source guards and private-helper/frame permissions do not
+change. Final-byte affected tests pass all 19 LLVM CLI roots in 168.883 seconds
+and five simple SDK roots in 191.320 seconds; Go 1.20, race and vet also pass.
+Complete chacha still contains all three original TEXTs and rejects its undeclared
+private helper without output. Native Windows confirmation is still required.
+
+`5427fb76` completes the existing B/W/L/Q CMP grammar for independently proved
+caller-address participants, retaining numerical, memory and hidden-entry
+boundaries. `11e3dff5` strengthens its real Go ABI0 counterpart to a one-byte
+bool return with seven untouched adjacent bytes. The two Linux AMD64 roots
+pass under emulation in 32.725 seconds, not native execution. Parent integration
+passes all seven portable/object roots in 4.359 seconds. Both Go 1.27 and the
+complete official Go 1.20 five-architecture classification gates pass at this
+frozen parent; Go 1.20 retains its explicit historical AMD64 unsupported form.
+The following fork batch must inventory and execute both native CMP axes and
+the actual failed/default-profile and canonical-path roots before full modules.
+
 Fork [38441921522](https://github.com/cpunion/plan9asm/actions/runs/38441921522)
 tests frozen `19e74032` (contribution source `b3755a3e`, plus fork-only workflow).
 The run completed with 28/28 successful jobs. Both Windows ownership lanes and
