@@ -331,7 +331,16 @@ func (joined *numericalSDKLiteralJoin) verifyFile(file *File, pkg string) error 
 			images[image.Definition.Name] = image
 		}
 	}
-	if len(images) == 0 || len(file.Globl) != len(images) {
+	if len(images) == 0 {
+		// An independently observed SDK archive may place readonly DATA in
+		// another selected member. This complete TEXT-only member receives
+		// no initializer or literal-read authority from those other images.
+		if len(flags) != 0 || len(file.Globl) != 0 || len(file.Data) != 0 {
+			return numericalSBContext("literal source complete empty-member DATA inventory differs")
+		}
+		return nil
+	}
+	if len(file.Globl) != len(images) {
 		return numericalSBContext("literal source complete DATA/GLOBL inventory differs")
 	}
 	initial := make(map[string][]byte)

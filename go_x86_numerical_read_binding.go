@@ -83,9 +83,15 @@ func (source *GoX86NumericalReadSource) BindNumericalReads(ctx context.Context, 
 	symbols := make(map[string]string)
 	for _, fn := range file.Funcs {
 		symbols[fn.Sym] = options.ResolveSym(fn.Sym)
-		if symbols[fn.Sym] != numericalNativeName(strings.TrimSuffix(fn.Sym, "(SB)"), pkg.Path) {
-			return Options{}, numericalSBContext("function resolver differs from actual ABI0 symbol")
+		name, _, valid := numericalFunctionSourceIdentity(fn.Sym, pkg.Path, arch, source.role)
+		if !valid || symbols[fn.Sym] != name {
+			return Options{}, numericalSBContext("function resolver differs from actual original source/object ABI symbol")
 		}
+		logical := goTextSymbolForResolution(fn.Sym)
+		if options.ResolveSym(logical) != name || symbols[logical] != "" && symbols[logical] != name {
+			return Options{}, numericalSBContext("logical declaration resolver differs from its exact source/native entry")
+		}
+		symbols[logical] = name
 	}
 	for _, read := range source.reads {
 		base, _, valid := parseSBRef(read.original.Args[read.operand].Sym)
@@ -358,7 +364,22 @@ func (source *GoX86NumericalReadSource) numericalDeclarations(ctx context.Contex
 			}
 		}
 	}
-	return guard.typedDeclarationsForArch(pkg, false, arch)
+	var entries map[string]bool
+	if source.role == numericalSBSDKSource {
+		entries = make(map[string]bool, len(source.file.Funcs))
+		for _, fn := range source.file.Funcs {
+			name, _, valid := numericalFunctionSourceIdentity(fn.Sym, pkg.Path, arch, source.role)
+			if !valid || !strings.HasPrefix(name, pkg.Path+".") {
+				return nil, numericalSBContext("SDK numerical source lacks its original same-package ASM declaration")
+			}
+			local := strings.TrimPrefix(name, pkg.Path+".")
+			if entries[local] {
+				return nil, numericalSBContext("SDK numerical source repeats a selected declaration identity")
+			}
+			entries[local] = true
+		}
+	}
+	return guard.typedDeclarationsForArchRole(pkg, false, arch, source.role == numericalSBSDKSource, entries)
 }
 
 type x86NumericalReadCertificate struct {

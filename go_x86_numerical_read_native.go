@@ -128,14 +128,26 @@ func (source *GoX86NumericalReadSource) bindNative(ctx context.Context, variable
 	}
 	for index, fn := range source.file.Funcs {
 		text, expandedText := proof.OriginalText[index], proof.ExpandedText[index]
-		name := numericalNativeName(fn.Sym, source.request.PackagePath)
-		if text.Name != name || text.ABI != 0 || expandedText.Name != name || expandedText.ABI != 0 ||
+		name, abi, valid := numericalFunctionSourceIdentity(fn.Sym, source.request.PackagePath, arch, source.role)
+		if !valid || text.Name != name || text.ABI != abi || expandedText.Name != name || expandedText.ABI != abi ||
 			!bytes.Equal(text.Code, expandedText.Code) || text.Size != expandedText.Size || !numericalRelocationEqual(text.Relocations, expandedText.Relocations) {
 			return numericalSBContext("whole original/expanded TEXT/ABI/code/relocations differ")
 		}
 		memberMatches := 0
-		for _, member := range proof.ArchiveMembers {
-			if member.Name != strings.TrimSuffix(source.request.AssemblyFile, ".s")+".o" {
+		memberOrdinal := -1
+		for ordinal, name := range selected.SFiles {
+			if name == source.request.AssemblyFile {
+				if memberOrdinal >= 0 {
+					return numericalSBContext("selected assembly repeats its native member identity")
+				}
+				memberOrdinal = ordinal + 2 // Actual work/gc.go compiler then selected ASM order.
+			}
+		}
+		if memberOrdinal < 2 || memberOrdinal >= len(proof.ArchiveMembers) {
+			return numericalSBContext("selected source has no original archive member ordinal")
+		}
+		for ordinal, member := range proof.ArchiveMembers {
+			if ordinal != memberOrdinal {
 				continue
 			}
 			for _, record := range member.Texts {
@@ -341,4 +353,24 @@ func (source *GoX86NumericalReadSource) bindNative(ctx context.Context, variable
 		}
 	}
 	return nil
+}
+
+// This binds an explicit source ABI selector to the original native object.
+// It creates no entry, frame or initialization permission. AMD64 scalar
+// register transport must independently pass its complete source/result proof.
+func numericalFunctionSourceIdentity(symbol, pkg, arch string, role numericalSBSourceRole) (string, uint16, bool) {
+	abi := uint16(0)
+	if strings.HasSuffix(symbol, "<ABIInternal>") {
+		if role != numericalSBSDKSource || arch != "amd64" {
+			return "", 0, false
+		}
+		abi = 1
+		symbol = strings.TrimSuffix(symbol, "<ABIInternal>")
+	} else if strings.HasSuffix(symbol, "<ABI0>") {
+		symbol = strings.TrimSuffix(symbol, "<ABI0>")
+	}
+	if strings.ContainsAny(symbol, "<>") {
+		return "", 0, false
+	}
+	return numericalNativeName(symbol, pkg), abi, true
 }
