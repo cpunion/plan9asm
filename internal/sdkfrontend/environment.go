@@ -52,7 +52,7 @@ func OrdinaryEnvironment(goos, goarch string, input []string) ([]string, error) 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 	stdout, stderr, err := gotoolprofile.RunBounded(ctx, "", encode(), "go",
-		"env", "-json", "GOCACHE", "GOMODCACHE", "GOPATH", "CGO_ENABLED", "GOENV", "GOWORK", "GOFLAGS")
+		"env", "-json", "GOROOT", "GOCACHE", "GOMODCACHE", "GOPATH", "CGO_ENABLED", "GOENV", "GOWORK", "GOFLAGS")
 	if err != nil || len(stderr) != 0 {
 		return nil, fmt.Errorf("resolve package-load cache environment: %v (stderr: %s)", err, stderr)
 	}
@@ -79,17 +79,42 @@ func OrdinaryEnvironment(goos, goarch string, input []string) ([]string, error) 
 			values[key] = "off"
 		}
 	}
-	for _, key := range []string{"GOCACHE", "GOMODCACHE", "GOPATH"} {
-		if !filepath.IsAbs(actual[key]) {
-			return nil, fmt.Errorf("package-load %s must resolve to an absolute path", key)
+	for _, key := range []string{"GOROOT", "GOCACHE", "GOMODCACHE", "GOPATH"} {
+		paths := []string{actual[key]}
+		if key == "GOPATH" {
+			paths = filepath.SplitList(actual[key])
 		}
-		// A local module may never download a dependency, so cmd/go need not
-		// create GOPATH or GOMODCACHE. Prepare the selected paths before the
-		// load captures their identity; do not repair a later source proof.
-		if err := os.MkdirAll(actual[key], 0755); err != nil {
-			return nil, fmt.Errorf("prepare package-load %s: %w", key, err)
+		if len(paths) == 0 {
+			return nil, fmt.Errorf("package-load %s has no actual path", key)
 		}
-		values[key] = actual[key]
+		for index, path := range paths {
+			if !filepath.IsAbs(path) {
+				return nil, fmt.Errorf("package-load %s must resolve to absolute paths", key)
+			}
+			// A local module may never download a dependency, so cmd/go need
+			// not create GOPATH/GOMODCACHE. Prepare each actual selected path
+			// before the load captures it, never repair a later source proof.
+			if key != "GOROOT" {
+				if err := os.MkdirAll(path, 0755); err != nil {
+					return nil, fmt.Errorf("prepare package-load %s: %w", key, err)
+				}
+			}
+			// Fix the actual filesystem target before packages.Load. Alias,
+			// case and separator spellings are not canonical source identity,
+			// even when cmd/go preserves them in its original go env output.
+			paths[index], err = sourcepath.Resolve(path)
+			if err != nil {
+				return nil, fmt.Errorf("resolve package-load %s: %w", key, err)
+			}
+			info, err := sourcepath.Lstat(paths[index])
+			if err != nil {
+				return nil, fmt.Errorf("inspect package-load %s: %w", key, err)
+			}
+			if !info.IsDir() {
+				return nil, fmt.Errorf("package-load %s is not its actual directory", key)
+			}
+		}
+		values[key] = strings.Join(paths, string(filepath.ListSeparator))
 	}
 	for _, key := range []string{"TMPDIR", "GOTMPDIR"} {
 		if values[key] == "" {
@@ -106,12 +131,19 @@ func OrdinaryEnvironment(goos, goarch string, input []string) ([]string, error) 
 		if err != nil {
 			return nil, fmt.Errorf("resolve package-load %s: %w", key, err)
 		}
+		info, err := sourcepath.Lstat(values[key])
+		if err != nil {
+			return nil, fmt.Errorf("inspect package-load %s: %w", key, err)
+		}
+		if !info.IsDir() {
+			return nil, fmt.Errorf("package-load %s is not its actual directory", key)
+		}
 	}
 	return encode(), nil
 }
 
 func GoEnvFile(requested, actual string) (string, error) {
-	if requested != "" || actual == "" || actual == "off" {
+	if actual == "" || actual == "off" {
 		return actual, nil
 	}
 	// Resolve the absence before packages.Load. An implicit missing config
@@ -120,10 +152,16 @@ func GoEnvFile(requested, actual string) (string, error) {
 	// User-selected paths and existing settings keep their original role.
 	_, err := os.Lstat(actual)
 	if os.IsNotExist(err) {
+		if requested != "" {
+			return actual, nil // Keep an explicitly selected missing config visible.
+		}
 		return "off", nil
 	}
 	if err != nil {
 		return "", err
 	}
-	return actual, nil
+	// Preserve the chosen file and its settings, but hand its opened physical
+	// spelling to the actual load. SDK observers still require that exact file
+	// and recheck its eager identity/bytes; this is never a config substitution.
+	return sourcepath.Resolve(actual)
 }

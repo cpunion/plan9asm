@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/xgo-dev/plan9asm/gotoolprofile"
+	"github.com/xgo-dev/plan9asm/internal/sourcepath"
 	"golang.org/x/tools/go/packages"
 )
 
@@ -90,9 +91,13 @@ func TestOrdinaryPackageEnvironmentCreatesSelectedCacheDirectories(t *testing.T)
 		t.Fatal(err)
 	}
 	for key, path := range paths {
+		physical, err := sourcepath.Resolve(path)
+		if err != nil {
+			t.Fatal(err)
+		}
 		found := false
 		for _, entry := range env {
-			found = found || entry == key+"="+path
+			found = found || entry == key+"="+physical
 		}
 		if !found {
 			t.Fatalf("selected %s path changed", key)
@@ -152,7 +157,8 @@ func TestOrdinaryPackageEnvironmentPreservesWorkspaceAndSavedFlags(t *testing.T)
 	if err != nil || wantErr != nil || actualWorkspace != wantWorkspace {
 		t.Errorf("implicit workspace discarded: got %q; %v", values["GOWORK"], err)
 	}
-	if values["GOFLAGS"] != "-tags=saved_profile" || values["GOENV"] != goenv {
+	physicalConfig, configErr := sourcepath.Resolve(goenv)
+	if values["GOFLAGS"] != "-tags=saved_profile" || configErr != nil || values["GOENV"] != physicalConfig {
 		t.Errorf("actual saved selection was not captured: GOENV=%q GOFLAGS=%q", values["GOENV"], values["GOFLAGS"])
 	}
 }

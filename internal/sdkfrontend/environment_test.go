@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/xgo-dev/plan9asm/internal/sourcepath"
 )
 
 // Keep the shared selection rule portable to Go 1.20, not only covered by a
@@ -16,13 +18,17 @@ func TestGoEnvFileSelection(t *testing.T) {
 	if err := os.WriteFile(existing, []byte(saved), 0600); err != nil {
 		t.Fatal(err)
 	}
+	physical, err := sourcepath.Resolve(existing)
+	if err != nil {
+		t.Fatal(err)
+	}
 	for _, test := range []struct {
 		name, requested, actual, want string
 	}{
 		{"absent implicit file", "", missing, "off"},
-		{"saved implicit file", "", existing, existing},
+		{"saved implicit file", "", existing, physical},
 		{"explicit missing file", missing, missing, missing},
-		{"explicit saved file", existing, existing, existing},
+		{"explicit saved file", existing, existing, physical},
 		{"explicit off", "off", "off", "off"},
 		// Stock Go reports an empty GOENV for explicit off. The enclosing
 		// ordinary environment encoder retains the explicit command spelling.
