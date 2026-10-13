@@ -86,24 +86,9 @@ func Reload(ctx context.Context, binary string, pkg *Package, selected *Selectio
 		return nil, nil, nil, err
 	}
 	// Honor the actual invocation's temporary root rather than ambient state.
-	workspace, err := os.MkdirTemp(values["TMPDIR"], "plan9asm-sdk-numerical-load-")
+	workspace, close, err := newReloadWorkspace(values["TMPDIR"])
 	if err != nil {
 		return nil, nil, nil, err
-	}
-	owned := workspace
-	identity, err := os.Lstat(owned)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	close := func() error {
-		now, err := os.Lstat(owned)
-		if os.IsNotExist(err) {
-			return nil
-		}
-		if err != nil || !now.IsDir() || !os.SameFile(identity, now) {
-			return contextError("owned reload directory changed before cleanup")
-		}
-		return os.RemoveAll(owned)
 	}
 	defer func() {
 		if result != nil {
@@ -148,6 +133,30 @@ func Reload(ctx context.Context, binary string, pkg *Package, selected *Selectio
 		return nil, nil, nil, contextError(fmt.Sprintf("source bytes changed during actual reload: %v", err))
 	}
 	return reloaded, CaptureSelection(reloaded, selected.target, environment, nil), close, nil
+}
+
+func newReloadWorkspace(parent string) (string, func() error, error) {
+	owned, err := os.MkdirTemp(parent, "plan9asm-sdk-numerical-load-")
+	if err != nil {
+		return "", nil, err
+	}
+	// Capture the actual directory ID before any consumer can replace it.
+	// os.Lstat's Windows FileInfo defers that observation until SameFile.
+	identity, err := sourcepath.Lstat(owned)
+	if err != nil {
+		return "", nil, err
+	}
+	close := func() error {
+		now, err := sourcepath.Lstat(owned)
+		if os.IsNotExist(err) {
+			return nil
+		}
+		if err != nil || !now.IsDir() || !os.SameFile(identity, now) {
+			return contextError("owned reload directory changed before cleanup")
+		}
+		return os.RemoveAll(owned)
+	}
+	return owned, close, nil
 }
 
 func EnvironmentValues(environment []string) (map[string]string, error) {
