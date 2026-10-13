@@ -157,6 +157,37 @@ func TestOrdinaryPackageEnvironmentPreservesWorkspaceAndSavedFlags(t *testing.T)
 	}
 }
 
+func TestOrdinaryGoEnvFileSelection(t *testing.T) {
+	dir := t.TempDir()
+	missing := filepath.Join(dir, "missing-goenv")
+	existing := filepath.Join(dir, "saved-goenv")
+	if err := os.WriteFile(existing, []byte("GOFLAGS=-tags=saved_profile\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	for _, test := range []struct {
+		name, requested, actual, want string
+	}{
+		{"absent implicit file", "", missing, "off"},
+		{"saved implicit file", "", existing, existing},
+		{"explicit missing file", missing, missing, missing},
+		{"explicit saved file", existing, existing, existing},
+		{"explicit off", "off", "off", "off"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			got, err := ordinaryGoEnvFile(test.requested, test.actual)
+			if err != nil || got != test.want {
+				t.Fatalf("compiler configuration selection: got %q, %v; want %q", got, err, test.want)
+			}
+		})
+	}
+	if _, err := os.Stat(missing); !os.IsNotExist(err) {
+		t.Fatalf("resolving implicit defaults created a configuration file: %v", err)
+	}
+	if data, err := os.ReadFile(existing); err != nil || string(data) != "GOFLAGS=-tags=saved_profile\n" {
+		t.Fatalf("resolving defaults changed saved compiler settings: %v", err)
+	}
+}
+
 func TestCallerSelectionRetainsActualLoadEnvironment(t *testing.T) {
 	pkg := &packages.Package{Name: "example", PkgPath: "example.invalid/p"}
 	env := []string{"GOOS=linux", "GOARCH=amd64", "GOFLAGS=", "GOPACKAGESDRIVER=off"}

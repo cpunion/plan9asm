@@ -110,6 +110,12 @@ Reports are in the fork probe worktree under
 `_out/register-result-repair/benchmark-portability-c4ff4f3b/`.
 Besides the native runtime/frame contracts below, its chacha20poly1305 fixed-local
 capture lacks an explicit GOENV profile; keep that failure visible, not excluded.
+The default-GOENV follow-up is RED/GREEN through actual Linux fixed-local Go
+export and LLVM compilation. Before package loading, an implicit nonexistent
+configuration becomes explicit `off`; existing settings and user-selected paths
+remain selected. CGO still follows the actual compiler default. All affected
+Linux environment/fixed-local regressions passed in 87.001 seconds; host profile
+controls and LLVM CLI vet passed. A fresh complete benchmark is still required.
 Current-head simple-CLI Linux CRC32 replay also remains failed at the CPU-feature
 SB comparison; its log is `simple-cli-crc32-linux-0428ee36.log`. Ownership logs
 are `windows-owned-process-*-0428ee36.log`, under the report directory below.

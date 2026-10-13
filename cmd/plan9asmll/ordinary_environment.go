@@ -68,6 +68,11 @@ func ordinaryPackageEnvironment(goos, goarch string, input []string) ([]string, 
 	}
 	values["CGO_ENABLED"] = actual["CGO_ENABLED"]
 	values["GOFLAGS"] = actual["GOFLAGS"]
+	goenv, err := ordinaryGoEnvFile(values["GOENV"], actual["GOENV"])
+	if err != nil {
+		return nil, fmt.Errorf("resolve package-load GOENV: %w", err)
+	}
+	actual["GOENV"] = goenv
 	for _, key := range []string{"GOENV", "GOWORK"} {
 		values[key] = actual[key]
 		if values[key] == "" {
@@ -103,4 +108,22 @@ func ordinaryPackageEnvironment(goos, goarch string, input []string) ([]string, 
 		}
 	}
 	return encode(), nil
+}
+
+func ordinaryGoEnvFile(requested, actual string) (string, error) {
+	if requested != "" || actual == "" || actual == "off" {
+		return actual, nil
+	}
+	// Resolve the absence before packages.Load. An implicit missing config
+	// carries Go's defaults; explicitly fixing that choice prevents a later
+	// file from changing the compiler invocation observed by source guards.
+	// User-selected paths and existing settings keep their original role.
+	_, err := os.Lstat(actual)
+	if os.IsNotExist(err) {
+		return "off", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	return actual, nil
 }
