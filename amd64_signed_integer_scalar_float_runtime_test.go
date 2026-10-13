@@ -151,16 +151,17 @@ func TestCrossLinuxRuntimeMatrixX86SignedIntegerScalarFloatNativeLinuxPrecisionS
 
 func x86SignedIntegerScalarFloatFaultFixture(t *testing.T, requireTrap bool) {
 	t.Helper()
-	llc, clang, triple, prefix := x86FloatAddSubRuntimeTools(t)
-	var source, declarations, checks strings.Builder
+	execution := x86FloatCompareExecutionTools(t)
+	var source, declarations, rows strings.Builder
 	sigs := map[string]FuncSig{}
+	var inexact []bool
 	for index, op := range []string{"CVTSL2SS", "CVTSL2SD", "CVTSQ2SS", "CVTSQ2SD", "VCVTSI2SSL", "VCVTSI2SDL", "VCVTSI2SSQ", "VCVTSI2SDQ"} {
 		name, args := fmt.Sprintf("read%d", index), "(BX),X0"
 		if strings.HasPrefix(op, "V") {
 			args = "(BX),X0,X1"
 		}
-		// Overwrite all results: the native memory read and precision trap
-		// remain observable and cannot be dead-code-eliminated by LLVM O2.
+		// All results are dead: native reads and precision traps must remain
+		// observable even after the LLVM IR and backend optimize the call.
 		fmt.Fprintf(&source, "TEXT %s(SB),4,$0-8\nMOVQ input+0(FP),BX\n%s %s\nRET\n", name, op, args)
 		sigs[name] = FuncSig{Args: []LLVMType{Ptr}, Ret: Void, Frame: FrameLayout{Params: []FrameSlot{{Offset: 0, Type: Ptr, Index: 0, Field: -1}}}}
 		fmt.Fprintf(&declarations, "extern void %s(const void*);\n", name)
@@ -171,63 +172,92 @@ func x86SignedIntegerScalarFloatFaultFixture(t *testing.T, requireTrap bool) {
 		if strings.Contains(op, "SD") {
 			resultBits = 64
 		}
-		fmt.Fprintf(&checks, "if(check(%s,0,%d,%d,0x1f80)||check(%s,page+size-%d,%d,%d,0x1f80))return %d;\n", name, width, resultBits, name, width/2, width, resultBits, index+1)
-		// Only the signed32→double conversion is always exact.
-		fmt.Fprintf(&checks, "if(check(%s,&inexact,%d,%d,0x0f80))return %d;\n", name, width, resultBits, index+20)
+		fmt.Fprintf(&rows, "{%s, %d, %d},\n", name, width, resultBits)
+		inexact = append(inexact, width == 8 || resultBits == 32)
 	}
 	goAssemblerOracleOutput(t, "amd64", source.String(), "", true)
 	file, err := Parse(ArchAMD64, source.String())
 	if err != nil {
 		t.Fatal(err)
 	}
-	ir, err := Translate(file, Options{Goarch: "amd64", TargetTriple: triple, Sigs: sigs})
+	ir, err := Translate(file, Options{Goarch: "amd64", TargetTriple: execution.triple, Sigs: sigs})
 	if err != nil {
 		t.Fatal(err)
 	}
-	const reference = `#include <stdint.h>
-#include <stdio.h>
-#include <signal.h>
-#include <unistd.h>
-#include <sys/mman.h>
-#include <sys/resource.h>
-#include <sys/wait.h>
-typedef void(*readfn)(const void*);
-static int check(readfn fn,const void*input,int width,int bits,unsigned csr){
- int statuses[2];
- for(unsigned original=0;original<2;original++){
-  pid_t child=fork();if(child<0)return 1;
-  if(child==0){
-   struct rlimit no_core={0,0};
-   if(setrlimit(RLIMIT_CORE,&no_core)) _exit(120);
+	driver := x86MemoryFaultSupportC + declarations.String() + `
+static const struct {
+    void (*run)(const void *);
+    unsigned width, bits;
+} cases[] = {
+` + rows.String() + "};\n" + x86SignedIntegerFloatFaultMainC
+	executable := execution.compileLLVM(t, "signed-native-fault", x86SignedIntegerFloatOptimize(t, ir), driver, "-O2")
+	for row, losesPrecision := range inexact {
+		for probe := 0; probe < 4; probe++ {
+			original := x86ObserveMemoryFault(t, execution, executable, row, probe, 1)
+			switch probe {
+			case 0, 1:
+				if original != "segv" && original != "bus" {
+					t.Fatalf("row %d probe %d: original SSE did not read its full source: %s", row, probe, original)
+				}
+			case 2:
+				if requireTrap && losesPrecision {
+					if original != "fpe" {
+						t.Fatalf("row %d: original SSE missing required native precision trap: %s", row, original)
+					}
+				} else if original != "return" && (!losesPrecision || original != "fpe") {
+					t.Fatalf("row %d: unexpected original SSE precision outcome: %s", row, original)
+				}
+			case 3:
+				if original != "return" {
+					t.Fatalf("row %d: exact-width accessible source faulted: %s", row, original)
+				}
+			}
+			if got := x86ObserveMemoryFault(t, execution, executable, row, probe, 0); got != original {
+				t.Fatalf("row %d probe %d: translated %s, original SSE %s", row, probe, got, original)
+			}
+		}
+	}
+	t.Log("8 conversion kernels: original SSE and optimized LLVM agree on NULL, partial/full reads and unmasked precision")
+}
 
-   __asm__ volatile("ldmxcsr %0"::"m"(csr):"memory");
-   if(!original)fn(input);
-   else if(bits==32){
-    if(width==4)__asm__ volatile("cvtsi2ssl (%0),%%xmm0"::"r"(input):"xmm0","memory");
-    else __asm__ volatile("cvtsi2ssq (%0),%%xmm0"::"r"(input):"xmm0","memory");
-   } else {
-    if(width==4)__asm__ volatile("cvtsi2sdl (%0),%%xmm0"::"r"(input):"xmm0","memory");
-    else __asm__ volatile("cvtsi2sdq (%0),%%xmm0"::"r"(input):"xmm0","memory");
-   }
-   _exit(0);
-  }
-  if(waitpid(child,&statuses[original],0)!=child)return 2;
- }
- if(WIFSIGNALED(statuses[0])!=WIFSIGNALED(statuses[1]) ||
-  (WIFSIGNALED(statuses[1])?WTERMSIG(statuses[0])!=WTERMSIG(statuses[1]):WEXITSTATUS(statuses[0])!=WEXITSTATUS(statuses[1]))) {
-  fprintf(stderr,"native signed conversion input=%p width=%d result=%d csr=%x statuses=%x/%x\n",input,width,bits,csr,statuses[0],statuses[1]);return 1;
- }
- if(!input||csr==0x1f80){if(!WIFSIGNALED(statuses[1])||(WTERMSIG(statuses[1])!=SIGSEGV&&WTERMSIG(statuses[1])!=SIGBUS))return 3;}
- if(REQUIRE_TRAP&&csr==0x0f80&&(width==8||bits==32)){
-  if(!WIFSIGNALED(statuses[1])||WTERMSIG(statuses[1])!=SIGFPE){fprintf(stderr,"original SSE missing precision SIGFPE status=%x\n",statuses[1]);return 4;}
- }
- return 0;
+const x86SignedIntegerFloatFaultMainC = `
+int main(int argc, char **argv) {
+    if (argc != 4) return 80;
+    unsigned row = (unsigned)atoi(argv[1]);
+    unsigned probe = (unsigned)atoi(argv[2]);
+    unsigned original = (unsigned)atoi(argv[3]);
+    if (row >= sizeof(cases)/sizeof(cases[0]) || probe > 3 || original > 1) return 80;
+    int setup = memory_fault_setup(0);
+    if (setup) return setup;
+    uint64_t inexact = UINT64_C(0x20000001000001);
+    const void *input = NULL;
+    if (probe == 1) input = guard + page - cases[row].width / 2;
+    if (probe == 2) input = &inexact;
+    if (probe == 3) input = guard + page - cases[row].width;
+    unsigned csr = probe == 2 ? 0x0f80 : 0x1f80, saved;
+
+    printf("memory enter %u %u %u\n", row, probe, original);
+    if (fflush(stdout)) return 83;
+    __asm__ volatile("stmxcsr %0" : "=m"(saved));
+    __asm__ volatile("ldmxcsr %0" :: "m"(csr) : "memory");
+    if (!original) {
+        cases[row].run(input);
+    } else if (cases[row].bits == 32) {
+        if (cases[row].width == 4) {
+            __asm__ volatile("cvtsi2ssl (%0),%%xmm0" :: "r"(input) : "xmm0", "memory");
+        } else {
+            __asm__ volatile("cvtsi2ssq (%0),%%xmm0" :: "r"(input) : "xmm0", "memory");
+        }
+    } else {
+        if (cases[row].width == 4) {
+            __asm__ volatile("cvtsi2sdl (%0),%%xmm0" :: "r"(input) : "xmm0", "memory");
+        } else {
+            __asm__ volatile("cvtsi2sdq (%0),%%xmm0" :: "r"(input) : "xmm0", "memory");
+        }
+    }
+    __asm__ volatile("ldmxcsr %0" :: "m"(saved) : "memory");
+    if (free_guard()) return 84;
+    puts("memory complete");
+    return fflush(stdout) ? 85 : 0;
 }
 `
-	main := fmt.Sprintf("#define REQUIRE_TRAP %d\n", x86FloatAddSubBoolInt(requireTrap)) + reference + declarations.String() + `int main(void){long size=sysconf(_SC_PAGESIZE);if(size<=0)return 4;
- char *page=mmap(0,size*2,PROT_READ|PROT_WRITE,MAP_PRIVATE|MAP_ANON,-1,0);
- if(page==MAP_FAILED||mprotect(page+size,size,PROT_NONE))return 5;
- uint64_t inexact=UINT64_C(0x20000001000001);
-` + checks.String() + "munmap(page,size*2);return 0;}\n"
-	compileAndRunRuntimeTestForTarget(t, llc, clang, "signed-native-fault", triple, x86SignedIntegerFloatOptimize(t, ir), main, prefix)
-}

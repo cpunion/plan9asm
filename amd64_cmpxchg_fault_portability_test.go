@@ -19,6 +19,16 @@ func TestX86MemoryFaultWindowsHeaderBoundary(t *testing.T) {
 		[]string{"VirtualAlloc", "VirtualProtect", "VirtualFree", "kernel.run(input)", "source[i]"})
 }
 
+func TestX86SignedConversionFaultWindowsHeaderBoundary(t *testing.T) {
+	driver := x86MemoryFaultSupportC + `
+static void sample(const void *p) { (void)p; }
+static const struct { void (*run)(const void *); unsigned width, bits; }
+    cases[] = {{sample, 4, 32}};
+` + x86SignedIntegerFloatFaultMainC
+	x86FaultWindowsHeaderBoundary(t, driver,
+		[]string{"VirtualAlloc", "VirtualProtect", "VirtualFree", "cases[row].run(input)", "cvtsi2ssl", "cvtsi2sdq"})
+}
+
 func x86FaultWindowsHeaderBoundary(t *testing.T, driver string, required []string) {
 	t.Helper()
 	clang := findLLVM22Tool("clang")

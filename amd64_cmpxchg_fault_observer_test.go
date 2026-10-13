@@ -38,7 +38,11 @@ func x86CMPXCHGObserveFaultContext(ctx context.Context, execution x86FloatCompar
 }
 
 func x86CMPXCHGFaultResult(goos, stdout, witness string, err error) (string, error) {
-	return x86NativeFaultResult(goos, stdout, witness, "CMPXCHG complete\n", err)
+	result, cause := x86NativeFaultResult(goos, stdout, witness, "CMPXCHG complete\n", err)
+	if cause == nil && result == "fpe" {
+		return "", fmt.Errorf("floating-point fault is not a CMPXCHG outcome")
+	}
+	return result, cause
 }
 
 func x86NativeFaultResult(goos, stdout, witness, completed string, err error) (string, error) {
@@ -59,7 +63,7 @@ func x86NativeFaultResult(goos, stdout, witness, completed string, err error) (s
 		return "", fmt.Errorf("missing actual process termination status")
 	}
 	if goos == "windows" {
-		return x86CMPXCHGWindowsFault(uint32(exit.ExitCode()))
+		return x86NativeWindowsFault(uint32(exit.ExitCode()))
 	}
 	if status.Signaled() {
 		switch status.Signal() {
@@ -69,9 +73,32 @@ func x86NativeFaultResult(goos, stdout, witness, completed string, err error) (s
 			return "bus", nil
 		case syscall.SIGILL:
 			return "ill", nil
+		case syscall.SIGFPE:
+			return "fpe", nil
 		}
 	}
 	return "", fmt.Errorf("setup, state or unexpected process failure: %w", err)
+}
+
+func x86NativeWindowsFault(code uint32) (string, error) {
+	if code == 0xc000008f { // EXCEPTION_FLT_INEXACT_RESULT, not other FP exceptions.
+		return "fpe", nil
+	}
+	return x86CMPXCHGWindowsFault(code)
+}
+
+func TestX86NativeWindowsPrecisionFaultCode(t *testing.T) {
+	if got, err := x86NativeWindowsFault(0xc000008f); err != nil || got != "fpe" {
+		t.Fatalf("native precision exception: %s, %v", got, err)
+	}
+	for _, code := range []uint32{136, 0xc000008e, 0xc0000090, 0xc0000091, 0xc0000094} {
+		if _, err := x86NativeWindowsFault(code); err == nil {
+			t.Fatalf("different exception/ordinary exit became precision evidence: %#x", code)
+		}
+	}
+	if _, err := x86CMPXCHGWindowsFault(0xc000008f); err == nil {
+		t.Fatal("precision exception became a registered CMPXCHG fault")
+	}
 }
 
 func x86CMPXCHGWindowsFault(code uint32) (string, error) {
