@@ -193,6 +193,58 @@ func TestSimpleSDKVariableQueryUsesOriginalMapsSource(t *testing.T) {
 	// or successful maps translation. Those remain independent core contracts.
 }
 
+func TestSimpleCLIOriginalSDKMapsScalarRegisterSource(t *testing.T) {
+	setSimpleSDKProfile(t)
+	input := filepath.Join(runtime.GOROOT(), "src", "internal", "runtime", "maps", "memhash_nosimd_amd64.s")
+	original, err := os.ReadFile(input)
+	if err != nil || !strings.Contains(string(original), "TEXT ·memHash32AES<ABIInternal>") ||
+		!strings.Contains(string(original), "TEXT ·memHash64AES<ABIInternal>") {
+		t.Fatal("complete original SDK scalar-register counterexample is absent", err)
+	}
+	folder := t.TempDir()
+	output, meta := filepath.Join(folder, "maps.ll"), filepath.Join(folder, "maps.json")
+	if err := runTranspile([]string{"-goos=linux", "-goarch=amd64", "-i=" + input, "-o=" + output, "-meta=" + meta}); err != nil {
+		t.Fatalf("complete unchanged SDK scalar-register source: %v", err)
+	}
+	raw, err := os.ReadFile(meta)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var metadata struct{ Functions []functionInfo }
+	if err := json.Unmarshal(raw, &metadata); err != nil || len(metadata.Functions) != 2 {
+		t.Fatalf("complete SDK scalar-register functions were not published: %v\n%s", err, raw)
+	}
+	for index, fn := range metadata.Functions {
+		first := "i32"
+		if index == 1 {
+			first = "i64"
+		}
+		if fn.Resolved != "internal/runtime/maps.memHash"+map[int]string{0: "32", 1: "64"}[index]+"AES" ||
+			len(fn.Args) != 2 || fn.Args[0] != first || fn.Args[1] != "i64" || fn.Ret != "i64" {
+			t.Fatalf("actual integer declaration/namespace changed: %+v", fn)
+		}
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	llc := sdkLLVM22LLC(t, ctx)
+	for _, optimization := range []string{"0", "2"} {
+		object := filepath.Join(folder, "maps-O"+optimization+".o")
+		stdout, stderr, err := gotoolprofile.RunBounded(ctx, folder, os.Environ(), llc,
+			"-O="+optimization, "-filetype=obj", "-o", object, output)
+		if err != nil || len(stderr) != 0 {
+			t.Fatalf("complete SDK scalar-register LLVM22 O%s object: %v\n%s%s", optimization, err, stdout, stderr)
+		}
+		if info, err := os.Stat(object); err != nil || info.Size() == 0 {
+			t.Fatal("complete SDK scalar-register object is absent", err)
+		}
+	}
+	after, err := os.ReadFile(input)
+	if err != nil || sha256.Sum256(after) != sha256.Sum256(original) {
+		t.Fatal("SDK scalar-register original source changed", err)
+	}
+	t.Logf("complete original SDK scalar-register SHA256=%x; both declarations and LLVM22 O0/O2 objects passed", sha256.Sum256(original))
+}
+
 func sdkLLVM22LLC(t *testing.T, ctx context.Context) string {
 	t.Helper()
 	candidates := []string{"llc-22", "llc"}
