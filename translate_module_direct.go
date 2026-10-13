@@ -98,7 +98,8 @@ func translateModuleDirectInContext(ctx llvm.Context, file *File, opt Options) (
 			mod.Dispose()
 			return llvm.Module{}, directUnsupportedf("arm64 CFG lowering required for %s", name)
 		}
-		if file.Arch == ArchAMD64 && (opt.Goarch == "386" || (opt.Goarch == "amd64" && funcNeedsAMD64CFG(*fn))) {
+		if file.Arch == ArchAMD64 && (opt.Goarch == "386" || (opt.Goarch == "amd64" &&
+			(funcNeedsAMD64CFG(*fn) || x86RegisterBoolResultNeedsProof(*fn, sig, opt.Goarch)))) {
 			mod.Dispose()
 			return llvm.Module{}, directUnsupportedf("x86 CFG lowering required for %s", name)
 		}

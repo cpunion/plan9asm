@@ -128,6 +128,13 @@ func (c *amd64Ctx) scalarFPViewNeedsInitialization(off int64, bits int, write bo
 }
 
 func (c *amd64Ctx) validateScalarFPSourceViews() error {
+	// A logical i1 return cannot bypass canonical Go-byte/result validation
+	// merely because the complete ABIInternal body contains no FP/SIMD view.
+	if x86RegisterBoolResultNeedsProof(c.fpScalarSource, c.sig, c.goarch) {
+		if err := c.scalarFPResultInitialized(); err != nil {
+			return err
+		}
+	}
 	for _, ins := range c.fpScalarSource.Instrs {
 		if form, known, err := x86GPSIMDTransferProperties(ins, c.goarch); known && err == nil &&
 			form.memoryWrite && x86ScalarFPStaticSymbolMemory(ins.Args[form.memory]) {

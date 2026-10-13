@@ -40,6 +40,9 @@ func checkAMD64RegisterResultInitialization(fn Func, sig FuncSig, transfer x86Re
 		return 0
 	}
 	resultWidth := width(sig.Ret)
+	if sig.Ret == I1 {
+		resultWidth = 1
+	}
 	if resultWidth == 0 || len(sig.Frame.Results) != 1 {
 		return fail("requires one complete integer register result")
 	}
@@ -68,11 +71,31 @@ func checkAMD64RegisterResultInitialization(fn Func, sig FuncSig, transfer x86Re
 	}
 	// No FP/AUTO ownership is imported from a classic signature or TEXT size.
 	// The register role must close separately before gaining any stack storage.
+	if sig.Ret == I1 {
+		original := transfer
+		transfer = func(pc int, ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string) bool {
+			if isX86RawDirective(ins) {
+				return false
+			}
+			before := state.canonicalGP
+			if !original(pc, ins, state, owned, resultOffset, arch) {
+				return false
+			}
+			state.canonicalGP = x86RegisterCanonicalBytesAfter(ins, before, arch)
+			for index := range state.gp {
+				state.canonicalGP[index] &= state.gp[index]
+			}
+			return true
+		}
+	}
 	return checkX86ResultSourceFlow(fn, initial, nil, 0, "amd64", transfer,
 		func(state x86ResultState, pc int) error {
 			reg, mask, _ := x86ResultGP(AX, resultWidth, "amd64")
 			if state.gp[reg]&mask != mask {
 				return fail(fmt.Sprintf("AX result bytes are not initialized on every path to RET %d", pc))
+			}
+			if sig.Ret == I1 && state.canonicalGP[reg]&mask != mask {
+				return fail(fmt.Sprintf("AX bool result byte is not canonical zero/one on every path to RET %d", pc))
 			}
 			return nil
 		})

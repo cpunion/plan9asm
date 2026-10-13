@@ -157,12 +157,12 @@ func checkX86ResultSourceFlow(fn Func, initial x86ResultState, owned []bool, res
 	if len(instructions) == 0 || len(instructions) > 4096 {
 		return fail("missing or oversized source CFG")
 	}
-	// One logical byte-work envelope includes FP/AUTO, numerical GP/Z/K/
-	// flags, opaque GP identities and the source-shape discriminator. It is
+	// One logical byte-work envelope includes FP/AUTO, numerical GP/Z/K,
+	// canonical GP bytes, flags, opaque GP identities and the source-shape discriminator. It is
 	// not a bound on Go's heap/struct overhead. pointerFP is immutable shared
 	// layout metadata, not a state payload copied at each CFG successor.
 	// AUTO states do not obtain an independent frame or iteration budget.
-	byteState := len(initial.fp) + len(initial.auto) + len(initial.gp) +
+	byteState := len(initial.fp) + len(initial.auto) + len(initial.gp) + len(initial.canonicalGP) +
 		8*len(initial.xmm) + len(initial.masks) + 1 + len(initial.pointerGP) + 1
 	const byteWorkLimit = 64 << 20
 	byteWork := len(instructions) * byteState
@@ -295,7 +295,10 @@ type x86ResultState struct {
 	fp   []bool
 	auto []bool
 	gp   [16]uint8
-	xmm  [32]uint16 // high banks are consumed only by validated mode-bound forms
+	// Used only by the independent ordinary register bool-result contract.
+	// A set bit means that physical byte is exactly 0/1, not merely initialized.
+	canonicalGP [16]uint8
+	xmm         [32]uint16 // high banks are consumed only by validated mode-bound forms
 	// The disjoint upper 48 byte bits share the same physical X/Y/Z bank.
 	// Existing low-X effects preserve these bits unless their typed encoding
 	// explicitly clears the upper aliases.
@@ -335,6 +338,7 @@ func (state x86ResultState) intersect(other x86ResultState) x86ResultState {
 	}
 	for index := range merged.gp {
 		merged.gp[index] &= other.gp[index]
+		merged.canonicalGP[index] &= other.canonicalGP[index]
 		merged.pointerGP[index] = merged.pointerGP[index] && other.pointerGP[index]
 	}
 	for index := range merged.xmm {
