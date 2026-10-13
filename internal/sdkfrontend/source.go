@@ -96,21 +96,22 @@ func Capture(ctx context.Context, request CaptureRequest, file *plan9asm.File) (
 		GoBinary: request.GoBinary, Directory: directory, PackagePath: request.PackagePath, AssemblyFile: filepath.Base(asm),
 		Target: request.Target, Environment: request.Environment, Owners: owners,
 	}
-	if len(file.Data)+len(file.Globl) != 0 {
-		data, err := plan9asm.CaptureGoX86SDKASMDataSource(ctx, plan9asm.GoX86SDKASMDataCaptureRequest{
-			GoBinary: request.GoBinary, Directory: directory, PackagePath: request.PackagePath, Target: request.Target, Environment: request.Environment,
-		})
-		if err != nil {
-			return nil, nil, err
-		}
-		source.cleanup = append(source.cleanup, data.Close)
-		literal, err := plan9asm.CaptureGoX86SDKReadonlyLiteralDataOwner(ctx, data)
-		if err != nil {
-			return nil, nil, err
-		}
-		source.cleanup = append(source.cleanup, literal.Close)
-		numerical.ReadonlyLiterals = literal
+	// Observe the complete selected package archive even when this member has
+	// no DATA. Another selected member may define private literals; the core
+	// joins this exact empty member without lending it those literal reads.
+	data, err := plan9asm.CaptureGoX86SDKASMDataSource(ctx, plan9asm.GoX86SDKASMDataCaptureRequest{
+		GoBinary: request.GoBinary, Directory: directory, PackagePath: request.PackagePath, Target: request.Target, Environment: request.Environment,
+	})
+	if err != nil {
+		return nil, nil, err
 	}
+	source.cleanup = append(source.cleanup, data.Close)
+	literal, err := plan9asm.CaptureGoX86SDKReadonlyLiteralDataOwner(ctx, data)
+	if err != nil {
+		return nil, nil, err
+	}
+	source.cleanup = append(source.cleanup, literal.Close)
+	numerical.ReadonlyLiterals = literal
 	source.Numerical, err = plan9asm.CaptureGoX86SDKNumericalReadSource(ctx, numerical)
 	if err != nil {
 		return nil, nil, err
