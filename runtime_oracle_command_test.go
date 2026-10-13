@@ -176,6 +176,7 @@ func TestRuntimeOracleCommandConsumersRetainOwnedExecution(t *testing.T) {
 		"go_x86_tls_move_runtime_linux_amd64_go127_test.go",
 		"amd64_tls_move_source_banks_test.go",
 		"amd64_movq_source_alias_test.go",
+		"amd64_movq_source_alias_provenance_test.go",
 		"amd64_movq_source_alias_runtime_linux_amd64_test.go",
 		"go_x86_numerical_read_runtime_test.go",
 		"go_x86_numerical_read_local_runtime_test.go",

@@ -230,6 +230,14 @@ its own complete source origins, initialized bytes and numerical versions across
 SCCs. The original shared finite replay budget and independent final replay stay
 unchanged; this does not prove dynamic affine, sentinel or nested loops and never
 uses an acyclic hull join to manufacture a cyclic invariant or allocation bounds.
+MOVQ's named MOVD/MOVDQ2Q aliases retain those same numerical origins,
+versions and complete zero-based partitions through local source-only dispatch.
+Raw physical opcodes never inherit that alias registration. Fixed-local scalar
+constant/boolean knowledge, memory-width observations and carry initialization
+likewise retain MOVQ's exact width without rewriting original source identity.
+The required Linux AMD64 source-alias counted-provenance runtime compares
+original Go and independent LLVM O0/O2 values, immutable lengths and full
+input/output canaries; no new loop, g or native-entry class is admitted.
 
 Signed packed dword-to-float conversion uses one validated whole native
 CVTDQ2PS/PD opcode, retaining ambient MXCSR rounding, precision, trapping,

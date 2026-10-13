@@ -45,9 +45,8 @@ func x86CallerCountedSCCRejectThreeAPIs(t *testing.T, assembly string) {
 	}
 }
 
-func TestX86GoCallerCountedSCCRetainsEveryPathAndOrigin(t *testing.T) {
-	original := x86CallerCountedSCCAssembly(false, true)
-	for name, change := range map[string][2]string{
+func x86CallerCountedSCCRejectedChanges() map[string][2]string {
+	return map[string][2]string{
 		"second missing guard":       {"JE done\n", ""},
 		"second reversed guard":      {"JE done", "JNE done"},
 		"second unknown bound":       {"MOVL R9,R13", "MOVL BX,R13"},
@@ -79,7 +78,12 @@ func TestX86GoCallerCountedSCCRetainsEveryPathAndOrigin(t *testing.T) {
 		"diamond SP escape":          {"MOVL $5,R11", "MOVQ DI,SP\nMOVL $5,R11"},
 		"diamond BP escape":          {"MOVL $5,R11", "MOVQ DI,BP\nMOVL $5,R11"},
 		"diamond g clobber":          {"MOVL $5,R11", "MOVQ $0,R14\nMOVL $5,R11"},
-	} {
+	}
+}
+
+func TestX86GoCallerCountedSCCRetainsEveryPathAndOrigin(t *testing.T) {
+	original := x86CallerCountedSCCAssembly(false, true)
+	for name, change := range x86CallerCountedSCCRejectedChanges() {
 		t.Run(name, func(t *testing.T) {
 			if strings.Count(original, change[0]) == 0 {
 				t.Fatal("negative does not name original source")

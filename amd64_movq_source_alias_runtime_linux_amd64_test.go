@@ -90,6 +90,7 @@ int main(void) {
     puts("126 original Go/LLVM MOVQ source-alias cases");
     return 0;
 }
+
 `
 	for _, api := range []string{"text", "module", "Go"} {
 		ir, err := x86ScalarFPBitViewAPI(t, source.String(), declarations.String(), "amd64", execution.triple, api)
@@ -104,4 +105,10 @@ int main(void) {
 			}
 		}
 	}
+}
+
+func TestCrossLinuxRuntimeMatrixX86MOVQSourceAliasesCountedProvenance(t *testing.T) {
+	aliases := append([]string{"MOVQ"}, x86OriginalMOVQAliases(t)...)
+	t.Run("original Go", func(t *testing.T) { runX86CallerCountedLoopOriginalValues(t, aliases) })
+	t.Run("LLVM", func(t *testing.T) { runX86CallerCountedLoopLLVMValues(t, aliases) })
 }

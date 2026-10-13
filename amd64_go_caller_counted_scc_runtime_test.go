@@ -16,26 +16,32 @@ import (
 // Both existing required counted-loop runtime roots consume these fixtures.
 // Their host/runner policy is unchanged; Rosetta remains diagnostic rather
 // than evidence of native Linux execution or physical source-stack identity.
-func x86CallerCountedSCCRuntimeFixtures() (string, string, []string) {
+func x86CallerCountedSCCRuntimeFixtures(aliases ...string) (string, string, []string) {
+	if len(aliases) == 0 {
+		aliases = []string{"MOVQ"}
+	}
 	var source, assembly strings.Builder
 	source.WriteString("package caller\nimport \"unsafe\"\n")
 	var names []string
-	for _, raw := range []bool{false, true} {
-		for _, diamond := range []bool{false, true} {
-			name := fmt.Sprintf("scc%t%t", raw, diamond)
-			declaration := x86CallerCountedLoopScalarSource()
-			declaration = declaration[strings.Index(declaration, "//go:noescape"):]
-			declaration = strings.ReplaceAll(declaration, "kernel", name)
-			source.WriteString(strings.Replace(declaration, "func Call(", "func Call"+name+"(", 1))
-			assembly.WriteString(strings.ReplaceAll(x86CallerCountedSCCAssembly(raw, diamond), "·kernel", "·"+name))
-			names = append(names, name)
+	for _, alias := range aliases {
+		for _, raw := range []bool{false, true} {
+			for _, diamond := range []bool{false, true} {
+				name := fmt.Sprintf("scc%s%t%t", alias, raw, diamond)
+				declaration := x86CallerCountedLoopScalarSource()
+				declaration = declaration[strings.Index(declaration, "//go:noescape"):]
+				declaration = strings.ReplaceAll(declaration, "kernel", name)
+				source.WriteString(strings.Replace(declaration, "func Call(", "func Call"+name+"(", 1))
+				machine := x86SourceAliasCountedAssembly(x86CallerCountedSCCAssembly(raw, diamond), alias)
+				assembly.WriteString(strings.ReplaceAll(machine, "·kernel", "·"+name))
+				names = append(names, name)
+			}
 		}
 	}
 	return source.String(), assembly.String(), names
 }
 
-func runX86CallerCountedSCCOriginalValues(t *testing.T) {
-	source, assembly, names := x86CallerCountedSCCRuntimeFixtures()
+func runX86CallerCountedSCCOriginalValues(t *testing.T, aliases ...string) {
+	source, assembly, names := x86CallerCountedSCCRuntimeFixtures(aliases...)
 	var calls strings.Builder
 	for index, name := range names {
 		fmt.Fprintf(&calls, `
@@ -77,7 +83,7 @@ func TestOriginalSCCValues(t *testing.T) {
    }
   }
  }
- if calls != 1536 { t.Fatalf("calls=%d", calls) }
+` + fmt.Sprintf(" if calls != %d { t.Fatalf(\"calls=%%d\", calls) }\n", 384*len(names)) + `
 }
 `
 	dir := t.TempDir()
@@ -105,15 +111,15 @@ func TestOriginalSCCValues(t *testing.T) {
 	if output, err := runtimeOracleCombinedOutput(ctx, command); err != nil {
 		t.Fatalf("first-party original Go serial SCC integer/canary oracle: %v\n%s", err, output)
 	}
-	t.Log("1536 original Go calls: two serial bounded loops, raw/named controls, both diamond arms, u32 wrap and complete guarded input snapshots")
+	t.Logf("%d original Go calls: two serial bounded loops, raw/named controls, both diamond arms, u32 wrap and complete guarded input snapshots", 384*len(names))
 }
 
-func runX86CallerCountedSCCLLVMValues(t *testing.T) {
+func runX86CallerCountedSCCLLVMValues(t *testing.T, aliases ...string) {
 	llc, clang, found := findLlcAndClang(t)
 	if !found {
 		t.Fatal("LLVM22 llc/clang required")
 	}
-	source, assembly, names := x86CallerCountedSCCRuntimeFixtures()
+	source, assembly, names := x86CallerCountedSCCRuntimeFixtures(aliases...)
 	var oracle, calls strings.Builder
 	oracle.WriteString(`#include <stdint.h>
 #include <string.h>
@@ -156,7 +162,7 @@ func runX86CallerCountedSCCLLVMValues(t *testing.T) {
     for (unsigned index=0;index<2*bound;index++) sum+=x[index]+y[index];
 `)
 	oracle.WriteString(calls.String())
-	oracle.WriteString("   }\n  }\n }\n return calls==1536?0:2;\n}\n")
+	fmt.Fprintf(&oracle, "   }\n  }\n }\n return calls==%d?0:2;\n}\n", 384*len(names))
 	goSource, err := format.Source([]byte(source))
 	if err != nil {
 		t.Fatal(err)
@@ -179,6 +185,12 @@ func runX86CallerCountedSCCLLVMValues(t *testing.T) {
 	if runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" {
 		runner = []string{"/usr/bin/arch", "-x86_64"}
 	}
-	compileAndRunRuntimeTestForTarget(t, llc, clang, "caller_counted_scc", triple, translation.Module.String(), oracle.String(), runner)
-	t.Log("1536 independent integer results plus full input/output canaries and immutable length; required Linux counterpart remains independently executable, Rosetta diagnostic is not native evidence")
+	compiler := []string{clang}
+	if triple != testTargetTriple(runtime.GOOS, runtime.GOARCH) {
+		compiler = append(compiler, "-target", triple)
+	}
+	for _, level := range []int{0, 2} {
+		compileAndRunRuntimeTestWithCompiler(t, llc, compiler, "caller_counted_scc", triple, translation.Module.String(), oracle.String(), runner, level)
+	}
+	t.Logf("%d independent integer results plus full input/output canaries and immutable length; required Linux counterpart remains independently executable, Rosetta diagnostic is not native evidence", 384*len(names))
 }
