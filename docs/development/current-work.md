@@ -86,6 +86,21 @@ pages. It adds positive full-extent reads, retains NULL/partial-read faults,
 canary/setup rejection and checked zero core limits. Linux container regression
 passed in 29.438 seconds; Go 1.20 header/policy checks passed in 0.883 seconds.
 These new fault drivers still need native Windows execution.
+`798ad021`, `339523d3` and `c4ff4f3b` now cover all six formerly Unix-only
+INSERT/PACK/UNPACK/SHIFT/MMX/scalar-conversion fault families. Direct owned
+children preserve exact entry/completion receipts, real fault status, canaries,
+both MMX guard boundaries and the original SSE precision comparison. Ordinary
+exits, joined cleanup errors and cancellation do not establish a native fault.
+Go's Windows #UD diagnostic also requires the tested original assembly frame;
+the modern sigpanic format has independent RED/GREEN controls. The expanded
+Linux container suite passed in 57.314 seconds and scalar precision/control
+follow-up passed in 14.167 seconds. Native Linux precision trapping is a separate
+required axis, not certified by container emulation. Go 1.20 header/diagnostic
+controls passed in 0.848 seconds. Root vet and the Go 1.27 five-architecture
+official gate passed at `c4ff4f3b`; classification does not certify execution.
+These three commits are staged locally on the fork probe branch but not pushed:
+run 38386789839 must finish first. Its three completed jobs pass and twenty-two
+complete-module jobs still await a Windows runner, with no test failures/logs yet.
 Current-head simple-CLI Linux CRC32 replay also remains failed at the CPU-feature
 SB comparison; its log is `simple-cli-crc32-linux-0428ee36.log`. Ownership logs
 are `windows-owned-process-*-0428ee36.log`, under the report directory below.
