@@ -31,6 +31,9 @@ func (source *Source) Close() error {
 func (source *Source) Verify(ctx context.Context) error { return source.Numerical.Verify(ctx) }
 
 func Resolve(packagePath, symbol string) string {
+	// The selector chooses a source entry role; LLVM's logical symbol keeps
+	// the independently observed Go declaration name. Private <> is distinct.
+	symbol = strings.TrimSuffix(strings.TrimSuffix(symbol, "<ABIInternal>"), "<ABI0>")
 	symbol = strings.ReplaceAll(strings.ReplaceAll(symbol, "∕", "/"), "·", ".")
 	if strings.HasPrefix(symbol, ".") {
 		return packagePath + symbol
