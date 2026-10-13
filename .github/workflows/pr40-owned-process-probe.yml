@@ -75,6 +75,16 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: '22'
+      - name: Check the previous native packed-store failure first
+        shell: bash
+        env:
+          GOTOOLCHAIN: local
+          GOFLAGS: ''
+        run: |
+          set -euo pipefail
+          mkdir -p _out/windows-ownership
+          roots='TestCrossLinuxRuntimeMatrixX86PackedZeroMemoryStoreFault|TestX86GoPackedStoreFaultDiagnostic'
+          go test . -run "^($roots)$" -count=1 -timeout=5m -v 2>&1 | tee _out/windows-ownership/packed-store.log
       - name: Real process-tree and exhaustive runner regressions
         shell: bash
         env:
