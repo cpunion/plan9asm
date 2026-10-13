@@ -33,14 +33,23 @@ func x86ObserveMemoryFault(t *testing.T, execution x86FloatCompareExecution, exe
 
 func x86CheckMemoryFaultMatrix(t *testing.T, execution x86FloatCompareExecution, executable string, rows int) {
 	t.Helper()
-	for row := 0; row < rows; row++ {
+	required := make([]bool, rows)
+	for row := range required {
+		required[row] = true
+	}
+	x86CheckMemoryAccessMatrix(t, execution, executable, required)
+}
+
+func x86CheckMemoryAccessMatrix(t *testing.T, execution x86FloatCompareExecution, executable string, required []bool) {
+	t.Helper()
+	for row, reads := range required {
 		for probe := 0; probe < 3; probe++ {
 			// A volatile byte read supplies an independent access-extent
 			// reference, not evidence of original AVX/EVEX execution.
 			want := x86ObserveMemoryFault(t, execution, executable, row, probe, 1)
-			if probe == 2 {
+			if probe == 2 || !reads {
 				if want != "return" {
-					t.Fatalf("row %d: full accessible source faulted: %s", row, want)
+					t.Fatalf("row %d probe %d: accessible or suppressed source faulted: %s", row, probe, want)
 				}
 			} else if want != "segv" && want != "bus" {
 				t.Fatalf("row %d probe %d: native access did not fault: %s", row, probe, want)
@@ -50,7 +59,7 @@ func x86CheckMemoryFaultMatrix(t *testing.T, execution x86FloatCompareExecution,
 			}
 		}
 	}
-	t.Logf("%d rows: NULL, partial-page and complete-page inputs; independent native access and translated outcomes agree", rows)
+	t.Logf("%d rows: NULL, partial-page and complete-page inputs; independent native access and translated outcomes agree", len(required))
 }
 
 func x86MemoryFaultDriver(declarations, rows string) string {
@@ -93,14 +102,14 @@ struct memory_case {
     unsigned accessible;
 };
 
-static int memory_fault_setup(void) {
+static int memory_fault_setup(unsigned leading) {
 #ifdef _WIN32
     SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
 #else
     struct rlimit no_core = {0, 0};
     if (setrlimit(RLIMIT_CORE, &no_core)) return 120;
 #endif
-    if (setup_guard() || page < 64) return 81;
+    if (setup_guard_before(leading) || page < 64) return 81;
     for (size_t i = 0; i < page; ++i) guard[i] = (uint8_t)(i * 13 + 17);
     return 0;
 }
@@ -115,10 +124,10 @@ int main(int argc, char **argv) {
             sscanf(argv[2], "%u%c", &probe, &tail) != 1 ||
             sscanf(argv[3], "%u%c", &original, &tail) != 1 ||
             row >= sizeof(cases) / sizeof(cases[0]) || probe > 2 || original > 1) return 80;
-    int setup = memory_fault_setup();
+    int setup = memory_fault_setup(0);
     if (setup) return setup;
     struct memory_case kernel = cases[row];
-    if (!kernel.bytes || kernel.bytes > page || kernel.accessible >= kernel.bytes) return 82;
+    if (kernel.bytes > page || (kernel.bytes ? kernel.accessible >= kernel.bytes : kernel.accessible != 0)) return 82;
     const uint8_t *input = probe == 0 ? NULL :
         guard + page - (probe == 1 ? kernel.accessible : kernel.bytes);
 

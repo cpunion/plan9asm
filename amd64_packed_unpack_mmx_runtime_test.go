@@ -7,8 +7,8 @@ import (
 )
 
 func TestCrossLinuxRuntimeMatrixX86PackedUnpackMMXNativeMemoryAndFP(t *testing.T) {
-	llc, clang, triple, prefix := x86FloatAddSubRuntimeTools(t)
-	var assembly, declarations, calls strings.Builder
+	execution := x86FloatCompareExecutionTools(t)
+	var assembly, declarations, rows strings.Builder
 	sigs := map[string]FuncSig{}
 	count := 0
 	for _, opcode := range x86CallerUnpackOpcodes() {
@@ -32,25 +32,24 @@ func TestCrossLinuxRuntimeMatrixX86PackedUnpackMMXNativeMemoryAndFP(t *testing.T
 		if strings.Contains(opcode, "UNPCKH") {
 			high, extent = 4, 8
 		}
-		fmt.Fprintf(&calls, "if(checkMMX(%s,%s,%d,%d,%d,begin,end)) return 1;\n", name, fpName, x86UnpackTestLaneBytes(opcode), high, extent)
+		fmt.Fprintf(&rows, "{%s, %s, %d, %d, %d},\n", name, fpName, x86UnpackTestLaneBytes(opcode), high, extent)
 	}
 	requireX86GoAssemblerResult(t, "amd64", assembly.String(), true)
 	file, err := Parse(ArchAMD64, assembly.String())
 	if err != nil {
 		t.Fatal(err)
 	}
-	ir, err := Translate(file, Options{Goarch: "amd64", TargetTriple: triple, Sigs: sigs})
+	ir, err := Translate(file, Options{Goarch: "amd64", TargetTriple: execution.triple, Sigs: sigs})
 	if err != nil {
 		t.Fatal(err)
 	}
-	main := `#include <stdint.h>
-#include <string.h>
-#include <signal.h>
-#include <sys/mman.h>
-#include <sys/resource.h>
-#include <sys/wait.h>
-#include <unistd.h>
-` + declarations.String() + `
+	main := x86MemoryFaultSupportC + declarations.String() + `
+static const struct {
+ uint64_t (*run)(const uint8_t*,uint64_t);
+ uint64_t (*fp)(uint32_t,uint32_t);
+ int lane, high, extent;
+} cases[] = {
+` + rows.String() + `};
 static uint64_t expectedMMX(const uint8_t *first,uint64_t second,int lane,int high) {
  uint8_t old[8],out[8];
  memcpy(old,&second,8);
@@ -63,7 +62,7 @@ static uint64_t expectedMMX(const uint8_t *first,uint64_t second,int lane,int hi
  return value;
 }
 static int checkMMX(uint64_t (*program)(const uint8_t*,uint64_t),
- uint64_t (*fp)(uint32_t,uint32_t),int lane,int high,int extent,uint8_t *begin,uint8_t *end) {
+ uint64_t (*fp)(uint32_t,uint32_t),int lane,int high,int extent,uint8_t *end) {
  for(int seed=0;seed<16;++seed) {
   uint8_t *first=end-extent,source[8];
   for(int i=0;i<8;++i) source[i]=(uint8_t)(seed*73+i*19+7);
@@ -75,34 +74,53 @@ static int checkMMX(uint64_t (*program)(const uint8_t*,uint64_t),
   memcpy(&b,source+4,4);
   if(fp(a,b)!=expectedMMX(source,0,lane,high)) return 1;
  }
- const uint8_t *bad[]={end-extent+1,high ? begin-4 : end-3};
- for(int i=0;i<2;++i) {
-  pid_t child=fork();
-  if(child<0) return 1;
-  if(child==0) {
-   struct rlimit limit={0,0};
-   if(setrlimit(RLIMIT_CORE,&limit)) _exit(2);
-   volatile uint64_t observed=program(bad[i],UINT64_C(0xabcdef1234567890));
-   (void)observed;
-   _exit(0);
-  }
-  int status=0;
-  if(waitpid(child,&status,0)!=child || !WIFSIGNALED(status) ||
-   (WTERMSIG(status)!=SIGSEGV && WTERMSIG(status)!=SIGBUS)) return 1;
- }
  return 0;
 }
-int main(void) {
- long page=sysconf(_SC_PAGESIZE);
- if(page<=0) return 1;
- uint8_t *memory=mmap(0,(size_t)page*3,PROT_READ|PROT_WRITE,MAP_PRIVATE|MAP_ANON,-1,0);
- if(memory==MAP_FAILED || mprotect(memory,(size_t)page,PROT_NONE) ||
-  mprotect(memory+2*page,(size_t)page,PROT_NONE)) return 1;
- uint8_t *begin=memory+page,*end=memory+2*page;
-` + calls.String() + `
- if(munmap(memory,(size_t)page*3)) return 1;
- return 0;
+int main(int argc, char **argv) {
+    if (argc != 4) return 80;
+    unsigned row = (unsigned)atoi(argv[1]);
+    unsigned probe = (unsigned)atoi(argv[2]);
+    unsigned original = (unsigned)atoi(argv[3]);
+    if (row >= sizeof(cases)/sizeof(cases[0]) || probe > 3 || original > 1) return 80;
+    int setup = memory_fault_setup(1);
+    if (setup) return setup;
+    uint8_t *end = guard + page;
+    const uint8_t *input = NULL;
+    if (probe == 1) input = end - cases[row].extent + 1;
+    if (probe == 2) input = end - cases[row].extent;
+    if (probe == 3) input = cases[row].high ? guard - 4 : end - 3;
+
+    printf("memory enter %u %u %u\n", row, probe, original);
+    if (fflush(stdout)) return 83;
+    if (original) {
+        const volatile uint8_t *source = input;
+        volatile uint8_t sink = 0;
+        for (int i = 0; i < cases[row].extent; ++i) sink ^= source[i];
+    } else if (probe == 2) {
+        if (checkMMX(cases[row].run, cases[row].fp, cases[row].lane,
+                cases[row].high, cases[row].extent, end)) return 91;
+    } else {
+        volatile uint64_t observed = cases[row].run(input, UINT64_C(0xabcdef1234567890));
+        (void)observed;
+    }
+    if (free_guard()) return 84;
+    puts("memory complete");
+    return fflush(stdout) ? 85 : 0;
 }
 `
-	compileAndRunRuntimeTestForTarget(t, llc, clang, "unpack-mmx-native-memory-fp", triple, ir, main, prefix)
+	for _, level := range []string{"-O0", "-O2"} {
+		t.Run(level, func(t *testing.T) {
+			executable := execution.compileLLVM(t, "unpack-mmx-native-memory-fp", ir, main, level)
+			x86CheckMemoryFaultMatrix(t, execution, executable, count)
+			for row := 0; row < count; row++ {
+				want := x86ObserveMemoryFault(t, execution, executable, row, 3, 1)
+				if want != "segv" && want != "bus" {
+					t.Fatalf("row %d: independent leading/short read did not fault: %s", row, want)
+				}
+				if got := x86ObserveMemoryFault(t, execution, executable, row, 3, 0); got != want {
+					t.Fatalf("row %d: translated leading/short read %s, want %s", row, got, want)
+				}
+			}
+		})
+	}
 }
