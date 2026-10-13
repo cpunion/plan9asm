@@ -72,6 +72,7 @@ type GoAMD64FrameSource struct {
 	numericalPackage   GoPackage
 	numericalCapturing bool
 	numericalCommands  []numericalSBCommand // Actual capture output only; never an authority.
+	sdkFrame           *goAMD64SDKFrameOrigin
 }
 
 // newGoOriginalInputGuard initializes only private input/cleanup ownership.
@@ -431,6 +432,9 @@ func (source *GoAMD64FrameSource) Verify(ctx context.Context) (verifyErr error) 
 	if source == nil || source.identity != source {
 		return goAMD64FrameContext("missing sealed actual-object observation")
 	}
+	if source.sdkFrame != nil {
+		return source.verifySDKFrame(ctx)
+	}
 	if err := source.verifyNumericalFrameInputs(ctx); err != nil {
 		source.revokeNumericalFrame()
 		return err
@@ -557,6 +561,9 @@ func (source *GoAMD64FrameSource) Close() error {
 	}
 	if source.identity != source {
 		return goAMD64FrameContext("copied or uninitialized observation cannot dispose original artifacts")
+	}
+	if source.sdkFrame != nil {
+		return source.closeSDKFrame()
 	}
 	source.mu.Lock()
 	defer source.mu.Unlock()
@@ -1185,6 +1192,9 @@ func goAMD64FrameIsAlias(typ types.Type) bool {
 }
 
 func (source *GoAMD64FrameSource) preprocess(name string, original []byte) (string, error) {
+	if source.sdkFrame != nil {
+		return source.preprocessSDKFrame(name, original)
+	}
 	if len(source.assemblerDefines) == 0 {
 		return "", goAMD64FrameContext("CPP lacks its actual assembler macro registration")
 	}

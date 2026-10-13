@@ -1,0 +1,90 @@
+//go:build go1.27
+
+package main
+
+import (
+	"bytes"
+	"os"
+	"path/filepath"
+	"runtime"
+	"strings"
+	"testing"
+
+	"github.com/xgo-dev/plan9asm/gotoolprofile"
+)
+
+func TestRunOneTargetSDKFixedLocalPreservesActualDefaultProfile(t *testing.T) {
+	for _, profile := range []string{"off", "original-config"} {
+		t.Run(profile, func(t *testing.T) {
+			for key, value := range map[string]string{
+				"GOWORK": "off", "GOTOOLCHAIN": "local", "GOFLAGS": "", "GOEXPERIMENT": "",
+				"GOPACKAGESDRIVER": "off", "GOOS": "linux", "GOARCH": "amd64",
+				"GO386": "", "GOARM": "", "GOARM64": "", "GOWASM": "",
+			} {
+				t.Setenv(key, value)
+			}
+			// Preserve actual compiler defaults, including CGO. An existing
+			// config is a producer input, not a request to replace it with off.
+			for _, key := range []string{"CGO_ENABLED", "GOAMD64", "GOPROXY"} {
+				t.Setenv(key, "")
+				if err := os.Unsetenv(key); err != nil {
+					t.Fatal(err)
+				}
+			}
+			configPath := "off"
+			if profile == "original-config" {
+				parent, err := filepath.EvalSymlinks(t.TempDir())
+				if err != nil {
+					t.Fatal(err)
+				}
+				configPath = filepath.Join(parent, "go-env")
+				if err := os.WriteFile(configPath, []byte("GOPROXY=https://original-config.invalid,direct\n"), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			t.Setenv("GOENV", configPath)
+			const path = "vendor/golang.org/x/crypto/chacha20poly1305"
+			input := filepath.Join(runtime.GOROOT(), "src", filepath.FromSlash(path), "chacha20poly1305_amd64.s")
+			original, err := os.ReadFile(input)
+			if err != nil {
+				t.Fatal(err)
+			}
+			ctx := arm64PrivateCLIContext(t)
+			defaults, stderr, err := gotoolprofile.RunBounded(ctx, "", os.Environ(), "go", "env", "CGO_ENABLED", "GOENV", "GOPROXY")
+			if err != nil || len(stderr) != 0 {
+				t.Fatalf("actual compiler/default config precondition: %v; %s", err, stderr)
+			}
+			t.Logf("actual original default profile:\n%s", defaults)
+			config, err := resolveCompileConfig(true, "", true, 2)
+			if err != nil {
+				t.Fatal(err)
+			}
+			config.Context = ctx
+			output := t.TempDir()
+			report, _, err := runOneTarget(targetSpec{Goos: "linux", Goarch: "amd64"},
+				[]string{path}, nil, nil, "", output, false, 0, false, false, true, "../..", config)
+			if err != nil || report.TotalAsm != 1 || len(report.AsmFiles) != 1 || report.Success != 0 ||
+				report.Failed != 1 || report.NotApplicable != 0 || len(report.Fails) != 1 {
+				t.Fatalf("complete actual SDK source failure disappeared: %v; %+v", err, report)
+			}
+			failure := report.Fails[0].Err
+			if !strings.Contains(failure, "SDK-primary frame requires an exact Go-declared logical ABI0 entry") ||
+				!strings.Contains(failure, "polyHashADInternal<>") || !strings.Contains(failure, "declared=false") ||
+				strings.Contains(failure, "ordinary observation requires exact GOENV") || strings.Contains(failure, "owned main") {
+				t.Fatalf("default profile/SDK source was mislabeled, or helper acquired frame authority: %s", failure)
+			}
+			if err := filepath.WalkDir(output, func(name string, entry os.DirEntry, err error) error {
+				if err == nil && !entry.IsDir() {
+					t.Errorf("rejected complete SDK source published an artifact: %s", name)
+				}
+				return err
+			}); err != nil {
+				t.Fatal(err)
+			}
+			after, err := os.ReadFile(input)
+			if err != nil || !bytes.Equal(after, original) {
+				t.Fatal("complete original SDK source was cropped or replaced", err)
+			}
+		})
+	}
+}
