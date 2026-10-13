@@ -15,6 +15,8 @@ import (
 	"time"
 
 	"github.com/xgo-dev/plan9asm"
+	"github.com/xgo-dev/plan9asm/gotoolprofile"
+	"github.com/xgo-dev/plan9asm/internal/nativeoracle"
 	"golang.org/x/tools/go/packages"
 )
 
@@ -164,9 +166,9 @@ func TestFallbackARM64WideFrameCompilesWithLLVM22(t *testing.T) {
 		if err != nil {
 			t.Fatal("required LLVM 22 clang: ", err)
 		}
-		version, err := exec.Command(clang, "--version").CombinedOutput()
+		version, stderr, err := gotoolprofile.RunBounded(arm64PrivateCLIContext(t), dir, os.Environ(), clang, "--version")
 		if err != nil || !regexp.MustCompile(`(?m)\bclang version 22\.`).Match(version) {
-			t.Fatalf("required LLVM 22 clang: %v\n%s", err, version)
+			t.Fatalf("required LLVM 22 clang: %v\n%s%s", err, version, stderr)
 		}
 		const oracle = `#include <stdint.h>
 #include <stdio.h>
@@ -191,16 +193,20 @@ int main(void) {
 		if err := os.WriteFile(main, []byte(oracle), 0o600); err != nil {
 			t.Fatal(err)
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-		defer cancel()
 		binary := filepath.Join(dir, "oracle")
-		command := exec.CommandContext(ctx, clang, "-O2", main,
-			filepath.Join(dir, runtime.GOOS+".o"), "-o", binary)
-		if output, err := command.CombinedOutput(); err != nil {
-			t.Fatalf("link native inferred-argument oracle: %v\n%s", err, output)
+		arguments := []string{"-O2", main, filepath.Join(dir, runtime.GOOS+".o"), "-o", binary}
+		if runtime.GOOS == "darwin" {
+			flags, err := nativeoracle.DarwinClangFlags(arm64PrivateCLIContext(t), os.Environ())
+			if err != nil {
+				t.Fatal(err)
+			}
+			arguments = append(flags, arguments...)
 		}
-		if output, err := exec.CommandContext(ctx, binary).CombinedOutput(); err != nil {
-			t.Fatalf("execute native inferred-argument oracle: %v\n%s", err, output)
+		if stdout, stderr, err := gotoolprofile.RunBounded(arm64PrivateCLIContext(t), dir, os.Environ(), clang, arguments...); err != nil {
+			t.Fatalf("link native inferred-argument oracle: %v\n%s%s", err, stdout, stderr)
+		}
+		if stdout, stderr, err := gotoolprofile.RunBounded(arm64PrivateCLIContext(t), dir, os.Environ(), binary); err != nil {
+			t.Fatalf("execute native inferred-argument oracle: %v\n%s%s", err, stdout, stderr)
 		}
 	})
 }
@@ -214,10 +220,9 @@ func requireFallbackARM64GoObject(t *testing.T, source string) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
-	command := exec.CommandContext(ctx, "go", "tool", "asm", "-o", object, asm)
-	command.Env = append(os.Environ(), "GOOS=linux", "GOARCH=arm64", "GOTOOLCHAIN=local")
-	if output, err := command.CombinedOutput(); err != nil {
-		t.Fatalf("independent Go assembler rejected source: %v\n%s", err, output)
+	env := append(os.Environ(), "GOOS=linux", "GOARCH=arm64", "GOTOOLCHAIN=local")
+	if stdout, stderr, err := gotoolprofile.RunBounded(ctx, dir, env, "go", "tool", "asm", "-o", object, asm); err != nil {
+		t.Fatalf("independent Go assembler rejected source: %v\n%s%s", err, stdout, stderr)
 	}
 	if info, err := os.Stat(object); err != nil || info.Size() == 0 {
 		t.Fatalf("independent Go assembler did not emit an object: %v", err)

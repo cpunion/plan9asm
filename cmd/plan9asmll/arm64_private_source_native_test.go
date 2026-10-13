@@ -14,6 +14,7 @@ import (
 
 	"github.com/xgo-dev/plan9asm"
 	"github.com/xgo-dev/plan9asm/gotoolprofile"
+	"github.com/xgo-dev/plan9asm/internal/nativeoracle"
 )
 
 func TestCompileOneARM64PrivateSourceNativeNumericalOracle(t *testing.T) {
@@ -95,8 +96,16 @@ int main(void) {
 		t.Fatal(err)
 	}
 	object := strings.TrimSuffix(output, ".ll") + ".o"
+	arguments := []string{"-O2", mainPath, object, "-o", binary}
+	if runtime.GOOS == "darwin" {
+		flags, err := nativeoracle.DarwinClangFlags(arm64PrivateCLIContext(t), os.Environ())
+		if err != nil {
+			t.Fatal(err)
+		}
+		arguments = append(flags, arguments...)
+	}
 	stdout, stderr, err = gotoolprofile.RunBounded(arm64PrivateCLIContext(t), dir, os.Environ(),
-		clang, "-O2", mainPath, object, "-o", binary)
+		clang, arguments...)
 	if err != nil {
 		t.Fatalf("link actual translated source: %v\n%s%s", err, stdout, stderr)
 	}

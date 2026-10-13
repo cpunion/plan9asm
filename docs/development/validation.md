@@ -27,6 +27,16 @@ export LLVM_CONFIG="$llvm22_root/bin/llvm-config"
 Missing required LLVM tools, linkers or backends fail, never skip.
 Host-inapplicable execution requires its cross-runtime CI counterpart.
 
+Darwin native C oracles query the actual selected macOS SDK with bounded, owned
+`xcrun --sdk macosx --show-sdk-path`, require one complete absolute existing
+directory, and pass `--no-default-config -isysroot` to the independently checked
+LLVM 22 clang. `DEVELOPER_DIR` selects the actual developer tools; `SDKROOT` and
+CGO flags alone cannot override a hard-coded clang default configuration. Do not
+edit global clang configurations, guess an SDK version or substitute another
+LLVM. Missing SDK selection fails. The shared `internal/nativeoracle` helper is
+test-driver configuration, not source/ABI authority; exact downloaded-source
+oracles retain their additional live SDK/tool/file identity observations.
+
 ## Local and CI gates
 
 Run focused RED/GREEN tests first; preserve failures under ignored `_out/`.

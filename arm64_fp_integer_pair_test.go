@@ -7,6 +7,8 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/xgo-dev/plan9asm/internal/nativeoracle"
 )
 
 func arm64FPPairRuntimeTools(t *testing.T) (llc, triple string, compiler, runner []string) {
@@ -33,6 +35,15 @@ func arm64FPPairRuntimeTools(t *testing.T) (llc, triple string, compiler, runner
 		}
 	} else if compiler[0] == "" {
 		t.Fatal("LLVM 22 clang not found")
+	}
+	if native && runtime.GOOS == "darwin" {
+		ctx, cancel := runtimeOracleStageContext(t)
+		defer cancel()
+		flags, err := nativeoracle.DarwinClangFlags(ctx, os.Environ())
+		if err != nil {
+			t.Fatal(err)
+		}
+		compiler = append(compiler, flags...)
 	}
 	return llc, triple, compiler, runner
 }
