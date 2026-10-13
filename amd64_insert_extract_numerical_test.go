@@ -190,8 +190,8 @@ __attribute__((noinline)) static int check(transfer fn,int insert,int scalar,int
 }
 
 func TestCrossLinuxRuntimeMatrixX86InsertInactiveMemoryStillFaults(t *testing.T) {
-	llc, clang, triple, prefix := x86FloatAddSubRuntimeTools(t)
-	var source, declarations, calls strings.Builder
+	execution := x86FloatCompareExecutionTools(t)
+	var source, declarations, rows strings.Builder
 	sigs := map[string]FuncSig{}
 	for index, row := range []string{
 		"VINSERTF32X4.Z $1,(BX),Y1,K1,Y2", "VINSERTI64X4.Z $1,(BX),Z1,K1,Z2", "VINSERTPS $15,(BX),X1,X2", "INSERTPS $15,(BX),X2",
@@ -200,48 +200,30 @@ func TestCrossLinuxRuntimeMatrixX86InsertInactiveMemoryStillFaults(t *testing.T)
 		fmt.Fprintf(&source, "TEXT %s(SB),4,$0-16\nMOVQ out+0(FP),AX\nMOVQ input+8(FP),BX\nMOVQ $0,CX\nKMOVQ CX,K1\nVPXORD Z1,Z1,Z1\n%s\nVMOVUPS Z2,(AX)\nRET\n", name, row)
 		sigs[name] = FuncSig{Name: name, Args: []LLVMType{Ptr, Ptr}, Ret: Void, Frame: FrameLayout{Params: []FrameSlot{{Offset: 0, Type: Ptr, Index: 0, Field: -1}, {Offset: 8, Type: Ptr, Index: 1, Field: -1}}}}
 		fmt.Fprintf(&declarations, "extern void %s(void*,const void*);\n", name)
-		fmt.Fprintf(&calls, "if(fault(%s,0,%d)||fault(%s,page+size-%d,%d))return %d;\n", name, []int{16, 32, 4, 4}[index], name, []int{8, 16, 2, 2}[index], []int{16, 32, 4, 4}[index], index+1)
+		fmt.Fprintf(&declarations, `static int observe%d(const uint8_t *input) {
+    uint8_t output[66];
+    memset(output, 0xc3, sizeof(output));
+    %s(output + 1, input);
+    return output[0] != 0xc3 || output[65] != 0xc3;
+}
+`, index, name)
+		width := []int{16, 32, 4, 4}[index]
+		fmt.Fprintf(&rows, "{observe%d, %d, %d},\n", index, width, width/2)
 	}
 	goAssemblerOracleOutput(t, "amd64", source.String(), "", true)
 	file, err := Parse(ArchAMD64, source.String())
 	if err != nil {
 		t.Fatal(err)
 	}
-	ir, err := Translate(file, Options{Goarch: "amd64", TargetTriple: triple, Sigs: sigs})
+	ir, err := Translate(file, Options{Goarch: "amd64", TargetTriple: execution.triple, Sigs: sigs})
 	if err != nil {
 		t.Fatal(err)
 	}
-	main := `#include <stdint.h>
-#include <signal.h>
-#include <unistd.h>
-#include <sys/mman.h>
-#include <sys/resource.h>
-#include <sys/wait.h>
-#include <stdio.h>
-typedef void(*transfer)(void*,const void*);
-static int fault(transfer fn,const void *input,unsigned width){
- int statuses[2];
- for(unsigned oracle=0;oracle<2;oracle++){
-  pid_t child=fork();if(child<0)return 1;
-  if(child==0){
-   struct rlimit no_core={0,0};
-   if(setrlimit(RLIMIT_CORE,&no_core)) _exit(120);
-
-   uint8_t out[64];
-   if(oracle){
-    volatile const uint8_t *p=input;
-    volatile uint8_t sink=0;
-    for(unsigned i=0;i<width;i++)sink^=p[i];
-   }else fn(out,input);
-   _exit(0);
-  }
-  if(waitpid(child,&statuses[oracle],0)!=child)return 1;
- }
- int expected=WIFSIGNALED(statuses[1])?WTERMSIG(statuses[1]):0;
- int failed=(expected!=SIGSEGV&&expected!=SIGBUS)||!WIFSIGNALED(statuses[0])||WTERMSIG(statuses[0])!=expected;
- if(failed)fprintf(stderr,"fault input=%p actual=%x original-native-access=%x\n",input,statuses[0],statuses[1]);return failed;
-}
-` + declarations.String() + `int main(void){long size=sysconf(_SC_PAGESIZE);if(size<=0)return 7;char *page=mmap(0,size*2,PROT_READ|PROT_WRITE,MAP_PRIVATE|MAP_ANON,-1,0);if(page==MAP_FAILED||mprotect(page+size,size,PROT_NONE))return 8;
-` + calls.String() + "munmap(page,size*2);return 0;}\n"
-	compileAndRunRuntimeTestForTarget(t, llc, clang, "insert-inactive-memory-fault", triple, ir, main, prefix)
+	main := x86MemoryFaultDriver(declarations.String(), rows.String())
+	for _, level := range []string{"-O0", "-O2"} {
+		t.Run(level, func(t *testing.T) {
+			executable := execution.compileLLVM(t, "insert-inactive-memory-fault", ir, main, level)
+			x86CheckMemoryFaultMatrix(t, execution, executable, 4)
+		})
+	}
 }

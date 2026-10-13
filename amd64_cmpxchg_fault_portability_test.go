@@ -9,6 +9,18 @@ import (
 )
 
 func TestX86CMPXCHGFaultWindowsHeaderBoundary(t *testing.T) {
+	x86FaultWindowsHeaderBoundary(t, x86CMPXCHGFaultReference,
+		[]string{"VirtualAlloc", "VirtualProtect", "VirtualFree", "kernel.original(p)", "kernel.translated(p)"})
+}
+
+func TestX86MemoryFaultWindowsHeaderBoundary(t *testing.T) {
+	driver := x86MemoryFaultDriver("static int sample(const uint8_t *p) { return *p; }\n", "{sample, 4, 3},")
+	x86FaultWindowsHeaderBoundary(t, driver,
+		[]string{"VirtualAlloc", "VirtualProtect", "VirtualFree", "kernel.run(input)", "source[i]"})
+}
+
+func x86FaultWindowsHeaderBoundary(t *testing.T, driver string, required []string) {
+	t.Helper()
 	clang := findLLVM22Tool("clang")
 	if clang == "" {
 		t.Fatal("LLVM 22 clang required")
@@ -31,7 +43,7 @@ func TestX86CMPXCHGFaultWindowsHeaderBoundary(t *testing.T) {
 		}
 	}
 	input := filepath.Join(directory, "fault.c")
-	if err := os.WriteFile(input, []byte(x86CMPXCHGFaultReference), 0600); err != nil {
+	if err := os.WriteFile(input, []byte(driver), 0600); err != nil {
 		t.Fatal(err)
 	}
 	ctx, cancel := runtimeOracleStageContext(t)
@@ -42,9 +54,9 @@ func TestX86CMPXCHGFaultWindowsHeaderBoundary(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Windows fault driver still consumes POSIX headers: %v\n%s", err, output)
 	}
-	for _, required := range []string{"VirtualAlloc", "VirtualProtect", "VirtualFree", "kernel.original(p)", "kernel.translated(p)"} {
-		if !strings.Contains(string(output), required) {
-			t.Fatal("Windows fault driver lost its real guard or operation", required)
+	for _, operation := range required {
+		if !strings.Contains(string(output), operation) {
+			t.Fatal("Windows fault driver lost its real guard or operation", operation)
 		}
 	}
 }

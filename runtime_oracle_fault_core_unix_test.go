@@ -70,7 +70,6 @@ func TestRuntimeOracleFaultChildrenDisableCoreDumps(t *testing.T) {
 		"amd64_signed_integer_scalar_float_runtime_test.go",
 		"amd64_packed_shift_fault_test.go",
 		"amd64_packed_shift_native_count_runtime_test.go",
-		"amd64_insert_extract_numerical_test.go",
 		"amd64_undefined_trap_runtime_unix_test.go",
 		"amd64_cpu_query_runtime_unix_test.go",
 		"amd64_dword_product_fault_runtime_unix_test.go",
@@ -208,5 +207,21 @@ static void inspect_limits(unsigned char *p) {
 		if err != nil || got != "return" {
 			t.Fatalf("actual direct child core limits, original=%d: %s, %v", original, got, err)
 		}
+	}
+}
+
+func TestX86MemoryFaultChildCoreLimit(t *testing.T) {
+	execution := x86FloatCompareExecutionTools(t)
+	const callback = `
+static int inspect_limits(const uint8_t *p) {
+    struct rlimit limit;
+    if (getrlimit(RLIMIT_CORE, &limit) || limit.rlim_cur || limit.rlim_max) return 91;
+    return *p != (uint8_t)((page - 4) * 13 + 17);
+}
+`
+	source := x86MemoryFaultDriver(callback, "{inspect_limits, 4, 3},")
+	executable := execution.compileLLVM(t, "memory-core-limit", "", source, "-O2")
+	if got := x86ObserveMemoryFault(t, execution, executable, 0, 2, 0); got != "return" {
+		t.Fatalf("direct child did not retain zero core limits: %s", got)
 	}
 }
