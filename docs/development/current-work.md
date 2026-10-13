@@ -145,9 +145,27 @@ logical numerical-read consumers with original source/PC/relocation joins.
 Actual SDK storage/profile guards passed in 8.441 seconds; the complete vector
 family's four APIs/five x86 backend/optimization objects passed in 26.899 seconds.
 Complete `gostaticstorage` passed Go 1.27/1.20 in 78.373/0.481 seconds; the shared
-frontend passed Go 1.20 in 0.436 seconds, and root vet passed. This does not yet
-close maps' native ABIInternal entry, caller loops or private literal contracts;
-keep those benchmark failures explicit. Ownership logs are
+frontend passed Go 1.20 in 0.436 seconds, and root vet passed. That initial
+batch did not close maps' entry, caller loops or private literal contracts.
+`c1ab80ac`/`1de48c7d` now join the genuine scalar-register ABIInternal declarations
+and exact empty current ASM DATA member without borrowing another member's
+private table permission. Their broad SDK/source/frame guards passed in
+482.918 seconds and ordinary consumer guards in 169.135 seconds. The private
+namespace fixture regression stays failed in its earlier receipt.
+`66103829` supplies the complete selected-package DATA observation through both
+frontends. Integrated public CRC32/CGO1 and complete original nosimd maps CLI,
+metadata and LLVM 22 O0/O2 tests passed in 125.158 seconds; root vet passed.
+Full memhash amd64/386 private addresses, indexed reads and caller/pointer/loop
+contracts remain unresolved. A fresh complete benchmark is still required.
+`a1eb6dc2` independently binds actual Go TLS direct-NOP source rewrites; no
+native thread, TLS address, g or entry permission is created. Integrated
+three-API objects, unknown-state/callback and owned-command guards passed in
+60.226 seconds; shared frontend tests passed in 0.384 seconds. All three module
+vets and tracked Go formatting passed before the scalar-entry follow-up; final
+root vet passed after it. Native Ubuntu TLS byte parity is required in the fork
+probe workflow, alongside all seven repaired memory/precision fault roots.
+Native Windows and native Linux confirmation of this batch remain pending.
+Ownership logs are
 `windows-owned-process-*-0428ee36.log`, under the report directory below.
 
 - `7bdc112a`: Windows C text-mode CRLF now retains the exact observation
@@ -322,12 +340,12 @@ tools; later edits do not inherit a complete-head pass.
 
 ## Remaining work, in priority order
 
-1. Windows' complete main-module and LLVM CLI suites exceed the thirty-minute deadline.
-   Partition without losing actual inventory. Windows Job ownership and actual
-   dependency scope, complete-module execution and coverage aggregation passed
-   native diagnostics and are wired into formal CI; full native validation is
-   running and its actual failures need repair. The local current root inventory
-   contains 5942 roots; four selected native regressions are not its full suite.
+1. Confirm the repaired Windows main-root failures in a fresh complete native
+   run. Partitioning retains inventory and the thirty-minute budgets; both
+   complete CLI execution/coverage aggregates and process ownership passed the
+   last frozen run. Its 5,840 main-root outcomes are retained above. New source
+   and fault-driver receipts still require actual native execution; selected
+   regressions are not complete-module certification.
 2. Rerun affected complete gates and both CLIs, publish to the existing
    allowed-fork contribution ref, then inspect fresh CI. No upstream manual
    cancellation/rerun is authorized. The sixteen-part Linux race schedule
