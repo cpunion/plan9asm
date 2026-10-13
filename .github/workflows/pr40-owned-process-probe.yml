@@ -82,6 +82,23 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: '22'
+      - name: Check the previous LLVM CLI platform-query failure first
+        if: ${{ matrix.go == '1.27.2' }}
+        shell: bash
+        working-directory: cmd/plan9asmll
+        env:
+          GOTOOLCHAIN: local
+          GOFLAGS: ''
+          GOENV: 'off'
+          GOWORK: 'off'
+        run: |
+          set -euo pipefail
+          mkdir -p ../../_out/windows-ownership
+          root='TestX86SDKNumericalOwnerQueryIsNotPackageExemption'
+          go test -tags=byollvm . -list "^$root$" > ../../_out/windows-ownership/sdk-query-inventory.log
+          grep -Fx "$root" ../../_out/windows-ownership/sdk-query-inventory.log
+          go test -tags=byollvm . -run "^$root$" -count=1 -timeout=2m -v \
+            2>&1 | tee ../../_out/windows-ownership/sdk-query.log
       - name: Check the previous native packed-store failure first
         shell: bash
         env:
