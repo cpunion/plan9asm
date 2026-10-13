@@ -17,9 +17,10 @@ type x86SDKLiteralOperand struct {
 func x86SDKLiteralOperandProperties(ins Instr, index int, arch string) (x86SDKLiteralOperand, bool) {
 	var form x86SDKLiteralOperand
 	if index < 0 || index >= len(ins.Args) || arch != "386" && arch != "amd64" ||
-		ins.x86Encoded || ins.x86AddressBits != 0 || ins.x86UnboundAddressOverride || ins.x86SegmentPrefix != 0 {
+		ins.x86Encoded || ins.x86SourceRaw != nil || ins.x86AddressBits != 0 || ins.x86UnboundAddressOverride || ins.x86SegmentPrefix != 0 {
 		return form, false
 	}
+	ins = x86GoMOVQSourceInstruction(ins) // Local grammar dispatch, never original Op/Raw.
 	operand := ins.Args[index]
 	immediate := operand.Kind == OpSym && strings.HasPrefix(strings.TrimSpace(operand.Sym), "$")
 	if immediate {

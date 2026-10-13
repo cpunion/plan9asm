@@ -61,7 +61,7 @@ func proveX86SDKLiteralAccesses(fn Func, sig FuncSig, arch string, literals map[
 	edges := make([][]int, n)
 	named := make([]bool, n)
 	for ordinal, ins := range fn.Instrs {
-		if ins.x86Encoded || ins.x86SourceRaw != nil || ins.x86RawNearReturn != nil || ins.x86AddressBits != 0 || ins.x86UnboundAddressOverride {
+		if isX86RawDirective(ins) || ins.x86Encoded || ins.x86SourceRaw != nil || ins.x86RawNearReturn != nil || ins.x86AddressBits != 0 || ins.x86UnboundAddressOverride {
 			return fail("raw/native/address-size source needs its separate contract")
 		}
 		for index := range ins.Args {
@@ -185,7 +185,7 @@ func proveX86SDKLiteralAccesses(fn Func, sig FuncSig, arch string, literals map[
 						operand.Mem.OffRaw != "" || operand.Mem.Segment != "" || operand.Mem.IndexExt != "" {
 						return numericalSBContext("private literal derived address lost its exact origin")
 					}
-					width, write, valid := x86InstructionMemoryShape(ins, index, arch)
+					width, write, valid := x86InstructionMemoryShape(x86GoMOVQSourceInstruction(ins), index, arch)
 					if !valid || write || width <= 0 {
 						return numericalSBContext("private literal derived access has an unbound read-only shape")
 					}
@@ -201,7 +201,7 @@ func proveX86SDKLiteralAccesses(fn Func, sig FuncSig, arch string, literals map[
 				}
 			}
 			if !private {
-				if width, write, known := x86InstructionMemoryShape(ins, index, arch); known && !write && width > 0 {
+				if width, write, known := x86InstructionMemoryShape(x86GoMOVQSourceInstruction(ins), index, arch); known && !write && width > 0 {
 					nonliteral[pc] = true
 				}
 				continue
@@ -346,6 +346,7 @@ func x86SDKLiteralRefineEdge(op Op, taken bool, state *x86SDKLiteralState) bool 
 }
 
 func x86SDKLiteralTransfer(ins Instr, state *x86SDKLiteralState, sig FuncSig, arch string, literalRead *x86SDKLiteralAccess) error {
+	ins = x86GoMOVQSourceInstruction(ins) // Facts retain the complete original instruction.
 	word := x86ResultPointerWord(arch)
 	op := string(ins.Op)
 	width := int64(0)
