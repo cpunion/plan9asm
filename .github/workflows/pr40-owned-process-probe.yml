@@ -1,0 +1,36 @@
+name: PR40 Windows owned-process diagnostics
+on:
+  push:
+    branches: [codex/pr40-windows-owned-process-probe-20261013]
+permissions:
+  contents: read
+jobs:
+  ownership:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        go: ['1.20.14', '1.27.2']
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-go
+        with:
+          go-version: ${{ matrix.go }}
+          cache: false
+      - name: Real process-tree and exhaustive runner regressions
+        shell: bash
+        env:
+          GOTOOLCHAIN: local
+          GOFLAGS: ''
+        run: |
+          set -euo pipefail
+          mkdir -p _out/windows-ownership
+          go test ./cmd/plan9asmtest -run '^TestWindows' -count=1 -timeout=8m -v 2>&1 | tee _out/windows-ownership/native.log
+      - name: Preserve native results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: owned-process-${{ matrix.go }}
+          path: _out/windows-ownership/
+          if-no-files-found: error
