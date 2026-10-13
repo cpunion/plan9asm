@@ -7,8 +7,8 @@ import (
 )
 
 func TestCrossLinuxRuntimeMatrixX86PackedUnpackZeroMaskStillFaults(t *testing.T) {
-	llc, clang, triple, prefix := x86FloatAddSubRuntimeTools(t)
-	var assembly, declarations, calls strings.Builder
+	execution := x86FloatCompareExecutionTools(t)
+	var assembly, declarations, rows strings.Builder
 	sigs := map[string]FuncSig{}
 	for index, row := range []struct {
 		instruction string
@@ -25,53 +25,31 @@ func TestCrossLinuxRuntimeMatrixX86PackedUnpackZeroMaskStillFaults(t *testing.T)
 			{Offset: 0, Type: Ptr, Index: 0, Field: -1}, {Offset: 8, Type: Ptr, Index: 1, Field: -1},
 		}}}
 		fmt.Fprintf(&declarations, "extern void %s(const uint8_t*,uint8_t*);\n", name)
-		fmt.Fprintf(&calls, "if(check_fault(%s,0) || check_fault(%s,boundary-%d+1)) return 1;\n", name, name, row.bytes)
+		fmt.Fprintf(&declarations, `static int observe%d(const uint8_t *input) {
+    uint8_t output[66];
+    memset(output, 0xc3, sizeof(output));
+    %s(input, output + 1);
+    if (output[0] != 0xc3 || output[65] != 0xc3) return 1;
+    for (unsigned i = 1; i <= 64; ++i) if (output[i]) return 2;
+    return 0;
+}
+`, index, name)
+		fmt.Fprintf(&rows, "{observe%d, %d, %d},\n", index, row.bytes, row.bytes-1)
 	}
 	requireX86GoAssemblerResult(t, "amd64", assembly.String(), true)
 	file, err := Parse(ArchAMD64, assembly.String())
 	if err != nil {
 		t.Fatal(err)
 	}
-	ir, err := Translate(file, Options{Goarch: "amd64", TargetTriple: triple, Sigs: sigs})
+	ir, err := Translate(file, Options{Goarch: "amd64", TargetTriple: execution.triple, Sigs: sigs})
 	if err != nil {
 		t.Fatal(err)
 	}
-	main := `#include <stdint.h>
-#include <stdio.h>
-#include <signal.h>
-#include <sys/mman.h>
-#include <sys/resource.h>
-#include <sys/wait.h>
-#include <unistd.h>
-` + declarations.String() + `
-static int check_fault(void (*program)(const uint8_t*,uint8_t*),const uint8_t *input) {
- pid_t child=fork();
- if(child<0) return 1;
- if(child==0) {
-  struct rlimit limit={0,0};
-  if(setrlimit(RLIMIT_CORE,&limit)) _exit(2);
-  uint8_t output[64];
-  program(input,output);
-  _exit(0);
- }
- int status=0;
- if(waitpid(child,&status,0)!=child) return 1;
- if(!WIFSIGNALED(status) || (WTERMSIG(status)!=SIGSEGV && WTERMSIG(status)!=SIGBUS)) {
-  fprintf(stderr,"E4NF zero-mask input %p failed to fault: status=%d\n",input,status);
-  return 1;
- }
- return 0;
-}
-int main(void) {
- long page=sysconf(_SC_PAGESIZE);
- if(page<=0) return 1;
- uint8_t *memory=mmap(0,(size_t)page*2,PROT_READ|PROT_WRITE,MAP_PRIVATE|MAP_ANON,-1,0);
- if(memory==MAP_FAILED || mprotect(memory+page,(size_t)page,PROT_NONE)) return 1;
- uint8_t *boundary=memory+page;
-` + calls.String() + `
- if(munmap(memory,(size_t)page*2)) return 1;
- return 0;
-}
-`
-	compileAndRunRuntimeTestForTarget(t, llc, clang, "unpack-e4nf-fault", triple, ir, main, prefix)
+	main := x86MemoryFaultDriver(declarations.String(), rows.String())
+	for _, level := range []string{"-O0", "-O2"} {
+		t.Run(level, func(t *testing.T) {
+			executable := execution.compileLLVM(t, "unpack-e4nf-fault", ir, main, level)
+			x86CheckMemoryFaultMatrix(t, execution, executable, 4)
+		})
+	}
 }

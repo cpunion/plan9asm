@@ -77,6 +77,15 @@ container's three guard-page families passed in 13.772 seconds. The broader
 container runtime run remains failed: original MADD/PACK/timestamp and scalar
 comparison observations disagree on AF under emulation. Preserve the failed
 receipt and require native x86 confirmation; do not weaken flag checks.
+Native [38386789839](https://github.com/cpunion/plan9asm/actions/runs/38386789839)
+now passes all fourteen repaired x86 runtime roots in 11.512 seconds, including
+those four flag oracles. Windows ownership/sourcepath pass both Go versions;
+the complete-module jobs remain queued. The next batch replaces three Unix-only
+INSERT/PACK/UNPACK fault drivers with direct owned processes and shared guard
+pages. It adds positive full-extent reads, retains NULL/partial-read faults,
+canary/setup rejection and checked zero core limits. Linux container regression
+passed in 29.438 seconds; Go 1.20 header/policy checks passed in 0.883 seconds.
+These new fault drivers still need native Windows execution.
 Current-head simple-CLI Linux CRC32 replay also remains failed at the CPU-feature
 SB comparison; its log is `simple-cli-crc32-linux-0428ee36.log`. Ownership logs
 are `windows-owned-process-*-0428ee36.log`, under the report directory below.

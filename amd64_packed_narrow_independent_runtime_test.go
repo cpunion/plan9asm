@@ -434,7 +434,7 @@ func TestCrossLinuxRuntimeMatrixX86PackedNarrowIndependentE4NF(t *testing.T) {
 					fmt.Fprintf(&declarations, "func %s(input *byte)\n", name)
 					fmt.Fprintf(&assembly, "TEXT ·%s(SB),4,$0-8\nMOVQ input+0(FP),AX\nVPXORD %s0,%s0,%s0\nMOVL $0,CX\nKMOVQ CX,K1\n%s (AX),%s0,K1,%s1\nRET\n",
 						name, bank, bank, bank, op, bank, bank)
-					fmt.Fprintf(&table, "{%s,%d,\"%s %s\"},\n", name, bytes, op, bank)
+					fmt.Fprintf(&table, "{observe%d, %d, %d},\n", count-1, bytes, bytes-1)
 				}
 			}
 		}
@@ -442,61 +442,19 @@ func TestCrossLinuxRuntimeMatrixX86PackedNarrowIndependentE4NF(t *testing.T) {
 	goAssemblerOracleOutput(t, "amd64", assembly.String(), "", true)
 	ir := x86NarrowOracleIR(t, assembly.String(), declarations.String(), execution.triple)
 	var main strings.Builder
-	main.WriteString(`#include <stdint.h>
-#include <stdio.h>
-#include <signal.h>
-#include <sys/mman.h>
-#include <sys/resource.h>
-#include <sys/wait.h>
-#include <unistd.h>
-`)
 	for index := 0; index < count; index++ {
 		fmt.Fprintf(&main, "extern void fault%d(const uint8_t*);\n", index)
+		fmt.Fprintf(&main, `static int observe%d(const uint8_t *input) {
+    fault%d(input);
+    return 0;
+}
+`, index, index)
 	}
-	main.WriteString("static const struct {void (*run)(const uint8_t*); int bytes; const char *name;} cases[]={\n" + table.String() + "};\n")
-	main.WriteString(`
-static int observe(void (*run)(const uint8_t*),const uint8_t *input,int fault,const char *name) {
- pid_t child=fork();
- if(child<0) return 1;
- if(child==0) {
-  struct rlimit limit={0,0};
-  if(setrlimit(RLIMIT_CORE,&limit)) _exit(2);
-  run(input);
-  _exit(0);
- }
- int status=0;
- if(waitpid(child,&status,0)!=child) return 1;
- int correct=fault ? WIFSIGNALED(status)&&(WTERMSIG(status)==SIGSEGV||WTERMSIG(status)==SIGBUS)
-                   : WIFEXITED(status)&&WEXITSTATUS(status)==0;
- if(!correct) fprintf(stderr,"E4NF %s input=%p requiredFault=%d waitStatus=%d\n",name,input,fault,status);
- return !correct;
-}
-int main(void) {
- long page=sysconf(_SC_PAGESIZE);
- if(page<64) return 2;
- uint8_t *memory=mmap(0,(size_t)page*2,PROT_READ|PROT_WRITE,MAP_PRIVATE|MAP_ANON,-1,0);
- if(memory==MAP_FAILED) return 3;
- for(long i=0;i<page;++i) memory[i]=(uint8_t)(i*13+17);
- if(mprotect(memory+page,(size_t)page,PROT_NONE)) return 4;
- unsigned failures=0,valid=0,faults=0;
- for(unsigned row=0;row<sizeof(cases)/sizeof(cases[0]);++row) {
-  failures+=observe(cases[row].run,memory+page-cases[row].bytes,0,cases[row].name); ++valid;
-  failures+=observe(cases[row].run,0,1,cases[row].name); ++faults;
-  failures+=observe(cases[row].run,memory+page-cases[row].bytes+1,1,cases[row].name); ++faults;
- }
- if(munmap(memory,(size_t)page*2)) return 5;
- printf("E4NF valid=%u faultProbes=%u mismatches=%u\n",valid,faults,failures);
- return failures?1:0;
-}
-`)
+	driver := x86MemoryFaultDriver(main.String(), table.String())
 	for _, level := range []string{"-O0", "-O2"} {
 		t.Run(level, func(t *testing.T) {
-			output := execution.compileAndRunLLVM(t, "narrow-independent-e4nf", ir, main.String(), level)
-			want := fmt.Sprintf("E4NF valid=%d faultProbes=%d mismatches=0\n", count, count*2)
-			if string(output) != want {
-				t.Fatalf("incomplete E4NF observer: %q want %q", output, want)
-			}
-			t.Log(strings.TrimSpace(string(output)))
+			executable := execution.compileLLVM(t, "narrow-independent-e4nf", ir, driver, level)
+			x86CheckMemoryFaultMatrix(t, execution, executable, count)
 		})
 	}
 }

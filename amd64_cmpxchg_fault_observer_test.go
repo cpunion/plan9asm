@@ -38,8 +38,12 @@ func x86CMPXCHGObserveFaultContext(ctx context.Context, execution x86FloatCompar
 }
 
 func x86CMPXCHGFaultResult(goos, stdout, witness string, err error) (string, error) {
+	return x86NativeFaultResult(goos, stdout, witness, "CMPXCHG complete\n", err)
+}
+
+func x86NativeFaultResult(goos, stdout, witness, completed string, err error) (string, error) {
 	if err == nil {
-		if stdout == witness+"CMPXCHG complete\n" {
+		if stdout == witness+completed {
 			return "return", nil
 		}
 		return "", fmt.Errorf("missing exact completed state/canary receipt")
