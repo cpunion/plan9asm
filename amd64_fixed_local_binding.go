@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"reflect"
@@ -72,9 +73,26 @@ func (source *GoAMD64FrameSource) BindFixedLocal(ctx context.Context, pkg GoPack
 		// sealed answers, without re-entering numerical/owner callbacks.
 		options.ResolveSym = numerical.resolve
 	}
+	// ResolveSym may change the caller's lifetime. Sample its context only
+	// outside the observer lock and retain the original, not this temporary
+	// standard command context, in every returned private binding.
+	private, contextErr := captureGoAMD64FramePrivateContext(ctx)
+	if contextErr != nil {
+		source.mu.Lock()
+		source.ready = false
+		source.mu.Unlock()
+		return Options{}, errors.Join(goAMD64FrameContext("fixed local caller context expired"), contextErr)
+	}
+	defer private.stop()
 	source.mu.Lock()
-	bound, err := source.bindFixedLocalLocked(ctx, pkg, file, options)
+	bound, err := source.bindFixedLocalLocked(private, ctx, pkg, file, options)
 	source.mu.Unlock()
+	if contextErr := private.verify(); contextErr != nil {
+		source.mu.Lock()
+		source.ready = false
+		source.mu.Unlock()
+		return Options{}, errors.Join(err, goAMD64FrameContext("fixed local caller context expired"), contextErr)
+	}
 	if err != nil {
 		return Options{}, err
 	}
@@ -93,7 +111,7 @@ func (source *GoAMD64FrameSource) BindFixedLocal(ctx context.Context, pkg GoPack
 	return bound, nil
 }
 
-func (source *GoAMD64FrameSource) bindFixedLocalLocked(ctx context.Context, pkg GoPackage, file *File, options Options) (Options, error) {
+func (source *GoAMD64FrameSource) bindFixedLocalLocked(ctx context.Context, lifetime context.Context, pkg GoPackage, file *File, options Options) (Options, error) {
 	if !source.ready || ctx == nil || ctx.Err() != nil || file == nil || file.Arch != ArchAMD64 ||
 		options.Goarch != "amd64" || pkg.Types == nil || pkg.Path != source.selection.ImportPath || pkg.Types.Path() != pkg.Path {
 		return Options{}, goAMD64FrameContext("fixed local binding has no matching live package/target")
@@ -139,7 +157,7 @@ func (source *GoAMD64FrameSource) bindFixedLocalLocked(ctx context.Context, pkg 
 	}
 	binding := &x86FixedLocalBinding{
 		source:         source,
-		context:        ctx,
+		context:        lifetime,
 		file:           fingerprint,
 		assembly:       expanded,
 		target:         options.TargetTriple,
