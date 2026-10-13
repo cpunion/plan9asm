@@ -156,9 +156,24 @@ also retains missing-Rosetta diagnostics and subsequent deadline exhaustion.
 Split complete inventories instead of increasing the timeout or treating those
 infrastructure failures as successful source exclusions.
 
+Both official five-architecture gates also pass at frozen `5b269f5e` with
+current Go 1.27 and the complete official Go 1.20.14 SDK. No baseline is changed;
+the historical AMD64 unsupported form remains explicit.
+The disjoint `c9fb679b` replay passes all 29 numerical-source roots in 272.663
+seconds and all 63 SDK DATA/literal roots in 661.541 seconds. Its ordinary
+numerical cohort remains failed: 50/51 pass, while an old cancellation fixture
+misses the inner frame callback after lifetime sampling moves into a helper.
+The test-only follow-up follows the complete exact observer route and checks
+actual Err/Deadline/Done cancellation, lock-free callbacks, outside-route
+negative controls and permanent revocation. Its seven-root Go 1.27 cohort passes
+in 120.713 seconds, race in 316.756 seconds and portable Go 1.20 controls in
+3.224 seconds. Production permissions are unchanged. Preserve the broad failed
+receipt and rerun its exact inventory; these mixed snapshots are not a complete
+277-root current-head certification.
+
 Inventory runs only on the server. Streaming ledger status and a complete
 five-minute incremental window have been verified before restoring catch-up;
-the trusted contiguous head now advances through 2026-10-08T15:22:43Z.
+the trusted contiguous head now advances through 2026-10-08T16:22:43Z.
 The requested historical cutoff remains 2025-10-01; subsequent hourly windows
 publish only after their complete scan. Real source failures remain retryable,
 not pass/skip. No local index/ledger scan is needed for translator work.
