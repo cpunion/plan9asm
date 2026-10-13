@@ -88,11 +88,15 @@ func TestX86SDKNumericalOwnerQueryIsNotPackageExemption(t *testing.T) {
 	}{
 		{"amd64", "hash/crc32", "linux/amd64", "internal∕cpu·X86+82(SB)", false, true},
 		{"386", "arbitrary/sdk/package", "linux/386", "internal∕cpu·X86+64(SB)", false, true},
+		{"darwin-amd64", "hash/crc32", "darwin/amd64", "internal∕cpu·X86+82(SB)", false, true},
+		{"windows-amd64", "hash/crc32", "windows/amd64", "internal∕cpu·X86+82(SB)", false, true},
+		{"windows-386", "arbitrary/sdk/package", "windows/386", "internal∕cpu·X86+64(SB)", false, true},
 		{"self", "internal/cpu", "linux/386", "·X86(SB)", false, true},
 		{"substring", "hash/crc32", "linux/amd64", "internal∕cpu·X86Other+82(SB)", false, false},
 		{"local", "hash/crc32", "linux/amd64", "internal∕cpu·X86<>+82(SB)", false, false},
 		{"external", "hash/crc32", "linux/amd64", "internal∕cpu·X86+82(SB)", true, false},
-		{"foreign-target", "hash/crc32", "darwin/amd64", "internal∕cpu·X86+82(SB)", false, false},
+		{"foreign-target", "hash/crc32", "freebsd/amd64", "internal∕cpu·X86+82(SB)", false, false},
+		{"unavailable-darwin-386", "hash/crc32", "darwin/386", "internal∕cpu·X86+64(SB)", false, false},
 	} {
 		t.Run(row.name, func(t *testing.T) {
 			pkg := &packages.Package{PkgPath: row.pkg}
