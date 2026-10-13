@@ -47,10 +47,17 @@ and dependency tests passed both SDKs in
 Local dependency/environment regressions passed at `7b222c49` in 263.070 seconds;
 that receipt predates the new Windows/Unix loader source split.
 
-The fork-only diagnostic branch now adds actual Windows complete-module
-partition/coverage and sticky-failure tests. Watch their result before enabling
-formal partitions; ownership and dependency success alone are not that gate.
-Keep its diagnostic workflow out of the contribution branch.
+Actual Windows complete-module partition/coverage and sticky-failure tests now
+pass both SDKs in [38354976736](https://github.com/cpunion/plan9asm/actions/runs/38354976736).
+The first fixture incorrectly demanded full `passed` status from a partial root
+owner; its correction requires `completed_owned`, retaining `passed` only for
+the aggregate. Native complete runner suites took 144.827/168.959 seconds
+(Go 1.27/1.20), followed by 25 real process-tree repetitions each. Missing root
+parts still fail; a real root failure does not suppress later packages or publish
+uploadable coverage. Tests are integrated as `ab72f4c0`/`df29b71e`.
+Local Unix dependency regressions passed at `25173f37` in 184.667 seconds.
+Formal Windows workflow partitioning is the next change; keep the diagnostic
+workflow out of the contribution branch.
 Current-head simple-CLI Linux CRC32 replay also remains failed at the CPU-feature
 SB comparison; its log is `simple-cli-crc32-linux-0428ee36.log`. Ownership logs
 are `windows-owned-process-*-0428ee36.log`, under the report directory below.
@@ -229,8 +236,8 @@ tools; later edits do not inherit a complete-head pass.
 
 1. Windows' complete main-module and LLVM CLI suites exceed the thirty-minute deadline.
    Partition without losing actual inventory. Windows Job ownership and actual
-   dependency scope passed native diagnostics; complete-module execution and
-   coverage aggregation still need validation before formal CI integration. The local current root inventory
+   dependency scope, complete-module execution and coverage aggregation passed
+   native diagnostics; formal CI integration remains. The local current root inventory
    contains 5942 roots; four selected native regressions are not its full suite.
 2. Rerun affected complete gates and both CLIs, publish to the existing
    allowed-fork contribution ref, then inspect fresh CI. No upstream manual
