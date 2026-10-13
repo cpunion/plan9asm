@@ -75,6 +75,34 @@ jobs:
   sdk-priority:
     runs-on: windows-latest
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - lane: llvm
+            module: cmd/plan9asmll
+            roots: TestX86SDKNumericalOwnerQueryIsNotPackageExemption|TestCompileOneX86SDKOriginalCRC32NumericalDataJoin
+            timeout: 5m
+          - lane: crc32-linux
+            module: cmd/plan9asm
+            roots: TestTranslateOriginalSDKCRC32NumericalSource
+            timeout: 8m
+          - lane: crc32-nonlinux
+            module: cmd/plan9asm
+            roots: TestTranslateOriginalSDKCRC32NumericalSourceNonLinux
+            timeout: 8m
+          - lane: crc32-publication
+            module: cmd/plan9asm
+            roots: TestSimpleCLIOriginalSDKCRC32PublicationAndRejection
+            timeout: 8m
+          - lane: maps
+            module: cmd/plan9asm
+            roots: TestSimpleCLIOriginalSDKMapsScalarRegisterSource
+            timeout: 8m
+          - lane: source
+            module: '.'
+            roots: TestGoX86SDKASMDataOriginalVendorPackageNamespace|TestGoX86SDKNumericalReadPackageQueryMatchesOriginalLiteralSource|TestSDKAMD64OriginalFrameConfigGuardEagerIdentity|TestSDKAMD64OriginalFrameProfileRejectsEqualByteConfigReplacement|TestSDKAMD64PrimaryInventoryActualCompleteMD5
+            timeout: 5m
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-go
@@ -85,70 +113,31 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: '22'
-      - name: Check both previous LLVM CLI SDK failures
+      - name: Check exact SDK priority inventory (${{ matrix.lane }})
         shell: bash
-        working-directory: cmd/plan9asmll
+        working-directory: ${{ matrix.module }}
         env:
           GOTOOLCHAIN: local
           GOFLAGS: ''
           GOENV: 'off'
           GOWORK: 'off'
+          SDK_PRIORITY_ROOTS: ${{ matrix.roots }}
+          SDK_PRIORITY_TIMEOUT: ${{ matrix.timeout }}
         run: |
           set -euo pipefail
-          mkdir -p ../../_out/windows-sdk-priority
-          roots='TestX86SDKNumericalOwnerQueryIsNotPackageExemption'
-          roots+='|TestCompileOneX86SDKOriginalCRC32NumericalDataJoin'
-          go test -tags=byollvm . -list "^($roots)$" > ../../_out/windows-sdk-priority/llvm-inventory.log
-          for root in ${roots//|/ }; do
-            grep -Fx "$root" ../../_out/windows-sdk-priority/llvm-inventory.log
+          report="$GITHUB_WORKSPACE/_out/windows-sdk-priority"
+          mkdir -p "$report"
+          go test -tags=byollvm . -list "^($SDK_PRIORITY_ROOTS)$" > "$report/inventory.log"
+          for root in ${SDK_PRIORITY_ROOTS//|/ }; do
+            grep -Fx "$root" "$report/inventory.log"
           done
-          go test -tags=byollvm . -run "^($roots)$" -count=1 -timeout=5m -v \
-            2>&1 | tee ../../_out/windows-sdk-priority/llvm.log
-      - name: Check all four previous simple CLI SDK failures
-        shell: bash
-        working-directory: cmd/plan9asm
-        env:
-          GOTOOLCHAIN: local
-          GOFLAGS: ''
-          GOENV: 'off'
-          GOWORK: 'off'
-        run: |
-          set -euo pipefail
-          mkdir -p ../../_out/windows-sdk-priority
-          roots='TestTranslateOriginalSDKCRC32NumericalSource'
-          roots+='|TestTranslateOriginalSDKCRC32NumericalSourceNonLinux'
-          roots+='|TestSimpleCLIOriginalSDKCRC32PublicationAndRejection'
-          roots+='|TestSimpleCLIOriginalSDKMapsScalarRegisterSource'
-          go test -tags=byollvm . -list "^($roots)$" > ../../_out/windows-sdk-priority/simple-inventory.log
-          for root in ${roots//|/ }; do
-            grep -Fx "$root" ../../_out/windows-sdk-priority/simple-inventory.log
-          done
-          go test -tags=byollvm . -run "^($roots)$" -count=1 -timeout=8m -v \
-            2>&1 | tee ../../_out/windows-sdk-priority/simple.log
-      - name: Check actual SDK namespace and config identity controls
-        shell: bash
-        env:
-          GOTOOLCHAIN: local
-          GOFLAGS: ''
-        run: |
-          set -euo pipefail
-          mkdir -p _out/windows-sdk-priority
-          roots='TestGoX86SDKASMDataOriginalVendorPackageNamespace'
-          roots+='|TestGoX86SDKNumericalReadPackageQueryMatchesOriginalLiteralSource'
-          roots+='|TestSDKAMD64OriginalFrameConfigGuardEagerIdentity'
-          roots+='|TestSDKAMD64OriginalFrameProfileRejectsEqualByteConfigReplacement'
-          roots+='|TestSDKAMD64PrimaryInventoryActualCompleteMD5'
-          go test -tags=byollvm . -list "^($roots)$" > _out/windows-sdk-priority/root-inventory.log
-          for root in ${roots//|/ }; do
-            grep -Fx "$root" _out/windows-sdk-priority/root-inventory.log
-          done
-          go test -tags=byollvm . -run "^($roots)$" -count=1 -timeout=5m -v \
-            2>&1 | tee _out/windows-sdk-priority/root.log
+          go test -tags=byollvm . -run "^($SDK_PRIORITY_ROOTS)$" -count=1 \
+            -timeout="$SDK_PRIORITY_TIMEOUT" -v 2>&1 | tee "$report/tests.log"
       - name: Preserve independently inventoried SDK results
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v6
         with:
-          name: windows-sdk-priority
+          name: windows-sdk-priority-${{ matrix.lane }}
           path: _out/windows-sdk-priority/
           if-no-files-found: error
 
