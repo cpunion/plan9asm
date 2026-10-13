@@ -35,17 +35,41 @@ func (budget sourceInventoryBudget) checkBytes(total int64, length int) error {
 	return nil
 }
 
-func validateSourceInventory(source map[string][]byte, protocol string) error {
-	budget := sourceBudget(protocol)
-	if err := budget.checkCount(len(source)); err != nil {
+type sourceInventoryUsage struct {
+	budget sourceInventoryBudget
+	files  int
+	bytes  int64
+}
+
+func sourceUsage(source map[string][]byte, protocol string) (sourceInventoryUsage, error) {
+	usage := sourceInventoryUsage{budget: sourceBudget(protocol)}
+	if err := usage.budget.checkCount(len(source)); err != nil {
+		return sourceInventoryUsage{}, err
+	}
+	for _, data := range source {
+		if err := usage.add(len(data)); err != nil {
+			return sourceInventoryUsage{}, err
+		}
+	}
+	return usage, nil
+}
+
+// A caller adds only a previously absent source key, after independently
+// checking any duplicate's original bytes. Failed additions leave the complete
+// inventory unchanged and are rejected before bytes enter the retained map.
+func (usage *sourceInventoryUsage) add(length int) error {
+	if err := usage.budget.checkCount(usage.files + 1); err != nil {
 		return err
 	}
-	total := int64(0)
-	for _, data := range source {
-		if err := budget.checkBytes(total, len(data)); err != nil {
-			return err
-		}
-		total += int64(len(data))
+	if err := usage.budget.checkBytes(usage.bytes, length); err != nil {
+		return err
 	}
+	usage.files++
+	usage.bytes += int64(length)
 	return nil
+}
+
+func validateSourceInventory(source map[string][]byte, protocol string) error {
+	_, err := sourceUsage(source, protocol)
+	return err
 }

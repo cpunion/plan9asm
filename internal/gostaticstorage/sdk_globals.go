@@ -133,6 +133,10 @@ func (o *Observation) captureSDKGlobalDependencies(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	usage, err := sourceUsage(o.report.Source, o.report.Protocol)
+	if err != nil {
+		return err
+	}
 	for _, pkg := range packages {
 		resolved, resolveErr := sourcepath.Resolve(pkg.Dir)
 		info, err := sourcepath.Lstat(pkg.Dir)
@@ -147,13 +151,14 @@ func (o *Observation) captureSDKGlobalDependencies(ctx context.Context) error {
 				if err != nil {
 					return err
 				}
-				if previous, present := o.report.Source[key]; present && !bytes.Equal(previous, data) {
-					return contextError("SDK global original source changed before compiler selection")
-				}
-				o.report.Source[key], o.report.SourceSHA256[key] = data, digest(data)
-				if err := validateSourceInventory(o.report.Source, o.report.Protocol); err != nil {
+				if previous, present := o.report.Source[key]; present {
+					if !bytes.Equal(previous, data) {
+						return contextError("SDK global original source changed before compiler selection")
+					}
+				} else if err := usage.add(len(data)); err != nil {
 					return err
 				}
+				o.report.Source[key], o.report.SourceSHA256[key] = data, digest(data)
 				o.inputs[absolute] = digest(data)
 			}
 		}
@@ -167,6 +172,10 @@ func (o *Observation) snapshotSource() (map[string][]byte, error) {
 		return source, err
 	}
 	packages, err := sdkGlobalsSelections(o.report.RawSelection, o.report.Environment["GOROOT"], o.report.PackagePath, true)
+	if err != nil {
+		return nil, err
+	}
+	usage, err := sourceUsage(source, o.report.Protocol)
 	if err != nil {
 		return nil, err
 	}
@@ -184,10 +193,10 @@ func (o *Observation) snapshotSource() (map[string][]byte, error) {
 				if err != nil {
 					return nil, err
 				}
-				source[key] = data
-				if err := validateSourceInventory(source, o.report.Protocol); err != nil {
+				if err := usage.add(len(data)); err != nil {
 					return nil, err
 				}
+				source[key] = data
 			}
 		}
 	}

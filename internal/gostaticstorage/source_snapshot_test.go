@@ -10,11 +10,13 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/xgo-dev/plan9asm/internal/sourcepath"
 )
 
 func snapshotFixtureDirectory(t *testing.T) string {
 	t.Helper()
-	directory, err := filepath.EvalSymlinks(t.TempDir())
+	directory, err := sourcepath.Resolve(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -159,5 +161,32 @@ func TestStaticStorageSourceRootAndCPUFailuresRetainCause(t *testing.T) {
 	}
 	if _, err := CaptureSDKCPU(context.Background(), request); !errors.Is(err, ErrContext) || !strings.Contains(err.Error(), "original SDK CPU source inventory differs") {
 		t.Fatal("pinned SDK CPU source role failure was discarded", err)
+	}
+}
+
+func TestStaticStorageSourceUsageRejectsBeforeAddition(t *testing.T) {
+	for _, protocol := range []string{Protocol, SDKCPUProtocol, SDKGlobalsProtocol} {
+		t.Run(protocol, func(t *testing.T) {
+			budget := sourceBudget(protocol)
+			usage := sourceInventoryUsage{budget: budget, files: budget.files, bytes: 1}
+			before := usage
+			if !errors.Is(usage.add(1), ErrContext) || usage != before {
+				t.Fatal("failed count addition altered retained inventory", usage)
+			}
+			usage.files, usage.bytes = 1, budget.bytes
+			before = usage
+			if !errors.Is(usage.add(1), ErrContext) || usage != before {
+				t.Fatal("failed byte addition altered retained inventory", usage)
+			}
+			usage.bytes = budget.bytes - 1
+			if err := usage.add(1); err != nil || usage.files != 2 || usage.bytes != budget.bytes {
+				t.Fatal("exact complete boundary addition differs", usage, err)
+			}
+			original := map[string][]byte{"primary.go": {1, 2}, "_sdk/dep/dep.go": {3}}
+			usage, err := sourceUsage(original, protocol)
+			if err != nil || usage.files != 2 || usage.bytes != 3 {
+				t.Fatal("complete initial primary/dependency accounting differs", usage, err)
+			}
+		})
 	}
 }

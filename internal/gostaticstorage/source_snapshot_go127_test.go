@@ -84,7 +84,7 @@ func TestGoSDKGlobalCompleteRuntimeSourceInventory(t *testing.T) {
 			}
 		})
 	}
-	for _, name := range []string{"iscgo", "g0"} {
+	for _, name := range []string{"iscgo", "g0", "cgoTraceback"} {
 		t.Run("unsupported-storage-"+name, func(t *testing.T) {
 			bad, err := CaptureSDKGlobals(context.Background(), Request{
 				GoBinary: binary, Directory: directory, PackagePath: "runtime", Target: "linux/amd64",
