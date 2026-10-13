@@ -35,6 +35,13 @@ jobs:
             grep -Fx "$root" _out/native-x86-oracles/alias-inventory.log
           done
           roots+="|$alias_roots"
+          bool_roots='TestCrossLinuxRuntimeMatrixAMD64RegisterCanonicalBoolInstructionBytes'
+          bool_roots+='|TestCrossLinuxRuntimeMatrixGoAMD64CanonicalBoolByteRepresentation'
+          go test . -list "^($bool_roots)$" > _out/native-x86-oracles/bool-inventory.log
+          for root in ${bool_roots//|/ }; do
+            grep -Fx "$root" _out/native-x86-oracles/bool-inventory.log
+          done
+          roots+="|$bool_roots"
           families='MADDTypedOriginalLegacy|PackedNarrowOriginalLegacyOracle|ScalarFPBitViewsOriginalBitsAndCanaries'
           families+='|PureGPUnknownDeadOutputs|SignedIntegerScalarFloatTranslatedFPFields|ScalarCompareFlags'
           families+='|RawReturnSourceAddressNumerical|FloatingCompareOriginalLegacyPredicates|TimestampOriginalAndLLVM'
@@ -53,7 +60,7 @@ jobs:
           if-no-files-found: error
 
   complete-windows:
-    needs: ownership
+    needs: [ownership, sdk-priority]
     permissions:
       contents: read
       id-token: write
@@ -64,6 +71,86 @@ jobs:
     uses: ./.github/workflows/windows-module.yml
     with:
       module: ${{ matrix.module }}
+
+  sdk-priority:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-go
+        with:
+          go-version: '1.27.2'
+          cache: true
+      - uses: ./.github/actions/setup-windows-llvm22
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+      - name: Check both previous LLVM CLI SDK failures
+        shell: bash
+        working-directory: cmd/plan9asmll
+        env:
+          GOTOOLCHAIN: local
+          GOFLAGS: ''
+          GOENV: 'off'
+          GOWORK: 'off'
+        run: |
+          set -euo pipefail
+          mkdir -p ../../_out/windows-sdk-priority
+          roots='TestX86SDKNumericalOwnerQueryIsNotPackageExemption'
+          roots+='|TestCompileOneX86SDKOriginalCRC32NumericalDataJoin'
+          go test -tags=byollvm . -list "^($roots)$" > ../../_out/windows-sdk-priority/llvm-inventory.log
+          for root in ${roots//|/ }; do
+            grep -Fx "$root" ../../_out/windows-sdk-priority/llvm-inventory.log
+          done
+          go test -tags=byollvm . -run "^($roots)$" -count=1 -timeout=5m -v \
+            2>&1 | tee ../../_out/windows-sdk-priority/llvm.log
+      - name: Check all four previous simple CLI SDK failures
+        shell: bash
+        working-directory: cmd/plan9asm
+        env:
+          GOTOOLCHAIN: local
+          GOFLAGS: ''
+          GOENV: 'off'
+          GOWORK: 'off'
+        run: |
+          set -euo pipefail
+          mkdir -p ../../_out/windows-sdk-priority
+          roots='TestTranslateOriginalSDKCRC32NumericalSource'
+          roots+='|TestTranslateOriginalSDKCRC32NumericalSourceNonLinux'
+          roots+='|TestSimpleCLIOriginalSDKCRC32PublicationAndRejection'
+          roots+='|TestSimpleCLIOriginalSDKMapsScalarRegisterSource'
+          go test -tags=byollvm . -list "^($roots)$" > ../../_out/windows-sdk-priority/simple-inventory.log
+          for root in ${roots//|/ }; do
+            grep -Fx "$root" ../../_out/windows-sdk-priority/simple-inventory.log
+          done
+          go test -tags=byollvm . -run "^($roots)$" -count=1 -timeout=8m -v \
+            2>&1 | tee ../../_out/windows-sdk-priority/simple.log
+      - name: Check actual SDK namespace and config identity controls
+        shell: bash
+        env:
+          GOTOOLCHAIN: local
+          GOFLAGS: ''
+        run: |
+          set -euo pipefail
+          mkdir -p _out/windows-sdk-priority
+          roots='TestGoX86SDKASMDataOriginalVendorPackageNamespace'
+          roots+='|TestGoX86SDKNumericalReadPackageQueryMatchesOriginalLiteralSource'
+          roots+='|TestSDKAMD64OriginalFrameConfigGuardEagerIdentity'
+          roots+='|TestSDKAMD64OriginalFrameProfileRejectsEqualByteConfigReplacement'
+          roots+='|TestSDKAMD64PrimaryInventoryActualCompleteMD5'
+          go test -tags=byollvm . -list "^($roots)$" > _out/windows-sdk-priority/root-inventory.log
+          for root in ${roots//|/ }; do
+            grep -Fx "$root" _out/windows-sdk-priority/root-inventory.log
+          done
+          go test -tags=byollvm . -run "^($roots)$" -count=1 -timeout=5m -v \
+            2>&1 | tee _out/windows-sdk-priority/root.log
+      - name: Preserve independently inventoried SDK results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: windows-sdk-priority
+          path: _out/windows-sdk-priority/
+          if-no-files-found: error
 
   ownership:
     runs-on: windows-latest
@@ -82,23 +169,6 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: '22'
-      - name: Check the previous LLVM CLI platform-query failure first
-        if: ${{ matrix.go == '1.27.2' }}
-        shell: bash
-        working-directory: cmd/plan9asmll
-        env:
-          GOTOOLCHAIN: local
-          GOFLAGS: ''
-          GOENV: 'off'
-          GOWORK: 'off'
-        run: |
-          set -euo pipefail
-          mkdir -p ../../_out/windows-ownership
-          root='TestX86SDKNumericalOwnerQueryIsNotPackageExemption'
-          go test -tags=byollvm . -list "^$root$" > ../../_out/windows-ownership/sdk-query-inventory.log
-          grep -Fx "$root" ../../_out/windows-ownership/sdk-query-inventory.log
-          go test -tags=byollvm . -run "^$root$" -count=1 -timeout=2m -v \
-            2>&1 | tee ../../_out/windows-ownership/sdk-query.log
       - name: Check the previous native root failures first
         shell: bash
         env:
@@ -115,6 +185,27 @@ jobs:
           done
           go test -tags=byollvm . -run "^($roots)$" -count=1 -timeout=5m -v \
             2>&1 | tee _out/windows-ownership/priority-roots.log
+      - name: Check canonical bool and source-query portable controls
+        shell: bash
+        env:
+          GOTOOLCHAIN: local
+          GOFLAGS: ''
+        run: |
+          set -euo pipefail
+          mkdir -p _out/windows-ownership
+          roots='TestAMD64RegisterBoolCanonicalResultThreeAPIs'
+          roots+='|TestAMD64RegisterBoolInitializedIsNotCanonical'
+          roots+='|TestAMD64RegisterBoolCanonicalTypedTransferFamilies'
+          roots+='|TestAMD64RegisterBoolThreeTargetOriginalAndLLVMObjects'
+          roots+='|TestNumericalRawSelectionPreservesActualPackageQuery'
+          roots+='|TestNumericalSourcePackageQueryKeepsSourceRolesDistinct'
+          roots+='|TestSDKAMD64OriginalFrameConfigGuardEagerIdentity'
+          go test -tags=byollvm . -list "^($roots)$" > _out/windows-ownership/portable-inventory.log
+          for root in ${roots//|/ }; do
+            grep -Fx "$root" _out/windows-ownership/portable-inventory.log
+          done
+          go test -tags=byollvm . -run "^($roots)$" -count=1 -timeout=5m -v \
+            2>&1 | tee _out/windows-ownership/portable.log
       - name: Real process-tree and exhaustive runner regressions
         shell: bash
         env:
