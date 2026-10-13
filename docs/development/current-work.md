@@ -24,28 +24,33 @@ These are that frozen run's results, not certification of the following repairs.
 
 ## Latest local repair batch
 
-Windows partition execution now has a prepared process-ownership repair:
-`28a0f922` adds real leader/child/grandchild, inherited-pipe, failure,
-cancellation and unrelated-peer regressions; `0428ee36` creates each leader
-suspended, assigns a private non-breakaway Job Object, then resumes it. Cleanup
-waits for zero active members before returning. `8cb6b2a7` additionally verifies
-the opened thread's actual process identity before resuming it, rather than
-trusting a recyclable snapshot ID. Actual Go inventory/seed/child and coverage
-regressions retain failed shards and refuse complete coverage after failure.
-Go 1.20/1.27 Windows cross-builds (386/amd64/arm64 across the two toolchains)
-and Windows vet pass. At frozen `0428ee36`, complete Darwin `plan9asmtest`
-passed in 524.317 seconds and `internal/ownedprocess` in 2.352 seconds;
-Go 1.20 focused ownership/runner controls also pass. These are not Windows
-execution receipts. The initial test-only native
-[run 38332958829](https://github.com/cpunion/plan9asm/actions/runs/38332958829)
-is still queued with no assigned runner, so neither native RED nor GREEN has
-been observed. The repair plus expanded diagnostic workflow is committed
-locally on `codex/pr40-windows-owned-process-probe-20261013`; only its earlier
-test-only head is published. Let that run complete, then push the prepared
-repair to the same allowed-fork diagnostic branch. Do not sync it to PR40 or
-enable formal Windows partitions without native validation. The remaining
-Windows module dependency/coverage scope and inherited `byollvm` build context
-still need their own complete CI integration; package execution is not that gate.
+Windows ownership and dependency scope now have native Go 1.20/1.27 evidence.
+The test-only [38332958829](https://github.com/cpunion/plan9asm/actions/runs/38332958829)
+reproduced the unsupported process-tree boundary. Suspended leaders enter a
+private non-breakaway Job before resume; actual thread ownership is rechecked.
+Accounting zero did not guarantee signaled process handles, reproduced by
+[38345922514](https://github.com/cpunion/plan9asm/actions/runs/38345922514).
+`9524c3d6` waits for the Job completion-port exit notification instead.
+[38346249492](https://github.com/cpunion/plan9asm/actions/runs/38346249492)
+passed both SDKs, including 25 repeated real-tree regressions each.
+
+Inherited `-tags=byollvm` has an exact Windows-only explicit-flag handoff;
+undeclared/conflicting/hidden flags still fail before execution. Complete native
+runner packages passed [38346896685](https://github.com/cpunion/plan9asm/actions/runs/38346896685).
+At frozen `582934e7`, complete local runner/ownership suites passed in
+640.906/1.987 seconds. Actual Windows module dependencies subsequently exposed
+mixed native separators, Node CRLF and the Unix-only DLL loader probe.
+`f69465e7`, `7b222c49` and `4e3f8dee` retain exact path/packet identity while
+observing the Windows imported function's real owning DLL. Full native runner
+and dependency tests passed both SDKs in
+[38348037017](https://github.com/cpunion/plan9asm/actions/runs/38348037017).
+Local dependency/environment regressions passed at `7b222c49` in 263.070 seconds;
+that receipt predates the new Windows/Unix loader source split.
+
+The fork-only diagnostic branch now adds actual Windows complete-module
+partition/coverage and sticky-failure tests. Watch their result before enabling
+formal partitions; ownership and dependency success alone are not that gate.
+Keep its diagnostic workflow out of the contribution branch.
 Current-head simple-CLI Linux CRC32 replay also remains failed at the CPU-feature
 SB comparison; its log is `simple-cli-crc32-linux-0428ee36.log`. Ownership logs
 are `windows-owned-process-*-0428ee36.log`, under the report directory below.
@@ -223,9 +228,9 @@ tools; later edits do not inherit a complete-head pass.
 ## Remaining work, in priority order
 
 1. Windows' complete main-module and LLVM CLI suites exceed the thirty-minute deadline.
-   Partition without losing actual inventory. The prepared Windows Job Object
-   implementation still needs native validation and Windows tool/source scope
-   before formal CI integration. Keep complete coverage aggregation. The local current root inventory
+   Partition without losing actual inventory. Windows Job ownership and actual
+   dependency scope passed native diagnostics; complete-module execution and
+   coverage aggregation still need validation before formal CI integration. The local current root inventory
    contains 5942 roots; four selected native regressions are not its full suite.
 2. Rerun affected complete gates and both CLIs, publish to the existing
    allowed-fork contribution ref, then inspect fresh CI. No upstream manual
