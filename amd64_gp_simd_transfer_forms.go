@@ -13,12 +13,13 @@ type x86GPSIMDTransferSpec struct {
 // MOVD is Go's MOVQ alias, not Intel's 32-bit MOVD. Ordinary GP-only
 // MOVL/Q/D and the separate MMX rows retain their existing scalar grammar.
 var x86GPSIMDTransferSpecs = map[Op]x86GPSIMDTransferSpec{
-	"MOVL":  {bits: 32, legacy: true},
-	"MOVQ":  {bits: 64, legacy: true},
-	"MOVD":  {bits: 64, legacy: true},
-	"VMOVD": {bits: 32},
-	"VMOVQ": {bits: 64},
-	"VMOVW": {bits: 16, rawOnly: true},
+	"MOVL":    {bits: 32, legacy: true},
+	"MOVQ":    {bits: 64, legacy: true},
+	"MOVD":    {bits: 64, legacy: true},
+	"MOVDQ2Q": {bits: 64, legacy: true},
+	"VMOVD":   {bits: 32},
+	"VMOVQ":   {bits: 64},
+	"VMOVW":   {bits: 16, rawOnly: true},
 }
 
 type x86GPSIMDTransferForm struct {

@@ -214,7 +214,7 @@ func normalizeX86SourceIntegerAddress(ins Instr, arch string) (Instr, bool, erro
 	}
 	derived := ins
 	derived.Args = append([]Operand(nil), ins.Args...)
-	op := strings.ToUpper(string(ins.Op))
+	op := strings.ToUpper(string(x86GoMOVQSourceInstruction(ins).Op))
 	if op == "MOVL" || op == "MOVQ" {
 		if len(ins.Args) != 2 || index != 0 {
 			return ins, false, fmt.Errorf("x86 MOV address rewrite requires source and GP destination: %q", ins.Raw)
@@ -390,7 +390,7 @@ func x86RawReturnNumericalAddressAdapter(source, derived Func, file *File, optio
 			return false // Another decoder's contract needs its own adapter.
 		}
 		if derived.Instrs[index].Op != ins.Op {
-			op := strings.ToUpper(string(ins.Op))
+			op := strings.ToUpper(string(x86GoMOVQSourceInstruction(ins).Op))
 			if (op != "MOVL" && op != "MOVQ") || string(derived.Instrs[index].Op) != "LEA"+op[3:] {
 				return false
 			}

@@ -18,27 +18,35 @@ func TestCrossLinuxRuntimeMatrixX86GoCallerCountedLoopOriginalInitializedValues(
 	if runtime.GOARCH != "amd64" && !crossRosetta {
 		t.Skip("requires the separately required Linux/amd64 caller runtime counterpart")
 	}
+	runX86CallerCountedLoopOriginalValues(t, []string{"MOVQ"})
+}
+
+func runX86CallerCountedLoopOriginalValues(t *testing.T, aliases []string) {
+	t.Helper()
 	var source, assembly, calls strings.Builder
 	source.WriteString("package caller\nimport \"unsafe\"\n")
-	for _, raw := range []bool{false, true} {
-		for _, separateExit := range []bool{false, true} {
-			name := fmt.Sprintf("counted%t%t", raw, separateExit)
-			declaration := x86CallerCountedLoopScalarSource()
-			declaration = declaration[strings.Index(declaration, "//go:noescape"):]
-			declaration = strings.ReplaceAll(declaration, "kernel", name)
-			declaration = strings.Replace(declaration, "func Call(", "func Call"+name+"(", 1)
-			source.WriteString(declaration)
-			machine := x86CallerCountedLoopScalarAssembly(raw)
-			if separateExit {
-				machine = x86CallerCountedLoopSeparateExitAssembly(raw)
-			}
-			assembly.WriteString(strings.ReplaceAll(machine, "·kernel", "·"+name))
-			fmt.Fprintf(&calls, `
+	for _, alias := range aliases {
+		for _, raw := range []bool{false, true} {
+			for _, separateExit := range []bool{false, true} {
+				name := fmt.Sprintf("counted%s%t%t", alias, raw, separateExit)
+				declaration := x86CallerCountedLoopScalarSource()
+				declaration = declaration[strings.Index(declaration, "//go:noescape"):]
+				declaration = strings.ReplaceAll(declaration, "kernel", name)
+				declaration = strings.Replace(declaration, "func Call(", "func Call"+name+"(", 1)
+				source.WriteString(declaration)
+				machine := x86CallerCountedLoopScalarAssembly(raw)
+				if separateExit {
+					machine = x86CallerCountedLoopSeparateExitAssembly(raw)
+				}
+				machine = x86SourceAliasCountedAssembly(machine, alias)
+				assembly.WriteString(strings.ReplaceAll(machine, "·kernel", "·"+name))
+				fmt.Fprintf(&calls, `
  if got:=Call%s(x.data[:length],y.data[:]); got!=want ||
   snapshot(&x)!=originalX || snapshot(&y)!=originalY {
   t.Fatalf("%s length=%%d got=%%#x want=%%#x",length,got,want)
  }
 `, name, name)
+			}
 		}
 	}
 	goTest := `package caller
@@ -101,8 +109,8 @@ func TestOriginalInitializedCountedValues(t *testing.T) {
 	if output, err := runtimeOracleCombinedOutput(ctx, command); err != nil {
 		t.Fatalf("first-party original Go counted integer/canary oracle: %v\n%s", err, output)
 	}
-	t.Log("original Go scalar oracle: 1536 initialized calls; bound zero/one/two/three, u32 wrap, both shared/separate exits; noinline full-memory snapshots compare both data buffers and adjacent canaries, not a physical source-stack witness; Darwin/Rosetta is diagnostic, not Intel hardware evidence")
-	t.Run("serial SCC composition", runX86CallerCountedSCCOriginalValues)
+	t.Logf("original Go scalar oracle: %d initialized calls; bound zero/one/two/three, u32 wrap, both shared/separate exits; noinline full-memory snapshots compare both data buffers and adjacent canaries, not a physical source-stack witness; Darwin/Rosetta is diagnostic, not Intel hardware evidence", 1536*len(aliases))
+	t.Run("serial SCC composition", func(t *testing.T) { runX86CallerCountedSCCOriginalValues(t, aliases...) })
 }
 
 func TestCrossLinuxRuntimeMatrixX86GoCallerCountedLoopValuesAndMemoryCanaries(t *testing.T) {
@@ -110,6 +118,12 @@ func TestCrossLinuxRuntimeMatrixX86GoCallerCountedLoopValuesAndMemoryCanaries(t 
 	if runtime.GOARCH != "amd64" && !crossRosetta {
 		t.Skip("requires the separately required Linux/amd64 caller runtime counterpart")
 	}
+	runX86CallerCountedLoopLLVMValues(t, []string{"MOVQ"})
+}
+
+func runX86CallerCountedLoopLLVMValues(t *testing.T, aliases []string) {
+	t.Helper()
+	crossRosetta := runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" && rosettaAvailable()
 	llc, clang, found := findLlcAndClang(t)
 	if !found {
 		t.Fatal("LLVM 22 llc/clang not found")
@@ -125,20 +139,22 @@ func TestCrossLinuxRuntimeMatrixX86GoCallerCountedLoopValuesAndMemoryCanaries(t 
 #endif
 `)
 	var calls strings.Builder
-	for _, raw := range []bool{false, true} {
-		for _, separateExit := range []bool{false, true} {
-			name := fmt.Sprintf("counted%t%t", raw, separateExit)
-			declaration := x86CallerCountedLoopScalarSource()
-			declaration = declaration[strings.Index(declaration, "//go:noescape"):]
-			declaration = strings.ReplaceAll(declaration, "kernel", name)
-			source.WriteString(strings.Replace(declaration, "func Call(", "func Call"+name+"(", 1))
-			machine := x86CallerCountedLoopScalarAssembly(raw)
-			if separateExit {
-				machine = x86CallerCountedLoopSeparateExitAssembly(raw)
-			}
-			assembly.WriteString(strings.ReplaceAll(machine, "·kernel", "·"+name))
-			fmt.Fprintf(&oracle, "extern void %s(void*,void*,void*,void*) __asm__(LABEL(\"caller.%s\"));\n", name, name)
-			fmt.Fprintf(&calls, `
+	for _, alias := range aliases {
+		for _, raw := range []bool{false, true} {
+			for _, separateExit := range []bool{false, true} {
+				name := fmt.Sprintf("counted%s%t%t", alias, raw, separateExit)
+				declaration := x86CallerCountedLoopScalarSource()
+				declaration = declaration[strings.Index(declaration, "//go:noescape"):]
+				declaration = strings.ReplaceAll(declaration, "kernel", name)
+				source.WriteString(strings.Replace(declaration, "func Call(", "func Call"+name+"(", 1))
+				machine := x86CallerCountedLoopScalarAssembly(raw)
+				if separateExit {
+					machine = x86CallerCountedLoopSeparateExitAssembly(raw)
+				}
+				machine = x86SourceAliasCountedAssembly(machine, alias)
+				assembly.WriteString(strings.ReplaceAll(machine, "·kernel", "·"+name))
+				fmt.Fprintf(&oracle, "extern void %s(void*,void*,void*,void*) __asm__(LABEL(\"caller.%s\"));\n", name, name)
+				fmt.Fprintf(&calls, `
     memset(output,0xc9,sizeof(output));memcpy(expected,output,sizeof(output));
     memcpy(expected+5,&want,sizeof(want));
     %s(a+1,b+3,output+5,&length);
@@ -146,6 +162,7 @@ func TestCrossLinuxRuntimeMatrixX86GoCallerCountedLoopValuesAndMemoryCanaries(t 
         memcmp(b,original_b,sizeof(b)) || length!=original_length) return 1;
     calls++;
 `, name)
+			}
 		}
 	}
 	oracle.WriteString(`int main(void) {
@@ -165,7 +182,7 @@ func TestCrossLinuxRuntimeMatrixX86GoCallerCountedLoopValuesAndMemoryCanaries(t 
     for (unsigned index=0;index<(length&3);index++) want+=x[index]+y[index];
 `)
 	oracle.WriteString(calls.String())
-	oracle.WriteString("   }\n  }\n }\n return calls==1536?0:2;\n}\n")
+	fmt.Fprintf(&oracle, "   }\n  }\n }\n return calls==%d?0:2;\n}\n", 1536*len(aliases))
 	goSource, err := format.Source([]byte(source.String()))
 	if err != nil {
 		t.Fatal(err)
@@ -188,7 +205,13 @@ func TestCrossLinuxRuntimeMatrixX86GoCallerCountedLoopValuesAndMemoryCanaries(t 
 	if crossRosetta {
 		runner = []string{"/usr/bin/arch", "-x86_64"}
 	}
-	compileAndRunRuntimeTestForTarget(t, llc, clang, "caller_counted_loop", triple, translation.Module.String(), oracle.String(), runner)
-	t.Log("1536 independent unsigned mathematical results; both input buffers and all output/adjacent guard bytes unchanged, length immutable; Rosetta is diagnostic only")
-	t.Run("serial SCC composition", runX86CallerCountedSCCLLVMValues)
+	compiler := []string{clang}
+	if triple != testTargetTriple(runtime.GOOS, runtime.GOARCH) {
+		compiler = append(compiler, "-target", triple)
+	}
+	for _, level := range []int{0, 2} {
+		compileAndRunRuntimeTestWithCompiler(t, llc, compiler, "caller_counted_loop", triple, translation.Module.String(), oracle.String(), runner, level)
+	}
+	t.Logf("%d independent unsigned mathematical results; both input buffers and all output/adjacent guard bytes unchanged, length immutable; Rosetta is diagnostic only", 1536*len(aliases))
+	t.Run("serial SCC composition", func(t *testing.T) { runX86CallerCountedSCCLLVMValues(t, aliases...) })
 }

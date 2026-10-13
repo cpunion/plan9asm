@@ -12,7 +12,11 @@ func observeASMDataObject(data, builtin []byte, target string, flags uint32, ref
 	if err != nil {
 		return member, err
 	}
-	body, err := objectBody(data, target)
+	reader := objectBody
+	if flags&16 != 0 && flags&4 == 0 {
+		reader = sdkObjectBody
+	}
+	body, err := reader(data, target)
 	if err != nil {
 		return member, err
 	}

@@ -100,7 +100,7 @@ func TestX86GPSIMDTransferCompleteCallerRegistration(t *testing.T) {
 
 func TestX86GPSIMDTransferActualSelectedCallerThreeAPIs(t *testing.T) {
 	count := 0
-	for _, op := range []string{"MOVL", "MOVQ", "MOVD", "VMOVD", "VMOVQ"} {
+	for _, op := range []string{"MOVL", "MOVQ", "MOVD", "MOVDQ2Q", "VMOVD", "VMOVQ"} {
 		for _, direction := range []string{"gp-to-x", "x-to-gp", "memory-load", "memory-store", "x-to-x"} {
 			if direction == "x-to-x" && (op == "MOVL" || op == "VMOVD") {
 				continue
@@ -163,7 +163,7 @@ func TestX86GPSIMDTransferActualSelectedCallerThreeAPIs(t *testing.T) {
 		}
 	}
 	// Scope denominator is independent of the typed implementation table.
-	if count != 23 {
+	if count != 28 {
 		t.Fatalf("caller direction denominator changed: %d", count)
 	}
 }

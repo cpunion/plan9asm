@@ -110,15 +110,45 @@ func TestGoX86NumericalReadOriginalSDKMapsRemainingMemoryContracts(t *testing.T)
 	for _, arch := range []string{"386", "amd64"} {
 		t.Run(arch, func(t *testing.T) {
 			source, err := numericalSDKMapsReadCapture(t, arch, "memhash_"+arch+".s")
-			if source != nil || !errors.Is(err, ErrProbeNeedsContext) {
-				t.Fatal("complete source obtained private indexed address/caller memory authority from mutable SDK numerical storage", err)
+			if err != nil {
+				t.Fatal("complete original literal/source/native observation", err)
 			}
-			want := "symbol address/write/unregistered numerical read form"
+			pkg, _, options := numericalSDKLiteralPackage(t, source.literals.source, source.request.AssemblyFile)
+			want := 4
+			functions := 2
 			if arch == "386" {
-				want = "indexed/alternate SB memory role needs separate binding"
+				want = 2
+				functions = 4
 			}
-			if !strings.Contains(err.Error(), want) {
-				t.Fatal("remaining complete original memory contract changed; retain its actual evidence", err)
+			if len(source.file.Funcs) != functions {
+				t.Fatal("complete original function inventory changed", len(source.file.Funcs))
+			}
+			literals := make(map[string]int64)
+			for _, global := range source.file.Globl {
+				literals[global.Sym] = global.Size
+			}
+			accesses, addressBitObservers := 0, 0
+			for _, fn := range source.file.Funcs {
+				// Query every original function, including the alignment observer.
+				// No subset is translated, rebound, or given a public certificate.
+				sig := options.Sigs[options.ResolveSym(fn.Sym)]
+				facts, err := proveX86SDKLiteralAccesses(fn, sig, arch, literals)
+				if err != nil {
+					if !errors.Is(err, ErrProbeNeedsContext) || !strings.Contains(err.Error(), "linked address-bit observation requires independent native alignment or physical identity") {
+						t.Fatal("original literal-only analysis reached another unclosed source role", err)
+					}
+					addressBitObservers++
+					continue
+				}
+				accesses += len(facts)
+			}
+			if accesses != want || addressBitObservers != 1 {
+				t.Fatal("original readonly envelopes or address observer inventory changed", accesses, addressBitObservers)
+			}
+			bound, err := source.BindNumericalReads(source.sdk.originalContext, pkg, source.file, options)
+			if bound.NumericalReads != nil || !errors.Is(err, ErrProbeNeedsContext) ||
+				!strings.Contains(err.Error(), "linked address-bit observation requires independent native alignment or physical identity") {
+				t.Fatal("full original file acquired an unauthenticated linked-address/boolean contract", err)
 			}
 		})
 	}

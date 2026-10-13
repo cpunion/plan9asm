@@ -9,9 +9,8 @@ import (
 	"github.com/xgo-dev/llvm"
 )
 
-func TestX86GoCallerCountedLoopRetainsUnprovedPaths(t *testing.T) {
-	original := x86CallerCountedLoopScalarAssembly(false)
-	for name, change := range map[string][2]string{
+func x86CallerCountedLoopRejectedChanges() map[string][2]string {
+	return map[string][2]string{
 		"missing nonzero guard":    {"JE done\n", ""},
 		"reversed guard":           {"JE done", "JNE done"},
 		"stale guard flags":        {"JE done", "ADDL $1,R10\nJE done"},
@@ -51,7 +50,12 @@ func TestX86GoCallerCountedLoopRetainsUnprovedPaths(t *testing.T) {
 		"unknown first vector":     {"MOVL (DI),BX", "VEXTRACTF128 $1,Y0,X1\nMOVL (DI),BX"},
 		"unknown first mask":       {"MOVL (DI),BX", "VMOVUPS (DI),Z0\nVPADDD.Z Z0,Z0,K1,Z1\nMOVL (DI),BX"},
 		"mask zero no rights":      {"MOVL (DI),BX", "VMOVUPS (DI),Z0\nMOVL $0,BX\nKMOVQ BX,K1\nVPADDD.Z (DX),Z0,K1,Z1\nMOVL (DI),BX"},
-	} {
+	}
+}
+
+func TestX86GoCallerCountedLoopRetainsUnprovedPaths(t *testing.T) {
+	original := x86CallerCountedLoopScalarAssembly(false)
+	for name, change := range x86CallerCountedLoopRejectedChanges() {
 		t.Run(name, func(t *testing.T) {
 			assembly := strings.Replace(original, change[0], change[1], 1)
 			if assembly == original {

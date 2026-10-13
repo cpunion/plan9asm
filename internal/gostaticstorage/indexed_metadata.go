@@ -124,3 +124,31 @@ func (object *sdkIndexedMetadataObject) selfSymbols() ([]indexedObjectSymbol, er
 	}
 	return result, nil
 }
+
+// The pinned CPU source's one-argument linkname variables live in NonpkgDefs.
+// Only that independent CPU role may request this additional namespace; generic
+// SDK globals and indexed foreign references retain SymbolDefs alone.
+func (object *sdkIndexedMetadataObject) storageSymbols(cpu bool) ([]indexedObjectSymbol, error) {
+	result, err := object.selfSymbols()
+	if err != nil || !cpu {
+		return result, err
+	}
+	base := uint32(0)
+	for _, block := range []int{3, 4, 5} {
+		base += uint32(len(object.block(block)) / 21)
+	}
+	block := object.block(6)
+	for offset := 0; offset < len(block); offset += 21 {
+		symbol := block[offset : offset+21]
+		name, err := object.stringAt(symbol)
+		if err != nil {
+			return nil, err
+		}
+		relative := uint32(offset / 21)
+		result = append(result, indexedObjectSymbol{Namespace: TextSymbolNonpkgDefinition,
+			Relative: relative, Index: base + relative, Name: name,
+			ABI: binary.LittleEndian.Uint16(symbol[8:]), Kind: symbol[10], Flags: symbol[11], Flags2: symbol[12],
+			Size: binary.LittleEndian.Uint32(symbol[13:]), Align: binary.LittleEndian.Uint32(symbol[17:])})
+	}
+	return result, nil
+}

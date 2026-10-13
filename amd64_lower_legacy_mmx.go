@@ -49,6 +49,12 @@ func (c *amd64Ctx) lowerLegacyMMXMove(op Op, ins Instr) (ok bool, terminated boo
 	if rawOp != baseOp {
 		return true, false, fmt.Errorf("%s %s does not accept instruction suffixes: %q", c.goarch, baseOp, ins.Raw)
 	}
+	if baseOp == "MOVDQ2Q" && (ins.x86Encoded || ins.x86SourceRaw != nil) {
+		return true, false, fmt.Errorf("%w: raw Intel MOVDQ2Q requires its physical MMX/x87 entry and caller-state contract: %q", ErrProbeNeedsContext, ins.Raw)
+	}
+	if baseOp == "MOVDQ2Q" {
+		return false, false, nil // Named Go source has all AMOVQ rows, not this Intel-only shape.
+	}
 	form, err := c.parseLegacyMMXMoveForm(baseOp, spec, ins)
 	if err != nil {
 		return true, false, err

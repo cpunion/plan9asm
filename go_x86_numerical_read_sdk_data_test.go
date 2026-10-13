@@ -557,7 +557,7 @@ func TestGoX86SDKNumericalReadLiteralInitializerAndReadBoundaries(t *testing.T) 
 		{"MOVOU r2r1<>-1(SB), X0", 0, false},
 		{"VMOVDQU64 r4r3<>(SB), Z0", 0, false},
 		{"MOVOU X0, r2r1<>(SB)", 1, false},
-		{"LEAQ r2r1<>(SB), AX", 0, false},
+		{"LEAQ r2r1<>(SB), AX", 0, true},
 		{"CALL r2r1<>(SB)", 0, false},
 	} {
 		t.Run(test.instruction, func(t *testing.T) {

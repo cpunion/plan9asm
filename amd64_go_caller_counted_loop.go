@@ -191,7 +191,7 @@ func (facts x86CallerCountedNumbers) clone() x86CallerCountedNumbers {
 // Relational evidence is independent of numericFlags. Unknown upper bits stay
 // unknown; only a real readonly local-length load supplies the partition source.
 func (facts *x86CallerCountedNumbers) step(pc, residue int, ins Instr, before x86SourceStackState, proof *x86GoCallerRegionProof) {
-	op := Op(normalizeInstructionOpcode(ins.Op))
+	op := Op(normalizeInstructionOpcode(x86GoMOVQSourceInstruction(ins).Op))
 	if op == OpTEXT || op == OpRET || op == OpJMP || isAMD64ConditionalBranch(op) {
 		return
 	}

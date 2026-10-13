@@ -213,7 +213,7 @@ func fixedLocalInstructionShape(ins Instr) bool {
 		_, named := fixedLocalBranchLabel(ins)
 		return named
 	}
-	if x86RawReturnScalarMoveBytes(ins.Op) != 0 {
+	if x86RawReturnScalarMoveBytes(x86GoMOVQSourceInstruction(ins).Op) != 0 {
 		return len(ins.Args) == 2
 	}
 	if ins.Op == "NOTQ" {
@@ -475,7 +475,7 @@ func fixedLocalStep(ins *Instr, state *x86FixedLocalState, sig FuncSig, proof *x
 	if known, err := fixedLocalNumericalReadStep(*ins, state); known {
 		return err
 	}
-	if width := x86RawReturnScalarMoveBytes(ins.Op); width != 0 {
+	if width := x86RawReturnScalarMoveBytes(x86GoMOVQSourceInstruction(*ins).Op); width != 0 {
 		return fixedLocalMove(ins, state, sig, proof, residue, width)
 	}
 	if known, err := fixedLocalConditionalSetStep(ins, state, sig, proof, residue); known {

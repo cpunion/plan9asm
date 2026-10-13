@@ -21,7 +21,7 @@ type ReadonlyLiteralDataImage struct {
 // records. Only the separate live SDK factory can create an initializer owner.
 func ReadonlyLiteralDataInitializers(observation *SDKASMDataObservation) ([]ReadonlyLiteralDataImage, error) {
 	if observation == nil || observation.Protocol != ASMDataProtocol && observation.Protocol != ASMDataCPPProtocol ||
-		observation.Target != "linux/386" && observation.Target != "linux/amd64" || observation.PackagePath == "" ||
+		!X86SDKTarget(observation.Target) || observation.PackagePath == "" ||
 		len(observation.Sources) == 0 || len(observation.Sources) > 62 || len(observation.Members) != len(observation.Sources)+2 {
 		return nil, contextError("readonly literal DATA lacks its complete observation role")
 	}
@@ -48,7 +48,9 @@ func ReadonlyLiteralDataInitializers(observation *SDKASMDataObservation) ([]Read
 	for ordinal, source := range observation.Sources {
 		member := observation.Members[ordinal+2]
 		if member.Ordinal != ordinal+2 || member.Name != members[ordinal] || !bytes.Equal(member.NameBytes, []byte(member.Name)) ||
-			member.Flags != 20 || source.Original.Flags != 20 || source.Expanded.Flags != 20 ||
+			member.Flags != sdkAssemblyObjectFlags(observation.Target) ||
+			source.Original.Flags != sdkAssemblyObjectFlags(observation.Target) ||
+			source.Expanded.Flags != sdkAssemblyObjectFlags(observation.Target) ||
 			!sameASMDataObjects(source.Original, member) || !sameASMDataObjects(source.Original, source.Expanded) {
 			return nil, contextError("readonly literal DATA whole source/object/archive identity differs")
 		}

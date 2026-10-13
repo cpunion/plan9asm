@@ -230,6 +230,14 @@ its own complete source origins, initialized bytes and numerical versions across
 SCCs. The original shared finite replay budget and independent final replay stay
 unchanged; this does not prove dynamic affine, sentinel or nested loops and never
 uses an acyclic hull join to manufacture a cyclic invariant or allocation bounds.
+MOVQ's named MOVD/MOVDQ2Q aliases retain those same numerical origins,
+versions and complete zero-based partitions through local source-only dispatch.
+Raw physical opcodes never inherit that alias registration. Fixed-local scalar
+constant/boolean knowledge, memory-width observations and carry initialization
+likewise retain MOVQ's exact width without rewriting original source identity.
+The required Linux AMD64 source-alias counted-provenance runtime compares
+original Go and independent LLVM O0/O2 values, immutable lengths and full
+input/output canaries; no new loop, g or native-entry class is admitted.
 
 Signed packed dword-to-float conversion uses one validated whole native
 CVTDQ2PS/PD opcode, retaining ambient MXCSR rounding, precision, trapping,
@@ -410,9 +418,10 @@ selects their meaning.
 expanded source with its actual Go tool, OS, architecture and shared flag.
 It binds every TEXT body, ordered relocation, frame/argument header and original
 source position. `BindTLSMoves` consumes only observed zero-width NOP rewrites
-of MOVL/MOVQ/MOVD TLS-to-GP rows, including Go's complete pre-encoding AX..R15
-range on 386. Such a NOP preserves both initialized and unknown destination
-bytes; the complete existing source/result proof still runs before lowering.
+of MOVL/MOVQ and its MOVD/MOVDQ2Q source aliases' TLS-to-GP rows, including
+Go's complete pre-encoding AX..R15 range on 386. Such a NOP preserves both
+initialized and unknown destination bytes; the complete existing source/result
+proof still runs before lowering.
 The source observer supplies no package selection, signature, native frame,
 thread, TLS address or g identity. ELF LE/IE relocations, Windows/Android runtime
 offsets, Plan 9 private storage and actual TLS memory remain Context without
@@ -772,7 +781,19 @@ identity and raw-entry contracts remain strict. Bound runtime batches and compar
 original legacy Go bytes, independent byte references and LLVM O0/O2 separately.
 
 GP/X scalar bit transfers share one typed grammar for MOVL, MOVQ, Go's MOVD
-alias (64-bit), VMOVD and VMOVQ. The grammar feeds original-source validation,
+and MOVDQ2Q source aliases (64-bit), VMOVD and VMOVQ. Named aliases preserve
+their original `Op` and `Raw` identity and use every MOVQ scalar, memory, GP/X,
+machine register and TLS row; they are not Intel opcode restrictions. Actual raw
+F2 0F D6 remains an X-to-MMX native effect, independent of source-compatible
+formatter spellings, and requires physical MMX/x87 entry and caller state.
+Source normalization cannot wash away that origin or establish initialized
+bytes. Canonicalize only local dispatch copies, not the complete source bound
+by caller, raw-return or frame fingerprints. Go's FLOAT-immediate class has no
+MOVQ or alias row and cannot become a zero integer. The required
+Linux AMD64 `TestCrossLinuxRuntimeMatrixX86MOVQSourceAliasesOriginalAndLLVM`
+counterpart executes original Go bytes and LLVM with separate GP, GP/X,
+X128-clearing, native eight-byte read and address effects.
+The grammar feeds original-source validation,
 CFG routing, lowering, private FP-result initialization and caller byte effects;
 the direct scalar module prototype cannot bypass it. Legacy writes preserve
 upper vector aliases, while VEX/EVEX writes clear them. Mode32 VEX GP transfers
@@ -957,6 +978,19 @@ numerical-command, memory, native-entry or source-exclusion permission.
 The source-role extension grants no new native instruction/memory effects or
 dynamic-frame permission. Keep the original Go objects and three-API LLVM 22
 O0/O2 objects on all AMD64 targets separate from external-library success.
+
+The independent x86 SDK numerical/data observation uses exact Linux x86,
+Darwin/amd64 and Windows x86 profiles. Source macros, baseline CPU settings,
+CGO defaults, LLVM triples and every native member remain target-bound;
+ordinary owned numerical capture retains its separate Linux-only boundary.
+Default Darwin PIE carries exact shared compiler/assembler flags; Windows PIE
+does not. CPU variables' original self-linkname NonpkgDefs remain a CPU-only
+storage role, never a generic-global or external-function permission. SDK
+compiler metadata may include the complete bounded JSON directive prologue
+from the pinned Go writer/linker grammar. Observe its rows without applying
+imports, linker flags or calls; standalone/owned objects retain their old bound.
+Keep full original CRC32 source/object checks on each added platform and
+cross-target, malformed-row, ABI/index and source-lifetime rejection controls.
 
 Ordinary fixed-local capture observes Go's actual AMD64 v1/v2/v3/v4 profiles
 independently. Original feature-tagged source selection, compiler exports,

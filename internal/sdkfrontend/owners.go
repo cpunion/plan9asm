@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/xgo-dev/plan9asm"
+	"github.com/xgo-dev/plan9asm/internal/gostaticstorage"
 )
 
 type OwnerRequest struct {
@@ -23,7 +24,7 @@ type OwnerRequest struct {
 // Private assembly data and functions never become Go-defined variables here.
 func OwnerRequests(pkg *Package, file *plan9asm.File, target string) []OwnerRequest {
 	if pkg == nil || pkg.Module || file == nil || file.Arch != plan9asm.ArchAMD64 ||
-		(target != "linux/amd64" && target != "linux/386") {
+		!gostaticstorage.X86SDKTarget(target) {
 		return nil
 	}
 	packages := make(map[string]*Package)

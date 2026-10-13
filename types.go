@@ -1004,6 +1004,9 @@ type Instr struct {
 	// Factory-only exact scalar numerical read. Its immutable source/native
 	// join is rechecked before and after translation, never inferred from SB.
 	x86NumericalRead *x86NumericalReadCertificate
+	// Literal-only address/read fact from the same live original SDK DATA and
+	// complete source-path proof; never caller or native-frame authority.
+	x86SDKLiteral *x86SDKLiteralCertificate
 	// A decoded near return is a physical C2/C3 instruction, not a Go RET
 	// pseudo-instruction with an automatically generated frame epilogue.
 	x86RawNearReturn *x86RawNearReturnForm

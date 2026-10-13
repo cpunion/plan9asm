@@ -215,13 +215,25 @@ func (source *GoX86NumericalReadSource) bindSDKLiteralSymbols(file *File, option
 
 // This is a bounded access to this translation's own emitted literal, not an
 // external Go-variable certificate. The shared complete typed memory shape
-// supplies the native width; taking/storing an address or writing the literal
-// cannot borrow its initializer owner.
+// supplies the native width. An observed full-word address or indexed source
+// additionally requires the separate complete literal provenance/range proof
+// at binding; this role query alone supplies neither bytes nor pointer backing.
 func (source *GoX86NumericalReadSource) sdkLiteralRead(ins Instr, index int, arch string) (bool, error) {
-	if source.literals == nil || index < 0 || index >= len(ins.Args) || ins.Args[index].Kind != OpSym {
+	if source.literals == nil || index < 0 || index >= len(ins.Args) {
 		return false, nil
 	}
-	base, offset, valid := parseSBRef(ins.Args[index].Sym)
+	operand := ins.Args[index]
+	if operand.Kind == OpSym {
+		operand.Sym = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(operand.Sym), "$"))
+		if parsed, err := parseOperandForArch(ArchAMD64, operand.Sym); err == nil {
+			operand = parsed
+		}
+	}
+	memory, valid := x86SBMemoryAddressRole(operand, arch)
+	if !valid {
+		return false, nil
+	}
+	base, _, valid := parseSBRef(memory.Sym)
 	if !valid || !strings.HasSuffix(base, "<>") {
 		return false, nil
 	}
@@ -230,8 +242,8 @@ func (source *GoX86NumericalReadSource) sdkLiteralRead(ins Instr, index int, arc
 		if image.SourceOrdinal != source.literals.SourceOrdinal || image.Definition.Name != name {
 			continue
 		}
-		width, write, known := x86InstructionMemoryShape(ins, index, arch)
-		if !known || write || offset < 0 || width <= 0 || offset > int64(len(image.Initial))-width {
+		form, known := x86SDKLiteralOperandProperties(ins, index, arch)
+		if !known || form.offset < 0 || form.offset > int64(len(image.Initial))-form.width {
 			return true, numericalSBContext("private literal read has an unbound shape/direction/whole-byte extent")
 		}
 		return true, nil

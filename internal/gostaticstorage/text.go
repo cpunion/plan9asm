@@ -158,12 +158,16 @@ func readTextArchive(data []byte, target string, sdkCPU bool, builtins []TextRef
 		value := TextMember{Name: member.name, Offset: member.offset, Size: int64(len(member.data))}
 		if index != 0 {
 			if sdkCPU {
-				value.Flags = 16
+				value.Flags = sdkCompilerObjectFlags(target)
 				if index != 1 {
 					value.Flags |= 4
 				}
 			}
-			body, err := objectBody(member.data, target)
+			reader := objectBody
+			if sdkCPU && index == 1 {
+				reader = sdkObjectBody
+			}
+			body, err := reader(member.data, target)
 			if err != nil {
 				return nil, err
 			}

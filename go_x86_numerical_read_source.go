@@ -78,7 +78,8 @@ func captureGoX86NumericalReadSource(ctx context.Context, request GoX86Numerical
 		return nil, fmt.Errorf("capture numerical read source: %w", ctx.Err())
 	}
 	if role != numericalSBOwnedSource && role != numericalSBSDKSource || inputsOnly && role != numericalSBSDKSource ||
-		ctx == nil || request.Target != "linux/386" && request.Target != "linux/amd64" ||
+		ctx == nil || !gostaticstorage.X86SDKTarget(request.Target) ||
+		role == numericalSBOwnedSource && request.Target != "linux/386" && request.Target != "linux/amd64" ||
 		!filepath.IsAbs(request.GoBinary) || !filepath.IsAbs(request.Directory) || request.PackagePath == "" ||
 		filepath.Base(request.AssemblyFile) != request.AssemblyFile || !strings.HasSuffix(request.AssemblyFile, ".s") ||
 		len(request.Owners) == 0 || len(request.Owners) > 8 {
@@ -104,8 +105,8 @@ func captureGoX86NumericalReadSource(ctx context.Context, request GoX86Numerical
 		}
 		provided[key] = value
 	}
-	_, arch, _ := strings.Cut(request.Target, "/")
-	for key, value := range map[string]string{"GOOS": "linux", "GOARCH": arch, "GOAMD64": "v1", "GO386": "sse2",
+	goos, arch, _ := strings.Cut(request.Target, "/")
+	for key, value := range map[string]string{"GOOS": goos, "GOARCH": arch, "GOAMD64": "v1", "GO386": "sse2",
 		"CGO_ENABLED": "0", "GOTOOLCHAIN": "local", "GOENV": "off", "GOWORK": "off", "GOFLAGS": "", "GOEXPERIMENT": "", "GOPROXY": "off"} {
 		if key == "CGO_ENABLED" && role == numericalSBSDKSource && (provided[key] == "0" || provided[key] == "1") {
 			continue // Complete selected SDK graph still rejects every cgo/generated source.
@@ -371,7 +372,7 @@ func (source *GoX86NumericalReadSource) preprocess() error {
 		return err
 	}
 	source.cpp, err = ObserveAssemblyCPP(string(original), AssemblyPreprocessOptions{FileName: filepath.Join(source.request.Directory, source.request.AssemblyFile),
-		Defines: GoAssemblerDefinesWithEnv("linux", guard.env["GOARCH"], guard.env),
+		Defines: GoAssemblerDefinesWithEnv(guard.env["GOOS"], guard.env["GOARCH"], guard.env),
 		ReadInclude: func(parent, name string) (string, []byte, error) {
 			if filepath.Base(name) != name || name == "go_asm.h" {
 				return "", nil, numericalSBContext("generated/relative header needs separate actual compiler agreement")

@@ -40,6 +40,19 @@ func setSimpleSDKProfile(t *testing.T) {
 }
 
 func TestTranslateOriginalSDKCRC32NumericalSource(t *testing.T) {
+	verifyOriginalSDKCRC32NumericalSource(t, "linux")
+}
+
+func TestTranslateOriginalSDKCRC32NumericalSourceNonLinux(t *testing.T) {
+	for _, goos := range []string{"darwin", "windows"} {
+		t.Run(goos, func(t *testing.T) {
+			verifyOriginalSDKCRC32NumericalSource(t, goos)
+		})
+	}
+}
+
+func verifyOriginalSDKCRC32NumericalSource(t *testing.T, goos string) {
+	t.Helper()
 	setSimpleSDKProfile(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
@@ -48,13 +61,16 @@ func TestTranslateOriginalSDKCRC32NumericalSource(t *testing.T) {
 	if err != nil || !strings.Contains(string(original), "CMPB internal∕cpu·X86+") {
 		t.Fatal("actual SDK CRC32 counterexample is absent", err)
 	}
-	pkg, err := loadPackage("hash/crc32", "linux", "amd64")
+	pkg, err := loadPackage("hash/crc32", goos, "amd64")
 	if err != nil {
 		t.Fatal(err)
 	}
-	tr, ok, err := translateAsmForPackage(pkg.Package, input, "linux", "amd64", false, pkg.selected)
+	tr, ok, err := translateAsmForPackage(pkg.Package, input, goos, "amd64", false, pkg.selected)
 	if err != nil || !ok {
 		t.Fatalf("unchanged original SDK translation: %v (TEXT=%t)", err, ok)
+	}
+	if !strings.Contains(tr.LLVMIR, "target triple = \""+targetTriple(goos, "amd64")+"\"") {
+		t.Fatal("translated SDK source did not retain its actual target triple")
 	}
 	llc := sdkLLVM22LLC(t, ctx)
 	folder := t.TempDir()

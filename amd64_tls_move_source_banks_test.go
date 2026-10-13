@@ -64,7 +64,7 @@ func TestX86TLSMoveDirectNOPAllRegisteredDestinationClasses(t *testing.T) {
 				names = append(names, "g") // The independently registered AMD64-only R14 alias.
 			}
 			accepted, rejected, contextual := 0, 0, 0
-			for _, op := range []string{"MOVL", "MOVQ", "MOVD"} {
+			for _, op := range []string{"MOVL", "MOVQ", "MOVD", "MOVDQ2Q"} {
 				for index, register := range names {
 					row := op + " TLS," + register
 					wantNOP := index >= 16 && index <= 31 || register == "g"
@@ -125,15 +125,15 @@ func TestX86TLSMoveDirectNOPAllRegisteredDestinationClasses(t *testing.T) {
 					t.Logf("native bank Context: %s %s: %s", profile.arch, row, strings.TrimSpace(string(output)))
 				}
 			}
-			want := 48
+			want := 64
 			if profile.arch == "amd64" {
-				want = 51
+				want = 68
 			}
-			if accepted != want || accepted+rejected+contextual != 3*len(names) {
+			if accepted != want || accepted+rejected+contextual != 4*len(names) {
 				t.Fatal("complete destination-bank probe inventory changed")
 			}
 			t.Logf("%s: actual source NOPs=%d ordinary Go rejections=%d Context=%d total=%d",
-				fmt.Sprint(profile), accepted, rejected, contextual, 3*len(names))
+				fmt.Sprint(profile), accepted, rejected, contextual, 4*len(names))
 		})
 	}
 }

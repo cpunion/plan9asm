@@ -6,7 +6,7 @@ import (
 )
 
 // This is source grammar, not a native-register, thread or storage permission.
-// Go's MOVD alias selects AMOVQ, including its mode32 MMX/XMM memory rows.
+// Go's complete MOVQ source aliases include the mode32 MMX/XMM memory rows.
 // Width describes the physical memory transfer, never a virtual GP slot.
 type x86TLSMoveForm struct {
 	op      Op
@@ -23,7 +23,8 @@ func x86TLSMoveProperties(ins Instr, arch string) (x86TLSMoveForm, bool, error) 
 	form := x86TLSMoveForm{memory: -1}
 	op := strings.ToUpper(string(ins.Op))
 	base := strings.SplitN(op, ".", 2)[0]
-	if base != "MOVB" && base != "MOVW" && base != "MOVL" && base != "MOVQ" && base != "MOVD" {
+	_, alias := x86GoMOVQSourceAliases[Op(base)]
+	if base != "MOVB" && base != "MOVW" && base != "MOVL" && base != "MOVQ" && !alias {
 		return form, false, nil
 	}
 	present := false
@@ -40,8 +41,8 @@ func x86TLSMoveProperties(ins Instr, arch string) (x86TLSMoveForm, bool, error) 
 	if arch != "386" && arch != "amd64" || op != base || len(ins.Args) != 2 {
 		return bad("has an invalid mode, suffix or operand count")
 	}
-	if base == "MOVD" {
-		base = "MOVQ"
+	if alias {
+		base = string(x86GoMOVQSourceAliases[Op(base)])
 	}
 	form.op = Op(base)
 	form.bits = map[string]int{"MOVB": 8, "MOVW": 16, "MOVL": 32, "MOVQ": 64}[base]

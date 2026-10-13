@@ -111,6 +111,7 @@ func (c *amd64Ctx) lockCarryWrite(operand Operand, width int64, known bool, stat
 }
 
 func (c *amd64Ctx) lockCarryTransfer(ins Instr, state x86LockCarryState) x86LockCarryState {
+	ins = x86GoMOVQSourceInstruction(ins) // Local numerical dispatch, never source/certificate identity.
 	op := Op(strings.ToUpper(string(ins.Op)))
 	if op == OpTEXT || op == OpRET || op == "LOCK" && len(ins.Args) == 0 ||
 		op == OpJMP || isAMD64ConditionalBranch(op) || op == "LOOP" {

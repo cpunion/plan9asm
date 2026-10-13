@@ -47,6 +47,7 @@ type Reloc struct { Offset, Size int64; Type uint16 }
 type Record struct {
  Name string; Kind uint8; ABI uint16; Flags, Flags2 uint8
  Size, Align int64; Data []byte; Relocations []Reloc
+ Member string; Index uint32
 }
 type Definition struct {
  Name string; Kind uint8; ABI uint16; Flags, Flags2 uint8
@@ -74,7 +75,11 @@ func main() {
     s:=r.Sym(uint32(i)); name:=s.Name(r)
     m.Definitions=append(m.Definitions,Definition{Name:name,Kind:s.Type(),ABI:s.ABI(),Flags:s.Flag(),Flags2:s.Flag2(),Size:int64(s.Siz()),Align:int64(s.Align()),DataBytes:len(r.Data(uint32(i))),Relocations:r.NReloc(uint32(i))})
     if name!="internal/cpu.X86"&&name!="internal/cpu.CacheLineSize" { continue }
-    v:=Record{Name:name,Kind:s.Type(),ABI:s.ABI(),Flags:s.Flag(),Flags2:s.Flag2(),Size:int64(s.Siz()),Align:int64(s.Align()),Data:r.Data(uint32(i))}
+    v:=Record{
+     Name:name, Kind:s.Type(), ABI:s.ABI(), Flags:s.Flag(), Flags2:s.Flag2(),
+     Size:int64(s.Siz()), Align:int64(s.Align()), Data:r.Data(uint32(i)),
+     Member:entry.Name, Index:uint32(i),
+    }
     for j:=0;j<r.NReloc(uint32(i));j++ { q:=r.Reloc(uint32(i),j); v.Relocations=append(v.Relocations,Reloc{int64(q.Off()),int64(q.Siz()),q.Type()}) }
     m.Variables[name]=v
    }
@@ -90,7 +95,10 @@ func TestGoSDKStaticStorageOriginalCPUArchiveMembers(t *testing.T) {
 	oracle := officialReaderForSource(t, binary, sdkMemberReaderSource)
 	root := filepath.Dir(filepath.Dir(binary))
 	dir := filepath.Join(root, "src", "internal", "cpu")
-	for _, target := range []string{"linux/386", "linux/amd64", "linux/arm", "linux/arm64", "js/wasm"} {
+	for _, target := range []string{
+		"linux/386", "linux/amd64", "linux/arm", "linux/arm64", "js/wasm",
+		"darwin/amd64", "windows/386", "windows/amd64",
+	} {
 		t.Run(target, func(t *testing.T) {
 			selected := run(t, binary, dir, fixtureEnv(t, target), "list", "-deps", "-json", "-compiled", "-export", "-a", "-p=1", "internal/cpu")
 			decoder := json.NewDecoder(bytes.NewReader(selected))

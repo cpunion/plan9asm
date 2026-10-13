@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/xgo-dev/plan9asm/gotoolprofile"
+	"github.com/xgo-dev/plan9asm/internal/gostaticstorage"
 	"github.com/xgo-dev/plan9asm/internal/sourcepath"
 )
 
@@ -43,9 +44,9 @@ func Reload(ctx context.Context, binary string, pkg *Package, selected *Selectio
 	if err := json.Unmarshal(observed, &actual); err != nil {
 		return nil, nil, nil, err
 	}
-	arch := strings.TrimPrefix(selected.target, "linux/")
+	goos, arch, _ := strings.Cut(selected.target, "/")
 	baseline := arch == "amd64" && actual["GOAMD64"] == "v1" || arch == "386" && actual["GO386"] == "sse2"
-	if actual["GOOS"] != "linux" || actual["GOARCH"] != arch || !baseline || actual["GOFLAGS"] != "" ||
+	if !gostaticstorage.X86SDKTarget(selected.target) || actual["GOOS"] != goos || actual["GOARCH"] != arch || !baseline || actual["GOFLAGS"] != "" ||
 		actual["GOEXPERIMENT"] != "" || actual["CGO_ENABLED"] != "0" && actual["CGO_ENABLED"] != "1" {
 		return nil, nil, nil, contextError("source requires the actual baseline x86 compiler profile")
 	}

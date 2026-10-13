@@ -34,6 +34,7 @@ type GoX86NumericalReadBinding struct {
 	symbols         map[string]string
 	declarations    map[string]goAMD64FrameDeclaration
 	reads           []numericalSBReadFact
+	literalAccesses []x86SDKLiteralAccess
 	capabilities    map[string]numericalSignatureCapabilities
 	seal            [32]byte
 }
@@ -66,8 +67,8 @@ func (source *GoX86NumericalReadSource) BindNumericalReads(ctx context.Context, 
 	if file == nil || options.ResolveSym == nil || pkg.Types == nil || pkg.Path != source.request.PackagePath || pkg.Types.Path() != pkg.Path || pkg.SourceSelection != nil {
 		return Options{}, numericalSBContext("binding lacks complete original declarations/source/resolver")
 	}
-	arch := strings.TrimPrefix(source.request.Target, "linux/")
-	triple := map[string]string{"386": "i386-unknown-linux-gnu", "amd64": "x86_64-unknown-linux-gnu"}[arch]
+	_, arch, _ := strings.Cut(source.request.Target, "/")
+	triple := numericalSDKTargetTriple(source.request.Target)
 	if options.Goarch != arch || options.TargetTriple != triple || options.WASMABI != WASMABIDirect || len(options.X86TailGroups) != 0 || options.NumericalReads != nil {
 		return Options{}, numericalSBContext("binding profile or existing authority differs")
 	}
@@ -153,10 +154,15 @@ func (source *GoX86NumericalReadSource) BindNumericalReads(ctx context.Context, 
 			}
 		}
 	}
+	literalAccesses, err := source.bindSDKLiteralAccesses(file, sigs, symbols, arch)
+	if err != nil {
+		return Options{}, err
+	}
 	options.Sigs, options.ResolveSym = sigs, nil
 	binding := &GoX86NumericalReadBinding{source: source, originalSource: source, context: ctx, originalContext: ctx, packageInput: pkg,
 		originalTypes: pkg.Types, originalImports: numericalImportIdentities(pkg.Imports), file: actual,
-		options: options, symbols: symbols, declarations: declarations, reads: source.readFacts(), capabilities: numericalCapabilities(sigs)}
+		options: options, symbols: symbols, declarations: declarations, reads: source.readFacts(), literalAccesses: literalAccesses,
+		capabilities: numericalCapabilities(sigs)}
 	binding.originalBinding = binding
 	binding.seal, err = binding.digest()
 	if err != nil {
@@ -269,8 +275,9 @@ func (binding *GoX86NumericalReadBinding) digest() ([32]byte, error) {
 		TailGroups   []X86TailGroup
 		Symbols      map[string]string
 		Reads        []numericalSBReadFact
+		Literals     []x86SDKLiteralAccess
 	}{binding.file, binding.options.TargetTriple, binding.options.Goarch, binding.options.WASMABI, binding.options.X87Mode,
-		binding.options.AnnotateSource, binding.options.Sigs, binding.options.X86TailGroups, binding.symbols, binding.reads})
+		binding.options.AnnotateSource, binding.options.Sigs, binding.options.X86TailGroups, binding.symbols, binding.reads, binding.literalAccesses})
 	return sha256.Sum256(data), err
 }
 
@@ -494,6 +501,9 @@ func joinNumericalReadCertificates(file *File, options Options) error {
 			return numericalSBContext("original read has no unique complete source function")
 		}
 	}
+	if err := joinSDKLiteralCertificates(file, binding); err != nil {
+		return err
+	}
 	return verifyNormalizedNumericalReads(file, options)
 }
 
@@ -531,6 +541,9 @@ func verifyNormalizedNumericalReads(file *File, options Options) error {
 	}
 	if len(seen) != len(options.NumericalReads.reads) {
 		return numericalSBContext("normalized read inventory changed or storage collides with local data")
+	}
+	if err := verifyNormalizedSDKLiteralAccesses(file, options); err != nil {
+		return err
 	}
 	if source := options.NumericalReads.source; source.literals != nil {
 		return source.literals.verifyFile(file, source.request.PackagePath)
@@ -577,7 +590,7 @@ func verifyGoNumericalReadInputs(binding *GoX86NumericalReadBinding, pkg GoPacka
 	}
 	if pkg.Path != binding.packageInput.Path || pkg.Types != binding.originalTypes || pkg.SourceSelection != nil ||
 		!numericalSameImports(pkg.Imports, binding.originalImports) ||
-		opt.GOOS != "linux" || opt.GOARCH != binding.options.Goarch || opt.TargetTriple != binding.options.TargetTriple ||
+		opt.GOOS+"/"+opt.GOARCH != binding.source.request.Target || opt.GOARCH != binding.options.Goarch || opt.TargetTriple != binding.options.TargetTriple ||
 		opt.WASMABI != binding.options.WASMABI || opt.X87Mode != binding.options.X87Mode || opt.AnnotateSource != binding.options.AnnotateSource ||
 		opt.Sizes != nil || opt.FrameSizes != nil ||
 		opt.ResolveSym == nil || opt.KeepFunc != nil || opt.ManualSig != nil || len(opt.ARM64ClosureABIs) != 0 ||

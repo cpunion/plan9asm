@@ -15,6 +15,9 @@ func normalizeX86RawFile(file *File, goarch string, translationOptions ...Option
 	if file == nil || file.Arch != ArchAMD64 {
 		return file, nil
 	}
+	if err := validateX86GoMOVQSourceAliases(file, goarch); err != nil {
+		return nil, err
+	}
 	if err := validateX86DirectiveFile(file); err != nil {
 		return nil, err
 	}

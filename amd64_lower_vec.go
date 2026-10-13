@@ -87,17 +87,21 @@ func (c *amd64Ctx) lowerVec(op Op, ins Instr) (ok bool, terminated bool, err err
 			op = Op(raw[:i])
 		}
 	}
-	if op == "MOVD" {
+	if _, alias := x86GoMOVQSourceAliases[op]; alias {
 		if rawOp != op {
 			return true, false, fmt.Errorf("%s MOVD does not accept instruction suffixes: %q", c.goarch, ins.Raw)
+		}
+		if known, terminated, err := c.lowerMachineRegisterMove("MOVQ", ins); known {
+			return known, terminated, err
 		}
 		if err := c.validateMOVDAliasForm(ins); err != nil {
 			return true, false, err
 		}
-		// cmd/asm maps the Plan 9 spelling MOVD to AMOVQ. In particular,
-		// memory/XMM forms transfer 64 bits; MOVD is not Intel's 32-bit MOVD
-		// mnemonic here.
-		op = "MOVQ"
+		// Go source aliases share AMOVQ's rows, not Intel's mnemonic scope.
+		// Change local dispatch only; keep source/caller certificate identity.
+		dispatch := ins
+		dispatch.Op = op
+		op = x86GoMOVQSourceInstruction(dispatch).Op
 	}
 	if _, ok := amd64MaskMoveSpecs[op]; ok {
 		if rawOp != op {

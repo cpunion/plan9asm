@@ -28,6 +28,13 @@ jobs:
           roots+='|TestX86NativeWindowsPrecisionFaultCode|TestX86SignedConversionFaultWindowsHeaderBoundary'
           roots+='|TestX86GoPackedStoreFaultDiagnostic|TestRuntimeOracleFault.*'
           roots+='|TestCrossLinuxRuntimeMatrixX86TLSNoopPreservesWideGP'
+          alias_roots='TestCrossLinuxRuntimeMatrixX86MOVQSourceAliasesOriginalAndLLVM'
+          alias_roots+='|TestCrossLinuxRuntimeMatrixX86MOVQSourceAliasesCountedProvenance'
+          go test . -list "^($alias_roots)$" > _out/native-x86-oracles/alias-inventory.log
+          for root in ${alias_roots//|/ }; do
+            grep -Fx "$root" _out/native-x86-oracles/alias-inventory.log
+          done
+          roots+="|$alias_roots"
           families='MADDTypedOriginalLegacy|PackedNarrowOriginalLegacyOracle|ScalarFPBitViewsOriginalBitsAndCanaries'
           families+='|PureGPUnknownDeadOutputs|SignedIntegerScalarFloatTranslatedFPFields|ScalarCompareFlags'
           families+='|RawReturnSourceAddressNumerical|FloatingCompareOriginalLegacyPredicates|TimestampOriginalAndLLVM'

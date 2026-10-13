@@ -40,7 +40,10 @@ func sdkCaptured(t *testing.T, req Request) (*Observation, Report) {
 func TestGoSDKStaticStorageTypedProducerAndReader(t *testing.T) {
 	_, binary, _ := fixture(t)
 	oracle := officialReaderForSource(t, binary, sdkMemberReaderSource)
-	for _, target := range []string{"linux/386", "linux/amd64", "linux/arm", "linux/arm64", "js/wasm"} {
+	for _, target := range []string{
+		"linux/386", "linux/amd64", "linux/arm", "linux/arm64", "js/wasm",
+		"darwin/amd64", "windows/386", "windows/amd64",
+	} {
 		t.Run(target, func(t *testing.T) {
 			o, report := sdkCaptured(t, sdkRequest(t, binary, target))
 			pad, word := int64(64), int64(8)
@@ -50,7 +53,7 @@ func TestGoSDKStaticStorageTypedProducerAndReader(t *testing.T) {
 			if target == "linux/arm64" {
 				pad = 128
 			}
-			if target == "linux/386" || target == "linux/arm" {
+			if target == "linux/386" || target == "windows/386" || target == "linux/arm" {
 				word = 4
 			}
 			for _, v := range report.Variables {
@@ -143,12 +146,12 @@ func TestGoSDKStaticStorageOwnerAndReaderGuards(t *testing.T) {
 		"module owner": func(r *Report) {
 			changeSDKSelection(t, r, "Module", map[string]any{"Path": "internal/cpu", "Dir": dir, "Main": true})
 		},
-		"import map":            func(r *Report) { changeSDKSelection(t, r, "ImportMap", map[string]string{"unsafe": "elsewhere"}) },
-		"native member":         func(r *Report) { changeSDKSelection(t, r, "SysoFiles", []string{"cpu.syso"}) },
-		"wrong assembly role":   func(r *Report) { changeSDKSelection(t, r, "SFiles", []string{"cpu_x86.s", "cpu.s"}) },
-		"assembly command rule": func(r *Report) { r.Tools["src/cmd/go/internal/work/gc.go"] = strings.Repeat("0", 64) },
-		"unbound target tuning": func(r *Report) { r.CommandEnvironment["GOARM"] = "6,softfloat" },
-		"unknown target":        func(r *Report) { r.Target = "darwin/amd64" },
+		"import map":                     func(r *Report) { changeSDKSelection(t, r, "ImportMap", map[string]string{"unsafe": "elsewhere"}) },
+		"native member":                  func(r *Report) { changeSDKSelection(t, r, "SysoFiles", []string{"cpu.syso"}) },
+		"wrong assembly role":            func(r *Report) { changeSDKSelection(t, r, "SFiles", []string{"cpu_x86.s", "cpu.s"}) },
+		"assembly command rule":          func(r *Report) { r.Tools["src/cmd/go/internal/work/gc.go"] = strings.Repeat("0", 64) },
+		"unbound target tuning":          func(r *Report) { r.CommandEnvironment["GOARM"] = "6,softfloat" },
+		"report target/profile mismatch": func(r *Report) { r.Target = "darwin/amd64" },
 		"original source changed with hash": func(r *Report) {
 			r.Source["cpu.go"] = append(r.Source["cpu.go"], '\n')
 			r.SourceSHA256["cpu.go"] = digest(r.Source["cpu.go"])
@@ -204,7 +207,7 @@ func TestGoSDKStaticStorageOwnerAndReaderGuards(t *testing.T) {
 			case "arbitrary module nil":
 				req.PackagePath = "unsafe"
 			case "unknown target":
-				req.Target = "windows/amd64"
+				req.Target = "freebsd/amd64"
 			case "function not Var":
 				req.Variables = []Reference{{"internal/cpu", "Initialize"}}
 			case "missing Var":

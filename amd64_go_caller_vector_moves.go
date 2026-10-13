@@ -422,7 +422,7 @@ func x86InstructionMemoryShape(ins Instr, index int, arch string) (width int64, 
 	if form, recognized, err := x86PackedLogicalProperties(ins, arch); recognized {
 		return int64(form.memoryBytes), false, err == nil && !form.mmx && form.memory == index
 	}
-	if width = x86RawReturnScalarMoveBytes(Op(normalizeInstructionOpcode(ins.Op))); width != 0 && len(ins.Args) == 2 {
+	if width = x86RawReturnScalarMoveBytes(Op(normalizeInstructionOpcode(x86GoMOVQSourceInstruction(ins).Op))); width != 0 && len(ins.Args) == 2 {
 		return width, index == 1, true
 	}
 	if form, recognized, err := x86ScalarExtensionProperties(ins.Op, ins, arch); recognized {

@@ -190,6 +190,7 @@ func bindVariables(report Report, packages map[string]Package, references []Refe
 		fset := token.NewFileSet()
 		var syntax []*ast.File
 		selfLinknames := make(map[string]bool)
+		standardFunctions := make(map[string]bool)
 		sourceRoot := pkg.Dir
 		if !sdkStorageProtocol(report.Protocol) {
 			sourceRoot = pkg.Module.Dir
@@ -207,6 +208,16 @@ func bindVariables(report Report, packages map[string]Package, references []Refe
 			// Linknames need an independently bound aliased backing producer.
 			for _, group := range parsed.Comments {
 				for _, comment := range group.List {
+					if strings.HasPrefix(comment.Text, "//go:linknamestd") && report.Protocol == SDKCPUProtocol {
+						words := strings.Fields(comment.Text)
+						if len(words) != 2 || words[0] != "//go:linknamestd" || !token.IsIdentifier(words[1]) ||
+							words[1] == ref.Name || standardFunctions[words[1]] || selfLinknames[words[1]] ||
+							!sdkExternalFunctionDirective(parsed, comment, words[1]) {
+							return nil, contextError("invalid, duplicate or variable SDK standard-linkname directive")
+						}
+						standardFunctions[words[1]] = true
+						continue // An unrelated external function supplies no variable backing.
+					}
 					if report.Protocol == SDKGlobalsProtocol && (strings.HasPrefix(comment.Text, "//go:linkname") || strings.HasPrefix(comment.Text, "//go:linknamestd")) {
 						words := strings.Fields(comment.Text)
 						if len(words) < 2 || len(words) > 3 || !token.IsIdentifier(words[1]) || words[1] == ref.Name {
@@ -216,7 +227,8 @@ func bindVariables(report Report, packages map[string]Package, references []Refe
 					}
 					if strings.HasPrefix(comment.Text, "//go:linkname") && report.Protocol == SDKCPUProtocol {
 						words := strings.Fields(comment.Text)
-						if len(words) != 2 || words[0] != "//go:linkname" || !token.IsIdentifier(words[1]) || selfLinknames[words[1]] {
+						if len(words) != 2 || words[0] != "//go:linkname" || !token.IsIdentifier(words[1]) ||
+							selfLinknames[words[1]] || standardFunctions[words[1]] {
 							return nil, contextError("aliased, duplicate or invalid SDK self-linkname")
 						}
 						selfLinknames[words[1]] = true
@@ -336,6 +348,21 @@ func bindVariables(report Report, packages map[string]Package, references []Refe
 			DefinitionMember: record.Member, DefinitionIndex: record.Index})
 	}
 	return result, nil
+}
+
+func sdkExternalFunctionDirective(file *ast.File, comment *ast.Comment, name string) bool {
+	for _, declaration := range file.Decls {
+		function, valid := declaration.(*ast.FuncDecl)
+		if !valid || function.Name.Name != name || function.Recv != nil || function.Body != nil || function.Doc == nil {
+			continue
+		}
+		for _, actual := range function.Doc.List {
+			if actual == comment {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func numericBytes(typ types.Type, sizes types.Sizes, bytes []bool, base int64, depth int) error {

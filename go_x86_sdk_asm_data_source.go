@@ -74,7 +74,7 @@ func CaptureGoX86SDKASMDataSource(ctx context.Context, request GoX86SDKASMDataCa
 	if ctx != nil && ctx.Err() != nil {
 		return nil, fmt.Errorf("capture SDK ASM DATA: %w", ctx.Err())
 	}
-	if ctx == nil || request.Target != "linux/386" && request.Target != "linux/amd64" ||
+	if ctx == nil || !gostaticstorage.X86SDKTarget(request.Target) ||
 		!filepath.IsAbs(request.GoBinary) || !filepath.IsAbs(request.Directory) ||
 		!filepath.IsLocal(filepath.FromSlash(request.PackagePath)) ||
 		filepath.ToSlash(filepath.Clean(filepath.FromSlash(request.PackagePath))) != request.PackagePath {
@@ -155,8 +155,8 @@ func sdkASMDataEnvironment(request GoX86SDKASMDataCaptureRequest) (map[string]st
 		}
 		provided[key] = value
 	}
-	_, arch, _ := strings.Cut(request.Target, "/")
-	for key, value := range map[string]string{"GOOS": "linux", "GOARCH": arch, "GOAMD64": "v1", "GO386": "sse2",
+	goos, arch, _ := strings.Cut(request.Target, "/")
+	for key, value := range map[string]string{"GOOS": goos, "GOARCH": arch, "GOAMD64": "v1", "GO386": "sse2",
 		"CGO_ENABLED": "0", "GOTOOLCHAIN": "local", "GOENV": "off", "GOWORK": "off", "GOFLAGS": "", "GOEXPERIMENT": "", "GOPROXY": "off"} {
 		if key == "CGO_ENABLED" && (provided[key] == "0" || provided[key] == "1") {
 			continue // Actual SDK graph still requires complete ordinary uncgo sources.

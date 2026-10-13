@@ -69,11 +69,12 @@ func X86FPAccessBytes(ins Instr, index int, arch string) (width int64, write, kn
 			return int64(spec.bits / 8), index == 1, true
 		}
 	}
-	if ins.Op == "MOVB" || ins.Op == "MOVW" || ins.Op == "MOVL" || ins.Op == "MOVQ" {
+	op := x86GoMOVQSourceInstruction(ins).Op
+	if op == "MOVB" || op == "MOVW" || op == "MOVL" || op == "MOVQ" {
 		if len(ins.Args) != 2 {
 			return 0, false, false
 		}
-		width = x86RawReturnScalarMoveBytes(ins.Op)
+		width = x86RawReturnScalarMoveBytes(op)
 		otherOperand := ins.Args[1-index]
 		if index == 1 && otherOperand.Kind == OpImm && otherOperand.ImmRaw == "" && !otherOperand.ImmIsFloat &&
 			(width != 8 || arch == "amd64" && otherOperand.Imm == int64(int32(otherOperand.Imm))) {

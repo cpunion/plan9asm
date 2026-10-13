@@ -128,6 +128,9 @@ func goAssemblerOracleX86AddressListing(original, listing []string, arch string)
 		len(args) != 2 || len(listedArgs) != 2 || len(args[0]) < 4 || args[0][0] != "$" {
 		return false
 	}
+	if canonical, alias := goAssemblerOracleX86Aliases[sourceOp]; alias {
+		sourceOp = canonical
+	}
 	want := map[string]string{"MOVL": "LEAL", "MOVQ": "LEAQ"}[sourceOp]
 	if want == "" || listedOp != want {
 		return false
