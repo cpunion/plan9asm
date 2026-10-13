@@ -100,6 +100,38 @@ retain that distinction. The integrated literal/numerical/bool family passes in
 278.822 seconds. Complete original maps source still needs a separate typed
 caller-address contract; do not promote this predicate repair to a file pass.
 
+`99a1146e` closes that separate typed caller-address predicate class. Its
+must-domain is distinct from literal/OR identities and numerical initialization;
+all B/W/L/Q TEST views, typed overwrites and joins retain the original FLAGS
+contract and unchanged budgets. Complete unmodified maps source passes both
+TEXTs/all DATA through three APIs, three OS profiles and LLVM 22 O0/O2 objects
+in 203.337 seconds. Mutable AES keys remain external loads and actual literal
+alignment agrees with the observed floor. The independent instruction-byte and
+genuine Go ABI0 caller axes pass under Linux emulation, not native SDK execution.
+The frontends still need their explicit typed-demand minimum handoff, so this
+does not establish benchmark completion. Parent focused integration passes in
+5.404 seconds; retain the separate 975.640-second Go 1.27 family receipt.
+
+`c761245d` hands authenticated SDK-primary ABI0 frames to the existing fixed-local
+checker without granting owned-main, helper, split-stack or caller permissions.
+Actual MD5 frame capture passes; its unrelated complete body remains Context at
+SHRQ. Complete chacha retains its undeclared private helper instead of cropping
+it. `d63f7b76` reproduces ordinary Verify and SDK Bind caller-context callbacks
+under a frame lock, then samples them outside locks through a bounded private
+command context. Published bindings retain the original lifetime and permanent
+revocation. Parent frame/context/C-driver integration passes in 125.987 seconds
+and the real CLI default/saved-profile cohort in 13.041 seconds.
+
+`79b7ab3f` fixes source TEXT ordinal versus Go's physical namespace-bank order.
+Exact symbol/ABI/namespace/index associations retain original physical records,
+code, PCs and relocations; SDK native listings consume the source association.
+The complete actual bytealg metadata now verifies, while whole equal translation
+still rejects its unresolved helper tail, DX closure and no-DATA source handoff.
+The parent combined mapping/frame/caller/minimum cohort passes Go 1.27 in 47.337
+seconds; Go 1.20 mapping and caller/context controls pass in 0.323/5.913 seconds.
+These receipts do not replace the still-failed complete benchmark or broad host
+cohort. Native instruction/caller confirmation needs the following fork batch.
+
 The following frozen `05aea382` five-target compile benchmark remains failed:
 163/184 assembly files compile, with 21 failures and zero N/A/unattempted.
 Counts are 29/33, 48/55, 27/30, 40/47 and 19/19; build takes ten seconds and
@@ -126,7 +158,7 @@ infrastructure failures as successful source exclusions.
 
 Inventory runs only on the server. Streaming ledger status and a complete
 five-minute incremental window have been verified before restoring catch-up;
-the trusted contiguous head now advances through 2026-10-08T12:22:43Z.
+the trusted contiguous head now advances through 2026-10-08T15:22:43Z.
 The requested historical cutoff remains 2025-10-01; subsequent hourly windows
 publish only after their complete scan. Real source failures remain retryable,
 not pass/skip. No local index/ledger scan is needed for translator work.

@@ -254,8 +254,12 @@ func numericalFamilyTranslate(t *testing.T, api string, pkg GoPackage, file *Fil
 		if readErr != nil {
 			t.Fatal(readErr)
 		}
+		goos, _, target := strings.Cut(source.request.Target, "/")
+		if !target {
+			t.Fatal("actual numerical source target has no OS/architecture", source.request.Target)
+		}
 		result, translateErr := translateGoModuleInContext(context, pkg, data, GoModuleOptions{
-			GOARCH: options.Goarch, GOOS: "linux", TargetTriple: options.TargetTriple,
+			GOARCH: options.Goarch, GOOS: goos, TargetTriple: options.TargetTriple,
 			FileName: source.request.AssemblyFile, NumericalReads: options.NumericalReads, ResolveSym: options.ResolveSym,
 		})
 		err = translateErr

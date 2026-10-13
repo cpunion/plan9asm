@@ -65,6 +65,7 @@ func checkAMD64RegisterResultInitialization(fn Func, sig FuncSig, transfer x86Re
 		}
 		if typ == Ptr {
 			initial.pointerGP[reg] = true // Opaque identity, not numerical bytes or bounds.
+			initial.callerAddressGP[reg] = true
 		} else {
 			initial.gp[reg] = mask // Narrow inputs do not initialize the unspecified upper bytes.
 		}

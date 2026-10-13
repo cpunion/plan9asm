@@ -22,6 +22,7 @@ import (
 type amd64FixedLocalCLISource struct {
 	observation *gotoolprofile.AMD64OriginalPackageObservation
 	binding     *gotoolprofile.AMD64OriginalFixedLocalBinding
+	sdkFrame    *plan9asm.GoAMD64FrameSource
 	selection   *x86CallerPackageSelection
 	packageData *packages.Package
 	target      string
@@ -62,6 +63,9 @@ func (source *amd64FixedLocalCLISource) verify(ctx context.Context) (result erro
 		if err != nil || actual != expected {
 			return fmt.Errorf("%w: fixed-local actual compiled Go source changed", plan9asm.ErrProbeNeedsContext)
 		}
+	}
+	if source.sdkFrame != nil {
+		return source.sdkFrame.Verify(ctx)
 	}
 	return source.binding.Verify(ctx)
 }
@@ -110,6 +114,9 @@ func amd64FixedLocalActualSyntax(ctx context.Context, pkg *packages.Package) ([]
 }
 
 func (source *amd64FixedLocalCLISource) close() error {
+	if source.sdkFrame != nil {
+		return source.sdkFrame.Close()
+	}
 	return source.observation.Close()
 }
 
@@ -174,6 +181,35 @@ func prepareAMD64FixedLocalSource(pkg *packages.Package, file *plan9asm.File, as
 	}
 	original := gotoolprofile.AMD64OriginalObservationRequest{
 		GoBinary: binary, Directory: dir, PackagePath: pkg.PkgPath, Target: target, Environment: env,
+	}
+	// This is only dispatch, not authority: the independent SDK factory must
+	// prove the actual compiler's complete physical SDK selection and native
+	// frame/source identity. Never infer an owned-main or caller role from it.
+	sdkDirectory := filepath.Join(filepath.Dir(filepath.Dir(binary)), "src", filepath.FromSlash(pkg.PkgPath))
+	if pkg.Module == nil && dir == sdkDirectory {
+		frame, err := plan9asm.CaptureGoAMD64SDKFrameSource(ctx,
+			plan9asm.GoPackage{Path: pkg.PkgPath, Types: pkg.Types, Syntax: syntax}, plan9asm.GoAMD64FrameCaptureRequest{
+				GoBinary: binary, Directory: dir, AssemblyFile: filepath.Base(actualAsm), Target: target, Environment: env,
+			})
+		if err != nil {
+			return nil, nil, err
+		}
+		defer func() {
+			if result != nil {
+				result = errors.Join(result, frame.Close())
+			}
+		}()
+		bound, err := frame.BindFixedLocal(ctx, plan9asm.GoPackage{Path: pkg.PkgPath, Types: pkg.Types, Syntax: syntax}, file,
+			plan9asm.Options{Goarch: goarch, TargetTriple: triple, ResolveSym: resolve, Sigs: sigs})
+		if err != nil {
+			return nil, nil, err
+		}
+		source := &amd64FixedLocalCLISource{sdkFrame: frame, selection: selection, packageData: pkg,
+			target: target, sources: sources}
+		if err := source.verify(ctx); err != nil {
+			return nil, nil, err
+		}
+		return bound.Sigs, source, nil
 	}
 	var observed *gotoolprofile.AMD64OriginalPackageObservation
 	var downloaded *amd64FixedLocalDownloadRequest

@@ -72,6 +72,7 @@ type GoAMD64FrameSource struct {
 	numericalPackage   GoPackage
 	numericalCapturing bool
 	numericalCommands  []numericalSBCommand // Actual capture output only; never an authority.
+	sdkFrame           *goAMD64SDKFrameOrigin
 }
 
 // newGoOriginalInputGuard initializes only private input/cleanup ownership.
@@ -431,6 +432,9 @@ func (source *GoAMD64FrameSource) Verify(ctx context.Context) (verifyErr error) 
 	if source == nil || source.identity != source {
 		return goAMD64FrameContext("missing sealed actual-object observation")
 	}
+	if source.sdkFrame != nil {
+		return source.verifySDKFrame(ctx)
+	}
 	if err := source.verifyNumericalFrameInputs(ctx); err != nil {
 		source.revokeNumericalFrame()
 		return err
@@ -453,6 +457,42 @@ func (source *GoAMD64FrameSource) verifyFrameOnly(ctx context.Context) (verifyEr
 	if source == nil {
 		return goAMD64FrameContext("missing sealed actual-object observation")
 	}
+	private, contextErr := captureGoAMD64FramePrivateContext(ctx)
+	if contextErr != nil {
+		source.mu.Lock()
+		source.ready = false
+		source.mu.Unlock()
+		if source.numericalOrigin != nil {
+			return fmt.Errorf("verify numerical frame observer context: %w", contextErr)
+		}
+		return errors.Join(goAMD64FrameContext("expired actual-object observation"), contextErr)
+	}
+	defer private.stop()
+	defer func() {
+		// Run every caller callback after the locked command/input round.
+		// A callback may Close or change original inputs; no authority may
+		// survive that final boundary even if its Err method returns nil.
+		contextErr := private.verify()
+		source.mu.Lock()
+		defer source.mu.Unlock()
+		if contextErr != nil {
+			if source.numericalOrigin != nil {
+				verifyErr = errors.Join(verifyErr, fmt.Errorf("numerical frame caller context expired after actual commands: %w", contextErr))
+			} else {
+				verifyErr = errors.Join(verifyErr, goAMD64FrameContext("caller context expired after actual commands"), contextErr)
+			}
+		}
+		if !source.ready && verifyErr == nil {
+			verifyErr = goAMD64FrameContext("source closed during caller context callbacks")
+		}
+		if verifyErr == nil {
+			verifyErr = errors.Join(source.verifyInputs(), source.verifyDownloadedOrigin())
+		}
+		if verifyErr != nil {
+			source.ready = false
+		}
+	}()
+	ctx = private
 	source.mu.Lock()
 	defer source.mu.Unlock()
 	defer func() {
@@ -507,7 +547,9 @@ func (source *GoAMD64FrameSource) verifyFrameOnly(ctx context.Context) (verifyEr
 		}
 		return errors.Join(goAMD64FrameContext("verification context expired after actual commands"), err)
 	}
-	return errors.Join(source.verifyInputs(), source.verifyDownloadedOrigin())
+	// The final complete input/origin check follows caller callbacks in the
+	// outer deferred boundary; do not repeat a whole-map read before it.
+	return nil
 }
 
 func (source *GoAMD64FrameSource) verifyOwnedSourceDirectory() error {
@@ -557,6 +599,9 @@ func (source *GoAMD64FrameSource) Close() error {
 	}
 	if source.identity != source {
 		return goAMD64FrameContext("copied or uninitialized observation cannot dispose original artifacts")
+	}
+	if source.sdkFrame != nil {
+		return source.closeSDKFrame()
 	}
 	source.mu.Lock()
 	defer source.mu.Unlock()
@@ -1185,6 +1230,9 @@ func goAMD64FrameIsAlias(typ types.Type) bool {
 }
 
 func (source *GoAMD64FrameSource) preprocess(name string, original []byte) (string, error) {
+	if source.sdkFrame != nil {
+		return source.preprocessSDKFrame(name, original)
+	}
 	if len(source.assemblerDefines) == 0 {
 		return "", goAMD64FrameContext("CPP lacks its actual assembler macro registration")
 	}

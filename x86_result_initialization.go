@@ -75,6 +75,7 @@ func checkX86ABI0ResultInitializationAtSource(fn Func, sig FuncSig, goarch strin
 		resultOffset = int64(frame)
 	}
 	initial := x86ResultState{fp: make([]bool, frame), pointerFP: make(map[int64]bool)}
+	initial.callerAddressFP = initial.pointerFP // Immutable actual typed entry layout.
 	autoExtent, autoErr := x86ResultAUTOExtent(fn, goarch)
 	if autoErr != nil {
 		return autoErr
@@ -131,6 +132,15 @@ type x86ResultSourceTransfer func(int, Instr, *x86ResultState, []bool, int64, st
 // entry role cannot weaken the existing ABI0 result proof.
 func checkX86ResultSourceFlow(fn Func, initial x86ResultState, owned []bool, resultOffset int64, goarch string,
 	transfer x86ResultSourceTransfer, checkReturn func(x86ResultState, int) error) error {
+	originalTransfer := transfer
+	transfer = func(ordinal int, ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string) bool {
+		before := state.callerAddressGP
+		if !originalTransfer(ordinal, ins, state, owned, resultOffset, arch) {
+			return false
+		}
+		state.callerAddressGP = x86ResultCallerAddressesAfter(ins, before, state.callerAddressFP, arch)
+		return true
+	}
 	fail := func(reason string) error {
 		return fmt.Errorf("%w: result initialization: %s", ErrProbeNeedsContext, reason)
 	}
@@ -158,12 +168,12 @@ func checkX86ResultSourceFlow(fn Func, initial x86ResultState, owned []bool, res
 		return fail("missing or oversized source CFG")
 	}
 	// One logical byte-work envelope includes FP/AUTO, numerical GP/Z/K,
-	// canonical GP bytes, flags, opaque GP identities and the source-shape discriminator. It is
+	// canonical GP bytes, flags, opaque GP and caller-address identities, and the source-shape discriminator. It is
 	// not a bound on Go's heap/struct overhead. pointerFP is immutable shared
 	// layout metadata, not a state payload copied at each CFG successor.
 	// AUTO states do not obtain an independent frame or iteration budget.
 	byteState := len(initial.fp) + len(initial.auto) + len(initial.gp) + len(initial.canonicalGP) +
-		8*len(initial.xmm) + len(initial.masks) + 1 + len(initial.pointerGP) + 1
+		8*len(initial.xmm) + len(initial.masks) + 1 + len(initial.pointerGP) + len(initial.callerAddressGP) + 1
 	const byteWorkLimit = 64 << 20
 	byteWork := len(instructions) * byteState
 	if len(initial.auto) != 0 && byteWork > byteWorkLimit/8 {
@@ -310,7 +320,11 @@ type x86ResultState struct {
 	// only an initialization observation, never a pointee/backing permission.
 	pointerFP map[int64]bool // immutable after deriving the actual ABI0 layout
 	pointerGP [16]bool
-	shapeOnly bool // source-wide effect validation, never a reaching state
+	// A separate actual typed-entry address-bit domain. SDK literal/OR
+	// carriers never seed it; no numerical GP or memory facts follow.
+	callerAddressFP map[int64]bool // immutable shared entry layout
+	callerAddressGP [16]bool
+	shapeOnly       bool // source-wide effect validation, never a reaching state
 
 	// Installed only for one lowering transfer over the actual emitted DATA.
 	// It is cleared before a CFG state can escape and never supplies a native
@@ -340,6 +354,7 @@ func (state x86ResultState) intersect(other x86ResultState) x86ResultState {
 		merged.gp[index] &= other.gp[index]
 		merged.canonicalGP[index] &= other.canonicalGP[index]
 		merged.pointerGP[index] = merged.pointerGP[index] && other.pointerGP[index]
+		merged.callerAddressGP[index] = merged.callerAddressGP[index] && other.callerAddressGP[index]
 	}
 	for index := range merged.xmm {
 		merged.xmm[index] &= other.xmm[index]
@@ -532,6 +547,9 @@ func x86ResultTransfer(ins Instr, state *x86ResultState, owned []bool, resultOff
 		return accepted
 	}
 	if accepted, known := x86ResultAESStep(ins, state, owned, arch); known {
+		return accepted
+	}
+	if accepted, known := x86ResultCallerAddressTest(ins, state, owned, arch); known {
 		return accepted
 	}
 	if accepted, recognized := x86ResultIncomingPointerTransfer(ins, state, owned, arch); recognized {
