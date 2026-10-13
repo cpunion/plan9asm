@@ -26,7 +26,19 @@ func TranslateModuleInContext(ctx llvm.Context, file *File, opt Options) (result
 		return translateARM64ByteCarrierModule(ctx, file, opt)
 	}
 	originalFile, originalOptions := file, opt
-	file, opt, err := freezeNumericalReadInputs(file, opt)
+	file, opt, err := freezeTLSMoveInputs(file, opt)
+	if err != nil {
+		return llvm.Module{}, err
+	}
+	defer func() {
+		if err := finishTLSMoves(originalFile, originalOptions); err != nil {
+			if !result.IsNil() {
+				result.Dispose()
+			}
+			result, resultErr = llvm.Module{}, errors.Join(resultErr, err)
+		}
+	}()
+	file, opt, err = freezeNumericalReadInputs(file, opt)
 	if err != nil {
 		return llvm.Module{}, err
 	}

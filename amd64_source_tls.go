@@ -40,7 +40,9 @@ func x86SourceTLSMemoryRole(operand Operand, arch string) bool {
 	case "", CS, SS, DS, ES, FS, GS:
 		return true // asm6 also accepts an index-only or segment-base annotation.
 	default:
-		return isX86YrlRegisterForArch(memory.Base, arch)
+		// Direct-TLS progedit may remove any AX..R15 source base before
+		// physical mode32 classification. It is still an unbound TLS role.
+		return isAMD64YrlRegister(memory.Base)
 	}
 }
 
