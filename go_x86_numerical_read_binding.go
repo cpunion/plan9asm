@@ -34,6 +34,7 @@ type GoX86NumericalReadBinding struct {
 	symbols         map[string]string
 	declarations    map[string]goAMD64FrameDeclaration
 	reads           []numericalSBReadFact
+	literalAccesses []x86SDKLiteralAccess
 	capabilities    map[string]numericalSignatureCapabilities
 	seal            [32]byte
 }
@@ -153,10 +154,15 @@ func (source *GoX86NumericalReadSource) BindNumericalReads(ctx context.Context, 
 			}
 		}
 	}
+	literalAccesses, err := source.bindSDKLiteralAccesses(file, sigs, symbols, arch)
+	if err != nil {
+		return Options{}, err
+	}
 	options.Sigs, options.ResolveSym = sigs, nil
 	binding := &GoX86NumericalReadBinding{source: source, originalSource: source, context: ctx, originalContext: ctx, packageInput: pkg,
 		originalTypes: pkg.Types, originalImports: numericalImportIdentities(pkg.Imports), file: actual,
-		options: options, symbols: symbols, declarations: declarations, reads: source.readFacts(), capabilities: numericalCapabilities(sigs)}
+		options: options, symbols: symbols, declarations: declarations, reads: source.readFacts(), literalAccesses: literalAccesses,
+		capabilities: numericalCapabilities(sigs)}
 	binding.originalBinding = binding
 	binding.seal, err = binding.digest()
 	if err != nil {
@@ -269,8 +275,9 @@ func (binding *GoX86NumericalReadBinding) digest() ([32]byte, error) {
 		TailGroups   []X86TailGroup
 		Symbols      map[string]string
 		Reads        []numericalSBReadFact
+		Literals     []x86SDKLiteralAccess
 	}{binding.file, binding.options.TargetTriple, binding.options.Goarch, binding.options.WASMABI, binding.options.X87Mode,
-		binding.options.AnnotateSource, binding.options.Sigs, binding.options.X86TailGroups, binding.symbols, binding.reads})
+		binding.options.AnnotateSource, binding.options.Sigs, binding.options.X86TailGroups, binding.symbols, binding.reads, binding.literalAccesses})
 	return sha256.Sum256(data), err
 }
 
@@ -494,6 +501,9 @@ func joinNumericalReadCertificates(file *File, options Options) error {
 			return numericalSBContext("original read has no unique complete source function")
 		}
 	}
+	if err := joinSDKLiteralCertificates(file, binding); err != nil {
+		return err
+	}
 	return verifyNormalizedNumericalReads(file, options)
 }
 
@@ -531,6 +541,9 @@ func verifyNormalizedNumericalReads(file *File, options Options) error {
 	}
 	if len(seen) != len(options.NumericalReads.reads) {
 		return numericalSBContext("normalized read inventory changed or storage collides with local data")
+	}
+	if err := verifyNormalizedSDKLiteralAccesses(file, options); err != nil {
+		return err
 	}
 	if source := options.NumericalReads.source; source.literals != nil {
 		return source.literals.verifyFile(file, source.request.PackagePath)

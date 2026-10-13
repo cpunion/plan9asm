@@ -203,7 +203,7 @@ func (source *GoX86NumericalReadSource) bindNative(ctx context.Context, variable
 					return err
 				}
 				containsSymbol = containsSymbol || operand.Kind == OpSym && !local
-				if operand.Kind == OpMem && operand.Mem.Sym != "" {
+				if operand.Kind == OpMem && operand.Mem.Sym != "" && !local {
 					return numericalSBContext("indexed/alternate SB memory role needs separate binding")
 				}
 			}

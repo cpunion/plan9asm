@@ -3,6 +3,21 @@ package plan9asm
 import "fmt"
 
 func (c *amd64Ctx) lowerNumericalRead(ins Instr) (bool, error) {
+	if ins.x86SDKLiteral != nil {
+		fact, valid := certifiedSDKLiteralAccess(ins, c.goarch)
+		if !valid || c.sig.Name != fact.Function || c.targetTriple != ins.x86SDKLiteral.binding.options.TargetTriple {
+			return true, numericalSBContext("emitted private literal source/function/profile differs")
+		}
+		if c.fixedLocal != nil || c.sourceStack != nil {
+			return true, numericalSBContext("literal address cannot borrow private/native frame authority")
+		}
+		if err := c.scalarFPResultInitialized(); err != nil {
+			return true, err
+		}
+		// Keep the original opcode/address emission. The byte fact supplies
+		// no align-1 replacement, fault suppression or constant-folded data.
+		return false, nil
+	}
 	if ins.x86NumericalRead == nil {
 		return false, nil
 	}

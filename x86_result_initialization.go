@@ -312,13 +312,16 @@ type x86ResultState struct {
 	// Installed only for one lowering transfer over the actual emitted DATA.
 	// It is cleared before a CFG state can escape and never supplies a native
 	// caller, raw-return, pointer or declaration-only query permission.
-	loweredStaticReads map[x86StaticSBAddress]int64
+	loweredStaticReads   map[x86StaticSBAddress]int64
+	literalMemoryOperand *Operand
+	literalMemoryBytes   int64
 }
 
 func (state x86ResultState) clone() x86ResultState {
 	state.fp = append([]bool(nil), state.fp...)
 	state.auto = append([]bool(nil), state.auto...)
 	state.loweredStaticReads = nil
+	state.literalMemoryOperand, state.literalMemoryBytes = nil, 0
 	return state
 }
 
@@ -366,6 +369,9 @@ func x86ResultGP(reg Reg, width int64, arch string) (int, uint8, bool) {
 }
 
 func x86ResultRead(arg Operand, width int64, state *x86ResultState, owned []bool, arch string) bool {
+	if state.literalMemoryOperand != nil && width > 0 && width <= state.literalMemoryBytes && reflect.DeepEqual(arg, *state.literalMemoryOperand) {
+		return true
+	}
 	if address, valid := x86StaticSBReadAddress(arg, arch); valid {
 		return width > 0 && state.loweredStaticReads[address] >= width
 	}
