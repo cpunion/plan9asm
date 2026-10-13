@@ -115,6 +115,10 @@ func TestWindowsOwnedCommandDoesNotKillPeer(t *testing.T) {
 }
 
 func TestWindowsOwnedCommandStartFailures(t *testing.T) {
+	plain := exec.Command(os.Args[0], "-test.run=^TestWindowsOwnedCommandHelper$", "--", "immediate", t.TempDir(), "")
+	if err := runOwnedCommand(plain); err != nil {
+		t.Fatalf("ordinary non-context command failed: %v", err)
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	cmd := windowsOwnershipHelper(ctx, "immediate", t.TempDir(), "")
