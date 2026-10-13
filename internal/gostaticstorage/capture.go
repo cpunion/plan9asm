@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"go/token"
 	"io"
 	"os"
@@ -141,9 +142,10 @@ func within(root, name string) bool {
 	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) && !filepath.IsAbs(rel)
 }
 
-func snapshot(root string) (map[string][]byte, error) {
+func snapshot(root, protocol string) (map[string][]byte, error) {
 	files := make(map[string][]byte)
-	total := 0
+	budget := sourceBudget(protocol)
+	total := int64(0)
 	err := filepath.WalkDir(root, func(name string, entry os.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -154,17 +156,17 @@ func snapshot(root string) (map[string][]byte, error) {
 			}
 			return nil
 		}
-		if len(files) >= 256 {
-			return contextError("module source inventory bound exceeded")
+		if err := budget.checkCount(len(files) + 1); err != nil {
+			return err
 		}
 		data, err := readRegular(name, 16<<20)
 		if err != nil {
 			return err
 		}
-		total += len(data)
-		if total > 16<<20 {
-			return contextError("module source byte bound exceeded")
+		if err := budget.checkBytes(total, len(data)); err != nil {
+			return err
 		}
+		total += int64(len(data))
 		rel, _ := filepath.Rel(root, name)
 		files[filepath.ToSlash(rel)] = data
 		return nil
@@ -197,7 +199,10 @@ func captureRole(ctx context.Context, request Request, protocol string) (*Observ
 		return nil, contextError("unknown target")
 	}
 	root, err := sourcepath.Resolve(request.Directory)
-	if err != nil || root != request.Directory {
+	if err != nil {
+		return nil, fmt.Errorf("%w: resolve original source root: %w", ErrContext, err)
+	}
+	if root != request.Directory {
 		return nil, contextError("source root must be canonical")
 	}
 	if sdkCPU && (request.PackagePath != "internal/cpu" || !sdkCPUTarget(request.Target) ||
@@ -249,9 +254,17 @@ func captureRole(ctx context.Context, request Request, protocol string) (*Observ
 			return nil, contextError("invalid or duplicate variable reference")
 		}
 	}
-	source, err := snapshot(root)
-	if err != nil || !sdk && source["go.mod"] == nil || sdkCPU && sdkCPUSource(source) != nil {
-		return nil, contextError("missing complete original module sources")
+	source, err := snapshot(root, protocol)
+	if err != nil {
+		return nil, fmt.Errorf("%w: snapshot complete original sources: %w", ErrContext, err)
+	}
+	if !sdk && source["go.mod"] == nil {
+		return nil, contextError("complete original module sources lack go.mod")
+	}
+	if sdkCPU {
+		if err := sdkCPUSource(source); err != nil {
+			return nil, fmt.Errorf("%w: complete original SDK CPU sources: %w", ErrContext, err)
+		}
 	}
 	o := &Observation{request: request, inputs: make(map[string]string), report: Report{
 		Protocol: Protocol, Target: request.Target, PackagePath: request.PackagePath,
@@ -433,7 +446,10 @@ func (o *Observation) Verify(ctx context.Context) error {
 		return fail(contextError("sealed producer report changed"))
 	}
 	source, err := o.snapshotSource()
-	if err != nil || !reflect.DeepEqual(source, o.report.Source) {
+	if err != nil {
+		return fail(fmt.Errorf("%w: snapshot complete original source inventory: %w", ErrContext, err))
+	}
+	if !reflect.DeepEqual(source, o.report.Source) {
 		return fail(contextError("complete original source inventory changed"))
 	}
 	for name, expected := range o.inputs {
@@ -448,7 +464,10 @@ func (o *Observation) Verify(ctx context.Context) error {
 	}
 	// The final command is not an exemption from the source/export guards.
 	final, err := o.snapshotSource()
-	if err != nil || !reflect.DeepEqual(final, o.report.Source) {
+	if err != nil {
+		return fail(fmt.Errorf("%w: snapshot original sources after actual final selection: %w", ErrContext, err))
+	}
+	if !reflect.DeepEqual(final, o.report.Source) {
 		return fail(contextError("source changed during actual final selection"))
 	}
 	for name, expected := range o.inputs {

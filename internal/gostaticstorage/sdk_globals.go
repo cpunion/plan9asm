@@ -151,6 +151,9 @@ func (o *Observation) captureSDKGlobalDependencies(ctx context.Context) error {
 					return contextError("SDK global original source changed before compiler selection")
 				}
 				o.report.Source[key], o.report.SourceSHA256[key] = data, digest(data)
+				if err := validateSourceInventory(o.report.Source, o.report.Protocol); err != nil {
+					return err
+				}
 				o.inputs[absolute] = digest(data)
 			}
 		}
@@ -159,7 +162,7 @@ func (o *Observation) captureSDKGlobalDependencies(ctx context.Context) error {
 }
 
 func (o *Observation) snapshotSource() (map[string][]byte, error) {
-	source, err := snapshot(o.request.Directory)
+	source, err := snapshot(o.request.Directory, o.report.Protocol)
 	if err != nil || o.report.Protocol != SDKGlobalsProtocol {
 		return source, err
 	}
@@ -182,6 +185,9 @@ func (o *Observation) snapshotSource() (map[string][]byte, error) {
 					return nil, err
 				}
 				source[key] = data
+				if err := validateSourceInventory(source, o.report.Protocol); err != nil {
+					return nil, err
+				}
 			}
 		}
 	}
