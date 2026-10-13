@@ -26,7 +26,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p _out/windows-ownership
-          go test ./internal/ownedprocess ./cmd/plan9asmtest -run '^TestWindows' -count=1 -timeout=8m -v 2>&1 | tee _out/windows-ownership/native.log
+          go test ./internal/ownedprocess ./cmd/plan9asmtest -count=1 -timeout=8m -v 2>&1 | tee _out/windows-ownership/native.log
       - name: Repeat real process termination races
         shell: bash
         env:
