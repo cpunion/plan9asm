@@ -40,6 +40,23 @@ frozen parent; Go 1.20 retains its explicit historical AMD64 unsupported form.
 The following fork batch must inventory and execute both native CMP axes and
 the actual failed/default-profile and canonical-path roots before full modules.
 
+The integrated frozen `2d696307` replays both actual CLI path roots successfully
+in 16.557 seconds, the complete Go 1.20 shared frontend in 0.499 seconds and both
+root/LLVM CLI vet gates. Fork `7c342c8b` stages that source and explicit native
+inventories in [38477743604](https://github.com/cpunion/plan9asm/actions/runs/38477743604);
+let the run finish before publishing another batch. The fresh five-target
+benchmark at `2d696307` remains failed: 163/184 files, 21 failures, zero N/A or
+unattempted; build three seconds and target total 113 seconds, within unchanged
+300/900-second budgets. Its counts remain 29/33, 48/55, 27/30, 40/47 and 19/19.
+
+The SDK literal-minimum frontend factory remains unmerged on
+`codex/pr40-sdk-numeric-maps-entry-20261013`. Its atomic numerical-source
+revocation must be rechecked after the final caller-context callback, including
+Verify, Readback and all three translation publication guards. Preserve its
+failed old-source infrastructure receipts and complete current-parent lifecycle
+verification before integrating it. Neither that factory nor the numeric-only
+LEA effect follow-up is included in the frozen fork run above.
+
 Fork [38441921522](https://github.com/cpunion/plan9asm/actions/runs/38441921522)
 tests frozen `19e74032` (contribution source `b3755a3e`, plus fork-only workflow).
 The run completed with 28/28 successful jobs. Both Windows ownership lanes and
