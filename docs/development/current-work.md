@@ -32,6 +32,20 @@ are incomplete, not passed. Complete Windows modules correctly do not start.
 Split these slow priority roots into independent lanes with the original
 per-command budgets, keeping exact inventories and the complete-module barrier.
 
+Fork [38466545308](https://github.com/cpunion/plan9asm/actions/runs/38466545308)
+tests frozen `192cacc9` (contribution `37fe7732`, plus fork-only priorities).
+All 46 selected native x86 roots and the expanded SDK source priority lane pass;
+the remaining priorities are still running. Three jobs fail before any tests:
+two MSYS2 database upgrades and one pinned-package dependency download hit the
+mirror's ten-second low-speed limit. Preserve them as infrastructure failures,
+not source rejections or test passes. The following installer repair retries
+bootstrap at most three times and the identical LLVM 22 package transaction at
+most three times. The last bootstrap failure is fatal; exhausted transactions
+return the final exit code, and the exact version check precedes build flags.
+Local actual-script fault injection covers early success, retry success, full
+exhaustion and LLVM 23 rejection. This is not Windows installation evidence;
+let the frozen run finish before publishing the repair batch.
+
 At frozen `b3755a3e`, the complete local LLVM CLI passes in 862.415 seconds and
 the complete new SDK literal-alignment producer's race cohort passes in 440.062
 seconds. `4818b84c` selects the actual Darwin SDK for independent LLVM 22 C
