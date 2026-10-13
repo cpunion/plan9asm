@@ -57,6 +57,13 @@ jobs:
             grep -Fx "$root" _out/native-x86-oracles/caller-inventory.log
           done
           roots+="|$caller_roots"
+          caller_cmp_roots='TestCrossLinuxRuntimeMatrixX86CallerAddressCMPInstructionBytesAndLLVM'
+          caller_cmp_roots+='|TestCrossLinuxRuntimeMatrixGoX86CallerAddressCMPABI0Representation'
+          go test . -list "^($caller_cmp_roots)$" > _out/native-x86-oracles/caller-cmp-inventory.log
+          for root in ${caller_cmp_roots//|/ }; do
+            grep -Fx "$root" _out/native-x86-oracles/caller-cmp-inventory.log
+          done
+          roots+="|$caller_cmp_roots"
           families='MADDTypedOriginalLegacy|PackedNarrowOriginalLegacyOracle|ScalarFPBitViewsOriginalBitsAndCanaries'
           families+='|PureGPUnknownDeadOutputs|SignedIntegerScalarFloatTranslatedFPFields|ScalarCompareFlags'
           families+='|RawReturnSourceAddressNumerical|FloatingCompareOriginalLegacyPredicates|TimestampOriginalAndLLVM'
@@ -100,6 +107,8 @@ jobs:
             roots:
               - TestX86SDKNumericalOwnerQueryIsNotPackageExemption
               - TestCompileOneX86SDKOriginalCRC32NumericalDataJoin
+              - TestRunOneTargetSDKFixedLocalPreservesActualDefaultProfile
+              - TestRunOneTargetSDKFixedLocalCanonicalCommandPaths
             timeout: 5m
           - lane: crc32-linux
             module: cmd/plan9asm
