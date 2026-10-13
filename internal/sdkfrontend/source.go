@@ -67,6 +67,7 @@ func CPUOwnerRequested(pkg *Package, file *plan9asm.File, target string) bool {
 type CaptureRequest struct {
 	GoBinary, Root, Directory, PackagePath, AssemblyFile, Target string
 	Environment                                                  []string
+	Package                                                      *Package
 }
 
 func Capture(ctx context.Context, request CaptureRequest, file *plan9asm.File) (_ *plan9asm.File, _ *Source, result error) {
@@ -78,15 +79,11 @@ func Capture(ctx context.Context, request CaptureRequest, file *plan9asm.File) (
 	if err != nil || filepath.Dir(asm) != directory {
 		return nil, nil, contextError(fmt.Sprintf("assembly origin differs: %v", err))
 	}
-	owner, err := plan9asm.CaptureGoNumericalStorageOwner(ctx, plan9asm.GoNumericalStorageCaptureRequest{
-		GoBinary: request.GoBinary, Directory: filepath.Join(request.Root, "src", "internal", "cpu"),
-		PackagePath: "internal/cpu", Target: request.Target, Environment: request.Environment, SDKCPU: true,
-		Variables: []plan9asm.GoNumericalStorageReference{{PackagePath: "internal/cpu", Name: "X86"}},
-	})
+	owners, close, err := captureOwners(ctx, request, file)
 	if err != nil {
 		return nil, nil, err
 	}
-	source := &Source{cleanup: []func() error{func() error { owner.Close(); return nil }}}
+	source := &Source{cleanup: []func() error{close}}
 	defer func() {
 		if result != nil {
 			result = errors.Join(result, source.Close())
@@ -94,7 +91,7 @@ func Capture(ctx context.Context, request CaptureRequest, file *plan9asm.File) (
 	}()
 	numerical := plan9asm.GoX86NumericalReadCaptureRequest{
 		GoBinary: request.GoBinary, Directory: directory, PackagePath: request.PackagePath, AssemblyFile: filepath.Base(asm),
-		Target: request.Target, Environment: request.Environment, Owners: []*plan9asm.GoNumericalStorageOwner{owner},
+		Target: request.Target, Environment: request.Environment, Owners: owners,
 	}
 	if len(file.Data)+len(file.Globl) != 0 {
 		data, err := plan9asm.CaptureGoX86SDKASMDataSource(ctx, plan9asm.GoX86SDKASMDataCaptureRequest{
