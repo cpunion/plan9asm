@@ -177,6 +177,14 @@ LLVM TLS byte comparison in 5.570 seconds. Both Windows ownership SDK lanes
 also pass; the complete Windows modules are still running. Preserve the native
 artifact as `native-x86-38407134879/native.log`; selected native roots do not
 certify the complete main module, race gate or upstream PR head.
+At frozen `c36bb835`, both Go 1.27 and Go 1.20 official five-architecture gates
+pass. The four SDK/TLS source callback/reentry/close roots also pass the native
+Darwin race check in 110.627 seconds; this is source lifecycle evidence, not
+native x86 instruction execution or the complete race gate. The test-only
+`fff0968c` adds all 201 independently read Go x86 register names to the TLS
+destination-bank audit. Its complete simple CLI passes in 128.133 seconds.
+Logs are `official-go*-c36bb835.log`, `sdk-source-reentry-race-c36bb835.log`
+and `simple-cli-complete-bank-batch.log`.
 Ownership logs are
 `windows-owned-process-*-0428ee36.log`, under the report directory below.
 
