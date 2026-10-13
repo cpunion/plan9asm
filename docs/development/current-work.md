@@ -38,7 +38,7 @@ An independent alignment regression also reproduces `go list runtime .` using
 the vendor directory's unrelated namespace. Both capture and live verification
 now query the original logical package path. The genuine empty-main link still
 rejects unretained literals; the focused regression passes in 7.542 seconds.
-These later source repairs are not in the active frozen CI run.
+These later source repairs are not in the completed frozen CI run.
 
 At `df5348d7`, the combined SDK source/literal/bool/result class passes Go 1.27
 in 203.695 seconds and its Go 1.20 counterpart in 13.322 seconds. Both official
@@ -70,11 +70,23 @@ rewrite either failed complete receipt.
 At `515cd1d2`, complete simple CLI passes in 195.264 seconds, the SDK numerical/
 literal/profile join class in 265.576 seconds, and portable Go 1.20 controls in
 2.694 seconds. All five actual previously failed CLI roots also pass their
-priority inventory; the following complete LLVM CLI replay is still running.
+priority inventory. The complete LLVM CLI replay then passes in 956.491 seconds:
+all 270 root tests and 1,872 subtests pass, with no skips, incomplete outcomes or
+inventory omissions. Both Darwin native C oracles actually execute. Source and
+tool identities remain unchanged throughout this frozen `515cd1d2` replay; it
+does not certify later commits or the published PR head.
 The SDK-primary direct inventory now binds all root members and child-directory
 identities without treating child generators as selected source. Existing
 ordinary flat inventory, byte/member bounds and relative-include rejection stay
 unchanged.
+
+`c6ed942b` adds an explicit live SDK literal-minimum handoff for masked address
+predicates. It grants only authenticated low-bit facts, not numeric addresses,
+memory extent, native entry or caller permissions. OR propagates these facts
+without making high-bit FLAGS known; SETcc/Jcc/CMOV/LAHF/PUSHF rejection controls
+retain that distinction. The integrated literal/numerical/bool family passes in
+278.822 seconds. Complete original maps source still needs a separate typed
+caller-address contract; do not promote this predicate repair to a file pass.
 
 Inventory runs only on the server. Streaming ledger status and a complete
 five-minute incremental window have been verified before restoring catch-up;
