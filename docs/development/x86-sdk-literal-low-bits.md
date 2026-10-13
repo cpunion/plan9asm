@@ -30,9 +30,11 @@ original instruction lowering; no forced align16, guessed linked address or
 constant replacement keys/initializers is introduced.
 
 The complete original AMD64 maps source keeps both TEXT functions. Its masked
-literal check can bind to the authentic minimum, while whole-file translation
-retains Context at the separate incoming caller-pointer address observation
-`TESTW $0xff0,AX`. That pointer/page test, caller memory/loop contracts and native
-Go entry are not literal-minimum authority. AMD64's three OS profiles are a
-source/object binding matrix, not execution or a complete maps compilation pass;
-386's ABI0 bool transport remains independent.
+literal check binds to the authentic minimum; a separately proved
+[caller-address domain](x86-caller-address-predicates.md) now observes the incoming
+`TESTW $0xff0,AX`. Their composition with existing paired native-read and
+must-initialized CFG rules permits logical whole-file translation. Neither
+supplies new memory extent, loop invariants or physical native Go entry.
+AMD64's three OS profiles are source/object evidence, not SDK execution or an
+actual frontend benchmark pass. The frontends still need an explicit authentic
+minimum handoff; 386's ABI0 bool transport remains a separate Context boundary.

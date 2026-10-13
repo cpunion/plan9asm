@@ -16,6 +16,12 @@ func (c *amd64Ctx) scalarCompareNativeResultTransfer(ins Instr, state *x86Result
 		ins.x86Encoded || ins.x86SourceRaw != nil || ins.x86RawNearReturn != nil {
 		return false, true
 	}
+	if form.memory < 0 {
+		// The shared ordinary source transfer owns register-only effects,
+		// including separately authenticated caller/literal address predicates.
+		// A native-memory retry must not intercept those independent roles.
+		return false, false
+	}
 	for index, operand := range form.args {
 		if index != form.memory || !x86OrdinaryNativeMemoryOperand(operand, arch) {
 			if operand.Kind == OpReg && !state.shapeOnly {

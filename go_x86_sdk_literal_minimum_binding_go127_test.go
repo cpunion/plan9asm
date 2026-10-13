@@ -70,13 +70,14 @@ func sdkLiteralMinimumCompleteMapsBinding(t *testing.T, target string) {
 	if proved != 1 {
 		t.Fatal("full source lost its actual declared predicate", proved)
 	}
-	// Keep the complete module failed at its genuinely separate source/result
-	// contract. Do not crop the original function inventory to claim maps pass.
+	// The separately tested caller-address rule now composes with this minimum
+	// and the existing paired native-read/result observer. Translate the whole
+	// inventory, never a cropped predicate; this is not native SDK execution.
 	_, err = Translate(file, bound)
-	if !errors.Is(err, ErrProbeNeedsContext) || strings.Contains(err.Error(), "linked address-bit observation") {
-		t.Fatal("complete maps file lost its distinct remaining caller/loop context", err)
+	if err != nil {
+		t.Fatal("complete original maps logical translation", err)
 	}
-	t.Logf("complete original %d TEXT/maps binding retained; translation remains Context: %v", len(file.Funcs), err)
+	t.Logf("complete original %d TEXT/maps binding retained; logical translation only, not native SDK entry/execution or benchmark completion", len(file.Funcs))
 }
 
 func TestGoX86SDKLiteralMinimumJoinFactoryIdentityAndLifetime(t *testing.T) {

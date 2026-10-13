@@ -1,0 +1,129 @@
+package plan9asm
+
+// Only TEST's register/immediate read-only rows observe actual incoming
+// caller addresses. The same physical typed byte view and original immediate
+// encoding are used by lowering. This does not initialize GP bytes, prove a
+// pointee, or authorize a numerical/address result, store or native entry.
+func x86ResultCallerAddressTest(ins Instr, state *x86ResultState, owned []bool, arch string) (bool, bool) {
+	form, known, err := x86ScalarCompareProperties(ins.Op, ins, arch)
+	if !known || err != nil || !form.test {
+		return false, false
+	}
+	address, valid := false, true
+	for _, operand := range form.args {
+		if operand.Kind == OpReg {
+			root, _, physical := x86ResultGP(operand.Reg, int64(form.bits/8), arch)
+			if physical && state.callerAddressGP[root] {
+				address = true
+				continue
+			}
+		}
+		valid = valid && (operand.Kind == OpReg || operand.Kind == OpImm) &&
+			x86ResultRead(operand, int64(form.bits/8), state, owned, arch)
+	}
+	if !address {
+		return false, false
+	}
+	if !valid || ins.x86Encoded || ins.x86SourceRaw != nil || ins.x86RawNearReturn != nil ||
+		ins.x86AddressBits != 0 || ins.x86UnboundAddressOverride || ins.x86SegmentPrefix != 0 {
+		return false, true
+	}
+	state.flags = x86ByteFlagsAll &^ x86ByteFlagAF
+	return true, true
+}
+
+// This post-transfer must-domain runs through the shared complete source CFG,
+// including dead effects and joins. A partial/full GP overwrite revokes its
+// old provenance independently of initialized bytes or opaque pointerGP.
+// Unknown effects conservatively revoke all caller addresses, never seed one.
+func x86ResultCallerAddressesAfter(ins Instr, before [16]bool, entryFP map[int64]bool, arch string) [16]bool {
+	if ins.x86Encoded || ins.x86SourceRaw != nil || ins.x86RawNearReturn != nil ||
+		ins.x86AddressBits != 0 || ins.x86UnboundAddressOverride || ins.x86SegmentPrefix != 0 {
+		return [16]bool{}
+	}
+	ins = x86GoMOVQSourceInstruction(ins) // Original source/certificates stay unchanged.
+	word := x86ResultPointerWord(arch)
+	move, lea, add, sub := Op("MOVQ"), Op("LEAQ"), Op("ADDQ"), Op("SUBQ")
+	if arch == "386" {
+		move, lea, add, sub = "MOVL", "LEAL", "ADDL", "SUBL"
+	}
+	if len(ins.Args) == 2 && ins.Args[1].Kind == OpReg {
+		destination, _, valid := x86ResultGP(ins.Args[1].Reg, word, arch)
+		if valid {
+			first := ins.Args[0]
+			switch ins.Op {
+			case move:
+				caller := first.Kind == OpFP && entryFP[first.FPOffset]
+				if first.Kind == OpReg {
+					source, _, valid := x86ResultGP(first.Reg, word, arch)
+					caller = valid && before[source]
+				}
+				before[destination] = caller
+				return before
+			case lea:
+				base, _, valid := x86ResultGP(first.Mem.Base, word, arch)
+				before[destination] = first.Kind == OpMem && first.Mem.Sym == "" && valid && before[base]
+				return before // Numerical index/complete address checked by the original transfer.
+			case add, sub:
+				return before // Only the separately validated full-word address transform preserves it.
+			}
+		}
+	}
+	kill := func(operand Operand, width int64) {
+		if operand.Kind == OpReg {
+			if root, _, valid := x86ResultGP(operand.Reg, width, arch); valid {
+				before[root] = false
+			}
+		}
+	}
+	if effect, known, err := x86TypedInstructionByteEffect(ins.Op, ins, arch); known && err == nil {
+		for _, operand := range effect.operands {
+			if operand.write {
+				kill(operand.operand, operand.width)
+			}
+		}
+		return before
+	}
+	if form, known, err := x86ConditionalSetProperties(ins.Op, ins, arch); known && err == nil {
+		kill(form.destination, 1)
+		return before
+	}
+	if _, known, err := x86ScalarCompareProperties(ins.Op, ins, arch); known && err == nil {
+		return before
+	}
+	if width := x86RawReturnScalarMoveBytes(ins.Op); width != 0 && len(ins.Args) == 2 {
+		kill(ins.Args[1], width)
+		return before
+	}
+	if form, known, err := x86GPSIMDTransferProperties(ins, arch); known && err == nil && !form.mmx {
+		if !form.destinationX {
+			kill(ins.Args[1], int64(form.bits/8))
+		}
+		return before
+	}
+	if form, known, err := x86ScalarLaneProperties(ins, arch); known && err == nil {
+		if !form.insert {
+			kill(Operand{Kind: OpReg, Reg: form.transferReg}, int64(form.gpBits/8))
+		}
+		return before
+	}
+	if x86CallerVectorMoveKnown(ins) {
+		for _, operand := range ins.Args {
+			if operand.Kind == OpReg {
+				_, vector := amd64VectorRegisterIndex(operand.Reg, amd64VectorByteWidth(operand.Reg))
+				_, mask := amd64ParseKReg(operand.Reg)
+				if !vector && !mask {
+					return [16]bool{} // GP/alias/native banks need their own exact effect.
+				}
+			}
+		}
+		return before // Complete shared typed vector-only form, no GP output.
+	}
+	if ins.Op == OpJMP || isAMD64ConditionalBranch(ins.Op) || ins.Op == OpTEXT || ins.Op == OpLABEL || ins.Op == "NOP" {
+		return before
+	}
+	if _, known, err := x86DirectiveProperties(ins); known && err == nil {
+		return before
+	}
+	return [16]bool{}
+}
