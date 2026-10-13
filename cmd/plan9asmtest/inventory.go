@@ -110,8 +110,15 @@ func runPattern(names []string) (string, error) {
 
 // Only build/instrumentation flags are forwarded. Test filters, repeats,
 // fuzzing, custom executors and arbitrary test arguments change this protocol.
+func runnerBooleanFlag(name string) bool {
+	switch name {
+	case "race", "cover", "trimpath", "asan", "msan", "work":
+		return true
+	}
+	return false
+}
+
 func validateFlags(args []string) ([]string, string, error) {
-	boolFlags := map[string]bool{"race": true, "cover": true, "trimpath": true, "asan": true, "msan": true, "work": true}
 	valueFlags := map[string]bool{"covermode": true, "coverpkg": true, "tags": true, "p": true, "gcflags": true, "asmflags": true, "ldflags": true, "mod": true, "modfile": true, "overlay": true}
 	var forwarded []string
 	var profile string
@@ -121,7 +128,7 @@ func validateFlags(args []string) ([]string, string, error) {
 			return nil, "", fmt.Errorf("only supported Go flags are allowed: %q", arg)
 		}
 		name, value, hasValue := strings.Cut(strings.TrimPrefix(arg, "-"), "=")
-		if boolFlags[name] {
+		if runnerBooleanFlag(name) {
 			if hasValue && value != "true" && value != "false" {
 				return nil, "", fmt.Errorf("invalid boolean flag %q", arg)
 			}

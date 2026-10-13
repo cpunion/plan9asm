@@ -23,12 +23,12 @@ func validateRunnerGoFlags(goos, inherited string, flags []string) error {
 	tags := 0
 	for i := 0; i < len(forwarded); i++ {
 		name, value, inline := strings.Cut(forwarded[i], "=")
-		if name != "-tags" {
-			continue
-		}
-		if !inline {
+		if !inline && !runnerBooleanFlag(strings.TrimPrefix(name, "-")) {
 			i++ // validateFlags already checked the value exists.
 			value = forwarded[i]
+		}
+		if name != "-tags" {
+			continue
 		}
 		tags++
 		if tags != 1 || value != "byollvm" {
