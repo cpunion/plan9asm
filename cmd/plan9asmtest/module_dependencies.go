@@ -12,6 +12,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/xgo-dev/plan9asm/internal/gotoolchain"
 )
 
 var ciLLVM22Version = regexp.MustCompile(`(?im)(?:\bLLVM|\bclang) version 22(?:\.|$)|\bLLD 22(?:\.|$)`)
@@ -197,10 +199,35 @@ func moduleLLVMBinding(data []byte) (*moduleLLVMPackage, error) {
 }
 
 // This is an owned tool-dependency query, not a translated program. The selected
-// Go binding calls LLVMContextCreate; dladdr observes that same loader symbol.
-// It detects environment/interposition routes instead of guessing SONAMEs.
+// Go binding calls LLVMContextCreate; observe that same loader symbol using
+// dladdr or the Windows imported address, never a guessed library basename.
 const moduleLLVMLoaderProbe = `package main
 /*
+#ifdef _WIN32
+#include <stdint.h>
+#include <windows.h>
+// Explicit dllimport obtains the IAT target rather than MinGW's local thunk.
+__declspec(dllimport) void *LLVMContextCreate(void);
+static const char *loadedLLVM(void) {
+    HMODULE module;
+    if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS,
+            (LPCWSTR)(uintptr_t)LLVMContextCreate, &module)) {
+        return 0;
+    }
+    WCHAR wide[32768];
+    DWORD length = GetModuleFileNameW(module, wide, 32768);
+    BOOL released = FreeLibrary(module);
+    if (!released || length == 0 || length >= 32768) {
+        return 0;
+    }
+    static char path[4 * 32768];
+    if (!WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, wide, -1,
+            path, sizeof(path), 0, 0)) {
+        return 0;
+    }
+    return path;
+}
+#else
 #define _GNU_SOURCE
 #include <dlfcn.h>
 #cgo linux LDFLAGS: -ldl
@@ -212,6 +239,7 @@ static const char *loadedLLVM(void) {
     }
     return info.dli_fname;
 }
+#endif
 */
 import "C"
 import (
@@ -256,7 +284,7 @@ func captureModuleLLVMBinding(ctx context.Context, cfg config, stem string, libr
 	if err != nil {
 		return err
 	}
-	source, binary := input.source.Path, stem+"-llvm-loader"
+	source, binary := input.source.Path, gotoolchain.HostExecutable(stem+"-llvm-loader")
 	if err := os.WriteFile(input.source.Artifact, []byte(moduleLLVMLoaderProbe), 0600); err != nil {
 		return err
 	}
