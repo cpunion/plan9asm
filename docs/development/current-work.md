@@ -36,6 +36,22 @@ now query the original logical package path. The genuine empty-main link still
 rejects unretained literals; the focused regression passes in 7.542 seconds.
 These later source repairs are not in the active frozen CI run.
 
+At `df5348d7`, the combined SDK source/literal/bool/result class passes Go 1.27
+in 203.695 seconds and its Go 1.20 counterpart in 13.322 seconds. Both official
+five-architecture classification gates and root vet pass. Go 1.20 retains its
+explicit historical unsupported form; do not describe that baseline as zero
+unsupported. [Canonical bool results](x86-register-bool-result.md) require a
+separate initialized/canonical byte must-fact through every public lowerer.
+The standalone original instruction-byte and genuine Go ABI0 representation
+oracles passed under Linux emulation; native x86 execution is still required.
+
+The SDK-primary frame observer now consumes the original selected config/CGO
+profile and complete native TEXT/frame inventory, without granting owned-main
+frame permissions. Its GOENV identity uses the shared eager handle capture on
+Windows. Full original chacha helper and split-stack functions remain present;
+their caller/entry/frame contracts are not bypassed. The integrated observer
+and new native bool roots still need the following frozen validation/CI batch.
+
 Inventory runs only on the server. Streaming ledger status and a complete
 five-minute incremental window have been verified before restoring catch-up;
 the trusted contiguous head advances from 2026-10-08T11:17:43Z to 11:22:43Z.
