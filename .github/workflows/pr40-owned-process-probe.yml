@@ -109,6 +109,8 @@ jobs:
               - TestCompileOneX86SDKOriginalCRC32NumericalDataJoin
               - TestRunOneTargetSDKFixedLocalPreservesActualDefaultProfile
               - TestRunOneTargetSDKFixedLocalCanonicalCommandPaths
+              - TestOrdinaryPackageLoadSDKWorkingDirectoryIdentity
+              - TestOrdinaryPackageLoadOutsideSDKRetainsInternalImportRejection
             timeout: 5m
           - lane: crc32-linux
             module: cmd/plan9asm
@@ -177,6 +179,8 @@ jobs:
           roots='TestOrdinaryEnvironmentActualCommandPathIdentity'
           roots+='|TestOrdinaryEnvironmentCommandPathRejectionPreservesInputs'
           roots+='|TestOrdinaryEnvironmentRetainsGOPATHComponentSelection'
+          roots+='|TestWorkingDirectoryActualIdentity'
+          roots+='|TestWorkingDirectoryRejectsMissingOrNonDirectory'
           go test -tags=byollvm . -list "^($roots)$" > "$report/shared-path-inventory.log"
           for root in ${roots//|/ }; do
             grep -Fx "$root" "$report/shared-path-inventory.log"
@@ -279,6 +283,8 @@ jobs:
           roots+='|TestOrdinaryEnvironmentActualCommandPathIdentity'
           roots+='|TestOrdinaryEnvironmentCommandPathRejectionPreservesInputs'
           roots+='|TestOrdinaryEnvironmentRetainsGOPATHComponentSelection'
+          roots+='|TestWorkingDirectoryActualIdentity'
+          roots+='|TestWorkingDirectoryRejectsMissingOrNonDirectory'
           go test -tags=byollvm ./internal/sdkfrontend -list "^($roots)$" \
             > _out/windows-ownership/command-path-inventory.log
           for root in ${roots//|/ }; do
