@@ -56,6 +56,27 @@ func numericalSDKLiteralFixture(t *testing.T) (context.Context, GoX86NumericalRe
 
 func numericalSDKLiteralPackage(t *testing.T, source *GoX86SDKASMDataSource, name string) (GoPackage, *File, Options) {
 	t.Helper()
+	pkg, file, options := numericalSDKOriginalTypedPackage(t, source, name)
+	for _, fn := range file.Funcs {
+		name := strings.TrimPrefix(goStripABISuffix(fn.Sym), "·")
+		declaration, ok := pkg.Types.Scope().Lookup(name).(*types.Func)
+		if !ok {
+			t.Fatal("original TEXT lacks its actual Go function declaration", fn.Sym)
+		}
+		name = numericalNativeName(goStripABISuffix(fn.Sym), pkg.Path)
+		sig, err := DeriveGoFuncABI0Signature(name, declaration, options.Goarch, types.SizesFor("gc", options.Goarch))
+		if err != nil {
+			t.Fatal(err)
+		}
+		options.Sigs[name] = sig
+	}
+	return pkg, file, options
+}
+
+// Retain one complete actual source/export/type importer for declaration-only
+// members and whole-source graphs. This supplies no private helper signature.
+func numericalSDKOriginalTypedPackage(t *testing.T, source *GoX86SDKASMDataSource, name string) (GoPackage, *File, Options) {
+	t.Helper()
 	fset := token.NewFileSet()
 	var syntax []*ast.File
 	for _, name := range source.guard.selection.GoFiles {
@@ -109,19 +130,6 @@ func numericalSDKLiteralPackage(t *testing.T, source *GoX86SDKASMDataSource, nam
 		Sigs: make(map[string]FuncSig), ResolveSym: func(symbol string) string {
 			return numericalNativeName(goTextSymbolForResolution(symbol), pkg.Path)
 		}}
-	for _, fn := range file.Funcs {
-		name := strings.TrimPrefix(goStripABISuffix(fn.Sym), "·")
-		declaration, ok := typed.Scope().Lookup(name).(*types.Func)
-		if !ok {
-			t.Fatal("original TEXT lacks its actual Go function declaration", fn.Sym)
-		}
-		name = numericalNativeName(goStripABISuffix(fn.Sym), pkg.Path)
-		sig, err := DeriveGoFuncABI0Signature(name, declaration, arch, sizes)
-		if err != nil {
-			t.Fatal(err)
-		}
-		options.Sigs[name] = sig
-	}
 	return pkg, file, options
 }
 

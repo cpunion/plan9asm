@@ -63,6 +63,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 				return accepted
 			}
 		}
+		if accepted, known := x86ResultPackedStringStepWithRead(ins, state, owned, arch, true); known {
+			return accepted // Paired emitter retains the full volatile m128 read.
+		}
 		if accepted, known := x86ResultPackedZeroExtendStep(ins, state, owned, arch, true); known {
 			return accepted
 		}

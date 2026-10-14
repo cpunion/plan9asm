@@ -1,6 +1,6 @@
 # Current work: PR 40 checkpoint
 
-Checkpoint: 2026-10-14 15:30 UTC. Contribution source: `be6933bf`.
+Checkpoint: 2026-10-14 16:16 UTC. Contribution source: `5f2265ce`.
 This is a handoff, not a ledger or a claim that current-head CI/stdlib passes.
 
 ## Scope and authority
@@ -26,22 +26,38 @@ Do not edit the primary or probe while their frozen jobs run.
 
 | Worktree basename | Branch / purpose |
 | --- | --- |
-| `plan9asm-wt-pr40-scalar-lane-native-20261011` | `codex/pr40-external-corpus-split-20261011`; integrated source `be6933bf`; current strict benchmark pending |
-| `plan9asm-wt-pr40-stdlib-preprocessing-20261012` | `codex/pr40-windows-owned-process-probe-20261013`; published frozen fork `2cd53a42`, source through `be6933bf`; CI in progress |
-| `plan9asm-wt-pr40-sdk-numeric-maps-entry-20261013` | `codex/pr40-sdk-numeric-maps-entry-20261013`; independent exact typed bool tails; not yet integrated |
-| `plan9asm-wt-pr40-sdk-tls-20261013` | `codex/pr40-sdk-tls-20261013`; ordinary integer result initialization without a result LEA, retaining the existing readonly bool-input role |
-| `plan9asm-wt-pr40-simple-sdk-bindings-20261013` | `codex/pr40-sdk-storage-snapshot-20261013`; complete eight-name PCMP string result/FLAGS and paired volatile m128 read |
+| `plan9asm-wt-pr40-scalar-lane-native-20261011` | `codex/pr40-external-corpus-split-20261011`; integrated source `5f2265ce`; current strict benchmark pending |
+| `plan9asm-wt-pr40-stdlib-preprocessing-20261012` | `codex/pr40-windows-owned-process-probe-20261013`; published `2cd53a42` failed; local `24938007` stages repairs, not pushed |
+| `plan9asm-wt-pr40-sdk-numeric-maps-entry-20261013` | `codex/pr40-sdk-numeric-maps-entry-20261013`; typed tails and distinct custom-register bool proof integrated; idle |
+| `plan9asm-wt-pr40-sdk-tls-20261013` | `codex/pr40-sdk-tls-20261013`; priority NUM replay identity and independently sealed fixed-local result handoff; parameter-only admission WIP retained separately |
+| `plan9asm-wt-pr40-simple-sdk-bindings-20261013` | `codex/pr40-sdk-storage-snapshot-20261013`; PCMP integrated; priority complete MXCSR and signed-conversion byte effects |
 
-## Active frozen fork run
+## Latest completed failed fork run
 
 [38589344888](https://github.com/cpunion/plan9asm/actions/runs/38589344888)
 started 15:26:34 UTC, published `2cd53a42b927012295783efd19a20b488da0c7ed`.
-It contains contribution `be6933bf` plus fork-only diagnostics. Expected native
-profile57 has ten independent inventories/19 mandatory owners. The113 source
-priorities are unique, all13 SDK lanes and budgets are unchanged, and40 policy
-tests plus actionlint passed before publication. Actual CI completion, native
-execution and complete modules are pending. Let this run finish naturally; do
-not edit/push over its tested snapshot or claim later local work is certified.
+It contains contribution `be6933bf` plus fork-only diagnostics, and completed
+FAILURE naturally at 15:34:54 UTC: ten executed jobs pass and six fail.
+The complete Windows barrier did not run. Native profile57 attempts all57:
+55 PASS, two FAIL, zero SKIP. New bit-scan, sparse GP/X and mode32 bool native
+owners pass, but the whole native package remains FAILED.
+
+| Failed job / class | Current disposition |
+| --- | --- |
+| Native signed conversion FP fields | Original eight-TEXT fixture exposes missing complete MXCSR m32 / signed conversion effects; independent family repair in progress |
+| Native mutable local NUM | AUTO raw replay differs from authenticated metadata; physical fixed-local proof requires its distinct validated handoff; still failed |
+| Ownership, both Go SDKs | Original custom-register CAS/I1 fixture repaired by `f505201c`, not by changing its signature or ABI0 layout |
+| SDK source | Unix-only symlink regression missing on Windows; `7aa91189` removes exclusion and independently requires platform availability |
+| SDK publication | Already sealed fixed-local physical SP must retain its own complete result proof; callback not reached in failed receipt; repair in progress |
+| SDK maps LLVM | Linux succeeds in 275.87s; shared five-minute root exhausts Darwin/Windows budget; `c861f658` creates three independent complete target owners |
+
+Fork-only `522a92e3`/`24938007` stage fifteen SDK lanes at their original budgets,
+123 unique source priorities, and the exact existing native AVX packed-string
+owner (planned profile58, eleven inventories/twenty mandatory owners).
+43 policy tests and actionlint pass, including genuine missing-owner REDs.
+The native auditor passes21 mutation controls; synthetic profile58 is not
+execution. Do not publish the next batch until failed classes are independently
+replayed; do not reuse earlier green runs as current-head certification.
 The upstream draft still has published head `24851df2`; this diagnostic push
 does not update that contribution head or make its CI green.
 
@@ -355,6 +371,28 @@ New code still needs its current-head vet, complete source/CI and strict benchma
 
 ## Stdlib benchmark: current complete failed receipt
 
+Current source integration `5f2265ce` additionally contains typed terminal
+`cc91bb77` as `d9fffefd`, custom register result `e60934e3` as `f505201c`,
+and complete PCMP result/native-read leaf `08041f8c` as `5f2265ce`.
+The explicit mode32 ArgRegs role is independent of ABI0 FP: it requires exact
+registered input bytes and canonical AX at every return, with existing paired
+typed CAS effects, not caller/native memory authority. Borrowed bool-tail
+signatures retain a private denial-only origin; actual independent callee
+transport and complete source replay remain required.
+
+Parent `f505201c` fresh Go27/race184 roots/5,382 children pass5.398/21.495s;
+actual Go20's180/5,371 pass5.189s. Parent `5f2265ce` fresh pure source union
+Go27/race192 roots/5,926 children pass5.543/23.453s; Go20's188/5,915 pass5.409s.
+All inventories/terminals, stable before/after head and clean tree match;
+zero FAIL/SKIP/missing/duplicate, both vets and tracked current-Go formatting pass.
+The PCMP worker's broader127-root receipt includes one explicit host-native
+skip, so is not a strict complete runtime pass. New parent pure union deliberately
+excludes that host axis and heavy objects, which need independent verification.
+The original full Index source advances to its next pointer-as-index Context;
+it is not a complete SDK/file pass. Guard-page/dead-output PCMP execution is pending.
+Maps independent-target policy and symlink platform-availability gates pass;
+actual three-target SDK object replay and native Windows still need new CI.
+
 Frozen `6281a98a`: 156/184 files,28 FAIL, zero N/A/unattempted. All original
 files and all five targets attempted; before/after source head and clean tree
 match. Earlier `7752fc1f`164/184 and `2d696307`163/184 remain separate failed
@@ -384,14 +422,14 @@ authority for any of those roles.
 
 ## External server checkpoint (no local scan)
 
-Trusted latest manifest generated 2026-10-14 14:13:02 UTC:
-`incremental_since=2026-10-11T03:22:43Z`; `history_before=2025-10-01`;
+Trusted latest manifest generated 2026-10-14 16:03:59 UTC:
+`incremental_since=2026-10-11T05:22:43Z`; `history_before=2025-10-01`;
 `history_complete=false`. The next hourly window is unfinished; never advance
 its cursor from partial progress.
-Index22,207,468 entries; unique_modules1,072,326; matched_records6,795;
-scanned_records1,120,245; failures16,874; latest_records1,002,739;
-cgo_records1,114,421. These are inventory records, never translator passes.
-All571 manifest ranges were independently checked continuous; their sum equals
+Index22,226,534 entries; unique_modules1,072,529; matched_records6,800;
+scanned_records1,120,680; failures16,878; latest_records1,002,950;
+cgo_records1,114,856. These are inventory records, never translator passes.
+All573 manifest ranges were independently checked continuous; their sum equals
 index_entries and first/last endpoints derive history/incremental cursors. Periodic
 exports can lag the completed manifest/journal; never interpret that as rollback.
 Source failures remain retryable, never pass/skip. Later values require readback.
@@ -400,15 +438,16 @@ Source failures remain retryable, never pass/skip. Later values require readback
 
 - Parent: fresh SDK composition, source/CI integration and benchmarks. Own the
   single heavy slot explicitly; do not merge or edit a running source snapshot.
-- TLS agent: ordinary bounded integer result aliases, preserving private-only
-  queries, now the independent parameter-only missing-result admission gap;
-  preserve readonly actual I1 inputs without native/input-write authority.
-- Numeric agent: authentic typed bool tails. A frontend
-  fallback signature copied from the caller is not an actual callee declaration.
-- Frontend agent: all eight PCMP explicit/implicit, index/mask, legacy/VEX
-  effects. Generic nonvolatile m128 loads can erase dead faults; paired full-width
-  volatile reads and strict dependencies are being tested, not yet integrated.
-  REP/string memory, pointer advance and zero-count FLAGS remain independent.
+- TLS agent: current CI's authenticated NUM replay and distinct fixed-local
+  result proof; keep genuine fixed-local/physical-SP failures until closed.
+  Resume separate parameter-only integer admission afterward, retaining actual
+  readonly I1 inputs without native/input-write authority.
+- Numeric agent: integrated typed tails/custom-register proof; idle, available
+  for bounded independent source checks after the priority failures close.
+- Frontend agent: current CI's complete four-name MXCSR m32 and eight-name
+  signed-conversion effects, including no-probe whole-source admission gates.
+  PCMP native guard-page/dead-output execution remains separate from the
+  integrated result/volatile-read proof. REP/pointer advance remain independent.
 One heavy source/SDK/object owner at a time; small bounded pure controls may overlap.
 Preserve native execution vs QEMU/emulated diagnostics, all original fault effects,
 canonical bool bytes (not arbitrary2/3 truncation) and unknown GP upper bytes.

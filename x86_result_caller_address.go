@@ -57,6 +57,15 @@ func x86ResultCallerAddressesAfter(ins Instr, before [16]bool, entryFP map[int64
 	if _, known, err := x86DirectionControlProperties(ins.Op, ins, arch); known && err == nil {
 		return before // Only DF changes; no GP, pointer or six-status writes.
 	}
+	if spec, known, err := amd64PackedStringCompareProperties(ins.Op, ins, arch); known && err == nil {
+		output, width, _ := spec.resultEffect()
+		if !spec.maskResult {
+			if index, _, valid := x86ResultGP(output, int64(width), arch); valid {
+				before[index] = false
+			}
+		}
+		return before // Neither the X0 result nor FLAGS write any other GP.
+	}
 	word := x86ResultPointerWord(arch)
 	move, lea, add, sub := Op("MOVQ"), Op("LEAQ"), Op("ADDQ"), Op("SUBQ")
 	if arch == "386" {

@@ -36,7 +36,7 @@ func (c *amd64Ctx) lowerPackedStringCompare(op Op, ins Instr) (ok bool, terminat
 	if err != nil {
 		return true, false, err
 	}
-	right, err := c.loadPackedCompareBytes(source, 16)
+	right, err := c.loadPackedStringCompareBytes(source)
 	if err != nil {
 		return true, false, err
 	}
@@ -90,6 +90,23 @@ func (c *amd64Ctx) lowerPackedStringCompare(op Op, ins Instr) (ok bool, terminat
 	c.clearX86StatusFlags(x86StatusPF | x86StatusAF)
 	fmt.Fprintf(c.b, "  store i1 %s, ptr %s\n", overflow, c.flagsOFSlot)
 	return true, false, nil
+}
+
+// Intel's packed-string exception row permits unaligned m128, but neither
+// explicit lengths nor dead results suppress its full observable memory read.
+// Logical FP is its existing separate field role; all native addresses use an
+// unaligned volatile tuple, without dereferenceability or extent assumptions.
+func (c *amd64Ctx) loadPackedStringCompareBytes(source Operand) (string, error) {
+	if source.Kind == OpReg || source.Kind == OpFP {
+		return c.loadPackedCompareBytes(source, 16)
+	}
+	pointer, pointerType, _, err := c.packedVectorMemoryPointer(source)
+	if err != nil {
+		return "", err
+	}
+	value := c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = load volatile <16 x i8>, %s %s, align 1\n", value, pointerType, pointer)
+	return "%" + value, nil
 }
 
 // This descriptor is syntax and architectural effects, not caller definedness
