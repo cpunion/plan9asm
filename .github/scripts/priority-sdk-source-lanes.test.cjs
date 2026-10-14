@@ -64,6 +64,25 @@ test('Every lane retains exact inventory and an independent artifact', () => {
   assert.doesNotMatch(sdk, /continue-on-error|max-parallel|go test[^\n]* -skip/);
 });
 
+test('Source priority includes the complete same-pass reader class without another lane', () => {
+  const source = sdk.slice(sdk.indexOf('- lane: source\n'), sdk.indexOf('- lane: frame-context\n'));
+  assert.match(source, /module: '\.'/);
+  assert.match(source, /timeout: 5m/);
+  for (const root of [
+    'TestReadGoAssemblySourceInputsShareExactExpansion',
+    'TestReadGoAssemblySourceInputsRetainRequestedAliases',
+    'TestReadGoAssemblySourceReportSeparatesFallbackSearchMiss',
+    'TestReadGoAssemblySourceReportErrorReturnsNoInventory',
+    'TestReadGoAssemblySourceExpandsToolchainHeadersInTrimpathBinary',
+    'TestReadGoAssemblySourceRejectsEscapedSourceAlias',
+    'TestReadGoAssemblySourceExpandsNestedLocalHeaders',
+    'TestReadGoAssemblySourceRejectsSymlinkIncludeOutsideRoot',
+  ]) {
+    assert.equal(source.split(`- ${root}\n`).length - 1, 1, root);
+  }
+  assert.equal((sdk.match(/- lane:/g) || []).length, 13);
+});
+
 test('New source mechanisms have their own exact priority lanes', () => {
   const additions = [
     ['literal-minimum-simple', 'cmd/plan9asm', 'TestSimpleCLIOriginalSDKMapsLiteralMinimumSource', '8m'],

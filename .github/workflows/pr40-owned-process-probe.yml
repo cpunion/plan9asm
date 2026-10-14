@@ -224,6 +224,14 @@ jobs:
           - lane: source
             module: '.'
             roots:
+              - TestReadGoAssemblySourceInputsShareExactExpansion
+              - TestReadGoAssemblySourceInputsRetainRequestedAliases
+              - TestReadGoAssemblySourceReportSeparatesFallbackSearchMiss
+              - TestReadGoAssemblySourceReportErrorReturnsNoInventory
+              - TestReadGoAssemblySourceExpandsToolchainHeadersInTrimpathBinary
+              - TestReadGoAssemblySourceRejectsEscapedSourceAlias
+              - TestReadGoAssemblySourceExpandsNestedLocalHeaders
+              - TestReadGoAssemblySourceRejectsSymlinkIncludeOutsideRoot
               - TestGoX86SDKASMDataOriginalVendorPackageNamespace
               - TestGoX86SDKNumericalReadPackageQueryMatchesOriginalLiteralSource
               - TestSDKAMD64OriginalFrameConfigGuardEagerIdentity
