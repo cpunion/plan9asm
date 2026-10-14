@@ -106,11 +106,25 @@ jobs:
             module: cmd/plan9asmll
             roots:
               - TestX86SDKNumericalOwnerQueryIsNotPackageExemption
-              - TestCompileOneX86SDKOriginalCRC32NumericalDataJoin
               - TestRunOneTargetSDKFixedLocalPreservesActualDefaultProfile
               - TestRunOneTargetSDKFixedLocalCanonicalCommandPaths
               - TestOrdinaryPackageLoadSDKWorkingDirectoryIdentity
               - TestOrdinaryPackageLoadOutsideSDKRetainsInternalImportRejection
+            timeout: 5m
+          - lane: llvm-crc32
+            module: cmd/plan9asmll
+            roots:
+              - TestCompileOneX86SDKOriginalCRC32NumericalDataJoin
+            timeout: 5m
+          - lane: assembly-selection
+            module: cmd/plan9asmll
+            roots:
+              - TestCompileOneARM64ABI0TailActualDeclaration
+              - TestCompileOneARM64ABI0TailCompleteAndChunks
+              - TestCompileOneARM64ABI0TailSourcePostGuard
+              - TestReflectDynamicStubNativeObjectsRetainContext
+              - TestReflectDynamicStubSelectedAssemblyIdentity
+              - TestReflectDynamicStubSelectedAssemblyRejectsUnboundIdentity
             timeout: 5m
           - lane: crc32-linux
             module: cmd/plan9asm
