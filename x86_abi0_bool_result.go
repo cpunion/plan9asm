@@ -20,7 +20,7 @@ func x86ABI0SingleByteBoolResultRole(fn Func, sig FuncSig, arch string) bool {
 // the logical i1 after the cached complete canonical result proof. Public
 // layouts/types and all other bool/frame roles retain their existing handling.
 func (c *amd64Ctx) abi0BoolResultByteStorage() bool {
-	return c.fpScalarChecked && c.fpScalarCheckErr == nil && x86ABI0SingleByteBoolResultRole(c.fpScalarSource, c.sig, c.goarch)
+	return c.fpScalarChecked && c.fpScalarCheckErr == nil && x86ABI0LogicalBoolFrameRole(c.fpScalarSource, c.sig, c.goarch)
 }
 
 func x86ABI0CanonicalBoolTransfer(transfer x86ResultSourceTransfer) x86ResultSourceTransfer {
@@ -28,11 +28,9 @@ func x86ABI0CanonicalBoolTransfer(transfer x86ResultSourceTransfer) x86ResultSou
 		if isX86RawDirective(ins) {
 			return false
 		}
-		beforeFP, beforeGP := append([]bool(nil), state.canonicalFP...), state.canonicalGP
-		if !transfer(ordinal, ins, state, owned, resultOffset, arch) {
+		if !x86ABI0BoolFrameTransfer(ordinal, ins, state, owned, resultOffset, arch, transfer) {
 			return false
 		}
-		state.canonicalFP, state.canonicalGP = x86ABI0CanonicalBytesAfter(ins, beforeFP, beforeGP, arch)
 		for offset := range state.canonicalFP {
 			state.canonicalFP[offset] = offset < len(state.fp) && state.canonicalFP[offset] && state.fp[offset]
 		}

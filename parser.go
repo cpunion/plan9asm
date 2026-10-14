@@ -70,6 +70,8 @@ type Func struct {
 	x86RawReplay               *x86RawReplaySource // immutable raw source/replay identity, never a capability
 	x86DirectTailRoot          *x86DirectTailRoot
 	x86ResultFlowBudget        *x86ResultFlowBudget // request-local combined proof accounting only
+	x86BoolCalls               *x86ABI0BoolCallPlan // private complete-source logical CALL plan only
+	x86BoolReadonlyInputs      bool                 // private callee replay; never entry/native authority
 }
 
 // Parse parses a subset of Go/Plan 9 assembly syntax.

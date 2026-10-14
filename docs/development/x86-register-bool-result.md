@@ -35,10 +35,10 @@ subject to their linked-low-bit, caller, pointer, loop and native-entry contract
 
 ## Bounded 386 ABI0 byte result
 
-The independent first ABI0 consumer admits only a complete ordinary 386
+The independent SDK literal-predicate role admits only a complete ordinary 386
 no-argument, zero-frame function with exactly one declared bool result byte
-at FP+0 and original argument size one. Other frame/input/result, direct-tail,
-raw and native roles retain Context; the shape alone authenticates no source.
+at FP+0 and original argument size one. Other literal-predicate contexts,
+direct-tail, raw and native roles retain Context; the shape authenticates no source.
 Each declared physical byte has a separate bounded canonical must-fact,
 cloned and intersected across the complete source CFG. Numerical initializedness
 remains independent: raw 2, 3 and 255 may be read or compared and then replaced
@@ -53,3 +53,37 @@ upper bytes, expand FP storage, permit pointer/frame escapes or establish
 native Go entry. The required Linux AMD64 execution counterpart uses original
 386 Go bool callers and independent raw-byte/canary observers, plus LLVM's
 explicit I1-to-I32 shims; fixture inventory/IR tests alone are not execution.
+
+An independent lowering-only extension handles existing zero-frame logical
+inputs and declared-slot aliases. Only actual I1 parameter leaves start
+canonical; numeric byte inputs remain merely initialized until a typed
+operation proves zero/one. LEAL and full-word copies retain a separate exact
+slot/interior address, never numerical, caller or graph-result pointer facts.
+Scalar/extension reads and SETcc stores stay inside that declared field;
+partial/mixed aliases, escapes and overwritten carriers lose the role. This
+optional alias state is cloned/intersected and charged to the same finite work
+envelope. Intermediate bool parameter reads/writes also preserve I8 bytes.
+Other scalar leaves reuse their existing exact parameter/effect rules: opaque
+pointers and floating values do not become canonical or numerical pointers.
+
+A separate request-local ordinary CALL contract retains the complete original
+File and exact signatures before KeepFunc/normalization. It accepts only a
+same-file zero-frame readonly leaf with one actual I1 input byte at FP+0 and
+one result byte at FP+4. The leaf receives its independent complete canonical
+proof once; recursion, unknown calls, input writes, escapes, raw/source changes
+and native/direct-tail roles retain Context. Original caller and callee source
+tuples are replayed, never relabeled or cropped. Resolve callbacks finish before
+the final source/signature check; all three APIs discard artifacts on late
+mutation. This is logical lowering, not Go-native CALL entry authentication.
+
+Actual positive caller TEXT frame bounds contain only the two declared outgoing
+bytes (SP+0/SP+4); padding and general physical-SP/AUTO storage gain nothing.
+Separate NUM/canonical outgoing facts clone/intersect and share the unchanged
+finite byte/visit envelope with the cached callee proof. A CALL requires the
+actual outgoing parameter byte to be canonical and writes only its declared
+result. All GP/SIMD/mask/FLAGS, pointer and slot-address facts are revoked across
+CALL; no unspecified high GP byte becomes initialized. Intermediate outgoing
+bytes remain I8 until the proved logical call transport. The existing complete
+seven-function bool-frame fixture remains intact; pure/IR tests are not an
+object or execution certificate, and actual 386 SDK/native validation is a
+separate gate.
