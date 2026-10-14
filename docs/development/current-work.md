@@ -1,6 +1,6 @@
 # Current work: PR 40 checkpoint
 
-Checkpoint: 2026-10-14 05:22 UTC. Contribution source: `f1db0fa8`.
+Checkpoint: 2026-10-14 06:00 UTC. Contribution source: `71ae5584`.
 This is a handoff, not a ledger or a claim that current-head CI/stdlib passes.
 
 ## Scope and authority
@@ -26,11 +26,11 @@ Do not edit the primary or probe while their frozen jobs run.
 
 | Worktree basename | Branch / purpose |
 | --- | --- |
-| `plan9asm-wt-pr40-scalar-lane-native-20261011` | `codex/pr40-external-corpus-split-20261011`; parent integration, source `f1db0fa8` |
-| `plan9asm-wt-pr40-stdlib-preprocessing-20261012` | `codex/pr40-windows-owned-process-probe-20261013`; fork-only workflow, `af4b6a3f` |
-| `plan9asm-wt-pr40-sdk-numeric-maps-entry-20261013` | `codex/pr40-sdk-numeric-maps-entry-20261013`; verified `ba474753`, idle |
+| `plan9asm-wt-pr40-scalar-lane-native-20261011` | `codex/pr40-external-corpus-split-20261011`; parent integration, source `71ae5584` |
+| `plan9asm-wt-pr40-stdlib-preprocessing-20261012` | `codex/pr40-windows-owned-process-probe-20261013`; staged fork-only priorities, `f0eb197c`; not pushed |
+| `plan9asm-wt-pr40-sdk-numeric-maps-entry-20261013` | `codex/pr40-sdk-numeric-maps-entry-20261013`; verified metadata `d9033ff4`, read-only review |
 | `plan9asm-wt-pr40-sdk-tls-20261013` | `codex/pr40-sdk-tls-20261013`; `10aa1cbd`, direct-tail TDD |
-| `plan9asm-wt-pr40-simple-sdk-bindings-20261013` | `codex/pr40-sdk-storage-snapshot-20261013`; `b43caaa1` + uncommitted continuation/publication repair |
+| `plan9asm-wt-pr40-simple-sdk-bindings-20261013` | `codex/pr40-sdk-storage-snapshot-20261013`; verified `f3e67767` + uncommitted consumed-input protection |
 
 ## Latest two frozen fork runs
 
@@ -101,6 +101,24 @@ Native Windows, full current-head modules/race and fresh benchmark remain pendin
 Alternate-extension consumed includes and module metadata can still collide
 with outputs: actual six-child RED is preserved, with a separate repair underway.
 
+## Verified metadata-only SDK handoff
+
+`d9033ff4` is integrated as `71ae5584`. `CaptureMetadata` returns the existing
+live SDK observer and an actual selected complete member, without numerical,
+readonly, literal-minimum, Options or native/frame permission. Empty DATA and
+comment-only selected members retain their distinct complete-source roles.
+The selected inventory is bounded by the existing archive-member limit; this
+canonical source observation does not certify the caller's original alias node.
+
+The frozen agent cohort passes eight roots/39 children in ordinary, race and
+Go20 runs, plus the complete three-OS empty-DATA source/object fixture in normal
+and race runs. Parent `71ae5584` independently passes all eight/39 and the one
+authentic root/three OS children in 7.130s, with zero failures/skips. Its official
+Go1.27 and Go1.20 five-architecture classification gates pass. Go1.20's existing
+one AMD64 unsupported form is unchanged, not claimed fixed. Before/after heads
+match `71ae55849d342fac8581d8a22c1697dd9a71914d`; diff is clean.
+These gates do not certify whole-module CI or native execution at this head.
+
 ## Stdlib benchmark: current complete failed receipt
 
 Frozen `7752fc1f`: 164/184 files, 20 FAIL, zero N/A/unattempted.
@@ -135,17 +153,21 @@ Source failures remain retryable, never pass/skip. Later values require readback
 
 ## Owners and next gates
 
-- Parent: factory and publication integrations/readback finished. Integrate
-  verified metadata/tail/input-protection families next, replay their exact joins,
+- Parent: factory, publication and metadata integration readbacks finished.
+  Integrate verified tail/input-protection families next, replay exact joins,
   then batch the next allowed-fork update. Full race remains required.
-- Numeric maps agent: metadata-only/no-DATA accessor and factory reuse the
-  existing observer. Eight pure/race/Go20 roots pass; six-file source is frozen
-  for actual three-OS complete empty-DATA and lifetime verification.
-- TLS agent: `10aa1cbd` direct-tail state-loss light IR TDD RED (six shapes ×
-  three APIs + negatives); design actual whole-source graph/root must-state,
-  then original-Go/LLVM runtime counterexample after explicit heavy clearance.
+- Numeric maps agent: verified metadata cohort frozen; read-only review of
+  current parent observer/factory lifetime and actual-selection joins.
+- TLS agent: direct-tail state loss independently reproduced on AMD64 and 386;
+  one same-source graph retains root state rather than reinitializing a helper.
+  The old AMD64 source fails the independent runtime oracle after original Go
+  passes 504 checks. A prior new snapshot passes emulated LLVM execution, not
+  native certification. The current expanded two-mode snapshot still needs
+  five-target objects, Go20/race and independent execution gates.
 - SDK/frontend agent: verified `f3e67767`; next consumed-input collision repair
-  reuses the plain assembly reader's same-pass input report, never another parser.
+  records actual successful reads and preferred-search misses in the existing
+  reader/resolver. Protect real module metadata, alternate-extension includes,
+  final alias identity and selected embed inputs, never another parser.
 One heavy source/SDK/object owner at a time; small bounded pure controls may overlap.
 Preserve native execution vs QEMU/emulated diagnostics, all original fault effects,
 canonical bool bytes (not arbitrary2/3 truncation) and unknown GP upper bytes.
@@ -153,7 +175,7 @@ canonical bool bytes (not arbitrary2/3 truncation) and unknown GP upper bytes.
 ## Receipts and history
 
 Parent ignored `_out/register-result-repair/`: `factory-7752fc1f/`,
-`publication-f1db0fa8/`,
+`publication-f1db0fa8/`, `metadata-71ae5584/`,
 `benchmark-2d696307/`, `ci-e544c001-{completion,llvm-parts}/`,
 `ci-af4b6a3f-{main-aggregate,main-parts,simple-parts,llvm-aggregate,llvm-parts}/`,
 `ci-af4b6a3f-native/native-x86-oracles/native.log` and all four independent
