@@ -28,6 +28,7 @@ import (
 	"github.com/xgo-dev/plan9asm/gotoolprofile"
 	"github.com/xgo-dev/plan9asm/internal/asmsig"
 	"github.com/xgo-dev/plan9asm/internal/goabi"
+	"github.com/xgo-dev/plan9asm/internal/sdkfrontend"
 	"golang.org/x/tools/go/packages"
 )
 
@@ -1127,6 +1128,10 @@ func loadPkgsInEnvironment(goos, goarch string, patterns, buildTags []string, mo
 	} else {
 		var err error
 		cfg.Env, err = ordinaryPackageEnvironment(goos, goarch, os.Environ())
+		if err != nil {
+			return nil, nil, err
+		}
+		cfg.Dir, err = sdkfrontend.WorkingDirectory("")
 		if err != nil {
 			return nil, nil, err
 		}
