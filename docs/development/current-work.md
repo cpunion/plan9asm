@@ -7,6 +7,32 @@ Let active frozen CI runs finish before publishing another batch.
 
 ## Current checkpoint: 2026-10-14
 
+Fork [38477743604](https://github.com/cpunion/plan9asm/actions/runs/38477743604)
+tests frozen `7c342c8b` (contribution `2d696307`, plus exact fork priorities).
+It naturally finishes failed: nine priority jobs pass, one fails, and the full
+Windows barrier correctly skips. All 48 selected native Linux x86 roots pass
+in 95.188 seconds, with zero skips, missing or duplicate terminals; both actual
+instruction-byte and genuine Go ABI0 bool CMP axes execute. Both Windows SDK
+ownership lanes and the three new shared path roots also pass. The original
+default-profile root and canonical-path counterpart now pass natively in
+21.22/28.63 seconds, retaining the actual undeclared-helper rejection.
+The remaining failure is CRC32's effective-defaults public CLI child: Go rejects
+`internal/byteorder` because physical GOROOT is paired with an unresolved cwd.
+Its explicit profile and direct compilation pass. Preserve the failed priority
+artifact; this run does not certify complete Windows modules or the benchmark.
+
+`9bf01156` pairs that same actual working directory's opened physical spelling
+with the environment before both initial package loads. The shared resolver
+does not change package selection, internal-import rules or source permissions.
+Actual aliased SDK inventory reproduces the defect independently; outside-SDK
+internal imports still fail. Complete simple CLI passes 31 roots/26 children in
+389.095 seconds; the affected LLVM CLI passes 18 roots/34 children in 203.537
+seconds, with exact fresh inventories and no skips. Shared Go 1.27/1.20, race,
+all three vet gates and formatting pass. Parent integration separately passes
+the actual CRC32 public/default profiles in 168.107 seconds, both directory
+controls in 2.238 seconds and Go 1.20 shared controls in 0.629 seconds. Native
+Windows confirmation of this paired-directory repair remains required.
+
 Fork [38469815846](https://github.com/cpunion/plan9asm/actions/runs/38469815846)
 tests frozen `dd35c7c1` (contribution `7251abd3`, plus fork-only priorities).
 It naturally finishes failed with 41/43 successful jobs. The main root's exact
