@@ -4,6 +4,7 @@ const test = require('node:test');
 
 const workflow = fs.readFileSync('.github/workflows/pr40-owned-process-probe.yml', 'utf8');
 const sdk = workflow.slice(workflow.indexOf('\n  sdk-priority:'), workflow.indexOf('\n  ownership:'));
+const sdkLaneCount = 15;
 
 test('SDK priority runs each previous simple root in its own bounded lane', () => {
   const roots = [
@@ -19,7 +20,7 @@ test('SDK priority runs each previous simple root in its own bounded lane', () =
   }
   assert.match(sdk, /module: cmd\/plan9asmll\n[\s\S]*?timeout: 5m/);
   assert.match(sdk, /module: '\.'\n[\s\S]*?timeout: 5m/);
-  assert.equal((sdk.match(/- lane:/g) || []).length, 13);
+  assert.equal((sdk.match(/- lane:/g) || []).length, sdkLaneCount);
   assert.match(sdk, /- lane: frame-context\n[\s\S]*?TestGoAMD64SDKFrameBindContextCallbacksMayClose/);
   assert.match(sdk, /- lane: frame-context\n[\s\S]*?TestGoX86NumericalSBReadFrameProducerObserverCancellationCause/);
   assert.match(sdk, /- lane: source\n[\s\S]*?TestGoX86SDKNumericalNativeOriginalMixedTextOrder/);
@@ -77,6 +78,7 @@ test('Source priority includes the complete reader and child-harness class witho
     'TestReadGoAssemblySourceRejectsEscapedSourceAlias',
     'TestReadGoAssemblySourceExpandsNestedLocalHeaders',
     'TestReadGoAssemblySourceRejectsSymlinkIncludeOutsideRoot',
+    'TestAssemblyIncludeSymlinkRegressionIsAvailableOnSupportedHosts',
     'TestFrameworkChildGoBuildRetainsParentLLVMMode',
     'TestX86ResultGPSIMDPlainUnknownReturnNeedsWholeFunctionProof',
     'TestX86ResultGPSIMDAdmissionScalarReturnFamilyThreeAPIs',
@@ -86,13 +88,15 @@ test('Source priority includes the complete reader and child-harness class witho
   ]) {
     assert.equal(source.split(`- ${root}\n`).length - 1, 1, root);
   }
-  assert.equal((sdk.match(/- lane:/g) || []).length, 13);
+  assert.equal((sdk.match(/- lane:/g) || []).length, sdkLaneCount);
 });
 
 test('New source mechanisms have their own exact priority lanes', () => {
   const additions = [
     ['literal-minimum-simple', 'cmd/plan9asm', 'TestSimpleCLIOriginalSDKMapsLiteralMinimumSource', '8m'],
-    ['literal-minimum-llvm', 'cmd/plan9asmll', 'TestCompileOneX86SDKOriginalMapsLiteralMinimumSource', '5m'],
+    ['literal-minimum-llvm-linux', 'cmd/plan9asmll', 'TestCompileOneX86SDKOriginalMapsLiteralMinimumSourceLinux', '5m'],
+    ['literal-minimum-llvm-darwin', 'cmd/plan9asmll', 'TestCompileOneX86SDKOriginalMapsLiteralMinimumSourceDarwin', '5m'],
+    ['literal-minimum-llvm-windows', 'cmd/plan9asmll', 'TestCompileOneX86SDKOriginalMapsLiteralMinimumSourceWindows', '5m'],
     ['metadata-only', 'internal/sdkfrontend', 'TestSharedSDKMetadataOriginalEmptyDATACompleteThreeOS', '10m'],
   ];
   for (const [lane, module, root, timeout] of additions) {
@@ -109,6 +113,18 @@ test('New source mechanisms have their own exact priority lanes', () => {
     'TestCompileOutputTransactionRollbackAndRestoreFailure',
     'TestCompileOutputTransactionNonretainedObjectPolicy',
   ]) assert.ok(publication.includes(`- ${root}\n`), root);
+});
+
+test('Complete maps target owners are disjoint and retain the original budget', () => {
+  assert.equal((sdk.match(/- lane:/g) || []).length, sdkLaneCount);
+  for (const goos of ['linux', 'darwin', 'windows']) {
+    const suffix = goos[0].toUpperCase() + goos.slice(1);
+    const root = `TestCompileOneX86SDKOriginalMapsLiteralMinimumSource${suffix}`;
+    assert.equal(sdk.split(`- ${root}\n`).length - 1, 1, root);
+    assert.ok(sdk.includes(`- lane: literal-minimum-llvm-${goos}\n            module: cmd/plan9asmll\n            roots:\n              - ${root}\n            timeout: 5m`));
+  }
+  assert.doesNotMatch(sdk, /- TestCompileOneX86SDKOriginalMapsLiteralMinimumSource\n/);
+  assert.equal(sdk.split('- TestMapsLiteralMinimumTargetsHaveIndependentCompleteOwners\n').length - 1, 1);
 });
 
 test('Guarded bit-scan and typed predicate rule classes are exact source priorities', () => {
@@ -128,7 +144,7 @@ test('Guarded bit-scan and typed predicate rule classes are exact source priorit
     'TestX86ResultPredicateBoundedStateAndRawRevocation',
   ]) assert.equal(source.split(`- ${root}\n`).length - 1, 1, root);
   assert.match(source, /timeout: 5m/);
-  assert.equal((sdk.match(/- lane:/g) || []).length, 13);
+  assert.equal((sdk.match(/- lane:/g) || []).length, sdkLaneCount);
 });
 
 test('Caller-address differences retain their exact source-origin priority controls', () => {
@@ -141,7 +157,7 @@ test('Caller-address differences retain their exact source-origin priority contr
     'TestX86ResultCallerAddressOriginIsBoundedIndependentMustState',
   ]) assert.equal(source.split(`- ${root}\n`).length - 1, 1, root);
   assert.match(source, /timeout: 5m/);
-  assert.equal((sdk.match(/- lane:/g) || []).length, 13);
+  assert.equal((sdk.match(/- lane:/g) || []).length, sdkLaneCount);
 });
 
 test('Bit-scan zero semantics and complete object cohort cannot wait behind full modules', () => {
@@ -158,7 +174,7 @@ test('Bit-scan zero semantics and complete object cohort cannot wait behind full
     'TestX86ScalarBitScanCompleteOriginalGoAndLLVMFiveTargetObjects',
   ]) assert.equal(source.split(`- ${root}\n`).length - 1, 1, root);
   assert.match(source, /timeout: 5m/);
-  assert.equal((sdk.match(/- lane:/g) || []).length, 13);
+  assert.equal((sdk.match(/- lane:/g) || []).length, sdkLaneCount);
 });
 
 test('Canonical bool calls retain complete source, byte, lifetime and budget priorities', () => {
@@ -187,7 +203,7 @@ test('Canonical bool calls retain complete source, byte, lifetime and budget pri
     'TestX86ABI0Mode32CanonicalFactDomainIsIndependent',
   ]) assert.equal(source.split(`- ${root}\n`).length - 1, 1, root);
   assert.match(source, /timeout: 5m/);
-  assert.equal((sdk.match(/- lane:/g) || []).length, 13);
+  assert.equal((sdk.match(/- lane:/g) || []).length, sdkLaneCount);
 });
 
 test('Complete bit-scan native axes and their authority controls are mandatory', () => {
@@ -215,7 +231,7 @@ test('Complete bit-scan native axes and their authority controls are mandatory',
     'TestX86ABI0Mode32CanonicalBoolCallSelectionRetainsTrueBoolLimit',
     'TestX86ABI0Mode32CanonicalBoolCallSelectionRejectsChangingQuery',
   ]) assert.equal(source.split(`- ${root}\n`).length - 1, 1, root);
-  assert.equal((sdk.match(/- lane:/g) || []).length, 13);
+  assert.equal((sdk.match(/- lane:/g) || []).length, sdkLaneCount);
 });
 
 test('ABI0 mode32 bool must execute its sealed native owner', () => {
@@ -231,7 +247,7 @@ test('ABI0 mode32 bool must execute its sealed native owner', () => {
     'TestX86ABI0Mode32BoolRuntimeNativeOwnerCannotEmulateOrSkip',
     'TestX86ABI0Mode32BoolRuntimeNativePolicyRejectsMutation',
   ]) assert.equal(source.split(`- ${root}\n`).length - 1, 1, root);
-  assert.equal((sdk.match(/- lane:/g) || []).length, 13);
+  assert.equal((sdk.match(/- lane:/g) || []).length, sdkLaneCount);
 });
 
 test('Sparse GP SIMD must execute both actual native architectures', () => {
@@ -257,7 +273,7 @@ test('Void calls and text context ownership regressions run before complete modu
     'TestTranslateTextConcurrentRequestsKeepOriginalFile',
   ]) assert.equal(source.split(`- ${root}\n`).length - 1, 1, root);
   assert.match(source, /timeout: 5m/);
-  assert.equal((sdk.match(/- lane:/g) || []).length, 13);
+  assert.equal((sdk.match(/- lane:/g) || []).length, sdkLaneCount);
 });
 
 test('Complete direction control and string-consumer regressions are mandatory', () => {
@@ -277,7 +293,7 @@ test('Complete direction control and string-consumer regressions are mandatory',
     'TestX86DirectionTypedBoolAndVoidWholeCallThreeAPIs',
   ]) assert.equal(source.split(`- ${root}\n`).length - 1, 1, root);
   assert.match(source, /timeout: 5m/);
-  assert.equal((sdk.match(/- lane:/g) || []).length, 13);
+  assert.equal((sdk.match(/- lane:/g) || []).length, sdkLaneCount);
 });
 
 test('Ordinary result aliases require the complete class and target objects', () => {
@@ -298,7 +314,7 @@ test('Ordinary result aliases require the complete class and target objects', ()
     'TestX86ResultSlotMoveWidthWholeProofAndThreeAPIs',
   ]) assert.equal(source.split(`- ${root}\n`).length - 1, 1, root);
   assert.match(source, /timeout: 5m/);
-  assert.equal((sdk.match(/- lane:/g) || []).length, 13);
+  assert.equal((sdk.match(/- lane:/g) || []).length, sdkLaneCount);
 });
 
 test('Actual failed SDK frame paths run before the complete-module barrier', () => {

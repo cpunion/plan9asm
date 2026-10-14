@@ -140,6 +140,7 @@ jobs:
               - TestRunOneTargetSDKFixedLocalCanonicalCommandPaths
               - TestOrdinaryPackageLoadSDKWorkingDirectoryIdentity
               - TestOrdinaryPackageLoadOutsideSDKRetainsInternalImportRejection
+              - TestMapsLiteralMinimumTargetsHaveIndependentCompleteOwners
             timeout: 5m
           - lane: llvm-crc32
             module: cmd/plan9asmll
@@ -171,10 +172,20 @@ jobs:
             roots:
               - TestSimpleCLIOriginalSDKMapsLiteralMinimumSource
             timeout: 8m
-          - lane: literal-minimum-llvm
+          - lane: literal-minimum-llvm-linux
             module: cmd/plan9asmll
             roots:
-              - TestCompileOneX86SDKOriginalMapsLiteralMinimumSource
+              - TestCompileOneX86SDKOriginalMapsLiteralMinimumSourceLinux
+            timeout: 5m
+          - lane: literal-minimum-llvm-darwin
+            module: cmd/plan9asmll
+            roots:
+              - TestCompileOneX86SDKOriginalMapsLiteralMinimumSourceDarwin
+            timeout: 5m
+          - lane: literal-minimum-llvm-windows
+            module: cmd/plan9asmll
+            roots:
+              - TestCompileOneX86SDKOriginalMapsLiteralMinimumSourceWindows
             timeout: 5m
           - lane: metadata-only
             module: internal/sdkfrontend
@@ -245,6 +256,7 @@ jobs:
               - TestReadGoAssemblySourceRejectsEscapedSourceAlias
               - TestReadGoAssemblySourceExpandsNestedLocalHeaders
               - TestReadGoAssemblySourceRejectsSymlinkIncludeOutsideRoot
+              - TestAssemblyIncludeSymlinkRegressionIsAvailableOnSupportedHosts
               - TestFrameworkChildGoBuildRetainsParentLLVMMode
               - TestX86ResultGPSIMDPlainUnknownReturnNeedsWholeFunctionProof
               - TestX86ResultGPSIMDAdmissionScalarReturnFamilyThreeAPIs
