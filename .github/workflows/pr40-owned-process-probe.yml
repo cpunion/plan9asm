@@ -70,6 +70,7 @@ jobs:
           roots+="|$numerical_lea_root"
           direct_tail_roots='TestCrossLinuxRuntimeMatrixAMD64DirectTailWholeSourceOriginalGoAndLLVM'
           direct_tail_roots+='|TestCrossLinuxRuntimeMatrixX86DirectTail386OriginalGoAndLLVM'
+          direct_tail_roots+='|TestCrossLinuxRuntimeMatrixX86DirectTailPCResultAliasesAndExternal'
           go test . -list "^($direct_tail_roots)$" > _out/native-x86-oracles/direct-tail-inventory.log
           for root in ${direct_tail_roots//|/ }; do
             grep -Fx "$root" _out/native-x86-oracles/direct-tail-inventory.log

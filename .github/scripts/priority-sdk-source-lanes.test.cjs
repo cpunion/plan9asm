@@ -156,6 +156,7 @@ test('Direct-tail state executes both native x86 modes with exact mandatory root
   for (const root of [
     'TestCrossLinuxRuntimeMatrixAMD64DirectTailWholeSourceOriginalGoAndLLVM',
     'TestCrossLinuxRuntimeMatrixX86DirectTail386OriginalGoAndLLVM',
+    'TestCrossLinuxRuntimeMatrixX86DirectTailPCResultAliasesAndExternal',
   ]) assert.ok(native.includes(root), root);
   assert.match(native, /go test \. -list "\^\(\$direct_tail_roots\)\$"/);
   assert.match(native, /grep -Fx "\$root" _out\/native-x86-oracles\/direct-tail-inventory.log/);
