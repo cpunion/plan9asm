@@ -546,8 +546,15 @@ func (state x86ResultState) intersect(other x86ResultState) x86ResultState {
 		}
 	} else if merged.continuation != nil {
 		for index := range merged.continuation.gp {
-			if merged.continuation.gp[index] != other.continuation.gp[index] {
-				merged.continuation.gp[index] = x86ContinuationAddress{}
+			left, right := merged.continuation.gp[index], other.continuation.gp[index]
+			if left != right {
+				if left.kind == 2 && right.kind == 2 && left.root != "" && left.root == right.root {
+					// Every finite helper successor is already part of this root's
+					// authenticated CFG. Preserve only that shared opaque role.
+					merged.continuation.gp[index] = x86ContinuationAddress{kind: 2, root: left.root}
+				} else {
+					merged.continuation.gp[index] = x86ContinuationAddress{}
+				}
 			}
 		}
 		for index := range merged.continuation.written {

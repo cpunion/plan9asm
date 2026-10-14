@@ -101,6 +101,48 @@ func TestX86ContinuationWholeCFGResultProof(t *testing.T) {
 	}
 }
 
+func TestX86ContinuationCodeAddressJoinsRetainOnlyActualRoot(t *testing.T) {
+	for _, arch := range []string{"amd64", "386"} {
+		word := "Q"
+		if arch == "386" {
+			word = "L"
+		}
+		for _, api := range []string{"text", "module", "owned-module"} {
+			t.Run(arch+"/"+api, func(t *testing.T) {
+				source, options := x86ContinuationResultFixture(t, arch, false)
+				original := " TEST" + word + " BX,BX\n JMP (SI)"
+				joined := " TEST" + word + " BX,BX\n JEQ chooseFinish\n LEA" + word +
+					" ·Advance(SB),CX\n JMP chosen\nchooseFinish:\n LEA" + word + " ·Finish(SB),CX\nchosen:\n JMP CX"
+				if !strings.Contains(source, original) {
+					t.Fatal("join fixture lost its complete original root")
+				}
+				source = strings.Replace(source, original, joined, 1)
+				if _, err := x86ContinuationResultAPI(t, source, options, api); err != nil {
+					t.Fatal(err)
+				}
+			})
+		}
+	}
+	t.Run("distinct-roots-and-kinds-revoke", func(t *testing.T) {
+		flow := new(x86ContinuationFlow)
+		state := x86ResultState{continuation: &x86ContinuationResultState{flow: flow, tablesValid: true}}
+		state.continuation.gp[0] = x86ContinuationAddress{kind: 2, symbol: "helper", root: "root"}
+		for _, address := range []x86ContinuationAddress{
+			{kind: 2, symbol: "helper", root: "another-root"},
+			{kind: 1, symbol: "helper", root: "root"},
+			{},
+		} {
+			other := state.clone()
+			other.continuation.gp[0] = address
+			for _, joined := range []x86ResultState{state.intersect(other), other.intersect(state)} {
+				if joined.continuation.gp[0] != (x86ContinuationAddress{}) {
+					t.Fatal("join borrowed a distinct root or non-code address")
+				}
+			}
+		}
+	})
+}
+
 func TestX86ContinuationWholeCFGResultRejectsIncomplete(t *testing.T) {
 	for _, arch := range []string{"amd64", "386"} {
 		word, size := "Q", 8
