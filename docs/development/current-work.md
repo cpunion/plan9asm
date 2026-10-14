@@ -7,6 +7,29 @@ Let active frozen CI runs finish before publishing another batch.
 
 ## Current checkpoint: 2026-10-14
 
+Fork [38502949565](https://github.com/cpunion/plan9asm/actions/runs/38502949565)
+tests frozen `e544c001` (contribution `94bd05f1`, plus fork-only priorities).
+All twelve priority jobs pass, and the complete Windows modules are running;
+do not publish another batch until the run finishes naturally. Independent
+raw inventories certify all twelve selected-member/previous-failure roots
+natively on Windows in 25.253 seconds, with zero skips or missing/duplicate
+terminals. That artifact's downloaded ZIP SHA matches GitHub's digest and
+workflow-run source SHA. The split LLVM five-root lane passes in 46.259 seconds;
+its original CRC32 root independently passes in 151.151 seconds, retaining
+the original five-minute budgets. All 48 selected native Linux x86 roots pass
+in 59.876 seconds. These priorities do not certify complete modules or stdlib.
+
+`7be7d50a` separately reuses the selected-member observer for x86 caller-source
+bindings. Each returned binding retains its original request lifetime; the
+complete cached source graph and compiler inventory stay unchanged. Actual
+Go alias RED precedes the repair; five-target original-Go/LLVM objects and
+post-callback replacement controls pass. The exact 26-root/75-child CLI class
+passes in 5.705 seconds, race in 7.643 seconds and vet; core caller controls
+pass Go 1.27/1.20. Parent replays the same 26-root inventory in 9.155 seconds,
+with no skipped, missing or duplicate roots. This local commit is not in the
+frozen fork run. Continuation's outside-alias sibling/reference-closure defect
+has an independent three-child RED and still needs a separate complete guard.
+
 Fork [38491308184](https://github.com/cpunion/plan9asm/actions/runs/38491308184)
 tests frozen `ac2576d2` (contribution `fbadcfa8`, plus fork-only priorities).
 It naturally finishes with 39 successful and four failed jobs. All ten priority
