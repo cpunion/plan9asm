@@ -144,6 +144,46 @@ test('Direct-tail state executes both native x86 modes with exact mandatory root
   assert.doesNotMatch(native, /qemu|overlay|continue-on-error|max-parallel/);
 });
 
+test('Input publication and terminal context counterexamples run before full modules', () => {
+  const publication = sdk.slice(sdk.indexOf('- lane: publication\n'), sdk.indexOf('- lane: crc32-linux\n'));
+  for (const root of [
+    'TestCompileOutputRejectsSourceExtensionCaseVariants',
+    'TestCompileOneOutputCannotReplaceCaseVariantSelectedGoSource',
+    'TestCompileOneOutputCannotReplaceOriginalModuleMetadata',
+    'TestCompileOneOutputCannotCreateAbsentMetadataAlias',
+    'TestCompileOutputMetadataNameProtectionUsesActualParent',
+    'TestCompileOneOutputCannotReplaceActualSelectedEmbed',
+    'TestCompileOneLateSelectedEmbedReplacementDoesNotPublish',
+    'TestCompileOutputInputDirectoryAliasLifetime',
+    'TestCompileOutputRechecksOriginalInputsDuringPublication',
+    'TestCompileOutputInputIdentityExcludesEquivalentExistingName',
+    'TestCompileOutputInputProtectionAccumulatesAttemptMembers',
+    'TestCompileOutputSuccessfullyReadInputCannotBecomeMissingRole',
+    'TestCompileOutputInputAliasLifetime',
+    'TestCompileOutputSearchMissProtection',
+    'TestCompileOutputSearchMissCannotBePublicDestination',
+    'TestCompileOneLateEqualByteIncludeRedirectDoesNotPublish',
+    'TestCompileOneTaskBuilderOutputCannotReplaceActualInclude',
+    'TestFeatureCPPReadReportRetainsOnlyActiveSearchMisses',
+  ]) assert.ok(publication.includes(`- ${root}\n`), root);
+  const contexts = sdk.slice(sdk.indexOf('- lane: frame-context\n'));
+  for (const root of [
+    'TestGoSourceContextTerminalSuccessHasNoLaterCallbacks',
+    'TestGoSourceContextTerminalLostBound',
+    'TestGoSourceContextTerminalCaptureCannotFreezeStaleLifetime',
+    'TestGoSourceContextTerminalOriginalErrCannotChangeLifetime',
+    'TestGoSourceContextTerminalJoinedOwnerCallbackCannotChangeLifetime',
+    'TestGoSourceContextTerminalCancellationSignalsAndCauses',
+    'TestGoSourceContextTerminalClosedDoneCannotReturnSuccess',
+    'TestGoSourceContextTerminalSameContextRolesAreBounded',
+    'TestGoSourceContextTerminalFrameDoneCannotChangeInLastErr',
+    'TestGoSourceContextTerminalPrivateBridgeOnlyTightensAndStops',
+    'TestGoSourceContextTerminalIdentityAndBoundedRoleGuards',
+  ]) assert.ok(contexts.includes(`- ${root}\n`), root);
+  assert.match(publication, /timeout: 5m/);
+  assert.match(contexts, /timeout: 5m/);
+});
+
 test('Caller selected-member lifetime also runs before complete Windows modules', () => {
   const selection = sdk.slice(sdk.indexOf('- lane: assembly-selection\n'), sdk.indexOf('- lane: crc32-linux\n'));
   for (const root of [

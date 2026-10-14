@@ -182,6 +182,24 @@ jobs:
               - TestCompileOutputTransactionRollbackDoesNotReplaceConcurrentOutput
               - TestCompileOutputTransactionCommittedCleanupIsExplicit
               - TestCompileOutputTransactionNonretainedObjectPolicy
+              - TestCompileOutputRejectsSourceExtensionCaseVariants
+              - TestCompileOneOutputCannotReplaceCaseVariantSelectedGoSource
+              - TestCompileOneOutputCannotReplaceOriginalModuleMetadata
+              - TestCompileOneOutputCannotCreateAbsentMetadataAlias
+              - TestCompileOutputMetadataNameProtectionUsesActualParent
+              - TestCompileOneOutputCannotReplaceActualSelectedEmbed
+              - TestCompileOneLateSelectedEmbedReplacementDoesNotPublish
+              - TestCompileOutputInputDirectoryAliasLifetime
+              - TestCompileOutputRechecksOriginalInputsDuringPublication
+              - TestCompileOutputInputIdentityExcludesEquivalentExistingName
+              - TestCompileOutputInputProtectionAccumulatesAttemptMembers
+              - TestCompileOutputSuccessfullyReadInputCannotBecomeMissingRole
+              - TestCompileOutputInputAliasLifetime
+              - TestCompileOutputSearchMissProtection
+              - TestCompileOutputSearchMissCannotBePublicDestination
+              - TestCompileOneLateEqualByteIncludeRedirectDoesNotPublish
+              - TestCompileOneTaskBuilderOutputCannotReplaceActualInclude
+              - TestFeatureCPPReadReportRetainsOnlyActiveSearchMisses
             timeout: 5m
           - lane: crc32-linux
             module: cmd/plan9asm
@@ -223,6 +241,17 @@ jobs:
               - TestGoAMD64FrameVerifyContextCallbacksMayClose
               - TestGoAMD64FramePrivateContextExactLifetime
               - TestGoX86NumericalSBReadFrameProducerObserverCancellationCause
+              - TestGoSourceContextTerminalSuccessHasNoLaterCallbacks
+              - TestGoSourceContextTerminalLostBound
+              - TestGoSourceContextTerminalCaptureCannotFreezeStaleLifetime
+              - TestGoSourceContextTerminalOriginalErrCannotChangeLifetime
+              - TestGoSourceContextTerminalJoinedOwnerCallbackCannotChangeLifetime
+              - TestGoSourceContextTerminalCancellationSignalsAndCauses
+              - TestGoSourceContextTerminalClosedDoneCannotReturnSuccess
+              - TestGoSourceContextTerminalSameContextRolesAreBounded
+              - TestGoSourceContextTerminalFrameDoneCannotChangeInLastErr
+              - TestGoSourceContextTerminalPrivateBridgeOnlyTightensAndStops
+              - TestGoSourceContextTerminalIdentityAndBoundedRoleGuards
             timeout: 5m
     steps:
       - uses: actions/checkout@v7
