@@ -157,6 +157,7 @@ func TestX86DirectTailResultRegionDoesNotInventOwnedBytes(t *testing.T) {
 		for _, row := range []struct{ name, from, to string }{
 			{"missing-first", "MOVL $7,(DI)", "NOP"},
 			{"missing-second", "MOVL $9,4(DI)", "NOP"},
+			{"partial-second", "MOVL $9,4(DI)", "MOVB $9,4(DI)"},
 			{"read-before-write", "MOVL $7,(DI)", "MOVL 4(DI),AX\nMOVL $7,(DI)"},
 			{"past-region", "MOVL $9,4(DI)", "MOVL $9,8(DI)"},
 			{"before-region", "MOVL $9,4(DI)", "MOVL $9,-4(DI)"},
@@ -232,6 +233,28 @@ func TestX86DirectTailResultRegionLayoutIsNotAuthority(t *testing.T) {
 		"amd64", "x86_64-unknown-linux-gnu", false)
 	if err := context.emitEntryAllocas(); !errors.Is(err, ErrProbeNeedsContext) || strings.Contains(output.String(), "%fp_result_region =") {
 		t.Fatalf("unproved shape allocated result backing: %v", err)
+	}
+	for _, arch := range []string{"386", "amd64"} {
+		for _, api := range []string{"text", "module", "Go"} {
+			t.Run(arch+"/no-FP/"+api, func(t *testing.T) {
+				// Even a fully numerical register state is not a write to the
+				// declared results. No FP instruction triggers a narrower guard.
+				source := "TEXT ·First(SB),4,$0-8\nJMP body<>(SB)\n" +
+					"TEXT body<>(SB),4,$0-0\nMOVL $7,AX\nMOVL $9,BX\nRET\n"
+				if ir, err := x86ScalarFPBitViewAPI(t, source, "func First() (a,b uint32)\n", arch, testTargetTriple("linux", arch), api); !errors.Is(err, ErrProbeNeedsContext) || ir != "" {
+					t.Fatalf("register fallback invented logical result writes: %v", err)
+				}
+			})
+		}
+	}
+	for _, api := range []string{"text", "module", "Go"} {
+		t.Run("386/invalid-X8/"+api, func(t *testing.T) {
+			source, declaration := x86DirectTailResultRegionFixture("386", "uint32", "L", 4)
+			source = strings.Replace(source, "MOVL $7,(DI)", "MOVL $7,AX\nMOVL AX,X8\nMOVL X8,(DI)", 1)
+			if ir, err := x86ScalarFPBitViewAPI(t, source, declaration, "386", testTargetTriple("linux", "386"), api); !errors.Is(err, ErrProbeNeedsContext) || ir != "" {
+				t.Fatalf("region borrowed a mode64-only vector bank: %v", err)
+			}
+		})
 	}
 }
 
