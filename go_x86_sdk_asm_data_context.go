@@ -2,7 +2,6 @@ package plan9asm
 
 import (
 	"context"
-	"errors"
 	"time"
 )
 
@@ -14,33 +13,24 @@ func sdkASMDataPrivateContext(caller, original context.Context, frozenDeadline t
 	if caller == nil || original == nil {
 		return nil, nil, sdkASMDataContext("missing verification/capture context")
 	}
-	if err := errors.Join(caller.Err(), original.Err()); err != nil {
+	sample, err := sampleGoSourceContext(caller, original,
+		goSourceContextLifetime{deadline: frozenDeadline, bounded: true}, true,
+		sdkASMDataContext("original capture context deadline changed or canceled without a cause"))
+	if err != nil {
 		return nil, nil, err
-	}
-	callerDeadline, callerBounded := caller.Deadline()
-	observedDeadline, bounded := original.Deadline()
-	if !bounded {
-		return nil, nil, sdkASMDataContext("original bounded context lost its deadline")
-	}
-	if !observedDeadline.Equal(frozenDeadline) {
-		return nil, nil, sdkASMDataContext("original capture context deadline changed")
 	}
 	deadline := frozenDeadline
-	callerDone, originalDone := caller.Done(), original.Done()
-	if callerBounded && callerDeadline.Before(deadline) {
-		deadline = callerDeadline
-	}
-	if err := errors.Join(caller.Err(), original.Err()); err != nil {
-		return nil, nil, err
+	if sample.callerBounded && sample.callerDeadline.Before(deadline) {
+		deadline = sample.callerDeadline
 	}
 	private, cancel := context.WithDeadline(context.Background(), deadline)
 	finished, stopped := make(chan struct{}), make(chan struct{})
 	go func() {
 		defer close(stopped)
 		select {
-		case <-callerDone:
+		case <-sample.callerDone:
 			cancel()
-		case <-originalDone:
+		case <-sample.originalDone:
 			cancel()
 		case <-private.Done():
 		case <-finished:

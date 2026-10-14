@@ -163,14 +163,16 @@ func (source *GoX86NumericalReadSource) verifySDKLiteralNumericalSource(ctx cont
 }
 
 func (joined *numericalSDKLiteralJoin) liveContext(ctx context.Context) error {
-	if ctx == nil || joined.context == nil {
+	if ctx == nil || joined.context == nil || joined.owner == nil {
 		return numericalSBContext("joined numerical source lost its original context")
 	}
-	deadline, bounded := joined.context.Deadline()
-	if !bounded || !deadline.Equal(joined.Deadline) {
-		return numericalSBContext("joined numerical source original deadline changed")
+	if err := joined.owner.liveContext(ctx); err != nil {
+		return err
 	}
-	return errors.Join(ctx.Err(), joined.context.Err(), joined.owner.liveContext(ctx))
+	_, err := sampleGoSourceContext(ctx, joined.context,
+		goSourceContextLifetime{deadline: joined.Deadline, bounded: true}, false,
+		numericalSBContext("joined numerical source original deadline changed or canceled without a cause"))
+	return err
 }
 
 func (joined *numericalSDKLiteralJoin) privateContext(ctx context.Context) (context.Context, func(), error) {

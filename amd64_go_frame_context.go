@@ -29,7 +29,9 @@ func captureGoAMD64FramePrivateContext(original context.Context) (*goAMD64FrameP
 	}
 	deadline, bounded := original.Deadline()
 	done := original.Done()
-	if err := original.Err(); err != nil {
+	if _, err := sampleGoSourceContext(context.Background(), original,
+		goSourceContextLifetime{deadline: deadline, bounded: bounded, done: done, checkDone: true}, false,
+		goAMD64FrameContext("caller context lifetime changed during capture")); err != nil {
 		return nil, err
 	}
 	var private context.Context
@@ -61,16 +63,13 @@ func captureGoAMD64FramePrivateContext(original context.Context) (*goAMD64FrameP
 // Always called outside observer locks. Retain actual cancellation causes and
 // reject a caller that changes its captured lifetime while work is in flight.
 func (ctx *goAMD64FramePrivateContext) verify() error {
-	err := ctx.original.Err()
-	deadline, bounded := ctx.original.Deadline()
-	done := ctx.original.Done()
-	if bounded != ctx.bounded || bounded && !deadline.Equal(ctx.deadline) || done != ctx.done {
-		err = errors.Join(err, goAMD64FrameContext("caller context lifetime changed during observation"))
-	}
-	select {
-	case <-ctx.done:
+	_, err := sampleGoSourceContext(ctx.Context, ctx.original,
+		goSourceContextLifetime{deadline: ctx.deadline, bounded: ctx.bounded, done: ctx.done, checkDone: true}, false,
+		goAMD64FrameContext("caller context lifetime changed during observation"))
+	if goSourceContextDone(ctx.done) {
 		ctx.cancel()
-	default:
 	}
-	return errors.Join(err, ctx.original.Err(), ctx.Context.Err())
+	// Context is the privately constructed standard command context, not the
+	// original caller implementation. No user callback follows the checkpoint.
+	return errors.Join(err, ctx.Context.Err())
 }

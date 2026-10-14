@@ -348,14 +348,10 @@ func (observed *GoX86SDKLiteralAlignment) liveContext(ctx context.Context) error
 		reflect.TypeOf(observed.context) != reflect.TypeOf(observed.originalContext) || !reflect.TypeOf(observed.context).Comparable() || observed.context != observed.originalContext {
 		return sdkASMDataContext("minimum alignment original context identity changed")
 	}
-	if err := errors.Join(ctx.Err(), observed.context.Err()); err != nil {
-		return err
-	}
-	deadline, bounded := observed.context.Deadline()
-	if !bounded || !deadline.Equal(observed.deadline) {
-		return sdkASMDataContext("minimum alignment original deadline changed")
-	}
-	return errors.Join(ctx.Err(), observed.context.Err())
+	_, err := sampleGoSourceContext(ctx, observed.context,
+		goSourceContextLifetime{deadline: observed.deadline, bounded: true}, false,
+		sdkASMDataContext("minimum alignment original deadline changed or canceled without a cause"))
+	return err
 }
 
 func (observed *GoX86SDKLiteralAlignment) verifyOwner() error {
