@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+
+	"github.com/xgo-dev/llvm"
 )
 
 func x86PhysicalBoolObjectSource(arch string) (string, string, string) {
@@ -22,6 +24,9 @@ func x86PhysicalBoolObjectSource(arch string) (string, string, string) {
 		"MOVB @WORD(SP),AX\nPUSH" + suffix + " AX\nMOV" + suffix + " $0,AX\nPOP" + suffix + " AX\nMOVB AX,@RESULT(SP)\nBYTE $0xc3",
 		"MOVB $3,@RESULT(SP)\nMOVB @RESULT(SP),AX\nANDB $1,AX\nMOVB AX,@RESULT(SP)\nBYTE $0xc3",
 		"MOVB $2,@RESULT(SP)\nMOVB @RESULT(SP),AX\nSHRB $1,AX\nANDB $1,AX\nMOVB AX,@RESULT(SP)\nBYTE $0xc3",
+		"MOVB x+0(FP),AX\nMOVB AX,ret+@WORD(FP)\nBYTE $0xc3",
+		"MOVB $1,ret+@WORD(FP)\nBYTE $0xc3",
+		"MOVB $2,ret+@WORD(FP)\nMOVB ret+@WORD(FP),AX\nSHRB $1,AX\nANDB $1,AX\nMOVB AX,ret+@WORD(FP)\nBYTE $0xc3",
 	} {
 		name := fmt.Sprintf("PhysicalBool%d", index)
 		text, _, _ := x86SourceStackTypedFixture(arch, "bool", I1, word, "MOVB", body)
@@ -32,6 +37,37 @@ func x86PhysicalBoolObjectSource(arch string) (string, string, string) {
 	return source.String(), declarations.String(), negative
 }
 
+func x86PhysicalBoolObjectAPI(t *testing.T, source, declarations, arch, triple, api string) (string, error) {
+	t.Helper()
+	if !strings.HasPrefix(api, "default-") {
+		return x86ScalarFPBitViewAPI(t, source, declarations, arch, triple, api)
+	}
+	// Derive the actual declaration under the known AMD64 source mode, then
+	// independently exercise the public Options default without editing it.
+	file, err := Parse(ArchAMD64, source)
+	if err != nil {
+		return "", err
+	}
+	pkg := mustGoPackage(t, "bitview", "package bitview\n"+declarations)
+	resolve := func(symbol string) string { return strings.TrimPrefix(symbol, "·") }
+	sigs, err := goSigsForAsmFile(pkg, file, resolve, "amd64", nil, nil, nil)
+	if err != nil {
+		return "", err
+	}
+	options := Options{TargetTriple: triple, ResolveSym: resolve, Sigs: sigs}
+	if api == "default-text" {
+		return Translate(file, options)
+	}
+	ctx := llvm.NewContext()
+	defer ctx.Dispose()
+	module, err := TranslateModuleInContext(ctx, file, options)
+	if !module.IsNil() {
+		defer module.Dispose()
+		return module.String(), err
+	}
+	return "", err
+}
+
 func TestX86PhysicalSourceStackBoolFiveTargetOriginalGoAndLLVMObjects(t *testing.T) {
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
@@ -40,14 +76,22 @@ func TestX86PhysicalSourceStackBoolFiveTargetOriginalGoAndLLVMObjects(t *testing
 	for _, target := range x86RawReturnTargets {
 		t.Run(target.triple, func(t *testing.T) {
 			source, declarations, negative := x86PhysicalBoolObjectSource(target.arch)
-			if strings.Count(source, "TEXT ·") != 8 || source == negative {
+			negativeNamed := strings.Replace(source, fmt.Sprintf("MOVB $1,ret+%d(FP)", goWordSize(target.arch)), fmt.Sprintf("MOVB $3,ret+%d(FP)", goWordSize(target.arch)), 1)
+			if strings.Count(source, "TEXT ·") != 11 || source == negative || source == negativeNamed {
 				t.Fatal("complete physical bool source inventory changed")
 			}
 			x86LEAActualTargetGoObject(t, target.arch, target.triple, source)
 			x86LEAActualTargetGoObject(t, target.arch, target.triple, negative)
-			for _, api := range []string{"text", "module", "Go"} {
+			x86LEAActualTargetGoObject(t, target.arch, target.triple, negativeNamed)
+			completeRuntime, _ := x86SourceStackRuntimeSource(target.arch)
+			x86LEAActualTargetGoObject(t, target.arch, target.triple, completeRuntime)
+			apis := []string{"text", "module", "Go"}
+			if target.arch == "amd64" {
+				apis = append(apis, "default-text", "default-module")
+			}
+			for _, api := range apis {
 				t.Run(api, func(t *testing.T) {
-					ir, err := x86ScalarFPBitViewAPI(t, source, declarations, target.arch, target.triple, api)
+					ir, err := x86PhysicalBoolObjectAPI(t, source, declarations, target.arch, target.triple, api)
 					if err != nil || ir == "" {
 						t.Fatal("complete original physical bool source rejected", err)
 					}
@@ -62,8 +106,10 @@ func TestX86PhysicalSourceStackBoolFiveTargetOriginalGoAndLLVMObjects(t *testing
 							})
 						}
 					}
-					if bad, err := x86ScalarFPBitViewAPI(t, negative, declarations, target.arch, target.triple, api); !errors.Is(err, ErrProbeNeedsContext) || bad != "" {
-						t.Fatal("noncanonical complete original physical bool source published LLVM", err)
+					for _, badSource := range []string{negative, negativeNamed} {
+						if bad, err := x86PhysicalBoolObjectAPI(t, badSource, declarations, target.arch, target.triple, api); !errors.Is(err, ErrProbeNeedsContext) || bad != "" {
+							t.Fatal("noncanonical complete original physical/named bool source published LLVM", err)
+						}
 					}
 				})
 			}

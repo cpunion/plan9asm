@@ -1,6 +1,9 @@
 package plan9asm
 
-import "reflect"
+import (
+	"reflect"
+	"strings"
+)
 
 // This state belongs only to the already bounded physical source-stack CFG.
 // It grants neither ordinary logical ABI0 entry nor caller/native memory. NUM
@@ -23,7 +26,23 @@ type x86SourceStackBoolProof struct {
 	normalized        []Instr
 }
 
+// A cost/denial predicate only. A stack-unobserved raw RET still transports
+// physical ABI0 bool bytes; omitting explicit SP syntax cannot bypass the
+// independent producer. Zero-argument/custom/native entries remain separate.
+func x86SourceStackBoolCandidate(fn Func, sig FuncSig) bool {
+	return fn.FrameSize == 0 && !strings.Contains(fn.Sym, "<") && sig.Ret == I1 &&
+		len(sig.Args) != 0 && len(sig.ArgRegs) == 0 && len(sig.Frame.Results) == 1 && sig.Frame.Results[0].Type == I1
+}
+
+func x86SourceStackBoolArch(arch string) string {
+	if arch == "" {
+		return "amd64" // The existing ArchAMD64 renderer default, not an Options/source rewrite.
+	}
+	return arch
+}
+
 func x86SourceStackBoolInitial(fn Func, sig FuncSig, arch string) *x86SourceStackBoolState {
+	arch = x86SourceStackBoolArch(arch)
 	if (arch != "386" && arch != "amd64") || sig.Ret != I1 || fn.ArgSize > 4096 ||
 		!x86SourceStackScalarABI0(sig, fn.ArgSize, arch) || sig.ARMEntry != nil ||
 		sig.ARM64GoRegisterABI != nil || sig.ARM64ClosureABI != nil || sig.WASMContext != "" || sig.WASMNative ||
@@ -67,6 +86,7 @@ func (state *x86SourceStackBoolState) clone() *x86SourceStackBoolState {
 // checked this exact instruction. Its access annotations are not public FP
 // permission: only this local byte-effect copy uses their exact slot offsets.
 func (state *x86SourceStackBoolState) step(ins Instr, arch string) bool {
+	arch = x86SourceStackBoolArch(arch)
 	if ins.Op == OpTEXT || ins.Op == OpLABEL {
 		return true
 	}
@@ -146,7 +166,8 @@ func (c *amd64Ctx) checkSourceStackBoolResultInitialization() error {
 	}
 	signature, err := x86CallerSourceFingerprint(sig)
 	if err != nil || signature != proof.signature || fn.x86RawReplay == nil ||
-		fn.x86RawReplay.validate(fn, c.goarch) != nil || !reflect.DeepEqual(fn.x86RawReplay.original, proof.original) {
+		x86SourceStackBoolArch(fn.x86RawReplay.goarch) != x86SourceStackBoolArch(c.goarch) ||
+		fn.x86RawReplay.validate(fn, fn.x86RawReplay.goarch) != nil || !reflect.DeepEqual(fn.x86RawReplay.original, proof.original) {
 		return fail()
 	}
 	emitted := c.sig

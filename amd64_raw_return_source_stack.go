@@ -101,6 +101,13 @@ func normalizeX86RawReturnSourceStack(fn Func, opt Options, bindFrame bool, orig
 		name = opt.ResolveSym(name)
 	}
 	sig, hasSig := opt.Sigs[name]
+	physicalBool := bindFrame && hasSig && x86SourceStackBoolCandidate(fn, sig)
+	if physicalBool {
+		// This argument is a request-local Options value. Match the public
+		// ArchAMD64 default for the complete grammar; do not rewrite the
+		// caller's bound Options or the raw decoder's original mode spelling.
+		opt.Goarch = x86SourceStackBoolArch(opt.Goarch)
+	}
 	caller := bindFrame && hasSig && x86CallerRegionSourceMatches(sig, input, opt.Goarch)
 	if !caller {
 		for index, instruction := range fn.Instrs {
@@ -124,7 +131,7 @@ func normalizeX86RawReturnSourceStack(fn Func, opt Options, bindFrame bool, orig
 			}
 		}
 	}
-	if !caller && x86RawReturnLeafStackUnobserved(fn) {
+	if !caller && !physicalBool && x86RawReturnLeafStackUnobserved(fn) {
 		return fn
 	}
 	if bindFrame && (!hasSig || !caller && !x86SourceStackScalarABI0(sig, fn.ArgSize, opt.Goarch)) {

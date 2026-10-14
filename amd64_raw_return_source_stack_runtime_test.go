@@ -96,6 +96,11 @@ func x86SourceStackRuntimeSource(arch string) (string, map[string]FuncSig) {
 	source.WriteString(strings.ReplaceAll(text, "·Value", "·PhysicalBoolIntermediate"))
 	sig.Name = "PhysicalBoolIntermediate"
 	sigs[sig.Name] = sig
+	text, sig, _ = x86SourceStackTypedFixture(arch, "bool", I1, word, "MOVB",
+		"MOVB $2,ret+@WORD(FP)\nMOVB ret+@WORD(FP),AX\nSHRB $1,AX\nANDB $1,AX\nMOVB AX,ret+@WORD(FP)\nBYTE $0xc3")
+	source.WriteString(strings.ReplaceAll(text, "·Value", "·PhysicalBoolNamedFP"))
+	sig.Name = "PhysicalBoolNamedFP"
+	sigs[sig.Name] = sig
 	return source.String(), sigs
 }
 
@@ -107,6 +112,7 @@ func x86SourceStackGoOracle(arch string) string {
 	}
 	goSource.WriteString("func PhysicalBool(x bool) bool\n")
 	goSource.WriteString("func PhysicalBoolIntermediate(x bool) bool\n")
+	goSource.WriteString("func PhysicalBoolNamedFP(x bool) bool\n")
 	goSource.WriteString("func TestNumerical(t *testing.T) {\n")
 	for _, test := range x86SourceStackRuntimeCases(arch) {
 		fmt.Fprintf(&goSource, `
@@ -130,7 +136,7 @@ func x86SourceStackGoOracle(arch string) string {
 `, test.name, test.name)
 	}
 	goSource.WriteString("\tif PhysicalBool(false) || !PhysicalBool(true) { t.Fatal(\"bool byte slot\") }\n")
-	goSource.WriteString("\tcanary := [4]uint64{11,23,37,41}\n\tif !PhysicalBoolIntermediate(false) || !PhysicalBoolIntermediate(true) || canary != [4]uint64{11,23,37,41} { t.Fatal(\"physical intermediate bool byte/canary\") }\n}\n")
+	goSource.WriteString("\tcanary := [4]uint64{11,23,37,41}\n\tif !PhysicalBoolIntermediate(false) || !PhysicalBoolIntermediate(true) || !PhysicalBoolNamedFP(false) || !PhysicalBoolNamedFP(true) || canary != [4]uint64{11,23,37,41} { t.Fatal(\"physical/named intermediate bool byte/canary\") }\n}\n")
 	return goSource.String()
 }
 
@@ -166,6 +172,7 @@ func x86SourceStackCOracle(arch string) string {
 	var source strings.Builder
 	source.WriteString("#include <stdint.h>\n")
 	source.WriteString("#include <stdbool.h>\nextern bool PhysicalBool(bool);\nextern bool PhysicalBoolIntermediate(bool);\n")
+	source.WriteString("extern bool PhysicalBoolNamedFP(bool);\n")
 	for _, test := range x86SourceStackRuntimeCases(arch) {
 		fmt.Fprintf(&source, "extern uint%d_t %s(uint%d_t);\n", test.width, test.name, test.width)
 	}
@@ -192,7 +199,7 @@ func x86SourceStackCOracle(arch string) string {
 `, test.name)
 	}
 	source.WriteString("\tif (PhysicalBool(false) || !PhysicalBool(true)) return 2;\n")
-	source.WriteString("\tvolatile uint64_t boolCanary = UINT64_C(0x123456789abcdef0);\n\tif (!PhysicalBoolIntermediate(false) || !PhysicalBoolIntermediate(true) || boolCanary != UINT64_C(0x123456789abcdef0)) return 3;\n\treturn 0;\n}\n")
+	source.WriteString("\tvolatile uint64_t boolCanary = UINT64_C(0x123456789abcdef0);\n\tif (!PhysicalBoolIntermediate(false) || !PhysicalBoolIntermediate(true) || !PhysicalBoolNamedFP(false) || !PhysicalBoolNamedFP(true) || boolCanary != UINT64_C(0x123456789abcdef0)) return 3;\n\treturn 0;\n}\n")
 	return source.String()
 }
 

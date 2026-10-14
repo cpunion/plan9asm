@@ -255,7 +255,7 @@ func TestX86PhysicalSourceStackBoolRuntimeFixtureRetainsBothByteRoles(t *testing
 		if err != nil {
 			t.Fatal(err)
 		}
-		want := len(x86SourceStackRuntimeCases(arch)) + 2
+		want := len(x86SourceStackRuntimeCases(arch)) + 3
 		if len(file.Funcs) != want || len(sigs) != want {
 			t.Fatal("complete old runtime inventory plus two bool roles differs")
 		}
@@ -266,7 +266,7 @@ func TestX86PhysicalSourceStackBoolRuntimeFixtureRetainsBothByteRoles(t *testing
 			t.Fatal("original physical bool source changed")
 		}
 		for _, driver := range []string{x86SourceStackGoOracle(arch), x86SourceStackCOracle(arch)} {
-			if strings.Count(driver, "PhysicalBool(") != 3 || strings.Count(driver, "PhysicalBoolIntermediate(") != 3 {
+			if strings.Count(driver, "PhysicalBool(") != 3 || strings.Count(driver, "PhysicalBoolIntermediate(") != 3 || strings.Count(driver, "PhysicalBoolNamedFP(") != 3 {
 				t.Fatal("independent original Go/LLVM caller lacks both bool inputs/roles")
 			}
 		}
