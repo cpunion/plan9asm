@@ -36,10 +36,17 @@ func x86ABI0BoolCallsNeeded(file *File, arch string) bool {
 		return false
 	}
 	for _, fn := range file.Funcs {
-		for _, ins := range fn.Instrs {
-			if ins.Op == "CALL" {
-				return true
-			}
+		if x86ABI0BoolFunctionCalls(fn) {
+			return true
+		}
+	}
+	return false
+}
+
+func x86ABI0BoolFunctionCalls(fn Func) bool {
+	for _, ins := range fn.Instrs {
+		if ins.Op == "CALL" {
+			return true
 		}
 	}
 	return false
@@ -56,19 +63,41 @@ func prepareX86ABI0BoolCalls(file *File, options Options) (*x86ABI0BoolCallSourc
 	if !x86ABI0BoolCallsNeeded(file, options.Goarch) {
 		return nil, nil
 	}
-	if len(file.Funcs) > 256 {
-		return nil, x86ABI0BoolCallContext("complete TEXT inventory exceeds its bound")
-	}
 	signatures, err := numericalCloneSignatures(options.Sigs)
 	if err != nil {
 		return nil, err
 	}
 	source := &x86ABI0BoolCallSource{origin: file, original: x86DirectTailSnapshot(file), options: options,
 		signatures: signatures, resolved: make(map[string]string), callers: make(map[string]*x86ABI0BoolCallPlan)}
+	needed := false
+	for _, fn := range source.original.Funcs {
+		if !x86ABI0BoolFunctionCalls(fn) {
+			continue
+		}
+		name := x86ABI0BoolCallResolve(options, fn.Sym)
+		source.resolved[fn.Sym] = name
+		if sig, declared := signatures[name]; declared && sig.Ret == I1 {
+			needed = true
+		}
+	}
+	if !needed {
+		// This callback-bearing type query grants nothing. In particular, a
+		// changed original source/declaration cannot hide a former candidate.
+		if err := source.verify(); err != nil {
+			return nil, err
+		}
+		return nil, nil
+	}
+	if len(file.Funcs) > 256 {
+		return nil, x86ABI0BoolCallContext("complete TEXT inventory exceeds its bound")
+	}
 	byName := make(map[string]Func)
 	resolved := make(map[string]bool)
 	for _, fn := range source.original.Funcs {
-		name := x86ABI0BoolCallResolve(options, fn.Sym)
+		name, queried := source.resolved[fn.Sym]
+		if !queried {
+			name = x86ABI0BoolCallResolve(options, fn.Sym)
+		}
 		if _, duplicate := byName[fn.Sym]; duplicate || name == "" || resolved[name] {
 			return nil, x86ABI0BoolCallContext("duplicate or aliased original TEXT identity")
 		}
@@ -76,6 +105,9 @@ func prepareX86ABI0BoolCalls(file *File, options Options) (*x86ABI0BoolCallSourc
 	}
 	checked := make(map[string]bool)
 	for _, fn := range source.original.Funcs {
+		if !x86ABI0BoolFunctionCalls(fn) {
+			continue
+		}
 		sig, present := signatures[source.resolved[fn.Sym]]
 		if !present || sig.Ret != I1 {
 			continue
