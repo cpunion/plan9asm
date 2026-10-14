@@ -464,12 +464,14 @@ func translateIRText(file *File, opt Options) (resultText string, result error) 
 			}
 		}
 		sourceSig := sig
+		inferredAttrs := ""
 		if sig.Attrs == "" {
 			features := function
 			if function.x86DirectTailRoot != nil {
 				features = function.x86DirectTailRoot.features()
 			}
 			sig.Attrs = attrRegistry.ref(inferFuncTargetFeaturesForGOARCH(file.Arch, opt.Goarch, features))
+			inferredAttrs = sig.Attrs
 		}
 		// ARM is a fully supported target. Always use its architecture-aware CFG
 		// lowerer so even straight-line functions receive the same operand-form
@@ -506,6 +508,7 @@ func translateIRText(file *File, opt Options) (resultText string, result error) 
 		if file.Arch == ArchAMD64 {
 			if err := translateFuncX86(&b, function, sig, resolve, opt.Sigs, opt.Goarch, opt.TargetTriple, opt.X87Mode, opt.AnnotateSource,
 				x86FunctionSource{
+					inferredAttrs:    inferredAttrs,
 					scalarData:       scalarData,
 					lockNamespace:    lockScalarNamespace,
 					bitScanNamespace: bitScanNamespace,

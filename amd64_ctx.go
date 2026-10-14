@@ -87,6 +87,8 @@ type amd64Ctx struct {
 	fpResWritten     map[int]bool                 // result index -> whether written via +off(FP)
 	fpResAddrTaken   map[int]bool                 // result index -> address of fp_ret_* escaped
 	fpScalarSource   Func                         // source for all-path checks of new scalar result views
+	fpSourceSig      FuncSig                      // original request-local declaration before feature rendering
+	fpFeatureAttrs   string                       // exact compiler-rendered feature reference, never supplied attributes
 	fpScalarData     map[x86StaticSBAddress]int64 // exact effective SB address -> available emitted numerical bytes
 	fpScalarChecked  bool
 	fpScalarCheckErr error
@@ -127,6 +129,7 @@ func newX86Ctx(b *strings.Builder, fn Func, sig FuncSig, resolve func(string) st
 		fpResWritten:   map[int]bool{},
 		fpResAddrTaken: map[int]bool{},
 		fpScalarSource: fn,
+		fpSourceSig:    sig,
 		blockByIdx:     map[int]int{},
 	}
 	if fn.x86DirectTailRoot != nil {

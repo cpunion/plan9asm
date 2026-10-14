@@ -53,8 +53,12 @@ func x86ResultAUTOExtent(fn Func, arch string) (int, error) {
 			return fail("original source cannot be replayed as one unchanged function")
 		}
 		original := parsed.Funcs[0]
+		instructions, err := x86ResultAUTOReplayInstructions(fn, arch)
+		if err != nil {
+			return 0, err
+		}
 		if original.Sym != fn.Sym || original.FrameSize != fn.FrameSize || original.ArgSize != fn.ArgSize ||
-			!reflect.DeepEqual(original.Instrs, fn.Instrs) {
+			!reflect.DeepEqual(original.Instrs, instructions) {
 			return fail("TEXT, operands or source roles changed after parsing")
 		}
 	}

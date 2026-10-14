@@ -1,6 +1,6 @@
 # Current work: PR 40 checkpoint
 
-Checkpoint: 2026-10-14 16:23 UTC. Contribution source: `386377f9`.
+Checkpoint: 2026-10-14 16:59 UTC. Contribution source: `e7328983`.
 This is a handoff, not a ledger or a claim that current-head CI/stdlib passes.
 
 ## Scope and authority
@@ -51,10 +51,12 @@ owners pass, but the whole native package remains FAILED.
 | SDK publication | Already sealed fixed-local physical SP must retain its own complete result proof; callback not reached in failed receipt; repair in progress |
 | SDK maps LLVM | Linux succeeds in 275.87s; shared five-minute root exhausts Darwin/Windows budget; `c861f658` creates three independent complete target owners |
 
-Fork-only `522a92e3`/`24938007` stage fifteen SDK lanes at their original budgets,
+Fork-only `522a92e3`/`24938007`/`1a2f9d23` stage seventeen SDK lanes at their original budgets,
 123 unique source priorities, and the exact existing native AVX packed-string
 owner (planned profile58, eleven inventories/twenty mandatory owners).
-43 policy tests and actionlint pass, including genuine missing-owner REDs.
+44 policy tests and actionlint pass, including genuine missing-owner REDs.
+Typed matrices and authenticated proof joins have independent five-minute
+owners; the original123-root source lane is not inflated by those heavy captures.
 The native auditor passes21 mutation controls; synthetic profile58 is not
 execution. Do not publish the next batch until failed classes are independently
 replayed; do not reuse earlier green runs as current-head certification.
@@ -390,6 +392,21 @@ skip, so is not a strict complete runtime pass. New parent pure union deliberate
 excludes that host axis and heavy objects, which need independent verification.
 The original full Index source advances to its next pointer-as-index Context;
 it is not a complete SDK/file pass. Guard-page/dead-output PCMP execution is pending.
+
+`9172bcc5`, integrated as `e7328983`, closes all four MXCSR m32 descriptions and
+the existing eight-name signed-conversion sparse byte effects. The original
+complete eight-TEXT FP fixture is unchanged. Independent no-probe counterexamples
+cover42 signed-conversion API cases plus24 MXCSR/AUTO cases; cached complete
+source proof now rejects unknown input bytes without widening source authority.
+Worker focused10 roots/381 children, body-audited149-root source class (Go20 has
+148), both vets and independent five-Go/sixty-LLVM object axes pass on both SDKs.
+An earlier mixed203-root command passes106.168s but includes object helpers;
+its subsequent owned race pipeline was interrupted, not passed, and is not a
+pure/runtime receipt. Native Linux execution and physical MXCSR/PCMP fault
+parity remain pending, distinct from logical FP/AUTO and object success.
+Parent `e7328983` fresh201 roots/6,251 children pass Go27/race5.454/22.799s;
+Go20's197/6,240 pass5.478s, zero FAIL/SKIP/missing/duplicate terminals.
+Both vets, tracked current-Go formatting, stable source head and clean tree pass.
 Maps independent-target policy and symlink platform-availability gates pass.
 At frozen `386377f9`, all three independent complete maps roots pass: Linux
 86.068s, Darwin32.617s, Windows31.180s, each within its unchanged five-minute

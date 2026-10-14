@@ -13,6 +13,9 @@ import "strings"
 // result. In particular, this never creates a caller-memory or raw-RET token.
 func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 	fn, sig, arch := c.fpScalarSource, c.sig, c.goarch
+	if fn.x86FixedLocal != nil {
+		return c.checkFixedLocalResultInitialization()
+	}
 	if calls := fn.x86BoolCalls; calls != nil && calls.tail != nil {
 		return calls.checkTailTerminal(fn, sig, arch)
 	}
