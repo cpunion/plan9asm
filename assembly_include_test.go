@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"go/build"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -8,6 +9,23 @@ import (
 	"strings"
 	"testing"
 )
+
+func TestAssemblyIncludeSymlinkRegressionIsAvailableOnSupportedHosts(t *testing.T) {
+	for _, target := range []struct{ os, arch string }{
+		{"linux", "amd64"}, {"linux", "386"}, {"linux", "arm"},
+		{"linux", "arm64"}, {"darwin", "amd64"}, {"darwin", "arm64"},
+		{"windows", "amd64"}, {"windows", "386"},
+	} {
+		t.Run(target.os+"/"+target.arch, func(t *testing.T) {
+			context := build.Default
+			context.GOOS, context.GOARCH = target.os, target.arch
+			included, err := context.MatchFile(".", "assembly_include_symlink_test.go")
+			if err != nil || !included {
+				t.Fatalf("source-root include escape regression is excluded: %v", err)
+			}
+		})
+	}
+}
 
 func TestReadGoAssemblySourceExpandsToolchainHeadersInTrimpathBinary(t *testing.T) {
 	dir := t.TempDir()
