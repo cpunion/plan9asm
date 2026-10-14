@@ -131,6 +131,19 @@ test('Numerical LEA requires its actual native owner, not an emulator overlay', 
   assert.doesNotMatch(native, /qemu|overlay|continue-on-error|max-parallel/);
 });
 
+test('Direct-tail state executes both native x86 modes with exact mandatory roots', () => {
+  const native = workflow.slice(workflow.indexOf('\n  native-x86-oracles:'), workflow.indexOf('\n  complete-windows:'));
+  for (const root of [
+    'TestCrossLinuxRuntimeMatrixAMD64DirectTailWholeSourceOriginalGoAndLLVM',
+    'TestCrossLinuxRuntimeMatrixX86DirectTail386OriginalGoAndLLVM',
+  ]) assert.ok(native.includes(root), root);
+  assert.match(native, /go test \. -list "\^\(\$direct_tail_roots\)\$"/);
+  assert.match(native, /grep -Fx "\$root" _out\/native-x86-oracles\/direct-tail-inventory.log/);
+  assert.match(native, /roots\+="\|\$direct_tail_roots"/);
+  assert.match(native, /gcc-i686-linux-gnu libc6-dev-i386-cross/);
+  assert.doesNotMatch(native, /qemu|overlay|continue-on-error|max-parallel/);
+});
+
 test('Caller selected-member lifetime also runs before complete Windows modules', () => {
   const selection = sdk.slice(sdk.indexOf('- lane: assembly-selection\n'), sdk.indexOf('- lane: crc32-linux\n'));
   for (const root of [
