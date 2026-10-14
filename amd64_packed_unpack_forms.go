@@ -44,6 +44,37 @@ type x86PackedUnpackForm struct {
 	source Operand
 }
 
+// Pure byte dependencies shared by independent caller and result observers.
+// Memory access, register mode, mask and alignment roles remain prerequisites
+// of each consumer; no dependency mask shrinks a native memory operation.
+func x86PackedUnpackDefinedBytes(form x86PackedUnpackForm, first, second, old uint64) uint64 {
+	laneBytes := form.spec.laneBits / 8
+	groupBytes := 16
+	if form.byteWidth < groupBytes {
+		groupBytes = form.byteWidth
+	}
+	half := groupBytes / 2
+	start := 0
+	if form.spec.high {
+		start = half
+	}
+	var known uint64
+	for group := 0; group < form.byteWidth; group += groupBytes {
+		for offset := 0; offset < half; offset += laneBytes {
+			for byteIndex := 0; byteIndex < laneBytes; byteIndex++ {
+				source := uint(group + start + offset + byteIndex)
+				destination := uint(group + 2*offset + byteIndex)
+				known |= (second >> source & 1) << destination
+				known |= (first >> source & 1) << (destination + uint(laneBytes))
+			}
+		}
+	}
+	if form.mask >= 0 && !form.zeroing {
+		known &= old
+	}
+	return known
+}
+
 func x86PackedUnpackProperties(ins Instr, goarch string) (x86PackedUnpackForm, bool, error) {
 	base, _, _ := strings.Cut(strings.ToUpper(string(ins.Op)), ".")
 	spec, recognized := x86PackedUnpackSpecs[Op(base)]

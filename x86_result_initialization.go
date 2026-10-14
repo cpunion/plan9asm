@@ -514,6 +514,9 @@ func x86ResultTransfer(ins Instr, state *x86ResultState, owned []bool, resultOff
 	if accepted, known := x86ResultByteShuffleStep(ins, state, owned, arch); known {
 		return accepted
 	}
+	if accepted, known := x86ResultPackedUnpackStep(ins, state, owned, arch); known {
+		return accepted
+	}
 	if accepted, known := x86ResultImmediateShuffleStep(ins, state, owned, arch); known {
 		return accepted
 	}
