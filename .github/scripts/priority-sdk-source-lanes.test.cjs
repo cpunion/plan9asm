@@ -247,6 +247,19 @@ test('Sparse GP SIMD must execute both actual native architectures', () => {
   assert.doesNotMatch(native, /qemu|overlay|continue-on-error|max-parallel/);
 });
 
+test('Void calls and text context ownership regressions run before complete modules', () => {
+  const source = sdk.slice(sdk.indexOf('- lane: source\n'), sdk.indexOf('- lane: frame-context\n'));
+  for (const root of [
+    'TestX86ABI0Mode32CanonicalBoolVoidCallThreeAPIs',
+    'TestX86ABI0Mode32CanonicalBoolVoidCallHasNoResultOrOutgoingBytes',
+    'TestX86ABI0Mode32CanonicalBoolActualAtomicCompleteSourceNextContext',
+    'TestTranslateTextOwnsRequestLLVMContext',
+    'TestTranslateTextConcurrentRequestsKeepOriginalFile',
+  ]) assert.equal(source.split(`- ${root}\n`).length - 1, 1, root);
+  assert.match(source, /timeout: 5m/);
+  assert.equal((sdk.match(/- lane:/g) || []).length, 13);
+});
+
 test('Actual failed SDK frame paths run before the complete-module barrier', () => {
   const llvm = sdk.slice(sdk.indexOf('- lane: llvm'), sdk.indexOf('- lane: crc32-linux'));
   for (const root of [

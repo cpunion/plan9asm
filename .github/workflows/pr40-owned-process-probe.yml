@@ -311,6 +311,11 @@ jobs:
               - TestX86ABI0Mode32CanonicalBoolCallSelectionRejectsChangingQuery
               - TestX86ABI0Mode32BoolRuntimeNativeOwnerCannotEmulateOrSkip
               - TestX86ABI0Mode32BoolRuntimeNativePolicyRejectsMutation
+              - TestX86ABI0Mode32CanonicalBoolVoidCallThreeAPIs
+              - TestX86ABI0Mode32CanonicalBoolVoidCallHasNoResultOrOutgoingBytes
+              - TestX86ABI0Mode32CanonicalBoolActualAtomicCompleteSourceNextContext
+              - TestTranslateTextOwnsRequestLLVMContext
+              - TestTranslateTextConcurrentRequestsKeepOriginalFile
               - TestGoX86SDKASMDataOriginalVendorPackageNamespace
               - TestGoX86SDKNumericalReadPackageQueryMatchesOriginalLiteralSource
               - TestSDKAMD64OriginalFrameConfigGuardEagerIdentity
