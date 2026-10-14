@@ -153,7 +153,7 @@ func numericalSDKListingLogicalPosition(display string) (string, bool) {
 // Resolve only against this invocation's captured root and existing exact CPP
 // input inventory. A logical name never authorizes opening an arbitrary file.
 func (source *GoX86NumericalReadSource) sdkLiteralObjectSource(name string) (string, bool) {
-	if source.literals == nil {
+	if source.sdkAssemblyJoin() == nil {
 		return "", false
 	}
 	name, valid := originalGoObjectSourcePath(name, source.guard.env["GOROOT"])

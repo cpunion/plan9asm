@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"reflect"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -163,6 +164,11 @@ type numericalListingRow struct {
 	ins      Instr
 }
 
+// Static continuation TEXT has a separate native symbol namespace and may
+// carry ArgsSizeUnknown. This display grammar does not make it a Go entry;
+// complete original/expanded/compiler records still bind its physical identity.
+var numericalListingHeader = regexp.MustCompile(`^(\S+) STEXT(?: static)? nosplit(?: asm)? size=([0-9]+) (?:align=0x[0-9a-f]+ )?args=0x([0-9a-f]+) locals=0x([0-9a-f]+)(?: funcid=0x[0-9a-f]+)?(?: align=0x[0-9a-f]+)?$`)
+
 func numericalListingRows(raw []byte) (map[string]map[int64][]numericalListingRow, error) {
 	rows := make(map[string]map[int64][]numericalListingRow)
 	scanner := bufio.NewScanner(bytes.NewReader(raw))
@@ -170,13 +176,18 @@ func numericalListingRows(raw []byte) (map[string]map[int64][]numericalListingRo
 	name := ""
 	for scanner.Scan() {
 		line := scanner.Text()
-		if header := goAMD64FrameHeader.FindStringSubmatch(line); header != nil {
+		if header := numericalListingHeader.FindStringSubmatch(line); header != nil {
 			name = header[1]
 			if rows[name] != nil {
 				return nil, numericalSBContext("duplicate listing TEXT")
 			}
 			rows[name] = make(map[int64][]numericalListingRow)
 			continue
+		}
+		for _, field := range strings.Fields(line) {
+			if field == "STEXT" {
+				return nil, numericalSBContext("unknown complete native listing TEXT role")
+			}
 		}
 		match := goAMD64FrameRow.FindStringSubmatch(line)
 		if match == nil {

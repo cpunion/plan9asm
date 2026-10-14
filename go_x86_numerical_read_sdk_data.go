@@ -183,10 +183,13 @@ func (joined *numericalSDKLiteralJoin) privateContext(ctx context.Context) (cont
 }
 
 func (source *GoX86NumericalReadSource) numericalDeclarationContext(ctx context.Context) (context.Context, func(), error) {
-	if source.literals == nil {
-		return ctx, func() {}, nil
+	if source.literals != nil {
+		return source.literals.privateContext(ctx)
 	}
-	return source.literals.privateContext(ctx)
+	if source.assembly != nil {
+		return source.assembly.privateContext(ctx)
+	}
+	return ctx, func() {}, nil
 }
 
 func (source *GoX86NumericalReadSource) bindSDKLiteralSymbols(file *File, options Options, symbols map[string]string) error {
@@ -253,9 +256,9 @@ func (source *GoX86NumericalReadSource) sdkLiteralRead(ins Instr, index int, arc
 	return false, nil
 }
 
-func (source *GoX86NumericalReadSource) captureSDKLiteralSourceRole(ctx context.Context) error {
-	joined := source.literals
-	if err := joined.verifyIdentity(source.request); err != nil {
+func (source *GoX86NumericalReadSource) captureSDKAssemblySourceRole(ctx context.Context) error {
+	joined := source.sdkAssemblyJoin()
+	if err := source.verifySDKAssemblyIdentity(); err != nil {
 		return err
 	}
 	observation := joined.Observation

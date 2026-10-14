@@ -87,6 +87,16 @@ func x86NumericalVectorBoundary(code []byte, mode int) (int, error) {
 		decodedX86VINSERT128InstructionWithMemory,
 		decodedX86EVEXPackedInsertInstructionWithMemory,
 		decodedX86VEXTRACT128InstructionWithMemory,
+		decodedX86VEXPackedBroadcastInstructionWithMemory,
+		decodedX86PackedIntegerCompareInstructionWithMemory,
+		decodedX86VMOVQInstructionWithMemory,
+		decodedX86VEXVectorTestInstructionWithMemory,
+	}
+	if ins, length, known, err := decodedX86VEXMoveMaskInstruction(code, mode); known || err != nil {
+		if err == nil && mode == 32 {
+			err = x86Mode32VectorRegisterContext(ins, "386")
+		}
+		return length, err
 	}
 	for _, decode := range decoders {
 		if ins, length, known, err := decode(code, mode, memory); known || err != nil {

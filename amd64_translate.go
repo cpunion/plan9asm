@@ -644,7 +644,7 @@ func (c *amd64Ctx) lowerInstr(bi int, ii int, ins Instr, emitBr amd64EmitBr, emi
 	if err := x86LegacyMMXReadEmitterContext(ins, c.goarch); err != nil {
 		return false, err
 	}
-	if recognized, err := c.lowerNumericalRead(ins); recognized {
+	if recognized, err := c.lowerNumericalReadAt(ins, bi, ii); recognized {
 		return false, err
 	}
 	if c.fixedLocal != nil {

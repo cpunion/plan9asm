@@ -23,6 +23,7 @@ type x86DirectTailGraph struct {
 	externalSymbols map[string]string
 	helpers         map[string]bool
 	roots           map[string]*x86DirectTailRoot
+	numerical       *GoX86NumericalReadBinding
 }
 
 type x86DirectTailRoot struct {
@@ -47,6 +48,9 @@ func x86DirectTailSnapshot(file *File) *File {
 		copy.Funcs[i].x86ResultFlowBudget = nil
 		copy.Funcs[i].x86BoolCalls = nil
 		copy.Funcs[i].x86BoolReadonlyInputs = false
+		for ordinal := range copy.Funcs[i].Instrs {
+			copy.Funcs[i].Instrs[ordinal] = x86DirectTailInstructionSnapshot(copy.Funcs[i].Instrs[ordinal])
+		}
 	}
 	return copy
 }
@@ -120,16 +124,20 @@ func PrepareX86DirectTailSource(file *File, options Options) (*File, error) {
 	if len(helpers) == 0 {
 		return nil, x86DirectTailContext("private tail target has no original source TEXT")
 	}
-	if options.NumericalReads != nil || options.X86TLSMoves != nil || options.ARM64ByteCarrierSource != nil ||
+	if options.X86TLSMoves != nil || options.ARM64ByteCarrierSource != nil ||
 		len(file.UnlinkedPrelude) != 0 || len(file.x86Continuations) != 0 {
 		return nil, x86DirectTailContext("source/native binding needs its independent complete node association")
+	}
+	request, err := x86DirectTailNumericalRequest(file, options)
+	if err != nil {
+		return nil, err
 	}
 	resolve := options.ResolveSym
 	if resolve == nil {
 		resolve = func(symbol string) string { return symbol }
 	}
 	graph := &x86DirectTailGraph{origin: file, original: x86DirectTailSnapshot(file), goarch: goarch, helpers: helpers,
-		symbols: make(map[string]string), externalSymbols: make(map[string]string), roots: make(map[string]*x86DirectTailRoot)}
+		symbols: make(map[string]string), externalSymbols: make(map[string]string), roots: make(map[string]*x86DirectTailRoot), numerical: options.NumericalReads}
 	signatures, err := numericalCloneSignatures(options.Sigs)
 	if err != nil {
 		return nil, err
@@ -186,8 +194,10 @@ func PrepareX86DirectTailSource(file *File, options Options) (*File, error) {
 			return nil, x86DirectTailContext("private helper lacks a closed typed root: %s", helper)
 		}
 	}
-	request := x86DirectTailSnapshot(file)
 	request.x86DirectTails = graph
+	if err := graph.joinNumericalNodes(request); err != nil {
+		return nil, err
+	}
 	budget := &x86ResultFlowBudget{}
 	for _, view := range graph.roots {
 		fn := graph.original.Funcs[view.text]
@@ -279,9 +289,17 @@ func (graph *x86DirectTailGraph) verify(file *File, options Options) (result err
 	}
 	if graph == nil || graph.origin == nil || graph.original == nil || file == nil ||
 		graph.revoked.Load() || graph.goarch != goarch || file.Arch != ArchAMD64 || len(options.X86TailGroups) != 0 ||
-		options.NumericalReads != nil || options.X86TLSMoves != nil || options.ARM64ByteCarrierSource != nil ||
+		options.NumericalReads != graph.numerical || options.X86TLSMoves != nil || options.ARM64ByteCarrierSource != nil ||
 		!reflect.DeepEqual(x86DirectTailSnapshot(graph.origin), graph.original) || !reflect.DeepEqual(graph.signatures, options.Sigs) {
 		return x86DirectTailContext("original complete source/signature identity changed")
+	}
+	if graph.numerical != nil {
+		if err := verifyNumericalReadInputs(graph.origin, options); err != nil {
+			return err
+		}
+		if err := verifyNormalizedNumericalReads(file, options); err != nil {
+			return err
+		}
 	}
 	before := x86DirectTailSnapshot(file)
 	selected := x86DirectTailSnapshot(file)
@@ -297,7 +315,11 @@ func (graph *x86DirectTailGraph) verify(file *File, options Options) (result err
 		seen[fn.Sym] = true
 		found := false
 		for _, original := range graph.original.Funcs {
-			if fn.Sym == original.Sym && reflect.DeepEqual(arm64PrivateTailSnapshot(fn), original) {
+			public := arm64PrivateTailSnapshot(fn)
+			for ordinal := range public.Instrs {
+				public.Instrs[ordinal] = x86DirectTailInstructionSnapshot(public.Instrs[ordinal])
+			}
+			if fn.Sym == original.Sym && reflect.DeepEqual(public, original) {
 				found = true
 			}
 		}

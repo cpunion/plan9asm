@@ -12,6 +12,10 @@ var x86RawVectorTestOpcodes = map[int]Op{
 }
 
 func decodedX86VEXVectorTestInstruction(code []byte, mode int) (Instr, int, bool, error) {
+	return decodedX86VEXVectorTestInstructionWithMemory(code, mode, x86RawMemoryDecoder{})
+}
+
+func decodedX86VEXVectorTestInstructionWithMemory(code []byte, mode int, memory x86RawMemoryDecoder) (Instr, int, bool, error) {
 	p, matched := decodeX86RawVectorEncoding(code)
 	if !matched || p.evex || p.mapNumber != 2 {
 		return Instr{}, 0, false, nil
@@ -42,7 +46,7 @@ func decodedX86VEXVectorTestInstruction(code []byte, mode int) (Instr, int, bool
 	if p.vectorLength == 1 {
 		width = "Y"
 	}
-	source, size, err := decodedX86VEXVectorRMOperand(code[p.modRM:], mode, p.b, p.x, p.segment, width)
+	source, size, err := memory.vex(code[p.modRM:], mode, p.b, p.x, p.segment, width)
 	if err != nil {
 		return Instr{}, 0, true, err
 	}

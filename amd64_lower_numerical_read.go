@@ -3,6 +3,10 @@ package plan9asm
 import "fmt"
 
 func (c *amd64Ctx) lowerNumericalRead(ins Instr) (bool, error) {
+	return c.lowerNumericalReadAt(ins, -1, -1)
+}
+
+func (c *amd64Ctx) lowerNumericalReadAt(ins Instr, block, ordinal int) (bool, error) {
 	if ins.x86SDKLiteral != nil {
 		fact, valid := certifiedSDKLiteralAccess(ins, c.goarch)
 		if !valid || c.sig.Name != fact.Function || c.targetTriple != ins.x86SDKLiteral.binding.options.TargetTriple {
@@ -23,7 +27,7 @@ func (c *amd64Ctx) lowerNumericalRead(ins Instr) (bool, error) {
 	}
 	read, form, valid := numericalCertifiedRead(ins, c.goarch)
 	cert := ins.x86NumericalRead
-	if !valid || c.sig.Name != read.Function || c.targetTriple != cert.binding.options.TargetTriple {
+	if !valid || !c.numericalReadAtOriginalSource(ins, read, block, ordinal) || c.targetTriple != cert.binding.options.TargetTriple {
 		return true, numericalSBContext("emitted function/profile/read certificate changed")
 	}
 	var comparison x86ScalarCompareForm

@@ -107,13 +107,34 @@ func Capture(ctx context.Context, request CaptureRequest, file *plan9asm.File) (
 		return nil, nil, err
 	}
 	source.cleanup = append(source.cleanup, data.Close)
-	literal, err := plan9asm.CaptureGoX86SDKReadonlyLiteralDataOwner(ctx, data)
+	rawData, err := data.Readback(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
-	source.cleanup = append(source.cleanup, literal.Close)
-	source.literalOwner, source.originalLiteralOwner = literal, literal
-	numerical.ReadonlyLiterals = literal
+	var observedData struct {
+		Objects *gostaticstorage.SDKASMDataObservation
+	}
+	if json.Unmarshal(rawData, &observedData) != nil || observedData.Objects == nil {
+		return nil, nil, contextError("complete assembly observation readback differs")
+	}
+	hasData := false
+	for _, member := range observedData.Objects.Sources {
+		hasData = hasData || len(member.ExpandedLayouts) != 0
+	}
+	if hasData {
+		// Presence requests the existing strict initializer producer. Mutable,
+		// malformed or unregistered DATA still fails; it never falls back to
+		// metadata-only observation after an initializer error.
+		literal, err := plan9asm.CaptureGoX86SDKReadonlyLiteralDataOwner(ctx, data)
+		if err != nil {
+			return nil, nil, err
+		}
+		source.cleanup = append(source.cleanup, literal.Close)
+		source.literalOwner, source.originalLiteralOwner = literal, literal
+		numerical.ReadonlyLiterals = literal
+	} else {
+		numerical.AssemblySource = data
+	}
 	source.Numerical, err = plan9asm.CaptureGoX86SDKNumericalReadSource(ctx, numerical)
 	if err != nil {
 		return nil, nil, err
