@@ -7,6 +7,32 @@ Let active frozen CI runs finish before publishing another batch.
 
 ## Current checkpoint: 2026-10-14
 
+Fork [38477743604](https://github.com/cpunion/plan9asm/actions/runs/38477743604)
+tests frozen `7c342c8b` (contribution `2d696307`, plus exact fork priorities).
+It naturally finishes failed: nine priority jobs pass, one fails, and the full
+Windows barrier correctly skips. All 48 selected native Linux x86 roots pass
+in 95.188 seconds, with zero skips, missing or duplicate terminals; both actual
+instruction-byte and genuine Go ABI0 bool CMP axes execute. Both Windows SDK
+ownership lanes and the three new shared path roots also pass. The original
+default-profile root and canonical-path counterpart now pass natively in
+21.22/28.63 seconds, retaining the actual undeclared-helper rejection.
+The remaining failure is CRC32's effective-defaults public CLI child: Go rejects
+`internal/byteorder` because physical GOROOT is paired with an unresolved cwd.
+Its explicit profile and direct compilation pass. Preserve the failed priority
+artifact; this run does not certify complete Windows modules or the benchmark.
+
+`9bf01156` pairs that same actual working directory's opened physical spelling
+with the environment before both initial package loads. The shared resolver
+does not change package selection, internal-import rules or source permissions.
+Actual aliased SDK inventory reproduces the defect independently; outside-SDK
+internal imports still fail. Complete simple CLI passes 31 roots/26 children in
+389.095 seconds; the affected LLVM CLI passes 18 roots/34 children in 203.537
+seconds, with exact fresh inventories and no skips. Shared Go 1.27/1.20, race,
+all three vet gates and formatting pass. Parent integration separately passes
+the actual CRC32 public/default profiles in 168.107 seconds, both directory
+controls in 2.238 seconds and Go 1.20 shared controls in 0.629 seconds. Native
+Windows confirmation of this paired-directory repair remains required.
+
 Fork [38469815846](https://github.com/cpunion/plan9asm/actions/runs/38469815846)
 tests frozen `dd35c7c1` (contribution `7251abd3`, plus fork-only priorities).
 It naturally finishes failed with 41/43 successful jobs. The main root's exact
@@ -39,6 +65,23 @@ complete official Go 1.20 five-architecture classification gates pass at this
 frozen parent; Go 1.20 retains its explicit historical AMD64 unsupported form.
 The following fork batch must inventory and execute both native CMP axes and
 the actual failed/default-profile and canonical-path roots before full modules.
+
+The integrated frozen `2d696307` replays both actual CLI path roots successfully
+in 16.557 seconds, the complete Go 1.20 shared frontend in 0.499 seconds and both
+root/LLVM CLI vet gates. Fork `7c342c8b` stages that source and explicit native
+inventories in [38477743604](https://github.com/cpunion/plan9asm/actions/runs/38477743604);
+let the run finish before publishing another batch. The fresh five-target
+benchmark at `2d696307` remains failed: 163/184 files, 21 failures, zero N/A or
+unattempted; build three seconds and target total 113 seconds, within unchanged
+300/900-second budgets. Its counts remain 29/33, 48/55, 27/30, 40/47 and 19/19.
+
+The SDK literal-minimum frontend factory remains unmerged on
+`codex/pr40-sdk-numeric-maps-entry-20261013`. Its atomic numerical-source
+revocation must be rechecked after the final caller-context callback, including
+Verify, Readback and all three translation publication guards. Preserve its
+failed old-source infrastructure receipts and complete current-parent lifecycle
+verification before integrating it. Neither that factory nor the numeric-only
+LEA effect follow-up is included in the frozen fork run above.
 
 Fork [38441921522](https://github.com/cpunion/plan9asm/actions/runs/38441921522)
 tests frozen `19e74032` (contribution source `b3755a3e`, plus fork-only workflow).

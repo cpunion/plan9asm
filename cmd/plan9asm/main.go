@@ -549,10 +549,15 @@ func loadPackage(pkgPath, goos, goarch string) (*loadedPackage, error) {
 	if err != nil {
 		return nil, err
 	}
+	directory, err := sdkfrontend.WorkingDirectory("")
+	if err != nil {
+		return nil, err
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 	cfg := &packages.Config{
 		Context: ctx,
+		Dir:     directory,
 		Mode: packages.NeedName |
 			packages.NeedFiles |
 			packages.NeedCompiledGoFiles |
