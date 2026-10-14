@@ -359,9 +359,12 @@ func translateIRText(file *File, opt Options) (resultText string, result error) 
 	// Architecture-specific declarations live in arch-specific files.
 	emitArchPrelude(&b, file, resolve, opt.Goarch, opt.WASMABI)
 	lockScalarNamespace := ""
+	bitScanNamespace := ""
 	if file.Arch == ArchAMD64 {
 		lockScalarNamespace = x86LockScalarNamespace(file, opt.Goarch, resolve, opt.Sigs)
 		emitX86LockScalarRMWHelpers(&b, file, opt.Goarch, lockScalarNamespace)
+		bitScanNamespace = x86BitScanNamespace(file, opt.Goarch, resolve, opt.Sigs)
+		emitX86BitScanHelpers(&b, file, opt.Goarch, bitScanNamespace)
 	}
 
 	emitExternSBGlobals(&b, file, resolve, opt.Sigs)
@@ -466,7 +469,7 @@ func translateIRText(file *File, opt Options) (resultText string, result error) 
 		// as numeric conversions and leave adjacent aggregate result slots unwritten.
 		if file.Arch == ArchAMD64 {
 			if err := translateFuncX86(&b, function, sig, resolve, opt.Sigs, opt.Goarch, opt.TargetTriple, opt.X87Mode, opt.AnnotateSource,
-				x86FunctionSource{scalarData: scalarData, lockNamespace: lockScalarNamespace}); err != nil {
+				x86FunctionSource{scalarData: scalarData, lockNamespace: lockScalarNamespace, bitScanNamespace: bitScanNamespace}); err != nil {
 				return "", fmt.Errorf("%s: %w", name, err)
 			}
 			b.WriteString("\n")

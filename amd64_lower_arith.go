@@ -216,12 +216,8 @@ func amd64YmbEffectiveRegister(r Reg, bits int) Reg {
 }
 
 func (c *amd64Ctx) lowerArith(op Op, ins Instr) (ok bool, terminated bool, err error) {
-	bitScanArch := c.goarch
-	if bitScanArch == "" {
-		bitScanArch = "amd64" // The existing direct-emitter default, not a source-mode guess.
-	}
-	if _, known, err := x86ScalarBitScanProperties(op, ins, bitScanArch); known && err != nil {
-		return true, false, err
+	if known, terminated, err := c.lowerScalarBitScan(op, ins); known {
+		return true, terminated, err
 	}
 	if ok, terminated, err := c.lowerX86CPUQuery(op, ins); ok {
 		return ok, terminated, err
@@ -1047,118 +1043,17 @@ func (c *amd64Ctx) lowerArith(op Op, ins Instr) (ok bool, terminated bool, err e
 			return true, false, fmt.Errorf("amd64 %s unsupported src: %q", op, ins.Raw)
 		}
 
-	case "BSFW", "BSRW":
-		if len(ins.Args) != 2 || ins.Args[1].Kind != OpReg {
-			return true, false, fmt.Errorf("amd64 %s expects src, dstReg: %q", op, ins.Raw)
+	case "BSWAPQ":
+		if len(ins.Args) != 1 || ins.Args[0].Kind != OpReg {
+			return true, false, fmt.Errorf("amd64 %s expects reg: %q", op, ins.Raw)
 		}
-		src, err := c.evalIntSized(ins.Args[0], I16)
+		value, err := c.loadReg(ins.Args[0].Reg)
 		if err != nil {
 			return true, false, err
 		}
-		zf := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = icmp eq i16 %s, 0\n", zf, src)
-		fmt.Fprintf(c.b, "  store i1 %%%s, ptr %s\n", zf, c.flagsZSlot)
-		ext := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = zext i16 %s to i32\n", ext, src)
-		var result string
-		if op == "BSFW" {
-			call := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = call i32 @llvm.cttz.i32(i32 %%%s, i1 false)\n", call, ext)
-			result = "%" + call
-		} else {
-			clz := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = call i32 @llvm.ctlz.i32(i32 %%%s, i1 false)\n", clz, ext)
-			sub := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = sub i32 31, %%%s\n", sub, clz)
-			result = "%" + sub
-		}
-		tr := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = trunc i32 %s to i16\n", tr, result)
-		return true, false, c.storeRegSized(ins.Args[1].Reg, I16, "%"+tr)
-
-	case "BSFQ", "BSRQ", "BSWAPQ", "BSFL", "BSRL":
-		// Bit scans accept register or memory sources. BSWAPQ is register-only.
-		sv := ""
-		dst := Reg("")
-		switch len(ins.Args) {
-		case 1:
-			if op != "BSWAPQ" || ins.Args[0].Kind != OpReg {
-				return true, false, fmt.Errorf("amd64 %s expects reg or srcReg,dstReg: %q", op, ins.Raw)
-			}
-			dst = ins.Args[0].Reg
-			var err error
-			sv, err = c.loadReg(ins.Args[0].Reg)
-			if err != nil {
-				return true, false, err
-			}
-		case 2:
-			if op == "BSWAPQ" || ins.Args[1].Kind != OpReg {
-				return true, false, fmt.Errorf("amd64 %s expects src, dstReg: %q", op, ins.Raw)
-			}
-			dst = ins.Args[1].Reg
-			srcType := I64
-			if op == "BSFL" || op == "BSRL" {
-				srcType = I32
-			}
-			var err error
-			sv, err = c.evalIntSized(ins.Args[0], srcType)
-			if err != nil {
-				return true, false, err
-			}
-		default:
-			return true, false, fmt.Errorf("amd64 %s expects 1 or 2 operands: %q", op, ins.Raw)
-		}
-		switch op {
-		case "BSFQ":
-			// ZF is set when src == 0.
-			zf := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = icmp eq i64 %s, 0\n", zf, sv)
-			fmt.Fprintf(c.b, "  store i1 %%%s, ptr %s\n", zf, c.flagsZSlot)
-			// dst = cttz(src). Use non-poison form for src==0.
-			call := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = call i64 @llvm.cttz.i64(i64 %s, i1 false)\n", call, sv)
-			return true, false, c.storeReg(dst, "%"+call)
-		case "BSRQ":
-			// ZF is set when src == 0.
-			zf := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = icmp eq i64 %s, 0\n", zf, sv)
-			fmt.Fprintf(c.b, "  store i1 %%%s, ptr %s\n", zf, c.flagsZSlot)
-			// dst = 63 - ctlz(src). Use non-poison form for src==0.
-			clz := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = call i64 @llvm.ctlz.i64(i64 %s, i1 false)\n", clz, sv)
-			sub := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = sub i64 63, %%%s\n", sub, clz)
-			return true, false, c.storeReg(dst, "%"+sub)
-		case "BSWAPQ":
-			call := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = call i64 @llvm.bswap.i64(i64 %s)\n", call, sv)
-			return true, false, c.storeReg(dst, "%"+call)
-		case "BSFL":
-			// ZF is set when the 32-bit source is zero.
-			zf := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = icmp eq i32 %s, 0\n", zf, sv)
-			fmt.Fprintf(c.b, "  store i1 %%%s, ptr %s\n", zf, c.flagsZSlot)
-			// dst = zext(cttz(src)). Use non-poison form for src==0.
-			call := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = call i32 @llvm.cttz.i32(i32 %s, i1 false)\n", call, sv)
-			z := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = zext i32 %%%s to i64\n", z, call)
-			return true, false, c.storeReg(dst, "%"+z)
-		case "BSRL":
-			// ZF is set when the 32-bit source is zero.
-			zf := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = icmp eq i32 %s, 0\n", zf, sv)
-			fmt.Fprintf(c.b, "  store i1 %%%s, ptr %s\n", zf, c.flagsZSlot)
-			// dst = zext(31 - ctlz(src)). Use non-poison form for src==0.
-			clz := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = call i32 @llvm.ctlz.i32(i32 %s, i1 false)\n", clz, sv)
-			sub := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = sub i32 31, %%%s\n", sub, clz)
-			z := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = zext i32 %%%s to i64\n", z, sub)
-			return true, false, c.storeReg(dst, "%"+z)
-		}
-		return true, false, fmt.Errorf("amd64: unsupported bit op %s", op)
+		call := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = call i64 @llvm.bswap.i64(i64 %s)\n", call, value)
+		return true, false, c.storeReg(ins.Args[0].Reg, "%"+call)
 
 	case "SETEQ", "SETLT", "SETGT", "SETGE", "SETHI", "SETCS":
 		// SETcc dst: set byte based on flags.

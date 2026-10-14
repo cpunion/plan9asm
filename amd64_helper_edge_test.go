@@ -655,11 +655,17 @@ func TestAMD64ArithmeticCoverage(t *testing.T) {
 	mustLower("POPCNTL", Instr{Raw: "POPCNTL AX, BX", Args: []Operand{{Kind: OpReg, Reg: AX}, {Kind: OpReg, Reg: BX}}})
 	mustLower("POPCNTQ", Instr{Raw: "POPCNTQ AX, CX", Args: []Operand{{Kind: OpReg, Reg: AX}, {Kind: OpReg, Reg: CX}}})
 	mustLower("TZCNTQ", Instr{Raw: "TZCNTQ BX, DX", Args: []Operand{{Kind: OpReg, Reg: BX}, {Kind: OpReg, Reg: DX}}})
+	// This is a fragment-shape test, not a module/native-entry certificate.
+	// Supply the compiler-local bridge name and its explicit target; complete
+	// public-API tests independently require the emitted no-red-zone helper.
+	oldScanNamespace, oldScanTarget := c.bitScanNS, c.targetTriple
+	c.bitScanNS, c.targetTriple = "__test_bitscan_", "x86_64-unknown-linux-gnu"
 	mustLower("BSFQ", Instr{Raw: "BSFQ AX, BX", Args: []Operand{{Kind: OpReg, Reg: AX}, {Kind: OpReg, Reg: BX}}})
 	mustLower("BSRQ", Instr{Raw: "BSRQ AX, CX", Args: []Operand{{Kind: OpReg, Reg: AX}, {Kind: OpReg, Reg: CX}}})
 	mustLower("BSWAPQ", Instr{Raw: "BSWAPQ AX", Args: []Operand{{Kind: OpReg, Reg: AX}}})
 	mustLower("BSFL", Instr{Raw: "BSFL AX, DX", Args: []Operand{{Kind: OpReg, Reg: AX}, {Kind: OpReg, Reg: DX}}})
 	mustLower("BSRL", Instr{Raw: "BSRL AX, DI", Args: []Operand{{Kind: OpReg, Reg: AX}, {Kind: OpReg, Reg: DI}}})
+	c.bitScanNS, c.targetTriple = oldScanNamespace, oldScanTarget
 	mustLower("SETEQ", Instr{Raw: "SETEQ AX", Args: []Operand{{Kind: OpReg, Reg: AX}}})
 	mustLower("SETGT", Instr{Raw: "SETGT ret+8(FP)", Args: []Operand{{Kind: OpFP, FPOffset: 8}}})
 	mustLower("SETGE", Instr{Raw: "SETGE AH", Args: []Operand{{Kind: OpReg, Reg: AH}}})
@@ -712,7 +718,7 @@ func TestAMD64ArithmeticCoverage(t *testing.T) {
 		"call i32 @llvm.ctpop.i32",
 		"call i64 @llvm.ctpop.i64",
 		"call i64 @llvm.cttz.i64",
-		"call i32 @llvm.ctlz.i32",
+		"@__test_bitscan_amd64_bsrl(",
 		"call i64 @llvm.bswap.i64",
 		"call i32 @llvm.bswap.i32",
 		"mul i128",

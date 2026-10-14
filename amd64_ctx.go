@@ -67,6 +67,7 @@ type amd64Ctx struct {
 	repeatPrefix    string // pending REP/REPN prefix for the following instruction
 	namedAtomicLock bool   // actual same-block source-adjacent LOCK for this instruction only
 	lockScalarNS    string // compiler name allocation, not a source capability
+	bitScanNS       string // compiler name allocation, not a source capability
 	vstackSlot      string // [64 x i64] virtual stack for PUSHQ/POPQ
 	vspSlot         string // i64 virtual stack pointer (next free slot)
 	localStackSlot  string // byte-addressable backing storage for x86 SP references

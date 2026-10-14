@@ -10,8 +10,9 @@ type x86ScalarBitScanSpec struct {
 	reverse bool
 }
 
-// All six Go yml_rl rows. This shape is not an unconditional destination
-// byte effect: BSF/BSR leave their result undefined when the source is zero.
+// All six Go yml_rl rows. Zero input cannot independently initialize the
+// destination: current Intel SDM preserves it, with a historical dword upper
+// half exception. Only a whole native opcode retains that target's behavior.
 var x86ScalarBitScanSpecs = map[Op]x86ScalarBitScanSpec{
 	"BSFW": {16, false}, "BSFL": {32, false}, "BSFQ": {64, false},
 	"BSRW": {16, true}, "BSRL": {32, true}, "BSRQ": {64, true},
