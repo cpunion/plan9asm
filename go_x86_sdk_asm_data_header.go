@@ -189,19 +189,62 @@ func sdkASMDataImportConfig(selected goAMD64FrameSelection, imports map[string]g
 }
 
 func (source *GoX86SDKASMDataSource) typedHeader(language string) ([]byte, error) {
+	pkg, _, err := source.typecheckPackage(language, nil, nil)
+	if err != nil {
+		return nil, err
+	}
+	return GoAssemblyHeader(pkg, source.guard.env["GOARCH"])
+}
+
+// Each query constructs private syntax and type objects from the same sealed
+// complete Go bytes and compiler imports. Nothing is accepted from a caller AST.
+func (source *GoX86SDKASMDataSource) typedPackage(language string) (GoPackage, error) {
+	selected := &GoSourceSelection{GoSources: make(map[string][]byte), Assembly: make(map[string]*File),
+		TypesInfo: &types.Info{Types: make(map[ast.Expr]types.TypeAndValue), Defs: make(map[*ast.Ident]types.Object), Uses: make(map[*ast.Ident]types.Object)}}
+	pkg, fset, err := source.typecheckPackage(language, selected.TypesInfo, func(name string, data []byte) {
+		selected.SelectedGoFiles = append(selected.SelectedGoFiles, name)
+		selected.GoSources[name] = append([]byte(nil), data...)
+	})
+	if err != nil {
+		return GoPackage{}, err
+	}
+	selected.Fset, selected.Sizes = fset, types.SizesFor("gc", source.guard.env["GOARCH"])
+	for ordinal, cpp := range source.observation.CPP {
+		if ordinal >= len(source.guard.selection.SFiles) {
+			return GoPackage{}, sdkASMDataContext("observed assembly exceeds its exact selected inventory")
+		}
+		file, err := ParseWithDefines(ArchAMD64, cpp.Output, nil)
+		if err != nil {
+			return GoPackage{}, sdkASMDataContext("complete observed SDK assembly lost its parsed source: %v", err)
+		}
+		name := filepath.Join(source.request.Directory, source.guard.selection.SFiles[ordinal])
+		selected.SelectedAssemblyFiles = append(selected.SelectedAssemblyFiles, name)
+		selected.Assembly[name] = file
+	}
+	pkg.SourceSelection = selected
+	return pkg, nil
+}
+
+// Header observation keeps its original typechecking cost and facts: it does
+// not allocate TypesInfo/source inventories or parse assembly. The distinct
+// typed-body query above collects only the additional facts its consumer needs.
+func (source *GoX86SDKASMDataSource) typecheckPackage(language string, info *types.Info, observeSource func(string, []byte)) (GoPackage, *token.FileSet, error) {
 	fset := token.NewFileSet()
 	var syntax []*ast.File
 	for _, name := range source.guard.selection.GoFiles {
 		file := filepath.Join(source.request.Directory, name)
 		data, err := source.guard.read(file)
 		if err != nil {
-			return nil, err
+			return GoPackage{}, nil, err
 		}
 		parsed, err := parser.ParseFile(fset, file, data, parser.ParseComments)
 		if err != nil {
-			return nil, err
+			return GoPackage{}, nil, err
 		}
 		syntax = append(syntax, parsed)
+		if observeSource != nil {
+			observeSource(file, data)
+		}
 	}
 	actualImporter := importer.ForCompiler(fset, "gc", func(path string) (io.ReadCloser, error) {
 		if target, mapped := source.guard.selection.ImportMap[path]; mapped {
@@ -219,11 +262,11 @@ func (source *GoX86SDKASMDataSource) typedHeader(language string) ([]byte, error
 	})
 	sizes := types.SizesFor("gc", source.guard.env["GOARCH"])
 	if sizes == nil {
-		return nil, sdkASMDataContext("unknown target compiler layout")
+		return GoPackage{}, nil, sdkASMDataContext("unknown target compiler layout")
 	}
-	typed, err := (&types.Config{Sizes: sizes, Importer: actualImporter, GoVersion: language}).Check(source.request.PackagePath, fset, syntax, nil)
+	typed, err := (&types.Config{Sizes: sizes, Importer: actualImporter, GoVersion: language}).Check(source.request.PackagePath, fset, syntax, info)
 	if err != nil {
-		return nil, sdkASMDataContext("complete original SDK Go sources cannot be independently typed: %v", err)
+		return GoPackage{}, nil, sdkASMDataContext("complete original SDK Go sources cannot be independently typed: %v", err)
 	}
-	return GoAssemblyHeader(GoPackage{Path: source.request.PackagePath, Types: typed}, source.guard.env["GOARCH"])
+	return GoPackage{Path: source.request.PackagePath, Types: typed, Syntax: syntax}, fset, nil
 }
