@@ -90,6 +90,7 @@ func checkX86ABI0ResultInitializationAtSource(fn Func, sig FuncSig, goarch strin
 			owned[offset] = true
 		}
 	}
+	parameterRoles := make(map[string]bool)
 	for _, slot := range sig.Frame.Params {
 		// Actual gc layout includes pointer storage even when no numeric
 		// instruction consumes it. Occupancy prevents overlap, but pointer
@@ -98,6 +99,11 @@ func checkX86ABI0ResultInitializationAtSource(fn Func, sig FuncSig, goarch strin
 		if bytes == 0 || slot.Offset < 0 || slot.Offset > int64(frame)-bytes || slot.Offset+bytes > resultOffset {
 			return fail("parameter bytes or result boundary are not closed")
 		}
+		role, valid := x86ResultParameterRole(sig.Args, slot)
+		if !valid || parameterRoles[role] {
+			return fail("parameter leaf type/index disagrees with its actual argument")
+		}
+		parameterRoles[role] = true
 		for offset := int(slot.Offset); offset < int(slot.Offset+bytes); offset++ {
 			if owned[offset] {
 				return fail("overlapping typed frame slots")
