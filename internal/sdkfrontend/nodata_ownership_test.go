@@ -113,10 +113,11 @@ func TestSharedSDKNoDATAOwnersAreCompleteAndIndependent(t *testing.T) {
 		{"source.Verify(ctx)", "source.Unchecked(ctx)"},
 		{"source.Verify(ctx)", `t.Skip("missing tools")`},
 	} {
-		changed := strings.Replace(string(source), change.old, change.replacement, 1)
-		if changed == string(source) {
+		index := strings.LastIndex(string(source), change.old)
+		if index < 0 {
 			t.Fatal("ownership mutation lost its source target", change.old)
 		}
+		changed := string(source[:index]) + change.replacement + string(source[index+len(change.old):])
 		if err := sharedSDKNoDATAOwners([]byte(changed)); err == nil {
 			t.Fatal("missing or shared original member/API owner was accepted", change.old)
 		}
