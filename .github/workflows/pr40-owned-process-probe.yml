@@ -252,6 +252,11 @@ jobs:
               - TestX86ResultPredicateLegacyAndVEXCompleteComparisonFamilies
               - TestX86ResultPredicateWholeSourceThreeAPIsAndMode32
               - TestX86ResultPredicateBoundedStateAndRawRevocation
+              - TestX86ResultCallerAddressDifferenceCancelsSameTypedOrigin
+              - TestX86ResultCallerAddressDifferenceUnknownOrMixedOriginsRemainContext
+              - TestX86ResultCallerAddressDifferenceThreeAPIWholeSourceAdmission
+              - TestX86ResultCallerAddressDifferenceCFGAndRevocation
+              - TestX86ResultCallerAddressOriginIsBoundedIndependentMustState
               - TestGoX86SDKASMDataOriginalVendorPackageNamespace
               - TestGoX86SDKNumericalReadPackageQueryMatchesOriginalLiteralSource
               - TestSDKAMD64OriginalFrameConfigGuardEagerIdentity

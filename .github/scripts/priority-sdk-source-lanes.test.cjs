@@ -131,6 +131,19 @@ test('Guarded bit-scan and typed predicate rule classes are exact source priorit
   assert.equal((sdk.match(/- lane:/g) || []).length, 13);
 });
 
+test('Caller-address differences retain their exact source-origin priority controls', () => {
+  const source = sdk.slice(sdk.indexOf('- lane: source\n'), sdk.indexOf('- lane: frame-context\n'));
+  for (const root of [
+    'TestX86ResultCallerAddressDifferenceCancelsSameTypedOrigin',
+    'TestX86ResultCallerAddressDifferenceUnknownOrMixedOriginsRemainContext',
+    'TestX86ResultCallerAddressDifferenceThreeAPIWholeSourceAdmission',
+    'TestX86ResultCallerAddressDifferenceCFGAndRevocation',
+    'TestX86ResultCallerAddressOriginIsBoundedIndependentMustState',
+  ]) assert.equal(source.split(`- ${root}\n`).length - 1, 1, root);
+  assert.match(source, /timeout: 5m/);
+  assert.equal((sdk.match(/- lane:/g) || []).length, 13);
+});
+
 test('Sparse GP SIMD must execute both actual native architectures', () => {
   const native = workflow.slice(workflow.indexOf('\n  native-x86-oracles:'), workflow.indexOf('\n  complete-windows:'));
   for (const root of [
