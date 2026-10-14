@@ -1,6 +1,6 @@
 # Current work: PR 40 checkpoint
 
-Checkpoint: 2026-10-14 21:43 UTC. Primary source `cf3dcf5d`.
+Checkpoint: 2026-10-14 21:49 UTC. Primary source `d129bdcc`.
 This is a handoff, not a ledger or a claim of complete CI/stdlib success.
 
 ## Scope and authority
@@ -60,16 +60,18 @@ No source or scanner history is being force-pushed.
 | Legacy/VEX EXTRACTPS stores into independent FP inputs | `5984054e`/`61f800f7` join the existing logical field writer to the private whole-source byte proof. All immediate rows, missing-byte/pointer/bool/padding negatives; Go27/race/Go20 portable16 roots/940 children pass, five actual Go targets and three-API IR optimization objects. Full18-root attempt remains FAILED (old uninitialized span fixture plus two host skips); initialized span fixture retains all rows. Two actual runtime roots remain host-inapplicable locally: Rosetta is unavailable. Require native CI; portable passes are not execution. |
 | Borrowed-frame continuations | `TestX86ContinuationBorrowedFrame` and `TestX86ContinuationLLVM` still fail at table-address effects. Reuse/authenticate the actual whole continuation graph; never loan helper signatures or bypass the result proof. |
 | Physical source-stack bool | `5e590dca`/`f0b82176` integrated as `8eb4218e`/`cf3dcf5d`. Original and normalized source, declared layout, access map, owner and numerical/canonical byte facts are sealed together; nonzero arguments and default Options preserve the same boundary. Both SDKs35 roots/1216 children, race8 roots/525 children, original CI roots,20 actual Go objects and84 LLVM object axes pass. Native execution remains pending, not implied by object success. |
-| Explicit386 helper bool | Independent helper call ABI remains Void with all actual ArgRegs. The complete16-SETcc pure cohort and original helper/object roots pass initially; source/helper publication identity guard and final frozen qualification remain in progress. No fake I1 helper declaration or renderer inlining. |
+| Explicit386 helper bool | `e3fd3479` integrated as `d129bdcc`. Actual helper remains Void with its ArgRegs; sealed whole original graph, helper transport, selected source/signatures and publication identity prove the root byte without copying its frame. Go20 pure55 roots/1090 children and Go27 race55/1090 pass; objects/current original root Go27 seven roots/58 children, Go20 six/53, both vets and source seals pass. The one extra physical-oracle root has an explicit go1.27 build role. Earlier58-root cohorts are tool-backed, not pure or isolated-performance evidence. No fake I1 callee or renderer inlining. |
 | MXCSR source roles | `4580b59b`/`8e588fe2` integrated as `e01da058`/`0b9d36f9`. Exact old zero-frame/uninitialized mixed source retained as Context. All4 instructions use valid initialized AUTO/FP, two DATA loads retain actual readonly bytes; typed native pointer/static stores remain Context. Both SDKs/race pure14 roots/631 children; both SDKs five actual Go objects/60 LLVM objects, exact one root/65 children pass. No production permission or Void bypass. |
 | Synthetic zero terminator | Test-only `a4bcecfb` integrated as `2b5ecc8e`: invoke the actual private zero emitter rather than pretend a NOP/no-RET source writes ABI0 results. Both SDKs16 pure roots/185 children and complete40 LLVM object types pass; original malformed I1/source negatives remain. No native execution claim or production bypass. |
-| Shared tuple result pointer | Local `76552a1e`/`6ba3a2e6` supplies one actually contiguous, bounded numerical backing only after the whole private direct-tail source-byte proof. Original opaque pointer-bits source remains Context; the transport fixture derives an actual numerical predicate. Initial three-API, object, independent-root/KeepFunc and actual-host portable value tests pass. Final frozen Go27/Go20/race/object qualification is running; not integrated or certified yet. |
+| Shared tuple result pointer | `76552a1e`/`6ba3a2e6` integrated as `9580ca12`/`0f356ad8`: actual contiguous numerical backing requires whole private direct-tail source-byte proof. Original opaque pointer-bits source remains Context; transport uses a real numerical predicate. Both SDKs28 roots/1485 children, race21/1271, original CLI one/three, vets/seals pass. New four-width/five-target source owner compiles60 LLVM object axes per SDK; actual-host portable values execute all four IR/backend axes. Native x86/Go execution is not implied. |
 
-Fourteen of the18 old failing roots have repaired, leaf-qualified source paths;
-this is not a current-head CI pass. Four old roots remain unsealed: two
-continuation, custom bool helper and tuple helper. Parent qualification is still
-required: the union at8decf884 passes Go27/race/Go20 with81 roots/4916 children,
-but predates the synthetic-zero and physical-bool leaves. No current batch is
+Sixteen of the18 old failing roots have repaired, leaf-qualified source paths;
+this is not a current-head CI pass. Two continuation roots remain unsealed.
+Parent qualification is still required: the union at8decf884 passes Go27/race/
+Go20 with81 roots/4916 children, but predates the synthetic-zero, physical-bool,
+tuple and helper leaves. Read-only body audit subsequently found two old81
+roots invoke Go/LLVM tools; preserve them as separate tool-backed owners, not
+pure or performance evidence. No current batch is
 ready to push until its relevant complete checks are sealed.
 Fork-only `eff7e8c5` stages28 priority lanes (six new no-DATA owners), keeping
 127 source priorities/native58, original budgets and no concurrency cap. Genuine
@@ -84,11 +86,11 @@ Basenames intentionally avoid private machine paths.
 
 | Worktree basename | Current role |
 | --- | --- |
-| `plan9asm-wt-pr40-scalar-lane-native-20261011` | Primary `codex/pr40-external-corpus-split-20261011`, source `cf3dcf5d`; integrated qualified repair leaves; updated parent union pending. |
+| `plan9asm-wt-pr40-scalar-lane-native-20261011` | Primary `codex/pr40-external-corpus-split-20261011`, source `d129bdcc`; integrated qualified repair leaves; updated parent union pending. |
 | `plan9asm-wt-pr40-stdlib-preprocessing-20261012` | Diagnostic `codex/pr40-windows-owned-process-probe-20261013`; published `d4baabba` failed, local `eff7e8c5` stages future lanes. Do not bring fork-only workflow back to contribution. |
-| `plan9asm-wt-pr40-sdk-numeric-maps-entry-20261013` | Tuple-region leaf6ba3a2e6 frozen qualification; namespace WIP separately stashed. |
+| `plan9asm-wt-pr40-sdk-numeric-maps-entry-20261013` | Tuple-region leaf6ba3a2e6 fully qualified and integrated; namespace WIP separately stashed. |
 | `plan9asm-wt-pr40-simple-sdk-bindings-20261013` | FP, MXCSR and synthetic-zero leaves integrated; read-only tuple review. PCMP fault leaf485 remains separate. |
-| `plan9asm-wt-pr40-sdk-tls-20261013` | Parameter WIP stashed; stack leaf9f7 qualified. New local-helper bool branch preserves all old history. |
+| `plan9asm-wt-pr40-sdk-tls-20261013` | Helper leafe3fd3479 fully qualified and integrated; clean/idle. Parameter WIP stashed; old history preserved. |
 | `plan9asm-wt-pr40-sdk-numeric-maps-20261013` | Physical-bool leaves fully qualified and integrated; new continuation repair branch preserves old history. |
 
 One heavy SDK/object/native/benchmark owner at a time. Small pure gates may run
