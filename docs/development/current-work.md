@@ -1,6 +1,6 @@
 # Current work: PR 40 checkpoint
 
-Checkpoint: 2026-10-14 08:01 UTC. Contribution source: `15e683d0`.
+Checkpoint: 2026-10-14 09:22 UTC. Contribution source: `d89b5c92`.
 This is a handoff, not a ledger or a claim that current-head CI/stdlib passes.
 
 ## Scope and authority
@@ -26,11 +26,11 @@ Do not edit the primary or probe while their frozen jobs run.
 
 | Worktree basename | Branch / purpose |
 | --- | --- |
-| `plan9asm-wt-pr40-scalar-lane-native-20261011` | `codex/pr40-external-corpus-split-20261011`; integrated source `15e683d0`; SDK composition FAILED |
-| `plan9asm-wt-pr40-stdlib-preprocessing-20261012` | `codex/pr40-windows-owned-process-probe-20261013`; staged fork-only priorities, `e8466405`; not pushed |
+| `plan9asm-wt-pr40-scalar-lane-native-20261011` | `codex/pr40-external-corpus-split-20261011`; integrated source `d89b5c92`; full SDK composition still pending |
+| `plan9asm-wt-pr40-stdlib-preprocessing-20261012` | `codex/pr40-windows-owned-process-probe-20261013`; staged fork-only priorities, `1b343ff5`; not pushed |
 | `plan9asm-wt-pr40-sdk-numeric-maps-entry-20261013` | `codex/pr40-sdk-numeric-maps-entry-20261013`; verified metadata `d9033ff4`, context `4daf1d73`, idle |
-| `plan9asm-wt-pr40-sdk-tls-20261013` | `codex/pr40-sdk-tls-20261013`; verified graph `4bdac0fb`, fixing two SDK counterexamples |
-| `plan9asm-wt-pr40-simple-sdk-bindings-20261013` | `codex/pr40-sdk-storage-snapshot-20261013`; verified input protection `b17f25f8`, idle |
+| `plan9asm-wt-pr40-sdk-tls-20261013` | `codex/pr40-sdk-tls-20261013`; verified graph follow-up `36cf733a`, fixing authenticated NUM composition |
+| `plan9asm-wt-pr40-simple-sdk-bindings-20261013` | `codex/pr40-sdk-storage-snapshot-20261013`; verified sparse GP/X `6874bcd3`, fixing plain-family admission |
 
 ## Latest two frozen fork runs
 
@@ -98,8 +98,8 @@ passes in 301.843s. Go1.20/1.27 caller controls pass 170 roots/5,220 children in
 replays all 70/171 in 222.617s, then the eight SDK roots/29 children in 241.311s,
 with strict inventories and vet. Before/after parent head remains `f1db0fa8`.
 Native Windows, full current-head modules/race and fresh benchmark remain pending.
-Alternate-extension consumed includes and module metadata can still collide
-with outputs: actual six-child RED is preserved, with a separate repair underway.
+That snapshot still had alternate-extension consumed-input collisions. Its
+actual six-child RED is preserved; the later `15e683d0` cohort repairs the class.
 
 ## Verified metadata-only SDK handoff
 
@@ -152,11 +152,46 @@ needs an independently proved result-slot address role. Fix these rule classes
 before publication; do not restore the old incorrect separate-helper state or
 turn Context into object success. The failed parent head remains stable.
 
-Fork priorities retain13 SDK lanes and the original budgets. Mandatory native
-execution adds AMD64 and386 direct-tail roots plus a required i386 compiler;
-the new51-root profile is not yet executed. All29 policy regressions and
-actionlint pass. Native audit controls reject missing inventories, substitutions,
-skips and duplicates; synthetic auditor fixtures are not execution receipts.
+Fork priorities retain13 SDK lanes and the original budgets. The source lane
+now also inventories all eight plain-reader roots and the child-harness mode
+root. Required i386 packages join the existing bounded LLVM22 installation,
+without a second apt transaction. Mandatory native execution adds AMD64/386
+direct-tail and PC/result/external follow-up roots: the new52-root profile,
+seven inventories/fourteen required roots, is not yet executed. All30 policy
+regressions and actionlint pass. Native audit mutation controls pass8 roots;
+synthetic expanded profiles are not execution receipts.
+
+## Latest rule-class leaves (not full SDK or CI certification)
+
+`06ac4707` shares the existing complete24-opcode packed-unpack grammar and pure
+byte dependency calculation between independent caller/result consumers.
+Ordinary/race/Go20 each pass6 roots/200 children in0.579/1.939/0.550s.
+Memory permissions remain separate: masks do not shrink E4NF reads, logical
+bytes do not prove legacy alignment, and MMX has no SIMD-state permission.
+
+`36cf733a` is integrated as `d32c86cf`: original Prog PC coordinates, exact
+declared ordinary external terminals, and bounded logical result-slot aliases.
+Final frozen source passes Go27 71 roots/1544 children13.484s, Go20 70/1539
+12.603s, race71/1544 23.246s, CLI6/100 normal4.702s/race8.135s, vet/build and
+both unchanged official gates. The extra native owner passes original-Go44
+and LLVM264 checks with canaries in21.720s locally emulated; native CI pending.
+The earlier complete count/indexbyte replay remains FAILED4.333s: CPU NUM
+binding and unpack/sparse-byte composition were not closed in that snapshot.
+
+`6874bcd3` is integrated as `d89b5c92`: sparse GP/X numerical byte propagation,
+exact overwrite and pointer/address/canonical revocation, no guessed high bytes.
+Its26-root/693-child scoped union passes Go27/race/Go20 in2.629/8.401/4.840s.
+The independent six plain-GP/X API admission failures are still OPEN: without
+a probe instruction the prior preflight can miss the whole-result check.
+Adding PEXTRD to another fixture does not repair that original failed source.
+
+Child harness leaves `0a1cee92`/`21960a76` are integrated as `eff931be`/`94c198f6`.
+Framework child builds explicitly select the compiled parent's LLVM mode,
+including empty tags in default mode; original SDK environments are untouched.
+Parent frozen `d89b5c92` replays all nine reader/harness roots and five children,
+including a real trimpath child: Go27 default/byollvm PASS20.467/20.064s, actual
+Go20 default PASS26.955s. All inventories and before/after heads match, no skips.
+These local results do not certify actual Windows or changed-head full modules.
 
 ## Stdlib benchmark: current complete failed receipt
 
@@ -180,28 +215,31 @@ The earlier `2d696307` 163/184,21-failure receipt stays unchanged.
 
 ## External server checkpoint (no local scan)
 
-Trusted observation completed 2026-10-14 07:50:36 UTC:
-`incremental_since=2026-10-10T05:22:43Z`; `history_before=2025-10-01`;
+Trusted latest journal observation completed 2026-10-14 09:00:45 UTC:
+`incremental_since=2026-10-10T08:22:43Z`; `history_before=2025-10-01`;
 `history_complete=false`. The next hourly window is unfinished; never advance
 its cursor from partial progress.
-Index21,867,676 entries; unique_modules1,066,010;
-scanned_records1,107,433; matched_records6,768; assembly_files85,732;
-failures16,823; latest_records996,045. Cgo:1,101,609 records/23,234 modules,
-2,401 failures/1,882 pending. These are server statistics, not translator passes.
-The earlier542-range checkpoint was independently checked continuous; its first
+Index21,917,574 entries; unique_modules1,066,611; matched_records6,777.
+Other latest counts require full readback. The prior07:50:36 checkpoint records
+scanned1,107,433, assembly_files85,732, failures16,823 and latest_records996,045;
+cgo1,101,609 records/23,234 modules, failures2,401/pending1,882. Never combine
+these different snapshots into a latest complete report or translator passes.
+The earlier549-range checkpoint was independently checked continuous; its first
 and last endpoints equal the derived history/incremental cursors. Periodic
 exports can lag the completed manifest/journal; never interpret that as rollback.
 Source failures remain retryable, never pass/skip. Later values require readback.
 
 ## Owners and next gates
 
-- Parent: all three new cohorts integrated; complete SDK composition found two
-  real failures. Retain failed receipt, then replay the repaired joins and fresh
+- Parent: latest leaves integrated and actual child verified; full SDK composition
+  still needs replay after every known rule/admission repair. Run a fresh strict
   benchmark before the next allowed-fork batch. Full CI remains required.
-- TLS agent owns the only heavy slot: PC-relative source CFG first, result-slot
-  address and alias/escape contract separately. Original source is never cropped.
-- Numeric/frontend agents' completed source is committed; no active tests or
-  external/local discovery jobs. Capacity interruptions lost no work or receipts.
+- TLS agent owns the only heavy slot: authenticated NUM/original-node graph
+  composition, then complete SDK failures. Original source is never cropped.
+- Numeric agent: independent386 literal and canonicalFP domains; raw2/3/255
+  complete bool-return RED remains open until the shared return gate closes it.
+- Frontend agent: sparse-byte leaf verified; plain GP/X whole-source preflight
+  cost predicate must cover the original six no-probe failures. No local scan.
 One heavy source/SDK/object owner at a time; small bounded pure controls may overlap.
 Preserve native execution vs QEMU/emulated diagnostics, all original fault effects,
 canonical bool bytes (not arbitrary2/3 truncation) and unknown GP upper bytes.
@@ -211,12 +249,14 @@ canonical bool bytes (not arbitrary2/3 truncation) and unknown GP upper bytes.
 Parent ignored `_out/register-result-repair/`: `factory-7752fc1f/`,
 `publication-f1db0fa8/`, `metadata-71ae5584/`, `context-9361399a/`,
 `combined-15e683d0/`,
+`unpack-{complete,final,v2}-*`, `harness-94c198f6-*`, `reader-d89b5c92-*`,
 `benchmark-2d696307/`, `ci-e544c001-{completion,llvm-parts}/`,
 `ci-af4b6a3f-{main-aggregate,main-parts,simple-parts,llvm-aggregate,llvm-parts}/`,
 `ci-af4b6a3f-native/native-x86-oracles/native.log` and all four independent
 `ci-af4b6a3f-*-audit.json` files.
 Numeric tree: `_out/sdk-numeric-maps/literal-minimum-partition-receipt.md`;
-TLS tree: `_out/direct-tail-state-b7e29095/`; SDK tree:
+TLS tree: `_out/direct-tail-state-b7e29095/`,
+`_out/direct-tail-pc-result-15e683d0/RECEIPT.md` and `v2-*`; SDK tree:
 `_out/register-result-repair/continuation-reference-closure/`.
 Raw heads/tools/inventories and complete terminal unions are authoritative.
 Use `git show <frozen-sha>:docs/development/current-work.md` for older history;
