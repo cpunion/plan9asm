@@ -34,7 +34,16 @@ type dataRecord struct {
 }
 
 const archiveLimit = 16 << 20
-const symbolLimit = 1 << 16
+
+// ArchiveMemberInventoryLimit is the existing complete compiler archive bound.
+// SDK ASM inventories reserve two members for __.PKGDEF and _go_.o.
+// Reusing this bound supplies no source/object or instruction authority.
+const ArchiveMemberInventoryLimit = 64
+
+// ObjectSymbolInventoryLimit is the existing complete object-symbol bound.
+// Frontend cost preflights may reuse it; it creates no observation or authority.
+const ObjectSymbolInventoryLimit = 1 << 16
+const symbolLimit = ObjectSymbolInventoryLimit
 
 func contextError(message string) error { return fmt.Errorf("%w: %s", ErrContext, message) }
 
@@ -70,7 +79,7 @@ func archiveMembers(data []byte) ([]archiveMember, error) {
 	seen := make(map[string]bool)
 	var members []archiveMember
 	for pos := 8; pos < len(data); {
-		if len(seen) >= 64 || len(data)-pos < 60 {
+		if len(seen) >= ArchiveMemberInventoryLimit || len(data)-pos < 60 {
 			return nil, contextError("truncated or oversized archive member inventory")
 		}
 		header := data[pos : pos+60]

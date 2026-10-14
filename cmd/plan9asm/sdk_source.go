@@ -113,7 +113,7 @@ func translateSDKSource(ctx context.Context, pkg *packages.Package, selected *sd
 	if err != nil {
 		return translation{}, err
 	}
-	options, err := source.Numerical.BindNumericalReads(ctx, goPackageView(actual), file, plan9asm.Options{
+	options, err := source.BindNumericalReads(ctx, goPackageView(actual), file, plan9asm.Options{
 		TargetTriple: targetTriple(goos, goarch), ResolveSym: resolve, Sigs: sigs, Goarch: goarch, AnnotateSource: annotate,
 	})
 	if err != nil {

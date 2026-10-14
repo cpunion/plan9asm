@@ -338,45 +338,8 @@ func bindX86CallerRegions(pkg *packages.Package, file *plan9asm.File, target, go
 	if !plan9asm.GoX86RawReturnCallerBindingNeeded(file, goarch, resolve, sigs) {
 		return sigs, nil, nil
 	}
-	selection := config.x86CallerSelections[pkg]
-	if selection == nil || !selection.ready || selection.target != target || selection.identity == "" ||
-		selection.types != pkg.Types || selection.identity != x86CallerSelectionIdentity(pkg) ||
-		!reflect.DeepEqual(selection.sizes, x86CallerSizes(pkg.TypesSizes)) {
-		return nil, nil, fmt.Errorf("%w: caller proof needs unchanged actual-load source role, inventory and layout", plan9asm.ErrProbeNeedsContext)
-	}
-	for path, dependency := range pkg.Imports {
-		if dependency == nil || dependency.Types != selection.imports[path] {
-			return nil, nil, fmt.Errorf("%w: caller dependency types differ from actual load", plan9asm.ErrProbeNeedsContext)
-		}
-	}
-	ctx := config.Context
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	if selection.loaded == nil {
-		if err := selection.verifyEffectiveSourceMode(ctx); err != nil {
-			return nil, nil, err
-		}
-		var err error
-		selection.loaded, err = loadX86CallerTypedPackage(ctx, pkg, defines, config.Feature)
-		if err != nil {
-			return nil, nil, err
-		}
-		selection.loaded.selection = selection
-	}
-	member, err := observeActualAssemblyMember(asm, selection.loaded.goPkg.SourceSelection.SelectedAssemblyFiles)
-	if err != nil || selection.loaded.goPkg.SourceSelection.Assembly[member.selected] == nil {
-		return nil, nil, fmt.Errorf("%w: translated assembly is absent from actual complete selection: %v", plan9asm.ErrProbeNeedsContext, err)
-	}
-	// The complete typed graph is cached, but each returned source keeps its
-	// own original request/lifetime. No alias is added to the actual inventory
-	// or accumulated in an unbounded shared cache.
-	loaded := &x86CallerTypedPackage{
-		pkg: selection.loaded.pkg, goPkg: selection.loaded.goPkg,
-		sources: selection.loaded.sources, expanded: selection.loaded.expanded,
-		selection: selection, member: member,
-	}
-	if err := loaded.verify(ctx, defines, config.Feature); err != nil {
+	loaded, err := loadX86ActualSelectedAssembly(pkg, target, asm, defines, config)
+	if err != nil {
 		return nil, nil, err
 	}
 	actual, _, err := sigsForAsmFile(loaded.pkg, file, resolve, "amd64")
@@ -390,4 +353,53 @@ func bindX86CallerRegions(pkg *packages.Package, file *plan9asm.File, target, go
 	}
 	bound, err := plan9asm.BindGoX86RawReturnCallerRegions(loaded.goPkg, file, "amd64", resolve, actual)
 	return bound, loaded, err
+}
+
+// This is a source observation only. The caller binder and continuation
+// reference closure independently choose and prove their body permissions.
+func loadX86ActualSelectedAssembly(pkg *packages.Package, target, asm string, defines []string,
+	config compileConfig,
+) (*x86CallerTypedPackage, error) {
+	selection := config.x86CallerSelections[pkg]
+	if pkg == nil || selection == nil || !selection.ready || selection.target != target || selection.identity == "" ||
+		selection.types != pkg.Types || selection.identity != x86CallerSelectionIdentity(pkg) ||
+		!reflect.DeepEqual(selection.sizes, x86CallerSizes(pkg.TypesSizes)) {
+		return nil, fmt.Errorf("%w: proof needs unchanged actual-load source role, inventory and layout", plan9asm.ErrProbeNeedsContext)
+	}
+	for path, dependency := range pkg.Imports {
+		if dependency == nil || dependency.Types != selection.imports[path] {
+			return nil, fmt.Errorf("%w: dependency types differ from actual load", plan9asm.ErrProbeNeedsContext)
+		}
+	}
+	ctx := config.Context
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if selection.loaded == nil {
+		if err := selection.verifyEffectiveSourceMode(ctx); err != nil {
+			return nil, err
+		}
+		var err error
+		selection.loaded, err = loadX86CallerTypedPackage(ctx, pkg, defines, config.Feature)
+		if err != nil {
+			return nil, err
+		}
+		selection.loaded.selection = selection
+	}
+	member, err := observeActualAssemblyMember(asm, selection.loaded.goPkg.SourceSelection.SelectedAssemblyFiles)
+	if err != nil || selection.loaded.goPkg.SourceSelection.Assembly[member.selected] == nil {
+		return nil, fmt.Errorf("%w: translated assembly is absent from actual complete selection: %v", plan9asm.ErrProbeNeedsContext, err)
+	}
+	// The complete typed graph is cached, but each returned source keeps its
+	// own original request/lifetime. No alias is added to the actual inventory
+	// or accumulated in an unbounded shared cache.
+	loaded := &x86CallerTypedPackage{
+		pkg: selection.loaded.pkg, goPkg: selection.loaded.goPkg,
+		sources: selection.loaded.sources, expanded: selection.loaded.expanded,
+		selection: selection, member: member,
+	}
+	if err := loaded.verify(ctx, defines, config.Feature); err != nil {
+		return nil, err
+	}
+	return loaded, nil
 }

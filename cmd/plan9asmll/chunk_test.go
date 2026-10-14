@@ -137,8 +137,8 @@ TEXT ·third(SB),$0-0
 		t.Fatalf("late invalid function was not reported: %v", err)
 	}
 	for _, name := range []string{"functions.ll", "functions.part-0001.ll"} {
-		if _, err := os.Stat(filepath.Join(dir, name)); err != nil {
-			t.Fatalf("earlier chunk %s was not checked: %v", name, err)
+		if _, err := os.Stat(filepath.Join(dir, name)); !os.IsNotExist(err) {
+			t.Fatalf("failed complete attempt published earlier chunk %s: %v", name, err)
 		}
 	}
 }

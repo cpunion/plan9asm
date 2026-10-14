@@ -37,5 +37,6 @@ runtime loads. Object tests independently compare each LLVM literal definition's
 alignment to the original minimum and existing Go-size rule. No forced align16,
 guessed keys, cropped functions or new loop/bounds promise is introduced.
 Logical LLVM object compilation is not execution of the complete SDK program,
-physical Go entry authorization or benchmark completion. The shared frontend
-still needs its own explicit authentic literal-minimum producer/consumer handoff.
+physical Go entry authorization or benchmark completion. The separate shared
+[frontend handoff](x86-sdk-literal-frontend.md) selects the authentic minimum
+only on typed literal-predicate demand; it does not expand this caller domain.

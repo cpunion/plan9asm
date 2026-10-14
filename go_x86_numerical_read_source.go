@@ -13,6 +13,7 @@ import (
 	"reflect"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/xgo-dev/plan9asm/internal/gostaticstorage"
 	"github.com/xgo-dev/plan9asm/internal/gotoolchain"
@@ -40,6 +41,7 @@ type GoX86NumericalReadCaptureRequest struct {
 // independent SDK source observation remain Context.
 type GoX86NumericalReadSource struct {
 	mu                           sync.Mutex
+	revoked                      atomic.Bool
 	identity                     *GoX86NumericalReadSource
 	ready                        bool
 	request                      GoX86NumericalReadCaptureRequest
@@ -399,10 +401,22 @@ func (source *GoX86NumericalReadSource) preprocess() error {
 }
 
 func (source *GoX86NumericalReadSource) Verify(ctx context.Context) error {
-	if source != nil && source.literals != nil {
-		return source.verifySDKLiteralNumericalSource(ctx)
+	if source != nil && source.revoked.Load() {
+		return numericalSBContext("read source publication is permanently revoked")
 	}
-	return source.verifyNumericalSource(ctx)
+	var result error
+	if source != nil && source.literals != nil {
+		result = source.verifySDKLiteralNumericalSource(ctx)
+	} else {
+		result = source.verifyNumericalSource(ctx)
+	}
+	// SDK verification also samples the original caller context in its final
+	// defer. Revoke is lock-free and changes no ready/owner generation, so
+	// authenticate its publication token after every such callback has returned.
+	if source != nil && source.revoked.Load() {
+		result = errors.Join(result, numericalSBContext("read source publication revoked during verification"))
+	}
+	return result
 }
 
 func (source *GoX86NumericalReadSource) verifyNumericalSource(ctx context.Context) error {
@@ -411,7 +425,7 @@ func (source *GoX86NumericalReadSource) verifyNumericalSource(ctx context.Contex
 	}
 	source.mu.Lock()
 	defer source.mu.Unlock()
-	if !source.ready || source.identity != source {
+	if !source.ready || source.identity != source || source.revoked.Load() {
 		source.ready = false
 		return numericalSBContext("read source is closed/revoked")
 	}
@@ -511,7 +525,7 @@ func (source *GoX86NumericalReadSource) Readback(ctx context.Context) ([]byte, e
 	}
 	source.mu.Lock()
 	defer source.mu.Unlock()
-	if !source.ready {
+	if !source.ready || source.revoked.Load() {
 		return nil, numericalSBContext("read source closed after verification")
 	}
 	return append([]byte(nil), source.report...), nil
@@ -525,7 +539,7 @@ func (source *GoX86NumericalReadSource) CheckReadback(ctx context.Context, raw [
 	}
 	source.mu.Lock()
 	defer source.mu.Unlock()
-	if !source.ready || sha256.Sum256(raw) != source.seal {
+	if !source.ready || source.revoked.Load() || sha256.Sum256(raw) != source.seal {
 		return numericalSBContext("readback differs from actual sealed source/object/owner outputs")
 	}
 	return nil

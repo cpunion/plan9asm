@@ -101,6 +101,7 @@ func TestSharedSDKSourceClosesInReverseOrderAndRetainsErrors(t *testing.T) {
 	first, second := errors.New("numerical"), errors.New("data")
 	var order []string
 	source := &Source{}
+	source.identity = source
 	for _, row := range []struct {
 		name string
 		err  error

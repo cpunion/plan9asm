@@ -1,10 +1,13 @@
 package main
 
 import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
 	"go/ast"
 	"go/parser"
 	"go/token"
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -17,11 +20,24 @@ import (
 // other TEXT must be an uncalled, zero-frame helper. Code pointers may only
 // enter complete file-local tables, then be loaded immediately before JMP.
 func inferX86TailGroups(pkg *packages.Package, file *plan9asm.File, asmPath, goarch string,
-	resolve func(string) string, sigs map[string]plan9asm.FuncSig,
-) ([]plan9asm.X86TailGroup, error) {
-	if file.Arch != plan9asm.ArchAMD64 || goarch != "amd64" {
-		return nil, nil
+	resolve func(string) string, sigs map[string]plan9asm.FuncSig, defines []string, config compileConfig,
+) (groups []plan9asm.X86TailGroup, source *continuationReferenceSource, result error) {
+	if file == nil || file.Arch != plan9asm.ArchAMD64 || goarch != "amd64" {
+		return nil, nil, nil
 	}
+	ctx := config.Context
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	defer func() {
+		if source != nil {
+			result = errors.Join(result, source.verify(ctx, defines, config.Feature))
+			source.releaseQueryBytes()
+		}
+		if result != nil || len(groups) == 0 {
+			groups, source = nil, nil
+		}
+	}()
 	byName := map[string]int{}
 	for i, fn := range file.Funcs {
 		byName[fn.Sym] = i
@@ -39,7 +55,6 @@ func inferX86TailGroups(pkg *packages.Package, file *plan9asm.File, asmPath, goa
 			}
 		}
 	}
-	var groups []plan9asm.X86TailGroup
 	seen := map[int]bool{}
 	for start := range file.Funcs {
 		if seen[start] || len(neighbors[start]) == 0 {
@@ -60,15 +75,46 @@ func inferX86TailGroups(pkg *packages.Package, file *plan9asm.File, asmPath, goa
 		if !ok || !closedContinuationTables(file, group, sigs, resolve) {
 			continue
 		}
-		private, err := privateContinuationReferences(pkg, asmPath, group.Helpers)
+		if _, eligible := continuationPrivateNames(pkg, group.Helpers); !eligible {
+			continue
+		}
+		if source == nil {
+			selection := config.x86CallerSelections[pkg]
+			if selection == nil || !strings.HasSuffix(selection.target, "/"+goarch) {
+				return nil, nil, continuationSourceError()
+			}
+			var err error
+			source, err = captureContinuationReferenceSource(pkg, asmPath, selection.target, defines, config)
+			if err != nil {
+				return nil, nil, err
+			}
+			observed, beforeErr := json.Marshal(source.selected.goPkg.SourceSelection.Assembly[source.selected.member.selected])
+			input, inputErr := json.Marshal(file)
+			if beforeErr != nil || inputErr != nil || !bytes.Equal(observed, input) {
+				return nil, source, continuationSourceError()
+			}
+			actual, _, err := sigsForAsmFile(source.selected.pkg, file, resolve, goarch)
+			if err != nil {
+				return nil, source, err
+			}
+			for name, previous := range sigs {
+				current, present := actual[name]
+				before, beforeErr := json.Marshal(previous)
+				after, afterErr := json.Marshal(current)
+				if !present || beforeErr != nil || afterErr != nil || !bytes.Equal(before, after) {
+					return nil, source, continuationSourceError()
+				}
+			}
+		}
+		private, err := privateContinuationReferences(source, group.Helpers)
 		if err != nil {
-			return nil, err
+			return nil, source, err
 		}
 		if private {
 			groups = append(groups, group)
 		}
 	}
-	return groups, nil
+	return groups, source, nil
 }
 
 func continuationComponent(file *plan9asm.File, members map[int]bool,
@@ -327,50 +373,44 @@ func sameContinuationReg(a, b plan9asm.Operand) bool {
 // Inspect all sibling Go sources, including tests and other build variants.
 // A false positive only prevents this optimization. Silently dropping a
 // callable Go symbol would change the program's ABI.
-func privateContinuationReferences(pkg *packages.Package, asmPath string, helpers []string) (bool, error) {
+func continuationPrivateNames(pkg *packages.Package, helpers []string) (map[string]bool, bool) {
 	if pkg == nil || pkg.Types == nil {
-		return false, nil
+		return nil, false
 	}
 	names := map[string]bool{}
 	for _, symbol := range helpers {
 		if !strings.HasPrefix(symbol, "·") {
-			return false, nil
+			return nil, false
 		}
 		name := strings.TrimPrefix(symbol, "·")
 		if ast.IsExported(name) || pkg.Types.Scope().Lookup(name) == nil {
-			return false, nil
+			return nil, false
 		}
 		names[name] = true
 	}
-	entries, err := os.ReadDir(filepath.Dir(asmPath))
-	if err != nil {
-		return false, err
+	return names, true
+}
+
+func privateContinuationReferences(source *continuationReferenceSource, helpers []string) (bool, error) {
+	names, eligible := continuationPrivateNames(source.selected.pkg, helpers)
+	if !eligible {
+		return false, nil
 	}
-	for _, entry := range entries {
-		if entry.IsDir() {
+	for name, record := range source.files {
+		if name == source.selfName {
 			continue
 		}
-		path := filepath.Join(filepath.Dir(asmPath), entry.Name())
-		if filepath.Clean(path) == filepath.Clean(asmPath) {
-			continue
-		}
-		ext := filepath.Ext(path)
-		if ext != ".go" && ext != ".s" && ext != ".S" && ext != ".h" {
-			continue
-		}
-		source, err := os.ReadFile(path)
-		if err != nil {
-			return false, err
-		}
+		path := filepath.Join(source.directory, name)
+		ext := filepath.Ext(name)
 		if ext != ".go" {
 			for name := range names {
-				if strings.Contains(string(source), name) {
+				if strings.Contains(string(record.data), name) {
 					return false, nil
 				}
 			}
 			continue
 		}
-		parsed, err := parser.ParseFile(token.NewFileSet(), path, source, parser.ParseComments)
+		parsed, err := parser.ParseFile(token.NewFileSet(), path, record.data, parser.ParseComments)
 		if err != nil {
 			return false, err
 		}
