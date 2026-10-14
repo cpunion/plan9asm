@@ -68,8 +68,15 @@ func (c *amd64Ctx) lowerPackedScalarExtract(op Op, ins Instr) (ok bool, terminat
 		return true, false, c.storeRegSized(destination.Reg, amd64IntegerTypeForBits(f.gpBits), value)
 	}
 	if (base == "EXTRACTPS" || base == "VEXTRACTPS") && destination.Kind == OpFP {
-		// Retain the old complete PS field-writer contract. The new integer
-		// lane observer does not retroactively grant or remove that contract.
+		// Parameter copies and result fields share the existing logical byte
+		// writer. Neither source syntax nor a complete destination makes an
+		// unknown selected X lane initialized, or a pointer/padding numeric.
+		if _, err := c.scalarFPSpan(destination.FPOffset, 32); err != nil {
+			return true, false, err
+		}
+		if err := c.scalarFPResultInitialized(); err != nil {
+			return true, false, err
+		}
 		bytes := c.newTmp()
 		fmt.Fprintf(c.b, "  %%%s = bitcast i32 %s to <4 x i8>\n", bytes, value)
 		return true, false, c.storeFPVectorBytes(destination.FPOffset, 4, "%"+bytes, "")
