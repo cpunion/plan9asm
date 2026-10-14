@@ -210,10 +210,7 @@ func inferFuncTargetFeaturesForGOARCH(arch Arch, goarch string, fn Func) string 
 					add("+avx")
 				}
 			}
-			if form, known, err := x86PackedSubtractProperties(ins, goarch); known && err == nil && form.legacy && form.memory >= 0 && ins.Args[form.memory].Kind != OpFP {
-				add("+sse2")
-			}
-			if form, known, err := x86PackedWrappingAddProperties(ins, goarch); known && err == nil && form.legacy && !form.mmx && form.memory >= 0 && ins.Args[form.memory].Kind != OpFP {
+			if form, known, err := x86LegacyIntegerArithmeticProperties(ins.Op, ins, goarch); known && err == nil && form.legacy && !form.mmx && form.memory >= 0 && form.source.Kind != OpFP {
 				add("+sse2")
 			}
 			if form, known, err := x86PackedMultiplyAddProperties(ins.Op, ins, goarch); known && err == nil && form.legacy && !form.mmx && form.memory >= 0 && ins.Args[form.memory].Kind != OpFP {

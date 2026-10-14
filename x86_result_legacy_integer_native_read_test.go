@@ -172,7 +172,7 @@ func TestX86LoweredLegacyIntegerNativeReadFiveTargetObjects(t *testing.T) {
 				assembly.WriteString(strings.ReplaceAll(source, "Value", name))
 				declarations.WriteString(strings.ReplaceAll(declaration, "Value", name))
 			}
-			goAssemblerOracleOutput(t, target.arch, assembly.String(), "", true)
+			x86LEAActualTargetGoObject(t, target.arch, target.triple, assembly.String())
 			for _, api := range []string{"text", "module", "Go"} {
 				ir, err := x86ScalarFPBitViewAPI(t, assembly.String(), declarations.String(), target.arch, target.triple, api)
 				if err != nil {
@@ -190,5 +190,19 @@ func TestX86LoweredLegacyIntegerNativeReadFiveTargetObjects(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestX86LegacyIntegerNativeMemoryCompleteFeatureInference(t *testing.T) {
+	for _, arch := range []string{"386", "amd64"} {
+		for _, op := range x86LegacyIntegerArithmeticTestNames {
+			for _, address := range []string{"(AX)", "8(AX)(CX*4)", "·constant(SB)"} {
+				instruction := x86PureGPUnknownInstruction(t, op+" "+address+",X0")
+				features := inferFuncTargetFeaturesForGOARCH(ArchAMD64, arch, Func{Instrs: []Instr{instruction}})
+				if !strings.Contains(features, "+sse2") {
+					t.Fatalf("complete legacy m128 instruction requires XMM registers: %s/%s/%s: %q", arch, op, address, features)
+				}
+			}
+		}
 	}
 }
