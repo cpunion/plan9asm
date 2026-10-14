@@ -64,6 +64,10 @@ jobs:
             grep -Fx "$root" _out/native-x86-oracles/caller-cmp-inventory.log
           done
           roots+="|$caller_cmp_roots"
+          numerical_lea_root='TestCrossLinuxRuntimeMatrixX86NumericalLEAOriginalBytesAndLLVM'
+          go test . -list "^($numerical_lea_root)$" > _out/native-x86-oracles/numerical-lea-inventory.log
+          grep -Fx "$numerical_lea_root" _out/native-x86-oracles/numerical-lea-inventory.log
+          roots+="|$numerical_lea_root"
           families='MADDTypedOriginalLegacy|PackedNarrowOriginalLegacyOracle|ScalarFPBitViewsOriginalBitsAndCanaries'
           families+='|PureGPUnknownDeadOutputs|SignedIntegerScalarFloatTranslatedFPFields|ScalarCompareFlags'
           families+='|RawReturnSourceAddressNumerical|FloatingCompareOriginalLegacyPredicates|TimestampOriginalAndLLVM'
@@ -125,6 +129,10 @@ jobs:
               - TestARM64ABI0TailActualSelectedMemberDirectoryAlias
               - TestARM64ABI0TailActualSelectedFinalSymlink
               - TestARM64ABI0TailOriginalAliasPostGuard
+              - TestX86CallerCLIActualSelectedMemberDirectoryAlias
+              - TestX86CallerCLIOriginalAliasFinalSourceGuard
+              - TestX86CallerCLIActualSelectedFinalSymlink
+              - TestX86CallerCLIOriginalAliasFiveTargetObjects
               - TestCompileOneARM64ABI0TailActualDeclaration
               - TestCompileOneARM64ABI0TailCompleteAndChunks
               - TestCompileOneARM64ABI0TailSourcePostGuard
