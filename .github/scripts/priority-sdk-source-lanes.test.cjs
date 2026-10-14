@@ -4,7 +4,7 @@ const test = require('node:test');
 
 const workflow = fs.readFileSync('.github/workflows/pr40-owned-process-probe.yml', 'utf8');
 const sdk = workflow.slice(workflow.indexOf('\n  sdk-priority:'), workflow.indexOf('\n  ownership:'));
-const sdkLaneCount = 17;
+const sdkLaneCount = 22;
 
 test('SDK priority runs each previous simple root in its own bounded lane', () => {
   const roots = [
@@ -95,6 +95,7 @@ test('New source mechanisms have their own exact priority lanes', () => {
   const additions = [
     ['literal-minimum-simple', 'cmd/plan9asm', 'TestSimpleCLIOriginalSDKMapsLiteralMinimumSource', '8m'],
     ['literal-minimum-llvm-linux', 'cmd/plan9asmll', 'TestCompileOneX86SDKOriginalMapsLiteralMinimumSourceLinux', '5m'],
+    ['literal-minimum-llvm-linux-public-cli', 'cmd/plan9asmll', 'TestCompileOneX86SDKOriginalMapsLiteralMinimumSourceLinuxPublicCLI', '5m'],
     ['literal-minimum-llvm-darwin', 'cmd/plan9asmll', 'TestCompileOneX86SDKOriginalMapsLiteralMinimumSourceDarwin', '5m'],
     ['literal-minimum-llvm-windows', 'cmd/plan9asmll', 'TestCompileOneX86SDKOriginalMapsLiteralMinimumSourceWindows', '5m'],
     ['metadata-only', 'internal/sdkfrontend', 'TestSharedSDKMetadataOriginalEmptyDATACompleteThreeOS', '10m'],
@@ -124,6 +125,7 @@ test('Complete maps target owners are disjoint and retain the original budget', 
     assert.ok(sdk.includes(`- lane: literal-minimum-llvm-${goos}\n            module: cmd/plan9asmll\n            roots:\n              - ${root}\n            timeout: 5m`));
   }
   assert.doesNotMatch(sdk, /- TestCompileOneX86SDKOriginalMapsLiteralMinimumSource\n/);
+  assert.equal(sdk.split('- TestCompileOneX86SDKOriginalMapsLiteralMinimumSourceLinuxPublicCLI\n').length - 1, 1);
   assert.equal(sdk.split('- TestMapsLiteralMinimumTargetsHaveIndependentCompleteOwners\n').length - 1, 1);
 });
 
@@ -142,13 +144,16 @@ test('Typed MXCSR conversions and authenticated proof joins have separate bounde
       'TestX86SignedIntegerFloatOriginalFPFixtureWholeThreeAPIs',
       'TestX86MXCSRConversionCompleteFiveTargetOriginalGoAndLLVMObjects',
     ],
-    'proof-join': [
+    'proof-join-guards': [
       'TestX86ResultAUTOReplayDoesNotWashUnboundSourceRoles',
       'TestX86FixedLocalFeatureProjectionUsesCompleteSourceOrder',
       'TestGoAMD64FixedLocalResultConsumerExactProofHandoff',
-      'TestGoX86ResultAUTOCompleteActualFixedLocalNumericalJoin',
       'TestGoX86ResultAUTONumericalReplayExactOriginalNodeGuards',
     ],
+    'proof-join-original': ['TestGoX86ResultAUTOCompleteActualFixedLocalNumericalJoinOriginalSourceShape'],
+    'proof-join-text': ['TestGoX86ResultAUTOCompleteActualFixedLocalNumericalJoinText'],
+    'proof-join-context': ['TestGoX86ResultAUTOCompleteActualFixedLocalNumericalJoinContext'],
+    'proof-join-go-module': ['TestGoX86ResultAUTOCompleteActualFixedLocalNumericalJoinGoModule'],
   };
   for (const [lane, roots] of Object.entries(required)) {
     const start = sdk.indexOf(`- lane: ${lane}\n`);
@@ -161,6 +166,16 @@ test('Typed MXCSR conversions and authenticated proof joins have separate bounde
     assert.deepEqual(actual.sort(), roots.sort());
     for (const root of roots) assert.equal(sdk.split(`- ${root}\n`).length - 1, 1, root);
   }
+});
+
+test('Native source policies retain CRLF equivalence and all independent owners', () => {
+  const source = sdk.slice(sdk.indexOf('- lane: source\n'), sdk.indexOf('- lane: frame-context\n'));
+  for (const root of [
+    'TestNativeOwnerPoliciesKeepCRLFSourceAndMutations',
+    'TestNativeOwnerPolicyNormalizationIsLimitedToCRLF',
+    'TestX86ResultGPSIMDSparseRuntimeNativeOwnerCannotEmulateOrSkip',
+  ]) assert.equal(source.split(`- ${root}\n`).length - 1, 1, root);
+  assert.match(source, /timeout: 5m/);
 });
 
 test('Guarded bit-scan and typed predicate rule classes are exact source priorities', () => {

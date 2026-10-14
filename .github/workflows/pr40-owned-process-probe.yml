@@ -181,6 +181,11 @@ jobs:
             roots:
               - TestCompileOneX86SDKOriginalMapsLiteralMinimumSourceLinux
             timeout: 5m
+          - lane: literal-minimum-llvm-linux-public-cli
+            module: cmd/plan9asmll
+            roots:
+              - TestCompileOneX86SDKOriginalMapsLiteralMinimumSourceLinuxPublicCLI
+            timeout: 5m
           - lane: literal-minimum-llvm-darwin
             module: cmd/plan9asmll
             roots:
@@ -264,13 +269,32 @@ jobs:
               - TestX86SignedIntegerFloatOriginalFPFixtureWholeThreeAPIs
               - TestX86MXCSRConversionCompleteFiveTargetOriginalGoAndLLVMObjects
             timeout: 5m
-          - lane: proof-join
+          - lane: proof-join-original
+            module: '.'
+            roots:
+              - TestGoX86ResultAUTOCompleteActualFixedLocalNumericalJoinOriginalSourceShape
+            timeout: 5m
+          - lane: proof-join-text
+            module: '.'
+            roots:
+              - TestGoX86ResultAUTOCompleteActualFixedLocalNumericalJoinText
+            timeout: 5m
+          - lane: proof-join-context
+            module: '.'
+            roots:
+              - TestGoX86ResultAUTOCompleteActualFixedLocalNumericalJoinContext
+            timeout: 5m
+          - lane: proof-join-go-module
+            module: '.'
+            roots:
+              - TestGoX86ResultAUTOCompleteActualFixedLocalNumericalJoinGoModule
+            timeout: 5m
+          - lane: proof-join-guards
             module: '.'
             roots:
               - TestX86ResultAUTOReplayDoesNotWashUnboundSourceRoles
               - TestX86FixedLocalFeatureProjectionUsesCompleteSourceOrder
               - TestGoAMD64FixedLocalResultConsumerExactProofHandoff
-              - TestGoX86ResultAUTOCompleteActualFixedLocalNumericalJoin
               - TestGoX86ResultAUTONumericalReplayExactOriginalNodeGuards
             timeout: 5m
           - lane: source
@@ -285,6 +309,9 @@ jobs:
               - TestReadGoAssemblySourceExpandsNestedLocalHeaders
               - TestReadGoAssemblySourceRejectsSymlinkIncludeOutsideRoot
               - TestAssemblyIncludeSymlinkRegressionIsAvailableOnSupportedHosts
+              - TestNativeOwnerPoliciesKeepCRLFSourceAndMutations
+              - TestNativeOwnerPolicyNormalizationIsLimitedToCRLF
+              - TestX86ResultGPSIMDSparseRuntimeNativeOwnerCannotEmulateOrSkip
               - TestFrameworkChildGoBuildRetainsParentLLVMMode
               - TestX86ResultGPSIMDPlainUnknownReturnNeedsWholeFunctionProof
               - TestX86ResultGPSIMDAdmissionScalarReturnFamilyThreeAPIs
