@@ -328,6 +328,17 @@ jobs:
               - TestX86ABI0ResultInitializationCompleteStateByteEnvelope
               - TestX86ABI0Mode32CanonicalBoolDirectCallRevokesDirection
               - TestX86DirectionTypedBoolAndVoidWholeCallThreeAPIs
+              - TestX86OrdinaryResultAddressWholeSource
+              - TestX86OrdinaryResultAddressNoProbeRejectsUnknown
+              - TestX86OrdinaryResultAddressScalarTransferWidths
+              - TestX86OrdinaryResultAddressPrivateProofNotPublicAuthority
+              - TestX86OrdinaryResultAddressNativeAliasOrdering
+              - TestX86OrdinaryResultAddressPhysicalBanksAndFieldBytes
+              - TestX86OrdinaryResultAddressKeepsUnclosedRoles
+              - TestX86OrdinaryResultAddressLayoutAndBudgetRemainExact
+              - TestX86OrdinaryResultAddressDistinctFieldsAndRevocation
+              - TestX86OrdinaryResultAddressConcurrentOriginalFile
+              - TestX86OrdinaryResultAddressOriginalGoAndLLVMFiveTargetObjects
               - TestGoX86SDKASMDataOriginalVendorPackageNamespace
               - TestGoX86SDKNumericalReadPackageQueryMatchesOriginalLiteralSource
               - TestSDKAMD64OriginalFrameConfigGuardEagerIdentity

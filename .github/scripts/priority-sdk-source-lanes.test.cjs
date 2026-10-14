@@ -280,6 +280,25 @@ test('Complete direction control and string-consumer regressions are mandatory',
   assert.equal((sdk.match(/- lane:/g) || []).length, 13);
 });
 
+test('Ordinary result aliases require the complete class and target objects', () => {
+  const source = sdk.slice(sdk.indexOf('- lane: source\n'), sdk.indexOf('- lane: frame-context\n'));
+  for (const root of [
+    'TestX86OrdinaryResultAddressWholeSource',
+    'TestX86OrdinaryResultAddressNoProbeRejectsUnknown',
+    'TestX86OrdinaryResultAddressScalarTransferWidths',
+    'TestX86OrdinaryResultAddressPrivateProofNotPublicAuthority',
+    'TestX86OrdinaryResultAddressNativeAliasOrdering',
+    'TestX86OrdinaryResultAddressPhysicalBanksAndFieldBytes',
+    'TestX86OrdinaryResultAddressKeepsUnclosedRoles',
+    'TestX86OrdinaryResultAddressLayoutAndBudgetRemainExact',
+    'TestX86OrdinaryResultAddressDistinctFieldsAndRevocation',
+    'TestX86OrdinaryResultAddressConcurrentOriginalFile',
+    'TestX86OrdinaryResultAddressOriginalGoAndLLVMFiveTargetObjects',
+  ]) assert.equal(source.split(`- ${root}\n`).length - 1, 1, root);
+  assert.match(source, /timeout: 5m/);
+  assert.equal((sdk.match(/- lane:/g) || []).length, 13);
+});
+
 test('Actual failed SDK frame paths run before the complete-module barrier', () => {
   const llvm = sdk.slice(sdk.indexOf('- lane: llvm'), sdk.indexOf('- lane: crc32-linux'));
   for (const root of [
