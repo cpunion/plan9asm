@@ -9,13 +9,14 @@ import (
 
 func TestX86ABI0ResultInitializationCompleteStateByteEnvelope(t *testing.T) {
 	// 1944 FP bytes + 16 AUTO bytes + (16 GP + 16 canonical GP + 256 Z +
-	// 8 K + 1 flags + 16 pointer + 16 caller-address identities + 1 shape discriminator) is 2290 logical payload
+	// 8 K + 1 flags + 16 pointer + 16 caller-address identities + 32 origin
+	// IDs + 2 scan-pending + 3 predicate + 1 DF + 1 shape discriminator) is the logical payload
 	// bytes. Every vector bank now tracks all 64 byte-definedness bits; the
 	// redundant representation of its low-X bits is not another logical value.
 	// A linear CFG pays its source scan and
 	// eight conservative copy/join units for each visited instruction. This
 	// tests the logical work envelope, not Go's actual heap allocation size.
-	const payloadBytes = 1944 + 16 + 16 + 16 + 256 + 8 + 1 + 16 + 16 + 1
+	const payloadBytes = 1944 + 16 + 16 + 16 + 256 + 8 + 1 + 16 + 16 + 32 + 2 + 3 + 1 + 1
 	const workLimit = 64 << 20
 	const lastLinear = workLimit / (9 * payloadBytes)
 	const lastSource = workLimit / (8 * payloadBytes)

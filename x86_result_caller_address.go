@@ -54,6 +54,9 @@ func x86ResultCallerAddressesAfter(ins Instr, before [16]bool, entryFP map[int64
 		return [16]bool{}
 	}
 	ins = x86GoMOVQSourceInstruction(ins) // Original source/certificates stay unchanged.
+	if _, known, err := x86DirectionControlProperties(ins.Op, ins, arch); known && err == nil {
+		return before // Only DF changes; no GP, pointer or six-status writes.
+	}
 	word := x86ResultPointerWord(arch)
 	move, lea, add, sub := Op("MOVQ"), Op("LEAQ"), Op("ADDQ"), Op("SUBQ")
 	if arch == "386" {

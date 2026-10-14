@@ -14,6 +14,11 @@ import (
 func x86ScalarFPBitViewAPI(t *testing.T, source, declaration, arch, triple, api string) (string, error) {
 	t.Helper()
 	pkg := mustGoPackage(t, "bitview", "package bitview\n"+declaration)
+	return x86ScalarFPBitViewPackageAPI(t, source, pkg, arch, triple, api)
+}
+
+func x86ScalarFPBitViewPackageAPI(t *testing.T, source string, pkg GoPackage, arch, triple, api string) (string, error) {
+	t.Helper()
 	resolve := func(symbol string) string { return strings.TrimPrefix(goStripABISuffix(symbol), "·") }
 	ctx := llvm.NewContext()
 	defer ctx.Dispose()
