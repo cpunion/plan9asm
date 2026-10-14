@@ -96,6 +96,28 @@ func x86ResultCallerAddressesAfter(ins Instr, before [16]bool, entryFP map[int64
 		}
 		return before
 	}
+	if form, known, err := x86MoveMaskProperties(ins.Op, ins, arch); known {
+		if err != nil || form.byteWidth == 8 {
+			return [16]bool{} // Unbound physical MMX is not a caller effect.
+		}
+		index, valid := amd64VectorRegisterIndex(ins.Args[0].Reg, form.byteWidth)
+		destination, _, physical := x86ResultGP(ins.Args[1].Reg, 4, arch)
+		if !valid || arch == "386" && index >= 8 || !physical {
+			return [16]bool{}
+		}
+		before[destination] = false // Complete typed r32 output, no other GP writes.
+		return before
+	}
+	if _, known, err := x86BroadcastProperties(ins.Op, ins, arch); known && err == nil {
+		return before // Scalar/block/mask inputs never give this vector output a GP write.
+	}
+	if _, known, err := x86VectorTestProperties(ins.Op, ins, arch); known && err == nil {
+		return before // Only FLAGS change; source/memory definedness is checked independently.
+	}
+	if form, known, err := x86ScalarBitScanProperties(ins.Op, ins, arch); known && err == nil {
+		kill(ins.Args[1], int64(form.bits/8))
+		return before // Conditional numerical definedness does not widen the write footprint.
+	}
 	if form, known, err := x86ConditionalSetProperties(ins.Op, ins, arch); known && err == nil {
 		kill(form.destination, 1)
 		return before
