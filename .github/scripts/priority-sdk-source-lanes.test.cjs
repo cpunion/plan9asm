@@ -190,6 +190,33 @@ test('Canonical bool calls retain complete source, byte, lifetime and budget pri
   assert.equal((sdk.match(/- lane:/g) || []).length, 13);
 });
 
+test('Complete bit-scan native axes and their authority controls are mandatory', () => {
+  const native = workflow.slice(workflow.indexOf('\n  native-x86-oracles:'), workflow.indexOf('\n  complete-windows:'));
+  for (const root of [
+    'TestCrossLinuxRuntimeMatrixX86BitScanNativeAMD64OriginalGoAndLLVM',
+    'TestCrossLinuxRuntimeMatrixX86BitScanNative386OriginalGoAndLLVM',
+  ]) assert.ok(native.includes(root), root);
+  assert.match(native, /go test \. -list "\^\(\$bit_scan_roots\)\$"/);
+  assert.match(native, /grep -Fx "\$root" _out\/native-x86-oracles\/bit-scan-inventory.log/);
+  assert.match(native, /roots\+="\|\$bit_scan_roots"/);
+  assert.match(native, /-timeout=8m/);
+  assert.doesNotMatch(native, /qemu|overlay|continue-on-error|max-parallel/);
+  const source = sdk.slice(sdk.indexOf('- lane: source\n'), sdk.indexOf('- lane: frame-context\n'));
+  for (const root of [
+    'TestX86ScalarBitScanExecutionOracleDoesNotInventZeroOrFlags',
+    'TestX86ScalarBitScanExecutionOracleCompleteWidthsAliasesAndRecords',
+    'TestX86ScalarBitScanExecutionPhysicalStatusShimKeepsPublicRoles',
+    'TestX86ScalarBitScanExecutionStatusObservationDoesNotAuthorizePublicFlags',
+    'TestX86ScalarBitScanRuntimeNativeOwnersCannotEmulateOrSkip',
+    'TestX86ScalarBitScanRuntimeNativePolicyRejectsMutation',
+    'TestX86ABI0Mode32CanonicalBoolCallSelectionKeepsNonboolGoFilter',
+    'TestX86ABI0Mode32CanonicalBoolCallSelectionKeepsNonboolWholeFiles',
+    'TestX86ABI0Mode32CanonicalBoolCallSelectionRetainsTrueBoolLimit',
+    'TestX86ABI0Mode32CanonicalBoolCallSelectionRejectsChangingQuery',
+  ]) assert.equal(source.split(`- ${root}\n`).length - 1, 1, root);
+  assert.equal((sdk.match(/- lane:/g) || []).length, 13);
+});
+
 test('Sparse GP SIMD must execute both actual native architectures', () => {
   const native = workflow.slice(workflow.indexOf('\n  native-x86-oracles:'), workflow.indexOf('\n  complete-windows:'));
   for (const root of [

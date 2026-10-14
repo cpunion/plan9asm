@@ -83,6 +83,13 @@ jobs:
             grep -Fx "$root" _out/native-x86-oracles/gp-simd-sparse-inventory.log
           done
           roots+="|$gp_simd_sparse_roots"
+          bit_scan_roots='TestCrossLinuxRuntimeMatrixX86BitScanNativeAMD64OriginalGoAndLLVM'
+          bit_scan_roots+='|TestCrossLinuxRuntimeMatrixX86BitScanNative386OriginalGoAndLLVM'
+          go test . -list "^($bit_scan_roots)$" > _out/native-x86-oracles/bit-scan-inventory.log
+          for root in ${bit_scan_roots//|/ }; do
+            grep -Fx "$root" _out/native-x86-oracles/bit-scan-inventory.log
+          done
+          roots+="|$bit_scan_roots"
           families='MADDTypedOriginalLegacy|PackedNarrowOriginalLegacyOracle|ScalarFPBitViewsOriginalBitsAndCanaries'
           families+='|PureGPUnknownDeadOutputs|SignedIntegerScalarFloatTranslatedFPFields|ScalarCompareFlags'
           families+='|RawReturnSourceAddressNumerical|FloatingCompareOriginalLegacyPredicates|TimestampOriginalAndLLVM'
@@ -287,6 +294,16 @@ jobs:
               - TestX86ABI0Mode32BoolPreflightUsesOneBoundedWholeProof
               - TestX86ABI0Mode32InitializedByteIsNotCanonicalBool
               - TestX86ABI0Mode32CanonicalFactDomainIsIndependent
+              - TestX86ScalarBitScanExecutionOracleDoesNotInventZeroOrFlags
+              - TestX86ScalarBitScanExecutionOracleCompleteWidthsAliasesAndRecords
+              - TestX86ScalarBitScanExecutionPhysicalStatusShimKeepsPublicRoles
+              - TestX86ScalarBitScanExecutionStatusObservationDoesNotAuthorizePublicFlags
+              - TestX86ScalarBitScanRuntimeNativeOwnersCannotEmulateOrSkip
+              - TestX86ScalarBitScanRuntimeNativePolicyRejectsMutation
+              - TestX86ABI0Mode32CanonicalBoolCallSelectionKeepsNonboolGoFilter
+              - TestX86ABI0Mode32CanonicalBoolCallSelectionKeepsNonboolWholeFiles
+              - TestX86ABI0Mode32CanonicalBoolCallSelectionRetainsTrueBoolLimit
+              - TestX86ABI0Mode32CanonicalBoolCallSelectionRejectsChangingQuery
               - TestGoX86SDKASMDataOriginalVendorPackageNamespace
               - TestGoX86SDKNumericalReadPackageQueryMatchesOriginalLiteralSource
               - TestSDKAMD64OriginalFrameConfigGuardEagerIdentity
