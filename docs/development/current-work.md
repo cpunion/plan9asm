@@ -1,6 +1,6 @@
 # Current work: PR 40 checkpoint
 
-Checkpoint: 2026-10-14 12:54 UTC. Contribution source: `3f972336`.
+Checkpoint: 2026-10-14 13:28 UTC. Contribution source: `6a20cdf2`.
 This is a handoff, not a ledger or a claim that current-head CI/stdlib passes.
 
 ## Scope and authority
@@ -26,11 +26,11 @@ Do not edit the primary or probe while their frozen jobs run.
 
 | Worktree basename | Branch / purpose |
 | --- | --- |
-| `plan9asm-wt-pr40-scalar-lane-native-20261011` | `codex/pr40-external-corpus-split-20261011`; integrated source `3f972336`; full SDK composition still pending |
-| `plan9asm-wt-pr40-stdlib-preprocessing-20261012` | `codex/pr40-windows-owned-process-probe-20261013`; staged fork-only priorities, `2a0d634f`; not pushed |
-| `plan9asm-wt-pr40-sdk-numeric-maps-entry-20261013` | `codex/pr40-sdk-numeric-maps-entry-20261013`; scoped bool/literal leaf `6e63c125`; repairing existing logical bool callers |
+| `plan9asm-wt-pr40-scalar-lane-native-20261011` | `codex/pr40-external-corpus-split-20261011`; integrated source `6a20cdf2`; full SDK composition still pending |
+| `plan9asm-wt-pr40-stdlib-preprocessing-20261012` | `codex/pr40-windows-owned-process-probe-20261013`; staged fork-only priorities, `0506accd`; not pushed |
+| `plan9asm-wt-pr40-sdk-numeric-maps-entry-20261013` | `codex/pr40-sdk-numeric-maps-entry-20261013`; verified bool/literal/CALL leaves; auditing non-bool selection and native-owner qualification |
 | `plan9asm-wt-pr40-sdk-tls-20261013` | `codex/pr40-sdk-tls-20261013`; caller leaf `92742505`; authenticated NUM node/emitter composition still dirty |
-| `plan9asm-wt-pr40-simple-sdk-bindings-20261013` | `codex/pr40-sdk-storage-snapshot-20261013`; GP/X objects `b4f6d916`; fixing full bit-scan zero semantics |
+| `plan9asm-wt-pr40-simple-sdk-bindings-20261013` | `codex/pr40-sdk-storage-snapshot-20261013`; verified bit-scan leaf `46f48072`; adding required native execution fixtures |
 
 ## Latest two frozen fork runs
 
@@ -202,8 +202,17 @@ pending result. Only its nonzero edge defines formerly unknown destination
 bytes; joins, raw roles, replaced flags and unknown upper bytes cannot borrow
 the fact. Its9-root/412-child union passes Go27/race/Go20 in0.667/2.813/0.700s.
 This conservative first leaf still rejects an initialized-prior zero-result
-case in the unchanged `goHexWordOps`; the separate native opcode/FLAGS repair
-is pending. Never change that original conformance expectation to hide it.
+case in the unchanged `goHexWordOps`; the later `46f48072` repair below closes
+that regression without changing the original conformance expectation.
+
+`46f48072` is integrated as `0a0e876e`: the complete six-name native opcode
+bridge preserves actual zero-input prior/high-half and CPU FLAGS behavior.
+Only portable ZF becomes source proof; unknown bytes remain unknown. Its frozen
+54-root/2,350-child pure union passes Go27/race/Go20 in2.528/10.350/2.356s;
+five actual Go target objects and60 LLVM22 IR/backend O0/O2 axes pass4.653s.
+The unchanged complete `goHexWordOps` function passes three APIs. This is not
+whole-conformance-file or native execution certification. Required native
+AMD64/386 fixtures and original-only ABI0 guarded callers are still being added.
 
 `047796dd` extracts one complete vector-test shape for lowerer and observer.
 The exact comparison-byte/test/ZF-nonzero/movemask chain supplies a bounded
@@ -251,18 +260,32 @@ retry children fail at typed entry/terminal signature inventory. Repair the
 actual CLI signature consumer; do not weaken original-node binding. No object,
 runtime or parent-head certification follows. The combined duration also needs
 measured verification-cost reduction, not larger budgets.
+The later dirty-v10 actual Bytealg CLI root passes72.449s, producing nonempty
+LLVM22 objects for both complete members. An exact typed-declaration inventory
+adapter removes fabricated helper signatures, and one downstream handoff
+forwards the admitted map; the existing strict Options comparator stays intact.
+The final frozen producer/core/race/Go20/official and rich SDK union is pending.
 
-Numeric `6e63c125` is scoped pure/IR evidence only, not integrated yet. Its
-canonicalFP and physical-I8 intermediates repair raw2/3/255 washing, but the
-existing complete logical bool-frame fixture still fails `BoolCaller` across
-all three APIs. The follow-up complete84-root Go27/race and83-root Go20 unions
-remain FAILED, each with exactly that one root/three children. Preserve the old
-fixture; close readonly same-file callee/outgoing-byte/source identity first.
+Numeric `6e63c125`/`48a8ef1a` are integrated as `1c23a81e`/`23201634`.
+CanonicalFP and physical-I8 intermediates preserve raw2/3/255 bytes until proved
+canonical RET. Bounded independent declared-slot aliases and cached readonly
+same-file callee proofs close the unchanged complete seven-TEXT bool fixture.
+Final user callbacks cannot mutate original source/declarations and publish.
+The worker90/2,535 pure union passes Go27/race; actual Go20's89 roots also pass.
+Parent's first118-root union genuinely FAILED3.638s at two old budget constants;
+that report remains failed. `4b9337d5`, integrated as `6a20cdf2`, revokes all
+three newer CALL domains and independently accounts for their37 logical bytes,
+without increasing the budget. Parent120-root/3,602-child union now passes
+Go27/race/Go20 in3.973/16.131/4.387s (Go20 has119 roots by explicit build role).
+Fresh inventories, all child terminals, stable head/clean tree and vet pass.
+SDK386 maps, complete-module/object/runtime and native bool execution remain
+pending. The separate native bool owner still needs exact native/kernel gates.
 
-Fork-only `2a0d634f` retains13 lanes and original budgets, adds12 exact predicate
-and five exact caller-origin source roots (40 unique source priorities), plus
-both native sparse-GP/X owners. All33 policy tests/actionlint pass; the new
-missing-origin priority RED remains preserved. The planned54-root native
+Fork-only `0506accd` retains13 lanes and original budgets, with70 unique source
+priorities covering predicates, origins, complete bit-scan objects and bool
+source/CALL/budget controls, plus both native sparse-GP/X owners.
+All35 policy tests/actionlint pass; genuine missing-priority REDs are preserved.
+The planned54-root native
 profile requires eight inventories/16 mandatory
 roots. Its12 auditor mutation controls pass, but expanded logs are synthetic,
 not execution. The fork still lacks later source merges; do not push it yet.
@@ -308,9 +331,9 @@ Source failures remain retryable, never pass/skip. Later values require readback
   benchmark before the next allowed-fork batch. Full CI remains required.
 - TLS agent owns the only heavy slot: authenticated NUM/original-node graph
   composition, then complete SDK failures. Original source is never cropped.
-- Numeric agent: independent386 canonicalFP/physical-I8 and readonly logical
-  same-file calls; complete existing bool-frame failure remains open.
-- Frontend agent: complete bit-scan zero semantics and original conformance;
+- Numeric agent: audit non-bool selection, then qualify the required native
+  bool owner; SDK386 literal/minimum object/runtime certification is pending.
+- Frontend agent: complete original-Go/LLVM bit-scan native execution fixtures;
   native sparse GP/X execution remains pending. No local scan.
 One heavy source/SDK/object owner at a time; small bounded pure controls may overlap.
 Preserve native execution vs QEMU/emulated diagnostics, all original fault effects,
