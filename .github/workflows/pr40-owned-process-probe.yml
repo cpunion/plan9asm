@@ -140,6 +140,36 @@ jobs:
               - TestReflectDynamicStubSelectedAssemblyIdentity
               - TestReflectDynamicStubSelectedAssemblyRejectsUnboundIdentity
             timeout: 5m
+          - lane: literal-minimum-simple
+            module: cmd/plan9asm
+            roots:
+              - TestSimpleCLIOriginalSDKMapsLiteralMinimumSource
+            timeout: 8m
+          - lane: literal-minimum-llvm
+            module: cmd/plan9asmll
+            roots:
+              - TestCompileOneX86SDKOriginalMapsLiteralMinimumSource
+            timeout: 5m
+          - lane: metadata-only
+            module: internal/sdkfrontend
+            roots:
+              - TestSharedSDKMetadataOriginalEmptyDATACompleteThreeOS
+            timeout: 10m
+          - lane: publication
+            module: cmd/plan9asmll
+            roots:
+              - TestCompileOneCallerLateSourceGuardDoesNotPublish
+              - TestCompileOneARM64TailLateSourceGuardDoesNotPublish
+              - TestCompileOneFixedLocalLateOwnerGuardDoesNotPublish
+              - TestCompileOneContinuationLateReferenceDoesNotPublish
+              - TestCompileOutputTransactionSealedInputs
+              - TestCompileOutputTransactionDirectoryIdentity
+              - TestCompileOutputTransactionRechecksLaterMembers
+              - TestCompileOutputTransactionRollbackAndRestoreFailure
+              - TestCompileOutputTransactionRollbackDoesNotReplaceConcurrentOutput
+              - TestCompileOutputTransactionCommittedCleanupIsExplicit
+              - TestCompileOutputTransactionNonretainedObjectPolicy
+            timeout: 5m
           - lane: crc32-linux
             module: cmd/plan9asm
             roots:
