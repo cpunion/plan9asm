@@ -7,6 +7,17 @@ Let active frozen CI runs finish before publishing another batch.
 
 ## Current checkpoint: 2026-10-14
 
+Fork [38507506824](https://github.com/cpunion/plan9asm/actions/runs/38507506824)
+tests frozen `af4b6a3f` (contribution `5a5a477a`, plus fork-only priorities).
+All twelve priority jobs pass; the complete Windows modules are running.
+The independently inventoried native LEA counterpart now executes successfully
+alongside all 48 previous native roots: 49/49 pass in 91.126 seconds, with six
+mandatory inventories/eleven exact required roots and zero skipped, missing
+or duplicate terminals. This closes the native LEA axis, not the whole run.
+Retain the earlier default-emulator failure separately. Do not edit or replace
+this frozen fork until its complete jobs finish naturally. The SDK factory and
+continuation-reference guard remain unmerged, independently staged work.
+
 Fork [38502949565](https://github.com/cpunion/plan9asm/actions/runs/38502949565)
 tests frozen `e544c001` (contribution `94bd05f1`, plus fork-only priorities).
 The run finishes naturally with all 45 jobs successful. All twelve priority
