@@ -135,45 +135,92 @@ func x86BitScanLLVMExecutionDriver(fixture x86BitScanExecutionFixture) string {
 	}
 	return `#include <stdint.h>
 #include <stdio.h>
+
 typedef ` + typ + ` word;
-static __attribute__((always_inline)) inline uintptr_t stack_pointer(void){uintptr_t value;__asm__ volatile("` + stack + `":"=r"(value)::"memory");return value;}
+
+static __attribute__((always_inline)) inline uintptr_t stack_pointer(void) {
+    uintptr_t value;
+    __asm__ volatile("` + stack + `" : "=r"(value) : : "memory");
+    return value;
+}
+
 ` + declarations.String() + `
-static const struct{word(*public)(word,word,uint32_t,uint32_t);void(*observe)(word*,word,word,word);int role;} rows[]={
+static const struct {
+    word (*public)(word, word, uint32_t, uint32_t);
+    void (*observe)(word *, word, word, word);
+    int role;
+} rows[] = {
 ` + registrations.String() + `};
-int main(int argc,char **argv){
- if(argc!=2)return 1;
- FILE *reference=fopen(argv[1],"r");if(!reference)return 2;
- const uint64_t inputs[]={` + inputs.String() + `},priors[]={` + priors.String() + `};
- unsigned checks=0;
- for(unsigned x=0;x<sizeof(inputs)/sizeof(inputs[0]);x++)for(unsigned p=0;p<sizeof(priors)/sizeof(priors[0]);p++)for(unsigned status=0;status<64;status++){
-  uint64_t seed=0;const unsigned positions[]={0,2,4,6,7,11};
-  for(unsigned bit=0;bit<6;bit++)seed|=((status>>bit)&1u)<<positions[bit];
-  for(unsigned r=0;r<sizeof(rows)/sizeof(rows[0]);r++){
-   const word left=(word)(UINT64_C(0x1122334455667788)^seed),right=(word)(UINT64_C(0x8877665544332211)^priors[p]);
-   volatile word guards[]={left,0,0,right};
-   word value=0,flags=0;
-   const uintptr_t stackBefore=stack_pointer();
-   if(rows[r].role<3)value=rows[r].public((word)inputs[x],(word)priors[p],(uint32_t)seed,(uint32_t)priors[p]);else{
-    rows[r].observe((word*)guards,(word)inputs[x],(word)priors[p],(word)seed);
-    value=guards[1];flags=guards[2]&2261u;
-   }
-   const uintptr_t stackAfter=stack_pointer();
-   unsigned long long expectedValue=0,expectedFlags=0;
-   if(fscanf(reference,"%llx %llx",&expectedValue,&expectedFlags)!=2||
-      (uint64_t)value!=expectedValue||(uint64_t)flags!=expectedFlags||guards[0]!=left||guards[3]!=right||stackBefore!=stackAfter){
-    fprintf(stderr,"bit-scan row=%u x=%llx prior=%llx seed=%llx value=%llx flags=%llx original=%llx/%llx SP=%llx/%llx or result-array boundary mismatch\n",
-     r,(unsigned long long)inputs[x],(unsigned long long)priors[p],(unsigned long long)seed,
-     (unsigned long long)value,(unsigned long long)flags,expectedValue,expectedFlags,
-     (unsigned long long)stackBefore,(unsigned long long)stackAfter);fclose(reference);return 3;
-   }
-   checks++;
-  }
- }
- unsigned long long extraValue,extraFlags;
- if(fscanf(reference,"%llx %llx",&extraValue,&extraFlags)!=EOF){fclose(reference);return 4;}
- if(fclose(reference))return 5;
- printf("bit-scan original/LLVM NUM+six-status+canaries checks=%u\n",checks);
- return 0;
+
+int main(int argc, char **argv) {
+    if (argc != 2)
+        return 1;
+
+    FILE *reference = fopen(argv[1], "r");
+    if (!reference)
+        return 2;
+
+    const uint64_t inputs[] = {` + inputs.String() + `},
+        priors[] = {` + priors.String() + `};
+    unsigned checks = 0;
+
+    for (unsigned x = 0; x < sizeof(inputs) / sizeof(inputs[0]); x++)
+        for (unsigned p = 0; p < sizeof(priors) / sizeof(priors[0]); p++)
+            for (unsigned status = 0; status < 64; status++) {
+                uint64_t seed = 0;
+                const unsigned positions[] = {0, 2, 4, 6, 7, 11};
+                for (unsigned bit = 0; bit < 6; bit++)
+                    seed |= ((status >> bit) & 1u) << positions[bit];
+
+                for (unsigned r = 0; r < sizeof(rows) / sizeof(rows[0]); r++) {
+                    const word left = (word)(UINT64_C(0x1122334455667788) ^ seed),
+                        right = (word)(UINT64_C(0x8877665544332211) ^ priors[p]);
+                    volatile word guards[] = {left, 0, 0, right};
+                    word value = 0, flags = 0;
+                    const uintptr_t stackBefore = stack_pointer();
+
+                    if (rows[r].role < 3)
+                        value = rows[r].public((word)inputs[x], (word)priors[p],
+                                              (uint32_t)seed, (uint32_t)priors[p]);
+                    else {
+                        rows[r].observe((word *)guards, (word)inputs[x],
+                                        (word)priors[p], (word)seed);
+                        value = guards[1];
+                        flags = guards[2] & 2261u;
+                    }
+
+                    const uintptr_t stackAfter = stack_pointer();
+                    unsigned long long expectedValue = 0, expectedFlags = 0;
+                    if (fscanf(reference, "%llx %llx", &expectedValue, &expectedFlags) != 2 ||
+                        (uint64_t)value != expectedValue ||
+                        (uint64_t)flags != expectedFlags ||
+                        guards[0] != left || guards[3] != right ||
+                        stackBefore != stackAfter) {
+                        fprintf(stderr,
+                            "bit-scan row=%u x=%llx prior=%llx seed=%llx value=%llx flags=%llx original=%llx/%llx SP=%llx/%llx or result-array boundary mismatch\n",
+                            r, (unsigned long long)inputs[x],
+                            (unsigned long long)priors[p], (unsigned long long)seed,
+                            (unsigned long long)value, (unsigned long long)flags,
+                            expectedValue, expectedFlags,
+                            (unsigned long long)stackBefore,
+                            (unsigned long long)stackAfter);
+                        fclose(reference);
+                        return 3;
+                    }
+                    checks++;
+                }
+            }
+
+    unsigned long long extraValue, extraFlags;
+    if (fscanf(reference, "%llx %llx", &extraValue, &extraFlags) != EOF) {
+        fclose(reference);
+        return 4;
+    }
+    if (fclose(reference))
+        return 5;
+
+    printf("bit-scan original/LLVM NUM+six-status+canaries checks=%u\n", checks);
+    return 0;
 }
 `
 }
