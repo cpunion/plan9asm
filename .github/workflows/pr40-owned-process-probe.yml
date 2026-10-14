@@ -266,6 +266,27 @@ jobs:
               - TestX86ResultCallerAddressDifferenceThreeAPIWholeSourceAdmission
               - TestX86ResultCallerAddressDifferenceCFGAndRevocation
               - TestX86ResultCallerAddressOriginIsBoundedIndependentMustState
+              - TestX86ABI0Mode32CanonicalBoolCallOriginalIdentity
+              - TestX86ABI0Mode32CanonicalBoolCallPlanStateAndCache
+              - TestX86ABI0Mode32CanonicalBoolSameFileCallThreeAPIs
+              - TestX86ABI0Mode32CanonicalBoolCallFinalCallbacks
+              - TestX86ABI0Mode32CanonicalBoolCallKeepsWholeSource
+              - TestX86ABI0Mode32CanonicalBoolCallExistingFloatPredicate
+              - TestX86ABI0Mode32CanonicalBoolCallRevokesAllDerivedDomains
+              - TestX86ABI0Mode32CanonicalBoolCallDerivedDomainsThreeAPIs
+              - TestX86ABI0Mode32CanonicalBoolExistingWholeFrameThreeAPIs
+              - TestX86ABI0Mode32CanonicalBoolTypedInputAndPrivateAlias
+              - TestX86ABI0Mode32CanonicalBoolParameterRawBytesRemainPhysical
+              - TestX86ABI0Mode32CanonicalBoolAliasCloneJoinAndBudget
+              - TestX86ABI0Mode32CanonicalBoolByteResult
+              - TestX86ABI0Mode32BoolThreeAPIsCannotBypassCanonicalProof
+              - TestX86ABI0Mode32BoolIntermediateBytesSurviveThreeAPIs
+              - TestX86ABI0Mode32BoolWholeCFGAndOverwriteThreeAPIs
+              - TestX86ABI0Mode32CanonicalBoolRoleAndSourceIdentity
+              - TestX86ABI0Mode32CanonicalFPCloneJoinAndBudget
+              - TestX86ABI0Mode32BoolPreflightUsesOneBoundedWholeProof
+              - TestX86ABI0Mode32InitializedByteIsNotCanonicalBool
+              - TestX86ABI0Mode32CanonicalFactDomainIsIndependent
               - TestGoX86SDKASMDataOriginalVendorPackageNamespace
               - TestGoX86SDKNumericalReadPackageQueryMatchesOriginalLiteralSource
               - TestSDKAMD64OriginalFrameConfigGuardEagerIdentity

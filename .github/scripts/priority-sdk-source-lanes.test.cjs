@@ -161,6 +161,35 @@ test('Bit-scan zero semantics and complete object cohort cannot wait behind full
   assert.equal((sdk.match(/- lane:/g) || []).length, 13);
 });
 
+test('Canonical bool calls retain complete source, byte, lifetime and budget priorities', () => {
+  const source = sdk.slice(sdk.indexOf('- lane: source\n'), sdk.indexOf('- lane: frame-context\n'));
+  for (const root of [
+    'TestX86ABI0Mode32CanonicalBoolCallOriginalIdentity',
+    'TestX86ABI0Mode32CanonicalBoolCallPlanStateAndCache',
+    'TestX86ABI0Mode32CanonicalBoolSameFileCallThreeAPIs',
+    'TestX86ABI0Mode32CanonicalBoolCallFinalCallbacks',
+    'TestX86ABI0Mode32CanonicalBoolCallKeepsWholeSource',
+    'TestX86ABI0Mode32CanonicalBoolCallExistingFloatPredicate',
+    'TestX86ABI0Mode32CanonicalBoolCallRevokesAllDerivedDomains',
+    'TestX86ABI0Mode32CanonicalBoolCallDerivedDomainsThreeAPIs',
+    'TestX86ABI0Mode32CanonicalBoolExistingWholeFrameThreeAPIs',
+    'TestX86ABI0Mode32CanonicalBoolTypedInputAndPrivateAlias',
+    'TestX86ABI0Mode32CanonicalBoolParameterRawBytesRemainPhysical',
+    'TestX86ABI0Mode32CanonicalBoolAliasCloneJoinAndBudget',
+    'TestX86ABI0Mode32CanonicalBoolByteResult',
+    'TestX86ABI0Mode32BoolThreeAPIsCannotBypassCanonicalProof',
+    'TestX86ABI0Mode32BoolIntermediateBytesSurviveThreeAPIs',
+    'TestX86ABI0Mode32BoolWholeCFGAndOverwriteThreeAPIs',
+    'TestX86ABI0Mode32CanonicalBoolRoleAndSourceIdentity',
+    'TestX86ABI0Mode32CanonicalFPCloneJoinAndBudget',
+    'TestX86ABI0Mode32BoolPreflightUsesOneBoundedWholeProof',
+    'TestX86ABI0Mode32InitializedByteIsNotCanonicalBool',
+    'TestX86ABI0Mode32CanonicalFactDomainIsIndependent',
+  ]) assert.equal(source.split(`- ${root}\n`).length - 1, 1, root);
+  assert.match(source, /timeout: 5m/);
+  assert.equal((sdk.match(/- lane:/g) || []).length, 13);
+});
+
 test('Sparse GP SIMD must execute both actual native architectures', () => {
   const native = workflow.slice(workflow.indexOf('\n  native-x86-oracles:'), workflow.indexOf('\n  complete-windows:'));
   for (const root of [
