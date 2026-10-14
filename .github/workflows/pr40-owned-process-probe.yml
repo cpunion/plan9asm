@@ -247,6 +247,15 @@ jobs:
               - TestX86ScalarBitScanWholeSourceThreeAPIAdmission
               - TestX86ABI0ResultBitScanPendingStateCannotLeakAuthority
               - TestX86ABI0ResultBitScanPortableStatusFlagConsumers
+              - TestX86ScalarBitScanNativeHelperShapesAndTargetBoundaries
+              - TestX86ScalarBitScanNarrowRegisterAliasRetainsUnknownUpperBytes
+              - TestX86ScalarBitScanNamespaceAndMissingCompilerBridge
+              - TestX86ResultBitScanZeroPreservesOnlyPriorNumericalBytes
+              - TestX86ScalarBitScanInitializedPriorThreeAPIs
+              - TestX86ScalarBitScanUnknownPriorStillNeedsZeroEdgeContext
+              - TestX86ScalarBitScanOriginalGoHexWordOpsFunctionThreeAPIs
+              - TestX86ScalarBitScanCompleteObjectFixtureNumericalRoles
+              - TestX86ScalarBitScanCompleteOriginalGoAndLLVMFiveTargetObjects
               - TestX86ResultPredicateNonzeroComparisonMaskBitScan
               - TestX86ResultPredicateNonzeroCannotBorrowOtherValueOrWidth
               - TestX86ResultPredicateLegacyAndVEXCompleteComparisonFamilies

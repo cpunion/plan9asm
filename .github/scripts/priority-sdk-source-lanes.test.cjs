@@ -144,6 +144,23 @@ test('Caller-address differences retain their exact source-origin priority contr
   assert.equal((sdk.match(/- lane:/g) || []).length, 13);
 });
 
+test('Bit-scan zero semantics and complete object cohort cannot wait behind full modules', () => {
+  const source = sdk.slice(sdk.indexOf('- lane: source\n'), sdk.indexOf('- lane: frame-context\n'));
+  for (const root of [
+    'TestX86ScalarBitScanNativeHelperShapesAndTargetBoundaries',
+    'TestX86ScalarBitScanNarrowRegisterAliasRetainsUnknownUpperBytes',
+    'TestX86ScalarBitScanNamespaceAndMissingCompilerBridge',
+    'TestX86ResultBitScanZeroPreservesOnlyPriorNumericalBytes',
+    'TestX86ScalarBitScanInitializedPriorThreeAPIs',
+    'TestX86ScalarBitScanUnknownPriorStillNeedsZeroEdgeContext',
+    'TestX86ScalarBitScanOriginalGoHexWordOpsFunctionThreeAPIs',
+    'TestX86ScalarBitScanCompleteObjectFixtureNumericalRoles',
+    'TestX86ScalarBitScanCompleteOriginalGoAndLLVMFiveTargetObjects',
+  ]) assert.equal(source.split(`- ${root}\n`).length - 1, 1, root);
+  assert.match(source, /timeout: 5m/);
+  assert.equal((sdk.match(/- lane:/g) || []).length, 13);
+});
+
 test('Sparse GP SIMD must execute both actual native architectures', () => {
   const native = workflow.slice(workflow.indexOf('\n  native-x86-oracles:'), workflow.indexOf('\n  complete-windows:'));
   for (const root of [
