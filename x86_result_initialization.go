@@ -157,10 +157,12 @@ func checkX86ResultSourceFlow(fn Func, initial x86ResultState, owned []bool, res
 			state.bitScanPending = x86ResultBitScanPending{}
 		}
 		before := state.callerAddressGP
+		predicate := state.predicate
 		if !x86DirectTailResultAddressTransfer(ins, state, owned, resultOffset, arch, originalTransfer, ordinal) {
 			return false
 		}
 		state.callerAddressGP = x86ResultCallerAddressesAfter(ins, before, state.callerAddressFP, arch)
+		state.predicate = x86ResultPredicateAfter(ins, predicate, arch)
 		return true
 	}
 	fail := func(reason string) error {
@@ -199,7 +201,7 @@ func checkX86ResultSourceFlow(fn Func, initial x86ResultState, owned []bool, res
 	// layout metadata, not a state payload copied at each CFG successor.
 	// AUTO states do not obtain an independent frame or iteration budget.
 	byteState := len(initial.fp) + len(initial.auto) + len(initial.gp) + len(initial.canonicalGP) +
-		8*len(initial.xmm) + len(initial.masks) + 1 + len(initial.pointerGP) + len(initial.callerAddressGP) + 1 + 2
+		8*len(initial.xmm) + len(initial.masks) + 1 + len(initial.pointerGP) + len(initial.callerAddressGP) + 1 + 2 + 3
 	if len(initial.resultAddressSlots) != 0 {
 		byteState += len(initial.resultAddressGP)*25 + 1
 	}
@@ -320,7 +322,7 @@ func checkX86ResultSourceFlow(fn Func, initial x86ResultState, owned []bool, res
 			return fail(fmt.Sprintf("unknown effect or undefined input at instruction %d: %s", pc, ins.Raw))
 		}
 		for edge, target := range edges[pc] {
-			nextState := x86ResultBitScanEdge(state, ins, edge)
+			nextState := x86ResultPredicateEdge(state, ins, edge)
 			if previous, visited := states[target]; visited {
 				merged := previous.intersect(nextState)
 				if reflect.DeepEqual(previous, merged) {
@@ -369,6 +371,7 @@ type x86ResultState struct {
 	masks          [8]bool // used only by the private scalar bit-view transfer
 	flags          uint8
 	bitScanPending x86ResultBitScanPending
+	predicate      x86ResultPredicate
 
 	// Incoming pointer identities are not numerical register bytes. This is
 	// only an initialization observation, never a pointee/backing permission.
@@ -426,6 +429,9 @@ func (state x86ResultState) intersect(other x86ResultState) x86ResultState {
 	merged.flags &= other.flags
 	if merged.bitScanPending != other.bitScanPending {
 		merged.bitScanPending = x86ResultBitScanPending{}
+	}
+	if merged.predicate != other.predicate {
+		merged.predicate = x86ResultPredicate{}
 	}
 	merged.resultAddressWritten = state.resultAddressWritten || other.resultAddressWritten
 	return merged
@@ -536,6 +542,9 @@ func x86ResultStore(arg Operand, width int64, state *x86ResultState, owned []boo
 }
 
 func x86ResultTransfer(ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string) bool {
+	if accepted, known := x86ResultVectorTestStep(ins, state, owned, arch); known {
+		return accepted
+	}
 	if accepted, known := x86ResultBitScanStep(ins, state, owned, arch); known {
 		return accepted
 	}

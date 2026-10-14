@@ -32,8 +32,16 @@ func x86ResultBitScanStep(ins Instr, state *x86ResultState, owned []bool, arch s
 	state.resultAddressGP[index] = x86ResultSlotAddress{}
 	state.flags = x86ByteFlagZF // Other flags have no portable cross-CPU definition.
 	state.bitScanPending = x86ResultBitScanPending{register: uint8(index), mask: mask}
-	if state.shapeOnly {
+	nonzero := false
+	if ins.Args[0].Kind == OpReg && state.predicate.kind == x86ResultNonzeroMaskGP && int(state.predicate.width) <= spec.bits {
+		source, _, valid := x86ResultGP(ins.Args[0].Reg, width, arch)
+		nonzero = valid && uint8(source) == state.predicate.register
+	}
+	if state.shapeOnly || nonzero {
 		state.gp[index] |= mask // Shape validation is never a reaching-state proof.
+	}
+	if nonzero {
+		state.bitScanPending = x86ResultBitScanPending{}
 	}
 	return true, true
 }

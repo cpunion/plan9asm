@@ -22,54 +22,81 @@ var amd64VectorTestSpecs = map[Op]amd64VectorTestSpec{
 	"VTESTPS": {maxBytes: 32, vector: true, signLaneBits: 32},
 }
 
-func (c *amd64Ctx) lowerVectorTest(op Op, ins Instr) (ok bool, terminated bool, err error) {
+type x86VectorTestForm struct {
+	amd64VectorTestSpec
+	byteWidth int
+}
+
+// The lowerer and numerical observer share operand shape only. Original
+// memory backing, initialized bytes and physical mode remain separate roles.
+func x86VectorTestProperties(op Op, ins Instr, arch string) (x86VectorTestForm, bool, error) {
 	rawOp := strings.ToUpper(string(op))
 	baseOp := rawOp
 	if dot := strings.IndexByte(rawOp, '.'); dot >= 0 {
 		baseOp = rawOp[:dot]
 	}
 	spec, recognized := amd64VectorTestSpecs[Op(baseOp)]
+	form := x86VectorTestForm{amd64VectorTestSpec: spec}
 	if !recognized {
-		return false, false, nil
+		return form, false, nil
 	}
-	if rawOp != baseOp {
-		return true, false, fmt.Errorf("%s %s has no suffixed form in Go 1.27: %q", c.goarch, baseOp, ins.Raw)
+	if rawOp != baseOp || arch != "amd64" && arch != "386" ||
+		ins.Op != "" && !strings.EqualFold(string(ins.Op), baseOp) {
+		return form, true, fmt.Errorf("%s %s has an unbound mode, dispatch or suffix: %q", arch, baseOp, ins.Raw)
 	}
 	if len(ins.Args) != 2 || ins.Args[1].Kind != OpReg {
-		return true, false, fmt.Errorf("%s %s expects vector/memory source and vector destination: %q", c.goarch, baseOp, ins.Raw)
+		return form, true, fmt.Errorf("%s %s expects vector/memory source and vector destination: %q", arch, baseOp, ins.Raw)
 	}
 
 	source, destination := ins.Args[0], ins.Args[1]
 	byteWidth := amd64VectorByteWidth(destination.Reg)
+	form.byteWidth = byteWidth
+	legacy := func(reg Reg) bool {
+		index, valid := amd64ParseXReg(reg)
+		return valid && index < 16 && (arch != "386" || index < 8)
+	}
 	if (byteWidth != 16 && byteWidth != 32) || byteWidth > spec.maxBytes {
-		return true, false, fmt.Errorf("%s %s destination width is outside its Go 1.27 table: %q", c.goarch, baseOp, ins.Raw)
+		return form, true, fmt.Errorf("%s %s destination width is outside its Go 1.27 table: %q", arch, baseOp, ins.Raw)
 	}
 	if spec.vector {
 		// Go's VEX classes admit X/Y0-15 even in 386 mode. They also admit
 		// extended address registers there, so do not apply the legacy 386
 		// register filter to VEX memory operands.
 		if !amd64VEXVectorRegister(destination, byteWidth) {
-			return true, false, fmt.Errorf("%s %s destination is outside Go's VEX X/Y class: %q", c.goarch, baseOp, ins.Raw)
+			return form, true, fmt.Errorf("%s %s destination is outside Go's VEX X/Y class: %q", arch, baseOp, ins.Raw)
 		}
-	} else if byteWidth != 16 || !c.isGoLegacyXReg(destination.Reg) {
-		return true, false, fmt.Errorf("%s %s destination is outside Go's legacy X class: %q", c.goarch, baseOp, ins.Raw)
+	} else if byteWidth != 16 || !legacy(destination.Reg) {
+		return form, true, fmt.Errorf("%s %s destination is outside Go's legacy X class: %q", arch, baseOp, ins.Raw)
 	}
 
 	if source.Kind == OpReg {
 		if spec.vector {
 			if !amd64VEXVectorRegister(source, byteWidth) {
-				return true, false, fmt.Errorf("%s %s source must match the destination's VEX width: %q", c.goarch, baseOp, ins.Raw)
+				return form, true, fmt.Errorf("%s %s source must match the destination's VEX width: %q", arch, baseOp, ins.Raw)
 			}
-		} else if byteWidth != 16 || !c.isGoLegacyXReg(source.Reg) {
-			return true, false, fmt.Errorf("%s %s source is outside Go's legacy X class: %q", c.goarch, baseOp, ins.Raw)
+		} else if byteWidth != 16 || !legacy(source.Reg) {
+			return form, true, fmt.Errorf("%s %s source is outside Go's legacy X class: %q", arch, baseOp, ins.Raw)
 		}
 	} else if !isAMD64MemoryOperand(source) {
-		return true, false, fmt.Errorf("%s %s source must be a same-width vector register or memory: %q", c.goarch, baseOp, ins.Raw)
+		return form, true, fmt.Errorf("%s %s source must be a same-width vector register or memory: %q", arch, baseOp, ins.Raw)
 	}
-	if !spec.vector && source.Kind == OpMem && !x86MemoryRegistersValidForArch(source.Mem, c.goarch) {
-		return true, false, fmt.Errorf("%s %s source uses an out-of-range legacy address register: %q", c.goarch, baseOp, ins.Raw)
+	if !spec.vector && source.Kind == OpMem && !x86MemoryRegistersValidForArch(source.Mem, arch) {
+		return form, true, fmt.Errorf("%s %s source uses an out-of-range legacy address register: %q", arch, baseOp, ins.Raw)
 	}
+	return form, true, nil
+}
 
+func (c *amd64Ctx) lowerVectorTest(op Op, ins Instr) (ok bool, terminated bool, err error) {
+	arch := c.goarch
+	if arch == "" {
+		arch = "amd64" // Preserve the existing direct-emitter default.
+	}
+	form, known, err := x86VectorTestProperties(op, ins, arch)
+	if !known || err != nil {
+		return known, false, err
+	}
+	source, destination := ins.Args[0], ins.Args[1]
+	spec, byteWidth := form.amd64VectorTestSpec, form.byteWidth
 	sourceBytes, err := c.loadPackedCompareBytes(source, byteWidth)
 	if err != nil {
 		return true, false, err
