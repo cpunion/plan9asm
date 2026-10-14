@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"go/ast"
 	"go/parser"
@@ -28,9 +29,14 @@ type arm64ABI0TailTypedSource struct {
 	sources   map[string]string
 	asm       string
 	expanded  string
+	member    *actualAssemblyMember
 }
 
-func (source *arm64ABI0TailTypedSource) verify(ctx context.Context, defines []string, feature *featureConsumer) error {
+func (source *arm64ABI0TailTypedSource) verify(ctx context.Context, defines []string, feature *featureConsumer) (result error) {
+	if err := source.member.verify(); err != nil {
+		return err
+	}
+	defer func() { result = errors.Join(result, source.member.verify()) }()
 	selection, pkg := source.selection, source.original
 	if selection == nil || selection.identity == "" || selection.identity != x86CallerSelectionIdentity(pkg) ||
 		selection.types != pkg.Types || !reflect.DeepEqual(selection.sizes, x86CallerSizes(pkg.TypesSizes)) ||
@@ -88,6 +94,11 @@ func loadARM64ABI0TailSource(pkg *packages.Package, asm string, expanded []byte,
 		original: pkg, selection: selection, sources: make(map[string]string),
 		asm: asm, expanded: featureBytesSHA256(expanded),
 	}
+	member, err := observeActualAssemblyMember(asm, pkg.OtherFiles)
+	if err != nil {
+		return nil, fmt.Errorf("%w: ABI0 tail assembly is absent from actual Go selection: %v", plan9asm.ErrProbeNeedsContext, err)
+	}
+	source.member = member
 	if err := selection.verifyEffectiveSourceMode(ctx); err != nil {
 		return nil, err
 	}
@@ -129,7 +140,7 @@ func loadARM64ABI0TailSource(pkg *packages.Package, asm string, expanded []byte,
 			return nil, err
 		}
 		source.sources[filename] = featureBytesSHA256(data)
-		selectedAsm = selectedAsm || filename == asm && filepath.Ext(filename) == ".s"
+		selectedAsm = selectedAsm || filename == member.selected && filepath.Ext(filename) == ".s"
 	}
 	if !selectedAsm {
 		return nil, fmt.Errorf("%w: ABI0 tail assembly is absent from actual Go selection", plan9asm.ErrProbeNeedsContext)
