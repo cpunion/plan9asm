@@ -33,6 +33,21 @@ both identity roots pass race in 1.589 seconds and LLVM CLI vet passes.
 Native Windows confirmation and the separate production ARM64 repair remain
 required. Neither the pending SDK factory nor numeric LEA is integrated.
 
+`9094f72e` completes that production ARM64 member join without changing the
+actual compiler inventory or source/entry permissions. The request's original
+file node, resolved target and ancestor identities remain live across both
+source guards, including selected final symlinks. Replacement, equal-byte
+redirection and restoration after rejection cannot revive a member. Independent
+actual-Go alias RED precedes the repair. The final 15-root/58-child class passes
+in 4.180 seconds and race in 7.125 seconds; adjacent 17-root/398-child ABI0-tail
+objects/guards pass Go 1.27/1.20 in 11.624/12.146 seconds. Go 1.20 sourcepath and
+LLVM CLI vet pass. Parent integration passes a fresh 21-root union, including
+the complete original 15-root class and reflect controls, in 7.197 seconds with
+zero skips, missing or duplicate roots. Native Windows confirmation is pending.
+The next fork priorities replay every failed root and live-member control;
+the expensive CRC32 root has its own unchanged five-minute command budget.
+Separate caller/tail path-join audit findings remain outside this urgent batch.
+
 Fork [38477743604](https://github.com/cpunion/plan9asm/actions/runs/38477743604)
 tests frozen `7c342c8b` (contribution `2d696307`, plus exact fork priorities).
 It naturally finishes failed: nine priority jobs pass, one fails, and the full
