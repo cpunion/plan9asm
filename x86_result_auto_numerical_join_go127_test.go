@@ -9,64 +9,79 @@ import (
 	"testing"
 )
 
-func TestGoX86ResultAUTOCompleteActualFixedLocalNumericalJoin(t *testing.T) {
-	for _, api := range []string{"original-source-shape", "text", "context", "go-module"} {
-		t.Run(api, func(t *testing.T) {
-			_, pkg, file, bound, source, frame := numericalLocalJoinedFactory(t)
-			before, err := x86CallerSourceFingerprint(file)
-			if err != nil {
-				t.Fatal(err)
+func TestGoX86ResultAUTOCompleteActualFixedLocalNumericalJoinOriginalSourceShape(t *testing.T) {
+	numericalResultAUTOCompleteActualFixedLocalJoin(t, "original-source-shape")
+}
+
+func TestGoX86ResultAUTOCompleteActualFixedLocalNumericalJoinText(t *testing.T) {
+	numericalResultAUTOCompleteActualFixedLocalJoin(t, "text")
+}
+
+func TestGoX86ResultAUTOCompleteActualFixedLocalNumericalJoinContext(t *testing.T) {
+	numericalResultAUTOCompleteActualFixedLocalJoin(t, "context")
+}
+
+func TestGoX86ResultAUTOCompleteActualFixedLocalNumericalJoinGoModule(t *testing.T) {
+	numericalResultAUTOCompleteActualFixedLocalJoin(t, "go-module")
+}
+
+// Each public owner invokes the complete fresh producer once, with its own
+// original deadline and lifecycle. Keep this fixture shared, not its owner.
+func numericalResultAUTOCompleteActualFixedLocalJoin(t *testing.T, api string) {
+	t.Helper()
+	_, pkg, file, bound, source, frame := numericalLocalJoinedFactory(t)
+	before, err := x86CallerSourceFingerprint(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if api == "original-source-shape" {
+		frozen, options, err := freezeNumericalReadInputs(file, bound)
+		if err != nil {
+			t.Fatal("complete original numerical source precondition", err)
+		}
+		bindings, err := verifyX86FixedLocalBindings(frozen, options)
+		if err != nil {
+			t.Fatal("complete actual independent fixed-local precondition", err)
+		}
+		frozen, err = freezeX86FixedLocalFile(frozen, bindings)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := joinNumericalReadCertificates(frozen, options); err != nil {
+			t.Fatal("actual reparse/original-node join precondition", err)
+		}
+		certificates := 0
+		for _, fn := range frozen.Funcs {
+			for _, ins := range fn.Instrs {
+				if ins.x86NumericalRead != nil {
+					certificates++
+				}
 			}
-			if api == "original-source-shape" {
-				frozen, options, err := freezeNumericalReadInputs(file, bound)
-				if err != nil {
-					t.Fatal("complete original numerical source precondition", err)
-				}
-				bindings, err := verifyX86FixedLocalBindings(frozen, options)
-				if err != nil {
-					t.Fatal("complete actual independent fixed-local precondition", err)
-				}
-				frozen, err = freezeX86FixedLocalFile(frozen, bindings)
-				if err != nil {
-					t.Fatal(err)
-				}
-				if err := joinNumericalReadCertificates(frozen, options); err != nil {
-					t.Fatal("actual reparse/original-node join precondition", err)
-				}
-				certificates := 0
-				for _, fn := range frozen.Funcs {
-					for _, ins := range fn.Instrs {
-						if ins.x86NumericalRead != nil {
-							certificates++
-						}
-					}
-					instructions, err := x86ResultAUTOReplayInstructions(fn, options.Goarch)
-					if err != nil || !reflect.DeepEqual(instructions, file.Funcs[0].Instrs) {
-						t.Fatal("actual NUM metadata changed complete original source identity", err)
-					}
-					if _, err := x86ResultAUTOExtent(fn, options.Goarch); !errors.Is(err, ErrProbeNeedsContext) {
-						t.Fatal("authenticated NUM metadata granted physical SP logical AUTO storage", err)
-					}
-				}
-				if certificates == 0 {
-					t.Fatal("fixture lost its actual numerical source node")
-				}
-			} else {
-				ir := numericalFamilyTranslate(t, api, pkg, file, bound)
-				if ir == "" || !strings.Contains(ir, "fixed_local_native") || !strings.Contains(ir, "load volatile") {
-					t.Fatal("complete actual joined consumer lost independent local/NUM roles")
-				}
+			instructions, err := x86ResultAUTOReplayInstructions(fn, options.Goarch)
+			if err != nil || !reflect.DeepEqual(instructions, file.Funcs[0].Instrs) {
+				t.Fatal("actual NUM metadata changed complete original source identity", err)
 			}
-			if err := source.Verify(bound.NumericalReads.context); err != nil {
-				t.Fatal("original source/storage owner changed", err)
+			if _, err := x86ResultAUTOExtent(fn, options.Goarch); !errors.Is(err, ErrProbeNeedsContext) {
+				t.Fatal("authenticated NUM metadata granted physical SP logical AUTO storage", err)
 			}
-			if err := frame.Verify(bound.NumericalReads.context); err != nil {
-				t.Fatal("original frame owner changed", err)
-			}
-			if after, err := x86CallerSourceFingerprint(file); err != nil || after != before {
-				t.Fatal("private joined consumers mutated original whole source")
-			}
-		})
+		}
+		if certificates == 0 {
+			t.Fatal("fixture lost its actual numerical source node")
+		}
+	} else {
+		ir := numericalFamilyTranslate(t, api, pkg, file, bound)
+		if ir == "" || !strings.Contains(ir, "fixed_local_native") || !strings.Contains(ir, "load volatile") {
+			t.Fatal("complete actual joined consumer lost independent local/NUM roles")
+		}
+	}
+	if err := source.Verify(bound.NumericalReads.context); err != nil {
+		t.Fatal("original source/storage owner changed", err)
+	}
+	if err := frame.Verify(bound.NumericalReads.context); err != nil {
+		t.Fatal("original frame owner changed", err)
+	}
+	if after, err := x86CallerSourceFingerprint(file); err != nil || after != before {
+		t.Fatal("private joined consumers mutated original whole source")
 	}
 }
 

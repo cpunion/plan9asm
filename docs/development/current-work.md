@@ -1,6 +1,6 @@
 # Current work: PR 40 checkpoint
 
-Checkpoint: 2026-10-14 17:41 UTC. Contribution source: `9bb1f22e`.
+Checkpoint: 2026-10-14 18:13 UTC. Contribution source: `7e393030`.
 This is a handoff, not a ledger or a claim that current-head CI/stdlib passes.
 
 ## Scope and authority
@@ -26,8 +26,8 @@ Do not edit the primary or probe while their frozen jobs run.
 
 | Worktree basename | Branch / purpose |
 | --- | --- |
-| `plan9asm-wt-pr40-scalar-lane-native-20261011` | `codex/pr40-external-corpus-split-20261011`; integrated source `5f2265ce`; current strict benchmark pending |
-| `plan9asm-wt-pr40-stdlib-preprocessing-20261012` | `codex/pr40-windows-owned-process-probe-20261013`; published `2cd53a42` failed; local `24938007` stages repairs, not pushed |
+| `plan9asm-wt-pr40-scalar-lane-native-20261011` | `codex/pr40-external-corpus-split-20261011`; integrated source `7e393030`; scoped composition passes, complete benchmark still failed |
+| `plan9asm-wt-pr40-stdlib-preprocessing-20261012` | `codex/pr40-windows-owned-process-probe-20261013`; published `732c8c15` failed; next complete repair batch staged locally |
 | `plan9asm-wt-pr40-sdk-numeric-maps-entry-20261013` | `codex/pr40-sdk-numeric-maps-entry-20261013`; typed tails and distinct custom-register bool proof integrated; idle |
 | `plan9asm-wt-pr40-sdk-tls-20261013` | `codex/pr40-sdk-tls-20261013`; priority NUM replay identity and independently sealed fixed-local result handoff; parameter-only admission WIP retained separately |
 | `plan9asm-wt-pr40-simple-sdk-bindings-20261013` | `codex/pr40-sdk-storage-snapshot-20261013`; PCMP integrated; priority complete MXCSR and signed-conversion byte effects |
@@ -51,10 +51,24 @@ five-minute root. Exact failed artifacts remain retained, not relabeled.
 native policy readers. It normalizes only policy parsing/mutation copies, never
 compiler input or authenticated source. Exact seven roots/31 children pass
 Go27/race/Go20 in0.416/1.928/0.453s; both vets, source seals and formatting pass.
-Fork-only `89860e44` stages22 lanes,126 unique source priorities and45 passing
-policy tests/actionlint. Each fresh NUM axis and Linux public CLI has its own
-original five-minute budget; fixture partition leaves are still being verified.
-Do not push until this complete batch is sealed; keep the contribution draft.
+Fork-only `89860e44`/`e1f79797` stage22 lanes,126 unique source priorities and45
+passing policy tests/actionlint. Each fresh NUM axis and Linux public CLI has its
+own original five-minute budget. Both test-only fixture leaves are now integrated:
+`e42bd793` as `2a961829`, `c9bee2fb` as `7e393030`. No producer, source authority,
+budget or denominator is weakened. The original-node guards remain unchanged;
+the redundant load/compile prepass is absent from the independent public CLI.
+
+Frozen parent `7e393030` independently passes all four NUM owners in
+24.505/27.309/27.387/30.066s and its separate six-root/63-child guard union in
+21.447s. All four maps owners pass: Linux source/object31.309s, complete real
+public CLI57.521s, Darwin32.580s and Windows31.178s. The full two-file CLI keeps
+all three original TEXTs, complete DATA, original source hashes and nonempty
+LLVM22 objects. Nine portable policy roots/45 mutation children pass Go27/race/
+Go20 in0.449/1.958/0.445s; maps policy's two roots/15 children pass normal/race
+in0.283/1.608s. All exact inventories and terminals have zero FAIL/SKIP/missing/
+duplicate outcomes. Root/both CLI Go27 vets, root Go20 vet, tracked formatting,
+clean tree and before/after source heads match. Next actual Windows replay is
+still pending; old CI remains failed and the contribution remains draft.
 
 `00033d24`, integrated as `c1d14f81`, authenticates only NUM metadata removed
 from exact source replay and revalidates the existing complete fixed-local
@@ -462,7 +476,7 @@ Both vets, tracked current-Go formatting, stable source head and clean tree pass
 Maps independent-target policy and symlink platform-availability gates pass.
 At frozen `386377f9`, all three independent complete maps roots pass: Linux
 86.068s, Darwin32.617s, Windows31.180s, each within its unchanged five-minute
-budget. Every target retains two original TEXT bodies, all DATA/source hashes,
+budget. Every target retains all original TEXT bodies, all DATA/source hashes,
 nonempty LLVM22 object and mutable-runtime external storage; Linux additionally
 runs the real public CLI for the complete two-file package, zero N/A/failures.
 Fresh exact inventories/terminals and unchanged source head/clean tree match.
@@ -498,14 +512,14 @@ authority for any of those roles.
 
 ## External server checkpoint (no local scan)
 
-Trusted latest manifest generated 2026-10-14 16:03:59 UTC:
-`incremental_since=2026-10-11T05:22:43Z`; `history_before=2025-10-01`;
+Trusted latest manifest generated 2026-10-14 17:54:33 UTC:
+derived `incremental_since=2026-10-11T13:22:43Z`; `history_before=2025-10-01`;
 `history_complete=false`. The next hourly window is unfinished; never advance
 its cursor from partial progress.
-Index22,226,534 entries; unique_modules1,072,529; matched_records6,800;
-scanned_records1,120,680; failures16,878; latest_records1,002,950;
-cgo_records1,114,856. These are inventory records, never translator passes.
-All573 manifest ranges were independently checked continuous; their sum equals
+Index22,315,363 entries; unique_modules1,073,867; matched_records6,811;
+scanned_records1,123,033; failures16,889; latest_records1,004,339;
+cgo_records1,117,209. These are inventory records, never translator passes.
+All581 manifest ranges were independently checked continuous; their sum equals
 index_entries and first/last endpoints derive history/incremental cursors. Periodic
 exports can lag the completed manifest/journal; never interpret that as rollback.
 Source failures remain retryable, never pass/skip. Later values require readback.
