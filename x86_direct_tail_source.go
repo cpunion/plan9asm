@@ -14,23 +14,25 @@ type x86DirectTailPoint struct {
 }
 
 type x86DirectTailGraph struct {
-	origin     *File
-	original   *File
-	goarch     string
-	revoked    atomic.Bool
-	signatures map[string]FuncSig
-	symbols    map[string]string
-	helpers    map[string]bool
-	roots      map[string]*x86DirectTailRoot
+	origin          *File
+	original        *File
+	goarch          string
+	revoked         atomic.Bool
+	signatures      map[string]FuncSig
+	symbols         map[string]string
+	externalSymbols map[string]string
+	helpers         map[string]bool
+	roots           map[string]*x86DirectTailRoot
 }
 
 type x86DirectTailRoot struct {
-	graph        *x86DirectTailGraph
-	text         int
-	points       []x86DirectTailPoint
-	instructions []Instr
-	ordinals     []int
-	edges        [][]int
+	graph         *x86DirectTailGraph
+	text          int
+	points        []x86DirectTailPoint
+	instructions  []Instr
+	ordinals      []int
+	edges         [][]int
+	externalTails []bool // Exact ordinary typed terminals, never helper ABIs.
 }
 
 func x86DirectTailContext(format string, args ...any) error {
@@ -125,7 +127,7 @@ func PrepareX86DirectTailSource(file *File, options Options) (*File, error) {
 		resolve = func(symbol string) string { return symbol }
 	}
 	graph := &x86DirectTailGraph{origin: file, original: x86DirectTailSnapshot(file), goarch: goarch, helpers: helpers,
-		symbols: make(map[string]string), roots: make(map[string]*x86DirectTailRoot)}
+		symbols: make(map[string]string), externalSymbols: make(map[string]string), roots: make(map[string]*x86DirectTailRoot)}
 	signatures, err := numericalCloneSignatures(options.Sigs)
 	if err != nil {
 		return nil, err
@@ -139,6 +141,15 @@ func PrepareX86DirectTailSource(file *File, options Options) (*File, error) {
 			return nil, x86DirectTailContext("missing, duplicate or aliased original TEXT identity")
 		}
 		byName[fn.Sym], graph.symbols[fn.Sym], resolved[name] = index, name, true
+	}
+	for _, fn := range graph.original.Funcs {
+		for _, ins := range fn.Instrs {
+			if ins.Op == OpJMP && len(ins.Args) == 1 && ins.Args[0].Kind == OpSym {
+				if name, offset, valid := parseSBRef(ins.Args[0].Sym); valid && offset == 0 && !helpers[name] {
+					graph.externalSymbols[name] = resolve(name)
+				}
+			}
+		}
 	}
 	if !reflect.DeepEqual(graph.original, x86DirectTailSnapshot(file)) || !reflect.DeepEqual(graph.signatures, options.Sigs) {
 		return nil, x86DirectTailContext("resolver changed complete source or signatures")
@@ -299,6 +310,11 @@ func (graph *x86DirectTailGraph) verify(file *File, options Options) (result err
 	for _, fn := range graph.original.Funcs {
 		if resolve(fn.Sym) != graph.symbols[fn.Sym] {
 			return x86DirectTailContext("original source symbol mapping changed")
+		}
+	}
+	for symbol, expected := range graph.externalSymbols {
+		if resolve(symbol) != expected {
+			return x86DirectTailContext("external typed terminal symbol mapping changed")
 		}
 	}
 	if graph.revoked.Load() || !reflect.DeepEqual(x86DirectTailSnapshot(graph.origin), graph.original) || !reflect.DeepEqual(graph.signatures, options.Sigs) ||

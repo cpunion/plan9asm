@@ -30,7 +30,8 @@ func (graph *x86DirectTailGraph) root(root int, byName map[string]int) (*x86Dire
 			}
 			for _, arg := range ins.Args {
 				if arg.Kind == OpReg && (arg.Reg == SP || arg.Reg == BP) ||
-					arg.Kind == OpMem && (arg.Mem.Base == SP || arg.Mem.Base == BP || arg.Mem.Base == "PC" || arg.Mem.Index == SP || arg.Mem.Index == BP) ||
+					arg.Kind == OpMem && (arg.Mem.Base == SP || arg.Mem.Base == BP || arg.Mem.Index == SP || arg.Mem.Index == BP ||
+						arg.Mem.Base == "PC" && !x86DirectTailPCBranch(ins)) ||
 					arg.Kind == OpFPAddr {
 					return nil, x86DirectTailContext("physical SP/BP/PC/frame address has no continuation role: %s", ins.Raw)
 				}
@@ -39,8 +40,14 @@ func (graph *x86DirectTailGraph) root(root int, byName map[string]int) (*x86Dire
 				continue
 			}
 			name, offset, valid := parseSBRef(ins.Args[0].Sym)
-			if !valid || offset != 0 || !graph.helpers[name] {
+			if !valid || offset != 0 {
 				return nil, x86DirectTailContext("indirect/external/missing/offset tail target: %s", ins.Raw)
+			}
+			if !graph.helpers[name] {
+				if !graph.ordinaryExternalTail(root, name) {
+					return nil, x86DirectTailContext("external terminal lacks identical ordinary root ABI0 roles: %s", ins.Raw)
+				}
+				continue
 			}
 			index, found := byName[name]
 			if !found {
@@ -88,6 +95,7 @@ func (graph *x86DirectTailGraph) root(root int, byName map[string]int) (*x86Dire
 		}
 	}
 	view.edges = make([][]int, len(view.points))
+	view.externalTails = make([]bool, len(view.points))
 	for pc, ins := range view.instructions {
 		if ins.Op == OpRET {
 			if len(ins.Args) != 0 {
@@ -97,11 +105,7 @@ func (graph *x86DirectTailGraph) root(root int, byName map[string]int) (*x86Dire
 		}
 		next := []int{pc + 1}
 		if ins.Op == OpJMP || isAMD64ConditionalBranch(ins.Op) {
-			args := ins.Args
-			if ins.Op != OpJMP && !isAMD64CounterZeroBranch(ins.Op) && len(args) == 2 && args[0].Kind == OpImm &&
-				args[0].ImmRaw == "" && !args[0].ImmIsFloat && (args[0].Imm == 0 || args[0].Imm == 1) {
-				args = args[1:]
-			}
+			args := x86DirectTailBranchArgs(ins)
 			if len(args) != 1 {
 				return nil, x86DirectTailContext("unbound source branch operands")
 			}
@@ -113,8 +117,24 @@ func (graph *x86DirectTailGraph) root(root int, byName map[string]int) (*x86Dire
 				label = string(arg.Reg)
 			}
 			target, found := labels[view.points[pc].text][label]
+			if x86DirectTailPCBranch(ins) {
+				// Go asmJump uses virtual Prog coordinates, not machine-byte
+				// displacements or graph/block coordinates. Labels do not count;
+				// PCDATA/FUNCDATA/PCALIGN do. The view retains exactly those
+				// source Progs in each TEXT. Bound before converting/adding, and
+				// never let a relative edge cross an original TEXT boundary.
+				offset := arg.Mem.Off
+				if offset < -int64(pc) || offset >= int64(len(view.points)-pc) {
+					return nil, x86DirectTailContext("PC branch outside original source instructions")
+				}
+				target, found = pc+int(offset), true
+			}
 			if ins.Op == OpJMP && arg.Kind == OpSym {
 				name, offset, valid := parseSBRef(arg.Sym)
+				if valid && offset == 0 && !graph.helpers[name] && graph.ordinaryExternalTail(root, name) {
+					view.externalTails[pc] = true
+					continue // No graph successor: ordinary typed call+return.
+				}
 				index, exists := byName[name]
 				if !valid || !exists || !members[index] || !graph.helpers[name] || offset != 0 {
 					return nil, x86DirectTailContext("unbound private tail node")
@@ -139,6 +159,31 @@ func (graph *x86DirectTailGraph) root(root int, byName map[string]int) (*x86Dire
 		view.edges[pc] = next
 	}
 	return view, nil
+}
+
+// Only Go's Ybr source branch role is accepted here. A PC memory/address
+// operand on another instruction supplies no physical native-PC authority.
+func x86DirectTailBranchArgs(ins Instr) []Operand {
+	args := ins.Args
+	if isAMD64ConditionalBranch(ins.Op) && !isAMD64CounterZeroBranch(ins.Op) && len(args) == 2 &&
+		args[0].Kind == OpImm && args[0].ImmRaw == "" && !args[0].ImmIsFloat &&
+		(args[0].Imm == 0 || args[0].Imm == 1) {
+		return args[1:]
+	}
+	return args
+}
+
+func x86DirectTailPCBranch(ins Instr) bool {
+	if ins.Op != OpJMP && !isAMD64ConditionalBranch(ins.Op) {
+		return false
+	}
+	args := x86DirectTailBranchArgs(ins)
+	if len(args) != 1 || args[0].Kind != OpMem {
+		return false
+	}
+	memory := args[0].Mem
+	return memory.Base == "PC" && memory.OffRaw == "" && memory.Sym == "" && memory.Index == "" &&
+		memory.Scale == 0 && memory.Segment == "" && memory.IndexExt == ""
 }
 
 func (view *x86DirectTailRoot) blocks() []amd64Block {

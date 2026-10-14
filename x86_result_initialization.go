@@ -75,6 +75,15 @@ func checkX86ABI0ResultInitializationAtSource(fn Func, sig FuncSig, goarch strin
 		resultOffset = int64(frame)
 	}
 	initial := x86ResultState{fp: make([]bool, frame), pointerFP: make(map[int64]bool)}
+	if fn.x86DirectTailRoot != nil && scalarViews {
+		for _, slot := range sig.Frame.Results {
+			switch slot.Type {
+			case I8, I16, I32, I64:
+				initial.resultAddressSlots = append(initial.resultAddressSlots, x86ResultSlotAddress{
+					start: slot.Offset, end: slot.Offset + x86ResultScalarBytes(slot.Type, goarch), valid: true})
+			}
+		}
+	}
 	initial.callerAddressFP = initial.pointerFP // Immutable actual typed entry layout.
 	autoExtent, autoErr := x86ResultAUTOExtent(fn, goarch)
 	if autoErr != nil {
@@ -145,7 +154,7 @@ func checkX86ResultSourceFlow(fn Func, initial x86ResultState, owned []bool, res
 	originalTransfer := transfer
 	transfer = func(ordinal int, ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string) bool {
 		before := state.callerAddressGP
-		if !originalTransfer(ordinal, ins, state, owned, resultOffset, arch) {
+		if !x86DirectTailResultAddressTransfer(ins, state, owned, resultOffset, arch, originalTransfer, ordinal) {
 			return false
 		}
 		state.callerAddressGP = x86ResultCallerAddressesAfter(ins, before, state.callerAddressFP, arch)
@@ -188,6 +197,9 @@ func checkX86ResultSourceFlow(fn Func, initial x86ResultState, owned []bool, res
 	// AUTO states do not obtain an independent frame or iteration budget.
 	byteState := len(initial.fp) + len(initial.auto) + len(initial.gp) + len(initial.canonicalGP) +
 		8*len(initial.xmm) + len(initial.masks) + 1 + len(initial.pointerGP) + len(initial.callerAddressGP) + 1
+	if len(initial.resultAddressSlots) != 0 {
+		byteState += len(initial.resultAddressGP)*25 + 1
+	}
 	const byteWorkLimit = 64 << 20
 	byteWork := len(instructions) * byteState
 	boundedWork := len(initial.auto) != 0 || fn.x86DirectTailRoot != nil
@@ -287,6 +299,13 @@ func checkX86ResultSourceFlow(fn Func, initial x86ResultState, owned []bool, res
 		queue = queue[1:]
 		state := states[pc].clone()
 		ins := instructions[pc]
+		if fn.x86DirectTailRoot != nil && fn.x86DirectTailRoot.externalTails[pc] {
+			if state.resultAddressWritten {
+				return fail("external terminal could observe a prior logical result write")
+			}
+			returned = true
+			continue // Exact independent callee return, no invented root FP bytes.
+		}
 		if ins.Op == OpRET {
 			if len(ins.Args) != 0 {
 				return fail("nonordinary return")
@@ -352,9 +371,12 @@ type x86ResultState struct {
 	pointerGP [16]bool
 	// A separate actual typed-entry address-bit domain. SDK literal/OR
 	// carriers never seed it; no numerical GP or memory facts follow.
-	callerAddressFP map[int64]bool // immutable shared entry layout
-	callerAddressGP [16]bool
-	shapeOnly       bool // source-wide effect validation, never a reaching state
+	callerAddressFP      map[int64]bool // immutable shared entry layout
+	callerAddressGP      [16]bool
+	resultAddressSlots   []x86ResultSlotAddress // Immutable root-local scalar layout.
+	resultAddressGP      [16]x86ResultSlotAddress
+	resultAddressWritten bool // May-write join, not an initialized-result fact.
+	shapeOnly            bool // source-wide effect validation, never a reaching state
 
 	// Installed only for one lowering transfer over the actual emitted DATA.
 	// It is cleared before a CFG state can escape and never supplies a native
@@ -385,6 +407,9 @@ func (state x86ResultState) intersect(other x86ResultState) x86ResultState {
 		merged.canonicalGP[index] &= other.canonicalGP[index]
 		merged.pointerGP[index] = merged.pointerGP[index] && other.pointerGP[index]
 		merged.callerAddressGP[index] = merged.callerAddressGP[index] && other.callerAddressGP[index]
+		if merged.resultAddressGP[index] != other.resultAddressGP[index] {
+			merged.resultAddressGP[index] = x86ResultSlotAddress{}
+		}
 	}
 	for index := range merged.xmm {
 		merged.xmm[index] &= other.xmm[index]
@@ -394,6 +419,7 @@ func (state x86ResultState) intersect(other x86ResultState) x86ResultState {
 		merged.masks[index] = merged.masks[index] && other.masks[index]
 	}
 	merged.flags &= other.flags
+	merged.resultAddressWritten = state.resultAddressWritten || other.resultAddressWritten
 	return merged
 }
 

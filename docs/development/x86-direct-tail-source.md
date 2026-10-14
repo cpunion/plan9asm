@@ -31,12 +31,32 @@ root or instruction will later be dropped.
 The first continuation class is call-free and zero-frame. It rejects missing,
 duplicate, aliased, offset and indirect targets, helper CALL/address/DATA
 escapes, unowned helper TEXTs, raw/native instruction roles and physical
-SP/BP/PC/frame addresses. It adds no Go closure DX, g/thread/TLS, native entry,
+SP/BP/physical-PC/frame addresses. Go's relative Ybr operands instead retain
+their original same-TEXT virtual Prog coordinates: labels do not count, while
+PCDATA/FUNCDATA/PCALIGN do. Hints remain the exact Yi0/Yi1 forms, and malformed,
+overflowing or cross-TEXT targets reject before lowering.
+It adds no Go closure DX, g/thread/TLS, native entry,
 caller extent, alignment, write or numerical pointer-bit permission. Existing
 explicit X86TailGroups keep their independent source contract. Numerical/TLS
 binding composition requires a separate exact original-node association and
 remains Context here. Standalone Func queries without whole-source information
 do not acquire graph authority.
+
+An ordinary external tail has its own terminal role, with an actual declaration
+or explicit signature and exactly compatible mode-bound ABI0 Args, result and
+Frame roles. Descriptive field names supply no layout. Undeclared targets cannot
+borrow the root signature; offsets, ABI selectors, custom registers and changed
+symbol/type/layout identities remain rejected. The LLVM call returns the actual
+callee result rather than inventing initialized root FP bytes.
+
+Graph-local integer result addresses retain an exact scalar slot and interior
+offset, separately from numerical and incoming-pointer domains. Only full-word
+copies, constant same-slot LEA and bounded scalar moves consume them. Different
+joins or overwritten aliases revoke the identity; padding, parameter storage,
+address escape, indexed access, comparison and vector transport do not gain
+permission. Result writes followed by ordinary native memory access or an
+external terminal remain Context, so fresh logical LLVM backing cannot hide a
+native caller alias observation. Original operands/certificates stay unchanged.
 
 Every request keeps independent original-source/signature snapshots and
 verifies source, selected DATA/GLOBL/prelude, TEXT membership, mode and symbol
@@ -60,6 +80,11 @@ all three public APIs and O0/O2. Required Linux AMD64 execution owners are
 `TestCrossLinuxRuntimeMatrixX86DirectTail386OriginalGoAndLLVM`; i386 uses the
 kernel compatibility ISA and a required static cross compiler. Emulated local
 execution is diagnostic and cannot replace these native counterparts.
+
+The independent follow-up owner
+`TestCrossLinuxRuntimeMatrixX86DirectTailPCResultAliasesAndExternal` executes
+both x86 modes' complete original Go files and three LLVM APIs at O0/O2, with
+independent references and caller canaries for all three roles.
 
 This mechanism does not close the complete equal source's closure/entry
 contract or authenticate an SDK numerical/native handoff. Offline Go objects

@@ -692,6 +692,9 @@ func (b *goSigBuilder) addReferencedFuncSigs(file *File) error {
 					continue
 				}
 			}
+			if b.directTail && tailJump {
+				return x86DirectTailContext("ordinary external terminal lacks an actual declaration or explicit signature: %s", base)
+			}
 			if tailJump && hasCallerSig {
 				if b.goarch == "arm64" && arm64PrivateTailSymbol(base+"(SB)") {
 					return arm64GoABIContext("private tail %q has no declaration or explicit register transport; caller Frame cannot supply it", base)

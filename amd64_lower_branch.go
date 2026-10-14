@@ -82,6 +82,15 @@ func (c *amd64Ctx) lowerBranch(bi int, ii int, op Op, ins Instr, emitBr amd64Emi
 		return false
 	}
 	if c.directTail != nil {
+		if bi >= 0 && bi < len(c.directTail.externalTails) && c.directTail.externalTails[bi] && ii == 0 {
+			if op != OpJMP || len(args) != 1 || args[0].Kind != OpSym {
+				return true, false, x86DirectTailContext("typed terminal lost its original source branch")
+			}
+			if err := c.tailCallAndRet(args[0]); err != nil {
+				return true, false, err
+			}
+			return true, true, nil
+		}
 		if bi < 0 || bi >= len(c.directTail.edges) || ii != 0 || len(c.directTail.edges[bi]) == 0 {
 			return true, false, x86DirectTailContext("branch lost its original source node")
 		}
