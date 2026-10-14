@@ -1,6 +1,6 @@
 # Current work: PR 40 checkpoint
 
-Checkpoint: 2026-10-14 04:44 UTC. Contribution source: `7752fc1f`.
+Checkpoint: 2026-10-14 05:22 UTC. Contribution source: `f1db0fa8`.
 This is a handoff, not a ledger or a claim that current-head CI/stdlib passes.
 
 ## Scope and authority
@@ -26,7 +26,7 @@ Do not edit the primary or probe while their frozen jobs run.
 
 | Worktree basename | Branch / purpose |
 | --- | --- |
-| `plan9asm-wt-pr40-scalar-lane-native-20261011` | `codex/pr40-external-corpus-split-20261011`; parent integration, currently `7752fc1f` |
+| `plan9asm-wt-pr40-scalar-lane-native-20261011` | `codex/pr40-external-corpus-split-20261011`; parent integration, source `f1db0fa8` |
 | `plan9asm-wt-pr40-stdlib-preprocessing-20261012` | `codex/pr40-windows-owned-process-probe-20261013`; fork-only workflow, `af4b6a3f` |
 | `plan9asm-wt-pr40-sdk-numeric-maps-entry-20261013` | `codex/pr40-sdk-numeric-maps-entry-20261013`; verified `ba474753`, idle |
 | `plan9asm-wt-pr40-sdk-tls-20261013` | `codex/pr40-sdk-tls-20261013`; `10aa1cbd`, direct-tail TDD |
@@ -81,6 +81,26 @@ have zero failures, skips, missing or duplicate roots. All three Go1.27 module
 vets, formatting and diff checks pass. Full current-head race/CI remain pending.
 386 ABI0 bool, no-DATA owner and unresolved native/helper contracts remain distinct.
 
+## Verified continuation and output publication
+
+`f3e67767` is integrated as `f1db0fa8`. Continuation checks the actual selected
+package's complete Go/s/S/h siblings, including unselected variants and separate
+names for the same physical file; original request/member identities stay live.
+Whole and chunk outputs share one same-filesystem stage outside source roots.
+Every final source verification and owner Close precedes public modifications.
+Publication failures attempt rollback; failed restoration preserves old backups.
+Post-commit temporary cleanup errors explicitly say outputs were committed.
+Multiple-file publication is not an atomic filesystem transaction.
+
+The exact 70-root/171-child class passes in 235.258s; its disjoint race union
+passes in 301.843s. Go1.20/1.27 caller controls pass 170 roots/5,220 children in
+235.816/266.923s; Go1.20 region22/sourcepath also pass. Parent independently
+replays all 70/171 in 222.617s, then the eight SDK roots/29 children in 241.311s,
+with strict inventories and vet. Before/after parent head remains `f1db0fa8`.
+Native Windows, full current-head modules/race and fresh benchmark remain pending.
+Alternate-extension consumed includes and module metadata can still collide
+with outputs: actual six-child RED is preserved, with a separate repair underway.
+
 ## Stdlib benchmark: current complete failed receipt
 
 Frozen `7752fc1f`: 164/184 files, 20 FAIL, zero N/A/unattempted.
@@ -103,29 +123,29 @@ The earlier `2d696307` 163/184,21-failure receipt stays unchanged.
 
 ## External server checkpoint (no local scan)
 
-Trusted observation completed 2026-10-14 04:14:56 UTC:
-`incremental_since=2026-10-09T16:22:43Z`; `history_before=2025-10-01`;
-`history_complete=false`. The next 16:22→17:22 window is unfinished
-(2,700/2,885 leaders processed); do not advance its cursor.
-Index536 ranges/21,653,241 entries; unique_modules1,061,474;
-scanned_records1,097,279; matched_records6,751; assembly_files85,340;
-failures16,815; latest_records991,292. Cgo:1,091,454 records/23,171 modules,
+Trusted observation completed 2026-10-14 05:14:07 UTC:
+`incremental_since=2026-10-09T19:22:43Z`; `history_before=2025-10-01`;
+`history_complete=false`. The next hourly window is unfinished; never advance
+its cursor from partial progress.
+Index539 ranges/21,713,183 entries; unique_modules1,062,663;
+scanned_records1,099,911; matched_records6,757; assembly_files85,385;
+failures16,816; latest_records992,517. Cgo:1,094,086 records/23,185 modules,
 2,397 failures/1,883 pending. These are server statistics, not translator passes.
 Source failures remain retryable, never pass/skip. Later values require readback.
 
 ## Owners and next gates
 
-- Parent: `7752fc1f` integration and benchmark readback finished. Integrate the
-  independently verified publication/tail families next, replay exact affected
-  joins, then batch the next allowed-fork update. Full race remains required.
-- Numeric maps agent: verified cohort delivered; read-only metadata-only/no-DATA
-  handoff analysis, no tests active. Do not invent readonly/minimum owners.
+- Parent: factory and publication integrations/readback finished. Integrate
+  verified metadata/tail/input-protection families next, replay their exact joins,
+  then batch the next allowed-fork update. Full race remains required.
+- Numeric maps agent: metadata-only/no-DATA accessor and factory reuse the
+  existing observer. Eight pure/race/Go20 roots pass; six-file source is frozen
+  for actual three-OS complete empty-DATA and lifetime verification.
 - TLS agent: `10aa1cbd` direct-tail state-loss light IR TDD RED (six shapes ×
   three APIs + negatives); design actual whole-source graph/root must-state,
   then original-Go/LLVM runtime counterexample after explicit heavy clearance.
-- SDK/frontend agent: `b43caaa1` dirty outside-alias complete reference closure
-  and compile publication transaction; pure RED/GREEN done, complete ordinary
-  continuation/caller/chunk/frame source/object/race verification pending.
+- SDK/frontend agent: verified `f3e67767`; next consumed-input collision repair
+  reuses the plain assembly reader's same-pass input report, never another parser.
 One heavy source/SDK/object owner at a time; small bounded pure controls may overlap.
 Preserve native execution vs QEMU/emulated diagnostics, all original fault effects,
 canonical bool bytes (not arbitrary2/3 truncation) and unknown GP upper bytes.
@@ -133,12 +153,14 @@ canonical bool bytes (not arbitrary2/3 truncation) and unknown GP upper bytes.
 ## Receipts and history
 
 Parent ignored `_out/register-result-repair/`: `factory-7752fc1f/`,
+`publication-f1db0fa8/`,
 `benchmark-2d696307/`, `ci-e544c001-{completion,llvm-parts}/`,
 `ci-af4b6a3f-{main-aggregate,main-parts,simple-parts,llvm-aggregate,llvm-parts}/`,
 `ci-af4b6a3f-native/native-x86-oracles/native.log` and all four independent
 `ci-af4b6a3f-*-audit.json` files.
 Numeric tree: `_out/sdk-numeric-maps/literal-minimum-partition-receipt.md`;
-TLS tree: `_out/direct-tail-state-b7e29095/`; SDK agent's new receipt dir pending.
+TLS tree: `_out/direct-tail-state-b7e29095/`; SDK tree:
+`_out/register-result-repair/continuation-reference-closure/`.
 Raw heads/tools/inventories and complete terminal unions are authoritative.
 Use `git show <frozen-sha>:docs/development/current-work.md` for older history;
 do not append old timelines here or promote failed/incomplete/emulated receipts.
