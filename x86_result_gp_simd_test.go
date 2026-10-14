@@ -121,11 +121,11 @@ func TestX86ResultGPSIMDRegisterIndependentEncoderRows(t *testing.T) {
 
 func TestX86ResultGPSIMDRegisterEveryInputByteAndOverwrite(t *testing.T) {
 	for _, arch := range []string{"amd64", "386"} {
-		for _, op := range []string{"MOVL", "MOVQ", "MOVD", "VMOVD", "VMOVQ"} {
-			qword := op == "MOVQ" || op == "MOVD" || op == "VMOVQ"
+		for _, op := range []string{"MOVL", "MOVQ", "MOVD", "MOVDQ2Q", "VMOVD", "VMOVQ"} {
+			qword := op == "MOVQ" || op == "MOVD" || op == "MOVDQ2Q" || op == "VMOVQ"
 			for _, direction := range []string{"gp-to-x", "x-to-gp", "x-to-x", "self"} {
 				gp := direction == "gp-to-x" || direction == "x-to-gp"
-				if !qword && !gp || arch == "386" && gp && (op == "MOVQ" || op == "MOVD") {
+				if !qword && !gp || arch == "386" && gp && qword && !strings.HasPrefix(op, "V") {
 					continue
 				}
 				width, row := 4, op+" AX,X1"
@@ -148,7 +148,8 @@ func TestX86ResultGPSIMDRegisterEveryInputByteAndOverwrite(t *testing.T) {
 					for missing := -1; missing < 16; missing++ {
 						initial := x86ResultState{flags: x86ByteFlagsAll}
 						initial.gp[0], initial.xmm[0], initial.xmm[1] = 0xff, 0xffff, 0x5151
-						initial.pointerGP[3] = true // A complete numeric overwrite revokes this identity.
+						initial.pointerGP[3], initial.callerAddressGP[3] = true, true
+						initial.canonicalGP[3] = 0xff
 						if missing >= 0 {
 							if direction == "gp-to-x" {
 								initial.gp[0] &^= uint8(1) << uint(missing)
@@ -157,27 +158,30 @@ func TestX86ResultGPSIMDRegisterEveryInputByteAndOverwrite(t *testing.T) {
 							}
 						}
 						want := initial.clone()
-						valid := missing < 0 || missing >= width
-						if valid {
-							switch direction {
-							case "gp-to-x", "x-to-x":
-								want.xmm[1] = 0xffff
-								if strings.HasPrefix(op, "V") {
-									want.vectorUpper[1] = ^uint64(0xffff)
-								}
-							case "self":
-								want.xmm[0] = 0xffff
-								if strings.HasPrefix(op, "V") {
-									want.vectorUpper[0] = ^uint64(0xffff)
-								}
-							case "x-to-gp":
-								want.gp[3], want.pointerGP[3] = 0xff, false
+						mask := uint16(1)<<uint(width) - 1
+						known := initial.xmm[0] & mask
+						if direction == "gp-to-x" {
+							known = uint16(initial.gp[0]) & mask
+						}
+						switch direction {
+						case "gp-to-x", "x-to-x":
+							want.xmm[1] = known | 0xffff&^mask
+							if strings.HasPrefix(op, "V") {
+								want.vectorUpper[1] = ^uint64(0xffff)
 							}
+						case "self":
+							want.xmm[0] = known | 0xffff&^mask
+							if strings.HasPrefix(op, "V") {
+								want.vectorUpper[0] = ^uint64(0xffff)
+							}
+						case "x-to-gp":
+							want.gp[3] = uint8(known) | ^uint8(mask)
+							want.pointerGP[3], want.callerAddressGP[3], want.canonicalGP[3] = false, false, 0
 						}
 						for _, consumer := range x86ResultGPSIMDConsumers {
 							state := initial.clone()
-							if got := consumer.step(ins, &state, nil, 0, arch); got != valid || !reflect.DeepEqual(state, want) {
-								t.Fatalf("%s missing byte %d: accepted=%t want=%t, state=%#v want=%#v", consumer.name, missing, got, valid, state, want)
+							if got := consumer.step(ins, &state, nil, 0, arch); !got || !reflect.DeepEqual(state, want) {
+								t.Fatalf("%s missing byte %d: accepted=%t, state=%#v want=%#v", consumer.name, missing, got, state, want)
 							}
 						}
 					}
