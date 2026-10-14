@@ -10,9 +10,9 @@ import (
 // This configures only child harnesses importing the translator/LLVM bindings.
 // Independent original-Go SDK/package observations must not use these flags.
 func frameworkChildGoBuildCommand(arguments ...string) *exec.Cmd {
-	flags := []string{"build"}
+	flags := []string{"build", "-tags="}
 	if frameworkChildByoLLVM {
-		flags = append(flags, "-tags=byollvm")
+		flags[1] = "-tags=byollvm"
 	}
 	return exec.Command("go", append(flags, arguments...)...)
 }
@@ -24,9 +24,9 @@ func TestFrameworkChildGoBuildRetainsParentLLVMMode(t *testing.T) {
 			arguments := []string{"-trimpath", "-o", "reader", "main.go"}
 			before := append([]string(nil), arguments...)
 			command := frameworkChildGoBuildCommand(arguments...)
-			want := []string{"go", "build"}
+			want := []string{"go", "build", "-tags="}
 			if frameworkChildByoLLVM {
-				want = append(want, "-tags=byollvm")
+				want[2] = "-tags=byollvm"
 			}
 			want = append(want, arguments...)
 			if !reflect.DeepEqual(command.Args, want) {
