@@ -26,6 +26,9 @@ func x86ABI0BoolCallStep(ordinal int, ins Instr, state *x86ResultState, owned []
 		state.masks = [8]bool{}
 		state.pointerGP = [16]bool{}
 		state.callerAddressGP = [16]bool{}
+		state.callerAddressOrigin = [16]uint16{}
+		state.bitScanPending = x86ResultBitScanPending{}
+		state.predicate = x86ResultPredicate{}
 		state.resultAddressGP = [16]x86ResultSlotAddress{}
 		if state.boolFrameGP != nil {
 			state.boolFrameGP = new([16]x86ResultSlotAddress)

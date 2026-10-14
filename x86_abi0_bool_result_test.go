@@ -147,13 +147,15 @@ func TestX86ABI0Mode32CanonicalFPCloneJoinAndBudget(t *testing.T) {
 		t.Fatal(err)
 	}
 	const limit = (64 << 20) / 8
-	// The existing logical NUM/GP/vector/FLAGS/pointer payload has331 bytes;
-	// the separately allocated canonical result byte must also count once.
-	for _, room := range []int{2 * 331, 2 * 332} {
+	// The base NUM/GP/vector/FLAGS/pointer payload has331 bytes, plus
+	// caller-origin IDs (32), scan-pending (2), predicate (3). The separately
+	// allocated canonical result byte must also count exactly once.
+	const ordinary = 331 + 32 + 2 + 3
+	for _, room := range []int{2 * ordinary, 2 * (ordinary + 1)} {
 		fn := file.Funcs[0]
 		fn.x86ResultFlowBudget = &x86ResultFlowBudget{bytes: limit - room}
 		err := checkX86ScalarFPResultInitialization(fn, x86SDKLiteral386Signature(), "386")
-		if room == 2*332 && err != nil || room == 2*331 && !errors.Is(err, ErrProbeNeedsContext) {
+		if room == 2*(ordinary+1) && err != nil || room == 2*ordinary && !errors.Is(err, ErrProbeNeedsContext) {
 			t.Fatal("canonical FP state received unaccounted extra source work", room, err)
 		}
 	}
