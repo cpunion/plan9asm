@@ -44,6 +44,18 @@ func (c *amd64Ctx) lowerPackedScalarExtract(op Op, ins Instr) (ok bool, terminat
 	if err != nil {
 		return true, false, err
 	}
+	destination := ins.Args[f.destination]
+	if (base == "EXTRACTPS" || base == "VEXTRACTPS") && destination.Kind == OpFP {
+		// Complete destination fields never initialize unknown source lanes.
+		// Check before emitting any IR, including the source-register load.
+		if _, err := c.scalarFPSpan(destination.FPOffset, 32); err != nil {
+			return true, false, err
+		}
+		if err := c.scalarFPResultInitialized(); err != nil {
+			return true, false, err
+		}
+	}
+
 	source, err := c.loadX(ins.Args[f.source].Reg)
 	if err != nil {
 		return true, false, err
@@ -53,7 +65,6 @@ func (c *amd64Ctx) lowerPackedScalarExtract(op Op, ins Instr) (ok bool, terminat
 	fmt.Fprintf(c.b, "  %%%s = bitcast <16 x i8> %s to <%d x i%d>\n", laneVector, source, lanes, f.bits)
 	fmt.Fprintf(c.b, "  %%%s = extractelement <%d x i%d> %%%s, i32 %d\n", extracted, lanes, f.bits, laneVector, f.offset/(f.bits/8))
 	value := "%" + extracted
-	destination := ins.Args[f.destination]
 	if destination.Kind == OpReg {
 		destination.Reg = f.transferReg
 		if f.gpBits > f.bits {
@@ -71,12 +82,6 @@ func (c *amd64Ctx) lowerPackedScalarExtract(op Op, ins Instr) (ok bool, terminat
 		// Parameter copies and result fields share the existing logical byte
 		// writer. Neither source syntax nor a complete destination makes an
 		// unknown selected X lane initialized, or a pointer/padding numeric.
-		if _, err := c.scalarFPSpan(destination.FPOffset, 32); err != nil {
-			return true, false, err
-		}
-		if err := c.scalarFPResultInitialized(); err != nil {
-			return true, false, err
-		}
 		bytes := c.newTmp()
 		fmt.Fprintf(c.b, "  %%%s = bitcast i32 %s to <4 x i8>\n", bytes, value)
 		return true, false, c.storeFPVectorBytes(destination.FPOffset, 4, "%"+bytes, "")
