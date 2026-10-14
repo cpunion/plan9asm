@@ -16,6 +16,7 @@ type x86ABI0BoolCallSource struct {
 	options    Options
 	callers    map[string]*x86ABI0BoolCallPlan
 	budget     x86ResultFlowBudget
+	tailProofs map[string]bool
 }
 
 type x86ABI0BoolCallPlan struct {
@@ -25,6 +26,7 @@ type x86ABI0BoolCallPlan struct {
 	emittedSignature *FuncSig        // Only the independently emitted nontransport Attrs projection.
 	calls            map[int]FuncSig // Original instruction ordinals, never helper/root rewrites.
 	bytes            map[int64]bool  // Actual declared outgoing bytes only; padding is absent.
+	tail             *x86ABI0BoolTail
 }
 
 func x86ABI0BoolCallContext(reason string) error {
@@ -36,16 +38,16 @@ func x86ABI0BoolCallsNeeded(file *File, arch string) bool {
 		return false
 	}
 	for _, fn := range file.Funcs {
-		if x86ABI0BoolFunctionCalls(fn) {
+		if x86ABI0BoolFunctionControlNeeded(fn) {
 			return true
 		}
 	}
 	return false
 }
 
-func x86ABI0BoolFunctionCalls(fn Func) bool {
+func x86ABI0BoolFunctionControlNeeded(fn Func) bool {
 	for _, ins := range fn.Instrs {
-		if ins.Op == "CALL" {
+		if ins.Op == "CALL" || ins.Op == OpJMP && len(ins.Args) == 1 && ins.Args[0].Kind == OpSym {
 			return true
 		}
 	}
@@ -78,10 +80,10 @@ func prepareX86ABI0BoolCalls(file *File, options Options) (*x86ABI0BoolCallSourc
 		return nil, err
 	}
 	source := &x86ABI0BoolCallSource{origin: file, original: x86DirectTailSnapshot(file), options: options,
-		signatures: signatures, resolved: make(map[string]string), callers: make(map[string]*x86ABI0BoolCallPlan)}
+		signatures: signatures, resolved: make(map[string]string), callers: make(map[string]*x86ABI0BoolCallPlan), tailProofs: make(map[string]bool)}
 	needed := false
 	for _, fn := range source.original.Funcs {
-		if !x86ABI0BoolFunctionCalls(fn) {
+		if !x86ABI0BoolFunctionControlNeeded(fn) {
 			continue
 		}
 		name := x86ABI0BoolCallResolve(options, fn.Sym)
@@ -115,7 +117,7 @@ func prepareX86ABI0BoolCalls(file *File, options Options) (*x86ABI0BoolCallSourc
 	}
 	checked := make(map[string]bool)
 	for _, fn := range source.original.Funcs {
-		if !x86ABI0BoolFunctionCalls(fn) {
+		if !x86ABI0BoolFunctionControlNeeded(fn) {
 			continue
 		}
 		sig, present := signatures[source.resolved[fn.Sym]]
@@ -130,6 +132,18 @@ func prepareX86ABI0BoolCalls(file *File, options Options) (*x86ABI0BoolCallSourc
 		}
 		plan := &x86ABI0BoolCallPlan{source: source, function: fn, signature: sig, calls: make(map[int]FuncSig), bytes: make(map[int64]bool)}
 		plan.signature.Name = source.resolved[fn.Sym]
+		if !x86ABI0BoolHasCall(fn) {
+			tail, err := source.prepareTail(fn, sig, byName, make(map[string]bool))
+			if err != nil {
+				return nil, err
+			}
+			plan.tail = tail
+			if err := plan.replay(); err != nil {
+				return nil, err
+			}
+			source.callers[fn.Sym] = plan
+			continue
+		}
 		for ordinal, ins := range fn.Instrs {
 			if ins.Op != "CALL" {
 				continue

@@ -87,6 +87,10 @@ type FuncSig struct {
 	arm64ABI0Declaration     *arm64ABI0Declaration
 	arm64ABI0TailDeclaration *arm64ABI0TailDeclaration
 	arm64NativeScratch       *arm64ScratchBinding
+
+	// Denial-only provenance: an unresolved 386 bool tail copied its caller's
+	// signature. This is not an independent target declaration or capability.
+	x86BorrowedBoolTail bool
 }
 
 // WASMABI selects the physical ABI used for WebAssembly Plan 9 assembly.

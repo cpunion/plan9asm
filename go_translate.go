@@ -286,11 +286,11 @@ func translateGoModuleInContext(ctx llvm.Context, pkg GoPackage, src []byte, opt
 	}
 	if potentialBoolCalls {
 		for _, fn := range file.Funcs {
-			if !x86ABI0BoolFunctionCalls(fn) {
+			if !x86ABI0BoolFunctionControlNeeded(fn) {
 				continue
 			}
 			if sig, declared := sigs[resolve(goTextSymbolForResolution(fn.Sym))]; declared && sig.Ret == I1 {
-				// Actual selected I1 CALLs require the complete original types;
+				// Actual selected I1 CALLs/terminals require complete original types;
 				// unrelated nonbool/unused TEXTs need no new declaration query.
 				// With no dropped function, this first signature inventory is
 				// already complete. No temporary callee proof is built here.
@@ -753,6 +753,7 @@ func (b *goSigBuilder) addReferencedFuncSigs(file *File) error {
 				// via ManualSig when the inferred signature is not identical.
 				fs := callerSig
 				fs.Name = targetResolved
+				fs.x86BorrowedBoolTail = b.goarch == "386" && fs.Ret == I1
 				// A borrowed scalar signature is not a declaration-backed Go
 				// register-entry proof for the unresolved helper.
 				fs.ARM64GoRegisterABI = nil
