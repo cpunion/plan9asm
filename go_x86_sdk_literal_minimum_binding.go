@@ -46,6 +46,10 @@ func captureNumericalSDKLiteralMinimum(ctx context.Context, source *GoX86Numeric
 		profile.InitializerSHA256 != source.literals.owner.seal || profile.CGOEnabled != source.guard.env["CGO_ENABLED"] {
 		return nil, numericalSBContext("linked minimum actual SDK target/profile/initializer differs")
 	}
+	_, arch, _ := strings.Cut(source.request.Target, "/")
+	if arch != "386" && arch != "amd64" {
+		return nil, numericalSBContext("linked minimum lost its actual x86 target width")
+	}
 	for _, global := range source.file.Globl {
 		name := numericalNativeName(strings.TrimSuffix(global.Sym, "<>"), source.request.PackagePath)
 		for _, row := range rows {
@@ -65,7 +69,7 @@ func captureNumericalSDKLiteralMinimum(ctx context.Context, source *GoX86Numeric
 				}
 			}
 			if matches != 1 || row.MinimumAlignment == 0 || row.MinimumAlignment&(row.MinimumAlignment-1) != 0 ||
-				int64(row.MinimumAlignment) > goAssemblyDataAlignment(ArchAMD64, global.Size) {
+				int64(row.MinimumAlignment) > goAssemblyDataAlignment(Arch(arch), global.Size) {
 				return nil, numericalSBContext("linked minimum lost its exact original object/extent/emitted floor")
 			}
 			joined.Minima[global.Sym] = row.MinimumAlignment
@@ -102,11 +106,11 @@ func (joined *numericalSDKLiteralMinimumJoin) verify(ctx context.Context, source
 }
 
 func validSDKLiteralLowBitForm(ins Instr, bits *x86SDKLiteralLowBits, arch string) bool {
-	if bits == nil || arch != "amd64" || bits.Mask >= uint64(goAssemblyDataAlignment(ArchAMD64, 1<<32)) || bits.Value&^bits.Mask != 0 {
+	if bits == nil || arch != "amd64" && arch != "386" || bits.Mask >= uint64(goAssemblyDataAlignment(Arch(arch), 1<<32)) || bits.Value&^bits.Mask != 0 {
 		return false
 	}
 	if form, known, err := x86LockScalarRMWProperties(ins.Op, ins, arch); known && err == nil && form.spec.stem == "OR" {
-		return form.spec.bits == 64 && bits.Bytes == 8 && form.source.Kind == OpReg && form.destination.Kind == OpReg
+		return int64(form.spec.bits/8) == x86ResultPointerWord(arch) && bits.Bytes == x86ResultPointerWord(arch) && form.source.Kind == OpReg && form.destination.Kind == OpReg
 	}
 	form, known, err := x86ScalarCompareProperties(ins.Op, ins, arch)
 	if !known || err != nil || !form.test || bits.Bytes != int64(form.bits/8) || form.args[0].Kind != OpImm || form.args[1].Kind != OpReg {
@@ -123,17 +127,17 @@ func x86ResultSDKLiteralLowBitStep(ins Instr, bits *x86SDKLiteralLowBits, state 
 	if !validSDKLiteralLowBitForm(ins, bits, arch) {
 		return false
 	}
-	read := func(operand Operand) bool {
-		root, _, valid := x86ResultGP(operand.Reg, 8, arch)
+	read := func(operand Operand, width int64) bool {
+		root, _, valid := x86ResultGP(operand.Reg, width, arch)
 		return operand.Kind == OpReg && valid && (state.shapeOnly || state.pointerGP[root])
 	}
 	if form, known, err := x86LockScalarRMWProperties(ins.Op, ins, arch); known && err == nil {
-		if !read(form.source) || !read(form.destination) {
+		if !read(form.source, x86ResultPointerWord(arch)) || !read(form.destination, x86ResultPointerWord(arch)) {
 			return false
 		}
-		root, _, _ := x86ResultGP(form.destination.Reg, 8, arch)
+		root, _, _ := x86ResultGP(form.destination.Reg, x86ResultPointerWord(arch), arch)
 		state.gp[root], state.pointerGP[root] = 0, true
-	} else if !read(ins.Args[1]) {
+	} else if !read(ins.Args[1], bits.Bytes) {
 		return false
 	}
 	state.flags = state.flags&^x86ByteFlagAF | (x86ByteFlagsAll &^ x86ByteFlagAF)

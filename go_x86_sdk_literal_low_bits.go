@@ -23,6 +23,10 @@ func proveX86SDKLiteralAccessesWithMinima(fn Func, sig FuncSig, arch string, lit
 
 func x86SDKLiteralLowBitStep(ins Instr, state *x86SDKLiteralState, fn Func, sig FuncSig, arch string) (*x86SDKLiteralLowBits, bool, error) {
 	word := x86ResultPointerWord(arch)
+	if form, known, err := x86ConditionalSetProperties(ins.Op, ins, arch); known && err == nil &&
+		form.destination.Kind == OpFP && arch == "386" && x86SDKLiteralBoolPredicateRole(fn, sig, arch) && form.destination.FPOffset == 0 {
+		return nil, true, nil // No literal GP/FLAGS effect; the separate typed bool-byte role owns this result.
+	}
 	if form, known, err := x86ConditionalSetProperties(ins.Op, ins, arch); known && err == nil && form.destination.Kind == OpReg {
 		root, mask, valid := x86ResultGP(form.destination.Reg, 1, arch)
 		if valid && state.gp[root].symbol != "" {
@@ -48,7 +52,7 @@ func x86SDKLiteralLowBitStep(ins Instr, state *x86SDKLiteralState, fn Func, sig 
 		if first.symbol == "" && previous.symbol == "" {
 			return nil, false, nil
 		}
-		if !x86RegisterBoolResultNeedsProof(fn, sig, arch) || sig.Ret != I1 ||
+		if !x86SDKLiteralBoolPredicateRole(fn, sig, arch) ||
 			int64(form.spec.bits/8) != word || !validSource || !validDestination || first.symbol == "" || previous.symbol == "" ||
 			!first.hasMinimum || !previous.hasMinimum || first.bad && !first.bitsOnly || previous.bad && !previous.bitsOnly {
 			return nil, true, numericalSBContext("private literal OR needs two sealed minimum-floor bool-predicate carriers")
@@ -64,11 +68,15 @@ func x86SDKLiteralLowBitStep(ins Instr, state *x86SDKLiteralState, fn Func, sig 
 		return &x86SDKLiteralLowBits{Operation: ins.Op, Mask: mask, Value: value, Bytes: word, Symbol: previous.symbol}, true, nil
 	}
 	if form, known, err := x86ScalarCompareProperties(ins.Op, ins, arch); known && err == nil && form.test {
-		_, previous, valid := read(form.args[1])
+		root, _, valid := x86ResultGP(form.args[1].Reg, int64(form.bits/8), arch)
+		if form.args[1].Kind != OpReg || !valid {
+			return nil, false, nil
+		}
+		previous := state.gp[root]
 		if previous.symbol == "" {
 			return nil, false, nil
 		}
-		if !x86RegisterBoolResultNeedsProof(fn, sig, arch) || sig.Ret != I1 || !valid || form.args[0].Kind != OpImm ||
+		if !x86SDKLiteralBoolPredicateRole(fn, sig, arch) || form.args[0].Kind != OpImm ||
 			!previous.hasMinimum || previous.bad && !previous.bitsOnly {
 			return nil, true, numericalSBContext("private literal TEST needs its complete sealed minimum-floor bool predicate")
 		}
@@ -76,12 +84,13 @@ func x86SDKLiteralLowBitStep(ins Instr, state *x86SDKLiteralState, fn Func, sig 
 		if form.bits < 64 {
 			mask &= (uint64(1) << uint(form.bits)) - 1
 		}
-		if mask&^previous.lowMask != 0 {
+		shift := uint(8 * fixedLocalBooleanShift(form.args[1].Reg))
+		if mask&^(previous.lowMask>>shift) != 0 {
 			return nil, true, numericalSBContext("private literal TEST observes bits outside its guaranteed minimum")
 		}
 		state.compared = false
 		state.opaqueFlags = 0 // Only a completely covered mask clears its address taint.
-		return &x86SDKLiteralLowBits{Operation: ins.Op, Mask: mask, Value: previous.lowValue & mask, Bytes: int64(form.bits / 8), Symbol: previous.symbol}, true, nil
+		return &x86SDKLiteralLowBits{Operation: ins.Op, Mask: mask, Value: previous.lowValue >> shift & mask, Bytes: int64(form.bits / 8), Symbol: previous.symbol}, true, nil
 	}
 	return nil, false, nil
 }

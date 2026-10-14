@@ -31,6 +31,10 @@ func checkX86ABI0ResultInitializationAtSource(fn Func, sig FuncSig, goarch strin
 		return fmt.Errorf("%w: result initialization: %s", ErrProbeNeedsContext, reason)
 	}
 	privateVoid := scalarViews && sig.Ret == Void && len(sig.Frame.Results) == 0
+	canonicalBool := scalarViews && goarch == "386" && sig.Ret == I1
+	if canonicalBool && !x86ABI0SingleByteBoolResultRole(fn, sig, goarch) {
+		return fail("bool byte requires its complete ordinary no-argument/zero-frame ABI0 role")
+	}
 	if goarch != "amd64" && goarch != "386" || strings.Contains(fn.Sym, "<") ||
 		len(sig.ArgRegs) != 0 || sig.ARMEntry != nil || sig.WASMContext != "" ||
 		len(sig.Frame.Results) == 0 && !privateVoid {
@@ -75,6 +79,10 @@ func checkX86ABI0ResultInitializationAtSource(fn Func, sig FuncSig, goarch strin
 		resultOffset = int64(frame)
 	}
 	initial := x86ResultState{fp: make([]bool, frame), pointerFP: make(map[int64]bool)}
+	if canonicalBool {
+		initial.canonicalFP = make([]bool, frame)
+		transfer = x86ABI0CanonicalBoolTransfer(transfer)
+	}
 	if fn.x86DirectTailRoot != nil && scalarViews {
 		for _, slot := range sig.Frame.Results {
 			switch slot.Type {
@@ -134,6 +142,9 @@ func checkX86ABI0ResultInitializationAtSource(fn Func, sig FuncSig, goarch strin
 			for offset := int(resultOffset); offset < frame; offset++ {
 				if owned[offset] && !state.fp[offset] {
 					return fail(fmt.Sprintf("result byte %d is not written on every path to RET %d", offset, pc))
+				}
+				if canonicalBool && owned[offset] && (offset >= len(state.canonicalFP) || !state.canonicalFP[offset]) {
+					return fail(fmt.Sprintf("bool result byte %d is not canonical zero/one on every path to RET %d", offset, pc))
 				}
 			}
 			return nil
@@ -198,11 +209,11 @@ func checkX86ResultSourceFlow(fn Func, initial x86ResultState, owned []bool, res
 		return fail("missing or oversized source CFG")
 	}
 	// One logical byte-work envelope includes FP/AUTO, numerical GP/Z/K,
-	// canonical GP bytes, flags, opaque GP and caller-address identities, and the source-shape discriminator. It is
+	// canonical FP/GP bytes, flags, opaque GP and caller-address identities, and the source-shape discriminator. It is
 	// not a bound on Go's heap/struct overhead. pointerFP is immutable shared
 	// layout metadata, not a state payload copied at each CFG successor.
 	// AUTO states do not obtain an independent frame or iteration budget.
-	byteState := len(initial.fp) + len(initial.auto) + len(initial.gp) + len(initial.canonicalGP) +
+	byteState := len(initial.fp) + len(initial.canonicalFP) + len(initial.auto) + len(initial.gp) + len(initial.canonicalGP) +
 		8*len(initial.xmm) + len(initial.masks) + 1 + len(initial.pointerGP) + len(initial.callerAddressGP) +
 		2*len(initial.callerAddressOrigin) + 1 + 2 + 3
 	if len(initial.resultAddressSlots) != 0 {
@@ -210,7 +221,7 @@ func checkX86ResultSourceFlow(fn Func, initial x86ResultState, owned []bool, res
 	}
 	const byteWorkLimit = 64 << 20
 	byteWork := len(instructions) * byteState
-	boundedWork := len(initial.auto) != 0 || fn.x86DirectTailRoot != nil
+	boundedWork := len(initial.auto) != 0 || len(initial.canonicalFP) != 0 || fn.x86DirectTailRoot != nil
 	if boundedWork && byteWork > byteWorkLimit/8 {
 		return fail("combined FP/AUTO source-CFG byte budget exhausted")
 	}
@@ -363,7 +374,10 @@ type x86ResultState struct {
 	fp   []bool
 	auto []bool
 	gp   [16]uint8
-	// Used only by the independent ordinary register bool-result contract.
+	// Canonical FP is allocated only for the independent bounded ABI0 bool
+	// role. It neither replaces numerical initialization nor extends FP slots.
+	canonicalFP []bool
+	// Used by the independent register/ABI0 bool-result contracts.
 	// A set bit means that physical byte is exactly 0/1, not merely initialized.
 	canonicalGP [16]uint8
 	xmm         [32]uint16 // high banks are consumed only by validated mode-bound forms
@@ -400,6 +414,7 @@ type x86ResultState struct {
 
 func (state x86ResultState) clone() x86ResultState {
 	state.fp = append([]bool(nil), state.fp...)
+	state.canonicalFP = append([]bool(nil), state.canonicalFP...)
 	state.auto = append([]bool(nil), state.auto...)
 	state.loweredStaticReads = nil
 	state.literalMemoryOperand, state.literalMemoryBytes = nil, 0
@@ -410,6 +425,9 @@ func (state x86ResultState) intersect(other x86ResultState) x86ResultState {
 	merged := state.clone()
 	for index := range merged.fp {
 		merged.fp[index] = merged.fp[index] && other.fp[index]
+	}
+	for index := range merged.canonicalFP {
+		merged.canonicalFP[index] = index < len(other.canonicalFP) && merged.canonicalFP[index] && other.canonicalFP[index]
 	}
 	for index := range merged.auto {
 		merged.auto[index] = merged.auto[index] && other.auto[index]

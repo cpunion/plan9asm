@@ -12,7 +12,7 @@ var sdkLiteralAlignmentRequested = errors.New("typed literal-address masked pred
 // layout, result or address permission. Only the independent live producer
 // and BindNumericalReadsWithLiteralAlignment may authorize a masked predicate.
 func GoX86SDKLiteralAlignmentRequested(file *File, options Options) bool {
-	if file == nil || file.Arch != ArchAMD64 || options.Goarch != "amd64" || len(file.Funcs) > 256 || len(file.Globl) > gostaticstorage.ObjectSymbolInventoryLimit {
+	if file == nil || file.Arch != ArchAMD64 || options.Goarch != "amd64" && options.Goarch != "386" || len(file.Funcs) > 256 || len(file.Globl) > gostaticstorage.ObjectSymbolInventoryLimit {
 		return false
 	}
 	literals := make(map[string]int64)
@@ -31,13 +31,13 @@ func GoX86SDKLiteralAlignmentRequested(file *File, options Options) bool {
 			name = options.ResolveSym(name)
 		}
 		sig, found := options.Sigs[name]
-		if !found || sig.Ret != I1 || !x86RegisterBoolResultNeedsProof(fn, sig, "amd64") {
+		if !found || !x86SDKLiteralBoolPredicateRole(fn, sig, options.Goarch) {
 			continue
 		}
 		// Reuse the complete bounded literal CFG, physical source aliases,
 		// origin/escape checks and cycle budget. The query has no fake floor,
 		// linked address, minimum certificate or initialized numerical bytes.
-		_, err := proveX86SDKLiteralAccessesAtMinimumRequest(fn, sig, "amd64", literals, nil, true)
+		_, err := proveX86SDKLiteralAccessesAtMinimumRequest(fn, sig, options.Goarch, literals, nil, true)
 		if errors.Is(err, sdkLiteralAlignmentRequested) {
 			return true
 		}
@@ -65,8 +65,9 @@ func x86SDKLiteralAlignmentRequestStep(ins Instr, state *x86SDKLiteralState, arc
 		return true, nil
 	}
 	if form, known, err := x86ScalarCompareProperties(ins.Op, ins, arch); known && err == nil && form.test {
-		_, value, valid := read(form.args[1])
-		if valid && form.args[0].Kind == OpImm && value.symbol != "" && (!value.bad || value.bitsOnly) {
+		root, _, valid := x86ResultGP(form.args[1].Reg, int64(form.bits/8), arch)
+		value := state.gp[root]
+		if valid && form.args[1].Kind == OpReg && form.args[0].Kind == OpImm && value.symbol != "" && (!value.bad || value.bitsOnly) {
 			return true, sdkLiteralAlignmentRequested
 		}
 	}

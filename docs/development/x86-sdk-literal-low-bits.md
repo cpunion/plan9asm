@@ -37,4 +37,7 @@ must-initialized CFG rules permits logical whole-file translation. Neither
 supplies new memory extent, loop invariants or physical native Go entry.
 AMD64's three OS profiles are source/object evidence, not SDK execution or an
 actual frontend benchmark pass. The frontends still need an explicit authentic
-minimum handoff; 386's ABI0 bool transport remains a separate Context boundary.
+minimum handoff. The independently bounded 386 consumer uses four-byte literal
+carriers and a separately proved ABI0 canonical bool byte; it does not borrow
+AMD64 register-return transport. Complete original 386 SDK source/object and
+execution gates remain necessary before claiming that discovering file passes.

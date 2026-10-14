@@ -1,4 +1,4 @@
-# Canonical AMD64 register bool result
+# Canonical x86 bool results
 
 The ordinary scalar-register lowering role accepts one logical `i1` result
 only when the complete explicit ABIInternal source proves AX's physical low
@@ -32,3 +32,24 @@ counterpart when local AMD64/Rosetta execution is unavailable.
 This role neither binds the linked SDK literal-minimum-alignment producer nor
 exposes a linked address as a number. Full original maps functions remain
 subject to their linked-low-bit, caller, pointer, loop and native-entry contracts.
+
+## Bounded 386 ABI0 byte result
+
+The independent first ABI0 consumer admits only a complete ordinary 386
+no-argument, zero-frame function with exactly one declared bool result byte
+at FP+0 and original argument size one. Other frame/input/result, direct-tail,
+raw and native roles retain Context; the shape alone authenticates no source.
+Each declared physical byte has a separate bounded canonical must-fact,
+cloned and intersected across the complete source CFG. Numerical initializedness
+remains independent: raw 2, 3 and 255 may be read or compared and then replaced
+by SETcc or another proved zero/one before RET. Overwrites revoke canonicality,
+and every predecessor must supply a canonical result. The existing shared
+byte-work envelope counts this state without increasing its limit.
+
+The cached whole-source proof is required even without an FP/SIMD probe.
+Intermediate loads and stores retain the physical I8 value; only the final
+proved result is truncated to logical I1. This does not initialize unknown GP
+upper bytes, expand FP storage, permit pointer/frame escapes or establish
+native Go entry. The required Linux AMD64 execution counterpart uses original
+386 Go bool callers and independent raw-byte/canary observers, plus LLVM's
+explicit I1-to-I32 shims; fixture inventory/IR tests alone are not execution.
