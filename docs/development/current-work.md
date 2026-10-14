@@ -1,6 +1,6 @@
 # Current work: PR 40 checkpoint
 
-Checkpoint: 2026-10-14 13:28 UTC. Contribution source: `6a20cdf2`.
+Checkpoint: 2026-10-14 14:30 UTC. Contribution source: `daaf28a4`.
 This is a handoff, not a ledger or a claim that current-head CI/stdlib passes.
 
 ## Scope and authority
@@ -26,11 +26,11 @@ Do not edit the primary or probe while their frozen jobs run.
 
 | Worktree basename | Branch / purpose |
 | --- | --- |
-| `plan9asm-wt-pr40-scalar-lane-native-20261011` | `codex/pr40-external-corpus-split-20261011`; integrated source `6a20cdf2`; full SDK composition still pending |
-| `plan9asm-wt-pr40-stdlib-preprocessing-20261012` | `codex/pr40-windows-owned-process-probe-20261013`; staged fork-only priorities, `0506accd`; not pushed |
-| `plan9asm-wt-pr40-sdk-numeric-maps-entry-20261013` | `codex/pr40-sdk-numeric-maps-entry-20261013`; verified bool/literal/CALL leaves; auditing non-bool selection and native-owner qualification |
-| `plan9asm-wt-pr40-sdk-tls-20261013` | `codex/pr40-sdk-tls-20261013`; caller leaf `92742505`; authenticated NUM node/emitter composition still dirty |
-| `plan9asm-wt-pr40-simple-sdk-bindings-20261013` | `codex/pr40-sdk-storage-snapshot-20261013`; verified bit-scan leaf `46f48072`; adding required native execution fixtures |
+| `plan9asm-wt-pr40-scalar-lane-native-20261011` | `codex/pr40-external-corpus-split-20261011`; integrated source `daaf28a4`; fresh complete SDK composition pending |
+| `plan9asm-wt-pr40-stdlib-preprocessing-20261012` | `codex/pr40-windows-owned-process-probe-20261013`; fork-only priorities `489d7cf8`, source through `6281a98a`; not pushed |
+| `plan9asm-wt-pr40-sdk-numeric-maps-entry-20261013` | `codex/pr40-sdk-numeric-maps-entry-20261013`; ordinary void CALL inside bool callers and authentic typed tails |
+| `plan9asm-wt-pr40-sdk-tls-20261013` | `codex/pr40-sdk-tls-20261013`; ordinary zero-frame integer result-address aliases |
+| `plan9asm-wt-pr40-simple-sdk-bindings-20261013` | `codex/pr40-sdk-storage-snapshot-20261013`; typed CLD/STD direction state, distinct from status and native memory |
 
 ## Latest two frozen fork runs
 
@@ -242,29 +242,25 @@ route. Original pointer/native/bounds/result-alias permissions remain separate.
 Its frozen25-root/198-child union passes Go27/race/Go20 in5.719/10.044/5.469s,
 with fresh exact inventories, no skips, equal six-file seals and vet success.
 
-TLS dirty-v4 complete SDK2 replay remains FAILED71.688s: all six API children
-ran; Count needed exact original helper-node emitter identity, Index needed
-same-origin subtraction. The later complete original Count3-TEXT/3-API replay
-passes translation100.488s on dirty-v5, not objects, runtime, fullSDK2 or SDK8.
-The source join and emitter leaf must still be sealed/committed and replayed
-with `3f972336` and the pending zero-input repair. Saved timing attributes91.60s
-to three APIs and8.68s to combined setup; finer stage durations were not logged.
-Repeated actual source/export verification needs measured optimization, never
-deleted guards or increased budgets.
-After joining `3f972336`, dirty-v8 also translates the unchanged complete
-IndexByte3-TEXT source through all three APIs in116.540s. The fresh combined
-two-file/six-API union now passes in303.782s, with two roots and eight child
-terminals, on that same frozen dirty-v8. Its subsequent complete SDK8 union
-remains FAILED325.932s: seven roots pass, while Bytealg's Count and IndexByte
-retry children fail at typed entry/terminal signature inventory. Repair the
-actual CLI signature consumer; do not weaken original-node binding. No object,
-runtime or parent-head certification follows. The combined duration also needs
-measured verification-cost reduction, not larger budgets.
-The later dirty-v10 actual Bytealg CLI root passes72.449s, producing nonempty
-LLVM22 objects for both complete members. An exact typed-declaration inventory
-adapter removes fabricated helper signatures, and one downstream handoff
-forwards the admitted map; the existing strict Options comparator stays intact.
-The final frozen producer/core/race/Go20/official and rich SDK union is pending.
+`31b2f09f` is integrated as `6281a98a`: authentic complete SDK source metadata
+joins each NUM read to its original TEXT/PC/instruction and sealed emitter
+coordinate. Private helpers never acquire copied root signatures or a fresh ABI.
+The CLI adapter retains actual root/ordinary terminal declarations and original
+private capabilities; one downstream handoff forwards that admitted map through
+the unchanged strict Options consumer. Raw decoder extensions observe lengths,
+not new source or memory permission. Metadata-only empty-DATA source capture
+does not manufacture a literal initializer.
+The worker's production-identical v11 union passes65 roots/998 children on
+Go27/race in271.603/1013.867s. A listing fixture alone used a Go27 namespace;
+its actual Go20 failure is retained, and explicit original source qualification
+repairs it without a parser/version guess. Final Go20's44/747 passes4.626s,
+both official gates pass, shared complete Count/IndexByte2/8 passes197.506s,
+and rich CLI12/43 passes321.563s with nonempty LLVM22 objects for both files.
+These are scoped worker receipts, not current-parent full CI or native execution.
+Parent `6281a98a` separately passes142 roots/3,835 children on Go27/race/Go20
+in3.926/16.979/4.061s; historical Go20 has141 roots by its explicit build role.
+All raw terminals and unchanged before/after heads are audited. Earlier failed
+SDK2, rich-v8, CLI-v9 and Go20-v11 reports remain failed, never relabeled.
 
 Numeric `6e63c125`/`48a8ef1a` are integrated as `1c23a81e`/`23201634`.
 CanonicalFP and physical-I8 intermediates preserve raw2/3/255 bytes until proved
@@ -281,60 +277,81 @@ Fresh inventories, all child terminals, stable head/clean tree and vet pass.
 SDK386 maps, complete-module/object/runtime and native bool execution remain
 pending. The separate native bool owner still needs exact native/kernel gates.
 
-Fork-only `0506accd` retains13 lanes and original budgets, with70 unique source
-priorities covering predicates, origins, complete bit-scan objects and bool
-source/CALL/budget controls, plus both native sparse-GP/X owners.
-All35 policy tests/actionlint pass; genuine missing-priority REDs are preserved.
-The planned54-root native
-profile requires eight inventories/16 mandatory
-roots. Its12 auditor mutation controls pass, but expanded logs are synthetic,
-not execution. The fork still lacks later source merges; do not push it yet.
+`3b42f9be` is integrated as `a9767230`: only an actual selected I1-result caller
+demands the bool CALL plan. Complete non-bool files and filters no longer borrow
+its256-TEXT cap. Unknown/declaration-changing queries still fail closed.
+`2d6ea3df`/`34d0966c` are integrated as `d5e204b2`/`24bbc237`: mandatory original
+Go/LLVM bit-scan native owners, independently derived guarded ABI0 callers and
+physical six-status observation, plus readable C driver control flow. Only ZF
+is portable source proof; original hardware determines other observed flags and
+historical zero-input dword behavior. `c5645adb`, integrated as `20b8ec24`, seals
+the mode32 bool owner to real native host observations and direct static ELF
+execution. None of these owner policy checks establishes actual execution.
+`daaf28a4` checks both complete original-Go executables and24 LLVM shim object
+axes before native execution. Go27/race/actualGo20 pass2.485/4.097/3.480s;
+independent exact inventories, source heads and child terminals are retained.
+
+Fork-only `489d7cf8` retains13 lanes and all budgets, with82 unique source
+priorities and57 planned native roots. Ten independent native inventories require
+19 exact owners, including both bit-scan modes and the sealed mode32 bool owner.
+All37 policy tests and actionlint pass, including genuine missing-priority REDs.
+The native auditor's17 mutation controls pass; expanded logs remain explicitly
+synthetic. Last executed profile is49, not57. The probe lacks `daaf28a4` and
+subsequent source repairs; no later native or full CI certification is claimed.
 
 ## Stdlib benchmark: current complete failed receipt
 
-Frozen `7752fc1f`: 164/184 files, 20 FAIL, zero N/A/unattempted.
-386 29/33; amd64 49/55; arm 27/30; arm64 40/47; wasm 19/19.
-Complete original AMD64 maps now passes; 386 still requires its independent
-literal/ABI0 contract. Build3s, target total165s, within unchanged300s-per-target
-and900s-total budgets. Reports remain FAILED; object success is not execution.
-The earlier `2d696307` 163/184,21-failure receipt stays unchanged.
+Frozen `6281a98a`: 156/184 files,28 FAIL, zero N/A/unattempted. All original
+files and all five targets attempted; before/after source head and clean tree
+match. Earlier `7752fc1f`164/184 and `2d696307`163/184 remain separate failed
+receipts. Eight more files fail the stricter composed source proof; investigate
+each rule class rather than restoring unchecked admission or shrinking scope.
+Build13s, target total367s; unchanged300s-per-target/900s-total budgets pass,
+but AMD64's297s is close to its limit and needs measured cost optimization.
+Object success is not execution, and classification success is not file success.
 
-| Failed-file mechanism family | Count | Contract still needed / new evidence |
-| --- | ---: | --- |
-| 386 maps linked literal predicates | 1 | Independent 32-bit literal minimum/ABI0 consumer; AMD64 complete source passes the current benchmark |
-| bytealg same-file tail / hidden closure | 2 | exact root-to-helper state, DX/R26 closure; AMD64 no-DATA handoff remains separate |
-| chacha private helper | 1 | genuine undeclared/native helper and split-stack/caller role; keep all three TEXTs |
-| reflect dynamic FP frame | 4 | caller-frame extent/layout; `func()` and local stack size are insufficient |
-| startup/TLS/native state | 6 | actual OS/arch/shared/thread/native entry and pointer/linkname globals |
-| asynchronous preempt state | 3 | original FLAGS/CPSR/NZCV and mixed register-target state, not guessed initialization |
-| VDSO/syscall caller stack | 2 | exact FP/saved-caller memory and disjoint syscall proof |
-| ARM64 atomic result tail | 1 | observed eight-byte write vs four-byte result/padding contract |
+| Target | Passed / original files | Failed | Wall seconds |
+| --- | ---: | ---: | ---: |
+| linux/386 | 24 /33 | 9 | 52 |
+| linux/amd64 | 46 /55 | 9 | 297 |
+| linux/arm | 27 /30 | 3 | 7 |
+| linux/arm64 | 40 /47 | 7 | 9 |
+| js/wasm | 19 /19 | 0 | 2 |
+
+Current first class repairs: ordinary void CALL within a bool-result caller;
+authentic ordinary/external bool tails; zero-frame integer result aliases;
+independent CLD/STD/REP direction state; paired string/PCMPESTRI source effects;
+ordinary virtual BP versus physical stack roles; private helper graph admission.
+Independent unresolved contracts remain: bytealg hidden DX/R26 closures,
+four-architecture reflect caller frames, actual startup/TLS/thread/native entry,
+preempt FLAGS/CPSR/NZCV, saved VDSO/syscall frames and ARM64 observable result
+tail stores. A copied declaration, manual func() or allocation padding is not
+authority for any of those roles.
 
 ## External server checkpoint (no local scan)
 
-Trusted latest manifest generated 2026-10-14 12:14:40 UTC:
-`incremental_since=2026-10-11T01:22:43Z`; `history_before=2025-10-01`;
+Trusted latest manifest generated 2026-10-14 14:13:02 UTC:
+`incremental_since=2026-10-11T03:22:43Z`; `history_before=2025-10-01`;
 `history_complete=false`. The next hourly window is unfinished; never advance
 its cursor from partial progress.
-Index22,181,069 entries; unique_modules1,072,099; matched_records6,793;
-scanned_records1,119,631; failures16,861; latest_records1,002,505;
-cgo_records1,113,807. These are inventory records, never translator passes.
-All569 manifest ranges were independently checked continuous; their sum equals
+Index22,207,468 entries; unique_modules1,072,326; matched_records6,795;
+scanned_records1,120,245; failures16,874; latest_records1,002,739;
+cgo_records1,114,421. These are inventory records, never translator passes.
+All571 manifest ranges were independently checked continuous; their sum equals
 index_entries and first/last endpoints derive history/incremental cursors. Periodic
 exports can lag the completed manifest/journal; never interpret that as rollback.
 Source failures remain retryable, never pass/skip. Later values require readback.
 
 ## Owners and next gates
 
-- Parent: latest leaves integrated and actual child verified; full SDK composition
-  still needs replay after every known rule/admission repair. Run a fresh strict
-  benchmark before the next allowed-fork batch. Full CI remains required.
-- TLS agent owns the only heavy slot: authenticated NUM/original-node graph
-  composition, then complete SDK failures. Original source is never cropped.
-- Numeric agent: audit non-bool selection, then qualify the required native
-  bool owner; SDK386 literal/minimum object/runtime certification is pending.
-- Frontend agent: complete original-Go/LLVM bit-scan native execution fixtures;
-  native sparse GP/X execution remains pending. No local scan.
+- Parent: fresh SDK composition, source/CI integration and benchmarks. Own the
+  single heavy slot explicitly; do not merge or edit a running source snapshot.
+- TLS agent: ordinary bounded integer result aliases, preserving private-only
+  queries, exact range/write/escape/join semantics and no native extent grant.
+- Numeric agent: authentic ordinary void CALL and typed bool tails. A frontend
+  fallback signature copied from the caller is not an actual callee declaration.
+- Frontend agent: direction-state grammar and result consumer; string memory,
+  dynamic pointer advance and zero-count preserved FLAGS need independent proof.
 One heavy source/SDK/object owner at a time; small bounded pure controls may overlap.
 Preserve native execution vs QEMU/emulated diagnostics, all original fault effects,
 canonical bool bytes (not arbitrary2/3 truncation) and unknown GP upper bytes.
