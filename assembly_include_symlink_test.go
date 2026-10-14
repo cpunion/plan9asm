@@ -1,5 +1,3 @@
-//go:build !windows
-
 package plan9asm
 
 import (
