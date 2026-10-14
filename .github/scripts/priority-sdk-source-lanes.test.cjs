@@ -64,7 +64,7 @@ test('Every lane retains exact inventory and an independent artifact', () => {
   assert.doesNotMatch(sdk, /continue-on-error|max-parallel|go test[^\n]* -skip/);
 });
 
-test('Source priority includes the complete same-pass reader class without another lane', () => {
+test('Source priority includes the complete reader and child-harness class without another lane', () => {
   const source = sdk.slice(sdk.indexOf('- lane: source\n'), sdk.indexOf('- lane: frame-context\n'));
   assert.match(source, /module: '\.'/);
   assert.match(source, /timeout: 5m/);
@@ -77,6 +77,7 @@ test('Source priority includes the complete same-pass reader class without anoth
     'TestReadGoAssemblySourceRejectsEscapedSourceAlias',
     'TestReadGoAssemblySourceExpandsNestedLocalHeaders',
     'TestReadGoAssemblySourceRejectsSymlinkIncludeOutsideRoot',
+    'TestFrameworkChildGoBuildRetainsParentLLVMMode',
   ]) {
     assert.equal(source.split(`- ${root}\n`).length - 1, 1, root);
   }

@@ -226,6 +226,7 @@ jobs:
               - TestReadGoAssemblySourceRejectsEscapedSourceAlias
               - TestReadGoAssemblySourceExpandsNestedLocalHeaders
               - TestReadGoAssemblySourceRejectsSymlinkIncludeOutsideRoot
+              - TestFrameworkChildGoBuildRetainsParentLLVMMode
               - TestGoX86SDKASMDataOriginalVendorPackageNamespace
               - TestGoX86SDKNumericalReadPackageQueryMatchesOriginalLiteralSource
               - TestSDKAMD64OriginalFrameConfigGuardEagerIdentity
