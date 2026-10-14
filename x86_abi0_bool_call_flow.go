@@ -34,6 +34,7 @@ func x86ABI0BoolCallStep(ordinal int, ins Instr, state *x86ResultState, owned []
 			state.boolFrameGP = new([16]x86ResultSlotAddress)
 		}
 		state.flags = 0
+		state.direction = x86ResultDirectionUnknown
 		if sig.Ret == Void {
 			return true, true // No numerical/canonical FP or outgoing byte is new.
 		}
