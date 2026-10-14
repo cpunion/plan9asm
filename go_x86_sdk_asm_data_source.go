@@ -240,17 +240,10 @@ func (source *GoX86SDKASMDataSource) liveContext(ctx context.Context) error {
 		!reflect.TypeOf(source.context).Comparable() || source.context != source.originalContext {
 		return sdkASMDataContext("original capture context identity changed")
 	}
-	if err := errors.Join(ctx.Err(), source.context.Err()); err != nil {
-		return err
-	}
-	deadline, bounded := source.context.Deadline()
-	if err := errors.Join(ctx.Err(), source.context.Err()); err != nil {
-		return err
-	}
-	if !bounded || !deadline.Equal(source.originalDeadline) {
-		return sdkASMDataContext("original capture context deadline changed")
-	}
-	return nil
+	_, err := sampleGoSourceContext(ctx, source.context,
+		goSourceContextLifetime{deadline: source.originalDeadline, bounded: true}, false,
+		sdkASMDataContext("original capture context deadline changed or canceled without a cause"))
+	return err
 }
 
 func (source *GoX86SDKASMDataSource) run(ctx context.Context, arguments ...string) ([]byte, error) {

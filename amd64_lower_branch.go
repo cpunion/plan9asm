@@ -81,75 +81,92 @@ func (c *amd64Ctx) lowerBranch(bi int, ii int, op Op, ins Instr, emitBr amd64Emi
 		}
 		return false
 	}
-	switch args[0].Kind {
-	case OpIdent:
-		target = args[0].Ident
-	case OpReg:
-		// Labels like V1 may be tokenized as registers. Prefer block labels;
-		// otherwise treat JMP reg as an indirect tail jump.
-		name := string(args[0].Reg)
-		if knownBlock(name) {
-			target = name
-			break
-		}
-		if op == "JMP" {
-			addr, err := c.loadReg(args[0].Reg)
-			if err != nil {
-				return true, false, err
+	if c.directTail != nil {
+		if bi >= 0 && bi < len(c.directTail.externalTails) && c.directTail.externalTails[bi] && ii == 0 {
+			if op != OpJMP || len(args) != 1 || args[0].Kind != OpSym {
+				return true, false, x86DirectTailContext("typed terminal lost its original source branch")
 			}
-			if err := c.tailCallIndirectAddrAndRet(addr); err != nil {
-				return true, false, err
-			}
-			return true, true, nil
-		}
-		return true, false, fmt.Errorf("amd64 %s invalid register target: %q", op, ins.Raw)
-	case OpSym:
-		s := strings.TrimSpace(args[0].Sym)
-		if op == "JMP" && strings.HasPrefix(s, "*") {
-			addr, err := c.loadIndirectSymbolAddr(s)
-			if err != nil {
-				return true, false, err
-			}
-			if err := c.tailCallIndirectAddrAndRet(addr); err != nil {
-				return true, false, err
-			}
-			return true, true, nil
-		}
-		// Treat JMP foo(SB) as a tailcall to another TEXT (common in stdlib asm).
-		if op == "JMP" && strings.HasSuffix(s, "(SB)") {
 			if err := c.tailCallAndRet(args[0]); err != nil {
 				return true, false, err
 			}
 			return true, true, nil
 		}
-		// Local labels sometimes appear with "<>" or (SB) suffix.
-		s = strings.TrimSuffix(strings.TrimSuffix(s, "(SB)"), "<>")
-		target = s
-	case OpMem:
-		// PC-relative branches like "JEQ 2(PC)" are used as a compact way to skip
-		// the next instruction. Handle them by mapping the offset to our block
-		// sequence (blocks are split at terminators, so the pattern works well).
-		if strings.EqualFold(string(args[0].Mem.Base), "PC") {
-			pcRel = true
-			pcOff = args[0].Mem.Off
-			break
+		if bi < 0 || bi >= len(c.directTail.edges) || ii != 0 || len(c.directTail.edges[bi]) == 0 {
+			return true, false, x86DirectTailContext("branch lost its original source node")
 		}
-		if op == "JMP" {
-			addr, err := c.addrFromMem(args[0].Mem)
-			if err != nil {
-				return true, false, err
+		edges := c.directTail.edges[bi]
+		target = c.blocks[edges[len(edges)-1]].name
+	} else {
+		switch args[0].Kind {
+		case OpIdent:
+			target = args[0].Ident
+		case OpReg:
+			// Labels like V1 may be tokenized as registers. Prefer block labels;
+			// otherwise treat JMP reg as an indirect tail jump.
+			name := string(args[0].Reg)
+			if knownBlock(name) {
+				target = name
+				break
 			}
-			p := c.ptrFromAddrI64(addr)
-			fnptr := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = load i64, ptr %s, align 1\n", fnptr, p)
-			if err := c.tailCallIndirectAddrAndRet("%" + fnptr); err != nil {
-				return true, false, err
+			if op == "JMP" {
+				addr, err := c.loadReg(args[0].Reg)
+				if err != nil {
+					return true, false, err
+				}
+				if err := c.tailCallIndirectAddrAndRet(addr); err != nil {
+					return true, false, err
+				}
+				return true, true, nil
 			}
-			return true, true, nil
+			return true, false, fmt.Errorf("amd64 %s invalid register target: %q", op, ins.Raw)
+		case OpSym:
+			s := strings.TrimSpace(args[0].Sym)
+			if op == "JMP" && strings.HasPrefix(s, "*") {
+				addr, err := c.loadIndirectSymbolAddr(s)
+				if err != nil {
+					return true, false, err
+				}
+				if err := c.tailCallIndirectAddrAndRet(addr); err != nil {
+					return true, false, err
+				}
+				return true, true, nil
+			}
+			// Treat JMP foo(SB) as a tailcall to another TEXT (common in stdlib asm).
+			if op == "JMP" && strings.HasSuffix(s, "(SB)") {
+				if err := c.tailCallAndRet(args[0]); err != nil {
+					return true, false, err
+				}
+				return true, true, nil
+			}
+			// Local labels sometimes appear with "<>" or (SB) suffix.
+			s = strings.TrimSuffix(strings.TrimSuffix(s, "(SB)"), "<>")
+			target = s
+		case OpMem:
+			// PC-relative branches like "JEQ 2(PC)" are used as a compact way to skip
+			// the next instruction. Handle them by mapping the offset to our block
+			// sequence (blocks are split at terminators, so the pattern works well).
+			if strings.EqualFold(string(args[0].Mem.Base), "PC") {
+				pcRel = true
+				pcOff = args[0].Mem.Off
+				break
+			}
+			if op == "JMP" {
+				addr, err := c.addrFromMem(args[0].Mem)
+				if err != nil {
+					return true, false, err
+				}
+				p := c.ptrFromAddrI64(addr)
+				fnptr := c.newTmp()
+				fmt.Fprintf(c.b, "  %%%s = load i64, ptr %s, align 1\n", fnptr, p)
+				if err := c.tailCallIndirectAddrAndRet("%" + fnptr); err != nil {
+					return true, false, err
+				}
+				return true, true, nil
+			}
+			fallthrough
+		default:
+			return true, false, fmt.Errorf("amd64 %s invalid target: %q", op, ins.Raw)
 		}
-		fallthrough
-	default:
-		return true, false, fmt.Errorf("amd64 %s invalid target: %q", op, ins.Raw)
 	}
 	if !pcRel && target == "" {
 		return true, false, fmt.Errorf("amd64 %s empty target: %q", op, ins.Raw)

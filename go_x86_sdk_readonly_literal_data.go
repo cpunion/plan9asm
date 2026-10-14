@@ -102,17 +102,10 @@ func (owner *GoX86SDKReadonlyLiteralDataOwner) liveContext(ctx context.Context) 
 		!reflect.TypeOf(owner.context).Comparable() || owner.context != owner.originalContext {
 		return sdkASMDataContext("literal initializer original context identity changed")
 	}
-	if err := errors.Join(ctx.Err(), owner.context.Err()); err != nil {
-		return err
-	}
-	deadline, bounded := owner.context.Deadline()
-	if err := errors.Join(ctx.Err(), owner.context.Err()); err != nil {
-		return err
-	}
-	if !bounded || !deadline.Equal(owner.originalDeadline) {
-		return sdkASMDataContext("literal initializer original deadline changed")
-	}
-	return nil
+	_, err := sampleGoSourceContext(ctx, owner.context,
+		goSourceContextLifetime{deadline: owner.originalDeadline, bounded: true}, false,
+		sdkASMDataContext("literal initializer original deadline changed or canceled without a cause"))
+	return err
 }
 
 func (owner *GoX86SDKReadonlyLiteralDataOwner) verifySourceGeneration() error {

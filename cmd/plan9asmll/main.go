@@ -685,6 +685,8 @@ func compileOneAttempt(pkg *packages.Package, arch plan9asm.Arch, goos, goarch, 
 	defines := plan9asm.GoAssemblerDefines(goos, goarch)
 	var cppProof *featureCPPProof
 	var src []byte
+	var originalInputs []string
+	var originalSearchMisses []string
 	if ccfg.Feature != nil {
 		if ccfg.Feature.Observed == nil || ccfg.Feature.Observed.Target != goos+"/"+goarch || ccfg.Feature.ID != gotoolprofile.ProfileID(ccfg.Feature.Observed) {
 			return fmt.Errorf("assembler profile identity differs from the actual compilation target")
@@ -699,10 +701,16 @@ func compileOneAttempt(pkg *packages.Package, arch plan9asm.Arch, goos, goarch, 
 		defines = macros.Defines
 		if ccfg.Feature.Proof != nil {
 			var inputs map[string]string
-			src, inputs, err = ccfg.Feature.preprocessCPP(t.AsmFile, pkg.PkgPath, defines)
+			var readReport plan9asm.GoAssemblySourceReadReport
+			src, inputs, err = ccfg.Feature.preprocessCPPWithReadReport(t.AsmFile, pkg.PkgPath, defines, &readReport)
 			if err != nil {
 				return err
 			}
+			originalInputs, err = compileCPPInputFiles(ccfg.Feature, inputs)
+			if err != nil {
+				return err
+			}
+			originalSearchMisses = readReport.SearchMisses
 			name, err := ccfg.Feature.sourceName(t.AsmFile)
 			if err != nil {
 				return err
@@ -724,10 +732,15 @@ func compileOneAttempt(pkg *packages.Package, arch plan9asm.Arch, goos, goarch, 
 	}
 	if src == nil {
 		var err error
-		src, err = readAsmSource(t.AsmFile, asmSourceRoot(pkg, t.AsmFile))
+		var inputs *plan9asm.GoAssemblySourceReadReport
+		src, inputs, err = plan9asm.ReadGoAssemblySourceWithReport(t.AsmFile, asmSourceRoot(pkg, t.AsmFile))
 		if err != nil {
 			return fmt.Errorf("read asm: %w", err)
 		}
+		for filename := range inputs.Inputs {
+			originalInputs = append(originalInputs, filename)
+		}
+		originalSearchMisses = inputs.SearchMisses
 	}
 	if cppProof != nil {
 		cppProof.ExpandedSHA256 = featureBytesSHA256(src)
@@ -918,6 +931,9 @@ func compileOneAttempt(pkg *packages.Package, arch plan9asm.Arch, goos, goarch, 
 	}
 	outputStage, err = newCompileOutputStage(t, pkg, ccfg.Feature)
 	if err != nil {
+		return err
+	}
+	if err := outputStage.protectInputs(pkg, originalInputs, originalSearchMisses); err != nil {
 		return err
 	}
 	// A continuation and the initializer taking its block address must remain
@@ -1153,6 +1169,7 @@ func loadPkgsInEnvironment(goos, goarch string, patterns, buildTags []string, mo
 	cfg := &packages.Config{
 		Mode: packages.NeedName |
 			packages.NeedFiles |
+			packages.NeedEmbedFiles |
 			packages.NeedCompiledGoFiles |
 			packages.NeedModule |
 			packages.NeedDeps |

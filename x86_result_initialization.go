@@ -75,6 +75,15 @@ func checkX86ABI0ResultInitializationAtSource(fn Func, sig FuncSig, goarch strin
 		resultOffset = int64(frame)
 	}
 	initial := x86ResultState{fp: make([]bool, frame), pointerFP: make(map[int64]bool)}
+	if fn.x86DirectTailRoot != nil && scalarViews {
+		for _, slot := range sig.Frame.Results {
+			switch slot.Type {
+			case I8, I16, I32, I64:
+				initial.resultAddressSlots = append(initial.resultAddressSlots, x86ResultSlotAddress{
+					start: slot.Offset, end: slot.Offset + x86ResultScalarBytes(slot.Type, goarch), valid: true})
+			}
+		}
+	}
 	initial.callerAddressFP = initial.pointerFP // Immutable actual typed entry layout.
 	autoExtent, autoErr := x86ResultAUTOExtent(fn, goarch)
 	if autoErr != nil {
@@ -133,6 +142,10 @@ func checkX86ABI0ResultInitializationAtSource(fn Func, sig FuncSig, goarch strin
 
 type x86ResultSourceTransfer func(int, Instr, *x86ResultState, []bool, int64, string) bool
 
+type x86ResultFlowBudget struct {
+	visits, bytes int
+}
+
 // The ABI owns entry bytes and the required return bytes. Instruction effects,
 // dead-source validation, joins and fixed-point budgets are shared, so a new
 // entry role cannot weaken the existing ABI0 result proof.
@@ -140,11 +153,18 @@ func checkX86ResultSourceFlow(fn Func, initial x86ResultState, owned []bool, res
 	transfer x86ResultSourceTransfer, checkReturn func(x86ResultState, int) error) error {
 	originalTransfer := transfer
 	transfer = func(ordinal int, ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string) bool {
+		if !isAMD64ConditionalBranch(ins.Op) {
+			state.bitScanPending = x86ResultBitScanPending{}
+		}
 		before := state.callerAddressGP
-		if !originalTransfer(ordinal, ins, state, owned, resultOffset, arch) {
+		origins := state.callerAddressOrigin
+		predicate := state.predicate
+		if !x86DirectTailResultAddressTransfer(ins, state, owned, resultOffset, arch, originalTransfer, ordinal) {
 			return false
 		}
 		state.callerAddressGP = x86ResultCallerAddressesAfter(ins, before, state.callerAddressFP, arch)
+		state.callerAddressOrigin = x86ResultCallerOriginsAfter(ins, origins, state.callerAddressGP, state.callerAddressFP, arch)
+		state.predicate = x86ResultPredicateAfter(ins, predicate, arch)
 		return true
 	}
 	fail := func(reason string) error {
@@ -170,6 +190,10 @@ func checkX86ResultSourceFlow(fn Func, initial x86ResultState, owned []bool, res
 		instructions = append(instructions, ins)
 		ordinals = append(ordinals, ordinal)
 	}
+	if fn.x86DirectTailRoot != nil {
+		instructions = fn.x86DirectTailRoot.instructions
+		ordinals = fn.x86DirectTailRoot.ordinals
+	}
 	if len(instructions) == 0 || len(instructions) > 4096 {
 		return fail("missing or oversized source CFG")
 	}
@@ -179,11 +203,22 @@ func checkX86ResultSourceFlow(fn Func, initial x86ResultState, owned []bool, res
 	// layout metadata, not a state payload copied at each CFG successor.
 	// AUTO states do not obtain an independent frame or iteration budget.
 	byteState := len(initial.fp) + len(initial.auto) + len(initial.gp) + len(initial.canonicalGP) +
-		8*len(initial.xmm) + len(initial.masks) + 1 + len(initial.pointerGP) + len(initial.callerAddressGP) + 1
+		8*len(initial.xmm) + len(initial.masks) + 1 + len(initial.pointerGP) + len(initial.callerAddressGP) +
+		2*len(initial.callerAddressOrigin) + 1 + 2 + 3
+	if len(initial.resultAddressSlots) != 0 {
+		byteState += len(initial.resultAddressGP)*25 + 1
+	}
 	const byteWorkLimit = 64 << 20
 	byteWork := len(instructions) * byteState
-	if len(initial.auto) != 0 && byteWork > byteWorkLimit/8 {
+	boundedWork := len(initial.auto) != 0 || fn.x86DirectTailRoot != nil
+	if boundedWork && byteWork > byteWorkLimit/8 {
 		return fail("combined FP/AUTO source-CFG byte budget exhausted")
+	}
+	if budget := fn.x86ResultFlowBudget; budget != nil {
+		budget.bytes += byteWork
+		if budget.bytes > byteWorkLimit/8 {
+			return fail("combined source-graph byte budget exhausted")
+		}
 	}
 	// Validate effects and all static successors source-wide. Definedness is
 	// proved below only for reachable paths; dead instructions must not hide
@@ -220,7 +255,9 @@ func checkX86ResultSourceFlow(fn Func, initial x86ResultState, owned []bool, res
 			return fail(fmt.Sprintf("unclosed source effect at instruction %d: %s", pc, ins.Raw))
 		}
 		next := []int{pc + 1}
-		if ins.Op == OpJMP || isAMD64ConditionalBranch(ins.Op) {
+		if fn.x86DirectTailRoot != nil {
+			next = fn.x86DirectTailRoot.edges[pc]
+		} else if ins.Op == OpJMP || isAMD64ConditionalBranch(ins.Op) {
 			if len(ins.Args) != 1 {
 				return fail("unbound branch operands")
 			}
@@ -253,7 +290,14 @@ func checkX86ResultSourceFlow(fn Func, initial x86ResultState, owned []bool, res
 		if visits >= 16384 {
 			return fail("must-defined fixed-point budget exhausted")
 		}
-		if len(initial.auto) != 0 {
+		if budget := fn.x86ResultFlowBudget; budget != nil {
+			budget.visits++
+			budget.bytes += 8 * byteState
+			if budget.visits > 16384 || budget.bytes > byteWorkLimit {
+				return fail("combined source-graph must-defined budget exhausted")
+			}
+		}
+		if boundedWork {
 			byteWork += 8 * byteState // conservative bound for copies and joins
 			if byteWork > byteWorkLimit {
 				return fail("combined FP/AUTO must-defined byte budget exhausted")
@@ -263,6 +307,13 @@ func checkX86ResultSourceFlow(fn Func, initial x86ResultState, owned []bool, res
 		queue = queue[1:]
 		state := states[pc].clone()
 		ins := instructions[pc]
+		if fn.x86DirectTailRoot != nil && fn.x86DirectTailRoot.externalTails[pc] {
+			if state.resultAddressWritten {
+				return fail("external terminal could observe a prior logical result write")
+			}
+			returned = true
+			continue // Exact independent callee return, no invented root FP bytes.
+		}
 		if ins.Op == OpRET {
 			if len(ins.Args) != 0 {
 				return fail("nonordinary return")
@@ -273,15 +324,16 @@ func checkX86ResultSourceFlow(fn Func, initial x86ResultState, owned []bool, res
 		if !transfer(ordinals[pc], ins, &state, owned, resultOffset, goarch) {
 			return fail(fmt.Sprintf("unknown effect or undefined input at instruction %d: %s", pc, ins.Raw))
 		}
-		for _, target := range edges[pc] {
+		for edge, target := range edges[pc] {
+			nextState := x86ResultPredicateEdge(state, ins, edge)
 			if previous, visited := states[target]; visited {
-				merged := previous.intersect(state)
+				merged := previous.intersect(nextState)
 				if reflect.DeepEqual(previous, merged) {
 					continue
 				}
 				states[target] = merged
 			} else {
-				states[target] = state.clone()
+				states[target] = nextState.clone()
 			}
 			queue = append(queue, target)
 		}
@@ -318,9 +370,11 @@ type x86ResultState struct {
 	// The disjoint upper 48 byte bits share the same physical X/Y/Z bank.
 	// Existing low-X effects preserve these bits unless their typed encoding
 	// explicitly clears the upper aliases.
-	vectorUpper [32]uint64
-	masks       [8]bool // used only by the private scalar bit-view transfer
-	flags       uint8
+	vectorUpper    [32]uint64
+	masks          [8]bool // used only by the private scalar bit-view transfer
+	flags          uint8
+	bitScanPending x86ResultBitScanPending
+	predicate      x86ResultPredicate
 
 	// Incoming pointer identities are not numerical register bytes. This is
 	// only an initialization observation, never a pointee/backing permission.
@@ -328,9 +382,13 @@ type x86ResultState struct {
 	pointerGP [16]bool
 	// A separate actual typed-entry address-bit domain. SDK literal/OR
 	// carriers never seed it; no numerical GP or memory facts follow.
-	callerAddressFP map[int64]bool // immutable shared entry layout
-	callerAddressGP [16]bool
-	shapeOnly       bool // source-wide effect validation, never a reaching state
+	callerAddressFP      map[int64]bool // immutable shared entry layout
+	callerAddressGP      [16]bool
+	callerAddressOrigin  [16]uint16
+	resultAddressSlots   []x86ResultSlotAddress // Immutable root-local scalar layout.
+	resultAddressGP      [16]x86ResultSlotAddress
+	resultAddressWritten bool // May-write join, not an initialized-result fact.
+	shapeOnly            bool // source-wide effect validation, never a reaching state
 
 	// Installed only for one lowering transfer over the actual emitted DATA.
 	// It is cleared before a CFG state can escape and never supplies a native
@@ -361,6 +419,12 @@ func (state x86ResultState) intersect(other x86ResultState) x86ResultState {
 		merged.canonicalGP[index] &= other.canonicalGP[index]
 		merged.pointerGP[index] = merged.pointerGP[index] && other.pointerGP[index]
 		merged.callerAddressGP[index] = merged.callerAddressGP[index] && other.callerAddressGP[index]
+		if merged.callerAddressOrigin[index] != other.callerAddressOrigin[index] || !merged.callerAddressGP[index] {
+			merged.callerAddressOrigin[index] = 0
+		}
+		if merged.resultAddressGP[index] != other.resultAddressGP[index] {
+			merged.resultAddressGP[index] = x86ResultSlotAddress{}
+		}
 	}
 	for index := range merged.xmm {
 		merged.xmm[index] &= other.xmm[index]
@@ -370,6 +434,13 @@ func (state x86ResultState) intersect(other x86ResultState) x86ResultState {
 		merged.masks[index] = merged.masks[index] && other.masks[index]
 	}
 	merged.flags &= other.flags
+	if merged.bitScanPending != other.bitScanPending {
+		merged.bitScanPending = x86ResultBitScanPending{}
+	}
+	if merged.predicate != other.predicate {
+		merged.predicate = x86ResultPredicate{}
+	}
+	merged.resultAddressWritten = state.resultAddressWritten || other.resultAddressWritten
 	return merged
 }
 
@@ -478,6 +549,12 @@ func x86ResultStore(arg Operand, width int64, state *x86ResultState, owned []boo
 }
 
 func x86ResultTransfer(ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string) bool {
+	if accepted, known := x86ResultVectorTestStep(ins, state, owned, arch); known {
+		return accepted
+	}
+	if accepted, known := x86ResultBitScanStep(ins, state, owned, arch); known {
+		return accepted
+	}
 	if accepted, known := x86ResultNumericalReadStep(ins, state, owned, resultOffset, arch); known {
 		return accepted
 	}
@@ -488,6 +565,9 @@ func x86ResultTransfer(ins Instr, state *x86ResultState, owned []bool, resultOff
 		return accepted
 	}
 	if accepted, known := x86ResultByteShuffleStep(ins, state, owned, arch); known {
+		return accepted
+	}
+	if accepted, known := x86ResultPackedUnpackStep(ins, state, owned, arch); known {
 		return accepted
 	}
 	if accepted, known := x86ResultImmediateShuffleStep(ins, state, owned, arch); known {
@@ -556,6 +636,9 @@ func x86ResultTransfer(ins Instr, state *x86ResultState, owned []bool, resultOff
 		return accepted
 	}
 	if accepted, known := x86ResultCallerAddressTest(ins, state, owned, arch); known {
+		return accepted
+	}
+	if accepted, known := x86ResultCallerAddressDifferenceStep(ins, state, arch); known {
 		return accepted
 	}
 	if accepted, recognized := x86ResultIncomingPointerTransfer(ins, state, owned, arch); recognized {

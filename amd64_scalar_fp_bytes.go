@@ -135,17 +135,38 @@ func (c *amd64Ctx) validateScalarFPSourceViews() error {
 			return err
 		}
 	}
+	integerResult := false
+	for _, slot := range c.fpResults {
+		if slot.Type == I8 || slot.Type == I16 || slot.Type == I32 || slot.Type == I64 {
+			integerResult = true
+			break
+		}
+	}
 	for _, ins := range c.fpScalarSource.Instrs {
-		if form, known, err := x86GPSIMDTransferProperties(ins, c.goarch); known && err == nil &&
-			form.memoryWrite && x86ScalarFPStaticSymbolMemory(ins.Args[form.memory]) {
-			for _, slot := range c.fpResults {
-				if slot.Type == I8 || slot.Type == I16 || slot.Type == I32 || slot.Type == I64 {
-					// An unrelated static-symbol store is not an ABI0 result
-					// write and cannot borrow the legacy AX fallback at RET.
-					if err := c.scalarFPResultInitialized(); err != nil {
-						return err
-					}
-					break
+		if integerResult && x86ResultCallerAddressDifferenceNeedsProof(ins, c.sig, c.goarch) {
+			if err := c.scalarFPResultInitialized(); err != nil {
+				return err
+			}
+		}
+		if _, known, err := x86ScalarBitScanProperties(ins.Op, ins, c.goarch); integerResult && known && err == nil {
+			if err := c.scalarFPResultInitialized(); err != nil {
+				return err
+			}
+		}
+		if form, known, err := x86GPSIMDTransferProperties(ins, c.goarch); integerResult && known && err == nil {
+			staticStore := form.memoryWrite && x86ScalarFPStaticSymbolMemory(ins.Args[form.memory])
+			ordinaryRegister := form.memory < 0 && !form.mmx && !form.spec.rawOnly &&
+				ins.Args[0].Kind == OpReg && ins.Args[1].Kind == OpReg &&
+				!ins.x86Encoded && ins.x86SourceRaw == nil && ins.x86RawNearReturn == nil &&
+				ins.x86AddressBits == 0 && !ins.x86UnboundAddressOverride && ins.x86SegmentPrefix == 0
+			if staticStore || ordinaryRegister {
+				// Register-only GP/X moves can feed an ordinary GP-to-FP
+				// result store without a later lane probe. Sparse numerical
+				// bytes require the same complete, cached source proof. This
+				// grants no raw/MMX/native role or canonical bool knowledge.
+				// Static stores retain their existing independent trigger.
+				if err := c.scalarFPResultInitialized(); err != nil {
+					return err
 				}
 			}
 		}

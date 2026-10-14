@@ -17,27 +17,9 @@ func x86CallerPackedUnpackStep(ins *Instr, form x86PackedUnpackForm, state *x86S
 		first = state.vectors[x86CallerVectorRoot(ins.Args[form.first].Reg)] & width
 	}
 	second := state.vectors[x86CallerVectorRoot(ins.Args[form.second].Reg)] & width
-	known := uint64(0)
-	laneBytes := form.spec.laneBits / 8
-	start := 0
-	if form.spec.high {
-		start = 8
-	}
-	for group := 0; group < form.byteWidth; group += 16 {
-		for offset := 0; offset < 8; offset += laneBytes {
-			for byteIndex := 0; byteIndex < laneBytes; byteIndex++ {
-				source := uint(group + start + offset + byteIndex)
-				destination := uint(group + 2*offset + byteIndex)
-				known |= (second >> source & 1) << destination
-				known |= (first >> source & 1) << (destination + uint(laneBytes))
-			}
-		}
-	}
 	destination := x86CallerVectorRoot(ins.Args[form.destination].Reg)
 	old := state.vectors[destination]
-	if form.mask >= 0 && !form.zeroing {
-		known &= old
-	}
+	known := x86PackedUnpackDefinedBytes(form, first, second, old)
 	if form.legacy {
 		state.vectors[destination] = old&^width | known
 	} else {

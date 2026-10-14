@@ -6,6 +6,9 @@ package plan9asm
 // frame backing, or pointer permissions.
 func checkX86ScalarFPResultInitialization(fn Func, sig FuncSig, arch string) error {
 	reads := x86ScalarFPCallerReads(fn, sig, arch)
+	if fn.x86DirectTailRoot != nil {
+		reads = nil // No helper may borrow another TEXT's caller-read ordinal.
+	}
 	return checkX86ABI0ResultInitializationAtSource(fn, sig, arch,
 		func(ordinal int, ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string) bool {
 			if read, present := reads[ordinal]; present {

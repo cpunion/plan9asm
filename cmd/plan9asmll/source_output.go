@@ -18,14 +18,22 @@ import (
 // a publication I/O failure rolls back already moved files, reporting every
 // rollback failure. Pure post-commit temporary cleanup has a distinct error.
 type compileOutputStage struct {
-	directory string
-	info      os.FileInfo
-	outputs   []compileOutputFile
-	names     map[string]bool
-	sealed    int
-	committed bool
-	rename    func(string, string) error
-	removeAll func(string) error
+	directory        string
+	info             os.FileInfo
+	outputs          []compileOutputFile
+	names            map[string]bool
+	sealed           int
+	inputs           map[string]bool
+	inputNodes       []compileOutputInput
+	inputMisses      []compileOutputSearchMiss
+	inputDirectories []compileOutputInputDirectory
+	inputNames       []compileOutputInputName
+	inputNameKeys    map[string]bool
+	inputSeenNames   map[string]bool
+	inputSeenDirs    map[string]bool
+	committed        bool
+	rename           func(string, string) error
+	removeAll        func(string) error
 }
 
 type compileOutputFile struct {
@@ -143,7 +151,10 @@ func (stage *compileOutputStage) verifyDirectory() error {
 }
 
 func (stage *compileOutputStage) stageTask(task asmTask, config compileConfig) (asmTask, error) {
-	if task.OutLL == "" || continuationReferenceName(filepath.Base(task.OutLL)) {
+	// This is an output-namespace exclusion, not Go's source-selection grammar.
+	// Reserve case variants too: they may name an existing source on a
+	// case-insensitive filesystem, even when no CPP read retained that Go file.
+	if task.OutLL == "" || continuationReferenceName(strings.ToLower(filepath.Base(task.OutLL))) {
 		return asmTask{}, compileOutputError()
 	}
 	if err := stage.verifyDirectory(); err != nil {
@@ -182,6 +193,9 @@ func (stage *compileOutputStage) stageTask(task asmTask, config compileConfig) (
 		output.destination = filepath.Join(physical, filepath.Base(absolute))
 		output.previous, err = sourcepath.Lstat(output.destination)
 		if err != nil && !os.IsNotExist(err) {
+			return asmTask{}, err
+		}
+		if err := stage.verifyInputDestination(output.destination, output.previous); err != nil {
 			return asmTask{}, err
 		}
 		if output.previous != nil {
@@ -262,6 +276,9 @@ func (stage *compileOutputStage) seal() error {
 }
 
 func (stage *compileOutputStage) publish() error {
+	if err := stage.verifyInputs(); err != nil {
+		return err
+	}
 	if err := stage.verifyDirectory(); err != nil {
 		return err
 	}
@@ -270,14 +287,16 @@ func (stage *compileOutputStage) publish() error {
 	}
 	for index := range stage.outputs {
 		output := &stage.outputs[index]
-		if err := errors.Join(output.verifyParent(), verifyOutputFile(output.path, output.info, output.digest),
+		if err := errors.Join(stage.verifyInputDestination(output.destination, output.previous),
+			output.verifyParent(), verifyOutputFile(output.path, output.info, output.digest),
 			verifyOutputFile(output.destination, output.previous, output.previousDigest)); err != nil {
 			return err
 		}
 	}
 	for index := range stage.outputs {
 		output := &stage.outputs[index]
-		if err := errors.Join(stage.verifyDirectory(), output.verifyParent(),
+		if err := errors.Join(stage.verifyInputs(), stage.verifyInputDestination(output.destination, output.previous),
+			stage.verifyDirectory(), output.verifyParent(),
 			verifyOutputFile(output.path, output.info, output.digest),
 			verifyOutputFile(output.destination, output.previous, output.previousDigest)); err != nil {
 			return errors.Join(err, stage.rollback())
@@ -291,7 +310,8 @@ func (stage *compileOutputStage) publish() error {
 			}
 			output.backupInfo = output.previous
 		}
-		if err := errors.Join(stage.verifyDirectory(), output.verifyParent(),
+		if err := errors.Join(stage.verifyInputs(), stage.verifyInputDestination(output.destination, output.previous),
+			stage.verifyDirectory(), output.verifyParent(),
 			verifyOutputFile(output.path, output.info, output.digest),
 			verifyOutputFile(output.destination, nil, "")); err != nil {
 			return errors.Join(err, stage.rollback())
