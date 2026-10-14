@@ -159,7 +159,8 @@ test('Direct-tail state executes both native x86 modes with exact mandatory root
   assert.match(native, /go test \. -list "\^\(\$direct_tail_roots\)\$"/);
   assert.match(native, /grep -Fx "\$root" _out\/native-x86-oracles\/direct-tail-inventory.log/);
   assert.match(native, /roots\+="\|\$direct_tail_roots"/);
-  assert.match(native, /gcc-i686-linux-gnu libc6-dev-i386-cross/);
+  assert.match(native, /run: bash scripts\/install-ci-llvm22-ubuntu\.sh gcc-i686-linux-gnu libc6-dev-i386-cross/);
+  assert.doesNotMatch(native, /sudo apt-get update|sudo apt-get install/);
   assert.doesNotMatch(native, /qemu|overlay|continue-on-error|max-parallel/);
 });
 
