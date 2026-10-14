@@ -239,37 +239,49 @@ func TestCrossLinuxRuntimeMatrixX86RawSourceStackNumerical(t *testing.T) {
 	if crossRosetta {
 		runner = []string{"/usr/bin/arch", "-x86_64"}
 	}
-	x86SourceStackActualGoNumerical(t, "amd64", nil)
-	source, sigs := x86SourceStackRuntimeSource("amd64")
-	file, err := Parse(ArchAMD64, source)
-	if err != nil {
-		t.Fatal(err)
-	}
-	ir, err := Translate(file, Options{Goarch: "amd64", TargetTriple: triple, Sigs: sigs,
-		ResolveSym: func(symbol string) string { return strings.TrimPrefix(symbol, "·") },
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	compileAndRunRuntimeTestForTarget(t, llc, clang, "source_stack64", triple, ir, x86SourceStackCOracle("amd64"), runner)
-	if os.Getenv("PLAN9ASM_CROSS_EXEC") == "1" {
-		if runtime.GOOS != "linux" || runtime.GOARCH != "amd64" {
-			t.Fatal("PLAN9ASM_CROSS_EXEC source-stack matrix requires Linux/amd64")
-		}
-		runner = []string{"qemu-i386", "-L", "/usr/i686-linux-gnu"}
-		x86SourceStackActualGoNumerical(t, "386", runner)
-		source, sigs = x86SourceStackRuntimeSource("386")
-		file, err = Parse(ArchAMD64, source)
+	t.Run("amd64", func(t *testing.T) {
+		x86SourceStackActualGoNumerical(t, "amd64", nil)
+		source, sigs := x86SourceStackRuntimeSource("amd64")
+		file, err := Parse(ArchAMD64, source)
 		if err != nil {
 			t.Fatal(err)
 		}
-		ir, err = Translate(file, Options{Goarch: "386", TargetTriple: "i386-unknown-linux-gnu", Sigs: sigs,
+		ir, err := Translate(file, Options{Goarch: "amd64", TargetTriple: triple, Sigs: sigs,
 			ResolveSym: func(symbol string) string { return strings.TrimPrefix(symbol, "·") },
 		})
 		if err != nil {
 			t.Fatal(err)
 		}
-		compileAndRunRuntimeTestWithCompiler(t, llc, []string{"i686-linux-gnu-gcc", "-no-pie"},
-			"source_stack32", "i386-unknown-linux-gnu", ir, x86SourceStackCOracle("386"), runner)
+		compileAndRunRuntimeTestForTarget(t, llc, clang, "source_stack64", triple, ir, x86SourceStackCOracle("amd64"), runner)
+	})
+	// This required native owner must execute the original physical 386 bool
+	// bytes too, even when the broader ARM/QEMU matrix is not selected. Explicit
+	// cross execution retains its old dynamic guest transport independently.
+	if os.Getenv("PLAN9ASM_CROSS_EXEC") == "1" || runtime.GOOS == "linux" && runtime.GOARCH == "amd64" {
+		if runtime.GOOS != "linux" || runtime.GOARCH != "amd64" {
+			t.Fatal("PLAN9ASM_CROSS_EXEC source-stack matrix requires Linux/amd64")
+		}
+		t.Run("386", func(t *testing.T) {
+			runner = nil
+			compiler := []string{"i686-linux-gnu-gcc", "-static", "-no-pie"}
+			if os.Getenv("PLAN9ASM_CROSS_EXEC") == "1" {
+				runner = []string{"qemu-i386", "-L", "/usr/i686-linux-gnu"}
+				compiler = []string{"i686-linux-gnu-gcc", "-no-pie"}
+			}
+			x86SourceStackActualGoNumerical(t, "386", runner)
+			source, sigs := x86SourceStackRuntimeSource("386")
+			file, err := Parse(ArchAMD64, source)
+			if err != nil {
+				t.Fatal(err)
+			}
+			ir, err := Translate(file, Options{Goarch: "386", TargetTriple: "i386-unknown-linux-gnu", Sigs: sigs,
+				ResolveSym: func(symbol string) string { return strings.TrimPrefix(symbol, "·") },
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			compileAndRunRuntimeTestWithCompiler(t, llc, compiler,
+				"source_stack32", "i386-unknown-linux-gnu", ir, x86SourceStackCOracle("386"), runner)
+		})
 	}
 }

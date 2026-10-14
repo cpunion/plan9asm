@@ -12,10 +12,11 @@ import (
 
 // File is a parsed Plan 9 asm source file (subset).
 type File struct {
-	Arch             Arch
-	Funcs            []Func
-	x86Continuations map[string]x86Continuation
-	x86DirectTails   *x86DirectTailGraph // request-local whole-source continuation graph
+	Arch                 Arch
+	Funcs                []Func
+	x86Continuations     map[string]x86Continuation
+	x86ContinuationGraph *x86ContinuationGraph
+	x86DirectTails       *x86DirectTailGraph // request-local whole-source continuation graph
 	// UnlinkedPrelude records instructions before the first TEXT. Go assembles
 	// them into no named function, so they cannot affect any translated symbol.
 	// Corpus verification checks the same source with Go's assembler first.
@@ -56,6 +57,7 @@ type Func struct {
 
 	x86ContinuationAddresses map[string]x86Continuation
 	x86IndirectLabels        []string
+	x86ContinuationFlow      *x86ContinuationFlow
 	x86SourceStack           *x86SourceStackProof // recomputed final source ABI0 stack proof
 	x86SourceStackFailure    string               // diagnostic only; never authorizes an effect or return
 	x86FixedLocal            *x86FixedLocalProof

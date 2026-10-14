@@ -157,7 +157,14 @@ func (c *amd64Ctx) lowerBranch(bi int, ii int, op Op, ins Instr, emitBr amd64Emi
 				}
 				p := c.ptrFromAddrI64(addr)
 				fnptr := c.newTmp()
-				fmt.Fprintf(c.b, "  %%%s = load i64, ptr %s, align 1\n", fnptr, p)
+				if c.goarch == "386" {
+					fmt.Fprintf(c.b, "  %%%s = load i32, ptr %s, align 1\n", fnptr, p)
+					wide := c.newTmp()
+					fmt.Fprintf(c.b, "  %%%s = zext i32 %%%s to i64\n", wide, fnptr)
+					fnptr = wide
+				} else {
+					fmt.Fprintf(c.b, "  %%%s = load i64, ptr %s, align 1\n", fnptr, p)
+				}
 				if err := c.tailCallIndirectAddrAndRet("%" + fnptr); err != nil {
 					return true, false, err
 				}

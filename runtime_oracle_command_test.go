@@ -179,6 +179,7 @@ func TestRuntimeOracleCommandConsumersRetainOwnedExecution(t *testing.T) {
 		"x86_direct_tail_runtime_linux_amd64_test.go",
 		"x86_direct_tail_386_runtime_linux_amd64_test.go",
 		"x86_direct_tail_followup_runtime_linux_amd64_test.go",
+		"x86_continuation_runtime_linux_amd64_test.go",
 		"x86_abi0_bool_runtime_linux_amd64_test.go",
 		"x86_direct_tail_object_test.go",
 		"x86_direct_tail_followup_object_test.go",

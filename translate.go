@@ -346,6 +346,14 @@ func translateIRText(file *File, opt Options) (resultText string, result error) 
 	if err != nil {
 		return "", err
 	}
+	if graph := file.x86ContinuationGraph; graph != nil {
+		request := file
+		defer func() {
+			if err := graph.verify(request, opt); err != nil {
+				resultText, result = "", errors.Join(result, err)
+			}
+		}()
+	}
 	file, err = prepareARMKernelHelpers(file, opt)
 	if err != nil {
 		return "", err
@@ -418,12 +426,16 @@ func translateIRText(file *File, opt Options) (resultText string, result error) 
 	// Build the immutable emitted-storage directory once per file. Repeating
 	// the global/signature scan for each TEXT would be quadratic in a corpus.
 	scalarData := x86LoweredScalarDataReads(file, resolve, opt.Sigs, opt.Goarch)
+	continuationBudget := &x86ResultFlowBudget{}
 	for i := range file.Funcs {
 		fn := &file.Funcs[i]
 		if file.x86DirectTailHelper(fn.Sym) {
 			continue // Original helper remains a graph node, never an entry.
 		}
 		function := *fn
+		if function.x86ContinuationFlow != nil {
+			function.x86ResultFlowBudget = continuationBudget
+		}
 		if view := file.x86DirectTailView(fn.Sym); view != nil {
 			function.x86DirectTailRoot = view
 		}

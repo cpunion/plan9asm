@@ -163,6 +163,17 @@ func TranslateModuleInContext(ctx llvm.Context, file *File, opt Options) (result
 	if err != nil {
 		return llvm.Module{}, err
 	}
+	if graph := file.x86ContinuationGraph; graph != nil {
+		request := file
+		defer func() {
+			if err := graph.verify(request, opt); err != nil {
+				if !result.IsNil() {
+					result.Dispose()
+				}
+				result, resultErr = llvm.Module{}, errors.Join(resultErr, err)
+			}
+		}()
+	}
 	if err := verifyNormalizedNumericalReads(file, opt); err != nil {
 		return llvm.Module{}, err
 	}

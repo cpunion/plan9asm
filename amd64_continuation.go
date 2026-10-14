@@ -30,7 +30,16 @@ func coalesceX86Continuations(file *File, opt Options) (*File, error) {
 	if file == nil {
 		return nil, fmt.Errorf("nil file")
 	}
-	if len(opt.X86TailGroups) == 0 || len(file.x86Continuations) != 0 {
+	if file.x86ContinuationGraph != nil {
+		if err := file.x86ContinuationGraph.verify(file, opt); err != nil {
+			return nil, err
+		}
+		return file, nil
+	}
+	if len(file.x86Continuations) != 0 {
+		return nil, x86ContinuationContext("unbound prepared continuation inventory")
+	}
+	if len(opt.X86TailGroups) == 0 {
 		return file, nil
 	}
 	if file.Arch != ArchAMD64 || (opt.Goarch != "amd64" && opt.Goarch != "386") {
@@ -103,8 +112,9 @@ func coalesceX86Continuations(file *File, opt Options) (*File, error) {
 				if ins.Op == "JMP" && len(ins.Args) == 1 {
 					continue
 				}
-				address := ins.Op == "LEAQ" || ins.Op == "LEAL" ||
-					((ins.Op == "MOVQ" || ins.Op == "MOVL") && strings.HasPrefix(arg.Sym, "$"))
+				form := x86GoMOVQSourceInstruction(ins)
+				address := form.Op == "LEAQ" || form.Op == "LEAL" ||
+					((form.Op == "MOVQ" || form.Op == "MOVL") && strings.HasPrefix(arg.Sym, "$"))
 				if !address || ai != 0 || len(ins.Args) != 2 || ins.Args[1].Kind != OpReg {
 					return nil, fmt.Errorf("continuation %q is not readable or callable code: %s", base, ins.Raw)
 				}
@@ -178,5 +188,5 @@ func coalesceX86Continuations(file *File, opt Options) (*File, error) {
 		fn.x86ContinuationAddresses = addresses
 		result.Funcs = append(result.Funcs, fn)
 	}
-	return &result, nil
+	return sealX86Continuations(file, &result, opt)
 }

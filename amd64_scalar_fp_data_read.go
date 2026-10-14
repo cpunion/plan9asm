@@ -63,6 +63,11 @@ func x86LoweredScalarDataReads(file *File, resolve func(string) string, sigs map
 				if !valid {
 					continue
 				}
+				if graph := file.x86ContinuationGraph; graph != nil {
+					if _, codeTable := graph.tables[address.symbol]; codeTable {
+						continue // Mutable code carriers are not numerical BSS/literal bytes.
+					}
+				}
 				current := objects[resolveAssemblyDataSymbol(address.symbol, resolve)]
 				if !current.invalid && current.size > 0 && current.size <= maxDataGlobalSize && address.offset < current.size {
 					reads[address] = current.size - address.offset
