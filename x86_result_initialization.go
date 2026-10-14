@@ -84,7 +84,7 @@ func checkX86ABI0ResultInitializationAtSource(fn Func, sig FuncSig, goarch strin
 		initial.boolFrameSlots = append(append([]FrameSlot(nil), sig.Frame.Params...), sig.Frame.Results...)
 		initial.boolCalls = fn.x86BoolCalls
 		initial.boolReadonlyInputs = fn.x86BoolReadonlyInputs
-		if initial.boolCalls != nil {
+		if initial.boolCalls != nil && len(initial.boolCalls.bytes) != 0 {
 			initial.boolOutgoing = make([]bool, 5)
 			initial.boolOutgoingCanonical = make([]bool, 5)
 		}

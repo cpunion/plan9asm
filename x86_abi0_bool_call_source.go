@@ -59,6 +59,16 @@ func x86ABI0BoolCallResolve(options Options, symbol string) string {
 	return symbol
 }
 
+// A declared logical no-argument void call transports no caller FP bytes and
+// supplies no result knowledge. Its unknown machine effects are revoked even
+// when the actual function happens not to return (for example a Go panic).
+func x86ABI0NoArgumentVoidCallRole(signature FuncSig) bool {
+	return signature.Ret == Void && len(signature.Args) == 0 && len(signature.ArgRegs) == 0 &&
+		len(signature.Frame.Params) == 0 && len(signature.Frame.Results) == 0 &&
+		signature.ARMEntry == nil && signature.ARM64GoRegisterABI == nil && signature.ARM64ClosureABI == nil &&
+		signature.WASMContext == "" && !signature.WASMNative
+}
+
 func prepareX86ABI0BoolCalls(file *File, options Options) (*x86ABI0BoolCallSource, error) {
 	if !x86ABI0BoolCallsNeeded(file, options.Goarch) {
 		return nil, nil
@@ -125,11 +135,19 @@ func prepareX86ABI0BoolCalls(file *File, options Options) (*x86ABI0BoolCallSourc
 				continue
 			}
 			if len(ins.Args) != 1 || ins.Args[0].Kind != OpSym {
-				return nil, x86ABI0BoolCallContext("call target is not an exact same-file ordinary TEXT")
+				return nil, x86ABI0BoolCallContext("call target is not an exact ordinary SB function")
 			}
 			name, offset, valid := parseSBRef(ins.Args[0].Sym)
 			callee, exists := byName[name]
+			if _, queried := source.resolved[name]; !queried && valid && offset == 0 && !strings.Contains(name, "<") {
+				source.resolved[name] = x86ABI0BoolCallResolve(options, name)
+			}
 			calleeSig, declared := signatures[source.resolved[name]]
+			if valid && offset == 0 && !strings.Contains(name, "<") && declared &&
+				(calleeSig.Name == "" || calleeSig.Name == source.resolved[name]) && x86ABI0NoArgumentVoidCallRole(calleeSig) {
+				plan.calls[ordinal] = calleeSig
+				continue // No readonly bool leaf, outgoing bytes or result fact.
+			}
 			if !valid || offset != 0 || !exists || !declared || strings.Contains(name, "<") ||
 				calleeSig.Name != "" && calleeSig.Name != source.resolved[name] ||
 				!x86ABI0LogicalBoolFrameRole(callee, calleeSig, "386") || len(calleeSig.Args) != 1 || calleeSig.Args[0] != I1 ||
@@ -165,7 +183,8 @@ func prepareX86ABI0BoolCalls(file *File, options Options) (*x86ABI0BoolCallSourc
 		}
 		role := fn
 		role.FrameSize = 0
-		if fn.FrameSize < 5 || fn.FrameSize > 4096 || !x86ABI0LogicalBoolFrameRole(role, sig, "386") || fn.x86DirectTailRoot != nil {
+		if fn.FrameSize < 0 || len(plan.bytes) != 0 && fn.FrameSize < 5 || fn.FrameSize > 4096 ||
+			!x86ABI0LogicalBoolFrameRole(role, sig, "386") || fn.x86DirectTailRoot != nil {
 			return nil, x86ABI0BoolCallContext("caller lacks its complete bounded ordinary logical frame")
 		}
 		if err := plan.replay(); err != nil {
