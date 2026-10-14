@@ -1,6 +1,6 @@
 # Current work: PR 40 checkpoint
 
-Checkpoint: 2026-10-14 16:59 UTC. Contribution source: `e7328983`.
+Checkpoint: 2026-10-14 17:41 UTC. Contribution source: `9bb1f22e`.
 This is a handoff, not a ledger or a claim that current-head CI/stdlib passes.
 
 ## Scope and authority
@@ -33,6 +33,48 @@ Do not edit the primary or probe while their frozen jobs run.
 | `plan9asm-wt-pr40-simple-sdk-bindings-20261013` | `codex/pr40-sdk-storage-snapshot-20261013`; PCMP integrated; priority complete MXCSR and signed-conversion byte effects |
 
 ## Latest completed failed fork run
+
+Next frozen diagnostic [38605615421](https://github.com/cpunion/plan9asm/actions/runs/38605615421)
+started 17:19:01 UTC on allowed fork `732c8c15ac7e478f134bc963449ab6b55e2aef78`,
+contribution source `c1d14f81`. It contains this complete repair batch and
+seventeen independent SDK lanes, unchanged budgets/source123/native58 owners.
+It completed FAILURE naturally at17:27:47: seventeen executed jobs pass,
+three fail, and the complete Windows barrier does not run. Native58/58 PASS
+107.453s, eleven independent inventories/twenty mandatory owners, zero SKIP,
+missing/duplicate/unfinished terminals; all new native owners really execute.
+Both Go ownership SDKs, publisher and typed matrices pass. Remaining failures:
+source policies assume LF and reject Windows CRLF; Linux maps object+public CLI
+still share a five-minute deadline; the four fresh NUM API producers share one
+five-minute root. Exact failed artifacts remain retained, not relabeled.
+
+`9bb1f22e` has a genuine independent CRLF RED and repairs all three analogous
+native policy readers. It normalizes only policy parsing/mutation copies, never
+compiler input or authenticated source. Exact seven roots/31 children pass
+Go27/race/Go20 in0.416/1.928/0.453s; both vets, source seals and formatting pass.
+Fork-only `89860e44` stages22 lanes,126 unique source priorities and45 passing
+policy tests/actionlint. Each fresh NUM axis and Linux public CLI has its own
+original five-minute budget; fixture partition leaves are still being verified.
+Do not push until this complete batch is sealed; keep the contribution draft.
+
+`00033d24`, integrated as `c1d14f81`, authenticates only NUM metadata removed
+from exact source replay and revalidates the existing complete fixed-local
+source/Sig/access/result proof. Original declarations and exact inferred
+renderer attributes stay separate. No physical SP becomes logical AUTO;
+native/caller/permission boundaries and NUM's strict verifier remain unchanged.
+GoModule transports its complete-file bool role only when actually selected;
+unrelated NUM bindings no longer receive an inconsistent private Options field.
+Worker35-root/race and Go20's34-root cohorts, genuine three-API source and
+unchanged publication callback checks pass with sealed source; earlier failures
+remain failed. The independent parameter-only integer admission WIP stays separate.
+
+Parent `c1d14f81` fresh composed203-root/6,263-child Go27/race union passes
+5.410/22.674s; Go20's199/6,252 passes5.509s. Independent five-root/53-child
+actual NUM/fixed-local proof join passes126.838s; two object/IR roots/136 children
+pass4.595s; unchanged publisher root/two children passes15.570s. Zero failures,
+skips, missing/duplicate/unfinished terminals. Root/both CLI Go27 vets, root
+Go20 vet, tracked formatting, clean tree and before/after source heads match.
+These scoped passes authorize this fork diagnostic replay, not full current CI,
+native Linux execution, all standard-library files or contribution ready status.
 
 [38589344888](https://github.com/cpunion/plan9asm/actions/runs/38589344888)
 started 15:26:34 UTC, published `2cd53a42b927012295783efd19a20b488da0c7ed`.
@@ -372,6 +414,16 @@ ignored historical reports and stayed failed; those evidence inputs were untouch
 New code still needs its current-head vet, complete source/CI and strict benchmark.
 
 ## Stdlib benchmark: current complete failed receipt
+
+Latest frozen `e88e77ce` (production-identical to `c1d14f81`) remains FAILED:
+156/184 pass,28 fail, zero N/A/unattempted; all original files/five targets run.
+38625/33 (8 fail,45s), AMD6445/55 (10 fail,234s), ARM27/30 (3 fail,2s),
+ARM6440/47 (7 fail,6s), wasm19/19 (2s). Build3s; target total289s within original
+300s-per-target/900s-total budgets. Earlier156/184 receipt had367s; differing
+cache/tool workloads do not establish an algorithmic speedup. Exact before/after
+source heads and clean tree match. The net unchanged pass count hides one more
+386 pass and one fewer AMD64 pass; inspect file-level changes before claiming
+that every old pass is preserved. Reports remain separate under ignored `_out/`.
 
 Current source integration `5f2265ce` additionally contains typed terminal
 `cc91bb77` as `d9fffefd`, custom register result `e60934e3` as `f505201c`,

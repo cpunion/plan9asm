@@ -16,6 +16,7 @@ func TestX86ResultGPSIMDSparseRuntimeNativeOwnerCannotEmulateOrSkip(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
+	source = normalizeNativeOwnerPolicySource(source)
 	if !strings.HasPrefix(string(source), "//go:build linux && amd64\n") {
 		t.Fatal("both required runtime counterparts lost their actual native owner")
 	}

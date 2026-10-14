@@ -23,6 +23,7 @@ func TestX86ScalarBitScanRuntimeNativeOwnersCannotEmulateOrSkip(t *testing.T) {
 }
 
 func x86BitScanNativeOwnerPolicy(source []byte) error {
+	source = normalizeNativeOwnerPolicySource(source)
 	if !strings.HasPrefix(string(source), "//go:build linux && amd64\n") {
 		return fmt.Errorf("required bit-scan counterparts lost their native Linux owner")
 	}
@@ -125,7 +126,7 @@ func TestX86ScalarBitScanRuntimeNativePolicyRejectsMutation(t *testing.T) {
 	}
 	const call = "\tx86BitScanExecuteOriginalAndLLVM(t, \"amd64\", execution)"
 	const gate = "\tx87IA32RequireNativeHost(t)"
-	text := string(source)
+	text := string(normalizeNativeOwnerPolicySource(source))
 	for name, mutation := range map[string]string{
 		"missing after":     strings.Replace(text, call+"\n"+gate, call, 1),
 		"both before":       strings.Replace(text, call+"\n"+gate, gate+"\n"+call, 1),
