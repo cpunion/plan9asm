@@ -344,7 +344,9 @@ func translateGoModuleInContext(ctx llvm.Context, pkg GoPackage, src []byte, opt
 		return nil, err
 	}
 	var boolCalls *x86ABI0BoolCallSource
+	var callOriginal *File
 	if boolCallSource {
+		callOriginal = completeFile
 		boolCalls, err = prepareX86ABI0BoolCalls(completeFile, Options{Goarch: opt.GOARCH, TargetTriple: opt.TargetTriple, ResolveSym: resolve, Sigs: sigs})
 		if err != nil {
 			return nil, err
@@ -366,7 +368,7 @@ func translateGoModuleInContext(ctx llvm.Context, pkg GoPackage, src []byte, opt
 		}
 	}
 	mod, err := TranslateModuleInContext(ctx, file, Options{
-		x86OriginalFile:        completeFile,
+		x86OriginalFile:        callOriginal,
 		x86BoolCallSource:      boolCalls,
 		TargetTriple:           opt.TargetTriple,
 		ResolveSym:             resolve,
