@@ -157,11 +157,13 @@ func checkX86ResultSourceFlow(fn Func, initial x86ResultState, owned []bool, res
 			state.bitScanPending = x86ResultBitScanPending{}
 		}
 		before := state.callerAddressGP
+		origins := state.callerAddressOrigin
 		predicate := state.predicate
 		if !x86DirectTailResultAddressTransfer(ins, state, owned, resultOffset, arch, originalTransfer, ordinal) {
 			return false
 		}
 		state.callerAddressGP = x86ResultCallerAddressesAfter(ins, before, state.callerAddressFP, arch)
+		state.callerAddressOrigin = x86ResultCallerOriginsAfter(ins, origins, state.callerAddressGP, state.callerAddressFP, arch)
 		state.predicate = x86ResultPredicateAfter(ins, predicate, arch)
 		return true
 	}
@@ -201,7 +203,8 @@ func checkX86ResultSourceFlow(fn Func, initial x86ResultState, owned []bool, res
 	// layout metadata, not a state payload copied at each CFG successor.
 	// AUTO states do not obtain an independent frame or iteration budget.
 	byteState := len(initial.fp) + len(initial.auto) + len(initial.gp) + len(initial.canonicalGP) +
-		8*len(initial.xmm) + len(initial.masks) + 1 + len(initial.pointerGP) + len(initial.callerAddressGP) + 1 + 2 + 3
+		8*len(initial.xmm) + len(initial.masks) + 1 + len(initial.pointerGP) + len(initial.callerAddressGP) +
+		2*len(initial.callerAddressOrigin) + 1 + 2 + 3
 	if len(initial.resultAddressSlots) != 0 {
 		byteState += len(initial.resultAddressGP)*25 + 1
 	}
@@ -381,6 +384,7 @@ type x86ResultState struct {
 	// carriers never seed it; no numerical GP or memory facts follow.
 	callerAddressFP      map[int64]bool // immutable shared entry layout
 	callerAddressGP      [16]bool
+	callerAddressOrigin  [16]uint16
 	resultAddressSlots   []x86ResultSlotAddress // Immutable root-local scalar layout.
 	resultAddressGP      [16]x86ResultSlotAddress
 	resultAddressWritten bool // May-write join, not an initialized-result fact.
@@ -415,6 +419,9 @@ func (state x86ResultState) intersect(other x86ResultState) x86ResultState {
 		merged.canonicalGP[index] &= other.canonicalGP[index]
 		merged.pointerGP[index] = merged.pointerGP[index] && other.pointerGP[index]
 		merged.callerAddressGP[index] = merged.callerAddressGP[index] && other.callerAddressGP[index]
+		if merged.callerAddressOrigin[index] != other.callerAddressOrigin[index] || !merged.callerAddressGP[index] {
+			merged.callerAddressOrigin[index] = 0
+		}
 		if merged.resultAddressGP[index] != other.resultAddressGP[index] {
 			merged.resultAddressGP[index] = x86ResultSlotAddress{}
 		}
@@ -629,6 +636,9 @@ func x86ResultTransfer(ins Instr, state *x86ResultState, owned []bool, resultOff
 		return accepted
 	}
 	if accepted, known := x86ResultCallerAddressTest(ins, state, owned, arch); known {
+		return accepted
+	}
+	if accepted, known := x86ResultCallerAddressDifferenceStep(ins, state, arch); known {
 		return accepted
 	}
 	if accepted, recognized := x86ResultIncomingPointerTransfer(ins, state, owned, arch); recognized {

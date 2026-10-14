@@ -103,6 +103,14 @@ func translateModuleDirectInContext(ctx llvm.Context, file *File, opt Options) (
 			mod.Dispose()
 			return llvm.Module{}, directUnsupportedf("x86 CFG lowering required for %s", name)
 		}
+		if file.Arch == ArchAMD64 {
+			for _, ins := range fn.Instrs {
+				if x86ResultCallerAddressDifferenceNeedsProof(ins, sig, opt.Goarch) {
+					mod.Dispose()
+					return llvm.Module{}, directUnsupportedf("x86 complete caller-origin proof required for %s", name)
+				}
+			}
+		}
 		if file.Arch == ArchWASM {
 			mod.Dispose()
 			return llvm.Module{}, directUnsupportedf("wasm stack lowering required for %s", name)

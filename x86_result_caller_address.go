@@ -77,6 +77,11 @@ func x86ResultCallerAddressesAfter(ins Instr, before [16]bool, entryFP map[int64
 				before[destination] = first.Kind == OpMem && first.Mem.Sym == "" && valid && before[base]
 				return before // Numerical index/complete address checked by the original transfer.
 			case add, sub:
+				if ins.Op == sub && first.Kind == OpReg {
+					if source, _, valid := x86ResultGP(first.Reg, word, arch); valid && before[source] {
+						before[destination] = false // A proved same-origin difference is numerical.
+					}
+				}
 				return before // Only the separately validated full-word address transform preserves it.
 			}
 		}
