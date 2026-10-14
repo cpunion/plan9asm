@@ -1,6 +1,6 @@
 # Current work: PR 40 checkpoint
 
-Checkpoint: 2026-10-14 16:16 UTC. Contribution source: `5f2265ce`.
+Checkpoint: 2026-10-14 16:23 UTC. Contribution source: `386377f9`.
 This is a handoff, not a ledger or a claim that current-head CI/stdlib passes.
 
 ## Scope and authority
@@ -390,8 +390,15 @@ skip, so is not a strict complete runtime pass. New parent pure union deliberate
 excludes that host axis and heavy objects, which need independent verification.
 The original full Index source advances to its next pointer-as-index Context;
 it is not a complete SDK/file pass. Guard-page/dead-output PCMP execution is pending.
-Maps independent-target policy and symlink platform-availability gates pass;
-actual three-target SDK object replay and native Windows still need new CI.
+Maps independent-target policy and symlink platform-availability gates pass.
+At frozen `386377f9`, all three independent complete maps roots pass: Linux
+86.068s, Darwin32.617s, Windows31.180s, each within its unchanged five-minute
+budget. Every target retains two original TEXT bodies, all DATA/source hashes,
+nonempty LLVM22 object and mutable-runtime external storage; Linux additionally
+runs the real public CLI for the complete two-file package, zero N/A/failures.
+Fresh exact inventories/terminals and unchanged source head/clean tree match.
+Cross-target object success is not Windows-host execution or native SDK entry;
+actual hosted Windows and current-head complete CI still need the next run.
 
 Frozen `6281a98a`: 156/184 files,28 FAIL, zero N/A/unattempted. All original
 files and all five targets attempted; before/after source head and clean tree
