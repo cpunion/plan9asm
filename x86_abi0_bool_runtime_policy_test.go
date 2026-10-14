@@ -16,6 +16,7 @@ const x86ABI0BoolNativeOwnerPath = "x86_abi0_bool_runtime_linux_amd64_test.go"
 // This portable policy checks the required owner's routes, not its executed
 // semantics or a new native-host certificate on the current test machine.
 func x86ABI0BoolNativeOwnerPolicy(source []byte) error {
+	source = normalizeNativeOwnerPolicySource(source)
 	if !strings.HasPrefix(string(source), "//go:build linux && amd64\n") {
 		return fmt.Errorf("required bool oracle lost its native Linux AMD64 owner")
 	}
@@ -146,6 +147,7 @@ func TestX86ABI0Mode32BoolRuntimeNativePolicyRejectsMutation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	source = normalizeNativeOwnerPolicySource(source)
 	if err := x86ABI0BoolNativeOwnerPolicy(source); err != nil {
 		t.Fatal("actual owner baseline", err)
 	}
