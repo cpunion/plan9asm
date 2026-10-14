@@ -326,6 +326,8 @@ jobs:
               - TestX86DirectionOriginalSDKIndexByte386ThreeAPIsNextContext
               - TestX86DirectionOriginalGo127CompleteYnoneRows
               - TestX86ABI0ResultInitializationCompleteStateByteEnvelope
+              - TestX86ABI0Mode32CanonicalBoolDirectCallRevokesDirection
+              - TestX86DirectionTypedBoolAndVoidWholeCallThreeAPIs
               - TestGoX86SDKASMDataOriginalVendorPackageNamespace
               - TestGoX86SDKNumericalReadPackageQueryMatchesOriginalLiteralSource
               - TestSDKAMD64OriginalFrameConfigGuardEagerIdentity

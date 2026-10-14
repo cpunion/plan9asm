@@ -273,6 +273,8 @@ test('Complete direction control and string-consumer regressions are mandatory',
     'TestX86DirectionOriginalSDKIndexByte386ThreeAPIsNextContext',
     'TestX86DirectionOriginalGo127CompleteYnoneRows',
     'TestX86ABI0ResultInitializationCompleteStateByteEnvelope',
+    'TestX86ABI0Mode32CanonicalBoolDirectCallRevokesDirection',
+    'TestX86DirectionTypedBoolAndVoidWholeCallThreeAPIs',
   ]) assert.equal(source.split(`- ${root}\n`).length - 1, 1, root);
   assert.match(source, /timeout: 5m/);
   assert.equal((sdk.match(/- lane:/g) || []).length, 13);
