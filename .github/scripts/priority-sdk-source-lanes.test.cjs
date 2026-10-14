@@ -294,6 +294,8 @@ test('Ordinary result aliases require the complete class and target objects', ()
     'TestX86OrdinaryResultAddressDistinctFieldsAndRevocation',
     'TestX86OrdinaryResultAddressConcurrentOriginalFile',
     'TestX86OrdinaryResultAddressOriginalGoAndLLVMFiveTargetObjects',
+    'TestX86ResultSlotMoveWidthKeepsScalarMode32Boundary',
+    'TestX86ResultSlotMoveWidthWholeProofAndThreeAPIs',
   ]) assert.equal(source.split(`- ${root}\n`).length - 1, 1, root);
   assert.match(source, /timeout: 5m/);
   assert.equal((sdk.match(/- lane:/g) || []).length, 13);

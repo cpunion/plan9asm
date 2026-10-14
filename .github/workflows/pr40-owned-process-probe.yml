@@ -339,6 +339,8 @@ jobs:
               - TestX86OrdinaryResultAddressDistinctFieldsAndRevocation
               - TestX86OrdinaryResultAddressConcurrentOriginalFile
               - TestX86OrdinaryResultAddressOriginalGoAndLLVMFiveTargetObjects
+              - TestX86ResultSlotMoveWidthKeepsScalarMode32Boundary
+              - TestX86ResultSlotMoveWidthWholeProofAndThreeAPIs
               - TestGoX86SDKASMDataOriginalVendorPackageNamespace
               - TestGoX86SDKNumericalReadPackageQueryMatchesOriginalLiteralSource
               - TestSDKAMD64OriginalFrameConfigGuardEagerIdentity
