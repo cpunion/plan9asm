@@ -1,6 +1,6 @@
 # Current work: PR 40 checkpoint
 
-Checkpoint: 2026-10-14 12:31 UTC. Contribution source: `3f972336`.
+Checkpoint: 2026-10-14 12:54 UTC. Contribution source: `3f972336`.
 This is a handoff, not a ledger or a claim that current-head CI/stdlib passes.
 
 ## Scope and authority
@@ -27,7 +27,7 @@ Do not edit the primary or probe while their frozen jobs run.
 | Worktree basename | Branch / purpose |
 | --- | --- |
 | `plan9asm-wt-pr40-scalar-lane-native-20261011` | `codex/pr40-external-corpus-split-20261011`; integrated source `3f972336`; full SDK composition still pending |
-| `plan9asm-wt-pr40-stdlib-preprocessing-20261012` | `codex/pr40-windows-owned-process-probe-20261013`; staged fork-only priorities, `1d9e009b`; not pushed |
+| `plan9asm-wt-pr40-stdlib-preprocessing-20261012` | `codex/pr40-windows-owned-process-probe-20261013`; staged fork-only priorities, `2a0d634f`; not pushed |
 | `plan9asm-wt-pr40-sdk-numeric-maps-entry-20261013` | `codex/pr40-sdk-numeric-maps-entry-20261013`; scoped bool/literal leaf `6e63c125`; repairing existing logical bool callers |
 | `plan9asm-wt-pr40-sdk-tls-20261013` | `codex/pr40-sdk-tls-20261013`; caller leaf `92742505`; authenticated NUM node/emitter composition still dirty |
 | `plan9asm-wt-pr40-simple-sdk-bindings-20261013` | `codex/pr40-sdk-storage-snapshot-20261013`; GP/X objects `b4f6d916`; fixing full bit-scan zero semantics |
@@ -244,8 +244,13 @@ Repeated actual source/export verification needs measured optimization, never
 deleted guards or increased budgets.
 After joining `3f972336`, dirty-v8 also translates the unchanged complete
 IndexByte3-TEXT source through all three APIs in116.540s. The fresh combined
-two-file/six-API union and completeSDK8 are still pending; no object/runtime
-or parent-head certification follows from these individual dirty-tree passes.
+two-file/six-API union now passes in303.782s, with two roots and eight child
+terminals, on that same frozen dirty-v8. Its subsequent complete SDK8 union
+remains FAILED325.932s: seven roots pass, while Bytealg's Count and IndexByte
+retry children fail at typed entry/terminal signature inventory. Repair the
+actual CLI signature consumer; do not weaken original-node binding. No object,
+runtime or parent-head certification follows. The combined duration also needs
+measured verification-cost reduction, not larger budgets.
 
 Numeric `6e63c125` is scoped pure/IR evidence only, not integrated yet. Its
 canonicalFP and physical-I8 intermediates repair raw2/3/255 washing, but the
@@ -254,9 +259,11 @@ all three APIs. The follow-up complete84-root Go27/race and83-root Go20 unions
 remain FAILED, each with exactly that one root/three children. Preserve the old
 fixture; close readonly same-file callee/outgoing-byte/source identity first.
 
-Fork-only `1d9e009b` retains13 lanes and original budgets, adds12 exact predicate
-source roots and both native sparse-GP/X owners. All32 policy tests/actionlint
-pass. The planned54-root native profile requires eight inventories/16 mandatory
+Fork-only `2a0d634f` retains13 lanes and original budgets, adds12 exact predicate
+and five exact caller-origin source roots (40 unique source priorities), plus
+both native sparse-GP/X owners. All33 policy tests/actionlint pass; the new
+missing-origin priority RED remains preserved. The planned54-root native
+profile requires eight inventories/16 mandatory
 roots. Its12 auditor mutation controls pass, but expanded logs are synthetic,
 not execution. The fork still lacks later source merges; do not push it yet.
 
@@ -282,14 +289,14 @@ The earlier `2d696307` 163/184,21-failure receipt stays unchanged.
 
 ## External server checkpoint (no local scan)
 
-Trusted latest manifest generated 2026-10-14 11:12:53 UTC:
-`incremental_since=2026-10-10T19:22:43Z`; `history_before=2025-10-01`;
+Trusted latest manifest generated 2026-10-14 12:14:40 UTC:
+`incremental_since=2026-10-11T01:22:43Z`; `history_before=2025-10-01`;
 `history_complete=false`. The next hourly window is unfinished; never advance
 its cursor from partial progress.
-Index22,093,583 entries; unique_modules1,070,612; matched_records6,789;
-scanned_records1,117,175; failures16,815; latest_records1,001,014;
-cgo_records1,111,351. These are inventory records, never translator passes.
-All563 manifest ranges were independently checked continuous; their sum equals
+Index22,181,069 entries; unique_modules1,072,099; matched_records6,793;
+scanned_records1,119,631; failures16,861; latest_records1,002,505;
+cgo_records1,113,807. These are inventory records, never translator passes.
+All569 manifest ranges were independently checked continuous; their sum equals
 index_entries and first/last endpoints derive history/incremental cursors. Periodic
 exports can lag the completed manifest/journal; never interpret that as rollback.
 Source failures remain retryable, never pass/skip. Later values require readback.
