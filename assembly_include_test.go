@@ -51,7 +51,7 @@ func main() {
 	if runtime.GOOS == "windows" {
 		bin += ".exe"
 	}
-	build := exec.Command("go", "build", "-trimpath", "-o", bin, mainFile)
+	build := frameworkChildGoBuildCommand("-trimpath", "-o", bin, mainFile)
 	if out, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("build trimpath reader: %v\n%s", err, out)
 	}
