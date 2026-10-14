@@ -31,6 +31,10 @@ func checkX86ABI0ResultInitializationAtSource(fn Func, sig FuncSig, goarch strin
 		return fmt.Errorf("%w: result initialization: %s", ErrProbeNeedsContext, reason)
 	}
 	privateVoid := scalarViews && sig.Ret == Void && len(sig.Frame.Results) == 0
+	canonicalBool := scalarViews && goarch == "386" && sig.Ret == I1
+	if canonicalBool && !x86ABI0LogicalBoolFrameRole(fn, sig, goarch) {
+		return fail("bool byte requires its complete ordinary bounded logical ABI0 role")
+	}
 	if goarch != "amd64" && goarch != "386" || strings.Contains(fn.Sym, "<") ||
 		len(sig.ArgRegs) != 0 || sig.ARMEntry != nil || sig.WASMContext != "" ||
 		len(sig.Frame.Results) == 0 && !privateVoid {
@@ -75,6 +79,20 @@ func checkX86ABI0ResultInitializationAtSource(fn Func, sig FuncSig, goarch strin
 		resultOffset = int64(frame)
 	}
 	initial := x86ResultState{fp: make([]bool, frame), pointerFP: make(map[int64]bool)}
+	if canonicalBool {
+		initial.canonicalFP = make([]bool, frame)
+		initial.boolFrameSlots = append(append([]FrameSlot(nil), sig.Frame.Params...), sig.Frame.Results...)
+		initial.boolCalls = fn.x86BoolCalls
+		initial.boolReadonlyInputs = fn.x86BoolReadonlyInputs
+		if initial.boolCalls != nil {
+			initial.boolOutgoing = make([]bool, 5)
+			initial.boolOutgoingCanonical = make([]bool, 5)
+		}
+		if x86ABI0BoolFrameAliasNeeded(fn) {
+			initial.boolFrameGP = new([16]x86ResultSlotAddress)
+		}
+		transfer = x86ABI0CanonicalBoolTransfer(transfer)
+	}
 	if fn.x86DirectTailRoot != nil && scalarViews {
 		for _, slot := range sig.Frame.Results {
 			switch slot.Type {
@@ -118,6 +136,9 @@ func checkX86ABI0ResultInitializationAtSource(fn Func, sig FuncSig, goarch strin
 				return fail("overlapping typed frame slots")
 			}
 			owned[offset], initial.fp[offset] = true, slot.Type != Ptr
+			if canonicalBool && slot.Type == I1 {
+				initial.canonicalFP[offset] = true // The logical entry is actual I1, not an arbitrary NUM byte.
+			}
 		}
 		if slot.Type == Ptr {
 			// Both observers may transport an incoming opaque identity while
@@ -134,6 +155,9 @@ func checkX86ABI0ResultInitializationAtSource(fn Func, sig FuncSig, goarch strin
 			for offset := int(resultOffset); offset < frame; offset++ {
 				if owned[offset] && !state.fp[offset] {
 					return fail(fmt.Sprintf("result byte %d is not written on every path to RET %d", offset, pc))
+				}
+				if canonicalBool && owned[offset] && (offset >= len(state.canonicalFP) || !state.canonicalFP[offset]) {
+					return fail(fmt.Sprintf("bool result byte %d is not canonical zero/one on every path to RET %d", offset, pc))
 				}
 			}
 			return nil
@@ -198,19 +222,23 @@ func checkX86ResultSourceFlow(fn Func, initial x86ResultState, owned []bool, res
 		return fail("missing or oversized source CFG")
 	}
 	// One logical byte-work envelope includes FP/AUTO, numerical GP/Z/K,
-	// canonical GP bytes, flags, opaque GP and caller-address identities, and the source-shape discriminator. It is
+	// canonical FP/GP bytes, flags, opaque GP and caller-address identities, and the source-shape discriminator. It is
 	// not a bound on Go's heap/struct overhead. pointerFP is immutable shared
 	// layout metadata, not a state payload copied at each CFG successor.
 	// AUTO states do not obtain an independent frame or iteration budget.
-	byteState := len(initial.fp) + len(initial.auto) + len(initial.gp) + len(initial.canonicalGP) +
+	byteState := len(initial.fp) + len(initial.canonicalFP) + len(initial.auto) +
+		len(initial.boolOutgoing) + len(initial.boolOutgoingCanonical) + len(initial.gp) + len(initial.canonicalGP) +
 		8*len(initial.xmm) + len(initial.masks) + 1 + len(initial.pointerGP) + len(initial.callerAddressGP) +
 		2*len(initial.callerAddressOrigin) + 1 + 2 + 3
 	if len(initial.resultAddressSlots) != 0 {
 		byteState += len(initial.resultAddressGP)*25 + 1
 	}
+	if initial.boolFrameGP != nil {
+		byteState += len(initial.boolFrameGP) * 25
+	}
 	const byteWorkLimit = 64 << 20
 	byteWork := len(instructions) * byteState
-	boundedWork := len(initial.auto) != 0 || fn.x86DirectTailRoot != nil
+	boundedWork := len(initial.auto) != 0 || len(initial.canonicalFP) != 0 || fn.x86DirectTailRoot != nil
 	if boundedWork && byteWork > byteWorkLimit/8 {
 		return fail("combined FP/AUTO source-CFG byte budget exhausted")
 	}
@@ -230,6 +258,9 @@ func checkX86ResultSourceFlow(fn Func, initial x86ResultState, owned []bool, res
 	}
 	for offset := range top.auto {
 		top.auto[offset] = true
+	}
+	for offset := range top.boolOutgoing {
+		top.boolOutgoing[offset], top.boolOutgoingCanonical[offset] = true, true
 	}
 	for index := range top.gp {
 		top.gp[index] = 0xff
@@ -363,7 +394,15 @@ type x86ResultState struct {
 	fp   []bool
 	auto []bool
 	gp   [16]uint8
-	// Used only by the independent ordinary register bool-result contract.
+	// Canonical FP is allocated only for the independent bounded ABI0 bool
+	// role. It neither replaces numerical initialization nor extends FP slots.
+	canonicalFP                         []bool
+	boolFrameSlots                      []FrameSlot               // Immutable declared logical fields, not native backing.
+	boolFrameGP                         *[16]x86ResultSlotAddress // Separate alias domain; never resultAddressGP/caller/native.
+	boolCalls                           *x86ABI0BoolCallPlan      // Immutable original call-site/declaration observations.
+	boolOutgoing, boolOutgoingCanonical []bool
+	boolReadonlyInputs                  bool // Only the independent readonly callee proof.
+	// Used by the independent register/ABI0 bool-result contracts.
 	// A set bit means that physical byte is exactly 0/1, not merely initialized.
 	canonicalGP [16]uint8
 	xmm         [32]uint16 // high banks are consumed only by validated mode-bound forms
@@ -400,6 +439,13 @@ type x86ResultState struct {
 
 func (state x86ResultState) clone() x86ResultState {
 	state.fp = append([]bool(nil), state.fp...)
+	state.canonicalFP = append([]bool(nil), state.canonicalFP...)
+	state.boolOutgoing = append([]bool(nil), state.boolOutgoing...)
+	state.boolOutgoingCanonical = append([]bool(nil), state.boolOutgoingCanonical...)
+	if state.boolFrameGP != nil {
+		aliases := *state.boolFrameGP
+		state.boolFrameGP = &aliases
+	}
 	state.auto = append([]bool(nil), state.auto...)
 	state.loweredStaticReads = nil
 	state.literalMemoryOperand, state.literalMemoryBytes = nil, 0
@@ -408,8 +454,22 @@ func (state x86ResultState) clone() x86ResultState {
 
 func (state x86ResultState) intersect(other x86ResultState) x86ResultState {
 	merged := state.clone()
+	for index := range merged.boolOutgoing {
+		merged.boolOutgoing[index] = index < len(other.boolOutgoing) && merged.boolOutgoing[index] && other.boolOutgoing[index]
+		merged.boolOutgoingCanonical[index] = index < len(other.boolOutgoingCanonical) && merged.boolOutgoingCanonical[index] && other.boolOutgoingCanonical[index]
+	}
 	for index := range merged.fp {
 		merged.fp[index] = merged.fp[index] && other.fp[index]
+	}
+	for index := range merged.canonicalFP {
+		merged.canonicalFP[index] = index < len(other.canonicalFP) && merged.canonicalFP[index] && other.canonicalFP[index]
+	}
+	if merged.boolFrameGP != nil {
+		for index := range merged.boolFrameGP {
+			if other.boolFrameGP == nil || merged.boolFrameGP[index] != other.boolFrameGP[index] {
+				merged.boolFrameGP[index] = x86ResultSlotAddress{}
+			}
+		}
 	}
 	for index := range merged.auto {
 		merged.auto[index] = merged.auto[index] && other.auto[index]

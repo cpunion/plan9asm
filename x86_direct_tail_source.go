@@ -45,6 +45,8 @@ func x86DirectTailSnapshot(file *File) *File {
 	for i := range copy.Funcs {
 		copy.Funcs[i].x86DirectTailRoot = nil
 		copy.Funcs[i].x86ResultFlowBudget = nil
+		copy.Funcs[i].x86BoolCalls = nil
+		copy.Funcs[i].x86BoolReadonlyInputs = false
 	}
 	return copy
 }

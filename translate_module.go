@@ -19,7 +19,33 @@ func TranslateModule(file *File, opt Options) (llvm.Module, error) {
 // Dispose the returned module before disposing ctx. High-volume callers should
 // create a fresh context per file so LLVM can release context-owned caches.
 func TranslateModuleInContext(ctx llvm.Context, file *File, opt Options) (result llvm.Module, resultErr error) {
-	file, err := PrepareX86DirectTailSource(file, opt)
+	callOriginal := file
+	if opt.x86OriginalFile != nil {
+		callOriginal = opt.x86OriginalFile
+	}
+	boolCalls := opt.x86BoolCallSource
+	var err error
+	if boolCalls == nil {
+		boolCalls, err = prepareX86ABI0BoolCalls(callOriginal, opt)
+	} else {
+		err = boolCalls.verify()
+	}
+	if err != nil {
+		return llvm.Module{}, err
+	}
+	if boolCalls != nil {
+		opt.x86BoolCallSource = boolCalls
+		defer func() {
+			if err := boolCalls.verify(); err != nil {
+				if !result.IsNil() {
+					result.Dispose()
+				}
+				result = llvm.Module{}
+				resultErr = errors.Join(resultErr, err)
+			}
+		}()
+	}
+	file, err = PrepareX86DirectTailSource(file, opt)
 	if err != nil {
 		return llvm.Module{}, err
 	}

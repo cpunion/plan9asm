@@ -214,6 +214,11 @@ type Options struct {
 	// AnnotateSource emits source asm lines as IR comments before lowering each
 	// instruction, for translation debugging.
 	AnnotateSource bool
+
+	// Actual complete Go source before KeepFunc. Private logical CALL lookup;
+	// no source/native permission can be reconstructed through public Options.
+	x86OriginalFile   *File
+	x86BoolCallSource *x86ABI0BoolCallSource
 }
 
 // Translate converts a parsed Plan 9 asm File into LLVM IR text (`.ll`).
@@ -234,7 +239,29 @@ func translateIRText(file *File, opt Options) (resultText string, result error) 
 	if file == nil {
 		return "", fmt.Errorf("nil file")
 	}
-	file, err := PrepareX86DirectTailSource(file, opt)
+	callOriginal := file
+	if opt.x86OriginalFile != nil {
+		callOriginal = opt.x86OriginalFile
+	}
+	boolCalls := opt.x86BoolCallSource
+	var err error
+	if boolCalls == nil {
+		boolCalls, err = prepareX86ABI0BoolCalls(callOriginal, opt)
+	} else {
+		err = boolCalls.verify()
+	}
+	if err != nil {
+		return "", err
+	}
+	if boolCalls != nil {
+		defer func() {
+			if err := boolCalls.verify(); err != nil {
+				resultText = ""
+				result = errors.Join(result, err)
+			}
+		}()
+	}
+	file, err = PrepareX86DirectTailSource(file, opt)
 	if err != nil {
 		return "", err
 	}
@@ -469,7 +496,13 @@ func translateIRText(file *File, opt Options) (resultText string, result error) 
 		// as numeric conversions and leave adjacent aggregate result slots unwritten.
 		if file.Arch == ArchAMD64 {
 			if err := translateFuncX86(&b, function, sig, resolve, opt.Sigs, opt.Goarch, opt.TargetTriple, opt.X87Mode, opt.AnnotateSource,
-				x86FunctionSource{scalarData: scalarData, lockNamespace: lockScalarNamespace, bitScanNamespace: bitScanNamespace}); err != nil {
+				x86FunctionSource{
+					scalarData:       scalarData,
+					lockNamespace:    lockScalarNamespace,
+					bitScanNamespace: bitScanNamespace,
+					boolCalls:        boolCalls,
+					declaration:      sourceSig,
+				}); err != nil {
 				return "", fmt.Errorf("%s: %w", name, err)
 			}
 			b.WriteString("\n")

@@ -258,7 +258,8 @@ func translateGoModuleInContext(ctx llvm.Context, pkg GoPackage, src []byte, opt
 		}
 	}
 	completeFile := file
-	if file.x86DirectTails != nil {
+	boolCallSource := x86ABI0BoolCallsNeeded(completeFile, opt.GOARCH)
+	if file.x86DirectTails != nil || boolCallSource {
 		filtered := *file
 		file = &filtered // KeepFunc cannot crop the complete graph origin/signatures.
 	}
@@ -274,7 +275,7 @@ func translateGoModuleInContext(ctx llvm.Context, pkg GoPackage, src []byte, opt
 	}
 
 	signatureFile := file
-	if file.x86DirectTails != nil {
+	if file.x86DirectTails != nil || boolCallSource {
 		signatureFile = completeFile // Recheck every root after caller callbacks.
 	}
 	sigs, err := goSigsForAsmFile(pkg, signatureFile, resolve, opt.GOARCH, opt.Sizes, opt.FrameSizes, opt.ManualSig)
@@ -318,7 +319,31 @@ func translateGoModuleInContext(ctx llvm.Context, pkg GoPackage, src []byte, opt
 	if err := bindGoARM64ClosureABIs(pkg, &closureSource, sigs, opt, resolve); err != nil {
 		return nil, err
 	}
+	var boolCalls *x86ABI0BoolCallSource
+	if boolCallSource {
+		boolCalls, err = prepareX86ABI0BoolCalls(completeFile, Options{Goarch: opt.GOARCH, TargetTriple: opt.TargetTriple, ResolveSym: resolve, Sigs: sigs})
+		if err != nil {
+			return nil, err
+		}
+		if boolCalls != nil {
+			defer func() {
+				final := boolCalls.verify()
+				if sha256.Sum256(originalSource) != originalSourceDigest {
+					final = errors.Join(final, x86ABI0BoolCallContext("original Go input changed during complete call consumption"))
+				}
+				if final != nil {
+					if result != nil && !result.Module.IsNil() {
+						result.Module.Dispose()
+					}
+					result = nil
+					resultErr = errors.Join(resultErr, final)
+				}
+			}()
+		}
+	}
 	mod, err := TranslateModuleInContext(ctx, file, Options{
+		x86OriginalFile:        completeFile,
+		x86BoolCallSource:      boolCalls,
 		TargetTriple:           opt.TargetTriple,
 		ResolveSym:             resolve,
 		Sigs:                   sigs,

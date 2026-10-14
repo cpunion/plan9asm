@@ -1614,6 +1614,9 @@ func (c *amd64Ctx) evalFPToI64(off int64) (string, error) {
 			if c.classicFrame != "" {
 				align = ", align 1"
 			}
+			if ty == I1 && c.abi0BoolResultByteStorage() {
+				ty = I8 // An intermediate numerical read is not a logical bool conversion.
+			}
 			v := c.loadFPStorage(ty, alloca, align)
 			switch ty {
 			case I64:
@@ -1659,6 +1662,19 @@ func (c *amd64Ctx) evalFPToI64(off int64) (string, error) {
 		return "0", nil
 	}
 	ty := slot.Type
+	if ty == I1 && c.abi0BoolResultByteStorage() {
+		pointer := c.fpParamAlloca[slot.Offset]
+		if c.classicFrame != "" {
+			pointer = c.classicFramePtr(slot.Offset)
+		}
+		if pointer == "" {
+			return "", fmt.Errorf("missing physical bool parameter copy at +%d(FP)", slot.Offset)
+		}
+		byteValue := c.loadFPStorage(I8, pointer, ", align 1")
+		wide := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = zext i8 %s to i64\n", wide, byteValue)
+		return "%" + wide, nil
+	}
 	arg, err := c.loadFPParamValue(slot)
 	if err != nil {
 		return "", err
@@ -1831,11 +1847,15 @@ func (c *amd64Ctx) storeFPResultWithMetadata(off int64, ty LLVMType, v, metadata
 		if ptr == "" {
 			return fmt.Errorf("missing mutable FP parameter slot at +%d(FP)", off)
 		}
-		value, err := c.coerceFPStoreValue(ty, slot.Type, v)
+		storageType := slot.Type
+		if storageType == I1 && c.abi0BoolResultByteStorage() {
+			storageType = I8
+		}
+		value, err := c.coerceFPStoreValue(ty, storageType, v)
 		if err != nil {
 			return fmt.Errorf("FP parameter write type mismatch: have %s want %s at +%d(FP): %w", ty, slot.Type, off, err)
 		}
-		c.storeFPStorage(slot.Type, value, ptr, align, metadata)
+		c.storeFPStorage(storageType, value, ptr, align, metadata)
 		return nil
 	}
 	if c.goarch == "386" && ty == I32 {
@@ -1883,6 +1903,15 @@ func (c *amd64Ctx) storeFPResultWithMetadata(off int64, ty LLVMType, v, metadata
 		return fmt.Errorf("unsupported FP write slot: +%d(FP)", off)
 	}
 	if slotTy == I1 {
+		if c.abi0BoolResultByteStorage() {
+			value, err := c.coerceFPStoreValue(ty, I8, v)
+			if err != nil {
+				return fmt.Errorf("FP bool result byte write at +%d(FP): %w", off, err)
+			}
+			c.storeFPStorage(I8, value, alloca, align, metadata)
+			c.markFPResultWritten(off)
+			return nil
+		}
 		value, err := c.coerceFPStoreValue(ty, I1, v)
 		if err != nil {
 			return fmt.Errorf("FP bool result write at +%d(FP): %w", off, err)
