@@ -158,7 +158,11 @@ func x86ResultSlotMoveBytes(ins Instr, arch string) int64 {
 		}
 		return int64(form.bits / 8) // Mode32 Q memory/X copies really are 8 bytes.
 	}
-	return x86RawReturnScalarMoveBytes(ins.Op)
+	width := x86RawReturnScalarMoveBytes(ins.Op)
+	if width == 8 && arch == "386" {
+		return 0 // Only the typed X/m64 branch above has a mode32 qword role.
+	}
+	return width
 }
 
 func x86ResultSlotDirectWrite(ins Instr, index int, arch string) bool {
