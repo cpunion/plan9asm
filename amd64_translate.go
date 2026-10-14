@@ -535,8 +535,9 @@ func emitX86RelocationAnchor(b *strings.Builder, fn Func, sig FuncSig, resolve f
 }
 
 type x86FunctionSource struct {
-	scalarData    map[x86StaticSBAddress]int64
-	lockNamespace string
+	scalarData       map[x86StaticSBAddress]int64
+	lockNamespace    string
+	bitScanNamespace string
 }
 
 func translateFuncX86(b *strings.Builder, fn Func, sig FuncSig, resolve func(string) string, sigs map[string]FuncSig, goarch, targetTriple string, x87Mode X87Mode, annotateSource bool, sources ...x86FunctionSource) error {
@@ -556,6 +557,7 @@ func translateFuncX86(b *strings.Builder, fn Func, sig FuncSig, resolve func(str
 	c := newX86Ctx(b, fn, sig, resolve, sigs, goarch, targetTriple, annotateSource)
 	if len(sources) == 1 {
 		c.lockScalarNS = sources[0].lockNamespace
+		c.bitScanNS = sources[0].bitScanNamespace
 		c.fpScalarData = sources[0].scalarData
 	}
 	if err := c.validateScalarFPSourceViews(); err != nil {

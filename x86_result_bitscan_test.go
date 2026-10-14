@@ -152,7 +152,16 @@ func TestX86ScalarBitScanWholeSourceThreeAPIAdmission(t *testing.T) {
 						body += move + " BX,ret+RESULT(FP)"
 					}
 					source := x86ResultGPSIMDAdmissionSource(t, arch, declaration, body)
-					x86ResultGPSIMDAdmissionAPIs(t, arch, source, declaration, guarded)
+					// This original source initializes the prior destination.
+					// Zero input therefore retains numerical bytes, even without
+					// the guard. Keep the source unchanged as a positive control.
+					x86ResultGPSIMDAdmissionAPIs(t, arch, source, declaration, true)
+					unknown := strings.Replace(source, move+" $0,BX\n", "", 1)
+					t.Run("unknown-prior", func(t *testing.T) {
+						// Even the nonzero W edge cannot initialize a full
+						// word result's previously unknown upper bytes.
+						x86ResultGPSIMDAdmissionAPIs(t, arch, unknown, declaration, guarded && !strings.HasSuffix(op, "W"))
+					})
 				})
 			}
 		}

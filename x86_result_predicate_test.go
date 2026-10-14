@@ -9,7 +9,12 @@ import (
 
 func x86ResultPredicateFixture(t *testing.T, compare, test, movemask, scan, between string) (Func, FuncSig, string) {
 	t.Helper()
-	body := "MOVQ x+0(FP),AX\nMOVQ AX,X0\nVPBROADCASTQ X0,Y1\nVPBROADCASTQ X0,Y2\n" + compare + "\n" + test + "\nJZ zero\n" + between + movemask + "\n" + scan + "\nMOVL DX,ret+8(FP)\nRET\nzero:\nMOVL $0,ret+8(FP)\nRET"
+	ins := x86ScalarLaneInstruction(t, scan)
+	if len(ins.Args) != 2 || ins.Args[1].Kind != OpReg {
+		t.Fatal("predicate fixture needs its actual scan destination")
+	}
+	destination := string(ins.Args[1].Reg)
+	body := "MOVQ x+0(FP),AX\nMOVQ AX,X0\nVPBROADCASTQ X0,Y1\nVPBROADCASTQ X0,Y2\n" + compare + "\n" + test + "\nJZ zero\n" + between + movemask + "\n" + scan + "\nMOVL " + destination + ",ret+8(FP)\nRET\nzero:\nMOVL $0,ret+8(FP)\nRET"
 	_, file, sig, source := x86ResultInitializationFixture(t, "amd64", "func Value(x uint64) uint32", body)
 	return file.Funcs[0], sig, source
 }
@@ -41,6 +46,11 @@ func TestX86ResultPredicateNonzeroCannotBorrowOtherValueOrWidth(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			fn, sig, _ := x86ResultPredicateFixture(t, change.compare, change.test, change.mask, change.scan, change.between)
+			if err := checkX86ScalarFPResultInitialization(fn, sig, "amd64"); err != nil {
+				t.Fatal("the original initialized self-alias is a valid numerical control", err)
+			}
+			unknownScan := strings.Replace(change.scan, ",DX", ",BX", 1)
+			fn, sig, _ = x86ResultPredicateFixture(t, change.compare, change.test, change.mask, unknownScan, change.between)
 			if err := checkX86ScalarFPResultInitialization(fn, sig, "amd64"); !errors.Is(err, ErrProbeNeedsContext) {
 				t.Fatal("nonzero relationship laundered a different value", err)
 			}
@@ -49,7 +59,16 @@ func TestX86ResultPredicateNonzeroCannotBorrowOtherValueOrWidth(t *testing.T) {
 	for _, replacement := range []string{"JNZ zero", "JCS zero", "CMPL AX,$0\nJZ zero"} {
 		t.Run(fmt.Sprintf("replaced guard %s", replacement), func(t *testing.T) {
 			_, sig, source := x86ResultPredicateFixture(t, "VPCMPEQB Y1,Y2,Y3", "VPTEST Y3,Y3", "VPMOVMSKB Y3,DX", "BSFL DX,DX", "")
-			file, err := Parse(ArchAMD64, strings.Replace(source, "JZ zero", replacement, 1))
+			changed := strings.Replace(source, "JZ zero", replacement, 1)
+			file, err := Parse(ArchAMD64, changed)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := checkX86ScalarFPResultInitialization(file.Funcs[0], sig, "amd64"); err != nil {
+				t.Fatal("original initialized self-alias ceased to be numerical", err)
+			}
+			unknown := strings.ReplaceAll(strings.Replace(changed, "BSFL DX,DX", "BSFL DX,BX", 1), "MOVL DX,ret", "MOVL BX,ret")
+			file, err = Parse(ArchAMD64, unknown)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -116,7 +135,7 @@ func TestX86ResultPredicateWholeSourceThreeAPIsAndMode32(t *testing.T) {
 	for _, arch := range []string{"amd64", "386"} {
 		for _, mutation := range []string{"none", "zero edge", "different vector", "GP replaced", "flags replaced"} {
 			t.Run(arch+"/"+mutation, func(t *testing.T) {
-				_, _, source := x86ResultPredicateFixture(t, "VPCMPEQB Y1,Y2,Y3", "VPTEST Y3,Y3", "VPMOVMSKB Y3,DX", "BSFL DX,DX", "")
+				_, _, source := x86ResultPredicateFixture(t, "VPCMPEQB Y1,Y2,Y3", "VPTEST Y3,Y3", "VPMOVMSKB Y3,DX", "BSFL DX,BX", "")
 				declaration := "func Value(x uint64) uint32\n"
 				triple := "x86_64-unknown-linux-gnu"
 				if arch == "386" {
@@ -132,12 +151,20 @@ func TestX86ResultPredicateWholeSourceThreeAPIsAndMode32(t *testing.T) {
 				case "different vector":
 					source = strings.Replace(source, "VPMOVMSKB Y3", "VPMOVMSKB Y2", 1)
 				case "GP replaced":
-					source = strings.Replace(source, "BSFL DX,DX", "MOVL $0,DX\nBSFL DX,DX", 1)
+					source = strings.Replace(source, "BSFL DX,BX", "MOVL $0,DX\nBSFL DX,BX", 1)
 				case "flags replaced":
 					source = strings.Replace(source, "JZ zero", "CMPL AX,$0\nJZ zero", 1)
 				}
+				// Preserve every original self-alias source as a separate
+				// positive. Its already initialized DX supplies numeric bytes
+				// even when the relationship does not prove a nonzero mask.
+				selfAlias := strings.ReplaceAll(strings.Replace(source, "BSFL DX,BX", "BSFL DX,DX", 1), "MOVL BX,ret", "MOVL DX,ret")
 				for _, api := range []string{"text", "module", "Go"} {
 					t.Run(api, func(t *testing.T) {
+						known, err := x86ScalarFPBitViewAPI(t, selfAlias, declaration, arch, triple, api)
+						if err != nil || known == "" {
+							t.Fatal("original initialized self-alias rejected", err)
+						}
 						ir, err := x86ScalarFPBitViewAPI(t, source, declaration, arch, triple, api)
 						if mutation == "none" {
 							if err != nil || ir == "" {

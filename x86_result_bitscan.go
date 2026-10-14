@@ -2,8 +2,11 @@ package plan9asm
 
 // A pending scan result is tied to its immediately following ZF branch.
 // It is not a known value, nonzero-input claim, pointer or memory permission.
-// The zero edge retains unknown result bytes; only the nonzero edge defines
-// the written destination. Any intervening effect discards this bounded fact.
+// The zero edge retains exactly its prior numerical byte knowledge; only the
+// nonzero edge independently defines the written destination. Older dword
+// zero-input opcodes may clear the upper half instead of preserving it: a
+// previously known byte stays known in either case, but an unknown one does
+// not become known without that nonzero edge. No CPU generation is guessed.
 type x86ResultBitScanPending struct {
 	register uint8
 	mask     uint8 // Zero means there is no pending definition.
@@ -26,7 +29,9 @@ func x86ResultBitScanStep(ins Instr, state *x86ResultState, owned []bool, arch s
 	if width == 4 && arch == "amd64" {
 		mask = 0xff // The valid dword result also clears the upper dword.
 	}
-	state.gp[index] &^= mask
+	// Every affected byte is either its prior numerical value on zero input
+	// (or known zero for the historical dword upper-half behavior) or a defined
+	// scan result on nonzero input. Preserve knowledge, never invent a value.
 	state.canonicalGP[index] &^= mask
 	state.pointerGP[index], state.callerAddressGP[index] = false, false
 	state.resultAddressGP[index] = x86ResultSlotAddress{}
