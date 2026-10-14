@@ -7,6 +7,32 @@ Let active frozen CI runs finish before publishing another batch.
 
 ## Current checkpoint: 2026-10-14
 
+Fork [38491308184](https://github.com/cpunion/plan9asm/actions/runs/38491308184)
+tests frozen `ac2576d2` (contribution `fbadcfa8`, plus fork-only priorities).
+It naturally finishes with 39 successful and four failed jobs. All ten priority
+jobs pass, including the paired-directory repair on native Windows and all 48
+selected native Linux x86 roots, with zero native skips or missing terminals.
+The complete main-module aggregate retains 5,981 roots: 5,718 pass and 263
+explicit platform skips; all 21 other packages pass. Simple CLI passes all
+31 roots. These platform skips are not executed semantics.
+
+Independent raw LLVM CLI partition readback agrees with the fresh 266-root
+inventory: 262 pass, four fail, zero skipped or incomplete roots. Subtests have
+1,850 passes, 21 failures and one explicit native ARM64-only skip. Three failed
+ARM64 ABI0-tail roots compare requested ASM spelling with physical selected
+members; reflect's independent Go-object oracle has the same path-string join
+defect. The aggregate correctly fails without publishing LLVM CLI coverage.
+Retain all original failed partitions; opcode classification is not file success.
+
+`48867929` fixes only that independent reflect oracle's selected-file join.
+Actual physical path and eagerly captured file identity replace raw spelling;
+equal bytes, unselected/missing members, duplicates and retargeted aliases still
+fail. Independent alias RED controls precede the repair. Its final five-root
+cohort includes actual 386/AMD64/ARM Go objects and passes in 2.559 seconds;
+both identity roots pass race in 1.589 seconds and LLVM CLI vet passes.
+Native Windows confirmation and the separate production ARM64 repair remain
+required. Neither the pending SDK factory nor numeric LEA is integrated.
+
 Fork [38477743604](https://github.com/cpunion/plan9asm/actions/runs/38477743604)
 tests frozen `7c342c8b` (contribution `2d696307`, plus exact fork priorities).
 It naturally finishes failed: nine priority jobs pass, one fails, and the full
