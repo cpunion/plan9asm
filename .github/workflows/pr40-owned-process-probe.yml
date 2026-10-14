@@ -98,6 +98,10 @@ jobs:
           go test . -list "^($packed_string_root)$" > _out/native-x86-oracles/packed-string-inventory.log
           grep -Fx "$packed_string_root" _out/native-x86-oracles/packed-string-inventory.log
           roots+="|$packed_string_root"
+          packed_string_fault_root='TestCrossLinuxRuntimeMatrixX86PackedStringOriginalNativeMemoryFaults'
+          go test . -list "^($packed_string_fault_root)$" > _out/native-x86-oracles/packed-string-fault-inventory.log
+          grep -Fx "$packed_string_fault_root" _out/native-x86-oracles/packed-string-fault-inventory.log
+          roots+="|$packed_string_fault_root"
           independent_fp_roots='TestCrossLinuxRuntimeMatrixX86InsertExtractIndependentFPFields'
           independent_fp_roots+='|TestCrossLinuxRuntimeMatrixX86LegacyPSIndependentFPFields'
           go test . -list "^($independent_fp_roots)$" > _out/native-x86-oracles/independent-fp-inventory.log
@@ -121,7 +125,7 @@ jobs:
           families+='|PackedShiftNativeReadFaults|PackedUnpackMMXNativeMemoryAndFP|PackedZeroMemoryStoreFault'
           families+='|SignedIntegerScalarFloatNativeReadExtentAndPrecision|SignedIntegerScalarFloatNativeLinuxPrecisionSignal'
           go test . -list "^($roots|TestCrossLinuxRuntimeMatrixX86($families))$" > _out/native-x86-oracles/all-roots.stdout
-          test "$(grep -c '^Test' _out/native-x86-oracles/all-roots.stdout)" = 62
+          test "$(grep -c '^Test' _out/native-x86-oracles/all-roots.stdout)" = 63
           go test . -run "^($roots|TestCrossLinuxRuntimeMatrixX86($families))$" \
             -json -count=1 -timeout=8m \
             2> _out/native-x86-oracles/native.stderr | tee _out/native-x86-oracles/native.jsonl

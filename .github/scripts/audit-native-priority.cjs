@@ -46,6 +46,7 @@ function auditNativePriority(directory, io = fs) {
     ],
     'source-stack': ['TestCrossLinuxRuntimeMatrixX86RawSourceStackNumerical'],
     continuation: ['TestCrossLinuxRuntimeMatrixX86ContinuationWholeCFGOriginalGoAndLLVM'],
+    'packed-string-fault': ['TestCrossLinuxRuntimeMatrixX86PackedStringOriginalNativeMemoryFaults'],
   };
   const actualFiles = io.readdirSync(directory).filter(name => name.endsWith('-inventory.log')).sort();
   assert.deepEqual(actualFiles, Object.keys(inventories).map(name => name + '-inventory.log').sort(),
@@ -60,11 +61,11 @@ function auditNativePriority(directory, io = fs) {
       mandatory.add(name);
     }
   }
-  assert.equal(mandatory.size, 24);
+  assert.equal(mandatory.size, 25);
   const discovered = io.readFileSync(path.join(directory, 'all-roots.stdout'), 'utf8')
     .split(/\r?\n/).filter(line => /^Test\S+$/.test(line)).sort();
-  assert.equal(discovered.length, 62, 'fresh discovery denominator changed');
-  assert.equal(new Set(discovered).size, 62, 'duplicate fresh discovery');
+  assert.equal(discovered.length, 63, 'fresh discovery denominator changed');
+  assert.equal(new Set(discovered).size, 63, 'duplicate fresh discovery');
   const roots = new Set(), rootTerminals = new Set();
   const children = new Set(), childTerminals = new Set();
   let packageTerminal;
@@ -77,6 +78,7 @@ function auditNativePriority(directory, io = fs) {
     if (!event.Test) {
       assert.notEqual(event.Action, 'build-fail', 'native package build failed');
       if (['pass', 'fail', 'skip'].includes(event.Action)) {
+        assert.equal(event.Package, 'github.com/xgo-dev/plan9asm', 'package terminal lacks exact package identity');
         assert.equal(packageTerminal, undefined, 'duplicate package terminal');
         assert.equal(event.Action, 'pass', 'native package did not execute successfully');
         packageTerminal = { package: event.Package, elapsed: event.Elapsed };
@@ -102,11 +104,12 @@ function auditNativePriority(directory, io = fs) {
     if (['pass', 'fail', 'skip'].includes(event.Action)) {
       assert.ok(starts.has(event.Test), 'test terminal lacks start: ' + event.Test);
       assert.ok(!terminals.has(event.Test), 'duplicate test terminal: ' + event.Test);
+      if (child) assert.ok(!rootTerminals.has(root), 'child finishes after root terminal: ' + event.Test);
       assert.equal(event.Action, 'pass', event.Test + ' did not execute successfully');
       terminals.add(event.Test);
     }
   }
-  assert.equal(roots.size, 62, 'exact native root denominator changed');
+  assert.equal(roots.size, 63, 'exact native root denominator changed');
   assert.deepEqual([...roots].sort(), discovered, 'execution roots differ from fresh discovery');
   assert.deepEqual([...roots].sort(), [...rootTerminals].sort(), 'incomplete root terminals');
   assert.deepEqual([...children].sort(), [...childTerminals].sort(), 'incomplete child terminals');
@@ -122,11 +125,15 @@ function auditNativePriority(directory, io = fs) {
       requiredChildren.push(continuation + '/' + arch + '/' + dispatch);
     }
   }
+  const packedStringFault = 'TestCrossLinuxRuntimeMatrixX86PackedStringOriginalNativeMemoryFaults';
+  for (const optimization of ['-O0', '-O2']) {
+    requiredChildren.push(packedStringFault + '/' + optimization);
+  }
   for (const child of requiredChildren) {
     assert.ok(children.has(child) && childTerminals.has(child), 'missing required child: ' + child);
   }
   return {
-    protocol: 'go_test_json_native62',
+    protocol: 'go_test_json_native63',
     roots: roots.size, passed: rootTerminals.size,
     children: children.size, childPassed: childTerminals.size,
     failed: 0, skipped: 0, incomplete: 0, duplicate: 0,

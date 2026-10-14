@@ -29,12 +29,15 @@ const inventories = {
     'TestCrossLinuxRuntimeMatrixX86LegacyPSIndependentFPFields'],
   'source-stack': ['TestCrossLinuxRuntimeMatrixX86RawSourceStackNumerical'],
   continuation: ['TestCrossLinuxRuntimeMatrixX86ContinuationWholeCFGOriginalGoAndLLVM'],
+  'packed-string-fault': ['TestCrossLinuxRuntimeMatrixX86PackedStringOriginalNativeMemoryFaults'],
 };
 const sourceStack = inventories['source-stack'][0];
 const continuation = inventories.continuation[0];
+const packedStringFault = inventories['packed-string-fault'][0];
 const requiredChildren = [sourceStack + '/amd64', sourceStack + '/386',
   ...['amd64', '386'].flatMap(arch => ['memory', 'register'].map(dispatch =>
-    continuation + '/' + arch + '/' + dispatch))];
+    continuation + '/' + arch + '/' + dispatch)),
+  packedStringFault + '/-O0', packedStringFault + '/-O2'];
 
 function fixture() {
   const files = new Map();
@@ -88,13 +91,14 @@ function audit(files) {
   });
 }
 
-test('synthetic62 requires fourteen inventories,24 owners and six source/ISA children', () => {
+test('synthetic63 requires fifteen inventories,25 owners and eight source/ISA/fault children', () => {
   const result = audit(fixture());
-  assert.equal(result.roots, 62);
-  assert.equal(result.inventories, 14);
-  assert.equal(result.mandatory.length, 24);
-  assert.equal(result.requiredChildren.length, 6);
-  assert.equal(result.children, 7);
+  assert.equal(result.protocol, 'go_test_json_native63');
+  assert.equal(result.roots, 63);
+  assert.equal(result.inventories, 15);
+  assert.equal(result.mandatory.length, 25);
+  assert.equal(result.requiredChildren.length, 8);
+  assert.equal(result.children, 9);
 });
 
 test('fresh full discovery rejects same-count nonmandatory root substitution', () => {
@@ -118,7 +122,7 @@ test('missing, duplicate or renamed independent inventory cannot certify executi
   }
 });
 
-test('each required source-stack ISA and continuation dispatch must actually finish', () => {
+test('each required source-stack ISA, continuation dispatch and fault axis must finish', () => {
   for (const child of requiredChildren) {
     const files = fixture();
     replaceEvents(files, events(files).filter(event => event.Test !== child));
@@ -127,7 +131,7 @@ test('each required source-stack ISA and continuation dispatch must actually fin
 });
 
 test('root or child SKIP and FAIL are never PASS', () => {
-  for (const name of [sourceStack, ...requiredChildren]) {
+  for (const name of [...Object.values(inventories).flat(), ...requiredChildren]) {
     for (const action of ['skip', 'fail']) {
       const files = fixture();
       const rows = events(files);
@@ -135,6 +139,19 @@ test('root or child SKIP and FAIL are never PASS', () => {
       replaceEvents(files, rows);
       assert.throws(() => audit(files), /execute successfully/);
     }
+  }
+});
+
+test('fault children cannot finish after their successful root terminal', () => {
+  for (const child of requiredChildren.filter(name => name.startsWith(packedStringFault + '/'))) {
+    const files = fixture();
+    const rows = events(files);
+    const index = rows.findIndex(event => event.Action === 'pass' && event.Test === child);
+    const [terminal] = rows.splice(index, 1);
+    const parent = rows.findIndex(event => event.Action === 'pass' && event.Test === packedStringFault);
+    rows.splice(parent + 1, 0, terminal);
+    replaceEvents(files, rows);
+    assert.throws(() => audit(files), /child.*root terminal/);
   }
 });
 
@@ -193,4 +210,14 @@ test('foreign package, unstarted child or duplicate package terminals are reject
   repeated.push({ ...repeated[repeated.length - 1] });
   replaceEvents(duplicate, repeated);
   assert.throws(() => audit(duplicate), /duplicate package/);
+});
+
+test('package completion requires its own exact package identity', () => {
+  for (const identity of [undefined, null, '']) {
+    const files = fixture();
+    const rows = events(files);
+    rows[rows.length - 1].Package = identity;
+    replaceEvents(files, rows);
+    assert.throws(() => audit(files), /package terminal.*identity/);
+  }
 });
