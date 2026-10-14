@@ -1,6 +1,6 @@
 # Current work: PR 40 checkpoint
 
-Checkpoint: 2026-10-14 18:13 UTC. Contribution source: `7e393030`.
+Checkpoint: 2026-10-14 18:30 UTC. Contribution source: `03cbab33`.
 This is a handoff, not a ledger or a claim that current-head CI/stdlib passes.
 
 ## Scope and authority
@@ -33,6 +33,26 @@ Do not edit the primary or probe while their frozen jobs run.
 | `plan9asm-wt-pr40-simple-sdk-bindings-20261013` | `codex/pr40-sdk-storage-snapshot-20261013`; PCMP integrated; priority complete MXCSR and signed-conversion byte effects |
 
 ## Latest completed failed fork run
+
+Frozen fork [38613446840](https://github.com/cpunion/plan9asm/actions/runs/38613446840)
+at `265c5a07` (contribution `a91b8d1c`) completed FAILURE naturally18:23:05 UTC:
+24 executed front gates pass, only source fails; the complete Windows barrier
+is skipped. Both Windows ownership SDKs, all four NUM interfaces/guard lane,
+all complete maps object/public-CLI owners and publication pass. Native58/58
+really execute and pass133.581s, zero skips/missing/duplicate/unfinished outcomes.
+All126 source roots start and terminate:125 pass, one fails. Its sole failure
+is the complete original `goHexWordOps` test's LF-specific two-line sentinel;
+the source-policy CRLF repairs themselves pass. No translation failure or
+timeout remains in this completed front-gate receipt.
+
+`03cbab33` independently reproduces the remaining CRLF failure, then adapts
+only the counterexample policy copy. The complete original function bytes are
+returned unchanged to its three actual APIs. Changed zero-input source remains
+rejected by the regression. Nine roots/36 children pass Go27/race/Go20 in
+0.430/1.848/0.491s; both vets, tracked formatting, stable source heads and clean
+tree pass. Fork-only `90877570` requires the new line-ending root, now127 source
+priorities;45 policy tests/actionlint pass. Actual next Windows replay remains
+pending; none of these scoped receipts certifies the complete Windows modules.
 
 Next frozen diagnostic [38605615421](https://github.com/cpunion/plan9asm/actions/runs/38605615421)
 started 17:19:01 UTC on allowed fork `732c8c15ac7e478f134bc963449ab6b55e2aef78`,
