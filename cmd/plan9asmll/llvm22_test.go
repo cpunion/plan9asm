@@ -37,8 +37,11 @@ func TestCompileOneRejectsLLCWithoutObject(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "did not produce a nonempty object") {
 		t.Fatalf("compileOne() error = %v, want missing object failure", err)
 	}
-	if _, err := os.Stat(object); !os.IsNotExist(err) {
-		t.Fatalf("stale object was not removed: %v", err)
+	if data, err := os.ReadFile(object); err != nil || string(data) != "stale object" {
+		t.Fatalf("failed attempt changed previous public object: %q, %v", data, err)
+	}
+	if _, err := os.Stat(out); !os.IsNotExist(err) {
+		t.Fatalf("failed object compilation published public IR: %v", err)
 	}
 }
 

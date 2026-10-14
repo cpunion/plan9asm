@@ -1,10 +1,6 @@
 package main
 
 import (
-	"go/ast"
-	"go/parser"
-	"go/token"
-	"go/types"
 	"os"
 	"path/filepath"
 	"strings"
@@ -45,26 +41,37 @@ TEXT ·exit(SB),$0-0
 `
 
 func continuationPackage(t *testing.T, source, assembly string) (*packages.Package, string) {
+	return continuationPackageWithSources(t, source, assembly, nil)
+}
+
+func continuationPackageWithSources(t *testing.T, source, assembly string, extra map[string]string) (*packages.Package, string) {
 	t.Helper()
 	dir := t.TempDir()
 	goPath, asmPath := filepath.Join(dir, "p.go"), filepath.Join(dir, "p_amd64.s")
-	for name, contents := range map[string]string{goPath: source, asmPath: assembly} {
+	if strings.Contains(source, "go:linkname") {
+		source = strings.Replace(source, "package p\n", "package p\nimport _ \"unsafe\"\n", 1)
+	}
+	files := map[string]string{goPath: source, asmPath: assembly,
+		filepath.Join(dir, "go.mod"): "module example.com/continuations\n\ngo 1.20\n"}
+	for name, contents := range extra {
+		files[filepath.Join(dir, name)] = contents
+	}
+	for name, contents := range files {
 		if err := os.WriteFile(name, []byte(contents), 0600); err != nil {
 			t.Fatal(err)
 		}
 	}
-	fset := token.NewFileSet()
-	parsed, err := parser.ParseFile(fset, goPath, source, 0)
-	if err != nil {
-		t.Fatal(err)
+	t.Chdir(dir)
+	t.Setenv("GOWORK", "off")
+	t.Setenv("GOENV", "off")
+	t.Setenv("GOTOOLCHAIN", "local")
+	t.Setenv("CGO_ENABLED", "0")
+	t.Setenv("GOFLAGS", "")
+	pkgs, err := loadPkgs("linux", "amd64", []string{"."}, nil, "example.com/continuations", true, false)
+	if err != nil || len(pkgs) != 1 {
+		t.Fatalf("complete actual continuation module: %v", err)
 	}
-	config := types.Config{Sizes: types.SizesFor("gc", "amd64")}
-	typed, err := config.Check("example.com/continuations", fset, []*ast.File{parsed}, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return &packages.Package{PkgPath: typed.Path(), Types: typed, TypesSizes: config.Sizes,
-		GoFiles: []string{goPath}, CompiledGoFiles: []string{goPath}}, asmPath
+	return pkgs[0], asmPath
 }
 
 func TestInferPrivateX86Continuations(t *testing.T) {
@@ -100,12 +107,11 @@ func TestInferPrivateX86Continuations(t *testing.T) {
 			if test.name == "table_uninitialized" {
 				asmSource = strings.Replace(asmSource, " MOVQ (R14),AX", "loaded:\n MOVQ (R14),AX", 1)
 			}
-			pkg, path := continuationPackage(t, goSource, asmSource)
+			extra := make(map[string]string)
 			if test.otherSource != "" {
-				if err := os.WriteFile(filepath.Join(filepath.Dir(path), "other.s"), []byte(test.otherSource), 0600); err != nil {
-					t.Fatal(err)
-				}
+				extra["other.s"] = test.otherSource
 			}
+			pkg, path := continuationPackageWithSources(t, goSource, asmSource, extra)
 			file, err := plan9asm.Parse(plan9asm.ArchAMD64, asmSource)
 			if err != nil {
 				t.Fatal(err)
@@ -115,7 +121,8 @@ func TestInferPrivateX86Continuations(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			groups, err := inferX86TailGroups(pkg, file, path, "amd64", resolve, sigs)
+			config := compileConfig{x86CallerSelections: captureX86CallerSelections([]*packages.Package{pkg}, "linux/amd64", nil)}
+			groups, _, err := inferX86TailGroups(pkg, file, path, "amd64", resolve, sigs, plan9asm.GoAssemblerDefines("linux", "amd64"), config)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -133,6 +140,7 @@ func TestCompileOnePreservesContinuationModule(t *testing.T) {
 		t.Fatal(err)
 	}
 	config.MaxFunctions, config.MaxInstructions = 1, 1
+	config.x86CallerSelections = captureX86CallerSelections([]*packages.Package{pkg}, "linux/amd64", nil)
 	out := filepath.Join(filepath.Dir(path), "continuation.ll")
 	if err := compileOne(pkg, plan9asm.ArchAMD64, "linux", "amd64", "x86_64-unknown-linux-gnu",
 		asmTask{PkgPath: pkg.PkgPath, AsmFile: path, OutLL: out}, false, config); err != nil {

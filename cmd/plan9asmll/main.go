@@ -664,6 +664,21 @@ func compileOne(pkg *packages.Package, arch plan9asm.Arch, goos, goarch, triple 
 }
 
 func compileOneAttempt(pkg *packages.Package, arch plan9asm.Arch, goos, goarch, triple string, t asmTask, annotate bool, ccfg compileConfig) (compileErr error) {
+	var continuationSource *continuationReferenceSource
+	var outputStage *compileOutputStage
+	// Registered first: every source guard and owner Close runs before any
+	// public output changes. Chunk outputs share this attempt's one stage.
+	defer func() {
+		if outputStage != nil {
+			if compileErr == nil && continuationSource != nil {
+				compileErr = continuationSource.verify(ccfg.Context, plan9asm.GoAssemblerDefines(goos, goarch), ccfg.Feature)
+			}
+			if compileErr == nil {
+				compileErr = outputStage.publish()
+			}
+			compileErr = errors.Join(compileErr, outputStage.close())
+		}
+	}()
 	if ccfg.diagnostics != nil {
 		ccfg.diagnostics.ops, ccfg.diagnostics.hits = nil, nil
 	}
@@ -843,9 +858,18 @@ func compileOneAttempt(pkg *packages.Package, arch plan9asm.Arch, goos, goarch, 
 			compileErr = errors.Join(compileErr, callerSource.verify(ctx, defines, ccfg.Feature))
 		}()
 	}
-	ccfg.X86TailGroups, err = inferX86TailGroups(pkg, file, t.AsmFile, goarch, resolve, sigs)
+	ccfg.X86TailGroups, continuationSource, err = inferX86TailGroups(pkg, file, t.AsmFile, goarch, resolve, sigs, defines, ccfg)
 	if err != nil {
 		return fmt.Errorf("prove private continuation entries: %w", err)
+	}
+	if continuationSource != nil {
+		defer func() {
+			ctx := ccfg.Context
+			if ctx == nil {
+				ctx = context.Background()
+			}
+			compileErr = errors.Join(compileErr, continuationSource.verify(ctx, defines, ccfg.Feature))
+		}()
 	}
 	sigs, fixedLocalSource, err := prepareAMD64FixedLocalSource(pkg, file, t.AsmFile, goos+"/"+goarch,
 		triple, goarch, ccfg, resolve, sigs)
@@ -892,6 +916,10 @@ func compileOneAttempt(pkg *packages.Package, arch plan9asm.Arch, goos, goarch, 
 	for _, fn := range file.Funcs {
 		instructionCount += len(fn.Instrs)
 	}
+	outputStage, err = newCompileOutputStage(t, pkg, ccfg.Feature)
+	if err != nil {
+		return err
+	}
 	// A continuation and the initializer taking its block address must remain
 	// in one LLVM module, just as an oversized ordinary function stays intact.
 	if ccfg.Enabled && !ccfg.KeepObj && len(ccfg.X86TailGroups) == 0 && fixedLocalSource == nil && scratchSource == nil && numericalSource == nil &&
@@ -920,17 +948,31 @@ func compileOneAttempt(pkg *packages.Package, arch plan9asm.Arch, goos, goarch, 
 				stem := strings.TrimSuffix(t.OutLL, filepath.Ext(t.OutLL))
 				partTask.OutLL = fmt.Sprintf("%s.part-%04d.ll", stem, chunk)
 			}
-			if err := translateAndCompileModule(&part, triple, goarch, partTask, annotate, ccfg, resolve, sigs); err != nil {
+			stagedTask, err := outputStage.stageTask(partTask, ccfg)
+			if err != nil {
+				return err
+			}
+			if err := translateAndCompileModule(&part, triple, goarch, stagedTask, annotate, ccfg, resolve, sigs); err != nil {
 				err = annotateUnboundCallerFrame(&part, resolve, sigs, declaredArgSizes, err)
 				return fmt.Errorf("functions %d-%d/%d: %w", first+1, last, len(file.Funcs), err)
+			}
+			if err := outputStage.seal(); err != nil {
+				return err
 			}
 			first = last
 		}
 		return nil
 	}
-	err = translateAndCompileModule(file, triple, goarch, t, annotate, ccfg, resolve, sigs)
+	compileTask, err := outputStage.stageTask(t, ccfg)
+	if err != nil {
+		return err
+	}
+	err = translateAndCompileModule(file, triple, goarch, compileTask, annotate, ccfg, resolve, sigs)
+	if err == nil {
+		err = outputStage.seal()
+	}
 	// Only a complete-file translation rejected before writing IR/object may
-	// request an independent SDK observation. A partially published chunked
+	// request an independent SDK observation. A partially translated chunked
 	// compilation never reaches this seam, and non-context errors stay errors.
 	if !ccfg.acquireSDKNumerical && ccfg.Feature == nil && errors.Is(err, plan9asm.ErrProbeNeedsContext) &&
 		x86SDKNumericalOwnerRequested(pkg, file, goos+"/"+goarch) {
