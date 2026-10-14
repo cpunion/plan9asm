@@ -292,6 +292,8 @@ jobs:
           - lane: proof-join-guards
             module: '.'
             roots:
+              - TestX86ResultAUTONumericalJoinHasIndependentCompleteOwners
+              - TestX86ResultAUTONumericalJoinOwnerPolicyRejectsMissingOrSharedAxes
               - TestX86ResultAUTOReplayDoesNotWashUnboundSourceRoles
               - TestX86FixedLocalFeatureProjectionUsesCompleteSourceOrder
               - TestGoAMD64FixedLocalResultConsumerExactProofHandoff

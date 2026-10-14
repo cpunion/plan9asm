@@ -145,6 +145,8 @@ test('Typed MXCSR conversions and authenticated proof joins have separate bounde
       'TestX86MXCSRConversionCompleteFiveTargetOriginalGoAndLLVMObjects',
     ],
     'proof-join-guards': [
+      'TestX86ResultAUTONumericalJoinHasIndependentCompleteOwners',
+      'TestX86ResultAUTONumericalJoinOwnerPolicyRejectsMissingOrSharedAxes',
       'TestX86ResultAUTOReplayDoesNotWashUnboundSourceRoles',
       'TestX86FixedLocalFeatureProjectionUsesCompleteSourceOrder',
       'TestGoAMD64FixedLocalResultConsumerExactProofHandoff',
