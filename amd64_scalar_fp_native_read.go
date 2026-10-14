@@ -127,6 +127,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 			*state = next
 			return true
 		}
+		if accepted, known := x86ResultUnusedFPAddressStep(ins, state, owned, resultOffset, arch); known {
+			return accepted // Mapped logical storage only; no initialized address bits.
+		}
 		return x86LoweredPureGPUnknownTransfer(ins, state, arch)
 	}
 	if registerEntry {

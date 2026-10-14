@@ -54,6 +54,10 @@ func x86ResultCallerAddressesAfter(ins Instr, before [16]bool, entryFP map[int64
 		return [16]bool{}
 	}
 	ins = x86GoMOVQSourceInstruction(ins) // Original source/certificates stay unchanged.
+	if destination, _, _, known := x86LogicalFPLEAWriteShape(ins, arch); known {
+		before[destination] = false
+		return before // Pure address calculation writes no unrelated GP or FLAGS.
+	}
 	if _, known, err := x86SignedIntegerFloatProperties(ins, arch); known && err == nil {
 		return before // Signed conversion writes only its typed scalar/vector view.
 	}
