@@ -76,6 +76,13 @@ jobs:
             grep -Fx "$root" _out/native-x86-oracles/direct-tail-inventory.log
           done
           roots+="|$direct_tail_roots"
+          gp_simd_sparse_roots='TestCrossLinuxRuntimeMatrixX86GPSIMDSparseNativeAMD64OriginalGoAndLLVM'
+          gp_simd_sparse_roots+='|TestCrossLinuxRuntimeMatrixX86GPSIMDSparseNative386OriginalGoAndLLVM'
+          go test . -list "^($gp_simd_sparse_roots)$" > _out/native-x86-oracles/gp-simd-sparse-inventory.log
+          for root in ${gp_simd_sparse_roots//|/ }; do
+            grep -Fx "$root" _out/native-x86-oracles/gp-simd-sparse-inventory.log
+          done
+          roots+="|$gp_simd_sparse_roots"
           families='MADDTypedOriginalLegacy|PackedNarrowOriginalLegacyOracle|ScalarFPBitViewsOriginalBitsAndCanaries'
           families+='|PureGPUnknownDeadOutputs|SignedIntegerScalarFloatTranslatedFPFields|ScalarCompareFlags'
           families+='|RawReturnSourceAddressNumerical|FloatingCompareOriginalLegacyPredicates|TimestampOriginalAndLLVM'
@@ -233,6 +240,18 @@ jobs:
               - TestX86ResultGPSIMDAdmissionCompleteOfficialRegisterRows
               - TestX86ResultGPSIMDAdmissionOrdinaryRolesAndCachedProof
               - TestX86ResultGPSIMDAdmissionWholeSourcePathsWithoutProbe
+              - TestX86ScalarBitScanCompleteOfficialRowsAndOperandGrammar
+              - TestX86ABI0ResultBitScanZeroBranchDefinesOnlyNonzeroEdge
+              - TestX86ABI0ResultBitScanUndefinedValuesAndFlagsRemainContext
+              - TestX86ABI0ResultBitScanGuardedByteAliasesAndCFGJoins
+              - TestX86ScalarBitScanWholeSourceThreeAPIAdmission
+              - TestX86ABI0ResultBitScanPendingStateCannotLeakAuthority
+              - TestX86ABI0ResultBitScanPortableStatusFlagConsumers
+              - TestX86ResultPredicateNonzeroComparisonMaskBitScan
+              - TestX86ResultPredicateNonzeroCannotBorrowOtherValueOrWidth
+              - TestX86ResultPredicateLegacyAndVEXCompleteComparisonFamilies
+              - TestX86ResultPredicateWholeSourceThreeAPIsAndMode32
+              - TestX86ResultPredicateBoundedStateAndRawRevocation
               - TestGoX86SDKASMDataOriginalVendorPackageNamespace
               - TestGoX86SDKNumericalReadPackageQueryMatchesOriginalLiteralSource
               - TestSDKAMD64OriginalFrameConfigGuardEagerIdentity

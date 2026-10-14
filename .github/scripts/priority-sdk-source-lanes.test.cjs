@@ -111,6 +111,39 @@ test('New source mechanisms have their own exact priority lanes', () => {
   ]) assert.ok(publication.includes(`- ${root}\n`), root);
 });
 
+test('Guarded bit-scan and typed predicate rule classes are exact source priorities', () => {
+  const source = sdk.slice(sdk.indexOf('- lane: source\n'), sdk.indexOf('- lane: frame-context\n'));
+  for (const root of [
+    'TestX86ScalarBitScanCompleteOfficialRowsAndOperandGrammar',
+    'TestX86ABI0ResultBitScanZeroBranchDefinesOnlyNonzeroEdge',
+    'TestX86ABI0ResultBitScanUndefinedValuesAndFlagsRemainContext',
+    'TestX86ABI0ResultBitScanGuardedByteAliasesAndCFGJoins',
+    'TestX86ScalarBitScanWholeSourceThreeAPIAdmission',
+    'TestX86ABI0ResultBitScanPendingStateCannotLeakAuthority',
+    'TestX86ABI0ResultBitScanPortableStatusFlagConsumers',
+    'TestX86ResultPredicateNonzeroComparisonMaskBitScan',
+    'TestX86ResultPredicateNonzeroCannotBorrowOtherValueOrWidth',
+    'TestX86ResultPredicateLegacyAndVEXCompleteComparisonFamilies',
+    'TestX86ResultPredicateWholeSourceThreeAPIsAndMode32',
+    'TestX86ResultPredicateBoundedStateAndRawRevocation',
+  ]) assert.equal(source.split(`- ${root}\n`).length - 1, 1, root);
+  assert.match(source, /timeout: 5m/);
+  assert.equal((sdk.match(/- lane:/g) || []).length, 13);
+});
+
+test('Sparse GP SIMD must execute both actual native architectures', () => {
+  const native = workflow.slice(workflow.indexOf('\n  native-x86-oracles:'), workflow.indexOf('\n  complete-windows:'));
+  for (const root of [
+    'TestCrossLinuxRuntimeMatrixX86GPSIMDSparseNativeAMD64OriginalGoAndLLVM',
+    'TestCrossLinuxRuntimeMatrixX86GPSIMDSparseNative386OriginalGoAndLLVM',
+  ]) assert.ok(native.includes(root), root);
+  assert.match(native, /go test \. -list "\^\(\$gp_simd_sparse_roots\)\$"/);
+  assert.match(native, /grep -Fx "\$root" _out\/native-x86-oracles\/gp-simd-sparse-inventory.log/);
+  assert.match(native, /roots\+="\|\$gp_simd_sparse_roots"/);
+  assert.match(native, /-timeout=8m/);
+  assert.doesNotMatch(native, /qemu|overlay|continue-on-error|max-parallel/);
+});
+
 test('Actual failed SDK frame paths run before the complete-module barrier', () => {
   const llvm = sdk.slice(sdk.indexOf('- lane: llvm'), sdk.indexOf('- lane: crc32-linux'));
   for (const root of [
