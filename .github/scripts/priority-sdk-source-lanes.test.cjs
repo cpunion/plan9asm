@@ -4,7 +4,7 @@ const test = require('node:test');
 
 const workflow = fs.readFileSync('.github/workflows/pr40-owned-process-probe.yml', 'utf8');
 const sdk = workflow.slice(workflow.indexOf('\n  sdk-priority:'), workflow.indexOf('\n  ownership:'));
-const sdkLaneCount = 22;
+const sdkLaneCount = 28;
 
 test('SDK priority runs each previous simple root in its own bounded lane', () => {
   const roots = [
@@ -99,6 +99,12 @@ test('New source mechanisms have their own exact priority lanes', () => {
     ['literal-minimum-llvm-darwin', 'cmd/plan9asmll', 'TestCompileOneX86SDKOriginalMapsLiteralMinimumSourceDarwin', '5m'],
     ['literal-minimum-llvm-windows', 'cmd/plan9asmll', 'TestCompileOneX86SDKOriginalMapsLiteralMinimumSourceWindows', '5m'],
     ['metadata-only', 'internal/sdkfrontend', 'TestSharedSDKMetadataOriginalEmptyDATACompleteThreeOS', '10m'],
+    ['nodata-count-text', 'internal/sdkfrontend', 'TestSharedSDKNoDATACountText', '5m'],
+    ['nodata-count-module', 'internal/sdkfrontend', 'TestSharedSDKNoDATACountModule', '5m'],
+    ['nodata-count-go-module', 'internal/sdkfrontend', 'TestSharedSDKNoDATACountGoModule', '5m'],
+    ['nodata-indexbyte-text', 'internal/sdkfrontend', 'TestSharedSDKNoDATAIndexByteText', '5m'],
+    ['nodata-indexbyte-module', 'internal/sdkfrontend', 'TestSharedSDKNoDATAIndexByteModule', '5m'],
+    ['nodata-indexbyte-go-module', 'internal/sdkfrontend', 'TestSharedSDKNoDATAIndexByteGoModule', '5m'],
   ];
   for (const [lane, module, root, timeout] of additions) {
     assert.ok(sdk.includes(`- lane: ${lane}\n            module: ${module}\n            roots:\n              - ${root}\n            timeout: ${timeout}`), lane);

@@ -201,6 +201,36 @@ jobs:
             roots:
               - TestSharedSDKMetadataOriginalEmptyDATACompleteThreeOS
             timeout: 10m
+          - lane: nodata-count-text
+            module: internal/sdkfrontend
+            roots:
+              - TestSharedSDKNoDATACountText
+            timeout: 5m
+          - lane: nodata-count-module
+            module: internal/sdkfrontend
+            roots:
+              - TestSharedSDKNoDATACountModule
+            timeout: 5m
+          - lane: nodata-count-go-module
+            module: internal/sdkfrontend
+            roots:
+              - TestSharedSDKNoDATACountGoModule
+            timeout: 5m
+          - lane: nodata-indexbyte-text
+            module: internal/sdkfrontend
+            roots:
+              - TestSharedSDKNoDATAIndexByteText
+            timeout: 5m
+          - lane: nodata-indexbyte-module
+            module: internal/sdkfrontend
+            roots:
+              - TestSharedSDKNoDATAIndexByteModule
+            timeout: 5m
+          - lane: nodata-indexbyte-go-module
+            module: internal/sdkfrontend
+            roots:
+              - TestSharedSDKNoDATAIndexByteGoModule
+            timeout: 5m
           - lane: publication
             module: cmd/plan9asmll
             roots:
