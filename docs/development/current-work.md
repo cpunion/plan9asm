@@ -1,6 +1,6 @@
 # Current work: PR 40 checkpoint
 
-Checkpoint: 2026-10-14 14:30 UTC. Contribution source: `daaf28a4`.
+Checkpoint: 2026-10-14 15:30 UTC. Contribution source: `be6933bf`.
 This is a handoff, not a ledger or a claim that current-head CI/stdlib passes.
 
 ## Scope and authority
@@ -26,11 +26,24 @@ Do not edit the primary or probe while their frozen jobs run.
 
 | Worktree basename | Branch / purpose |
 | --- | --- |
-| `plan9asm-wt-pr40-scalar-lane-native-20261011` | `codex/pr40-external-corpus-split-20261011`; integrated source `daaf28a4`; fresh complete SDK composition pending |
-| `plan9asm-wt-pr40-stdlib-preprocessing-20261012` | `codex/pr40-windows-owned-process-probe-20261013`; fork-only priorities `489d7cf8`, source through `6281a98a`; not pushed |
-| `plan9asm-wt-pr40-sdk-numeric-maps-entry-20261013` | `codex/pr40-sdk-numeric-maps-entry-20261013`; ordinary void CALL inside bool callers and authentic typed tails |
-| `plan9asm-wt-pr40-sdk-tls-20261013` | `codex/pr40-sdk-tls-20261013`; ordinary zero-frame integer result-address aliases |
-| `plan9asm-wt-pr40-simple-sdk-bindings-20261013` | `codex/pr40-sdk-storage-snapshot-20261013`; typed CLD/STD direction state, distinct from status and native memory |
+| `plan9asm-wt-pr40-scalar-lane-native-20261011` | `codex/pr40-external-corpus-split-20261011`; integrated source `be6933bf`; current strict benchmark pending |
+| `plan9asm-wt-pr40-stdlib-preprocessing-20261012` | `codex/pr40-windows-owned-process-probe-20261013`; published frozen fork `2cd53a42`, source through `be6933bf`; CI in progress |
+| `plan9asm-wt-pr40-sdk-numeric-maps-entry-20261013` | `codex/pr40-sdk-numeric-maps-entry-20261013`; independent exact typed bool tails; not yet integrated |
+| `plan9asm-wt-pr40-sdk-tls-20261013` | `codex/pr40-sdk-tls-20261013`; ordinary integer result initialization without a result LEA, retaining the existing readonly bool-input role |
+| `plan9asm-wt-pr40-simple-sdk-bindings-20261013` | `codex/pr40-sdk-storage-snapshot-20261013`; complete eight-name PCMP string result/FLAGS and paired volatile m128 read |
+
+## Active frozen fork run
+
+[38589344888](https://github.com/cpunion/plan9asm/actions/runs/38589344888)
+started 15:26:34 UTC, published `2cd53a42b927012295783efd19a20b488da0c7ed`.
+It contains contribution `be6933bf` plus fork-only diagnostics. Expected native
+profile57 has ten independent inventories/19 mandatory owners. The113 source
+priorities are unique, all13 SDK lanes and budgets are unchanged, and40 policy
+tests plus actionlint passed before publication. Actual CI completion, native
+execution and complete modules are pending. Let this run finish naturally; do
+not edit/push over its tested snapshot or claim later local work is certified.
+The upstream draft still has published head `24851df2`; this diagnostic push
+does not update that contribution head or make its CI green.
 
 ## Latest two frozen fork runs
 
@@ -299,6 +312,47 @@ The native auditor's17 mutation controls pass; expanded logs remain explicitly
 synthetic. Last executed profile is49, not57. The probe lacks `daaf28a4` and
 subsequent source repairs; no later native or full CI certification is claimed.
 
+## Current integrated repairs and remaining boundaries
+
+`289bfbfd`, integrated as `cd6058ff`, separates exact declared noarg void CALLs
+inside I1-result callers from readonly bool-return helpers. Void supplies no
+outgoing/result bytes and revokes machine facts. Complete42/36-TEXT atomic
+sources remain Context at LOCK and authentic bool-tail contracts, not file passes.
+`93e57a85` gives each text-only Translate request a fresh LLVM context, releasing
+its module before the context on success/error. The original eight-worker child
+SIGSEGV is preserved; scoped seven-root ordinary/race and six-root Go20 checks
+pass. Default module-returning APIs retain their explicit ownership boundary.
+
+`36ae5caf`/`8f5cc930`, integrated as `e02b42d9`/`2bae0939`, share complete CLD/STD
+grammar and separate must-defined DF state. CALL/FLAGS restoration revoke it;
+direct typed CALL has its own independent eight-child RED/GREEN, not only an
+outer CFG wrapper. Numerical/pointer/canonical/six-status facts are separate.
+Full original386 IndexByte advances from CLD to instruction5 REPN Context.
+The existing complete-state envelope now accounts for prior37 bytes plus DF1;
+its actual25 Go-object controls pass on both SDKs, without raising64-MiB bounds.
+
+`379d0d47`/`64e2573f`, integrated as `dc5aff78`/`be6933bf`, activate the existing
+private integer result-slot alias proof for ordinary zero-frame call-free roots.
+A result FP LEA cannot bypass the cached full proof without a vector probe.
+Legal386 X/m64 consumes the shared complete width grammar; scalar GP qword
+fallback remains denied. Nine descriptor negatives genuinely failed; public27
+bad-mode cases already rejected concretely, so no public vulnerability is claimed.
+Agent81-root source/property union passes both SDKs/race; five original Go and
+30 LLVM object axes pass per SDK. Native execution and full386 maps are not claimed.
+Parameter-only source with no result LEA still has a genuine public missing-result
+admission gap. Its unchanged six-child failed overlay is retained and explicitly
+not counted as repaired by private proof or a modified positive fixture.
+
+Parent `be6933bf` fresh171 roots/5,105 children pass Go27/race5.086/21.125s;
+Go20's167/5,094 pass4.969s, no failure/skip/missing/duplicate/unfinished terminal.
+Before/after head and clean tree match. Parent `5f69abb5` also independently
+replays rich SDK12/43 in308.329s, including actual Count/IndexByte objects; it
+predates the later repairs and cannot certify their complete SDK/module/CI scope.
+Root and both CLI Go27 vets plus root Go20 vet pass at `e02b42d9`; tracked
+current-Go formatting passes. An initial whole-directory format attempt included
+ignored historical reports and stayed failed; those evidence inputs were untouched.
+New code still needs its current-head vet, complete source/CI and strict benchmark.
+
 ## Stdlib benchmark: current complete failed receipt
 
 Frozen `6281a98a`: 156/184 files,28 FAIL, zero N/A/unattempted. All original
@@ -347,11 +401,14 @@ Source failures remain retryable, never pass/skip. Later values require readback
 - Parent: fresh SDK composition, source/CI integration and benchmarks. Own the
   single heavy slot explicitly; do not merge or edit a running source snapshot.
 - TLS agent: ordinary bounded integer result aliases, preserving private-only
-  queries, exact range/write/escape/join semantics and no native extent grant.
-- Numeric agent: authentic ordinary void CALL and typed bool tails. A frontend
+  queries, now the independent parameter-only missing-result admission gap;
+  preserve readonly actual I1 inputs without native/input-write authority.
+- Numeric agent: authentic typed bool tails. A frontend
   fallback signature copied from the caller is not an actual callee declaration.
-- Frontend agent: direction-state grammar and result consumer; string memory,
-  dynamic pointer advance and zero-count preserved FLAGS need independent proof.
+- Frontend agent: all eight PCMP explicit/implicit, index/mask, legacy/VEX
+  effects. Generic nonvolatile m128 loads can erase dead faults; paired full-width
+  volatile reads and strict dependencies are being tested, not yet integrated.
+  REP/string memory, pointer advance and zero-count FLAGS remain independent.
 One heavy source/SDK/object owner at a time; small bounded pure controls may overlap.
 Preserve native execution vs QEMU/emulated diagnostics, all original fault effects,
 canonical bool bytes (not arbitrary2/3 truncation) and unknown GP upper bytes.
