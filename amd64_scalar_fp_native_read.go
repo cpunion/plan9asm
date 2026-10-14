@@ -58,6 +58,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 	transfer := func(ordinal int, ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string) bool {
 		state.loweredStaticReads = c.fpScalarData
 		defer func() { state.loweredStaticReads = nil }()
+		if accepted, known := x86ResultSignedIntegerFloatStepWithRead(ins, state, owned, arch, true); known {
+			return accepted // The same typed emitter retains an exact volatile source read.
+		}
 		if customRegisterBool {
 			if accepted, known := x86CustomRegisterBoolCompareExchangeStep(fn, ordinal, ins, state, arch); known {
 				return accepted

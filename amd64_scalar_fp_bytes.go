@@ -149,6 +149,16 @@ func (c *amd64Ctx) validateScalarFPSourceViews() error {
 		}
 	}
 	for _, ins := range c.fpScalarSource.Instrs {
+		if _, known, err := x86SignedIntegerFloatProperties(ins, c.goarch); integerResult && known && err == nil {
+			if err := c.scalarFPResultInitialized(); err != nil {
+				return err
+			}
+		}
+		if _, known, err := x86MXCSRProperties(ins, c.goarch); integerResult && known && err == nil {
+			if err := c.scalarFPResultInitialized(); err != nil {
+				return err
+			}
+		}
 		if _, known, err := amd64PackedStringCompareProperties(ins.Op, ins, c.goarch); integerResult && known && err == nil {
 			if err := c.scalarFPResultInitialized(); err != nil {
 				return err

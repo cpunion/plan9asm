@@ -6,23 +6,18 @@ import (
 )
 
 func (c *amd64Ctx) lowerMXCSR(op Op, ins Instr) (ok bool, terminated bool, err error) {
-	rawOp := strings.ToUpper(string(op))
-	baseOp := rawOp
-	if dot := strings.IndexByte(rawOp, '.'); dot >= 0 {
-		baseOp = rawOp[:dot]
-	}
-	switch baseOp {
-	case "LDMXCSR", "VLDMXCSR", "STMXCSR", "VSTMXCSR":
-		// handled below
-	default:
+	if ins.Op == "" {
+		ins.Op = op
+	} else if !strings.EqualFold(string(ins.Op), string(op)) {
+		if _, known, _ := x86MXCSRProperties(Instr{Op: op}, c.goarch); known {
+			return true, false, fmt.Errorf("MXCSR helper/source identity differs: %s/%s", op, ins.Op)
+		}
 		return false, false, nil
 	}
-	if rawOp != baseOp {
-		return true, false, fmt.Errorf("amd64 %s does not accept instruction suffixes: %q", baseOp, ins.Raw)
+	if _, known, err := x86MXCSRProperties(ins, c.goarch); !known || err != nil {
+		return known, false, err
 	}
-	if len(ins.Args) != 1 || !isAMD64MemoryOperand(ins.Args[0]) {
-		return true, false, fmt.Errorf("amd64 %s expects one memory operand: %q", baseOp, ins.Raw)
-	}
+	baseOp := strings.ToUpper(string(op))
 	slot := c.newTmp()
 	fmt.Fprintf(c.b, "  %%%s = alloca i32\n", slot)
 	switch baseOp {
