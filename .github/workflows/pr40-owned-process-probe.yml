@@ -119,6 +119,12 @@ jobs:
           - lane: assembly-selection
             module: cmd/plan9asmll
             roots:
+              - TestActualAssemblyMemberExactSelection
+              - TestActualAssemblyMemberOriginalAliasLifetime
+              - TestActualAssemblyMemberFinalSymlinkIdentity
+              - TestARM64ABI0TailActualSelectedMemberDirectoryAlias
+              - TestARM64ABI0TailActualSelectedFinalSymlink
+              - TestARM64ABI0TailOriginalAliasPostGuard
               - TestCompileOneARM64ABI0TailActualDeclaration
               - TestCompileOneARM64ABI0TailCompleteAndChunks
               - TestCompileOneARM64ABI0TailSourcePostGuard
