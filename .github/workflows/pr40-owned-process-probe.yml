@@ -98,6 +98,21 @@ jobs:
           go test . -list "^($packed_string_root)$" > _out/native-x86-oracles/packed-string-inventory.log
           grep -Fx "$packed_string_root" _out/native-x86-oracles/packed-string-inventory.log
           roots+="|$packed_string_root"
+          independent_fp_roots='TestCrossLinuxRuntimeMatrixX86InsertExtractIndependentFPFields'
+          independent_fp_roots+='|TestCrossLinuxRuntimeMatrixX86LegacyPSIndependentFPFields'
+          go test . -list "^($independent_fp_roots)$" > _out/native-x86-oracles/independent-fp-inventory.log
+          for root in ${independent_fp_roots//|/ }; do
+            grep -Fx "$root" _out/native-x86-oracles/independent-fp-inventory.log
+          done
+          roots+="|$independent_fp_roots"
+          source_stack_root='TestCrossLinuxRuntimeMatrixX86RawSourceStackNumerical'
+          go test . -list "^($source_stack_root)$" > _out/native-x86-oracles/source-stack-inventory.log
+          grep -Fx "$source_stack_root" _out/native-x86-oracles/source-stack-inventory.log
+          roots+="|$source_stack_root"
+          continuation_root='TestCrossLinuxRuntimeMatrixX86ContinuationWholeCFGOriginalGoAndLLVM'
+          go test . -list "^($continuation_root)$" > _out/native-x86-oracles/continuation-inventory.log
+          grep -Fx "$continuation_root" _out/native-x86-oracles/continuation-inventory.log
+          roots+="|$continuation_root"
           families='MADDTypedOriginalLegacy|PackedNarrowOriginalLegacyOracle|ScalarFPBitViewsOriginalBitsAndCanaries'
           families+='|PureGPUnknownDeadOutputs|SignedIntegerScalarFloatTranslatedFPFields|ScalarCompareFlags'
           families+='|RawReturnSourceAddressNumerical|FloatingCompareOriginalLegacyPredicates|TimestampOriginalAndLLVM'
@@ -105,8 +120,12 @@ jobs:
           families+='|InsertInactiveMemoryStillFaults|PackedUnpackZeroMaskStillFaults|PackedNarrowIndependentE4NF'
           families+='|PackedShiftNativeReadFaults|PackedUnpackMMXNativeMemoryAndFP|PackedZeroMemoryStoreFault'
           families+='|SignedIntegerScalarFloatNativeReadExtentAndPrecision|SignedIntegerScalarFloatNativeLinuxPrecisionSignal'
+          go test . -list "^($roots|TestCrossLinuxRuntimeMatrixX86($families))$" > _out/native-x86-oracles/all-roots.stdout
+          test "$(grep -c '^Test' _out/native-x86-oracles/all-roots.stdout)" = 62
           go test . -run "^($roots|TestCrossLinuxRuntimeMatrixX86($families))$" \
-            -v -count=1 -timeout=8m 2>&1 | tee _out/native-x86-oracles/native.log
+            -json -count=1 -timeout=8m \
+            2> _out/native-x86-oracles/native.stderr | tee _out/native-x86-oracles/native.jsonl
+          node .github/scripts/audit-native-priority.cjs _out/native-x86-oracles > _out/native-x86-oracles/audit.json
       - name: Preserve original and translated observations
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v6
