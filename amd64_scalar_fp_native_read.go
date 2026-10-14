@@ -75,6 +75,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		if accepted, known := x86ResultPackedZeroExtendStep(ins, state, owned, arch, true); known {
 			return accepted
 		}
+		if accepted, known := x86ResultLegacyIntegerNativeReadStep(ins, state, owned, resultOffset, arch); known {
+			return accepted
+		}
 		if accepted, recognized := x86LoweredBlockInsertRead(ins, state, owned, resultOffset, arch); recognized {
 			return accepted
 		}
