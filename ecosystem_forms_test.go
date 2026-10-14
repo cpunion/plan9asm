@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"strings"
 	"testing"
 )
@@ -94,6 +95,10 @@ TEXT lz4(SB),NOSPLIT,$0-0
 func TestTranslateGoBitsScalarForms(t *testing.T) {
 	ir := translateEcosystemScalarForms(t, ArchAMD64, "x86_64-unknown-linux-gnu", "amd64", `
 TEXT bits(SB),NOSPLIT,$0-16
+	MOVQ $0, AX
+	MOVQ $0, BX
+	MOVQ $0, CX
+	MOVQ $0, DX
 	BSFQ x+0(FP), AX
 	BSRQ x+0(FP), BX
 	BSFL x+0(FP), CX
@@ -101,10 +106,31 @@ TEXT bits(SB),NOSPLIT,$0-16
 	MOVQ AX, ret+8(FP)
 	RET
 `)
-	for want, count := range map[string]int{"call i64 @llvm.cttz.i64": 1, "call i64 @llvm.ctlz.i64": 1, "call i32 @llvm.cttz.i32": 1, "call i32 @llvm.ctlz.i32": 1} {
-		if got := strings.Count(ir, want); got != count {
-			t.Fatalf("go-bits %q count = %d, want %d:\n%s", want, got, count, ir)
+	// Zero input observes the original prior destination and native flags.
+	// A poison-producing cttz/ctlz substitution does not establish that contract.
+	for _, instruction := range []string{"bsfq ${3:q}, ${0:q}", "bsrq ${3:q}, ${0:q}", "bsfl ${3:k}, ${0:k}", "bsrl ${3:k}, ${0:k}"} {
+		if got := strings.Count(ir, instruction); got != 1 {
+			t.Fatalf("go-bits native %q count = %d, want 1:\n%s", instruction, got, ir)
 		}
+	}
+}
+
+func TestTranslateGoBitsUnknownPriorResultNeedsContext(t *testing.T) {
+	file, err := Parse(ArchAMD64, `
+TEXT bits(SB),NOSPLIT,$0-16
+	BSFQ x+0(FP), AX
+	BSRQ x+0(FP), BX
+	BSFL x+0(FP), CX
+	BSRL x+0(FP), DX
+	MOVQ AX, ret+8(FP)
+	RET
+`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = Translate(file, ecosystemScalarOptions("x86_64-unknown-linux-gnu", "amd64"))
+	if !errors.Is(err, ErrProbeNeedsContext) {
+		t.Fatal("zero input acquired an initialized bit-scan destination", err)
 	}
 }
 
@@ -190,7 +216,15 @@ func translateEcosystemScalarForms(t *testing.T, arch Arch, triple, goarch, src 
 	if err != nil {
 		t.Fatal(err)
 	}
-	ir, err := Translate(file, Options{
+	ir, err := Translate(file, ecosystemScalarOptions(triple, goarch))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return ir
+}
+
+func ecosystemScalarOptions(triple, goarch string) Options {
+	return Options{
 		TargetTriple: triple,
 		Sigs: map[string]FuncSig{
 			"snappy": {Name: "snappy", Ret: Void},
@@ -208,9 +242,5 @@ func translateEcosystemScalarForms(t *testing.T, arch Arch, triple, goarch, src 
 			"emitLiteral": {Name: "emitLiteral", Args: []LLVMType{"{ ptr, i64, i64 }", "{ ptr, i64, i64 }"}, Ret: I64},
 		},
 		Goarch: goarch,
-	})
-	if err != nil {
-		t.Fatal(err)
 	}
-	return ir
 }
