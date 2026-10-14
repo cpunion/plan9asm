@@ -249,6 +249,30 @@ jobs:
             roots:
               - TestSimpleCLIOriginalSDKMapsScalarRegisterSource
             timeout: 8m
+          - lane: typed-matrix
+            module: '.'
+            roots:
+              - TestX86MXCSRCompleteOriginalGoRows
+              - TestX86MXCSRByteEffectHasNoIndependentMemoryAuthority
+              - TestX86MXCSRFullMemoryWidthAndOperandGrammar
+              - TestX86MXCSRPlainAUTOReturnNeedsReachingBytes
+              - TestX86MXCSRAUTOExtentKeepsCompleteSourceAndBounds
+              - TestX86SignedIntegerFloatResultPreservesSparseMergeBytes
+              - TestX86SignedIntegerFloatUnknownUpperResultThreeAPIs
+              - TestX86SignedIntegerFloatPlainMXCSRReturnRequiresWholeSource
+              - TestX86SignedIntegerFloatPairedNativeReadRetainsExactDeadWidth
+              - TestX86SignedIntegerFloatOriginalFPFixtureWholeThreeAPIs
+              - TestX86MXCSRConversionCompleteFiveTargetOriginalGoAndLLVMObjects
+            timeout: 5m
+          - lane: proof-join
+            module: '.'
+            roots:
+              - TestX86ResultAUTOReplayDoesNotWashUnboundSourceRoles
+              - TestX86FixedLocalFeatureProjectionUsesCompleteSourceOrder
+              - TestGoAMD64FixedLocalResultConsumerExactProofHandoff
+              - TestGoX86ResultAUTOCompleteActualFixedLocalNumericalJoin
+              - TestGoX86ResultAUTONumericalReplayExactOriginalNodeGuards
+            timeout: 5m
           - lane: source
             module: '.'
             roots:

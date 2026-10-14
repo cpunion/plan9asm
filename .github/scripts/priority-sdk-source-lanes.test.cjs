@@ -4,7 +4,7 @@ const test = require('node:test');
 
 const workflow = fs.readFileSync('.github/workflows/pr40-owned-process-probe.yml', 'utf8');
 const sdk = workflow.slice(workflow.indexOf('\n  sdk-priority:'), workflow.indexOf('\n  ownership:'));
-const sdkLaneCount = 15;
+const sdkLaneCount = 17;
 
 test('SDK priority runs each previous simple root in its own bounded lane', () => {
   const roots = [
@@ -125,6 +125,42 @@ test('Complete maps target owners are disjoint and retain the original budget', 
   }
   assert.doesNotMatch(sdk, /- TestCompileOneX86SDKOriginalMapsLiteralMinimumSource\n/);
   assert.equal(sdk.split('- TestMapsLiteralMinimumTargetsHaveIndependentCompleteOwners\n').length - 1, 1);
+});
+
+test('Typed MXCSR conversions and authenticated proof joins have separate bounded lanes', () => {
+  const required = {
+    'typed-matrix': [
+      'TestX86MXCSRCompleteOriginalGoRows',
+      'TestX86MXCSRByteEffectHasNoIndependentMemoryAuthority',
+      'TestX86MXCSRFullMemoryWidthAndOperandGrammar',
+      'TestX86MXCSRPlainAUTOReturnNeedsReachingBytes',
+      'TestX86MXCSRAUTOExtentKeepsCompleteSourceAndBounds',
+      'TestX86SignedIntegerFloatResultPreservesSparseMergeBytes',
+      'TestX86SignedIntegerFloatUnknownUpperResultThreeAPIs',
+      'TestX86SignedIntegerFloatPlainMXCSRReturnRequiresWholeSource',
+      'TestX86SignedIntegerFloatPairedNativeReadRetainsExactDeadWidth',
+      'TestX86SignedIntegerFloatOriginalFPFixtureWholeThreeAPIs',
+      'TestX86MXCSRConversionCompleteFiveTargetOriginalGoAndLLVMObjects',
+    ],
+    'proof-join': [
+      'TestX86ResultAUTOReplayDoesNotWashUnboundSourceRoles',
+      'TestX86FixedLocalFeatureProjectionUsesCompleteSourceOrder',
+      'TestGoAMD64FixedLocalResultConsumerExactProofHandoff',
+      'TestGoX86ResultAUTOCompleteActualFixedLocalNumericalJoin',
+      'TestGoX86ResultAUTONumericalReplayExactOriginalNodeGuards',
+    ],
+  };
+  for (const [lane, roots] of Object.entries(required)) {
+    const start = sdk.indexOf(`- lane: ${lane}\n`);
+    assert.notEqual(start, -1, lane);
+    const end = sdk.indexOf('- lane:', start + 1);
+    const block = sdk.slice(start, end === -1 ? sdk.length : end);
+    assert.match(block, /module: '\.'/);
+    assert.match(block, /timeout: 5m/);
+    const actual = [...block.matchAll(/- (Test\w+)\n/g)].map(match => match[1]);
+    assert.deepEqual(actual.sort(), roots.sort());
+    for (const root of roots) assert.equal(sdk.split(`- ${root}\n`).length - 1, 1, root);
+  }
 });
 
 test('Guarded bit-scan and typed predicate rule classes are exact source priorities', () => {
