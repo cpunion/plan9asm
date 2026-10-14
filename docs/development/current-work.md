@@ -9,15 +9,22 @@ Let active frozen CI runs finish before publishing another batch.
 
 Fork [38502949565](https://github.com/cpunion/plan9asm/actions/runs/38502949565)
 tests frozen `e544c001` (contribution `94bd05f1`, plus fork-only priorities).
-All twelve priority jobs pass, and the complete Windows modules are running;
-do not publish another batch until the run finishes naturally. Independent
+The run finishes naturally with all 45 jobs successful. All twelve priority
+jobs and all three complete Windows modules/coverage aggregates pass. Independent
 raw inventories certify all twelve selected-member/previous-failure roots
 natively on Windows in 25.253 seconds, with zero skips or missing/duplicate
 terminals. That artifact's downloaded ZIP SHA matches GitHub's digest and
 workflow-run source SHA. The split LLVM five-root lane passes in 46.259 seconds;
 its original CRC32 root independently passes in 151.151 seconds, retaining
 the original five-minute budgets. All 48 selected native Linux x86 roots pass
-in 59.876 seconds. These priorities do not certify complete modules or stdlib.
+in 59.876 seconds. Complete main-module readback has 5,981 roots: 5,718 passes
+and 263 explicit platform skips, with all 21 other packages passed. Simple CLI
+passes all 31 roots. Independent raw LLVM CLI partitions agree with its fresh
+274-root inventory: every root passes, zero incomplete/duplicate/skipped roots;
+subtests have 1,898 passes and one native ARM64-only skip. That skip and the
+main platform skips are not executed semantics. All raw partition source heads
+remain `e544c001` before/after. This certifies the frozen fork's selected native
+and complete Windows gates, not the later local commits or stdlib benchmark.
 
 `7be7d50a` separately reuses the selected-member observer for x86 caller-source
 bindings. Each returned binding retains its original request lifetime; the
