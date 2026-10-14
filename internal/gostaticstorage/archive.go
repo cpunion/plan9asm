@@ -34,7 +34,11 @@ type dataRecord struct {
 }
 
 const archiveLimit = 16 << 20
-const symbolLimit = 1 << 16
+
+// ObjectSymbolInventoryLimit is the existing complete object-symbol bound.
+// Frontend cost preflights may reuse it; it creates no observation or authority.
+const ObjectSymbolInventoryLimit = 1 << 16
+const symbolLimit = ObjectSymbolInventoryLimit
 
 func contextError(message string) error { return fmt.Errorf("%w: %s", ErrContext, message) }
 

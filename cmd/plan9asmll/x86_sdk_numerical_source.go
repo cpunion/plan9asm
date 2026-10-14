@@ -20,7 +20,7 @@ import (
 // This adapter owns one complete-file observation. It never reconstructs a
 // permission from the diagnostic readback and never lends it to file chunks.
 type x86SDKNumericalCLISource struct {
-	numerical *plan9asm.GoX86NumericalReadSource
+	frontend  *sdkfrontend.Source
 	selected  *x86CallerPackageSelection
 	pkg       *packages.Package
 	goPackage plan9asm.GoPackage
@@ -85,7 +85,7 @@ func (source *x86SDKNumericalCLISource) verify(ctx context.Context) error {
 			return fmt.Errorf("%w: SDK numerical compiled Go source changed", plan9asm.ErrProbeNeedsContext)
 		}
 	}
-	return source.numerical.Verify(ctx)
+	return source.frontend.Verify(ctx)
 }
 
 // The symbol query chooses whether to pay for an independent observer. It is
@@ -199,7 +199,7 @@ func captureX86SDKNumericalSource(pkg *packages.Package, file *plan9asm.File, as
 	if err != nil {
 		return nil, nil, err
 	}
-	source.numerical = observed.Numerical
+	source.frontend = observed
 	source.cleanup = append(source.cleanup, observed.Close)
 	if err := source.verify(ctx); err != nil {
 		return nil, nil, err

@@ -48,6 +48,10 @@ func proveX86SDKLiteralAccesses(fn Func, sig FuncSig, arch string, literals map[
 }
 
 func proveX86SDKLiteralAccessesAtMinimum(fn Func, sig FuncSig, arch string, literals map[string]int64, minima map[string]uint32) ([]x86SDKLiteralAccess, error) {
+	return proveX86SDKLiteralAccessesAtMinimumRequest(fn, sig, arch, literals, minima, false)
+}
+
+func proveX86SDKLiteralAccessesAtMinimumRequest(fn Func, sig FuncSig, arch string, literals map[string]int64, minima map[string]uint32, requestOnly bool) ([]x86SDKLiteralAccess, error) {
 	fail := func(reason string) ([]x86SDKLiteralAccess, error) {
 		return nil, numericalSBContext("private literal source proof: %s", reason)
 	}
@@ -257,6 +261,20 @@ func proveX86SDKLiteralAccessesAtMinimum(fn Func, sig FuncSig, arch string, lite
 				if state.comparison == root {
 					state.compared = false
 				}
+				for _, target := range edges[pc] {
+					if err := walk(target, state); err != nil {
+						return err
+					}
+				}
+				return nil
+			}
+		}
+		if requestOnly {
+			known, err := x86SDKLiteralAlignmentRequestStep(ins, &state, arch)
+			if err != nil {
+				return err
+			}
+			if known {
 				for _, target := range edges[pc] {
 					if err := walk(target, state); err != nil {
 						return err

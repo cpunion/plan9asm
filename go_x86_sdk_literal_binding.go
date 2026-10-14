@@ -80,6 +80,7 @@ func certifiedSDKLiteralAccess(ins Instr, arch string) (x86SDKLiteralAccess, boo
 	cert := ins.x86SDKLiteral
 	if cert == nil || cert.binding == nil || cert.binding.originalBinding != cert.binding ||
 		cert.binding.source == nil || cert.binding.source.identity != cert.binding.source ||
+		cert.binding.source.revoked.Load() ||
 		cert.binding.source.role != numericalSBSDKSource || cert.binding.source.literals == nil ||
 		arch != cert.binding.options.Goarch || cert.access < 0 || cert.access >= len(cert.binding.literalAccesses) {
 		return x86SDKLiteralAccess{}, false

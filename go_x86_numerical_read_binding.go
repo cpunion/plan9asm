@@ -524,7 +524,7 @@ func joinNumericalReadCertificates(file *File, options Options) error {
 
 func numericalCertifiedRead(ins Instr, arch string) (numericalSBReadFact, x86NumericalSBReadForm, bool) {
 	cert := ins.x86NumericalRead
-	if cert == nil || cert.binding == nil || cert.binding.source == nil || cert.read < 0 || cert.read >= len(cert.binding.reads) || arch != cert.binding.options.Goarch {
+	if cert == nil || cert.binding == nil || cert.binding.source == nil || cert.binding.source.revoked.Load() || cert.read < 0 || cert.read >= len(cert.binding.reads) || arch != cert.binding.options.Goarch {
 		return numericalSBReadFact{}, x86NumericalSBReadForm{}, false
 	}
 	read := cert.binding.reads[cert.read]
@@ -654,7 +654,7 @@ func numericalGoAssemblyInput(binding *GoX86NumericalReadBinding, input []byte) 
 	name := filepath.Join(source.request.Directory, source.request.AssemblyFile)
 	original, retained := source.native.Sources[name]
 	expected, selected := source.guard.inputs[name]
-	if !source.ready || source.identity != source || !retained || !selected ||
+	if !source.ready || source.revoked.Load() || source.identity != source || !retained || !selected ||
 		sha256.Sum256(original) != expected || !bytes.Equal(input, original) {
 		source.ready = false
 		return "", numericalSBContext("Go wrapper original selected ASM bytes changed")

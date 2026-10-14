@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/xgo-dev/plan9asm"
 	"github.com/xgo-dev/plan9asm/internal/gostaticstorage"
@@ -16,20 +17,18 @@ import (
 // Source owns the independently captured whole-file numerical/readonly join.
 // Parsed CPP readback supplies no permission without its live numerical binder.
 type Source struct {
-	Numerical *plan9asm.GoX86NumericalReadSource
-	cleanup   []func() error
+	Numerical                          *plan9asm.GoX86NumericalReadSource
+	cleanup                            []func() error
+	mu                                 sync.Mutex
+	identity                           *Source
+	context                            context.Context
+	originalNumerical                  *plan9asm.GoX86NumericalReadSource
+	literalOwner, originalLiteralOwner *plan9asm.GoX86SDKReadonlyLiteralDataOwner
+	minimum, originalMinimum           *plan9asm.GoX86SDKLiteralAlignment
+	minimumAttempted                   bool
+	minimumError                       error
+	active, closePending, closed       bool
 }
-
-func (source *Source) Close() error {
-	var result error
-	for i := len(source.cleanup) - 1; i >= 0; i-- {
-		result = errors.Join(result, source.cleanup[i]())
-	}
-	source.cleanup = nil
-	return result
-}
-
-func (source *Source) Verify(ctx context.Context) error { return source.Numerical.Verify(ctx) }
 
 func Resolve(packagePath, symbol string) string {
 	// The selector chooses a source entry role; LLVM's logical symbol keeps
@@ -87,7 +86,8 @@ func Capture(ctx context.Context, request CaptureRequest, file *plan9asm.File) (
 	if err != nil {
 		return nil, nil, err
 	}
-	source := &Source{cleanup: []func() error{close}}
+	source := &Source{cleanup: []func() error{close}, context: ctx}
+	source.identity = source
 	defer func() {
 		if result != nil {
 			result = errors.Join(result, source.Close())
@@ -112,12 +112,14 @@ func Capture(ctx context.Context, request CaptureRequest, file *plan9asm.File) (
 		return nil, nil, err
 	}
 	source.cleanup = append(source.cleanup, literal.Close)
+	source.literalOwner, source.originalLiteralOwner = literal, literal
 	numerical.ReadonlyLiterals = literal
 	source.Numerical, err = plan9asm.CaptureGoX86SDKNumericalReadSource(ctx, numerical)
 	if err != nil {
 		return nil, nil, err
 	}
 	source.cleanup = append(source.cleanup, source.Numerical.Close)
+	source.originalNumerical = source.Numerical
 	raw, err := source.Numerical.Readback(ctx)
 	if err != nil {
 		return nil, nil, err

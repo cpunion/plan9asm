@@ -873,7 +873,7 @@ func compileOneAttempt(pkg *packages.Package, arch plan9asm.Arch, goos, goarch, 
 		}()
 	}
 	if numericalSource != nil {
-		options, err := numericalSource.numerical.BindNumericalReads(ccfg.Context, numericalSource.goPackage, file,
+		options, err := numericalSource.bindNumericalReads(ccfg.Context, file,
 			compileTranslationOptions(triple, goarch, annotate, ccfg, resolve, sigs))
 		if err != nil {
 			return fmt.Errorf("bind actual SDK numerical source: %w", err)
