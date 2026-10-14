@@ -216,6 +216,13 @@ func amd64YmbEffectiveRegister(r Reg, bits int) Reg {
 }
 
 func (c *amd64Ctx) lowerArith(op Op, ins Instr) (ok bool, terminated bool, err error) {
+	bitScanArch := c.goarch
+	if bitScanArch == "" {
+		bitScanArch = "amd64" // The existing direct-emitter default, not a source-mode guess.
+	}
+	if _, known, err := x86ScalarBitScanProperties(op, ins, bitScanArch); known && err != nil {
+		return true, false, err
+	}
 	if ok, terminated, err := c.lowerX86CPUQuery(op, ins); ok {
 		return ok, terminated, err
 	}

@@ -143,6 +143,11 @@ func (c *amd64Ctx) validateScalarFPSourceViews() error {
 		}
 	}
 	for _, ins := range c.fpScalarSource.Instrs {
+		if _, known, err := x86ScalarBitScanProperties(ins.Op, ins, c.goarch); integerResult && known && err == nil {
+			if err := c.scalarFPResultInitialized(); err != nil {
+				return err
+			}
+		}
 		if form, known, err := x86GPSIMDTransferProperties(ins, c.goarch); integerResult && known && err == nil {
 			staticStore := form.memoryWrite && x86ScalarFPStaticSymbolMemory(ins.Args[form.memory])
 			ordinaryRegister := form.memory < 0 && !form.mmx && !form.spec.rawOnly &&

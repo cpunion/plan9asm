@@ -153,6 +153,9 @@ func checkX86ResultSourceFlow(fn Func, initial x86ResultState, owned []bool, res
 	transfer x86ResultSourceTransfer, checkReturn func(x86ResultState, int) error) error {
 	originalTransfer := transfer
 	transfer = func(ordinal int, ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string) bool {
+		if !isAMD64ConditionalBranch(ins.Op) {
+			state.bitScanPending = x86ResultBitScanPending{}
+		}
 		before := state.callerAddressGP
 		if !x86DirectTailResultAddressTransfer(ins, state, owned, resultOffset, arch, originalTransfer, ordinal) {
 			return false
@@ -196,7 +199,7 @@ func checkX86ResultSourceFlow(fn Func, initial x86ResultState, owned []bool, res
 	// layout metadata, not a state payload copied at each CFG successor.
 	// AUTO states do not obtain an independent frame or iteration budget.
 	byteState := len(initial.fp) + len(initial.auto) + len(initial.gp) + len(initial.canonicalGP) +
-		8*len(initial.xmm) + len(initial.masks) + 1 + len(initial.pointerGP) + len(initial.callerAddressGP) + 1
+		8*len(initial.xmm) + len(initial.masks) + 1 + len(initial.pointerGP) + len(initial.callerAddressGP) + 1 + 2
 	if len(initial.resultAddressSlots) != 0 {
 		byteState += len(initial.resultAddressGP)*25 + 1
 	}
@@ -316,15 +319,16 @@ func checkX86ResultSourceFlow(fn Func, initial x86ResultState, owned []bool, res
 		if !transfer(ordinals[pc], ins, &state, owned, resultOffset, goarch) {
 			return fail(fmt.Sprintf("unknown effect or undefined input at instruction %d: %s", pc, ins.Raw))
 		}
-		for _, target := range edges[pc] {
+		for edge, target := range edges[pc] {
+			nextState := x86ResultBitScanEdge(state, ins, edge)
 			if previous, visited := states[target]; visited {
-				merged := previous.intersect(state)
+				merged := previous.intersect(nextState)
 				if reflect.DeepEqual(previous, merged) {
 					continue
 				}
 				states[target] = merged
 			} else {
-				states[target] = state.clone()
+				states[target] = nextState.clone()
 			}
 			queue = append(queue, target)
 		}
@@ -361,9 +365,10 @@ type x86ResultState struct {
 	// The disjoint upper 48 byte bits share the same physical X/Y/Z bank.
 	// Existing low-X effects preserve these bits unless their typed encoding
 	// explicitly clears the upper aliases.
-	vectorUpper [32]uint64
-	masks       [8]bool // used only by the private scalar bit-view transfer
-	flags       uint8
+	vectorUpper    [32]uint64
+	masks          [8]bool // used only by the private scalar bit-view transfer
+	flags          uint8
+	bitScanPending x86ResultBitScanPending
 
 	// Incoming pointer identities are not numerical register bytes. This is
 	// only an initialization observation, never a pointee/backing permission.
@@ -419,6 +424,9 @@ func (state x86ResultState) intersect(other x86ResultState) x86ResultState {
 		merged.masks[index] = merged.masks[index] && other.masks[index]
 	}
 	merged.flags &= other.flags
+	if merged.bitScanPending != other.bitScanPending {
+		merged.bitScanPending = x86ResultBitScanPending{}
+	}
 	merged.resultAddressWritten = state.resultAddressWritten || other.resultAddressWritten
 	return merged
 }
@@ -528,6 +536,9 @@ func x86ResultStore(arg Operand, width int64, state *x86ResultState, owned []boo
 }
 
 func x86ResultTransfer(ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string) bool {
+	if accepted, known := x86ResultBitScanStep(ins, state, owned, arch); known {
+		return accepted
+	}
 	if accepted, known := x86ResultNumericalReadStep(ins, state, owned, resultOffset, arch); known {
 		return accepted
 	}
