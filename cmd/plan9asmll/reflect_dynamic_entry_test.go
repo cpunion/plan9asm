@@ -177,14 +177,9 @@ func reflectDynamicStubGoObject(t *testing.T, pkg *types.Package, source, goarch
 		}
 		fmt.Fprintf(&importcfg, "packagefile %s=%s\n", selected.ImportPath, selected.Export)
 		if selected.ImportPath == "reflect" {
-			selectedSource := false
-			for _, name := range selected.SFiles {
-				if filepath.Join(selected.Dir, name) == source {
-					selectedSource = true
-				}
-			}
-			if !selectedSource {
-				t.Fatalf("actual Go linux/%s did not select %s", goarch, source)
+			selectedSource, err := reflectDynamicStubAssemblySelected(selected.Dir, selected.SFiles, source)
+			if err != nil || !selectedSource {
+				t.Fatalf("actual Go linux/%s did not select %s: %v", goarch, source, err)
 			}
 			for _, name := range selected.GoFiles {
 				files = append(files, filepath.Join(selected.Dir, name))
