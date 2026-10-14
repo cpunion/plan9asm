@@ -250,6 +250,34 @@ test('ABI0 mode32 bool must execute its sealed native owner', () => {
   assert.equal((sdk.match(/- lane:/g) || []).length, sdkLaneCount);
 });
 
+test('Packed string result effects retain their independent native AVX owner', () => {
+  const native = workflow.slice(workflow.indexOf('\n  native-x86-oracles:'), workflow.indexOf('\n  complete-windows:'));
+  const root = 'TestCrossLinuxRuntimeMatrixX86PackedStringImplicitVectorNativeAVX';
+  assert.ok(native.includes(`packed_string_root='${root}'`));
+  assert.ok(native.includes('go test . -list "^($packed_string_root)$" > _out/native-x86-oracles/packed-string-inventory.log'));
+  assert.ok(native.includes('grep -Fx "$packed_string_root" _out/native-x86-oracles/packed-string-inventory.log'));
+  assert.ok(native.includes('roots+="|$packed_string_root"'));
+  assert.match(native, /-timeout=8m/);
+  assert.doesNotMatch(native, /qemu|overlay|continue-on-error|max-parallel/);
+});
+
+test('Typed bool terminals and distinct custom register proofs are mandatory source priorities', () => {
+  const source = sdk.slice(sdk.indexOf('- lane: source\n'), sdk.indexOf('- lane: frame-context\n'));
+  for (const root of [
+    'TestX86ABI0Mode32CanonicalBoolTypedTailThreeAPIs',
+    'TestX86ABI0Mode32CanonicalBoolTypedTailSourceReplayAndLayouts',
+    'TestX86ABI0Mode32CanonicalBoolTypedTailCannotBorrowGoCaller',
+    'TestX86ABI0Mode32CanonicalBoolTypedTailCacheAndKeepSource',
+    'TestX86ABI0Mode32CanonicalBoolTypedTailFinalCallbacks',
+    'TestX86Mode32CustomRegisterBoolCanonicalThreeAPIs',
+    'TestX86Mode32CustomRegisterBoolCompareExchangeEffects',
+    'TestX86Mode32CustomRegisterBoolRoleAndByteViews',
+    'TestX86Mode32CustomRegisterBoolPairedEffectHasNoNewAuthority',
+  ]) assert.equal(source.split(`- ${root}\n`).length - 1, 1, root);
+  assert.match(source, /timeout: 5m/);
+  assert.equal((sdk.match(/- lane:/g) || []).length, sdkLaneCount);
+});
+
 test('Sparse GP SIMD must execute both actual native architectures', () => {
   const native = workflow.slice(workflow.indexOf('\n  native-x86-oracles:'), workflow.indexOf('\n  complete-windows:'));
   for (const root of [

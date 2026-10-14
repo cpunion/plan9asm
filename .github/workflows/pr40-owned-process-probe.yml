@@ -94,6 +94,10 @@ jobs:
           go test . -list "^($bool_386_root)$" > _out/native-x86-oracles/bool-386-inventory.log
           grep -Fx "$bool_386_root" _out/native-x86-oracles/bool-386-inventory.log
           roots+="|$bool_386_root"
+          packed_string_root='TestCrossLinuxRuntimeMatrixX86PackedStringImplicitVectorNativeAVX'
+          go test . -list "^($packed_string_root)$" > _out/native-x86-oracles/packed-string-inventory.log
+          grep -Fx "$packed_string_root" _out/native-x86-oracles/packed-string-inventory.log
+          roots+="|$packed_string_root"
           families='MADDTypedOriginalLegacy|PackedNarrowOriginalLegacyOracle|ScalarFPBitViewsOriginalBitsAndCanaries'
           families+='|PureGPUnknownDeadOutputs|SignedIntegerScalarFloatTranslatedFPFields|ScalarCompareFlags'
           families+='|RawReturnSourceAddressNumerical|FloatingCompareOriginalLegacyPredicates|TimestampOriginalAndLLVM'
@@ -299,6 +303,15 @@ jobs:
               - TestX86ABI0Mode32CanonicalBoolCallDerivedDomainsThreeAPIs
               - TestX86ABI0Mode32CanonicalBoolExistingWholeFrameThreeAPIs
               - TestX86ABI0Mode32CanonicalBoolTypedInputAndPrivateAlias
+              - TestX86ABI0Mode32CanonicalBoolTypedTailThreeAPIs
+              - TestX86ABI0Mode32CanonicalBoolTypedTailSourceReplayAndLayouts
+              - TestX86ABI0Mode32CanonicalBoolTypedTailCannotBorrowGoCaller
+              - TestX86ABI0Mode32CanonicalBoolTypedTailCacheAndKeepSource
+              - TestX86ABI0Mode32CanonicalBoolTypedTailFinalCallbacks
+              - TestX86Mode32CustomRegisterBoolCanonicalThreeAPIs
+              - TestX86Mode32CustomRegisterBoolCompareExchangeEffects
+              - TestX86Mode32CustomRegisterBoolRoleAndByteViews
+              - TestX86Mode32CustomRegisterBoolPairedEffectHasNoNewAuthority
               - TestX86ABI0Mode32CanonicalBoolParameterRawBytesRemainPhysical
               - TestX86ABI0Mode32CanonicalBoolAliasCloneJoinAndBudget
               - TestX86ABI0Mode32CanonicalBoolByteResult
