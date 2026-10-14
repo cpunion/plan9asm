@@ -205,6 +205,7 @@ test('Complete bit-scan native axes and their authority controls are mandatory',
   for (const root of [
     'TestX86ScalarBitScanExecutionOracleDoesNotInventZeroOrFlags',
     'TestX86ScalarBitScanExecutionOracleCompleteWidthsAliasesAndRecords',
+    'TestX86ScalarBitScanExecutionCompleteOriginalGoLinksAndLLVMObjects',
     'TestX86ScalarBitScanExecutionPhysicalStatusShimKeepsPublicRoles',
     'TestX86ScalarBitScanExecutionStatusObservationDoesNotAuthorizePublicFlags',
     'TestX86ScalarBitScanRuntimeNativeOwnersCannotEmulateOrSkip',

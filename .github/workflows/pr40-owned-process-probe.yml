@@ -300,6 +300,7 @@ jobs:
               - TestX86ABI0Mode32CanonicalFactDomainIsIndependent
               - TestX86ScalarBitScanExecutionOracleDoesNotInventZeroOrFlags
               - TestX86ScalarBitScanExecutionOracleCompleteWidthsAliasesAndRecords
+              - TestX86ScalarBitScanExecutionCompleteOriginalGoLinksAndLLVMObjects
               - TestX86ScalarBitScanExecutionPhysicalStatusShimKeepsPublicRoles
               - TestX86ScalarBitScanExecutionStatusObservationDoesNotAuthorizePublicFlags
               - TestX86ScalarBitScanRuntimeNativeOwnersCannotEmulateOrSkip
