@@ -176,7 +176,16 @@ type x86ResultFlowBudget struct {
 func checkX86ResultSourceFlow(fn Func, initial x86ResultState, owned []bool, resultOffset int64, goarch string,
 	transfer x86ResultSourceTransfer, checkReturn func(x86ResultState, int) error) error {
 	originalTransfer := transfer
+	for _, ins := range fn.Instrs {
+		if _, known, _ := x86StackWidthProperties(ins, goarch); known {
+			initial.valueStack = new(x86ResultValueStack)
+			break
+		}
+	}
 	transfer = func(ordinal int, ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string) bool {
+		if !x86ResultValueStackContinuation(ins, state, arch) {
+			return false
+		}
 		if !isAMD64ConditionalBranch(ins.Op) {
 			state.bitScanPending = x86ResultBitScanPending{}
 		}
@@ -186,10 +195,16 @@ func checkX86ResultSourceFlow(fn Func, initial x86ResultState, owned []bool, res
 		if !x86DirectTailResultAddressTransfer(ins, state, owned, resultOffset, arch, originalTransfer, ordinal) {
 			return false
 		}
+		if state.valueStack != nil && (ins.Op == OpCALL || !x86ResultNamedPredicateInstruction(ins)) {
+			state.valueStack.id = false
+		}
 		state.callerAddressGP = x86ResultCallerAddressesAfter(ins, before, state.callerAddressFP, arch)
 		state.callerAddressOrigin = x86ResultCallerOriginsAfter(ins, origins, state.callerAddressGP, state.callerAddressFP, arch)
 		state.predicate = x86ResultPredicateAfter(ins, predicate, arch)
-		state.direction = x86ResultDirectionAfter(ins, state.direction)
+		spec, stack, _ := x86StackWidthProperties(ins, arch)
+		if state.valueStack == nil || !stack || spec.mode != amd64StackPopFlags {
+			state.direction = x86ResultDirectionAfter(ins, state.direction)
+		}
 		return true
 	}
 	fail := func(reason string) error {
@@ -237,10 +252,13 @@ func checkX86ResultSourceFlow(fn Func, initial x86ResultState, owned []bool, res
 	if initial.boolFrameGP != nil {
 		byteState += len(initial.boolFrameGP) * 25
 	}
+	if initial.valueStack != nil {
+		byteState += x86ResultValueStackLimit(goarch) + 4 // bit masks, two-byte depth, invalid join and separate ID.
+	}
 	const byteWorkLimit = 64 << 20
 	byteWork := len(instructions) * byteState
 	boundedWork := len(initial.auto) != 0 || len(initial.canonicalFP) != 0 ||
-		len(initial.resultAddressSlots) != 0 || fn.x86DirectTailRoot != nil
+		len(initial.resultAddressSlots) != 0 || fn.x86DirectTailRoot != nil || initial.valueStack != nil
 	if boundedWork && byteWork > byteWorkLimit/8 {
 		return fail("combined FP/AUTO source-CFG byte budget exhausted")
 	}
@@ -341,6 +359,9 @@ func checkX86ResultSourceFlow(fn Func, initial x86ResultState, owned []bool, res
 		state := states[pc].clone()
 		ins := instructions[pc]
 		if fn.x86DirectTailRoot != nil && fn.x86DirectTailRoot.externalTails[pc] {
+			if state.valueStack != nil && (state.valueStack.invalid || len(state.valueStack.bytes) != 0) {
+				return fail("external terminal cannot consume the private value stack")
+			}
 			if state.resultAddressWritten {
 				return fail("external terminal could observe a prior logical result write")
 			}
@@ -378,6 +399,9 @@ func checkX86ResultSourceFlow(fn Func, initial x86ResultState, owned []bool, res
 		if instructions[pc].Op != OpRET {
 			continue
 		}
+		if state.valueStack != nil && (state.valueStack.invalid || len(state.valueStack.bytes) != 0) {
+			return fail("private value stack is not balanced at RET")
+		}
 		if err := checkReturn(state, pc); err != nil {
 			return err
 		}
@@ -414,7 +438,8 @@ type x86ResultState struct {
 	vectorUpper    [32]uint64
 	masks          [8]bool // used only by the private scalar bit-view transfer
 	flags          uint8
-	direction      x86ResultDirection // DF only; no numerical/status/pointer permission.
+	direction      x86ResultDirection   // DF only; no numerical/status/pointer permission.
+	valueStack     *x86ResultValueStack // Private numerical storage; never physical SP or an entry slot.
 	bitScanPending x86ResultBitScanPending
 	predicate      x86ResultPredicate
 
@@ -450,6 +475,11 @@ func (state x86ResultState) clone() x86ResultState {
 		state.boolFrameGP = &aliases
 	}
 	state.auto = append([]bool(nil), state.auto...)
+	if state.valueStack != nil {
+		stack := *state.valueStack
+		stack.bytes = append([]uint8(nil), stack.bytes...)
+		state.valueStack = &stack
+	}
 	state.loweredStaticReads = nil
 	state.literalMemoryOperand, state.literalMemoryBytes = nil, 0
 	return state
@@ -498,6 +528,17 @@ func (state x86ResultState) intersect(other x86ResultState) x86ResultState {
 	}
 	merged.flags &= other.flags
 	merged.direction = state.direction.intersect(other.direction)
+	if merged.valueStack != nil {
+		if other.valueStack == nil || merged.valueStack.invalid || other.valueStack.invalid ||
+			len(merged.valueStack.bytes) != len(other.valueStack.bytes) {
+			merged.valueStack.bytes, merged.valueStack.invalid = nil, true
+		} else {
+			for index := range merged.valueStack.bytes {
+				merged.valueStack.bytes[index] &= other.valueStack.bytes[index]
+			}
+			merged.valueStack.id = merged.valueStack.id && other.valueStack.id
+		}
+	}
 	if merged.bitScanPending != other.bitScanPending {
 		merged.bitScanPending = x86ResultBitScanPending{}
 	}
@@ -613,6 +654,9 @@ func x86ResultStore(arg Operand, width int64, state *x86ResultState, owned []boo
 }
 
 func x86ResultTransfer(ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string) bool {
+	if accepted, known := x86ResultValueStackStep(ins, state, owned, resultOffset, arch); known {
+		return accepted
+	}
 	if accepted, known := x86ResultSignedIntegerFloatStep(ins, state, owned, arch); known {
 		return accepted
 	}
