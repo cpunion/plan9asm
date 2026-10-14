@@ -223,6 +223,7 @@ func TestX86PackedStringFaultCompleteFiveTargetOriginalGoAndLLVMObjects(t *testi
 }
 
 func x86PackedStringFaultNativePolicy(source []byte) error {
+	source = normalizeNativeOwnerPolicySource(source)
 	if !strings.HasPrefix(string(source), "//go:build linux && amd64\n") {
 		return fmt.Errorf("packed-string faults need the required native Linux/AMD64 owner")
 	}
@@ -294,15 +295,10 @@ func x86PackedStringFaultNativePolicy(source []byte) error {
 	return nil
 }
 
-func TestX86PackedStringFaultNativePolicyRejectsMutation(t *testing.T) {
-	source, err := os.ReadFile("amd64_packed_string_fault_linux_amd64_test.go")
-	if err != nil {
-		t.Fatal(err)
-	}
-	text := string(source)
+func x86PackedStringFaultNativeMutations(text string) map[string]string {
 	const run = "\tx86PackedStringRunMemoryFaults(t, execution, true)"
 	const gate = "\tx87IA32RequireNativeHost(t)"
-	for name, mutation := range map[string]string{
+	return map[string]string{
 		"missing after":   strings.Replace(text, run+"\n"+gate, run, 1),
 		"both before":     strings.Replace(text, run+"\n"+gate, gate+"\n"+run, 1),
 		"conditional run": strings.Replace(text, run, "\tif false {\n"+run+"\n\t}", 1),
@@ -312,7 +308,16 @@ func TestX86PackedStringFaultNativePolicyRejectsMutation(t *testing.T) {
 		"legacy only":     strings.Replace(text, run, strings.Replace(run, "true", "false", 1), 1),
 		"wrong host":      strings.Replace(text, "linux && amd64", "darwin && amd64", 1),
 		"missing root":    strings.Replace(text, "TestCrossLinuxRuntimeMatrixX86PackedStringOriginalNativeMemoryFaults", "NoNativeOwner", 1),
-	} {
+	}
+}
+
+func TestX86PackedStringFaultNativePolicyRejectsMutation(t *testing.T) {
+	source, err := os.ReadFile("amd64_packed_string_fault_linux_amd64_test.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(normalizeNativeOwnerPolicySource(source))
+	for name, mutation := range x86PackedStringFaultNativeMutations(text) {
 		t.Run(name, func(t *testing.T) {
 			if mutation == text || x86PackedStringFaultNativePolicy([]byte(mutation)) == nil {
 				t.Fatal("native lifecycle mutation not rejected")
