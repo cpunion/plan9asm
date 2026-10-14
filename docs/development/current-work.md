@@ -1,6 +1,6 @@
 # Current work: PR 40 checkpoint
 
-Checkpoint: 2026-10-14 16:59 UTC. Contribution source: `e7328983`.
+Checkpoint: 2026-10-14 17:20 UTC. Contribution source: `c1d14f81`.
 This is a handoff, not a ledger or a claim that current-head CI/stdlib passes.
 
 ## Scope and authority
@@ -33,6 +33,33 @@ Do not edit the primary or probe while their frozen jobs run.
 | `plan9asm-wt-pr40-simple-sdk-bindings-20261013` | `codex/pr40-sdk-storage-snapshot-20261013`; PCMP integrated; priority complete MXCSR and signed-conversion byte effects |
 
 ## Latest completed failed fork run
+
+Next frozen diagnostic [38605615421](https://github.com/cpunion/plan9asm/actions/runs/38605615421)
+started 17:19:01 UTC on allowed fork `732c8c15ac7e478f134bc963449ab6b55e2aef78`,
+contribution source `c1d14f81`. It contains this complete repair batch and
+seventeen independent SDK lanes, unchanged budgets/source123/native58 owners.
+Current CI/native/complete Windows outcomes are pending, not green.
+Let the run finish naturally; do not push another snapshot over it.
+
+`00033d24`, integrated as `c1d14f81`, authenticates only NUM metadata removed
+from exact source replay and revalidates the existing complete fixed-local
+source/Sig/access/result proof. Original declarations and exact inferred
+renderer attributes stay separate. No physical SP becomes logical AUTO;
+native/caller/permission boundaries and NUM's strict verifier remain unchanged.
+GoModule transports its complete-file bool role only when actually selected;
+unrelated NUM bindings no longer receive an inconsistent private Options field.
+Worker35-root/race and Go20's34-root cohorts, genuine three-API source and
+unchanged publication callback checks pass with sealed source; earlier failures
+remain failed. The independent parameter-only integer admission WIP stays separate.
+
+Parent `c1d14f81` fresh composed203-root/6,263-child Go27/race union passes
+5.410/22.674s; Go20's199/6,252 passes5.509s. Independent five-root/53-child
+actual NUM/fixed-local proof join passes126.838s; two object/IR roots/136 children
+pass4.595s; unchanged publisher root/two children passes15.570s. Zero failures,
+skips, missing/duplicate/unfinished terminals. Root/both CLI Go27 vets, root
+Go20 vet, tracked formatting, clean tree and before/after source heads match.
+These scoped passes authorize this fork diagnostic replay, not full current CI,
+native Linux execution, all standard-library files or contribution ready status.
 
 [38589344888](https://github.com/cpunion/plan9asm/actions/runs/38589344888)
 started 15:26:34 UTC, published `2cd53a42b927012295783efd19a20b488da0c7ed`.
