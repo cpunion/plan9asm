@@ -6,28 +6,12 @@ import "strings"
 // SDK literal/native entry, caller backing or the direct-tail result domain.
 // Actual signature/source producers retain their independent authentication.
 func x86ABI0LogicalBoolFrameRole(fn Func, sig FuncSig, arch string) bool {
-	if arch != "386" || strings.Contains(fn.Sym, "<") || fn.FrameSize != 0 && (fn.x86BoolCalls == nil || !fn.x86BoolCalls.matches(fn, sig, arch)) || sig.Ret != I1 ||
-		len(sig.ArgRegs) != 0 || len(sig.Frame.Results) != 1 || sig.ARMEntry != nil ||
-		sig.ARM64GoRegisterABI != nil || sig.ARM64ClosureABI != nil || sig.WASMContext != "" || sig.WASMNative ||
+	if !x86ABI0BoolDeclarationRole(sig, arch) || strings.Contains(fn.Sym, "<") ||
+		fn.FrameSize != 0 && (fn.x86BoolCalls == nil || !fn.x86BoolCalls.matches(fn, sig, arch)) ||
 		len(fn.X86RawText) != 0 || fn.x86SourceStack != nil || fn.x86FixedLocal != nil || fn.x86DirectTailRoot != nil {
 		return false
 	}
-	result := sig.Frame.Results[0]
-	if result.Type != I1 || result.Index != 0 || result.Field != -1 || len(result.Fields) != 0 ||
-		result.Offset < 0 || result.Offset >= 4096 || fn.ArgSize != result.Offset+1 || len(sig.Frame.Params) > 4096 || len(sig.Args) > 4096 {
-		return false
-	}
-	represented := make(map[int]bool)
-	for _, slot := range sig.Frame.Params {
-		if x86FrameScalarBytes(slot.Type, arch) <= 0 {
-			return false
-		}
-		if _, valid := x86ResultParameterRole(sig.Args, slot); !valid {
-			return false
-		}
-		represented[slot.Index] = true
-	}
-	if len(represented) != len(sig.Args) {
+	if fn.ArgSize != sig.Frame.Results[0].Offset+1 {
 		return false
 	}
 	for _, ins := range fn.Instrs {
@@ -35,7 +19,43 @@ func x86ABI0LogicalBoolFrameRole(fn Func, sig FuncSig, arch string) bool {
 			return false
 		}
 	}
-	return true // The existing complete layout check closes offsets and overlaps.
+	return true
+}
+
+// This bounded typed-layout query grants no source, terminal or FP permission.
+// Native/borrowed target roles are not independent logical bool declarations.
+func x86ABI0BoolDeclarationRole(sig FuncSig, arch string) bool {
+	if arch != "386" || sig.Ret != I1 || len(sig.ArgRegs) != 0 || len(sig.Frame.Results) != 1 || sig.ARMEntry != nil ||
+		sig.ARM64GoRegisterABI != nil || sig.ARM64ClosureABI != nil || sig.WASMContext != "" || sig.WASMNative || sig.x86BorrowedBoolTail {
+		return false
+	}
+	result := sig.Frame.Results[0]
+	if result.Type != I1 || result.Index != 0 || result.Field != -1 || len(result.Fields) != 0 ||
+		result.Offset < 0 || result.Offset >= 4096 || len(sig.Frame.Params) > 4096 || len(sig.Args) > 4096 {
+		return false
+	}
+	represented := make(map[int]bool)
+	roles := make(map[string]bool)
+	occupied := make([]bool, result.Offset)
+	for _, slot := range sig.Frame.Params {
+		width := x86FrameScalarBytes(slot.Type, arch)
+		if width <= 0 || slot.Offset < 0 || slot.Offset > result.Offset-width {
+			return false
+		}
+		role, valid := x86ResultParameterRole(sig.Args, slot)
+		if !valid || roles[role] {
+			return false
+		}
+		roles[role] = true
+		represented[slot.Index] = true
+		for offset := slot.Offset; offset < slot.Offset+width; offset++ {
+			if occupied[offset] {
+				return false
+			}
+			occupied[offset] = true
+		}
+	}
+	return len(represented) == len(sig.Args)
 }
 
 func x86ABI0BoolFrameAliasNeeded(fn Func) bool {

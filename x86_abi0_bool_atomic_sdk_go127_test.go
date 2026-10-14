@@ -62,7 +62,7 @@ func TestX86ABI0Mode32CanonicalBoolActualAtomicCompleteSourceNextContext(t *test
 		texts                  int
 	}{
 		{"internal/runtime/atomic", "atomic_386.s", "instruction 3: LOCK", []string{"stubs.go", "atomic_386.go", "unaligned.go"}, 42},
-		{"sync/atomic", "asm.s", "bool byte requires", []string{"doc.go", "doc_32.go"}, 36},
+		{"sync/atomic", "asm.s", "tail target lacks its independent exact canonical declaration/transport", []string{"doc.go", "doc_32.go"}, 36},
 	} {
 		t.Run(row.path, func(t *testing.T) {
 			pkg := x86ABI0BoolActualAtomicPackage(t, row.path, row.declarations)
@@ -84,9 +84,13 @@ func TestX86ABI0Mode32CanonicalBoolActualAtomicCompleteSourceNextContext(t *test
 				t.Fatal(err)
 			}
 			if row.path == "internal/runtime/atomic" {
-				plan, err := prepareX86ABI0BoolCalls(file, Options{Goarch: "386", TargetTriple: "i386-unknown-linux-gnu", ResolveSym: resolve, Sigs: sigs})
-				if err != nil || plan == nil || len(plan.callers["·Cas64"].bytes) != 0 {
-					t.Fatal("actual noarg void call acquired a bool-return/outgoing contract", err)
+				if !x86ABI0NoArgumentVoidCallRole(sigs[resolve("·panicUnaligned")]) {
+					t.Fatal("actual Go void declaration acquired a bool-return/outgoing contract")
+				}
+				// Complete typed-tail preparation now checks Cas's own canonical
+				// body before any alias can forward it; LOCK remains unclosed.
+				if plan, err := prepareX86ABI0BoolCalls(file, Options{Goarch: "386", TargetTriple: "i386-unknown-linux-gnu", ResolveSym: resolve, Sigs: sigs}); plan != nil || !errors.Is(err, ErrProbeNeedsContext) || !strings.Contains(err.Error(), row.boundary) {
+					t.Fatal("complete original aliases borrowed an unclosed callee body", err)
 				}
 			}
 			for _, api := range []string{"text", "module", "Go"} {
