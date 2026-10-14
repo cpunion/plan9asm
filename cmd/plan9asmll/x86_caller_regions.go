@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"go/ast"
 	"go/parser"
@@ -42,6 +43,7 @@ type x86CallerTypedPackage struct {
 	sources   map[string]string
 	expanded  map[string]string
 	selection *x86CallerPackageSelection
+	member    *actualAssemblyMember
 }
 
 func x86CallerSelectionIdentity(pkg *packages.Package) string {
@@ -302,7 +304,11 @@ func loadX86CallerTypedPackage(ctx context.Context, pkg *packages.Package, defin
 	return loaded, nil
 }
 
-func (loaded *x86CallerTypedPackage) verify(ctx context.Context, defines []string, feature *featureConsumer) error {
+func (loaded *x86CallerTypedPackage) verify(ctx context.Context, defines []string, feature *featureConsumer) (result error) {
+	if err := loaded.member.verify(); err != nil {
+		return err
+	}
+	defer func() { result = errors.Join(result, loaded.member.verify()) }()
 	if loaded.selection != nil {
 		if err := loaded.selection.verifyEffectiveSourceMode(ctx); err != nil {
 			return err
@@ -358,9 +364,17 @@ func bindX86CallerRegions(pkg *packages.Package, file *plan9asm.File, target, go
 		}
 		selection.loaded.selection = selection
 	}
-	loaded := selection.loaded
-	if loaded.goPkg.SourceSelection.Assembly[asm] == nil {
-		return nil, nil, fmt.Errorf("%w: translated assembly is absent from actual complete selection", plan9asm.ErrProbeNeedsContext)
+	member, err := observeActualAssemblyMember(asm, selection.loaded.goPkg.SourceSelection.SelectedAssemblyFiles)
+	if err != nil || selection.loaded.goPkg.SourceSelection.Assembly[member.selected] == nil {
+		return nil, nil, fmt.Errorf("%w: translated assembly is absent from actual complete selection: %v", plan9asm.ErrProbeNeedsContext, err)
+	}
+	// The complete typed graph is cached, but each returned source keeps its
+	// own original request/lifetime. No alias is added to the actual inventory
+	// or accumulated in an unbounded shared cache.
+	loaded := &x86CallerTypedPackage{
+		pkg: selection.loaded.pkg, goPkg: selection.loaded.goPkg,
+		sources: selection.loaded.sources, expanded: selection.loaded.expanded,
+		selection: selection, member: member,
 	}
 	if err := loaded.verify(ctx, defines, config.Feature); err != nil {
 		return nil, nil, err
