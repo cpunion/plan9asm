@@ -58,6 +58,16 @@ permission. Result writes followed by ordinary native memory access or an
 external terminal remain Context, so fresh logical LLVM backing cannot hide a
 native caller alias observation. Original operands/certificates stay unchanged.
 
+The same private integer slot domain also applies to ordinary zero-frame,
+call-free ABI0 roots with their own actual scalar result layout. A named FP LEA
+requires the complete cached source proof even without a later vector probe.
+Mode32 X/m64 moves retain their real eight-byte width through the complete
+GP/X grammar; this gives neither mode32 GP qwords nor MMX any state. Public
+declaration-only queries and independent bool/native-frame roles stay closed.
+Parameter-only source without a result LEA does not acquire this new admission
+trigger or result-slot state; its older missing-result admission gap remains a
+separate unresolved class, not a result-alias success.
+
 Every request keeps independent original-source/signature snapshots and
 verifies source, selected DATA/GLOBL/prelude, TEXT membership, mode and symbol
 mapping before and after callbacks/consumption. A failed graph identity check
