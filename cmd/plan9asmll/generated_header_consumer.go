@@ -70,6 +70,14 @@ func (consumer *featureConsumer) preprocessCPP(asm, packagePath string, defines 
 	})
 }
 
+// Publication uses the same active include resolver's absence trace, not a
+// guessed path derived from the normalized fallback names or inactive branches.
+func (consumer *featureConsumer) preprocessCPPWithReadReport(asm, packagePath string, defines []string, report *plan9asm.GoAssemblySourceReadReport) ([]byte, map[string]string, error) {
+	return consumer.preprocessCPPSource(asm, packagePath, defines, func() ([]byte, error) {
+		return consumer.generatedCPPHeader(packagePath)
+	}, false, report)
+}
+
 func (consumer *featureConsumer) generatedCPPHeader(packagePath string) ([]byte, error) {
 	if consumer.Proof == nil || consumer.Proof.GeneratedHeaders == nil {
 		return nil, fmt.Errorf("active generated include lacks actual compiler metadata")
@@ -106,16 +114,16 @@ func (consumer *featureConsumer) preprocessCallerCPP(asm, packagePath string, de
 	}
 	return consumer.preprocessCPPSource(asm, packagePath, defines, func() ([]byte, error) {
 		return consumer.generatedCPPHeader(packagePath)
-	}, sourceOnly)
+	}, sourceOnly, nil)
 }
 
 // A mode caller supplies a separately validated native header. This shared
 // source-order search/read path never assigns that header an ordinary role.
 func (consumer *featureConsumer) preprocessCPPWithHeader(asm, packagePath string, defines []string, generatedHeader func() ([]byte, error)) ([]byte, map[string]string, error) {
-	return consumer.preprocessCPPSource(asm, packagePath, defines, generatedHeader, false)
+	return consumer.preprocessCPPSource(asm, packagePath, defines, generatedHeader, false, nil)
 }
 
-func (consumer *featureConsumer) preprocessCPPSource(asm, packagePath string, defines []string, generatedHeader func() ([]byte, error), sourceOnly bool) ([]byte, map[string]string, error) {
+func (consumer *featureConsumer) preprocessCPPSource(asm, packagePath string, defines []string, generatedHeader func() ([]byte, error), sourceOnly bool, report *plan9asm.GoAssemblySourceReadReport) ([]byte, map[string]string, error) {
 	if err := gotoolprofile.ValidateCPPIncludeSearch(consumer.Input, nil); err != nil {
 		return nil, nil, err
 	}
@@ -240,6 +248,9 @@ func (consumer *featureConsumer) preprocessCPPSource(asm, packagePath string, de
 				return read(candidate, false)
 			} else if !os.IsNotExist(err) {
 				return "", nil, err
+			}
+			if report != nil {
+				report.SearchMisses = append(report.SearchMisses, candidate)
 			}
 			if filepath.Clean(name) == "go_asm.h" {
 				return read("", true)
