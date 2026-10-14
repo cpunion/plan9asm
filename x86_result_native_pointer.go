@@ -70,7 +70,13 @@ func x86ResultIncomingPointerTransfer(ins Instr, state *x86ResultState, owned []
 		}
 	}
 	if ins.Op == lea && first.Kind == OpMem {
-		return x86ResultIncomingPointerAddressIdentity(first, state, arch) && writePointer(), true
+		base, _, valid := x86ResultGP(first.Mem.Base, word, arch)
+		if valid && (state.shapeOnly || state.pointerGP[base]) {
+			return x86ResultIncomingPointerAddressIdentity(first, state, arch) && writePointer(), true
+		}
+		// No typed pointer base: let the independent numerical LEA effect
+		// prove every actual register input instead of treating it as a pointer.
+		return false, false
 	}
 	if (ins.Op == add || ins.Op == sub) && last.Kind == OpReg && !state.shapeOnly {
 		index, _, valid := x86ResultGP(last.Reg, word, arch)

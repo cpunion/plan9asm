@@ -54,9 +54,17 @@ func TestX86CallerCLIFixtureCapturesCanonicalSelectionBeforeWrites(t *testing.T)
 		if err != nil || !filepath.IsLocal(relative) {
 			t.Fatalf("fixture source escaped its owned physical parent: %s, %v", relative, err)
 		}
+		if _, loaded, err := bindX86CallerRegions(pkg, file, "linux/amd64", "amd64",
+			filepath.Join(alias, relative), plan9asm.GoAssemblerDefines("linux", "amd64"), config, resolve, sigs); err != nil || loaded == nil || loaded.member == nil {
+			t.Fatalf("exact alias was not independently observed against the actual selection: %v", err)
+		}
+		unselected := filepath.Join(t.TempDir(), "kernel_amd64.s")
+		if err := os.WriteFile(unselected, []byte(x86CallerCLIAssembly), 0600); err != nil {
+			t.Fatal(err)
+		}
 		if _, _, err := bindX86CallerRegions(pkg, file, "linux/amd64", "amd64",
-			filepath.Join(alias, relative), plan9asm.GoAssemblerDefines("linux", "amd64"), config, resolve, sigs); !errors.Is(err, plan9asm.ErrProbeNeedsContext) {
-			t.Fatalf("an uncaptured alias acquired actual selection authority: %v", err)
+			unselected, plan9asm.GoAssemblerDefines("linux", "amd64"), config, resolve, sigs); !errors.Is(err, plan9asm.ErrProbeNeedsContext) {
+			t.Fatalf("unselected equal-byte file acquired actual selection authority: %v", err)
 		}
 	})
 }

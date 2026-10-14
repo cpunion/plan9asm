@@ -23,6 +23,7 @@ func x86LEAWidth(op Op, arch string) int64 {
 }
 
 func x86LEAOperandWidth(ins Instr, arch string) (int64, error) {
+	ins = x86LEASourceInstruction(ins)
 	width := x86LEAWidth(ins.Op, arch)
 	if width == 0 {
 		return 0, fmt.Errorf("%s %s has no Go LEA width: %q", arch, ins.Op, ins.Raw)
@@ -71,12 +72,35 @@ func x86LEAOperandWidth(ins Instr, arch string) (int64, error) {
 	return width, nil
 }
 
+// A bare integer expression is Go's TYPE_MEM/NAME_NONE displacement, not a
+// symbol or a dereference for LEA. Normalize only this local operand copy;
+// the original opcode, Raw and source/certificate identity remain unchanged.
+// Unknown expressions, address immediates and physical decoder roles retain
+// their separate grammar instead of acquiring a guessed zero displacement.
+func x86LEASourceInstruction(ins Instr) Instr {
+	if len(ins.Args) != 2 || ins.Args[0].Kind != OpSym || ins.x86Encoded || ins.x86SourceRaw != nil ||
+		ins.x86RawNearReturn != nil || ins.x86AddressBits != 0 || ins.x86UnboundAddressOverride || ins.x86SegmentPrefix != 0 {
+		return ins
+	}
+	if ins.Op != "LEAW" && ins.Op != "LEAL" && ins.Op != "LEAQ" {
+		return ins
+	}
+	value, resolved := parseImmExpr(strings.TrimSpace(ins.Args[0].Sym))
+	if !resolved {
+		return ins
+	}
+	ins.Args = append([]Operand(nil), ins.Args...)
+	ins.Args[0] = Operand{Kind: OpMem, Mem: MemRef{Off: int64(value)}}
+	return ins
+}
+
 func x86CallerLEAStep(ins *Instr, state *x86SourceStackState) bool {
-	width, err := x86LEAOperandWidth(*ins, "amd64")
-	if err != nil || ins.Args[0].Kind != OpMem || ins.x86AddressBits != 0 {
+	form := x86LEASourceInstruction(*ins)
+	width, err := x86LEAOperandWidth(form, "amd64")
+	if err != nil || form.Args[0].Kind != OpMem || ins.x86AddressBits != 0 {
 		return false
 	}
-	memory := ins.Args[0].Mem
+	memory := form.Args[0].Mem
 	destination, full := x86CallerGP(ins.Args[1].Reg)
 	if !full || destination != ins.Args[1].Reg || destination == SP || destination == BP ||
 		memory.Sym != "" || memory.Segment != "" {

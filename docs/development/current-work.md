@@ -7,6 +7,51 @@ Let active frozen CI runs finish before publishing another batch.
 
 ## Current checkpoint: 2026-10-14
 
+Fork [38502949565](https://github.com/cpunion/plan9asm/actions/runs/38502949565)
+tests frozen `e544c001` (contribution `94bd05f1`, plus fork-only priorities).
+The run finishes naturally with all 45 jobs successful. All twelve priority
+jobs and all three complete Windows modules/coverage aggregates pass. Independent
+raw inventories certify all twelve selected-member/previous-failure roots
+natively on Windows in 25.253 seconds, with zero skips or missing/duplicate
+terminals. That artifact's downloaded ZIP SHA matches GitHub's digest and
+workflow-run source SHA. The split LLVM five-root lane passes in 46.259 seconds;
+its original CRC32 root independently passes in 151.151 seconds, retaining
+the original five-minute budgets. All 48 selected native Linux x86 roots pass
+in 59.876 seconds. Complete main-module readback has 5,981 roots: 5,718 passes
+and 263 explicit platform skips, with all 21 other packages passed. Simple CLI
+passes all 31 roots. Independent raw LLVM CLI partitions agree with its fresh
+274-root inventory: every root passes, zero incomplete/duplicate/skipped roots;
+subtests have 1,898 passes and one native ARM64-only skip. That skip and the
+main platform skips are not executed semantics. All raw partition source heads
+remain `e544c001` before/after. This certifies the frozen fork's selected native
+and complete Windows gates, not the later local commits or stdlib benchmark.
+
+`7be7d50a` separately reuses the selected-member observer for x86 caller-source
+bindings. Each returned binding retains its original request lifetime; the
+complete cached source graph and compiler inventory stay unchanged. Actual
+Go alias RED precedes the repair; five-target original-Go/LLVM objects and
+post-callback replacement controls pass. The exact 26-root/75-child CLI class
+passes in 5.705 seconds, race in 7.643 seconds and vet; core caller controls
+pass Go 1.27/1.20. Parent replays the same 26-root inventory in 9.155 seconds,
+with no skipped, missing or duplicate roots. This local commit is not in the
+frozen fork run. Continuation's outside-alias sibling/reference-closure defect
+has an independent three-child RED and still needs a separate complete guard.
+
+`12b3daf0` adds the numerical-only W/L/Q LEA effect family and exact parameter
+leaf consistency. Bare displacement expressions normalize only an operand copy;
+original source identity stays intact. NUM base/index arithmetic grants no memory,
+pointer, frame or entry authority, and independently proved raw/SP/BP consumers
+keep their own roles. Its frozen source passes all 152 affected roots and 3,942
+subtest pass events on each Go 1.27/1.20, in 80.624/85.134 seconds, without skips
+or omissions. Both official five-architecture gates pass unchanged; focused
+race, vet/build and supported-op extraction pass. Parent's thirteen focused
+grammar/parameter roots pass in 5.162 seconds with exact inventory and vet.
+The explicit-QEMU-only ignored diagnostic passes 181,104 row-pair checks in
+87.256 seconds, not native execution. Preserve the default-emulator AF/PF
+failure. The next fork batch must execute native
+`TestCrossLinuxRuntimeMatrixX86NumericalLEAOriginalBytesAndLLVM` before claiming
+complete-family runtime certification; this change is not in frozen `e544c001`.
+
 Fork [38491308184](https://github.com/cpunion/plan9asm/actions/runs/38491308184)
 tests frozen `ac2576d2` (contribution `fbadcfa8`, plus fork-only priorities).
 It naturally finishes with 39 successful and four failed jobs. All ten priority

@@ -983,6 +983,7 @@ func (c *amd64Ctx) lowerArith(op Op, ins Instr) (ok bool, terminated bool, err e
 		// grammar validation and destination emission use one identity; the
 		// original source/caller instruction remains independently required.
 		ins.Op = op
+		ins = x86LEASourceInstruction(ins)
 		if _, err := x86LEAOperandWidth(ins, c.goarch); err != nil {
 			return true, false, err
 		}
