@@ -87,8 +87,8 @@ func x86DirectTailResultAddressTransfer(ins Instr, state *x86ResultState, owned 
 		if !value.valid && !state.shapeOnly {
 			continue
 		}
-		width := x86RawReturnScalarMoveBytes(form.Op)
-		if width == 0 || width == 8 && arch == "386" || len(form.Args) != 2 || !x86ResultSlotMemory(arg.Mem) {
+		width := x86ResultSlotMoveBytes(form, arch)
+		if width == 0 || len(form.Args) != 2 || !x86ResultSlotMemory(arg.Mem) {
 			if value.valid {
 				return false
 			}
@@ -149,6 +149,16 @@ func x86DirectTailResultAddressTransfer(ins Instr, state *x86ResultState, owned 
 		}
 	}
 	return true
+}
+
+func x86ResultSlotMoveBytes(ins Instr, arch string) int64 {
+	if form, known, err := x86GPSIMDTransferProperties(ins, arch); known {
+		if err != nil || form.mmx || form.spec.rawOnly || form.memory < 0 {
+			return 0
+		}
+		return int64(form.bits / 8) // Mode32 Q memory/X copies really are 8 bytes.
+	}
+	return x86RawReturnScalarMoveBytes(ins.Op)
 }
 
 func x86ResultSlotDirectWrite(ins Instr, index int, arch string) bool {

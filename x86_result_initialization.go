@@ -93,7 +93,7 @@ func checkX86ABI0ResultInitializationAtSource(fn Func, sig FuncSig, goarch strin
 		}
 		transfer = x86ABI0CanonicalBoolTransfer(transfer)
 	}
-	if fn.x86DirectTailRoot != nil && scalarViews {
+	if scalarViews && (fn.x86DirectTailRoot != nil || x86OrdinaryResultAddressRole(fn, sig, goarch)) {
 		for _, slot := range sig.Frame.Results {
 			switch slot.Type {
 			case I8, I16, I32, I64:
@@ -239,7 +239,8 @@ func checkX86ResultSourceFlow(fn Func, initial x86ResultState, owned []bool, res
 	}
 	const byteWorkLimit = 64 << 20
 	byteWork := len(instructions) * byteState
-	boundedWork := len(initial.auto) != 0 || len(initial.canonicalFP) != 0 || fn.x86DirectTailRoot != nil
+	boundedWork := len(initial.auto) != 0 || len(initial.canonicalFP) != 0 ||
+		len(initial.resultAddressSlots) != 0 || fn.x86DirectTailRoot != nil
 	if boundedWork && byteWork > byteWorkLimit/8 {
 		return fail("combined FP/AUTO source-CFG byte budget exhausted")
 	}
