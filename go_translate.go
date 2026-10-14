@@ -252,7 +252,8 @@ func translateGoModuleInContext(ctx llvm.Context, pkg GoPackage, src []byte, opt
 			return nil, err
 		}
 		file, err = PrepareX86DirectTailSource(file, Options{Goarch: opt.GOARCH, TargetTriple: opt.TargetTriple,
-			ResolveSym: resolve, Sigs: completeSigs, NumericalReads: opt.NumericalReads, X86TLSMoves: opt.X86TLSMoves})
+			ResolveSym: resolve, Sigs: completeSigs, NumericalReads: opt.NumericalReads, X86TLSMoves: opt.X86TLSMoves,
+			WASMABI: opt.WASMABI, X87Mode: opt.X87Mode, AnnotateSource: opt.AnnotateSource})
 		if err != nil {
 			return nil, err
 		}
@@ -307,7 +308,8 @@ func translateGoModuleInContext(ctx llvm.Context, pkg GoPackage, src []byte, opt
 	if graph := file.x86DirectTails; graph != nil {
 		request, signatures := file, sigs
 		defer func() {
-			final := graph.verify(request, Options{Goarch: opt.GOARCH, ResolveSym: resolve, Sigs: signatures})
+			final := graph.verify(request, Options{Goarch: opt.GOARCH, TargetTriple: opt.TargetTriple, ResolveSym: resolve, Sigs: signatures,
+				NumericalReads: opt.NumericalReads, WASMABI: opt.WASMABI, X87Mode: opt.X87Mode, AnnotateSource: opt.AnnotateSource})
 			if sha256.Sum256(originalSource) != originalSourceDigest {
 				final = errors.Join(final, x86DirectTailContext("original Go assembly input changed during consumption"))
 			}

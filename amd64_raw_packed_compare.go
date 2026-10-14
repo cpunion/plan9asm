@@ -6,6 +6,10 @@ import (
 )
 
 func decodedX86PackedIntegerCompareInstruction(code []byte, mode int) (Instr, int, bool, error) {
+	return decodedX86PackedIntegerCompareInstructionWithMemory(code, mode, x86RawMemoryDecoder{})
+}
+
+func decodedX86PackedIntegerCompareInstructionWithMemory(code []byte, mode int, memory x86RawMemoryDecoder) (Instr, int, bool, error) {
 	p, matched := decodeX86RawVectorEncoding(code)
 	if !matched {
 		return Instr{}, 0, false, nil
@@ -58,9 +62,9 @@ func decodedX86PackedIntegerCompareInstruction(code []byte, mode int) (Instr, in
 	var size int
 	var err error
 	if p.evex {
-		source, size, err = decodedX86EVEXRMOperand(code[p.modRM:], mode, p.b, p.x, p.segment, width, scale)
+		source, size, err = memory.evex(code[p.modRM:], mode, p.b, p.x, p.segment, width, scale)
 	} else {
-		source, size, err = decodedX86VEXVectorRMOperand(code[p.modRM:], mode, p.b, p.x, p.segment, width)
+		source, size, err = memory.vex(code[p.modRM:], mode, p.b, p.x, p.segment, width)
 	}
 	if err != nil {
 		return Instr{}, 0, true, err

@@ -184,7 +184,7 @@ func TestX86NumericalNativeBoundariesFailuresDiscardAll(t *testing.T) {
 		"far-memory-call":      {0xff, 0x18},
 		"truncated-escape":     {0x0f},
 		"unknown-evex":         {0x62, 0xf1, 0x7c, 0x48, 0xff, 0xc0},
-		"vex-legacy-confusion": {0xc4, 0xe2, 0x79, 0x58, 0xc0},
+		"unknown-vex-map2":     {0xc4, 0xe2, 0x79, 0xff, 0xc0},
 		"overlong":             append(bytes.Repeat([]byte{0x64}, 15), 0x90),
 	} {
 		for _, mode := range []int{32, 64} {
@@ -278,6 +278,15 @@ func TestX86NumericalNativeBoundariesDefaultRawFamiliesRemainStrict(t *testing.T
 		{"VINSERTF128 $255,table(SB),Y1,Y2", decodedX86VINSERT128Instruction},
 		{"VEXTRACTF32X4 $255,Z2,table(SB)", decodedX86VEXTRACT128Instruction},
 		{"VEXTRACTF128 $255,Y2,table(SB)", decodedX86VEXTRACT128Instruction},
+		{"VPBROADCASTB table(SB),Y2", decodedX86VEXPackedBroadcastInstruction},
+		{"VPBROADCASTQ.Z table(SB),K7,Z2", decodedX86VEXPackedBroadcastInstruction},
+		{"VPCMPEQB table(SB),Y1,Y2", decodedX86PackedIntegerCompareInstruction},
+		{"VPCMPGTD.BCST table(SB),Z1,K7,K2", decodedX86PackedIntegerCompareInstruction},
+		{"VMOVD table(SB),X2", decodedX86VMOVQInstruction},
+		{"VMOVQ table(SB),X31", decodedX86VMOVQInstruction},
+		{"VPTEST table(SB),Y2", decodedX86VEXVectorTestInstruction},
+		{"VTESTPS table(SB),X2", decodedX86VEXVectorTestInstruction},
+		{"VTESTPD table(SB),Y2", decodedX86VEXVectorTestInstruction},
 	} {
 		t.Run(family.instruction, func(t *testing.T) {
 			code, pcs := x86NumericalBoundaryGoBytes(t, "amd64", family.instruction+"\nRET")

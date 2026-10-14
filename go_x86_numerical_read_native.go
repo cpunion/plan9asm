@@ -25,6 +25,10 @@ func (source *GoX86NumericalReadSource) bindNative(ctx context.Context, variable
 	if err := source.preprocess(); err != nil {
 		return err
 	}
+	tailRoles, err := numericalDirectTailRoles(source.file)
+	if err != nil {
+		return err
+	}
 	guard := source.guard
 	selected := guard.selection
 	_, arch, _ := strings.Cut(source.request.Target, "/")
@@ -33,6 +37,7 @@ func (source *GoX86NumericalReadSource) bindNative(ctx context.Context, variable
 		return err
 	}
 	proof := &source.native
+	assembly := source.sdkAssemblyJoin()
 	proof.Archive, err = guard.read(selected.Export)
 	if err != nil {
 		return err
@@ -41,8 +46,8 @@ func (source *GoX86NumericalReadSource) bindNative(ctx context.Context, variable
 		if source.sdk == nil || source.sdk.origin != source || source.sdk.closed {
 			return numericalSBContext("native observation lacks the live exact SDK input graph")
 		}
-		if source.literals != nil {
-			if !bytes.Equal(proof.Archive, source.literals.Observation.ObjectInputs.Archive) {
+		if assembly != nil {
+			if !bytes.Equal(proof.Archive, assembly.Observation.ObjectInputs.Archive) {
 				return numericalSBContext("literal native archive changed")
 			}
 			proof.ArchiveMembers = source.sdk.ArchiveMembers
@@ -66,8 +71,8 @@ func (source *GoX86NumericalReadSource) bindNative(ctx context.Context, variable
 	expanded := filepath.Join(guard.owned, "expanded.s")
 	expandedProgram := source.cpp.Output
 	var sourcePositions [][]string
-	if source.literals != nil {
-		positioned := source.literals.Observation.Positions[source.literals.SourceOrdinal]
+	if assembly != nil {
+		positioned := assembly.Observation.Positions[assembly.SourceOrdinal]
 		expandedProgram = positioned.Mapped
 		sourcePositions, err = numericalSDKLiteralSourcePositions(source.file, source.cpp.Output, positioned)
 		if err != nil {
@@ -82,11 +87,11 @@ func (source *GoX86NumericalReadSource) bindNative(ctx context.Context, variable
 	}
 	assemble := func(input, output string) ([]byte, []byte, error) {
 		arguments := []string{"tool", "asm", "-S", "-p", source.request.PackagePath, "-I", source.request.Directory, "-I", filepath.Join(guard.env["GOROOT"], "pkg", "include")}
-		if source.literals != nil {
+		if assembly != nil {
 			// Match the independent SDK header producer's complete source and
 			// generated-header route; no user header or substituted constant.
 			arguments = []string{"tool", "asm", "-S", "-p", source.request.PackagePath, "-std",
-				"-I", source.literals.source.guard.owned, "-I", filepath.Join(guard.env["GOROOT"], "pkg", "include")}
+				"-I", assembly.source.guard.owned, "-I", filepath.Join(guard.env["GOROOT"], "pkg", "include")}
 		}
 		if source.role == numericalSBSDKSource && environment["GOOS"] == "darwin" {
 			arguments = append(arguments, "-shared")
@@ -110,9 +115,9 @@ func (source *GoX86NumericalReadSource) bindNative(ctx context.Context, variable
 	if err != nil {
 		return err
 	}
-	if source.literals != nil {
+	if assembly != nil {
 		proof.OriginalText, proof.ExpandedText, err = gostaticstorage.ObserveX86SDKASMDataListingObjects(
-			source.literals.Observation.ObjectInputs, source.literals.SourceOrdinal, proof.OriginalObject, proof.ExpandedObject)
+			assembly.Observation.ObjectInputs, assembly.SourceOrdinal, proof.OriginalObject, proof.ExpandedObject)
 	} else {
 		proof.OriginalText, err = gostaticstorage.ObserveX86AssemblyText(proof.OriginalObject, builtin, source.request.Target)
 		if err == nil {
@@ -131,8 +136,8 @@ func (source *GoX86NumericalReadSource) bindNative(ctx context.Context, variable
 		return err
 	}
 	var textOrder []int
-	if source.literals != nil {
-		observed := source.literals.Observation.Objects.Sources[source.literals.SourceOrdinal]
+	if assembly != nil {
+		observed := assembly.Observation.Objects.Sources[assembly.SourceOrdinal]
 		textOrder, err = numericalSDKNativeTextOrder(source.cpp.Output, source.request.PackagePath,
 			observed, proof.OriginalText, proof.ExpandedText)
 		if err != nil {
@@ -145,7 +150,7 @@ func (source *GoX86NumericalReadSource) bindNative(ctx context.Context, variable
 			objectOrdinal = textOrder[index]
 		}
 		text, expandedText := proof.OriginalText[objectOrdinal], proof.ExpandedText[objectOrdinal]
-		name, abi, valid := numericalFunctionSourceIdentity(fn.Sym, source.request.PackagePath, arch, source.role)
+		name, abi, valid := source.numericalSourceTextIdentity(index, fn, arch)
 		if !valid || text.Name != name || text.ABI != abi || expandedText.Name != name || expandedText.ABI != abi ||
 			!bytes.Equal(text.Code, expandedText.Code) || text.Size != expandedText.Size || !numericalRelocationEqual(text.Relocations, expandedText.Relocations) {
 			return numericalSBContext("whole original/expanded TEXT/ABI/code/relocations differ")
@@ -213,6 +218,9 @@ func (source *GoX86NumericalReadSource) bindNative(ctx context.Context, variable
 			return err
 		}
 		for ordinal, ins := range fn.Instrs {
+			if _, terminal := tailRoles[x86DirectTailPoint{index, ordinal}]; terminal {
+				continue // Exact source control role; no data/entry/state authority.
+			}
 			containsSymbol := false
 			for operandIndex, operand := range ins.Args {
 				local, err := source.sdkLiteralRead(ins, operandIndex, arch)
@@ -245,7 +253,7 @@ func (source *GoX86NumericalReadSource) bindNative(ctx context.Context, variable
 					if !numericalSameInstruction(ins, row.ins, source.request.PackagePath, arch) {
 						continue
 					}
-					if source.literals != nil {
+					if assembly != nil {
 						if !numericalSDKLiteralReadOrdinal(fn, ordinal, sourcePositions[index], pc, row,
 							expandedRows[name], source.request.PackagePath, arch) {
 							continue
@@ -283,7 +291,7 @@ func (source *GoX86NumericalReadSource) bindNative(ctx context.Context, variable
 							for _, position := range text.Positions {
 								path := original.position
 								objectFile := position.File
-								if source.literals != nil {
+								if assembly != nil {
 									var valid bool
 									path, valid = numericalSDKListingLogicalPosition(path)
 									if !valid {
@@ -334,7 +342,11 @@ func (source *GoX86NumericalReadSource) bindNative(ctx context.Context, variable
 					}
 					matches++
 					read := owner
-					read.function, read.instruction, read.original = name, ordinal, ins
+					function := name
+					if strings.HasSuffix(fn.Sym, "<>") {
+						function = numericalNativeName(fn.Sym, source.request.PackagePath)
+					}
+					read.function, read.instruction, read.original = function, ordinal, ins
 					read.operand = operandIndex
 					read.pc, read.offset, read.width, read.relocation = pc, offset, width, relocation
 					read.code = append([]byte(nil), text.Code[pc:pc+int64(native.length)]...)
@@ -342,7 +354,7 @@ func (source *GoX86NumericalReadSource) bindNative(ctx context.Context, variable
 				}
 			}
 			if matches != 1 {
-				if source.literals != nil {
+				if assembly != nil {
 					var positions []string
 					for pc, rows := range expandedRows[name] {
 						for _, row := range rows {

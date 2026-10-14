@@ -916,6 +916,7 @@ func compileOneAttempt(pkg *packages.Package, arch plan9asm.Arch, goos, goarch, 
 			return fmt.Errorf("bind actual SDK numerical source: %w", err)
 		}
 		ccfg.numericalOptions = &options
+		sigs = options.Sigs
 	}
 	maxFunctions := ccfg.MaxFunctions
 	if maxFunctions <= 0 {

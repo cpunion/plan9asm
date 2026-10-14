@@ -32,6 +32,11 @@ type GoX86NumericalReadCaptureRequest struct {
 	// The borrowed owner and its original SDK source must remain live through
 	// binding and translation; closing this numerical source never closes them.
 	ReadonlyLiterals *GoX86SDKReadonlyLiteralDataOwner
+
+	// AssemblySource observes complete original/expanded/compiler source nodes
+	// independently of DATA initialization. It grants no numerical storage or
+	// entry state. Nil preserves the existing ordinary TEXT-only route.
+	AssemblySource *GoX86SDKASMDataSource
 }
 
 // GoX86NumericalReadSource is a sealed source/native-instruction/numerical-owner
@@ -61,6 +66,7 @@ type GoX86NumericalReadSource struct {
 	role                         numericalSBSourceRole
 	sdk                          *numericalSBSDKObservation
 	literals                     *numericalSDKLiteralJoin
+	assembly                     *numericalSDKAssemblyJoin
 }
 
 type numericalSBCommand struct {
@@ -96,6 +102,10 @@ func captureGoX86NumericalReadSource(ctx context.Context, request GoX86Numerical
 	if err != nil {
 		return nil, err
 	}
+	assembly, err := captureNumericalSDKAssemblyJoin(ctx, request, role)
+	if err != nil {
+		return nil, err
+	}
 	provided := make(map[string]string)
 	for _, pair := range request.Environment {
 		key, value, valid := strings.Cut(pair, "=")
@@ -120,7 +130,7 @@ func captureGoX86NumericalReadSource(ctx context.Context, request GoX86Numerical
 	if provided["GOPACKAGESDRIVER"] != "" && provided["GOPACKAGESDRIVER"] != "off" {
 		return nil, numericalSBContext("external package driver needs independent mapping")
 	}
-	source := &GoX86NumericalReadSource{request: request, role: role, literals: literals, dirs: make(map[string]os.FileInfo), misses: make(map[string]bool),
+	source := &GoX86NumericalReadSource{request: request, role: role, literals: literals, assembly: assembly, dirs: make(map[string]os.FileInfo), misses: make(map[string]bool),
 		originalOwners: append([]*GoNumericalStorageOwner(nil), request.Owners...)}
 	source.identity = source
 	source.guard = newGoOriginalInputGuard(GoAMD64FrameCaptureRequest{GoBinary: request.GoBinary, Directory: request.Directory,
@@ -244,7 +254,8 @@ func captureGoX86NumericalReadSource(ctx context.Context, request GoX86Numerical
 		Role                         numericalSBSourceRole
 		SDK                          *numericalSBSDKObservation
 		Literals                     *numericalSDKLiteralJoin
-	}{request, source.cpp, source.file, selected, source.guard.inputs, reports, source.native, source.rawSelection, source.rawEnvironment, source.commands, source.readFacts(), role, source.sdk, source.literals})
+		Assembly                     *numericalSDKAssemblyJoin
+	}{request, source.cpp, source.file, selected, source.guard.inputs, reports, source.native, source.rawSelection, source.rawEnvironment, source.commands, source.readFacts(), role, source.sdk, source.literals, source.assembly})
 	if err != nil {
 		return nil, err
 	}
@@ -365,8 +376,8 @@ func (source *GoX86NumericalReadSource) bindImports(reports []gostaticstorage.Re
 }
 
 func (source *GoX86NumericalReadSource) preprocess() error {
-	if source.literals != nil {
-		return source.preprocessSDKLiterals()
+	if source.sdkAssemblyJoin() != nil {
+		return source.preprocessSDKAssembly()
 	}
 	guard := source.guard
 	original, err := guard.read(filepath.Join(source.request.Directory, source.request.AssemblyFile))
@@ -407,6 +418,8 @@ func (source *GoX86NumericalReadSource) Verify(ctx context.Context) error {
 	var result error
 	if source != nil && source.literals != nil {
 		result = source.verifySDKLiteralNumericalSource(ctx)
+	} else if source != nil && source.assembly != nil {
+		result = source.verifySDKAssemblyNumericalSource(ctx)
 	} else {
 		result = source.verifyNumericalSource(ctx)
 	}
@@ -468,7 +481,7 @@ func (source *GoX86NumericalReadSource) verifyNumericalSource(ctx context.Contex
 	if err := source.guard.verifyInputs(); err != nil {
 		return fail(err)
 	}
-	if source.literals == nil {
+	if source.sdkAssemblyJoin() == nil {
 		for _, owner := range source.request.Owners {
 			if err := owner.Verify(ctx); err != nil {
 				return fail(err)
@@ -578,7 +591,8 @@ func (source *GoX86NumericalReadSource) stateDigest() ([32]byte, error) {
 		Role                         numericalSBSourceRole
 		SDK                          *numericalSBSDKObservation
 		Literals                     *numericalSDKLiteralJoin
-	}{source.request, source.cpp, source.file, source.native, source.guard.selection, source.guard.inputs, source.readFacts(), source.rawSelection, source.rawEnvironment, source.commands, source.role, source.sdk, source.literals})
+		Assembly                     *numericalSDKAssemblyJoin
+	}{source.request, source.cpp, source.file, source.native, source.guard.selection, source.guard.inputs, source.readFacts(), source.rawSelection, source.rawEnvironment, source.commands, source.role, source.sdk, source.literals, source.assembly})
 	return sha256.Sum256(raw), err
 }
 

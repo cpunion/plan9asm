@@ -391,6 +391,9 @@ func sdkMinimumOriginalPackageContext(t *testing.T, path, assembly string, decor
 	}
 	options := plan9asm.Options{Goarch: "amd64", TargetTriple: "x86_64-unknown-linux-gnu", ResolveSym: func(symbol string) string { return Resolve(path, symbol) }, Sigs: make(map[string]plan9asm.FuncSig)}
 	for _, fn := range file.Funcs {
+		if strings.HasSuffix(fn.Sym, "<>") {
+			continue // A private continuation has no Go entry declaration.
+		}
 		name := strings.TrimPrefix(Resolve("", fn.Sym), ".")
 		declaration, valid := typed.Scope().Lookup(name).(*types.Func)
 		if !valid {
@@ -401,6 +404,27 @@ func sdkMinimumOriginalPackageContext(t *testing.T, path, assembly string, decor
 			t.Fatal(err)
 		}
 		options.Sigs[sig.Name] = sig
+	}
+	for _, fn := range file.Funcs {
+		for _, ins := range fn.Instrs {
+			if ins.Op != plan9asm.OpJMP || len(ins.Args) != 1 || ins.Args[0].Kind != plan9asm.OpSym {
+				continue
+			}
+			symbol := strings.TrimSuffix(ins.Args[0].Sym, "(SB)")
+			if strings.HasSuffix(symbol, "<>") {
+				continue
+			}
+			name := strings.TrimPrefix(Resolve("", symbol), ".")
+			declaration, valid := typed.Scope().Lookup(name).(*types.Func)
+			if !valid {
+				t.Fatal("ordinary tail lacks its actual Go declaration", name)
+			}
+			sig, err := plan9asm.DeriveGoFuncABI0Signature(Resolve(path, symbol), declaration, "amd64", sizes)
+			if err != nil {
+				t.Fatal(err)
+			}
+			options.Sigs[sig.Name] = sig
+		}
 	}
 	return originalContext, CaptureRequest{GoBinary: binary, Root: root, Directory: directory, PackagePath: path, AssemblyFile: filename, Target: "linux/amd64", Environment: environment, Package: view}, pkg, file, options
 }

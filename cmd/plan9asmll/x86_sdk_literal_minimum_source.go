@@ -13,5 +13,10 @@ func (source *x86SDKNumericalCLISource) bindNumericalReads(ctx context.Context, 
 	if source == nil || source.frontend == nil {
 		return plan9asm.Options{}, fmt.Errorf("%w: SDK numerical source lacks its original shared handoff", plan9asm.ErrProbeNeedsContext)
 	}
+	var err error
+	options, err = x86SDKDirectTailDeclarationOptions(source.goPackage, file, options)
+	if err != nil {
+		return plan9asm.Options{}, err
+	}
 	return source.frontend.BindNumericalReads(ctx, source.goPackage, file, options)
 }

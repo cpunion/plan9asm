@@ -114,8 +114,8 @@ func (source *GoX86NumericalReadSource) captureSourceRole(ctx context.Context) e
 	if matched != 1 {
 		return numericalSBContext("SDK assembly is not uniquely selected by the actual target")
 	}
-	if source.literals != nil {
-		return source.captureSDKLiteralSourceRole(ctx)
+	if source.sdkAssemblyJoin() != nil {
+		return source.captureSDKAssemblySourceRole(ctx)
 	}
 	graph, err := source.run(ctx, "list", "-deps", "-compiled", "-export", "-json", "-mod=readonly", source.packageQuery())
 	if err != nil {
@@ -222,7 +222,7 @@ func (source *GoX86NumericalReadSource) verifySDKObservation(ctx context.Context
 		if owner != source.request.Owners[ordinal] {
 			return numericalSBContext("SDK source owner identity/order changed")
 		}
-		if source.literals == nil {
+		if source.sdkAssemblyJoin() == nil {
 			if err := owner.Verify(ctx); err != nil {
 				return err
 			}
@@ -264,13 +264,13 @@ func (source *GoX86NumericalReadSource) verifySDKObservation(ctx context.Context
 }
 
 func (source *GoX86NumericalReadSource) verifySDKCaptureContext() error {
-	if source.literals != nil {
+	if joined := source.sdkAssemblyJoin(); joined != nil {
 		// The joined route samples both original contexts outside source.mu.
 		// The serialized portion can only consume the already sampled lease.
-		if source.sdk.context != source.literals.context || source.sdk.originalContext != source.literals.context {
+		if source.sdk.context != joined.context || source.sdk.originalContext != joined.context {
 			return numericalSBContext("joined SDK capture context identity changed")
 		}
-		return source.literals.verifyIdentity(source.request)
+		return source.verifySDKAssemblyIdentity()
 	}
 	if source.sdk.context == nil || source.sdk.originalContext == nil ||
 		reflect.TypeOf(source.sdk.context) != reflect.TypeOf(source.sdk.originalContext) ||

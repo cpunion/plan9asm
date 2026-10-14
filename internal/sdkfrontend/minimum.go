@@ -27,6 +27,9 @@ func (source *Source) BindNumericalReads(ctx context.Context, pkg plan9asm.GoPac
 	if !requested {
 		return source.Numerical.BindNumericalReads(ctx, pkg, file, options)
 	}
+	if source.literalOwner == nil {
+		return plan9asm.Options{}, contextError("metadata-only source has no literal-minimum owner")
+	}
 	if !source.minimumAttempted {
 		source.minimumAttempted = true // One actual attempt under the original bounded context.
 		source.minimum, source.minimumError = plan9asm.CaptureGoX86SDKLiteralAlignment(ctx, source.literalOwner)
@@ -130,7 +133,7 @@ func (source *Source) end() error {
 // replacement cannot silently change the source whose resources we own.
 func (source *Source) originalComponents() bool {
 	return source.identity == source && source.Numerical != nil && source.Numerical == source.originalNumerical &&
-		source.literalOwner != nil && source.literalOwner == source.originalLiteralOwner && source.minimum == source.originalMinimum
+		source.literalOwner == source.originalLiteralOwner && source.minimum == source.originalMinimum
 }
 
 func (source *Source) Close() error {

@@ -82,14 +82,28 @@ func (source *GoX86NumericalReadSource) bindNumericalReads(ctx context.Context, 
 		return Options{}, err
 	}
 	actual, err := x86CallerSourceFingerprint(source.file)
-	if err != nil || provided != actual || len(file.Funcs) != len(options.Sigs) {
+	if err != nil || provided != actual {
 		return Options{}, numericalSBContext("binding requires the exact complete original parsed file")
+	}
+	if source.role == numericalSBSDKSource {
+		entries, _, err := numericalTypedSourceEntries(file, pkg.Path, arch, source.role)
+		if err != nil || len(entries) != len(options.Sigs) {
+			return Options{}, numericalSBContext("binding typed entry/terminal inventory differs: %v", err)
+		}
+	} else if len(file.Funcs) != len(options.Sigs) {
+		return Options{}, numericalSBContext("binding ordinary declaration inventory differs")
 	}
 	// Resolve outside observer locks, then verify the complete live source again.
 	symbols := make(map[string]string)
-	for _, fn := range file.Funcs {
+	for index, fn := range file.Funcs {
 		symbols[fn.Sym] = options.ResolveSym(fn.Sym)
-		name, _, valid := numericalFunctionSourceIdentity(fn.Sym, pkg.Path, arch, source.role)
+		name, _, valid := source.numericalSourceTextIdentity(index, fn, arch)
+		if strings.HasSuffix(fn.Sym, "<>") && valid {
+			name = numericalNativeName(fn.Sym, pkg.Path)
+			if _, fake := options.Sigs[name]; fake {
+				return Options{}, numericalSBContext("private continuation cannot acquire a callable signature")
+			}
+		}
 		if !valid || symbols[fn.Sym] != name {
 			return Options{}, numericalSBContext("function resolver differs from actual original source/object ABI symbol")
 		}
@@ -98,6 +112,17 @@ func (source *GoX86NumericalReadSource) bindNumericalReads(ctx context.Context, 
 			return Options{}, numericalSBContext("logical declaration resolver differs from its exact source/native entry")
 		}
 		symbols[logical] = name
+	}
+	tailRoles, err := numericalDirectTailRoles(file)
+	if err != nil {
+		return Options{}, err
+	}
+	for _, symbol := range tailRoles {
+		name := numericalNativeName(symbol, pkg.Path)
+		if options.ResolveSym(symbol) != name {
+			return Options{}, numericalSBContext("continuation/terminal resolver changed exact source identity")
+		}
+		symbols[symbol] = name
 	}
 	for _, read := range source.reads {
 		base, _, valid := parseSBRef(read.original.Args[read.operand].Sym)
@@ -139,10 +164,8 @@ func (source *GoX86NumericalReadSource) bindNumericalReads(ctx context.Context, 
 	if err != nil {
 		return Options{}, err
 	}
-	for _, fn := range file.Funcs {
-		name := symbols[fn.Sym]
+	for name, sig := range sigs {
 		declaration, found := declarations[name]
-		sig := sigs[name]
 		if !found || sig.arm64FPReadDeclaration != nil || sig.arm64ABI0Declaration != nil || sig.arm64ABI0TailDeclaration != nil || sig.arm64NativeScratch != nil ||
 			!reflect.DeepEqual(numericalSignatureShape(sig), declaration.signature) {
 			return Options{}, numericalSBContext("signature is not the actual source declaration: %s", name)
@@ -362,7 +385,7 @@ func (source *GoX86NumericalReadSource) numericalDeclarations(ctx context.Contex
 		}
 	}
 	for _, owner := range source.originalOwners {
-		if source.literals != nil {
+		if source.sdkAssemblyJoin() != nil {
 			// Joined SDK capture accepts only independent SDK CPU owners.
 			// Its complete declaration graph is the separately sealed SDK graph;
 			// owner callbacks run before/after, never under source.mu here.
@@ -387,21 +410,31 @@ func (source *GoX86NumericalReadSource) numericalDeclarations(ctx context.Contex
 		}
 	}
 	var entries map[string]bool
+	var terminals map[string]bool
 	if source.role == numericalSBSDKSource {
-		entries = make(map[string]bool, len(source.file.Funcs))
-		for _, fn := range source.file.Funcs {
-			name, _, valid := numericalFunctionSourceIdentity(fn.Sym, pkg.Path, arch, source.role)
-			if !valid || !strings.HasPrefix(name, pkg.Path+".") {
-				return nil, numericalSBContext("SDK numerical source lacks its original same-package ASM declaration")
-			}
-			local := strings.TrimPrefix(name, pkg.Path+".")
-			if entries[local] {
-				return nil, numericalSBContext("SDK numerical source repeats a selected declaration identity")
-			}
-			entries[local] = true
+		var err error
+		entries, terminals, err = numericalTypedSourceEntries(source.file, pkg.Path, arch, source.role)
+		if err != nil {
+			return nil, err
 		}
 	}
-	return guard.typedDeclarationsForArchRole(pkg, false, arch, source.role == numericalSBSDKSource, entries)
+	if source.sdkAssemblyJoin() != nil && x86DirectTailSourceNeeded(source.file) {
+		return source.numericalSDKOrdinaryTailDeclarations(ctx, pkg, arch, entries)
+	}
+	declarations, err := guard.typedDeclarationsForArchRole(pkg, false, arch, source.role == numericalSBSDKSource, entries)
+	if err != nil {
+		return nil, err
+	}
+	ordinary, err := source.numericalSDKOrdinaryTailDeclarations(ctx, pkg, arch, terminals)
+	if err != nil {
+		return nil, err
+	}
+	for name, declaration := range ordinary {
+		if _, present := declarations[name]; !present {
+			declarations[name] = declaration
+		}
+	}
+	return declarations, nil
 }
 
 type x86NumericalReadCertificate struct {
@@ -477,6 +510,9 @@ func freezeNumericalReadInputs(file *File, options Options) (*File, Options, err
 	}
 	options.ResolveSym, options.NumericalReads = binding.resolve, binding
 	if err := joinNumericalReadCertificates(&frozen, options); err != nil {
+		return nil, Options{}, err
+	}
+	if err := preserveX86DirectTailNumericalGraph(file, &frozen, options); err != nil {
 		return nil, Options{}, err
 	}
 	return &frozen, options, nil
