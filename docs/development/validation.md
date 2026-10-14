@@ -48,7 +48,7 @@ go test ./... -count=1 -timeout=45m
 (cd cmd/plan9asmll && go test ./... -count=1 -timeout=30m)
 go vet ./...
 go build ./...
-test -z "$(gofmt -l .)"
+test -z "$(git ls-files -z -- '*.go' | xargs -0 gofmt -l)"
 git diff --check
 node --test .github/scripts/priority-*.test.cjs
 
@@ -79,6 +79,9 @@ Run race tests for changed concurrent code and actual Go 1.20 checks for changed
 root-module code. Current-SDK producer fixtures use explicit `go1.27` build
 roles; historical lanes still test their portable framework. Do not add runtime
 skips or `!llgo` tags to hide incomplete compiler support.
+Run the formatting check with the selected current Go toolchain. Limit it to
+tracked sources: ignored `_out/` holds deliberately unchanged historical failures
+and generated observation inputs, not repository formatting targets.
 
 ## Native and cross-runtime semantics
 
