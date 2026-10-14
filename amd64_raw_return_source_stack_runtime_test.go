@@ -88,19 +88,25 @@ func x86SourceStackRuntimeSource(arch string) (string, map[string]FuncSig) {
 	source.WriteString(strings.ReplaceAll(text, "·Value", "·PhysicalBool"))
 	sig.Name = "PhysicalBool"
 	sigs[sig.Name] = sig
+	// Preserve the original identity kernel above byte-for-byte. This sibling
+	// observes a physical result byte before its final logical bool conversion:
+	// prematurely truncating the intermediate 2 to i1 would return false.
+	text, sig, _ = x86SourceStackTypedFixture(arch, "bool", I1, word, "MOVB",
+		"MOVB $2,@RESULT(SP)\nMOVB @RESULT(SP),AX\nSHRB $1,AX\nANDB $1,AX\nMOVB AX,@RESULT(SP)\nBYTE $0xc3")
+	source.WriteString(strings.ReplaceAll(text, "·Value", "·PhysicalBoolIntermediate"))
+	sig.Name = "PhysicalBoolIntermediate"
+	sigs[sig.Name] = sig
 	return source.String(), sigs
 }
 
-func x86SourceStackActualGoNumerical(t *testing.T, arch string, runner []string) {
-	t.Helper()
-	dir := t.TempDir()
-	source, _ := x86SourceStackRuntimeSource(arch)
+func x86SourceStackGoOracle(arch string) string {
 	var goSource strings.Builder
 	goSource.WriteString("package sourceframe\nimport \"testing\"\n")
 	for _, test := range x86SourceStackRuntimeCases(arch) {
 		fmt.Fprintf(&goSource, "func %s(x uint%d) uint%d\n", test.name, test.width, test.width)
 	}
 	goSource.WriteString("func PhysicalBool(x bool) bool\n")
+	goSource.WriteString("func PhysicalBoolIntermediate(x bool) bool\n")
 	goSource.WriteString("func TestNumerical(t *testing.T) {\n")
 	for _, test := range x86SourceStackRuntimeCases(arch) {
 		fmt.Fprintf(&goSource, `
@@ -123,11 +129,19 @@ func x86SourceStackActualGoNumerical(t *testing.T, arch string, runner []string)
 	}
 `, test.name, test.name)
 	}
-	goSource.WriteString("\tif PhysicalBool(false) || !PhysicalBool(true) { t.Fatal(\"bool byte slot\") }\n}\n")
+	goSource.WriteString("\tif PhysicalBool(false) || !PhysicalBool(true) { t.Fatal(\"bool byte slot\") }\n")
+	goSource.WriteString("\tcanary := [4]uint64{11,23,37,41}\n\tif !PhysicalBoolIntermediate(false) || !PhysicalBoolIntermediate(true) || canary != [4]uint64{11,23,37,41} { t.Fatal(\"physical intermediate bool byte/canary\") }\n}\n")
+	return goSource.String()
+}
+
+func x86SourceStackActualGoNumerical(t *testing.T, arch string, runner []string) {
+	t.Helper()
+	dir := t.TempDir()
+	source, _ := x86SourceStackRuntimeSource(arch)
 	for name, text := range map[string]string{
 		"go.mod":               "module example.invalid/sourceframeoracle\n\ngo 1.20\n",
 		"value_" + arch + ".s": source,
-		"value_test.go":        goSource.String(),
+		"value_test.go":        x86SourceStackGoOracle(arch),
 	} {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(text), 0600); err != nil {
 			t.Fatal(err)
@@ -151,7 +165,7 @@ func x86SourceStackActualGoNumerical(t *testing.T, arch string, runner []string)
 func x86SourceStackCOracle(arch string) string {
 	var source strings.Builder
 	source.WriteString("#include <stdint.h>\n")
-	source.WriteString("#include <stdbool.h>\nextern bool PhysicalBool(bool);\n")
+	source.WriteString("#include <stdbool.h>\nextern bool PhysicalBool(bool);\nextern bool PhysicalBoolIntermediate(bool);\n")
 	for _, test := range x86SourceStackRuntimeCases(arch) {
 		fmt.Fprintf(&source, "extern uint%d_t %s(uint%d_t);\n", test.width, test.name, test.width)
 	}
@@ -177,7 +191,8 @@ func x86SourceStackCOracle(arch string) string {
 	}
 `, test.name)
 	}
-	source.WriteString("\tif (PhysicalBool(false) || !PhysicalBool(true)) return 2;\n\treturn 0;\n}\n")
+	source.WriteString("\tif (PhysicalBool(false) || !PhysicalBool(true)) return 2;\n")
+	source.WriteString("\tvolatile uint64_t boolCanary = UINT64_C(0x123456789abcdef0);\n\tif (!PhysicalBoolIntermediate(false) || !PhysicalBoolIntermediate(true) || boolCanary != UINT64_C(0x123456789abcdef0)) return 3;\n\treturn 0;\n}\n")
 	return source.String()
 }
 

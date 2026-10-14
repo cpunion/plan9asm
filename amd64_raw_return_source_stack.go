@@ -11,9 +11,10 @@ import (
 // Ordinary pointers need a separately consumed complete Go caller proof.
 // Nonzero TEXT frames, calls and private-stack address escape cannot use it.
 type x86SourceStackProof struct {
-	minimum int64
-	word    int64
-	caller  *x86GoCallerRegionProof
+	minimum    int64
+	word       int64
+	caller     *x86GoCallerRegionProof
+	boolResult *x86SourceStackBoolProof
 	// Exact public normalized source bytes, excluding private certificates.
 	normalized [32]byte
 	// Diagnostic-only finite replay counts, never used as permission inputs.
@@ -42,6 +43,8 @@ type x86SourceStackCell struct {
 	partialNumericFlags uint8
 	caller              *x86CallerPointerValue
 	known               uint8
+	canonical           uint8
+	boolFlags           uint8
 	gOriginal           bool
 }
 
@@ -56,6 +59,7 @@ type x86SourceStackState struct {
 	vectors             map[Reg]uint64
 	masks               map[Reg]bool
 	gOriginal           bool
+	boolResult          *x86SourceStackBoolState
 }
 
 const x86SourceStackLimit = int64(1 << 20)
@@ -215,6 +219,13 @@ func normalizeX86RawReturnSourceStack(fn Func, opt Options, bindFrame bool, orig
 	work := []int{0}
 	states[0] = x86SourceStackState{bp: x86SourceStackAddress{original: true}, gOriginal: true}
 	proof := &x86SourceStackProof{word: word}
+	if bindFrame && hasSig && sig.Ret == I1 {
+		states[0] = x86SourceStackState{bp: x86SourceStackAddress{original: true}, gOriginal: true,
+			boolResult: x86SourceStackBoolInitial(fn, sig, opt.Goarch)}
+		if states[0].boolResult == nil || caller {
+			return reject(0, "physical bool result requires its independent scalar declaration")
+		}
+	}
 	if caller {
 		proof.caller = sig.x86CallerRegions
 		states[0] = x86SourceStackState{
@@ -234,6 +245,10 @@ func normalizeX86RawReturnSourceStack(fn Func, opt Options, bindFrame bool, orig
 			}
 			if len(ins.Args) != 0 || state.sp != 0 || !state.bp.original || goDeltas[instructions[pc]] != 0 {
 				return false, "unproved source-stack or ABI0 continuation effect"
+			}
+			if value := state.boolResult; value != nil &&
+				(!value.bytes.fp[value.result] || !value.bytes.canonicalFP[value.result]) {
+				return false, "physical bool result is not written canonical zero/one on every return"
 			}
 			return true, ""
 		}
@@ -316,6 +331,9 @@ func normalizeX86RawReturnSourceStack(fn Func, opt Options, bindFrame bool, orig
 		if pointerFlags {
 			x86SourceStackSetNumericFlags(state, 0)
 		}
+		if state.boolResult != nil && !state.boolResult.step(*ins, opt.Goarch) {
+			return false, "physical bool result has an undefined numerical input or effect"
+		}
 
 		return false, ""
 	}
@@ -356,6 +374,7 @@ func normalizeX86RawReturnSourceStack(fn Func, opt Options, bindFrame bool, orig
 		}
 	}
 	final := false
+	boolByteWork := 0
 	for budget := 0; ; budget++ {
 		if len(work) == 0 {
 			if !acyclic || final {
@@ -379,10 +398,17 @@ func normalizeX86RawReturnSourceStack(fn Func, opt Options, bindFrame bool, orig
 		pc := work[0]
 		work = work[1:]
 		state := states[pc]
+		if value := state.boolResult; value != nil {
+			boolByteWork += 8 * (2*len(value.bytes.fp) + 33 + 2*len(state.cells))
+			if boolByteWork > 64<<20 {
+				return reject(instructions[pc], "physical bool source-CFG byte budget exhausted")
+			}
+		}
 		if caller {
 			state = x86CloneCallerState(state)
 		} else {
 			state.cells = append([]x86SourceStackCell(nil), state.cells...)
+			state.boolResult = state.boolResult.clone()
 		}
 		ins := &copyFn.Instrs[instructions[pc]]
 		ins.x86CallerMemory = nil
@@ -455,6 +481,12 @@ func normalizeX86RawReturnSourceStack(fn Func, opt Options, bindFrame bool, orig
 	}
 	if !returned {
 		return fn
+	}
+	if bindFrame && hasSig && sig.Ret == I1 {
+		proof.boolResult = sealX86SourceStackBool(copyFn, input, sig, proof)
+		if proof.boolResult == nil {
+			return reject(0, "physical bool result source seal failed")
+		}
 	}
 	if caller {
 		var err error
@@ -545,6 +577,9 @@ func x86SourceStackStep(spec amd64StackWidthSpec, ins *Instr, state *x86SourceSt
 		return false
 	}
 	cell := x86SourceStackCell{width: width, flags: flags, numericFlags: state.numericFlags, partialNumericFlags: state.partialNumericFlags}
+	if state.boolResult != nil && flags {
+		cell.boolFlags = state.boolResult.bytes.flags
+	}
 	if !flags {
 		operand := ins.Args[0]
 		if operand.Kind != OpReg && (!push || operand.Kind != OpImm) {
@@ -581,6 +616,25 @@ func x86SourceStackStep(spec amd64StackWidthSpec, ins *Instr, state *x86SourceSt
 				}
 				cell.known = state.known[root]
 			}
+			if state.boolResult != nil && operand.Reg != BP {
+				arch := "amd64"
+				if word == 4 {
+					arch = "386"
+				}
+				index, mask, valid := x86ResultGP(operand.Reg, width, arch)
+				if !valid {
+					return false
+				}
+				cell.known = state.boolResult.bytes.gp[index] & mask
+				cell.canonical = state.boolResult.bytes.canonicalGP[index] & mask
+			}
+		}
+		if state.boolResult != nil && operand.Kind == OpImm {
+			if operand.ImmRaw != "" || operand.ImmIsFloat {
+				return false
+			}
+			cell.known = uint8((uint16(1) << uint(width)) - 1)
+			cell.canonical = fixedLocalConstantBooleans(operand.Imm, width)
 		}
 	}
 	if push {
@@ -614,6 +668,26 @@ func x86SourceStackStep(spec amd64StackWidthSpec, ins *Instr, state *x86SourceSt
 	if flags {
 		state.numericFlags = saved.numericFlags
 		state.partialNumericFlags = saved.partialNumericFlags
+		if state.boolResult != nil {
+			state.boolResult.bytes.flags = saved.boolFlags
+		}
+	}
+	if state.boolResult != nil && !flags && ins.Args[0].Reg != BP {
+		arch := "amd64"
+		if word == 4 {
+			arch = "386"
+		}
+		index, mask, valid := x86ResultGP(ins.Args[0].Reg, width, arch)
+		if !valid {
+			return false
+		}
+		value := &state.boolResult.bytes
+		value.gp[index] = value.gp[index]&^mask | saved.known&mask
+		value.canonicalGP[index] = value.canonicalGP[index]&^mask | saved.canonical&mask
+		if width == 4 && word == 8 {
+			value.gp[index] |= 240
+			value.canonicalGP[index] |= 240
+		}
 	}
 	if saved.bp != nil {
 		if flags || ins.Args[0].Reg != BP {
