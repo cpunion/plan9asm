@@ -437,6 +437,10 @@ func (c *amd64Ctx) scanUsedRegs() {
 }
 
 func (c *amd64Ctx) emitEntryAllocas() error {
+	resultRegion, regionalResults := x86DirectTailResultRegion(c.fpScalarSource, c.sig, c.goarch)
+	if regionalResults && (!c.fpScalarChecked || c.fpScalarCheckErr != nil) {
+		return fmt.Errorf("%w: contiguous result backing lacks its complete source-byte proof", ErrProbeNeedsContext)
+	}
 	if c.fixedLocal != nil && (c.fixedLocal.binding == nil || c.fixedLocal.binding != c.sig.x86FixedLocal ||
 		c.goarch != "amd64" || c.targetTriple != c.fixedLocal.binding.target || c.frameSize != c.fixedLocal.frame) {
 		return goAMD64FrameContext("fixed local storage consumer lost its sealed source identity")
@@ -656,12 +660,24 @@ func (c *amd64Ctx) emitEntryAllocas() error {
 			fmt.Fprintf(c.b, "  %s = alloca %s\n", name, x86FPStorageType(slot.Type))
 			c.storeFPStorage(slot.Type, value, name, "", "")
 		}
-		for _, r := range c.fpResults {
-			name := fmt.Sprintf("%%fp_ret_%d", r.Index)
-			c.fpResAllocaIdx[r.Index] = name
-			c.fpResAllocaOff[r.Offset] = name
-			fmt.Fprintf(c.b, "  %s = alloca %s\n", name, x86FPStorageType(r.Type))
-			c.storeFPStorage(r.Type, llvmZeroValue(r.Type), name, "", "")
+		if regionalResults {
+			c.emitDirectTailResultRegion(resultRegion)
+		} else {
+			for _, r := range c.fpResults {
+				name := fmt.Sprintf("%%fp_ret_%d", r.Index)
+				c.fpResAllocaIdx[r.Index] = name
+				c.fpResAllocaOff[r.Offset] = name
+				fmt.Fprintf(c.b, "  %s = alloca %s\n", name, x86FPStorageType(r.Type))
+				c.storeFPStorage(r.Type, llvmZeroValue(r.Type), name, "", "")
+			}
+		}
+	}
+	if regionalResults {
+		// One region address may reach any of its fields. RET must load each
+		// member's actual storage, never a return-register fallback. This is
+		// addressability, not a numerical initialization fact.
+		for _, slot := range c.fpResults {
+			c.markFPResultAddrTaken(slot.Offset)
 		}
 	}
 

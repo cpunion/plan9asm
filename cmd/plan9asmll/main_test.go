@@ -704,7 +704,7 @@ func TestSigsForAsmFileInfersSharedABI0ResultPointerHelper(t *testing.T) {
 		Types:      typesPkg,
 		TypesSizes: types.SizesFor("gc", "amd64"),
 	}
-	const source = `TEXT ·HashPointerAndSeed(SB),NOSPLIT,$0-32
+	const opaqueSource = `TEXT ·HashPointerAndSeed(SB),NOSPLIT,$0-32
 	MOVQ p+0(FP), AX
 	MOVQ seed+8(FP), CX
 	LEAQ ret+16(FP), DX
@@ -719,6 +719,12 @@ TEXT hashbody<>(SB),NOSPLIT,$0-0
 	MOVQ CX, 8(DX)
 	RET
 `
+	// This fixture checks shared result-pointer transport, not permission to
+	// expose opaque pointer bits as a numerical hash. Retain AX as an actual
+	// live-in pointer, but derive a numerical predicate through the existing
+	// read-only address comparison and canonical byte/extension grammar.
+	source := strings.Replace(opaqueSource, "\tMOVQ AX, (DX)",
+		"\tTESTQ AX, AX\n\tSETNE AX\n\tMOVBQZX AX, AX\n\tMOVQ AX, (DX)", 1)
 	file, err := plan9asm.Parse(plan9asm.ArchAMD64, source)
 	if err != nil {
 		t.Fatal(err)
@@ -763,14 +769,39 @@ TEXT hashbody<>(SB),NOSPLIT,$0-0
 		t.Fatal(err)
 	}
 	for _, want := range []string{
-		`define void @"example.com/hash.hashbody$local"(`,
-		`call void @"example.com/hash.hashbody$local"(`,
+		`@"example.com/hash.HashPointerAndSeed"(`,
+		`@"example.com/hash.HashPointer"(`,
+		`%fp_result_region = alloca [16 x i8], align 8`,
 		`ret { i64, i64 }`,
 	} {
 		if !strings.Contains(string(ir), want) {
 			t.Fatalf("shared output-pointer IR omitted %q", want)
 		}
 	}
+	// The renderer already closes and inlines each private direct-tail graph.
+	// Its inferred custom helper signature is not a standalone callable ABI or
+	// permission to pass one root's result storage to another root.
+	if strings.Count(string(ir), "define ") != 2 || strings.Contains(string(ir), `call void @"example.com/hash.hashbody$local"(`) {
+		t.Fatal("shared private tail graph escaped its two independent roots")
+	}
+	t.Run("opaque pointer bits retain their independent contract", func(t *testing.T) {
+		originalAsm := filepath.Join(dir, "opaque_amd64.s")
+		originalOut := filepath.Join(dir, "opaque_amd64.ll")
+		if err := os.WriteFile(originalAsm, []byte(opaqueSource), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		err := compileOne(pkg, plan9asm.ArchAMD64, "linux", "amd64", "x86_64-unknown-linux-gnu", asmTask{
+			PkgPath: pkg.PkgPath,
+			AsmFile: originalAsm,
+			OutLL:   originalOut,
+		}, false, compileConfig{})
+		if !errors.Is(err, plan9asm.ErrProbeNeedsContext) {
+			t.Fatalf("opaque pointer acquired numerical result bytes: %v", err)
+		}
+		if _, err := os.Stat(originalOut); !os.IsNotExist(err) {
+			t.Fatalf("failed opaque result observation published output: %v", err)
+		}
+	})
 
 	for _, test := range []struct {
 		name   string

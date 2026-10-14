@@ -101,6 +101,9 @@ func checkX86ABI0ResultInitializationAtSource(fn Func, sig FuncSig, goarch strin
 					start: slot.Offset, end: slot.Offset + x86ResultScalarBytes(slot.Type, goarch), valid: true})
 			}
 		}
+		if region, valid := x86DirectTailResultRegion(fn, sig, goarch); valid {
+			initial.resultAddressSlots = []x86ResultSlotAddress{region}
+		}
 	}
 	initial.callerAddressFP = initial.pointerFP // Immutable actual typed entry layout.
 	autoExtent, autoErr := x86ResultAUTOExtent(fn, goarch)

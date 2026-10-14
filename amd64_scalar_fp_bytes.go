@@ -133,6 +133,11 @@ func (c *amd64Ctx) validateScalarFPSourceViews() error {
 			return err
 		}
 	}
+	if _, valid := x86DirectTailResultRegion(c.fpScalarSource, c.sig, c.goarch); valid {
+		if err := c.scalarFPResultInitialized(); err != nil {
+			return err
+		}
+	}
 	if x86OrdinaryResultAddressNeedsProof(c.fpScalarSource, c.sig, c.goarch) {
 		if err := c.scalarFPResultInitialized(); err != nil {
 			return err
