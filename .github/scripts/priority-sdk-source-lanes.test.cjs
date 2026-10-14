@@ -260,6 +260,24 @@ test('Void calls and text context ownership regressions run before complete modu
   assert.equal((sdk.match(/- lane:/g) || []).length, 13);
 });
 
+test('Complete direction control and string-consumer regressions are mandatory', () => {
+  const source = sdk.slice(sdk.indexOf('- lane: source\n'), sdk.indexOf('- lane: frame-context\n'));
+  for (const root of [
+    'TestX86DirectionControlNumericalAndCallerThreeAPIs',
+    'TestX86DirectionControlCompleteGoGrammarAndRawSeparation',
+    'TestX86DirectionStateCloneJoinPreservationAndRevocation',
+    'TestX86DirectionWholeSourceCFGJoinsAndFinalEffectRevocation',
+    'TestX86DirectionMalformedDeadSourceCannotBorrowNumericalProof',
+    'TestX86DirectionLoweredStringCompleteFamilyConsumesDirection',
+    'TestX86DirectionControlPreservesSixStatusButGrantsNoEntryFacts',
+    'TestX86DirectionOriginalSDKIndexByte386ThreeAPIsNextContext',
+    'TestX86DirectionOriginalGo127CompleteYnoneRows',
+    'TestX86ABI0ResultInitializationCompleteStateByteEnvelope',
+  ]) assert.equal(source.split(`- ${root}\n`).length - 1, 1, root);
+  assert.match(source, /timeout: 5m/);
+  assert.equal((sdk.match(/- lane:/g) || []).length, 13);
+});
+
 test('Actual failed SDK frame paths run before the complete-module barrier', () => {
   const llvm = sdk.slice(sdk.indexOf('- lane: llvm'), sdk.indexOf('- lane: crc32-linux'));
   for (const root of [

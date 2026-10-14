@@ -316,6 +316,16 @@ jobs:
               - TestX86ABI0Mode32CanonicalBoolActualAtomicCompleteSourceNextContext
               - TestTranslateTextOwnsRequestLLVMContext
               - TestTranslateTextConcurrentRequestsKeepOriginalFile
+              - TestX86DirectionControlNumericalAndCallerThreeAPIs
+              - TestX86DirectionControlCompleteGoGrammarAndRawSeparation
+              - TestX86DirectionStateCloneJoinPreservationAndRevocation
+              - TestX86DirectionWholeSourceCFGJoinsAndFinalEffectRevocation
+              - TestX86DirectionMalformedDeadSourceCannotBorrowNumericalProof
+              - TestX86DirectionLoweredStringCompleteFamilyConsumesDirection
+              - TestX86DirectionControlPreservesSixStatusButGrantsNoEntryFacts
+              - TestX86DirectionOriginalSDKIndexByte386ThreeAPIsNextContext
+              - TestX86DirectionOriginalGo127CompleteYnoneRows
+              - TestX86ABI0ResultInitializationCompleteStateByteEnvelope
               - TestGoX86SDKASMDataOriginalVendorPackageNamespace
               - TestGoX86SDKNumericalReadPackageQueryMatchesOriginalLiteralSource
               - TestSDKAMD64OriginalFrameConfigGuardEagerIdentity
