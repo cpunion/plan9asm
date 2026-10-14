@@ -187,20 +187,11 @@ func TestX86ScalarBitScanOriginalGoHexWordOpsFunctionThreeAPIs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	text := string(assembly)
-	start := strings.Index(text, "TEXT ·goHexWordOps(SB)")
-	if start < 0 {
-		t.Fatal("original conformance member disappeared")
-	}
-	end := strings.Index(text[start+1:], "\nTEXT ")
-	if end < 0 {
-		t.Fatal("complete original function boundary disappeared")
-	}
 	// This is the complete unchanged original function, not a claim that the
 	// entire conformance file or its native/runtime axes have been executed.
-	source := text[start : start+1+end]
-	if !strings.Contains(source, "MOVQ $0, AX\n\tBSFW DX, AX") {
-		t.Fatal("original non-guarded initialized-destination counterexample changed")
+	source, err := x86OriginalHexWordOpsSource(assembly)
+	if err != nil {
+		t.Fatal(err)
 	}
 	fset := token.NewFileSet()
 	parsed, err := parser.ParseFile(fset, "conformance.go", goSource, 0)
@@ -224,6 +215,48 @@ func TestX86ScalarBitScanOriginalGoHexWordOpsFunctionThreeAPIs(t *testing.T) {
 			ir, err := x86ScalarFPBitViewAPI(t, source, declaration, "amd64", "x86_64-unknown-linux-gnu", api)
 			if err != nil || ir == "" {
 				t.Fatal("unchanged original goHexWordOps was rejected", err)
+			}
+		})
+	}
+}
+
+func x86OriginalHexWordOpsSource(assembly []byte) (string, error) {
+	text := string(assembly)
+	start := strings.Index(text, "TEXT ·goHexWordOps(SB)")
+	if start < 0 {
+		return "", fmt.Errorf("original conformance member disappeared")
+	}
+	end := strings.Index(text[start+1:], "\nTEXT ")
+	if end < 0 {
+		return "", fmt.Errorf("complete original function boundary disappeared")
+	}
+	source := text[start : start+1+end]
+	// Check only a policy copy; return the complete original bytes unchanged
+	// for every actual translation API, including CRLF checkouts.
+	policySource := string(normalizeNativeOwnerPolicySource([]byte(source)))
+	if !strings.Contains(policySource, "MOVQ $0, AX\n\tBSFW DX, AX") {
+		return "", fmt.Errorf("original non-guarded initialized-destination counterexample changed")
+	}
+	return source, nil
+}
+
+func TestX86ScalarBitScanOriginalGoHexWordOpsSourceLineEndings(t *testing.T) {
+	const original = "TEXT ·goHexWordOps(SB), NOSPLIT, $0-16\n\tMOVQ $0, AX\n\tBSFW DX, AX\n\tRET\nTEXT ·next(SB), NOSPLIT, $0\n\tRET\n"
+	for _, newline := range []string{"\n", "\r\n"} {
+		name := "LF"
+		if newline == "\r\n" {
+			name = "CRLF"
+		}
+		t.Run(name, func(t *testing.T) {
+			assembly := strings.ReplaceAll(original, "\n", newline)
+			source, err := x86OriginalHexWordOpsSource([]byte(assembly))
+			boundary := strings.Index(assembly, "\nTEXT ·next(SB)")
+			if err != nil || source != assembly[:boundary] {
+				t.Fatal("Go-equivalent checkout changed original source selection or bytes", err)
+			}
+			changed := strings.Replace(assembly, "MOVQ $0, AX", "MOVQ $1, AX", 1)
+			if _, err := x86OriginalHexWordOpsSource([]byte(changed)); err == nil {
+				t.Fatal("changed original zero-input counterexample was accepted")
 			}
 		})
 	}
