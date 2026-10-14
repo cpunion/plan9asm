@@ -1,6 +1,9 @@
 package plan9asm
 
-import "strings"
+import (
+	"reflect"
+	"strings"
+)
 
 // This is a lowering-only numerical availability check. A paired original
 // opcode or volatile unaligned load either faults or produces its active
@@ -70,16 +73,19 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 			}
 		}
 	}
+	lockPrefixes := x86ResultSourceLockPrefixes(fn, arch)
 	transfer := func(ordinal int, ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string) bool {
 		state.loweredStaticReads = c.fpScalarData
 		defer func() { state.loweredStaticReads = nil }()
+		if ins.Op == "LOCK" {
+			prefix, bound := lockPrefixes[ordinal]
+			return bound && reflect.DeepEqual(prefix, ins)
+		}
+		if accepted, known := x86LoweredCompareExchangeResultStep(ins, state, owned, arch); known {
+			return accepted
+		}
 		if accepted, known := x86ResultSignedIntegerFloatStepWithRead(ins, state, owned, arch, true); known {
 			return accepted // The same typed emitter retains an exact volatile source read.
-		}
-		if customRegisterBool {
-			if accepted, known := x86CustomRegisterBoolCompareExchangeStep(fn, ordinal, ins, state, arch); known {
-				return accepted
-			}
 		}
 		if accepted, known := x86ResultPackedStringStepWithRead(ins, state, owned, arch, true); known {
 			return accepted // Paired emitter retains the full volatile m128 read.

@@ -69,7 +69,7 @@ func TestX86Mode32CustomRegisterBoolPairedEffectHasNoNewAuthority(t *testing.T) 
 			before := x86DirectTailSnapshot(file)
 			observed := false
 			transfer := func(ordinal int, ins Instr, state *x86ResultState, owned []bool, offset int64, arch string) bool {
-				if accepted, known := x86CustomRegisterBoolCompareExchangeStep(file.Funcs[0], ordinal, ins, state, arch); known {
+				if accepted, known := x86LoweredCompareExchangeResultStep(ins, state, owned, arch); known {
 					if !state.shapeOnly {
 						observed = true
 						wantFlags := uint8(x86ByteFlagsAll)
