@@ -25,7 +25,8 @@ type amd64Ctx struct {
 
 	tmp int
 
-	blocks []amd64Block
+	blocks     []amd64Block
+	directTail *x86DirectTailRoot
 	// Mapping between linear instruction index and block index. Used to
 	// resolve n(PC) branches which are instruction-relative.
 	blockBase  []int
@@ -126,6 +127,10 @@ func newX86Ctx(b *strings.Builder, fn Func, sig FuncSig, resolve func(string) st
 		fpResAddrTaken: map[int]bool{},
 		fpScalarSource: fn,
 		blockByIdx:     map[int]int{},
+	}
+	if fn.x86DirectTailRoot != nil {
+		c.directTail = fn.x86DirectTailRoot
+		c.blocks = c.directTail.blocks()
 	}
 	for _, s := range sig.Frame.Params {
 		c.fpParams[s.Offset] = s

@@ -19,6 +19,22 @@ func TranslateModule(file *File, opt Options) (llvm.Module, error) {
 // Dispose the returned module before disposing ctx. High-volume callers should
 // create a fresh context per file so LLVM can release context-owned caches.
 func TranslateModuleInContext(ctx llvm.Context, file *File, opt Options) (result llvm.Module, resultErr error) {
+	file, err := PrepareX86DirectTailSource(file, opt)
+	if err != nil {
+		return llvm.Module{}, err
+	}
+	if file != nil && file.x86DirectTails != nil {
+		graph, request := file.x86DirectTails, file
+		defer func() {
+			if err := graph.verify(request, opt); err != nil {
+				if !result.IsNil() {
+					result.Dispose()
+				}
+				result = llvm.Module{}
+				resultErr = errors.Join(resultErr, err)
+			}
+		}()
+	}
 	if err := rejectMixedNativeAuthorities(opt.NumericalReads, opt.ARM64ByteCarrierSource); err != nil {
 		return llvm.Module{}, err
 	}
@@ -26,7 +42,7 @@ func TranslateModuleInContext(ctx llvm.Context, file *File, opt Options) (result
 		return translateARM64ByteCarrierModule(ctx, file, opt)
 	}
 	originalFile, originalOptions := file, opt
-	file, opt, err := freezeTLSMoveInputs(file, opt)
+	file, opt, err = freezeTLSMoveInputs(file, opt)
 	if err != nil {
 		return llvm.Module{}, err
 	}

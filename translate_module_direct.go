@@ -27,7 +27,7 @@ func translateModuleDirectInContext(ctx llvm.Context, file *File, opt Options) (
 	if file == nil {
 		return llvm.Module{}, fmt.Errorf("nil file")
 	}
-	if len(file.x86Continuations) != 0 {
+	if len(file.x86Continuations) != 0 || file.x86DirectTails != nil {
 		return llvm.Module{}, directUnsupportedf("x86 continuations require shared CFG lowering")
 	}
 	if len(file.Funcs) == 0 && len(file.Data) == 0 && len(file.Globl) == 0 {

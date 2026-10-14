@@ -133,6 +133,10 @@ func checkX86ABI0ResultInitializationAtSource(fn Func, sig FuncSig, goarch strin
 
 type x86ResultSourceTransfer func(int, Instr, *x86ResultState, []bool, int64, string) bool
 
+type x86ResultFlowBudget struct {
+	visits, bytes int
+}
+
 // The ABI owns entry bytes and the required return bytes. Instruction effects,
 // dead-source validation, joins and fixed-point budgets are shared, so a new
 // entry role cannot weaken the existing ABI0 result proof.
@@ -170,6 +174,10 @@ func checkX86ResultSourceFlow(fn Func, initial x86ResultState, owned []bool, res
 		instructions = append(instructions, ins)
 		ordinals = append(ordinals, ordinal)
 	}
+	if fn.x86DirectTailRoot != nil {
+		instructions = fn.x86DirectTailRoot.instructions
+		ordinals = fn.x86DirectTailRoot.ordinals
+	}
 	if len(instructions) == 0 || len(instructions) > 4096 {
 		return fail("missing or oversized source CFG")
 	}
@@ -182,8 +190,15 @@ func checkX86ResultSourceFlow(fn Func, initial x86ResultState, owned []bool, res
 		8*len(initial.xmm) + len(initial.masks) + 1 + len(initial.pointerGP) + len(initial.callerAddressGP) + 1
 	const byteWorkLimit = 64 << 20
 	byteWork := len(instructions) * byteState
-	if len(initial.auto) != 0 && byteWork > byteWorkLimit/8 {
+	boundedWork := len(initial.auto) != 0 || fn.x86DirectTailRoot != nil
+	if boundedWork && byteWork > byteWorkLimit/8 {
 		return fail("combined FP/AUTO source-CFG byte budget exhausted")
+	}
+	if budget := fn.x86ResultFlowBudget; budget != nil {
+		budget.bytes += byteWork
+		if budget.bytes > byteWorkLimit/8 {
+			return fail("combined source-graph byte budget exhausted")
+		}
 	}
 	// Validate effects and all static successors source-wide. Definedness is
 	// proved below only for reachable paths; dead instructions must not hide
@@ -220,7 +235,9 @@ func checkX86ResultSourceFlow(fn Func, initial x86ResultState, owned []bool, res
 			return fail(fmt.Sprintf("unclosed source effect at instruction %d: %s", pc, ins.Raw))
 		}
 		next := []int{pc + 1}
-		if ins.Op == OpJMP || isAMD64ConditionalBranch(ins.Op) {
+		if fn.x86DirectTailRoot != nil {
+			next = fn.x86DirectTailRoot.edges[pc]
+		} else if ins.Op == OpJMP || isAMD64ConditionalBranch(ins.Op) {
 			if len(ins.Args) != 1 {
 				return fail("unbound branch operands")
 			}
@@ -253,7 +270,14 @@ func checkX86ResultSourceFlow(fn Func, initial x86ResultState, owned []bool, res
 		if visits >= 16384 {
 			return fail("must-defined fixed-point budget exhausted")
 		}
-		if len(initial.auto) != 0 {
+		if budget := fn.x86ResultFlowBudget; budget != nil {
+			budget.visits++
+			budget.bytes += 8 * byteState
+			if budget.visits > 16384 || budget.bytes > byteWorkLimit {
+				return fail("combined source-graph must-defined budget exhausted")
+			}
+		}
+		if boundedWork {
 			byteWork += 8 * byteState // conservative bound for copies and joins
 			if byteWork > byteWorkLimit {
 				return fail("combined FP/AUTO must-defined byte budget exhausted")

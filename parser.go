@@ -15,6 +15,7 @@ type File struct {
 	Arch             Arch
 	Funcs            []Func
 	x86Continuations map[string]x86Continuation
+	x86DirectTails   *x86DirectTailGraph // request-local whole-source continuation graph
 	// UnlinkedPrelude records instructions before the first TEXT. Go assembles
 	// them into no named function, so they cannot affect any translated symbol.
 	// Corpus verification checks the same source with Go's assembler first.
@@ -67,6 +68,8 @@ type Func struct {
 	arm64ABI0TailSource        *arm64ABI0TailSource
 	arm64PrivateSourceAdded    int                 // resource accounting only, never a machine-state permission
 	x86RawReplay               *x86RawReplaySource // immutable raw source/replay identity, never a capability
+	x86DirectTailRoot          *x86DirectTailRoot
+	x86ResultFlowBudget        *x86ResultFlowBudget // request-local combined proof accounting only
 }
 
 // Parse parses a subset of Go/Plan 9 assembly syntax.

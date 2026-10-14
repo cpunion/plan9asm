@@ -246,6 +246,22 @@ func translateGoModuleInContext(ctx llvm.Context, pkg GoPackage, src []byte, opt
 	if err != nil {
 		return nil, fmt.Errorf("%s: private source contract %s: %w", pkgPath, asmName, err)
 	}
+	if (opt.GOARCH == "amd64" || opt.GOARCH == "386") && x86DirectTailSourceNeeded(file) {
+		completeSigs, err := goSigsForAsmFile(pkg, file, resolve, opt.GOARCH, opt.Sizes, opt.FrameSizes, opt.ManualSig)
+		if err != nil {
+			return nil, err
+		}
+		file, err = PrepareX86DirectTailSource(file, Options{Goarch: opt.GOARCH, TargetTriple: opt.TargetTriple,
+			ResolveSym: resolve, Sigs: completeSigs, NumericalReads: opt.NumericalReads, X86TLSMoves: opt.X86TLSMoves})
+		if err != nil {
+			return nil, err
+		}
+	}
+	completeFile := file
+	if file.x86DirectTails != nil {
+		filtered := *file
+		file = &filtered // KeepFunc cannot crop the complete graph origin/signatures.
+	}
 	if opt.KeepFunc != nil {
 		keep := make([]Func, 0, len(file.Funcs))
 		for _, fn := range file.Funcs {
@@ -257,9 +273,29 @@ func translateGoModuleInContext(ctx llvm.Context, pkg GoPackage, src []byte, opt
 		file.Funcs = keep
 	}
 
-	sigs, err := goSigsForAsmFile(pkg, file, resolve, opt.GOARCH, opt.Sizes, opt.FrameSizes, opt.ManualSig)
+	signatureFile := file
+	if file.x86DirectTails != nil {
+		signatureFile = completeFile // Recheck every root after caller callbacks.
+	}
+	sigs, err := goSigsForAsmFile(pkg, signatureFile, resolve, opt.GOARCH, opt.Sizes, opt.FrameSizes, opt.ManualSig)
 	if err != nil {
 		return nil, fmt.Errorf("%s: sigs %s: %w", pkgPath, asmName, err)
+	}
+	if graph := file.x86DirectTails; graph != nil {
+		request, signatures := file, sigs
+		defer func() {
+			final := graph.verify(request, Options{Goarch: opt.GOARCH, ResolveSym: resolve, Sigs: signatures})
+			if sha256.Sum256(originalSource) != originalSourceDigest {
+				final = errors.Join(final, x86DirectTailContext("original Go assembly input changed during consumption"))
+			}
+			if final != nil {
+				if result != nil && !result.Module.IsNil() {
+					result.Module.Dispose()
+				}
+				result = nil
+				resultErr = errors.Join(resultErr, final)
+			}
+		}()
 	}
 	if binding := opt.NumericalReads; binding != nil {
 		sigs, err = numericalGoSignatures(binding, sigs)
@@ -304,6 +340,9 @@ func translateGoModuleInContext(ctx llvm.Context, pkg GoPackage, src []byte, opt
 		metadataResolve = opt.NumericalReads.resolve
 	}
 	for _, fn := range file.Funcs {
+		if file.x86DirectTailHelper(fn.Sym) {
+			continue // The private node is not a Go/LLVM entry or callable ABI.
+		}
 		funcs = append(funcs, GoFunction{TextSymbol: fn.Sym, ResolvedSymbol: metadataResolve(goTextSymbolForResolution(fn.Sym))})
 	}
 
@@ -413,16 +452,17 @@ func goSigsForAsmFile(pkg GoPackage, file *File, resolve func(sym string) string
 		frameSz = sz
 	}
 	b := goSigBuilder{
-		sigs:      make(map[string]FuncSig, len(file.Funcs)),
-		localSigs: make(map[string]bool),
-		scope:     pkg.Types.Scope(),
-		sz:        sz,
-		frameSz:   frameSz,
-		linknames: goLinknameRemoteToLocal(pkg.Syntax),
-		pkgPath:   pkg.Path,
-		resolve:   resolve,
-		goarch:    goarch,
-		manualSig: manualSig,
+		sigs:       make(map[string]FuncSig, len(file.Funcs)),
+		localSigs:  make(map[string]bool),
+		scope:      pkg.Types.Scope(),
+		sz:         sz,
+		frameSz:    frameSz,
+		linknames:  goLinknameRemoteToLocal(pkg.Syntax),
+		pkgPath:    pkg.Path,
+		resolve:    resolve,
+		goarch:     goarch,
+		manualSig:  manualSig,
+		directTail: (goarch == "amd64" || goarch == "386") && x86DirectTailSourceNeeded(file),
 	}
 	if b.pkgPath == "" {
 		b.pkgPath = pkg.Types.Path()
@@ -462,6 +502,9 @@ func goSigsForAsmFile(pkg GoPackage, file *File, resolve func(sym string) string
 	// or ManualSig; raw register entry points require the native backend.
 	for resolved := range b.localSigs {
 		if _, ok := b.sigs[resolved]; !ok {
+			if b.directTail {
+				continue // The whole-source graph must close this non-callable node.
+			}
 			if goarch == "arm64" {
 				return nil, arm64GoABIContext("missing signature for file-local assembly %q; supply an explicit entry or closed source continuation contract", resolved)
 			}
@@ -494,16 +537,17 @@ func WASMAssemblyUsesNativeReturn(fn Func) bool {
 }
 
 type goSigBuilder struct {
-	sigs      map[string]FuncSig
-	localSigs map[string]bool
-	scope     *types.Scope
-	sz        types.Sizes
-	frameSz   types.Sizes
-	linknames map[string]string
-	pkgPath   string
-	resolve   func(sym string) string
-	goarch    string
-	manualSig func(string) (FuncSig, bool)
+	sigs       map[string]FuncSig
+	localSigs  map[string]bool
+	scope      *types.Scope
+	sz         types.Sizes
+	frameSz    types.Sizes
+	linknames  map[string]string
+	pkgPath    string
+	resolve    func(sym string) string
+	goarch     string
+	manualSig  func(string) (FuncSig, bool)
+	directTail bool // source-cost detection only; the graph must prove every node
 }
 
 func (b *goSigBuilder) addDeclaredFuncSigs(file *File) error {
@@ -511,6 +555,10 @@ func (b *goSigBuilder) addDeclaredFuncSigs(file *File) error {
 		textSym := file.Funcs[i].Sym
 		sym := goStripABISuffix(textSym)
 		resolved := b.resolve(goTextSymbolForResolution(textSym))
+		if b.directTail && strings.HasSuffix(textSym, "<>") {
+			b.localSigs[resolved] = true
+			continue // No ManualSig/zero-arg/caller signature becomes a helper ABI.
+		}
 		if ms, ok := goLookupManualSig(b.manualSig, resolved); ok {
 			b.sigs[resolved] = ms
 			continue
@@ -627,6 +675,9 @@ func (b *goSigBuilder) addReferencedFuncSigs(file *File) error {
 			base, tailJump, ok := goReferencedFunc(ins)
 			if !ok {
 				continue
+			}
+			if b.directTail && tailJump && strings.HasSuffix(base, "<>") {
+				continue // Bound only by complete source nodes and root must-state.
 			}
 			if err := b.addGoDeclSig(base); err != nil {
 				return err

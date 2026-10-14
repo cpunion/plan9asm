@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"regexp"
 	"sort"
@@ -229,9 +230,22 @@ func Translate(file *File, opt Options) (string, error) {
 }
 
 // translateIRText builds textual LLVM IR prior to module parsing.
-func translateIRText(file *File, opt Options) (_ string, result error) {
+func translateIRText(file *File, opt Options) (resultText string, result error) {
 	if file == nil {
 		return "", fmt.Errorf("nil file")
+	}
+	file, err := PrepareX86DirectTailSource(file, opt)
+	if err != nil {
+		return "", err
+	}
+	if file.x86DirectTails != nil {
+		graph, request := file.x86DirectTails, file
+		defer func() {
+			if err := graph.verify(request, opt); err != nil {
+				resultText = ""
+				result = errors.Join(result, err)
+			}
+		}()
 	}
 	arm64ScratchCalls, err := verifyARM64ScratchBindings(file, opt)
 	if err != nil {
@@ -367,6 +381,13 @@ func translateIRText(file *File, opt Options) (_ string, result error) {
 	scalarData := x86LoweredScalarDataReads(file, resolve, opt.Sigs, opt.Goarch)
 	for i := range file.Funcs {
 		fn := &file.Funcs[i]
+		if file.x86DirectTailHelper(fn.Sym) {
+			continue // Original helper remains a graph node, never an entry.
+		}
+		function := *fn
+		if view := file.x86DirectTailView(fn.Sym); view != nil {
+			function.x86DirectTailRoot = view
+		}
 		name := resolve(fn.Sym)
 		sig, ok := opt.Sigs[name]
 		if !ok {
@@ -405,7 +426,11 @@ func translateIRText(file *File, opt Options) (_ string, result error) {
 		}
 		sourceSig := sig
 		if sig.Attrs == "" {
-			sig.Attrs = attrRegistry.ref(inferFuncTargetFeaturesForGOARCH(file.Arch, opt.Goarch, *fn))
+			features := function
+			if function.x86DirectTailRoot != nil {
+				features = function.x86DirectTailRoot.features()
+			}
+			sig.Attrs = attrRegistry.ref(inferFuncTargetFeaturesForGOARCH(file.Arch, opt.Goarch, features))
 		}
 		// ARM is a fully supported target. Always use its architecture-aware CFG
 		// lowerer so even straight-line functions receive the same operand-form
@@ -440,7 +465,7 @@ func translateIRText(file *File, opt Options) (_ string, result error) {
 		// The old linear prototype could silently reinterpret wide FP-frame stores
 		// as numeric conversions and leave adjacent aggregate result slots unwritten.
 		if file.Arch == ArchAMD64 {
-			if err := translateFuncX86(&b, *fn, sig, resolve, opt.Sigs, opt.Goarch, opt.TargetTriple, opt.X87Mode, opt.AnnotateSource,
+			if err := translateFuncX86(&b, function, sig, resolve, opt.Sigs, opt.Goarch, opt.TargetTriple, opt.X87Mode, opt.AnnotateSource,
 				x86FunctionSource{scalarData: scalarData, lockNamespace: lockScalarNamespace}); err != nil {
 				return "", fmt.Errorf("%s: %w", name, err)
 			}
