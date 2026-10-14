@@ -6,6 +6,9 @@ import "strings"
 // SDK literal/native entry, caller backing or the direct-tail result domain.
 // Actual signature/source producers retain their independent authentication.
 func x86ABI0LogicalBoolFrameRole(fn Func, sig FuncSig, arch string) bool {
+	if x86CustomHelperBoolFrameRole(fn, sig, arch) {
+		return true // Actual root layout and a complete source/result-pointer plan.
+	}
 	if !x86ABI0BoolDeclarationRole(sig, arch) || strings.Contains(fn.Sym, "<") ||
 		fn.FrameSize != 0 && (fn.x86BoolCalls == nil || !fn.x86BoolCalls.matches(fn, sig, arch)) ||
 		len(fn.X86RawText) != 0 || fn.x86SourceStack != nil || fn.x86FixedLocal != nil || fn.x86DirectTailRoot != nil {
@@ -198,6 +201,9 @@ func x86ABI0BoolFrameTransfer(ordinal int, original Instr, state *x86ResultState
 				for _, slot := range state.boolFrameSlots {
 					if state.boolReadonlyInputs && write && slot.Offset < resultOffset {
 						continue
+					}
+					if write && slot.Offset < resultOffset && slot.Type != I1 {
+						continue // A numerical input cannot represent a writable bool/result byte.
 					}
 					if size := x86FrameScalarBytes(slot.Type, arch); size >= width {
 						value = x86ResultSlotAddress{start: slot.Offset, end: slot.Offset + size, offset: slot.Offset, valid: true}

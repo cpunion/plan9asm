@@ -96,6 +96,20 @@ func PrepareX86DirectTailSource(file *File, options Options) (*File, error) {
 	if file == nil {
 		return file, nil
 	}
+	calls := options.x86BoolCallSource
+	if calls == nil {
+		var err error
+		calls, err = prepareX86ABI0BoolCalls(file, options)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if calls != nil {
+		owned, err := calls.ownsCustomRegisterTails(file, options)
+		if err != nil || owned {
+			return file, err // Complete canonical graph proof; retain the actual custom calls.
+		}
+	}
 	if file.x86DirectTails != nil {
 		if err := file.x86DirectTails.verify(file, options); err != nil {
 			return nil, err
@@ -132,40 +146,13 @@ func PrepareX86DirectTailSource(file *File, options Options) (*File, error) {
 	if err != nil {
 		return nil, err
 	}
-	resolve := options.ResolveSym
-	if resolve == nil {
-		resolve = func(symbol string) string { return symbol }
-	}
-	graph := &x86DirectTailGraph{origin: file, original: x86DirectTailSnapshot(file), goarch: goarch, helpers: helpers,
-		symbols: make(map[string]string), externalSymbols: make(map[string]string), roots: make(map[string]*x86DirectTailRoot), numerical: options.NumericalReads}
-	signatures, err := numericalCloneSignatures(options.Sigs)
+	graph, byName, err := newX86DirectTailGraph(file, options, helpers, goarch)
 	if err != nil {
 		return nil, err
 	}
-	graph.signatures = signatures
-	byName := make(map[string]int)
-	resolved := make(map[string]bool)
-	for index, fn := range graph.original.Funcs {
-		name := resolve(fn.Sym)
-		if _, duplicate := byName[fn.Sym]; duplicate || name == "" || resolved[name] {
-			return nil, x86DirectTailContext("missing, duplicate or aliased original TEXT identity")
-		}
-		byName[fn.Sym], graph.symbols[fn.Sym], resolved[name] = index, name, true
-	}
-	for _, fn := range graph.original.Funcs {
-		for _, ins := range fn.Instrs {
-			if ins.Op == OpJMP && len(ins.Args) == 1 && ins.Args[0].Kind == OpSym {
-				if name, offset, valid := parseSBRef(ins.Args[0].Sym); valid && offset == 0 && !helpers[name] {
-					graph.externalSymbols[name] = resolve(name)
-				}
-			}
-		}
-	}
-	if !reflect.DeepEqual(graph.original, x86DirectTailSnapshot(file)) || !reflect.DeepEqual(graph.signatures, options.Sigs) {
-		return nil, x86DirectTailContext("resolver changed complete source or signatures")
-	}
-	if err := graph.auditReferences(); err != nil {
-		return nil, err
+	signatures, resolve := graph.signatures, options.ResolveSym
+	if resolve == nil {
+		resolve = func(symbol string) string { return symbol }
 	}
 	reached := make(map[string]bool)
 	combined := 0
@@ -228,6 +215,47 @@ func PrepareX86DirectTailSource(file *File, options Options) (*File, error) {
 		return nil, err
 	}
 	return request, nil
+}
+
+// Both continuation emission and a separately sealed custom-register result
+// plan use this same complete original source/reference/signature producer.
+func newX86DirectTailGraph(file *File, options Options, helpers map[string]bool, goarch string) (*x86DirectTailGraph, map[string]int, error) {
+	resolve := options.ResolveSym
+	if resolve == nil {
+		resolve = func(symbol string) string { return symbol }
+	}
+	graph := &x86DirectTailGraph{origin: file, original: x86DirectTailSnapshot(file), goarch: goarch, helpers: helpers,
+		symbols: make(map[string]string), externalSymbols: make(map[string]string), roots: make(map[string]*x86DirectTailRoot), numerical: options.NumericalReads}
+	signatures, err := numericalCloneSignatures(options.Sigs)
+	if err != nil {
+		return nil, nil, err
+	}
+	graph.signatures = signatures
+	byName := make(map[string]int)
+	resolved := make(map[string]bool)
+	for index, fn := range graph.original.Funcs {
+		name := resolve(fn.Sym)
+		if _, duplicate := byName[fn.Sym]; duplicate || name == "" || resolved[name] {
+			return nil, nil, x86DirectTailContext("missing, duplicate or aliased original TEXT identity")
+		}
+		byName[fn.Sym], graph.symbols[fn.Sym], resolved[name] = index, name, true
+	}
+	for _, fn := range graph.original.Funcs {
+		for _, ins := range fn.Instrs {
+			if ins.Op == OpJMP && len(ins.Args) == 1 && ins.Args[0].Kind == OpSym {
+				if name, offset, valid := parseSBRef(ins.Args[0].Sym); valid && offset == 0 && !helpers[name] {
+					graph.externalSymbols[name] = resolve(name)
+				}
+			}
+		}
+	}
+	if !reflect.DeepEqual(graph.original, x86DirectTailSnapshot(file)) || !reflect.DeepEqual(graph.signatures, options.Sigs) {
+		return nil, nil, x86DirectTailContext("resolver changed complete source or signatures")
+	}
+	if err := graph.auditReferences(); err != nil {
+		return nil, nil, err
+	}
+	return graph, byName, nil
 }
 
 func x86DirectTailInstructions(fn Func) []x86DirectTailPoint {

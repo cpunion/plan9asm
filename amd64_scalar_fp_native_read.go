@@ -19,6 +19,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 	if fn.x86SourceStack != nil && sig.Ret == I1 {
 		return c.checkSourceStackBoolResultInitialization()
 	}
+	if calls := fn.x86BoolCalls; calls != nil && calls.registerTail != nil {
+		return calls.checkCustomRegisterTail(fn, sig, arch)
+	}
 	if calls := fn.x86BoolCalls; calls != nil && calls.tail != nil {
 		return calls.checkTailTerminal(fn, sig, arch)
 	}
