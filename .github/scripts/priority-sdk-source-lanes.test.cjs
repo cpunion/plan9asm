@@ -217,6 +217,22 @@ test('Complete bit-scan native axes and their authority controls are mandatory',
   assert.equal((sdk.match(/- lane:/g) || []).length, 13);
 });
 
+test('ABI0 mode32 bool must execute its sealed native owner', () => {
+  const native = workflow.slice(workflow.indexOf('\n  native-x86-oracles:'), workflow.indexOf('\n  complete-windows:'));
+  assert.match(native, /bool_386_root='TestCrossLinuxRuntimeMatrixX86ABI0Mode32CanonicalBoolOriginalGoAndLLVM'/);
+  assert.match(native, /go test \. -list "\^\(\$bool_386_root\)\$"/);
+  assert.match(native, /grep -Fx "\$bool_386_root" _out\/native-x86-oracles\/bool-386-inventory.log/);
+  assert.match(native, /roots\+="\|\$bool_386_root"/);
+  assert.match(native, /-timeout=8m/);
+  assert.doesNotMatch(native, /qemu|overlay|continue-on-error|max-parallel/);
+  const source = sdk.slice(sdk.indexOf('- lane: source\n'), sdk.indexOf('- lane: frame-context\n'));
+  for (const root of [
+    'TestX86ABI0Mode32BoolRuntimeNativeOwnerCannotEmulateOrSkip',
+    'TestX86ABI0Mode32BoolRuntimeNativePolicyRejectsMutation',
+  ]) assert.equal(source.split(`- ${root}\n`).length - 1, 1, root);
+  assert.equal((sdk.match(/- lane:/g) || []).length, 13);
+});
+
 test('Sparse GP SIMD must execute both actual native architectures', () => {
   const native = workflow.slice(workflow.indexOf('\n  native-x86-oracles:'), workflow.indexOf('\n  complete-windows:'));
   for (const root of [

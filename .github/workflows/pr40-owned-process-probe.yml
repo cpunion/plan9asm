@@ -90,6 +90,10 @@ jobs:
             grep -Fx "$root" _out/native-x86-oracles/bit-scan-inventory.log
           done
           roots+="|$bit_scan_roots"
+          bool_386_root='TestCrossLinuxRuntimeMatrixX86ABI0Mode32CanonicalBoolOriginalGoAndLLVM'
+          go test . -list "^($bool_386_root)$" > _out/native-x86-oracles/bool-386-inventory.log
+          grep -Fx "$bool_386_root" _out/native-x86-oracles/bool-386-inventory.log
+          roots+="|$bool_386_root"
           families='MADDTypedOriginalLegacy|PackedNarrowOriginalLegacyOracle|ScalarFPBitViewsOriginalBitsAndCanaries'
           families+='|PureGPUnknownDeadOutputs|SignedIntegerScalarFloatTranslatedFPFields|ScalarCompareFlags'
           families+='|RawReturnSourceAddressNumerical|FloatingCompareOriginalLegacyPredicates|TimestampOriginalAndLLVM'
@@ -304,6 +308,8 @@ jobs:
               - TestX86ABI0Mode32CanonicalBoolCallSelectionKeepsNonboolWholeFiles
               - TestX86ABI0Mode32CanonicalBoolCallSelectionRetainsTrueBoolLimit
               - TestX86ABI0Mode32CanonicalBoolCallSelectionRejectsChangingQuery
+              - TestX86ABI0Mode32BoolRuntimeNativeOwnerCannotEmulateOrSkip
+              - TestX86ABI0Mode32BoolRuntimeNativePolicyRejectsMutation
               - TestGoX86SDKASMDataOriginalVendorPackageNamespace
               - TestGoX86SDKNumericalReadPackageQueryMatchesOriginalLiteralSource
               - TestSDKAMD64OriginalFrameConfigGuardEagerIdentity
