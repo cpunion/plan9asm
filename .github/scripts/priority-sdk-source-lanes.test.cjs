@@ -223,6 +223,7 @@ test('Bit-scan zero semantics and complete object cohort cannot wait behind full
     'TestX86ScalarBitScanInitializedPriorThreeAPIs',
     'TestX86ScalarBitScanUnknownPriorStillNeedsZeroEdgeContext',
     'TestX86ScalarBitScanOriginalGoHexWordOpsFunctionThreeAPIs',
+    'TestX86ScalarBitScanOriginalGoHexWordOpsSourceLineEndings',
     'TestX86ScalarBitScanCompleteObjectFixtureNumericalRoles',
     'TestX86ScalarBitScanCompleteOriginalGoAndLLVMFiveTargetObjects',
   ]) assert.equal(source.split(`- ${root}\n`).length - 1, 1, root);

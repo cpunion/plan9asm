@@ -334,6 +334,7 @@ jobs:
               - TestX86ScalarBitScanInitializedPriorThreeAPIs
               - TestX86ScalarBitScanUnknownPriorStillNeedsZeroEdgeContext
               - TestX86ScalarBitScanOriginalGoHexWordOpsFunctionThreeAPIs
+              - TestX86ScalarBitScanOriginalGoHexWordOpsSourceLineEndings
               - TestX86ScalarBitScanCompleteObjectFixtureNumericalRoles
               - TestX86ScalarBitScanCompleteOriginalGoAndLLVMFiveTargetObjects
               - TestX86ResultPredicateNonzeroComparisonMaskBitScan
