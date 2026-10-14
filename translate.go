@@ -6,6 +6,8 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+
+	"github.com/xgo-dev/llvm"
 )
 
 type LLVMType string
@@ -224,9 +226,12 @@ type Options struct {
 // Translate converts a parsed Plan 9 asm File into LLVM IR text (`.ll`).
 //
 // The generated text is produced from an llvm.Module to keep textual emission
-// consistent with the LLVM printer.
+// consistent with the LLVM printer. Each text request owns a fresh context and
+// releases its module and context before returning, including failed requests.
 func Translate(file *File, opt Options) (string, error) {
-	mod, err := TranslateModule(file, opt)
+	ctx := llvm.NewContext()
+	defer ctx.Dispose()
+	mod, err := TranslateModuleInContext(ctx, file, opt)
 	if err != nil {
 		return "", err
 	}

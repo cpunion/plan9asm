@@ -13,12 +13,12 @@ func x86ABI0BoolCallStep(ordinal int, ins Instr, state *x86ResultState, owned []
 		if !known || arch != "386" || len(ins.Args) != 1 || ins.Args[0].Kind != OpSym {
 			return false, true
 		}
-		if !state.shapeOnly && (!state.boolOutgoing[0] || !state.boolOutgoingCanonical[0]) {
+		if sig.Ret != Void && !state.shapeOnly && (!state.boolOutgoing[0] || !state.boolOutgoingCanonical[0]) {
 			return false, true
 		}
 		// No caller GP, SIMD, mask, pointer, slot-address or FLAGS state is
-		// preserved by the original leaf CALL, even if logical SSA happens to
-		// leave a register alloca untouched. Only its actual result byte is new.
+		// preserved by the original CALL, even if logical SSA happens to leave
+		// a register alloca untouched. Void supplies no result byte at all.
 		state.gp = [16]uint8{}
 		state.canonicalGP = [16]uint8{}
 		state.xmm = [32]uint16{}
@@ -34,6 +34,9 @@ func x86ABI0BoolCallStep(ordinal int, ins Instr, state *x86ResultState, owned []
 			state.boolFrameGP = new([16]x86ResultSlotAddress)
 		}
 		state.flags = 0
+		if sig.Ret == Void {
+			return true, true // No numerical/canonical FP or outgoing byte is new.
+		}
 		offset := int(sig.Frame.Results[0].Offset)
 		state.boolOutgoing[offset], state.boolOutgoingCanonical[offset] = true, true
 		return true, true

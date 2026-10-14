@@ -800,24 +800,9 @@ func (c *amd64Ctx) lowerInstr(bi int, ii int, ins Instr, emitBr amd64EmitBr, emi
 		next := c.newTmp()
 		fmt.Fprintf(c.b, "  %%%s = sub i64 %s, %d\n", next, sp, int64(ins.Args[0].Imm))
 		return false, c.storeRegUnchecked(SP, "%"+next)
-	case "CLD":
-		if len(ins.Args) != 0 {
-			return false, fmt.Errorf("%s CLD takes no operands: %q", c.goarch, ins.Raw)
-		}
-		if c.directionSlot != "" {
-			fmt.Fprintf(c.b, "  store i1 false, ptr %s\n", c.directionSlot)
-		}
-		c.b.WriteString("  call void asm sideeffect \"cld\", \"~{dirflag}\"()\n")
-		return false, nil
-	case "STD":
-		if len(ins.Args) != 0 {
-			return false, fmt.Errorf("%s STD takes no operands: %q", c.goarch, ins.Raw)
-		}
-		if c.directionSlot != "" {
-			fmt.Fprintf(c.b, "  store i1 true, ptr %s\n", c.directionSlot)
-		}
-		c.b.WriteString("  call void asm sideeffect \"std\", \"~{dirflag}\"()\n")
-		return false, nil
+	case "CLD", "STD":
+		_, err := c.lowerDirectionControl(ins)
+		return false, err
 	case "REP", "REPN":
 		if len(ins.Args) != 0 {
 			return false, fmt.Errorf("%s %s takes no operands: %q", c.goarch, op, ins.Raw)

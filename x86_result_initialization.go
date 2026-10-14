@@ -84,7 +84,7 @@ func checkX86ABI0ResultInitializationAtSource(fn Func, sig FuncSig, goarch strin
 		initial.boolFrameSlots = append(append([]FrameSlot(nil), sig.Frame.Params...), sig.Frame.Results...)
 		initial.boolCalls = fn.x86BoolCalls
 		initial.boolReadonlyInputs = fn.x86BoolReadonlyInputs
-		if initial.boolCalls != nil {
+		if initial.boolCalls != nil && len(initial.boolCalls.bytes) != 0 {
 			initial.boolOutgoing = make([]bool, 5)
 			initial.boolOutgoingCanonical = make([]bool, 5)
 		}
@@ -189,6 +189,7 @@ func checkX86ResultSourceFlow(fn Func, initial x86ResultState, owned []bool, res
 		state.callerAddressGP = x86ResultCallerAddressesAfter(ins, before, state.callerAddressFP, arch)
 		state.callerAddressOrigin = x86ResultCallerOriginsAfter(ins, origins, state.callerAddressGP, state.callerAddressFP, arch)
 		state.predicate = x86ResultPredicateAfter(ins, predicate, arch)
+		state.direction = x86ResultDirectionAfter(ins, state.direction)
 		return true
 	}
 	fail := func(reason string) error {
@@ -222,14 +223,14 @@ func checkX86ResultSourceFlow(fn Func, initial x86ResultState, owned []bool, res
 		return fail("missing or oversized source CFG")
 	}
 	// One logical byte-work envelope includes FP/AUTO, numerical GP/Z/K,
-	// canonical FP/GP bytes, flags, opaque GP and caller-address identities, and the source-shape discriminator. It is
+	// canonical FP/GP bytes, status/DF, opaque GP and caller-address identities, and the source-shape discriminator. It is
 	// not a bound on Go's heap/struct overhead. pointerFP is immutable shared
 	// layout metadata, not a state payload copied at each CFG successor.
 	// AUTO states do not obtain an independent frame or iteration budget.
 	byteState := len(initial.fp) + len(initial.canonicalFP) + len(initial.auto) +
 		len(initial.boolOutgoing) + len(initial.boolOutgoingCanonical) + len(initial.gp) + len(initial.canonicalGP) +
 		8*len(initial.xmm) + len(initial.masks) + 1 + len(initial.pointerGP) + len(initial.callerAddressGP) +
-		2*len(initial.callerAddressOrigin) + 1 + 2 + 3
+		2*len(initial.callerAddressOrigin) + 1 + 2 + 3 + 1
 	if len(initial.resultAddressSlots) != 0 {
 		byteState += len(initial.resultAddressGP)*25 + 1
 	}
@@ -412,6 +413,7 @@ type x86ResultState struct {
 	vectorUpper    [32]uint64
 	masks          [8]bool // used only by the private scalar bit-view transfer
 	flags          uint8
+	direction      x86ResultDirection // DF only; no numerical/status/pointer permission.
 	bitScanPending x86ResultBitScanPending
 	predicate      x86ResultPredicate
 
@@ -494,6 +496,7 @@ func (state x86ResultState) intersect(other x86ResultState) x86ResultState {
 		merged.masks[index] = merged.masks[index] && other.masks[index]
 	}
 	merged.flags &= other.flags
+	merged.direction = state.direction.intersect(other.direction)
 	if merged.bitScanPending != other.bitScanPending {
 		merged.bitScanPending = x86ResultBitScanPending{}
 	}
@@ -609,6 +612,9 @@ func x86ResultStore(arg Operand, width int64, state *x86ResultState, owned []boo
 }
 
 func x86ResultTransfer(ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string) bool {
+	if accepted, known := x86ResultDirectionStep(ins, state, arch); known {
+		return accepted
+	}
 	if accepted, known := x86ResultVectorTestStep(ins, state, owned, arch); known {
 		return accepted
 	}

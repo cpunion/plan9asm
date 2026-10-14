@@ -63,8 +63,11 @@ verifies source, selected DATA/GLOBL/prelude, TEXT membership, mode and symbol
 mapping before and after callbacks/consumption. A failed graph identity check
 permanently invalidates that prepared graph; restoring public fields cannot
 revive it. Concurrent owned LLVM contexts may read the same unchanged original
-File without mutating it or sharing mutable graph state. The existing global
-LLVM context ownership boundary is unchanged.
+File without mutating it or sharing mutable graph state. Text-only `Translate`
+owns and releases a separate LLVM context per request, so it does not share
+LLVM GlobalContext across concurrent text requests. Module-returning default
+APIs retain their global-context boundary; concurrent module callers must use
+the explicit caller-owned-context APIs and dispose each module before its context.
 
 Combined root/helper work keeps the existing 4096-instruction,
 16384-fixed-point-visit and 64-MiB logical byte-work envelopes. Shared helpers
