@@ -30,6 +30,21 @@ with no skipped, missing or duplicate roots. This local commit is not in the
 frozen fork run. Continuation's outside-alias sibling/reference-closure defect
 has an independent three-child RED and still needs a separate complete guard.
 
+`12b3daf0` adds the numerical-only W/L/Q LEA effect family and exact parameter
+leaf consistency. Bare displacement expressions normalize only an operand copy;
+original source identity stays intact. NUM base/index arithmetic grants no memory,
+pointer, frame or entry authority, and independently proved raw/SP/BP consumers
+keep their own roles. Its frozen source passes all 152 affected roots and 3,942
+subtest pass events on each Go 1.27/1.20, in 80.624/85.134 seconds, without skips
+or omissions. Both official five-architecture gates pass unchanged; focused
+race, vet/build and supported-op extraction pass. Parent's thirteen focused
+grammar/parameter roots pass in 5.162 seconds with exact inventory and vet.
+The explicit-QEMU-only ignored diagnostic passes 181,104 row-pair checks in
+87.256 seconds, not native execution. Preserve the default-emulator AF/PF
+failure. The next fork batch must execute native
+`TestCrossLinuxRuntimeMatrixX86NumericalLEAOriginalBytesAndLLVM` before claiming
+complete-family runtime certification; this change is not in frozen `e544c001`.
+
 Fork [38491308184](https://github.com/cpunion/plan9asm/actions/runs/38491308184)
 tests frozen `ac2576d2` (contribution `fbadcfa8`, plus fork-only priorities).
 It naturally finishes with 39 successful and four failed jobs. All ten priority
