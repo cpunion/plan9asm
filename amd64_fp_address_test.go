@@ -21,7 +21,10 @@ func TestX86LEAFPAddressesRequireBoundStorage(t *testing.T) {
 			for _, prefix := range []string{"", "$"} {
 				for _, offset := range []int64{0, 1, 8, 9, 4, 12} {
 					t.Run(fmt.Sprintf("%s/%s/%s/%d", target.triple, width, prefix, offset), func(t *testing.T) {
-						source := fmt.Sprintf("TEXT Address(SB),4,$0-16\nLEA%s %sr+%d(FP),AX\nRET\n", width, prefix, offset)
+						// Storage-address validity is independent of result
+						// initialization. The original unwritten-result source is
+						// retained as a separate complete negative regression.
+						source := fmt.Sprintf("TEXT Address(SB),4,$0-16\nMOVL $7,r+8(FP)\nLEA%s %sr+%d(FP),AX\nRET\n", width, prefix, offset)
 						requireX86GoAssemblerResult(t, target.arch, source, prefix == "")
 						file, err := Parse(ArchAMD64, source)
 						if err != nil {

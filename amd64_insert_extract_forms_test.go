@@ -237,6 +237,13 @@ func TestX86InsertExtractCompleteTypedFPSpanBeforeEmission(t *testing.T) {
 			t.Fatal(err)
 		}
 		width := form.spec.chunk
+		if form.spec.scalar && !form.spec.insert {
+			// The PS writer now consumes the full source-byte proof too.
+			// Keep this test about complete spans, not unknown X input data.
+			file.Funcs[0].Instrs = append([]Instr{
+				file.Funcs[0].Instrs[0], x86ScalarLaneInstruction(t, "PXOR X1,X1"),
+			}, file.Funcs[0].Instrs[1:]...)
+		}
 		for _, missing := range []int{-1, 0, width - 1} {
 			sig := FuncSig{Name: "f", Ret: Void}
 			for index := 0; index < width; index++ {

@@ -13,8 +13,20 @@ import "strings"
 // result. In particular, this never creates a caller-memory or raw-RET token.
 func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 	fn, sig, arch := c.fpScalarSource, c.sig, c.goarch
+	if fn.x86ContinuationFlow != nil {
+		if err := c.checkContinuationResultSource(); err != nil {
+			return err
+		}
+		sig = c.fpSourceSig
+	}
 	if fn.x86FixedLocal != nil {
 		return c.checkFixedLocalResultInitialization()
+	}
+	if fn.x86SourceStack != nil && sig.Ret == I1 {
+		return c.checkSourceStackBoolResultInitialization()
+	}
+	if calls := fn.x86BoolCalls; calls != nil && calls.registerTail != nil {
+		return calls.checkCustomRegisterTail(fn, sig, arch)
 	}
 	if calls := fn.x86BoolCalls; calls != nil && calls.tail != nil {
 		return calls.checkTailTerminal(fn, sig, arch)
@@ -75,6 +87,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		if accepted, known := x86ResultPackedZeroExtendStep(ins, state, owned, arch, true); known {
 			return accepted
 		}
+		if accepted, known := x86ResultLegacyIntegerNativeReadStep(ins, state, owned, resultOffset, arch); known {
+			return accepted
+		}
 		if accepted, recognized := x86LoweredBlockInsertRead(ins, state, owned, resultOffset, arch); recognized {
 			return accepted
 		}
@@ -85,6 +100,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 			return accepted
 		}
 		if accepted, recognized := x86LoweredScalarArithmeticNativeRead(ins, state, owned, resultOffset, arch); recognized {
+			return accepted
+		}
+		if accepted, known := c.scalarPSLogicalFPWriteTransfer(ins, state, owned, arch); known {
 			return accepted
 		}
 		if accepted, recognized := x86ResultScalarLaneStepWithRead(ins, state, owned, resultOffset, arch, true); recognized {
@@ -123,6 +141,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		if x86ScalarFPResultTransfer(ins, &next, owned, resultOffset, arch) {
 			*state = next
 			return true
+		}
+		if accepted, known := x86ResultUnusedFPAddressStep(ins, state, owned, resultOffset, arch); known {
+			return accepted // Mapped logical storage only; no initialized address bits.
 		}
 		return x86LoweredPureGPUnknownTransfer(ins, state, arch)
 	}

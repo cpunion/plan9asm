@@ -88,19 +88,31 @@ func x86SourceStackRuntimeSource(arch string) (string, map[string]FuncSig) {
 	source.WriteString(strings.ReplaceAll(text, "·Value", "·PhysicalBool"))
 	sig.Name = "PhysicalBool"
 	sigs[sig.Name] = sig
+	// Preserve the original identity kernel above byte-for-byte. This sibling
+	// observes a physical result byte before its final logical bool conversion:
+	// prematurely truncating the intermediate 2 to i1 would return false.
+	text, sig, _ = x86SourceStackTypedFixture(arch, "bool", I1, word, "MOVB",
+		"MOVB $2,@RESULT(SP)\nMOVB @RESULT(SP),AX\nSHRB $1,AX\nANDB $1,AX\nMOVB AX,@RESULT(SP)\nBYTE $0xc3")
+	source.WriteString(strings.ReplaceAll(text, "·Value", "·PhysicalBoolIntermediate"))
+	sig.Name = "PhysicalBoolIntermediate"
+	sigs[sig.Name] = sig
+	text, sig, _ = x86SourceStackTypedFixture(arch, "bool", I1, word, "MOVB",
+		"MOVB $2,ret+@WORD(FP)\nMOVB ret+@WORD(FP),AX\nSHRB $1,AX\nANDB $1,AX\nMOVB AX,ret+@WORD(FP)\nBYTE $0xc3")
+	source.WriteString(strings.ReplaceAll(text, "·Value", "·PhysicalBoolNamedFP"))
+	sig.Name = "PhysicalBoolNamedFP"
+	sigs[sig.Name] = sig
 	return source.String(), sigs
 }
 
-func x86SourceStackActualGoNumerical(t *testing.T, arch string, runner []string) {
-	t.Helper()
-	dir := t.TempDir()
-	source, _ := x86SourceStackRuntimeSource(arch)
+func x86SourceStackGoOracle(arch string) string {
 	var goSource strings.Builder
 	goSource.WriteString("package sourceframe\nimport \"testing\"\n")
 	for _, test := range x86SourceStackRuntimeCases(arch) {
 		fmt.Fprintf(&goSource, "func %s(x uint%d) uint%d\n", test.name, test.width, test.width)
 	}
 	goSource.WriteString("func PhysicalBool(x bool) bool\n")
+	goSource.WriteString("func PhysicalBoolIntermediate(x bool) bool\n")
+	goSource.WriteString("func PhysicalBoolNamedFP(x bool) bool\n")
 	goSource.WriteString("func TestNumerical(t *testing.T) {\n")
 	for _, test := range x86SourceStackRuntimeCases(arch) {
 		fmt.Fprintf(&goSource, `
@@ -123,11 +135,19 @@ func x86SourceStackActualGoNumerical(t *testing.T, arch string, runner []string)
 	}
 `, test.name, test.name)
 	}
-	goSource.WriteString("\tif PhysicalBool(false) || !PhysicalBool(true) { t.Fatal(\"bool byte slot\") }\n}\n")
+	goSource.WriteString("\tif PhysicalBool(false) || !PhysicalBool(true) { t.Fatal(\"bool byte slot\") }\n")
+	goSource.WriteString("\tcanary := [4]uint64{11,23,37,41}\n\tif !PhysicalBoolIntermediate(false) || !PhysicalBoolIntermediate(true) || !PhysicalBoolNamedFP(false) || !PhysicalBoolNamedFP(true) || canary != [4]uint64{11,23,37,41} { t.Fatal(\"physical/named intermediate bool byte/canary\") }\n}\n")
+	return goSource.String()
+}
+
+func x86SourceStackActualGoNumerical(t *testing.T, arch string, runner []string) {
+	t.Helper()
+	dir := t.TempDir()
+	source, _ := x86SourceStackRuntimeSource(arch)
 	for name, text := range map[string]string{
 		"go.mod":               "module example.invalid/sourceframeoracle\n\ngo 1.20\n",
 		"value_" + arch + ".s": source,
-		"value_test.go":        goSource.String(),
+		"value_test.go":        x86SourceStackGoOracle(arch),
 	} {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(text), 0600); err != nil {
 			t.Fatal(err)
@@ -151,7 +171,8 @@ func x86SourceStackActualGoNumerical(t *testing.T, arch string, runner []string)
 func x86SourceStackCOracle(arch string) string {
 	var source strings.Builder
 	source.WriteString("#include <stdint.h>\n")
-	source.WriteString("#include <stdbool.h>\nextern bool PhysicalBool(bool);\n")
+	source.WriteString("#include <stdbool.h>\nextern bool PhysicalBool(bool);\nextern bool PhysicalBoolIntermediate(bool);\n")
+	source.WriteString("extern bool PhysicalBoolNamedFP(bool);\n")
 	for _, test := range x86SourceStackRuntimeCases(arch) {
 		fmt.Fprintf(&source, "extern uint%d_t %s(uint%d_t);\n", test.width, test.name, test.width)
 	}
@@ -177,7 +198,8 @@ func x86SourceStackCOracle(arch string) string {
 	}
 `, test.name)
 	}
-	source.WriteString("\tif (PhysicalBool(false) || !PhysicalBool(true)) return 2;\n\treturn 0;\n}\n")
+	source.WriteString("\tif (PhysicalBool(false) || !PhysicalBool(true)) return 2;\n")
+	source.WriteString("\tvolatile uint64_t boolCanary = UINT64_C(0x123456789abcdef0);\n\tif (!PhysicalBoolIntermediate(false) || !PhysicalBoolIntermediate(true) || !PhysicalBoolNamedFP(false) || !PhysicalBoolNamedFP(true) || boolCanary != UINT64_C(0x123456789abcdef0)) return 3;\n\treturn 0;\n}\n")
 	return source.String()
 }
 
@@ -217,37 +239,49 @@ func TestCrossLinuxRuntimeMatrixX86RawSourceStackNumerical(t *testing.T) {
 	if crossRosetta {
 		runner = []string{"/usr/bin/arch", "-x86_64"}
 	}
-	x86SourceStackActualGoNumerical(t, "amd64", nil)
-	source, sigs := x86SourceStackRuntimeSource("amd64")
-	file, err := Parse(ArchAMD64, source)
-	if err != nil {
-		t.Fatal(err)
-	}
-	ir, err := Translate(file, Options{Goarch: "amd64", TargetTriple: triple, Sigs: sigs,
-		ResolveSym: func(symbol string) string { return strings.TrimPrefix(symbol, "·") },
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	compileAndRunRuntimeTestForTarget(t, llc, clang, "source_stack64", triple, ir, x86SourceStackCOracle("amd64"), runner)
-	if os.Getenv("PLAN9ASM_CROSS_EXEC") == "1" {
-		if runtime.GOOS != "linux" || runtime.GOARCH != "amd64" {
-			t.Fatal("PLAN9ASM_CROSS_EXEC source-stack matrix requires Linux/amd64")
-		}
-		runner = []string{"qemu-i386", "-L", "/usr/i686-linux-gnu"}
-		x86SourceStackActualGoNumerical(t, "386", runner)
-		source, sigs = x86SourceStackRuntimeSource("386")
-		file, err = Parse(ArchAMD64, source)
+	t.Run("amd64", func(t *testing.T) {
+		x86SourceStackActualGoNumerical(t, "amd64", nil)
+		source, sigs := x86SourceStackRuntimeSource("amd64")
+		file, err := Parse(ArchAMD64, source)
 		if err != nil {
 			t.Fatal(err)
 		}
-		ir, err = Translate(file, Options{Goarch: "386", TargetTriple: "i386-unknown-linux-gnu", Sigs: sigs,
+		ir, err := Translate(file, Options{Goarch: "amd64", TargetTriple: triple, Sigs: sigs,
 			ResolveSym: func(symbol string) string { return strings.TrimPrefix(symbol, "·") },
 		})
 		if err != nil {
 			t.Fatal(err)
 		}
-		compileAndRunRuntimeTestWithCompiler(t, llc, []string{"i686-linux-gnu-gcc", "-no-pie"},
-			"source_stack32", "i386-unknown-linux-gnu", ir, x86SourceStackCOracle("386"), runner)
+		compileAndRunRuntimeTestForTarget(t, llc, clang, "source_stack64", triple, ir, x86SourceStackCOracle("amd64"), runner)
+	})
+	// This required native owner must execute the original physical 386 bool
+	// bytes too, even when the broader ARM/QEMU matrix is not selected. Explicit
+	// cross execution retains its old dynamic guest transport independently.
+	if os.Getenv("PLAN9ASM_CROSS_EXEC") == "1" || runtime.GOOS == "linux" && runtime.GOARCH == "amd64" {
+		if runtime.GOOS != "linux" || runtime.GOARCH != "amd64" {
+			t.Fatal("PLAN9ASM_CROSS_EXEC source-stack matrix requires Linux/amd64")
+		}
+		t.Run("386", func(t *testing.T) {
+			runner = nil
+			compiler := []string{"i686-linux-gnu-gcc", "-static", "-no-pie"}
+			if os.Getenv("PLAN9ASM_CROSS_EXEC") == "1" {
+				runner = []string{"qemu-i386", "-L", "/usr/i686-linux-gnu"}
+				compiler = []string{"i686-linux-gnu-gcc", "-no-pie"}
+			}
+			x86SourceStackActualGoNumerical(t, "386", runner)
+			source, sigs := x86SourceStackRuntimeSource("386")
+			file, err := Parse(ArchAMD64, source)
+			if err != nil {
+				t.Fatal(err)
+			}
+			ir, err := Translate(file, Options{Goarch: "386", TargetTriple: "i386-unknown-linux-gnu", Sigs: sigs,
+				ResolveSym: func(symbol string) string { return strings.TrimPrefix(symbol, "·") },
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			compileAndRunRuntimeTestWithCompiler(t, llc, compiler,
+				"source_stack32", "i386-unknown-linux-gnu", ir, x86SourceStackCOracle("386"), runner)
+		})
 	}
 }

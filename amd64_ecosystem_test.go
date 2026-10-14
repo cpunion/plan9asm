@@ -5371,52 +5371,25 @@ func TestTranslateAMD64PackedDwordMultiplyFamilyRejectsFormsOutsideGoOptabs(t *t
 
 func TestTranslateAMD64MXCSRStateFamilyCompleteGoAssemblerForms(t *testing.T) {
 	// Go 1.27's ysvrs_mo/ysvrs_om and _yvldmxcsr tables give all four
-	// instructions exactly one memory operand. Exercise general, SP, SB, and
-	// named FP memory; VEX changes only encoding, not the operand shape.
-	src := `
-TEXT mxcsrstateforms(SB),NOSPLIT,$0-8
-	LDMXCSR (AX)
-	LDMXCSR -8(SP)
-	LDMXCSR control(SB)
-	LDMXCSR input+0(FP)
-	VLDMXCSR (AX)
-	VLDMXCSR control(SB)
-	STMXCSR 4(BX)
-	STMXCSR -8(SP)
-	STMXCSR control(SB)
-	STMXCSR output+4(FP)
-	VSTMXCSR (AX)
-	VSTMXCSR output+4(FP)
-	RET
-`
-	file, err := Parse(ArchAMD64, src)
-	if err != nil {
-		t.Fatal(err)
-	}
-	ll, err := Translate(file, Options{
-		TargetTriple: "x86_64-unknown-linux-gnu",
-		Goarch:       "amd64",
-		Sigs: map[string]FuncSig{
-			"mxcsrstateforms": {
-				Name: "mxcsrstateforms",
-				Args: []LLVMType{I32},
-				Ret:  I32,
-				Frame: FrameLayout{
-					Params:  []FrameSlot{{Offset: 0, Type: I32, Index: 0, Field: -1}},
-					Results: []FrameSlot{{Offset: 4, Type: I32, Index: 0, Field: -1}},
-				},
-			},
-		},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(ll, "%local_stack = alloca") {
-		t.Fatal("amd64 SP-relative MXCSR memory did not receive byte-addressable local-stack backing")
-	}
-	for _, intrinsic := range []string{"@llvm.x86.sse.ldmxcsr", "@llvm.x86.sse.stmxcsr"} {
-		if !strings.Contains(ll, intrinsic) {
-			t.Fatalf("MXCSR lowering omitted %s", intrinsic)
+	// instructions exactly one m32 operand. Syntax is not storage authority:
+	// exercise bounded initialized AUTO, actual typed FP and emitted DATA.
+	// Native pointers and static stores retain separate negative controls.
+	for _, target := range x86RawReturnTargets {
+		for _, row := range x86MXCSRBoundMemoryForms(t, target.arch) {
+			for _, api := range []string{"text", "module", "Go"} {
+				t.Run(target.triple+"/"+row.name+"/"+api, func(t *testing.T) {
+					ir, err := x86ScalarFPBitViewAPI(t, row.source, row.declaration, target.arch, target.triple, api)
+					if err != nil || ir == "" {
+						t.Fatalf("complete initialized MXCSR storage: %v", err)
+					}
+					if row.local && !strings.Contains(ir, "%local_stack = alloca") {
+						t.Fatal("bounded AUTO operand lost byte-addressable local storage")
+					}
+					if !strings.Contains(ir, row.intrinsic) {
+						t.Fatalf("MXCSR lowering omitted %s", row.intrinsic)
+					}
+				})
+			}
 		}
 	}
 }

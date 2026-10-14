@@ -71,9 +71,19 @@ func TestX86DefinedStatusThreeAPIsFiveTargetsObjects(t *testing.T) {
 			}
 			name := fmt.Sprintf("status%d", count)
 			fmt.Fprintf(&declarations, "func %s(seed %s) %s\n", name, valueType, valueType)
+			// Initialize each instruction's actual complete inputs. MOVL to X
+			// clears X128; KMOVW zero-extends K. Both precede the FLAGS seed.
+			setup := ""
+			if strings.Contains(row.instruction, "X0") {
+				setup += "MOVL AX,X0\nMOVL AX,X1\n"
+			}
+			if strings.Contains(row.instruction, "K1") {
+				setup += "KMOVW AX,K1\nKMOVW AX,K2\n"
+			}
 			fmt.Fprintf(&assembly, "TEXT ·%s(SB),4,$0-%d\nMOVL $0,AX\nMOVL $0,DX\nMOVL $0,BX\n"+
+				"%s"+
 				"PUSH%s seed+0(FP)\nPOPF%s\n%s\nPUSHF%s\nPOP%s CX\nMOV%s CX,ret+%d(FP)\nRET\n",
-				name, 2*valueBytes, word, word, row.instruction, word, word, word, valueBytes)
+				name, 2*valueBytes, setup, word, word, row.instruction, word, word, word, valueBytes)
 			count++
 		}
 		wantCount := 42

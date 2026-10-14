@@ -46,59 +46,81 @@ func TestSharedSDKNumericalOriginalNoDATAKeepsIndependentRoles(t *testing.T) {
 	}
 }
 
-func TestSharedSDKNumericalOriginalNoDATADirectTailThreeAPIs(t *testing.T) {
-	for _, member := range []string{"count_amd64.s", "indexbyte_amd64.s"} {
-		t.Run(member, func(t *testing.T) {
-			ctx, request, pkg, file, options := sdkMinimumOriginalPackage(t, "internal/bytealg", member)
-			file, source, err := Capture(ctx, request, file)
-			if err != nil {
-				t.Fatal("complete original no-DATA numerical source", err)
-			}
-			t.Cleanup(func() {
-				if err := source.Close(); err != nil {
-					t.Error(err)
-				}
-			})
-			bound, err := source.BindNumericalReads(ctx, pkg, file, options)
-			if err != nil {
-				t.Fatal("original numerical/TEXT nodes did not bind", err)
-			}
-			for _, api := range []string{"text", "module", "go-module"} {
-				t.Run(api, func(t *testing.T) {
-					var ir string
-					var err error
-					if api == "text" {
-						ir, err = plan9asm.Translate(file, bound)
-					} else {
-						context := llvm.NewContext()
-						defer context.Dispose()
-						if api == "module" {
-							module, translateErr := plan9asm.TranslateModuleInContext(context, file, bound)
-							err = translateErr
-							if !module.IsNil() {
-								defer module.Dispose()
-								ir = module.String()
-							}
-						} else {
-							original, readErr := os.ReadFile(request.AssemblyFile)
-							if readErr != nil {
-								t.Fatal(readErr)
-							}
-							translation, translateErr := plan9asm.TranslateGoModule(pkg, original,
-								plan9asm.GoModuleOptions{GOOS: "linux", GOARCH: "amd64", TargetTriple: bound.TargetTriple,
-									ResolveSym: bound.ResolveSym, FileName: member, NumericalReads: bound.NumericalReads})
-							err = translateErr
-							if translation != nil {
-								defer translation.Module.Dispose()
-								ir = translation.Module.String()
-							}
-						}
-					}
-					if err != nil || ir == "" {
-						t.Fatal("complete original numerical continuation lost state/identity", err)
-					}
-				})
-			}
-		})
+func TestSharedSDKNoDATACountText(t *testing.T) {
+	sharedSDKNoDATAOriginalOwner(t, "count_amd64.s", "text")
+}
+
+func TestSharedSDKNoDATACountModule(t *testing.T) {
+	sharedSDKNoDATAOriginalOwner(t, "count_amd64.s", "module")
+}
+
+func TestSharedSDKNoDATACountGoModule(t *testing.T) {
+	sharedSDKNoDATAOriginalOwner(t, "count_amd64.s", "go-module")
+}
+
+func TestSharedSDKNoDATAIndexByteText(t *testing.T) {
+	sharedSDKNoDATAOriginalOwner(t, "indexbyte_amd64.s", "text")
+}
+
+func TestSharedSDKNoDATAIndexByteModule(t *testing.T) {
+	sharedSDKNoDATAOriginalOwner(t, "indexbyte_amd64.s", "module")
+}
+
+func TestSharedSDKNoDATAIndexByteGoModule(t *testing.T) {
+	sharedSDKNoDATAOriginalOwner(t, "indexbyte_amd64.s", "go-module")
+}
+
+// Each complete member/API owns a fresh original producer deadline. Sharing
+// this fixture must not share the live factory or its remaining budget.
+func sharedSDKNoDATAOriginalOwner(t *testing.T, member, api string) {
+	t.Helper()
+	ctx, request, pkg, file, options := sdkMinimumOriginalPackage(t, "internal/bytealg", member)
+	file, source, err := Capture(ctx, request, file)
+	if err != nil {
+		t.Fatal("complete original no-DATA numerical source", err)
+	}
+	t.Cleanup(func() {
+		if err := source.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+	bound, err := source.BindNumericalReads(ctx, pkg, file, options)
+	if err != nil {
+		t.Fatal("original numerical/TEXT nodes did not bind", err)
+	}
+	var ir string
+	switch api {
+	case "text":
+		ir, err = plan9asm.Translate(file, bound)
+	case "module":
+		context := llvm.NewContext()
+		defer context.Dispose()
+		module, translateErr := plan9asm.TranslateModuleInContext(context, file, bound)
+		err = translateErr
+		if !module.IsNil() {
+			defer module.Dispose()
+			ir = module.String()
+		}
+	case "go-module":
+		original, readErr := os.ReadFile(request.AssemblyFile)
+		if readErr != nil {
+			t.Fatal(readErr)
+		}
+		translation, translateErr := plan9asm.TranslateGoModule(pkg, original,
+			plan9asm.GoModuleOptions{GOOS: "linux", GOARCH: "amd64", TargetTriple: bound.TargetTriple,
+				ResolveSym: bound.ResolveSym, FileName: member, NumericalReads: bound.NumericalReads})
+		err = translateErr
+		if translation != nil {
+			defer translation.Module.Dispose()
+			ir = translation.Module.String()
+		}
+	default:
+		t.Fatal("unknown complete original API owner", api)
+	}
+	if err != nil || ir == "" {
+		t.Fatal("complete original numerical continuation lost state/identity", err)
+	}
+	if err := source.Verify(ctx); err != nil {
+		t.Fatal("complete original source owner changed after translation", err)
 	}
 }

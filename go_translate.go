@@ -246,14 +246,24 @@ func translateGoModuleInContext(ctx llvm.Context, pkg GoPackage, src []byte, opt
 	if err != nil {
 		return nil, fmt.Errorf("%s: private source contract %s: %w", pkgPath, asmName, err)
 	}
+	var registerBoolCalls *x86ABI0BoolCallSource
 	if (opt.GOARCH == "amd64" || opt.GOARCH == "386") && x86DirectTailSourceNeeded(file) {
 		completeSigs, err := goSigsForAsmFile(pkg, file, resolve, opt.GOARCH, opt.Sizes, opt.FrameSizes, opt.ManualSig)
 		if err != nil {
 			return nil, err
 		}
-		file, err = PrepareX86DirectTailSource(file, Options{Goarch: opt.GOARCH, TargetTriple: opt.TargetTriple,
+		request := Options{Goarch: opt.GOARCH, TargetTriple: opt.TargetTriple,
 			ResolveSym: resolve, Sigs: completeSigs, NumericalReads: opt.NumericalReads, X86TLSMoves: opt.X86TLSMoves,
-			WASMABI: opt.WASMABI, X87Mode: opt.X87Mode, AnnotateSource: opt.AnnotateSource})
+			WASMABI: opt.WASMABI, X87Mode: opt.X87Mode, AnnotateSource: opt.AnnotateSource}
+		calls, err := prepareX86ABI0BoolCalls(file, request)
+		if err != nil {
+			return nil, err
+		}
+		if calls != nil && calls.customGraph != nil {
+			registerBoolCalls = calls // One original graph and one shared flow budget.
+			request.x86BoolCallSource = calls
+		}
+		file, err = PrepareX86DirectTailSource(file, request)
 		if err != nil {
 			return nil, err
 		}
@@ -277,7 +287,7 @@ func translateGoModuleInContext(ctx llvm.Context, pkg GoPackage, src []byte, opt
 	}
 
 	signatureFile := file
-	if file.x86DirectTails != nil {
+	if file.x86DirectTails != nil || registerBoolCalls != nil {
 		signatureFile = completeFile // Recheck every root after caller callbacks.
 	}
 	sigs, err := goSigsForAsmFile(pkg, signatureFile, resolve, opt.GOARCH, opt.Sizes, opt.FrameSizes, opt.ManualSig)
@@ -345,11 +355,14 @@ func translateGoModuleInContext(ctx llvm.Context, pkg GoPackage, src []byte, opt
 	}
 	var boolCalls *x86ABI0BoolCallSource
 	var callOriginal *File
-	if boolCallSource {
+	if boolCallSource || registerBoolCalls != nil {
 		callOriginal = completeFile
-		boolCalls, err = prepareX86ABI0BoolCalls(completeFile, Options{Goarch: opt.GOARCH, TargetTriple: opt.TargetTriple, ResolveSym: resolve, Sigs: sigs})
-		if err != nil {
-			return nil, err
+		boolCalls = registerBoolCalls
+		if boolCalls == nil {
+			boolCalls, err = prepareX86ABI0BoolCalls(completeFile, Options{Goarch: opt.GOARCH, TargetTriple: opt.TargetTriple, ResolveSym: resolve, Sigs: sigs})
+			if err != nil {
+				return nil, err
+			}
 		}
 		if boolCalls != nil {
 			defer func() {
@@ -521,6 +534,7 @@ func goSigsForAsmFile(pkg GoPackage, file *File, resolve func(sym string) string
 	if err := b.addDeclaredFuncSigs(file); err != nil {
 		return nil, err
 	}
+	b.addCustomBoolHelperTransports(file)
 	if err := b.addReferencedFuncSigs(file); err != nil {
 		return nil, err
 	}
@@ -569,6 +583,33 @@ func goSigsForAsmFile(pkg GoPackage, file *File, resolve func(sym string) string
 		return BindGoX86RawReturnCallerRegions(pkg, file, goarch, resolve, b.sigs)
 	}
 	return b.sigs, nil
+}
+
+// Observe explicit custom transports only for an actual ordinary I1 root.
+// This does not make a private node callable or give it the caller's frame:
+// the complete register-tail graph must independently prove its result writes.
+func (b *goSigBuilder) addCustomBoolHelperTransports(file *File) {
+	if b.goarch != "386" || !b.directTail || b.manualSig == nil {
+		return
+	}
+	needed := false
+	for _, fn := range file.Funcs {
+		if !strings.HasSuffix(fn.Sym, "<>") && x86DirectTailRootNeeded(fn) {
+			sig, declared := b.sigs[b.resolve(goTextSymbolForResolution(fn.Sym))]
+			needed = needed || declared && x86ABI0BoolDeclarationRole(sig, b.goarch)
+		}
+	}
+	if !needed {
+		return
+	}
+	for _, fn := range file.Funcs {
+		if strings.HasSuffix(fn.Sym, "<>") {
+			name := b.resolve(goTextSymbolForResolution(fn.Sym))
+			if sig, supplied := goLookupManualSig(b.manualSig, name); supplied {
+				b.sigs[name] = sig
+			}
+		}
+	}
 }
 
 func wasmUsesNativeReturn(fn Func) bool {

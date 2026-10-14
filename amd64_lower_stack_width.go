@@ -57,7 +57,69 @@ var amd64StackWidthSpecs = map[Op]amd64StackWidthSpec{
 	"POPFQ":  {bits: 64, mode: amd64StackPopFlags},
 }
 
+// This describes Go's complete value/FLAGS operand grammar, independently of
+// a consumer's private-stack, segment-state or native-memory permissions.
+func x86StackWidthProperties(ins Instr, arch string) (amd64StackWidthSpec, bool, error) {
+	name := strings.ToUpper(string(ins.Op))
+	base := strings.SplitN(name, ".", 2)[0]
+	spec, known := amd64StackWidthSpecs[Op(base)]
+	if !known {
+		return spec, false, nil
+	}
+	fail := func() (amd64StackWidthSpec, bool, error) {
+		return spec, true, fmt.Errorf("%s invalid %s stack form: %q", arch, base, ins.Raw)
+	}
+	if name != base {
+		return fail()
+	}
+	flags := spec.mode == amd64StackPushFlags || spec.mode == amd64StackPopFlags
+	if flags {
+		if err := validateX86OrdinaryStackWidthMode(arch, base, spec.bits, ins); err != nil {
+			return spec, true, err
+		}
+		if len(ins.Args) != 0 {
+			return spec, true, fmt.Errorf("%s %s takes no operands: %q", arch, base, ins.Raw)
+		}
+		return spec, true, nil
+	}
+	if len(ins.Args) != 1 {
+		role := "src"
+		if spec.mode == amd64StackPopValue {
+			role = "dst"
+		}
+		return spec, true, fmt.Errorf("%s %s expects %s: %q", arch, base, role, ins.Raw)
+	}
+	arg := ins.Args[0]
+	if x86SegmentRegisterOperand(arg) {
+		if !spec.segments.contains(arg.Reg) {
+			return fail()
+		}
+		return spec, true, nil
+	}
+	if err := validateX86OrdinaryStackWidthMode(arch, base, spec.bits, ins); err != nil {
+		return spec, true, err
+	}
+	if arg.Kind == OpReg {
+		if !isX86YrlRegisterForArch(arg.Reg, arch) {
+			return fail()
+		}
+	} else if !isAMD64MemoryOperand(arg) && !(spec.mode == amd64StackPushValue &&
+		(arg.Kind == OpImm || x86AbsoluteRelocationSource(arg, arch, spec.bits))) {
+		if spec.mode == amd64StackPopValue {
+			return spec, true, fmt.Errorf("%s %s expects reg/mem dst in the Yrl class: %q", arch, base, ins.Raw)
+		}
+		return fail()
+	}
+	if arg.Kind == OpMem && !x86MemoryRegistersValidForArch(arg.Mem, arch) {
+		return fail()
+	}
+	return spec, true, nil
+}
+
 func (c *amd64Ctx) lowerStackWidth(op Op, ins Instr) (ok bool, terminated bool, err error) {
+	if _, known, err := x86StackWidthProperties(ins, c.goarch); known && err != nil {
+		return true, false, err
+	}
 	rawOp := strings.ToUpper(string(op))
 	baseOp := rawOp
 	if dot := strings.IndexByte(rawOp, '.'); dot >= 0 {
@@ -193,10 +255,14 @@ func (c *amd64Ctx) lowerStackWidth(op Op, ins Instr) (ok bool, terminated bool, 
 }
 
 func (c *amd64Ctx) validateOrdinaryStackWidthMode(op string, bits int, ins Instr) error {
-	if c.goarch == "386" && bits == 64 {
+	return validateX86OrdinaryStackWidthMode(c.goarch, op, bits, ins)
+}
+
+func validateX86OrdinaryStackWidthMode(arch, op string, bits int, ins Instr) error {
+	if arch == "386" && bits == 64 {
 		return fmt.Errorf("386 %s requires GOARCH=amd64: %q", op, ins.Raw)
 	}
-	if c.goarch != "386" && bits == 32 {
+	if arch != "386" && bits == 32 {
 		return fmt.Errorf("%s requires GOARCH=386: %q", op, ins.Raw)
 	}
 	return nil

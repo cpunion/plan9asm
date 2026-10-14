@@ -22,6 +22,9 @@ func x86DirectionControlProperties(op Op, ins Instr, arch string) (x86DirectionC
 	if !known {
 		return spec, false, nil
 	}
+	if len(ins.Args) != 0 {
+		return spec, true, fmt.Errorf("%s takes no operands; %s direction-control ynone grammar: %q", name, arch, ins.Raw)
+	}
 	if arch != "386" && arch != "amd64" || dotted || len(ins.Args) != 0 ||
 		ins.Op != "" && !strings.EqualFold(string(ins.Op), name) {
 		return spec, true, fmt.Errorf("%s %s outside Go direction-control ynone grammar: %q", arch, op, ins.Raw)

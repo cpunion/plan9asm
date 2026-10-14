@@ -79,6 +79,14 @@ func checkX86ABI0ResultInitializationAtSource(fn Func, sig FuncSig, goarch strin
 		resultOffset = int64(frame)
 	}
 	initial := x86ResultState{fp: make([]bool, frame), pointerFP: make(map[int64]bool)}
+	if scalarViews && fn.x86ContinuationFlow != nil {
+		view := fn.x86ContinuationFlow
+		if !view.bind(fn, sig, goarch) {
+			return fail("coalesced source/declaration identity changed")
+		}
+		initial.continuation = &x86ContinuationResultState{flow: view, tablesValid: true,
+			written: make([]bool, view.graph.cells)}
+	}
 	if canonicalBool {
 		initial.canonicalFP = make([]bool, frame)
 		initial.boolFrameSlots = append(append([]FrameSlot(nil), sig.Frame.Params...), sig.Frame.Results...)
@@ -100,6 +108,9 @@ func checkX86ABI0ResultInitializationAtSource(fn Func, sig FuncSig, goarch strin
 				initial.resultAddressSlots = append(initial.resultAddressSlots, x86ResultSlotAddress{
 					start: slot.Offset, end: slot.Offset + x86ResultScalarBytes(slot.Type, goarch), valid: true})
 			}
+		}
+		if region, valid := x86DirectTailResultRegion(fn, sig, goarch); valid {
+			initial.resultAddressSlots = []x86ResultSlotAddress{region}
 		}
 	}
 	initial.callerAddressFP = initial.pointerFP // Immutable actual typed entry layout.
@@ -152,6 +163,9 @@ func checkX86ABI0ResultInitializationAtSource(fn Func, sig FuncSig, goarch strin
 	}
 	return checkX86ResultSourceFlow(fn, initial, owned, resultOffset, goarch, transfer,
 		func(state x86ResultState, pc int) error {
+			if state.continuation != nil && !state.continuation.checkReturn() {
+				return fail("initializer does not write every code-table cell on every RET")
+			}
 			for offset := int(resultOffset); offset < frame; offset++ {
 				if owned[offset] && !state.fp[offset] {
 					return fail(fmt.Sprintf("result byte %d is not written on every path to RET %d", offset, pc))
@@ -176,20 +190,50 @@ type x86ResultFlowBudget struct {
 func checkX86ResultSourceFlow(fn Func, initial x86ResultState, owned []bool, resultOffset int64, goarch string,
 	transfer x86ResultSourceTransfer, checkReturn func(x86ResultState, int) error) error {
 	originalTransfer := transfer
+	for _, ins := range fn.Instrs {
+		if _, known, _ := x86StackWidthProperties(ins, goarch); known {
+			initial.valueStack = new(x86ResultValueStack)
+			break
+		}
+	}
 	transfer = func(ordinal int, ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string) bool {
+		if !x86ResultValueStackContinuation(ins, state, arch) {
+			return false
+		}
 		if !isAMD64ConditionalBranch(ins.Op) {
 			state.bitScanPending = x86ResultBitScanPending{}
 		}
 		before := state.callerAddressGP
 		origins := state.callerAddressOrigin
 		predicate := state.predicate
-		if !x86DirectTailResultAddressTransfer(ins, state, owned, resultOffset, arch, originalTransfer, ordinal) {
+		handled := false
+		if state.continuation != nil {
+			accepted, known := x86ContinuationResultStep(ordinal, ins, state, owned, arch)
+			if known {
+				if !accepted {
+					return false
+				}
+				handled = true
+			} else {
+				if !x86ContinuationOrdinaryUses(ins, state, arch) {
+					return false
+				}
+				defer x86ContinuationRevokeOverwrites(ins, state, arch)
+			}
+		}
+		if !handled && !x86DirectTailResultAddressTransfer(ins, state, owned, resultOffset, arch, originalTransfer, ordinal) {
 			return false
+		}
+		if state.valueStack != nil && (ins.Op == OpCALL || !x86ResultNamedPredicateInstruction(ins)) {
+			state.valueStack.id = false
 		}
 		state.callerAddressGP = x86ResultCallerAddressesAfter(ins, before, state.callerAddressFP, arch)
 		state.callerAddressOrigin = x86ResultCallerOriginsAfter(ins, origins, state.callerAddressGP, state.callerAddressFP, arch)
 		state.predicate = x86ResultPredicateAfter(ins, predicate, arch)
-		state.direction = x86ResultDirectionAfter(ins, state.direction)
+		spec, stack, _ := x86StackWidthProperties(ins, arch)
+		if state.valueStack == nil || !stack || spec.mode != amd64StackPopFlags {
+			state.direction = x86ResultDirectionAfter(ins, state.direction)
+		}
 		return true
 	}
 	fail := func(reason string) error {
@@ -219,6 +263,10 @@ func checkX86ResultSourceFlow(fn Func, initial x86ResultState, owned []bool, res
 		instructions = fn.x86DirectTailRoot.instructions
 		ordinals = fn.x86DirectTailRoot.ordinals
 	}
+	if fn.x86ContinuationFlow != nil {
+		instructions = fn.x86ContinuationFlow.instructions
+		ordinals = fn.x86ContinuationFlow.ordinals
+	}
 	if len(instructions) == 0 || len(instructions) > 4096 {
 		return fail("missing or oversized source CFG")
 	}
@@ -237,10 +285,16 @@ func checkX86ResultSourceFlow(fn Func, initial x86ResultState, owned []bool, res
 	if initial.boolFrameGP != nil {
 		byteState += len(initial.boolFrameGP) * 25
 	}
+	if initial.valueStack != nil {
+		byteState += x86ResultValueStackLimit(goarch) + 4 // bit masks, two-byte depth, invalid join and separate ID.
+	}
+	if initial.continuation != nil {
+		byteState += 16*48 + len(initial.continuation.written) + 2
+	}
 	const byteWorkLimit = 64 << 20
 	byteWork := len(instructions) * byteState
 	boundedWork := len(initial.auto) != 0 || len(initial.canonicalFP) != 0 ||
-		len(initial.resultAddressSlots) != 0 || fn.x86DirectTailRoot != nil
+		len(initial.resultAddressSlots) != 0 || fn.x86DirectTailRoot != nil || initial.valueStack != nil || initial.continuation != nil
 	if boundedWork && byteWork > byteWorkLimit/8 {
 		return fail("combined FP/AUTO source-CFG byte budget exhausted")
 	}
@@ -290,6 +344,8 @@ func checkX86ResultSourceFlow(fn Func, initial x86ResultState, owned []bool, res
 		next := []int{pc + 1}
 		if fn.x86DirectTailRoot != nil {
 			next = fn.x86DirectTailRoot.edges[pc]
+		} else if fn.x86ContinuationFlow != nil {
+			next = fn.x86ContinuationFlow.edges[pc]
 		} else if ins.Op == OpJMP || isAMD64ConditionalBranch(ins.Op) {
 			if len(ins.Args) != 1 {
 				return fail("unbound branch operands")
@@ -341,6 +397,9 @@ func checkX86ResultSourceFlow(fn Func, initial x86ResultState, owned []bool, res
 		state := states[pc].clone()
 		ins := instructions[pc]
 		if fn.x86DirectTailRoot != nil && fn.x86DirectTailRoot.externalTails[pc] {
+			if state.valueStack != nil && (state.valueStack.invalid || len(state.valueStack.bytes) != 0) {
+				return fail("external terminal cannot consume the private value stack")
+			}
 			if state.resultAddressWritten {
 				return fail("external terminal could observe a prior logical result write")
 			}
@@ -378,6 +437,9 @@ func checkX86ResultSourceFlow(fn Func, initial x86ResultState, owned []bool, res
 		if instructions[pc].Op != OpRET {
 			continue
 		}
+		if state.valueStack != nil && (state.valueStack.invalid || len(state.valueStack.bytes) != 0) {
+			return fail("private value stack is not balanced at RET")
+		}
 		if err := checkReturn(state, pc); err != nil {
 			return err
 		}
@@ -414,7 +476,9 @@ type x86ResultState struct {
 	vectorUpper    [32]uint64
 	masks          [8]bool // used only by the private scalar bit-view transfer
 	flags          uint8
-	direction      x86ResultDirection // DF only; no numerical/status/pointer permission.
+	direction      x86ResultDirection          // DF only; no numerical/status/pointer permission.
+	valueStack     *x86ResultValueStack        // Private numerical storage; never physical SP or an entry slot.
+	continuation   *x86ContinuationResultState // Separate opaque control/table identities, never NUM/native storage.
 	bitScanPending x86ResultBitScanPending
 	predicate      x86ResultPredicate
 
@@ -450,6 +514,16 @@ func (state x86ResultState) clone() x86ResultState {
 		state.boolFrameGP = &aliases
 	}
 	state.auto = append([]bool(nil), state.auto...)
+	if state.valueStack != nil {
+		stack := *state.valueStack
+		stack.bytes = append([]uint8(nil), stack.bytes...)
+		state.valueStack = &stack
+	}
+	if state.continuation != nil {
+		copy := *state.continuation
+		copy.written = append([]bool(nil), copy.written...)
+		state.continuation = &copy
+	}
 	state.loweredStaticReads = nil
 	state.literalMemoryOperand, state.literalMemoryBytes = nil, 0
 	return state
@@ -457,6 +531,37 @@ func (state x86ResultState) clone() x86ResultState {
 
 func (state x86ResultState) intersect(other x86ResultState) x86ResultState {
 	merged := state.clone()
+	if merged.continuation == nil && other.continuation != nil {
+		copy := other.clone()
+		merged.continuation = copy.continuation
+		merged.continuation.invalid = true
+	}
+	if merged.continuation != nil && (other.continuation == nil || merged.continuation.flow != other.continuation.flow ||
+		len(merged.continuation.written) != len(other.continuation.written) || merged.continuation.invalid || other.continuation.invalid) {
+		merged.continuation.invalid = true
+		merged.continuation.gp = [16]x86ContinuationAddress{}
+		merged.continuation.tablesValid = false
+		for index := range merged.continuation.written {
+			merged.continuation.written[index] = false
+		}
+	} else if merged.continuation != nil {
+		for index := range merged.continuation.gp {
+			left, right := merged.continuation.gp[index], other.continuation.gp[index]
+			if left != right {
+				if left.kind == 2 && right.kind == 2 && left.root != "" && left.root == right.root {
+					// Every finite helper successor is already part of this root's
+					// authenticated CFG. Preserve only that shared opaque role.
+					merged.continuation.gp[index] = x86ContinuationAddress{kind: 2, root: left.root}
+				} else {
+					merged.continuation.gp[index] = x86ContinuationAddress{}
+				}
+			}
+		}
+		for index := range merged.continuation.written {
+			merged.continuation.written[index] = merged.continuation.written[index] && other.continuation.written[index]
+		}
+		merged.continuation.tablesValid = merged.continuation.tablesValid && other.continuation.tablesValid
+	}
 	for index := range merged.boolOutgoing {
 		merged.boolOutgoing[index] = index < len(other.boolOutgoing) && merged.boolOutgoing[index] && other.boolOutgoing[index]
 		merged.boolOutgoingCanonical[index] = index < len(other.boolOutgoingCanonical) && merged.boolOutgoingCanonical[index] && other.boolOutgoingCanonical[index]
@@ -498,6 +603,17 @@ func (state x86ResultState) intersect(other x86ResultState) x86ResultState {
 	}
 	merged.flags &= other.flags
 	merged.direction = state.direction.intersect(other.direction)
+	if merged.valueStack != nil {
+		if other.valueStack == nil || merged.valueStack.invalid || other.valueStack.invalid ||
+			len(merged.valueStack.bytes) != len(other.valueStack.bytes) {
+			merged.valueStack.bytes, merged.valueStack.invalid = nil, true
+		} else {
+			for index := range merged.valueStack.bytes {
+				merged.valueStack.bytes[index] &= other.valueStack.bytes[index]
+			}
+			merged.valueStack.id = merged.valueStack.id && other.valueStack.id
+		}
+	}
 	if merged.bitScanPending != other.bitScanPending {
 		merged.bitScanPending = x86ResultBitScanPending{}
 	}
@@ -613,6 +729,9 @@ func x86ResultStore(arg Operand, width int64, state *x86ResultState, owned []boo
 }
 
 func x86ResultTransfer(ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string) bool {
+	if accepted, known := x86ResultValueStackStep(ins, state, owned, resultOffset, arch); known {
+		return accepted
+	}
 	if accepted, known := x86ResultSignedIntegerFloatStep(ins, state, owned, arch); known {
 		return accepted
 	}

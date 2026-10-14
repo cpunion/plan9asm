@@ -17,10 +17,17 @@ func x86ABI0SingleByteBoolResultRole(fn Func, sig FuncSig, arch string) bool {
 }
 
 // NUM reads and stores see the complete physical ABI0 byte. Only RET consumes
-// the logical i1 after the cached complete canonical result proof. Public
-// layouts/types and all other bool/frame roles retain their existing handling.
+// the logical i1 after the cached complete canonical result proof. The separate
+// physical source-stack seal has its own checked byte-storage handoff; it never
+// changes the public logical role. Other bool/frame roles remain unchanged.
 func (c *amd64Ctx) abi0BoolResultByteStorage() bool {
-	return c.fpScalarChecked && c.fpScalarCheckErr == nil && x86ABI0LogicalBoolFrameRole(c.fpScalarSource, c.sig, c.goarch)
+	if !c.fpScalarChecked || c.fpScalarCheckErr != nil {
+		return false
+	}
+	if stack := c.sourceStack; stack != nil && stack == c.fpScalarSource.x86SourceStack && stack.boolResult != nil && c.sig.Ret == I1 {
+		return true // The independent physical producer/consumer already checked its complete byte role.
+	}
+	return x86ABI0LogicalBoolFrameRole(c.fpScalarSource, c.sig, c.goarch)
 }
 
 func x86ABI0CanonicalBoolTransfer(transfer x86ResultSourceTransfer) x86ResultSourceTransfer {

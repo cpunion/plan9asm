@@ -230,7 +230,17 @@ func TestContinuationReferenceSourceLateChangesArePermanent(t *testing.T) {
 			var restore func()
 			called := false
 			if change == "selected-directory" {
-				t.Chdir(filepath.Dir(source.directory))
+				// Go's t.Chdir pins the previous directory until cleanup. On
+				// Windows that handle would prevent the actual rename mutation.
+				// The fixture already owns restoring its original working directory.
+				if err := os.Chdir(filepath.Dir(source.directory)); err != nil {
+					t.Fatal(err)
+				}
+				t.Cleanup(func() {
+					if err := os.Chdir(source.directory); err != nil {
+						t.Error("restore selected fixture directory", err)
+					}
+				})
 			}
 			ctx := &assemblyMemberCallbackContext{Context: config.Context, callback: func() {
 				called = true
