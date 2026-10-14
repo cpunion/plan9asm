@@ -75,9 +75,10 @@ API axes, 39 exact source/native roots, complete original CRC32 and maps objects
 both affected CLIs, Go20 portable gates, vet and formatting. Not whole-module CI.
 Ordered 22-file seal: `2bb0df72f6f9426b4decea1ebf58a82c55333e1170cb69f2e83fed1fdd72cc58`.
 Parent `7752fc1f`: fresh shared 21 roots PASS218.862s; rich eight PASS252.029s;
-Go20 shared/storage/query PASS0.488/1.292/0.723s; simple six PASS315.306s and
-callback six/15 children PASS158.238s. Race/fresh benchmark: pending parent readback.
-Do not infer all-pass from earlier receipts.
+Go20 shared/storage/query PASS0.488/1.292/0.723s; simple six/ten children
+PASS315.306s; final callback six/fifteen children PASS158.238s. Fresh inventories
+have zero failures, skips, missing or duplicate roots. All three Go1.27 module
+vets, formatting and diff checks pass. Full current-head race/CI remain pending.
 386 ABI0 bool, no-DATA owner and unresolved native/helper contracts remain distinct.
 
 ## Stdlib benchmark: current complete failed receipt
@@ -114,8 +115,9 @@ Source failures remain retryable, never pass/skip. Later values require readback
 
 ## Owners and next gates
 
-- Parent: freeze `7752fc1f`, finish portable/race→fresh benchmark (AMD64 active);
-  inspect raw complete results, then batch the next allowed-fork update.
+- Parent: `7752fc1f` integration and benchmark readback finished. Integrate the
+  independently verified publication/tail families next, replay exact affected
+  joins, then batch the next allowed-fork update. Full race remains required.
 - Numeric maps agent: verified cohort delivered; read-only metadata-only/no-DATA
   handoff analysis, no tests active. Do not invent readonly/minimum owners.
 - TLS agent: `10aa1cbd` direct-tail state-loss light IR TDD RED (six shapes ×
@@ -133,7 +135,8 @@ canonical bool bytes (not arbitrary2/3 truncation) and unknown GP upper bytes.
 Parent ignored `_out/register-result-repair/`: `factory-7752fc1f/`,
 `benchmark-2d696307/`, `ci-e544c001-{completion,llvm-parts}/`,
 `ci-af4b6a3f-{main-aggregate,main-parts,simple-parts,llvm-aggregate,llvm-parts}/`,
-`ci-af4b6a3f-native/native-x86-oracles/native.log` and all four independent `ci-af4b6a3f-*-audit.json` files.
+`ci-af4b6a3f-native/native-x86-oracles/native.log` and all four independent
+`ci-af4b6a3f-*-audit.json` files.
 Numeric tree: `_out/sdk-numeric-maps/literal-minimum-partition-receipt.md`;
 TLS tree: `_out/direct-tail-state-b7e29095/`; SDK agent's new receipt dir pending.
 Raw heads/tools/inventories and complete terminal unions are authoritative.
