@@ -258,8 +258,9 @@ func translateGoModuleInContext(ctx llvm.Context, pkg GoPackage, src []byte, opt
 		}
 	}
 	completeFile := file
-	boolCallSource := x86ABI0BoolCallsNeeded(completeFile, opt.GOARCH)
-	if file.x86DirectTails != nil || boolCallSource {
+	potentialBoolCalls := x86ABI0BoolCallsNeeded(completeFile, opt.GOARCH)
+	boolCallSource := false
+	if file.x86DirectTails != nil || potentialBoolCalls {
 		filtered := *file
 		file = &filtered // KeepFunc cannot crop the complete graph origin/signatures.
 	}
@@ -275,12 +276,33 @@ func translateGoModuleInContext(ctx llvm.Context, pkg GoPackage, src []byte, opt
 	}
 
 	signatureFile := file
-	if file.x86DirectTails != nil || boolCallSource {
+	if file.x86DirectTails != nil {
 		signatureFile = completeFile // Recheck every root after caller callbacks.
 	}
 	sigs, err := goSigsForAsmFile(pkg, signatureFile, resolve, opt.GOARCH, opt.Sizes, opt.FrameSizes, opt.ManualSig)
 	if err != nil {
 		return nil, fmt.Errorf("%s: sigs %s: %w", pkgPath, asmName, err)
+	}
+	if potentialBoolCalls {
+		for _, fn := range file.Funcs {
+			if !x86ABI0BoolFunctionCalls(fn) {
+				continue
+			}
+			if sig, declared := sigs[resolve(goTextSymbolForResolution(fn.Sym))]; declared && sig.Ret == I1 {
+				// Actual selected I1 CALLs require the complete original types;
+				// unrelated nonbool/unused TEXTs need no new declaration query.
+				// With no dropped function, this first signature inventory is
+				// already complete. No temporary callee proof is built here.
+				if len(file.Funcs) != len(completeFile.Funcs) && signatureFile != completeFile {
+					sigs, err = goSigsForAsmFile(pkg, completeFile, resolve, opt.GOARCH, opt.Sizes, opt.FrameSizes, opt.ManualSig)
+					if err != nil {
+						return nil, err
+					}
+				}
+				boolCallSource = true
+				break
+			}
+		}
 	}
 	if graph := file.x86DirectTails; graph != nil {
 		request, signatures := file, sigs
