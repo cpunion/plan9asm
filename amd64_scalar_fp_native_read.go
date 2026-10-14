@@ -17,6 +17,13 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		return calls.checkTailTerminal(fn, sig, arch)
 	}
 	strictErr := checkX86ScalarFPResultInitialization(fn, sig, arch)
+	customRegisterBool := arch == "386" && sig.Ret == I1 && len(sig.ArgRegs) != 0
+	if customRegisterBool {
+		strictErr = checkX86CustomRegisterBoolResultInitialization(fn, sig, arch,
+			func(_ int, ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string) bool {
+				return x86ScalarFPResultTransfer(ins, state, owned, resultOffset, arch)
+			})
+	}
 	registerEntry := arch == "amd64" && strings.HasSuffix(fn.Sym, "<ABIInternal>")
 	if registerEntry {
 		strictErr = checkAMD64RegisterResultInitialization(fn, sig,
@@ -48,9 +55,14 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 			}
 		}
 	}
-	transfer := func(_ int, ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string) bool {
+	transfer := func(ordinal int, ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string) bool {
 		state.loweredStaticReads = c.fpScalarData
 		defer func() { state.loweredStaticReads = nil }()
+		if customRegisterBool {
+			if accepted, known := x86CustomRegisterBoolCompareExchangeStep(fn, ordinal, ins, state, arch); known {
+				return accepted
+			}
+		}
 		if accepted, known := x86ResultPackedZeroExtendStep(ins, state, owned, arch, true); known {
 			return accepted
 		}
@@ -107,6 +119,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 	}
 	if registerEntry {
 		return checkAMD64RegisterResultInitialization(fn, sig, transfer)
+	}
+	if customRegisterBool {
+		return checkX86CustomRegisterBoolResultInitialization(fn, sig, arch, transfer)
 	}
 	return checkX86ABI0ResultInitializationAtSource(fn, sig, arch, transfer, true)
 }

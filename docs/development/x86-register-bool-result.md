@@ -33,6 +33,24 @@ This role neither binds the linked SDK literal-minimum-alignment producer nor
 exposes a linked address as a number. Full original maps functions remain
 subject to their linked-low-bit, caller, pointer, loop and native-entry contracts.
 
+## Explicit mode32 logical register result
+
+An independent lowering-only role consumes complete explicit `ArgRegs` with
+one logical I1 return in AX, no ABI selector, zero frame/argument extent and
+no FP slots. Each unique registered word carrier receives only its declared
+I1/I8/I16/I32 bytes; Ptr supplies opaque address identity, never numerical
+bytes or backing. Only an actual I1 input starts canonical. The shared bounded
+CFG and canonical-byte transfer require AX's low byte to be zero/one at every
+RET; unknown upper bytes and initialized 2/3/255 remain distinct.
+
+The existing complete typed mode32 CMPXCHG B/W/L/8B emitter can supply its
+conditional numerical outputs and defined status flags after its preserved
+native memory opcode continues. Every explicit/implicit data input and pointer
+address is checked; LOCK must be adjacent to the complete memory operation.
+No source rewrite, LLVM atomic alignment, reusable memory extent, physical Go
+entry/caller or ABI0 byte slot is inferred. This logical source/IR proof is not
+an original-Go caller, backend-object or executed-semantics certificate.
+
 ## Bounded 386 ABI0 byte result
 
 The independent SDK literal-predicate role admits only a complete ordinary 386
