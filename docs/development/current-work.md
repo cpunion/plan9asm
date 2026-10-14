@@ -1,6 +1,6 @@
 # Current work: PR 40 checkpoint
 
-Checkpoint: 2026-10-14 20:34 UTC. Primary source `a50042b5`.
+Checkpoint: 2026-10-14 21:08 UTC. Primary source `0b9d36f9`.
 This is a handoff, not a ledger or a claim of complete CI/stdlib success.
 
 ## Scope and authority
@@ -54,15 +54,20 @@ No source or scanner history is being force-pushed.
 | CLD/STD operand diagnostic | `5598ab3f` retains the exact no-operand diagnostic; invalid forms stay rejected. Combined direction/ecosystem13 roots/446 children pass. |
 | Windows continuation directory mutation | `a9848df1` avoids `t.Chdir` pinning the very directory being renamed. Actual Go1.27 testing source confirms the old retained directory handle. Three complete local CLI roots/nine children pass; actual Windows replay pending. |
 | Shared SDK no-DATA deadline | `58d73c76`/`a50042b5`: six independent complete Count/IndexByte × Text/Module/GoModule owners, original five-minute budgets. All six pass35.563/35.744/46.073/40.093/36.295/52.225s with final source Verify; portable ownership policy passes Go27/race/Go20 and both vets. An initially mis-targeted mutation test stays FAILED in its separate receipt. |
-| FP storage addresses | Frontend worktree has an unsealed denial-only typed FP-write shape shared by private observer/caller effects. No numerical/address/native permission. Preserve all156 original formats with a real initialized I32 result and retain old missing-result negatives. Five-target typed objects pass on Go27; final Go20/race/vet seal still needed. |
-| Legacy PADD/PSUB incoming reads | Numeric worktree `2d38de0b` adds only paired conditional result bytes for complete17-name legacy grammar. Original m128 native instruction preserves alignment/dead faults. Full object tests independently expose missing386 SSE2 metadata; `a78997f8` shares the complete grammar with feature inference. Latest six-root qualification is pending. |
-| FP PUSH/FLAGS family | Pure TDD in recovery/TLS tree; preserve all42/39 status writers. Model only bounded numerical private value stack. Existing uninitialized X/K fixture inputs must not acquire bytes from unknown state. |
-| Legacy/VEX EXTRACTPS stores into independent FP inputs | Still failed; requires the actual complete logical FP write/read model, not permission to mutate native caller storage. |
+| FP storage addresses | `3febe438` integrated as `8cfe6ed3`: denial-only mapped address effect, all156 original formats with a real initialized I32 result and original missing-result negatives retained. Go27/race/Go20 pure50 roots/2370 children; both SDKs two object roots/221 children, five Go targets/60 LLVM objects, vets/seals pass. No numerical/address/native permission. |
+| Legacy PADD/PSUB incoming reads | `2d38de0b`/`a78997f8` integrated as `2f0f6d8b`/`77c2bcae`. Complete17-name grammar supplies only paired conditional result bytes and complete386 SSE2 inference. Original m128 alignment/dead faults remain. Go27/Go20/race11 roots/563 children, both vets, source seals and actual discovering CLI root/two children pass. |
+| FP PUSH/FLAGS family | `9f7e61e1` integrated as `f6ef6030`: bounded separate private numerical bit stack, balanced depth, exact GP/FLAGS/DF/ID effects. All42/39 original status writers pass five targets/three APIs; initialize only each row's actual X/K inputs before POPF, not unrelated native rows. Go27/Go20 complete9 roots/636 children and pure6/race/vets pass. No new native-status effect or increased budget. |
+| Legacy/VEX EXTRACTPS stores into independent FP inputs | `5984054e`/`61f800f7` join the existing logical field writer to the private whole-source byte proof. All immediate rows, missing-byte/pointer/bool/padding negatives; Go27/race/Go20 portable16 roots/940 children pass, five actual Go targets and three-API IR optimization objects. Full18-root attempt remains FAILED (old uninitialized span fixture plus two host skips); initialized span fixture retains all rows. Two actual runtime roots remain host-inapplicable locally: Rosetta is unavailable. Require native CI; portable passes are not execution. |
 | Borrowed-frame continuations | `TestX86ContinuationBorrowedFrame` and `TestX86ContinuationLLVM` still fail at table-address effects. Reuse/authenticate the actual whole continuation graph; never loan helper signatures or bypass the result proof. |
 | Physical/custom bool domains | Raw-bound source-stack bool tests, explicit386 register helper and synthetic no-RET I1 terminator still fail. These are distinct from ordinary logical ABI0 FP; only their independently validated producer may hand off a complete result proof. |
-| Other old source assumptions | Zero-frame SP-relative MXCSR fixture and shared tuple result-pointer helper remain failed. Check original frame/language/byte roles before changing either implementation or fixture. |
+| MXCSR source roles | `4580b59b`/`8e588fe2` integrated as `e01da058`/`0b9d36f9`. Exact old zero-frame/uninitialized mixed source retained as Context. All4 instructions use valid initialized AUTO/FP, two DATA loads retain actual readonly bytes; typed native pointer/static stores remain Context. Both SDKs/race pure14 roots/631 children; both SDKs five actual Go objects/60 LLVM objects, exact one root/65 children pass. No production permission or Void bypass. |
+| Other old source assumptions | Synthetic no-RET zero-terminator test and shared tuple result-pointer helper still fail. Test an actual synthetic emitter separately from ordinary ABI0 result authority; opaque pointer-to-NUM transport still needs its distinct contract. |
 
-No current batch is ready to push until its relevant complete checks are sealed.
+Eleven of the18 old failing roots have repaired, leaf-qualified source paths;
+this is not a current-head CI pass. Seven old roots remain: two physical-bool,
+two continuation, custom bool helper, synthetic zero and tuple helper.
+Parent integration qualification is still required. No current batch is ready
+to push until its relevant complete checks are sealed.
 Fork-only `eff7e8c5` stages28 priority lanes (six new no-DATA owners), keeping
 127 source priorities/native58, original budgets and no concurrency cap. Genuine
 missing-lane RED precedes45 passing policy tests/actionlint. It is not pushed and
@@ -76,11 +81,12 @@ Basenames intentionally avoid private machine paths.
 
 | Worktree basename | Current role |
 | --- | --- |
-| `plan9asm-wt-pr40-scalar-lane-native-20261011` | Primary `codex/pr40-external-corpus-split-20261011`, source `a50042b5`; integrated repairs, completed no-DATA validation. |
+| `plan9asm-wt-pr40-scalar-lane-native-20261011` | Primary `codex/pr40-external-corpus-split-20261011`, source `0b9d36f9`; integrated qualified repair leaves; parent union pending. |
 | `plan9asm-wt-pr40-stdlib-preprocessing-20261012` | Diagnostic `codex/pr40-windows-owned-process-probe-20261013`; published `d4baabba` failed, local `eff7e8c5` stages future lanes. Do not bring fork-only workflow back to contribution. |
-| `plan9asm-wt-pr40-sdk-numeric-maps-entry-20261013` | NUM LEA sealed183, legacy integer conditional read/feature leaves2d38/a789 under root qualification; namespace WIP separately stashed. |
-| `plan9asm-wt-pr40-simple-sdk-bindings-20261013` | PCMP fault leaf485 sealed separately, FP storage-address class unsealed; preserve five owned dirty files. |
-| `plan9asm-wt-pr40-sdk-tls-20261013` | Parameter-only admission WIP stashed, recovery agent owns PUSH/FLAGS; inspect before resuming after model capacity failures. |
+| `plan9asm-wt-pr40-sdk-numeric-maps-entry-20261013` | NUM LEA and legacy integer leaves fully qualified, clean/idle; namespace WIP separately stashed. |
+| `plan9asm-wt-pr40-simple-sdk-bindings-20261013` | FP and MXCSR leaves qualified; synthetic terminator test-boundary task. PCMP fault leaf485 remains separate. |
+| `plan9asm-wt-pr40-sdk-tls-20261013` | Parameter WIP stashed; stack leaf9f7 qualified. New local-helper bool branch preserves all old history. |
+| `plan9asm-wt-pr40-sdk-numeric-maps-20261013` | Reused clean tree for physical source-stack bool; new branch based on8cfe, old29530 branch preserved. No unsafe conflict resolution. |
 
 One heavy SDK/object/native/benchmark owner at a time. Small pure gates may run
 in parallel. A model/connection error is not a test failure; inspect any still
@@ -137,13 +143,15 @@ and ARM64 result-tail stores; do not restore unchecked admission.
 
 ## External inventory (server only)
 
-Last trusted readback generated17:54:33 UTC:22,315,363 index entries,
-1,073,867 unique module paths,6,811 assembly-bearing version records,
-1,123,033 scanned records,16,889 retryable failures,1,004,339 latest records and
-1,117,209 cgo scan records (not cgo-positive count). These are NOT translator
-or runtime passes. All581 ranges checked contiguous and their sum equals index
+Last trusted readback generated21:01:01 UTC:22,581,151 index entries,
+1,077,186 unique module paths,6,841 assembly-bearing version records,
+1,129,782 scanned records,16,903 retryable failures,1,007,805 latest records and
+1,123,958 cgo scan records (not cgo-positive count). These are NOT translator
+or runtime passes. All599 ranges checked contiguous and their sum equals index
 entries. Derived history endpoint2025-10-01 and incremental endpoint
-2026-10-11T13:22:43Z; unfinished windows cannot advance cursors.
+2026-10-12T07:22:43Z; unfinished windows cannot advance cursors. Service active;
+no local scan process. A missing remote jq was an inspection-tool error, not a
+scan failure; a bounded manifest-only JSON check independently verified ranges.
 Later progress requires fresh remote manifest readback. Resolve server details
 from private operator configuration; never commit private hosts/paths.
 Do not install heavy native-test toolchains on the inventory server implicitly.
@@ -154,6 +162,7 @@ Primary ignored `_out/register-result-repair/` retains
 `ci-d4baabba-{source,native,main-part*,root-part*,llvm-part*}/`,
 `nodata-independent-58d73/` (failed mutation control) and
 `nodata-independent-v2/` (complete six-owner PASS),
+`ps-logical-store/{red,green-first,green-v2,final,final-v2}/`,
 `full-ci-gobits-directory/`, `official-0fa63506/`,
 `bitscan-original-crlf/`, `parent-7e393-ci-partition/`.
 Numeric tree: `_out/sdk-numeric-maps/{numerical-lea-unsigned,legacy-integer-native-read}/`.
