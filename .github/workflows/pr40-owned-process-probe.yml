@@ -228,6 +228,11 @@ jobs:
               - TestReadGoAssemblySourceExpandsNestedLocalHeaders
               - TestReadGoAssemblySourceRejectsSymlinkIncludeOutsideRoot
               - TestFrameworkChildGoBuildRetainsParentLLVMMode
+              - TestX86ResultGPSIMDPlainUnknownReturnNeedsWholeFunctionProof
+              - TestX86ResultGPSIMDAdmissionScalarReturnFamilyThreeAPIs
+              - TestX86ResultGPSIMDAdmissionCompleteOfficialRegisterRows
+              - TestX86ResultGPSIMDAdmissionOrdinaryRolesAndCachedProof
+              - TestX86ResultGPSIMDAdmissionWholeSourcePathsWithoutProbe
               - TestGoX86SDKASMDataOriginalVendorPackageNamespace
               - TestGoX86SDKNumericalReadPackageQueryMatchesOriginalLiteralSource
               - TestSDKAMD64OriginalFrameConfigGuardEagerIdentity

@@ -78,6 +78,11 @@ test('Source priority includes the complete reader and child-harness class witho
     'TestReadGoAssemblySourceExpandsNestedLocalHeaders',
     'TestReadGoAssemblySourceRejectsSymlinkIncludeOutsideRoot',
     'TestFrameworkChildGoBuildRetainsParentLLVMMode',
+    'TestX86ResultGPSIMDPlainUnknownReturnNeedsWholeFunctionProof',
+    'TestX86ResultGPSIMDAdmissionScalarReturnFamilyThreeAPIs',
+    'TestX86ResultGPSIMDAdmissionCompleteOfficialRegisterRows',
+    'TestX86ResultGPSIMDAdmissionOrdinaryRolesAndCachedProof',
+    'TestX86ResultGPSIMDAdmissionWholeSourcePathsWithoutProbe',
   ]) {
     assert.equal(source.split(`- ${root}\n`).length - 1, 1, root);
   }
