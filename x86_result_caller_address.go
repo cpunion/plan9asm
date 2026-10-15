@@ -58,6 +58,10 @@ func x86ResultCallerAddressesAfter(ins Instr, before [16]bool, entryFP map[int64
 		before[destination] = false
 		return before // Pure address calculation writes no unrelated GP or FLAGS.
 	}
+	if destination, _, _, _, known := x86SBLEAWriteShape(ins, arch); known {
+		before[destination] = false
+		return before // Only this validated destination loses its old address identity.
+	}
 	if _, known, err := x86SignedIntegerFloatProperties(ins, arch); known && err == nil {
 		return before // Signed conversion writes only its typed scalar/vector view.
 	}
