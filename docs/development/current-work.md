@@ -1,13 +1,16 @@
 # Current work: PR 40 checkpoint
 
-Checkpoint: 2026-10-15 23:41 UTC. The notes below this section are historical
+Checkpoint: 2026-10-15 23:53 UTC. The notes below this section are historical
 and retain their original source scope; they are not the current task queue.
 
 ## Active queue
 
 The repaired candidate `354ea4ef` has been pushed normally to the allowed fork.
 [Run38824961157](https://github.com/cpunion/plan9asm/actions/runs/38824961157)
-is queued; no new native or complete-module CI success is claimed yet. It must
+is still running/queued. Its independent native x87 job passes and the original
+artifact independently replays as 4 roots/26 children, no skips or incomplete
+terminals, with the exact GitHub SHA256 digest. Complete-module CI is not yet
+successful. The run must
 finish naturally before another repair push. Its non-GitHub tree is exactly
 the qualified main source `d0388d27`; fork-only diagnostic policy is separate.
 
@@ -37,6 +40,7 @@ establish native execution on the skipped architecture.
 | x87 initialized words, ENV and exact signed integers | Merged `bda3e19c` passes 139 complete affected/retained owners on Go27, actual Go20 and race: 417 root executions/40,950 children, zero skips, complete ordered terminals and matching source/tool seals. Both whole-root-module vets pass. These are not whole-module tests, native execution or general FP80 arithmetic receipts. |
 | DATA relocation address values | Qualified `1f39d8db` is merged through `62784911`: 54 affected owners on both SDKs and 30 source/model owners on race, 138 root executions/3,497 children, two whole-root-module vets and tracked formatting pass. Generic incoming pointers and code addresses gain no numerical or dereference permission. |
 | Complete 386 runtime fixture | The original 18 TEXTs, manual signatures and C driver remain unchanged. The BX-only source retains its missing-scratch Context; the separately proved bounded counterpart now supplies the Windows runtime owner. All three original/corrected/bounded Go objects, eight LLVM22 axes and 28 single-mutation controls pass in the merged portable set. Actual Windows execution remains pending. |
+| Strict complete standard-library benchmark | `00cfc843` finishes naturally with unchanged complete source/tool seals and all 184 original files attempted: 146 pass/38 fail, zero N/A. Total target time is491s; AMD64410s still exceeds the original300s target budget. Compared with `ab5ad450`, two files recover and six regress. These failures remain failures; focused owners do not replace this gate. |
 
 The independent original-runtime boundary pair genuinely fails at `ab0395d3`:
 BX-only scratch has no backing frame, and the new conditional Go oracle lacks
@@ -75,6 +79,13 @@ All 102 Node policies and three workflow lints pass freshly at that exact
 candidate. The new run above owns actual execution; the old completed failed
 run remains failed. PR40 is still draft at its older head, pending fork CI
 and the separate strict benchmark/standard-library work.
+
+The benchmark's new x86 pointer-return failures are isolated in the independent
+`ba30ec9f` test-only leaf. It retains complete code/data address sources and MOV
+aliases across five x86 target objects, plus numerical, partial-write, unknown
+copy and pointee-permission controls. Its first old-implementation run is still
+in progress. Do not loosen `x86ResultScalarBytes` or treat opaque pointer bits as
+numerical bytes to make these cases pass.
 
 The FS/GS first-GREEN set at `951a68a0` passes 17 unique roots and 30,902
 children, retaining all 212 AMD64 or 114 386 TEXTs per target. Its explicit
