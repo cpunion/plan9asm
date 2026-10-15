@@ -125,7 +125,7 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		}
 		if form, known, err := amd64PackedVectorMoveProperties(ins, arch); known && err == nil &&
 			form.memory == 0 && form.ordinaryMemory(ins, arch) &&
-			x86ResultIncomingPointerAddressIdentity(ins.Args[0], state, arch) {
+			x86ResultIncomingPointerReadAddressIdentity(ins.Args[0], state, arch) {
 			// The emitter preserves the original aligned opcode, or the
 			// unaligned full/guarded tuple with volatile accesses. If it continues,
 			// active bytes are numerical; inactive bytes still require the
@@ -140,7 +140,7 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 			// identity and initialized numerical indexes supply an address.
 			// No native store, static symbol, virtual frame or unknown base
 			// gains a numerical input from this load-only rule.
-			return x86ResultIncomingPointerAddressIdentity(form.source, state, arch) &&
+			return x86ResultIncomingPointerReadAddressIdentity(form.source, state, arch) &&
 				x86ResultStore(form.destination, 16, state, owned, resultOffset, arch)
 		}
 		next := state.clone()
@@ -178,5 +178,5 @@ func x86ResultReadWithNativeContinuation(ins Instr, source Operand, width int64,
 	return conditionalNativeRead && source.Kind == OpMem && source.Mem.Sym == "" &&
 		ins.x86NumericalRead == nil && !ins.x86Encoded && ins.x86SourceRaw == nil && ins.x86RawNearReturn == nil &&
 		ins.x86AddressBits == 0 && !ins.x86UnboundAddressOverride && ins.x86SegmentPrefix == 0 &&
-		x86OrdinaryNativeMemoryOperand(source, arch) && x86ResultIncomingPointerAddressIdentity(source, state, arch)
+		x86OrdinaryNativeMemoryOperand(source, arch) && x86ResultIncomingPointerReadAddressIdentity(source, state, arch)
 }

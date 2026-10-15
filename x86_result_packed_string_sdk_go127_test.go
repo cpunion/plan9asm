@@ -3,7 +3,6 @@
 package plan9asm
 
 import (
-	"errors"
 	"go/types"
 	"os"
 	"path/filepath"
@@ -14,6 +13,23 @@ import (
 )
 
 func TestGoX86PackedStringOriginalSDKIndexCompleteSourceThreeAPIs(t *testing.T) {
+	goX86PackedStringOriginalSDKIndexComplete(t, false)
+}
+
+func TestGoX86PackedStringOriginalSDKIndexCompleteSourceLLVM22Objects(t *testing.T) {
+	goX86PackedStringOriginalSDKIndexComplete(t, true)
+}
+
+// Each root owns a fresh complete source/CPU producer and its original stage
+// deadline. Object work cannot consume the source-only owner's five minutes.
+func goX86PackedStringOriginalSDKIndexComplete(t *testing.T, objects bool) {
+	llc := ""
+	if objects {
+		llc = findLLVM22Tool("llc")
+		if llc == "" {
+			t.Fatal("LLVM 22 llc is required for complete original SDK objects")
+		}
+	}
 	ctx, request, metadata, _ := numericalSDKAssemblyFixture(t)
 	request.AssemblyFile = "index_amd64.s"
 	source, err := CaptureGoX86SDKNumericalReadSource(ctx, request)
@@ -41,16 +57,19 @@ func TestGoX86PackedStringOriginalSDKIndexCompleteSourceThreeAPIs(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
+	objectCount := 0
 	for _, api := range []string{"text", "module", "Go"} {
 		t.Run(api, func(t *testing.T) {
-			var ir string
-			var result error
-			if api == "text" {
-				ir, result = Translate(file, bound)
-			} else {
+			// Dispose every module/context before creating object artifacts.
+			// Both object axes consume this unchanged complete original IR.
+			ir, result := func() (string, error) {
+				if api == "text" {
+					return Translate(file, bound)
+				}
 				context := llvm.NewContext()
 				defer context.Dispose()
 				var module llvm.Module
+				var result error
 				if api == "module" {
 					module, result = TranslateModuleInContext(context, file, bound)
 				} else {
@@ -63,23 +82,38 @@ func TestGoX86PackedStringOriginalSDKIndexCompleteSourceThreeAPIs(t *testing.T) 
 				}
 				if !module.IsNil() {
 					defer module.Dispose()
-					ir = module.String()
+					return module.String(), result
 				}
-			}
+				return "", result
+			}()
 			if result != nil {
-				if !errors.Is(result, ErrProbeNeedsContext) || ir != "" || strings.Contains(result.Error(), "PCMPESTR") || strings.Contains(result.Error(), "PCMPISTR") {
-					t.Fatal("complete original source did not advance beyond the packed-string effect", result)
-				}
-				t.Logf("complete unchanged SDK next Context: %v", result)
-				return
+				t.Fatal("complete unchanged original SDK source must translate successfully", result)
 			}
 			if ir == "" || strings.Count(ir, "load volatile <16 x i8>") < 2 {
 				t.Fatal("complete original full m128 reads missing")
 			}
-			t.Log("complete unchanged SDK numerical/IR source succeeded; no object or native execution claim")
+			t.Log("complete unchanged SDK numerical/IR source succeeded")
+			if objects {
+				for _, optimizeIR := range []bool{false, true} {
+					input, label := ir, "IR-original"
+					if optimizeIR {
+						input, label = x86MulDivRoundOptimize(t, ir), "IR-O2"
+					}
+					for _, backend := range []string{"-O0", "-O2"} {
+						t.Run(label+"/backend"+backend, func(t *testing.T) {
+							x86PackedStringCompileObject(t, llc, bound.TargetTriple, input, backend)
+							objectCount++
+						})
+					}
+				}
+			}
 		})
+	}
+	if objects && objectCount != 12 {
+		t.Fatal("complete three-API/IR/backend object denominator changed", objectCount)
 	}
 	if err := source.Verify(ctx); err != nil {
 		t.Fatal("original complete source changed after all consumers", err)
 	}
+	t.Logf("complete unchanged SDK source: LLVM objects=%d; no native execution claim", objectCount)
 }
