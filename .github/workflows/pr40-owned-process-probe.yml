@@ -219,6 +219,24 @@ jobs:
               - TestX86OrdinaryBPNativeMemoryCompleteFamiliesGoAndLLVMObjects
               - TestX86OrdinaryBPCMOVCompleteFamilyGoAndLLVMObjects
             timeout: 5m
+          - lane: string-memory-lods-state
+            module: '.'
+            roots:
+              - TestX86StringImplicitMemoryIndependentFamilyEffects
+              - TestX86StringImplicitHelpersKeepObservableNativeAccesses
+              - TestX86StringImplicitHelpersGuardZeroCountBeforeMemory
+              - TestX86StringImplicitMemoryDoesNotGrantResultOrPointerAuthority
+              - TestX86StringRepeatCFGAcceptsOnlyUnambiguousAdjacency
+              - TestX86StringRepeatCFGRejectsBypassedOrAmbiguousPrefix
+              - TestX86StringRepeatCFGFixtureKeepsActualBranchAndPrefixNodes
+              - TestX86StringRepeatCFGPortGrammarRemainsIndependent
+              - TestX86StringImplicitMemoryOriginalGoAndLLVMO0O2
+              - TestX86StringRepeatCFGOriginalGoKeepsCompleteFixtures
+              - TestX86LODSStateCompleteIndependentCases
+              - TestX86LODSZeroCountDoesNotCreateResultFacts
+              - TestX86LODSZeroStoreObserverRejectsEveryFieldAndUnknownEffect
+              - TestX86LODSZeroCountOriginalGoAndLLVMWholeState
+            timeout: 5m
           - lane: arm64-carrier-widths
             module: '.'
             roots:

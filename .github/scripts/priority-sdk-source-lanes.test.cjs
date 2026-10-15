@@ -4,7 +4,60 @@ const test = require('node:test');
 
 const workflow = fs.readFileSync('.github/workflows/pr40-owned-process-probe.yml', 'utf8');
 const sdk = workflow.slice(workflow.indexOf('\n  sdk-priority:'), workflow.indexOf('\n  ownership:'));
-const sdkLaneCount = 35;
+const sdkLaneCount = 36;
+
+const stringLODSRoots = [
+  'TestX86StringImplicitMemoryIndependentFamilyEffects',
+  'TestX86StringImplicitHelpersKeepObservableNativeAccesses',
+  'TestX86StringImplicitHelpersGuardZeroCountBeforeMemory',
+  'TestX86StringImplicitMemoryDoesNotGrantResultOrPointerAuthority',
+  'TestX86StringRepeatCFGAcceptsOnlyUnambiguousAdjacency',
+  'TestX86StringRepeatCFGRejectsBypassedOrAmbiguousPrefix',
+  'TestX86StringRepeatCFGFixtureKeepsActualBranchAndPrefixNodes',
+  'TestX86StringRepeatCFGPortGrammarRemainsIndependent',
+  'TestX86StringImplicitMemoryOriginalGoAndLLVMO0O2',
+  'TestX86StringRepeatCFGOriginalGoKeepsCompleteFixtures',
+  'TestX86LODSStateCompleteIndependentCases',
+  'TestX86LODSZeroCountDoesNotCreateResultFacts',
+  'TestX86LODSZeroStoreObserverRejectsEveryFieldAndUnknownEffect',
+  'TestX86LODSZeroCountOriginalGoAndLLVMWholeState',
+];
+const stringLODSLane = '- lane: string-memory-lods-state\n            module: \'.\'\n            roots:\n' +
+  stringLODSRoots.map(root => `              - ${root}\n`).join('') + '            timeout: 5m';
+
+function checkStringLODSPriority(text) {
+  assert.equal(stringLODSRoots.length, 14);
+  assert.equal(new Set(stringLODSRoots).size, 14);
+  assert.ok(text.includes(stringLODSLane), 'all new string memory/CFG and LODS state owners');
+  assert.equal(text.split('- lane: string-memory-lods-state\n').length - 1, 1,
+    'one independent string/LODS priority lane');
+  for (const root of stringLODSRoots) {
+    assert.equal(text.split(`- ${root}\n`).length - 1, 1, 'one complete literal string/LODS owner: ' + root);
+  }
+}
+
+test('String LODS priority retains fourteen complete source and state owners within five minutes', () => {
+  checkStringLODSPriority(sdk);
+});
+
+test('String LODS priority rejects missing, duplicate, substituted, partial or enlarged owners', () => {
+  checkStringLODSPriority(stringLODSLane);
+  for (const changed of [
+    '',
+    stringLODSLane.replace('string-memory-lods-state', 'unrelated-string-state'),
+    stringLODSLane + '\n          ' + stringLODSLane,
+    stringLODSLane.replace("module: '.'", 'module: cmd/plan9asmll'),
+    stringLODSLane.replace('timeout: 5m', 'timeout: 6m'),
+    stringLODSLane.replace('            timeout: 5m',
+      '              - TestUnrelatedAdditionalOwner\n            timeout: 5m'),
+    ...stringLODSRoots.flatMap(root => [
+      stringLODSLane.replace(`              - ${root}\n`, ''),
+      stringLODSLane + `\n              - ${root}\n`,
+      stringLODSLane.replace(root, 'TestUnrelatedSubstituteOwner'),
+      stringLODSLane.replace(root, root + '/386'),
+    ]),
+  ]) assert.throws(() => checkStringLODSPriority(changed));
+});
 
 const ordinaryBPRoots = [
   'TestX86LegacyPackedFloatingNativeMemoryUnboundSourcesFiveTargets',
