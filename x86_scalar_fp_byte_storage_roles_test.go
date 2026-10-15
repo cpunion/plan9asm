@@ -25,7 +25,8 @@ func TestX86OrdinaryIntegerFPStoreKeepsIndependentStorageConsumers(t *testing.T)
 			{"partial-cannot-borrow-SP", "func Value() uint32", "MOVL $9,-4(SP)\nMOVB $1,ret+0(FP)", 4, false},
 			{"partial-cannot-borrow-FP-address", "func Value(x uint32) uint32", fmt.Sprintf("%s x+0(FP),SI\nMOVB $1,ret+%d(FP)", lea, word), word + 4, false},
 			{"interior-cannot-borrow-SP", "func Value() (uint32,uint8)", "MOVL $9,-4(SP)\nMOVL $0x04030201,ret+0(FP)\nMOVB ret+1(FP),AX\nMOVB AX,ret+4(FP)", 5, false},
-			{"cross-field-cannot-borrow-FP-address", "func Value(x uint32) (uint16,uint16)", fmt.Sprintf("%s x+0(FP),SI\nMOVL $0x04030201,ret+%d(FP)", lea, word), word + 4, false},
+			{"cross-field-defined-FP-address", "func Value(x uint32) (uint16,uint16)", fmt.Sprintf("%s x+0(FP),SI\nMOVL $0x04030201,ret+%d(FP)", lea, word), word + 4, true},
+			{"cross-field-unknown-cannot-borrow-FP-address", "func Value(x uint32) (uint16,uint16)", fmt.Sprintf("%s x+0(FP),SI\nMOVL AX,ret+%d(FP)", lea, word), word + 4, false},
 		} {
 			for _, api := range []string{"text", "module", "Go"} {
 				t.Run(target.triple+"/"+row.name+"/"+api, func(t *testing.T) {
@@ -37,6 +38,10 @@ func TestX86OrdinaryIntegerFPStoreKeepsIndependentStorageConsumers(t *testing.T)
 						}
 						if row.name == "direct-defined" {
 							x86ScalarFPTupleSpanConstantResult(t, ir, []uint64{9})
+						} else if row.name == "cross-field-defined-FP-address" {
+							// The existing checked unused-address effect grants no
+							// address bits, but does not invalidate unrelated data.
+							x86ScalarFPTupleSpanConstantResult(t, ir, []uint64{0x0201, 0x0403})
 						}
 					} else if !errors.Is(err, ErrProbeNeedsContext) || ir != "" {
 						t.Fatalf("new byte view borrowed an independent storage role: output=%t, error=%v", ir != "", err)
