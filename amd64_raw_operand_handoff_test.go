@@ -299,38 +299,20 @@ func TestX86PrivateDecoderX87FiveTargetObjects(t *testing.T) {
 				Sigs: map[string]FuncSig{"Bound": {Name: "Bound", Ret: Void}}}
 			for _, api := range []string{"text", "module", "owned-module"} {
 				t.Run(api, func(t *testing.T) {
-					var ir string
-					var err error
-					switch api {
-					case "text":
-						ir, err = Translate(file, opt)
-					case "module":
-						module, callErr := TranslateModule(file, opt)
-						err = callErr
-						if err == nil {
-							ir = module.String()
-							module.Dispose()
-						}
-					default:
-						ctx := llvm.NewContext()
-						module, callErr := TranslateModuleInContext(ctx, file, opt)
-						err = callErr
-						if err == nil {
-							ir = module.String()
-							module.Dispose()
-						}
-						ctx.Dispose()
+					ir, err := x86X87UnboundOriginalAPI(t, file, opt, api)
+					if !errors.Is(err, ErrProbeNeedsContext) || ir != "" || !strings.Contains(err.Error(), "FSAVE FS:0(AX)") {
+						t.Fatal("complete original raw source acquired native AX/segment storage or an x87 image", err)
 					}
-					if err != nil {
-						t.Fatal(err)
-					}
-					llc := findLLVM22Tool("llc")
-					if llc == "" {
-						t.Fatal("LLVM 22 llc required")
-					}
-					compileLLVMToObject(t, llc, target.triple, "physical-x87.ll", "physical-x87.o", ir)
 				})
 			}
+			t.Run("lowerer-unit-object", func(t *testing.T) {
+				ir := x86X87LowererObjectUnit(t, file, target.arch, target.triple)
+				llc := findLLVM22Tool("llc")
+				if llc == "" {
+					t.Fatal("LLVM 22 llc required")
+				}
+				compileLLVMToObject(t, llc, target.triple, "physical-x87-unit.ll", "physical-x87-unit.o", ir)
+			})
 		})
 	}
 }
@@ -430,43 +412,25 @@ func TestX86PrivateDecoderNamedX87MemoryConsumers(t *testing.T) {
 				Sigs: map[string]FuncSig{"Bound": {Name: "Bound", Ret: Void}}}
 			for _, api := range []string{"text", "module", "owned-module"} {
 				t.Run(api, func(t *testing.T) {
-					var ir string
-					var err error
-					switch api {
-					case "text":
-						ir, err = Translate(file, opt)
-					case "module":
-						module, callErr := TranslateModule(file, opt)
-						err = callErr
-						if err == nil {
-							ir = module.String()
-							module.Dispose()
-						}
-					default:
-						ctx := llvm.NewContext()
-						module, callErr := TranslateModuleInContext(ctx, file, opt)
-						err = callErr
-						if err == nil {
-							ir = module.String()
-							module.Dispose()
-						}
-						ctx.Dispose()
+					ir, err := x86X87UnboundOriginalAPI(t, file, opt, api)
+					if !errors.Is(err, ErrProbeNeedsContext) || ir != "" || !strings.Contains(err.Error(), "FSAVE 0(AX)(FS)") {
+						t.Fatal("complete original named source acquired native AX/segment storage or an x87 image", err)
 					}
-					if err != nil {
-						t.Fatal(err)
-					}
-					for _, addressSpace := range []string{"ptr addrspace(256)", "ptr addrspace(257)"} {
-						if !strings.Contains(ir, "getelementptr i8, "+addressSpace) || !strings.Contains(ir, "load i8, "+addressSpace) {
-							t.Fatalf("environment/BCD memory lost %s", addressSpace)
-						}
-					}
-					llc := findLLVM22Tool("llc")
-					if llc == "" {
-						t.Fatal("LLVM 22 llc required")
-					}
-					compileLLVMToObject(t, llc, target.triple, "named-x87.ll", "named-x87.o", ir)
 				})
 			}
+			t.Run("lowerer-unit-object", func(t *testing.T) {
+				ir := x86X87LowererObjectUnit(t, file, target.arch, target.triple)
+				for _, addressSpace := range []string{"ptr addrspace(256)", "ptr addrspace(257)"} {
+					if !strings.Contains(ir, "getelementptr i8, "+addressSpace) || !strings.Contains(ir, "load i8, "+addressSpace) {
+						t.Fatalf("environment/BCD emitter unit lost %s", addressSpace)
+					}
+				}
+				llc := findLLVM22Tool("llc")
+				if llc == "" {
+					t.Fatal("LLVM 22 llc required")
+				}
+				compileLLVMToObject(t, llc, target.triple, "named-x87-unit.ll", "named-x87-unit.o", ir)
+			})
 		})
 	}
 }

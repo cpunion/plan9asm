@@ -21,6 +21,25 @@ func X86FPAccessBytes(ins Instr, index int, arch string) (width int64, write, kn
 	if op := Op(normalizeInstructionOpcode(ins.Op)); x86RawReturnScalarMoveBytes(op) != 0 && ins.Op != op {
 		return 0, false, false
 	}
+	// These three Ym rows observe exactly m16. FINIT/FCLEX and FSTSW AX
+	// have no FP memory access. This supplies only width/direction, never a
+	// known control/status word or an independent caller/storage permission.
+	if form, recognized, err := x86X87WordProperties(ins, arch); recognized {
+		if err != nil || index != 0 || form.operand.Kind != OpFP {
+			return 0, false, false
+		}
+		return 2, form.kind != x86X87LoadControl, true
+	}
+	// x87 memory widths come from the same complete Go value grammar used by
+	// lowering and the private source observer. Operand-free/register forms
+	// have no FP access; malformed integer stores cannot fall through to a
+	// suffix-derived width. Recognition supplies no initialized value or role.
+	if form, recognized, err := x86X87ValueProperties(ins, arch); recognized {
+		if err != nil || form.memoryBytes() == 0 {
+			return 0, false, false
+		}
+		return form.memoryBytes(), index == 1, true
+	}
 	// CMP/TEST have two read-only operands, with opposite immediate positions.
 	// Reuse the complete lowering grammar; observing these widths supplies
 	// neither initialized flags/results nor permission to access native memory.

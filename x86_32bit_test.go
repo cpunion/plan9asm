@@ -933,16 +933,37 @@ TEXT frameAddress(SB),NOSPLIT,$0-12
 		}
 	}
 	var ir string
-	t.Run("partial-selection-original-other-18-TEXTs", func(t *testing.T) {
+	boundedCounterpart := x86X87InstructionFamiliesBoundedCounterpart(t, src)
+	// The old symbolAddress had an external declaration and a bare AX result.
+	// Its separate positive counterpart explicitly supplies same-module DATA
+	// and a complete ABI0 result slot. Do not infer either from a MOV opcode.
+	const oldAddress = "TEXT symbolAddress(SB),NOSPLIT,$0-0\n\tMOVL $someGlobal(SB), AX\n\tRET"
+	const boundedAddress = "TEXT symbolAddress(SB),NOSPLIT,$0-4\n\tMOVL $someGlobal(SB), AX\n\tMOVL AX, ret+0(FP)\n\tRET"
+	if strings.Count(boundedCounterpart, oldAddress) != 1 {
+		t.Fatal("original address counterpart lost its complete source anchor")
+	}
+	boundedCounterpart = "DATA someGlobal(SB)/4,$0\nGLOBL someGlobal(SB),8,$4\n" +
+		strings.Replace(boundedCounterpart, oldAddress, boundedAddress, 1)
+	boundedSigs := make(map[string]FuncSig, len(sigs))
+	for name, sig := range sigs {
+		boundedSigs[name] = sig
+	}
+	addressSig := boundedSigs["symbolAddress"]
+	addressSig.Frame.Results = []FrameSlot{{Offset: 0, Type: I32, Index: 0, Field: -1}}
+	boundedSigs["symbolAddress"] = addressSig
+	t.Run("partial-selection-bounded-counterpart-other-18-TEXTs", func(t *testing.T) {
 		// KeepFunc belongs to the Go-module API. The empty package grants no
 		// Go declaration; every selected signature is exactly the original
-		// explicit manual contract, including custom register assignments.
+		// explicit manual contract, including custom register assignments,
+		// except for the separately documented symbolAddress result slot.
+		// x87math has bounded scratch; symbolAddress has local DATA/ABI0
+		// output. arith and the other selected TEXTs stay intact.
 		pkg := mustGoPackage(t, "families", "package families")
-		result, err := TranslateGoModule(pkg, []byte(src), GoModuleOptions{
+		result, err := TranslateGoModule(pkg, []byte(boundedCounterpart), GoModuleOptions{
 			GOOS: "linux", GOARCH: "386", TargetTriple: options.TargetTriple,
 			ResolveSym: options.ResolveSym,
 			KeepFunc:   func(text, resolved string) bool { return text != "arith" && resolved != "arith" },
-			ManualSig:  func(resolved string) (FuncSig, bool) { sig, found := sigs[resolved]; return sig, found },
+			ManualSig:  func(resolved string) (FuncSig, bool) { sig, found := boundedSigs[resolved]; return sig, found },
 		})
 		if err != nil {
 			t.Fatal(err)
@@ -965,7 +986,8 @@ TEXT frameAddress(SB),NOSPLIT,$0-12
 		`asm sideeffect "fnstcw $0"`,
 		`asm sideeffect "fldcw $0"`,
 		`asm sideeffect "fldl $1; frndint; fstpl $0"`,
-		`asm sideeffect "fldl $1; fistpll $0"`,
+		`asm sideeffect "cmpb $$0, $3; je 1f; fildll $2;`,
+		`1: fldl $1; 2: fistpll $0`,
 		"@llvm.sqrt.f64",
 		"%x87_control = alloca i16",
 		"%local_stack = alloca",
@@ -1020,7 +1042,7 @@ TEXT frameAddress(SB),NOSPLIT,$0-12
 }
 
 func TestTranslate386X87MoveFamilyCompleteForms(t *testing.T) {
-	file, err := Parse(ArchAMD64, `
+	const source = `
 TEXT x87moves(SB),NOSPLIT,$0-0
 	FMOVB 0(SI), F0
 	FMOVBP F0, 0(DI)
@@ -1045,7 +1067,9 @@ TEXT x87moves(SB),NOSPLIT,$0-0
 	FMOVX 0(SI), F0
 	FMOVXP F0, 0(DI)
 	RET
-`)
+`
+	goAssemblerOracleOutput(t, "386", "#include \"textflag.h\"\n"+source, "", true)
+	file, err := Parse(ArchAMD64, source)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1055,10 +1079,10 @@ TEXT x87moves(SB),NOSPLIT,$0-0
 		Sigs:         map[string]FuncSig{"x87moves": {Name: "x87moves", Ret: Void}},
 		X87Mode:      X87Software,
 	})
-	if err != nil {
-		t.Fatalf("Translate(complete x87 move family) error = %v", err)
+	if !errors.Is(err, ErrProbeNeedsContext) || ir != "" || !strings.Contains(err.Error(), "FMOVB 0(SI), F0") {
+		t.Fatal("complete no-argument move source acquired SI/DI storage or initialized x87 inputs", err)
 	}
-	compile386IR(t, ir, "x87_move_family")
+	compile386IR(t, x86X87LowererObjectUnit(t, file, "386", "i386-unknown-linux-gnu"), "x87_move_family_emitter_only")
 }
 
 func TestTranslate386X87MoveFamilyRejectsNonGoForms(t *testing.T) {
@@ -1066,15 +1090,17 @@ func TestTranslate386X87MoveFamilyRejectsNonGoForms(t *testing.T) {
 		instruction string
 		want        string
 	}{
-		{instruction: "FMOVF F1, F0", want: "FMOVF expects memory source and F0 destination"},
-		{instruction: "FMOVFP F1, 0(DI)", want: "FMOVFP expects F0 source and memory destination"},
-		{instruction: "FMOVL 0(SI), F1", want: "FMOVL expects memory source and F0 destination"},
-		{instruction: "FMOVLP F0, F1", want: "FMOVLP expects F0 source and memory destination"},
+		{instruction: "FMOVF F1, F0", want: "FMOVF expects memory,F0, Freg,F0, F0,memory, or F0,Freg"},
+		{instruction: "FMOVFP F1, 0(DI)", want: "FMOVFP expects F0 source and memory or x87-register destination"},
+		{instruction: "FMOVL 0(SI), F1", want: "FMOVL expects signed integer memory,F0 or the registered F0,memory store row"},
+		{instruction: "FMOVLP F0, F1", want: "FMOVLP expects F0 source and signed integer memory destination"},
 		{instruction: "FMOVX F0, F1", want: "FMOVX expects memory source and F0 destination"},
 		{instruction: "FMOVXP F1, 0(DI)", want: "FMOVXP expects F0 source and memory destination"},
 	} {
 		t.Run(test.instruction, func(t *testing.T) {
-			file, err := Parse(ArchAMD64, "TEXT bad(SB),NOSPLIT,$0-0\n"+test.instruction+"\nRET\n")
+			source := "TEXT bad(SB),NOSPLIT,$0-0\n" + test.instruction + "\nRET\n"
+			goAssemblerOracleOutput(t, "386", "#include \"textflag.h\"\n"+source, "", false)
+			file, err := Parse(ArchAMD64, source)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -1083,7 +1109,7 @@ func TestTranslate386X87MoveFamilyRejectsNonGoForms(t *testing.T) {
 				Goarch:       "386",
 				Sigs:         map[string]FuncSig{"bad": {Name: "bad", Ret: Void}},
 			})
-			if err == nil || !strings.Contains(err.Error(), test.want) {
+			if err == nil || errors.Is(err, ErrProbeNeedsContext) || !strings.Contains(err.Error(), test.want) {
 				t.Fatalf("Translate(%q) error = %v, want %q", test.instruction, err, test.want)
 			}
 		})
@@ -1091,7 +1117,7 @@ func TestTranslate386X87MoveFamilyRejectsNonGoForms(t *testing.T) {
 }
 
 func TestTranslate386X87ConstantUnaryAndTranscendentalFamily(t *testing.T) {
-	file, err := Parse(ArchAMD64, `
+	const source = `
 TEXT x87transcendental(SB),NOSPLIT,$0-0
 	FBLD 0(SI)
 	FBSTP 0(DI)
@@ -1126,7 +1152,9 @@ TEXT x87transcendental(SB),NOSPLIT,$0-0
 	FYL2X
 	FYL2XP1
 	RET
-`)
+`
+	goAssemblerOracleOutput(t, "386", "#include \"textflag.h\"\n"+source, "", true)
+	file, err := Parse(ArchAMD64, source)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1136,10 +1164,10 @@ TEXT x87transcendental(SB),NOSPLIT,$0-0
 		Sigs:         map[string]FuncSig{"x87transcendental": {Name: "x87transcendental", Ret: Void}},
 		X87Mode:      X87Software,
 	})
-	if err != nil {
-		t.Fatalf("Translate(complete x87 constant/unary/transcendental family) error = %v", err)
+	if !errors.Is(err, ErrProbeNeedsContext) || ir != "" || !strings.Contains(err.Error(), "FBLD 0(SI)") {
+		t.Fatal("complete no-argument transcendental source acquired SI/DI storage or initialized x87 inputs", err)
 	}
-	compile386IR(t, ir, "x87_transcendental_family")
+	compile386IR(t, x86X87LowererObjectUnit(t, file, "386", "i386-unknown-linux-gnu"), "x87_transcendental_emitter_only")
 }
 
 func TestTranslate386X87ConstantUnaryAndTranscendentalFamilyRejectsOperands(t *testing.T) {
@@ -1289,15 +1317,17 @@ func TestTranslate386X87CompareFamilyRejectsNonGoForms(t *testing.T) {
 		instruction string
 		want        string
 	}{
-		{instruction: "FCOMF F1, F0", want: "FCOMF expects memory source and F0 destination"},
-		{instruction: "FCOMD 0(SI), F1", want: "FCOMD expects memory,F0"},
+		{instruction: "FCOMF F1, F0", want: "FCOMF expects memory source or x87-register source and F0 destination"},
+		{instruction: "FCOMD 0(SI), F1", want: "FCOMD expects memory source or x87-register source and F0 destination"},
 		{instruction: "FCOMDPP F1, F0", want: "FCOMDPP expects F0 source and x87-register destination"},
 		{instruction: "FCOMI F0, F1", want: "FCOMI expects x87-register source and F0 destination"},
 		{instruction: "FUCOM F1, F0", want: "FUCOM expects F0 source and x87-register destination"},
 		{instruction: "FUCOMIP 0(SI), F0", want: "FUCOMIP expects F0 source and x87-register destination"},
 	} {
 		t.Run(test.instruction, func(t *testing.T) {
-			file, err := Parse(ArchAMD64, "TEXT bad(SB),NOSPLIT,$0-0\n"+test.instruction+"\nRET\n")
+			source := "TEXT bad(SB),NOSPLIT,$0-0\n" + test.instruction + "\nRET\n"
+			goAssemblerOracleOutput(t, "386", "#include \"textflag.h\"\n"+source, "", false)
+			file, err := Parse(ArchAMD64, source)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -1306,7 +1336,7 @@ func TestTranslate386X87CompareFamilyRejectsNonGoForms(t *testing.T) {
 				Goarch:       "386",
 				Sigs:         map[string]FuncSig{"bad": {Name: "bad", Ret: Void}},
 			})
-			if err == nil || !strings.Contains(err.Error(), test.want) {
+			if err == nil || errors.Is(err, ErrProbeNeedsContext) || !strings.Contains(err.Error(), test.want) {
 				t.Fatalf("Translate(%q) error = %v, want %q", test.instruction, err, test.want)
 			}
 		})
@@ -1370,10 +1400,11 @@ TEXT x87environment(SB),NOSPLIT,$0-0
 		Sigs:         map[string]FuncSig{"x87environment": {Name: "x87environment", Ret: Void}},
 		X87Mode:      X87Software,
 	})
-	if err != nil {
-		t.Fatalf("Translate(complete x87 environment/control family) error = %v", err)
+	if !errors.Is(err, ErrProbeNeedsContext) || ir != "" || !strings.Contains(err.Error(), "FLDCW 0(SI)") {
+		t.Fatalf("complete no-argument ENV source acquired native SI/DI storage: output=%t error=%v", ir != "", err)
 	}
-	compile386IR(t, ir, "x87_environment_family")
+	// Typed syntax/object witnesses are independent of the original source's
+	// missing incoming pointers, restore image and native write contracts.
 }
 
 func TestTranslate386X87EnvironmentAndControlFamilyRejectsNonGoForms(t *testing.T) {
@@ -1412,7 +1443,8 @@ func TestTranslate386X87Modes(t *testing.T) {
 		`asm sideeffect "fnstcw $0"`,
 		`asm sideeffect "fldcw $0"`,
 		`asm sideeffect "fldl $1; frndint; fstpl $0"`,
-		`asm sideeffect "fldl $1; fistpll $0"`,
+		`asm sideeffect "cmpb $$0, $3; je 1f; fildll $2;`,
+		`1: fldl $1; 2: fistpll $0`,
 	} {
 		if !strings.Contains(hardware, want) {
 			t.Fatalf("hardware x87 IR missing %q:\n%s", want, hardware)
@@ -1555,14 +1587,7 @@ func TestTranslate386X87Codegen(t *testing.T) {
 
 func translate386RoundingIR(t *testing.T, mode X87Mode) string {
 	t.Helper()
-	file, err := Parse(ArchAMD64, `TEXT round(SB),NOSPLIT,$0-16
-	FMOVD value+0(FP), F0
-	FSTCW -2(SP)
-	FLDCW -2(SP)
-	FRNDINT
-	FMOVVP F0, ret+8(FP)
-	RET
-`)
+	file, err := Parse(ArchAMD64, x86X87LegacyBoundedRoundingSource(mode))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1686,244 +1711,13 @@ func TestRuntimeExec386Core(t *testing.T) {
 	if llc == "" || clang == "" {
 		t.Fatal("llc/clang not found")
 	}
-	file, err := Parse(ArchAMD64, `
-TEXT addCarry(SB),NOSPLIT,$0-12
-	MOVL a+0(FP), AX
-	MOVL b+4(FP), BX
-	CMPL AX, $0
-	ADCL BX, AX
-	MOVL AX, ret+8(FP)
-	RET
-
-TEXT cpuidProbe(SB),NOSPLIT,$0-0
-	PUSHFL
-	PUSHFL
-	XORL $0x200000, 0(SP)
-	POPFL
-	PUSHFL
-	POPL AX
-	XORL 0(SP), AX
-	POPFL
-	TESTL $0x200000, AX
-	JNE cpuidAvailable
-	MOVL $0, AX
-	RET
-cpuidAvailable:
-	MOVL $1, AX
-	RET
-
-TEXT frameAddress(SB),NOSPLIT,$0-12
-	LEAL a+0(FP), SI
-	MOVL $41, 4(SI)
-	MOVL b+4(FP), AX
-	MOVL AX, ret+8(FP)
-	RET
-
-TEXT copyForward(SB),NOSPLIT,$0-12
-	MOVL dst+0(FP), DI
-	MOVL src+4(FP), SI
-	MOVL n+8(FP), CX
-	CLD
-	REP; MOVSB
-	RET
-
-TEXT copyBackward(SB),NOSPLIT,$0-12
-	MOVL dst+0(FP), DI
-	MOVL src+4(FP), SI
-	MOVL n+8(FP), CX
-	ADDL CX, DI
-	ADDL CX, SI
-	DECL DI
-	DECL SI
-	STD
-	REP; MOVSB
-	CLD
-	RET
-
-TEXT copyBackwardRestoredDF(SB),NOSPLIT,$0-12
-	MOVL dst+0(FP), DI
-	MOVL src+4(FP), SI
-	MOVL n+8(FP), CX
-	ADDL CX, DI
-	ADDL CX, SI
-	DECL DI
-	DECL SI
-	STD
-	PUSHFL
-	CLD
-	POPFL
-	REP; MOVSB
-	CLD
-	RET
-
-TEXT fillWords(SB),NOSPLIT,$0-12
-	MOVL dst+0(FP), DI
-	MOVL value+4(FP), AX
-	MOVL n+8(FP), CX
-	CLD
-	REP; STOSL
-	RET
-
-TEXT findByte(SB),NOSPLIT,$0-16
-	MOVL data+0(FP), DI
-	MOVL n+4(FP), CX
-	MOVL value+8(FP), AX
-	CLD
-	REPN; SCASB
-	MOVL CX, ret+12(FP)
-	RET
-
-TEXT zeroLengthScanPreservesZF(SB),NOSPLIT,$0-8
-	MOVL data+0(FP), DI
-	MOVL $0, CX
-	CMPL AX, AX
-	REPN; SCASB
-	JNE zfLost
-	MOVL $1, AX
-	MOVL AX, ret+4(FP)
-	RET
-zfLost:
-	MOVL $0, AX
-	MOVL AX, ret+4(FP)
-	RET
-
-TEXT negateHasCarry(SB),NOSPLIT,$0-8
-	MOVL value+0(FP), AX
-	NEGL AX
-	SETCS BX
-	MOVL BX, ret+4(FP)
-	RET
-
-TEXT floorValue(SB),NOSPLIT,$0-16
-	FMOVD value+0(FP), F0
-	FSTCW -2(SP)
-	MOVW -2(SP), AX
-	ANDW $0xf3ff, AX
-	ORW $0x0400, AX
-	MOVW AX, -4(SP)
-	FLDCW -4(SP)
-	FRNDINT
-	FLDCW -2(SP)
-	FMOVDP F0, ret+8(FP)
-	RET
-
-TEXT uint32ToFloat64(SB),NOSPLIT,$0-12
-	MOVL value+0(FP), AX
-	MOVL AX, 0(SP)
-	MOVL $0, 4(SP)
-	FMOVV 0(SP), F0
-	FMOVDP F0, ret+4(FP)
-	RET
-
-TEXT cas64(SB),NOSPLIT,$0-0
-	LOCK
-	CMPXCHG8B (SI)
-	SETEQ AX
-	RET
-
-TEXT xadd32(SB),NOSPLIT,$0-12
-	MOVL ptr+0(FP), BX
-	MOVL delta+4(FP), AX
-	MOVL AX, CX
-	LOCK
-	XADDL AX, 0(BX)
-	ADDL CX, AX
-	MOVL AX, ret+8(FP)
-	RET
-
-TEXT identity64(SB),NOSPLIT,$0-16
-	MOVL value_lo+0(FP), AX
-	MOVL AX, ret_lo+8(FP)
-	MOVL value_hi+4(FP), AX
-	MOVL AX, ret_hi+12(FP)
-	RET
-
-TEXT identityFloat64(SB),NOSPLIT,$0-16
-	MOVL value_lo+0(FP), AX
-	MOVL AX, ret_lo+8(FP)
-	MOVL value_hi+4(FP), AX
-	MOVL AX, ret_hi+12(FP)
-	RET
-
-TEXT readFS(SB),NOSPLIT,$0-4
-	MOVL 0x18(FS), AX
-	MOVL AX, ret+0(FP)
-	RET
-
-TEXT roundNearest(SB),NOSPLIT,$0-16
-	FMOVD value+0(FP), F0
-	FRNDINT
-	FMOVDP F0, ret+8(FP)
-	RET
-`)
+	// Keep all eighteen original operations and manual register transports.
+	// Only the separately verified counterpart supplies real local x87 scratch.
+	file, err := Parse(ArchAMD64, runtime386BoundedScratchAssembly(t))
 	if err != nil {
 		t.Fatal(err)
 	}
-	sig := FuncSig{
-		Name: "addCarry", Args: []LLVMType{I32, I32}, Ret: I32,
-		Frame: FrameLayout{
-			Params:  []FrameSlot{{Offset: 0, Type: I32, Index: 0, Field: -1}, {Offset: 4, Type: I32, Index: 1, Field: -1}},
-			Results: []FrameSlot{{Offset: 8, Type: I32, Index: 0, Field: -1}},
-		},
-	}
-	frameSig := func(name string, args []LLVMType, ret LLVMType, params, results []FrameSlot) FuncSig {
-		return FuncSig{
-			Name: name, Args: args, Ret: ret,
-			Frame: FrameLayout{Params: params, Results: results},
-		}
-	}
-	ir, err := Translate(file, Options{
-		TargetTriple: "i686-pc-windows-msvc",
-		Goarch:       "386",
-		Sigs: map[string]FuncSig{
-			"addCarry":   sig,
-			"cpuidProbe": {Name: "cpuidProbe", Ret: I32},
-			"frameAddress": frameSig("frameAddress", []LLVMType{I32, I32}, I32,
-				[]FrameSlot{{Offset: 0, Type: I32, Index: 0, Field: -1}, {Offset: 4, Type: I32, Index: 1, Field: -1}},
-				[]FrameSlot{{Offset: 8, Type: I32, Index: 0, Field: -1}}),
-			"copyForward": frameSig("copyForward", []LLVMType{Ptr, Ptr, I32}, Void,
-				[]FrameSlot{{Offset: 0, Type: Ptr, Index: 0, Field: -1}, {Offset: 4, Type: Ptr, Index: 1, Field: -1}, {Offset: 8, Type: I32, Index: 2, Field: -1}}, nil),
-			"copyBackward": frameSig("copyBackward", []LLVMType{Ptr, Ptr, I32}, Void,
-				[]FrameSlot{{Offset: 0, Type: Ptr, Index: 0, Field: -1}, {Offset: 4, Type: Ptr, Index: 1, Field: -1}, {Offset: 8, Type: I32, Index: 2, Field: -1}}, nil),
-			"copyBackwardRestoredDF": frameSig("copyBackwardRestoredDF", []LLVMType{Ptr, Ptr, I32}, Void,
-				[]FrameSlot{{Offset: 0, Type: Ptr, Index: 0, Field: -1}, {Offset: 4, Type: Ptr, Index: 1, Field: -1}, {Offset: 8, Type: I32, Index: 2, Field: -1}}, nil),
-			"fillWords": frameSig("fillWords", []LLVMType{Ptr, I32, I32}, Void,
-				[]FrameSlot{{Offset: 0, Type: Ptr, Index: 0, Field: -1}, {Offset: 4, Type: I32, Index: 1, Field: -1}, {Offset: 8, Type: I32, Index: 2, Field: -1}}, nil),
-			"findByte": frameSig("findByte", []LLVMType{Ptr, I32, I32}, I32,
-				[]FrameSlot{{Offset: 0, Type: Ptr, Index: 0, Field: -1}, {Offset: 4, Type: I32, Index: 1, Field: -1}, {Offset: 8, Type: I32, Index: 2, Field: -1}},
-				[]FrameSlot{{Offset: 12, Type: I32, Index: 0, Field: -1}}),
-			"zeroLengthScanPreservesZF": frameSig("zeroLengthScanPreservesZF", []LLVMType{Ptr}, I32,
-				[]FrameSlot{{Offset: 0, Type: Ptr, Index: 0, Field: -1}},
-				[]FrameSlot{{Offset: 4, Type: I32, Index: 0, Field: -1}}),
-			"negateHasCarry": frameSig("negateHasCarry", []LLVMType{I32}, I32,
-				[]FrameSlot{{Offset: 0, Type: I32, Index: 0, Field: -1}},
-				[]FrameSlot{{Offset: 4, Type: I32, Index: 0, Field: -1}}),
-			"floorValue": frameSig("floorValue", []LLVMType{LLVMType("double")}, LLVMType("double"),
-				[]FrameSlot{{Offset: 0, Type: LLVMType("double"), Index: 0, Field: -1}},
-				[]FrameSlot{{Offset: 8, Type: LLVMType("double"), Index: 0, Field: -1}}),
-			"uint32ToFloat64": frameSig("uint32ToFloat64", []LLVMType{I32}, LLVMType("double"),
-				[]FrameSlot{{Offset: 0, Type: I32, Index: 0, Field: -1}},
-				[]FrameSlot{{Offset: 4, Type: LLVMType("double"), Index: 0, Field: -1}}),
-			"cas64": {
-				Name: "cas64", Args: []LLVMType{Ptr, I32, I32, I32, I32}, Ret: I1,
-				ArgRegs: []Reg{SI, AX, DX, BX, CX},
-			},
-			"xadd32": frameSig("xadd32", []LLVMType{Ptr, I32}, I32,
-				[]FrameSlot{{Offset: 0, Type: Ptr, Index: 0, Field: -1}, {Offset: 4, Type: I32, Index: 1, Field: -1}},
-				[]FrameSlot{{Offset: 8, Type: I32, Index: 0, Field: -1}}),
-			"identity64": frameSig("identity64", []LLVMType{I64}, I64,
-				[]FrameSlot{{Offset: 0, Type: I64, Index: 0, Field: -1}},
-				[]FrameSlot{{Offset: 8, Type: I64, Index: 0, Field: -1}}),
-			"identityFloat64": frameSig("identityFloat64", []LLVMType{LLVMType("double")}, LLVMType("double"),
-				[]FrameSlot{{Offset: 0, Type: LLVMType("double"), Index: 0, Field: -1}},
-				[]FrameSlot{{Offset: 8, Type: LLVMType("double"), Index: 0, Field: -1}}),
-			"readFS": frameSig("readFS", nil, I32, nil,
-				[]FrameSlot{{Offset: 0, Type: I32, Index: 0, Field: -1}}),
-			"roundNearest": frameSig("roundNearest", []LLVMType{LLVMType("double")}, LLVMType("double"),
-				[]FrameSlot{{Offset: 0, Type: LLVMType("double"), Index: 0, Field: -1}},
-				[]FrameSlot{{Offset: 8, Type: LLVMType("double"), Index: 0, Field: -1}}),
-		},
-	})
+	ir, err := Translate(file, runtime386CoreOptions())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1935,72 +1729,7 @@ TEXT roundNearest(SB),NOSPLIT,$0-16
 	if err := os.WriteFile(llPath, []byte(ir), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	const cSource = `
-int _fltused;
-extern int addCarry(int, int);
-extern int cpuidProbe(void);
-extern int frameAddress(int, int);
-extern void copyForward(unsigned char *, const unsigned char *, unsigned int);
-extern void copyBackward(unsigned char *, const unsigned char *, unsigned int);
-extern void copyBackwardRestoredDF(unsigned char *, const unsigned char *, unsigned int);
-extern void fillWords(unsigned int *, unsigned int, unsigned int);
-extern unsigned int findByte(const unsigned char *, unsigned int, unsigned int);
-extern unsigned int zeroLengthScanPreservesZF(const unsigned char *);
-extern unsigned int negateHasCarry(unsigned int);
-extern double floorValue(double);
-extern double uint32ToFloat64(unsigned int);
-extern _Bool cas64(unsigned long long *, unsigned int, unsigned int, unsigned int, unsigned int);
-extern unsigned int xadd32(unsigned int *, unsigned int);
-extern unsigned long long identity64(unsigned long long);
-extern double identityFloat64(double);
-extern unsigned int readFS(void);
-extern double roundNearest(double);
-int main(void) {
-    unsigned int i;
-    const unsigned char source[8] = {1, 2, 3, 4, 5, 6, 7, 8};
-    unsigned char copied[8] = {0};
-    unsigned char overlap[9] = {0, 1, 2, 3, 4, 5, 6, 7, 8};
-    unsigned char restoredOverlap[9] = {0, 1, 2, 3, 4, 5, 6, 7, 8};
-    unsigned char forwardOverlap[5] = {1, 2, 3, 4, 5};
-    unsigned int words[4] = {0};
-    __declspec(align(8)) unsigned long long word = 0x1122334455667788ULL;
-    unsigned int atomicWord = 10;
-    if (addCarry(20, 22) != 42) return 11;
-    if (cpuidProbe() != 1) return 12;
-    if (frameAddress(20, 22) != 41) return 13;
-    copyForward(copied, source, 8);
-    for (i = 0; i < 8; i++) if (copied[i] != source[i]) return 14;
-    copyBackward(overlap + 1, overlap, 8);
-    for (i = 0; i < 8; i++) if (overlap[i + 1] != i) return 15;
-    copyBackwardRestoredDF(restoredOverlap + 1, restoredOverlap, 8);
-    for (i = 0; i < 8; i++) if (restoredOverlap[i + 1] != i) return 31;
-    fillWords(words, 0x89abcdefU, 4);
-    for (i = 0; i < 4; i++) if (words[i] != 0x89abcdefU) return 16;
-    if (findByte(source, 8, 4) != 4) return 17;
-    if (findByte(source, 8, 9) != 0) return 18;
-    if (zeroLengthScanPreservesZF(source) != 1) return 32;
-    if (negateHasCarry(0) != 0 || negateHasCarry(7) != 1) return 33;
-    if (floorValue(3.75) != 3.0 || floorValue(-3.25) != -4.0) return 19;
-    if (uint32ToFloat64(0xffffffffU) != 4294967295.0) return 20;
-    if (!cas64(&word, 0x55667788U, 0x11223344U, 0xaabbccddU, 0x99aabbccU)) return 21;
-    if (word != 0x99aabbccaabbccddULL) return 22;
-    if (cas64(&word, 0, 0, 1, 2) || word != 0x99aabbccaabbccddULL) return 23;
-    if (xadd32(&atomicWord, 5) != 15 || atomicWord != 15) return 24;
-    if (identity64(0x8877665544332211ULL) != 0x8877665544332211ULL) return 25;
-    if (identityFloat64(-123.75) != -123.75) return 26;
-    copyForward(forwardOverlap + 1, forwardOverlap, 4);
-    for (i = 0; i < 5; i++) if (forwardOverlap[i] != 1) return 27;
-    if (readFS() == 0) return 28;
-    if (roundNearest(2.5) != 2.0 || roundNearest(3.5) != 4.0 || roundNearest(-1.5) != -2.0) return 29;
-    {
-        union { double f; unsigned long long u; } rounded;
-        rounded.f = roundNearest(-0.5);
-        if (rounded.u != 0x8000000000000000ULL) return 30;
-    }
-    return 0;
-}
-`
-	if err := os.WriteFile(cPath, []byte(cSource), 0o644); err != nil {
+	if err := os.WriteFile(cPath, []byte(runtime386CoreCSource), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if out, err := exec.Command(llc, "-mtriple=i686-pc-windows-msvc", "-filetype=obj", llPath, "-o", objPath).CombinedOutput(); err != nil {

@@ -82,43 +82,11 @@ func x86PackedIntegerCompareProperties(op Op, ins Instr, arch string) (x86Packed
 		// _yvpcmpeqb EVEX rows produce K0-7, not an X/Y/Z destination;
 		// their optional input mask is K1-7. There is no .Z form.
 		form.maskResult = true
-		form.x86PackedBinaryForm = x86PackedBinaryForm{
-			first: 0, second: 1, destination: len(local.Args) - 1,
-			mask: -1, memory: -1,
-		}
-		if len(local.Args) != 3 && len(local.Args) != 4 || dotted && suffix != "BCST" {
+		binary, valid := x86PackedMaskCompareProperties(local, arch, 0, spec.laneBits, dotted, suffix)
+		if !valid {
 			return fail()
 		}
-		if !amd64IsKOperand(local.Args[form.destination]) {
-			return fail()
-		}
-		width, valid := amd64PackedCompareWidth(local.Args[1])
-		if !valid || !amd64GoPackedVectorMoveRegister(local.Args[1], width, "amd64") {
-			return fail()
-		}
-		form.byteWidth = width
-		first := local.Args[0]
-		if first.Kind == OpReg {
-			if !amd64GoPackedVectorMoveRegister(first, width, "amd64") {
-				return fail()
-			}
-		} else if !x86PackedShiftMemoryValid(first, arch) {
-			return fail()
-		} else {
-			form.memory, form.memoryBytes = 0, width
-		}
-		if dotted {
-			if spec.laneBits < 32 || form.memory < 0 {
-				return fail()
-			}
-			form.broadcast, form.memoryBytes = true, spec.laneBits/8
-		}
-		if len(local.Args) == 4 {
-			if !amd64NonzeroKOperand(local.Args[2]) || arch == "386" && !local.x86Encoded {
-				return fail()
-			}
-			form.mask = 2
-		}
+		form.x86PackedBinaryForm = binary
 	}
 	form.source = local.Args[form.first]
 	if err := x86Mode32VectorRegisterContext(local, arch); err != nil {
@@ -130,8 +98,56 @@ func x86PackedIntegerCompareProperties(op Op, ins Instr, arch string) (x86Packed
 	return form, true, nil
 }
 
+// The EVEX K-result rows of _yvpcmpeqb and _yvpcmpb have the same source,
+// width, mask and broadcast axes. Only the latter has a leading immediate.
+// This descriptor supplies operand roles, never initialized data or backing.
+func x86PackedMaskCompareProperties(ins Instr, arch string, first, laneBits int, dotted bool, suffix string) (x86PackedBinaryForm, bool) {
+	form := x86PackedBinaryForm{first: first, second: first + 1, destination: len(ins.Args) - 1, mask: -1, memory: -1}
+	if len(ins.Args) != first+3 && len(ins.Args) != first+4 || dotted && suffix != "BCST" {
+		return form, false
+	}
+	if !amd64IsKOperand(ins.Args[form.destination]) {
+		return form, false
+	}
+	width, valid := amd64PackedCompareWidth(ins.Args[form.second])
+	if !valid || !amd64GoPackedVectorMoveRegister(ins.Args[form.second], width, "amd64") {
+		return form, false
+	}
+	form.byteWidth = width
+	source := ins.Args[first]
+	if source.Kind == OpReg {
+		if !amd64GoPackedVectorMoveRegister(source, width, "amd64") {
+			return form, false
+		}
+	} else if !x86PackedShiftMemoryValid(source, arch) {
+		return form, false
+	} else {
+		form.memory, form.memoryBytes = first, width
+	}
+	if dotted {
+		if laneBits < 32 || form.memory < 0 {
+			return form, false
+		}
+		form.broadcast, form.memoryBytes = true, laneBits/8
+	}
+	if len(ins.Args) == first+4 {
+		mask := first + 2
+		if !amd64NonzeroKOperand(ins.Args[mask]) || arch == "386" && !ins.x86Encoded {
+			return form, false
+		}
+		form.mask = mask
+	}
+	return form, true
+}
+
 func x86TypedPackedIntegerCompareByteEffect(op Op, ins Instr, arch string) (x86TypedByteEffect, bool, error) {
 	form, known, err := x86PackedIntegerCompareProperties(op, ins, arch)
+	immediateFamily := false
+	if !known {
+		immediate, recognized, immediateErr := x86ImmediatePackedCompareProperties(op, ins, arch)
+		form, known, err = immediate.x86PackedIntegerCompareForm, recognized, immediateErr
+		immediateFamily = recognized
+	}
 	if !known || err != nil {
 		return x86TypedByteEffect{}, known, err
 	}
@@ -153,5 +169,5 @@ func x86TypedPackedIntegerCompareByteEffect(op Op, ins Instr, arch string) (x86T
 	operands = append(operands, x86TypedByteOperand{
 		index: form.destination, operand: ins.Args[form.destination], width: int64(width), write: true,
 	})
-	return x86TypedByteEffect{operands: operands}, true, nil
+	return x86TypedByteEffect{operands: operands, requiresResultProof: immediateFamily}, true, nil
 }

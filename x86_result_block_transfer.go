@@ -20,7 +20,7 @@ func x86LoweredBlockInsertRead(ins Instr, state *x86ResultState, owned []bool, r
 	if source.Kind != OpMem || source.Mem.Sym != "" || !x86OrdinaryNativeMemoryOperand(source, arch) {
 		return false, false
 	}
-	if !x86ResultIncomingPointerAddressIdentity(source, state, arch) {
+	if !x86ResultIncomingPointerReadAddressIdentity(source, state, arch) {
 		return false, true
 	}
 	return x86ResultBlockTransferWithRead(ins, form, state, owned, resultOffset, arch, true), true

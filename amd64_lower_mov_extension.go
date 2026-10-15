@@ -57,7 +57,7 @@ func x86LoweredScalarExtensionRead(ins Instr, state *x86ResultState, owned []boo
 	}
 	if ins.x86Encoded || ins.x86SourceRaw != nil || ins.x86RawNearReturn != nil ||
 		ins.x86AddressBits != 0 || ins.x86UnboundAddressOverride || ins.x86SegmentPrefix != 0 ||
-		!x86ResultIncomingPointerAddressIdentity(form.source, state, arch) {
+		!x86ResultIncomingPointerReadAddressIdentity(form.source, state, arch) {
 		return false, true
 	}
 	return x86ResultStore(Operand{Kind: OpReg, Reg: form.result}, int64(form.spec.destinationBits/8),

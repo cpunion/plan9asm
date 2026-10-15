@@ -1150,17 +1150,18 @@ func TestAMD64TranslateReturnCoverage(t *testing.T) {
 }
 
 func TestAMD64FPMovCoverage(t *testing.T) {
-	fn := Func{
-		Instrs: []Instr{
-			{Op: "MOVQ", Args: []Operand{{Kind: OpReg, Reg: AX}, {Kind: OpReg, Reg: BX}}},
-			{Op: "MOVQ", Args: []Operand{{Kind: OpReg, Reg: Reg("X0")}, {Kind: OpReg, Reg: Reg("X1")}}},
-			{Op: "MOVQ", Args: []Operand{{Kind: OpReg, Reg: Reg("X2")}, {Kind: OpReg, Reg: Reg("X3")}}},
-		},
+	fixture, err := Parse(ArchAMD64, "TEXT example.fpmov(SB),$0-65\n"+
+		"MOVQ arg+0(FP),AX\nMOVQ AX,BX\nPXOR X0,X0\nPXOR X2,X2\nMOVQ X0,X1\nMOVQ X2,X3\n"+
+		"MOVSD input+8(FP),X0\nMOVSD X0,ret+40(FP)\nMOVQ AX,ret+48(FP)\n"+
+		"MOVW AX,ret+56(FP)\nMOVB AX,ret+64(FP)\nRET\n")
+	if err != nil {
+		t.Fatal(err)
 	}
+	fn := fixture.Funcs[0]
 	sig := FuncSig{
 		Name: "example.fpmov",
 		Args: []LLVMType{I64, LLVMType("double"), I64, I64},
-		Ret:  Void,
+		Ret:  LLVMType("{ double, i64, i16, i8 }"),
 		Frame: FrameLayout{
 			Params: []FrameSlot{
 				{Offset: 0, Type: I64, Index: 0, Field: -1},
@@ -1346,10 +1347,10 @@ func TestAMD64CmpBtCoverage(t *testing.T) {
 	sig := FuncSig{
 		Name: "example.cmpbt",
 		Args: []LLVMType{I64},
-		Ret:  Void,
+		Ret:  I64,
 		Frame: FrameLayout{
-			Params:  []FrameSlot{{Offset: 0, Type: I64, Index: 0}},
-			Results: []FrameSlot{{Offset: 8, Type: I64, Index: 0}},
+			Params:  []FrameSlot{{Offset: 0, Type: I64, Index: 0, Field: -1}},
+			Results: []FrameSlot{{Offset: 8, Type: I64, Index: 0, Field: -1}},
 		},
 	}
 	c, b := newAMD64CtxWithFuncForTest(t, Func{}, sig, nil)
@@ -1439,13 +1440,20 @@ func TestAMD64MovSyscallAndCRC32Coverage(t *testing.T) {
 	sig := FuncSig{
 		Name: "example.mov",
 		Args: []LLVMType{I64},
-		Ret:  Void,
+		Ret:  LLVMType("{ i64, i16, i8 }"),
 		Frame: FrameLayout{
-			Params:  []FrameSlot{{Offset: 0, Type: I64, Index: 0}},
-			Results: []FrameSlot{{Offset: 8, Type: I64, Index: 0}, {Offset: 16, Type: I16, Index: 1}, {Offset: 24, Type: I8, Index: 2}},
+			Params:  []FrameSlot{{Offset: 0, Type: I64, Index: 0, Field: -1}},
+			Results: []FrameSlot{{Offset: 8, Type: I64, Index: 0, Field: -1}, {Offset: 16, Type: I16, Index: 1, Field: -1}, {Offset: 24, Type: I8, Index: 2, Field: -1}},
 		},
 	}
-	c, b := newAMD64CtxWithFuncForTest(t, Func{}, sig, nil)
+	// Fragment-level emitter assertions still need a complete source when a
+	// partial logical FP view asks for the independent whole-byte proof.
+	fixture, err := Parse(ArchAMD64, "TEXT example.mov(SB),$0-25\nMOVQ arg+0(FP),AX\nMOVQ AX,ret+8(FP)\nMOVW AX,ret+16(FP)\nMOVB AX,ret+24(FP)\nRET\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	fn := fixture.Funcs[0]
+	c, b := newAMD64CtxWithFuncForTest(t, fn, sig, nil)
 	for _, tc := range []struct {
 		r Reg
 		v string
@@ -1525,7 +1533,7 @@ func TestAMD64MovSyscallAndCRC32Coverage(t *testing.T) {
 		t.Fatalf("MOVQ yreg dst = (%v, %v, %v)", ok, term, err)
 	}
 
-	cBadReg, _ := newAMD64CtxWithFuncForTest(t, Func{}, sig, nil)
+	cBadReg, _ := newAMD64CtxWithFuncForTest(t, fn, sig, nil)
 	if ok, term, err := cBadReg.lowerMov("MOVB", Instr{Raw: "MOVB BAD, ret+24(FP)", Args: []Operand{{Kind: OpReg, Reg: Reg("BAD")}, {Kind: OpFP, FPOffset: 24}}}); !ok || term || err == nil {
 		t.Fatalf("MOVB invalid src reg = (%v, %v, %v), want handled error", ok, term, err)
 	}
@@ -1539,7 +1547,7 @@ func TestAMD64MovSyscallAndCRC32Coverage(t *testing.T) {
 		t.Fatalf("MOVL missing reg = (%v, %v, %v)", ok, term, err)
 	}
 
-	cBadMem, _ := newAMD64CtxWithFuncForTest(t, Func{}, sig, nil)
+	cBadMem, _ := newAMD64CtxWithFuncForTest(t, fn, sig, nil)
 	if ok, term, err := cBadMem.lowerMov("MOVLQSX", Instr{Raw: "MOVLQSX 8(BAD), SI", Args: []Operand{{Kind: OpMem, Mem: MemRef{Base: Reg("BAD"), Off: 8}}, {Kind: OpReg, Reg: SI}}}); !ok || term || err == nil {
 		t.Fatalf("MOVLQSX bad mem = (%v, %v, %v)", ok, term, err)
 	}

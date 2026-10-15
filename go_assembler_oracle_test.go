@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -24,24 +25,28 @@ func goAssemblerOracleOutput(t *testing.T, arch, source, experiment string, want
 	defer cancelStage()
 	ctx, cancel := context.WithTimeout(stage, time.Minute)
 	defer cancel()
-	command := exec.CommandContext(ctx, "go", "tool", "asm", "-p", "example.com/forms", "-o", object, asm)
+	// Includes belong to the selected SDK, not the temporary source directory
+	// or an ambient installation. Preserve source literals such as NOSPLIT.
+	include := filepath.Join(runtime.GOROOT(), "pkg", "include")
+	command := exec.CommandContext(ctx, "go", "tool", "asm", "-I", include, "-p", "example.com/forms", "-o", object, asm)
 	command.Env = append(os.Environ(), "GOTOOLCHAIN=local", "GOOS=linux", "GOARCH="+arch)
 	if experiment != "" {
 		command.Env = append(command.Env, "GOEXPERIMENT="+experiment)
 	}
 	output, err := runtimeOracleCombinedOutput(ctx, command)
-	if failure := goAssemblerOracleOutcome(asm, object, output, err, ctx.Err(), wantSuccess, arch); failure != nil {
+	if failure := goAssemblerOracleOutcome(asm, object, output, err, ctx.Err(), wantSuccess, arch, "example.com/forms"); failure != nil {
 		t.Fatalf("%v\n%s\noriginal source:\n%s", failure, output, source)
 	}
 }
 
-func goAssemblerOracleOutcome(source, object string, output []byte, commandErr, contextErr error, wantSuccess bool, arch string) error {
+func goAssemblerOracleOutcome(source, object string, output []byte, commandErr, contextErr error, wantSuccess bool, arch string, packagePrefix ...string) error {
 	return goasmoracle.CheckOutcome(source, object, output, nil, commandErr, contextErr,
 		wantSuccess, 0, func(source, diagnostic string) bool {
 			return arch == "wasm" && goasmoracle.WasmSourceDiagnosticLine(source, diagnostic, 0) ||
 				goAssemblerOracleX86SourceDiagnostic(source, arch, diagnostic) ||
 				goAssemblerOracleARM64SourceDiagnostic(source, arch, diagnostic) ||
-				goAssemblerOraclePositionlessDiagnostic(source, arch, diagnostic)
+				goAssemblerOraclePositionlessDiagnostic(source, arch, diagnostic) ||
+				len(packagePrefix) == 1 && goAssemblerOracleX86ObservedPackageDiagnostic(source, arch, diagnostic, packagePrefix[0])
 		})
 }
 

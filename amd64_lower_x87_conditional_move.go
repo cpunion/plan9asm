@@ -47,10 +47,13 @@ func (c *amd64Ctx) lowerX87ConditionalMove(op Op, ins Instr) error {
 	default:
 		return fmt.Errorf("unsupported x87 conditional move %s", op)
 	}
-	sourceValue := c.loadX87(source)
-	destinationValue := c.loadX87(0)
+	sourceValue := c.loadX87IntegerValue(source)
+	destinationValue := c.loadX87IntegerValue(0)
 	selected := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = select i1 %s, double %s, double %s\n", selected, condition, sourceValue, destinationValue)
-	c.storeX87(0, "%"+selected)
+	integer, exact := c.newTmp(), c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = select i1 %s, double %s, double %s\n", selected, condition, sourceValue.floating, destinationValue.floating)
+	fmt.Fprintf(c.b, "  %%%s = select i1 %s, i64 %s, i64 %s\n", integer, condition, sourceValue.integer, destinationValue.integer)
+	fmt.Fprintf(c.b, "  %%%s = select i1 %s, i1 %s, i1 %s\n", exact, condition, sourceValue.exact, destinationValue.exact)
+	c.storeX87IntegerValue(0, x87IntegerValue{"%" + selected, "%" + integer, "%" + exact})
 	return nil
 }

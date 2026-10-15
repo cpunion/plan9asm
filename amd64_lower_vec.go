@@ -2149,6 +2149,7 @@ func (c *amd64Ctx) validateMOVDAliasForm(ins Instr) error {
 	srcX, dstX := isAMD64MOVDXRegister(src), isAMD64MOVDXRegister(dst)
 	srcM, dstM := isAMD64MOVDMRegister(src), isAMD64MOVDMRegister(dst)
 	srcGP, dstGP := c.isGoYrlRegister(src), c.isGoYrlRegister(dst)
+	srcAddress := x86GoMOVQAddressSource(src, c.goarch)
 
 	valid := false
 	if c.goarch == "386" {
@@ -2158,7 +2159,7 @@ func (c *amd64Ctx) validateMOVDAliasForm(ins Instr) error {
 			(dstX && (srcMem || srcX)) ||
 			(dstM && (srcMem || srcX))
 	} else {
-		valid = (dstGP && (src.Kind == OpImm || srcGP || srcMem || srcX || srcM)) ||
+		valid = (dstGP && (src.Kind == OpImm || srcAddress || srcGP || srcMem || srcX || srcM)) ||
 			(dstMem && (src.Kind == OpImm || srcGP || srcX || srcM)) ||
 			(dstX && (srcGP || srcMem || srcX)) ||
 			(dstM && (srcGP || srcMem || srcX || srcM))

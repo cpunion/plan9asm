@@ -39,6 +39,10 @@ func TestTranslateX86WideStoresSpanComplex64Result(t *testing.T) {
 				source := fmt.Sprintf("TEXT %s(SB),$0-8\n", functionName)
 				if tc.needsZeroXMM {
 					source += "\tPXOR X0, X0\n"
+				} else if tc.name == "movq-gp" {
+					// Like every vector variant, the GP format witness must
+					// define its source rather than publish unknown entry bits.
+					source += "\tXORQ AX, AX\n"
 				}
 				source += "\t" + tc.instruction + "\n\tRET\n"
 				requireX86GoAssemblerResult(t, target.goarch, source, true)

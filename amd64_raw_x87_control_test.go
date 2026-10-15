@@ -2,6 +2,7 @@ package plan9asm
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -287,7 +288,19 @@ FSTSW AX
 MOVQ AX,ret+8(FP)
 RET
 `
-	file, err := Parse(ArchAMD64, source)
+	// The original source has no source-authenticated Tag/TOP shape at RET.
+	// Keep it as a Context control. The executed counterpart differs only by
+	// a final FINIT after the captured result, not by an invented entry fact.
+	_, err := x86X87InitializedWordAPI(t, source, "func clearModeledStatus(env *byte) uint64",
+		"amd64", "x86_64-unknown-linux-gnu", "text", X87Software)
+	if !errors.Is(err, ErrProbeNeedsContext) || !strings.Contains(err.Error(), "logical x87 value stack is not balanced at RET") {
+		t.Fatal("complete original source borrowed an unknown empty value stack", err)
+	}
+	bounded := strings.Replace(source, "MOVQ AX,ret+8(FP)\nRET\n", "MOVQ AX,ret+8(FP)\nFINIT\nRET\n", 1)
+	if bounded == source {
+		t.Fatal("bounded runtime counterpart lost its exact final-reset anchor")
+	}
+	file, err := Parse(ArchAMD64, bounded)
 	if err != nil {
 		t.Fatal(err)
 	}

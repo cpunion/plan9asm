@@ -148,14 +148,22 @@ func TestX86ABI0Mode32CanonicalFPCloneJoinAndBudget(t *testing.T) {
 	}
 	const limit = (64 << 20) / 8
 	// The base NUM/GP/vector/FLAGS/pointer payload has331 bytes, plus
-	// caller-origin IDs (32), scan-pending (2), predicate (3). The separately
-	// allocated canonical result byte must also count exactly once.
-	const ordinary = 331 + 32 + 2 + 3 + 1 // Separate DF byte, unchanged limit.
-	for _, room := range []int{2 * ordinary, 2 * (ordinary + 1)} {
+	// caller-origin IDs (32), scan-pending (2), predicate (3), DF and native
+	// string-counter bytes. The separately allocated canonical result byte
+	// must also count exactly once, without changing the shared limit.
+	const ordinary = 331 + 32 + 2 + 3 + 1 + 1
+	for _, room := range []int{2*(ordinary+1) - 1, 2 * (ordinary + 1)} {
 		fn := file.Funcs[0]
 		fn.x86ResultFlowBudget = &x86ResultFlowBudget{bytes: limit - room}
 		err := checkX86ScalarFPResultInitialization(fn, x86SDKLiteral386Signature(), "386")
-		if room == 2*(ordinary+1) && err != nil || room == 2*ordinary && !errors.Is(err, ErrProbeNeedsContext) {
+		visits := 0
+		if room == 2*(ordinary+1) {
+			visits = 2
+		}
+		if fn.x86ResultFlowBudget.visits != visits || fn.x86ResultFlowBudget.bytes != limit+2*(ordinary+1)-room+8*(ordinary+1)*visits {
+			t.Fatal("canonical source work differs from its exact complete-state charge", fn.x86ResultFlowBudget.bytes)
+		}
+		if room == 2*(ordinary+1) && err != nil || room != 2*(ordinary+1) && !errors.Is(err, ErrProbeNeedsContext) {
 			t.Fatal("canonical FP state received unaccounted extra source work", room, err)
 		}
 	}

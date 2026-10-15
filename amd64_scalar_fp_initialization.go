@@ -19,6 +19,12 @@ func checkX86ScalarFPResultInitialization(fn Func, sig FuncSig, arch string) err
 }
 
 func x86ScalarFPResultTransfer(ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string) bool {
+	if accepted, known := x86ResultX87ValueStep(ins, state, owned, resultOffset, arch); known {
+		return accepted
+	}
+	if accepted, known := x86ResultX87StatusProjection(ins, state, owned, resultOffset, arch); known {
+		return accepted
+	}
 	if accepted, known := x86ResultSDKLiteralStep(ins, state, owned, resultOffset, arch); known {
 		return accepted
 	}

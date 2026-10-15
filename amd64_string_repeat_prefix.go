@@ -6,7 +6,8 @@ import (
 )
 
 type x86StringRepeatPair struct {
-	prefixBlock, bodyBlock int
+	prefixBlock, prefixInstruction int
+	bodyBlock, bodyInstruction     int
 }
 
 // The lexical prefix carrier is safe only if every incoming source path to
@@ -14,6 +15,14 @@ type x86StringRepeatPair struct {
 // but a branch to a label after the prefix must not acquire the skipped byte.
 // This is a denial-only CFG check, not a string memory or initialized-byte role.
 func (c *amd64Ctx) verifyStringRepeatPrefixes() error {
+	_, err := c.stringRepeatSourceBindings()
+	return err
+}
+
+// Both the result preflight and emission consume this exact complete CFG
+// check. A returned pair identifies source nodes, never initialized bytes,
+// repeat count, memory backing or permission to perform a native access.
+func (c *amd64Ctx) stringRepeatSourceBindings() ([]x86StringRepeatPair, error) {
 	hasRepeat := false
 	for _, block := range c.blocks {
 		for _, ins := range block.instrs {
@@ -27,7 +36,7 @@ func (c *amd64Ctx) verifyStringRepeatPrefixes() error {
 		}
 	}
 	if !hasRepeat {
-		return nil
+		return nil, nil
 	}
 	// First nonempty block at/after each position. Together with the transition
 	// prefix sum below, arbitrarily long label chains are checked once, not once
@@ -48,34 +57,34 @@ func (c *amd64Ctx) verifyStringRepeatPrefixes() error {
 				continue
 			}
 			if len(prefix.Args) != 0 {
-				return fmt.Errorf("%s %s takes no operands: %q", c.goarch, op, prefix.Raw)
+				return nil, fmt.Errorf("%s %s takes no operands: %q", c.goarch, op, prefix.Raw)
 			}
 			bodyBlock, bodyInstruction := block, instruction+1
 			if bodyInstruction == len(body.instrs) {
 				bodyBlock, bodyInstruction = next[block+1], 0
 			}
 			if bodyBlock == len(c.blocks) {
-				return fmt.Errorf("%s %s prefix has no following string instruction", c.goarch, op)
+				return nil, fmt.Errorf("%s %s prefix has no following string instruction", c.goarch, op)
 			}
 			follower := c.blocks[bodyBlock].instrs[bodyInstruction]
 			if _, known, err := x86StringInstructionProperties(follower, c.goarch); known {
 				if err != nil {
-					return err
+					return nil, err
 				}
 			} else if _, _, known := x86PortStringProperties(follower.Op); known {
 				// Preserve the existing port-string grammar and native I/O
 				// emitter. The common prefix binding creates no I/O permission.
 				if len(follower.Args) != 0 {
-					return fmt.Errorf("%s %s takes no operands: %q", c.goarch, follower.Op, follower.Raw)
+					return nil, fmt.Errorf("%s %s takes no operands: %q", c.goarch, follower.Op, follower.Raw)
 				}
 			} else {
-				return fmt.Errorf("%s %s prefix is unsupported for %s", c.goarch, op, strings.ToUpper(string(follower.Op)))
+				return nil, fmt.Errorf("%s %s prefix is unsupported for %s", c.goarch, op, strings.ToUpper(string(follower.Op)))
 			}
-			pairs = append(pairs, x86StringRepeatPair{block, bodyBlock})
+			pairs = append(pairs, x86StringRepeatPair{block, instruction, bodyBlock, bodyInstruction})
 		}
 	}
 	if len(pairs) == 0 {
-		return nil // Unprefixed source retains its original control contract.
+		return nil, nil // Unprefixed source retains its original control contract.
 	}
 	context := func(reason string) error {
 		return fmt.Errorf("%w: %s REP/REPN needs its exact source-adjacent CFG binding: %s", ErrProbeNeedsContext, c.goarch, reason)
@@ -83,7 +92,7 @@ func (c *amd64Ctx) verifyStringRepeatPrefixes() error {
 	labels := make(map[string]int, len(c.blocks))
 	for block, body := range c.blocks {
 		if _, duplicate := labels[body.name]; duplicate {
-			return context("ambiguous source label")
+			return nil, context("ambiguous source label")
 		}
 		labels[body.name] = block
 	}
@@ -91,7 +100,7 @@ func (c *amd64Ctx) verifyStringRepeatPrefixes() error {
 	for block := range c.blocks {
 		successors, valid := c.sourceBlockSuccessors(block, labels)
 		if !valid {
-			return context("indirect, external or unresolved source control flow")
+			return nil, context("indirect, external or unresolved source control flow")
 		}
 		for edge, target := range successors {
 			if edge > 0 && target == successors[0] {
@@ -110,8 +119,8 @@ func (c *amd64Ctx) verifyStringRepeatPrefixes() error {
 	}
 	for _, pair := range pairs {
 		if badThrough[pair.bodyBlock] != badThrough[pair.prefixBlock] {
-			return context("a body or intervening label has an incoming edge that skips its prefix")
+			return nil, context("a body or intervening label has an incoming edge that skips its prefix")
 		}
 	}
-	return nil
+	return pairs, nil
 }

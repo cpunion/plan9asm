@@ -36,6 +36,29 @@ func (c *amd64Ctx) lowerX87(op Op, ins Instr) (ok bool, terminated bool, err err
 	if !isX87Op(op) {
 		return false, false, nil
 	}
+	dispatch := ins
+	if dispatch.Op == "" {
+		dispatch.Op = op // Legacy direct-helper callers have no second source head.
+	} else if !strings.EqualFold(string(dispatch.Op), string(op)) {
+		return true, false, fmt.Errorf("%s x87 dispatch/source opcode differs: %q", c.goarch, ins.Raw)
+	}
+	arch := c.goarch
+	if arch == "" {
+		arch = "amd64" // Legacy private helpers have always used the default x86 mode.
+	}
+	if _, known, err := x86X87WordProperties(dispatch, arch); known && err != nil {
+		return true, false, err
+	}
+	if _, known, err := x86X87EnvironmentReadProperties(dispatch, arch); known && err != nil {
+		return true, false, err
+	}
+	valueForm, typedValue, formErr := x86X87ValueProperties(dispatch, arch)
+	if typedValue && formErr != nil {
+		return true, false, formErr
+	}
+	if typedValue && valueForm.spec.kind == x86X87IntegerMove {
+		return true, false, c.lowerX87IntegerMove(valueForm)
+	}
 	switch op {
 	case "FBLD":
 		if len(ins.Args) != 1 || !isX87MemoryOperand(ins.Args[0]) {
@@ -101,11 +124,21 @@ func (c *amd64Ctx) lowerX87(op Op, ins Instr) (ok bool, terminated bool, err err
 		if !valid {
 			return true, false, fmt.Errorf("386 FMOVD expects memory,F0, Freg,F0, F0,memory, or F0,Freg: %q", ins.Raw)
 		}
+		if srcIsReg {
+			value := c.loadX87IntegerValue(srcReg)
+			if valueForm.push {
+				return true, false, c.pushX87IntegerValue(value)
+			}
+			if dstIsReg {
+				c.storeX87IntegerValue(dstReg, value)
+				return true, false, nil
+			}
+		}
 		v, err := c.evalX87F64(ins.Args[0])
 		if err != nil {
 			return true, false, err
 		}
-		if idx, isF := x87OperandReg(ins.Args[1]); isF && idx == 0 && ins.Args[0].Kind != OpReg {
+		if valueForm.push {
 			return true, false, c.pushX87(v)
 		}
 		return true, false, c.storeX87F64(ins.Args[1], v)
@@ -113,6 +146,12 @@ func (c *amd64Ctx) lowerX87(op Op, ins Instr) (ok bool, terminated bool, err err
 	case "FMOVDP":
 		if len(ins.Args) != 2 || !isX87F0(ins.Args[0]) || !(isX87MemoryOperand(ins.Args[1]) || isX87RegisterOperand(ins.Args[1])) {
 			return true, false, fmt.Errorf("386 FMOVDP expects F0 source and memory or x87-register destination: %q", ins.Raw)
+		}
+		if index, register := x87OperandReg(ins.Args[1]); register {
+			value := c.loadX87IntegerValue(0)
+			c.storeX87IntegerValue(index, value)
+			c.popX87()
+			return true, false, nil
 		}
 		v, err := c.evalX87F64(ins.Args[0])
 		if err != nil {
@@ -124,11 +163,11 @@ func (c *amd64Ctx) lowerX87(op Op, ins Instr) (ok bool, terminated bool, err err
 		c.popX87()
 		return true, false, nil
 
-	case "FMOVF", "FMOVL", "FMOVW":
+	case "FMOVF":
 		if len(ins.Args) != 2 {
 			return true, false, fmt.Errorf("386 %s expects src, dst: %q", op, ins.Raw)
 		}
-		if isX87MemoryOperand(ins.Args[0]) && isX87F0(ins.Args[1]) {
+		if (isX87MemoryOperand(ins.Args[0]) || op == "FMOVF" && valueForm.push) && isX87F0(ins.Args[1]) {
 			value, err := c.loadX87MoveValue(op, ins.Args[0])
 			if err != nil {
 				return true, false, err
@@ -140,43 +179,12 @@ func (c *amd64Ctx) lowerX87(op Op, ins Instr) (ok bool, terminated bool, err err
 		}
 		return true, false, fmt.Errorf("386 %s expects memory source and F0 destination, or F0 source and memory destination: %q", op, ins.Raw)
 
-	case "FMOVFP", "FMOVLP", "FMOVWP":
+	case "FMOVFP":
 		if len(ins.Args) != 2 || !isX87F0(ins.Args[0]) || !isX87MemoryOperand(ins.Args[1]) {
 			return true, false, fmt.Errorf("386 %s expects F0 source and memory destination: %q", op, ins.Raw)
 		}
 		baseOp := Op(strings.TrimSuffix(string(op), "P"))
 		if err := c.storeX87MoveValue(baseOp, ins.Args[1], c.loadX87(0)); err != nil {
-			return true, false, err
-		}
-		c.popX87()
-		return true, false, nil
-
-	case "FMOVV":
-		if len(ins.Args) != 2 || !isX87MemoryOperand(ins.Args[0]) || !isX87F0(ins.Args[1]) {
-			return true, false, fmt.Errorf("386 FMOVV expects memory source and F0 destination: %q", ins.Raw)
-		}
-		v, err := c.evalIntSized(ins.Args[0], I64)
-		if err != nil {
-			return true, false, err
-		}
-		f := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = sitofp i64 %s to double\n", f, v)
-		return true, false, c.pushX87("%" + f)
-
-	case "FMOVVP":
-		if len(ins.Args) != 2 || !isX87F0(ins.Args[0]) || !isX87MemoryOperand(ins.Args[1]) {
-			return true, false, fmt.Errorf("386 FMOVVP expects F0 source and memory destination: %q", ins.Raw)
-		}
-		var iv string
-		if c.useHardwareX87() {
-			iv = c.convertX87ToI64Hardware()
-		} else {
-			rounded := c.roundX87Software(c.loadX87(0))
-			converted := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = fptosi double %s to i64\n", converted, rounded)
-			iv = "%" + converted
-		}
-		if err := c.storeX87I64(ins.Args[1], iv); err != nil {
 			return true, false, err
 		}
 		c.popX87()
@@ -191,10 +199,10 @@ func (c *amd64Ctx) lowerX87(op Op, ins Instr) (ok bool, terminated bool, err err
 		if !okA || !okB {
 			return true, false, fmt.Errorf("386 FXCHD expects x87 registers: %q", ins.Raw)
 		}
-		av := c.loadX87(a)
-		b := c.loadX87(bv)
-		c.storeX87(a, b)
-		c.storeX87(bv, av)
+		av := c.loadX87IntegerValue(a)
+		b := c.loadX87IntegerValue(bv)
+		c.storeX87IntegerValue(a, b)
+		c.storeX87IntegerValue(bv, av)
 		return true, false, nil
 
 	case "FADDW", "FADDL", "FADDF", "FADDD", "FADDDP",
@@ -203,12 +211,12 @@ func (c *amd64Ctx) lowerX87(op Op, ins Instr) (ok bool, terminated bool, err err
 		"FSUBRW", "FSUBRL", "FSUBRF", "FSUBRD", "FSUBRDP",
 		"FDIVW", "FDIVL", "FDIVF", "FDIVD", "FDIVDP",
 		"FDIVRW", "FDIVRL", "FDIVRF", "FDIVRD", "FDIVRDP":
-		return true, false, c.lowerX87Arithmetic(op, ins)
+		return true, false, c.lowerX87Arithmetic(op, ins, valueForm)
 
 	case "FCOMD", "FCOMDP", "FCOMDPP", "FCOMF", "FCOMFP", "FCOMI", "FCOMIP",
 		"FCOML", "FCOMLP", "FCOMW", "FCOMWP",
 		"FUCOM", "FUCOMI", "FUCOMIP", "FUCOMP", "FUCOMPP":
-		return true, false, c.lowerX87Compare(op, ins)
+		return true, false, c.lowerX87Compare(op, ins, valueForm)
 
 	case "FCMOVCC", "FCMOVCS", "FCMOVEQ", "FCMOVHI", "FCMOVLS",
 		"FCMOVB", "FCMOVBE", "FCMOVNB", "FCMOVNBE", "FCMOVE", "FCMOVNE", "FCMOVNU", "FCMOVU", "FCMOVUN":
@@ -269,7 +277,10 @@ func (c *amd64Ctx) lowerX87(op Op, ins Instr) (ok bool, terminated bool, err err
 			c.roundX87Hardware(c.x87Slot[0])
 			return true, false, nil
 		}
-		return true, false, c.storeX87F64(Operand{Kind: OpReg, Reg: Reg("F0")}, c.roundX87Software(c.loadX87(0)))
+		value := c.loadX87IntegerValue(0)
+		value.floating = c.roundX87Software(value.floating)
+		c.storeX87IntegerValue(0, value)
+		return true, false, nil
 
 	case "F2XM1":
 		if len(ins.Args) != 0 {
@@ -524,42 +535,14 @@ func (c *amd64Ctx) lowerX87(op Op, ins Instr) (ok bool, terminated bool, err err
 	return false, false, nil
 }
 
-func (c *amd64Ctx) lowerX87Arithmetic(op Op, ins Instr) error {
-	if len(ins.Args) != 2 {
-		return fmt.Errorf("386 %s expects src, dst: %q", op, ins.Raw)
-	}
-	name := string(op)
-	pop := strings.HasSuffix(name, "DP")
-	width := name[len(name)-1:]
-	base := strings.TrimSuffix(name, width)
-	if pop {
-		width = "D"
-		base = strings.TrimSuffix(name, "DP")
-	}
-
-	if pop {
-		if !isX87F0(ins.Args[0]) || !isX87RegisterOperand(ins.Args[1]) {
-			return fmt.Errorf("386 %s expects F0 source and x87-register destination: %q", op, ins.Raw)
-		}
-	} else if width == "D" {
-		srcIndex, srcReg := x87OperandReg(ins.Args[0])
-		dstIndex, dstReg := x87OperandReg(ins.Args[1])
-		loadToF0 := (isX87MemoryOperand(ins.Args[0]) || ins.Args[0].Kind == OpImm) && dstReg && dstIndex == 0
-		regToF0 := srcReg && dstReg && dstIndex == 0
-		f0ToReg := srcReg && srcIndex == 0 && dstReg
-		if !loadToF0 && !regToF0 && !f0ToReg {
-			return fmt.Errorf("386 %s expects memory,F0, Freg,F0, or F0,Freg: %q", op, ins.Raw)
-		}
-	} else if !isX87MemoryOperand(ins.Args[0]) || !isX87F0(ins.Args[1]) {
-		return fmt.Errorf("386 %s expects memory source and F0 destination: %q", op, ins.Raw)
-	}
-
+func (c *amd64Ctx) lowerX87Arithmetic(op Op, ins Instr, form x86X87ValueForm) error {
+	width := form.spec.width
 	var src string
 	var err error
 	switch width {
-	case "W", "L":
+	case 'W', 'L':
 		typ := I16
-		if width == "L" {
+		if width == 'L' {
 			typ = I32
 		}
 		integer, evalErr := c.evalIntSized(ins.Args[0], typ)
@@ -569,7 +552,7 @@ func (c *amd64Ctx) lowerX87Arithmetic(op Op, ins Instr) error {
 		converted := c.newTmp()
 		fmt.Fprintf(c.b, "  %%%s = sitofp %s %s to double\n", converted, typ, integer)
 		src = "%" + converted
-	case "F":
+	case 'F':
 		value, evalErr := c.evalF32(ins.Args[0])
 		if evalErr != nil {
 			return evalErr
@@ -577,7 +560,7 @@ func (c *amd64Ctx) lowerX87Arithmetic(op Op, ins Instr) error {
 		converted := c.newTmp()
 		fmt.Fprintf(c.b, "  %%%s = fpext float %s to double\n", converted, value)
 		src = "%" + converted
-	case "D":
+	case 'D':
 		src, err = c.evalX87F64(ins.Args[0])
 		if err != nil {
 			return err
@@ -590,18 +573,18 @@ func (c *amd64Ctx) lowerX87Arithmetic(op Op, ins Instr) error {
 		return err
 	}
 	lhs, rhs := dst, src
-	if strings.HasPrefix(base, "FSUBR") || strings.HasPrefix(base, "FDIVR") {
+	if form.spec.reverse {
 		lhs, rhs = src, dst
 	}
 	operation := ""
 	switch {
-	case strings.HasPrefix(base, "FADD"):
+	case form.spec.stem == "FADD":
 		operation = "fadd"
-	case strings.HasPrefix(base, "FMUL"):
+	case form.spec.stem == "FMUL":
 		operation = "fmul"
-	case strings.HasPrefix(base, "FSUB"):
+	case form.spec.stem == "FSUB" || form.spec.stem == "FSUBR":
 		operation = "fsub"
-	case strings.HasPrefix(base, "FDIV"):
+	case form.spec.stem == "FDIV" || form.spec.stem == "FDIVR":
 		operation = "fdiv"
 	}
 	if operation == "" {
@@ -612,84 +595,36 @@ func (c *amd64Ctx) lowerX87Arithmetic(op Op, ins Instr) error {
 	if err := c.storeX87F64(ins.Args[1], "%"+result); err != nil {
 		return err
 	}
-	if pop {
+	if form.spec.pop != 0 {
 		c.popX87()
 	}
 	return nil
 }
 
-func (c *amd64Ctx) lowerX87Compare(op Op, ins Instr) error {
-	if len(ins.Args) != 2 {
-		return fmt.Errorf("386 %s expects lhs, rhs: %q", op, ins.Raw)
-	}
-	name := string(op)
-	directFlags := name == "FCOMI" || name == "FCOMIP" || name == "FUCOMI" || name == "FUCOMIP"
-	popCount := 0
-	switch name {
-	case "FCOMDP", "FCOMFP", "FCOMIP", "FCOMLP", "FCOMWP", "FUCOMIP", "FUCOMP":
-		popCount = 1
-	case "FCOMDPP", "FUCOMPP":
-		popCount = 2
-	}
-
-	var lhsOperand, rhsOperand Operand
-	width := "D"
-	switch {
-	case name == "FCOMI" || name == "FCOMIP":
-		if !isX87RegisterOperand(ins.Args[0]) || !isX87F0(ins.Args[1]) {
-			return fmt.Errorf("386 %s expects x87-register source and F0 destination: %q", op, ins.Raw)
-		}
-		lhsOperand, rhsOperand = ins.Args[1], ins.Args[0]
-	case strings.HasPrefix(name, "FUCOM") || name == "FCOMDPP":
-		if !isX87F0(ins.Args[0]) || !isX87RegisterOperand(ins.Args[1]) {
-			return fmt.Errorf("386 %s expects F0 source and x87-register destination: %q", op, ins.Raw)
-		}
-		lhsOperand, rhsOperand = ins.Args[0], ins.Args[1]
-	case name == "FCOMD" || name == "FCOMDP":
-		srcIndex, srcReg := x87OperandReg(ins.Args[0])
-		dstIndex, dstReg := x87OperandReg(ins.Args[1])
-		loadToF0 := (isX87MemoryOperand(ins.Args[0]) || ins.Args[0].Kind == OpImm) && dstReg && dstIndex == 0
-		regToF0 := srcReg && dstReg && dstIndex == 0
-		f0ToReg := srcReg && srcIndex == 0 && dstReg
-		if !loadToF0 && !regToF0 && !f0ToReg {
-			return fmt.Errorf("386 %s expects memory,F0, Freg,F0, or F0,Freg: %q", op, ins.Raw)
-		}
-		lhsOperand, rhsOperand = ins.Args[1], ins.Args[0]
-	default:
-		widthIndex := len("FCOM")
-		if len(name) <= widthIndex {
-			return fmt.Errorf("386 %s has unknown x87 compare form", op)
-		}
-		width = name[widthIndex : widthIndex+1]
-		if !isX87MemoryOperand(ins.Args[0]) || !isX87F0(ins.Args[1]) {
-			return fmt.Errorf("386 %s expects memory source and F0 destination: %q", op, ins.Raw)
-		}
-		lhsOperand, rhsOperand = ins.Args[1], ins.Args[0]
-	}
-
-	lhs, err := c.evalX87F64(lhsOperand)
+func (c *amd64Ctx) lowerX87Compare(op Op, ins Instr, form x86X87ValueForm) error {
+	lhs, err := c.evalX87F64(form.left)
 	if err != nil {
 		return err
 	}
 	var rhs string
-	switch width {
-	case "D":
-		rhs, err = c.evalX87F64(rhsOperand)
-	case "F":
+	switch form.spec.width {
+	case 'D':
+		rhs, err = c.evalX87F64(form.right)
+	case 'F':
 		var narrow string
-		narrow, err = c.evalF32(rhsOperand)
+		narrow, err = c.evalF32(form.right)
 		if err == nil {
 			wide := c.newTmp()
 			fmt.Fprintf(c.b, "  %%%s = fpext float %s to double\n", wide, narrow)
 			rhs = "%" + wide
 		}
-	case "L", "W":
+	case 'L', 'W':
 		typ := I16
-		if width == "L" {
+		if form.spec.width == 'L' {
 			typ = I32
 		}
 		var integer string
-		integer, err = c.evalIntSized(rhsOperand, typ)
+		integer, err = c.evalIntSized(form.right, typ)
 		if err == nil {
 			wide := c.newTmp()
 			fmt.Fprintf(c.b, "  %%%s = sitofp %s %s to double\n", wide, typ, integer)
@@ -701,12 +636,12 @@ func (c *amd64Ctx) lowerX87Compare(op Op, ins Instr) error {
 	if err != nil {
 		return err
 	}
-	if directFlags {
+	if form.spec.directFlags {
 		c.setX87CompareFlags(lhs, rhs)
 	} else {
 		c.setX87CompareStatus(lhs, rhs)
 	}
-	for i := 0; i < popCount; i++ {
+	for i := uint8(0); i < form.spec.pop; i++ {
 		c.popX87()
 	}
 	return nil
@@ -800,14 +735,12 @@ func (c *amd64Ctx) storeX87MoveValue(op Op, dst Operand, value string) error {
 		fmt.Fprintf(c.b, "  %%%s = fptrunc double %s to float\n", narrow, value)
 		return c.storeX87TypedMemory(dst, LLVMType("float"), "%"+narrow)
 	case "FMOVL", "FMOVW":
-		typ := I32
+		bits := 32
 		if op == "FMOVW" {
-			typ = I16
+			bits = 16
 		}
 		rounded := c.roundX87Software(value)
-		integer := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = fptosi double %s to %s\n", integer, rounded, typ)
-		return c.storeX87TypedMemory(dst, typ, "%"+integer)
+		return c.storeX87TypedMemory(dst, amd64IntegerTypeForBits(bits), c.convertRoundedX87Integer(rounded, bits))
 	default:
 		return fmt.Errorf("386: unsupported x87 move store %s", op)
 	}
@@ -815,6 +748,9 @@ func (c *amd64Ctx) storeX87MoveValue(op Op, dst Operand, value string) error {
 
 func (c *amd64Ctx) storeX87TypedMemory(dst Operand, typ LLVMType, value string) error {
 	if dst.Kind == OpFP {
+		if typ == LLVMType("float") {
+			return c.storeScalarFPFloat(dst.FPOffset, 32, value)
+		}
 		return c.storeFPResult(dst.FPOffset, typ, value)
 	}
 	ptr, ptrType, err := c.x87MemoryPointer(dst)
@@ -841,12 +777,18 @@ func (c *amd64Ctx) loadX87Environment(src Operand) error {
 	if err != nil {
 		return err
 	}
+	// The 32-bit environment is one observable 28-byte read, including the
+	// fields that this software model does not interpret. Keep it exact and
+	// volatile even when both captured words are dead. An aggregate-width
+	// integer load avoids 28 separate IR accesses and preserves address space.
+	environment := c.newTmp()
 	control := c.newTmp()
-	statusPtr := c.newTmp()
+	statusBits := c.newTmp()
 	status := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = load i16, %s %s, align 1\n", control, ptrType, ptr)
-	fmt.Fprintf(c.b, "  %%%s = getelementptr i8, %s %s, i64 4\n", statusPtr, ptrType, ptr)
-	fmt.Fprintf(c.b, "  %%%s = load i16, %s %%%s, align 1\n", status, ptrType, statusPtr)
+	fmt.Fprintf(c.b, "  %%%s = load volatile i224, %s %s, align 1\n", environment, ptrType, ptr)
+	fmt.Fprintf(c.b, "  %%%s = trunc i224 %%%s to i16\n", control, environment)
+	fmt.Fprintf(c.b, "  %%%s = lshr i224 %%%s, 32\n", statusBits, environment)
+	fmt.Fprintf(c.b, "  %%%s = trunc i224 %%%s to i16\n", status, statusBits)
 	fmt.Fprintf(c.b, "  store i16 %%%s, ptr %s\n", control, c.x87ControlSlot)
 	fmt.Fprintf(c.b, "  store i16 %%%s, ptr %s\n", status, c.x87StatusSlot)
 	if c.useHardwareX87() {
@@ -998,36 +940,35 @@ func (c *amd64Ctx) loadX87(index int) string {
 
 func (c *amd64Ctx) storeX87(index int, value string) {
 	fmt.Fprintf(c.b, "  store double %s, ptr %s\n", value, c.x87Slot[index])
+	if c.x87ExactSlot[index] != "" {
+		fmt.Fprintf(c.b, "  store i1 false, ptr %s\n", c.x87ExactSlot[index])
+	}
 }
 
 func (c *amd64Ctx) pushX87(value string) error {
-	for i := len(c.x87Slot) - 1; i > 0; i-- {
-		c.storeX87(i, c.loadX87(i-1))
-	}
-	c.storeX87(0, value)
-	return nil
+	return c.pushX87IntegerValue(x87IntegerValue{value, "0", "false"})
 }
 
 func (c *amd64Ctx) popX87() {
 	for i := 0; i < len(c.x87Slot)-1; i++ {
-		c.storeX87(i, c.loadX87(i+1))
+		c.storeX87IntegerValue(i, c.loadX87IntegerValue(i+1))
 	}
 	c.storeX87(len(c.x87Slot)-1, "0.000000e+00")
 }
 
 func (c *amd64Ctx) rotateX87Stack(increment bool) {
-	values := make([]string, len(c.x87Slot))
+	values := make([]x87IntegerValue, len(c.x87Slot))
 	for i := range values {
-		values[i] = c.loadX87(i)
+		values[i] = c.loadX87IntegerValue(i)
 	}
 	if increment {
 		for i := range values {
-			c.storeX87(i, values[(i+1)%len(values)])
+			c.storeX87IntegerValue(i, values[(i+1)%len(values)])
 		}
 		return
 	}
 	for i := range values {
-		c.storeX87(i, values[(i+len(values)-1)%len(values)])
+		c.storeX87IntegerValue(i, values[(i+len(values)-1)%len(values)])
 	}
 }
 
@@ -1096,7 +1037,7 @@ func (c *amd64Ctx) storeX87F64(dst Operand, value string) error {
 	}
 	switch dst.Kind {
 	case OpFP:
-		return c.storeFPResult(dst.FPOffset, LLVMType("double"), value)
+		return c.storeScalarFPFloat(dst.FPOffset, 64, value)
 	case OpMem:
 		p, ptrType, err := c.ptrFromMem(dst.Mem)
 		if err != nil {
@@ -1177,7 +1118,12 @@ func (c *amd64Ctx) roundX87Hardware(slot string) {
 }
 
 func (c *amd64Ctx) convertX87ToI64Hardware() string {
-	fmt.Fprintf(c.b, "  call void asm sideeffect \"fldl $1; fistpll $0\", \"=*m,*m,~{dirflag},~{fpsr},~{flags}\"(ptr elementtype(i64) %s, ptr elementtype(double) %s)\n", c.x87IntegerSlot, c.x87Slot[0])
+	if c.x87ExactSlot[0] == "" {
+		fmt.Fprintf(c.b, "  call void asm sideeffect \"fldl $1; fistpll $0\", \"=*m,*m,~{dirflag},~{fpsr},~{flags}\"(ptr elementtype(i64) %s, ptr elementtype(double) %s)\n", c.x87IntegerSlot, c.x87Slot[0])
+	} else {
+		fmt.Fprintf(c.b, "  call void asm sideeffect \"cmpb $$0, $3; je 1f; fildll $2; jmp 2f; 1: fldl $1; 2: fistpll $0\", \"=*m,*m,*m,*m,~{dirflag},~{fpsr},~{flags}\"(ptr elementtype(i64) %s, ptr elementtype(double) %s, ptr elementtype(i64) %s, ptr elementtype(i1) %s)\n",
+			c.x87IntegerSlot, c.x87Slot[0], c.x87IntegerValueSlot[0], c.x87ExactSlot[0])
+	}
 	value := c.newTmp()
 	fmt.Fprintf(c.b, "  %%%s = load i64, ptr %s\n", value, c.x87IntegerSlot)
 	return "%" + value
@@ -1226,7 +1172,11 @@ func (c *amd64Ctx) roundNearestEvenX87(value, floor string) string {
 	floorInt := c.newTmp()
 	oddBits := c.newTmp()
 	odd := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = fptosi double %s to i64\n", floorInt, floor)
+	// Only values below 2^52 need a tie-parity calculation. Keep even the
+	// discarded large/NaN path free of an out-of-range fptosi operand.
+	parityInput := c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = select i1 %%%s, double 0.000000e+00, double %s\n", parityInput, large, floor)
+	fmt.Fprintf(c.b, "  %%%s = fptosi double %%%s to i64\n", floorInt, parityInput)
 	fmt.Fprintf(c.b, "  %%%s = and i64 %%%s, 1\n", oddBits, floorInt)
 	fmt.Fprintf(c.b, "  %%%s = icmp ne i64 %%%s, 0\n", odd, oddBits)
 	tieUp := c.newTmp()

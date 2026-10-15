@@ -44,15 +44,17 @@ type amd64Ctx struct {
 	usedZRegs map[int]bool
 	zRegSlot  map[int]string // zmm reg index -> alloca name (<64 x i8>)
 
-	usedKRegs      map[int]bool
-	kRegSlot       map[int]string // avx512 mask reg index -> alloca name (i64)
-	usedX87        bool
-	usesX87Convert bool
-	x87Slot        [8]string // x87 stack registers, represented as f64 values
-	x87ControlSlot string
-	x87StatusSlot  string // condition-code status populated by FTST for FSTSW
-	x87IntegerSlot string // hardware FISTP result for explicit 386 x87 lowering
-	x87Mode        X87Mode
+	usedKRegs           map[int]bool
+	kRegSlot            map[int]string // avx512 mask reg index -> alloca name (i64)
+	usedX87             bool
+	usesX87Convert      bool
+	x87Slot             [8]string // x87 stack registers, represented as f64 values
+	x87IntegerValueSlot [8]string // Exact signed-integer payload for each logical value.
+	x87ExactSlot        [8]string // Runtime tag; never source availability or entry authority.
+	x87ControlSlot      string
+	x87StatusSlot       string // condition-code status populated by FTST for FSTSW
+	x87IntegerSlot      string // hardware FISTP result for explicit 386 x87 lowering
+	x87Mode             X87Mode
 
 	flagsZSlot      string
 	flagsSltSlot    string // architectural SF; signed conditions combine it with OF
@@ -92,7 +94,10 @@ type amd64Ctx struct {
 	fpScalarData     map[x86StaticSBAddress]int64 // exact effective SB address -> available emitted numerical bytes
 	fpScalarChecked  bool
 	fpScalarCheckErr error
+	fpScalarTrapOnly bool // Complete private logical-shadow proof: every path ends in an exact trap.
 	fpMixedBoolBytes bool // Complete ordinary tuple NUM/canonical proof passed.
+
+	fpStaticAddressValues *x86StaticAddressValues // No dereference capability.
 }
 
 func newAMD64Ctx(b *strings.Builder, fn Func, sig FuncSig, resolve func(string) string, sigs map[string]FuncSig, annotate bool) *amd64Ctx {
@@ -587,6 +592,12 @@ func (c *amd64Ctx) emitEntryAllocas() error {
 			c.x87Slot[i] = name
 			fmt.Fprintf(c.b, "  %s = alloca double\n", name)
 			fmt.Fprintf(c.b, "  store double 0.000000e+00, ptr %s\n", name)
+			c.x87IntegerValueSlot[i] = fmt.Sprintf("%%x87_integer%d", i)
+			c.x87ExactSlot[i] = fmt.Sprintf("%%x87_exact%d", i)
+			fmt.Fprintf(c.b, "  %s = alloca i64\n", c.x87IntegerValueSlot[i])
+			fmt.Fprintf(c.b, "  store i64 0, ptr %s\n", c.x87IntegerValueSlot[i])
+			fmt.Fprintf(c.b, "  %s = alloca i1\n", c.x87ExactSlot[i])
+			fmt.Fprintf(c.b, "  store i1 false, ptr %s\n", c.x87ExactSlot[i])
 		}
 		c.x87ControlSlot = "%x87_control"
 		c.x87StatusSlot = "%x87_status"

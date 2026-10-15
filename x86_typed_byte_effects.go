@@ -95,6 +95,12 @@ func x86TypedGPByteEffect(op Op, ins Instr, arch string) (x86TypedByteEffect, bo
 	if arch != "amd64" && arch != "386" {
 		return x86TypedByteEffect{}, false, nil
 	}
+	if effect, known, err := x86TypedSelfCompareByteEffect(op, ins, arch); known {
+		return effect, known, err
+	}
+	if effect, known, err := x86TypedCarryControlByteEffect(op, ins, arch); known {
+		return effect, known, err
+	}
 	if effect, known, err := x86TypedByteSwapEffect(op, ins, arch); known {
 		return effect, known, err
 	}
