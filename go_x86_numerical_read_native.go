@@ -19,6 +19,7 @@ type numericalSBNativeProof struct {
 	OriginalText, ExpandedText              []gostaticstorage.TextRecord
 	ArchiveMembers                          []gostaticstorage.TextMember
 	Sources                                 map[string][]byte
+	CompilerAliases                         map[string]numericalCompilerAliasWitness
 }
 
 func (source *GoX86NumericalReadSource) bindNative(ctx context.Context, variables map[string]numericalSBRead, environment map[string]string) error {
@@ -371,6 +372,9 @@ func (source *GoX86NumericalReadSource) bindNative(ctx context.Context, variable
 	}
 	if len(source.reads) == 0 {
 		return numericalSBContext("source has no certified numerical SB reads")
+	}
+	if err := source.captureCompilerAliases(); err != nil {
+		return err
 	}
 	proof.Sources = make(map[string][]byte)
 	for name := range guard.inputs {

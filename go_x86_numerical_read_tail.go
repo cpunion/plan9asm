@@ -57,39 +57,16 @@ func numericalDirectTailRoles(file *File) (map[x86DirectTailPoint]string, error)
 }
 
 func numericalTypedSourceEntries(file *File, pkg, arch string, role numericalSBSourceRole) (map[string]bool, map[string]bool, error) {
-	controls, err := numericalDirectTailRoles(file)
+	observed, ordinary, err := numericalTypedSourceDeclarations(file, pkg, arch, role, numericalGoLinknames{}, nil)
 	if err != nil {
 		return nil, nil, err
 	}
 	entries, terminals := make(map[string]bool), make(map[string]bool)
-	add := func(symbol string, terminal bool) error {
-		name, _, valid := numericalFunctionSourceIdentity(symbol, pkg, arch, role)
-		if !valid || !strings.HasPrefix(name, pkg+".") {
-			return numericalSBContext("numerical source lacks its exact same-package typed declaration")
-		}
-		local := strings.TrimPrefix(name, pkg+".")
-		if terminal {
-			terminals[local] = true
-		} else if entries[local] {
-			return numericalSBContext("numerical source repeats its typed declaration identity")
-		}
-		entries[local] = true
-		return nil
+	for _, declaration := range observed {
+		entries[declaration.local] = true
 	}
-	for _, fn := range file.Funcs {
-		if strings.HasSuffix(fn.Sym, "<>") && len(controls) != 0 {
-			continue // No helper declaration, signature or entry state is created.
-		}
-		if err := add(fn.Sym, false); err != nil {
-			return nil, nil, err
-		}
-	}
-	for _, name := range controls {
-		if !strings.HasSuffix(name, "<>") {
-			if err := add(name, true); err != nil {
-				return nil, nil, err
-			}
-		}
+	for _, declaration := range ordinary {
+		terminals[declaration.local] = true
 	}
 	return entries, terminals, nil
 }
@@ -99,7 +76,7 @@ func numericalTypedSourceEntries(file *File, pkg, arch string, role numericalSBS
 // original selected Go file/import and compare both complete language roles
 // before deriving its ABI0 layout; a supplied root signature grants nothing.
 func (source *GoX86NumericalReadSource) numericalSDKOrdinaryTailDeclarations(ctx context.Context, pkg GoPackage, arch string,
-	terminals map[string]bool,
+	terminals map[string]numericalSourceDeclaration,
 ) (map[string]goAMD64FrameDeclaration, error) {
 	result := make(map[string]goAMD64FrameDeclaration)
 	if len(terminals) == 0 {
@@ -144,6 +121,19 @@ func (source *GoX86NumericalReadSource) numericalSDKOrdinaryTailDeclarations(ctx
 	if err != nil || !reflect.DeepEqual(typed.Scope().Names(), pkg.Types.Scope().Names()) {
 		return nil, numericalSBContext("ordinary terminal complete Go declaration graph differs: %v", err)
 	}
+	names, err := numericalGoDeclarationLinknames(syntax, typed)
+	if err != nil {
+		return nil, err
+	}
+	observed, _, err := numericalTypedSourceDeclarations(source.file, pkg.Path, arch, source.role, names, source.native.CompilerAliases)
+	if err != nil {
+		return nil, err
+	}
+	for name, declaration := range terminals {
+		if original, found := observed[name]; !found || original != declaration {
+			return nil, numericalSBContext("original declaration/compiler/native association differs")
+		}
+	}
 	language := func(fn *types.Func) (string, error) {
 		sig, valid := fn.Type().(*types.Signature)
 		if !valid || sig.Recv() != nil || sig.Variadic() || sig.TypeParams().Len() != 0 {
@@ -169,7 +159,8 @@ func (source *GoX86NumericalReadSource) numericalSDKOrdinaryTailDeclarations(ctx
 		}
 		return value.String(), nil
 	}
-	for local := range terminals {
+	for name, declaration := range terminals {
+		local := declaration.local
 		actual, found := typed.Scope().Lookup(local).(*types.Func)
 		provided, supplied := pkg.Types.Scope().Lookup(local).(*types.Func)
 		if !found || !supplied || actual.Pkg() != typed || provided.Pkg() != pkg.Types {
@@ -177,14 +168,11 @@ func (source *GoX86NumericalReadSource) numericalSDKOrdinaryTailDeclarations(ctx
 		}
 		// A selected source TEXT remains bodyless; only an actual ordinary
 		// external terminal may have a Go body. Helpers never enter this set.
-		for _, fn := range source.file.Funcs {
-			if !strings.HasSuffix(fn.Sym, "<>") && numericalNativeName(goTextSymbolForResolution(fn.Sym), pkg.Path) == pkg.Path+"."+local && !bodyless[local] {
-				return nil, numericalSBContext("source TEXT lacks its actual bodyless entry declaration")
-			}
+		if declaration.entry && !bodyless[local] {
+			return nil, numericalSBContext("source TEXT lacks its actual bodyless entry declaration")
 		}
 		first, err := language(actual)
 		second, priorErr := language(provided)
-		name := pkg.Path + "." + local
 		sig, abiErr := DeriveGoFuncABI0Signature(name, actual, arch, sizes)
 		prior, priorABIError := DeriveGoFuncABI0Signature(name, provided, arch, sizes)
 		if err != nil || priorErr != nil || abiErr != nil || priorABIError != nil || first != second || !reflect.DeepEqual(sig, prior) {

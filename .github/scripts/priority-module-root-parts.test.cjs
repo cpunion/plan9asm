@@ -210,27 +210,57 @@ test('Windows modules retain disjoint scheduling and complete coverage readback'
     /files: \.\/coverage-windows-\$\{\{ inputs.module \}\}\.out/);
 });
 
-test('Windows shell transports complete module roles and rejects hidden build flags', t => {
+function windowsModuleShellFixture(t) {
   // Argument transport only; native Go execution is covered by the Windows
   // module fixture, not by this synthetic command.
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'windows-module-ci-args-'));
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
-  fs.writeFileSync(path.join(directory, 'go'), `#!/usr/bin/env bash
+  const tools = Object.fromEntries(['go', 'llvm', 'node', 'python', 'jq'].map(name => {
+    const bin = path.join(directory, name, 'bin');
+    fs.mkdirSync(bin, { recursive: true });
+    return [name, bin];
+  }));
+  fs.writeFileSync(path.join(tools.go, 'go'), `#!/bin/bash
 if [[ "$*" == 'env GOHOSTOS' ]]; then
   echo windows
+elif [[ "$*" == 'env GOROOT' ]]; then
+  printf '%s\\n' '${path.dirname(tools.go)}'
 else
+  printf 'SYNTHETIC_PATH=%s\\n' "$PATH"
   printf '%s\\n' SYNTHETIC_GO "$@"
 fi
 `, { mode: 0o700 });
-  fs.writeFileSync(path.join(directory, 'cygpath'), '#!/usr/bin/env bash\necho C:/fixture\n', { mode: 0o700 });
-  const run = (flags, ...args) => spawnSync('bash', [
+  const commands = {
+    [path.join(directory, 'cygpath')]: 'if [[ "$1" == -m ]]; then echo C:/fixture; else printf "%s\\n" "$2"; fi',
+    [path.join(tools.llvm, 'llvm-config')]: `if [[ "$1" == --version ]]; then echo 22.1.8; else echo '${tools.llvm}'; fi`,
+    [path.join(tools.node, 'node')]: `echo '${tools.node}'`,
+    [path.join(tools.python, 'python')]: `echo '${tools.python}'`,
+    [path.join(tools.jq, 'jq')]: 'exit 0',
+  };
+  for (const [file, body] of Object.entries(commands)) {
+    fs.writeFileSync(file, `#!/usr/bin/env bash\n${body}\n`, { mode: 0o700 });
+  }
+  const environment = {};
+  const runAmbient = (ambient, flags, ...args) => spawnSync('bash', [
     path.join(__dirname, '../../scripts/test-windows-module-ci.sh'), ...args,
   ], {
     cwd: directory,
-    env: { ...process.env, PATH: directory + path.delimiter + process.env.PATH, GOFLAGS: flags },
+    env: {
+      ...process.env,
+      PATH: [directory, ...Object.values(tools), ambient, process.env.PATH].join(path.delimiter),
+      GOFLAGS: flags,
+      LLVM_CONFIG: '',
+      SYSTEMROOT: path.join(directory, 'Windows'),
+      ...environment,
+    },
     encoding: 'utf8',
     timeout: 5000,
   });
+  return { directory, tools, environment, runAmbient, run: (flags, ...args) => runAmbient('', flags, ...args) };
+}
+
+test('Windows shell transports complete module roles and rejects hidden build flags', t => {
+  const { directory, run } = windowsModuleShellFixture(t);
   for (const [module, parts, shards] of [['root', 16, 32], ['plan9asm', 4, 8], ['plan9asmll', 4, 8]]) {
     const rootRoles = Array.from({ length: parts }, (_, part) => ['execute', '0', String(part)]);
     for (const args of [...rootRoles, ['execute', '1', '-1'], ['execute', '2', '-1']]) {
@@ -265,5 +295,58 @@ fi
     const actual = run(flags, 'root', 'execute', '0', '0');
     assert.equal(actual.status, 1, actual.stderr);
     assert.doesNotMatch(actual.stdout, /SYNTHETIC_GO/);
+  }
+});
+
+test('Windows module execution and aggregation exclude ambient Git and WSL paths', t => {
+  const { directory, tools, runAmbient } = windowsModuleShellFixture(t);
+  const paths = [];
+  for (const [git, wsl] of [['ucrt64', true], ['mingw64', false]]) {
+    const ambient = [path.join(directory, 'Git', git, 'bin')];
+    if (wsl) ambient.push(path.join(directory, 'WSL'));
+    for (const role of [['execute', '0', '0'], ['complete']]) {
+      fs.writeFileSync(path.join(directory, 'coverage-windows-root.out'), 'fixture\n');
+      const actual = runAmbient(ambient.join(path.delimiter), '-tags=byollvm', 'root', ...role);
+      assert.equal(actual.status, 0, actual.stderr);
+      const observed = actual.stdout.split('\n').find(line => line.startsWith('SYNTHETIC_PATH='));
+      assert.ok(observed, 'the actual driver did not reach the synthetic command');
+      paths.push(observed.slice('SYNTHETIC_PATH='.length));
+    }
+  }
+  assert.equal(new Set(paths).size, 1, 'cross-owner tool search still depends on the hosted image');
+  const selected = paths[0].split(path.delimiter);
+  for (const bin of Object.values(tools)) assert.ok(selected.includes(bin), `lost selected ${bin}`);
+  assert.doesNotMatch(paths[0], /ucrt64|mingw64|WSL/);
+  assert.deepEqual(selected, [
+    tools.go, tools.llvm, tools.node, tools.python, tools.jq,
+    '/cmd', '/usr/bin', path.join(directory, 'Windows', 'System32'), path.join(directory, 'Windows'),
+  ]);
+});
+
+test('Windows module tool selection fails without falling back from explicit LLVM', t => {
+  const { directory, tools, environment, run } = windowsModuleShellFixture(t);
+  const configured = path.join(directory, 'explicit-llvm-config');
+  environment.LLVM_CONFIG = configured;
+  for (const version of ['23.1.0', '21.1.8', '', '22.1.8\nforeign']) {
+    fs.writeFileSync(configured, `#!/usr/bin/env bash\nprintf '%s\\n' '${version}'\n`, { mode: 0o700 });
+    const actual = run('-tags=byollvm', 'root', 'execute', '0', '0');
+    assert.equal(actual.status, 1, actual.stderr);
+    assert.match(actual.stderr, /selected LLVM 22/);
+    assert.doesNotMatch(actual.stdout, /SYNTHETIC_GO/);
+  }
+  environment.LLVM_CONFIG = path.join(directory, 'missing-llvm-config');
+  const missing = run('-tags=byollvm', 'root', 'execute', '0', '0');
+  assert.notEqual(missing.status, 0);
+  assert.doesNotMatch(missing.stdout, /SYNTHETIC_GO/);
+  environment.LLVM_CONFIG = '';
+  for (const name of ['node', 'python']) {
+    const file = path.join(tools[name], name);
+    const original = fs.readFileSync(file);
+    fs.writeFileSync(file, '#!/usr/bin/env bash\nexit 17\n', { mode: 0o700 });
+    const actual = run('-tags=byollvm', 'root', 'execute', '0', '0');
+    assert.equal(actual.status, 1, actual.stderr);
+    assert.match(actual.stderr, /one nonempty path/);
+    assert.doesNotMatch(actual.stdout, /SYNTHETIC_GO/);
+    fs.writeFileSync(file, original, { mode: 0o700 });
   }
 });

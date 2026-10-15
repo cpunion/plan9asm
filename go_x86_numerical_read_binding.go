@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	"github.com/xgo-dev/plan9asm/internal/gostaticstorage"
+	"github.com/xgo-dev/plan9asm/internal/gosym"
 )
 
 // GoX86NumericalReadBinding is a live factory token, not a serializable report.
@@ -86,7 +87,11 @@ func (source *GoX86NumericalReadSource) bindNumericalReads(ctx context.Context, 
 		return Options{}, numericalSBContext("binding requires the exact complete original parsed file")
 	}
 	if source.role == numericalSBSDKSource {
-		entries, _, err := numericalTypedSourceEntries(file, pkg.Path, arch, source.role)
+		names, err := numericalGoDeclarationLinknames(pkg.Syntax, pkg.Types)
+		if err != nil {
+			return Options{}, err
+		}
+		entries, _, err := numericalTypedSourceDeclarations(file, pkg.Path, arch, source.role, names, source.native.CompilerAliases)
 		if err != nil || len(entries) != len(options.Sigs) {
 			return Options{}, numericalSBContext("binding typed entry/terminal inventory differs: %v", err)
 		}
@@ -410,19 +415,29 @@ func (source *GoX86NumericalReadSource) numericalDeclarations(ctx context.Contex
 			}
 		}
 	}
-	var entries map[string]bool
-	var terminals map[string]bool
+	var entries map[string]numericalSourceDeclaration
+	var terminals map[string]numericalSourceDeclaration
+	var localEntries map[string]bool
+	foreignEntry := false
 	if source.role == numericalSBSDKSource {
-		var err error
-		entries, terminals, err = numericalTypedSourceEntries(source.file, pkg.Path, arch, source.role)
+		names, err := numericalGoDeclarationLinknames(pkg.Syntax, pkg.Types)
 		if err != nil {
 			return nil, err
 		}
+		entries, terminals, err = numericalTypedSourceDeclarations(source.file, pkg.Path, arch, source.role, names, source.native.CompilerAliases)
+		if err != nil {
+			return nil, err
+		}
+		localEntries = make(map[string]bool, len(entries))
+		for name, declaration := range entries {
+			localEntries[declaration.local] = true
+			foreignEntry = foreignEntry || name != gosym.PackagePrefix(pkg.Path)+"."+declaration.local
+		}
 	}
-	if source.sdkAssemblyJoin() != nil && x86DirectTailSourceNeeded(source.file) {
+	if source.sdkAssemblyJoin() != nil && (foreignEntry || x86DirectTailSourceNeeded(source.file)) {
 		return source.numericalSDKOrdinaryTailDeclarations(ctx, pkg, arch, entries)
 	}
-	declarations, err := guard.typedDeclarationsForArchRole(pkg, false, arch, source.role == numericalSBSDKSource, entries)
+	declarations, err := guard.typedDeclarationsForArchRole(pkg, false, arch, source.role == numericalSBSDKSource, localEntries)
 	if err != nil {
 		return nil, err
 	}

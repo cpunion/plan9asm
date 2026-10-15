@@ -57,59 +57,69 @@ func fixedLocalDataOperations() []string {
 	return operations
 }
 
-func TestGoAMD64FixedLocalReadonlyDataAllRegisteredConsumers(t *testing.T) {
+func TestGoAMD64FixedLocalReadonlyDataLinuxRegisteredConsumers(t *testing.T) {
+	fixedLocalDataTargetConsumers(t, "linux/amd64", "x86_64-unknown-linux-gnu")
+}
+
+func TestGoAMD64FixedLocalReadonlyDataDarwinRegisteredConsumers(t *testing.T) {
+	fixedLocalDataTargetConsumers(t, "darwin/amd64", "x86_64-apple-darwin")
+}
+
+func TestGoAMD64FixedLocalReadonlyDataWindowsRegisteredConsumers(t *testing.T) {
+	fixedLocalDataTargetConsumers(t, "windows/amd64", "x86_64-pc-windows-msvc")
+}
+
+func fixedLocalDataTargetConsumers(t *testing.T, target, triple string) {
+	t.Helper()
 	t.Setenv("GOCACHE", t.TempDir())
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc required")
 	}
 	operations := fixedLocalDataOperations()
-	for _, target := range []struct{ name, triple string }{
-		{"linux/amd64", "x86_64-unknown-linux-gnu"},
-		{"darwin/amd64", "x86_64-apple-darwin"},
-		{"windows/amd64", "x86_64-pc-windows-msvc"},
-	} {
-		for start := 0; start < len(operations); start += 32 {
-			end := start + 32
-			if end > len(operations) {
-				end = len(operations)
-			}
-			t.Run(fmt.Sprintf("%s/batch%d", target.name, start/32), func(t *testing.T) {
-				var assembly, declarations strings.Builder
-				assembly.WriteString(strings.Replace(fixedLocalLiteralData, "$32", "$64", 1))
-				for index := start; index < end; index++ {
-					name := fmt.Sprintf("Value%d", index)
-					body, _, _ := x86PrivateAlignedFrameAuditFixture(t, operations[index]+"\nPADDQ 16(SP),X0")
-					assembly.WriteString(strings.Replace(body, "·Value", "·"+name, 1))
-					fmt.Fprintf(&declarations, "func %s(a,b,c,d uint64) uint64\n", name)
-				}
-				pkg, request, _, options := x86CMOVFixedLocalFixture(t, assembly.String(), declarations.String(), target.name, target.triple)
-				source := requireGoAMD64FrameCapture(t, pkg, request)
-				expanded, err := source.preprocess(request.AssemblyFile, []byte(assembly.String()))
-				if err != nil {
-					t.Fatal(err)
-				}
-				file, err := Parse(ArchAMD64, expanded)
-				if err != nil {
-					t.Fatal(err)
-				}
-				ctx, cancel := runtimeOracleStageContext(t)
-				defer cancel()
-				bound, err := source.BindFixedLocal(ctx, pkg, file, options)
-				if err != nil {
-					t.Fatal(err)
-				}
-				fixedLocalDataAPIs(t, pkg, file, expanded, bound, func(t *testing.T, ir string, err error) {
-					if err != nil {
-						t.Fatal(err)
-					}
-					compileLLVMToObject(t, llc, target.triple, "literal-consumers.ll", "literal-consumers.o", ir)
-					compileLLVMToObject(t, llc, target.triple, "literal-consumers-opt.ll", "literal-consumers-opt.o", x86MulDivRoundOptimize(t, ir))
-				})
-			})
-		}
+	if len(operations) != 119 {
+		t.Fatal("complete literal consumer denominator changed", len(operations))
 	}
-	t.Logf("independent literal consumer operations=%d; three actual Go targets, three APIs, O0/O2; at most 32 functions/module", len(operations))
+	for start := 0; start < len(operations); start += 32 {
+		end := start + 32
+		if end > len(operations) {
+			end = len(operations)
+		}
+		t.Run(fmt.Sprintf("%s/batch%d", target, start/32), func(t *testing.T) {
+			var assembly, declarations strings.Builder
+			assembly.WriteString(strings.Replace(fixedLocalLiteralData, "$32", "$64", 1))
+			for index := start; index < end; index++ {
+				name := fmt.Sprintf("Value%d", index)
+				body, _, _ := x86PrivateAlignedFrameAuditFixture(t, operations[index]+"\nPADDQ 16(SP),X0")
+				assembly.WriteString(strings.Replace(body, "·Value", "·"+name, 1))
+				fmt.Fprintf(&declarations, "func %s(a,b,c,d uint64) uint64\n", name)
+			}
+			pkg, request, _, options := x86CMOVFixedLocalFixture(t, assembly.String(), declarations.String(), target, triple)
+			source := requireGoAMD64FrameCapture(t, pkg, request)
+			expanded, err := source.preprocess(request.AssemblyFile, []byte(assembly.String()))
+			if err != nil {
+				t.Fatal(err)
+			}
+			file, err := Parse(ArchAMD64, expanded)
+			if err != nil {
+				t.Fatal(err)
+			}
+			ctx, cancel := runtimeOracleStageContext(t)
+			defer cancel()
+			bound, err := source.BindFixedLocal(ctx, pkg, file, options)
+			if err != nil {
+				t.Fatal(err)
+			}
+			fixedLocalDataAPIs(t, pkg, file, expanded, bound, func(t *testing.T, ir string, err error) {
+				if err != nil {
+					t.Fatal(err)
+				}
+				compileLLVMToObject(t, llc, triple, "literal-consumers.ll", "literal-consumers.o", ir)
+				compileLLVMToObject(t, llc, triple, "literal-consumers-opt.ll", "literal-consumers-opt.o", x86MulDivRoundOptimize(t, ir))
+			})
+		})
+	}
+	t.Logf("independent literal consumer operations=%d; actual Go target=%s, three APIs, O0/O2; at most 32 functions/module", len(operations), target)
 }
 
 func TestGoAMD64FixedLocalReadonlyDataRejectsUnownedAccesses(t *testing.T) {
