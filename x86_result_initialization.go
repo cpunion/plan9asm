@@ -867,6 +867,9 @@ func x86ResultTransfer(ins Instr, state *x86ResultState, owned []bool, resultOff
 	if accepted, known := x86ResultCallerAddressDifferenceStep(ins, state, arch); known {
 		return accepted
 	}
+	if accepted, known := x86ResultPointerResidueStep(ins, state, owned, resultOffset, arch); known {
+		return accepted
+	}
 	if accepted, recognized := x86ResultIncomingPointerTransfer(ins, state, owned, arch); recognized {
 		return accepted
 	}
