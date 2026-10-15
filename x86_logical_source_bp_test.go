@@ -49,7 +49,13 @@ func TestX86DirectTailModeAwareBPRegisterRoles(t *testing.T) {
 		} {
 			for _, api := range []string{"text", "module", "Go"} {
 				t.Run(target.triple+"/"+row.name+"/"+api, func(t *testing.T) {
-					source := fmt.Sprintf("TEXT ·Value(SB),NOSPLIT,$0-%d\n%s\nJMP body<>(SB)\nTEXT body<>(SB),NOSPLIT,$0-0\n%s\nRET\n",
+					source := fmt.Sprintf(`TEXT ·Value(SB),NOSPLIT,$0-%d
+%s
+JMP body<>(SB)
+TEXT body<>(SB),NOSPLIT,$0-0
+%s
+RET
+`,
 						2*width, row.setup, row.body)
 					source = strings.NewReplacer("WORD", word, "RESULT", fmt.Sprint(width)).Replace(source)
 					ir, err := x86ScalarFPBitViewAPI(t, source, "func Value(n "+typ+") "+typ, target.arch, target.triple, api)
@@ -87,7 +93,15 @@ func TestX86Mode32BPPairedNativeLoadDefinedBytes(t *testing.T) {
 			} {
 				for _, api := range []string{"text", "module", "Go"} {
 					t.Run(target.triple+"/"+width.suffix+"/"+row.name+"/"+api, func(t *testing.T) {
-						source := fmt.Sprintf("TEXT ·Value(SB),NOSPLIT,$0-%d\n%s\nMOV%s (DX),BP\n%s BP,AX\nMOVL AX,X0\nPEXTRD $0,X0,AX\nMOVL AX,ret+%d(FP)\nRET\n",
+						source := fmt.Sprintf(`TEXT ·Value(SB),NOSPLIT,$0-%d
+%s
+MOV%s (DX),BP
+%s BP,AX
+MOVL AX,X0
+PEXTRD $0,X0,AX
+MOVL AX,ret+%d(FP)
+RET
+`,
 							offset+4, strings.ReplaceAll(row.setup, "WORD", word), width.suffix, width.widen, offset)
 						ir, err := x86ScalarFPBitViewAPI(t, source, "func Value(p *byte) uint32", target.arch, target.triple, api)
 						if target.arch == "386" && row.complete {
