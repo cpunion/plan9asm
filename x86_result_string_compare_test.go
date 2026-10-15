@@ -129,7 +129,11 @@ func TestX86StringCompareCannotInventIncomingFlagsOrDirection(t *testing.T) {
 						body = x86StringCompareResultBody(target.arch, "SCASB", "REP", "CLD", true)
 					case "partial counter":
 						// A low16 zero is not a full native count of zero.
-						body = "MOVW $0,CX\nREPN\nSCASB\nMOVL CX,ret+RESULT(FP)"
+						move := "MOVQ"
+						if target.arch == "386" {
+							move = "MOVL"
+						}
+						body = "MOVW $0,CX\nREPN\nSCASB\n" + move + " CX,ret+RESULT(FP)"
 					case "skipped prefix":
 						body = strings.Replace(body, "REPN\nSCASB", "CMPL AX,AX\nJE body\nREPN\nbody:\nSCASB", 1)
 					}
