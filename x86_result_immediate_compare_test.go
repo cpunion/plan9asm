@@ -3,6 +3,8 @@ package plan9asm
 import (
 	"fmt"
 	"reflect"
+	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -167,16 +169,35 @@ func TestX86ImmediatePackedCompareDeadMemoryRemainsObservable(t *testing.T) {
 							}
 							return
 						}
-						count := vector.bytes * 8 / bits
+						bytes := vector.bytes
 						if broadcast {
-							count = 1
+							bytes = bits / 8
 						}
 						for _, input := range []string{ir, optimized} {
-							x86RequireCMOVVolatileWidth(t, input, bits/8, count)
+							// An unmasked tuple may use one vector read; masked
+							// active lanes may use separate scalar volatile reads.
+							if got := x86ImmediateCompareVolatileReadBytes(input); got != bytes {
+								t.Fatal("dead comparison lost its exact active native tuple", got, bytes)
+							}
 						}
 					})
 				}
 			}
 		}
 	}
+}
+
+func x86ImmediateCompareVolatileReadBytes(ir string) int {
+	pattern := regexp.MustCompile(`load volatile (?:i([0-9]+)|<([0-9]+) x i([0-9]+)>),[^\r\n]*, align 1(?:[^0-9]|$)`)
+	bytes := 0
+	for _, match := range pattern.FindAllStringSubmatch(ir, -1) {
+		bits, _ := strconv.Atoi(match[1])
+		if match[2] != "" {
+			lanes, _ := strconv.Atoi(match[2])
+			width, _ := strconv.Atoi(match[3])
+			bits = lanes * width
+		}
+		bytes += bits / 8
+	}
+	return bytes
 }
