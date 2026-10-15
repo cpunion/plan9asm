@@ -115,7 +115,7 @@ func translateModuleDirectInContext(ctx llvm.Context, file *File, opt Options) (
 			if arch == "" {
 				arch = "amd64" // Match the existing textual default without changing sealed Options.
 			}
-			if x86IntegerFPByteMovesNeedCFG(*fn, sig, arch) {
+			if x86IntegerFPByteMovesNeedCFG(*fn, sig, arch) || x86ImplicitMultiplyFPResultNeedsProof(*fn, sig, arch) {
 				mod.Dispose()
 				return llvm.Module{}, directUnsupportedf("integer FP byte views require shared complete source lowering for %s", name)
 			}

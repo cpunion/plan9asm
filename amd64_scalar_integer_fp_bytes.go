@@ -12,6 +12,10 @@ import (
 // view must be handled here, including a failed proof; it cannot fall back to
 // the legacy first-slot conversion or an unresolved-offset zero.
 func (c *amd64Ctx) integerFPByteView(off, width int64, write bool) (bool, error) {
+	return c.integerFPByteViewMode(off, width, write, false)
+}
+
+func (c *amd64Ctx) integerFPByteViewMode(off, width int64, write, exactBits bool) (bool, error) {
 	if c.goarch == "386" && width == 8 {
 		return true, fmt.Errorf("%w: mode32 has no GP qword FP move; X/m64 retains its separate typed consumer", ErrProbeNeedsContext)
 	}
@@ -19,7 +23,7 @@ func (c *amd64Ctx) integerFPByteView(off, width int64, write bool) (bool, error)
 		len(c.sig.Frame.Params)+len(c.fpResults) == 0 {
 		return false, nil // Independently bound physical storage retains its consumer.
 	}
-	if x86IntegerFPNaturalTransfer(c.sig.Frame.Params, c.fpResults, off, width, write, c.goarch) {
+	if !exactBits && x86IntegerFPNaturalTransfer(c.sig.Frame.Params, c.fpResults, off, width, write, c.goarch) {
 		return false, nil
 	}
 	fail := func(reason string) (bool, error) {
@@ -117,8 +121,13 @@ func x86IntegerFPByteMovesNeedCFG(fn Func, sig FuncSig, arch string) bool {
 // GP/FP admission class does not model those storage domains; a new byte view
 // still goes through integerFPByteView and cannot borrow this separation.
 func x86OrdinaryIntegerFPStoreNeedsProof(fn Func, sig FuncSig, arch string) bool {
-	if arch != "386" && arch != "amd64" || sig.Ret != I8 && sig.Ret != I16 && sig.Ret != I32 && sig.Ret != I64 ||
-		len(sig.Frame.Results) != 1 || fn.FrameSize != 0 || strings.Contains(fn.Sym, "<") || len(sig.ArgRegs) != 0 ||
+	return (sig.Ret == I8 || sig.Ret == I16 || sig.Ret == I32 || sig.Ret == I64) &&
+		len(sig.Frame.Results) == 1 && x86DirectGPFPResultSourceRole(fn, sig, arch)
+}
+
+func x86DirectGPFPResultSourceRole(fn Func, sig FuncSig, arch string) bool {
+	if arch != "386" && arch != "amd64" || sig.Ret == Void || len(sig.Frame.Results) == 0 ||
+		fn.FrameSize != 0 || strings.Contains(fn.Sym, "<") || len(sig.ArgRegs) != 0 ||
 		sig.ARMEntry != nil || sig.ARM64GoRegisterABI != nil || sig.ARM64ClosureABI != nil || sig.WASMContext != "" || sig.WASMNative ||
 		sig.amd64GoArguments != nil || sig.x86FixedLocal != nil || sig.x86CallerRegions != nil || sig.x86BorrowedBoolTail ||
 		len(fn.X86RawText) != 0 || fn.x86SourceStack != nil || fn.x86FixedLocal != nil || fn.x86RawReplay != nil ||
@@ -199,8 +208,12 @@ func x86IntegerFPMoveWidth(original Instr, arch string) int64 {
 }
 
 func (c *amd64Ctx) loadIntegerFPBytes(off int64, typ LLVMType) (string, bool, error) {
+	return c.loadIntegerFPBytesMode(off, typ, false)
+}
+
+func (c *amd64Ctx) loadIntegerFPBytesMode(off int64, typ LLVMType, exactBits bool) (string, bool, error) {
 	bits, _ := amd64IntegerTypeBits(typ)
-	handled, err := c.integerFPByteView(off, int64(bits/8), false)
+	handled, err := c.integerFPByteViewMode(off, int64(bits/8), false, exactBits)
 	if !handled || err != nil {
 		return "", handled, err
 	}

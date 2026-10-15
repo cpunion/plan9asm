@@ -136,6 +136,11 @@ func (c *amd64Ctx) validateScalarFPSourceViews() error {
 			return err
 		}
 	}
+	if x86ImplicitMultiplyFPResultNeedsProof(c.fpScalarSource, c.sig, c.goarch) {
+		if err := c.integerEffectResultInitialized("implicit multiply"); err != nil {
+			return err
+		}
+	}
 	if c.sig.amd64GoArguments != nil {
 		if err := c.scalarFPResultInitialized(); err != nil {
 			return err

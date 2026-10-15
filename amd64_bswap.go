@@ -64,6 +64,10 @@ func x86ResultByteSwapStep(ins Instr, state *x86ResultState, arch string) (bool,
 }
 
 func (c *amd64Ctx) byteSwapResultInitialized() error {
+	return c.integerEffectResultInitialized("BSWAP")
+}
+
+func (c *amd64Ctx) integerEffectResultInitialized(family string) error {
 	if err := c.scalarFPResultInitialized(); err != nil {
 		return err
 	}
@@ -79,7 +83,7 @@ func (c *amd64Ctx) byteSwapResultInitialized() error {
 	}
 	for _, slot := range c.fpResults {
 		if slot.Type == I1 {
-			return fmt.Errorf("%w: BSWAP bool result requires an independent canonical result role", ErrProbeNeedsContext)
+			return fmt.Errorf("%w: %s bool result requires an independent canonical result role", ErrProbeNeedsContext, family)
 		}
 	}
 	return nil

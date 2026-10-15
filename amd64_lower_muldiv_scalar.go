@@ -47,12 +47,17 @@ func (c *amd64Ctx) lowerScalarMultiplyDivide(op Op, ins Instr) (ok bool, termina
 	if !isX86ScalarMultiplyDivideSource(ins.Args[0], bits, c.goarch) {
 		return true, false, fmt.Errorf("%s %s source is outside Go 1.27's %s class: %q", c.goarch, name, x86ScalarMultiplyDivideSourceClass(bits), ins.Raw)
 	}
+	if (stem == "MUL" || stem == "IMUL") && x86ResultNamedPredicateInstruction(ins) {
+		if _, _, err := x86ImplicitMultiplyProperties(op, ins, c.goarch); err != nil {
+			return true, false, err
+		}
+	}
 
 	switch stem {
 	case "MUL":
-		return true, false, c.emitX86ImplicitMultiply(bits, false, ins.Args[0])
+		return true, false, c.emitX86ImplicitMultiply(bits, false, ins.Args[0], x86ResultNamedPredicateInstruction(ins))
 	case "IMUL":
-		return true, false, c.emitX86ImplicitMultiply(bits, true, ins.Args[0])
+		return true, false, c.emitX86ImplicitMultiply(bits, true, ins.Args[0], x86ResultNamedPredicateInstruction(ins))
 	case "DIV":
 		return true, false, c.emitX86ImplicitDivide(bits, false, ins.Args[0])
 	case "IDIV":
@@ -169,10 +174,18 @@ func isX86IMULImmediate(operand Operand, goarch string) bool {
 	return goarch == "386" || (operand.Imm >= -2147483648 && operand.Imm <= 4294967295)
 }
 
-func (c *amd64Ctx) emitX86ImplicitMultiply(bits int, signed bool, source Operand) error {
+func (c *amd64Ctx) emitX86ImplicitMultiply(bits int, signed bool, source Operand, named bool) error {
 	narrow := amd64IntegerTypeForBits(bits)
 	wide := x86ScalarMultiplyDivideWideType(bits)
-	src, err := c.evalIntSized(source, narrow)
+	var src string
+	var err error
+	handled := false
+	if named && source.Kind == OpFP {
+		src, handled, err = c.loadIntegerFPBytesMode(source.FPOffset, narrow, true)
+	}
+	if !handled && err == nil {
+		src, err = c.evalIntSized(source, narrow)
+	}
 	if err != nil {
 		return err
 	}
