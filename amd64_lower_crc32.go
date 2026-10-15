@@ -3,57 +3,60 @@ package plan9asm
 import "fmt"
 
 func (c *amd64Ctx) lowerCrc32(op Op, ins Instr) (ok bool, terminated bool, err error) {
-	sourceType := LLVMType("")
-	intrinsic := ""
+	form, known, err := x86CRC32Properties(op, ins, c.goarch)
+	if !known || err != nil {
+		return known, false, err
+	}
+	if form.source.Kind == OpReg && (form.source.Reg == SP || form.source.Reg == BP) &&
+		form.source.Reg != ins.Args[0].Reg {
+		return true, false, fmt.Errorf("%w: Go CRC32 REX byte view needs its original physical SP/BP input", ErrProbeNeedsContext)
+	}
+	sourceType := amd64IntegerTypeForBits(form.bits)
+	intrinsic := fmt.Sprintf("llvm.x86.sse42.crc32.32.%d", form.bits)
 	resultType := I32
-	switch op {
-	case "CRC32B":
-		sourceType = I8
-		intrinsic = "llvm.x86.sse42.crc32.32.8"
-	case "CRC32W":
-		sourceType = I16
-		intrinsic = "llvm.x86.sse42.crc32.32.16"
-	case "CRC32L":
-		sourceType = I32
-		intrinsic = "llvm.x86.sse42.crc32.32.32"
-	case "CRC32Q":
-		if c.goarch == "386" {
-			return true, false, fmt.Errorf("386 CRC32Q is illegal in 32-bit mode: %q", ins.Raw)
-		}
-		sourceType = I64
+	if form.bits == 64 {
 		resultType = I64
 		intrinsic = "llvm.x86.sse42.crc32.64.64"
-	default:
-		return false, false, nil
 	}
-	if len(ins.Args) != 2 {
-		return true, false, fmt.Errorf("%s %s expects register/memory source and register destination: %q", c.goarch, op, ins.Raw)
-	}
-	source, destination := ins.Args[0], ins.Args[1]
-	if source.Kind == OpReg {
-		valid := isX86YrlRegisterForArch(source.Reg, c.goarch)
-		if op == "CRC32B" {
-			valid = isGoYmbRegisterForArch(source.Reg, c.goarch)
-		}
-		if !valid {
-			return true, false, fmt.Errorf("%s %s source is outside Go 1.27's %s class: %q", c.goarch, op, map[bool]string{true: "Ymb", false: "Yml"}[op == "CRC32B"], ins.Raw)
-		}
-	} else if !isAMD64MemoryOperand(source) {
-		return true, false, fmt.Errorf("%s %s source is outside Go 1.27's register/memory class: %q", c.goarch, op, ins.Raw)
-	}
-	if destination.Kind != OpReg || !isX86YrlRegisterForArch(destination.Reg, c.goarch) {
-		return true, false, fmt.Errorf("%s %s destination is outside Go 1.27's Yrl class: %q", c.goarch, op, ins.Raw)
-	}
-
-	sourceValue, err := c.evalIntSized(source, sourceType)
+	sourceValue, err := c.evalCRC32Source(ins, form, sourceType)
 	if err != nil {
 		return true, false, err
 	}
-	crcValue, err := c.evalIntSized(destination, resultType)
+	crcValue, err := c.evalIntSized(form.destination, I32)
 	if err != nil {
 		return true, false, err
+	}
+	if resultType == I64 {
+		extended := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = zext i32 %s to i64\n", extended, crcValue)
+		crcValue = "%" + extended // Unknown old high32 never enter the intrinsic.
 	}
 	call := c.newTmp()
 	fmt.Fprintf(c.b, "  %%%s = call %s @%s(%s %s, %s %s)\n", call, resultType, intrinsic, resultType, crcValue, sourceType, sourceValue)
-	return true, false, c.storeRegSized(destination.Reg, resultType, "%"+call)
+	return true, false, c.storeRegSized(form.destination.Reg, resultType, "%"+call)
+}
+
+func (c *amd64Ctx) evalCRC32Source(ins Instr, form x86CRC32Form, typ LLVMType) (string, error) {
+	if form.source.Kind == OpFP && x86ResultNamedPredicateInstruction(ins) {
+		if value, handled, err := c.loadIntegerFPBytesMode(form.source.FPOffset, typ, true); handled || err != nil {
+			return value, err
+		}
+	}
+	if isAMD64MemoryOperand(form.source) && form.source.Kind != OpFP &&
+		(x86OrdinaryNativeMemoryOperand(form.source, c.goarch) ||
+			x86CallerMemoryCertified(ins, 0) || c.fixedLocalMemoryCertified(ins, 0)) {
+		if ins.x86AddressBits != 0 || ins.x86UnboundAddressOverride {
+			return "", fmt.Errorf("%w: CRC32 needs its original native address size", ErrProbeNeedsContext)
+		}
+		pointer, pointerType, _, err := c.packedVectorMemoryPointer(form.source)
+		if err != nil {
+			return "", err
+		}
+		value := c.newTmp()
+		// Even a zero accumulator or dead result retains the complete native
+		// source read. No backing, extent or alignment follows from continuing.
+		fmt.Fprintf(c.b, "  %%%s = load volatile %s, %s %s, align 1\n", value, typ, pointerType, pointer)
+		return "%" + value, nil
+	}
+	return c.evalIntSized(form.source, typ)
 }
