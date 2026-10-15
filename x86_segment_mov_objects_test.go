@@ -24,7 +24,7 @@ func x86SegmentMOVCompleteSource(t *testing.T, arch string) (string, string, []x
 		declarations.WriteString(strings.Replace(declaration, "view(", name+"(", 1) + "\n")
 		functions = append(functions, x86SegmentMOVFunction{name, width, space})
 	}
-	addresses := []string{"fixed", "fixed-zero", "base", "index"}
+	addresses := []string{"fixed", "fixed-zero", "base", "segment-index-scale1", "segment-index-scale2", "segment-index-scale4", "segment-index-scale8"}
 	if arch == "386" {
 		addresses = append(addresses, "mode32-BP")
 	}
@@ -58,9 +58,9 @@ func x86SegmentMOVCompleteSource(t *testing.T, arch string) (string, string, []x
 			}
 		}
 	}
-	want := 116
+	want := 188
 	if arch == "386" {
-		want = 66
+		want = 102
 	}
 	if len(functions) != want || strings.Count(source.String(), "TEXT ") != want || strings.Count(declarations.String(), "func ") != want {
 		t.Fatal("independent complete segment source denominator changed", len(functions), want)

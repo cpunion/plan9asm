@@ -36,8 +36,11 @@ func x86SegmentMOVAddress(arch, segment, kind string) (string, string) {
 		return "", "0(" + segment + ")"
 	case "base":
 		return move + " offset+0(FP),BX\n", "-8(BX)(" + segment + ")"
-	case "index":
-		return move + " offset+0(FP),CX\n", "-8(" + segment + ")(CX*4)"
+	case "segment-index-scale1", "segment-index-scale2", "segment-index-scale4", "segment-index-scale8":
+		// The second register is the segment annotation, not a numerical
+		// scaled index. The actual Go encoder ignores its scale field.
+		scale := strings.TrimPrefix(kind, "segment-index-scale")
+		return move + " offset+0(FP),BX\n", "-8(BX)(" + segment + "*" + scale + ")"
 	case "mode32-BP":
 		return "MOVL offset+0(FP),BP\n", "-8(BP)(" + segment + ")"
 	default:
@@ -76,7 +79,7 @@ func x86SegmentMOVNamedReadIR(t *testing.T, ir, name string, width, addressSpace
 
 func TestX86SegmentMOVNumericalContinuationThreeAPIs(t *testing.T) {
 	for _, target := range x86RawReturnTargets {
-		addresses := []string{"fixed", "fixed-zero", "base", "index"}
+		addresses := []string{"fixed", "fixed-zero", "base", "segment-index-scale1", "segment-index-scale2", "segment-index-scale4", "segment-index-scale8"}
 		if target.arch == "386" {
 			addresses = append(addresses, "mode32-BP")
 		}
@@ -181,9 +184,6 @@ func TestX86SegmentMOVCannotGrantIndependentAuthority(t *testing.T) {
 					{"unknown-offset", row.op + " -8(BX)(" + segment + "),DX\n" + finish, declaration},
 					{"partial-offset", "MOVW $8,BX\n" + row.op + " -8(BX)(" + segment + "),DX\n" + finish, declaration},
 					{"pointer-offset", fmt.Sprintf("%s p+%d(FP),BX\n", move, word) + row.op + " -8(BX)(" + segment + "),DX\n" + finish, declaration},
-					{"unknown-index", row.op + " -8(" + segment + ")(CX*4),DX\n" + finish, declaration},
-					{"partial-index", "MOVW $8,CX\n" + row.op + " -8(" + segment + ")(CX*4),DX\n" + finish, declaration},
-					{"pointer-index", fmt.Sprintf("%s p+%d(FP),CX\n", move, word) + row.op + " -8(" + segment + ")(CX*4),DX\n" + finish, declaration},
 					{"pointer-overwritten-offset", move + " offset+0(FP),BX\n" + fmt.Sprintf("%s p+%d(FP),BX\n", move, word) + row.op + " -8(BX)(" + segment + "),DX\n" + finish, declaration},
 					{"unknown-join", move + " offset+0(FP),AX\nCMPL AX,$0\nJE joined\n" + move + " offset+0(FP),BX\njoined:\n" + row.op + " -8(BX)(" + segment + "),DX\n" + finish, declaration},
 					{"TLS-pseudo-register", row.op + " 24(TLS),DX\n" + finish, declaration},
@@ -209,8 +209,28 @@ func TestX86SegmentMOVCannotGrantIndependentAuthority(t *testing.T) {
 						t.Run(target.triple+"/"+row.op+"/"+segment+"/"+control.name+"/"+api, func(t *testing.T) {
 							source := x86ResultGPSIMDAdmissionSource(t, target.arch, control.declaration, control.body)
 							ir, err := x86ScalarFPBitViewAPI(t, source, control.declaration, target.arch, target.triple, api)
-							if err == nil || ir != "" {
+							if !errors.Is(err, ErrProbeNeedsContext) || ir != "" {
 								t.Fatal("paired segment load granted another input/result/store/native contract", err)
+							}
+						})
+					}
+				}
+				// A real GP index after a segment-as-base is rejected by
+				// Go's encoder, independently of its initialized-byte role.
+				// Do not count these as valid-format permission rejections.
+				for _, format := range []struct{ name, setup string }{
+					{"unknown-index", ""},
+					{"partial-index", "MOVW $8,CX\n"},
+					{"full-index", move + " offset+0(FP),CX\n"},
+					{"pointer-index", fmt.Sprintf("%s p+%d(FP),CX\n", move, word)},
+				} {
+					for _, api := range []string{"text", "module", "Go"} {
+						t.Run(target.triple+"/"+row.op+"/"+segment+"/format-rejection/"+format.name+"/"+api, func(t *testing.T) {
+							body := format.setup + row.op + " -8(" + segment + ")(CX*4),DX\n" + finish
+							source := x86ResultGPSIMDAdmissionSource(t, target.arch, declaration, body)
+							ir, err := x86ScalarFPBitViewAPI(t, source, declaration, target.arch, target.triple, api)
+							if err == nil || ir != "" {
+								t.Fatal("actual-Go illegal segment/index format was published", err)
 							}
 						})
 					}
@@ -233,15 +253,13 @@ func TestX86SegmentMOVStateAndOriginalRoleBoundaries(t *testing.T) {
 	for _, arch := range []string{"386", "amd64"} {
 		for _, row := range x86SegmentMOVRows(arch) {
 			for _, segment := range []string{"FS", "GS"} {
-				for _, address := range []string{"fixed", "fixed-zero", "base", "index"} {
+				for _, address := range []string{"fixed", "fixed-zero", "base", "segment-index-scale1", "segment-index-scale2", "segment-index-scale4", "segment-index-scale8"} {
 					t.Run(arch+"/"+row.op+"/"+segment+"/"+address, func(t *testing.T) {
 						_, memory := x86SegmentMOVAddress(arch, segment, address)
 						ins := x86ScalarLaneInstruction(t, row.op+" "+memory+",DX")
 						state := x86ResultState{flags: 0x15, direction: x86ResultDirectionBackward, fp: []bool{true}, auto: []bool{true}}
-						if address == "base" {
+						if address == "base" || strings.HasPrefix(address, "segment-index-scale") {
 							state.gp[3] = 0xff
-						} else if address == "index" {
-							state.gp[1] = 0xff
 						}
 						state.pointerGP[7], state.callerAddressGP[7], state.callerAddressOrigin[7] = true, true, 9
 						state.pointerGP[2], state.callerAddressGP[2], state.callerAddressOrigin[2] = true, true, 3
@@ -263,7 +281,7 @@ func TestX86SegmentMOVStateAndOriginalRoleBoundaries(t *testing.T) {
 						}
 					})
 				}
-				origins := []string{"encoded", "source-raw", "raw-return", "address-size", "unbound-address", "raw-segment", "numerical-certificate", "unknown-segment", "unresolved-offset", "index-extension", "invalid-scale", "wide-displacement", "unknown-offset", "partial-offset", "pointer-offset", "unknown-index", "partial-index", "pointer-index", "SP-destination", "SP-base", "SP-index"}
+				origins := []string{"encoded", "source-raw", "raw-return", "address-size", "unbound-address", "raw-segment", "numerical-certificate", "unknown-segment", "unresolved-offset", "index-extension", "invalid-scale", "wide-displacement", "unknown-offset", "partial-offset", "pointer-offset", "illegal-source-GP-scaled-index", "unknown-index", "partial-index", "pointer-index", "SP-destination", "SP-base", "SP-index"}
 				if arch == "amd64" {
 					origins = append(origins, "BP-destination", "BP-base", "BP-index", "REX-SP-destination", "REX-BP-destination")
 				}
@@ -305,9 +323,11 @@ func TestX86SegmentMOVStateAndOriginalRoleBoundaries(t *testing.T) {
 							} else if origin == "pointer-offset" {
 								state.pointerGP[3], state.callerAddressGP[3] = true, true
 							}
-						case "unknown-index", "partial-index", "pointer-index":
+						case "illegal-source-GP-scaled-index", "unknown-index", "partial-index", "pointer-index":
 							ins.Args[0].Mem.Index, ins.Args[0].Mem.Scale = CX, 4
-							if origin == "partial-index" {
+							if origin == "illegal-source-GP-scaled-index" {
+								state.gp[1] = 0xff
+							} else if origin == "partial-index" {
 								state.gp[1] = 3
 							} else if origin == "pointer-index" {
 								state.pointerGP[1], state.callerAddressGP[1] = true, true
