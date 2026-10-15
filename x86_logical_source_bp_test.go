@@ -39,6 +39,7 @@ func TestX86DirectTailModeAwareBPRegisterRoles(t *testing.T) {
 			{"numerical", "MOVWORD n+0(FP),BP", "ADDWORD $7,BP\nMOVWORD BP,ret+RESULT(FP)", true},
 			{"helper-write", "NOP", "MOVWORD n+0(FP),BP\nMOVWORD BP,ret+RESULT(FP)", true},
 			{"logical-result-address", "MOVWORD n+0(FP),SI\nLEAWORD ret+RESULT(FP),BP", "MOVWORD SI,(BP)", true},
+			{"private-value-stack", "LEAWORD ret+RESULT(FP),BP", "PUSHWORD n+0(FP)\nMOVWORD $7,(BP)\nPOPWORD AX", true},
 			{"unknown-entry", "NOP", "MOVWORD BP,ret+RESULT(FP)", false},
 			{"partial-word", "MOVW $7,BP", "MOVWORD BP,ret+RESULT(FP)", false},
 			{"unknown-overwrite", "MOVWORD n+0(FP),BP", "MOVWORD CX,BP\nMOVWORD BP,ret+RESULT(FP)", false},
@@ -61,6 +62,43 @@ func TestX86DirectTailModeAwareBPRegisterRoles(t *testing.T) {
 						t.Fatal("BP classification granted an unbound register/frame/memory role", err)
 					}
 				})
+			}
+		}
+	}
+}
+
+func TestX86Mode32BPPairedNativeLoadDefinedBytes(t *testing.T) {
+	for _, target := range x86RawReturnTargets {
+		word, offset := "Q", 8
+		if target.arch == "386" {
+			word, offset = "L", 4
+		}
+		for _, width := range []struct{ suffix, widen string }{
+			{"B", "MOVBLZX"}, {"W", "MOVWLZX"}, {"L", "MOVL"},
+		} {
+			for _, row := range []struct {
+				name, setup string
+				complete    bool
+			}{
+				{"incoming-pointer", "MOVWORD p+0(FP),DX", true},
+				{"unknown-pointer", "NOP", false},
+				{"partial-pointer", "MOVW p+0(FP),DX", false},
+				{"numeric-pointer", "MOVL $7,DX", false},
+			} {
+				for _, api := range []string{"text", "module", "Go"} {
+					t.Run(target.triple+"/"+width.suffix+"/"+row.name+"/"+api, func(t *testing.T) {
+						source := fmt.Sprintf("TEXT ·Value(SB),NOSPLIT,$0-%d\n%s\nMOV%s (DX),BP\n%s BP,AX\nMOVL AX,X0\nPEXTRD $0,X0,AX\nMOVL AX,ret+%d(FP)\nRET\n",
+							offset+4, strings.ReplaceAll(row.setup, "WORD", word), width.suffix, width.widen, offset)
+						ir, err := x86ScalarFPBitViewAPI(t, source, "func Value(p *byte) uint32", target.arch, target.triple, api)
+						if target.arch == "386" && row.complete {
+							if err != nil || ir == "" || !strings.Contains(ir, "load volatile i") {
+								t.Fatal("paired native load lost its ordinary mode32 destination or original fault", err)
+							}
+						} else if !errors.Is(err, ErrProbeNeedsContext) || ir != "" {
+							t.Fatal("paired BP load acquired unknown pointer bytes or a physical frame destination", err)
+						}
+					})
+				}
 			}
 		}
 	}
