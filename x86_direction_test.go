@@ -200,7 +200,7 @@ func TestX86DirectionLoweredStringCompleteFamilyConsumesDirection(t *testing.T) 
 								t.Fatal(err)
 							}
 							ctx.repeatPrefix = prefix
-							known, _, err := ctx.lowerString(op, x86ScalarLaneInstruction(t, string(op)))
+							known, _, err := ctx.lowerString(x86ScalarLaneInstruction(t, string(op)))
 							if !known || arch == "386" && width == "Q" && err == nil || !(arch == "386" && width == "Q") && err != nil {
 								t.Fatal("complete string grammar changed", err)
 							}
