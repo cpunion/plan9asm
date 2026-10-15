@@ -322,7 +322,7 @@ func TestX86SegmentMOVStateAndOriginalRoleBoundaries(t *testing.T) {
 						}
 					})
 				}
-				origins := []string{"encoded", "source-raw", "raw-return", "address-size", "unbound-address", "raw-segment", "numerical-certificate", "unknown-segment", "unresolved-offset", "index-extension", "invalid-scale", "wide-displacement", "unknown-offset", "partial-offset", "pointer-offset", "illegal-source-GP-scaled-index", "unknown-index", "partial-index", "pointer-index", "SP-destination", "SP-base", "SP-index"}
+				origins := []string{"encoded", "source-raw", "raw-return", "address-size", "unbound-address", "raw-segment", "numerical-certificate", "unmodeled-CS-role", "unresolved-offset", "index-extension", "invalid-scale", "wide-displacement", "unknown-offset", "partial-offset", "pointer-offset", "illegal-source-GP-scaled-index", "unknown-index", "partial-index", "pointer-index", "SP-destination", "SP-base", "SP-index"}
 				if arch == "amd64" {
 					origins = append(origins, "BP-destination", "BP-base", "BP-index", "REX-SP-destination", "REX-BP-destination")
 				}
@@ -345,7 +345,7 @@ func TestX86SegmentMOVStateAndOriginalRoleBoundaries(t *testing.T) {
 							ins.x86SegmentPrefix = 0x64
 						case "numerical-certificate":
 							ins.x86NumericalRead = new(x86NumericalReadCertificate)
-						case "unknown-segment":
+						case "unmodeled-CS-role":
 							ins.Args[0].Mem.Segment = "CS"
 						case "unresolved-offset":
 							ins.Args[0].Mem.OffRaw = "missing"

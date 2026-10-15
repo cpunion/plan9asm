@@ -80,8 +80,12 @@ func TestX86SegmentMOVCompleteGoGrammarAndAliases(t *testing.T) {
 						})
 					}
 				}
-				for _, mutation := range []string{"OffRaw", "IndexExt", "scale", "wide-offset", "unknown-segment", "illegal-source-GP-scaled-index"} {
-					t.Run(arch+"/"+row.op+"/"+segment+"/invalid-"+mutation, func(t *testing.T) {
+				for _, mutation := range []string{"OffRaw", "IndexExt", "scale", "wide-offset", "unmodeled-CS-role", "illegal-source-GP-scaled-index"} {
+					name := "invalid-" + mutation
+					if mutation == "unmodeled-CS-role" {
+						name = mutation // CS is valid Go syntax, outside this FS/GS role.
+					}
+					t.Run(arch+"/"+row.op+"/"+segment+"/"+name, func(t *testing.T) {
 						ins := x86ScalarLaneInstruction(t, row.op+" 24("+segment+"),DX")
 						switch mutation {
 						case "OffRaw":
@@ -92,12 +96,15 @@ func TestX86SegmentMOVCompleteGoGrammarAndAliases(t *testing.T) {
 							ins.Args[0].Mem.Index, ins.Args[0].Mem.Scale = CX, 3
 						case "wide-offset":
 							ins.Args[0].Mem.Off = 1 << 32
-						case "unknown-segment":
+						case "unmodeled-CS-role":
 							ins.Args[0].Mem.Segment = "CS"
 						case "illegal-source-GP-scaled-index":
 							ins.Args[0].Mem.Index, ins.Args[0].Mem.Scale = CX, 4
 						}
 						if _, known, err := x86ScalarNativeLoadProperties(ins.Op, ins, arch); known && err == nil {
+							if mutation == "unmodeled-CS-role" {
+								t.Fatal("FS/GS-only source projection borrowed an unmodeled Go segment role")
+							}
 							t.Fatal("typed source grammar accepted a malformed segment memory operand", mutation)
 						}
 					})
