@@ -45,9 +45,9 @@ func TestX86IntegerFPByteViewsFiveTargetOriginalAndLLVMObjects(t *testing.T) {
 	for _, target := range x86RawReturnTargets {
 		t.Run(target.triple, func(t *testing.T) {
 			declarations, source, count := x86ScalarFPByteCompleteFixture(target.arch)
-			wantCount := 88
+			wantCount := 89
 			if target.arch == "386" {
-				wantCount = 38
+				wantCount = 39
 			}
 			if count != wantCount || strings.Count(source, "TEXT ·") != count {
 				t.Fatalf("complete unfiltered byte-view source changed: got %d, want %d", count, wantCount)

@@ -131,6 +131,11 @@ func (c *amd64Ctx) validateScalarFPSourceViews() error {
 	if err := c.validateMixedBoolResultRole(); err != nil {
 		return err
 	}
+	if x86OrdinaryIntegerFPStoreNeedsProof(c.fpScalarSource, c.sig, c.goarch) {
+		if err := c.scalarFPResultInitialized(); err != nil {
+			return err
+		}
+	}
 	if c.sig.amd64GoArguments != nil {
 		if err := c.scalarFPResultInitialized(); err != nil {
 			return err

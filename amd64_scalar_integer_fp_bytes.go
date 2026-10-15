@@ -3,6 +3,7 @@ package plan9asm
 import (
 	"fmt"
 	"math"
+	"strings"
 )
 
 // A named GP move's FP operand describes instruction bytes, not a coercion to
@@ -18,7 +19,7 @@ func (c *amd64Ctx) integerFPByteView(off, width int64, write bool) (bool, error)
 		len(c.sig.Frame.Params)+len(c.fpResults) == 0 {
 		return false, nil // Independently bound physical storage retains its consumer.
 	}
-	if x86IntegerFPNaturalSlot(c.sig.Frame.Params, c.fpResults, off, width, c.goarch) {
+	if x86IntegerFPNaturalTransfer(c.sig.Frame.Params, c.fpResults, off, width, write, c.goarch) {
 		return false, nil
 	}
 	fail := func(reason string) (bool, error) {
@@ -66,10 +67,16 @@ func (c *amd64Ctx) integerFPByteView(off, width int64, write bool) (bool, error)
 	return true, nil
 }
 
-func x86IntegerFPNaturalSlot(params, results []FrameSlot, off, width int64, arch string) bool {
-	for _, slots := range [][]FrameSlot{params, results} {
+func x86IntegerFPNaturalTransfer(params, results []FrameSlot, off, width int64, write bool, arch string) bool {
+	for group, slots := range [][]FrameSlot{params, results} {
 		for _, slot := range slots {
 			if slot.Offset == off && x86FrameScalarBytes(slot.Type, arch) == width {
+				// Legacy evalFPToI64 handles floating parameters, but its
+				// result branch has no floating bit view. Reuse the checked
+				// byte engine rather than its unresolved-result zero.
+				if group == 1 && !write && (slot.Type == "float" || slot.Type == "double") {
+					return false
+				}
 				return true
 			}
 		}
@@ -82,6 +89,9 @@ func x86IntegerFPNaturalSlot(params, results []FrameSlot, off, width int64, arch
 // independently need CFG lowering (for example, mixed canonical bool tuples).
 // This is solely a routing decision; the selected consumer must prove the role.
 func x86IntegerFPByteMovesNeedCFG(fn Func, sig FuncSig, arch string) bool {
+	if x86OrdinaryIntegerFPStoreNeedsProof(fn, sig, arch) {
+		return true
+	}
 	if fn.x86SourceStack != nil || fn.x86FixedLocal != nil || len(sig.Frame.Params)+len(sig.Frame.Results) == 0 {
 		return false
 	}
@@ -90,13 +100,46 @@ func x86IntegerFPByteMovesNeedCFG(fn Func, sig FuncSig, arch string) bool {
 		if width == 0 || len(ins.Args) != 2 {
 			continue
 		}
-		for _, operand := range ins.Args {
-			if operand.Kind == OpFP && !x86IntegerFPNaturalSlot(sig.Frame.Params, sig.Frame.Results, operand.FPOffset, width, arch) {
+		for index, operand := range ins.Args {
+			if operand.Kind == OpFP && !x86IntegerFPNaturalTransfer(sig.Frame.Params, sig.Frame.Results, operand.FPOffset, width, index == 1, arch) {
 				return true
 			}
 		}
 	}
 	return false
+}
+
+// Ordinary declared integer results cannot publish unknown bytes simply
+// because the final FP store is an exact natural field. This is a cost gate
+// for the existing complete proof, not another ABI/state/alias producer.
+// Logical bool-input aliases and all bound native/custom entry roles retain
+// their independent consumers; a frame-empty register intrinsic is not ABI0.
+func x86OrdinaryIntegerFPStoreNeedsProof(fn Func, sig FuncSig, arch string) bool {
+	if arch != "386" && arch != "amd64" || sig.Ret != I8 && sig.Ret != I16 && sig.Ret != I32 && sig.Ret != I64 ||
+		len(sig.Frame.Results) != 1 || fn.FrameSize != 0 || strings.Contains(fn.Sym, "<") || len(sig.ArgRegs) != 0 ||
+		sig.ARMEntry != nil || sig.ARM64GoRegisterABI != nil || sig.ARM64ClosureABI != nil || sig.WASMContext != "" || sig.WASMNative ||
+		sig.amd64GoArguments != nil || sig.x86FixedLocal != nil || sig.x86CallerRegions != nil || sig.x86BorrowedBoolTail ||
+		len(fn.X86RawText) != 0 || fn.x86SourceStack != nil || fn.x86FixedLocal != nil || fn.x86RawReplay != nil ||
+		fn.x86DirectTailRoot != nil || fn.x86ContinuationFlow != nil || len(fn.x86ContinuationAddresses) != 0 ||
+		len(fn.x86IndirectLabels) != 0 || fn.x86BoolCalls != nil || fn.x86BoolReadonlyInputs {
+		return false
+	}
+	for _, slot := range sig.Frame.Params {
+		if slot.Type == I1 {
+			return false // No new readonly logical-bool input/address role is inferred.
+		}
+	}
+	found := false
+	for _, ins := range fn.Instrs {
+		if ins.Op == "CALL" || isX86RawDirective(ins) || ins.x86Encoded || ins.x86SourceRaw != nil ||
+			ins.x86RawNearReturn != nil || ins.x86AddressBits != 0 || ins.x86UnboundAddressOverride || ins.x86SegmentPrefix != 0 {
+			return false
+		}
+		if x86IntegerFPMoveWidth(ins, arch) != 0 && len(ins.Args) == 2 && ins.Args[1].Kind == OpFP {
+			found = true
+		}
+	}
+	return found
 }
 
 // This dispatch is only a cost/transport selector for the existing named GP

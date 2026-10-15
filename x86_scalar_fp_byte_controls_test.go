@@ -43,6 +43,11 @@ func x86ScalarFPByteInputCases(arch string) []x86ScalarFPByteInputCase {
 		body = "MOVL $0,ret+0(FP)\nMOVL $0x3ff00000,ret+4(FP)\nMOVB $0x11,ret+1(FP)\nMOVL ret+0(FP),AX\nMOVL AX,ret+8(FP)\nMOVL ret+4(FP),DX\nMOVL DX,ret+12(FP)\n"
 	}
 	rows = append(rows, x86ScalarFPByteInputCase{x86ScalarFPTupleSpanCase{
+		name: "partial-floating32-result-bits", declaration: "func Value() (float32,uint32)",
+		source: "TEXT ·Value(SB),4,$0-8\nMOVL $0x3f800000,ret+0(FP)\nMOVB $0x11,ret+1(FP)\nMOVL ret+0(FP),AX\nMOVL AX,ret+4(FP)\nRET\n",
+		want:   []uint64{0x3f801100, 0x3f801100},
+	}, "define {i32,i32} @Probe() {\n %r = call {float,i32} @Value()\n %f = extractvalue {float,i32} %r,0\n %b = bitcast float %f to i32\n %n = extractvalue {float,i32} %r,1\n %a = insertvalue {i32,i32} poison,i32 %b,0\n %v = insertvalue {i32,i32} %a,i32 %n,1\n ret {i32,i32} %v\n}\n"})
+	rows = append(rows, x86ScalarFPByteInputCase{x86ScalarFPTupleSpanCase{
 		name: "partial-floating-result-bits", declaration: "func Value() (float64,uint64)",
 		source: "TEXT ·Value(SB),4,$0-16\n" + body + "RET\n",
 		want:   []uint64{0x3ff0000000001100, 0x3ff0000000001100},
@@ -125,6 +130,62 @@ func TestX86IntegerFPByteViewsMOVQSourceAliases(t *testing.T) {
 							x86ScalarFPTupleSpanConstantResult(t, ir, row.want)
 						})
 					}
+				}
+			}
+		}
+	}
+}
+
+func TestX86OrdinaryIntegerFPStoreWidthsRequireWholeSource(t *testing.T) {
+	for _, target := range x86RawReturnTargets {
+		word := 8
+		if target.arch == "386" {
+			word = 4
+		}
+		for _, width := range []int{1, 2, 4, 8} {
+			move := map[int]string{1: "MOVB", 2: "MOVW", 4: "MOVL", 8: "MOVQ"}[width]
+			store := move + " AX,ret+0(FP)\n"
+			constant := move + " $9,AX\n" + store
+			partial := "MOVB $1,AH\n" + store
+			if width > 1 {
+				partial = "MOVB $1,AX\n" + store
+			}
+			result := (width + word - 1) & -word
+			input := fmt.Sprintf("%s x+0(FP),AX\n%s AX,ret+%d(FP)\n", move, move, result)
+			if width == 8 && target.arch == "386" {
+				store = "MOVL AX,ret+0(FP)\nMOVL $0,ret+4(FP)\n"
+				constant = "MOVL $9,AX\n" + store
+				partial = "MOVB $1,AX\n" + store
+				input = fmt.Sprintf("MOVL x+0(FP),AX\nMOVL AX,ret+%d(FP)\nMOVL x+4(FP),DX\nMOVL DX,ret+%d(FP)\n", result, result+4)
+			}
+			for _, row := range []struct {
+				name, body string
+				input, ok  bool
+			}{
+				{"undefined", store, false, false},
+				{"partial", partial, false, false},
+				{"constant", constant, false, true},
+				{"actual-numeric-input", input, true, true},
+			} {
+				for _, api := range []string{"text", "module", "Go"} {
+					t.Run(fmt.Sprintf("%s/%d/%s/%s", target.triple, width, row.name, api), func(t *testing.T) {
+						declaration, extent := fmt.Sprintf("func Value() uint%d", 8*width), width
+						if row.input {
+							declaration, extent = fmt.Sprintf("func Value(x uint%d) uint%d", 8*width, 8*width), result+width
+						}
+						source := fmt.Sprintf("TEXT ·Value(SB),4,$0-%d\n%sRET\n", extent, row.body)
+						ir, err := x86ScalarFPBitViewAPI(t, source, declaration, target.arch, target.triple, api)
+						if row.ok {
+							if err != nil || ir == "" {
+								t.Fatal("complete ordinary scalar source rejected", err)
+							}
+							if !row.input {
+								x86ScalarFPTupleSpanConstantResult(t, ir, []uint64{9})
+							}
+						} else if !errors.Is(err, ErrProbeNeedsContext) || ir != "" {
+							t.Fatalf("ordinary full-width store published unknown bytes: output=%t, error=%v", ir != "", err)
+						}
+					})
 				}
 			}
 		}
