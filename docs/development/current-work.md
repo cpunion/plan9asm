@@ -1,6 +1,6 @@
 # Current work: PR 40 checkpoint
 
-Checkpoint: 2026-10-15 00:56 UTC. Primary source `dd628058`.
+Checkpoint: 2026-10-15 01:28 UTC. Parent checkpoint `ca02d8ea`.
 This is a handoff, not a ledger or a claim of complete CI/stdlib success.
 
 ## Scope and authority
@@ -21,8 +21,9 @@ failures as failures; do not increase budgets, crop sources or shrink denominato
 ## Latest completed CI
 
 Current [38661041122](https://github.com/cpunion/plan9asm/actions/runs/38661041122)
-at fork5657d2ab is still RUNNING: all31 priority jobs pass and the complete
-Windows three-module stage has started. Do not call the complete run green.
+at fork5657d2ab is still RUNNING: all31 priority jobs pass. The complete Windows
+stage has two CLI aggregate failures and one root-shard deadline failure;
+the remaining-package owner is still running. Do not call the complete run green.
 Downloaded native63 independently passes63 roots/169 children in140.887s,
 all15 inventories/25 mandatory owners/eight children, zero skips or gaps.
 The new original PCMP fault owner really executes all32 rows/34 probes at
@@ -32,6 +33,21 @@ failures pass with no reported skip. This artifact is Go verbose output, not
 a JSON event trace. The Linux native artifact has strict JSON event audits.
 Fork5657's non-GitHub source is identical to earlier contributionaa8287d5;
 new local namespace source below has NOT been pushed into this running CI.
+
+The downloaded CLI producer/aggregate plans differ only in actual PATH:
+hosted Git ucrt64 versus mingw64 and optional WSL entries. The repair explicitly
+selects a minimal tool search path in both driver roles, retaining strict
+scope equality. A synthetic command-transport RED reproduces this drift;
+wrong/missing explicit LLVM and failed tool queries remain hard failures.
+These synthetic controls are not actual Windows execution evidence.
+
+Root part9's shard25 really expires at1800s. Its complete readonly DATA consumer
+root passes all119 operations/three targets/three APIs/O0/O2 but takes1210.90s,
+leaving insufficient time for later roots. Split that same matrix into three
+independent complete target roots, with a real scheduling-policy RED and
+disjoint32-shard/16-owner verification. All original12 batches/48 children and
+72 module-object axes remain required. Current-head qualification and another
+actual Windows run are still required; the old run remains FAILED.
 
 [38648974765](https://github.com/cpunion/plan9asm/actions/runs/38648974765)
 at frozen fork `7003d395` completed FAILURE naturally at00:08 UTC:32 jobs,

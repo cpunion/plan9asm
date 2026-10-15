@@ -69,6 +69,13 @@ three modules independent: sixteen root parts for the main module over the same
 owner each. Every command retains the thirty-minute budget;
 only complete cross-owner verification publishes the module's coverage. The
 Windows driver binds inherited and explicit `-tags=byollvm` without fallback.
+It selects Go, LLVM22, Node, Python and jq before freezing a minimal tool PATH
+for both execution and aggregation. Ambient hosted Git runtime-bank and WSL
+entries are not inherited. Complete environment equality remains strict; never
+remove PATH from the verifier to accept unrelated execution environments.
+The readonly DATA consumer matrix has three complete target roots, placed in
+different Windows scheduling owners. Each retains all119 operations, all three
+APIs and O0/O2 objects; root splitting is not a reduced test denominator.
 
 ```sh
 go run ./cmd/plan9asmtest -module -out _out/module-suite \
