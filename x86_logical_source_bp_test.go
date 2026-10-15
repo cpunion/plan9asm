@@ -3,9 +3,35 @@ package plan9asm
 import (
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 )
+
+func TestX86PrivateStackPreservesOnlyUnwrittenGPIdentities(t *testing.T) {
+	for _, arch := range []string{"386", "amd64"} {
+		for _, op := range strings.Fields("PUSHW POPW PUSHL POPL PUSHQ POPQ PUSHFW POPFW PUSHFL POPFL PUSHFQ POPFQ") {
+			t.Run(arch+"/"+op, func(t *testing.T) {
+				args := " BX"
+				if strings.Contains(op, "F") {
+					args = ""
+				}
+				ins := x86ScalarLaneInstruction(t, op+args)
+				before := [16]bool{0: true, 1: true, 2: true, 3: true, 5: arch == "386", 6: true, 7: true}
+				want := before
+				invalid := arch == "386" && strings.HasSuffix(op, "Q") || arch == "amd64" && strings.HasSuffix(op, "L")
+				if invalid {
+					want = [16]bool{}
+				} else if strings.HasPrefix(op, "POP") && !strings.Contains(op, "F") {
+					want[3] = false // Any partial/full POP revokes BX's old identity.
+				}
+				if got := x86ResultCallerAddressesAfter(ins, before, nil, arch); !reflect.DeepEqual(got, want) {
+					t.Fatal("typed stack GP footprint either invented or revoked an unrelated identity", got, want)
+				}
+			})
+		}
+	}
+}
 
 func TestX86OrdinaryMemoryModeAwareFrameRegisters(t *testing.T) {
 	for _, arch := range []string{"386", "amd64"} {

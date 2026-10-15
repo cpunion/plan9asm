@@ -112,6 +112,19 @@ func x86ResultCallerAddressesAfter(ins Instr, before [16]bool, entryFP map[int64
 			}
 		}
 	}
+	if form, known, err := x86StackWidthProperties(ins, arch); known {
+		if err != nil {
+			return [16]bool{}
+		}
+		if form.mode == amd64StackPopValue {
+			kill(ins.Args[0], int64(form.bits/8))
+		}
+		// This post-transfer observes only the GP write footprint. PUSH and
+		// FLAGS transport do not overwrite unrelated GP identities; POP's
+		// explicit destination does. The independent private-stack proof must
+		// still close every input, depth, memory and FLAGS effect first.
+		return before
+	}
 	if effect, known, err := x86TypedInstructionByteEffect(ins.Op, ins, arch); known && err == nil {
 		for _, operand := range effect.operands {
 			if operand.write {
