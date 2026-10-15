@@ -25,6 +25,14 @@ type GoX86SDKASMDataCaptureRequest struct {
 	Environment                              []string
 }
 
+type sdkASMDataCaptureRole uint8
+
+const (
+	sdkASMDataStrictRole sdkASMDataCaptureRole = iota
+	sdkASMDataOriginalFrameRole
+	sdkASMDataOriginalSourceRole
+)
+
 // GoX86SDKASMDataSource authenticates source/header/CPP/object observations
 // only. It has no Bind, Options, initializer, numerical or native-body API.
 type GoX86SDKASMDataSource struct {
@@ -40,9 +48,10 @@ type GoX86SDKASMDataSource struct {
 	context          context.Context
 	originalContext  context.Context
 	originalDeadline time.Time
-	// Only the distinct SDK-primary frame factory can select this role.
-	// Public ASM DATA/numerical source producers retain their strict profile.
+	// Only distinct private SDK-primary observation factories select an
+	// original profile. Public DATA/numerical producers remain strict.
 	originalProfile   bool
+	captureRole       sdkASMDataCaptureRole
 	originalConfig    string
 	originalConfigID  os.FileInfo
 	frameListingBytes int
@@ -83,6 +92,20 @@ func CaptureGoX86SDKASMDataSource(ctx context.Context, request GoX86SDKASMDataCa
 }
 
 func captureGoX86SDKASMDataSource(ctx context.Context, request GoX86SDKASMDataCaptureRequest, originalProfile bool) (_ *GoX86SDKASMDataSource, result error) {
+	role := sdkASMDataStrictRole
+	if originalProfile {
+		role = sdkASMDataOriginalFrameRole
+	}
+	return captureGoX86SDKASMDataSourceRole(ctx, request, role)
+}
+
+// A distinct private source-only role observes the same original profile but
+// never captures AMD64 native frames or constructs their observation owner.
+func captureGoX86SDKASMDataSourceRole(ctx context.Context, request GoX86SDKASMDataCaptureRequest, role sdkASMDataCaptureRole) (_ *GoX86SDKASMDataSource, result error) {
+	if role > sdkASMDataOriginalSourceRole {
+		return nil, sdkASMDataContext("unknown private SDK source observation role")
+	}
+	originalProfile := role != sdkASMDataStrictRole
 	if ctx != nil && ctx.Err() != nil {
 		return nil, fmt.Errorf("capture SDK ASM DATA: %w", ctx.Err())
 	}
@@ -99,15 +122,17 @@ func captureGoX86SDKASMDataSource(ctx context.Context, request GoX86SDKASMDataCa
 	request.Environment = append([]string(nil), request.Environment...)
 	var provided map[string]string
 	var err error
-	if originalProfile {
+	if role == sdkASMDataOriginalFrameRole {
 		provided, err = sdkAMD64FrameEnvironment(request)
+	} else if role == sdkASMDataOriginalSourceRole {
+		provided, err = sdkX86OriginalSourceEnvironment(request)
 	} else {
 		provided, err = sdkASMDataEnvironment(request)
 	}
 	if err != nil {
 		return nil, err
 	}
-	source := &GoX86SDKASMDataSource{request: request, context: ctx, originalContext: ctx, originalProfile: originalProfile,
+	source := &GoX86SDKASMDataSource{request: request, context: ctx, originalContext: ctx, originalProfile: originalProfile, captureRole: role,
 		originalDeadline: deadline,
 		directories:      make(map[string]os.FileInfo), misses: make(map[string]bool)}
 	source.identity = source
@@ -305,11 +330,12 @@ func (source *GoX86SDKASMDataSource) digest() ([32]byte, error) {
 		Observation       sdkASMDataLiveObservation
 		OriginalDeadline  time.Time
 		OriginalProfile   bool
+		CaptureRole       sdkASMDataCaptureRole
 		OriginalConfig    string
 		FrameListingBytes int
 	}{source.request, source.guard.request, source.guard.selection, source.guard.env, source.guard.imports,
 		source.guard.inputs, source.guard.entries, source.misses, source.observation, source.originalDeadline,
-		source.originalProfile, source.originalConfig, source.frameListingBytes})
+		source.originalProfile, source.captureRole, source.originalConfig, source.frameListingBytes})
 	return sha256.Sum256(raw), err
 }
 

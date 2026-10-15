@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/xgo-dev/plan9asm/internal/gostaticstorage"
 	"github.com/xgo-dev/plan9asm/internal/sourcepath"
 )
 
@@ -51,6 +52,15 @@ func sdkAMD64FrameEnvironment(request GoX86SDKASMDataCaptureRequest) (map[string
 	if request.Target != "linux/amd64" && request.Target != "darwin/amd64" && request.Target != "windows/amd64" {
 		return nil, sdkASMDataContext("SDK-primary frame profile requires an original AMD64 target")
 	}
+	return sdkX86OriginalSourceEnvironment(request)
+}
+
+// Original source observation does not select a native frame/entry role. The
+// AMD64 factory above retains its separate exact target check.
+func sdkX86OriginalSourceEnvironment(request GoX86SDKASMDataCaptureRequest) (map[string]string, error) {
+	if !gostaticstorage.X86SDKTarget(request.Target) {
+		return nil, sdkASMDataContext("SDK-primary source profile requires an original x86 target")
+	}
 	provided := make(map[string]string)
 	for _, pair := range request.Environment {
 		key, value, valid := strings.Cut(pair, "=")
@@ -59,8 +69,8 @@ func sdkAMD64FrameEnvironment(request GoX86SDKASMDataCaptureRequest) (map[string
 		}
 		provided[key] = value
 	}
-	goos, _, _ := strings.Cut(request.Target, "/")
-	for key, value := range map[string]string{"GOOS": goos, "GOARCH": "amd64", "GOFLAGS": "", "GOTOOLCHAIN": "local", "GOWORK": "off"} {
+	goos, arch, _ := strings.Cut(request.Target, "/")
+	for key, value := range map[string]string{"GOOS": goos, "GOARCH": arch, "GOFLAGS": "", "GOTOOLCHAIN": "local", "GOWORK": "off"} {
 		if actual, present := provided[key]; !present || actual != value {
 			return nil, sdkASMDataContext("SDK-primary unbound actual command profile: %s", key)
 		}

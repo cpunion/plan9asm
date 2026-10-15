@@ -40,6 +40,9 @@ func (source *GoX86SDKASMDataSource) capture(ctx context.Context, provided map[s
 	if source.originalProfile {
 		arguments = append(arguments, "GOENV", "GOWORK", "GOTOOLCHAIN", "GOPROXY")
 		source.observation.Protocol = "actual_go_sdk_primary_frame_source_observation_v1"
+		if source.captureRole == sdkASMDataOriginalSourceRole {
+			source.observation.Protocol = "actual_go_sdk_original_source_observation_v1"
+		}
 	}
 	raw, err := source.run(ctx, arguments...)
 	if err != nil {
@@ -187,7 +190,17 @@ func (source *GoX86SDKASMDataSource) capture(ctx context.Context, provided map[s
 		return sdkASMDataContext("complete original/expanded/compiler DATA/TEXT join differs: %v", err)
 	}
 	source.observation.ObjectInputs, source.observation.Objects = objectInputs, objects
-	if source.originalProfile {
+	for _, observed := range objects.Sources {
+		if len(observed.GeneratedFuncdata) != 0 {
+			if err := gostaticstorage.GeneratedFuncdataSources(env["GOVERSION"], func(role string) ([]byte, error) {
+				return source.guard.read(filepath.Join(env["GOROOT"], filepath.FromSlash(role)))
+			}); err != nil {
+				return sdkASMDataContext("generated metadata lacks its exact original producer source: %v", err)
+			}
+			break
+		}
+	}
+	if source.captureRole == sdkASMDataOriginalFrameRole {
 		return source.captureSDKFrameListings(ctx)
 	}
 	return nil
