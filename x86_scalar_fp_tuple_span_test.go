@@ -87,6 +87,10 @@ func x86ScalarFPTupleSpanCases(arch string, read bool) []x86ScalarFPTupleSpanCas
 }
 
 func x86ScalarFPTupleSpanConstantResult(t *testing.T, ir string, want []uint64) {
+	x86ScalarFPNamedConstantResult(t, ir, "Value", want)
+}
+
+func x86ScalarFPNamedConstantResult(t *testing.T, ir, name string, want []uint64) {
 	t.Helper()
 	context := llvm.NewContext()
 	defer context.Dispose()
@@ -102,9 +106,9 @@ func x86ScalarFPTupleSpanConstantResult(t *testing.T, ir string, want []uint64) 
 	if err := module.RunPasses("default<O2>", llvm.TargetMachine{}, options); err != nil {
 		t.Fatal(err)
 	}
-	function := module.NamedFunction("Value")
+	function := module.NamedFunction(name)
 	if function.IsNil() {
-		t.Fatal("missing exact translated Value entry")
+		t.Fatal("missing exact translated entry", name)
 	}
 	returns := 0
 	for block := function.FirstBasicBlock(); !block.IsNil(); block = llvm.NextBasicBlock(block) {
@@ -117,6 +121,12 @@ func x86ScalarFPTupleSpanConstantResult(t *testing.T, ir string, want []uint64) 
 				t.Fatalf("missing physical-byte tuple result: %s", function.String())
 			}
 			result := instruction.Operand(0)
+			if len(want) == 1 && !result.IsAConstantInt().IsNil() {
+				if result.ZExtValue() != want[0] {
+					t.Errorf("FP span scalar result: got %s, want %d; optimized actual fixture:\n%s", result.String(), want[0], function.String())
+				}
+				continue
+			}
 			if result.IsAConstantStruct().IsNil() || result.OperandsCount() != len(want) {
 				t.Fatalf("whole constant fixture did not produce an inspectable tuple: %s", function.String())
 			}
