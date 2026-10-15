@@ -115,6 +115,7 @@ func arm64SignedCarrierEntry(t *testing.T, source *GoARM64ByteCarrierSource, nam
 }
 
 func TestARM64ByteCarrierSignedCompleteWidthObjects(t *testing.T) {
+	buildCache := t.TempDir()
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM22 llc required")
@@ -126,7 +127,7 @@ func TestARM64ByteCarrierSignedCompleteWidthObjects(t *testing.T) {
 	} {
 		t.Run(target.goos, func(t *testing.T) {
 			directory, packagePath, cases := arm64SignedCarrierMatrixFixture(t)
-			request := arm64ByteCarrierRequest(t, directory, packagePath)
+			request := arm64ByteCarrierRequestWithBuildCache(t, directory, packagePath, buildCache)
 			request.Target = target.goos + "/arm64"
 			for index, pair := range request.Environment {
 				if strings.HasPrefix(pair, "GOOS=") {

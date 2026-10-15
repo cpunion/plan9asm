@@ -81,6 +81,13 @@ IndexByte files in separate scheduling owners, each with its own original
 five-minute context. A previous root shared that context across both files;
 the second file's cancellation was a real failure, not source rejection.
 
+Repeated ARM64 byte-carrier matrices share only a parent-test-owned `GOCACHE`.
+Recent Go distributions build builtin observers such as `objdump` there;
+recreating an empty cache for each row repeats that build and can exhaust the
+unchanged one-minute command limit. Each case still captures independent
+original sources, outputs, leases and revocable owners. Do not share those
+mutable observations or increase command budgets to hide cache setup costs.
+
 ```sh
 go run ./cmd/plan9asmtest -module -out _out/module-suite \
   -shards 32 -workers 2 -timeout 45m
