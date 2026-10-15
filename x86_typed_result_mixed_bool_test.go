@@ -9,13 +9,15 @@ import (
 func TestX86TypedNumericalMixedBoolCanonicalCompositionThreeAPIs(t *testing.T) {
 	for _, target := range x86RawReturnTargets {
 		operations := []string{"CRC32B BX,AX", "CRC32W BX,AX", "CRC32L BX,AX", "MULL BX", "BSWAPL AX"}
+		inputType, inputMove, inputOffset := "uint32", "MOVL", 4
 		if target.arch == "amd64" {
 			operations = append(operations, "CRC32Q BX,AX", "BSWAPQ AX")
+			inputType, inputMove, inputOffset = "uint64", "MOVQ", 8
 		}
 		for _, boolFirst := range []bool{false, true} {
-			declaration := "func Value(crc,value uint32) (uint32,bool)"
+			declaration := fmt.Sprintf("func Value(crc,value %s) (uint32,bool)", inputType)
 			if boolFirst {
-				declaration = "func Value(crc,value uint32) (bool,uint32)"
+				declaration = fmt.Sprintf("func Value(crc,value %s) (bool,uint32)", inputType)
 			}
 			_, _, sig, _ := x86ResultInitializationFixture(t, target.arch, declaration, "RET")
 			var boolean, number int64
@@ -27,10 +29,20 @@ func TestX86TypedNumericalMixedBoolCanonicalCompositionThreeAPIs(t *testing.T) {
 				}
 			}
 			for _, operation := range operations {
-				for _, scenario := range []string{"canonical-mask", "raw-two", "unmasked-number", "unknown-accumulator", "missing-number"} {
-					body := "MOVL value+4(FP),BX\n"
+				scenarios := []string{"canonical-mask", "raw-two", "unmasked-number", "unknown-accumulator", "missing-number"}
+				if operation == "BSWAPQ AX" {
+					// A prior MOVL makes the high half zero; BSWAPQ then
+					// legitimately produces a canonical low byte without AND.
+					scenarios = append(scenarios, "zero-extended-input")
+				}
+				for _, scenario := range scenarios {
+					body := fmt.Sprintf("%s value+%d(FP),BX\n", inputMove, inputOffset)
 					if scenario != "unknown-accumulator" {
-						body += "MOVL crc+0(FP),AX\n"
+						move := inputMove
+						if scenario == "zero-extended-input" {
+							move = "MOVL"
+						}
+						body += move + " crc+0(FP),AX\n"
 					}
 					body += operation + "\n"
 					if scenario != "missing-number" {
@@ -39,7 +51,7 @@ func TestX86TypedNumericalMixedBoolCanonicalCompositionThreeAPIs(t *testing.T) {
 					switch scenario {
 					case "raw-two":
 						body += "MOVL $2,AX\n"
-					case "unmasked-number":
+					case "unmasked-number", "zero-extended-input":
 						// Initialized arithmetic bytes alone never witness zero/one.
 					default:
 						body += "ANDL $1,AX\n"
@@ -49,7 +61,7 @@ func TestX86TypedNumericalMixedBoolCanonicalCompositionThreeAPIs(t *testing.T) {
 					for _, api := range []string{"text", "module", "Go"} {
 						t.Run(fmt.Sprintf("%s/bool-first=%t/%s/%s/%s", target.triple, boolFirst, operation, scenario, api), func(t *testing.T) {
 							ir, err := x86ScalarFPBitViewAPI(t, source, declaration, target.arch, target.triple, api)
-							if scenario == "canonical-mask" {
+							if scenario == "canonical-mask" || scenario == "zero-extended-input" {
 								if err != nil || ir == "" {
 									t.Fatalf("complete typed NUM/canonical tuple rejected: output=%t error=%v", ir != "", err)
 								}
