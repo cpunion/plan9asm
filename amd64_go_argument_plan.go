@@ -8,8 +8,8 @@ import (
 // amd64GoArgumentPlan is a private language-layout calculation, not an entry
 // certificate. In particular, it supplies no initialized bytes, native pointer
 // backing, FP/spill storage, closure context, or permission to lower a source.
-// No consumer currently uses it. A future consumer must authenticate the actual
-// declaration, selected compiler/ABI, LLVM transport and complete source first.
+// The private entry consumer separately authenticates the actual declaration,
+// selected compiler/ABI, LLVM transport and complete source before using it.
 type amd64GoArgumentPlan struct {
 	Arguments []amd64GoArgumentAssignment
 	GPUsed    int

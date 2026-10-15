@@ -252,6 +252,14 @@ func translateGoModuleInContext(ctx llvm.Context, pkg GoPackage, src []byte, opt
 		if err != nil {
 			return nil, err
 		}
+		if binding := opt.NumericalReads; binding != nil {
+			// The complete graph consumes the same independently bound private
+			// identities as lowering, not just fresh language signature shapes.
+			completeSigs, err = numericalGoSignatures(binding, completeSigs)
+			if err != nil {
+				return nil, err
+			}
+		}
 		request := Options{Goarch: opt.GOARCH, TargetTriple: opt.TargetTriple,
 			ResolveSym: resolve, Sigs: completeSigs, NumericalReads: opt.NumericalReads, X86TLSMoves: opt.X86TLSMoves,
 			WASMABI: opt.WASMABI, X87Mode: opt.X87Mode, AnnotateSource: opt.AnnotateSource}
@@ -315,6 +323,12 @@ func translateGoModuleInContext(ctx llvm.Context, pkg GoPackage, src []byte, opt
 			}
 		}
 	}
+	if binding := opt.NumericalReads; binding != nil {
+		sigs, err = numericalGoSignatures(binding, sigs)
+		if err != nil {
+			return nil, err
+		}
+	}
 	if graph := file.x86DirectTails; graph != nil {
 		request, signatures := file, sigs
 		defer func() {
@@ -331,12 +345,6 @@ func translateGoModuleInContext(ctx llvm.Context, pkg GoPackage, src []byte, opt
 				resultErr = errors.Join(resultErr, final)
 			}
 		}()
-	}
-	if binding := opt.NumericalReads; binding != nil {
-		sigs, err = numericalGoSignatures(binding, sigs)
-		if err != nil {
-			return nil, err
-		}
 	}
 	for name, sourceSig := range tailSigs {
 		if sourceSig.arm64ABI0TailDeclaration != nil {
