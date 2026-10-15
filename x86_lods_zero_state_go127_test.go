@@ -81,9 +81,9 @@ func TestX86LODSZeroCountOriginalGoAndLLVMWholeState(t *testing.T) {
 	for _, arch := range []string{"386", "amd64"} {
 		source, declarations := x86LODSStateFixture(arch)
 		goAssemblerOracleOutput(t, arch, source, "", true)
-		triple, typ, word := "x86_64-unknown-linux-gnu", "i64", 8
+		triple, word := "x86_64-unknown-linux-gnu", 8
 		if arch == "386" {
-			triple, typ, word = "i386-unknown-linux-gnu", "i32", 4
+			triple, word = "i386-unknown-linux-gnu", 4
 		}
 		for _, api := range []string{"text", "module", "Go"} {
 			t.Run(arch+"/"+api, func(t *testing.T) {
@@ -106,12 +106,9 @@ func TestX86LODSZeroCountOriginalGoAndLLVMWholeState(t *testing.T) {
 						continue
 					}
 					body := x86StringMemoryFunction(t, optimized, "observe_"+row.name)
-					expected := x86LODSStateExpected(row)
-					want := fmt.Sprintf("ret { %s, i1, %s, %s } { %s %d, i1 true, %s 0, %s %d }",
-						typ, typ, typ, typ, expected.ax, typ, typ, expected.flags)
-					if !strings.Contains(body, want) {
-						t.Errorf("zero count changed complete AX, source SI, CX or initialized FLAGS: %s/%s/count0/backward=%t\nwant %s\n%s",
-							arch, row.op, row.backward, want, body)
+					if err := x86LODSCheckZeroOutputStores(body, row); err != nil {
+						t.Errorf("zero count changed complete AX, source SI, CX or initialized FLAGS: %s/%s/count0/backward=%t\n%v\n%s",
+							arch, row.op, row.backward, err, body)
 					}
 				}
 			})
