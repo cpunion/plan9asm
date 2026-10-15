@@ -53,6 +53,9 @@ func (c *amd64Ctx) lowerX87(op Op, ins Instr) (ok bool, terminated bool, err err
 	if typedValue && formErr != nil {
 		return true, false, formErr
 	}
+	if typedValue && valueForm.spec.kind == x86X87IntegerMove {
+		return true, false, c.lowerX87IntegerMove(valueForm)
+	}
 	switch op {
 	case "FBLD":
 		if len(ins.Args) != 1 || !isX87MemoryOperand(ins.Args[0]) {
@@ -118,6 +121,16 @@ func (c *amd64Ctx) lowerX87(op Op, ins Instr) (ok bool, terminated bool, err err
 		if !valid {
 			return true, false, fmt.Errorf("386 FMOVD expects memory,F0, Freg,F0, F0,memory, or F0,Freg: %q", ins.Raw)
 		}
+		if srcIsReg {
+			value := c.loadX87IntegerValue(srcReg)
+			if valueForm.push {
+				return true, false, c.pushX87IntegerValue(value)
+			}
+			if dstIsReg {
+				c.storeX87IntegerValue(dstReg, value)
+				return true, false, nil
+			}
+		}
 		v, err := c.evalX87F64(ins.Args[0])
 		if err != nil {
 			return true, false, err
@@ -131,6 +144,12 @@ func (c *amd64Ctx) lowerX87(op Op, ins Instr) (ok bool, terminated bool, err err
 		if len(ins.Args) != 2 || !isX87F0(ins.Args[0]) || !(isX87MemoryOperand(ins.Args[1]) || isX87RegisterOperand(ins.Args[1])) {
 			return true, false, fmt.Errorf("386 FMOVDP expects F0 source and memory or x87-register destination: %q", ins.Raw)
 		}
+		if index, register := x87OperandReg(ins.Args[1]); register {
+			value := c.loadX87IntegerValue(0)
+			c.storeX87IntegerValue(index, value)
+			c.popX87()
+			return true, false, nil
+		}
 		v, err := c.evalX87F64(ins.Args[0])
 		if err != nil {
 			return true, false, err
@@ -141,7 +160,7 @@ func (c *amd64Ctx) lowerX87(op Op, ins Instr) (ok bool, terminated bool, err err
 		c.popX87()
 		return true, false, nil
 
-	case "FMOVF", "FMOVL", "FMOVW":
+	case "FMOVF":
 		if len(ins.Args) != 2 {
 			return true, false, fmt.Errorf("386 %s expects src, dst: %q", op, ins.Raw)
 		}
@@ -157,41 +176,12 @@ func (c *amd64Ctx) lowerX87(op Op, ins Instr) (ok bool, terminated bool, err err
 		}
 		return true, false, fmt.Errorf("386 %s expects memory source and F0 destination, or F0 source and memory destination: %q", op, ins.Raw)
 
-	case "FMOVFP", "FMOVLP", "FMOVWP":
+	case "FMOVFP":
 		if len(ins.Args) != 2 || !isX87F0(ins.Args[0]) || !isX87MemoryOperand(ins.Args[1]) {
 			return true, false, fmt.Errorf("386 %s expects F0 source and memory destination: %q", op, ins.Raw)
 		}
 		baseOp := Op(strings.TrimSuffix(string(op), "P"))
 		if err := c.storeX87MoveValue(baseOp, ins.Args[1], c.loadX87(0)); err != nil {
-			return true, false, err
-		}
-		c.popX87()
-		return true, false, nil
-
-	case "FMOVV":
-		if len(ins.Args) != 2 || !isX87MemoryOperand(ins.Args[0]) || !isX87F0(ins.Args[1]) {
-			return true, false, fmt.Errorf("386 FMOVV expects memory source and F0 destination: %q", ins.Raw)
-		}
-		v, err := c.evalIntSized(ins.Args[0], I64)
-		if err != nil {
-			return true, false, err
-		}
-		f := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = sitofp i64 %s to double\n", f, v)
-		return true, false, c.pushX87("%" + f)
-
-	case "FMOVVP":
-		if len(ins.Args) != 2 || !isX87F0(ins.Args[0]) || !isX87MemoryOperand(ins.Args[1]) {
-			return true, false, fmt.Errorf("386 FMOVVP expects F0 source and memory destination: %q", ins.Raw)
-		}
-		var iv string
-		if c.useHardwareX87() {
-			iv = c.convertX87ToI64Hardware()
-		} else {
-			rounded := c.roundX87Software(c.loadX87(0))
-			iv = c.convertRoundedX87Integer(rounded, 64)
-		}
-		if err := c.storeX87I64(ins.Args[1], iv); err != nil {
 			return true, false, err
 		}
 		c.popX87()
@@ -206,10 +196,10 @@ func (c *amd64Ctx) lowerX87(op Op, ins Instr) (ok bool, terminated bool, err err
 		if !okA || !okB {
 			return true, false, fmt.Errorf("386 FXCHD expects x87 registers: %q", ins.Raw)
 		}
-		av := c.loadX87(a)
-		b := c.loadX87(bv)
-		c.storeX87(a, b)
-		c.storeX87(bv, av)
+		av := c.loadX87IntegerValue(a)
+		b := c.loadX87IntegerValue(bv)
+		c.storeX87IntegerValue(a, b)
+		c.storeX87IntegerValue(bv, av)
 		return true, false, nil
 
 	case "FADDW", "FADDL", "FADDF", "FADDD", "FADDDP",
@@ -284,7 +274,10 @@ func (c *amd64Ctx) lowerX87(op Op, ins Instr) (ok bool, terminated bool, err err
 			c.roundX87Hardware(c.x87Slot[0])
 			return true, false, nil
 		}
-		return true, false, c.storeX87F64(Operand{Kind: OpReg, Reg: Reg("F0")}, c.roundX87Software(c.loadX87(0)))
+		value := c.loadX87IntegerValue(0)
+		value.floating = c.roundX87Software(value.floating)
+		c.storeX87IntegerValue(0, value)
+		return true, false, nil
 
 	case "F2XM1":
 		if len(ins.Args) != 0 {
@@ -938,36 +931,35 @@ func (c *amd64Ctx) loadX87(index int) string {
 
 func (c *amd64Ctx) storeX87(index int, value string) {
 	fmt.Fprintf(c.b, "  store double %s, ptr %s\n", value, c.x87Slot[index])
+	if c.x87ExactSlot[index] != "" {
+		fmt.Fprintf(c.b, "  store i1 false, ptr %s\n", c.x87ExactSlot[index])
+	}
 }
 
 func (c *amd64Ctx) pushX87(value string) error {
-	for i := len(c.x87Slot) - 1; i > 0; i-- {
-		c.storeX87(i, c.loadX87(i-1))
-	}
-	c.storeX87(0, value)
-	return nil
+	return c.pushX87IntegerValue(x87IntegerValue{value, "0", "false"})
 }
 
 func (c *amd64Ctx) popX87() {
 	for i := 0; i < len(c.x87Slot)-1; i++ {
-		c.storeX87(i, c.loadX87(i+1))
+		c.storeX87IntegerValue(i, c.loadX87IntegerValue(i+1))
 	}
 	c.storeX87(len(c.x87Slot)-1, "0.000000e+00")
 }
 
 func (c *amd64Ctx) rotateX87Stack(increment bool) {
-	values := make([]string, len(c.x87Slot))
+	values := make([]x87IntegerValue, len(c.x87Slot))
 	for i := range values {
-		values[i] = c.loadX87(i)
+		values[i] = c.loadX87IntegerValue(i)
 	}
 	if increment {
 		for i := range values {
-			c.storeX87(i, values[(i+1)%len(values)])
+			c.storeX87IntegerValue(i, values[(i+1)%len(values)])
 		}
 		return
 	}
 	for i := range values {
-		c.storeX87(i, values[(i+len(values)-1)%len(values)])
+		c.storeX87IntegerValue(i, values[(i+len(values)-1)%len(values)])
 	}
 }
 
@@ -1117,7 +1109,12 @@ func (c *amd64Ctx) roundX87Hardware(slot string) {
 }
 
 func (c *amd64Ctx) convertX87ToI64Hardware() string {
-	fmt.Fprintf(c.b, "  call void asm sideeffect \"fldl $1; fistpll $0\", \"=*m,*m,~{dirflag},~{fpsr},~{flags}\"(ptr elementtype(i64) %s, ptr elementtype(double) %s)\n", c.x87IntegerSlot, c.x87Slot[0])
+	if c.x87ExactSlot[0] == "" {
+		fmt.Fprintf(c.b, "  call void asm sideeffect \"fldl $1; fistpll $0\", \"=*m,*m,~{dirflag},~{fpsr},~{flags}\"(ptr elementtype(i64) %s, ptr elementtype(double) %s)\n", c.x87IntegerSlot, c.x87Slot[0])
+	} else {
+		fmt.Fprintf(c.b, "  call void asm sideeffect \"cmpb $$0, $3; je 1f; fildll $2; jmp 2f; 1: fldl $1; 2: fistpll $0\", \"=*m,*m,*m,*m,~{dirflag},~{fpsr},~{flags}\"(ptr elementtype(i64) %s, ptr elementtype(double) %s, ptr elementtype(i64) %s, ptr elementtype(i1) %s)\n",
+			c.x87IntegerSlot, c.x87Slot[0], c.x87IntegerValueSlot[0], c.x87ExactSlot[0])
+	}
 	value := c.newTmp()
 	fmt.Fprintf(c.b, "  %%%s = load i64, ptr %s\n", value, c.x87IntegerSlot)
 	return "%" + value
