@@ -1,11 +1,17 @@
 # Current work: PR 40 checkpoint
 
-Checkpoint: 2026-10-15 23:25 UTC. The notes below this section are historical
+Checkpoint: 2026-10-15 23:41 UTC. The notes below this section are historical
 and retain their original source scope; they are not the current task queue.
 
 ## Active queue
 
-The latest allowed-fork [run38760793656](https://github.com/cpunion/plan9asm/actions/runs/38760793656)
+The repaired candidate `354ea4ef` has been pushed normally to the allowed fork.
+[Run38824961157](https://github.com/cpunion/plan9asm/actions/runs/38824961157)
+is queued; no new native or complete-module CI success is claimed yet. It must
+finish naturally before another repair push. Its non-GitHub tree is exactly
+the qualified main source `d0388d27`; fork-only diagnostic policy is separate.
+
+The last completed allowed-fork [run38760793656](https://github.com/cpunion/plan9asm/actions/runs/38760793656)
 at `191fbeaf` ended naturally: 78 jobs, 66 successful and 12 failed. Ten
 execution jobs contain 13 distinct failing test roots; the two other failures
 are strict complete-module aggregates refusing those failed partitions.
@@ -53,16 +59,22 @@ All eight actual SDKs independently compare complete AMD64 reports before and
 after the repair. Only eight FCMOV forms and FRNDINT change from supported
 isolated probes to context-required; every other form, denominator and encoder
 rule remains unchanged. `368991ae` updates exactly three AMD64 baseline fields
-per SDK. The new isolated/initialized/missing-input regression is undergoing
-its old-source RED and current-source verification; official gate GREEN is
-still pending at this checkpoint.
+per SDK. The independent regression genuinely reproduces 60 false acceptances
+on the old complete source; its 30 initialized positives still pass there.
+At `d0388d27`, all 120 children pass separately on actual Go27, Go20 and race,
+without skips and with complete before/after seals. Both actual SDKs then pass
+the five-architecture official gate and all three selected scanner roots.
+The existing Go20 malformed maskless EVEX.Z corpus row remains unsupported;
+this is not a new regression or a full execution-coverage certificate.
 
-Allowed-fork staging `956d5fa4` retains the original 41 SDK priorities and
+Allowed-fork candidate `354ea4ef` retains the original 41 SDK priorities and
 native65 job, and adds a separate native x87 owner. Its four required roots
 include original-Go/LLVM amd64 and 386 I64 execution, conditional moves and
 hardware status checks, with all 26 backend/architecture children mandatory.
-All 102 Node policies and three workflow lints pass. It has not been pushed;
-the old completed failed run above is still the latest online result.
+All 102 Node policies and three workflow lints pass freshly at that exact
+candidate. The new run above owns actual execution; the old completed failed
+run remains failed. PR40 is still draft at its older head, pending fork CI
+and the separate strict benchmark/standard-library work.
 
 The FS/GS first-GREEN set at `951a68a0` passes 17 unique roots and 30,902
 children, retaining all 212 AMD64 or 114 386 TEXTs per target. Its explicit
