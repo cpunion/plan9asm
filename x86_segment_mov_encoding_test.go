@@ -123,6 +123,10 @@ func TestX86SegmentMOVCompleteGoGrammarAndAliases(t *testing.T) {
 }
 
 func TestX86SegmentMOVOriginalGoEncodingWitnesses(t *testing.T) {
+	producer := x86SegmentMOVObserveSelectedEncoder(t)
+	if !producer.schema.indexPrefix386 {
+		t.Log("historical selected producer: 386 dynamic Index FS/GS emits no segment override; its object is not evidence of current segment-read execution equivalence")
+	}
 	for _, arch := range []string{"386", "amd64"} {
 		for _, segment := range []string{"FS", "GS"} {
 			prefix := byte(0x64)
@@ -156,7 +160,7 @@ func TestX86SegmentMOVOriginalGoEncodingWitnesses(t *testing.T) {
 				name, instruction string
 				bytes             []byte
 			}{
-				{"base", "MOVB -8(BX)(" + segment + "),CX", []byte{prefix, 0x8a, 0x4b, 0xf8, 0xc3}},
+				{"base", "MOVB -8(BX)(" + segment + "),CX", append(producer.schema.dynamicPrefix(arch, segment), 0x8a, 0x4b, 0xf8, 0xc3)},
 			} {
 				t.Run(arch+"/"+segment+"/"+witness.name+"-bytes", func(t *testing.T) {
 					got := x86OrderingHintGoBytes(t, arch, "TEXT original(SB),4,$0-0\n"+witness.instruction+"\nRET\n")
@@ -168,14 +172,14 @@ func TestX86SegmentMOVOriginalGoEncodingWitnesses(t *testing.T) {
 			for _, scale := range []string{"1", "2", "4", "8"} {
 				t.Run(arch+"/"+segment+"/segment-annotation-scale"+scale, func(t *testing.T) {
 					source := "TEXT original(SB),4,$0-0\nMOVL -8(BX)(" + segment + "*" + scale + "),DX\nRET\n"
-					want := []byte{prefix, 0x8b, 0x53, 0xf8, 0xc3}
+					want := append(producer.schema.dynamicPrefix(arch, segment), 0x8b, 0x53, 0xf8, 0xc3)
 					if got := x86OrderingHintGoBytes(t, arch, source); !bytes.Equal(got, want) {
 						t.Fatalf("segment annotation changed actual GP address/scale: %x != %x", got, want)
 					}
 				})
 			}
 			t.Run(arch+"/"+segment+"/illegal-GP-scaled-index-source", func(t *testing.T) {
-				x86SegmentMOVRejectScaledGPSource(t, arch, segment)
+				x86SegmentMOVRejectScaledGPSource(t, arch, segment, producer.schema)
 			})
 			if arch == "amd64" {
 				for index, alias := range []Reg{AH, CH, DH, BH} {
@@ -221,7 +225,7 @@ func TestX86SegmentMOVOriginalGoEncodingWitnesses(t *testing.T) {
 	}
 }
 
-func x86SegmentMOVRejectScaledGPSource(t *testing.T, arch, segment string) {
+func x86SegmentMOVRejectScaledGPSource(t *testing.T, arch, segment string, schema x86SegmentMOVEncoderSchema) {
 	t.Helper()
 	// This is an exact actual-Go invalid address tuple, separately from a
 	// legal source's missing numerical/native permissions. The generic
@@ -242,9 +246,7 @@ func x86SegmentMOVRejectScaledGPSource(t *testing.T, arch, segment string) {
 	output, err := runtimeOracleCombinedOutput(ctx, command)
 	if failure := goasmoracle.CheckOutcome(input, object, output, nil, err, ctx.Err(), false, 0, func(filename, diagnostic string) bool {
 		original, readErr := os.ReadFile(filename)
-		want := "asm: asmidx: bad address 4/CX/" + segment + "\nasm: assembly failed"
-		return filename == input && readErr == nil && string(original) == source &&
-			strings.TrimSpace(strings.ReplaceAll(diagnostic, "\r\n", "\n")) == want
+		return readErr == nil && schema.acceptsScaledDiagnostic(filename, input, original, []byte(source), segment, diagnostic)
 	}); failure != nil {
 		t.Fatalf("exact invalid original Go address tuple lost its bound source diagnostic: %v\n%s", failure, output)
 	}

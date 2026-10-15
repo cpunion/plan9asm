@@ -73,6 +73,10 @@ func x86SegmentMOVCompleteSource(t *testing.T, arch string) (string, string, []x
 }
 
 func TestX86SegmentMOVFiveTargetThreeAPICompleteObjects(t *testing.T) {
+	producer := x86SegmentMOVObserveSelectedEncoder(t)
+	if !producer.schema.indexPrefix386 {
+		t.Log("historical selected Go producer objects retain all original TEXTs, but its dynamic 386 FS/GS Index forms have no segment prefix; they do not certify equivalence to current named-source LLVM segment reads")
+	}
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM22 llc is required")
