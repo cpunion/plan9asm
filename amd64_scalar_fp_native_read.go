@@ -52,6 +52,12 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 	if strictErr == nil {
 		return nil
 	}
+	if x86TrapOnlyLogicalFPSourceRole(fn, sig, arch) {
+		if err := c.checkTrapOnlyLogicalFPResultInitialization(); err == nil {
+			c.fpScalarTrapOnly = true
+			return nil
+		}
+	}
 	// Native/raw entry contracts are established before ordinary lowering.
 	// Do not let this conditional byte rule create or supplement one.
 	if len(fn.X86RawText) != 0 || fn.x86SourceStack != nil || fn.x86FixedLocal != nil {
@@ -115,6 +121,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 			return accepted
 		}
 		if accepted, known := c.scalarPSLogicalFPWriteTransfer(ins, state, owned, arch); known {
+			return accepted
+		}
+		if accepted, known := c.scalarBitTestFPShadowTransfer(ins, state, owned, arch); known {
 			return accepted
 		}
 		if accepted, recognized := x86ResultScalarLaneStepWithRead(ins, state, owned, resultOffset, arch, true); recognized {
