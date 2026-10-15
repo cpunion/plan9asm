@@ -70,6 +70,15 @@ func x86ResultCallerAddressesAfter(ins Instr, before [16]bool, entryFP map[int64
 		return [16]bool{}
 	}
 	ins = x86GoMOVQSourceInstruction(ins) // Original source/certificates stay unchanged.
+	if form, known, err := x86ScalarNativeLoadProperties(ins.Op, ins, arch); known && err == nil {
+		// The paired typed emitter uses the effective REX byte register,
+		// which may be SI/DI rather than the textual DH/BH. This is only
+		// its write footprint, not permission to read the native source.
+		if destination, _, valid := x86ResultGP(form.destination, form.bytes, arch); valid {
+			before[destination] = false
+		}
+		return before
+	}
 	if (ins.Op == "REP" || ins.Op == "REPN") && len(ins.Args) == 0 {
 		return before // Only an independently accepted source-bound prefix reaches this post-consumer.
 	}
