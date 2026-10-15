@@ -36,6 +36,18 @@ func x86PointerResultTransportSource(arch string) (string, string) {
 	return source.String(), declarations.String()
 }
 
+func x86PointerResultTransportAPI(t *testing.T, source, declarations, arch, triple, api string) (string, error) {
+	t.Helper()
+	pkg := mustGoPackage(t, "bitview", "package bitview\n"+declarations)
+	// A file-local TEXT does not imply a signature. This exact fixture owns
+	// the complete zero-argument RET body explicitly; do not infer a helper
+	// ABI from another function's Go declaration or remove the original TEXT.
+	manual := func(name string) (FuncSig, bool) {
+		return FuncSig{Name: name, Ret: Void}, name == "StaticText"
+	}
+	return x86ScalarFPBitViewPackageAPIWithManual(t, source, pkg, arch, triple, api, manual)
+}
+
 func TestX86OpaquePointerResultAddressFamilyCompleteObjects(t *testing.T) {
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
@@ -50,7 +62,7 @@ func TestX86OpaquePointerResultAddressFamilyCompleteObjects(t *testing.T) {
 			dataRelocationGoObject(t, source, target.goos, target.goarch, true)
 			for _, api := range []string{"text", "module", "Go"} {
 				t.Run(api, func(t *testing.T) {
-					ir, err := x86ScalarFPBitViewAPI(t, source, declarations, target.goarch, target.triple, api)
+					ir, err := x86PointerResultTransportAPI(t, source, declarations, target.goarch, target.triple, api)
 					if err != nil || ir == "" {
 						t.Fatal("complete code/data address lost its existing opaque pointer transport", err)
 					}
@@ -92,7 +104,7 @@ func TestX86OpaquePointerAddressCannotBorrowNumericalOrPartialStorage(t *testing
 						"TEXT StaticText<>(SB),$0\nRET\n" +
 						fmt.Sprintf("TEXT ·Value(SB),4,$0-%d\n%s\nRET\n", word, row.body)
 					goAssemblerOracleOutput(t, arch, source, "", true)
-					ir, err := x86ScalarFPBitViewAPI(t, source, row.declaration, arch, triple, api)
+					ir, err := x86PointerResultTransportAPI(t, source, row.declaration, arch, triple, api)
 					if !errors.Is(err, ErrProbeNeedsContext) || ir != "" {
 						t.Fatal("opaque pointer transport acquired numerical, partial or native permissions", err)
 					}
