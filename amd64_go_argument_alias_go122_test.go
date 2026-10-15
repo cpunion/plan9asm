@@ -4,6 +4,7 @@ package plan9asm
 
 import (
 	"errors"
+	"fmt"
 	"go/token"
 	"go/types"
 	"reflect"
@@ -73,5 +74,46 @@ func TestAMD64GoArgumentPlanAliasesRejectUnresolvedAndUnboundedRHS(t *testing.T)
 				t.Fatalf("unsupported alias RHS acquired a partial plan: %#v, %v", plan, err)
 			}
 		})
+	}
+}
+
+func TestAMD64GoArgumentIssuerAliasesRetainResultBoundary(t *testing.T) {
+	for _, count := range []int{1, 2, 32} {
+		for _, scalar := range []types.Type{types.Typ[types.Bool], types.Typ[types.Uint8], types.Typ[types.Uint16],
+			types.Typ[types.Uint32], types.Typ[types.Uint64]} {
+			t.Run(fmt.Sprintf("%s/depth-%d", scalar, count), func(t *testing.T) {
+				input := amd64ArgumentEntryModel(t, "a float64")
+				result := amd64ArgumentAlias(scalar, count)
+				pkg := types.NewPackage(input.Package.Path(), input.Package.Name())
+				signature := types.NewSignatureType(nil, nil, nil,
+					input.Declaration.Type().(*types.Signature).Params(),
+					types.NewTuple(types.NewVar(token.NoPos, nil, "r", result)), false)
+				input.Declaration = types.NewFunc(token.NoPos, pkg, "Entry", signature)
+				pkg.Scope().Insert(input.Declaration)
+				input.Package = pkg
+				var err error
+				input.Signature, err = DeriveGoFuncABI0Signature(input.Native, input.Declaration, "amd64", types.SizesFor("gc", "amd64"))
+				if err != nil {
+					t.Fatal(err)
+				}
+				if _, err := numericalSDKDeclarationLanguage(input.Declaration, types.SizesFor("gc", "amd64"), true); err != nil {
+					t.Fatal("concrete scalar result alias lost its language identity", err)
+				}
+				if _, err := amd64GoArgumentEntryPlan(input); err != nil {
+					t.Fatal("concrete scalar result alias lost its independent transport", err)
+				}
+			})
+		}
+	}
+	for _, count := range []int{1, 2} {
+		calls := 0
+		result := amd64ArgumentAlias(&amd64ArgumentCallbackType{calls: &calls}, count)
+		signature := types.NewSignatureType(nil, nil, nil, nil,
+			types.NewTuple(types.NewVar(token.NoPos, nil, "r", result)), false)
+		function := types.NewFunc(token.NoPos, nil, "Entry", signature)
+		calls = 0 // Only issuer sampling, not fixture construction, is observed.
+		if _, err := numericalSDKDeclarationLanguage(function, types.SizesFor("gc", "amd64"), true); !errors.Is(err, ErrProbeNeedsContext) || calls != 0 {
+			t.Fatalf("alias RHS reached caller type callbacks at depth %d: err=%v, calls=%d", count, err, calls)
+		}
 	}
 }

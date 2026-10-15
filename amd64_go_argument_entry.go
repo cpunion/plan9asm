@@ -42,6 +42,15 @@ func amd64GoArgumentEntryPlan(input amd64GoArgumentEntryInput) (*amd64GoArgument
 	if err != nil || plan.requireRegisters() != nil {
 		return fail() // Neither actual stack arguments nor reserved spill homes.
 	}
+	if declaration.Results().Len() != 1 {
+		return fail()
+	}
+	resultBuilder := amd64GoArgumentBuilder{sizes: types.SizesFor("gc", "amd64")}
+	result, err := resultBuilder.shape(declaration.Results().At(0).Type(), 0)
+	if err != nil || result.stack || len(result.leaves) != 1 || len(result.leaves[0].Path) != 0 ||
+		(result.leaves[0].Kind != amd64GoArgumentInteger && result.leaves[0].Kind != amd64GoArgumentBoolean) {
+		return fail() // LLVM flattening is not a scalar Go result declaration.
+	}
 	expected, err := DeriveGoFuncABI0Signature(input.Native, fn, "amd64", types.SizesFor("gc", "amd64"))
 	if err != nil || !reflect.DeepEqual(numericalSignatureShape(input.Signature), expected) || len(expected.Frame.Results) != 1 {
 		return fail()
