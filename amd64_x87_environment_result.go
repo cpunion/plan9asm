@@ -14,7 +14,7 @@ func x86X87EnvironmentReadProperties(ins Instr, arch string) (Operand, bool, err
 		return Operand{}, false, nil
 	}
 	if arch != "386" && arch != "amd64" || dotted || len(ins.Args) != 1 || !isX87MemoryOperand(ins.Args[0]) {
-		return Operand{}, true, fmt.Errorf("%s FLDENV requires its unsuffixed single-memory source: %q", arch, ins.Raw)
+		return Operand{}, true, fmt.Errorf("%s FLDENV expects memory source in its unsuffixed Go row: %q", arch, ins.Raw)
 	}
 	if err := x86NamedMultiplyMemoryError(ins.Args[0], arch); err != nil {
 		return Operand{}, true, err

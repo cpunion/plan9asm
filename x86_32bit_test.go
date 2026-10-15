@@ -934,18 +934,36 @@ TEXT frameAddress(SB),NOSPLIT,$0-12
 	}
 	var ir string
 	boundedCounterpart := x86X87InstructionFamiliesBoundedCounterpart(t, src)
+	// The old symbolAddress had an external declaration and a bare AX result.
+	// Its separate positive counterpart explicitly supplies same-module DATA
+	// and a complete ABI0 result slot. Do not infer either from a MOV opcode.
+	const oldAddress = "TEXT symbolAddress(SB),NOSPLIT,$0-0\n\tMOVL $someGlobal(SB), AX\n\tRET"
+	const boundedAddress = "TEXT symbolAddress(SB),NOSPLIT,$0-4\n\tMOVL $someGlobal(SB), AX\n\tMOVL AX, ret+0(FP)\n\tRET"
+	if strings.Count(boundedCounterpart, oldAddress) != 1 {
+		t.Fatal("original address counterpart lost its complete source anchor")
+	}
+	boundedCounterpart = "DATA someGlobal(SB)/4,$0\nGLOBL someGlobal(SB),8,$4\n" +
+		strings.Replace(boundedCounterpart, oldAddress, boundedAddress, 1)
+	boundedSigs := make(map[string]FuncSig, len(sigs))
+	for name, sig := range sigs {
+		boundedSigs[name] = sig
+	}
+	addressSig := boundedSigs["symbolAddress"]
+	addressSig.Frame.Results = []FrameSlot{{Offset: 0, Type: I32, Index: 0, Field: -1}}
+	boundedSigs["symbolAddress"] = addressSig
 	t.Run("partial-selection-bounded-counterpart-other-18-TEXTs", func(t *testing.T) {
 		// KeepFunc belongs to the Go-module API. The empty package grants no
 		// Go declaration; every selected signature is exactly the original
-		// explicit manual contract, including custom register assignments.
-		// Only x87math's scratch header/name differs from the original source;
-		// arith and every instruction in the other selected TEXTs stay intact.
+		// explicit manual contract, including custom register assignments,
+		// except for the separately documented symbolAddress result slot.
+		// x87math has bounded scratch; symbolAddress has local DATA/ABI0
+		// output. arith and the other selected TEXTs stay intact.
 		pkg := mustGoPackage(t, "families", "package families")
 		result, err := TranslateGoModule(pkg, []byte(boundedCounterpart), GoModuleOptions{
 			GOOS: "linux", GOARCH: "386", TargetTriple: options.TargetTriple,
 			ResolveSym: options.ResolveSym,
 			KeepFunc:   func(text, resolved string) bool { return text != "arith" && resolved != "arith" },
-			ManualSig:  func(resolved string) (FuncSig, bool) { sig, found := sigs[resolved]; return sig, found },
+			ManualSig:  func(resolved string) (FuncSig, bool) { sig, found := boundedSigs[resolved]; return sig, found },
 		})
 		if err != nil {
 			t.Fatal(err)
@@ -1373,10 +1391,11 @@ TEXT x87environment(SB),NOSPLIT,$0-0
 		Sigs:         map[string]FuncSig{"x87environment": {Name: "x87environment", Ret: Void}},
 		X87Mode:      X87Software,
 	})
-	if err != nil {
-		t.Fatalf("Translate(complete x87 environment/control family) error = %v", err)
+	if !errors.Is(err, ErrProbeNeedsContext) || ir != "" || !strings.Contains(err.Error(), "FLDCW 0(SI)") {
+		t.Fatalf("complete no-argument ENV source acquired native SI/DI storage: output=%t error=%v", ir != "", err)
 	}
-	compile386IR(t, ir, "x87_environment_family")
+	// Typed syntax/object witnesses are independent of the original source's
+	// missing incoming pointers, restore image and native write contracts.
 }
 
 func TestTranslate386X87EnvironmentAndControlFamilyRejectsNonGoForms(t *testing.T) {
