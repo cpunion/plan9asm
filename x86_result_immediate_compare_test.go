@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 	"regexp"
@@ -200,4 +201,29 @@ func x86ImmediateCompareVolatileReadBytes(ir string) int {
 		bytes += bits / 8
 	}
 	return bytes
+}
+
+func TestX86ImmediatePackedCompareCannotBypassWholeSourceProof(t *testing.T) {
+	for _, target := range x86RawReturnTargets {
+		if target.arch != "amd64" {
+			continue
+		}
+		for _, row := range []struct {
+			name, body string
+		}{
+			{"undefined-vector", "PXOR X2,X2\nVPCMPUQ $4,Z1,Z0,K2\nMOVSD X2,ret+0(FP)\nRET\n"},
+			{"undefined-mask", "VPXORD Z0,Z0,Z0\nPXOR X2,X2\nVPCMPUQ $4,Z0,Z0,K1,K2\nMOVSD X2,ret+0(FP)\nRET\n"},
+			{"missing-result", "VPXORD Z0,Z0,Z0\nVPCMPUQ $4,Z0,Z0,K2\nRET\n"},
+		} {
+			source := "TEXT ·Value(SB),4,$0-8\n" + row.body
+			for _, api := range []string{"text", "module", "Go"} {
+				t.Run(target.triple+"/"+row.name+"/"+api, func(t *testing.T) {
+					ir, err := x86ScalarFPBitViewAPI(t, source, "func Value() float64", target.arch, target.triple, api)
+					if !errors.Is(err, ErrProbeNeedsContext) || ir != "" {
+						t.Fatalf("floating storage bypassed the numerical family obligation: output=%t, error=%v", ir != "", err)
+					}
+				})
+			}
+		}
+	}
 }
