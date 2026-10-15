@@ -76,6 +76,10 @@ remove PATH from the verifier to accept unrelated execution environments.
 The readonly DATA consumer matrix has three complete target roots, placed in
 different Windows scheduling owners. Each retains all119 operations, all three
 APIs and O0/O2 objects; root splitting is not a reduced test denominator.
+The two current-Go bytealg CLI object owners likewise keep complete Count and
+IndexByte files in separate scheduling owners, each with its own original
+five-minute context. A previous root shared that context across both files;
+the second file's cancellation was a real failure, not source rejection.
 
 ```sh
 go run ./cmd/plan9asmtest -module -out _out/module-suite \

@@ -209,7 +209,16 @@ func compileX86SDKOriginalCRC32NumericalDataJoin(t *testing.T, profile string) {
 	}
 }
 
-func TestCompileOneX86SDKBytealgExistingObjects(t *testing.T) {
+func TestCompileOneX86SDKBytealgCountExistingObjects(t *testing.T) {
+	compileX86SDKBytealgExistingObject(t, "count_amd64.s")
+}
+
+func TestCompileOneX86SDKBytealgIndexByteExistingObjects(t *testing.T) {
+	compileX86SDKBytealgExistingObject(t, "indexbyte_amd64.s")
+}
+
+func compileX86SDKBytealgExistingObject(t *testing.T, name string) {
+	t.Helper()
 	setX86SDKNumericalCLIProfile(t, "effective-defaults")
 	ctx := arm64PrivateCLIContext(t)
 	dir := filepath.Join(runtime.GOROOT(), "src", "internal", "bytealg")
@@ -229,18 +238,16 @@ func TestCompileOneX86SDKBytealgExistingObjects(t *testing.T) {
 	}
 	config.Context = ctx
 	config.x86CallerSelections = captureX86CallerSelections(actual, "linux/amd64", nil)
-	for _, name := range []string{"count_amd64.s", "indexbyte_amd64.s"} {
-		t.Run(name, func(t *testing.T) {
-			// These existing private-continuation programs already translate
-			// without a numerical source/initializer owner.
-			file := filepath.Join(t.TempDir(), "original.ll")
-			if err := compileOne(actual[0], plan9asm.ArchAMD64, "linux", "amd64", "x86_64-unknown-linux-gnu",
-				asmTask{PkgPath: actual[0].PkgPath, AsmFile: filepath.Join(dir, name), OutLL: file}, false, config); err != nil {
-				t.Fatalf("unchanged ordinary SDK bytealg regressed: %v", err)
-			}
-			if object, err := os.Stat(strings.TrimSuffix(file, ".ll") + ".o"); err != nil || object.Size() == 0 {
-				t.Fatalf("ordinary SDK bytealg object absent: %v", err)
-			}
-		})
-	}
+	t.Run(name, func(t *testing.T) {
+		// Retain each whole original private-continuation program and its
+		// ordinary compileOne path, including the guarded SDK retry.
+		file := filepath.Join(t.TempDir(), "original.ll")
+		if err := compileOne(actual[0], plan9asm.ArchAMD64, "linux", "amd64", "x86_64-unknown-linux-gnu",
+			asmTask{PkgPath: actual[0].PkgPath, AsmFile: filepath.Join(dir, name), OutLL: file}, false, config); err != nil {
+			t.Fatalf("unchanged ordinary SDK bytealg regressed: %v", err)
+		}
+		if object, err := os.Stat(strings.TrimSuffix(file, ".ll") + ".o"); err != nil || object.Size() == 0 {
+			t.Fatalf("ordinary SDK bytealg object absent: %v", err)
+		}
+	})
 }
