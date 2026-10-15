@@ -134,6 +134,13 @@ function auditNativePriority(directory, io = fs) {
   for (const arch of ['amd64', '386']) {
     requiredChildren.push(byteSwap + '/' + arch);
   }
+  const directTail386 = 'TestCrossLinuxRuntimeMatrixX86DirectTail386OriginalGoAndLLVM';
+  for (const carrier of ['SI', 'BP', 'SI-stack', 'BP-stack']) {
+    requiredChildren.push(directTail386 + '/' + carrier);
+  }
+  for (const dispatch of ['BP-memory', 'BP-register', 'BP-target']) {
+    requiredChildren.push(continuation + '/386/' + dispatch);
+  }
   for (const child of requiredChildren) {
     assert.ok(children.has(child) && childTerminals.has(child), 'missing required child: ' + child);
   }

@@ -36,11 +36,16 @@ const sourceStack = inventories['source-stack'][0];
 const continuation = inventories.continuation[0];
 const packedStringFault = inventories['packed-string-fault'][0];
 const byteSwap = inventories['byte-swap'][0];
+const directTail386 = inventories['direct-tail'][1];
+const mode32Children = [
+  ...['SI', 'BP', 'SI-stack', 'BP-stack'].map(carrier => directTail386 + '/' + carrier),
+  ...['BP-memory', 'BP-register', 'BP-target'].map(dispatch => continuation + '/386/' + dispatch),
+];
 const requiredChildren = [sourceStack + '/amd64', sourceStack + '/386',
   ...['amd64', '386'].flatMap(arch => ['memory', 'register'].map(dispatch =>
     continuation + '/' + arch + '/' + dispatch)),
   packedStringFault + '/-O0', packedStringFault + '/-O2',
-  byteSwap + '/amd64', byteSwap + '/386'];
+  byteSwap + '/amd64', byteSwap + '/386', ...mode32Children];
 
 function fixture() {
   const files = new Map();
@@ -94,15 +99,15 @@ function audit(files) {
   });
 }
 
-test('synthetic64 requires sixteen inventories,26 owners and ten source/ISA/fault children', () => {
+test('synthetic64 requires sixteen inventories,26 owners and seventeen source/ISA/fault children', () => {
   const result = audit(fixture());
   assert.equal(result.protocol, 'go_test_json_native64');
   assert.equal(result.roots, 64);
   assert.equal(result.inventories, 16);
   assert.equal(result.mandatory.length, 26);
-  assert.equal(result.requiredChildren.length, 10);
-  // Only this synthetic fixture has eleven children; real execution is counted.
-  assert.equal(result.children, 11);
+  assert.equal(result.requiredChildren.length, 17);
+  // Only this synthetic fixture has eighteen children; real execution is counted.
+  assert.equal(result.children, 18);
 });
 
 test('fresh full discovery rejects same-count nonmandatory root substitution', () => {
@@ -143,6 +148,16 @@ test('both byte-swap ISAs reject same-count child substitution', () => {
   }
 });
 
+test('all seven ordinary386 carrier, private-stack and code-target children reject substitution', () => {
+  assert.equal(mode32Children.length, 7);
+  for (const child of mode32Children) {
+    const files = fixture();
+    replaceEvents(files, events(files).map(event => event.Test === child ?
+      { ...event, Test: child + '-unrelated' } : event));
+    assert.throws(() => audit(files), /required child/);
+  }
+});
+
 test('root or child SKIP and FAIL are never PASS', () => {
   for (const name of [...Object.values(inventories).flat(), ...requiredChildren]) {
     for (const action of ['skip', 'fail']) {
@@ -155,9 +170,9 @@ test('root or child SKIP and FAIL are never PASS', () => {
   }
 });
 
-test('fault and byte-swap children cannot finish after their successful root terminal', () => {
+test('required children cannot finish after their successful root terminal', () => {
   for (const child of requiredChildren.filter(name =>
-    name.startsWith(packedStringFault + '/') || name.startsWith(byteSwap + '/'))) {
+    name.startsWith(packedStringFault + '/') || name.startsWith(byteSwap + '/') || mode32Children.includes(name))) {
     const files = fixture();
     const rows = events(files);
     const index = rows.findIndex(event => event.Action === 'pass' && event.Test === child);
@@ -170,7 +185,7 @@ test('fault and byte-swap children cannot finish after their successful root ter
 });
 
 test('duplicate or missing root and child events cannot close the protocol', () => {
-  for (const name of [sourceStack, requiredChildren[0], byteSwap, byteSwap + '/amd64', byteSwap + '/386']) {
+  for (const name of [sourceStack, requiredChildren[0], byteSwap, byteSwap + '/amd64', byteSwap + '/386', ...mode32Children]) {
     for (const action of ['run', 'pass']) {
       const duplicate = fixture();
       const rows = events(duplicate);
@@ -192,6 +207,18 @@ test('tool-output text cannot replace missing machine events', () => {
     Output: JSON.stringify({ Action: 'pass', Test: requiredChildren[1] }) + '\n' });
   replaceEvents(files, rows);
   assert.throws(() => audit(files), /child terminals/);
+});
+
+test('ordinary386 carrier execution cannot be supplied by printed PASS payloads', () => {
+  for (const child of mode32Children) {
+    const files = fixture();
+    const rows = events(files).filter(event => event.Test !== child);
+    rows.splice(rows.length - 1, 0, { Action: 'output', Package: 'github.com/xgo-dev/plan9asm',
+      Output: JSON.stringify({ Action: 'run', Test: child }) + '\n' +
+        JSON.stringify({ Action: 'pass', Test: child }) + '\n' });
+    replaceEvents(files, rows);
+    assert.throws(() => audit(files), /required child/);
+  }
 });
 
 test('missing package pass, failed package and malformed JSON remain failures', () => {
