@@ -199,7 +199,7 @@ func TestX86ResultNumericalLEACompletePhysicalRegisterBank(t *testing.T) {
 					goAssemblerOracleOutput(t, arch, "TEXT f(SB),4,$0-0\n"+body+"\nRET\n", "", true)
 					ins := x86PureGPUnknownInstruction(t, body)
 					_, known, err := x86TypedInstructionByteEffect(ins.Op, ins, arch)
-					ordinary := register != "SP" && register != "BP"
+					ordinary := register != "SP" && (register != "BP" || arch == "386")
 					if ordinary && (!known || err != nil) || !ordinary && (known || err != nil) {
 						t.Fatal("registered bank vs physical stack-role boundary", arch, body, known, err)
 					}

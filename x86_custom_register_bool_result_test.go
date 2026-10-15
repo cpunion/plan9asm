@@ -181,27 +181,36 @@ func TestX86Mode32CustomRegisterBoolRoleAndByteViews(t *testing.T) {
 	if err := checkX86CustomRegisterBoolResultInitialization(fn, sig, "386", transfer); err != nil {
 		t.Fatal(err)
 	}
+	for _, api := range []string{"text", "module", "Go"} {
+		t.Run("ordinary-BP-assignment/"+api, func(t *testing.T) {
+			ordinary := x86CustomRegisterBoolSignature()
+			ordinary.ArgRegs[4] = BP
+			if _, err := x86CustomRegisterBoolAPI(t, "CMPL AX,BP\nSETEQ AX", ordinary, api); err != nil {
+				t.Fatal("explicit mode32 BP bytes were mistaken for a native frame", err)
+			}
+		})
+	}
 	for name, mutate := range map[string]func(*Func, *FuncSig){
-		"missing-assignment": func(_ *Func, sig *FuncSig) { sig.ArgRegs = sig.ArgRegs[:4] },
-		"extra-assignment":   func(_ *Func, sig *FuncSig) { sig.ArgRegs = append(sig.ArgRegs, DI) },
-		"duplicate-register": func(_ *Func, sig *FuncSig) { sig.ArgRegs[4] = AX },
-		"byte-assignment":    func(_ *Func, sig *FuncSig) { sig.ArgRegs[4] = CL },
-		"stack-register":     func(_ *Func, sig *FuncSig) { sig.ArgRegs[4] = SP },
-		"frame-register":     func(_ *Func, sig *FuncSig) { sig.ArgRegs[4] = BP },
-		"out-of-mode":        func(_ *Func, sig *FuncSig) { sig.ArgRegs[4] = "R8" },
-		"wide-input":         func(_ *Func, sig *FuncSig) { sig.Args[4] = I64 },
-		"float-input":        func(_ *Func, sig *FuncSig) { sig.Args[4] = LLVMType("float") },
-		"aggregate-input":    func(_ *Func, sig *FuncSig) { sig.Args[4] = LLVMType("{ i32, i32 }") },
-		"FP-parameter":       func(_ *Func, sig *FuncSig) { sig.Frame.Params = []FrameSlot{{Type: I32, Field: -1}} },
-		"FP-result":          func(_ *Func, sig *FuncSig) { sig.Frame.Results = []FrameSlot{{Type: I1, Field: -1}} },
-		"frame":              func(fn *Func, _ *FuncSig) { fn.FrameSize = 4 },
-		"argsize":            func(fn *Func, _ *FuncSig) { fn.ArgSize = 1 },
-		"internal-selector":  func(fn *Func, _ *FuncSig) { fn.Sym += "<ABIInternal>" },
-		"raw-source":         func(fn *Func, _ *FuncSig) { fn.Instrs[1].x86Encoded = true },
-		"address-override":   func(fn *Func, _ *FuncSig) { fn.Instrs[1].x86AddressBits = 16 },
-		"segment":            func(fn *Func, _ *FuncSig) { fn.Instrs[1].x86SegmentPrefix = 0x64 },
-		"wasm":               func(_ *Func, sig *FuncSig) { sig.WASMNative = true },
-		"borrowed-tail":      func(_ *Func, sig *FuncSig) { sig.x86BorrowedBoolTail = true },
+		"missing-assignment":   func(_ *Func, sig *FuncSig) { sig.ArgRegs = sig.ArgRegs[:4] },
+		"extra-assignment":     func(_ *Func, sig *FuncSig) { sig.ArgRegs = append(sig.ArgRegs, DI) },
+		"duplicate-register":   func(_ *Func, sig *FuncSig) { sig.ArgRegs[4] = AX },
+		"byte-assignment":      func(_ *Func, sig *FuncSig) { sig.ArgRegs[4] = CL },
+		"stack-register":       func(_ *Func, sig *FuncSig) { sig.ArgRegs[4] = SP },
+		"mode-invalid-byte-BP": func(_ *Func, sig *FuncSig) { sig.ArgRegs[4] = BPB },
+		"out-of-mode":          func(_ *Func, sig *FuncSig) { sig.ArgRegs[4] = "R8" },
+		"wide-input":           func(_ *Func, sig *FuncSig) { sig.Args[4] = I64 },
+		"float-input":          func(_ *Func, sig *FuncSig) { sig.Args[4] = LLVMType("float") },
+		"aggregate-input":      func(_ *Func, sig *FuncSig) { sig.Args[4] = LLVMType("{ i32, i32 }") },
+		"FP-parameter":         func(_ *Func, sig *FuncSig) { sig.Frame.Params = []FrameSlot{{Type: I32, Field: -1}} },
+		"FP-result":            func(_ *Func, sig *FuncSig) { sig.Frame.Results = []FrameSlot{{Type: I1, Field: -1}} },
+		"frame":                func(fn *Func, _ *FuncSig) { fn.FrameSize = 4 },
+		"argsize":              func(fn *Func, _ *FuncSig) { fn.ArgSize = 1 },
+		"internal-selector":    func(fn *Func, _ *FuncSig) { fn.Sym += "<ABIInternal>" },
+		"raw-source":           func(fn *Func, _ *FuncSig) { fn.Instrs[1].x86Encoded = true },
+		"address-override":     func(fn *Func, _ *FuncSig) { fn.Instrs[1].x86AddressBits = 16 },
+		"segment":              func(fn *Func, _ *FuncSig) { fn.Instrs[1].x86SegmentPrefix = 0x64 },
+		"wasm":                 func(_ *Func, sig *FuncSig) { sig.WASMNative = true },
+		"borrowed-tail":        func(_ *Func, sig *FuncSig) { sig.x86BorrowedBoolTail = true },
 	} {
 		t.Run(name, func(t *testing.T) {
 			changed, signature := x86DirectTailSnapshot(file).Funcs[0], sig

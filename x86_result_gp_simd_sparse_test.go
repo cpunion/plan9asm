@@ -228,7 +228,18 @@ func TestX86ResultGPSIMDSparseRejectsUnboundSourceRoles(t *testing.T) {
 				}
 				for _, consumer := range x86ResultGPSIMDConsumers {
 					state := initial.clone()
-					if consumer.step(ins, &state, owned, 4, arch) || !reflect.DeepEqual(state, initial) {
+					accepted := consumer.step(ins, &state, owned, 4, arch)
+					if arch == "386" && test.row == "MOVL BP,X1" {
+						// The ordinary register exists, but its low input bytes
+						// are unknown. Only X's architectural high zeros follow.
+						want := initial.clone()
+						want.xmm[1] = 0xfff0
+						if !accepted || !reflect.DeepEqual(state, want) {
+							t.Fatal("unknown mode32 BP acquired numerical low bytes", consumer.name, state)
+						}
+						continue
+					}
+					if accepted || !reflect.DeepEqual(state, initial) {
 						t.Fatalf("%s changed an unbound source role: got=%#v want=%#v", consumer.name, state, initial)
 					}
 				}
