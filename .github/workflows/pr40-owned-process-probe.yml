@@ -121,6 +121,10 @@ jobs:
           go test . -list "^($byte_swap_root)$" > _out/native-x86-oracles/byte-swap-inventory.log
           grep -Fx "$byte_swap_root" _out/native-x86-oracles/byte-swap-inventory.log
           roots+="|$byte_swap_root"
+          crc32_root='TestAMD64CRC32RuntimeSemanticsAndFlags'
+          go test . -list "^($crc32_root)$" > _out/native-x86-oracles/crc32-inventory.log
+          grep -Fx "$crc32_root" _out/native-x86-oracles/crc32-inventory.log
+          roots+="|$crc32_root"
           families='MADDTypedOriginalLegacy|PackedNarrowOriginalLegacyOracle|ScalarFPBitViewsOriginalBitsAndCanaries'
           families+='|PureGPUnknownDeadOutputs|SignedIntegerScalarFloatTranslatedFPFields|ScalarCompareFlags'
           families+='|RawReturnSourceAddressNumerical|FloatingCompareOriginalLegacyPredicates|TimestampOriginalAndLLVM'
@@ -129,7 +133,7 @@ jobs:
           families+='|PackedShiftNativeReadFaults|PackedUnpackMMXNativeMemoryAndFP|PackedZeroMemoryStoreFault'
           families+='|SignedIntegerScalarFloatNativeReadExtentAndPrecision|SignedIntegerScalarFloatNativeLinuxPrecisionSignal'
           go test . -list "^($roots|TestCrossLinuxRuntimeMatrixX86($families))$" > _out/native-x86-oracles/all-roots.stdout
-          test "$(grep -c '^Test' _out/native-x86-oracles/all-roots.stdout)" = 64
+          test "$(grep -c '^Test' _out/native-x86-oracles/all-roots.stdout)" = 65
           go test . -run "^($roots|TestCrossLinuxRuntimeMatrixX86($families))$" \
             -json -count=1 -timeout=8m \
             2> _out/native-x86-oracles/native.stderr | tee _out/native-x86-oracles/native.jsonl

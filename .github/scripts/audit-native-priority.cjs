@@ -48,6 +48,7 @@ function auditNativePriority(directory, io = fs) {
     continuation: ['TestCrossLinuxRuntimeMatrixX86ContinuationWholeCFGOriginalGoAndLLVM'],
     'packed-string-fault': ['TestCrossLinuxRuntimeMatrixX86PackedStringOriginalNativeMemoryFaults'],
     'byte-swap': ['TestCrossLinuxRuntimeMatrixX86ByteSwapOriginalGoAndLLVM'],
+    crc32: ['TestAMD64CRC32RuntimeSemanticsAndFlags'],
   };
   const actualFiles = io.readdirSync(directory).filter(name => name.endsWith('-inventory.log')).sort();
   assert.deepEqual(actualFiles, Object.keys(inventories).map(name => name + '-inventory.log').sort(),
@@ -62,11 +63,11 @@ function auditNativePriority(directory, io = fs) {
       mandatory.add(name);
     }
   }
-  assert.equal(mandatory.size, 26);
+  assert.equal(mandatory.size, 27);
   const discovered = io.readFileSync(path.join(directory, 'all-roots.stdout'), 'utf8')
     .split(/\r?\n/).filter(line => /^Test\S+$/.test(line)).sort();
-  assert.equal(discovered.length, 64, 'fresh discovery denominator changed');
-  assert.equal(new Set(discovered).size, 64, 'duplicate fresh discovery');
+  assert.equal(discovered.length, 65, 'fresh discovery denominator changed');
+  assert.equal(new Set(discovered).size, 65, 'duplicate fresh discovery');
   const roots = new Set(), rootTerminals = new Set();
   const children = new Set(), childTerminals = new Set();
   let packageTerminal;
@@ -110,7 +111,7 @@ function auditNativePriority(directory, io = fs) {
       terminals.add(event.Test);
     }
   }
-  assert.equal(roots.size, 64, 'exact native root denominator changed');
+  assert.equal(roots.size, 65, 'exact native root denominator changed');
   assert.deepEqual([...roots].sort(), discovered, 'execution roots differ from fresh discovery');
   assert.deepEqual([...roots].sort(), [...rootTerminals].sort(), 'incomplete root terminals');
   assert.deepEqual([...children].sort(), [...childTerminals].sort(), 'incomplete child terminals');
@@ -145,7 +146,7 @@ function auditNativePriority(directory, io = fs) {
     assert.ok(children.has(child) && childTerminals.has(child), 'missing required child: ' + child);
   }
   return {
-    protocol: 'go_test_json_native64',
+    protocol: 'go_test_json_native65',
     roots: roots.size, passed: rootTerminals.size,
     children: children.size, childPassed: childTerminals.size,
     failed: 0, skipped: 0, incomplete: 0, duplicate: 0,

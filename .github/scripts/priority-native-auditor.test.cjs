@@ -31,11 +31,13 @@ const inventories = {
   continuation: ['TestCrossLinuxRuntimeMatrixX86ContinuationWholeCFGOriginalGoAndLLVM'],
   'packed-string-fault': ['TestCrossLinuxRuntimeMatrixX86PackedStringOriginalNativeMemoryFaults'],
   'byte-swap': ['TestCrossLinuxRuntimeMatrixX86ByteSwapOriginalGoAndLLVM'],
+  crc32: ['TestAMD64CRC32RuntimeSemanticsAndFlags'],
 };
 const sourceStack = inventories['source-stack'][0];
 const continuation = inventories.continuation[0];
 const packedStringFault = inventories['packed-string-fault'][0];
 const byteSwap = inventories['byte-swap'][0];
+const crc32 = inventories.crc32[0];
 const directTail386 = inventories['direct-tail'][1];
 const mode32Children = [
   ...['SI', 'BP', 'SI-stack', 'BP-stack'].map(carrier => directTail386 + '/' + carrier),
@@ -99,15 +101,33 @@ function audit(files) {
   });
 }
 
-test('synthetic64 requires sixteen inventories,26 owners and seventeen source/ISA/fault children', () => {
+test('synthetic65 requires seventeen inventories,27 owners and seventeen source/ISA/fault children', () => {
   const result = audit(fixture());
-  assert.equal(result.protocol, 'go_test_json_native64');
-  assert.equal(result.roots, 64);
-  assert.equal(result.inventories, 16);
-  assert.equal(result.mandatory.length, 26);
+  assert.equal(result.protocol, 'go_test_json_native65');
+  assert.equal(result.roots, 65);
+  assert.equal(result.inventories, 17);
+  assert.equal(result.mandatory.length, 27);
+  assert.ok(result.mandatory.includes(crc32));
   assert.equal(result.requiredChildren.length, 17);
   // Only this synthetic fixture has eighteen children; real execution is counted.
   assert.equal(result.children, 18);
+});
+
+test('CRC32 native root cannot be replaced by a same-count nonmandatory owner', () => {
+  const files = fixture();
+  files.set('all-roots.stdout', files.get('all-roots.stdout').replace(crc32, 'TestUnrelatedCRC32Owner'));
+  files.set('native.jsonl', files.get('native.jsonl').replaceAll(crc32, 'TestUnrelatedCRC32Owner'));
+  assert.throws(() => audit(files), /mandatory root/);
+});
+
+test('CRC32 native root cannot be supplied by printed run and PASS payloads', () => {
+  const files = fixture();
+  const rows = events(files).filter(event => event.Test !== crc32);
+  rows.splice(rows.length - 1, 0, { Action: 'output', Package: 'github.com/xgo-dev/plan9asm',
+    Output: JSON.stringify({ Action: 'run', Test: crc32 }) + '\n' +
+      JSON.stringify({ Action: 'pass', Test: crc32 }) + '\n' });
+  replaceEvents(files, rows);
+  assert.throws(() => audit(files), /denominator|mandatory root/);
 });
 
 test('fresh full discovery rejects same-count nonmandatory root substitution', () => {
@@ -185,7 +205,7 @@ test('required children cannot finish after their successful root terminal', () 
 });
 
 test('duplicate or missing root and child events cannot close the protocol', () => {
-  for (const name of [sourceStack, requiredChildren[0], byteSwap, byteSwap + '/amd64', byteSwap + '/386', ...mode32Children]) {
+  for (const name of [sourceStack, requiredChildren[0], byteSwap, byteSwap + '/amd64', byteSwap + '/386', crc32, ...mode32Children]) {
     for (const action of ['run', 'pass']) {
       const duplicate = fixture();
       const rows = events(duplicate);
