@@ -164,21 +164,33 @@ func (c *amd64Ctx) lowerString(ins Instr) (ok bool, terminated bool, err error) 
 		if err := c.storeReg(SI, "%"+nextSI); err != nil {
 			return true, false, err
 		}
-		value := "%" + loaded
+		var oldAccumulator string
 		if prefix != "" {
-			old, err := c.evalIntSized(Operand{Kind: OpReg, Reg: AX}, typ)
+			old, err := c.loadReg(AX)
 			if err != nil {
 				return true, false, err
 			}
+			oldAccumulator = old
+		}
+		if err := c.storeRegSized(AX, typ, "%"+loaded); err != nil {
+			return true, false, err
+		}
+		if prefix != "" {
+			written, err := c.loadReg(AX)
+			if err != nil {
+				return true, false, err
+			}
+			// An empty repeat executes no accumulator write at all. Selecting
+			// only the low operand width before storeRegSized would still clear
+			// AMD64's high 32 bits for LODSL even on that empty path.
 			selected := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = select i1 %%%s, %s %%%s, %s %s\n", selected, executed, typ, loaded, typ, old)
-			value = "%" + selected
+			fmt.Fprintf(c.b, "  %%%s = select i1 %%%s, i64 %s, i64 %s\n", selected, executed, written, oldAccumulator)
+			if err := c.storeReg(AX, "%"+selected); err != nil {
+				return true, false, err
+			}
 			if err := c.storeStringCount("%" + remaining); err != nil {
 				return true, false, err
 			}
-		}
-		if err := c.storeRegSized(AX, typ, value); err != nil {
-			return true, false, err
 		}
 	}
 

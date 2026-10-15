@@ -1,5 +1,3 @@
-//go:build go1.27
-
 package plan9asm
 
 import (
@@ -78,6 +76,10 @@ entry:
 }
 
 func TestX86LODSZeroCountOriginalGoAndLLVMWholeState(t *testing.T) {
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("complete LODS state objects require LLVM22 llc")
+	}
 	for _, arch := range []string{"386", "amd64"} {
 		source, declarations := x86LODSStateFixture(arch)
 		goAssemblerOracleOutput(t, arch, source, "", true)
@@ -94,6 +96,13 @@ func TestX86LODSZeroCountOriginalGoAndLLVMWholeState(t *testing.T) {
 				for _, row := range x86LODSStateCases(arch) {
 					if row.prefix != "" && row.count == 0 {
 						ir += x86LODSZeroStateObserver(row)
+					}
+				}
+				for _, stage := range []struct{ name, ir string }{{"ir0", ir}, {"ir2", optimized}} {
+					for _, backend := range []string{"-O0", "-O2"} {
+						t.Run(stage.name+"/backend"+backend[2:], func(t *testing.T) {
+							x86PackedStringCompileObject(t, llc, triple, stage.ir, backend)
+						})
 					}
 				}
 				ir = x86LODSStateTargetLayout(t, ir, triple, word)
