@@ -1,10 +1,11 @@
 # Current work: PR 40 checkpoint
 
-Checkpoint: 2026-10-15 11:16 UTC. The latest fork diagnostic completed naturally
+Checkpoint: 2026-10-15 11:35 UTC. The latest fork diagnostic completed naturally
 with nine stale BP test-root failures, not a tool or timeout failure. All nine
 are repaired and locally integrated through `6925918c`. Main also contains the
 qualified string-memory/REP-CFG repair and full-AX empty-LODS repair through
-`99c6d83b`. These leaf receipts do not certify the merged source snapshot.
+`99c6d83b`. Qualified exact-FP-byte and implicit-product leaf `bbe4fcc6` is now
+merged through `60b269e2`. Leaf receipts do not certify this merged snapshot.
 
 The previous complete main qualification at `68ef8aa3` passes548 unique owners;
 its strict benchmark remains FAILED158/184 with26 failures, zero N/A and zero
@@ -18,41 +19,28 @@ unattempted files. Classification, objects and executed semantics stay distinct.
    Complete 69-name memory objects and 32-member CMOV objects compile on both
    mode32 targets through three APIs. SP and amd64 BP remain physical-frame
    negatives. Main contains equivalent commits; this is not native execution.
-2. Finish scalar MOVB/W/L/Q logical-FP byte transport in the TLS leaf.
-   Test-only `6caaaca0`/`94e72a08` reproduce534 actual wrong returned values,
-   183 valid-interior rejections and69 passing controls. `51964b2a` now passes
-   all786 semantic cases plus229 boundary/status controls on Go27. This is
-   only a historical quick gate, not qualification of the newer leaf.
-   `6a56a490` additionally passes 1,549 focused children and 60 LLVM objects;
-   the default-architecture TDD then finds 12 direct-path false passes.
-   `cfb3c699` fixes that local cost projection without changing source authority.
-   Its unchanged 386 instruction-family root reveals an old virtual-SP versus
-   positive-TEXT AUTO-role mismatch. Through `618ee502`, typed explicit and
-   implicit stack/storage separation restores both SDKs' complete 31-root 386
-   and 11-root CPU/status cohorts; 25 semantic/control roots also pass both
-   SDKs and race. These are intermediate receipts, not final qualification.
-   The retained legacy cohort then finds implicit MULL's missing NUM effect and
-   an old fixture declaring two i64 results while writing only four bytes.
-   Preserve that complete invalid-result fixture as a negative; add a genuinely
-   complete typed positive and the full implicit MUL/IMUL B/W/L/Q effect family.
-   New FP source views must use checked byte transport, not legacy interior
-   zero/coercion. Do not extend DIV, raw/source-stack or caller permissions.
-   Through `63016ca7`, independent REDs also expose120 missing-result-store
-   false passes and120 old-storage-route false passes. The family now consumes
-   mandatory whole NUM/canonical proof independently of MOV storage costs.
-   All34 semantic/control owners pass Go27, actual Go20 and race. The final
-   qualification then stops FAILED at the unchanged complete386 `arith`:
-   its zero-frame physical SP, live-stack memory POP and unmodeled PUSHAL/POPAL
-   cannot borrow a logical AUTO proof. Preserve that entire original multi-TEXT
-   input as an explicit Context negative, distinguish partial selection of all
-   other unchanged TEXTs, and add an independent bounded typed AUTO positive.
-   Neither selection nor that positive certifies the complete original arith.
-   Rerun every final owner on the corrected frozen head; remaining commands
-   from the failed630 run are unattempted. Native implicit-MUL memory loads
-   still need independent dead/zero-result fault TDD; objects are not that gate.
-   Never crop old source or add an opcode exemption to hide these failures.
-   It fixes named GP MOV views, not all arithmetic/compare FP consumers or
-   specialized source-stack/fixed-local roles. Never retag legal tuples Context.
+2. Preserve qualified exact-byte/implicit-product leaf `bbe4fcc6`: all29 commands
+   pass, with229 root executions and20,053 children, zero failures/skips/gaps.
+   This includes34 semantic/control roots on Go27, race and actual Go20;
+   57 retained roots and six tool owners on both SDKs; CLI extraction, both
+   five-architecture official gates and three vets. Root independently audits
+   every raw inventory/terminal and all3,882 tracked sources,20,452 SDK-source,
+   tool and driver files, before/after/current identities and five stashes.
+   Scalar MOVB/W/L/Q now transports exact partial/interior/cross-field bytes;
+   original REDs retain534 wrong returned values and183 valid-view rejections.
+   Implicit MUL/IMUL B/W/L/Q shares the complete Go grammar and consumes whole
+   NUM/canonical proof even without result stores or through other storage
+   routes. Independent120+120 false-pass REDs remain failed at their old heads.
+   No DIV, raw/source-stack, caller or native-memory permission is added.
+   The complete original19-TEXT fixture remains an explicit Context negative:
+   its zero-frame physical SP, live memory POP and PUSHAL/POPAL lack backing.
+   Its other18 unchanged TEXTs have explicitly partial object coverage; an
+   independent bounded named-AUTO/MUL positive has real Go/LLVM objects,
+   three-API value checks and five negative controls. Neither is a complete
+   original-arith pass. Failed630 and build-failedb119 reports remain failed.
+   Native implicit-MUL loads still need dead/zero-result fault TDD. Objects
+   do not certify native execution. Other arithmetic FP consumers and bound
+   source-stack/fixed-local roles retain their independent contracts.
 3. Preserve qualified LODS leaf `74e145d6`: 38 unique owners, 105 root executions
    and 9,697 children pass across Go27, actual Go20 and race, plus six vets.
    Genuine RED `183f7121` isolates exactly 12 AMD64 LODSL empty-repeat wrong
@@ -61,16 +49,14 @@ unattempted files. Classification, objects and executed semantics stay distinct.
    objects from all 84 original functions. Only zero-state observations are
    checked; bare/nonzero execution and native execution remain unclaimed.
    Preserve failed earlier observer attempts separately from this genuine RED.
-4. Finish the FP leaf, integrate only qualified changes, update this checkpoint,
-   then freeze source, documentation and tools once. The current pre-FP union
-   has 589 unique owners: all previous 548 plus BP and string additions. Add
-   every new FP owner without dropping SDK lanes or enlarging original 3m/5m
-   budgets. Rerun official gates, vets and the strict benchmark.
-5. Stage the complete batch in the allowed fork. Policy `d3c51480` retains all
-   36 previous early lanes and expands the FP lane to26 complete byte/MUL
-   roots; its91 Node policies and three workflow lints pass. The failed old386
-   owner is being added to that same priority without changing any budget.
-   These are policy checks,
+4. Freeze the merged source, documentation and tools. Rebuild the exact union
+   of all previous548 owners and every qualified BP/string/FP addition without
+   dropping SDK lanes or enlarging original3m/5m budgets. Bind llvm-objdump as
+   well as the other actual tools. Rerun fresh inventories, raw terminal audits,
+   official gates, vets and the strict benchmark; no older receipt certifies it.
+5. Stage the batch in the allowed fork. Policy `519d43f5` retains all36 prior
+   early lanes and expands the FP lane to27 complete byte/MUL/old386 roots;
+   its91 Node policies and three workflow lints pass. These are policy checks,
    not an executed CI receipt for the new source. Push once and let the
    entire new run finish naturally. Draft PR40 is not ready; its contribution
    head is still `24851df2` at this checkpoint.
