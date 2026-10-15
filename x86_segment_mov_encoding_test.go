@@ -15,7 +15,7 @@ import (
 func x86SegmentMOVRegisters(arch string, width int) []Reg {
 	registers := []Reg{AX, CX, DX, BX, SP, BP, SI, DI}
 	if arch == "amd64" {
-		registers = append(registers, R8, R9, R10, R11, R12, R13, R14, R15)
+		registers = append(registers, "R8", "R9", "R10", "R11", "R12", "R13", "R14", "R15")
 	}
 	if width == 1 {
 		registers = append(registers, AL, CL, DL, BL, AH, CH, DH, BH)

@@ -328,7 +328,7 @@ func TestX86SegmentMOVStateAndOriginalRoleBoundaries(t *testing.T) {
 							}
 						case "REX-SP-destination", "REX-BP-destination":
 							// Only the byte row has Go's high-byte/REX alias.
-							ins.Op, ins.Args[0].Mem.Base, ins.Args[1].Reg = "MOVB", R8, AH
+							ins.Op, ins.Args[0].Mem.Base, ins.Args[1].Reg = "MOVB", "R8", AH
 							state.gp[8] = 0xff
 							if origin == "REX-BP-destination" {
 								ins.Args[1].Reg = CH
