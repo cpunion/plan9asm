@@ -781,12 +781,18 @@ func (c *amd64Ctx) loadX87Environment(src Operand) error {
 	if err != nil {
 		return err
 	}
+	// The 32-bit environment is one observable 28-byte read, including the
+	// fields that this software model does not interpret. Keep it exact and
+	// volatile even when both captured words are dead. An aggregate-width
+	// integer load avoids 28 separate IR accesses and preserves address space.
+	environment := c.newTmp()
 	control := c.newTmp()
-	statusPtr := c.newTmp()
+	statusBits := c.newTmp()
 	status := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = load i16, %s %s, align 1\n", control, ptrType, ptr)
-	fmt.Fprintf(c.b, "  %%%s = getelementptr i8, %s %s, i64 4\n", statusPtr, ptrType, ptr)
-	fmt.Fprintf(c.b, "  %%%s = load i16, %s %%%s, align 1\n", status, ptrType, statusPtr)
+	fmt.Fprintf(c.b, "  %%%s = load volatile i224, %s %s, align 1\n", environment, ptrType, ptr)
+	fmt.Fprintf(c.b, "  %%%s = trunc i224 %%%s to i16\n", control, environment)
+	fmt.Fprintf(c.b, "  %%%s = lshr i224 %%%s, 32\n", statusBits, environment)
+	fmt.Fprintf(c.b, "  %%%s = trunc i224 %%%s to i16\n", status, statusBits)
 	fmt.Fprintf(c.b, "  store i16 %%%s, ptr %s\n", control, c.x87ControlSlot)
 	fmt.Fprintf(c.b, "  store i16 %%%s, ptr %s\n", status, c.x87StatusSlot)
 	if c.useHardwareX87() {
