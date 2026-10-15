@@ -63,12 +63,20 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 	if len(fn.X86RawText) != 0 || fn.x86SourceStack != nil || fn.x86FixedLocal != nil {
 		return strictErr
 	}
+	boundRawClear := false
 	for _, ins := range fn.Instrs {
 		if ins.x86Encoded || ins.x86RawNearReturn != nil ||
 			ins.x86AddressBits != 0 || ins.x86UnboundAddressOverride {
 			return strictErr
 		}
 		if origin := ins.x86SourceRaw; origin != nil {
+			if x86X87RawClearInstruction(ins) {
+				if !boundRawClear && (fn.x86RawReplay == nil || fn.x86RawReplay.validate(fn, arch) != nil) {
+					return strictErr
+				}
+				boundRawClear = true
+				continue
+			}
 			// The physical decoder already validated the complete NOP and
 			// its prefixes before discarding inert ModRM/SIB address fields.
 			// Ordinary padding has no memory, register, FLAGS or entry effect.
@@ -96,6 +104,12 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		if ins.Op == "LOCK" {
 			prefix, bound := lockPrefixes[ordinal]
 			return bound && reflect.DeepEqual(prefix, ins)
+		}
+		if boundRawClear && x86X87RawClearInstruction(ins) {
+			return x86ResultX87BoundRawClear(ins, state, owned, resultOffset, arch)
+		}
+		if accepted, known := c.x87EnvironmentReadResultStep(ins, state, arch); known {
+			return accepted
 		}
 		if accepted, known := c.x87HardwareControlResultStep(ins, state, owned, resultOffset, arch); known {
 			return accepted // The same actual hardware emitter writes the full i16.
