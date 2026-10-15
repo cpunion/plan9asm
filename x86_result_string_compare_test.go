@@ -26,32 +26,86 @@ func x86StringCompareResultBody(arch, opcode, prefix, direction string, flags bo
 	return body
 }
 
-func TestX86StringCompareCompleteGoObjects(t *testing.T) {
+func x86StringCompareCompleteSource(t *testing.T, arch string) (string, string) {
+	t.Helper()
 	const declaration = "func view(left,right *byte,n,needle uintptr) uintptr"
+	var source, declarations strings.Builder
+	for _, stem := range []string{"SCAS", "CMPS"} {
+		widths := "BWLQ"
+		if arch == "386" {
+			widths = "BWL"
+		}
+		for _, width := range widths {
+			for index, prefix := range []string{"", "REP", "REPN"} {
+				for _, direction := range []string{"CLD", "STD"} {
+					body := x86StringCompareResultBody(arch, stem+string(width), prefix, direction, prefix == "")
+					text := x86ResultGPSIMDAdmissionSource(t, arch, declaration, body)
+					name := fmt.Sprintf("view%s%c%d%s", stem, width, index, direction)
+					source.WriteString(strings.Replace(text, "·view(SB)", "·"+name+"(SB)", 1))
+					declarations.WriteString(strings.Replace(declaration, "view(", name+"(", 1) + "\n")
+				}
+			}
+		}
+	}
+	want := 48
+	if arch == "386" {
+		want = 36
+	}
+	if strings.Count(source.String(), "TEXT ") != want || strings.Count(declarations.String(), "func ") != want {
+		t.Fatal("complete independent SCAS/CMPS source inventory changed")
+	}
+	return source.String(), declarations.String()
+}
+
+func TestX86StringCompareCompleteGoObjects(t *testing.T) {
 	for _, target := range dataRelocationTargets {
 		if target.arch != ArchAMD64 {
 			continue
 		}
 		t.Run(target.triple, func(t *testing.T) {
-			var source strings.Builder
-			for _, stem := range []string{"SCAS", "CMPS"} {
-				widths := "BWLQ"
-				if target.goarch == "386" {
-					widths = "BWL"
-				}
-				for _, width := range widths {
-					for index, prefix := range []string{"", "REP", "REPN"} {
-						for _, direction := range []string{"CLD", "STD"} {
-							body := x86StringCompareResultBody(target.goarch, stem+string(width), prefix, direction, prefix == "")
-							text := x86ResultGPSIMDAdmissionSource(t, target.goarch, declaration, body)
-							name := fmt.Sprintf("view%s%c%d%s", stem, width, index, direction)
-							source.WriteString(strings.Replace(text, "·view(SB)", "·"+name+"(SB)", 1))
-						}
-					}
-				}
-			}
-			dataRelocationGoObject(t, source.String(), target.goos, target.goarch, true)
+			source, _ := x86StringCompareCompleteSource(t, target.goarch)
+			dataRelocationGoObject(t, source, target.goos, target.goarch, true)
 		})
+	}
+}
+
+func TestX86StringCompareConditionalFactsRequireWholeSource(t *testing.T) {
+	const declaration = "func view(left,right *byte,n,needle uintptr) uintptr"
+	for _, target := range x86RawReturnTargets {
+		word, move := 8, "MOVQ"
+		if target.arch == "386" {
+			word, move = 4, "MOVL"
+		}
+		for _, row := range []struct {
+			name string
+			edit func(string) string
+		}{
+			{"missing-result", func(body string) string { return strings.Replace(body, "CX,ret+RESULT(FP)", "CX,BX", 1) }},
+			{"missing-needle", func(body string) string {
+				return strings.Replace(body, fmt.Sprintf("%s needle+%d(FP),AX\n", move, 3*word), "", 1)
+			}},
+			{"not-a-pointer", func(body string) string {
+				return strings.Replace(body, fmt.Sprintf("%s right+%d(FP),DI", move, word), fmt.Sprintf("%s n+%d(FP),DI", move, 2*word), 1)
+			}},
+			{"partial-zero", func(string) string { return "MOVW $0,CX\nREP\nSCASB\n" + move + " $7,ret+RESULT(FP)" }},
+			{"overwritten-zero", func(string) string { return "MOVL $0,CX\nMOVB $1,CL\nREP\nSCASB\n" + move + " $7,ret+RESULT(FP)" }},
+			{"zero-cannot-define-ZF", func(string) string {
+				return "MOVL $0,CX\nREP\nSCASB\nMOVL $0,BX\nSETEQ BL\n" + move + " BX,ret+RESULT(FP)"
+			}},
+			{"zero-cannot-define-DF", func(body string) string {
+				return "MOVL $0,CX\nREP\nSCASB\n" + strings.Replace(body, "CLD\n", "", 1)
+			}},
+		} {
+			for _, api := range []string{"text", "module", "Go"} {
+				t.Run(target.triple+"/"+row.name+"/"+api, func(t *testing.T) {
+					body := row.edit(x86StringCompareResultBody(target.arch, "SCASB", "REPN", "CLD", false))
+					source := x86ResultGPSIMDAdmissionSource(t, target.arch, declaration, body)
+					if ir, err := x86ScalarFPBitViewAPI(t, source, declaration, target.arch, target.triple, api); err == nil || ir != "" {
+						t.Fatal("conditional continuation manufactured a missing input, result or status fact", err)
+					}
+				})
+			}
+		}
 	}
 }
 

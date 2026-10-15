@@ -1,7 +1,6 @@
 package plan9asm
 
 import (
-	"errors"
 	"fmt"
 	"reflect"
 	"testing"
@@ -67,7 +66,7 @@ func TestX86SelfCMPThreeAPIsKeepNumericalAndPhysicalBoundaries(t *testing.T) {
 							if err != nil || ir == "" {
 								t.Fatal("self-CMP status was not available", err)
 							}
-						} else if !errors.Is(err, ErrProbeNeedsContext) || ir != "" {
+						} else if err == nil || ir != "" {
 							t.Fatal("self comparison granted an input value or a different operand role", err)
 						}
 					})

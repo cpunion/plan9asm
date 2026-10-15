@@ -54,6 +54,16 @@ func x86ResultCallerAddressesAfter(ins Instr, before [16]bool, entryFP map[int64
 		return [16]bool{}
 	}
 	ins = x86GoMOVQSourceInstruction(ins) // Original source/certificates stay unchanged.
+	if (ins.Op == "REP" || ins.Op == "REPN") && len(ins.Args) == 0 {
+		return before // Only an independently accepted source-bound prefix reaches this post-consumer.
+	}
+	if form, known, err := x86ResultStringCompareProperties(ins, arch); known && err == nil {
+		before[7], before[1] = false, false // DI and a possibly repeated native CX write.
+		if form.kind == "cmps" {
+			before[6] = false
+		}
+		return before // No implicit GP writes outside this typed footprint.
+	}
 	if destination, _, _, known := x86LogicalFPLEAWriteShape(ins, arch); known {
 		before[destination] = false
 		return before // Pure address calculation writes no unrelated GP or FLAGS.

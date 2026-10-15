@@ -10,6 +10,9 @@ func x86TypedFPResultNeedsProof(fn Func, sig FuncSig, arch string) bool {
 		return false
 	}
 	for _, ins := range fn.Instrs {
+		if _, known, err := x86ResultStringCompareProperties(ins, arch); known && err == nil && x86ResultNamedPredicateInstruction(ins) {
+			return true // Conditional native reads need the same complete result proof, including missing stores.
+		}
 		if effect, known, err := x86TypedInstructionByteEffect(ins.Op, ins, arch); known && err == nil &&
 			effect.requiresResultProof && x86ResultNamedPredicateInstruction(ins) {
 			return true
