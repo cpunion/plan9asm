@@ -4,7 +4,7 @@ const test = require('node:test');
 
 const workflow = fs.readFileSync('.github/workflows/pr40-owned-process-probe.yml', 'utf8');
 const sdk = workflow.slice(workflow.indexOf('\n  sdk-priority:'), workflow.indexOf('\n  ownership:'));
-const sdkLaneCount = 31;
+const sdkLaneCount = 32;
 
 function checkBytealgPriority(text) {
   for (const [lane, root] of [
@@ -30,6 +30,29 @@ test('Bytealg priority rejects a missing, duplicate, substituted or enlarged own
     ['TestCompileOneX86SDKBytealgIndexByteExistingObjects\n            timeout: 5m',
       'TestCompileOneX86SDKBytealgIndexByteExistingObjects\n            timeout: 6m'],
   ]) assert.throws(() => checkBytealgPriority(sdk.replace(before, after)));
+});
+
+const carrierRoot = 'TestARM64ByteCarrierTwoScalarNativeWidthConsumers';
+const carrierBlock = '- lane: arm64-carrier-widths\n            module: \'.\'\n' +
+  `            roots:\n              - ${carrierRoot}\n            timeout: 5m`;
+
+function checkCarrierPriority(text) {
+  assert.ok(text.includes(carrierBlock), 'complete failed ARM64 carrier owner');
+  assert.equal(text.split(`- ${carrierRoot}\n`).length - 1, 1);
+}
+
+test('Failed ARM64 native-width source matrix precedes complete Windows modules', () => {
+  checkCarrierPriority(sdk);
+});
+
+test('Carrier priority rejects missing, duplicate, substituted or enlarged owners', () => {
+  checkCarrierPriority(carrierBlock);
+  for (const changed of [
+    carrierBlock.replace('arm64-carrier-widths', 'missing-carrier-widths'),
+    carrierBlock + `\n              - ${carrierRoot}\n`,
+    carrierBlock.replace(carrierRoot, carrierRoot + 'Subset'),
+    carrierBlock.replace('timeout: 5m', 'timeout: 6m'),
+  ]) assert.throws(() => checkCarrierPriority(changed));
 });
 
 test('New panic observations retain both complete actual compiler and linker owners', () => {

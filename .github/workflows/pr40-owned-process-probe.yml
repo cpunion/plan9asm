@@ -190,6 +190,11 @@ jobs:
               - TestX86GoPanicTerminal386OriginalABICompileAndLink
               - TestX86GoPanicTerminalOriginal386CompilerAndCALLAssociations
             timeout: 5m
+          - lane: arm64-carrier-widths
+            module: '.'
+            roots:
+              - TestARM64ByteCarrierTwoScalarNativeWidthConsumers
+            timeout: 5m
           - lane: assembly-selection
             module: cmd/plan9asmll
             roots:
