@@ -500,3 +500,54 @@ func TestX86ResultByteSwapActualGoRegisterAliasKeepsSourceAndUnknownEntry(t *tes
 		}
 	}
 }
+
+func TestX86ResultByteSwapMixedBoolResultNeedsIndependentCanonicalRole(t *testing.T) {
+	for _, target := range x86OrderingHintTargets {
+		for _, op := range []string{"BSWAPL", "BSWAPQ"} {
+			if target.arch == "386" && op == "BSWAPQ" {
+				continue
+			}
+			for _, other := range []string{"uint8", "uint16", "uint32", "uint64", "float32", "float64"} {
+				for _, boolFirst := range []bool{false, true} {
+					results := other + ",bool"
+					if boolFirst {
+						results = "bool," + other
+					}
+					declaration := "func Value() (" + results + ")"
+					_, _, sig, _ := x86ResultInitializationFixture(t, target.arch, declaration, "RET")
+					var body strings.Builder
+					initialize := "MOVL $0x02000000,AX\n"
+					if op == "BSWAPQ" {
+						initialize = "MOVQ $0x0200000000000000,AX\n"
+					}
+					body.WriteString(initialize + op + " AX\n")
+					for index, slot := range sig.Frame.Results {
+						if slot.Type == I1 {
+							fmt.Fprintf(&body, "MOVB AX,ret%d+%d(FP)\n", index, slot.Offset)
+							continue
+						}
+						width := x86FrameScalarBytes(slot.Type, target.arch)
+						if width == 8 && target.arch == "386" {
+							fmt.Fprintf(&body, "MOVL $0,ret%d+%d(FP)\nMOVL $0,ret%d+%d(FP)\n", index, slot.Offset, index, slot.Offset+4)
+						} else {
+							move := map[int64]string{1: "MOVB", 2: "MOVW", 4: "MOVL", 8: "MOVQ"}[width]
+							if move == "" {
+								t.Fatal("mixed result fixture lost its actual scalar field")
+							}
+							fmt.Fprintf(&body, "%s $0,ret%d+%d(FP)\n", move, index, slot.Offset)
+						}
+					}
+					_, _, _, source := x86ResultInitializationFixture(t, target.arch, declaration, body.String()+"RET")
+					for _, api := range []string{"text", "module", "Go"} {
+						t.Run(target.triple+"/"+op+"/"+results+"/"+api, func(t *testing.T) {
+							ir, err := x86OrderingHintTranslateAPI(t, api, source, "package ordering\n"+declaration+"\n", target.arch, target.triple)
+							if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+								t.Fatalf("initialized mixed result byte became canonical bool: output=%t error=%v", ir != "", err)
+							}
+						})
+					}
+				}
+			}
+		}
+	}
+}
