@@ -66,6 +66,23 @@ Unknown source/result bytes cannot fall back to zero-initialized implementation
 allocas. Test these boundaries through all public APIs, including default and
 explicit architectures; retain independent canonical-bool and memory contracts.
 
+CRC32B/W/L/Q shares the complete Go source grammar across lowering, liveness
+and numerical effects. Every row reads the old accumulator's low32, uses its
+exact source width, zero-extends its result and preserves FLAGS/DF. Go's
+CRC32B Px encoder has different byte-register/REX aliases from MUL's Pb row;
+retain independent original-Go byte witnesses. Native reads must stay exact,
+unaligned and volatile even when their result is discarded. Only the paired
+lowering continuation may consume their conditional numerical result.
+
+A proper low-mask AND projection requires both actual caller-address and
+complete pointer must-facts, never an opaque pointer alone. Its B/W/L/Q write
+defines only the written bytes and revokes every address identity. Native-word
+INC/DEC may preserve an already proved affine caller pointer, including only
+the old knowledge of CF; partial or unknown inputs cannot create one. These
+rules add no memory backing, bounds, raw entry or store permission. A numerical
+family may consume an already checked cached mixed-bool canonical role; it
+cannot manufacture that role from initialized bytes or a bool declaration.
+
 Macro expansion uses complete Go assembler identifier tokens, including middle
 dot and division slash, never prefixes or text inside string/character literals.
 Unresolved constants need context for an isolated instruction probe, but must

@@ -115,6 +115,9 @@ func x86TypedInstructionByteEffect(op Op, ins Instr, arch string) (x86TypedByteE
 	if effect, known, err := x86TypedImplicitMultiplyByteEffect(op, ins, arch); known {
 		return effect, known, err
 	}
+	if effect, known, err := x86TypedCRC32ByteEffect(op, ins, arch); known {
+		return effect, known, err
+	}
 	if effect, recognized, err := x86TypedLegacyIntegerArithmeticByteEffect(op, ins, arch); recognized {
 		return effect, recognized, err
 	}

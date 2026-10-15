@@ -82,15 +82,8 @@ func TestX86StringImplicitMemoryOriginalGoAndLLVMO0O2(t *testing.T) {
 
 func x86StringMemoryCheckAccesses(t *testing.T, body string, row x86StringMemoryRow, reads, writes int) {
 	t.Helper()
-	typ := fmt.Sprintf("i%d", 8*row.width)
-	read := regexp.MustCompile(`(?m)^  %[^\n]+ = load volatile ` + typ + `, ptr [^\n]+, align 1(?:,|$)`)
-	write := regexp.MustCompile(`(?m)^  store volatile ` + typ + ` [^\n]+, ptr [^\n]+, align 1(?:,|$)`)
-	if gotReads, gotWrites := len(read.FindAllString(body, -1)), len(write.FindAllString(body, -1)); gotReads != reads || gotWrites != writes {
-		t.Errorf("%s lost or invented observable native memory: got read/write %d/%d, want %d/%d\n%s",
-			row.op, gotReads, gotWrites, reads, writes, body)
-	}
-	if regexp.MustCompile(`(?m)^  (?:%[^ ]+ = load|store) i\d+ [^\n]+, ptr [^\n]+, align 1(?:,|$)`).MatchString(body) {
-		t.Error("string access became nonvolatile", row.op, body)
+	if err := x86StringMemoryIRAccessError(body, row.width, reads, writes); err != nil {
+		t.Errorf("%s %v", row.op, err)
 	}
 }
 
