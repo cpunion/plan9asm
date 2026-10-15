@@ -56,6 +56,18 @@ func TestX86StringMemoryIRReaderRejectsMemoryMutations(t *testing.T) {
 				{"zero-count-extra-volatile-write", write, 0, 0},
 				{"zero-count-nonvolatile-read", strings.Replace(read, "load volatile", "load", 1), 0, 0},
 				{"zero-count-nonvolatile-write", strings.Replace(write, "store volatile", "store", 1), 0, 0},
+				{"zero-count-wrong-read-width", strings.Replace(read, typ, "i128", 1), 0, 0},
+				{"zero-count-wrong-write-width", strings.Replace(write, typ, "i128", 1), 0, 0},
+				{"zero-count-wrong-read-alignment", strings.Replace(read, "align 1", "align 16", 1), 0, 0},
+				{"zero-count-wrong-write-alignment", strings.Replace(write, "align 1", "align 16", 1), 0, 0},
+				{"zero-count-nonvolatile-wrong-read-alignment", strings.ReplaceAll(strings.Replace(read, "load volatile", "load", 1), "align 1", "align 16"), 0, 0},
+				{"zero-count-nonvolatile-wrong-write-alignment", strings.ReplaceAll(strings.Replace(write, "store volatile", "store", 1), "align 1", "align 16"), 0, 0},
+				{"extra-wrong-read-width", read + write + strings.Replace(read, typ, "i128", 1), 1, 1},
+				{"extra-wrong-write-width", read + write + strings.Replace(write, typ, "i128", 1), 1, 1},
+				{"extra-wrong-read-alignment", read + write + strings.Replace(read, "align 1", "align 16", 1), 1, 1},
+				{"extra-wrong-write-alignment", read + write + strings.Replace(write, "align 1", "align 16", 1), 1, 1},
+				{"extra-nonvolatile-wrong-read-alignment", read + write + strings.ReplaceAll(strings.Replace(read, "load volatile", "load", 1), "align 1", "align 16"), 1, 1},
+				{"extra-nonvolatile-wrong-write-alignment", read + write + strings.ReplaceAll(strings.Replace(write, "store volatile", "store", 1), "align 1", "align 16"), 1, 1},
 			} {
 				t.Run(fmt.Sprintf("width=%d/%s/%s", width, ending, row.name), func(t *testing.T) {
 					body := row.body
