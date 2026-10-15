@@ -1,6 +1,7 @@
 # Current work: PR 40 checkpoint
 
-Checkpoint: 2026-10-15 01:46 UTC. Qualified CI repair `b66fbd33`.
+Checkpoint: 2026-10-15 02:54 UTC. Qualified deadline repair `ecd5fa2b`;
+fork diagnostic `fcff729f` completed and remains a separate failed snapshot.
 This is a handoff, not a ledger or a claim of complete CI/stdlib success.
 
 ## Scope and authority
@@ -18,7 +19,50 @@ Read [instruction rules](instructions.md) and [validation](validation.md).
 Freeze source, tools and documentation during a tested snapshot. Preserve old
 failures as failures; do not increase budgets, crop sources or shrink denominators.
 
-## Latest completed CI
+## Latest completed CI and qualified repair
+
+[38667476177](https://github.com/cpunion/plan9asm/actions/runs/38667476177)
+at fork `fcff729f` completed FAILURE naturally:64 jobs,62 success/two failures.
+All31 priority jobs pass. Simple CLI completion passes32 roots/29 children,
+all8 shards, strict7-scope equality, complete module/environment/coverage checks
+and coverage upload, zero skips or raw trace gaps. Main completion verifies all
+22 packages and uploads coverage. Its6330-root inventory has263 explicit
+host-inapplicable runtime skips; module status is `completed_with_skips`, not
+an all-platform executed pass. Native/cross-runtime counterparts remain required.
+
+The two failed jobs are one cause: rich CLI root part2 and its strict aggregate.
+`TestCompileOneX86SDKBytealgExistingObjects` shares a300s context across Count
+and IndexByte; Count passes162.35s, IndexByte is cancelled135.15s later, whole
+root fails300.17s. Other101 roots pass with no skip or unfinished terminal.
+The aggregate correctly rejects that failed fragment. Never classify joined
+cancellation/closed-source errors as another unsupported instruction.
+
+Repair `ecd5fa2b` gives both whole original files separate root/deadline owners
+and preserves both named children, actual LLVM22 objects and five-minute
+per-file budgets. Its scheduling policy has an independent RED and four
+reduction/shared-owner negatives; Windows8-shard/4-owner placements are disjoint.
+Frozen qualification passes runner21 roots/26 children on Go27/race/actualGo20,
+both complete CLI roots/one child each in35.369/35.156s, both root SDK vets,
+current CLI vet, formatting and3829 tracked inputs/19 selected tool/driver seals.
+Evidence: ignored `_out/register-result-repair/sdk-bytealg-independent/`.
+The next fork replay adds each repaired file as its own exact priority lane;
+only actual Windows execution can close the remaining CI failure.
+
+Downloaded native63 independently passes63 roots/169 children in149.992s,
+all15 inventories/25 mandatory owners/eight children, zero failure, skip,
+missing, duplicate or unfinished terminals. Original PCMP fault execution
+covers all32 rows/34 probes at O0/O2. Retain downloaded evidence under ignored
+`_out/register-result-repair/ci-fcff729f/`. A local watch TLS timeout is transport
+failure, not a CI failure; reread actual job states before retrying the watch.
+
+All three DATA targets pass their original119 operations/16 children each:
+Linux374.66s, Darwin507.11s, Windows540.53s. Old shard25 now completes1085.087s
+inside1800s; its original interrupted whole-source root passes139.49s. Earlier
+PATH and monolithic-DATA deadline failures do not recur in this completed run.
+
+The diagnostic includes the qualified namespace and Windows repair batches
+through contribution `2f0a4a4b`; it does not include later panic observations
+`51bb6a5d`. Never use one snapshot's receipts to certify the other.
 
 [38661041122](https://github.com/cpunion/plan9asm/actions/runs/38661041122)
 at fork5657d2ab completed FAILURE naturally:64 jobs,60 success/four failure.
@@ -37,7 +81,7 @@ the exact original127 roots/3947 children and passes131.348s; both former DF
 failures pass with no reported skip. This artifact is Go verbose output, not
 a JSON event trace. The Linux native artifact has strict JSON event audits.
 Fork5657's non-GitHub source is identical to earlier contributionaa8287d5;
-new local namespace source below has NOT been pushed into this running CI.
+its completed run did not include the later namespace source.
 
 The downloaded CLI producer/aggregate plans differ only in actual PATH:
 hosted Git ucrt64 versus mingw64 and optional WSL entries. The repair explicitly
@@ -56,8 +100,8 @@ three complete target roots/48 children:172.471/164.300/155.115s, every original
 119-operation producer byte unchanged. Runner19 roots/22 children pass Go27,
 race and actualGo20; both SDK vets, all3817 tracked inputs and selected tools,
 HEAD and clean-status seals pass. Main's19 Node policies pass; the integrated
-forkc95's63 policies/actionlint also pass. Another actual Windows run is still
-required; the old run remains FAILED. Evidence is under ignored
+forkc95's63 policies/actionlint also pass. The completed run above is the required
+actual Windows replay; the old run remains FAILED. Evidence is under ignored
 `_out/register-result-repair/windows-module-path/`.
 
 [38648974765](https://github.com/cpunion/plan9asm/actions/runs/38648974765)
@@ -125,7 +169,18 @@ Both vets and complete source/tool/head/status seals pass. opt/libLLVM's two
 tool hashes explicitly use earlier aa benchmark tool-before evidence and own
 post-run checks at the exact same installation; this is tool provenance only,
 not reuse of aa source results. The qualified namespace merge is integrated
-locally, not pushed. Fresh combined-head critical gates are next.
+and included in the active fork run. Coupled `ca02d8ea` gates pass pure237
+roots/8144 children on Go27/race, actualGo20 pure236/8136, source130/3951,
+both official five-architecture gates, continuation23/811, vets and seals.
+
+Panic observations are integrated as `c5337326`, `80a70903` and `51bb6a5d`.
+Frozen clean `51bb6a5d` passes the deduplicated union: root pure252/8218 on
+Go27/race and250/8196 on actualGo20, internal18/201 on all three lanes,
+source130/3951 in98.107s and the exact two new tool roots/five children in4.106s.
+Both SDK vets, formatting, complete tracked inputs, selected tools, HEAD and
+clean-status seals pass. These are observation/source/object checks, not a
+terminal capability or runtime result. The coupled receipts are under ignored
+`_out/register-result-repair/combined-panic-51bb6a5d/`.
 
 The following older repair rows retain their leaf-time dispositions; latest
 actual native/Windows receipts above supersede their earlier pending labels.
@@ -184,12 +239,12 @@ Basenames intentionally avoid private machine paths.
 
 | Worktree basename | Current role |
 | --- | --- |
-| `plan9asm-wt-pr40-scalar-lane-native-20261011` | Primary `codex/pr40-external-corpus-split-20261011`, qualified namespace merge dd628058 integrated; new combined critical gates next. |
-| `plan9asm-wt-pr40-stdlib-preprocessing-20261012` | Published diagnostic5657, current CI active; source/native priorities pass, complete Windows pending. |
-| `plan9asm-wt-pr40-sdk-numeric-maps-entry-20261013` | Qualified namespace dd628058, clean/idle; old stash preserved. |
+| `plan9asm-wt-pr40-scalar-lane-native-20261011` | Primary `codex/pr40-external-corpus-split-20261011`; source51bb and deadline repairecd5 qualified, not yet pushed. |
+| `plan9asm-wt-pr40-stdlib-preprocessing-20261012` | Published diagnosticfcff; CI naturally ended62 success/two failures, one shared-deadline cause. |
+| `plan9asm-wt-pr40-sdk-numeric-maps-entry-20261013` | Clean argument-planner8607 plus test-only inventory305e, not integrated. Actual Compare wrapper is absent; no entry permission follows. Old stash preserved. |
 | `plan9asm-wt-pr40-simple-sdk-bindings-20261013` | Clean fully qualified POPF982 leaf; integrated. No heavy process. |
-| `plan9asm-wt-pr40-sdk-tls-20261013` | Source/terminal-consumer WIP; independent386 compiler/linker oracle passes1 root/two children, runtime unexecuted. Preserve all files/stashes. |
-| `plan9asm-wt-pr40-sdk-numeric-maps-20261013` | Clean fork5657/native63 staging mirror; never merge fork workflow into contribution. |
+| `plan9asm-wt-pr40-sdk-tls-20261013` | Terminal-CFG WIP at51bb, paused for CI. Last pure checkpoint10/32 passes; newer terminal-only two-child RED remains unresolved. No tool qualification. Preserve18 WIP files, old4c44 branch and stashes. |
+| `plan9asm-wt-pr40-sdk-numeric-maps-20261013` | Fork-only staging for qualified source merge and independent Bytealg priorities; never merge fork workflow into contribution. |
 
 One heavy SDK/object/native/benchmark owner at a time. Small pure gates may run
 in parallel. A model/connection error is not a test failure; inspect any still
@@ -222,17 +277,26 @@ This is declaration association, not complete file translation. No runtime.*
 exemption, fake helper declaration or second observer is permitted. Go20 tests
 the portable framework, not a fabricated SDK producer.
 
-The separate386 single-panic terminal consumer is still WIP/RED. Typed body
-observation alone is not terminal authority. Preserve exact source/compiler/
-ABI/linker association, original CALL/unwind, zero normal successors only,
-shared budget and permanent/final-callback revocation. Actual386 ABIInternal
-normalization is independently compiled/linked by a new standalone own-package
-oracle: two actual ABI1 bodies, original ABI0 ASM references and linked E8
-targets agree;1 root/two children pass with unchanged source/tools. It does not
-execute the ELF or complete the two still-RED compiler-association roots.
-No terminal capability, source truncation or noreturn attribute is admitted yet.
+The separate386 single-panic terminal consumer is still WIP/RED. The integrated
+observation now binds complete typed Go declarations, compiler/linker sources,
+full compiler archive and every original CALL in the complete42-TEXT source.
+Two actual tool roots/five children pass; standalone386 ELF compilation/linking
+does not execute that ELF. Typed body observation alone is not terminal
+authority. The next consumer must preserve original CALL/unwind, cut only its
+proved zero-normal-successor edge, validate all original and normalized source,
+and retain independent alternate entries after the CALL. Share the16k-visit/
+64MiB budget and permanent/final-callback revocation. No source truncation,
+fake ABI0 Go body, noreturn or nounwind attribute is admitted.
 Hidden DX closure extent, composite ABI carriers and native entry/caller memory
 still need separate producers.
+
+The separate AMD64 argument planner8607 is qualified but not integrated. It
+retains typed grouping/paths, Go's9GP/15FP banks and whole-argument rollback;
+it supplies no source, initialized-byte, spill, DX or caller permission. Actual
+compiler ABI wrappers are not guaranteed for every declaration. Inventory the
+real full compiler archive before designing a consumer; do not manufacture
+SDK references or wrappers. Shared ABI readers need their own observed source
+roles, full lifetime checks and a coherent downstream consumer before merging.
 
 A read-only size audit confirms all865 migration-deleted scanner/ledger paths
 remain absent. `cmd/plan9asmscan` deliberately remains the official/std classifier.
@@ -244,7 +308,7 @@ Go parsing/import setup. Preserve separate authority/lifetime contracts.
 
 ## Official coverage and benchmark
 
-Fresh frozen `aa8287d5` passes official five-architecture classification gates on
+Fresh frozen `ca02d8ea` passes official five-architecture classification gates on
 Go1.27 and actualGo1.20. Original supported/context/unsupported denominators and
 fingerprints match; Go27 has zero unsupported/parse errors, historical Go20
 retains one AMD64 unsupported form. Classification is not complete execution
@@ -252,10 +316,10 @@ or full standard-library file success. Go27 observes only21 distinct386 corpus
 operations and classifies all121 wasm forms as Context: no claim that every
 encoder name or runtime behavior is implemented follows from a green gate.
 
-Latest strict complete benchmark remains FAILED at `aa8287d5`:
+Latest strict complete benchmark remains FAILED at `ca02d8ea`:
 156/184 original files pass,28 fail, zero N/A/unattempted; all five targets run.
 38625/33, AMD6445/55, ARM27/30, ARM6440/47, wasm19/19.
-Target wall total300s (AMD64243s) passes original300s-per-target/900s-total limits.
+Target wall total312s (AMD64254s) passes original300s-per-target/900s-total limits.
 New386 atomic source/LOCK observations only advance to an independent CALL
 contract; no additional complete-file pass has been established.
 Different caches do not establish an algorithmic speedup. Remaining contracts
