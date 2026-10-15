@@ -777,7 +777,7 @@ func (c *amd64Ctx) lowerInstr(bi int, ii int, ins Instr, emitBr amd64EmitBr, emi
 		fmt.Fprintf(c.b, "  store i1 %s, ptr %s\n", flagBit(7), c.flagsSltSlot)
 		return false, nil
 	case "CLC", "STC", "CMC":
-		form, _, err := x86CarryControlProperties(op, ins, c.goarch)
+		form, _, err := x86CarryControlProperties(Op(op), ins, c.goarch)
 		if err != nil {
 			return false, err
 		}
