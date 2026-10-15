@@ -20,13 +20,20 @@ import (
 )
 
 func TestCompileOneX86SDKOriginalCRC32NumericalDataJoin(t *testing.T) {
-	for _, profile := range []string{"explicit", "effective-defaults"} {
-		t.Run(profile, func(t *testing.T) { compileX86SDKOriginalCRC32NumericalDataJoin(t, profile) })
-	}
+	t.Run("explicit", func(t *testing.T) {
+		compileX86SDKOriginalCRC32NumericalDataJoin(t, "explicit")
+	})
+}
+
+func TestCompileOneX86SDKOriginalCRC32NumericalDataJoinEffectiveDefaults(t *testing.T) {
+	t.Run("effective-defaults", func(t *testing.T) {
+		compileX86SDKOriginalCRC32NumericalDataJoin(t, "effective-defaults")
+	})
 }
 
 func setX86SDKNumericalCLIProfile(t *testing.T, profile string) {
 	t.Helper()
+	cache := x86SDKNumericalCLIBuildCache(t)
 	for key, value := range map[string]string{
 		"GOENV": "off", "GOWORK": "off", "GOTOOLCHAIN": "local",
 		"GOFLAGS": "", "GOEXPERIMENT": "", "GOPACKAGESDRIVER": "off",
@@ -35,13 +42,14 @@ func setX86SDKNumericalCLIProfile(t *testing.T, profile string) {
 	} {
 		t.Setenv(key, value)
 	}
-	for _, key := range []string{"GOCACHE", "GOPATH", "GOMODCACHE", "TMPDIR", "GOTMPDIR"} {
+	for _, key := range []string{"GOPATH", "GOMODCACHE", "TMPDIR", "GOTMPDIR"} {
 		path, err := filepath.EvalSymlinks(t.TempDir())
 		if err != nil {
 			t.Fatal(err)
 		}
 		t.Setenv(key, path)
 	}
+	t.Setenv("GOCACHE", cache)
 	if profile == "effective-defaults" {
 		for _, key := range []string{"GOAMD64", "GO386", "GOPROXY", "GOTMPDIR", "GOMODCACHE", "GOPATH", "CGO_ENABLED"} {
 			// Setenv owns restoration and prohibits parallel environment users;

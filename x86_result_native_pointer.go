@@ -13,6 +13,17 @@ func x86ResultPointerWord(arch string) int64 {
 }
 
 func x86ResultIncomingPointerAddressIdentity(arg Operand, state *x86ResultState, arch string) bool {
+	return x86ResultIncomingPointerAddress(arg, state, arch, false)
+}
+
+// Only an existing paired native read may commute a numerical base with an
+// unscaled pointer index. Stores, RMW, caller certificates and LEA keep the
+// original base-pointer entry above; this grants no reusable address fact.
+func x86ResultIncomingPointerReadAddressIdentity(arg Operand, state *x86ResultState, arch string) bool {
+	return x86ResultIncomingPointerAddress(arg, state, arch, true)
+}
+
+func x86ResultIncomingPointerAddress(arg Operand, state *x86ResultState, arch string, commutedRead bool) bool {
 	if arg.Kind != OpMem {
 		return false
 	}
@@ -22,18 +33,25 @@ func x86ResultIncomingPointerAddressIdentity(arg Operand, state *x86ResultState,
 		return false
 	}
 	word := x86ResultPointerWord(arch)
-	base, _, valid := x86ResultGP(memory.Base, word, arch)
-	if !valid || !state.shapeOnly && !state.pointerGP[base] {
+	base, baseMask, valid := x86ResultGP(memory.Base, word, arch)
+	if !valid {
 		return false
 	}
 	if memory.Index == "" {
-		return memory.Scale == 0
+		return memory.Scale == 0 && (state.shapeOnly || state.pointerGP[base])
 	}
 	if memory.Scale != 1 && memory.Scale != 2 && memory.Scale != 4 && memory.Scale != 8 {
 		return false
 	}
 	index, mask, valid := x86ResultGP(memory.Index, word, arch)
-	return valid && state.gp[index]&mask == mask
+	if !valid {
+		return false
+	}
+	if (state.shapeOnly || state.pointerGP[base]) && state.gp[index]&mask == mask {
+		return true // Preserve the existing pointer-base/numerical-index role.
+	}
+	return commutedRead && !state.shapeOnly && memory.Scale == 1 &&
+		!state.pointerGP[base] && state.gp[base]&baseMask == baseMask && state.pointerGP[index]
 }
 
 func x86ResultIncomingPointerTransfer(ins Instr, state *x86ResultState, owned []bool, arch string) (bool, bool) {

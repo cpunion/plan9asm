@@ -1,5 +1,162 @@
 # Current work: PR 40 checkpoint
 
+Checkpoint: 2026-10-15 21:00 UTC. The notes below this section are historical
+and retain their original source scope; they are not the current task queue.
+
+## Active queue
+
+The latest allowed-fork [run38760793656](https://github.com/cpunion/plan9asm/actions/runs/38760793656)
+at `191fbeaf` ended naturally: 78 jobs, 66 successful and 12 failed. Ten
+execution jobs contain 13 distinct failing test roots; the two other failures
+are strict complete-module aggregates refusing those failed partitions.
+No cancellation or rerun established success. The complete simple CLI and its
+coverage upload pass; main/rich coverage uploads are skipped, not passed.
+All 41 SDK priorities, native65 and ARM cross execution pass their own scopes.
+
+Independent complete Windows raw audits retain main's 22 packages, 7,043 root
+and 166,564 child executions, with 12 failed roots/45 failed children and 263
+explicit host-inapplicable root skips. The simple CLI has 32 roots/29 children,
+all passing without skips. The rich CLI has 334 roots/2,095 children, one
+failed root and one explicit host-inapplicable child skip. Host skips do not
+establish native execution on the skipped architecture.
+
+| Failing class | Current bounded repair or remaining work |
+| --- | --- |
+| Complete Maps public CLI deadline | `ccf1a8f9` preserves the selected content-addressed Go build cache; fresh source/proof observations and complete two-file package remain independent. Its exact CLI passes locally in 58.23 seconds. Windows performance still needs CI. |
+| CLC/STC/CMC numerical effects | Complete shared carry grammar and CF-only effects; the complement requires incoming CF. Existing unrelated FLAGS/DF remain unchanged. |
+| MOV/FP helper metadata and wide complex store fixture | Actual result schemas, complete source witnesses and initialized GP input replace invalid metadata/unknown-entry assumptions; production checks are not loosened. |
+| Native XADD/XCHG result continuation | Uses the existing complete typed sideeffect emitter; preserves faults/order and grants no reusable memory or declaration-query authority. |
+| Partial FP parameter stores, BIT shadow writeback and trap-only source | Qualified `7753b575` is merged. Separate typed logical-shadow and all-path trap roles preserve the incoming-write, pointer/bool and complete-source boundaries. Actual Linux runtime still needs replay. |
+| SB LEAW/L/Q address effects | Qualified `e5523905` is merged through `cf07263b`. Unknown-address writes kill destination identities without inventing numerical bytes or dereference permission. A separate old AUTO cost-selector gap remains unresolved. |
+| x87 initialized control/status words | Unmerged `78ffe059` passes 11 source-effect/input-obligation roots and 4,270 children. `0df839a6` additionally makes all five masked integer-store directions total: its 12 roots/5,950 children pass, including all 1,560 numerical boundary leaves. I64 precision still fails; ENV has a separate genuine RED and an unexecuted production candidate. Neither leaf is completely qualified. |
+| DATA relocation address values | Qualified `1f39d8db` is merged through `62784911`: 54 affected owners on both SDKs and 30 source/model owners on race, 138 root executions/3,497 children, two whole-root-module vets and tracked formatting pass. Generic incoming pointers and code addresses gain no numerical or dereference permission. |
+| Complete 386 runtime fixture | SCAS/CMPS plus FS/GS candidate `44aa6e45` passes the complete 18-TEXT portable replay: original Go object and retained undefined-BX rejection controls, followed by the explicit-zero-extension counterpart through text/module IR0/O2 and eight LLVM22 object axes. Its 14 children pass. This is Windows/386 object evidence, not native execution or the Go-module API. |
+
+The FS/GS first-GREEN set at `951a68a0` passes 17 unique roots and 30,902
+children, retaining all 212 AMD64 or 114 386 TEXTs per target. Its explicit
+old-source Context and independent read-only counterpart close the old unbound
+CX-store fixture without granting a native-store contract. The first expanded
+qualification nevertheless fails at command 21 on actual Go20 encoding
+observations; four later commands, including both vets, remain unattempted.
+That failure is retained, not a qualified or native-execution receipt.
+
+Actual selected Go20/386 drops FS/GS Index prefixes on dynamic-GP addresses;
+current Go27 emits them. The old encoder also prints numeric register enums in
+four genuine rejected-address diagnostics. Test-only `692c94a2` binds those
+observations to the actual selected assembler/parser source and exact diagnostic
+writer. Unknown schemas fail. Both SDKs independently pass its first three
+roots/83 children; historical no-prefix objects do not prove equivalent current
+segment semantics. The unchanged current-Go source-capability gates still
+exclude historical objects from their private permission factories.
+Fresh 120-owner qualification is running at this checkpoint: 15/25 commands
+pass, with the complete Maps SDK owner currently running. Final scope is
+Go27 120, race 87 and actual Go20 115 owners plus two whole-module vets.
+
+The x87 input-obligation RED at `14e81e89` contains 1,170 real Void false
+acceptances; the complete 3,420-child matrix also retains 540 initialized
+positives. The narrow `78ffe059` routing repair removes all 1,170 false
+acceptances without weakening the independent storage/result checks.
+
+ENV test-only `cfb43daa` then independently reproduces further obligations:
+four public roots/75 children fail in 69 children; the full-read root fails
+all 12 children because only two nonvolatile words are read; whole raw-replay
+identity fails its two authentic positive children while 28 mutation/query
+controls pass. New Void controls expose the missing source/input route.
+Unexecuted `b67f9c48` preserves one complete volatile 28-byte read, and
+`a8713543` pairs Software word observations and raw FCLEX with their complete
+source proof. Unknown Tag/TOP never becomes an initialized value or an empty
+stack: the independent bounded counterpart has an actual final FINIT. Original
+complete ENV source and its unknown-shape-at-RET control remain unchanged.
+These commits still need their first GREEN, objects and executed semantics.
+
+Complete Runtime386 scratch TDD at `11f7ca69` independently passes all 18
+source bodies, three complete Go objects and eight LLVM objects. Its 28
+single-axis negative children nevertheless include 26 false acceptances; only
+two reject, at an independent earlier AUTO boundary. Preserve the failed
+four-root/59-child receipt. Object compilation is not an input-validity proof;
+the bounded whole-source counterpart has not replaced the native owner.
+
+Frozen `0c80d8a6` passes nine carry/exchange/fixture owners on each of Go27,
+actual Go20 and race: 27 root executions/378 children, no failures or skips.
+This is a focused result, not whole-module, native-runtime or final PR
+qualification. Vets and broader affected-family qualification remain required.
+
+The combined `1c883d32` snapshot separately passes the exact 37-root
+DATA/BIT/LEA/carry/fixture integration set on Go27 and actual Go20:
+74 root executions/5,238 children, no failures, skips, gaps or duplicates.
+Both original five-minute commands retain identical source/SDK/tool seals.
+This is not race, whole-module or native-runtime qualification.
+
+The later combined `3a560149` separately passes whole-root-module `go vet ./...`
+on current Go and actual Go20, under the original three-minute commands and
+unchanged source/SDK/tool seals. These vets do not certify subsequent candidates.
+
+Root independently rechecks the two newly merged leaves' original inventories,
+raw ordered terminals, source/SDK/tool identities and vet exits. BIT/FP/trap's
+Go27/Go20/race scopes pass 252 root executions/16,382 children. SB LEA's same
+lanes pass 185 root executions/7,584 children. Both retain zero skips, missing
+or duplicate terminals; neither is a whole-module or native-runtime receipt.
+The combined head still requires its own fresh qualification before publishing.
+
+DATA's independent final audit rereads 106 bound reports and 24,362 current
+source/SDK/tool files. Its original failed snapshots, including the historical
+Go local-symbol formatter mismatch, remain failed. The reader selects the
+actual SDK lexer producer and exact observed assembler package, not a version
+guess or arbitrary package suffix. Objects do not establish native execution.
+
+The x87 follow-up still needs a real bounded scratch producer and an exact
+extended-value representation. I64-to-double loses integers above 2^53.
+Test-only `c0870164` independently passes all 96 original-Go format/byte cases
+for the seven-name, nine-row integer/rounding family. Its complete I64 identity
+source, without any control-word probe, reaches LLVM O2 through all three APIs
+on five targets: 90 numerical leaves pass, 60 return incorrect constants and
+15 return poison. Parent failures are not additional numerical cases. These
+are genuine Software-mode numerical failures, not native-execution evidence.
+The total-conversion follow-up `0df839a6` removes all 648 poison results in the
+expanded five-direction boundary test. Its independent I64 identity diagnostic
+still fails: all 165 numerical leaves execute, 90 pass and 75 return incorrect
+constants, with no remaining poison. Do not substitute an adjacent-pair cache
+or reject large integers to conceal that representation defect. A tagged
+integer/double carrier alone is not closed under general x87 arithmetic.
+Whether explicit Software mode owns an initialized virtual FPU environment is
+awaiting a user choice; default Auto/Hardware must still observe actual hardware.
+Do not turn the existing private alloca initializer into an implicit entry fact.
+
+SCAS/CMPS retains the independent failed self-CMP and exact caller-write-footprint
+matrices. The unchanged SDK IndexByte replay now reaches the existing unresolved
+PC-relative branch guard, not an observed FLAGS failure; its expected next
+Context is updated only after preserving the actual three-API failed trace.
+That observation does not establish a complete SDK-file pass.
+
+Main now includes the qualified commuted-pointer read leaf through `67c38bc2`
+and immediate packed comparison leaf `605c8615`. The latter's Go27/Go20/race
+affected tests pass 44 root executions/5,020 children. Its complete discovering
+SDK package remains FAILED2/3: the next source effect is VPCOMPRESSQ. That is
+not a complete SDK success. The strict original Index leaf independently passes
+all three APIs and 12 LLVM22 object axes, without a native-execution claim.
+
+The x87 logical-value leaf `0b541d6b` has only first focused GREEN so far:
+14 roots/1,888 children, with Go-row/byte observations and bounded storage
+controls. Go20, race, backend objects, complete original hypot and native
+execution remain pending. Its original failed snapshots remain failed.
+
+Earlier merged `ab5ad450` passes the exact 692-owner union: 1,690 root
+executions/85,181 children across its selected SDK/race lanes. Its strict
+benchmark is nevertheless FAILED150/184, with 34 failed files and AMD64
+484 seconds above the unchanged 300-second budget. Neither that receipt nor
+the subsequent focused leaves certify a newer combined snapshot. Do not
+raise budgets or turn Context into a file pass.
+
+Keep one local heavy command owner at a time, including inventories that build
+test binaries. Release immediately after natural completion. Reuse existing
+idle persistent worktrees, preserve immutable refs/failed reports, and freeze
+each tested source. Stage only qualified batches in the allowed fork; do not
+push a new diagnostic while its current run is active. PR40 remains draft at
+`24851df2`; never directly push or merge upstream. No local inventory scanner
+or external ledger workload belongs in this repository.
+
+## Historical checkpoint: 13:13 UTC
+
 Checkpoint: 2026-10-15 13:13 UTC. Fork diagnostic `5b44378d` completed naturally
 with six failed jobs in three classes: CRC32 result/read proof, a string-IR
 reader's CRLF handling and a shared Compare source deadline. Main contains the

@@ -31,6 +31,18 @@ func TestX86DirectionOriginalSDKIndexByte386ThreeAPIsNextContext(t *testing.T) {
 		t.Fatal("complete original SDK member changed", err)
 	}
 	for _, function := range file.Funcs {
+		branches := 0
+		for _, instruction := range function.Instrs {
+			if instruction.Op == "JZ" && len(instruction.Args) == 1 && instruction.Args[0].Kind == OpMem {
+				address := instruction.Args[0].Mem
+				if address.Base == "PC" && address.Off == 3 && address.OffRaw == "" && address.Index == "" && address.Sym == "" {
+					branches++
+				}
+			}
+		}
+		if branches != 1 {
+			t.Fatal("complete original TEXT lost its PC-relative conditional branch", function.Sym)
+		}
 		name := strings.TrimPrefix(function.Sym, "·")
 		declaration := pkg.Types.Scope().Lookup(name)
 		if declaration == nil {
@@ -51,9 +63,12 @@ func TestX86DirectionOriginalSDKIndexByte386ThreeAPIsNextContext(t *testing.T) {
 		t.Run(api, func(t *testing.T) {
 			ir, err := x86ScalarFPBitViewPackageAPI(t, string(source), pkg, "386", "i386-unknown-linux-gnu", api)
 			// This is complete unchanged source/declaration numerical observation,
-			// not a compiler graph/native-memory grant or a whole-file pass.
-			if !errors.Is(err, ErrProbeNeedsContext) || ir != "" || strings.Contains(err.Error(), "instruction 4: CLD") || !strings.Contains(err.Error(), "REPN") {
-				t.Fatal("DF control has not advanced to the independent repeated-memory contract", err)
+			// not a compiler graph/native-memory grant or a whole-file pass. The
+			// paired SCAS continuation reaches the existing PC-branch CFG guard
+			// before any branch FLAGS transfer; it does not close that guard.
+			if !errors.Is(err, ErrProbeNeedsContext) || ir != "" ||
+				!strings.Contains(err.Error(), "result initialization: indirect, external or unresolved branch") {
+				t.Fatal("complete source did not retain its independent PC-branch boundary", err)
 			}
 			t.Log(err)
 		})

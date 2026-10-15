@@ -21,6 +21,44 @@ func x86GoMOVQSourceInstruction(ins Instr) Instr {
 	return ins
 }
 
+// Go progedit rewrites AMOVQ TYPE_ADDR to ALEAQ before matching ymovq.
+// Source aliases must retain that complete source class, not mistake it for
+// a memory read or a SIMD immediate. This validates syntax only; actual FP,
+// AUTO, symbol and numerical address roles remain separate consumers.
+func x86GoMOVQAddressSource(operand Operand, arch string) bool {
+	if arch != "386" && operand.Kind == OpFPAddr {
+		address := Operand{Kind: OpFP, FPOffset: operand.FPOffset}
+		_, err := x86LEAOperandWidth(Instr{Op: "LEAQ", Args: []Operand{address, {Kind: OpReg, Reg: AX}}}, arch)
+		return err == nil
+	}
+	if arch == "386" || operand.Kind != OpSym {
+		return false
+	}
+	source := strings.TrimSpace(operand.Sym)
+	if !strings.HasPrefix(source, "$") {
+		return false
+	}
+	source = strings.TrimSpace(strings.TrimPrefix(source, "$"))
+	address := Operand{Kind: OpSym, Sym: source}
+	if memory, matched, err := x86UnnamedSourceAddressInMode(operand, arch); matched || err != nil {
+		if err != nil {
+			return false
+		}
+		address = Operand{Kind: OpMem, Mem: memory}
+	} else if memory, matched, err := parseX86SymbolIndexedMemory(source); matched {
+		if err != nil {
+			return false
+		}
+		address = Operand{Kind: OpMem, Mem: memory}
+	} else if _, offset, valid := parseFP(source); valid {
+		address = Operand{Kind: OpFP, FPOffset: offset}
+	} else if memory, valid := parseMem(source); valid {
+		address = Operand{Kind: OpMem, Mem: memory}
+	}
+	_, err := x86LEAOperandWidth(Instr{Op: "LEAQ", Args: []Operand{address, {Kind: OpReg, Reg: AX}}}, arch)
+	return err == nil
+}
+
 // Do not normalize the actual source: caller/raw/frame certificates bind its
 // entire original Op and Raw. Consumers canonicalize only local dispatch copies.
 func validateX86GoMOVQSourceAliases(file *File, arch string) error {

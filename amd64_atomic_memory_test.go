@@ -131,7 +131,7 @@ func TestAMD64ExchangeUnalignedRuntimeSemantics(t *testing.T) {
 			fmt.Fprintf(&source, "TEXT %s(SB),$0-24\nMOVQ p+0(FP), BX\nMOVQ v+8(FP), AX\n%s\nMOVQ AX, ret+16(FP)\nRET\n", name, instruction)
 			sigs[name] = FuncSig{Name: name, Args: []LLVMType{Ptr, I64}, Ret: I64, Frame: FrameLayout{
 				Params:  []FrameSlot{{Offset: 0, Type: Ptr, Index: 0, Field: -1}, {Offset: 8, Type: I64, Index: 1, Field: -1}},
-				Results: []FrameSlot{{Offset: 16, Type: I64, Index: 0}},
+				Results: []FrameSlot{{Offset: 16, Type: I64, Index: 0, Field: -1}},
 			}}
 			fmt.Fprintf(&declarations, "extern uint64_t %s(uint8_t *, uint64_t);\n", name)
 			add := 0

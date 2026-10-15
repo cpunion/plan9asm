@@ -52,6 +52,12 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 	if strictErr == nil {
 		return nil
 	}
+	if x86TrapOnlyLogicalFPSourceRole(fn, sig, arch) {
+		if err := c.checkTrapOnlyLogicalFPResultInitialization(); err == nil {
+			c.fpScalarTrapOnly = true
+			return nil
+		}
+	}
 	// Native/raw entry contracts are established before ordinary lowering.
 	// Do not let this conditional byte rule create or supplement one.
 	if len(fn.X86RawText) != 0 || fn.x86SourceStack != nil || fn.x86FixedLocal != nil {
@@ -82,9 +88,19 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		}
 	}
 	lockPrefixes := x86ResultSourceLockPrefixes(fn, arch)
+	stringComparisons, err := x86ResultStringCompareSourcePlan(fn, arch)
+	if err != nil {
+		return err
+	}
 	transfer := func(ordinal int, ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string) bool {
 		state.loweredStaticReads = c.fpScalarData
 		defer func() { state.loweredStaticReads = nil }()
+		if accepted, known := c.scalarStaticAddressValueTransfer(ins, state, owned, arch); known {
+			return accepted
+		}
+		if accepted, known := stringComparisons.transfer(ordinal, ins, state, arch); known {
+			return accepted
+		}
 		if ins.Op == "LOCK" {
 			prefix, bound := lockPrefixes[ordinal]
 			return bound && reflect.DeepEqual(prefix, ins)
@@ -102,6 +118,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 			return accepted // No ambient environment fact reaches the standalone query.
 		}
 		if accepted, known := x86LoweredCompareExchangeResultStep(ins, state, owned, arch); known {
+			return accepted
+		}
+		if accepted, known := x86LoweredExchangeResultStep(ins, state, owned, arch); known {
 			return accepted
 		}
 		if accepted, known := x86LoweredCRC32NativeRead(ins, state, owned, resultOffset, arch); known {
@@ -134,6 +153,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		if accepted, known := c.scalarPSLogicalFPWriteTransfer(ins, state, owned, arch); known {
 			return accepted
 		}
+		if accepted, known := c.scalarBitTestFPShadowTransfer(ins, state, owned, arch); known {
+			return accepted
+		}
 		if accepted, recognized := x86ResultScalarLaneStepWithRead(ins, state, owned, resultOffset, arch, true); recognized {
 			return accepted
 		}
@@ -145,7 +167,7 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		}
 		if form, known, err := amd64PackedVectorMoveProperties(ins, arch); known && err == nil &&
 			form.memory == 0 && form.ordinaryMemory(ins, arch) &&
-			x86ResultIncomingPointerAddressIdentity(ins.Args[0], state, arch) {
+			x86ResultIncomingPointerReadAddressIdentity(ins.Args[0], state, arch) {
 			// The emitter preserves the original aligned opcode, or the
 			// unaligned full/guarded tuple with volatile accesses. If it continues,
 			// active bytes are numerical; inactive bytes still require the
@@ -160,7 +182,7 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 			// identity and initialized numerical indexes supply an address.
 			// No native store, static symbol, virtual frame or unknown base
 			// gains a numerical input from this load-only rule.
-			return x86ResultIncomingPointerAddressIdentity(form.source, state, arch) &&
+			return x86ResultIncomingPointerReadAddressIdentity(form.source, state, arch) &&
 				x86ResultStore(form.destination, 16, state, owned, resultOffset, arch)
 		}
 		next := state.clone()
@@ -173,6 +195,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		}
 		if accepted, known := x86ResultUnusedFPAddressStep(ins, state, owned, resultOffset, arch); known {
 			return accepted // Mapped logical storage only; no initialized address bits.
+		}
+		if accepted, known := x86ResultUnknownSBAddressStep(ins, state, arch); known {
+			return accepted // Address calculation only; written address bits stay unknown.
 		}
 		return x86LoweredPureGPUnknownTransfer(ins, state, arch)
 	}
@@ -198,5 +223,5 @@ func x86ResultReadWithNativeContinuation(ins Instr, source Operand, width int64,
 	return conditionalNativeRead && source.Kind == OpMem && source.Mem.Sym == "" &&
 		ins.x86NumericalRead == nil && !ins.x86Encoded && ins.x86SourceRaw == nil && ins.x86RawNearReturn == nil &&
 		ins.x86AddressBits == 0 && !ins.x86UnboundAddressOverride && ins.x86SegmentPrefix == 0 &&
-		x86OrdinaryNativeMemoryOperand(source, arch) && x86ResultIncomingPointerAddressIdentity(source, state, arch)
+		x86OrdinaryNativeMemoryOperand(source, arch) && x86ResultIncomingPointerReadAddressIdentity(source, state, arch)
 }
