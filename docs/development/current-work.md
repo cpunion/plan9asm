@@ -1,6 +1,6 @@
 # Current work: PR 40 checkpoint
 
-Checkpoint: 2026-10-15 00:20 UTC. Primary source `7f686ed4`.
+Checkpoint: 2026-10-15 00:56 UTC. Primary source `dd628058`.
 This is a handoff, not a ledger or a claim of complete CI/stdlib success.
 
 ## Scope and authority
@@ -19,6 +19,19 @@ Freeze source, tools and documentation during a tested snapshot. Preserve old
 failures as failures; do not increase budgets, crop sources or shrink denominators.
 
 ## Latest completed CI
+
+Current [38661041122](https://github.com/cpunion/plan9asm/actions/runs/38661041122)
+at fork5657d2ab is still RUNNING: all31 priority jobs pass and the complete
+Windows three-module stage has started. Do not call the complete run green.
+Downloaded native63 independently passes63 roots/169 children in140.887s,
+all15 inventories/25 mandatory owners/eight children, zero skips or gaps.
+The new original PCMP fault owner really executes all32 rows/34 probes at
+both O0/O2, including original VEX. Downloaded Windows source priority retains
+the exact original127 roots/3947 children and passes131.348s; both former DF
+failures pass with no reported skip. This artifact is Go verbose output, not
+a JSON event trace. The Linux native artifact has strict JSON event audits.
+Fork5657's non-GitHub source is identical to earlier contributionaa8287d5;
+new local namespace source below has NOT been pushed into this running CI.
 
 [38648974765](https://github.com/cpunion/plan9asm/actions/runs/38648974765)
 at frozen fork `7003d395` completed FAILURE naturally at00:08 UTC:32 jobs,
@@ -70,6 +83,25 @@ New integrated leaves, fully qualified independently before integration:
 
 Commit and freeze the complete batch, then run fresh integrated-head affected
 pure/tool groups, original source127 and official coverage before publishing.
+At cleanaa8287d5 that coupled gate now passes375 unique current-SDK package/root
+identities: root pure222/8060 children plus internal18/201 on Go27/race,
+Go20 root221/8052 plus internal18/201, exact source127/3947, all affected
+CAS/status/PCMP objects, SDK31+11 and internal13 tools. Both SDKs' official
+classifications/continuation23, vets and all3809 tracked input/tool/head/status
+seals pass. Complete benchmark still fails156/184; these are distinct claims.
+
+Namespaceec21 is fully qualified on cleandd628058 (ec21 plusaa): pure16/96
+pass Go27/race/actualGo20; exact22 SDK roots/71 children over two packages and
+ten original five-minute commands pass, including all six independent NoDATA
+owners, old denials, complete three-OS assembly and CRC/maps object axes.
+Both vets and complete source/tool/head/status seals pass. opt/libLLVM's two
+tool hashes explicitly use earlier aa benchmark tool-before evidence and own
+post-run checks at the exact same installation; this is tool provenance only,
+not reuse of aa source results. The qualified namespace merge is integrated
+locally, not pushed. Fresh combined-head critical gates are next.
+
+The following older repair rows retain their leaf-time dispositions; latest
+actual native/Windows receipts above supersede their earlier pending labels.
 
 | Class / failed root | Current disposition |
 | --- | --- |
@@ -125,12 +157,12 @@ Basenames intentionally avoid private machine paths.
 
 | Worktree basename | Current role |
 | --- | --- |
-| `plan9asm-wt-pr40-scalar-lane-native-20261011` | Primary `codex/pr40-external-corpus-split-20261011`, source7f686ed4; coupled current-head qualification next. |
-| `plan9asm-wt-pr40-stdlib-preprocessing-20261012` | Published diagnostic7003; failed run complete. Fork-only workflow stays outside contribution. |
-| `plan9asm-wt-pr40-sdk-numeric-maps-entry-20261013` | Namespace checkpointec21f454, clean but NOT fully qualified/integrated. Old stash preserved. |
+| `plan9asm-wt-pr40-scalar-lane-native-20261011` | Primary `codex/pr40-external-corpus-split-20261011`, qualified namespace merge dd628058 integrated; new combined critical gates next. |
+| `plan9asm-wt-pr40-stdlib-preprocessing-20261012` | Published diagnostic5657, current CI active; source/native priorities pass, complete Windows pending. |
+| `plan9asm-wt-pr40-sdk-numeric-maps-entry-20261013` | Qualified namespace dd628058, clean/idle; old stash preserved. |
 | `plan9asm-wt-pr40-simple-sdk-bindings-20261013` | Clean fully qualified POPF982 leaf; integrated. No heavy process. |
-| `plan9asm-wt-pr40-sdk-tls-20261013` | Qualified bca8 source observation plus untracked terminal-consumer WIP; preserve all files and parameter stash. |
-| `plan9asm-wt-pr40-sdk-numeric-maps-20261013` | Clean frozen future fork582/native63 staging; never merge fork workflow into contribution. |
+| `plan9asm-wt-pr40-sdk-tls-20261013` | Source/terminal-consumer WIP; independent386 compiler/linker oracle passes1 root/two children, runtime unexecuted. Preserve all files/stashes. |
+| `plan9asm-wt-pr40-sdk-numeric-maps-20261013` | Clean fork5657/native63 staging mirror; never merge fork workflow into contribution. |
 
 One heavy SDK/object/native/benchmark owner at a time. Small pure gates may run
 in parallel. A model/connection error is not a test failure; inspect any still
@@ -150,15 +182,16 @@ merely to satisfy an incorrect expectation.
 PCMP test-only leaf `485cb2fd` and CRLF-onlyd82 are integrated: required Linux owner
 `TestCrossLinuxRuntimeMatrixX86PackedStringOriginalNativeMemoryFaults`, all eight
 original Go encodings, zero/full length × live/dead result, NULL/partial/full/
-unaligned guarded reads and LLVM O0/O2. Source/object controls pass; actual
-Linux fault execution remains pending. A Darwin host skip is not a runtime pass.
+unaligned guarded reads and LLVM O0/O2. Source/object controls and actual
+Linux fault execution pass at5657. A Darwin host skip is not a runtime pass.
 Physical MXCSR dead/fault parity remains separate and unresolved.
 
 Namespaceec21 associates actual selected two-argument go:linkname bodyless
 declarations through the existing live source/SymABI/compiler-object observer
 and complete TEXT archive. Actual unchanged equal/compare captures now pass;
 four live mutation controls permanently revoke stale options. Committed-head
-complete capture, old positives and seals still need qualification. No runtime.*
+complete capture, old positives, six NoDATA owners and seals now pass ondd628.
+This is declaration association, not complete file translation. No runtime.*
 exemption, fake helper declaration or second observer is permitted. Go20 tests
 the portable framework, not a fabricated SDK producer.
 
@@ -166,7 +199,10 @@ The separate386 single-panic terminal consumer is still WIP/RED. Typed body
 observation alone is not terminal authority. Preserve exact source/compiler/
 ABI/linker association, original CALL/unwind, zero normal successors only,
 shared budget and permanent/final-callback revocation. Actual386 ABIInternal
-normalization must be independently compiled/linked, never relabeled as ABI0.
+normalization is independently compiled/linked by a new standalone own-package
+oracle: two actual ABI1 bodies, original ABI0 ASM references and linked E8
+targets agree;1 root/two children pass with unchanged source/tools. It does not
+execute the ELF or complete the two still-RED compiler-association roots.
 No terminal capability, source truncation or noreturn attribute is admitted yet.
 Hidden DX closure extent, composite ABI carriers and native entry/caller memory
 still need separate producers.
@@ -181,7 +217,7 @@ Go parsing/import setup. Preserve separate authority/lifetime contracts.
 
 ## Official coverage and benchmark
 
-Fresh frozen `46517f30` passes official five-architecture classification gates on
+Fresh frozen `aa8287d5` passes official five-architecture classification gates on
 Go1.27 and actualGo1.20. Original supported/context/unsupported denominators and
 fingerprints match; Go27 has zero unsupported/parse errors, historical Go20
 retains one AMD64 unsupported form. Classification is not complete execution
@@ -189,10 +225,10 @@ or full standard-library file success. Go27 observes only21 distinct386 corpus
 operations and classifies all121 wasm forms as Context: no claim that every
 encoder name or runtime behavior is implemented follows from a green gate.
 
-Latest strict complete benchmark remains FAILED at `46517f30`:
+Latest strict complete benchmark remains FAILED at `aa8287d5`:
 156/184 original files pass,28 fail, zero N/A/unattempted; all five targets run.
 38625/33, AMD6445/55, ARM27/30, ARM6440/47, wasm19/19.
-Target wall total305s passes original300s-per-target/900s-total limits.
+Target wall total300s (AMD64243s) passes original300s-per-target/900s-total limits.
 New386 atomic source/LOCK observations only advance to an independent CALL
 contract; no additional complete-file pass has been established.
 Different caches do not establish an algorithmic speedup. Remaining contracts
@@ -201,13 +237,13 @@ and ARM64 result-tail stores; do not restore unchecked admission.
 
 ## External inventory (server only)
 
-Last trusted readback generated21:35:55 UTC:22,622,410 index entries,
-1,077,773 unique module paths,6,847 assembly-bearing version records,
-1,130,822 scanned records,16,917 retryable failures,1,008,425 latest records and
-1,124,998 cgo scan records (not cgo-positive count). These are NOT translator
-or runtime passes. All602 ranges checked contiguous and their sum equals index
+Last trusted readback generated2026-10-15T00:21:33Z:22,775,671 index entries,
+1,080,162 unique module paths,6,877 assembly-bearing version records,
+1,134,359 scanned records,16,946 retryable failures,1,010,978 latest records and
+1,128,535 cgo scan records (not cgo-positive count). These are NOT translator
+or runtime passes. All616 ranges checked contiguous and their sum equals index
 entries. Derived history endpoint2025-10-01 and incremental endpoint
-2026-10-12T10:22:43Z; unfinished windows cannot advance cursors. Service active;
+2026-10-13T00:22:43Z; unfinished windows cannot advance cursors. Service active;
 no local scan process. A missing remote jq was an inspection-tool error, not a
 scan failure; a bounded manifest-only JSON check independently verified ranges.
 Later progress requires fresh remote manifest readback. Resolve server details
