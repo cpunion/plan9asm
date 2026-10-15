@@ -204,6 +204,21 @@ jobs:
             roots:
               - TestX86ABI0ResultTupleScalarTypesAndObjects
             timeout: 5m
+          - lane: ordinary-bp-native-read
+            module: '.'
+            roots:
+              - TestX86LegacyPackedFloatingNativeMemoryUnboundSourcesFiveTargets
+              - TestX86LegacyLogicalMemoryVirtualStackNeedsCertificate
+              - TestX86WordMultiplyAddLegacyVirtualMemoryCannotProveAlignment
+              - TestX86PackedWordMultiplyVirtualLegacyMemoryRemainsContext
+              - TestX86PackedLowMultiplyVirtualLegacyStorageRemainsContext
+              - TestX86PackedConversionOriginalNativeAddressRequired
+              - TestX86ByteShuffleVirtualLegacyStorageRemainsContext
+              - TestX86SignedPackedFloatAllWidthsZeroMaskStorageContext
+              - TestX86CMOVFamilyNativeStackAndFPAuthorityUnchanged
+              - TestX86OrdinaryBPNativeMemoryCompleteFamiliesGoAndLLVMObjects
+              - TestX86OrdinaryBPCMOVCompleteFamilyGoAndLLVMObjects
+            timeout: 5m
           - lane: arm64-carrier-widths
             module: '.'
             roots:

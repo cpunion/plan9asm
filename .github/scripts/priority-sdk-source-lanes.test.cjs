@@ -4,7 +4,57 @@ const test = require('node:test');
 
 const workflow = fs.readFileSync('.github/workflows/pr40-owned-process-probe.yml', 'utf8');
 const sdk = workflow.slice(workflow.indexOf('\n  sdk-priority:'), workflow.indexOf('\n  ownership:'));
-const sdkLaneCount = 34;
+const sdkLaneCount = 35;
+
+const ordinaryBPRoots = [
+  'TestX86LegacyPackedFloatingNativeMemoryUnboundSourcesFiveTargets',
+  'TestX86LegacyLogicalMemoryVirtualStackNeedsCertificate',
+  'TestX86WordMultiplyAddLegacyVirtualMemoryCannotProveAlignment',
+  'TestX86PackedWordMultiplyVirtualLegacyMemoryRemainsContext',
+  'TestX86PackedLowMultiplyVirtualLegacyStorageRemainsContext',
+  'TestX86PackedConversionOriginalNativeAddressRequired',
+  'TestX86ByteShuffleVirtualLegacyStorageRemainsContext',
+  'TestX86SignedPackedFloatAllWidthsZeroMaskStorageContext',
+  'TestX86CMOVFamilyNativeStackAndFPAuthorityUnchanged',
+  'TestX86OrdinaryBPNativeMemoryCompleteFamiliesGoAndLLVMObjects',
+  'TestX86OrdinaryBPCMOVCompleteFamilyGoAndLLVMObjects',
+];
+const ordinaryBPLane = '- lane: ordinary-bp-native-read\n            module: \'.\'\n            roots:\n' +
+  ordinaryBPRoots.map(root => `              - ${root}\n`).join('') + '            timeout: 5m';
+
+function checkOrdinaryBPPriority(text) {
+  assert.equal(ordinaryBPRoots.length, 11);
+  assert.equal(new Set(ordinaryBPRoots).size, 11);
+  assert.ok(text.includes(ordinaryBPLane), 'all nine original BP fixtures and both complete object owners');
+  assert.equal(text.split('- lane: ordinary-bp-native-read\n').length - 1, 1,
+    'one bounded BP family priority lane, not eleven new jobs');
+  for (const root of ordinaryBPRoots) {
+    assert.equal(text.split(`- ${root}\n`).length - 1, 1, 'one complete owner per literal root: ' + root);
+  }
+}
+
+test('Ordinary BP priority keeps the complete eleven-owner family in its original five-minute budget', () => {
+  checkOrdinaryBPPriority(sdk);
+});
+
+test('Ordinary BP priority rejects missing, duplicate, substituted, partial or enlarged owners', () => {
+  checkOrdinaryBPPriority(ordinaryBPLane);
+  for (const changed of [
+    '',
+    ordinaryBPLane.replace('ordinary-bp-native-read', 'unrelated-native-read'),
+    ordinaryBPLane + '\n          ' + ordinaryBPLane,
+    ordinaryBPLane.replace("module: '.'", 'module: cmd/plan9asmll'),
+    ordinaryBPLane.replace('timeout: 5m', 'timeout: 6m'),
+    ordinaryBPLane.replace('            timeout: 5m',
+      '              - TestUnrelatedAdditionalOwner\n            timeout: 5m'),
+    ...ordinaryBPRoots.flatMap(root => [
+      ordinaryBPLane.replace(`              - ${root}\n`, ''),
+      ordinaryBPLane + `\n              - ${root}\n`,
+      ordinaryBPLane.replace(root, 'TestUnrelatedSubstituteOwner'),
+      ordinaryBPLane.replace(root, root + '/i386-unknown-linux-gnu'),
+    ]),
+  ]) assert.throws(() => checkOrdinaryBPPriority(changed));
+});
 
 const tupleRoot = 'TestX86ABI0ResultTupleScalarTypesAndObjects';
 const tupleLane = '- lane: abi0-result-tuples\n            module: \'.\'\n' +
