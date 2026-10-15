@@ -777,19 +777,17 @@ func (c *amd64Ctx) lowerInstr(bi int, ii int, ins Instr, emitBr amd64EmitBr, emi
 		fmt.Fprintf(c.b, "  store i1 %s, ptr %s\n", flagBit(7), c.flagsSltSlot)
 		return false, nil
 	case "CLC", "STC", "CMC":
-		if len(ins.Args) != 0 {
-			return false, fmt.Errorf("%s %s takes no operands: %q", c.goarch, op, ins.Raw)
+		form, _, err := x86CarryControlProperties(op, ins, c.goarch)
+		if err != nil {
+			return false, err
 		}
-		switch op {
-		case "CLC":
-			fmt.Fprintf(c.b, "  store i1 false, ptr %s\n", c.flagsCFSlot)
-		case "STC":
-			fmt.Fprintf(c.b, "  store i1 true, ptr %s\n", c.flagsCFSlot)
-		case "CMC":
+		if form.complement {
 			oldCarry := c.loadFlag(c.flagsCFSlot)
 			newCarry := c.newTmp()
 			fmt.Fprintf(c.b, "  %%%s = xor i1 %s, true\n", newCarry, oldCarry)
 			fmt.Fprintf(c.b, "  store i1 %%%s, ptr %s\n", newCarry, c.flagsCFSlot)
+		} else {
+			fmt.Fprintf(c.b, "  store i1 %t, ptr %s\n", form.set, c.flagsCFSlot)
 		}
 		return false, nil
 	case "ADJSP":
