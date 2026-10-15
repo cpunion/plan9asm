@@ -1,6 +1,6 @@
 # Current work: PR 40 checkpoint
 
-Checkpoint: 2026-10-15 17:54 UTC. The notes below this section are historical
+Checkpoint: 2026-10-15 18:28 UTC. The notes below this section are historical
 and retain their original source scope; they are not the current task queue.
 
 ## Active queue
@@ -28,9 +28,9 @@ establish native execution on the skipped architecture.
 | Native XADD/XCHG result continuation | Uses the existing complete typed sideeffect emitter; preserves faults/order and grants no reusable memory or declaration-query authority. |
 | Partial FP parameter stores, BIT shadow writeback and trap-only source | Qualified `7753b575` is merged. Separate typed logical-shadow and all-path trap roles preserve the incoming-write, pointer/bool and complete-source boundaries. Actual Linux runtime still needs replay. |
 | SB LEAW/L/Q address effects | Qualified `e5523905` is merged through `cf07263b`. Unknown-address writes kill destination identities without inventing numerical bytes or dereference permission. A separate old AUTO cost-selector gap remains unresolved. |
-| x87 initialized control/status words | Original word-store objects pass at `606bb5d9`, but portable complete ENV source remains failed. Mode-correct `2f854007` reproduces 177 genuine semantic rejections plus a state failure; its 45 bare-SP fixture errors are separately corrected. Named-AUTO `9b5b9b15` then genuinely fails all 45 positive width projections. No complete x87 qualification yet. |
-| DATA relocation address values | `de9c0339` first GREEN passes 12 roots/305 children, including original Go objects and 60 LLVM22 axes. Complete SDK/race affected qualification remains pending. Generic incoming pointers and code addresses gain no numerical or dereference permission. |
-| Complete 386 runtime fixture | New complete SCAS/CMPS source oracle passes all five targets. Result-flow tests retain 708 legal rejections and 60 passing boundary controls; complete prefix, zero-count FLAGS and original runtime-source replay remain work, not passes. |
+| x87 initialized control/status words | Candidate `3bdaabe1` passes 14 roots/1,285 children, including the original word-store objects, but complete ENV still fails all nine children at FLDENV. Original instruction-family replay also fails its partial-18 positive at x87math's zero-frame SP storage; the complete-19 Context control passes. Modes/Codegen remain unattempted. Do not merge or narrow the proof to hide this regression. |
+| DATA relocation address values | Qualified `1f39d8db` is merged through `62784911`: 54 affected owners on both SDKs and 30 source/model owners on race, 138 root executions/3,497 children, two whole-root-module vets and tracked formatting pass. Generic incoming pointers and code addresses gain no numerical or dereference permission. |
+| Complete 386 runtime fixture | The complete SCAS/CMPS Go oracle passes five targets. Candidate `31d4386f` remains unqualified; independent self-CMP RED retains 79 model failures and 54 rejected public positives. Follow-up `15e5b1cc` reproduces 432 legitimate whole-flow failures from incorrectly clearing unchanged caller-address facts. Prefix, count, FLAGS, exact write-footprint repair and complete original runtime replay remain pending. |
 
 Frozen `0c80d8a6` passes nine carry/exchange/fixture owners on each of Go27,
 actual Go20 and race: 27 root executions/378 children, no failures or skips.
@@ -43,6 +43,19 @@ Go27/Go20/race scopes pass 252 root executions/16,382 children. SB LEA's same
 lanes pass 185 root executions/7,584 children. Both retain zero skips, missing
 or duplicate terminals; neither is a whole-module or native-runtime receipt.
 The combined head still requires its own fresh qualification before publishing.
+
+DATA's independent final audit rereads 106 bound reports and 24,362 current
+source/SDK/tool files. Its original failed snapshots, including the historical
+Go local-symbol formatter mismatch, remain failed. The reader selects the
+actual SDK lexer producer and exact observed assembler package, not a version
+guess or arbitrary package suffix. Objects do not establish native execution.
+
+The x87 follow-up needs separate complete rounding/integer-conversion effects
+and a real bounded scratch producer. I64-to-double already loses integers above
+2^53, and software NaN/out-of-range conversion must not become LLVM poison.
+Whether explicit Software mode owns an initialized virtual FPU environment is
+awaiting a user choice; default Auto/Hardware must still observe actual hardware.
+Do not turn the existing private alloca initializer into an implicit entry fact.
 
 Main now includes the qualified commuted-pointer read leaf through `67c38bc2`
 and immediate packed comparison leaf `605c8615`. The latter's Go27/Go20/race
