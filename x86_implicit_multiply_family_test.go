@@ -64,7 +64,11 @@ func TestX86ImplicitMultiplyGrammarBanksAndMemoryBoundaries(t *testing.T) {
 			}
 		}
 		for _, instruction := range []string{"MULL $3", "MULL $1.0", "MULL $x(SB)", "MULL", "MULL AX,BX", "IMULB AX,BX", "MULL (AX)(SP*1)", "MULL (AX)(BX*3)", "MULL (AX)(BX)", "MULL $slot+0(FP)"} {
-			ins := x86YMMReadSource(t, instruction)
+			file, err := Parse(ArchAMD64, "TEXT ·Value(SB),4,$0-0\n"+instruction+"\nRET\n")
+			if err != nil {
+				continue // Malformed source syntax has already been rejected, not granted a typed effect.
+			}
+			ins := file.Funcs[0].Instrs[1]
 			if _, known, err := x86ImplicitMultiplyProperties(ins.Op, ins, arch); !known || err == nil {
 				t.Fatal("invalid implicit form acquired numerical effect", arch, instruction)
 			}
@@ -78,6 +82,56 @@ func TestX86ImplicitMultiplyGrammarBanksAndMemoryBoundaries(t *testing.T) {
 			state.gp[0] = 255
 			if x86ScalarFPResultTransfer(ins, &state, nil, 0, arch) {
 				t.Fatal("shape alone initialized unowned FP/AUTO/SB/native storage", instruction)
+			}
+		}
+	}
+}
+
+func TestX86ImplicitMultiplyIndependentStorageCannotBypassNUM(t *testing.T) {
+	for _, target := range x86RawReturnTargets {
+		word, move, push, pop, lea := goWordSize(target.arch), "MOVQ", "PUSHQ", "POPQ", "LEAQ"
+		if target.arch == "386" {
+			move, push, pop, lea = "MOVL", "PUSHL", "POPL", "LEAL"
+		}
+		for _, row := range []struct {
+			name, params, storage string
+			writes, knownValid    bool
+		}{
+			{"bool-input", "flag bool", "", true, true},
+			{"bool-input-unwritten", "flag bool", "", false, false},
+			{"unused-result-address", "", fmt.Sprintf("%s ret+0(FP),SI\n", lea), true, true},
+			{"value-stack", "", push + " $7\n" + pop + " SI\n", true, true},
+			{"input-store", "flag uint32", "MOVL $1,flag+0(FP)\n", true, false},
+			{"unbacked-SP", "", move + " $7,-8(SP)\n", true, false},
+		} {
+			for _, initialized := range []bool{false, true} {
+				for _, api := range []string{"text", "module", "Go"} {
+					t.Run(fmt.Sprintf("%s/%s/initialized=%t/%s", target.triple, row.name, initialized, api), func(t *testing.T) {
+						result := 0
+						if row.params != "" {
+							result = word
+						}
+						body := row.storage
+						if initialized {
+							body += "MOVL $2,AX\nMOVL $3,BX\n"
+						}
+						body += "MULL BX\n"
+						if row.writes {
+							body += fmt.Sprintf("MOVL AX,ret+%d(FP)\n", result)
+						}
+						source := fmt.Sprintf("TEXT ·Value(SB),4,$0-%d\n%sRET\n", result+4, body)
+						ir, err := x86ScalarFPBitViewAPI(t, source, "func Value("+row.params+") uint32", target.arch, target.triple, api)
+						if !initialized || !row.knownValid {
+							if !errors.Is(err, ErrProbeNeedsContext) || ir != "" {
+								t.Fatalf("storage syntax substituted for implicit NUM/result proof: output=%t error=%v", ir != "", err)
+							}
+							return
+						}
+						if err != nil || ir == "" {
+							t.Fatal("independent checked storage lost a complete product", err)
+						}
+					})
+				}
 			}
 		}
 	}
