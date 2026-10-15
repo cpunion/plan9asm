@@ -1,6 +1,6 @@
 # Current work: PR 40 checkpoint
 
-Checkpoint: 2026-10-15 01:40 UTC. Qualified CI repair `b66fbd33`.
+Checkpoint: 2026-10-15 01:46 UTC. Qualified CI repair `b66fbd33`.
 This is a handoff, not a ledger or a claim of complete CI/stdlib success.
 
 ## Scope and authority
@@ -20,10 +20,15 @@ failures as failures; do not increase budgets, crop sources or shrink denominato
 
 ## Latest completed CI
 
-Current [38661041122](https://github.com/cpunion/plan9asm/actions/runs/38661041122)
-at fork5657d2ab is still RUNNING: all31 priority jobs pass. The complete Windows
-stage has two CLI aggregate failures and one root-shard deadline failure;
-the remaining-package owner is still running. Do not call the complete run green.
+[38661041122](https://github.com/cpunion/plan9asm/actions/runs/38661041122)
+at fork5657d2ab completed FAILURE naturally:64 jobs,60 success/four failure.
+All31 priority jobs pass. Three module aggregates fail only on actual PATH;
+root part9 has the independent shard25 deadline failure described below.
+The remaining-package owner passes20 complete packages/282 named roots,
+zero failures/skips. Actual raw roots show its time is dominated by
+`internal/sdkfrontend` (32 roots/1517.004s), not the runner itself
+(`cmd/plan9asmtest`,30 roots/108.552s). No extra failure class was found.
+Do not call the complete run green or rewrite the old failed evidence.
 Downloaded native63 independently passes63 roots/169 children in140.887s,
 all15 inventories/25 mandatory owners/eight children, zero skips or gaps.
 The new original PCMP fault owner really executes all32 rows/34 probes at
