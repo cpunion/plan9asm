@@ -24,6 +24,12 @@ func x86ScalarNativeLoadProperties(op Op, ins Instr, arch string) (x86ScalarNati
 	if source.Mem.Sym != "" {
 		return x86ScalarNativeLoadForm{}, false, nil
 	}
+	if projected, segment, err := x86NamedSegmentMemorySource(ins, source, arch); segment {
+		if err != nil {
+			return x86ScalarNativeLoadForm{}, true, err
+		}
+		source = projected
+	}
 	validRegister := isX86YrlRegisterForArch(destination, arch)
 	if width == 1 {
 		validRegister = isGoYmbRegisterForArch(destination, arch)
@@ -72,6 +78,17 @@ func x86LoweredScalarNativeLoad(ins Instr, state *x86ResultState, owned []bool, 
 	}
 	if x86LogicalSourceFrameRegister(form.destination, arch) {
 		return false, true
+	}
+	if form.source.Mem.Segment != "" {
+		// The hardware segment base is an implicit input of this exact
+		// volatile emitter, not an initialized AS0 pointer or GP zero.
+		// Any explicit offset base still needs its full numerical value;
+		// opaque caller/pointer identities cannot supply those bits.
+		base := form.source.Mem.Base
+		if base != "" && !x86ResultRead(Operand{Kind: OpReg, Reg: base}, x86ResultPointerWord(arch), state, owned, arch) {
+			return false, true
+		}
+		return x86ResultStore(Operand{Kind: OpReg, Reg: form.destination}, form.bytes, state, owned, resultOffset, arch), true
 	}
 	if !x86ResultReadWithNativeContinuation(ins, form.source, form.bytes, state, owned, arch, true) {
 		return false, true

@@ -44,6 +44,22 @@ func x86ResultCallerAddressTest(ins Instr, state *x86ResultState, owned []bool, 
 	return true, true
 }
 
+// A source-bound string comparison has already applied its conditional write
+// footprint. Intersect with the prior must-domain: an untouched register may
+// retain its identity, but this post-consumer cannot introduce one. Other
+// instructions keep the existing independent overwrite classification.
+func x86ResultCallerAddressesAfterTransfer(ins Instr, before, transferred [16]bool,
+	entryFP map[int64]bool, arch string) [16]bool {
+	if _, known, err := x86ResultStringCompareProperties(ins, arch); known && err == nil &&
+		x86ResultNamedPredicateInstruction(ins) {
+		for index := range before {
+			before[index] = before[index] && transferred[index]
+		}
+		return before
+	}
+	return x86ResultCallerAddressesAfter(ins, before, entryFP, arch)
+}
+
 // This post-transfer must-domain runs through the shared complete source CFG,
 // including dead effects and joins. A partial/full GP overwrite revokes its
 // old provenance independently of initialized bytes or opaque pointerGP.
@@ -54,6 +70,25 @@ func x86ResultCallerAddressesAfter(ins Instr, before [16]bool, entryFP map[int64
 		return [16]bool{}
 	}
 	ins = x86GoMOVQSourceInstruction(ins) // Original source/certificates stay unchanged.
+	if form, known, err := x86ScalarNativeLoadProperties(ins.Op, ins, arch); known && err == nil {
+		// The paired typed emitter uses the effective REX byte register,
+		// which may be SI/DI rather than the textual DH/BH. This is only
+		// its write footprint, not permission to read the native source.
+		if destination, _, valid := x86ResultGP(form.destination, form.bytes, arch); valid {
+			before[destination] = false
+		}
+		return before
+	}
+	if (ins.Op == "REP" || ins.Op == "REPN") && len(ins.Args) == 0 {
+		return before // Only an independently accepted source-bound prefix reaches this post-consumer.
+	}
+	if form, known, err := x86ResultStringCompareProperties(ins, arch); known && err == nil {
+		before[7], before[1] = false, false // DI and a possibly repeated native CX write.
+		if form.kind == "cmps" {
+			before[6] = false
+		}
+		return before // No implicit GP writes outside this typed footprint.
+	}
 	if destination, _, _, known := x86LogicalFPLEAWriteShape(ins, arch); known {
 		before[destination] = false
 		return before // Pure address calculation writes no unrelated GP or FLAGS.

@@ -234,6 +234,7 @@ func checkX86ResultSourceFlowWithTrapOnly(fn Func, initial x86ResultState, owned
 		before := state.callerAddressGP
 		origins := state.callerAddressOrigin
 		predicate := state.predicate
+		stringCount := state.stringCount
 		handled := false
 		if state.continuation != nil {
 			accepted, known := x86ContinuationResultStep(ordinal, ins, state, owned, arch)
@@ -255,9 +256,10 @@ func checkX86ResultSourceFlowWithTrapOnly(fn Func, initial x86ResultState, owned
 		if state.valueStack != nil && (ins.Op == OpCALL || !x86ResultNamedPredicateInstruction(ins)) {
 			state.valueStack.id = false
 		}
-		state.callerAddressGP = x86ResultCallerAddressesAfter(ins, before, state.callerAddressFP, arch)
+		state.callerAddressGP = x86ResultCallerAddressesAfterTransfer(ins, before, state.callerAddressGP, state.callerAddressFP, arch)
 		state.callerAddressOrigin = x86ResultCallerOriginsAfter(ins, origins, state.callerAddressGP, state.callerAddressFP, arch)
 		state.predicate = x86ResultPredicateAfter(ins, predicate, arch)
+		state.stringCount = x86ResultStringCountAfter(ins, stringCount, state.stringCount, arch)
 		if !popFlags {
 			state.direction = x86ResultDirectionAfter(ins, state.direction)
 		}
@@ -313,7 +315,7 @@ func checkX86ResultSourceFlowWithTrapOnly(fn Func, initial x86ResultState, owned
 	byteState := len(initial.fp) + len(initial.canonicalFP) + len(initial.auto) +
 		len(initial.boolOutgoing) + len(initial.boolOutgoingCanonical) + len(initial.gp) + len(initial.canonicalGP) +
 		8*len(initial.xmm) + len(initial.masks) + 1 + len(initial.pointerGP) + len(initial.callerAddressGP) +
-		2*len(initial.callerAddressOrigin) + 1 + 2 + 3 + 1
+		2*len(initial.callerAddressOrigin) + 1 + 2 + 3 + 1 + 1 // Native string counter must-fact.
 	if len(initial.resultAddressSlots) != 0 {
 		byteState += len(initial.resultAddressGP)*25 + 1
 	}
@@ -524,6 +526,7 @@ type x86ResultState struct {
 	masks          [8]bool // used only by the private scalar bit-view transfer
 	flags          uint8
 	direction      x86ResultDirection          // DF only; no numerical/status/pointer permission.
+	stringCount    x86ResultStringCount        // Full native CX zero/nonzero; never NUM or a memory role.
 	valueStack     *x86ResultValueStack        // Private numerical storage; never physical SP or an entry slot.
 	continuation   *x86ContinuationResultState // Separate opaque control/table identities, never NUM/native storage.
 	bitScanPending x86ResultBitScanPending
@@ -650,6 +653,9 @@ func (state x86ResultState) intersect(other x86ResultState) x86ResultState {
 	}
 	merged.flags &= other.flags
 	merged.direction = state.direction.intersect(other.direction)
+	if merged.stringCount != other.stringCount {
+		merged.stringCount = x86StringCountUnknown
+	}
 	if merged.valueStack != nil {
 		if other.valueStack == nil || merged.valueStack.invalid || other.valueStack.invalid ||
 			len(merged.valueStack.bytes) != len(other.valueStack.bytes) {

@@ -80,10 +80,17 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		}
 	}
 	lockPrefixes := x86ResultSourceLockPrefixes(fn, arch)
+	stringComparisons, err := x86ResultStringCompareSourcePlan(fn, arch)
+	if err != nil {
+		return err
+	}
 	transfer := func(ordinal int, ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string) bool {
 		state.loweredStaticReads = c.fpScalarData
 		defer func() { state.loweredStaticReads = nil }()
 		if accepted, known := c.scalarStaticAddressValueTransfer(ins, state, owned, arch); known {
+			return accepted
+		}
+		if accepted, known := stringComparisons.transfer(ordinal, ins, state, arch); known {
 			return accepted
 		}
 		if ins.Op == "LOCK" {
