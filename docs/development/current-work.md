@@ -3,7 +3,9 @@
 Checkpoint: 2026-10-15 07:30 UTC. Fork diagnostic `de238372` has one
 confirmed Windows tuple failure; do not cancel its remaining owner or push over
 the active run. The ordinary canonical-bool repair is committed through
-`acae3606`; its final merged-source qualification is next. The last complete
+`acae3606`; its final merged-source qualification is next. Standalone synthetic
+object fixtures use numeric NOSPLIT, matching their header-free Go oracle.
+The last complete
 strict benchmark, at `870d011f`, remains157/184, not standard-library success.
 
 ## Scope and authority
