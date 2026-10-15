@@ -33,14 +33,15 @@ const scalarFPByteRoots = [
   'TestX86ImplicitMultiplyOriginalGoGrammarAndEncoding',
   'TestX86ImplicitMultiplyFiveTargetOriginalGoAndLLVMObjects',
   'TestX86ImplicitMultiplyIndependentStorageCannotBypassNUM',
+  'TestTranslate386InstructionFamilies',
 ];
 const scalarFPByteLane = '- lane: scalar-fp-byte-spans\n            module: \'.\'\n            roots:\n' +
   scalarFPByteRoots.map(root => `              - ${root}\n`).join('') + '            timeout: 5m';
 
 function checkScalarFPBytePriority(text) {
-  assert.equal(scalarFPByteRoots.length, 26);
-  assert.equal(new Set(scalarFPByteRoots).size, 26);
-  assert.ok(text.includes(scalarFPByteLane), 'complete FP byte and implicit multiply semantic/control and actual-object owners');
+  assert.equal(scalarFPByteRoots.length, 27);
+  assert.equal(new Set(scalarFPByteRoots).size, 27);
+  assert.ok(text.includes(scalarFPByteLane), 'complete FP byte, implicit multiply and whole386 semantic/control and actual-object owners');
   assert.equal(text.split('- lane: scalar-fp-byte-spans\n').length - 1, 1,
     'one bounded FP byte priority lane');
   for (const root of scalarFPByteRoots) {
@@ -48,7 +49,7 @@ function checkScalarFPBytePriority(text) {
   }
 }
 
-test('Scalar FP byte priority retains twenty-six complete semantic and object owners within five minutes', () => {
+test('Scalar FP byte priority retains twenty-seven complete semantic and object owners within five minutes', () => {
   checkScalarFPBytePriority(sdk);
 });
 

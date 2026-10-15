@@ -266,6 +266,7 @@ jobs:
               - TestX86ImplicitMultiplyOriginalGoGrammarAndEncoding
               - TestX86ImplicitMultiplyFiveTargetOriginalGoAndLLVMObjects
               - TestX86ImplicitMultiplyIndependentStorageCannotBypassNUM
+              - TestTranslate386InstructionFamilies
             timeout: 5m
           - lane: arm64-carrier-widths
             module: '.'
