@@ -1346,10 +1346,10 @@ func TestAMD64CmpBtCoverage(t *testing.T) {
 	sig := FuncSig{
 		Name: "example.cmpbt",
 		Args: []LLVMType{I64},
-		Ret:  Void,
+		Ret:  I64,
 		Frame: FrameLayout{
-			Params:  []FrameSlot{{Offset: 0, Type: I64, Index: 0}},
-			Results: []FrameSlot{{Offset: 8, Type: I64, Index: 0}},
+			Params:  []FrameSlot{{Offset: 0, Type: I64, Index: 0, Field: -1}},
+			Results: []FrameSlot{{Offset: 8, Type: I64, Index: 0, Field: -1}},
 		},
 	}
 	c, b := newAMD64CtxWithFuncForTest(t, Func{}, sig, nil)
@@ -1442,7 +1442,7 @@ func TestAMD64MovSyscallAndCRC32Coverage(t *testing.T) {
 		Ret:  LLVMType("{ i64, i16, i8 }"),
 		Frame: FrameLayout{
 			Params:  []FrameSlot{{Offset: 0, Type: I64, Index: 0, Field: -1}},
-			Results: []FrameSlot{{Offset: 8, Type: I64, Index: 0, Field: 0}, {Offset: 16, Type: I16, Index: 0, Field: 1}, {Offset: 24, Type: I8, Index: 0, Field: 2}},
+			Results: []FrameSlot{{Offset: 8, Type: I64, Index: 0, Field: -1}, {Offset: 16, Type: I16, Index: 1, Field: -1}, {Offset: 24, Type: I8, Index: 2, Field: -1}},
 		},
 	}
 	c, b := newAMD64CtxWithFuncForTest(t, Func{}, sig, nil)
