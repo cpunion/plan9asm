@@ -1,5 +1,10 @@
 package plan9asm
 
+import (
+	"strings"
+	"testing"
+)
+
 // Shared verbatim source, manual transport signatures and native C driver.
 // Portable object observations do not turn this fixture into a Go ABI0 body.
 const runtime386CoreAssembly = `
@@ -172,6 +177,19 @@ TEXT roundNearest(SB),NOSPLIT,$0-16
 	FMOVDP F0, ret+8(FP)
 	RET
 `
+
+// Keep the original complete counterexample above. SETCS writes only BL;
+// explicitly extend that byte before the corrected runtime fixture returns
+// all of BX. No other TEXT, transport signature or native observation changes.
+func runtime386CoreCorrectedAssembly(t *testing.T) string {
+	t.Helper()
+	const before = "\tSETCS BX\n\tMOVL BX, ret+4(FP)"
+	const after = "\tSETCS BX\n\tMOVBLZX BX,BX\n\tMOVL BX, ret+4(FP)"
+	if strings.Count(runtime386CoreAssembly, before) != 1 {
+		t.Fatal("original carry-result path is not uniquely identified")
+	}
+	return strings.Replace(runtime386CoreAssembly, before, after, 1)
+}
 
 func runtime386CoreOptions() Options {
 	sig := FuncSig{

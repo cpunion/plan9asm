@@ -1686,7 +1686,7 @@ func TestRuntimeExec386Core(t *testing.T) {
 	if llc == "" || clang == "" {
 		t.Fatal("llc/clang not found")
 	}
-	file, err := Parse(ArchAMD64, runtime386CoreAssembly)
+	file, err := Parse(ArchAMD64, runtime386CoreCorrectedAssembly(t))
 	if err != nil {
 		t.Fatal(err)
 	}
