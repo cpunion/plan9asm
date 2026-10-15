@@ -29,7 +29,7 @@ func x86ResultX87WordStep(ins Instr, state *x86ResultState, owned []bool, result
 	if !known {
 		return false, false
 	}
-	if err != nil || !x86ResultNamedPredicateInstruction(ins) || state.x87 == nil || state.x87.invalid {
+	if err != nil || !x86ResultNamedPredicateInstruction(ins) || state.x87 == nil {
 		return false, true
 	}
 	x87 := state.x87
@@ -41,7 +41,7 @@ func x86ResultX87WordStep(ins Instr, state *x86ResultState, owned []bool, result
 		if !state.shapeOnly {
 			// Empty tags are not zero-valued F0..F7. Existing GP captures
 			// remain physically unchanged; no GP or integer FLAGS are written.
-			x87.slots, x87.depth = 0, 0
+			x87.slots, x87.depth, x87.invalid = 0, 0, false
 			x87.status, x87.word.control = 0xffff, 0xffff
 		}
 		return true, true
@@ -53,7 +53,19 @@ func x86ResultX87WordStep(ins Instr, state *x86ResultState, owned []bool, result
 		}
 		return true, true
 	case x86X87LoadControl:
-		return false, true // NUM m16 alone closes no control/rounding/trapping role.
+		// This is the already implemented control-word write/read role, not
+		// an environment restore, stack/value producer or native memory read.
+		// Only two actual mapped FP/AUTO bytes may supply it; neither static
+		// bytes nor an incoming pointer acquire a new control-load permission.
+		mappedSource := form.operand.Kind == OpFP || form.operand.Kind == OpMem && form.operand.Mem.Base == SP
+		if x87.word == nil || !mappedSource ||
+			!x86ResultRead(form.operand, 2, state, owned, arch) {
+			return false, true
+		}
+		if !state.shapeOnly {
+			x87.word.control = 0xffff
+		}
+		return true, true
 	}
 	bits := x87.status
 	if form.kind == x86X87StoreControl {

@@ -36,7 +36,7 @@ func x86ABI0BoolCallStep(ordinal int, ins Instr, state *x86ResultState, owned []
 		state.flags = 0
 		state.direction = x86ResultDirectionUnknown
 		if state.x87 != nil {
-			*state.x87 = x86ResultX87State{invalid: true}
+			state.x87.revoke()
 		}
 		if sig.Ret == Void {
 			return true, true // No numerical/canonical FP or outgoing byte is new.

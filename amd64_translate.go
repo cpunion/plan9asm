@@ -574,10 +574,10 @@ func translateFuncX86(b *strings.Builder, fn Func, sig FuncSig, resolve func(str
 			}
 		}
 	}
+	c.x87Mode = x87Mode // The proof must use the same mode as its paired emitter.
 	if err := c.validateScalarFPSourceViews(); err != nil {
 		return err
 	}
-	c.x87Mode = x87Mode
 	if err := c.emitEntryAllocas(); err != nil {
 		return err
 	}

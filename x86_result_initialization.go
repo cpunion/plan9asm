@@ -585,7 +585,14 @@ func (state x86ResultState) intersect(other x86ResultState) x86ResultState {
 		merged.x87 = &x86ResultX87State{invalid: true}
 	} else if merged.x87 != nil {
 		if other.x87 == nil || merged.x87.invalid || other.x87.invalid || merged.x87.depth != other.x87.depth {
-			*merged.x87 = x86ResultX87State{invalid: true}
+			// An unknown value-stack shape revokes hardware facts, not the
+			// same immutable ABI layout independently present on both edges.
+			sharedLayout := other.x87 != nil && merged.x87.word != nil && other.x87.word != nil &&
+				merged.x87.word.layout != nil && merged.x87.word.layout == other.x87.word.layout
+			merged.x87.revoke()
+			if !sharedLayout {
+				merged.x87.word = nil
+			}
 		} else {
 			merged.x87.slots &= other.x87.slots
 			merged.x87.status &= other.x87.status

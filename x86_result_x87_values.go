@@ -16,6 +16,15 @@ type x86ResultX87State struct {
 
 const x86ResultX87StatusConditions uint16 = 0x4500 // C3, C2, C0 only.
 
+func (state *x86ResultX87State) revoke() {
+	word := state.word
+	*state = x86ResultX87State{invalid: true}
+	if word != nil {
+		// ABI layout is immutable source metadata, not an x87 hardware fact.
+		state.word = &x86ResultX87WordState{layout: word.layout}
+	}
+}
+
 func x86X87FlowInstructions(fn Func) []Instr {
 	if fn.x86DirectTailRoot != nil {
 		return fn.x86DirectTailRoot.instructions
@@ -227,7 +236,7 @@ func x86ResultX87After(ins Instr, state *x86ResultState, arch string) {
 		return
 	}
 	if ins.Op == OpCALL {
-		*state.x87 = x86ResultX87State{invalid: true}
+		state.x87.revoke()
 		return // An independently accepted call supplies no empty-stack or captured GP fact.
 	}
 	if _, known, _ := x86X87WordProperties(ins, arch); known {

@@ -81,6 +81,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 			prefix, bound := lockPrefixes[ordinal]
 			return bound && reflect.DeepEqual(prefix, ins)
 		}
+		if accepted, known := c.x87HardwareControlResultStep(ins, state, owned, resultOffset, arch); known {
+			return accepted // The same actual hardware emitter writes the full i16.
+		}
 		if accepted, known := x86LoweredCompareExchangeResultStep(ins, state, owned, arch); known {
 			return accepted
 		}
