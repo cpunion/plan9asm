@@ -54,6 +54,17 @@ func x86ResultCallerAddressesAfter(ins Instr, before [16]bool, entryFP map[int64
 		return [16]bool{}
 	}
 	ins = x86GoMOVQSourceInstruction(ins) // Original source/certificates stay unchanged.
+	if form, known, err := x86X87ValueProperties(ins, arch); known {
+		if err != nil {
+			return [16]bool{}
+		}
+		if form.spec.kind == x86X87Status && form.destination.Kind == OpReg {
+			if index, _, valid := x86ResultGP(form.destination.Reg, 2, arch); valid {
+				before[index] = false
+			}
+		}
+		return before // Typed x87 value forms write no unrelated GP identity.
+	}
 	if destination, _, _, known := x86LogicalFPLEAWriteShape(ins, arch); known {
 		before[destination] = false
 		return before // Pure address calculation writes no unrelated GP or FLAGS.

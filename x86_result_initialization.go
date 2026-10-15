@@ -83,6 +83,9 @@ func checkX86ABI0ResultInitializationAtSource(fn Func, sig FuncSig, goarch strin
 		resultOffset = int64(frame)
 	}
 	initial := x86ResultState{fp: make([]bool, frame), pointerFP: make(map[int64]bool)}
+	if scalarViews && x86X87ValueFlowNeeded(fn) {
+		initial.x87 = new(x86ResultX87State)
+	}
 	if scalarViews && fn.x86ContinuationFlow != nil {
 		view := fn.x86ContinuationFlow
 		if !view.bind(fn, sig, goarch) {
@@ -172,6 +175,9 @@ func checkX86ABI0ResultInitializationAtSource(fn Func, sig FuncSig, goarch strin
 	}
 	return checkX86ResultSourceFlow(fn, initial, owned, resultOffset, goarch, transfer,
 		func(state x86ResultState, pc int) error {
+			if state.x87 != nil && (state.x87.invalid || state.x87.depth != 0) {
+				return fail("logical x87 value stack is not balanced at RET")
+			}
 			if state.continuation != nil && !state.continuation.checkReturn() {
 				return fail("initializer does not write every code-table cell on every RET")
 			}
@@ -239,6 +245,7 @@ func checkX86ResultSourceFlow(fn Func, initial x86ResultState, owned []bool, res
 		if !handled && !x86DirectTailResultAddressTransfer(ins, state, owned, resultOffset, arch, originalTransfer, ordinal) {
 			return false
 		}
+		x86ResultX87After(ins, state, arch)
 		if state.valueStack != nil && (ins.Op == OpCALL || !x86ResultNamedPredicateInstruction(ins)) {
 			state.valueStack.id = false
 		}
@@ -313,10 +320,13 @@ func checkX86ResultSourceFlow(fn Func, initial x86ResultState, owned []bool, res
 	if initial.continuation != nil {
 		byteState += 16*48 + len(initial.continuation.written) + 2
 	}
+	if initial.x87 != nil {
+		byteState += 1 + 1 + 1 + 2 + 2*len(initial.x87.gp) // slots, depth, invalid, status, captured bits.
+	}
 	const byteWorkLimit = 64 << 20
 	byteWork := len(instructions) * byteState
 	boundedWork := len(initial.auto) != 0 || len(initial.canonicalFP) != 0 ||
-		len(initial.resultAddressSlots) != 0 || fn.x86DirectTailRoot != nil || initial.valueStack != nil || initial.continuation != nil
+		len(initial.resultAddressSlots) != 0 || fn.x86DirectTailRoot != nil || initial.valueStack != nil || initial.continuation != nil || initial.x87 != nil
 	if boundedWork && byteWork > byteWorkLimit/8 {
 		return fail("combined FP/AUTO source-CFG byte budget exhausted")
 	}
@@ -500,6 +510,7 @@ type x86ResultState struct {
 	flags          uint8
 	direction      x86ResultDirection          // DF only; no numerical/status/pointer permission.
 	valueStack     *x86ResultValueStack        // Private numerical storage; never physical SP or an entry slot.
+	x87            *x86ResultX87State          // Private logical availability; never hardware entry/control state.
 	continuation   *x86ContinuationResultState // Separate opaque control/table identities, never NUM/native storage.
 	bitScanPending x86ResultBitScanPending
 	predicate      x86ResultPredicate
@@ -536,6 +547,10 @@ func (state x86ResultState) clone() x86ResultState {
 		state.boolFrameGP = &aliases
 	}
 	state.auto = append([]bool(nil), state.auto...)
+	if state.x87 != nil {
+		copy := *state.x87
+		state.x87 = &copy
+	}
 	if state.valueStack != nil {
 		stack := *state.valueStack
 		stack.bytes = append([]uint8(nil), stack.bytes...)
@@ -553,6 +568,19 @@ func (state x86ResultState) clone() x86ResultState {
 
 func (state x86ResultState) intersect(other x86ResultState) x86ResultState {
 	merged := state.clone()
+	if merged.x87 == nil && other.x87 != nil {
+		merged.x87 = &x86ResultX87State{invalid: true}
+	} else if merged.x87 != nil {
+		if other.x87 == nil || merged.x87.invalid || other.x87.invalid || merged.x87.depth != other.x87.depth {
+			*merged.x87 = x86ResultX87State{invalid: true}
+		} else {
+			merged.x87.slots &= other.x87.slots
+			merged.x87.status &= other.x87.status
+			for index := range merged.x87.gp {
+				merged.x87.gp[index] &= other.x87.gp[index]
+			}
+		}
+	}
 	if merged.continuation == nil && other.continuation != nil {
 		copy := other.clone()
 		merged.continuation = copy.continuation

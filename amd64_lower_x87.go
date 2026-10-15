@@ -36,6 +36,20 @@ func (c *amd64Ctx) lowerX87(op Op, ins Instr) (ok bool, terminated bool, err err
 	if !isX87Op(op) {
 		return false, false, nil
 	}
+	dispatch := ins
+	if dispatch.Op == "" {
+		dispatch.Op = op // Legacy direct-helper callers have no second source head.
+	} else if !strings.EqualFold(string(dispatch.Op), string(op)) {
+		return true, false, fmt.Errorf("%s x87 dispatch/source opcode differs: %q", c.goarch, ins.Raw)
+	}
+	arch := c.goarch
+	if arch == "" {
+		arch = "amd64" // Legacy private helpers have always used the default x86 mode.
+	}
+	valueForm, typedValue, formErr := x86X87ValueProperties(dispatch, arch)
+	if typedValue && formErr != nil {
+		return true, false, formErr
+	}
 	switch op {
 	case "FBLD":
 		if len(ins.Args) != 1 || !isX87MemoryOperand(ins.Args[0]) {
@@ -105,7 +119,7 @@ func (c *amd64Ctx) lowerX87(op Op, ins Instr) (ok bool, terminated bool, err err
 		if err != nil {
 			return true, false, err
 		}
-		if idx, isF := x87OperandReg(ins.Args[1]); isF && idx == 0 && ins.Args[0].Kind != OpReg {
+		if valueForm.push {
 			return true, false, c.pushX87(v)
 		}
 		return true, false, c.storeX87F64(ins.Args[1], v)
@@ -128,7 +142,7 @@ func (c *amd64Ctx) lowerX87(op Op, ins Instr) (ok bool, terminated bool, err err
 		if len(ins.Args) != 2 {
 			return true, false, fmt.Errorf("386 %s expects src, dst: %q", op, ins.Raw)
 		}
-		if isX87MemoryOperand(ins.Args[0]) && isX87F0(ins.Args[1]) {
+		if (isX87MemoryOperand(ins.Args[0]) || op == "FMOVF" && valueForm.push) && isX87F0(ins.Args[1]) {
 			value, err := c.loadX87MoveValue(op, ins.Args[0])
 			if err != nil {
 				return true, false, err
@@ -203,12 +217,12 @@ func (c *amd64Ctx) lowerX87(op Op, ins Instr) (ok bool, terminated bool, err err
 		"FSUBRW", "FSUBRL", "FSUBRF", "FSUBRD", "FSUBRDP",
 		"FDIVW", "FDIVL", "FDIVF", "FDIVD", "FDIVDP",
 		"FDIVRW", "FDIVRL", "FDIVRF", "FDIVRD", "FDIVRDP":
-		return true, false, c.lowerX87Arithmetic(op, ins)
+		return true, false, c.lowerX87Arithmetic(op, ins, valueForm)
 
 	case "FCOMD", "FCOMDP", "FCOMDPP", "FCOMF", "FCOMFP", "FCOMI", "FCOMIP",
 		"FCOML", "FCOMLP", "FCOMW", "FCOMWP",
 		"FUCOM", "FUCOMI", "FUCOMIP", "FUCOMP", "FUCOMPP":
-		return true, false, c.lowerX87Compare(op, ins)
+		return true, false, c.lowerX87Compare(op, ins, valueForm)
 
 	case "FCMOVCC", "FCMOVCS", "FCMOVEQ", "FCMOVHI", "FCMOVLS",
 		"FCMOVB", "FCMOVBE", "FCMOVNB", "FCMOVNBE", "FCMOVE", "FCMOVNE", "FCMOVNU", "FCMOVU", "FCMOVUN":
@@ -524,42 +538,14 @@ func (c *amd64Ctx) lowerX87(op Op, ins Instr) (ok bool, terminated bool, err err
 	return false, false, nil
 }
 
-func (c *amd64Ctx) lowerX87Arithmetic(op Op, ins Instr) error {
-	if len(ins.Args) != 2 {
-		return fmt.Errorf("386 %s expects src, dst: %q", op, ins.Raw)
-	}
-	name := string(op)
-	pop := strings.HasSuffix(name, "DP")
-	width := name[len(name)-1:]
-	base := strings.TrimSuffix(name, width)
-	if pop {
-		width = "D"
-		base = strings.TrimSuffix(name, "DP")
-	}
-
-	if pop {
-		if !isX87F0(ins.Args[0]) || !isX87RegisterOperand(ins.Args[1]) {
-			return fmt.Errorf("386 %s expects F0 source and x87-register destination: %q", op, ins.Raw)
-		}
-	} else if width == "D" {
-		srcIndex, srcReg := x87OperandReg(ins.Args[0])
-		dstIndex, dstReg := x87OperandReg(ins.Args[1])
-		loadToF0 := (isX87MemoryOperand(ins.Args[0]) || ins.Args[0].Kind == OpImm) && dstReg && dstIndex == 0
-		regToF0 := srcReg && dstReg && dstIndex == 0
-		f0ToReg := srcReg && srcIndex == 0 && dstReg
-		if !loadToF0 && !regToF0 && !f0ToReg {
-			return fmt.Errorf("386 %s expects memory,F0, Freg,F0, or F0,Freg: %q", op, ins.Raw)
-		}
-	} else if !isX87MemoryOperand(ins.Args[0]) || !isX87F0(ins.Args[1]) {
-		return fmt.Errorf("386 %s expects memory source and F0 destination: %q", op, ins.Raw)
-	}
-
+func (c *amd64Ctx) lowerX87Arithmetic(op Op, ins Instr, form x86X87ValueForm) error {
+	width := form.spec.width
 	var src string
 	var err error
 	switch width {
-	case "W", "L":
+	case 'W', 'L':
 		typ := I16
-		if width == "L" {
+		if width == 'L' {
 			typ = I32
 		}
 		integer, evalErr := c.evalIntSized(ins.Args[0], typ)
@@ -569,7 +555,7 @@ func (c *amd64Ctx) lowerX87Arithmetic(op Op, ins Instr) error {
 		converted := c.newTmp()
 		fmt.Fprintf(c.b, "  %%%s = sitofp %s %s to double\n", converted, typ, integer)
 		src = "%" + converted
-	case "F":
+	case 'F':
 		value, evalErr := c.evalF32(ins.Args[0])
 		if evalErr != nil {
 			return evalErr
@@ -577,7 +563,7 @@ func (c *amd64Ctx) lowerX87Arithmetic(op Op, ins Instr) error {
 		converted := c.newTmp()
 		fmt.Fprintf(c.b, "  %%%s = fpext float %s to double\n", converted, value)
 		src = "%" + converted
-	case "D":
+	case 'D':
 		src, err = c.evalX87F64(ins.Args[0])
 		if err != nil {
 			return err
@@ -590,18 +576,18 @@ func (c *amd64Ctx) lowerX87Arithmetic(op Op, ins Instr) error {
 		return err
 	}
 	lhs, rhs := dst, src
-	if strings.HasPrefix(base, "FSUBR") || strings.HasPrefix(base, "FDIVR") {
+	if form.spec.reverse {
 		lhs, rhs = src, dst
 	}
 	operation := ""
 	switch {
-	case strings.HasPrefix(base, "FADD"):
+	case form.spec.stem == "FADD":
 		operation = "fadd"
-	case strings.HasPrefix(base, "FMUL"):
+	case form.spec.stem == "FMUL":
 		operation = "fmul"
-	case strings.HasPrefix(base, "FSUB"):
+	case form.spec.stem == "FSUB" || form.spec.stem == "FSUBR":
 		operation = "fsub"
-	case strings.HasPrefix(base, "FDIV"):
+	case form.spec.stem == "FDIV" || form.spec.stem == "FDIVR":
 		operation = "fdiv"
 	}
 	if operation == "" {
@@ -612,84 +598,36 @@ func (c *amd64Ctx) lowerX87Arithmetic(op Op, ins Instr) error {
 	if err := c.storeX87F64(ins.Args[1], "%"+result); err != nil {
 		return err
 	}
-	if pop {
+	if form.spec.pop != 0 {
 		c.popX87()
 	}
 	return nil
 }
 
-func (c *amd64Ctx) lowerX87Compare(op Op, ins Instr) error {
-	if len(ins.Args) != 2 {
-		return fmt.Errorf("386 %s expects lhs, rhs: %q", op, ins.Raw)
-	}
-	name := string(op)
-	directFlags := name == "FCOMI" || name == "FCOMIP" || name == "FUCOMI" || name == "FUCOMIP"
-	popCount := 0
-	switch name {
-	case "FCOMDP", "FCOMFP", "FCOMIP", "FCOMLP", "FCOMWP", "FUCOMIP", "FUCOMP":
-		popCount = 1
-	case "FCOMDPP", "FUCOMPP":
-		popCount = 2
-	}
-
-	var lhsOperand, rhsOperand Operand
-	width := "D"
-	switch {
-	case name == "FCOMI" || name == "FCOMIP":
-		if !isX87RegisterOperand(ins.Args[0]) || !isX87F0(ins.Args[1]) {
-			return fmt.Errorf("386 %s expects x87-register source and F0 destination: %q", op, ins.Raw)
-		}
-		lhsOperand, rhsOperand = ins.Args[1], ins.Args[0]
-	case strings.HasPrefix(name, "FUCOM") || name == "FCOMDPP":
-		if !isX87F0(ins.Args[0]) || !isX87RegisterOperand(ins.Args[1]) {
-			return fmt.Errorf("386 %s expects F0 source and x87-register destination: %q", op, ins.Raw)
-		}
-		lhsOperand, rhsOperand = ins.Args[0], ins.Args[1]
-	case name == "FCOMD" || name == "FCOMDP":
-		srcIndex, srcReg := x87OperandReg(ins.Args[0])
-		dstIndex, dstReg := x87OperandReg(ins.Args[1])
-		loadToF0 := (isX87MemoryOperand(ins.Args[0]) || ins.Args[0].Kind == OpImm) && dstReg && dstIndex == 0
-		regToF0 := srcReg && dstReg && dstIndex == 0
-		f0ToReg := srcReg && srcIndex == 0 && dstReg
-		if !loadToF0 && !regToF0 && !f0ToReg {
-			return fmt.Errorf("386 %s expects memory,F0, Freg,F0, or F0,Freg: %q", op, ins.Raw)
-		}
-		lhsOperand, rhsOperand = ins.Args[1], ins.Args[0]
-	default:
-		widthIndex := len("FCOM")
-		if len(name) <= widthIndex {
-			return fmt.Errorf("386 %s has unknown x87 compare form", op)
-		}
-		width = name[widthIndex : widthIndex+1]
-		if !isX87MemoryOperand(ins.Args[0]) || !isX87F0(ins.Args[1]) {
-			return fmt.Errorf("386 %s expects memory source and F0 destination: %q", op, ins.Raw)
-		}
-		lhsOperand, rhsOperand = ins.Args[1], ins.Args[0]
-	}
-
-	lhs, err := c.evalX87F64(lhsOperand)
+func (c *amd64Ctx) lowerX87Compare(op Op, ins Instr, form x86X87ValueForm) error {
+	lhs, err := c.evalX87F64(form.left)
 	if err != nil {
 		return err
 	}
 	var rhs string
-	switch width {
-	case "D":
-		rhs, err = c.evalX87F64(rhsOperand)
-	case "F":
+	switch form.spec.width {
+	case 'D':
+		rhs, err = c.evalX87F64(form.right)
+	case 'F':
 		var narrow string
-		narrow, err = c.evalF32(rhsOperand)
+		narrow, err = c.evalF32(form.right)
 		if err == nil {
 			wide := c.newTmp()
 			fmt.Fprintf(c.b, "  %%%s = fpext float %s to double\n", wide, narrow)
 			rhs = "%" + wide
 		}
-	case "L", "W":
+	case 'L', 'W':
 		typ := I16
-		if width == "L" {
+		if form.spec.width == 'L' {
 			typ = I32
 		}
 		var integer string
-		integer, err = c.evalIntSized(rhsOperand, typ)
+		integer, err = c.evalIntSized(form.right, typ)
 		if err == nil {
 			wide := c.newTmp()
 			fmt.Fprintf(c.b, "  %%%s = sitofp %s %s to double\n", wide, typ, integer)
@@ -701,12 +639,12 @@ func (c *amd64Ctx) lowerX87Compare(op Op, ins Instr) error {
 	if err != nil {
 		return err
 	}
-	if directFlags {
+	if form.spec.directFlags {
 		c.setX87CompareFlags(lhs, rhs)
 	} else {
 		c.setX87CompareStatus(lhs, rhs)
 	}
-	for i := 0; i < popCount; i++ {
+	for i := uint8(0); i < form.spec.pop; i++ {
 		c.popX87()
 	}
 	return nil
