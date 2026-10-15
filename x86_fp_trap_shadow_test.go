@@ -49,6 +49,9 @@ func TestX86TrapOnlyLogicalShadowCannotAuthorizeReturningOrUnknownSource(t *test
 			{"unknown-dead-effect", "func value(x uint64) uint64", "MOVB $17,x+0(FP)\nUD2\nMOVB (AX),BX\nRET"},
 			{"CALL", "func value(x uint64) uint64", "MOVB $17,x+0(FP)\nCALL unbound(SB)\nUD2\nRET"},
 			{"external-tail", "func value(x uint64) uint64", "MOVB $17,x+0(FP)\nJMP unbound(SB)\nUD2\nRET"},
+			{"cycle-only", "func value(x uint64) uint64", "MOVB $17,x+0(FP)\nagain:\nJMP again\nUD2\nRET"},
+			{"one-cyclic-path", "func value(x uint64) uint64", "MOVB $17,x+0(FP)\nCMPL x+0(FP),$0\nJE again\nUD2\nagain:\nJMP again\nRET"},
+			{"one-falloff-path", "func value(x uint64) uint64", "MOVB $17,x+0(FP)\nCMPL x+0(FP),$0\nJE outside\nUD2\noutside:\nNOP"},
 			{"raw-trap", "func value(x uint64) uint64", "MOVB $17,x+0(FP)\nBYTE $0x0f\nBYTE $0x0b\nRET"},
 			{"malformed-trap", "func value(x uint64) uint64", "MOVB $17,x+0(FP)\nUD2 AX\nRET"},
 		} {
