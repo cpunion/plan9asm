@@ -99,9 +99,12 @@ func TestX86ResultByteSwapEveryByteMaskAndIndependentFlags(t *testing.T) {
 			if arch == "386" && op == "BSWAPQ" {
 				continue // Independently rejected syntax row, not a skipped execution.
 			}
-			for _, register := range strings.Fields("AX CX DX BX SI DI R8 R9 R10 R11 R12 R13 R14 R15") {
+			for _, register := range strings.Fields("AX CX DX BX SI DI BP R8 R9 R10 R11 R12 R13 R14 R15") {
 				if arch == "386" && strings.HasPrefix(register, "R") {
 					continue
+				}
+				if arch == "amd64" && register == "BP" {
+					continue // Its independent physical frame role stays unbound.
 				}
 				t.Run(arch+"/"+string(op)+"/"+register, func(t *testing.T) {
 					width := int64(4)
@@ -209,8 +212,11 @@ func TestX86ResultByteSwapCompleteThreeAPITypedBanks(t *testing.T) {
 			if target.arch == "386" && op == "BSWAPQ" {
 				continue
 			}
-			for _, reg := range strings.Fields("AX CX DX BX SI DI R8 R15") {
+			for _, reg := range strings.Fields("AX CX DX BX SI DI BP R8 R9 R10 R11 R12 R13 R14 R15") {
 				if target.arch == "386" && strings.HasPrefix(reg, "R") {
+					continue
+				}
+				if target.arch == "amd64" && reg == "BP" {
 					continue
 				}
 				move, typ := "MOVL", "uint32"
@@ -227,6 +233,29 @@ func TestX86ResultByteSwapCompleteThreeAPITypedBanks(t *testing.T) {
 						}
 					})
 				}
+			}
+		}
+	}
+}
+
+func TestX86ResultByteSwapPhysicalStackAndFrameStayIndependent(t *testing.T) {
+	for _, arch := range []string{"amd64", "386"} {
+		for _, register := range []Reg{SP, BP} {
+			if arch == "386" && register == BP {
+				continue // Positive source-defined BP is in the complete bank roots.
+			}
+			op, move, typ, word := "BSWAPQ", "MOVQ", "uint64", 8
+			if arch == "386" {
+				op, move, typ, word = "BSWAPL", "MOVL", "uint32", 4
+			}
+			for _, api := range []string{"text", "module", "Go"} {
+				t.Run(arch+"/"+string(register)+"/"+api, func(t *testing.T) {
+					source := fmt.Sprintf("TEXT ·Value(SB),4,$0-%d\n%s $7,%s\n%s %s\n%s %s,ret0+0(FP)\nRET\n", word, move, register, op, register, move, register)
+					ir, err := x86OrderingHintTranslateAPI(t, api, source, "package ordering\nfunc Value() "+typ+"\n", arch, testTargetTriple("linux", arch))
+					if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+						t.Fatal("numerical byte swap acquired a physical SP/AMD64 BP contract", err)
+					}
+				})
 			}
 		}
 	}
