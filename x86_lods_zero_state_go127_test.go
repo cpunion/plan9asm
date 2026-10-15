@@ -5,8 +5,45 @@ package plan9asm
 import (
 	"fmt"
 	"strings"
+	"sync"
 	"testing"
+
+	"github.com/xgo-dev/llvm"
 )
+
+var x86LODSStateTargets sync.Once
+
+// The observer loads a real target pointer from a machine-word output cell.
+// Obtain that layout from the selected LLVM target, not the host or an assumed
+// pointer width, before optimizing either architecture's complete module.
+func x86LODSStateTargetLayout(t *testing.T, ir, triple string, word int) string {
+	t.Helper()
+	x86LODSStateTargets.Do(func() {
+		llvm.InitializeAllTargetInfos()
+		llvm.InitializeAllTargets()
+		llvm.InitializeAllTargetMCs()
+	})
+	target, err := llvm.GetTargetFromTriple(triple)
+	if err != nil {
+		t.Fatal("LODS observer requires its actual LLVM target", err)
+	}
+	machine := target.CreateTargetMachine(triple, "", "", llvm.CodeGenLevelDefault,
+		llvm.RelocDefault, llvm.CodeModelDefault)
+	if machine.C == nil {
+		t.Fatal("LODS observer target machine is missing", triple)
+	}
+	defer machine.Dispose()
+	data := machine.CreateTargetData()
+	defer data.Dispose()
+	if data.PointerSize() != word {
+		t.Fatal("LODS output cells do not match the actual target pointer", triple, data.PointerSize(), word)
+	}
+	if strings.Contains(ir, "target datalayout") {
+		t.Fatal("LODS observer must not replace an existing module layout")
+	}
+	t.Logf("actual LLVM target %s pointer=%d datalayout=%q", triple, word, data.String())
+	return fmt.Sprintf("target datalayout = %q\n", data.String()) + ir
+}
 
 // This test-only LLVM caller observes the actual translated void function's
 // four output cells. Its fresh alloca is not an ASM frame/backing certificate.
@@ -44,9 +81,9 @@ func TestX86LODSZeroCountOriginalGoAndLLVMWholeState(t *testing.T) {
 	for _, arch := range []string{"386", "amd64"} {
 		source, declarations := x86LODSStateFixture(arch)
 		goAssemblerOracleOutput(t, arch, source, "", true)
-		triple, typ := "x86_64-unknown-linux-gnu", "i64"
+		triple, typ, word := "x86_64-unknown-linux-gnu", "i64", 8
 		if arch == "386" {
-			triple, typ = "i386-unknown-linux-gnu", "i32"
+			triple, typ, word = "i386-unknown-linux-gnu", "i32", 4
 		}
 		for _, api := range []string{"text", "module", "Go"} {
 			t.Run(arch+"/"+api, func(t *testing.T) {
@@ -59,6 +96,7 @@ func TestX86LODSZeroCountOriginalGoAndLLVMWholeState(t *testing.T) {
 						ir += x86LODSZeroStateObserver(row)
 					}
 				}
+				ir = x86LODSStateTargetLayout(t, ir, triple, word)
 				optimized := x86UndefinedTrapOptimizedIR(t, ir)
 				for _, row := range x86LODSStateCases(arch) {
 					// Keep the complete original matrix in this same module. The
