@@ -11,6 +11,18 @@ func TestX86ByteSwapOriginalGoCompleteGrammarAndBytes(t *testing.T) {
 	registers := strings.Fields("AX CX DX BX SP BP SI DI R8 R9 R10 R11 R12 R13 R14 R15")
 	for _, arch := range []string{"amd64", "386"} {
 		for _, op := range []string{"BSWAPL", "BSWAPQ"} {
+			t.Run(arch+"/"+op+"/Go-g-register-alias", func(t *testing.T) {
+				source := "TEXT swap(SB),4,$0-0\n" + op + " g\nRET\n"
+				if arch == "386" {
+					goAssemblerOracleOutput(t, arch, source, "", false)
+					return
+				}
+				code := x86OrderingHintGoBytes(t, arch, source)
+				physical := x86OrderingHintGoBytes(t, arch, strings.ReplaceAll(source, " g\n", " R14\n"))
+				if !bytes.Equal(code, physical) {
+					t.Fatal("official source g alias did not retain its exact R14 encoding")
+				}
+			})
 			for index, register := range registers {
 				t.Run(arch+"/"+op+"/"+register, func(t *testing.T) {
 					source := "TEXT swap(SB),4,$0-0\n" + op + " " + register + "\nRET\n"

@@ -199,11 +199,11 @@ static __attribute__((always_inline)) inline uintptr_t stack_pointer(void) {
     return value;
 }
 static word reverse_bytes(word value,unsigned bytes) {
+    volatile uint8_t input[8],output[8];
+    for(unsigned byte=0;byte<bytes;byte++)input[byte]=(uint8_t)(value>>(8*byte));
+    for(unsigned byte=0;byte<bytes;byte++)output[byte]=input[bytes-1-byte];
     word result=0;
-    for(unsigned byte=0;byte<bytes;byte++) {
-        result=(result<<8)|(value&255);
-        value>>=8;
-    }
+    for(unsigned byte=0;byte<bytes;byte++)result|=(word)output[byte]<<(8*byte);
     return result;
 }
 int main(void) {
