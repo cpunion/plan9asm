@@ -753,6 +753,9 @@ func (c *amd64Ctx) storeX87MoveValue(op Op, dst Operand, value string) error {
 
 func (c *amd64Ctx) storeX87TypedMemory(dst Operand, typ LLVMType, value string) error {
 	if dst.Kind == OpFP {
+		if typ == LLVMType("float") {
+			return c.storeScalarFPFloat(dst.FPOffset, 32, value)
+		}
 		return c.storeFPResult(dst.FPOffset, typ, value)
 	}
 	ptr, ptrType, err := c.x87MemoryPointer(dst)
@@ -1034,7 +1037,7 @@ func (c *amd64Ctx) storeX87F64(dst Operand, value string) error {
 	}
 	switch dst.Kind {
 	case OpFP:
-		return c.storeFPResult(dst.FPOffset, LLVMType("double"), value)
+		return c.storeScalarFPFloat(dst.FPOffset, 64, value)
 	case OpMem:
 		p, ptrType, err := c.ptrFromMem(dst.Mem)
 		if err != nil {

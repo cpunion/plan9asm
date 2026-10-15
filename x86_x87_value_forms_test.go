@@ -212,6 +212,7 @@ func TestX86X87ValueStateConsumesSharedBudgetAndPrivateRole(t *testing.T) {
 	if err := CheckX86ABI0ResultInitialization(resultFile.Funcs[0], sig, "386"); !errors.Is(err, ErrProbeNeedsContext) {
 		t.Fatal("private logical effect widened the declaration-only query", err)
 	}
+	x86X87FloatingStoresUseOnlyCheckedByteRoles(t)
 }
 
 func TestX86X87LegacyDirectHelperBindsDispatchAndDefaultMode(t *testing.T) {
