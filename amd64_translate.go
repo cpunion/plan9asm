@@ -541,6 +541,8 @@ type x86FunctionSource struct {
 	boolCalls        *x86ABI0BoolCallSource
 	declaration      FuncSig
 	inferredAttrs    string
+
+	staticAddressValues *x86StaticAddressValues
 }
 
 func translateFuncX86(b *strings.Builder, fn Func, sig FuncSig, resolve func(string) string, sigs map[string]FuncSig, goarch, targetTriple string, x87Mode X87Mode, annotateSource bool, sources ...x86FunctionSource) error {
@@ -564,6 +566,7 @@ func translateFuncX86(b *strings.Builder, fn Func, sig FuncSig, resolve func(str
 		c.lockScalarNS = sources[0].lockNamespace
 		c.bitScanNS = sources[0].bitScanNamespace
 		c.fpScalarData = sources[0].scalarData
+		c.fpStaticAddressValues = sources[0].staticAddressValues
 		if calls := sources[0].boolCalls; calls != nil {
 			if plan := calls.callers[fn.Sym]; plan != nil {
 				if !plan.bindLowering(fn, sources[0].declaration, sig, goarch) {

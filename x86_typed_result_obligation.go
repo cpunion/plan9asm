@@ -10,6 +10,9 @@ func x86TypedFPResultNeedsProof(fn Func, sig FuncSig, arch string) bool {
 		return false
 	}
 	for _, ins := range fn.Instrs {
+		if _, _, _, known := x86StaticAddressValueMove(ins, arch); known {
+			return true // The address source cannot hide an unwritten result.
+		}
 		if effect, known, err := x86TypedInstructionByteEffect(ins.Op, ins, arch); known && err == nil &&
 			effect.requiresResultProof && x86ResultNamedPredicateInstruction(ins) {
 			return true
