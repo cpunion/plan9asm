@@ -234,8 +234,12 @@ func TestX86X87IntegerRoundingBoundStorageAndStack(t *testing.T) {
 		{"overflow-stack", "func Value(input int16) int16", strings.Repeat("FLD1\n", 9) + "FMOVWP F0,ret+RESULT(FP)\nFINIT\n", false},
 		{"unwritten-AUTO", "func Value(input int16) int16", "FMOVW cell-2(SP),F0\nFMOVWP F0,ret+RESULT(FP)\n", false},
 		{"padding", "func Value(a byte,b int64) int16", "FMOVW a+0(FP),F0\nFMOVWP F0,ret+RESULT(FP)\n", false},
-		{"pointer-is-not-NUM", "func Value(input *byte) int16", "MOVE input+0(FP),BX\nFMOVW (BX),F0\nFMOVWP F0,ret+RESULT(FP)\n", false},
-		{"parameter-write", "func Value(input int16) int16", "FMOVW input+0(FP),F0\nFMOVWP F0,input+0(FP)\nMOVW input+0(FP),AX\nMOVW AX,ret+RESULT(FP)\n", false},
+		// A typed pointer alone supplies neither NUM pointee bytes nor the
+		// independently paired native-read role. This is not invalid Go syntax.
+		{"independent-native-read-role-unproved", "func Value(input *byte) int16", "MOVE input+0(FP),BX\nFMOVW (BX),F0\nFMOVWP F0,ret+RESULT(FP)\n", false},
+		// The existing exact natural I16 parameter writer is a private shadow,
+		// not a caller/native-frame write. A defined F0 may use that same role.
+		{"whole-natural-I16-shadow", "func Value(input int16) int16", "FMOVW input+0(FP),F0\nFMOVWP F0,input+0(FP)\nMOVW input+0(FP),AX\nMOVW AX,ret+RESULT(FP)\n", true},
 		{"unknown-CALL", "func Value(input int16) int16", "CALL ·unknown(SB)\nFINIT\nFMOVW input+0(FP),F0\nFMOVWP F0,ret+RESULT(FP)\n", false},
 	}
 	for _, target := range x86RawReturnTargets {
@@ -253,6 +257,13 @@ func TestX86X87IntegerRoundingBoundStorageAndStack(t *testing.T) {
 					if row.good && (err != nil || ir == "") ||
 						!row.good && (!errors.Is(err, ErrProbeNeedsContext) || ir != "") {
 						t.Fatal("rounding changed independent storage/initialized-byte/stack authority", row.good, err)
+					}
+					if row.name == "whole-natural-I16-shadow" {
+						actual := x86X87InlineActualValue(t, ir, "i16", 16)
+						for _, input := range []uint16{0, 7, 0x7fff, 0x8000, 0xfffe} {
+							probe := fmt.Sprintf("\ndefine i16 @ShadowProbe() {\n %%r = call i16 @Value(i16 %d)\n ret i16 %%r\n}\n", input)
+							x86ScalarFPNamedConstantResult(t, actual+probe, "ShadowProbe", []uint64{uint64(input)})
+						}
 					}
 				})
 			}
