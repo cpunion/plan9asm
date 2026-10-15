@@ -87,3 +87,23 @@ func TestX86RelocationValueDoesNotGrantIncomingPointerOrPartialBytes(t *testing.
 		}
 	}
 }
+
+func TestX86StaticAddressValuesRequireWholeResultProof(t *testing.T) {
+	for _, target := range x86RawReturnTargets {
+		move := "MOVQ"
+		if target.arch == "386" {
+			move = "MOVL"
+		}
+		for _, form := range []string{"load", "address"} {
+			for _, api := range []string{"text", "module", "Go"} {
+				t.Run(target.triple+"/"+form+"/"+api, func(t *testing.T) {
+					source := x86RelocationResultSource(target.arch, form)
+					source = strings.Replace(source, move+" AX,ret+0(FP)\n", "", 1)
+					if ir, err := x86ScalarFPBitViewAPI(t, source, "func Value() uintptr", target.arch, target.triple, api); err == nil || ir != "" {
+						t.Fatal("missing result acquired an initialized implementation alloca", err)
+					}
+				})
+			}
+		}
+	}
+}
