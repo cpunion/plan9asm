@@ -52,7 +52,6 @@ func TestX86IncomingPointerResidueMasksRolesAndByteAliases(t *testing.T) {
 								t.Fatal("projection changed unrelated bytes/flags/DF or retained address authority", arch, ins.Raw)
 							}
 						}
-						}
 					}
 				}
 			}
