@@ -154,6 +154,21 @@ func x86ResultX87ValueStepWithHardwareRounding(ins Instr, state *x86ResultState,
 	controlKnown := x87.word != nil && x87.word.control == 0xffff
 	status := uint16(0)
 	switch form.spec.kind {
+	case x86X87ConditionalMove:
+		if !read(form.source) || !read(form.destination) ||
+			!state.shapeOnly && state.flags&form.spec.flags != form.spec.flags {
+			return false, true
+		}
+		first, last := x87.integerBytes(form.source), x87.integerBytes(form.destination)
+		if !write(form.destination) {
+			return false, true
+		}
+		if !state.shapeOnly && first != 0 && last != 0 {
+			if first > last {
+				last = first
+			}
+			x87.integer[0] = last // The selected value has either complete signed bound.
+		}
 	case x86X87FloatMove:
 		if !read(form.source) {
 			return false, true

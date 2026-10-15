@@ -18,6 +18,7 @@ const (
 	x86X87Status
 	x86X87IntegerMove
 	x86X87Round
+	x86X87ConditionalMove
 )
 
 type x86X87ValueSpec struct {
@@ -27,6 +28,7 @@ type x86X87ValueSpec struct {
 	pop         uint8
 	reverse     bool
 	directFlags bool
+	flags       uint8 // Required integer predicates; FCMOV preserves those flags.
 }
 
 // These are value-availability forms, not a physical x87 entry/control-word,
@@ -55,6 +57,19 @@ var x86X87ValueSpecs = func() map[Op]x86X87ValueSpec {
 	}
 	for _, op := range []Op{"FABS", "FCHS", "FSQRT"} {
 		forms[op] = x86X87ValueSpec{kind: x86X87Unary}
+	}
+	for _, row := range []struct {
+		ops   []Op
+		flags uint8
+	}{
+		{[]Op{"FCMOVCC", "FCMOVCS", "FCMOVB", "FCMOVNB"}, x86ByteFlagCF},
+		{[]Op{"FCMOVEQ", "FCMOVE", "FCMOVNE"}, x86ByteFlagZF},
+		{[]Op{"FCMOVHI", "FCMOVLS", "FCMOVBE", "FCMOVNBE"}, x86ByteFlagCF | x86ByteFlagZF},
+		{[]Op{"FCMOVNU", "FCMOVU", "FCMOVUN"}, x86ByteFlagPF},
+	} {
+		for _, op := range row.ops {
+			forms[op] = x86X87ValueSpec{kind: x86X87ConditionalMove, flags: row.flags}
+		}
 	}
 	for _, stem := range []string{"FADD", "FMUL", "FSUB", "FSUBR", "FDIV", "FDIVR"} {
 		for _, suffix := range []string{"W", "L", "F", "D", "DP"} {
@@ -174,6 +189,10 @@ func x86X87ValueProperties(ins Instr, arch string) (x86X87ValueForm, bool, error
 	first, last := ins.Args[0], ins.Args[1]
 	form.source, form.destination = first, last
 	switch spec.kind {
+	case x86X87ConditionalMove:
+		if !register(first) || !isX87F0(last) {
+			return fail("expects x87-register source and F0 destination")
+		}
 	case x86X87IntegerMove:
 		if spec.pop != 0 {
 			if !isX87F0(first) || !memory(last) {
