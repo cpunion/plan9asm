@@ -1,6 +1,6 @@
 # Current work: PR 40 checkpoint
 
-Checkpoint: 2026-10-15 12:34 UTC. Fork diagnostic `5b44378d` completed naturally
+Checkpoint: 2026-10-15 13:13 UTC. Fork diagnostic `5b44378d` completed naturally
 with six failed jobs in three classes: CRC32 result/read proof, a string-IR
 reader's CRLF handling and a shared Compare source deadline. Main contains the
 qualified BP, string/LODS and exact-FP-byte/implicit-product leaves through
@@ -22,6 +22,16 @@ original14 owners plus three reader roots pass17 roots/2,337 children, including
 three SDK/race lanes with240 children each. Genuine REDs preserve both CRLF
 false failures and96 extra-memory false accepts; neither is weakened into
 success. Immutable tested Git blobs and current selected tools are audited.
+
+CRC32/caller-projection/canonical-composition leaf `9adca3c4` is now merged.
+Its exact new17 owners pass Go27 and actual Go20 with2,936 children per lane;
+race passes15 owners/2,834 children. All49 root executions/8,706 children,
+six SDK vets, formatting and frozen seals pass. Root independently rechecks
+all raw terminals,52 bound report files and24,353 source/SDK/tool inputs.
+This includes five original-Go objects and60 LLVM22 axes per SDK, not native
+execution. Historical `de9ef3e3` independently passes the complete SDK CRC32
+root plus all four failed CLI owners (five roots/34 children); that receipt
+does not certify the newer9adc or merged head. Fresh merged replay is required.
 
 The previous complete main qualification at `68ef8aa3` passes548 unique owners;
 its strict benchmark remains FAILED158/184 with26 failures, zero N/A and zero
@@ -54,8 +64,11 @@ unattempted files. Classification, objects and executed semantics stay distinct.
    independent bounded named-AUTO/MUL positive has real Go/LLVM objects,
    three-API value checks and five negative controls. Neither is a complete
    original-arith pass. Failed630 and build-failedb119 reports remain failed.
-   Native implicit-MUL loads still need dead/zero-result fault TDD. Objects
-   do not certify native execution. Other arithmetic FP consumers and bound
+   Native implicit-MUL RED `74eeb615` now retains all28 kernels:84 IR0 native
+   loads are nonvolatile and84 O2 loads disappear across three APIs. Its other
+   three controls pass; the real Go test exits1, not success. This test-only
+   leaf is not merged or repaired. Native fault execution remains separate.
+   Objects do not certify native execution. Other arithmetic FP consumers and bound
    source-stack/fixed-local roles retain their independent contracts.
 3. Preserve qualified LODS leaf `74e145d6`: 38 unique owners, 105 root executions
    and 9,697 children pass across Go27, actual Go20 and race, plus six vets.
@@ -65,35 +78,35 @@ unattempted files. Classification, objects and executed semantics stay distinct.
    objects from all 84 original functions. Only zero-state observations are
    checked; bare/nonzero execution and native execution remain unclaimed.
    Preserve failed earlier observer attempts separately from this genuine RED.
-4. Complete the CRC32 family repair, using the actual complete Go encoding
-   tables and independent byte witnesses. CRC32B has encoding-specific byte
-   aliases; do not reuse MUL's physical-byte mapping. A successful translation
-   must consume mandatory whole-result proof and preserve live and dead native
-   memory reads. Genuine CRC REDs retain rejected positives and public false
-   passes; do not exempt CRC or weaken the ordinary-result gate. Candidate
-   `6fc74757` passes nine independent roots/1,342 children, but the original
-   complete SDK root still FAILS all three APIs at `ANDQ $7,BX` after a pointer
-   copy. Shape closure exposes this reaching-state address-residue boundary;
-   it is not a new successful original-file receipt. The four subsequent CLI
-   owners remain unattempted. Add a complete, independently tested lossy AND
-   projection class using actual caller-address provenance, not opaque PTR
-   alone; keep numeric, native-address, raw and storage permissions separate.
+4. Preserve qualified9adc: full CRC grammar and mandatory NUM obligations,
+   exact volatile reads, actual-caller low-mask projection, native-word INC/DEC
+   and consumption of the existing mixed-bool canonical role. Genuine REDs
+   retain public false passes, rejected valid sources and the failed6fc full
+   SDK proof. Corrected Q-row tests distinguish arbitrary full-width input
+   from a legitimately canonical zero-extended BSWAPQ result. No generic PTR
+   bytes, native bounds, raw/source-stack or store permission is added.
 5. Freeze the merged source, documentation and tools. Rebuild the exact union
    of all previous548 owners and every qualified BP/string/FP addition without
    dropping SDK lanes or enlarging original3m/5m budgets. Bind llvm-objdump as
    well as the other actual tools. Rerun fresh inventories, raw terminal audits,
    official gates, vets and the strict benchmark; no older receipt certifies it.
    The failed941 union contains669 unique owners over171 planned commands.
-   Add the three new reader roots and both new Compare API roots explicitly:
-   the old Compare root now owns only text, not the other two APIs.
+   Add the three new reader roots, Compare ownership root/two new API roots
+   and all17 CRC/composition owners explicitly. The old Compare root owns
+   only text; its other two complete APIs must retain independent scheduling.
+   All five previously failed CRC SDK/CLI owners remain required in this run.
 6. Stage the qualified batch in the allowed fork, without merging diagnostic
    workflows back into main. Policy `97cf2398` retains all37 prior early lanes
    and adds two independent five-minute Compare lanes (39 total); its93 Node
    policies and three workflow lints pass. Follow-up `ae7368f8` retains all39
    lanes and appends all three strict reader roots to the existing string
-   lane without changing its five-minute budget; all93 policies/three lints
-   pass. This is not executed qualification of the new source. Push once and
-   let the new run finish naturally. Draft
+   lane without changing its five-minute budget. Fork-only `34138d3c` adds
+   one17-owner CRC/composition lane (40 total) and the existing CRC runtime
+   root as required native65:17 inventories/27 mandatory owners, retaining
+   all17 required child paths and original budgets. Its97 policies/three
+   lints pass; actual Linux execution remains pending. The current Darwin
+   ARM64 host lacks Rosetta, so it cannot certify that runtime via a skip.
+   Push once after merged qualification and let the new run finish naturally. Draft
    PR40 is not ready; its contribution head remains `24851df2`.
 
 One local heavy SDK/ASM/LLVM/object/native/benchmark command owner at a time.
@@ -226,12 +239,13 @@ The primary branch is `codex/pr40-external-corpus-split-20261011`. One heavy
 SDK/ASM/LLVM/object/native/benchmark owner runs at a time. Small audited pure
 groups may overlap. Do not interrupt another owner's frozen snapshot.
 
-The active CI repair is `codex/pr40-crc32-result-native-read-20261016`.
+The qualified CRC leaf `codex/pr40-crc32-result-native-read-20261016` remains
+frozen at9adc while primary source receives fresh merged qualification.
 Test-only follow-up `codex/pr40-implicit-multiply-native-read-regression-20261016`
-prepares28 dead/zero-result native-read kernels; its `74eeb615` tests are not
-executed or merged at this checkpoint. The string reader's qualified3f1b ref
+retains28 dead/zero-result native-read kernels and genuine failed74ee output;
+it is not merged or repaired at this checkpoint. The string reader's qualified3f1b ref
 and reports remain preserved. Fork-only scheduling is
-`codex/pr40-fork-string-reader-priority-20261015`. Qualified BP, mixed-FP and
+the preserved native65 fork branch (resolve `34138d3c` with Git). Qualified BP, mixed-FP and
 string-zero-count refs remain preserved. Resolve existing worktree directories
 with Git; do not create disposable temporary clones.
 
