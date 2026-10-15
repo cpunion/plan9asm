@@ -19,8 +19,9 @@ func x86TypedFPResultNeedsProof(fn Func, sig FuncSig, arch string) bool {
 			return true // Input/control/stack obligations also apply to Void; private slots cannot supply unknown facts.
 		}
 	}
+	opaqueAddressResult := x86OpaqueAddressPointerResultRole(fn, sig, arch)
 	for _, ins := range fn.Instrs {
-		if _, _, _, known := x86StaticAddressValueMove(ins, arch); known {
+		if _, _, _, known := x86StaticAddressValueMove(ins, arch); known && !opaqueAddressResult {
 			return true // The address source cannot hide an unwritten result.
 		}
 		if x86NamedSegmentMOVNeedsProof(ins, arch) {
