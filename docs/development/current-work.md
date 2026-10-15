@@ -1,6 +1,6 @@
 # Current work: PR 40 checkpoint
 
-Checkpoint: 2026-10-15 22:30 UTC. The notes below this section are historical
+Checkpoint: 2026-10-15 23:25 UTC. The notes below this section are historical
 and retain their original source scope; they are not the current task queue.
 
 ## Active queue
@@ -28,9 +28,41 @@ establish native execution on the skipped architecture.
 | Native XADD/XCHG result continuation | Uses the existing complete typed sideeffect emitter; preserves faults/order and grants no reusable memory or declaration-query authority. |
 | Partial FP parameter stores, BIT shadow writeback and trap-only source | Qualified `7753b575` is merged. Separate typed logical-shadow and all-path trap roles preserve the incoming-write, pointer/bool and complete-source boundaries. Actual Linux runtime still needs replay. |
 | SB LEAW/L/Q address effects | Qualified `e5523905` is merged through `cf07263b`. Unknown-address writes kill destination identities without inventing numerical bytes or dereference permission. A separate old AUTO cost-selector gap remains unresolved. |
-| x87 initialized control/status words | Unmerged `40db2550` passes 12 integer/value/conditional/object/runtime owners and 2,559 children; all 165 original I64 identity leaves now pass. ENV separately passes 16 owners/316 children at `79b2d6cf`, followed by 27 retained/new owners and 908 children at `abeeaf57`. Combined SDK/race/whole-module/native qualification is still pending; these are not general FP80 arithmetic receipts. |
+| x87 initialized words, ENV and exact signed integers | Merged `bda3e19c` passes 139 complete affected/retained owners on Go27, actual Go20 and race: 417 root executions/40,950 children, zero skips, complete ordered terminals and matching source/tool seals. Both whole-root-module vets pass. These are not whole-module tests, native execution or general FP80 arithmetic receipts. |
 | DATA relocation address values | Qualified `1f39d8db` is merged through `62784911`: 54 affected owners on both SDKs and 30 source/model owners on race, 138 root executions/3,497 children, two whole-root-module vets and tracked formatting pass. Generic incoming pointers and code addresses gain no numerical or dereference permission. |
-| Complete 386 runtime fixture | SCAS/CMPS plus FS/GS candidate `44aa6e45` passes the complete 18-TEXT portable replay: original Go object and retained undefined-BX rejection controls, followed by the explicit-zero-extension counterpart through text/module IR0/O2 and eight LLVM22 object axes. Its 14 children pass. This is Windows/386 object evidence, not native execution or the Go-module API. |
+| Complete 386 runtime fixture | The original 18 TEXTs, manual signatures and C driver remain unchanged. The BX-only source retains its missing-scratch Context; the separately proved bounded counterpart now supplies the Windows runtime owner. All three original/corrected/bounded Go objects, eight LLVM22 axes and 28 single-mutation controls pass in the merged portable set. Actual Windows execution remains pending. |
+
+The independent original-runtime boundary pair genuinely fails at `ab0395d3`:
+BX-only scratch has no backing frame, and the new conditional Go oracle lacks
+the selected SDK include path. `02ac0895` fixes the test driver and activates
+only the bounded complete 386 counterpart; its two roots/26 children pass.
+The full conditional counterpart retains the original C checks and returns
+fourteen typed scalar functions instead of granting native stores from a pointer.
+Three APIs/two IR levels execute all fourteen predicates with independent
+NaN/zero/subnormal bit checks on the actual host in explicit Software mode.
+
+Expanded integration also reproduces five stale byte-budget expectations after
+the native string-counter state was added. The test-only repair counts that
+one logical byte, distinguishes source-scan and reaching-state charges, and
+checks the exact limit versus one byte short. No production limit is raised.
+Complete old no-argument x87 memory fixtures retain original Go acceptance and
+explicit public Context checks; separately labeled emitter units retain every
+original instruction and LLVM object check, without claiming executable inputs.
+
+All eight actual SDKs independently compare complete AMD64 reports before and
+after the repair. Only eight FCMOV forms and FRNDINT change from supported
+isolated probes to context-required; every other form, denominator and encoder
+rule remains unchanged. `368991ae` updates exactly three AMD64 baseline fields
+per SDK. The new isolated/initialized/missing-input regression is undergoing
+its old-source RED and current-source verification; official gate GREEN is
+still pending at this checkpoint.
+
+Allowed-fork staging `956d5fa4` retains the original 41 SDK priorities and
+native65 job, and adds a separate native x87 owner. Its four required roots
+include original-Go/LLVM amd64 and 386 I64 execution, conditional moves and
+hardware status checks, with all 26 backend/architecture children mandatory.
+All 102 Node policies and three workflow lints pass. It has not been pushed;
+the old completed failed run above is still the latest online result.
 
 The FS/GS first-GREEN set at `951a68a0` passes 17 unique roots and 30,902
 children, retaining all 212 AMD64 or 114 386 TEXTs per target. Its explicit
@@ -97,7 +129,8 @@ two reject, at an independent earlier AUTO boundary. Preserve the failed
 four-root/59-child receipt. After composing the actual word/input proof,
 `9247bef4` passes that complete four-root/59-child set, removing all 26 false
 acceptances while retaining the legitimate complete 18-TEXT source. Objects are
-not Windows execution; activating the bounded native counterpart remains pending.
+not Windows execution; the bounded native counterpart is activated locally,
+but its actual Windows execution still requires the next CI run.
 
 Frozen `0c80d8a6` passes nine carry/exchange/fixture owners on each of Go27,
 actual Go20 and race: 27 root executions/378 children, no failures or skips.
@@ -150,9 +183,9 @@ passes 12 roots/2,559 children, including 120 Hardware/Software LLVM22 objects
 and six actual-host Software executions. Neither tagged integer/binary64
 transport nor those tests establish general extended-precision arithmetic;
 mixed fractional arithmetic and all remaining consumers still need review.
-Whether explicit Software mode owns an initialized virtual FPU environment is
-awaiting a user choice; default Auto/Hardware must still observe actual hardware.
-Do not turn the existing private alloca initializer into an implicit entry fact.
+Software mode still requires an actual source control-word producer; its API
+default is unchanged. Auto/Hardware must still observe actual hardware. Do not
+turn the existing private alloca initializer into an implicit entry fact.
 
 SCAS/CMPS retains the independent failed self-CMP and exact caller-write-footprint
 matrices. The unchanged SDK IndexByte replay now reaches the existing unresolved
