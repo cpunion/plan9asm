@@ -1,11 +1,17 @@
 # Current work: PR 40 checkpoint
 
-Checkpoint: 2026-10-15 11:35 UTC. The latest fork diagnostic completed naturally
-with nine stale BP test-root failures, not a tool or timeout failure. All nine
-are repaired and locally integrated through `6925918c`. Main also contains the
-qualified string-memory/REP-CFG repair and full-AX empty-LODS repair through
-`99c6d83b`. Qualified exact-FP-byte and implicit-product leaf `bbe4fcc6` is now
-merged through `60b269e2`. Leaf receipts do not certify this merged snapshot.
+Checkpoint: 2026-10-15 12:09 UTC. Fork diagnostic `5b44378d` completed naturally
+with six failed jobs in three classes: CRC32 result/read proof, a string-IR
+reader's CRLF handling and a shared Compare source deadline. Main contains the
+qualified BP, string/LODS and exact-FP-byte/implicit-product leaves through
+`60b269e2`. Their receipts do not certify the subsequent merged snapshot.
+
+The actual combined run at `941f641a` FAILED on complete original CRC32 after
+26 successful commands (1,188 root and37,258 child executions). Later commands
+did not run. Preserve its failed raw output and frozen before/after seals.
+Compare scheduling RED `a2f72363` and repair `bd8e6607` give each API an
+independent original five-minute source lease; pure Go27/race/Go20 ownership
+checks pass, but all three complete-source/object owners still need replay.
 
 The previous complete main qualification at `68ef8aa3` passes548 unique owners;
 its strict benchmark remains FAILED158/184 with26 failures, zero N/A and zero
@@ -49,17 +55,28 @@ unattempted files. Classification, objects and executed semantics stay distinct.
    objects from all 84 original functions. Only zero-state observations are
    checked; bare/nonzero execution and native execution remain unclaimed.
    Preserve failed earlier observer attempts separately from this genuine RED.
-4. Freeze the merged source, documentation and tools. Rebuild the exact union
+4. Complete the CRC32 family repair, using the actual complete Go encoding
+   tables and independent byte witnesses. CRC32B has encoding-specific byte
+   aliases; do not reuse MUL's physical-byte mapping. A successful translation
+   must consume mandatory whole-result proof and preserve live and dead native
+   memory reads. Genuine CRC REDs retain rejected positives and public false
+   passes; do not exempt CRC or weaken the ordinary-result gate. The string
+   reader repair `371e495c` passes three portable roots across both SDKs/race;
+   its complete original-source/object replay is still pending.
+5. Freeze the merged source, documentation and tools. Rebuild the exact union
    of all previous548 owners and every qualified BP/string/FP addition without
    dropping SDK lanes or enlarging original3m/5m budgets. Bind llvm-objdump as
    well as the other actual tools. Rerun fresh inventories, raw terminal audits,
    official gates, vets and the strict benchmark; no older receipt certifies it.
-5. Stage the batch in the allowed fork. Policy `519d43f5` retains all36 prior
-   early lanes and expands the FP lane to27 complete byte/MUL/old386 roots;
-   its91 Node policies and three workflow lints pass. These are policy checks,
-   not an executed CI receipt for the new source. Push once and let the
-   entire new run finish naturally. Draft PR40 is not ready; its contribution
-   head is still `24851df2` at this checkpoint.
+   The failed941 union contains669 unique owners over171 planned commands.
+   Add the three new reader roots and both new Compare API roots explicitly:
+   the old Compare root now owns only text, not the other two APIs.
+6. Stage the qualified batch in the allowed fork, without merging diagnostic
+   workflows back into main. Policy `97cf2398` retains all37 prior early lanes
+   and adds two independent five-minute Compare lanes (39 total); its93 Node
+   policies and three workflow lints pass. This is not executed qualification
+   of the new source. Push once and let the new run finish naturally. Draft
+   PR40 is not ready; its contribution head remains `24851df2`.
 
 One local heavy SDK/ASM/LLVM/object/native/benchmark command owner at a time.
 Release its lease immediately after natural completion, before read-only
@@ -82,21 +99,31 @@ qualification. Preserve failed snapshots, deadlines and complete denominators.
 
 ## Latest completed CI
 
-The latest [run38703136882](https://github.com/cpunion/plan9asm/actions/runs/38703136882)
-at `e6a29969` ended naturally FAILURE:71 jobs,63 successful and eight failed
-(seven root parts plus their correctly failed aggregate). Independent complete
-raw audits find exactly nine failing main-module roots and385 failing children,
-with no missing, duplicate or unfinished terminals. All are the mode-aware BP
-test-fixture class above; every other job succeeds, including native64/208
-children, ARM QEMU and both nested CLI aggregates/coverage uploads.
+The latest [run38729263837](https://github.com/cpunion/plan9asm/actions/runs/38729263837)
+at `5b44378d` ended naturally FAILURE:42 jobs,35 successful, six failed and one
+skipped. Four failed priorities expose the same CRC32 missing result/read proof;
+the other two are the string-IR reader and Compare deadline above. The complete
+Windows reusable workflow was blocked by those prerequisites: none of its three
+full modules, aggregates or coverage uploads executed. Do not count them as
+passes or compare this42-job denominator to a fully expanded71-job run.
 
-The complete main inventory has22 packages/6976 named roots/155190 children,
-263 explicit host-inapplicable root skips and no child skips. The simple CLI
-has32 roots/29 children and no skips; the rich CLI has333 roots/2095 children
-with one explicit ARM host child skip. These are exact-run outcomes, not
-certification of newer local source or an all-platform executed pass.
+Complete current-head raw audits retain295 unique priority owners and14,320
+children, six failed roots/56 failed children, no skips or terminal gaps in
+executed SDK lanes. Native passes64 roots/208 children,16 inventories,26
+mandatory owners and17 required children. ARM64 QEMU passes four required
+children/512 inputs. Objects and executed adapter semantics do not establish
+whole Go/ABI0 caller execution.
 
 ### Historical checkpoints
+
+[Run38703136882](https://github.com/cpunion/plan9asm/actions/runs/38703136882)
+at `e6a29969` ended naturally FAILURE:71 jobs,63 successful and eight failed.
+Its nine failing BP fixture roots/385 children are repaired through `6925918c`.
+The complete main inventory had22 packages/6976 named roots/155190 children,
+263 explicit host-inapplicable root skips and no child skips. The simple CLI
+had32 roots/29 children with no skips; the rich CLI had333 roots/2095 children
+and one explicit ARM host child skip. These historical outcomes do not certify
+the newer snapshot or the unexecuted complete modules in the latest run.
 
 [Run38691683296](https://github.com/cpunion/plan9asm/actions/runs/38691683296)
 at `de238372` has67 successful jobs, one failed root part and one remaining
@@ -181,10 +208,11 @@ The primary branch is `codex/pr40-external-corpus-split-20261011`. One heavy
 SDK/ASM/LLVM/object/native/benchmark owner runs at a time. Small audited pure
 groups may overlap. Do not interrupt another owner's frozen snapshot.
 
-Active leaves are `codex/pr40-bp-fixture-peer-families-20261015`,
-`codex/pr40-mixed-bool-fp-span-red-20261016` and
-`codex/pr40-x86-string-zero-count-state-20261016`. Resolve their existing
-worktree directories with Git; do not create disposable temporary clones.
+Active repairs are `codex/pr40-crc32-result-native-read-20261016` and
+`codex/pr40-x86-string-ir-reader-crlf-20261016`; fork-only scheduling is
+`codex/pr40-fork-compare-api-priority-20261015`. Qualified BP, mixed-FP and
+string-zero-count refs remain preserved. Resolve their existing worktree
+directories with Git; do not create disposable temporary clones.
 
 The BSWAP branch is `codex/pr40-bswap-definedness-20261015`; its qualified
 native tests and shared mixed-I1 guard are integrated through `abf771ac`.
