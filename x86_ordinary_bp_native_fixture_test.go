@@ -9,7 +9,7 @@ import (
 
 // These fixtures test native instruction/address classification, not numerical
 // results or pointee backing. All ordinary inputs are explicitly initialized;
-// the unused native m128 read must still retain its original fault/MXCSR effect.
+// the unused native read must still retain its original fault/MXCSR effect.
 func x86OrdinaryBPNativeFixture(t *testing.T, arch, name, instruction, address string, frame int) (string, FuncSig, GoPackage) {
 	t.Helper()
 	source := x86OrdinaryBPNativeSource(arch, name, instruction, address, frame)

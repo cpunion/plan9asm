@@ -376,10 +376,10 @@ func TestX86CMOVFamilyBoundFrameNumericalExtent(t *testing.T) {
 
 func TestX86CMOVFamilyNativeStackAndFPAuthorityUnchanged(t *testing.T) {
 	for _, target := range x86OrderingHintTargets {
-		for _, operand := range []string{"(SP)", "(BP)", "value+7(FP)", "missing+8(FP)", "p+0(FP)"} {
+		for _, operand := range []string{"(SP)", "(BP)", "(SI)(BP*1)", "value+7(FP)", "missing+8(FP)", "p+0(FP)"} {
 			t.Run(target.triple+"/"+operand, func(t *testing.T) {
 				declaration := "package ordering\nfunc Value(value uint64)\n"
-				size, width := 8, "Q"
+				size, width, setup := 8, "Q", ""
 				if target.arch == "386" {
 					width = "L"
 				}
@@ -389,11 +389,29 @@ func TestX86CMOVFamilyNativeStackAndFPAuthorityUnchanged(t *testing.T) {
 						size = 4
 					}
 				}
-				source := fmt.Sprintf("TEXT ·Value(SB),4,$0-%d\nCMOV%sLE %s,AX\nRET\n", size, width, operand)
+				ordinary := target.arch == "386" && strings.Contains(operand, "BP")
+				if ordinary {
+					size, declaration = 4, "package ordering\nfunc Value(p *byte)\n"
+					setup = "MOVL p+0(FP),BP\n"
+					if strings.Contains(operand, "BP*") {
+						setup = "MOVL p+0(FP),SI\nMOVL $0,BP\n"
+					}
+				}
+				// Every row has an independent defined numerical old destination
+				// and FLAGS, so a Context result must still be about source storage.
+				setup += fmt.Sprintf("MOV%s $7,AX\nCMP%s AX,$0\n", width, width)
+				source := fmt.Sprintf("TEXT ·Value(SB),4,$0-%d\n%sCMOV%sLE %s,AX\nRET\n", size, setup, width, operand)
 				goAssemblerOracleOutput(t, target.arch, source, "", true)
 				for _, api := range []string{"text", "module", "Go"} {
-					_, err := x86OrderingHintTranslateAPI(t, api, source, declaration, target.arch, target.triple)
-					if !errors.Is(err, ErrProbeNeedsContext) {
+					ir, err := x86OrderingHintTranslateAPI(t, api, source, declaration, target.arch, target.triple)
+					if ordinary {
+						if err != nil {
+							t.Fatal("ordinary386 BP native CMOV", api, err)
+						}
+						for _, input := range []string{ir, x86MulDivRoundOptimize(t, ir)} {
+							x86RequireCMOVVolatileWidth(t, input, 4, 1)
+						}
+					} else if !errors.Is(err, ErrProbeNeedsContext) {
 						t.Fatal("new native-stack, pointer or missing-FP input authority", api, err)
 					}
 				}
