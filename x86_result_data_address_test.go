@@ -13,7 +13,8 @@ func TestX86StaticAddressValueDirectoryRejectsAliasesAndCode(t *testing.T) {
 		for _, mutation := range []string{
 			"external target", "code target", "signature target", "signature alias",
 			"coalesced holder", "coalesced target", "unresolved extent", "oversize target",
-			"overlap holder", "code carrier", "wrong relocation width", "mixed relocation", "missing target",
+			"overlap holder", "code carrier", "block address", "prepared code address",
+			"wrong relocation width", "mixed relocation", "missing target",
 		} {
 			t.Run(arch+"/"+mutation, func(t *testing.T) {
 				file, err := Parse(ArchAMD64, x86RelocationResultSource(arch, "load"))
@@ -49,6 +50,10 @@ func TestX86StaticAddressValueDirectoryRejectsAliasesAndCode(t *testing.T) {
 					file.Data = append(file.Data, DataStmt{Sym: "box<>", Off: 8, Width: 1, Value: 1})
 				case "code carrier":
 					file.x86ContinuationGraph = &x86ContinuationGraph{tables: map[string]x86ContinuationTable{"box<>": {}}}
+				case "block address":
+					file.x86ContinuationGraph = &x86ContinuationGraph{addresses: map[string]x86Continuation{"bytes<>": {root: "Value", label: "inner"}}}
+				case "prepared code address":
+					file.Funcs[0].x86ContinuationAddresses = map[string]x86Continuation{"bytes<>": {root: "Value", label: "inner"}}
 				case "wrong relocation width":
 					file.Data[1].Width /= 2
 				case "mixed relocation":
