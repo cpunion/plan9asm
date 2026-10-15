@@ -933,12 +933,15 @@ TEXT frameAddress(SB),NOSPLIT,$0-12
 		}
 	}
 	var ir string
-	t.Run("partial-selection-original-other-18-TEXTs", func(t *testing.T) {
+	boundedCounterpart := x86X87InstructionFamiliesBoundedCounterpart(t, src)
+	t.Run("partial-selection-bounded-counterpart-other-18-TEXTs", func(t *testing.T) {
 		// KeepFunc belongs to the Go-module API. The empty package grants no
 		// Go declaration; every selected signature is exactly the original
 		// explicit manual contract, including custom register assignments.
+		// Only x87math's scratch header/name differs from the original source;
+		// arith and every instruction in the other selected TEXTs stay intact.
 		pkg := mustGoPackage(t, "families", "package families")
-		result, err := TranslateGoModule(pkg, []byte(src), GoModuleOptions{
+		result, err := TranslateGoModule(pkg, []byte(boundedCounterpart), GoModuleOptions{
 			GOOS: "linux", GOARCH: "386", TargetTriple: options.TargetTriple,
 			ResolveSym: options.ResolveSym,
 			KeepFunc:   func(text, resolved string) bool { return text != "arith" && resolved != "arith" },
@@ -1555,14 +1558,7 @@ func TestTranslate386X87Codegen(t *testing.T) {
 
 func translate386RoundingIR(t *testing.T, mode X87Mode) string {
 	t.Helper()
-	file, err := Parse(ArchAMD64, `TEXT round(SB),NOSPLIT,$0-16
-	FMOVD value+0(FP), F0
-	FSTCW -2(SP)
-	FLDCW -2(SP)
-	FRNDINT
-	FMOVVP F0, ret+8(FP)
-	RET
-`)
+	file, err := Parse(ArchAMD64, x86X87LegacyBoundedRoundingSource(mode))
 	if err != nil {
 		t.Fatal(err)
 	}
