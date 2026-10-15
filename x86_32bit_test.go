@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -901,13 +902,43 @@ TEXT frameAddress(SB),NOSPLIT,$0-12
 	if err != nil {
 		t.Fatal(err)
 	}
-	ir, err := Translate(file, Options{
+	options := Options{
 		TargetTriple: "i386-unknown-linux-gnu",
 		ResolveSym: func(sym string) string {
 			return strings.TrimPrefix(sym, "·")
 		},
 		Goarch: "386",
 		Sigs:   sigs,
+	}
+	t.Run("complete-original-physical-stack-remains-Context", func(t *testing.T) {
+		ir, err := Translate(file, options)
+		if !errors.Is(err, ErrProbeNeedsContext) || ir != "" || !strings.Contains(err.Error(), "result initialization AUTO") {
+			t.Fatalf("original zero-frame physical-SP/PUSHAL source gained backing: output=%t error=%v", ir != "", err)
+		}
+	})
+	// Keep the complete original file and declarations. This explicitly
+	// selected counterpart does not certify arith's unbound physical stack,
+	// PUSHAL/POPAL or live-stack memory addressing. Nothing may reference it.
+	if len(file.Funcs) != 19 || len(sigs) != 19 {
+		t.Fatal("complete instruction-family TEXT/declaration inventory changed")
+	}
+	for _, fn := range file.Funcs {
+		if fn.Sym == "arith" {
+			continue
+		}
+		for _, ins := range fn.Instrs {
+			if strings.Contains(ins.Raw, "arith") {
+				t.Fatal("partial selection cannot discard a referenced arithmetic TEXT", ins.Raw)
+			}
+		}
+	}
+	options.KeepFunc = func(text, resolved string) bool { return text != "arith" && resolved != "arith" }
+	var ir string
+	t.Run("partial-selection-original-other-18-TEXTs", func(t *testing.T) {
+		ir, err = Translate(file, options)
+		if err != nil {
+			t.Fatal(err)
+		}
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -944,6 +975,35 @@ TEXT frameAddress(SB),NOSPLIT,$0-12
 		t.Fatalf("386 x87 lowering unexpectedly depends on external roundeven:\n%s", ir)
 	}
 	compile386IR(t, ir, "instruction_families")
+	t.Run("independent-bounded-named-AUTO-product", func(t *testing.T) {
+		const bounded = "TEXT ·Bounded(SB),4,$16-12\nMOVL a+0(FP),AX\nMOVL b+4(FP),BX\nIMULL BX\nMOVL AX,spill-8(SP)\nMOVL spill-8(SP),AX\nMOVL AX,ret+8(FP)\nRET\n"
+		const declaration = "func Bounded(a,b uint32) uint32"
+		x86LEAActualTargetGoObject(t, "386", options.TargetTriple, bounded)
+		for _, api := range []string{"text", "module", "Go"} {
+			t.Run(api, func(t *testing.T) {
+				ir, err := x86ScalarFPBitViewAPI(t, bounded, declaration, "386", options.TargetTriple, api)
+				if err != nil {
+					t.Fatal(err)
+				}
+				x86ScalarFPNamedConstantResult(t, ir+"define i32 @Probe() { %r = call i32 @Bounded(i32 2,i32 3)\n ret i32 %r }\n", "Probe", []uint64{6})
+				compile386IR(t, ir, "bounded_product_"+api)
+				for name, invalid := range map[string]string{
+					"unknown-input":  strings.Replace(bounded, "MOVL b+4(FP),BX", "NOP", 1),
+					"unwritten-AUTO": strings.Replace(bounded, "MOVL AX,spill-8(SP)", "NOP", 1),
+					"physical-SP":    strings.ReplaceAll(bounded, "spill-8(SP)", "-8(SP)"),
+					"missing-frame":  strings.Replace(bounded, "$16-12", "$0-12", 1),
+					"past-frame":     strings.ReplaceAll(bounded, "spill-8(SP)", "spill-20(SP)"),
+				} {
+					t.Run(name, func(t *testing.T) {
+						output, err := x86ScalarFPBitViewAPI(t, invalid, declaration, "386", options.TargetTriple, api)
+						if !errors.Is(err, ErrProbeNeedsContext) || output != "" {
+							t.Fatal("bounded counterpart borrowed initialization or native backing", err)
+						}
+					})
+				}
+			})
+		}
+	})
 }
 
 func TestTranslate386X87MoveFamilyCompleteForms(t *testing.T) {
