@@ -22,12 +22,18 @@ func TestCrossLinuxRuntimeMatrixX86ContinuationWholeCFGOriginalGoAndLLVM(t *test
 	for _, arch := range []string{"amd64", "386"} {
 		dispatches := []string{"memory", "register"}
 		if arch == "386" {
-			dispatches = append(dispatches, "BP-memory", "BP-register")
+			dispatches = append(dispatches, "BP-memory", "BP-register", "BP-target")
 		}
 		for _, dispatch := range dispatches {
 			t.Run(arch+"/"+dispatch, func(t *testing.T) {
-				source, options, goDriver, cDriver := x86ContinuationRuntimeFixture(t, arch, strings.TrimPrefix(dispatch, "BP-"))
-				if strings.HasPrefix(dispatch, "BP-") {
+				mode := strings.TrimPrefix(dispatch, "BP-")
+				if dispatch == "BP-target" {
+					mode = "register"
+				}
+				source, options, goDriver, cDriver := x86ContinuationRuntimeFixture(t, arch, mode)
+				if dispatch == "BP-target" {
+					source = strings.ReplaceAll(source, "AX", "BP")
+				} else if strings.HasPrefix(dispatch, "BP-") {
 					source = strings.ReplaceAll(source, "SI", "BP")
 				}
 				compiler := []string{clang, "-target", options.TargetTriple, "-no-pie"}

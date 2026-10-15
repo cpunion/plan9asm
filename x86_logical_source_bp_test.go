@@ -66,20 +66,51 @@ func TestX86DirectTailModeAwareBPRegisterRoles(t *testing.T) {
 	}
 }
 
+func x86LogicalSourceBPContinuation(t *testing.T, arch, role string) (string, Options) {
+	t.Helper()
+	source, options := x86ContinuationResultFixture(t, arch, true)
+	if register := map[string]string{"numerical": "BX", "code-table": "SI", "output-pointer": "DI"}[role]; register != "" {
+		return strings.ReplaceAll(source, register, "BP"), options
+	}
+	word := "Q"
+	if arch == "386" {
+		word = "L"
+	}
+	body := " MOV" + word + " (SI),BP\n JMP BP"
+	switch role {
+	case "code-target":
+	case "partial-target":
+		body = " MOVW (SI),BP\n JMP BP"
+	case "unknown-target":
+		body = " MOV" + word + " $0,BP\n JMP BP"
+	case "overwritten-target":
+		body = " MOV" + word + " (SI),BP\n MOVB $0,BP\n JMP BP"
+	default:
+		t.Fatal("unknown BP continuation fixture role", role)
+	}
+	return strings.Replace(source, " JMP (SI)", body, 1), options
+}
+
 func TestX86ContinuationModeAwareBPRegisterRoles(t *testing.T) {
 	for _, target := range x86RawReturnTargets {
-		for _, row := range []struct{ name, original string }{
-			{"numerical", "BX"},
-			{"closed-code-table-address", "SI"},
-			{"existing-output-pointer", "DI"},
+		for _, row := range []struct {
+			name     string
+			complete bool
+		}{
+			{"numerical", true},
+			{"code-table", true},
+			{"output-pointer", true},
+			{"code-target", true},
+			{"partial-target", false},
+			{"unknown-target", false},
+			{"overwritten-target", false},
 		} {
 			for _, api := range []string{"text", "module", "owned-module"} {
 				t.Run(target.triple+"/"+row.name+"/"+api, func(t *testing.T) {
-					source, options := x86ContinuationResultFixture(t, target.arch, false)
-					source = strings.ReplaceAll(source, row.original, "BP")
+					source, options := x86LogicalSourceBPContinuation(t, target.arch, row.name)
 					options.TargetTriple = target.triple
 					ir, err := x86ContinuationResultAPI(t, source, options, api)
-					if target.arch == "386" {
+					if target.arch == "386" && row.complete {
 						if err != nil || ir == "" {
 							t.Fatal("mode32 BP lost its independently closed continuation role", err)
 						}
@@ -101,15 +132,13 @@ func TestX86Mode32BPLogicalSourceOriginalGoAndLLVMObjects(t *testing.T) {
 		if target.arch != "386" {
 			continue // This owner explicitly compiles the two mode32 targets.
 		}
-		for _, role := range []string{"direct-tail", "numerical", "code-table", "output-pointer"} {
+		for _, role := range []string{"direct-tail", "numerical", "code-table", "output-pointer", "code-target"} {
 			t.Run(target.triple+"/"+role, func(t *testing.T) {
 				source := strings.ReplaceAll(x86DirectTail386ASM, "SI", "BP")
 				var options Options
 				if role != "direct-tail" {
-					source, options = x86ContinuationResultFixture(t, "386", true)
+					source, options = x86LogicalSourceBPContinuation(t, "386", role)
 					options.TargetTriple = target.triple
-					register := map[string]string{"numerical": "BX", "code-table": "SI", "output-pointer": "DI"}[role]
-					source = strings.ReplaceAll(source, register, "BP")
 				}
 				x86LEAActualTargetGoObject(t, target.arch, target.triple, source)
 				apis := []string{"text", "module", "owned-module"}
