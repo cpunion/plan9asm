@@ -63,6 +63,25 @@ func x86ResultByteSwapStep(ins Instr, state *x86ResultState, arch string) (bool,
 	return true, true
 }
 
+func (c *amd64Ctx) byteSwapResultInitialized() error {
+	if err := c.scalarFPResultInitialized(); err != nil {
+		return err
+	}
+	// The generic ABI0 byte proof does not establish canonical bool results
+	// on amd64. Only an already authenticated independent consumer can do
+	// that; a byte permutation itself is neither a producer nor a witness.
+	if c.goarch != "amd64" || c.fpScalarSource.x86SourceStack != nil ||
+		c.fpScalarSource.x86FixedLocal != nil || x86RegisterBoolResultNeedsProof(c.fpScalarSource, c.sig, c.goarch) {
+		return nil
+	}
+	for _, slot := range c.fpResults {
+		if slot.Type == I1 {
+			return fmt.Errorf("%w: BSWAP bool result requires an independent canonical result role", ErrProbeNeedsContext)
+		}
+	}
+	return nil
+}
+
 func (c *amd64Ctx) lowerByteSwap(op Op, ins Instr) (bool, bool, error) {
 	bits, known, err := x86ByteSwapProperties(op, ins, c.goarch)
 	if !known || err != nil {

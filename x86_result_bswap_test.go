@@ -357,3 +357,104 @@ func TestX86ResultByteSwapUnknownPublicResult(t *testing.T) {
 		}
 	}
 }
+
+func TestX86ResultByteSwapLogicalBoolRequiresIndependentRole(t *testing.T) {
+	for _, target := range x86OrderingHintTargets {
+		for _, op := range []string{"BSWAPL", "BSWAPQ"} {
+			if target.arch == "386" && op == "BSWAPQ" {
+				continue
+			}
+			for _, row := range []struct {
+				name, initialize string
+			}{
+				{"unknown", ""},
+				{"noncanonical", "MOVL $0x02000000,AX\n"},
+				{"ordinary amd64 ABI0 has no canonical role", "MOVL $0,AX\n"},
+			} {
+				if target.arch == "386" && row.name == "ordinary amd64 ABI0 has no canonical role" {
+					continue // Its independent canonical byte role is tested separately.
+				}
+				for _, api := range []string{"text", "module", "Go"} {
+					t.Run(target.triple+"/"+op+"/"+row.name+"/"+api, func(t *testing.T) {
+						initialize := row.initialize
+						if op == "BSWAPQ" && row.name == "noncanonical" {
+							initialize = "MOVQ $0x0200000000000000,AX\n"
+						}
+						source := "TEXT ·Value(SB),4,$0-1\n" + initialize + op + " AX\nMOVB AX,ret0+0(FP)\nRET\n"
+						ir, err := x86OrderingHintTranslateAPI(t, api, source, "package ordering\nfunc Value() bool\n", target.arch, target.triple)
+						if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+							t.Fatalf("undefined/noncanonical BSWAP bytes became a logical bool: output=%t error=%v", ir != "", err)
+						}
+					})
+				}
+			}
+		}
+		for _, value := range []int{0, 1} {
+			for _, api := range []string{"text", "module", "Go"} {
+				t.Run(fmt.Sprintf("%s/unchanged-bool/%d/%s", target.triple, value, api), func(t *testing.T) {
+					source := fmt.Sprintf("TEXT ·Value(SB),4,$0-1\nMOVB $%d,ret0+0(FP)\nRET\n", value)
+					ir, err := x86OrderingHintTranslateAPI(t, api, source, "package ordering\nfunc Value() bool\n", target.arch, target.triple)
+					if err != nil || ir == "" {
+						t.Fatal("BSWAP admission stole an unchanged independent bool body", err)
+					}
+				})
+			}
+		}
+	}
+}
+
+func TestX86ResultByteSwapUnknownNonIntegerResults(t *testing.T) {
+	for _, target := range x86OrderingHintTargets {
+		for _, row := range []struct {
+			typ, move string
+			width     int
+		}{
+			{"float32", "MOVL", 4}, {"float64", "MOVQ", 8}, {"*byte", "MOVQ", 8},
+		} {
+			op := "BSWAPQ"
+			if target.arch == "386" {
+				op = "BSWAPL"
+				if row.typ == "*byte" {
+					row.move, row.width = "MOVL", 4
+				}
+			}
+			for _, api := range []string{"text", "module", "Go"} {
+				t.Run(target.triple+"/"+row.typ+"/"+api, func(t *testing.T) {
+					store := row.move + " AX,ret0+0(FP)\n"
+					if target.arch == "386" && row.typ == "float64" {
+						store = "MOVL AX,ret0+0(FP)\nMOVL AX,ret0+4(FP)\n"
+					}
+					source := fmt.Sprintf("TEXT ·Value(SB),4,$0-%d\n%s AX\n%sRET\n", row.width, op, store)
+					ir, err := x86OrderingHintTranslateAPI(t, api, source, "package ordering\nfunc Value() "+row.typ+"\n", target.arch, target.triple)
+					if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+						t.Fatalf("unknown BSWAP bits escaped through a noninteger result: output=%t error=%v", ir != "", err)
+					}
+				})
+			}
+		}
+	}
+}
+
+func TestX86ResultByteSwapExistingRegisterBoolRole(t *testing.T) {
+	for _, op := range []string{"BSWAPL", "BSWAPQ"} {
+		for _, value := range []uint64{0, 1, 2, 255} {
+			for _, api := range []string{"text", "module", "Go"} {
+				t.Run(fmt.Sprintf("%s/%d/%s", op, value, api), func(t *testing.T) {
+					initialize := fmt.Sprintf("MOVL $%d,AX", value<<24)
+					if op == "BSWAPQ" {
+						initialize = fmt.Sprintf("MOVQ $%d,AX", value<<56)
+					}
+					source := amd64RegisterBoolSource(initialize + "\n" + op + " AX")
+					ir, err := x86ScalarFPBitViewAPI(t, source, "func view(a,b uint64) bool\n", "amd64", "x86_64-unknown-linux-gnu", api)
+					if value <= 1 {
+						if err != nil || ir == "" {
+							t.Fatal("existing actual register canonical role lost its BSWAP byte", err)
+						}
+					} else if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+						t.Fatal("defined numerical byte became register canonical bool", err)
+					}
+				})
+			}
+		}
+	}
+}
