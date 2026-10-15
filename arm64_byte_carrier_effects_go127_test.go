@@ -11,6 +11,7 @@ import (
 )
 
 func TestARM64ByteCarrierConsumersRejectUnclosedNativeEffects(t *testing.T) {
+	buildCache := t.TempDir()
 	for _, test := range []struct {
 		name   string
 		mutate func(string) string
@@ -47,7 +48,7 @@ func TestARM64ByteCarrierConsumersRejectUnclosedNativeEffects(t *testing.T) {
 				t.Fatal(err)
 			}
 			pkg := mustGoPackage(t, packagePath, string(declarations))
-			request := arm64ByteCarrierRequest(t, directory, packagePath)
+			request := arm64ByteCarrierRequestWithBuildCache(t, directory, packagePath, buildCache)
 			for _, api := range []string{"text", "module", "Go"} {
 				t.Run(api, func(t *testing.T) {
 					lease, release := runtimeOracleStageContext(t)

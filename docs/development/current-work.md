@@ -1,7 +1,7 @@
 # Current work: PR 40 checkpoint
 
-Checkpoint: 2026-10-15 02:54 UTC. Qualified deadline repair `ecd5fa2b`;
-fork diagnostic `fcff729f` completed and remains a separate failed snapshot.
+Checkpoint: 2026-10-15 03:56 UTC. Qualified cache repair `0145fd26`;
+fork diagnostic `41251144` completed and remains a separate failed snapshot.
 This is a handoff, not a ledger or a claim of complete CI/stdlib success.
 
 ## Scope and authority
@@ -20,6 +20,42 @@ Freeze source, tools and documentation during a tested snapshot. Preserve old
 failures as failures; do not increase budgets, crop sources or shrink denominators.
 
 ## Latest completed CI and qualified repair
+
+[38673581818](https://github.com/cpunion/plan9asm/actions/runs/38673581818)
+at fork `41251144` completed FAILURE naturally:67 jobs,65 success/two failures.
+All34 priority jobs pass. Both complete bytealg CLI files now also pass in
+covered Windows shards:Count88.44s and IndexByte108.34s, each within its original
+five-minute budget. Both CLI aggregate jobs pass. Simple CLI independently
+verifies32 roots/29 children, all8 raw traces/profiles and7 equal scopes; its
+merged584-block coverage equals the eight original profiles, zero skips/gaps.
+Rich CLI retains332 roots, zero skipped roots and one host-inapplicable native
+ARM64 child; its status is `completed_with_skips`, not complete execution.
+That child's512-input execution still requires an ARM64 native/cross counterpart.
+Downloaded native63 independently passes63 roots/169 children in146.803s;
+source priority passes127 roots/3947 children in161.102s without skips/gaps.
+
+The two failures are one cause: main root part2 and its strict aggregate.
+`TestARM64ByteCarrierTwoScalarNativeWidthConsumers/MOVHU_u8/module` fails during
+producer setup:actual `go tool -n objdump` exceeds the unchanged60s command
+limit. The parent takes623.54s; sibling shard18 passes. The matrix recreates an
+empty Go build cache for every one of27 independent sources, repeatedly building
+the SDK's builtin object observer. This is infrastructure/setup failure, not
+an instruction rejection or permission to skip the row.
+
+Repair `0145fd26` shares only a parent-owned immutable Go build cache across
+three related matrices. Original sources, temporary state, capture/Close owners,
+all widths/APIs/targets and budgets stay independent. Real Windows failure and
+portable cache-policy RED/GREEN are retained. Frozen qualification passes runner
+23 roots/33 children on Go27/race/actualGo20; the independent-cache request guard
+also passes. Four complete original source/consumer roots pass60 children:
+native widths44.758s, signed five-target objects24.266s, native-effect denials
+11.340s and undefined-byte denials11.413s. Both SDK vets, formatting and all3830
+tracked inputs/19 selected tool/driver seals pass. This is not a runtime claim
+or a Windows replay of the new repair. Evidence:ignored
+`_out/register-result-repair/byte-carrier-cache/` and diagnostic
+`_out/register-result-repair/ci-41251144/`. Replay the complete failed matrix as
+an independent fork priority before all original Windows modules; do not reduce
+the denominator, increase timeouts or erase either failed run.
 
 [38667476177](https://github.com/cpunion/plan9asm/actions/runs/38667476177)
 at fork `fcff729f` completed FAILURE naturally:64 jobs,62 success/two failures.
@@ -45,8 +81,8 @@ Frozen qualification passes runner21 roots/26 children on Go27/race/actualGo20,
 both complete CLI roots/one child each in35.369/35.156s, both root SDK vets,
 current CLI vet, formatting and3829 tracked inputs/19 selected tool/driver seals.
 Evidence: ignored `_out/register-result-repair/sdk-bytealg-independent/`.
-The next fork replay adds each repaired file as its own exact priority lane;
-only actual Windows execution can close the remaining CI failure.
+The later `41251144` replay above confirms both independent priority owners and
+their complete covered Windows shards. The original failed run stays failed.
 
 Downloaded native63 independently passes63 roots/169 children in149.992s,
 all15 inventories/25 mandatory owners/eight children, zero failure, skip,
@@ -239,12 +275,12 @@ Basenames intentionally avoid private machine paths.
 
 | Worktree basename | Current role |
 | --- | --- |
-| `plan9asm-wt-pr40-scalar-lane-native-20261011` | Primary `codex/pr40-external-corpus-split-20261011`; source51bb and deadline repairecd5 qualified, not yet pushed. |
-| `plan9asm-wt-pr40-stdlib-preprocessing-20261012` | Published diagnosticfcff; CI naturally ended62 success/two failures, one shared-deadline cause. |
-| `plan9asm-wt-pr40-sdk-numeric-maps-entry-20261013` | Clean argument-planner8607 plus test-only inventory305e, not integrated. Actual Compare wrapper is absent; no entry permission follows. Old stash preserved. |
+| `plan9asm-wt-pr40-scalar-lane-native-20261011` | Primary `codex/pr40-external-corpus-split-20261011`; cache repair0145 qualified, pending fork replay. |
+| `plan9asm-wt-pr40-stdlib-preprocessing-20261012` | Published diagnostic4125; CI naturally ended65 success/two failures, one ARM64 cold-cache timeout cause. |
+| `plan9asm-wt-pr40-sdk-numeric-maps-entry-20261013` | Private argument-carrieraa421 plus test-only parserbd338, not integrated. Actual compiler fixture/Compare tools remain FAILED; Equal retains hidden-DX Context, not file pass. Old stash preserved. |
 | `plan9asm-wt-pr40-simple-sdk-bindings-20261013` | Clean fully qualified POPF982 leaf; integrated. No heavy process. |
-| `plan9asm-wt-pr40-sdk-tls-20261013` | Terminal-CFG WIP at51bb, paused for CI. Last pure checkpoint10/32 passes; newer terminal-only two-child RED remains unresolved. No tool qualification. Preserve18 WIP files, old4c44 branch and stashes. |
-| `plan9asm-wt-pr40-sdk-numeric-maps-20261013` | Fork-only staging for qualified source merge and independent Bytealg priorities; never merge fork workflow into contribution. |
+| `plan9asm-wt-pr40-sdk-tls-20261013` | Separate386 BP mode WIP at7704, focused3/140 pure GREEN, not qualified. Private terminal-CFG dbb/e47 branch remains preserved and isolated; its full42-TEXT file still BP Context, no IR/file pass. |
+| `plan9asm-wt-pr40-sdk-numeric-maps-20261013` | Fork-only staging95ee adds the failed complete ARM64 priority; merge only qualified main source here, never reverse. |
 
 One heavy SDK/object/native/benchmark owner at a time. Small pure gates may run
 in parallel. A model/connection error is not a test failure; inspect any still
@@ -328,13 +364,13 @@ and ARM64 result-tail stores; do not restore unchecked admission.
 
 ## External inventory (server only)
 
-Last trusted readback generated2026-10-15T00:21:33Z:22,775,671 index entries,
-1,080,162 unique module paths,6,877 assembly-bearing version records,
-1,134,359 scanned records,16,946 retryable failures,1,010,978 latest records and
-1,128,535 cgo scan records (not cgo-positive count). These are NOT translator
-or runtime passes. All616 ranges checked contiguous and their sum equals index
+Last trusted readback generated2026-10-15T03:21:01Z:22,923,676 index entries,
+1,084,293 unique module paths,6,910 assembly-bearing version records,
+1,140,397 scanned records,16,969 retryable failures,1,015,242 latest records and
+1,134,573 cgo scan records (not cgo-positive count). These are NOT translator
+or runtime passes. All632 ranges checked contiguous and their sum equals index
 entries. Derived history endpoint2025-10-01 and incremental endpoint
-2026-10-13T00:22:43Z; unfinished windows cannot advance cursors. Service active;
+2026-10-13T16:22:43Z; unfinished windows cannot advance cursors. Service active;
 no local scan process. A missing remote jq was an inspection-tool error, not a
 scan failure; a bounded manifest-only JSON check independently verified ranges.
 Later progress requires fresh remote manifest readback. Resolve server details

@@ -215,6 +215,9 @@ func TestARM64ByteCarrierTwoScalarActualSourceTargetMatrix(t *testing.T) {
 }
 
 func TestARM64ByteCarrierTwoScalarNativeWidthConsumers(t *testing.T) {
+	// Reuse immutable compiler artifacts, never a revocable source owner or
+	// a case's original files, temporary outputs or command environment.
+	buildCache := t.TempDir()
 	for _, width := range arm64NativeResultTailCases() {
 		for _, api := range []string{"text", "module", "Go"} {
 			t.Run(width.name()+"/"+api, func(t *testing.T) {
@@ -223,7 +226,8 @@ func TestARM64ByteCarrierTwoScalarNativeWidthConsumers(t *testing.T) {
 				directory, packagePath := arm64ByteCarrierTwoScalarFixture(t, []arm64NativeResultTailCase{width})
 				lease, release := runtimeOracleStageContext(t)
 				defer release()
-				source, err := CaptureGoARM64ByteCarrierSource(lease, arm64ByteCarrierRequest(t, directory, packagePath))
+				request := arm64ByteCarrierRequestWithBuildCache(t, directory, packagePath, buildCache)
+				source, err := CaptureGoARM64ByteCarrierSource(lease, request)
 				if err != nil {
 					t.Fatalf("producer precondition, not consumer RED: %v", err)
 				}
