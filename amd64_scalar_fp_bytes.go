@@ -128,6 +128,11 @@ func (c *amd64Ctx) scalarFPViewNeedsInitialization(off int64, bits int, write bo
 }
 
 func (c *amd64Ctx) validateScalarFPSourceViews() error {
+	if c.sig.amd64GoArguments != nil {
+		if err := c.scalarFPResultInitialized(); err != nil {
+			return err
+		}
+	}
 	if c.fpScalarSource.x86ContinuationFlow != nil {
 		if err := c.scalarFPResultInitialized(); err != nil {
 			return err
@@ -164,6 +169,11 @@ func (c *amd64Ctx) validateScalarFPSourceViews() error {
 		}
 	}
 	for _, ins := range c.fpScalarSource.Instrs {
+		if _, known, err := x86ByteSwapProperties(ins.Op, ins, c.goarch); c.sig.Ret != Void && known && err == nil {
+			if err := c.byteSwapResultInitialized(); err != nil {
+				return err
+			}
+		}
 		if _, known, err := x86SignedIntegerFloatProperties(ins, c.goarch); integerResult && known && err == nil {
 			if err := c.scalarFPResultInitialized(); err != nil {
 				return err

@@ -216,6 +216,9 @@ func amd64YmbEffectiveRegister(r Reg, bits int) Reg {
 }
 
 func (c *amd64Ctx) lowerArith(op Op, ins Instr) (ok bool, terminated bool, err error) {
+	if known, terminated, err := c.lowerByteSwap(op, ins); known {
+		return true, terminated, err
+	}
 	if known, terminated, err := c.lowerScalarBitScan(op, ins); known {
 		return true, terminated, err
 	}
@@ -1043,18 +1046,6 @@ func (c *amd64Ctx) lowerArith(op Op, ins Instr) (ok bool, terminated bool, err e
 			return true, false, fmt.Errorf("amd64 %s unsupported src: %q", op, ins.Raw)
 		}
 
-	case "BSWAPQ":
-		if len(ins.Args) != 1 || ins.Args[0].Kind != OpReg {
-			return true, false, fmt.Errorf("amd64 %s expects reg: %q", op, ins.Raw)
-		}
-		value, err := c.loadReg(ins.Args[0].Reg)
-		if err != nil {
-			return true, false, err
-		}
-		call := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = call i64 @llvm.bswap.i64(i64 %s)\n", call, value)
-		return true, false, c.storeReg(ins.Args[0].Reg, "%"+call)
-
 	case "SETEQ", "SETLT", "SETGT", "SETGE", "SETHI", "SETCS":
 		// SETcc dst: set byte based on flags.
 		// Register, memory, and FP result destinations all occur in Go's x86
@@ -1571,24 +1562,6 @@ func (c *amd64Ctx) lowerArith(op Op, ins Instr) (ok bool, terminated bool, err e
 		z := c.newTmp()
 		fmt.Fprintf(c.b, "  %%%s = zext i32 %%%s to i64\n", z, rot)
 		return true, false, c.storeReg(dst, "%"+z)
-
-	case "BSWAPL":
-		// BSWAPL reg: byte swap low 32 bits and zero-extend result to i64.
-		if len(ins.Args) != 1 || ins.Args[0].Kind != OpReg {
-			return true, false, fmt.Errorf("amd64 BSWAPL expects reg: %q", ins.Raw)
-		}
-		r := ins.Args[0].Reg
-		v64, err := c.loadReg(r)
-		if err != nil {
-			return true, false, err
-		}
-		tr := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = trunc i64 %s to i32\n", tr, v64)
-		bswap := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = call i32 @llvm.bswap.i32(i32 %%%s)\n", bswap, tr)
-		z := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = zext i32 %%%s to i64\n", z, bswap)
-		return true, false, c.storeReg(r, "%"+z)
 
 	case "MULXL":
 		// BMI2 MULXL src, loDst, hiDst multiplies the low 32 bits of DX by

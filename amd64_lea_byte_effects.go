@@ -48,7 +48,7 @@ func x86TypedLEAByteEffect(op Op, original Instr, arch string) (x86TypedByteEffe
 	// source-stack consumer. Leave it to that independent role; the numerical
 	// effect must neither steal its FLAGS handling nor grant any stack fact.
 	for _, register := range []Reg{memory.Base, memory.Index, ins.Args[1].Reg} {
-		if register == SP || register == BP {
+		if register == SP || register == BP && arch != "386" {
 			return x86TypedByteEffect{}, false, nil
 		}
 	}

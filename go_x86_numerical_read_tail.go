@@ -134,31 +134,6 @@ func (source *GoX86NumericalReadSource) numericalSDKOrdinaryTailDeclarations(ctx
 			return nil, numericalSBContext("original declaration/compiler/native association differs")
 		}
 	}
-	language := func(fn *types.Func) (string, error) {
-		sig, valid := fn.Type().(*types.Signature)
-		if !valid || sig.Recv() != nil || sig.Variadic() || sig.TypeParams().Len() != 0 {
-			return "", numericalSBContext("ordinary terminal is not a monomorphic direct function")
-		}
-		var value strings.Builder
-		for _, tuple := range []*types.Tuple{sig.Params(), sig.Results()} {
-			if tuple.Len() > 4096 {
-				return "", numericalSBContext("ordinary terminal tuple bound exceeded")
-			}
-			value.WriteString("[")
-			for index := 0; index < tuple.Len(); index++ {
-				leaf, err := numericalTailLanguageType(tuple.At(index).Type(), sizes)
-				if err != nil {
-					return "", err
-				}
-				value.WriteString(leaf + ";")
-				if value.Len() > 64<<10 {
-					return "", numericalSBContext("ordinary terminal language bound exceeded")
-				}
-			}
-			value.WriteString("]")
-		}
-		return value.String(), nil
-	}
 	for name, declaration := range terminals {
 		local := declaration.local
 		actual, found := typed.Scope().Lookup(local).(*types.Func)
@@ -171,16 +146,75 @@ func (source *GoX86NumericalReadSource) numericalSDKOrdinaryTailDeclarations(ctx
 		if declaration.entry && !bodyless[local] {
 			return nil, numericalSBContext("source TEXT lacks its actual bodyless entry declaration")
 		}
-		first, err := language(actual)
-		second, priorErr := language(provided)
+		arguments := arch == "amd64" && declaration.entry && declaration.abi == 1 &&
+			reflect.DeepEqual(source.native.ArgumentRules, amd64GoArgumentCompilerSchema)
+		first, err := numericalSDKDeclarationLanguage(actual, sizes, arguments)
+		second, priorErr := numericalSDKDeclarationLanguage(provided, sizes, arguments)
+		if err != nil || priorErr != nil || first != second {
+			return nil, numericalSBContext("ordinary terminal original complete language graph differs")
+		}
+		if arguments {
+			for _, function := range []*types.Func{actual, provided} {
+				plan, err := planAMD64GoArguments(function.Type().(*types.Signature))
+				if err != nil || plan.requireRegisters() != nil {
+					return nil, amd64GoArgumentContext("typed source declaration has unsupported register/stack grouping")
+				}
+			}
+		}
 		sig, abiErr := DeriveGoFuncABI0Signature(name, actual, arch, sizes)
 		prior, priorABIError := DeriveGoFuncABI0Signature(name, provided, arch, sizes)
-		if err != nil || priorErr != nil || abiErr != nil || priorABIError != nil || first != second || !reflect.DeepEqual(sig, prior) {
+		if abiErr != nil || priorABIError != nil || !reflect.DeepEqual(sig, prior) {
 			return nil, numericalSBContext("ordinary terminal original language/ABI0 layout differs")
 		}
 		result[name] = goAMD64FrameDeclaration{signature: sig, transport: goAMD64FrameCompositeTransport, languageType: first}
 	}
 	return result, ctx.Err()
+}
+
+// This is the existing issuer's bounded language comparison, not a source,
+// compiler, entry, frame or result-transport certificate.
+func numericalSDKDeclarationLanguage(fn *types.Func, sizes types.Sizes, arguments bool) (string, error) {
+	sig, valid := fn.Type().(*types.Signature)
+	if !valid || sig.Recv() != nil || sig.Variadic() || sig.TypeParams().Len() != 0 {
+		return "", numericalSBContext("ordinary terminal is not a monomorphic direct function")
+	}
+	var value strings.Builder
+	resultBuilder := amd64GoArgumentBuilder{sizes: sizes}
+	for role, tuple := range []*types.Tuple{sig.Params(), sig.Results()} {
+		if tuple.Len() > 4096 {
+			return "", numericalSBContext("ordinary terminal tuple bound exceeded")
+		}
+		value.WriteString("[")
+		for index := 0; index < tuple.Len(); index++ {
+			var leaf string
+			var err error
+			if arguments && role == 0 {
+				leaf, err = goAMD64LanguageTypeRole(tuple.At(index).Type(), sizes, true, true)
+			} else {
+				if arguments {
+					// The old string adapter samples Underlying. First reject
+					// non-source nodes and unresolved alias RHSs without invoking
+					// caller callbacks; this layout grants no result transport.
+					if _, err := resultBuilder.shape(tuple.At(index).Type(), 0); err != nil {
+						return "", err
+					}
+				}
+				// Argument carriers do not extend the old result-language
+				// role. Their single integer/I1 result transport is checked
+				// independently when the real entry binding is issued.
+				leaf, err = numericalTailLanguageType(tuple.At(index).Type(), sizes)
+			}
+			if err != nil {
+				return "", err
+			}
+			value.WriteString(leaf + ";")
+			if value.Len() > 64<<10 {
+				return "", numericalSBContext("ordinary terminal language bound exceeded")
+			}
+		}
+		value.WriteString("]")
+	}
+	return value.String(), nil
 }
 
 // The existing Go signature builder transports string as an opaque data

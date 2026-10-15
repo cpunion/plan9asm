@@ -27,6 +27,13 @@ export LLVM_CONFIG="$llvm22_root/bin/llvm-config"
 Missing required LLVM tools, linkers or backends fail, never skip.
 Host-inapplicable execution requires its cross-runtime CI counterpart.
 
+The rich CLI's complete ARM64 fallback-frame oracle runs natively on supported
+ARM64 hosts and under pinned QEMU in the required Linux cross job. One outer
+owner runs its exact nested-module root; a fresh strict reader verifies both
+logical partitions and all four required children. Cross scopes bind the actual
+Node auditor through the shared tool observer. Object-only Windows skips do not
+establish execution of its512 input rows.
+
 Darwin native C oracles query the actual selected macOS SDK with bounded, owned
 `xcrun --sdk macosx --show-sdk-path`, require one complete absolute existing
 directory, and pass `--no-default-config -isysroot` to the independently checked

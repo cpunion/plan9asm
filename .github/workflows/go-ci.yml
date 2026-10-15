@@ -268,6 +268,10 @@ jobs:
             -ci-isolate-root TestCrossLinuxRuntimeMatrix \
             -ci-owner ${{ matrix.owner }} -shards 16 -timeout 20m
 
+      - name: Execute rich CLI ARM64 fallback oracle
+        if: ${{ !cancelled() && matrix.owner == 15 }}
+        run: bash scripts/test-arm64-fallback-ci.sh execute
+
       - name: Retain every owner receipt, including failures
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v6
@@ -320,6 +324,10 @@ jobs:
             -verify-ci-partitions _out/cross-runtime-partitions \
             -ci-selector '^(TestCrossLinuxRuntimeMatrix|TestARM64Conformance|TestARM64RawSQSHLURuntimeSemantics|TestARMIntegerMemoryRuntimeCross|TestARMRawSaturationRuntimeCross)' \
             -ci-isolate-root TestCrossLinuxRuntimeMatrix -shards 16 -timeout 20m
+
+      - name: Verify rich CLI ARM64 fallback execution
+        if: ${{ !cancelled() }}
+        run: bash scripts/test-arm64-fallback-ci.sh complete
 
       - name: Retain completion evidence
         if: ${{ !cancelled() }}

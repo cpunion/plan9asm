@@ -200,11 +200,13 @@ func TestX86OrdinaryResultAddressPhysicalBanksAndFieldBytes(t *testing.T) {
 		}
 		for _, register := range []string{"SP", "BP", "R14", "R16", "AL", "AH", "X0", "M0", "TLS", "FS"} {
 			for _, api := range []string{"text", "module", "Go"} {
-				t.Run(arch+"/invalid_address_bank/"+register+"/"+api, func(t *testing.T) {
+				t.Run(arch+"/mode_address_bank/"+register+"/"+api, func(t *testing.T) {
 					source, declaration := x86OrdinaryResultAddressFixture(arch, "NOP", "MOVWORD SI,(DI)")
 					source = strings.ReplaceAll(source, ",DI", ","+register)
 					source = strings.ReplaceAll(source, "(DI)", "("+register+")")
-					if _, err := x86ScalarFPBitViewAPI(t, source, declaration, arch, triple, api); err == nil {
+					_, err := x86ScalarFPBitViewAPI(t, source, declaration, arch, triple, api)
+					ordinary := arch == "386" && register == "BP"
+					if ordinary && err != nil || !ordinary && err == nil {
 						t.Fatal("result address acquired physical/unknown bank role")
 					}
 				})

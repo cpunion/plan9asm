@@ -84,7 +84,7 @@ func moduleSharedLibraries(data []byte) ([]string, error) {
 	return files, nil
 }
 
-func captureModuleDependencies(ctx context.Context, cfg config, stem string, environment, origins map[string]string) error {
+func captureCINodeDependency(ctx context.Context, cfg config, stem string, origins map[string]string) error {
 	process := map[string]string{}
 	for _, key := range []string{"NODE_OPTIONS", "NODE_PATH", "NODE_ICU_DATA"} {
 		process[key] = os.Getenv(key)
@@ -106,6 +106,13 @@ func captureModuleDependencies(ctx context.Context, cfg config, stem string, env
 	}
 	if !ciNodeVersion.Match(version) {
 		return fmt.Errorf("actual Node runtime returned an unregistered version observation")
+	}
+	return nil
+}
+
+func captureModuleDependencies(ctx context.Context, cfg config, stem string, environment, origins map[string]string) error {
+	if err := captureCINodeDependency(ctx, cfg, stem, origins); err != nil {
+		return err
 	}
 	bindirData, err := os.ReadFile(stem + "-llvm-configbindir.stdout")
 	if err != nil {

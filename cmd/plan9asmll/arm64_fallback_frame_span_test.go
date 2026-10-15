@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"go/token"
 	"go/types"
 	"os"
@@ -159,16 +160,12 @@ func TestFallbackARM64WideFrameCompilesWithLLVM22(t *testing.T) {
 		})
 	}
 	t.Run("native complete-argument oracle", func(t *testing.T) {
-		if runtime.GOARCH != "arm64" || runtime.GOOS != "darwin" && runtime.GOOS != "linux" {
-			t.Skip("native ARM64 execution runs in the required ARM64 test jobs; cross objects were compiled above")
-		}
-		clang, err := exec.LookPath("clang")
+		mode, err := fallbackARM64OracleExecution(runtime.GOOS, runtime.GOARCH, os.Getenv("PLAN9ASM_CROSS_EXEC"))
 		if err != nil {
-			t.Fatal("required LLVM 22 clang: ", err)
+			t.Fatal(err)
 		}
-		version, stderr, err := gotoolprofile.RunBounded(arm64PrivateCLIContext(t), dir, os.Environ(), clang, "--version")
-		if err != nil || !regexp.MustCompile(`(?m)\bclang version 22\.`).Match(version) {
-			t.Fatalf("required LLVM 22 clang: %v\n%s%s", err, version, stderr)
+		if mode == "" {
+			t.Skip("host-inapplicable; the required Linux cross owner executes this same complete oracle")
 		}
 		const oracle = `#include <stdint.h>
 #include <stdio.h>
@@ -194,21 +191,64 @@ int main(void) {
 			t.Fatal(err)
 		}
 		binary := filepath.Join(dir, "oracle")
-		arguments := []string{"-O2", main, filepath.Join(dir, runtime.GOOS+".o"), "-o", binary}
-		if runtime.GOOS == "darwin" {
+		linker, objectOS := "clang", runtime.GOOS
+		var emulator string
+		if mode == "cross" {
+			linker, objectOS = "aarch64-linux-gnu-gcc", "linux"
+			emulator, err = exec.LookPath("qemu-aarch64")
+			if err != nil {
+				t.Fatal("required pinned ARM64 emulator: ", err)
+			}
+			version, stderr, err := gotoolprofile.RunBounded(arm64PrivateCLIContext(t), dir, os.Environ(), emulator, "--version")
+			if err != nil || !regexp.MustCompile(`(?m)^qemu-aarch64 version 10\.2\.3\b`).Match(version) {
+				t.Fatalf("required QEMU 10.2.3: %v\n%s%s", err, version, stderr)
+			}
+		}
+		linker, err = exec.LookPath(linker)
+		if err != nil {
+			t.Fatal("required oracle linker: ", err)
+		}
+		arguments := []string{"-O2", main, filepath.Join(dir, objectOS+".o"), "-o", binary}
+		if mode == "native" {
+			version, stderr, err := gotoolprofile.RunBounded(arm64PrivateCLIContext(t), dir, os.Environ(), linker, "--version")
+			if err != nil || !regexp.MustCompile(`(?m)\bclang version 22\.`).Match(version) {
+				t.Fatalf("required LLVM 22 clang: %v\n%s%s", err, version, stderr)
+			}
+		}
+		if mode == "native" && runtime.GOOS == "darwin" {
 			flags, err := nativeoracle.DarwinClangFlags(arm64PrivateCLIContext(t), os.Environ())
 			if err != nil {
 				t.Fatal(err)
 			}
 			arguments = append(flags, arguments...)
 		}
-		if stdout, stderr, err := gotoolprofile.RunBounded(arm64PrivateCLIContext(t), dir, os.Environ(), clang, arguments...); err != nil {
-			t.Fatalf("link native inferred-argument oracle: %v\n%s%s", err, stdout, stderr)
+		if stdout, stderr, err := gotoolprofile.RunBounded(arm64PrivateCLIContext(t), dir, os.Environ(), linker, arguments...); err != nil {
+			t.Fatalf("link complete inferred-argument oracle: %v\n%s%s", err, stdout, stderr)
 		}
-		if stdout, stderr, err := gotoolprofile.RunBounded(arm64PrivateCLIContext(t), dir, os.Environ(), binary); err != nil {
-			t.Fatalf("execute native inferred-argument oracle: %v\n%s%s", err, stdout, stderr)
+		executable, runArguments := binary, []string(nil)
+		if mode == "cross" {
+			executable, runArguments = emulator, []string{"-L", "/usr/aarch64-linux-gnu", binary}
+		}
+		if stdout, stderr, err := gotoolprofile.RunBounded(arm64PrivateCLIContext(t), dir, os.Environ(), executable, runArguments...); err != nil {
+			t.Fatalf("execute complete inferred-argument oracle: %v\n%s%s", err, stdout, stderr)
 		}
 	})
+}
+
+func fallbackARM64OracleExecution(goos, goarch, cross string) (string, error) {
+	if cross != "" && cross != "0" && cross != "1" {
+		return "", fmt.Errorf("invalid PLAN9ASM_CROSS_EXEC value %q", cross)
+	}
+	if cross == "1" && (goos != "linux" || goarch != "amd64" && goarch != "arm64") {
+		return "", fmt.Errorf("required ARM64 cross execution needs Linux/amd64 or native Linux/arm64")
+	}
+	if goarch == "arm64" && (goos == "darwin" || goos == "linux") {
+		return "native", nil
+	}
+	if cross == "1" {
+		return "cross", nil
+	}
+	return "", nil
 }
 
 func requireFallbackARM64GoObject(t *testing.T, source string) {

@@ -416,7 +416,8 @@ func TestX86BroadcastAuthorityAndGrammarControls(t *testing.T) {
 				for index := range state.masks {
 					state.masks[index] = true
 				}
-				if consumer.step(ins, &state, nil, 0, arch) {
+				ordinary := arch == "386" && row == "VPBROADCASTQ BP,X2"
+				if consumer.step(ins, &state, nil, 0, arch) != ordinary {
 					t.Fatalf("%s borrowed native/mask/SP/BP permission: %s", consumer.name, row)
 				}
 			}
@@ -495,7 +496,7 @@ func TestX86BroadcastCompleteRegisterBanks(t *testing.T) {
 								for i := range state.xmm {
 									state.xmm[i] = 65535
 								}
-								valid := src != SP && src != BP
+								valid := src != SP && (src != BP || arch == "386")
 								if got := consumer.step(ins, &state, nil, 0, arch); got != valid || state.flags != x86ByteFlagsAll {
 									t.Fatalf("%s %s row%s accepted%t want%t", arch, consumer.name, ins.Raw, got, valid)
 								}
