@@ -26,6 +26,11 @@ func x86GoMOVQSourceInstruction(ins Instr) Instr {
 // a memory read or a SIMD immediate. This validates syntax only; actual FP,
 // AUTO, symbol and numerical address roles remain separate consumers.
 func x86GoMOVQAddressSource(operand Operand, arch string) bool {
+	if arch != "386" && operand.Kind == OpFPAddr {
+		address := Operand{Kind: OpFP, FPOffset: operand.FPOffset}
+		_, err := x86LEAOperandWidth(Instr{Op: "LEAQ", Args: []Operand{address, {Kind: OpReg, Reg: AX}}}, arch)
+		return err == nil
+	}
 	if arch == "386" || operand.Kind != OpSym {
 		return false
 	}
