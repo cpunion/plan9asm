@@ -43,7 +43,7 @@ func TestX86TrapOnlyLogicalShadowCannotAuthorizeReturningOrUnknownSource(t *test
 			{"one-normal-path", "func value(x uint64) uint64", "MOVB $17,x+0(FP)\nCMPL x+0(FP),$0\nJE normal\nUD2\nnormal:\nMOVL $0,ret+8(FP)\nMOVL $0,ret+12(FP)\nRET"},
 			{"unknown-input", "func value(x uint64) uint64", "MOVB AX,x+0(FP)\nUD2\nRET"},
 			{"pointer", "func value(x *byte) uint64", "MOVB $17,x+0(FP)\nUD2\nRET"},
-			{"bool", "func value(x bool) uint64", "MOVB $2,x+0(FP)\nUD2\nRET"},
+			{"bool-cross-field-byte-view", "func value(x bool,y byte) uint64", "MOVW $0x1102,x+0(FP)\nUD2\nRET"},
 			{"padding", "func value(x byte,y uint64) uint64", "MOVW $17,x+0(FP)\nUD2\nRET"},
 			{"native-store", "func value(x uint64) uint64", "MOVB $17,x+0(FP)\nMOVB $1,(AX)\nUD2\nRET"},
 			{"unknown-dead-effect", "func value(x uint64) uint64", "MOVB $17,x+0(FP)\nUD2\nMOVB (AX),BX\nRET"},
