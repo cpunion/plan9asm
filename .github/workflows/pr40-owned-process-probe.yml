@@ -182,6 +182,11 @@ jobs:
             roots:
               - TestCompileOneX86SDKOriginalCRC32NumericalDataJoin
             timeout: 5m
+          - lane: llvm-crc32-effective-defaults
+            module: cmd/plan9asmll
+            roots:
+              - TestCompileOneX86SDKOriginalCRC32NumericalDataJoinEffectiveDefaults
+            timeout: 5m
           - lane: llvm-bytealg-count
             module: cmd/plan9asmll
             roots:
