@@ -281,6 +281,25 @@ jobs:
               - TestX86ImplicitMultiplyIndependentStorageCannotBypassNUM
               - TestTranslate386InstructionFamilies
             timeout: 5m
+          - lane: crc32-typed-effects
+            module: '.'
+            roots:
+              - TestX86CRC32WholeResultNUMThreeAPIs
+              - TestX86CRC32PairedNativeReadVolatile
+              - TestX86CRC32FPExactSourceBytes
+              - TestX86CRC32SparseNUMFlagsAndSourceBoundaries
+              - TestX86CRC32GrammarBanksAndOriginalIdentity
+              - TestX86CRC32PhysicalByteNormalizationAndScanner
+              - TestX86CRC32UnownedMemoryAndProvenanceThreeAPIs
+              - TestX86CRC32CompleteOfficialGoRows
+              - TestX86CRC32OriginalGoByteViews
+              - TestX86IncomingPointerResidueMasksRolesAndByteAliases
+              - TestX86IncomingPointerResidueWholeSourceThreeAPIs
+              - TestX86IncomingPointerUnaryAdvanceWholeSourceThreeAPIs
+              - TestX86IncomingPointerUnaryAdvanceRolesFlagsAndOrigins
+              - TestX86CRC32CompleteOriginalGoRegisterBanks
+              - TestX86CRC32FiveTargetOriginalGoAndLLVMObjects
+            timeout: 5m
           - lane: arm64-carrier-widths
             module: '.'
             roots:

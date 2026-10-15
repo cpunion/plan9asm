@@ -4,7 +4,61 @@ const test = require('node:test');
 
 const workflow = fs.readFileSync('.github/workflows/pr40-owned-process-probe.yml', 'utf8');
 const sdk = workflow.slice(workflow.indexOf('\n  sdk-priority:'), workflow.indexOf('\n  ownership:'));
-const sdkLaneCount = 39;
+const sdkLaneCount = 40;
+
+const crc32TypedRoots = [
+  'TestX86CRC32WholeResultNUMThreeAPIs',
+  'TestX86CRC32PairedNativeReadVolatile',
+  'TestX86CRC32FPExactSourceBytes',
+  'TestX86CRC32SparseNUMFlagsAndSourceBoundaries',
+  'TestX86CRC32GrammarBanksAndOriginalIdentity',
+  'TestX86CRC32PhysicalByteNormalizationAndScanner',
+  'TestX86CRC32UnownedMemoryAndProvenanceThreeAPIs',
+  'TestX86CRC32CompleteOfficialGoRows',
+  'TestX86CRC32OriginalGoByteViews',
+  'TestX86IncomingPointerResidueMasksRolesAndByteAliases',
+  'TestX86IncomingPointerResidueWholeSourceThreeAPIs',
+  'TestX86IncomingPointerUnaryAdvanceWholeSourceThreeAPIs',
+  'TestX86IncomingPointerUnaryAdvanceRolesFlagsAndOrigins',
+  'TestX86CRC32CompleteOriginalGoRegisterBanks',
+  'TestX86CRC32FiveTargetOriginalGoAndLLVMObjects',
+];
+const crc32TypedLane = '- lane: crc32-typed-effects\n            module: \'.\'\n            roots:\n' +
+  crc32TypedRoots.map(root => `              - ${root}\n`).join('') + '            timeout: 5m';
+
+function checkCRC32TypedPriority(text) {
+  assert.equal(crc32TypedRoots.length, 15);
+  assert.equal(new Set(crc32TypedRoots).size, 15);
+  assert.ok(text.includes(crc32TypedLane), 'complete CRC32 typed effects, pointer composition and actual-object owners');
+  assert.equal(text.split('- lane: crc32-typed-effects\n').length - 1, 1,
+    'one independent CRC32 typed-effects priority lane');
+  for (const root of crc32TypedRoots) {
+    assert.equal(text.split(`- ${root}\n`).length - 1, 1, 'one complete literal CRC32 typed owner: ' + root);
+  }
+}
+
+test('CRC32 typed effects priority retains fifteen complete semantic and object owners within five minutes', () => {
+  checkCRC32TypedPriority(sdk);
+});
+
+test('CRC32 typed effects priority rejects missing, duplicate, substituted, partial or enlarged owners', () => {
+  checkCRC32TypedPriority(crc32TypedLane);
+  for (const changed of [
+    '',
+    crc32TypedLane.replace('crc32-typed-effects', 'unrelated-crc32-effects'),
+    crc32TypedLane + '\n          ' + crc32TypedLane,
+    crc32TypedLane.replace("module: '.'", 'module: cmd/plan9asmll'),
+    crc32TypedLane.replace('timeout: 5m', 'timeout: 6m'),
+    crc32TypedLane.replace('            timeout: 5m',
+      '              - TestUnrelatedAdditionalOwner\n            timeout: 5m'),
+    ...crc32TypedRoots.flatMap(root => [
+      crc32TypedLane.replace(`              - ${root}\n`, ''),
+      crc32TypedLane + `\n              - ${root}\n`,
+      crc32TypedLane.replace(root, 'TestUnrelatedSubstituteOwner'),
+      crc32TypedLane.replace(root, root + '/amd64'),
+    ]),
+  ]) assert.throws(() => checkCRC32TypedPriority(changed));
+});
 
 const scalarFPByteRoots = [
   'TestX86ScalarFPWideTupleStoresPreserveEveryField',
