@@ -32,7 +32,7 @@ ARM64 hosts and under pinned QEMU in the required Linux cross job. One outer
 owner runs its exact nested-module root; a fresh strict reader verifies both
 logical partitions and all four required children. Cross scopes bind the actual
 Node auditor through the shared tool observer. Object-only Windows skips do not
-establish execution of its512 input rows.
+establish execution of its 512 input rows.
 
 Darwin native C oracles query the actual selected macOS SDK with bounded, owned
 `xcrun --sdk macosx --show-sdk-path`, require one complete absolute existing
