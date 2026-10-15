@@ -98,13 +98,6 @@ func TestX86LODSZeroCountOriginalGoAndLLVMWholeState(t *testing.T) {
 						ir += x86LODSZeroStateObserver(row)
 					}
 				}
-				for _, stage := range []struct{ name, ir string }{{"ir0", ir}, {"ir2", optimized}} {
-					for _, backend := range []string{"-O0", "-O2"} {
-						t.Run(stage.name+"/backend"+backend[2:], func(t *testing.T) {
-							x86PackedStringCompileObject(t, llc, triple, stage.ir, backend)
-						})
-					}
-				}
 				ir = x86LODSStateTargetLayout(t, ir, triple, word)
 				optimized := x86UndefinedTrapOptimizedIR(t, ir)
 				for _, row := range x86LODSStateCases(arch) {
@@ -118,6 +111,13 @@ func TestX86LODSZeroCountOriginalGoAndLLVMWholeState(t *testing.T) {
 					if err := x86LODSCheckZeroOutputStores(body, row); err != nil {
 						t.Errorf("zero count changed complete AX, source SI, CX or initialized FLAGS: %s/%s/count0/backward=%t\n%v\n%s",
 							arch, row.op, row.backward, err, body)
+					}
+				}
+				for _, stage := range []struct{ name, ir string }{{"ir0", ir}, {"ir2", optimized}} {
+					for _, backend := range []string{"-O0", "-O2"} {
+						t.Run(stage.name+"/backend"+backend[2:], func(t *testing.T) {
+							x86PackedStringCompileObject(t, llc, triple, stage.ir, backend)
+						})
 					}
 				}
 			})
