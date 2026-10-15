@@ -205,7 +205,11 @@ func TestX86X87ValueStateConsumesSharedBudgetAndPrivateRole(t *testing.T) {
 		fn := file.Funcs[0]
 		fn.x86ResultFlowBudget = &x86ResultFlowBudget{bytes: limit - room}
 		err := checkX86ScalarFPResultInitialization(fn, FuncSig{Name: "Value", Ret: Void}, "386")
-		if fn.x86ResultFlowBudget.bytes != limit+3*payload-room {
+		visits := 0
+		if room == 3*payload {
+			visits = 3
+		}
+		if fn.x86ResultFlowBudget.visits != visits || fn.x86ResultFlowBudget.bytes != limit+3*payload-room+8*payload*visits {
 			t.Fatal("logical x87 source work differs from its exact complete-state charge", fn.x86ResultFlowBudget.bytes)
 		}
 		if room == 3*payload && err != nil || room != 3*payload && !errors.Is(err, ErrProbeNeedsContext) {

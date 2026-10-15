@@ -156,7 +156,11 @@ func TestX86ABI0Mode32CanonicalFPCloneJoinAndBudget(t *testing.T) {
 		fn := file.Funcs[0]
 		fn.x86ResultFlowBudget = &x86ResultFlowBudget{bytes: limit - room}
 		err := checkX86ScalarFPResultInitialization(fn, x86SDKLiteral386Signature(), "386")
-		if fn.x86ResultFlowBudget.bytes != limit+2*(ordinary+1)-room {
+		visits := 0
+		if room == 2*(ordinary+1) {
+			visits = 2
+		}
+		if fn.x86ResultFlowBudget.visits != visits || fn.x86ResultFlowBudget.bytes != limit+2*(ordinary+1)-room+8*(ordinary+1)*visits {
 			t.Fatal("canonical source work differs from its exact complete-state charge", fn.x86ResultFlowBudget.bytes)
 		}
 		if room == 2*(ordinary+1) && err != nil || room != 2*(ordinary+1) && !errors.Is(err, ErrProbeNeedsContext) {
