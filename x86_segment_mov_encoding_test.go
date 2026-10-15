@@ -81,7 +81,7 @@ func TestX86SegmentMOVCompleteGoGrammarAndAliases(t *testing.T) {
 					}
 				}
 				for _, mutation := range []string{"OffRaw", "IndexExt", "scale", "wide-offset", "unmodeled-CS-role", "illegal-source-GP-scaled-index"} {
-					name := "invalid-" + mutation
+					name := "outside-modeled-source-role-" + mutation
 					if mutation == "unmodeled-CS-role" {
 						name = mutation // CS is valid Go syntax, outside this FS/GS role.
 					}
@@ -105,7 +105,7 @@ func TestX86SegmentMOVCompleteGoGrammarAndAliases(t *testing.T) {
 							if mutation == "unmodeled-CS-role" {
 								t.Fatal("FS/GS-only source projection borrowed an unmodeled Go segment role")
 							}
-							t.Fatal("typed source grammar accepted a malformed segment memory operand", mutation)
+							t.Fatal("typed segment source accepted a representation outside its modeled source role", mutation)
 						}
 					})
 				}

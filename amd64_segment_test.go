@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"strings"
 	"testing"
 )
@@ -22,27 +23,59 @@ TEXT ·loadGS(SB),4,$0-0
 	for _, api := range []string{"text", "module", "Go"} {
 		t.Run(api, func(t *testing.T) {
 			ir, err := x86ScalarFPBitViewAPI(t, src, "func loadGS()", "amd64", triple, api)
-			if err != nil {
-				t.Fatal(err)
+			if !errors.Is(err, ErrProbeNeedsContext) || ir != "" ||
+				!strings.Contains(err.Error(), "unclosed source effect at instruction 1: MOVQ DI, 0(CX)(GS)") {
+				t.Fatal("complete original source lost its unbound native-store boundary", err)
 			}
-			for _, optimized := range []bool{false, true} {
-				output, name := ir, "segment"
-				if optimized {
-					output, name = x86MulDivRoundOptimize(t, ir), "segment-optimized"
+		})
+	}
+	// This independent read-only counterpart removes exactly the unbound
+	// store. The complete original above remains a Go-format-positive,
+	// translation-Context control, not a successful native-write fixture.
+	store := "\tMOVQ DI, 0(CX)(GS)\n"
+	if strings.Count(src, store) != 1 {
+		t.Fatal("original full segment fixture changed its single native store")
+	}
+	readOnly := strings.Replace(src, store, "", 1)
+	if strings.Count(readOnly, "MOVQ") != 2 || strings.Count(readOnly, "TEXT ") != 1 {
+		t.Fatal("read-only counterpart lost an original segment read or TEXT")
+	}
+	x86LEAActualTargetGoObject(t, "amd64", triple, readOnly)
+	for _, api := range []string{"text", "module", "Go"} {
+		t.Run("read-only/"+api, func(t *testing.T) {
+			ir, err := x86ScalarFPBitViewAPI(t, readOnly, "func loadGS()", "amd64", triple, api)
+			if err != nil || ir == "" {
+				t.Fatal("independent read-only segment counterpart was rejected", err)
+			}
+			for _, irLevel := range []string{"0", "2"} {
+				output := ir
+				if irLevel == "2" {
+					output = x86DwordProductIROptimize(t, ir)
 				}
 				for _, want := range []string{
 					"load volatile i64, ptr addrspace(256)",
-					"store i64",
 					"load volatile i64, ptr addrspace(257)",
 				} {
-					if !strings.Contains(output, want) {
+					if strings.Count(output, want) != 1 {
 						t.Fatalf("segment-relative output missing %q:\n%s", want, output)
+					}
+				}
+				if strings.Count(output, "load volatile ") != 2 {
+					t.Fatal("dead-result segment reads were duplicated or eliminated", output)
+				}
+				for _, line := range strings.Split(output, "\n") {
+					if strings.Contains(line, "store ") && strings.Contains(line, "ptr addrspace(") {
+						t.Fatal("read-only counterpart acquired a native segment store", line)
 					}
 				}
 				if strings.Contains(output, "0x30(GS)") {
 					t.Fatalf("segment-relative memory was emitted as a symbol:\n%s", output)
 				}
-				compileLLVMToObject(t, llc, triple, name+".ll", name+".o", output)
+				for _, backendLevel := range []string{"0", "2"} {
+					t.Run("IR"+irLevel+"/backend"+backendLevel, func(t *testing.T) {
+						x86PackedStringCompileObject(t, llc, triple, output, "-O"+backendLevel)
+					})
+				}
 			}
 		})
 	}
