@@ -158,6 +158,63 @@ func TestX86ScalarFPWideTupleReadsPreserveEveryField(t *testing.T) {
 	x86ScalarFPTupleSpanThreeAPIs(t, true)
 }
 
+func x86ScalarFPInteriorCases(arch string) []x86ScalarFPTupleSpanCase {
+	word, full, seed := 8, "MOVQ", uint64(0x0807060504030201)
+	if arch == "386" {
+		word, full, seed = 4, "MOVL", 0x04030201
+	}
+	var cases []x86ScalarFPTupleSpanCase
+	for _, width := range []int{1, 2, 4, 8} {
+		if width > word {
+			continue // No GP qword row exists in the mode32 Go table.
+		}
+		mask := ^uint64(0)
+		if width < 8 {
+			mask = uint64(1)<<uint(8*width) - 1
+		}
+		move := map[int]string{1: "MOVB", 2: "MOVW", 4: "MOVL", 8: "MOVQ"}[width]
+		for offset := 0; offset <= word-width; offset++ {
+			for _, read := range []bool{false, true} {
+				role, first, second := "write", seed, seed
+				body := fmt.Sprintf("%s $0x%x,AX\n%s AX,ret+0(FP)\n", full, seed, full)
+				if read {
+					role, second = "read", seed>>uint(8*offset)&mask
+					body += fmt.Sprintf("%s $0,AX\n%s ret+%d(FP),AX\n", full, move, offset)
+				} else {
+					part := uint64(0x1514131211100f0e) & mask
+					first = seed&^(mask<<uint(8*offset)) | part<<uint(8*offset)
+					second = first
+					body += fmt.Sprintf("%s $0x%x,BX\n%s BX,ret+%d(FP)\n%s ret+0(FP),AX\n", move, part, move, offset, full)
+				}
+				body += fmt.Sprintf("%s AX,ret+%d(FP)\nRET\n", full, word)
+				cases = append(cases, x86ScalarFPTupleSpanCase{
+					name:        fmt.Sprintf("%s/%s/offset-%d", role, move, offset),
+					declaration: fmt.Sprintf("func Value() (uint%d,uint%d)", 8*word, 8*word),
+					source:      fmt.Sprintf("TEXT ·Value(SB),4,$0-%d\n%s", 2*word, body),
+					want:        []uint64{first, second},
+				})
+			}
+		}
+	}
+	return cases
+}
+
+func TestX86ScalarFPIntegerPartialAndInteriorBytesThreeAPIs(t *testing.T) {
+	for _, target := range x86RawReturnTargets {
+		for _, row := range x86ScalarFPInteriorCases(target.arch) {
+			for _, api := range []string{"text", "module", "Go"} {
+				t.Run(target.triple+"/"+row.name+"/"+api, func(t *testing.T) {
+					ir, err := x86ScalarFPBitViewAPI(t, row.source, row.declaration, target.arch, target.triple, api)
+					if err != nil || ir == "" {
+						t.Fatalf("complete initialized physical FP span rejected: %v", err)
+					}
+					x86ScalarFPTupleSpanConstantResult(t, ir, row.want)
+				})
+			}
+		}
+	}
+}
+
 func TestX86ScalarFPWideTupleSpanOriginalGoAssembly(t *testing.T) {
 	for _, arch := range []string{"amd64", "386"} {
 		t.Run(arch, func(t *testing.T) {
@@ -167,6 +224,9 @@ func TestX86ScalarFPWideTupleSpanOriginalGoAssembly(t *testing.T) {
 					name := fmt.Sprintf("Span%dRead%t", index, read)
 					source.WriteString(strings.ReplaceAll(row.source, "Value", name))
 				}
+			}
+			for index, row := range x86ScalarFPInteriorCases(arch) {
+				source.WriteString(strings.ReplaceAll(row.source, "Value", fmt.Sprintf("Interior%d", index)))
 			}
 			goAssemblerOracleOutput(t, arch, source.String(), "", true)
 		})
