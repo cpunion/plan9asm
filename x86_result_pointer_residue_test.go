@@ -3,9 +3,62 @@ package plan9asm
 import (
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 )
+
+func TestX86IncomingPointerResidueMasksRolesAndByteAliases(t *testing.T) {
+	for _, arch := range []string{"amd64", "386"} {
+		for _, row := range []struct {
+			op    string
+			width int64
+		}{{"ANDB", 1}, {"ANDW", 2}, {"ANDL", 4}, {"ANDQ", 8}} {
+			if arch == "386" && row.width == 8 {
+				continue
+			}
+			for _, register := range strings.Fields("AX CX DX BX BP SI DI R8 R15 AL AH BL BH CL CH DL DH BPB SIB DIB R8B R15B") {
+				for _, mask := range []int64{0, 1, 3, 7, 5, -1} {
+					ins := x86ScalarLaneInstruction(t, fmt.Sprintf("%s $%d,%s", row.op, mask, register))
+					// Byte identity is the separately validated existing grammar;
+					// the expectation below independently selects role/mask bits.
+					form, known, err := x86LockScalarRMWProperties(ins.Op, ins, arch)
+					if !known || err != nil {
+						continue
+					}
+					index, byteMask, valid := x86ResultGP(form.destination.Reg, row.width, arch)
+					if !valid {
+						continue // Physical SP/amd64 BP and mode32 high banks have no role.
+					}
+					for _, caller := range []bool{false, true} {
+						for _, pointer := range []bool{false, true} {
+							state := x86ResultState{flags: x86ByteFlagsAll, direction: x86ResultDirectionBackward}
+							state.pointerGP[index], state.callerAddressGP[index] = pointer, caller
+							before := state.clone()
+							positive := caller && pointer && (mask == 0 || mask == 1 || mask == 3 || mask == 7)
+							got := x86ScalarFPResultTransfer(ins, &state, nil, 0, arch)
+							if got != positive {
+								t.Fatalf("%s %s %s mask=%d caller=%t pointer=%t: got=%t want=%t", arch, row.op, register, mask, caller, pointer, got, positive)
+							}
+							if positive {
+								before.gp[index] = byteMask
+								if row.width >= 4 {
+									before.gp[index] = 255
+								}
+								before.pointerGP[index], before.callerAddressGP[index] = false, false
+								before.flags = x86ByteFlagsAll &^ x86ByteFlagAF
+							}
+							if !reflect.DeepEqual(state, before) {
+								t.Fatal("projection changed unrelated bytes/flags/DF or retained address authority", arch, ins.Raw)
+							}
+						}
+						}
+					}
+				}
+			}
+		}
+	}
+}
 
 func TestX86IncomingPointerResidueWholeSourceThreeAPIs(t *testing.T) {
 	for _, target := range x86RawReturnTargets {
