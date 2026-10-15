@@ -81,11 +81,16 @@ func x86TypedImplicitMultiplyByteEffect(op Op, ins Instr, arch string) (x86Typed
 }
 
 func x86ImplicitMultiplyFPResultNeedsProof(fn Func, sig FuncSig, arch string) bool {
-	if !x86DirectGPFPResultSourceRole(fn, sig, arch) {
+	// Unlike the ordinary MOV-store cost selector, an implicit product has
+	// its own whole-result obligation. An unrelated bool input or storage
+	// operation cannot substitute for initialized AX/source/result bytes.
+	// Existing bound entry/storage roles are consumed by that same complete
+	// proof, never granted by this syntax-only routing decision.
+	if arch != "386" && arch != "amd64" || sig.Ret == Void || len(sig.Frame.Results) == 0 {
 		return false
 	}
 	for _, ins := range fn.Instrs {
-		if _, known, err := x86ImplicitMultiplyProperties(ins.Op, ins, arch); known && err == nil {
+		if _, known, err := x86ImplicitMultiplyProperties(ins.Op, ins, arch); known && err == nil && x86ResultNamedPredicateInstruction(ins) {
 			return true
 		}
 	}
