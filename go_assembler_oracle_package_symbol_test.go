@@ -1,9 +1,26 @@
 package plan9asm
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/xgo-dev/plan9asm/internal/goasmoracle"
+)
 
 func goAssemblerOracleX86PackageDiagnostic(source, arch, output, packagePrefix string) bool {
-	return goAssemblerOracleX86SourceDiagnostic(source, arch, output)
+	if arch != "386" && arch != "amd64" || packagePrefix == "" {
+		return false
+	}
+	return goasmoracle.SourceDiagnosticLineWithListing(source, output, 0,
+		func(original, listing []string) bool {
+			if len(original) == 0 {
+				return false
+			}
+			canonical := append([]string(nil), original...)
+			if alias, present := goAssemblerOracleX86Aliases[canonical[0]]; present {
+				canonical[0] = alias
+			}
+			return goasmoracle.PackageQualifiedListing(canonical, listing, packagePrefix)
+		})
 }
 
 func TestGoAssemblerOracleX86BoundPackageQualification(t *testing.T) {
