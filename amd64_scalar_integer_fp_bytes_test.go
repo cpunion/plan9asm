@@ -67,7 +67,7 @@ func TestX86IntegerFPByteViewsMode32QwordKeepsVectorConsumer(t *testing.T) {
 				for _, gp := range []struct{ role, source string }{{"store", "MOVL $1,AX\n" + alias + " AX,ret+0(FP)"}, {"load", alias + " ret+0(FP),AX\nMOVL AX,ret+0(FP)\nMOVL AX,ret+4(FP)"}} {
 					t.Run(target.triple+"/"+alias+"/GP/"+api+"/"+gp.role, func(t *testing.T) {
 						ir, err := x86ScalarFPBitViewAPI(t, "TEXT ·Value(SB),4,$0-8\n"+gp.source+"\nRET\n", "func Value() uint64", target.arch, target.triple, api)
-						if !errors.Is(err, ErrProbeNeedsContext) || ir != "" {
+						if err == nil || ir != "" {
 							t.Fatalf("mode32 GP qword borrowed X/m64: output=%t, error=%v", ir != "", err)
 						}
 					})

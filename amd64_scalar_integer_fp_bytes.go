@@ -18,12 +18,8 @@ func (c *amd64Ctx) integerFPByteView(off, width int64, write bool) (bool, error)
 		len(c.sig.Frame.Params)+len(c.fpResults) == 0 {
 		return false, nil // Independently bound physical storage retains its consumer.
 	}
-	for _, slots := range [][]FrameSlot{c.sig.Frame.Params, c.fpResults} {
-		for _, slot := range slots {
-			if slot.Offset == off && x86FrameScalarBytes(slot.Type, c.goarch) == width {
-				return false, nil
-			}
-		}
+	if x86IntegerFPNaturalSlot(c.sig.Frame.Params, c.fpResults, off, width, c.goarch) {
+		return false, nil
 	}
 	fail := func(reason string) (bool, error) {
 		return true, fmt.Errorf("%w: integer FP byte view +%d/%d: %s", ErrProbeNeedsContext, off, width, reason)
@@ -68,6 +64,39 @@ func (c *amd64Ctx) integerFPByteView(off, width int64, write bool) (bool, error)
 		}
 	}
 	return true, nil
+}
+
+func x86IntegerFPNaturalSlot(params, results []FrameSlot, off, width int64, arch string) bool {
+	for _, slots := range [][]FrameSlot{params, results} {
+		for _, slot := range slots {
+			if slot.Offset == off && x86FrameScalarBytes(slot.Type, arch) == width {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// The linear emitter also coerces the first FP field. Select the shared byte
+// emitter/proof for new views on every public API, not only for functions that
+// independently need CFG lowering (for example, mixed canonical bool tuples).
+// This is solely a routing decision; the selected consumer must prove the role.
+func x86IntegerFPByteMovesNeedCFG(fn Func, sig FuncSig, arch string) bool {
+	if fn.x86SourceStack != nil || fn.x86FixedLocal != nil || len(sig.Frame.Params)+len(sig.Frame.Results) == 0 {
+		return false
+	}
+	for _, ins := range fn.Instrs {
+		width := x86IntegerFPMoveWidth(ins, arch)
+		if width == 0 || len(ins.Args) != 2 {
+			continue
+		}
+		for _, operand := range ins.Args {
+			if operand.Kind == OpFP && !x86IntegerFPNaturalSlot(sig.Frame.Params, sig.Frame.Results, operand.FPOffset, width, arch) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // This dispatch is only a cost/transport selector for the existing named GP

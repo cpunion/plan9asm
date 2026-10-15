@@ -110,6 +110,10 @@ func translateModuleDirectInContext(ctx llvm.Context, file *File, opt Options) (
 			mod.Dispose()
 			return llvm.Module{}, directUnsupportedf("mixed bool result requires complete canonical role checking for %s", name)
 		}
+		if file.Arch == ArchAMD64 && x86IntegerFPByteMovesNeedCFG(*fn, sig, opt.Goarch) {
+			mod.Dispose()
+			return llvm.Module{}, directUnsupportedf("integer FP byte views require shared complete source lowering for %s", name)
+		}
 		if file.Arch == ArchAMD64 && (opt.Goarch == "386" || (opt.Goarch == "amd64" &&
 			(funcNeedsAMD64CFG(*fn) || x86RegisterBoolResultNeedsProof(*fn, sig, opt.Goarch)))) {
 			mod.Dispose()
