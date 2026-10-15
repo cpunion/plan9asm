@@ -139,7 +139,7 @@ jobs:
           if-no-files-found: error
 
   complete-windows:
-    needs: [ownership, sdk-priority]
+    needs: [ownership, sdk-priority, arm64-fallback-cross-priority]
     permissions:
       contents: read
       id-token: write
@@ -685,4 +685,44 @@ jobs:
         with:
           name: owned-process-${{ matrix.go }}
           path: _out/windows-ownership/
+          if-no-files-found: error
+
+  arm64-fallback-cross-priority:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      GOFLAGS: ''
+      GOENV: 'off'
+      GOWORK: 'off'
+      GOTOOLCHAIN: local
+      PLAN9ASM_CROSS_EXEC: '1'
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install original cross-role LLVM 22 and linkers
+        timeout-minutes: 14
+        run: >-
+          bash scripts/install-ci-llvm22-ubuntu.sh
+          gcc-i686-linux-gnu gcc-arm-linux-gnueabihf
+          gcc-aarch64-linux-gnu
+      - name: Install original pinned QEMU 10.2.3
+        timeout-minutes: 5
+        run: bash scripts/install-ci-qemu.sh
+      - uses: ./.github/actions/setup-go
+        with:
+          go-version: '1.27.2'
+          cache: true
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+      - name: Execute complete rich CLI ARM64 fallback oracle
+        run: |
+          set -euo pipefail
+          mkdir -p _out/cross-runtime-owner
+          bash scripts/test-arm64-fallback-ci.sh execute
+      - name: Retain complete source, tools and raw execution children
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: arm64-fallback-cross-priority
+          path: _out/cross-runtime-owner/arm64-fallback-cross/
           if-no-files-found: error
