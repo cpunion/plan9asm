@@ -307,8 +307,13 @@ func TestX86StaticSBAnnotationRawAddressBoundaries(t *testing.T) {
 	if x86ResultRead(read, 16, &state, nil, "amd64") {
 		t.Fatal("386 base annotation became valid AMD64 RIP-relative memory")
 	}
-	if x86OrdinaryNativeMemoryOperand(Operand{Kind: OpMem, Mem: MemRef{Sym: "table<>(SB)", Base: SP, Index: BP, Scale: 1}}, "386") {
-		t.Fatal("an actual BP index borrowed permission from an ignored SP annotation")
+	dynamic := Operand{Kind: OpMem, Mem: MemRef{Sym: "table<>(SB)", Base: SP, Index: BP, Scale: 1}}
+	if !x86OrdinaryNativeMemoryOperand(dynamic, "386") || x86ResultRead(dynamic, 16, &state, nil, "386") {
+		t.Fatal("ordinary mode32 BP index was either classified as a frame or borrowed an unindexed static extent")
+	}
+	dynamic.Mem.Index = SP
+	if x86OrdinaryNativeMemoryOperand(dynamic, "386") {
+		t.Fatal("an actual SP index borrowed permission from an ignored SP annotation")
 	}
 	for _, copy := range []x86ResultState{state.clone(), state.intersect(state)} {
 		if x86ResultRead(read, 16, &copy, nil, "386") {

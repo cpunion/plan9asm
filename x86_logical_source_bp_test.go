@@ -7,6 +7,25 @@ import (
 	"testing"
 )
 
+func TestX86OrdinaryMemoryModeAwareFrameRegisters(t *testing.T) {
+	for _, arch := range []string{"386", "amd64"} {
+		for _, base := range []Reg{AX, BP, SP} {
+			for _, index := range []Reg{"", AX, BP, SP} {
+				t.Run(arch+"/"+string(base)+"/"+string(index), func(t *testing.T) {
+					memory := MemRef{Base: base, Index: index}
+					if index != "" {
+						memory.Scale = 1
+					}
+					want := base != SP && index != SP && (arch == "386" || base != BP && index != BP)
+					if got := x86OrdinaryNativeMemoryOperand(Operand{Kind: OpMem, Mem: memory}, arch); got != want {
+						t.Fatal("ordinary native address classification differs from the selected GP mode", got, want)
+					}
+				})
+			}
+		}
+	}
+}
+
 func TestX86DirectTailModeAwareBPRegisterRoles(t *testing.T) {
 	for _, target := range x86RawReturnTargets {
 		word, width, typ := "Q", 8, "uint64"
