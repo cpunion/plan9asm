@@ -99,6 +99,18 @@ RET
 	}
 }
 
+func x86Mode32BPNativeLoadSource(word string, offset int, suffix, widen, setup string) string {
+	return fmt.Sprintf(`TEXT ·Value(SB),NOSPLIT,$0-%d
+%s
+MOV%s (DX),BP
+%s BP,AX
+MOVL AX,X0
+PEXTRD $0,X0,AX
+MOVL AX,ret+%d(FP)
+RET
+`, offset+4, strings.ReplaceAll(setup, "WORD", word), suffix, widen, offset)
+}
+
 func TestX86Mode32BPPairedNativeLoadDefinedBytes(t *testing.T) {
 	for _, target := range x86RawReturnTargets {
 		word, offset := "Q", 8
@@ -119,16 +131,7 @@ func TestX86Mode32BPPairedNativeLoadDefinedBytes(t *testing.T) {
 			} {
 				for _, api := range []string{"text", "module", "Go"} {
 					t.Run(target.triple+"/"+width.suffix+"/"+row.name+"/"+api, func(t *testing.T) {
-						source := fmt.Sprintf(`TEXT ·Value(SB),NOSPLIT,$0-%d
-%s
-MOV%s (DX),BP
-%s BP,AX
-MOVL AX,X0
-PEXTRD $0,X0,AX
-MOVL AX,ret+%d(FP)
-RET
-`,
-							offset+4, strings.ReplaceAll(row.setup, "WORD", word), width.suffix, width.widen, offset)
+						source := x86Mode32BPNativeLoadSource(word, offset, width.suffix, width.widen, row.setup)
 						ir, err := x86ScalarFPBitViewAPI(t, source, "func Value(p *byte) uint32", target.arch, target.triple, api)
 						if target.arch == "386" && row.complete {
 							if err != nil || ir == "" || !strings.Contains(ir, "load volatile i") {
@@ -248,25 +251,50 @@ func TestX86Mode32BPLogicalSourceOriginalGoAndLLVMObjects(t *testing.T) {
 		if target.arch != "386" {
 			continue // This owner explicitly compiles the two mode32 targets.
 		}
-		for _, role := range []string{"direct-tail", "numerical", "code-table", "output-pointer", "code-target"} {
+		for _, role := range []string{
+			"direct-tail", "private-stack", "private-result-stack",
+			"native-load-B", "native-load-W", "native-load-L",
+			"numerical", "code-table", "output-pointer", "code-target",
+		} {
 			t.Run(target.triple+"/"+role, func(t *testing.T) {
 				source := strings.ReplaceAll(x86DirectTail386ASM, "SI", "BP")
+				declarations := x86DirectTail386Go
+				ordinary := role == "direct-tail" || strings.HasPrefix(role, "private-") || strings.HasPrefix(role, "native-load-")
 				var options Options
-				if role != "direct-tail" {
+				switch {
+				case role == "private-stack":
+					source = strings.Replace(source, " MOVL BP,AX", " PUSHL BP\n POPL AX", 1)
+				case role == "private-result-stack":
+					declarations = "func Value(n uint32) uint32"
+					source = `TEXT ·Value(SB),NOSPLIT,$0-8
+LEAL ret+4(FP),BP
+JMP body<>(SB)
+TEXT body<>(SB),NOSPLIT,$0-0
+PUSHL n+0(FP)
+MOVL $7,(BP)
+POPL AX
+RET
+`
+				case strings.HasPrefix(role, "native-load-"):
+					suffix := strings.TrimPrefix(role, "native-load-")
+					widen := map[string]string{"B": "MOVBLZX", "W": "MOVWLZX", "L": "MOVL"}[suffix]
+					source = x86Mode32BPNativeLoadSource("L", 4, suffix, widen, "MOVWORD p+0(FP),DX")
+					declarations = "func Value(p *byte) uint32"
+				case !ordinary:
 					source, options = x86LogicalSourceBPContinuation(t, "386", role)
 					options.TargetTriple = target.triple
 				}
 				x86LEAActualTargetGoObject(t, target.arch, target.triple, source)
 				apis := []string{"text", "module", "owned-module"}
-				if role == "direct-tail" {
+				if ordinary {
 					apis[2] = "Go"
 				}
 				for _, api := range apis {
 					t.Run(api, func(t *testing.T) {
 						var ir string
 						var err error
-						if role == "direct-tail" {
-							ir, err = x86ScalarFPBitViewAPI(t, source, x86DirectTail386Go, target.arch, target.triple, api)
+						if ordinary {
+							ir, err = x86ScalarFPBitViewAPI(t, source, declarations, target.arch, target.triple, api)
 						} else {
 							ir, err = x86ContinuationResultAPI(t, source, options, api)
 						}
