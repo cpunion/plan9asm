@@ -14,6 +14,15 @@ import (
 // counterpart through the kernel's compatibility ISA. An emulated local host
 // is only diagnostic; a missing compiler/compatibility entry fails, never skips.
 func TestCrossLinuxRuntimeMatrixX86DirectTail386OriginalGoAndLLVM(t *testing.T) {
+	for _, carrier := range []string{"SI", "BP"} {
+		t.Run(carrier, func(t *testing.T) {
+			x86DirectTail386ExecuteOriginalGoAndLLVM(t, strings.ReplaceAll(x86DirectTail386ASM, "SI", carrier))
+		})
+	}
+}
+
+func x86DirectTail386ExecuteOriginalGoAndLLVM(t *testing.T, source string) {
+	t.Helper()
 	llc := findLLVM22Tool("llc")
 	compiler, err := exec.LookPath("i686-linux-gnu-gcc")
 	if llc == "" || err != nil {
@@ -41,7 +50,7 @@ func main() {
 }
 `
 	for name, source := range map[string]string{
-		"go.mod": "module directtail386\n\ngo 1.20\n", "main.go": goDriver, "tail_386.s": x86DirectTail386ASM,
+		"go.mod": "module directtail386\n\ngo 1.20\n", "main.go": goDriver, "tail_386.s": source,
 	} {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(source), 0600); err != nil {
 			t.Fatal(err)
@@ -81,7 +90,7 @@ int main(void) {
 }
 `
 	for _, api := range []string{"text", "module", "Go"} {
-		ir, err := x86ScalarFPBitViewAPI(t, x86DirectTail386ASM, x86DirectTail386Go, "386", execution.triple, api)
+		ir, err := x86ScalarFPBitViewAPI(t, source, x86DirectTail386Go, "386", execution.triple, api)
 		if err != nil {
 			t.Fatal(api, err)
 		}

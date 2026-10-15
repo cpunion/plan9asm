@@ -72,3 +72,57 @@ func TestX86ContinuationModeAwareBPRegisterRoles(t *testing.T) {
 		}
 	}
 }
+
+func TestX86Mode32BPLogicalSourceOriginalGoAndLLVMObjects(t *testing.T) {
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM22 llc required for mode32 logical BP objects")
+	}
+	for _, target := range x86RawReturnTargets {
+		if target.arch != "386" {
+			continue // This owner explicitly compiles the two mode32 targets.
+		}
+		for _, role := range []string{"direct-tail", "numerical", "code-table", "output-pointer"} {
+			t.Run(target.triple+"/"+role, func(t *testing.T) {
+				source := strings.ReplaceAll(x86DirectTail386ASM, "SI", "BP")
+				var options Options
+				if role != "direct-tail" {
+					source, options = x86ContinuationResultFixture(t, "386", true)
+					options.TargetTriple = target.triple
+					register := map[string]string{"numerical": "BX", "code-table": "SI", "output-pointer": "DI"}[role]
+					source = strings.ReplaceAll(source, register, "BP")
+				}
+				x86LEAActualTargetGoObject(t, target.arch, target.triple, source)
+				apis := []string{"text", "module", "owned-module"}
+				if role == "direct-tail" {
+					apis[2] = "Go"
+				}
+				for _, api := range apis {
+					t.Run(api, func(t *testing.T) {
+						var ir string
+						var err error
+						if role == "direct-tail" {
+							ir, err = x86ScalarFPBitViewAPI(t, source, x86DirectTail386Go, target.arch, target.triple, api)
+						} else {
+							ir, err = x86ContinuationResultAPI(t, source, options, api)
+						}
+						if err != nil {
+							t.Fatal(err)
+						}
+						for _, optimized := range []bool{false, true} {
+							input := ir
+							if optimized {
+								input = x86UndefinedTrapOptimizedIR(t, input)
+							}
+							for _, level := range []string{"-O0", "-O2"} {
+								t.Run(fmt.Sprintf("IR_O2=%t/backend%s", optimized, level), func(t *testing.T) {
+									x86PackedStringCompileObject(t, llc, target.triple, input, level)
+								})
+							}
+						}
+					})
+				}
+			})
+		}
+	}
+}
