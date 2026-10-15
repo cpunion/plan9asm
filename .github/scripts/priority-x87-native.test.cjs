@@ -37,3 +37,59 @@ test('x87 complete native hardware and original-Go owners cannot be replaced by 
 });
 
 module.exports = {requireX87NativeJob, roots};
+
+test('native x87 scheduling rejects removed, substituted, duplicated, emulated or unverified owners', () => {
+  const body = requireX87NativeJob(workflow);
+  for (const root of roots) {
+    assert.throws(() => requireX87NativeJob(workflow.replace(root, 'TestUnrelatedX87Object')));
+    assert.throws(() => requireX87NativeJob(workflow.replace(root, root + '|' + root)));
+  }
+  for (const [before, after] of [
+    ['-timeout=5m -json', '-timeout=6m -json'],
+    ['go test -p=1 . -list', 'printf missing-inventory'],
+    ['node .github/scripts/audit-x87-native.cjs', 'printf omitted-audit'],
+    ['2> _out/native-x87/stderr.log', '2>&1'],
+    ['set -euo pipefail', 'set -euo pipefail\n          qemu-i386 true'],
+    ['runs-on: ubuntu-latest', 'runs-on: windows-latest'],
+  ]) {
+    assert.ok(body.includes(before));
+    assert.throws(() => requireX87NativeJob(workflow.replace(body, body.replace(before, after))));
+  }
+});
+
+test('native x87 auditor requires actual complete ordered terminals, not printed PASS text', () => {
+  const {auditNativeX87, roots: actualRoots, children} = require('./audit-x87-native.cjs');
+  assert.deepEqual(actualRoots, roots);
+  const event = (Action, Test) => ({Action, Package: 'github.com/xgo-dev/plan9asm', ...(Test ? {Test} : {})});
+  const events = [event('start')];
+  for (const root of roots) {
+    events.push(event('run', root));
+    for (const parent of children.filter(name => name.startsWith(root + '/') && name.split('/').length === 2)) {
+      events.push(event('run', parent));
+      for (const child of children.filter(name => name.startsWith(parent + '/'))) {
+        events.push(event('run', child), event('pass', child));
+      }
+      events.push(event('pass', parent));
+    }
+    events.push(event('pass', root));
+  }
+  events.push(event('pass'));
+  const inventory = roots.join('\n') + '\nok\tgithub.com/xgo-dev/plan9asm\n';
+  const encode = values => values.map(value => JSON.stringify(value)).join('\n') + '\n';
+  assert.deepEqual(auditNativeX87(inventory, encode(events)), {roots: 4, children: 26, passed: 30, skipped: 0, incomplete: 0});
+  const child = children[1];
+  const earlyParent = events.filter(value => value.Test !== children[0] || value.Action !== 'pass');
+  earlyParent.splice(earlyParent.findIndex(value => value.Test === child), 0, event('pass', children[0]));
+  for (const changed of [
+    earlyParent,
+    events.filter(value => value.Test !== child),
+    events.filter(value => value.Test !== child || value.Action !== 'pass'),
+    events.map(value => value.Test === child && value.Action === 'pass' ? {...value, Action: 'skip'} : value),
+    events.map(value => value.Test === child && value.Action === 'pass' ? {...value, Action: 'fail'} : value),
+    events.map(value => value.Test === child ? {...value, Test: child + '-object-only'} : value),
+    events.slice(0, -1),
+    [...events, event('pass')],
+    [event('start'), {...event('output'), Output: events.map(value => 'PASS ' + (value.Test || 'package')).join('\n')}, event('pass')],
+  ]) assert.throws(() => auditNativeX87(inventory, encode(changed)));
+  assert.throws(() => auditNativeX87(inventory.replace(roots[0], 'TestObjectOnly'), encode(events)));
+});

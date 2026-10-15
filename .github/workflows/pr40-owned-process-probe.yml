@@ -847,3 +847,43 @@ jobs:
           name: arm64-fallback-cross-priority
           path: _out/cross-runtime-owner/arm64-fallback-cross/
           if-no-files-found: error
+
+  x87-native-priority:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      GOTOOLCHAIN: local
+      GOENV: 'off'
+      GOWORK: 'off'
+      GOFLAGS: ''
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install LLVM 22 and actual native i386 link tools
+        timeout-minutes: 14
+        run: bash scripts/install-ci-llvm22-ubuntu.sh gcc-i686-linux-gnu libc6-dev-i386-cross
+      - uses: ./.github/actions/setup-go
+        with:
+          go-version: '1.27.2'
+          cache: true
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+      - name: Execute original Go and LLVM x87 integer, conditional and status oracles
+        run: |
+          set -euo pipefail
+          mkdir -p _out/native-x87
+          roots='TestCrossLinuxRuntimeMatrixX86X87SignedI64IdentityOriginalGoAndLLVM'
+          roots+='|TestAMD64X87ConditionalMoveRuntimeConditions'
+          roots+='|TestX86RawX87ClearExceptionRuntimeSemantics'
+          roots+='|TestX86RawX87SoftwareClearPreservesAllStatusFields'
+          go test -p=1 . -list "^($roots)$" > _out/native-x87/inventory.log
+          go test -p=1 . -run "^($roots)$" -count=1 -timeout=5m -json \
+            2> _out/native-x87/stderr.log | tee _out/native-x87/raw.jsonl
+          node .github/scripts/audit-x87-native.cjs _out/native-x87 > _out/native-x87/audit.json
+      - name: Retain complete original and hardware execution evidence
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: native-x87
+          path: _out/native-x87/
+          if-no-files-found: error
