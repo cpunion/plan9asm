@@ -106,7 +106,7 @@ func x86ContinuationResultStep(ordinal int, ins Instr, state *x86ResultState, ow
 	form := x86GoMOVQSourceInstruction(ins)
 	register := func(arg Operand) (int, bool) {
 		index, _, ok := x86ResultGP(arg.Reg, word, arch)
-		return index, ok && arg.Kind == OpReg && arg.Reg != SP && arg.Reg != BP
+		return index, ok && arg.Kind == OpReg
 	}
 	address := func(arg Operand) x86ContinuationAddress {
 		if index, ok := register(arg); ok {

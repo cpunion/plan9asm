@@ -92,6 +92,7 @@ type amd64Ctx struct {
 	fpScalarData     map[x86StaticSBAddress]int64 // exact effective SB address -> available emitted numerical bytes
 	fpScalarChecked  bool
 	fpScalarCheckErr error
+	fpMixedBoolBytes bool // Complete ordinary tuple NUM/canonical proof passed.
 }
 
 func newAMD64Ctx(b *strings.Builder, fn Func, sig FuncSig, resolve func(string) string, sigs map[string]FuncSig, annotate bool) *amd64Ctx {

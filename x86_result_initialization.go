@@ -35,6 +35,10 @@ func checkX86ABI0ResultInitializationAtSource(fn Func, sig FuncSig, goarch strin
 	if canonicalBool && !x86ABI0LogicalBoolFrameRole(fn, sig, goarch) {
 		return fail("bool byte requires its complete ordinary bounded logical ABI0 role")
 	}
+	mixedBool := scalarViews && x86MixedBoolResultNeedsCanonicalRole(sig, sig.Frame.Results)
+	if mixedBool && !x86OrdinaryMixedBoolResultRole(fn, sig, goarch) {
+		return fail("mixed bool requires its complete ordinary bounded logical ABI0 role")
+	}
 	if goarch != "amd64" && goarch != "386" || strings.Contains(fn.Sym, "<") ||
 		len(sig.ArgRegs) != 0 || sig.ARMEntry != nil || sig.WASMContext != "" ||
 		len(sig.Frame.Results) == 0 && !privateVoid {
@@ -87,8 +91,13 @@ func checkX86ABI0ResultInitializationAtSource(fn Func, sig FuncSig, goarch strin
 		initial.continuation = &x86ContinuationResultState{flow: view, tablesValid: true,
 			written: make([]bool, view.graph.cells)}
 	}
-	if canonicalBool {
+	if canonicalBool || mixedBool {
 		initial.canonicalFP = make([]bool, frame)
+	}
+	if mixedBool {
+		transfer = x86MixedBoolCanonicalTransfer(transfer)
+	}
+	if canonicalBool {
 		initial.boolFrameSlots = append(append([]FrameSlot(nil), sig.Frame.Params...), sig.Frame.Results...)
 		initial.boolCalls = fn.x86BoolCalls
 		initial.boolReadonlyInputs = fn.x86BoolReadonlyInputs
@@ -147,7 +156,7 @@ func checkX86ABI0ResultInitializationAtSource(fn Func, sig FuncSig, goarch strin
 				return fail("overlapping typed frame slots")
 			}
 			owned[offset], initial.fp[offset] = true, slot.Type != Ptr
-			if canonicalBool && slot.Type == I1 {
+			if (canonicalBool || mixedBool) && slot.Type == I1 {
 				initial.canonicalFP[offset] = true // The logical entry is actual I1, not an arbitrary NUM byte.
 			}
 		}
@@ -170,8 +179,12 @@ func checkX86ABI0ResultInitializationAtSource(fn Func, sig FuncSig, goarch strin
 				if owned[offset] && !state.fp[offset] {
 					return fail(fmt.Sprintf("result byte %d is not written on every path to RET %d", offset, pc))
 				}
-				if canonicalBool && owned[offset] && (offset >= len(state.canonicalFP) || !state.canonicalFP[offset]) {
-					return fail(fmt.Sprintf("bool result byte %d is not canonical zero/one on every path to RET %d", offset, pc))
+			}
+			if canonicalBool || mixedBool {
+				for _, slot := range sig.Frame.Results {
+					if slot.Type == I1 && !state.canonicalFP[slot.Offset] {
+						return fail(fmt.Sprintf("bool result byte %d is not canonical zero/one on every path to RET %d", slot.Offset, pc))
+					}
 				}
 			}
 			return nil
@@ -190,12 +203,6 @@ type x86ResultFlowBudget struct {
 func checkX86ResultSourceFlow(fn Func, initial x86ResultState, owned []bool, resultOffset int64, goarch string,
 	transfer x86ResultSourceTransfer, checkReturn func(x86ResultState, int) error) error {
 	originalTransfer := transfer
-	for _, ins := range fn.Instrs {
-		if _, known, _ := x86StackWidthProperties(ins, goarch); known {
-			initial.valueStack = new(x86ResultValueStack)
-			break
-		}
-	}
 	transfer = func(ordinal int, ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string) bool {
 		if !x86ResultValueStackContinuation(ins, state, arch) {
 			return false
@@ -276,6 +283,14 @@ func checkX86ResultSourceFlow(fn Func, initial x86ResultState, owned []bool, res
 	}
 	if len(instructions) == 0 || len(instructions) > 4096 {
 		return fail("missing or oversized source CFG")
+	}
+	// Discover private value-stack effects in the same complete, already
+	// selected CFG used below, including source-bound private helpers.
+	for _, ins := range instructions {
+		if _, known, _ := x86StackWidthProperties(ins, goarch); known {
+			initial.valueStack = new(x86ResultValueStack)
+			break
+		}
 	}
 	// One logical byte-work envelope includes FP/AUTO, numerical GP/Z/K,
 	// canonical FP/GP bytes, status/DF, opaque GP and caller-address identities, and the source-shape discriminator. It is
@@ -631,6 +646,12 @@ func (state x86ResultState) intersect(other x86ResultState) x86ResultState {
 	return merged
 }
 
+// A logical source view never imports a physical stack/frame role. BP is an
+// ordinary GP in mode32; explicit native-frame bindings remain separate.
+func x86LogicalSourceFrameRegister(reg Reg, arch string) bool {
+	return reg == SP || reg == BP && arch != "386"
+}
+
 func x86ResultGP(reg Reg, width int64, arch string) (int, uint8, bool) {
 	root, valid := x86CallerGP(reg)
 	// This observer admits only ABI0. Its R14 entry bytes are undefined,
@@ -639,7 +660,7 @@ func x86ResultGP(reg Reg, width int64, arch string) (int, uint8, bool) {
 	// BP is an ordinary caller-clobbered GP in mode32. Its entry bytes are
 	// still unknown; only the existing typed writes can define NUM or opaque
 	// pointer facts. Physical source-stack/fixed-local roles remain separate.
-	if !valid || root == SP || root == BP && arch != "386" || width == 8 && arch == "386" {
+	if !valid || x86LogicalSourceFrameRegister(root, arch) || width == 8 && arch == "386" {
 		return 0, 0, false
 	}
 	if width != 1 && root != reg || width == 1 && !isGoYmbRegisterForArch(reg, arch) {

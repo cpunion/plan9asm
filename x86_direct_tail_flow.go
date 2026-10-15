@@ -29,8 +29,9 @@ func (graph *x86DirectTailGraph) root(root int, byName map[string]int) (*x86Dire
 				return nil, x86DirectTailContext("raw/call/native effect has no continuation role: %s", ins.Raw)
 			}
 			for _, arg := range ins.Args {
-				if arg.Kind == OpReg && (arg.Reg == SP || arg.Reg == BP) ||
-					arg.Kind == OpMem && (arg.Mem.Base == SP || arg.Mem.Base == BP || arg.Mem.Index == SP || arg.Mem.Index == BP ||
+				if arg.Kind == OpReg && x86LogicalSourceFrameRegister(arg.Reg, graph.goarch) ||
+					arg.Kind == OpMem && (x86LogicalSourceFrameRegister(arg.Mem.Base, graph.goarch) ||
+						x86LogicalSourceFrameRegister(arg.Mem.Index, graph.goarch) ||
 						arg.Mem.Base == "PC" && !x86DirectTailPCBranch(ins)) ||
 					arg.Kind == OpFPAddr {
 					return nil, x86DirectTailContext("physical SP/BP/PC/frame address has no continuation role: %s", ins.Raw)

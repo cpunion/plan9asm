@@ -4,59 +4,22 @@ import (
 	"fmt"
 )
 
-type x86StringSpec struct {
-	kind  string
-	typ   LLVMType
-	width int
-}
-
-var x86StringSpecs = map[Op]x86StringSpec{
-	"MOVSB": {kind: "movs", typ: I8, width: 1},
-	"MOVSW": {kind: "movs", typ: I16, width: 2},
-	"MOVSL": {kind: "movs", typ: I32, width: 4},
-	"MOVSQ": {kind: "movs", typ: I64, width: 8},
-	"STOSB": {kind: "stos", typ: I8, width: 1},
-	"STOSW": {kind: "stos", typ: I16, width: 2},
-	"STOSL": {kind: "stos", typ: I32, width: 4},
-	"STOSQ": {kind: "stos", typ: I64, width: 8},
-	"SCASB": {kind: "scas", typ: I8, width: 1},
-	"SCASW": {kind: "scas", typ: I16, width: 2},
-	"SCASL": {kind: "scas", typ: I32, width: 4},
-	"SCASQ": {kind: "scas", typ: I64, width: 8},
-	"CMPSB": {kind: "cmps", typ: I8, width: 1},
-	"CMPSW": {kind: "cmps", typ: I16, width: 2},
-	"CMPSL": {kind: "cmps", typ: I32, width: 4},
-	"CMPSQ": {kind: "cmps", typ: I64, width: 8},
-	"LODSB": {kind: "lods", typ: I8, width: 1},
-	"LODSW": {kind: "lods", typ: I16, width: 2},
-	"LODSL": {kind: "lods", typ: I32, width: 4},
-	"LODSQ": {kind: "lods", typ: I64, width: 8},
-}
-
-func x86StringProperties(op Op) (kind string, typ LLVMType, width int, ok bool) {
-	spec, ok := x86StringSpecs[Op(normalizeInstructionOpcode(op))]
-	if !ok {
-		return "", "", 0, false
-	}
-	return spec.kind, spec.typ, spec.width, true
-}
-
-func (c *amd64Ctx) lowerString(op Op, ins Instr) (ok bool, terminated bool, err error) {
-	kind, typ, width, ok := x86StringProperties(op)
+func (c *amd64Ctx) lowerString(ins Instr) (ok bool, terminated bool, err error) {
+	form, ok, err := x86StringInstructionProperties(ins, c.goarch)
 	if !ok {
 		return false, false, nil
 	}
-	if op != Op(normalizeInstructionOpcode(op)) {
-		return true, false, fmt.Errorf("%s %s does not accept instruction suffixes: %q", c.goarch, op, ins.Raw)
+	if form.kind == "" {
+		return true, false, err
 	}
+	// Preserve the existing consumption order: a malformed opcode suffix has
+	// not consumed a prefix; mode/operand rejection after a valid head has.
 	prefix := c.repeatPrefix
 	c.repeatPrefix = ""
-	if c.goarch == "386" && typ == I64 {
-		return true, false, fmt.Errorf("386 %s is not in the Go assembler's 32-bit instruction table", op)
+	if err != nil {
+		return true, false, err
 	}
-	if len(ins.Args) != 0 {
-		return true, false, fmt.Errorf("%s %s takes no operands: %q", c.goarch, op, ins.Raw)
-	}
+	kind, typ, width := form.kind, form.typ, form.width
 
 	count := "1"
 	if prefix != "" {

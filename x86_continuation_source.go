@@ -183,8 +183,9 @@ func sealX86Continuations(original, prepared *File, opt Options) (*File, error) 
 				return nil, x86ContinuationContext("unbound raw/native/call instruction")
 			}
 			for _, arg := range ins.Args {
-				if arg.Kind == OpReg && (arg.Reg == SP || arg.Reg == BP) || arg.Kind == OpFPAddr ||
-					arg.Kind == OpMem && (arg.Mem.Base == SP || arg.Mem.Base == BP || arg.Mem.Index == SP || arg.Mem.Index == BP || arg.Mem.Base == PC) {
+				if arg.Kind == OpReg && x86LogicalSourceFrameRegister(arg.Reg, graph.arch) || arg.Kind == OpFPAddr ||
+					arg.Kind == OpMem && (x86LogicalSourceFrameRegister(arg.Mem.Base, graph.arch) ||
+						x86LogicalSourceFrameRegister(arg.Mem.Index, graph.arch) || arg.Mem.Base == PC) {
 					return nil, x86ContinuationContext("physical frame or PC role is not closed")
 				}
 			}

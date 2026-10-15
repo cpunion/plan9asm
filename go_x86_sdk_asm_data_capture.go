@@ -29,6 +29,40 @@ func (source *GoX86SDKASMDataSource) verifySDKDirectory() error {
 	return nil
 }
 
+// This pure predicate validates a command's observed profile. Only capture's
+// independent live source/tool/selection guards can authenticate that command.
+func (source *GoX86SDKASMDataSource) validateObservedEnvironment(raw []byte, provided map[string]string) (map[string]string, error) {
+	var env map[string]string
+	if json.Unmarshal(raw, &env) != nil {
+		return nil, sdkASMDataContext("actual SDK/compiler environment is not a complete string observation")
+	}
+	amd64Profile := env["GOAMD64"] == "v1"
+	if source.captureRole == sdkASMDataOriginalSourceRole && env["GOARCH"] == "386" {
+		// cmd/go reports this inactive setting verbatim (including empty).
+		// Retain it in the sealed observation, never invent a v1 environment.
+		_, amd64Profile = env["GOAMD64"]
+	}
+	if !strings.HasPrefix(env["GOVERSION"], "go1.27.") ||
+		env["GOOS"]+"/"+env["GOARCH"] != source.request.Target ||
+		filepath.Join(env["GOROOT"], "bin", gotoolchain.HostExecutable("go")) != source.request.GoBinary ||
+		!amd64Profile || env["GOARCH"] == "386" && env["GO386"] != "sse2" ||
+		env["GOFLAGS"] != "" || env["GOEXPERIMENT"] != "" ||
+		env["GOCACHE"] != provided["GOCACHE"] || env["GOMODCACHE"] != provided["GOMODCACHE"] ||
+		env["CGO_ENABLED"] != provided["CGO_ENABLED"] {
+		return nil, sdkASMDataContext("actual SDK/compiler/profile is outside this registered observation")
+	}
+	if source.originalProfile {
+		wanted := provided["GOENV"]
+		if wanted == "off" {
+			wanted = "" // cmd/go reports an explicitly disabled config as empty.
+		}
+		if env["GOENV"] != wanted || env["GOWORK"] != provided["GOWORK"] || env["GOTOOLCHAIN"] != provided["GOTOOLCHAIN"] {
+			return nil, sdkASMDataContext("actual SDK-primary original default/config profile differs")
+		}
+	}
+	return env, nil
+}
+
 func (source *GoX86SDKASMDataSource) capture(ctx context.Context, provided map[string]string) error {
 	source.observation.Protocol = "actual_go_sdk_asm_data_live_observation_v1"
 	source.observation.Request = source.request
@@ -48,27 +82,12 @@ func (source *GoX86SDKASMDataSource) capture(ctx context.Context, provided map[s
 	if err != nil {
 		return err
 	}
-	var env map[string]string
-	if json.Unmarshal(raw, &env) != nil || !strings.HasPrefix(env["GOVERSION"], "go1.27.") ||
-		env["GOOS"]+"/"+env["GOARCH"] != source.request.Target ||
-		filepath.Join(env["GOROOT"], "bin", gotoolchain.HostExecutable("go")) != source.request.GoBinary ||
-		env["GOAMD64"] != "v1" || env["GOARCH"] == "386" && env["GO386"] != "sse2" ||
-		env["GOFLAGS"] != "" || env["GOEXPERIMENT"] != "" ||
-		env["GOCACHE"] != provided["GOCACHE"] || env["GOMODCACHE"] != provided["GOMODCACHE"] ||
-		env["CGO_ENABLED"] != provided["CGO_ENABLED"] {
-		return sdkASMDataContext("actual SDK/compiler/profile is outside this registered observation")
+	env, err := source.validateObservedEnvironment(raw, provided)
+	if err != nil {
+		return err
 	}
 	source.guard.env = env
 	source.observation.RawEnvironment = raw
-	if source.originalProfile {
-		wanted := provided["GOENV"]
-		if wanted == "off" {
-			wanted = "" // cmd/go reports an explicitly disabled config as empty.
-		}
-		if env["GOENV"] != wanted || env["GOWORK"] != provided["GOWORK"] || env["GOTOOLCHAIN"] != provided["GOTOOLCHAIN"] {
-			return sdkASMDataContext("actual SDK-primary original default/config profile differs")
-		}
-	}
 	if err := source.verifySDKDirectory(); err != nil {
 		return err
 	}

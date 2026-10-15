@@ -20,9 +20,22 @@ func TestCrossLinuxRuntimeMatrixX86ContinuationWholeCFGOriginalGoAndLLVM(t *test
 		t.Fatalf("continuation native owner requires LLVM22 llc/clang and static i386 compiler: %v", err)
 	}
 	for _, arch := range []string{"amd64", "386"} {
-		for _, dispatch := range []string{"memory", "register"} {
+		dispatches := []string{"memory", "register"}
+		if arch == "386" {
+			dispatches = append(dispatches, "BP-memory", "BP-register", "BP-target")
+		}
+		for _, dispatch := range dispatches {
 			t.Run(arch+"/"+dispatch, func(t *testing.T) {
-				source, options, goDriver, cDriver := x86ContinuationRuntimeFixture(t, arch, dispatch)
+				mode := strings.TrimPrefix(dispatch, "BP-")
+				if dispatch == "BP-target" {
+					mode = "register"
+				}
+				source, options, goDriver, cDriver := x86ContinuationRuntimeFixture(t, arch, mode)
+				if dispatch == "BP-target" {
+					source = strings.ReplaceAll(source, "AX", "BP")
+				} else if strings.HasPrefix(dispatch, "BP-") {
+					source = strings.ReplaceAll(source, "SI", "BP")
+				}
 				compiler := []string{clang, "-target", options.TargetTriple, "-no-pie"}
 				if arch == "386" {
 					compiler = []string{i386, "-static", "-no-pie"}

@@ -1,9 +1,12 @@
 # Current work: PR 40 checkpoint
 
-Checkpoint: 2026-10-15 05:38 UTC. Fork diagnostic `79e484c9` has finished
-successfully; main's complete Compare objects pass at `9f74695f` and its
-five-target benchmark at `a12697f4` now passes157/184 files.
-Neither receipt establishes complete PR40 or standard-library success.
+Checkpoint: 2026-10-15 07:30 UTC. Fork diagnostic `de238372` has one
+confirmed Windows tuple failure; do not cancel its remaining owner or push over
+the active run. The ordinary canonical-bool repair is committed through
+`acae3606`; its final merged-source qualification is next. Standalone synthetic
+object fixtures use numeric NOSPLIT, matching their header-free Go oracle.
+The last complete
+strict benchmark, at `870d011f`, remains157/184, not standard-library success.
 
 ## Scope and authority
 
@@ -21,6 +24,27 @@ Missing tools fail. Freeze all tracked inputs, tools and documentation during
 qualification. Preserve failed snapshots, deadlines and complete denominators.
 
 ## Latest completed CI
+
+The newer [run38691683296](https://github.com/cpunion/plan9asm/actions/runs/38691683296)
+at `de238372` has67 successful jobs, one failed root part and one remaining
+package owner at this checkpoint. All37 priorities passed. Independent raw
+audits confirm native64 roots/201 children, ARM64 QEMU four children/512 input
+rows, and complete Compare21 children/12 LLVM objects. These are current-run
+executed scopes, not certification of the newer local source.
+
+The failed part has exactly one failing root,
+`TestX86ABI0ResultTupleScalarTypesAndObjects`, across all five targets. Original
+Go objects pass; the new mixed-I1 preflight incorrectly rejects valid typed bool
+input copies. Do not fix this by changing those positives to Context. Test-only
+`845d9c92` reproduces120 rejected positives with240 negative controls passing.
+Production `f46199bf` supplies a bounded ordinary ABI0 canonical byte proof,
+retaining raw2/unknown/join/layout rejection and physical I8 intermediate storage.
+Its20 portable roots/1246 children pass Go27/race/Go20, and the unchanged tuple
+object root passes Go27. The combined object group remains failed because four
+new BP fixture roles lacked `textflag.h`; `acae3606` corrects those inputs and
+adds physical-byte/layout controls. Final merged qualification is still required.
+
+Earlier fully completed run:
 
 [Run38679026699](https://github.com/cpunion/plan9asm/actions/runs/38679026699)
 at `79e484c9` ended naturally SUCCESS:68/68 jobs, including35 priority jobs,
@@ -54,29 +78,30 @@ failed diagnostic runs remain failed; historical detail is retained in
 | Complete Compare objects, `9f74695f` | All three APIs retain all three original TEXTs and compile12 LLVM22 objects across original/O2 IR and O0/O2 backend axes. Its21 children pass in96.387s; Equal remains Context. Final source/tool seals and both SDK vets pass. The subsequent default CLI benchmark independently compiles the entire original Compare file successfully. |
 | BSWAP native fixtures through `afc18aa4` | Integrated as `a12697f4`; both SDKs' complete Go grammar, five-target objects and freestanding C/ASM adapter objects pass. Go27/race284 roots/9290 children and Go20 282/9268 pass. Actual original-Go-opcode/LLVM execution on Linux AMD64/386 remains pending, not established by adapter compilation. |
 | Shared mixed-I1 boundary through `abf771ac` | Genuine REDs reproduce noncanonical bool aggregate false passes both with BSWAP and in180 MOV-only combinations. The shared preflight and direct-module fallback require an existing complete canonical result role; a copied fixed-local token cannot supply it. Leaf Go27/race287 roots/9774 children, Go20 285/9752, both SDKs' grammar/objects/adapter, official gates and seals pass. Independent code review reports no concrete finding. Ordinary AMD64 ABI0 scalar-I1 remains a separate pre-existing boundary. |
+| Mode-aware logical BP through `76a4c52c` | Source CFGs, paired native loads and the bounded private value stack distinguish ordinary386 BP from SP/AMD64 frame BP. Shared complete stack forms preserve only unwritten GP identities; whole helper CFGs are included before unchanged budget accounting. New pure controls pass at `f46199bf`; expanded original-Go/LLVM fixtures must be rerun after their header repair. LOCK remains an independent complete input/address proof boundary. |
+| Inactive original386 profile, `d4c3307d` | Qualified live capture and portable framework are merged. GOAMD64 must be observed but is inactive for Original386; active GO386 and strict DATA/NUM/AMD64 profiles remain exact. This does not solve the complete atomic source's independent CALL boundary. |
+| Typed string grammar, `fa45ba44` | A shared complete20-name descriptor validates implicit Ynone forms, modes, suffixes and operand counts. Six new roots/524 children plus retained grammar/objects pass both SDKs/race at the leaf. Existing CMPS/LODS host skips are not native passes; REPN source/memory/result authority is unchanged. No code-size reduction is claimed. |
 
-`e56a7dda` integrates the qualified production leaves above. Its focused gate
-also passes both SDK vets and before/after3861 tracked-input/19 selected-tool
-seals. A whole coupled-source gate is still required after the next test batch.
+At `870d011f`, independent merged-source qualification passes514 unique owners
+across112 commands, retaining all source/namespace/SDK/CLI owners, both SDKs and
+race. Its official gates and before/after source/tool seals pass. That receipt
+cannot certify the subsequent BP/profile/string/tuple integration.
 
 ## Next work, in order
 
-1. Freeze the merged shared mixed-I1/argument/BSWAP snapshot and run the fresh
-   deduplicated494-owner coupled manifest. Its315/310 root pure owners,18
-   internal owners and25 runner portable owners have distinct inventories;
-   all old source/namespace/SDK/CLI owners remain. Never reuse leaf evidence
-   as certification of the merged head. Preserve both mandatory preflight checks
-   when resolving the argument-carrier/mixed-result integration conflict.
-2. Keep the newly completed Compare object and default CLI benchmark receipts
-   separate from runtime execution. Equal's closure Context remains explicit.
-3. Build a fresh deduplicated coupled manifest at the final committed head.
-   Preserve independent six NoDATA owners and complete CLI Count/IndexByte
-   owners, every previous source/namespace/tool root, both SDKs and race/vets.
-   An inventory is preparation, never evidence of execution.
-4. Fork-only staging `5639f360` passes81 Node policies and actionlint with
-   native64's exact BSWAP AMD64/386 children, the ARM64 cross oracle and a
-   separate five-minute Windows Compare priority. This is not actual execution.
-   Integrate final qualified main, reseal, batch-push and let CI finish naturally.
+1. Finish the current CI naturally and investigate any additional failures.
+   Preserve the tuple regression's real RED and failed fixture receipt.
+2. Freeze a fresh committed merged snapshot. Qualify canonical tuples and BP
+   objects first, then the complete retained514-owner union plus new profile,
+   grammar, tuple and source-CFG owners. Exact inventories and raw terminals
+   must agree; do not replace old owners with aggregate counts.
+3. Preserve all six NoDATA owners, complete CLI Count/IndexByte sources, both
+   SDKs, race/vets, official forms and before/final source/tool seals. Object
+   compilation is not native execution; Equal retains its closure Context.
+4. Fork-only staging `8145f3a6` passes85 Node policies and actionlint. It retains
+   native64, requires17 exact native children and adds the tuple object root as
+   a separate five-minute early priority. Merge final qualified main into it,
+   reseal, batch-push only to the allowed fork and let CI finish naturally.
    Never merge the fork diagnostic workflow/auditors back into main source.
 5. Rerun the strict five-target benchmark at that head, resolve remaining real
    failures, then update draft PR40 and require current-head CI/review/coverage.
@@ -100,10 +125,9 @@ The argument-carrier branch
 integrated. Fork staging is `codex/pr40-fork-native63-staging-20261015`;
 published diagnostics use `codex/pr40-windows-owned-process-probe-20261013`.
 
-Preserved `f5bc1eb2` fixes only Original386's inactive GOAMD64 observation:
-the key must exist, active GO386 remains sse2 and all raw observations stay
-unchanged. Seven roots/81 children pass Go27/race/Go20 and actual Go metadata;
-actual SDK capture/CLI/object qualification is still pending. It is not merged.
+The inactive-profile leaf is now qualified at `d4c3307d` and merged; its live
+capture, six retained source observers and seven-root/81-child portable roster
+pass with exact before/final seals. Only two portable roots are new, not seven.
 Preserved `e47ca042` is a private386 terminal-CFG consumer, not a public factory
 or activation. Complete original CALL/unwind/alternate-entry boundaries and
 permanent revocation remain required; no noreturn/nounwind or source truncation.
@@ -117,7 +141,7 @@ AMD64 maskless EVEX.Z encoder form. Classification is not full encoder-name,
 LLVM-object, runtime or complete standard-library coverage: the observed386
 corpus has21 distinct operations and121 wasm forms remain Context.
 
-Latest strict complete benchmark remains FAILED at `a12697f4`:
+Latest strict complete benchmark remains FAILED at `870d011f`:
 
 | Target | Complete files passed / total |
 | --- | --- |
@@ -128,7 +152,7 @@ Latest strict complete benchmark remains FAILED at `a12697f4`:
 | js/wasm | 19/19 |
 | Total | 157/184;27 failures, zero N/A/unattempted |
 
-Target wall times47/284/2/6/2s and total341s meet the original300s/target and
+Target wall times47/287/2/6/1s and total343s meet the original300s/target and
 900s total budgets. Compared with `ca02d8ea`, only the entire original Compare
 file changes from failure to success. Retain the command's failed exit1 and
 all27 failures rather than reporting performance success as compile success.
@@ -156,7 +180,7 @@ ledger. No local scanner or new ledger files belong in this repository.
 Ignored `_out/register-result-repair/` retains `ci-79e484c9/`,
 `arm64-fallback-cross/` and `combined-arguments-bswap/` with frozen manifests,
 fresh inventories, raw Go JSON, final audits and before/after source/tool seals.
-The complete failed benchmark is `benchmark-final-a12697f4.../`, including its
+The complete failed benchmark is `benchmark-final-870d011f.../`, including its
 schema-2 results and identical before/after source/tool/head/status manifests.
 Leaf receipts remain in their respective worktrees. Preserve the failed
 `a1a6e9dc` Compare printer-spelling assertion and the corrected `e56a7dda`
