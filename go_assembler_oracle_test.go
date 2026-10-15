@@ -42,7 +42,7 @@ func goAssemblerOracleOutcome(source, object string, output []byte, commandErr, 
 				goAssemblerOracleX86SourceDiagnostic(source, arch, diagnostic) ||
 				goAssemblerOracleARM64SourceDiagnostic(source, arch, diagnostic) ||
 				goAssemblerOraclePositionlessDiagnostic(source, arch, diagnostic) ||
-				len(packagePrefix) == 1 && goAssemblerOracleX86PackageDiagnostic(source, arch, diagnostic, packagePrefix[0])
+				len(packagePrefix) == 1 && goAssemblerOracleX86ObservedPackageDiagnostic(source, arch, diagnostic, packagePrefix[0])
 		})
 }
 

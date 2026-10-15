@@ -26,9 +26,18 @@ func goAssemblerOracleX86PackageDiagnostic(source, arch, output, packagePrefix s
 			if alias, present := goAssemblerOracleX86Aliases[canonical[0]]; present {
 				canonical[0] = alias
 			}
-			return goasmoracle.PackageQualifiedListing(canonical, listing, packagePrefix) ||
-				goAssemblerOracleLegacyPackageSymbol() && goasmoracle.PackageQualifiedListing(canonical, listing, `""`)
+			return goasmoracle.PackageQualifiedListing(canonical, listing, packagePrefix)
 		})
+}
+
+func goAssemblerOracleX86ObservedPackageDiagnostic(source, arch, output, packagePrefix string) bool {
+	if packagePrefix == "" {
+		return false
+	}
+	if goAssemblerOracleLegacyPackageSymbol() {
+		packagePrefix = `""`
+	}
+	return goAssemblerOracleX86PackageDiagnostic(source, arch, output, packagePrefix)
 }
 
 // Historical Go's lexer rewrites the local prefix to "" before parsing,
