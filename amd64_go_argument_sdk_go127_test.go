@@ -94,10 +94,17 @@ func amd64SDKTypedArgumentsWholeSource(t *testing.T, member string) {
 			if err != nil || ir == "" {
 				t.Fatal("whole original Compare source still needs an independent contract", err)
 			}
-			if !strings.Contains(ir, "define i64 "+llvmGlobal("internal/bytealg.Compare")) ||
-				!strings.Contains(ir, "define i64 "+llvmGlobal("runtime.cmpstring")) ||
-				!strings.Contains(ir, "{ ptr, i64, i64 }") || !strings.Contains(ir, "{ ptr, i64 }") {
-				t.Fatal("complete two original declared roots/grouped string+slice transport were replaced", ir)
+			context := llvm.NewContext()
+			defer context.Dispose()
+			module, err := parseIRModuleInContext(context, ir)
+			if !module.IsNil() {
+				defer module.Dispose()
+			}
+			if err != nil {
+				t.Fatal("complete translated Compare module did not parse", err)
+			}
+			if err := amd64ArgumentCompareEntryTypes(module); err != nil {
+				t.Fatal("complete original grouped entry transport differs", err)
 			}
 		})
 	}
