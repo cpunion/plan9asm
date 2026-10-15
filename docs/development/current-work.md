@@ -1,6 +1,6 @@
 # Current work: PR 40 checkpoint
 
-Checkpoint: 2026-10-15 05:26 UTC. Fork diagnostic `79e484c9` has finished
+Checkpoint: 2026-10-15 05:38 UTC. Fork diagnostic `79e484c9` has finished
 successfully; main's complete Compare objects pass at `9f74695f` and its
 five-target benchmark at `a12697f4` now passes157/184 files.
 Neither receipt establishes complete PR40 or standard-library success.
@@ -53,6 +53,7 @@ failed diagnostic runs remain failed; historical detail is retained in
 | Actual LLVM entry inspection, `e56a7dda` | Checks real function identity and grouped LLVM types rather than printed identifier quotes. Nine parser/type controls pass Go27/race/Go20; complete original Compare3-TEXT source passes all three translation APIs in97.437s. Equal correctly retains hidden `8(DX)` Context in all three APIs. Neither is a new object/native/file-benchmark receipt. |
 | Complete Compare objects, `9f74695f` | All three APIs retain all three original TEXTs and compile12 LLVM22 objects across original/O2 IR and O0/O2 backend axes. Its21 children pass in96.387s; Equal remains Context. Final source/tool seals and both SDK vets pass. The subsequent default CLI benchmark independently compiles the entire original Compare file successfully. |
 | BSWAP native fixtures through `afc18aa4` | Integrated as `a12697f4`; both SDKs' complete Go grammar, five-target objects and freestanding C/ASM adapter objects pass. Go27/race284 roots/9290 children and Go20 282/9268 pass. Actual original-Go-opcode/LLVM execution on Linux AMD64/386 remains pending, not established by adapter compilation. |
+| Shared mixed-I1 boundary through `abf771ac` | Genuine REDs reproduce noncanonical bool aggregate false passes both with BSWAP and in180 MOV-only combinations. The shared preflight and direct-module fallback require an existing complete canonical result role; a copied fixed-local token cannot supply it. Leaf Go27/race287 roots/9774 children, Go20 285/9752, both SDKs' grammar/objects/adapter, official gates and seals pass. Independent code review reports no concrete finding. Ordinary AMD64 ABI0 scalar-I1 remains a separate pre-existing boundary. |
 
 `e56a7dda` integrates the qualified production leaves above. Its focused gate
 also passes both SDK vets and before/after3861 tracked-input/19 selected-tool
@@ -60,10 +61,12 @@ seals. A whole coupled-source gate is still required after the next test batch.
 
 ## Next work, in order
 
-1. Finish the shared mixed-I1 result-role repair. Genuine public REDs show
-   unregistered bool aggregate fields accepting noncanonical bytes with and
-   without BSWAP. Fix the shared class, not an opcode-only symptom; retain all
-   existing independently proved scalar/fixed-local/entry roles and revocation.
+1. Freeze the merged shared mixed-I1/argument/BSWAP snapshot and run the fresh
+   deduplicated494-owner coupled manifest. Its315/310 root pure owners,18
+   internal owners and25 runner portable owners have distinct inventories;
+   all old source/namespace/SDK/CLI owners remain. Never reuse leaf evidence
+   as certification of the merged head. Preserve both mandatory preflight checks
+   when resolving the argument-carrier/mixed-result integration conflict.
 2. Keep the newly completed Compare object and default CLI benchmark receipts
    separate from runtime execution. Equal's closure Context remains explicit.
 3. Build a fresh deduplicated coupled manifest at the final committed head.
@@ -90,8 +93,9 @@ The primary branch is `codex/pr40-external-corpus-split-20261011`. One heavy
 SDK/ASM/LLVM/object/native/benchmark owner runs at a time. Small audited pure
 groups may overlap. Do not interrupt another owner's frozen snapshot.
 
-The BSWAP test branch is `codex/pr40-bswap-definedness-20261015`; its production
-leaf is integrated, later native tests are separate. The argument-carrier branch
+The BSWAP branch is `codex/pr40-bswap-definedness-20261015`; its qualified
+native tests and shared mixed-I1 guard are integrated through `abf771ac`.
+The argument-carrier branch
 `codex/pr40-amd64-go-argument-carriers-20261016` is frozen at `cc0e26f6` and
 integrated. Fork staging is `codex/pr40-fork-native63-staging-20261015`;
 published diagnostics use `codex/pr40-windows-owned-process-probe-20261013`.
