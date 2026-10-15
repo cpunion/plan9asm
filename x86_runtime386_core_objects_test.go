@@ -149,13 +149,26 @@ func TestRuntimeExec386CoreCompleteSourceGoAndLLVMObjects(t *testing.T) {
 	if !t.Run("corrected-Go-windows386", func(t *testing.T) { runtime386CoreGoObject(t, corrected) }) {
 		return
 	}
+	for _, api := range []string{"text", "module"} {
+		t.Run("BX-only-unbounded-scratch/"+api, func(t *testing.T) {
+			ir, err := runtime386CoreTranslate(t, corrected, api)
+			if !errors.Is(err, ErrProbeNeedsContext) || ir != "" || !strings.Contains(err.Error(), "floorValue") ||
+				!strings.Contains(err.Error(), "requires complete bounded positive original TEXT") {
+				t.Fatal("BX correction manufactured a backing frame for the original physical SP scratch", err)
+			}
+		})
+	}
+	bounded := runtime386BoundedScratchAssembly(t)
+	if !t.Run("bounded-Go-windows386", func(t *testing.T) { runtime386CoreGoObject(t, bounded) }) {
+		return
+	}
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("complete original Windows386 objects require LLVM22 llc")
 	}
 	for _, api := range []string{"text", "module"} {
-		t.Run("corrected/"+api, func(t *testing.T) {
-			ir, err := runtime386CoreTranslate(t, corrected, api)
+		t.Run("bounded-complete18/"+api, func(t *testing.T) {
+			ir, err := runtime386CoreTranslate(t, bounded, api)
 			if err != nil || ir == "" {
 				t.Fatal("complete corrected Windows386 source has an unclosed contract", err)
 			}

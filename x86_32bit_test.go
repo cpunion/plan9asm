@@ -1703,7 +1703,9 @@ func TestRuntimeExec386Core(t *testing.T) {
 	if llc == "" || clang == "" {
 		t.Fatal("llc/clang not found")
 	}
-	file, err := Parse(ArchAMD64, runtime386CoreCorrectedAssembly(t))
+	// Keep all eighteen original operations and manual register transports.
+	// Only the separately verified counterpart supplies real local x87 scratch.
+	file, err := Parse(ArchAMD64, runtime386BoundedScratchAssembly(t))
 	if err != nil {
 		t.Fatal(err)
 	}

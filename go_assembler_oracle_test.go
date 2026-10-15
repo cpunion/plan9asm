@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -24,7 +25,10 @@ func goAssemblerOracleOutput(t *testing.T, arch, source, experiment string, want
 	defer cancelStage()
 	ctx, cancel := context.WithTimeout(stage, time.Minute)
 	defer cancel()
-	command := exec.CommandContext(ctx, "go", "tool", "asm", "-p", "example.com/forms", "-o", object, asm)
+	// Includes belong to the selected SDK, not the temporary source directory
+	// or an ambient installation. Preserve source literals such as NOSPLIT.
+	include := filepath.Join(runtime.GOROOT(), "pkg", "include")
+	command := exec.CommandContext(ctx, "go", "tool", "asm", "-I", include, "-p", "example.com/forms", "-o", object, asm)
 	command.Env = append(os.Environ(), "GOTOOLCHAIN=local", "GOOS=linux", "GOARCH="+arch)
 	if experiment != "" {
 		command.Env = append(command.Env, "GOEXPERIMENT="+experiment)
