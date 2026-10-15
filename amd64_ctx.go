@@ -683,6 +683,9 @@ func (c *amd64Ctx) emitEntryAllocas() error {
 
 	// Map LLVM args -> simulated registers for ABIInternal-ish entrypoints and
 	// for helper<> bodies with explicit ArgRegs.
+	if c.sig.amd64GoArguments != nil {
+		return c.emitAMD64GoArguments()
+	}
 	if len(c.sig.ArgRegs) > 0 {
 		for i := 0; i < len(c.sig.Args) && i < len(c.sig.ArgRegs); i++ {
 			r := c.sig.ArgRegs[i]

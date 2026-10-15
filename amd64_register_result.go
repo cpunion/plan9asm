@@ -16,7 +16,7 @@ func checkAMD64RegisterResultInitialization(fn Func, sig FuncSig, transfer x86Re
 	registers := [...]Reg{AX, BX, CX, DI, SI, "R8", "R9", "R10", "R11"}
 	if !strings.HasSuffix(fn.Sym, "<ABIInternal>") || len(sig.ArgRegs) != 0 ||
 		sig.ARMEntry != nil || sig.ARM64GoRegisterABI != nil || sig.ARM64ClosureABI != nil ||
-		sig.WASMContext != "" || sig.WASMNative || len(sig.Args) > len(registers) ||
+		sig.WASMContext != "" || sig.WASMNative || sig.amd64GoArguments == nil && len(sig.Args) > len(registers) ||
 		len(fn.X86RawText) != 0 || fn.x86SourceStack != nil || fn.x86FixedLocal != nil {
 		return fail("requires a complete ordinary scalar register entry")
 	}
@@ -51,23 +51,34 @@ func checkAMD64RegisterResultInitialization(fn Func, sig FuncSig, transfer x86Re
 		return fail("result transport differs from the scalar signature")
 	}
 	initial := x86ResultState{}
-	for index, typ := range sig.Args {
-		bytes := width(typ)
-		if typ == Ptr {
-			bytes = 8
+	if entry := sig.amd64GoArguments; entry != nil {
+		if !entry.valid(fn, sig, "amd64") {
+			return fail("typed argument carrier lost its live original compiler/source binding")
 		}
-		if bytes == 0 {
-			return fail("aggregate, floating, boolean or spilled argument needs its own register contract")
-		}
-		reg, mask, valid := x86ResultGP(registers[index], bytes, "amd64")
+		var valid bool
+		initial, valid = amd64GoArgumentInitialState(entry.plan)
 		if !valid {
-			return fail("invalid integer register assignment")
+			return fail("invalid declared typed argument carrier bytes")
 		}
-		if typ == Ptr {
-			initial.pointerGP[reg] = true // Opaque identity, not numerical bytes or bounds.
-			initial.callerAddressGP[reg] = true
-		} else {
-			initial.gp[reg] = mask // Narrow inputs do not initialize the unspecified upper bytes.
+	} else {
+		for index, typ := range sig.Args {
+			bytes := width(typ)
+			if typ == Ptr {
+				bytes = 8
+			}
+			if bytes == 0 {
+				return fail("aggregate, floating, boolean or spilled argument needs its own register contract")
+			}
+			reg, mask, valid := x86ResultGP(registers[index], bytes, "amd64")
+			if !valid {
+				return fail("invalid integer register assignment")
+			}
+			if typ == Ptr {
+				initial.pointerGP[reg] = true // Opaque identity, not numerical bytes or bounds.
+				initial.callerAddressGP[reg] = true
+			} else {
+				initial.gp[reg] = mask // Narrow inputs do not initialize the unspecified upper bytes.
+			}
 		}
 	}
 	// No FP/AUTO ownership is imported from a classic signature or TEXT size.

@@ -80,6 +80,10 @@ func translateModuleDirectInContext(ctx llvm.Context, file *File, opt Options) (
 			mod.Dispose()
 			return llvm.Module{}, fmt.Errorf("missing return type for %q", name)
 		}
+		if sig.amd64GoArguments != nil {
+			mod.Dispose()
+			return llvm.Module{}, directUnsupportedf("typed AMD64 Go arguments require shared whole-source CFG lowering for %s", name)
+		}
 		if err := validateResolvedImmediates(file.Arch, *fn); err != nil {
 			mod.Dispose()
 			return llvm.Module{}, directUnsupportedf("%s: %v", name, err)

@@ -80,6 +80,7 @@ type FuncSig struct {
 	// or a manual noalias option. Final normalization independently consumes it.
 	x86CallerRegions *x86GoCallerRegionProof
 	x86FixedLocal    *x86FixedLocalBinding
+	amd64GoArguments *amd64GoArgumentBinding
 
 	// A typed declaration snapshot, not permission to address padding. The
 	// complete original/normalized bit-use proof must independently consume it.
