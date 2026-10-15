@@ -47,6 +47,14 @@ func x86RegisterCanonicalBytesAfter(original Instr, before [16]uint8, arch strin
 		}
 		next[root] = next[root]&^mask | canonical&mask
 	}
+	if bits, known, err := x86ByteSwapProperties(ins.Op, ins, arch); known {
+		if err != nil {
+			return [16]uint8{}
+		}
+		width := int64(bits / 8)
+		write(ins.Args[0].Reg, width, x86ByteSwapByteMask(read(ins.Args[0], width), bits))
+		return next
+	}
 	if form, known, err := x86ConditionalSetProperties(ins.Op, ins, arch); known {
 		if err == nil && form.destination.Kind == OpReg {
 			write(form.destination.Reg, 1, 1)
