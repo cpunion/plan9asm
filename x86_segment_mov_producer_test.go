@@ -61,10 +61,41 @@ func x86SegmentMOVInspectProducer(sources map[string][]byte) (x86SegmentMOVEncod
 	}{
 		// Observed Go1.20.14: I386 early return dominates the Index switch;
 		// asmidx writes the selected enum's numeric register identities.
-		{"4b1d710df7230ccfb9abb463fa692b57a492fa44ddef3feda094eb963822dff1", "3c08a9be657cff57a08638f4366576bdc6c7a951711855d417a70f36fe7db17d", "2c2e8d87991ead9b37a043704619d0f862f0039644c9feb711e9cf22e5cb8f9d", "e973c5bb650e3cecba96f4ac6934b17388cf4c64907d0006340be23e3e2e30f5", false, false},
+		{
+			"4b1d710df7230ccfb9abb463fa692b57a492fa44ddef3feda094eb963822dff1",
+			"3c08a9be657cff57a08638f4366576bdc6c7a951711855d417a70f36fe7db17d",
+			"2c2e8d87991ead9b37a043704619d0f862f0039644c9feb711e9cf22e5cb8f9d",
+			"e973c5bb650e3cecba96f4ac6934b17388cf4c64907d0006340be23e3e2e30f5",
+			false, false,
+		},
+		// Observed Go1.21.13/1.22.12/1.23.12: the I386 early return
+		// is gone, but asmidx retains numeric identities. asmandsz has
+		// the changed Windows TLS relocation condition.
+		{
+			"7359b12c59641f0ca2b3179bdd5c631dd91b721cf3b68d2a05ffd837992bb881",
+			"3c08a9be657cff57a08638f4366576bdc6c7a951711855d417a70f36fe7db17d",
+			"db9c3b90208841426493ed3e3f475000462e8a53a5e0d4e67a68e11f8c3c44c9",
+			"e973c5bb650e3cecba96f4ac6934b17388cf4c64907d0006340be23e3e2e30f5",
+			true, false,
+		},
+		// Observed Go1.24.13/1.25.14/1.26.9: named diagnostics and
+		// the current relocation writer, with the earlier parser body.
+		{
+			"7359b12c59641f0ca2b3179bdd5c631dd91b721cf3b68d2a05ffd837992bb881",
+			"aecd67962a374b23f9f57ed1dbfe281bd91e801118d9c3478fa54d150dd90f06",
+			"dca5b846b2f8e47be6c360076cbddc4d3a95a879a3e7cc90a581d34a10287a46",
+			"e973c5bb650e3cecba96f4ac6934b17388cf4c64907d0006340be23e3e2e30f5",
+			true, true,
+		},
 		// Observed Go1.27.2: explicit Index FS/GS reaches the prefix switch;
 		// asmidx writes register names. These hashes are not a build-version gate.
-		{"7359b12c59641f0ca2b3179bdd5c631dd91b721cf3b68d2a05ffd837992bb881", "aecd67962a374b23f9f57ed1dbfe281bd91e801118d9c3478fa54d150dd90f06", "dca5b846b2f8e47be6c360076cbddc4d3a95a879a3e7cc90a581d34a10287a46", "c15ef57b88cb006f21dd98b0b15b52a9082d899d9afdb075f454a02fdd8b516a", true, true},
+		{
+			"7359b12c59641f0ca2b3179bdd5c631dd91b721cf3b68d2a05ffd837992bb881",
+			"aecd67962a374b23f9f57ed1dbfe281bd91e801118d9c3478fa54d150dd90f06",
+			"dca5b846b2f8e47be6c360076cbddc4d3a95a879a3e7cc90a581d34a10287a46",
+			"c15ef57b88cb006f21dd98b0b15b52a9082d899d9afdb075f454a02fdd8b516a",
+			true, true,
+		},
 	}
 	var hashes []string
 	for index, name := range []string{"prefixof", "asmidx", "asmandsz", "registerIndirect"} {
