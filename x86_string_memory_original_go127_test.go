@@ -12,6 +12,10 @@ import (
 // These are structural original-Go/LLVM observations. They neither execute a
 // fault nor authenticate caller memory, bounds, a frame or an SDK function.
 func TestX86StringImplicitMemoryOriginalGoAndLLVMO0O2(t *testing.T) {
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("complete implicit string objects require LLVM22 llc")
+	}
 	for _, arch := range []string{"386", "amd64"} {
 		triple := "x86_64-unknown-linux-gnu"
 		if arch == "386" {
@@ -57,6 +61,15 @@ func TestX86StringImplicitMemoryOriginalGoAndLLVMO0O2(t *testing.T) {
 								// no filtering or replacement of a dead-result function.
 								for _, row := range rows {
 									x86StringMemoryFunction(t, optimized, "stringmem_"+strings.ToLower(row.op))
+								}
+								for _, stage := range []struct {
+									name, ir string
+								}{{"ir0", ir}, {"ir2", optimized}} {
+									for _, backend := range []string{"-O0", "-O2"} {
+										t.Run(stage.name+"/backend"+backend[2:], func(t *testing.T) {
+											x86PackedStringCompileObject(t, llc, triple, stage.ir, backend)
+										})
+									}
 								}
 							})
 						}
@@ -104,8 +117,9 @@ func x86StringMemoryReachableIR(t *testing.T, ir, name string, active map[string
 
 func TestX86StringRepeatCFGOriginalGoKeepsCompleteFixtures(t *testing.T) {
 	for _, arch := range []string{"386", "amd64"} {
-		for _, shape := range []string{"adjacent", "fallthrough-label", "branch-to-prefix",
-			"conditional-bypass", "unreachable-prefix", "backedge-to-body"} {
+		for _, shape := range []string{"adjacent", "fallthrough-label", "fallthrough-label-chain",
+			"branch-to-prefix", "pc-to-prefix", "loopback-to-prefix",
+			"conditional-bypass", "unreachable-prefix", "backedge-to-body", "pc-bypass", "unknown-indirect"} {
 			t.Run(arch+"/"+shape, func(t *testing.T) {
 				var source strings.Builder
 				for _, prefix := range []string{"REP", "REPN"} {

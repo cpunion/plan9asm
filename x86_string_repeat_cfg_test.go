@@ -13,14 +13,24 @@ func x86StringRepeatCFGBody(op, prefix, shape string) string {
 		return prefix + "\n" + op + "\n"
 	case "fallthrough-label":
 		return prefix + "\nconsume:\n" + op + "\n"
+	case "fallthrough-label-chain":
+		return prefix + "\nfirst:\nsecond:\nconsume:\n" + op + "\n"
 	case "branch-to-prefix":
 		return "JMP repeat\nrepeat:\n" + prefix + "\n" + op + "\n"
+	case "pc-to-prefix":
+		return "JMP 1(PC)\n" + prefix + "\n" + op + "\n"
+	case "loopback-to-prefix":
+		return "repeat:\n" + prefix + "\n" + op + "\nTESTL BX,BX\nJNE repeat\n"
 	case "conditional-bypass":
 		return "TESTL BX,BX\nJE consume\n" + prefix + "\nconsume:\n" + op + "\n"
 	case "unreachable-prefix":
 		return "JMP consume\n" + prefix + "\nconsume:\n" + op + "\n"
 	case "backedge-to-body":
 		return prefix + "\nconsume:\n" + op + "\nTESTL BX,BX\nJNE consume\n"
+	case "pc-bypass":
+		return "JMP 2(PC)\n" + prefix + "\n" + op + "\n"
+	case "unknown-indirect":
+		return "JMP BX\n" + prefix + "\n" + op + "\n"
 	default:
 		panic("unknown independent repeat CFG fixture")
 	}
@@ -51,7 +61,8 @@ func TestX86StringRepeatCFGAcceptsOnlyUnambiguousAdjacency(t *testing.T) {
 			triple = "i386-unknown-linux-gnu"
 		}
 		for _, prefix := range []string{"REP", "REPN"} {
-			for _, shape := range []string{"adjacent", "fallthrough-label", "branch-to-prefix"} {
+			for _, shape := range []string{"adjacent", "fallthrough-label", "fallthrough-label-chain",
+				"branch-to-prefix", "pc-to-prefix", "loopback-to-prefix"} {
 				for _, row := range x86StringMemoryModeRows(arch) {
 					// Repeat the complete family through the text consumer. The
 					// tool-backed owner separately retains all three public APIs.
@@ -75,7 +86,7 @@ func TestX86StringRepeatCFGRejectsBypassedOrAmbiguousPrefix(t *testing.T) {
 			triple = "i386-unknown-linux-gnu"
 		}
 		for _, prefix := range []string{"REP", "REPN"} {
-			for _, shape := range []string{"conditional-bypass", "unreachable-prefix", "backedge-to-body"} {
+			for _, shape := range []string{"conditional-bypass", "unreachable-prefix", "backedge-to-body", "pc-bypass", "unknown-indirect"} {
 				for _, row := range x86StringMemoryModeRows(arch) {
 					for _, api := range []string{"text", "module", "Go"} {
 						t.Run(arch+"/"+prefix+"/"+shape+"/"+row.op+"/"+api, func(t *testing.T) {
@@ -95,8 +106,9 @@ func TestX86StringRepeatCFGRejectsBypassedOrAmbiguousPrefix(t *testing.T) {
 func TestX86StringRepeatCFGFixtureKeepsActualBranchAndPrefixNodes(t *testing.T) {
 	for _, arch := range []string{"386", "amd64"} {
 		for _, prefix := range []string{"REP", "REPN"} {
-			for _, shape := range []string{"adjacent", "fallthrough-label", "branch-to-prefix",
-				"conditional-bypass", "unreachable-prefix", "backedge-to-body"} {
+			for _, shape := range []string{"adjacent", "fallthrough-label", "fallthrough-label-chain",
+				"branch-to-prefix", "pc-to-prefix", "loopback-to-prefix",
+				"conditional-bypass", "unreachable-prefix", "backedge-to-body", "pc-bypass", "unknown-indirect"} {
 				for _, row := range x86StringMemoryModeRows(arch) {
 					source, _ := x86StringRepeatCFGFixture(row, arch, prefix, shape)
 					file, err := Parse(ArchAMD64, source)
@@ -115,6 +127,48 @@ func TestX86StringRepeatCFGFixtureKeepsActualBranchAndPrefixNodes(t *testing.T) 
 					if prefixes != 1 || followers != 1 {
 						t.Fatal("fixture removed or duplicated the original prefix/follower", arch, prefix, shape, row)
 					}
+				}
+			}
+		}
+	}
+}
+
+func TestX86StringRepeatCFGPortGrammarRemainsIndependent(t *testing.T) {
+	for _, arch := range []string{"386", "amd64"} {
+		for _, prefix := range []string{"REP", "REPN"} {
+			for _, op := range []string{"INSB", "INSW", "INSL", "OUTSB", "OUTSW", "OUTSL"} {
+				for _, shape := range []string{"adjacent", "fallthrough-label-chain", "branch-to-prefix", "conditional-bypass"} {
+					t.Run(arch+"/"+prefix+"/"+op+"/"+shape, func(t *testing.T) {
+						source := "TEXT port(SB),4,$0-0\nMOVL $3,CX\nMOVL $0,DX\nCLD\n" +
+							x86StringRepeatCFGBody(op, prefix, shape) + "RET\n"
+						file, err := Parse(ArchAMD64, source)
+						if err != nil {
+							t.Fatal(err)
+						}
+						ir, err := Translate(file, Options{Goarch: arch,
+							Sigs: map[string]FuncSig{"port": {Name: "port", Ret: Void}}})
+						if shape == "conditional-bypass" {
+							if !errors.Is(err, ErrProbeNeedsContext) {
+								t.Fatal("port I/O acquired a skipped prefix", err)
+							}
+							return
+						}
+						if err != nil || !strings.Contains(ir, "asm sideeffect") ||
+							!strings.Contains(ir, "; "+strings.ToLower(op)) {
+							t.Fatal("existing complete native port-I/O emitter changed", err)
+						}
+					})
+				}
+			}
+			for _, follower := range []string{"REP", "REPN", "NOP", "INB", "OUTL", "INSB AX", "OUTSL $1"} {
+				source := "TEXT bad(SB),4,$0-0\nJMP done\n" + prefix + "\n" + follower + "\ndone:\nRET\n"
+				file, err := Parse(ArchAMD64, source)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if _, err := Translate(file, Options{Goarch: arch,
+					Sigs: map[string]FuncSig{"bad": {Name: "bad", Ret: Void}}}); err == nil {
+					t.Fatal("dead or malformed nonstring follower was silently skipped", arch, prefix, follower)
 				}
 			}
 		}
