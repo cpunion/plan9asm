@@ -200,6 +200,10 @@ func x86X87ENVReadOffset(pointer llvm.Value) (int, bool) {
 }
 
 func x86X87ENVReadFootprint(ir string, addressSpace int) error {
+	return x86X87ENVReadFootprintOf(ir, addressSpace, "EnvRead")
+}
+
+func x86X87ENVReadFootprintOf(ir string, addressSpace int, name string) error {
 	context := llvm.NewContext()
 	defer context.Dispose()
 	module, err := parseIRModuleInContext(context, ir)
@@ -209,7 +213,7 @@ func x86X87ENVReadFootprint(ir string, addressSpace int) error {
 	if err != nil {
 		return err
 	}
-	function := module.NamedFunction("EnvRead")
+	function := module.NamedFunction(name)
 	if function.IsNil() {
 		return fmt.Errorf("missing complete environment read")
 	}
