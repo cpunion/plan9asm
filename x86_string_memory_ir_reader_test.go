@@ -15,16 +15,20 @@ func x86StringMemoryIRAccessError(body string, width, reads, writes int) error {
 	typ := fmt.Sprintf("i%d", 8*width)
 	read := regexp.MustCompile(`(?m)^  %[^\n]+ = load volatile ` + typ + `, ptr [^\n]+, align 1(?:,|$)`)
 	write := regexp.MustCompile(`(?m)^  store volatile ` + typ + ` [^\n]+, ptr [^\n]+, align 1(?:,|$)`)
-	if gotReads, gotWrites := len(read.FindAllString(body, -1)), len(write.FindAllString(body, -1)); gotReads != reads || gotWrites != writes {
+	gotReads, gotWrites := len(read.FindAllString(body, -1)), len(write.FindAllString(body, -1))
+	// The observed original helper, or its optimized entry/helper closure,
+	// has no other memory-storage role. Count every load/store instruction
+	// independently before checking the expected volatile type/alignment.
+	// An extra access cannot disappear merely by failing that exact predicate.
+	allReads := regexp.MustCompile(`(?m)^[ \t]*%[^\n=]+ = load\b[^\n]*$`)
+	allWrites := regexp.MustCompile(`(?m)^[ \t]*store\b[^\n]*$`)
+	if totalReads, totalWrites := len(allReads.FindAllString(body, -1)), len(allWrites.FindAllString(body, -1)); totalReads != gotReads || totalWrites != gotWrites {
+		return fmt.Errorf("string memory has an unexpected volatility, width or alignment: total read/write %d/%d, exact %d/%d\n%s",
+			totalReads, totalWrites, gotReads, gotWrites, body)
+	}
+	if gotReads != reads || gotWrites != writes {
 		return fmt.Errorf("lost or invented observable native memory: got read/write %d/%d, want %d/%d\n%s",
 			gotReads, gotWrites, reads, writes, body)
-	}
-	// Load's type is followed by a comma, whereas store has a value after its
-	// type. Check both original LLVM forms even when zero accesses are expected.
-	nonvolatileRead := regexp.MustCompile(`(?m)^  %[^\n]+ = load i\d+, ptr [^\n]+, align 1(?:,|$)`)
-	nonvolatileWrite := regexp.MustCompile(`(?m)^  store i\d+ [^\n]+, ptr [^\n]+, align 1(?:,|$)`)
-	if nonvolatileRead.MatchString(body) || nonvolatileWrite.MatchString(body) {
-		return fmt.Errorf("string access became nonvolatile\n%s", body)
 	}
 	return nil
 }
