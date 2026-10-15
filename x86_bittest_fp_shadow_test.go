@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"go/types"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -121,5 +122,43 @@ func TestX86BitTestFPShadowOriginalCompleteGoObjects(t *testing.T) {
 			x86LEAActualTargetGoObject(t, target.arch, target.triple, source.String())
 			t.Logf("actual original Go object retains %d complete returning BIT-shadow TEXTs; not native execution", count)
 		})
+	}
+}
+
+func TestX86BitTestLogicalFPShadowExactByteEffects(t *testing.T) {
+	for _, arch := range []string{"386", "amd64"} {
+		pkg := mustGoPackage(t, "bitbytes", "package bitbytes\nfunc value(x uint64) uint64\n")
+		sig, err := DeriveGoFuncABI0Signature("value", pkg.Types.Scope().Lookup("value").(*types.Func), arch, types.SizesFor("gc", arch))
+		if err != nil {
+			t.Fatal(err)
+		}
+		context := amd64Ctx{sig: sig, fpResults: sig.Frame.Results, goarch: arch}
+		for _, row := range x86BitTestFPShadowNames(arch) {
+			for offset := 0; offset+row.width <= 8; offset++ {
+				t.Run(fmt.Sprintf("%s/%s/%d", arch, row.name, offset), func(t *testing.T) {
+					ins := x86PureGPUnknownInstruction(t, fmt.Sprintf("%s $-1,x+%d(FP)", row.name, offset))
+					owned := make([]bool, 16)
+					state := x86ResultState{fp: make([]bool, 16), flags: x86ByteFlagsAll, direction: x86ResultDirectionForward}
+					for index := range owned {
+						owned[index] = true
+						state.fp[index] = index < 8
+					}
+					state.gp[0], state.pointerGP[1], state.callerAddressGP[1] = 0x35, true, true
+					want := state.clone()
+					want.flags = x86ByteFlagZF | x86ByteFlagCF
+					if accepted, known := context.scalarBitTestFPShadowTransfer(ins, &state, owned, arch); !known || !accepted || !reflect.DeepEqual(state, want) {
+						t.Fatal("BIT shadow changed unrelated bytes/FLAGS/DF or opaque identities", accepted, known)
+					}
+					for missing := offset; missing < offset+row.width; missing++ {
+						bad := state.clone()
+						bad.fp[missing] = false
+						before := bad.clone()
+						if accepted, known := context.scalarBitTestFPShadowTransfer(ins, &bad, owned, arch); !known || accepted || !reflect.DeepEqual(bad, before) {
+							t.Fatal("BIT shadow manufactured an unread input byte or changed state on rejection", missing)
+						}
+					}
+				})
+			}
+		}
 	}
 }

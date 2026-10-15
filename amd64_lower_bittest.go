@@ -163,16 +163,9 @@ func (c *amd64Ctx) loadBitTestDestination(destination Operand, typ LLVMType, mem
 func (c *amd64Ctx) loadBitTestFPDestination(destination Operand, typ LLVMType) (string, func(string) error, error) {
 	bits, _ := amd64IntegerTypeBits(typ)
 	width := bits / 8
-	if err := c.validateX86PackedShiftFPSpan(destination.FPOffset, width); err != nil {
+	result, err := c.bitTestFPSpan(destination.FPOffset, width)
+	if err != nil {
 		return "", nil, err
-	}
-	result := false
-	for offset := destination.FPOffset; offset < destination.FPOffset+int64(width); offset++ {
-		slot, output, _ := c.fpVectorSlot(offset)
-		if slot.Type == Ptr || slot.Type == I1 {
-			return "", nil, fmt.Errorf("%w: FP bit string needs declared numerical bytes", ErrProbeNeedsContext)
-		}
-		result = result || output
 	}
 	if result {
 		if err := c.scalarFPResultInitialized(); err != nil {
@@ -190,4 +183,19 @@ func (c *amd64Ctx) loadBitTestFPDestination(destination Operand, typ LLVMType) (
 		fmt.Fprintf(c.b, "  %%%s = bitcast %s %s to <%d x i8>\n", bytes, typ, value, width)
 		return c.storeFPVectorBytes(destination.FPOffset, width, "%"+bytes, "")
 	}, nil
+}
+
+func (c *amd64Ctx) bitTestFPSpan(off int64, width int) (bool, error) {
+	if err := c.validateX86PackedShiftFPSpan(off, width); err != nil {
+		return false, err
+	}
+	result := false
+	for offset := off; offset < off+int64(width); offset++ {
+		slot, output, _ := c.fpVectorSlot(offset)
+		if slot.Type == Ptr || slot.Type == I1 {
+			return false, fmt.Errorf("%w: FP bit string needs declared numerical bytes", ErrProbeNeedsContext)
+		}
+		result = result || output
+	}
+	return result, nil
 }

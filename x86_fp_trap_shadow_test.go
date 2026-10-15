@@ -88,3 +88,32 @@ func TestX86TrapOnlyFPShadowOriginalGoForms(t *testing.T) {
 		})
 	}
 }
+
+func TestX86TrapOnlyCFGRequiresEveryReachableSuccessor(t *testing.T) {
+	for _, row := range []struct {
+		name         string
+		instructions []Instr
+		edges        [][]int
+		reachable    []int
+		valid        bool
+	}{
+		{"linear", []Instr{{Op: "NOP"}, {Op: "UD2"}, {Op: OpRET}}, [][]int{{1}, nil, nil}, []int{0, 1}, true},
+		{"two-traps", []Instr{{Op: "JE"}, {Op: "UD2"}, {Op: "UNDEF"}}, [][]int{{1, 2}, nil, nil}, []int{0, 1, 2}, true},
+		{"one-cycle", []Instr{{Op: "JE"}, {Op: OpJMP}, {Op: "UD2"}}, [][]int{{1, 2}, {1}, nil}, []int{0, 1, 2}, false},
+		{"one-return", []Instr{{Op: "JE"}, {Op: OpRET}, {Op: "UD2"}}, [][]int{{1, 2}, nil, nil}, []int{0, 1, 2}, false},
+		{"nontrap-leaf", []Instr{{Op: "NOP"}}, [][]int{nil}, []int{0}, false},
+		{"invalid-trap", []Instr{{Op: "UD2", Args: []Operand{{Kind: OpReg, Reg: AX}}}}, [][]int{nil}, []int{0}, false},
+	} {
+		for _, arch := range []string{"386", "amd64"} {
+			t.Run(arch+"/"+row.name, func(t *testing.T) {
+				states := make(map[int]x86ResultState)
+				for _, pc := range row.reachable {
+					states[pc] = x86ResultState{}
+				}
+				if got := x86ResultAllPathsTerminateInTrap(row.instructions, row.edges, states, arch); got != row.valid {
+					t.Fatalf("all-successor termination differs: got %t want %t", got, row.valid)
+				}
+			})
+		}
+	}
+}

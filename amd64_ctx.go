@@ -92,6 +92,7 @@ type amd64Ctx struct {
 	fpScalarData     map[x86StaticSBAddress]int64 // exact effective SB address -> available emitted numerical bytes
 	fpScalarChecked  bool
 	fpScalarCheckErr error
+	fpScalarTrapOnly bool // Complete private logical-shadow proof: every path ends in an exact trap.
 	fpMixedBoolBytes bool // Complete ordinary tuple NUM/canonical proof passed.
 }
 
