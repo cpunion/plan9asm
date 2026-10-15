@@ -105,7 +105,13 @@ func TestX86X87SoftwareRoundedIntegerBoundariesNeverBecomePoison(t *testing.T) {
 		for _, row := range []struct {
 			op, typ string
 			bits    int
-		}{{"FMOVWP", "int16", 16}, {"FMOVLP", "int32", 32}, {"FMOVVP", "int64", 64}} {
+		}{
+			{"FMOVW", "int16", 16},
+			{"FMOVWP", "int16", 16},
+			{"FMOVL", "int32", 32},
+			{"FMOVLP", "int32", 32},
+			{"FMOVVP", "int64", 64},
+		} {
 			lower, upper := -math.Ldexp(1, row.bits-1), math.Ldexp(1, row.bits-1)
 			below := lower - 1
 			if row.bits == 64 {
@@ -117,6 +123,11 @@ func TestX86X87SoftwareRoundedIntegerBoundariesNeverBecomePoison(t *testing.T) {
 				declaration := "func Value(input float64) " + row.typ
 				body := fmt.Sprintf("MOVW $%d,control-2(SP)\nFLDCW control-2(SP)\nFMOVD input+0(FP),F0\n%s F0,ret+RESULT(FP)\n",
 					0x037f|mode<<10, row.op)
+				if !strings.HasSuffix(row.op, "P") {
+					// Keep the non-pop store's real direction and balance only
+					// afterwards; do not replace it with its popping sibling.
+					body += "FINIT\n"
+				}
 				source := x86X87IntegerRoundingSource(t, target.arch, declaration, body, 16)
 				for _, api := range []string{"text", "module", "Go"} {
 					t.Run(fmt.Sprintf("%s/%s/RC%d/%s", target.triple, row.op, mode, api), func(t *testing.T) {
