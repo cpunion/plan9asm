@@ -85,6 +85,34 @@ func TestX86ImplicitMultiplyWholeSourceThreeAPIs(t *testing.T) {
 	}
 }
 
+func TestX86ImplicitMultiplyMissingFPResultsThreeAPIs(t *testing.T) {
+	for _, target := range x86RawReturnTargets {
+		for _, stem := range []string{"MUL", "IMUL"} {
+			for _, tuple := range []bool{false, true} {
+				declaration, bytes := "func Value() uint32", 4
+				if tuple {
+					declaration, bytes = "func Value() (uint32,uint32)", 8
+				}
+				for _, initialized := range []bool{false, true} {
+					for _, api := range []string{"text", "module", "Go"} {
+						t.Run(fmt.Sprintf("%s/%s/tuple=%t/initialized=%t/%s", target.triple, stem, tuple, initialized, api), func(t *testing.T) {
+							body := stem + "L BX\nRET\n"
+							if initialized {
+								body = "MOVL $2,AX\nMOVL $3,BX\n" + body
+							}
+							source := fmt.Sprintf("TEXT ·Value(SB),4,$0-%d\n%s", bytes, body)
+							ir, err := x86ScalarFPBitViewAPI(t, source, declaration, target.arch, target.triple, api)
+							if !errors.Is(err, ErrProbeNeedsContext) || ir != "" {
+								t.Fatalf("unwritten declared result escaped whole-source proof: output=%t error=%v", ir != "", err)
+							}
+						})
+					}
+				}
+			}
+		}
+	}
+}
+
 func TestX86ImplicitMultiplyNUMBytesAndStatus(t *testing.T) {
 	for _, arch := range []string{"386", "amd64"} {
 		for _, row := range x86ImplicitMultiplyCases(arch) {
