@@ -228,7 +228,30 @@ func TestX86ScalarFPWideTupleSpanOriginalGoAssembly(t *testing.T) {
 			for index, row := range x86ScalarFPInteriorCases(arch) {
 				source.WriteString(strings.ReplaceAll(row.source, "Value", fmt.Sprintf("Interior%d", index)))
 			}
+			word := 8
+			if arch == "386" {
+				word = 4
+			}
+			for index, row := range x86IntegerFPByteRoleCases(word) {
+				fmt.Fprintf(&source, "TEXT ·Role%d(SB),4,$0-%d\n%s\n", index, row.args, row.body)
+			}
+			source.WriteString(strings.ReplaceAll(x86IntegerFPByteStatusSource, "Value", "Status"))
+			if arch == "386" {
+				for index, alias := range []string{"MOVQ", "MOVD", "MOVDQ2Q"} {
+					fmt.Fprintf(&source, "TEXT ·Vector%d(SB),4,$0-8\nPXOR X0,X0\n%s X0,ret+0(FP)\n%s ret+0(FP),X1\n%s X1,ret+0(FP)\nRET\n", index, alias, alias, alias)
+				}
+			}
 			goAssemblerOracleOutput(t, arch, source.String(), "", true)
 		})
+	}
+	// These are Go-invalid GP rows, not another admitted mode32 format. Require
+	// the actual assembler's fixture-bound exit-1 diagnostic independently of
+	// the translator's conservative Context result and the valid X/m64 controls.
+	for _, alias := range []string{"MOVQ", "MOVD", "MOVDQ2Q"} {
+		for _, row := range []struct{ name, body string }{{"store", alias + " AX,ret+0(FP)"}, {"load", alias + " ret+0(FP),AX"}} {
+			t.Run("386-GP-qword-rejected/"+alias+"/"+row.name, func(t *testing.T) {
+				goAssemblerOracleOutput(t, "386", "TEXT ·Invalid(SB),4,$0-8\n"+row.body+"\nRET\n", "", false)
+			})
+		}
 	}
 }
