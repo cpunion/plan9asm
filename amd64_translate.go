@@ -541,6 +541,8 @@ type x86FunctionSource struct {
 	boolCalls        *x86ABI0BoolCallSource
 	declaration      FuncSig
 	inferredAttrs    string
+
+	staticAddressValues *x86StaticAddressValues
 }
 
 func translateFuncX86(b *strings.Builder, fn Func, sig FuncSig, resolve func(string) string, sigs map[string]FuncSig, goarch, targetTriple string, x87Mode X87Mode, annotateSource bool, sources ...x86FunctionSource) error {
@@ -564,6 +566,7 @@ func translateFuncX86(b *strings.Builder, fn Func, sig FuncSig, resolve func(str
 		c.lockScalarNS = sources[0].lockNamespace
 		c.bitScanNS = sources[0].bitScanNamespace
 		c.fpScalarData = sources[0].scalarData
+		c.fpStaticAddressValues = sources[0].staticAddressValues
 		if calls := sources[0].boolCalls; calls != nil {
 			if plan := calls.callers[fn.Sym]; plan != nil {
 				if !plan.bindLowering(fn, sources[0].declaration, sig, goarch) {
@@ -777,19 +780,17 @@ func (c *amd64Ctx) lowerInstr(bi int, ii int, ins Instr, emitBr amd64EmitBr, emi
 		fmt.Fprintf(c.b, "  store i1 %s, ptr %s\n", flagBit(7), c.flagsSltSlot)
 		return false, nil
 	case "CLC", "STC", "CMC":
-		if len(ins.Args) != 0 {
-			return false, fmt.Errorf("%s %s takes no operands: %q", c.goarch, op, ins.Raw)
+		form, _, err := x86CarryControlProperties(Op(op), ins, c.goarch)
+		if err != nil {
+			return false, err
 		}
-		switch op {
-		case "CLC":
-			fmt.Fprintf(c.b, "  store i1 false, ptr %s\n", c.flagsCFSlot)
-		case "STC":
-			fmt.Fprintf(c.b, "  store i1 true, ptr %s\n", c.flagsCFSlot)
-		case "CMC":
+		if form.complement {
 			oldCarry := c.loadFlag(c.flagsCFSlot)
 			newCarry := c.newTmp()
 			fmt.Fprintf(c.b, "  %%%s = xor i1 %s, true\n", newCarry, oldCarry)
 			fmt.Fprintf(c.b, "  store i1 %%%s, ptr %s\n", newCarry, c.flagsCFSlot)
+		} else {
+			fmt.Fprintf(c.b, "  store i1 %t, ptr %s\n", form.set, c.flagsCFSlot)
 		}
 		return false, nil
 	case "ADJSP":

@@ -15,12 +15,21 @@ func x86TypedFPResultNeedsProof(fn Func, sig FuncSig, arch string) bool {
 			return true // Input/control/stack obligations also apply to Void; private slots cannot supply unknown facts.
 		}
 	}
-	if sig.Ret == Void || len(sig.Frame.Results) == 0 {
-		return false // Other families retain their existing result-only routing.
-	}
 	for _, ins := range fn.Instrs {
+		if _, _, _, known := x86StaticAddressValueMove(ins, arch); known {
+			return true // The address source cannot hide an unwritten result.
+		}
+		if x86NamedSegmentMOVNeedsProof(ins, arch) {
+			return true // Source/input effects remain mandatory even with no result.
+		}
+		if sig.Ret == Void || len(sig.Frame.Results) == 0 {
+			continue
+		}
 		if _, known, err := x86X87WordProperties(ins, arch); known && err == nil && x86ResultNamedPredicateInstruction(ins) {
 			return true // Word results need the same whole proof without a GP-to-FP MOV.
+		}
+		if _, known, err := x86ResultStringCompareProperties(ins, arch); known && err == nil && x86ResultNamedPredicateInstruction(ins) {
+			return true // Conditional native reads need the same complete result proof, including missing stores.
 		}
 		if effect, known, err := x86TypedInstructionByteEffect(ins.Op, ins, arch); known && err == nil &&
 			effect.requiresResultProof && x86ResultNamedPredicateInstruction(ins) {

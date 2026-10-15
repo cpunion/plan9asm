@@ -6,6 +6,10 @@ package plan9asm
 func x86ResultVectorCompareStep(ins Instr, state *x86ResultState, owned []bool, arch string) (bool, bool) {
 	form, known, err := x86PackedIntegerCompareProperties(ins.Op, ins, arch)
 	if !known {
+		immediate, recognized, immediateErr := x86ImmediatePackedCompareProperties(ins.Op, ins, arch)
+		form, known, err = immediate.x86PackedIntegerCompareForm, recognized, immediateErr
+	}
+	if !known {
 		return false, false
 	}
 	if err != nil || form.mmx {

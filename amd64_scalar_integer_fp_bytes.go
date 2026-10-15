@@ -46,8 +46,19 @@ func (c *amd64Ctx) integerFPByteViewMode(off, width int64, write, exactBits bool
 				if current < slot.Offset || current >= slot.Offset+size {
 					continue
 				}
-				if slot.Type == Ptr || write && !group.result {
-					return fail("pointer bits and parameter writes retain independent roles")
+				if slot.Type == Ptr {
+					return fail("pointer bits retain their independent role")
+				}
+				if write && !group.result {
+					if slot.Type == I1 {
+						return fail("bool parameter writes retain their independent role")
+					}
+					if err := c.scalarFPResultInitialized(); err != nil {
+						return true, err
+					}
+					if !c.fpScalarTrapOnly {
+						return fail("parameter write needs its complete trap-only shadow role")
+					}
 				}
 				matches++
 			}

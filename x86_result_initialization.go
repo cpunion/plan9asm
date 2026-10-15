@@ -27,6 +27,11 @@ func checkX86ABI0ResultInitialization(fn Func, sig FuncSig, goarch string,
 // authorize an effect; a private observer may join it to an exact source fact.
 func checkX86ABI0ResultInitializationAtSource(fn Func, sig FuncSig, goarch string,
 	transfer func(int, Instr, *x86ResultState, []bool, int64, string) bool, scalarViews bool) error {
+	return checkX86ABI0ResultInitializationWithTrapOnly(fn, sig, goarch, transfer, scalarViews, false)
+}
+
+func checkX86ABI0ResultInitializationWithTrapOnly(fn Func, sig FuncSig, goarch string,
+	transfer x86ResultSourceTransfer, scalarViews, trapOnly bool) error {
 	fail := func(reason string) error {
 		return fmt.Errorf("%w: result initialization: %s", ErrProbeNeedsContext, reason)
 	}
@@ -179,10 +184,13 @@ func checkX86ABI0ResultInitializationAtSource(fn Func, sig FuncSig, goarch strin
 	if (fn.ArgSize != 0 || privateVoid) && (fn.ArgSize < int64(frame) || fn.ArgSize > 4096) {
 		return fail("TEXT argument extent disagrees with the typed result")
 	}
-	return checkX86ResultSourceFlow(fn, initial, owned, resultOffset, goarch, transfer,
+	return checkX86ResultSourceFlowWithTrapOnly(fn, initial, owned, resultOffset, goarch, transfer,
 		func(state x86ResultState, pc int) error {
 			if state.x87 != nil && (state.x87.invalid || state.x87.depth != 0) {
 				return fail("logical x87 value stack is not balanced at RET")
+			}
+			if trapOnly {
+				return fail("trap-only logical shadow reaches an ordinary RET")
 			}
 			if state.continuation != nil && !state.continuation.checkReturn() {
 				return fail("initializer does not write every code-table cell on every RET")
@@ -200,7 +208,7 @@ func checkX86ABI0ResultInitializationAtSource(fn Func, sig FuncSig, goarch strin
 				}
 			}
 			return nil
-		})
+		}, trapOnly)
 }
 
 type x86ResultSourceTransfer func(int, Instr, *x86ResultState, []bool, int64, string) bool
@@ -214,6 +222,11 @@ type x86ResultFlowBudget struct {
 // entry role cannot weaken the existing ABI0 result proof.
 func checkX86ResultSourceFlow(fn Func, initial x86ResultState, owned []bool, resultOffset int64, goarch string,
 	transfer x86ResultSourceTransfer, checkReturn func(x86ResultState, int) error) error {
+	return checkX86ResultSourceFlowWithTrapOnly(fn, initial, owned, resultOffset, goarch, transfer, checkReturn, false)
+}
+
+func checkX86ResultSourceFlowWithTrapOnly(fn Func, initial x86ResultState, owned []bool, resultOffset int64, goarch string,
+	transfer x86ResultSourceTransfer, checkReturn func(x86ResultState, int) error, trapOnly bool) error {
 	originalTransfer := transfer
 	transfer = func(ordinal int, ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string) bool {
 		if !x86ResultValueStackContinuation(ins, state, arch) {
@@ -233,6 +246,7 @@ func checkX86ResultSourceFlow(fn Func, initial x86ResultState, owned []bool, res
 		before := state.callerAddressGP
 		origins := state.callerAddressOrigin
 		predicate := state.predicate
+		stringCount := state.stringCount
 		handled := false
 		if state.continuation != nil {
 			accepted, known := x86ContinuationResultStep(ordinal, ins, state, owned, arch)
@@ -255,9 +269,10 @@ func checkX86ResultSourceFlow(fn Func, initial x86ResultState, owned []bool, res
 		if state.valueStack != nil && (ins.Op == OpCALL || !x86ResultNamedPredicateInstruction(ins)) {
 			state.valueStack.id = false
 		}
-		state.callerAddressGP = x86ResultCallerAddressesAfter(ins, before, state.callerAddressFP, arch)
+		state.callerAddressGP = x86ResultCallerAddressesAfterTransfer(ins, before, state.callerAddressGP, state.callerAddressFP, arch)
 		state.callerAddressOrigin = x86ResultCallerOriginsAfter(ins, origins, state.callerAddressGP, state.callerAddressFP, arch)
 		state.predicate = x86ResultPredicateAfter(ins, predicate, arch)
+		state.stringCount = x86ResultStringCountAfter(ins, stringCount, state.stringCount, arch)
 		if !popFlags {
 			state.direction = x86ResultDirectionAfter(ins, state.direction)
 		}
@@ -313,7 +328,7 @@ func checkX86ResultSourceFlow(fn Func, initial x86ResultState, owned []bool, res
 	byteState := len(initial.fp) + len(initial.canonicalFP) + len(initial.auto) +
 		len(initial.boolOutgoing) + len(initial.boolOutgoingCanonical) + len(initial.gp) + len(initial.canonicalGP) +
 		8*len(initial.xmm) + len(initial.masks) + 1 + len(initial.pointerGP) + len(initial.callerAddressGP) +
-		2*len(initial.callerAddressOrigin) + 1 + 2 + 3 + 1
+		2*len(initial.callerAddressOrigin) + 1 + 2 + 3 + 1 + 1 // Native string counter must-fact.
 	if len(initial.resultAddressSlots) != 0 {
 		byteState += len(initial.resultAddressGP)*25 + 1
 	}
@@ -335,8 +350,12 @@ func checkX86ResultSourceFlow(fn Func, initial x86ResultState, owned []bool, res
 	}
 	const byteWorkLimit = 64 << 20
 	byteWork := len(instructions) * byteState
+	if trapOnly {
+		byteWork += len(instructions) * 16 // One bounded reverse-CFG termination check, not a per-state payload.
+	}
 	boundedWork := len(initial.auto) != 0 || len(initial.canonicalFP) != 0 ||
-		len(initial.resultAddressSlots) != 0 || fn.x86DirectTailRoot != nil || initial.valueStack != nil || initial.continuation != nil || initial.x87 != nil
+		len(initial.resultAddressSlots) != 0 || fn.x86DirectTailRoot != nil || initial.valueStack != nil ||
+		initial.continuation != nil || initial.x87 != nil || trapOnly
 	if boundedWork && byteWork > byteWorkLimit/8 {
 		return fail("combined FP/AUTO source-CFG byte budget exhausted")
 	}
@@ -384,7 +403,9 @@ func checkX86ResultSourceFlow(fn Func, initial x86ResultState, owned []bool, res
 			return fail(fmt.Sprintf("unclosed source effect at instruction %d: %s", pc, ins.Raw))
 		}
 		next := []int{pc + 1}
-		if fn.x86DirectTailRoot != nil {
+		if _, known, err := x86UndefinedTrapProperties(ins.Op, ins, goarch); trapOnly && known && err == nil {
+			next = nil // The paired exact architectural trap has no normal successor.
+		} else if fn.x86DirectTailRoot != nil {
 			next = fn.x86DirectTailRoot.edges[pc]
 		} else if fn.x86ContinuationFlow != nil {
 			next = fn.x86ContinuationFlow.edges[pc]
@@ -417,6 +438,7 @@ func checkX86ResultSourceFlow(fn Func, initial x86ResultState, owned []bool, res
 	states := map[int]x86ResultState{0: initial}
 	queue := []int{0}
 	returned := false
+	trapped := false
 	for visits := 0; len(queue) != 0; visits++ {
 		if visits >= 16384 {
 			return fail("must-defined fixed-point budget exhausted")
@@ -458,6 +480,9 @@ func checkX86ResultSourceFlow(fn Func, initial x86ResultState, owned []bool, res
 		if !transfer(ordinals[pc], ins, &state, owned, resultOffset, goarch) {
 			return fail(fmt.Sprintf("unknown effect or undefined input at instruction %d: %s", pc, ins.Raw))
 		}
+		if _, known, err := x86UndefinedTrapProperties(ins.Op, ins, goarch); trapOnly && known && err == nil {
+			trapped = true
+		}
 		for edge, target := range edges[pc] {
 			nextState := x86ResultPredicateEdge(state, ins, edge)
 			if previous, visited := states[target]; visited {
@@ -472,7 +497,10 @@ func checkX86ResultSourceFlow(fn Func, initial x86ResultState, owned []bool, res
 			queue = append(queue, target)
 		}
 	}
-	if !returned {
+	if trapOnly && !x86ResultAllPathsTerminateInTrap(instructions, edges, states, goarch) {
+		return fail("trap-only logical shadow has a reachable non-trap continuation or cycle")
+	}
+	if !returned && !(trapOnly && trapped) {
 		return fail("no ordinary reachable RET")
 	}
 	for pc, state := range states {
@@ -519,6 +547,7 @@ type x86ResultState struct {
 	masks          [8]bool // used only by the private scalar bit-view transfer
 	flags          uint8
 	direction      x86ResultDirection          // DF only; no numerical/status/pointer permission.
+	stringCount    x86ResultStringCount        // Full native CX zero/nonzero; never NUM or a memory role.
 	valueStack     *x86ResultValueStack        // Private numerical storage; never physical SP or an entry slot.
 	x87            *x86ResultX87State          // Private logical availability; never hardware entry/control state.
 	continuation   *x86ContinuationResultState // Separate opaque control/table identities, never NUM/native storage.
@@ -686,6 +715,9 @@ func (state x86ResultState) intersect(other x86ResultState) x86ResultState {
 	}
 	merged.flags &= other.flags
 	merged.direction = state.direction.intersect(other.direction)
+	if merged.stringCount != other.stringCount {
+		merged.stringCount = x86StringCountUnknown
+	}
 	if merged.valueStack != nil {
 		if other.valueStack == nil || merged.valueStack.invalid || other.valueStack.invalid ||
 			len(merged.valueStack.bytes) != len(other.valueStack.bytes) {

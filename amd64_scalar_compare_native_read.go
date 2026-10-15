@@ -52,11 +52,5 @@ func (c *amd64Ctx) scalarCompareNativeAddress(operand Operand, state *x86ResultS
 	// addresses, unknown GP bases and virtual frame addresses. External SB needs
 	// its existing actual-source numerical certificate: a volatile read alone
 	// cannot establish that an LLVM global preserves original Go field layout.
-	if operand.Kind == OpMem && operand.Mem.Index != "" && !state.shapeOnly {
-		index, _, valid := x86ResultGP(operand.Mem.Index, x86ResultPointerWord(arch), arch)
-		if valid && state.pointerGP[index] {
-			return false
-		}
-	}
-	return x86ResultIncomingPointerAddressIdentity(operand, state, arch)
+	return x86ResultIncomingPointerReadAddressIdentity(operand, state, arch)
 }

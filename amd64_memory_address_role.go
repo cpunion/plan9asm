@@ -59,6 +59,13 @@ type x86StaticSBAddress struct {
 }
 
 func x86StaticSBReadAddress(operand Operand, arch string) (x86StaticSBAddress, bool) {
+	address, valid := x86StaticSBSourceAddress(operand, arch)
+	return address, valid && address.offset >= 0
+}
+
+// Address formation permits signed addends. Only a read additionally needs
+// a nonnegative offset and an independently checked complete storage extent.
+func x86StaticSBSourceAddress(operand Operand, arch string) (x86StaticSBAddress, bool) {
 	memory, valid := x86SBMemoryAddressRole(operand, arch)
 	if !valid || memory.Index != "" || memory.Scale != 0 || memory.IndexExt != "" ||
 		memory.OffRaw != "" || memory.Segment != "" {
@@ -71,8 +78,5 @@ func x86StaticSBReadAddress(operand Operand, arch string) (x86StaticSBAddress, b
 		return x86StaticSBAddress{}, false
 	}
 	offset += memory.Off
-	if offset < 0 {
-		return x86StaticSBAddress{}, false
-	}
 	return x86StaticSBAddress{symbol: base, offset: offset}, true
 }

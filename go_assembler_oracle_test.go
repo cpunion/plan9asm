@@ -30,18 +30,19 @@ func goAssemblerOracleOutput(t *testing.T, arch, source, experiment string, want
 		command.Env = append(command.Env, "GOEXPERIMENT="+experiment)
 	}
 	output, err := runtimeOracleCombinedOutput(ctx, command)
-	if failure := goAssemblerOracleOutcome(asm, object, output, err, ctx.Err(), wantSuccess, arch); failure != nil {
+	if failure := goAssemblerOracleOutcome(asm, object, output, err, ctx.Err(), wantSuccess, arch, "example.com/forms"); failure != nil {
 		t.Fatalf("%v\n%s\noriginal source:\n%s", failure, output, source)
 	}
 }
 
-func goAssemblerOracleOutcome(source, object string, output []byte, commandErr, contextErr error, wantSuccess bool, arch string) error {
+func goAssemblerOracleOutcome(source, object string, output []byte, commandErr, contextErr error, wantSuccess bool, arch string, packagePrefix ...string) error {
 	return goasmoracle.CheckOutcome(source, object, output, nil, commandErr, contextErr,
 		wantSuccess, 0, func(source, diagnostic string) bool {
 			return arch == "wasm" && goasmoracle.WasmSourceDiagnosticLine(source, diagnostic, 0) ||
 				goAssemblerOracleX86SourceDiagnostic(source, arch, diagnostic) ||
 				goAssemblerOracleARM64SourceDiagnostic(source, arch, diagnostic) ||
-				goAssemblerOraclePositionlessDiagnostic(source, arch, diagnostic)
+				goAssemblerOraclePositionlessDiagnostic(source, arch, diagnostic) ||
+				len(packagePrefix) == 1 && goAssemblerOracleX86ObservedPackageDiagnostic(source, arch, diagnostic, packagePrefix[0])
 		})
 }
 
