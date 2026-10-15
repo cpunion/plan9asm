@@ -1,6 +1,6 @@
 # Current work: PR 40 checkpoint
 
-Checkpoint: 2026-10-14 22:34 UTC. Primary source `696d63ab`.
+Checkpoint: 2026-10-15 00:20 UTC. Primary source `7f686ed4`.
 This is a handoff, not a ledger or a claim of complete CI/stdlib success.
 
 ## Scope and authority
@@ -20,19 +20,29 @@ failures as failures; do not increase budgets, crop sources or shrink denominato
 
 ## Latest completed CI
 
-[38615686212](https://github.com/cpunion/plan9asm/actions/runs/38615686212)
-at frozen fork `d4baabba64ce67051f616ee8a681324b65e6731d` completed FAILURE
-naturally at19:26:26 UTC:58 jobs,44 success,14 failure. Failed aggregates are
-not additional defects. All25 priority jobs pass, then complete Windows modules
-run;18 individual test roots fail across the main module, rich CLI and shared
-SDK frontend. Simple CLI complete-module aggregate passes. Do not relabel the
-run or its failed shards as successful.
+[38648974765](https://github.com/cpunion/plan9asm/actions/runs/38648974765)
+at frozen fork `7003d395` completed FAILURE naturally at00:08 UTC:32 jobs,
+30 success, one failure and one skipped. Native62 and both Windows owned-process
+SDKs pass. Source priority fails; complete Windows modules do NOT start this
+cycle. Do not relabel that run or the skipped stage as successful.
 
-Strict downloaded receipts: source127/127 roots PASS; native58/58 really execute
-and PASS132.944s, eleven inventories/twenty mandatory axes, zero skips,
-missing/duplicate/unfinished terminals. That profile omitted the two independent
-FP-field owners, source-stack runtime and new continuation runtime. Its success
-does not certify those axes, complete Windows modules or future PCMP guards.
+The sole failed root is
+`TestX86DirectionWholeSourceCFGJoinsAndFinalEffectRevocation`, both mode-specific
+accepted-flags-restore children. Private-stack allocation incorrectly suppressed
+DF revocation for an independently accepted POPF. Leaf98292316, integrated as
+7f686ed4, clears old DF before transfer; only checked saved bits establish a new
+fact. Six Go PUSHF/POPF rows, both modes, saved DF/status/ID and joins have real
+independent REDs and complete regressions. Clean leaf qualification: pure18
+roots/1170 children Go27/race/Go20; original exact127 source-priority roots/3947
+children PASS63.173s; original42/39 status family five-target/three-API objects
+on both SDKs. Vets and source/tool/head/status seals pass. These leaf receipts
+do not certify the newer integrated source or complete Windows execution.
+
+Downloaded native62 really executes62 roots/167 children PASS141.218s, fourteen
+inventories/twenty-four mandatory owners and six source-stack/continuation ISA
+children, zero skips, missing, duplicate or unfinished terminals. Both FP-field
+owners and both source-stack/continuation modes execute. New PCMP fault
+execution remains pending, not implied by this older native62 success.
 
 Earlier `265c5a07` run38613446840 completed FAILED:24 priority jobs pass, one
 LF-specific original bit-scan sentinel fails, full modules do not start.
@@ -47,6 +57,19 @@ four independent NUM API owners. They all really pass on Windows at `d4baabba`.
 The contribution's published fork branch still has head `24851df2`; do not
 confuse the diagnostic branch with PR40. Current upstream main is `e2164ac0`.
 No source or scanner history is being force-pushed.
+Upstream `e2164ac0` is already an ancestor; no rebase is needed for that revision.
+
+New integrated leaves, fully qualified independently before integration:
+
+| Class | Integrated disposition |
+| --- | --- |
+| LOCK/CMPXCHG | `3b457517` as `432e39bd`: typed conditional-CAS transfer and source-bound same-block LOCK map; all67 AMD64/49 mode32 forms and six CAS names. Pure67/67/66 roots pass Go27/race/Go20; both SDKs three tool roots/1288 children, all299 Go LOCK oracles and objects pass. Conditional AX high halves and pair-CAS ZF-only effects stay exact. |
+| Original386 source/generated FUNCDATA | `bca8c046` as `c99504d4`: complete42-TEXT source, actual compiler/archive and exact generated stackmap/owner/slot observations. No memory/native/terminal permission. SDK50+literal11+internal13 tool roots and portable37 roots pass; race/Go20/vets/seals pass. Former61-root timeout stays FAILED; disjoint complete groups retain five-minute budgets. |
+| PCMP original native memory faults | `485cb2fd`/CRLF-only `d82ab956` as `5a74cb01`/`0d4afb5b`: eight names, zero/full length, live/dead outputs and NULL/partial/full/unaligned reads. Six truly pure policy roots/43 children pass Go27/race/Go20. Actual native O0/O2 remains pending. |
+| POPF direction | `98292316` as `7f686ed4`, exact source127 and complete status-object replay as above. |
+
+Commit and freeze the complete batch, then run fresh integrated-head affected
+pure/tool groups, original source127 and official coverage before publishing.
 
 | Class / failed root | Current disposition |
 | --- | --- |
@@ -79,14 +102,19 @@ fresh inventories and source/tool/head/status seals pass. The earlier81-root
 group included these two tool-backed owners: do not call that group pure or
 isolated performance evidence. Final integrated696d63ab qualification adds the
 17 disjoint continuation roots:175 total,173 pure plus the same two tool owners.
-Run that current-head gate and fresh official classification before publishing.
+At clean46517f30 the complete175-root gate passes:173 pure roots/6651 children
+on Go27/race/Go20, two tool roots/192 children on both SDKs, vets and seals.
+The fresh official gate and continuation23 also pass both SDKs. These older
+receipts do not certify the newer integrated batch; run its coupled gate next.
 
-Fork-only542f0955 stages28 SDK priority lanes,127 source priorities and native62,
-without changing original budgets or adding a concurrency cap. Fourteen exact
-native inventories require24 mandatory owners plus all six source-stack and
-continuation ISA/dispatch children. The self-auditor binds fresh62-root discovery
-to actual Go JSON run/terminal events and rejects skips, gaps or substitutions.
-All59 Node policy tests and actionlint pass, but this has NOT executed native62.
+Fork-only582dcc55 stages28 SDK priority lanes,127 source priorities and native63,
+without changing original budgets or adding a concurrency cap. Fifteen exact
+native inventories require25 mandatory owners and eight dispatch children,
+including the new original PCMP fault owner and its O0/O2 children. The strict
+JSON auditor additionally rejects child terminals after their parent and final
+package terminals without the exact package identity; both have real REDs.
+All61 Node policies and actionlint pass on clean582 with source/tool seals.
+This has NOT executed native63; older actual native62 success is separate.
 Merge only verified main source into the diagnostic branch, never the reverse;
 batch push the allowed fork and let that frozen CI run finish naturally.
 
@@ -97,12 +125,12 @@ Basenames intentionally avoid private machine paths.
 
 | Worktree basename | Current role |
 | --- | --- |
-| `plan9asm-wt-pr40-scalar-lane-native-20261011` | Primary `codex/pr40-external-corpus-split-20261011`, source `696d63ab`; all current repair leaves integrated, final175-root parent qualification next. |
-| `plan9asm-wt-pr40-stdlib-preprocessing-20261012` | Diagnostic `codex/pr40-windows-owned-process-probe-20261013`; published `d4baabba` failed, local `542f0955` stages future lanes. Do not bring fork-only workflow back to contribution. |
-| `plan9asm-wt-pr40-sdk-numeric-maps-entry-20261013` | Tuple-region leaf6ba3a2e6 fully qualified and integrated; namespace WIP separately stashed. |
-| `plan9asm-wt-pr40-simple-sdk-bindings-20261013` | FP, MXCSR and synthetic-zero leaves integrated; main21-root original-failure replay complete; read-only final union preparation. PCMP fault leaf485 remains separate. |
-| `plan9asm-wt-pr40-sdk-tls-20261013` | Helper leafe3fd3479 fully qualified and integrated; clean/idle. Parameter WIP stashed; old history preserved. |
-| `plan9asm-wt-pr40-sdk-numeric-maps-20261013` | Physical-bool and continuation leaves fully qualified and integrated; clean/idle, old history preserved. |
+| `plan9asm-wt-pr40-scalar-lane-native-20261011` | Primary `codex/pr40-external-corpus-split-20261011`, source7f686ed4; coupled current-head qualification next. |
+| `plan9asm-wt-pr40-stdlib-preprocessing-20261012` | Published diagnostic7003; failed run complete. Fork-only workflow stays outside contribution. |
+| `plan9asm-wt-pr40-sdk-numeric-maps-entry-20261013` | Namespace checkpointec21f454, clean but NOT fully qualified/integrated. Old stash preserved. |
+| `plan9asm-wt-pr40-simple-sdk-bindings-20261013` | Clean fully qualified POPF982 leaf; integrated. No heavy process. |
+| `plan9asm-wt-pr40-sdk-tls-20261013` | Qualified bca8 source observation plus untracked terminal-consumer WIP; preserve all files and parameter stash. |
+| `plan9asm-wt-pr40-sdk-numeric-maps-20261013` | Clean frozen future fork582/native63 staging; never merge fork workflow into contribution. |
 
 One heavy SDK/object/native/benchmark owner at a time. Small pure gates may run
 in parallel. A model/connection error is not a test failure; inspect any still
@@ -119,19 +147,29 @@ merely to satisfy an incorrect expectation.
 
 ## Remaining source/semantic boundaries
 
-PCMP test-only leaf `485cb2fd` is NOT integrated: required Linux owner
+PCMP test-only leaf `485cb2fd` and CRLF-onlyd82 are integrated: required Linux owner
 `TestCrossLinuxRuntimeMatrixX86PackedStringOriginalNativeMemoryFaults`, all eight
 original Go encodings, zero/full length × live/dead result, NULL/partial/full/
 unaligned guarded reads and LLVM O0/O2. Source/object controls pass; actual
 Linux fault execution remains pending. A Darwin host skip is not a runtime pass.
 Physical MXCSR dead/fault parity remains separate and unresolved.
 
-Namespace WIP only associates actual selected two-argument go:linkname bodyless
-declarations with native TEXT using source/compiler/object identities. Complete
-equal/compare SDK captures genuinely reject at the old same-package prefix check.
-Do not replace it with a runtime.* exemption, fake helper declarations or a new
-observer frontend. Hidden DX closure extent, composite ABI carriers and native
-entry/caller memory still need their separate producers.
+Namespaceec21 associates actual selected two-argument go:linkname bodyless
+declarations through the existing live source/SymABI/compiler-object observer
+and complete TEXT archive. Actual unchanged equal/compare captures now pass;
+four live mutation controls permanently revoke stale options. Committed-head
+complete capture, old positives and seals still need qualification. No runtime.*
+exemption, fake helper declaration or second observer is permitted. Go20 tests
+the portable framework, not a fabricated SDK producer.
+
+The separate386 single-panic terminal consumer is still WIP/RED. Typed body
+observation alone is not terminal authority. Preserve exact source/compiler/
+ABI/linker association, original CALL/unwind, zero normal successors only,
+shared budget and permanent/final-callback revocation. Actual386 ABIInternal
+normalization must be independently compiled/linked, never relabeled as ABI0.
+No terminal capability, source truncation or noreturn attribute is admitted yet.
+Hidden DX closure extent, composite ABI carriers and native entry/caller memory
+still need separate producers.
 
 A read-only size audit confirms all865 migration-deleted scanner/ledger paths
 remain absent. `cmd/plan9asmscan` deliberately remains the official/std classifier.
@@ -143,7 +181,7 @@ Go parsing/import setup. Preserve separate authority/lifetime contracts.
 
 ## Official coverage and benchmark
 
-Fresh frozen `8eb4218e` passes official five-architecture classification gates on
+Fresh frozen `46517f30` passes official five-architecture classification gates on
 Go1.27 and actualGo1.20. Original supported/context/unsupported denominators and
 fingerprints match; Go27 has zero unsupported/parse errors, historical Go20
 retains one AMD64 unsupported form. Classification is not complete execution
@@ -151,10 +189,12 @@ or full standard-library file success. Go27 observes only21 distinct386 corpus
 operations and classifies all121 wasm forms as Context: no claim that every
 encoder name or runtime behavior is implemented follows from a green gate.
 
-Latest strict complete benchmark remains FAILED at `e88e77ce` (productionc1):
+Latest strict complete benchmark remains FAILED at `46517f30`:
 156/184 original files pass,28 fail, zero N/A/unattempted; all five targets run.
 38625/33, AMD6445/55, ARM27/30, ARM6440/47, wasm19/19.
-Target wall total289s passes original300s-per-target/900s-total limits.
+Target wall total305s passes original300s-per-target/900s-total limits.
+New386 atomic source/LOCK observations only advance to an independent CALL
+contract; no additional complete-file pass has been established.
 Different caches do not establish an algorithmic speedup. Remaining contracts
 include actual entry/TLS/g, reflect frames, preempt flags, VDSO/syscall frames
 and ARM64 result-tail stores; do not restore unchecked admission.
