@@ -32,8 +32,9 @@ func x86SBMemoryAddressRole(operand Operand, arch string) (MemRef, bool) {
 	return memory, true
 }
 
-// Native emitters may additionally possess a checked physical SP/BP token.
+// Native emitters may additionally possess a checked physical frame token.
 // This ordinary branch does not create one, including for an effective Index.
+// BP is an ordinary GP in mode32, not an implicit physical frame binding.
 // It classifies already validated operands; the typed instruction grammar must
 // first reject a bare name or malformed address instead of inventing storage.
 func x86OrdinaryNativeMemoryOperand(operand Operand, arch string) bool {
@@ -47,7 +48,7 @@ func x86OrdinaryNativeMemoryOperand(operand Operand, arch string) bool {
 	if named, valid := x86SBMemoryAddressRole(operand, arch); valid {
 		memory = named
 	}
-	return memory.Base != SP && memory.Base != BP && memory.Index != SP && memory.Index != BP
+	return !x86LogicalSourceFrameRegister(memory.Base, arch) && !x86LogicalSourceFrameRegister(memory.Index, arch)
 }
 
 // The key includes the complete effective displacement, not Operand.String:
