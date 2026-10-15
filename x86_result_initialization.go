@@ -200,6 +200,14 @@ func checkX86ResultSourceFlow(fn Func, initial x86ResultState, owned []bool, res
 		if !x86ResultValueStackContinuation(ins, state, arch) {
 			return false
 		}
+		spec, stack, _ := x86StackWidthProperties(ins, arch)
+		popFlags := stack && spec.mode == amd64StackPopFlags
+		if popFlags {
+			// An independently accepted restore supplies no saved DF fact.
+			// The actual checked private-stack transfer may establish a new
+			// fact below, but must not inherit the pre-restore direction.
+			state.direction = x86ResultDirectionUnknown
+		}
 		if !isAMD64ConditionalBranch(ins.Op) {
 			state.bitScanPending = x86ResultBitScanPending{}
 		}
@@ -230,8 +238,7 @@ func checkX86ResultSourceFlow(fn Func, initial x86ResultState, owned []bool, res
 		state.callerAddressGP = x86ResultCallerAddressesAfter(ins, before, state.callerAddressFP, arch)
 		state.callerAddressOrigin = x86ResultCallerOriginsAfter(ins, origins, state.callerAddressGP, state.callerAddressFP, arch)
 		state.predicate = x86ResultPredicateAfter(ins, predicate, arch)
-		spec, stack, _ := x86StackWidthProperties(ins, arch)
-		if state.valueStack == nil || !stack || spec.mode != amd64StackPopFlags {
+		if !popFlags {
 			state.direction = x86ResultDirectionAfter(ins, state.direction)
 		}
 		return true

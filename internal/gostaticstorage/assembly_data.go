@@ -110,6 +110,7 @@ type ASMDataSourceObservation struct {
 	ExpandedLayouts                []ASMGlobalLayout
 	Original, Expanded             ASMDataMember
 	TextOrder                      []ASMSourceText
+	GeneratedFuncdata              []ASMGeneratedFuncdata
 }
 
 type SDKASMDataObservation struct {
@@ -298,11 +299,19 @@ func observeX86SDKASMData(request SDKASMDataObservationRequest, cpp bool) (*SDKA
 			}
 			return nil, err
 		}
-		layouts, err := joinASMDataLayouts(originalStates, original)
+		generated, err := generatedASMFuncdataWithTextOrder(originalGrammar, request.PackagePath, original, textOrder)
 		if err != nil {
 			return nil, err
 		}
-		expandedLayouts, err := joinASMDataLayouts(expandedStates, expanded)
+		expandedGenerated, err := generatedASMFuncdataWithTextOrder(expandedGrammar, request.PackagePath, expanded, expandedOrder)
+		if err != nil || !sameGeneratedFuncdata(generated, expandedGenerated) {
+			return nil, contextError("original/expanded generated FUNCDATA roles differ")
+		}
+		layouts, err := joinASMDataLayouts(originalStates, asmDataWithoutGeneratedFuncdata(original, generated))
+		if err != nil {
+			return nil, err
+		}
+		expandedLayouts, err := joinASMDataLayouts(expandedStates, asmDataWithoutGeneratedFuncdata(expanded, expandedGenerated))
 		if err != nil {
 			return nil, err
 		}
@@ -343,7 +352,7 @@ func observeX86SDKASMData(request SDKASMDataObservationRequest, cpp bool) (*SDKA
 			OriginalSHA256: digest(source.Original), ExpandedSHA256: digest(source.Expanded),
 			OriginalObjectSHA256: digest(source.OriginalObject), ExpandedObjectSHA256: digest(source.ExpandedObject),
 			OriginalProgramSHA256: originalProgram, ExpandedProgramSHA256: expandedProgram,
-			Layouts: layouts, ExpandedLayouts: expandedLayouts, Original: original, Expanded: expanded, TextOrder: textOrder})
+			Layouts: layouts, ExpandedLayouts: expandedLayouts, Original: original, Expanded: expanded, TextOrder: textOrder, GeneratedFuncdata: generated})
 	}
 	return observation, nil
 }
