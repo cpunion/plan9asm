@@ -74,19 +74,8 @@ func x86ExplicitIMULProperties(op Op, ins Instr, arch string) (x86ExplicitIMULFo
 		if operand.Kind == OpImm && (operand.ImmRaw != "" || operand.ImmIsFloat) {
 			return fail("requires a resolved integer immediate")
 		}
-		if operand.Kind == OpMem {
-			memory := operand.Mem
-			if err := x86SymbolIndexedMemoryError(memory, arch); err != nil {
-				return x86ExplicitIMULForm{}, true, err
-			}
-			if arch == "386" && strings.HasSuffix(memory.Sym, "(SB)") {
-				memory.Base = "" // Go discards this annotation, not a register input.
-			}
-			if !x86MemoryRegistersValidForArch(memory, arch) || memory.OffRaw != "" ||
-				memory.Index == SP || memory.Index != "" && memory.Scale != 1 && memory.Scale != 2 && memory.Scale != 4 && memory.Scale != 8 ||
-				memory.Off != int64(int32(memory.Off)) && !(arch == "386" && memory.Off == int64(uint32(memory.Off))) {
-				return fail("has an unencodable or unresolved memory source")
-			}
+		if err := x86NamedMultiplyMemoryError(operand, arch); err != nil {
+			return fail(err.Error())
 		}
 	}
 	// These copies retain Go's actual encoded immediate, including W truncation

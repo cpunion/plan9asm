@@ -37,6 +37,38 @@ func (c *amd64Ctx) validateFPVectorSpan(off int64, byteWidth int) error {
 }
 
 func (c *amd64Ctx) loadFPVectorBytes(off int64, byteWidth int) (string, error) {
+	return c.loadFPVectorBytesMode(off, byteWidth, false)
+}
+
+// Integer byte views may observe an intermediate noncanonical bool byte, but
+// only after their independent whole-function canonical result proof. Existing
+// SIMD views keep their old logical-field policy and never acquire this mode.
+func (c *amd64Ctx) loadFPVectorField(slot FrameSlot, result, physicalBool bool) (string, LLVMType, error) {
+	if physicalBool && slot.Type == I1 {
+		if !c.abi0BoolResultByteStorage() {
+			return "", "", fmt.Errorf("%w: FP bool byte lacks a checked storage role", ErrProbeNeedsContext)
+		}
+		pointer := c.fpParamAlloca[slot.Offset]
+		if result {
+			pointer, _, _ = c.fpResultAlloca(slot.Offset)
+		}
+		if c.classicFrame != "" {
+			pointer = c.classicFramePtr(slot.Offset)
+		}
+		if pointer == "" {
+			return "", "", fmt.Errorf("missing physical FP bool storage at +%d(FP)", slot.Offset)
+		}
+		return c.loadFPStorage(I8, pointer, ", align 1"), I8, nil
+	}
+	if result {
+		value, err := c.loadFPResult(slot)
+		return value, slot.Type, err
+	}
+	value, err := c.loadFPParamValue(slot)
+	return value, slot.Type, err
+}
+
+func (c *amd64Ctx) loadFPVectorBytesMode(off int64, byteWidth int, physicalBool bool) (string, error) {
 	if err := c.validateFPVectorSpan(off, byteWidth); err != nil {
 		return "", err
 	}
@@ -46,17 +78,11 @@ func (c *amd64Ctx) loadFPVectorBytes(off int64, byteWidth int) (string, error) {
 		slot, result, _ := c.fpVectorSlot(off + int64(i))
 		word, found := words[slot.Offset]
 		if !found {
-			var scalar string
-			var err error
-			if result {
-				scalar, err = c.loadFPResult(slot)
-			} else {
-				scalar, err = c.loadFPParamValue(slot)
-			}
+			scalar, typ, err := c.loadFPVectorField(slot, result, physicalBool)
 			if err != nil {
 				return "", err
 			}
-			word, err = c.fpVectorScalarBits(slot.Type, scalar)
+			word, err = c.fpVectorScalarBits(typ, scalar)
 			if err != nil {
 				return "", err
 			}
@@ -105,8 +131,19 @@ func (c *amd64Ctx) fpVectorScalarBits(typ LLVMType, scalar string) (string, erro
 }
 
 func (c *amd64Ctx) storeFPVectorBytes(off int64, byteWidth int, value, metadata string) error {
+	return c.storeFPVectorBytesMode(off, byteWidth, value, metadata, false)
+}
+
+func (c *amd64Ctx) storeFPVectorBytesMode(off int64, byteWidth int, value, metadata string, physicalBool bool) error {
 	if err := c.validateFPVectorSpan(off, byteWidth); err != nil {
 		return err
+	}
+	if physicalBool && !c.abi0BoolResultByteStorage() {
+		for i := 0; i < byteWidth; i++ {
+			if slot, _, _ := c.fpVectorSlot(off + int64(i)); slot.Type == I1 {
+				return fmt.Errorf("%w: FP bool byte lacks a checked storage role", ErrProbeNeedsContext)
+			}
+		}
 	}
 	if c.classicFrame != "" {
 		for i := 0; i < byteWidth; i++ {
@@ -127,17 +164,11 @@ func (c *amd64Ctx) storeFPVectorBytes(off int64, byteWidth int, value, metadata 
 		slot, result, _ := c.fpVectorSlot(current)
 		bits, found := updated[slot.Offset]
 		if !found {
-			var scalar string
-			var err error
-			if result {
-				scalar, err = c.loadFPResult(slot)
-			} else {
-				scalar, err = c.loadFPParamValue(slot)
-			}
+			scalar, typ, err := c.loadFPVectorField(slot, result, physicalBool)
 			if err != nil {
 				return err
 			}
-			bits, err = c.fpVectorScalarBits(slot.Type, scalar)
+			bits, err = c.fpVectorScalarBits(typ, scalar)
 			if err != nil {
 				return err
 			}
@@ -164,7 +195,11 @@ func (c *amd64Ctx) storeFPVectorBytes(off int64, byteWidth int, value, metadata 
 	for _, slot := range order {
 		bits := updated[slot.Offset]
 		converted := bits
-		switch slot.Type {
+		typ := slot.Type
+		if physicalBool && typ == I1 {
+			typ = I8
+		}
+		switch typ {
 		case I64:
 		case Ptr:
 			tmp := c.newTmp()
@@ -180,7 +215,7 @@ func (c *amd64Ctx) storeFPVectorBytes(off int64, byteWidth int, value, metadata 
 			fmt.Fprintf(c.b, "  %%%s = bitcast i32 %%%s to float\n", tmp, narrow)
 			converted = "%" + tmp
 		default:
-			width, ok := amd64IntegerTypeBits(slot.Type)
+			width, ok := amd64IntegerTypeBits(typ)
 			if !ok || width > 64 {
 				return fmt.Errorf("unsupported FP vector field type %s", slot.Type)
 			}
@@ -188,7 +223,7 @@ func (c *amd64Ctx) storeFPVectorBytes(off int64, byteWidth int, value, metadata 
 			fmt.Fprintf(c.b, "  %%%s = trunc i64 %s to i%d\n", tmp, bits, width)
 			converted = "%" + tmp
 		}
-		if err := c.storeFPResultWithMetadata(slot.Offset, slot.Type, converted, metadata); err != nil {
+		if err := c.storeFPResultWithMetadata(slot.Offset, typ, converted, metadata); err != nil {
 			return err
 		}
 	}

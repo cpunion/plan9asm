@@ -2398,7 +2398,33 @@ TEXT mulparts(SB),NOSPLIT,$0-32
 	ADDL DX, hi+16(FP)
 	RET
 `
-	translateX86FrameCase(t, x86Source, "386", "i386-unknown-linux-gnu", "mulparts")
+	// Retain the complete historical body and its old manual two-I64 result
+	// layout as a missing-byte negative: it writes only the low four bytes of
+	// the first result and none of the second, not two initialized I64s.
+	file, err := Parse(ArchAMD64, x86Source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	old := FuncSig{Name: "mulparts", Args: []LLVMType{I64, I64}, Ret: LLVMType("{ i64, i64 }"), Frame: FrameLayout{
+		Params:  []FrameSlot{{Type: I64, Field: -1}, {Offset: 8, Type: I64, Index: 1, Field: -1}},
+		Results: []FrameSlot{{Offset: 16, Type: I64, Field: -1}, {Offset: 24, Type: I64, Index: 1, Field: -1}},
+	}}
+	if _, err := Translate(file, Options{Goarch: "386", TargetTriple: "i386-unknown-linux-gnu", Sigs: map[string]FuncSig{"mulparts": old}}); !errors.Is(err, ErrProbeNeedsContext) {
+		t.Fatalf("incomplete historical result tuple acquired initialized bytes: %v", err)
+	}
+	// The same complete operations have one genuine I32 result. Bind the
+	// actual declaration and exact argument/result extent, not borrowed slots.
+	complete := strings.Replace(x86Source, "$0-32", "$0-20", 1)
+	for _, api := range []string{"text", "module", "Go"} {
+		t.Run("complete-mulparts/"+api, func(t *testing.T) {
+			ir, err := x86ScalarFPBitViewAPI(t, complete, "func mulparts(a,b uint64) uint32", "386", "i386-unknown-linux-gnu", api)
+			if err != nil || ir == "" {
+				t.Fatal("complete typed multiply/frame operations rejected", err)
+			}
+			probe := "define i32 @Probe() {\n %r = call i32 @mulparts(i64 4294967295,i64 2)\n ret i32 %r\n}\n"
+			x86ScalarFPNamedConstantResult(t, ir+probe, "Probe", []uint64{0xffffffff})
+		})
+	}
 }
 
 func TestTranslateAMD64LegacyBranchHintAndSignedDivision(t *testing.T) {
