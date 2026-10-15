@@ -35,7 +35,12 @@ func x86GoMOVQAddressSource(operand Operand, arch string) bool {
 	}
 	source = strings.TrimSpace(strings.TrimPrefix(source, "$"))
 	address := Operand{Kind: OpSym, Sym: source}
-	if memory, matched, err := parseX86SymbolIndexedMemory(source); matched {
+	if memory, matched, err := x86UnnamedSourceAddressInMode(operand, arch); matched || err != nil {
+		if err != nil {
+			return false
+		}
+		address = Operand{Kind: OpMem, Mem: memory}
+	} else if memory, matched, err := parseX86SymbolIndexedMemory(source); matched {
 		if err != nil {
 			return false
 		}
