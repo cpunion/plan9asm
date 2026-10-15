@@ -77,6 +77,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 	transfer := func(ordinal int, ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string) bool {
 		state.loweredStaticReads = c.fpScalarData
 		defer func() { state.loweredStaticReads = nil }()
+		if accepted, known := c.scalarStaticAddressValueTransfer(ins, state, owned, arch); known {
+			return accepted
+		}
 		if ins.Op == "LOCK" {
 			prefix, bound := lockPrefixes[ordinal]
 			return bound && reflect.DeepEqual(prefix, ins)

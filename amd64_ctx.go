@@ -93,6 +93,8 @@ type amd64Ctx struct {
 	fpScalarChecked  bool
 	fpScalarCheckErr error
 	fpMixedBoolBytes bool // Complete ordinary tuple NUM/canonical proof passed.
+
+	fpStaticAddressValues *x86StaticAddressValues // No dereference capability.
 }
 
 func newAMD64Ctx(b *strings.Builder, fn Func, sig FuncSig, resolve func(string) string, sigs map[string]FuncSig, annotate bool) *amd64Ctx {

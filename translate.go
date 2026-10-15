@@ -427,6 +427,7 @@ func translateIRText(file *File, opt Options) (resultText string, result error) 
 	// Build the immutable emitted-storage directory once per file. Repeating
 	// the global/signature scan for each TEXT would be quadratic in a corpus.
 	scalarData := x86LoweredScalarDataReads(file, resolve, opt.Sigs, opt.Goarch)
+	staticAddressValues := x86LoweredStaticAddressValues(file, resolve, opt.Sigs, opt.Goarch)
 	continuationBudget := &x86ResultFlowBudget{}
 	for i := range file.Funcs {
 		fn := &file.Funcs[i]
@@ -527,6 +528,8 @@ func translateIRText(file *File, opt Options) (resultText string, result error) 
 					bitScanNamespace: bitScanNamespace,
 					boolCalls:        boolCalls,
 					declaration:      sourceSig,
+
+					staticAddressValues: staticAddressValues,
 				}); err != nil {
 				return "", fmt.Errorf("%s: %w", name, err)
 			}
