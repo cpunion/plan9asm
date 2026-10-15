@@ -25,10 +25,13 @@ func x86RelocationResultSource(arch, form string) string {
 }
 
 func TestX86SameModuleRelocationValueOriginalGoObjects(t *testing.T) {
-	for _, target := range x86RawReturnTargets {
+	for _, target := range dataRelocationTargets {
+		if target.arch != ArchAMD64 {
+			continue
+		}
 		for _, form := range []string{"load", "address"} {
 			t.Run(target.triple+"/"+form, func(t *testing.T) {
-				dataRelocationGoObject(t, x86RelocationResultSource(target.arch, form), "linux", target.arch, true)
+				dataRelocationGoObject(t, x86RelocationResultSource(target.goarch, form), target.goos, target.goarch, true)
 			})
 		}
 	}
