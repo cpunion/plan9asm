@@ -50,6 +50,9 @@ func x86LoweredStaticAddressValues(file *File, resolve func(string) string, sigs
 	}
 	code := make(map[string]bool)
 	for _, function := range file.Funcs {
+		if len(function.x86ContinuationAddresses) != 0 {
+			return nil // Prepared per-entry code identities retain their separate whole-source consumer.
+		}
 		code[resolve(function.Sym)] = true
 		code[resolveAssemblyDataSymbol(function.Sym, resolve)] = true
 	}
@@ -57,6 +60,10 @@ func x86LoweredStaticAddressValues(file *File, resolve func(string) string, sigs
 		code[name], code[funcSigSymbol(name, signature)] = true, true
 	}
 	if graph := file.x86ContinuationGraph; graph != nil {
+		for symbol := range graph.addresses {
+			code[resolve(symbol)] = true
+			code[resolveAssemblyDataSymbol(symbol, resolve)] = true
+		}
 		for symbol := range graph.tables {
 			code[resolveAssemblyDataSymbol(symbol, resolve)] = true
 		}
