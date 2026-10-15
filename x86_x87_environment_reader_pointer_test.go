@@ -13,12 +13,43 @@ func TestX86X87ENVFootprintReaderHandlesOptimizedPointerValues(t *testing.T) {
 		name, body string
 		good       bool
 	}{
-		{"pointer-argument", "entry:\n%v = load volatile i224, ptr %a, align 1\nret void", true},
-		{"selected-arguments", "entry:\n%p = select i1 %gate, ptr %a, ptr %b\n%v = load volatile i224, ptr %p, align 1\nret void", true},
-		{"joined-arguments", "entry:\nbr i1 %gate, label %left, label %right\nleft:\nbr label %join\nright:\nbr label %join\njoin:\n%p = phi ptr [%a, %left], [%b, %right]\n%v = load volatile i224, ptr %p, align 1\nret void", true},
-		{"selected-different-offsets", "entry:\n%offset = getelementptr i8, ptr %b, i64 1\n%p = select i1 %gate, ptr %a, ptr %offset\n%v = load volatile i224, ptr %p, align 1\nret void", false},
-		{"selected-null", "entry:\n%p = select i1 %gate, ptr %a, ptr null\n%v = load volatile i224, ptr %p, align 1\nret void", false},
-		{"joined-different-offsets", "entry:\n%offset = getelementptr i8, ptr %b, i64 1\nbr i1 %gate, label %left, label %right\nleft:\nbr label %join\nright:\nbr label %join\njoin:\n%p = phi ptr [%a, %left], [%offset, %right]\n%v = load volatile i224, ptr %p, align 1\nret void", false},
+		{"pointer-argument", `entry:
+%v = load volatile i224, ptr %a, align 1
+ret void`, true},
+		{"selected-arguments", `entry:
+%p = select i1 %gate, ptr %a, ptr %b
+%v = load volatile i224, ptr %p, align 1
+ret void`, true},
+		{"joined-arguments", `entry:
+br i1 %gate, label %left, label %right
+left:
+br label %join
+right:
+br label %join
+join:
+%p = phi ptr [%a, %left], [%b, %right]
+%v = load volatile i224, ptr %p, align 1
+ret void`, true},
+		{"selected-different-offsets", `entry:
+%offset = getelementptr i8, ptr %b, i64 1
+%p = select i1 %gate, ptr %a, ptr %offset
+%v = load volatile i224, ptr %p, align 1
+ret void`, false},
+		{"selected-null", `entry:
+%p = select i1 %gate, ptr %a, ptr null
+%v = load volatile i224, ptr %p, align 1
+ret void`, false},
+		{"joined-different-offsets", `entry:
+%offset = getelementptr i8, ptr %b, i64 1
+br i1 %gate, label %left, label %right
+left:
+br label %join
+right:
+br label %join
+join:
+%p = phi ptr [%a, %left], [%offset, %right]
+%v = load volatile i224, ptr %p, align 1
+ret void`, false},
 	} {
 		t.Run(row.name, func(t *testing.T) {
 			ir := "define void @EnvRead(ptr %a, ptr %b, i1 %gate) {\n" + row.body + "\n}\n"
