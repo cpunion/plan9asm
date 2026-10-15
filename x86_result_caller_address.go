@@ -44,6 +44,22 @@ func x86ResultCallerAddressTest(ins Instr, state *x86ResultState, owned []bool, 
 	return true, true
 }
 
+// A source-bound string comparison has already applied its conditional write
+// footprint. Intersect with the prior must-domain: an untouched register may
+// retain its identity, but this post-consumer cannot introduce one. Other
+// instructions keep the existing independent overwrite classification.
+func x86ResultCallerAddressesAfterTransfer(ins Instr, before, transferred [16]bool,
+	entryFP map[int64]bool, arch string) [16]bool {
+	if _, known, err := x86ResultStringCompareProperties(ins, arch); known && err == nil &&
+		x86ResultNamedPredicateInstruction(ins) {
+		for index := range before {
+			before[index] = before[index] && transferred[index]
+		}
+		return before
+	}
+	return x86ResultCallerAddressesAfter(ins, before, entryFP, arch)
+}
+
 // This post-transfer must-domain runs through the shared complete source CFG,
 // including dead effects and joins. A partial/full GP overwrite revokes its
 // old provenance independently of initialized bytes or opaque pointerGP.

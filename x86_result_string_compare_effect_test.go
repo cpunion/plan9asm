@@ -71,11 +71,48 @@ func TestX86StringCompareTypedContinuationChangesOnlyActualOutputs(t *testing.T)
 								if accepted, known := plan.transfer(ordinal, ins, &state, arch); !accepted || !known || !reflect.DeepEqual(state, expected) {
 									t.Fatal("conditional native comparison changed another byte, identity or FLAGS/DF domain", accepted, known)
 								}
+								// The shared post-consumer must retain exactly the paired
+								// transfer's surviving caller identities and origins.
+								before := [16]bool{3: true, 6: true, 7: true}
+								origins := [16]uint16{3: 4, 6: 7, 7: 8}
+								addresses := x86ResultCallerAddressesAfterTransfer(ins, before, state.callerAddressGP, nil, arch)
+								if addresses != expected.callerAddressGP {
+									t.Fatal("post-consumer changed the actual conditional caller footprint")
+								}
+								entry := map[int64]bool{0: true}
+								if got := x86ResultCallerOriginsAfter(ins, origins, addresses, entry, arch); got != expected.callerAddressOrigin {
+									t.Fatal("revoked caller origins did not match the final address domain")
+								}
+								transferred := state.callerAddressGP
+								transferred[0] = true
+								if got := x86ResultCallerAddressesAfterTransfer(ins, before, transferred, nil, arch); got[0] {
+									t.Fatal("post-consumer introduced an identity absent before the transfer")
+								}
 							})
 						}
 					}
 				}
 			}
+		}
+		for _, row := range []struct {
+			name, source string
+			change       func(*Instr)
+		}{
+			{name: "operands", source: "SCASB AX"},
+			{name: "unrelated-string", source: "MOVSB"},
+			{name: "raw", source: "SCASB", change: func(ins *Instr) { ins.x86Encoded = true }},
+			{name: "address-override", source: "CMPSB", change: func(ins *Instr) { ins.x86AddressBits = 32 }},
+		} {
+			t.Run(arch+"/post-consumer/"+row.name, func(t *testing.T) {
+				ins := x86ScalarLaneInstruction(t, row.source)
+				if row.change != nil {
+					row.change(&ins)
+				}
+				before := [16]bool{1: true, 3: true, 6: true, 7: true}
+				if got := x86ResultCallerAddressesAfterTransfer(ins, before, before, nil, arch); got != [16]bool{} {
+					t.Fatal("unbound source borrowed the paired string footprint")
+				}
+			})
 		}
 	}
 }

@@ -243,7 +243,7 @@ func checkX86ResultSourceFlow(fn Func, initial x86ResultState, owned []bool, res
 		if state.valueStack != nil && (ins.Op == OpCALL || !x86ResultNamedPredicateInstruction(ins)) {
 			state.valueStack.id = false
 		}
-		state.callerAddressGP = x86ResultCallerAddressesAfter(ins, before, state.callerAddressFP, arch)
+		state.callerAddressGP = x86ResultCallerAddressesAfterTransfer(ins, before, state.callerAddressGP, state.callerAddressFP, arch)
 		state.callerAddressOrigin = x86ResultCallerOriginsAfter(ins, origins, state.callerAddressGP, state.callerAddressFP, arch)
 		state.predicate = x86ResultPredicateAfter(ins, predicate, arch)
 		state.stringCount = x86ResultStringCountAfter(ins, stringCount, state.stringCount, arch)
