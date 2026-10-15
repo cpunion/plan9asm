@@ -59,18 +59,35 @@ func TestX86SignedPackedFloatAllWidthsZeroMaskStorageContext(t *testing.T) {
 								row := fmt.Sprintf("%s %s,%s%s1", mnemonic, address, mask, bank)
 								name := fmt.Sprintf("storage%d", index)
 								index++
-								source := fmt.Sprintf("TEXT %s(SB),4,$0-0\nMOVL $%d,AX\nKMOVW AX,K1\n%s\nRET\n", name, maskValue, row)
+								source, sig, _ := x86OrdinaryBPNativeFixture(t, arch, name, row, address, 0)
+								// Keep the typed pointer in AX. Initialize the entire merging
+								// destination bank, not just its low XMM bytes, and use CX
+								// independently for the explicit mask input.
+								setup := ""
+								if bank == "Y" {
+									setup = "VPXOR Y1,Y1,Y1\n"
+								} else if bank == "Z" {
+									setup = "VPXORD Z1,Z1,Z1\n"
+								}
+								setup += fmt.Sprintf("MOVL $%d,CX\nKMOVW CX,K1\n", maskValue)
+								source = strings.Replace(source, row+"\nRET", setup+row+"\nRET", 1)
 								original.WriteString(source)
 								t.Run(fmt.Sprintf("%s/mask=%d", row, maskValue), func(t *testing.T) {
 									file, err := Parse(ArchAMD64, source)
 									if err != nil {
 										t.Fatal(err)
 									}
-									options := Options{
-										Goarch: arch,
-										Sigs:   map[string]FuncSig{name: {Ret: Void}},
+									triple := "x86_64-unknown-linux-gnu"
+									if arch == "386" {
+										triple = "i386-unknown-linux-gnu"
 									}
-									assertX86PackedFloatStorageContext(t, file, options)
+									options := x86SourceStackOptions(arch, triple, sig)
+									for _, api := range []string{"Translate", "TranslateModule", "TranslateModuleInContext"} {
+										t.Run(api, func(t *testing.T) {
+											ir, err := x86PackedFloatStorageAPI(api, file, options)
+											x86RequireOrdinaryBPNativeOutcome(t, arch, address, ir, err)
+										})
+									}
 								})
 							}
 						}
@@ -81,7 +98,7 @@ func TestX86SignedPackedFloatAllWidthsZeroMaskStorageContext(t *testing.T) {
 				t.Fatalf("storage boundary denominator changed: %d", index)
 			}
 			goAssemblerOracleOutput(t, arch, original.String(), "", true)
-			t.Logf("%d original Go accepted stack-boundary forms; all three APIs retain Context", index)
+			t.Logf("%d complete original Go forms; all three APIs distinguish ordinary386 BP from physical SP/AMD64 BP", index)
 		})
 	}
 }
@@ -89,24 +106,29 @@ func TestX86SignedPackedFloatAllWidthsZeroMaskStorageContext(t *testing.T) {
 func assertX86PackedFloatStorageContext(t *testing.T, file *File, options Options) {
 	t.Helper()
 	for _, api := range []string{"Translate", "TranslateModule", "TranslateModuleInContext"} {
-		var err error
-		if api == "Translate" {
-			_, err = Translate(file, options)
-		} else {
-			context := llvm.NewContext()
-			var module llvm.Module
-			if api == "TranslateModule" {
-				module, err = TranslateModule(file, options)
-			} else {
-				module, err = TranslateModuleInContext(context, file, options)
-			}
-			if !module.IsNil() {
-				module.Dispose()
-			}
-			context.Dispose()
-		}
+		_, err := x86PackedFloatStorageAPI(api, file, options)
 		if !errors.Is(err, ErrProbeNeedsContext) {
 			t.Fatalf("%s authorized unbound native stack storage: %v", api, err)
 		}
 	}
+}
+
+func x86PackedFloatStorageAPI(api string, file *File, options Options) (string, error) {
+	if api == "Translate" {
+		return Translate(file, options)
+	}
+	var module llvm.Module
+	var err error
+	if api == "TranslateModule" {
+		module, err = TranslateModule(file, options)
+	} else {
+		context := llvm.NewContext()
+		defer context.Dispose()
+		module, err = TranslateModuleInContext(context, file, options)
+	}
+	if module.IsNil() {
+		return "", err
+	}
+	defer module.Dispose()
+	return module.String(), err
 }

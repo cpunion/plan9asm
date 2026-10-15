@@ -1,7 +1,6 @@
 package plan9asm
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -47,15 +46,22 @@ func TestX86ByteShuffleThreeAPIsFiveTargetObjects(t *testing.T) {
 
 func TestX86ByteShuffleVirtualLegacyStorageRemainsContext(t *testing.T) {
 	for _, row := range []string{"PSHUFB value+0(FP),X1", "PSHUFB local-16(SP),X1", "PSHUFB (SP),X1", "PSHUFB (BP),X1"} {
-		source := "TEXT ·Shuffle(SB),4,$64-64\n" + row + "\nRET\n"
 		for _, target := range x86RawReturnTargets {
-			x86LEAActualTargetGoObject(t, target.arch, target.triple, source)
-			for _, api := range []string{"text", "module", "Go"} {
-				_, err := x86ScalarFPBitViewAPI(t, source, "func Shuffle(value [64]byte)", target.arch, target.triple, api)
-				if !errors.Is(err, ErrProbeNeedsContext) {
-					t.Fatal("logical storage acquired original SSE alignment", row, target.triple, api, err)
+			t.Run(target.triple+"/"+row, func(t *testing.T) {
+				source := "TEXT ·Shuffle(SB),4,$64-64\nPXOR X1,X1\n" + row + "\nRET\n"
+				declaration := "func Shuffle(value [64]byte)"
+				if strings.Contains(row, "(BP)") {
+					source = x86OrdinaryBPNativeSource(target.arch, "Shuffle", row, "(BP)", 64)
+					declaration = "func Shuffle(p *byte)"
 				}
-			}
+				x86LEAActualTargetGoObject(t, target.arch, target.triple, source)
+				for _, api := range []string{"text", "module", "Go"} {
+					t.Run(api, func(t *testing.T) {
+						ir, err := x86ScalarFPBitViewAPI(t, source, declaration, target.arch, target.triple, api)
+						x86RequireOrdinaryBPNativeOutcome(t, target.arch, row, ir, err)
+					})
+				}
+			})
 		}
 	}
 }

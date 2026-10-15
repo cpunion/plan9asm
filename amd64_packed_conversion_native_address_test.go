@@ -1,7 +1,6 @@
 package plan9asm
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -39,7 +38,8 @@ func TestX86PackedConversionOriginalNativeAddressRequired(t *testing.T) {
 		var original strings.Builder
 		for index, row := range rows {
 			for _, address := range []string{"(SP)", "32(SP)", "(BP)", "-17(BP)", "32(SP)(CX*2)", "32(AX)(BP*2)"} {
-				fmt.Fprintf(&original, "TEXT original%d_%d(SB),4,$128-0\n%s %s,%s\nRET\n", index, original.Len(), row.name, address, row.destination)
+				name := fmt.Sprintf("original%d_%d", index, original.Len())
+				original.WriteString(x86OrdinaryBPNativeSource(arch, name, row.name+" "+address+","+row.destination, address, 128))
 			}
 		}
 		goAssemblerOracleOutput(t, arch, original.String(), "", true)
@@ -49,11 +49,9 @@ func TestX86PackedConversionOriginalNativeAddressRequired(t *testing.T) {
 			t.Run(target.triple+"/"+api, func(t *testing.T) {
 				for _, row := range rows {
 					for _, address := range []string{"(SP)", "32(SP)", "(BP)", "-17(BP)", "32(SP)(CX*2)", "32(AX)(BP*2)"} {
-						source := fmt.Sprintf("TEXT ·view(SB),4,$128-0\n%s %s,%s\nRET\n", row.name, address, row.destination)
-						ir, err := x86ScalarFPBitViewAPI(t, source, "func view()", target.arch, target.triple, api)
-						if !errors.Is(err, ErrProbeNeedsContext) || ir != "" {
-							t.Fatalf("unbound physical SP/BP acquired synthetic-stack native memory: %s %s (%s), error=%v\n%s", row.name, address, row.destination, err, ir)
-						}
+						source := x86OrdinaryBPNativeSource(target.arch, "view", row.name+" "+address+","+row.destination, address, 128)
+						ir, err := x86ScalarFPBitViewAPI(t, source, "func view(p *byte)", target.arch, target.triple, api)
+						x86RequireOrdinaryBPNativeOutcome(t, target.arch, address, ir, err)
 					}
 				}
 			})

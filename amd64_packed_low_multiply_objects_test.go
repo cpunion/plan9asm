@@ -1,7 +1,6 @@
 package plan9asm
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -48,14 +47,21 @@ func TestX86PackedLowMultiplyThreeAPIsFiveTargetObjects(t *testing.T) {
 
 func TestX86PackedLowMultiplyVirtualLegacyStorageRemainsContext(t *testing.T) {
 	for _, row := range []string{"PMULLD value+0(FP),X1", "PMULLD local-16(SP),X1", "PMULLD (SP),X1", "PMULLD (BP),X1"} {
-		source := "TEXT ·Low(SB),4,$64-64\n" + row + "\nRET\n"
 		for _, target := range x86RawReturnTargets {
+			source := "TEXT ·Low(SB),4,$64-64\nPXOR X1,X1\n" + row + "\nRET\n"
+			declaration := "func Low(value [64]byte)"
+			address := strings.Fields(row)[1]
+			address = strings.Split(address, ",")[0]
+			if address == "(BP)" || address == "(SP)" {
+				source = x86OrdinaryBPNativeSource(target.arch, "Low", row, address, 64)
+				declaration = "func Low(p *byte)"
+			}
 			x86LEAActualTargetGoObject(t, target.arch, target.triple, source)
 			for _, api := range []string{"text", "module", "Go"} {
-				_, err := x86ScalarFPBitViewAPI(t, source, "func Low(value [64]byte)", target.arch, target.triple, api)
-				if !errors.Is(err, ErrProbeNeedsContext) {
-					t.Fatal("logical storage acquired original SSE alignment", row, target.triple, api, err)
-				}
+				t.Run(target.triple+"/"+row+"/"+api, func(t *testing.T) {
+					ir, err := x86ScalarFPBitViewAPI(t, source, declaration, target.arch, target.triple, api)
+					x86RequireOrdinaryBPNativeOutcome(t, target.arch, address, ir, err)
+				})
 			}
 		}
 	}

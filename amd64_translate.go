@@ -288,8 +288,8 @@ body:
   %dst_ptr = inttoptr i64 %cur_dst to ptr
   %src_ptr = inttoptr i64 %cur_src to ptr
 `)
-	fmt.Fprintf(b, "  %%value = load %s, ptr %%src_ptr, align 1\n", ty)
-	fmt.Fprintf(b, "  store %s %%value, ptr %%dst_ptr, align 1\n", ty)
+	fmt.Fprintf(b, "  %%value = load volatile %s, ptr %%src_ptr, align 1\n", ty)
+	fmt.Fprintf(b, "  store volatile %s %%value, ptr %%dst_ptr, align 1\n", ty)
 	b.WriteString(`  %next_dst = add i64 %cur_dst, %step
   %next_src = add i64 %cur_src, %step
   %remaining = sub i64 %left, 1
@@ -315,7 +315,7 @@ loop:
 body:
   %ptr = inttoptr i64 %cur to ptr
 `)
-	fmt.Fprintf(b, "  store %s %%value, ptr %%ptr, align 1\n", typ)
+	fmt.Fprintf(b, "  store volatile %s %%value, ptr %%ptr, align 1\n", typ)
 	b.WriteString(`  %next = add i64 %cur, %step
   %remaining = sub i64 %left, 1
   br label %loop
@@ -341,7 +341,7 @@ loop:
 scan:
   %ptr = inttoptr i64 %cur to ptr
 `)
-	fmt.Fprintf(b, "  %%value = load %s, ptr %%ptr, align 1\n", typ)
+	fmt.Fprintf(b, "  %%value = load volatile %s, ptr %%ptr, align 1\n", typ)
 	fmt.Fprintf(b, "  %%equal = icmp eq %s %%value, %%needle\n", typ)
 	b.WriteString(`  %not_equal = xor i1 %equal, true
   %repeat_condition = select i1 %while_equal, i1 %equal, i1 %not_equal
@@ -382,8 +382,8 @@ scan:
   %src_ptr = inttoptr i64 %cur_src to ptr
   %dst_ptr = inttoptr i64 %cur_dst to ptr
 `)
-	fmt.Fprintf(b, "  %%src_value = load %s, ptr %%src_ptr, align 1\n", typ)
-	fmt.Fprintf(b, "  %%dst_value = load %s, ptr %%dst_ptr, align 1\n", typ)
+	fmt.Fprintf(b, "  %%src_value = load volatile %s, ptr %%src_ptr, align 1\n", typ)
+	fmt.Fprintf(b, "  %%dst_value = load volatile %s, ptr %%dst_ptr, align 1\n", typ)
 	fmt.Fprintf(b, "  %%equal = icmp eq %s %%src_value, %%dst_value\n", typ)
 	b.WriteString(`  %not_equal = xor i1 %equal, true
   %repeat_condition = select i1 %while_equal, i1 %equal, i1 %not_equal
@@ -427,7 +427,7 @@ loop:
 load:
   %ptr = inttoptr i64 %cur to ptr
 `)
-	fmt.Fprintf(b, "  %%value = load %s, ptr %%ptr, align 1\n", typ)
+	fmt.Fprintf(b, "  %%value = load volatile %s, ptr %%ptr, align 1\n", typ)
 	b.WriteString(`  %next = add i64 %cur, %step
   %remaining = sub i64 %left, 1
   %more = icmp ne i64 %remaining, 0
@@ -590,6 +590,9 @@ func translateFuncX86(b *strings.Builder, fn Func, sig FuncSig, resolve func(str
 }
 
 func (c *amd64Ctx) lowerBlocks() error {
+	if err := c.verifyStringRepeatPrefixes(); err != nil {
+		return err
+	}
 	if err := c.verifyNamedLockPrefixes(); err != nil {
 		return err
 	}

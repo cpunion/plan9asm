@@ -284,6 +284,13 @@ func (c *amd64Ctx) verifyNamedLockCarry() error {
 }
 
 func (c *amd64Ctx) lockCarrySuccessors(block int) ([]int, bool) {
+	return c.sourceBlockSuccessors(block, nil)
+}
+
+// This decodes only ordinary source control flow. It supplies no LOCK, carry,
+// memory or entry authority. A complete label index avoids repeated scans for
+// consumers whose analysis must remain linear in source nodes and edges.
+func (c *amd64Ctx) sourceBlockSuccessors(block int, labels map[string]int) ([]int, bool) {
 	body := c.blocks[block].instrs
 	if len(body) == 0 {
 		if block+1 < len(c.blocks) {
@@ -330,10 +337,14 @@ func (c *amd64Ctx) lockCarrySuccessors(block int) ([]int, bool) {
 		case OpReg:
 			label = string(args[0].Reg)
 		}
-		for index, candidate := range c.blocks {
-			if candidate.name == label {
-				target, found = index, true
-				break
+		if labels != nil {
+			target, found = labels[label]
+		} else {
+			for index, candidate := range c.blocks {
+				if candidate.name == label {
+					target, found = index, true
+					break
+				}
 			}
 		}
 	}

@@ -65,7 +65,7 @@ func TestX86LegacyPackedFloatingNativeMemoryUnboundSourcesFiveTargets(t *testing
 		for _, op := range []string{"ADDPS", "ADDPD", "SUBPS", "SUBPD", "MULPS", "MULPD", "DIVPS", "DIVPD"} {
 			for _, operand := range []string{"16(SP)", "-32(BP)", "(AX)(BP*1)"} {
 				t.Run(target.triple+"/"+op+"/"+operand, func(t *testing.T) {
-					source, sig, pkg := x86SourceStackNumericalFixture(target.arch, op+" "+operand+",X0\nRET")
+					source, sig, pkg := x86OrdinaryBPNativeFixture(t, target.arch, "Value", op+" "+operand+",X0", operand, 0)
 					x86InsertExtractGoListing(t, target.arch, source)
 					file, err := Parse(ArchAMD64, source)
 					if err != nil {
@@ -73,8 +73,8 @@ func TestX86LegacyPackedFloatingNativeMemoryUnboundSourcesFiveTargets(t *testing
 					}
 					opt := x86SourceStackOptions(target.arch, target.triple, sig)
 					t.Run("Translate", func(t *testing.T) {
-						_, err := Translate(file, opt)
-						x86LegacyFloatMemoryRequireContext(t, err)
+						ir, err := Translate(file, opt)
+						x86RequireOrdinaryBPNativeOutcome(t, target.arch, operand, ir, err)
 					})
 					t.Run("TranslateModuleInContext", func(t *testing.T) {
 						ctx := llvm.NewContext()
@@ -83,7 +83,11 @@ func TestX86LegacyPackedFloatingNativeMemoryUnboundSourcesFiveTargets(t *testing
 						if !module.IsNil() {
 							defer module.Dispose()
 						}
-						x86LegacyFloatMemoryRequireContext(t, err)
+						ir := ""
+						if !module.IsNil() {
+							ir = module.String()
+						}
+						x86RequireOrdinaryBPNativeOutcome(t, target.arch, operand, ir, err)
 					})
 					t.Run("TranslateGoModule", func(t *testing.T) {
 						translation, err := TranslateGoModule(pkg, []byte(source), GoModuleOptions{
@@ -93,7 +97,11 @@ func TestX86LegacyPackedFloatingNativeMemoryUnboundSourcesFiveTargets(t *testing
 						if translation != nil && !translation.Module.IsNil() {
 							defer translation.Module.Dispose()
 						}
-						x86LegacyFloatMemoryRequireContext(t, err)
+						ir := ""
+						if translation != nil && !translation.Module.IsNil() {
+							ir = translation.Module.String()
+						}
+						x86RequireOrdinaryBPNativeOutcome(t, target.arch, operand, ir, err)
 					})
 				})
 			}

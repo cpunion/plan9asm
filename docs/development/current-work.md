@@ -1,12 +1,69 @@
 # Current work: PR 40 checkpoint
 
-Checkpoint: 2026-10-15 07:30 UTC. Fork diagnostic `de238372` has one
-confirmed Windows tuple failure; do not cancel its remaining owner or push over
-the active run. The ordinary canonical-bool repair is committed through
-`acae3606`; its final merged-source qualification is next. Standalone synthetic
-object fixtures use numeric NOSPLIT, matching their header-free Go oracle.
-The last complete
-strict benchmark, at `870d011f`, remains157/184, not standard-library success.
+Checkpoint: 2026-10-15 11:35 UTC. The latest fork diagnostic completed naturally
+with nine stale BP test-root failures, not a tool or timeout failure. All nine
+are repaired and locally integrated through `6925918c`. Main also contains the
+qualified string-memory/REP-CFG repair and full-AX empty-LODS repair through
+`99c6d83b`. Qualified exact-FP-byte and implicit-product leaf `bbe4fcc6` is now
+merged through `60b269e2`. Leaf receipts do not certify this merged snapshot.
+
+The previous complete main qualification at `68ef8aa3` passes548 unique owners;
+its strict benchmark remains FAILED158/184 with26 failures, zero N/A and zero
+unattempted files. Classification, objects and executed semantics stay distinct.
+
+## Current blocking scope
+
+1. Preserve the complete BP repair: `903274da` passes 28 unique owners on each
+   of Go27 and actual Go20, plus 16 on race and both SDK vets. Its 74 commands
+   have 10,018 child executions, no failures or skips, and exact frozen seals.
+   Complete 69-name memory objects and 32-member CMOV objects compile on both
+   mode32 targets through three APIs. SP and amd64 BP remain physical-frame
+   negatives. Main contains equivalent commits; this is not native execution.
+2. Preserve qualified exact-byte/implicit-product leaf `bbe4fcc6`: all29 commands
+   pass, with229 root executions and20,053 children, zero failures/skips/gaps.
+   This includes34 semantic/control roots on Go27, race and actual Go20;
+   57 retained roots and six tool owners on both SDKs; CLI extraction, both
+   five-architecture official gates and three vets. Root independently audits
+   every raw inventory/terminal and all3,882 tracked sources,20,452 SDK-source,
+   tool and driver files, before/after/current identities and five stashes.
+   Scalar MOVB/W/L/Q now transports exact partial/interior/cross-field bytes;
+   original REDs retain534 wrong returned values and183 valid-view rejections.
+   Implicit MUL/IMUL B/W/L/Q shares the complete Go grammar and consumes whole
+   NUM/canonical proof even without result stores or through other storage
+   routes. Independent120+120 false-pass REDs remain failed at their old heads.
+   No DIV, raw/source-stack, caller or native-memory permission is added.
+   The complete original19-TEXT fixture remains an explicit Context negative:
+   its zero-frame physical SP, live memory POP and PUSHAL/POPAL lack backing.
+   Its other18 unchanged TEXTs have explicitly partial object coverage; an
+   independent bounded named-AUTO/MUL positive has real Go/LLVM objects,
+   three-API value checks and five negative controls. Neither is a complete
+   original-arith pass. Failed630 and build-failedb119 reports remain failed.
+   Native implicit-MUL loads still need dead/zero-result fault TDD. Objects
+   do not certify native execution. Other arithmetic FP consumers and bound
+   source-stack/fixed-local roles retain their independent contracts.
+3. Preserve qualified LODS leaf `74e145d6`: 38 unique owners, 105 root executions
+   and 9,697 children pass across Go27, actual Go20 and race, plus six vets.
+   Genuine RED `183f7121` isolates exactly 12 AMD64 LODSL empty-repeat wrong
+   values after observer mutation controls pass. Production `c9b03e61` selects
+   the complete old AX on zero iterations. Each SDK/race lane compiles 24 LLVM
+   objects from all 84 original functions. Only zero-state observations are
+   checked; bare/nonzero execution and native execution remain unclaimed.
+   Preserve failed earlier observer attempts separately from this genuine RED.
+4. Freeze the merged source, documentation and tools. Rebuild the exact union
+   of all previous548 owners and every qualified BP/string/FP addition without
+   dropping SDK lanes or enlarging original3m/5m budgets. Bind llvm-objdump as
+   well as the other actual tools. Rerun fresh inventories, raw terminal audits,
+   official gates, vets and the strict benchmark; no older receipt certifies it.
+5. Stage the batch in the allowed fork. Policy `519d43f5` retains all36 prior
+   early lanes and expands the FP lane to27 complete byte/MUL/old386 roots;
+   its91 Node policies and three workflow lints pass. These are policy checks,
+   not an executed CI receipt for the new source. Push once and let the
+   entire new run finish naturally. Draft PR40 is not ready; its contribution
+   head is still `24851df2` at this checkpoint.
+
+One local heavy SDK/ASM/LLVM/object/native/benchmark command owner at a time.
+Release its lease immediately after natural completion, before read-only
+archiving or further edits, so another existing worktree can make progress.
 
 ## Scope and authority
 
@@ -25,7 +82,23 @@ qualification. Preserve failed snapshots, deadlines and complete denominators.
 
 ## Latest completed CI
 
-The newer [run38691683296](https://github.com/cpunion/plan9asm/actions/runs/38691683296)
+The latest [run38703136882](https://github.com/cpunion/plan9asm/actions/runs/38703136882)
+at `e6a29969` ended naturally FAILURE:71 jobs,63 successful and eight failed
+(seven root parts plus their correctly failed aggregate). Independent complete
+raw audits find exactly nine failing main-module roots and385 failing children,
+with no missing, duplicate or unfinished terminals. All are the mode-aware BP
+test-fixture class above; every other job succeeds, including native64/208
+children, ARM QEMU and both nested CLI aggregates/coverage uploads.
+
+The complete main inventory has22 packages/6976 named roots/155190 children,
+263 explicit host-inapplicable root skips and no child skips. The simple CLI
+has32 roots/29 children and no skips; the rich CLI has333 roots/2095 children
+with one explicit ARM host child skip. These are exact-run outcomes, not
+certification of newer local source or an all-platform executed pass.
+
+### Historical checkpoints
+
+[Run38691683296](https://github.com/cpunion/plan9asm/actions/runs/38691683296)
 at `de238372` has67 successful jobs, one failed root part and one remaining
 package owner at this checkpoint. All37 priorities passed. Independent raw
 audits confirm native64 roots/201 children, ARM64 QEMU four children/512 input
@@ -66,7 +139,7 @@ not an all-platform executed pass. Earlier `41251144`, `fcff729f` and other
 failed diagnostic runs remain failed; historical detail is retained in
 `git show d214b793:docs/development/current-work.md` and ignored raw reports.
 
-## New main source, not yet published in that CI
+## Earlier implementation evidence
 
 | Class | Qualified scope and remaining boundary |
 | --- | --- |
@@ -87,24 +160,14 @@ across112 commands, retaining all source/namespace/SDK/CLI owners, both SDKs and
 race. Its official gates and before/after source/tool seals pass. That receipt
 cannot certify the subsequent BP/profile/string/tuple integration.
 
-## Next work, in order
+## Retained gates
 
-1. Finish the current CI naturally and investigate any additional failures.
-   Preserve the tuple regression's real RED and failed fixture receipt.
-2. Freeze a fresh committed merged snapshot. Qualify canonical tuples and BP
-   objects first, then the complete retained514-owner union plus new profile,
-   grammar, tuple and source-CFG owners. Exact inventories and raw terminals
-   must agree; do not replace old owners with aggregate counts.
-3. Preserve all six NoDATA owners, complete CLI Count/IndexByte sources, both
-   SDKs, race/vets, official forms and before/final source/tool seals. Object
-   compilation is not native execution; Equal retains its closure Context.
-4. Fork-only staging `8145f3a6` passes85 Node policies and actionlint. It retains
-   native64, requires17 exact native children and adds the tuple object root as
-   a separate five-minute early priority. Merge final qualified main into it,
-   reseal, batch-push only to the allowed fork and let CI finish naturally.
-   Never merge the fork diagnostic workflow/auditors back into main source.
-5. Rerun the strict five-target benchmark at that head, resolve remaining real
-   failures, then update draft PR40 and require current-head CI/review/coverage.
+The current ordered plan is at the top of this document. Preserve all six
+NoDATA owners, complete CLI Count/IndexByte sources, both SDKs, race/vets,
+official forms and before/final source/tool seals. Object compilation is not
+native execution; Equal retains its closure Context. Native64's17 required
+children remain exact. Never merge fork diagnostic workflows/auditors into
+the main source branch.
 
 Do not infer a speedup from changed caches. A static audit finds fixed repeated
 verification stages, not per-instruction disk verification, in Compare. No
@@ -117,6 +180,11 @@ Use existing persistent worktrees and inspect their status before edits.
 The primary branch is `codex/pr40-external-corpus-split-20261011`. One heavy
 SDK/ASM/LLVM/object/native/benchmark owner runs at a time. Small audited pure
 groups may overlap. Do not interrupt another owner's frozen snapshot.
+
+Active leaves are `codex/pr40-bp-fixture-peer-families-20261015`,
+`codex/pr40-mixed-bool-fp-span-red-20261016` and
+`codex/pr40-x86-string-zero-count-state-20261016`. Resolve their existing
+worktree directories with Git; do not create disposable temporary clones.
 
 The BSWAP branch is `codex/pr40-bswap-definedness-20261015`; its qualified
 native tests and shared mixed-I1 guard are integrated through `abf771ac`.
@@ -141,21 +209,23 @@ AMD64 maskless EVEX.Z encoder form. Classification is not full encoder-name,
 LLVM-object, runtime or complete standard-library coverage: the observed386
 corpus has21 distinct operations and121 wasm forms remain Context.
 
-Latest strict complete benchmark remains FAILED at `870d011f`:
+Latest strict complete benchmark remains FAILED at `68ef8aa3`:
 
 | Target | Complete files passed / total |
 | --- | --- |
-| linux/386 | 25/33 |
+| linux/386 | 26/33 |
 | linux/amd64 | 46/55 |
 | linux/arm | 27/30 |
 | linux/arm64 | 40/47 |
 | js/wasm | 19/19 |
-| Total | 157/184;27 failures, zero N/A/unattempted |
+| Total | 158/184;26 failures, zero N/A/unattempted |
 
-Target wall times47/287/2/6/1s and total343s meet the original300s/target and
-900s total budgets. Compared with `ca02d8ea`, only the entire original Compare
-file changes from failure to success. Retain the command's failed exit1 and
-all27 failures rather than reporting performance success as compile success.
+Target wall times46/286/2/6/2s and total342s meet the original300s/target and
+900s total budgets. Its184 exact target/file pairs equal the `870d011f` scope;
+only the entire original386 Compare file changes to success, with no regression.
+Do not infer a speedup from one second of wall-time difference. Retain the
+command's failed exit1 and all26 failures rather than reporting performance
+success as compile success.
 Remaining roles include TLS/g/entry, reflect dynamic frames, preempt flags,
 VDSO/syscall frames, hidden closure context and ARM64 result-tail backing.
 

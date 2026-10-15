@@ -105,6 +105,13 @@ func (c *amd64Ctx) lowerMov(op Op, ins Instr) (ok bool, terminated bool, err err
 			fmt.Fprintf(c.b, "  %%%s = trunc i64 %s to %s\n", tr, v64, widthTy)
 			small = "%" + tr
 		case OpFP:
+			if value, handled, err := c.loadIntegerFPBytes(src.FPOffset, widthTy); handled {
+				if err != nil {
+					return true, false, err
+				}
+				small = value
+				break
+			}
 			v64, err := c.evalFPToI64(src.FPOffset)
 			if err != nil {
 				return true, false, err
@@ -135,6 +142,9 @@ func (c *amd64Ctx) lowerMov(op Op, ins Instr) (ok bool, terminated bool, err err
 		case OpReg:
 			return true, false, c.storeRegSized(dst.Reg, widthTy, small)
 		case OpFP:
+			if handled, err := c.storeIntegerFPBytes(dst.FPOffset, widthTy, small); handled {
+				return true, false, err
+			}
 			return true, false, c.storeFPResult(dst.FPOffset, widthTy, small)
 		case OpMem:
 			p, ptrType, err := c.ptrFromMem(dst.Mem)
@@ -163,7 +173,13 @@ func (c *amd64Ctx) lowerMov(op Op, ins Instr) (ok bool, terminated bool, err err
 		case OpReg:
 			var v string
 			var err error
-			if src.Kind == OpMem && src.Mem.Segment != "" {
+			if src.Kind == OpFP {
+				var handled bool
+				v, handled, err = c.loadIntegerFPBytes(src.FPOffset, I64)
+				if !handled {
+					v, err = c.evalI64(src)
+				}
+			} else if src.Kind == OpMem && src.Mem.Segment != "" {
 				p, ptrType, err2 := c.ptrFromMem(src.Mem)
 				if err2 != nil {
 					return true, false, err2
@@ -202,6 +218,9 @@ func (c *amd64Ctx) lowerMov(op Op, ins Instr) (ok bool, terminated bool, err err
 			// Store low 64 bits to a return slot if present.
 			v, err := c.evalI64(src)
 			if err != nil {
+				return true, false, err
+			}
+			if handled, err := c.storeIntegerFPBytes(dst.FPOffset, I64, v); handled {
 				return true, false, err
 			}
 			return true, false, c.storeFPResult(dst.FPOffset, I64, v)
@@ -244,7 +263,17 @@ func (c *amd64Ctx) lowerMov(op Op, ins Instr) (ok bool, terminated bool, err err
 			return true, false, fmt.Errorf("%s MOVL does not allow memory-to-result-memory: %q", c.goarch, ins.Raw)
 		}
 
-		i32v, err := c.evalIntSized(src, I32)
+		var i32v string
+		var err error
+		if src.Kind == OpFP {
+			var handled bool
+			i32v, handled, err = c.loadIntegerFPBytes(src.FPOffset, I32)
+			if !handled {
+				i32v, err = c.evalIntSized(src, I32)
+			}
+		} else {
+			i32v, err = c.evalIntSized(src, I32)
+		}
 		if err != nil {
 			// Preserve MOVL's existing treatment of unresolved constants from
 			// assembly include files. Explicit `$symbol(SB)` addresses are handled
@@ -263,6 +292,9 @@ func (c *amd64Ctx) lowerMov(op Op, ins Instr) (ok bool, terminated bool, err err
 
 		case OpFP:
 			// Store low 32 bits (common for ret slots).
+			if handled, err := c.storeIntegerFPBytes(dst.FPOffset, I32, i32v); handled {
+				return true, false, err
+			}
 			return true, false, c.storeFPResult(dst.FPOffset, I32, i32v)
 		case OpMem:
 			p, ptrType, err := c.ptrFromMem(dst.Mem)

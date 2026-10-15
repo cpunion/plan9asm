@@ -468,16 +468,19 @@ func TestX86PackedWordMultiplyLegacyResultBytesAndUnknownInputs(t *testing.T) {
 func TestX86PackedWordMultiplyVirtualLegacyMemoryRemainsContext(t *testing.T) {
 	for _, name := range x86WordMultiplyNames[:4] {
 		for _, address := range []string{"value+0(FP)", "(SP)", "(BP)", "(AX)(BP*2)"} {
-			source := "TEXT f(SB),4,$64-64\n" + name + " " + address + ",X0\nRET\n"
-			goAssemblerOracleOutput(t, "amd64", source, "", true)
-			file, err := Parse(ArchAMD64, source)
-			if err != nil {
-				t.Fatal(err)
-			}
-			for _, arch := range []string{"amd64", "386"} {
-				_, err := Translate(file, Options{Goarch: arch, Sigs: map[string]FuncSig{"f": x86WordMaddFPType(t)}})
-				if !errors.Is(err, ErrProbeNeedsContext) {
-					t.Fatal("virtual legacy input obtained native storage", source, arch, err)
+			for _, target := range x86RawReturnTargets {
+				source := "TEXT ·f(SB),4,$64-64\nPXOR X0,X0\n" + name + " " + address + ",X0\nRET\n"
+				declaration := "func f(value [64]byte)"
+				if address != "value+0(FP)" {
+					source = x86OrdinaryBPNativeSource(target.arch, "f", name+" "+address+",X0", address, 64)
+					declaration = "func f(p *byte)"
+				}
+				x86LEAActualTargetGoObject(t, target.arch, target.triple, source)
+				for _, api := range []string{"text", "module", "Go"} {
+					t.Run(target.triple+"/"+name+"/"+address+"/"+api, func(t *testing.T) {
+						ir, err := x86ScalarFPBitViewAPI(t, source, declaration, target.arch, target.triple, api)
+						x86RequireOrdinaryBPNativeOutcome(t, target.arch, address, ir, err)
+					})
 				}
 			}
 		}

@@ -131,6 +131,16 @@ func (c *amd64Ctx) validateScalarFPSourceViews() error {
 	if err := c.validateMixedBoolResultRole(); err != nil {
 		return err
 	}
+	if x86OrdinaryIntegerFPStoreNeedsProof(c.fpScalarSource, c.sig, c.goarch) {
+		if err := c.scalarFPResultInitialized(); err != nil {
+			return err
+		}
+	}
+	if x86ImplicitMultiplyFPResultNeedsProof(c.fpScalarSource, c.sig, c.goarch) {
+		if err := c.integerEffectResultInitialized("implicit multiply"); err != nil {
+			return err
+		}
+	}
 	if c.sig.amd64GoArguments != nil {
 		if err := c.scalarFPResultInitialized(); err != nil {
 			return err
@@ -172,6 +182,15 @@ func (c *amd64Ctx) validateScalarFPSourceViews() error {
 		}
 	}
 	for _, ins := range c.fpScalarSource.Instrs {
+		if width := x86IntegerFPMoveWidth(ins, c.goarch); width != 0 && len(ins.Args) == 2 {
+			for index, operand := range ins.Args {
+				if operand.Kind == OpFP {
+					if _, err := c.integerFPByteView(operand.FPOffset, width, index == 1); err != nil {
+						return err
+					}
+				}
+			}
+		}
 		if _, known, err := x86ByteSwapProperties(ins.Op, ins, c.goarch); c.sig.Ret != Void && known && err == nil {
 			if err := c.byteSwapResultInitialized(); err != nil {
 				return err
