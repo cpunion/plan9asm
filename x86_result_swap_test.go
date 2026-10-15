@@ -377,7 +377,16 @@ func TestX86ResultSwapRejectsNonRegisterAuthorityAndMalformedGrammar(t *testing.
 			}
 			for _, consumer := range x86ResultGPSIMDConsumers {
 				state := initial.clone()
-				if consumer.step(ins, &state, []bool{true, true}, 0, test.arch) || !reflect.DeepEqual(state, initial) {
+				accepted := consumer.step(ins, &state, []bool{true, true}, 0, test.arch)
+				if test.arch == "386" && test.row == "XCHGB BP,DI" {
+					want := initial.clone()
+					want.pointerGP[5], want.pointerGP[7] = false, false
+					if !accepted || !reflect.DeepEqual(state, want) {
+						t.Fatal("ordinary mode32 byte exchange changed unrelated state", consumer.name, state)
+					}
+					continue
+				}
+				if accepted || !reflect.DeepEqual(state, initial) {
 					t.Fatalf("%s widened register or memory authority: %#v", consumer.name, state)
 				}
 			}

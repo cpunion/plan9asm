@@ -17,11 +17,14 @@ var x86ResultGPSIMDConsumers = []struct {
 }
 
 // Enumerate independent register axes, not the implementation's spec map.
-// SP/BP have Go encodings but no numerical result-observer permission.
+// SP and AMD64 BP retain their separate frame roles. Mode32 BP is an
+// ordinary GP; numerical availability still requires actual defined bytes.
 func x86ResultGPSIMDRegisterRows(arch string) []string {
 	gps := []string{"AX", "CX", "DX", "BX", "SI", "DI"}
 	if arch == "amd64" {
 		gps = append(gps, "R8", "R9", "R10", "R11", "R12", "R13", "R14", "R15")
+	} else {
+		gps = append(gps, "BP")
 	}
 	var rows []string
 	seen := make(map[string]bool)

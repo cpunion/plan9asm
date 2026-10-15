@@ -636,7 +636,10 @@ func x86ResultGP(reg Reg, width int64, arch string) (int, uint8, bool) {
 	// This observer admits only ABI0. Its R14 entry bytes are undefined,
 	// unlike ABIInternal's opaque g identity; only explicit source writes can
 	// initialize them. No caller/source-stack/native permissions are changed.
-	if !valid || root == SP || root == BP || width == 8 && arch == "386" {
+	// BP is an ordinary caller-clobbered GP in mode32. Its entry bytes are
+	// still unknown; only the existing typed writes can define NUM or opaque
+	// pointer facts. Physical source-stack/fixed-local roles remain separate.
+	if !valid || root == SP || root == BP && arch != "386" || width == 8 && arch == "386" {
 		return 0, 0, false
 	}
 	if width != 1 && root != reg || width == 1 && !isGoYmbRegisterForArch(reg, arch) {
@@ -736,6 +739,9 @@ func x86ResultStore(arg Operand, width int64, state *x86ResultState, owned []boo
 }
 
 func x86ResultTransfer(ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string) bool {
+	if accepted, known := x86ResultByteSwapStep(ins, state, arch); known {
+		return accepted
+	}
 	if accepted, known := x86ResultValueStackStep(ins, state, owned, resultOffset, arch); known {
 		return accepted
 	}
