@@ -97,3 +97,52 @@ func TestX86MixedBoolResultRoleCannotDropDeclaredOrModeledBool(t *testing.T) {
 		})
 	}
 }
+
+func TestX86MixedBoolResultOrdinaryCanonicalThreeAPIs(t *testing.T) {
+	for _, target := range x86OrderingHintTargets {
+		for _, boolFirst := range []bool{false, true} {
+			declaration := "func Value(n uint32, x bool) (uint32, bool)"
+			input, boolean, number := 4, 12, 8
+			if boolFirst {
+				declaration = "func Value(x bool, n uint32) (bool, uint32)"
+				input, boolean, number = 0, 8, 12
+			}
+			copyBool := fmt.Sprintf("MOVB x+%d(FP),AX\nMOVB AX,ret+%d(FP)\n", input, boolean)
+			storeBool := func(value int) string {
+				return fmt.Sprintf("MOVB $%d,ret+%d(FP)\n", value, boolean)
+			}
+			storeNumber := fmt.Sprintf("MOVL $7,ret+%d(FP)\n", number)
+			for _, row := range []struct {
+				name, body string
+				accept     bool
+			}{
+				{"typed-entry-copy", copyBool + storeNumber + "RET", true},
+				{"constant-zero", storeBool(0) + storeNumber + "RET", true},
+				{"constant-one", storeBool(1) + storeNumber + "RET", true},
+				{"canonical-join", "MOVL $1,AX\nCMPL AX,$0\nJE other\n" + storeBool(0) + "JMP end\nother:\n" + copyBool + "end:\n" + storeNumber + "RET", true},
+				{"raw-two", storeBool(2) + storeNumber + "RET", false},
+				{"unknown-byte", fmt.Sprintf("MOVB DX,ret+%d(FP)\n", boolean) + storeNumber + "RET", false},
+				{"numeric-input-is-not-bool", fmt.Sprintf("MOVL n+%d(FP),AX\nMOVB AX,ret+%d(FP)\n", 4-input, boolean) + storeNumber + "RET", false},
+				{"noncanonical-join", "MOVL $1,AX\nCMPL AX,$0\nJE other\n" + storeBool(2) + "JMP end\nother:\n" + copyBool + "end:\n" + storeNumber + "RET", false},
+				{"missing-number", copyBool + "RET", false},
+				{"partial-number", copyBool + fmt.Sprintf("MOVB $7,ret+%d(FP)\nRET", number), false},
+				{"overwritten-canonical", copyBool + storeBool(2) + storeNumber + "RET", false},
+				{"dead-unknown-effect", copyBool + storeNumber + "JMP end\nCALL ·unknown(SB)\nend:\nRET", false},
+			} {
+				for _, api := range []string{"text", "module", "Go"} {
+					t.Run(fmt.Sprintf("%s/bool-first=%t/%s/%s", target.triple, boolFirst, row.name, api), func(t *testing.T) {
+						_, _, _, source := x86ResultInitializationFixture(t, target.arch, declaration, row.body)
+						ir, err := x86OrderingHintTranslateAPI(t, api, source, "package ordering\n"+declaration+"\n", target.arch, target.triple)
+						if row.accept {
+							if err != nil || ir == "" {
+								t.Fatalf("canonical typed tuple rejected: output=%t error=%v", ir != "", err)
+							}
+						} else if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+							t.Fatalf("unproved tuple accepted: output=%t error=%v", ir != "", err)
+						}
+					})
+				}
+			}
+		}
+	}
+}
