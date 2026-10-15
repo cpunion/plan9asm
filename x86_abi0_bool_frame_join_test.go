@@ -107,13 +107,17 @@ func TestX86ABI0Mode32CanonicalBoolAliasCloneJoinAndBudget(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Include independent actual caller-origin IDs (32), scan-pending (2)
-	// and predicate (3) bytes; none replaces canonical or alias state.
-	const payload = 332 + 32 + 2 + 3 + 1 + 16*25 // Separate DF byte, unchanged limit.
+	// and predicate (3) bytes; none replaces canonical or alias state. DF and
+	// the native string counter each retain their own byte, with the same cap.
+	const payload = 332 + 32 + 2 + 3 + 1 + 1 + 16*25
 	const limit = (64 << 20) / 8
-	for _, room := range []int{3 * (payload - 1), 3 * payload} {
+	for _, room := range []int{3*payload - 1, 3 * payload} {
 		fn := file.Funcs[0]
 		fn.x86ResultFlowBudget = &x86ResultFlowBudget{bytes: limit - room}
 		err := checkX86ScalarFPResultInitialization(fn, x86SDKLiteral386Signature(), "386")
+		if fn.x86ResultFlowBudget.bytes != limit+3*payload-room {
+			t.Fatal("bool alias source work differs from its exact complete-state charge", fn.x86ResultFlowBudget.bytes)
+		}
 		if room == 3*payload && err != nil || room != 3*payload && !errors.Is(err, ErrProbeNeedsContext) {
 			t.Fatal("logical alias state escaped the shared byte budget", room, err)
 		}

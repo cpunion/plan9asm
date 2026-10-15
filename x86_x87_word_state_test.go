@@ -137,14 +137,18 @@ func TestX86X87WordStateConsumesSharedBudgetAndPrivateRole(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Existing no-FP payload368 plus logical x87 payload45 and the two-byte
-	// control knownness. Immutable layout metadata is not a CFG copy.
-	const payload = 368 + 45 + 2
+	// No-FP payload369 includes the native string-counter must-fact, plus
+	// logical x87 payload45 and two-byte control knownness. Immutable layout
+	// metadata is not a CFG copy.
+	const payload = 369 + 45 + 2
 	const limit = (64 << 20) / 8
-	for _, room := range []int{3 * (payload - 1), 3 * payload} {
+	for _, room := range []int{3*payload - 1, 3 * payload} {
 		fn := file.Funcs[0]
 		fn.x86ResultFlowBudget = &x86ResultFlowBudget{bytes: limit - room}
 		err := checkX86ScalarFPResultInitialization(fn, FuncSig{Name: "Value", Ret: Void}, "386")
+		if fn.x86ResultFlowBudget.bytes != limit+3*payload-room {
+			t.Fatal("word source work differs from its exact complete-state charge", fn.x86ResultFlowBudget.bytes)
+		}
 		if room == 3*payload && err != nil || room != 3*payload && !errors.Is(err, ErrProbeNeedsContext) {
 			t.Fatal("initialized word state escaped or raised the existing shared budget", room, err)
 		}

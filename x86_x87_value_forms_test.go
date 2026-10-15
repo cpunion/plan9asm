@@ -195,15 +195,19 @@ func TestX86X87ValueStateConsumesSharedBudgetAndPrivateRole(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// The old no-FP state has 368 logical bytes. This optional domain adds
+	// The no-FP state has 369 logical bytes, including the separate native
+	// string-counter must-fact. This optional domain adds
 	// exactly 45: slots/depth/invalid, status16, sixteen captured words and
 	// eight source signed-width facts. This does not raise the shared limit.
-	const payload = 368 + 45
+	const payload = 369 + 45
 	const limit = (64 << 20) / 8
-	for _, room := range []int{3 * (payload - 1), 3 * payload} {
+	for _, room := range []int{3*payload - 1, 3 * payload} {
 		fn := file.Funcs[0]
 		fn.x86ResultFlowBudget = &x86ResultFlowBudget{bytes: limit - room}
 		err := checkX86ScalarFPResultInitialization(fn, FuncSig{Name: "Value", Ret: Void}, "386")
+		if fn.x86ResultFlowBudget.bytes != limit+3*payload-room {
+			t.Fatal("logical x87 source work differs from its exact complete-state charge", fn.x86ResultFlowBudget.bytes)
+		}
 		if room == 3*payload && err != nil || room != 3*payload && !errors.Is(err, ErrProbeNeedsContext) {
 			t.Fatal("logical x87 state escaped or raised the existing shared budget", room, err)
 		}
