@@ -22,13 +22,15 @@ const crc32TypedRoots = [
   'TestX86IncomingPointerUnaryAdvanceRolesFlagsAndOrigins',
   'TestX86CRC32CompleteOriginalGoRegisterBanks',
   'TestX86CRC32FiveTargetOriginalGoAndLLVMObjects',
+  'TestX86TypedNumericalMixedBoolCanonicalCompositionThreeAPIs',
+  'TestX86TypedNumericalMixedBoolRequiresLiveCachedCanonicalRole',
 ];
 const crc32TypedLane = '- lane: crc32-typed-effects\n            module: \'.\'\n            roots:\n' +
   crc32TypedRoots.map(root => `              - ${root}\n`).join('') + '            timeout: 5m';
 
 function checkCRC32TypedPriority(text) {
-  assert.equal(crc32TypedRoots.length, 15);
-  assert.equal(new Set(crc32TypedRoots).size, 15);
+  assert.equal(crc32TypedRoots.length, 17);
+  assert.equal(new Set(crc32TypedRoots).size, 17);
   assert.ok(text.includes(crc32TypedLane), 'complete CRC32 typed effects, pointer composition and actual-object owners');
   assert.equal(text.split('- lane: crc32-typed-effects\n').length - 1, 1,
     'one independent CRC32 typed-effects priority lane');
@@ -37,7 +39,7 @@ function checkCRC32TypedPriority(text) {
   }
 }
 
-test('CRC32 typed effects priority retains fifteen complete semantic and object owners within five minutes', () => {
+test('CRC32 typed effects priority retains seventeen complete semantic and object owners within five minutes', () => {
   checkCRC32TypedPriority(sdk);
 });
 

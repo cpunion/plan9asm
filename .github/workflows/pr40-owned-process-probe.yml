@@ -299,6 +299,8 @@ jobs:
               - TestX86IncomingPointerUnaryAdvanceRolesFlagsAndOrigins
               - TestX86CRC32CompleteOriginalGoRegisterBanks
               - TestX86CRC32FiveTargetOriginalGoAndLLVMObjects
+              - TestX86TypedNumericalMixedBoolCanonicalCompositionThreeAPIs
+              - TestX86TypedNumericalMixedBoolRequiresLiveCachedCanonicalRole
             timeout: 5m
           - lane: arm64-carrier-widths
             module: '.'
