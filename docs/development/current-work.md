@@ -1,6 +1,6 @@
 # Current work: PR 40 checkpoint
 
-Checkpoint: 2026-10-15 01:28 UTC. Parent checkpoint `ca02d8ea`.
+Checkpoint: 2026-10-15 01:40 UTC. Qualified CI repair `b66fbd33`.
 This is a handoff, not a ledger or a claim of complete CI/stdlib success.
 
 ## Scope and authority
@@ -46,8 +46,14 @@ root passes all119 operations/three targets/three APIs/O0/O2 but takes1210.90s,
 leaving insufficient time for later roots. Split that same matrix into three
 independent complete target roots, with a real scheduling-policy RED and
 disjoint32-shard/16-owner verification. All original12 batches/48 children and
-72 module-object axes remain required. Current-head qualification and another
-actual Windows run are still required; the old run remains FAILED.
+72 module-object axes remain required. Frozenb66 qualification now passes all
+three complete target roots/48 children:172.471/164.300/155.115s, every original
+119-operation producer byte unchanged. Runner19 roots/22 children pass Go27,
+race and actualGo20; both SDK vets, all3817 tracked inputs and selected tools,
+HEAD and clean-status seals pass. Main's19 Node policies pass; the integrated
+forkc95's63 policies/actionlint also pass. Another actual Windows run is still
+required; the old run remains FAILED. Evidence is under ignored
+`_out/register-result-repair/windows-module-path/`.
 
 [38648974765](https://github.com/cpunion/plan9asm/actions/runs/38648974765)
 at frozen fork `7003d395` completed FAILURE naturally at00:08 UTC:32 jobs,

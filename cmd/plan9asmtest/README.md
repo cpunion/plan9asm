@@ -40,8 +40,12 @@ with no tests or only benchmarks/TestMain. Every package has its own actual
 `-list=.` receipt, including runnable examples/fuzz targets and separately
 recorded benchmarks. Nested CLI modules are not main-module packages; their
 independent complete-module workflows remain required. Windows uses the same
-strict module protocol with eight root parts for the main module and four for
+strict module protocol with sixteen root parts for the main module and four for
 each CLI, preserving profile/rest ownership and the thirty-minute command budget.
+The Windows driver selects a minimal Go/LLVM22/Node/Python/jq/Git/system PATH
+before either execution or verification; unrelated hosted-image search paths
+cannot change the cross-owner plan. Raw and normalized environment equality
+remains strict, including PATH.
 
 ```sh
 # Each command is a separate CI job, not concurrent local invocations.
