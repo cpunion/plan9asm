@@ -20,9 +20,15 @@ import (
 )
 
 func TestCompileOneX86SDKOriginalCRC32NumericalDataJoin(t *testing.T) {
-	for _, profile := range []string{"explicit", "effective-defaults"} {
-		t.Run(profile, func(t *testing.T) { compileX86SDKOriginalCRC32NumericalDataJoin(t, profile) })
-	}
+	t.Run("explicit", func(t *testing.T) {
+		compileX86SDKOriginalCRC32NumericalDataJoin(t, "explicit")
+	})
+}
+
+func TestCompileOneX86SDKOriginalCRC32NumericalDataJoinEffectiveDefaults(t *testing.T) {
+	t.Run("effective-defaults", func(t *testing.T) {
+		compileX86SDKOriginalCRC32NumericalDataJoin(t, "effective-defaults")
+	})
 }
 
 func setX86SDKNumericalCLIProfile(t *testing.T, profile string) {
