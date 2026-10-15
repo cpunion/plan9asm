@@ -255,6 +255,17 @@ jobs:
               - TestX86OrdinaryIntegerFPStoreKeepsIndependentStorageConsumers
               - TestX86ScalarFPWideTupleSpanOriginalGoAssembly
               - TestX86IntegerFPByteViewsFiveTargetOriginalAndLLVMObjects
+              - TestX86ImplicitMultiplyWholeSourceThreeAPIs
+              - TestX86ImplicitMultiplyNUMBytesAndStatus
+              - TestX86ImplicitMultiplyDoesNotRegisterRawEntryOrDivide
+              - TestX86ImplicitMultiplyFPSourceBytesThreeAPIs
+              - TestX86ImplicitMultiplyMissingFPResultsThreeAPIs
+              - TestX86ImplicitMultiplyCompleteOfficialGoRows
+              - TestX86ImplicitMultiplyGrammarBanksAndMemoryBoundaries
+              - TestX86ImplicitMultiplyAliasesReadBeforeWriteAndFlags
+              - TestX86ImplicitMultiplyOriginalGoGrammarAndEncoding
+              - TestX86ImplicitMultiplyFiveTargetOriginalGoAndLLVMObjects
+              - TestX86ImplicitMultiplyIndependentStorageCannotBypassNUM
             timeout: 5m
           - lane: arm64-carrier-widths
             module: '.'
