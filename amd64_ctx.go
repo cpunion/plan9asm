@@ -296,6 +296,10 @@ func (c *amd64Ctx) scanUsedRegs() {
 			if form, known, err := x86ScalarNativeLoadProperties(ins.Op, ins, c.goarch); known && err == nil {
 				markReg(form.destination)
 			}
+			if form, known, err := x86CRC32Properties(ins.Op, ins, c.goarch); known && err == nil {
+				markOp(form.source) // Px/Zlitm_r can select a different byte's GP root.
+				markOp(form.destination)
+			}
 			if effect, known, err := x86TypedPackedIntegerCompareByteEffect(ins.Op, ins, c.goarch); known && err == nil {
 				for _, operand := range effect.operands {
 					markOp(operand.operand)

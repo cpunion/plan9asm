@@ -63,7 +63,7 @@ func x86TypedImplicitMultiplyByteEffect(op Op, ins Instr, arch string) (x86Typed
 		return x86TypedByteEffect{}, known, err
 	}
 	width := int64(form.bits / 8)
-	effect := x86TypedByteEffect{flagsDefined: x86ByteFlagCF | x86ByteFlagOF, flagsKilled: x86ByteFlagsAll,
+	effect := x86TypedByteEffect{requiresResultProof: true, flagsDefined: x86ByteFlagCF | x86ByteFlagOF, flagsKilled: x86ByteFlagsAll,
 		operands: []x86TypedByteOperand{
 			{index: 0, operand: form.source, width: width, read: true},
 			{index: -1, operand: Operand{Kind: OpReg, Reg: AX}, width: width, read: true},
@@ -78,21 +78,4 @@ func x86TypedImplicitMultiplyByteEffect(op Op, ins Instr, arch string) (x86Typed
 		}
 	}
 	return effect, true, nil
-}
-
-func x86ImplicitMultiplyFPResultNeedsProof(fn Func, sig FuncSig, arch string) bool {
-	// Unlike the ordinary MOV-store cost selector, an implicit product has
-	// its own whole-result obligation. An unrelated bool input or storage
-	// operation cannot substitute for initialized AX/source/result bytes.
-	// Existing bound entry/storage roles are consumed by that same complete
-	// proof, never granted by this syntax-only routing decision.
-	if arch != "386" && arch != "amd64" || sig.Ret == Void || len(sig.Frame.Results) == 0 {
-		return false
-	}
-	for _, ins := range fn.Instrs {
-		if _, known, err := x86ImplicitMultiplyProperties(ins.Op, ins, arch); known && err == nil && x86ResultNamedPredicateInstruction(ins) {
-			return true
-		}
-	}
-	return false
 }

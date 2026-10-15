@@ -18,11 +18,12 @@ type x86TypedByteOperand struct {
 }
 
 type x86TypedByteEffect struct {
-	operands      []x86TypedByteOperand
-	flagsRead     uint8
-	flagsDefined  uint8
-	flagsKilled   uint8
-	dynamicMemory bool // A register-indexed bit string has no fixed base span.
+	operands            []x86TypedByteOperand
+	flagsRead           uint8
+	flagsDefined        uint8
+	flagsKilled         uint8
+	dynamicMemory       bool // A register-indexed bit string has no fixed base span.
+	requiresResultProof bool // Mandatory NUM/result obligation, independent of cost-only storage routing.
 }
 
 const (

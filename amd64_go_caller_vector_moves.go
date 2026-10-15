@@ -313,6 +313,9 @@ func x86CallerMoveMemoryShape(ins Instr, index int) (width int64, write, valid b
 }
 
 func x86InstructionMemoryShape(ins Instr, index int, arch string) (width int64, write, valid bool) {
+	if form, known, err := x86CRC32Properties(ins.Op, ins, arch); known {
+		return int64(form.bits / 8), false, err == nil && index == 0 && isAMD64MemoryOperand(form.source)
+	}
 	if form, known, err := x86ByteShuffleProperties(ins.Op, ins, arch); known {
 		return int64(form.memoryBytes), false, err == nil && form.memory == index
 	}
