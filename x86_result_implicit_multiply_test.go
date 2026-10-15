@@ -120,7 +120,7 @@ func TestX86ImplicitMultiplyNUMBytesAndStatus(t *testing.T) {
 				ins := x86YMMReadSource(t, row.op+" BX")
 				width := int64(row.width)
 				input := uint8((uint16(1) << uint(width)) - 1)
-				state := x86ResultState{flags: x86ByteFlagsAll}
+				state := x86ResultState{flags: x86ByteFlagsAll, direction: x86ResultDirectionBackward}
 				ax, _, _ := x86ResultGP(AX, width, arch)
 				bx, _, _ := x86ResultGP(BX, width, arch)
 				dx, _, _ := x86ResultGP(DX, width, arch)
@@ -135,8 +135,37 @@ func TestX86ImplicitMultiplyNUMBytesAndStatus(t *testing.T) {
 				} else if width == 4 {
 					wantAX, wantDX = 0xff, 0xff // Dword writes clear both upper32 halves.
 				}
-				if state.gp[ax] != wantAX || state.gp[dx] != wantDX || state.flags != x86ByteFlagCF|x86ByteFlagOF {
+				if state.gp[ax] != wantAX || state.gp[dx] != wantDX || state.flags != x86ByteFlagCF|x86ByteFlagOF || state.direction != before.direction {
 					t.Fatal("incorrect implicit widths or undefined status retained", state.gp, state.flags)
+				}
+				var addresses [16]bool
+				var canonical [16]uint8
+				for index := range addresses {
+					addresses[index], canonical[index] = true, 255
+				}
+				after := x86ResultCallerAddressesAfter(ins, addresses, nil, arch)
+				addresses[ax] = false
+				if width != 1 {
+					addresses[dx] = false
+				}
+				if after != addresses {
+					t.Fatal("implicit output retained/revoked wrong opaque address", after)
+				}
+				boolean := x86RegisterCanonicalBytesAfter(ins, canonical, arch)
+				mask := input
+				if width == 1 {
+					mask = 3
+				}
+				canonical[ax] &^= mask
+				if width != 1 {
+					canonical[dx] &^= mask
+				}
+				if width == 4 && arch == "amd64" {
+					canonical[ax] |= 240
+					canonical[dx] |= 240
+				}
+				if boolean != canonical {
+					t.Fatal("product bytes borrowed canonical inputs", boolean)
 				}
 				unknown := before.clone()
 				unknown.gp[ax] = 0
@@ -170,47 +199,65 @@ func TestX86ImplicitMultiplyDoesNotRegisterRawEntryOrDivide(t *testing.T) {
 	}
 }
 
+type x86ImplicitMultiplyFPCase struct {
+	name, params, arguments, source string
+	paramBytes, width               int
+	want                            uint64
+}
+
+func x86ImplicitMultiplyFPCases(arch string) []x86ImplicitMultiplyFPCase {
+	rows := []x86ImplicitMultiplyFPCase{
+		{"natural-byte", "a uint8", "i8 3", "a+0(FP)", 1, 1, 6},
+		{"natural-word", "a uint16", "i16 3", "a+0(FP)", 2, 2, 6},
+		{"natural-long", "a uint32", "i32 3", "a+0(FP)", 4, 4, 6},
+		{"partial-byte", "a uint64", "i64 134678021", "a+0(FP)", 8, 1, 10},
+		{"partial-word", "a uint64", "i64 134678021", "a+0(FP)", 8, 2, 0x0c0a},
+		{"partial-long", "a uint64", "i64 134678021", "a+0(FP)", 8, 4, 0x100e0c0a},
+		{"interior-byte", "a uint64", "i64 134678021", "a+1(FP)", 8, 1, 12},
+		{"interior-word", "a uint64", "i64 134678021", "a+1(FP)", 8, 2, 0x0e0c},
+		{"interior-long", "a uint64", "i64 578437695752307201", "a+1(FP)", 8, 4, 0x0a080604},
+		{"cross-word", "a,b uint8", "i8 3,i8 4", "a+0(FP)", 2, 2, 0x0806},
+		{"cross-long", "a,b uint16", "i16 513,i16 1027", "a+0(FP)", 4, 4, 0x08060402},
+		{"natural-float-bits", "a float32", "float 1.000000e+00", "a+0(FP)", 4, 4, 0x7f000000},
+	}
+	if arch == "amd64" {
+		rows = append(rows,
+			x86ImplicitMultiplyFPCase{"natural-quad", "a uint64", "i64 3", "a+0(FP)", 8, 8, 6},
+			x86ImplicitMultiplyFPCase{"interior-quad", "a,b uint64", "i64 578437695752307201,i64 16", "a+1(FP)", 16, 8, 0x20100e0c0a080604},
+			x86ImplicitMultiplyFPCase{"cross-quad", "a,b uint32", "i32 67305985,i32 134678021", "a+0(FP)", 8, 8, 0x100e0c0a08060402},
+			x86ImplicitMultiplyFPCase{"natural-double-bits", "a float64", "double 1.000000e+00", "a+0(FP)", 8, 8, 0x7fe0000000000000},
+		)
+	}
+	return rows
+}
+
+func x86ImplicitMultiplyFPFixture(row x86ImplicitMultiplyFPCase, stem, arch string) (string, string) {
+	word, move, resultType := 8, "MOVQ", "uint64"
+	if arch == "386" {
+		word, move, resultType = 4, "MOVL", "uint32"
+	}
+	result := (row.paramBytes + word - 1) & -word
+	suffix := map[int]string{1: "B", 2: "W", 4: "L", 8: "Q"}[row.width]
+	source := fmt.Sprintf("TEXT ·Value(SB),4,$0-%d\nMOVL $2,AX\n%s%s %s\n", result+word, stem, suffix, row.source)
+	if row.width <= 2 {
+		source += "MOVWLZX AX,AX\n" // B observes AX16; W also clears the old upper bytes.
+	}
+	source += fmt.Sprintf("%s AX,ret+%d(FP)\nRET\n", move, result)
+	return source, "func Value(" + row.params + ") " + resultType
+}
+
 func TestX86ImplicitMultiplyFPSourceBytesThreeAPIs(t *testing.T) {
 	for _, target := range x86RawReturnTargets {
-		word, move, resultType := 8, "MOVQ", "uint64"
-		if target.arch == "386" {
-			word, move, resultType = 4, "MOVL", "uint32"
-		}
-		for _, row := range []struct {
-			name, params, arguments, source string
-			paramBytes, width               int
-			want                            uint64
-		}{
-			{"natural-byte", "a uint8", "i8 3", "a+0(FP)", 1, 1, 6},
-			{"natural-word", "a uint16", "i16 3", "a+0(FP)", 2, 2, 6},
-			{"natural-long", "a uint32", "i32 3", "a+0(FP)", 4, 4, 6},
-			{"partial-byte", "a uint64", "i64 134678021", "a+0(FP)", 8, 1, 10},
-			{"partial-word", "a uint64", "i64 134678021", "a+0(FP)", 8, 2, 0x0c0a},
-			{"partial-long", "a uint64", "i64 134678021", "a+0(FP)", 8, 4, 0x100e0c0a},
-			{"interior-byte", "a uint64", "i64 134678021", "a+1(FP)", 8, 1, 12},
-			{"interior-word", "a uint64", "i64 134678021", "a+1(FP)", 8, 2, 0x0e0c},
-			{"interior-long", "a uint64", "i64 578437695752307201", "a+1(FP)", 8, 4, 0x0a080604},
-			{"cross-word", "a,b uint8", "i8 3,i8 4", "a+0(FP)", 2, 2, 0x0806},
-			{"cross-long", "a,b uint16", "i16 513,i16 1027", "a+0(FP)", 4, 4, 0x08060402},
-			{"natural-float-bits", "a float32", "float 1.000000e+00", "a+0(FP)", 4, 4, 0x7f000000},
-		} {
+		for _, row := range x86ImplicitMultiplyFPCases(target.arch) {
 			for _, stem := range []string{"MUL", "IMUL"} {
-				suffix := map[int]string{1: "B", 2: "W", 4: "L"}[row.width]
 				for _, api := range []string{"text", "module", "Go"} {
-					t.Run(target.triple+"/"+stem+suffix+"/"+row.name+"/"+api, func(t *testing.T) {
-						result := (row.paramBytes + word - 1) & -word
-						source := fmt.Sprintf("TEXT ·Value(SB),4,$0-%d\nMOVL $2,AX\n%s%s %s\n", result+word, stem, suffix, row.source)
-						if row.width == 1 {
-							source += "MOVWLZX AX,AX\n" // Observe the complete B product, not only AL.
-						} else if row.width == 2 {
-							source += "MOVWLZX AX,AX\n"
-						}
-						source += fmt.Sprintf("%s AX,ret+%d(FP)\nRET\n", move, result)
-						ir, err := x86ScalarFPBitViewAPI(t, source, "func Value("+row.params+") "+resultType, target.arch, target.triple, api)
+					t.Run(target.triple+"/"+stem+"/"+row.name+"/"+api, func(t *testing.T) {
+						source, declaration := x86ImplicitMultiplyFPFixture(row, stem, target.arch)
+						ir, err := x86ScalarFPBitViewAPI(t, source, declaration, target.arch, target.triple, api)
 						if err != nil || ir == "" {
 							t.Fatal("complete typed FP source rejected", err)
 						}
-						typ := fmt.Sprintf("i%d", word*8)
+						typ := fmt.Sprintf("i%d", goWordSize(target.arch)*8)
 						probe := fmt.Sprintf("define %s @Probe() {\n %%r = call %s @Value(%s)\n ret %s %%r\n}\n", typ, typ, row.arguments, typ)
 						x86ScalarFPNamedConstantResult(t, ir+probe, "Probe", []uint64{row.want})
 					})
