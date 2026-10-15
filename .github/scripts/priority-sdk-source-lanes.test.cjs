@@ -4,7 +4,38 @@ const test = require('node:test');
 
 const workflow = fs.readFileSync('.github/workflows/pr40-owned-process-probe.yml', 'utf8');
 const sdk = workflow.slice(workflow.indexOf('\n  sdk-priority:'), workflow.indexOf('\n  ownership:'));
-const sdkLaneCount = 33;
+const sdkLaneCount = 34;
+
+const tupleRoot = 'TestX86ABI0ResultTupleScalarTypesAndObjects';
+const tupleLane = '- lane: abi0-result-tuples\n            module: \'.\'\n' +
+  `            roots:\n              - ${tupleRoot}\n            timeout: 5m`;
+
+function checkTuplePriority(text) {
+  assert.ok(text.includes(tupleLane), 'complete ABI0 tuple object owner with its original budget');
+  assert.equal(text.split('- lane: abi0-result-tuples\n').length - 1, 1,
+    'exactly one independent tuple object priority lane');
+  assert.equal(text.split(`- ${tupleRoot}\n`).length - 1, 1, 'exactly one complete tuple owner');
+}
+
+test('Tuple priority retains the complete five-target owner before full Windows modules', () => {
+  checkTuplePriority(sdk);
+});
+
+test('Tuple priority rejects missing, duplicate, substituted, partial or enlarged owners', () => {
+  checkTuplePriority(tupleLane);
+  for (const changed of [
+    '',
+    tupleLane.replace('abi0-result-tuples', 'unrelated-result-tuples'),
+    tupleLane + '\n          ' + tupleLane,
+    tupleLane + `\n              - ${tupleRoot}\n`,
+    tupleLane.replace(tupleRoot, 'TestX86ABI0ResultTupleEveryByteAndPath'),
+    tupleLane.replace(tupleRoot, tupleRoot + '/i386-unknown-linux-gnu'),
+    tupleLane.replace("module: '.'", 'module: cmd/plan9asmll'),
+    tupleLane.replace('timeout: 5m', 'timeout: 6m'),
+    tupleLane.replace('            timeout: 5m',
+      '              - TestUnrelatedAdditionalOwner\n            timeout: 5m'),
+  ]) assert.throws(() => checkTuplePriority(changed));
+});
 
 const compareRoot = 'TestGoX86SDKAMD64CompareTypedArgumentsWholeSource';
 const compareLane = '- lane: typed-arguments-compare\n            module: \'.\'\n' +

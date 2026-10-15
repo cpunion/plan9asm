@@ -199,6 +199,11 @@ jobs:
             roots:
               - TestGoX86SDKAMD64CompareTypedArgumentsWholeSource
             timeout: 5m
+          - lane: abi0-result-tuples
+            module: '.'
+            roots:
+              - TestX86ABI0ResultTupleScalarTypesAndObjects
+            timeout: 5m
           - lane: arm64-carrier-widths
             module: '.'
             roots:
