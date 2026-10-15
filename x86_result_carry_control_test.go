@@ -34,13 +34,17 @@ func TestX86CarryControlNumericalAvailability(t *testing.T) {
 
 func TestX86CarryControlLogicalFPResultThreeAPIs(t *testing.T) {
 	for _, target := range x86RawReturnTargets {
+		resultOffset := 8
+		if target.arch == "386" {
+			resultOffset = 4
+		}
 		for _, row := range []struct{ name, flags string }{
 			{"clear", "CLC"}, {"set", "STC"}, {"complement", "CLC\nCMC"}, {"unknown", "CMC"},
 		} {
 			for _, api := range []string{"text", "module", "Go"} {
 				t.Run(target.triple+"/"+row.name+"/"+api, func(t *testing.T) {
-					source := "TEXT ·Value(SB),4,$0-8\nMOVL x+0(FP),AX\n" + row.flags +
-						"\nMOVL $3,BX\nCMOVLCC BX,AX\nMOVL AX,ret+4(FP)\nRET\n"
+					source := fmt.Sprintf("TEXT ·Value(SB),4,$0-%d\nMOVL x+0(FP),AX\n%s"+
+						"\nMOVL $3,BX\nCMOVLCC BX,AX\nMOVL AX,ret+%d(FP)\nRET\n", resultOffset+4, row.flags, resultOffset)
 					ir, err := x86ScalarFPBitViewAPI(t, source, "func Value(x float32) uint32", target.arch, target.triple, api)
 					if row.name == "unknown" {
 						if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
