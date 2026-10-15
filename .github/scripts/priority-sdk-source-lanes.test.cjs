@@ -6,6 +6,48 @@ const workflow = fs.readFileSync('.github/workflows/pr40-owned-process-probe.yml
 const sdk = workflow.slice(workflow.indexOf('\n  sdk-priority:'), workflow.indexOf('\n  ownership:'));
 const sdkLaneCount = 40;
 
+const crc32ProfileOwners = [
+  ['llvm-crc32', 'TestCompileOneX86SDKOriginalCRC32NumericalDataJoin'],
+  ['llvm-crc32-effective-defaults', 'TestCompileOneX86SDKOriginalCRC32NumericalDataJoinEffectiveDefaults'],
+];
+const crc32ProfileBlocks = crc32ProfileOwners.map(([lane, root]) =>
+  `- lane: ${lane}\n            module: cmd/plan9asmll\n            roots:\n              - ${root}\n            timeout: 5m`);
+
+function checkCRC32ProfileOwners(text) {
+  for (let index = 0; index < crc32ProfileOwners.length; index++) {
+    const [lane, root] = crc32ProfileOwners[index];
+    assert.ok(text.includes(crc32ProfileBlocks[index]), 'complete independent CRC32 profile: ' + lane);
+    assert.equal(text.split(`- lane: ${lane}\n`).length - 1, 1, 'one CRC32 profile lane: ' + lane);
+    assert.equal(text.split(`- ${root}\n`).length - 1, 1, 'one complete CRC32 profile owner: ' + root);
+  }
+}
+
+test('CRC32 actual profiles each retain an independent original five-minute owner', () => {
+  checkCRC32ProfileOwners(sdk);
+});
+
+test('CRC32 profile priority rejects missing, shared, duplicate, substituted or enlarged owners', () => {
+  const valid = crc32ProfileBlocks.join('\n          ');
+  checkCRC32ProfileOwners(valid);
+  for (let index = 0; index < crc32ProfileOwners.length; index++) {
+    const [lane, root] = crc32ProfileOwners[index];
+    const block = crc32ProfileBlocks[index];
+    for (const changed of [
+      valid.replace(block, ''),
+      valid + '\n          ' + block,
+      valid.replace(`- lane: ${lane}\n`, '- lane: unrelated-crc32-profile\n'),
+      valid + `\n              - ${root}\n`,
+      valid.replace(root, root + 'Subset'),
+      valid.replace(root, root + '/effective-defaults'),
+      valid.replace(block, block.replace('module: cmd/plan9asmll', "module: '.'")),
+      valid.replace(block, block.replace('timeout: 5m', 'timeout: 6m')),
+      valid.replace(block, block.replace('            timeout: 5m',
+        '              - TestUnrelatedAdditionalOwner\n            timeout: 5m')),
+      valid.replace(block, block.replace(root, crc32ProfileOwners[(index + 1) % crc32ProfileOwners.length][1])),
+    ]) assert.throws(() => checkCRC32ProfileOwners(changed));
+  }
+});
+
 const crc32TypedRoots = [
   'TestX86CRC32WholeResultNUMThreeAPIs',
   'TestX86CRC32PairedNativeReadVolatile',
