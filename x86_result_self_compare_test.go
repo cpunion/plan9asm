@@ -38,6 +38,25 @@ func TestX86SelfCMPCompleteFlagsWithoutNumericalInputs(t *testing.T) {
 				})
 			}
 		}
+		for _, aliases := range [][2]string{{"AX", "AL"}, {"AL", "AX"}, {"CX", "CL"}, {"DX", "DL"}, {"BX", "BL"}} {
+			t.Run(arch+"/same-low-byte/"+aliases[0]+"/"+aliases[1], func(t *testing.T) {
+				ins := x86ScalarLaneInstruction(t, "CMPB "+aliases[0]+","+aliases[1])
+				state := x86ResultState{direction: x86ResultDirectionForward}
+				expected := state.clone()
+				expected.flags = x86ByteFlagsAll
+				if !x86ResultTransfer(ins, &state, nil, 0, arch) || !reflect.DeepEqual(state, expected) {
+					t.Fatal("equal physical byte aliases were treated as different values")
+				}
+			})
+		}
+		for _, source := range []string{"CMPB AX,AH", "CMPB AH,AX", "TESTB AX,AX", "CMPL (AX),AX"} {
+			t.Run(arch+"/distinct-read/"+source, func(t *testing.T) {
+				state := x86ResultState{}
+				if x86ResultTransfer(x86ScalarLaneInstruction(t, source), &state, nil, 0, arch) {
+					t.Fatal("different byte, TEST or native memory borrowed self-CMP's value-independent role")
+				}
+			})
+		}
 	}
 }
 
@@ -48,7 +67,7 @@ func TestX86SelfCMPThreeAPIsKeepNumericalAndPhysicalBoundaries(t *testing.T) {
 			widths = "BWL"
 		}
 		for _, width := range widths {
-			for _, row := range []struct {
+			rows := []struct {
 				name, body string
 				accepted   bool
 			}{
@@ -57,7 +76,14 @@ func TestX86SelfCMPThreeAPIsKeepNumericalAndPhysicalBoundaries(t *testing.T) {
 				{"different-inputs", fmt.Sprintf("CMP%c AX,BX\nMOVL $7,ret+RESULT(FP)", width), false},
 				{"TEST-reads-input", fmt.Sprintf("TEST%c AX,AX\nMOVL $7,ret+RESULT(FP)", width), false},
 				{"SP-still-physical", fmt.Sprintf("CMP%c SP,SP\nMOVL $7,ret+RESULT(FP)", width), false},
-			} {
+			}
+			if target.arch == "amd64" {
+				rows = append(rows, struct {
+					name, body string
+					accepted   bool
+				}{"BP-still-physical", fmt.Sprintf("CMP%c BP,BP\nMOVL $7,ret+RESULT(FP)", width), false})
+			}
+			for _, row := range rows {
 				for _, api := range []string{"text", "module", "Go"} {
 					t.Run(fmt.Sprintf("%s/CMP%c/%s/%s", target.triple, width, row.name, api), func(t *testing.T) {
 						source := x86ResultGPSIMDAdmissionSource(t, target.arch, "func view() uint32", row.body)
