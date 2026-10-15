@@ -189,9 +189,7 @@ func (c *amd64Ctx) lowerX87(op Op, ins Instr) (ok bool, terminated bool, err err
 			iv = c.convertX87ToI64Hardware()
 		} else {
 			rounded := c.roundX87Software(c.loadX87(0))
-			converted := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = fptosi double %s to i64\n", converted, rounded)
-			iv = "%" + converted
+			iv = c.convertRoundedX87Integer(rounded, 64)
 		}
 		if err := c.storeX87I64(ins.Args[1], iv); err != nil {
 			return true, false, err
@@ -741,14 +739,12 @@ func (c *amd64Ctx) storeX87MoveValue(op Op, dst Operand, value string) error {
 		fmt.Fprintf(c.b, "  %%%s = fptrunc double %s to float\n", narrow, value)
 		return c.storeX87TypedMemory(dst, LLVMType("float"), "%"+narrow)
 	case "FMOVL", "FMOVW":
-		typ := I32
+		bits := 32
 		if op == "FMOVW" {
-			typ = I16
+			bits = 16
 		}
 		rounded := c.roundX87Software(value)
-		integer := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = fptosi double %s to %s\n", integer, rounded, typ)
-		return c.storeX87TypedMemory(dst, typ, "%"+integer)
+		return c.storeX87TypedMemory(dst, amd64IntegerTypeForBits(bits), c.convertRoundedX87Integer(rounded, bits))
 	default:
 		return fmt.Errorf("386: unsupported x87 move store %s", op)
 	}
@@ -1170,7 +1166,11 @@ func (c *amd64Ctx) roundNearestEvenX87(value, floor string) string {
 	floorInt := c.newTmp()
 	oddBits := c.newTmp()
 	odd := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = fptosi double %s to i64\n", floorInt, floor)
+	// Only values below 2^52 need a tie-parity calculation. Keep even the
+	// discarded large/NaN path free of an out-of-range fptosi operand.
+	parityInput := c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = select i1 %%%s, double 0.000000e+00, double %s\n", parityInput, large, floor)
+	fmt.Fprintf(c.b, "  %%%s = fptosi double %%%s to i64\n", floorInt, parityInput)
 	fmt.Fprintf(c.b, "  %%%s = and i64 %%%s, 1\n", oddBits, floorInt)
 	fmt.Fprintf(c.b, "  %%%s = icmp ne i64 %%%s, 0\n", odd, oddBits)
 	tieUp := c.newTmp()
