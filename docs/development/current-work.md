@@ -1,10 +1,10 @@
 # Current work: PR 40 checkpoint
 
-Checkpoint: 2026-10-15 09:36 UTC. The latest fork diagnostic completed naturally
-with nine stale BP test-root failures, not a tool or timeout failure. Six roots
-and their complete object matrix are repaired and locally integrated; three
-remain in development. Main also contains the qualified string-memory/REP-CFG
-repair. Do not publish this partially integrated batch as qualified.
+Checkpoint: 2026-10-15 10:43 UTC. The latest fork diagnostic completed naturally
+with nine stale BP test-root failures, not a tool or timeout failure. All nine
+are repaired and locally integrated through `6925918c`. Main also contains the
+qualified string-memory/REP-CFG repair and full-AX empty-LODS repair through
+`99c6d83b`. These leaf receipts do not certify the merged source snapshot.
 
 The previous complete main qualification at `68ef8aa3` passes548 unique owners;
 its strict benchmark remains FAILED158/184 with26 failures, zero N/A and zero
@@ -12,30 +12,51 @@ unattempted files. Classification, objects and executed semantics stay distinct.
 
 ## Current blocking scope
 
-1. Finish test-only repairs for PSHUFB, signed integer-to-float conversion and
-   CMOV's old blanket386 BP negatives. They retain actual Go acceptance, all
-   applicable widths/masks/targets and three APIs; SP and amd64 BP remain
-   physical-frame negatives. The other six repaired roots plus complete64-name
-   BP objects pass21 unique owners on Go27/actual Go20 and13 on race at
-   `ce65e120`. Main contains the equivalent commits `c3f6b1b3`/`ec654367`.
-2. Complete scalar MOVB/W/L/Q logical-FP byte transport in the TLS leaf.
+1. Preserve the complete BP repair: `903274da` passes 28 unique owners on each
+   of Go27 and actual Go20, plus 16 on race and both SDK vets. Its 74 commands
+   have 10,018 child executions, no failures or skips, and exact frozen seals.
+   Complete 69-name memory objects and 32-member CMOV objects compile on both
+   mode32 targets through three APIs. SP and amd64 BP remain physical-frame
+   negatives. Main contains equivalent commits; this is not native execution.
+2. Finish scalar MOVB/W/L/Q logical-FP byte transport in the TLS leaf.
    Test-only `6caaaca0`/`94e72a08` reproduce534 actual wrong returned values,
    183 valid-interior rejections and69 passing controls. `51964b2a` now passes
    all786 semantic cases plus229 boundary/status controls on Go27. This is
-   only a quick gate: full objects, Go20, race and retained roles remain due.
+   only a historical quick gate, not qualification of the newer leaf.
+   `6a56a490` additionally passes 1,549 focused children and 60 LLVM objects;
+   the default-architecture TDD then finds 12 direct-path false passes.
+   `cfb3c699` fixes that local cost projection without changing source authority.
+   Its unchanged 386 instruction-family root reveals an old virtual-SP versus
+   positive-TEXT AUTO-role mismatch. Through `618ee502`, typed explicit and
+   implicit stack/storage separation restores both SDKs' complete 31-root 386
+   and 11-root CPU/status cohorts; 25 semantic/control roots also pass both
+   SDKs and race. These are intermediate receipts, not final qualification.
+   The retained legacy cohort then finds implicit MULL's missing NUM effect and
+   an old fixture declaring two i64 results while writing only four bytes.
+   Preserve that complete invalid-result fixture as a negative; add a genuinely
+   complete typed positive and the full implicit MUL/IMUL B/W/L/Q effect family.
+   New FP source views must use checked byte transport, not legacy interior
+   zero/coercion. Do not extend DIV, raw/source-stack or caller permissions.
+   Never crop old source or add an opcode exemption to hide these failures.
    It fixes named GP MOV views, not all arithmetic/compare FP consumers or
    specialized source-stack/fixed-local roles. Never retag legal tuples Context.
-3. Finish LODSL zero-count TDD in the string leaf. `f66bc165` and test-only
-   target-layout correction `57eb5c48` remain failed because the first observer
-   assumed incidental aggregate constant folding. No production repair is
-   certified. Preserve all84 original source functions and prove the observer
-   with mutation controls before claiming the target-only wrong-high32 RED.
-4. Integrate qualified leaves, update this checkpoint, then freeze source,
-   documentation and tools once. Retain every previous548 owner, ten new string
-   owners and every new BP/FP/state root; deduplicate package/root ownership
-   without dropping SDK lanes. Rerun official gates, vets and strict benchmark.
-5. Stage the complete batch in the allowed fork, preserve all34 old early CI
-   lanes and add early checks for these real failures. Push once and let the
+3. Preserve qualified LODS leaf `74e145d6`: 38 unique owners, 105 root executions
+   and 9,697 children pass across Go27, actual Go20 and race, plus six vets.
+   Genuine RED `183f7121` isolates exactly 12 AMD64 LODSL empty-repeat wrong
+   values after observer mutation controls pass. Production `c9b03e61` selects
+   the complete old AX on zero iterations. Each SDK/race lane compiles 24 LLVM
+   objects from all 84 original functions. Only zero-state observations are
+   checked; bare/nonzero execution and native execution remain unclaimed.
+   Preserve failed earlier observer attempts separately from this genuine RED.
+4. Finish the FP leaf, integrate only qualified changes, update this checkpoint,
+   then freeze source, documentation and tools once. The current pre-FP union
+   has 589 unique owners: all previous 548 plus BP and string additions. Add
+   every new FP owner without dropping SDK lanes or enlarging original 3m/5m
+   budgets. Rerun official gates, vets and the strict benchmark.
+5. Stage the complete batch in the allowed fork. Policy `a46b3620` retains all
+   34 old early lanes and adds complete BP and string/LODS priorities; its
+   89 Node policies and three workflow lints pass. These are policy checks,
+   not an executed CI receipt for the new source. Push once and let the
    entire new run finish naturally. Draft PR40 is not ready; its contribution
    head is still `24851df2` at this checkpoint.
 
