@@ -186,17 +186,44 @@ func x86X87ENVTypeBytes(typ llvm.Type) int {
 	return 0
 }
 
-func x86X87ENVReadOffset(pointer llvm.Value) (int, bool) {
+func x86X87ENVReadOffset(pointer llvm.Value, roots map[llvm.Value]bool, remaining *int) (int, bool) {
+	if *remaining == 0 {
+		return 0, false // Unknown/cyclic pointer graphs cannot manufacture an offset.
+	}
+	*remaining--
+	if roots[pointer] {
+		return 0, true
+	}
 	if !pointer.IsAIntToPtrInst().IsNil() {
 		return 0, true
+	}
+	if !pointer.IsASelectInst().IsNil() {
+		first, firstOK := x86X87ENVReadOffset(pointer.Operand(1), roots, remaining)
+		last, lastOK := x86X87ENVReadOffset(pointer.Operand(2), roots, remaining)
+		return first, firstOK && lastOK && first == last
+	}
+	if !pointer.IsAPHINode().IsNil() {
+		if pointer.IncomingCount() == 0 {
+			return 0, false
+		}
+		first, valid := x86X87ENVReadOffset(pointer.IncomingValue(0), roots, remaining)
+		for index := 1; valid && index < pointer.IncomingCount(); index++ {
+			other, known := x86X87ENVReadOffset(pointer.IncomingValue(index), roots, remaining)
+			valid = known && other == first
+		}
+		return first, valid
 	}
 	if pointer.IsAGetElementPtrInst().IsNil() || pointer.OperandsCount() != 2 ||
 		pointer.GEPSourceElementType().TypeKind() != llvm.IntegerTypeKind || pointer.GEPSourceElementType().IntTypeWidth() != 8 ||
 		pointer.Operand(1).IsAConstantInt().IsNil() {
 		return 0, false
 	}
-	base, valid := x86X87ENVReadOffset(pointer.Operand(0))
-	return base + int(pointer.Operand(1).SExtValue()), valid
+	delta := pointer.Operand(1).SExtValue()
+	if delta < -28 || delta > 28 {
+		return 0, false // Bound arithmetic before narrowing or adding offsets.
+	}
+	base, valid := x86X87ENVReadOffset(pointer.Operand(0), roots, remaining)
+	return base + int(delta), valid
 }
 
 func x86X87ENVReadFootprint(ir string, addressSpace int) error {
@@ -217,6 +244,13 @@ func x86X87ENVReadFootprintOf(ir string, addressSpace int, name string) error {
 	if function.IsNil() {
 		return fmt.Errorf("missing complete environment read")
 	}
+	roots := make(map[llvm.Value]bool)
+	for index := 0; index < function.ParamsCount(); index++ {
+		parameter := function.Param(index)
+		if parameter.Type().TypeKind() == llvm.PointerTypeKind {
+			roots[parameter] = true
+		}
+	}
 	var seen [28]int
 	for block := function.FirstBasicBlock(); !block.IsNil(); block = llvm.NextBasicBlock(block) {
 		for ins := block.FirstInstruction(); !ins.IsNil(); ins = llvm.NextInstruction(ins) {
@@ -224,7 +258,8 @@ func x86X87ENVReadFootprintOf(ir string, addressSpace int, name string) error {
 				continue
 			}
 			pointer := ins.Operand(0)
-			offset, valid := x86X87ENVReadOffset(pointer)
+			remaining := 256
+			offset, valid := x86X87ENVReadOffset(pointer, roots, &remaining)
 			width := x86X87ENVTypeBytes(ins.Type())
 			if !valid || width <= 0 || offset < 0 || offset > 28-width || !ins.IsVolatile() || ins.Alignment() != 1 ||
 				pointer.Type().PointerAddressSpace() != addressSpace {
