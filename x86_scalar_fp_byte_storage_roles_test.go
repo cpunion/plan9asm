@@ -8,9 +8,9 @@ import (
 
 func TestX86OrdinaryIntegerFPStoreKeepsIndependentStorageConsumers(t *testing.T) {
 	for _, target := range x86RawReturnTargets {
-		word, lea := 8, "LEAQ"
+		word, lea, stackWord := 8, "LEAQ", "Q"
 		if target.arch == "386" {
-			word, lea = 4, "LEAL"
+			word, lea, stackWord = 4, "LEAL", "L"
 		}
 		for _, row := range []struct {
 			name, declaration, body string
@@ -20,9 +20,11 @@ func TestX86OrdinaryIntegerFPStoreKeepsIndependentStorageConsumers(t *testing.T)
 			{"direct-defined", "func Value() uint32", "MOVL $9,AX\nMOVL AX,ret+0(FP)", 4, true},
 			{"direct-unknown", "func Value() uint32", "MOVL AX,ret+0(FP)", 4, false},
 			{"existing-virtual-SP", "func Value() uint32", "MOVL $9,-4(SP)\nMOVL -4(SP),AX\nMOVL AX,ret+0(FP)", 4, true},
+			{"existing-implicit-stack", "func Value() uint32", fmt.Sprintf("MOVL $9,AX\nPUSH%s AX\nPOP%s AX\nMOVL AX,ret+0(FP)", stackWord, stackWord), 4, true},
 			{"existing-FP-address", "func Value(a,b uint32) uint32", lea + " a+0(FP),SI\nMOVL $41,4(SI)\nMOVL b+4(FP),AX\nMOVL AX,ret+8(FP)", 12, true},
 			{"existing-FP-input-shadow", "func Value(x uint32) uint32", fmt.Sprintf("MOVL $41,x+0(FP)\nMOVL x+0(FP),AX\nMOVL AX,ret+%d(FP)", word), word + 4, true},
 			{"partial-cannot-borrow-SP", "func Value() uint32", "MOVL $9,-4(SP)\nMOVB $1,ret+0(FP)", 4, false},
+			{"partial-cannot-borrow-implicit-stack", "func Value() uint32", fmt.Sprintf("MOVL $0,AX\nMOVL $0,DX\nMOVL $0,BX\nPUSH%s $0\nPOPF%s\nUMWAIT BX\nMOVB $1,ret+0(FP)", stackWord, stackWord), 4, false},
 			{"partial-cannot-borrow-FP-address", "func Value(x uint32) uint32", fmt.Sprintf("%s x+0(FP),SI\nMOVB $1,ret+%d(FP)", lea, word), word + 4, false},
 			{"interior-cannot-borrow-SP", "func Value() (uint32,uint8)", "MOVL $9,-4(SP)\nMOVL $0x04030201,ret+0(FP)\nMOVB ret+1(FP),AX\nMOVB AX,ret+4(FP)", 5, false},
 			{"cross-field-defined-FP-address", "func Value(x uint32) (uint16,uint16)", fmt.Sprintf("%s x+0(FP),SI\nMOVL $0x04030201,ret+%d(FP)", lea, word), word + 4, true},
@@ -48,6 +50,24 @@ func TestX86OrdinaryIntegerFPStoreKeepsIndependentStorageConsumers(t *testing.T)
 					}
 				})
 			}
+		}
+		// Independent width/mode/segment witnesses for every value/FLAGS stack
+		// row. This tests cost separation only, not native segment permission.
+		for _, instruction := range []string{
+			"PUSHW AX", "POPW AX", "PUSHFW", "POPFW",
+			"PUSH" + stackWord + " AX", "POP" + stackWord + " AX", "PUSHF" + stackWord, "POPF" + stackWord,
+			"PUSHL FS", "POPL GS", "PUSHQ FS", "POPQ GS",
+		} {
+			t.Run(target.triple+"/typed-storage/"+instruction, func(t *testing.T) {
+				file, err := Parse(ArchAMD64, "TEXT Value(SB),4,$0-4\n"+instruction+"\nMOVL $9,AX\nMOVL AX,ret+0(FP)\nRET\n")
+				if err != nil {
+					t.Fatal(err)
+				}
+				sig := FuncSig{Name: "Value", Ret: I32, Frame: FrameLayout{Results: []FrameSlot{{Type: I32, Field: -1}}}}
+				if x86OrdinaryIntegerFPStoreNeedsProof(file.Funcs[0], sig, target.arch) {
+					t.Fatal("complete typed stack row was stolen by direct GP/FP admission")
+				}
+			})
 		}
 	}
 }

@@ -137,6 +137,9 @@ func x86OrdinaryIntegerFPStoreNeedsProof(fn Func, sig FuncSig, arch string) bool
 			ins.x86RawNearReturn != nil || ins.x86AddressBits != 0 || ins.x86UnboundAddressOverride || ins.x86SegmentPrefix != 0 {
 			return false
 		}
+		if _, stack, err := x86StackWidthProperties(ins, arch); stack && err == nil {
+			return false // Implicit value/FLAGS stack storage retains the same independent role.
+		}
 		for _, operand := range ins.Args {
 			if operand.Kind == OpFPAddr || operand.Kind == OpMem && (operand.Mem.Base == SP || operand.Mem.Index == SP) {
 				return false // Existing logical address/storage consumer, not native AUTO authority.
