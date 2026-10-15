@@ -1,6 +1,6 @@
 # Current work: PR 40 checkpoint
 
-Checkpoint: 2026-10-15 16:48 UTC. The notes below this section are historical
+Checkpoint: 2026-10-15 17:54 UTC. The notes below this section are historical
 and retain their original source scope; they are not the current task queue.
 
 ## Active queue
@@ -26,16 +26,23 @@ establish native execution on the skipped architecture.
 | CLC/STC/CMC numerical effects | Complete shared carry grammar and CF-only effects; the complement requires incoming CF. Existing unrelated FLAGS/DF remain unchanged. |
 | MOV/FP helper metadata and wide complex store fixture | Actual result schemas, complete source witnesses and initialized GP input replace invalid metadata/unknown-entry assumptions; production checks are not loosened. |
 | Native XADD/XCHG result continuation | Uses the existing complete typed sideeffect emitter; preserves faults/order and grants no reusable memory or declaration-query authority. |
-| Partial FP parameter stores, BIT shadow writeback and trap-only source | Separate typed logical-shadow and all-path trap roles are being tested. Generic incoming writes, pointer/bool bytes and source cropping remain prohibited. |
-| SB LEAW/L/Q address effects | A separate unknown-address effect is being tested. It must kill destination identities without inventing numerical bytes or dereference permissions. |
-| x87 initialized control/status words | Preserve the complete original FINIT/FSTCW/FSTSW parameter/result fixture; independent Go-row and byte regressions precede the state-family repair. |
-| DATA relocation address values | Independent same-module relocation regressions are prepared; generic pointer-to-number permission must not be inferred. |
-| Complete 386 runtime fixture | Its first failure is REPN/SCASB result availability. Keep complete prefixes, zero-count FLAGS behavior and all original functions. |
+| Partial FP parameter stores, BIT shadow writeback and trap-only source | Qualified `7753b575` is merged. Separate typed logical-shadow and all-path trap roles preserve the incoming-write, pointer/bool and complete-source boundaries. Actual Linux runtime still needs replay. |
+| SB LEAW/L/Q address effects | Qualified `e5523905` is merged through `cf07263b`. Unknown-address writes kill destination identities without inventing numerical bytes or dereference permission. A separate old AUTO cost-selector gap remains unresolved. |
+| x87 initialized control/status words | Original word-store objects pass at `606bb5d9`, but portable complete ENV source remains failed. Mode-correct `2f854007` reproduces 177 genuine semantic rejections plus a state failure; its 45 bare-SP fixture errors are separately corrected. Named-AUTO `9b5b9b15` then genuinely fails all 45 positive width projections. No complete x87 qualification yet. |
+| DATA relocation address values | `de9c0339` first GREEN passes 12 roots/305 children, including original Go objects and 60 LLVM22 axes. Complete SDK/race affected qualification remains pending. Generic incoming pointers and code addresses gain no numerical or dereference permission. |
+| Complete 386 runtime fixture | New complete SCAS/CMPS source oracle passes all five targets. Result-flow tests retain 708 legal rejections and 60 passing boundary controls; complete prefix, zero-count FLAGS and original runtime-source replay remain work, not passes. |
 
 Frozen `0c80d8a6` passes nine carry/exchange/fixture owners on each of Go27,
 actual Go20 and race: 27 root executions/378 children, no failures or skips.
 This is a focused result, not whole-module, native-runtime or final PR
 qualification. Vets and broader affected-family qualification remain required.
+
+Root independently rechecks the two newly merged leaves' original inventories,
+raw ordered terminals, source/SDK/tool identities and vet exits. BIT/FP/trap's
+Go27/Go20/race scopes pass 252 root executions/16,382 children. SB LEA's same
+lanes pass 185 root executions/7,584 children. Both retain zero skips, missing
+or duplicate terminals; neither is a whole-module or native-runtime receipt.
+The combined head still requires its own fresh qualification before publishing.
 
 Main now includes the qualified commuted-pointer read leaf through `67c38bc2`
 and immediate packed comparison leaf `605c8615`. The latter's Go27/Go20/race
