@@ -87,13 +87,16 @@ const stringLODSRoots = [
   'TestX86LODSZeroCountDoesNotCreateResultFacts',
   'TestX86LODSZeroStoreObserverRejectsEveryFieldAndUnknownEffect',
   'TestX86LODSZeroCountOriginalGoAndLLVMWholeState',
+  'TestX86StringMemoryIRReaderEmptyZeroCount',
+  'TestX86StringMemoryIRReaderLineEndingsAndMetadata',
+  'TestX86StringMemoryIRReaderRejectsMemoryMutations',
 ];
 const stringLODSLane = '- lane: string-memory-lods-state\n            module: \'.\'\n            roots:\n' +
   stringLODSRoots.map(root => `              - ${root}\n`).join('') + '            timeout: 5m';
 
 function checkStringLODSPriority(text) {
-  assert.equal(stringLODSRoots.length, 14);
-  assert.equal(new Set(stringLODSRoots).size, 14);
+  assert.equal(stringLODSRoots.length, 17);
+  assert.equal(new Set(stringLODSRoots).size, 17);
   assert.ok(text.includes(stringLODSLane), 'all new string memory/CFG and LODS state owners');
   assert.equal(text.split('- lane: string-memory-lods-state\n').length - 1, 1,
     'one independent string/LODS priority lane');
@@ -102,7 +105,7 @@ function checkStringLODSPriority(text) {
   }
 }
 
-test('String LODS priority retains fourteen complete source and state owners within five minutes', () => {
+test('String LODS priority retains seventeen complete source, state and reader owners within five minutes', () => {
   checkStringLODSPriority(sdk);
 });
 

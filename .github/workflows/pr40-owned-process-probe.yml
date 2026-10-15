@@ -246,6 +246,9 @@ jobs:
               - TestX86LODSZeroCountDoesNotCreateResultFacts
               - TestX86LODSZeroStoreObserverRejectsEveryFieldAndUnknownEffect
               - TestX86LODSZeroCountOriginalGoAndLLVMWholeState
+              - TestX86StringMemoryIRReaderEmptyZeroCount
+              - TestX86StringMemoryIRReaderLineEndingsAndMetadata
+              - TestX86StringMemoryIRReaderRejectsMemoryMutations
             timeout: 5m
           - lane: scalar-fp-byte-spans
             module: '.'
