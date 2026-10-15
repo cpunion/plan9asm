@@ -29,6 +29,9 @@ func x86TrapOnlyLogicalFPSourceRole(fn Func, sig FuncSig, arch string) bool {
 			ins.x86RawNearReturn != nil || ins.x86AddressBits != 0 || ins.x86UnboundAddressOverride || ins.x86SegmentPrefix != 0 {
 			return false
 		}
+		if _, stack, _ := x86StackWidthProperties(ins, arch); stack {
+			return false // This new role does not supplement independent stack storage.
+		}
 		for _, operand := range ins.Args {
 			if operand.Kind == OpMem || operand.Kind == OpFPAddr {
 				return false
