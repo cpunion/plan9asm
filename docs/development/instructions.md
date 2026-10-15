@@ -58,6 +58,14 @@ where practical. A completeness test must compare the whole spec table with
 the current Go encoder family so adding one observed spelling cannot leave
 sibling forms unmodeled.
 
+Keep mandatory numerical/result obligations separate from cost-only routing.
+A newly modeled family must not bypass its complete source proof because a
+function has no result store, an unused bool parameter, another storage role,
+or an unused FP address. That role needs its own proof, not an exemption.
+Unknown source/result bytes cannot fall back to zero-initialized implementation
+allocas. Test these boundaries through all public APIs, including default and
+explicit architectures; retain independent canonical-bool and memory contracts.
+
 Macro expansion uses complete Go assembler identifier tokens, including middle
 dot and division slash, never prefixes or text inside string/character literals.
 Unresolved constants need context for an isolated instruction probe, but must

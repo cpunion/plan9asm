@@ -1,6 +1,6 @@
 # Current work: PR 40 checkpoint
 
-Checkpoint: 2026-10-15 10:43 UTC. The latest fork diagnostic completed naturally
+Checkpoint: 2026-10-15 11:16 UTC. The latest fork diagnostic completed naturally
 with nine stale BP test-root failures, not a tool or timeout failure. All nine
 are repaired and locally integrated through `6925918c`. Main also contains the
 qualified string-memory/REP-CFG repair and full-AX empty-LODS repair through
@@ -37,6 +37,19 @@ unattempted files. Classification, objects and executed semantics stay distinct.
    complete typed positive and the full implicit MUL/IMUL B/W/L/Q effect family.
    New FP source views must use checked byte transport, not legacy interior
    zero/coercion. Do not extend DIV, raw/source-stack or caller permissions.
+   Through `63016ca7`, independent REDs also expose120 missing-result-store
+   false passes and120 old-storage-route false passes. The family now consumes
+   mandatory whole NUM/canonical proof independently of MOV storage costs.
+   All34 semantic/control owners pass Go27, actual Go20 and race. The final
+   qualification then stops FAILED at the unchanged complete386 `arith`:
+   its zero-frame physical SP, live-stack memory POP and unmodeled PUSHAL/POPAL
+   cannot borrow a logical AUTO proof. Preserve that entire original multi-TEXT
+   input as an explicit Context negative, distinguish partial selection of all
+   other unchanged TEXTs, and add an independent bounded typed AUTO positive.
+   Neither selection nor that positive certifies the complete original arith.
+   Rerun every final owner on the corrected frozen head; remaining commands
+   from the failed630 run are unattempted. Native implicit-MUL memory loads
+   still need independent dead/zero-result fault TDD; objects are not that gate.
    Never crop old source or add an opcode exemption to hide these failures.
    It fixes named GP MOV views, not all arithmetic/compare FP consumers or
    specialized source-stack/fixed-local roles. Never retag legal tuples Context.
@@ -53,9 +66,11 @@ unattempted files. Classification, objects and executed semantics stay distinct.
    has 589 unique owners: all previous 548 plus BP and string additions. Add
    every new FP owner without dropping SDK lanes or enlarging original 3m/5m
    budgets. Rerun official gates, vets and the strict benchmark.
-5. Stage the complete batch in the allowed fork. Policy `a46b3620` retains all
-   34 old early lanes and adds complete BP and string/LODS priorities; its
-   89 Node policies and three workflow lints pass. These are policy checks,
+5. Stage the complete batch in the allowed fork. Policy `d3c51480` retains all
+   36 previous early lanes and expands the FP lane to26 complete byte/MUL
+   roots; its91 Node policies and three workflow lints pass. The failed old386
+   owner is being added to that same priority without changing any budget.
+   These are policy checks,
    not an executed CI receipt for the new source. Push once and let the
    entire new run finish naturally. Draft PR40 is not ready; its contribution
    head is still `24851df2` at this checkpoint.
