@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/xgo-dev/plan9asm/internal/goasmcmd"
 	"github.com/xgo-dev/plan9asm/internal/gostaticstorage"
 )
 
@@ -39,6 +40,18 @@ func TestX86SDKOriginalSource386InactiveAMD64ProfileCompleteCapture(t *testing.T
 			}
 			request.Environment = environment
 			before := append([]string(nil), environment...)
+			actual, err := goasmcmd.Run(ctx, request.Directory, request.Environment, request.GoBinary,
+				"env", "-json", "GOOS", "GOARCH", "GOAMD64", "GO386")
+			var profileObservation map[string]string
+			if err != nil || json.Unmarshal(actual, &profileObservation) != nil {
+				t.Fatal("independent actual Go profile observation failed", err)
+			}
+			inactive, present := profileObservation["GOAMD64"]
+			if !present || inactive != profile.value || profileObservation["GO386"] != "sse2" ||
+				profileObservation["GOOS"] != "linux" || profileObservation["GOARCH"] != "386" {
+				t.Fatal("actual inactive/active architecture fields differ", profileObservation)
+			}
+			t.Logf("independent actual original386 profile before capture: %s", actual)
 			if public, err := CaptureGoX86SDKASMDataSource(ctx, request); public != nil || !errors.Is(err, ErrProbeNeedsContext) {
 				t.Fatal("inactive original-source profile leaked into strict DATA/NUM observation", err)
 			}
