@@ -3,10 +3,10 @@ package plan9asm
 import (
 	"bytes"
 	"go/ast"
-	"go/format"
 	"go/parser"
 	"go/token"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"testing"
 
@@ -66,8 +66,14 @@ func Make(token ScanToken, text string) Token {
 	if err != nil {
 		return false
 	}
+	// Ignore source positions and parser symbol-table pointers, but retain
+	// every AST node, operation and literal byte. Comment layout is not a
+	// producer difference; changing a string literal still is.
+	semanticField := func(name string, value reflect.Value) bool {
+		return name != "Obj" && value.Type() != reflect.TypeOf(token.NoPos)
+	}
 	var want bytes.Buffer
-	if format.Node(&want, files, expected.Decls[0]) != nil {
+	if ast.Fprint(&want, nil, expected.Decls[0], semanticField) != nil {
 		return false
 	}
 	matched := 0
@@ -77,7 +83,7 @@ func Make(token ScanToken, text string) Token {
 			continue
 		}
 		var got bytes.Buffer
-		if format.Node(&got, files, function) != nil || got.String() != want.String() {
+		if ast.Fprint(&got, nil, function, semanticField) != nil || got.String() != want.String() {
 			return false
 		}
 		matched++
