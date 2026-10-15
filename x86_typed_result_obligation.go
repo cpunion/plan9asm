@@ -6,10 +6,16 @@ package plan9asm
 // Independently bound entry/storage roles are consumed by the complete cached
 // proof; this syntax-only routing decision never grants one.
 func x86TypedFPResultNeedsProof(fn Func, sig FuncSig, arch string) bool {
-	if arch != "386" && arch != "amd64" || sig.Ret == Void || len(sig.Frame.Results) == 0 {
+	if arch != "386" && arch != "amd64" {
 		return false
 	}
 	for _, ins := range fn.Instrs {
+		if x86NamedSegmentMOVNeedsProof(ins, arch) {
+			return true // Source/input effects remain mandatory even with no result.
+		}
+		if sig.Ret == Void || len(sig.Frame.Results) == 0 {
+			continue
+		}
 		if _, known, err := x86ResultStringCompareProperties(ins, arch); known && err == nil && x86ResultNamedPredicateInstruction(ins) {
 			return true // Conditional native reads need the same complete result proof, including missing stores.
 		}
