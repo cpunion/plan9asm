@@ -3,6 +3,7 @@ package plan9asm
 import (
 	"context"
 	"errors"
+	"reflect"
 	"testing"
 
 	"github.com/xgo-dev/plan9asm/internal/gostaticstorage"
@@ -19,7 +20,8 @@ func TestX86GoPanicTerminalSourceCannotBeReconstructedFromReports(t *testing.T) 
 	}
 	actual := &GoX86SDKASMDataSource{}
 	actual.identity = actual
-	copy := *actual
+	copy := new(GoX86SDKASMDataSource)
+	reflect.ValueOf(copy).Elem().Set(reflect.ValueOf(actual).Elem())
 	if observed, err := copy.panicTerminalObservation(context.Background(), &x86ResultFlowBudget{}); !errors.Is(err, ErrProbeNeedsContext) || observed != nil {
 		t.Fatal("copied source acquired original compiler-body association", observed, err)
 	}
