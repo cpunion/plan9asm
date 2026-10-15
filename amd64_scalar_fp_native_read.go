@@ -92,7 +92,7 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		if boundRawClear && x86X87RawClearInstruction(ins) {
 			return x86ResultX87BoundRawClear(ins, state, owned, resultOffset, arch)
 		}
-		if accepted, known := c.x87EnvironmentReadResultStep(ins, state, owned, arch); known {
+		if accepted, known := c.x87EnvironmentReadResultStep(ins, state, arch); known {
 			return accepted
 		}
 		if accepted, known := c.x87HardwareControlResultStep(ins, state, owned, resultOffset, arch); known {

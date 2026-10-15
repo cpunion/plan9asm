@@ -25,16 +25,22 @@ func x86X87EnvironmentReadProperties(ins Instr, arch string) (Operand, bool, err
 // Only the paired Software emitter supplies this conditional observation.
 // Its exact volatile read defines CW/SW values, not native bounds, hardware
 // Tag/TOP, initialized F0..F7, an empty stack, or the FRSTOR register image.
-func (c *amd64Ctx) x87EnvironmentReadResultStep(ins Instr, state *x86ResultState, owned []bool, arch string) (bool, bool) {
+func (c *amd64Ctx) x87EnvironmentReadResultStep(ins Instr, state *x86ResultState, arch string) (bool, bool) {
 	source, known, err := x86X87EnvironmentReadProperties(ins, arch)
 	if !known {
 		return false, false
 	}
 	if err != nil || c.x87Mode != X87Software || state.x87 == nil || state.x87.word == nil ||
-		!x86ResultNamedPredicateInstruction(ins) ||
-		!x86ResultReadWithNativeContinuation(ins, source, 28, state, owned, arch, true) {
+		!x86ResultNamedPredicateInstruction(ins) || ins.x86NumericalRead != nil ||
+		source.Kind != OpMem || source.Mem.Sym != "" ||
+		!x86OrdinaryNativeMemoryOperand(source, arch) ||
+		!x86ResultIncomingPointerAddressIdentity(source, state, arch) {
 		return false, true
 	}
+	// Initialized logical FP bytes do not imply a contiguous 28-byte native
+	// allocation: each scalar parameter can have its own small alloca. AUTO,
+	// DATA and logical FP require their own complete backing adapters and do
+	// not inherit the ordinary reaching-pointer read role here.
 	if !state.shapeOnly {
 		x87 := state.x87
 		x87.slots, x87.depth, x87.invalid = 0, 0, true
