@@ -142,9 +142,11 @@ func x86PackedMaskCompareProperties(ins Instr, arch string, first, laneBits int,
 
 func x86TypedPackedIntegerCompareByteEffect(op Op, ins Instr, arch string) (x86TypedByteEffect, bool, error) {
 	form, known, err := x86PackedIntegerCompareProperties(op, ins, arch)
+	immediateFamily := false
 	if !known {
 		immediate, recognized, immediateErr := x86ImmediatePackedCompareProperties(op, ins, arch)
 		form, known, err = immediate.x86PackedIntegerCompareForm, recognized, immediateErr
+		immediateFamily = recognized
 	}
 	if !known || err != nil {
 		return x86TypedByteEffect{}, known, err
@@ -167,5 +169,5 @@ func x86TypedPackedIntegerCompareByteEffect(op Op, ins Instr, arch string) (x86T
 	operands = append(operands, x86TypedByteOperand{
 		index: form.destination, operand: ins.Args[form.destination], width: int64(width), write: true,
 	})
-	return x86TypedByteEffect{operands: operands}, true, nil
+	return x86TypedByteEffect{operands: operands, requiresResultProof: immediateFamily}, true, nil
 }
