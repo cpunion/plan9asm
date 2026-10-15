@@ -106,6 +106,19 @@ func TestX86IncomingPointerCommutedReadRolesAndOriginalIdentity(t *testing.T) {
 				}
 				ins := x86ScalarLaneInstruction(t, "MOVL "+row.address+",CX")
 				before := state.clone()
+				if row.name == "commuted-order" {
+					if x86ResultIncomingPointerAddressIdentity(ins.Args[0], &state, arch) {
+						t.Fatal("paired read widened the independent store/RMW address role")
+					}
+					lea := "LEAQ"
+					if arch == "386" {
+						lea = "LEAL"
+					}
+					address := x86ScalarLaneInstruction(t, lea+" "+row.address+",CX")
+					if accepted, _ := x86ResultIncomingPointerTransfer(address, &state, nil, arch); accepted || !reflect.DeepEqual(state, before) {
+						t.Fatal("paired read created an independent commuted LEA pointer")
+					}
+				}
 				if accepted, known := x86LoweredScalarNativeLoad(ins, &state, nil, 0, arch); !known || accepted != row.accept {
 					t.Fatal("paired load disagrees with the independent address roles", accepted, known)
 				}
