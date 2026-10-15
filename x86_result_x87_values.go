@@ -38,6 +38,9 @@ func x86X87FlowInstructions(fn Func) []Instr {
 func x86X87ValueFlowNeeded(fn Func) bool {
 	for _, ins := range x86X87FlowInstructions(fn) {
 		name, _, _ := strings.Cut(strings.ToUpper(string(ins.Op)), ".")
+		if name == "FLDENV" {
+			return true // Allocation only; the actual transfer still checks mode and source.
+		}
 		if _, known := x86X87ValueSpecs[Op(name)]; known {
 			return true
 		}

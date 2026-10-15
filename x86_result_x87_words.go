@@ -17,6 +17,9 @@ type x86X87WordLayout struct {
 func x86X87WordStateNeeded(fn Func) bool {
 	for _, ins := range x86X87FlowInstructions(fn) {
 		name, _, _ := strings.Cut(strings.ToUpper(string(ins.Op)), ".")
+		if name == "FLDENV" {
+			return true // Environment observation does not initialize the value stack.
+		}
 		if spec, known := x86X87ValueSpecs[Op(name)]; known &&
 			(spec.kind == x86X87IntegerMove || spec.kind == x86X87Round) {
 			return true // Explicit control knownness/layout, never a default CW.
