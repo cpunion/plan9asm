@@ -4,7 +4,61 @@ const test = require('node:test');
 
 const workflow = fs.readFileSync('.github/workflows/pr40-owned-process-probe.yml', 'utf8');
 const sdk = workflow.slice(workflow.indexOf('\n  sdk-priority:'), workflow.indexOf('\n  ownership:'));
-const sdkLaneCount = 36;
+const sdkLaneCount = 37;
+
+const scalarFPByteRoots = [
+  'TestX86ScalarFPWideTupleStoresPreserveEveryField',
+  'TestX86ScalarFPWideTupleReadsPreserveEveryField',
+  'TestX86ScalarFPIntegerPartialAndInteriorBytesThreeAPIs',
+  'TestX86IntegerFPByteViewsKeepIndependentRoles',
+  'TestX86IntegerFPByteViewsMode32QwordKeepsVectorConsumer',
+  'TestX86IntegerFPByteViewsPreserveStatusAndDirection',
+  'TestX86IntegerFPByteViewsDescriptorCannotCreateStorage',
+  'TestX86IntegerFPByteViewsReadonlyInputsAndFloatingBits',
+  'TestX86IntegerFPByteViewsSparseMustInitialization',
+  'TestX86IntegerFPByteViewsMOVQSourceAliases',
+  'TestX86OrdinaryIntegerFPStoreWidthsRequireWholeSource',
+  'TestX86OrdinaryIntegerFPDefaultArchitectureCannotBypassProof',
+  'TestX86OrdinaryIntegerFPStoreKeepsIndependentStorageConsumers',
+  'TestX86ScalarFPWideTupleSpanOriginalGoAssembly',
+  'TestX86IntegerFPByteViewsFiveTargetOriginalAndLLVMObjects',
+];
+const scalarFPByteLane = '- lane: scalar-fp-byte-spans\n            module: \'.\'\n            roots:\n' +
+  scalarFPByteRoots.map(root => `              - ${root}\n`).join('') + '            timeout: 5m';
+
+function checkScalarFPBytePriority(text) {
+  assert.equal(scalarFPByteRoots.length, 15);
+  assert.equal(new Set(scalarFPByteRoots).size, 15);
+  assert.ok(text.includes(scalarFPByteLane), 'thirteen complete FP byte semantic/control and two original/object owners');
+  assert.equal(text.split('- lane: scalar-fp-byte-spans\n').length - 1, 1,
+    'one bounded FP byte priority lane');
+  for (const root of scalarFPByteRoots) {
+    assert.equal(text.split(`- ${root}\n`).length - 1, 1, 'one complete literal FP byte owner: ' + root);
+  }
+}
+
+test('Scalar FP byte priority retains fifteen complete semantic and object owners within five minutes', () => {
+  checkScalarFPBytePriority(sdk);
+});
+
+test('Scalar FP byte priority rejects missing, duplicate, substituted, partial or enlarged owners', () => {
+  checkScalarFPBytePriority(scalarFPByteLane);
+  for (const changed of [
+    '',
+    scalarFPByteLane.replace('scalar-fp-byte-spans', 'unrelated-fp-byte-spans'),
+    scalarFPByteLane + '\n          ' + scalarFPByteLane,
+    scalarFPByteLane.replace("module: '.'", 'module: cmd/plan9asmll'),
+    scalarFPByteLane.replace('timeout: 5m', 'timeout: 6m'),
+    scalarFPByteLane.replace('            timeout: 5m',
+      '              - TestX86ABI0ResultTupleScalarTypesAndObjects\n            timeout: 5m'),
+    ...scalarFPByteRoots.flatMap(root => [
+      scalarFPByteLane.replace(`              - ${root}\n`, ''),
+      scalarFPByteLane + `\n              - ${root}\n`,
+      scalarFPByteLane.replace(root, 'TestUnrelatedSubstituteOwner'),
+      scalarFPByteLane.replace(root, root + '/386'),
+    ]),
+  ]) assert.throws(() => checkScalarFPBytePriority(changed));
+});
 
 const stringLODSRoots = [
   'TestX86StringImplicitMemoryIndependentFamilyEffects',

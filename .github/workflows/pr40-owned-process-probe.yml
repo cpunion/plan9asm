@@ -237,6 +237,25 @@ jobs:
               - TestX86LODSZeroStoreObserverRejectsEveryFieldAndUnknownEffect
               - TestX86LODSZeroCountOriginalGoAndLLVMWholeState
             timeout: 5m
+          - lane: scalar-fp-byte-spans
+            module: '.'
+            roots:
+              - TestX86ScalarFPWideTupleStoresPreserveEveryField
+              - TestX86ScalarFPWideTupleReadsPreserveEveryField
+              - TestX86ScalarFPIntegerPartialAndInteriorBytesThreeAPIs
+              - TestX86IntegerFPByteViewsKeepIndependentRoles
+              - TestX86IntegerFPByteViewsMode32QwordKeepsVectorConsumer
+              - TestX86IntegerFPByteViewsPreserveStatusAndDirection
+              - TestX86IntegerFPByteViewsDescriptorCannotCreateStorage
+              - TestX86IntegerFPByteViewsReadonlyInputsAndFloatingBits
+              - TestX86IntegerFPByteViewsSparseMustInitialization
+              - TestX86IntegerFPByteViewsMOVQSourceAliases
+              - TestX86OrdinaryIntegerFPStoreWidthsRequireWholeSource
+              - TestX86OrdinaryIntegerFPDefaultArchitectureCannotBypassProof
+              - TestX86OrdinaryIntegerFPStoreKeepsIndependentStorageConsumers
+              - TestX86ScalarFPWideTupleSpanOriginalGoAssembly
+              - TestX86IntegerFPByteViewsFiveTargetOriginalAndLLVMObjects
+            timeout: 5m
           - lane: arm64-carrier-widths
             module: '.'
             roots:
