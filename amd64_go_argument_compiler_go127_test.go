@@ -71,7 +71,7 @@ func TestAMD64GoArgumentCompilerCallsiteBanksAndWidths(t *testing.T) {
 			target, caller := functions[name], functions["example.invalid/carrieroracle.Caller"+fixture.name]
 			if target == nil || caller == nil || len(target.code) == 0 || len(caller.code) == 0 ||
 				!bytes.Contains(compiled, target.code) || !bytes.Contains(compiled, caller.code) {
-				t.Fatal("original named ABIInternal compiler bodies/code are absent")
+				t.Fatalf("original named ABIInternal compiler bodies/code are absent\n%s", listing)
 			}
 			call, found := caller.calls[name]
 			if !found || call < 1 || call > int64(len(caller.code))-4 || caller.code[call-1] != 0xe8 {
@@ -105,6 +105,7 @@ func TestAMD64GoArgumentCompilerCallsiteBanksAndWidths(t *testing.T) {
 			if !reflect.DeepEqual(modeled, fixture.carriers) {
 				t.Fatalf("compiler-independent parameter grouping/bank/width matrix differs: %#v", modeled)
 			}
+			t.Logf("actual original ABIInternal target=%s receivingStores=%+v uniqueE8CallOffset=%d callerCodeSHA=%x targetCodeSHA=%x; no incoming stack/carrier permission", name, got, call, sha256.Sum256(caller.code), sha256.Sum256(target.code))
 			if strings.Contains(fixture.name, "Rollback") && plan.requireRegisters() == nil {
 				t.Fatal("oracle spill observations became a register-only entry permission")
 			}

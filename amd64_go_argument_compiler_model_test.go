@@ -52,11 +52,20 @@ func TestAMD64GoArgumentCompilerFixtureAndListingGuards(t *testing.T) {
 	if err != nil || len(observed) != 2 || len(observed["target"].spills) != 1 || observed["target"].spills[0].register != AX || observed["caller"].calls["target"] != 1 {
 		t.Fatal("complete compiler parser model", err)
 	}
+	for _, flags := range []string{"NOSPLIT|ABIInternal", "ABIInternal|NOSPLIT", "DUPOK|NOSPLIT|NOFRAME|ABIInternal"} {
+		withFlags := strings.Replace(listing, "TEXT target(SB), ABIInternal,", "TEXT target(SB), "+flags+",", 1)
+		if functions, err := amd64ArgumentCompilerFunctions([]byte(withFlags)); err != nil || len(functions) != 2 || functions["target"] == nil {
+			t.Errorf("compiler TEXT flags lost an original ABIInternal target (%s): %v", flags, err)
+		}
+	}
 	for name, invalid := range map[string]string{
-		"duplicate-TEXT": listing + "\t0x0000 00000 TEXT target(SB), ABIInternal, $0-8\n",
-		"code-hole":      strings.Replace(listing, "0x0000 c3", "0x0001 c3", 1),
-		"duplicate-call": listing + "\trel 1+4 t=R_CALL target+0\n",
-		"empty":          "",
+		"duplicate-flags": strings.Replace(listing, "TEXT target(SB), ABIInternal,", "TEXT target(SB), ABIInternal|ABIInternal,", 1),
+		"unknown-flags":   strings.Replace(listing, "TEXT target(SB), ABIInternal,", "TEXT target(SB), ABIInternal|UNKNOWN,", 1),
+		"ABI0":            strings.Replace(listing, "TEXT target(SB), ABIInternal,", "TEXT target(SB), ABI0,", 1),
+		"duplicate-TEXT":  listing + "\t0x0000 00000 TEXT target(SB), ABIInternal, $0-8\n",
+		"code-hole":       strings.Replace(listing, "0x0000 c3", "0x0001 c3", 1),
+		"duplicate-call":  listing + "\trel 1+4 t=R_CALL target+0\n",
+		"empty":           "",
 	} {
 		t.Run(name, func(t *testing.T) {
 			if _, err := amd64ArgumentCompilerFunctions([]byte(invalid)); err == nil {

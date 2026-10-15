@@ -97,7 +97,7 @@ type amd64ArgumentCompilerFunction struct {
 }
 
 var (
-	amd64ArgumentCompilerText  = regexp.MustCompile(`\bTEXT\s+([^\s(]+)\(SB\),\s+ABIInternal,`)
+	amd64ArgumentCompilerText  = regexp.MustCompile(`\bTEXT\s+([^\s(]+)\(SB\),\s+([A-Za-z0-9_|]+),`)
 	amd64ArgumentCompilerStore = regexp.MustCompile(`\b(MOVB|MOVW|MOVL|MOVQ|MOVSS|MOVSD)\s+([A-Z0-9]+),\s+[^\s,]+\.([A-Za-z][A-Za-z0-9_]*)\+(-?[0-9]+)\((?:SP|FP)\)`)
 	amd64ArgumentCompilerBytes = regexp.MustCompile(`^\s+0x([0-9a-f]+)\s+((?:[0-9a-f]{2} ){1,16})`)
 	amd64ArgumentCompilerCall  = regexp.MustCompile(`^\s+rel ([0-9]+)\+4 t=R_CALL ([^\s+]+)\+0\s*$`)
@@ -114,6 +114,21 @@ func amd64ArgumentCompilerFunctions(listing []byte) (map[string]*amd64ArgumentCo
 	var current *amd64ArgumentCompilerFunction
 	for _, line := range strings.Split(string(listing), "\n") {
 		if row := amd64ArgumentCompilerText.FindStringSubmatch(line); row != nil {
+			flags := make(map[string]bool)
+			for _, flag := range strings.Split(row[2], "|") {
+				if flags[flag] {
+					return nil, fmt.Errorf("duplicate compiler TEXT flag")
+				}
+				flags[flag] = true
+				switch flag {
+				case "ABIInternal", "NOSPLIT", "NOFRAME", "DUPOK":
+				default:
+					return nil, fmt.Errorf("unregistered compiler TEXT flag %s", flag)
+				}
+			}
+			if !flags["ABIInternal"] {
+				return nil, fmt.Errorf("compiler argument fixture has a non-ABIInternal entry")
+			}
 			if functions[row[1]] != nil || len(functions) >= 256 {
 				return nil, fmt.Errorf("duplicate/oversized compiler TEXT inventory")
 			}
