@@ -1,5 +1,71 @@
 # Current work: PR 40 checkpoint
 
+Checkpoint: 2026-10-15 16:48 UTC. The notes below this section are historical
+and retain their original source scope; they are not the current task queue.
+
+## Active queue
+
+The latest allowed-fork [run38760793656](https://github.com/cpunion/plan9asm/actions/runs/38760793656)
+at `191fbeaf` ended naturally: 78 jobs, 66 successful and 12 failed. Ten
+execution jobs contain 13 distinct failing test roots; the two other failures
+are strict complete-module aggregates refusing those failed partitions.
+No cancellation or rerun established success. The complete simple CLI and its
+coverage upload pass; main/rich coverage uploads are skipped, not passed.
+All 41 SDK priorities, native65 and ARM cross execution pass their own scopes.
+
+Independent complete Windows raw audits retain main's 22 packages, 7,043 root
+and 166,564 child executions, with 12 failed roots/45 failed children and 263
+explicit host-inapplicable root skips. The simple CLI has 32 roots/29 children,
+all passing without skips. The rich CLI has 334 roots/2,095 children, one
+failed root and one explicit host-inapplicable child skip. Host skips do not
+establish native execution on the skipped architecture.
+
+| Failing class | Current bounded repair or remaining work |
+| --- | --- |
+| Complete Maps public CLI deadline | `ccf1a8f9` preserves the selected content-addressed Go build cache; fresh source/proof observations and complete two-file package remain independent. Its exact CLI passes locally in 58.23 seconds. Windows performance still needs CI. |
+| CLC/STC/CMC numerical effects | Complete shared carry grammar and CF-only effects; the complement requires incoming CF. Existing unrelated FLAGS/DF remain unchanged. |
+| MOV/FP helper metadata and wide complex store fixture | Actual result schemas, complete source witnesses and initialized GP input replace invalid metadata/unknown-entry assumptions; production checks are not loosened. |
+| Native XADD/XCHG result continuation | Uses the existing complete typed sideeffect emitter; preserves faults/order and grants no reusable memory or declaration-query authority. |
+| Partial FP parameter stores, BIT shadow writeback and trap-only source | Separate typed logical-shadow and all-path trap roles are being tested. Generic incoming writes, pointer/bool bytes and source cropping remain prohibited. |
+| SB LEAW/L/Q address effects | A separate unknown-address effect is being tested. It must kill destination identities without inventing numerical bytes or dereference permissions. |
+| x87 initialized control/status words | Preserve the complete original FINIT/FSTCW/FSTSW parameter/result fixture; independent Go-row and byte regressions precede the state-family repair. |
+| DATA relocation address values | Independent same-module relocation regressions are prepared; generic pointer-to-number permission must not be inferred. |
+| Complete 386 runtime fixture | Its first failure is REPN/SCASB result availability. Keep complete prefixes, zero-count FLAGS behavior and all original functions. |
+
+Frozen `0c80d8a6` passes nine carry/exchange/fixture owners on each of Go27,
+actual Go20 and race: 27 root executions/378 children, no failures or skips.
+This is a focused result, not whole-module, native-runtime or final PR
+qualification. Vets and broader affected-family qualification remain required.
+
+Main now includes the qualified commuted-pointer read leaf through `67c38bc2`
+and immediate packed comparison leaf `605c8615`. The latter's Go27/Go20/race
+affected tests pass 44 root executions/5,020 children. Its complete discovering
+SDK package remains FAILED2/3: the next source effect is VPCOMPRESSQ. That is
+not a complete SDK success. The strict original Index leaf independently passes
+all three APIs and 12 LLVM22 object axes, without a native-execution claim.
+
+The x87 logical-value leaf `0b541d6b` has only first focused GREEN so far:
+14 roots/1,888 children, with Go-row/byte observations and bounded storage
+controls. Go20, race, backend objects, complete original hypot and native
+execution remain pending. Its original failed snapshots remain failed.
+
+Earlier merged `ab5ad450` passes the exact 692-owner union: 1,690 root
+executions/85,181 children across its selected SDK/race lanes. Its strict
+benchmark is nevertheless FAILED150/184, with 34 failed files and AMD64
+484 seconds above the unchanged 300-second budget. Neither that receipt nor
+the subsequent focused leaves certify a newer combined snapshot. Do not
+raise budgets or turn Context into a file pass.
+
+Keep one local heavy command owner at a time, including inventories that build
+test binaries. Release immediately after natural completion. Reuse existing
+idle persistent worktrees, preserve immutable refs/failed reports, and freeze
+each tested source. Stage only qualified batches in the allowed fork; do not
+push a new diagnostic while its current run is active. PR40 remains draft at
+`24851df2`; never directly push or merge upstream. No local inventory scanner
+or external ledger workload belongs in this repository.
+
+## Historical checkpoint: 13:13 UTC
+
 Checkpoint: 2026-10-15 13:13 UTC. Fork diagnostic `5b44378d` completed naturally
 with six failed jobs in three classes: CRC32 result/read proof, a string-IR
 reader's CRLF handling and a shared Compare source deadline. Main contains the
