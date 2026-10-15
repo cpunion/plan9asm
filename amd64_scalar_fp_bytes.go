@@ -128,6 +128,11 @@ func (c *amd64Ctx) scalarFPViewNeedsInitialization(off int64, bits int, write bo
 }
 
 func (c *amd64Ctx) validateScalarFPSourceViews() error {
+	if c.sig.amd64GoArguments != nil {
+		if err := c.scalarFPResultInitialized(); err != nil {
+			return err
+		}
+	}
 	if c.fpScalarSource.x86ContinuationFlow != nil {
 		if err := c.scalarFPResultInitialized(); err != nil {
 			return err

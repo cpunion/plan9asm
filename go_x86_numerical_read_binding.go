@@ -42,14 +42,15 @@ type GoX86NumericalReadBinding struct {
 }
 
 type numericalSignatureCapabilities struct {
-	caller *x86GoCallerRegionProof
-	local  *x86FixedLocalBinding
+	caller    *x86GoCallerRegionProof
+	local     *x86FixedLocalBinding
+	arguments *amd64GoArgumentBinding
 }
 
 func numericalCapabilities(sigs map[string]FuncSig) map[string]numericalSignatureCapabilities {
 	result := make(map[string]numericalSignatureCapabilities, len(sigs))
 	for name, sig := range sigs {
-		result[name] = numericalSignatureCapabilities{sig.x86CallerRegions, sig.x86FixedLocal}
+		result[name] = numericalSignatureCapabilities{sig.x86CallerRegions, sig.x86FixedLocal, sig.amd64GoArguments}
 	}
 	return result
 }
@@ -171,7 +172,7 @@ func (source *GoX86NumericalReadSource) bindNumericalReads(ctx context.Context, 
 	}
 	for name, sig := range sigs {
 		declaration, found := declarations[name]
-		if !found || sig.arm64FPReadDeclaration != nil || sig.arm64ABI0Declaration != nil || sig.arm64ABI0TailDeclaration != nil || sig.arm64NativeScratch != nil ||
+		if !found || sig.amd64GoArguments != nil || sig.arm64FPReadDeclaration != nil || sig.arm64ABI0Declaration != nil || sig.arm64ABI0TailDeclaration != nil || sig.arm64NativeScratch != nil ||
 			!reflect.DeepEqual(numericalSignatureShape(sig), declaration.signature) {
 			return Options{}, numericalSBContext("signature is not the actual source declaration: %s", name)
 		}
@@ -201,6 +202,10 @@ func (source *GoX86NumericalReadSource) bindNumericalReads(ctx context.Context, 
 		options: options, symbols: symbols, declarations: declarations, reads: source.readFacts(), literalAccesses: literalAccesses,
 		capabilities: numericalCapabilities(sigs), literalMinimum: joinedMinimum}
 	binding.originalBinding = binding
+	if err := binding.bindAMD64GoArguments(); err != nil {
+		return Options{}, err
+	}
+	binding.capabilities = numericalCapabilities(binding.options.Sigs)
 	binding.seal, err = binding.digest()
 	if err != nil {
 		return Options{}, err
@@ -243,6 +248,7 @@ func numericalSameImports(imports, expected map[string]*types.Package) bool {
 
 func numericalSignatureShape(sig FuncSig) FuncSig {
 	sig.x86CallerRegions, sig.x86FixedLocal = nil, nil
+	sig.amd64GoArguments = nil
 	sig.arm64FPReadDeclaration, sig.arm64ABI0Declaration, sig.arm64ABI0TailDeclaration, sig.arm64NativeScratch = nil, nil, nil, nil
 	return sig
 }
@@ -258,6 +264,7 @@ func numericalCloneSignatures(input map[string]FuncSig) (map[string]FuncSig, err
 		sig.x86CallerRegions, sig.x86FixedLocal = old.x86CallerRegions, old.x86FixedLocal
 		sig.arm64FPReadDeclaration, sig.arm64ABI0Declaration, sig.arm64ABI0TailDeclaration, sig.arm64NativeScratch = old.arm64FPReadDeclaration, old.arm64ABI0Declaration, old.arm64ABI0TailDeclaration, old.arm64NativeScratch
 		sig.x86BorrowedBoolTail = old.x86BorrowedBoolTail
+		sig.amd64GoArguments = old.amd64GoArguments
 		result[name] = sig
 	}
 	return result, nil
@@ -303,6 +310,16 @@ func (binding *GoX86NumericalReadBinding) resolve(symbol string) string {
 }
 
 func (binding *GoX86NumericalReadBinding) digest() ([32]byte, error) {
+	arguments := make(map[string][32]byte)
+	for name, sig := range binding.options.Sigs {
+		if entry := sig.amd64GoArguments; entry != nil {
+			digest, err := entry.digest()
+			if err != nil {
+				return [32]byte{}, err
+			}
+			arguments[name] = digest
+		}
+	}
 	data, err := json.Marshal(struct {
 		File         [32]byte
 		Target, Arch string
@@ -315,8 +332,9 @@ func (binding *GoX86NumericalReadBinding) digest() ([32]byte, error) {
 		Reads        []numericalSBReadFact
 		Literals     []x86SDKLiteralAccess
 		Minimum      *numericalSDKLiteralMinimumJoin
+		Arguments    map[string][32]byte
 	}{binding.file, binding.options.TargetTriple, binding.options.Goarch, binding.options.WASMABI, binding.options.X87Mode,
-		binding.options.AnnotateSource, binding.options.Sigs, binding.options.X86TailGroups, binding.symbols, binding.reads, binding.literalAccesses, binding.literalMinimum})
+		binding.options.AnnotateSource, binding.options.Sigs, binding.options.X86TailGroups, binding.symbols, binding.reads, binding.literalAccesses, binding.literalMinimum, arguments})
 	return sha256.Sum256(data), err
 }
 
@@ -355,6 +373,19 @@ func (binding *GoX86NumericalReadBinding) verify() error {
 	sum, err := binding.digest()
 	if err != nil || sum != binding.seal || !numericalSameCapabilities(binding.options.Sigs, binding.capabilities) {
 		return fail(numericalSBContext("private binding shape changed"))
+	}
+	for _, sig := range binding.options.Sigs {
+		if entry := sig.amd64GoArguments; entry != nil {
+			matches := 0
+			for _, fn := range binding.source.file.Funcs {
+				if fn.Sym == entry.symbol && entry.valid(fn, sig, binding.options.Goarch) {
+					matches++
+				}
+			}
+			if matches != 1 {
+				return fail(amd64GoArgumentContext("binding lost its unique live original typed argument entry"))
+			}
+		}
 	}
 	declarationContext, stop, err := binding.source.numericalDeclarationContext(binding.context)
 	if err != nil {
@@ -434,7 +465,7 @@ func (source *GoX86NumericalReadSource) numericalDeclarations(ctx context.Contex
 			foreignEntry = foreignEntry || name != gosym.PackagePrefix(pkg.Path)+"."+declaration.local
 		}
 	}
-	if source.sdkAssemblyJoin() != nil && (foreignEntry || x86DirectTailSourceNeeded(source.file)) {
+	if source.sdkAssemblyJoin() != nil && (foreignEntry || x86DirectTailSourceNeeded(source.file) || len(source.native.ArgumentRules) != 0) {
 		return source.numericalSDKOrdinaryTailDeclarations(ctx, pkg, arch, entries)
 	}
 	declarations, err := guard.typedDeclarationsForArchRole(pkg, false, arch, source.role == numericalSBSDKSource, localEntries)
@@ -460,6 +491,11 @@ type x86NumericalReadCertificate struct {
 }
 
 func verifyNumericalReadInputs(file *File, options Options) (result error) {
+	for _, sig := range options.Sigs {
+		if entry := sig.amd64GoArguments; entry != nil && (options.NumericalReads == nil || entry.owner != options.NumericalReads) {
+			return amd64GoArgumentContext("typed arguments require their complete live source binding")
+		}
+	}
 	if err := rejectMixedNativeAuthorities(options.NumericalReads, options.ARM64ByteCarrierSource); err != nil {
 		return err
 	}
@@ -627,7 +663,7 @@ func numericalSameCapabilities(sigs map[string]FuncSig, expected map[string]nume
 	}
 	for name, sig := range sigs {
 		cap, found := expected[name]
-		if !found || sig.x86CallerRegions != cap.caller || sig.x86FixedLocal != cap.local {
+		if !found || sig.x86CallerRegions != cap.caller || sig.x86FixedLocal != cap.local || sig.amd64GoArguments != cap.arguments {
 			return false
 		}
 	}

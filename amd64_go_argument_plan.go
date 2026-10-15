@@ -121,6 +121,17 @@ func (builder *amd64GoArgumentBuilder) shape(typ types.Type, depth int) (amd64Go
 	// interface and can reach Sizes with no concrete layout. Rhs is expressed
 	// as a private interface so the base planner still compiles with Go1.20.
 	for {
+		// A user-supplied Type implementation can execute arbitrary callbacks
+		// from Underlying/String/TypeParams. Only concrete parser/compiler
+		// go/types nodes may reach a live source's serialized declaration query.
+		switch typ.(type) {
+		case *types.Basic, *types.Named, *types.Pointer, *types.Array, *types.Slice,
+			*types.Struct, *types.Map, *types.Chan, *types.Signature, *types.Interface, *types.TypeParam:
+		default:
+			if !goAMD64FrameIsAlias(typ) {
+				return shape, amd64GoArgumentContext("argument type is not an original concrete go/types node")
+			}
+		}
 		if generic, ok := typ.(interface{ TypeParams() *types.TypeParamList }); ok && generic.TypeParams().Len() != 0 {
 			return shape, amd64GoArgumentContext("generic parameter needs its separate type contract")
 		}

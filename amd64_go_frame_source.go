@@ -1062,6 +1062,12 @@ func goAMD64FrameLanguageType(typ types.Type, sizes types.Sizes) (string, error)
 // an opaque language identity. The ordinary frame observer remains strict;
 // no pointee, extent, numerical bytes, GC or physical frame follows from it.
 func goAMD64FrameLanguageTypeRole(typ types.Type, sizes types.Sizes, opaqueUnsafePointer bool) (string, error) {
+	return goAMD64LanguageTypeRole(typ, sizes, opaqueUnsafePointer, false)
+}
+
+// The SDK argument role compares language identities only. It never grants
+// the ordinary frame observer floating/string storage or a pointee extent.
+func goAMD64LanguageTypeRole(typ types.Type, sizes types.Sizes, opaqueUnsafePointer, argumentCarriers bool) (string, error) {
 	if sizes == nil {
 		return "", goAMD64FrameContext("missing target language layout")
 	}
@@ -1080,7 +1086,8 @@ func goAMD64FrameLanguageTypeRole(typ types.Type, sizes types.Sizes, opaqueUnsaf
 		// for type parameters. An unknown or generic role is not a layout.
 		switch concrete := typ.(type) {
 		case *types.Basic:
-			if concrete.Info()&(types.IsInteger|types.IsBoolean) == 0 && !(opaqueUnsafePointer && concrete.Kind() == types.UnsafePointer) ||
+			if concrete.Info()&(types.IsInteger|types.IsBoolean) == 0 && !(opaqueUnsafePointer && concrete.Kind() == types.UnsafePointer) &&
+				!(argumentCarriers && concrete.Info()&(types.IsFloat|types.IsComplex|types.IsString) != 0) ||
 				concrete.Info()&types.IsUntyped != 0 {
 				return goAMD64FrameContext("unsupported noninteger or untyped language type")
 			}
@@ -1120,6 +1127,8 @@ func goAMD64FrameLanguageTypeRole(typ types.Type, sizes types.Sizes, opaqueUnsaf
 				output.WriteString("bool")
 			} else if typ.Info()&types.IsInteger != 0 {
 				fmt.Fprintf(&output, "integer%d", typ.Kind())
+			} else if argumentCarriers && typ.Info()&(types.IsFloat|types.IsComplex|types.IsString) != 0 {
+				fmt.Fprintf(&output, "argument_scalar%d", typ.Kind())
 			} else {
 				return goAMD64FrameContext("unsupported noninteger pointee/element")
 			}
