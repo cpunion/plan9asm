@@ -34,6 +34,11 @@ func x86X87ENVBoundedSource() string {
 
 func x86X87ENVLiteral(t *testing.T, path, function string) string {
 	t.Helper()
+	return x86X87FunctionLiteral(t, path, function, "source")
+}
+
+func x86X87FunctionLiteral(t *testing.T, path, function, name string) string {
+	t.Helper()
 	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
@@ -50,7 +55,7 @@ func x86X87ENVLiteral(t *testing.T, path, function string) string {
 		}
 		ast.Inspect(fn.Body, func(node ast.Node) bool {
 			spec, ok := node.(*ast.ValueSpec)
-			if !ok || len(spec.Names) != 1 || spec.Names[0].Name != "source" || len(spec.Values) != 1 {
+			if !ok || len(spec.Names) != 1 || spec.Names[0].Name != name || len(spec.Values) != 1 {
 				return true
 			}
 			literal, ok := spec.Values[0].(*ast.BasicLit)

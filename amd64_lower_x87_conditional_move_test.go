@@ -180,28 +180,15 @@ func TestAMD64X87ConditionalMoveRuntimeConditions(t *testing.T) {
 	FMOVDP F0, 56(DI)
 	RET
 `
-	file, err := Parse(ArchAMD64, source)
-	if err != nil {
-		t.Fatal(err)
-	}
 	triple := testTargetTriple(runtime.GOOS, runtime.GOARCH)
 	var runPrefix []string
 	if crossRosetta {
 		triple = "x86_64-apple-macosx"
 		runPrefix = []string{"/usr/bin/arch", "-x86_64"}
 	}
-	ir, err := Translate(file, Options{
-		Goarch:       "amd64",
-		TargetTriple: triple,
-		Sigs: map[string]FuncSig{
-			"x87conditionalmovesemantics": {
-				Name: "x87conditionalmovesemantics", Args: []LLVMType{Ptr}, Ret: Void,
-				Frame: FrameLayout{Params: []FrameSlot{{Offset: 0, Type: Ptr, Index: 0, Field: -1}}},
-			},
-		},
-	})
-	if err != nil {
-		t.Fatal(err)
+	if ir, err := x86X87InitializedWordAPI(t, source, "func x87conditionalmovesemantics(data *byte)",
+		"amd64", triple, "text", X87Auto); !errors.Is(err, ErrProbeNeedsContext) || ir != "" {
+		t.Fatal("original pointer fixture acquired an unproved native region", err)
 	}
 	const mainC = `
 #include <stdint.h>
@@ -217,5 +204,14 @@ int main(void) {
   return 0;
 }
 `
-	compileAndRunRuntimeTestForTarget(t, llc, clang, "x87_conditional_move_semantics", triple, ir, mainC, runPrefix)
+	// The original C checks remain unchanged. A separate typed-scalar source
+	// returns values; C owns the output array instead of granting native stores
+	// from a pointer declaration or a translator-private scratch allocation.
+	assembly, declaration := x86X87ConditionalScalarCounterpart()
+	ir, err := x86X87InitializedWordAPI(t, assembly, declaration, "amd64", triple, "text", X87Auto)
+	if err != nil || ir == "" {
+		t.Fatal("typed conditional counterpart did not reach native execution", err)
+	}
+	compileAndRunRuntimeTestForTarget(t, llc, clang, "x87_conditional_move_semantics", triple, ir,
+		x86X87ConditionalScalarC(mainC), runPrefix)
 }
