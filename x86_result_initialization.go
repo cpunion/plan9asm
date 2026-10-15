@@ -35,6 +35,10 @@ func checkX86ABI0ResultInitializationAtSource(fn Func, sig FuncSig, goarch strin
 	if canonicalBool && !x86ABI0LogicalBoolFrameRole(fn, sig, goarch) {
 		return fail("bool byte requires its complete ordinary bounded logical ABI0 role")
 	}
+	mixedBool := scalarViews && x86MixedBoolResultNeedsCanonicalRole(sig, sig.Frame.Results)
+	if mixedBool && !x86OrdinaryMixedBoolResultRole(fn, sig, goarch) {
+		return fail("mixed bool requires its complete ordinary bounded logical ABI0 role")
+	}
 	if goarch != "amd64" && goarch != "386" || strings.Contains(fn.Sym, "<") ||
 		len(sig.ArgRegs) != 0 || sig.ARMEntry != nil || sig.WASMContext != "" ||
 		len(sig.Frame.Results) == 0 && !privateVoid {
@@ -87,8 +91,13 @@ func checkX86ABI0ResultInitializationAtSource(fn Func, sig FuncSig, goarch strin
 		initial.continuation = &x86ContinuationResultState{flow: view, tablesValid: true,
 			written: make([]bool, view.graph.cells)}
 	}
-	if canonicalBool {
+	if canonicalBool || mixedBool {
 		initial.canonicalFP = make([]bool, frame)
+	}
+	if mixedBool {
+		transfer = x86MixedBoolCanonicalTransfer(transfer)
+	}
+	if canonicalBool {
 		initial.boolFrameSlots = append(append([]FrameSlot(nil), sig.Frame.Params...), sig.Frame.Results...)
 		initial.boolCalls = fn.x86BoolCalls
 		initial.boolReadonlyInputs = fn.x86BoolReadonlyInputs
@@ -147,7 +156,7 @@ func checkX86ABI0ResultInitializationAtSource(fn Func, sig FuncSig, goarch strin
 				return fail("overlapping typed frame slots")
 			}
 			owned[offset], initial.fp[offset] = true, slot.Type != Ptr
-			if canonicalBool && slot.Type == I1 {
+			if (canonicalBool || mixedBool) && slot.Type == I1 {
 				initial.canonicalFP[offset] = true // The logical entry is actual I1, not an arbitrary NUM byte.
 			}
 		}
@@ -170,8 +179,12 @@ func checkX86ABI0ResultInitializationAtSource(fn Func, sig FuncSig, goarch strin
 				if owned[offset] && !state.fp[offset] {
 					return fail(fmt.Sprintf("result byte %d is not written on every path to RET %d", offset, pc))
 				}
-				if canonicalBool && owned[offset] && (offset >= len(state.canonicalFP) || !state.canonicalFP[offset]) {
-					return fail(fmt.Sprintf("bool result byte %d is not canonical zero/one on every path to RET %d", offset, pc))
+			}
+			if canonicalBool || mixedBool {
+				for _, slot := range sig.Frame.Results {
+					if slot.Type == I1 && !state.canonicalFP[slot.Offset] {
+						return fail(fmt.Sprintf("bool result byte %d is not canonical zero/one on every path to RET %d", slot.Offset, pc))
+					}
 				}
 			}
 			return nil

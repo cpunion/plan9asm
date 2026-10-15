@@ -24,6 +24,9 @@ func (c *amd64Ctx) abi0BoolResultByteStorage() bool {
 	if !c.fpScalarChecked || c.fpScalarCheckErr != nil {
 		return false
 	}
+	if c.fpMixedBoolBytes {
+		return true
+	}
 	if stack := c.sourceStack; stack != nil && stack == c.fpScalarSource.x86SourceStack && stack.boolResult != nil && c.sig.Ret == I1 {
 		return true // The independent physical producer/consumer already checked its complete byte role.
 	}
