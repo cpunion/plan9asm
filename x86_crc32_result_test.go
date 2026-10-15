@@ -20,23 +20,6 @@ func x86CRC32ResultCases(arch string) []x86CRC32ResultCase {
 	return rows
 }
 
-// The reference uses the reflected Castagnoli polynomial independently of
-// the LLVM intrinsics and the instruction grammar.
-func x86CRC32Reference(crc uint32, source uint64, width int) uint32 {
-	for i := 0; i < width; i++ {
-		crc ^= uint32(byte(source))
-		source >>= 8
-		for bit := 0; bit < 8; bit++ {
-			if crc&1 != 0 {
-				crc = crc>>1 ^ 0x82f63b78
-			} else {
-				crc >>= 1
-			}
-		}
-	}
-	return crc
-}
-
 func TestX86CRC32WholeResultNUMThreeAPIs(t *testing.T) {
 	for _, target := range x86RawReturnTargets {
 		for _, row := range x86CRC32ResultCases(target.arch) {

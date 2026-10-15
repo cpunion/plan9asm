@@ -13,12 +13,15 @@ func TestX86IncomingPointerUnaryAdvanceWholeSourceThreeAPIs(t *testing.T) {
 			move, suffix = "MOVL", "L"
 		}
 		for _, stem := range []string{"INC", "DEC"} {
-			for _, scenario := range []string{"projection", "native-read", "unknown", "unknown-CF", "partial"} {
+			for _, scenario := range []string{"projection", "native-read", "unknown", "unknown-CF", "partial", "result-address"} {
 				for _, api := range []string{"text", "module", "Go"} {
 					t.Run(target.triple+"/"+stem+"/"+scenario+"/"+api, func(t *testing.T) {
 						body := move + " p+0(FP),AX\n"
 						if scenario == "unknown" {
 							body = ""
+						}
+						if scenario == "result-address" {
+							body = fmt.Sprintf("LEA%s ret+%d(FP),AX\n", suffix, word)
 						}
 						actualSuffix := suffix
 						if scenario == "partial" {
