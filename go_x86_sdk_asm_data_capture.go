@@ -81,7 +81,11 @@ func (source *GoX86SDKASMDataSource) capture(ctx context.Context, provided map[s
 	if err != nil || strings.Split(string(version), "\n")[0] != env["GOVERSION"] {
 		return sdkASMDataContext("invoked compiler differs from its SDK source VERSION: %v", err)
 	}
-	for _, tool := range []string{"asm", "compile"} {
+	tools := []string{"asm", "compile"}
+	if source.captureRole == sdkASMDataOriginalSourceRole && env["GOARCH"] == "386" {
+		tools = append(tools, "link")
+	}
+	for _, tool := range tools {
 		route, err := source.run(ctx, "tool", "-n", tool)
 		if err != nil {
 			return err
@@ -101,6 +105,16 @@ func (source *GoX86SDKASMDataSource) capture(ctx context.Context, provided map[s
 		"src/cmd/asm/internal/lex/tokenizer.go", "src/cmd/compile/internal/typecheck/subr.go"} {
 		if _, err := source.guard.read(filepath.Join(env["GOROOT"], filepath.FromSlash(role))); err != nil {
 			return err
+		}
+	}
+	if source.captureRole == sdkASMDataOriginalSourceRole && env["GOARCH"] == "386" {
+		// Retain source bytes as observations only. Schema admission belongs to
+		// the distinct private compiler-association query, not this observer;
+		// public strict DATA and unrelated source profiles remain unchanged.
+		for role := range x86GoPanicTerminalCompilerSourceRoles() {
+			if _, err := source.guard.read(filepath.Join(env["GOROOT"], filepath.FromSlash(role))); err != nil {
+				return err
+			}
 		}
 	}
 	raw, err = source.run(ctx, "list", "-json", "-compiled", "-export", "-mod=readonly", source.request.PackagePath)
