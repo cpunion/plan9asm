@@ -70,15 +70,31 @@ func TestX86LEASBUnknownAddressDoesNotGrantFacts(t *testing.T) {
 				}
 			}
 		}
-		for _, address := range []string{"local+0(SP)", "local+0(SP)(CX*1)"} {
+		for _, boundary := range []struct{ name, instruction string }{
+			{"SP-destination", "LEAL ·table<>(SB),SP"},
+			{"indexed-AUTO", "LEAL local+0(SP)(CX*1),DX"},
+		} {
 			for _, api := range []string{"text", "module", "Go"} {
-				t.Run(target.triple+"/physical/"+address+"/"+api, func(t *testing.T) {
-					body := "MOVL $7,ret+RESULT(FP)\nMOVL $0,CX\nLEAL " + address + ",DX\nMOVB (DX),CL"
+				t.Run(target.triple+"/physical/"+boundary.name+"/"+api, func(t *testing.T) {
+					body := "MOVL $7,ret+RESULT(FP)\nMOVL $0,CX\n" + boundary.instruction
 					source := x86LEASBUnknownAddressSource(t, target.arch, "func view() uint32", body)
 					if ir, err := x86ScalarFPBitViewAPI(t, source, "func view() uint32", target.arch, target.triple, api); !errors.Is(err, ErrProbeNeedsContext) || ir != "" {
 						t.Fatalf("physical source stack acquired backing: %v", err)
 					}
 				})
+			}
+		}
+		if target.arch == "amd64" {
+			for _, width := range widths {
+				for _, api := range []string{"text", "module", "Go"} {
+					t.Run(target.triple+"/physical/BP-destination/"+width+"/"+api, func(t *testing.T) {
+						body := "LEA" + width + " ·table<>(SB),BP\nMOVL $7,ret+RESULT(FP)"
+						source := x86LEASBUnknownAddressSource(t, target.arch, "func view() uint32", body)
+						if ir, err := x86ScalarFPBitViewAPI(t, source, "func view() uint32", target.arch, target.triple, api); !errors.Is(err, ErrProbeNeedsContext) || ir != "" {
+							t.Fatalf("AMD64 physical frame destination acquired ordinary GP authority: %v", err)
+						}
+					})
+				}
 			}
 		}
 	}
