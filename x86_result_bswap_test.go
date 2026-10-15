@@ -458,3 +458,45 @@ func TestX86ResultByteSwapExistingRegisterBoolRole(t *testing.T) {
 		}
 	}
 }
+
+func TestX86ResultByteSwapActualGoRegisterAliasKeepsSourceAndUnknownEntry(t *testing.T) {
+	for _, target := range x86OrderingHintTargets {
+		if target.arch != "amd64" {
+			continue // Go registers g only on amd64; the actual assembler rejects386 above.
+		}
+		for _, op := range []string{"BSWAPL", "BSWAPQ"} {
+			for _, initialized := range []bool{false, true} {
+				body := op + " g\nMOVQ g,ret0+0(FP)\nRET\n"
+				if initialized {
+					body = "MOVQ $0x1122334455667788,g\n" + body
+				}
+				source := "TEXT ·Value(SB),4,$0-8\n" + body
+				file, err := Parse(ArchAMD64, source)
+				if err != nil {
+					t.Fatal(err)
+				}
+				found := false
+				for _, ins := range file.Funcs[0].Instrs {
+					if ins.Op == Op(op) {
+						found = len(ins.Args) == 1 && ins.Args[0].Kind == OpReg && ins.Args[0].Reg == "R14" && ins.Raw == op+" g"
+					}
+				}
+				if !found {
+					t.Fatal("actual parsed alias lost original Op/Raw or normalized physical operand")
+				}
+				for _, api := range []string{"text", "module", "Go"} {
+					t.Run(fmt.Sprintf("%s/%s/initialized=%t/%s", target.triple, op, initialized, api), func(t *testing.T) {
+						ir, err := x86OrderingHintTranslateAPI(t, api, source, "package ordering\nfunc Value() uint64\n", target.arch, target.triple)
+						if initialized {
+							if err != nil || ir == "" {
+								t.Fatal("source-defined ordinary numerical R14 alias lost its bytes", err)
+							}
+						} else if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+							t.Fatal("g spelling supplied an invented thread/register entry value", err)
+						}
+					})
+				}
+			}
+		}
+	}
+}
