@@ -1,6 +1,6 @@
 # Current work: PR 40 checkpoint
 
-Checkpoint: 2026-10-15 18:56 UTC. The notes below this section are historical
+Checkpoint: 2026-10-15 19:53 UTC. The notes below this section are historical
 and retain their original source scope; they are not the current task queue.
 
 ## Active queue
@@ -28,9 +28,30 @@ establish native execution on the skipped architecture.
 | Native XADD/XCHG result continuation | Uses the existing complete typed sideeffect emitter; preserves faults/order and grants no reusable memory or declaration-query authority. |
 | Partial FP parameter stores, BIT shadow writeback and trap-only source | Qualified `7753b575` is merged. Separate typed logical-shadow and all-path trap roles preserve the incoming-write, pointer/bool and complete-source boundaries. Actual Linux runtime still needs replay. |
 | SB LEAW/L/Q address effects | Qualified `e5523905` is merged through `cf07263b`. Unknown-address writes kill destination identities without inventing numerical bytes or dereference permission. A separate old AUTO cost-selector gap remains unresolved. |
-| x87 initialized control/status words | Candidate `3bdaabe1` passes 14 roots/1,285 children, including the original word-store objects, but complete ENV still fails all nine children at FLDENV. Original instruction-family replay also fails its partial-18 positive at x87math's zero-frame SP storage; the complete-19 Context control passes. Modes/Codegen remain unattempted. Do not merge or narrow the proof to hide this regression. |
+| x87 initialized control/status words | Unmerged `3bdaabe1` passes its original word-store objects but complete ENV still fails all nine children at FLDENV. Follow-up `689c2c90` passes nine source-effect/state roots and 850 children for the seven-name, nine-row integer/rounding grammar. This does not repair I64 representation, total conversion, ENV or establish complete qualification. |
 | DATA relocation address values | Qualified `1f39d8db` is merged through `62784911`: 54 affected owners on both SDKs and 30 source/model owners on race, 138 root executions/3,497 children, two whole-root-module vets and tracked formatting pass. Generic incoming pointers and code addresses gain no numerical or dereference permission. |
-| Complete 386 runtime fixture | Candidate `acbfd7c0` passes its first 12 roots/2,677 children, including five original Go objects and 60 LLVM22 object axes. Expanded qualification and native execution remain pending. Complete original 18-TEXT replay at `ebfcd52e` passes Go assembly but both translation APIs fail because SETCS leaves BX's upper 24 bits undefined before a full result store. Preserve that RED; repair the fixture's explicit zero extension, not the production definedness check. |
+| Complete 386 runtime fixture | SCAS/CMPS plus FS/GS candidate `44aa6e45` passes the complete 18-TEXT portable replay: original Go object and retained undefined-BX rejection controls, followed by the explicit-zero-extension counterpart through text/module IR0/O2 and eight LLVM22 object axes. Its 14 children pass. This is Windows/386 object evidence, not native execution or the Go-module API. |
+
+The FS/GS first-GREEN set at `44aa6e45` passes seven roots and 9,512 children:
+the complete semantic/control matrix, 55 independent original-Go encoding cases,
+30 effective-REX caller-footprint cases, five complete Go objects and 60 LLVM22
+object axes. Root independently rechecks every ordered terminal, inventory and
+source/SDK/tool seal. Each target retains all 212 AMD64 or 114 386 TEXTs; none is
+cropped. Go20, race, vets, broader qualification and native execution are pending.
+
+The unchanged old segment/TLS replay separately fails only the three APIs of
+`TestTranslateAMD64SegmentMemory`: its no-argument source writes through an
+unbound CX at instruction one. Preserve that complete source and actual Go
+object as an explicit Context control; a separately labeled read-only counterpart
+must not grant a native-store contract. The other eight roots and 21,358 children
+pass. Neither that source rejection nor the new object receipts establishes
+current complete-module or CI success.
+
+Independent x87 input-obligation tests at `14e81e89` add two roots with 3,420
+planned children, including Void, unused bool and independent storage paths.
+They are test-only and unqualified at this checkpoint. In particular the old
+Void early return must not turn missing F0/CW/source bytes into initialized
+implementation allocas. Preserve the actual RED before changing that routing.
 
 Frozen `0c80d8a6` passes nine carry/exchange/fixture owners on each of Go27,
 actual Go20 and race: 27 root executions/378 children, no failures or skips.
@@ -42,6 +63,10 @@ DATA/BIT/LEA/carry/fixture integration set on Go27 and actual Go20:
 74 root executions/5,238 children, no failures, skips, gaps or duplicates.
 Both original five-minute commands retain identical source/SDK/tool seals.
 This is not race, whole-module or native-runtime qualification.
+
+The later combined `3a560149` separately passes whole-root-module `go vet ./...`
+on current Go and actual Go20, under the original three-minute commands and
+unchanged source/SDK/tool seals. These vets do not certify subsequent candidates.
 
 Root independently rechecks the two newly merged leaves' original inventories,
 raw ordered terminals, source/SDK/tool identities and vet exits. BIT/FP/trap's
