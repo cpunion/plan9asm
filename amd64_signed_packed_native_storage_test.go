@@ -81,7 +81,7 @@ func TestX86SignedPackedFloatAllWidthsZeroMaskStorageContext(t *testing.T) {
 									if arch == "386" {
 										triple = "i386-unknown-linux-gnu"
 									}
-									options := Options{Goarch: arch, TargetTriple: triple, Sigs: map[string]FuncSig{name: sig}}
+									options := x86SourceStackOptions(arch, triple, sig)
 									for _, api := range []string{"Translate", "TranslateModule", "TranslateModuleInContext"} {
 										t.Run(api, func(t *testing.T) {
 											ir, err := x86PackedFloatStorageAPI(api, file, options)
@@ -117,13 +117,13 @@ func x86PackedFloatStorageAPI(api string, file *File, options Options) (string, 
 	if api == "Translate" {
 		return Translate(file, options)
 	}
-	context := llvm.NewContext()
-	defer context.Dispose()
 	var module llvm.Module
 	var err error
 	if api == "TranslateModule" {
 		module, err = TranslateModule(file, options)
 	} else {
+		context := llvm.NewContext()
+		defer context.Dispose()
 		module, err = TranslateModuleInContext(context, file, options)
 	}
 	if module.IsNil() {
