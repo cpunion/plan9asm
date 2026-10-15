@@ -121,8 +121,16 @@ func x86IntegerFPByteMovesNeedCFG(fn Func, sig FuncSig, arch string) bool {
 // GP/FP admission class does not model those storage domains; a new byte view
 // still goes through integerFPByteView and cannot borrow this separation.
 func x86OrdinaryIntegerFPStoreNeedsProof(fn Func, sig FuncSig, arch string) bool {
-	return (sig.Ret == I8 || sig.Ret == I16 || sig.Ret == I32 || sig.Ret == I64) &&
-		len(sig.Frame.Results) == 1 && x86DirectGPFPResultSourceRole(fn, sig, arch)
+	if (sig.Ret != I8 && sig.Ret != I16 && sig.Ret != I32 && sig.Ret != I64) ||
+		len(sig.Frame.Results) != 1 || !x86DirectGPFPResultSourceRole(fn, sig, arch) {
+		return false
+	}
+	for _, ins := range fn.Instrs {
+		if x86IntegerFPMoveWidth(ins, arch) != 0 && len(ins.Args) == 2 && ins.Args[1].Kind == OpFP {
+			return true
+		}
+	}
+	return false
 }
 
 func x86DirectGPFPResultSourceRole(fn Func, sig FuncSig, arch string) bool {
@@ -140,7 +148,6 @@ func x86DirectGPFPResultSourceRole(fn Func, sig FuncSig, arch string) bool {
 			return false // No new readonly logical-bool input/address role is inferred.
 		}
 	}
-	found := false
 	for _, ins := range fn.Instrs {
 		if ins.Op == "CALL" || isX86RawDirective(ins) || ins.x86Encoded || ins.x86SourceRaw != nil ||
 			ins.x86RawNearReturn != nil || ins.x86AddressBits != 0 || ins.x86UnboundAddressOverride || ins.x86SegmentPrefix != 0 {
@@ -164,10 +171,9 @@ func x86DirectGPFPResultSourceRole(fn Func, sig FuncSig, arch string) bool {
 					return false // Preserve the old exact-natural writable input shadow.
 				}
 			}
-			found = true
 		}
 	}
-	return found
+	return true
 }
 
 // This dispatch is only a cost/transport selector for the existing named GP
