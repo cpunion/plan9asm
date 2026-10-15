@@ -14,9 +14,14 @@ import (
 // counterpart through the kernel's compatibility ISA. An emulated local host
 // is only diagnostic; a missing compiler/compatibility entry fails, never skips.
 func TestCrossLinuxRuntimeMatrixX86DirectTail386OriginalGoAndLLVM(t *testing.T) {
-	for _, carrier := range []string{"SI", "BP"} {
+	for _, carrier := range []string{"SI", "BP", "SI-stack", "BP-stack"} {
 		t.Run(carrier, func(t *testing.T) {
-			x86DirectTail386ExecuteOriginalGoAndLLVM(t, strings.ReplaceAll(x86DirectTail386ASM, "SI", carrier))
+			register := strings.TrimSuffix(carrier, "-stack")
+			source := strings.ReplaceAll(x86DirectTail386ASM, "SI", register)
+			if strings.HasSuffix(carrier, "-stack") {
+				source = strings.Replace(source, " MOVL "+register+",AX", " PUSHL "+register+"\n POPL AX", 1)
+			}
+			x86DirectTail386ExecuteOriginalGoAndLLVM(t, source)
 		})
 	}
 }

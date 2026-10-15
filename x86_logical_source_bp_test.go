@@ -118,6 +118,44 @@ RET
 	}
 }
 
+func TestX86LogicalSourcePrivateStackWholeHelperCFG(t *testing.T) {
+	for _, target := range x86RawReturnTargets {
+		word, width, typ := "Q", 8, "uint64"
+		if target.arch == "386" {
+			word, width, typ = "L", 4, "uint32"
+		}
+		for _, row := range []struct {
+			name, body string
+			complete   bool
+		}{
+			{"balanced", "PUSHWORD n+0(FP)\nPOPWORD AX\nMOVWORD AX,ret+RESULT(FP)", true},
+			{"unknown-input", "PUSHWORD CX\nPOPWORD AX\nMOVWORD AX,ret+RESULT(FP)", false},
+			{"unbalanced", "PUSHWORD n+0(FP)\nMOVWORD $7,ret+RESULT(FP)", false},
+			{"underflow", "POPWORD AX\nMOVWORD AX,ret+RESULT(FP)", false},
+		} {
+			for _, api := range []string{"text", "module", "Go"} {
+				t.Run(target.triple+"/"+row.name+"/"+api, func(t *testing.T) {
+					source := fmt.Sprintf(`TEXT ·Value(SB),NOSPLIT,$0-%d
+JMP body<>(SB)
+TEXT body<>(SB),NOSPLIT,$0-0
+%s
+RET
+`, 2*width, row.body)
+					source = strings.NewReplacer("WORD", word, "RESULT", fmt.Sprint(width)).Replace(source)
+					ir, err := x86ScalarFPBitViewAPI(t, source, "func Value(n "+typ+") "+typ, target.arch, target.triple, api)
+					if row.complete {
+						if err != nil || ir == "" {
+							t.Fatal("private stack features were not discovered in the complete helper CFG", err)
+						}
+					} else if !errors.Is(err, ErrProbeNeedsContext) || ir != "" {
+						t.Fatal("private helper stack bypassed its input/depth proof", err)
+					}
+				})
+			}
+		}
+	}
+}
+
 func x86LogicalSourceBPContinuation(t *testing.T, arch, role string) (string, Options) {
 	t.Helper()
 	source, options := x86ContinuationResultFixture(t, arch, true)

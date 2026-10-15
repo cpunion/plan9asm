@@ -70,7 +70,7 @@ func x86LoweredScalarNativeLoad(ins Instr, state *x86ResultState, owned []bool, 
 	if !known || err != nil {
 		return false, known
 	}
-	if form.destination == SP || form.destination == BP {
+	if x86LogicalSourceFrameRegister(form.destination, arch) {
 		return false, true
 	}
 	if !x86ResultReadWithNativeContinuation(ins, form.source, form.bytes, state, owned, arch, true) {

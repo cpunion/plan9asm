@@ -190,12 +190,6 @@ type x86ResultFlowBudget struct {
 func checkX86ResultSourceFlow(fn Func, initial x86ResultState, owned []bool, resultOffset int64, goarch string,
 	transfer x86ResultSourceTransfer, checkReturn func(x86ResultState, int) error) error {
 	originalTransfer := transfer
-	for _, ins := range fn.Instrs {
-		if _, known, _ := x86StackWidthProperties(ins, goarch); known {
-			initial.valueStack = new(x86ResultValueStack)
-			break
-		}
-	}
 	transfer = func(ordinal int, ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string) bool {
 		if !x86ResultValueStackContinuation(ins, state, arch) {
 			return false
@@ -276,6 +270,14 @@ func checkX86ResultSourceFlow(fn Func, initial x86ResultState, owned []bool, res
 	}
 	if len(instructions) == 0 || len(instructions) > 4096 {
 		return fail("missing or oversized source CFG")
+	}
+	// Discover private value-stack effects in the same complete, already
+	// selected CFG used below, including source-bound private helpers.
+	for _, ins := range instructions {
+		if _, known, _ := x86StackWidthProperties(ins, goarch); known {
+			initial.valueStack = new(x86ResultValueStack)
+			break
+		}
 	}
 	// One logical byte-work envelope includes FP/AUTO, numerical GP/Z/K,
 	// canonical FP/GP bytes, status/DF, opaque GP and caller-address identities, and the source-shape discriminator. It is

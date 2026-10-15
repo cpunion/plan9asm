@@ -27,7 +27,7 @@ func x86ResultValueStackContinuation(ins Instr, state *x86ResultState, arch stri
 	// cannot borrow the independent unchanged-SP local-byte proof while live.
 	if arch == "386" {
 		for _, arg := range ins.Args {
-			if arg.Kind == OpMem && (arg.Mem.Base == SP || arg.Mem.Base == BP) {
+			if arg.Kind == OpMem && x86LogicalSourceFrameRegister(arg.Mem.Base, arch) {
 				return false
 			}
 		}
