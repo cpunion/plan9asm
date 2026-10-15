@@ -932,16 +932,29 @@ TEXT frameAddress(SB),NOSPLIT,$0-12
 			}
 		}
 	}
-	options.KeepFunc = func(text, resolved string) bool { return text != "arith" && resolved != "arith" }
 	var ir string
 	t.Run("partial-selection-original-other-18-TEXTs", func(t *testing.T) {
-		ir, err = Translate(file, options)
+		// KeepFunc belongs to the Go-module API. The empty package grants no
+		// Go declaration; every selected signature is exactly the original
+		// explicit manual contract, including custom register assignments.
+		pkg := mustGoPackage(t, "families", "package families")
+		result, err := TranslateGoModule(pkg, []byte(src), GoModuleOptions{
+			GOOS: "linux", GOARCH: "386", TargetTriple: options.TargetTriple,
+			ResolveSym: options.ResolveSym,
+			KeepFunc:   func(text, resolved string) bool { return text != "arith" && resolved != "arith" },
+			ManualSig:  func(resolved string) (FuncSig, bool) { sig, found := sigs[resolved]; return sig, found },
+		})
 		if err != nil {
 			t.Fatal(err)
 		}
+		defer result.Module.Dispose()
+		if len(result.Functions) != 18 || len(result.Signatures) != 18 {
+			t.Fatal("partial selection changed the remaining TEXT/signature inventory")
+		}
+		ir = result.Module.String()
 	})
-	if err != nil {
-		t.Fatal(err)
+	if ir == "" {
+		t.Fatal("partial selection did not emit its separate module")
 	}
 	for _, want := range []string{
 		`asm sideeffect "lock; cmpxchg8b`,
