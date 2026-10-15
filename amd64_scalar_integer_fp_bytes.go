@@ -112,8 +112,10 @@ func x86IntegerFPByteMovesNeedCFG(fn Func, sig FuncSig, arch string) bool {
 // Ordinary declared integer results cannot publish unknown bytes simply
 // because the final FP store is an exact natural field. This is a cost gate
 // for the existing complete proof, not another ABI/state/alias producer.
-// Logical bool-input aliases and all bound native/custom entry roles retain
-// their independent consumers; a frame-empty register intrinsic is not ABI0.
+// Logical bool-input aliases, existing virtual-SP/mutable FP storage and bound
+// native/custom entry roles retain their independent consumers. This direct
+// GP/FP admission class does not model those storage domains; a new byte view
+// still goes through integerFPByteView and cannot borrow this separation.
 func x86OrdinaryIntegerFPStoreNeedsProof(fn Func, sig FuncSig, arch string) bool {
 	if arch != "386" && arch != "amd64" || sig.Ret != I8 && sig.Ret != I16 && sig.Ret != I32 && sig.Ret != I64 ||
 		len(sig.Frame.Results) != 1 || fn.FrameSize != 0 || strings.Contains(fn.Sym, "<") || len(sig.ArgRegs) != 0 ||
@@ -135,7 +137,21 @@ func x86OrdinaryIntegerFPStoreNeedsProof(fn Func, sig FuncSig, arch string) bool
 			ins.x86RawNearReturn != nil || ins.x86AddressBits != 0 || ins.x86UnboundAddressOverride || ins.x86SegmentPrefix != 0 {
 			return false
 		}
+		for _, operand := range ins.Args {
+			if operand.Kind == OpFPAddr || operand.Kind == OpMem && (operand.Mem.Base == SP || operand.Mem.Index == SP) {
+				return false // Existing logical address/storage consumer, not native AUTO authority.
+			}
+		}
+		if _, _, _, address := x86LogicalFPLEAWriteShape(ins, arch); address {
+			return false
+		}
 		if x86IntegerFPMoveWidth(ins, arch) != 0 && len(ins.Args) == 2 && ins.Args[1].Kind == OpFP {
+			width, offset := x86IntegerFPMoveWidth(ins, arch), ins.Args[1].FPOffset
+			for _, slot := range sig.Frame.Params {
+				if slot.Offset == offset && x86FrameScalarBytes(slot.Type, arch) == width {
+					return false // Preserve the old exact-natural writable input shadow.
+				}
+			}
 			found = true
 		}
 	}
