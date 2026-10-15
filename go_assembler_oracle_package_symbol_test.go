@@ -2,6 +2,10 @@ package plan9asm
 
 import "testing"
 
+func goAssemblerOracleX86PackageDiagnostic(source, arch, output, packagePrefix string) bool {
+	return goAssemblerOracleX86SourceDiagnostic(source, arch, output)
+}
+
 func TestGoAssemblerOracleX86BoundPackageQualification(t *testing.T) {
 	for _, alias := range []string{"MOVD", "MOVDQ2Q"} {
 		for _, suffix := range []string{"", "+3", "-1"} {
