@@ -168,13 +168,21 @@ func TestX86ImplicitMultiplyAliasesReadBeforeWriteAndFlags(t *testing.T) {
 				if !strings.HasPrefix(row.op, stem) { // MUL and IMUL have independent sign rules.
 					continue
 				}
-				for _, flag := range []string{"CS", "OS", "EQ", "MI", "PS"} {
+				for _, flag := range []string{"CS", "OS", "EQ", "MI", "PS", "overflow-CS", "overflow-OS"} {
 					for _, api := range []string{"text", "module", "Go"} {
 						t.Run(target.triple+"/"+row.op+"/status"+flag+"/"+api, func(t *testing.T) {
 							move := map[int]string{1: "MOVB", 2: "MOVW", 4: "MOVL", 8: "MOVQ"}[row.width]
-							source := fmt.Sprintf("TEXT ·Value(SB),4,$0-1\nCLD\nMOVL $0,AX\nCMPL AX,$0\n%s $-1,AX\n%s $1,BX\n%s BX\nSET%s CX\nMOVB CX,ret+0(FP)\nRET\n", move, move, row.op, flag)
+							input, multiplier, want := "-1", 1, uint64(0)
+							condition := strings.TrimPrefix(flag, "overflow-")
+							if condition != flag {
+								multiplier, want = 2, 1
+								if strings.HasPrefix(row.op, "IMUL") {
+									input = fmt.Sprint((uint64(1) << uint(row.width*8-1)) - 1)
+								}
+							}
+							source := fmt.Sprintf("TEXT ·Value(SB),4,$0-1\nCLD\nMOVL $0,AX\nCMPL AX,$0\n%s $%s,AX\n%s $%d,BX\n%s BX\nSET%s CX\nMOVB CX,ret+0(FP)\nRET\n", move, input, move, multiplier, row.op, condition)
 							ir, err := x86ScalarFPBitViewAPI(t, source, "func Value() uint8", target.arch, target.triple, api)
-							if flag != "CS" && flag != "OS" {
+							if condition != "CS" && condition != "OS" {
 								if !errors.Is(err, ErrProbeNeedsContext) || ir != "" {
 									t.Fatal("multiply reused undefined status", err)
 								}
@@ -183,7 +191,7 @@ func TestX86ImplicitMultiplyAliasesReadBeforeWriteAndFlags(t *testing.T) {
 							if err != nil {
 								t.Fatal(err)
 							}
-							x86ScalarFPTupleSpanConstantResult(t, ir, []uint64{0}) // Signed -1*1 has a nonzero high half but no overflow.
+							x86ScalarFPTupleSpanConstantResult(t, ir, []uint64{want}) // Signed -1*1 has a nonzero high half but no overflow.
 						})
 					}
 				}
