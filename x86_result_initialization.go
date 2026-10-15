@@ -328,6 +328,7 @@ func checkX86ResultSourceFlow(fn Func, initial x86ResultState, owned []bool, res
 	}
 	if initial.x87 != nil {
 		byteState += 1 + 1 + 1 + 2 + 2*len(initial.x87.gp) // slots, depth, invalid, status, captured bits.
+		byteState += len(initial.x87.integer)              // Source signed bounds, not numerical representation.
 		if initial.x87.word != nil {
 			byteState += 2 // Control knownness only; actual parameter layout is immutable metadata.
 		}
@@ -596,6 +597,13 @@ func (state x86ResultState) intersect(other x86ResultState) x86ResultState {
 		} else {
 			merged.x87.slots &= other.x87.slots
 			merged.x87.status &= other.x87.status
+			for index := range merged.x87.integer {
+				if merged.x87.slots&(1<<uint(index)) == 0 || merged.x87.integer[index] == 0 || other.x87.integer[index] == 0 {
+					merged.x87.integer[index] = 0
+				} else if other.x87.integer[index] > merged.x87.integer[index] {
+					merged.x87.integer[index] = other.x87.integer[index]
+				}
+			}
 			for index := range merged.x87.gp {
 				merged.x87.gp[index] &= other.x87.gp[index]
 			}

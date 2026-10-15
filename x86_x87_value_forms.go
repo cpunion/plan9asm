@@ -16,11 +16,13 @@ const (
 	x86X87Compare
 	x86X87Test
 	x86X87Status
+	x86X87IntegerMove
+	x86X87Round
 )
 
 type x86X87ValueSpec struct {
 	kind        x86X87ValueKind
-	width       byte // W/L signed integer memory, F/D floating memory.
+	width       byte // W/L/V signed integer memory, F/D floating memory.
 	stem        string
 	pop         uint8
 	reverse     bool
@@ -29,17 +31,24 @@ type x86X87ValueSpec struct {
 
 // These are value-availability forms, not a physical x87 entry/control-word,
 // native-memory or caller-state contract. The Go rows are shared by both x86
-// modes. Environment, BCD/extended/integer moves and transcendental state stay
+// modes. Environment, BCD/extended moves and transcendental state stay
 // outside this independent logical family.
 var x86X87ValueSpecs = func() map[Op]x86X87ValueSpec {
 	forms := map[Op]x86X87ValueSpec{
-		"FMOVD":  {kind: x86X87FloatMove, width: 'D'},
-		"FMOVDP": {kind: x86X87FloatMove, width: 'D', pop: 1},
-		"FMOVF":  {kind: x86X87FloatMove, width: 'F'},
-		"FMOVFP": {kind: x86X87FloatMove, width: 'F', pop: 1},
-		"FXCHD":  {kind: x86X87Exchange},
-		"FTST":   {kind: x86X87Test},
-		"FSTSW":  {kind: x86X87Status},
+		"FMOVD":   {kind: x86X87FloatMove, width: 'D'},
+		"FMOVDP":  {kind: x86X87FloatMove, width: 'D', pop: 1},
+		"FMOVF":   {kind: x86X87FloatMove, width: 'F'},
+		"FMOVFP":  {kind: x86X87FloatMove, width: 'F', pop: 1},
+		"FXCHD":   {kind: x86X87Exchange},
+		"FTST":    {kind: x86X87Test},
+		"FSTSW":   {kind: x86X87Status},
+		"FMOVW":   {kind: x86X87IntegerMove, width: 'W'},
+		"FMOVWP":  {kind: x86X87IntegerMove, width: 'W', pop: 1},
+		"FMOVL":   {kind: x86X87IntegerMove, width: 'L'},
+		"FMOVLP":  {kind: x86X87IntegerMove, width: 'L', pop: 1},
+		"FMOVV":   {kind: x86X87IntegerMove, width: 'V'},
+		"FMOVVP":  {kind: x86X87IntegerMove, width: 'V', pop: 1},
+		"FRNDINT": {kind: x86X87Round},
 	}
 	for _, op := range []Op{"FLD1", "FLDL2E", "FLDL2T", "FLDLG2", "FLDLN2", "FLDPI", "FLDZ"} {
 		forms[op] = x86X87ValueSpec{kind: x86X87Constant}
@@ -90,7 +99,7 @@ func (form x86X87ValueForm) memoryBytes() int64 {
 		return 2
 	case 'L', 'F':
 		return 4
-	case 'D':
+	case 'D', 'V':
 		return 8
 	}
 	return 0
@@ -138,7 +147,7 @@ func x86X87ValueProperties(ins Instr, arch string) (x86X87ValueForm, bool, error
 		_, valid := x87OperandReg(operand)
 		return valid
 	}
-	if spec.kind == x86X87Constant || spec.kind == x86X87Unary || spec.kind == x86X87Test {
+	if spec.kind == x86X87Constant || spec.kind == x86X87Unary || spec.kind == x86X87Test || spec.kind == x86X87Round {
 		if len(ins.Args) != 0 {
 			return fail("takes no operands")
 		}
@@ -165,6 +174,22 @@ func x86X87ValueProperties(ins Instr, arch string) (x86X87ValueForm, bool, error
 	first, last := ins.Args[0], ins.Args[1]
 	form.source, form.destination = first, last
 	switch spec.kind {
+	case x86X87IntegerMove:
+		if spec.pop != 0 {
+			if !isX87F0(first) || !memory(last) {
+				return fail("expects F0 source and signed integer memory destination")
+			}
+			return form, true, nil
+		}
+		if memory(first) && isX87F0(last) {
+			form.push = true
+			return form, true, nil
+		}
+		// yfmvx has only the m64 load row; Go has no non-pop FIST m64.
+		if spec.width != 'V' && isX87F0(first) && memory(last) {
+			return form, true, nil
+		}
+		return fail("expects signed integer memory,F0 or the registered F0,memory store row")
 	case x86X87FloatMove:
 		if spec.pop != 0 {
 			if !isX87F0(first) || !(memory(last) || spec.width == 'D' && register(last)) {

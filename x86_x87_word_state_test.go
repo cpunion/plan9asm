@@ -137,9 +137,9 @@ func TestX86X87WordStateConsumesSharedBudgetAndPrivateRole(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Existing no-FP payload368 plus logical x87 payload37 and only the new
-	// two-byte control knownness. Immutable layout metadata is not a CFG copy.
-	const payload = 368 + 37 + 2
+	// Existing no-FP payload368 plus logical x87 payload45 and the two-byte
+	// control knownness. Immutable layout metadata is not a CFG copy.
+	const payload = 368 + 45 + 2
 	const limit = (64 << 20) / 8
 	for _, room := range []int{3 * (payload - 1), 3 * payload} {
 		fn := file.Funcs[0]

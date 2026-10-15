@@ -84,6 +84,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		if accepted, known := c.x87HardwareControlResultStep(ins, state, owned, resultOffset, arch); known {
 			return accepted // The same actual hardware emitter writes the full i16.
 		}
+		if accepted, known := c.x87HardwareRoundingResultStep(ins, state, owned, resultOffset, arch); known {
+			return accepted // No ambient environment fact reaches the standalone query.
+		}
 		if accepted, known := x86LoweredCompareExchangeResultStep(ins, state, owned, arch); known {
 			return accepted
 		}

@@ -19,6 +19,7 @@ func x86X87ValueInstruction(t *testing.T, source string) Instr {
 func TestX86X87ValueCompleteGrammarAndMode(t *testing.T) {
 	names := strings.Fields(`
 		FMOVF FMOVFP FMOVD FMOVDP FXCHD FTST FSTSW
+		FMOVW FMOVWP FMOVL FMOVLP FMOVV FMOVVP FRNDINT
 		FLD1 FLDL2E FLDL2T FLDLG2 FLDLN2 FLDPI FLDZ FABS FCHS FSQRT
 		FADDW FADDL FADDF FADDD FADDDP FMULW FMULL FMULF FMULD FMULDP
 		FSUBW FSUBL FSUBF FSUBD FSUBDP FSUBRW FSUBRL FSUBRF FSUBRD FSUBRDP
@@ -26,7 +27,7 @@ func TestX86X87ValueCompleteGrammarAndMode(t *testing.T) {
 		FCOMW FCOMWP FCOML FCOMLP FCOMF FCOMFP FCOMD FCOMDP FCOMDPP
 		FCOMI FCOMIP FUCOM FUCOMP FUCOMPP FUCOMI FUCOMIP
 	`)
-	if len(names) != 63 || len(x86X87ValueSpecs) != len(names) {
+	if len(names) != 70 || len(x86X87ValueSpecs) != len(names) {
 		t.Fatal("complete independent x87 value-family denominator changed", len(names), len(x86X87ValueSpecs))
 	}
 	for _, name := range names {
@@ -193,8 +194,9 @@ func TestX86X87ValueStateConsumesSharedBudgetAndPrivateRole(t *testing.T) {
 		t.Fatal(err)
 	}
 	// The old no-FP state has 368 logical bytes. This optional domain adds
-	// exactly 37: slots/depth/invalid, status16 and sixteen captured words.
-	const payload = 368 + 37
+	// exactly 45: slots/depth/invalid, status16, sixteen captured words and
+	// eight source signed-width facts. This does not raise the shared limit.
+	const payload = 368 + 45
 	const limit = (64 << 20) / 8
 	for _, room := range []int{3 * (payload - 1), 3 * payload} {
 		fn := file.Funcs[0]

@@ -30,6 +30,16 @@ func X86FPAccessBytes(ins Instr, index int, arch string) (width int64, write, kn
 		}
 		return 2, form.kind != x86X87LoadControl, true
 	}
+	// x87 memory widths come from the same complete Go value grammar used by
+	// lowering and the private source observer. Operand-free/register forms
+	// have no FP access; malformed integer stores cannot fall through to a
+	// suffix-derived width. Recognition supplies no initialized value or role.
+	if form, recognized, err := x86X87ValueProperties(ins, arch); recognized {
+		if err != nil || form.memoryBytes() == 0 {
+			return 0, false, false
+		}
+		return form.memoryBytes(), index == 1, true
+	}
 	// CMP/TEST have two read-only operands, with opposite immediate positions.
 	// Reuse the complete lowering grammar; observing these widths supplies
 	// neither initialized flags/results nor permission to access native memory.

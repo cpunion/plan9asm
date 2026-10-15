@@ -17,6 +17,10 @@ type x86X87WordLayout struct {
 func x86X87WordStateNeeded(fn Func) bool {
 	for _, ins := range x86X87FlowInstructions(fn) {
 		name, _, _ := strings.Cut(strings.ToUpper(string(ins.Op)), ".")
+		if spec, known := x86X87ValueSpecs[Op(name)]; known &&
+			(spec.kind == x86X87IntegerMove || spec.kind == x86X87Round) {
+			return true // Explicit control knownness/layout, never a default CW.
+		}
 		if kind, known := x86X87WordSpecs[Op(name)]; known && kind != x86X87StoreStatus {
 			return true // No target permission follows from this allocation predicate.
 		}
@@ -42,6 +46,7 @@ func x86ResultX87WordStep(ins Instr, state *x86ResultState, owned []bool, result
 			// Empty tags are not zero-valued F0..F7. Existing GP captures
 			// remain physically unchanged; no GP or integer FLAGS are written.
 			x87.slots, x87.depth, x87.invalid = 0, 0, false
+			x87.integer = [8]uint8{}
 			x87.status, x87.word.control = 0xffff, 0xffff
 		}
 		return true, true
@@ -98,17 +103,7 @@ func x86ResultX87WordStep(ins Instr, state *x86ResultState, owned []bool, result
 		if !state.shapeOnly && bits != 0xffff {
 			return false, true
 		}
-		parameter := form.operand.Kind == OpFP && form.operand.FPOffset < resultOffset
-		if parameter {
-			offset := form.operand.FPOffset
-			if x87.word == nil || x87.word.layout == nil || !x87.word.layout.parameters[offset] || offset < 0 ||
-				offset > int64(len(owned))-2 || !owned[offset] || !owned[offset+1] {
-				return false, true
-			}
-			// Exactly the pre-existing natural I16 input shadow, not an
-			// arbitrary span of owned scalar, padding, pointer or bool bytes.
-			state.fp[offset], state.fp[offset+1] = true, true
-		} else if !x86ResultStore(form.operand, 2, state, owned, resultOffset, arch) {
+		if !x86ResultX87NaturalWordStore(form.operand, 2, state, owned, resultOffset, arch) {
 			return false, true
 		}
 	}
@@ -116,4 +111,22 @@ func x86ResultX87WordStep(ins Instr, state *x86ResultState, owned []bool, result
 	// A second store cannot borrow stale full-status facts from its first read.
 	x87.status = 0
 	return true, true
+}
+
+// Reuse only the old exact natural I16 parameter shadow. A typed x87 integer
+// store does not make other parameter spans, pointers or caller memory writable.
+// Results and named AUTO keep the existing independently bounded byte writer.
+func x86ResultX87NaturalWordStore(operand Operand, width int64, state *x86ResultState,
+	owned []bool, resultOffset int64, arch string) bool {
+	if operand.Kind != OpFP || operand.FPOffset >= resultOffset {
+		return x86ResultStore(operand, width, state, owned, resultOffset, arch)
+	}
+	offset := operand.FPOffset
+	if width != 2 || state.x87 == nil || state.x87.word == nil || state.x87.word.layout == nil ||
+		!state.x87.word.layout.parameters[offset] || offset < 0 ||
+		offset > int64(len(owned))-2 || offset > int64(len(state.fp))-2 || !owned[offset] || !owned[offset+1] {
+		return false
+	}
+	state.fp[offset], state.fp[offset+1] = true, true
+	return true
 }

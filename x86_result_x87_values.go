@@ -12,6 +12,7 @@ type x86ResultX87State struct {
 	status  uint16
 	gp      [16]uint16             // Captured known status bits, never whole NUM/canonical bytes.
 	word    *x86ResultX87WordState // Optional control knownness and immutable natural-word layout.
+	integer [8]uint8               // Source signed range in 2/4/8 bytes, not the emitter's representation.
 }
 
 const x86ResultX87StatusConditions uint16 = 0x4500 // C3, C2, C0 only.
@@ -58,6 +59,7 @@ func (state *x86ResultX87State) write(operand Operand) bool {
 		return false
 	}
 	state.slots |= 1 << uint(index)
+	state.integer[index] = 0
 	if state.depth <= uint8(index) {
 		state.depth = uint8(index + 1)
 	}
@@ -69,6 +71,10 @@ func (state *x86ResultX87State) push() bool {
 		return false
 	}
 	state.slots = state.slots<<1 | 1
+	for index := len(state.integer) - 1; index > 0; index-- {
+		state.integer[index] = state.integer[index-1]
+	}
+	state.integer[0] = 0
 	state.depth++
 	return true
 }
@@ -82,15 +88,37 @@ func (state *x86ResultX87State) pop(count uint8) bool {
 			return false
 		}
 		state.slots >>= 1
+		copy(state.integer[:], state.integer[1:])
+		state.integer[len(state.integer)-1] = 0
 		state.depth--
 	}
 	return true
+}
+
+func (state *x86ResultX87State) integerBytes(operand Operand) uint8 {
+	index, valid := x87OperandReg(operand)
+	if !valid || !state.read(operand) {
+		return 0
+	}
+	width := state.integer[index]
+	if width != 2 && width != 4 && width != 8 {
+		return 0
+	}
+	return width
 }
 
 // Only the private logical-FP observer installs this transfer. Existing
 // bounded FP/AUTO or exact observed static bytes supply memory; no conditional
 // native read or write follows from knowing an x87 instruction's width.
 func x86ResultX87ValueStep(ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string) (bool, bool) {
+	return x86ResultX87ValueStepWithHardwareRounding(ins, state, owned, resultOffset, arch, false)
+}
+
+// The ordinary query has no ambient environment. Only the paired lowering
+// adapter may set hardwareRounding for an actually emitted native operation;
+// a default X87Mode value is not a source/control or native continuation fact.
+func x86ResultX87ValueStepWithHardwareRounding(ins Instr, state *x86ResultState, owned []bool,
+	resultOffset int64, arch string, hardwareRounding bool) (bool, bool) {
 	if accepted, known := x86ResultX87WordStep(ins, state, owned, resultOffset, arch); known {
 		return accepted, true
 	}
@@ -102,6 +130,8 @@ func x86ResultX87ValueStep(ins Instr, state *x86ResultState, owned []bool, resul
 		return false, true
 	}
 	x87 := state.x87
+	hardwareRounding = hardwareRounding && (form.spec.kind == x86X87Round ||
+		form.spec.kind == x86X87IntegerMove && form.spec.width == 'V' && form.spec.pop == 1)
 	read := func(operand Operand) bool {
 		if isX87RegisterOperand(operand) {
 			return state.shapeOnly || x87.read(operand)
@@ -115,21 +145,54 @@ func x86ResultX87ValueStep(ins Instr, state *x86ResultState, owned []bool, resul
 		if isX87RegisterOperand(operand) {
 			return state.shapeOnly || x87.write(operand)
 		}
+		if form.spec.kind == x86X87IntegerMove {
+			return x86ResultX87NaturalWordStore(operand, form.memoryBytes(), state, owned, resultOffset, arch)
+		}
 		return x86ResultStore(operand, form.memoryBytes(), state, owned, resultOffset, arch)
 	}
 	f0 := Operand{Kind: OpReg, Reg: "F0"}
+	controlKnown := x87.word != nil && x87.word.control == 0xffff
 	status := uint16(0)
 	switch form.spec.kind {
 	case x86X87FloatMove:
 		if !read(form.source) {
 			return false, true
 		}
+		integer := x87.integerBytes(form.source) // Capture before push or an aliased overwrite.
 		if form.push {
 			if !state.shapeOnly && !x87.push() {
 				return false, true
 			}
+			if !state.shapeOnly {
+				x87.integer[0] = integer
+			}
 		} else if !write(form.destination) {
 			return false, true
+		} else if !state.shapeOnly {
+			if index, register := x87OperandReg(form.destination); register {
+				x87.integer[index] = integer
+			}
+		}
+	case x86X87IntegerMove:
+		if !read(form.source) {
+			return false, true
+		}
+		if form.push {
+			if !state.shapeOnly {
+				if !x87.push() {
+					return false, true
+				}
+				x87.integer[0] = uint8(form.memoryBytes())
+			}
+		} else {
+			integer := x87.integerBytes(f0)
+			infallible := integer != 0 && int64(integer) <= form.memoryBytes()
+			if !state.shapeOnly && !infallible && !controlKnown && !hardwareRounding {
+				return false, true
+			}
+			if !write(form.destination) {
+				return false, true
+			}
 		}
 	case x86X87Constant:
 		if !state.shapeOnly && !x87.push() {
@@ -139,11 +202,25 @@ func x86ResultX87ValueStep(ins Instr, state *x86ResultState, owned []bool, resul
 		if !read(f0) {
 			return false, true
 		}
+		if !state.shapeOnly {
+			x87.integer[0] = 0 // Even a sign change can leave the old signed range.
+		}
+	case x86X87Round:
+		if !read(f0) || !state.shapeOnly && !controlKnown && !hardwareRounding {
+			return false, true
+		}
+		// An already integral value retains its signed bound. Rounding an
+		// arbitrary float supplies no finite/signed-range or NUM entry fact.
 	case x86X87Exchange:
 		if !read(form.source) || !read(form.destination) {
 			return false, true
 		}
 		// Both exact cells were independently defined before either write.
+		if !state.shapeOnly {
+			first, _ := x87OperandReg(form.source)
+			last, _ := x87OperandReg(form.destination)
+			x87.integer[first], x87.integer[last] = x87.integer[last], x87.integer[first]
+		}
 	case x86X87Arithmetic:
 		if !read(form.source) || !read(form.destination) || !write(form.destination) {
 			return false, true
