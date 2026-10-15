@@ -64,6 +64,9 @@ func x86ResultCallerAddressesAfter(ins Instr, before [16]bool, entryFP map[int64
 	if _, known, err := x86DirectionControlProperties(ins.Op, ins, arch); known && err == nil {
 		return before // Only DF changes; no GP, pointer or six-status writes.
 	}
+	if _, known := x86CallerPointerAdvanceProperties(ins, arch); known {
+		return before // Only a separately accepted full-word affine transfer preserves it.
+	}
 	if spec, known, err := amd64PackedStringCompareProperties(ins.Op, ins, arch); known && err == nil {
 		output, width, _ := spec.resultEffect()
 		if !spec.maskResult {
