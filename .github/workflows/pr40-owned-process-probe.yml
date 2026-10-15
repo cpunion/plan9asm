@@ -194,6 +194,11 @@ jobs:
               - TestX86GoPanicTerminal386OriginalABICompileAndLink
               - TestX86GoPanicTerminalOriginal386CompilerAndCALLAssociations
             timeout: 5m
+          - lane: typed-arguments-compare
+            module: '.'
+            roots:
+              - TestGoX86SDKAMD64CompareTypedArgumentsWholeSource
+            timeout: 5m
           - lane: arm64-carrier-widths
             module: '.'
             roots:

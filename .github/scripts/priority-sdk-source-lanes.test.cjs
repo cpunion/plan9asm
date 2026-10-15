@@ -4,7 +4,37 @@ const test = require('node:test');
 
 const workflow = fs.readFileSync('.github/workflows/pr40-owned-process-probe.yml', 'utf8');
 const sdk = workflow.slice(workflow.indexOf('\n  sdk-priority:'), workflow.indexOf('\n  ownership:'));
-const sdkLaneCount = 32;
+const sdkLaneCount = 33;
+
+const compareRoot = 'TestGoX86SDKAMD64CompareTypedArgumentsWholeSource';
+const compareLane = '- lane: typed-arguments-compare\n            module: \'.\'\n' +
+  `            roots:\n              - ${compareRoot}\n            timeout: 5m`;
+
+function checkTypedArgumentsComparePriority(text) {
+  assert.ok(text.includes(compareLane), 'complete original Compare owner with its original budget');
+  assert.equal(text.split('- lane: typed-arguments-compare\n').length - 1, 1,
+    'exactly one independent Compare priority lane');
+  assert.equal(text.split(`- ${compareRoot}\n`).length - 1, 1, 'exactly one complete Compare owner');
+}
+
+test('Complete typed-argument Compare objects precede full Windows modules with the original budget', () => {
+  checkTypedArgumentsComparePriority(sdk);
+});
+
+test('Compare priority rejects missing, duplicate, substituted, partial or enlarged owners', () => {
+  checkTypedArgumentsComparePriority(compareLane);
+  for (const changed of [
+    compareLane.replace('typed-arguments-compare', 'unrelated-compare'),
+    compareLane + '\n          ' + compareLane,
+    compareLane + `\n              - ${compareRoot}\n`,
+    compareLane.replace(compareRoot, 'TestGoX86SDKAMD64EqualTypedArgumentsWholeSource'),
+    compareLane.replace(compareRoot, compareRoot + '/text'),
+    compareLane.replace("module: '.'", 'module: cmd/plan9asmll'),
+    compareLane.replace('timeout: 5m', 'timeout: 6m'),
+    compareLane.replace('            timeout: 5m',
+      '              - TestUnrelatedAdditionalOwner\n            timeout: 5m'),
+  ]) assert.throws(() => checkTypedArgumentsComparePriority(changed));
+});
 
 function checkBytealgPriority(text) {
   for (const [lane, root] of [
