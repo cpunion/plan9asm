@@ -113,3 +113,84 @@ func TestX86OpaquePointerAddressCannotBorrowNumericalOrPartialStorage(t *testing
 		}
 	}
 }
+
+func TestX86OpaqueAddressPointerRoleRetainsCompleteSourceBoundary(t *testing.T) {
+	for _, arch := range []string{"386", "amd64"} {
+		move := "MOVQ"
+		if arch == "386" {
+			move = "MOVL"
+		}
+		start, store := move+" $payload<>(SB),AX\n", move+" AX,ret+0(FP)\n"
+		for _, row := range []struct {
+			name, body string
+			accepted   bool
+		}{
+			{"complete", start + store + "RET", true},
+			{"copy", start + move + " AX,BX\n" + move + " BX,ret+0(FP)\nRET", true},
+			{"nil-result", start + move + " $0,ret+0(FP)\nRET", true},
+			{"padding", start + "NOP\n" + store + "RET", true},
+			{"unknown-copy", start + move + " BX,ret+0(FP)\nRET", false},
+			{"partial-source", start + "MOVB $0,AX\n" + store + "RET", false},
+			{"partial-result", start + "MOVB AX,ret+0(FP)\nRET", false},
+			{"missing-result", start + "RET", false},
+			{"early-return", start + "RET\n" + store + "RET", false},
+			{"branch", start + "JMP finish\nfinish:\n" + store + "RET", false},
+			{"native-read", start + "MOVB (AX),BX\n" + store + "RET", false},
+			{"native-write", start + "MOVB $0,(AX)\n" + store + "RET", false},
+			{"call", start + "CALL other(SB)\n" + store + "RET", false},
+			{"physical-stack", start + move + " AX,SP\n" + store + "RET", false},
+		} {
+			t.Run(arch+"/"+row.name, func(t *testing.T) {
+				_, file, sig, _ := x86ResultInitializationFixture(t, arch, "func Value() *byte", row.body)
+				before := fmt.Sprintf("%#v %#v", file.Funcs[0], sig)
+				if got := x86OpaqueAddressPointerResultRole(file.Funcs[0], sig, arch); got != row.accepted {
+					t.Fatal("opaque complete transport disagrees with its source boundary", got)
+				}
+				if after := fmt.Sprintf("%#v %#v", file.Funcs[0], sig); after != before {
+					t.Fatal("opaque role changed its original function or declaration")
+				}
+				if err := CheckX86ABI0ResultInitialization(file.Funcs[0], sig, arch); !errors.Is(err, ErrProbeNeedsContext) {
+					t.Fatal("opaque transport supplied a numerical or GC result proof", err)
+				}
+			})
+		}
+		_, file, sig, _ := x86ResultInitializationFixture(t, arch, "func Value() *byte", start+store+"RET")
+		for _, mutation := range []string{"result-offset", "result-width", "result-index", "result-field", "result-path",
+			"argument", "register-entry", "unknown-extent", "private-frame", "raw-input", "missing-TEXT", "oversize-source"} {
+			t.Run(arch+"/"+mutation, func(t *testing.T) {
+				fn, changed := file.Funcs[0], sig
+				fn.Instrs = append([]Instr(nil), fn.Instrs...)
+				changed.Frame.Results = append([]FrameSlot(nil), sig.Frame.Results...)
+				switch mutation {
+				case "result-offset":
+					changed.Frame.Results[0].Offset = 1
+				case "result-width":
+					changed.Frame.Results[0].Type = I32
+				case "result-index":
+					changed.Frame.Results[0].Index = 1
+				case "result-field":
+					changed.Frame.Results[0].Field = 0
+				case "result-path":
+					changed.Frame.Results[0].Fields = []int{0}
+				case "argument":
+					changed.Args = []LLVMType{Ptr}
+				case "register-entry":
+					changed.ArgRegs = []Reg{AX}
+				case "unknown-extent":
+					fn.ArgSize = 0
+				case "private-frame":
+					fn.FrameSize = 8
+				case "raw-input":
+					fn.Instrs[1].x86Encoded = true
+				case "missing-TEXT":
+					fn.Instrs = fn.Instrs[1:]
+				case "oversize-source":
+					fn.Instrs = make([]Instr, 4097)
+				}
+				if x86OpaqueAddressPointerResultRole(fn, changed, arch) {
+					t.Fatal("changed source or ABI metadata borrowed the original pointer role")
+				}
+			})
+		}
+	}
+}
