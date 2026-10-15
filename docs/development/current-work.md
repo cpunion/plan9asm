@@ -1,6 +1,6 @@
 # Current work: PR 40 checkpoint
 
-Checkpoint: 2026-10-15 18:28 UTC. The notes below this section are historical
+Checkpoint: 2026-10-15 18:56 UTC. The notes below this section are historical
 and retain their original source scope; they are not the current task queue.
 
 ## Active queue
@@ -30,12 +30,18 @@ establish native execution on the skipped architecture.
 | SB LEAW/L/Q address effects | Qualified `e5523905` is merged through `cf07263b`. Unknown-address writes kill destination identities without inventing numerical bytes or dereference permission. A separate old AUTO cost-selector gap remains unresolved. |
 | x87 initialized control/status words | Candidate `3bdaabe1` passes 14 roots/1,285 children, including the original word-store objects, but complete ENV still fails all nine children at FLDENV. Original instruction-family replay also fails its partial-18 positive at x87math's zero-frame SP storage; the complete-19 Context control passes. Modes/Codegen remain unattempted. Do not merge or narrow the proof to hide this regression. |
 | DATA relocation address values | Qualified `1f39d8db` is merged through `62784911`: 54 affected owners on both SDKs and 30 source/model owners on race, 138 root executions/3,497 children, two whole-root-module vets and tracked formatting pass. Generic incoming pointers and code addresses gain no numerical or dereference permission. |
-| Complete 386 runtime fixture | The complete SCAS/CMPS Go oracle passes five targets. Candidate `31d4386f` remains unqualified; independent self-CMP RED retains 79 model failures and 54 rejected public positives. Follow-up `15e5b1cc` reproduces 432 legitimate whole-flow failures from incorrectly clearing unchanged caller-address facts. Prefix, count, FLAGS, exact write-footprint repair and complete original runtime replay remain pending. |
+| Complete 386 runtime fixture | Candidate `acbfd7c0` passes its first 12 roots/2,677 children, including five original Go objects and 60 LLVM22 object axes. Expanded qualification and native execution remain pending. Complete original 18-TEXT replay at `ebfcd52e` passes Go assembly but both translation APIs fail because SETCS leaves BX's upper 24 bits undefined before a full result store. Preserve that RED; repair the fixture's explicit zero extension, not the production definedness check. |
 
 Frozen `0c80d8a6` passes nine carry/exchange/fixture owners on each of Go27,
 actual Go20 and race: 27 root executions/378 children, no failures or skips.
 This is a focused result, not whole-module, native-runtime or final PR
 qualification. Vets and broader affected-family qualification remain required.
+
+The combined `1c883d32` snapshot separately passes the exact 37-root
+DATA/BIT/LEA/carry/fixture integration set on Go27 and actual Go20:
+74 root executions/5,238 children, no failures, skips, gaps or duplicates.
+Both original five-minute commands retain identical source/SDK/tool seals.
+This is not race, whole-module or native-runtime qualification.
 
 Root independently rechecks the two newly merged leaves' original inventories,
 raw ordered terminals, source/SDK/tool identities and vet exits. BIT/FP/trap's
@@ -53,9 +59,21 @@ guess or arbitrary package suffix. Objects do not establish native execution.
 The x87 follow-up needs separate complete rounding/integer-conversion effects
 and a real bounded scratch producer. I64-to-double already loses integers above
 2^53, and software NaN/out-of-range conversion must not become LLVM poison.
+Test-only `c0870164` independently passes all 96 original-Go format/byte cases
+for the seven-name, nine-row integer/rounding family. Its complete I64 identity
+source, without any control-word probe, reaches LLVM O2 through all three APIs
+on five targets: 90 numerical leaves pass, 60 return incorrect constants and
+15 return poison. Parent failures are not additional numerical cases. These
+are genuine Software-mode numerical failures, not native-execution evidence.
 Whether explicit Software mode owns an initialized virtual FPU environment is
 awaiting a user choice; default Auto/Hardware must still observe actual hardware.
 Do not turn the existing private alloca initializer into an implicit entry fact.
+
+SCAS/CMPS retains the independent failed self-CMP and exact caller-write-footprint
+matrices. The unchanged SDK IndexByte replay now reaches the existing unresolved
+PC-relative branch guard, not an observed FLAGS failure; its expected next
+Context is updated only after preserving the actual three-API failed trace.
+That observation does not establish a complete SDK-file pass.
 
 Main now includes the qualified commuted-pointer read leaf through `67c38bc2`
 and immediate packed comparison leaf `605c8615`. The latter's Go27/Go20/race
