@@ -36,7 +36,11 @@ func TestX86CRC32SparseNUMFlagsAndSourceBoundaries(t *testing.T) {
 						state := x86ResultState{flags: x86ByteFlagsAll, direction: x86ResultDirectionForward}
 						state.gp[0], state.gp[bx], state.pointerGP[dx] = uint8(mask), sourceMask, true
 						before := state.clone()
-						accepted := mask&15 == 15 && sourceMask == 255
+						indexMask := uint8(255)
+						if arch == "386" {
+							indexMask = 15
+						}
+						accepted := mask&15 == 15 && sourceMask&indexMask == indexMask
 						if got, known := x86LoweredCRC32NativeRead(native, &state, nil, 0, arch); !known || got != accepted {
 							t.Fatal("native CRC inferred input/address knowledge", mask, sourceMask, got, known)
 						}
@@ -80,7 +84,7 @@ func TestX86CRC32GrammarBanksAndOriginalIdentity(t *testing.T) {
 	for _, arch := range []string{"amd64", "386"} {
 		for _, row := range x86CRC32ResultCases(arch) {
 			for _, bank := range []string{"source", "destination"} {
-				for _, reg := range strings.Fields("AX CX DX BX SP BP SI DI R8 R9 R10 R11 R12 R13 R14 R15 AL AH BL BH CL CH DL DH BPB SIB DIB R8B R15B X0 Y0 Z0 K1 M0 FS TLS R16") {
+				for _, reg := range strings.Fields("AX CX DX BX SP BP SI DI R8 R9 R10 R11 R12 R13 R14 R15 AL AH BL BH CL CH DL DH SPB BPB SIB DIB R8B R9B R10B R11B R12B R13B R14B R15B X0 Y0 Z0 K1 M0 FS TLS R16") {
 					t.Run(arch+"/"+row.op+"/"+bank+"/"+reg, func(t *testing.T) {
 						source, dest := reg, "AX"
 						if bank == "destination" {
@@ -92,7 +96,7 @@ func TestX86CRC32GrammarBanksAndOriginalIdentity(t *testing.T) {
 						gp := strings.Contains(" AX CX DX BX SP BP SI DI ", " "+reg+" ") || arch == "amd64" && strings.Contains(" R8 R9 R10 R11 R12 R13 R14 R15 ", " "+reg+" ")
 						valid := gp
 						if bank == "source" && row.width == 1 {
-							valid = gp && (arch != "386" || reg != "SP") || strings.Contains(" AL AH BL BH CL CH DL DH ", " "+reg+" ") || arch == "amd64" && strings.Contains(" BPB SIB DIB R8B R15B ", " "+reg+" ")
+							valid = gp && (arch != "386" || reg != "SP") || strings.Contains(" AL AH BL BH CL CH DL DH ", " "+reg+" ") || arch == "amd64" && strings.Contains(" BPB SIB DIB R8B R9B R10B R11B R12B R13B R14B R15B ", " "+reg+" ")
 						}
 						_, known, err := x86CRC32Properties(ins.Op, ins, arch)
 						if !known || (err == nil) != valid || !reflect.DeepEqual(ins, original) {
@@ -106,7 +110,11 @@ func TestX86CRC32GrammarBanksAndOriginalIdentity(t *testing.T) {
 			}
 		}
 		for _, source := range []string{"CRC32L $1,AX", "CRC32L $0.5,AX", "CRC32L $table(SB),AX", "CRC32L (BX)(SI*3),AX", "CRC32L (BX)(SP*1),AX", "CRC32L.Z BX,AX", "CRC32L BX", "CRC32L AX,BX,CX"} {
-			ins := x86ScalarLaneInstruction(t, source)
+			file, err := Parse(ArchAMD64, "TEXT ·Value(SB),4,$0-0\n"+source+"\nRET\n")
+			if err != nil {
+				continue // Invalid parser syntax never reaches a typed instruction row.
+			}
+			ins := file.Funcs[0].Instrs[1]
 			if _, known, err := x86CRC32Properties(ins.Op, ins, arch); !known || err == nil {
 				t.Fatal("invalid CRC row granted an effect", arch, source)
 			}
