@@ -112,6 +112,7 @@ func TestX86MixedBoolResultOrdinaryCanonicalThreeAPIs(t *testing.T) {
 				return fmt.Sprintf("MOVB $%d,ret+%d(FP)\n", value, boolean)
 			}
 			storeNumber := fmt.Sprintf("MOVL $7,ret+%d(FP)\n", number)
+			roundtrip := storeBool(2) + fmt.Sprintf("MOVL $0,AX\nMOVB ret+%d(FP),AX\nMOVL AX,ret+%d(FP)\n", boolean, number)
 			for _, row := range []struct {
 				name, body string
 				accept     bool
@@ -119,6 +120,7 @@ func TestX86MixedBoolResultOrdinaryCanonicalThreeAPIs(t *testing.T) {
 				{"typed-entry-copy", copyBool + storeNumber + "RET", true},
 				{"constant-zero", storeBool(0) + storeNumber + "RET", true},
 				{"constant-one", storeBool(1) + storeNumber + "RET", true},
+				{"physical-byte-roundtrip", roundtrip + storeBool(1) + "RET", true},
 				{"canonical-join", "MOVL $1,AX\nCMPL AX,$0\nJE other\n" + storeBool(0) + "JMP end\nother:\n" + copyBool + "end:\n" + storeNumber + "RET", true},
 				{"raw-two", storeBool(2) + storeNumber + "RET", false},
 				{"unknown-byte", fmt.Sprintf("MOVB DX,ret+%d(FP)\n", boolean) + storeNumber + "RET", false},
@@ -137,12 +139,53 @@ func TestX86MixedBoolResultOrdinaryCanonicalThreeAPIs(t *testing.T) {
 							if err != nil || ir == "" {
 								t.Fatalf("canonical typed tuple rejected: output=%t error=%v", ir != "", err)
 							}
+							if row.name == "physical-byte-roundtrip" && !strings.Contains(ir, " = zext i8 ") {
+								t.Fatal("intermediate bool byte was normalized before its numerical observation")
+							}
 						} else if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
 							t.Fatalf("unproved tuple accepted: output=%t error=%v", ir != "", err)
 						}
 					})
 				}
 			}
+		}
+	}
+}
+
+func TestX86MixedBoolResultOrdinaryCanonicalRoleBoundaries(t *testing.T) {
+	for _, arch := range []string{"amd64", "386"} {
+		for _, row := range []struct {
+			name   string
+			mutate func(*Func, *FuncSig)
+		}{
+			{"native-frame", func(fn *Func, _ *FuncSig) { fn.FrameSize = 4 }},
+			{"wrong-extent", func(fn *Func, _ *FuncSig) { fn.ArgSize++ }},
+			{"register-entry", func(fn *Func, _ *FuncSig) { fn.Sym += "<ABIInternal>" }},
+			{"custom-registers", func(_ *Func, sig *FuncSig) { sig.ArgRegs = []Reg{"AX"} }},
+			{"borrowed-bool", func(_ *Func, sig *FuncSig) { sig.x86BorrowedBoolTail = true }},
+			{"raw-text", func(fn *Func, _ *FuncSig) { fn.X86RawText = []byte{0xc3} }},
+			{"source-stack", func(fn *Func, _ *FuncSig) { fn.x86SourceStack = &x86SourceStackProof{} }},
+			{"fixed-local", func(fn *Func, _ *FuncSig) { fn.x86FixedLocal = &x86FixedLocalProof{} }},
+			{"coalesced-flow", func(fn *Func, _ *FuncSig) { fn.x86ContinuationFlow = &x86ContinuationFlow{} }},
+			{"wrong-result-type", func(_ *Func, sig *FuncSig) { sig.Frame.Results[0].Type = I8 }},
+			{"wrong-result-index", func(_ *Func, sig *FuncSig) { sig.Frame.Results[0].Index = 1 }},
+			{"nested-result", func(_ *Func, sig *FuncSig) { sig.Frame.Results[0].Fields = []int{0} }},
+			{"overlapping-results", func(_ *Func, sig *FuncSig) { sig.Frame.Results[1].Offset = sig.Frame.Results[0].Offset }},
+			{"untyped-bool-entry", func(_ *Func, sig *FuncSig) { sig.Args[0] = I8 }},
+			{"overlapping-parameters", func(_ *Func, sig *FuncSig) { sig.Frame.Params[1].Offset = 0 }},
+			{"unrepresented-argument", func(_ *Func, sig *FuncSig) { sig.Args = append(sig.Args, I32) }},
+		} {
+			t.Run(arch+"/"+row.name, func(t *testing.T) {
+				_, file, sig, _ := x86ResultInitializationFixture(t, arch,
+					"func Value(x bool, n uint32) (bool, uint32)",
+					"MOVB x+0(FP),AX\nMOVB AX,ret+8(FP)\nMOVL $7,ret+12(FP)\nRET")
+				fn := file.Funcs[0]
+				row.mutate(&fn, &sig)
+				c := &amd64Ctx{goarch: arch, sig: sig, fpResults: sig.Frame.Results, fpScalarSource: fn}
+				if err := c.validateMixedBoolResultRole(); !errors.Is(err, ErrProbeNeedsContext) || c.fpMixedBoolBytes {
+					t.Fatalf("incomplete tuple acquired canonical physical-byte storage: %v", err)
+				}
+			})
 		}
 	}
 }

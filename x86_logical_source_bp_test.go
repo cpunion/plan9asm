@@ -100,7 +100,8 @@ RET
 }
 
 func x86Mode32BPNativeLoadSource(word string, offset int, suffix, widen, setup string) string {
-	return fmt.Sprintf(`TEXT ·Value(SB),NOSPLIT,$0-%d
+	return fmt.Sprintf(`#include "textflag.h"
+TEXT ·Value(SB),NOSPLIT,$0-%d
 %s
 MOV%s (DX),BP
 %s BP,AX
@@ -266,7 +267,8 @@ func TestX86Mode32BPLogicalSourceOriginalGoAndLLVMObjects(t *testing.T) {
 					source = strings.Replace(source, " MOVL BP,AX", " PUSHL BP\n POPL AX", 1)
 				case role == "private-result-stack":
 					declarations = "func Value(n uint32) uint32"
-					source = `TEXT ·Value(SB),NOSPLIT,$0-8
+					source = `#include "textflag.h"
+TEXT ·Value(SB),NOSPLIT,$0-8
 LEAL ret+4(FP),BP
 JMP body<>(SB)
 TEXT body<>(SB),NOSPLIT,$0-0
