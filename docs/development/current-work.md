@@ -1,7 +1,7 @@
 # Current work: PR 40 checkpoint
 
-Checkpoint: 2026-10-15 02:23 UTC. Qualified source observations `51bb6a5d`;
-published fork diagnostic `fcff729f` is a separate, still-running snapshot.
+Checkpoint: 2026-10-15 02:54 UTC. Qualified deadline repair `ecd5fa2b`;
+fork diagnostic `fcff729f` completed and remains a separate failed snapshot.
 This is a handoff, not a ledger or a claim of complete CI/stdlib success.
 
 ## Scope and authority
@@ -19,15 +19,34 @@ Read [instruction rules](instructions.md) and [validation](validation.md).
 Freeze source, tools and documentation during a tested snapshot. Preserve old
 failures as failures; do not increase budgets, crop sources or shrink denominators.
 
-## Active CI and latest completed run
+## Latest completed CI and qualified repair
 
 [38667476177](https://github.com/cpunion/plan9asm/actions/runs/38667476177)
-at fork `fcff729f` is still running. Let it finish naturally before another
-push; do not cancel unrelated release jobs. All31 priority jobs pass. Simple
-CLI completion now passes its fresh32-root inventory, all8 shards, complete
-module/environment/coverage checks and coverage upload, with zero root/child
-skips. This is actual Windows evidence for the PATH repair, not yet a complete
-three-module CI pass. The other CLI and main module remain pending.
+at fork `fcff729f` completed FAILURE naturally:64 jobs,62 success/two failures.
+All31 priority jobs pass. Simple CLI completion passes32 roots/29 children,
+all8 shards, strict7-scope equality, complete module/environment/coverage checks
+and coverage upload, zero skips or raw trace gaps. Main completion verifies all
+22 packages and uploads coverage. Its6330-root inventory has263 explicit
+host-inapplicable runtime skips; module status is `completed_with_skips`, not
+an all-platform executed pass. Native/cross-runtime counterparts remain required.
+
+The two failed jobs are one cause: rich CLI root part2 and its strict aggregate.
+`TestCompileOneX86SDKBytealgExistingObjects` shares a300s context across Count
+and IndexByte; Count passes162.35s, IndexByte is cancelled135.15s later, whole
+root fails300.17s. Other101 roots pass with no skip or unfinished terminal.
+The aggregate correctly rejects that failed fragment. Never classify joined
+cancellation/closed-source errors as another unsupported instruction.
+
+Repair `ecd5fa2b` gives both whole original files separate root/deadline owners
+and preserves both named children, actual LLVM22 objects and five-minute
+per-file budgets. Its scheduling policy has an independent RED and four
+reduction/shared-owner negatives; Windows8-shard/4-owner placements are disjoint.
+Frozen qualification passes runner21 roots/26 children on Go27/race/actualGo20,
+both complete CLI roots/one child each in35.369/35.156s, both root SDK vets,
+current CLI vet, formatting and3829 tracked inputs/19 selected tool/driver seals.
+Evidence: ignored `_out/register-result-repair/sdk-bytealg-independent/`.
+The next fork replay adds each repaired file as its own exact priority lane;
+only actual Windows execution can close the remaining CI failure.
 
 Downloaded native63 independently passes63 roots/169 children in149.992s,
 all15 inventories/25 mandatory owners/eight children, zero failure, skip,
@@ -35,6 +54,11 @@ missing, duplicate or unfinished terminals. Original PCMP fault execution
 covers all32 rows/34 probes at O0/O2. Retain downloaded evidence under ignored
 `_out/register-result-repair/ci-fcff729f/`. A local watch TLS timeout is transport
 failure, not a CI failure; reread actual job states before retrying the watch.
+
+All three DATA targets pass their original119 operations/16 children each:
+Linux374.66s, Darwin507.11s, Windows540.53s. Old shard25 now completes1085.087s
+inside1800s; its original interrupted whole-source root passes139.49s. Earlier
+PATH and monolithic-DATA deadline failures do not recur in this completed run.
 
 The diagnostic includes the qualified namespace and Windows repair batches
 through contribution `2f0a4a4b`; it does not include later panic observations
@@ -76,7 +100,7 @@ three complete target roots/48 children:172.471/164.300/155.115s, every original
 119-operation producer byte unchanged. Runner19 roots/22 children pass Go27,
 race and actualGo20; both SDK vets, all3817 tracked inputs and selected tools,
 HEAD and clean-status seals pass. Main's19 Node policies pass; the integrated
-forkc95's63 policies/actionlint also pass. The active run above is the required
+forkc95's63 policies/actionlint also pass. The completed run above is the required
 actual Windows replay; the old run remains FAILED. Evidence is under ignored
 `_out/register-result-repair/windows-module-path/`.
 
@@ -215,12 +239,12 @@ Basenames intentionally avoid private machine paths.
 
 | Worktree basename | Current role |
 | --- | --- |
-| `plan9asm-wt-pr40-scalar-lane-native-20261011` | Primary `codex/pr40-external-corpus-split-20261011`; source observations51bb and coupled gate qualified, not yet pushed. |
-| `plan9asm-wt-pr40-stdlib-preprocessing-20261012` | Published diagnosticfcff; active CI has all priorities and simple CLI completion passing. |
-| `plan9asm-wt-pr40-sdk-numeric-maps-entry-20261013` | Clean qualified argument-planner8607 leaf, not integrated: calculation alone must not grant ABI permission. Old stash preserved. |
+| `plan9asm-wt-pr40-scalar-lane-native-20261011` | Primary `codex/pr40-external-corpus-split-20261011`; source51bb and deadline repairecd5 qualified, not yet pushed. |
+| `plan9asm-wt-pr40-stdlib-preprocessing-20261012` | Published diagnosticfcff; CI naturally ended62 success/two failures, one shared-deadline cause. |
+| `plan9asm-wt-pr40-sdk-numeric-maps-entry-20261013` | Clean argument-planner8607 plus test-only inventory305e, not integrated. Actual Compare wrapper is absent; no entry permission follows. Old stash preserved. |
 | `plan9asm-wt-pr40-simple-sdk-bindings-20261013` | Clean fully qualified POPF982 leaf; integrated. No heavy process. |
-| `plan9asm-wt-pr40-sdk-tls-20261013` | Terminal-CFG WIP on a new branch at51bb; old qualified4c44 branch/receipts and stashes preserved. Sole heavy lease. |
-| `plan9asm-wt-pr40-sdk-numeric-maps-20261013` | Clean forkfcff/native63 staging mirror; never merge fork workflow into contribution. |
+| `plan9asm-wt-pr40-sdk-tls-20261013` | Terminal-CFG WIP at51bb, paused for CI. Last pure checkpoint10/32 passes; newer terminal-only two-child RED remains unresolved. No tool qualification. Preserve18 WIP files, old4c44 branch and stashes. |
+| `plan9asm-wt-pr40-sdk-numeric-maps-20261013` | Fork-only staging for qualified source merge and independent Bytealg priorities; never merge fork workflow into contribution. |
 
 One heavy SDK/object/native/benchmark owner at a time. Small pure gates may run
 in parallel. A model/connection error is not a test failure; inspect any still
