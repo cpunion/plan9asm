@@ -5,6 +5,7 @@ package plan9asm
 import (
 	"crypto/sha256"
 	"errors"
+	"fmt"
 	"go/types"
 	"os"
 	"path/filepath"
@@ -52,6 +53,13 @@ func amd64SDKArgumentTranslate(t *testing.T, api string, pkg GoPackage, file *Fi
 
 func amd64SDKTypedArgumentsWholeSource(t *testing.T, member string) {
 	t.Helper()
+	var llc string
+	if member == "compare_amd64.s" {
+		llc = findLLVM22Tool("llc")
+		if llc == "" {
+			t.Fatal("complete original Compare objects require LLVM22 llc")
+		}
+	}
 	ctx, request, metadata, _ := numericalSDKAssemblyFixture(t)
 	request.AssemblyFile = member
 	original, err := os.ReadFile(filepath.Join(request.Directory, member))
@@ -106,6 +114,19 @@ func amd64SDKTypedArgumentsWholeSource(t *testing.T, member string) {
 			if err := amd64ArgumentCompareEntryTypes(module); err != nil {
 				t.Fatal("complete original grouped entry transport differs", err)
 			}
+			for _, optimizeIR := range []bool{false, true} {
+				t.Run(fmt.Sprintf("IR_O2=%t", optimizeIR), func(t *testing.T) {
+					input := ir
+					if optimizeIR {
+						input = x86MulDivRoundOptimize(t, input)
+					}
+					for _, level := range []string{"-O0", "-O2"} {
+						t.Run("backend"+level, func(t *testing.T) {
+							x86PackedStringCompileObject(t, llc, options.TargetTriple, input, level)
+						})
+					}
+				})
+			}
 		})
 	}
 	after, err := x86CallerSourceFingerprint(file)
@@ -122,7 +143,11 @@ func amd64SDKTypedArgumentsWholeSource(t *testing.T, member string) {
 	if err != nil || sha256.Sum256(afterBytes) != sha256.Sum256(original) {
 		t.Fatal("original SDK bytes changed", err)
 	}
-	t.Logf("member=%s completeTEXTs=3 declaredEntries=2 allSelectedASM=%d sourceSHA=%x; no object/native/closure/stack proof", member, len(metadata.guard.selection.SFiles), sha256.Sum256(original))
+	role := "Context only; no object/native/closure/stack proof"
+	if member == "compare_amd64.s" {
+		role = "12 LLVM22 object axes; no native/closure/stack proof"
+	}
+	t.Logf("member=%s completeTEXTs=3 declaredEntries=2 allSelectedASM=%d sourceSHA=%x; %s", member, len(metadata.guard.selection.SFiles), sha256.Sum256(original), role)
 }
 
 func TestGoX86SDKAMD64CompareTypedArgumentsWholeSource(t *testing.T) {
