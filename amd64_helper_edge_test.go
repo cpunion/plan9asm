@@ -1150,17 +1150,18 @@ func TestAMD64TranslateReturnCoverage(t *testing.T) {
 }
 
 func TestAMD64FPMovCoverage(t *testing.T) {
-	fn := Func{
-		Instrs: []Instr{
-			{Op: "MOVQ", Args: []Operand{{Kind: OpReg, Reg: AX}, {Kind: OpReg, Reg: BX}}},
-			{Op: "MOVQ", Args: []Operand{{Kind: OpReg, Reg: Reg("X0")}, {Kind: OpReg, Reg: Reg("X1")}}},
-			{Op: "MOVQ", Args: []Operand{{Kind: OpReg, Reg: Reg("X2")}, {Kind: OpReg, Reg: Reg("X3")}}},
-		},
+	fixture, err := Parse(ArchAMD64, "TEXT example.fpmov(SB),$0-65\n"+
+		"MOVQ arg+0(FP),AX\nMOVQ AX,BX\nPXOR X0,X0\nPXOR X2,X2\nMOVQ X0,X1\nMOVQ X2,X3\n"+
+		"MOVSD input+8(FP),X0\nMOVSD X0,ret+40(FP)\nMOVQ AX,ret+48(FP)\n"+
+		"MOVW AX,ret+56(FP)\nMOVB AX,ret+64(FP)\nRET\n")
+	if err != nil {
+		t.Fatal(err)
 	}
+	fn := fixture.Funcs[0]
 	sig := FuncSig{
 		Name: "example.fpmov",
 		Args: []LLVMType{I64, LLVMType("double"), I64, I64},
-		Ret:  Void,
+		Ret:  LLVMType("{ double, i64, i16, i8 }"),
 		Frame: FrameLayout{
 			Params: []FrameSlot{
 				{Offset: 0, Type: I64, Index: 0, Field: -1},
