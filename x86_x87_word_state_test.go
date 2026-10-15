@@ -104,21 +104,29 @@ func TestX86X87WordStateKnownBitsAliasesAndCallRevocation(t *testing.T) {
 			}
 		}
 		x86ResultX87After(Instr{Op: OpCALL}, &state, arch)
-		if !state.x87.invalid || state.x87.word != nil || state.x87.status != 0 || state.x87.gp[0] != 0 {
-			t.Fatal("outer CALL retained an initialized word fact", arch)
+		if !state.x87.invalid || state.x87.word == nil || state.x87.word.control != 0 ||
+			state.x87.word.layout != layout || state.x87.status != 0 || state.x87.gp[0] != 0 {
+			t.Fatal("outer CALL retained hardware facts or erased immutable argument layout", arch)
 		}
-		if accepted, known := x86ResultX87ValueStep(x86X87ValueInstruction(t, "FINIT"), &state, nil, 0, arch); !known || accepted {
-			t.Fatal("FINIT revived an unproved post-CALL source stack", arch)
+		step("FINIT")
+		if state.x87.invalid || state.x87.depth != 0 || state.x87.slots != 0 || state.x87.status != 0xffff ||
+			state.x87.word.control != 0xffff || state.x87.word.layout != layout {
+			t.Fatal("FINIT failed to restore empty shape and words without inventing an F0 value", arch)
 		}
 	}
 	// The direct typed CALL consumer must revoke without relying on After.
 	for _, shape := range []bool{false, true} {
 		plan, state, owned := x86ABI0BoolCallDomainState(t)
 		state.shapeOnly = shape
-		state.x87 = &x86ResultX87State{status: 0xffff, word: &x86ResultX87WordState{control: 0xffff}}
+		layout := &x86X87WordLayout{parameters: map[int64]bool{}}
+		state.x87 = &x86ResultX87State{status: 0xffff, word: &x86ResultX87WordState{control: 0xffff, layout: layout}}
 		for ordinal := range plan.calls {
-			if accepted, known := x86ABI0BoolCallStep(ordinal, plan.function.Instrs[ordinal], &state, owned, 4, "386"); !known || !accepted || !state.x87.invalid || state.x87.word != nil || state.x87.status != 0 {
-				t.Fatal("direct typed CALL retained the optional initialized word domain", shape, known, accepted)
+			if accepted, known := x86ABI0BoolCallStep(ordinal, plan.function.Instrs[ordinal], &state, owned, 4, "386"); !known || !accepted {
+				t.Fatal("independently closed typed CALL no longer accepted", shape, known, accepted)
+			}
+			if !state.x87.invalid || state.x87.word == nil || state.x87.word.control != 0 ||
+				state.x87.word.layout != layout || state.x87.status != 0 {
+				t.Fatal("direct typed CALL retained hardware facts or erased immutable source layout", shape)
 			}
 		}
 	}

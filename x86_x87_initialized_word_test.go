@@ -176,6 +176,21 @@ func TestX86X87WordInitializationCannotBorrowUnknownOrForeignRoles(t *testing.T)
 				for _, api := range []string{"text", "module", "Go"} {
 					t.Run(fmt.Sprintf("%s/%s/mode%d/%s", target.triple, row.name, mode, api), func(t *testing.T) {
 						ir, err := x86X87InitializedWordAPI(t, source, row.declaration, target.arch, target.triple, api, mode)
+						// A hardware FNSTCW reads an actual complete word, not the
+						// private alloca's default. A typed FLDCW input likewise
+						// writes known control bytes in either mode. Neither fact
+						// supplies x87 values, Tag/TOP or an environment extent.
+						if row.name == "entry-control" && mode != X87Software || row.name == "control-load-is-not-environment-authority" {
+							if err != nil || ir == "" {
+								t.Fatal("existing defined control-word path was rejected", err)
+							}
+							if mode != X87Software {
+								x86X87HardwareWordRead(t, ir, 1)
+							} else {
+								x86X87SoftwareControlRoundTrip(t, ir)
+							}
+							return
+						}
 						if !errors.Is(err, ErrProbeNeedsContext) || ir != "" {
 							t.Fatalf("unknown/foreign word state became NUM: output=%t error=%v", ir != "", err)
 						}
