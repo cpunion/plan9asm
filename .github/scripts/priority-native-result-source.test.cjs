@@ -27,6 +27,11 @@ const groups = [
     inventory: 'packed-string-fault',
     roots: ['TestCrossLinuxRuntimeMatrixX86PackedStringOriginalNativeMemoryFaults'],
   },
+  {
+    variable: 'byte_swap_root',
+    inventory: 'byte-swap',
+    roots: ['TestCrossLinuxRuntimeMatrixX86ByteSwapOriginalGoAndLLVM'],
+  },
 ];
 
 function nativeBody(text) {
@@ -42,9 +47,9 @@ function validate(text) {
   assert.ok(execution >= 0, 'missing complete native execution');
   const allQuery = 'go test . -list "^($roots|TestCrossLinuxRuntimeMatrixX86($families))$" > _out/native-x86-oracles/all-roots.stdout';
   const allQueryAt = body.indexOf(allQuery);
-  assert.ok(allQueryAt >= 0 && allQueryAt < execution, 'missing complete exact63 discovery');
-  assert.ok(body.includes('test "$(grep -c \'^Test\' _out/native-x86-oracles/all-roots.stdout)" = 63'),
-    'complete fresh discovery must retain exactly63 roots');
+  assert.ok(allQueryAt >= 0 && allQueryAt < execution, 'missing complete exact64 discovery');
+  assert.ok(body.includes('test "$(grep -c \'^Test\' _out/native-x86-oracles/all-roots.stdout)" = 64'),
+    'complete fresh discovery must retain exactly64 roots');
   for (const group of groups) {
     const initial = new RegExp('\\b' + group.variable + "='([^']+)'").exec(body);
     assert.ok(initial, 'missing ' + group.inventory + ' registration');
@@ -81,7 +86,7 @@ function validate(text) {
   assert.match(body, /if: \$\{\{ !cancelled\(\) \}\}/);
 }
 
-test('native result/source/fault roles retain five exact independently inventoried owners', () => {
+test('native result/source/fault/byte-swap roles retain six exact independently inventoried owners', () => {
   validate(workflow);
 });
 

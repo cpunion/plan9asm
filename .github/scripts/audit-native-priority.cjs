@@ -47,6 +47,7 @@ function auditNativePriority(directory, io = fs) {
     'source-stack': ['TestCrossLinuxRuntimeMatrixX86RawSourceStackNumerical'],
     continuation: ['TestCrossLinuxRuntimeMatrixX86ContinuationWholeCFGOriginalGoAndLLVM'],
     'packed-string-fault': ['TestCrossLinuxRuntimeMatrixX86PackedStringOriginalNativeMemoryFaults'],
+    'byte-swap': ['TestCrossLinuxRuntimeMatrixX86ByteSwapOriginalGoAndLLVM'],
   };
   const actualFiles = io.readdirSync(directory).filter(name => name.endsWith('-inventory.log')).sort();
   assert.deepEqual(actualFiles, Object.keys(inventories).map(name => name + '-inventory.log').sort(),
@@ -61,11 +62,11 @@ function auditNativePriority(directory, io = fs) {
       mandatory.add(name);
     }
   }
-  assert.equal(mandatory.size, 25);
+  assert.equal(mandatory.size, 26);
   const discovered = io.readFileSync(path.join(directory, 'all-roots.stdout'), 'utf8')
     .split(/\r?\n/).filter(line => /^Test\S+$/.test(line)).sort();
-  assert.equal(discovered.length, 63, 'fresh discovery denominator changed');
-  assert.equal(new Set(discovered).size, 63, 'duplicate fresh discovery');
+  assert.equal(discovered.length, 64, 'fresh discovery denominator changed');
+  assert.equal(new Set(discovered).size, 64, 'duplicate fresh discovery');
   const roots = new Set(), rootTerminals = new Set();
   const children = new Set(), childTerminals = new Set();
   let packageTerminal;
@@ -109,7 +110,7 @@ function auditNativePriority(directory, io = fs) {
       terminals.add(event.Test);
     }
   }
-  assert.equal(roots.size, 63, 'exact native root denominator changed');
+  assert.equal(roots.size, 64, 'exact native root denominator changed');
   assert.deepEqual([...roots].sort(), discovered, 'execution roots differ from fresh discovery');
   assert.deepEqual([...roots].sort(), [...rootTerminals].sort(), 'incomplete root terminals');
   assert.deepEqual([...children].sort(), [...childTerminals].sort(), 'incomplete child terminals');
@@ -129,11 +130,15 @@ function auditNativePriority(directory, io = fs) {
   for (const optimization of ['-O0', '-O2']) {
     requiredChildren.push(packedStringFault + '/' + optimization);
   }
+  const byteSwap = 'TestCrossLinuxRuntimeMatrixX86ByteSwapOriginalGoAndLLVM';
+  for (const arch of ['amd64', '386']) {
+    requiredChildren.push(byteSwap + '/' + arch);
+  }
   for (const child of requiredChildren) {
     assert.ok(children.has(child) && childTerminals.has(child), 'missing required child: ' + child);
   }
   return {
-    protocol: 'go_test_json_native63',
+    protocol: 'go_test_json_native64',
     roots: roots.size, passed: rootTerminals.size,
     children: children.size, childPassed: childTerminals.size,
     failed: 0, skipped: 0, incomplete: 0, duplicate: 0,

@@ -30,14 +30,17 @@ const inventories = {
   'source-stack': ['TestCrossLinuxRuntimeMatrixX86RawSourceStackNumerical'],
   continuation: ['TestCrossLinuxRuntimeMatrixX86ContinuationWholeCFGOriginalGoAndLLVM'],
   'packed-string-fault': ['TestCrossLinuxRuntimeMatrixX86PackedStringOriginalNativeMemoryFaults'],
+  'byte-swap': ['TestCrossLinuxRuntimeMatrixX86ByteSwapOriginalGoAndLLVM'],
 };
 const sourceStack = inventories['source-stack'][0];
 const continuation = inventories.continuation[0];
 const packedStringFault = inventories['packed-string-fault'][0];
+const byteSwap = inventories['byte-swap'][0];
 const requiredChildren = [sourceStack + '/amd64', sourceStack + '/386',
   ...['amd64', '386'].flatMap(arch => ['memory', 'register'].map(dispatch =>
     continuation + '/' + arch + '/' + dispatch)),
-  packedStringFault + '/-O0', packedStringFault + '/-O2'];
+  packedStringFault + '/-O0', packedStringFault + '/-O2',
+  byteSwap + '/amd64', byteSwap + '/386'];
 
 function fixture() {
   const files = new Map();
@@ -91,14 +94,15 @@ function audit(files) {
   });
 }
 
-test('synthetic63 requires fifteen inventories,25 owners and eight source/ISA/fault children', () => {
+test('synthetic64 requires sixteen inventories,26 owners and ten source/ISA/fault children', () => {
   const result = audit(fixture());
-  assert.equal(result.protocol, 'go_test_json_native63');
-  assert.equal(result.roots, 63);
-  assert.equal(result.inventories, 15);
-  assert.equal(result.mandatory.length, 25);
-  assert.equal(result.requiredChildren.length, 8);
-  assert.equal(result.children, 9);
+  assert.equal(result.protocol, 'go_test_json_native64');
+  assert.equal(result.roots, 64);
+  assert.equal(result.inventories, 16);
+  assert.equal(result.mandatory.length, 26);
+  assert.equal(result.requiredChildren.length, 10);
+  // Only this synthetic fixture has eleven children; real execution is counted.
+  assert.equal(result.children, 11);
 });
 
 test('fresh full discovery rejects same-count nonmandatory root substitution', () => {
@@ -122,10 +126,19 @@ test('missing, duplicate or renamed independent inventory cannot certify executi
   }
 });
 
-test('each required source-stack ISA, continuation dispatch and fault axis must finish', () => {
+test('each required source-stack ISA, continuation dispatch, fault and byte-swap axis must finish', () => {
   for (const child of requiredChildren) {
     const files = fixture();
     replaceEvents(files, events(files).filter(event => event.Test !== child));
+    assert.throws(() => audit(files), /required child/);
+  }
+});
+
+test('both byte-swap ISAs reject same-count child substitution', () => {
+  for (const arch of ['amd64', '386']) {
+    const files = fixture();
+    files.set('native.jsonl', files.get('native.jsonl').replaceAll(
+      byteSwap + '/' + arch, byteSwap + '/unrelated-' + arch));
     assert.throws(() => audit(files), /required child/);
   }
 });
@@ -142,13 +155,14 @@ test('root or child SKIP and FAIL are never PASS', () => {
   }
 });
 
-test('fault children cannot finish after their successful root terminal', () => {
-  for (const child of requiredChildren.filter(name => name.startsWith(packedStringFault + '/'))) {
+test('fault and byte-swap children cannot finish after their successful root terminal', () => {
+  for (const child of requiredChildren.filter(name =>
+    name.startsWith(packedStringFault + '/') || name.startsWith(byteSwap + '/'))) {
     const files = fixture();
     const rows = events(files);
     const index = rows.findIndex(event => event.Action === 'pass' && event.Test === child);
     const [terminal] = rows.splice(index, 1);
-    const parent = rows.findIndex(event => event.Action === 'pass' && event.Test === packedStringFault);
+    const parent = rows.findIndex(event => event.Action === 'pass' && event.Test === child.split('/')[0]);
     rows.splice(parent + 1, 0, terminal);
     replaceEvents(files, rows);
     assert.throws(() => audit(files), /child.*root terminal/);
@@ -156,7 +170,7 @@ test('fault children cannot finish after their successful root terminal', () => 
 });
 
 test('duplicate or missing root and child events cannot close the protocol', () => {
-  for (const name of [sourceStack, requiredChildren[0]]) {
+  for (const name of [sourceStack, requiredChildren[0], byteSwap, byteSwap + '/amd64', byteSwap + '/386']) {
     for (const action of ['run', 'pass']) {
       const duplicate = fixture();
       const rows = events(duplicate);
