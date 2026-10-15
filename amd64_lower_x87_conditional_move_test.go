@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"runtime"
 	"strings"
 	"testing"
@@ -46,11 +47,28 @@ func TestTranslateX86X87ConditionalMoveCompleteGo127FormsAcrossTargets(t *testin
 			if err != nil {
 				t.Fatal(err)
 			}
-			ir, err := Translate(file, Options{
+			options := Options{
 				Goarch:       target.goarch,
 				TargetTriple: target.triple,
 				Sigs:         map[string]FuncSig{"x87conditionalmoveforms": {Name: "x87conditionalmoveforms", Ret: Void}},
-			})
+			}
+			if ir, err := Translate(file, options); !errors.Is(err, ErrProbeNeedsContext) || ir != "" {
+				t.Fatal("original complete Go format fixture borrowed undefined F0/F7 or FLAGS", err)
+			}
+			// Retain every original conditional form, but supply actual source
+			// values and predicate bits in a separately labeled counterpart.
+			const header = "TEXT x87conditionalmoveforms(SB),$0-0\n"
+			initialized := strings.Replace(source, header, header+"FINIT\n"+strings.Repeat("FLD1\n", 8)+
+				"MOVL $0,AX\nCMPL AX,AX\n", 1)
+			initialized = strings.Replace(initialized, "\tRET\n", "FINIT\n\tRET\n", 1)
+			if strings.Count(source, header) != 1 || strings.Count(initialized, "FLD1\n") != 8 {
+				t.Fatal("initialized counterpart lost its complete original source anchor")
+			}
+			file, err = Parse(ArchAMD64, initialized)
+			if err != nil {
+				t.Fatal(err)
+			}
+			ir, err := Translate(file, options)
 			if err != nil {
 				t.Fatal(err)
 			}
