@@ -1416,7 +1416,8 @@ func TestTranslate386X87Modes(t *testing.T) {
 		`asm sideeffect "fnstcw $0"`,
 		`asm sideeffect "fldcw $0"`,
 		`asm sideeffect "fldl $1; frndint; fstpl $0"`,
-		`asm sideeffect "fldl $1; fistpll $0"`,
+		`asm sideeffect "cmpb $$0, $3; je 1f; fildll $2;`,
+		`1: fldl $1; 2: fistpll $0`,
 	} {
 		if !strings.Contains(hardware, want) {
 			t.Fatalf("hardware x87 IR missing %q:\n%s", want, hardware)
