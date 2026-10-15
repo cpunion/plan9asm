@@ -3,6 +3,7 @@ package plan9asm
 import (
 	"fmt"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -109,6 +110,69 @@ func TestX86ImmediatePackedCompareResultThreeAPIs(t *testing.T) {
 						}{{"0", 0}, {"-1", ^uint64(0) >> uint(64-lanes)}} {
 							probe := fmt.Sprintf("\ndefine i64 @Probe() {\n %%r = call i64 @Value(i64 %s)\n ret i64 %%r\n}\n", input.literal)
 							x86ScalarFPNamedConstantResult(t, ir+probe, "Probe", []uint64{input.want})
+						}
+					})
+				}
+			}
+		}
+	}
+}
+
+func TestX86ImmediatePackedCompareDeadMemoryRemainsObservable(t *testing.T) {
+	for _, op := range x86ImmediateCompareResultMembers {
+		bits := 8
+		switch op {
+		case "VPCMPW", "VPCMPUW":
+			bits = 16
+		case "VPCMPD", "VPCMPUD":
+			bits = 32
+		case "VPCMPQ", "VPCMPUQ":
+			bits = 64
+		}
+		for _, vector := range []struct {
+			bank  string
+			bytes int
+		}{{"X", 16}, {"Y", 32}, {"Z", 64}} {
+			for _, broadcast := range []bool{false, true} {
+				if broadcast && bits < 32 {
+					continue // No Go broadcast row for B/W, signed or unsigned.
+				}
+				for _, mask := range []string{"none", "zero", "all"} {
+					name := fmt.Sprintf("%s/%s/broadcast-%t/%s", op, vector.bank, broadcast, mask)
+					t.Run(name, func(t *testing.T) {
+						suffix, inputMask, setup := "", "", ""
+						if broadcast {
+							suffix = ".BCST"
+						}
+						if mask != "none" {
+							value := "0"
+							if mask == "all" {
+								value = "-1"
+							}
+							setup = "MOVQ $" + value + ",CX\nKMOVQ CX,K1\n"
+							inputMask = "K1,"
+						}
+						// Predicate 3 is always false, and K2 is dead. Its active
+						// native memory access must nevertheless remain observable.
+						source := fmt.Sprintf("TEXT ·Value(SB),4,$0-8\nMOVQ p+0(FP),AX\nVPXORD Z0,Z0,Z0\n%s%s%s $3,(AX),%s0,%sK2\nRET\n",
+							setup, op, suffix, vector.bank, inputMask)
+						ir, err := x86ScalarFPBitViewAPI(t, source, "func Value(p *byte)", "amd64", "x86_64-unknown-linux-gnu", "text")
+						if err != nil {
+							t.Fatal("valid native-memory comparison did not translate", err)
+						}
+						optimized := x86MulDivRoundOptimize(t, ir)
+						if mask == "zero" {
+							if strings.Contains(optimized, "load volatile") {
+								t.Fatal("fully inactive comparison still accesses native memory")
+							}
+							return
+						}
+						count := vector.bytes * 8 / bits
+						if broadcast {
+							count = 1
+						}
+						for _, input := range []string{ir, optimized} {
+							x86RequireCMOVVolatileWidth(t, input, bits/8, count)
 						}
 					})
 				}
