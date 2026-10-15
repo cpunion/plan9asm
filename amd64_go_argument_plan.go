@@ -116,11 +116,30 @@ func (builder *amd64GoArgumentBuilder) shape(typ types.Type, depth int) (amd64Go
 	if typ == nil || depth > 32 || builder.nodes > amd64GoArgumentPlanLimit {
 		return shape, amd64GoArgumentContext("recursive or unbounded parameter type")
 	}
+	// Preserve argument.Type above, but inspect the actual RHS before using
+	// Underlying: an alias of a TypeParam otherwise looks like its constraint
+	// interface and can reach Sizes with no concrete layout. Rhs is expressed
+	// as a private interface so the base planner still compiles with Go1.20.
+	for {
+		if generic, ok := typ.(interface{ TypeParams() *types.TypeParamList }); ok && generic.TypeParams().Len() != 0 {
+			return shape, amd64GoArgumentContext("generic parameter needs its separate type contract")
+		}
+		if !goAMD64FrameIsAlias(typ) {
+			break
+		}
+		alias, valid := typ.(interface{ Rhs() types.Type })
+		if !valid {
+			return shape, amd64GoArgumentContext("alias lacks its actual RHS")
+		}
+		typ = alias.Rhs()
+		depth++
+		builder.nodes++
+		if typ == nil || depth > 32 || builder.nodes > amd64GoArgumentPlanLimit {
+			return shape, amd64GoArgumentContext("recursive or unbounded alias RHS")
+		}
+	}
 	if _, parameter := typ.(*types.TypeParam); parameter {
 		return shape, amd64GoArgumentContext("unresolved type parameter has no concrete argument layout")
-	}
-	if named, ok := typ.(*types.Named); ok && named.TypeParams().Len() != 0 {
-		return shape, amd64GoArgumentContext("generic named parameter needs its separate type contract")
 	}
 	add := func(llvm LLVMType, kind amd64GoArgumentKind, width, offset int64, path []int) error {
 		builder.leaves++
