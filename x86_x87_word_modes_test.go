@@ -116,9 +116,9 @@ func TestX86X87ControlLoadsNeedOnlyTheirDefinedBoundWord(t *testing.T) {
 			name, declaration, body string
 			good                    bool
 		}{
-			{"known-AUTO", "func Value(input uint16) uint16", "MOVW input+0(FP),AX\nMOVW AX,-2(SP)\nFLDCW -2(SP)\n", true},
-			{"unknown-AUTO", "func Value(input uint16) uint16", "FLDCW -2(SP)\n", false},
-			{"partial-AUTO", "func Value(input uint16) uint16", "MOVB $1,-2(SP)\nFLDCW -2(SP)\n", false},
+			{"known-AUTO", "func Value(input uint16) uint16", "MOVW input+0(FP),AX\nMOVW AX,control-2(SP)\nFLDCW control-2(SP)\n", true},
+			{"unknown-AUTO", "func Value(input uint16) uint16", "FLDCW control-2(SP)\n", false},
+			{"partial-AUTO", "func Value(input uint16) uint16", "MOVB $1,control-2(SP)\nFLDCW control-2(SP)\n", false},
 			{"pointer-is-not-word-backing", "func Value(input *byte) uint16", move + " input+0(FP),BX\nFLDCW (BX)\n", false},
 		} {
 			_, _, _, source := x86ResultInitializationFixture(t, target.arch, row.declaration,
