@@ -174,6 +174,22 @@ jobs:
             roots:
               - TestCompileOneX86SDKOriginalCRC32NumericalDataJoin
             timeout: 5m
+          - lane: llvm-bytealg-count
+            module: cmd/plan9asmll
+            roots:
+              - TestCompileOneX86SDKBytealgCountExistingObjects
+            timeout: 5m
+          - lane: llvm-bytealg-indexbyte
+            module: cmd/plan9asmll
+            roots:
+              - TestCompileOneX86SDKBytealgIndexByteExistingObjects
+            timeout: 5m
+          - lane: panic-observation
+            module: '.'
+            roots:
+              - TestX86GoPanicTerminal386OriginalABICompileAndLink
+              - TestX86GoPanicTerminalOriginal386CompilerAndCALLAssociations
+            timeout: 5m
           - lane: assembly-selection
             module: cmd/plan9asmll
             roots:

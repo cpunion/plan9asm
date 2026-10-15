@@ -4,7 +4,40 @@ const test = require('node:test');
 
 const workflow = fs.readFileSync('.github/workflows/pr40-owned-process-probe.yml', 'utf8');
 const sdk = workflow.slice(workflow.indexOf('\n  sdk-priority:'), workflow.indexOf('\n  ownership:'));
-const sdkLaneCount = 28;
+const sdkLaneCount = 31;
+
+function checkBytealgPriority(text) {
+  for (const [lane, root] of [
+    ['llvm-bytealg-count', 'TestCompileOneX86SDKBytealgCountExistingObjects'],
+    ['llvm-bytealg-indexbyte', 'TestCompileOneX86SDKBytealgIndexByteExistingObjects'],
+  ]) {
+    const block = `- lane: ${lane}\n            module: cmd/plan9asmll\n            roots:\n              - ${root}\n            timeout: 5m`;
+    assert.ok(text.includes(block), lane);
+    assert.equal(text.split(`- ${root}\n`).length - 1, 1, root);
+  }
+  assert.doesNotMatch(text, /- TestCompileOneX86SDKBytealgExistingObjects\n/);
+}
+
+test('Bytealg original Count and IndexByte each precede full modules with their own budget', () => {
+  checkBytealgPriority(sdk);
+});
+
+test('Bytealg priority rejects a missing, duplicate, substituted or enlarged owner', () => {
+  for (const [before, after] of [
+    ['- lane: llvm-bytealg-count\n', '- lane: missing-bytealg-count\n'],
+    ['TestCompileOneX86SDKBytealgCountExistingObjects', 'TestCompileOneX86SDKBytealgExistingObjects'],
+    ['TestCompileOneX86SDKBytealgIndexByteExistingObjects', 'TestCompileOneX86SDKBytealgCountExistingObjects'],
+    ['TestCompileOneX86SDKBytealgIndexByteExistingObjects\n            timeout: 5m',
+      'TestCompileOneX86SDKBytealgIndexByteExistingObjects\n            timeout: 6m'],
+  ]) assert.throws(() => checkBytealgPriority(sdk.replace(before, after)));
+});
+
+test('New panic observations retain both complete actual compiler and linker owners', () => {
+  const block = '- lane: panic-observation\n            module: \'.\'\n            roots:\n' +
+    '              - TestX86GoPanicTerminal386OriginalABICompileAndLink\n' +
+    '              - TestX86GoPanicTerminalOriginal386CompilerAndCALLAssociations\n            timeout: 5m';
+  assert.ok(sdk.includes(block));
+});
 
 test('SDK priority runs each previous simple root in its own bounded lane', () => {
   const roots = [
