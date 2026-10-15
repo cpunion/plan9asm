@@ -4,7 +4,7 @@ const test = require('node:test');
 
 const workflow = fs.readFileSync('.github/workflows/pr40-owned-process-probe.yml', 'utf8');
 const sdk = workflow.slice(workflow.indexOf('\n  sdk-priority:'), workflow.indexOf('\n  ownership:'));
-const sdkLaneCount = 37;
+const sdkLaneCount = 39;
 
 const scalarFPByteRoots = [
   'TestX86ScalarFPWideTupleStoresPreserveEveryField',
@@ -234,6 +234,49 @@ test('Compare priority rejects missing, duplicate, substituted, partial or enlar
     compareLane.replace('            timeout: 5m',
       '              - TestUnrelatedAdditionalOwner\n            timeout: 5m'),
   ]) assert.throws(() => checkTypedArgumentsComparePriority(changed));
+});
+
+const compareAPIPartitions = [
+  ['typed-arguments-compare', 'TestGoX86SDKAMD64CompareTypedArgumentsWholeSource'],
+  ['typed-arguments-compare-module', 'TestGoX86SDKAMD64CompareTypedArgumentsWholeSourceModule'],
+  ['typed-arguments-compare-go-module', 'TestGoX86SDKAMD64CompareTypedArgumentsWholeSourceGoModule'],
+];
+const compareAPIBlocks = compareAPIPartitions.map(([lane, root]) =>
+  `- lane: ${lane}\n            module: '.'\n            roots:\n              - ${root}\n            timeout: 5m`);
+
+function checkCompareAPIPartitions(text) {
+  for (let index = 0; index < compareAPIPartitions.length; index++) {
+    const [lane, root] = compareAPIPartitions[index];
+    assert.ok(text.includes(compareAPIBlocks[index]), 'complete original Compare API partition: ' + lane);
+    assert.equal(text.split(`- lane: ${lane}\n`).length - 1, 1, 'one independent API lane: ' + lane);
+    assert.equal(text.split(`- ${root}\n`).length - 1, 1, 'one complete original-source API owner: ' + root);
+  }
+}
+
+test('Complete Compare API partitions each retain an independent original five-minute owner', () => {
+  checkCompareAPIPartitions(sdk);
+});
+
+test('Compare API partition policy rejects missing, shared, substituted or enlarged owners', () => {
+  const valid = compareAPIBlocks.join('\n          ');
+  checkCompareAPIPartitions(valid);
+  for (let index = 0; index < compareAPIPartitions.length; index++) {
+    const [lane, root] = compareAPIPartitions[index];
+    const block = compareAPIBlocks[index];
+    for (const changed of [
+      valid.replace(block, ''),
+      valid + '\n          ' + block,
+      valid.replace(`- lane: ${lane}\n`, '- lane: unrelated-compare-api\n'),
+      valid + `\n              - ${root}\n`,
+      valid.replace(root, compareRoot + 'Subset'),
+      valid.replace(root, root + '/text'),
+      valid.replace(block, block.replace("module: '.'", 'module: cmd/plan9asmll')),
+      valid.replace(block, block.replace('timeout: 5m', 'timeout: 6m')),
+      valid.replace(block, block.replace('            timeout: 5m',
+        '              - TestUnrelatedAdditionalOwner\n            timeout: 5m')),
+      valid.replace(block, block.replace(root, compareAPIPartitions[(index + 1) % compareAPIPartitions.length][1])),
+    ]) assert.throws(() => checkCompareAPIPartitions(changed));
+  }
 });
 
 function checkBytealgPriority(text) {

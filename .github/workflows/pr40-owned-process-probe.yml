@@ -199,6 +199,16 @@ jobs:
             roots:
               - TestGoX86SDKAMD64CompareTypedArgumentsWholeSource
             timeout: 5m
+          - lane: typed-arguments-compare-module
+            module: '.'
+            roots:
+              - TestGoX86SDKAMD64CompareTypedArgumentsWholeSourceModule
+            timeout: 5m
+          - lane: typed-arguments-compare-go-module
+            module: '.'
+            roots:
+              - TestGoX86SDKAMD64CompareTypedArgumentsWholeSourceGoModule
+            timeout: 5m
           - lane: abi0-result-tuples
             module: '.'
             roots:
