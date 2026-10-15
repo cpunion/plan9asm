@@ -1042,7 +1042,7 @@ TEXT frameAddress(SB),NOSPLIT,$0-12
 }
 
 func TestTranslate386X87MoveFamilyCompleteForms(t *testing.T) {
-	file, err := Parse(ArchAMD64, `
+	const source = `
 TEXT x87moves(SB),NOSPLIT,$0-0
 	FMOVB 0(SI), F0
 	FMOVBP F0, 0(DI)
@@ -1067,7 +1067,9 @@ TEXT x87moves(SB),NOSPLIT,$0-0
 	FMOVX 0(SI), F0
 	FMOVXP F0, 0(DI)
 	RET
-`)
+`
+	goAssemblerOracleOutput(t, "386", "#include \"textflag.h\"\n"+source, "", true)
+	file, err := Parse(ArchAMD64, source)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1077,10 +1079,10 @@ TEXT x87moves(SB),NOSPLIT,$0-0
 		Sigs:         map[string]FuncSig{"x87moves": {Name: "x87moves", Ret: Void}},
 		X87Mode:      X87Software,
 	})
-	if err != nil {
-		t.Fatalf("Translate(complete x87 move family) error = %v", err)
+	if !errors.Is(err, ErrProbeNeedsContext) || ir != "" || !strings.Contains(err.Error(), "FMOVB 0(SI), F0") {
+		t.Fatal("complete no-argument move source acquired SI/DI storage or initialized x87 inputs", err)
 	}
-	compile386IR(t, ir, "x87_move_family")
+	compile386IR(t, x86X87LowererObjectUnit(t, file, "386", "i386-unknown-linux-gnu"), "x87_move_family_emitter_only")
 }
 
 func TestTranslate386X87MoveFamilyRejectsNonGoForms(t *testing.T) {
@@ -1088,15 +1090,17 @@ func TestTranslate386X87MoveFamilyRejectsNonGoForms(t *testing.T) {
 		instruction string
 		want        string
 	}{
-		{instruction: "FMOVF F1, F0", want: "FMOVF expects memory source and F0 destination"},
-		{instruction: "FMOVFP F1, 0(DI)", want: "FMOVFP expects F0 source and memory destination"},
-		{instruction: "FMOVL 0(SI), F1", want: "FMOVL expects memory source and F0 destination"},
-		{instruction: "FMOVLP F0, F1", want: "FMOVLP expects F0 source and memory destination"},
+		{instruction: "FMOVF F1, F0", want: "FMOVF expects memory,F0, Freg,F0, F0,memory, or F0,Freg"},
+		{instruction: "FMOVFP F1, 0(DI)", want: "FMOVFP expects F0 source and memory or x87-register destination"},
+		{instruction: "FMOVL 0(SI), F1", want: "FMOVL expects signed integer memory,F0 or the registered F0,memory store row"},
+		{instruction: "FMOVLP F0, F1", want: "FMOVLP expects F0 source and signed integer memory destination"},
 		{instruction: "FMOVX F0, F1", want: "FMOVX expects memory source and F0 destination"},
 		{instruction: "FMOVXP F1, 0(DI)", want: "FMOVXP expects F0 source and memory destination"},
 	} {
 		t.Run(test.instruction, func(t *testing.T) {
-			file, err := Parse(ArchAMD64, "TEXT bad(SB),NOSPLIT,$0-0\n"+test.instruction+"\nRET\n")
+			source := "TEXT bad(SB),NOSPLIT,$0-0\n" + test.instruction + "\nRET\n"
+			goAssemblerOracleOutput(t, "386", "#include \"textflag.h\"\n"+source, "", false)
+			file, err := Parse(ArchAMD64, source)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -1105,7 +1109,7 @@ func TestTranslate386X87MoveFamilyRejectsNonGoForms(t *testing.T) {
 				Goarch:       "386",
 				Sigs:         map[string]FuncSig{"bad": {Name: "bad", Ret: Void}},
 			})
-			if err == nil || !strings.Contains(err.Error(), test.want) {
+			if err == nil || errors.Is(err, ErrProbeNeedsContext) || !strings.Contains(err.Error(), test.want) {
 				t.Fatalf("Translate(%q) error = %v, want %q", test.instruction, err, test.want)
 			}
 		})
@@ -1113,7 +1117,7 @@ func TestTranslate386X87MoveFamilyRejectsNonGoForms(t *testing.T) {
 }
 
 func TestTranslate386X87ConstantUnaryAndTranscendentalFamily(t *testing.T) {
-	file, err := Parse(ArchAMD64, `
+	const source = `
 TEXT x87transcendental(SB),NOSPLIT,$0-0
 	FBLD 0(SI)
 	FBSTP 0(DI)
@@ -1148,7 +1152,9 @@ TEXT x87transcendental(SB),NOSPLIT,$0-0
 	FYL2X
 	FYL2XP1
 	RET
-`)
+`
+	goAssemblerOracleOutput(t, "386", "#include \"textflag.h\"\n"+source, "", true)
+	file, err := Parse(ArchAMD64, source)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1158,10 +1164,10 @@ TEXT x87transcendental(SB),NOSPLIT,$0-0
 		Sigs:         map[string]FuncSig{"x87transcendental": {Name: "x87transcendental", Ret: Void}},
 		X87Mode:      X87Software,
 	})
-	if err != nil {
-		t.Fatalf("Translate(complete x87 constant/unary/transcendental family) error = %v", err)
+	if !errors.Is(err, ErrProbeNeedsContext) || ir != "" || !strings.Contains(err.Error(), "FBLD 0(SI)") {
+		t.Fatal("complete no-argument transcendental source acquired SI/DI storage or initialized x87 inputs", err)
 	}
-	compile386IR(t, ir, "x87_transcendental_family")
+	compile386IR(t, x86X87LowererObjectUnit(t, file, "386", "i386-unknown-linux-gnu"), "x87_transcendental_emitter_only")
 }
 
 func TestTranslate386X87ConstantUnaryAndTranscendentalFamilyRejectsOperands(t *testing.T) {
@@ -1311,15 +1317,17 @@ func TestTranslate386X87CompareFamilyRejectsNonGoForms(t *testing.T) {
 		instruction string
 		want        string
 	}{
-		{instruction: "FCOMF F1, F0", want: "FCOMF expects memory source and F0 destination"},
-		{instruction: "FCOMD 0(SI), F1", want: "FCOMD expects memory,F0"},
+		{instruction: "FCOMF F1, F0", want: "FCOMF expects memory source or x87-register source and F0 destination"},
+		{instruction: "FCOMD 0(SI), F1", want: "FCOMD expects memory source or x87-register source and F0 destination"},
 		{instruction: "FCOMDPP F1, F0", want: "FCOMDPP expects F0 source and x87-register destination"},
 		{instruction: "FCOMI F0, F1", want: "FCOMI expects x87-register source and F0 destination"},
 		{instruction: "FUCOM F1, F0", want: "FUCOM expects F0 source and x87-register destination"},
 		{instruction: "FUCOMIP 0(SI), F0", want: "FUCOMIP expects F0 source and x87-register destination"},
 	} {
 		t.Run(test.instruction, func(t *testing.T) {
-			file, err := Parse(ArchAMD64, "TEXT bad(SB),NOSPLIT,$0-0\n"+test.instruction+"\nRET\n")
+			source := "TEXT bad(SB),NOSPLIT,$0-0\n" + test.instruction + "\nRET\n"
+			goAssemblerOracleOutput(t, "386", "#include \"textflag.h\"\n"+source, "", false)
+			file, err := Parse(ArchAMD64, source)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -1328,7 +1336,7 @@ func TestTranslate386X87CompareFamilyRejectsNonGoForms(t *testing.T) {
 				Goarch:       "386",
 				Sigs:         map[string]FuncSig{"bad": {Name: "bad", Ret: Void}},
 			})
-			if err == nil || !strings.Contains(err.Error(), test.want) {
+			if err == nil || errors.Is(err, ErrProbeNeedsContext) || !strings.Contains(err.Error(), test.want) {
 				t.Fatalf("Translate(%q) error = %v, want %q", test.instruction, err, test.want)
 			}
 		})
