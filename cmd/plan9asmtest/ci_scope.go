@@ -176,6 +176,11 @@ func captureCIScope(ctx context.Context, cfg config, stem string) (ciScope, erro
 			}
 		}
 	}
+	if os.Getenv("PLAN9ASM_CROSS_EXEC") == "1" && !cfg.Module {
+		if err := captureCINodeDependency(ctx, cfg, stem, origins); err != nil {
+			return scope, err
+		}
+	}
 	if cfg.Module {
 		if err := captureModuleDependencies(ctx, cfg, stem, environment, origins); err != nil {
 			return scope, err
@@ -272,6 +277,15 @@ func verifyScopeArtifacts(directory, goBinary string, scope ciScope) error {
 		}
 		if origins["go"] != goBinary || len(origins) != len(scope.Tools) {
 			return fmt.Errorf("actual SDK/tool origins differ")
+		}
+		if scope.Tools["node"] != "" {
+			if err := validateModuleNodeEnvironment(observation.Process); err != nil {
+				return err
+			}
+			version, err := os.ReadFile(stem + "-node-version.stdout")
+			if err != nil || !ciNodeVersion.Match(version) {
+				return fmt.Errorf("actual Node version observation differs: %v", err)
+			}
 		}
 		for name := range scope.Tools {
 			if !filepath.IsAbs(origins[name]) {
