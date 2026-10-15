@@ -115,6 +115,19 @@ func TestX86SegmentMOVNumericalContinuationThreeAPIs(t *testing.T) {
 						x86SegmentMOVReadIR(t, x86DwordProductIROptimize(t, ir), row.width, space)
 					})
 				}
+				for _, address := range []string{"fixed", "base"} {
+					for _, api := range []string{"text", "module", "Go"} {
+						t.Run(target.triple+"/"+row.op+"/"+segment+"/void-address/"+address+"/"+api, func(t *testing.T) {
+							source, declaration := x86SegmentMOVVoidAddressFixture(target.arch, row, segment, address)
+							ir, err := x86ScalarFPBitViewAPI(t, source, declaration, target.arch, target.triple, api)
+							if err != nil || ir == "" {
+								t.Fatal("void native read rejected its actual hardware/NUM address", err)
+							}
+							x86SegmentMOVReadIR(t, ir, row.width, space)
+							x86SegmentMOVReadIR(t, x86DwordProductIROptimize(t, ir), row.width, space)
+						})
+					}
+				}
 			}
 		}
 		if target.arch == "amd64" {
@@ -147,6 +160,18 @@ func x86SegmentMOVVoidFixture(arch string, row x86SegmentMOVRow, segment string)
 	// No GP initialization is needed for a hardware segment's fixed offset.
 	// Its zero displacement is not a pointer to address-space-zero null.
 	return "TEXT ·view(SB),4,$0-0\n" + row.op + " 0(" + segment + "),DX\nRET\n", "func view()"
+}
+
+func x86SegmentMOVVoidAddressFixture(arch string, row x86SegmentMOVRow, segment, address string) (string, string) {
+	setup, memory := x86SegmentMOVAddress(arch, segment, address)
+	frame, declaration := 0, "func view()"
+	if address == "base" {
+		frame, declaration = 8, "func view(offset uintptr)"
+		if arch == "386" {
+			frame = 4
+		}
+	}
+	return fmt.Sprintf("TEXT ·view(SB),4,$0-%d\n%s%s %s,DX\nRET\n", frame, setup, row.op, memory), declaration
 }
 
 func x86SegmentMOVREXFixture(t *testing.T, segment, alias string, dead bool) (string, string) {
@@ -211,6 +236,22 @@ func TestX86SegmentMOVCannotGrantIndependentAuthority(t *testing.T) {
 							ir, err := x86ScalarFPBitViewAPI(t, source, control.declaration, target.arch, target.triple, api)
 							if !errors.Is(err, ErrProbeNeedsContext) || ir != "" {
 								t.Fatal("paired segment load granted another input/result/store/native contract", err)
+							}
+						})
+					}
+				}
+				for _, control := range []struct{ name, setup string }{
+					{"unknown-base", ""},
+					{"partial-base", "MOVW $8,BX\n"},
+					{"pointer-base", fmt.Sprintf("%s p+%d(FP),BX\n", move, word)},
+					{"revoked-NUM-base", move + " offset+0(FP),BX\n" + fmt.Sprintf("%s p+%d(FP),BX\n", move, word)},
+				} {
+					for _, api := range []string{"text", "module", "Go"} {
+						t.Run(target.triple+"/"+row.op+"/"+segment+"/void-address-denial/"+control.name+"/"+api, func(t *testing.T) {
+							source := fmt.Sprintf("TEXT ·view(SB),4,$0-%d\n%s%s -8(BX)(%s),DX\nRET\n", 2*word, control.setup, row.op, segment)
+							ir, err := x86ScalarFPBitViewAPI(t, source, "func view(offset uintptr,p *byte)", target.arch, target.triple, api)
+							if !errors.Is(err, ErrProbeNeedsContext) || ir != "" {
+								t.Fatal("void discarded result bypassed its actual native address input", err)
 							}
 						})
 					}

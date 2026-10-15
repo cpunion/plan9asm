@@ -42,6 +42,10 @@ func x86SegmentMOVCompleteSource(t *testing.T, arch string) (string, string, []x
 			}
 			assembly, declaration := x86SegmentMOVVoidFixture(arch, row, segment)
 			appendFunction(assembly, declaration, row.width, space)
+			for _, address := range []string{"fixed", "base"} {
+				assembly, declaration := x86SegmentMOVVoidAddressFixture(arch, row, segment, address)
+				appendFunction(assembly, declaration, row.width, space)
+			}
 		}
 	}
 	if arch == "amd64" {
@@ -58,9 +62,9 @@ func x86SegmentMOVCompleteSource(t *testing.T, arch string) (string, string, []x
 			}
 		}
 	}
-	want := 188
+	want := 212
 	if arch == "386" {
-		want = 102
+		want = 114
 	}
 	if len(functions) != want || strings.Count(source.String(), "TEXT ") != want || strings.Count(declarations.String(), "func ") != want {
 		t.Fatal("independent complete segment source denominator changed", len(functions), want)
