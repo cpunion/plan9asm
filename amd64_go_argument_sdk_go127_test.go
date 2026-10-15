@@ -51,8 +51,18 @@ func amd64SDKArgumentTranslate(t *testing.T, api string, pkg GoPackage, file *Fi
 	return "", err
 }
 
-func amd64SDKTypedArgumentsWholeSource(t *testing.T, member string) {
+func amd64SDKTypedArgumentsWholeSource(t *testing.T, member string, apis ...string) {
 	t.Helper()
+	if len(apis) == 0 {
+		apis = []string{"text", "module", "go-module"}
+	}
+	seen := make(map[string]bool)
+	for _, api := range apis {
+		if api != "text" && api != "module" && api != "go-module" || seen[api] {
+			t.Fatal("invalid or repeated complete-source API", api)
+		}
+		seen[api] = true
+	}
 	var llc string
 	if member == "compare_amd64.s" {
 		llc = findLLVM22Tool("llc")
@@ -89,7 +99,7 @@ func amd64SDKTypedArgumentsWholeSource(t *testing.T, member string) {
 	if err != nil {
 		t.Fatal("complete original typed carrier/compiler/source binding", err)
 	}
-	for _, api := range []string{"text", "module", "go-module"} {
+	for _, api := range apis {
 		t.Run(api, func(t *testing.T) {
 			ir, err := amd64SDKArgumentTranslate(t, api, pkg, file, bound)
 			if member == "equal_amd64.s" {
@@ -145,13 +155,26 @@ func amd64SDKTypedArgumentsWholeSource(t *testing.T, member string) {
 	}
 	role := "Context only; no object/native/closure/stack proof"
 	if member == "compare_amd64.s" {
-		role = "12 LLVM22 object axes; no native/closure/stack proof"
+		role = fmt.Sprintf("%d LLVM22 object axes; no native/closure/stack proof", 4*len(apis))
 	}
-	t.Logf("member=%s completeTEXTs=3 declaredEntries=2 allSelectedASM=%d sourceSHA=%x; %s", member, len(metadata.guard.selection.SFiles), sha256.Sum256(original), role)
+	t.Logf("member=%s APIs=%v completeTEXTs=3 declaredEntries=2 allSelectedASM=%d sourceSHA=%x; %s", member, apis, len(metadata.guard.selection.SFiles), sha256.Sum256(original), role)
 }
 
+// Each API owns a fresh complete capture, before/final verification and all
+// four object axes. Scheduling them independently avoids spending one shared
+// five-minute source lease across three expensive compiler observations.
+// Together these roots retain the entire original three-TEXT, twelve-object
+// scope; they do not cache or share mutable source observations.
 func TestGoX86SDKAMD64CompareTypedArgumentsWholeSource(t *testing.T) {
-	amd64SDKTypedArgumentsWholeSource(t, "compare_amd64.s")
+	amd64SDKTypedArgumentsWholeSource(t, "compare_amd64.s", "text")
+}
+
+func TestGoX86SDKAMD64CompareTypedArgumentsWholeSourceModule(t *testing.T) {
+	amd64SDKTypedArgumentsWholeSource(t, "compare_amd64.s", "module")
+}
+
+func TestGoX86SDKAMD64CompareTypedArgumentsWholeSourceGoModule(t *testing.T) {
+	amd64SDKTypedArgumentsWholeSource(t, "compare_amd64.s", "go-module")
 }
 
 func TestGoX86SDKAMD64EqualTypedArgumentsWholeSource(t *testing.T) {
