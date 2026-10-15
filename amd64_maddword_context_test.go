@@ -1,27 +1,22 @@
 package plan9asm
 
-import (
-	"errors"
-	"strings"
-	"testing"
-)
+import "testing"
 
 func TestX86WordMultiplyAddLegacyVirtualMemoryCannotProveAlignment(t *testing.T) {
 	for _, operand := range []string{"source+0(FP)", "(SP)", "(BP)"} {
-		source := "TEXT f(SB),4,$0-64\nPMADDWL " + operand + ",X1\nRET\n"
-		requireX86GoAssemblerResult(t, "amd64", source, true)
-		file, err := Parse(ArchAMD64, source)
-		if err != nil {
-			t.Fatal(err)
-		}
-		for _, triple := range []string{"x86_64-apple-darwin", "x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc", "i386-unknown-linux-gnu", "i686-pc-windows-msvc"} {
-			arch := "amd64"
-			if strings.HasPrefix(triple, "i") {
-				arch = "386"
+		for _, target := range x86RawReturnTargets {
+			source := "TEXT ·f(SB),4,$0-64\nPXOR X1,X1\nPMADDWL " + operand + ",X1\nRET\n"
+			declaration := "func f(source [64]byte)"
+			if operand != "source+0(FP)" {
+				source = x86OrdinaryBPNativeSource(target.arch, "f", "PMADDWL "+operand+",X1", operand, 0)
+				declaration = "func f(p *byte)"
 			}
-			_, err := Translate(file, Options{Goarch: arch, TargetTriple: triple, Sigs: map[string]FuncSig{"f": x86WordMaddFPType(t)}})
-			if !errors.Is(err, ErrProbeNeedsContext) {
-				t.Fatalf("%s virtual%s obtained original m128 alignment/fault semantics: %v", triple, operand, err)
+			x86LEAActualTargetGoObject(t, target.arch, target.triple, source)
+			for _, api := range []string{"text", "module", "Go"} {
+				t.Run(target.triple+"/"+operand+"/"+api, func(t *testing.T) {
+					ir, err := x86ScalarFPBitViewAPI(t, source, declaration, target.arch, target.triple, api)
+					x86RequireOrdinaryBPNativeOutcome(t, target.arch, operand, ir, err)
+				})
 			}
 		}
 	}
