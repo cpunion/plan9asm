@@ -46,6 +46,9 @@ func (c *amd64Ctx) lowerX87(op Op, ins Instr) (ok bool, terminated bool, err err
 	if arch == "" {
 		arch = "amd64" // Legacy private helpers have always used the default x86 mode.
 	}
+	if _, known, err := x86X87WordProperties(dispatch, arch); known && err != nil {
+		return true, false, err
+	}
 	valueForm, typedValue, formErr := x86X87ValueProperties(dispatch, arch)
 	if typedValue && formErr != nil {
 		return true, false, formErr

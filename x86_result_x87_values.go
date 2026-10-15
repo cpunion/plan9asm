@@ -10,21 +10,28 @@ type x86ResultX87State struct {
 	depth   uint8
 	invalid bool
 	status  uint16
-	gp      [16]uint16 // Captured known status bits, never whole NUM/canonical bytes.
+	gp      [16]uint16             // Captured known status bits, never whole NUM/canonical bytes.
+	word    *x86ResultX87WordState // Optional control knownness and immutable natural-word layout.
 }
 
 const x86ResultX87StatusConditions uint16 = 0x4500 // C3, C2, C0 only.
 
-func x86X87ValueFlowNeeded(fn Func) bool {
-	instructions := fn.Instrs
+func x86X87FlowInstructions(fn Func) []Instr {
 	if fn.x86DirectTailRoot != nil {
-		instructions = fn.x86DirectTailRoot.instructions
+		return fn.x86DirectTailRoot.instructions
 	} else if fn.x86ContinuationFlow != nil {
-		instructions = fn.x86ContinuationFlow.instructions
+		return fn.x86ContinuationFlow.instructions
 	}
-	for _, ins := range instructions {
+	return fn.Instrs
+}
+
+func x86X87ValueFlowNeeded(fn Func) bool {
+	for _, ins := range x86X87FlowInstructions(fn) {
 		name, _, _ := strings.Cut(strings.ToUpper(string(ins.Op)), ".")
 		if _, known := x86X87ValueSpecs[Op(name)]; known {
+			return true
+		}
+		if _, known := x86X87WordSpecs[Op(name)]; known {
 			return true
 		}
 	}
@@ -75,6 +82,9 @@ func (state *x86ResultX87State) pop(count uint8) bool {
 // bounded FP/AUTO or exact observed static bytes supply memory; no conditional
 // native read or write follows from knowing an x87 instruction's width.
 func x86ResultX87ValueStep(ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string) (bool, bool) {
+	if accepted, known := x86ResultX87WordStep(ins, state, owned, resultOffset, arch); known {
+		return accepted, true
+	}
 	form, known, err := x86X87ValueProperties(ins, arch)
 	if !known {
 		return false, false
@@ -143,25 +153,6 @@ func x86ResultX87ValueStep(ins Instr, state *x86ResultState, owned []bool, resul
 			return false, true
 		}
 		status = x86ResultX87StatusConditions
-	case x86X87Status:
-		if form.destination.Kind == OpReg {
-			index, mask, valid := x86ResultGP(form.destination.Reg, 2, arch)
-			if !valid {
-				return false, true
-			}
-			state.gp[index] &^= mask
-			state.canonicalGP[index] &^= mask
-			state.pointerGP[index], state.callerAddressGP[index] = false, false
-			state.callerAddressOrigin[index] = 0
-			state.resultAddressGP[index] = x86ResultSlotAddress{}
-			if state.boolFrameGP != nil {
-				state.boolFrameGP[index] = x86ResultSlotAddress{}
-			}
-			x87.gp[index] = x87.status
-		} else if !state.shapeOnly && x87.status != 0xffff ||
-			!x86ResultStore(form.destination, 2, state, owned, resultOffset, arch) {
-			return false, true // A partially known status cannot become stored NUM bytes.
-		}
 	}
 	if !state.shapeOnly && !x87.pop(form.spec.pop) {
 		return false, true
@@ -238,6 +229,9 @@ func x86ResultX87After(ins Instr, state *x86ResultState, arch string) {
 	if ins.Op == OpCALL {
 		*state.x87 = x86ResultX87State{invalid: true}
 		return // An independently accepted call supplies no empty-stack or captured GP fact.
+	}
+	if _, known, _ := x86X87WordProperties(ins, arch); known {
+		return // The shared typed word transfer applied every exact GP write.
 	}
 	if _, known, _ := x86X87ValueProperties(ins, arch); known {
 		return // The typed value transfer already applied its exact write/capture.

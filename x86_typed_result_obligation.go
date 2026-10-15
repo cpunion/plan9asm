@@ -10,6 +10,9 @@ func x86TypedFPResultNeedsProof(fn Func, sig FuncSig, arch string) bool {
 		return false
 	}
 	for _, ins := range fn.Instrs {
+		if _, known, err := x86X87WordProperties(ins, arch); known && err == nil && x86ResultNamedPredicateInstruction(ins) {
+			return true // Word results need the same whole proof without a GP-to-FP MOV.
+		}
 		if effect, known, err := x86TypedInstructionByteEffect(ins.Op, ins, arch); known && err == nil &&
 			effect.requiresResultProof && x86ResultNamedPredicateInstruction(ins) {
 			return true

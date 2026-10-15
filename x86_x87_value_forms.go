@@ -145,11 +145,9 @@ func x86X87ValueProperties(ins Instr, arch string) (x86X87ValueForm, bool, error
 		return form, true, nil
 	}
 	if spec.kind == x86X87Status {
-		if len(ins.Args) != 1 || !(memory(ins.Args[0]) || ins.Args[0].Kind == OpReg && ins.Args[0].Reg == AX) {
-			return fail("expects memory destination or AX")
-		}
-		form.destination = ins.Args[0]
-		return form, true, nil
+		word, _, err := x86X87WordProperties(ins, arch)
+		form.destination = word.operand
+		return form, true, err
 	}
 	if len(ins.Args) != 2 {
 		switch spec.kind {

@@ -54,14 +54,20 @@ func x86ResultCallerAddressesAfter(ins Instr, before [16]bool, entryFP map[int64
 		return [16]bool{}
 	}
 	ins = x86GoMOVQSourceInstruction(ins) // Original source/certificates stay unchanged.
-	if form, known, err := x86X87ValueProperties(ins, arch); known {
+	if form, known, err := x86X87WordProperties(ins, arch); known {
 		if err != nil {
 			return [16]bool{}
 		}
-		if form.spec.kind == x86X87Status && form.destination.Kind == OpReg {
-			if index, _, valid := x86ResultGP(form.destination.Reg, 2, arch); valid {
+		if form.kind == x86X87StoreStatus && form.operand.Kind == OpReg {
+			if index, _, valid := x86ResultGP(form.operand.Reg, 2, arch); valid {
 				before[index] = false
 			}
+		}
+		return before // Only FSTSW AX writes a GP; no unrelated identity changes.
+	}
+	if _, known, err := x86X87ValueProperties(ins, arch); known {
+		if err != nil {
+			return [16]bool{}
 		}
 		return before // Typed x87 value forms write no unrelated GP identity.
 	}

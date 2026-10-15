@@ -85,6 +85,9 @@ func checkX86ABI0ResultInitializationAtSource(fn Func, sig FuncSig, goarch strin
 	initial := x86ResultState{fp: make([]bool, frame), pointerFP: make(map[int64]bool)}
 	if scalarViews && x86X87ValueFlowNeeded(fn) {
 		initial.x87 = new(x86ResultX87State)
+		if x86X87WordStateNeeded(fn) {
+			initial.x87.word = &x86ResultX87WordState{layout: &x86X87WordLayout{parameters: make(map[int64]bool)}}
+		}
 	}
 	if scalarViews && fn.x86ContinuationFlow != nil {
 		view := fn.x86ContinuationFlow
@@ -154,6 +157,9 @@ func checkX86ABI0ResultInitializationAtSource(fn Func, sig FuncSig, goarch strin
 			return fail("parameter leaf type/index disagrees with its actual argument")
 		}
 		parameterRoles[role] = true
+		if initial.x87 != nil && initial.x87.word != nil && slot.Type == I16 {
+			initial.x87.word.layout.parameters[slot.Offset] = true
+		}
 		for offset := int(slot.Offset); offset < int(slot.Offset+bytes); offset++ {
 			if owned[offset] {
 				return fail("overlapping typed frame slots")
@@ -322,6 +328,9 @@ func checkX86ResultSourceFlow(fn Func, initial x86ResultState, owned []bool, res
 	}
 	if initial.x87 != nil {
 		byteState += 1 + 1 + 1 + 2 + 2*len(initial.x87.gp) // slots, depth, invalid, status, captured bits.
+		if initial.x87.word != nil {
+			byteState += 2 // Control knownness only; actual parameter layout is immutable metadata.
+		}
 	}
 	const byteWorkLimit = 64 << 20
 	byteWork := len(instructions) * byteState
@@ -550,6 +559,10 @@ func (state x86ResultState) clone() x86ResultState {
 	if state.x87 != nil {
 		copy := *state.x87
 		state.x87 = &copy
+		if state.x87.word != nil {
+			word := *state.x87.word
+			state.x87.word = &word
+		}
 	}
 	if state.valueStack != nil {
 		stack := *state.valueStack
@@ -578,6 +591,11 @@ func (state x86ResultState) intersect(other x86ResultState) x86ResultState {
 			merged.x87.status &= other.x87.status
 			for index := range merged.x87.gp {
 				merged.x87.gp[index] &= other.x87.gp[index]
+			}
+			if merged.x87.word != nil && other.x87.word != nil && merged.x87.word.layout == other.x87.word.layout {
+				merged.x87.word.control &= other.x87.word.control
+			} else if merged.x87.word != nil || other.x87.word != nil {
+				*merged.x87 = x86ResultX87State{invalid: true}
 			}
 		}
 	}
