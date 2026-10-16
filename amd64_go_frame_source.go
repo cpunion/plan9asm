@@ -575,8 +575,8 @@ func (source *GoAMD64FrameSource) verifyInputs() error {
 		return goAMD64FrameContext("original package directory inventory changed")
 	}
 	for name, expected := range source.inputs {
-		data, err := goAMD64FrameRead(name)
-		if err != nil || sha256.Sum256(data) != expected {
+		digest, err := gooriginalsrc.HashRegularFile(name, 64<<20)
+		if err != nil || digest != expected {
 			return goAMD64FrameContext("original/tool/export/object input changed: %s: %v", filepath.Base(name), err)
 		}
 	}
