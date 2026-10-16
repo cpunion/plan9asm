@@ -81,7 +81,11 @@ func TestX86PackedZeroMemoryStoreFaultPrecedesFPBoundsAndMaskReads(t *testing.T)
 				ctx, output := newAMD64CtxWithFuncForTest(t, Func{}, FuncSig{Ret: Void}, nil)
 				ctx.goarch = arch
 				before := output.Len()
-				recognized, terminated, err := ctx.lowerVec(instruction.Op, instruction)
+				lower := ctx.lowerPackedVectorMove
+				if strings.Contains(opcode, "COMPRESS") {
+					lower = ctx.lowerPackedCompress
+				}
+				recognized, terminated, err := lower(instruction.Op, instruction)
 				if !recognized || !terminated || err != nil || output.String()[before:] != "  call void asm sideeffect \"ud2\", \"~{memory}\"()\n  unreachable\n" {
 					t.Fatalf("%s invalid encoding evaluated nonexistent FP/mask/register data before #UD: %t/%t/%v", arch, recognized, terminated, err)
 				}
@@ -164,7 +168,11 @@ func TestX86PackedZeroMemoryStoreActualGoAndLLVM22Encoding(t *testing.T) {
 					cancel()
 					// llvm-mc can return zero while diagnosing rejected bytes.
 					invalid := strings.Contains(string(output), "invalid instruction encoding")
-					if err != nil || invalid != test.invalid || !test.invalid && !strings.Contains(strings.ToUpper(string(output)), "VMOV") {
+					family := "VMOV"
+					if strings.Contains(opcode, "COMPRESS") {
+						family = "COMPRESS"
+					}
+					if err != nil || invalid != test.invalid || !test.invalid && !strings.Contains(strings.ToUpper(string(output)), family) {
 						t.Fatalf("%s %s invalid=%t: LLVM 22 diagnostic mismatch: %v\n%s", arch, instruction, test.invalid, err, output)
 					}
 					// LLVM 22's 32-bit decoder aliases some W1 move spellings
@@ -173,7 +181,7 @@ func TestX86PackedZeroMemoryStoreActualGoAndLLVM22Encoding(t *testing.T) {
 					if !test.invalid {
 						ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 						command := exec.CommandContext(ctx, mc, "--disassemble", "--triple=x86_64-unknown-linux-gnu",
-							"--mattr=+avx512f,+avx512bw,+avx512vl")
+							"--mattr=+avx512f,+avx512bw,+avx512vl,+avx512vbmi2")
 						command.Stdin = strings.NewReader(input.String())
 						command.WaitDelay = 2 * time.Second
 						output, err := command.CombinedOutput()
