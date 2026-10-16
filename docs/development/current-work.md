@@ -1,5 +1,38 @@
 # Current work: PR 40 checkpoint
 
+## AH, ordinary RMW and private stack qualification, 2026-10-17
+
+At `b5daaf8c`, all 28 affected/retained roots pass on current Go, actual
+Go20 and race: 84 root executions and 21,777 children, zero failures/skips.
+Independent raw checks retain the same 7,287 exact terminal identities in each
+lane and identical before/after source, SDK and tool seals. Earlier REDs and
+failed intermediate receipts remain failed; these results certify this scope
+and exact revision, not current-head full CI or original native execution.
+
+LAHF/SAHF share complete zero-operand typed effects, including implicit AH,
+the five transferred flags and unchanged OF/DF. Ordinary unlocked memory RMW
+shares the complete eleven-stem B/W/L/Q grammar and preserves exact volatile
+non-atomic accesses. Its objects and three portable numerical runtime APIs pass;
+the two new Linux AMD64/386 original-Go/native LLVM owners still need explicit
+CI inventory registration and actual native execution.
+
+Private register PUSH/POP now always triggers the complete source proof and
+copies only independently known bytes. Unknown bytes remain unknown; the copy
+creates neither pointer/canonical facts nor physical SP/frame permissions.
+Independent RED retains sixty public-API false acceptances. AMD64 BP remains
+a separate frame role: original Go objects and explicit Context controls remain,
+while ordinary GP counterparts own public numerical coverage. Mode32 BP keeps
+its existing ordinary GP role. Portable ID/FLAGS execution no longer skips the
+host; it does not certify original physical ID execution.
+
+Continue native packed narrow, shift and unpack families, then the combined
+wider SDK/race union, retained format owners, official-baseline audits, final
+gates and strict benchmark. The latest published fork run remains the failed
+`ceedd8da` batch (60 successful jobs, two failures, dependent Windows skipped).
+PR40 remains draft at its older head. No push or external ledger change was
+made during this qualification; discovery remains external and is not running
+locally.
+
 ## Signed conversion and native-store qualification, 2026-10-17
 
 At `bf6c4291`, all 51 affected/retained roots pass on current Go, actual Go20
