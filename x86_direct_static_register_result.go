@@ -92,6 +92,9 @@ func (c *amd64Ctx) checkStaticIntegerResultInitialization() error {
 		if accepted, known := c.scalarStaticAddressValueTransfer(ins, state, owned, arch); known {
 			return accepted // Preserve the independently bound relocation-value producer.
 		}
+		if accepted, known := x86ResultUnknownSBAddressStep(ins, state, arch); known {
+			return accepted // Discarded source addresses never become numerical bytes.
+		}
 		width := x86StaticIntegerResultMoveBytes(ins, arch)
 		if width != 0 && len(ins.Args) == 2 {
 			if address, static := x86StaticSBReadAddress(ins.Args[1], arch); static {
