@@ -3,13 +3,19 @@ package plan9asm
 import (
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"testing"
 )
 
 func x86PackedFaultProgramGoDeclarations(signatures map[string]FuncSig, parameters string) string {
 	var declarations strings.Builder
+	var names []string
 	for name := range signatures {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
 		fmt.Fprintf(&declarations, "func %s(%s)\n", name, parameters)
 	}
 	return declarations.String()
@@ -59,13 +65,21 @@ func TestX86PackedShiftUnpackVoidNativeInputsCannotBorrowShadowState(t *testing.
 		"VPSRLW (AX),Y0,Y1", "VPSRLD $1,(AX),Y1",
 		"VPSRLVD.BCST (AX),Y0,Y1", "VPSRLDQ $1,(AX),Y1",
 		"VPUNPCKLBW (AX),Z0,Z1", "VUNPCKHPD.BCST (AX),Z0,Z1",
+		"VPSRLW.Z (AX),Y0,K1,Y1", "VPUNPCKLBW.Z (AX),Z0,K1,Z1",
 	} {
 		for _, target := range x86RawReturnTargets {
 			word, move := 8, "MOVQ"
+			mask := ""
+			if strings.Contains(row, "K1") {
+				if target.arch == "386" {
+					continue // The actual mode32 Go frontend rejects these named masked rows.
+				}
+				mask = "MOVL $0,CX\nKMOVQ CX,K1\n"
+			}
 			if target.arch == "386" {
 				word, move = 4, "MOVL"
 			}
-			source := fmt.Sprintf("TEXT ·Value(SB),4,$0-%d\n%s p+0(FP),AX\nVPXORD Z0,Z0,Z0\n%s\nRET\n", word, move, row)
+			source := fmt.Sprintf("TEXT ·Value(SB),4,$0-%d\n%s p+0(FP),AX\nVPXORD Z0,Z0,Z0\n%s%s\nRET\n", word, move, mask, row)
 			t.Run(target.triple+"/"+row, func(t *testing.T) {
 				x86LEAActualTargetGoObject(t, target.arch, target.triple, source)
 				for _, api := range []string{"text", "module", "Go"} {
@@ -75,6 +89,12 @@ func TestX86PackedShiftUnpackVoidNativeInputsCannotBorrowShadowState(t *testing.
 					unknown := strings.Replace(source, move+" p+0(FP),AX\n", "", 1)
 					if ir, err := x86ScalarFPBitViewAPI(t, unknown, "func Value(p *[64]byte)", target.arch, target.triple, api); ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
 						t.Error("unobserved native input acquired an implementation address", api, err)
+					}
+					if mask != "" {
+						unknown = strings.Replace(source, "KMOVQ CX,K1\n", "", 1)
+						if ir, err := x86ScalarFPBitViewAPI(t, unknown, "func Value(p *[64]byte)", target.arch, target.triple, api); ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+							t.Error("unobserved native input acquired an implementation mask", api, err)
+						}
 					}
 				}
 			})
