@@ -945,6 +945,7 @@ TEXT frameAddress(SB),NOSPLIT,$0-12
 	}
 	boundedCounterpart = "DATA someGlobal(SB)/4,$0\nGLOBL someGlobal(SB),8,$4\n" +
 		strings.Replace(boundedCounterpart, oldAddress, boundedAddress, 1)
+	boundedCounterpart = x86Legacy386StackCounterparts(t, boundedCounterpart)
 	boundedSigs := make(map[string]FuncSig, len(sigs))
 	for name, sig := range sigs {
 		boundedSigs[name] = sig
@@ -952,13 +953,27 @@ TEXT frameAddress(SB),NOSPLIT,$0-12
 	addressSig := boundedSigs["symbolAddress"]
 	addressSig.Frame.Results = []FrameSlot{{Offset: 0, Type: I32, Index: 0, Field: -1}}
 	boundedSigs["symbolAddress"] = addressSig
+	boundedSigs["stackAdjust"] = FuncSig{
+		Name: "stackAdjust", Args: []LLVMType{I32}, Ret: I32,
+		Frame: FrameLayout{
+			Params:  []FrameSlot{{Offset: 0, Type: I32, Index: 0, Field: -1}},
+			Results: []FrameSlot{{Offset: 4, Type: I32, Index: 0, Field: -1}},
+		},
+	}
+	boundedSigs["cpuidProbe"] = FuncSig{
+		Name: "cpuidProbe", Ret: I32,
+		Frame: FrameLayout{
+			Results: []FrameSlot{{Offset: 0, Type: I32, Index: 0, Field: -1}},
+		},
+	}
 	t.Run("partial-selection-bounded-counterpart-other-18-TEXTs", func(t *testing.T) {
 		// KeepFunc belongs to the Go-module API. The empty package grants no
 		// Go declaration; every selected signature is exactly the original
 		// explicit manual contract, including custom register assignments,
-		// except for the separately documented symbolAddress result slot.
-		// x87math has bounded scratch; symbolAddress has local DATA/ABI0
-		// output. arith and the other selected TEXTs stay intact.
+		// except the separately documented bounded scratch, DATA and stack
+		// counterparts. Those complete programs explicitly initialize their
+		// inputs and ABI0 outputs; they do not certify the original physical
+		// stack programs. arith and all other selected TEXTs stay intact.
 		pkg := mustGoPackage(t, "families", "package families")
 		result, err := TranslateGoModule(pkg, []byte(boundedCounterpart), GoModuleOptions{
 			GOOS: "linux", GOARCH: "386", TargetTriple: options.TargetTriple,
@@ -1000,8 +1015,6 @@ TEXT frameAddress(SB),NOSPLIT,$0-12
 		"%flags_id = alloca i1",
 		"%classic_frame = alloca",
 		"ptrtoint ptr @someGlobal to i64",
-		"sub i64 %",
-		", 156",
 	} {
 		if !strings.Contains(ir, want) {
 			t.Fatalf("386 IR missing %q:\n%s", want, ir)
@@ -1011,6 +1024,15 @@ TEXT frameAddress(SB),NOSPLIT,$0-12
 		t.Fatalf("386 x87 lowering unexpectedly depends on external roundeven:\n%s", ir)
 	}
 	compile386IR(t, ir, "instruction_families")
+	// ADJSP belongs to the original physical-stack format. Keep its complete
+	// emitter-only object separate from the public initialized counterpart.
+	formatIR := x86Legacy386StackFormatObject(t, options.TargetTriple)
+	for _, want := range []string{"sub i64 %", ", 156"} {
+		if !strings.Contains(formatIR, want) {
+			t.Fatalf("original 386 stack format IR missing %q", want)
+		}
+	}
+	compile386IR(t, formatIR, "original_stack_formats")
 	t.Run("independent-bounded-named-AUTO-product", func(t *testing.T) {
 		const bounded = "TEXT ·Bounded(SB),4,$16-12\nMOVL a+0(FP),AX\nMOVL b+4(FP),BX\nIMULL BX\nMOVL AX,spill-8(SP)\nMOVL spill-8(SP),AX\nMOVL AX,ret+8(FP)\nRET\n"
 		const declaration = "func Bounded(a,b uint32) uint32"

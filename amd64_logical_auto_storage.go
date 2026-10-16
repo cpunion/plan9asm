@@ -2,7 +2,8 @@ package plan9asm
 
 import "fmt"
 
-// Ordinary logical AUTO bytes have an immutable frame-end base. They are not
+// Ordinary logical AUTO bytes use immutable entry SP plus the frame extent.
+// They are not
 // addresses below the mutable physical/private SP, and private PUSH storage
 // must not overwrite them. This consumes an existing complete source proof;
 // independently bound native/caller storage keeps its own address projection.
@@ -26,6 +27,9 @@ func (c *amd64Ctx) prepareLogicalAUTOStorage() error {
 
 func (c *amd64Ctx) logicalAUTOAddress(mem MemRef) (string, bool, error) {
 	if c.logicalAUTOExtent == 0 || mem.Base != SP {
+		return "", false, nil
+	}
+	if _, static := x86SBMemoryAddressRole(Operand{Kind: OpMem, Mem: mem}, c.goarch); static {
 		return "", false, nil
 	}
 	offset, valid := x86ResultAUTOOffset(Operand{Kind: OpMem, Mem: mem}, 1, c.logicalAUTOExtent)
