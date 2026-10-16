@@ -24,6 +24,15 @@ func (c *amd64Ctx) lowerPackedUnpack(op Op, ins Instr) (bool, bool, error) {
 		return true, false, err
 	}
 	first, second, destination := ins.Args[form.first], ins.Args[form.second], ins.Args[form.destination]
+	if form.legacy && !form.mmx && form.memory >= 0 {
+		virtual := first.Kind == OpFP
+		if first.Kind == OpMem && !x86CallerMemoryCertified(ins, form.memory) && !c.fixedLocalMemoryCertified(ins, form.memory) {
+			virtual = !x86OrdinaryNativeMemoryOperand(first, c.goarch)
+		}
+		if virtual {
+			return true, false, fmt.Errorf("%w: legacy unpack m128 needs original native storage, not virtual FP/SP/BP alignment", ErrProbeNeedsContext)
+		}
+	}
 	laneBits := form.spec.laneBits
 	lanes := form.byteWidth * 8 / laneBits
 	if form.memory >= 0 && first.Kind == OpFP {
@@ -50,15 +59,34 @@ func (c *amd64Ctx) lowerPackedUnpack(op Op, ins Instr) (bool, bool, error) {
 	// Intel SDM Vol.2A Tables 2-44/45 classify these EVEX permutations as
 	// E4NF, not E4. A mask (even all zero) is not memory-fault suppression.
 	// Do not reuse the logical family's masked-memory reader here.
-	a, err := c.loadPackedUnpackSource(first, form)
-	if err != nil {
-		return true, false, err
-	}
 	b, err := c.loadPackedCompareLanes(second, form.byteWidth, laneBits, false)
 	if err != nil {
 		return true, false, err
 	}
-	result := c.emitPackedUnpackLanes(form.byteWidth, laneBits, form.spec.high, a, b)
+	var result string
+	if form.legacy && form.memory >= 0 {
+		mnemonic := strings.ToLower(base)
+		switch base {
+		case "PUNPCKLWL":
+			mnemonic = "punpcklwd"
+		case "PUNPCKHWL":
+			mnemonic = "punpckhwd"
+		case "PUNPCKLLQ":
+			mnemonic = "punpckldq"
+		case "PUNPCKHLQ":
+			mnemonic = "punpckhdq"
+		}
+		result, err = c.emitPackedBinaryNativeMemory(first, laneBits, b, mnemonic)
+	} else {
+		var a string
+		a, err = c.loadPackedUnpackSource(first, form)
+		if err == nil {
+			result = c.emitPackedUnpackLanes(form.byteWidth, laneBits, form.spec.high, a, b)
+		}
+	}
+	if err != nil {
+		return true, false, err
+	}
 	if form.mask >= 0 {
 		mask, err := c.loadK(ins.Args[form.mask].Reg)
 		if err != nil {

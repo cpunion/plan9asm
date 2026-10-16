@@ -24,6 +24,12 @@ func x86TypedFPResultNeedsProof(fn Func, sig FuncSig, arch string) bool {
 	}
 	opaqueAddressResult := x86OpaqueAddressPointerResultRole(fn, sig, arch)
 	for ordinal, ins := range fn.Instrs {
+		if _, known, err := x86PackedShiftProperties(ins.Op, ins, arch); known && err == nil {
+			return true // Native accesses and masks stay obligations even with dead numerical outputs.
+		}
+		if _, known, err := x86PackedUnpackProperties(ins, arch); known && err == nil {
+			return true // Named/physical permutations cannot borrow implementation entry bytes.
+		}
 		if _, known, err := x86PackedNarrowProperties(ins, arch); known && err == nil {
 			return true // Named or physical PACK retains address, mask and result obligations even for Void.
 		}

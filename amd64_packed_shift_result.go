@@ -61,6 +61,10 @@ func x86PackedShiftDefinedBytes(form x86PackedShiftForm, data, counts, old uint6
 }
 
 func x86ResultPackedShiftStep(ins Instr, state *x86ResultState, owned []bool, arch string) (bool, bool) {
+	return x86ResultPackedShiftStepWithRead(ins, state, owned, arch, false)
+}
+
+func x86ResultPackedShiftStepWithRead(ins Instr, state *x86ResultState, owned []bool, arch string, nativeRead bool) (bool, bool) {
 	form, known, err := x86PackedShiftProperties(ins.Op, ins, arch)
 	if !known {
 		return false, false
@@ -80,10 +84,11 @@ func x86ResultPackedShiftStep(ins Instr, state *x86ResultState, owned []bool, ar
 		// lowering's ephemeral same-file DATA directory can provide an SB
 		// input here; logical FP/AUTO storage still cannot stand in for it.
 		memory := ins.Args[form.memory]
-		if _, static := x86StaticSBReadAddress(memory, arch); form.legacy && !static {
+		if _, static := x86StaticSBReadAddress(memory, arch); form.legacy && !static &&
+			(!nativeRead || !x86OrdinaryNativeMemoryOperand(memory, arch)) {
 			return false, true
 		}
-		if !x86ResultRead(memory, int64(form.memoryBytes), state, owned, arch) {
+		if !x86ResultReadWithNativeContinuation(ins, memory, int64(form.memoryBytes), state, owned, arch, nativeRead) {
 			return false, true
 		}
 	}
