@@ -238,12 +238,21 @@ func TestX86PackedUnpackCompleteGoRowsAndFiveLLVMObjects(t *testing.T) {
 					t.Fatalf("actual Go accepted %s but grammar rejected: %v", ins.Raw, err)
 				}
 			}
-			ir, err := Translate(file, Options{Goarch: target.arch, TargetTriple: target.triple, Sigs: map[string]FuncSig{"unpackforms": {Name: "unpackforms", Ret: Void}}})
-			if err != nil {
-				t.Fatal(err)
+			for _, api := range []string{"text", "module", "Go"} {
+				if ir, err := x86ScalarFPBitViewAPI(t, source.String(), "func unpackforms()", target.arch, target.triple, api); ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+					t.Fatal("original unpack formats invented missing numerical/native inputs", api, err)
+				}
 			}
-			compileLLVMToObject(t, llc, target.triple, "unpack-forms.ll", "unpack-forms.o", ir)
-			t.Logf("%d actual Go forms in one LLVM22 target object", count)
+			ir := x86InstructionFormatObjectUnit(t, file, map[string]FuncSig{"unpackforms": {Name: "unpackforms", Ret: Void}},
+				target.arch, target.triple, 0, func(c *amd64Ctx, ins Instr) (bool, bool, error) {
+					return c.lowerPackedUnpack(ins.Op, ins)
+				})
+			for _, text := range []string{ir, x86DwordProductIROptimize(t, ir)} {
+				for _, level := range []string{"-O0", "-O2"} {
+					x86PackedStringCompileObject(t, llc, target.triple, text, level)
+				}
+			}
+			t.Logf("all %d original Go forms retain emitter-only LLVM22 objects and three-API Context controls", count)
 		})
 	}
 }
@@ -363,6 +372,12 @@ func TestX86PackedUnpackTypedFPMemoryExtentBeforeEmission(t *testing.T) {
 				ctx, output := newAMD64CtxWithFuncForTest(t, file.Funcs[0], sig, nil)
 				before := output.String()
 				known, _, err := ctx.lowerPackedUnpack(ins.Op, ins)
+				if form.legacy && !form.mmx {
+					if !known || !errors.Is(err, ErrProbeNeedsContext) || output.String() != before {
+						t.Fatal("logical FP bytes invented original legacy native alignment", row, err)
+					}
+					continue
+				}
 				if !known || complete && err != nil || !complete && (err == nil || output.String() != before) {
 					t.Fatalf("%s complete=%t native bytes=%d: %v", row, complete, form.memoryBytes, err)
 				}
