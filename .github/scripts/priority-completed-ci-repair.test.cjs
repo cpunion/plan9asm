@@ -28,31 +28,45 @@ const roots = [
   'TestX86NativeGPStoreCannotBorrowUnknownOrPointerData',
   'TestX86NativeGPStoreOriginalByteAliasesAndUnchangedState',
   'TestX86ScalarMoveNativeRetainsPublicAndSourceBoundaries',
+  'TestX86SegmentMOVCannotGrantIndependentAuthority',
+  'TestX86SegmentLoadAndNativeStoreHaveIndependentPairedEffects',
 ];
-const block = '- lane: completed-ci-repair\n            module: \'.\'\n            roots:\n' +
-  roots.map(root => `              - ${root}\n`).join('') + '            timeout: 5m';
+const groups = [
+  ['completed-ci-repair', roots.slice(0, 14)],
+  ['native-memory-effects', roots.slice(14)],
+];
+const blocks = groups.map(([lane, owners]) => `- lane: ${lane}\n            module: '.'\n            roots:\n` +
+  owners.map(root => `              - ${root}\n`).join('') + '            timeout: 5m');
 const workflow = fs.readFileSync('.github/workflows/pr40-owned-process-probe.yml', 'utf8');
 
 function validate(source) {
-  assert.equal(roots.length, 23);
-  assert.equal(new Set(roots).size, 23);
-  assert.ok(source.includes(block), 'all fourteen original failures, eight new class roots and retained load/store owner must run first');
-  assert.equal(source.split('- lane: completed-ci-repair\n').length - 1, 1);
+  assert.equal(roots.length, 25);
+  assert.equal(new Set(roots).size, 25);
+  assert.deepEqual(groups.map(([, owners]) => owners.length), [14, 11]);
+  for (let index = 0; index < groups.length; index++) {
+    assert.ok(source.includes(blocks[index]), 'complete independent old-failure and native-effect priorities');
+    assert.equal(source.split(`- lane: ${groups[index][0]}\n`).length - 1, 1);
+  }
 }
 
-test('complete old failures and independent fixes have one mandatory bounded priority', () => {
+test('complete old failures and independent fixes have two disjoint bounded priorities', () => {
   validate(workflow);
 });
 
 test('failed-root priority rejects removal, duplication, substitution, partial roots and widened budgets', () => {
-  for (const changed of [
-    block.replace("module: '.'", 'module: cmd/plan9asmll'),
-    block.replace('timeout: 5m', 'timeout: 6m'),
-    block + '\n' + block,
-    ...roots.flatMap(root => [
-      block.replace(`              - ${root}\n`, ''),
-      block.replace(root, root + '/partial'),
-      block.replace(root, 'TestUnrelatedFailure'),
-    ]),
-  ]) assert.throws(() => validate(changed));
+  const fixture = blocks.join('\n');
+  validate(fixture);
+  for (let index = 0; index < groups.length; index++) {
+    const block = blocks[index];
+    for (const changed of [
+      block.replace("module: '.'", 'module: cmd/plan9asmll'),
+      block.replace('timeout: 5m', 'timeout: 6m'),
+      block + '\n' + block,
+      ...groups[index][1].flatMap(root => [
+        block.replace(`              - ${root}\n`, ''),
+        block.replace(root, root + '/partial'),
+        block.replace(root, 'TestUnrelatedFailure'),
+      ]),
+    ]) assert.throws(() => validate(fixture.replace(block, changed)));
+  }
 });
