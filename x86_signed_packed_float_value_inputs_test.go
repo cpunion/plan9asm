@@ -3,6 +3,7 @@ package plan9asm
 import (
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -41,7 +42,11 @@ func x86SignedPackedValueRows() []x86SignedPackedValueRow {
 				rows = append(rows, x86SignedPackedValueRow{name, bank, inputBank + "0", mask},
 					x86SignedPackedValueRow{name, bank, "3(AX)(DX*2)", mask})
 				if strings.HasPrefix(op, "V") {
-					rows = append(rows, x86SignedPackedValueRow{strings.Replace(name, ".Z", "", 1) + ".BCST" + strings.TrimPrefix(name, op), bank, "3(AX)(DX*2)", mask})
+					broadcast := op + ".BCST"
+					if mode == "zero" {
+						broadcast += ".Z"
+					}
+					rows = append(rows, x86SignedPackedValueRow{broadcast, bank, "3(AX)(DX*2)", mask})
 				}
 			}
 		}
@@ -59,6 +64,45 @@ func x86SignedPackedValueRows() []x86SignedPackedValueRow {
 		}
 	}
 	return rows
+}
+
+func TestX86SignedPackedFloatResultByteTransfers(t *testing.T) {
+	for _, arch := range []string{"386", "amd64"} {
+		for index, row := range x86SignedPackedValueRows() {
+			if strings.Contains(row.input, "(") {
+				continue
+			}
+			t.Run(fmt.Sprintf("%s/%d", arch, index), func(t *testing.T) {
+				width := map[string]int{"X": 16, "Y": 32, "Z": 64}[row.bank]
+				inputBytes := width
+				if strings.Contains(row.op, "DQ2PD") || row.op == "CVTPL2PD" {
+					inputBytes /= 2
+				}
+				legacy := !strings.HasPrefix(row.op, "V")
+				instruction := x86ScalarLaneInstruction(t, row.op+" "+row.input+","+row.mask+row.bank+"1")
+				state := x86ResultState{flags: x86ByteFlagsAll, direction: x86ResultDirectionBackward}
+				state.pointerGP[3], state.gp[2], state.masks[1] = true, 0xff, true
+				input := x86CallerVectorByteMask(int64(inputBytes))
+				state.writeVector(0, 64, input, true)
+				old := uint64(0xa5a55a5affff0000)
+				if row.mask != "" && !strings.HasSuffix(row.op, ".Z") {
+					old |= x86CallerVectorByteMask(int64(width))
+				}
+				state.writeVector(1, 64, old, true)
+				before, want := state.clone(), state.clone()
+				want.writeVector(1, width, x86CallerVectorByteMask(int64(width)), legacy)
+				if !x86ResultTransfer(instruction, &state, nil, 0, arch) || !reflect.DeepEqual(state, want) {
+					t.Fatal("signed conversion byte transfer lost exact input/output/upper aliases or changed unrelated state", instruction.Raw)
+				}
+				missing := before.clone()
+				missing.writeVector(0, 64, input&^(uint64(1)<<uint(inputBytes-1)), true)
+				unchanged := missing.clone()
+				if x86ResultTransfer(instruction, &missing, nil, 0, arch) || !reflect.DeepEqual(missing, unchanged) {
+					t.Fatal("signed conversion accepted a missing integer byte or mutated a rejected state")
+				}
+			})
+		}
+	}
 }
 
 func x86SignedPackedValueFixture(arch string, row x86SignedPackedValueRow, result bool) (string, string) {
