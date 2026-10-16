@@ -73,6 +73,12 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 			return strictErr
 		}
 		if origin := ins.x86SourceRaw; origin != nil {
+			if _, known, err := x86TimestampProperties(origin.op, ins, arch); known && err == nil && len(origin.args) == 0 {
+				// The decoder's exact original and normalized zero-operand
+				// timestamp share the same implicit outputs. It adds no memory,
+				// raw-return, stack or native-entry authority to this continuation.
+				continue
+			}
 			if x86X87RawClearInstruction(ins) {
 				if !boundRawClear && (fn.x86RawReplay == nil || fn.x86RawReplay.validate(fn, arch) != nil) {
 					return strictErr
