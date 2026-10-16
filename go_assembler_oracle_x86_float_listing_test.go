@@ -7,9 +7,9 @@ import (
 	"strings"
 )
 
-// Match Go's TYPE_FCONST Prog formatting without replacing integer tokens by
-// floats or granting an instruction-format/lowering permission. The frontend
-// consumes one FLOAT leaf, with only unary signs and parentheses around it.
+// Match Go's TYPE_CONST and TYPE_FCONST Prog formatting without converting
+// integer source tokens into FLOAT or granting instruction/lowering permission.
+// The FLOAT frontend consumes one leaf with only unary signs and parentheses.
 func goAssemblerOracleX86OperandListing(original, listing []string) bool {
 	if reflect.DeepEqual(original, listing) {
 		return true

@@ -1,5 +1,36 @@
 # Current work: PR 40 checkpoint
 
+## Native input-composition follow-up, 2026-10-17
+
+Fork diagnostic run 38926645676 at `ceedd8da` is still running. Its native66
+owner has completed 58 roots and failed eight, without skips. Preserve that
+original artifact: immediate native writes, LAHF and several vector-memory
+compositions still fail; the earlier 87-job success belongs to `2729a5d0`.
+The published batch excludes the unqualified ordinary scalar-RMW leaf.
+
+At `2e25cdbc`, the complete native immediate-store family and retained
+GP-store/diagnostic controls pass twelve roots on Go27, actual Go20 and race:
+36 root executions and 1,536 children, no skips or failures. The ordered raw
+reports have the same exact root/child union and unchanged source/tool/SDK
+seals. Original Go objects retain all B/W/L/Q Yi32 rows, both MOVQ aliases,
+mode32 constant truncation and qword sign extension. Three APIs and both IR
+and backend levels retain exact volatile stores and portable byte/canary
+execution. Void entries still require actual pointer/index inputs: the old
+source falsely accepted all 75 independent negative children.
+
+The full malformed-immediate run also exposed a diagnostic-reader defect:
+Go prints an opcode alias and its hexadecimal constant as canonical opcode
+and signed decimal. Its exact-token adapter now composes those observations,
+without changing the default parser or accepting altered operands/messages.
+Keep the earlier six infrastructure failures as failed, not source rejections.
+
+These are affected/retained local scopes, not current-head full CI, native
+AMD64 execution or new official baseline/benchmark results. The remaining
+native roots and both SDKs' final gates still need repair/qualification before
+another push. CRC32 and inactive INSERT fault fixtures now have independent
+host-visible original-source regressions staged in a separate worktree;
+their RED/GREEN and required actual native execution remain outstanding.
+
 Checkpoint: 2026-10-16, after fork run 38895272356 completed. This queue
 supersedes older checkpoints;
 receipts certify only their exact source and scope.
