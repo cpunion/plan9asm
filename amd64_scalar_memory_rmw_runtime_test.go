@@ -29,10 +29,7 @@ func x86UnlockedScalarRMWRuntimeFixture(arch string, native bool) (declarations,
 		if native {
 			source.WriteString("STMXCSR 24(DI)\n")
 		}
-		statusMask := 0x8d5
-		if row.stem == "AND" || row.stem == "OR" || row.stem == "XOR" {
-			statusMask = 0x8c5 // AF is architecturally undefined after logical operations.
-		}
+		statusMask := x86ScalarRuntimeStatusMask(row.stem)
 		// Refine the saved word in the original source, before any native
 		// output store. A C-side mask alone cannot initialize unknown bits.
 		fmt.Fprintf(&source, "%s\nPUSHF%s\nPOP%s AX\nAND%s $%d,AX\nMOV%s AX,0(DI)\nMOV%s CX,8(DI)\nMOV%s DX,16(DI)\n",

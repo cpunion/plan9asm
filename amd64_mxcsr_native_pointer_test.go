@@ -98,3 +98,56 @@ func TestX86LockRuntimeCompleteSourcesTranslateAllAPIs(t *testing.T) {
 		}
 	}
 }
+
+func TestX86LockRuntimeSavedStatusNeedsOriginalSourceRefinement(t *testing.T) {
+	for _, arch := range []string{"amd64", "386"} {
+		declarations, source, _, _, count := x86LockScalarRuntimeFixture(arch)
+		file, err := Parse(ArchAMD64, source)
+		if err != nil || len(file.Funcs) != count {
+			t.Fatal("complete original LOCK observation inventory changed", err)
+		}
+		rows := x86LockScalarRuntimeCases(arch)
+		for index, function := range file.Funcs {
+			observations := 0
+			for offset, ins := range function.Instrs {
+				if ins.Op != "PUSHFQ" && ins.Op != "PUSHFL" {
+					continue
+				}
+				if offset+2 >= len(function.Instrs) {
+					t.Fatal("saved status has no complete following refinement")
+				}
+				mask := function.Instrs[offset+2]
+				if (mask.Op != "ANDQ" && mask.Op != "ANDL") || len(mask.Args) != 2 ||
+					mask.Args[0].Kind != OpImm || mask.Args[0].Imm != int64(x86ScalarRuntimeStatusMask(rows[index].stem)) ||
+					mask.Args[1].Kind != OpReg || mask.Args[1].Reg != AX {
+					t.Fatal("LOCK status output borrowed undefined architecture bits", function.Sym, mask)
+				}
+				observations++
+			}
+			if observations != 1 {
+				t.Fatal("complete LOCK kernel lost its one saved-status observation", function.Sym)
+			}
+		}
+		// Preserve the original complete source as a negative control. Logical
+		// and bit-string status bits cannot be materialized merely because a
+		// separate reference would discard them later.
+		original := source
+		for _, mask := range []int{0x41, 0x8c5, 0x8d5} {
+			for _, suffix := range []string{"L", "Q"} {
+				original = strings.ReplaceAll(original, fmt.Sprintf("AND%s $%d,AX\n", suffix, mask), "")
+			}
+		}
+		triple := "x86_64-unknown-linux-gnu"
+		if arch == "386" {
+			triple = "i386-unknown-linux-gnu"
+		}
+		for _, api := range []string{"text", "module", "Go"} {
+			t.Run(arch+"/"+api, func(t *testing.T) {
+				ir, err := x86OrderingHintTranslateAPI(t, api, original, declarations, arch, triple)
+				if !errors.Is(err, ErrProbeNeedsContext) || ir != "" {
+					t.Fatal("the original unrefined LOCK source gained undefined numerical bits", err)
+				}
+			})
+		}
+	}
+}

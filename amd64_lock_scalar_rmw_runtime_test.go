@@ -14,6 +14,17 @@ type x86LockScalarRuntimeCase struct {
 	literal          uint64
 }
 
+func x86ScalarRuntimeStatusMask(stem string) int {
+	switch stem {
+	case "BTC", "BTR", "BTS":
+		return 0x41 // CF is defined; ZF is preserved. Other status bits are undefined.
+	case "AND", "OR", "XOR":
+		return 0x8c5 // AF is undefined, not a numerical zero.
+	default:
+		return 0x8d5
+	}
+}
+
 func x86LockScalarRuntimeCases(arch string) []x86LockScalarRuntimeCase {
 	var rows []x86LockScalarRuntimeCase
 	for _, form := range x86LockScalarOracleForms(arch) {
@@ -60,8 +71,10 @@ func x86LockScalarRuntimeFixture(arch string) (declarations, assembly, driver, r
 			suffix, suffix, slot*3, suffix, slot*4)
 		fmt.Fprintf(&source, "PUSH%s DX\nPOPF%s\nSTMXCSR 24(DI)\nLOCK\n%s\nPUSHF%s\nPOP%s AX\n",
 			suffix, suffix, row.body, suffix, suffix)
-		fmt.Fprintf(&source, "MOV%s AX,0(DI)\nMOV%s CX,8(DI)\nMOV%s DX,16(DI)\nSTMXCSR 32(DI)\nRET\n",
-			suffix, suffix, suffix)
+		// Refine the original saved word before observing it as numerical
+		// output. A mask in the C/Go reference cannot define missing source bits.
+		fmt.Fprintf(&source, "AND%s $%d,AX\nMOV%s AX,0(DI)\nMOV%s CX,8(DI)\nMOV%s DX,16(DI)\nSTMXCSR 32(DI)\nRET\n",
+			suffix, x86ScalarRuntimeStatusMask(row.stem), suffix, suffix, suffix)
 		fmt.Fprintf(&goRows, "{%s,%q,%d,%t,%d},\n", row.name, row.stem, row.width, row.immediate, row.literal)
 		cWord := "uint64_t"
 		if arch == "386" {
