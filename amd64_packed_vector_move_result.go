@@ -39,6 +39,12 @@ func x86ResultPackedVectorMoveTransfer(ins Instr, form amd64PackedVectorMoveForm
 			return false
 		}
 		destination := ins.Args[form.destination]
+		if conditionalRead && form.ordinaryMemory(ins, arch) &&
+			x86ResultIncomingPointerAddressIdentity(destination, state, arch) {
+			// The paired native store does not read inactive destination lanes
+			// and establishes no logical storage, bounds or future read facts.
+			return true
+		}
 		if form.mask >= 0 && !x86ResultRead(destination, width, state, owned, arch) {
 			return false // An unknown mask may retain any old destination byte.
 		}

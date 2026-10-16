@@ -46,6 +46,10 @@ func TestTranslateX86PackedLeadingZeroCountCompleteGoFormsAcrossTargets(t *testi
 	} {
 		t.Run(target.name, func(t *testing.T) {
 			var source strings.Builder
+			base := "R9"
+			if target.goarch == "386" {
+				base = "CX"
+			}
 			source.WriteString("TEXT packedlzcntforms(SB),$0-0\n")
 			for _, op := range []string{"VPLZCNTD", "VPLZCNTQ"} {
 				for _, width := range []string{"X", "Y", "Z"} {
@@ -54,11 +58,11 @@ func TestTranslateX86PackedLeadingZeroCountCompleteGoFormsAcrossTargets(t *testi
 						last = 7
 					}
 					fmt.Fprintf(&source, "\t%s %s0, %s%d\n", op, width, width, last)
-					fmt.Fprintf(&source, "\t%s 8(R9), %s%d\n", op, width, last)
+					fmt.Fprintf(&source, "\t%s 8(%s), %s%d\n", op, base, width, last)
 					fmt.Fprintf(&source, "\t%s %s1, K1, %s%d\n", op, width, width, last)
-					fmt.Fprintf(&source, "\t%s.Z 16(R9), K7, %s%d\n", op, width, last)
-					fmt.Fprintf(&source, "\t%s.BCST 24(R9), %s%d\n", op, width, last)
-					fmt.Fprintf(&source, "\t%s.BCST.Z 32(R9), K2, %s%d\n", op, width, last)
+					fmt.Fprintf(&source, "\t%s.Z 16(%s), K7, %s%d\n", op, base, width, last)
+					fmt.Fprintf(&source, "\t%s.BCST 24(%s), %s%d\n", op, base, width, last)
+					fmt.Fprintf(&source, "\t%s.BCST.Z 32(%s), K2, %s%d\n", op, base, width, last)
 				}
 			}
 			source.WriteString("\tRET\n")
@@ -123,10 +127,7 @@ func TestTranslateX86PackedLeadingZeroCountRejectsFormsOutsideGoTable(t *testing
 }
 
 func TestAMD64PackedLeadingZeroCountRuntimeSemantics(t *testing.T) {
-	crossRosetta := runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" && rosettaAvailable()
-	if runtime.GOARCH != "amd64" && !crossRosetta {
-		t.Skip("runtime execution test requires amd64 or Rosetta")
-	}
+	// Portable LLVM execution on the actual host, not original-Go/native AVX512.
 	llc, clang, ok := findLlcAndClang(t)
 	if !ok {
 		t.Fatal("LLVM 22 llc/clang not found")
@@ -163,11 +164,6 @@ func TestAMD64PackedLeadingZeroCountRuntimeSemantics(t *testing.T) {
 		t.Fatal(err)
 	}
 	triple := testTargetTriple(runtime.GOOS, runtime.GOARCH)
-	var runPrefix []string
-	if crossRosetta {
-		triple = "x86_64-apple-macosx"
-		runPrefix = []string{"/usr/bin/arch", "-x86_64"}
-	}
 	ir, err := Translate(file, Options{
 		Goarch: "amd64", TargetTriple: triple,
 		Sigs: map[string]FuncSig{"packedlzcntsemantics": {
@@ -215,5 +211,5 @@ int main(void) {
   return 0;
 }
 `
-	compileAndRunRuntimeTestForTarget(t, llc, clang, "packed_lzcnt_semantics", triple, ir, mainC, runPrefix)
+	compileAndRunRuntimeTestForTarget(t, llc, clang, "packed_lzcnt_semantics", triple, ir, mainC, nil)
 }

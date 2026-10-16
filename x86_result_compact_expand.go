@@ -4,6 +4,10 @@ package plan9asm
 // the complete source and, for merging, the complete old destination. A mask's
 // definedness is not a constant-value or memory-access certificate.
 func x86ResultCompactExpandStep(ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string) (bool, bool) {
+	return x86ResultCompactExpandMemoryStep(ins, state, owned, resultOffset, arch, false)
+}
+
+func x86ResultCompactExpandMemoryStep(ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string, pairedNative bool) (bool, bool) {
 	form, known, err := x86PackedCompactProperties(ins.Op, ins, arch)
 	if !known {
 		return false, false
@@ -34,12 +38,17 @@ func x86ResultCompactExpandStep(ins Instr, state *x86ResultState, owned []bool, 
 	}
 	if form.memory >= 0 {
 		memory := ins.Args[form.memory]
+		native := pairedNative && x86OrdinaryNativeMemoryOperand(memory, arch) &&
+			x86ResultIncomingPointerAddressIdentity(memory, state, arch)
 		// Logical FP/AUTO bytes and bound DATA reads are not native backing
 		// or permission to dereference an incoming pointer.
-		if (form.expand || form.mask >= 0) && !x86ResultRead(memory, int64(form.byteWidth), state, owned, arch) {
+		if !native && (form.expand || form.mask >= 0) && !x86ResultRead(memory, int64(form.byteWidth), state, owned, arch) {
 			return false, true
 		}
 		if !form.expand {
+			if native {
+				return true, true // Only the emitted compact prefix changes; no reusable memory facts.
+			}
 			return x86ResultStore(memory, int64(form.byteWidth), state, owned, resultOffset, arch), true
 		}
 	}

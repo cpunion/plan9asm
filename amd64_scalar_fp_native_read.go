@@ -174,9 +174,13 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		if accepted, known := c.scalarCompareNativeResultTransfer(ins, state, owned, arch); known {
 			return accepted
 		}
+		if accepted, known := x86ResultCompactExpandMemoryStep(ins, state, owned, resultOffset, arch, true); known {
+			return accepted // Same guarded native emitter; public observers keep logical-only memory.
+		}
 		if form, known, err := amd64PackedVectorMoveProperties(ins, arch); known && err == nil &&
-			form.memory == 0 && form.ordinaryMemory(ins, arch) &&
-			x86ResultIncomingPointerReadAddressIdentity(ins.Args[0], state, arch) {
+			form.ordinaryMemory(ins, arch) && x86ResultNamedPredicateInstruction(ins) &&
+			(form.memory == 0 && x86ResultIncomingPointerReadAddressIdentity(ins.Args[0], state, arch) ||
+				form.memoryWrite && x86ResultIncomingPointerAddressIdentity(ins.Args[form.memory], state, arch)) {
 			// The emitter preserves the original aligned opcode, or the
 			// unaligned full/guarded tuple with volatile accesses. If it continues,
 			// active bytes are numerical; inactive bytes still require the

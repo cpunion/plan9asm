@@ -122,10 +122,8 @@ func assertX86PackedCompressRejected(t *testing.T, goarch, triple, instruction s
 }
 
 func TestAMD64PackedCompressRuntimeSemantics(t *testing.T) {
-	crossRosetta := runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" && rosettaAvailable()
-	if runtime.GOARCH != "amd64" && !crossRosetta {
-		t.Skip("runtime execution test only runs on amd64 host")
-	}
+	// This oracle executes portable LLVM semantics on the actual host. It
+	// does not execute AVX512 opcodes or certify original-Go native execution.
 	llc, clang, ok := findLlcAndClang(t)
 	if !ok {
 		t.Fatal("LLVM 22 llc/clang not found")
@@ -151,9 +149,9 @@ TEXT packedcompress(SB),$0-32
 	VPCOMPRESSQ.Z Z0, K1, Z1
 	VMOVDQU64 Z1, 192(AX)
 	VPCOMPRESSB Z0, K1, 256(AX)
-	VPCOMPRESSW.Z Z0, K1, 320(AX)
+	VPCOMPRESSW Z0, K1, 320(AX)
 	VPCOMPRESSD Z0, K1, 384(AX)
-	VPCOMPRESSQ.Z Z0, K1, 448(AX)
+	VPCOMPRESSQ Z0, K1, 448(AX)
 	VMOVDQU64 (CX), Z1
 	VCOMPRESSPS Z0, K1, Z1
 	VMOVDQU64 Z1, 512(AX)
@@ -161,7 +159,7 @@ TEXT packedcompress(SB),$0-32
 	VCOMPRESSPD.Z Z0, K1, Z1
 	VMOVDQU64 Z1, 576(AX)
 	VCOMPRESSPS Z0, K1, 640(AX)
-	VCOMPRESSPD.Z Z0, K1, 704(AX)
+	VCOMPRESSPD Z0, K1, 704(AX)
 	RET
 `
 	file, err := Parse(ArchAMD64, source)
@@ -175,11 +173,6 @@ TEXT packedcompress(SB),$0-32
 		{Offset: 24, Type: I64, Index: 3, Field: -1},
 	}}
 	triple := testTargetTriple(runtime.GOOS, runtime.GOARCH)
-	var runPrefix []string
-	if crossRosetta {
-		triple = "x86_64-apple-macosx"
-		runPrefix = []string{"/usr/bin/arch", "-x86_64"}
-	}
 	ll, err := Translate(file, Options{
 		TargetTriple: triple,
 		Goarch:       "amd64",
@@ -230,5 +223,5 @@ int main(void) {
   return 0;
 }
 `
-	compileAndRunRuntimeTestForTarget(t, llc, clang, "packed_compress", triple, ll, mainC, runPrefix)
+	compileAndRunRuntimeTestForTarget(t, llc, clang, "packed_compress", triple, ll, mainC, nil)
 }

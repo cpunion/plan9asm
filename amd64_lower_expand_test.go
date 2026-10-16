@@ -129,15 +129,12 @@ func TestTranslateX86PackedExpandRejectsFormsOutsideGoTable(t *testing.T) {
 }
 
 func TestAMD64PackedExpandRuntimeSemantics(t *testing.T) {
-	crossRosetta := runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" && rosettaAvailable()
-	if runtime.GOARCH != "amd64" && !crossRosetta {
-		t.Skip("runtime execution test requires amd64 or Rosetta")
-	}
+	// Portable LLVM execution, not an original-Go/native AVX512 certificate.
 	llc, clang, ok := findLlcAndClang(t)
 	if !ok {
 		t.Fatal("LLVM 22 llc/clang not found")
 	}
-	const source = `TEXT packedexpandsemantics(SB),$0-32
+	const source = `TEXT packedexpandsemantics(SB),$0-40
 	MOVQ out+0(FP), AX
 	MOVQ source+8(FP), BX
 	MOVQ old+16(FP), CX
@@ -165,13 +162,15 @@ func TestAMD64PackedExpandRuntimeSemantics(t *testing.T) {
 	VMOVDQU64 0(BX), Z1
 	VPEXPANDD Z1, K1, Z1
 	VMOVDQU64 Z1, 384(AX)
-	XORQ DX, DX
-	KMOVQ DX, K2
+	MOVQ null+32(FP), DX
+	XORQ R8, R8
+	KMOVQ R8, K2
 	VMOVDQU64 0(CX), Z1
 	STC
 	VPEXPANDB 0(DX), K2, Z1
 	VMOVDQU64 Z1, 448(AX)
-	SETCS 512(AX)
+	SETCS CL
+	MOVB CL,512(AX)
 	RET
 `
 	requireX86GoAssemblerResult(t, "amd64", source, true)
@@ -180,20 +179,16 @@ func TestAMD64PackedExpandRuntimeSemantics(t *testing.T) {
 		t.Fatal(err)
 	}
 	triple := testTargetTriple(runtime.GOOS, runtime.GOARCH)
-	var runPrefix []string
-	if crossRosetta {
-		triple = "x86_64-apple-macosx"
-		runPrefix = []string{"/usr/bin/arch", "-x86_64"}
-	}
 	ir, err := Translate(file, Options{
 		Goarch: "amd64", TargetTriple: triple,
 		Sigs: map[string]FuncSig{"packedexpandsemantics": {
-			Name: "packedexpandsemantics", Args: []LLVMType{Ptr, Ptr, Ptr, I64}, Ret: Void,
+			Name: "packedexpandsemantics", Args: []LLVMType{Ptr, Ptr, Ptr, I64, Ptr}, Ret: Void,
 			Frame: FrameLayout{Params: []FrameSlot{
 				{Offset: 0, Type: Ptr, Index: 0, Field: -1},
 				{Offset: 8, Type: Ptr, Index: 1, Field: -1},
 				{Offset: 16, Type: Ptr, Index: 2, Field: -1},
 				{Offset: 24, Type: I64, Index: 3, Field: -1},
+				{Offset: 32, Type: Ptr, Index: 4, Field: -1},
 			}},
 		}},
 	})
@@ -203,7 +198,7 @@ func TestAMD64PackedExpandRuntimeSemantics(t *testing.T) {
 	const mainC = `
 #include <stdint.h>
 #include <string.h>
-extern void packedexpandsemantics(uint8_t *, const uint8_t *, const uint8_t *, uint64_t);
+extern void packedexpandsemantics(uint8_t *, const uint8_t *, const uint8_t *, uint64_t, const uint8_t *);
 static int check(const uint8_t *got, const uint8_t *source, const uint8_t *old,
                  int lane_bytes, uint64_t mask, int zeroing) {
   int lanes = 64 / lane_bytes, packed = 0;
@@ -219,7 +214,7 @@ int main(void) {
   const uint64_t mask = UINT64_C(0xa55aa55aa55aa55a);
   for (int i = 0; i < 64; i++) { source[i] = (uint8_t)(i*37 + 9); old[i] = (uint8_t)(0xe0 - i); }
   memset(out, 0xcc, sizeof(out));
-  packedexpandsemantics(out, source, old, mask);
+  packedexpandsemantics(out, source, old, mask, 0);
   int r;
   if ((r = check(out+0, source, old, 1, mask, 0))) return 100+r;
   if ((r = check(out+64, source, old, 2, mask, 1))) return 200+r;
@@ -233,5 +228,5 @@ int main(void) {
   return 0;
 }
 `
-	compileAndRunRuntimeTestForTarget(t, llc, clang, "packed_expand_semantics", triple, ir, mainC, runPrefix)
+	compileAndRunRuntimeTestForTarget(t, llc, clang, "packed_expand_semantics", triple, ir, mainC, nil)
 }

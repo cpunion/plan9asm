@@ -1,9 +1,6 @@
 package plan9asm
 
-import (
-	"fmt"
-	"strings"
-)
+import "fmt"
 
 type amd64IndexedPermuteMode uint8
 
@@ -40,109 +37,25 @@ var amd64IndexedPermuteSpecs = map[Op]amd64IndexedPermuteSpec{
 	"VPERMT2PD": {laneBits: 64, mode: amd64IndexedPermuteT2, broadcast: true},
 }
 
-type amd64TwoSourcePermuteSuffixes struct {
-	broadcast bool
-	zeroing   bool
-}
-
-func amd64ParseTwoSourcePermuteSuffixes(rawOp, baseOp string) (amd64TwoSourcePermuteSuffixes, error) {
-	var suffixes amd64TwoSourcePermuteSuffixes
-	dot := strings.IndexByte(rawOp, '.')
-	if dot < 0 {
-		return suffixes, nil
-	}
-	parts := strings.Split(rawOp[dot+1:], ".")
-	for index, part := range parts {
-		switch part {
-		case "BCST":
-			if suffixes.broadcast || suffixes.zeroing || index != 0 {
-				return suffixes, fmt.Errorf("amd64 %s has invalid or duplicate .BCST suffix", baseOp)
-			}
-			suffixes.broadcast = true
-		case "Z":
-			if suffixes.zeroing || index != len(parts)-1 {
-				return suffixes, fmt.Errorf("amd64 %s has invalid or duplicate .Z suffix", baseOp)
-			}
-			suffixes.zeroing = true
-		default:
-			return suffixes, fmt.Errorf("amd64 %s has unsupported suffix .%s", baseOp, part)
-		}
-	}
-	return suffixes, nil
-}
-
 // lowerIndexedPermute implements Go 1.27's complete single- and two-table
 // indexed-permute family.
 func (c *amd64Ctx) lowerIndexedPermute(op Op, ins Instr) (ok bool, terminated bool, err error) {
-	rawOp := strings.ToUpper(string(op))
-	baseOp := rawOp
-	if dot := strings.IndexByte(rawOp, '.'); dot >= 0 {
-		baseOp = rawOp[:dot]
+	form, spec, known, err := x86IndexedPermuteProperties(op, ins, c.goarch)
+	if !known || err != nil {
+		return known, false, err
 	}
-	spec, ok := amd64IndexedPermuteSpecs[Op(baseOp)]
-	if !ok {
-		return false, false, nil
-	}
-	suffixes, err := amd64ParseTwoSourcePermuteSuffixes(rawOp, baseOp)
-	if err != nil {
-		return true, false, fmt.Errorf("%w: %q", err, ins.Raw)
-	}
-	if suffixes.broadcast && !spec.broadcast {
-		return true, false, fmt.Errorf("amd64 %s does not enable broadcast in Go 1.27: %q", baseOp, ins.Raw)
-	}
-	if len(ins.Args) != 3 && len(ins.Args) != 4 {
-		return true, false, fmt.Errorf("amd64 %s expects first source, second source, [K mask,] destination: %q", baseOp, ins.Raw)
-	}
-	masked := len(ins.Args) == 4
-	if masked && c.goarch == "386" {
-		return true, false, fmt.Errorf("386 %s masked form exceeds the Go assembler frontend's operand limit: %q", baseOp, ins.Raw)
-	}
-	if suffixes.zeroing && !masked {
-		return true, false, fmt.Errorf("amd64 %s .Z requires a K1-K7 mask: %q", baseOp, ins.Raw)
-	}
-
-	destination := ins.Args[len(ins.Args)-1]
-	byteWidth := 0
-	if destination.Kind == OpReg {
-		byteWidth = amd64VectorByteWidth(destination.Reg)
-	}
-	if byteWidth == 0 || !c.isGoPackedVectorMoveRegister(destination, byteWidth) {
-		return true, false, fmt.Errorf("amd64 %s expects an in-range X, Y, or Z destination: %q", baseOp, ins.Raw)
-	}
-	second := ins.Args[1]
-	if !c.isGoPackedVectorMoveRegister(second, byteWidth) {
-		return true, false, fmt.Errorf("amd64 %s second source must match the destination width: %q", baseOp, ins.Raw)
-	}
-	first := ins.Args[0]
-	if first.Kind == OpReg {
-		if !c.isGoPackedVectorMoveRegister(first, byteWidth) {
-			return true, false, fmt.Errorf("amd64 %s first source register must match the destination width: %q", baseOp, ins.Raw)
-		}
-	} else if !isAMD64MemoryOperand(first) {
-		return true, false, fmt.Errorf("amd64 %s first source must be a matching vector register or memory: %q", baseOp, ins.Raw)
-	}
-	if suffixes.broadcast && !isAMD64MemoryOperand(first) {
-		return true, false, fmt.Errorf("amd64 %s.BCST requires a memory first source: %q", baseOp, ins.Raw)
-	}
-
+	destination := ins.Args[form.destination]
+	first, second, byteWidth := ins.Args[form.first], ins.Args[form.second], form.byteWidth
 	mask := ""
-	if masked {
-		maskArg := ins.Args[2]
-		if maskArg.Kind != OpReg {
-			return true, false, fmt.Errorf("amd64 %s masked form expects K1-K7: %q", baseOp, ins.Raw)
-		}
-		maskIndex, validMask := amd64ParseKReg(maskArg.Reg)
-		if !validMask || maskIndex == 0 {
-			return true, false, fmt.Errorf("amd64 %s masked form expects K1-K7: %q", baseOp, ins.Raw)
-		}
-		mask, err = c.loadK(maskArg.Reg)
+	if form.mask >= 0 {
+		mask, err = c.loadK(ins.Args[form.mask].Reg)
 		if err != nil {
 			return true, false, err
 		}
 	}
 
 	lanes := byteWidth * 8 / spec.laneBits
-	firstValue, err := c.loadPackedCompareLanes(first, byteWidth, spec.laneBits, suffixes.broadcast)
+	firstValue, err := c.loadPackedCompareLanes(first, byteWidth, spec.laneBits, form.broadcast)
 	if err != nil {
 		return true, false, err
 	}
@@ -169,8 +82,8 @@ func (c *amd64Ctx) lowerIndexedPermute(op Op, ins Instr) (ok bool, terminated bo
 		// destination is table 0 and the Plan 9 first operand is table 1.
 		computed = c.emitTwoTablePermute(lanes, spec.laneBits, old, firstValue, secondValue)
 	}
-	if masked {
-		computed = amd64ApplyIntegerLaneMask(c, lanes, spec.laneBits, computed, old, mask, suffixes.zeroing)
+	if form.mask >= 0 {
+		computed = amd64ApplyIntegerLaneMask(c, lanes, spec.laneBits, computed, old, mask, form.zeroing)
 	}
 	out := c.newTmp()
 	fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i%d> %s to <%d x i8>\n", out, lanes, spec.laneBits, computed, byteWidth)

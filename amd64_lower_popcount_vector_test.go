@@ -112,10 +112,7 @@ func assertX86PackedPopcountRejected(t *testing.T, goarch, triple, instruction s
 }
 
 func TestAMD64PackedPopcountRuntimeSemantics(t *testing.T) {
-	crossRosetta := runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" && rosettaAvailable()
-	if runtime.GOARCH != "amd64" && !crossRosetta {
-		t.Skip("runtime execution test only runs on amd64 host")
-	}
+	// Portable LLVM execution on the actual host, not original-Go/native AVX512.
 	llc, clang, ok := findLlcAndClang(t)
 	if !ok {
 		t.Fatal("LLVM 22 llc/clang not found")
@@ -154,11 +151,6 @@ TEXT packedpopcount(SB),$0-32
 		{Offset: 24, Type: I64, Index: 3, Field: -1},
 	}}
 	triple := testTargetTriple(runtime.GOOS, runtime.GOARCH)
-	var runPrefix []string
-	if crossRosetta {
-		triple = "x86_64-apple-macosx"
-		runPrefix = []string{"/usr/bin/arch", "-x86_64"}
-	}
 	ll, err := Translate(file, Options{
 		TargetTriple: triple,
 		Goarch:       "amd64",
@@ -206,5 +198,5 @@ int main(void) {
   return 0;
 }
 `
-	compileAndRunRuntimeTestForTarget(t, llc, clang, "packed_popcount", triple, ll, mainC, runPrefix)
+	compileAndRunRuntimeTestForTarget(t, llc, clang, "packed_popcount", triple, ll, mainC, nil)
 }

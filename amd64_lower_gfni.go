@@ -29,98 +29,22 @@ var amd64GFNISpecs = map[Op]amd64GFNISpec{
 }
 
 func (c *amd64Ctx) lowerGFNI(op Op, ins Instr) (ok bool, terminated bool, err error) {
-	rawOp := strings.ToUpper(string(op))
-	baseOp, suffix := rawOp, ""
-	if dot := strings.IndexByte(rawOp, '.'); dot >= 0 {
-		baseOp, suffix = rawOp[:dot], rawOp[dot+1:]
+	form, known, err := x86GFNIProperties(op, ins, c.goarch)
+	if !known || err != nil {
+		return known, false, err
 	}
-	spec, recognized := amd64GFNISpecs[Op(baseOp)]
-	if !recognized {
-		return false, false, nil
-	}
-
-	broadcast, zeroing := false, false
-	switch suffix {
-	case "":
-	case "Z":
-		zeroing = true
-	case "BCST":
-		broadcast = true
-	case "BCST.Z":
-		broadcast, zeroing = true, true
-	default:
-		return true, false, fmt.Errorf("%s %s has a suffix absent from Go 1.27's GFNI table: %q", c.goarch, baseOp, ins.Raw)
-	}
-	if broadcast && !spec.broadcast {
-		return true, false, fmt.Errorf("%s %s does not support broadcast: %q", c.goarch, baseOp, ins.Raw)
-	}
-	// The 386 assembler frontend can encode the three-operand multiply forms,
-	// but cannot represent the affine family's four-operand minimum.
-	if c.goarch == "386" && spec.immediate && !ins.x86Encoded {
-		return true, false, fmt.Errorf("386 %s exceeds the Go assembler frontend's three-operand limit: %q", baseOp, ins.Raw)
-	}
-
-	minimumArgs := 3
-	if spec.immediate {
-		minimumArgs = 4
-	}
-	if len(ins.Args) != minimumArgs && len(ins.Args) != minimumArgs+1 {
-		return true, false, fmt.Errorf("%s %s has the wrong operand count for Go 1.27's GFNI table: %q", c.goarch, baseOp, ins.Raw)
-	}
-	masked := len(ins.Args) == minimumArgs+1
-	if c.goarch == "386" && masked && !ins.x86Encoded {
-		return true, false, fmt.Errorf("386 %s masked form exceeds the Go assembler frontend's three-operand limit: %q", baseOp, ins.Raw)
-	}
-	if zeroing && !masked {
-		return true, false, fmt.Errorf("%s %s.Z requires a K1-K7 mask: %q", c.goarch, baseOp, ins.Raw)
-	}
-
-	operandOffset := 0
-	immediate := uint8(0)
-	if spec.immediate {
-		if !amd64UnsignedImmediate(ins.Args[0], 8) {
-			return true, false, fmt.Errorf("%s %s expects an unsigned 8-bit immediate: %q", c.goarch, baseOp, ins.Raw)
-		}
-		immediate = uint8(ins.Args[0].Imm)
-		operandOffset = 1
-	}
-	first := ins.Args[operandOffset]
-	second := ins.Args[operandOffset+1]
-	destination := ins.Args[len(ins.Args)-1]
-	if destination.Kind != OpReg {
-		return true, false, fmt.Errorf("%s %s destination must be X, Y, or Z: %q", c.goarch, baseOp, ins.Raw)
-	}
-	byteWidth := amd64VectorByteWidth(destination.Reg)
-	if byteWidth == 0 || !c.isGoPackedVectorMoveRegister(destination, byteWidth) {
-		return true, false, fmt.Errorf("%s %s destination is outside Go 1.27's vector-register class: %q", c.goarch, baseOp, ins.Raw)
-	}
-	if !c.isGoPackedVectorMoveRegister(second, byteWidth) {
-		return true, false, fmt.Errorf("%s %s second source must be a same-width vector register: %q", c.goarch, baseOp, ins.Raw)
-	}
-	if first.Kind == OpReg {
-		if !c.isGoPackedVectorMoveRegister(first, byteWidth) {
-			return true, false, fmt.Errorf("%s %s first source must match the destination width: %q", c.goarch, baseOp, ins.Raw)
-		}
-	} else if !isAMD64MemoryOperand(first) {
-		return true, false, fmt.Errorf("%s %s first source must be a vector register or memory: %q", c.goarch, baseOp, ins.Raw)
-	}
-	if broadcast && !isAMD64MemoryOperand(first) {
-		return true, false, fmt.Errorf("%s %s.BCST requires a memory matrix source: %q", c.goarch, baseOp, ins.Raw)
-	}
-
+	spec, byteWidth := form.spec, form.byteWidth
+	first, second := ins.Args[form.first], ins.Args[form.second]
+	destination := ins.Args[form.destination]
 	var mask string
-	if masked {
-		maskArg := ins.Args[len(ins.Args)-2]
-		if !amd64NonzeroKOperand(maskArg) {
-			return true, false, fmt.Errorf("%s %s masked form requires K1-K7: %q", c.goarch, baseOp, ins.Raw)
-		}
-		mask, err = c.loadK(maskArg.Reg)
+	if form.mask >= 0 {
+		mask, err = c.loadK(ins.Args[form.mask].Reg)
 		if err != nil {
 			return true, false, err
 		}
 	}
 
-	firstBytes, err := c.loadGFNIFirstSource(first, byteWidth, broadcast)
+	firstBytes, err := c.loadGFNIFirstSource(first, byteWidth, form.broadcast)
 	if err != nil {
 		return true, false, err
 	}
@@ -136,14 +60,14 @@ func (c *amd64Ctx) lowerGFNI(op Op, ins Instr) (ok bool, terminated bool, err er
 		if spec.mode == amd64GFNIAffineInverse {
 			secondBytes = c.emitGF2P8Inverse(byteWidth, secondBytes)
 		}
-		computed = c.emitGF2P8Affine(byteWidth, firstBytes, secondBytes, immediate)
+		computed = c.emitGF2P8Affine(byteWidth, firstBytes, secondBytes, form.immediate)
 	}
-	if masked {
+	if form.mask >= 0 {
 		old, loadErr := c.loadPackedCompareBytes(destination, byteWidth)
 		if loadErr != nil {
 			return true, false, loadErr
 		}
-		computed = amd64ApplyIntegerLaneMask(c, byteWidth, 8, computed, old, mask, zeroing)
+		computed = amd64ApplyIntegerLaneMask(c, byteWidth, 8, computed, old, mask, form.zeroing)
 	}
 	return true, false, c.storeVectorBytes(destination.Reg, byteWidth, computed)
 }

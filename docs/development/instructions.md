@@ -85,6 +85,24 @@ Unknown source/result bytes cannot fall back to zero-initialized implementation
 allocas. Test these boundaries through all public APIs, including default and
 explicit architectures; retain independent canonical-bool and memory contracts.
 
+Indexed permutes and GFNI share the existing typed EVEX/VEX binary grammar;
+unary vector bit counts project their original two/three operands locally.
+Never mutate source operands to reuse a grammar. I2 old-destination indices
+and T2 old-destination tables remain inputs even with zero masking. Complete
+vector reads use actual X/Y/Z byte views, not the older scalar/legacy-X reader.
+Memory widths come from each opcode's full tuple or independent broadcast
+attribute. Shared numerical dependencies grant no native/caller memory role.
+Keep the actual architecture when projecting unary mask arity or physical
+decoder operands. Go-accepted non-SIB extended GP bases in mode32 retain their
+missing physical context only after the complete remaining grammar validates;
+invalid SIB/index, scale, suffix or mask syntax cannot borrow that boundary.
+
+Native compact arrays advance their offset only for enabled lanes. Paired
+source continuation consumes exactly guarded volatile accesses; masked stores
+do not read old destination bytes or establish future read facts. Keep logical
+FP/AUTO scatter/gather separate. EVEX.z memory compression faults before any
+mask/source/address read, rather than behaving like a zeroing register result.
+
 CRC32B/W/L/Q shares the complete Go source grammar across lowering, liveness
 and numerical effects. Every row reads the old accumulator's low32, uses its
 exact source width, zero-extends its result and preserves FLAGS/DF. Go's

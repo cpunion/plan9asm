@@ -32,6 +32,9 @@ func (c *amd64Ctx) lowerPackedExpand(op Op, ins Instr) (ok bool, terminated bool
 	if err != nil {
 		return true, false, err
 	}
+	if form.memory >= 0 && x86OrdinaryNativeMemoryOperand(ins.Args[form.memory], c.goarch) {
+		return true, false, c.lowerNativeCompactMemory(ins, form)
+	}
 	byteWidth, laneBits := form.byteWidth, form.laneBits
 	source, destination := ins.Args[0], ins.Args[form.destination]
 	if form.mask < 0 {
