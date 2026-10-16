@@ -200,6 +200,16 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 			return x86ResultPackedVectorMoveTransfer(ins, form, state, owned, resultOffset, arch, true)
 		}
 		form, known, err := x86LegacyPackedMoveProperties(ins.Op, ins, arch)
+		if known && err == nil && form.memoryWrite && x86ResultNamedPredicateInstruction(ins) &&
+			form.destination.Kind == OpMem && form.destination.Mem.Sym == "" &&
+			x86OrdinaryNativeMemoryOperand(form.destination, arch) {
+			// All seven whole128 legacy names retain their exact native
+			// store opcode and its alignment/fault contract. This consumes
+			// numerical source bytes plus an incoming-pointer address only;
+			// no logical storage, validity, extent or later-read fact follows.
+			return x86ResultRead(form.source, 16, state, owned, arch) &&
+				x86ResultIncomingPointerAddressIdentity(form.destination, state, arch)
+		}
 		if known && err == nil && form.memory == 0 && form.source.Kind == OpMem &&
 			form.source.Mem.Sym == "" && x86OrdinaryNativeMemoryOperand(form.source, arch) {
 			// This same typed form selects the original sideeffect opcode

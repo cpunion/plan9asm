@@ -2,6 +2,7 @@ package plan9asm
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 )
 
@@ -72,8 +73,13 @@ func (c *amd64Ctx) integerEffectResultInitialized(family string) error {
 		// The complete caller/stack proof already checked every numerical
 		// input and native access. Consume that exact owner, not a logical FP
 		// proof for the normalized physical stack or a new memory capability.
+		emitted := c.sig
+		if c.fpSourceSig.Attrs == "" && emitted.Attrs == c.fpFeatureAttrs {
+			emitted.Attrs = "" // Only the renderer's exact, separately bound feature handoff.
+		}
 		if c.goarch != "amd64" || c.sourceStack != proof || c.sig.Ret != Void ||
-			len(c.sig.Frame.Results) != 0 || !x86CallerNormalizedSourceMatches(c.fpScalarSource, c.sig) {
+			len(c.sig.Frame.Results) != 0 || !reflect.DeepEqual(emitted, c.fpSourceSig) ||
+			!x86CallerNormalizedSourceMatches(c.fpScalarSource, c.fpSourceSig) {
 			return fmt.Errorf("%w: %s checked caller continuation changed", ErrProbeNeedsContext, family)
 		}
 		return nil
