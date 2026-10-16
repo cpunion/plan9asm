@@ -30,6 +30,17 @@ func x86SBLEAWriteShape(ins Instr, arch string) (int, uint8, int64, MemRef, bool
 // architectural zero upper32; Q leaves all written bytes unknown. No read,
 // store, caller, raw-entry or logical-frame permission is established here.
 func x86ResultUnknownSBAddressStep(ins Instr, state *x86ResultState, arch string) (bool, bool) {
+	if address, immediate, _, known := x86StaticAddressValueMove(ins, arch); known && immediate {
+		// Go progedit turns native-word MOV $symbol into LEA. Project only
+		// that already validated address role; the original source is not
+		// rewritten and no external address bit becomes numerical knowledge.
+		ins.Args = append([]Operand(nil), ins.Args...)
+		ins.Args[0] = Operand{Kind: OpMem, Mem: MemRef{Sym: address.symbol + "(SB)", Off: address.offset}}
+		ins.Op = "LEAQ"
+		if arch == "386" {
+			ins.Op = "LEAL"
+		}
+	}
 	index, mask, width, memory, known := x86SBLEAWriteShape(ins, arch)
 	if !known {
 		return false, false
