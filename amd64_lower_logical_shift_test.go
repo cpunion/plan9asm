@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -70,21 +71,23 @@ func TestTranslateX86PackedLogicalShiftCompleteGoAssemblerForms(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			ll, err := Translate(file, Options{
-				TargetTriple: target.triple,
-				Goarch:       target.goarch,
-				Sigs: map[string]FuncSig{
-					"packedlogicalshiftforms": {Name: "packedlogicalshiftforms", Ret: Void},
-				},
-			})
-			if err != nil {
-				t.Fatal(err)
+			for _, api := range []string{"text", "module", "Go"} {
+				if ir, err := x86ScalarFPBitViewAPI(t, source.String(), "func packedlogicalshiftforms()", target.goarch, target.triple, api); ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+					t.Fatal("original packed-shift formats invented native/vector/mask inputs", api, err)
+				}
 			}
+			ll := x86ScalarFormatObjectUnit(t, file, map[string]FuncSig{
+				"packedlogicalshiftforms": {Name: "packedlogicalshiftforms", Ret: Void},
+			}, target.goarch, target.triple, 0)
 			llc := findLLVM22Tool("llc")
 			if llc == "" {
 				t.Fatal("LLVM 22 llc not found")
 			}
-			compileLLVMToObject(t, llc, target.triple, "packed-logical-shift-"+target.name+".ll", "packed-logical-shift-"+target.name+".o", ll)
+			for _, ir := range []string{ll, x86DwordProductIROptimize(t, ll)} {
+				for _, level := range []string{"-O0", "-O2"} {
+					x86PackedStringCompileObject(t, llc, target.triple, ir, level)
+				}
+			}
 		})
 	}
 }
