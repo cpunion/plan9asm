@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"runtime"
 	"strings"
@@ -75,9 +76,13 @@ func TestTranslateX86PackedLeadingZeroCountCompleteGoFormsAcrossTargets(t *testi
 				Goarch: target.goarch, TargetTriple: target.triple,
 				Sigs: map[string]FuncSig{"packedlzcntforms": {Name: "packedlzcntforms", Ret: Void}},
 			})
-			if err != nil {
-				t.Fatal(err)
+			if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+				t.Fatal("original leading-zero format invented initialized inputs", err)
 			}
+			ir = x86ZeroArgumentLowererObjectUnit(t, file, target.goarch, target.triple, "LZCountEmitterOnly",
+				func(consumer *amd64Ctx, instruction Instr) (bool, bool, error) {
+					return consumer.lowerPackedBitCount(instruction.Op, instruction)
+				})
 			for _, want := range []string{"@llvm.ctlz.v4i32", "@llvm.ctlz.v8i64", "select i1"} {
 				if !strings.Contains(ir, want) {
 					t.Fatalf("packed-LZCNT lowering omitted %q:\n%s", want, ir)

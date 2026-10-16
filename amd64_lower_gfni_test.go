@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"runtime"
 	"strings"
@@ -75,10 +76,14 @@ func TestTranslateX86GFNICompleteGoAssemblerForms(t *testing.T) {
 				Goarch: target.goarch, TargetTriple: target.triple,
 				Sigs: map[string]FuncSig{"gfniforms": {Name: "gfniforms", Ret: Void}},
 			})
-			if err != nil {
-				t.Fatal(err)
-			}
 			llc := findLLVM22Tool("llc")
+			if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+				t.Fatal("original GFNI format source invented initialized inputs", err)
+			}
+			ir = x86ZeroArgumentLowererObjectUnit(t, file, target.goarch, target.triple, "GFNIEmitterOnly",
+				func(consumer *amd64Ctx, instruction Instr) (bool, bool, error) {
+					return consumer.lowerGFNI(instruction.Op, instruction)
+				})
 			if llc == "" {
 				t.Fatal("LLVM 22 llc not found")
 			}

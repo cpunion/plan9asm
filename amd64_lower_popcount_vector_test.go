@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"runtime"
 	"strings"
@@ -52,10 +53,14 @@ func TestTranslateX86PackedPopcountCompleteGoAssemblerForms(t *testing.T) {
 					"packedpopcountforms": {Name: "packedpopcountforms", Ret: Void},
 				},
 			})
-			if err != nil {
-				t.Fatal(err)
-			}
 			llc := findLLVM22Tool("llc")
+			if ll != "" || !errors.Is(err, ErrProbeNeedsContext) {
+				t.Fatal("original population-count format invented initialized inputs", err)
+			}
+			ll = x86ZeroArgumentLowererObjectUnit(t, file, target.goarch, target.triple, "PopcountEmitterOnly",
+				func(consumer *amd64Ctx, instruction Instr) (bool, bool, error) {
+					return consumer.lowerPackedBitCount(instruction.Op, instruction)
+				})
 			if llc == "" {
 				t.Fatal("LLVM 22 llc not found")
 			}
