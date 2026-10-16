@@ -1,6 +1,10 @@
 package plan9asm
 
 func x86ResultByteShuffleStep(ins Instr, state *x86ResultState, owned []bool, arch string) (bool, bool) {
+	return x86ResultByteShuffleStepWithRead(ins, state, owned, arch, false)
+}
+
+func x86ResultByteShuffleStepWithRead(ins Instr, state *x86ResultState, owned []bool, arch string, nativeRead bool) (bool, bool) {
 	form, known, err := x86ByteShuffleProperties(ins.Op, ins, arch)
 	if !known || err != nil {
 		return false, known
@@ -13,9 +17,10 @@ func x86ResultByteShuffleStep(ins Instr, state *x86ResultState, owned []bool, ar
 	}
 	control := uint64(0)
 	if form.memory >= 0 {
-		// Retain the existing FP/AUTO or lowering-owned same-file DATA proof.
-		// A mask cannot shrink the read, nor prove an arbitrary pointer safe.
-		if !x86ResultRead(ins.Args[form.memory], int64(form.memoryBytes), state, owned, arch) {
+		// Only the paired emitter may observe continuation past its complete
+		// native read. A mask cannot shrink E4NF, certify alignment or grant
+		// backing; public/caller observers keep their separate storage rules.
+		if !x86ResultReadWithNativeContinuation(ins, ins.Args[form.memory], int64(form.memoryBytes), state, owned, arch, nativeRead) {
 			return false, true
 		}
 		control = x86CallerVectorByteMask(int64(form.byteWidth))
