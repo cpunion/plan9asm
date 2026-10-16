@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -22,6 +23,79 @@ var x86MaskNumericalOracle = []struct {
 	{"KSHIFTRB", 8, true}, {"KSHIFTRW", 16, true},
 	{"KSHIFTRD", 32, true}, {"KSHIFTRQ", 64, true},
 	{"KUNPCKBW", 8, false}, {"KUNPCKWD", 16, false}, {"KUNPCKDQ", 32, false},
+}
+
+func TestX86MaskArithmeticCompletePortableValues(t *testing.T) {
+	llc, clang, found := findLlcAndClang(t)
+	if !found {
+		t.Fatal("LLVM22 llc and clang required")
+	}
+	var source, declarations, prototypes, checks strings.Builder
+	count := 0
+	for _, row := range x86MaskNumericalOracle {
+		counts := []int{0}
+		operation := 0
+		if row.shift {
+			counts = []int{0, row.bits - 1, row.bits, 255}
+			operation = 1
+			if strings.HasPrefix(row.op, "KSHIFTR") {
+				operation = 2
+			}
+		} else if strings.HasPrefix(row.op, "KUNPCK") {
+			operation = 3
+		}
+		for _, shift := range counts {
+			name := fmt.Sprintf("MaskValue%d", count)
+			count++
+			first := "K0"
+			if row.shift {
+				first = fmt.Sprintf("$%d", shift)
+			}
+			fmt.Fprintf(&source, "TEXT ·%s(SB),4,$0-24\nKMOVQ a+0(FP),K0\nKMOVQ b+8(FP),K7\n"+
+				"%s %s,K7,K3\nKMOVQ K3,ret+16(FP)\nRET\n", name, row.op, first)
+			fmt.Fprintf(&declarations, "func %s(a,b uint64) uint64\n", name)
+			fmt.Fprintf(&prototypes, "extern uint64_t %s(uint64_t,uint64_t);\n", name)
+			fmt.Fprintf(&checks, "if(check(%s,\"%s\",%d,%d,%d)) return 1;\n", name, name, operation, row.bits, shift)
+		}
+	}
+	if count != 39 {
+		t.Fatal("complete runtime family/count denominator changed", count)
+	}
+	oracle := "#include <stdint.h>\n#include <stdio.h>\n" + prototypes.String() + `
+static int check(uint64_t (*fn)(uint64_t,uint64_t),const char *name,unsigned op,unsigned bits,unsigned count) {
+ const uint64_t values[]={0,1,UINT64_MAX,UINT64_C(0x89abcdef01234567),UINT64_C(0x8000000000000000),UINT64_C(0x55555555aaaaaaaa)};
+ uint64_t mask=bits==64?UINT64_MAX:(UINT64_C(1)<<bits)-1;
+ for(unsigned a=0;a<6;a++) for(unsigned b=0;b<6;b++) {
+  uint64_t x=values[a]&mask,y=values[b]&mask,expected=0;
+  if(op==0) expected=(x+y)&mask;
+  if(op==1 && count<bits) expected=(y<<count)&mask;
+  if(op==2 && count<bits) expected=y>>count;
+  if(op==3) expected=x|(y<<bits);
+  uint64_t actual=fn(values[a],values[b]);
+  if(actual!=expected) {
+   fprintf(stderr,"%s a=%llx b=%llx got=%llx want=%llx\n",name,
+    (unsigned long long)values[a],(unsigned long long)values[b],(unsigned long long)actual,(unsigned long long)expected);
+   return 1;
+  }
+ }
+ return 0;
+}
+int main(void) {
+` + checks.String() + "return 0;\n}\n"
+	triple := testTargetTriple(runtime.GOOS, runtime.GOARCH)
+	for _, api := range []string{"text", "module", "Go"} {
+		t.Run(api, func(t *testing.T) {
+			ir, err := x86ScalarFPBitViewAPI(t, source.String(), declarations.String(), "amd64", triple, api)
+			if err != nil || ir == "" {
+				t.Fatal("complete initialized mask-value runtime rejected", err)
+			}
+			for _, text := range []string{ir, x86DwordProductIROptimize(t, ir)} {
+				for _, level := range []int{0, 2} {
+					compileAndRunRuntimeTestWithCompiler(t, llc, []string{clang}, "mask-values", triple, text, oracle, nil, level)
+				}
+			}
+		})
+	}
 }
 
 func TestX86MaskArithmeticNumericalInputsAndState(t *testing.T) {
