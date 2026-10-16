@@ -31,7 +31,9 @@ func x86LODSCheckZeroOutputStores(body string, row x86LODSStateCase) error {
 	privateGEP := assignment(fmt.Sprintf(`getelementptr inbounds(?: nuw)? i8, ptr (%s), i%d ([0-9]+)`, ssa, bits))
 	privateInteger := assignment(fmt.Sprintf(`ptrtoint ptr (%s) to i%d`, ssa, bits))
 	privateAlloca := assignment(`alloca \[256 x i8\], align 1`)
-	store := regexp.MustCompile(`^store i([0-9]+) ([^ ,]+), ptr (` + ssa + `), align ([0-9]+)$`)
+	// Native output MOVs retain volatile; private numerical cells need not.
+	// Both spellings still require the same complete width/value/address proof.
+	store := regexp.MustCompile(`^store(?: volatile)? i([0-9]+) ([^ ,]+), ptr (` + ssa + `), align ([0-9]+)$`)
 	directionCall := regexp.MustCompile(`^(?:tail )?call void asm sideeffect "(?:cld|std)", "~\{dirflag\}"\(\)(?: #[0-9]+)?$`)
 	lifetimeCall := regexp.MustCompile(`^call void @llvm\.lifetime\.(?:start|end)\.p0\(ptr nonnull (` + ssa + `)\)$`)
 
