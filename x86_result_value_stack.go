@@ -8,6 +8,9 @@ type x86ResultValueStack struct {
 	invalid bool
 	id      bool // ID is separate from the six arithmetic flags and DF.
 	popped  x86ResultPoppedWord
+	// AMD64 has at most 63 private cells. A set bit marks a source W cell,
+	// not a Q cell; equal virtual depth does not imply equal native SP delta.
+	wordCells uint64
 	// Nil means the existing ordinary NUM bytes. FLAGS pushes additionally
 	// retain precisely which source bits the adjacent mask may refine. Keep
 	// those masks in stack-byte order through mixed widths, not GP positions.
@@ -61,6 +64,9 @@ func x86ResultValueStackStep(ins Instr, state *x86ResultState, owned []bool, res
 		stack.refinable != nil && len(stack.refinable) != len(stack.bytes) {
 		return false, true
 	}
+	if arch == "amd64" && (len(stack.bytes)%8 != 0 || stack.wordCells>>uint(len(stack.bytes)/8) != 0) {
+		return false, true
+	}
 	push := spec.mode == amd64StackPushValue || spec.mode == amd64StackPushFlags
 	if push {
 		bits := ^uint64(0)
@@ -105,6 +111,9 @@ func x86ResultValueStackStep(ins Instr, state *x86ResultState, owned []bool, res
 		if len(stack.bytes) > x86ResultValueStackLimit(arch)-storage {
 			return false, true
 		}
+		if arch == "amd64" && width == 2 {
+			stack.wordCells |= uint64(1) << uint(len(stack.bytes)/8)
+		}
 		if spec.mode == amd64StackPushFlags && stack.refinable == nil {
 			stack.refinable = make([]uint8, len(stack.bytes))
 			copy(stack.refinable, stack.bytes)
@@ -128,6 +137,13 @@ func x86ResultValueStackStep(ins Instr, state *x86ResultState, owned []bool, res
 	if !state.shapeOnly {
 		if len(stack.bytes) < storage {
 			return false, true
+		}
+		if arch == "amd64" {
+			cell := uint64(1) << uint(len(stack.bytes)/8-1)
+			if (stack.wordCells&cell != 0) != (width == 2) {
+				return false, true // Partial native pops need a separate byte-accurate emitter.
+			}
+			stack.wordCells &^= cell
 		}
 		bits = 0
 		refinable = 0

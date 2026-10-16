@@ -11,6 +11,10 @@ import (
 // actual W/Q operations move SP by two/eight bytes. A partial native pop must
 // not consume an entire private cell or invent zero bytes for a later wide pop.
 func TestX86ValueStackMixedNativeWidthsNeedByteAccurateStorage(t *testing.T) {
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM22 llc required")
+	}
 	for _, target := range x86RawReturnTargets {
 		if target.arch != "amd64" {
 			continue
@@ -50,9 +54,15 @@ func TestX86ValueStackMixedNativeWidthsNeedByteAccurateStorage(t *testing.T) {
 			const source = "TEXT ·Value(SB),4,$0-16\nPUSHQ value+0(FP)\nPUSHW $9\nPOPW AX\nPOPQ BX\nMOVQ BX,ret+8(FP)\nRET\n"
 			x86LEAActualTargetGoObject(t, "amd64", target.triple, source)
 			for _, api := range []string{"text", "module", "Go"} {
-				if ir, err := x86ScalarFPBitViewAPI(t, source,
-					"func Value(value uint64) uint64", "amd64", target.triple, api); err != nil || ir == "" {
+				ir, err := x86ScalarFPBitViewAPI(t, source,
+					"func Value(value uint64) uint64", "amd64", target.triple, api)
+				if err != nil || ir == "" {
 					t.Fatal("complete nested cells lost their independent numerical input", api, err)
+				}
+				for _, text := range []string{ir, x86DwordProductIROptimize(t, ir)} {
+					for _, level := range []string{"-O0", "-O2"} {
+						x86PackedStringCompileObject(t, llc, target.triple, text, level)
+					}
 				}
 			}
 		})
@@ -83,6 +93,18 @@ func TestX86ValueStackCellWidthsKeepCloneAndJoinIdentity(t *testing.T) {
 				pop := x86ScalarLaneInstruction(t, "POP"+widths.left+" AX")
 				if !x86ResultTransfer(pop, &clone, nil, 0, "amd64") || len(left.valueStack.bytes) != 8 {
 					t.Fatal("a cloned pop changed the original private cell")
+				}
+				replacement := "Q"
+				if widths.left == "Q" {
+					replacement = "W"
+				}
+				push := x86ScalarLaneInstruction(t, "PUSH"+replacement+" $9")
+				if !x86ResultTransfer(push, &clone, nil, 0, "amd64") {
+					t.Fatal("a consumed cell could not be independently reused")
+				}
+				original := left.clone()
+				if !x86ResultTransfer(pop, &original, nil, 0, "amd64") {
+					t.Fatal("a cloned cell replacement changed the original source width")
 				}
 				merged := left.intersect(right)
 				got := x86ResultTransfer(pop, &merged, nil, 0, "amd64")

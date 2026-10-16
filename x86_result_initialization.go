@@ -743,9 +743,11 @@ func (state x86ResultState) intersect(other x86ResultState) x86ResultState {
 	}
 	if merged.valueStack != nil {
 		if other.valueStack == nil || merged.valueStack.invalid || other.valueStack.invalid ||
-			len(merged.valueStack.bytes) != len(other.valueStack.bytes) {
+			len(merged.valueStack.bytes) != len(other.valueStack.bytes) ||
+			merged.valueStack.wordCells != other.valueStack.wordCells {
 			merged.valueStack.bytes, merged.valueStack.invalid = nil, true
 			merged.valueStack.refinable = nil
+			merged.valueStack.wordCells = 0
 		} else {
 			if merged.valueStack.refinable != nil || other.valueStack.refinable != nil {
 				left, right := merged.valueStack.refinable, other.valueStack.refinable
