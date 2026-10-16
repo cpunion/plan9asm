@@ -21,6 +21,14 @@ func (c *amd64Ctx) loadScalarRMWDestination(op Op, ins Instr, destination Operan
 		return "", nil, err
 	}
 	if !known || !x86OrdinaryNativeMemoryOperand(form.destination, c.goarch) {
+		if form.spec.stem == "INC" || form.spec.stem == "DEC" {
+			// Preserve the existing logical GP/FP/AUTO byte-view consumer;
+			// only actual native memory gets the new paired access above it.
+			value, err := c.evalIntSized(destination, typ)
+			return value, func(value string) error {
+				return c.storeScalarIntegerOperand(destination, typ, value)
+			}, err
+		}
 		return c.loadIntDestination(destination, typ)
 	}
 	if ins.x86AddressBits != 0 || ins.x86UnboundAddressOverride {
