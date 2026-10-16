@@ -1,0 +1,80 @@
+package plan9asm
+
+import (
+	"fmt"
+	"strings"
+)
+
+// A zero-argument direct integer result is returned in AX, not in a fictional
+// ABI0 FP slot. This only selects its complete numerical check. Static extents
+// still come from the actual emitted module; raw RET retains its separate
+// original-source, stack and continuation validation.
+func x86DirectStaticRegisterResultCandidate(fn Func, sig FuncSig, arch string) bool {
+	width := x86ResultScalarBytes(sig.Ret, arch)
+	if arch != "386" && arch != "amd64" || width <= 0 || width > x86ResultPointerWord(arch) || sig.Ret == I1 ||
+		len(sig.Args) != 0 || len(sig.Frame.Params) != 0 || len(sig.Frame.Results) != 0 ||
+		len(sig.ArgRegs) != 0 || sig.ARMEntry != nil || sig.ARM64GoRegisterABI != nil || sig.ARM64ClosureABI != nil ||
+		sig.WASMContext != "" || sig.WASMNative || sig.amd64GoArguments != nil ||
+		fn.FrameSize != 0 || fn.ArgSize != 0 || strings.Contains(fn.Sym, "<") || len(fn.X86RawText) != 0 ||
+		fn.x86SourceStack != nil || fn.x86FixedLocal != nil || fn.x86ContinuationFlow != nil ||
+		fn.x86DirectTailRoot != nil || fn.x86BoolCalls != nil {
+		return false
+	}
+	for _, ins := range fn.Instrs {
+		if len(ins.Args) == 2 && x86RawReturnScalarMoveBytes(x86GoMOVQSourceInstruction(ins).Op) != 0 {
+			for _, operand := range ins.Args {
+				if _, static := x86StaticSBReadAddress(operand, arch); static {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+func (c *amd64Ctx) checkDirectStaticRegisterResultInitialization() error {
+	fn, sig, arch := c.fpScalarSource, c.sig, c.goarch
+	fail := func(reason string) error {
+		return fmt.Errorf("%w: direct static integer result: %s", ErrProbeNeedsContext, reason)
+	}
+	if !x86DirectStaticRegisterResultCandidate(fn, sig, arch) {
+		return fail("requires the complete zero-argument direct scalar role")
+	}
+	if fn.x86RawReplay != nil {
+		if err := fn.x86RawReplay.validate(fn, arch); err != nil {
+			return err
+		}
+	}
+	for _, ins := range fn.Instrs {
+		if form := ins.x86RawNearReturn; form != nil {
+			if fn.x86RawReplay == nil || ins.Op != OpRET || !form.nativeWidth || form.cleanup != 0 {
+				return fail("raw return lost its independent native-width source role")
+			}
+			continue
+		}
+		if !x86ResultNamedPredicateInstruction(ins) || isX86RawDirective(ins) {
+			return fail("another raw/native instruction needs its own complete effect")
+		}
+	}
+	transfer := func(_ int, ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string) bool {
+		state.loweredStaticReads = c.fpScalarData
+		defer func() { state.loweredStaticReads = nil }()
+		width := x86RawReturnScalarMoveBytes(x86GoMOVQSourceInstruction(ins).Op)
+		if width != 0 && len(ins.Args) == 2 {
+			if address, static := x86StaticSBReadAddress(ins.Args[1], arch); static {
+				// Only the paired bounded scalar MOV store is admitted. It
+				// creates no incoming-pointer, caller or reusable memory fact.
+				return c.fpScalarData[address] >= width && x86ResultRead(ins.Args[0], width, state, owned, arch)
+			}
+		}
+		return x86ScalarFPResultTransfer(ins, state, owned, resultOffset, arch)
+	}
+	return checkX86ResultSourceFlow(fn, x86ResultState{}, nil, 0, arch, transfer,
+		func(state x86ResultState, _ int) error {
+			index, mask, valid := x86ResultGP(AX, x86ResultScalarBytes(sig.Ret, arch), arch)
+			if !valid || state.gp[index]&mask != mask {
+				return fail("AX result bytes are not initialized on every return path")
+			}
+			return nil
+		})
+}

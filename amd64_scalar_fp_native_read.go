@@ -16,6 +16,9 @@ import (
 // result. In particular, this never creates a caller-memory or raw-RET token.
 func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 	fn, sig, arch := c.fpScalarSource, c.sig, c.goarch
+	if x86DirectStaticRegisterResultCandidate(fn, sig, arch) {
+		return c.checkDirectStaticRegisterResultInitialization()
+	}
 	if fn.x86ContinuationFlow != nil {
 		if err := c.checkContinuationResultSource(); err != nil {
 			return err
