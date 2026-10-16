@@ -1,13 +1,11 @@
 package plan9asm
 
 import (
-	"debug/buildinfo"
 	"fmt"
 	"go/format"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 )
@@ -51,18 +49,8 @@ func x86PackedIntegerCompareOriginalGoDriver(t *testing.T, declaration, assembly
 		t.Fatalf("actual original Go packed compare driver (build-only=%t): %v\n%s", buildOnly, err, output)
 	}
 	if buildOnly {
-		info, err := buildinfo.ReadFile(executable)
-		if err != nil || info.GoVersion != runtime.Version() {
-			t.Fatal("build-only driver did not retain the actual SDK's linked executable", info, err)
-		}
-		amd64 := false
-		for _, setting := range info.Settings {
-			if setting.Key == "GOARCH" {
-				amd64 = setting.Value == "amd64"
-			}
-		}
-		if !amd64 {
-			t.Fatal("build-only driver lost its actual AMD64 target", info.Settings)
+		if amd64, err := x86OriginalGoLinkedAMD64(executable); err != nil || !amd64 {
+			t.Fatal("build-only driver lost its actual linked SDK/AMD64 executable", err)
 		}
 	}
 }
