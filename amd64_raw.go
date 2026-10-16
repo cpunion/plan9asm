@@ -57,6 +57,12 @@ func normalizeX86RawFile(file *File, goarch string, translationOptions ...Option
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", normalized.Funcs[i].Sym, err)
 		}
+		// Replay compares the physical decoder with this checkpoint, before
+		// file-local DATA names replace its pending literal/address operands.
+		replay := fn.x86RawReplay
+		if replay == nil {
+			replay = newX86RawReplaySource(originalFn, fn, goarch)
+		}
 		hasLiteral := false
 		for _, ins := range fn.Instrs {
 			if ins.x86RIPLiteral {
@@ -138,10 +144,6 @@ func normalizeX86RawFile(file *File, goarch string, translationOptions ...Option
 				return nil, fmt.Errorf("%s: %w", fn.Sym, err)
 			}
 			ins.Raw = strings.Replace(ins.Raw, "·__plan9asm_raw_literal_pending(SB)", ins.Args[literalArg].Sym, 1)
-		}
-		replay := fn.x86RawReplay
-		if replay == nil {
-			replay = newX86RawReplaySource(originalFn, fn, goarch)
 		}
 		fn = normalizeX86RawReturnSourceStack(fn, opt, len(translationOptions) != 0, normalized.Funcs[i])
 		if opt.ResolveSym != nil {
