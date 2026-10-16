@@ -148,3 +148,53 @@ func TestX86SignedPackedFloatVoidCannotInventRegisterInputs(t *testing.T) {
 		}
 	}
 }
+
+func TestX86SignedPackedFloatNativeInputsStayIndependent(t *testing.T) {
+	for index, row := range x86SignedPackedValueRows() {
+		if !strings.Contains(row.input, "(") {
+			continue
+		}
+		source, declaration := x86SignedPackedValueFixture("amd64", row, true)
+		pkg := mustGoPackage(t, "value", "package value\n"+declaration)
+		file := mustParseX86RawReturn(t, source)
+		signatures, err := goSigsForAsmFile(pkg, file, func(name string) string {
+			return strings.TrimPrefix(name, "·")
+		}, "amd64", nil, nil, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := CheckX86ABI0ResultInitialization(file.Funcs[0], signatures["Value"], "amd64"); !errors.Is(err, ErrProbeNeedsContext) {
+			t.Fatal("standalone signed conversion acquired native memory authority", err)
+		}
+		variants := map[string]string{
+			"unknown-pointer": strings.Replace(source, "p+0(FP),AX", "p+0(FP),DI", 1),
+			"unknown-index":   strings.Replace(source, "MOVL $1,DX\n", "", 1),
+			"numeric-pointer": strings.Replace(source, "MOVL $1,DX", "MOVL $42,AX\nMOVL $1,DX", 1),
+		}
+		if row.mask != "" {
+			variants["unknown-mask"] = strings.Replace(source, "KMOVD CX,K1\n", "", 1)
+			if !strings.HasSuffix(row.op, ".Z") {
+				variants["unknown-merge"] = strings.Replace(source, "VPXORD Z1,Z1,Z1\n", "", 1)
+			}
+		}
+		for name, changed := range variants {
+			t.Run(fmt.Sprintf("%d/%s", index, name), func(t *testing.T) {
+				for _, api := range []string{"text", "module", "Go"} {
+					if ir, err := x86ScalarFPBitViewAPI(t, changed, declaration, "amd64", "x86_64-unknown-linux-gnu", api); !errors.Is(err, ErrProbeNeedsContext) || ir != "" {
+						t.Fatal("signed conversion borrowed native or vector inputs", api, err)
+					}
+				}
+			})
+		}
+		if row.mask != "" && strings.HasSuffix(row.op, ".Z") {
+			t.Run(fmt.Sprintf("%d/zeroing-needs-no-old-destination", index), func(t *testing.T) {
+				zero := strings.Replace(source, "VPXORD Z1,Z1,Z1\n", "", 1)
+				for _, api := range []string{"text", "module", "Go"} {
+					if ir, err := x86ScalarFPBitViewAPI(t, zero, declaration, "amd64", "x86_64-unknown-linux-gnu", api); err != nil || ir == "" {
+						t.Fatal("zeroing conversion incorrectly demanded an old destination", api, err)
+					}
+				}
+			})
+		}
+	}
+}
