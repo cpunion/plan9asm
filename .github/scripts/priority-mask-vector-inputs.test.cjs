@@ -38,7 +38,7 @@ const owners = {
     'TestMaskValueCoverageRequiresCompleteInputs', 'TestVectorValueCoverageRequiresCompleteInputs',
   ]},
 };
-const dependencies = 'needs: [ownership, sdk-priority, arm64-fallback-cross-priority, lock-native-priority, vector-value-fault-priority]';
+const dependencies = 'needs: [ownership, native-x86-oracles, sdk-priority, arm64-fallback-cross-priority, lock-native-priority, unlocked-rmw-native-priority, vector-value-fault-priority]';
 const block = (lane, owner) => `- lane: ${lane}\n            module: '${owner.module}'\n            roots:\n` +
   owner.roots.map(root => `              - ${root}\n`).join('') + '            timeout: 5m';
 

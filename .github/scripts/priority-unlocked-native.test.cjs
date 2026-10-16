@@ -24,7 +24,7 @@ function requireUnlockedOwner(source) {
   assert.match(body, /if: \$\{\{ !cancelled\(\) \}\}/);
   assert.match(body, /name: native-unlocked\n          path: _out\/native-unlocked\/\n          if-no-files-found: error/);
   assert.doesNotMatch(body, /continue-on-error|max-parallel|qemu|rosetta|PLAN9ASM_CROSS_EXEC|overlay/);
-  assert.match(source, /needs: \[ownership, sdk-priority, arm64-fallback-cross-priority, lock-native-priority, unlocked-rmw-native-priority, vector-value-fault-priority\]/);
+  assert.match(source, /needs: \[ownership, native-x86-oracles, sdk-priority, arm64-fallback-cross-priority, lock-native-priority, unlocked-rmw-native-priority, vector-value-fault-priority\]/);
   return body;
 }
 
@@ -54,6 +54,7 @@ test('unlocked native ownership rejects omissions, duplicate roots, emulation an
     assert.throws(() => requireUnlockedOwner(workflow.replace(body, body.replace(before, after))));
   }
   assert.throws(() => requireUnlockedOwner(workflow.replace(', unlocked-rmw-native-priority,', ',')));
+  assert.throws(() => requireUnlockedOwner(workflow.replace(', native-x86-oracles,', ',')));
 });
 
 test('unlocked audit requires both executed ISAs and all three public API children', () => {

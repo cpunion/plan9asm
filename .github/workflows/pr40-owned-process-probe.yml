@@ -155,7 +155,7 @@ jobs:
           if-no-files-found: error
 
   complete-windows:
-    needs: [ownership, sdk-priority, arm64-fallback-cross-priority, lock-native-priority, vector-value-fault-priority]
+    needs: [ownership, native-x86-oracles, sdk-priority, arm64-fallback-cross-priority, lock-native-priority, unlocked-rmw-native-priority, vector-value-fault-priority]
     permissions:
       contents: read
       id-token: write
@@ -1043,6 +1043,41 @@ jobs:
         with:
           name: native-lock
           path: _out/native-lock/
+          if-no-files-found: error
+
+  unlocked-rmw-native-priority:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install LLVM 22 and required native i386 toolchain
+        timeout-minutes: 14
+        run: bash scripts/install-ci-llvm22-ubuntu.sh gcc-i686-linux-gnu libc6-dev-i386-cross
+      - uses: ./.github/actions/setup-go
+        with:
+          go-version: '1.27.2'
+          cache: true
+      - name: Execute original Go and LLVM native unlocked RMW semantics
+        env:
+          GOTOOLCHAIN: local
+        run: |
+          set -euo pipefail
+          mkdir -p _out/native-unlocked
+          roots='TestCrossLinuxRuntimeMatrixX86UnlockedScalarRMWNativeAMD64'
+          roots+='|TestCrossLinuxRuntimeMatrixX86UnlockedScalarRMWNative386'
+          go test -p=1 . -list "^($roots)$" > _out/native-unlocked/inventory.log
+          for root in ${roots//|/ }; do
+            grep -Fx "$root" _out/native-unlocked/inventory.log
+          done
+          go test -p=1 . -run "^($roots)$" -count=1 -timeout=5m -json \
+            2> _out/native-unlocked/stderr.log | tee _out/native-unlocked/raw.jsonl
+          node .github/scripts/audit-unlocked-native.cjs _out/native-unlocked > _out/native-unlocked/audit.json
+      - name: Preserve original and translated unlocked RMW observations
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: native-unlocked
+          path: _out/native-unlocked/
           if-no-files-found: error
 
   vector-value-fault-priority:
