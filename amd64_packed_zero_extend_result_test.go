@@ -171,11 +171,11 @@ func TestX86PackedZeroExtendNativeResultsKeepWholeSourceBoundaries(t *testing.T)
 			t.Run(name, func(t *testing.T) {
 				load := name + " (DX),X1\n"
 				for mutation, body := range map[string]string{
-					"pointer index": name + " (DX)(DX*1),X1\n",
-					"lost pointer":  "MOVL $1,DX\n" + load,
-					"missing path":  "MOVL $0,BX\nCMPL BX,$0\nJE after\n" + load + "after:\n",
-					"native store":  load + "MOVL $1,(DX)\n",
-					"input write":   load + "MOVQ $1,p+0(FP)\n",
+					"pointer index":       name + " (DX)(DX*1),X1\n",
+					"lost pointer":        "MOVL $1,DX\n" + load,
+					"missing path":        "MOVL $0,BX\nCMPL BX,$0\nJE after\n" + load + "after:\n",
+					"unknown store input": load + "MOVL BX,(DX)\n",
+					"input write":         load + "MOVQ $1,p+0(FP)\n",
 				} {
 					source := "TEXT ·Value(SB),4,$0-12\nMOVQ p+0(FP),DX\n" + body + "PEXTRD $0,X1,AX\nMOVL AX,ret+8(FP)\nRET\n"
 					goAssemblerOracleOutput(t, "amd64", source, "", true)

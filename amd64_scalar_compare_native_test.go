@@ -128,7 +128,7 @@ func TestX86ScalarCompareIncomingPointerDoesNotGrantOtherEffects(t *testing.T) {
 				{"unknown-numerical-input", "", "(DX)", "AX", ""},
 				{"opaque-numerical-input", move + " p+0(FP),AX\n", "(DX)", "AX", ""},
 				{"no-reusable-backing-credit", "", "(DX)", "$1", "MOVL (DX),DX\nMOVL (DX),AX\n"},
-				{"no-write-credit", "", "(DX)", "$1", "MOVL $1,(DX)\n"},
+				{"no-write-data-credit", "", "(DX)", "$1", "MOVL BX,(DX)\n"},
 				{"no-segment-credit", "", "(FS)", "$1", ""},
 			} {
 				source := x86ScalarComparePointerSource(target.arch, "view", row.setup,

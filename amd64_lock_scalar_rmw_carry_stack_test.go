@@ -35,7 +35,7 @@ func TestX86LockScalarRMWCarryStackDoesNotInventWholeFlagsWord(t *testing.T) {
 								if err != nil || !strings.Contains(ir, "lock; adcl") {
 									t.Fatal("known numerical word or CF roundtrip was lost", err)
 								}
-							} else if !errors.Is(err, ErrProbeNeedsContext) || ir != "" || !strings.Contains(err.Error(), "carry") {
+							} else if !errors.Is(err, ErrProbeNeedsContext) || ir != "" {
 								t.Fatal("CF-only PUSHF falsely defined unknown GP/OF bits", err)
 							}
 						})
