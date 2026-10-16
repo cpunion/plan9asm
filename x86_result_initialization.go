@@ -133,6 +133,10 @@ func checkX86ABI0ResultInitializationWithTrapOnly(fn Func, sig FuncSig, goarch s
 			initial.resultAddressSlots = []x86ResultSlotAddress{region}
 		}
 	}
+	if scalarViews && x86Ordinary386FrameAddressRole(fn, sig, goarch) && fn.ArgSize == int64(frame) {
+		initial.logicalFrameParameters = true
+		initial.resultAddressSlots = []x86ResultSlotAddress{{start: 0, end: int64(frame), valid: true}}
+	}
 	initial.callerAddressFP = initial.pointerFP // Immutable actual typed entry layout.
 	autoExtent, autoErr := x86ResultAUTOExtent(fn, goarch)
 	if autoErr != nil {
@@ -347,7 +351,7 @@ func checkX86ResultSourceFlowWithTrapOnly(fn Func, initial x86ResultState, owned
 		8*len(initial.xmm) + len(initial.masks) + 1 + len(initial.pointerGP) + len(initial.callerAddressGP) +
 		2*len(initial.callerAddressOrigin) + 1 + 2 + 3 + 1 + 1 // Native string counter must-fact.
 	if len(initial.resultAddressSlots) != 0 {
-		byteState += len(initial.resultAddressGP)*25 + 1
+		byteState += len(initial.resultAddressGP)*25 + 2
 	}
 	if initial.boolFrameGP != nil {
 		byteState += len(initial.boolFrameGP) * 25
@@ -582,13 +586,14 @@ type x86ResultState struct {
 	pointerGP [16]bool
 	// A separate actual typed-entry address-bit domain. SDK literal/OR
 	// carriers never seed it; no numerical GP or memory facts follow.
-	callerAddressFP      map[int64]bool // immutable shared entry layout
-	callerAddressGP      [16]bool
-	callerAddressOrigin  [16]uint16
-	resultAddressSlots   []x86ResultSlotAddress // Immutable root-local scalar layout.
-	resultAddressGP      [16]x86ResultSlotAddress
-	resultAddressWritten bool // May-write join, not an initialized-result fact.
-	shapeOnly            bool // source-wide effect validation, never a reaching state
+	callerAddressFP        map[int64]bool // immutable shared entry layout
+	callerAddressGP        [16]bool
+	callerAddressOrigin    [16]uint16
+	resultAddressSlots     []x86ResultSlotAddress // Immutable root-local scalar layout.
+	resultAddressGP        [16]x86ResultSlotAddress
+	resultAddressWritten   bool // May-write join, not an initialized-result fact.
+	logicalFrameParameters bool // Immutable private386 numeric-copy role; never caller storage.
+	shapeOnly              bool // source-wide effect validation, never a reaching state
 
 	// Installed only for one lowering transfer over the actual emitted DATA.
 	// It is cleared before a CFG state can escape and never supplies a native

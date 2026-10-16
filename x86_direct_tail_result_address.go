@@ -118,7 +118,11 @@ func x86DirectTailResultAddressTransfer(ins Instr, state *x86ResultState, owned 
 	}
 	if usesSlot {
 		before := state.resultAddressGP
-		if !transfer(ordinal, local, state, owned, resultOffset, arch) {
+		writeBoundary := resultOffset
+		if state.logicalFrameParameters {
+			writeBoundary = 0 // Only independently owned numeric bytes in the private386 copy.
+		}
+		if !transfer(ordinal, local, state, owned, writeBoundary, arch) {
 			return false
 		}
 		x86ResultSlotRevokeOverwrites(local, state, before, arch)

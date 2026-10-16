@@ -161,7 +161,8 @@ func (c *amd64Ctx) validateScalarFPSourceViews() error {
 			return err
 		}
 	}
-	if x86OrdinaryResultAddressNeedsProof(c.fpScalarSource, c.sig, c.goarch) {
+	if x86OrdinaryResultAddressNeedsProof(c.fpScalarSource, c.sig, c.goarch) ||
+		x86OrdinaryParameterAddressNeedsProof(c.fpScalarSource, c.sig, c.goarch) {
 		if err := c.scalarFPResultInitialized(); err != nil {
 			return err
 		}

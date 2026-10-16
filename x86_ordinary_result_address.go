@@ -48,3 +48,52 @@ func x86OrdinaryResultAddressRole(fn Func, sig FuncSig, arch string) bool {
 	}
 	return true
 }
+
+// Mode32 already emits one contiguous private classic-frame copy. A complete
+// ordinary integer ABI0 program may address its numeric parameter copies as
+// well as results, including across adjacent owned fields. This is not a
+// native incoming frame, an address-valued result or caller memory authority.
+func x86Ordinary386FrameAddressRole(fn Func, sig FuncSig, arch string) bool {
+	if arch != "386" || !x86OrdinaryParameterAddressNeedsProof(fn, sig, arch) ||
+		fn.FrameSize != 0 || len(fn.X86RawText) != 0 || fn.x86SourceStack != nil ||
+		fn.x86FixedLocal != nil || fn.x86RawReplay != nil || fn.x86DirectTailRoot != nil ||
+		fn.x86ContinuationFlow != nil || fn.x86BoolCalls != nil ||
+		len(fn.x86ContinuationAddresses) != 0 || len(fn.x86IndirectLabels) != 0 {
+		return false
+	}
+	for _, slots := range [][]FrameSlot{sig.Frame.Params, sig.Frame.Results} {
+		for _, slot := range slots {
+			if !x86IntegerResultSlot(slot) {
+				return false
+			}
+		}
+	}
+	for _, ins := range fn.Instrs {
+		if ins.Op == "CALL" || isX86RawDirective(ins) || ins.x86Encoded || ins.x86SourceRaw != nil ||
+			ins.x86RawNearReturn != nil || ins.x86AddressBits != 0 || ins.x86UnboundAddressOverride || ins.x86SegmentPrefix != 0 {
+			return false
+		}
+	}
+	return true
+}
+
+// Cost routing only: every parameter LEA still needs the complete proof,
+// including narrowed addresses, Void functions and eventual unused values.
+func x86OrdinaryParameterAddressNeedsProof(fn Func, sig FuncSig, arch string) bool {
+	if arch != "386" && arch != "amd64" {
+		return false
+	}
+	for _, ins := range fn.Instrs {
+		if (ins.Op == "LEAW" || ins.Op == "LEAL" || ins.Op == "LEAQ") &&
+			len(ins.Args) == 2 && ins.Args[0].Kind == OpFP {
+			for _, slot := range sig.Frame.Params {
+				width := x86FrameScalarBytes(slot.Type, arch)
+				if width > 0 && slot.Offset >= 0 && slot.Offset <= 4096-width &&
+					ins.Args[0].FPOffset >= slot.Offset && ins.Args[0].FPOffset < slot.Offset+width {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
