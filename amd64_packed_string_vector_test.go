@@ -129,8 +129,9 @@ func x86PackedStringStatusObservation(arch string, refined bool) string {
 			" AX,336(DI)\nLAHF\nMOVB AH,344(DI)\nMOV" + suffix + " CX,352(DI)\nRET\n"
 	}
 	// PCMP defines all six arithmetic flags, not incoming DF/ID. Capture LAHF
-	// before AND changes FLAGS, using BX so AH cannot overwrite saved OF.
-	return "PUSHF" + suffix + "\nPOP" + suffix + " BX\nLAHF\nMOVB AH,344(DI)\nAND" +
+	// first, then refine the popped FLAGS immediately, before any other effect
+	// can invalidate its transient bit knowledge or AND can change FLAGS.
+	return "LAHF\nMOVB AH,344(DI)\nPUSHF" + suffix + "\nPOP" + suffix + " BX\nAND" +
 		suffix + " $0x8d5,BX\nMOV" + suffix + " BX,336(DI)\nMOV" + suffix + " CX,352(DI)\nRET\n"
 }
 
