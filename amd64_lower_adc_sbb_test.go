@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"runtime"
 	"strings"
@@ -46,23 +47,27 @@ func TestTranslateX86ADCSBBCompleteGoAssemblerForms(t *testing.T) {
 				}
 			}
 			source.WriteString("\tRET\n")
+			requireX86GoAssemblerResult(t, target.goarch, "#include \"textflag.h\"\n"+source.String(), true)
 			file, err := Parse(ArchAMD64, source.String())
 			if err != nil {
 				t.Fatal(err)
 			}
-			ll, err := Translate(file, Options{
-				TargetTriple: target.triple,
-				Goarch:       target.goarch,
-				Sigs:         map[string]FuncSig{"adcsbbforms": {Name: "adcsbbforms", Ret: Void}},
-			})
-			if err != nil {
-				t.Fatal(err)
+			for _, api := range []string{"text", "module", "Go"} {
+				if ir, err := x86ScalarFPBitViewAPI(t, source.String(), "func adcsbbforms()", target.goarch, target.triple, api); ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+					t.Fatal("original ADC/SBB forms invented carry, numerical/native inputs or SP", api, err)
+				}
 			}
+			ll := x86ScalarFormatObjectUnit(t, file, map[string]FuncSig{"adcsbbforms": {Name: "adcsbbforms", Ret: Void}},
+				target.goarch, target.triple, 32)
 			llc := findLLVM22Tool("llc")
 			if llc == "" {
 				t.Fatal("LLVM 22 llc not found")
 			}
-			compileLLVMToObject(t, llc, target.triple, "adc-sbb-"+target.name+".ll", "adc-sbb-"+target.name+".o", ll)
+			for _, ir := range []string{ll, x86DwordProductIROptimize(t, ll)} {
+				for _, level := range []string{"-O0", "-O2"} {
+					x86PackedStringCompileObject(t, llc, target.triple, ir, level)
+				}
+			}
 		})
 	}
 }

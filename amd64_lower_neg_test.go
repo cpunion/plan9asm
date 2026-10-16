@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -93,14 +94,13 @@ func TestTranslateX86NEGCompleteGo127FormsAcrossTargets(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			ll, err := Translate(file, Options{
-				Goarch:       target.goarch,
-				TargetTriple: target.triple,
-				Sigs:         map[string]FuncSig{"negforms": {Name: "negforms", Ret: Void}},
-			})
-			if err != nil {
-				t.Fatal(err)
+			for _, api := range []string{"text", "module", "Go"} {
+				if ir, err := x86ScalarFPBitViewAPI(t, source, "func negforms()", target.goarch, target.triple, api); ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+					t.Fatal("original scalar format source invented mutable/native/frame inputs", api, err)
+				}
 			}
+			ll := x86ScalarFormatObjectUnit(t, file, map[string]FuncSig{"negforms": {Name: "negforms", Ret: Void}},
+				target.goarch, target.triple, 0)
 			for _, want := range []string{"sub i8 0", "sub i16 0", "sub i32 0", "store i1"} {
 				if !strings.Contains(ll, want) {
 					t.Fatalf("NEG lowering omitted %q:\n%s", want, ll)
@@ -109,7 +109,11 @@ func TestTranslateX86NEGCompleteGo127FormsAcrossTargets(t *testing.T) {
 			if target.goarch == "amd64" && !strings.Contains(ll, "sub i64 0") {
 				t.Fatalf("NEGQ lowering omitted sub i64:\n%s", ll)
 			}
-			compileLLVMToObject(t, llc, target.triple, "neg-"+target.name+".ll", "neg-"+target.name+".o", ll)
+			for _, ir := range []string{ll, x86DwordProductIROptimize(t, ll)} {
+				for _, level := range []string{"-O0", "-O2"} {
+					x86PackedStringCompileObject(t, llc, target.triple, ir, level)
+				}
+			}
 		})
 	}
 }

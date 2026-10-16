@@ -31,6 +31,11 @@ func x86InstructionFormatObjectUnit(t *testing.T, file *File, signatures map[str
 	fmt.Fprintf(&ir, "target triple = %q\n", triple)
 	emitAMD64Prelude(&ir, arch, file)
 	emitExternSBGlobals(&ir, file, resolve, signatures)
+	if len(file.Data) != 0 || len(file.Globl) != 0 {
+		if err := emitDataGlobalsWithSigs(&ir, file, resolve, signatures, WASMABIDirect); err != nil {
+			t.Fatal("original format unit lost its actual DATA/GLOBL storage", err)
+		}
+	}
 	attributes := newFeatureAttrRegistry()
 	emitted := 0
 	for index, function := range file.Funcs {
@@ -72,4 +77,15 @@ func x86InstructionFormatObjectUnit(t *testing.T, file *File, signatures map[str
 	attributes.emit(&ir)
 	t.Logf("all %d original instruction format rows in emitter-only objects; no public or runtime success claim", emitted)
 	return ir.String()
+}
+
+// The ordinary dispatcher can emit straight-line scalar format units without
+// acquiring a public entry, numerical input or native storage certificate.
+func x86ScalarFormatObjectUnit(t *testing.T, file *File, signatures map[string]FuncSig, arch, triple string, frame int64) string {
+	t.Helper()
+	return x86InstructionFormatObjectUnit(t, file, signatures, arch, triple, frame,
+		func(c *amd64Ctx, instruction Instr) (bool, bool, error) {
+			terminated, err := c.lowerInstr(0, 0, instruction, nil, nil)
+			return true, terminated, err
+		})
 }

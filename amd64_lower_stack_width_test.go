@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"reflect"
 	"runtime"
 	"strings"
@@ -65,14 +66,18 @@ func TestTranslateX86StackWidthCompleteGoAssemblerForms(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			ir, err := Translate(file, Options{
-				Goarch: target.goarch, TargetTriple: target.triple,
-				Sigs: map[string]FuncSig{"stackwidthforms": {Name: "stackwidthforms", Ret: Void}},
-			})
-			if err != nil {
-				t.Fatal(err)
+			for _, api := range []string{"text", "module", "Go"} {
+				if ir, err := x86ScalarFPBitViewAPI(t, source, "func stackwidthforms()", target.goarch, target.triple, api); ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+					t.Fatal("original stack format source invented native/segment inputs", api, err)
+				}
 			}
-			compileLLVMToObject(t, llc, target.triple, "stack-width-"+target.name+".ll", "stack-width-"+target.name+".o", ir)
+			ir := x86ScalarFormatObjectUnit(t, file, map[string]FuncSig{"stackwidthforms": {Name: "stackwidthforms", Ret: Void}},
+				target.goarch, target.triple, 0)
+			for _, text := range []string{ir, x86DwordProductIROptimize(t, ir)} {
+				for _, level := range []string{"-O0", "-O2"} {
+					x86PackedStringCompileObject(t, llc, target.triple, text, level)
+				}
+			}
 		})
 	}
 }
@@ -130,14 +135,18 @@ func TestTranslateX86StackSegmentCompleteGoAssemblerForms(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			ir, err := Translate(file, Options{
-				Goarch: target.goarch, TargetTriple: target.triple,
-				Sigs: map[string]FuncSig{"stacksegmentforms": {Name: "stacksegmentforms", Ret: Void}},
-			})
-			if err != nil {
-				t.Fatal(err)
+			for _, api := range []string{"text", "module", "Go"} {
+				if ir, err := x86ScalarFPBitViewAPI(t, source, "func stacksegmentforms()", target.goarch, target.triple, api); ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+					t.Fatal("original segment formats invented physical selector/stack state", api, err)
+				}
 			}
-			compileLLVMToObject(t, llc, target.triple, "stack-segment-"+target.name+".ll", "stack-segment-"+target.name+".o", ir)
+			ir := x86ScalarFormatObjectUnit(t, file, map[string]FuncSig{"stacksegmentforms": {Name: "stacksegmentforms", Ret: Void}},
+				target.goarch, target.triple, 0)
+			for _, text := range []string{ir, x86DwordProductIROptimize(t, ir)} {
+				for _, level := range []string{"-O0", "-O2"} {
+					x86PackedStringCompileObject(t, llc, target.triple, text, level)
+				}
+			}
 		})
 	}
 }
