@@ -62,9 +62,18 @@ func TestX86VectorValueMode32AddressContextDoesNotHideInvalidFormats(t *testing.
 		"VPOPCNTB 8(R9),AX",
 		"VPOPCNTB 8(AX)(R9*3),X1",
 		"VPOPCNTB 8(AX)(R9*2),X1",
+		"VPOPCNTB 8(R12),X1",
+		"VPLZCNTD 8(R9)(CX*2),X1",
 		"VPOPCNTQ 8(R9),K0,X1",
 	} {
 		t.Run(instruction, func(t *testing.T) {
+			if strings.Contains(instruction, "*3)") {
+				_, err := Parse(ArchAMD64, "TEXT ·Value(SB),4,$0-0\n"+instruction+"\nRET\n")
+				if err == nil || errors.Is(err, ErrProbeNeedsContext) || !strings.Contains(err.Error(), "(R9*3)") {
+					t.Fatal("invalid source scale did not retain its fixture-bound parser rejection", err)
+				}
+				return
+			}
 			ins := x86ScalarLaneInstruction(t, instruction)
 			if err := x86VectorValueMemoryGrammarError(ins, "386"); err == nil || errors.Is(err, ErrProbeNeedsContext) {
 				t.Fatal("invalid format was hidden by an unrelated address context", err)
