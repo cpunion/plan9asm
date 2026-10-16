@@ -1,6 +1,8 @@
 package plan9asm
 
 import (
+	"errors"
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -21,19 +23,48 @@ func x86NarrowValueRows(arch string) []struct{ op, bank, mode string } {
 }
 
 func TestX86PackedNarrowValueCompleteFamilyFiveTargetsThreeAPIs(t *testing.T) {
-	x86FixedBinaryCompleteFamilyObjects(t, x86NarrowValueRows, 58, 22)
+	for batch := 0; batch < 2; batch++ {
+		t.Run(fmt.Sprint(batch), func(t *testing.T) {
+			x86FixedBinaryCompleteFamilyObjects(t, func(arch string) []struct{ op, bank, mode string } {
+				rows := x86NarrowValueRows(arch)
+				want := 58
+				if arch == "386" {
+					want = 22
+				}
+				if len(rows) != want {
+					t.Fatal("complete independent narrow denominator changed", len(rows), want)
+				}
+				return rows[batch*want/2 : (batch+1)*want/2]
+			}, 29, 11)
+		})
+	}
 }
 
-func TestX86PackedNarrowVoidCannotInventRegisterInputs(t *testing.T) {
-	x86FixedBinaryVoidInputBoundaries(t, func(arch string) []struct{ op, bank, mode string } {
-		var rows []struct{ op, bank, mode string }
-		for _, row := range x86NarrowValueRows(arch) {
-			if !strings.Contains(row.op, ".") {
-				rows = append(rows, row)
-			}
+// Discarded numerical bytes may stay unknown. An actual native address,
+// mask or result byte still cannot be borrowed from implementation slots.
+func TestX86PackedNarrowVoidCannotInventMaskOrMemoryInputs(t *testing.T) {
+	for _, row := range x86NarrowValueRows("amd64") {
+		source, declaration := x86FixedBinaryValueFixture("amd64", row.op, row.bank, row.mode, false)
+		variants := map[string]string{
+			"unknown-pointer": strings.Replace(source, "p+0(FP),AX", "p+0(FP),DI", 1),
+			"unknown-index":   strings.Replace(source, "MOVL $1,DX\n", "", 1),
 		}
-		return rows
-	})
+		if row.mode != "plain" {
+			variants["unknown-mask"] = strings.Replace(source, "KMOVQ CX,K1\n", "", 1)
+		}
+		for name, changed := range variants {
+			t.Run(row.op+"/"+row.bank+"/"+row.mode+"/"+name, func(t *testing.T) {
+				for _, api := range []string{"text", "module", "Go"} {
+					if ir, err := x86ScalarFPBitViewAPI(t, source, declaration, "amd64", "x86_64-unknown-linux-gnu", api); err != nil || ir == "" {
+						t.Fatal("complete independent Void control rejected", api, err)
+					}
+					if ir, err := x86ScalarFPBitViewAPI(t, changed, declaration, "amd64", "x86_64-unknown-linux-gnu", api); !errors.Is(err, ErrProbeNeedsContext) || ir != "" {
+						t.Error("Void narrow acquired a missing native address or mask", api, err)
+					}
+				}
+			})
+		}
+	}
 }
 
 func TestX86PackedNarrowNativeInputsStayIndependent(t *testing.T) {
