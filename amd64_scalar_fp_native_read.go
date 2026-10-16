@@ -168,6 +168,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		if accepted, known := x86LoweredFixedVectorNativeRead(ins, state, owned, arch); known {
 			return accepted // The typed emitter retains full E4NF or guarded E4 native accesses.
 		}
+		if accepted, known := x86ResultPackedNarrowStep(ins, state, owned, arch, true); known {
+			return accepted // The same emitter retains the complete E4NF tuple or original legacy opcode.
+		}
 		if accepted, recognized := x86LoweredScalarArithmeticNativeRead(ins, state, owned, resultOffset, arch); recognized {
 			return accepted
 		}
