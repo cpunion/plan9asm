@@ -171,7 +171,7 @@ func x86CRC32RuntimeSemanticsSource() string {
 
 func TestX86CRC32RuntimeFixtureUsesOriginalGoEncoding(t *testing.T) {
 	source := x86CRC32RuntimeSemanticsSource()
-	x86LEAActualTargetGoObject(t, "amd64", "x86_64-unknown-linux-gnu", source)
+	goAssemblerOracleOutput(t, "amd64", "#include \"textflag.h\"\n"+source, "", true)
 	for _, target := range x86RawReturnTargets {
 		if target.arch != "amd64" {
 			continue // The original complete fixture includes CRC32Q, not a Go386 GP row.
