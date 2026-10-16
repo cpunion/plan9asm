@@ -143,10 +143,7 @@ func TestTranslateX86IndexedPermuteRejectsFormsOutsideGoAssemblerTable(t *testin
 }
 
 func TestAMD64IndexedPermuteRuntimeSemantics(t *testing.T) {
-	crossRosetta := runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" && rosettaAvailable()
-	if runtime.GOARCH != "amd64" && !crossRosetta {
-		t.Skip("runtime execution test requires amd64 or Rosetta")
-	}
+	// Portable LLVM execution on the actual host, not original-Go/native AVX512.
 	llc, clang, ok := findLlcAndClang(t)
 	if !ok {
 		t.Fatal("LLVM 22 llc/clang not found")
@@ -195,11 +192,6 @@ func TestAMD64IndexedPermuteRuntimeSemantics(t *testing.T) {
 		t.Fatal(err)
 	}
 	triple := testTargetTriple(runtime.GOOS, runtime.GOARCH)
-	var runPrefix []string
-	if crossRosetta {
-		triple = "x86_64-apple-macosx"
-		runPrefix = []string{"/usr/bin/arch", "-x86_64"}
-	}
 	ir, err := Translate(file, Options{
 		Goarch: "amd64", TargetTriple: triple,
 		Sigs: map[string]FuncSig{"indexedpermutesemantics": {
@@ -270,5 +262,5 @@ int main(void) {
   return 0;
 }
 `
-	compileAndRunRuntimeTestForTarget(t, llc, clang, "indexed_permute_semantics", triple, ir, mainC, runPrefix)
+	compileAndRunRuntimeTestForTarget(t, llc, clang, "indexed_permute_semantics", triple, ir, mainC, nil)
 }
