@@ -133,6 +133,9 @@ func x86ResultValueStackStep(ins Instr, state *x86ResultState, owned []bool, res
 		// Preserve partial-bit knowledge for exactly the next instruction.
 		// Whole known bytes outside a narrow POP remain independently known.
 		known := bits
+		if width < 8 {
+			known &= uint64(1)<<uint(8*width) - 1
+		}
 		for b := width; b < 8; b++ {
 			if state.gp[index]&(1<<uint(b)) != 0 {
 				known |= uint64(0xff) << uint(8*b)
