@@ -1,14 +1,17 @@
 # Current work: PR 40 checkpoint
 
-Checkpoint: 2026-10-16 12:58 UTC. This queue supersedes older checkpoints;
+Checkpoint: 2026-10-16, after fork run 38895272356 completed. This queue
+supersedes older checkpoints;
 receipts certify only their exact source and scope.
 
 Source `af9223af` passes the complete 124-owner union on current Go, actual
 Go20 and race: 372 root executions and 30,108 children, without skips. Its
 final gates and independent audit pass. Allowed-fork `2729a5d0` retains that
-non-GitHub tree and is published. Run 38895272356 is still active: 84 jobs pass,
-two execute and no failure has been observed. Let it finish naturally; do not
-publish a replacement early or transfer its results to newer local changes.
+non-GitHub tree and is published. Fork diagnostic run 38895272356 finished
+naturally with all 87 jobs successful. Its three complete-module aggregates
+and coverage uploads pass. Main retains 263 explicit Windows-inapplicable root
+skips and the rich CLI one host-inapplicable child skip; neither is execution.
+This is not the upstream PR40 workflow or a pass for newer local changes.
 
 The subsequent KMOV review exposes incomplete GP zero-extension facts, wrong
 logical FP byte read/write widths and a lost checked caller continuation.
@@ -16,11 +19,30 @@ Independent REDs additionally expose all fifteen KADD/KSHIFT/KUNPCK numerical
 transfers, unknown Void inputs, floating-zero shift immediates and exact native
 KMOV/SETcc accesses. The repair shares typed grammar and existing byte views;
 paired volatile native effects grant no reusable memory or entry authority.
-At `d8abc5b0`, thirteen changed/retained owners and 84 children pass, including
-39 complete mask arithmetic programs through three APIs, both IR/backend
-levels and actual-host execution. Earlier focused receipts retain their own
-heads. Complete combined-source Go20/race, retained owners, official baseline
-review and final gates remain pending. Do not publish this unqualified batch.
+The shared complete-vector input route additionally covers all fourteen indexed
+permutes, three GFNI operations and six packed bit counts. Independent Void
+REDs reproduce 46 false acceptances without a KMOV routing prerequisite. At
+`3302c41a`, the exact seventeen-owner union passes in three bounded commands:
+264 children, no skips, full five-x86-target objects and portable host runtime
+and fault checks. The earlier single-command deadline receipt remains failed.
+These are not physical AVX512 execution or combined-source qualification.
+
+At `1ba488f6`, bounded pooled streaming replaces only digest-only whole-file
+buffers. Each call still reads every byte and checks physical identity, EOF,
+extent and close errors. The independent changed/retained audit passes 57 root
+executions and 319 children across relevant Go27, actual Go20 and race scopes.
+Three 8-MiB verifier reads allocate 121,920 bytes rather than 51,234,768; the
+same-size/same-time tail mutation remains detected. Actual complete SDK Count
+profiling passes: observed time changes from 81.61 to 77.74 seconds and sampled
+cumulative allocations from 80,025.45 to 6,768.90 MiB. These are single-run
+observations, not peak memory, a full benchmark or an established budget pass.
+
+The independent scanner RED at `854b490e` reproduces false support in all 245
+mask/vector children; every initialized positive control still passes there.
+The unchanged regression is integrated with the repairs. Complete current
+source SDK/race qualification, retained immediate consumers, scanner GREEN,
+official baseline review and final gates remain pending. Do not publish the
+unqualified combined batch or transfer old receipts to its head.
 
 The complete strict benchmark at `af9223af` remains FAILED: 148/184 files,
 36 failures, no N/A/unattempted files, 1,256 target seconds and AMD64 above its

@@ -42,9 +42,8 @@ func x86ResultFixedVectorInputsWithRead(ins Instr, form x86PackedBinaryForm, old
 	return true // No FLAGS/DF/mask, memory or pointer facts change.
 }
 
-// Only the paired exact-width native emitter consumes this conditional read.
-// Complete masks, second inputs and I2/T2/merge destination bytes stay required.
-// No pointer backing, bounds, caller, frame or declaration authority follows.
+// Share only the complete family grammar and old-destination input role.
+// This description grants no numerical, memory, frame or declaration authority.
 func x86FixedVectorValueProperties(ins Instr, arch string) (x86PackedBinaryForm, bool, bool, error) {
 	if parsed, spec, recognized, parseErr := x86IndexedPermuteProperties(ins.Op, ins, arch); recognized {
 		return parsed, spec.mode != amd64IndexedPermuteSingle, recognized, parseErr
@@ -58,6 +57,8 @@ func x86FixedVectorValueProperties(ins Instr, arch string) (x86PackedBinaryForm,
 	return x86PackedBinaryForm{}, false, false, nil
 }
 
+// Only the paired exact-width native emitter consumes this conditional read.
+// Complete masks, second inputs and I2/T2/merge destination bytes stay required.
 func x86LoweredFixedVectorNativeRead(ins Instr, state *x86ResultState, owned []bool, arch string) (bool, bool) {
 	form, oldInput, known, err := x86FixedVectorValueProperties(ins, arch)
 	if !known || err != nil {

@@ -103,6 +103,15 @@ decoder operands. Go-accepted non-SIB extended GP bases in mode32 retain their
 missing physical context only after the complete remaining grammar validates;
 invalid SIB/index, scale, suffix or mask syntax cannot borrow that boundary.
 
+Native GFNI and indexed permutes retain complete E4NF source-tuple reads even
+when masks or a dead table make the numerical result independent. Packed bit
+counts retain E4 per-lane access suppression. Reuse exact volatile full/guarded
+read helpers, including independent broadcast widths. The paired lowering
+continuation supplies conditional numerical values only; it never grants
+pointer backing, a declaration-query result or a reusable memory certificate.
+Keep all 23 members, complete object axes, missing-input/Void regressions and
+live/dead guard-page checks. Portable Software execution is not native AVX512.
+
 Native compact arrays advance their offset only for enabled lanes. Paired
 source continuation consumes exactly guarded volatile accesses; masked stores
 do not read old destination bytes or establish future read facts. Keep logical
