@@ -21,7 +21,8 @@ func x86TypedFPResultNeedsProof(fn Func, sig FuncSig, arch string) bool {
 	}
 	opaqueAddressResult := x86OpaqueAddressPointerResultRole(fn, sig, arch)
 	for _, ins := range fn.Instrs {
-		if _, known, err := x86PackedCompactProperties(ins.Op, ins, arch); known && err == nil && x86ResultNamedPredicateInstruction(ins) {
+		if form, known, err := x86PackedCompactProperties(ins.Op, ins, arch); known && err == nil &&
+			!form.undefinedOpcode() && x86ResultNamedPredicateInstruction(ins) {
 			return true // Dead named compact/expand inputs remain obligations even for Void.
 		}
 		if _, _, _, known := x86StaticAddressValueMove(ins, arch); known && !opaqueAddressResult {

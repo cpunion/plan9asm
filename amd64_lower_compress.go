@@ -17,8 +17,8 @@ var amd64PackedCompressLaneBits = map[Op]int{
 // lowerPackedCompress implements the complete Go 1.27 _yvcompresspd table.
 // Masked register forms compact selected source lanes and merge/zero only the
 // tail. Masked memory forms write selected lanes contiguously and leave every
-// byte after the compacted tail untouched, including for Go's accepted .Z
-// spelling.
+// byte after the compacted tail untouched. Go's accepted EVEX.z memory spelling
+// instead raises #UD before any mask, source or address access.
 func (c *amd64Ctx) lowerPackedCompress(op Op, ins Instr) (ok bool, terminated bool, err error) {
 	form, known, err := x86PackedCompactProperties(op, ins, c.goarch)
 	if !known || form.expand {
@@ -26,6 +26,9 @@ func (c *amd64Ctx) lowerPackedCompress(op Op, ins Instr) (ok bool, terminated bo
 	}
 	if err != nil {
 		return true, false, err
+	}
+	if form.undefinedOpcode() {
+		return c.lowerSyscall("UD2", Instr{Op: "UD2"})
 	}
 	laneBits, byteWidth := form.laneBits, form.byteWidth
 	source, destination := ins.Args[0], ins.Args[form.destination]

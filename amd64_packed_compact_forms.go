@@ -14,6 +14,13 @@ type x86PackedCompactForm struct {
 	expand, zeroing           bool
 }
 
+// Go accepts EVEX.z on compressed memory destinations, but Intel XED requires
+// ZEROING=0 for every such memory pattern. This is an architectural #UD, not
+// a store that ignores zeroing or a numerical continuation with unknown inputs.
+func (form x86PackedCompactForm) undefinedOpcode() bool {
+	return !form.expand && form.memory == form.destination && form.zeroing
+}
+
 func x86PackedCompactProperties(op Op, ins Instr, arch string) (x86PackedCompactForm, bool, error) {
 	name, suffix, dotted := strings.Cut(strings.ToUpper(string(op)), ".")
 	bits, known := amd64PackedCompressLaneBits[Op(name)]
@@ -76,6 +83,9 @@ func x86TypedCompactExpandByteEffect(op Op, ins Instr, arch string) (x86TypedByt
 	form, known, err := x86PackedCompactProperties(op, ins, arch)
 	if !known || err != nil {
 		return x86TypedByteEffect{}, known, err
+	}
+	if form.undefinedOpcode() {
+		return x86TypedByteEffect{}, true, fmt.Errorf("%w: compact EVEX.z memory encoding has no ordinary byte continuation", ErrProbeNeedsContext)
 	}
 	operands := []x86TypedByteOperand{
 		{index: 0, operand: ins.Args[0], width: int64(form.byteWidth), read: true},
