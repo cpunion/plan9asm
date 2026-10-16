@@ -151,7 +151,8 @@ func x86CRC32RuntimeSemanticsSource() string {
 	MOVQ BX, 16(DI)
 
 	MOVL $0x456789ab, BX
-	MOVQ $0x0123456789abcdef, 48(DI)
+	MOVQ $0x0123456789abcdef, CX
+	MOVQ CX, 48(DI)
 	CRC32Q 48(DI), BX
 	MOVQ BX, 24(DI)
 
@@ -180,6 +181,13 @@ func TestX86CRC32RuntimeFixtureUsesOriginalGoEncoding(t *testing.T) {
 				ir, err := x86ScalarFPBitViewAPI(t, source, "func crc32semantics(out *byte)", "amd64", target.triple, api)
 				if err != nil || ir == "" {
 					t.Fatal("complete original CRC32 numerical/flags fixture rejected", err)
+				}
+				llc := findLLVM22Tool("llc")
+				if llc == "" {
+					t.Fatal("LLVM22 llc required")
+				}
+				for _, level := range []string{"-O0", "-O2"} {
+					x86PackedStringCompileObject(t, llc, target.triple, ir, level)
 				}
 			})
 		}

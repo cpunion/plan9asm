@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"go/types"
 	"strings"
@@ -190,7 +191,31 @@ __attribute__((noinline)) static int check(transfer fn,int insert,int scalar,int
 }
 
 func x86InactiveInsertFaultSource(name, row string) string {
-	return fmt.Sprintf("TEXT %s(SB),4,$0-16\nMOVQ out+0(FP),AX\nMOVQ input+8(FP),BX\nMOVQ $0,CX\nKMOVQ CX,K1\nVPXORD Z1,Z1,Z1\n%s\nVMOVUPS Z2,(AX)\nRET\n", name, row)
+	// Legacy INSERTPS preserves wider aliases even if all four X lanes are
+	// zeroed. The following complete Z store must not observe unknown bytes.
+	return fmt.Sprintf("TEXT %s(SB),4,$0-16\nMOVQ out+0(FP),AX\nMOVQ input+8(FP),BX\nMOVQ $0,CX\nKMOVQ CX,K1\nVPXORD Z1,Z1,Z1\nVPXORD Z2,Z2,Z2\n%s\nVMOVUPS Z2,(AX)\nRET\n", name, row)
+}
+
+func TestX86LegacyInsertCannotInventObservedUpperBytes(t *testing.T) {
+	source := x86InactiveInsertFaultSource("fault", "INSERTPS $15,(BX),X2")
+	const seed = "VPXORD Z2,Z2,Z2\n"
+	if strings.Count(source, seed) != 1 {
+		t.Fatal("complete legacy fault fixture lost its unique wide source definition")
+	}
+	source = strings.Replace(source, seed, "", 1)
+	for _, target := range x86RawReturnTargets {
+		if target.arch != "amd64" {
+			continue
+		}
+		for _, api := range []string{"text", "module", "Go"} {
+			t.Run(target.triple+"/"+api, func(t *testing.T) {
+				ir, err := x86ScalarFPBitViewAPI(t, source, "func fault(out,input *byte)", "amd64", target.triple, api)
+				if !errors.Is(err, ErrProbeNeedsContext) || ir != "" {
+					t.Fatal("legacy X zeroing manufactured initialized Y/Z aliases", err)
+				}
+			})
+		}
+	}
 }
 
 func TestX86InactiveInsertFaultSourceDefinesEveryObservedVectorByte(t *testing.T) {
