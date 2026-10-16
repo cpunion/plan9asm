@@ -92,6 +92,10 @@ func x86SegmentMOVTargetCompleteObjects(t *testing.T, arch, triple string) {
 	t.Run(triple, func(t *testing.T) {
 		source, declarations, functions := x86SegmentMOVCompleteSource(t, arch)
 		x86LEAActualTargetGoObject(t, arch, triple, source)
+		names := make([]string, len(functions))
+		for index, function := range functions {
+			names[index] = function.name
+		}
 		axes := 0
 		for _, api := range []string{"text", "module", "Go"} {
 			ir, err := x86ScalarFPBitViewAPI(t, source, declarations, arch, triple, api)
@@ -106,8 +110,9 @@ func x86SegmentMOVTargetCompleteObjects(t *testing.T, arch, triple string) {
 				if strings.Count(input, "\ndefine ") != len(functions) {
 					t.Fatal("whole-file translation added or cropped a function", api, irLevel)
 				}
+				bodies := x86StringMemoryFunctions(t, input, names)
 				for _, function := range functions {
-					x86SegmentMOVNamedReadIR(t, input, function.name, function.width, function.addressSpace)
+					x86SegmentMOVReadBody(t, bodies[function.name], function.width, function.addressSpace)
 				}
 				for _, backendLevel := range []string{"0", "2"} {
 					axes++

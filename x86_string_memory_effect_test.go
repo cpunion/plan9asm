@@ -6,6 +6,8 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+
+	"github.com/xgo-dev/llvm"
 )
 
 // This inventory is independent of x86StringSpecs. It describes architectural
@@ -80,12 +82,27 @@ func x86StringMemoryFunction(t testing.TB, ir, name string) string {
 // frame, caller-memory or native-entry permissions.
 func x86StringMemoryFunctions(t testing.TB, ir string, names []string) map[string]string {
 	t.Helper()
+	// Parse once and use LLVM's own symbol index rather than scanning the
+	// whole module with a fresh matcher for every requested definition.
+	ctx := llvm.NewContext()
+	defer ctx.Dispose()
+	module, err := parseIRModuleInContext(ctx, ir)
+	if !module.IsNil() {
+		defer module.Dispose()
+	}
+	if err != nil {
+		t.Fatal("complete function index requires valid LLVM IR", err)
+	}
 	bodies := make(map[string]string, len(names))
 	for _, name := range names {
 		if _, duplicate := bodies[name]; duplicate {
 			t.Fatal("duplicate expected complete function", name)
 		}
-		bodies[name] = x86StringMemoryFunction(t, ir, name)
+		function := module.NamedFunction(name)
+		if function.IsNil() || function.IsDeclaration() || function.BasicBlocksCount() == 0 {
+			t.Fatal("missing complete indexed function", name)
+		}
+		bodies[name] = function.String()
 	}
 	return bodies
 }

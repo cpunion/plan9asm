@@ -67,7 +67,11 @@ func x86SegmentMOVReadIR(t *testing.T, ir string, width, addressSpace int) {
 
 func x86SegmentMOVNamedReadIR(t *testing.T, ir, name string, width, addressSpace int) {
 	t.Helper()
-	body := x86StringMemoryFunction(t, ir, name)
+	x86SegmentMOVReadBody(t, x86StringMemoryFunction(t, ir, name), width, addressSpace)
+}
+
+func x86SegmentMOVReadBody(t *testing.T, body string, width, addressSpace int) {
+	t.Helper()
 	want := fmt.Sprintf("load volatile i%d, ptr addrspace(%d)", 8*width, addressSpace)
 	if strings.Count(body, want) != 1 || strings.Count(body, "load volatile ") != 1 {
 		t.Fatalf("exact segment read/width/volatility was changed, duplicated or discarded; want %q\n%s", want, body)
