@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"os/exec"
 	"strings"
@@ -55,17 +56,27 @@ func TestX86RawEnqueueFamilyObjects(t *testing.T) {
 					instruction.Args[1].Kind != OpReg || instruction.Args[1].Reg != AX {
 					t.Fatalf("wrong command source/destination: %+v", instruction)
 				}
-				ir, err := Translate(file, Options{
-					Goarch: target.arch, TargetTriple: target.triple,
-					Sigs: map[string]FuncSig{"enqueue": {Name: "enqueue", Ret: I32}},
-				})
-				if err != nil {
-					t.Fatal(err)
+				// The original source has no ABI0 result field and uses null
+				// device/source addresses. It is a format witness, not a closed
+				// public entry or an executable hardware/PASID contract.
+				for _, api := range []string{"text", "module", "Go"} {
+					ir, err := x86ScalarFPBitViewAPI(t, source, "func enqueue() uint32", target.arch, target.triple, api)
+					if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+						t.Fatal("device format invented an initialized ABI0 return", api, err)
+					}
 				}
+				original := *file
+				original.Funcs = []Func{decoded}
+				ir := x86ScalarFormatObjectUnit(t, &original,
+					map[string]FuncSig{"enqueue": {Name: "enqueue", Ret: I32}}, target.arch, target.triple, 0)
 				if !strings.Contains(ir, strings.ToLower(family.name)) {
 					t.Fatalf("lost device command %s", family.name)
 				}
-				compileLLVMToObject(t, llc, target.triple, "enqueue.ll", "enqueue.o", ir)
+				for _, text := range []string{ir, x86DwordProductIROptimize(t, ir)} {
+					for _, level := range []string{"-O0", "-O2"} {
+						x86PackedStringCompileObject(t, llc, target.triple, text, level)
+					}
+				}
 			})
 		}
 	}

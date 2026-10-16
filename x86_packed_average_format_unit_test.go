@@ -40,15 +40,16 @@ func x86InstructionFormatObjectUnit(t *testing.T, file *File, signatures map[str
 	emitted := 0
 	for index, function := range file.Funcs {
 		sig, found := signatures[resolve(function.Sym)]
-		if !found || sig.Ret != Void || function.FrameSize != frame || len(function.Instrs) < 2 {
-			t.Fatal("instruction format unit lost its complete original Void/frame role")
+		registerI32 := sig.Ret == I32 && len(sig.Frame.Results) == 0
+		if !found || sig.Ret != Void && !registerI32 || function.FrameSize != frame || len(function.Instrs) < 2 {
+			t.Fatal("instruction format unit lost its complete original return/frame role")
 		}
 		var arguments []string
 		for ordinal, typ := range sig.Args {
 			arguments = append(arguments, fmt.Sprintf("%s %%arg%d", typ, ordinal))
 		}
 		features := attributes.ref(inferFuncTargetFeaturesForGOARCH(file.Arch, arch, function))
-		fmt.Fprintf(&ir, "define void @InstructionFormat%d(%s) %s {\n", index, strings.Join(arguments, ", "), features)
+		fmt.Fprintf(&ir, "define %s @InstructionFormat%d(%s) %s {\n", sig.Ret, index, strings.Join(arguments, ", "), features)
 		consumer := newX86Ctx(&ir, function, sig, resolve, signatures, arch, triple, false)
 		if err := consumer.emitEntryAllocas(); err != nil {
 			t.Fatal(err)
@@ -63,7 +64,15 @@ func x86InstructionFormatObjectUnit(t *testing.T, file *File, signatures map[str
 				if ordinal != len(function.Instrs)-1 || len(instruction.Args) != 0 {
 					t.Fatal("format unit lost its original final return")
 				}
-				ir.WriteString("  ret void\n")
+				if registerI32 {
+					// Preserve the original emitter's AX return in format-only
+					// objects. This supplies no public ABI0 result declaration.
+					if err := consumer.lowerRET(); err != nil {
+						t.Fatal(err)
+					}
+				} else {
+					ir.WriteString("  ret void\n")
+				}
 			default:
 				known, terminated, err := lower(consumer, instruction)
 				if !known || terminated || err != nil {

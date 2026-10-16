@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"go/ast"
 	"go/parser"
@@ -205,24 +206,45 @@ func TestX86AddressClassPreservesActualMemoryAndRelocationObjects(t *testing.T) 
 		if arch == "386" {
 			move = "MOVL"
 		}
-		for _, body := range []string{
-			move + " $·cell(SB),AX",
-			move + " $16(AX),BX",
-			"XADDL CX,·cell(SB)",
-			"XCHGL CX,16(AX)",
-			"INCL ·cell(SB)",
-			"NEGL 16(AX)",
-			"STMXCSR ·cell(SB)",
-			"LDMXCSR 16(AX)",
-			"PSHUFB ·cell(SB),X0",
-			"MOVNTPS X0,16(AX)",
+		for _, row := range []struct {
+			body         string
+			needsContext bool
+		}{
+			{move + " $·cell(SB),AX", false},
+			{move + " $16(AX),BX", false},
+			{"XADDL CX,·cell(SB)", false},
+			{"XCHGL CX,16(AX)", false},
+			{"INCL ·cell(SB)", true},
+			{"NEGL 16(AX)", true},
+			{"STMXCSR ·cell(SB)", true},
+			{"LDMXCSR 16(AX)", true},
+			{"PSHUFB ·cell(SB),X0", false},
+			{"MOVNTPS X0,16(AX)", false},
 		} {
-			source := "TEXT ·Value(SB),4,$0-0\n" + body + "\nRET\n"
+			source := "TEXT ·Value(SB),4,$0-0\n" + row.body + "\nRET\n"
 			goAssemblerOracleOutput(t, arch, source, "", true)
 			for _, target := range x86AddressMemoryTargets(arch) {
+				if row.needsContext {
+					// Keep every original memory/relocation object. A Void
+					// format fixture supplies neither initialized AX nor the
+					// external cell's storage role to a public source proof.
+					file, err := Parse(ArchAMD64, source)
+					if err != nil {
+						t.Fatal(err)
+					}
+					ir := x86ScalarFormatObjectUnit(t, file,
+						map[string]FuncSig{"Value": {Name: "Value", Ret: Void}}, arch, target, 0)
+					x86ResultInitializationObject(t, llc, target, ir, "original-address-format")
+				}
 				for _, api := range []string{"text", "module", "go"} {
-					t.Run(arch+"/"+body+"/"+target+"/"+api, func(t *testing.T) {
+					t.Run(arch+"/"+row.body+"/"+target+"/"+api, func(t *testing.T) {
 						ir, err := x86AddressMemoryAPI(t, api, source, arch, target)
+						if row.needsContext {
+							if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+								t.Fatal("unbound format acquired public storage/input authority", err)
+							}
+							return
+						}
 						if err != nil {
 							t.Fatal("legitimate memory/address operand lost:", err)
 						}
