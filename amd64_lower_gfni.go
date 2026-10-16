@@ -69,7 +69,7 @@ func (c *amd64Ctx) lowerGFNI(op Op, ins Instr) (ok bool, terminated bool, err er
 		}
 		computed = amd64ApplyIntegerLaneMask(c, byteWidth, 8, computed, old, mask, form.zeroing)
 	}
-	return true, false, c.storeVectorBytes(destination.Reg, byteWidth, computed)
+	return true, false, c.storePackedMoveOperand(destination, byteWidth, computed)
 }
 
 func (c *amd64Ctx) loadGFNIFirstSource(source Operand, byteWidth int, broadcast bool) (string, error) {

@@ -42,7 +42,7 @@ func (c *amd64Ctx) lowerPackedExpand(op Op, ins Instr) (ok bool, terminated bool
 		if err != nil {
 			return true, false, err
 		}
-		return true, false, c.storeVectorBytes(destination.Reg, byteWidth, sourceBytes)
+		return true, false, c.storePackedMoveOperand(destination, byteWidth, sourceBytes)
 	}
 
 	mask, err := c.loadK(ins.Args[form.mask].Reg)
@@ -81,7 +81,7 @@ func (c *amd64Ctx) lowerPackedExpand(op Op, ins Instr) (ok bool, terminated bool
 	}
 	out := c.newTmp()
 	fmt.Fprintf(c.b, "  %%%s = bitcast %s %s to <%d x i8>\n", out, vectorType, result, byteWidth)
-	return true, false, c.storeVectorBytes(destination.Reg, byteWidth, "%"+out)
+	return true, false, c.storePackedMoveOperand(destination, byteWidth, "%"+out)
 }
 
 // expandPackedRegisterLanes is the register-source inverse of vector

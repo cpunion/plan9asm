@@ -19,7 +19,7 @@ func (c *amd64Ctx) lowerNativeCompactMemory(ins Instr, form x86PackedCompactForm
 		if form.expand {
 			value := c.newTmp()
 			fmt.Fprintf(c.b, "  %%%s = load volatile <%d x i8>, %s %s, align 1\n", value, width, pointerType, pointer)
-			return c.storeVectorBytes(ins.Args[form.destination].Reg, width, "%"+value)
+			return c.storePackedMoveOperand(ins.Args[form.destination], width, "%"+value)
 		}
 		value, err := c.loadPackedCompareBytes(ins.Args[0], width)
 		if err != nil {
@@ -84,7 +84,7 @@ func (c *amd64Ctx) lowerNativeCompactMemory(ins Instr, form x86PackedCompactForm
 	if form.expand {
 		bytes := c.newTmp()
 		fmt.Fprintf(c.b, "  %%%s = bitcast %s %s to <%d x i8>\n", bytes, vectorType, value, width)
-		return c.storeVectorBytes(ins.Args[form.destination].Reg, width, "%"+bytes)
+		return c.storePackedMoveOperand(ins.Args[form.destination], width, "%"+bytes)
 	}
 	return nil
 }

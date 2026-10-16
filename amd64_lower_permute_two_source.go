@@ -87,7 +87,7 @@ func (c *amd64Ctx) lowerIndexedPermute(op Op, ins Instr) (ok bool, terminated bo
 	}
 	out := c.newTmp()
 	fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i%d> %s to <%d x i8>\n", out, lanes, spec.laneBits, computed, byteWidth)
-	return true, false, c.storeVectorBytes(destination.Reg, byteWidth, "%"+out)
+	return true, false, c.storePackedMoveOperand(destination, byteWidth, "%"+out)
 }
 
 func (c *amd64Ctx) emitSingleTablePermute(lanes, laneBits int, table, indices string) string {

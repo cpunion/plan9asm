@@ -1,5 +1,40 @@
 # Current work: PR 40 checkpoint
 
+Checkpoint: 2026-10-16 11:12 UTC. This queue supersedes the historical notes
+below. Every receipt retains its exact source and scope.
+
+The four root failures from fork run 38871174173 pass at `d21f5e9f` in the
+complete changed/retained union: 118 owners per SDK/race lane, 354 root
+executions and 20,127 children, zero skips. Nine final gates, scanner race and
+the independent 24,480-input audit pass. This is not new CI or a native AVX512
+execution certificate. The old fork run ended naturally; do not relabel its
+five failed jobs successful.
+
+A subsequent independent nonzero-upper review reproduces an emitter/result
+model mismatch across compact/expand, indexed permutes, GFNI and packed bit
+counts. At `f5a2f0e9`, five-target original-Go objects, three public APIs and
+portable actual-host execution expose stale X-to-Y/Z aliases. All Y controls
+hold. Preserve the earlier frontend-fixture and unclosed-mask-seed failures as
+failed; neither establishes the intended semantic counterexample.
+
+The nine-call repair `58744813` routes all 35 members and native expansion
+through the existing encoding-aware vector writeback. Legacy SSE storage is
+unchanged. All three new owners and 3,313 children pass at that head, including
+246 complete-family programs through three APIs and both IR/backend levels on
+the actual host. Native original-Go AVX512 execution is a separate axis.
+Combined-source qualification, actual Go20/race and retained legacy aliases
+must pass afresh before publishing. A later test-log correction must likewise
+be included in the frozen snapshot; do not reuse the earlier pass as its seal.
+
+The allowed-fork candidate contains required priorities for those complete
+owners and the already qualified LOCK dispatch repair. It is not yet pushed.
+PR40 remains draft at its older head. The strict benchmark remains 148/184 with
+36 failures and AMD64 over budget at its earlier `ac04c385` source, not a pass
+for these changes. External inventory remains server-only, without a new local
+scan, ledger update or third-party compatibility pass.
+
+## Earlier initialized-vector checkpoint
+
 Checkpoint: 2026-10-16 09:51 UTC. This queue supersedes the historical notes
 below. Receipts certify their exact source snapshots, never later commits.
 

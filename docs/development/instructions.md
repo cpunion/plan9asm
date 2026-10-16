@@ -92,6 +92,12 @@ and T2 old-destination tables remain inputs even with zero masking. Complete
 vector reads use actual X/Y/Z byte views, not the older scalar/legacy-X reader.
 Memory widths come from each opcode's full tuple or independent broadcast
 attribute. Shared numerical dependencies grant no native/caller memory role.
+All VEX/EVEX value writers, including unmasked and masked native expansion,
+must use the encoding-aware vector writeback. A generic legacy X store may
+leave nonzero Y/Z aliases stale even when the source-result model correctly
+marks them zero. Seed the complete old vector with nonzero bytes and observe
+inactive aliases independently; zero-input or low-result-only fixtures cannot
+establish this behavior. Keep legacy SSE's upper-preserving writeback separate.
 Keep the actual architecture when projecting unary mask arity or physical
 decoder operands. Go-accepted non-SIB extended GP bases in mode32 retain their
 missing physical context only after the complete remaining grammar validates;
