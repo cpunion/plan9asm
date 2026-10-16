@@ -285,19 +285,22 @@ func TestX86SignedPackedIntegerFloatCompleteObjects(t *testing.T) {
 			opt := Options{Goarch: target.arch, TargetTriple: target.triple, Sigs: sigs}
 			for _, api := range []string{"Translate", "TranslateModule", "TranslateModuleInContext"} {
 				ir, err := x86SignedPackedFloatTranslate(file, opt, api)
-				if err != nil {
-					t.Fatal(api, err)
+				if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+					t.Fatal("uninitialized original conversion formats acquired vector or native inputs", api, err)
 				}
-				if strings.Contains(ir, " = sitofp ") || strings.Contains(ir, " = call <16 x float> @llvm.experimental.constrained.sitofp") || strings.Count(ir, "asm sideeffect") != len(rows)-contextRows {
-					t.Fatalf("native conversion dropped/scalarized: native=%d expected%d", strings.Count(ir, "asm sideeffect"), len(rows)-contextRows)
-				}
-				optimized := x86SignedIntegerFloatOptimize(t, ir)
-				if strings.Count(optimized, "asm sideeffect") != len(rows)-contextRows {
-					t.Fatal("O2 erased dead conversion side effects")
-				}
-				compileLLVMToObject(t, llc, target.triple, api+".ll", api+".o", optimized)
 			}
-			t.Logf("%d actual Go accepted forms: %d native LLVM x3 APIs, %d MMX Context x3 APIs", len(rows), len(rows)-contextRows, contextRows)
+			ir := x86InstructionFormatObjectUnit(t, file, sigs, target.arch, target.triple, 0, func(c *amd64Ctx, ins Instr) (bool, bool, error) {
+				return c.lowerSignedPackedIntegerFloat(ins.Op, ins)
+			})
+			for _, text := range []string{ir, x86SignedIntegerFloatOptimize(t, ir)} {
+				if strings.Contains(text, " = sitofp ") || strings.Contains(text, " = call <16 x float> @llvm.experimental.constrained.sitofp") || strings.Count(text, "asm sideeffect") != len(rows)-contextRows {
+					t.Fatalf("original conversion format lost/scalarized native effects: native=%d expected%d", strings.Count(text, "asm sideeffect"), len(rows)-contextRows)
+				}
+				for _, level := range []string{"-O0", "-O2"} {
+					x86PackedStringCompileObject(t, llc, target.triple, text, level)
+				}
+			}
+			t.Logf("%d actual Go accepted forms: %d emitter-only native objects, %d physical MMX Context rows; initialized public positives have their own complete owner", len(rows), len(rows)-contextRows, contextRows)
 		})
 	}
 }
