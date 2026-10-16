@@ -155,7 +155,7 @@ jobs:
           if-no-files-found: error
 
   complete-windows:
-    needs: [ownership, sdk-priority, arm64-fallback-cross-priority, lock-native-priority]
+    needs: [ownership, sdk-priority, arm64-fallback-cross-priority, lock-native-priority, vector-value-fault-priority]
     permissions:
       contents: read
       id-token: write
@@ -248,6 +248,65 @@ jobs:
               - TestAMD64GFNIRuntimeSemantics
               - TestAMD64PackedPopcountRuntimeSemantics
               - TestAMD64PackedLeadingZeroCountRuntimeSemantics
+            timeout: 5m
+          - lane: mask-move-complete-values
+            module: '.'
+            roots:
+              - TestX86MaskMoveGPResultFullWordDefinedness
+              - TestX86MaskMoveGPResultFiveTargetsThreeAPIs
+              - TestX86MaskMoveGPResultCannotInventInputOrBoolCanonicality
+              - TestX86MaskMoveLogicalFPExactReadAndWriteWidths
+              - TestX86MaskMoveLogicalFPExactBytesPortableRuntime
+              - TestX86NumericalEffectConsumesOnlyCheckedCallerContinuation
+            timeout: 5m
+          - lane: mask-arithmetic-complete-values
+            module: '.'
+            roots:
+              - TestX86MaskArithmeticCompletePortableValues
+              - TestX86MaskArithmeticNumericalInputsAndState
+              - TestX86MaskArithmeticRejectsNonIntegerImmediateConsumers
+              - TestX86MaskArithmeticVoidCannotInventInputs
+              - TestX86MaskArithmeticCompleteResultFiveTargetsThreeAPIs
+            timeout: 5m
+          - lane: mask-native-and-predicate-inputs
+            module: '.'
+            roots:
+              - TestX86MaskNativeEmitterPreservesExactVolatileWidths
+              - TestX86MaskNativeCompleteFiveTargetsThreeAPIs
+              - TestX86MaskNativeCannotSupplyDeclarationOrMissingInputs
+              - TestX86NativeConditionalSetExactFlagsAndState
+              - TestX86NativeConditionalSetCompleteFiveTargetsThreeAPIs
+              - TestX86NativeConditionalSetCannotInventFlagsOrAddress
+              - TestX86ConditionalSetVoidRequiresActualPredicateFlags
+            timeout: 5m
+          - lane: vector-native-memory-complete
+            module: '.'
+            roots:
+              - TestX86VectorValueNativeCompleteFiveTargetsThreeAPIs
+              - TestX86VectorValueNativeMissingInputsStayContext
+              - TestX86VectorValueNativeDeadEmitterKeepsInputRead
+              - TestX86VectorValueVoidInputsCannotBorrowImplementationSlots
+            timeout: 5m
+          - lane: immediate-control-and-frame-hashing
+            module: '.'
+            roots:
+              - TestX86ImmediateControlHelpersRetainIntegerBoundaries
+              - TestX86ImmediateControlHelpersRejectNonIntegerRoles
+              - TestX86GFNIImmediateFloatZeroRejectedLikeGo
+              - TestGoAMD64FrameInputVerificationHasBoundedAllocations
+              - TestGoAMD64FrameInputVerificationReadsTailDespiteSameMetadata
+              - TestGoAMD64FrameInputVerificationRetainsInputRole
+            timeout: 5m
+          - lane: sdk-gc-filter-mask-width
+            module: 'cmd/plan9asmll'
+            roots:
+              - TestCompileOneX86SDKGCFilterMaskWidthExistingObjects
+            timeout: 5m
+          - lane: typed-value-input-coverage
+            module: 'cmd/plan9asmscan'
+            roots:
+              - TestMaskValueCoverageRequiresCompleteInputs
+              - TestVectorValueCoverageRequiresCompleteInputs
             timeout: 5m
           - lane: static-result-effects
             module: '.'
@@ -984,6 +1043,41 @@ jobs:
         with:
           name: native-lock
           path: _out/native-lock/
+          if-no-files-found: error
+
+  vector-value-fault-priority:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install required LLVM 22
+        timeout-minutes: 14
+        run: bash scripts/install-ci-llvm22-ubuntu.sh
+      - uses: ./.github/actions/setup-go
+        with:
+          go-version: '1.27.2'
+          cache: true
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+      - name: Execute complete portable value memory-fault oracles
+        env:
+          GOTOOLCHAIN: local
+        run: |
+          set -euo pipefail
+          mkdir -p _out/vector-value-faults
+          roots='TestX86VectorValueNativePortableFaults'
+          roots+='|TestGoX86NumericalSBReadRuntimeFaultCorePolicy'
+          go test -p=1 . -list "^($roots)$" > _out/vector-value-faults/inventory.log
+          go test -p=1 . -run "^($roots)$" -count=1 -timeout=5m -json \
+            2> _out/vector-value-faults/stderr.log | tee _out/vector-value-faults/raw.jsonl
+          node .github/scripts/audit-value-fault-priority.cjs _out/vector-value-faults > _out/vector-value-faults/audit.json
+      - name: Retain complete portable fault observations
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: vector-value-faults
+          path: _out/vector-value-faults/
           if-no-files-found: error
 
   x87-native-priority:

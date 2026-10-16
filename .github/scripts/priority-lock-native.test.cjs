@@ -31,7 +31,7 @@ function requireLockOwners(source) {
   assert.match(body, /if: \$\{\{ !cancelled\(\) \}\}/);
   assert.match(body, /name: native-lock\n          path: _out\/native-lock\/\n          if-no-files-found: error/);
   assert.doesNotMatch(body, /continue-on-error|max-parallel|qemu|rosetta|PLAN9ASM_CROSS_EXEC|overlay/);
-  assert.match(source, /needs: \[ownership, sdk-priority, arm64-fallback-cross-priority, lock-native-priority\]/);
+  assert.match(source, /needs: \[ownership, sdk-priority, arm64-fallback-cross-priority, lock-native-priority, vector-value-fault-priority\]/);
   assert.ok(source.includes(priority), 'complete source-body dispatch before module tests');
   assert.equal(source.split('- lane: lock-scalar-dispatch\n').length - 1, 1);
   assert.equal(source.split(`- ${dispatch}\n`).length - 1, 1);
@@ -61,7 +61,7 @@ test('LOCK priority rejects cropped, duplicate, skipped, emulated or unverified 
   }
   for (const changed of [
     workflow + '\n  lock-native-priority:\n',
-    workflow.replace(', lock-native-priority]', ']'),
+    workflow.replace(', lock-native-priority,', ','),
     workflow.replace(priority, priority.replace(dispatch, dispatch + '/sample')),
     workflow.replace(priority, priority.replace('timeout: 5m', 'timeout: 6m')),
   ]) assert.throws(() => requireLockOwners(changed));
