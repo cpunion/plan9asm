@@ -115,14 +115,17 @@ func x86UnlockedScalarRMWCheckBodies(t *testing.T, ir string, rows []x86LockScal
 		if function.IsNil() || function.FirstBasicBlock().IsNil() {
 			t.Fatal("original native RMW body disappeared", row.text)
 		}
+		body := function.String()
+		for _, atomic := range []string{"atomicrmw ", "cmpxchg ", "load atomic ", "store atomic ", "lock;"} {
+			if strings.Contains(body, atomic) {
+				t.Fatal("ordinary body acquired an implicit atomic effect", row.text, atomic)
+			}
+		}
 		bits := map[byte]int{'B': 8, 'W': 16, 'L': 32, 'Q': 64}[row.op[len(row.op)-1]]
 		loads, stores := 0, 0
 		for block := function.FirstBasicBlock(); !block.IsNil(); block = llvm.NextBasicBlock(block) {
 			for instruction := block.FirstInstruction(); !instruction.IsNil(); instruction = llvm.NextInstruction(instruction) {
 				opcode := instruction.InstructionOpcode()
-				if opcode == llvm.AtomicRMW || opcode == llvm.AtomicCmpXchg || strings.Contains(instruction.String(), "lock;") {
-					t.Fatal("ordinary body acquired an implicit atomic effect", row.text, instruction.String())
-				}
 				if opcode != llvm.Load && opcode != llvm.Store || !instruction.IsVolatile() {
 					continue
 				}
