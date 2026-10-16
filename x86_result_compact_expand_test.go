@@ -101,7 +101,9 @@ func TestX86PackedCompactExpandResultThreeAPIs(t *testing.T) {
 							if err != nil || ir == "" {
 								t.Fatal("complete initialized register form rejected", err)
 							}
-							x86ScalarFPNamedConstantResult(t, ir, "Value", []uint64{0})
+							if !x86CompactExpandZeroReturn(t, ir) {
+								t.Fatal("complete constant compact/expand fixture does not return zero")
+							}
 						})
 					}
 				}
