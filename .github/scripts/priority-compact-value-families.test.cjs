@@ -21,6 +21,8 @@ const owners = {
     'TestX86GFNIInitializedResultWholeFamily',
     'TestX86PackedBitCountInitializedResultWholeFamily',
     'TestX86FixedLaneValueResultInputsStayIndependent',
+    'TestX86VectorValueMode32HighGPAddressesNeedPhysicalContext',
+    'TestX86VectorValueMode32AddressContextDoesNotHideInvalidFormats',
     'TestTranslateAMD64AVX512Go126Families',
     'TestX86Go126FamiliesCannotBorrowUninitializedVectorInputs',
     'TestAMD64IndexedPermuteRuntimeSemantics',
