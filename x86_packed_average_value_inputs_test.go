@@ -161,6 +161,17 @@ func x86FixedBinaryNativeInputBoundaries(t *testing.T, inventory func(string) []
 	t.Helper()
 	for _, row := range inventory("amd64") {
 		source, declaration := x86FixedBinaryValueFixture("amd64", row.op, row.bank, row.mode, true)
+		pkg := mustGoPackage(t, "value", "package value\n"+declaration)
+		file := mustParseX86RawReturn(t, source)
+		signatures, err := goSigsForAsmFile(pkg, file, func(name string) string {
+			return strings.TrimPrefix(name, "·")
+		}, "amd64", nil, nil, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := CheckX86ABI0ResultInitialization(file.Funcs[0], signatures["Value"], "amd64"); !errors.Is(err, ErrProbeNeedsContext) {
+			t.Fatal("declaration-only query borrowed paired native memory authority", row, err)
+		}
 		variants := map[string]string{
 			"unknown-pointer": strings.Replace(source, "p+0(FP),AX", "p+0(FP),DI", 1),
 			"unknown-index":   strings.Replace(source, "MOVL $1,DX\n", "", 1),
