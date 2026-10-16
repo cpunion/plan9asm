@@ -23,7 +23,10 @@ func x86AHFlagsProperties(op Op, ins Instr, arch string) (x86AHFlagsSpec, bool, 
 	if !known {
 		return spec, false, nil
 	}
-	if arch != "386" && arch != "amd64" || dotted || len(ins.Args) != 0 ||
+	if len(ins.Args) != 0 {
+		return spec, true, fmt.Errorf("%s %s takes no operands: %q", arch, op, ins.Raw)
+	}
+	if arch != "386" && arch != "amd64" || dotted ||
 		ins.Op != "" && !strings.EqualFold(string(ins.Op), name) {
 		return spec, true, fmt.Errorf("%s %s outside Go AH/FLAGS ynone grammar: %q", arch, op, ins.Raw)
 	}
