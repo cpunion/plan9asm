@@ -62,10 +62,46 @@ func TestX86LogicalAUTOProjectionRequiresCompleteSource(t *testing.T) {
 					t.Fatal("unbound address borrowed logical AUTO bytes", memory, err)
 				}
 			}
-			// Go's386 SB Reg annotation is ignored, not a physical SP input.
+			// Go's 386 SB Reg annotation is ignored, not a physical SP input.
 			memory := MemRef{Base: SP, Sym: "literal(SB)"}
 			if _, recognized, err := consumer.logicalAUTOAddress(memory); recognized || err != nil {
 				t.Fatal("logical AUTO projection captured an independent static-symbol role", err)
+			}
+		})
+	}
+}
+
+func TestX86LogicalAUTOStaticSPAnnotationKeepsIndependentRole(t *testing.T) {
+	const source = `DATA literal<>+0(SB)/4,$0x12345678
+GLOBL literal<>(SB),8,$4
+TEXT ·StaticAUTO(SB),4,$32-8
+MOVL value+0(FP),AX
+MOVL AX,saved-4(SP)
+PUSHL $7
+POPL BX
+MOVL literal<>(SB)(SP),BX
+MOVL saved-4(SP),AX
+XORL BX,AX
+MOVL AX,ret+4(FP)
+RET
+`
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM22 llc required")
+	}
+	for _, triple := range []string{"i386-unknown-linux-gnu", "i686-pc-windows-msvc"} {
+		t.Run(triple, func(t *testing.T) {
+			x86LEAActualTargetGoObject(t, "386", triple, source)
+			for _, api := range []string{"text", "module", "Go"} {
+				ir, err := x86ScalarFPBitViewAPI(t, source, "func StaticAUTO(value uint32) uint32", "386", triple, api)
+				if err != nil {
+					t.Fatal("logical AUTO captured Go's independent ignored SP annotation", api, err)
+				}
+				for _, text := range []string{ir, x86DwordProductIROptimize(t, ir)} {
+					for _, level := range []string{"-O0", "-O2"} {
+						x86PackedStringCompileObject(t, llc, triple, text, level)
+					}
+				}
 			}
 		})
 	}

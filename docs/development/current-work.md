@@ -1,5 +1,26 @@
 # Current work: PR 40 checkpoint
 
+## Current CI counterexamples, 2026-10-17
+
+Published fork CI `e50292a9` exposes the same old386 family fixture on both
+SDKs and a native LOCK/MXCSR composition gap. Independent REDs additionally
+reproduce real386 AUTO corruption by private PUSH storage, missing bounded
+parameter-copy aliases and missing Void MXCSR input checks. Local repairs retain
+the original physical-stack formats as objects/Context controls, initialize
+separate stack counterparts, project logical AUTO from immutable entry SP,
+and compose bounded386 classic-frame aliases without numerical address escape.
+All four native MXCSR opcodes retain their original sideeffect m32 instruction;
+the paired input observer grants no reusable memory permission. LOCK observation
+sources now mask only defined/preserved saved status bits before storing them.
+
+Focused current-Go tests pass at `dbccad32`; wider SDK/race and native execution
+remain required. Current strict benchmark `e50292a9` is139/184 with45 failures,
+zero N/A or unattempted inputs,301 seconds across five targets. It is failed,
+not a performance comparison against a different successful compilation scope.
+The previous32-root SDK/race qualification and9/9 final gates certify only
+`e50292a9`. PR40 remains draft at its older contribution head. Let the current
+fork CI finish before another batch push; external inventory remains separate.
+
 ## Combined native-input and stack-width checkpoint, 2026-10-17
 
 Frozen `d9c3b367` passes the complete 191-root affected/retained union on

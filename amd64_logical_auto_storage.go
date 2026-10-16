@@ -2,9 +2,8 @@ package plan9asm
 
 import "fmt"
 
-// Ordinary logical AUTO bytes use immutable entry SP plus the frame extent.
-// They are not
-// addresses below the mutable physical/private SP, and private PUSH storage
+// Ordinary logical AUTO bytes use immutable entry SP plus the frame extent,
+// not addresses below the mutable physical/private SP. Private PUSH storage
 // must not overwrite them. This consumes an existing complete source proof;
 // independently bound native/caller storage keeps its own address projection.
 func (c *amd64Ctx) prepareLogicalAUTOStorage() error {
