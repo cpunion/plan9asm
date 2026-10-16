@@ -30,6 +30,9 @@ func x86CompileOnlyDestinationEmitterModule(t *testing.T, original *File, option
 		} else {
 			ir = x86ZeroArgumentLowererObjectUnit(t, file, options.Goarch, options.TargetTriple, function.Sym,
 				func(consumer *amd64Ctx, instruction Instr) (bool, bool, error) {
+					if known, terminated, err := consumer.lowerVectorScalarIntegerMove(instruction.Op, instruction); known {
+						return known, terminated, err
+					}
 					if known, terminated, err := consumer.lowerMov(instruction.Op, instruction); known {
 						return known, terminated, err
 					}
