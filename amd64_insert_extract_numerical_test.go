@@ -189,6 +189,39 @@ __attribute__((noinline)) static int check(transfer fn,int insert,int scalar,int
 	t.Logf("%d independent original-Go forms/aliases/immediates x40 byte/MXCSR/CF/upper-zero/input-output canary vectors", len(sigs))
 }
 
+func x86InactiveInsertFaultSource(name, row string) string {
+	return fmt.Sprintf("TEXT %s(SB),4,$0-16\nMOVQ out+0(FP),AX\nMOVQ input+8(FP),BX\nMOVQ $0,CX\nKMOVQ CX,K1\nVPXORD Z1,Z1,Z1\n%s\nVMOVUPS Z2,(AX)\nRET\n", name, row)
+}
+
+func TestX86InactiveInsertFaultSourceDefinesEveryObservedVectorByte(t *testing.T) {
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM22 llc required")
+	}
+	for _, row := range []string{
+		"VINSERTF32X4.Z $1,(BX),Y1,K1,Y2", "VINSERTI64X4.Z $1,(BX),Z1,K1,Z2", "VINSERTPS $15,(BX),X1,X2", "INSERTPS $15,(BX),X2",
+	} {
+		source := x86InactiveInsertFaultSource("fault", row)
+		x86LEAActualTargetGoObject(t, "amd64", "x86_64-unknown-linux-gnu", source)
+		for _, target := range x86RawReturnTargets {
+			if target.arch != "amd64" {
+				continue // These original fixture rows include AMD64 EVEX forms.
+			}
+			for _, api := range []string{"text", "module", "Go"} {
+				t.Run(target.triple+"/"+row+"/"+api, func(t *testing.T) {
+					ir, err := x86ScalarFPBitViewAPI(t, source, "func fault(out,input *byte)", "amd64", target.triple, api)
+					if err != nil || ir == "" {
+						t.Fatal("original fault fixture observes undefined vector bytes", err)
+					}
+					for _, level := range []string{"-O0", "-O2"} {
+						x86PackedStringCompileObject(t, llc, target.triple, ir, level)
+					}
+				})
+			}
+		}
+	}
+}
+
 func TestCrossLinuxRuntimeMatrixX86InsertInactiveMemoryStillFaults(t *testing.T) {
 	execution := x86FloatCompareExecutionTools(t)
 	var source, declarations, rows strings.Builder
@@ -197,7 +230,7 @@ func TestCrossLinuxRuntimeMatrixX86InsertInactiveMemoryStillFaults(t *testing.T)
 		"VINSERTF32X4.Z $1,(BX),Y1,K1,Y2", "VINSERTI64X4.Z $1,(BX),Z1,K1,Z2", "VINSERTPS $15,(BX),X1,X2", "INSERTPS $15,(BX),X2",
 	} {
 		name := fmt.Sprintf("fault%d", index)
-		fmt.Fprintf(&source, "TEXT %s(SB),4,$0-16\nMOVQ out+0(FP),AX\nMOVQ input+8(FP),BX\nMOVQ $0,CX\nKMOVQ CX,K1\nVPXORD Z1,Z1,Z1\n%s\nVMOVUPS Z2,(AX)\nRET\n", name, row)
+		source.WriteString(x86InactiveInsertFaultSource(name, row))
 		sigs[name] = FuncSig{Name: name, Args: []LLVMType{Ptr, Ptr}, Ret: Void, Frame: FrameLayout{Params: []FrameSlot{{Offset: 0, Type: Ptr, Index: 0, Field: -1}, {Offset: 8, Type: Ptr, Index: 1, Field: -1}}}}
 		fmt.Fprintf(&declarations, "extern void %s(void*,const void*);\n", name)
 		fmt.Fprintf(&declarations, `static int observe%d(const uint8_t *input) {
