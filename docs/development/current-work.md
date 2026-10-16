@@ -1,5 +1,31 @@
 # Current work: PR 40 checkpoint
 
+## Private addresses and retained family qualification, 2026-10-17
+
+At `f21dadbc`, the complete 84-root changed/retained union passes current Go,
+actual Go20 and race: 252 root executions, 11,241 children, zero failures/skips,
+identical terminal names and unchanged source/SDK/tool observations per lane.
+Opaque mode32 relocation PUSH copies retain unknown bits rather than inventing
+NUM/pointer facts. Bool input bytes retain bounded numeric private-frame aliases;
+custom helpers consume their exact complete graph and declared transport.
+Byte shuffles share the paired full-tuple native-read continuation. Packed-string
+observations preserve LAHF before refining saved arithmetic status, never
+borrowing incoming DF/ID. Original address/device format objects and their actual
+returns remain distinct from initialized public entries or native execution.
+
+The older complete-module attempt at `b1b70a85` was explicitly interrupted to
+prioritize repaired failures. Its report remains failed and incomplete: 1,491
+passed roots, 32 failed, 90 host-inapplicable skips and 5,292 incomplete. It is
+not a complete module pass. Independent AMD64 parameter-field and original-Go
+build-only driver regressions are next; first observe RED before implementation.
+The build-only driver currently uses `-run=^$`, which still starts TestMain.
+
+Published CI still runs older `e50292a9`; let it finish before a batch push.
+PR40 remains draft at its old contribution head. Actual native execution, the
+remaining full-module counterexamples and the failed strict benchmark remain
+unresolved. External inventory and ledgers stay outside this repository; no
+local scanner or external pass credit was introduced.
+
 ## Logical storage, MXCSR and timestamp checkpoint, 2026-10-17
 
 `dd87e7cb` passes all 88 affected/retained roots on current Go, actual Go20
