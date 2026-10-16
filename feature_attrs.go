@@ -231,6 +231,16 @@ func inferFuncTargetFeaturesForGOARCH(arch Arch, goarch string, fn Func) string 
 			if form, known, err := x86PackedAverageProperties(ins.Op, ins, goarch); known && err == nil && form.legacy && !form.mmx && form.memory >= 0 && ins.Args[form.memory].Kind != OpFP {
 				add("+sse2")
 			}
+			if form, known, err := x86PackedUnpackProperties(ins, moveArch); known && err == nil &&
+				form.legacy && !form.mmx && form.memory >= 0 && form.source.Kind != OpFP {
+				// The original memory opcode needs its own XMM carrier on
+				// i386; no sibling may supply that native register class.
+				if form.spec.grammar.encoding == x86PackedLogicalLegacyFP && form.spec.laneBits == 32 {
+					add("+sse")
+				} else {
+					add("+sse2")
+				}
+			}
 			if form, known, err := x86DwordProductProperties(ins.Op, ins, goarch); known && err == nil && form.legacy && !form.mmx && form.memory >= 0 && ins.Args[form.memory].Kind != OpFP {
 				add("+sse2")
 				if form.spec.signed {
