@@ -1,0 +1,115 @@
+package plan9asm
+
+import (
+	"fmt"
+	"runtime"
+	"strconv"
+	"strings"
+	"testing"
+)
+
+func x86AverageValueRuntimeProgram(arch string) (string, string, string, string) {
+	word, move, maskMove := 8, "MOVQ", "KMOVQ"
+	if arch == "386" {
+		word, move, maskMove = 4, "MOVL", "KMOVD"
+	}
+	var source, declarations, prototypes, rows strings.Builder
+	for index, row := range x86AverageValueRows(arch) {
+		name := fmt.Sprintf("Average%d", index)
+		instruction := row.op + " X0,X2"
+		setup, width, bits, mode, legacy := "VMOVUPS (AX),Z0\n", 16, 8, 0, 1
+		if strings.HasPrefix(row.op, "V") {
+			op, mask := row.op, ""
+			setup, legacy = "", 0
+			if row.bank == "Y" {
+				width = 32
+			} else if row.bank == "Z" {
+				width = 64
+			}
+			if row.mode != "plain" {
+				mask, mode = "K1,", 1
+			}
+			if row.mode == "zero" {
+				op, mode = op+".Z", 2
+			}
+			instruction = op + " (AX)," + row.bank + "1," + mask + row.bank + "2"
+		}
+		if strings.HasSuffix(row.op, "W") {
+			bits = 16
+		}
+		fmt.Fprintf(&source, "TEXT ·%s(SB),4,$0-%d\n%s a+0(FP),AX\n%s b+%d(FP),BX\n%s out+%d(FP),SI\n"+
+			"%s mask+%d(FP),CX\n%s CX,K1\nVMOVUPS (BX),Z1\nVMOVUPS (BX),Z2\n%sSTC\n%s\nVMOVUPS Z2,(SI)\nSETCS 64(SI)\nRET\n",
+			name, 4*word, move, move, word, move, 2*word, move, 3*word, maskMove, setup, instruction)
+		fmt.Fprintf(&declarations, "func %s(a,b,out *[65]byte,mask uintptr)\n", name)
+		fmt.Fprintf(&prototypes, "extern void %s(uint8_t*,uint8_t*,uint8_t*,uintptr_t);\n", name)
+		fmt.Fprintf(&rows, "{%s,%d,%d,%d,%d},\n", name, width, bits, mode, legacy)
+	}
+	return source.String(), declarations.String(), prototypes.String(), rows.String()
+}
+
+func TestX86PackedAverageCompletePortableValuesAndCanaries(t *testing.T) {
+	llc, clang, found := findLlcAndClang(t)
+	if !found {
+		t.Fatal("LLVM22 llc and clang required")
+	}
+	arch := "amd64"
+	if strconv.IntSize == 32 {
+		arch = "386"
+	}
+	source, declarations, prototypes, rows := x86AverageValueRuntimeProgram(arch)
+	x86LEAActualTargetGoObject(t, arch, map[string]string{"amd64": "x86_64-unknown-linux-gnu", "386": "i386-unknown-linux-gnu"}[arch], source)
+	driver := "#include <stdint.h>\n#include <stdio.h>\n#include <string.h>\n" + prototypes + `
+struct kernel {void (*fn)(uint8_t*,uint8_t*,uint8_t*,uintptr_t);unsigned width,bits,mode,legacy;};
+static const struct kernel kernels[]={
+` + rows + `};
+int main(void) {
+    const uintptr_t masks[]={0,1,(uintptr_t)0xa55a9c63f00fc33cULL,UINTPTR_MAX};
+    for(unsigned k=0;k<sizeof(kernels)/sizeof(kernels[0]);k++)for(unsigned sample=0;sample<257;sample++) {
+        const struct kernel *p=&kernels[k];
+        uint8_t a[67],b[67],a_before[67],b_before[67],out[67],want[64];
+        for(unsigned i=0;i<67;i++){a[i]=(i*73+sample*29)^sample;b[i]=(i*47+sample*113)^(sample>>1);}
+        memcpy(a_before,a,67);memcpy(b_before,b,67);
+        for(unsigned m=0;m<sizeof(masks)/sizeof(masks[0]);m++) {
+            memset(out,0xc3,67);
+            memcpy(want,b+1,64);
+            if(!p->legacy)memset(want+p->width,0,64-p->width);
+            unsigned bytes=p->bits/8;
+            for(unsigned lane=0;lane<p->width/bytes;lane++) {
+                unsigned at=lane*bytes;
+                if(p->mode && !(masks[m]>>lane&1)) {
+                    if(p->mode==2)memset(want+at,0,bytes);
+                    continue;
+                }
+                uint32_t left=a[at+1],right=b[at+1];
+                if(bytes==2){left|=(uint32_t)a[at+2]<<8;right|=(uint32_t)b[at+2]<<8;}
+                uint32_t average=(left+right+1)>>1;
+                want[at]=average;
+                if(bytes==2)want[at+1]=average>>8;
+            }
+            p->fn(a+1,b+1,out+1,masks[m]);
+            if(memcmp(out+1,want,64)||out[65]!=1||out[0]!=0xc3||out[66]!=0xc3||
+                memcmp(a,a_before,67)||memcmp(b,b_before,67)) {
+                fprintf(stderr,"average row=%u sample=%u mask=%u width=%u mode=%u legacy=%u\n",k,sample,m,p->width,p->mode,p->legacy);
+                return 1;
+            }
+        }
+    }
+    return 0;
+}
+`
+	triple := testTargetTriple(runtime.GOOS, runtime.GOARCH)
+	for _, api := range []string{"text", "module", "Go"} {
+		t.Run(api, func(t *testing.T) {
+			ir, err := x86ScalarFPBitViewAPI(t, source, declarations, arch, triple, api)
+			if err != nil {
+				t.Fatal("complete initialized average execution source rejected", err)
+			}
+			for _, text := range []string{ir, x86DwordProductIROptimize(t, ir)} {
+				for _, level := range []int{0, 2} {
+					compileAndRunRuntimeTestWithCompiler(t, llc, []string{clang}, "average-values", triple, text, driver, nil, level)
+				}
+			}
+		})
+	}
+	t.Log("complete byte/word averages, full 64-byte aliases, merge/zero masks, CF and canaries; portable LLVM, not native AVX512")
+}
