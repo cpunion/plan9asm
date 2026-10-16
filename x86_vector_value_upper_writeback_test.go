@@ -255,5 +255,7 @@ int main(void) {
 			}
 		})
 	}
-	t.Log("246 complete-family programs executed on the actual host; portable LLVM, not original-Go/native AVX512")
+	if !t.Failed() {
+		t.Log("246 complete-family programs passed on the actual host; portable LLVM, not original-Go/native AVX512")
+	}
 }
