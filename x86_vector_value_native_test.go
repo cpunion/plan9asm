@@ -20,9 +20,9 @@ func x86NativeVectorValueMembers() []x86FixedLaneValueOracle {
 }
 
 func x86NativeVectorValueFixture(member x86FixedLaneValueOracle, arch, bank, mode string, broadcast, dead bool) (string, string) {
-	word, move := 8, "MOVQ"
+	word, move, maskMove := 8, "MOVQ", "KMOVQ"
 	if arch == "386" {
-		word, move = 4, "MOVL"
+		word, move, maskMove = 4, "MOVL", "KMOVD"
 	}
 	op, immediate, mask := member.name, "", ""
 	if broadcast {
@@ -46,9 +46,9 @@ func x86NativeVectorValueFixture(member x86FixedLaneValueOracle, arch, bank, mod
 		result = "MOVL $7,AX\n"
 	}
 	source := fmt.Sprintf("TEXT ·Value(SB),4,$0-%d\n%s p+0(FP),AX\n%s mask+%d(FP),CX\n"+
-		"KMOVD CX,K1\nMOVL $1,DX\nVPXORD Z1,Z1,Z1\nVPXORD Z2,Z2,Z2\n"+
+		"%s CX,K1\nMOVL $1,DX\nVPXORD Z1,Z1,Z1\nVPXORD Z2,Z2,Z2\n"+
 		"%s %s3(AX)(DX*2),%s%s%s2\n%sMOVL AX,ret+%d(FP)\nRET\n",
-		2*word+4, move, move, word, op, immediate, second, mask, bank, result, 2*word)
+		2*word+4, move, move, word, maskMove, op, immediate, second, mask, bank, result, 2*word)
 	return source, "func Value(p *[128]byte,mask uintptr) uint32"
 }
 
@@ -124,7 +124,7 @@ func TestX86VectorValueNativeMissingInputsStayContext(t *testing.T) {
 				"unknown-pointer": strings.Replace(source, "p+0(FP),AX", "p+0(FP),DI", 1),
 				"numeric-pointer": strings.Replace(source, "MOVL $1,DX", "MOVL $42,AX\nMOVL $1,DX", 1),
 				"unknown-index":   strings.Replace(source, "MOVL $1,DX\n", "", 1),
-				"unknown-mask":    strings.Replace(source, "KMOVD CX,K1\n", "", 1),
+				"unknown-mask":    strings.Replace(source, "KMOVQ CX,K1\n", "", 1),
 				"unknown-merge":   strings.Replace(source, "VPXORD Z2,Z2,Z2\n", "", 1),
 			}
 			if !member.unary {
@@ -156,7 +156,18 @@ func TestX86VectorValueNativeDeadEmitterKeepsInputRead(t *testing.T) {
 					if err != nil {
 						t.Fatal(err)
 					}
-					ins := file.Funcs[0].Instrs[8]
+					var ins Instr
+					matches := 0
+					for _, instruction := range file.Funcs[0].Instrs {
+						base, _, _ := strings.Cut(string(instruction.Op), ".")
+						if base == member.name {
+							ins = instruction
+							matches++
+						}
+					}
+					if matches != 1 {
+						t.Fatal("emitter fixture must retain its exact original value opcode", matches)
+					}
 					consumer, output := newAMD64CtxWithFuncForTest(t, file.Funcs[0], FuncSig{Ret: Void}, nil)
 					var known bool
 					if _, _, known, _ = x86IndexedPermuteProperties(ins.Op, ins, "amd64"); known {
