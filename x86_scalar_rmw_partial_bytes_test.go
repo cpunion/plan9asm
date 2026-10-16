@@ -153,10 +153,10 @@ func TestX86ScalarPartialAddPortableAllByteValues(t *testing.T) {
 	}
 	const driver = `#include <stdint.h>
 #include <stdio.h>
-extern uint8_t PartialAdd(uint8_t);
+extern uint32_t PartialAddByteOracle(uint32_t);
 int main(void) {
     for (unsigned input=0;input<256;++input) {
-        unsigned got=PartialAdd((uint8_t)input);
+        unsigned got=PartialAddByteOracle(input);
         if (got!=(uint8_t)(input+7)) {
             fprintf(stderr,"partial add input=%u got=%u\n",input,got);
             return 1;
@@ -173,6 +173,18 @@ int main(void) {
 				if err != nil {
 					t.Fatal(err)
 				}
+				// The translator exposes LLVM's i8 ABI, not C's stronger
+				// zeroext return convention on targets such as Darwin ARM64.
+				// Observe the original low byte through an explicit LLVM
+				// trunc/zext adapter; both sides of the C boundary use i32.
+				ir += `
+define i32 @PartialAddByteOracle(i32 %input) {
+    %byte = trunc i32 %input to i8
+    %value = call i8 @PartialAdd(i8 %byte)
+    %result = zext i8 %value to i32
+    ret i32 %result
+}
+`
 				for _, text := range []string{ir, x86DwordProductIROptimize(t, ir)} {
 					for _, level := range []int{0, 2} {
 						compileAndRunRuntimeTestWithCompiler(t, llc, []string{clang}, "partial-add-byte-values", triple, text, driver, nil, level)
