@@ -102,28 +102,43 @@ func TestX86GoCallerPackedMovesRetainUnknownAndBoundedMemoryFailures(t *testing.
 func TestX86PackedMoveInvalidStoreCannotAcquireCallerMemoryCertificate(t *testing.T) {
 	for _, opcode := range x86PackedZeroStoreOpcodes {
 		for _, bank := range []string{"X", "Y", "Z"} {
-			instruction := fmt.Sprintf("%s.Z %s0,K1,(DX)", opcode, bank)
-			parsed, err := Parse(ArchAMD64, "TEXT f(SB),4,$0-0\n"+instruction+"\nRET\n")
-			if err != nil {
-				t.Fatal(err)
-			}
-			ins := parsed.Funcs[0].Instrs[1]
-			form, recognized, err := amd64PackedVectorMoveProperties(ins, "amd64")
-			if !recognized || err != nil || !form.undefinedOpcode() {
-				t.Fatalf("missing syntax/exception distinction: %s: %v", instruction, err)
-			}
-			if x86CallerVectorMoveKnown(ins) {
-				t.Fatalf("#UD instruction acquired an ordinary move effect: %s", instruction)
-			}
-			if _, _, valid := x86CallerMoveMemoryShape(ins, 2); valid {
-				t.Fatalf("#UD instruction acquired a memory certificate shape: %s", instruction)
-			}
-			state := x86SourceStackState{
-				vectors: map[Reg]uint64{"Z0": ^uint64(0)}, masks: map[Reg]bool{"K1": true},
-			}
-			if x86CallerPackedVectorMoveStep(&ins, form, &state, nil) {
-				t.Fatalf("#UD instruction acquired caller continuation: %s", instruction)
-			}
+			t.Run(opcode+"/"+bank, func(t *testing.T) {
+				instruction := fmt.Sprintf("%s.Z %s0,K1,(DX)", opcode, bank)
+				parsed, err := Parse(ArchAMD64, "TEXT f(SB),4,$0-0\n"+instruction+"\nRET\n")
+				if err != nil {
+					t.Fatal(err)
+				}
+				ins := parsed.Funcs[0].Instrs[1]
+				state := x86SourceStackState{
+					vectors: map[Reg]uint64{"Z0": ^uint64(0)}, masks: map[Reg]bool{"K1": true},
+				}
+				if strings.Contains(opcode, "COMPRESS") {
+					form, known, err := x86PackedCompactProperties(ins.Op, ins, "amd64")
+					if !known || err != nil || !form.undefinedOpcode() {
+						t.Fatal("compact syntax lost its independent #UD effect", err)
+					}
+					if _, known, err := x86TypedCompactExpandByteEffect(ins.Op, ins, "amd64"); !known || !errors.Is(err, ErrProbeNeedsContext) {
+						t.Fatal("#UD compact form acquired ordinary numerical effects", err)
+					}
+				} else {
+					form, known, err := amd64PackedVectorMoveProperties(ins, "amd64")
+					if !known || err != nil || !form.undefinedOpcode() {
+						t.Fatal("move syntax lost its independent #UD effect", err)
+					}
+					if x86CallerPackedVectorMoveStep(&ins, form, &state, nil) {
+						t.Fatal("#UD instruction acquired caller continuation")
+					}
+				}
+				if x86CallerVectorMoveKnown(ins) {
+					t.Fatal("#UD instruction acquired an ordinary move effect")
+				}
+				if _, _, valid := x86CallerMoveMemoryShape(ins, 2); valid {
+					t.Fatal("#UD instruction acquired a memory certificate shape")
+				}
+				if x86CallerVectorMoveStep(&ins, &state, nil) || x86CallerMemoryCertified(ins, 2) {
+					t.Fatal("#UD instruction acquired a caller memory certificate")
+				}
+			})
 		}
 	}
 }
