@@ -3,6 +3,7 @@ package plan9asm
 import (
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -49,6 +50,72 @@ func TestX86NativeGPStoreCompleteWidthsThreeAPIs(t *testing.T) {
 						x86PackedStringCompileObject(t, llc, target.triple, ir, level)
 					}
 				})
+			}
+		}
+	}
+}
+
+func TestX86NativeGPStoreOriginalByteAliasesAndUnchangedState(t *testing.T) {
+	for ordinal, register := range []string{"AH", "CH", "DH", "BH"} {
+		for _, address := range []string{"(DX)", "(R8)", "(DX)(R9*2)"} {
+			instruction := "MOVB " + register + "," + address
+			code := x86OrderingHintGoBytes(t, "amd64", "TEXT native(SB),4,$0-0\n"+instruction+"\nRET\n")
+			want := []byte{0x88, byte(0x22 + ordinal*8), 0xc3}
+			if address == "(R8)" {
+				want = []byte{0x41, 0x88, byte(0x20 + ordinal*8), 0xc3}
+			} else if address == "(DX)(R9*2)" {
+				want = []byte{0x42, 0x88, byte(0x24 + ordinal*8), 0x4a, 0xc3}
+			}
+			if !reflect.DeepEqual(code, want) {
+				t.Fatalf("original Go store byte role changed: %s = %x, want %x", instruction, code, want)
+			}
+			ins := x86ScalarLaneInstruction(t, instruction)
+			form, known, err := x86ScalarNativeStoreProperties(ins.Op, ins, "amd64")
+			effective := Reg(register)
+			if address != "(DX)" {
+				effective = []Reg{SP, BP, SI, DI}[ordinal]
+			}
+			if !known || err != nil || form.source != effective || form.bytes != 1 {
+				t.Fatal("typed store disagrees with actual ModRM/REX", form, err)
+			}
+			if address != "(DX)" && ordinal < 2 {
+				context, output := newAMD64CtxWithFuncForTest(t, Func{}, FuncSig{Name: "store", Ret: Void}, nil)
+				before := output.String()
+				if err := context.lowerScalarNativeStore(form, ins); !errors.Is(err, ErrProbeNeedsContext) || output.String() != before {
+					t.Fatal("unbound physical SP/BP read emitted a store", err)
+				}
+			}
+		}
+	}
+	for _, arch := range []string{"386", "amd64"} {
+		move := "MOVL"
+		if arch == "amd64" {
+			move = "MOVQ"
+		}
+		ins := x86ScalarLaneInstruction(t, move+" AX,-1(DX)(BX*2)")
+		state := x86ResultState{flags: x86ByteFlagsAll, direction: x86ResultDirectionBackward}
+		state.gp[0], state.gp[3], state.pointerGP[2] = 0xff, 0xff, true
+		before := state.clone()
+		if accepted, known := x86LoweredScalarNativeStore(ins, &state, nil, arch); !accepted || !known || !reflect.DeepEqual(state, before) {
+			t.Fatal("native store manufactured or revoked a state fact", arch, state)
+		}
+		for _, mutation := range []string{"physical", "address", "unknown-index", "commuted-pointer", "pointer-data"} {
+			changed, next := ins, before.clone()
+			switch mutation {
+			case "physical":
+				changed.x86Encoded = true
+			case "address":
+				changed.x86AddressBits = 16
+			case "unknown-index":
+				next.gp[3] = 0
+			case "commuted-pointer":
+				next.pointerGP[2], next.gp[2], next.pointerGP[3], next.gp[3] = false, 0xff, true, 0
+			case "pointer-data":
+				next.gp[0], next.pointerGP[0] = 0, true
+			}
+			unchanged := next.clone()
+			if accepted, _ := x86LoweredScalarNativeStore(changed, &next, nil, arch); accepted || !reflect.DeepEqual(next, unchanged) {
+				t.Fatal("native store acquired a foreign permission or changed rejected state", arch, mutation)
 			}
 		}
 	}
