@@ -24,6 +24,9 @@ func x86TypedFPResultNeedsProof(fn Func, sig FuncSig, arch string) bool {
 	}
 	opaqueAddressResult := x86OpaqueAddressPointerResultRole(fn, sig, arch)
 	for _, ins := range fn.Instrs {
+		if _, _, known, err := x86FixedVectorValueProperties(ins, arch); known && err == nil && x86ResultNamedPredicateInstruction(ins) {
+			return true // Complete value inputs and native addresses stay required without results or masks.
+		}
 		if form, known, err := x86ConditionalSetProperties(ins.Op, ins, arch); known && err == nil &&
 			isAMD64MemoryOperand(form.destination) && x86OrdinaryNativeMemoryOperand(form.destination, arch) &&
 			x86ResultNamedPredicateInstruction(ins) {

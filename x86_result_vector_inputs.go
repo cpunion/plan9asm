@@ -45,18 +45,21 @@ func x86ResultFixedVectorInputsWithRead(ins Instr, form x86PackedBinaryForm, old
 // Only the paired exact-width native emitter consumes this conditional read.
 // Complete masks, second inputs and I2/T2/merge destination bytes stay required.
 // No pointer backing, bounds, caller, frame or declaration authority follows.
-func x86LoweredFixedVectorNativeRead(ins Instr, state *x86ResultState, owned []bool, arch string) (bool, bool) {
-	var form x86PackedBinaryForm
-	var oldInput, known bool
-	var err error
+func x86FixedVectorValueProperties(ins Instr, arch string) (x86PackedBinaryForm, bool, bool, error) {
 	if parsed, spec, recognized, parseErr := x86IndexedPermuteProperties(ins.Op, ins, arch); recognized {
-		form, known, err = parsed, recognized, parseErr
-		oldInput = spec.mode != amd64IndexedPermuteSingle
-	} else if parsed, recognized, parseErr := x86GFNIProperties(ins.Op, ins, arch); recognized {
-		form, known, err = parsed.x86PackedBinaryForm, recognized, parseErr
-	} else if parsed, recognized, parseErr := x86PackedBitCountProperties(ins.Op, ins, arch); recognized {
-		form, known, err = parsed.x86PackedBinaryForm, recognized, parseErr
+		return parsed, spec.mode != amd64IndexedPermuteSingle, recognized, parseErr
 	}
+	if parsed, recognized, parseErr := x86GFNIProperties(ins.Op, ins, arch); recognized {
+		return parsed.x86PackedBinaryForm, false, recognized, parseErr
+	}
+	if parsed, recognized, parseErr := x86PackedBitCountProperties(ins.Op, ins, arch); recognized {
+		return parsed.x86PackedBinaryForm, false, recognized, parseErr
+	}
+	return x86PackedBinaryForm{}, false, false, nil
+}
+
+func x86LoweredFixedVectorNativeRead(ins Instr, state *x86ResultState, owned []bool, arch string) (bool, bool) {
+	form, oldInput, known, err := x86FixedVectorValueProperties(ins, arch)
 	if !known || err != nil {
 		return false, known
 	}
