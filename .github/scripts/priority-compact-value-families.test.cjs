@@ -7,6 +7,7 @@ const owners = {
   'compact-native-memory': [
     'TestX86CompactNativeMemorySequencesThreeAPIs',
     'TestX86CompactNativeMemoryCannotInventSourceOrDestinationFacts',
+    'TestX86CompactNativeExpandClearsNonzeroUpperAliases',
     'TestX86PackedMoveInitializedNativeStoresWholeFamily',
     'TestAMD64PackedCompressRuntimeSemantics',
     'TestAMD64PackedExpandRuntimeSemantics',
@@ -21,6 +22,8 @@ const owners = {
     'TestX86GFNIInitializedResultWholeFamily',
     'TestX86PackedBitCountInitializedResultWholeFamily',
     'TestX86FixedLaneValueResultInputsStayIndependent',
+    'TestX86VectorValueFamiliesClearNonzeroUpperAliases',
+    'TestX86VectorValueUpperAliasesPortableRuntime',
     'TestX86VectorValueMode32HighGPAddressesNeedPhysicalContext',
     'TestX86VectorValueMode32AddressContextDoesNotHideInvalidFormats',
     'TestTranslateAMD64AVX512Go126Families',
