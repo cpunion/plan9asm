@@ -32,7 +32,7 @@ func x86MaskValueProperties(op Op, ins Instr, arch string) (x86MaskValueForm, bo
 	first := 0
 	if spec.shift != "" {
 		immediate := ins.Args[0]
-		if immediate.ImmIsFloat || immediate.ImmRaw != "" || !amd64UnsignedImmediate(immediate, 8) {
+		if !amd64UnsignedImmediate(immediate, 8) {
 			return fail()
 		}
 		first = 1

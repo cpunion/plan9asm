@@ -12,7 +12,7 @@ func (c *amd64Ctx) lowerPackedByteShift(op Op, ins Instr) (bool, bool, error) {
 }
 
 func amd64SignedImmediate(operand Operand, bits int) bool {
-	if operand.Kind != OpImm || bits <= 0 || bits >= 63 {
+	if operand.Kind != OpImm || operand.ImmIsFloat || operand.ImmRaw != "" || bits <= 0 || bits >= 63 {
 		return false
 	}
 	limit := int64(1) << (bits - 1)
@@ -20,7 +20,7 @@ func amd64SignedImmediate(operand Operand, bits int) bool {
 }
 
 func amd64VectorByteShiftImmediate(operand Operand) bool {
-	return operand.Kind == OpImm && operand.Imm >= -128 && operand.Imm <= 255
+	return operand.Kind == OpImm && !operand.ImmIsFloat && operand.ImmRaw == "" && operand.Imm >= -128 && operand.Imm <= 255
 }
 
 func amd64PackedByteShiftRequiresEVEX(source, destination Operand, byteWidth int) bool {

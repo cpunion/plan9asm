@@ -108,7 +108,7 @@ func (c *amd64Ctx) lowerPackedAlignRight(rawOp Op, ins Instr) (ok bool, terminat
 }
 
 func amd64UnsignedImmediate(operand Operand, bits int) bool {
-	if operand.Kind != OpImm || bits <= 0 || bits >= 63 {
+	if operand.Kind != OpImm || operand.ImmIsFloat || operand.ImmRaw != "" || bits <= 0 || bits >= 63 {
 		return false
 	}
 	return operand.Imm >= 0 && operand.Imm < int64(uint64(1)<<bits)
