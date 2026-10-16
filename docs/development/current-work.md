@@ -39,10 +39,26 @@ observations, not peak memory, a full benchmark or an established budget pass.
 
 The independent scanner RED at `854b490e` reproduces false support in all 245
 mask/vector children; every initialized positive control still passes there.
-The unchanged regression is integrated with the repairs. Complete current
-source SDK/race qualification, retained immediate consumers, scanner GREEN,
-official baseline review and final gates remain pending. Do not publish the
-unqualified combined batch or transfer old receipts to its head.
+At `c3b6ffc7`, its two roots pass on Go27, actual Go20 and race: 735 children,
+no skips. The full SETcc review then reproduces another 720 false acceptances
+in 128 register-write/Void cases, while all fully defined and CF-only positive
+controls hold. `0550fbd9` applies the same input obligation to every named
+destination. Four affected/retained owners pass each of Go27, Go20 and race:
+twelve root executions and 522 children, no skips.
+
+All eight SDKs independently reproduce the old x86 baseline and then compare
+complete old/new forms. Exactly 281 AMD64 forms and two 386 forms per SDK
+change from supported isolated probes to context-required; only the known
+mask/vector/SETcc families change. Complete operand metadata, encoder rules,
+corpus denominators and unsupported counts remain identical. The baseline
+update is limited to supported/context counts and classification fingerprints.
+This is not lost instruction support or an execution certificate. The existing
+Go20 maskless EVEX.Z malformed row remains separately unsupported.
+
+The combined source still requires its complete 195-owner SDK/race union,
+retained immediate consumers and final gates. Do not publish an unqualified
+batch or transfer old receipts to its head. Preserve the earlier failed
+deadline, malformed-fixture and real semantic/input RED receipts as failed.
 
 The complete strict benchmark at `af9223af` remains FAILED: 148/184 files,
 36 failures, no N/A/unattempted files, 1,256 target seconds and AMD64 above its

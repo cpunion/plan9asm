@@ -84,6 +84,10 @@ or an unused FP address. That role needs its own proof, not an exemption.
 Unknown source/result bytes cannot fall back to zero-initialized implementation
 allocas. Test these boundaries through all public APIs, including default and
 explicit architectures; retain independent canonical-bool and memory contracts.
+The complete SETcc family consumes predicate FLAGS for every named destination,
+including dead register writes in Void functions. Only SETCC/SETCS can consume
+a lone CLC/STC producer; that CF fact does not define other predicates. Neither
+an unused bool parameter nor a native-only routing predicate supplies FLAGS.
 
 Indexed permutes and GFNI share the existing typed EVEX/VEX binary grammar;
 unary vector bit counts project their original two/three operands locally.
