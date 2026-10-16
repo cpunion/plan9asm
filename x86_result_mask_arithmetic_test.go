@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 	"strings"
@@ -66,12 +67,9 @@ func TestX86MaskArithmeticRejectsNonIntegerImmediateConsumers(t *testing.T) {
 			t.Run(row.op+"/"+value, func(t *testing.T) {
 				ins := x86ScalarLaneInstruction(t, row.op+" "+value+",K1,K2")
 				for _, arch := range []string{"386", "amd64"} {
-					consumer, _ := newAMD64CtxWithFuncForTest(t, Func{}, FuncSig{Ret: Void}, nil)
-					consumer.goarch = arch
-					if err := consumer.emitEntryAllocas(); err != nil {
-						t.Fatal(err)
-					}
 					control := x86ScalarLaneInstruction(t, row.op+" $1,K1,K2")
+					consumer, _ := newAMD64CtxWithFuncForTest(t, Func{Instrs: []Instr{control}}, FuncSig{Ret: Void}, nil)
+					consumer.goarch = arch
 					if err := consumer.lowerMaskArithmetic(control.Op, control); err != nil {
 						t.Fatal("valid immediate control did not reach the lowerer", err)
 					}
@@ -87,6 +85,31 @@ func TestX86MaskArithmeticRejectsNonIntegerImmediateConsumers(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+func TestX86MaskArithmeticVoidCannotInventInputs(t *testing.T) {
+	for _, row := range x86MaskNumericalOracle {
+		t.Run(row.op, func(t *testing.T) {
+			first := "K0"
+			if row.shift {
+				first = "$255"
+			}
+			source := "TEXT ·Value(SB),4,$0-0\n" + row.op + " " + first + ",K7,K3\nRET\n"
+			goAssemblerOracleOutput(t, "amd64", source, "", true)
+			for _, arch := range []string{"386", "amd64"} {
+				triple := "x86_64-unknown-linux-gnu"
+				if arch == "386" {
+					triple = "i386-unknown-linux-gnu"
+				}
+				for _, api := range []string{"text", "module", "Go"} {
+					ir, err := x86ScalarFPBitViewAPI(t, source, "func Value()", arch, triple, api)
+					if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+						t.Fatal("unknown mask input borrowed implementation zeros", arch, api, err)
+					}
+				}
+			}
+		})
 	}
 }
 
