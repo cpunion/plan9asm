@@ -6,8 +6,7 @@ import (
 	"testing"
 )
 
-func TestCrossLinuxRuntimeMatrixX86PackedUnpackZeroMaskStillFaults(t *testing.T) {
-	execution := x86FloatCompareExecutionTools(t)
+func x86PackedUnpackFaultProgram() (string, map[string]FuncSig, string, string) {
 	var assembly, declarations, rows strings.Builder
 	sigs := map[string]FuncSig{}
 	for index, row := range []struct {
@@ -36,8 +35,14 @@ func TestCrossLinuxRuntimeMatrixX86PackedUnpackZeroMaskStillFaults(t *testing.T)
 `, index, name)
 		fmt.Fprintf(&rows, "{observe%d, %d, %d},\n", index, row.bytes, row.bytes-1)
 	}
-	requireX86GoAssemblerResult(t, "amd64", assembly.String(), true)
-	file, err := Parse(ArchAMD64, assembly.String())
+	return assembly.String(), sigs, declarations.String(), rows.String()
+}
+
+func TestCrossLinuxRuntimeMatrixX86PackedUnpackZeroMaskStillFaults(t *testing.T) {
+	execution := x86FloatCompareExecutionTools(t)
+	source, sigs, declarations, rows := x86PackedUnpackFaultProgram()
+	requireX86GoAssemblerResult(t, "amd64", source, true)
+	file, err := Parse(ArchAMD64, source)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -45,7 +50,7 @@ func TestCrossLinuxRuntimeMatrixX86PackedUnpackZeroMaskStillFaults(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	main := x86MemoryFaultDriver(declarations.String(), rows.String())
+	main := x86MemoryFaultDriver(declarations, rows)
 	for _, level := range []string{"-O0", "-O2"} {
 		t.Run(level, func(t *testing.T) {
 			executable := execution.compileLLVM(t, "unpack-e4nf-fault", ir, main, level)

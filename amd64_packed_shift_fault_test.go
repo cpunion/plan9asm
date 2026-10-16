@@ -6,8 +6,7 @@ import (
 	"testing"
 )
 
-func TestCrossLinuxRuntimeMatrixX86PackedShiftNativeReadFaults(t *testing.T) {
-	execution := x86FloatCompareExecutionTools(t)
+func x86PackedShiftFaultProgram() (string, map[string]FuncSig, string, string, []bool) {
 	var source, declarations, rows strings.Builder
 	sigs := map[string]FuncSig{}
 	var required []bool
@@ -60,8 +59,14 @@ func TestCrossLinuxRuntimeMatrixX86PackedShiftNativeReadFaults(t *testing.T) {
 		fmt.Fprintf(&rows, "{observe%d, %d, %d},\n", i, row.bytes, row.accessible)
 		required = append(required, row.bytes != 0)
 	}
-	goAssemblerOracleOutput(t, "amd64", source.String(), "", true)
-	file, err := Parse(ArchAMD64, source.String())
+	return source.String(), sigs, declarations.String(), rows.String(), required
+}
+
+func TestCrossLinuxRuntimeMatrixX86PackedShiftNativeReadFaults(t *testing.T) {
+	execution := x86FloatCompareExecutionTools(t)
+	source, sigs, declarations, rows, required := x86PackedShiftFaultProgram()
+	goAssemblerOracleOutput(t, "amd64", source, "", true)
+	file, err := Parse(ArchAMD64, source)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -69,7 +74,7 @@ func TestCrossLinuxRuntimeMatrixX86PackedShiftNativeReadFaults(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	driver := x86MemoryFaultDriver(declarations.String(), rows.String())
+	driver := x86MemoryFaultDriver(declarations, rows)
 	for _, level := range []string{"-O0", "-O2"} {
 		t.Run(level, func(t *testing.T) {
 			executable := execution.compileLLVM(t, "packed-shift-memory-faults", ir, driver, level)
