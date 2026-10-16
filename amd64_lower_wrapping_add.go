@@ -124,9 +124,12 @@ func (c *amd64Ctx) emitPackedBinaryNativeMemory(source Operand, bits int, data, 
 		segment = "%fs:"
 	}
 	carrier, result := c.newTmp(), c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i%d> %s to <4 x i32>\n", carrier, 128/bits, bits, data)
-	fmt.Fprintf(c.b, "  %%%s = call <4 x i32> asm sideeffect %q, %q(<4 x i32> %%%s, %s %s)\n", result, mnemonic+" "+segment+"($2), $0", "=x,0,r,~{memory}", carrier, pointerType, pointer)
+	// LLVM's i386 v4i32 inline-asm carrier requires SSE2. A bitcast-only
+	// v4f32 carrier also represents original SSE1 PS operations without
+	// strengthening their CPU requirements. No floating arithmetic occurs.
+	fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i%d> %s to <4 x float>\n", carrier, 128/bits, bits, data)
+	fmt.Fprintf(c.b, "  %%%s = call <4 x float> asm sideeffect %q, %q(<4 x float> %%%s, %s %s)\n", result, mnemonic+" "+segment+"($2), $0", "=x,0,r,~{memory}", carrier, pointerType, pointer)
 	value := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = bitcast <4 x i32> %%%s to <%d x i%d>\n", value, result, 128/bits, bits)
+	fmt.Fprintf(c.b, "  %%%s = bitcast <4 x float> %%%s to <%d x i%d>\n", value, result, 128/bits, bits)
 	return "%" + value, nil
 }
