@@ -1,5 +1,48 @@
 # Current work: PR 40 checkpoint
 
+## Complete shift/unpack qualification, 2026-10-17
+
+At `e6410b0c`, all 39 affected/retained roots pass on current Go, actual
+Go20 and race: 117 root executions and 5,133 children, zero failures/skips.
+Independent raw checks retain the same 1,750 exact terminal identities per
+lane and identical before/after source, SDK and tool seals. The original RED
+at `749fde8a` and failed carrier receipts at `6204dcae`/`917da560` remain
+failed. The logical SSE1 sibling control already passed before the carrier
+change; it is a retained control, not another reproduced defect.
+
+The complete 24-name shift and 24-name unpack grammars now supply the paired
+native numerical continuation without shrinking uniform m128, E4NF or
+guarded E4 reads. Every named/physical source still consumes mask, address
+and result obligations, including Void. Sparse bytes, count dependencies,
+merge/zero behavior and wider aliases keep their existing pure typed rules.
+The native CI fault programs are shared verbatim with host-visible three-API
+object and portable memory-fault tests; host skips cannot hide their source
+proof failure. Original native execution remains separately required.
+
+All twelve legacy X unpack memory names retain their original native opcode,
+including Go's four width aliases and original alignment/fault behavior.
+Standalone 386 functions infer their own SSE/SSE2 carrier requirement. LLVM22
+needs a floating bit carrier for SSE1, not an SSE2-only integer carrier; the
+shared bitcast-only helper now serves logical, unpack and native shift-count
+operations, removing 38 duplicate lines without adding FP arithmetic.
+
+Initialized unpack coverage retains 192 AMD64 and 72 mode32 combinations,
+five x86 targets, three APIs and both IR/backend levels in bounded batches.
+All six legacy native shift counts have independent initialized five-target
+counterparts. Every original official format, segment/count object and raw
+mode32 boundary remains; uninitialized originals are explicit Context with
+emitter-only objects, not initialized public/runtime successes.
+
+The source includes current upstream main `e2164ac0` (freshly checked). The
+allowed-fork CI profile from `ceedd8da` is now locally merged with these
+repairs; only CI/documentation differs from the qualified core snapshot.
+Before publishing, add explicit native CI ownership for the two new unlocked
+RMW runtime roots, rerun the combined affected union after the shared-carrier
+change, audit the complete SDK baselines, final gates and strict benchmark,
+then run actual Linux/native CI and all dependent modules. Latest published
+CI remains the old failed run; PR40 stays draft. No push, external ledger
+change or local scanner run was made during this qualification.
+
 ## Complete packed narrow qualification, 2026-10-17
 
 At `9ac09c71`, all 21 affected/retained roots pass on current Go, actual
