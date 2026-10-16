@@ -41,7 +41,7 @@ func (c *amd64Ctx) lowerPackedCompress(op Op, ins Instr) (ok bool, terminated bo
 		return true, false, err
 	}
 	if form.mask < 0 {
-		return true, false, c.storeVectorBytesOperand(destination, byteWidth, sourceBytes)
+		return true, false, c.storePackedMoveOperand(destination, byteWidth, sourceBytes)
 	}
 	mask, err := c.loadK(ins.Args[form.mask].Reg)
 	if err != nil {
@@ -75,7 +75,7 @@ func (c *amd64Ctx) lowerPackedCompress(op Op, ins Instr) (ok bool, terminated bo
 	fmt.Fprintf(c.b, "  %%%s = bitcast %s %%%s to <%d x i8>\n", out, vectorType, compressed, byteWidth)
 	// FP results are separate scalar fields, not one contiguous native alloca.
 	// The old complete span supplies the untouched compacted tail above.
-	return true, false, c.storeVectorBytesOperand(destination, byteWidth, "%"+out)
+	return true, false, c.storePackedMoveOperand(destination, byteWidth, "%"+out)
 }
 
 func amd64IntegerMaskVector(c *amd64Ctx, lanes int, mask string) string {
