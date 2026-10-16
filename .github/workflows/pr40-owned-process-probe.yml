@@ -203,6 +203,7 @@ jobs:
               - TestX86ScalarMoveNativeRetainsPublicAndSourceBoundaries
               - TestX86SegmentMOVCannotGrantIndependentAuthority
               - TestX86SegmentLoadAndNativeStoreHaveIndependentPairedEffects
+              - TestX86PoppedPartialFlagsCannotInventUnmodeledControls
             timeout: 5m
           - lane: llvm
             module: cmd/plan9asmll

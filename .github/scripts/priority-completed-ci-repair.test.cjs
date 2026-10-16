@@ -30,6 +30,7 @@ const roots = [
   'TestX86ScalarMoveNativeRetainsPublicAndSourceBoundaries',
   'TestX86SegmentMOVCannotGrantIndependentAuthority',
   'TestX86SegmentLoadAndNativeStoreHaveIndependentPairedEffects',
+  'TestX86PoppedPartialFlagsCannotInventUnmodeledControls',
 ];
 const groups = [
   ['completed-ci-repair', roots.slice(0, 14)],
@@ -40,9 +41,9 @@ const blocks = groups.map(([lane, owners]) => `- lane: ${lane}\n            modu
 const workflow = fs.readFileSync('.github/workflows/pr40-owned-process-probe.yml', 'utf8');
 
 function validate(source) {
-  assert.equal(roots.length, 25);
-  assert.equal(new Set(roots).size, 25);
-  assert.deepEqual(groups.map(([, owners]) => owners.length), [14, 11]);
+  assert.equal(roots.length, 26);
+  assert.equal(new Set(roots).size, 26);
+  assert.deepEqual(groups.map(([, owners]) => owners.length), [14, 12]);
   for (let index = 0; index < groups.length; index++) {
     assert.ok(source.includes(blocks[index]), 'complete independent old-failure and native-effect priorities');
     assert.equal(source.split(`- lane: ${groups[index][0]}\n`).length - 1, 1);
