@@ -11,8 +11,6 @@ import (
 	"regexp"
 	"strings"
 	"testing"
-
-	"github.com/xgo-dev/llvm"
 )
 
 var x86LegacyShiftMemoryOpcodes = []struct {
@@ -78,34 +76,21 @@ func TestX86PackedShiftNativeCountThreeAPIsFiveO2Objects(t *testing.T) {
 		{"386", "i386-unknown-linux-gnu"}, {"386", "i686-pc-windows-msvc"},
 	} {
 		requireX86GoAssemblerResult(t, target.arch, source.String(), true)
-		options := Options{Goarch: target.arch, TargetTriple: target.triple, Sigs: map[string]FuncSig{"shifts": {Name: "shifts", Ret: Void}}}
-		ir, err := Translate(file, options)
-		if err != nil {
-			t.Fatal(err)
+		for _, api := range []string{"text", "module", "Go"} {
+			if ir, err := x86ScalarFPBitViewPackageAPI(t, source.String(), x86PackedShiftGoPackage(t, target.arch), target.arch, target.triple, api); ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+				t.Fatal("original native/segment count source invented entry inputs", api, err)
+			}
 		}
-		context := llvm.NewContext()
+		ir := x86InstructionFormatObjectUnit(t, file, map[string]FuncSig{"shifts": {Name: "shifts", Ret: Void}},
+			target.arch, target.triple, 0, func(c *amd64Ctx, ins Instr) (bool, bool, error) {
+				return c.lowerX86PackedShift(ins.Op, ins)
+			})
 		func() {
-			defer context.Dispose()
-			module, err := TranslateModuleInContext(context, file, options)
-			if !module.IsNil() {
-				defer module.Dispose()
-			}
-			if err != nil {
-				t.Fatal(err)
-			}
-			result, err := translateGoModuleInContext(context, x86PackedShiftGoPackage(t, target.arch),
-				[]byte(strings.Replace(source.String(), "shifts(SB)", "·shifts(SB)", 1)), GoModuleOptions{GOARCH: target.arch, TargetTriple: target.triple})
-			if result != nil && !result.Module.IsNil() {
-				defer result.Module.Dispose()
-			}
-			if err != nil {
-				t.Fatal(err)
-			}
-			for api, body := range []string{ir, module.String(), result.Module.String()} {
+			for axis, body := range []string{ir, x86DwordProductIROptimize(t, ir)} {
 				for _, mnemonic := range []string{"psllw", "pslld", "psllq", "psrlw", "psrld", "psrlq"} {
 					for _, segment := range []string{"", "%fs:", "%gs:"} {
 						if strings.Count(body, `asm sideeffect "`+mnemonic+` `+segment+`($2), $0", "=x,0,r,~{memory}"`) != 1 {
-							t.Fatalf("%s API%d lost original %s %s m128 count operation", target.triple, api, mnemonic, segment)
+							t.Fatalf("%s IR%d lost original %s %s m128 count operation", target.triple, axis, mnemonic, segment)
 						}
 					}
 				}
@@ -122,24 +107,24 @@ func TestX86PackedShiftNativeCountThreeAPIsFiveO2Objects(t *testing.T) {
 				output, err := runtimeOracleCombinedOutput(stage, command)
 				cancel()
 				if err != nil {
-					t.Fatalf("O2 %s API%d: %v\n%s", target.triple, api, err, output)
+					t.Fatalf("O2 %s IR%d: %v\n%s", target.triple, axis, err, output)
 				}
 				stage, cancel = runtimeOracleStageContext(t)
 				command = exec.CommandContext(stage, disassembler, "-d", object)
 				output, err = runtimeOracleCombinedOutput(stage, command)
 				cancel()
 				if err != nil {
-					t.Fatalf("O2 disassembly %s API%d: %v\n%s", target.triple, api, err, output)
+					t.Fatalf("O2 disassembly %s IR%d: %v\n%s", target.triple, axis, err, output)
 				}
 				for _, mnemonic := range []string{"psllw", "pslld", "psllq", "psrlw", "psrld", "psrlq"} {
 					pattern := regexp.MustCompile(`(?m)\b` + mnemonic + `\s+[^\n]*\([^\n]*\)`)
 					if len(pattern.FindAll(output, -1)) != 3 {
-						t.Fatalf("O2 actual original %s m128 count %s API%d:\n%s", mnemonic, target.triple, api, output)
+						t.Fatalf("O2 actual original %s m128 count %s IR%d:\n%s", mnemonic, target.triple, axis, output)
 					}
 				}
 				for _, segment := range []string{"%fs:", "%gs:"} {
 					if strings.Count(string(output), segment) != 6 {
-						t.Fatalf("O2 lost six native %s count overrides %s API%d:\n%s", segment, target.triple, api, output)
+						t.Fatalf("O2 lost six native %s count overrides %s IR%d:\n%s", segment, target.triple, axis, output)
 					}
 				}
 			}
