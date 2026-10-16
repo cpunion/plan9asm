@@ -51,7 +51,8 @@ func x86OrdinaryResultAddressRole(fn Func, sig FuncSig, arch string) bool {
 
 // Mode32 already emits one contiguous private classic-frame copy. A complete
 // ordinary integer ABI0 program may address its numeric parameter copies as
-// well as results, including across adjacent owned fields. This is not a
+// well as results, including the physical byte of a bool input. No canonical
+// bool result is granted by this numeric role. This is not a
 // native incoming frame, an address-valued result or caller memory authority.
 func x86Ordinary386FrameAddressRole(fn Func, sig FuncSig, arch string) bool {
 	if arch != "386" || !x86OrdinaryParameterAddressNeedsProof(fn, sig, arch) ||
@@ -61,11 +62,14 @@ func x86Ordinary386FrameAddressRole(fn Func, sig FuncSig, arch string) bool {
 		len(fn.x86ContinuationAddresses) != 0 || len(fn.x86IndirectLabels) != 0 {
 		return false
 	}
-	for _, slots := range [][]FrameSlot{sig.Frame.Params, sig.Frame.Results} {
-		for _, slot := range slots {
-			if !x86IntegerResultSlot(slot) {
-				return false
-			}
+	for _, slot := range sig.Frame.Params {
+		if slot.Type != I1 && !x86IntegerResultSlot(slot) {
+			return false
+		}
+	}
+	for _, slot := range sig.Frame.Results {
+		if !x86IntegerResultSlot(slot) {
+			return false
 		}
 	}
 	for _, ins := range fn.Instrs {
