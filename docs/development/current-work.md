@@ -1,9 +1,37 @@
 # Current work: PR 40 checkpoint
 
-Checkpoint: 2026-10-16 02:29 UTC. This section supersedes the historical queue
+Checkpoint: 2026-10-16 03:23 UTC. This section supersedes the historical queue
 below; every older result retains its original source and scope.
 
 ## Immediate CI repair queue
+
+The combined `dec82d00` source independently passes155 retained/affected roots
+and19,026 children on each of Go27 and actual Go20. Its first five race groups
+pass130 roots; the last25-owner command remains FAILED at its original five
+minutes. It completes23 roots, times out inside the complete five-target
+segment object owner, and never starts the final root. Preserve the raw panic
+and unfinished terminals. Do not call this a complete race pass. The original
+normal object matrix remains complete; a future race partition must preserve
+every target/API/IR/backend child and verify their full disjoint union.
+
+Independent follow-up `7efc5a50` exposes150 false acceptances when the new
+partial-popped-word consumer observes unmodeled TF/IF/IOPL/NT/RF/AC controls.
+`af30d26f` restricts only that partial-byte refinement to modeled FLAGS and
+reserved low-byte bits; independently complete NUM bytes retain their old proof.
+Five focused roots/675 children pass without skips on Go27, including all360
+control/numerical-counterpart cases and the276-program portable BIT runtime.
+This does not claim a complete native system-FLAGS entry/restore contract.
+Freeze the combined source and qualify the complete changed FLAGS class plus
+retained CI repair owners on both actual SDKs/race, then both vets/builds and
+the official gates. The broad old race timeout remains an unresolved execution
+scope, not a repaired or silently omitted pass.
+
+Allowed-fork staging now has two disjoint five-minute priorities: all14
+original failed roots and11 numerical/native-memory regressions. Its native
+list also requires the original BIT runtime as owner66 and all six three-API/
+optimization children. The independently frozen `5818c186` policy candidate
+passes104 Node policies and three workflow lints. No new push has occurred;
+its non-GitHub tree matches `dec82d00`, not the newer partial-FLAGS refinement.
 
 Allowed-fork [run38824961157](https://github.com/cpunion/plan9asm/actions/runs/38824961157)
 at `354ea4ef` finished naturally: 79 jobs, 69 successful, ten failed. Nine
