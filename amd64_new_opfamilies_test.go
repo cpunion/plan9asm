@@ -133,12 +133,16 @@ func TestTranslateAMD64AVX512Go126Families(t *testing.T) {
 		t.Fatal("LLVM22 llc is required")
 	}
 	source := x86Go126FamiliesInitializedSource("")
+	// Supply Go's textflag constants without changing the original body or
+	// relying on an ambient include search path in the cross-object helper.
+	oracleSource := "#define NOSPLIT 4\n#define RODATA 8\n" + source
+	goAssemblerOracleOutput(t, "amd64", oracleSource, "", true)
 	for _, target := range dataRelocationTargets {
 		if target.goarch != "amd64" {
 			continue
 		}
 		t.Run(target.triple, func(t *testing.T) {
-			dataRelocationGoObject(t, source, target.goos, target.goarch, true)
+			dataRelocationGoObject(t, oracleSource, target.goos, target.goarch, true)
 			for _, api := range []string{"text", "module", "Go"} {
 				t.Run(api, func(t *testing.T) {
 					ir, err := x86ScalarFPBitViewAPI(t, source, "func go126ops()", target.goarch, target.triple, api)
@@ -171,7 +175,7 @@ func TestX86Go126FamiliesCannotBorrowUninitializedVectorInputs(t *testing.T) {
 	sources["missing-mask"] = strings.Replace(x86Go126FamiliesInitializedSource(""), "KMOVQ AX, K1", "NOP", 1)
 	for name, source := range sources {
 		t.Run(name, func(t *testing.T) {
-			goAssemblerOracleOutput(t, "amd64", source, "", true)
+			goAssemblerOracleOutput(t, "amd64", "#include \"textflag.h\"\n"+source, "", true)
 			for _, target := range dataRelocationTargets {
 				if target.goarch != "amd64" {
 					continue
