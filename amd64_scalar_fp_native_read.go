@@ -162,6 +162,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		if accepted, known := c.scalarBitTestFPShadowTransfer(ins, state, owned, arch); known {
 			return accepted
 		}
+		if accepted, known := x86LoweredNativeBitTest(ins, state, owned, arch); known {
+			return accepted
+		}
 		if accepted, recognized := x86ResultScalarLaneStepWithRead(ins, state, owned, resultOffset, arch, true); recognized {
 			return accepted
 		}

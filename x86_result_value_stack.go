@@ -7,6 +7,7 @@ type x86ResultValueStack struct {
 	bytes   []uint8 // Low byte is at the end, matching a descending byte stack.
 	invalid bool
 	id      bool // ID is separate from the six arithmetic flags and DF.
+	popped  x86ResultPoppedWord
 }
 
 func x86ResultValueStackLimit(arch string) int {
@@ -129,6 +130,15 @@ func x86ResultValueStackStep(ins Instr, state *x86ResultState, owned []bool, res
 		}
 		state.pointerGP[index], state.callerAddressGP[index] = false, false
 		state.canonicalGP[index] &^= mask
+		// Preserve partial-bit knowledge for exactly the next instruction.
+		// Whole known bytes outside a narrow POP remain independently known.
+		known := bits
+		for b := width; b < 8; b++ {
+			if state.gp[index]&(1<<uint(b)) != 0 {
+				known |= uint64(0xff) << uint(8*b)
+			}
+		}
+		stack.popped = x86ResultPoppedWord{bits: known, register: index, valid: true}
 		return true, true
 	}
 	for b := int64(0); b < width; b++ {

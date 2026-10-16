@@ -232,6 +232,11 @@ func checkX86ResultSourceFlowWithTrapOnly(fn Func, initial x86ResultState, owned
 		if !x86ResultValueStackContinuation(ins, state, arch) {
 			return false
 		}
+		popped := x86ResultPoppedWord{}
+		if state.valueStack != nil {
+			popped = state.valueStack.popped
+			state.valueStack.popped = x86ResultPoppedWord{}
+		}
 		spec, stack, _ := x86StackWidthProperties(ins, arch)
 		popFlags := stack && spec.mode == amd64StackPopFlags
 		if popFlags {
@@ -262,7 +267,16 @@ func checkX86ResultSourceFlowWithTrapOnly(fn Func, initial x86ResultState, owned
 				defer x86ContinuationRevokeOverwrites(ins, state, arch)
 			}
 		}
-		if !handled && !x86DirectTailResultAddressTransfer(ins, state, owned, resultOffset, arch, originalTransfer, ordinal) {
+		step := originalTransfer
+		if popped.valid {
+			step = func(ordinal int, ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string) bool {
+				if accepted, known := x86ResultPoppedWordMaskStep(ins, popped, state, owned, resultOffset, arch); known {
+					return accepted
+				}
+				return originalTransfer(ordinal, ins, state, owned, resultOffset, arch)
+			}
+		}
+		if !handled && !x86DirectTailResultAddressTransfer(ins, state, owned, resultOffset, arch, step, ordinal) {
 			return false
 		}
 		x86ResultX87After(ins, state, arch)
@@ -336,7 +350,9 @@ func checkX86ResultSourceFlowWithTrapOnly(fn Func, initial x86ResultState, owned
 		byteState += len(initial.boolFrameGP) * 25
 	}
 	if initial.valueStack != nil {
-		byteState += x86ResultValueStackLimit(goarch) + 4 // bit masks, two-byte depth, invalid join and separate ID.
+		// Bit masks, two-byte depth, invalid join, ID and the ten-byte
+		// transient popped register/validity/eight-byte initialized-bit view.
+		byteState += x86ResultValueStackLimit(goarch) + 14
 	}
 	if initial.continuation != nil {
 		byteState += 16*48 + len(initial.continuation.written) + 2
@@ -727,6 +743,13 @@ func (state x86ResultState) intersect(other x86ResultState) x86ResultState {
 				merged.valueStack.bytes[index] &= other.valueStack.bytes[index]
 			}
 			merged.valueStack.id = merged.valueStack.id && other.valueStack.id
+		}
+		if other.valueStack == nil || merged.valueStack.invalid ||
+			merged.valueStack.popped.register != other.valueStack.popped.register ||
+			!merged.valueStack.popped.valid || !other.valueStack.popped.valid {
+			merged.valueStack.popped = x86ResultPoppedWord{}
+		} else {
+			merged.valueStack.popped.bits &= other.valueStack.popped.bits
 		}
 	}
 	if merged.bitScanPending != other.bitScanPending {
