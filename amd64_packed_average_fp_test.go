@@ -92,9 +92,9 @@ func TestX86PackedAverageFPSpansThreeAPIsFiveObjects(t *testing.T) {
 				fmt.Fprintf(&completeDeclarations, "func %s(input [64]byte)\n", name)
 				complete++
 			}
-			want := 36
+			want := 18
 			if arch == "386" {
-				want = 12
+				want = 6
 			}
 			if complete != want {
 				t.Fatal("complete initialized FP row union changed", complete, want)

@@ -16,6 +16,7 @@ func x86AverageFormatObjectUnit(t *testing.T, file *File, signatures map[string]
 	fmt.Fprintf(&ir, "target triple = %q\n", triple)
 	emitAMD64Prelude(&ir, arch, file)
 	emitExternSBGlobals(&ir, file, resolve, signatures)
+	attributes := newFeatureAttrRegistry()
 	emitted := 0
 	for index, function := range file.Funcs {
 		sig, found := signatures[resolve(function.Sym)]
@@ -26,7 +27,8 @@ func x86AverageFormatObjectUnit(t *testing.T, file *File, signatures map[string]
 		for ordinal, typ := range sig.Args {
 			arguments = append(arguments, fmt.Sprintf("%s %%arg%d", typ, ordinal))
 		}
-		fmt.Fprintf(&ir, "define void @AverageFormat%d(%s) {\n", index, strings.Join(arguments, ", "))
+		features := attributes.ref(inferFuncTargetFeaturesForGOARCH(file.Arch, arch, function))
+		fmt.Fprintf(&ir, "define void @AverageFormat%d(%s) %s {\n", index, strings.Join(arguments, ", "), features)
 		consumer := newX86Ctx(&ir, function, sig, resolve, signatures, arch, triple, false)
 		if err := consumer.emitEntryAllocas(); err != nil {
 			t.Fatal(err)
@@ -52,6 +54,7 @@ func x86AverageFormatObjectUnit(t *testing.T, file *File, signatures map[string]
 		}
 		ir.WriteString("}\n")
 	}
+	attributes.emit(&ir)
 	t.Logf("all %d original average format rows in emitter-only objects; no public or runtime success claim", emitted)
 	return ir.String()
 }
