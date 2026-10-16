@@ -276,18 +276,21 @@ func TestX86PackedMoveResultSourceBoundaries(t *testing.T) {
 			load := move + " p+0(FP),AX\n"
 			read := row.name + " (AX),X1\n"
 			bodies := map[string]string{
-				"unknown base":   read,
-				"numeric base":   "MOVL $1,AX\n" + read,
-				"lost identity":  load + "MOVL $1,AX\n" + read,
-				"unknown index":  load + row.name + " (AX)(DI*1),X1\n",
-				"pointer index":  load + row.name + " (AX)(AX*1),X1\n",
-				"native store":   load + read + row.name + " X1,(AX)\n",
-				"unknown static": row.name + " ·foreign(SB),X1\n",
-				"unknown path":   load + "MOVL $1,CX\nCMPL CX,$0\nJE done\n" + read + "done:\n",
+				"unknown base":         read,
+				"numeric base":         "MOVL $1,AX\n" + read,
+				"lost identity":        load + "MOVL $1,AX\n" + read,
+				"unknown index":        load + row.name + " (AX)(DI*1),X1\n",
+				"pointer index":        load + row.name + " (AX)(AX*1),X1\n",
+				"unknown store source": load + row.name + " X1,(AX)\n",
+				"unknown store base":   load + read + row.name + " X1,(DI)\n",
+				"pointer store index":  load + read + row.name + " X1,(AX)(AX*1)\n",
+				"unknown static":       row.name + " ·foreign(SB),X1\n",
+				"unknown path":         load + "MOVL $1,CX\nCMPL CX,$0\nJE done\n" + read + "done:\n",
 			}
 			if !row.vexOnly {
 				bodies["undefined mask"] = load + row.name + ".Z (AX),K1,X1\n"
 				bodies["undefined merge"] = load + "MOVL $1,CX\nKMOVD CX,K1\n" + row.name + " (AX),K1,X1\n"
+				bodies["undefined store mask"] = load + read + row.name + " X1,K1,(AX)\n"
 			}
 			for name, body := range bodies {
 				source := fmt.Sprintf("TEXT ·view(SB),4,$0-%d\n%sPEXTRD $0,X1,CX\nMOVL CX,ret+%d(FP)\nRET\n", word+4, body, word)
@@ -298,6 +301,73 @@ func TestX86PackedMoveResultSourceBoundaries(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+func TestX86PackedMoveInitializedNativeStoresWholeFamily(t *testing.T) {
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM22 llc is required")
+	}
+	for _, target := range x86RawReturnTargets {
+		t.Run(target.triple, func(t *testing.T) {
+			word, move := 8, "MOVQ"
+			if target.arch == "386" {
+				word, move = 4, "MOVL"
+			}
+			var source, declarations strings.Builder
+			var names []string
+			for _, row := range x86PackedMoveResultOracle {
+				for _, bank := range []string{"X", "Y", "Z"} {
+					if row.vexOnly && bank == "Z" {
+						continue
+					}
+					for _, masked := range []bool{false, true} {
+						if row.vexOnly && masked {
+							continue
+						}
+						predicate := ""
+						if masked {
+							predicate = "K1,"
+						}
+						name := fmt.Sprintf("view%d", len(names))
+						names = append(names, name)
+						// Keep the original initialized load/store pair, including
+						// native alignment effects. Its result is independent of the
+						// store and cannot be supplied by a fresh logical allocation.
+						fmt.Fprintf(&source, "TEXT ·%s(SB),4,$0-%d\n%s p+0(FP),AX\n"+
+							"MOVL $7,CX\nKMOVD CX,K1\n%s (AX),%s1\n%s %s1,%s(AX)\n"+
+							"PEXTRD $0,X1,CX\nMOVL CX,ret+%d(FP)\nRET\n",
+							name, word+4, move, row.name, bank, row.name, bank, predicate, word)
+						fmt.Fprintf(&declarations, "func %s(p *[64]byte) uint32\n", name)
+					}
+				}
+			}
+			if len(names) != 64 {
+				t.Fatal("complete initialized native-store denominator changed", len(names))
+			}
+			x86LEAActualTargetGoObject(t, target.arch, target.triple, source.String())
+			for _, api := range []string{"text", "module", "Go"} {
+				t.Run(api, func(t *testing.T) {
+					ir, err := x86ScalarFPBitViewAPI(t, source.String(), declarations.String(), target.arch, target.triple, api)
+					if err != nil || ir == "" {
+						t.Fatal("complete initialized native-store sequence rejected", err)
+					}
+					x86CompactExpandRequireAllDefinitions(t, ir, names)
+					for _, optimized := range []bool{false, true} {
+						text := ir
+						if optimized {
+							text = x86DwordProductIROptimize(t, ir)
+						}
+						for _, level := range []string{"-O0", "-O2"} {
+							t.Run(fmt.Sprintf("IR-O2=%t/backend%s", optimized, level), func(t *testing.T) {
+								x86PackedStringCompileObject(t, llc, target.triple, text, level)
+							})
+						}
+					}
+				})
+			}
+		})
 	}
 }
 
