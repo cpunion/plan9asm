@@ -1,9 +1,58 @@
 # Current work: PR 40 checkpoint
 
-Checkpoint: 2026-10-16 00:44 UTC. The notes below this section are historical
-and retain their original source scope; they are not the current task queue.
+Checkpoint: 2026-10-16 02:29 UTC. This section supersedes the historical queue
+below; every older result retains its original source and scope.
 
-## Active queue
+## Immediate CI repair queue
+
+Allowed-fork [run38824961157](https://github.com/cpunion/plan9asm/actions/runs/38824961157)
+at `354ea4ef` finished naturally: 79 jobs, 69 successful, ten failed. Nine
+failed main-module execution partitions expose fourteen failing test roots;
+the tenth failure is the strict main-module aggregate. Both complete CLI
+modules pass. The separate native x87 artifact authenticates and replays as
+four roots/26 children, all passing. No cancellation or rerun is a pass.
+
+The main development branch now integrates `f95a403b`. The repair batch includes
+the qualified opaque-pointer transport, bounded static integer results,
+physical-versus-named segment handoff, unused opaque SB-address transport and
+independent original-source/emitter/initialized-counterpart fixture corrections.
+The earlier `b4e71afc` static/segment set passes all64 roots/11,365 children on
+Go27 and actual Go20. Its combined race command times out and remains FAILED;
+split the same complete owner union rather than increasing its deadline.
+
+The final BIT runtime defect has independent TDDs for complete GP native stores,
+partial-bit FLAGS transport, all twelve BIT names and their native memory forms.
+Use the shared typed grammars, preserve exact volatile effects and strict
+incoming-pointer/numerical-index identities. The adjacent popped-word mask
+observation consumes exactly the actual known bits, never virtual stack padding;
+other instructions revoke it. It adds no memory, raw-entry, caller or GC contract.
+At `f95a403b`, eight focused roots/1,413 children pass on Go27 without skips.
+The portable runtime executes276 LLVM programs, each with126 independent
+whole-buffer/status inputs, through three APIs and both IR/backend O0/O2 axes.
+This is not original-Go native execution: the unchanged cross-runtime root
+requires its native Linux/Windows counterpart, not a host skip.
+
+Next, freeze the combined source and run the exact retained plus affected
+owner union on Go27, actual Go20 and race in disjoint bounded groups. Retain
+all original failed CI roots, original-Go and LLVM objects, before/after seals,
+both whole-root-module vets and the official five-architecture gates. Then
+stage the complete repair batch on the allowed fork and let CI finish naturally.
+Do not change the contribution head or mark PR40 ready before qualification.
+
+The strict184-file benchmark still has146 passes/38 failures at `00cfc843`;
+focused checktest recovery is not a new whole-benchmark pass. AMD64 still
+exceeds its unchanged300-second target budget. General x87 FP80 arithmetic
+and compact-family completion remain separate pending work. The compact leaf
+`5b53e944` has a Go27 three-root/1,530-child memory/FP first GREEN, not final
+Go20/race/native qualification; it is not merged into this CI repair batch.
+
+External inventory remains server-only in `llgo-compat/plan9asm`. The last
+validated export is23,202,445 index entries,1,090,783 unique module paths and
+6,962 assembly-bearing version records, with contiguous boundaries2025-10-01
+through2026-10-15T04:27:23Z. Those are discovery counts, not translation,
+LLVM compilation or execution passes. No local inventory process is required.
+
+## Historical queue at 00:44 UTC
 
 The repaired candidate `354ea4ef` has been pushed normally to the allowed fork.
 [Run38824961157](https://github.com/cpunion/plan9asm/actions/runs/38824961157)

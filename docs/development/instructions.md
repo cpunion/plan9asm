@@ -635,6 +635,18 @@ upper half. Continuing the paired load establishes only numerical result bytes,
 not pointee, caller, frame or raw-entry authority. Keep the complete Go MOV
 tables separate from the MMX/X, system, immediate, static-symbol, FP/AUTO and
 store consumers.
+
+The ordinary register-to-native MOV store rows locally reverse that same typed
+GP grammar, including qword aliases and actual REX byte views. Keep native
+stores exact, unaligned and volatile even when their results are dead. A paired
+NUM continuation needs the strict incoming-pointer base and numerical index;
+it changes no logical storage/GP/FLAGS facts and grants no reusable memory,
+pointer-data/GC, caller, raw or frame permission. The complete native BIT
+continuation likewise consumes its shared grammar and exact volatile read/write
+emitter, defines CF and revokes only the ISA's undefined flags. Adjacent popped
+word masking retains only actual known bits, never virtual slot padding. Other
+instructions revoke that transient observation; joins intersect it and its
+logical bytes count toward the unchanged source-flow budget.
 Actual REX changes AH/CH/DH/BH ModRM spellings to SP/BP/SI/DI low bytes;
 register allocation and effects must agree with Go's bytes. An implicit
 physical SP/BP write remains Context without its native contract.

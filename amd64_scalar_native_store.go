@@ -13,7 +13,8 @@ type x86ScalarNativeStoreForm struct {
 
 func x86ScalarNativeStoreProperties(op Op, ins Instr, arch string) (x86ScalarNativeStoreForm, bool, error) {
 	if len(ins.Args) != 2 || ins.Args[0].Kind != OpReg || ins.Args[1].Kind != OpMem ||
-		ins.Args[1].Mem.Sym != "" || ins.Args[1].Mem.Segment != "" {
+		ins.Args[1].Mem.Sym != "" || ins.Args[1].Mem.Segment != "" ||
+		ins.Args[1].Mem.Index == FS || ins.Args[1].Mem.Index == GS {
 		return x86ScalarNativeStoreForm{}, false, nil
 	}
 	projected := ins

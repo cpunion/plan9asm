@@ -56,6 +56,14 @@ func TestX86NativeGPStoreCompleteWidthsThreeAPIs(t *testing.T) {
 }
 
 func TestX86NativeGPStoreOriginalByteAliasesAndUnchangedState(t *testing.T) {
+	for _, arch := range []string{"386", "amd64"} {
+		for _, instruction := range []string{"MOVL AX,(DX)(FS*1)", "MOVL AX,8(GS)", "MOVL AX,table(SB)", "MOVL AX,result+0(FP)", "MOVL AX,local-4(SP)", "MOVL X0,(DX)"} {
+			ins := x86ScalarLaneInstruction(t, instruction)
+			if _, known, _ := x86ScalarNativeStoreProperties(ins.Op, ins, arch); known {
+				t.Fatal("ordinary GP store consumed a separate segment/static/frame/SIMD row", arch, instruction)
+			}
+		}
+	}
 	for ordinal, register := range []string{"AH", "CH", "DH", "BH"} {
 		for _, address := range []string{"(DX)", "(R8)", "(DX)(R9*2)"} {
 			instruction := "MOVB " + register + "," + address
