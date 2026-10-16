@@ -17,64 +17,30 @@ var amd64PackedCompressLaneBits = map[Op]int{
 // lowerPackedCompress implements the complete Go 1.27 _yvcompresspd table.
 // Masked register forms compact selected source lanes and merge/zero only the
 // tail. Masked memory forms write selected lanes contiguously and leave every
-// byte after the compacted tail untouched, including for Go's accepted .Z
-// spelling.
+// byte after the compacted tail untouched. Go's accepted EVEX.z memory spelling
+// instead raises #UD before any mask, source or address access.
 func (c *amd64Ctx) lowerPackedCompress(op Op, ins Instr) (ok bool, terminated bool, err error) {
-	rawOp := strings.ToUpper(string(op))
-	baseOp := rawOp
-	suffix := ""
-	if dot := strings.IndexByte(rawOp, '.'); dot >= 0 {
-		baseOp, suffix = rawOp[:dot], rawOp[dot+1:]
-	}
-	laneBits, ok := amd64PackedCompressLaneBits[Op(baseOp)]
-	if !ok {
+	form, known, err := x86PackedCompactProperties(op, ins, c.goarch)
+	if !known || form.expand {
 		return false, false, nil
 	}
-	zeroing := false
-	switch suffix {
-	case "":
-	case "Z":
-		zeroing = true
-	default:
-		return true, false, fmt.Errorf("%s %s accepts only Go 1.27's optional .Z suffix: %q", c.goarch, baseOp, ins.Raw)
+	if err != nil {
+		return true, false, err
 	}
-	if len(ins.Args) != 2 && len(ins.Args) != 3 {
-		return true, false, fmt.Errorf("%s %s expects source, [K1-K7,] destination: %q", c.goarch, baseOp, ins.Raw)
+	if form.undefinedOpcode() {
+		return c.lowerSyscall("UD2", Instr{Op: "UD2"})
 	}
-	masked := len(ins.Args) == 3
-	if zeroing && !masked {
-		return true, false, fmt.Errorf("%s %s.Z requires a K1-K7 mask: %q", c.goarch, baseOp, ins.Raw)
-	}
-	source := ins.Args[0]
-	if source.Kind != OpReg {
-		return true, false, fmt.Errorf("%s %s source must be an X, Y, or Z register: %q", c.goarch, baseOp, ins.Raw)
-	}
-	byteWidth := amd64VectorByteWidth(source.Reg)
-	if byteWidth == 0 || !c.isGoEVEXVectorRegister(source, byteWidth) {
-		return true, false, fmt.Errorf("%s %s source is outside Go's EVEX register range: %q", c.goarch, baseOp, ins.Raw)
-	}
-	destination := ins.Args[len(ins.Args)-1]
-	if destination.Kind == OpReg {
-		if !c.isGoEVEXVectorRegister(destination, byteWidth) {
-			return true, false, fmt.Errorf("%s %s register destination must match the source width and range: %q", c.goarch, baseOp, ins.Raw)
-		}
-	} else if !isAMD64MemoryOperand(destination) {
-		return true, false, fmt.Errorf("%s %s destination must be a matching vector register or memory: %q", c.goarch, baseOp, ins.Raw)
-	}
+	laneBits, byteWidth := form.laneBits, form.byteWidth
+	source, destination := ins.Args[0], ins.Args[form.destination]
 
 	sourceBytes, err := c.loadPackedCompareBytes(source, byteWidth)
 	if err != nil {
 		return true, false, err
 	}
-	if !masked {
+	if form.mask < 0 {
 		return true, false, c.storeVectorBytesOperand(destination, byteWidth, sourceBytes)
 	}
-	maskArg := ins.Args[1]
-	maskIndex, valid := amd64ParseKReg(maskArg.Reg)
-	if maskArg.Kind != OpReg || !valid || maskIndex == 0 {
-		return true, false, fmt.Errorf("%s %s masked form requires K1-K7: %q", c.goarch, baseOp, ins.Raw)
-	}
-	mask, err := c.loadK(maskArg.Reg)
+	mask, err := c.loadK(ins.Args[form.mask].Reg)
 	if err != nil {
 		return true, false, err
 	}
@@ -82,20 +48,17 @@ func (c *amd64Ctx) lowerPackedCompress(op Op, ins Instr) (ok bool, terminated bo
 	vectorType := fmt.Sprintf("<%d x i%d>", lanes, laneBits)
 	sourceValue := c.bitcastVectorBytesToIntegerLanes(byteWidth, lanes, laneBits, sourceBytes)
 	maskVector := amd64IntegerMaskVector(c, lanes, mask)
-	if destination.Kind != OpReg {
+	if destination.Kind != OpReg && destination.Kind != OpFP {
 		pointer, pointerType, intrinsicSuffix, err := c.packedVectorMemoryPointer(destination)
 		if err != nil {
 			return true, false, err
 		}
 		fmt.Fprintf(c.b, "  call void @llvm.masked.compressstore.v%di%d%s(%s %s, %s %s, <%d x i1> %s)\n",
 			lanes, laneBits, intrinsicSuffix, vectorType, sourceValue, pointerType, pointer, lanes, maskVector)
-		if destination.Kind == OpFP {
-			c.markFPResultWritten(destination.FPOffset)
-		}
 		return true, false, nil
 	}
 	passthrough := "zeroinitializer"
-	if !zeroing {
+	if !form.zeroing {
 		oldBytes, err := c.loadPackedCompareBytes(destination, byteWidth)
 		if err != nil {
 			return true, false, err
@@ -107,7 +70,9 @@ func (c *amd64Ctx) lowerPackedCompress(op Op, ins Instr) (ok bool, terminated bo
 		compressed, vectorType, lanes, laneBits, vectorType, sourceValue, lanes, maskVector, vectorType, passthrough)
 	out := c.newTmp()
 	fmt.Fprintf(c.b, "  %%%s = bitcast %s %%%s to <%d x i8>\n", out, vectorType, compressed, byteWidth)
-	return true, false, c.storeVectorBytes(destination.Reg, byteWidth, "%"+out)
+	// FP results are separate scalar fields, not one contiguous native alloca.
+	// The old complete span supplies the untouched compacted tail above.
+	return true, false, c.storeVectorBytesOperand(destination, byteWidth, "%"+out)
 }
 
 func amd64IntegerMaskVector(c *amd64Ctx, lanes int, mask string) string {

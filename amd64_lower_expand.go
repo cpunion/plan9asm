@@ -2,7 +2,6 @@ package plan9asm
 
 import (
 	"fmt"
-	"strings"
 )
 
 type amd64PackedExpandSpec struct {
@@ -23,47 +22,19 @@ var amd64PackedExpandSpecs = map[Op]amd64PackedExpandSpec{
 
 // lowerPackedExpand implements all six _yvexpandpd rows for every instruction
 // above: X/Y/Z register or memory sources and the corresponding K1-K7 merge or
-// .Z forms. Masked memory uses llvm.masked.expandload so disabled lanes do not
-// spuriously read beyond the compact source array.
+// .Z forms. Logical FP fields are reconstructed independently; only native
+// memory uses a pointer to the compact source array.
 func (c *amd64Ctx) lowerPackedExpand(op Op, ins Instr) (ok bool, terminated bool, err error) {
-	rawOp := strings.ToUpper(string(op))
-	baseOp := rawOp
-	suffix := ""
-	if dot := strings.IndexByte(rawOp, '.'); dot >= 0 {
-		baseOp, suffix = rawOp[:dot], rawOp[dot+1:]
-	}
-	spec, ok := amd64PackedExpandSpecs[Op(baseOp)]
-	if !ok {
+	form, known, err := x86PackedCompactProperties(op, ins, c.goarch)
+	if !known || !form.expand {
 		return false, false, nil
 	}
-	zeroing := false
-	switch suffix {
-	case "":
-	case "Z":
-		zeroing = true
-	default:
-		return true, false, fmt.Errorf("%s %s accepts only Go 1.27's optional .Z suffix: %q", c.goarch, baseOp, ins.Raw)
+	if err != nil {
+		return true, false, err
 	}
-	if len(ins.Args) != 2 && len(ins.Args) != 3 {
-		return true, false, fmt.Errorf("%s %s expects source, [K1-K7,] destination: %q", c.goarch, baseOp, ins.Raw)
-	}
-	masked := len(ins.Args) == 3
-	if zeroing && !masked {
-		return true, false, fmt.Errorf("%s %s.Z requires a K1-K7 mask: %q", c.goarch, baseOp, ins.Raw)
-	}
-	destination := ins.Args[len(ins.Args)-1]
-	if destination.Kind != OpReg {
-		return true, false, fmt.Errorf("%s %s destination must be an X, Y, or Z register: %q", c.goarch, baseOp, ins.Raw)
-	}
-	byteWidth := amd64VectorByteWidth(destination.Reg)
-	if byteWidth == 0 || !c.isGoEVEXVectorRegister(destination, byteWidth) {
-		return true, false, fmt.Errorf("%s %s destination is outside Go's EVEX register range: %q", c.goarch, baseOp, ins.Raw)
-	}
-	source := ins.Args[0]
-	if !isAMD64MemoryOperand(source) && !c.isGoEVEXVectorRegister(source, byteWidth) {
-		return true, false, fmt.Errorf("%s %s source must be matching X/Y/Z register or memory: %q", c.goarch, baseOp, ins.Raw)
-	}
-	if !masked {
+	byteWidth, laneBits := form.byteWidth, form.laneBits
+	source, destination := ins.Args[0], ins.Args[form.destination]
+	if form.mask < 0 {
 		sourceBytes, err := c.loadPackedCompareBytes(source, byteWidth)
 		if err != nil {
 			return true, false, err
@@ -71,44 +42,39 @@ func (c *amd64Ctx) lowerPackedExpand(op Op, ins Instr) (ok bool, terminated bool
 		return true, false, c.storeVectorBytes(destination.Reg, byteWidth, sourceBytes)
 	}
 
-	maskArg := ins.Args[1]
-	maskIndex, valid := amd64ParseKReg(maskArg.Reg)
-	if maskArg.Kind != OpReg || !valid || maskIndex == 0 {
-		return true, false, fmt.Errorf("%s %s masked form requires K1-K7: %q", c.goarch, baseOp, ins.Raw)
-	}
-	mask, err := c.loadK(maskArg.Reg)
+	mask, err := c.loadK(ins.Args[form.mask].Reg)
 	if err != nil {
 		return true, false, err
 	}
-	lanes := byteWidth * 8 / spec.laneBits
-	vectorType := fmt.Sprintf("<%d x i%d>", lanes, spec.laneBits)
+	lanes := byteWidth * 8 / laneBits
+	vectorType := fmt.Sprintf("<%d x i%d>", lanes, laneBits)
 	maskVector := amd64IntegerMaskVector(c, lanes, mask)
 	passthrough := "zeroinitializer"
-	if !zeroing {
+	if !form.zeroing {
 		oldBytes, err := c.loadPackedCompareBytes(destination, byteWidth)
 		if err != nil {
 			return true, false, err
 		}
-		passthrough = c.bitcastVectorBytesToIntegerLanes(byteWidth, lanes, spec.laneBits, oldBytes)
+		passthrough = c.bitcastVectorBytesToIntegerLanes(byteWidth, lanes, laneBits, oldBytes)
 	}
 
 	result := ""
-	if isAMD64MemoryOperand(source) {
+	if isAMD64MemoryOperand(source) && source.Kind != OpFP {
 		pointer, pointerType, intrinsicSuffix, err := c.packedVectorMemoryPointer(source)
 		if err != nil {
 			return true, false, err
 		}
 		expanded := c.newTmp()
 		fmt.Fprintf(c.b, "  %%%s = call %s @llvm.masked.expandload.v%di%d%s(%s %s, <%d x i1> %s, %s %s)\n",
-			expanded, vectorType, lanes, spec.laneBits, intrinsicSuffix, pointerType, pointer, lanes, maskVector, vectorType, passthrough)
+			expanded, vectorType, lanes, laneBits, intrinsicSuffix, pointerType, pointer, lanes, maskVector, vectorType, passthrough)
 		result = "%" + expanded
 	} else {
 		sourceBytes, err := c.loadPackedCompareBytes(source, byteWidth)
 		if err != nil {
 			return true, false, err
 		}
-		sourceLanes := c.bitcastVectorBytesToIntegerLanes(byteWidth, lanes, spec.laneBits, sourceBytes)
-		result = c.expandPackedRegisterLanes(lanes, spec.laneBits, sourceLanes, passthrough, mask, maskVector)
+		sourceLanes := c.bitcastVectorBytesToIntegerLanes(byteWidth, lanes, laneBits, sourceBytes)
+		result = c.expandPackedRegisterLanes(lanes, laneBits, sourceLanes, passthrough, mask, maskVector)
 	}
 	out := c.newTmp()
 	fmt.Fprintf(c.b, "  %%%s = bitcast %s %s to <%d x i8>\n", out, vectorType, result, byteWidth)

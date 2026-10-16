@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"runtime"
 	"strings"
@@ -43,16 +44,22 @@ func TestTranslateX86PackedCompressCompleteGoAssemblerForms(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			ll, err := Translate(file, Options{
+			options := Options{
 				TargetTriple: target.triple,
 				Goarch:       target.goarch,
 				Sigs: map[string]FuncSig{
 					"packedcompressforms": {Name: "packedcompressforms", Ret: Void},
 				},
-			})
-			if err != nil {
-				t.Fatal(err)
 			}
+			for _, api := range []string{"text", "module", "owned-module"} {
+				if ir, err := x86X87UnboundOriginalAPI(t, file, options, api); !errors.Is(err, ErrProbeNeedsContext) || ir != "" {
+					t.Fatal("original format-only source acquired undefined vector/mask/address inputs", api, err)
+				}
+			}
+			ll := x86ZeroArgumentLowererObjectUnit(t, file, target.goarch, target.triple, "PackedCompressEmitterObjectUnit",
+				func(consumer *amd64Ctx, instruction Instr) (bool, bool, error) {
+					return consumer.lowerVec(instruction.Op, instruction)
+				})
 			llc := findLLVM22Tool("llc")
 			if llc == "" {
 				t.Fatal("LLVM 22 llc not found")
