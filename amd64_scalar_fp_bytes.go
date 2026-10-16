@@ -183,6 +183,11 @@ func (c *amd64Ctx) validateScalarFPSourceViews() error {
 		}
 	}
 	for _, ins := range c.fpScalarSource.Instrs {
+		if _, known, err := x86TimestampProperties(ins.Op, ins, c.goarch); c.sig.Ret == Void && known && err == nil {
+			if err := c.scalarFPResultInitialized(); err != nil {
+				return err
+			}
+		}
 		if width := x86IntegerFPMoveWidth(ins, c.goarch); width != 0 && len(ins.Args) == 2 {
 			for index, operand := range ins.Args {
 				if operand.Kind == OpFP {

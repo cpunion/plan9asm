@@ -42,6 +42,24 @@ func x86TimestampRegisters(spec x86TimestampSpec) []Reg {
 	return registers
 }
 
+// These implicit dword writes share the original zero-operand grammar and
+// output directory with the native emitter. They read no numerical input and
+// preserve integer FLAGS/DF. Initialization alone grants no entry, memory or
+// caller authority, nor a claim that the hardware instruction cannot fault.
+func x86TypedTimestampByteEffect(op Op, ins Instr, arch string) (x86TypedByteEffect, bool, error) {
+	spec, known, err := x86TimestampProperties(op, ins, arch)
+	if !known || err != nil {
+		return x86TypedByteEffect{}, known, err
+	}
+	effect := x86TypedByteEffect{requiresResultProof: true}
+	for _, register := range x86TimestampRegisters(spec) {
+		effect.operands = append(effect.operands, x86TypedByteOperand{
+			index: -1, operand: Operand{Kind: OpReg, Reg: register}, width: 4, write: true,
+		})
+	}
+	return effect, true, nil
+}
+
 func (c *amd64Ctx) lowerX86Timestamp(op Op, ins Instr) (bool, bool, error) {
 	spec, known, err := x86TimestampProperties(op, ins, c.goarch)
 	if !known || err != nil {
