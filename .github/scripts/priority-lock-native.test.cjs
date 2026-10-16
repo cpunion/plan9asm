@@ -17,15 +17,19 @@ function requireLockOwners(source) {
   if (end >= 0) body = body.slice(0, end);
   assert.match(body, /runs-on: ubuntu-latest/);
   assert.match(body, /gcc-i686-linux-gnu libc6-dev-i386-cross/);
+  assert.match(body, /scripts\/install-ci-llvm22-ubuntu\.sh/);
   assert.match(body, /go-version: '1\.27\.2'/);
   assert.match(body, /set -euo pipefail/);
   assert.match(body, /go test -p=1 \. -list "\^\(\$roots\)\$"/);
   assert.match(body, /go test -p=1 \. -run "\^\(\$roots\)\$" -count=1 -timeout=5m -json/);
   for (const root of roots) assert.equal(body.split(root).length - 1, 1);
+  assert.ok(body.includes(`roots='${roots[0]}'\n`), 'complete AMD64 root assignment');
+  assert.ok(body.includes(`roots+='|${roots[1]}'\n`), 'complete 386 root assignment');
   assert.match(body, /2> _out\/native-lock\/stderr\.log \| tee _out\/native-lock\/raw\.jsonl/);
   assert.match(body, /node \.github\/scripts\/audit-lock-native\.cjs _out\/native-lock/);
   assert.match(body, /actions\/upload-artifact@v6/);
   assert.match(body, /if: \$\{\{ !cancelled\(\) \}\}/);
+  assert.match(body, /name: native-lock\n          path: _out\/native-lock\/\n          if-no-files-found: error/);
   assert.doesNotMatch(body, /continue-on-error|max-parallel|qemu|rosetta|PLAN9ASM_CROSS_EXEC|overlay/);
   assert.match(source, /needs: \[ownership, sdk-priority, arm64-fallback-cross-priority, lock-native-priority\]/);
   assert.ok(source.includes(priority), 'complete source-body dispatch before module tests');
@@ -43,14 +47,17 @@ test('LOCK priority rejects cropped, duplicate, skipped, emulated or unverified 
   for (const [before, after] of [
     ['runs-on: ubuntu-latest', 'runs-on: windows-latest'],
     ['gcc-i686-linux-gnu libc6-dev-i386-cross', 'gcc-i686-linux-gnu'],
+    ['scripts/install-ci-llvm22-ubuntu.sh', 'scripts/install-ci-llvm23-ubuntu.sh'],
     ['-timeout=5m -json', '-timeout=6m -json'],
     ['go test -p=1 . -list', 'printf missing-inventory'],
     ['node .github/scripts/audit-lock-native.cjs', 'printf missing-audit'],
+    ['if-no-files-found: error', 'if-no-files-found: ignore'],
     ['set -euo pipefail', 'set -euo pipefail\n          qemu-i386 true'],
     ...roots.flatMap(root => [[root, root + '/-O0'], [root, root + '|' + root]]),
   ]) {
     assert.ok(body.includes(before));
-    assert.throws(() => requireLockOwners(workflow.replace(body, body.replace(before, after))));
+    assert.throws(() => requireLockOwners(workflow.replace(body, body.replace(before, after))),
+      undefined, before);
   }
   for (const changed of [
     workflow + '\n  lock-native-priority:\n',
