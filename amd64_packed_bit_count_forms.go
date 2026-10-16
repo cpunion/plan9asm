@@ -30,12 +30,12 @@ func x86PackedBitCountProperties(op Op, ins Instr, arch string) (x86PackedBitCou
 		local.Args = []Operand{ins.Args[0], destination, ins.Args[1], destination}
 	}
 	local, contextual := x86VectorValueMemoryInput(local, arch)
-	grammar := x86PackedBinarySpec{encoding: x86PackedLogicalEVEX, zeroing: true, mode32MaskOperands: true}
+	grammar := x86PackedBinarySpec{encoding: x86PackedLogicalEVEX, zeroing: true}
 	if spec.broadcast {
 		grammar.broadcastBytes = spec.laneBits / 8
 	}
 	var err error
-	form.x86PackedBinaryForm, err = x86PackedBinaryProperties(local, arch, grammar)
+	form.x86PackedBinaryForm, err = x86PackedBinaryOperandGrammar(local, arch, grammar, true)
 	if err != nil {
 		return form, true, err
 	}

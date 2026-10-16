@@ -35,12 +35,12 @@ func x86GFNIProperties(op Op, ins Instr, arch string) (x86GFNIForm, bool, error)
 		local.Args = ins.Args[1:]
 	}
 	local, contextual := x86VectorValueMemoryInput(local, arch)
-	grammar := x86PackedBinarySpec{encoding: x86PackedLogicalVEXOrEVEX, zeroing: true, mode32MaskOperands: ins.x86Encoded}
+	grammar := x86PackedBinarySpec{encoding: x86PackedLogicalVEXOrEVEX, zeroing: true}
 	if spec.broadcast {
 		grammar.broadcastBytes = 8
 	}
 	var err error
-	form.x86PackedBinaryForm, err = x86PackedBinaryProperties(local, arch, grammar)
+	form.x86PackedBinaryForm, err = x86PackedBinaryOperandGrammar(local, arch, grammar, ins.x86Encoded)
 	if err != nil {
 		return form, true, err
 	}

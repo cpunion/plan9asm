@@ -90,9 +90,6 @@ type x86PackedBinarySpec struct {
 	encoding       x86PackedLogicalEncoding
 	broadcastBytes int
 	zeroing        bool
-	// Only a validated unary projection or physical decoder may avoid the
-	// named four-operand frontend cap, without changing the actual GOARCH.
-	mode32MaskOperands bool
 }
 
 type x86PackedBinaryForm struct {
@@ -147,6 +144,12 @@ func x86PackedLogicalProperties(ins Instr, goarch string) (x86PackedLogicalForm,
 }
 
 func x86PackedBinaryProperties(ins Instr, goarch string, spec x86PackedBinarySpec) (x86PackedBinaryForm, error) {
+	return x86PackedBinaryOperandGrammar(ins, goarch, spec, false)
+}
+
+// Only a validated unary projection or physical decoder may avoid the named
+// four-operand frontend cap. Every other grammar axis keeps the actual GOARCH.
+func x86PackedBinaryOperandGrammar(ins Instr, goarch string, spec x86PackedBinarySpec, mode32MaskOperands bool) (x86PackedBinaryForm, error) {
 	_, suffix, dotted := strings.Cut(strings.ToUpper(string(ins.Op)), ".")
 	form := x86PackedBinaryForm{first: 0, second: 1, destination: len(ins.Args) - 1, mask: -1, memory: -1}
 	fail := func() (x86PackedBinaryForm, error) {
@@ -187,7 +190,7 @@ func x86PackedBinaryProperties(ins Instr, goarch string, spec x86PackedBinarySpe
 			return fail()
 		}
 		if len(ins.Args) == 4 {
-			if goarch == "386" && !spec.mode32MaskOperands || spec.encoding == x86PackedLogicalVEX || !amd64NonzeroKOperand(ins.Args[2]) {
+			if goarch == "386" && !mode32MaskOperands || spec.encoding == x86PackedLogicalVEX || !amd64NonzeroKOperand(ins.Args[2]) {
 				return fail()
 			}
 			form.mask = 2
