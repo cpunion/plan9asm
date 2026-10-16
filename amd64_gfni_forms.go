@@ -21,6 +21,9 @@ func x86GFNIProperties(op Op, ins Instr, arch string) (x86GFNIForm, bool, error)
 	if ins.Op != "" && !strings.EqualFold(string(ins.Op), string(op)) {
 		return form, true, fmt.Errorf("GFNI dispatch/source opcode mismatch: %s/%s", op, ins.Op)
 	}
+	if err := x86VectorValueMemoryContext(ins, arch); err != nil {
+		return form, true, err
+	}
 	local := ins
 	local.Op = op
 	offset := 0

@@ -46,6 +46,10 @@ func TestTranslateX86PackedLeadingZeroCountCompleteGoFormsAcrossTargets(t *testi
 	} {
 		t.Run(target.name, func(t *testing.T) {
 			var source strings.Builder
+			base := "R9"
+			if target.goarch == "386" {
+				base = "CX"
+			}
 			source.WriteString("TEXT packedlzcntforms(SB),$0-0\n")
 			for _, op := range []string{"VPLZCNTD", "VPLZCNTQ"} {
 				for _, width := range []string{"X", "Y", "Z"} {
@@ -54,11 +58,11 @@ func TestTranslateX86PackedLeadingZeroCountCompleteGoFormsAcrossTargets(t *testi
 						last = 7
 					}
 					fmt.Fprintf(&source, "\t%s %s0, %s%d\n", op, width, width, last)
-					fmt.Fprintf(&source, "\t%s 8(R9), %s%d\n", op, width, last)
+					fmt.Fprintf(&source, "\t%s 8(%s), %s%d\n", op, base, width, last)
 					fmt.Fprintf(&source, "\t%s %s1, K1, %s%d\n", op, width, width, last)
-					fmt.Fprintf(&source, "\t%s.Z 16(R9), K7, %s%d\n", op, width, last)
-					fmt.Fprintf(&source, "\t%s.BCST 24(R9), %s%d\n", op, width, last)
-					fmt.Fprintf(&source, "\t%s.BCST.Z 32(R9), K2, %s%d\n", op, width, last)
+					fmt.Fprintf(&source, "\t%s.Z 16(%s), K7, %s%d\n", op, base, width, last)
+					fmt.Fprintf(&source, "\t%s.BCST 24(%s), %s%d\n", op, base, width, last)
+					fmt.Fprintf(&source, "\t%s.BCST.Z 32(%s), K2, %s%d\n", op, base, width, last)
 				}
 			}
 			source.WriteString("\tRET\n")
