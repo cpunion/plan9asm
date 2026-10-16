@@ -42,8 +42,8 @@ func TestX86RawStaticRegisterReturnDoesNotInventSourceBytes(t *testing.T) {
 				row.op, row.register, row.op, row.register, row.op, row.register)
 			for _, mutation := range []struct{ name, body string }{
 				{"unknown-store-input", strings.Replace(body, row.op+" $17,"+row.register, "NOP", 1)},
-				{"unbound-static-read", strings.Replace(body, row.op+" "+row.register+",saved<>+4(SB)\n", "", 1)},
-				{"different-static-byte", strings.Replace(body, "saved<>+4(SB),"+row.register, "saved<>+5(SB),"+row.register, 1)},
+				{"unbound-static-read", strings.Replace(body, "saved<>+4(SB),"+row.register, "external+4(SB),"+row.register, 1)},
+				{"outside-static-extent", strings.Replace(body, "saved<>+4(SB),"+row.register, "saved<>+32(SB),"+row.register, 1)},
 				{"unknown-final-result", body + "MOVL DX,AX\n"},
 			} {
 				t.Run(target.triple+"/"+row.op+"/"+mutation.name, func(t *testing.T) {
