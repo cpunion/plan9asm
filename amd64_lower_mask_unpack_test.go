@@ -88,10 +88,7 @@ func TestTranslateX86MaskUnpackRejectsFormsOutsideGo127Table(t *testing.T) {
 }
 
 func TestAMD64MaskUnpackRuntimeSemantics(t *testing.T) {
-	crossRosetta := runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" && rosettaAvailable()
-	if runtime.GOARCH != "amd64" && !crossRosetta {
-		t.Skip("runtime execution test requires amd64 or Rosetta")
-	}
+	// Portable LLVM integer execution, not original-Go/native opmask execution.
 	llc, clang, ok := findLlcAndClang(t)
 	if !ok {
 		t.Fatal("LLVM 22 llc/clang not found")
@@ -116,11 +113,6 @@ func TestAMD64MaskUnpackRuntimeSemantics(t *testing.T) {
 		t.Fatal(err)
 	}
 	triple := testTargetTriple(runtime.GOOS, runtime.GOARCH)
-	var runPrefix []string
-	if crossRosetta {
-		triple = "x86_64-apple-macosx"
-		runPrefix = []string{"/usr/bin/arch", "-x86_64"}
-	}
 	ir, err := Translate(file, Options{
 		Goarch:       "amd64",
 		TargetTriple: triple,
@@ -154,5 +146,5 @@ int main(void) {
   return 0;
 }
 `
-	compileAndRunRuntimeTestForTarget(t, llc, clang, "mask_unpack_semantics", triple, ir, mainC, runPrefix)
+	compileAndRunRuntimeTestForTarget(t, llc, clang, "mask_unpack_semantics", triple, ir, mainC, nil)
 }

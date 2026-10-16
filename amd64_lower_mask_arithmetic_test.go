@@ -94,10 +94,7 @@ func assertX86MaskArithmeticRejected(t *testing.T, goarch, instruction string) {
 }
 
 func TestAMD64MaskArithmeticRuntimeSemantics(t *testing.T) {
-	crossRosetta := runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" && rosettaAvailable()
-	if runtime.GOARCH != "amd64" && !crossRosetta {
-		t.Skip("runtime execution test only runs on amd64 or Rosetta")
-	}
+	// Portable LLVM integer execution, not original-Go/native opmask execution.
 	llc, clang, ok := findLlcAndClang(t)
 	if !ok {
 		t.Fatal("LLVM 22 llc/clang not found")
@@ -128,10 +125,7 @@ TEXT maskArithmetic(SB),$0-24
 		{Offset: 8, Type: I64, Index: 1, Field: -1},
 		{Offset: 16, Type: I64, Index: 2, Field: -1},
 	}}
-	triple := "x86_64-apple-darwin"
-	if runtime.GOOS != "darwin" {
-		triple = testTargetTriple(runtime.GOOS, "amd64")
-	}
+	triple := testTargetTriple(runtime.GOOS, runtime.GOARCH)
 	ll, err := Translate(file, Options{
 		TargetTriple: triple,
 		Goarch:       "amd64",
@@ -158,9 +152,5 @@ int main(void) {
   return 0;
 }
 `
-	var runPrefix []string
-	if crossRosetta {
-		runPrefix = []string{"arch", "-x86_64"}
-	}
-	compileAndRunRuntimeTestForTarget(t, llc, clang, "mask_arithmetic", triple, ll, mainC, runPrefix)
+	compileAndRunRuntimeTestForTarget(t, llc, clang, "mask_arithmetic", triple, ll, mainC, nil)
 }
