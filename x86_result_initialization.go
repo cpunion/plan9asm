@@ -328,10 +328,13 @@ func checkX86ResultSourceFlowWithTrapOnly(fn Func, initial x86ResultState, owned
 	}
 	// Discover private value-stack effects in the same complete, already
 	// selected CFG used below, including source-bound private helpers.
+	flagProjection := false
 	for _, ins := range instructions {
-		if _, known, _ := x86StackWidthProperties(ins, goarch); known {
-			initial.valueStack = new(x86ResultValueStack)
-			break
+		if spec, known, _ := x86StackWidthProperties(ins, goarch); known {
+			if initial.valueStack == nil {
+				initial.valueStack = new(x86ResultValueStack)
+			}
+			flagProjection = flagProjection || spec.mode == amd64StackPushFlags
 		}
 	}
 	// One logical byte-work envelope includes FP/AUTO, numerical GP/Z/K,
@@ -352,7 +355,10 @@ func checkX86ResultSourceFlowWithTrapOnly(fn Func, initial x86ResultState, owned
 	if initial.valueStack != nil {
 		// Bit masks, two-byte depth, invalid join, ID and the ten-byte
 		// transient popped register/validity/eight-byte initialized-bit view.
-		byteState += x86ResultValueStackLimit(goarch) + 14 + 32 // Halfword FLAGS-origin bitmap.
+		byteState += x86ResultValueStackLimit(goarch) + 14
+		if flagProjection {
+			byteState += x86ResultValueStackLimit(goarch) // Exact source-position refinement masks.
+		}
 	}
 	if initial.continuation != nil {
 		byteState += 16*48 + len(initial.continuation.written) + 2
@@ -613,6 +619,7 @@ func (state x86ResultState) clone() x86ResultState {
 	if state.valueStack != nil {
 		stack := *state.valueStack
 		stack.bytes = append([]uint8(nil), stack.bytes...)
+		stack.refinable = append([]uint8(nil), stack.refinable...)
 		state.valueStack = &stack
 	}
 	if state.continuation != nil {
@@ -738,20 +745,25 @@ func (state x86ResultState) intersect(other x86ResultState) x86ResultState {
 		if other.valueStack == nil || merged.valueStack.invalid || other.valueStack.invalid ||
 			len(merged.valueStack.bytes) != len(other.valueStack.bytes) {
 			merged.valueStack.bytes, merged.valueStack.invalid = nil, true
+			merged.valueStack.refinable = nil
 		} else {
+			if merged.valueStack.refinable != nil || other.valueStack.refinable != nil {
+				left, right := merged.valueStack.refinable, other.valueStack.refinable
+				if left == nil {
+					left = merged.valueStack.bytes
+				}
+				if right == nil {
+					right = other.valueStack.bytes
+				}
+				merged.valueStack.refinable = make([]uint8, len(merged.valueStack.bytes))
+				for index := range merged.valueStack.refinable {
+					merged.valueStack.refinable[index] = left[index] & right[index]
+				}
+			}
 			for index := range merged.valueStack.bytes {
 				merged.valueStack.bytes[index] &= other.valueStack.bytes[index]
 			}
 			merged.valueStack.id = merged.valueStack.id && other.valueStack.id
-		}
-		if merged.valueStack.invalid {
-			merged.valueStack.flagOrigins = [4]uint64{}
-		} else {
-			// A FLAGS source on either edge forbids inventing an ambient
-			// control input, even when the ordinary NUM-byte join is full.
-			for index := range merged.valueStack.flagOrigins {
-				merged.valueStack.flagOrigins[index] |= other.valueStack.flagOrigins[index]
-			}
 		}
 		if other.valueStack == nil || merged.valueStack.invalid ||
 			merged.valueStack.popped.register != other.valueStack.popped.register ||

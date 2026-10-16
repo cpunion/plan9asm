@@ -8,23 +8,10 @@ type x86ResultValueStack struct {
 	invalid bool
 	id      bool // ID is separate from the six arithmetic flags and DF.
 	popped  x86ResultPoppedWord
-	// Every source PUSH/POP width is a multiple of two. One origin bit per
-	// halfword covers all504 maximum stack bytes without a second byte array.
-	flagOrigins [4]uint64
-}
-
-func (stack *x86ResultValueStack) flagOrigin(byteOffset int) bool {
-	index := byteOffset / 2
-	return stack.flagOrigins[index/64]&(uint64(1)<<uint(index%64)) != 0
-}
-
-func (stack *x86ResultValueStack) setFlagOrigin(byteOffset int, flags bool) {
-	index := byteOffset / 2
-	mask := uint64(1) << uint(index%64)
-	stack.flagOrigins[index/64] &^= mask
-	if flags {
-		stack.flagOrigins[index/64] |= mask
-	}
+	// Nil means the existing ordinary NUM bytes. FLAGS pushes additionally
+	// retain precisely which source bits the adjacent mask may refine. Keep
+	// those masks in stack-byte order through mixed widths, not GP positions.
+	refinable []uint8
 }
 
 func x86ResultValueStackLimit(arch string) int {
@@ -67,7 +54,8 @@ func x86ResultValueStackStep(ins Instr, state *x86ResultState, owned []bool, res
 		storage = 8 // Existing virtual AMD64 slots zero-extend narrow pushes.
 	}
 	stack := state.valueStack
-	if len(stack.bytes)%2 != 0 || len(stack.bytes) > x86ResultValueStackLimit(arch) {
+	if len(stack.bytes)%2 != 0 || len(stack.bytes) > x86ResultValueStackLimit(arch) ||
+		stack.refinable != nil && len(stack.refinable) != len(stack.bytes) {
 		return false, true
 	}
 	push := spec.mode == amd64StackPushValue || spec.mode == amd64StackPushFlags
@@ -97,28 +85,46 @@ func x86ResultValueStackStep(ins Instr, state *x86ResultState, owned []bool, res
 		if len(stack.bytes) > x86ResultValueStackLimit(arch)-storage {
 			return false, true
 		}
+		if spec.mode == amd64StackPushFlags && stack.refinable == nil {
+			stack.refinable = make([]uint8, len(stack.bytes))
+			copy(stack.refinable, stack.bytes)
+		}
 		for index := storage - 1; index >= 0; index-- {
-			stack.setFlagOrigin(len(stack.bytes), spec.mode == amd64StackPushFlags && int64(index) < width)
-			stack.bytes = append(stack.bytes, uint8(bits>>uint(8*index)))
+			initialized := uint8(bits >> uint(8*index))
+			if stack.refinable != nil {
+				eligible := initialized
+				if spec.mode == amd64StackPushFlags {
+					const modeledFlags = uint64(0x200cff)
+					eligible &= uint8(modeledFlags >> uint(8*index))
+				}
+				stack.refinable = append(stack.refinable, eligible)
+			}
+			stack.bytes = append(stack.bytes, initialized)
 		}
 		return true, true
 	}
 	bits := ^uint64(0)
-	var flagBytes uint8
+	refinable := bits
 	if !state.shapeOnly {
 		if len(stack.bytes) < storage {
 			return false, true
 		}
 		bits = 0
+		refinable = 0
 		for index := 0; index < storage; index++ {
 			position := len(stack.bytes) - 1 - index
 			bits |= uint64(stack.bytes[position]) << uint(8*index)
-			if stack.flagOrigin(position) {
-				flagBytes |= 1 << uint(index)
+			eligible := stack.bytes[position]
+			if stack.refinable != nil {
+				eligible &= stack.refinable[position]
 			}
+			refinable |= uint64(eligible) << uint(8*index)
 		}
-		for index := len(stack.bytes) - storage; index < len(stack.bytes); index += 2 {
-			stack.setFlagOrigin(index, false)
+		if stack.refinable != nil {
+			stack.refinable = stack.refinable[:len(stack.bytes)-storage]
+			if len(stack.refinable) == 0 {
+				stack.refinable = nil
+			}
 		}
 		stack.bytes = stack.bytes[:len(stack.bytes)-storage]
 	}
@@ -163,15 +169,7 @@ func x86ResultValueStackStep(ins Instr, state *x86ResultState, owned []bool, res
 		// Whole known bytes outside a narrow POP remain independently known.
 		known := uint64(0)
 		for b := int64(0); b < width; b++ {
-			initialized := uint8(bits >> uint(8*b))
-			if flagBytes&(1<<uint(b)) != 0 {
-				// Even a fully initialized FLAGS byte is not ordinary NUM
-				// data. Refine only modeled status/DF/ID and reserved low
-				// bits, never ambient TF/IF/IOPL/NT/RF/AC controls.
-				const modeledFlags = uint64(0x200cff)
-				initialized &= uint8(modeledFlags >> uint(8*b))
-			}
-			known |= uint64(initialized) << uint(8*b)
+			known |= uint64(uint8(refinable>>uint(8*b))) << uint(8*b)
 		}
 		for b := width; b < 8; b++ {
 			if state.gp[index]&(1<<uint(b)) != 0 {
