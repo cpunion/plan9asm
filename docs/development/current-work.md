@@ -1,5 +1,33 @@
 # Current work: PR 40 checkpoint
 
+## Logical storage, MXCSR and timestamp checkpoint, 2026-10-17
+
+`dd87e7cb` passes all 88 affected/retained roots on current Go, actual Go20
+and race: 264 root executions, 27,702 children, zero failures/skips and the
+same terminal identities per lane. Its nine final gates and all 120 CI policy
+tests pass. Independent comparison of all eight SDK x86 corpora changes only
+four isolated AMD64 MXCSR probes to Context; complete original encoding rules,
+form metadata and corpus denominators stay unchanged. Complete initialized
+programs retain all four native opcodes and five-target objects.
+
+The subsequent timestamp repair shares both complete implicit-output specs
+with numerical writes and GP revocation, including Void. Exact decoded raw
+timestamps preserve independent ID/DF/private-stack facts; altered origins,
+operands, encoding/address flags and foreign entry/storage roles remain Context.
+At `837c6457`, the six-root focused set passes on current Go and actual Go20;
+the complete twelve-root SDK/race retained union is being qualified separately.
+This is object/source coverage, not original Linux timestamp execution.
+
+Published fork CI is still the older `e50292a9` run. Its native inventory has
+61 passed and five failed roots: packed-string status, MMX unpack, word-multiply
+MXCSR composition, physical source-stack numerical composition and timestamps.
+The latter two numerical instruction effects must not be confused with native
+execution certification. A separate SDK job also exposes unbound address-format
+fixtures. Continue with the complete first-party module runner (64 disjoint
+shards, two workers, unchanged 45m command budgets), retaining every failure and
+host-inapplicable skip explicitly. Do not run external inventory locally or
+publish another batch until the current CI finishes. PR40 remains draft.
+
 ## Current CI counterexamples, 2026-10-17
 
 Published fork CI `e50292a9` exposes the same old 386 family fixture on both
