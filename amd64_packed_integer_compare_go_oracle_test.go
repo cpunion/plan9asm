@@ -1,11 +1,13 @@
 package plan9asm
 
 import (
+	"debug/buildinfo"
 	"fmt"
 	"go/format"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -37,15 +39,31 @@ func x86PackedIntegerCompareOriginalGoDriver(t *testing.T, declaration, assembly
 	ctx, cancel := runtimeOracleStageContext(t)
 	defer cancel()
 	arguments := []string{"test", "-p=2", "-vet=off", "-count=1"}
+	executable := filepath.Join(dir, "original-compare.test")
 	if buildOnly {
-		arguments = append(arguments, "-run=^$")
+		arguments = append(arguments, "-c", "-o", executable)
 	}
 	arguments = append(arguments, ".")
 	command := exec.CommandContext(ctx, driver, arguments...)
 	command.Dir = dir
 	command.Env = append(os.Environ(), "GOENV=off", "GOWORK=off", "GOTOOLCHAIN=local", "GOARCH=amd64", "CGO_ENABLED=0", "GOMAXPROCS=2")
 	if output, err := runtimeOracleCombinedOutput(ctx, command); err != nil {
-		t.Fatalf("actual original Go packed compare execution: %v\n%s", err, output)
+		t.Fatalf("actual original Go packed compare driver (build-only=%t): %v\n%s", buildOnly, err, output)
+	}
+	if buildOnly {
+		info, err := buildinfo.ReadFile(executable)
+		if err != nil || info.GoVersion != runtime.Version() {
+			t.Fatal("build-only driver did not retain the actual SDK's linked executable", info, err)
+		}
+		amd64 := false
+		for _, setting := range info.Settings {
+			if setting.Key == "GOARCH" {
+				amd64 = setting.Value == "amd64"
+			}
+		}
+		if !amd64 {
+			t.Fatal("build-only driver lost its actual AMD64 target", info.Settings)
+		}
 	}
 }
 
