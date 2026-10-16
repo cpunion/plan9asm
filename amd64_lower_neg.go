@@ -43,7 +43,7 @@ func (c *amd64Ctx) lowerScalarUnaryYmb(op Op, ins Instr) (ok bool, terminated bo
 	}
 
 	typ := amd64IntegerTypeForBits(bits)
-	value, store, err := c.loadScalarRMWDestination(op, ins, typ)
+	value, store, err := c.loadScalarRMWDestination(op, ins, destination, typ)
 	if err != nil {
 		return true, false, err
 	}

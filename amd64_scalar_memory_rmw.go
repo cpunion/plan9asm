@@ -15,13 +15,13 @@ func x86ScalarMemoryRMWProperties(op Op, ins Instr, arch string) (x86LockScalarR
 	return form, isAMD64MemoryOperand(form.destination), nil
 }
 
-func (c *amd64Ctx) loadScalarRMWDestination(op Op, ins Instr, typ LLVMType) (string, func(string) error, error) {
+func (c *amd64Ctx) loadScalarRMWDestination(op Op, ins Instr, destination Operand, typ LLVMType) (string, func(string) error, error) {
 	form, known, err := x86ScalarMemoryRMWProperties(op, ins, c.goarch)
 	if err != nil {
 		return "", nil, err
 	}
 	if !known || !x86OrdinaryNativeMemoryOperand(form.destination, c.goarch) {
-		return c.loadIntDestination(ins.Args[len(ins.Args)-1], typ)
+		return c.loadIntDestination(destination, typ)
 	}
 	if ins.x86AddressBits != 0 || ins.x86UnboundAddressOverride {
 		return "", nil, fmt.Errorf("%w: scalar RMW needs its original native address size", ErrProbeNeedsContext)
@@ -73,7 +73,7 @@ func (c *amd64Ctx) lowerScalarMemoryRMW(op Op, ins Instr) (bool, bool, error) {
 	if err != nil {
 		return true, false, err
 	}
-	old, store, err := c.loadScalarRMWDestination(op, local, typ)
+	old, store, err := c.loadScalarRMWDestination(op, local, form.destination, typ)
 	if err != nil {
 		return true, false, err
 	}

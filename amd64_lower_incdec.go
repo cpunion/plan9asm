@@ -50,7 +50,7 @@ func (c *amd64Ctx) lowerScalarIncDec(op Op, ins Instr) (ok bool, terminated bool
 	}
 
 	ty := amd64IntegerTypeForBits(bits)
-	old, store, err := c.loadScalarRMWDestination(op, ins, ty)
+	old, store, err := c.loadScalarRMWDestination(op, ins, dst, ty)
 	if err != nil {
 		return true, false, err
 	}
