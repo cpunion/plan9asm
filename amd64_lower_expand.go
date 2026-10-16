@@ -22,8 +22,8 @@ var amd64PackedExpandSpecs = map[Op]amd64PackedExpandSpec{
 
 // lowerPackedExpand implements all six _yvexpandpd rows for every instruction
 // above: X/Y/Z register or memory sources and the corresponding K1-K7 merge or
-// .Z forms. Masked memory uses llvm.masked.expandload so disabled lanes do not
-// spuriously read beyond the compact source array.
+// .Z forms. Logical FP fields are reconstructed independently; only native
+// memory uses a pointer to the compact source array.
 func (c *amd64Ctx) lowerPackedExpand(op Op, ins Instr) (ok bool, terminated bool, err error) {
 	form, known, err := x86PackedCompactProperties(op, ins, c.goarch)
 	if !known || !form.expand {
@@ -59,7 +59,7 @@ func (c *amd64Ctx) lowerPackedExpand(op Op, ins Instr) (ok bool, terminated bool
 	}
 
 	result := ""
-	if isAMD64MemoryOperand(source) {
+	if isAMD64MemoryOperand(source) && source.Kind != OpFP {
 		pointer, pointerType, intrinsicSuffix, err := c.packedVectorMemoryPointer(source)
 		if err != nil {
 			return true, false, err
