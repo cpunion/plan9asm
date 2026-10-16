@@ -14,10 +14,28 @@ func (c *amd64Ctx) lowerMXCSR(op Op, ins Instr) (ok bool, terminated bool, err e
 		}
 		return false, false, nil
 	}
-	if _, known, err := x86MXCSRProperties(ins, c.goarch); !known || err != nil {
+	write, known, err := x86MXCSRProperties(ins, c.goarch)
+	if !known || err != nil {
 		return known, false, err
 	}
 	baseOp := strings.ToUpper(string(op))
+	if memory := ins.Args[0]; memory.Kind == OpMem && memory.Mem.Sym == "" &&
+		x86OrdinaryNativeMemoryOperand(memory, c.goarch) {
+		pointer, pointerType, err := c.ptrFromMem(memory.Mem)
+		if err != nil {
+			return true, false, err
+		}
+		constraint := "*m,~{memory}"
+		if write {
+			constraint = "=*m,~{memory}"
+		}
+		// One original native m32 operation retains exact access/fault and
+		// legacy/VEX identity, even when no numerical result is observed.
+		// MXCSR does not modify integer FLAGS, DF or any GP register.
+		fmt.Fprintf(c.b, "  call void asm sideeffect %q, %q(%s elementtype(i32) %s)\n",
+			strings.ToLower(baseOp)+" $0", constraint, pointerType, pointer)
+		return true, false, nil
+	}
 	slot := c.newTmp()
 	fmt.Fprintf(c.b, "  %%%s = alloca i32\n", slot)
 	switch baseOp {
@@ -40,6 +58,24 @@ func (c *amd64Ctx) lowerMXCSR(op Op, ins Instr) (ok bool, terminated bool, err e
 	default:
 		panic("MXCSR opcode precheck drift")
 	}
+}
+
+// The paired original opcode either faults or continues. This lowering-only
+// consumer checks actual incoming pointer/index identity, not numerical address
+// bits, pointee initializedness, bounds or a reusable caller-memory permission.
+func x86LoweredNativeMXCSRStep(ins Instr, state *x86ResultState, arch string) (bool, bool) {
+	write, known, err := x86MXCSRProperties(ins, arch)
+	if !known || err != nil || len(ins.Args) != 1 || ins.Args[0].Kind != OpMem ||
+		ins.Args[0].Mem.Sym != "" || !x86OrdinaryNativeMemoryOperand(ins.Args[0], arch) {
+		return false, false
+	}
+	if !x86ResultNamedPredicateInstruction(ins) || ins.x86NumericalRead != nil {
+		return false, true
+	}
+	if write {
+		return x86ResultIncomingPointerAddressIdentity(ins.Args[0], state, arch), true
+	}
+	return x86ResultIncomingPointerReadAddressIdentity(ins.Args[0], state, arch), true
 }
 
 func (c *amd64Ctx) storeMXCSRMemory(dst Operand, value string) error {

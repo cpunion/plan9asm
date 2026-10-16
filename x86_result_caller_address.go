@@ -70,6 +70,9 @@ func x86ResultCallerAddressesAfter(ins Instr, before [16]bool, entryFP map[int64
 		return [16]bool{}
 	}
 	ins = x86GoMOVQSourceInstruction(ins) // Original source/certificates stay unchanged.
+	if _, known, err := x86MXCSRProperties(ins, arch); known && err == nil {
+		return before // All four original m32 opcodes preserve GP identities.
+	}
 	if form, known, err := x86X87WordProperties(ins, arch); known {
 		if err != nil {
 			return [16]bool{}

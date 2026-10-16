@@ -99,7 +99,6 @@ func TestX86MXCSRStorageRolesCannotBorrowSyntaxAuthority(t *testing.T) {
 			write := strings.Contains(op, "STMXCSR")
 			rows := []struct{ name, declaration, body, data string }{
 				{"unbound GP", "func view() uint32", op + " (AX)\nMOVL $7,ret+RESULT(FP)", ""},
-				{"actual typed native pointer", "func view(p *[2]uint32) uint32", move + " p+0(FP),AX\n" + op + " 4(AX)\nMOVL $7,ret+RESULT(FP)", ""},
 				{"undefined SB", "func view() uint32", op + " control(SB)\nMOVL $7,ret+RESULT(FP)", ""},
 			}
 			if write {

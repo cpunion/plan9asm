@@ -98,6 +98,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 	transfer := func(ordinal int, ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string) bool {
 		state.loweredStaticReads = c.fpScalarData
 		defer func() { state.loweredStaticReads = nil }()
+		if accepted, known := x86LoweredNativeMXCSRStep(ins, state, arch); known {
+			return accepted
+		}
 		if accepted, known := c.scalarStaticAddressValueTransfer(ins, state, owned, arch); known {
 			return accepted
 		}
