@@ -13,15 +13,25 @@ func x86AverageValueRuntimeProgram(arch string) (string, string, string, string)
 }
 
 func x86AverageValueRuntimeProgramWithResult(arch string, discard bool) (string, string, string, string) {
+	return x86FixedBinaryValueRuntimeProgram(arch, discard, "Average", x86AverageValueRows, func(op string) (int, int) {
+		if strings.HasSuffix(op, "W") {
+			return 16, 0
+		}
+		return 8, 0
+	})
+}
+
+func x86FixedBinaryValueRuntimeProgram(arch string, discard bool, prefix string,
+	inventory func(string) []struct{ op, bank, mode string }, reference func(string) (int, int)) (string, string, string, string) {
 	word, move, maskMove, cWord := 8, "MOVQ", "KMOVQ", "uint64_t"
 	if arch == "386" {
 		word, move, maskMove, cWord = 4, "MOVL", "KMOVD", "uint32_t"
 	}
 	var source, declarations, prototypes, rows strings.Builder
-	for index, row := range x86AverageValueRows(arch) {
-		name := fmt.Sprintf("Average%d", index)
+	for index, row := range inventory(arch) {
+		name := fmt.Sprintf("%s%d", prefix, index)
 		instruction := row.op + " X0,X2"
-		setup, width, bits, mode, legacy := "VMOVUPS (AX),Z0\n", 16, 8, 0, 1
+		setup, width, mode, legacy := "VMOVUPS (AX),Z0\n", 16, 0, 1
 		if strings.HasPrefix(row.op, "V") {
 			op, mask := row.op, ""
 			setup, legacy = "", 0
@@ -38,9 +48,7 @@ func x86AverageValueRuntimeProgramWithResult(arch string, discard bool) (string,
 			}
 			instruction = op + " (AX)," + row.bank + "1," + mask + row.bank + "2"
 		}
-		if strings.HasSuffix(row.op, "W") {
-			bits = 16
-		}
+		bits, operation := reference(row.op)
 		finish := "VMOVUPS Z2,(SI)\n"
 		if discard {
 			finish = "" // Preserve every source read and CF observation, discard only the numerical result.
@@ -50,7 +58,7 @@ func x86AverageValueRuntimeProgramWithResult(arch string, discard bool) (string,
 			name, 4*word, move, move, word, move, 2*word, move, 3*word, maskMove, setup, instruction, finish)
 		fmt.Fprintf(&declarations, "func %s(a,b,out *[65]byte,mask uintptr)\n", name)
 		fmt.Fprintf(&prototypes, "extern void %s(uint8_t*,uint8_t*,uint8_t*,%s);\n", name, cWord)
-		fmt.Fprintf(&rows, "{%s,%d,%d,%d,%d},\n", name, width, bits, mode, legacy)
+		fmt.Fprintf(&rows, "{%s,%d,%d,%d,%d,%d},\n", name, width, bits, mode, legacy, operation)
 	}
 	return source.String(), declarations.String(), prototypes.String(), rows.String()
 }
@@ -68,7 +76,7 @@ func TestX86PackedAverageCompletePortableValuesAndCanaries(t *testing.T) {
 	x86LEAActualTargetGoObject(t, arch, map[string]string{"amd64": "x86_64-unknown-linux-gnu", "386": "i386-unknown-linux-gnu"}[arch], source)
 	driver := "#include <stdint.h>\n#include <stdio.h>\n#include <string.h>\n" + prototypes +
 		"typedef " + cWord + " average_word;\n" + `
-struct kernel {void (*fn)(uint8_t*,uint8_t*,uint8_t*,average_word);unsigned width,bits,mode,legacy;};
+struct kernel {void (*fn)(uint8_t*,uint8_t*,uint8_t*,average_word);unsigned width,bits,mode,legacy,operation;};
 static const struct kernel kernels[]={
 ` + rows + `};
 int main(void) {

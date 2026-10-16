@@ -4,48 +4,13 @@ import (
 	"fmt"
 	"runtime"
 	"strconv"
-	"strings"
 	"testing"
 )
 
 func x86WordMultiplyValueRuntimeProgram(arch string, discard bool) (string, string, string, string) {
-	word, move, maskMove, cWord := 8, "MOVQ", "KMOVQ", "uint64_t"
-	if arch == "386" {
-		word, move, maskMove, cWord = 4, "MOVL", "KMOVD", "uint32_t"
-	}
-	var source, declarations, prototypes, rows strings.Builder
-	for index, row := range x86WordMultiplyValueRows(arch) {
-		name := fmt.Sprintf("WordMultiplyValue%d", index)
-		instruction, setup := row.op+" X0,X2", "VMOVUPS (AX),Z0\n"
-		width, mode, legacy := 16, 0, 1
-		if strings.HasPrefix(row.op, "V") {
-			op, mask := row.op, ""
-			setup, legacy = "", 0
-			if row.bank == "Y" {
-				width = 32
-			} else if row.bank == "Z" {
-				width = 64
-			}
-			if row.mode != "plain" {
-				mask, mode = "K1,", 1
-			}
-			if row.mode == "zero" {
-				op, mode = op+".Z", 2
-			}
-			instruction = op + " (AX)," + row.bank + "1," + mask + row.bank + "2"
-		}
-		finish := "VMOVUPS Z2,(SI)\n"
-		if discard {
-			finish = "" // Discard numerical results, never the input read or CF observation.
-		}
-		fmt.Fprintf(&source, "TEXT ·%s(SB),4,$0-%d\n%s a+0(FP),AX\n%s b+%d(FP),BX\n%s out+%d(FP),SI\n"+
-			"%s mask+%d(FP),CX\n%s CX,K1\nVMOVUPS (BX),Z1\nVMOVUPS (BX),Z2\n%sSTC\n%s\n%sSETCS 64(SI)\nRET\n",
-			name, 4*word, move, move, word, move, 2*word, move, 3*word, maskMove, setup, instruction, finish)
-		fmt.Fprintf(&declarations, "func %s(a,b,out *[65]byte,mask uintptr)\n", name)
-		fmt.Fprintf(&prototypes, "extern void %s(uint8_t*,uint8_t*,uint8_t*,%s);\n", name, cWord)
-		fmt.Fprintf(&rows, "{%s,%d,%d,%d,%d},\n", name, width, x86WordMultiplyReferenceMode(row.op), mode, legacy)
-	}
-	return source.String(), declarations.String(), prototypes.String(), rows.String()
+	return x86FixedBinaryValueRuntimeProgram(arch, discard, "WordMultiplyValue", x86WordMultiplyValueRows, func(op string) (int, int) {
+		return 16, x86WordMultiplyReferenceMode(op)
+	})
 }
 
 // Mathematical integer reference, independent of the emitter and its spec map.
@@ -74,7 +39,7 @@ func TestX86PackedWordMultiplyCompletePortableValuesAndCanaries(t *testing.T) {
 	x86LEAActualTargetGoObject(t, arch, map[string]string{"amd64": "x86_64-unknown-linux-gnu", "386": "i386-unknown-linux-gnu"}[arch], source)
 	driver := "#include <stdint.h>\n#include <stdio.h>\n#include <string.h>\n" + prototypes +
 		"typedef " + cWord + " source_word;\n" + x86WordMultiplyPortableReference + `
-struct kernel {void (*fn)(uint8_t*,uint8_t*,uint8_t*,source_word);unsigned width,operation,mode,legacy;};
+struct kernel {void (*fn)(uint8_t*,uint8_t*,uint8_t*,source_word);unsigned width,bits,mode,legacy,operation;};
 static const struct kernel kernels[]={
 ` + rows + `};
 int main(void) {

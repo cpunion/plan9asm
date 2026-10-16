@@ -9,16 +9,25 @@ import (
 )
 
 func TestX86PackedAverageE4PortableMemoryFaults(t *testing.T) {
+	x86FixedBinaryE4PortableMemoryFaults(t, x86AverageValueRuntimeProgramWithResult, 90)
+}
+
+func TestX86PackedWordMultiplyE4PortableMemoryFaults(t *testing.T) {
+	x86FixedBinaryE4PortableMemoryFaults(t, x86WordMultiplyValueRuntimeProgram, 180)
+}
+
+func x86FixedBinaryE4PortableMemoryFaults(t *testing.T, program func(string, bool) (string, string, string, string), observations int) {
+	t.Helper()
 	llc, clang, found := findLlcAndClang(t)
 	if !found {
 		t.Fatal("LLVM22 llc and clang required")
 	}
 	for _, discard := range []bool{false, true} {
-		source, declarations, prototypes, rows := x86AverageValueRuntimeProgramWithResult("amd64", discard)
+		source, declarations, prototypes, rows := program("amd64", discard)
 		driver := "#include <stdint.h>\n#include <stdio.h>\n#include <string.h>\n#include <errno.h>\n" +
 			"#include <unistd.h>\n#include <signal.h>\n#include <sys/mman.h>\n#include <sys/wait.h>\n#include <sys/resource.h>\n" +
 			numericalRuntimeFaultObservationC + prototypes + `
-struct kernel {void (*fn)(uint8_t*,uint8_t*,uint8_t*,uint64_t);unsigned width,bits,mode,legacy;};
+struct kernel {void (*fn)(uint8_t*,uint8_t*,uint8_t*,uint64_t);unsigned width,bits,mode,legacy,operation;};
 static const struct kernel kernels[]={
 ` + rows + `};
 static uint8_t *protected_region;
@@ -65,7 +74,7 @@ int main(void) {
             observe(k,storage+page-k->bits/8,1,k->mode==0))return 1;
         observations+=5;
     }
-    if(observations!=90)return 1;
+    if(observations!=` + fmt.Sprint(observations) + `)return 1;
     return munmap(storage,2*page)!=0;
 }
 `
@@ -84,5 +93,5 @@ int main(void) {
 			})
 		}
 	}
-	t.Log("all 18 VEX/EVEX width/mask rows ×5 boundary controls ×live/dead results per backend; portable LLVM, not native AVX512")
+	t.Logf("all %d VEX/EVEX width/mask rows ×5 boundary controls ×live/dead results per backend; portable LLVM, not native AVX512", observations/5)
 }
