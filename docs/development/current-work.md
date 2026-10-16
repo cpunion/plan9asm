@@ -1,5 +1,42 @@
 # Current work: PR 40 checkpoint
 
+## Complete packed narrow qualification, 2026-10-17
+
+At `9ac09c71`, all 21 affected/retained roots pass on current Go, actual
+Go20 and race: 63 root executions and 3,294 children, zero failures/skips.
+Independent raw checks retain the same 1,119 exact terminal identities per
+lane and unchanged before/after source, SDK and tool seals. The earlier named
+and physical-entry REDs remain failed, including the host-inapplicable native
+root receipt; no native skip has been promoted to an executed pass.
+
+All eight PACK names share pure per-output-element dependencies with the
+existing caller observer. Partial inputs define only their independent output
+elements; an unobserved unknown numerical byte is not an initialized value.
+Masks, complete E4NF/.nb memory tuples and actual incoming-pointer/index
+identity remain separate requirements, even for Void. The same mandatory
+whole-source obligation now covers named and physical BYTE forms. No reusable
+memory, caller, native-entry, alignment or pointer authority is created.
+
+Independent initialized programs retain 58 AMD64 and 22 mode32 native/input
+combinations, all five x86 targets, three APIs and both IR/backend levels.
+Portable runtime checks cover signed/unsigned saturation, broadcast, full
+64-byte aliases, masks, CF, unchanged inputs and output canaries. E4NF guard
+pages retain all 54 vector rows, five boundary controls and live/dead results;
+the affected E4 average/word-multiply fault tests also remain passed.
+
+All original Go format objects remain, including the 90 vector W0 rows and
+44 independent W1 equivalents. Missing native input/mask batches require
+Context through all three APIs. Bounded emitter-only units retain every
+original format at both optimization levels; separate initialized programs
+own public translation/runtime coverage. Objects are released in batches of
+at most 64 functions. These results are not original native AVX512 execution,
+current full CI, official-baseline qualification or benchmark success.
+
+Shift/unpack counterexamples now reuse their exact native CI source generators
+in host-visible three-API object and portable fault tests. Their TDD and whole
+family repair are next. The latest published fork CI and PR40 remain unchanged;
+no scanner, external ledger or package download workload was run locally.
+
 ## AH, ordinary RMW and private stack qualification, 2026-10-17
 
 At `b5daaf8c`, all 28 affected/retained roots pass on current Go, actual
