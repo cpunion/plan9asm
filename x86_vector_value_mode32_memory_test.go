@@ -34,7 +34,7 @@ func TestX86VectorValueMode32HighGPAddressesNeedPhysicalContext(t *testing.T) {
 			t.Fatal("complete named mode32 value family changed", len(instructions))
 		}
 		for _, template := range instructions {
-			for _, memory := range []string{"8(R9)", "8(R14)", "8(AX)(R9*2)"} {
+			for _, memory := range []string{"8(R9)", "8(R14)", "16(R15)"} {
 				instruction := strings.Replace(template, "ADDRESS", memory, 1)
 				t.Run(bank+"/"+instruction, func(t *testing.T) {
 					goAssemblerOracleOutput(t, "386", "TEXT ·Value(SB),4,$0-0\n"+instruction+"\nRET\n", "", true)
@@ -48,5 +48,27 @@ func TestX86VectorValueMode32HighGPAddressesNeedPhysicalContext(t *testing.T) {
 				})
 			}
 		}
+	}
+}
+
+func TestX86VectorValueMode32AddressContextDoesNotHideInvalidFormats(t *testing.T) {
+	for _, instruction := range []string{
+		"VPERMB.BAD 8(R9),X1,X2",
+		"VPERMB 8(R9),X1,K0,X2",
+		"VGF2P8MULB.BCST 8(R9),X1,X2",
+		"VGF2P8AFFINEQB $0,8(R9),X1,X2",
+		"VPLZCNTD.BAD 8(R9),X1",
+		"VPOPCNTB.BCST 8(R9),X1",
+		"VPOPCNTB 8(R9),AX",
+		"VPOPCNTB 8(AX)(R9*3),X1",
+		"VPOPCNTB 8(AX)(R9*2),X1",
+		"VPOPCNTQ 8(R9),K0,X1",
+	} {
+		t.Run(instruction, func(t *testing.T) {
+			ins := x86ScalarLaneInstruction(t, instruction)
+			if err := x86VectorValueMemoryGrammarError(ins, "386"); err == nil || errors.Is(err, ErrProbeNeedsContext) {
+				t.Fatal("invalid format was hidden by an unrelated address context", err)
+			}
+		})
 	}
 }
