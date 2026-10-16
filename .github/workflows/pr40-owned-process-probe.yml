@@ -1,0 +1,1121 @@
+name: PR40 Windows owned-process diagnostics
+on:
+  push:
+    branches: [codex/pr40-windows-owned-process-probe-20261013]
+permissions:
+  contents: read
+jobs:
+  native-x86-oracles:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install LLVM 22 and required native i386 toolchain
+        timeout-minutes: 14
+        run: bash scripts/install-ci-llvm22-ubuntu.sh gcc-i686-linux-gnu libc6-dev-i386-cross
+      - uses: ./.github/actions/setup-go
+        with:
+          go-version: '1.27.2'
+          cache: true
+      - name: Check actual native flags, ABI transport and guarded memory
+        env:
+          GOTOOLCHAIN: local
+        run: |
+          set -euo pipefail
+          mkdir -p _out/native-x86-oracles
+          roots='TestX86OriginalSysVDirectAndPointerTransport'
+          roots+='|TestX86MemoryFault.*|TestX86CMPXCHGFault.*|TestX86CMPXCHGWindowsFaultCodes'
+          roots+='|TestX86NativeWindowsPrecisionFaultCode|TestX86SignedConversionFaultWindowsHeaderBoundary'
+          roots+='|TestX86GoPackedStoreFaultDiagnostic|TestRuntimeOracleFault.*'
+          roots+='|TestRuntimeOracleNativeCActualHeadersAndLink|TestGoX86NumericalSBReadRuntimeFaultObservation'
+          roots+='|TestCrossLinuxRuntimeMatrixX86TLSNoopPreservesWideGP'
+          static_read_root='TestX86RawReturnStaticReadNumericOracle'
+          go test . -list "^($static_read_root)$" > _out/native-x86-oracles/static-read-inventory.log
+          grep -Fx "$static_read_root" _out/native-x86-oracles/static-read-inventory.log
+          roots+="|$static_read_root"
+          alias_roots='TestCrossLinuxRuntimeMatrixX86MOVQSourceAliasesOriginalAndLLVM'
+          alias_roots+='|TestCrossLinuxRuntimeMatrixX86MOVQSourceAliasesCountedProvenance'
+          go test . -list "^($alias_roots)$" > _out/native-x86-oracles/alias-inventory.log
+          for root in ${alias_roots//|/ }; do
+            grep -Fx "$root" _out/native-x86-oracles/alias-inventory.log
+          done
+          roots+="|$alias_roots"
+          bool_roots='TestCrossLinuxRuntimeMatrixAMD64RegisterCanonicalBoolInstructionBytes'
+          bool_roots+='|TestCrossLinuxRuntimeMatrixGoAMD64CanonicalBoolByteRepresentation'
+          go test . -list "^($bool_roots)$" > _out/native-x86-oracles/bool-inventory.log
+          for root in ${bool_roots//|/ }; do
+            grep -Fx "$root" _out/native-x86-oracles/bool-inventory.log
+          done
+          roots+="|$bool_roots"
+          numerical_roots='TestCrossLinuxRuntimeMatrixX86NumericalSBReadMutableAMD64'
+          numerical_roots+='|TestCrossLinuxRuntimeMatrixX86NumericalSBReadMutableLocalAMD64'
+          go test . -list "^($numerical_roots)$" > _out/native-x86-oracles/numerical-inventory.log
+          for root in ${numerical_roots//|/ }; do
+            grep -Fx "$root" _out/native-x86-oracles/numerical-inventory.log
+          done
+          roots+="|$numerical_roots"
+          caller_roots='TestCrossLinuxRuntimeMatrixX86CallerAddressInstructionBytesAndLLVM'
+          caller_roots+='|TestCrossLinuxRuntimeMatrixGoX86CallerAddressABI0Representation'
+          go test . -list "^($caller_roots)$" > _out/native-x86-oracles/caller-inventory.log
+          for root in ${caller_roots//|/ }; do
+            grep -Fx "$root" _out/native-x86-oracles/caller-inventory.log
+          done
+          roots+="|$caller_roots"
+          caller_cmp_roots='TestCrossLinuxRuntimeMatrixX86CallerAddressCMPInstructionBytesAndLLVM'
+          caller_cmp_roots+='|TestCrossLinuxRuntimeMatrixGoX86CallerAddressCMPABI0Representation'
+          go test . -list "^($caller_cmp_roots)$" > _out/native-x86-oracles/caller-cmp-inventory.log
+          for root in ${caller_cmp_roots//|/ }; do
+            grep -Fx "$root" _out/native-x86-oracles/caller-cmp-inventory.log
+          done
+          roots+="|$caller_cmp_roots"
+          numerical_lea_root='TestCrossLinuxRuntimeMatrixX86NumericalLEAOriginalBytesAndLLVM'
+          go test . -list "^($numerical_lea_root)$" > _out/native-x86-oracles/numerical-lea-inventory.log
+          grep -Fx "$numerical_lea_root" _out/native-x86-oracles/numerical-lea-inventory.log
+          roots+="|$numerical_lea_root"
+          direct_tail_roots='TestCrossLinuxRuntimeMatrixAMD64DirectTailWholeSourceOriginalGoAndLLVM'
+          direct_tail_roots+='|TestCrossLinuxRuntimeMatrixX86DirectTail386OriginalGoAndLLVM'
+          direct_tail_roots+='|TestCrossLinuxRuntimeMatrixX86DirectTailPCResultAliasesAndExternal'
+          go test . -list "^($direct_tail_roots)$" > _out/native-x86-oracles/direct-tail-inventory.log
+          for root in ${direct_tail_roots//|/ }; do
+            grep -Fx "$root" _out/native-x86-oracles/direct-tail-inventory.log
+          done
+          roots+="|$direct_tail_roots"
+          gp_simd_sparse_roots='TestCrossLinuxRuntimeMatrixX86GPSIMDSparseNativeAMD64OriginalGoAndLLVM'
+          gp_simd_sparse_roots+='|TestCrossLinuxRuntimeMatrixX86GPSIMDSparseNative386OriginalGoAndLLVM'
+          go test . -list "^($gp_simd_sparse_roots)$" > _out/native-x86-oracles/gp-simd-sparse-inventory.log
+          for root in ${gp_simd_sparse_roots//|/ }; do
+            grep -Fx "$root" _out/native-x86-oracles/gp-simd-sparse-inventory.log
+          done
+          roots+="|$gp_simd_sparse_roots"
+          bit_scan_roots='TestCrossLinuxRuntimeMatrixX86BitScanNativeAMD64OriginalGoAndLLVM'
+          bit_scan_roots+='|TestCrossLinuxRuntimeMatrixX86BitScanNative386OriginalGoAndLLVM'
+          go test . -list "^($bit_scan_roots)$" > _out/native-x86-oracles/bit-scan-inventory.log
+          for root in ${bit_scan_roots//|/ }; do
+            grep -Fx "$root" _out/native-x86-oracles/bit-scan-inventory.log
+          done
+          roots+="|$bit_scan_roots"
+          bool_386_root='TestCrossLinuxRuntimeMatrixX86ABI0Mode32CanonicalBoolOriginalGoAndLLVM'
+          go test . -list "^($bool_386_root)$" > _out/native-x86-oracles/bool-386-inventory.log
+          grep -Fx "$bool_386_root" _out/native-x86-oracles/bool-386-inventory.log
+          roots+="|$bool_386_root"
+          packed_string_root='TestCrossLinuxRuntimeMatrixX86PackedStringImplicitVectorNativeAVX'
+          go test . -list "^($packed_string_root)$" > _out/native-x86-oracles/packed-string-inventory.log
+          grep -Fx "$packed_string_root" _out/native-x86-oracles/packed-string-inventory.log
+          roots+="|$packed_string_root"
+          packed_string_fault_root='TestCrossLinuxRuntimeMatrixX86PackedStringOriginalNativeMemoryFaults'
+          go test . -list "^($packed_string_fault_root)$" > _out/native-x86-oracles/packed-string-fault-inventory.log
+          grep -Fx "$packed_string_fault_root" _out/native-x86-oracles/packed-string-fault-inventory.log
+          roots+="|$packed_string_fault_root"
+          independent_fp_roots='TestCrossLinuxRuntimeMatrixX86InsertExtractIndependentFPFields'
+          independent_fp_roots+='|TestCrossLinuxRuntimeMatrixX86LegacyPSIndependentFPFields'
+          go test . -list "^($independent_fp_roots)$" > _out/native-x86-oracles/independent-fp-inventory.log
+          for root in ${independent_fp_roots//|/ }; do
+            grep -Fx "$root" _out/native-x86-oracles/independent-fp-inventory.log
+          done
+          roots+="|$independent_fp_roots"
+          source_stack_root='TestCrossLinuxRuntimeMatrixX86RawSourceStackNumerical'
+          go test . -list "^($source_stack_root)$" > _out/native-x86-oracles/source-stack-inventory.log
+          grep -Fx "$source_stack_root" _out/native-x86-oracles/source-stack-inventory.log
+          roots+="|$source_stack_root"
+          continuation_root='TestCrossLinuxRuntimeMatrixX86ContinuationWholeCFGOriginalGoAndLLVM'
+          go test . -list "^($continuation_root)$" > _out/native-x86-oracles/continuation-inventory.log
+          grep -Fx "$continuation_root" _out/native-x86-oracles/continuation-inventory.log
+          roots+="|$continuation_root"
+          byte_swap_root='TestCrossLinuxRuntimeMatrixX86ByteSwapOriginalGoAndLLVM'
+          go test . -list "^($byte_swap_root)$" > _out/native-x86-oracles/byte-swap-inventory.log
+          grep -Fx "$byte_swap_root" _out/native-x86-oracles/byte-swap-inventory.log
+          roots+="|$byte_swap_root"
+          crc32_root='TestAMD64CRC32RuntimeSemanticsAndFlags'
+          go test . -list "^($crc32_root)$" > _out/native-x86-oracles/crc32-inventory.log
+          grep -Fx "$crc32_root" _out/native-x86-oracles/crc32-inventory.log
+          roots+="|$crc32_root"
+          bit_test_root='TestCrossLinuxRuntimeMatrixX86BitTestNumericalAndAliases'
+          go test . -list "^($bit_test_root)$" > _out/native-x86-oracles/bit-test-inventory.log
+          grep -Fx "$bit_test_root" _out/native-x86-oracles/bit-test-inventory.log
+          roots+="|$bit_test_root"
+          families='MADDTypedOriginalLegacy|PackedNarrowOriginalLegacyOracle|ScalarFPBitViewsOriginalBitsAndCanaries'
+          families+='|PureGPUnknownDeadOutputs|SignedIntegerScalarFloatTranslatedFPFields|ScalarCompareFlags'
+          families+='|RawReturnSourceAddressNumerical|FloatingCompareOriginalLegacyPredicates|TimestampOriginalAndLLVM'
+          families+='|PackedWordMultiplySoftwareMaskedMemory|PackedAverageInactiveMemory|PackedZeroExtendCompleteBytes'
+          families+='|InsertInactiveMemoryStillFaults|PackedUnpackZeroMaskStillFaults|PackedNarrowIndependentE4NF'
+          families+='|PackedShiftNativeReadFaults|PackedUnpackMMXNativeMemoryAndFP|PackedZeroMemoryStoreFault'
+          families+='|SignedIntegerScalarFloatNativeReadExtentAndPrecision|SignedIntegerScalarFloatNativeLinuxPrecisionSignal'
+          go test . -list "^($roots|TestCrossLinuxRuntimeMatrixX86($families))$" > _out/native-x86-oracles/all-roots.stdout
+          test "$(grep -c '^Test' _out/native-x86-oracles/all-roots.stdout)" = 66
+          go test . -run "^($roots|TestCrossLinuxRuntimeMatrixX86($families))$" \
+            -json -count=1 -timeout=8m \
+            2> _out/native-x86-oracles/native.stderr | tee _out/native-x86-oracles/native.jsonl
+          node .github/scripts/audit-native-priority.cjs _out/native-x86-oracles > _out/native-x86-oracles/audit.json
+      - name: Preserve original and translated observations
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: native-x86-oracles
+          path: _out/native-x86-oracles/
+          if-no-files-found: error
+
+  complete-windows:
+    needs: [ownership, sdk-priority, arm64-fallback-cross-priority, lock-native-priority, vector-value-fault-priority]
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        module: [root, plan9asm, plan9asmll]
+    uses: ./.github/workflows/windows-module.yml
+    with:
+      module: ${{ matrix.module }}
+
+  sdk-priority:
+    name: SDK priority (${{ matrix.lane }})
+    runs-on: windows-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - lane: completed-ci-repair
+            module: '.'
+            roots:
+              - TestTranslateIRTextCoverage
+              - TestX86RawSegmentAbsoluteMemory
+              - TestX86ResultCompareExchangePrefixAndAuthorityBoundaries
+              - TestTranslate386RejectsInvalidInstructionForms
+              - TestX86RawReturnBoundFPAndStaticObjects
+              - TestX86RawReturnActualGoDeclarationContract
+              - TestX86RawAddressOverrideDefaultCallerControlsAndPhysicalSegments
+              - TestX86DirectSymbolMemorySinkObjectsRemainSupported
+              - TestTranslate386DestinationForms
+              - TestX86RawReturnStaticDATAExtents
+              - TestTranslateHelpersCoverage
+              - TestX86AddressClassPreservesActualMemoryAndRelocationObjects
+              - TestTranslateGoModule_X87Mode
+              - TestCrossLinuxRuntimeMatrixX86BitTestNumericalAndAliases
+            timeout: 5m
+          - lane: native-memory-effects
+            module: '.'
+            roots:
+              - TestX86PoppedFlagWordImmediateMaskThreeAPIs
+              - TestX86NarrowPoppedWordCannotDefineUnwrittenHighBits
+              - TestX86NativeBitTestCompleteReachingInputsThreeAPIs
+              - TestX86NativeBitTestExactStateAndIndependentAuthorities
+              - TestX86BitTestPortableNumericalAndAliases
+              - TestX86NativeGPStoreCompleteWidthsThreeAPIs
+              - TestX86NativeGPStoreCannotBorrowUnknownOrPointerData
+              - TestX86NativeGPStoreOriginalByteAliasesAndUnchangedState
+              - TestX86ScalarMoveNativeRetainsPublicAndSourceBoundaries
+              - TestX86SegmentMOVCannotGrantIndependentAuthority
+              - TestX86SegmentLoadAndNativeStoreHaveIndependentPairedEffects
+              - TestX86PoppedPartialFlagsCannotInventUnmodeledControls
+              - TestX86PoppedMixedWidthsRetainOriginalFlagBitPositions
+              - TestX86StackRefinementCloneJoinAndReuse
+            timeout: 5m
+          - lane: lock-scalar-dispatch
+            module: '.'
+            roots:
+              - TestX86LockScalarRMWPublicBodiesCallCompleteNativeHelpers
+            timeout: 5m
+          - lane: compact-native-memory
+            module: '.'
+            roots:
+              - TestX86CompactNativeMemorySequencesThreeAPIs
+              - TestX86CompactNativeMemoryCannotInventSourceOrDestinationFacts
+              - TestX86CompactNativeExpandClearsNonzeroUpperAliases
+              - TestX86PackedMoveInitializedNativeStoresWholeFamily
+              - TestAMD64PackedCompressRuntimeSemantics
+              - TestAMD64PackedExpandRuntimeSemantics
+              - TestX86PackedMoveInvalidStoreCannotAcquireCallerMemoryCertificate
+              - TestX86PackedZeroMemoryStorePreservesUndefinedOpcode
+              - TestX86PackedZeroMemoryStoreFaultPrecedesFPBoundsAndMaskReads
+            timeout: 5m
+          - lane: complete-vector-value-families
+            module: '.'
+            roots:
+              - TestX86IndexedPermuteInitializedResultWholeFamily
+              - TestX86IndexedPermuteResultInputsStayIndependent
+              - TestX86IndexedPermuteResultRequiresCompleteTablesIndicesAndMerge
+              - TestX86GFNIInitializedResultWholeFamily
+              - TestX86PackedBitCountInitializedResultWholeFamily
+              - TestX86FixedLaneValueResultInputsStayIndependent
+              - TestX86VectorValueFamiliesClearNonzeroUpperAliases
+              - TestX86VectorValueUpperAliasesPortableRuntime
+              - TestX86VectorValueMode32HighGPAddressesNeedPhysicalContext
+              - TestX86VectorValueMode32AddressContextDoesNotHideInvalidFormats
+              - TestTranslateAMD64AVX512Go126Families
+              - TestX86Go126FamiliesCannotBorrowUninitializedVectorInputs
+              - TestAMD64IndexedPermuteRuntimeSemantics
+              - TestAMD64GFNIRuntimeSemantics
+              - TestAMD64PackedPopcountRuntimeSemantics
+              - TestAMD64PackedLeadingZeroCountRuntimeSemantics
+            timeout: 5m
+          - lane: mask-move-complete-values
+            module: '.'
+            roots:
+              - TestX86MaskMoveGPResultFullWordDefinedness
+              - TestX86MaskMoveGPResultFiveTargetsThreeAPIs
+              - TestX86MaskMoveGPResultCannotInventInputOrBoolCanonicality
+              - TestX86MaskMoveLogicalFPExactReadAndWriteWidths
+              - TestX86MaskMoveLogicalFPExactBytesPortableRuntime
+              - TestX86NumericalEffectConsumesOnlyCheckedCallerContinuation
+            timeout: 5m
+          - lane: mask-arithmetic-complete-values
+            module: '.'
+            roots:
+              - TestX86MaskArithmeticCompletePortableValues
+              - TestX86MaskArithmeticNumericalInputsAndState
+              - TestX86MaskArithmeticRejectsNonIntegerImmediateConsumers
+              - TestX86MaskArithmeticVoidCannotInventInputs
+              - TestX86MaskArithmeticCompleteResultFiveTargetsThreeAPIs
+            timeout: 5m
+          - lane: mask-native-and-predicate-inputs
+            module: '.'
+            roots:
+              - TestX86MaskNativeEmitterPreservesExactVolatileWidths
+              - TestX86MaskNativeCompleteFiveTargetsThreeAPIs
+              - TestX86MaskNativeCannotSupplyDeclarationOrMissingInputs
+              - TestX86NativeConditionalSetExactFlagsAndState
+              - TestX86NativeConditionalSetCompleteFiveTargetsThreeAPIs
+              - TestX86NativeConditionalSetCannotInventFlagsOrAddress
+              - TestX86ConditionalSetVoidRequiresActualPredicateFlags
+            timeout: 5m
+          - lane: vector-native-memory-complete
+            module: '.'
+            roots:
+              - TestX86VectorValueNativeCompleteFiveTargetsThreeAPIs
+              - TestX86VectorValueNativeMissingInputsStayContext
+              - TestX86VectorValueNativeDeadEmitterKeepsInputRead
+              - TestX86VectorValueVoidInputsCannotBorrowImplementationSlots
+            timeout: 5m
+          - lane: immediate-control-and-frame-hashing
+            module: '.'
+            roots:
+              - TestX86ImmediateControlHelpersRetainIntegerBoundaries
+              - TestX86ImmediateControlHelpersRejectNonIntegerRoles
+              - TestX86GFNIImmediateFloatZeroRejectedLikeGo
+              - TestGoAMD64FrameInputVerificationHasBoundedAllocations
+              - TestGoAMD64FrameInputVerificationReadsTailDespiteSameMetadata
+              - TestGoAMD64FrameInputVerificationRetainsInputRole
+            timeout: 5m
+          - lane: sdk-gc-filter-mask-width
+            module: 'cmd/plan9asmll'
+            roots:
+              - TestCompileOneX86SDKGCFilterMaskWidthExistingObjects
+            timeout: 5m
+          - lane: typed-value-input-coverage
+            module: 'cmd/plan9asmscan'
+            roots:
+              - TestMaskValueCoverageRequiresCompleteInputs
+              - TestVectorValueCoverageRequiresCompleteInputs
+            timeout: 5m
+          - lane: static-result-effects
+            module: '.'
+            roots:
+              - TestX86StaticIntegerSIMDSBStoresCompleteMoveFamily
+              - TestX86StaticIntegerSIMDSBStoresRetainInputResultAndExtentBoundaries
+              - TestX86ScalarFPLogicalNumericalSBStoreKeepsIndependentResult
+              - TestX86StaticIntegerResultDiscardedSBAddresses
+              - TestX86StaticIntegerSBAddressesDoNotAcquireNumericalOrStackRoles
+              - TestX86SymbolIndexedSBThreeAPIsFiveLLVMObjects
+              - TestTranslateAMD64MOVQFromXRegisterToFrameResult
+            timeout: 5m
+          - lane: raw-static-replay
+            module: '.'
+            roots:
+              - TestX86RawStaticReplayCapturesDecoderBeforeSymbolRebinding
+              - TestX86RawStaticReplayScalarResultsThreeAPIs
+              - TestX86RawStaticReplayPortableValuesAndMutablePool
+              - TestX86RawReturnMaterializedReadCannotAuthorizeChangedSource
+              - TestX86RawStaticRegisterReturnDoesNotInventSourceBytes
+            timeout: 5m
+          - lane: llvm
+            module: cmd/plan9asmll
+            roots:
+              - TestX86SDKNumericalOwnerQueryIsNotPackageExemption
+              - TestRunOneTargetSDKFixedLocalPreservesActualDefaultProfile
+              - TestRunOneTargetSDKFixedLocalCanonicalCommandPaths
+              - TestOrdinaryPackageLoadSDKWorkingDirectoryIdentity
+              - TestOrdinaryPackageLoadOutsideSDKRetainsInternalImportRejection
+              - TestMapsLiteralMinimumTargetsHaveIndependentCompleteOwners
+            timeout: 5m
+          - lane: llvm-crc32
+            module: cmd/plan9asmll
+            roots:
+              - TestCompileOneX86SDKOriginalCRC32NumericalDataJoin
+            timeout: 5m
+          - lane: llvm-crc32-effective-defaults
+            module: cmd/plan9asmll
+            roots:
+              - TestCompileOneX86SDKOriginalCRC32NumericalDataJoinEffectiveDefaults
+            timeout: 5m
+          - lane: llvm-bytealg-count
+            module: cmd/plan9asmll
+            roots:
+              - TestCompileOneX86SDKBytealgCountExistingObjects
+            timeout: 5m
+          - lane: llvm-bytealg-indexbyte
+            module: cmd/plan9asmll
+            roots:
+              - TestCompileOneX86SDKBytealgIndexByteExistingObjects
+            timeout: 5m
+          - lane: panic-observation
+            module: '.'
+            roots:
+              - TestX86GoPanicTerminal386OriginalABICompileAndLink
+              - TestX86GoPanicTerminalOriginal386CompilerAndCALLAssociations
+            timeout: 5m
+          - lane: typed-arguments-compare
+            module: '.'
+            roots:
+              - TestGoX86SDKAMD64CompareTypedArgumentsWholeSource
+            timeout: 5m
+          - lane: typed-arguments-compare-module
+            module: '.'
+            roots:
+              - TestGoX86SDKAMD64CompareTypedArgumentsWholeSourceModule
+            timeout: 5m
+          - lane: typed-arguments-compare-go-module
+            module: '.'
+            roots:
+              - TestGoX86SDKAMD64CompareTypedArgumentsWholeSourceGoModule
+            timeout: 5m
+          - lane: abi0-result-tuples
+            module: '.'
+            roots:
+              - TestX86ABI0ResultTupleScalarTypesAndObjects
+            timeout: 5m
+          - lane: ordinary-bp-native-read
+            module: '.'
+            roots:
+              - TestX86LegacyPackedFloatingNativeMemoryUnboundSourcesFiveTargets
+              - TestX86LegacyLogicalMemoryVirtualStackNeedsCertificate
+              - TestX86WordMultiplyAddLegacyVirtualMemoryCannotProveAlignment
+              - TestX86PackedWordMultiplyVirtualLegacyMemoryRemainsContext
+              - TestX86PackedLowMultiplyVirtualLegacyStorageRemainsContext
+              - TestX86PackedConversionOriginalNativeAddressRequired
+              - TestX86ByteShuffleVirtualLegacyStorageRemainsContext
+              - TestX86SignedPackedFloatAllWidthsZeroMaskStorageContext
+              - TestX86CMOVFamilyNativeStackAndFPAuthorityUnchanged
+              - TestX86OrdinaryBPNativeMemoryCompleteFamiliesGoAndLLVMObjects
+              - TestX86OrdinaryBPCMOVCompleteFamilyGoAndLLVMObjects
+            timeout: 5m
+          - lane: string-memory-lods-state
+            module: '.'
+            roots:
+              - TestX86StringImplicitMemoryIndependentFamilyEffects
+              - TestX86StringImplicitHelpersKeepObservableNativeAccesses
+              - TestX86StringImplicitHelpersGuardZeroCountBeforeMemory
+              - TestX86StringImplicitMemoryDoesNotGrantResultOrPointerAuthority
+              - TestX86StringRepeatCFGAcceptsOnlyUnambiguousAdjacency
+              - TestX86StringRepeatCFGRejectsBypassedOrAmbiguousPrefix
+              - TestX86StringRepeatCFGFixtureKeepsActualBranchAndPrefixNodes
+              - TestX86StringRepeatCFGPortGrammarRemainsIndependent
+              - TestX86StringImplicitMemoryOriginalGoAndLLVMO0O2
+              - TestX86StringRepeatCFGOriginalGoKeepsCompleteFixtures
+              - TestX86LODSStateCompleteIndependentCases
+              - TestX86LODSZeroCountDoesNotCreateResultFacts
+              - TestX86LODSZeroStoreObserverRejectsEveryFieldAndUnknownEffect
+              - TestX86LODSZeroStoreObserverVolatileAndLineEndingForms
+              - TestX86LODSZeroCountOriginalGoAndLLVMWholeState
+              - TestX86StringMemoryIRReaderEmptyZeroCount
+              - TestX86StringMemoryIRReaderLineEndingsAndMetadata
+              - TestX86StringMemoryIRReaderRejectsMemoryMutations
+            timeout: 5m
+          - lane: scalar-fp-byte-spans
+            module: '.'
+            roots:
+              - TestX86ScalarFPWideTupleStoresPreserveEveryField
+              - TestX86ScalarFPWideTupleReadsPreserveEveryField
+              - TestX86ScalarFPIntegerPartialAndInteriorBytesThreeAPIs
+              - TestX86IntegerFPByteViewsKeepIndependentRoles
+              - TestX86IntegerFPByteViewsMode32QwordKeepsVectorConsumer
+              - TestX86IntegerFPByteViewsPreserveStatusAndDirection
+              - TestX86IntegerFPByteViewsDescriptorCannotCreateStorage
+              - TestX86IntegerFPByteViewsReadonlyInputsAndFloatingBits
+              - TestX86IntegerFPByteViewsSparseMustInitialization
+              - TestX86IntegerFPByteViewsMOVQSourceAliases
+              - TestX86OrdinaryIntegerFPStoreWidthsRequireWholeSource
+              - TestX86OrdinaryIntegerFPDefaultArchitectureCannotBypassProof
+              - TestX86OrdinaryIntegerFPStoreKeepsIndependentStorageConsumers
+              - TestX86ScalarFPWideTupleSpanOriginalGoAssembly
+              - TestX86IntegerFPByteViewsFiveTargetOriginalAndLLVMObjects
+              - TestX86ImplicitMultiplyWholeSourceThreeAPIs
+              - TestX86ImplicitMultiplyNUMBytesAndStatus
+              - TestX86ImplicitMultiplyDoesNotRegisterRawEntryOrDivide
+              - TestX86ImplicitMultiplyFPSourceBytesThreeAPIs
+              - TestX86ImplicitMultiplyMissingFPResultsThreeAPIs
+              - TestX86ImplicitMultiplyCompleteOfficialGoRows
+              - TestX86ImplicitMultiplyGrammarBanksAndMemoryBoundaries
+              - TestX86ImplicitMultiplyAliasesReadBeforeWriteAndFlags
+              - TestX86ImplicitMultiplyOriginalGoGrammarAndEncoding
+              - TestX86ImplicitMultiplyFiveTargetOriginalGoAndLLVMObjects
+              - TestX86ImplicitMultiplyIndependentStorageCannotBypassNUM
+              - TestTranslate386InstructionFamilies
+            timeout: 5m
+          - lane: crc32-typed-effects
+            module: '.'
+            roots:
+              - TestX86CRC32WholeResultNUMThreeAPIs
+              - TestX86CRC32PairedNativeReadVolatile
+              - TestX86CRC32FPExactSourceBytes
+              - TestX86CRC32SparseNUMFlagsAndSourceBoundaries
+              - TestX86CRC32GrammarBanksAndOriginalIdentity
+              - TestX86CRC32PhysicalByteNormalizationAndScanner
+              - TestX86CRC32UnownedMemoryAndProvenanceThreeAPIs
+              - TestX86CRC32CompleteOfficialGoRows
+              - TestX86CRC32OriginalGoByteViews
+              - TestX86IncomingPointerResidueMasksRolesAndByteAliases
+              - TestX86IncomingPointerResidueWholeSourceThreeAPIs
+              - TestX86IncomingPointerUnaryAdvanceWholeSourceThreeAPIs
+              - TestX86IncomingPointerUnaryAdvanceRolesFlagsAndOrigins
+              - TestX86CRC32CompleteOriginalGoRegisterBanks
+              - TestX86CRC32FiveTargetOriginalGoAndLLVMObjects
+              - TestX86TypedNumericalMixedBoolCanonicalCompositionThreeAPIs
+              - TestX86TypedNumericalMixedBoolRequiresLiveCachedCanonicalRole
+            timeout: 5m
+          - lane: arm64-carrier-widths
+            module: '.'
+            roots:
+              - TestARM64ByteCarrierTwoScalarNativeWidthConsumers
+            timeout: 5m
+          - lane: assembly-selection
+            module: cmd/plan9asmll
+            roots:
+              - TestActualAssemblyMemberExactSelection
+              - TestActualAssemblyMemberOriginalAliasLifetime
+              - TestActualAssemblyMemberFinalSymlinkIdentity
+              - TestARM64ABI0TailActualSelectedMemberDirectoryAlias
+              - TestARM64ABI0TailActualSelectedFinalSymlink
+              - TestARM64ABI0TailOriginalAliasPostGuard
+              - TestX86CallerCLIActualSelectedMemberDirectoryAlias
+              - TestX86CallerCLIOriginalAliasFinalSourceGuard
+              - TestX86CallerCLIActualSelectedFinalSymlink
+              - TestX86CallerCLIOriginalAliasFiveTargetObjects
+              - TestCompileOneARM64ABI0TailActualDeclaration
+              - TestCompileOneARM64ABI0TailCompleteAndChunks
+              - TestCompileOneARM64ABI0TailSourcePostGuard
+              - TestReflectDynamicStubNativeObjectsRetainContext
+              - TestReflectDynamicStubSelectedAssemblyIdentity
+              - TestReflectDynamicStubSelectedAssemblyRejectsUnboundIdentity
+            timeout: 5m
+          - lane: literal-minimum-simple
+            module: cmd/plan9asm
+            roots:
+              - TestSimpleCLIOriginalSDKMapsLiteralMinimumSource
+            timeout: 8m
+          - lane: literal-minimum-llvm-linux
+            module: cmd/plan9asmll
+            roots:
+              - TestCompileOneX86SDKOriginalMapsLiteralMinimumSourceLinux
+            timeout: 5m
+          - lane: literal-minimum-llvm-linux-public-cli
+            module: cmd/plan9asmll
+            roots:
+              - TestCompileOneX86SDKOriginalMapsLiteralMinimumSourceLinuxPublicCLI
+            timeout: 5m
+          - lane: literal-minimum-llvm-darwin
+            module: cmd/plan9asmll
+            roots:
+              - TestCompileOneX86SDKOriginalMapsLiteralMinimumSourceDarwin
+            timeout: 5m
+          - lane: literal-minimum-llvm-windows
+            module: cmd/plan9asmll
+            roots:
+              - TestCompileOneX86SDKOriginalMapsLiteralMinimumSourceWindows
+            timeout: 5m
+          - lane: metadata-only
+            module: internal/sdkfrontend
+            roots:
+              - TestSharedSDKMetadataOriginalEmptyDATACompleteThreeOS
+            timeout: 10m
+          - lane: nodata-count-text
+            module: internal/sdkfrontend
+            roots:
+              - TestSharedSDKNoDATACountText
+            timeout: 5m
+          - lane: nodata-count-module
+            module: internal/sdkfrontend
+            roots:
+              - TestSharedSDKNoDATACountModule
+            timeout: 5m
+          - lane: nodata-count-go-module
+            module: internal/sdkfrontend
+            roots:
+              - TestSharedSDKNoDATACountGoModule
+            timeout: 5m
+          - lane: nodata-indexbyte-text
+            module: internal/sdkfrontend
+            roots:
+              - TestSharedSDKNoDATAIndexByteText
+            timeout: 5m
+          - lane: nodata-indexbyte-module
+            module: internal/sdkfrontend
+            roots:
+              - TestSharedSDKNoDATAIndexByteModule
+            timeout: 5m
+          - lane: nodata-indexbyte-go-module
+            module: internal/sdkfrontend
+            roots:
+              - TestSharedSDKNoDATAIndexByteGoModule
+            timeout: 5m
+          - lane: publication
+            module: cmd/plan9asmll
+            roots:
+              - TestCompileOneCallerLateSourceGuardDoesNotPublish
+              - TestCompileOneARM64TailLateSourceGuardDoesNotPublish
+              - TestCompileOneFixedLocalLateOwnerGuardDoesNotPublish
+              - TestCompileOneContinuationLateReferenceDoesNotPublish
+              - TestCompileOutputTransactionSealedInputs
+              - TestCompileOutputTransactionDirectoryIdentity
+              - TestCompileOutputTransactionRechecksLaterMembers
+              - TestCompileOutputTransactionRollbackAndRestoreFailure
+              - TestCompileOutputTransactionRollbackDoesNotReplaceConcurrentOutput
+              - TestCompileOutputTransactionCommittedCleanupIsExplicit
+              - TestCompileOutputTransactionNonretainedObjectPolicy
+              - TestCompileOutputRejectsSourceExtensionCaseVariants
+              - TestCompileOneOutputCannotReplaceCaseVariantSelectedGoSource
+              - TestCompileOneOutputCannotReplaceOriginalModuleMetadata
+              - TestCompileOneOutputCannotCreateAbsentMetadataAlias
+              - TestCompileOutputMetadataNameProtectionUsesActualParent
+              - TestCompileOneOutputCannotReplaceActualSelectedEmbed
+              - TestCompileOneLateSelectedEmbedReplacementDoesNotPublish
+              - TestCompileOutputInputDirectoryAliasLifetime
+              - TestCompileOutputRechecksOriginalInputsDuringPublication
+              - TestCompileOutputInputIdentityExcludesEquivalentExistingName
+              - TestCompileOutputInputProtectionAccumulatesAttemptMembers
+              - TestCompileOutputSuccessfullyReadInputCannotBecomeMissingRole
+              - TestCompileOutputInputAliasLifetime
+              - TestCompileOutputSearchMissProtection
+              - TestCompileOutputSearchMissCannotBePublicDestination
+              - TestCompileOneLateEqualByteIncludeRedirectDoesNotPublish
+              - TestCompileOneTaskBuilderOutputCannotReplaceActualInclude
+              - TestFeatureCPPReadReportRetainsOnlyActiveSearchMisses
+            timeout: 5m
+          - lane: crc32-linux
+            module: cmd/plan9asm
+            roots:
+              - TestTranslateOriginalSDKCRC32NumericalSource
+            timeout: 8m
+          - lane: crc32-nonlinux
+            module: cmd/plan9asm
+            roots:
+              - TestTranslateOriginalSDKCRC32NumericalSourceNonLinux
+            timeout: 8m
+          - lane: crc32-publication
+            module: cmd/plan9asm
+            roots:
+              - TestSimpleCLIOriginalSDKCRC32PublicationAndRejection
+            timeout: 8m
+          - lane: maps
+            module: cmd/plan9asm
+            roots:
+              - TestSimpleCLIOriginalSDKMapsScalarRegisterSource
+            timeout: 8m
+          - lane: typed-matrix
+            module: '.'
+            roots:
+              - TestX86MXCSRCompleteOriginalGoRows
+              - TestX86MXCSRByteEffectHasNoIndependentMemoryAuthority
+              - TestX86MXCSRFullMemoryWidthAndOperandGrammar
+              - TestX86MXCSRPlainAUTOReturnNeedsReachingBytes
+              - TestX86MXCSRAUTOExtentKeepsCompleteSourceAndBounds
+              - TestX86SignedIntegerFloatResultPreservesSparseMergeBytes
+              - TestX86SignedIntegerFloatUnknownUpperResultThreeAPIs
+              - TestX86SignedIntegerFloatPlainMXCSRReturnRequiresWholeSource
+              - TestX86SignedIntegerFloatPairedNativeReadRetainsExactDeadWidth
+              - TestX86SignedIntegerFloatOriginalFPFixtureWholeThreeAPIs
+              - TestX86MXCSRConversionCompleteFiveTargetOriginalGoAndLLVMObjects
+            timeout: 5m
+          - lane: proof-join-original
+            module: '.'
+            roots:
+              - TestGoX86ResultAUTOCompleteActualFixedLocalNumericalJoinOriginalSourceShape
+            timeout: 5m
+          - lane: proof-join-text
+            module: '.'
+            roots:
+              - TestGoX86ResultAUTOCompleteActualFixedLocalNumericalJoinText
+            timeout: 5m
+          - lane: proof-join-context
+            module: '.'
+            roots:
+              - TestGoX86ResultAUTOCompleteActualFixedLocalNumericalJoinContext
+            timeout: 5m
+          - lane: proof-join-go-module
+            module: '.'
+            roots:
+              - TestGoX86ResultAUTOCompleteActualFixedLocalNumericalJoinGoModule
+            timeout: 5m
+          - lane: proof-join-guards
+            module: '.'
+            roots:
+              - TestX86ResultAUTONumericalJoinHasIndependentCompleteOwners
+              - TestX86ResultAUTONumericalJoinOwnerPolicyRejectsMissingOrSharedAxes
+              - TestX86ResultAUTOReplayDoesNotWashUnboundSourceRoles
+              - TestX86FixedLocalFeatureProjectionUsesCompleteSourceOrder
+              - TestGoAMD64FixedLocalResultConsumerExactProofHandoff
+              - TestGoX86ResultAUTONumericalReplayExactOriginalNodeGuards
+            timeout: 5m
+          - lane: source
+            module: '.'
+            roots:
+              - TestReadGoAssemblySourceInputsShareExactExpansion
+              - TestReadGoAssemblySourceInputsRetainRequestedAliases
+              - TestReadGoAssemblySourceReportSeparatesFallbackSearchMiss
+              - TestReadGoAssemblySourceReportErrorReturnsNoInventory
+              - TestReadGoAssemblySourceExpandsToolchainHeadersInTrimpathBinary
+              - TestReadGoAssemblySourceRejectsEscapedSourceAlias
+              - TestReadGoAssemblySourceExpandsNestedLocalHeaders
+              - TestReadGoAssemblySourceRejectsSymlinkIncludeOutsideRoot
+              - TestAssemblyIncludeSymlinkRegressionIsAvailableOnSupportedHosts
+              - TestNativeOwnerPoliciesKeepCRLFSourceAndMutations
+              - TestNativeOwnerPolicyNormalizationIsLimitedToCRLF
+              - TestX86ResultGPSIMDSparseRuntimeNativeOwnerCannotEmulateOrSkip
+              - TestFrameworkChildGoBuildRetainsParentLLVMMode
+              - TestX86ResultGPSIMDPlainUnknownReturnNeedsWholeFunctionProof
+              - TestX86ResultGPSIMDAdmissionScalarReturnFamilyThreeAPIs
+              - TestX86ResultGPSIMDAdmissionCompleteOfficialRegisterRows
+              - TestX86ResultGPSIMDAdmissionOrdinaryRolesAndCachedProof
+              - TestX86ResultGPSIMDAdmissionWholeSourcePathsWithoutProbe
+              - TestX86ScalarBitScanCompleteOfficialRowsAndOperandGrammar
+              - TestX86ABI0ResultBitScanZeroBranchDefinesOnlyNonzeroEdge
+              - TestX86ABI0ResultBitScanUndefinedValuesAndFlagsRemainContext
+              - TestX86ABI0ResultBitScanGuardedByteAliasesAndCFGJoins
+              - TestX86ScalarBitScanWholeSourceThreeAPIAdmission
+              - TestX86ABI0ResultBitScanPendingStateCannotLeakAuthority
+              - TestX86ABI0ResultBitScanPortableStatusFlagConsumers
+              - TestX86ScalarBitScanNativeHelperShapesAndTargetBoundaries
+              - TestX86ScalarBitScanNarrowRegisterAliasRetainsUnknownUpperBytes
+              - TestX86ScalarBitScanNamespaceAndMissingCompilerBridge
+              - TestX86ResultBitScanZeroPreservesOnlyPriorNumericalBytes
+              - TestX86ScalarBitScanInitializedPriorThreeAPIs
+              - TestX86ScalarBitScanUnknownPriorStillNeedsZeroEdgeContext
+              - TestX86ScalarBitScanOriginalGoHexWordOpsFunctionThreeAPIs
+              - TestX86ScalarBitScanOriginalGoHexWordOpsSourceLineEndings
+              - TestX86ScalarBitScanCompleteObjectFixtureNumericalRoles
+              - TestX86ScalarBitScanCompleteOriginalGoAndLLVMFiveTargetObjects
+              - TestX86ResultPredicateNonzeroComparisonMaskBitScan
+              - TestX86ResultPredicateNonzeroCannotBorrowOtherValueOrWidth
+              - TestX86ResultPredicateLegacyAndVEXCompleteComparisonFamilies
+              - TestX86ResultPredicateWholeSourceThreeAPIsAndMode32
+              - TestX86ResultPredicateBoundedStateAndRawRevocation
+              - TestX86ResultCallerAddressDifferenceCancelsSameTypedOrigin
+              - TestX86ResultCallerAddressDifferenceUnknownOrMixedOriginsRemainContext
+              - TestX86ResultCallerAddressDifferenceThreeAPIWholeSourceAdmission
+              - TestX86ResultCallerAddressDifferenceCFGAndRevocation
+              - TestX86ResultCallerAddressOriginIsBoundedIndependentMustState
+              - TestX86ABI0Mode32CanonicalBoolCallOriginalIdentity
+              - TestX86ABI0Mode32CanonicalBoolCallPlanStateAndCache
+              - TestX86ABI0Mode32CanonicalBoolSameFileCallThreeAPIs
+              - TestX86ABI0Mode32CanonicalBoolCallFinalCallbacks
+              - TestX86ABI0Mode32CanonicalBoolCallKeepsWholeSource
+              - TestX86ABI0Mode32CanonicalBoolCallExistingFloatPredicate
+              - TestX86ABI0Mode32CanonicalBoolCallRevokesAllDerivedDomains
+              - TestX86ABI0Mode32CanonicalBoolCallDerivedDomainsThreeAPIs
+              - TestX86ABI0Mode32CanonicalBoolExistingWholeFrameThreeAPIs
+              - TestX86ABI0Mode32CanonicalBoolTypedInputAndPrivateAlias
+              - TestX86ABI0Mode32CanonicalBoolTypedTailThreeAPIs
+              - TestX86ABI0Mode32CanonicalBoolTypedTailSourceReplayAndLayouts
+              - TestX86ABI0Mode32CanonicalBoolTypedTailCannotBorrowGoCaller
+              - TestX86ABI0Mode32CanonicalBoolTypedTailCacheAndKeepSource
+              - TestX86ABI0Mode32CanonicalBoolTypedTailFinalCallbacks
+              - TestX86Mode32CustomRegisterBoolCanonicalThreeAPIs
+              - TestX86Mode32CustomRegisterBoolCompareExchangeEffects
+              - TestX86Mode32CustomRegisterBoolRoleAndByteViews
+              - TestX86Mode32CustomRegisterBoolPairedEffectHasNoNewAuthority
+              - TestX86ABI0Mode32CanonicalBoolParameterRawBytesRemainPhysical
+              - TestX86ABI0Mode32CanonicalBoolAliasCloneJoinAndBudget
+              - TestX86ABI0Mode32CanonicalBoolByteResult
+              - TestX86ABI0Mode32BoolThreeAPIsCannotBypassCanonicalProof
+              - TestX86ABI0Mode32BoolIntermediateBytesSurviveThreeAPIs
+              - TestX86ABI0Mode32BoolWholeCFGAndOverwriteThreeAPIs
+              - TestX86ABI0Mode32CanonicalBoolRoleAndSourceIdentity
+              - TestX86ABI0Mode32CanonicalFPCloneJoinAndBudget
+              - TestX86ABI0Mode32BoolPreflightUsesOneBoundedWholeProof
+              - TestX86ABI0Mode32InitializedByteIsNotCanonicalBool
+              - TestX86ABI0Mode32CanonicalFactDomainIsIndependent
+              - TestX86ScalarBitScanExecutionOracleDoesNotInventZeroOrFlags
+              - TestX86ScalarBitScanExecutionOracleCompleteWidthsAliasesAndRecords
+              - TestX86ScalarBitScanExecutionCompleteOriginalGoLinksAndLLVMObjects
+              - TestX86ScalarBitScanExecutionPhysicalStatusShimKeepsPublicRoles
+              - TestX86ScalarBitScanExecutionStatusObservationDoesNotAuthorizePublicFlags
+              - TestX86ScalarBitScanRuntimeNativeOwnersCannotEmulateOrSkip
+              - TestX86ScalarBitScanRuntimeNativePolicyRejectsMutation
+              - TestX86ABI0Mode32CanonicalBoolCallSelectionKeepsNonboolGoFilter
+              - TestX86ABI0Mode32CanonicalBoolCallSelectionKeepsNonboolWholeFiles
+              - TestX86ABI0Mode32CanonicalBoolCallSelectionRetainsTrueBoolLimit
+              - TestX86ABI0Mode32CanonicalBoolCallSelectionRejectsChangingQuery
+              - TestX86ABI0Mode32BoolRuntimeNativeOwnerCannotEmulateOrSkip
+              - TestX86ABI0Mode32BoolRuntimeNativePolicyRejectsMutation
+              - TestX86ABI0Mode32CanonicalBoolVoidCallThreeAPIs
+              - TestX86ABI0Mode32CanonicalBoolVoidCallHasNoResultOrOutgoingBytes
+              - TestX86ABI0Mode32CanonicalBoolActualAtomicCompleteSourceNextContext
+              - TestTranslateTextOwnsRequestLLVMContext
+              - TestTranslateTextConcurrentRequestsKeepOriginalFile
+              - TestX86DirectionControlNumericalAndCallerThreeAPIs
+              - TestX86DirectionControlCompleteGoGrammarAndRawSeparation
+              - TestX86DirectionStateCloneJoinPreservationAndRevocation
+              - TestX86DirectionWholeSourceCFGJoinsAndFinalEffectRevocation
+              - TestX86DirectionMalformedDeadSourceCannotBorrowNumericalProof
+              - TestX86DirectionLoweredStringCompleteFamilyConsumesDirection
+              - TestX86DirectionControlPreservesSixStatusButGrantsNoEntryFacts
+              - TestX86DirectionOriginalSDKIndexByte386ThreeAPIsNextContext
+              - TestX86DirectionOriginalGo127CompleteYnoneRows
+              - TestX86ABI0ResultInitializationCompleteStateByteEnvelope
+              - TestX86ABI0Mode32CanonicalBoolDirectCallRevokesDirection
+              - TestX86DirectionTypedBoolAndVoidWholeCallThreeAPIs
+              - TestX86OrdinaryResultAddressWholeSource
+              - TestX86OrdinaryResultAddressNoProbeRejectsUnknown
+              - TestX86OrdinaryResultAddressScalarTransferWidths
+              - TestX86OrdinaryResultAddressPrivateProofNotPublicAuthority
+              - TestX86OrdinaryResultAddressNativeAliasOrdering
+              - TestX86OrdinaryResultAddressPhysicalBanksAndFieldBytes
+              - TestX86OrdinaryResultAddressKeepsUnclosedRoles
+              - TestX86OrdinaryResultAddressLayoutAndBudgetRemainExact
+              - TestX86OrdinaryResultAddressDistinctFieldsAndRevocation
+              - TestX86OrdinaryResultAddressConcurrentOriginalFile
+              - TestX86OrdinaryResultAddressOriginalGoAndLLVMFiveTargetObjects
+              - TestX86ResultSlotMoveWidthKeepsScalarMode32Boundary
+              - TestX86ResultSlotMoveWidthWholeProofAndThreeAPIs
+              - TestGoX86SDKASMDataOriginalVendorPackageNamespace
+              - TestGoX86SDKNumericalReadPackageQueryMatchesOriginalLiteralSource
+              - TestSDKAMD64OriginalFrameConfigGuardEagerIdentity
+              - TestSDKAMD64OriginalFrameProfileRejectsEqualByteConfigReplacement
+              - TestSDKAMD64PrimaryInventoryActualCompleteMD5
+              - TestGoX86SDKASMDataOriginalBytealgTextSourceOrder
+              - TestSDKAMD64NativeFrameMixedNamespaceSourceOrder
+              - TestGoX86SDKNumericalNativeOriginalMixedTextOrder
+              - TestGoX86SDKNumericalNativeTextOrderLiveRevocation
+            timeout: 5m
+          - lane: frame-context
+            module: '.'
+            roots:
+              - TestGoAMD64SDKFrameBindContextCallbacksMayClose
+              - TestGoAMD64FrameVerifyContextCallbacksMayClose
+              - TestGoAMD64FramePrivateContextExactLifetime
+              - TestGoX86NumericalSBReadFrameProducerObserverCancellationCause
+              - TestGoSourceContextTerminalSuccessHasNoLaterCallbacks
+              - TestGoSourceContextTerminalLostBound
+              - TestGoSourceContextTerminalCaptureCannotFreezeStaleLifetime
+              - TestGoSourceContextTerminalOriginalErrCannotChangeLifetime
+              - TestGoSourceContextTerminalJoinedOwnerCallbackCannotChangeLifetime
+              - TestGoSourceContextTerminalCancellationSignalsAndCauses
+              - TestGoSourceContextTerminalClosedDoneCannotReturnSuccess
+              - TestGoSourceContextTerminalSameContextRolesAreBounded
+              - TestGoSourceContextTerminalFrameDoneCannotChangeInLastErr
+              - TestGoSourceContextTerminalPrivateBridgeOnlyTightensAndStops
+              - TestGoSourceContextTerminalIdentityAndBoundedRoleGuards
+            timeout: 5m
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-go
+        with:
+          go-version: '1.27.2'
+          cache: true
+      - uses: ./.github/actions/setup-windows-llvm22
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+      - name: Check shared command-path identities
+        if: ${{ matrix.lane == 'llvm' }}
+        shell: bash
+        working-directory: internal/sdkfrontend
+        env:
+          GOTOOLCHAIN: local
+          GOFLAGS: ''
+          GOENV: 'off'
+          GOWORK: 'off'
+        run: |
+          set -euo pipefail
+          report="$GITHUB_WORKSPACE/_out/windows-sdk-priority"
+          mkdir -p "$report"
+          roots='TestOrdinaryEnvironmentActualCommandPathIdentity'
+          roots+='|TestOrdinaryEnvironmentCommandPathRejectionPreservesInputs'
+          roots+='|TestOrdinaryEnvironmentRetainsGOPATHComponentSelection'
+          roots+='|TestWorkingDirectoryActualIdentity'
+          roots+='|TestWorkingDirectoryRejectsMissingOrNonDirectory'
+          go test -tags=byollvm . -list "^($roots)$" > "$report/shared-path-inventory.log"
+          for root in ${roots//|/ }; do
+            grep -Fx "$root" "$report/shared-path-inventory.log"
+          done
+          go test -tags=byollvm . -run "^($roots)$" -count=1 -timeout=5m -v \
+            2>&1 | tee "$report/shared-path-tests.log"
+      - name: Check exact SDK priority inventory (${{ matrix.lane }})
+        shell: bash
+        working-directory: ${{ matrix.module }}
+        env:
+          GOTOOLCHAIN: local
+          GOFLAGS: ''
+          GOENV: 'off'
+          GOWORK: 'off'
+          SDK_PRIORITY_ROOTS: ${{ join(matrix.roots, '|') }}
+          SDK_PRIORITY_TIMEOUT: ${{ matrix.timeout }}
+        run: |
+          set -euo pipefail
+          report="$GITHUB_WORKSPACE/_out/windows-sdk-priority"
+          mkdir -p "$report"
+          go test -tags=byollvm . -list "^($SDK_PRIORITY_ROOTS)$" > "$report/inventory.log"
+          for root in ${SDK_PRIORITY_ROOTS//|/ }; do
+            grep -Fx "$root" "$report/inventory.log"
+          done
+          go test -tags=byollvm . -run "^($SDK_PRIORITY_ROOTS)$" -count=1 \
+            -timeout="$SDK_PRIORITY_TIMEOUT" -v 2>&1 | tee "$report/tests.log"
+      - name: Preserve independently inventoried SDK results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: windows-sdk-priority-${{ matrix.lane }}
+          path: _out/windows-sdk-priority/
+          if-no-files-found: error
+
+  ownership:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        go: ['1.20.14', '1.27.2']
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-go
+        with:
+          go-version: ${{ matrix.go }}
+          cache: false
+      - uses: ./.github/actions/setup-windows-llvm22
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+      - name: Check the previous native root failures first
+        shell: bash
+        env:
+          GOTOOLCHAIN: local
+          GOFLAGS: ''
+        run: |
+          set -euo pipefail
+          mkdir -p _out/windows-ownership
+          roots='TestCrossLinuxRuntimeMatrixX86PackedZeroMemoryStoreFault|TestX86GoPackedStoreFaultDiagnostic'
+          roots+='|TestTranslate386InstructionFamilies|TestRuntimeOracleSinkRejectsMissingEntryAndEarlyExit'
+          go test -tags=byollvm . -list "^($roots)$" > _out/windows-ownership/priority-inventory.log
+          for root in ${roots//|/ }; do
+            grep -Fx "$root" _out/windows-ownership/priority-inventory.log
+          done
+          go test -tags=byollvm . -run "^($roots)$" -count=1 -timeout=5m -v \
+            2>&1 | tee _out/windows-ownership/priority-roots.log
+      - name: Check canonical bool and source-query portable controls
+        shell: bash
+        env:
+          GOTOOLCHAIN: local
+          GOFLAGS: ''
+        run: |
+          set -euo pipefail
+          mkdir -p _out/windows-ownership
+          roots='TestAMD64RegisterBoolCanonicalResultThreeAPIs'
+          roots+='|TestAMD64RegisterBoolInitializedIsNotCanonical'
+          roots+='|TestAMD64RegisterBoolCanonicalTypedTransferFamilies'
+          roots+='|TestAMD64RegisterBoolThreeTargetOriginalAndLLVMObjects'
+          roots+='|TestNumericalRawSelectionPreservesActualPackageQuery'
+          roots+='|TestNumericalSourcePackageQueryKeepsSourceRolesDistinct'
+          roots+='|TestSDKAMD64OriginalFrameConfigGuardEagerIdentity'
+          go test -tags=byollvm . -list "^($roots)$" > _out/windows-ownership/portable-inventory.log
+          for root in ${roots//|/ }; do
+            grep -Fx "$root" _out/windows-ownership/portable-inventory.log
+          done
+          go test -tags=byollvm . -run "^($roots)$" -count=1 -timeout=5m -v \
+            2>&1 | tee _out/windows-ownership/portable.log
+      - name: Check actual shared command paths on both SDKs
+        shell: bash
+        env:
+          GOTOOLCHAIN: local
+          GOFLAGS: ''
+          GOENV: 'off'
+          GOWORK: 'off'
+        run: |
+          set -euo pipefail
+          mkdir -p _out/windows-ownership
+          roots='TestGoEnvFileSelection'
+          roots+='|TestOrdinaryEnvironmentActualCommandPathIdentity'
+          roots+='|TestOrdinaryEnvironmentCommandPathRejectionPreservesInputs'
+          roots+='|TestOrdinaryEnvironmentRetainsGOPATHComponentSelection'
+          roots+='|TestWorkingDirectoryActualIdentity'
+          roots+='|TestWorkingDirectoryRejectsMissingOrNonDirectory'
+          go test -tags=byollvm ./internal/sdkfrontend -list "^($roots)$" \
+            > _out/windows-ownership/command-path-inventory.log
+          for root in ${roots//|/ }; do
+            grep -Fx "$root" _out/windows-ownership/command-path-inventory.log
+          done
+          go test -tags=byollvm ./internal/sdkfrontend -run "^($roots)$" \
+            -count=1 -timeout=5m -v 2>&1 | tee _out/windows-ownership/command-path-tests.log
+      - name: Real process-tree and exhaustive runner regressions
+        shell: bash
+        env:
+          GOTOOLCHAIN: local
+          GOFLAGS: ''
+        run: |
+          set -euo pipefail
+          mkdir -p _out/windows-ownership
+          go test ./internal/ownedprocess ./internal/sourcepath ./cmd/plan9asmtest -count=1 -timeout=8m -v 2>&1 | tee _out/windows-ownership/native.log
+      - name: Repeat real process termination races
+        shell: bash
+        env:
+          GOTOOLCHAIN: local
+          GOFLAGS: ''
+        run: |
+          set -euo pipefail
+          go test ./cmd/plan9asmtest -run '^TestWindowsOwnedCommand' -count=25 -timeout=8m -v 2>&1 | tee _out/windows-ownership/repeated.log
+      - name: Preserve native results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: owned-process-${{ matrix.go }}
+          path: _out/windows-ownership/
+          if-no-files-found: error
+
+  arm64-fallback-cross-priority:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      GOFLAGS: ''
+      GOENV: 'off'
+      GOWORK: 'off'
+      GOTOOLCHAIN: local
+      PLAN9ASM_CROSS_EXEC: '1'
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install original cross-role LLVM 22 and linkers
+        timeout-minutes: 14
+        run: >-
+          bash scripts/install-ci-llvm22-ubuntu.sh
+          gcc-i686-linux-gnu gcc-arm-linux-gnueabihf
+          gcc-aarch64-linux-gnu
+      - name: Install original pinned QEMU 10.2.3
+        timeout-minutes: 5
+        run: bash scripts/install-ci-qemu.sh
+      - uses: ./.github/actions/setup-go
+        with:
+          go-version: '1.27.2'
+          cache: true
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+      - name: Execute complete rich CLI ARM64 fallback oracle
+        run: |
+          set -euo pipefail
+          mkdir -p _out/cross-runtime-owner
+          bash scripts/test-arm64-fallback-ci.sh execute
+      - name: Retain complete source, tools and raw execution children
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: arm64-fallback-cross-priority
+          path: _out/cross-runtime-owner/arm64-fallback-cross/
+          if-no-files-found: error
+
+  lock-native-priority:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install LLVM 22 and required native i386 toolchain
+        timeout-minutes: 14
+        run: bash scripts/install-ci-llvm22-ubuntu.sh gcc-i686-linux-gnu libc6-dev-i386-cross
+      - uses: ./.github/actions/setup-go
+        with:
+          go-version: '1.27.2'
+          cache: true
+      - name: Execute original Go and LLVM native LOCK semantics
+        env:
+          GOTOOLCHAIN: local
+        run: |
+          set -euo pipefail
+          mkdir -p _out/native-lock
+          roots='TestCrossLinuxRuntimeMatrixX86LockScalarRMWNativeAMD64'
+          roots+='|TestCrossLinuxRuntimeMatrixX86LockScalarRMWNative386'
+          go test -p=1 . -list "^($roots)$" > _out/native-lock/inventory.log
+          for root in ${roots//|/ }; do
+            grep -Fx "$root" _out/native-lock/inventory.log
+          done
+          go test -p=1 . -run "^($roots)$" -count=1 -timeout=5m -json \
+            2> _out/native-lock/stderr.log | tee _out/native-lock/raw.jsonl
+          node .github/scripts/audit-lock-native.cjs _out/native-lock > _out/native-lock/audit.json
+      - name: Preserve original and translated LOCK observations
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: native-lock
+          path: _out/native-lock/
+          if-no-files-found: error
+
+  vector-value-fault-priority:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install required LLVM 22
+        timeout-minutes: 14
+        run: bash scripts/install-ci-llvm22-ubuntu.sh
+      - uses: ./.github/actions/setup-go
+        with:
+          go-version: '1.27.2'
+          cache: true
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+      - name: Execute complete portable value memory-fault oracles
+        env:
+          GOTOOLCHAIN: local
+        run: |
+          set -euo pipefail
+          mkdir -p _out/vector-value-faults
+          roots='TestX86VectorValueNativePortableFaults'
+          roots+='|TestGoX86NumericalSBReadRuntimeFaultCorePolicy'
+          go test -p=1 . -list "^($roots)$" > _out/vector-value-faults/inventory.log
+          go test -p=1 . -run "^($roots)$" -count=1 -timeout=5m -json \
+            2> _out/vector-value-faults/stderr.log | tee _out/vector-value-faults/raw.jsonl
+          node .github/scripts/audit-value-fault-priority.cjs _out/vector-value-faults > _out/vector-value-faults/audit.json
+      - name: Retain complete portable fault observations
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: vector-value-faults
+          path: _out/vector-value-faults/
+          if-no-files-found: error
+
+  x87-native-priority:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      GOTOOLCHAIN: local
+      GOENV: 'off'
+      GOWORK: 'off'
+      GOFLAGS: ''
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install LLVM 22 and actual native i386 link tools
+        timeout-minutes: 14
+        run: bash scripts/install-ci-llvm22-ubuntu.sh gcc-i686-linux-gnu libc6-dev-i386-cross
+      - uses: ./.github/actions/setup-go
+        with:
+          go-version: '1.27.2'
+          cache: true
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+      - name: Execute original Go and LLVM x87 integer, conditional and status oracles
+        run: |
+          set -euo pipefail
+          mkdir -p _out/native-x87
+          roots='TestCrossLinuxRuntimeMatrixX86X87SignedI64IdentityOriginalGoAndLLVM'
+          roots+='|TestAMD64X87ConditionalMoveRuntimeConditions'
+          roots+='|TestX86RawX87ClearExceptionRuntimeSemantics'
+          roots+='|TestX86RawX87SoftwareClearPreservesAllStatusFields'
+          go test -p=1 . -list "^($roots)$" > _out/native-x87/inventory.log
+          go test -p=1 . -run "^($roots)$" -count=1 -timeout=5m -json \
+            2> _out/native-x87/stderr.log | tee _out/native-x87/raw.jsonl
+          node .github/scripts/audit-x87-native.cjs _out/native-x87 > _out/native-x87/audit.json
+      - name: Retain complete original and hardware execution evidence
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: native-x87
+          path: _out/native-x87/
+          if-no-files-found: error

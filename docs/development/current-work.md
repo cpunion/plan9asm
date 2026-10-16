@@ -262,10 +262,14 @@ update is limited to supported/context counts and classification fingerprints.
 This is not lost instruction support or an execution certificate. The existing
 Go20 maskless EVEX.Z malformed row remains separately unsupported.
 
-The combined source still requires its complete 195-owner SDK/race union,
-retained immediate consumers and final gates. Do not publish an unqualified
-batch or transfer old receipts to its head. Preserve the earlier failed
-deadline, malformed-fixture and real semantic/input RED receipts as failed.
+At `611f5aa9`, the complete 195-owner union passes on actual Go20, Go27 and
+Go27 race: 585 root executions and 35,994 children, zero failures or skips.
+All nine final gates pass, including both SDKs' whole-root-module vet/build,
+five-architecture official coverage and scanner checks. An independent audit
+rechecks ordered raw outcomes and 24,494 bound source/tool/SDK paths. These are
+the complete affected/retained union and final gates, not the full module suite,
+strict standard-library benchmark or physical AVX512 execution. Preserve every
+earlier failed deadline, fixture and semantic/input RED receipt as failed.
 
 The combined `cd518920` qualification passes its first six current-Go groups,
 then fails the seventh at an old KMOV emitter assertion expecting a nonvolatile
@@ -273,6 +277,23 @@ byte load. The actual original body retains its exact volatile i8 native read.
 The test-only follow-up updates that required spelling, not production code,
 input permissions, the full owner union or any time budget. Later SDK/race and
 native-object/fault groups remain unattempted in that failed receipt.
+
+The complete current-SDK GC `filter_amd64.s` independently reproduces the old
+KMOVW-to-POPCNTL failure at `4ba65e3f`, against the pre-repair source. The actual
+selected source bytes remain unchanged. At `c589ca92`, its ordinary package
+loader and compileOne path produce a nonempty LLVM22 object on Go27 normal and
+race. The existing complete SDK Count and IndexByte object roots also pass in
+separate commands with their original five-minute budgets. This follow-up
+changes only two CLI test files; it does not establish a new full-benchmark count.
+
+The next fork batch adds seven exact SDK priority lanes (55 total), plus a
+required Linux owner for both complete portable vector-fault and child-core
+policy roots. Strict raw-event auditing rejects missing, skipped, failed,
+duplicate or incomplete children. Existing full-module owners and command
+budgets remain unchanged. These new CI policies still need their final local
+checks and an actual published run; the older 87-job result does not certify
+them. The ordinary scalar memory-RMW repair remains a separate unqualified
+leaf, excluded from this batch until retained, native and SDK/race checks pass.
 
 The complete strict benchmark at `af9223af` remains FAILED: 148/184 files,
 36 failures, no N/A/unattempted files, 1,256 target seconds and AMD64 above its
