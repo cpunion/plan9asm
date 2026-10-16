@@ -23,7 +23,11 @@ func x86TypedFPResultNeedsProof(fn Func, sig FuncSig, arch string) bool {
 		}
 	}
 	opaqueAddressResult := x86OpaqueAddressPointerResultRole(fn, sig, arch)
-	for _, ins := range fn.Instrs {
+	for ordinal, ins := range fn.Instrs {
+		if _, known, err := x86ScalarMemoryRMWProperties(ins.Op, ins, arch); known && err == nil &&
+			x86ResultNamedPredicateInstruction(ins) && (ordinal == 0 || fn.Instrs[ordinal-1].Op != "LOCK") {
+			return true // Ordinary memory RMW inputs remain obligations even for Void or missing results.
+		}
 		if _, known, err := x86AHFlagsProperties(ins.Op, ins, arch); known && err == nil && x86ResultNamedPredicateInstruction(ins) {
 			return true // Dead AH/FLAGS transfers still need their actual source byte or five flags.
 		}

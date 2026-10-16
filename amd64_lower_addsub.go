@@ -31,7 +31,7 @@ func (c *amd64Ctx) lowerScalarAddSub(op Op, ins Instr) (ok bool, terminated bool
 			return true, false, err
 		}
 	}
-	destinationValue, store, err := c.loadIntDestination(destination, typ)
+	destinationValue, store, err := c.loadScalarRMWDestination(op, ins, typ)
 	if err != nil {
 		return true, false, err
 	}

@@ -156,6 +156,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		if accepted, recognized := x86LoweredScalarNativeStore(ins, state, owned, arch); recognized {
 			return accepted
 		}
+		if accepted, recognized := x86LoweredScalarMemoryRMW(ins, state, owned, arch); recognized {
+			return accepted
+		}
 		if accepted, known := x86MaskMoveResultStep(ins, state, owned, resultOffset, arch, true); known {
 			return accepted // The same KMOV emitter retains the complete volatile native width.
 		}

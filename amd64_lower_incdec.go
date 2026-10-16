@@ -50,7 +50,7 @@ func (c *amd64Ctx) lowerScalarIncDec(op Op, ins Instr) (ok bool, terminated bool
 	}
 
 	ty := amd64IntegerTypeForBits(bits)
-	old, err := c.evalIntSized(dst, ty)
+	old, store, err := c.loadScalarRMWDestination(op, ins, ty)
 	if err != nil {
 		return true, false, err
 	}
@@ -61,7 +61,7 @@ func (c *amd64Ctx) lowerScalarIncDec(op Op, ins Instr) (ok bool, terminated bool
 	}
 	fmt.Fprintf(c.b, "  %%%s = %s %s %s, 1\n", result, llvmOp, ty, old)
 	value := "%" + result
-	if err := c.storeScalarIntegerOperand(dst, ty, value); err != nil {
+	if err := store(value); err != nil {
 		return true, false, err
 	}
 
