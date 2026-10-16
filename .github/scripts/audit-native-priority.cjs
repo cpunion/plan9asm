@@ -4,6 +4,7 @@ const path = require('node:path');
 
 function auditNativePriority(directory, io = fs) {
   const inventories = {
+    'static-read': ['TestX86RawReturnStaticReadNumericOracle'],
     alias: [
       'TestCrossLinuxRuntimeMatrixX86MOVQSourceAliasesOriginalAndLLVM',
       'TestCrossLinuxRuntimeMatrixX86MOVQSourceAliasesCountedProvenance',
@@ -64,7 +65,7 @@ function auditNativePriority(directory, io = fs) {
       mandatory.add(name);
     }
   }
-  assert.equal(mandatory.size, 28);
+  assert.equal(mandatory.size, 29);
   const discovered = io.readFileSync(path.join(directory, 'all-roots.stdout'), 'utf8')
     .split(/\r?\n/).filter(line => /^Test\S+$/.test(line)).sort();
   assert.equal(discovered.length, 66, 'fresh discovery denominator changed');

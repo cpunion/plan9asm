@@ -23,12 +23,16 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p _out/native-x86-oracles
-          roots='TestX86RawReturnStaticReadNumericOracle|TestX86OriginalSysVDirectAndPointerTransport'
+          roots='TestX86OriginalSysVDirectAndPointerTransport'
           roots+='|TestX86MemoryFault.*|TestX86CMPXCHGFault.*|TestX86CMPXCHGWindowsFaultCodes'
           roots+='|TestX86NativeWindowsPrecisionFaultCode|TestX86SignedConversionFaultWindowsHeaderBoundary'
           roots+='|TestX86GoPackedStoreFaultDiagnostic|TestRuntimeOracleFault.*'
           roots+='|TestRuntimeOracleNativeCActualHeadersAndLink|TestGoX86NumericalSBReadRuntimeFaultObservation'
           roots+='|TestCrossLinuxRuntimeMatrixX86TLSNoopPreservesWideGP'
+          static_read_root='TestX86RawReturnStaticReadNumericOracle'
+          go test . -list "^($static_read_root)$" > _out/native-x86-oracles/static-read-inventory.log
+          grep -Fx "$static_read_root" _out/native-x86-oracles/static-read-inventory.log
+          roots+="|$static_read_root"
           alias_roots='TestCrossLinuxRuntimeMatrixX86MOVQSourceAliasesOriginalAndLLVM'
           alias_roots+='|TestCrossLinuxRuntimeMatrixX86MOVQSourceAliasesCountedProvenance'
           go test . -list "^($alias_roots)$" > _out/native-x86-oracles/alias-inventory.log
@@ -207,6 +211,15 @@ jobs:
               - TestX86PoppedMixedWidthsRetainOriginalFlagBitPositions
               - TestX86StackRefinementCloneJoinAndReuse
             timeout: 5m
+          - lane: raw-static-replay
+            module: '.'
+            roots:
+              - TestX86RawStaticReplayCapturesDecoderBeforeSymbolRebinding
+              - TestX86RawStaticReplayScalarResultsThreeAPIs
+              - TestX86RawStaticReplayPortableValuesAndMutablePool
+              - TestX86RawReturnMaterializedReadCannotAuthorizeChangedSource
+              - TestX86RawStaticRegisterReturnDoesNotInventSourceBytes
+            timeout: 5m
           - lane: llvm
             module: cmd/plan9asmll
             roots:
@@ -294,6 +307,7 @@ jobs:
               - TestX86LODSStateCompleteIndependentCases
               - TestX86LODSZeroCountDoesNotCreateResultFacts
               - TestX86LODSZeroStoreObserverRejectsEveryFieldAndUnknownEffect
+              - TestX86LODSZeroStoreObserverVolatileAndLineEndingForms
               - TestX86LODSZeroCountOriginalGoAndLLVMWholeState
               - TestX86StringMemoryIRReaderEmptyZeroCount
               - TestX86StringMemoryIRReaderLineEndingsAndMetadata
