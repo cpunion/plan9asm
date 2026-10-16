@@ -131,16 +131,8 @@ func TestTranslateX86CRC32RejectsFormsOutsideGo127Optabs(t *testing.T) {
 	}
 }
 
-func TestAMD64CRC32RuntimeSemanticsAndFlags(t *testing.T) {
-	crossRosetta := runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" && rosettaAvailable()
-	if runtime.GOARCH != "amd64" && !crossRosetta {
-		t.Skip("runtime execution test requires amd64 or Rosetta")
-	}
-	llc, clang, ok := findLlcAndClang(t)
-	if !ok {
-		t.Fatal("LLVM 22 llc/clang not found")
-	}
-	const source = `TEXT crc32semantics(SB),NOSPLIT,$0-8
+func x86CRC32RuntimeSemanticsSource() string {
+	return `TEXT crc32semantics(SB),NOSPLIT,$0-8
 	MOVQ out+0(FP), DI
 
 	MOVL $0x12345678, BX
@@ -174,6 +166,36 @@ func TestAMD64CRC32RuntimeSemanticsAndFlags(t *testing.T) {
 	SETMI 35(DI)
 	RET
 `
+}
+
+func TestX86CRC32RuntimeFixtureUsesOriginalGoEncoding(t *testing.T) {
+	source := x86CRC32RuntimeSemanticsSource()
+	x86LEAActualTargetGoObject(t, "amd64", "x86_64-unknown-linux-gnu", source)
+	for _, target := range x86RawReturnTargets {
+		if target.arch != "amd64" {
+			continue // The original complete fixture includes CRC32Q, not a Go386 GP row.
+		}
+		for _, api := range []string{"text", "module", "Go"} {
+			t.Run(target.triple+"/"+api, func(t *testing.T) {
+				ir, err := x86ScalarFPBitViewAPI(t, source, "func crc32semantics(out *byte)", "amd64", target.triple, api)
+				if err != nil || ir == "" {
+					t.Fatal("complete original CRC32 numerical/flags fixture rejected", err)
+				}
+			})
+		}
+	}
+}
+
+func TestAMD64CRC32RuntimeSemanticsAndFlags(t *testing.T) {
+	crossRosetta := runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" && rosettaAvailable()
+	if runtime.GOARCH != "amd64" && !crossRosetta {
+		t.Skip("runtime execution test requires amd64 or Rosetta")
+	}
+	llc, clang, ok := findLlcAndClang(t)
+	if !ok {
+		t.Fatal("LLVM 22 llc/clang not found")
+	}
+	source := x86CRC32RuntimeSemanticsSource()
 	file, err := Parse(ArchAMD64, source)
 	if err != nil {
 		t.Fatal(err)
