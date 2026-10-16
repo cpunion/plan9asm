@@ -218,11 +218,11 @@ func TestX86LoweredPureGPUnknownPartialBytesFlagsAndPointers(t *testing.T) {
 		flags, wantDX, wantFlags uint8
 	}{
 		{"ADDB BL,DH", 0xfe, 0xff, 0xff, x86ByteFlagsAll, 0xfd, 0},
-		{"ADDW BX,DX", 0xfd, 0xff, 0xff, x86ByteFlagsAll, 0xfc, 0},
+		{"ADDW BX,DX", 0xfd, 0xff, 0xff, x86ByteFlagsAll, 0xfd, 0},
 		{"ADDL BX,DX", 0xfe, 0xff, 0xff, x86ByteFlagsAll, 0xf0, 0},
-		{"ADDQ BX,DX", 0x7f, 0xff, 0xff, x86ByteFlagsAll, 0, 0},
-		{"INCW DX", 0xff, 0xfd, 0xff, x86ByteFlagsAll, 0xfc, x86ByteFlagCF},
-		{"NOTW DX", 0xff, 0xfd, 0xff, x86ByteFlagsAll, 0xfc, x86ByteFlagsAll},
+		{"ADDQ BX,DX", 0x7f, 0xff, 0xff, x86ByteFlagsAll, 0x7f, 0},
+		{"INCW DX", 0xff, 0xfd, 0xff, x86ByteFlagsAll, 0xfd, x86ByteFlagCF},
+		{"NOTW DX", 0xff, 0xfd, 0xff, x86ByteFlagsAll, 0xfd, x86ByteFlagsAll},
 		{"SHLL $0,DX", 0xff, 0xfd, 0xff, x86ByteFlagsAll, 0xfd, x86ByteFlagsAll},
 		{"BTSL BX,DX", 0xfe, 0xff, 0xff, x86ByteFlagsAll, 0xf0, x86ByteFlagZF},
 		{"SHLL CX,DX", 0xff, 0xff, 0xfe, x86ByteFlagsAll, 0xf0, 0},

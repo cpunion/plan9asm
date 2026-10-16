@@ -25,7 +25,7 @@ func x86LoweredPureGPUnknownTransfer(ins Instr, state *x86ResultState, arch stri
 	// by describing their byte inputs and outputs.
 	shift, isShift, shiftErr := x86ScalarShiftProperties(ins.Op, ins, arch)
 	extension, isExtension, extensionErr := x86ScalarExtensionProperties(ins.Op, ins, arch)
-	_, isRMW, rmwErr := x86LockScalarRMWProperties(ins.Op, ins, arch)
+	rmw, isRMW, rmwErr := x86LockScalarRMWProperties(ins.Op, ins, arch)
 	_, isIMUL, imulErr := x86ExplicitIMULProperties(ins.Op, ins, arch)
 	_, isCMOV, cmovErr := x86ConditionalMoveProperties(ins.Op, ins, arch)
 	if !isShift && !isExtension && !isRMW && !isIMUL && !isCMOV ||
@@ -68,6 +68,13 @@ func x86LoweredPureGPUnknownTransfer(ins Instr, state *x86ResultState, arch stri
 			defined = x86LoweredExtensionKnownBytes(extension, before, arch)
 		} else if isShift && !shift.bmi2 && shift.count.Kind == OpImm && shift.maskedCount() == 0 {
 			defined = before[index] & mask // Group2 count0 leaves its low bytes unchanged.
+		} else if isRMW {
+			defined = x86LoweredRMWKnownBytes(rmw.spec, effect, before, state.flags, arch)
+			// The dependency directory uses low-relative bytes. The actual
+			// typed operand still owns high-byte aliases such as AH/DH.
+			for view := mask; view&1 == 0; view >>= 1 {
+				defined <<= 1
+			}
 		}
 		state.gp[index] = before[index]&^mask | defined
 		if operand.width == 4 {
@@ -88,6 +95,34 @@ func x86LoweredPureGPUnknownTransfer(ins Instr, state *x86ResultState, arch stri
 	}
 	state.flags &^= flagsWritten
 	return true
+}
+
+func x86LoweredRMWKnownBytes(spec x86LockScalarRMWSpec, effect x86TypedByteEffect, before [16]uint8,
+	flags uint8, arch string) uint8 {
+	inputs := uint8(0xff)
+	for _, operand := range effect.operands {
+		if !operand.read || operand.operand.Kind == OpImm {
+			continue
+		}
+		root, mask, valid := x86ResultGP(operand.operand.Reg, operand.width, arch)
+		if !valid {
+			return 0
+		}
+		known := before[root] & mask
+		for mask&1 == 0 {
+			known >>= 1
+			mask >>= 1
+		}
+		inputs &= known
+	}
+	var result uint8
+	for output := 0; output < spec.bits/8; output++ {
+		mask, carry := spec.numericalByteInputs(output)
+		if mask != 0 && inputs&mask == mask && (!carry || flags&x86ByteFlagCF != 0) {
+			result |= 1 << uint(output)
+		}
+	}
+	return result
 }
 
 // Extensions copy individual source bytes. Zero fill is independent of every

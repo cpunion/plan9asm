@@ -23,6 +23,25 @@ type x86LockScalarRMWForm struct {
 	destination Operand
 }
 
+// Numerical output bytes are independent of FLAGS preservation. INC/DEC do
+// not read CF to compute data, while ADC/SBB do. Arithmetic carry/borrow flows
+// only toward higher bytes; the four logical operations are byte-local.
+func (s x86LockScalarRMWSpec) numericalByteInputs(output int) (mask uint8, carry bool) {
+	if output < 0 || output >= s.bits/8 {
+		return 0, false
+	}
+	switch s.stem {
+	case "AND", "OR", "XOR", "NOT":
+		return 1 << uint(output), false
+	case "ADC", "SBB":
+		return uint8((uint16(1) << uint(output+1)) - 1), true
+	case "ADD", "SUB", "INC", "DEC", "NEG":
+		return uint8((uint16(1) << uint(output+1)) - 1), false
+	default:
+		return 0, false // Bit-string indexes retain their separate dependencies.
+	}
+}
+
 var x86LockScalarRMWSpecs = func() map[Op]x86LockScalarRMWSpec {
 	result := make(map[Op]x86LockScalarRMWSpec)
 	for _, stem := range []string{"ADC", "ADD", "AND", "OR", "SBB", "SUB", "XOR", "INC", "DEC", "NEG", "NOT", "BTC", "BTR", "BTS"} {
