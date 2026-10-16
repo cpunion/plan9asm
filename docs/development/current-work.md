@@ -1,5 +1,34 @@
 # Current work: PR 40 checkpoint
 
+Checkpoint: 2026-10-16 12:58 UTC. This queue supersedes older checkpoints;
+receipts certify only their exact source and scope.
+
+Source `af9223af` passes the complete 124-owner union on current Go, actual
+Go20 and race: 372 root executions and 30,108 children, without skips. Its
+final gates and independent audit pass. Allowed-fork `2729a5d0` retains that
+non-GitHub tree and is published. Run 38895272356 is still active: 84 jobs pass,
+two execute and no failure has been observed. Let it finish naturally; do not
+publish a replacement early or transfer its results to newer local changes.
+
+The subsequent KMOV review exposes incomplete GP zero-extension facts, wrong
+logical FP byte read/write widths and a lost checked caller continuation.
+Independent REDs additionally expose all fifteen KADD/KSHIFT/KUNPCK numerical
+transfers, unknown Void inputs, floating-zero shift immediates and exact native
+KMOV/SETcc accesses. The repair shares typed grammar and existing byte views;
+paired volatile native effects grant no reusable memory or entry authority.
+At `d8abc5b0`, thirteen changed/retained owners and 84 children pass, including
+39 complete mask arithmetic programs through three APIs, both IR/backend
+levels and actual-host execution. Earlier focused receipts retain their own
+heads. Complete combined-source Go20/race, retained owners, official baseline
+review and final gates remain pending. Do not publish this unqualified batch.
+
+The complete strict benchmark at `af9223af` remains FAILED: 148/184 files,
+36 failures, no N/A/unattempted files, 1,256 target seconds and AMD64 above its
+unchanged 300-second budget. Diagnose performance before changing code; do not
+raise budgets or call Context a file pass. External inventory remains the
+server-only snapshot below, not a new scan or compatibility pass. PR40 stays
+draft at its older contribution head.
+
 Checkpoint: 2026-10-16 11:12 UTC. This queue supersedes the historical notes
 below. Every receipt retains its exact source and scope.
 

@@ -183,6 +183,19 @@ encoding-aware packed writeback even for X destinations: legacy `storeX`
 preserves wider bytes. Independent whole-byte runtime checks must observe both
 directions separately rather than relying only on a round trip.
 
+KMOVB/W/D/Q is a separate grammar. B/W/D-to-GP defines the complete zero-extended
+native word; its FP/native memory effect still uses only the named byte width.
+Logical FP reads gather exact fields, and narrow stores retain untouched bytes.
+KADD, KSHIFT and KUNPCK share two complete typed operand shapes, not numerical
+operations. Every source mask remains required, even for Void and oversized
+shifts; floating/unresolved immediates never become Yu8. A checked normalized
+caller continuation must consume its exact original source/signature/stack
+owner, not impersonate a logical FP proof. Paired native KMOV and all sixteen
+SETcc byte stores retain exact unaligned volatile effects and known inputs or
+FLAGS. They supply no reusable memory, pointee, raw-entry or caller permission.
+Format-only sources keep original Go objects and explicit Context controls;
+separate initialized counterparts own executable and public LLVM coverage.
+
 The eight immediate shuffles share their integer-only source grammar and exact
 byte selectors with lowering, caller definedness and memory shapes. Bind the
 complete legacy and VEX/EVEX rows independently, including signed MMX Yi8,
