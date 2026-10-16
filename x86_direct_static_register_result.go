@@ -58,6 +58,11 @@ func (c *amd64Ctx) checkStaticIntegerResultInitialization() error {
 			}
 			continue
 		}
+		if fn.x86RawReplay != nil {
+			if _, bound := x86StaticIntegerResultRawView(ins, arch); bound {
+				continue // The complete replay and independent raw memory guard remain required.
+			}
+		}
 		if !x86ResultNamedPredicateInstruction(ins) || isX86RawDirective(ins) {
 			return fail("another raw/native instruction needs its own complete effect")
 		}
@@ -65,6 +70,12 @@ func (c *amd64Ctx) checkStaticIntegerResultInitialization() error {
 	transfer := func(_ int, ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string) bool {
 		state.loweredStaticReads = c.fpScalarData
 		defer func() { state.loweredStaticReads = nil }()
+		if view, bound := x86StaticIntegerResultRawView(ins, arch); bound {
+			ins = view // Local effect dispatch only; never rewrite either sealed source snapshot.
+			if accepted, known := x86ResultUnknownSBAddressStep(ins, state, arch); known {
+				return accepted // A materialized native address does not define numerical bytes.
+			}
+		}
 		if accepted, known := c.scalarStaticAddressValueTransfer(ins, state, owned, arch); known {
 			return accepted // Preserve the independently bound relocation-value producer.
 		}
@@ -92,4 +103,32 @@ func (c *amd64Ctx) checkStaticIntegerResultInitialization() error {
 			}
 			return nil
 		})
+}
+
+// Only a complete replay-bound scalar RIP read or source-local LEAQ may use
+// the existing named byte effects. The whole-file raw guard separately checks
+// the actual DATA bytes/extent and every native return; this view grants none
+// of those contracts and is never used by standalone declaration queries.
+func x86StaticIntegerResultRawView(ins Instr, arch string) (Instr, bool) {
+	if arch != "amd64" || ins.x86SourceRaw == nil || ins.x86RawNearReturn != nil ||
+		ins.x86AddressBits != 0 || ins.x86UnboundAddressOverride || ins.x86SegmentPrefix != 0 {
+		return Instr{}, false
+	}
+	width := x86RawReturnScalarMoveBytes(ins.Op)
+	read := width != 0 && x86RawReturnDecodedReadIdentity(ins) &&
+		ins.x86RIPMemoryRead.source == 0 && ins.x86RIPMemoryRead.width == width &&
+		len(ins.Args) == 2 && ins.Args[1].Kind == OpReg
+	address := ins.Op == "LEAQ" && len(ins.x86RIPAddressData) != 0
+	if !read && !address {
+		return Instr{}, false
+	}
+	view := ins
+	view.x86Encoded, view.x86SourceRaw = false, nil
+	if address {
+		_, _, _, _, address = x86SBLEAWriteShape(view, arch)
+		if !address {
+			return Instr{}, false
+		}
+	}
+	return view, true
 }

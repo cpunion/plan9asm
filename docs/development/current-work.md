@@ -1,88 +1,63 @@
 # Current work: PR 40 checkpoint
 
-Checkpoint: 2026-10-16 04:07 UTC. This section supersedes the historical queue
+Checkpoint: 2026-10-16 04:45 UTC. This section supersedes the historical queue
 below; every older result retains its original source and scope.
 
 ## Immediate CI repair queue
 
-At `cca217b0`, all43 changed/retained owners pass on Go27, actual Go20 and
-race:129 root executions/23,976 children, no skips. Both whole-root-module
-vets/builds, current-Go formatting, official five-architecture classifications
-and three scanner owners also pass. Those receipts do not certify later code.
+The exact `ca4a7a3f` source passes all 45 changed/retained owners on Go27,
+actual Go20 and race: 135 root executions and 25,092 children, without skips.
+Both whole-root-module vets/builds, tracked formatting, both official five-arch
+gates and three scanner owners pass. Independent audits retain every ordered
+terminal and 24,449 bound source/SDK/tool inputs. Fork `e1dcf1ca` has the exact
+same non-GitHub tree and passes 104 Node policies plus three workflow lints.
+It was pushed normally; those receipts do not certify subsequent repairs.
 
-The final source-origin review independently retains two additional REDs:
-`489c6de1` has120 unmodeled-control false acceptances when one FLAGS byte is
-fully initialized; `17ba7da4` has six when386 mixed-width pops relocate AC
-into the low halfword. Exact stack-ordered refinement masks replace a coarse
-origin tag, preserve ordinary NUM bytes, intersect across joins, clone without
-aliasing and clear on slot reuse. The extra bounded byte-work is charged only
-for source CFGs with FLAGS pushes; neither deadline nor budget is increased.
-`17dbd30e` passes eight roots/1,091 children; `3eb3cb8f` passes all732 origin,
-mixed-width and clone/join/reuse children. Final qualification now includes
-these two new owners as well as the previous43. Do not extend this repair batch
-again before publishing its qualified fork candidate and observing CI.
+[Run 38850109873](https://github.com/cpunion/plan9asm/actions/runs/38850109873)
+is still active at that fork head: 44 successful jobs, two failed and two
+executing at this checkpoint. All 14 previously failed roots and 777 children
+pass in their required priority, including original-Go/LLVM BIT execution
+through all three APIs and six backend children. Independent artifact audits
+also pass native x87's four roots/26 children and the ARM64 fallback's complete
+four execution children. Do not cancel the run or publish a replacement early.
 
-The combined `dec82d00` source independently passes155 retained/affected roots
-and19,026 children on each of Go27 and actual Go20. Its first five race groups
-pass130 roots; the last25-owner command remains FAILED at its original five
-minutes. It completes23 roots, times out inside the complete five-target
-segment object owner, and never starts the final root. Preserve the raw panic
-and unfinished terminals. Do not call this a complete race pass. The original
-normal object matrix remains complete; a future race partition must preserve
-every target/API/IR/backend child and verify their full disjoint union.
+The two new failures have independent local TDDs:
 
-Independent follow-up `7efc5a50` exposes150 false acceptances when the new
-partial-popped-word consumer observes unmodeled TF/IF/IOPL/NT/RF/AC controls.
-`af30d26f` restricts only that partial-byte refinement to modeled FLAGS and
-reserved low-byte bits; independently complete NUM bytes retain their old proof.
-Five focused roots/675 children pass without skips on Go27, including all360
-control/numerical-counterpart cases and the276-program portable BIT runtime.
-This does not claim a complete native system-FLAGS entry/restore contract.
-Freeze the combined source and qualify the complete changed FLAGS class plus
-retained CI repair owners on both actual SDKs/race, then both vets/builds and
-the official gates. The broad old race timeout remains an unresolved execution
-scope, not a repaired or silently omitted pass.
+- The LODS observer rejects correct native MOV `store volatile` output cells.
+  `7e9011f9` reproduces 56 qualifier/line-ending failures and the original six
+  API/architecture failures. `caa20caa` classifies the qualifier without relaxing
+  widths, values, addresses, duplicate stores or unknown effects. Its five
+  roots/226 children pass separately on Go27, actual Go20 and race, no skips.
+- The raw static result observer compares a post-rebinding snapshot with a
+  fresh physical decode. `e289dc61` reproduces all 20 new children failing.
+  `8c68ea26` captures the decoder before DATA symbol materialization and pairs
+  only replay-bound scalar RIP reads/source-local LEAQ with existing numerical
+  effects. Addresses remain nonnumerical; other raw effects retain Context.
+  Four roots/101 children pass. `ad722572` also executes 13 scalar/mutable-pool
+  functions in all 12 API/IR/backend axes on the actual host; its three roots/
+  35 children pass. This portable LLVM run is not original-Go native execution.
 
-Allowed-fork staging now has two disjoint five-minute priorities: all14
-original failed roots and11 numerical/native-memory regressions. Its native
-list also requires the original BIT runtime as owner66 and all six three-API/
-optimization children. The independently frozen `5818c186` policy candidate
-passes104 Node policies and three workflow lints. No new push has occurred;
-its non-GitHub tree matches `dec82d00`, not the newer partial-FLAGS refinement.
+The combined raw-static/LODS source now needs its own frozen complete affected
+and retained owner union on both SDKs and race, both vets/builds and official
+gates. The unchanged native static-read root must still pass in Linux CI.
+Fork-only `5da9abd9` adds its mandatory independent inventory, the complete
+five-owner raw-replay priority and the new LODS grammar owner: 44 SDK lanes,
+19 native inventories/29 mandatory roots, unchanged 66 actual roots and all
+23 required children. Its 107 Node policies and three workflow lints pass;
+the final combined-source fork candidate still needs fresh sealed policy checks.
 
-Allowed-fork [run38824961157](https://github.com/cpunion/plan9asm/actions/runs/38824961157)
-at `354ea4ef` finished naturally: 79 jobs, 69 successful, ten failed. Nine
-failed main-module execution partitions expose fourteen failing test roots;
-the tenth failure is the strict main-module aggregate. Both complete CLI
-modules pass. The separate native x87 artifact authenticates and replays as
-four roots/26 children, all passing. No cancellation or rerun is a pass.
+The earlier `dec82d00` source passes 155 roots/19,026 children on each SDK,
+but its final race group times out. A fresh `ca4a7a3f` command containing only
+the complete five-target segment object root and final static-directory root
+also times out at five minutes. Keep both failures and unfinished terminals.
+Partition the same complete target/API/IR/backend union; never raise the budget
+or report a narrowed subset as the original complete race pass.
 
-The main development branch now integrates `f95a403b`. The repair batch includes
-the qualified opaque-pointer transport, bounded static integer results,
-physical-versus-named segment handoff, unused opaque SB-address transport and
-independent original-source/emitter/initialized-counterpart fixture corrections.
-The earlier `b4e71afc` static/segment set passes all64 roots/11,365 children on
-Go27 and actual Go20. Its combined race command times out and remains FAILED;
-split the same complete owner union rather than increasing its deadline.
-
-The final BIT runtime defect has independent TDDs for complete GP native stores,
-partial-bit FLAGS transport, all twelve BIT names and their native memory forms.
-Use the shared typed grammars, preserve exact volatile effects and strict
-incoming-pointer/numerical-index identities. The adjacent popped-word mask
-observation consumes exactly the actual known bits, never virtual stack padding;
-other instructions revoke it. It adds no memory, raw-entry, caller or GC contract.
-At `f95a403b`, eight focused roots/1,413 children pass on Go27 without skips.
-The portable runtime executes276 LLVM programs, each with126 independent
-whole-buffer/status inputs, through three APIs and both IR/backend O0/O2 axes.
-This is not original-Go native execution: the unchanged cross-runtime root
-requires its native Linux/Windows counterpart, not a host skip.
-
-Next, freeze the combined source and run the exact retained plus affected
-owner union on Go27, actual Go20 and race in disjoint bounded groups. Retain
-all original failed CI roots, original-Go and LLVM objects, before/after seals,
-both whole-root-module vets and the official five-architecture gates. Then
-stage the complete repair batch on the allowed fork and let CI finish naturally.
-Do not change the contribution head or mark PR40 ready before qualification.
+The previous full [run 38824961157](https://github.com/cpunion/plan9asm/actions/runs/38824961157)
+ended naturally with 69 successful and ten failed jobs. Both complete CLI
+modules passed there. A priority failure in the newer run can prevent complete
+modules from starting; blocked/skipped modules are not successful executions.
+PR40 stays draft at `24851df2` until current-head CI and remaining gates pass.
 
 The strict184-file benchmark still has146 passes/38 failures at `00cfc843`;
 focused checktest recovery is not a new whole-benchmark pass. AMD64 still
