@@ -1,5 +1,40 @@
 # Current work: PR 40 checkpoint
 
+Checkpoint: 2026-10-16 07:44 UTC. This queue supersedes the historical notes
+below. Receipts certify their exact source snapshots, never later commits.
+
+## Current CI repair
+
+Allowed-fork [run 38853831617](https://github.com/cpunion/plan9asm/actions/runs/38853831617)
+at `699a1f61` ended naturally: 78 successful jobs, three failed execution
+partitions and their failed strict main-module aggregate. Both complete CLI
+modules and all 49 prerequisite jobs pass. No cancellation establishes success.
+PR40 remains draft at its older head; do not publish another batch until its
+combined source and fork policies have fresh qualification.
+
+The three failing roots are retained in authenticated original artifacts.
+`54b92155` shares the existing complete GP/X move grammar with static-result
+stores, retaining source bytes, exact extent and independent result obligations.
+`da555409` composes the existing discarded-SB-address effect in that same proof;
+it kills numerical address facts and grants no stack or memory authority.
+At `3e9bc80c`, their six affected roots pass on Go27, actual Go20 and race:
+18 root executions/3,648 children. Another 41 retained owners pass in each lane
+(123 executions/5,931 children), as do nine final gates. All have zero skips.
+
+The third old fixture writes an undefined global. Preserve its genuine failed
+`3e9bc80c` receipt. Test-only `1b969694` supplies an eight-byte NOPTR definition
+to the positive, checks original Go and LLVM22 O0/O2 objects, and retains the
+unchanged unbound source as a Context negative. All seven affected roots and
+1,218 children pass on Go27 at that head; later SDK/race and combined-source
+qualification remain required. Never relax the extent check for this fixture.
+
+The compact/expand, linear-observer and strict benchmark results below retain
+their original scopes. The interrupted `c61f829c` combined qualification is
+retired as incomplete; do not resume it or use it to certify this repair batch.
+External inventory is still server-only; its last validated export is unchanged.
+
+## Earlier integration checkpoint
+
 Checkpoint: 2026-10-16 06:40 UTC. This queue supersedes the historical notes
 below. Receipts certify their exact source snapshots, never later commits.
 
