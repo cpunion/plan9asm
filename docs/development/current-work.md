@@ -1,9 +1,26 @@
 # Current work: PR 40 checkpoint
 
-Checkpoint: 2026-10-16 03:23 UTC. This section supersedes the historical queue
+Checkpoint: 2026-10-16 04:07 UTC. This section supersedes the historical queue
 below; every older result retains its original source and scope.
 
 ## Immediate CI repair queue
+
+At `cca217b0`, all43 changed/retained owners pass on Go27, actual Go20 and
+race:129 root executions/23,976 children, no skips. Both whole-root-module
+vets/builds, current-Go formatting, official five-architecture classifications
+and three scanner owners also pass. Those receipts do not certify later code.
+
+The final source-origin review independently retains two additional REDs:
+`489c6de1` has120 unmodeled-control false acceptances when one FLAGS byte is
+fully initialized; `17ba7da4` has six when386 mixed-width pops relocate AC
+into the low halfword. Exact stack-ordered refinement masks replace a coarse
+origin tag, preserve ordinary NUM bytes, intersect across joins, clone without
+aliasing and clear on slot reuse. The extra bounded byte-work is charged only
+for source CFGs with FLAGS pushes; neither deadline nor budget is increased.
+`17dbd30e` passes eight roots/1,091 children; `3eb3cb8f` passes all732 origin,
+mixed-width and clone/join/reuse children. Final qualification now includes
+these two new owners as well as the previous43. Do not extend this repair batch
+again before publishing its qualified fork candidate and observing CI.
 
 The combined `dec82d00` source independently passes155 retained/affected roots
 and19,026 children on each of Go27 and actual Go20. Its first five race groups
