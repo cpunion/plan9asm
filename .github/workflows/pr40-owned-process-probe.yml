@@ -216,6 +216,33 @@ jobs:
             roots:
               - TestX86LockScalarRMWPublicBodiesCallCompleteNativeHelpers
             timeout: 5m
+          - lane: compact-native-memory
+            module: '.'
+            roots:
+              - TestX86CompactNativeMemorySequencesThreeAPIs
+              - TestX86CompactNativeMemoryCannotInventSourceOrDestinationFacts
+              - TestAMD64PackedCompressRuntimeSemantics
+              - TestAMD64PackedExpandRuntimeSemantics
+              - TestX86PackedMoveInvalidStoreCannotAcquireCallerMemoryCertificate
+              - TestX86PackedZeroMemoryStorePreservesUndefinedOpcode
+              - TestX86PackedZeroMemoryStoreFaultPrecedesFPBoundsAndMaskReads
+            timeout: 5m
+          - lane: complete-vector-value-families
+            module: '.'
+            roots:
+              - TestX86IndexedPermuteInitializedResultWholeFamily
+              - TestX86IndexedPermuteResultInputsStayIndependent
+              - TestX86IndexedPermuteResultRequiresCompleteTablesIndicesAndMerge
+              - TestX86GFNIInitializedResultWholeFamily
+              - TestX86PackedBitCountInitializedResultWholeFamily
+              - TestX86FixedLaneValueResultInputsStayIndependent
+              - TestTranslateAMD64AVX512Go126Families
+              - TestX86Go126FamiliesCannotBorrowUninitializedVectorInputs
+              - TestAMD64IndexedPermuteRuntimeSemantics
+              - TestAMD64GFNIRuntimeSemantics
+              - TestAMD64PackedPopcountRuntimeSemantics
+              - TestAMD64PackedLeadingZeroCountRuntimeSemantics
+            timeout: 5m
           - lane: static-result-effects
             module: '.'
             roots:

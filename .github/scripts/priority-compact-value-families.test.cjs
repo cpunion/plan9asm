@@ -45,6 +45,7 @@ test('complete compact-memory and vector-value families run before full modules'
 });
 
 test('complete family priorities reject omitted, sampled, duplicate or expanded owners', () => {
+  requireCompleteFamilies(workflow);
   for (const [lane, roots] of Object.entries(owners)) {
     const original = block(lane, roots);
     for (const root of roots) {
