@@ -1,6 +1,8 @@
 package plan9asm
 
 import (
+	"errors"
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -95,8 +97,7 @@ TEXT crcops(SB),NOSPLIT,$0-0
 	}
 }
 
-func TestTranslateAMD64AVX512Go126Families(t *testing.T) {
-	src := `
+const x86Go126FamiliesSource = `
 GLOBL mat<>(SB), RODATA, $64
 DATA mat<>+0(SB)/8, $0
 
@@ -113,18 +114,78 @@ TEXT go126ops(SB),NOSPLIT,$0-0
 	VPCOMPRESSQ Z1, K1, Z2
 	RET
 `
-	file, err := Parse(ArchAMD64, src)
-	if err != nil {
-		t.Fatal(err)
+
+var x86Go126FamiliesInputs = []string{"Z0", "Z1", "Z2", "Z3", "Z4", "Z5", "Z6", "Z15"}
+
+func x86Go126FamiliesInitializedSource(omit string) string {
+	var initialization strings.Builder
+	for _, reg := range x86Go126FamiliesInputs {
+		if reg != omit {
+			fmt.Fprintf(&initialization, "VPXORD %s,%s,%s\n", reg, reg, reg)
+		}
 	}
-	_, err = Translate(file, Options{
-		TargetTriple: "x86_64-unknown-linux-gnu",
-		Sigs: map[string]FuncSig{
-			"go126ops": {Name: "go126ops", Ret: Void},
-		},
-		Goarch: "amd64",
-	})
-	if err != nil {
-		t.Fatal(err)
+	return strings.Replace(x86Go126FamiliesSource, "\tMOVQ $0xff, AX", initialization.String()+"\tMOVQ $0xff, AX", 1)
+}
+
+func TestTranslateAMD64AVX512Go126Families(t *testing.T) {
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM22 llc is required")
+	}
+	source := x86Go126FamiliesInitializedSource("")
+	for _, target := range dataRelocationTargets {
+		if target.goarch != "amd64" {
+			continue
+		}
+		t.Run(target.triple, func(t *testing.T) {
+			dataRelocationGoObject(t, source, target.goos, target.goarch, true)
+			for _, api := range []string{"text", "module", "Go"} {
+				t.Run(api, func(t *testing.T) {
+					ir, err := x86ScalarFPBitViewAPI(t, source, "func go126ops()", target.goarch, target.triple, api)
+					if err != nil || ir == "" {
+						t.Fatal("initialized whole instruction sequence rejected", err)
+					}
+					x86CompactExpandRequireAllDefinitions(t, ir, []string{"go126ops"})
+					for _, optimized := range []bool{false, true} {
+						objectIR := ir
+						if optimized {
+							objectIR = x86DwordProductIROptimize(t, ir)
+						}
+						for _, level := range []string{"-O0", "-O2"} {
+							t.Run(fmt.Sprintf("IR-O2=%t/backend%s", optimized, level), func(t *testing.T) {
+								x86PackedStringCompileObject(t, llc, target.triple, objectIR, level)
+							})
+						}
+					}
+				})
+			}
+		})
+	}
+}
+
+func TestX86Go126FamiliesCannotBorrowUninitializedVectorInputs(t *testing.T) {
+	sources := map[string]string{"original": x86Go126FamiliesSource}
+	for _, reg := range x86Go126FamiliesInputs {
+		sources["missing-"+reg] = x86Go126FamiliesInitializedSource(reg)
+	}
+	sources["missing-mask"] = strings.Replace(x86Go126FamiliesInitializedSource(""), "KMOVQ AX, K1", "NOP", 1)
+	for name, source := range sources {
+		t.Run(name, func(t *testing.T) {
+			goAssemblerOracleOutput(t, "amd64", source, "", true)
+			for _, target := range dataRelocationTargets {
+				if target.goarch != "amd64" {
+					continue
+				}
+				t.Run(target.triple, func(t *testing.T) {
+					for _, api := range []string{"text", "module", "Go"} {
+						t.Run(api, func(t *testing.T) {
+							if _, err := x86ScalarFPBitViewAPI(t, source, "func go126ops()", target.goarch, target.triple, api); !errors.Is(err, ErrProbeNeedsContext) {
+								t.Fatal("unknown source acquired implementation-slot bytes", err)
+							}
+						})
+					}
+				})
+			}
+		})
 	}
 }
