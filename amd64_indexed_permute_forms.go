@@ -16,16 +16,16 @@ func x86IndexedPermuteProperties(op Op, ins Instr, arch string) (x86PackedBinary
 	if ins.Op != "" && !strings.EqualFold(string(ins.Op), string(op)) {
 		return x86PackedBinaryForm{}, spec, true, fmt.Errorf("indexed permute dispatch/source opcode mismatch: %s/%s", op, ins.Op)
 	}
-	if err := x86VectorValueMemoryContext(ins, arch); err != nil {
-		return x86PackedBinaryForm{}, spec, true, err
-	}
-	local := ins
+	local, contextual := x86VectorValueMemoryInput(ins, arch)
 	local.Op = op
 	grammar := x86PackedBinarySpec{encoding: x86PackedLogicalEVEX, zeroing: true}
 	if spec.broadcast {
 		grammar.broadcastBytes = spec.laneBits / 8
 	}
 	form, err := x86PackedBinaryProperties(local, arch, grammar)
+	if err == nil && contextual {
+		err = x86VectorValueMemoryContext(ins)
+	}
 	return form, spec, true, err
 }
 

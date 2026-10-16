@@ -90,6 +90,9 @@ type x86PackedBinarySpec struct {
 	encoding       x86PackedLogicalEncoding
 	broadcastBytes int
 	zeroing        bool
+	// Only a validated unary projection or physical decoder may avoid the
+	// named four-operand frontend cap, without changing the actual GOARCH.
+	mode32MaskOperands bool
 }
 
 type x86PackedBinaryForm struct {
@@ -184,7 +187,7 @@ func x86PackedBinaryProperties(ins Instr, goarch string, spec x86PackedBinarySpe
 			return fail()
 		}
 		if len(ins.Args) == 4 {
-			if goarch == "386" || spec.encoding == x86PackedLogicalVEX || !amd64NonzeroKOperand(ins.Args[2]) {
+			if goarch == "386" && !spec.mode32MaskOperands || spec.encoding == x86PackedLogicalVEX || !amd64NonzeroKOperand(ins.Args[2]) {
 				return fail()
 			}
 			form.mask = 2

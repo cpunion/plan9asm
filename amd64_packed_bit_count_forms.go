@@ -22,9 +22,6 @@ func x86PackedBitCountProperties(op Op, ins Instr, arch string) (x86PackedBitCou
 	if ins.Op != "" && !strings.EqualFold(string(ins.Op), string(op)) || len(ins.Args) != 2 && len(ins.Args) != 3 {
 		return form, true, fmt.Errorf("%s %s has an unbound dispatch or unary operand count: %q", arch, op, ins.Raw)
 	}
-	if err := x86VectorValueMemoryContext(ins, arch); err != nil {
-		return form, true, err
-	}
 	local := ins
 	local.Op = op
 	destination := ins.Args[len(ins.Args)-1]
@@ -32,16 +29,13 @@ func x86PackedBitCountProperties(op Op, ins Instr, arch string) (x86PackedBitCou
 	if len(ins.Args) == 3 {
 		local.Args = []Operand{ins.Args[0], destination, ins.Args[1], destination}
 	}
-	grammar := x86PackedBinarySpec{encoding: x86PackedLogicalEVEX, zeroing: true}
+	local, contextual := x86VectorValueMemoryInput(local, arch)
+	grammar := x86PackedBinarySpec{encoding: x86PackedLogicalEVEX, zeroing: true, mode32MaskOperands: true}
 	if spec.broadcast {
 		grammar.broadcastBytes = spec.laneBits / 8
 	}
-	grammarArch := arch
-	if arch == "386" {
-		grammarArch = "amd64" // Three original operands still fit cmd/asm's limit.
-	}
 	var err error
-	form.x86PackedBinaryForm, err = x86PackedBinaryProperties(local, grammarArch, grammar)
+	form.x86PackedBinaryForm, err = x86PackedBinaryProperties(local, arch, grammar)
 	if err != nil {
 		return form, true, err
 	}
@@ -55,8 +49,11 @@ func x86PackedBitCountProperties(op Op, ins Instr, arch string) (x86PackedBitCou
 			return form, true, fmt.Errorf("%s %s has an unbound vector bank: %q", arch, op, ins.Raw)
 		}
 	}
-	if form.memory >= 0 && !x86PackedShiftMemoryValid(ins.Args[form.memory], arch) {
+	if form.memory >= 0 && !contextual && !x86PackedShiftMemoryValid(ins.Args[form.memory], arch) {
 		return form, true, fmt.Errorf("%s %s has an unbound memory operand: %q", arch, op, ins.Raw)
+	}
+	if contextual {
+		return form, true, x86VectorValueMemoryContext(ins)
 	}
 	return form, true, nil
 }

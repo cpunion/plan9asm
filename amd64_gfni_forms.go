@@ -21,9 +21,6 @@ func x86GFNIProperties(op Op, ins Instr, arch string) (x86GFNIForm, bool, error)
 	if ins.Op != "" && !strings.EqualFold(string(ins.Op), string(op)) {
 		return form, true, fmt.Errorf("GFNI dispatch/source opcode mismatch: %s/%s", op, ins.Op)
 	}
-	if err := x86VectorValueMemoryContext(ins, arch); err != nil {
-		return form, true, err
-	}
 	local := ins
 	local.Op = op
 	offset := 0
@@ -37,16 +34,13 @@ func x86GFNIProperties(op Op, ins Instr, arch string) (x86GFNIForm, bool, error)
 		form.immediate, offset = uint8(ins.Args[0].Imm), 1
 		local.Args = ins.Args[1:]
 	}
-	grammar := x86PackedBinarySpec{encoding: x86PackedLogicalVEXOrEVEX, zeroing: true}
+	local, contextual := x86VectorValueMemoryInput(local, arch)
+	grammar := x86PackedBinarySpec{encoding: x86PackedLogicalVEXOrEVEX, zeroing: true, mode32MaskOperands: ins.x86Encoded}
 	if spec.broadcast {
 		grammar.broadcastBytes = 8
 	}
-	grammarArch := arch
-	if arch == "386" && ins.x86Encoded {
-		grammarArch = "amd64" // Physical EVEX does not inherit cmd/asm's operand cap.
-	}
 	var err error
-	form.x86PackedBinaryForm, err = x86PackedBinaryProperties(local, grammarArch, grammar)
+	form.x86PackedBinaryForm, err = x86PackedBinaryProperties(local, arch, grammar)
 	if err != nil {
 		return form, true, err
 	}
@@ -65,8 +59,11 @@ func x86GFNIProperties(op Op, ins Instr, arch string) (x86GFNIForm, bool, error)
 			return form, true, fmt.Errorf("%s %s has an unbound physical vector register: %q", arch, op, ins.Raw)
 		}
 	}
-	if form.memory >= 0 && !x86PackedShiftMemoryValid(ins.Args[form.memory], arch) {
+	if form.memory >= 0 && !contextual && !x86PackedShiftMemoryValid(ins.Args[form.memory], arch) {
 		return form, true, fmt.Errorf("%s %s has an unbound memory operand: %q", arch, op, ins.Raw)
+	}
+	if contextual {
+		return form, true, x86VectorValueMemoryContext(ins)
 	}
 	return form, true, nil
 }
