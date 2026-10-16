@@ -195,13 +195,18 @@ func TestX86Legacy386InitializedStackFixturesPortableValues(t *testing.T) {
 		t.Fatal("LLVM22 llc and clang required")
 	}
 	const driver = `#include <stdint.h>
+#include <stdio.h>
 extern uint32_t stackAdjust(uint32_t);
 extern uint32_t cpuidProbe(void);
 int main(void) {
     const uint32_t values[]={0,1,7,127,128,255,256,65535,0x12345678,UINT32_MAX};
     for(unsigned i=0;i<sizeof(values)/sizeof(values[0]);i++) {
         uint32_t v=values[i],want=(v&255)|256;
-        if(stackAdjust(v)!=want||cpuidProbe()!=1)return 1;
+        uint32_t got=stackAdjust(v),id=cpuidProbe();
+        if(got!=want||id!=1) {
+            fprintf(stderr,"legacy386 case=%u value=%x got=%x want=%x id=%x\n",i,v,got,want,id);
+            return 1;
+        }
     }
     return 0;
 }
