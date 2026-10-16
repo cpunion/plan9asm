@@ -3,6 +3,7 @@ package plan9asm
 import (
 	"fmt"
 	"reflect"
+	"strconv"
 	"strings"
 )
 
@@ -15,6 +16,27 @@ func goAssemblerOracleX86OperandListing(original, listing []string) bool {
 	}
 	if len(original) < 2 || original[0] != "$" {
 		return false
+	}
+	// TYPE_CONST is rendered as signed decimal, independently of an opcode
+	// alias. Bind exactly one integer token and its optional unary sign;
+	// FLOAT, expressions, symbols and another constant cannot borrow it.
+	integer := original[1:]
+	negative := len(integer) == 2 && integer[0] == "-"
+	if len(integer) == 2 && (integer[0] == "+" || negative) {
+		integer = integer[1:]
+	}
+	if len(integer) == 1 {
+		if value, err := strconv.ParseUint(integer[0], 0, 64); err == nil {
+			if negative {
+				value = -value
+			}
+			printed := strconv.FormatInt(int64(value), 10)
+			want := []string{"$"}
+			if strings.HasPrefix(printed, "-") {
+				want, printed = append(want, "-"), strings.TrimPrefix(printed, "-")
+			}
+			return reflect.DeepEqual(append(want, printed), listing)
+		}
 	}
 	leaves := 0
 	for _, token := range original[1:] {

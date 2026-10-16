@@ -61,7 +61,7 @@ func TestX86NativeImmediateStoreRejectsOutsideGoEncodingClasses(t *testing.T) {
 				source := "TEXT ·Value(SB),4,$0-0\n" + instruction + "\nRET\n"
 				requireX86GoAssemblerResult(t, target.arch, source, false)
 				for _, api := range []string{"text", "module", "Go"} {
-					if ir, err := x86ScalarFPBitViewAPI(t, source, "func Value()", target.arch, target.triple, api); err == nil || ir != "" {
+					if ir, err := x86ScalarFPBitViewAPI(t, source, "func Value()", target.arch, target.triple, api); err == nil || errors.Is(err, ErrProbeNeedsContext) || ir != "" {
 						t.Fatal("native store accepted a non-Go immediate/mode row", api, err)
 					}
 				}
