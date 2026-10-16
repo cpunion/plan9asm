@@ -214,7 +214,7 @@ func TestX86SegmentMOVCannotGrantIndependentAuthority(t *testing.T) {
 					{"TLS-pseudo-register", row.op + " 24(TLS),DX\n" + finish, declaration},
 					{"physical-SP-offset", row.op + " -8(SP)(" + segment + "),DX\n" + finish, declaration},
 					{"store-permission", load + "MOVL $7,AX\n" + row.store + " AX,24(" + segment + ")\n" + finish, declaration},
-					{"caller-write-permission", fmt.Sprintf("%s p+%d(FP),DI\n", move, word) + load + row.store + " DX,(DI)\n" + finish, declaration},
+					{"numerical-address-not-pointer", move + " offset+0(FP),DI\n" + load + row.store + " DX,(DI)\n" + finish, declaration},
 					{"loaded-value-not-pointer", "MOVL $0,DX\n" + load + "MOVB (DX),AX\n" + finish, declaration},
 					{"result-address-not-pointer", "MOVL $0,DX\n" + load + move + " DX,SI\nMOVB $7,(SI)\n" + finish, declaration},
 					{"noncanonical-bool", "MOVL $0,DX\n" + load + "MOVB DX,ret+RESULT(FP)", "func view(offset uintptr,p *byte) bool"},
