@@ -229,18 +229,20 @@ func TestX86PackedNarrowE4NFMemoryRemainsObservable(t *testing.T) {
 				t.Run(row, func(t *testing.T) {
 					source := "TEXT pack(SB),4,$0-0\nMOVL $0,CX\nKMOVQ CX,K1\n" + row + "\nRET\n"
 					goAssemblerOracleOutput(t, "amd64", source, "", true)
-					file, err := Parse(ArchAMD64, source)
-					if err != nil {
-						t.Fatal(err)
-					}
-					ir, err := Translate(file, Options{Goarch: "amd64", TargetTriple: "x86_64-unknown-linux-gnu",
-						Sigs: map[string]FuncSig{"pack": {Name: "pack", Ret: Void}}})
-					if err != nil {
-						t.Fatal(err)
-					}
-					if !strings.Contains(ir, "load volatile") ||
-						!strings.Contains(x86MulDivRoundOptimize(t, ir), "load volatile") {
-						t.Fatal("E4NF memory read disappeared for a zero mask/dead output")
+					initialized := strings.Replace(source, "$0-0\n", "$0-8\nMOVQ p+0(FP),AX\nVPXORD Z0,Z0,Z0\n", 1)
+					goAssemblerOracleOutput(t, "amd64", initialized, "", true)
+					for _, api := range []string{"text", "module", "Go"} {
+						if ir, err := x86ScalarFPBitViewAPI(t, source, "func pack()", "amd64", "x86_64-unknown-linux-gnu", api); ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+							t.Fatal("original missing-address source invented native input", api, err)
+						}
+						ir, err := x86ScalarFPBitViewAPI(t, initialized, "func pack(p *[64]byte)", "amd64", "x86_64-unknown-linux-gnu", api)
+						if err != nil {
+							t.Fatal(err)
+						}
+						if !strings.Contains(ir, "load volatile") ||
+							!strings.Contains(x86MulDivRoundOptimize(t, ir), "load volatile") {
+							t.Fatal("E4NF memory read disappeared for a zero mask/dead output")
+						}
 					}
 				})
 			}
