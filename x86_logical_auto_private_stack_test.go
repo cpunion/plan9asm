@@ -1,11 +1,75 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"runtime"
 	"strings"
 	"testing"
 )
+
+func TestX86LogicalAUTOProjectionRequiresCompleteSource(t *testing.T) {
+	file, sig, _ := x86ResultAUTOFixture(t, "386", "func Value(x uint32) uint32", 32,
+		"MOVL x+0(FP),AX\nMOVL AX,saved-4(SP)\nPUSHL $7\nPOPL BX\nMOVL saved-4(SP),AX\nMOVL AX,ret0+4(FP)\nRET")
+	makeConsumer := func() *amd64Ctx {
+		fn := file.Funcs[0]
+		fn.Instrs = append([]Instr(nil), fn.Instrs...)
+		return newX86Ctx(new(strings.Builder), fn, sig,
+			func(name string) string { return strings.TrimPrefix(name, "·") }, nil,
+			"386", "i386-unknown-linux-gnu", false)
+	}
+	for _, checked := range []bool{false, true} {
+		t.Run(fmt.Sprintf("missing-or-failed-proof-%v", checked), func(t *testing.T) {
+			consumer := makeConsumer()
+			consumer.fpScalarChecked = checked
+			if checked {
+				consumer.fpScalarCheckErr = ErrProbeNeedsContext
+			}
+			if err := consumer.prepareLogicalAUTOStorage(); err != nil || consumer.logicalAUTOExtent != 0 || consumer.logicalAUTOBase != "" {
+				t.Fatal("missing/failed source proof supplied logical storage", err)
+			}
+		})
+	}
+	for _, mutation := range []string{"unchanged", "changed-frame", "changed-literal"} {
+		t.Run(mutation, func(t *testing.T) {
+			consumer := makeConsumer()
+			if err := consumer.scalarFPResultInitialized(); err != nil {
+				t.Fatal("independent complete source rejected", err)
+			}
+			switch mutation {
+			case "changed-frame":
+				consumer.frameSize *= 2
+			case "changed-literal":
+				consumer.fpScalarSource.Instrs[2].Raw = "MOVL AX,-4(SP)"
+			}
+			err := consumer.emitEntryAllocas()
+			if mutation != "unchanged" {
+				if !errors.Is(err, ErrProbeNeedsContext) || consumer.logicalAUTOBase != "" {
+					t.Fatal("changed source revived a cached storage projection", err)
+				}
+				return
+			}
+			if err != nil || consumer.logicalAUTOExtent != 32 || consumer.logicalAUTOBase == "" {
+				t.Fatal("complete ordinary source lost its immutable entry base", err)
+			}
+			for _, memory := range []MemRef{
+				{Base: SP, Off: -33}, {Base: SP}, {Base: SP, Off: -4, OffRaw: "missing"},
+				{Base: SP, Off: -4, Index: AX}, {Base: SP, Off: -4, Scale: 2},
+				{Base: SP, Off: -4, Segment: FS},
+			} {
+				address, recognized, err := consumer.logicalAUTOAddress(memory)
+				if !recognized || !errors.Is(err, ErrProbeNeedsContext) || address != "" {
+					t.Fatal("unbound address borrowed logical AUTO bytes", memory, err)
+				}
+			}
+			// Go's386 SB Reg annotation is ignored, not a physical SP input.
+			memory := MemRef{Base: SP, Sym: "literal(SB)"}
+			if _, recognized, err := consumer.logicalAUTOAddress(memory); recognized || err != nil {
+				t.Fatal("logical AUTO projection captured an independent static-symbol role", err)
+			}
+		})
+	}
+}
 
 // The original Go AUTO address is above the post-prologue SP. Private PUSH
 // storage is below it. Keep those distinct even though parsed AUTO offsets
