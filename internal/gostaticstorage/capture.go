@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/xgo-dev/plan9asm/internal/goasmcmd"
+	"github.com/xgo-dev/plan9asm/internal/gooriginalsrc"
 	"github.com/xgo-dev/plan9asm/internal/gotoolchain"
 	"github.com/xgo-dev/plan9asm/internal/sourcepath"
 )
@@ -453,8 +454,8 @@ func (o *Observation) Verify(ctx context.Context) error {
 		return fail(contextError("complete original source inventory changed"))
 	}
 	for name, expected := range o.inputs {
-		data, err := readRegular(name, 64<<20)
-		if err != nil || digest(data) != expected {
+		actual, err := gooriginalsrc.HashRegularFile(name, 64<<20)
+		if err != nil || hex.EncodeToString(actual[:]) != expected {
 			return fail(contextError("actual source/tool/export bytes changed"))
 		}
 	}
@@ -471,8 +472,8 @@ func (o *Observation) Verify(ctx context.Context) error {
 		return fail(contextError("source changed during actual final selection"))
 	}
 	for name, expected := range o.inputs {
-		data, err := readRegular(name, 64<<20)
-		if err != nil || digest(data) != expected {
+		actual, err := gooriginalsrc.HashRegularFile(name, 64<<20)
+		if err != nil || hex.EncodeToString(actual[:]) != expected {
 			return fail(contextError("tool/export changed during actual final selection"))
 		}
 	}
