@@ -29,20 +29,5 @@ func (c *amd64Ctx) emitX86PackedShiftNativeCount(form x86PackedShiftForm, source
 	default:
 		return "", fmt.Errorf("unsupported legacy packed count lane width %d", form.laneBits)
 	}
-	pointer, pointerType, _, err := c.packedVectorMemoryPointer(source)
-	if err != nil {
-		return "", err
-	}
-	segment := ""
-	switch pointerType {
-	case "ptr addrspace(256)":
-		segment = "%gs:"
-	case "ptr addrspace(257)":
-		segment = "%fs:"
-	}
-	value := c.newTmp()
-	typeName := fmt.Sprintf("<%d x i%d>", 128/form.laneBits, form.laneBits)
-	fmt.Fprintf(c.b, "  %%%s = call %s asm sideeffect %q, %q(%s %s, %s %s)\n",
-		value, typeName, name+" "+segment+"($2), $0", "=x,0,r,~{memory}", typeName, data, pointerType, pointer)
-	return "%" + value, nil
+	return c.emitPackedBinaryNativeMemory(source, form.laneBits, data, name)
 }
