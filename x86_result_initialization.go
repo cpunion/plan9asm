@@ -352,7 +352,7 @@ func checkX86ResultSourceFlowWithTrapOnly(fn Func, initial x86ResultState, owned
 	if initial.valueStack != nil {
 		// Bit masks, two-byte depth, invalid join, ID and the ten-byte
 		// transient popped register/validity/eight-byte initialized-bit view.
-		byteState += x86ResultValueStackLimit(goarch) + 14
+		byteState += x86ResultValueStackLimit(goarch) + 14 + 32 // Halfword FLAGS-origin bitmap.
 	}
 	if initial.continuation != nil {
 		byteState += 16*48 + len(initial.continuation.written) + 2
@@ -743,6 +743,15 @@ func (state x86ResultState) intersect(other x86ResultState) x86ResultState {
 				merged.valueStack.bytes[index] &= other.valueStack.bytes[index]
 			}
 			merged.valueStack.id = merged.valueStack.id && other.valueStack.id
+		}
+		if merged.valueStack.invalid {
+			merged.valueStack.flagOrigins = [4]uint64{}
+		} else {
+			// A FLAGS source on either edge forbids inventing an ambient
+			// control input, even when the ordinary NUM-byte join is full.
+			for index := range merged.valueStack.flagOrigins {
+				merged.valueStack.flagOrigins[index] |= other.valueStack.flagOrigins[index]
+			}
 		}
 		if other.valueStack == nil || merged.valueStack.invalid ||
 			merged.valueStack.popped.register != other.valueStack.popped.register ||

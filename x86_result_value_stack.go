@@ -8,6 +8,23 @@ type x86ResultValueStack struct {
 	invalid bool
 	id      bool // ID is separate from the six arithmetic flags and DF.
 	popped  x86ResultPoppedWord
+	// Every source PUSH/POP width is a multiple of two. One origin bit per
+	// halfword covers all504 maximum stack bytes without a second byte array.
+	flagOrigins [4]uint64
+}
+
+func (stack *x86ResultValueStack) flagOrigin(byteOffset int) bool {
+	index := byteOffset / 2
+	return stack.flagOrigins[index/64]&(uint64(1)<<uint(index%64)) != 0
+}
+
+func (stack *x86ResultValueStack) setFlagOrigin(byteOffset int, flags bool) {
+	index := byteOffset / 2
+	mask := uint64(1) << uint(index%64)
+	stack.flagOrigins[index/64] &^= mask
+	if flags {
+		stack.flagOrigins[index/64] |= mask
+	}
 }
 
 func x86ResultValueStackLimit(arch string) int {
@@ -50,6 +67,9 @@ func x86ResultValueStackStep(ins Instr, state *x86ResultState, owned []bool, res
 		storage = 8 // Existing virtual AMD64 slots zero-extend narrow pushes.
 	}
 	stack := state.valueStack
+	if len(stack.bytes)%2 != 0 || len(stack.bytes) > x86ResultValueStackLimit(arch) {
+		return false, true
+	}
 	push := spec.mode == amd64StackPushValue || spec.mode == amd64StackPushFlags
 	if push {
 		bits := ^uint64(0)
@@ -78,18 +98,27 @@ func x86ResultValueStackStep(ins Instr, state *x86ResultState, owned []bool, res
 			return false, true
 		}
 		for index := storage - 1; index >= 0; index-- {
+			stack.setFlagOrigin(len(stack.bytes), spec.mode == amd64StackPushFlags && int64(index) < width)
 			stack.bytes = append(stack.bytes, uint8(bits>>uint(8*index)))
 		}
 		return true, true
 	}
 	bits := ^uint64(0)
+	var flagBytes uint8
 	if !state.shapeOnly {
 		if len(stack.bytes) < storage {
 			return false, true
 		}
 		bits = 0
 		for index := 0; index < storage; index++ {
-			bits |= uint64(stack.bytes[len(stack.bytes)-1-index]) << uint(8*index)
+			position := len(stack.bytes) - 1 - index
+			bits |= uint64(stack.bytes[position]) << uint(8*index)
+			if stack.flagOrigin(position) {
+				flagBytes |= 1 << uint(index)
+			}
+		}
+		for index := len(stack.bytes) - storage; index < len(stack.bytes); index += 2 {
+			stack.setFlagOrigin(index, false)
 		}
 		stack.bytes = stack.bytes[:len(stack.bytes)-storage]
 	}
@@ -135,11 +164,10 @@ func x86ResultValueStackStep(ins Instr, state *x86ResultState, owned []bool, res
 		known := uint64(0)
 		for b := int64(0); b < width; b++ {
 			initialized := uint8(bits >> uint(8*b))
-			if initialized != 0xff {
-				// Only FLAGS pushes can introduce partial numerical bytes.
-				// Refine modeled status/DF/ID and the reserved low-byte
-				// constants, never ambient TF/IF/IOPL/NT/RF/AC controls.
-				// Complete NUM bytes retain their independent old proof.
+			if flagBytes&(1<<uint(b)) != 0 {
+				// Even a fully initialized FLAGS byte is not ordinary NUM
+				// data. Refine only modeled status/DF/ID and reserved low
+				// bits, never ambient TF/IF/IOPL/NT/RF/AC controls.
 				const modeledFlags = uint64(0x200cff)
 				initialized &= uint8(modeledFlags >> uint(8*b))
 			}
