@@ -62,6 +62,17 @@ func x86ScalarFPResultTransfer(ins Instr, state *x86ResultState, owned []bool, r
 			state.masks[index] = true
 			return true
 		}
+		if last.Kind == OpReg {
+			// KMOV's GP encoding zero-extends B/W/D, not a partial MOVB/W
+			// write. Do not turn the existing mode32 Q boundary into a grant.
+			word := int64(8)
+			if arch == "386" {
+				word = 4
+			}
+			if width < word {
+				width = word
+			}
+		}
 		return x86ResultStore(last, width, state, owned, resultOffset, arch)
 	}
 	form, recognized, err := amd64ScalarVectorMoveProperties(ins, arch)
