@@ -417,14 +417,14 @@ func TestAMD64AtomicAndBranchEdges(t *testing.T) {
 	}); !ok || err != nil {
 		t.Fatalf("lowerAtomic(XCHGQ sym) = (%v, %v)", ok, err)
 	}
-	if ok, _, err := c.lowerAtomic("ANDB", Instr{
+	if ok, _, err := c.lowerScalarMemoryRMW("ANDB", Instr{
 		Raw: "ANDB $1, 4(BX)",
 		Args: []Operand{
 			{Kind: OpImm, Imm: 1},
 			{Kind: OpMem, Mem: MemRef{Base: BX, Off: 4}},
 		},
 	}); !ok || err != nil {
-		t.Fatalf("lowerAtomic(ANDB) = (%v, %v)", ok, err)
+		t.Fatalf("lowerScalarMemoryRMW(ANDB) = (%v, %v)", ok, err)
 	}
 	if ok, term, err := c.lowerAtomic("ORQ", Instr{
 		Raw: "ORQ AX, BX",
@@ -549,11 +549,16 @@ func TestAMD64AtomicAndBranchEdges(t *testing.T) {
 	if strings.Contains(out, "cmpxchg ptr") {
 		t.Fatal("native CMPXCHGL silently acquired software atomic alignment or LOCK semantics")
 	}
+	if strings.Contains(out, "atomicrmw and ptr") {
+		t.Fatal("ordinary ANDB silently acquired implicit LOCK semantics")
+	}
 	for _, want := range []string{
 		"asm sideeffect \"cmpxchgl $3, $2; sete $1\"",
 		"asm sideeffect \"lock; xadd",
 		"asm sideeffect \"xchg",
-		"atomicrmw and ptr",
+		"load volatile i8",
+		"and i8",
+		"store volatile i8",
 		"icmp eq i8",
 		"icmp slt i8",
 		"call i64",
