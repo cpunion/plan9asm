@@ -48,16 +48,13 @@ func (c *amd64Ctx) lowerPackedCompress(op Op, ins Instr) (ok bool, terminated bo
 	vectorType := fmt.Sprintf("<%d x i%d>", lanes, laneBits)
 	sourceValue := c.bitcastVectorBytesToIntegerLanes(byteWidth, lanes, laneBits, sourceBytes)
 	maskVector := amd64IntegerMaskVector(c, lanes, mask)
-	if destination.Kind != OpReg {
+	if destination.Kind != OpReg && destination.Kind != OpFP {
 		pointer, pointerType, intrinsicSuffix, err := c.packedVectorMemoryPointer(destination)
 		if err != nil {
 			return true, false, err
 		}
 		fmt.Fprintf(c.b, "  call void @llvm.masked.compressstore.v%di%d%s(%s %s, %s %s, <%d x i1> %s)\n",
 			lanes, laneBits, intrinsicSuffix, vectorType, sourceValue, pointerType, pointer, lanes, maskVector)
-		if destination.Kind == OpFP {
-			c.markFPResultWritten(destination.FPOffset)
-		}
 		return true, false, nil
 	}
 	passthrough := "zeroinitializer"
@@ -73,7 +70,9 @@ func (c *amd64Ctx) lowerPackedCompress(op Op, ins Instr) (ok bool, terminated bo
 		compressed, vectorType, lanes, laneBits, vectorType, sourceValue, lanes, maskVector, vectorType, passthrough)
 	out := c.newTmp()
 	fmt.Fprintf(c.b, "  %%%s = bitcast %s %%%s to <%d x i8>\n", out, vectorType, compressed, byteWidth)
-	return true, false, c.storeVectorBytes(destination.Reg, byteWidth, "%"+out)
+	// FP results are separate scalar fields, not one contiguous native alloca.
+	// The old complete span supplies the untouched compacted tail above.
+	return true, false, c.storeVectorBytesOperand(destination, byteWidth, "%"+out)
 }
 
 func amd64IntegerMaskVector(c *amd64Ctx, lanes int, mask string) string {
