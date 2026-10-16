@@ -91,7 +91,15 @@ func (c *amd64Ctx) loadMaskMoveValue(src Operand, bits int, sourceIsK bool) (str
 	}
 
 	typ := amd64IntegerTypeForBits(bits)
-	value, err := c.evalIntSized(src, typ)
+	var value string
+	var err error
+	if src.Kind == OpFP && c.fpScalarSource.x86SourceStack == nil && c.fpScalarSource.x86FixedLocal == nil {
+		// A mask memory width is not its first logical field's type. Gather
+		// precisely those bytes, including interior and cross-field reads.
+		value, err = c.loadScalarLaneFPBits(src.FPOffset, bits)
+	} else {
+		value, err = c.evalIntSized(src, typ)
+	}
 	if err != nil {
 		return "", err
 	}
@@ -122,6 +130,11 @@ func (c *amd64Ctx) storeMaskMoveMemory(dst Operand, bits int, value string) erro
 	}
 	switch dst.Kind {
 	case OpFP:
+		if c.fpScalarSource.x86SourceStack == nil && c.fpScalarSource.x86FixedLocal == nil {
+			// Scatter only the native write width; a B/W/D store must retain
+			// the initialized remainder of a larger logical result field.
+			return c.storeScalarLaneFPBits(dst.FPOffset, bits, stored)
+		}
 		return c.storeFPResult(dst.FPOffset, typ, stored)
 	case OpMem:
 		ptr, ptrType, err := c.ptrFromMem(dst.Mem)

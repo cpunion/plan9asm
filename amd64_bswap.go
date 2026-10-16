@@ -68,6 +68,16 @@ func (c *amd64Ctx) byteSwapResultInitialized() error {
 }
 
 func (c *amd64Ctx) integerEffectResultInitialized(family string) error {
+	if proof := c.fpScalarSource.x86SourceStack; proof != nil && proof.caller != nil {
+		// The complete caller/stack proof already checked every numerical
+		// input and native access. Consume that exact owner, not a logical FP
+		// proof for the normalized physical stack or a new memory capability.
+		if c.goarch != "amd64" || c.sourceStack != proof || c.sig.Ret != Void ||
+			len(c.sig.Frame.Results) != 0 || !x86CallerNormalizedSourceMatches(c.fpScalarSource, c.sig) {
+			return fmt.Errorf("%w: %s checked caller continuation changed", ErrProbeNeedsContext, family)
+		}
+		return nil
+	}
 	if err := c.scalarFPResultInitialized(); err != nil {
 		return err
 	}
