@@ -60,18 +60,19 @@ func TestX86PackedAverageCompletePortableValuesAndCanaries(t *testing.T) {
 	if !found {
 		t.Fatal("LLVM22 llc and clang required")
 	}
-	arch := "amd64"
+	arch, cWord := "amd64", "uint64_t"
 	if strconv.IntSize == 32 {
-		arch = "386"
+		arch, cWord = "386", "uint32_t"
 	}
 	source, declarations, prototypes, rows := x86AverageValueRuntimeProgram(arch)
 	x86LEAActualTargetGoObject(t, arch, map[string]string{"amd64": "x86_64-unknown-linux-gnu", "386": "i386-unknown-linux-gnu"}[arch], source)
-	driver := "#include <stdint.h>\n#include <stdio.h>\n#include <string.h>\n" + prototypes + `
-struct kernel {void (*fn)(uint8_t*,uint8_t*,uint8_t*,uintptr_t);unsigned width,bits,mode,legacy;};
+	driver := "#include <stdint.h>\n#include <stdio.h>\n#include <string.h>\n" + prototypes +
+		"typedef " + cWord + " average_word;\n" + `
+struct kernel {void (*fn)(uint8_t*,uint8_t*,uint8_t*,average_word);unsigned width,bits,mode,legacy;};
 static const struct kernel kernels[]={
 ` + rows + `};
 int main(void) {
-    const uintptr_t masks[]={0,1,(uintptr_t)0xa55a9c63f00fc33cULL,UINTPTR_MAX};
+    const average_word masks[]={0,1,(average_word)0xa55a9c63f00fc33cULL,(average_word)-1};
     for(unsigned k=0;k<sizeof(kernels)/sizeof(kernels[0]);k++)for(unsigned sample=0;sample<257;sample++) {
         const struct kernel *p=&kernels[k];
         uint8_t a[67],b[67],a_before[67],b_before[67],out[67],want[64];
