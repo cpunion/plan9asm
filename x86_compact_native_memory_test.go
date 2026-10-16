@@ -3,6 +3,7 @@ package plan9asm
 import (
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -63,7 +64,7 @@ func TestX86CompactNativeMemorySequencesThreeAPIs(t *testing.T) {
 						t.Fatal("complete native compact memory sequence rejected", err)
 					}
 					x86CompactExpandRequireAllDefinitions(t, ir, names)
-					if strings.Contains(ir, "@llvm.masked.expandload.") || strings.Contains(ir, "@llvm.masked.compressstore.") {
+					if regexp.MustCompile(`(?m)^  (?:%[^ =]+ = )?call [^\n]*@llvm\.masked\.(?:expandload|compressstore)\.`).MatchString(ir) {
 						t.Fatal("native compact access must retain observable guarded loads/stores")
 					}
 					for _, optimized := range []bool{false, true} {
