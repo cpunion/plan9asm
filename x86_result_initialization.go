@@ -133,9 +133,16 @@ func checkX86ABI0ResultInitializationWithTrapOnly(fn Func, sig FuncSig, goarch s
 			initial.resultAddressSlots = []x86ResultSlotAddress{region}
 		}
 	}
-	if scalarViews && x86Ordinary386FrameAddressRole(fn, sig, goarch) && fn.ArgSize == int64(frame) {
+	if scalarViews && x86OrdinaryParameterAddressRole(fn, sig, goarch) && fn.ArgSize == int64(frame) {
 		initial.logicalFrameParameters = true
-		initial.resultAddressSlots = []x86ResultSlotAddress{{start: 0, end: int64(frame), valid: true}}
+		if goarch == "386" {
+			initial.resultAddressSlots = []x86ResultSlotAddress{{start: 0, end: int64(frame), valid: true}}
+		} else {
+			for _, slot := range sig.Frame.Params {
+				initial.resultAddressSlots = append(initial.resultAddressSlots, x86ResultSlotAddress{
+					start: slot.Offset, end: slot.Offset + x86FrameScalarBytes(slot.Type, goarch), valid: true})
+			}
+		}
 	}
 	initial.callerAddressFP = initial.pointerFP // Immutable actual typed entry layout.
 	autoExtent, autoErr := x86ResultAUTOExtent(fn, goarch)
@@ -593,7 +600,7 @@ type x86ResultState struct {
 	resultAddressSlots     []x86ResultSlotAddress // Immutable root-local scalar layout.
 	resultAddressGP        [16]x86ResultSlotAddress
 	resultAddressWritten   bool // May-write join, not an initialized-result fact.
-	logicalFrameParameters bool // Immutable private386 numeric-copy role; never caller storage.
+	logicalFrameParameters bool // Immutable private numeric parameter-copy role; never caller storage.
 	shapeOnly              bool // source-wide effect validation, never a reaching state
 
 	// Installed only for one lowering transfer over the actual emitted DATA.

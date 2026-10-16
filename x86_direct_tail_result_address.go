@@ -1,6 +1,6 @@
 package plan9asm
 
-// A logical result-field address is neither an incoming/native pointer nor
+// A logical declared-field address is neither an incoming/native pointer nor
 // numerical bits. The field and its interior offset belong to this root's
 // actual scalar ABI0 layout; another root sharing a helper supplies nothing.
 type x86ResultSlotAddress struct {
@@ -120,7 +120,7 @@ func x86DirectTailResultAddressTransfer(ins Instr, state *x86ResultState, owned 
 		before := state.resultAddressGP
 		writeBoundary := resultOffset
 		if state.logicalFrameParameters {
-			writeBoundary = 0 // Only independently owned numeric bytes in the private386 copy.
+			writeBoundary = 0 // Only independently owned numeric bytes in private parameter copies.
 		}
 		if !transfer(ordinal, local, state, owned, writeBoundary, arch) {
 			return false

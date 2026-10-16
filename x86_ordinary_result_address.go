@@ -49,13 +49,12 @@ func x86OrdinaryResultAddressRole(fn Func, sig FuncSig, arch string) bool {
 	return true
 }
 
-// Mode32 already emits one contiguous private classic-frame copy. A complete
-// ordinary integer ABI0 program may address its numeric parameter copies as
-// well as results, including the physical byte of a bool input. No canonical
-// bool result is granted by this numeric role. This is not a
-// native incoming frame, an address-valued result or caller memory authority.
-func x86Ordinary386FrameAddressRole(fn Func, sig FuncSig, arch string) bool {
-	if arch != "386" || !x86OrdinaryParameterAddressNeedsProof(fn, sig, arch) ||
+// Ordinary scalar ABI0 parameters have private logical copies, including the
+// physical byte of a bool input. Mode32's classic frame is contiguous; AMD64
+// instead retains each actual field's separate allocation and bounds. Neither
+// role grants canonical bool results, native incoming frames or caller memory.
+func x86OrdinaryParameterAddressRole(fn Func, sig FuncSig, arch string) bool {
+	if arch != "386" && arch != "amd64" || !x86OrdinaryParameterAddressNeedsProof(fn, sig, arch) ||
 		fn.FrameSize != 0 || len(fn.X86RawText) != 0 || fn.x86SourceStack != nil ||
 		fn.x86FixedLocal != nil || fn.x86RawReplay != nil || fn.x86DirectTailRoot != nil ||
 		fn.x86ContinuationFlow != nil || fn.x86BoolCalls != nil ||
