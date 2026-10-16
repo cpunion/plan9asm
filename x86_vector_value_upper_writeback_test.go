@@ -68,7 +68,7 @@ func x86VectorUpperFixture(arch string) (string, string, []string) {
 				fmt.Fprintf(&declarations, "func %s() uint32\n", name)
 				fmt.Fprintf(&source, "TEXT ·%s(SB),4,$0-4\n"+
 					"VPXORD Z0,Z0,Z0\nVPXORD Z1,Z1,Z1\nVPXORD Z2,Z2,Z2\nVPXORD Z7,Z7,Z7\n"+
-					"VPTERNLOGD $255,Z0,Z1,Z2\nMOVL $0,AX\nKMOVD AX,K1\nVPCOMPRESSQ Z0,K1,Z7\n"+
+					"MOVL $-1,AX\nKMOVD AX,K2\nVPMOVM2D K2,Z2\nMOVL $0,AX\nKMOVD AX,K1\nVPCOMPRESSQ Z0,K1,Z7\n"+
 					"%s %s%s0,%s%s%s2\nVEXTRACTI32X4 $3,Z2,X3\nPEXTRD $0,X3,AX\nMOVL AX,ret+0(FP)\nRET\n",
 					name, op, immediate, bank, second, mask, bank)
 			}
