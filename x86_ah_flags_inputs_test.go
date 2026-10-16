@@ -177,3 +177,24 @@ func TestX86AHFlagsRejectsNonGoFormats(t *testing.T) {
 		}
 	}
 }
+
+func TestX86AHFlagsNumericalBytesAreNotCanonicalBoolWitnesses(t *testing.T) {
+	for _, target := range x86RawReturnTargets {
+		t.Run(target.triple, func(t *testing.T) {
+			prefix := "TEXT ·Value(SB),4,$0-1\nMOVL $0,BX\nCMPL BX,BX\nSETEQ AH\n"
+			finish := "MOVB AH,ret+0(FP)\nRET\n"
+			for _, body := range []string{"", "SAHF\n"} {
+				for _, api := range []string{"text", "module", "Go"} {
+					if ir, err := x86ScalarFPBitViewAPI(t, prefix+body+finish, "func Value() bool", target.arch, target.triple, api); err != nil || ir == "" {
+						t.Fatal("SETcc's known canonical AH was lost without a GP overwrite", api, body, err)
+					}
+				}
+			}
+			for _, api := range []string{"text", "module", "Go"} {
+				if ir, err := x86ScalarFPBitViewAPI(t, prefix+"LAHF\n"+finish, "func Value() bool", target.arch, target.triple, api); !errors.Is(err, ErrProbeNeedsContext) || ir != "" {
+					t.Fatal("raw packed FLAGS byte retained a stale canonical AH witness", api, err)
+				}
+			}
+		})
+	}
+}

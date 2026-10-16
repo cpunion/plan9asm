@@ -1,10 +1,8 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
-	"os"
-	"os/exec"
-	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
@@ -64,6 +62,28 @@ func x86StackIDSource(goarch string) string {
 		flags, width, width, flags, width, width, width, flags)
 }
 
+func x86StackIDInitializedSource(t *testing.T, arch string) string {
+	t.Helper()
+	width := "Q"
+	if arch == "386" {
+		width = "L"
+	}
+	source := x86StackIDSource(arch)
+	entry := "\tMOV" + width + " out+0(FP), DI"
+	if strings.Count(source, entry) != 1 || strings.Count(source, "\tLAHF\n") != 1 {
+		t.Fatal("initialized ID fixture lost its unique original entry/AH boundaries")
+	}
+	// Define every arithmetic flag, DF and ID explicitly, rather than borrowing
+	// the emitter's default slots. CMP repairs only the later AND's undefined AF;
+	// neither seed changes the original ID toggle/upper-preservation checks.
+	source = strings.Replace(source, entry, "\tPUSH"+width+" $2\n\tPOPF"+width+"\n"+entry, 1)
+	source = strings.Replace(source, "\tLAHF\n", "\tCMP"+width+" AX, AX\n\tLAHF\n", 1)
+	if arch == "386" {
+		source = strings.Replace(source, "$0-8", "$0-4", 1)
+	}
+	return source
+}
+
 func TestX86StackFlagsIDObjects(t *testing.T) {
 	llc, _, ok := findLlcAndClang(t)
 	if !ok {
@@ -86,20 +106,27 @@ func TestX86StackFlagsIDObjects(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			ir, err := Translate(file, x86StackIDOptions(target.arch, target.triple))
+			options := x86StackIDOptions(target.arch, target.triple)
+			if ir, err := Translate(file, options); ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+				t.Fatal("original unknown entry/AF state became numerical FLAGS input", err)
+			}
+			initialized := x86StackIDInitializedSource(t, target.arch)
+			requireX86GoAssemblerResult(t, target.arch, initialized, true)
+			file, err = Parse(ArchAMD64, initialized)
 			if err != nil {
 				t.Fatal(err)
 			}
-			if !strings.Contains(ir, "%flags_id = alloca i1") {
-				t.Fatal("native stack flags cannot silently omit the CPUID ID bit")
-			}
-			dir := t.TempDir()
-			path := filepath.Join(dir, "flags.ll")
-			if err := os.WriteFile(path, []byte(ir), 0600); err != nil {
-				t.Fatal(err)
-			}
-			if output, err := exec.Command(llc, "-filetype=obj", "-mtriple="+target.triple, path, "-o", filepath.Join(dir, "flags.o")).CombinedOutput(); err != nil {
-				t.Fatalf("LLVM 22 flags object: %v\n%s", err, output)
+			for _, api := range []string{"Translate", "TranslateModule", "TranslateModuleInContext"} {
+				ir, err := x86PackedFloatStorageAPI(api, file, options)
+				if err != nil {
+					t.Fatal("initialized complete ID program rejected", api, err)
+				}
+				if !strings.Contains(ir, "%flags_id = alloca i1") {
+					t.Fatal("stack flags cannot silently omit the CPUID ID bit")
+				}
+				for _, level := range []string{"-O0", "-O2"} {
+					x86PackedStringCompileObject(t, llc, target.triple, ir, level)
+				}
 			}
 		})
 	}
@@ -115,27 +142,23 @@ func x86StackIDOptions(arch, triple string) Options {
 }
 
 func TestAMD64StackFlagsIDRuntime(t *testing.T) {
-	crossRosetta := runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" && rosettaAvailable()
-	if runtime.GOARCH != "amd64" && !crossRosetta {
-		t.Skip("requires native amd64 or the required cross-runtime counterpart")
-	}
 	llc, clang, ok := findLlcAndClang(t)
 	if !ok {
 		t.Fatal("LLVM 22 llc/clang not found")
 	}
 	triple := testTargetTriple(runtime.GOOS, runtime.GOARCH)
-	var prefix []string
-	if crossRosetta {
-		triple = "x86_64-apple-macosx"
-		prefix = []string{"/usr/bin/arch", "-x86_64"}
-	}
-	file, err := Parse(ArchAMD64, x86StackIDSource("amd64"))
+	// This executes translated numerical FLAGS/stack state, not original Go
+	// bytes or physical ID. No native x86 opcode or Rosetta is required.
+	file, err := Parse(ArchAMD64, x86StackIDInitializedSource(t, "amd64"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	ir, err := Translate(file, x86StackIDOptions("amd64", triple))
 	if err != nil {
 		t.Fatal(err)
+	}
+	if strings.Contains(ir, "asm ") {
+		t.Fatal("portable ID oracle acquired a native opcode")
 	}
 	const oracle = `
 #include <stdint.h>
@@ -150,5 +173,5 @@ int main(void) {
   return 0;
 }
 `
-	compileAndRunRuntimeTestForTarget(t, llc, clang, "stack_flags_id", triple, ir, oracle, prefix)
+	compileAndRunRuntimeTestForTarget(t, llc, clang, "stack_flags_id", triple, ir, oracle, nil)
 }

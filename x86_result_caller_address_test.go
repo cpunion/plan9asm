@@ -83,7 +83,7 @@ func TestX86ResultCallerAddressAllTypedFlagConsumersAndKills(t *testing.T) {
 	for op := range x86ConditionalMoveSpecs {
 		check("TESTQ BX,AX\nMOVQ $1,CX\nMOVQ $0,DX\n" + string(op) + " CX,DX\nMOVQ DX,AX")
 	}
-	for _, body := range []string{"MOVB $1,AX", "MOVW $1,AX", "MOVL $1,AX", "MOVQ $1,AX", "MOVBQZX CX,AX", "PEXTRB $0,X0,M0", "PEXTRD $0,X0,M0", "PEXTRQ $0,X0,M0", "PEXTRW $0,X0,M0", "PEXTRW $0,X0,AX", "MOVQ X0,AX", "RDTSC"} {
+	for _, body := range []string{"MOVB $1,AX", "MOVW $1,AX", "MOVL $1,AX", "MOVQ $1,AX", "MOVBQZX CX,AX", "PEXTRB $0,X0,M0", "PEXTRD $0,X0,M0", "PEXTRQ $0,X0,M0", "PEXTRW $0,X0,M0", "PEXTRW $0,X0,AX", "MOVQ X0,AX", "RDTSC", "LAHF"} {
 		file, err := Parse(ArchAMD64, "TEXT ·effect(SB),4,$0-0\n"+body+"\nRET\n")
 		if err != nil {
 			t.Fatal(err)
@@ -95,7 +95,7 @@ func TestX86ResultCallerAddressAllTypedFlagConsumersAndKills(t *testing.T) {
 }
 
 func TestX86ResultCallerAddressSurvivesTypedUnwrittenGP(t *testing.T) {
-	file, err := Parse(ArchAMD64, "TEXT ·independent(SB),4,$0-0\nMOVQ BX,X0\nPINSRW $4,CX,X0\nPSHUFHW $0,X0,X0\nMOVO X0,X1\nPXOR ·independent(SB),X0\nAESENC X0,X0\nCMPQ CX,$16\nRET\n")
+	file, err := Parse(ArchAMD64, "TEXT ·independent(SB),4,$0-0\nMOVQ BX,X0\nPINSRW $4,CX,X0\nPSHUFHW $0,X0,X0\nMOVO X0,X1\nPXOR ·independent(SB),X0\nAESENC X0,X0\nCMPQ CX,$16\nSAHF\nRET\n")
 	if err != nil {
 		t.Fatal(err)
 	}

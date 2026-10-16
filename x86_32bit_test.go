@@ -1345,20 +1345,32 @@ func TestTranslate386X87CompareFamilyRejectsNonGoForms(t *testing.T) {
 }
 
 func TestTranslate386LAHFSAHFFamily(t *testing.T) {
-	file, err := Parse(ArchAMD64, `
+	const source = `
 TEXT flags386(SB),NOSPLIT,$0-0
 	LAHF
 	SAHF
 	RET
-`)
+`
+	goAssemblerOracleOutput(t, "386", "#include \"textflag.h\"\n"+source, "", true)
+	file, err := Parse(ArchAMD64, source)
 	if err != nil {
 		t.Fatal(err)
 	}
-	ir, err := Translate(file, Options{
+	options := Options{
 		TargetTriple: "i386-unknown-linux-gnu",
 		Goarch:       "386",
 		Sigs:         map[string]FuncSig{"flags386": {Name: "flags386", Ret: Void}},
-	})
+	}
+	if ir, err := Translate(file, options); ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+		t.Fatal("original uninitialized FLAGS format invented input facts", err)
+	}
+	initialized := strings.Replace(source, "\tLAHF", "\tMOVL $0,AX\n\tCMPL AX,AX\n\tLAHF", 1)
+	goAssemblerOracleOutput(t, "386", "#include \"textflag.h\"\n"+initialized, "", true)
+	file, err = Parse(ArchAMD64, initialized)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ir, err := Translate(file, options)
 	if err != nil {
 		t.Fatalf("Translate(LAHF/SAHF) error = %v", err)
 	}

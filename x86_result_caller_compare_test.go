@@ -72,6 +72,7 @@ func TestX86CallerAddressCMPCompleteExistingFlagConsumers(t *testing.T) {
 	for _, op := range []string{"JCC", "JCS", "JO", "JNO", "JE", "JNE", "JS", "JNS", "JP", "JNP", "JGE", "JL", "JG", "JLE", "JHI", "JLS"} {
 		check("CMPQ AX,BX\n" + op + " yes\nMOVB $0,AX\nJMP done\nyes:\nMOVB $1,AX\ndone:")
 	}
+	check("CMPQ AX,BX\nLAHF\nSETEQ AX") // AH is now a modeled numerical output, not a caller address.
 }
 
 func TestX86CallerAddressCMPCompleteGoRegisterViews(t *testing.T) {
@@ -117,10 +118,10 @@ func TestX86CallerAddressCMPRejectsOtherParticipantsAndContracts(t *testing.T) {
 		"immediate direction": "CMPQ $1,AX\nSETEQ AX",
 		"pointer vector":      "CMPQ AX,BX\nMOVQ AX,X0\nSETEQ AX",
 		"pointer result":      "CMPQ AX,BX", "noncanonical result": "CMPQ AX,BX\nMOVB $2,AX",
-		"memory participant": "CMPQ AX,(BX)\nSETEQ AX",
-		"unknown call":       "CMPQ AX,BX\nCALL external(SB)\nSETEQ AX",
-		"raw entry":          "BYTE $0x90\nCMPQ AX,BX\nSETEQ AX",
-		"unregistered LAHF":  "CMPQ AX,BX\nLAHF\nSETEQ AX",
+		"memory participant":                  "CMPQ AX,(BX)\nSETEQ AX",
+		"unknown call":                        "CMPQ AX,BX\nCALL external(SB)\nSETEQ AX",
+		"raw entry":                           "BYTE $0x90\nCMPQ AX,BX\nSETEQ AX",
+		"AH overwrite revokes caller address": "CMPQ AX,BX\nLAHF\nCMPQ AX,BX\nSETEQ AX",
 	} {
 		t.Run(name, func(t *testing.T) {
 			for _, api := range []string{"text", "module", "Go"} {
