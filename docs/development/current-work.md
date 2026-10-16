@@ -1,5 +1,36 @@
 # Current work: PR 40 checkpoint
 
+Checkpoint: 2026-10-16 08:20 UTC. This queue supersedes the historical notes
+below. Receipts certify their exact source snapshots, never later commits.
+
+## Current published batch and dispatch repair
+
+Source `ac04c385` passes 101 complete changed/retained owners on Go27, actual
+Go20 and race: 303 root executions/46,821 children, zero skips. Nine final
+gates, scanner race and the independent 24,468-input audit pass. Fork-only
+`64afab38` has the same non-GitHub tree, 109 passing policies and three workflow
+lints. It is pushed normally. [Run 38871174173](https://github.com/cpunion/plan9asm/actions/runs/38871174173)
+is active with 20 successful priorities and 30 queued at this checkpoint.
+Do not cancel it or publish another batch before its natural completion.
+
+The complete strict benchmark at that source is still FAILED: 148/184 files,
+36 failures, zero N/A/unattempted files. AMD64 takes 432 seconds, above its
+unchanged 300-second budget. Compared with `9be274bd`, no file recovers and
+`scan_amd64.s` newly requires the complete AUTO/native-call proof when compact
+inputs become mandatory. `filter_amd64.s` advances past VPCOMPRESSQ to its
+unclosed VMOVDQU64 store. Do not restore an unchecked compact continuation.
+
+Independent `18d23c78` follows all scalar LOCK source bodies, not merely their
+emitted helper definitions. Five targets, three APIs and both IR levels expose
+924 failed source-body checks across ADD/SUB and BTC/BTR/BTS, while the remaining
+family calls hold. Preserve its genuine failed receipt. The six-line dispatch
+repair `67cddb6c` invokes the existing complete bound LOCK handler before those
+overlapping ordinary handlers; its 2,462 children pass. Complete retained-family
+Go20/race, final gates and required native AMD64/386 execution remain pending.
+PR40 remains draft at its older head. No local inventory scanner is needed.
+
+## Earlier static-result checkpoint
+
 Checkpoint: 2026-10-16 07:44 UTC. This queue supersedes the historical notes
 below. Receipts certify their exact source snapshots, never later commits.
 
