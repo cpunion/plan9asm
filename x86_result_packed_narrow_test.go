@@ -109,7 +109,6 @@ func TestX86PackedNarrowResultEveryOutputByteKeepsExactDependencies(t *testing.T
 							t.Fatalf("first=%x second=%x got=%x want=%x flags=%x", first, second, got, want, state.flags)
 						}
 					}
-					}
 				}
 			})
 		}
