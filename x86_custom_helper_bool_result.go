@@ -1,6 +1,9 @@
 package plan9asm
 
-import "strings"
+import (
+	"reflect"
+	"strings"
+)
 
 // This plan proves the root's actual canonical byte through its complete
 // original helper graph. Helpers retain their independent Void/ArgRegs ABI;
@@ -281,4 +284,53 @@ func (plan *x86ABI0BoolCallPlan) checkCustomRegisterTail(fn Func, sig FuncSig, a
 		return x86ABI0BoolCallContext("custom result-byte proof lost its original source or declaration")
 	}
 	return plan.source.verify()
+}
+
+// The complete graph already checks every helper instruction after transporting
+// only that helper's declared inputs and exact private result-byte address.
+// Reuse that proof only for its original helper and actual emitted declaration;
+// a private symbol or a Void/ArgRegs signature alone grants nothing.
+func (c *amd64Ctx) checkCustomHelperBoolSource() (bool, error) {
+	source := c.fpBoolCallSource
+	if source == nil || !strings.HasSuffix(c.fpScalarSource.Sym, "<>") {
+		return false, nil
+	}
+	for _, plan := range source.callers {
+		tail := plan.registerTail
+		if tail == nil || !tail.proved {
+			continue
+		}
+		expected, present := tail.helpers[c.fpScalarSource.Sym]
+		if !present {
+			continue
+		}
+		fail := func(reason string) (bool, error) {
+			return true, x86ABI0BoolCallContext("custom helper consumer: " + reason)
+		}
+		if c.goarch != "386" || c.targetTriple != source.options.TargetTriple {
+			return fail("actual target differs from the proved graph")
+		}
+		if expected.Name == "" {
+			expected.Name = source.resolved[c.fpScalarSource.Sym]
+		}
+		emitted := expected
+		if expected.Attrs == "" {
+			emitted.Attrs = c.fpFeatureAttrs
+		} else if c.fpFeatureAttrs != "" {
+			return fail("supplied attributes acquired an inferred replacement")
+		}
+		if !reflect.DeepEqual(c.fpSourceSig, expected) || !reflect.DeepEqual(c.sig, emitted) {
+			return fail("actual helper declaration or emitted transport differs")
+		}
+		for _, original := range source.original.Funcs {
+			if original.Sym == c.fpScalarSource.Sym {
+				if !reflect.DeepEqual(original, c.fpScalarSource) {
+					return fail("complete helper source differs")
+				}
+				return true, source.verify()
+			}
+		}
+		return fail("original helper TEXT is missing")
+	}
+	return false, nil
 }

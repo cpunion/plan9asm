@@ -568,6 +568,7 @@ func translateFuncX86(b *strings.Builder, fn Func, sig FuncSig, resolve func(str
 		c.fpScalarData = sources[0].scalarData
 		c.fpStaticAddressValues = sources[0].staticAddressValues
 		if calls := sources[0].boolCalls; calls != nil {
+			c.fpBoolCallSource = calls
 			if plan := calls.callers[fn.Sym]; plan != nil {
 				if !plan.bindLowering(fn, sources[0].declaration, sig, goarch) {
 					return x86ABI0BoolCallContext("lowering lost its original caller/source declaration")
