@@ -54,6 +54,9 @@ func x86ResultValueStackStep(ins Instr, state *x86ResultState, owned []bool, res
 		storage = 8 // Existing virtual AMD64 slots zero-extend narrow pushes.
 	}
 	stack := state.valueStack
+	if spec.mode == amd64StackPopValue && ins.Args[0].Kind == OpReg && ins.Args[0].Reg == SP {
+		return false, true // Numerical storage cannot rebind the physical/private stack pointer.
+	}
 	if len(stack.bytes)%2 != 0 || len(stack.bytes) > x86ResultValueStackLimit(arch) ||
 		stack.refinable != nil && len(stack.refinable) != len(stack.bytes) {
 		return false, true
@@ -63,7 +66,24 @@ func x86ResultValueStackStep(ins Instr, state *x86ResultState, owned []bool, res
 		bits := ^uint64(0)
 		if spec.mode == amd64StackPushValue {
 			arg := ins.Args[0]
-			if x86SegmentRegisterOperand(arg) || !x86ResultRead(arg, width, state, owned, arch) {
+			if x86SegmentRegisterOperand(arg) {
+				return false, true
+			}
+			if arg.Kind == OpReg {
+				index, _, valid := x86ResultGP(arg.Reg, width, arch)
+				if !valid {
+					return false, true
+				}
+				// This is a bit-preserving private copy, not a numerical use.
+				// Retain only independently known bytes; narrow virtual slots
+				// zero-extend exactly as the paired existing emitter does.
+				bits = ^uint64(0) << uint(8*width)
+				for offset := int64(0); offset < width; offset++ {
+					if state.gp[index]&(1<<uint(offset)) != 0 {
+						bits |= uint64(255) << uint(8*offset)
+					}
+				}
+			} else if !x86ResultRead(arg, width, state, owned, arch) {
 				return false, true
 			}
 		} else {
