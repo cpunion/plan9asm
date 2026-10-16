@@ -335,7 +335,7 @@ func TestX86PackedWordMultiplyThreeAPIsFiveTargetObjects(t *testing.T) {
 			// Keep every old format/function in its original Go object and in
 			// emitter-only objects. Initialized public positives live in the
 			// complete-family value matrix, not these uninitialized probes.
-			ir := x86WordMultiplyFormatObjectUnit(t, file, sigs, arch, triple)
+			ir := x86WordMultiplyFormatObjectUnit(t, file, sigs, arch, triple, 64)
 			for _, text := range []string{ir, x86MulDivRoundOptimize(t, ir)} {
 				for _, level := range []string{"-O0", "-O2"} {
 					x86PackedStringCompileObject(t, llc, triple, text, level)
@@ -487,12 +487,27 @@ func TestX86PackedWordMultiplyMode32LowZActualGo(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				ir, err := Translate(file, Options{Goarch: "386", TargetTriple: "i386-unknown-linux-gnu",
-					Sigs: map[string]FuncSig{"wordmul": {Name: "wordmul", Ret: Void}}})
-				if err != nil {
-					t.Fatal(err)
+				for _, api := range []string{"text", "module", "Go"} {
+					if ir, err := x86ScalarFPBitViewAPI(t, source, "func wordmul()", "386", "i386-unknown-linux-gnu", api); ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+						t.Fatal("original low-Z format invented native or register inputs", api, err)
+					}
 				}
+				ir := x86WordMultiplyFormatObjectUnit(t, file, map[string]FuncSig{
+					"wordmul": {Name: "wordmul", Ret: Void},
+				}, "386", "i386-unknown-linux-gnu", 0)
 				x86ResultInitializationObject(t, llc, "i386-unknown-linux-gnu", ir, "word-multiply-low-z")
+
+				initialized := "TEXT wordmul(SB),4,$0-4\nMOVL p+0(FP),AX\nVPXORD Z0,Z0,Z0\nVPXORD Z1,Z1,Z1\n" + row + "\nRET\n"
+				goAssemblerOracleOutput(t, "386", initialized, "", true)
+				for _, api := range []string{"text", "module", "Go"} {
+					ir, err := x86ScalarFPBitViewAPI(t, initialized, "func wordmul(p *byte)", "386", "i386-unknown-linux-gnu", api)
+					if err != nil {
+						t.Fatal("initialized low-bank Z source rejected", api, err)
+					}
+					for _, level := range []string{"-O0", "-O2"} {
+						x86PackedStringCompileObject(t, llc, "i386-unknown-linux-gnu", ir, level)
+					}
+				}
 			})
 		}
 	}

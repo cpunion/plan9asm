@@ -16,9 +16,9 @@ func x86AverageFormatObjectUnit(t *testing.T, file *File, signatures map[string]
 	})
 }
 
-func x86WordMultiplyFormatObjectUnit(t *testing.T, file *File, signatures map[string]FuncSig, arch, triple string) string {
+func x86WordMultiplyFormatObjectUnit(t *testing.T, file *File, signatures map[string]FuncSig, arch, triple string, frame int64) string {
 	t.Helper()
-	return x86FixedBinaryFormatObjectUnit(t, file, signatures, arch, triple, 64, func(c *amd64Ctx, ins Instr) (bool, bool, error) {
+	return x86FixedBinaryFormatObjectUnit(t, file, signatures, arch, triple, frame, func(c *amd64Ctx, ins Instr) (bool, bool, error) {
 		return c.lowerPackedWordMultiply(ins.Op, ins)
 	})
 }
