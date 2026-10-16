@@ -1,10 +1,42 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 	"testing"
 )
+
+func TestX86TimestampVoidCannotBorrowUnwrittenImplicitRegisters(t *testing.T) {
+	for _, arch := range []string{"386", "amd64"} {
+		move, word, triple := "MOVL", 4, "i386-unknown-linux-gnu"
+		if arch == "amd64" {
+			move, word, triple = "MOVQ", 8, "x86_64-unknown-linux-gnu"
+		}
+		for _, row := range []struct {
+			op, source string
+			valid      bool
+		}{
+			{"RDTSC", "AX", true}, {"RDTSC", "DX", true}, {"RDTSC", "CX", false},
+			{"RDTSCP", "AX", true}, {"RDTSCP", "DX", true}, {"RDTSCP", "CX", true},
+		} {
+			for _, api := range []string{"text", "module", "Go"} {
+				t.Run(arch+"/"+row.op+"/"+row.source+"/"+api, func(t *testing.T) {
+					source := fmt.Sprintf("TEXT ·Clock(SB),4,$0-%d\n%s p+0(FP),DI\n%s\nMOVL %s,(DI)\nRET\n",
+						word, move, row.op, row.source)
+					ir, err := x86ScalarFPBitViewAPI(t, source, "func Clock(p *uint32)", arch, triple, api)
+					if row.valid {
+						if err != nil || ir == "" {
+							t.Fatal("actual timestamp output lost its native store continuation", err)
+						}
+					} else if !errors.Is(err, ErrProbeNeedsContext) || ir != "" {
+						t.Fatal("RDTSC invented RDTSCP's CX output in a Void function", err)
+					}
+				})
+			}
+		}
+	}
+}
 
 func TestX86TimestampNumericalEffectsUseCompleteImplicitOutputSpec(t *testing.T) {
 	for _, arch := range []string{"386", "amd64"} {
