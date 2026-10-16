@@ -31,13 +31,22 @@ func x86ResultIndexedPermuteStep(ins Instr, state *x86ResultState, owned []bool,
 	if !known {
 		return false, false
 	}
-	if err != nil || !x86ResultNamedPredicateInstruction(ins) || x86Mode32VectorRegisterContext(ins, arch) != nil {
+	if err != nil {
 		return false, true
+	}
+	return x86ResultFixedVectorInputs(ins, form, spec.mode != amd64IndexedPermuteSingle, state, owned, arch), true
+}
+
+// This common dependency consumer supplies numerical values only. Operation
+// specs independently identify whether old destination bytes are data inputs.
+func x86ResultFixedVectorInputs(ins Instr, form x86PackedBinaryForm, oldInput bool, state *x86ResultState, owned []bool, arch string) bool {
+	if !x86ResultNamedPredicateInstruction(ins) || x86Mode32VectorRegisterContext(ins, arch) != nil {
+		return false
 	}
 	if form.mask >= 0 {
 		mask, _ := amd64ParseKReg(ins.Args[form.mask].Reg)
 		if !state.masks[mask] {
-			return false, true
+			return false
 		}
 	}
 	width := int64(form.byteWidth)
@@ -46,18 +55,18 @@ func x86ResultIndexedPermuteStep(ins Instr, state *x86ResultState, owned []bool,
 		firstWidth = int64(form.memoryBytes)
 	}
 	if !x86ResultPackedVectorRead(ins.Args[form.first], firstWidth, state, owned, arch) ||
-		!x86ResultPackedVectorRead(ins.Args[form.second], width, state, owned, arch) {
-		return false, true
+		form.second >= 0 && !x86ResultPackedVectorRead(ins.Args[form.second], width, state, owned, arch) {
+		return false
 	}
 	// I2 reads old destination indices; T2 reads its first table, even with
 	// zero masking. Single-table operations need old bytes only for merging.
-	if (spec.mode != amd64IndexedPermuteSingle || form.mask >= 0 && !form.zeroing) &&
+	if (oldInput || form.mask >= 0 && !form.zeroing) &&
 		!x86ResultPackedVectorRead(ins.Args[form.destination], width, state, owned, arch) {
-		return false, true
+		return false
 	}
 	destination, _ := amd64VectorRegisterIndex(ins.Args[form.destination].Reg, form.byteWidth)
 	state.writeVector(destination, form.byteWidth, x86CallerVectorByteMask(width), false)
-	return true, true // No FLAGS/DF/mask, memory or pointer facts change.
+	return true // No FLAGS/DF/mask, memory or pointer facts change.
 }
 
 // This is only a numerical vector view. Keep the older scalar/legacy-X read
