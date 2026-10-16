@@ -32,6 +32,34 @@ type x86PackedNarrowForm struct {
 	source Operand
 }
 
+// Numerical dependencies only. Each narrowed element needs its complete
+// signed input, independently within each source half of a 128-bit chunk.
+// This never shrinks the native memory tuple or supplies a mask/pointer role.
+func x86PackedNarrowDefinedBytes(form x86PackedNarrowForm, first, second, old uint64) uint64 {
+	inputBytes, outputBytes := form.spec.inputBits/8, form.spec.outputBits/8
+	chunkBytes := 16
+	if form.byteWidth < chunkBytes {
+		chunkBytes = form.byteWidth
+	}
+	half := chunkBytes / 2
+	var known uint64
+	for output := 0; output < form.byteWidth; output += outputBytes {
+		chunk, local := output/chunkBytes*chunkBytes, output%chunkBytes
+		input, source := chunk+(local%half)/outputBytes*inputBytes, second
+		if local >= half {
+			source = first
+		}
+		needed := x86CallerVectorByteMask(int64(inputBytes)) << uint(input)
+		if source&needed == needed {
+			known |= x86CallerVectorByteMask(int64(outputBytes)) << uint(output)
+		}
+	}
+	if form.mask >= 0 && !form.zeroing {
+		known &= old
+	}
+	return known
+}
+
 func x86PackedNarrowProperties(ins Instr, goarch string) (x86PackedNarrowForm, bool, error) {
 	base, _, _ := strings.Cut(strings.ToUpper(string(ins.Op)), ".")
 	spec, known := x86PackedNarrowSpecs[Op(base)]
