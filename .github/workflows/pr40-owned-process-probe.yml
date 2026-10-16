@@ -211,6 +211,17 @@ jobs:
               - TestX86PoppedMixedWidthsRetainOriginalFlagBitPositions
               - TestX86StackRefinementCloneJoinAndReuse
             timeout: 5m
+          - lane: static-result-effects
+            module: '.'
+            roots:
+              - TestX86StaticIntegerSIMDSBStoresCompleteMoveFamily
+              - TestX86StaticIntegerSIMDSBStoresRetainInputResultAndExtentBoundaries
+              - TestX86ScalarFPLogicalNumericalSBStoreKeepsIndependentResult
+              - TestX86StaticIntegerResultDiscardedSBAddresses
+              - TestX86StaticIntegerSBAddressesDoNotAcquireNumericalOrStackRoles
+              - TestX86SymbolIndexedSBThreeAPIsFiveLLVMObjects
+              - TestTranslateAMD64MOVQFromXRegisterToFrameResult
+            timeout: 5m
           - lane: raw-static-replay
             module: '.'
             roots:
