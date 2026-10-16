@@ -29,8 +29,14 @@ func x86UnlockedScalarRMWRuntimeFixture(arch string, native bool) (declarations,
 		if native {
 			source.WriteString("STMXCSR 24(DI)\n")
 		}
-		fmt.Fprintf(&source, "%s\nPUSHF%s\nPOP%s AX\nMOV%s AX,0(DI)\nMOV%s CX,8(DI)\nMOV%s DX,16(DI)\n",
-			row.body, suffix, suffix, suffix, suffix, suffix)
+		statusMask := 0x8d5
+		if row.stem == "AND" || row.stem == "OR" || row.stem == "XOR" {
+			statusMask = 0x8c5 // AF is architecturally undefined after logical operations.
+		}
+		// Refine the saved word in the original source, before any native
+		// output store. A C-side mask alone cannot initialize unknown bits.
+		fmt.Fprintf(&source, "%s\nPUSHF%s\nPOP%s AX\nAND%s $%d,AX\nMOV%s AX,0(DI)\nMOV%s CX,8(DI)\nMOV%s DX,16(DI)\n",
+			row.body, suffix, suffix, suffix, statusMask, suffix, suffix, suffix)
 		if native {
 			source.WriteString("STMXCSR 32(DI)\n")
 		}
@@ -55,6 +61,44 @@ func x86UnlockedScalarRMWRuntimeFixture(arch string, native bool) (declarations,
 	reference = strings.NewReplacer("@WORD@", cWord, "@PROTOTYPES@", prototypes.String(),
 		"@ROWS@", cRows.String(), "lock observations", "unlocked observations").Replace(oracle)
 	return decl.String(), source.String(), driver, reference, count
+}
+
+func TestX86UnlockedScalarRMWObservationUsesOnlyDefinedStatus(t *testing.T) {
+	for _, arch := range []string{"386", "amd64"} {
+		for _, native := range []bool{false, true} {
+			_, source, _, _, count := x86UnlockedScalarRMWRuntimeFixture(arch, native)
+			file, err := Parse(ArchAMD64, source)
+			if err != nil || len(file.Funcs) != count {
+				t.Fatal("complete observation source lost a kernel", arch, native, err)
+			}
+			for _, function := range file.Funcs {
+				observations := 0
+				for index, instruction := range function.Instrs {
+					if instruction.Op != "PUSHFQ" && instruction.Op != "PUSHFL" {
+						continue
+					}
+					if index == 0 || index+2 >= len(function.Instrs) {
+						t.Fatal("saved FLAGS lost its complete source neighborhood")
+					}
+					operation := string(function.Instrs[index-1].Op)
+					mask := int64(0x8d5)
+					if strings.HasPrefix(operation, "AND") || strings.HasPrefix(operation, "OR") || strings.HasPrefix(operation, "XOR") {
+						mask = 0x8c5
+					}
+					refinement := function.Instrs[index+2]
+					if !strings.HasPrefix(string(refinement.Op), "AND") || len(refinement.Args) != 2 ||
+						refinement.Args[0].Kind != OpImm || refinement.Args[0].Imm != mask ||
+						refinement.Args[1].Kind != OpReg || refinement.Args[1].Reg != AX {
+						t.Fatal("saved FLAGS borrowed undefined or unmodeled bits", arch, native, operation)
+					}
+					observations++
+				}
+				if observations != 1 {
+					t.Fatal("ordinary kernel lost its single complete FLAGS observation", function.Sym)
+				}
+			}
+		}
+	}
 }
 
 func x86UnlockedScalarRMWPortableRuntime(t *testing.T, api string) {
