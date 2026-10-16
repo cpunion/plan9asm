@@ -74,9 +74,10 @@ func (c *amd64Ctx) lowerGFNI(op Op, ins Instr) (ok bool, terminated bool, err er
 
 func (c *amd64Ctx) loadGFNIFirstSource(source Operand, byteWidth int, broadcast bool) (string, error) {
 	if !broadcast {
-		return c.loadPackedCompareBytes(source, byteWidth)
+		return c.loadX86PackedShiftBytes(source, byteWidth, true)
 	}
-	qwords, err := c.loadPackedCompareLanes(source, byteWidth, 64, true)
+	// GFNI is E4NF: masks never suppress this complete source/m64bcst read.
+	qwords, err := c.loadX86PackedShiftLanes(source, byteWidth, 64, true, "")
 	if err != nil {
 		return "", err
 	}

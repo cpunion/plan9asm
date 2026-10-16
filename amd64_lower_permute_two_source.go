@@ -55,7 +55,9 @@ func (c *amd64Ctx) lowerIndexedPermute(op Op, ins Instr) (ok bool, terminated bo
 	}
 
 	lanes := byteWidth * 8 / spec.laneBits
-	firstValue, err := c.loadPackedCompareLanes(first, byteWidth, spec.laneBits, form.broadcast)
+	// Indexed table reads are E4NF, not destination-lane masked loads. Keep
+	// the complete tuple/broadcast even for zero masks or unused tables.
+	firstValue, err := c.loadX86PackedShiftLanes(first, byteWidth, spec.laneBits, form.broadcast, "")
 	if err != nil {
 		return true, false, err
 	}
