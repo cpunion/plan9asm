@@ -1,5 +1,37 @@
 # Current work: PR 40 checkpoint
 
+## Signed conversion and native-store qualification, 2026-10-17
+
+At `bf6c4291`, all 51 affected/retained roots pass on current Go, actual Go20
+and race: 153 root executions and 9,273 children, zero failures or skips.
+Independent raw checks retain the same 3,142 exact terminal identities per
+lane and identical before/after source, SDK and tool seals. Earlier failed
+receipts at `b347a91e`, `da88ce0b`, `8be35922` and `761018fe` remain failed.
+
+All four signed packed dword-to-floating names share exact typed numerical
+availability: input-byte widths, X/Y/Z outputs, broadcast, mask/zeroing and
+rounding. Independent positives retain 70 complete combinations, five x86
+targets and three APIs. Void inputs cannot borrow shadow slots; native reads
+belong only to their original opcode emitter, retaining MXCSR/fault behavior.
+The previously failed ordinary386 BP root now passes. MMX stays Context.
+All original Go format objects and native emitter-only objects remain; these
+are not initialized public translations or original/native runtime passes.
+
+The retained suite exposes two adjacent mechanism defects. Checked caller
+proofs now compare the actual declaration and permit only its exact separate
+renderer-inferred attribute reference; altered/missing declarations, owners,
+sources and feature references still fail. All seven whole128 legacy native
+stores consume known numerical bytes plus their actual incoming-pointer
+address, keeping the original aligned/unaligned opcode. Neither rule creates
+memory bounds, alignment, logical storage or a reusable caller permission.
+
+Continue the original native failures in LAHF, packed narrow, packed shift and
+unpack. Actual native66/full-CI reruns, the wider combined-source union, all
+SDK official-baseline audits, final gates and strict benchmark remain pending.
+The latest remote run is still the old failed `ceedd8da` batch, not these local
+passes. Do not push until the next coherent repaired batch is qualified. PR40
+remains draft; no upstream state or external inventory/ledger was changed.
+
 ## Complete fixed-binary qualification, 2026-10-17
 
 At `0c209d81`, the complete average/word-multiply changed and retained union
