@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"runtime"
 	"strings"
@@ -103,6 +104,45 @@ func TestX86ScalarPartialAddThreeAPIsFiveTargets(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestX86ScalarPartialRMWCannotSupplyUpperBytesOrWholeFlags(t *testing.T) {
+	for _, target := range x86RawReturnTargets {
+		word, suffix, typ := 8, "Q", "uint64"
+		if target.arch == "386" {
+			word, suffix, typ = 4, "L", "uint32"
+		}
+		prefix := "MOVB x+0(FP),AX\nADD" + suffix + " $7,AX\n"
+		rows := []struct {
+			name, declaration, body string
+			args                    int
+		}{
+			{"upper-result", "func Value(x byte) " + typ,
+				prefix + fmt.Sprintf("MOV%s AX,ret+%d(FP)", suffix, word), 2 * word},
+			{"wide-native-store", "func Value(p *uint64,x byte) byte",
+				fmt.Sprintf("MOV%s p+0(FP),DX\nMOVB x+%d(FP),AX\nADD%s $7,AX\nMOV%s AX,(DX)\nMOVB AX,ret+%d(FP)",
+					suffix, word, suffix, suffix, 2*word), 2*word + 1},
+		}
+		for _, condition := range []string{"EQ", "CS", "OS"} {
+			rows = append(rows, struct {
+				name, declaration, body string
+				args                    int
+			}{"unknown-" + condition, "func Value(x byte) byte",
+				prefix + fmt.Sprintf("SET%s BL\nMOVB BL,ret+%d(FP)", condition, word), word + 1})
+		}
+		for _, row := range rows {
+			source := fmt.Sprintf("TEXT ·Value(SB),4,$0-%d\n%s\nRET\n", row.args, row.body)
+			x86LEAActualTargetGoObject(t, target.arch, target.triple, source)
+			for _, api := range []string{"text", "module", "Go"} {
+				t.Run(target.triple+"/"+row.name+"/"+api, func(t *testing.T) {
+					ir, err := x86ScalarFPBitViewAPI(t, source, row.declaration, target.arch, target.triple, api)
+					if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+						t.Fatal("known low bytes supplied unknown upper data or native-width FLAGS", err)
+					}
+				})
+			}
+		}
 	}
 }
 
