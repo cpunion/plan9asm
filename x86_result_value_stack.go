@@ -8,6 +8,10 @@ type x86ResultValueStack struct {
 	invalid bool
 	id      bool // ID is separate from the six arithmetic flags and DF.
 	popped  x86ResultPoppedWord
+	// Nil means the existing ordinary NUM bytes. FLAGS pushes additionally
+	// retain precisely which source bits the adjacent mask may refine. Keep
+	// those masks in stack-byte order through mixed widths, not GP positions.
+	refinable []uint8
 }
 
 func x86ResultValueStackLimit(arch string) int {
@@ -50,6 +54,10 @@ func x86ResultValueStackStep(ins Instr, state *x86ResultState, owned []bool, res
 		storage = 8 // Existing virtual AMD64 slots zero-extend narrow pushes.
 	}
 	stack := state.valueStack
+	if len(stack.bytes)%2 != 0 || len(stack.bytes) > x86ResultValueStackLimit(arch) ||
+		stack.refinable != nil && len(stack.refinable) != len(stack.bytes) {
+		return false, true
+	}
 	push := spec.mode == amd64StackPushValue || spec.mode == amd64StackPushFlags
 	if push {
 		bits := ^uint64(0)
@@ -77,19 +85,46 @@ func x86ResultValueStackStep(ins Instr, state *x86ResultState, owned []bool, res
 		if len(stack.bytes) > x86ResultValueStackLimit(arch)-storage {
 			return false, true
 		}
+		if spec.mode == amd64StackPushFlags && stack.refinable == nil {
+			stack.refinable = make([]uint8, len(stack.bytes))
+			copy(stack.refinable, stack.bytes)
+		}
 		for index := storage - 1; index >= 0; index-- {
-			stack.bytes = append(stack.bytes, uint8(bits>>uint(8*index)))
+			initialized := uint8(bits >> uint(8*index))
+			if stack.refinable != nil {
+				eligible := initialized
+				if spec.mode == amd64StackPushFlags {
+					const modeledFlags = uint64(0x200cff)
+					eligible &= uint8(modeledFlags >> uint(8*index))
+				}
+				stack.refinable = append(stack.refinable, eligible)
+			}
+			stack.bytes = append(stack.bytes, initialized)
 		}
 		return true, true
 	}
 	bits := ^uint64(0)
+	refinable := bits
 	if !state.shapeOnly {
 		if len(stack.bytes) < storage {
 			return false, true
 		}
 		bits = 0
+		refinable = 0
 		for index := 0; index < storage; index++ {
-			bits |= uint64(stack.bytes[len(stack.bytes)-1-index]) << uint(8*index)
+			position := len(stack.bytes) - 1 - index
+			bits |= uint64(stack.bytes[position]) << uint(8*index)
+			eligible := stack.bytes[position]
+			if stack.refinable != nil {
+				eligible &= stack.refinable[position]
+			}
+			refinable |= uint64(eligible) << uint(8*index)
+		}
+		if stack.refinable != nil {
+			stack.refinable = stack.refinable[:len(stack.bytes)-storage]
+			if len(stack.refinable) == 0 {
+				stack.refinable = nil
+			}
 		}
 		stack.bytes = stack.bytes[:len(stack.bytes)-storage]
 	}
@@ -134,16 +169,7 @@ func x86ResultValueStackStep(ins Instr, state *x86ResultState, owned []bool, res
 		// Whole known bytes outside a narrow POP remain independently known.
 		known := uint64(0)
 		for b := int64(0); b < width; b++ {
-			initialized := uint8(bits >> uint(8*b))
-			if initialized != 0xff {
-				// Only FLAGS pushes can introduce partial numerical bytes.
-				// Refine modeled status/DF/ID and the reserved low-byte
-				// constants, never ambient TF/IF/IOPL/NT/RF/AC controls.
-				// Complete NUM bytes retain their independent old proof.
-				const modeledFlags = uint64(0x200cff)
-				initialized &= uint8(modeledFlags >> uint(8*b))
-			}
-			known |= uint64(initialized) << uint(8*b)
+			known |= uint64(uint8(refinable>>uint(8*b))) << uint(8*b)
 		}
 		for b := width; b < 8; b++ {
 			if state.gp[index]&(1<<uint(b)) != 0 {
