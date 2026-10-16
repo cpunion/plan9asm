@@ -14,6 +14,13 @@ func TestX86NativeImmediateStoreVoidInputsCannotBorrowPrivateSlots(t *testing.T)
 		if target.arch == "386" {
 			word, move = 4, "MOVL"
 		}
+		valid := fmt.Sprintf("TEXT ·Value(SB),4,$0-%d\n%s p+0(FP),DI\n%s $3,BX\nMOVL $7,-1(DI)(BX*2)\nRET\n", word, move, move)
+		for _, api := range []string{"text", "module", "Go"} {
+			ir, err := x86ScalarFPBitViewAPI(t, valid, "func Value(p *byte)", target.arch, target.triple, api)
+			if err != nil || strings.Count(ir, "store volatile i32 ") != 1 {
+				t.Fatal("complete Void pointer/index control rejected", api, err)
+			}
+		}
 		for _, row := range []struct {
 			name, setup, address string
 		}{
@@ -33,6 +40,32 @@ func TestX86NativeImmediateStoreVoidInputsCannotBorrowPrivateSlots(t *testing.T)
 					}
 				})
 			}
+		}
+	}
+}
+
+func TestX86NativeImmediateStoreRejectsOutsideGoEncodingClasses(t *testing.T) {
+	for _, target := range x86RawReturnTargets {
+		instructions := []string{"MOVB $0.0,(DI)", "MOVW $0.0,(DI)", "MOVL $0.0,(DI)", "MOVQ $0.0,(DI)"}
+		if target.arch == "amd64" {
+			for _, op := range []string{"MOVB", "MOVW", "MOVL", "MOVQ", "MOVD", "MOVDQ2Q"} {
+				for _, value := range []string{"-2147483649", "4294967296", "0x0123456789abcdef"} {
+					instructions = append(instructions, op+" $"+value+",(DI)")
+				}
+			}
+		} else {
+			instructions = append(instructions, "MOVQ $1,(DI)", "MOVD $1,(DI)", "MOVDQ2Q $1,(DI)")
+		}
+		for _, instruction := range instructions {
+			t.Run(target.triple+"/"+instruction, func(t *testing.T) {
+				source := "TEXT ·Value(SB),4,$0-0\n" + instruction + "\nRET\n"
+				requireX86GoAssemblerResult(t, target.arch, source, false)
+				for _, api := range []string{"text", "module", "Go"} {
+					if ir, err := x86ScalarFPBitViewAPI(t, source, "func Value()", target.arch, target.triple, api); err == nil || ir != "" {
+						t.Fatal("native store accepted a non-Go immediate/mode row", api, err)
+					}
+				}
+			})
 		}
 	}
 }
