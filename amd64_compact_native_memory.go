@@ -7,8 +7,8 @@ import "fmt"
 // source instruction's enabled access/fault, even when its vector is unused.
 // No inbounds, alignment, extent or allocation assumption follows from a GEP.
 func (c *amd64Ctx) lowerNativeCompactMemory(ins Instr, form x86PackedCompactForm) error {
-	if !x86ResultNamedPredicateInstruction(ins) {
-		return fmt.Errorf("%w: compact memory needs its original named native address", ErrProbeNeedsContext)
+	if ins.x86AddressBits != 0 || ins.x86UnboundAddressOverride {
+		return fmt.Errorf("%w: compact memory needs its original native address size", ErrProbeNeedsContext)
 	}
 	pointer, pointerType, _, err := c.packedVectorMemoryPointer(ins.Args[form.memory])
 	if err != nil {

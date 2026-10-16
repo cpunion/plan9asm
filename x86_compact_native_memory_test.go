@@ -26,7 +26,7 @@ func x86CompactNativeFixture(arch, op, bank, mode string) (string, string) {
 	}
 	source := fmt.Sprintf("TEXT ·Value(SB),4,$0-%d\n%s p+0(FP),DI\nMOVL mask+%d(FP),AX\n"+
 		"KMOVD AX,K1\nVPXORD Z0,Z0,Z0\n%s\nMOVL $7,AX\nMOVL AX,ret+%d(FP)\nRET\n",
-		word+8, move, word, operation, word+4)
+		2*word+4, move, word, operation, 2*word)
 	return source, "func Value(p *[128]byte, mask uint32) uint32"
 }
 
