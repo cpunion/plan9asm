@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -40,6 +41,14 @@ func x86AuxiliaryCases(arch string) []x86AuxiliaryCase {
 }
 
 func x86AuxiliaryAssembly(arch string, cases []x86AuxiliaryCase) string {
+	saved := "R8"
+	if arch == "386" {
+		saved = "BP"
+	}
+	return x86AuxiliaryAssemblyWithSavedRegister(arch, cases, saved)
+}
+
+func x86AuxiliaryAssemblyWithSavedRegister(arch string, cases []x86AuxiliaryCase, saved string) string {
 	move, push, flags, slot := "Q", "Q", "Q", 8
 	if arch == "386" {
 		move, push, flags, slot = "L", "L", "L", 4
@@ -56,9 +65,9 @@ func x86AuxiliaryAssembly(arch string, cases []x86AuxiliaryCase) string {
 			fmt.Fprintf(&source, "MOV%s DX,AX\n", move)
 		}
 		if row.op == "CMPS" || row.op == "SCAS" {
-			// BP retains the output address, not a fabricated caller frame.
-			fmt.Fprintf(&source, "PUSH%s BP\n", push)
-			fmt.Fprintf(&source, "MOV%s DI,BP\nMOV%s DI,SI\nADD%s $8,DI\nMOV%s BX,AX\n", move, move, move, move)
+			// Use an ordinary GP, not AMD64's independently owned BP frame.
+			fmt.Fprintf(&source, "PUSH%s %s\n", push, saved)
+			fmt.Fprintf(&source, "MOV%s DI,%s\nMOV%s DI,SI\nADD%s $8,DI\nMOV%s BX,AX\n", move, saved, move, move, move)
 		}
 		fmt.Fprintf(&source, "PUSH%s CX\nPOPF%s\n", push, flags)
 		suffix := map[int]string{8: "B", 16: "W", 32: "L", 64: "Q"}[row.bits]
@@ -76,7 +85,7 @@ func x86AuxiliaryAssembly(arch string, cases []x86AuxiliaryCase) string {
 				}
 				fmt.Fprintf(&source, "%s\n", prefix)
 			}
-			fmt.Fprintf(&source, "%s\nMOV%s BP,DI\n", opcode, move)
+			fmt.Fprintf(&source, "%s\nMOV%s %s,DI\n", opcode, move, saved)
 		case "INC", "DEC", "NEG":
 			destination := "BX"
 			if row.form == 1 {
@@ -99,11 +108,31 @@ func x86AuxiliaryAssembly(arch string, cases []x86AuxiliaryCase) string {
 		fmt.Fprintf(&source, "PUSHF%s\nPOP%s CX\nMOV%s CX,24(DI)\nLAHF\nMOVB AH,32(DI)\n", flags, push, move)
 		source.WriteString("SETCS 33(DI)\nSETPS 34(DI)\nSETEQ 35(DI)\nSETMI 36(DI)\nSETOS 37(DI)\nSETLT 38(DI)\n")
 		if row.op == "CMPS" || row.op == "SCAS" {
-			fmt.Fprintf(&source, "POP%s BP\n", push)
+			fmt.Fprintf(&source, "POP%s %s\n", push, saved)
 		}
 		source.WriteString("RET\n")
 	}
 	return source.String()
+}
+
+func TestX86AuxiliaryCarryOriginalPhysicalBPRemainsContext(t *testing.T) {
+	cases := []x86AuxiliaryCase{{name: "PhysicalFrame", op: "CMPS", bits: 8}}
+	source := x86AuxiliaryAssemblyWithSavedRegister("amd64", cases, "BP")
+	for _, target := range x86RawReturnTargets {
+		if target.arch != "amd64" {
+			continue // The whole-family owner retains the ordinary mode32 BP form.
+		}
+		t.Run(target.triple, func(t *testing.T) {
+			x86LEAActualTargetGoObject(t, target.arch, target.triple, source)
+			for _, api := range []string{"text", "module", "Go"} {
+				ir, err := x86ScalarFPBitViewAPI(t, source,
+					"func PhysicalFrame(out *byte,a,b,seed uint64)", target.arch, target.triple, api)
+				if !errors.Is(err, ErrProbeNeedsContext) || ir != "" {
+					t.Fatal("original BP source borrowed ordinary numerical GP transport", api, err)
+				}
+			}
+		})
+	}
 }
 
 func x86AuxiliaryOptions(arch, triple string, cases []x86AuxiliaryCase) Options {

@@ -12,9 +12,11 @@ func x86ValueStackTransportProgram(arch string) (string, string, []string) {
 	if arch == "386" {
 		word = "L"
 	}
-	registers := strings.Fields("AX BX CX DX BP SI DI")
+	registers := strings.Fields("AX BX CX DX SI DI")
 	if arch == "amd64" {
 		registers = append(registers, "R8", "R15")
+	} else {
+		registers = append(registers, "BP")
 	}
 	var source, declarations strings.Builder
 	var names []string
@@ -80,5 +82,24 @@ func TestX86ValueStackRegisterTransportCannotInventBitsOrPointerRoles(t *testing
 				}
 			})
 		}
+	}
+}
+
+func TestX86ValueStackAMD64FrameRegisterNeedsItsSeparateRole(t *testing.T) {
+	for _, target := range x86RawReturnTargets {
+		if target.arch != "amd64" {
+			continue // Mode32 BP is an ordinary GP; the positive matrix covers it.
+		}
+		t.Run(target.triple, func(t *testing.T) {
+			for _, register := range []string{"SP", "BP"} {
+				source := "TEXT ·Value(SB),4,$0-4\nPUSHQ " + register + "\nPOPQ AX\nMOVL $7,AX\nMOVL AX,ret+0(FP)\nRET\n"
+				x86LEAActualTargetGoObject(t, target.arch, target.triple, source)
+				for _, api := range []string{"text", "module", "Go"} {
+					if ir, err := x86ScalarFPBitViewAPI(t, source, "func Value() uint32", target.arch, target.triple, api); !errors.Is(err, ErrProbeNeedsContext) || ir != "" {
+						t.Fatal("private numerical copy acquired a physical stack/frame role", register, api, err)
+					}
+				}
+			}
+		})
 	}
 }
