@@ -61,7 +61,7 @@ func x86StringMemoryHelper(row x86StringMemoryRow) string {
 
 // These generated identifiers contain only ASCII letters, digits and '_'.
 // Accept either of LLVM's equivalent quoted/unquoted identifier renderings.
-func x86StringMemoryFunction(t *testing.T, ir, name string) string {
+func x86StringMemoryFunction(t testing.TB, ir, name string) string {
 	t.Helper()
 	head := regexp.MustCompile(`(?m)^define [^\n]* @(?:"` + regexp.QuoteMeta(name) + `"|` + regexp.QuoteMeta(name) + `)\(`)
 	locations := head.FindAllStringIndex(ir, -1)
@@ -74,6 +74,20 @@ func x86StringMemoryFunction(t *testing.T, ir, name string) string {
 		t.Fatal("unterminated complete function", name)
 	}
 	return rest[:end+2]
+}
+
+// The returned bodies are local test observations, never reusable source,
+// frame, caller-memory or native-entry permissions.
+func x86StringMemoryFunctions(t testing.TB, ir string, names []string) map[string]string {
+	t.Helper()
+	bodies := make(map[string]string, len(names))
+	for _, name := range names {
+		if _, duplicate := bodies[name]; duplicate {
+			t.Fatal("duplicate expected complete function", name)
+		}
+		bodies[name] = x86StringMemoryFunction(t, ir, name)
+	}
+	return bodies
 }
 
 func x86StringMemoryHelperIR(t *testing.T, row x86StringMemoryRow) string {
