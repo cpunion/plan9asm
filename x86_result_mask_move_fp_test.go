@@ -108,10 +108,20 @@ int main(void) {
 func TestX86NumericalEffectConsumesOnlyCheckedCallerContinuation(t *testing.T) {
 	_, _, options, source := x86PrivateReadObserverFixture(t)
 	signature := options.Sigs["caller.kernel"]
-	for _, mutation := range []string{"complete", "missing-caller", "changed-signature", "changed-source", "different-stack", "different-arch"} {
+	for _, mutation := range []string{"complete", "inferred-features", "foreign-features", "unbound-features", "changed-declaration", "missing-declaration-caller", "missing-caller", "changed-signature", "changed-source", "different-stack", "different-arch"} {
 		t.Run(mutation, func(t *testing.T) {
 			consumer, _ := newAMD64CtxWithFuncForTest(t, source, signature, nil)
 			switch mutation {
+			case "inferred-features":
+				consumer.fpFeatureAttrs, consumer.sig.Attrs = "#17", "#17"
+			case "foreign-features":
+				consumer.fpFeatureAttrs, consumer.sig.Attrs = "#17", "#18"
+			case "unbound-features":
+				consumer.sig.Attrs = "#17"
+			case "changed-declaration":
+				consumer.fpSourceSig.Name += ".foreign"
+			case "missing-declaration-caller":
+				consumer.fpSourceSig.x86CallerRegions = nil
 			case "missing-caller":
 				consumer.sig.x86CallerRegions = nil
 			case "changed-signature":
@@ -125,7 +135,7 @@ func TestX86NumericalEffectConsumesOnlyCheckedCallerContinuation(t *testing.T) {
 				consumer.goarch = "386"
 			}
 			err := consumer.integerEffectResultInitialized("mask movement")
-			if mutation == "complete" {
+			if mutation == "complete" || mutation == "inferred-features" {
 				if err != nil || consumer.fpScalarChecked {
 					t.Fatal("complete caller proof was lost or impersonated a logical FP proof", err)
 				}
