@@ -72,14 +72,24 @@ func TestX86VectorValueNativePortableFaults(t *testing.T) {
 		t.Fatal("complete native fault denominator changed", count)
 	}
 	driver := "#include <stdint.h>\n#include <stdio.h>\n#include <unistd.h>\n#include <signal.h>\n" +
-		"#include <sys/mman.h>\n#include <sys/wait.h>\n#include <sys/resource.h>\n" + prototypes.String() + `
+		"#include <errno.h>\n#include <string.h>\n#include <sys/mman.h>\n#include <sys/wait.h>\n#include <sys/resource.h>\n" +
+		numericalRuntimeFaultObservationC + prototypes.String() + `
+static uint8_t *protected_region;
+static size_t protected_bytes;
 static int observe(uint32_t (*fn)(uint8_t *,uintptr_t),uint8_t *p,uintptr_t mask,int fault,const char *name) {
  pid_t child=fork();
  if(child<0)return 1;
- if(child==0) {_exit(fn(p,mask)==7?0:1);}
+ if(child==0) {
+  struct rlimit observed;
+  if(getrlimit(RLIMIT_CORE,&observed)||observed.rlim_cur||observed.rlim_max)_exit(120);
+  numerical_fault_begin(p ? protected_region : 0,protected_bytes);
+  _exit(fn(p,mask)==7?0:1);
+ }
  int status;
- if(waitpid(child,&status,0)!=child)return 1;
- if(fault ? (WIFSIGNALED(status)&&(WTERMSIG(status)==SIGSEGV||WTERMSIG(status)==SIGBUS)) :
+ pid_t waited;
+ do {waited=waitpid(child,&status,0);} while(waited<0&&errno==EINTR);
+ if(waited!=child)return 1;
+ if(fault ? numerical_fault_status(status) :
              (WIFEXITED(status)&&WEXITSTATUS(status)==0))return 0;
  fprintf(stderr,"%s mask=%llx expected fault=%d wait=%x\n",name,(unsigned long long)mask,fault,status);
  return 1;
@@ -91,6 +101,8 @@ int main(void) {
  if(page<128)return 1;
  uint8_t *storage=mmap(0,2*page,PROT_READ|PROT_WRITE,MAP_PRIVATE|MAP_ANON,-1,0);
  if(storage==MAP_FAILED||mprotect(storage+page,page,PROT_NONE))return 1;
+ protected_region=storage+page;
+ protected_bytes=(size_t)page;
 ` + checks.String() + "return munmap(storage,2*page)!=0;\n}\n"
 	triple := testTargetTriple(runtime.GOOS, runtime.GOARCH)
 	for _, api := range []string{"text", "module", "Go"} {
