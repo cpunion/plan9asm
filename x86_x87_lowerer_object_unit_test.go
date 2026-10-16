@@ -91,8 +91,10 @@ func x86ZeroArgumentLowererObjectUnit(t *testing.T, original *File, arch, triple
 				t.Fatalf("complete original instruction %d was not emitted: %s: %v", ordinal, instruction.Raw, err)
 			}
 			if terminated {
-				// Keep later original rows in explicitly unreachable unit-only
-				// blocks; a real trap is not a returning numerical operation.
+				// The complete format-only source can contain an invalid
+				// encoding before later rows. Retain those original rows in
+				// explicitly unreachable emitter-unit blocks, not by turning
+				// #UD into a returning operation or claiming native execution.
 				fmt.Fprintf(&ir, "%s_emitter_only_unreachable:\n", consumer.newTmp())
 			}
 			emitted++

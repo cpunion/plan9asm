@@ -14,11 +14,13 @@ import (
 	"time"
 )
 
-// These are Go's ten EVEX packed-move opcodes, independently of the shared
-// implementation map. VMOVDQA/DQU are VEX-only and do not have this form.
+// Independent EVEX opcodes whose Go-accepted .Z memory destination requires
+// architectural #UD. Intel XED's memory patterns require ZEROING=0 for both
+// packed moves and all six compression opcodes. VMOVDQA/DQU are VEX-only.
 var x86PackedZeroStoreOpcodes = []string{
 	"VMOVAPD", "VMOVAPS", "VMOVUPD", "VMOVUPS",
 	"VMOVDQA32", "VMOVDQA64", "VMOVDQU8", "VMOVDQU16", "VMOVDQU32", "VMOVDQU64",
+	"VCOMPRESSPS", "VCOMPRESSPD", "VPCOMPRESSB", "VPCOMPRESSW", "VPCOMPRESSD", "VPCOMPRESSQ",
 }
 
 func x86PackedZeroStoreSource() (string, map[string]FuncSig, []string) {
@@ -70,16 +72,24 @@ func TestX86PackedZeroMemoryStorePreservesUndefinedOpcode(t *testing.T) {
 
 func TestX86PackedZeroMemoryStoreFaultPrecedesFPBoundsAndMaskReads(t *testing.T) {
 	for _, arch := range []string{"amd64", "386"} {
-		instruction := Instr{Op: "VMOVUPS.Z", Args: []Operand{
-			{Kind: OpReg, Reg: "X0"}, {Kind: OpReg, Reg: "K1"},
-			{Kind: OpFP, FPOffset: 1 << 20},
-		}}
-		ctx, output := newAMD64CtxWithFuncForTest(t, Func{}, FuncSig{Ret: Void}, nil)
-		ctx.goarch = arch
-		before := output.Len()
-		recognized, terminated, err := ctx.lowerPackedVectorMove(instruction.Op, instruction)
-		if !recognized || !terminated || err != nil || output.String()[before:] != "  call void asm sideeffect \"ud2\", \"~{memory}\"()\n  unreachable\n" {
-			t.Fatalf("%s invalid encoding evaluated nonexistent FP/mask/register data before #UD: %t/%t/%v", arch, recognized, terminated, err)
+		for _, opcode := range x86PackedZeroStoreOpcodes {
+			t.Run(arch+"/"+opcode, func(t *testing.T) {
+				instruction := Instr{Op: Op(opcode + ".Z"), Args: []Operand{
+					{Kind: OpReg, Reg: "X0"}, {Kind: OpReg, Reg: "K1"},
+					{Kind: OpFP, FPOffset: 1 << 20},
+				}}
+				ctx, output := newAMD64CtxWithFuncForTest(t, Func{}, FuncSig{Ret: Void}, nil)
+				ctx.goarch = arch
+				before := output.Len()
+				lower := ctx.lowerPackedVectorMove
+				if strings.Contains(opcode, "COMPRESS") {
+					lower = ctx.lowerPackedCompress
+				}
+				recognized, terminated, err := lower(instruction.Op, instruction)
+				if !recognized || !terminated || err != nil || output.String()[before:] != "  call void asm sideeffect \"ud2\", \"~{memory}\"()\n  unreachable\n" {
+					t.Fatalf("%s invalid encoding evaluated nonexistent FP/mask/register data before #UD: %t/%t/%v", arch, recognized, terminated, err)
+				}
+			})
 		}
 	}
 }
@@ -127,7 +137,8 @@ func TestX86PackedZeroMemoryStoreActualGoAndLLVM22Encoding(t *testing.T) {
 				if normal[0] != 0x62 || normal[3]&0x80 != 0 || zero[3]&0x80 == 0 {
 					t.Fatalf("%s %s lacks independent EVEX.z witness: normal=%x zero=%x", arch, instruction, normal, zero)
 				}
-				wantW := strings.HasSuffix(opcode, "64") || opcode == "VMOVDQU16" || strings.HasSuffix(opcode, "PD")
+				wantW := strings.HasSuffix(opcode, "64") || opcode == "VMOVDQU16" || strings.HasSuffix(opcode, "PD") ||
+					opcode == "VPCOMPRESSW" || opcode == "VPCOMPRESSQ"
 				if (normal[2]&0x80 != 0) != wantW {
 					t.Fatalf("actual Go object changed the native element selector: %s %s bytes=%x", arch, instruction, normal)
 				}
@@ -150,14 +161,18 @@ func TestX86PackedZeroMemoryStoreActualGoAndLLVM22Encoding(t *testing.T) {
 					}
 					ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 					command := exec.CommandContext(ctx, mc, "--disassemble", "--triple="+triple,
-						"--mattr=+avx512f,+avx512bw,+avx512vl")
+						"--mattr=+avx512f,+avx512bw,+avx512vl,+avx512vbmi2")
 					command.Stdin = strings.NewReader(input.String())
 					command.WaitDelay = 2 * time.Second
 					output, err := command.CombinedOutput()
 					cancel()
 					// llvm-mc can return zero while diagnosing rejected bytes.
 					invalid := strings.Contains(string(output), "invalid instruction encoding")
-					if err != nil || invalid != test.invalid || !test.invalid && !strings.Contains(strings.ToUpper(string(output)), "VMOV") {
+					family := "VMOV"
+					if strings.Contains(opcode, "COMPRESS") {
+						family = "COMPRESS"
+					}
+					if err != nil || invalid != test.invalid || !test.invalid && !strings.Contains(strings.ToUpper(string(output)), family) {
 						t.Fatalf("%s %s invalid=%t: LLVM 22 diagnostic mismatch: %v\n%s", arch, instruction, test.invalid, err, output)
 					}
 					// LLVM 22's 32-bit decoder aliases some W1 move spellings
@@ -166,7 +181,7 @@ func TestX86PackedZeroMemoryStoreActualGoAndLLVM22Encoding(t *testing.T) {
 					if !test.invalid {
 						ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 						command := exec.CommandContext(ctx, mc, "--disassemble", "--triple=x86_64-unknown-linux-gnu",
-							"--mattr=+avx512f,+avx512bw,+avx512vl")
+							"--mattr=+avx512f,+avx512bw,+avx512vl,+avx512vbmi2")
 						command.Stdin = strings.NewReader(input.String())
 						command.WaitDelay = 2 * time.Second
 						output, err := command.CombinedOutput()

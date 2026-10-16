@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"runtime"
 	"strings"
@@ -66,13 +67,19 @@ func TestTranslateX86PackedExpandCompleteGoFormsAcrossTargets(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			ir, err := Translate(file, Options{
+			options := Options{
 				Goarch: target.goarch, TargetTriple: target.triple,
 				Sigs: map[string]FuncSig{"packedexpandforms": {Name: "packedexpandforms", Ret: Void}},
-			})
-			if err != nil {
-				t.Fatal(err)
 			}
+			for _, api := range []string{"text", "module", "owned-module"} {
+				if ir, err := x86X87UnboundOriginalAPI(t, file, options, api); !errors.Is(err, ErrProbeNeedsContext) || ir != "" {
+					t.Fatal("original format-only source acquired undefined vector/mask/address inputs", api, err)
+				}
+			}
+			ir := x86ZeroArgumentLowererObjectUnit(t, file, target.goarch, target.triple, "PackedExpandEmitterObjectUnit",
+				func(consumer *amd64Ctx, instruction Instr) (bool, bool, error) {
+					return consumer.lowerVec(instruction.Op, instruction)
+				})
 			for _, want := range []string{"@llvm.masked.expandload.v", "extractelement", "select i1"} {
 				if !strings.Contains(ir, want) {
 					t.Fatalf("packed-expand lowering omitted %q:\n%s", want, ir)

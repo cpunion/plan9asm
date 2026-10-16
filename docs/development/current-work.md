@@ -1,5 +1,80 @@
 # Current work: PR 40 checkpoint
 
+Checkpoint: 2026-10-16 07:44 UTC. This queue supersedes the historical notes
+below. Receipts certify their exact source snapshots, never later commits.
+
+## Current CI repair
+
+Allowed-fork [run 38853831617](https://github.com/cpunion/plan9asm/actions/runs/38853831617)
+at `699a1f61` ended naturally: 78 successful jobs, three failed execution
+partitions and their failed strict main-module aggregate. Both complete CLI
+modules and all 49 prerequisite jobs pass. No cancellation establishes success.
+PR40 remains draft at its older head; do not publish another batch until its
+combined source and fork policies have fresh qualification.
+
+The three failing roots are retained in authenticated original artifacts.
+`54b92155` shares the existing complete GP/X move grammar with static-result
+stores, retaining source bytes, exact extent and independent result obligations.
+`da555409` composes the existing discarded-SB-address effect in that same proof;
+it kills numerical address facts and grants no stack or memory authority.
+At `3e9bc80c`, their six affected roots pass on Go27, actual Go20 and race:
+18 root executions/3,648 children. Another 41 retained owners pass in each lane
+(123 executions/5,931 children), as do nine final gates. All have zero skips.
+
+The third old fixture writes an undefined global. Preserve its genuine failed
+`3e9bc80c` receipt. Test-only `1b969694` supplies an eight-byte NOPTR definition
+to the positive, checks original Go and LLVM22 O0/O2 objects, and retains the
+unchanged unbound source as a Context negative. All seven affected roots and
+1,218 children pass on Go27 at that head; later SDK/race and combined-source
+qualification remain required. Never relax the extent check for this fixture.
+
+The compact/expand, linear-observer and strict benchmark results below retain
+their original scopes. The interrupted `c61f829c` combined qualification is
+retired as incomplete; do not resume it or use it to certify this repair batch.
+External inventory is still server-only; its last validated export is unchanged.
+
+## Earlier integration checkpoint
+
+Checkpoint: 2026-10-16 06:40 UTC. This queue supersedes the historical notes
+below. Receipts certify their exact source snapshots, never later commits.
+
+## Active integration and CI
+
+Allowed-fork [run 38853831617](https://github.com/cpunion/plan9asm/actions/runs/38853831617)
+at `699a1f61` retains the exact non-GitHub source tree of `9be274bd`.
+All 49 prerequisite jobs pass, including native66 and the complete LODS and
+raw-static replay priorities. Thirty complete Windows jobs are now expanded;
+the latest observed state is 58 successful jobs, seven executing and fourteen
+queued, without a failure. Let the run finish before another push. PR40 is
+still draft at its older head; these fork receipts do not certify that head.
+
+Local integration joins the complete twelve-name compact/expand grammar and
+logical scalar-field memory effects with the retained CI fixes and the linear
+complete-function observer. Preserve `cb301f0d`: both independent scanner roots
+fail all 504 children on the old source while their initialized positives hold.
+At `bb9351fb`, both roots and all 504 children pass without skips.
+
+The compact leaf `5b53e944` passes 29 affected/retained roots on current Go,
+actual Go20 and race: 87 root executions/13,788 children, no skips. Its official
+gate nevertheless fails against the old baseline. Independent before/after
+scans on all eight SDKs prove exactly the same 96 forms, confined to those twelve
+opcodes, change from supported to context-required; encoder metadata, form
+inventories and every other classification remain unchanged. The baseline
+update changes only those three AMD64 summary fields per SDK. Freeze and
+qualify the combined head afresh before publishing; neither leaf receipt is
+a complete-module or native AVX512 execution certificate.
+
+Observer source `32c3c97d` separately passes 72 root executions/23,448 children,
+nine final gates and an independent complete-input audit. Its 212-function
+fixture falls from 9,548 to 233 Go allocations and from approximately 1.15s to 3.30ms;
+this is not a whole-compiler speedup. The complete benchmark at `9be274bd`
+attempts all 184 original files: 149 pass/35 fail, zero skips or unattempted files.
+AMD64 exceeds the original 300-second target budget; a one-second diagnostic
+sample taken after that failure is recorded separately. No performance pass is
+claimed, and the original strict budgets remain unchanged.
+
+## Historical checkpoint
+
 Checkpoint: 2026-10-16 04:45 UTC. This section supersedes the historical queue
 below; every older result retains its original source and scope.
 

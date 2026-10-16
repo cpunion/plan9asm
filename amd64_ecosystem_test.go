@@ -2331,11 +2331,7 @@ TEXT vectorret(SB),NOSPLIT,$0-8
 	MOVQ X0, ret+0(FP)
 	RET
 `
-	file, err := Parse(ArchAMD64, src)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := Translate(file, Options{
+	opts := Options{
 		TargetTriple: "x86_64-unknown-linux-gnu",
 		Goarch:       "amd64",
 		Sigs: map[string]FuncSig{"vectorret": {
@@ -2348,9 +2344,37 @@ TEXT vectorret(SB),NOSPLIT,$0-8
 				Field:  -1,
 			}}},
 		}},
-	}); err != nil {
-		t.Fatal(err)
 	}
+	t.Run("defined-storage", func(t *testing.T) {
+		bound := "GLOBL vectorGlobal<>(SB),16,$8\n" + strings.Replace(src, ",NOSPLIT,", ",4,", 1)
+		x86LEAActualTargetGoObject(t, "amd64", opts.TargetTriple, bound)
+		file, err := Parse(ArchAMD64, bound)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ir, err := Translate(file, opts)
+		if err != nil {
+			t.Fatal(err)
+		}
+		llc := findLLVM22Tool("llc")
+		if llc == "" {
+			t.Fatal("LLVM 22 llc not found")
+		}
+		for _, backend := range []string{"-O0", "-O2"} {
+			x86PackedStringCompileObject(t, llc, opts.TargetTriple, ir, backend)
+		}
+	})
+	t.Run("unbound-storage", func(t *testing.T) {
+		// The original source has no storage definition. A signature and
+		// initialized X0 cannot establish the external symbol's extent.
+		file, err := Parse(ArchAMD64, src)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if ir, err := Translate(file, opts); !errors.Is(err, ErrProbeNeedsContext) || ir != "" {
+			t.Fatal("unbound static storage acquired an extent", err)
+		}
+	})
 }
 
 func TestTranslateAMD64X87Arithmetic(t *testing.T) {

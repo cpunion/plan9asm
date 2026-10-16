@@ -27,7 +27,7 @@ func x86StaticIntegerResultSourceCandidate(fn Func, sig FuncSig, arch string) bo
 		return false
 	}
 	for _, ins := range fn.Instrs {
-		if len(ins.Args) == 2 && x86RawReturnScalarMoveBytes(x86GoMOVQSourceInstruction(ins).Op) != 0 {
+		if len(ins.Args) == 2 && x86StaticIntegerResultMoveBytes(ins, arch) != 0 {
 			for _, operand := range ins.Args {
 				if _, static := x86StaticSBReadAddress(operand, arch); static {
 					return true
@@ -36,6 +36,19 @@ func x86StaticIntegerResultSourceCandidate(fn Func, sig FuncSig, arch string) bo
 		}
 	}
 	return false
+}
+
+// Select the existing scalar or GP/X memory grammar, including Go's qword
+// aliases and VEX memory widths. A format supplies no initialized source,
+// static extent, caller-memory or raw-entry permission.
+func x86StaticIntegerResultMoveBytes(ins Instr, arch string) int64 {
+	if form, known, err := x86GPSIMDTransferProperties(ins, arch); known {
+		if err != nil || form.mmx || form.spec.rawOnly || form.memory < 0 {
+			return 0
+		}
+		return int64(form.bits / 8)
+	}
+	return x86RawReturnScalarMoveBytes(x86GoMOVQSourceInstruction(ins).Op)
 }
 
 func (c *amd64Ctx) checkStaticIntegerResultInitialization() error {
@@ -79,12 +92,23 @@ func (c *amd64Ctx) checkStaticIntegerResultInitialization() error {
 		if accepted, known := c.scalarStaticAddressValueTransfer(ins, state, owned, arch); known {
 			return accepted // Preserve the independently bound relocation-value producer.
 		}
-		width := x86RawReturnScalarMoveBytes(x86GoMOVQSourceInstruction(ins).Op)
+		if accepted, known := x86ResultUnknownSBAddressStep(ins, state, arch); known {
+			return accepted // Discarded source addresses never become numerical bytes.
+		}
+		width := x86StaticIntegerResultMoveBytes(ins, arch)
 		if width != 0 && len(ins.Args) == 2 {
 			if address, static := x86StaticSBReadAddress(ins.Args[1], arch); static {
-				// Only the paired bounded scalar MOV store is admitted. It
-				// creates no incoming-pointer, caller or reusable memory fact.
-				return c.fpScalarData[address] >= width && x86ResultRead(ins.Args[0], width, state, owned, arch)
+				// Keep the same independently emitted static extent for every
+				// scalar store. A typed X source needs its actual low bytes,
+				// not a GP-register interpretation of the same source operand.
+				if c.fpScalarData[address] < width {
+					return false
+				}
+				if form, known, err := x86GPSIMDTransferProperties(ins, arch); known {
+					return err == nil && form.memoryWrite &&
+						x86ResultGPSIMDTransfer(ins, form, state, owned, resultOffset, arch)
+				}
+				return x86ResultRead(ins.Args[0], width, state, owned, arch)
 			}
 		}
 		return x86ScalarFPResultTransfer(ins, state, owned, resultOffset, arch)

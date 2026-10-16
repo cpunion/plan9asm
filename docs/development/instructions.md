@@ -58,6 +58,19 @@ where practical. A completeness test must compare the whole spec table with
 the current Go encoder family so adding one observed spelling cannot leave
 sibling forms unmodeled.
 
+The twelve compact/expand names share Go's complete `_yvcompresspd` and
+`_yvexpandpd` grammar: X/Y/Z widths, matching banks, optional K1-K7 and masked
+register zeroing. Compressed memory `.Z` encodes an architectural #UD before
+source, mask or address access, not an ordinary store. Keep original Go bytes,
+fault-priority controls and all-five-x86-target objects. Isolated probes lack
+initialized source/mask/merge inputs; complete sequences must establish them
+without borrowing zeroed implementation slots. Logical FP fields are separate
+scalar allocations: gather expand inputs and scatter compact results across
+their actual fields, retaining masked tails and rejecting missing bytes or
+incoming-parameter writes. This grants no contiguous native backing or new
+caller-memory permission. Preserve the independent scanner-input regressions
+when intentionally updating the official classification baseline.
+
 Keep mandatory numerical/result obligations separate from cost-only routing.
 A newly modeled family must not bypass its complete source proof because a
 function has no result store, an unused bool parameter, another storage role,

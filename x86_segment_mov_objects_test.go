@@ -72,7 +72,15 @@ func x86SegmentMOVCompleteSource(t *testing.T, arch string) (string, string, []x
 	return source.String(), declarations.String(), functions
 }
 
-func TestX86SegmentMOVFiveTargetThreeAPICompleteObjects(t *testing.T) {
+func x86SegmentMOVTargetCompleteObjects(t *testing.T, arch, triple string) {
+	t.Helper()
+	known := false
+	for _, target := range x86RawReturnTargets {
+		known = known || target.arch == arch && target.triple == triple
+	}
+	if !known {
+		t.Fatal("complete segment object owner requires a registered target", arch, triple)
+	}
 	producer := x86SegmentMOVObserveSelectedEncoder(t)
 	if !producer.schema.indexPrefix386 {
 		t.Log("historical selected Go producer objects retain all original TEXTs, but its dynamic 386 FS/GS Index forms have no segment prefix; they do not certify equivalence to current named-source LLVM segment reads")
@@ -81,33 +89,61 @@ func TestX86SegmentMOVFiveTargetThreeAPICompleteObjects(t *testing.T) {
 	if llc == "" {
 		t.Fatal("LLVM22 llc is required")
 	}
-	for _, target := range x86RawReturnTargets {
-		t.Run(target.triple, func(t *testing.T) {
-			source, declarations, functions := x86SegmentMOVCompleteSource(t, target.arch)
-			x86LEAActualTargetGoObject(t, target.arch, target.triple, source)
-			for _, api := range []string{"text", "module", "Go"} {
-				ir, err := x86ScalarFPBitViewAPI(t, source, declarations, target.arch, target.triple, api)
-				if err != nil || ir == "" {
-					t.Fatal("complete uncut segment MOV source was rejected", err)
+	t.Run(triple, func(t *testing.T) {
+		source, declarations, functions := x86SegmentMOVCompleteSource(t, arch)
+		x86LEAActualTargetGoObject(t, arch, triple, source)
+		names := make([]string, len(functions))
+		for index, function := range functions {
+			names[index] = function.name
+		}
+		axes := 0
+		for _, api := range []string{"text", "module", "Go"} {
+			ir, err := x86ScalarFPBitViewAPI(t, source, declarations, arch, triple, api)
+			if err != nil || ir == "" {
+				t.Fatal("complete uncut segment MOV source was rejected", err)
+			}
+			for _, irLevel := range []string{"0", "2"} {
+				input := ir
+				if irLevel == "2" {
+					input = x86DwordProductIROptimize(t, input)
 				}
-				for _, irLevel := range []string{"0", "2"} {
-					input := ir
-					if irLevel == "2" {
-						input = x86DwordProductIROptimize(t, input)
-					}
-					if strings.Count(input, "\ndefine ") != len(functions) {
-						t.Fatal("whole-file translation added or cropped a function", api, irLevel)
-					}
-					for _, function := range functions {
-						x86SegmentMOVNamedReadIR(t, input, function.name, function.width, function.addressSpace)
-					}
-					for _, backendLevel := range []string{"0", "2"} {
-						t.Run(api+"/IR"+irLevel+"/backend"+backendLevel, func(t *testing.T) {
-							x86PackedStringCompileObject(t, llc, target.triple, input, "-O"+backendLevel)
-						})
-					}
+				if strings.Count(input, "\ndefine ") != len(functions) {
+					t.Fatal("whole-file translation added or cropped a function", api, irLevel)
+				}
+				bodies := x86StringMemoryFunctions(t, input, names)
+				for _, function := range functions {
+					x86SegmentMOVReadBody(t, bodies[function.name], function.width, function.addressSpace)
+				}
+				for _, backendLevel := range []string{"0", "2"} {
+					axes++
+					t.Run(api+"/IR"+irLevel+"/backend"+backendLevel, func(t *testing.T) {
+						x86PackedStringCompileObject(t, llc, triple, input, "-O"+backendLevel)
+					})
 				}
 			}
-		})
-	}
+		}
+		if axes != 12 {
+			t.Fatal("complete three-API/IR/backend object denominator changed", axes)
+		}
+	})
+}
+
+func TestX86SegmentMOVLinux386CompleteObjects(t *testing.T) {
+	x86SegmentMOVTargetCompleteObjects(t, "386", "i386-unknown-linux-gnu")
+}
+
+func TestX86SegmentMOVWindows386CompleteObjects(t *testing.T) {
+	x86SegmentMOVTargetCompleteObjects(t, "386", "i686-pc-windows-msvc")
+}
+
+func TestX86SegmentMOVDarwinAMD64CompleteObjects(t *testing.T) {
+	x86SegmentMOVTargetCompleteObjects(t, "amd64", "x86_64-apple-darwin")
+}
+
+func TestX86SegmentMOVLinuxAMD64CompleteObjects(t *testing.T) {
+	x86SegmentMOVTargetCompleteObjects(t, "amd64", "x86_64-unknown-linux-gnu")
+}
+
+func TestX86SegmentMOVWindowsAMD64CompleteObjects(t *testing.T) {
+	x86SegmentMOVTargetCompleteObjects(t, "amd64", "x86_64-pc-windows-msvc")
 }
