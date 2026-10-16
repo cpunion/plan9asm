@@ -77,3 +77,11 @@ func x86TypedPackedAverageByteEffect(op Op, ins Instr, arch string) (x86TypedByt
 		{index: form.destination, operand: ins.Args[form.destination], width: int64(form.byteWidth), read: true, write: true},
 	}}, true, nil
 }
+
+func x86ResultPackedAverageStep(ins Instr, state *x86ResultState, owned []bool, arch string) (bool, bool) {
+	form, known, err := x86PackedAverageProperties(ins.Op, ins, arch)
+	if !known || err != nil {
+		return false, known
+	}
+	return x86ResultFixedVectorInputs(ins, form.x86PackedBinaryForm, false, state, owned, arch), true
+}
