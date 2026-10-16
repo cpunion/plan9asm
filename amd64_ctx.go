@@ -56,30 +56,32 @@ type amd64Ctx struct {
 	x87IntegerSlot      string // hardware FISTP result for explicit 386 x87 lowering
 	x87Mode             X87Mode
 
-	flagsZSlot      string
-	flagsSltSlot    string // architectural SF; signed conditions combine it with OF
-	flagsCFSlot     string // carry/borrow style bit for J{B,BE,A,AE,NC,C}-like checks
-	flagsPFSlot     string // parity bit for J{P,PE,PS,NP,PO,PC}-like checks
-	flagsAFSlot     string // auxiliary carry/borrow from bit 3, exposed by LAHF/PUSHF
-	flagsOFSlot     string // overflow-style bit used by ADOX carry chain modeling
-	flagsIDSlot     string // CPUID ID bit preserved by native-width flags stack forms
-	flagsWritten    bool
-	allowSPWrite    bool   // current instruction has an explicitly modeled 386 SP destination
-	directionSlot   string // x86 DF, used by MOVS/STOS/SCAS instructions
-	repeatPrefix    string // pending REP/REPN prefix for the following instruction
-	namedAtomicLock bool   // actual same-block source-adjacent LOCK for this instruction only
-	lockScalarNS    string // compiler name allocation, not a source capability
-	bitScanNS       string // compiler name allocation, not a source capability
-	vstackSlot      string // [64 x i64] virtual stack for PUSHQ/POPQ
-	vspSlot         string // i64 virtual stack pointer (next free slot)
-	localStackSlot  string // byte-addressable backing storage for x86 SP references
-	sourceStack     *x86SourceStackProof
-	fixedLocal      *x86FixedLocalProof
-	fixedMemRoles   map[MemRef]MemRef // exact certified current-instruction native role projection
-	frameSize       int64             // local bytes below the Go assembler's implicit amd64 BP
-	classicFrame    string            // contiguous classic Go ABI frame used by 386 FP addressing
-	classicSize     int64
-	classicBias     int64
+	flagsZSlot        string
+	flagsSltSlot      string // architectural SF; signed conditions combine it with OF
+	flagsCFSlot       string // carry/borrow style bit for J{B,BE,A,AE,NC,C}-like checks
+	flagsPFSlot       string // parity bit for J{P,PE,PS,NP,PO,PC}-like checks
+	flagsAFSlot       string // auxiliary carry/borrow from bit 3, exposed by LAHF/PUSHF
+	flagsOFSlot       string // overflow-style bit used by ADOX carry chain modeling
+	flagsIDSlot       string // CPUID ID bit preserved by native-width flags stack forms
+	flagsWritten      bool
+	allowSPWrite      bool   // current instruction has an explicitly modeled 386 SP destination
+	directionSlot     string // x86 DF, used by MOVS/STOS/SCAS instructions
+	repeatPrefix      string // pending REP/REPN prefix for the following instruction
+	namedAtomicLock   bool   // actual same-block source-adjacent LOCK for this instruction only
+	lockScalarNS      string // compiler name allocation, not a source capability
+	bitScanNS         string // compiler name allocation, not a source capability
+	vstackSlot        string // [64 x i64] virtual stack for PUSHQ/POPQ
+	vspSlot           string // i64 virtual stack pointer (next free slot)
+	localStackSlot    string // byte-addressable backing storage for x86 SP references
+	logicalAUTOBase   string // immutable entry-SP SSA address, not a source pointer fact
+	logicalAUTOExtent int    // proved ordinary logical frame bytes above entry SP
+	sourceStack       *x86SourceStackProof
+	fixedLocal        *x86FixedLocalProof
+	fixedMemRoles     map[MemRef]MemRef // exact certified current-instruction native role projection
+	frameSize         int64             // local bytes below the Go assembler's implicit amd64 BP
+	classicFrame      string            // contiguous classic Go ABI frame used by 386 FP addressing
+	classicSize       int64
+	classicBias       int64
 
 	fpParams         map[int64]FrameSlot // off(FP) -> slot
 	fpParamAlloca    map[int64]string    // off(FP) -> mutable parameter shadow
@@ -447,6 +449,9 @@ func (c *amd64Ctx) scanUsedRegs() {
 }
 
 func (c *amd64Ctx) emitEntryAllocas() error {
+	if err := c.prepareLogicalAUTOStorage(); err != nil {
+		return err
+	}
 	resultRegion, regionalResults := x86DirectTailResultRegion(c.fpScalarSource, c.sig, c.goarch)
 	if regionalResults && (!c.fpScalarChecked || c.fpScalarCheckErr != nil) {
 		return fmt.Errorf("%w: contiguous result backing lacks its complete source-byte proof", ErrProbeNeedsContext)
@@ -527,6 +532,9 @@ func (c *amd64Ctx) emitEntryAllocas() error {
 			addr := c.newTmp()
 			fmt.Fprintf(c.b, "  %%%s = ptrtoint ptr %%%s to i64\n", addr, base)
 			fmt.Fprintf(c.b, "  store i64 %%%s, ptr %s\n", addr, spSlot)
+			if c.logicalAUTOExtent != 0 {
+				c.logicalAUTOBase = "%" + addr
+			}
 			if bpSlot, ok := c.regSlot[BP]; ok && c.goarch != "386" && c.frameSize > 0 {
 				// Go saves BP before reserving TEXT's local frame. Thus a source
 				// -8(BP) aliases FrameSize-8(SP), including across outgoing calls.
@@ -2252,6 +2260,8 @@ func (c *amd64Ctx) addrFromPlainMem(mem MemRef) (addrI64 string, err error) {
 	}
 	if physical, certified := c.fixedMemRoles[mem]; certified {
 		mem = physical
+	} else if address, logical, err := c.logicalAUTOAddress(mem); logical {
+		return address, err
 	}
 	if err := x86SymbolIndexedMemoryError(mem, c.goarch); err != nil {
 		return "", err
