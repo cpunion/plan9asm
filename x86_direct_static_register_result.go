@@ -65,6 +65,9 @@ func (c *amd64Ctx) checkStaticIntegerResultInitialization() error {
 	transfer := func(_ int, ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string) bool {
 		state.loweredStaticReads = c.fpScalarData
 		defer func() { state.loweredStaticReads = nil }()
+		if accepted, known := c.scalarStaticAddressValueTransfer(ins, state, owned, arch); known {
+			return accepted // Preserve the independently bound relocation-value producer.
+		}
 		width := x86RawReturnScalarMoveBytes(x86GoMOVQSourceInstruction(ins).Op)
 		if width != 0 && len(ins.Args) == 2 {
 			if address, static := x86StaticSBReadAddress(ins.Args[1], arch); static {
