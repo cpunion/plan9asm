@@ -62,7 +62,9 @@ func TestX86DirectStaticRegisterResultHostRuntime(t *testing.T) {
 	}{{"MOVB", "AL", "uint8_t", I8}, {"MOVW", "AX", "uint16_t", I16}, {"MOVL", "AX", "uint32_t", I32}, {"MOVQ", "AX", "uint64_t", I64}} {
 		for index, encoding := range []string{"BYTE $0xc3", "BYTE $0xc2\nWORD $0"} {
 			name := fmt.Sprintf("Result%s%d", row.op, index)
-			fmt.Fprintf(&source, "GLOBL %sData<>(SB),8,$32\nTEXT %s(SB),4,$0-0\n%s $17,%s\n%s %s,%sData<>+4(SB)\n%s %sData<>+4(SB),%s\n%s\nRET\n",
+			// The original compile-only counterexamples use RODATA (8).
+			// This explicit executable counterpart needs writable NOPTR (16).
+			fmt.Fprintf(&source, "GLOBL %sData<>(SB),16,$32\nTEXT %s(SB),4,$0-0\n%s $17,%s\n%s %s,%sData<>+4(SB)\n%s %sData<>+4(SB),%s\n%s\nRET\n",
 				name, name, row.op, row.register, row.op, row.register, name, row.op, name, row.register, encoding)
 			options.Sigs[name] = FuncSig{Name: name, Ret: row.typ}
 			fmt.Fprintf(&reference, "extern %s %s(void);\n", row.cType, name)

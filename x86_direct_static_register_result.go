@@ -11,10 +11,12 @@ import (
 // original-source, stack and continuation validation.
 func x86DirectStaticRegisterResultCandidate(fn Func, sig FuncSig, arch string) bool {
 	width := x86ResultScalarBytes(sig.Ret, arch)
-	if arch != "386" && arch != "amd64" || width <= 0 || width > x86ResultPointerWord(arch) || sig.Ret == I1 ||
+	integer := sig.Ret == I8 || sig.Ret == I16 || sig.Ret == I32 || sig.Ret == I64
+	if arch != "386" && arch != "amd64" || !integer || width <= 0 || width > x86ResultPointerWord(arch) ||
 		len(sig.Args) != 0 || len(sig.Frame.Params) != 0 || len(sig.Frame.Results) != 0 ||
 		len(sig.ArgRegs) != 0 || sig.ARMEntry != nil || sig.ARM64GoRegisterABI != nil || sig.ARM64ClosureABI != nil ||
-		sig.WASMContext != "" || sig.WASMNative || sig.amd64GoArguments != nil ||
+		sig.WASMContext != "" || sig.WASMNative || sig.amd64GoArguments != nil || sig.x86FixedLocal != nil ||
+		sig.x86CallerRegions != nil || sig.x86BorrowedBoolTail ||
 		fn.FrameSize != 0 || fn.ArgSize != 0 || strings.Contains(fn.Sym, "<") || len(fn.X86RawText) != 0 ||
 		fn.x86SourceStack != nil || fn.x86FixedLocal != nil || fn.x86ContinuationFlow != nil ||
 		fn.x86DirectTailRoot != nil || fn.x86BoolCalls != nil {
