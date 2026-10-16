@@ -32,6 +32,12 @@ as its operand classes. A shared ytab or a name/row count is not a complete
 format check. Concrete syntax witnesses do not prove which overlapping encoder
 row Go selected, LLVM object success, runtime semantics or an ABI contract.
 
+A bound whole-instruction prefix must own dispatch before overlapping generic
+handlers. For scalar LOCK, an emitted correct helper is not evidence that the
+source operation uses it: inspect every original function body through all
+public APIs and both IR levels, then retain actual objects and native execution.
+Keep complete prefix adjacency, carry, frame and address checks unchanged.
+
 Use test-driven development for every instruction change:
 
 1. Reproduce the unsupported instruction or incorrect operand-form behavior in
