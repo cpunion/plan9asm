@@ -847,13 +847,15 @@ func x86ResultStore(arg Operand, width int64, state *x86ResultState, owned []boo
 		if !owned[offset] {
 			return false
 		}
+	}
+	for offset := arg.FPOffset; offset < arg.FPOffset+width; offset++ {
 		state.fp[offset] = true
 	}
 	return true
 }
 
 func x86ResultTransfer(ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string) bool {
-	if accepted, known := x86ResultCompactExpandStep(ins, state, arch); known {
+	if accepted, known := x86ResultCompactExpandStep(ins, state, owned, resultOffset, arch); known {
 		return accepted
 	}
 	if accepted, known := x86ResultByteSwapStep(ins, state, arch); known {
