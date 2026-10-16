@@ -60,6 +60,13 @@ retained immediate consumers and final gates. Do not publish an unqualified
 batch or transfer old receipts to its head. Preserve the earlier failed
 deadline, malformed-fixture and real semantic/input RED receipts as failed.
 
+The combined `cd518920` qualification passes its first six current-Go groups,
+then fails the seventh at an old KMOV emitter assertion expecting a nonvolatile
+byte load. The actual original body retains its exact volatile i8 native read.
+The test-only follow-up updates that required spelling, not production code,
+input permissions, the full owner union or any time budget. Later SDK/race and
+native-object/fault groups remain unattempted in that failed receipt.
+
 The complete strict benchmark at `af9223af` remains FAILED: 148/184 files,
 36 failures, no N/A/unattempted files, 1,256 target seconds and AMD64 above its
 unchanged 300-second budget. Diagnose performance before changing code; do not

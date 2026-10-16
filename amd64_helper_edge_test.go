@@ -2091,7 +2091,7 @@ func TestAMD64VectorAliasAndErrorCoverage(t *testing.T) {
 	out := b.String()
 	for _, want := range []string{
 		"load volatile i64, ptr @\"example.global\"",
-		"load i8, ptr",
+		"load volatile i8, ptr",
 		"and i64",
 		"store i64",
 		"zext i8",
