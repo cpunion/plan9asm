@@ -105,8 +105,13 @@ func TestX86DirectSymbolMemorySinkObjectsRemainSupported(t *testing.T) {
 								x86LEAActualTargetGoObject(t, arch, target, source)
 								unit := x86ZeroArgumentLowererObjectUnit(t, mustParseX86RawReturn(t, source), arch, target, "ExternalSinkEmitterOnly",
 									func(consumer *amd64Ctx, instruction Instr) (bool, bool, error) {
-										terminated, err := consumer.lowerInstr(instruction)
-										return true, terminated, err
+										if known, terminated, err := consumer.lowerMov(instruction.Op, instruction); known {
+											return known, terminated, err
+										}
+										if known, terminated, err := consumer.lowerVec(instruction.Op, instruction); known {
+											return known, terminated, err
+										}
+										return consumer.lowerX87(instruction.Op, instruction)
 									})
 								x86ResultInitializationObject(t, llc, target, unit, "original-external-sink-emitter-only")
 							}
