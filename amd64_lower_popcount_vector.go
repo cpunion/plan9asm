@@ -44,7 +44,9 @@ func (c *amd64Ctx) lowerPackedBitCount(op Op, ins Instr) (ok bool, terminated bo
 	}
 
 	lanes := byteWidth * 8 / spec.laneBits
-	sourceValue, err := c.loadPackedCompareLanes(source, byteWidth, spec.laneBits, form.broadcast)
+	// E4 suppresses inactive native lanes; enabled reads remain observable
+	// even when the computed count is dead. FP fields keep their full span.
+	sourceValue, err := c.loadX86PackedShiftLanes(source, byteWidth, spec.laneBits, form.broadcast, mask)
 	if err != nil {
 		return true, false, err
 	}

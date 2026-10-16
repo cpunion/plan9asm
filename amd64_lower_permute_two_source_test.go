@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -59,10 +60,15 @@ func TestTranslateX86TwoSourcePermuteCompleteGoAssemblerForms(t *testing.T) {
 					"twosourcepermuteforms": {Name: "twosourcepermuteforms", Ret: Void},
 				},
 			})
-			if err != nil {
-				t.Fatal(err)
-			}
 			llc := findLLVM22Tool("llc")
+			if ll != "" || !errors.Is(err, ErrProbeNeedsContext) {
+				t.Fatal("original two-source format invented initialized tables or indices", err)
+			}
+			requireX86GoAssemblerResult(t, target.goarch, "#include \"textflag.h\"\n"+source.String(), true)
+			ll = x86ZeroArgumentLowererObjectUnit(t, file, target.goarch, target.triple, "TwoSourceEmitterOnly",
+				func(consumer *amd64Ctx, instruction Instr) (bool, bool, error) {
+					return consumer.lowerIndexedPermute(instruction.Op, instruction)
+				})
 			if llc == "" {
 				t.Fatal("LLVM 22 llc not found")
 			}

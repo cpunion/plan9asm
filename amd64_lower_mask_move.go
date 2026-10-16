@@ -91,7 +91,23 @@ func (c *amd64Ctx) loadMaskMoveValue(src Operand, bits int, sourceIsK bool) (str
 	}
 
 	typ := amd64IntegerTypeForBits(bits)
-	value, err := c.evalIntSized(src, typ)
+	var value string
+	var err error
+	if src.Kind == OpFP && c.fpScalarSource.x86SourceStack == nil && c.fpScalarSource.x86FixedLocal == nil {
+		// A mask memory width is not its first logical field's type. Gather
+		// precisely those bytes, including interior and cross-field reads.
+		value, err = c.loadScalarLaneFPBits(src.FPOffset, bits)
+	} else if src.Kind == OpMem || src.Kind == OpSym {
+		pointer, pointerType, _, pointerErr := c.packedVectorMemoryPointer(src)
+		if pointerErr != nil {
+			return "", pointerErr
+		}
+		temporary := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = load volatile %s, %s %s, align 1\n", temporary, typ, pointerType, pointer)
+		value = "%" + temporary
+	} else {
+		value, err = c.evalIntSized(src, typ)
+	}
 	if err != nil {
 		return "", err
 	}
@@ -122,20 +138,25 @@ func (c *amd64Ctx) storeMaskMoveMemory(dst Operand, bits int, value string) erro
 	}
 	switch dst.Kind {
 	case OpFP:
+		if c.fpScalarSource.x86SourceStack == nil && c.fpScalarSource.x86FixedLocal == nil {
+			// Scatter only the native write width; a B/W/D store must retain
+			// the initialized remainder of a larger logical result field.
+			return c.storeScalarLaneFPBits(dst.FPOffset, bits, stored)
+		}
 		return c.storeFPResult(dst.FPOffset, typ, stored)
 	case OpMem:
 		ptr, ptrType, err := c.ptrFromMem(dst.Mem)
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(c.b, "  store %s %s, %s %s, align 1\n", typ, stored, ptrType, ptr)
+		fmt.Fprintf(c.b, "  store volatile %s %s, %s %s, align 1\n", typ, stored, ptrType, ptr)
 		return nil
 	case OpSym:
 		ptr, err := c.ptrFromSB(dst.Sym)
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(c.b, "  store %s %s, ptr %s, align 1\n", typ, stored, ptr)
+		fmt.Fprintf(c.b, "  store volatile %s %s, ptr %s, align 1\n", typ, stored, ptr)
 		return nil
 	default:
 		return fmt.Errorf("amd64 mask move expected a memory destination, got %s", dst.String())

@@ -19,6 +19,9 @@ func checkX86ScalarFPResultInitialization(fn Func, sig FuncSig, arch string) err
 }
 
 func x86ScalarFPResultTransfer(ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string) bool {
+	if accepted, known := x86MaskValueResultStep(ins, state, arch); known {
+		return accepted
+	}
 	if accepted, known := x86ResultX87ValueStep(ins, state, owned, resultOffset, arch); known {
 		return accepted
 	}
@@ -46,23 +49,8 @@ func x86ScalarFPResultTransfer(ins Instr, state *x86ResultState, owned []bool, r
 	if form, recognized, err := x86FloatMulDivProperties(ins, arch); recognized {
 		return err == nil && x86ScalarFPFloatBinaryTransfer(ins, form.x86FloatBinaryForm, state, owned, arch)
 	}
-	if amd64MaskMoveOperandsValid(ins, arch) {
-		width := int64(amd64MaskMoveSpecs[ins.Op] / 8)
-		first, last := ins.Args[0], ins.Args[1]
-		if amd64IsKOperand(first) {
-			index, _ := amd64ParseKReg(first.Reg)
-			if !state.masks[index] {
-				return false
-			}
-		} else if !x86ResultRead(first, width, state, owned, arch) {
-			return false
-		}
-		if amd64IsKOperand(last) {
-			index, _ := amd64ParseKReg(last.Reg)
-			state.masks[index] = true
-			return true
-		}
-		return x86ResultStore(last, width, state, owned, resultOffset, arch)
+	if accepted, known := x86MaskMoveResultStep(ins, state, owned, resultOffset, arch, false); known {
+		return accepted
 	}
 	form, recognized, err := amd64ScalarVectorMoveProperties(ins, arch)
 	if !recognized || form.spec.legacy {

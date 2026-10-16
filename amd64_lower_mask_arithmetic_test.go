@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"runtime"
 	"strings"
@@ -29,7 +30,20 @@ func TestTranslateX86MaskArithmeticCompleteGoAssemblerForms(t *testing.T) {
 			}
 			source.WriteString("\tRET\n")
 			requireX86GoAssemblerResult(t, target.goarch, source.String(), true)
-			file, err := Parse(ArchAMD64, source.String())
+			original, err := Parse(ArchAMD64, source.String())
+			if err != nil {
+				t.Fatal(err)
+			}
+			options := Options{TargetTriple: target.triple, Goarch: target.goarch,
+				Sigs: map[string]FuncSig{"maskArithmeticForms": {Name: "maskArithmeticForms", Ret: Void}}}
+			if ir, err := Translate(original, options); ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+				t.Fatal("original format-only source invented mask inputs", err)
+			}
+			// Preserve every original row and separately supply actual source
+			// definitions. This is a complete initialized object counterpart.
+			initialized := strings.Replace(source.String(), "\n", "\nMOVL $7,AX\nKMOVD AX,K0\nKMOVD AX,K7\n", 1)
+			requireX86GoAssemblerResult(t, target.goarch, initialized, true)
+			file, err := Parse(ArchAMD64, initialized)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -94,10 +108,7 @@ func assertX86MaskArithmeticRejected(t *testing.T, goarch, instruction string) {
 }
 
 func TestAMD64MaskArithmeticRuntimeSemantics(t *testing.T) {
-	crossRosetta := runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" && rosettaAvailable()
-	if runtime.GOARCH != "amd64" && !crossRosetta {
-		t.Skip("runtime execution test only runs on amd64 or Rosetta")
-	}
+	// Portable LLVM integer execution, not original-Go/native opmask execution.
 	llc, clang, ok := findLlcAndClang(t)
 	if !ok {
 		t.Fatal("LLVM 22 llc/clang not found")
@@ -128,10 +139,7 @@ TEXT maskArithmetic(SB),$0-24
 		{Offset: 8, Type: I64, Index: 1, Field: -1},
 		{Offset: 16, Type: I64, Index: 2, Field: -1},
 	}}
-	triple := "x86_64-apple-darwin"
-	if runtime.GOOS != "darwin" {
-		triple = testTargetTriple(runtime.GOOS, "amd64")
-	}
+	triple := testTargetTriple(runtime.GOOS, runtime.GOARCH)
 	ll, err := Translate(file, Options{
 		TargetTriple: triple,
 		Goarch:       "amd64",
@@ -158,9 +166,5 @@ int main(void) {
   return 0;
 }
 `
-	var runPrefix []string
-	if crossRosetta {
-		runPrefix = []string{"arch", "-x86_64"}
-	}
-	compileAndRunRuntimeTestForTarget(t, llc, clang, "mask_arithmetic", triple, ll, mainC, runPrefix)
+	compileAndRunRuntimeTestForTarget(t, llc, clang, "mask_arithmetic", triple, ll, mainC, nil)
 }

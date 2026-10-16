@@ -24,6 +24,19 @@ func x86TypedFPResultNeedsProof(fn Func, sig FuncSig, arch string) bool {
 	}
 	opaqueAddressResult := x86OpaqueAddressPointerResultRole(fn, sig, arch)
 	for _, ins := range fn.Instrs {
+		if _, _, known, err := x86FixedVectorValueProperties(ins, arch); known && err == nil && x86ResultNamedPredicateInstruction(ins) {
+			return true // Complete value inputs and native addresses stay required without results or masks.
+		}
+		if _, known, err := x86ConditionalSetProperties(ins.Op, ins, arch); known && err == nil &&
+			x86ResultNamedPredicateInstruction(ins) {
+			return true // Every conditional byte write consumes actual predicate FLAGS, even for Void.
+		}
+		if _, known, err := x86MaskValueProperties(ins.Op, ins, arch); known && err == nil && x86ResultNamedPredicateInstruction(ins) {
+			return true // KADD/KSHIFT/KUNPCK retain their complete input obligation for Void.
+		}
+		if amd64MaskMoveOperandsValid(ins, arch) && x86ResultNamedPredicateInstruction(ins) {
+			return true // Mask inputs/results cannot borrow zeroed implementation slots, even for Void.
+		}
 		if form, known, err := x86PackedCompactProperties(ins.Op, ins, arch); known && err == nil &&
 			!form.undefinedOpcode() && x86ResultNamedPredicateInstruction(ins) {
 			return true // Dead named compact/expand inputs remain obligations even for Void.

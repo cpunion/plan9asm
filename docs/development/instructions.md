@@ -84,6 +84,10 @@ or an unused FP address. That role needs its own proof, not an exemption.
 Unknown source/result bytes cannot fall back to zero-initialized implementation
 allocas. Test these boundaries through all public APIs, including default and
 explicit architectures; retain independent canonical-bool and memory contracts.
+The complete SETcc family consumes predicate FLAGS for every named destination,
+including dead register writes in Void functions. Only SETCC/SETCS can consume
+a lone CLC/STC producer; that CF fact does not define other predicates. Neither
+an unused bool parameter nor a native-only routing predicate supplies FLAGS.
 
 Indexed permutes and GFNI share the existing typed EVEX/VEX binary grammar;
 unary vector bit counts project their original two/three operands locally.
@@ -102,6 +106,15 @@ Keep the actual architecture when projecting unary mask arity or physical
 decoder operands. Go-accepted non-SIB extended GP bases in mode32 retain their
 missing physical context only after the complete remaining grammar validates;
 invalid SIB/index, scale, suffix or mask syntax cannot borrow that boundary.
+
+Native GFNI and indexed permutes retain complete E4NF source-tuple reads even
+when masks or a dead table make the numerical result independent. Packed bit
+counts retain E4 per-lane access suppression. Reuse exact volatile full/guarded
+read helpers, including independent broadcast widths. The paired lowering
+continuation supplies conditional numerical values only; it never grants
+pointer backing, a declaration-query result or a reusable memory certificate.
+Keep all 23 members, complete object axes, missing-input/Void regressions and
+live/dead guard-page checks. Portable Software execution is not native AVX512.
 
 Native compact arrays advance their offset only for enabled lanes. Paired
 source continuation consumes exactly guarded volatile accesses; masked stores
@@ -182,6 +195,19 @@ wider alias, while reverse writes zero-extend the mask remainder. Use the
 encoding-aware packed writeback even for X destinations: legacy `storeX`
 preserves wider bytes. Independent whole-byte runtime checks must observe both
 directions separately rather than relying only on a round trip.
+
+KMOVB/W/D/Q is a separate grammar. B/W/D-to-GP defines the complete zero-extended
+native word; its FP/native memory effect still uses only the named byte width.
+Logical FP reads gather exact fields, and narrow stores retain untouched bytes.
+KADD, KSHIFT and KUNPCK share two complete typed operand shapes, not numerical
+operations. Every source mask remains required, even for Void and oversized
+shifts; floating/unresolved immediates never become Yu8. A checked normalized
+caller continuation must consume its exact original source/signature/stack
+owner, not impersonate a logical FP proof. Paired native KMOV and all sixteen
+SETcc byte stores retain exact unaligned volatile effects and known inputs or
+FLAGS. They supply no reusable memory, pointee, raw-entry or caller permission.
+Format-only sources keep original Go objects and explicit Context controls;
+separate initialized counterparts own executable and public LLVM coverage.
 
 The eight immediate shuffles share their integer-only source grammar and exact
 byte selectors with lowering, caller definedness and memory shapes. Bind the

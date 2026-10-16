@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"runtime"
 	"strings"
@@ -92,10 +93,14 @@ func TestTranslateX86IndexedPermuteCompleteGoAssemblerForms(t *testing.T) {
 				Goarch: target.goarch, TargetTriple: target.triple,
 				Sigs: map[string]FuncSig{"indexedpermuteforms": {Name: "indexedpermuteforms", Ret: Void}},
 			})
-			if err != nil {
-				t.Fatal(err)
-			}
 			llc := findLLVM22Tool("llc")
+			if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+				t.Fatal("original indexed format source invented initialized inputs", err)
+			}
+			ir = x86ZeroArgumentLowererObjectUnit(t, file, target.goarch, target.triple, "IndexedEmitterOnly",
+				func(consumer *amd64Ctx, instruction Instr) (bool, bool, error) {
+					return consumer.lowerIndexedPermute(instruction.Op, instruction)
+				})
 			if llc == "" {
 				t.Fatal("LLVM 22 llc not found")
 			}

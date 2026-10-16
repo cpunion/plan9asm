@@ -74,3 +74,17 @@ func x86CallerConditionalSetStep(ins *Instr, state *x86SourceStackState, proof *
 	}
 	return true, x86CallerOrdinaryMemoryStep(ins, 0, state, proof, 1, true)
 }
+
+// Only the paired lowering may continue an actual volatile native-byte store.
+// FLAGS and incoming address identity must already exist; no logical memory,
+// canonical result, caller envelope or pointer bound is produced here.
+func x86LoweredNativeConditionalSet(ins Instr, state *x86ResultState, arch string) (bool, bool) {
+	form, known, err := x86ConditionalSetProperties(ins.Op, ins, arch)
+	if !known || err != nil || form.destination.Kind != OpMem || !x86OrdinaryNativeMemoryOperand(form.destination, arch) {
+		return false, false
+	}
+	required := x86ByteConditionFlags(form.condition)
+	return x86ResultNamedPredicateInstruction(ins) && ins.x86NumericalRead == nil &&
+		required != 0 && state.flags&required == required &&
+		x86ResultIncomingPointerAddressIdentity(form.destination, state, arch), true
+}

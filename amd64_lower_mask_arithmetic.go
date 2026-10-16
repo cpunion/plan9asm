@@ -19,16 +19,15 @@ var amd64MaskArithmeticSpecs = map[Op]amd64MaskArithmeticSpec{
 }
 
 func (c *amd64Ctx) lowerMaskArithmetic(op Op, ins Instr) error {
-	spec := amd64MaskArithmeticSpecs[op]
+	form, known, err := x86MaskValueProperties(op, ins, c.goarch)
+	if err != nil {
+		return err
+	}
+	if !known || form.unpack {
+		return fmt.Errorf("%s unknown mask-arithmetic opcode %q", c.goarch, op)
+	}
+	spec := form.spec
 	if spec.shift == "" {
-		if len(ins.Args) != 3 {
-			return fmt.Errorf("%s %s expects three K-register operands: %q", c.goarch, op, ins.Raw)
-		}
-		for _, arg := range ins.Args {
-			if !amd64IsKOperand(arg) {
-				return fmt.Errorf("%s %s expects only K0..K7 operands: %q", c.goarch, op, ins.Raw)
-			}
-		}
 		first, err := c.loadK(ins.Args[0].Reg)
 		if err != nil {
 			return err
@@ -44,9 +43,6 @@ func (c *amd64Ctx) lowerMaskArithmetic(op Op, ins Instr) error {
 		return c.storeK(ins.Args[2].Reg, c.maskMoveI64("%"+added, spec.bits))
 	}
 
-	if len(ins.Args) != 3 || !amd64UnsignedImmediate(ins.Args[0], 8) || !amd64IsKOperand(ins.Args[1]) || !amd64IsKOperand(ins.Args[2]) {
-		return fmt.Errorf("%s %s expects $u8, K0..K7, K0..K7: %q", c.goarch, op, ins.Raw)
-	}
 	source, err := c.loadK(ins.Args[1].Reg)
 	if err != nil {
 		return err

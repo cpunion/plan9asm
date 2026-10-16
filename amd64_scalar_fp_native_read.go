@@ -153,6 +153,15 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		if accepted, recognized := x86LoweredScalarNativeStore(ins, state, owned, arch); recognized {
 			return accepted
 		}
+		if accepted, known := x86MaskMoveResultStep(ins, state, owned, resultOffset, arch, true); known {
+			return accepted // The same KMOV emitter retains the complete volatile native width.
+		}
+		if accepted, known := x86LoweredNativeConditionalSet(ins, state, arch); known {
+			return accepted // The same typed SETcc emitter preserves its exact volatile byte write.
+		}
+		if accepted, known := x86LoweredFixedVectorNativeRead(ins, state, owned, arch); known {
+			return accepted // The typed emitter retains full E4NF or guarded E4 native accesses.
+		}
 		if accepted, recognized := x86LoweredScalarArithmeticNativeRead(ins, state, owned, resultOffset, arch); recognized {
 			return accepted
 		}

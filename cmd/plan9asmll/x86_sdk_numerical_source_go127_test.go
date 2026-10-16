@@ -227,15 +227,20 @@ func TestCompileOneX86SDKBytealgIndexByteExistingObjects(t *testing.T) {
 
 func compileX86SDKBytealgExistingObject(t *testing.T, name string) {
 	t.Helper()
+	compileX86SDKExistingObject(t, "internal/bytealg", name)
+}
+
+func compileX86SDKExistingObject(t *testing.T, packagePath, name string) {
+	t.Helper()
 	setX86SDKNumericalCLIProfile(t, "effective-defaults")
 	ctx := arm64PrivateCLIContext(t)
-	dir := filepath.Join(runtime.GOROOT(), "src", "internal", "bytealg")
+	dir := filepath.Join(runtime.GOROOT(), "src", filepath.FromSlash(packagePath))
 	actual, err := packages.Load(&packages.Config{Context: ctx, Dir: dir, Env: os.Environ(),
 		Mode: packages.NeedName | packages.NeedFiles | packages.NeedCompiledGoFiles |
 			packages.NeedModule | packages.NeedDeps | packages.NeedImports | packages.NeedTypes | packages.NeedTypesSizes,
 	}, ".")
 	if err != nil || len(actual) != 1 || len(actual[0].Errors) != 0 {
-		t.Fatalf("original SDK bytealg load: %v, %+v", err, actual)
+		t.Fatalf("original SDK %s load: %v, %+v", packagePath, err, actual)
 	}
 	if err := loadLinknameSyntax(actual[0]); err != nil {
 		t.Fatal(err)
@@ -252,10 +257,10 @@ func compileX86SDKBytealgExistingObject(t *testing.T, name string) {
 		file := filepath.Join(t.TempDir(), "original.ll")
 		if err := compileOne(actual[0], plan9asm.ArchAMD64, "linux", "amd64", "x86_64-unknown-linux-gnu",
 			asmTask{PkgPath: actual[0].PkgPath, AsmFile: filepath.Join(dir, name), OutLL: file}, false, config); err != nil {
-			t.Fatalf("unchanged ordinary SDK bytealg regressed: %v", err)
+			t.Fatalf("unchanged ordinary SDK %s regressed: %v", packagePath, err)
 		}
 		if object, err := os.Stat(strings.TrimSuffix(file, ".ll") + ".o"); err != nil || object.Size() == 0 {
-			t.Fatalf("ordinary SDK bytealg object absent: %v", err)
+			t.Fatalf("ordinary SDK %s object absent: %v", packagePath, err)
 		}
 	})
 }

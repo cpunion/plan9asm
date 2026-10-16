@@ -12,15 +12,14 @@ var amd64MaskUnpackBits = map[Op]int{
 }
 
 func (c *amd64Ctx) lowerMaskUnpack(op Op, ins Instr) error {
-	bits := amd64MaskUnpackBits[op]
-	if len(ins.Args) != 3 {
-		return fmt.Errorf("%s %s expects three K-register operands: %q", c.goarch, op, ins.Raw)
+	form, known, err := x86MaskValueProperties(op, ins, c.goarch)
+	if err != nil {
+		return err
 	}
-	for _, arg := range ins.Args {
-		if !amd64IsKOperand(arg) {
-			return fmt.Errorf("%s %s expects only K0..K7 operands: %q", c.goarch, op, ins.Raw)
-		}
+	if !known || !form.unpack {
+		return fmt.Errorf("%s unknown mask-unpack opcode %q", c.goarch, op)
 	}
+	bits := form.spec.bits
 
 	low, err := c.loadK(ins.Args[0].Reg)
 	if err != nil {

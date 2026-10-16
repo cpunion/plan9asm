@@ -4794,9 +4794,11 @@ func TestTranslateAMD64ConditionalSetCompleteGoAssemblerForms(t *testing.T) {
 			},
 		},
 	})
-	if err != nil {
-		t.Fatal(err)
+	if !errors.Is(err, ErrProbeNeedsContext) || ll != "" {
+		t.Fatal("original format-only SETcc source invented FLAGS or a native address", err)
 	}
+	goAssemblerOracleOutput(t, "amd64", "#include \"textflag.h\"\n"+src.String(), "", true)
+	ll = x86ConditionalSetOriginalEmitterUnit(t, file, "amd64", "x86_64-unknown-linux-gnu")
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc not found")
@@ -4838,9 +4840,11 @@ func TestTranslate386ConditionalSetCompleteGoAssemblerForms(t *testing.T) {
 			},
 		},
 	})
-	if err != nil {
-		t.Fatal(err)
+	if !errors.Is(err, ErrProbeNeedsContext) || ll != "" {
+		t.Fatal("original format-only SETcc source invented FLAGS or a native address", err)
 	}
+	goAssemblerOracleOutput(t, "386", "#include \"textflag.h\"\n"+src.String(), "", true)
+	ll = x86ConditionalSetOriginalEmitterUnit(t, file, "386", "i386-unknown-linux-gnu")
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc not found")
@@ -6390,10 +6394,6 @@ func TestTranslateX86MaskMoveCompleteGo127Forms(t *testing.T) {
 		fmt.Fprintf(&src, "\t%s mask_move_source(SB), K4\n", op)
 		fmt.Fprintf(&src, "\t%s K4, mask_move_destination(SB)\n", op)
 	}
-	llc := findLLVM22Tool("llc")
-	if llc == "" {
-		t.Fatal("LLVM 22 llc not found")
-	}
 	for _, target := range []struct {
 		name   string
 		goarch string
@@ -6433,10 +6433,16 @@ func TestTranslateX86MaskMoveCompleteGo127Forms(t *testing.T) {
 					},
 				},
 			})
-			if err != nil {
-				t.Fatal(err)
+			if ll != "" || !errors.Is(err, ErrProbeNeedsContext) {
+				t.Fatal("format-only KMOV source invented initialized masks or native storage", err)
 			}
-			compileLLVMToObject(t, llc, target.triple, "mask-move-"+target.name+".ll", "mask-move-"+target.name+".o", ll)
+			goAssemblerOracleOutput(t, target.goarch, "#include \"textflag.h\"\n"+targetSource, "", true)
+			for _, instruction := range file.Funcs[0].Instrs[1 : len(file.Funcs[0].Instrs)-1] {
+				if !amd64MaskMoveOperandsValid(instruction, target.goarch) {
+					t.Fatal("complete original Go row lost its typed grammar", instruction.Raw)
+				}
+			}
+			t.Log("original complete Go forms retain Context; initialized GP, FP, native and caller counterparts own LLVM objects")
 		})
 	}
 }

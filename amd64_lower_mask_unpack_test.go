@@ -1,6 +1,8 @@
 package plan9asm
 
 import (
+	"errors"
+	"fmt"
 	"runtime"
 	"strings"
 	"testing"
@@ -32,7 +34,23 @@ func TestTranslateX86MaskUnpackCompleteGo127FormsAcrossTargets(t *testing.T) {
 	} {
 		t.Run(target.name, func(t *testing.T) {
 			requireX86GoAssemblerResult(t, target.goarch, source, true)
-			file, err := Parse(ArchAMD64, source)
+			original, err := Parse(ArchAMD64, source)
+			if err != nil {
+				t.Fatal(err)
+			}
+			options := Options{Goarch: target.goarch, TargetTriple: target.triple,
+				Sigs: map[string]FuncSig{"maskunpackforms": {Name: "maskunpackforms", Ret: Void}}}
+			if ir, err := Translate(original, options); ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+				t.Fatal("original format-only source invented mask inputs", err)
+			}
+			var definitions strings.Builder
+			definitions.WriteString("\nMOVL $7,AX\n")
+			for index := 0; index < 8; index++ {
+				fmt.Fprintf(&definitions, "KMOVD AX,K%d\n", index)
+			}
+			initialized := strings.Replace(source, "\n", definitions.String(), 1)
+			requireX86GoAssemblerResult(t, target.goarch, initialized, true)
+			file, err := Parse(ArchAMD64, initialized)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -88,10 +106,7 @@ func TestTranslateX86MaskUnpackRejectsFormsOutsideGo127Table(t *testing.T) {
 }
 
 func TestAMD64MaskUnpackRuntimeSemantics(t *testing.T) {
-	crossRosetta := runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" && rosettaAvailable()
-	if runtime.GOARCH != "amd64" && !crossRosetta {
-		t.Skip("runtime execution test requires amd64 or Rosetta")
-	}
+	// Portable LLVM integer execution, not original-Go/native opmask execution.
 	llc, clang, ok := findLlcAndClang(t)
 	if !ok {
 		t.Fatal("LLVM 22 llc/clang not found")
@@ -116,11 +131,6 @@ func TestAMD64MaskUnpackRuntimeSemantics(t *testing.T) {
 		t.Fatal(err)
 	}
 	triple := testTargetTriple(runtime.GOOS, runtime.GOARCH)
-	var runPrefix []string
-	if crossRosetta {
-		triple = "x86_64-apple-macosx"
-		runPrefix = []string{"/usr/bin/arch", "-x86_64"}
-	}
 	ir, err := Translate(file, Options{
 		Goarch:       "amd64",
 		TargetTriple: triple,
@@ -154,5 +164,5 @@ int main(void) {
   return 0;
 }
 `
-	compileAndRunRuntimeTestForTarget(t, llc, clang, "mask_unpack_semantics", triple, ir, mainC, runPrefix)
+	compileAndRunRuntimeTestForTarget(t, llc, clang, "mask_unpack_semantics", triple, ir, mainC, nil)
 }
