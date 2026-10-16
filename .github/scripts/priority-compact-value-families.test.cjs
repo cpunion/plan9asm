@@ -7,6 +7,7 @@ const owners = {
   'compact-native-memory': [
     'TestX86CompactNativeMemorySequencesThreeAPIs',
     'TestX86CompactNativeMemoryCannotInventSourceOrDestinationFacts',
+    'TestX86PackedMoveInitializedNativeStoresWholeFamily',
     'TestAMD64PackedCompressRuntimeSemantics',
     'TestAMD64PackedExpandRuntimeSemantics',
     'TestX86PackedMoveInvalidStoreCannotAcquireCallerMemoryCertificate',
