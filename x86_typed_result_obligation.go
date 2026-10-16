@@ -27,10 +27,9 @@ func x86TypedFPResultNeedsProof(fn Func, sig FuncSig, arch string) bool {
 		if _, _, known, err := x86FixedVectorValueProperties(ins, arch); known && err == nil && x86ResultNamedPredicateInstruction(ins) {
 			return true // Complete value inputs and native addresses stay required without results or masks.
 		}
-		if form, known, err := x86ConditionalSetProperties(ins.Op, ins, arch); known && err == nil &&
-			isAMD64MemoryOperand(form.destination) && x86OrdinaryNativeMemoryOperand(form.destination, arch) &&
+		if _, known, err := x86ConditionalSetProperties(ins.Op, ins, arch); known && err == nil &&
 			x86ResultNamedPredicateInstruction(ins) {
-			return true // A native conditional store still needs source FLAGS and an address for Void.
+			return true // Every conditional byte write consumes actual predicate FLAGS, even for Void.
 		}
 		if _, known, err := x86MaskValueProperties(ins.Op, ins, arch); known && err == nil && x86ResultNamedPredicateInstruction(ins) {
 			return true // KADD/KSHIFT/KUNPCK retain their complete input obligation for Void.
