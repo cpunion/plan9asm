@@ -77,6 +77,10 @@ func x86StackIDInitializedSource(t *testing.T, arch string) string {
 	// the emitter's default slots. CMP repairs only the later AND's undefined AF;
 	// neither seed changes the original ID toggle/upper-preservation checks.
 	source = strings.Replace(source, entry, "\tPUSH"+width+" $2\n\tPOPF"+width+"\n"+entry, 1)
+	// Full snapshots transport complete numerical words. Define the status
+	// bits before each; the original checks observe only ID there. Do not
+	// touch PUSHFW: its later CF roundtrip intentionally follows STC.
+	source = strings.ReplaceAll(source, "\tPUSHF"+width+"\n", "\tCMP"+width+" AX, AX\n\tPUSHF"+width+"\n")
 	source = strings.Replace(source, "\tLAHF\n", "\tCMP"+width+" AX, AX\n\tLAHF\n", 1)
 	if arch == "386" {
 		source = strings.Replace(source, "$0-8", "$0-4", 1)

@@ -181,11 +181,29 @@ func TestX86AHFlagsRejectsNonGoFormats(t *testing.T) {
 func TestX86AHFlagsNumericalBytesAreNotCanonicalBoolWitnesses(t *testing.T) {
 	for _, target := range x86RawReturnTargets {
 		t.Run(target.triple, func(t *testing.T) {
+			before := [16]uint8{2, 0, 0, 1}
+			load := x86ScalarLaneInstruction(t, "LAHF")
+			store := x86ScalarLaneInstruction(t, "SAHF")
+			want := before
+			want[0] = 0
+			if after := x86RegisterCanonicalBytesAfter(load, before, target.arch); after != want {
+				t.Fatal("LAHF retained canonical AH or revoked an unrelated GP byte", after)
+			}
+			if after := x86RegisterCanonicalBytesAfter(store, before, target.arch); after != before {
+				t.Fatal("SAHF changed a canonical GP byte without a GP output", after)
+			}
 			prefix := "TEXT ·Value(SB),4,$0-1\nMOVL $0,BX\nCMPL BX,BX\nSETEQ AH\n"
 			finish := "MOVB AH,ret+0(FP)\nRET\n"
 			for _, body := range []string{"", "SAHF\n"} {
 				for _, api := range []string{"text", "module", "Go"} {
-					if ir, err := x86ScalarFPBitViewAPI(t, prefix+body+finish, "func Value() bool", target.arch, target.triple, api); err != nil || ir == "" {
+					ir, err := x86ScalarFPBitViewAPI(t, prefix+body+finish, "func Value() bool", target.arch, target.triple, api)
+					if target.arch == "amd64" {
+						// The existing ordinary single-byte ABI0 role is mode32.
+						// A flag descriptor must not silently create an AMD64 role.
+						if !errors.Is(err, ErrProbeNeedsContext) || ir != "" {
+							t.Fatal("AH byte effect created an unrelated AMD64 bool entry role", api, err)
+						}
+					} else if err != nil || ir == "" {
 						t.Fatal("SETcc's known canonical AH was lost without a GP overwrite", api, body, err)
 					}
 				}
