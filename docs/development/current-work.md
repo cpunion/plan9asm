@@ -1,5 +1,49 @@
 # Current work: PR 40 checkpoint
 
+Checkpoint: 2026-10-16 09:51 UTC. This queue supersedes the historical notes
+below. Receipts certify their exact source snapshots, never later commits.
+
+## Current complete-module CI failures
+
+Allowed-fork [run 38871174173](https://github.com/cpunion/plan9asm/actions/runs/38871174173)
+ended naturally: 78 successful jobs and five failures. Four execution parts
+contain one failing root each; the main aggregate correctly rejects them.
+Both complete CLI modules and all 50 prerequisite jobs pass. Independently
+checked original artifact digests and complete machine terminals retain all
+four failures; neighboring passes or host skips do not repair them.
+
+The complete compact/expand source proof needs a paired native vector store
+and compact-array memory continuation. The twelve-member repair uses guarded
+volatile accesses with an advancing compact offset, preserving enabled faults
+and masked tails without inventing logical storage or pointer bounds. At
+`fcb79ee9`, four complete owners and 512 children pass separately on Go27 and
+actual Go20, including host-executed LLVM values. Its earlier fixture-extent
+failure and host-skip failure remain failed. The corrected positive compression
+driver no longer treats EVEX.z memory #UD as an ordinary masked store.
+
+The fourth failed root confuses the expanded compact opcode inventory with
+the ordinary packed-move grammar. Its revised controls bind both distinct
+grammars and still forbid ordinary caller-memory certificates for #UD.
+The AVX512 composition also exposed missing numerical transfers for all 14
+indexed permutes, three GFNI operations and six vector bit counts. Shared typed
+binary/unary projections replace duplicated syntax parsers; the complete
+source proof still requires every table/index/merge byte and mask. At
+`d895b3d4`, all nine affected owners and 934 children pass without skips. At
+`e466e5fe`, the four existing value oracles additionally execute successfully
+on the actual host; these portable LLVM runs are not original-Go/native AVX512
+certificates. Combined-source Go20/race, retained owners and final gates remain
+pending. Do not publish before those pass.
+
+The qualified LOCK dispatch repair below remains included. Its required
+Linux AMD64/386 execution has not run at the repaired source. The next fork
+also prepares two complete-family priority lanes; policy checks do not certify
+the new source or replace native execution. PR40 stays draft at its older head.
+Ordinary unlocked scalar RMW remains a separate unqualified branch, not part
+of this urgent CI batch. The last strict benchmark and external export below
+are unchanged; no local scanner is required.
+
+## Earlier dispatch checkpoint
+
 Checkpoint: 2026-10-16 08:20 UTC. This queue supersedes the historical notes
 below. Receipts certify their exact source snapshots, never later commits.
 
