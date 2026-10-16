@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+
+	"github.com/xgo-dev/llvm"
 )
 
 func x86UnlockedScalarRMWRows(arch string) []x86LockScalarOracleForm {
@@ -78,6 +80,7 @@ func TestX86UnlockedScalarRMWCompleteFamilyThreeAPIs(t *testing.T) {
 						t.Fatal(err)
 					}
 					for _, text := range []string{ir, x86MulDivRoundOptimize(t, ir)} {
+						x86UnlockedScalarRMWCheckBodies(t, text, rows)
 						if strings.Count(text, "load volatile i") != want || strings.Count(text, "store volatile i") != want ||
 							strings.Contains(text, "atomicrmw ") || strings.Contains(text, "lock; ") {
 							t.Fatal("unlocked family lost exact native accesses or acquired atomic semantics")
@@ -89,6 +92,72 @@ func TestX86UnlockedScalarRMWCompleteFamilyThreeAPIs(t *testing.T) {
 				})
 			}
 		})
+	}
+}
+
+// Bind each original body, not just totals or unused helper definitions.
+func x86UnlockedScalarRMWCheckBodies(t *testing.T, ir string, rows []x86LockScalarOracleForm) {
+	t.Helper()
+	context := llvm.NewContext()
+	defer context.Dispose()
+	module, err := parseIRModuleInContext(context, ir)
+	if !module.IsNil() {
+		defer module.Dispose()
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := llvm.VerifyModule(module, llvm.ReturnStatusAction); err != nil {
+		t.Fatal(err)
+	}
+	for index, row := range rows {
+		function := module.NamedFunction(fmt.Sprintf("RMW%d", index))
+		if function.IsNil() || function.FirstBasicBlock().IsNil() {
+			t.Fatal("original native RMW body disappeared", row.text)
+		}
+		bits := map[byte]int{'B': 8, 'W': 16, 'L': 32, 'Q': 64}[row.op[len(row.op)-1]]
+		loads, stores := 0, 0
+		for block := function.FirstBasicBlock(); !block.IsNil(); block = llvm.NextBasicBlock(block) {
+			for instruction := block.FirstInstruction(); !instruction.IsNil(); instruction = llvm.NextInstruction(instruction) {
+				opcode := instruction.InstructionOpcode()
+				if opcode == llvm.AtomicRMW || opcode == llvm.AtomicCmpXchg || strings.Contains(instruction.String(), "lock;") {
+					t.Fatal("ordinary body acquired an implicit atomic effect", row.text, instruction.String())
+				}
+				if opcode != llvm.Load && opcode != llvm.Store || !instruction.IsVolatile() {
+					continue
+				}
+				typ := instruction.Type()
+				if opcode == llvm.Store {
+					typ = instruction.Operand(0).Type()
+					stores++
+				} else {
+					loads++
+				}
+				if typ.TypeKind() != llvm.IntegerTypeKind || typ.IntTypeWidth() != bits || instruction.Alignment() != 1 {
+					t.Fatal("body has an inexact native RMW width/alignment", row.text, instruction.String())
+				}
+			}
+		}
+		if loads != 1 || stores != 1 {
+			t.Fatal("original body lost its exact paired native access", row.text, loads, stores)
+		}
+	}
+}
+
+func TestX86UnlockedScalarRMWCannotAcquireImplicitLockFromAtomicEntry(t *testing.T) {
+	for _, arch := range []string{"386", "amd64"} {
+		for _, row := range x86UnlockedScalarRMWRows(arch) {
+			t.Run(arch+"/"+row.text, func(t *testing.T) {
+				instruction := x86ScalarLaneInstruction(t, row.text)
+				context, output := newAMD64CtxWithFuncForTest(t, Func{Instrs: []Instr{instruction}}, FuncSig{Ret: Void}, nil)
+				context.goarch = arch
+				before, temporary := output.String(), context.tmp
+				known, terminated, err := context.lowerAtomic(instruction.Op, instruction)
+				if known || terminated || err != nil || output.String() != before || context.tmp != temporary {
+					t.Fatal("atomic entry must not silently lock an ordinary instruction", known, terminated, err)
+				}
+			})
+		}
 	}
 }
 
