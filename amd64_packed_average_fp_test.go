@@ -11,8 +11,6 @@ import (
 	"os"
 	"strings"
 	"testing"
-
-	"github.com/xgo-dev/llvm"
 )
 
 func TestX86PackedAverageFPSpansThreeAPIsFiveObjects(t *testing.T) {
@@ -73,32 +71,42 @@ func TestX86PackedAverageFPSpansThreeAPIsFiveObjects(t *testing.T) {
 				}
 				sigs[name] = sig
 			}
-			options := Options{Goarch: arch, TargetTriple: triple, Sigs: sigs,
-				ResolveSym: func(symbol string) string { return strings.TrimPrefix(symbol, "·") }}
-			ir, err := Translate(file, options)
-			if err != nil {
-				t.Fatal(err)
+			for _, api := range []string{"text", "module", "Go"} {
+				if ir, err := x86ScalarFPBitViewPackageAPI(t, source.String(), pkg, arch, triple, api); ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+					t.Fatal("original FP format source invented a vector/mask/MMX input", api, err)
+				}
 			}
-			x86ResultInitializationObject(t, llc, triple, ir, "average-fp-text")
-			ctx := llvm.NewContext()
-			defer ctx.Dispose()
-			module, err := TranslateModuleInContext(ctx, file, options)
-			if !module.IsNil() {
-				defer module.Dispose()
+			ir := x86AverageFormatObjectUnit(t, file, sigs, arch, triple)
+			x86ResultInitializationObject(t, llc, triple, ir, "average-fp-original-emitter-only")
+
+			var initialized, completeDeclarations strings.Builder
+			complete := 0
+			for _, function := range file.Funcs {
+				instruction := function.Instrs[1]
+				if !strings.HasPrefix(string(instruction.Op), "V") {
+					continue // Original MMX rows remain object/Context controls above.
+				}
+				name := strings.TrimPrefix(function.Sym, "·")
+				fmt.Fprintf(&initialized, "TEXT ·%s(SB),4,$0-64\nMOVL $7,AX\nKMOVD AX,K1\n"+
+					"VPXORD Z1,Z1,Z1\nVPXORD Z2,Z2,Z2\n%s\nRET\n", name, instruction.Raw)
+				fmt.Fprintf(&completeDeclarations, "func %s(input [64]byte)\n", name)
+				complete++
 			}
-			if err != nil {
-				t.Fatal(err)
+			want := 36
+			if arch == "386" {
+				want = 12
 			}
-			x86ResultInitializationObject(t, llc, triple, module.String(), "average-fp-module")
-			translated, err := translateGoModuleInContext(ctx, pkg, []byte(source.String()), GoModuleOptions{
-				GOARCH: arch, Sizes: types.SizesFor("gc", arch), TargetTriple: triple, ResolveSym: options.ResolveSym})
-			if translated != nil && !translated.Module.IsNil() {
-				defer translated.Module.Dispose()
+			if complete != want {
+				t.Fatal("complete initialized FP row union changed", complete, want)
 			}
-			if err != nil {
-				t.Fatal(err)
+			goAssemblerOracleOutput(t, arch, initialized.String(), "", true)
+			for _, api := range []string{"text", "module", "Go"} {
+				ir, err := x86ScalarFPBitViewAPI(t, initialized.String(), completeDeclarations.String(), arch, triple, api)
+				if err != nil {
+					t.Fatal("complete initialized logical FP average rejected", api, err)
+				}
+				x86ResultInitializationObject(t, llc, triple, ir, "average-initialized-fp-"+api)
 			}
-			x86ResultInitializationObject(t, llc, triple, translated.Module.String(), "average-fp-go")
 		})
 	}
 }

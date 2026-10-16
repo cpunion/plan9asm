@@ -10,8 +10,6 @@ import (
 	"runtime"
 	"strings"
 	"testing"
-
-	"github.com/xgo-dev/llvm"
 )
 
 var x86AverageNames = []string{"PAVGB", "PAVGW", "VPAVGB", "VPAVGW"}
@@ -74,32 +72,13 @@ func TestX86PackedAverageThreeAPIsFiveTargetObjects(t *testing.T) {
 				}
 				sigs[name] = sig
 			}
-			options := Options{Goarch: arch, TargetTriple: triple, Sigs: sigs,
-				ResolveSym: func(symbol string) string { return strings.TrimPrefix(symbol, "·") }}
-			ir, err := Translate(file, options)
-			if err != nil {
-				t.Fatal(err)
+			for _, api := range []string{"text", "module", "Go"} {
+				if ir, err := x86ScalarFPBitViewPackageAPI(t, source.String(), pkg, arch, triple, api); ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+					t.Fatal("complete original format source invented input or memory state", api, err)
+				}
 			}
-			x86ResultInitializationObject(t, llc, triple, ir, "average-text")
-			ctx := llvm.NewContext()
-			defer ctx.Dispose()
-			module, err := TranslateModuleInContext(ctx, file, options)
-			if !module.IsNil() {
-				defer module.Dispose()
-			}
-			if err != nil {
-				t.Fatal(err)
-			}
-			x86ResultInitializationObject(t, llc, triple, module.String(), "average-module")
-			translated, err := translateGoModuleInContext(ctx, pkg, []byte(source.String()), GoModuleOptions{
-				GOARCH: arch, TargetTriple: triple, ResolveSym: options.ResolveSym})
-			if translated != nil && !translated.Module.IsNil() {
-				defer translated.Module.Dispose()
-			}
-			if err != nil {
-				t.Fatal(err)
-			}
-			x86ResultInitializationObject(t, llc, triple, translated.Module.String(), "average-go")
+			ir := x86AverageFormatObjectUnit(t, file, sigs, arch, triple)
+			x86ResultInitializationObject(t, llc, triple, ir, "average-original-emitter-only")
 			x86ResultInitializationObject(t, llc, triple, x86MulDivRoundOptimize(t, ir), "average-O2")
 		})
 	}

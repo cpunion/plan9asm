@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -62,9 +63,12 @@ func TestTranslateX86PackedUnsignedAverageCompleteGoAssemblerForms(t *testing.T)
 					"packedunsignedaverageforms": {Name: "packedunsignedaverageforms", Ret: Void},
 				},
 			})
-			if err != nil {
-				t.Fatal(err)
+			if ll != "" || !errors.Is(err, ErrProbeNeedsContext) {
+				t.Fatal("uninitialized original average formats acquired numerical or memory inputs", err)
 			}
+			ll = x86AverageFormatObjectUnit(t, file, map[string]FuncSig{
+				"packedunsignedaverageforms": {Name: "packedunsignedaverageforms", Ret: Void},
+			}, target.goarch, target.triple)
 			llc := findLLVM22Tool("llc")
 			if llc == "" {
 				t.Fatal("LLVM 22 llc not found")
