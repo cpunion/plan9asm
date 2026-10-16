@@ -90,6 +90,10 @@ func x86ResultValueStackStep(ins Instr, state *x86ResultState, owned []bool, res
 						bits |= uint64(255) << uint(8*offset)
 					}
 				}
+			} else if x86AbsoluteRelocationSource(arg, arch, spec.bits) {
+				// Copy the actual relocation address as opaque bits. Its
+				// numerical value and every pointer/storage role remain unknown.
+				bits = ^uint64(0) << uint(8*width)
 			} else if !x86ResultRead(arg, width, state, owned, arch) {
 				return false, true
 			}
