@@ -1,5 +1,32 @@
 # Current work: PR 40 checkpoint
 
+## Complete fixed-binary qualification, 2026-10-17
+
+At `0c209d81`, the complete average/word-multiply changed and retained union
+passes on current Go, actual Go20 and race: 38 roots and 3,633 children per
+lane, 114 root executions and 10,899 children in total, zero failures/skips.
+Independent raw checks retain all 3,671 exact terminal identities per lane,
+the same union and identical before/after source, SDK and tool seals.
+
+The eight-member word-multiply family now consumes the existing typed fixed
+vector-input and paired native-read mechanism; production changes are fourteen
+lines. Independent RED `fea56b44` retains all 64 unknown Void input children
+falsely accepted through three APIs, plus the rejected initialized native
+sources. `53d2826e` passes all five new roots, but still fails two older format
+owners whose originals lack initialized register/native inputs. Keep those
+failures. Every selected original Go row/object remains, with separate
+emitter-only LLVM objects; mode32 low-Z adds initialized three-API controls.
+The current union retains five-target/three-API objects, complete portable
+integer values/canaries and E4.nb memory boundaries with live/dead results.
+It does not certify original-Go/native AVX512 execution or current full CI.
+
+Signed packed conversion is the next CI repair. Its complete independent
+four-name register/native/broadcast/mask/rounding inventory and byte/input
+regressions are staged separately; the old ordinary-BP failure remains real.
+Remaining native roots, combined wider SDK/race scopes, official baseline
+audits, final gates and strict benchmark remain outstanding. No new batch was
+pushed, and no upstream state was changed.
+
 ## Complete packed-average qualification, 2026-10-17
 
 At `cf0c6afd`, all 23 changed/retained roots pass separately on current Go,
