@@ -61,6 +61,20 @@ func TestX86CompactExpandLogicalMemoryAvailability(t *testing.T) {
 								}
 							}
 						}
+						for missing := range owned {
+							partialOwned := append([]bool(nil), owned...)
+							partialOwned[missing] = false
+							partial := before.clone()
+							if x86ResultTransfer(instruction, &partial, partialOwned, boundary, arch) || !reflect.DeepEqual(partial, before) {
+								t.Fatal("missing field changed part of a rejected logical memory transfer", missing)
+							}
+						}
+						if !expand {
+							partial := before.clone()
+							if x86ResultTransfer(instruction, &partial, owned, int64(width.bytes), arch) || !reflect.DeepEqual(partial, before) {
+								t.Fatal("compact store acquired write permission for incoming FP parameters")
+							}
+						}
 					})
 				}
 			}
