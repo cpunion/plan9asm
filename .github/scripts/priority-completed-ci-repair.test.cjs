@@ -27,15 +27,16 @@ const roots = [
   'TestX86NativeGPStoreCompleteWidthsThreeAPIs',
   'TestX86NativeGPStoreCannotBorrowUnknownOrPointerData',
   'TestX86NativeGPStoreOriginalByteAliasesAndUnchangedState',
+  'TestX86ScalarMoveNativeRetainsPublicAndSourceBoundaries',
 ];
 const block = '- lane: completed-ci-repair\n            module: \'.\'\n            roots:\n' +
   roots.map(root => `              - ${root}\n`).join('') + '            timeout: 5m';
 const workflow = fs.readFileSync('.github/workflows/pr40-owned-process-probe.yml', 'utf8');
 
 function validate(source) {
-  assert.equal(roots.length, 22);
-  assert.equal(new Set(roots).size, 22);
-  assert.ok(source.includes(block), 'all fourteen original failures and eight new complete class roots must run first');
+  assert.equal(roots.length, 23);
+  assert.equal(new Set(roots).size, 23);
+  assert.ok(source.includes(block), 'all fourteen original failures, eight new class roots and retained load/store owner must run first');
   assert.equal(source.split('- lane: completed-ci-repair\n').length - 1, 1);
 }
 

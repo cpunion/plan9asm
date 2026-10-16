@@ -125,6 +125,10 @@ jobs:
           go test . -list "^($crc32_root)$" > _out/native-x86-oracles/crc32-inventory.log
           grep -Fx "$crc32_root" _out/native-x86-oracles/crc32-inventory.log
           roots+="|$crc32_root"
+          bit_test_root='TestCrossLinuxRuntimeMatrixX86BitTestNumericalAndAliases'
+          go test . -list "^($bit_test_root)$" > _out/native-x86-oracles/bit-test-inventory.log
+          grep -Fx "$bit_test_root" _out/native-x86-oracles/bit-test-inventory.log
+          roots+="|$bit_test_root"
           families='MADDTypedOriginalLegacy|PackedNarrowOriginalLegacyOracle|ScalarFPBitViewsOriginalBitsAndCanaries'
           families+='|PureGPUnknownDeadOutputs|SignedIntegerScalarFloatTranslatedFPFields|ScalarCompareFlags'
           families+='|RawReturnSourceAddressNumerical|FloatingCompareOriginalLegacyPredicates|TimestampOriginalAndLLVM'
@@ -133,7 +137,7 @@ jobs:
           families+='|PackedShiftNativeReadFaults|PackedUnpackMMXNativeMemoryAndFP|PackedZeroMemoryStoreFault'
           families+='|SignedIntegerScalarFloatNativeReadExtentAndPrecision|SignedIntegerScalarFloatNativeLinuxPrecisionSignal'
           go test . -list "^($roots|TestCrossLinuxRuntimeMatrixX86($families))$" > _out/native-x86-oracles/all-roots.stdout
-          test "$(grep -c '^Test' _out/native-x86-oracles/all-roots.stdout)" = 65
+          test "$(grep -c '^Test' _out/native-x86-oracles/all-roots.stdout)" = 66
           go test . -run "^($roots|TestCrossLinuxRuntimeMatrixX86($families))$" \
             -json -count=1 -timeout=8m \
             2> _out/native-x86-oracles/native.stderr | tee _out/native-x86-oracles/native.jsonl
@@ -167,6 +171,33 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          - lane: completed-ci-repair
+            module: '.'
+            roots:
+              - TestTranslateIRTextCoverage
+              - TestX86RawSegmentAbsoluteMemory
+              - TestX86ResultCompareExchangePrefixAndAuthorityBoundaries
+              - TestTranslate386RejectsInvalidInstructionForms
+              - TestX86RawReturnBoundFPAndStaticObjects
+              - TestX86RawReturnActualGoDeclarationContract
+              - TestX86RawAddressOverrideDefaultCallerControlsAndPhysicalSegments
+              - TestX86DirectSymbolMemorySinkObjectsRemainSupported
+              - TestTranslate386DestinationForms
+              - TestX86RawReturnStaticDATAExtents
+              - TestTranslateHelpersCoverage
+              - TestX86AddressClassPreservesActualMemoryAndRelocationObjects
+              - TestTranslateGoModule_X87Mode
+              - TestCrossLinuxRuntimeMatrixX86BitTestNumericalAndAliases
+              - TestX86PoppedFlagWordImmediateMaskThreeAPIs
+              - TestX86NarrowPoppedWordCannotDefineUnwrittenHighBits
+              - TestX86NativeBitTestCompleteReachingInputsThreeAPIs
+              - TestX86NativeBitTestExactStateAndIndependentAuthorities
+              - TestX86BitTestPortableNumericalAndAliases
+              - TestX86NativeGPStoreCompleteWidthsThreeAPIs
+              - TestX86NativeGPStoreCannotBorrowUnknownOrPointerData
+              - TestX86NativeGPStoreOriginalByteAliasesAndUnchangedState
+              - TestX86ScalarMoveNativeRetainsPublicAndSourceBoundaries
+            timeout: 5m
           - lane: llvm
             module: cmd/plan9asmll
             roots:
