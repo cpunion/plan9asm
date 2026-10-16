@@ -24,6 +24,9 @@ func x86TypedFPResultNeedsProof(fn Func, sig FuncSig, arch string) bool {
 	}
 	opaqueAddressResult := x86OpaqueAddressPointerResultRole(fn, sig, arch)
 	for _, ins := range fn.Instrs {
+		if _, known, err := x86AHFlagsProperties(ins.Op, ins, arch); known && err == nil && x86ResultNamedPredicateInstruction(ins) {
+			return true // Dead AH/FLAGS transfers still need their actual source byte or five flags.
+		}
 		if _, known, err := x86SignedPackedFloatProperties(ins, arch); known && err == nil && x86ResultNamedPredicateInstruction(ins) {
 			return true // Complete conversion inputs stay required for Void without a KMOV routing prerequisite.
 		}

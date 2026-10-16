@@ -744,17 +744,16 @@ func (c *amd64Ctx) lowerInstr(bi int, ii int, ins Instr, emitBr amd64EmitBr, emi
 		"PUSH_REGS_HOST_TO_ABI0()", "POP_REGS_HOST_TO_ABI0()":
 		// Existing macro handling is separate from the directive grammar.
 		return false, nil
-	case "LAHF":
-		if len(ins.Args) != 0 {
-			return false, fmt.Errorf("%s LAHF takes no operands: %q", c.goarch, ins.Raw)
+	case "LAHF", "SAHF":
+		spec, _, err := x86AHFlagsProperties(Op(op), ins, c.goarch)
+		if err != nil {
+			return false, err
 		}
-		packed := c.packX86Flags()
-		value := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = trunc i64 %s to i8\n", value, packed)
-		return false, c.storeRegSized(AH, I8, "%"+value)
-	case "SAHF":
-		if len(ins.Args) != 0 {
-			return false, fmt.Errorf("%s SAHF takes no operands: %q", c.goarch, ins.Raw)
+		if spec.toAH {
+			packed := c.packX86Flags()
+			value := c.newTmp()
+			fmt.Fprintf(c.b, "  %%%s = trunc i64 %s to i8\n", value, packed)
+			return false, c.storeRegSized(AH, I8, "%"+value)
 		}
 		value, err := c.evalIntSized(Operand{Kind: OpReg, Reg: AH}, I8)
 		if err != nil {
