@@ -173,3 +173,80 @@ func TestX86NativePackedBinarySSE1CarrierDoesNotRequireSSE2(t *testing.T) {
 		})
 	}
 }
+
+func x86UnpackValueRows(arch string) []struct{ op, bank, mode string } {
+	names := x86CallerUnpackOpcodes()
+	rows := x86FixedBinaryValueRows(arch, names)
+	for _, op := range names {
+		if !strings.HasPrefix(op, "V") || x86UnpackTestLaneBytes(op) < 4 {
+			continue
+		}
+		for _, row := range x86FixedBinaryValueRows(arch, []string{op}) {
+			row.op += ".BCST"
+			rows = append(rows, row)
+		}
+	}
+	return rows
+}
+
+func TestX86PackedUnpackInitializedCompleteFamilyFiveTargetsThreeAPIs(t *testing.T) {
+	for batch := 0; batch < 6; batch++ {
+		t.Run(fmt.Sprint(batch), func(t *testing.T) {
+			x86FixedBinaryCompleteFamilyObjects(t, func(arch string) []struct{ op, bank, mode string } {
+				rows, want := x86UnpackValueRows(arch), 192
+				if arch == "386" {
+					want = 72
+				}
+				if len(rows) != want {
+					t.Fatal("complete independent unpack denominator changed", len(rows), want)
+				}
+				return rows[batch*want/6 : (batch+1)*want/6]
+			}, 32, 12)
+		})
+	}
+}
+
+func TestX86PackedUnpackNativeInputsStayIndependent(t *testing.T) {
+	x86FixedBinaryNativeInputBoundaries(t, x86UnpackValueRows)
+}
+
+func TestX86PackedShiftLegacyCountInitializedFiveTargetsThreeAPIs(t *testing.T) {
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM22 llc required")
+	}
+	for _, target := range x86RawReturnTargets {
+		t.Run(target.triple, func(t *testing.T) {
+			word, move := 8, "MOVQ"
+			if target.arch == "386" {
+				word, move = 4, "MOVL"
+			}
+			var source, declarations strings.Builder
+			for index, row := range x86LegacyShiftMemoryOpcodes {
+				name := fmt.Sprintf("NativeCount%d", index)
+				fmt.Fprintf(&source, "TEXT ·%s(SB),4,$0-%d\n%s count+0(FP),AX\n%s out+%d(FP),DI\nXORPS X0,X0\n%s (AX),X0\nMOVUPS X0,(DI)\nRET\n",
+					name, 2*word, move, move, word, row.name)
+				fmt.Fprintf(&declarations, "func %s(count,out *[16]byte)\n", name)
+			}
+			x86LEAActualTargetGoObject(t, target.arch, target.triple, source.String())
+			for _, api := range []string{"text", "module", "Go"} {
+				t.Run(api, func(t *testing.T) {
+					ir, err := x86ScalarFPBitViewAPI(t, source.String(), declarations.String(), target.arch, target.triple, api)
+					if err != nil {
+						t.Fatal("complete original native m128 count source rejected", err)
+					}
+					for _, text := range []string{ir, x86DwordProductIROptimize(t, ir)} {
+						for _, mnemonic := range []string{"psllw", "pslld", "psllq", "psrlw", "psrld", "psrlq"} {
+							if strings.Count(text, `asm sideeffect "`+mnemonic+` ($2), $0"`) != 1 {
+								t.Fatal("complete source lost its actual full m128 count opcode", mnemonic)
+							}
+						}
+						for _, level := range []string{"-O0", "-O2"} {
+							x86PackedStringCompileObject(t, llc, target.triple, text, level)
+						}
+					}
+				})
+			}
+		})
+	}
+}
