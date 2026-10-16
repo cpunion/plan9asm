@@ -85,50 +85,48 @@ func TestX86PackedShiftNativeCountThreeAPIsFiveO2Objects(t *testing.T) {
 			target.arch, target.triple, 0, func(c *amd64Ctx, ins Instr) (bool, bool, error) {
 				return c.lowerX86PackedShift(ins.Op, ins)
 			})
-		func() {
-			for axis, body := range []string{ir, x86DwordProductIROptimize(t, ir)} {
-				for _, mnemonic := range []string{"psllw", "pslld", "psllq", "psrlw", "psrld", "psrlq"} {
-					for _, segment := range []string{"", "%fs:", "%gs:"} {
-						if strings.Count(body, `asm sideeffect "`+mnemonic+` `+segment+`($2), $0", "=x,0,r,~{memory}"`) != 1 {
-							t.Fatalf("%s IR%d lost original %s %s m128 count operation", target.triple, axis, mnemonic, segment)
-						}
-					}
-				}
-				if strings.Contains(body, `asm sideeffect "movdqa`) {
-					t.Fatal("count access was replaced by a stronger MOVDQA access")
-				}
-				dir := t.TempDir()
-				input, object := filepath.Join(dir, "native-count.ll"), filepath.Join(dir, "native-count.o")
-				if err := os.WriteFile(input, []byte(body), 0600); err != nil {
-					t.Fatal(err)
-				}
-				stage, cancel := runtimeOracleStageContext(t)
-				command := exec.CommandContext(stage, llc, "-O2", "-mtriple="+target.triple, "-filetype=obj", input, "-o", object)
-				output, err := runtimeOracleCombinedOutput(stage, command)
-				cancel()
-				if err != nil {
-					t.Fatalf("O2 %s IR%d: %v\n%s", target.triple, axis, err, output)
-				}
-				stage, cancel = runtimeOracleStageContext(t)
-				command = exec.CommandContext(stage, disassembler, "-d", object)
-				output, err = runtimeOracleCombinedOutput(stage, command)
-				cancel()
-				if err != nil {
-					t.Fatalf("O2 disassembly %s IR%d: %v\n%s", target.triple, axis, err, output)
-				}
-				for _, mnemonic := range []string{"psllw", "pslld", "psllq", "psrlw", "psrld", "psrlq"} {
-					pattern := regexp.MustCompile(`(?m)\b` + mnemonic + `\s+[^\n]*\([^\n]*\)`)
-					if len(pattern.FindAll(output, -1)) != 3 {
-						t.Fatalf("O2 actual original %s m128 count %s IR%d:\n%s", mnemonic, target.triple, axis, output)
-					}
-				}
-				for _, segment := range []string{"%fs:", "%gs:"} {
-					if strings.Count(string(output), segment) != 6 {
-						t.Fatalf("O2 lost six native %s count overrides %s IR%d:\n%s", segment, target.triple, axis, output)
+		for axis, body := range []string{ir, x86DwordProductIROptimize(t, ir)} {
+			for _, mnemonic := range []string{"psllw", "pslld", "psllq", "psrlw", "psrld", "psrlq"} {
+				for _, segment := range []string{"", "%fs:", "%gs:"} {
+					if strings.Count(body, `asm sideeffect "`+mnemonic+` `+segment+`($2), $0", "=x,0,r,~{memory}"`) != 1 {
+						t.Fatalf("%s IR%d lost original %s %s m128 count operation", target.triple, axis, mnemonic, segment)
 					}
 				}
 			}
-		}()
+			if strings.Contains(body, `asm sideeffect "movdqa`) {
+				t.Fatal("count access was replaced by a stronger MOVDQA access")
+			}
+			dir := t.TempDir()
+			input, object := filepath.Join(dir, "native-count.ll"), filepath.Join(dir, "native-count.o")
+			if err := os.WriteFile(input, []byte(body), 0600); err != nil {
+				t.Fatal(err)
+			}
+			stage, cancel := runtimeOracleStageContext(t)
+			command := exec.CommandContext(stage, llc, "-O2", "-mtriple="+target.triple, "-filetype=obj", input, "-o", object)
+			output, err := runtimeOracleCombinedOutput(stage, command)
+			cancel()
+			if err != nil {
+				t.Fatalf("O2 %s IR%d: %v\n%s", target.triple, axis, err, output)
+			}
+			stage, cancel = runtimeOracleStageContext(t)
+			command = exec.CommandContext(stage, disassembler, "-d", object)
+			output, err = runtimeOracleCombinedOutput(stage, command)
+			cancel()
+			if err != nil {
+				t.Fatalf("O2 disassembly %s IR%d: %v\n%s", target.triple, axis, err, output)
+			}
+			for _, mnemonic := range []string{"psllw", "pslld", "psllq", "psrlw", "psrld", "psrlq"} {
+				pattern := regexp.MustCompile(`(?m)\b` + mnemonic + `\s+[^\n]*\([^\n]*\)`)
+				if len(pattern.FindAll(output, -1)) != 3 {
+					t.Fatalf("O2 actual original %s m128 count %s IR%d:\n%s", mnemonic, target.triple, axis, output)
+				}
+			}
+			for _, segment := range []string{"%fs:", "%gs:"} {
+				if strings.Count(string(output), segment) != 6 {
+					t.Fatalf("O2 lost six native %s count overrides %s IR%d:\n%s", segment, target.triple, axis, output)
+				}
+			}
+		}
 	}
 }
 
