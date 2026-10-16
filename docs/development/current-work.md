@@ -16,9 +16,14 @@ returns remain distinct from initialized public entries or native execution.
 The older complete-module attempt at `b1b70a85` was explicitly interrupted to
 prioritize repaired failures. Its report remains failed and incomplete: 1,491
 passed roots, 32 failed, 90 host-inapplicable skips and 5,292 incomplete. It is
-not a complete module pass. Independent AMD64 parameter-field and original-Go
-build-only driver regressions are next; first observe RED before implementation.
-The build-only driver currently uses `-run=^$`, which still starts TestMain.
+not a complete module pass. Independent RED `fe81777c` reproduces ten failure
+terminals for AMD64 parameter-field aliases and the original-Go build-only
+driver. At `e857ffdb`, all five focused roots and 24 children pass on current Go,
+including portable numerical execution and the original wide-driver link.
+AMD64 retains independent field bounds, not mode32's contiguous frame. The
+build-only driver now uses `go test -c` and verifies the actual linked binary's
+SDK/architecture; it never executes TestMain. A complete 89-root SDK/race union
+is running on that frozen snapshot; those wider results remain pending.
 
 Published CI still runs older `e50292a9`; let it finish before a batch push.
 PR40 remains draft at its old contribution head. Actual native execution, the
