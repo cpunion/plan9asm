@@ -194,3 +194,43 @@ func TestX86VectorValueNativeDeadEmitterKeepsInputRead(t *testing.T) {
 		}
 	}
 }
+
+func TestX86VectorValueVoidInputsCannotBorrowImplementationSlots(t *testing.T) {
+	for _, member := range x86NativeVectorValueMembers() {
+		immediate, second := "", "Z1,"
+		if member.immediate {
+			immediate = "$99,"
+		}
+		if member.unary {
+			second = ""
+		}
+		for _, variant := range []string{"unknown-registers", "known-registers", "native-pointer", "unknown-pointer"} {
+			t.Run(member.name+"/"+variant, func(t *testing.T) {
+				prefix, input, args, declaration := "", "Z0", 0, "func Value()"
+				if variant != "unknown-registers" {
+					prefix = "VPXORD Z0,Z0,Z0\nVPXORD Z1,Z1,Z1\nVPXORD Z2,Z2,Z2\n"
+				}
+				if variant == "native-pointer" || variant == "unknown-pointer" {
+					prefix = "MOVQ p+0(FP),AX\nMOVL $1,DX\n" + prefix
+					input, args, declaration = "3(AX)(DX*2)", 8, "func Value(p *[128]byte)"
+					if variant == "unknown-pointer" {
+						prefix = strings.Replace(prefix, "p+0(FP),AX", "p+0(FP),DI", 1)
+					}
+				}
+				source := fmt.Sprintf("TEXT ·Value(SB),4,$0-%d\n%s%s %s%s,%sZ2\nRET\n",
+					args, prefix, member.name, immediate, input, second)
+				goAssemblerOracleOutput(t, "amd64", source, "", true)
+				for _, api := range []string{"text", "module", "Go"} {
+					ir, err := x86ScalarFPBitViewAPI(t, source, declaration, "amd64", "x86_64-unknown-linux-gnu", api)
+					known := variant == "known-registers" || variant == "native-pointer"
+					if known && (ir == "" || err != nil) {
+						t.Fatal("complete initialized Void control was lost", api, err)
+					}
+					if !known && (ir != "" || !errors.Is(err, ErrProbeNeedsContext)) {
+						t.Fatal("Void value family borrowed zeroed implementation slots or an unknown address", api, err)
+					}
+				}
+			})
+		}
+	}
+}
