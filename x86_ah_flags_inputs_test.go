@@ -57,8 +57,12 @@ func TestX86AHFlagsCompleteGoFormsAndEffects(t *testing.T) {
 	}
 }
 
-func x86AHFlagsCompleteSource() (string, string) {
-	return `TEXT ·AHLoad(SB),4,$0-12
+func x86AHFlagsCompleteSource(arch string) (string, string) {
+	smallResult, mixedResult := 8, 16
+	if arch == "386" {
+		smallResult, mixedResult = 4, 12
+	}
+	return fmt.Sprintf(`TEXT ·AHLoad(SB),4,$0-12
 MOVL a+0(FP),AX
 MOVL b+4(FP),BX
 CMPL AX,BX
@@ -66,14 +70,14 @@ LAHF
 MOVBLZX AH,AX
 MOVL AX,ret+8(FP)
 RET
-TEXT ·AHStoreAndLoad(SB),4,$0-8
+TEXT ·AHStoreAndLoad(SB),4,$0-%d
 MOVW flags+0(FP),AX
 SAHF
 LAHF
 MOVBLZX AH,AX
-MOVL AX,ret+4(FP)
+MOVL AX,ret+%d(FP)
 RET
-TEXT ·AHPreserveOF(SB),4,$0-16
+TEXT ·AHPreserveOF(SB),4,$0-%d
 MOVW flags+0(FP),AX
 MOVL a+4(FP),BX
 MOVL b+8(FP),CX
@@ -85,16 +89,16 @@ MOVBLZX AH,AX
 MOVBLZX DL,DX
 SHLL $8,DX
 ORL DX,AX
-MOVL AX,ret+12(FP)
+MOVL AX,ret+%d(FP)
 RET
-TEXT ·AHByteOnly(SB),4,$0-8
+TEXT ·AHByteOnly(SB),4,$0-%d
 MOVB flags+0(FP),AH
 SAHF
 LAHF
 MOVBLZX AH,AX
-MOVL AX,ret+4(FP)
+MOVL AX,ret+%d(FP)
 RET
-`, `func AHLoad(a,b uint32) uint32
+`, smallResult+4, smallResult, mixedResult+4, mixedResult, smallResult+4, smallResult), `func AHLoad(a,b uint32) uint32
 func AHStoreAndLoad(flags uint16) uint32
 func AHPreserveOF(flags uint16,a,b uint32) uint32
 func AHByteOnly(flags uint8) uint32
@@ -106,9 +110,9 @@ func TestX86AHFlagsCompleteSourceFiveTargetsThreeAPIs(t *testing.T) {
 	if llc == "" {
 		t.Fatal("LLVM22 llc required")
 	}
-	source, declarations := x86AHFlagsCompleteSource()
 	for _, target := range x86RawReturnTargets {
 		t.Run(target.triple, func(t *testing.T) {
+			source, declarations := x86AHFlagsCompleteSource(target.arch)
 			x86LEAActualTargetGoObject(t, target.arch, target.triple, source)
 			for _, api := range []string{"text", "module", "Go"} {
 				t.Run(api, func(t *testing.T) {

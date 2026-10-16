@@ -10,7 +10,7 @@ func TestX86AHFlagsPortableNumericalValues(t *testing.T) {
 	if !found {
 		t.Fatal("LLVM22 llc and clang required")
 	}
-	source, declarations := x86AHFlagsCompleteSource()
+	source, declarations := x86AHFlagsCompleteSource("amd64")
 	const driver = `#include <stdint.h>
 #include <stdio.h>
 extern uint32_t AHLoad(uint32_t,uint32_t);
