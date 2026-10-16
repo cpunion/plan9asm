@@ -3,6 +3,7 @@ package plan9asm
 import (
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -10,6 +11,50 @@ import (
 var x86IndexedPermuteResultNames = []string{
 	"VPERMB", "VPERMW", "VPERMI2B", "VPERMI2W", "VPERMI2D", "VPERMI2Q", "VPERMI2PS", "VPERMI2PD",
 	"VPERMT2B", "VPERMT2W", "VPERMT2D", "VPERMT2Q", "VPERMT2PS", "VPERMT2PD",
+}
+
+func TestX86IndexedPermuteResultRequiresCompleteTablesIndicesAndMerge(t *testing.T) {
+	for _, op := range x86IndexedPermuteResultNames {
+		for axis, bank := range []string{"X", "Y", "Z"} {
+			width := 16 << axis
+			for _, mode := range []string{"plain", "merge", "zero"} {
+				t.Run(op+"/"+bank+"/"+mode, func(t *testing.T) {
+					mask, suffix := "", ""
+					if mode != "plain" {
+						mask = "K1,"
+					}
+					if mode == "zero" {
+						suffix = ".Z"
+					}
+					ins := x86ScalarLaneInstruction(t, fmt.Sprintf("%s%s %s0,%s1,%s%s2", op, suffix, bank, bank, mask, bank))
+					inputs := 2
+					if strings.HasPrefix(op, "VPERMI2") || strings.HasPrefix(op, "VPERMT2") || mode == "merge" {
+						inputs = 3
+					}
+					for input := 0; input < inputs; input++ {
+						for missing := -1; missing < width; missing++ {
+							state := x86ResultState{flags: x86ByteFlagsAll, masks: [8]bool{1: true}}
+							for reg := 0; reg < 3; reg++ {
+								bits := ^uint64(0)
+								if reg == input && missing >= 0 {
+									bits &^= uint64(1) << uint(missing)
+								}
+								state.writeVector(reg, 64, bits, false)
+							}
+							before := state.clone()
+							accepted, known := x86ResultIndexedPermuteStep(ins, &state, nil, "amd64")
+							if !known || accepted != (missing < 0) {
+								t.Fatal("table/index/merge byte dependency lost", input, missing, accepted, known)
+							}
+							if missing >= 0 && !reflect.DeepEqual(state, before) {
+								t.Fatal("failed dependency changed source facts")
+							}
+						}
+					}
+				})
+			}
+		}
+	}
 }
 
 func x86IndexedPermuteResultFixture(op, bank, mode, source string) string {

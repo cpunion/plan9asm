@@ -45,17 +45,28 @@ func x86ResultIndexedPermuteStep(ins Instr, state *x86ResultState, owned []bool,
 	if form.memory >= 0 {
 		firstWidth = int64(form.memoryBytes)
 	}
-	if !x86ResultRead(ins.Args[form.first], firstWidth, state, owned, arch) ||
-		!x86ResultRead(ins.Args[form.second], width, state, owned, arch) {
+	if !x86ResultPackedVectorRead(ins.Args[form.first], firstWidth, state, owned, arch) ||
+		!x86ResultPackedVectorRead(ins.Args[form.second], width, state, owned, arch) {
 		return false, true
 	}
 	// I2 reads old destination indices; T2 reads its first table, even with
 	// zero masking. Single-table operations need old bytes only for merging.
 	if (spec.mode != amd64IndexedPermuteSingle || form.mask >= 0 && !form.zeroing) &&
-		!x86ResultRead(ins.Args[form.destination], width, state, owned, arch) {
+		!x86ResultPackedVectorRead(ins.Args[form.destination], width, state, owned, arch) {
 		return false, true
 	}
 	destination, _ := amd64VectorRegisterIndex(ins.Args[form.destination].Reg, form.byteWidth)
 	state.writeVector(destination, form.byteWidth, x86CallerVectorByteMask(width), false)
 	return true, true // No FLAGS/DF/mask, memory or pointer facts change.
+}
+
+// This is only a numerical vector view. Keep the older scalar/legacy-X read
+// domain unchanged; neither native pointers nor wider logical storage follow.
+func x86ResultPackedVectorRead(operand Operand, width int64, state *x86ResultState, owned []bool, arch string) bool {
+	if operand.Kind != OpReg {
+		return x86ResultRead(operand, width, state, owned, arch)
+	}
+	index, valid := amd64VectorRegisterIndex(operand.Reg, int(width))
+	mask := x86CallerVectorByteMask(width)
+	return valid && (arch != "386" || index < 8) && mask != 0 && state.vectorBytes(index)&mask == mask
 }
