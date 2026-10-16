@@ -20,49 +20,6 @@ func (c *amd64Ctx) lowerAtomic(op Op, ins Instr) (ok bool, terminated bool, err 
 		// Only the whole-source consumer can bind this prefix to an adjacent
 		// complete native operation. An isolated helper has no such body.
 		return true, false, fmt.Errorf("%w: standalone LOCK has no source-adjacent complete atomic operation", ErrProbeNeedsContext)
-
-	case "ORB", "ANDB", "ORL", "ANDL", "ORQ", "ANDQ":
-		if len(ins.Args) != 2 || ins.Args[1].Kind != OpMem {
-			return false, false, nil
-		}
-		ty := I8
-		switch op {
-		case "ORL", "ANDL":
-			ty = I32
-		case "ORQ", "ANDQ":
-			ty = I64
-		}
-		src64, err := c.evalI64(ins.Args[0])
-		if err != nil {
-			return true, false, err
-		}
-		src, err := c.amd64AtomicTruncFromI64(src64, ty)
-		if err != nil {
-			return true, false, err
-		}
-		ptr, err := c.amd64AtomicPtrFromMem(ins.Args[1].Mem)
-		if err != nil {
-			return true, false, err
-		}
-		rmw := "or"
-		if op == "ANDB" || op == "ANDL" || op == "ANDQ" {
-			rmw = "and"
-		}
-		tmp := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = atomicrmw %s ptr %s, %s %s seq_cst\n", tmp, rmw, ptr, ty, src)
-		// atomicrmw returns the old value, while x86 logical instructions set
-		// flags from the new value. LOCK does not alter that flag behavior.
-		out := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = %s %s %%%s, %s\n", out, rmw, ty, tmp, src)
-		fmt.Fprintf(c.b, "  store i1 false, ptr %s\n", c.flagsCFSlot)
-		fmt.Fprintf(c.b, "  store i1 false, ptr %s\n", c.flagsOFSlot)
-		zf := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = icmp eq %s %%%s, 0\n", zf, ty, out)
-		fmt.Fprintf(c.b, "  store i1 %%%s, ptr %s\n", zf, c.flagsZSlot)
-		sf := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = icmp slt %s %%%s, 0\n", sf, ty, out)
-		fmt.Fprintf(c.b, "  store i1 %%%s, ptr %s\n", sf, c.flagsSltSlot)
-		return true, false, nil
 	}
 	return false, false, nil
 }
