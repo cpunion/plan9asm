@@ -244,7 +244,7 @@ func TestTranslate386ModelsOfficialDirectSPWrites(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ir, err := Translate(file, Options{
+	options := Options{
 		TargetTriple: "i386-unknown-linux-gnu",
 		Goarch:       "386",
 		Sigs:         map[string]FuncSig{"stack": {Name: "stack", Ret: Void}},
@@ -601,10 +601,11 @@ TEXT x87IntegerSymbol(SB),NOSPLIT,$0-0
 			"x87IntegerMemory": {Name: "x87IntegerMemory", Ret: Void},
 			"x87IntegerSymbol": {Name: "x87IntegerSymbol", Ret: Void},
 		},
-	})
-	if err != nil {
-		t.Fatal(err)
 	}
+	if _, err := Translate(file, options); !errors.Is(err, ErrProbeNeedsContext) {
+		t.Fatal("original unbacked x87 source did not retain Context", err)
+	}
+	ir := x86CompileOnlyDestinationEmitterModule(t, file, options)
 	check386DestinationFormsIR(t, ir)
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
