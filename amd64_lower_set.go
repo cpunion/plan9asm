@@ -36,14 +36,14 @@ func (c *amd64Ctx) storeConditionalSetByte(dst Operand, value string) error {
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(c.b, "  store i8 %s, %s %s, align 1\n", value, ptrType, ptr)
+		fmt.Fprintf(c.b, "  store volatile i8 %s, %s %s, align 1\n", value, ptrType, ptr)
 		return nil
 	case OpSym:
 		ptr, err := c.ptrFromSB(dst.Sym)
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(c.b, "  store i8 %s, ptr %s, align 1\n", value, ptr)
+		fmt.Fprintf(c.b, "  store volatile i8 %s, ptr %s, align 1\n", value, ptr)
 		return nil
 	case OpFP:
 		return c.storeFPResult(dst.FPOffset, I8, value)
