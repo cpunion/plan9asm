@@ -9,8 +9,12 @@ import (
 
 // Independent complete Go ymm/Py1 and _yvandnpd inventory, not spec-map keys.
 func x86AverageValueRows(arch string) []struct{ op, bank, mode string } {
+	return x86FixedBinaryValueRows(arch, []string{"PAVGB", "PAVGW", "VPAVGB", "VPAVGW"})
+}
+
+func x86FixedBinaryValueRows(arch string, names []string) []struct{ op, bank, mode string } {
 	var rows []struct{ op, bank, mode string }
-	for _, op := range []string{"PAVGB", "PAVGW", "VPAVGB", "VPAVGW"} {
+	for _, op := range names {
 		banks := []string{"X", "Y", "Z"}
 		if !strings.HasPrefix(op, "V") {
 			banks = banks[:1]
@@ -28,6 +32,10 @@ func x86AverageValueRows(arch string) []struct{ op, bank, mode string } {
 }
 
 func x86AverageValueFixture(arch, op, bank, mode string, result bool) (string, string) {
+	return x86FixedBinaryValueFixture(arch, op, bank, mode, result)
+}
+
+func x86FixedBinaryValueFixture(arch, op, bank, mode string, result bool) (string, string) {
 	word, move, maskMove := 8, "MOVQ", "KMOVQ"
 	if arch == "386" {
 		word, move, maskMove = 4, "MOVL", "KMOVD"
@@ -55,16 +63,21 @@ func x86AverageValueFixture(arch, op, bank, mode string, result bool) (string, s
 }
 
 func TestX86PackedAverageValueCompleteFamilyFiveTargetsThreeAPIs(t *testing.T) {
+	x86FixedBinaryCompleteFamilyObjects(t, x86AverageValueRows, 20, 8)
+}
+
+func x86FixedBinaryCompleteFamilyObjects(t *testing.T, inventory func(string) []struct{ op, bank, mode string }, amd64Count, mode32Count int) {
+	t.Helper()
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM22 llc required")
 	}
 	for _, target := range x86RawReturnTargets {
 		t.Run(target.triple, func(t *testing.T) {
-			rows := x86AverageValueRows(target.arch)
-			want := 20
+			rows := inventory(target.arch)
+			want := amd64Count
 			if target.arch == "386" {
-				want = 8
+				want = mode32Count
 			}
 			if len(rows) != want {
 				t.Fatal("complete original average family denominator changed", len(rows), want)
@@ -73,7 +86,7 @@ func TestX86PackedAverageValueCompleteFamilyFiveTargetsThreeAPIs(t *testing.T) {
 			var names []string
 			for _, row := range rows {
 				for _, result := range []bool{false, true} {
-					body, declaration := x86AverageValueFixture(target.arch, row.op, row.bank, row.mode, result)
+					body, declaration := x86FixedBinaryValueFixture(target.arch, row.op, row.bank, row.mode, result)
 					name := fmt.Sprintf("AverageValue%d", len(names))
 					names = append(names, name)
 					source.WriteString(strings.ReplaceAll(body, "Value", name))
@@ -100,12 +113,17 @@ func TestX86PackedAverageValueCompleteFamilyFiveTargetsThreeAPIs(t *testing.T) {
 }
 
 func TestX86PackedAverageVoidCannotInventRegisterInputs(t *testing.T) {
+	x86FixedBinaryVoidInputBoundaries(t, x86AverageValueRows)
+}
+
+func x86FixedBinaryVoidInputBoundaries(t *testing.T, inventory func(string) []struct{ op, bank, mode string }) {
+	t.Helper()
 	for _, arch := range []string{"386", "amd64"} {
 		triple := "x86_64-unknown-linux-gnu"
 		if arch == "386" {
 			triple = "i386-unknown-linux-gnu"
 		}
-		for _, row := range x86AverageValueRows(arch) {
+		for _, row := range inventory(arch) {
 			if row.mode != "plain" {
 				continue // Separate native/mask roots retain the complete masked rows.
 			}
@@ -136,8 +154,13 @@ func TestX86PackedAverageVoidCannotInventRegisterInputs(t *testing.T) {
 }
 
 func TestX86PackedAverageNativeInputsStayIndependent(t *testing.T) {
-	for _, row := range x86AverageValueRows("amd64") {
-		source, declaration := x86AverageValueFixture("amd64", row.op, row.bank, row.mode, true)
+	x86FixedBinaryNativeInputBoundaries(t, x86AverageValueRows)
+}
+
+func x86FixedBinaryNativeInputBoundaries(t *testing.T, inventory func(string) []struct{ op, bank, mode string }) {
+	t.Helper()
+	for _, row := range inventory("amd64") {
+		source, declaration := x86FixedBinaryValueFixture("amd64", row.op, row.bank, row.mode, true)
 		variants := map[string]string{
 			"unknown-pointer": strings.Replace(source, "p+0(FP),AX", "p+0(FP),DI", 1),
 			"unknown-index":   strings.Replace(source, "MOVL $1,DX\n", "", 1),
