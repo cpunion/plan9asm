@@ -9,6 +9,9 @@ func x86TypedFPResultNeedsProof(fn Func, sig FuncSig, arch string) bool {
 	if arch != "386" && arch != "amd64" {
 		return false
 	}
+	if x86StaticIntegerResultSourceCandidate(fn, sig, arch) {
+		return true
+	}
 	for _, ins := range x86X87FlowInstructions(fn) {
 		if _, known, err := x86X87EnvironmentReadProperties(ins, arch); known && err == nil {
 			return true // Dead environment reads retain input and stack obligations for Void.

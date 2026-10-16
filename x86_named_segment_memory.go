@@ -8,7 +8,10 @@ import "fmt"
 // accompany a real scaled GP Index. Keep the original instruction untouched;
 // each paired consumer uses this same normalized operand for proof/emission.
 func x86NamedSegmentMemorySource(ins Instr, source Operand, arch string) (Operand, bool, error) {
-	if source.Kind != OpMem {
+	if source.Kind != OpMem || !x86ResultNamedPredicateInstruction(ins) {
+		// The physical decoder already supplies normalized segment fields.
+		// It must not be reclassified as named Go syntax or borrow a named
+		// instruction's separate input/source proof.
 		return source, false, nil
 	}
 	memory := source.Mem
@@ -19,7 +22,7 @@ func x86NamedSegmentMemorySource(ins Instr, source Operand, arch string) (Operan
 	fail := func() (Operand, bool, error) {
 		return source, true, fmt.Errorf("%w: invalid %s named segment memory: %q", ErrProbeNeedsContext, arch, ins.Raw)
 	}
-	if arch != "386" && arch != "amd64" || !x86ResultNamedPredicateInstruction(ins) ||
+	if arch != "386" && arch != "amd64" ||
 		ins.x86NumericalRead != nil || memory.Sym != "" || memory.OffRaw != "" || memory.IndexExt != "" {
 		return fail()
 	}
