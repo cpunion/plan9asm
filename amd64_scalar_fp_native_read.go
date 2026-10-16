@@ -171,6 +171,12 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		if accepted, known := x86ResultPackedNarrowStep(ins, state, owned, arch, true); known {
 			return accepted // The same emitter retains the complete E4NF tuple or original legacy opcode.
 		}
+		if accepted, known := x86ResultPackedShiftStepWithRead(ins, state, owned, arch, true); known {
+			return accepted // Uniform m128, E4NF tuples and guarded E4 reads retain their independent shapes.
+		}
+		if accepted, known := x86ResultPackedUnpackStepWithRead(ins, state, owned, arch, true); known {
+			return accepted // Unpack retains the full E4NF tuple even with zero masks or dead results.
+		}
 		if accepted, recognized := x86LoweredScalarArithmeticNativeRead(ins, state, owned, resultOffset, arch); recognized {
 			return accepted
 		}
