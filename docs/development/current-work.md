@@ -1,6 +1,6 @@
 # Current work: PR 40 checkpoint
 
-Checkpoint: 2026-10-15 23:53 UTC. The notes below this section are historical
+Checkpoint: 2026-10-16 00:15 UTC. The notes below this section are historical
 and retain their original source scope; they are not the current task queue.
 
 ## Active queue
@@ -80,12 +80,26 @@ candidate. The new run above owns actual execution; the old completed failed
 run remains failed. PR40 is still draft at its older head, pending fork CI
 and the separate strict benchmark/standard-library work.
 
-The benchmark's new x86 pointer-return failures are isolated in the independent
-`ba30ec9f` test-only leaf. It retains complete code/data address sources and MOV
-aliases across five x86 target objects, plus numerical, partial-write, unknown
-copy and pointee-permission controls. Its first old-implementation run is still
-in progress. Do not loosen `x86ResultScalarBytes` or treat opaque pointer bits as
-numerical bytes to make these cases pass.
+The benchmark's new opaque-pointer return regression is fixed locally through
+`2e7f3821`, merged as `b3d900d9`. The first test-only run has a genuine private
+signature setup failure; the corrected fixture then reproduces all15 failed
+translation paths while all30 negative controls pass. The complete bounded
+address/MOV/copy role keeps `x86ResultScalarBytes` unchanged and grants no NUM,
+caller or pointee permission. All31 affected owners/2,723 children pass on each
+of Go27, Go20 and race, without skips. Both merged whole-root-module vets pass.
+The original complete Go27 checktest package then compiles both files on each
+of386 and amd64: four original files, zero failures/N/A. This is not a fresh
+184-file benchmark or native pointer-result receipt; the38 failed benchmark
+files above remain the latest complete result. No second push interrupts CI.
+
+The separate compact/expand leaf retains its current-source RED at `0d45f567`:
+four roots/2,448 children expose216 missing register effects,1,620 rejected
+initialized API paths and540 wrongly accepted missing-input/result paths.
+`bbf06955` shares complete Go `_yvcompresspd`/`_yvexpandpd` grammar across all12
+opcodes, the two emitters and numerical descriptors. Its first focused run is
+in progress. Memory forms, old unbound compile-only fixtures, complete SDK
+objects, compatibility, native execution and baseline classification still
+need qualification before this leaf can be merged or published.
 
 The FS/GS first-GREEN set at `951a68a0` passes 17 unique roots and 30,902
 children, retaining all 212 AMD64 or 114 386 TEXTs per target. Its explicit
