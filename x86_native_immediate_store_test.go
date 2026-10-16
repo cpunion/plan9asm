@@ -1,11 +1,41 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"runtime"
 	"strings"
 	"testing"
 )
+
+func TestX86NativeImmediateStoreVoidInputsCannotBorrowPrivateSlots(t *testing.T) {
+	for _, target := range x86RawReturnTargets {
+		word, move := 8, "MOVQ"
+		if target.arch == "386" {
+			word, move = 4, "MOVL"
+		}
+		for _, row := range []struct {
+			name, setup, address string
+		}{
+			{"unknown-base", "", "(DI)"},
+			{"numeric-base", move + " $64,DI\n", "(DI)"},
+			{"partial-base", "MOVB $1,DI\n", "(DI)"},
+			{"unknown-index", move + " p+0(FP),DI\n", "(DI)(BX*2)"},
+			{"pointer-index", move + " p+0(FP),DI\n" + move + " p+0(FP),BX\n", "(DI)(BX*2)"},
+		} {
+			source := fmt.Sprintf("TEXT ·Value(SB),4,$0-%d\n%sMOVL $7,%s\nRET\n", word, row.setup, row.address)
+			x86LEAActualTargetGoObject(t, target.arch, target.triple, source)
+			for _, api := range []string{"text", "module", "Go"} {
+				t.Run(target.triple+"/"+row.name+"/"+api, func(t *testing.T) {
+					ir, err := x86ScalarFPBitViewAPI(t, source, "func Value(p *byte)", target.arch, target.triple, api)
+					if !errors.Is(err, ErrProbeNeedsContext) || ir != "" {
+						t.Fatal("Void native write acquired an unproved base/index", err)
+					}
+				})
+			}
+		}
+	}
+}
 
 // Independent witnesses for all four Go Yi32-to-memory rows, including the
 // frontend's two MOVQ aliases. The qword row sign-extends its encoded imm32.
