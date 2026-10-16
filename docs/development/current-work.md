@@ -1,5 +1,33 @@
 # Current work: PR 40 checkpoint
 
+## Complete packed-average qualification, 2026-10-17
+
+At `cf0c6afd`, all 23 changed/retained roots pass separately on current Go,
+actual Go20 and race: 69 root executions and 9,249 children, zero failures or
+skips. Independent raw-terminal checks retain the same 3,106-test union in
+each lane and identical before/after source, tool and SDK seals. The earlier
+`9fe383c3` C function-pointer type mismatch remains a failed driver receipt;
+equal word widths did not make Darwin's uintptr_t and uint64_t compatible.
+
+The four-member PAVGB/PAVGW/VPAVGB/VPAVGW family shares typed numerical inputs
+and paired exact native reads. Legacy upper bytes are preserved; VEX/EVEX
+upper aliases are cleared. Unknown source, mask, merge, pointer and index
+inputs remain Context. Physical MMX state stays separate. All original Go
+format rows retain their actual objects and emitter-only LLVM objects;
+uninitialized originals are not public-translation successes. Independent
+initialized programs cover five x86 targets, three APIs and O0/O2 objects.
+Portable host arithmetic/canary and E4.nb guard-page tests retain both live
+and discarded results, not an original-Go/native AVX512 execution claim.
+
+Fork diagnostic run 38926645676 at `ceedd8da` has now ended naturally:
+60 successful jobs, two failures and one dependent Windows job skipped.
+The native66 artifact retains its original 58 passed/eight failed roots.
+The second failed priority is signed packed conversion with ordinary mode32
+BP: source proof stops at the original conversion after the initialized mask.
+Keep both real failures. The complete native rerun, remaining instruction
+families, combined-source SDK/race union, official baseline audits and final
+gates are still outstanding before another batch push. PR40 remains draft.
+
 ## Native fixture follow-up, 2026-10-17
 
 At `696143de`, four host-visible CRC32/INSERT/invalid-immediate roots pass
@@ -14,13 +42,14 @@ The inactive INSERT fixture explicitly seeds the complete Z2 before its
 legacy X write and later Z store. Its earlier nine unknown-upper-byte failures
 remain genuine REDs. Removing only that seed still requires Context through
 all three APIs; no production permission was relaxed. All original fault rows
-and native runtime owners remain present. Go20/race and actual native reruns
-for these fixture repairs are still outstanding; do not promote these object
-checks to a successful rerun of the old eight-root native CI failure.
+and native runtime owners remain present. At `c6cb1f8c`, actual Go20 and race
+also pass the same four roots and 134 children without skips. Actual native
+reruns remain outstanding; these objects are not a successful rerun of the
+old eight-root native CI failure.
 
 ## Native input-composition follow-up, 2026-10-17
 
-Fork diagnostic run 38926645676 at `ceedd8da` is still running. Its native66
+Fork diagnostic run 38926645676 at `ceedd8da` has ended. Its native66
 owner has completed 58 roots and failed eight, without skips. Preserve that
 original artifact: immediate native writes, LAHF and several vector-memory
 compositions still fail; the earlier 87-job success belongs to `2729a5d0`.
