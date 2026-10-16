@@ -9,9 +9,13 @@ import (
 )
 
 func x86AverageValueRuntimeProgram(arch string) (string, string, string, string) {
-	word, move, maskMove := 8, "MOVQ", "KMOVQ"
+	return x86AverageValueRuntimeProgramWithResult(arch, false)
+}
+
+func x86AverageValueRuntimeProgramWithResult(arch string, discard bool) (string, string, string, string) {
+	word, move, maskMove, cWord := 8, "MOVQ", "KMOVQ", "uint64_t"
 	if arch == "386" {
-		word, move, maskMove = 4, "MOVL", "KMOVD"
+		word, move, maskMove, cWord = 4, "MOVL", "KMOVD", "uint32_t"
 	}
 	var source, declarations, prototypes, rows strings.Builder
 	for index, row := range x86AverageValueRows(arch) {
@@ -37,11 +41,15 @@ func x86AverageValueRuntimeProgram(arch string) (string, string, string, string)
 		if strings.HasSuffix(row.op, "W") {
 			bits = 16
 		}
+		finish := "VMOVUPS Z2,(SI)\n"
+		if discard {
+			finish = "" // Preserve every source read and CF observation, discard only the numerical result.
+		}
 		fmt.Fprintf(&source, "TEXT ·%s(SB),4,$0-%d\n%s a+0(FP),AX\n%s b+%d(FP),BX\n%s out+%d(FP),SI\n"+
-			"%s mask+%d(FP),CX\n%s CX,K1\nVMOVUPS (BX),Z1\nVMOVUPS (BX),Z2\n%sSTC\n%s\nVMOVUPS Z2,(SI)\nSETCS 64(SI)\nRET\n",
-			name, 4*word, move, move, word, move, 2*word, move, 3*word, maskMove, setup, instruction)
+			"%s mask+%d(FP),CX\n%s CX,K1\nVMOVUPS (BX),Z1\nVMOVUPS (BX),Z2\n%sSTC\n%s\n%sSETCS 64(SI)\nRET\n",
+			name, 4*word, move, move, word, move, 2*word, move, 3*word, maskMove, setup, instruction, finish)
 		fmt.Fprintf(&declarations, "func %s(a,b,out *[65]byte,mask uintptr)\n", name)
-		fmt.Fprintf(&prototypes, "extern void %s(uint8_t*,uint8_t*,uint8_t*,uintptr_t);\n", name)
+		fmt.Fprintf(&prototypes, "extern void %s(uint8_t*,uint8_t*,uint8_t*,%s);\n", name, cWord)
 		fmt.Fprintf(&rows, "{%s,%d,%d,%d,%d},\n", name, width, bits, mode, legacy)
 	}
 	return source.String(), declarations.String(), prototypes.String(), rows.String()
