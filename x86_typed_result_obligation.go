@@ -9,7 +9,7 @@ func x86TypedFPResultNeedsProof(fn Func, sig FuncSig, arch string) bool {
 	if arch != "386" && arch != "amd64" {
 		return false
 	}
-	if x86DirectStaticRegisterResultCandidate(fn, sig, arch) {
+	if x86StaticIntegerResultSourceCandidate(fn, sig, arch) {
 		return true
 	}
 	for _, ins := range x86X87FlowInstructions(fn) {
