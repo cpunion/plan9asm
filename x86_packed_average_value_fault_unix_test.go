@@ -16,17 +16,30 @@ func TestX86PackedWordMultiplyE4PortableMemoryFaults(t *testing.T) {
 	x86FixedBinaryE4PortableMemoryFaults(t, x86WordMultiplyValueRuntimeProgram, 180)
 }
 
+func TestX86PackedNarrowE4NFPortableMemoryFaults(t *testing.T) {
+	x86FixedBinaryPortableMemoryFaults(t, x86NarrowValueRuntimeProgram, 270, true)
+}
+
 func x86FixedBinaryE4PortableMemoryFaults(t *testing.T, program func(string, bool) (string, string, string, string), observations int) {
+	t.Helper()
+	x86FixedBinaryPortableMemoryFaults(t, program, observations, false)
+}
+
+func x86FixedBinaryPortableMemoryFaults(t *testing.T, program func(string, bool) (string, string, string, string), observations int, fullTuple bool) {
 	t.Helper()
 	llc, clang, found := findLlcAndClang(t)
 	if !found {
 		t.Fatal("LLVM22 llc and clang required")
 	}
+	full := 0
+	if fullTuple {
+		full = 1
+	}
 	for _, discard := range []bool{false, true} {
 		source, declarations, prototypes, rows := program("amd64", discard)
 		driver := "#include <stdint.h>\n#include <stdio.h>\n#include <string.h>\n#include <errno.h>\n" +
 			"#include <unistd.h>\n#include <signal.h>\n#include <sys/mman.h>\n#include <sys/wait.h>\n#include <sys/resource.h>\n" +
-			numericalRuntimeFaultObservationC + prototypes + `
+			numericalRuntimeFaultObservationC + prototypes + "\nstatic const int full_tuple=" + fmt.Sprint(full) + ";\n" + `
 struct kernel {void (*fn)(uint8_t*,uint8_t*,uint8_t*,uint64_t);unsigned width,bits,mode,legacy,operation;};
 static const struct kernel kernels[]={
 ` + rows + `};
@@ -68,10 +81,12 @@ int main(void) {
     for(unsigned row=0;row<sizeof(kernels)/sizeof(kernels[0]);row++) {
         const struct kernel *k=&kernels[row];
         if(k->legacy)continue; /* SSE's original aligned m128 opcode is a separate native axis. */
-        if(observe(k,0,0,k->mode==0)||observe(k,0,UINT64_MAX,1)||
-            observe(k,storage+page-k->width,UINT64_MAX,0)||
-            observe(k,storage+page-k->width+1,UINT64_MAX,1)||
-            observe(k,storage+page-k->bits/8,1,k->mode==0))return 1;
+        unsigned tuple=k->width;
+        if(full_tuple && (k->operation&2))tuple=k->bits/8;
+        if(observe(k,0,0,full_tuple || k->mode==0)||observe(k,0,UINT64_MAX,1)||
+            observe(k,storage+page-tuple,UINT64_MAX,0)||
+            observe(k,storage+page-tuple+1,UINT64_MAX,1)||
+            observe(k,storage+page-k->bits/8,1,full_tuple ? tuple>k->bits/8 : k->mode==0))return 1;
         observations+=5;
     }
     if(observations!=` + fmt.Sprint(observations) + `)return 1;
@@ -83,7 +98,7 @@ int main(void) {
 			t.Run(fmt.Sprintf("discard=%t/%s", discard, api), func(t *testing.T) {
 				ir, err := x86ScalarFPBitViewAPI(t, source, declarations, "amd64", triple, api)
 				if err != nil {
-					t.Fatal("complete E4.nb byte/word average source rejected", err)
+					t.Fatal("complete typed packed source rejected", err)
 				}
 				for _, text := range []string{ir, x86DwordProductIROptimize(t, ir)} {
 					for _, level := range []int{0, 2} {
@@ -93,5 +108,5 @@ int main(void) {
 			})
 		}
 	}
-	t.Logf("all %d VEX/EVEX width/mask rows ×5 boundary controls ×live/dead results per backend; portable LLVM, not native AVX512", observations/5)
+	t.Logf("all %d VEX/EVEX width/mask rows ×5 boundary controls ×live/dead results per backend, full-tuple=%t; portable LLVM, not native AVX512", observations/5, fullTuple)
 }
