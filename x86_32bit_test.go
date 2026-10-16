@@ -244,7 +244,7 @@ func TestTranslate386ModelsOfficialDirectSPWrites(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	options := Options{
+	ir, err := Translate(file, Options{
 		TargetTriple: "i386-unknown-linux-gnu",
 		Goarch:       "386",
 		Sigs:         map[string]FuncSig{"stack": {Name: "stack", Ret: Void}},
@@ -585,7 +585,7 @@ TEXT x87IntegerSymbol(SB),NOSPLIT,$0-0
 	if err != nil {
 		t.Fatal(err)
 	}
-	ir, err := Translate(file, Options{
+	options := Options{
 		TargetTriple: "i386-unknown-linux-gnu",
 		Goarch:       "386",
 		Sigs: map[string]FuncSig{
