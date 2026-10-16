@@ -148,13 +148,32 @@ func TestX86ScalarMoveNativeRetainsPublicAndSourceBoundaries(t *testing.T) {
 						t.Fatal("standalone query acquired native storage", err)
 					}
 				}
+				t.Run("paired-native-load-and-store", func(t *testing.T) {
+					// Retain the original complete source. This is now the
+					// independently paired NUM store, not a load-only grant.
+					source, declaration := x86ExtensionNativeFixture("Value", arch, op+" (DX),CX\n"+op+" CX,(DX)", false)
+					goAssemblerOracleOutput(t, arch, source, "", true)
+					llc := findLLVM22Tool("llc")
+					if llc == "" {
+						t.Fatal("LLVM22 llc required")
+					}
+					for _, api := range []string{"text", "module", "Go"} {
+						ir, err := x86ScalarFPBitViewAPI(t, source, declaration, arch, triple, api)
+						if err != nil || ir == "" || !strings.Contains(ir, "load volatile ") || !strings.Contains(ir, "store volatile ") {
+							t.Fatal("paired load/store lost a complete native effect", api, err)
+						}
+						for _, level := range []string{"-O0", "-O2"} {
+							x86PackedStringCompileObject(t, llc, triple, ir, level)
+						}
+					}
+				})
 				for name, body := range map[string]string{
 					"unknown base":       op + " (DI),CX",
 					"numeric base":       "MOVL $42,DX\n" + op + " (DX),CX",
 					"unknown index":      op + " (DX)(SI*1),CX",
 					"pointer index":      op + " (DX)(DX*1),CX",
 					"pointer destroyed":  op + " (DX),DX\nMOVB (DX),CX",
-					"native store":       op + " (DX),CX\n" + op + " CX,(DX)",
+					"unbound store":      op + " (DX),CX\n" + op + " CX,(SI)",
 					"mixed pointer join": "CMPL BX,$0\nJE other\n" + move + " DX,DI\nJMP end\nother:\nMOVL $42,DI\nend:\n" + op + " (DI),CX",
 				} {
 					t.Run(name, func(t *testing.T) {
