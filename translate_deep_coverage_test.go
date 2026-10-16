@@ -139,6 +139,15 @@ func TestTranslateIRTextCoverage(t *testing.T) {
 			"example.helper": {Name: "example.helper", Args: []LLVMType{I64}, Ret: Void},
 		},
 	}
+	if _, err := translateIRText(file, opt); !errors.Is(err, ErrProbeNeedsContext) {
+		t.Fatalf("unbound external numerical storage did not retain Context: %v", err)
+	}
+	// Preserve the original unbound counterexample above. The independent
+	// successful fixture reads all eight actual same-file numeric bytes;
+	// an unrelated DATA relocation still exercises external declarations.
+	file.Funcs[0].Instrs[1].Args[0].Sym = "tbl(SB)"
+	file.Funcs[0].Instrs[1].Raw = "MOVQ tbl(SB), AX"
+	file.Data = append(file.Data, DataStmt{Sym: "refs", Width: 8, Addr: "other+8(SB)"})
 	ir, err := translateIRText(file, opt)
 	if err != nil {
 		t.Fatalf("translateIRText() error = %v", err)

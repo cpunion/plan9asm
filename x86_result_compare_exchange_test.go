@@ -74,7 +74,7 @@ func TestX86ResultCompareExchangePrefixAndAuthorityBoundaries(t *testing.T) {
 			{"jump-into-body", "LOCK\nCMPXCHGL CX,(SI)", "JMP 2(PC)\nLOCK\nCMPXCHGL CX,(SI)"},
 			{"jump-target-body", "LOCK\nCMPXCHGL CX,(SI)", "CMPL AX,AX\nJEQ 2(PC)\nLOCK\nCMPXCHGL CX,(SI)"},
 			{"locked-register", "CMPXCHGL CX,(SI)", "CMPXCHGL CX,BX"},
-			{"different-RMW", "CMPXCHGL CX,(SI)", "XADDL CX,(SI)"},
+			{"non-RMW-prefix-target", "CMPXCHGL CX,(SI)", "MOVL (SI),CX"},
 			{"REP-is-not-LOCK", "LOCK\n", "REP\n"},
 			{"REPN-is-not-LOCK", "LOCK\n", "REPN\n"},
 			{"undefined-vector-result", "SETEQ ret+", "AESENC X1,X0\nMOV" + word + " X0,AX\nCMPL AX,$0\nSETEQ ret+"},
@@ -128,6 +128,30 @@ func TestX86ResultCompareExchangePrefixAndAuthorityBoundaries(t *testing.T) {
 				source = strings.Replace(source, "SETEQ ret+", "SETCS ret+", 1)
 				if ir, err := x86ScalarFPBitViewAPI(t, source, declaration, arch, triple, "text"); ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
 					t.Fatal("pair CAS invented non-ZF status bytes", err)
+				}
+			})
+		}
+	}
+}
+
+func TestX86ResultCompareExchangeAlternateRMWUsesIndependentEffect(t *testing.T) {
+	for _, arch := range []string{"386", "amd64"} {
+		triple := "x86_64-unknown-linux-gnu"
+		if arch == "386" {
+			triple = "i386-unknown-linux-gnu"
+		}
+		source, declaration := x86ResultCompareExchangeFixture(arch, "CMPXCHGL", true, false)
+		source = strings.Replace(source, "CMPXCHGL CX,(SI)", "XADDL CX,(SI)", 1)
+		requireX86GoAssemblerResult(t, arch, source, true)
+		instruction := x86ScalarLaneInstruction(t, "XADDL CX,(SI)")
+		state := x86ResultState{}
+		if accepted, known := x86LoweredCompareExchangeResultStep(instruction, &state, nil, arch); accepted || known {
+			t.Fatal("XADD acquired the unrelated CAS effect")
+		}
+		for _, api := range []string{"text", "module", "Go"} {
+			t.Run(arch+"/"+api, func(t *testing.T) {
+				if ir, err := x86ScalarFPBitViewAPI(t, source, declaration, arch, triple, api); err != nil || ir == "" {
+					t.Fatal("the independently modeled complete XADD source was rejected", err)
 				}
 			})
 		}
