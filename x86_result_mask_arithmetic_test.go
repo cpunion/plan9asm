@@ -62,12 +62,19 @@ func TestX86MaskArithmeticRejectsNonIntegerImmediateConsumers(t *testing.T) {
 		if !row.shift {
 			continue
 		}
-		for _, value := range []string{"$1.0", "$UNRESOLVED", "$-1", "$256"} {
+		for _, value := range []string{"$0.0", "$1.0", "$UNRESOLVED", "$-1", "$256"} {
 			t.Run(row.op+"/"+value, func(t *testing.T) {
 				ins := x86ScalarLaneInstruction(t, row.op+" "+value+",K1,K2")
 				for _, arch := range []string{"386", "amd64"} {
 					consumer, _ := newAMD64CtxWithFuncForTest(t, Func{}, FuncSig{Ret: Void}, nil)
 					consumer.goarch = arch
+					if err := consumer.emitEntryAllocas(); err != nil {
+						t.Fatal(err)
+					}
+					control := x86ScalarLaneInstruction(t, row.op+" $1,K1,K2")
+					if err := consumer.lowerMaskArithmetic(control.Op, control); err != nil {
+						t.Fatal("valid immediate control did not reach the lowerer", err)
+					}
 					if err := consumer.lowerMaskArithmetic(ins.Op, ins); err == nil {
 						t.Fatal("lowerer accepted a non-Yu8 immediate", arch, value)
 					}
