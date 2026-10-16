@@ -1,5 +1,36 @@
 # Current work: PR 40 checkpoint
 
+## Combined native-input and stack-width checkpoint, 2026-10-17
+
+Frozen `d9c3b367` passes the complete 191-root affected/retained union on
+current Go, actual Go20 and race: 573 root executions and 52,044 children,
+zero test failures/skips in the completed qualification. Independent raw
+auditing retains the same 17,539 terminal identities per lane and unchanged
+source/SDK/tool seals. The first cold race command exceeded its outer deadline;
+that failed receipt remains failed. Its complete 46-root replay passes without
+changing the five-minute test or 330-second outer budget. All 120 CI policy
+tests also pass. The new unlocked-RMW native job is a full-module prerequisite.
+
+Independent RED `0161285a` additionally reproduces 36 public false acceptances
+and four invalid joins for mixed native W/Q stack cells, including Void.
+At `3acec0cb`, four changed/retained roots pass 29 children without skips.
+A bounded value-only bit mask retains AMD64 cell-width identity without extra
+allocation; partial native pops require a byte-accurate storage role. Complete
+mixed-width nesting, original Go objects, three-API O0/O2 LLVM objects and the
+separate byte-accurate386 controls remain. This is not native execution.
+
+All eight SDK x86 form reports are now independently reviewed. Exactly seven
+386 forms and 612 AMD64 forms per SDK change from supported isolated probes
+to Context for the registered missing-input/stack obligations. Complete form
+metadata, encoder rows/rules, unsupported/parse counts and corpus denominators
+are unchanged. The baseline changes only 48 reviewed count/fingerprint values.
+The earlier final-gate receipt remains seven passes/two official-baseline
+failures; rerun current-head gates after this update. Next qualify the complete
+stack/AH/RMW retained union on both SDKs/race, then publish one allowed-fork
+batch and require actual native/full-module CI. The strict benchmark remains
+failed at its older 148/184 result. PR40 is still draft at the old contribution
+head; no new push, external ledger update or local scanner workload was made.
+
 ## Complete shift/unpack qualification, 2026-10-17
 
 At `e6410b0c`, all 39 affected/retained roots pass on current Go, actual
