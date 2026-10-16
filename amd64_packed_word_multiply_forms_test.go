@@ -12,8 +12,6 @@ import (
 	"runtime"
 	"strings"
 	"testing"
-
-	"github.com/xgo-dev/llvm"
 )
 
 var x86WordMultiplyNames = []string{
@@ -329,33 +327,20 @@ func TestX86PackedWordMultiplyThreeAPIsFiveTargetObjects(t *testing.T) {
 				}
 				sigs[name] = sig
 			}
-			options := Options{Goarch: arch, TargetTriple: triple, Sigs: sigs,
-				ResolveSym: func(symbol string) string { return strings.TrimPrefix(symbol, "·") }}
-			ir, err := Translate(file, options)
-			if err != nil {
-				t.Fatal(err)
+			for _, api := range []string{"text", "module", "Go"} {
+				if ir, err := x86ScalarFPBitViewPackageAPI(t, source.String(), pkg, arch, triple, api); ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+					t.Fatal("original word-multiply formats invented register or native inputs", api, err)
+				}
 			}
-			x86ResultInitializationObject(t, llc, triple, ir, "word-multiply-text")
-			ctx := llvm.NewContext()
-			defer ctx.Dispose()
-			module, err := TranslateModuleInContext(ctx, file, options)
-			if !module.IsNil() {
-				defer module.Dispose()
+			// Keep every old format/function in its original Go object and in
+			// emitter-only objects. Initialized public positives live in the
+			// complete-family value matrix, not these uninitialized probes.
+			ir := x86WordMultiplyFormatObjectUnit(t, file, sigs, arch, triple)
+			for _, text := range []string{ir, x86MulDivRoundOptimize(t, ir)} {
+				for _, level := range []string{"-O0", "-O2"} {
+					x86PackedStringCompileObject(t, llc, triple, text, level)
+				}
 			}
-			if err != nil {
-				t.Fatal(err)
-			}
-			x86ResultInitializationObject(t, llc, triple, module.String(), "word-multiply-module")
-			translated, err := translateGoModuleInContext(ctx, pkg, []byte(source.String()), GoModuleOptions{
-				GOARCH: arch, TargetTriple: triple, ResolveSym: options.ResolveSym})
-			if translated != nil && !translated.Module.IsNil() {
-				defer translated.Module.Dispose()
-			}
-			if err != nil {
-				t.Fatal(err)
-			}
-			x86ResultInitializationObject(t, llc, triple, translated.Module.String(), "word-multiply-go")
-			x86ResultInitializationObject(t, llc, triple, x86MulDivRoundOptimize(t, ir), "word-multiply-O2")
 		})
 	}
 }
