@@ -150,6 +150,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		if accepted, recognized := x86LoweredScalarNativeLoad(ins, state, owned, resultOffset, arch); recognized {
 			return accepted
 		}
+		if accepted, recognized := x86LoweredScalarNativeStore(ins, state, owned, arch); recognized {
+			return accepted
+		}
 		if accepted, recognized := x86LoweredScalarArithmeticNativeRead(ins, state, owned, resultOffset, arch); recognized {
 			return accepted
 		}
