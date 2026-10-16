@@ -96,7 +96,7 @@ function validate(text) {
   assert.match(body, /if: \$\{\{ !cancelled\(\) \}\}/);
 }
 
-test('native result/source/fault/byte-swap/CRC32 roles retain seven exact independently inventoried owners', () => {
+test('native result/source/fault/byte-swap/CRC32/BIT roles retain eight exact independently inventoried owners', () => {
   validate(workflow);
 });
 

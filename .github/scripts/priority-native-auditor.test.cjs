@@ -210,7 +210,8 @@ test('required children cannot finish after their successful root terminal', () 
 });
 
 test('duplicate or missing root and child events cannot close the protocol', () => {
-  for (const name of [sourceStack, requiredChildren[0], byteSwap, byteSwap + '/amd64', byteSwap + '/386', crc32, ...mode32Children]) {
+  for (const name of [sourceStack, requiredChildren[0], byteSwap, byteSwap + '/amd64', byteSwap + '/386', crc32,
+    bitTest, ...requiredChildren.filter(child => child.startsWith(bitTest + '/')), ...mode32Children]) {
     for (const action of ['run', 'pass']) {
       const duplicate = fixture();
       const rows = events(duplicate);
