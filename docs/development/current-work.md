@@ -1,11 +1,69 @@
 # Current work: PR 40 checkpoint
 
-Checkpoint: 2026-10-15 23:25 UTC. The notes below this section are historical
-and retain their original source scope; they are not the current task queue.
+Checkpoint: 2026-10-16 02:29 UTC. This section supersedes the historical queue
+below; every older result retains its original source and scope.
 
-## Active queue
+## Immediate CI repair queue
 
-The latest allowed-fork [run38760793656](https://github.com/cpunion/plan9asm/actions/runs/38760793656)
+Allowed-fork [run38824961157](https://github.com/cpunion/plan9asm/actions/runs/38824961157)
+at `354ea4ef` finished naturally: 79 jobs, 69 successful, ten failed. Nine
+failed main-module execution partitions expose fourteen failing test roots;
+the tenth failure is the strict main-module aggregate. Both complete CLI
+modules pass. The separate native x87 artifact authenticates and replays as
+four roots/26 children, all passing. No cancellation or rerun is a pass.
+
+The main development branch now integrates `f95a403b`. The repair batch includes
+the qualified opaque-pointer transport, bounded static integer results,
+physical-versus-named segment handoff, unused opaque SB-address transport and
+independent original-source/emitter/initialized-counterpart fixture corrections.
+The earlier `b4e71afc` static/segment set passes all64 roots/11,365 children on
+Go27 and actual Go20. Its combined race command times out and remains FAILED;
+split the same complete owner union rather than increasing its deadline.
+
+The final BIT runtime defect has independent TDDs for complete GP native stores,
+partial-bit FLAGS transport, all twelve BIT names and their native memory forms.
+Use the shared typed grammars, preserve exact volatile effects and strict
+incoming-pointer/numerical-index identities. The adjacent popped-word mask
+observation consumes exactly the actual known bits, never virtual stack padding;
+other instructions revoke it. It adds no memory, raw-entry, caller or GC contract.
+At `f95a403b`, eight focused roots/1,413 children pass on Go27 without skips.
+The portable runtime executes276 LLVM programs, each with126 independent
+whole-buffer/status inputs, through three APIs and both IR/backend O0/O2 axes.
+This is not original-Go native execution: the unchanged cross-runtime root
+requires its native Linux/Windows counterpart, not a host skip.
+
+Next, freeze the combined source and run the exact retained plus affected
+owner union on Go27, actual Go20 and race in disjoint bounded groups. Retain
+all original failed CI roots, original-Go and LLVM objects, before/after seals,
+both whole-root-module vets and the official five-architecture gates. Then
+stage the complete repair batch on the allowed fork and let CI finish naturally.
+Do not change the contribution head or mark PR40 ready before qualification.
+
+The strict184-file benchmark still has146 passes/38 failures at `00cfc843`;
+focused checktest recovery is not a new whole-benchmark pass. AMD64 still
+exceeds its unchanged300-second target budget. General x87 FP80 arithmetic
+and compact-family completion remain separate pending work. The compact leaf
+`5b53e944` has a Go27 three-root/1,530-child memory/FP first GREEN, not final
+Go20/race/native qualification; it is not merged into this CI repair batch.
+
+External inventory remains server-only in `llgo-compat/plan9asm`. The last
+validated export is23,202,445 index entries,1,090,783 unique module paths and
+6,962 assembly-bearing version records, with contiguous boundaries2025-10-01
+through2026-10-15T04:27:23Z. Those are discovery counts, not translation,
+LLVM compilation or execution passes. No local inventory process is required.
+
+## Historical queue at 00:44 UTC
+
+The repaired candidate `354ea4ef` has been pushed normally to the allowed fork.
+[Run38824961157](https://github.com/cpunion/plan9asm/actions/runs/38824961157)
+is still running/queued. Its independent native x87 job passes and the original
+artifact independently replays as 4 roots/26 children, no skips or incomplete
+terminals, with the exact GitHub SHA256 digest. Complete-module CI is not yet
+successful. The run must
+finish naturally before another repair push. Its non-GitHub tree is exactly
+the qualified main source `d0388d27`; fork-only diagnostic policy is separate.
+
+The last completed allowed-fork [run38760793656](https://github.com/cpunion/plan9asm/actions/runs/38760793656)
 at `191fbeaf` ended naturally: 78 jobs, 66 successful and 12 failed. Ten
 execution jobs contain 13 distinct failing test roots; the two other failures
 are strict complete-module aggregates refusing those failed partitions.
@@ -31,6 +89,7 @@ establish native execution on the skipped architecture.
 | x87 initialized words, ENV and exact signed integers | Merged `bda3e19c` passes 139 complete affected/retained owners on Go27, actual Go20 and race: 417 root executions/40,950 children, zero skips, complete ordered terminals and matching source/tool seals. Both whole-root-module vets pass. These are not whole-module tests, native execution or general FP80 arithmetic receipts. |
 | DATA relocation address values | Qualified `1f39d8db` is merged through `62784911`: 54 affected owners on both SDKs and 30 source/model owners on race, 138 root executions/3,497 children, two whole-root-module vets and tracked formatting pass. Generic incoming pointers and code addresses gain no numerical or dereference permission. |
 | Complete 386 runtime fixture | The original 18 TEXTs, manual signatures and C driver remain unchanged. The BX-only source retains its missing-scratch Context; the separately proved bounded counterpart now supplies the Windows runtime owner. All three original/corrected/bounded Go objects, eight LLVM22 axes and 28 single-mutation controls pass in the merged portable set. Actual Windows execution remains pending. |
+| Strict complete standard-library benchmark | `00cfc843` finishes naturally with unchanged complete source/tool seals and all 184 original files attempted: 146 pass/38 fail, zero N/A. Total target time is491s; AMD64410s still exceeds the original300s target budget. Compared with `ab5ad450`, two files recover and six regress. These failures remain failures; focused owners do not replace this gate. |
 
 The independent original-runtime boundary pair genuinely fails at `ab0395d3`:
 BX-only scratch has no backing frame, and the new conditional Go oracle lacks
@@ -53,16 +112,59 @@ All eight actual SDKs independently compare complete AMD64 reports before and
 after the repair. Only eight FCMOV forms and FRNDINT change from supported
 isolated probes to context-required; every other form, denominator and encoder
 rule remains unchanged. `368991ae` updates exactly three AMD64 baseline fields
-per SDK. The new isolated/initialized/missing-input regression is undergoing
-its old-source RED and current-source verification; official gate GREEN is
-still pending at this checkpoint.
+per SDK. The independent regression genuinely reproduces 60 false acceptances
+on the old complete source; its 30 initialized positives still pass there.
+At `d0388d27`, all 120 children pass separately on actual Go27, Go20 and race,
+without skips and with complete before/after seals. Both actual SDKs then pass
+the five-architecture official gate and all three selected scanner roots.
+The existing Go20 malformed maskless EVEX.Z corpus row remains unsupported;
+this is not a new regression or a full execution-coverage certificate.
 
-Allowed-fork staging `956d5fa4` retains the original 41 SDK priorities and
+Allowed-fork candidate `354ea4ef` retains the original 41 SDK priorities and
 native65 job, and adds a separate native x87 owner. Its four required roots
 include original-Go/LLVM amd64 and 386 I64 execution, conditional moves and
 hardware status checks, with all 26 backend/architecture children mandatory.
-All 102 Node policies and three workflow lints pass. It has not been pushed;
-the old completed failed run above is still the latest online result.
+All 102 Node policies and three workflow lints pass freshly at that exact
+candidate. The new run above owns actual execution; the old completed failed
+run remains failed. PR40 is still draft at its older head, pending fork CI
+and the separate strict benchmark/standard-library work.
+
+The benchmark's new opaque-pointer return regression is fixed locally through
+`2e7f3821`, merged as `b3d900d9`. The first test-only run has a genuine private
+signature setup failure; the corrected fixture then reproduces all15 failed
+translation paths while all30 negative controls pass. The complete bounded
+address/MOV/copy role keeps `x86ResultScalarBytes` unchanged and grants no NUM,
+caller or pointee permission. All31 affected owners/2,723 children pass on each
+of Go27, Go20 and race, without skips. Both merged whole-root-module vets pass.
+The original complete Go27 checktest package then compiles both files on each
+of386 and amd64: four original files, zero failures/N/A. This is not a fresh
+184-file benchmark or native pointer-result receipt; the38 failed benchmark
+files above remain the latest complete result. No second push interrupts CI.
+
+The separate `codex/pr40-compact-expand-completion-20261016` leaf retains its current-source RED at `0d45f567`:
+four roots/2,448 children expose216 missing register effects,1,620 rejected
+initialized API paths and540 wrongly accepted missing-input/result paths.
+`bbf06955` shares complete Go `_yvcompresspd`/`_yvexpandpd` grammar across all12
+opcodes, the two emitters and numerical descriptors. That first run also exposes
+an overly strong test expectation: LLVM22 retains a constant vector.compress
+intrinsic rather than folding it. `a9dc8abd` independently checks its actual
+typed zero inputs/continuation and rejects nonzero, poison and foreign calls.
+The unchanged old unbound full fixtures remain public Context controls and
+complete emitter-only objects. A separate216-function initialized counterpart
+retains all five x86 targets, three APIs and both IR/backend optimization axes.
+At `ae1e064e`, Go27's19 roots/2,779 children and Go20's expanded23/3,029 pass.
+
+Intel XED independently requires ZEROING=0 for all18 compressed-memory opcode/
+width combinations. The corrected `0649893e` regression retains passing actual
+Go-object/LLVM22 decode observations, while five complete targets and12 direct
+fault-priority children genuinely fail. `86213047` emits #UD before operand
+evaluation, without granting an ordinary numerical continuation. Its three
+roots/37 children pass. `69315993` then passes all26 retained/register/fault
+owners/3,066 children on Go27; the identical Go20 and race lanes are running.
+Valid memory forms, old runtime fixtures, complete SDK objects, both vets,
+native execution and official baseline classification still need qualification
+before this leaf can be merged or published. Current fork CI remains frozen at
+`354ea4ef`; none of these newer compact changes interrupts that run.
 
 The FS/GS first-GREEN set at `951a68a0` passes 17 unique roots and 30,902
 children, retaining all 212 AMD64 or 114 386 TEXTs per target. Its explicit

@@ -16,6 +16,9 @@ import (
 // result. In particular, this never creates a caller-memory or raw-RET token.
 func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 	fn, sig, arch := c.fpScalarSource, c.sig, c.goarch
+	if x86StaticIntegerResultSourceCandidate(fn, sig, arch) {
+		return c.checkStaticIntegerResultInitialization()
+	}
 	if fn.x86ContinuationFlow != nil {
 		if err := c.checkContinuationResultSource(); err != nil {
 			return err
@@ -147,6 +150,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		if accepted, recognized := x86LoweredScalarNativeLoad(ins, state, owned, resultOffset, arch); recognized {
 			return accepted
 		}
+		if accepted, recognized := x86LoweredScalarNativeStore(ins, state, owned, arch); recognized {
+			return accepted
+		}
 		if accepted, recognized := x86LoweredScalarArithmeticNativeRead(ins, state, owned, resultOffset, arch); recognized {
 			return accepted
 		}
@@ -154,6 +160,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 			return accepted
 		}
 		if accepted, known := c.scalarBitTestFPShadowTransfer(ins, state, owned, arch); known {
+			return accepted
+		}
+		if accepted, known := x86LoweredNativeBitTest(ins, state, owned, arch); known {
 			return accepted
 		}
 		if accepted, recognized := x86ResultScalarLaneStepWithRead(ins, state, owned, resultOffset, arch, true); recognized {

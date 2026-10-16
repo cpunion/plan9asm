@@ -319,13 +319,26 @@ func Round(x float64) int64
 	RET
 `)
 
-	tr, err := TranslateGoModule(pkg, asm, GoModuleOptions{
+	options := GoModuleOptions{
 		FileName:     "round_386.s",
 		GOARCH:       "386",
 		TargetTriple: "i386-unknown-linux-gnu",
 		X87Mode:      X87Software,
 		ResolveSym:   testResolveSym("test/pkg"),
-	})
+	}
+	goAssemblerOracleOutput(t, "386", strings.ReplaceAll(string(asm), ",NOSPLIT,", ",4,"), "", true)
+	original, err := TranslateGoModule(pkg, asm, options)
+	if original != nil {
+		original.Module.Dispose()
+	}
+	if !errors.Is(err, ErrProbeNeedsContext) {
+		t.Fatal("original source invented an entry control word", err)
+	}
+	// A separately initialized counterpart still exercises the same three
+	// original numerical instructions and actual Software option propagation.
+	initialized := strings.Replace(string(asm), "\n\tFMOVD", "\n\tFINIT\n\tFMOVD", 1)
+	goAssemblerOracleOutput(t, "386", strings.ReplaceAll(initialized, ",NOSPLIT,", ",4,"), "", true)
+	tr, err := TranslateGoModule(pkg, []byte(initialized), options)
 	if err != nil {
 		t.Fatal(err)
 	}

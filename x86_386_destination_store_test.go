@@ -8,6 +8,58 @@ import (
 	"github.com/xgo-dev/llvm"
 )
 
+// Retain every original destination-form body. Only vectorResult has actual
+// typed/initialized input and output; the remaining no-argument bodies are
+// explicitly emitter-only objects, never public translations or executions.
+func x86CompileOnlyDestinationEmitterModule(t *testing.T, original *File, options Options) string {
+	t.Helper()
+	context := llvm.NewContext()
+	defer context.Dispose()
+	module := context.NewModule("destination-emitter-observations")
+	defer module.Dispose()
+	for _, function := range original.Funcs {
+		file := &File{Arch: original.Arch, Funcs: []Func{function}}
+		var ir string
+		if function.ArgSize != 0 {
+			var err error
+			ir, err = Translate(file, Options{Goarch: options.Goarch, TargetTriple: options.TargetTriple,
+				Sigs: map[string]FuncSig{function.Sym: options.Sigs[function.Sym]}})
+			if err != nil {
+				t.Fatal("independent typed destination failed", err)
+			}
+		} else {
+			ir = x86ZeroArgumentLowererObjectUnit(t, file, options.Goarch, options.TargetTriple, function.Sym,
+				func(consumer *amd64Ctx, instruction Instr) (bool, bool, error) {
+					if known, terminated, err := consumer.lowerVectorScalarIntegerMove(instruction.Op, instruction); known {
+						return known, terminated, err
+					}
+					if known, terminated, err := consumer.lowerMov(instruction.Op, instruction); known {
+						return known, terminated, err
+					}
+					if known, terminated, err := consumer.lowerVec(instruction.Op, instruction); known {
+						return known, terminated, err
+					}
+					return consumer.lowerX87(instruction.Op, instruction)
+				})
+		}
+		part, err := parseIRModuleInContext(context, ir)
+		if err != nil {
+			if !part.IsNil() {
+				part.Dispose()
+			}
+			t.Fatal("complete original destination body produced invalid IR", err)
+		}
+		// LLVMLinkModules2 consumes part on both success and failure.
+		if err := llvm.LinkModules(module, part); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := llvm.VerifyModule(module, llvm.ReturnStatusAction); err != nil {
+		t.Fatal(err)
+	}
+	return module.String()
+}
+
 func check386DestinationFormsIR(t *testing.T, ir string) {
 	t.Helper()
 	ctx := llvm.NewContext()

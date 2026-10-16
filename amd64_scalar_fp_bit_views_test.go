@@ -18,13 +18,18 @@ func x86ScalarFPBitViewAPI(t *testing.T, source, declaration, arch, triple, api 
 }
 
 func x86ScalarFPBitViewPackageAPI(t *testing.T, source string, pkg GoPackage, arch, triple, api string) (string, error) {
+	return x86ScalarFPBitViewPackageAPIWithManual(t, source, pkg, arch, triple, api, nil)
+}
+
+func x86ScalarFPBitViewPackageAPIWithManual(t *testing.T, source string, pkg GoPackage, arch, triple, api string,
+	manual func(string) (FuncSig, bool)) (string, error) {
 	t.Helper()
 	resolve := func(symbol string) string { return strings.TrimPrefix(goStripABISuffix(symbol), "·") }
 	ctx := llvm.NewContext()
 	defer ctx.Dispose()
 	if api == "Go" {
 		module, err := translateGoModuleInContext(ctx, pkg, []byte(source), GoModuleOptions{
-			GOARCH: arch, TargetTriple: triple, ResolveSym: resolve,
+			GOARCH: arch, TargetTriple: triple, ResolveSym: resolve, ManualSig: manual,
 		})
 		if module != nil && !module.Module.IsNil() {
 			defer module.Module.Dispose()
@@ -36,7 +41,7 @@ func x86ScalarFPBitViewPackageAPI(t *testing.T, source string, pkg GoPackage, ar
 	if err != nil {
 		return "", err
 	}
-	signatures, err := goSigsForAsmFile(pkg, file, resolve, arch, nil, nil, nil)
+	signatures, err := goSigsForAsmFile(pkg, file, resolve, arch, nil, nil, manual)
 	if err != nil {
 		return "", err
 	}

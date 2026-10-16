@@ -174,9 +174,9 @@ func TestTranslate386RejectsInvalidInstructionForms(t *testing.T) {
 		{name: "fmovd destination", instruction: "FMOVD F0, AX", want: "FMOVD expects memory,F0"},
 		{name: "fmovdp count", instruction: "FMOVDP F0", want: "FMOVDP expects F0 source"},
 		{name: "fmovdp destination", instruction: "FMOVDP F0, AX", want: "FMOVDP expects F0 source"},
-		{name: "fmovv count", instruction: "FMOVV AX", want: "FMOVV expects memory source"},
-		{name: "fmovv destination", instruction: "FMOVV AX, F1", want: "FMOVV expects memory source"},
-		{name: "fmovvp count", instruction: "FMOVVP F0", want: "FMOVVP expects F0 source"},
+		{name: "fmovv count", instruction: "FMOVV AX", want: "FMOVV expects src, dst"},
+		{name: "fmovv destination", instruction: "FMOVV AX, F1", want: "FMOVV expects signed integer memory,F0"},
+		{name: "fmovvp count", instruction: "FMOVVP F0", want: "FMOVVP expects src, dst"},
 		{name: "fmovvp source", instruction: "FMOVVP F1, 0(SP)", want: "FMOVVP expects F0 source"},
 		{name: "fmovvp destination", instruction: "FMOVVP F0, AX", want: "FMOVVP expects F0 source"},
 		{name: "fxchd count", instruction: "FXCHD F0", want: "FXCHD expects Fsrc, Fdst"},
@@ -585,7 +585,7 @@ TEXT x87IntegerSymbol(SB),NOSPLIT,$0-0
 	if err != nil {
 		t.Fatal(err)
 	}
-	ir, err := Translate(file, Options{
+	options := Options{
 		TargetTriple: "i386-unknown-linux-gnu",
 		Goarch:       "386",
 		Sigs: map[string]FuncSig{
@@ -601,10 +601,11 @@ TEXT x87IntegerSymbol(SB),NOSPLIT,$0-0
 			"x87IntegerMemory": {Name: "x87IntegerMemory", Ret: Void},
 			"x87IntegerSymbol": {Name: "x87IntegerSymbol", Ret: Void},
 		},
-	})
-	if err != nil {
-		t.Fatal(err)
 	}
+	if _, err := Translate(file, options); !errors.Is(err, ErrProbeNeedsContext) {
+		t.Fatal("original unbacked x87 source did not retain Context", err)
+	}
+	ir := x86CompileOnlyDestinationEmitterModule(t, file, options)
 	check386DestinationFormsIR(t, ir)
 	llc := findLLVM22Tool("llc")
 	if llc == "" {

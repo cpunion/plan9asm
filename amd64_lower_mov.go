@@ -33,6 +33,12 @@ func (c *amd64Ctx) lowerMov(op Op, ins Instr) (ok bool, terminated bool, err err
 		}
 		return true, false, c.lowerScalarNativeLoad(form, ins)
 	}
+	if form, known, err := x86ScalarNativeStoreProperties(op, ins, c.goarch); known {
+		if err != nil {
+			return true, false, err
+		}
+		return true, false, c.lowerScalarNativeStore(form, ins)
+	}
 	src, dst := ins.Args[0], ins.Args[1]
 	dispatch := ins
 	dispatch.Op = op

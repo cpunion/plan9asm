@@ -40,8 +40,17 @@ func x86X87UnboundOriginalAPI(t *testing.T, file *File, options Options, api str
 // Public APIs must independently reject these original fixtures below.
 func x86X87LowererObjectUnit(t *testing.T, original *File, arch, triple string) string {
 	t.Helper()
+	return x86ZeroArgumentLowererObjectUnit(t, original, arch, triple, "X87LowererObjectUnit",
+		func(consumer *amd64Ctx, instruction Instr) (bool, bool, error) {
+			return consumer.lowerX87(instruction.Op, instruction)
+		})
+}
+
+func x86ZeroArgumentLowererObjectUnit(t *testing.T, original *File, arch, triple, name string,
+	lower func(*amd64Ctx, Instr) (bool, bool, error)) string {
+	t.Helper()
 	if original == nil || len(original.Funcs) != 1 || len(original.Data) != 0 || len(original.Globl) != 0 {
-		t.Fatal("x87 emitter unit requires one complete original TEXT without DATA")
+		t.Fatal("instruction emitter unit requires one complete original TEXT without DATA")
 	}
 	file, err := normalizeX86RawFile(original, arch)
 	if err != nil || len(file.Funcs) != 1 {
@@ -54,8 +63,9 @@ func x86X87LowererObjectUnit(t *testing.T, original *File, arch, triple string) 
 	var ir strings.Builder
 	fmt.Fprintf(&ir, "target triple = %q\n", triple)
 	emitAMD64Prelude(&ir, arch, file)
-	ir.WriteString("define void @X87LowererObjectUnit() {\n")
-	consumer := newX86Ctx(&ir, function, FuncSig{Name: "X87LowererObjectUnit", Ret: Void},
+	emitExternSBGlobals(&ir, file, func(symbol string) string { return symbol }, nil)
+	fmt.Fprintf(&ir, "define void %s() {\n", llvmGlobal(name))
+	consumer := newX86Ctx(&ir, function, FuncSig{Name: name, Ret: Void},
 		func(name string) string { return name }, nil, arch, triple, false)
 	consumer.x87Mode = X87Software
 	if err := consumer.emitEntryAllocas(); err != nil {
@@ -76,9 +86,14 @@ func x86X87LowererObjectUnit(t *testing.T, original *File, arch, triple string) 
 			}
 			ir.WriteString("  ret void\n")
 		default:
-			known, terminated, err := consumer.lowerX87(instruction.Op, instruction)
-			if !known || terminated || err != nil {
-				t.Fatalf("complete original x87 instruction %d was not emitted: %s: %v", ordinal, instruction.Raw, err)
+			known, terminated, err := lower(consumer, instruction)
+			if !known || err != nil {
+				t.Fatalf("complete original instruction %d was not emitted: %s: %v", ordinal, instruction.Raw, err)
+			}
+			if terminated {
+				// Keep later original rows in explicitly unreachable unit-only
+				// blocks; a real trap is not a returning numerical operation.
+				fmt.Fprintf(&ir, "%s_emitter_only_unreachable:\n", consumer.newTmp())
 			}
 			emitted++
 		}
@@ -87,6 +102,6 @@ func x86X87LowererObjectUnit(t *testing.T, original *File, arch, triple string) 
 		t.Fatal("emitter unit did not consume every original instruction")
 	}
 	ir.WriteString("}\n")
-	t.Logf("emitter-only object source: all %d normalized x87 instructions; no public translation or execution claim", emitted)
+	t.Logf("emitter-only object source: all %d normalized instructions; no public translation or execution claim", emitted)
 	return ir.String()
 }

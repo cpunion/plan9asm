@@ -139,6 +139,15 @@ func TestTranslateIRTextCoverage(t *testing.T) {
 			"example.helper": {Name: "example.helper", Args: []LLVMType{I64}, Ret: Void},
 		},
 	}
+	if _, err := translateIRText(file, opt); !errors.Is(err, ErrProbeNeedsContext) {
+		t.Fatalf("unbound external numerical storage did not retain Context: %v", err)
+	}
+	// Preserve the original unbound counterexample above. The independent
+	// successful fixture reads all eight actual same-file numeric bytes;
+	// an unrelated DATA relocation still exercises external declarations.
+	file.Funcs[0].Instrs[1].Args[0].Sym = "tbl(SB)"
+	file.Funcs[0].Instrs[1].Raw = "MOVQ tbl(SB), AX"
+	file.Data = append(file.Data, DataStmt{Sym: "refs", Width: 8, Addr: "other+8(SB)"})
 	ir, err := translateIRText(file, opt)
 	if err != nil {
 		t.Fatalf("translateIRText() error = %v", err)
@@ -258,14 +267,31 @@ func TestTranslateHelpersCoverage(t *testing.T) {
 		Globl: []GloblStmt{{Sym: "data", Size: 8}},
 		Data:  []DataStmt{{Sym: "data", Off: 0, Width: 8, Value: 1}},
 	}
-	got, err := Translate(file, Options{
+	options := Options{
 		ResolveSym: resolve,
 		Goarch:     "amd64",
 		Sigs: map[string]FuncSig{
 			"example.entry":  {Name: "example.entry", Ret: I64},
 			"example.helper": {Name: "example.helper", Ret: Void},
 		},
-	})
+	}
+	if _, err := Translate(file, options); !errors.Is(err, ErrProbeNeedsContext) {
+		t.Fatalf("unbound local symbol/call-clobbered AX did not retain Context: %v", err)
+	}
+	// Independent helper-declaration and numeric-data entries: a void call
+	// does not promise to preserve an integer AX result, and data<> is not
+	// the separately defined non-local data object.
+	file.Funcs = []Func{
+		{Sym: "·entry", Instrs: []Instr{file.Funcs[0].Instrs[0], file.Funcs[0].Instrs[2], file.Funcs[0].Instrs[3]}},
+		{Sym: "·readData", Instrs: []Instr{
+			{Op: OpTEXT, Raw: "TEXT ·readData(SB),NOSPLIT,$0-0"},
+			{Op: OpMOVQ, Args: []Operand{{Kind: OpSym, Sym: "data(SB)"}, {Kind: OpReg, Reg: AX}}, Raw: "MOVQ data(SB), AX"},
+			{Op: OpRET, Raw: "RET"},
+		}},
+	}
+	options.Sigs["example.entry"] = FuncSig{Name: "example.entry", Ret: Void}
+	options.Sigs["example.readData"] = FuncSig{Name: "example.readData", Ret: I64}
+	got, err := Translate(file, options)
 	if err != nil {
 		t.Fatalf("Translate() error = %v", err)
 	}

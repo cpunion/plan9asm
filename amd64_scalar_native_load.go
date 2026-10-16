@@ -76,6 +76,9 @@ func x86LoweredScalarNativeLoad(ins Instr, state *x86ResultState, owned []bool, 
 	if !known || err != nil {
 		return false, known
 	}
+	if !x86ResultNamedPredicateInstruction(ins) || ins.x86NumericalRead != nil {
+		return false, true // Physical emission does not grant a named numerical continuation.
+	}
 	if x86LogicalSourceFrameRegister(form.destination, arch) {
 		return false, true
 	}
