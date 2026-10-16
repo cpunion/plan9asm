@@ -24,6 +24,9 @@ func x86TypedFPResultNeedsProof(fn Func, sig FuncSig, arch string) bool {
 	}
 	opaqueAddressResult := x86OpaqueAddressPointerResultRole(fn, sig, arch)
 	for _, ins := range fn.Instrs {
+		if _, known, err := x86MaskValueProperties(ins.Op, ins, arch); known && err == nil && x86ResultNamedPredicateInstruction(ins) {
+			return true // KADD/KSHIFT/KUNPCK retain their complete input obligation for Void.
+		}
 		if amd64MaskMoveOperandsValid(ins, arch) && x86ResultNamedPredicateInstruction(ins) {
 			return true // Mask inputs/results cannot borrow zeroed implementation slots, even for Void.
 		}
