@@ -92,6 +92,10 @@ and T2 old-destination tables remain inputs even with zero masking. Complete
 vector reads use actual X/Y/Z byte views, not the older scalar/legacy-X reader.
 Memory widths come from each opcode's full tuple or independent broadcast
 attribute. Shared numerical dependencies grant no native/caller memory role.
+Keep the actual architecture when projecting unary mask arity or physical
+decoder operands. Go-accepted non-SIB extended GP bases in mode32 retain their
+missing physical context only after the complete remaining grammar validates;
+invalid SIB/index, scale, suffix or mask syntax cannot borrow that boundary.
 
 Native compact arrays advance their offset only for enabled lanes. Paired
 source continuation consumes exactly guarded volatile accesses; masked stores

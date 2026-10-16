@@ -3,6 +3,21 @@
 Checkpoint: 2026-10-16 09:51 UTC. This queue supersedes the historical notes
 below. Receipts certify their exact source snapshots, never later commits.
 
+The retained-source pass additionally exposes two older fixture assumptions.
+Initialized native packed stores now have their own complete twelve-member,
+64-sequence matrix; unknown source/base/index/mask controls remain negative.
+That pair passes 80 children at `be895649`. Preserve its earlier failed
+retained receipt rather than relabeling it successful.
+
+The mode32 LZCNT emitter fixture used R9 as a base. Go accepts ordinary
+non-SIB extended-base syntax, but it supplies no bound 386 physical register.
+An independent 21-member/189-address matrix retains that Context boundary;
+invalid SIB/index, scale, suffix and mask formats remain separate rejections.
+Unary/physical mask-arity projections keep the actual GOARCH instead of
+borrowing AMD64 address rules. The three focused owners and 206 children pass
+at `653faecf`, without skips. Full combined-source qualification is restarting
+with both new boundary owners; old-head partial receipts are not its pass.
+
 ## Current complete-module CI failures
 
 Allowed-fork [run 38871174173](https://github.com/cpunion/plan9asm/actions/runs/38871174173)
