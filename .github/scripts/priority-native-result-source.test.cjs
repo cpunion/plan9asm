@@ -5,6 +5,11 @@ const test = require('node:test');
 const workflow = fs.readFileSync('.github/workflows/pr40-owned-process-probe.yml', 'utf8');
 const groups = [
   {
+    variable: 'static_read_root',
+    inventory: 'static-read',
+    roots: ['TestX86RawReturnStaticReadNumericOracle'],
+  },
+  {
     variable: 'independent_fp_roots',
     inventory: 'independent-fp',
     roots: [
@@ -96,7 +101,7 @@ function validate(text) {
   assert.match(body, /if: \$\{\{ !cancelled\(\) \}\}/);
 }
 
-test('native result/source/fault/byte-swap/CRC32/BIT roles retain eight exact independently inventoried owners', () => {
+test('native result/source/fault/byte-swap/CRC32/BIT roles retain nine exact independently inventoried owners', () => {
   validate(workflow);
 });
 

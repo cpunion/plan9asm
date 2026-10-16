@@ -4,7 +4,7 @@ const test = require('node:test');
 
 const workflow = fs.readFileSync('.github/workflows/pr40-owned-process-probe.yml', 'utf8');
 const sdk = workflow.slice(workflow.indexOf('\n  sdk-priority:'), workflow.indexOf('\n  ownership:'));
-const sdkLaneCount = 43;
+const sdkLaneCount = 44;
 
 const crc32ProfileOwners = [
   ['llvm-crc32', 'TestCompileOneX86SDKOriginalCRC32NumericalDataJoin'],
@@ -184,6 +184,7 @@ const stringLODSRoots = [
   'TestX86LODSStateCompleteIndependentCases',
   'TestX86LODSZeroCountDoesNotCreateResultFacts',
   'TestX86LODSZeroStoreObserverRejectsEveryFieldAndUnknownEffect',
+  'TestX86LODSZeroStoreObserverVolatileAndLineEndingForms',
   'TestX86LODSZeroCountOriginalGoAndLLVMWholeState',
   'TestX86StringMemoryIRReaderEmptyZeroCount',
   'TestX86StringMemoryIRReaderLineEndingsAndMetadata',
@@ -193,8 +194,8 @@ const stringLODSLane = '- lane: string-memory-lods-state\n            module: \'
   stringLODSRoots.map(root => `              - ${root}\n`).join('') + '            timeout: 5m';
 
 function checkStringLODSPriority(text) {
-  assert.equal(stringLODSRoots.length, 17);
-  assert.equal(new Set(stringLODSRoots).size, 17);
+  assert.equal(stringLODSRoots.length, 18);
+  assert.equal(new Set(stringLODSRoots).size, 18);
   assert.ok(text.includes(stringLODSLane), 'all new string memory/CFG and LODS state owners');
   assert.equal(text.split('- lane: string-memory-lods-state\n').length - 1, 1,
     'one independent string/LODS priority lane');
@@ -203,7 +204,7 @@ function checkStringLODSPriority(text) {
   }
 }
 
-test('String LODS priority retains seventeen complete source, state and reader owners within five minutes', () => {
+test('String LODS priority retains eighteen complete source, state and reader owners within five minutes', () => {
   checkStringLODSPriority(sdk);
 });
 

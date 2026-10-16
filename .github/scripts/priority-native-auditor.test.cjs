@@ -5,6 +5,7 @@ const { auditNativePriority } = require('./audit-native-priority.cjs');
 
 // Synthetic machine-event controls are not native execution receipts.
 const inventories = {
+  'static-read': ['TestX86RawReturnStaticReadNumericOracle'],
   alias: ['TestCrossLinuxRuntimeMatrixX86MOVQSourceAliasesOriginalAndLLVM',
     'TestCrossLinuxRuntimeMatrixX86MOVQSourceAliasesCountedProvenance'],
   bool: ['TestCrossLinuxRuntimeMatrixAMD64RegisterCanonicalBoolInstructionBytes',
@@ -59,7 +60,7 @@ function fixture() {
     files.set(name + '-inventory.log', roots.join('\n') + '\n');
   }
   const roots = Object.values(inventories).flat();
-  for (let index = 0; index < 38; index++) roots.push('TestSyntheticExtraOwner' + index);
+  for (let index = 0; index < 37; index++) roots.push('TestSyntheticExtraOwner' + index);
   const events = [];
   const emit = (Action, Test) => events.push({
     Action, Package: 'github.com/xgo-dev/plan9asm', ...(Test ? { Test } : {}), Elapsed: 1,
@@ -105,17 +106,26 @@ function audit(files) {
   });
 }
 
-test('synthetic66 requires eighteen inventories,28 owners and23 source/ISA/fault children', () => {
+test('synthetic66 requires nineteen inventories,29 owners and23 source/ISA/fault children', () => {
   const result = audit(fixture());
   assert.equal(result.protocol, 'go_test_json_native66');
   assert.equal(result.roots, 66);
-  assert.equal(result.inventories, 18);
-  assert.equal(result.mandatory.length, 28);
+  assert.equal(result.inventories, 19);
+  assert.equal(result.mandatory.length, 29);
+  assert.ok(result.mandatory.includes(inventories['static-read'][0]));
   assert.ok(result.mandatory.includes(crc32));
   assert.ok(result.mandatory.includes(bitTest));
   assert.equal(result.requiredChildren.length, 23);
   // Only this synthetic fixture has24 children; real execution is counted.
   assert.equal(result.children, 24);
+});
+
+test('static-read native root cannot be replaced by a same-count nonmandatory owner', () => {
+  const files = fixture();
+  const root = inventories['static-read'][0];
+  files.set('all-roots.stdout', files.get('all-roots.stdout').replace(root, 'TestUnrelatedStaticRead'));
+  files.set('native.jsonl', files.get('native.jsonl').replaceAll(root, 'TestUnrelatedStaticRead'));
+  assert.throws(() => audit(files), /mandatory root/);
 });
 
 test('CRC32 native root cannot be replaced by a same-count nonmandatory owner', () => {
