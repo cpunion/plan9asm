@@ -24,6 +24,9 @@ func x86TypedFPResultNeedsProof(fn Func, sig FuncSig, arch string) bool {
 	}
 	opaqueAddressResult := x86OpaqueAddressPointerResultRole(fn, sig, arch)
 	for _, ins := range fn.Instrs {
+		if _, known, err := x86SignedPackedFloatProperties(ins, arch); known && err == nil && x86ResultNamedPredicateInstruction(ins) {
+			return true // Complete conversion inputs stay required for Void without a KMOV routing prerequisite.
+		}
 		if form, known, err := x86ScalarNativeStoreProperties(ins.Op, ins, arch); known && err == nil &&
 			form.source.Kind == OpImm && x86ResultNamedPredicateInstruction(ins) {
 			return true // Immediate data supplies no address/index facts, including for Void.

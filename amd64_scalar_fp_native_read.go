@@ -132,6 +132,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		if accepted, known := x86ResultSignedIntegerFloatStepWithRead(ins, state, owned, arch, true); known {
 			return accepted // The same typed emitter retains an exact volatile source read.
 		}
+		if accepted, known := x86ResultSignedPackedFloatStep(ins, state, owned, arch, true); known {
+			return accepted // The original native opcode retains rounding, exception and memory effects.
+		}
 		if accepted, known := x86ResultPackedStringStepWithRead(ins, state, owned, arch, true); known {
 			return accepted // Paired emitter retains the full volatile m128 read.
 		}
