@@ -119,6 +119,10 @@ func TestX86UnlockedScalarRMWEmitterKeepsNativeWidthAndNonAtomicIdentity(t *test
 
 func TestX86UnlockedScalarRMWDoesNotInventInputsResultsOrStorage(t *testing.T) {
 	for _, arch := range []string{"386", "amd64"} {
+		triple, resultOffset := "x86_64-unknown-linux-gnu", 16
+		if arch == "386" {
+			triple, resultOffset = "i386-unknown-linux-gnu", 8
+		}
 		for _, row := range x86UnlockedScalarRMWRows(arch) {
 			if strings.Contains(row.text, "$1") {
 				continue // Source-format positives are complete; these mutations need GP input.
@@ -130,6 +134,10 @@ func TestX86UnlockedScalarRMWDoesNotInventInputsResultsOrStorage(t *testing.T) {
 					"numeric-base":  strings.Replace(source, "CLC\n", "MOVL $42,DI\nCLC\n", 1),
 					"unknown-index": strings.Replace(source, "MOVL $1,BX\n", "", 1),
 					"pointer-index": strings.Replace(source, "MOVL $1,BX\n", "MOVL DI,BX\n", 1),
+				}
+				if result {
+					variants["missing-result"] = strings.Replace(source,
+						fmt.Sprintf("MOVL AX,ret+%d(FP)\n", resultOffset), "", 1)
 				}
 				if strings.Contains(row.text, ",") {
 					variants["unknown-value"] = strings.Replace(source, ",CX\n", ",DX\n", 1)
@@ -149,7 +157,7 @@ func TestX86UnlockedScalarRMWDoesNotInventInputsResultsOrStorage(t *testing.T) {
 						}
 						for _, api := range []string{"text", "module", "Go"} {
 							t.Run(api, func(t *testing.T) {
-								ir, err := x86ScalarFPBitViewAPI(t, changed, declaration, arch, "", api)
+								ir, err := x86ScalarFPBitViewAPI(t, changed, declaration, arch, triple, api)
 								if !errors.Is(err, ErrProbeNeedsContext) || ir != "" {
 									t.Fatal("unlocked RMW manufactured a source, carry or native address", err)
 								}
