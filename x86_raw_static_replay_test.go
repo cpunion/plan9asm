@@ -1,9 +1,12 @@
 package plan9asm
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"reflect"
+	"runtime"
+	"strings"
 	"testing"
 )
 
@@ -120,5 +123,76 @@ func TestX86RawStaticReplayScalarResultsThreeAPIs(t *testing.T) {
 				})
 			}
 		}
+	}
+}
+
+// Execute the lowered scalar/data semantics on the actual host. The unchanged
+// native cross-runtime owner separately executes the original Go instructions.
+func TestX86RawStaticReplayPortableValuesAndMutablePool(t *testing.T) {
+	llc, clang, ok := findLlcAndClang(t)
+	if !ok {
+		t.Fatal("LLVM22 llc and clang are required")
+	}
+	var source, declarations, checks strings.Builder
+	declarations.WriteString("#include <stdint.h>\n#include <stdio.h>\n")
+	options := Options{Goarch: "amd64", TargetTriple: testTargetTriple(runtime.GOOS, runtime.GOARCH),
+		Sigs: make(map[string]FuncSig), ResolveSym: func(symbol string) string {
+			if strings.HasPrefix(symbol, "·__plan9asm_raw_address_") {
+				return "MutablePool"
+			}
+			return symbol
+		}}
+	values := []uint64{0, 1, 0x80000001, 0xffffffff, 0x89abcdef01234567, 0xfedcba9876543210}
+	for _, width := range []int{4, 8} {
+		for index, value := range values {
+			name := fmt.Sprintf("Scalar%d_%d", width, index)
+			code := x86RawStaticReplayScalar(width, false)
+			typ, cType := I32, "uint32_t"
+			if width == 4 {
+				value = uint64(uint32(value))
+				binary.LittleEndian.PutUint32(code[len(code)-width:], uint32(value))
+			} else {
+				typ, cType = I64, "uint64_t"
+				binary.LittleEndian.PutUint64(code[len(code)-width:], value)
+			}
+			source.WriteString(x86StaticReturnSource(name, code))
+			options.Sigs[name] = FuncSig{Name: name, Ret: typ}
+			fmt.Fprintf(&declarations, "extern %s %s(void);\n", cType, name)
+			fmt.Fprintf(&checks, "if(%s()!=0x%xULL){fprintf(stderr,\"%s wrong\\n\");return 1;}\n",
+				name, value, name)
+		}
+	}
+	mutable := x86RawStaticReplayScalar(8, true)
+	binary.LittleEndian.PutUint64(mutable[len(mutable)-8:], 0x89abcdef01234567)
+	source.WriteString(x86StaticReturnSource("Mutable", mutable))
+	options.Sigs["Mutable"] = FuncSig{Name: "Mutable", Ret: I64}
+	declarations.WriteString("extern uint64_t Mutable(void);\nextern uint64_t MutablePool[];\n")
+	checks.WriteString("if(Mutable()!=0x89abcdef01234567ULL){fprintf(stderr,\"initial pool wrong\\n\");return 1;}\n")
+	checks.WriteString("MutablePool[0]=0xfedcba9876543210ULL;\n")
+	checks.WriteString("if(Mutable()!=0xfedcba9876543210ULL){fprintf(stderr,\"changed pool folded\\n\");return 1;}\n")
+	if len(options.Sigs) != 13 {
+		t.Fatal("complete scalar value and mutable-pool denominator changed")
+	}
+	reference := declarations.String() + "int main(void){\n" + checks.String() + "return 0;}\n"
+	file := mustParseX86RawReturn(t, source.String())
+	for _, api := range []string{"text", "module", "owned-module"} {
+		t.Run(api, func(t *testing.T) {
+			ir, err := x86X87UnboundOriginalAPI(t, file, options, api)
+			if err != nil || ir == "" {
+				t.Fatal(err)
+			}
+			for _, optimized := range []bool{false, true} {
+				input := ir
+				if optimized {
+					input = x86DwordProductIROptimize(t, ir)
+				}
+				for _, level := range []int{0, 2} {
+					t.Run(fmt.Sprintf("IR-O2=%t/backend-O%d", optimized, level), func(t *testing.T) {
+						compileAndRunRuntimeTestWithCompiler(t, llc, []string{clang},
+							"raw-static-replay", options.TargetTriple, input, reference, nil, level)
+					})
+				}
+			}
+		})
 	}
 }
