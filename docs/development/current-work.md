@@ -1,5 +1,23 @@
 # Current work: PR 40 checkpoint
 
+## Native fixture follow-up, 2026-10-17
+
+At `696143de`, four host-visible CRC32/INSERT/invalid-immediate roots pass
+134 children without skips. CRC32 retains its complete original numerical and
+FLAGS program, but moves the non-encodable imm64-to-memory seed through CX.
+The actual original Go object and all three public LLVM APIs/AMD64 target
+objects pass. The corrected-header old-source RED at `d45685a7` observes Go's
+actual invalid MOVQ encoding; earlier missing-NOSPLIT-header receipts remain
+infrastructure failures, not that counterexample.
+
+The inactive INSERT fixture explicitly seeds the complete Z2 before its
+legacy X write and later Z store. Its earlier nine unknown-upper-byte failures
+remain genuine REDs. Removing only that seed still requires Context through
+all three APIs; no production permission was relaxed. All original fault rows
+and native runtime owners remain present. Go20/race and actual native reruns
+for these fixture repairs are still outstanding; do not promote these object
+checks to a successful rerun of the old eight-root native CI failure.
+
 ## Native input-composition follow-up, 2026-10-17
 
 Fork diagnostic run 38926645676 at `ceedd8da` is still running. Its native66
