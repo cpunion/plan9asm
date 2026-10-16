@@ -132,9 +132,18 @@ func x86ResultValueStackStep(ins Instr, state *x86ResultState, owned []bool, res
 		state.canonicalGP[index] &^= mask
 		// Preserve partial-bit knowledge for exactly the next instruction.
 		// Whole known bytes outside a narrow POP remain independently known.
-		known := bits
-		if width < 8 {
-			known &= uint64(1)<<uint(8*width) - 1
+		known := uint64(0)
+		for b := int64(0); b < width; b++ {
+			initialized := uint8(bits >> uint(8*b))
+			if initialized != 0xff {
+				// Only FLAGS pushes can introduce partial numerical bytes.
+				// Refine modeled status/DF/ID and the reserved low-byte
+				// constants, never ambient TF/IF/IOPL/NT/RF/AC controls.
+				// Complete NUM bytes retain their independent old proof.
+				const modeledFlags = uint64(0x200cff)
+				initialized &= uint8(modeledFlags >> uint(8*b))
+			}
+			known |= uint64(initialized) << uint(8*b)
 		}
 		for b := width; b < 8; b++ {
 			if state.gp[index]&(1<<uint(b)) != 0 {
