@@ -8,8 +8,6 @@ import (
 	"reflect"
 	"strings"
 	"testing"
-
-	"github.com/xgo-dev/llvm"
 )
 
 // Select the semantic family by name, but derive its entire vector syntax
@@ -80,38 +78,46 @@ func TestX86PackedNarrowOfficialRowsThreeAPIsFiveTargetObjects(t *testing.T) {
 					}
 					sigs[name] = sig
 				}
-				options := Options{Goarch: target.arch, TargetTriple: target.triple, Sigs: sigs,
-					ResolveSym: func(symbol string) string { return strings.TrimPrefix(symbol, "·") }}
 				before := fmt.Sprintf("%#v %#v", file, sigs)
-				ir, err := Translate(file, options)
-				if err != nil {
-					t.Fatal(err)
+				for _, api := range []string{"text", "module", "Go"} {
+					if ir, err := x86ScalarFPBitViewPackageAPI(t, source.String(), pkg, target.arch, target.triple, api); ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+						t.Fatal("original named/raw format batch invented native entry inputs", api, err)
+					}
 				}
-				compileLLVMToObject(t, llc, target.triple, "narrow-text.ll", "narrow-text.o", ir)
-				context := llvm.NewContext()
-				defer context.Dispose()
-				module, err := TranslateModuleInContext(context, file, options)
-				if !module.IsNil() {
-					defer module.Dispose()
+				units := *file
+				units.Funcs = append([]Func(nil), file.Funcs...)
+				if raw {
+					for index, fn := range units.Funcs {
+						decoded, err := decodeX86RawDirectives(fn, target.arch)
+						if err != nil {
+							t.Fatal("actual physical format unit could not be decoded", err)
+						}
+						units.Funcs[index] = decoded
+					}
 				}
-				if err != nil {
-					t.Fatal(err)
+				// Keep every original form, but release each bounded object
+				// before the next batch. Units are not initialized entries.
+				for start := 0; start < len(units.Funcs); start += 64 {
+					end := start + 64
+					if end > len(units.Funcs) {
+						end = len(units.Funcs)
+					}
+					batch := units
+					batch.Funcs = units.Funcs[start:end]
+					ir := x86InstructionFormatObjectUnit(t, &batch, sigs, target.arch, target.triple, 0,
+						func(c *amd64Ctx, ins Instr) (bool, bool, error) {
+							return c.lowerPackedSaturatingNarrow(ins.Op, ins)
+						})
+					for _, text := range []string{ir, x86DwordProductIROptimize(t, ir)} {
+						for _, level := range []string{"-O0", "-O2"} {
+							x86PackedStringCompileObject(t, llc, target.triple, text, level)
+						}
+					}
 				}
-				compileLLVMToObject(t, llc, target.triple, "narrow-module.ll", "narrow-module.o", module.String())
-				translated, err := translateGoModuleInContext(context, pkg, []byte(source.String()), GoModuleOptions{
-					GOARCH: target.arch, TargetTriple: target.triple, ResolveSym: options.ResolveSym,
-				})
-				if translated != nil && !translated.Module.IsNil() {
-					defer translated.Module.Dispose()
-				}
-				if err != nil {
-					t.Fatal(err)
-				}
-				compileLLVMToObject(t, llc, target.triple, "narrow-go.ll", "narrow-go.o", translated.Module.String())
 				if before != fmt.Sprintf("%#v %#v", file, sigs) {
 					t.Fatal("object coverage changed original source/signatures")
 				}
-				t.Logf("%d named/physical vector forms: three APIs and LLVM 22 objects, not runtime/caller coverage", len(rows))
+				t.Logf("all %d original named/physical Go forms retain emitter-only LLVM objects and three-API Context; independent initialized sources own public/runtime coverage", len(rows))
 			})
 		}
 	}
