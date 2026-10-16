@@ -32,12 +32,14 @@ const inventories = {
   'packed-string-fault': ['TestCrossLinuxRuntimeMatrixX86PackedStringOriginalNativeMemoryFaults'],
   'byte-swap': ['TestCrossLinuxRuntimeMatrixX86ByteSwapOriginalGoAndLLVM'],
   crc32: ['TestAMD64CRC32RuntimeSemanticsAndFlags'],
+  'bit-test': ['TestCrossLinuxRuntimeMatrixX86BitTestNumericalAndAliases'],
 };
 const sourceStack = inventories['source-stack'][0];
 const continuation = inventories.continuation[0];
 const packedStringFault = inventories['packed-string-fault'][0];
 const byteSwap = inventories['byte-swap'][0];
 const crc32 = inventories.crc32[0];
+const bitTest = inventories['bit-test'][0];
 const directTail386 = inventories['direct-tail'][1];
 const mode32Children = [
   ...['SI', 'BP', 'SI-stack', 'BP-stack'].map(carrier => directTail386 + '/' + carrier),
@@ -47,7 +49,9 @@ const requiredChildren = [sourceStack + '/amd64', sourceStack + '/386',
   ...['amd64', '386'].flatMap(arch => ['memory', 'register'].map(dispatch =>
     continuation + '/' + arch + '/' + dispatch)),
   packedStringFault + '/-O0', packedStringFault + '/-O2',
-  byteSwap + '/amd64', byteSwap + '/386', ...mode32Children];
+  byteSwap + '/amd64', byteSwap + '/386', ...mode32Children,
+  ...['text', 'module', 'Go'].flatMap(api => ['backend_O0', 'IR_O2/backend_O2']
+    .map(axis => `${bitTest}/${api}/${axis}`))];
 
 function fixture() {
   const files = new Map();
@@ -101,16 +105,17 @@ function audit(files) {
   });
 }
 
-test('synthetic65 requires seventeen inventories,27 owners and seventeen source/ISA/fault children', () => {
+test('synthetic66 requires eighteen inventories,28 owners and23 source/ISA/fault children', () => {
   const result = audit(fixture());
-  assert.equal(result.protocol, 'go_test_json_native65');
-  assert.equal(result.roots, 65);
-  assert.equal(result.inventories, 17);
-  assert.equal(result.mandatory.length, 27);
+  assert.equal(result.protocol, 'go_test_json_native66');
+  assert.equal(result.roots, 66);
+  assert.equal(result.inventories, 18);
+  assert.equal(result.mandatory.length, 28);
   assert.ok(result.mandatory.includes(crc32));
-  assert.equal(result.requiredChildren.length, 17);
-  // Only this synthetic fixture has eighteen children; real execution is counted.
-  assert.equal(result.children, 18);
+  assert.ok(result.mandatory.includes(bitTest));
+  assert.equal(result.requiredChildren.length, 23);
+  // Only this synthetic fixture has24 children; real execution is counted.
+  assert.equal(result.children, 24);
 });
 
 test('CRC32 native root cannot be replaced by a same-count nonmandatory owner', () => {

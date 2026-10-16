@@ -37,6 +37,11 @@ const groups = [
     inventory: 'crc32',
     roots: ['TestAMD64CRC32RuntimeSemanticsAndFlags'],
   },
+  {
+    variable: 'bit_test_root',
+    inventory: 'bit-test',
+    roots: ['TestCrossLinuxRuntimeMatrixX86BitTestNumericalAndAliases'],
+  },
 ];
 
 function nativeBody(text) {
@@ -52,9 +57,9 @@ function validate(text) {
   assert.ok(execution >= 0, 'missing complete native execution');
   const allQuery = 'go test . -list "^($roots|TestCrossLinuxRuntimeMatrixX86($families))$" > _out/native-x86-oracles/all-roots.stdout';
   const allQueryAt = body.indexOf(allQuery);
-  assert.ok(allQueryAt >= 0 && allQueryAt < execution, 'missing complete exact65 discovery');
-  assert.ok(body.includes('test "$(grep -c \'^Test\' _out/native-x86-oracles/all-roots.stdout)" = 65'),
-    'complete fresh discovery must retain exactly65 roots');
+  assert.ok(allQueryAt >= 0 && allQueryAt < execution, 'missing complete exact66 discovery');
+  assert.ok(body.includes('test "$(grep -c \'^Test\' _out/native-x86-oracles/all-roots.stdout)" = 66'),
+    'complete fresh discovery must retain exactly66 roots');
   for (const group of groups) {
     const initial = new RegExp('\\b' + group.variable + "='([^']+)'").exec(body);
     assert.ok(initial, 'missing ' + group.inventory + ' registration');
