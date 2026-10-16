@@ -2,36 +2,53 @@ package plan9asm
 
 import "fmt"
 
-// Go's Zr_m GP store rows have the same width/register/address classes as
-// Zm_r loads. Keep the operand projection local: source identity, FP/AUTO,
-// static symbols, segments and the independent SIMD/MMX rows are unchanged.
+// Go's GP stores share their address classes with Zm_r loads. Yi32 immediate
+// rows retain their own encoded width, including sign extension for MOVQ.
+// FP/AUTO, static symbols, segments and SIMD/MMX keep their separate roles.
 type x86ScalarNativeStoreForm struct {
-	source      Reg
+	source      Operand
 	destination Operand
 	bytes       int64
 }
 
 func x86ScalarNativeStoreProperties(op Op, ins Instr, arch string) (x86ScalarNativeStoreForm, bool, error) {
-	if len(ins.Args) != 2 || ins.Args[0].Kind != OpReg || ins.Args[1].Kind != OpMem ||
+	if len(ins.Args) != 2 || (ins.Args[0].Kind != OpReg && ins.Args[0].Kind != OpImm) || ins.Args[1].Kind != OpMem ||
 		ins.Args[1].Mem.Sym != "" || ins.Args[1].Mem.Segment != "" ||
 		ins.Args[1].Mem.Index == FS || ins.Args[1].Mem.Index == GS {
 		return x86ScalarNativeStoreForm{}, false, nil
 	}
 	projected := ins
-	projected.Args = []Operand{ins.Args[1], ins.Args[0]}
+	source := ins.Args[0]
+	register := source
+	if source.Kind == OpImm {
+		register = Operand{Kind: OpReg, Reg: AX} // Validate only the shared native address/width row.
+	}
+	projected.Args = []Operand{ins.Args[1], register}
 	form, known, err := x86ScalarNativeLoadProperties(op, projected, arch)
-	return x86ScalarNativeStoreForm{form.destination, form.source, form.bytes}, known, err
+	if !known || err != nil {
+		return x86ScalarNativeStoreForm{}, known, err
+	}
+	if source.Kind == OpImm {
+		if source.ImmRaw != "" || source.ImmIsFloat ||
+			arch != "386" && (source.Imm < -2147483648 || source.Imm > 4294967295) {
+			return x86ScalarNativeStoreForm{}, true, fmt.Errorf("%s %s native store needs Go's resolved Yi32 immediate: %q", arch, op, ins.Raw)
+		}
+		source.Imm = amd64ScalarAddSubImmediateInt64(source.Imm, int(form.bytes*8))
+	} else {
+		source.Reg = form.destination // Preserve the actual Go byte/REX interpretation.
+	}
+	return x86ScalarNativeStoreForm{source, form.source, form.bytes}, true, nil
 }
 
 func (c *amd64Ctx) lowerScalarNativeStore(form x86ScalarNativeStoreForm, ins Instr) error {
-	if form.source != ins.Args[0].Reg && (form.source == SP || form.source == BP) {
+	if form.source.Kind == OpReg && form.source.Reg != ins.Args[0].Reg && (form.source.Reg == SP || form.source.Reg == BP) {
 		return fmt.Errorf("%w: REX byte alias needs its physical SP/BP read contract", ErrProbeNeedsContext)
 	}
 	if ins.x86AddressBits != 0 || ins.x86UnboundAddressOverride {
 		return fmt.Errorf("%w: scalar MOV needs its original native address size", ErrProbeNeedsContext)
 	}
 	typ := amd64IntegerTypeForBits(int(form.bytes * 8))
-	value, err := c.evalIntSized(Operand{Kind: OpReg, Reg: form.source}, typ)
+	value, err := c.evalIntSized(form.source, typ)
 	if err != nil {
 		return err
 	}
@@ -51,12 +68,12 @@ func x86LoweredScalarNativeStore(ins Instr, state *x86ResultState, owned []bool,
 		return false, known
 	}
 	if !x86ResultNamedPredicateInstruction(ins) || ins.x86NumericalRead != nil ||
-		x86LogicalSourceFrameRegister(form.source, arch) ||
+		(form.source.Kind == OpReg && x86LogicalSourceFrameRegister(form.source.Reg, arch)) ||
 		!x86ResultIncomingPointerAddressIdentity(form.destination, state, arch) {
 		return false, true
 	}
 	// A native NUM store changes no GP/vector/FLAGS/DF or logical bytes.
 	// Pointer-as-data requires its separate GC/escape contract. Standalone
 	// declaration, caller, raw and frame observers cannot use this consumer.
-	return x86ResultRead(Operand{Kind: OpReg, Reg: form.source}, form.bytes, state, owned, arch), true
+	return x86ResultRead(form.source, form.bytes, state, owned, arch), true
 }

@@ -83,7 +83,7 @@ func TestX86NativeGPStoreOriginalByteAliasesAndUnchangedState(t *testing.T) {
 			if address != "(DX)" {
 				effective = []Reg{SP, BP, SI, DI}[ordinal]
 			}
-			if !known || err != nil || form.source != effective || form.bytes != 1 {
+			if !known || err != nil || form.source.Kind != OpReg || form.source.Reg != effective || form.bytes != 1 {
 				t.Fatal("typed store disagrees with actual ModRM/REX", form, err)
 			}
 			if address != "(DX)" && ordinal < 2 {
