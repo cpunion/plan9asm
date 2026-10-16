@@ -1,6 +1,6 @@
 # Current work: PR 40 checkpoint
 
-Checkpoint: 2026-10-16 00:15 UTC. The notes below this section are historical
+Checkpoint: 2026-10-16 00:44 UTC. The notes below this section are historical
 and retain their original source scope; they are not the current task queue.
 
 ## Active queue
@@ -92,14 +92,30 @@ of386 and amd64: four original files, zero failures/N/A. This is not a fresh
 184-file benchmark or native pointer-result receipt; the38 failed benchmark
 files above remain the latest complete result. No second push interrupts CI.
 
-The separate compact/expand leaf retains its current-source RED at `0d45f567`:
+The separate `codex/pr40-compact-expand-completion-20261016` leaf retains its current-source RED at `0d45f567`:
 four roots/2,448 children expose216 missing register effects,1,620 rejected
 initialized API paths and540 wrongly accepted missing-input/result paths.
 `bbf06955` shares complete Go `_yvcompresspd`/`_yvexpandpd` grammar across all12
-opcodes, the two emitters and numerical descriptors. Its first focused run is
-in progress. Memory forms, old unbound compile-only fixtures, complete SDK
-objects, compatibility, native execution and baseline classification still
-need qualification before this leaf can be merged or published.
+opcodes, the two emitters and numerical descriptors. That first run also exposes
+an overly strong test expectation: LLVM22 retains a constant vector.compress
+intrinsic rather than folding it. `a9dc8abd` independently checks its actual
+typed zero inputs/continuation and rejects nonzero, poison and foreign calls.
+The unchanged old unbound full fixtures remain public Context controls and
+complete emitter-only objects. A separate216-function initialized counterpart
+retains all five x86 targets, three APIs and both IR/backend optimization axes.
+At `ae1e064e`, Go27's19 roots/2,779 children and Go20's expanded23/3,029 pass.
+
+Intel XED independently requires ZEROING=0 for all18 compressed-memory opcode/
+width combinations. The corrected `0649893e` regression retains passing actual
+Go-object/LLVM22 decode observations, while five complete targets and12 direct
+fault-priority children genuinely fail. `86213047` emits #UD before operand
+evaluation, without granting an ordinary numerical continuation. Its three
+roots/37 children pass. `69315993` then passes all26 retained/register/fault
+owners/3,066 children on Go27; the identical Go20 and race lanes are running.
+Valid memory forms, old runtime fixtures, complete SDK objects, both vets,
+native execution and official baseline classification still need qualification
+before this leaf can be merged or published. Current fork CI remains frozen at
+`354ea4ef`; none of these newer compact changes interrupts that run.
 
 The FS/GS first-GREEN set at `951a68a0` passes 17 unique roots and 30,902
 children, retaining all 212 AMD64 or 114 386 TEXTs per target. Its explicit
