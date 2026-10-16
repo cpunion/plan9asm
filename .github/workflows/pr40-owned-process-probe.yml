@@ -155,7 +155,7 @@ jobs:
           if-no-files-found: error
 
   complete-windows:
-    needs: [ownership, sdk-priority, arm64-fallback-cross-priority]
+    needs: [ownership, sdk-priority, arm64-fallback-cross-priority, lock-native-priority]
     permissions:
       contents: read
       id-token: write
@@ -210,6 +210,11 @@ jobs:
               - TestX86PoppedPartialFlagsCannotInventUnmodeledControls
               - TestX86PoppedMixedWidthsRetainOriginalFlagBitPositions
               - TestX86StackRefinementCloneJoinAndReuse
+            timeout: 5m
+          - lane: lock-scalar-dispatch
+            module: '.'
+            roots:
+              - TestX86LockScalarRMWPublicBodiesCallCompleteNativeHelpers
             timeout: 5m
           - lane: static-result-effects
             module: '.'
@@ -911,6 +916,41 @@ jobs:
         with:
           name: arm64-fallback-cross-priority
           path: _out/cross-runtime-owner/arm64-fallback-cross/
+          if-no-files-found: error
+
+  lock-native-priority:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install LLVM 22 and required native i386 toolchain
+        timeout-minutes: 14
+        run: bash scripts/install-ci-llvm22-ubuntu.sh gcc-i686-linux-gnu libc6-dev-i386-cross
+      - uses: ./.github/actions/setup-go
+        with:
+          go-version: '1.27.2'
+          cache: true
+      - name: Execute original Go and LLVM native LOCK semantics
+        env:
+          GOTOOLCHAIN: local
+        run: |
+          set -euo pipefail
+          mkdir -p _out/native-lock
+          roots='TestCrossLinuxRuntimeMatrixX86LockScalarRMWNativeAMD64'
+          roots+='|TestCrossLinuxRuntimeMatrixX86LockScalarRMWNative386'
+          go test -p=1 . -list "^($roots)$" > _out/native-lock/inventory.log
+          for root in ${roots//|/ }; do
+            grep -Fx "$root" _out/native-lock/inventory.log
+          done
+          go test -p=1 . -run "^($roots)$" -count=1 -timeout=5m -json \
+            2> _out/native-lock/stderr.log | tee _out/native-lock/raw.jsonl
+          node .github/scripts/audit-lock-native.cjs _out/native-lock > _out/native-lock/audit.json
+      - name: Preserve original and translated LOCK observations
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: native-lock
+          path: _out/native-lock/
           if-no-files-found: error
 
   x87-native-priority:

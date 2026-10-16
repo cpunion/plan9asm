@@ -4,7 +4,7 @@ const test = require('node:test');
 
 const workflow = fs.readFileSync('.github/workflows/pr40-owned-process-probe.yml', 'utf8');
 const sdk = workflow.slice(workflow.indexOf('\n  sdk-priority:'), workflow.indexOf('\n  ownership:'));
-const sdkLaneCount = 45;
+const sdkLaneCount = 46;
 
 const crc32ProfileOwners = [
   ['llvm-crc32', 'TestCompileOneX86SDKOriginalCRC32NumericalDataJoin'],
@@ -492,7 +492,7 @@ test('Every lane retains exact inventory and an independent artifact', () => {
   assert.match(sdk, /grep -Fx "\$root" "\$report\/inventory.log"/);
   assert.match(sdk, /-timeout="\$SDK_PRIORITY_TIMEOUT"/);
   assert.match(sdk, /name: windows-sdk-priority-\$\{\{ matrix.lane \}\}/);
-  assert.match(workflow, /needs: \[ownership, sdk-priority, arm64-fallback-cross-priority\]/);
+  assert.match(workflow, /needs: \[ownership, sdk-priority, arm64-fallback-cross-priority, lock-native-priority\]/);
   assert.doesNotMatch(sdk, /continue-on-error|max-parallel|go test[^\n]* -skip/);
 });
 
