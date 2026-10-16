@@ -140,3 +140,36 @@ func TestX86PackedUnpackLegacyMemoryRequiresOriginalNativeOpcode(t *testing.T) {
 		})
 	}
 }
+
+func TestX86NativePackedBinarySSE1CarrierDoesNotRequireSSE2(t *testing.T) {
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM22 llc required")
+	}
+	for _, target := range x86RawReturnTargets {
+		t.Run(target.triple, func(t *testing.T) {
+			var source strings.Builder
+			signatures := map[string]FuncSig{}
+			for index, op := range []string{"ANDPS", "ANDNPS", "ORPS", "XORPS"} {
+				name := fmt.Sprintf("SSE1Carrier%d", index)
+				fmt.Fprintf(&source, "TEXT %s(SB),4,$0-0\n%s (AX),X1\nRET\n", name, op)
+				signatures[name] = FuncSig{Name: name, Ret: Void}
+			}
+			x86LEAActualTargetGoObject(t, target.arch, target.triple, source.String())
+			file := mustParseX86RawReturn(t, source.String())
+			for _, fn := range file.Funcs {
+				features := inferFuncTargetFeaturesForGOARCH(ArchAMD64, target.arch, fn)
+				if features != "+sse" {
+					t.Fatal("isolated original SSE1 opcode acquired a sibling or stronger CPU feature", fn.Sym, features)
+				}
+			}
+			ir := x86InstructionFormatObjectUnit(t, file, signatures, target.arch, target.triple, 0,
+				func(c *amd64Ctx, ins Instr) (bool, bool, error) { return c.lowerPackedLogicalFamily(ins.Op, ins) })
+			for _, text := range []string{ir, x86DwordProductIROptimize(t, ir)} {
+				for _, level := range []string{"-O0", "-O2"} {
+					x86PackedStringCompileObject(t, llc, target.triple, text, level)
+				}
+			}
+		})
+	}
+}
