@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"go/ast"
 	"go/parser"
@@ -14,8 +15,6 @@ import (
 	"sort"
 	"strings"
 	"testing"
-
-	"github.com/xgo-dev/llvm"
 )
 
 func x86PackedShiftNames() []string {
@@ -217,31 +216,21 @@ func TestX86PackedShiftCompleteGoRowsThreeAPIsFiveObjects(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			options := Options{Goarch: target.arch, TargetTriple: target.triple, Sigs: map[string]FuncSig{"shifts": {Name: "shifts", Ret: Void}}}
-			ir, err := Translate(file, options)
-			if err != nil {
-				t.Fatal(err)
-			}
-			compileLLVMToObject(t, llc, target.triple, "shifts.ll", "shifts.o", ir)
-			ctx := llvm.NewContext()
-			defer ctx.Dispose()
-			module, err := TranslateModuleInContext(ctx, file, options)
-			if !module.IsNil() {
-				defer module.Dispose()
-			}
-			if err != nil {
-				t.Fatal(err)
-			}
-			compileLLVMToObject(t, llc, target.triple, "module.ll", "module.o", module.String())
 			pkg := x86PackedShiftGoPackage(t, target.arch)
-			translated, err := translateGoModuleInContext(ctx, pkg, []byte(strings.Replace(source.String(), "shifts(SB)", "·shifts(SB)", 1)), GoModuleOptions{GOARCH: target.arch, TargetTriple: target.triple})
-			if translated != nil {
-				defer translated.Module.Dispose()
+			for _, api := range []string{"text", "module", "Go"} {
+				if ir, err := x86ScalarFPBitViewPackageAPI(t, source.String(), pkg, target.arch, target.triple, api); ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+					t.Fatal("original format source invented numerical/native entry inputs", api, err)
+				}
 			}
-			if err != nil {
-				t.Fatal(err)
+			ir := x86InstructionFormatObjectUnit(t, file, map[string]FuncSig{"shifts": {Name: "shifts", Ret: Void}},
+				target.arch, target.triple, 0, func(c *amd64Ctx, ins Instr) (bool, bool, error) {
+					return c.lowerX86PackedShift(ins.Op, ins)
+				})
+			for _, text := range []string{ir, x86DwordProductIROptimize(t, ir)} {
+				for _, level := range []string{"-O0", "-O2"} {
+					x86PackedStringCompileObject(t, llc, target.triple, text, level)
+				}
 			}
-			compileLLVMToObject(t, llc, target.triple, "go-module.ll", "go-module.o", translated.Module.String())
 		})
 	}
 }
