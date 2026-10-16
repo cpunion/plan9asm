@@ -51,6 +51,9 @@ func x86TypedTimestampByteEffect(op Op, ins Instr, arch string) (x86TypedByteEff
 	if !known || err != nil {
 		return x86TypedByteEffect{}, known, err
 	}
+	if !x86TimestampPreservesSourceState(ins) {
+		return x86TypedByteEffect{}, true, fmt.Errorf("%w: timestamp original/normalized source identity differs", ErrProbeNeedsContext)
+	}
 	effect := x86TypedByteEffect{requiresResultProof: true}
 	for _, register := range x86TimestampRegisters(spec) {
 		effect.operands = append(effect.operands, x86TypedByteOperand{
@@ -58,6 +61,19 @@ func x86TypedTimestampByteEffect(op Op, ins Instr, arch string) (x86TypedByteEff
 		})
 	}
 	return effect, true, nil
+}
+
+// Both x86 modes have the same exact zero-operand state footprint. This
+// instruction-local observation authorizes neither a function's raw entry nor
+// storage. Raw handoffs must retain the decoder's original opcode and operands.
+func x86TimestampPreservesSourceState(ins Instr) bool {
+	_, known := x86TimestampSpecs[Op(strings.ToUpper(string(ins.Op)))]
+	if !known || len(ins.Args) != 0 || ins.x86Encoded || ins.x86RawNearReturn != nil ||
+		ins.x86AddressBits != 0 || ins.x86UnboundAddressOverride || ins.x86SegmentPrefix != 0 {
+		return false
+	}
+	origin := ins.x86SourceRaw
+	return origin == nil || len(origin.args) == 0 && strings.EqualFold(string(origin.op), string(ins.Op))
 }
 
 func (c *amd64Ctx) lowerX86Timestamp(op Op, ins Instr) (bool, bool, error) {

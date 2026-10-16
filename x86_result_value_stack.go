@@ -28,7 +28,8 @@ func x86ResultValueStackContinuation(ins Instr, state *x86ResultState, arch stri
 	if state.valueStack == nil || state.shapeOnly || len(state.valueStack.bytes) == 0 && !state.valueStack.invalid {
 		return true
 	}
-	if state.valueStack.invalid || ins.Op == OpCALL || !x86ResultNamedPredicateInstruction(ins) {
+	if state.valueStack.invalid || ins.Op == OpCALL ||
+		!x86ResultNamedPredicateInstruction(ins) && !x86TimestampPreservesSourceState(ins) {
 		return false
 	}
 	// On 386 the private byte stack moves the simulated SP. An AUTO access
