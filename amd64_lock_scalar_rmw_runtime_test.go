@@ -295,7 +295,9 @@ func main() {
 }
 `
 
-const x86LockScalarIndependentC = `
+// Shared independent arithmetic only. Each execution driver separately owns
+// its memory, FLAGS and platform-specific observations.
+const x86ScalarMemoryIndependentC = `
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -398,7 +400,9 @@ static uint64_t reference(const struct kernel *k, uint8_t *memory,
 	return flags;
 }
 
-int main(void) {
+`
+
+const x86LockScalarIndependentC = x86ScalarMemoryIndependentC + `int main(void) {
 	static const uint64_t edges[] = {0,1,15,16,17,127,128,255,256,32767,32768,65535,
 		0x7fffffff,0x80000000,0xffffffff,0x7fffffffffffffff,0x8000000000000000,UINT64_MAX};
 	const uint64_t sentinel = UINT64_C(0xa7a7a7a7a7a7a7a7);
