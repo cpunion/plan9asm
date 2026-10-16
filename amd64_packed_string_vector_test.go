@@ -114,13 +114,24 @@ func x86PackedStringVectorFixture(cases []x86PackedStringVectorCase, arch string
 				fmt.Fprintf(&source, "VMOVUPS %s%d,%d(DI)\n", view.bank, register, register*112+view.offset)
 			}
 		}
-		if arch == "386" {
-			source.WriteString("PUSHFL\nPOPL AX\nMOVL AX,336(DI)\nLAHF\nMOVB AH,344(DI)\nMOVL CX,352(DI)\nRET\n")
-		} else {
-			source.WriteString("PUSHFQ\nPOPQ AX\nMOVQ AX,336(DI)\nLAHF\nMOVB AH,344(DI)\nMOVQ CX,352(DI)\nRET\n")
-		}
+		source.WriteString(x86PackedStringStatusObservation(arch, true))
 	}
 	return declarations.String(), source.String()
+}
+
+func x86PackedStringStatusObservation(arch string, refined bool) string {
+	suffix := "Q"
+	if arch == "386" {
+		suffix = "L"
+	}
+	if !refined {
+		return "PUSHF" + suffix + "\nPOP" + suffix + " AX\nMOV" + suffix +
+			" AX,336(DI)\nLAHF\nMOVB AH,344(DI)\nMOV" + suffix + " CX,352(DI)\nRET\n"
+	}
+	// PCMP defines all six arithmetic flags, not incoming DF/ID. Capture LAHF
+	// before AND changes FLAGS, using BX so AH cannot overwrite saved OF.
+	return "PUSHF" + suffix + "\nPOP" + suffix + " BX\nLAHF\nMOVB AH,344(DI)\nAND" +
+		suffix + " $0x8d5,BX\nMOV" + suffix + " BX,336(DI)\nMOV" + suffix + " CX,352(DI)\nRET\n"
 }
 
 func TestX86PackedStringThreeAPIsFiveTargetsO0O2Objects(t *testing.T) {

@@ -79,7 +79,7 @@ int main(void) {
             memcpy(&gotFlags,output+1+336,8);
             memcpy(&gotIndex,output+1+352,8);
             uint8_t lahf=(uint8_t)((flags&UINT64_C(0xd5))|2);
-            if ((gotFlags&UINT64_C(0x8d5))!=flags || output[1+344]!=lahf || gotIndex!=index ||
+            if (gotFlags!=flags || output[1+344]!=lahf || gotIndex!=index ||
                 after!=before || output[0]!=0xc3 || output[361]!=0xc3 || memcmp(input,original,sizeof(input))) {
                 fprintf(stderr,"%s/%u flags/index/input/canary mismatch\n",p->name,program);
                 return 1;
