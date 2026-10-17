@@ -2,49 +2,39 @@
 
 ## Closure queue, 2026-10-17
 
-This queue supersedes the historical checkpoints below. Freeze scope to actual
-CI failures; do not add inventory work or another broad proof/refactoring project.
-At `4cc8f3ba`, all fourteen failed-class/retained roots pass current Go,
-actual Go20 and race, with 1,614 children per lane and zero failures/skips.
-The original Go CFG owner also passes without changing its source fixtures.
-At `0352ff76`, the preceding ten-root union passes all three lanes; all five
-complete maps CLI owners pass Linux/Darwin/Windows, public rich CLI and simple
-CLI publication. These are local receipts, not successful reruns of CI jobs.
+Freeze scope to actual failures; do not add inventory work or another broad
+proof/refactoring project. Published `e4a48c3e` includes the four failed CI-class
+repairs: manual 386 fixtures, literal/native dispatch overlap, old MMX preflight
+expectations and string CFG/cursor scope. Their fourteen-root union passes
+current Go, actual Go20 and race, with 1,614 children per lane. All five complete
+maps CLI owners and nine final gates also pass locally. The original repeat
+loop retains Go objects/Context; its replenished-cursor counterpart is not
+original-loop execution.
 
-Fork run 39000367870 finished naturally: 53 jobs pass, ten fail and the dependent
-Windows module aggregate is skipped. Its failed jobs reduce to four classes:
-manual 386 fixture entry/results, literal/native dispatch overlap, an old MMX
-preflight expectation and string CFG/cursor scope. Their repairs are local.
-The original repeat loop retains Go objects and explicit Context checks for
-its updated-cursor memory role; its positive counterpart replenishes declared
-inputs per iteration. Do not count that counterpart as original-loop execution.
+The retained XMM chain now passes after all eight arithmetic-shift names join
+the shared packed-shift grammar, exact memory/count handling and byte dependency.
+At `bdfc51a8`, all 37 affected/retained roots pass current Go, actual Go20 and
+race: 177 children per lane, zero failures/skips and identical terminal sets.
+Independent complete Go encoder rows/attributes, 56 AMD64 and 20 mode32
+initialized kernels, three APIs, five-target objects, full aliases, merge/zero
+masks, unsigned count boundaries, CF and canaries remain covered. Numerical
+execution is portable LLVM, not an original AVX512 execution receipt. Original
+raw bytes, RET and literal DATA retain format objects and explicit public Context;
+do not replace RET by UD2 or invent incoming K/native storage to obtain a pass.
 
-All sixteen x86 official reports are compared against the previous matching
-baseline across Go1.20–1.27. Exactly four 386 and 117 AMD64 isolated forms per
-SDK move from Supported to Context: missing MMX state/inputs, horizontal inputs,
-implicit string state or native-store inputs. Only the three classification
-fields change; encoder rules, corpus metadata, unsupported/parse and runtime
-counts remain unchanged. The reviewed baseline still needs fresh final gates.
-The retained XMM chain's arithmetic-right-shift consumer, complete modules,
-strict benchmark and a successful new-head CI remain outstanding.
+All sixteen x86 reports are reviewed across Go1.20–1.27. Relative to `e4a48c3e`,
+386 is unchanged; exactly 81 AMD64 forms per SDK move Supported to Context:
+73 unknown masks, six unbound count addresses and two original native m128
+counts. Only 24 classification fields change. Complete encoder/corpus metadata,
+form identities and unsupported/parse/runtime counts remain unchanged. Fresh
+final gates are required after this reviewed baseline update.
 
-Candidate `94ef177e` is now published to the allowed fork. Let
-[run 39000367870](https://github.com/cpunion/plan9asm/actions/runs/39000367870)
-finish before the next consolidated push. PR40 remains draft at its older head.
-
-At that candidate, the fourteen MMX core roots and 285 children pass current
-Go, actual Go20 and race without skips. All seventeen MMX object roots pass.
-Native Linux x86 execution also passes the complete 66-root CI owner, both
-LOCK/unlocked RMW owners and the separate x87 owner. The independent physical
-MMX fixture additionally passes 96 boundary probes and 384 value/FPU-state calls.
-These are not full-module, benchmark, official-baseline or all-CI success claims.
-
-The retained XMM chain still exposes missing horizontal-integer and arithmetic
-shift result consumers. New CI failures include manual 386 register-entry
-fixtures, overlapping SDK-literal/native byte-shuffle dispatch and the old MMX
-preflight expectation. Both SDK official gates also fail changed classifications:
-retain those failures and inspect complete forms before any baseline update.
-Inventory is stopped at the requested historical boundary; ledgers remain external.
+Let [fork run 39002791430](https://github.com/cpunion/plan9asm/actions/runs/39002791430)
+finish naturally before the next consolidated push. Its complete native x86,
+LOCK/unlocked RMW, x87 and ARM64 cross owners pass; other jobs remain pending.
+PR40 is still draft at its older contribution head. Current-head full modules,
+strict benchmark and successful CI remain outstanding. Inventory is stopped at
+the requested historical boundary; scanning and ledgers remain external.
 
 ## Native MMX repair candidate, 2026-10-17
 
