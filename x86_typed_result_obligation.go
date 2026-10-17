@@ -73,14 +73,14 @@ func x86TypedFPResultNeedsProof(fn Func, sig FuncSig, arch string) bool {
 		if x86NamedSegmentMOVNeedsProof(ins, arch) {
 			return true // Source/input effects remain mandatory even with no result.
 		}
+		if _, known, err := x86StringInstructionProperties(ins, arch); known && err == nil && x86ResultNamedPredicateInstruction(ins) {
+			return true // Implicit data/address/count/DF inputs remain mandatory, including Void.
+		}
 		if sig.Ret == Void || len(sig.Frame.Results) == 0 {
 			continue
 		}
 		if _, known, err := x86X87WordProperties(ins, arch); known && err == nil && x86ResultNamedPredicateInstruction(ins) {
 			return true // Word results need the same whole proof without a GP-to-FP MOV.
-		}
-		if _, known, err := x86ResultStringCompareProperties(ins, arch); known && err == nil && x86ResultNamedPredicateInstruction(ins) {
-			return true // Conditional native reads need the same complete result proof, including missing stores.
 		}
 		if effect, known, err := x86TypedInstructionByteEffect(ins.Op, ins, arch); known && err == nil &&
 			effect.requiresResultProof && x86ResultNamedPredicateInstruction(ins) {
