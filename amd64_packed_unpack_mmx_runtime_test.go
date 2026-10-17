@@ -66,6 +66,46 @@ static uint64_t expectedMMX(const uint8_t *first,uint64_t second,int lane,int hi
  memcpy(&value,out,8);
  return value;
 }
+struct MMXModeImage { _Alignas(16) uint8_t bytes[512]; };
+static void beginMMXMode(uint16_t *oldControl,uint32_t *oldCSR) {
+ const uint16_t control=0x077f;
+ const uint32_t csr=0x5f80;
+ __asm__ volatile("fnstcw %0; stmxcsr %1; fninit; fldcw %2; ldmxcsr %3; "
+  "pcmpeqd %%mm6,%%mm6; emms; fld1"
+  : "=m"(*oldControl),"=m"(*oldCSR) : "m"(control),"m"(csr)
+  : "mm6","st","memory");
+}
+static int endMMXMode(uint64_t result,uint16_t control,uint32_t csr) {
+ struct MMXModeImage image;
+ __asm__ volatile("fxsave64 %0; fninit; fldcw %1; ldmxcsr %2"
+  : "=m"(image) : "m"(control),"m"(csr) : "st","memory");
+ uint16_t actualControl,status;
+ uint32_t actualCSR;
+ uint64_t actualResult,canary;
+ memcpy(&actualControl,image.bytes,2);
+ memcpy(&status,image.bytes+2,2);
+ memcpy(&actualCSR,image.bytes+24,4);
+ memcpy(&actualResult,image.bytes+32,8);
+ memcpy(&canary,image.bytes+32+6*16,8);
+ return actualControl==0x077f && (status&0x3800)==0 && image.bytes[4]==0 &&
+  actualCSR==0x5f80 && actualResult==result && canary==UINT64_MAX;
+}
+static int checkMMXModeObserver(void) {
+ for(int mutation=0;mutation<3;mutation++) {
+  uint16_t control;
+  uint32_t csr;
+  beginMMXMode(&control,&csr);
+  if(mutation==0) {
+   __asm__ volatile("emms" : : : "st","memory");
+  } else if(mutation==1) {
+   __asm__ volatile("pxor %%mm0,%%mm0" : : : "mm0","st","memory");
+  } else {
+   __asm__ volatile("pxor %%mm0,%%mm0; emms" : : : "mm0","st","memory");
+  }
+  if(endMMXMode(0,control,csr)!=(mutation==2)) return 1;
+ }
+ return 0;
+}
 static int checkMMX(uint64_t (*program)(const uint8_t*,uint64_t),
  uint64_t (*fp)(uint32_t,uint32_t),int lane,int high,int extent,uint8_t *end) {
  for(int seed=0;seed<16;++seed) {
@@ -73,16 +113,24 @@ static int checkMMX(uint64_t (*program)(const uint8_t*,uint64_t),
   for(int i=0;i<8;++i) source[i]=(uint8_t)(seed*73+i*19+7);
   memcpy(first,source,extent);
   uint64_t second=UINT64_C(0xcafe11223344ba5e)^((uint64_t)seed*UINT64_C(0x1234567890));
-  if(program(first,second)!=expectedMMX(source,second,lane,high) || memcmp(first,source,extent)) return 1;
+  uint16_t control;
+  uint32_t csr;
+  beginMMXMode(&control,&csr);
+  uint64_t result=program(first,second);
+  if(!endMMXMode(result,control,csr)) return 1;
+  if(result!=expectedMMX(source,second,lane,high) || memcmp(first,source,extent)) return 1;
   uint32_t a,b;
   memcpy(&a,source,4);
   memcpy(&b,source+4,4);
-  if(fp(a,b)!=expectedMMX(source,0,lane,high)) return 1;
+  beginMMXMode(&control,&csr);
+  result=fp(a,b);
+  if(!endMMXMode(result,control,csr) || result!=expectedMMX(source,0,lane,high)) return 1;
  }
  return 0;
 }
 int main(int argc, char **argv) {
     if (argc != 4) return 80;
+    if (checkMMXModeObserver()) return 92;
     unsigned row = (unsigned)atoi(argv[1]);
     unsigned probe = (unsigned)atoi(argv[2]);
     unsigned original = (unsigned)atoi(argv[3]);
