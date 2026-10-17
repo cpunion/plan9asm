@@ -24,6 +24,8 @@ of the current candidate. Do not create another worktree for routine work.
 
 | Snapshot | Evidence and limits |
 |---|---|
+| `d0505fd99` | Active branch `codex/pr40-scalar-fp-address-closing-20261018` is TDD only: three roots / 22 children reproduce 20 failed terminals, including a falsely accepted uninitialized floating result; no production repair or qualification yet |
+| `d5bdb0399` | All 179 historical failed roots re-observed locally: 29 pass, 58 fail, 92 explicit host skips, zero absent/pending/incomplete. Original output hashes, all run/terminal identities and both source/SDK/tool/environment seals audit unchanged; selected aggregate remains failed, not a full/native CI pass |
 | `0cb14d2fa` | Integer self-comparison and mandatory Void repair: 54 roots / 7,277 children pass current Go, actual Go1.20 and race; all 7,331 terminals match, zero fail/skip/incomplete, unchanged source/SDK/LLVM22 observations |
 | Same code head | Build/vet, twelve scanner roots on both SDKs, five-arch official classification, three CLI extraction roots, 132 CI policies and tracked formatting pass; staged in allowed fork branch `codex/pr40-integer-self-compare-closing-20261018`, not the contribution head |
 | `bc79fd0f` | Combined named/raw NOP repair: 64 roots / 8,606 children pass current Go, actual Go 1.20 and race; all 8,670 terminal identities match, zero fail/skip/incomplete, unchanged source/SDK/LLVM 22 observations |
@@ -114,10 +116,21 @@ cannot certify a performance improvement. Full reports remain under ignored
    Use shared typed grammar/effects rather than library-specific exceptions.
    Existing failure classes include scalar input/effect gaps, MMX-region
    composition and stale unbound-format expectations; the completed CI failure
-   index is the authority, not an estimated remaining count. Rerun all 179 old
-   failed roots against actual current host inventory using the selected-owner
-   runner; retain absent, skipped, unfinished and pending roots explicitly.
-   That local queue is not a replacement for complete all-platform CI.
+   index is the authority, not an estimated remaining count. The complete local
+   historical-failure replay now has 58 failed roots, not 179 unexamined ones;
+   92 host skips remain unexecuted native counterparts, never repaired tests.
+   This selected queue does not revalidate the old complete suite's passed roots.
+   Its main classes are numerical/field-address effects, MMX closure, raw/native
+   read composition, custom ABI/stack roles and obsolete unbound-format contracts.
+   The first actual failure remains `TestGoABI0PaddedSqrtObjects`. The new floating
+   field-copy tests separate address/storage transport from SQRT arithmetic.
+   Current roles admit integer/bool parameters and integer results only; parameter
+   backing also requires exact logical end rather than ABI0 rounded allocation.
+   The uninitialized-floating-result negative additionally exposes missing cost
+   routing, not a fixture error. Keep all five target Go objects, three APIs and
+   padding/input-write/SP negatives; do not special-case SqrtByAddress or grant
+   contiguous/native frame backing. Run complete affected Go forms before adding
+   SQRT effects, and retain the unchanged original discovering program.
 4. Require current-head complete CI, benchmark, coverage and fresh review before
    ready. Keep ABI/context failures visible; do not weaken the benchmark or
    treat Context classification as successful program compilation.
@@ -134,6 +147,9 @@ Resolve branch locations with `git worktree list`. Latest ignored receipts use
 `integer-self-compare-qualified-0cb14d2f.json` records the exact disjoint union.
 The eight-SDK audit is `integer-self-compare-classification-audit` at `7d0ab042d`;
 later changes before qualification are only test contracts and their baseline.
+The local 179-root replay is `previous-failures-d5bdb039`; its
+`raw-outcomes-audit.json` retains every actual failure and skip separately.
+The floating-field RED is `logical-floating-field-address-red` at `d0505fd99`.
 Earlier receipts use `nop-source-state-qualified-{nop,stack,identity}` and
 `nop-current-sdk-producers`; `qualified-nop-source-state-bc79fd0f.json` records
 the exact union. Earlier cohorts use `bitfield-qualified-*` and
