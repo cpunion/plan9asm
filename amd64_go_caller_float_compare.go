@@ -7,11 +7,7 @@ func x86CallerFloatCompareStep(ins *Instr, form x86FloatCompareForm, state *x86S
 	if form.mask >= 0 && !state.masks[ins.Args[form.mask].Reg] {
 		return false
 	}
-	width := form.byteWidth
-	if form.scalar {
-		width = form.bits / 8
-	}
-	required := x86CallerVectorByteMask(int64(width))
+	required := x86CallerVectorByteMask(int64(form.inputByteWidth()))
 	if form.memory >= 0 && !x86CallerOrdinaryMemoryStep(ins, form.memory, state, proof, int64(form.memoryBytes), false) {
 		return false
 	}
@@ -25,14 +21,7 @@ func x86CallerFloatCompareStep(ins *Instr, form x86FloatCompareForm, state *x86S
 		return true
 	}
 	destination := x86CallerVectorRoot(ins.Args[form.destination].Reg)
-	known := ^uint64(0)
-	if form.legacy {
-		known = state.vectors[destination] | required
-	} else if form.scalar {
-		second := state.vectors[x86CallerVectorRoot(ins.Args[form.second].Reg)]
-		upper := x86CallerVectorByteMask(16) &^ required
-		known = ^x86CallerVectorByteMask(16) | required | second&upper
-	}
-	state.vectors[destination] = known
+	second := x86CallerVectorRoot(ins.Args[form.second].Reg)
+	state.vectors[destination] = form.resultDefinedBytes(state.vectors[second], state.vectors[destination])
 	return true
 }

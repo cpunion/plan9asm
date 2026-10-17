@@ -24,6 +24,9 @@ func x86TypedFPResultNeedsProof(fn Func, sig FuncSig, arch string) bool {
 	}
 	opaqueAddressResult := x86OpaqueAddressPointerResultRole(fn, sig, arch)
 	for ordinal, ins := range fn.Instrs {
+		if _, known, err := x86FloatCompareProperties(ins, arch); known && err == nil {
+			return true // Dead comparisons still consume real vector/mask inputs and native FP effects.
+		}
 		if form, known, err := x86NonTemporalVectorProperties(ins.Op, ins, arch); known && err == nil && !form.trap {
 			return true // Dead non-temporal accesses still need real memory and complete inputs, including Void.
 		}

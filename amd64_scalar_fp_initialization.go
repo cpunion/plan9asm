@@ -37,6 +37,9 @@ func x86ScalarFPResultTransfer(ins Instr, state *x86ResultState, owned []bool, r
 	if accepted, known := x86ResultNumericalReadStep(ins, state, owned, resultOffset, arch); known {
 		return accepted
 	}
+	if accepted, known := x86ResultFloatCompareStep(ins, state, owned, arch, false); known {
+		return accepted
+	}
 	if form, known, err := amd64PackedVectorMoveProperties(ins, arch); known {
 		return err == nil && x86ResultPackedVectorMoveTransfer(ins, form, state, owned, resultOffset, arch, false)
 	}

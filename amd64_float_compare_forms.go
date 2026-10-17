@@ -27,6 +27,26 @@ type x86FloatCompareForm struct {
 	maskResult, sae bool
 }
 
+func (form x86FloatCompareForm) inputByteWidth() int {
+	if form.scalar {
+		return form.bits / 8
+	}
+	return form.byteWidth
+}
+
+// Both callers and result analysis use the same architectural byte writes.
+// These are definedness facts, not predicate values or native memory rights.
+func (form x86FloatCompareForm) resultDefinedBytes(second, previous uint64) uint64 {
+	active := x86CallerVectorByteMask(int64(form.inputByteWidth()))
+	if form.legacy {
+		return previous | active
+	}
+	if form.scalar {
+		return ^uint64(0xffff) | active | second&(0xffff&^active)
+	}
+	return ^uint64(0)
+}
+
 func x86FloatCompareProperties(ins Instr, goarch string) (x86FloatCompareForm, bool, error) {
 	base, suffix, dotted := strings.Cut(strings.ToUpper(string(ins.Op)), ".")
 	spec, known := x86FloatCompareSpecs[Op(base)]
