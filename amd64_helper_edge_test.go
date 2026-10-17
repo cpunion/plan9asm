@@ -904,6 +904,9 @@ func TestAMD64VectorCoverage(t *testing.T) {
 		},
 	}
 	c, b := newAMD64CtxWithFuncForTest(t, fn, FuncSig{Name: "example.vec", Ret: Void}, nil)
+	// Emitter-only native vector formats still need their actual x86 backend.
+	// Complete initialized public programs have separate object owners.
+	c.targetTriple = "x86_64-unknown-linux-gnu"
 	mustLower := func(op Op, ins Instr) {
 		t.Helper()
 		if ok, term, err := c.lowerVec(op, ins); !ok || term || err != nil {

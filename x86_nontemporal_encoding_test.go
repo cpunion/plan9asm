@@ -88,3 +88,32 @@ func TestX86NonTemporalCompleteOriginalNativeBoundaries(t *testing.T) {
 		})
 	}
 }
+
+func TestX86NonTemporalVEXWIsIgnoredUnlikeEVEX(t *testing.T) {
+	// Intel SDM's four VEX rows are WIG, although Go emits W0. The
+	// independent EVEX mutation controls above require each exact W0/W1.
+	for _, row := range []struct {
+		name string
+		code []byte
+	}{
+		{"VMOVNTDQ", []byte{0xc4, 0xe1, 0x79, 0xe7, 0x03}},
+		{"VMOVNTPD", []byte{0xc4, 0xe1, 0x79, 0x2b, 0x03}},
+		{"VMOVNTPS", []byte{0xc4, 0xe1, 0x78, 0x2b, 0x03}},
+		{"VMOVNTDQA", []byte{0xc4, 0xe2, 0x79, 0x2a, 0x03}},
+	} {
+		for _, mode := range []int{32, 64} {
+			for _, word := range []byte{0, 0x80} {
+				code := append([]byte(nil), row.code...)
+				code[2] |= word
+				ins, length, known, err := decodedX86VEXNonTemporalMoveInstruction(code, mode)
+				if !known || err != nil || ins.Op != Op(row.name) || length != len(code) {
+					t.Fatal("valid physical VEX.WIG form lost its native identity", row.name, mode, word, err)
+				}
+				boundaries, scalar, err := x86NumericalNativeBoundaries(code, mode)
+				if err != nil || len(boundaries) != 1 || len(scalar) != 0 {
+					t.Fatal("VEX.WIG move became a scalar or incomplete native boundary", row.name, mode, word, err)
+				}
+			}
+		}
+	}
+}
