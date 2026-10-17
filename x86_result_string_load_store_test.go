@@ -3,6 +3,7 @@ package plan9asm
 import (
 	"fmt"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -81,6 +82,65 @@ func TestX86StringLoadStorePairedEffectsCompleteFamily(t *testing.T) {
 					}
 				}
 			}
+		}
+	}
+}
+
+// Each operation owns at most 48 functions, below the existing 64-function
+// object batch bound. The independent effect matrix above owns sparse-byte,
+// count and direction semantics; these are actual initialized public entries.
+func TestX86StringLoadStoreInitializedFiveTargetThreeAPIObjects(t *testing.T) {
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM22 llc required")
+	}
+	for _, target := range x86RawReturnTargets {
+		word, move, widths := 8, "MOVQ", "BWLQ"
+		if target.arch == "386" {
+			word, move, widths = 4, "MOVL", "BWL"
+		}
+		for _, stem := range []string{"MOVS", "STOS", "LODS"} {
+			t.Run(target.triple+"/"+stem, func(t *testing.T) {
+				var source, declaration strings.Builder
+				count := 0
+				for _, suffix := range widths {
+					for _, prefix := range []string{"", "REP", "REPN"} {
+						for _, iterations := range []int{0, 3} {
+							for _, backward := range []bool{false, true} {
+								name := fmt.Sprintf("%s%c_%s_%d_%t", stem, suffix, prefix, iterations, backward)
+								fmt.Fprintf(&source, "TEXT ·%s(SB),4,$0-%d\n%s src+0(FP),SI\n%s dst+%d(FP),DI\n%s value+%d(FP),AX\n%s $%d,CX\n",
+									name, 4*word, move, move, word, move, 2*word, move, iterations)
+								if backward {
+									source.WriteString("STD\n")
+								} else {
+									source.WriteString("CLD\n")
+								}
+								if prefix != "" {
+									source.WriteString(prefix + "\n")
+								}
+								fmt.Fprintf(&source, "%s%c\nCLD\n%s AX,ret+%d(FP)\nRET\n", stem, suffix, move, 3*word)
+								fmt.Fprintf(&declaration, "func %s(src,dst *byte,value uintptr) uintptr\n", name)
+								count++
+							}
+						}
+					}
+				}
+				if count != len(widths)*12 || count > 64 {
+					t.Fatal("complete independent string object inventory changed", count)
+				}
+				x86LEAActualTargetGoObject(t, target.arch, target.triple, source.String())
+				for _, api := range []string{"text", "module", "Go"} {
+					ir, err := x86ScalarFPBitViewAPI(t, source.String(), declaration.String(), target.arch, target.triple, api)
+					if err != nil {
+						t.Fatal("initialized string sibling lost its complete source proof", api, err)
+					}
+					for _, text := range []string{ir, x86DwordProductIROptimize(t, ir)} {
+						for _, level := range []string{"-O0", "-O2"} {
+							x86PackedStringCompileObject(t, llc, target.triple, text, level)
+						}
+					}
+				}
+			})
 		}
 	}
 }
