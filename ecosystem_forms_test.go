@@ -208,6 +208,11 @@ TEXT vectors(SB),NOSPLIT,$0-0
 	if !strings.Contains(ir, "store <16 x i8> zeroinitializer") {
 		t.Fatalf("PSRLQ with an oversized count must clear the vector:\n%s", ir)
 	}
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM 22 llc not found")
+	}
+	compileLLVMToObject(t, llc, "x86_64-unknown-linux-gnu", "ecosystem-vector-formats.ll", "ecosystem-vector-formats.o", ir)
 }
 
 func translateEcosystemScalarForms(t *testing.T, arch Arch, triple, goarch, src string) string {
