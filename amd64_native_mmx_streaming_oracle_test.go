@@ -9,7 +9,7 @@ import (
 func x86MMXStreamingOracleSources() (string, string, string, string) {
 	var declarations, assembly, c, goTest strings.Builder
 	declarations.WriteString("package oracle\n")
-	c.WriteString("#include <stdint.h>\n#include <string.h>\n")
+	c.WriteString("#include <stdint.h>\n#include <stdio.h>\n#include <string.h>\n")
 	var names []string
 	var offsets []string
 	for register := 0; register < 8; register++ {
@@ -39,11 +39,18 @@ int main(void) {
                 if (byte>=(unsigned)offsets[k] && byte<(unsigned)offsets[k]+8) {
                     want=(uint8_t)((uint64_t)values[v] >> (8*(byte-offsets[k])));
                 }
-                if (out[byte]!=want) return 1;
+                if (out[byte]!=want) {
+                    fprintf(stderr,"kernel=%u value=%x byte=%u got=%x want=%x\n",
+                        k,values[v],byte,out[byte],want);
+                    return 1;
+                }
             }
             _Alignas(16) uint8_t state[512];
             __asm__ volatile("fxsave %0" : "=m"(state));
-            if (state[4]!=0) return 1;
+            if (state[4]!=0) {
+                fprintf(stderr,"kernel=%u value=%x x87 tag=%x\n",k,values[v],state[4]);
+                return 1;
+            }
         }
     }
     return 0;

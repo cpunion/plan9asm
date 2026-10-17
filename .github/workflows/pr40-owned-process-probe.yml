@@ -146,6 +146,18 @@ jobs:
             -json -count=1 -timeout=8m \
             2> _out/native-x86-oracles/native.stderr | tee _out/native-x86-oracles/native.jsonl
           node .github/scripts/audit-native-priority.cjs _out/native-x86-oracles > _out/native-x86-oracles/audit.json
+      - name: Execute original Go and LLVM native MMX streaming stores
+        env:
+          GOTOOLCHAIN: local
+        run: |
+          set -euo pipefail
+          directory=_out/native-x86-oracles/mmx-streaming
+          mkdir -p "$directory"
+          root='TestCrossLinuxRuntimeMatrixX86MMXStreamingOriginalAndLLVM'
+          go test . -list "^($root)$" > "$directory/inventory.log"
+          grep -Fx "$root" "$directory/inventory.log"
+          go test . -run "^($root)$" -count=1 -timeout=5m -json > "$directory/raw.jsonl" 2> "$directory/stderr.log"
+          node .github/scripts/audit-mmx-streaming.cjs "$directory"
       - name: Preserve original and translated observations
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v6
