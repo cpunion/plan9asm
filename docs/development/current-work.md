@@ -26,7 +26,7 @@ mutation that exposes those unknown bytes and must fail with Context.
 At the same code head, build, vet, ten scanner roots on both SDKs, the five-arch
 official gate, two CLI extraction roots, all 132 CI policies and formatting pass.
 Three separately recorded local cohorts overlap 28 exact failed roots in the
-completed old CI: nine logical/compare, eleven BLS/broadcast/string/mixed format
+completed old CI: nine logical/compare, eleven broadcast/string/mixed format
 owners and eight floating-format owners. They are not 28 online repaired tests.
 Publish the verified batch to the allowed fork, require its new native BLS/
 BEXTR owner and complete-module feedback, and continue the remaining actual
