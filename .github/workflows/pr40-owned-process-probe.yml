@@ -158,6 +158,20 @@ jobs:
           grep -Fx "$root" "$directory/inventory.log"
           go test . -run "^($root)$" -count=1 -timeout=5m -json > "$directory/raw.jsonl" 2> "$directory/stderr.log"
           node .github/scripts/audit-mmx-streaming.cjs "$directory"
+      - name: Execute LLVM floating comparison results and native FP effects
+        env:
+          GOTOOLCHAIN: local
+        run: |
+          set -euo pipefail
+          directory=_out/native-x86-oracles/floating-compare
+          mkdir -p "$directory"
+          roots='TestCrossLinuxRuntimeMatrixX86FloatingCompareIndependentIEEEAndMXCSR|TestCrossLinuxRuntimeMatrixX86FloatingCompareDeadResultEffects|TestCrossLinuxRuntimeMatrixX86FloatingCompareFPScalarByteSpans|TestCrossLinuxRuntimeMatrixX86FloatingCompareLegacyUpperAliases'
+          go test . -list "^($roots)$" > "$directory/inventory.log"
+          for root in ${roots//|/ }; do
+            grep -Fx "$root" "$directory/inventory.log"
+          done
+          go test . -run "^($roots)$" -count=1 -timeout=5m -json > "$directory/raw.jsonl" 2> "$directory/stderr.log"
+          node .github/scripts/audit-floating-compare.cjs "$directory"
       - name: Preserve original and translated observations
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v6
