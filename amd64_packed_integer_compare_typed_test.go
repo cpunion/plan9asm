@@ -109,11 +109,27 @@ func TestX86PackedIntegerCompareLegacyNativeOpcodeAndVirtualBoundaries(t *testin
 		for _, target := range x86RawReturnTargets {
 			t.Run(op+"/"+target.triple, func(t *testing.T) {
 				source := "TEXT ·query(SB),4,$0-0\n" + op + " (AX),X1\nRET\n"
-				x86LEAActualTargetGoObject(t, target.arch, target.triple, source)
-				ir, err := x86PackedIntegerCompareAPI(t, source, "func query()\n", target.arch, target.triple, "text")
+				x86UnboundVoidFormatSource(t, source, "query", target.arch, target.triple)
+				word, move := int(goWordSize(target.arch)), "MOVQ"
+				if word == 4 {
+					move = "MOVL"
+				}
+				// Keep the exact original m128 instruction. Only its actual
+				// pointer and destructive X input are established here; the
+				// complete native-object owner covers the family separately.
+				initialized := fmt.Sprintf("TEXT ·query(SB),4,$0-%d\n%s p+0(FP),AX\nPXOR X1,X1\n%s (AX),X1\nRET\n", word, move, op)
+				x86LEAActualTargetGoObject(t, target.arch, target.triple, initialized)
 				mnemonic := strings.ToLower(strings.ReplaceAll(op, "L", "D"))
-				if err != nil || !strings.Contains(ir, "asm sideeffect \""+mnemonic+" ($2), $0\"") {
-					t.Fatalf("legacy m128 erased original opcode/fault semantics: %v\n%s", err, ir)
+				for _, api := range []string{"text", "module", "Go"} {
+					ir, err := x86PackedIntegerCompareAPI(t, initialized, "func query(p *[16]byte)\n", target.arch, target.triple, api)
+					if err != nil {
+						t.Fatal("initialized original legacy source rejected", api, err)
+					}
+					for _, text := range []string{ir, x86DwordProductIROptimize(t, ir)} {
+						if !strings.Contains(text, "asm sideeffect \""+mnemonic+" ($2), $0\"") {
+							t.Fatal("legacy m128 erased original opcode/fault semantics", api)
+						}
+					}
 				}
 			})
 		}
