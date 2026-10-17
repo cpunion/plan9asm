@@ -23,12 +23,12 @@ type amd64LegacyMMXMoveSpec struct {
 
 // amd64LegacyMMXMoveSpecs describes the complete Go 1.27 legacy cross-domain
 // and non-temporal MMX move grammar. Operand classes and transfer semantics are
-// data; one parser validates all four opcode spellings.
+// data; one parser validates the owned spellings. SIMD non-temporal moves
+// have their complete separate x86NonTemporalVectorSpecs grammar.
 var amd64LegacyMMXMoveSpecs = map[Op]amd64LegacyMMXMoveSpec{
 	"MOVQOZX": {source: amd64LegacyMMXMMX | amd64LegacyMMXXMM | amd64LegacyMMXMemory, destination: amd64LegacyMMXXMM, transferBits: 64, zeroExtend: true},
 	"MOVDQ2Q": {source: amd64LegacyMMXXMM, destination: amd64LegacyMMXMMX, transferBits: 64},
 	"MOVNTQ":  {source: amd64LegacyMMXMMX, destination: amd64LegacyMMXMemory, transferBits: 64, nonTemporal: true},
-	"MOVNTDQ": {source: amd64LegacyMMXXMM, destination: amd64LegacyMMXMemory, transferBits: 128, nonTemporal: true},
 }
 
 type amd64LegacyMMXMoveForm struct {
@@ -117,18 +117,12 @@ func (c *amd64Ctx) emitLegacyMMXMove(spec amd64LegacyMMXMoveSpec, form amd64Lega
 		return true, false, c.storeReg(form.destination.Reg, bits)
 	}
 
-	if spec.transferBits == 64 {
-		bits, err := c.evalIntSized(form.source, I64)
-		if err != nil {
-			return true, false, err
-		}
-		return true, false, c.storeMOVNTIMemory(form.destination, I64, bits)
-	}
-	bytes, err := c.loadX(form.source.Reg)
+	// MOVNTQ is the only remaining memory destination in this MMX directory.
+	bits, err := c.evalIntSized(form.source, I64)
 	if err != nil {
 		return true, false, err
 	}
-	return true, false, c.storeVectorBytesOperandWithMetadata(form.destination, 16, bytes, x86NonTemporalMetadata)
+	return true, false, c.storeMOVNTIMemory(form.destination, I64, bits)
 }
 
 func (c *amd64Ctx) loadLegacyMMXMoveLow64(source Operand) (string, error) {

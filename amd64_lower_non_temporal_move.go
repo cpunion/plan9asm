@@ -10,11 +10,13 @@ func (c *amd64Ctx) lowerNonTemporalVectorMove(op Op, ins Instr) (bool, bool, err
 	if !known || err != nil {
 		return known, false, err
 	}
+	if !x86ScalarFloatIntegerNativeTarget(c.goarch, c.targetTriple) {
+		return true, false, fmt.Errorf("%w: non-temporal vector access needs its actual x86 target", ErrProbeNeedsContext)
+	}
 	if form.trap {
 		return c.lowerSyscall("UD2", Instr{Op: "UD2"})
 	}
-	if !x86ScalarFloatIntegerNativeTarget(c.goarch, c.targetTriple) ||
-		ins.x86AddressBits != 0 || ins.x86UnboundAddressOverride ||
+	if ins.x86AddressBits != 0 || ins.x86UnboundAddressOverride ||
 		(ins.x86Encoded || ins.x86SourceRaw != nil) && ins.x86NumericalRead == nil && ins.x86SDKLiteral == nil {
 		return true, false, fmt.Errorf("%w: non-temporal vector access needs its actual x86 target/encoding", ErrProbeNeedsContext)
 	}

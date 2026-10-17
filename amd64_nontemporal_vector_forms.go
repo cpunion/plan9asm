@@ -102,8 +102,10 @@ func x86ResultNonTemporalVectorStep(ins Instr, state *x86ResultState, owned []bo
 	}
 	width := int64(form.move.byteWidth)
 	if !form.spec.load {
+		index, valid := amd64VectorRegisterIndex(ins.Args[0].Reg, form.move.byteWidth)
+		mask := x86CallerVectorByteMask(width)
 		return x86ResultIncomingPointerAddressIdentity(memory, state, arch) &&
-			x86ResultRead(ins.Args[0], width, state, owned, arch), true
+			valid && state.vectorBytes(index)&mask == mask, true
 	}
 	if !x86ResultIncomingPointerReadAddressIdentity(memory, state, arch) {
 		return false, true

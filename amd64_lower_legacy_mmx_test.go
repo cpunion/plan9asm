@@ -12,7 +12,6 @@ func TestAMD64LegacyMMXMoveGrammarIsComplete(t *testing.T) {
 		"MOVQOZX": {source: amd64LegacyMMXMMX | amd64LegacyMMXXMM | amd64LegacyMMXMemory, destination: amd64LegacyMMXXMM, transferBits: 64, zeroExtend: true},
 		"MOVDQ2Q": {source: amd64LegacyMMXXMM, destination: amd64LegacyMMXMMX, transferBits: 64},
 		"MOVNTQ":  {source: amd64LegacyMMXMMX, destination: amd64LegacyMMXMemory, transferBits: 64, nonTemporal: true},
-		"MOVNTDQ": {source: amd64LegacyMMXXMM, destination: amd64LegacyMMXMemory, transferBits: 128, nonTemporal: true},
 	}
 	if !reflect.DeepEqual(amd64LegacyMMXMoveSpecs, want) {
 		t.Fatalf("legacy MMX move grammar = %+v, want %+v", amd64LegacyMMXMoveSpecs, want)
