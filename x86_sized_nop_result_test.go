@@ -35,10 +35,12 @@ func TestX86SizedNOPCompleteGoRowsAndInertState(t *testing.T) {
 			if !bytes.Equal(code, want) {
 				t.Fatalf("original %s/%s bytes %x, want %x", arch, op, code, want)
 			}
-			operands := []string{"AX", "SP", "(AX)", "4096(BP)", "(AX)(DX*8)", "external(SB)", "value+0(FP)"}
+			operands := strings.Fields("AX CX DX BX SP BP SI DI")
 			if arch == "amd64" {
-				operands = append(operands, "R15")
+				operands = append(operands, strings.Fields("R8 R9 R10 R11 R12 R13 R14 R15 g")...)
+				operands = append(operands, "(g)", "(AX)(g*2)")
 			}
+			operands = append(operands, "(AX)", "4096(BP)", "(AX)(DX*8)", "external(SB)", "value+0(FP)")
 			var original strings.Builder
 			original.WriteString("TEXT f(SB),4,$0-0\n")
 			for _, operand := range operands {
