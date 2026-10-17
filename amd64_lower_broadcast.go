@@ -90,20 +90,16 @@ func (c *amd64Ctx) loadPackedBroadcastScalar(src Operand, laneBits int, rawEncod
 		}
 		return c.evalIntSized(src, amd64IntegerTypeForBits(laneBits))
 	}
-	if src.Kind == OpSym {
-		// A bare integer in Go's x86 syntax is absolute memory, not an
-		// immediate (immediates carry a '$'). The parser keeps this spelling
-		// as OpSym so distinguish it here before the generic symbol loader.
-		if address, parseErr := parseInt(src.Sym); parseErr == nil {
-			loaded := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = load i%d, ptr %s, align 1\n", loaded, laneBits, c.ptrFromAddrI64(fmt.Sprintf("%d", address)))
-			return "%" + loaded, nil
-		}
-	}
 	if !isAMD64MemoryOperand(src) {
 		return "", fmt.Errorf("expected an X register, GP register, or memory, got %s", src.String())
 	}
-	return c.evalIntSized(src, amd64IntegerTypeForBits(laneBits))
+	bytes, err := c.loadX86PackedShiftBytes(src, laneBits/8, true)
+	if err != nil {
+		return "", err
+	}
+	value := c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i8> %s to i%d\n", value, laneBits/8, bytes, laneBits)
+	return "%" + value, nil
 }
 
 // isAMD64YrlRegister mirrors Go's amd64 Yrl register class. Byte aliases,

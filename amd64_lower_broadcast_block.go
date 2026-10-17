@@ -52,7 +52,30 @@ func (c *amd64Ctx) lowerPackedBlockBroadcast(op Op, ins Instr) (ok bool, termina
 		}
 	}
 
-	block, err := c.loadPackedBlockBroadcastSource(source, spec.sourceBytes)
+	var block string
+	if mask != "" && source.Kind != OpReg {
+		// E6 suppresses each source element unless at least one repeated
+		// destination lane selects it. Fold the destination mask onto the
+		// source tuple before reusing the exact guarded volatile lane reader.
+		sourceLanes := spec.sourceBytes * 8 / spec.laneBits
+		folded := mask
+		for shift := sourceLanes; shift < destinationBytes*8/spec.laneBits; shift += sourceLanes {
+			high, combined := c.newTmp(), c.newTmp()
+			fmt.Fprintf(c.b, "  %%%s = lshr i64 %s, %d\n", high, mask, shift)
+			fmt.Fprintf(c.b, "  %%%s = or i64 %s, %%%s\n", combined, folded, high)
+			folded = "%" + combined
+		}
+		lanes, readErr := c.loadX86PackedShiftLanes(source, spec.sourceBytes, spec.laneBits, false, folded)
+		err = readErr
+		if err == nil {
+			value := c.newTmp()
+			fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i%d> %s to <%d x i8>\n",
+				value, sourceLanes, spec.laneBits, lanes, spec.sourceBytes)
+			block = "%" + value
+		}
+	} else {
+		block, err = c.loadPackedBlockBroadcastSource(source, spec.sourceBytes)
+	}
 	if err != nil {
 		return true, false, err
 	}
@@ -99,39 +122,5 @@ func (c *amd64Ctx) loadPackedBlockBroadcastSource(source Operand, sourceBytes in
 		return "%" + bytesValue, nil
 	}
 
-	switch source.Kind {
-	case OpMem:
-		address, err := c.addrFromMem(source.Mem)
-		if err != nil {
-			return "", err
-		}
-		loaded := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = load <%d x i8>, ptr %s, align 1\n", loaded, sourceBytes, c.ptrFromAddrI64(address))
-		return "%" + loaded, nil
-	case OpSym:
-		pointer, err := c.ptrFromSB(source.Sym)
-		if err != nil {
-			return "", err
-		}
-		loaded := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = load <%d x i8>, ptr %s, align 1\n", loaded, sourceBytes, pointer)
-		return "%" + loaded, nil
-	case OpFP:
-		chunks := sourceBytes / 8
-		words := "zeroinitializer"
-		for chunk := 0; chunk < chunks; chunk++ {
-			word, err := c.evalFPToI64(source.FPOffset + int64(chunk*8))
-			if err != nil {
-				return "", err
-			}
-			inserted := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = insertelement <%d x i64> %s, i64 %s, i32 %d\n", inserted, chunks, words, word, chunk)
-			words = "%" + inserted
-		}
-		bytesValue := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i64> %s to <%d x i8>\n", bytesValue, chunks, words, sourceBytes)
-		return "%" + bytesValue, nil
-	default:
-		return "", fmt.Errorf("expected packed-block broadcast memory source, got %s", source.String())
-	}
+	return c.loadX86PackedShiftBytes(source, sourceBytes, true)
 }

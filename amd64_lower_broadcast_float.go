@@ -39,9 +39,11 @@ func (c *amd64Ctx) lowerScalarFloatBroadcast(op Op, ins Instr) (ok bool, termina
 			relevant, active := c.newTmp(), c.newTmp()
 			fmt.Fprintf(c.b, "  %%%s = and i64 %s, %d\n", relevant, mask, uint64(1)<<uint(lanes)-1)
 			fmt.Fprintf(c.b, "  %%%s = icmp ne i64 %%%s, 0\n", active, relevant)
-			scalar, err = c.loadX86ScalarMemoryIf(source, laneBits, "%"+active)
+			scalar, err = c.loadX86ScalarIf(laneBits, "%"+active, func() (string, error) {
+				return c.loadPackedBroadcastScalar(source, laneBits, false)
+			})
 		} else {
-			scalar, err = c.evalIntSized(source, amd64IntegerTypeForBits(laneBits))
+			scalar, err = c.loadPackedBroadcastScalar(source, laneBits, false)
 		}
 	}
 	if err != nil {

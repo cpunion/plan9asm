@@ -111,6 +111,10 @@ func x86BroadcastProperties(op Op, ins Instr, arch string) (x86BroadcastForm, bo
 // A broadcast reads its exact scalar/block source and defines the complete
 // destination width. A low-X source cannot stand in for a wider block input.
 func x86ResultBroadcastStep(ins Instr, state *x86ResultState, owned []bool, arch string) (bool, bool) {
+	return x86ResultBroadcastStepWithRead(ins, state, owned, arch, false)
+}
+
+func x86ResultBroadcastStepWithRead(ins Instr, state *x86ResultState, owned []bool, arch string, nativeRead bool) (bool, bool) {
 	f, known, err := x86BroadcastProperties(ins.Op, ins, arch)
 	if !known {
 		return false, false
@@ -134,9 +138,10 @@ func x86ResultBroadcastStep(ins Instr, state *x86ResultState, owned []bool, arch
 		// Reuse the exact initialized FP/AUTO bytes or the lowering-only
 		// same-file DATA extent. The tuple is the scalar/block input, not
 		// the wider destination. A mask cannot waive any potential input.
-		// This grants neither an ordinary pointer read nor a raw address role.
+		// Only the paired exact volatile emitter supplies a native continuation;
+		// the standalone query still has no native memory or raw address role.
 		if !isAMD64MemoryOperand(src) || ins.x86AddressBits != 0 || ins.x86UnboundAddressOverride ||
-			!x86ResultRead(src, int64(f.sourceBytes), state, owned, arch) {
+			!x86ResultReadWithNativeContinuation(ins, src, int64(f.sourceBytes), state, owned, arch, nativeRead) {
 			return false, true
 		}
 	} else if index, valid := amd64VectorRegisterIndex(src.Reg, amd64VectorByteWidth(src.Reg)); valid {

@@ -220,6 +220,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		if accepted, known := x86ResultVectorCompareStepWithRead(ins, state, owned, arch, true); known {
 			return accepted // Complete vector/K-result compares retain their exact native source accesses.
 		}
+		if accepted, known := x86ResultBroadcastStepWithRead(ins, state, owned, arch, true); known {
+			return accepted // Scalar/block E6 reads keep exact, mask-guarded native accesses.
+		}
 		if form, known, err := x86PackedLogicalProperties(ins, arch); known {
 			// Only the paired emitter supplies these conditional native values.
 			// Standalone queries and physical MMX keep their separate contracts.

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+
+	"github.com/xgo-dev/llvm"
 )
 
 // Reuse the independent complete Go encoder directory, not production-map keys.
@@ -67,10 +69,7 @@ func TestX86BroadcastPairedNativeReadCompleteFamily(t *testing.T) {
 									t.Fatal("complete broadcast lost its paired native input", err)
 								}
 								for _, text := range []string{ir, x86DwordProductIROptimize(t, ir)} {
-									x86CompactExpandRequireAllDefinitions(t, text, names)
-									if strings.Count(text, "load volatile") != len(names) {
-										t.Fatal("live or dead broadcast discarded its exact native access")
-									}
+									x86BroadcastRequireNativeLoads(t, text, names)
 									for _, level := range []string{"-O0", "-O2"} {
 										x86PackedStringCompileObject(t, llc, target.triple, text, level)
 									}
@@ -81,6 +80,28 @@ func TestX86BroadcastPairedNativeReadCompleteFamily(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func x86BroadcastRequireNativeLoads(t *testing.T, ir string, names []string) {
+	t.Helper()
+	context := llvm.NewContext()
+	defer context.Dispose()
+	module, err := parseIRModuleInContext(context, ir)
+	if !module.IsNil() {
+		defer module.Dispose()
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := llvm.VerifyModule(module, llvm.ReturnStatusAction); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range names {
+		function := module.NamedFunction(name)
+		if function.IsNil() || function.FirstBasicBlock().IsNil() || !strings.Contains(function.String(), "load volatile") {
+			t.Fatal("live or dead broadcast discarded its original function or native access", name)
+		}
 	}
 }
 
