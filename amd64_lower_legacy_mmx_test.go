@@ -51,18 +51,7 @@ func TestTranslateX86LegacyMMXCompleteGoAssemblerForms(t *testing.T) {
 	MOVNTQ M2, 24(BX)
 ` + "\tMOVQOZX M3, " + xreg + "\n" +
 				"\tMOVNTQ M3, 32(" + base + ")\n\tRET\n"
-			requireX86GoAssemblerResult(t, target.goarch, source, true)
-			file, err := Parse(ArchAMD64, source)
-			if err != nil {
-				t.Fatal(err)
-			}
-			ir, err := Translate(file, Options{
-				Goarch: target.goarch, TargetTriple: target.triple,
-				Sigs: map[string]FuncSig{"legacymmxforms": {Name: "legacymmxforms", Ret: Void}},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			ir := x86UnboundVoidScalarFormatObject(t, source, "legacymmxforms", target.goarch, target.triple)
 			for _, want := range []string{"!nontemporal !0", "!0 = !{i32 1}"} {
 				if !strings.Contains(ir, want) {
 					t.Errorf("IR is missing %s:\n%s", want, ir)
@@ -161,18 +150,7 @@ func TestTranslateX86LegacyMMXEncoderAliases(t *testing.T) {
 `
 			// Go accepts these Intel decoder names in addition to the MOVQ and
 			// MOVNTO spellings used by its primary optab entries.
-			requireX86GoAssemblerResult(t, target.goarch, source, true)
-			file, err := Parse(ArchAMD64, source)
-			if err != nil {
-				t.Fatal(err)
-			}
-			ir, err := Translate(file, Options{
-				Goarch: target.goarch, TargetTriple: target.triple,
-				Sigs: map[string]FuncSig{"encoderaliases": {Name: "encoderaliases", Ret: Void}},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			ir := x86UnboundVoidScalarFormatObject(t, source, "encoderaliases", target.goarch, target.triple)
 			llc := findLLVM22Tool("llc")
 			if llc == "" {
 				t.Fatal("LLVM 22 llc not found")
