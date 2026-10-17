@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 	"strings"
@@ -103,6 +104,39 @@ func TestX86BEXTRVoidCannotInventInputs(t *testing.T) {
 					source := "TEXT f(SB),4,$0-0\n" + prefix + op + " AX,BX,CX\nRET\n"
 					x86UnboundVoidFormatSource(t, source, "f", target.arch, target.triple)
 				})
+			}
+		}
+	}
+}
+
+func TestX86BEXTRUnusedBoolCannotWaiveInputProof(t *testing.T) {
+	const declaration = "func Value(unused bool)"
+	for _, target := range x86RawReturnTargets {
+		for _, op := range []string{"BEXTRL", "BEXTRQ"} {
+			for _, input := range []string{"BX", "(BX)"} {
+				for _, missing := range []string{"START and LEN", "LEN", "source"} {
+					t.Run(target.triple+"/"+op+"/"+input+"/"+missing, func(t *testing.T) {
+						prefix := "MOVW $0x0804,AX\nMOVL $7,BX\n"
+						switch missing {
+						case "START and LEN":
+							prefix = "MOVL $7,BX\n"
+						case "LEN":
+							prefix = "MOVB $4,AL\nMOVL $7,BX\n"
+						case "source":
+							prefix = "MOVW $0x0804,AX\n"
+						}
+						// The original unused ABI0 bool occupies one byte. It
+						// supplies neither control bytes nor pointer identity.
+						source := "TEXT ·Value(SB),4,$0-1\n" + prefix + op + " AX," + input + ",CX\nRET\n"
+						x86LEAActualTargetGoObject(t, target.arch, target.triple, source)
+						for _, api := range []string{"text", "module", "Go"} {
+							ir, err := x86ScalarFPBitViewAPI(t, source, declaration, target.arch, target.triple, api)
+							if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+								t.Fatal("unused bool hid missing BEXTR numerical/address inputs", api, err)
+							}
+						}
+					})
+				}
 			}
 		}
 	}
