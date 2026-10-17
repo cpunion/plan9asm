@@ -64,28 +64,45 @@ func TestX86LogicalFloatingFieldAddressCopyThreeAPIsFiveTargets(t *testing.T) {
 }
 
 func TestX86LogicalFloatingFieldAddressKeepsIndependentBoundaries(t *testing.T) {
-	source, declaration := x86LogicalFloatingFieldCopy("amd64", "float32", 16)
-	for _, mutation := range []struct{ name, before, after string }{
-		{"parameter-padding", "x+0(FP),AX", "x+4(FP),AX"},
-		{"result-padding", "ret+8(FP),BX", "ret+12(FP),BX"},
-		{"uninitialized-result", "x+0(FP),AX", "ret+8(FP),AX"},
-		{"cross-field-read", "MOVSS (AX),X0", "MOVSD (AX),X0"},
-		{"address-as-data", "MOVSS X0,(BX)", "MOVQ AX,X0\nMOVSS X0,(BX)"},
-		{"physical-SP", "LEAQ x+0(FP),AX\nMOVSS (AX),X0", "LEAQ x+0(FP),SP\nMOVSS (SP),X0"},
-	} {
-		t.Run(mutation.name, func(t *testing.T) {
-			changed := strings.Replace(source, mutation.before, mutation.after, 1)
-			if changed == source {
-				t.Fatal("negative source mutation was not applied")
+	for _, target := range x86RawReturnTargets {
+		for _, kind := range []string{"float32", "float64"} {
+			move, wordMove, lea, width, result, extent := "MOVSS", "MOVQ", "LEAQ", 4, 8, 16
+			if kind == "float64" {
+				move, width = "MOVSD", 8
 			}
-			x86LEAActualTargetGoObject(t, "amd64", "x86_64-unknown-linux-gnu", changed)
-			for _, api := range []string{"text", "module", "Go"} {
-				ir, err := x86ScalarFPBitViewAPI(t, changed, declaration, "amd64", "x86_64-unknown-linux-gnu", api)
-				if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
-					t.Fatal("floating field acquired padding, input-write or native state authority", api, err)
+			if target.arch == "386" {
+				wordMove, lea = "MOVL", "LEAL"
+				if kind == "float32" {
+					result, extent = 4, 8
 				}
 			}
-		})
+			source, declaration := x86LogicalFloatingFieldCopy(target.arch, kind, extent)
+			resultAddress := fmt.Sprintf("ret+%d(FP)", result)
+			for _, mutation := range []struct{ name, before, after string }{
+				{"parameter-one-past", "x+0(FP),AX", fmt.Sprintf("x+%d(FP),AX", width)},
+				{"result-one-past", resultAddress + ",BX", fmt.Sprintf("ret+%d(FP),BX", result+width)},
+				{"uninitialized-result", "x+0(FP),AX", resultAddress + ",AX"},
+				{"cross-field-read", move + " (AX),X0", "MOVUPS (AX),X0"},
+				{"address-as-data", move + " X0,(BX)", wordMove + " AX,X0\n" + move + " X0,(BX)"},
+				{"physical-SP", lea + " x+0(FP),AX\n" + move + " (AX),X0", lea + " x+0(FP),SP\n" + move + " (SP),X0"},
+				{"unknown-store", move + " X0,(BX)", move + " X1,(BX)"},
+				{"indexed-address", move + " (AX),X0", "MOVL $0,CX\n" + move + " (AX)(CX*1),X0"},
+			} {
+				t.Run(target.triple+"/"+kind+"/"+mutation.name, func(t *testing.T) {
+					changed := strings.Replace(source, mutation.before, mutation.after, 1)
+					if changed == source {
+						t.Fatal("negative source mutation was not applied")
+					}
+					x86LEAActualTargetGoObject(t, target.arch, target.triple, changed)
+					for _, api := range []string{"text", "module", "Go"} {
+						ir, err := x86ScalarFPBitViewAPI(t, changed, declaration, target.arch, target.triple, api)
+						if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+							t.Error("floating field acquired padding, unknown data or native state authority", api, err)
+						}
+					}
+				})
+			}
+		}
 	}
 }
 
