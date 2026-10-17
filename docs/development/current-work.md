@@ -4,6 +4,30 @@
 
 This queue supersedes the historical checkpoints below. Freeze scope to actual
 CI failures; do not add inventory work or another broad proof/refactoring project.
+At `4cc8f3ba`, all fourteen failed-class/retained roots pass current Go,
+actual Go20 and race, with 1,614 children per lane and zero failures/skips.
+The original Go CFG owner also passes without changing its source fixtures.
+At `0352ff76`, the preceding ten-root union passes all three lanes; all five
+complete maps CLI owners pass Linux/Darwin/Windows, public rich CLI and simple
+CLI publication. These are local receipts, not successful reruns of CI jobs.
+
+Fork run 39000367870 finished naturally: 53 jobs pass, ten fail and the dependent
+Windows module aggregate is skipped. Its failed jobs reduce to four classes:
+manual 386 fixture entry/results, literal/native dispatch overlap, an old MMX
+preflight expectation and string CFG/cursor scope. Their repairs are local.
+The original repeat loop retains Go objects and explicit Context checks for
+its updated-cursor memory role; its positive counterpart replenishes declared
+inputs per iteration. Do not count that counterpart as original-loop execution.
+
+All sixteen x86 official reports are compared against the previous matching
+baseline across Go1.20–1.27. Exactly four 386 and 117 AMD64 isolated forms per
+SDK move from Supported to Context: missing MMX state/inputs, horizontal inputs,
+implicit string state or native-store inputs. Only the three classification
+fields change; encoder rules, corpus metadata, unsupported/parse and runtime
+counts remain unchanged. The reviewed baseline still needs fresh final gates.
+The retained XMM chain's arithmetic-right-shift consumer, complete modules,
+strict benchmark and a successful new-head CI remain outstanding.
+
 Candidate `94ef177e` is now published to the allowed fork. Let
 [run 39000367870](https://github.com/cpunion/plan9asm/actions/runs/39000367870)
 finish before the next consolidated push. PR40 remains draft at its older head.
