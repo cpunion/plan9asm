@@ -732,18 +732,8 @@ func (c *amd64Ctx) lowerInstr(bi int, ii int, ins Instr, emitBr amd64EmitBr, emi
 		}
 		return true, c.lowerRET()
 	case "NOPW", "NOPL":
-		if len(ins.Args) != 1 {
-			return false, fmt.Errorf("%s %s expects one Yml register/memory operand: %q", c.goarch, op, ins.Raw)
-		}
-		operand := ins.Args[0]
-		if operand.Kind == OpReg {
-			if !isX86YrlRegisterForArch(operand.Reg, c.goarch) {
-				return false, fmt.Errorf("%s %s register is outside Go 1.27's Yml class: %q", c.goarch, op, ins.Raw)
-			}
-		} else if !isAMD64MemoryOperand(operand) {
-			return false, fmt.Errorf("%s %s operand is outside Go 1.27's Yml class: %q", c.goarch, op, ins.Raw)
-		}
-		return false, nil
+		_, err := x86SizedNOPProperties(ins, c.goarch)
+		return false, err
 	case "NO_LOCAL_POINTERS", "NOP",
 		"PUSH_REGS_HOST_TO_ABI0()", "POP_REGS_HOST_TO_ABI0()":
 		// Existing macro handling is separate from the directive grammar.
