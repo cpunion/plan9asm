@@ -110,6 +110,9 @@ func TestX86DirectSymbolMemorySinkObjectsRemainSupported(t *testing.T) {
 									if known, terminated, err := consumer.lowerVec(instruction.Op, instruction); known {
 										return known, terminated, err
 									}
+									if known, terminated, err := consumer.lowerFP(instruction.Op, instruction); known {
+										return known, terminated, err
+									}
 									return consumer.lowerX87(instruction.Op, instruction)
 								})
 							x86ResultInitializationObject(t, llc, target, unit, "original-external-sink-emitter-only")

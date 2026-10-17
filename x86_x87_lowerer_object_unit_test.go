@@ -64,7 +64,9 @@ func x86ZeroArgumentLowererObjectUnit(t *testing.T, original *File, arch, triple
 	fmt.Fprintf(&ir, "target triple = %q\n", triple)
 	emitAMD64Prelude(&ir, arch, file)
 	emitExternSBGlobals(&ir, file, func(symbol string) string { return symbol }, nil)
-	fmt.Fprintf(&ir, "define void %s() {\n", llvmGlobal(name))
+	attributes := newFeatureAttrRegistry()
+	features := attributes.ref(inferFuncTargetFeaturesForGOARCH(file.Arch, arch, function))
+	fmt.Fprintf(&ir, "define void %s() %s {\n", llvmGlobal(name), features)
 	consumer := newX86Ctx(&ir, function, FuncSig{Name: name, Ret: Void},
 		func(name string) string { return name }, nil, arch, triple, false)
 	consumer.x87Mode = X87Software
@@ -104,6 +106,7 @@ func x86ZeroArgumentLowererObjectUnit(t *testing.T, original *File, arch, triple
 		t.Fatal("emitter unit did not consume every original instruction")
 	}
 	ir.WriteString("}\n")
+	attributes.emit(&ir)
 	t.Logf("emitter-only object source: all %d normalized instructions; no public translation or execution claim", emitted)
 	return ir.String()
 }
