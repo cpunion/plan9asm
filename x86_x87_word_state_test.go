@@ -137,10 +137,10 @@ func TestX86X87WordStateConsumesSharedBudgetAndPrivateRole(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// No-FP payload369 includes the native string-counter must-fact, plus
-	// logical x87 payload45 and two-byte control knownness. Immutable layout
-	// metadata is not a CFG copy.
-	const payload = 369 + 45 + 2
+	// Complete no-FP state, logical x87 payload45 and two-byte control
+	// knownness remain independently charged. Immutable layout metadata
+	// is not a CFG copy.
+	const payload = x86IndependentResultBasePayload + 45 + 2
 	const limit = (64 << 20) / 8
 	for _, room := range []int{3*payload - 1, 3 * payload} {
 		fn := file.Funcs[0]

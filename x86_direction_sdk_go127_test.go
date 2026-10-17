@@ -64,11 +64,12 @@ func TestX86DirectionOriginalSDKIndexByte386ThreeAPIsNextContext(t *testing.T) {
 			ir, err := x86ScalarFPBitViewPackageAPI(t, string(source), pkg, "386", "i386-unknown-linux-gnu", api)
 			// This is complete unchanged source/declaration numerical observation,
 			// not a compiler graph/native-memory grant or a whole-file pass. The
-			// paired SCAS continuation reaches the existing PC-branch CFG guard
-			// before any branch FLAGS transfer; it does not close that guard.
+			// PC edges now bind, but zero-iteration SCAS preserves incoming
+			// ZF. The paired continuation cannot invent that predicate for
+			// JZ, even though both original Go paths compute -1 for length0.
 			if !errors.Is(err, ErrProbeNeedsContext) || ir != "" ||
-				!strings.Contains(err.Error(), "result initialization: indirect, external or unresolved branch") {
-				t.Fatal("complete source did not retain its independent PC-branch boundary", err)
+				!strings.Contains(err.Error(), "result initialization: unknown effect or undefined input at instruction 7: JZ 3(PC)") {
+				t.Fatal("complete source invented the independent zero-count branch predicate", err)
 			}
 			t.Log(err)
 		})

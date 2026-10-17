@@ -195,11 +195,11 @@ func TestX86X87ValueStateConsumesSharedBudgetAndPrivateRole(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// The no-FP state has 369 logical bytes, including the separate native
-	// string-counter must-fact. This optional domain adds
+	// The complete no-FP state includes native MMX and the separate string
+	// counter. This optional domain adds
 	// exactly 45: slots/depth/invalid, status16, sixteen captured words and
 	// eight source signed-width facts. This does not raise the shared limit.
-	const payload = 369 + 45
+	const payload = x86IndependentResultBasePayload + 45
 	const limit = (64 << 20) / 8
 	for _, room := range []int{3*payload - 1, 3 * payload} {
 		fn := file.Funcs[0]

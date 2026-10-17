@@ -106,10 +106,9 @@ func TestX86ABI0Mode32CanonicalBoolAliasCloneJoinAndBudget(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Include independent actual caller-origin IDs (32), scan-pending (2)
-	// and predicate (3) bytes; none replaces canonical or alias state. DF and
-	// the native string counter each retain their own byte, with the same cap.
-	const payload = 332 + 32 + 2 + 3 + 1 + 1 + 16*25
+	// One FP byte, one independent canonical byte and sixteen slot aliases
+	// supplement the complete ordinary state, including native MMX.
+	const payload = x86IndependentResultBasePayload + 2 + 16*25
 	const limit = (64 << 20) / 8
 	for _, room := range []int{3*payload - 1, 3 * payload} {
 		fn := file.Funcs[0]

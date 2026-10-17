@@ -17,7 +17,7 @@ func TestX86ABI0ResultInitializationCompleteStateByteEnvelope(t *testing.T) {
 	// A linear CFG pays its source scan and
 	// eight conservative copy/join units for each visited instruction. This
 	// tests the logical work envelope, not Go's actual heap allocation size.
-	const payloadBytes = 1944 + 16 + 16 + 16 + 256 + 8 + 8 + 1 + 16 + 16 + 32 + 2 + 3 + 1 + 1 + 1
+	const payloadBytes = 1944 + 16 + x86IndependentResultBasePayload
 	const workLimit = 64 << 20
 	const lastLinear = workLimit / (9 * payloadBytes)
 	const lastSource = workLimit / (8 * payloadBytes)

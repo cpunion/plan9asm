@@ -147,11 +147,10 @@ func TestX86ABI0Mode32CanonicalFPCloneJoinAndBudget(t *testing.T) {
 		t.Fatal(err)
 	}
 	const limit = (64 << 20) / 8
-	// The base NUM/GP/vector/FLAGS/pointer payload has331 bytes, plus
-	// caller-origin IDs (32), scan-pending (2), predicate (3), DF and native
-	// string-counter bytes. The separately allocated canonical result byte
-	// must also count exactly once, without changing the shared limit.
-	const ordinary = 331 + 32 + 2 + 3 + 1 + 1
+	// Ordinary state includes every independent domain, including native MMX.
+	// One FP byte and its separately allocated canonical result byte each
+	// count exactly once, without changing the shared limit.
+	const ordinary = x86IndependentResultBasePayload + 1
 	for _, room := range []int{2*(ordinary+1) - 1, 2 * (ordinary + 1)} {
 		fn := file.Funcs[0]
 		fn.x86ResultFlowBudget = &x86ResultFlowBudget{bytes: limit - room}
