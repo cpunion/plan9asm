@@ -44,7 +44,9 @@ func checkX86ABI0ResultInitializationWithTrapOnly(fn Func, sig FuncSig, goarch s
 	if mixedBool && !x86OrdinaryMixedBoolResultRole(fn, sig, goarch) {
 		return fail("mixed bool requires its complete ordinary bounded logical ABI0 role")
 	}
-	if goarch != "amd64" && goarch != "386" || strings.Contains(fn.Sym, "<") ||
+	// Go's file-local <> marker keeps ABI0; explicit entry selectors do not
+	// inherit this ordinary scalar-frame observation from their spelling.
+	if goarch != "amd64" && goarch != "386" || strings.Contains(strings.TrimSuffix(fn.Sym, "<>"), "<") ||
 		len(sig.ArgRegs) != 0 || sig.ARMEntry != nil || sig.WASMContext != "" ||
 		len(sig.Frame.Results) == 0 && !privateVoid {
 		return fail("requires an ordinary x86 scalar ABI0 declaration")

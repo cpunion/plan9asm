@@ -9,7 +9,7 @@ import (
 	"github.com/xgo-dev/llvm"
 )
 
-// Go's symRefAttrs assigns ABI0 to both plain and file-local (<> ) symbols.
+// Go's symRefAttrs assigns ABI0 to both plain and file-local (<>) symbols.
 // Scope is not a register-entry contract or permission to access other bytes.
 func TestX86ABI0LocalSymbolScalarResultsThreeAPIs(t *testing.T) {
 	llc := findLLVM22Tool("llc")
