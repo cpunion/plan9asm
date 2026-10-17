@@ -19,12 +19,6 @@ func checkX86ScalarFPResultInitialization(fn Func, sig FuncSig, arch string) err
 }
 
 func x86ScalarFPResultTransfer(ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string) bool {
-	if form, known, err := x86PackedWordMultiplyProperties(ins.Op, ins, arch); known {
-		// A sparse low-product NUM projection is not the complete source
-		// input contract. Keep the existing word-family guard for actual
-		// lowering, including Void, masks and separately paired native reads.
-		return err == nil && x86ResultFixedVectorInputs(ins, form.x86PackedBinaryForm, false, state, owned, arch)
-	}
 	if accepted, known := x86ResultNonTemporalVectorStep(ins, state, owned, resultOffset, arch, false); known {
 		return accepted
 	}
@@ -63,6 +57,12 @@ func x86ScalarFPResultTransfer(ins Instr, state *x86ResultState, owned []bool, r
 	}
 	if accepted, known := x86MaskMoveResultStep(ins, state, owned, resultOffset, arch, false); known {
 		return accepted
+	}
+	if form, known, err := x86PackedWordMultiplyProperties(ins.Op, ins, arch); known {
+		// A sparse low-product NUM projection is not the complete source
+		// input contract. Keep the existing word-family guard after marked
+		// literal/read validation, including Void and paired native reads.
+		return err == nil && x86ResultFixedVectorInputs(ins, form.x86PackedBinaryForm, false, state, owned, arch)
 	}
 	form, recognized, err := amd64ScalarVectorMoveProperties(ins, arch)
 	if !recognized || form.spec.legacy {
