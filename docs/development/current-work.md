@@ -1,23 +1,43 @@
 # Current work: PR 40 checkpoint
 
-## Frozen fork run and next local format batch, 2026-10-18
+## Packed source obligations and completed CI feedback, 2026-10-18
 
-The accumulated40-commit batch is published only to the allowed fork at
-`edda1974`. Complete run39050102570 is in progress; let it finish naturally
-without another push/cancellation. The contribution PR remains draft at its
-older head until the fork qualifies. Its last complete failure denominator is
-still the181 failed roots from run39034893053, not a local subtraction.
+Fork run39050102570 at `edda1974` finished naturally:64 jobs pass, one fails
+and `complete-windows` is skipped. Its sole failed root is
+`TestX86AddressClassPreservesActualMemoryAndRelocationObjects`: the original
+MOVNTPS fixture has neither an AX pointer nor initialized X0. No new complete
+Windows root result exists; the181-root failure queue from run39034893053
+remains the last complete denominator. Do not subtract focused local passes.
+The downloaded native job independently audits66 roots/217 children, MMX
+streaming1/5 and floating comparison4/6:71 roots/228 children really execute,
+with zero skips or incomplete terminals. These receipts bind `edda1974` only.
 
-While CI runs, the original three packed-word multiply/multiply-add format
-roots independently reproduce failures at `edda1974`. At `f8cf4f36`, their
-repair preserves every original Go source row, actual Go objects, three-API
-Context controls and separate LLVM format objects. The14-root/345-child
-changed/retained union passes current Go, actual Go1.20 and race with identical
-terminals and unchanged source/SDK/LLVM22 snapshots. Initialized five-target
-value objects, complete Go attributes, missing inputs, caller permissions and
-legacy byte boundaries remain tested. Physical MMX entry/region restrictions
-are unchanged. This local batch is committed but not pushed or included in the
-frozen CI run. It is not a native execution or complete-module receipt.
+The retained word-format batch at `f8cf4f36` passes14 roots/345 children on
+current Go, actual Go1.20 and race. The six later unbound packed-format CI
+roots independently reproduce before repair; all original Go source rows,
+objects and public Context controls remain, with separate LLVM syntax objects.
+An independent33-name add/sub RED then finds650 Void/unused-bool native-input
+bypasses. Six production lines route the complete existing grammars through
+their existing source proof, without new permissions or changed arithmetic.
+At `ce860101`, all28 affected/retained roots and6,516 children pass all three
+lanes, with identical terminals and unchanged source/SDK/LLVM22 observations.
+The sealed Go1.20-1.27 audit changes exactly192 isolated AMD64 forms per SDK
+from supported to context-required;386, other forms and other metrics do not
+change. There is no new unsupported form. The independent scanner keeps this
+input context distinct from unsupported instruction syntax.
+
+The actual failed CI root independently reproduces at `173349d6`. At
+`1a18e77f`, its repair passes with the original MOVNTPS source retained as
+Context and a genuinely initialized five-target/three-API positive counterpart
+at both IR and backend optimization levels. Its complete
+24-root/2,202-child retained union passes current Go, actual Go1.20 and race
+with identical terminals and unchanged observations. The lane's native-only
+bit-test root has its separate passing required Linux owner above. Build, vet,
+eight scanner roots on both SDKs, the five-arch official gate, CLI extraction,
+all130 CI policies and tracked formatting pass. These are not complete-module
+passes. Publish this verified batch only after the finished fork run, then let
+the next full run finish and repair its actual failures. Keep PR40 draft;
+external inventory and older benchmark counts cannot certify this new head.
 
 ## BEXTR and retained scalar formats, 2026-10-18
 
