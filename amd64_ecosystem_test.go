@@ -1213,7 +1213,7 @@ func TestTranslateAMD64PackedUnpackCompleteGoAssemblerForms(t *testing.T) {
 		}
 	}
 	src.WriteString("\tRET\n")
-	ll := translateAMD64EcosystemCase(t, src.String(), "packedunpackforms")
+	ll := x86UnboundVoidScalarFormatObject(t, src.String(), "packedunpackforms", "amd64", "x86_64-unknown-linux-gnu")
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc not found")
@@ -1246,20 +1246,7 @@ func TestTranslate386PackedUnpackCompleteGoAssemblerForms(t *testing.T) {
 		}
 	}
 	src.WriteString("\tRET\n")
-	file, err := Parse(ArchAMD64, src.String())
-	if err != nil {
-		t.Fatal(err)
-	}
-	ll, err := Translate(file, Options{
-		TargetTriple: "i386-unknown-linux-gnu",
-		Goarch:       "386",
-		Sigs: map[string]FuncSig{
-			"packedunpackforms386": {Name: "packedunpackforms386", Ret: Void},
-		},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	ll := x86UnboundVoidScalarFormatObject(t, src.String(), "packedunpackforms386", "386", "i386-unknown-linux-gnu")
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc not found")
@@ -2713,7 +2700,7 @@ TEXT packedandnotforms(SB),NOSPLIT,$0-0
 	VPANDNQ.BCST.Z (AX), Z2, K1, Z3
 	RET
 `
-	ll := translateAMD64EcosystemCase(t, src, "packedandnotforms")
+	ll := x86UnboundVoidScalarFormatObject(t, src, "packedandnotforms", "amd64", "x86_64-unknown-linux-gnu")
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc not found")
@@ -2845,6 +2832,10 @@ func TestTranslateAMD64PackedScalarBroadcastRejectsFormsOutsideGoAssemblerTable(
 }
 
 func TestTranslateAMD64PackedIntegerAddCompleteGoAssemblerForms(t *testing.T) {
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM 22 llc not found")
+	}
 	// Go 1.27's legacy ymm table gives these instructions MMX and XMM forms.
 	for _, op := range []string{"PADDB", "PADDL", "PADDSB", "PADDSW", "PADDUSB", "PADDUSW", "PADDW"} {
 		src := fmt.Sprintf(`
@@ -2855,15 +2846,18 @@ TEXT legacy%sforms(SB),NOSPLIT,$0-0
 	%s (AX), X2
 	RET
 `, op, op, op, op, op)
-		translateAMD64EcosystemCase(t, src, "legacy"+op+"forms")
+		ir := x86UnboundVoidScalarFormatObject(t, src, "legacy"+op+"forms", "amd64", "x86_64-unknown-linux-gnu")
+		x86PackedStringCompileObject(t, llc, "x86_64-unknown-linux-gnu", ir, "-O0")
 	}
 	// PADDQ is deliberately narrower in Go's legacy yxm table: XMM only.
-	translateAMD64EcosystemCase(t, `
+	legacyQ := `
 TEXT legacyPADDQforms(SB),NOSPLIT,$0-0
 	PADDQ X1, X2
 	PADDQ (AX), X2
 	RET
-`, "legacyPADDQforms")
+`
+	legacyIR := x86UnboundVoidScalarFormatObject(t, legacyQ, "legacyPADDQforms", "amd64", "x86_64-unknown-linux-gnu")
+	x86PackedStringCompileObject(t, llc, "x86_64-unknown-linux-gnu", legacyIR, "-O0")
 
 	// Every AVX variant shares _yvandnpd: X/Y/Z register-or-memory inputs,
 	// optional K1-K7 merge/zero masks. D/Q additionally enable broadcast.
@@ -2908,11 +2902,7 @@ TEXT legacyPADDQforms(SB),NOSPLIT,$0-0
 		}
 	}
 	src.WriteString("\tRET\n")
-	ll := translateAMD64EcosystemCase(t, src.String(), "packedintegeraddforms")
-	llc := findLLVM22Tool("llc")
-	if llc == "" {
-		t.Fatal("LLVM 22 llc not found")
-	}
+	ll := x86UnboundVoidScalarFormatObject(t, src.String(), "packedintegeraddforms", "amd64", "x86_64-unknown-linux-gnu")
 	compileLLVMToObject(t, llc, "x86_64-unknown-linux-gnu", "packed-integer-add-forms.ll", "packed-integer-add-forms.o", ll)
 }
 
@@ -4456,7 +4446,7 @@ func TestTranslateAMD64PackedSaturatingNarrowCompleteGoAssemblerForms(t *testing
 	}
 	src.WriteString("\tRET\n")
 
-	ll := translateAMD64EcosystemCase(t, src.String(), "packedsaturatingnarrowforms")
+	ll := x86UnboundVoidScalarFormatObject(t, src.String(), "packedsaturatingnarrowforms", "amd64", "x86_64-unknown-linux-gnu")
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc not found")
@@ -4483,20 +4473,7 @@ func TestTranslate386PackedSaturatingNarrowCompleteGoAssemblerForms(t *testing.T
 	}
 	src.WriteString("\tRET\n")
 	goAssemblerOracleOutput(t, "386", src.String(), "", true)
-	file, err := Parse(ArchAMD64, src.String())
-	if err != nil {
-		t.Fatal(err)
-	}
-	ll, err := Translate(file, Options{
-		TargetTriple: "i386-unknown-linux-gnu",
-		Goarch:       "386",
-		Sigs: map[string]FuncSig{
-			"packedsaturatingnarrowforms386": {Name: "packedsaturatingnarrowforms386", Ret: Void},
-		},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	ll := x86UnboundVoidScalarFormatObject(t, src.String(), "packedsaturatingnarrowforms386", "386", "i386-unknown-linux-gnu")
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc not found")
