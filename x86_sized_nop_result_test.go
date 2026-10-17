@@ -17,7 +17,7 @@ func TestX86SizedNOPCompleteGoRowsAndInertState(t *testing.T) {
 	}
 	compact := strings.Join(strings.Fields(string(data)), "")
 	for _, row := range []string{
-		"var_ydivl=[]ytab{{Zm_o,2,argList{Yml}},}",
+		"varydivl=[]ytab{{Zm_o,2,argList{Yml}},}",
 		"{ANOPW,ydivl,Pe,opBytes{0x0f,0x1f,00}},",
 		"{ANOPL,ydivl,Px,opBytes{0x0f,0x1f,00}},",
 	} {
