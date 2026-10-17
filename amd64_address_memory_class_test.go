@@ -219,7 +219,7 @@ func TestX86AddressClassPreservesActualMemoryAndRelocationObjects(t *testing.T) 
 			{"STMXCSR ·cell(SB)", true},
 			{"LDMXCSR 16(AX)", true},
 			{"PSHUFB ·cell(SB),X0", false},
-			{"MOVNTPS X0,16(AX)", false},
+			{"MOVNTPS X0,16(AX)", true},
 		} {
 			source := "TEXT ·Value(SB),4,$0-0\n" + row.body + "\nRET\n"
 			goAssemblerOracleOutput(t, arch, source, "", true)
@@ -253,6 +253,43 @@ func TestX86AddressClassPreservesActualMemoryAndRelocationObjects(t *testing.T) 
 				}
 			}
 		}
+	}
+}
+
+func TestX86AddressClassInitializedNonTemporalStoreObjects(t *testing.T) {
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM22 llc required")
+	}
+	for _, target := range x86RawReturnTargets {
+		t.Run(target.triple, func(t *testing.T) {
+			move, word := "MOVQ", 8
+			if target.arch == "386" {
+				move, word = "MOVL", 4
+			}
+			// Keep the discovering row byte-for-byte, including displacement.
+			// The new entry explicitly supplies its pointer and vector inputs;
+			// neither the declaration nor LLVM zeroed slots supplies them.
+			source := fmt.Sprintf("TEXT ·Value(SB),4,$0-%d\n%s p+0(FP),AX\n"+
+				"PXOR X0,X0\nMOVNTPS X0,16(AX)\nRET\n", word, move)
+			x86LEAActualTargetGoObject(t, target.arch, target.triple, source)
+			for _, api := range []string{"text", "module", "Go"} {
+				t.Run(api, func(t *testing.T) {
+					ir, err := x86ScalarFPBitViewAPI(t, source, "func Value(p *[32]byte)", target.arch, target.triple, api)
+					if err != nil || ir == "" {
+						t.Fatal("initialized original non-temporal address form rejected", err)
+					}
+					for _, text := range []string{ir, x86MulDivRoundOptimize(t, ir)} {
+						if !strings.Contains(text, "asm sideeffect") || !strings.Contains(text, "movntps") {
+							t.Fatal("actual non-temporal store/alignment effect disappeared")
+						}
+						for _, level := range []string{"-O0", "-O2"} {
+							x86PackedStringCompileObject(t, llc, target.triple, text, level)
+						}
+					}
+				})
+			}
+		})
 	}
 }
 
