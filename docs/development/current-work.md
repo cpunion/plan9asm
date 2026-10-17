@@ -1,5 +1,27 @@
 # Current work: PR 40 checkpoint
 
+## Complete scalar-stack/arithmetic qualification, 2026-10-17
+
+At `b8023c35`, the complete 125-root changed/retained union passes current
+Go, actual Go20 and race: 375 root executions and 19,224 children, zero
+failures/skips, identical terminal identities and unchanged source/SDK/tool
+observations. Four disjoint scheduling groups retain the entire denominator
+and unchanged per-command budgets. The earlier 102-root race timeout stays
+failed/incomplete; it was not converted into a success receipt. All nine final
+gates and all 120 CI policy tests pass on the qualified snapshot. Both SDKs'
+official checks cover all five architectures; matching their registered
+classifications is not a claim that every context-dependent form executes.
+
+The old published `e50292a9` CI is still running. Its later Windows failures
+include the already retained parameter-storage boundary and the complete LODS
+state fixture. Next reproduce and repair the complete MOVS/STOS/LODS typed
+continuation siblings, preserving unknown inputs, zero-iteration bytes, FLAGS,
+DF, counter facts and exact CFG-bound prefixes. An opaque cursor's bit store
+requires its independent address/escape role; initialized numerical bytes alone
+cannot authorize it. Physical MMX/x87 state remains a separate unresolved class.
+Current native execution, complete modules and the strict benchmark are still
+required. No new push, local scanner or external-ledger credit was made.
+
 ## Complete physical scalar source-stack checkpoint, 2026-10-17
 
 Independent RED `48569024` reproduces 99 failure terminals: missing BP/SP
