@@ -57,20 +57,12 @@ TEXT broadcastvec(SB),NOSPLIT,$0-0
 	VGF2P8AFFINEQB $0, Y0, Y1, Y1
 	RET
 `
-	file, err := Parse(ArchAMD64, src)
-	if err != nil {
-		t.Fatal(err)
+	ir := x86UnboundVoidScalarFormatObject(t, src, "broadcastvec", "amd64", "x86_64-unknown-linux-gnu")
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM 22 llc required")
 	}
-	_, err = Translate(file, Options{
-		TargetTriple: "x86_64-unknown-linux-gnu",
-		Sigs: map[string]FuncSig{
-			"broadcastvec": {Name: "broadcastvec", Ret: Void},
-		},
-		Goarch: "amd64",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	compileLLVMToObject(t, llc, "x86_64-unknown-linux-gnu", "vector-broadcast-forms.ll", "vector-broadcast-forms.o", ir)
 }
 
 func TestAMD64VectorLoweringBranchCoverage(t *testing.T) {

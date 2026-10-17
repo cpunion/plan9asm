@@ -29,20 +29,7 @@ func TestTranslateAMD64ExtendedByteRegisterCompleteGoAssemblerClass(t *testing.T
 				fmt.Fprintf(&source, "\tMOVBQSX %s, DX\n", alias)
 			}
 			source.WriteString("\tRET\n")
-			file, err := Parse(ArchAMD64, source.String())
-			if err != nil {
-				t.Fatal(err)
-			}
-			ll, err := Translate(file, Options{
-				TargetTriple: target.triple,
-				Goarch:       "amd64",
-				Sigs: map[string]FuncSig{
-					"extendedbyteforms": {Name: "extendedbyteforms", Ret: Void},
-				},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			ll := x86UnboundVoidScalarFormatObject(t, source.String(), "extendedbyteforms", "amd64", target.triple)
 			llc := findLLVM22Tool("llc")
 			if llc == "" {
 				t.Fatal("LLVM 22 llc not found")

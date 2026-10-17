@@ -9,20 +9,7 @@ func TestTranslateAMD64LegacyFloatingCompareHistoricalBarePredicate(t *testing.T
 		"\tCMPSD X1, X0, 5\n" +
 		"\tCMPSS 8(AX), X0, -1\n" +
 		"\tRET\n"
-	file, err := Parse(ArchAMD64, source)
-	if err != nil {
-		t.Fatal(err)
-	}
-	ll, err := Translate(file, Options{
-		TargetTriple: "x86_64-unknown-linux-gnu",
-		Goarch:       "amd64",
-		Sigs: map[string]FuncSig{
-			"historicalcompare": {Name: "historicalcompare", Ret: Void},
-		},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	ll := x86UnboundVoidScalarFormatObject(t, source, "historicalcompare", "amd64", "x86_64-unknown-linux-gnu")
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc not found")

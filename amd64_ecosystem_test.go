@@ -1904,7 +1904,7 @@ TEXT movdaliasforms(SB),NOSPLIT,$0-0
 	MOVD X1, X2
 	RET
 `
-	ll := translateAMD64EcosystemCase(t, src, "movdaliasforms")
+	ll := x86UnboundVoidScalarFormatObject(t, src, "movdaliasforms", "amd64", "x86_64-unknown-linux-gnu")
 	if !strings.Contains(ll, "load i64") || !strings.Contains(ll, "store i64") {
 		t.Fatalf("MOVD alias did not preserve MOVQ-width memory semantics:\n%s", ll)
 	}
@@ -2119,7 +2119,7 @@ func TestTranslateAMD64ScalarFloatBroadcastFamilyRejectsNonGoForms(t *testing.T)
 }
 
 func TestTranslateAMD64DwordToQwordMultiplyFamilyCompleteGo127Forms(t *testing.T) {
-	ll := translateAMD64EcosystemCase(t, `
+	ll := x86UnboundVoidScalarFormatObject(t, `
 TEXT dwordqwordmultiply(SB),NOSPLIT,$0-0
 	PMULDQ X0, X1
 	PMULDQ 16(AX), X2
@@ -2142,7 +2142,7 @@ TEXT dwordqwordmultiply(SB),NOSPLIT,$0-0
 	VPMULUDQ.BCST 56(AX), Z1, Z2
 	VPMULUDQ.BCST.Z 64(AX), Z1, K3, Z2
 	RET
-`, "dwordqwordmultiply")
+`, "dwordqwordmultiply", "amd64", "x86_64-unknown-linux-gnu")
 	for _, want := range []string{"sext <", "zext <", "mul <2 x i64>", "mul <4 x i64>", "mul <8 x i64>"} {
 		if !strings.Contains(ll, want) {
 			t.Fatalf("missing %q in dword-to-qword multiply IR:\n%s", want, ll)
@@ -2217,20 +2217,7 @@ TEXT discoveredx86forms386(SB),NOSPLIT,$0-0
 	VPMULUDQ Z0, Z1, Z2
 	RET
 `
-	file, err := Parse(ArchAMD64, src)
-	if err != nil {
-		t.Fatal(err)
-	}
-	ll, err := Translate(file, Options{
-		TargetTriple: "i386-unknown-linux-gnu",
-		Goarch:       "386",
-		Sigs: map[string]FuncSig{
-			"discoveredx86forms386": {Name: "discoveredx86forms386", Ret: Void},
-		},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	ll := x86UnboundVoidScalarFormatObject(t, src, "discoveredx86forms386", "386", "i386-unknown-linux-gnu")
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc not found")
@@ -2759,11 +2746,6 @@ func TestTranslateAMD64PackedScalarBroadcastCompleteGoAssemblerForms(t *testing.
 		}
 	}
 	src.WriteString("\tRET\n")
-	requireX86GoAssemblerResult(t, "amd64", strings.Replace(src.String(), ",NOSPLIT", "", 1), true)
-	file, err := Parse(ArchAMD64, src.String())
-	if err != nil {
-		t.Fatal(err)
-	}
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc not found")
@@ -2777,16 +2759,7 @@ func TestTranslateAMD64PackedScalarBroadcastCompleteGoAssemblerForms(t *testing.
 		{name: "windows-amd64", triple: "x86_64-pc-windows-msvc"},
 	} {
 		t.Run(target.name, func(t *testing.T) {
-			ll, err := Translate(file, Options{
-				TargetTriple: target.triple,
-				Goarch:       "amd64",
-				Sigs: map[string]FuncSig{
-					"packedscalarbroadcastforms": {Name: "packedscalarbroadcastforms", Ret: Void},
-				},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			ll := x86UnboundVoidScalarFormatObject(t, src.String(), "packedscalarbroadcastforms", "amd64", target.triple)
 			compileLLVMToObject(t, llc, target.triple, "packed-scalar-broadcast-forms-"+target.name+".ll", "packed-scalar-broadcast-forms-"+target.name+".o", ll)
 		})
 	}

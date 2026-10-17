@@ -53,15 +53,7 @@ func TestTranslateX86MaskBroadcastCompleteFormsAcrossTargets(t *testing.T) {
 				fmt.Fprintf(&source, "\t%s K1, Z%d\n", op, zLast)
 			}
 			source.WriteString("\tRET\n")
-			requireX86GoAssemblerResult(t, target.goarch, source.String(), true)
-			file, err := Parse(ArchAMD64, source.String())
-			if err != nil {
-				t.Fatal(err)
-			}
-			ir, err := Translate(file, Options{Goarch: target.goarch, TargetTriple: target.triple, Sigs: map[string]FuncSig{"maskbroadcastforms": {Name: "maskbroadcastforms", Ret: Void}}})
-			if err != nil {
-				t.Fatal(err)
-			}
+			ir := x86UnboundVoidScalarFormatObject(t, source.String(), "maskbroadcastforms", target.goarch, target.triple)
 			for _, want := range []string{"<2 x i64>", "<8 x i32>", "<8 x i64>", "<16 x i32>"} {
 				if !strings.Contains(ir, want) {
 					t.Fatalf("mask broadcast lowering omitted %q:\n%s", want, ir)
