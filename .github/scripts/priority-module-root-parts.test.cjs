@@ -261,7 +261,7 @@ fi
 
 test('Windows shell transports complete module roles and rejects hidden build flags', t => {
   const { directory, run } = windowsModuleShellFixture(t);
-  for (const [module, parts, shards] of [['root', 16, 32], ['plan9asm', 4, 8], ['plan9asmll', 4, 8]]) {
+  for (const [module, parts, shards] of [['root', 16, 64], ['plan9asm', 4, 8], ['plan9asmll', 4, 8]]) {
     const rootRoles = Array.from({ length: parts }, (_, part) => ['execute', '0', String(part)]);
     for (const args of [...rootRoles, ['execute', '1', '-1'], ['execute', '2', '-1']]) {
       const actual = run('-tags=byollvm', module, ...args);
