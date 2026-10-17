@@ -24,6 +24,8 @@ of the current candidate. Do not create another worktree for routine work.
 
 | Snapshot | Evidence and limits |
 |---|---|
+| `0cb14d2fa` | Integer self-comparison and mandatory Void repair: 54 roots / 7,277 children pass current Go, actual Go1.20 and race; all 7,331 terminals match, zero fail/skip/incomplete, unchanged source/SDK/LLVM22 observations |
+| Same code head | Build/vet, twelve scanner roots on both SDKs, five-arch official classification, three CLI extraction roots, 132 CI policies and tracked formatting pass; staged in allowed fork branch `codex/pr40-integer-self-compare-closing-20261018`, not the contribution head |
 | `bc79fd0f` | Combined named/raw NOP repair: 64 roots / 8,606 children pass current Go, actual Go 1.20 and race; all 8,670 terminal identities match, zero fail/skip/incomplete, unchanged source/SDK/LLVM 22 observations |
 | Same code head | Three additional current-Go SDK producer roots / eight children pass normal and race; they are not part of the Go1.20 denominator |
 | Same code head | Build, vet, eleven scanner roots on both SDKs, five-architecture official classification, three CLI extraction roots, 132 CI policies and tracked formatting pass |
@@ -41,26 +43,29 @@ execution and native execution remain different claims.
 
 ## Latest repairs
 
-NOPW/NOPL share the complete independent Go `ydivl/Yml` grammar. Every GP bank,
-Go `g` spelling, original Go opcode bytes and all existing result consumers
-check that ignored ModRM operands read no register or memory and change no
-FLAGS. Original runtime source and driver remain unchanged, with public target
-objects and actual-host portable execution. Native x86 execution is separate.
+All 24 fixed/immediate integer EQ/GT comparison names share the same validated
+same-vector dependency rule. Self comparisons need no incoming numerical vector
+bits; actual masks, different inputs, memory, raw origins and MMX keep their
+separate requirements. Retain operands for emitter allocation, existing FLAGS
+and upper-alias rules. Complete Go rows/attributes, all imm8 controls and banks,
+three-API five-target objects and whole-byte/mask/FLAGS/canary execution pass.
+Actual-host portable execution is not native AVX512 execution.
 
-The raw-NOP failure is a different state-consumer defect: the decoder already
-proved its inert complete encoding, but post-consumers revoked DF/ID and other
-unchanged facts. One exact original/normalized NOP handoff now preserves only
-existing status, private numerical-stack, predicate, CX and GP identity facts.
-It creates no numerical input, pointee, caller-memory, frame or raw-entry role.
-Encoded/changed operands, address overrides, segments and raw returns retain
-their negative controls. The unchanged GP/FLAGS/MXCSR/canary fixture now has
-all-three-API LLVM objects for all five x86 targets and both optimization axes.
+The scanner gate then found a real mandatory-descriptor bypass: the Void/no-
+result shortcut ran before `requiresResultProof`. True RED `f50765b07` has
+91 failed terminals, five original Go object receipts and no fixture/tool error.
+Moving the shared descriptor check before that shortcut fixes immediate compares,
+CRC32, implicit MUL/IMUL and the remaining registered mandatory effects without
+another opcode list. The two new roots / 157 children pass at `7d0ab042d`.
+Three old unbound format roots fail their obsolete public-success expectation;
+`0cb14d2fa` preserves every original source row as Go/public-Context/emitter-only
+object coverage. Existing initialized public owners remain independent.
 
-True RED is `145071f7`: three failing roots, five original-program target
-failures, and passing exact-handoff negative controls. Preserve the earlier
-fixture-only failure separately; it is not semantic RED evidence. GREEN is
-`68e3bc85`, followed by the independently verified named-NOP merge at
-`bc79fd0f`. Source remains frozen during verification, including documentation.
+The sealed Go1.20–1.27 audit changes exactly eight AMD64 self-initializing formats
+Context->supported, 92 isolated missing-input formats supported->Context, and
+one 386 IMULL format supported->Context per SDK. Encoding rules and every other
+metric remain unchanged, with no new unsupported forms. Baseline changes retain
+that distinction; a form classification is not execution of every instance.
 
 ## Strict standard-library benchmark
 
@@ -94,7 +99,11 @@ cannot certify a performance improvement. Full reports remain under ignored
    why a real original Go program lacks its translation contract before adding
    a new factory, exception or validation layer. Investigate repeated checking
    using the captured performance sample without removing mutation, lifetime
-   or source-boundary failures.
+   or source-boundary failures. A concrete next candidate is the parser's
+   conflation of omitted TEXT arguments (`$0`) with explicit zero (`$0-0`).
+   Go's assembler retains ArgsSizeUnknown for the first; the private Void extent
+   check rejects both. `subtle/xorBytes` reaches this error. Reproduce before
+   changing it; keep explicit mismatch and native-frame/address controls.
 2. Watch the published diagnostic run to its natural terminal. Its native
    owners already pass; Windows SDK priorities and complete modules still need
    their own final results. Download and inspect actual failed roots before
@@ -105,7 +114,10 @@ cannot certify a performance improvement. Full reports remain under ignored
    Use shared typed grammar/effects rather than library-specific exceptions.
    Existing failure classes include scalar input/effect gaps, MMX-region
    composition and stale unbound-format expectations; the completed CI failure
-   index is the authority, not an estimated remaining count.
+   index is the authority, not an estimated remaining count. Rerun all 179 old
+   failed roots against actual current host inventory using the selected-owner
+   runner; retain absent, skipped, unfinished and pending roots explicitly.
+   That local queue is not a replacement for complete all-platform CI.
 4. Require current-head complete CI, benchmark, coverage and fresh review before
    ready. Keep ABI/context failures visible; do not weaken the benchmark or
    treat Context classification as successful program compilation.
@@ -117,8 +129,12 @@ Run focused RED first, then the complete affected union on current Go, actual
 Go 1.20 and race. One heavy local Go/LLVM owner runs at a time; develop in an
 existing idle worktree while its tested source stays frozen.
 
-Resolve branch locations with `git worktree list`. Ignored compact receipts use
-`nop-source-state-qualified-{nop,stack,identity}` and
+Resolve branch locations with `git worktree list`. Latest ignored receipts use
+`integer-self-compare-final-{core,effects,grammar,mandatory}`;
+`integer-self-compare-qualified-0cb14d2f.json` records the exact disjoint union.
+The eight-SDK audit is `integer-self-compare-classification-audit` at `7d0ab042d`;
+later changes before qualification are only test contracts and their baseline.
+Earlier receipts use `nop-source-state-qualified-{nop,stack,identity}` and
 `nop-current-sdk-producers`; `qualified-nop-source-state-bc79fd0f.json` records
 the exact union. Earlier cohorts use `bitfield-qualified-*` and
 `paired-native-qualified-*`. CI artifacts are retrievable from the linked runs;
