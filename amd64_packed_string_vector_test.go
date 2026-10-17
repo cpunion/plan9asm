@@ -135,32 +135,109 @@ func x86PackedStringStatusObservation(arch string, refined bool) string {
 		suffix + " $0x8d5,BX\nMOV" + suffix + " BX,336(DI)\nMOV" + suffix + " CX,352(DI)\nRET\n"
 }
 
-func TestX86PackedStringThreeAPIsFiveTargetsO0O2Objects(t *testing.T) {
+func x86PackedStringObjectBatches(rows []x86PackedStringVectorCase) [][]x86PackedStringVectorCase {
+	const maxFunctions = 64
+	var batches [][]x86PackedStringVectorCase
+	for len(rows) != 0 {
+		count := len(rows)
+		if count > maxFunctions {
+			count = maxFunctions
+		}
+		batches = append(batches, rows[:count])
+		rows = rows[count:]
+	}
+	return batches
+}
+
+func TestX86PackedStringObjectBatchInventory(t *testing.T) {
+	original := x86PackedStringVectorCases()
+	var joined []x86PackedStringVectorCase
+	seen := make(map[x86PackedStringVectorCase]bool)
+	for _, batch := range x86PackedStringObjectBatches(original) {
+		if len(batch) == 0 || len(batch) > 64 {
+			t.Fatal("empty or oversized packed-string object batch", len(batch))
+		}
+		for _, row := range batch {
+			if seen[row] {
+				t.Fatal("duplicate original packed-string form", row)
+			}
+			seen[row] = true
+		}
+		joined = append(joined, batch...)
+	}
+	if len(original) != 8*7*3 || !reflect.DeepEqual(joined, original) {
+		t.Fatal("bounded batches changed the complete ordered original form inventory")
+	}
+	owners := map[string]string{
+		"i386-unknown-linux-gnu":   "386",
+		"i686-pc-windows-msvc":     "386",
+		"x86_64-apple-darwin":      "amd64",
+		"x86_64-unknown-linux-gnu": "amd64",
+		"x86_64-pc-windows-msvc":   "amd64",
+	}
+	if len(x86RawReturnTargets) != len(owners) {
+		t.Fatal("new object targets need their own complete packed-string owner")
+	}
+	for _, target := range x86RawReturnTargets {
+		if owners[target.triple] != target.arch {
+			t.Fatal("missing or duplicate complete target owner", target)
+		}
+		delete(owners, target.triple)
+	}
+	if len(owners) != 0 {
+		t.Fatal("orphaned packed-string object owner", owners)
+	}
+}
+
+// Each target is independently schedulable, and each bounded LLVM unit is
+// released before the next batch. Partitioning retains all 168 original rows,
+// all five targets and the original three-API/two-optimization matrix.
+func x86PackedStringTargetObjects(t *testing.T, arch, triple string) {
+	t.Helper()
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc is required")
 	}
-	cases := x86PackedStringVectorCases()
-	for _, target := range x86RawReturnTargets {
-		t.Run(target.arch+"/"+target.triple, func(t *testing.T) {
-			declarations, source := x86PackedStringVectorFixture(cases, target.arch)
-			x86LEAActualTargetGoObject(t, target.arch, target.triple, source)
+	for index, batch := range x86PackedStringObjectBatches(x86PackedStringVectorCases()) {
+		t.Run(fmt.Sprintf("batch-%d", index), func(t *testing.T) {
+			declarations, source := x86PackedStringVectorFixture(batch, arch)
+			x86LEAActualTargetGoObject(t, arch, triple, source)
 			for _, api := range []string{"text", "module", "Go"} {
 				t.Run(api, func(t *testing.T) {
-					ir := x86CPUQueryIRFromDeclaration(t, source, declarations, target.arch, target.triple, api)
+					ir := x86CPUQueryIRFromDeclaration(t, source, declarations, arch, triple, api)
 					for _, level := range []string{"-O0", "-O2"} {
 						t.Run(level, func(t *testing.T) {
 							input := ir
 							if level == "-O2" {
 								input = x86UndefinedTrapOptimizedIR(t, input)
 							}
-							x86PackedStringCompileObject(t, llc, target.triple, input, level)
+							x86PackedStringCompileObject(t, llc, triple, input, level)
 						})
 					}
 				})
 			}
 		})
 	}
+}
+
+func TestX86PackedStringObjectsLinux386(t *testing.T) {
+	x86PackedStringTargetObjects(t, "386", "i386-unknown-linux-gnu")
+}
+
+func TestX86PackedStringObjectsWindows386(t *testing.T) {
+	x86PackedStringTargetObjects(t, "386", "i686-pc-windows-msvc")
+}
+
+func TestX86PackedStringObjectsDarwinAMD64(t *testing.T) {
+	x86PackedStringTargetObjects(t, "amd64", "x86_64-apple-darwin")
+}
+
+func TestX86PackedStringObjectsLinuxAMD64(t *testing.T) {
+	x86PackedStringTargetObjects(t, "amd64", "x86_64-unknown-linux-gnu")
+}
+
+func TestX86PackedStringObjectsWindowsAMD64(t *testing.T) {
+	x86PackedStringTargetObjects(t, "amd64", "x86_64-pc-windows-msvc")
 }
 
 func TestX86PackedStringResultEffectsAndPreEmissionIdentity(t *testing.T) {
