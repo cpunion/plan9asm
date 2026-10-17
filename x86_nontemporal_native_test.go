@@ -43,8 +43,21 @@ func TestX86NonTemporalVectorNativeByteAndSourceBoundaries(t *testing.T) {
 					state := x86ResultState{flags: x86ByteFlagsAll, direction: x86ResultDirectionBackward}
 					state.pointerGP[0] = true
 					state.writeVector(1, 64, ^uint64(0), false)
+					if row.load {
+						// Sparse old aliases distinguish a new definition from an
+						// accidental no-op and legacy preservation from VEX clearing.
+						state.writeVector(1, 64, 0xaaaaaaaaaaaaaaaa, false)
+					}
 					before := state.clone()
-					if accepted, known := x86ResultNonTemporalVectorStep(ins, &state, nil, 0, arch, true); !known || !accepted || !reflect.DeepEqual(state, before) {
+					expected := before.clone()
+					if row.load {
+						expectedBytes := ^uint64(0)
+						if !row.vector {
+							expectedBytes = before.vectorBytes(1) | x86CallerVectorByteMask(width)
+						}
+						expected.writeVector(1, 64, expectedBytes, false)
+					}
+					if accepted, known := x86ResultNonTemporalVectorStep(ins, &state, nil, 0, arch, true); !known || !accepted || !reflect.DeepEqual(state, expected) {
 						t.Fatal("complete native move changed flags, pointers or unrelated byte domains")
 					}
 					if accepted, _ := x86ResultNonTemporalVectorStep(ins, &state, nil, 0, arch, false); accepted {
