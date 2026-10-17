@@ -40,20 +40,11 @@ func TestTranslateX86ImmediatePackedCompareCompleteGoAssemblerForms(t *testing.T
 			}
 			source.WriteString("\tRET\n")
 
-			file, err := Parse(ArchAMD64, source.String())
-			if err != nil {
-				t.Fatal(err)
-			}
-			ll, err := Translate(file, Options{
-				TargetTriple: target.triple,
-				Goarch:       "amd64",
-				Sigs: map[string]FuncSig{
-					"immediatepackedcompareforms": {Name: "immediatepackedcompareforms", Ret: Void},
-				},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			// Retain every original row as a Go object and public Context
+			// control. Emitter-only objects grant no unknown input; complete
+			// initialized public objects have their separate native-read owner.
+			ll := x86UnboundVoidScalarFormatObject(t, source.String(),
+				"immediatepackedcompareforms", "amd64", target.triple)
 			llc := findLLVM22Tool("llc")
 			if llc == "" {
 				t.Fatal("LLVM 22 llc not found")

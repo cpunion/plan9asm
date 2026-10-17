@@ -450,18 +450,10 @@ func TestTranslateX86ImplicitMultiplyDivideCompleteGoAssemblerForms(t *testing.T
 				}
 			}
 			src.WriteString("\tRET\n")
-			file, err := Parse(ArchAMD64, src.String())
-			if err != nil {
-				t.Fatal(err)
-			}
-			ll, err := Translate(file, Options{
-				TargetTriple: target.triple,
-				Goarch:       target.goarch,
-				Sigs:         map[string]FuncSig{"muldivforms": {Name: "muldivforms", Ret: Void}},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			// Retain every original Go row and its missing-input Context.
+			// Emitter-only objects are not a Void-entry exemption; initialized
+			// product objects have their independent five-target owner.
+			ll := x86UnboundVoidScalarFormatObject(t, src.String(), "muldivforms", target.goarch, target.triple)
 			compileLLVMToObject(t, llc, target.triple, "mul-div-forms-"+target.goarch+".ll", "mul-div-forms-"+target.goarch+".o", ll)
 		})
 	}

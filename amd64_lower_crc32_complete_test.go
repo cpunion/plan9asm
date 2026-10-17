@@ -62,19 +62,10 @@ func TestTranslateX86CRC32CompleteGo127FormsAcrossTargets(t *testing.T) {
 	} {
 		t.Run(target.name, func(t *testing.T) {
 			source := x86CRC32CompleteFormsSource(target.goarch)
-			requireX86GoAssemblerResult(t, target.goarch, source, true)
-			file, err := Parse(ArchAMD64, source)
-			if err != nil {
-				t.Fatal(err)
-			}
-			ir, err := Translate(file, Options{
-				Goarch:       target.goarch,
-				TargetTriple: target.triple,
-				Sigs:         map[string]FuncSig{"crc32forms": {Name: "crc32forms", Ret: Void}},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			// Preserve the complete original mixed bank/memory source.
+			// Its unknown accumulators and physical SP cannot supply a public
+			// entry. Initialized public objects have their separate CRC32 owner.
+			ir := x86UnboundVoidScalarFormatObject(t, source, "crc32forms", target.goarch, target.triple)
 			for _, want := range []string{
 				"@llvm.x86.sse42.crc32.32.8",
 				"@llvm.x86.sse42.crc32.32.16",
