@@ -58,14 +58,20 @@ word; unmodeled RFLAGS control bits are not numerical data. Complete modules,
 runtime counterparts, final gates and the strict benchmark remain required.
 
 The conversion-object root exhausted the Windows30-minute shard deadline during
-its first platform. Three independently owned target roots retain all741 forms,
-three APIs and O0/O2. Smaller eight-function units alone still time out locally
-at `913de1a9`; that failed receipt remains failed. The live child is repeatedly
-building Go1.27's objdump in new per-batch caches. A regression first rejects
-the missing parent cache; the candidate now uses one target-test-owned GOCACHE.
-Source, typed package, module/temp directories and actual object observations
-remain independent, and every generated function must survive both IR levels.
-The complete object matrix and actual runtime improvement are not yet qualified.
+its first platform, leaving212 later roots unattempted. Three target roots and
+eight-function units still fail at `913de1a9`. Parent-owned compiler caching
+also fails to finish the complete Linux root at `d0660458`; neither failed
+receipt is a pass. Source inspection finds repeated actual-Go verification for
+every translated function; cache sharing alone does not remove that cost.
+
+The candidate keeps all741 forms, three APIs, all three target platforms and
+O0/O2. Each platform has12 independently scheduled64-function batches, with a
+37-function last batch. Independent inventory tests require all36 owners and
+an exact, disjoint union; at most three conversion owners share a Windows hash
+shard. The partition test first fails on the old three-root layout. Each batch
+keeps its owned compiler cache, independent source/package/object/lifetime
+observations and assertions that every function survives both IR levels.
+Splitting scheduling does not establish a speedup or a complete object pass.
 
 ## Closure queue, 2026-10-17
 
