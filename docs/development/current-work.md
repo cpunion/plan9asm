@@ -1,5 +1,40 @@
 # Current work: PR 40 checkpoint
 
+## Paired native input repair and completed fork, 2026-10-18
+
+Fork run39063200769 at `1a882975d` finished naturally:64 jobs pass and one
+fails; complete Windows modules do not start after the failed prerequisite.
+The sole failed lane is `ordinary-bp-native-read`, with five failed roots.
+Its exact eleven-root selection independently reproduces locally. Native
+artifacts separately audit73 roots/228 children with no failure, skip,
+duplicate or incomplete terminal, including actual BLS/BEXTR execution.
+These native receipts bind `1a882975d`, not the later repair head.
+
+At `92acfbb2a`, the complete affected union passes44 roots/3,522 children on
+current Go, actual Go1.20 and race, with identical3,566 terminal identities
+and unchanged source/SDK/LLVM22 observations. The disjoint owners are core
+25/3,242, objects and portable execution8/63, and retained negatives11/217.
+Receipts use `paired-native-qualified-*`; the ignored qualification summary
+is `qualified-paired-native-92acfbb2.json`. Earlier RED and the host-inapplicable
+original low-product execution selection remain failed, not passing evidence.
+
+Low-word NUM projection again preserves sparse lane knowledge; the private
+whole-source guard still requires complete inputs and validates marked reads
+first. Native floating arithmetic, packed conversions and D/Q/multiply-add
+reads now consume their existing typed grammars and exact paired emitters.
+The new102-case input boundary retains unknown/numerical-pointer and missing
+vector rejection. Declaration-only observers retain their strict read paths;
+no pointer, caller, raw-entry or memory authority is added. Original69-opcode
+BP objects, all three APIs and both IR axes remain unchanged.
+
+At the same code head, build, vet, ten scanner roots on both SDKs, the official
+five-architecture classification gate, two CLI extraction roots,132 CI policies
+and tracked formatting pass. Publish this verified batch to the allowed fork
+and watch the next complete run. The last complete main-root denominator is
+still run39054965721's179 failed roots; do not subtract focused passes or
+replace it with a prerequisite-only result. Keep PR40 draft until canonical
+CI, the strict benchmark, coverage and fresh review qualify its actual head.
+
 ## Completed fork and floating format batch, 2026-10-18
 
 This supersedes the running-CI and 181-root checkpoints below. Fork run
