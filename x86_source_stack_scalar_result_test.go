@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -195,32 +196,37 @@ func TestX86PhysicalSourceStackScalarJoinOnlyIntersectsFacts(t *testing.T) {
 	}
 }
 
-// The complete original kernels execute through the private LLVM source-stack
-// model on the host. This is separate from native Go/x86 execution in CI.
+// Execute the complete kernels whose source word matches the host pointer.
+// Unlike pure GP arithmetic, physical MOVL SP,BP cannot carry a 64-bit host
+// address. Both source widths retain their five-target objects above and their
+// required original-Go/LLVM Linux AMD64/i386 execution owner, without skips here.
 func TestX86PhysicalSourceStackScalarPortableCompleteRuntimeSource(t *testing.T) {
 	llc, clang, found := findLlcAndClang(t)
 	if !found {
 		t.Fatal("LLVM22 llc/clang required")
 	}
 	triple := testTargetTriple(runtime.GOOS, runtime.GOARCH)
-	for _, arch := range []string{"386", "amd64"} {
-		source, _ := x86SourceStackRuntimeSource(arch)
-		var adapters, declarations, checks strings.Builder
-		for _, row := range x86SourceStackRuntimeCases(arch) {
-			x86SourceStackPortableAdapter(&adapters, row.name, row.width)
-			fmt.Fprintf(&declarations, "extern uint64_t %sPortable(uint64_t);\n", row.name)
-			fmt.Fprintf(&checks, `    {
+	arch := "amd64"
+	if strconv.IntSize == 32 {
+		arch = "386"
+	}
+	source, _ := x86SourceStackRuntimeSource(arch)
+	var adapters, declarations, checks strings.Builder
+	for _, row := range x86SourceStackRuntimeCases(arch) {
+		x86SourceStackPortableAdapter(&adapters, row.name, row.width)
+		fmt.Fprintf(&declarations, "extern uint64_t %sPortable(uint64_t);\n", row.name)
+		fmt.Fprintf(&checks, `    {
         const uint64_t mask=UINT64_MAX >> %d;
         const uint64_t value=input & mask;
         uint64_t want=value+7;
 `, 64-row.width)
-			if row.flags {
-				checks.WriteString("        if (value==0) want++;\n")
-			}
-			if row.name == "WordImmediate" {
-				checks.WriteString("        want=((value & ~UINT64_C(65535)) | 65530)+7;\n")
-			}
-			fmt.Fprintf(&checks, `        uint64_t got=%sPortable(input);
+		if row.flags {
+			checks.WriteString("        if (value==0) want++;\n")
+		}
+		if row.name == "WordImmediate" {
+			checks.WriteString("        want=((value & ~UINT64_C(65535)) | 65530)+7;\n")
+		}
+		fmt.Fprintf(&checks, `        uint64_t got=%sPortable(input);
         if (got!=(want & mask)) {
             fprintf(stderr,"%s input=%%llx got=%%llx want=%%llx\n",
                 (unsigned long long)input,(unsigned long long)got,(unsigned long long)(want & mask));
@@ -228,12 +234,12 @@ func TestX86PhysicalSourceStackScalarPortableCompleteRuntimeSource(t *testing.T)
         }
     }
 `, row.name, row.name)
-		}
-		for _, name := range []string{"PhysicalBool", "PhysicalBoolIntermediate", "PhysicalBoolNamedFP"} {
-			x86SourceStackPortableAdapter(&adapters, name, 1)
-			fmt.Fprintf(&declarations, "extern uint64_t %sPortable(uint64_t);\n", name)
-		}
-		const body = `int main(void) {
+	}
+	for _, name := range []string{"PhysicalBool", "PhysicalBoolIntermediate", "PhysicalBoolNamedFP"} {
+		x86SourceStackPortableAdapter(&adapters, name, 1)
+		fmt.Fprintf(&declarations, "extern uint64_t %sPortable(uint64_t);\n", name)
+	}
+	const body = `int main(void) {
     const uint64_t inputs[]={0,1,17,253,249,UINT64_C(65530),UINT64_C(0xfffffffc),UINT64_MAX-3};
     for (unsigned index=0;index<sizeof(inputs)/sizeof(inputs[0]);++index) {
         const uint64_t input=inputs[index];
@@ -248,21 +254,20 @@ func TestX86PhysicalSourceStackScalarPortableCompleteRuntimeSource(t *testing.T)
     return 0;
 }
 `
-		driver := "#include <stdint.h>\n#include <stdio.h>\n" + declarations.String() + fmt.Sprintf(body, checks.String())
-		for _, api := range []string{"text", "module", "Go"} {
-			t.Run(arch+"/"+api, func(t *testing.T) {
-				ir, err := x86ScalarFPBitViewAPI(t, source, x86SourceStackRuntimeDeclarations(arch), arch, triple, api)
-				if err != nil {
-					t.Fatal(err)
+	driver := "#include <stdint.h>\n#include <stdio.h>\n" + declarations.String() + fmt.Sprintf(body, checks.String())
+	for _, api := range []string{"text", "module", "Go"} {
+		t.Run(arch+"/"+api, func(t *testing.T) {
+			ir, err := x86ScalarFPBitViewAPI(t, source, x86SourceStackRuntimeDeclarations(arch), arch, triple, api)
+			if err != nil {
+				t.Fatal(err)
+			}
+			ir += adapters.String()
+			for _, text := range []string{ir, x86DwordProductIROptimize(t, ir)} {
+				for _, level := range []int{0, 2} {
+					compileAndRunRuntimeTestWithCompiler(t, llc, []string{clang}, "source-stack-scalar-values", triple, text, driver, nil, level)
 				}
-				ir += adapters.String()
-				for _, text := range []string{ir, x86DwordProductIROptimize(t, ir)} {
-					for _, level := range []int{0, 2} {
-						compileAndRunRuntimeTestWithCompiler(t, llc, []string{clang}, "source-stack-scalar-values", triple, text, driver, nil, level)
-					}
-				}
-			})
-		}
+			}
+		})
 	}
 }
 

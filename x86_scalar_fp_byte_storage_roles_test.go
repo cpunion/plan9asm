@@ -55,7 +55,10 @@ define i32 @ObserveField() {
     ret i32 %value
 }
 `
-							x86ScalarFPNamedConstantResult(t, ir+observe, "ObserveField", []uint64{41})
+							// The optimizer must use the selected target's actual
+							// pointer layout, not its default host-sized pointer.
+							observed := x86LODSStateTargetLayout(t, ir+observe, target.triple, word)
+							x86ScalarFPNamedConstantResult(t, observed, "ObserveField", []uint64{41})
 						} else if row.name == "cross-field-defined-FP-address" {
 							// The existing checked unused-address effect grants no
 							// address bits, but does not invalidate unrelated data.
