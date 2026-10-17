@@ -32,6 +32,17 @@ as its operand classes. A shared ytab or a name/row count is not a complete
 format check. Concrete syntax witnesses do not prove which overlapping encoder
 row Go selected, LLVM object success, runtime semantics or an ABI contract.
 
+Non-temporal vector moves share the complete legacy yxr_ml/ylddqu and both
+five-row AVX tables, including MOVNTDQ's MOVNTO alias. Retain actual native
+opcodes: LLVM nontemporal/align metadata cannot preserve dead-access or alignment
+faults. Legacy loads preserve wider aliases; VEX/EVEX loads clear them. Legacy
+Yml register destinations fault before inputs. VEX.WIG is not EVEX.W0/W1;
+masking, zeroing and broadcast remain reserved. Reuse packed fixed-local byte,
+alignment and spill-revocation proofs, not another memory permission. Native
+byte boundaries grant neither raw entry nor symbolic-read authority. Original
+unbound formats need Go objects and public Context controls; initialized
+counterparts own public objects and separately required runtime evidence.
+
 A bound whole-instruction prefix must own dispatch before overlapping generic
 handlers. For scalar LOCK, an emitted correct helper is not evidence that the
 source operation uses it: inspect every original function body through all

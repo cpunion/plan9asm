@@ -1,5 +1,61 @@
 # Current work: PR 40 checkpoint
 
+## Non-temporal vector closing batch, 2026-10-17
+
+This section supersedes older checkpoints below. PR40 remains draft at
+`24851df2`; allowed-fork run39034893053 still tests `60b321cd`, not this local
+candidate. At this checkpoint57 prerequisites pass and eight Windows owners
+are queued. Let that frozen run finish. The last complete failure denominator
+remains the192 failed/39 incomplete main roots from run39021103697; do not
+subtract focused local successes from it or claim complete-module success.
+
+At `22e0592e`, all27 changed/retained roots and592 children pass current Go,
+actual Go1.20 and race. All619 terminal identities match across lanes, with no
+failures/skips and unchanged source/SDK/LLVM22 seals. Receipts are the
+`compact-22e0592e-nontemporal-family-qualified-*` cohort under the ignored
+immediate-compare result directory. The earlier RED and failed intermediate
+receipts remain failed, including the attempted native host-only root.
+
+The complete nine-name non-temporal vector family now has one typed grammar
+and alias owner. Native inline assembly retains exact16/32/64-byte alignment,
+dead accesses, ordering and distinct legacy/VEX/EVEX upper-byte writes. Valid
+legacy register destinations raise #UD before missing source inputs. Both full
+Go AVX tables bind complete rows and attributes independently. Original Go
+native-byte boundaries retain96 VEX/EVEX forms per physical mode, truncation
+and reserved-bit controls; VEX.WIG remains distinct from EVEX.W0/W1.
+
+Complete initialized programs retain five x86-target objects through three
+public APIs, both IR levels and both backend optimization levels. Seventeen
+fixed-local forms additionally retain actual Go frame/object observations on
+Linux, Darwin and Windows. Their byte/alignment/spill proof reuses the existing
+packed-move consumer, including actual fences. Original unbound format sources
+remain original Go objects/public Context controls with separate emitter-only
+LLVM syntax objects. None of these receipts establishes native AVX512 execution.
+
+The independent old/current official audit binds all eight Go1.20-1.27 SDKs
+and both x86 modes. Exactly the same23 non-temporal memory forms per AMD64
+SDK move supported->context-required;386 and every other metric stay unchanged.
+At `0dda3232`, the updated baseline passes the current-Go official gate on all
+five architectures. That gate checks classification, not complete encoder-row
+execution. All128 CI policy tests pass. Scanner input/trap and CLI extraction
+regressions pass current Go; the scanner also passes actual Go1.20. The rich
+CLI declares Go1.24 as its minimum: the attempted Go1.20 invocation fails while
+parsing that module's go.mod and is not a compatible-toolchain test pass.
+
+The published packed-frame partition at `5fd35696` has now passed all12 actual
+object owners:195 forms on each of three targets,12 roots/48 children, complete
+API/IR axes and unchanged source/tool seals. The old monolithic timeout remains
+failed. The two unbound MMX format repairs at `60b321cd` pass their nine-root/
+28-child retained union on current Go, actual Go1.20 and race. These are not
+strict184-file benchmark or complete-module receipts.
+
+Continue the fixed CI failure queue by rule class. Existing failures still
+include unclosed floating-compare result effects, physical MMX-region contracts
+and other typed/native source effects. Preserve complete original programs and
+independent counterexamples; do not reopen inventory work or relax the checks.
+The last strict benchmark remains132/184 compiled with52 failures and AMD64
+over budget. No newer full pass exists.
+
 ## Active closure queue, 2026-10-17
 
 This section supersedes older checkpoints below. PR40 remains draft at

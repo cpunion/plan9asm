@@ -111,6 +111,9 @@ Run race tests for changed concurrent code and actual Go 1.20 checks for changed
 root-module code. Current-SDK producer fixtures use explicit `go1.27` build
 roles; historical lanes still test their portable framework. Do not add runtime
 skips or `!llgo` tags to hide incomplete compiler support.
+The rich CLI's separate `cmd/plan9asmll` module declares Go1.24 as its minimum.
+The root's Go1.20 checks and eight-SDK assembler-table audit do not imply that
+this nested module builds with Go1.20; test its declared minimum independently.
 Run the formatting check with the selected current Go toolchain. Limit it to
 tracked sources: ignored `_out/` holds deliberately unchanged historical failures
 and generated observation inputs, not repository formatting targets.
