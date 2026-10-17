@@ -123,10 +123,10 @@ func checkX86ABI0ResultInitializationWithTrapOnly(fn Func, sig FuncSig, goarch s
 		}
 		transfer = x86ABI0CanonicalBoolTransfer(transfer)
 	}
-	if scalarViews && (fn.x86DirectTailRoot != nil || x86OrdinaryResultAddressRole(fn, sig, goarch)) {
+	ordinaryResultAddress := scalarViews && x86OrdinaryResultAddressRole(fn, sig, goarch)
+	if scalarViews && (fn.x86DirectTailRoot != nil || ordinaryResultAddress) {
 		for _, slot := range sig.Frame.Results {
-			switch slot.Type {
-			case I8, I16, I32, I64:
+			if x86IntegerResultSlot(slot) || ordinaryResultAddress && x86OrdinaryNumericAddressSlot(slot) {
 				initial.resultAddressSlots = append(initial.resultAddressSlots, x86ResultSlotAddress{
 					start: slot.Offset, end: slot.Offset + x86ResultScalarBytes(slot.Type, goarch), valid: true})
 			}
@@ -135,7 +135,10 @@ func checkX86ABI0ResultInitializationWithTrapOnly(fn Func, sig FuncSig, goarch s
 			initial.resultAddressSlots = []x86ResultSlotAddress{region}
 		}
 	}
-	if scalarViews && x86OrdinaryParameterAddressRole(fn, sig, goarch) && fn.ArgSize == int64(frame) {
+	// TEXT may include ABI0 allocation padding beyond the declared logical end.
+	// It cannot add owned/initialized bytes or extend an AMD64 field allocation.
+	if scalarViews && x86OrdinaryParameterAddressRole(fn, sig, goarch) &&
+		fn.ArgSize >= int64(frame) && fn.ArgSize <= 4096 {
 		initial.logicalFrameParameters = true
 		if goarch == "386" {
 			initial.resultAddressSlots = []x86ResultSlotAddress{{start: 0, end: int64(frame), valid: true}}
