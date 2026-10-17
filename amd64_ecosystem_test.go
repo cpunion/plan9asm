@@ -713,7 +713,7 @@ func TestTranslateAMD64PackedWordMultiplyCompleteGoAssemblerForms(t *testing.T) 
 		fmt.Fprintf(&src, "\t%s.Z Z0, Z1, K3, Z2\n", op)
 	}
 	src.WriteString("\tRET\n")
-	ll := translateAMD64EcosystemCase(t, src.String(), "packedwordmulforms")
+	ll := x86UnboundVoidScalarFormatObject(t, src.String(), "packedwordmulforms", "amd64", "x86_64-unknown-linux-gnu")
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc not found")
@@ -737,20 +737,7 @@ func TestTranslate386PackedWordMultiplyCompleteGoAssemblerForms(t *testing.T) {
 		fmt.Fprintf(&src, "\t%s (AX), Z1, Z2\n", op)
 	}
 	src.WriteString("\tRET\n")
-	file, err := Parse(ArchAMD64, src.String())
-	if err != nil {
-		t.Fatal(err)
-	}
-	ll, err := Translate(file, Options{
-		TargetTriple: "i386-unknown-linux-gnu",
-		Goarch:       "386",
-		Sigs: map[string]FuncSig{
-			"packedwordmulforms386": {Name: "packedwordmulforms386", Ret: Void},
-		},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	ll := x86UnboundVoidScalarFormatObject(t, src.String(), "packedwordmulforms386", "386", "i386-unknown-linux-gnu")
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc not found")
@@ -843,7 +830,7 @@ func TestTranslateAMD64PackedWordMultiplyAddCompleteGoAssemblerForms(t *testing.
 	VPMADDWD.Z (AX), Z21, K6, Z22
 	RET
 `
-	ll := translateAMD64EcosystemCase(t, src, "packedwordmaddforms")
+	ll := x86UnboundVoidScalarFormatObject(t, src, "packedwordmaddforms", "amd64", "x86_64-unknown-linux-gnu")
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc not found")
