@@ -3,6 +3,7 @@ package plan9asm
 import (
 	"bytes"
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -56,15 +57,54 @@ func TestX86BroadcastRawMaskDataOriginalGoBytes(t *testing.T) {
 			if err != nil || !recognized || form.kind != x86BroadcastMask {
 				t.Fatalf("%s physical mask grammar %+v: known%t err%v", arch, form, recognized, err)
 			}
-			// Decoding an initialized K input is not a new numerical proof.
+			// This private decoder returns a plain instruction, not a raw-source
+			// entry contract. Its numerical effect requires only its actual K
+			// data input; neither another initialized mask nor the decoder can
+			// manufacture that input or grant native-memory/entry permission.
 			for _, consumer := range x86ResultGPSIMDConsumers {
-				state := x86ResultState{}
-				for index := range state.masks {
-					state.masks[index] = true
+				input, _ := amd64ParseKReg(ins.Args[0].Reg)
+				destination, _ := amd64VectorRegisterIndex(ins.Args[1].Reg, form.byteWidth)
+				for _, initialized := range []bool{false, true} {
+					state := x86ResultState{flags: x86ByteFlagsAll}
+					state.masks[(input+1)%len(state.masks)] = true
+					state.masks[input] = initialized
+					before := state.clone()
+					if accepted := consumer.step(ins, &state, nil, 0, arch); accepted != initialized {
+						t.Fatalf("%s %s K%d initialized%t: accepted%t", arch, consumer.name, input, initialized, accepted)
+					}
+					expected := before.clone()
+					if initialized {
+						expected.writeVector(destination, form.byteWidth, ^uint64(0), false)
+					}
+					if !reflect.DeepEqual(state, expected) {
+						t.Fatalf("%s %s changed unrelated state or invented missing input: %+v", arch, consumer.name, state)
+					}
 				}
-				if consumer.step(ins, &state, nil, 0, arch) {
-					t.Fatalf("%s admitted mask-data numerical authority", consumer.name)
-				}
+			}
+		}
+	}
+}
+
+func TestX86BroadcastMaskDataUnboundPublicSourceNeedsContext(t *testing.T) {
+	for _, target := range []struct{ arch, triple string }{
+		{"amd64", "x86_64-unknown-linux-gnu"},
+		{"amd64", "x86_64-apple-darwin"},
+		{"amd64", "x86_64-pc-windows-msvc"},
+		{"386", "i386-unknown-linux-gnu"},
+		{"386", "i686-pc-windows-msvc"},
+	} {
+		for _, row := range []string{"VPBROADCASTMB2Q K0,X2", "VPBROADCASTMW2D K7,Z2"} {
+			for _, raw := range []bool{false, true} {
+				t.Run(target.triple+"/"+row+fmt.Sprint("/raw", raw), func(t *testing.T) {
+					var source strings.Builder
+					source.WriteString("TEXT f(SB),4,$0-0\n")
+					emitX86GoEncodedTestInstructionForArch(t, &source, row, raw, target.arch)
+					source.WriteString("RET\n")
+					// Raw normalization and a Void result cannot supply the
+					// missing K data. Preserve the original Go object as well
+					// as Context with empty IR through all three public APIs.
+					x86UnboundVoidFormatSource(t, source.String(), "f", target.arch, target.triple)
+				})
 			}
 		}
 	}
