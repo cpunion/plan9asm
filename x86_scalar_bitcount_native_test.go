@@ -125,20 +125,29 @@ func TestX86ScalarBitCountVoidCannotHideNativeInputs(t *testing.T) {
 						body := source[strings.Index(source, "\n")+1:]
 						body = strings.Replace(body, fmt.Sprintf("%s BX,ret+%d(FP)\n", move, word), "", 1)
 						declaration := "func Value(p *[64]byte)"
+						arguments := word
 						if unusedBool {
 							declaration = "func Value(p *[64]byte,unused bool)"
+							arguments++
 						}
-						_, _, _, source = x86ResultInitializationFixture(t, arch, declaration, body)
+						source = fmt.Sprintf("TEXT ·Value(SB),4,$0-%d\n%s", arguments, body)
+						goAssemblerOracleOutput(t, arch, source, "", true)
 						for _, api := range []string{"text", "module", "Go"} {
-							if ir, err := x86ScalarFPBitViewAPI(t, source, declaration, arch, triple, api); err != nil || ir == "" {
-								t.Fatal("complete Void count lost its native continuation", api, err)
-							}
-							for _, input := range []string{move + " p+0(FP),AX\n", "MOVL $1,DX\n"} {
-								changed := strings.Replace(source, input, "", 1)
-								if ir, err := x86ScalarFPBitViewAPI(t, changed, declaration, arch, triple, api); ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
-									t.Fatal("Void count invented a native pointer or index", input, api, err)
+							t.Run(api, func(t *testing.T) {
+								if ir, err := x86ScalarFPBitViewAPI(t, source, declaration, arch, triple, api); err != nil || ir == "" {
+									t.Fatal("complete Void count lost its native continuation", api, err)
 								}
-							}
+								for _, input := range []struct{ name, line string }{
+									{"pointer", move + " p+0(FP),AX\n"}, {"index", "MOVL $1,DX\n"},
+								} {
+									t.Run(input.name, func(t *testing.T) {
+										changed := strings.Replace(source, input.line, "", 1)
+										if ir, err := x86ScalarFPBitViewAPI(t, changed, declaration, arch, triple, api); ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+											t.Fatal("Void count invented a native pointer or index", api, err)
+										}
+									})
+								}
+							})
 						}
 					})
 				}
