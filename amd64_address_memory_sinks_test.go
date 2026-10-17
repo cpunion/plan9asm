@@ -97,24 +97,24 @@ func TestX86DirectSymbolMemorySinkObjectsRemainSupported(t *testing.T) {
 				for _, api := range []string{"text", "module", "go"} {
 					t.Run(arch+"/"+row+"/"+target+"/"+api, func(t *testing.T) {
 						ir, err := x86AddressMemoryAPI(t, api, source, arch, target)
+						if !errors.Is(err, ErrProbeNeedsContext) || ir != "" {
+							t.Fatal("format-only external sink acquired storage or x87 state", err)
+						}
+						if api == "text" {
+							x86LEAActualTargetGoObject(t, arch, target, source)
+							unit := x86ZeroArgumentLowererObjectUnit(t, mustParseX86RawReturn(t, source), arch, target, "ExternalSinkEmitterOnly",
+								func(consumer *amd64Ctx, instruction Instr) (bool, bool, error) {
+									if known, terminated, err := consumer.lowerMov(instruction.Op, instruction); known {
+										return known, terminated, err
+									}
+									if known, terminated, err := consumer.lowerVec(instruction.Op, instruction); known {
+										return known, terminated, err
+									}
+									return consumer.lowerX87(instruction.Op, instruction)
+								})
+							x86ResultInitializationObject(t, llc, target, unit, "original-external-sink-emitter-only")
+						}
 						if counterpart, integer := x86AddressIntegerSinkCounterpart(row); integer {
-							if !errors.Is(err, ErrProbeNeedsContext) || ir != "" {
-								t.Fatal("unbound external integer/x87 source acquired numerical inputs", err)
-							}
-							if api == "text" {
-								x86LEAActualTargetGoObject(t, arch, target, source)
-								unit := x86ZeroArgumentLowererObjectUnit(t, mustParseX86RawReturn(t, source), arch, target, "ExternalSinkEmitterOnly",
-									func(consumer *amd64Ctx, instruction Instr) (bool, bool, error) {
-										if known, terminated, err := consumer.lowerMov(instruction.Op, instruction); known {
-											return known, terminated, err
-										}
-										if known, terminated, err := consumer.lowerVec(instruction.Op, instruction); known {
-											return known, terminated, err
-										}
-										return consumer.lowerX87(instruction.Op, instruction)
-									})
-								x86ResultInitializationObject(t, llc, target, unit, "original-external-sink-emitter-only")
-							}
 							declaration := fmt.Sprintf("func Value(input %s)", counterpart.inputType)
 							body := x86X87IntegerInputCases(counterpart)[0].body
 							bounded := x86X87IntegerInputSource(t, arch, declaration, body, false, "")
@@ -126,11 +126,8 @@ func TestX86DirectSymbolMemorySinkObjectsRemainSupported(t *testing.T) {
 							if err != nil || ir == "" {
 								t.Fatal("independent initialized and balanced integer-sink counterpart failed", err)
 							}
+							x86ResultInitializationObject(t, llc, target, ir, "memory-sink")
 						}
-						if err != nil {
-							t.Fatal("ordinary memory sink lost:", err)
-						}
-						x86ResultInitializationObject(t, llc, target, ir, "memory-sink")
 					})
 				}
 			}
