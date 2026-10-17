@@ -15,20 +15,7 @@ TEXT notb(SB),NOSPLIT,$0-0
 	NOTB 3(AX)
 	RET
 `
-	file, err := Parse(ArchAMD64, src)
-	if err != nil {
-		t.Fatal(err)
-	}
-	ir, err := Translate(file, Options{
-		TargetTriple: "x86_64-unknown-linux-gnu",
-		Sigs: map[string]FuncSig{
-			"notb": {Name: "notb", Ret: Void},
-		},
-		Goarch: "amd64",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	ir := x86UnboundVoidScalarFormatObject(t, src, "notb", "amd64", "x86_64-unknown-linux-gnu")
 	if got := strings.Count(ir, "xor i8"); got != 2 {
 		t.Fatalf("NOTB xor count = %d, want 2:\n%s", got, ir)
 	}

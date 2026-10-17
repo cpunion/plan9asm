@@ -145,14 +145,7 @@ func TestTranslateRawEVEXMaskToVectorWeaviateBlockRegression(t *testing.T) {
 	LONG $0x4845d162; WORD $0xf8fa
 	RET
 `
-	file, err := Parse(ArchAMD64, source)
-	if err != nil {
-		t.Fatal(err)
-	}
-	ir, err := Translate(file, Options{Goarch: "amd64", TargetTriple: "x86_64-unknown-linux-gnu", Sigs: map[string]FuncSig{"rawMaskToVectorBlock": {Name: "rawMaskToVectorBlock", Ret: Void}}})
-	if err != nil {
-		t.Fatal(err)
-	}
+	ir := x86UnboundVoidRawScalarFormatObject(t, source, "amd64", "x86_64-unknown-linux-gnu")
 	if strings.Count(ir, "select i1") < 8*16 {
 		t.Fatalf("raw VPMOVM2D block omitted mask expansion:\n%s", ir)
 	}
