@@ -24,10 +24,9 @@ func TestX86IntegerSelfComparePortableValuesFlagsAndCanaries(t *testing.T) {
 				fmt.Fprintf(&prototypes, "extern void %s(uint8_t*,uint64_t);\n", name)
 				fmt.Fprintf(&source, "TEXT %s(SB),4,$0-16\nMOVQ out+0(FP),DI\nMOVQ mask+8(FP),AX\nKMOVQ AX,K1\n", name)
 				source.WriteString("MOVL $0x7fffffff,DX\nADDL $1,DX\nSTC\n" + row.row + "\n")
-				move, bits := "PMOVMSKB", row.width
+				bits := row.width
 				selected := strings.Contains(string(ins.Op), "EQ")
 				if row.maskResult {
-					move = "KMOVQ"
 					lane := map[byte]int{'B': 8, 'W': 16, 'L': 32, 'D': 32, 'Q': 64}[ins.Op[len(ins.Op)-1]]
 					bits = row.width * 8 / lane
 					if ins.Args[0].Kind == OpImm {
@@ -35,11 +34,18 @@ func TestX86IntegerSelfComparePortableValuesFlagsAndCanaries(t *testing.T) {
 						// LE, false, NE, NLT, NLE, true. High five bits are ignored.
 						selected = [8]bool{true, false, true, false, false, true, false, true}[ins.Args[0].Imm&7]
 					}
-				} else if !row.legacy {
-					move = "VPMOVMSKB"
+					fmt.Fprintf(&source, "KMOVQ %s,AX\nMOVQ AX,0(DI)\n", destination)
+				} else {
+					move := "MOVOU"
+					if !row.legacy {
+						move = "VMOVUPS"
+					}
+					// Observe every result byte with ordinary stores, rather
+					// than an unrelated x86-only movemask intrinsic on ARM64.
+					fmt.Fprintf(&source, "%s %s,0(DI)\n", move, destination)
 				}
-				fmt.Fprintf(&source, "%s %s,AX\nMOVQ AX,0(DI)\nSETCS 8(DI)\nSETOS 9(DI)\nSETEQ 10(DI)\nSETMI 11(DI)\nRET\n", move, destination)
-				fmt.Fprintf(&kernels, "{%s,%d,%t,%t},\n", name, bits, selected, row.masked)
+				source.WriteString("SETCS 64(DI)\nSETOS 65(DI)\nSETEQ 66(DI)\nSETMI 67(DI)\nRET\n")
+				fmt.Fprintf(&kernels, "{%s,%d,%t,%t,%t},\n", name, bits, selected, row.masked, row.maskResult)
 			}
 			x86LEAActualTargetGoObject(t, "amd64", "x86_64-unknown-linux-gnu", source.String())
 			driver := strings.ReplaceAll(x86IntegerSelfCompareValueDriver, "PROTOTYPES", prototypes.String())
@@ -63,12 +69,13 @@ func TestX86IntegerSelfComparePortableValuesFlagsAndCanaries(t *testing.T) {
 const x86IntegerSelfCompareValueDriver = `
 #include <stdint.h>
 #include <stdio.h>
+#include <stdbool.h>
 #include <string.h>
 PROTOTYPES
 struct kernel {
     void (*run)(uint8_t*,uint64_t);
     unsigned bits;
-    _Bool selected, masked;
+    _Bool selected, masked, maskResult;
 };
 static const struct kernel kernels[] = { KERNELS };
 int main(void) {
@@ -77,21 +84,33 @@ int main(void) {
     for (unsigned k=0;k<sizeof(kernels)/sizeof(kernels[0]);++k) {
         const struct kernel *kernel=&kernels[k];
         for (unsigned m=0;m<sizeof(masks)/sizeof(masks[0]);++m) {
-            uint8_t output[32];
+            uint8_t output[96];
             memset(output,0xa7,sizeof(output));
             kernel->run(output+1,masks[m]);
-            uint64_t got, want=0;
-            memcpy(&got,output+1,8);
-            if (kernel->selected) {
-                want=kernel->bits==64 ? UINT64_MAX : (UINT64_C(1)<<kernel->bits)-1;
+            unsigned size=kernel->maskResult ? 8 : kernel->bits;
+            if (kernel->maskResult) {
+                uint64_t got, want=0;
+                memcpy(&got,output+1,8);
+                if (kernel->selected) {
+                    want=kernel->bits==64 ? UINT64_MAX : (UINT64_C(1)<<kernel->bits)-1;
+                }
+                if (kernel->masked) want&=masks[m];
+                if (got!=want) {
+                    fprintf(stderr,"self-compare kernel=%u mask=%u got=%llx want=%llx\n",
+                        k,m,(unsigned long long)got,(unsigned long long)want);
+                    return 1;
+                }
+            } else {
+                for (unsigned b=0;b<size;++b) {
+                    if (output[1+b]!=(kernel->selected ? 0xff : 0)) return 1;
+                }
             }
-            if (kernel->masked) want&=masks[m];
-            if (got!=want || memcmp(output+9,flags,4) || output[0]!=0xa7) {
-                fprintf(stderr,"self-compare kernel=%u mask=%u got=%llx want=%llx\n",
-                    k,m,(unsigned long long)got,(unsigned long long)want);
+            if (memcmp(output+65,flags,4) || output[0]!=0xa7) {
+                fprintf(stderr,"self-compare kernel=%u mask=%u status/canary\n",k,m);
                 return 1;
             }
-            for (unsigned i=13;i<sizeof(output);++i) {
+            for (unsigned i=1;i<sizeof(output);++i) {
+                if (i<=size || (i>=65 && i<69)) continue;
                 if (output[i]!=0xa7) return 2;
             }
         }
