@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -72,16 +73,36 @@ func TestTranslateX86PackedArithmeticRightShiftCompleteGoAssemblerForms(t *testi
 			if err != nil {
 				t.Fatal(err)
 			}
-			ll, err := Translate(file, Options{
+			options := Options{
 				TargetTriple: target.triple,
 				Goarch:       target.goarch,
 				Sigs: map[string]FuncSig{
 					"packedarithmeticrightshiftforms": {Name: "packedarithmeticrightshiftforms", Ret: Void},
 				},
-			})
-			if err != nil {
-				t.Fatal(err)
 			}
+			goAssemblerOracleOutput(t, target.goarch, strings.ReplaceAll(source.String(), "NOSPLIT", "4"), "", true)
+			for _, api := range []string{"text", "module", "Go"} {
+				original := strings.Replace(source.String(), "packedarithmeticrightshiftforms(SB)", "·view(SB)", 1)
+				if ir, err := x86ScalarFPBitViewAPI(t, original, "func view()", target.goarch, target.triple, api); ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+					t.Fatal("uninitialized original formats acquired MMX/numerical/native inputs", api, err)
+				}
+			}
+			if target.goarch == "386" {
+				// Go emits high-bank EVEX spellings in mode32, but those
+				// physical registers do not exist. Retain the original Go
+				// objects/Context above; LLVM format objects use this explicit
+				// low-bank counterpart, not an invented high-bank permission.
+				counterpart := strings.NewReplacer("X20", "X5", "X21", "X6", "Y20", "Y5", "Y21", "Y6").Replace(source.String())
+				goAssemblerOracleOutput(t, target.goarch, strings.ReplaceAll(counterpart, "NOSPLIT", "4"), "", true)
+				file, err = Parse(ArchAMD64, counterpart)
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+			ll := x86InstructionFormatObjectUnit(t, file, options.Sigs, target.goarch, target.triple, 0,
+				func(c *amd64Ctx, ins Instr) (bool, bool, error) {
+					return c.lowerPackedArithmeticRightShift(ins.Op, ins)
+				})
 			llc := findLLVM22Tool("llc")
 			if llc == "" {
 				t.Fatal("LLVM 22 llc not found")

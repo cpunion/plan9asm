@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -57,16 +58,23 @@ func TestTranslateX86PerLaneVariableShiftCompleteGoAssemblerForms(t *testing.T) 
 			if err != nil {
 				t.Fatal(err)
 			}
-			ll, err := Translate(file, Options{
+			options := Options{
 				TargetTriple: target.triple,
 				Goarch:       target.goarch,
 				Sigs: map[string]FuncSig{
 					"perlanevariableshiftforms": {Name: "perlanevariableshiftforms", Ret: Void},
 				},
-			})
-			if err != nil {
-				t.Fatal(err)
 			}
+			for _, api := range []string{"text", "module", "Go"} {
+				original := strings.Replace(source.String(), "perlanevariableshiftforms(SB)", "·view(SB)", 1)
+				if ir, err := x86ScalarFPBitViewAPI(t, original, "func view()", target.goarch, target.triple, api); ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+					t.Fatal("uninitialized original formats acquired numerical/native inputs", api, err)
+				}
+			}
+			ll := x86InstructionFormatObjectUnit(t, file, options.Sigs, target.goarch, target.triple, 0,
+				func(c *amd64Ctx, ins Instr) (bool, bool, error) {
+					return c.lowerPerLaneVariableShift(ins.Op, ins)
+				})
 			llc := findLLVM22Tool("llc")
 			if llc == "" {
 				t.Fatal("LLVM 22 llc not found")

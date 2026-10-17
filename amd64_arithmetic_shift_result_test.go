@@ -1,7 +1,9 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
+	"reflect"
 	"testing"
 )
 
@@ -119,6 +121,80 @@ func TestX86ArithmeticShiftEverySignBitDependency(t *testing.T) {
 					}
 				}
 			}
+		}
+	}
+}
+
+func TestX86ArithmeticShiftVoidInputsThreeAPIs(t *testing.T) {
+	for _, name := range x86ArithmeticShiftTestNames() {
+		row := name + " X0,X1"
+		if name[0] == 'V' {
+			row = name + " X0,X1,X2"
+		}
+		for _, api := range []string{"text", "module", "Go"} {
+			ir, err := x86ScalarFPBitViewAPI(t, "TEXT ·view(SB),4,$0-0\n"+row+"\nRET\n",
+				"func view()", "amd64", "x86_64-unknown-linux-gnu", api)
+			if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+				t.Errorf("undefined arithmetic inputs accepted: %s/%s: %v", row, api, err)
+			}
+		}
+	}
+}
+
+func TestX86ArithmeticShiftSignBytesMasksAndUpperAliases(t *testing.T) {
+	for _, row := range []string{
+		"PSRAW $127,X1", "PSRAL $127,X1", "VPSRAW $255,X1,X2",
+		"VPSRAD $255,Y1,Y2", "VPSRAQ $255,Z1,Z2",
+		"VPSRAW $255,X1,K1,X2", "VPSRAW.Z $255,X1,K1,X2",
+		"VPSRAD $255,Y1,K1,Y2", "VPSRAQ.Z $255,Z1,K1,Z2",
+	} {
+		ins := x86ScalarLaneInstruction(t, row)
+		form, known, err := x86PackedShiftProperties(ins.Op, ins, "amd64")
+		if !known || err != nil {
+			t.Fatal(row, err)
+		}
+		var signs uint64
+		for at := form.laneBits/8 - 1; at < form.byteWidth; at += form.laneBits / 8 {
+			signs |= uint64(1) << uint(at)
+		}
+		for hole := -1; hole < form.byteWidth; hole++ {
+			state := x86ResultState{flags: x86ByteFlagsAll, direction: x86ResultDirectionForward}
+			data := signs | 0xa55a000000000000
+			if hole >= 0 {
+				data &^= uint64(1) << uint(hole)
+			}
+			state.writeVector(1, 64, data, false)
+			state.writeVector(2, 64, 0x55aa55aa55aa55aa, false)
+			state.masks[1] = true
+			before := state.clone()
+			if !x86ResultTransfer(ins, &state, nil, 0, "amd64") {
+				t.Fatal("partial arithmetic shift transfer rejected", row, hole)
+			}
+			var expected uint64
+			for output := 0; output < form.byteWidth; output++ {
+				sign := output/(form.laneBits/8)*(form.laneBits/8) + form.laneBits/8 - 1
+				if before.vectorBytes(1)&(uint64(1)<<uint(sign)) != 0 {
+					expected |= uint64(1) << uint(output)
+				}
+			}
+			destination := 2
+			if form.legacy {
+				destination = 1
+			}
+			if form.mask >= 0 && !form.zeroing {
+				expected &= before.vectorBytes(destination)
+			}
+			want := before.clone()
+			want.writeVector(destination, form.byteWidth, expected, form.legacy)
+			if !reflect.DeepEqual(state, want) {
+				t.Fatal("sign dependency, mask, upper alias or unrelated state changed", row, hole)
+			}
+		}
+	}
+	for _, row := range []string{"VPSRAQ $-1,X1,X2", "VPSRAD $1.0,X1,X2", "VPSRAW $undefined,X1,X2"} {
+		ins := x86ScalarLaneInstruction(t, row)
+		if _, known, err := x86PackedShiftProperties(ins.Op, ins, "amd64"); !known || err == nil {
+			t.Fatal("invalid integer count acquired arithmetic grammar", row, err)
 		}
 	}
 }
