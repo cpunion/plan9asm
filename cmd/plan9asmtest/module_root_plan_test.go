@@ -6,33 +6,45 @@ import (
 )
 
 func TestModuleRootShardPartsAreExhaustiveAndDisjoint(t *testing.T) {
-	for _, count := range []int{1, 3, 8, 16, 32} {
-		parts, err := moduleRootShardParts(32, count)
-		if err != nil || len(parts) != count {
-			t.Fatalf("32/%d plan: %v %v", count, parts, err)
+	for _, shards := range []int{32, 64} {
+		counts := []int{1, 3, 8, 16, 32}
+		if shards == 64 {
+			counts = append(counts, 64)
 		}
-		seen := make([]int, 32)
-		for part, indices := range parts {
-			if len(indices) == 0 {
-				t.Fatalf("part %d has no global shard indices", part)
+		for _, count := range counts {
+			parts, err := moduleRootShardParts(shards, count)
+			if err != nil || len(parts) != count {
+				t.Fatalf("%d/%d plan: %v %v", shards, count, parts, err)
 			}
-			for _, index := range indices {
-				if index < 0 || index >= 32 || index%count != part {
-					t.Fatalf("part %d obtained foreign shard %d", part, index)
+			seen := make([]int, shards)
+			for part, indices := range parts {
+				if len(indices) == 0 {
+					t.Fatalf("part %d has no global shard indices", part)
 				}
-				seen[index]++
+				for _, index := range indices {
+					if index < 0 || index >= shards || index%count != part {
+						t.Fatalf("part %d obtained foreign shard %d", part, index)
+					}
+					seen[index]++
+				}
 			}
-		}
-		for index, owners := range seen {
-			if owners != 1 {
-				t.Fatalf("shard %d has %d owners", index, owners)
+			for index, owners := range seen {
+				if owners != 1 {
+					t.Fatalf("shard %d has %d owners", index, owners)
+				}
 			}
-		}
-		if count == 8 && !reflect.DeepEqual(parts[0], []int{0, 8, 16, 24}) {
-			t.Fatalf("CI root part zero changed original shard indices: %v", parts[0])
-		}
-		if count == 16 && !reflect.DeepEqual(parts[1], []int{1, 17}) {
-			t.Fatalf("race root part must fit one two-worker wave: %v", parts[1])
+			if shards == 32 && count == 8 && !reflect.DeepEqual(parts[0], []int{0, 8, 16, 24}) {
+				t.Fatalf("CI root part zero changed original shard indices: %v", parts[0])
+			}
+			if count == 16 {
+				want := []int{1, 17}
+				if shards == 64 {
+					want = append(want, 33, 49)
+				}
+				if !reflect.DeepEqual(parts[1], want) {
+					t.Fatalf("root part changed its complete shard ownership: %v", parts[1])
+				}
+			}
 		}
 	}
 	for _, invalid := range [][2]int{{0, 1}, {1025, 1}, {32, 0}, {32, -1}, {32, 33}} {

@@ -15,7 +15,7 @@ import (
 func runRootSplitFixture(t *testing.T, binary, dir, out, inputs, profile string, owner, part, count int) {
 	t.Helper()
 	args := []string{"-module", fmt.Sprintf("-module-root-partitions=%d", count), "-dir", dir, "-out", out,
-		"-shards=32", "-workers=2", "-timeout=2m"}
+		"-shards=64", "-workers=2", "-timeout=2m"}
 	if inputs != "" {
 		args = append(args, "-verify-module", inputs)
 	} else {
@@ -80,7 +80,7 @@ func TestModuleRootPartitionActualCompleteUnionAndCoverage(t *testing.T) {
 	}
 	if expected.Protocol != moduleRootPartsProtocol || expected.Status != "passed" || expected.RootPartitions != 16 ||
 		expected.RootInventory == nil || len(expected.RootInventory.Names) != 36 || len(expected.Packages) != 5 ||
-		expected.Packages[0].Shards != 32 {
+		expected.Packages[0].Shards != 64 {
 		t.Fatalf("complete fresh denominator/package union lost: %+v", expected)
 	}
 	data, err := os.ReadFile(profile)
@@ -96,7 +96,7 @@ func TestModuleRootPartitionActualCompleteUnionAndCoverage(t *testing.T) {
 		t.Fatalf("aggregate did not retain its own real complete root list: %v", err)
 	}
 	results, err := checkedModuleArtifacts(expected, inputs)
-	if err != nil || len(results) != 5 || len(results[0].rootCoverage) != 32 {
+	if err != nil || len(results) != 5 || len(results[0].rootCoverage) != 64 {
 		t.Fatalf("independent full raw-shard replay: %+v %v", results, err)
 	}
 

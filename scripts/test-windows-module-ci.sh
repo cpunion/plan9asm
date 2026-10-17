@@ -4,7 +4,7 @@ set -euo pipefail
 module=${1:?root, plan9asm or plan9asmll required}
 phase=${2:?execute or complete required}
 case "$module" in
-  root) directory=.; parts=16; shards=32 ;;
+  root) directory=.; parts=16; shards=64 ;;
   plan9asm|plan9asmll) directory="cmd/$module"; parts=4; shards=8 ;;
   *) echo 'unknown Windows module' >&2; exit 1 ;;
 esac
