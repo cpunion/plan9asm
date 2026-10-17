@@ -8,6 +8,9 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
 	"strings"
@@ -94,6 +97,34 @@ func moduleRootPartitionFixtureForShards(t *testing.T, shards int) string {
 		t.Fatal(err)
 	}
 	return dir
+}
+
+// Catch witness-generation mistakes without first executing every owner. The
+// complete CLI union below still independently lists and executes these roots.
+func TestModuleRootPartitionWitnessFixturesFillEveryShard(t *testing.T) {
+	for _, shards := range []int{32, 64} {
+		t.Run(fmt.Sprint(shards), func(t *testing.T) {
+			dir := moduleRootPartitionFixtureForShards(t, shards)
+			syntax, err := parser.ParseFile(token.NewFileSet(), filepath.Join(dir, "value_test.go"), nil, 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			seen := make([]int, shards)
+			for _, declaration := range syntax.Decls {
+				function, ok := declaration.(*ast.FuncDecl)
+				if !ok || !strings.HasPrefix(function.Name.Name, "TestRootShardWitness") {
+					continue
+				}
+				hash := sha256.Sum256([]byte(function.Name.Name))
+				seen[binary.BigEndian.Uint64(hash[:8])%uint64(shards)]++
+			}
+			for shard, count := range seen {
+				if count != 1 {
+					t.Fatal("each actual shard needs its own complete witness", shard, count)
+				}
+			}
+		})
+	}
 }
 
 func TestModuleRootPartitionCLIActualOwnedSubset(t *testing.T) {
