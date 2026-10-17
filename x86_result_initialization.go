@@ -453,7 +453,21 @@ func checkX86ResultSourceFlowWithTrapOnly(fn Func, initial x86ResultState, owned
 				label = arg.Ident
 			}
 			target, found := labels[label]
-			if arg.Kind != OpLabel && arg.Kind != OpIdent || !found {
+			if arg.Kind == OpMem {
+				// Named Go n(PC) counts source instructions, just as the
+				// emitter's flat block positions do. No raw/indirect address
+				// or external target may acquire this ordinary CFG edge.
+				memory := arg.Mem
+				found = x86ResultNamedPredicateInstruction(ins) &&
+					reflect.DeepEqual(memory, MemRef{Base: "PC", Off: memory.Off}) &&
+					memory.Off >= -int64(pc) && memory.Off < int64(len(instructions)-pc)
+				if found {
+					target = pc + int(memory.Off)
+				}
+			} else {
+				found = found && (arg.Kind == OpLabel || arg.Kind == OpIdent)
+			}
+			if !found {
 				return fail("indirect, external or unresolved branch")
 			}
 			if ins.Op == OpJMP {
