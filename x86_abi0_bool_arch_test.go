@@ -124,6 +124,25 @@ func TestX86AMD64CanonicalBoolDefaultArchitecture(t *testing.T) {
 	}
 }
 
+func TestX86AMD64CanonicalBoolKeepsManualRegisterTransport(t *testing.T) {
+	for _, arch := range []string{"", "amd64"} {
+		for _, instruction := range []string{"CALL", "JMP"} {
+			t.Run(arch+"/"+instruction, func(t *testing.T) {
+				file, err := Parse(ArchAMD64, "TEXT Manual(SB),4,$0-0\n"+instruction+" Outside(SB)\nRET\n")
+				if err != nil {
+					t.Fatal(err)
+				}
+				options := Options{Goarch: arch, TargetTriple: "x86_64-unknown-linux-gnu", Sigs: map[string]FuncSig{
+					"Manual": {Name: "Manual", Ret: I1}, "Outside": {Name: "Outside", Ret: I1},
+				}}
+				if source, err := prepareX86ABI0BoolCalls(file, options); source != nil || err != nil {
+					t.Fatal("manual register signature acquired an undeclared ABI0 byte frame", err)
+				}
+			})
+		}
+	}
+}
+
 func TestX86ABI0CanonicalBoolArchitectureAliasesAndCalls(t *testing.T) {
 	for _, target := range x86RawReturnTargets {
 		word, lea, move := x86ResultPointerWord(target.arch), "LEAQ", "MOVQ"
