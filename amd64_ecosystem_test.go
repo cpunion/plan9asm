@@ -601,7 +601,7 @@ func TestTranslateAMD64IncDecCompleteGoAssemblerForms(t *testing.T) {
 		fmt.Fprintf(&src, "\t%s (BX)\n", op)
 	}
 	src.WriteString("\tRET\n")
-	ll := translateAMD64EcosystemCase(t, src.String(), "incdecforms")
+	ll := x86UnboundVoidScalarFormatObject(t, src.String(), "incdecforms", "amd64", "x86_64-unknown-linux-gnu")
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc not found")
@@ -628,20 +628,7 @@ func TestTranslate386IncDecCompleteGoAssemblerForms(t *testing.T) {
 		fmt.Fprintf(&src, "\t%s SP\n", op)
 	}
 	src.WriteString("\tRET\n")
-	file, err := Parse(ArchAMD64, src.String())
-	if err != nil {
-		t.Fatal(err)
-	}
-	ll, err := Translate(file, Options{
-		TargetTriple: "i386-unknown-linux-gnu",
-		Goarch:       "386",
-		Sigs: map[string]FuncSig{
-			"incdecforms386": {Name: "incdecforms386", Ret: Void},
-		},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	ll := x86UnboundVoidScalarFormatObject(t, src.String(), "incdecforms386", "386", "i386-unknown-linux-gnu")
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc not found")
@@ -3560,7 +3547,7 @@ func TestTranslateAMD64BitwiseNotCompleteGoAssemblerForms(t *testing.T) {
 		}
 	}
 	src.WriteString("\tRET\n")
-	ll := translateAMD64EcosystemCase(t, src.String(), "bitwisenotforms")
+	ll := x86UnboundVoidScalarFormatObject(t, src.String(), "bitwisenotforms", "amd64", "x86_64-unknown-linux-gnu")
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc not found")
@@ -3584,20 +3571,7 @@ func TestTranslate386BitwiseNotCompleteGoAssemblerForms(t *testing.T) {
 		}
 	}
 	src.WriteString("\tRET\n")
-	file, err := Parse(ArchAMD64, src.String())
-	if err != nil {
-		t.Fatal(err)
-	}
-	ll, err := Translate(file, Options{
-		TargetTriple: "i386-unknown-linux-gnu",
-		Goarch:       "386",
-		Sigs: map[string]FuncSig{
-			"bitwisenot386forms": {Name: "bitwisenot386forms", Ret: Void},
-		},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	ll := x86UnboundVoidScalarFormatObject(t, src.String(), "bitwisenot386forms", "386", "i386-unknown-linux-gnu")
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc not found")
@@ -3907,7 +3881,7 @@ func TestTranslateAMD64ScalarAddSubCompleteGoAssemblerForms(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ll, err := Translate(file, Options{
+	options := Options{
 		TargetTriple: "x86_64-unknown-linux-gnu",
 		Goarch:       "amd64",
 		Sigs: map[string]FuncSig{
@@ -3923,10 +3897,12 @@ func TestTranslateAMD64ScalarAddSubCompleteGoAssemblerForms(t *testing.T) {
 				}},
 			},
 		},
-	})
-	if err != nil {
-		t.Fatal(err)
 	}
+	// Keep the original Go-accepted source and all public Context controls.
+	// Its synthetic FP offsets and incoming native registers are format
+	// witnesses, not an ordinary initialized ABI0 entry.
+	x86UnboundVoidFormatSource(t, src.String(), "scalaraddsubforms", "amd64", options.TargetTriple)
+	ll := x86ScalarFormatObjectUnit(t, file, options.Sigs, "amd64", options.TargetTriple, 0)
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc not found")
@@ -3963,7 +3939,7 @@ func TestTranslate386ScalarAddSubCompleteGoAssemblerForms(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ll, err := Translate(file, Options{
+	options := Options{
 		TargetTriple: "i386-unknown-linux-gnu",
 		Goarch:       "386",
 		Sigs: map[string]FuncSig{
@@ -3978,10 +3954,9 @@ func TestTranslate386ScalarAddSubCompleteGoAssemblerForms(t *testing.T) {
 				}},
 			},
 		},
-	})
-	if err != nil {
-		t.Fatal(err)
 	}
+	x86UnboundVoidFormatSource(t, src.String(), "scalaraddsubforms386", "386", options.TargetTriple)
+	ll := x86ScalarFormatObjectUnit(t, file, options.Sigs, "386", options.TargetTriple, 0)
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc not found")
