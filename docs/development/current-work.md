@@ -88,10 +88,24 @@ bounded CI priority. Its added lane requires the policy's exact lane count to
 move from55 to56; complete current-head CI and runtime remain unqualified.
 
 The next existing-CI counterexample is independently reproduced at `3fccf065`:
-the immediate packed-compare dead-memory owner fails73 terminals. Its emitters
-already retain volatile reads, but the shared result consumer lacks their
-conditional native input. The failed RED remains failed; another branch's
-complete24-name native comparison repair is not yet a qualified receipt.
+the immediate packed-compare dead-memory owner fails73 terminals. Independent
+RED at `c131e44e` also fails50 terminals across all five x86 object targets.
+The emitters already retain volatile reads; their shared typed result consumer
+now consumes only those paired conditional native inputs. At `eee2f66f`, all11
+changed/retained roots pass current Go, actual Go20 and race, with2,076 children
+per lane, matching terminal identities and unchanged source/tool observations.
+The independent24-name inventory retains168 AMD64 and60 mode32 native shapes,
+three APIs, both IR levels and backend O0/O2. Standalone, address, index, vector
+and mask boundaries remain strict. The FP-span fixture retains its original
+missing-vector source as Context and initializes every vector byte in its
+positive control; a zero mask does not supply those bytes. Both RED receipts
+remain failed. This is not original native execution or complete-module success.
+
+Fork run39018694673 is executing the published `9a107643` batch. Do not cancel
+it or push again until it finishes. The subsequent comparison batch is committed
+locally for the next consolidated update. PR40 remains draft at its older head.
+Its full current-head CI, complete36-owner conversion union, runtime counterparts,
+remaining complete-module failures and strict benchmark are still open.
 
 ## Closure queue, 2026-10-17
 
