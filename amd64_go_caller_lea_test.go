@@ -28,7 +28,9 @@ func x86LEAActualTargetGoObject(t *testing.T, arch, triple, source string) *x86L
 	ctx, cancel := runtimeOracleStageContext(t)
 	defer cancel()
 	driver, driverHash := x86LEAActualSDKDriver(t)
-	command := exec.CommandContext(ctx, driver, "tool", "asm", "-p", "sourceframe", "-o", filepath.Join(dir, "lea.o"), path)
+	include := filepath.Join(filepath.Dir(filepath.Dir(driver)), "pkg", "include")
+	command := exec.CommandContext(ctx, driver, "tool", "asm", "-I", include,
+		"-p", "sourceframe", "-o", filepath.Join(dir, "lea.o"), path)
 	command.Env = append(os.Environ(), "GOOS="+goos, "GOARCH="+arch, "CGO_ENABLED=0", "GOTOOLCHAIN=local", "GOENV=off", "GOWORK=off")
 	if output, err := runtimeOracleCombinedOutput(ctx, command); err != nil {
 		t.Fatalf("actual Go %s/%s LEA object: %v\n%s", goos, arch, err, output)
