@@ -60,22 +60,7 @@ func TestTranslateX86PackedSignedGreaterThanCompleteGoAssemblerForms(t *testing.
 				}
 			}
 			source.WriteString("\tRET\n")
-			x86LEAActualTargetGoObject(t, target.goarch, target.triple, source.String())
-
-			file, err := Parse(ArchAMD64, source.String())
-			if err != nil {
-				t.Fatal(err)
-			}
-			ll, err := Translate(file, Options{
-				TargetTriple: target.triple,
-				Goarch:       target.goarch,
-				Sigs: map[string]FuncSig{
-					"packedsignedgreaterthanforms": {Name: "packedsignedgreaterthanforms", Ret: Void},
-				},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			ll := x86UnboundVoidScalarFormatObject(t, source.String(), "packedsignedgreaterthanforms", target.goarch, target.triple)
 			llc := findLLVM22Tool("llc")
 			if llc == "" {
 				t.Fatal("LLVM 22 llc not found")

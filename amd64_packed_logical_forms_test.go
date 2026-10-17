@@ -169,15 +169,7 @@ func TestX86PackedLogicalCompleteGoRowsAndLLVMObjects(t *testing.T) {
 			source.WriteString("RET\n")
 			goSource.WriteString("RET\n")
 			requireX86GoAssemblerResult(t, target.arch, goSource.String(), true)
-			requireX86GoAssemblerResult(t, target.arch, source.String(), true)
-			file, err := Parse(ArchAMD64, source.String())
-			if err != nil {
-				t.Fatal(err)
-			}
-			ir, err := Translate(file, Options{Goarch: target.arch, TargetTriple: target.triple, Sigs: map[string]FuncSig{"logicalforms": {Name: "logicalforms", Ret: Void}}})
-			if err != nil {
-				t.Fatal(err)
-			}
+			ir := x86UnboundVoidScalarFormatObject(t, source.String(), "logicalforms", target.arch, target.triple)
 			compileLLVMToObject(t, llc, target.triple, "logical.ll", "logical.o", ir)
 		})
 	}

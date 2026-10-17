@@ -24,6 +24,12 @@ func x86TypedFPResultNeedsProof(fn Func, sig FuncSig, arch string) bool {
 	}
 	opaqueAddressResult := x86OpaqueAddressPointerResultRole(fn, sig, arch)
 	for ordinal, ins := range fn.Instrs {
+		if _, known, err := x86PackedLogicalProperties(ins, arch); known && err == nil {
+			return true // Dead logical results cannot excuse actual native inputs or masks.
+		}
+		if _, known, err := x86PackedIntegerCompareProperties(ins.Op, ins, arch); known && err == nil {
+			return true // EQ/GT share source obligations, not logical writeback or caller authority.
+		}
 		if _, known, err := x86PackedIntegerAddProperties(ins, arch); known && err == nil {
 			return true // Native add inputs/masks remain obligations without a result or unrelated KMOV.
 		}

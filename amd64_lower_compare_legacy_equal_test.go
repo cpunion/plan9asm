@@ -62,22 +62,7 @@ func TestTranslateX86LegacyPackedEqualityCompleteGoAssemblerForms(t *testing.T) 
 			fmt.Fprintf(&source, "\tPCMPEQQ X0, X%d\n", lastX)
 			fmt.Fprintf(&source, "\tPCMPEQQ 24(AX), X%d\n", lastX)
 			source.WriteString("\tRET\n")
-			x86LEAActualTargetGoObject(t, target.goarch, target.triple, source.String())
-
-			file, err := Parse(ArchAMD64, source.String())
-			if err != nil {
-				t.Fatal(err)
-			}
-			ll, err := Translate(file, Options{
-				TargetTriple: target.triple,
-				Goarch:       target.goarch,
-				Sigs: map[string]FuncSig{
-					"legacypackedequalityforms": {Name: "legacypackedequalityforms", Ret: Void},
-				},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			ll := x86UnboundVoidScalarFormatObject(t, source.String(), "legacypackedequalityforms", target.goarch, target.triple)
 			llc := findLLVM22Tool("llc")
 			if llc == "" {
 				t.Fatal("LLVM 22 llc not found")

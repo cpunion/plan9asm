@@ -39,19 +39,7 @@ func TestTranslateX86LegacyPackedLogicalCompleteGo127FormsAcrossTargets(t *testi
 				fmt.Fprintf(&source, "\t%s 16(AX), X%d\n", op, lastX)
 			}
 			source.WriteString("\tRET\n")
-			requireX86GoAssemblerResult(t, target.goarch, source.String(), true)
-			file, err := Parse(ArchAMD64, source.String())
-			if err != nil {
-				t.Fatal(err)
-			}
-			ir, err := Translate(file, Options{
-				Goarch:       target.goarch,
-				TargetTriple: target.triple,
-				Sigs:         map[string]FuncSig{"legacypackedlogicalforms": {Name: "legacypackedlogicalforms", Ret: Void}},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			ir := x86UnboundVoidScalarFormatObject(t, source.String(), "legacypackedlogicalforms", target.goarch, target.triple)
 			wantIR := []string{"and <16 x i8>", "or <16 x i8>", "xor <16 x i8>"}
 			if target.goarch == "amd64" {
 				wantIR = append(wantIR, "and i64", "or i64", "xor i64")
