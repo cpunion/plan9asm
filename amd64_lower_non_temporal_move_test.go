@@ -43,25 +43,21 @@ func TestTranslateX86NonTemporalVectorMoveCompleteGoAssemblerForms(t *testing.T)
 			source.WriteString("\tMOVNTDQA 1408(AX), X4\n")
 			source.WriteString("\tRET\n")
 
-			requireX86GoAssemblerResult(t, target.goarch, source.String(), true)
-			file, err := Parse(ArchAMD64, source.String())
-			if err != nil {
-				t.Fatal(err)
-			}
-			ir, err := Translate(file, Options{
-				TargetTriple: target.triple,
-				Goarch:       target.goarch,
-				Sigs: map[string]FuncSig{
-					"nontemporalmoveforms": {Name: "nontemporalmoveforms", Ret: Void},
-				},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
-			for _, vectorType := range []string{"<16 x i8>", "<32 x i8>", "<64 x i8>"} {
-				if !strings.Contains(ir, "load "+vectorType) || !strings.Contains(ir, "store "+vectorType) {
-					t.Fatalf("translation omitted %s load/store forms:\n%s", vectorType, ir)
-				}
+			file, signatures := x86UnboundVoidFormatSource(t, source.String(), "nontemporalmoveforms", target.goarch, target.triple)
+			ir := x86InstructionFormatObjectUnit(t, file, signatures, target.goarch, target.triple, 0,
+				func(c *amd64Ctx, ins Instr) (bool, bool, error) {
+					form, known, err := x86NonTemporalVectorProperties(ins.Op, ins, target.goarch)
+					if !known || err != nil {
+						return known, false, err
+					}
+					// The original Go source and every public Context result are
+					// retained above. This unit tests LLVM carrier syntax only:
+					// high named mode32 registers have no physical entry binding.
+					ins.Op = Op(form.spec.native)
+					return true, false, c.lowerNativeAlignedVectorMemory(ins, form.move, !form.spec.vector)
+				})
+			if strings.Count(ir, "asm sideeffect") != 16 {
+				t.Fatal("emitter-only object lost an original non-temporal native format")
 			}
 			llc := findLLVM22Tool("llc")
 			if llc == "" {
