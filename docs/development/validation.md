@@ -95,6 +95,13 @@ unchanged one-minute command limit. Each case still captures independent
 original sources, outputs, leases and revocable owners. Do not share those
 mutable observations or increase command budgets to hide cache setup costs.
 
+Fixed-local conversion objects keep all741 independent forms on each of three
+AMD64 targets. Twelve top-level batches per target retain64 functions each
+(37 in the last batch), all three APIs and both IR levels. The inventory policy
+requires every target/batch exactly once and at most three such owners per
+Windows hash shard. A passing batch is not a complete-target receipt: require
+the exact union of all twelve, without skipped or unfinished children.
+
 ```sh
 go run ./cmd/plan9asmtest -module -out _out/module-suite \
   -shards 32 -workers 2 -timeout 45m

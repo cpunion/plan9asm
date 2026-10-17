@@ -234,72 +234,282 @@ func TestGoAMD64FixedLocalConversionExactMemoryTuples(t *testing.T) {
 	}
 }
 
-func TestGoAMD64FixedLocalConversionActualObjects(t *testing.T) {
+func TestGoAMD64FixedLocalConversionActualObjectsLinuxBatch00(t *testing.T) {
+	fixedLocalConversionActualObjects(t, "linux/amd64", "x86_64-unknown-linux-gnu", 0)
+}
+
+func TestGoAMD64FixedLocalConversionActualObjectsLinuxBatch01(t *testing.T) {
+	fixedLocalConversionActualObjects(t, "linux/amd64", "x86_64-unknown-linux-gnu", 1)
+}
+
+func TestGoAMD64FixedLocalConversionActualObjectsLinuxBatch02(t *testing.T) {
+	fixedLocalConversionActualObjects(t, "linux/amd64", "x86_64-unknown-linux-gnu", 2)
+}
+
+func TestGoAMD64FixedLocalConversionActualObjectsLinuxBatch03(t *testing.T) {
+	fixedLocalConversionActualObjects(t, "linux/amd64", "x86_64-unknown-linux-gnu", 3)
+}
+
+func TestGoAMD64FixedLocalConversionActualObjectsLinuxBatch04(t *testing.T) {
+	fixedLocalConversionActualObjects(t, "linux/amd64", "x86_64-unknown-linux-gnu", 4)
+}
+
+func TestGoAMD64FixedLocalConversionActualObjectsLinuxBatch05(t *testing.T) {
+	fixedLocalConversionActualObjects(t, "linux/amd64", "x86_64-unknown-linux-gnu", 5)
+}
+
+func TestGoAMD64FixedLocalConversionActualObjectsLinuxBatch06(t *testing.T) {
+	fixedLocalConversionActualObjects(t, "linux/amd64", "x86_64-unknown-linux-gnu", 6)
+}
+
+func TestGoAMD64FixedLocalConversionActualObjectsLinuxBatch07(t *testing.T) {
+	fixedLocalConversionActualObjects(t, "linux/amd64", "x86_64-unknown-linux-gnu", 7)
+}
+
+func TestGoAMD64FixedLocalConversionActualObjectsLinuxBatch08(t *testing.T) {
+	fixedLocalConversionActualObjects(t, "linux/amd64", "x86_64-unknown-linux-gnu", 8)
+}
+
+func TestGoAMD64FixedLocalConversionActualObjectsLinuxBatch09(t *testing.T) {
+	fixedLocalConversionActualObjects(t, "linux/amd64", "x86_64-unknown-linux-gnu", 9)
+}
+
+func TestGoAMD64FixedLocalConversionActualObjectsLinuxBatch10(t *testing.T) {
+	fixedLocalConversionActualObjects(t, "linux/amd64", "x86_64-unknown-linux-gnu", 10)
+}
+
+func TestGoAMD64FixedLocalConversionActualObjectsLinuxBatch11(t *testing.T) {
+	fixedLocalConversionActualObjects(t, "linux/amd64", "x86_64-unknown-linux-gnu", 11)
+}
+
+func TestGoAMD64FixedLocalConversionActualObjectsDarwinBatch00(t *testing.T) {
+	fixedLocalConversionActualObjects(t, "darwin/amd64", "x86_64-apple-darwin", 0)
+}
+
+func TestGoAMD64FixedLocalConversionActualObjectsDarwinBatch01(t *testing.T) {
+	fixedLocalConversionActualObjects(t, "darwin/amd64", "x86_64-apple-darwin", 1)
+}
+
+func TestGoAMD64FixedLocalConversionActualObjectsDarwinBatch02(t *testing.T) {
+	fixedLocalConversionActualObjects(t, "darwin/amd64", "x86_64-apple-darwin", 2)
+}
+
+func TestGoAMD64FixedLocalConversionActualObjectsDarwinBatch03(t *testing.T) {
+	fixedLocalConversionActualObjects(t, "darwin/amd64", "x86_64-apple-darwin", 3)
+}
+
+func TestGoAMD64FixedLocalConversionActualObjectsDarwinBatch04(t *testing.T) {
+	fixedLocalConversionActualObjects(t, "darwin/amd64", "x86_64-apple-darwin", 4)
+}
+
+func TestGoAMD64FixedLocalConversionActualObjectsDarwinBatch05(t *testing.T) {
+	fixedLocalConversionActualObjects(t, "darwin/amd64", "x86_64-apple-darwin", 5)
+}
+
+func TestGoAMD64FixedLocalConversionActualObjectsDarwinBatch06(t *testing.T) {
+	fixedLocalConversionActualObjects(t, "darwin/amd64", "x86_64-apple-darwin", 6)
+}
+
+func TestGoAMD64FixedLocalConversionActualObjectsDarwinBatch07(t *testing.T) {
+	fixedLocalConversionActualObjects(t, "darwin/amd64", "x86_64-apple-darwin", 7)
+}
+
+func TestGoAMD64FixedLocalConversionActualObjectsDarwinBatch08(t *testing.T) {
+	fixedLocalConversionActualObjects(t, "darwin/amd64", "x86_64-apple-darwin", 8)
+}
+
+func TestGoAMD64FixedLocalConversionActualObjectsDarwinBatch09(t *testing.T) {
+	fixedLocalConversionActualObjects(t, "darwin/amd64", "x86_64-apple-darwin", 9)
+}
+
+func TestGoAMD64FixedLocalConversionActualObjectsDarwinBatch10(t *testing.T) {
+	fixedLocalConversionActualObjects(t, "darwin/amd64", "x86_64-apple-darwin", 10)
+}
+
+func TestGoAMD64FixedLocalConversionActualObjectsDarwinBatch11(t *testing.T) {
+	fixedLocalConversionActualObjects(t, "darwin/amd64", "x86_64-apple-darwin", 11)
+}
+
+func TestGoAMD64FixedLocalConversionActualObjectsWindowsBatch00(t *testing.T) {
+	fixedLocalConversionActualObjects(t, "windows/amd64", "x86_64-pc-windows-msvc", 0)
+}
+
+func TestGoAMD64FixedLocalConversionActualObjectsWindowsBatch01(t *testing.T) {
+	fixedLocalConversionActualObjects(t, "windows/amd64", "x86_64-pc-windows-msvc", 1)
+}
+
+func TestGoAMD64FixedLocalConversionActualObjectsWindowsBatch02(t *testing.T) {
+	fixedLocalConversionActualObjects(t, "windows/amd64", "x86_64-pc-windows-msvc", 2)
+}
+
+func TestGoAMD64FixedLocalConversionActualObjectsWindowsBatch03(t *testing.T) {
+	fixedLocalConversionActualObjects(t, "windows/amd64", "x86_64-pc-windows-msvc", 3)
+}
+
+func TestGoAMD64FixedLocalConversionActualObjectsWindowsBatch04(t *testing.T) {
+	fixedLocalConversionActualObjects(t, "windows/amd64", "x86_64-pc-windows-msvc", 4)
+}
+
+func TestGoAMD64FixedLocalConversionActualObjectsWindowsBatch05(t *testing.T) {
+	fixedLocalConversionActualObjects(t, "windows/amd64", "x86_64-pc-windows-msvc", 5)
+}
+
+func TestGoAMD64FixedLocalConversionActualObjectsWindowsBatch06(t *testing.T) {
+	fixedLocalConversionActualObjects(t, "windows/amd64", "x86_64-pc-windows-msvc", 6)
+}
+
+func TestGoAMD64FixedLocalConversionActualObjectsWindowsBatch07(t *testing.T) {
+	fixedLocalConversionActualObjects(t, "windows/amd64", "x86_64-pc-windows-msvc", 7)
+}
+
+func TestGoAMD64FixedLocalConversionActualObjectsWindowsBatch08(t *testing.T) {
+	fixedLocalConversionActualObjects(t, "windows/amd64", "x86_64-pc-windows-msvc", 8)
+}
+
+func TestGoAMD64FixedLocalConversionActualObjectsWindowsBatch09(t *testing.T) {
+	fixedLocalConversionActualObjects(t, "windows/amd64", "x86_64-pc-windows-msvc", 9)
+}
+
+func TestGoAMD64FixedLocalConversionActualObjectsWindowsBatch10(t *testing.T) {
+	fixedLocalConversionActualObjects(t, "windows/amd64", "x86_64-pc-windows-msvc", 10)
+}
+
+func TestGoAMD64FixedLocalConversionActualObjectsWindowsBatch11(t *testing.T) {
+	fixedLocalConversionActualObjects(t, "windows/amd64", "x86_64-pc-windows-msvc", 11)
+}
+
+func fixedLocalConversionBatchRange(total, batch int) (start, end int, ok bool) {
+	const size = 64
+	if total <= 0 || batch < 0 || batch >= (total+size-1)/size {
+		return 0, 0, false
+	}
+	start, end = batch*size, (batch+1)*size
+	if end > total {
+		end = total
+	}
+	return start, end, true
+}
+
+func TestGoAMD64FixedLocalConversionObjectBatchPlan(t *testing.T) {
+	rows := fixedLocalConversionOperations()
+	if len(rows) != 741 {
+		t.Fatal("complete independent conversion inventory changed", len(rows))
+	}
+	seen := make([]int, len(rows))
+	for batch := 0; batch < 12; batch++ {
+		start, end, ok := fixedLocalConversionBatchRange(len(rows), batch)
+		if !ok || end-start > 64 || end <= start {
+			t.Fatal("invalid independent conversion batch", batch, start, end, ok)
+		}
+		for index := start; index < end; index++ {
+			seen[index]++
+		}
+	}
+	for index, count := range seen {
+		if count != 1 {
+			t.Fatal("missing or duplicated original conversion form", index, rows[index], count)
+		}
+	}
+	for _, input := range [][2]int{{0, 0}, {741, -1}, {741, 12}} {
+		if _, _, ok := fixedLocalConversionBatchRange(input[0], input[1]); ok {
+			t.Fatal("invalid conversion batch accepted", input)
+		}
+	}
+}
+
+func fixedLocalConversionActualObjects(t *testing.T, target, triple string, batch int) {
+	t.Helper()
+	// Go 1.27 builds objdump into GOCACHE. Reuse this batch's test-owned
+	// compiler cache, not its independent source, object or lifetime records.
+	t.Setenv("GOCACHE", t.TempDir())
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc required")
 	}
 	rows := fixedLocalConversionOperations()
-	for _, target := range []struct{ name, triple string }{
-		{"linux/amd64", "x86_64-unknown-linux-gnu"},
-		{"darwin/amd64", "x86_64-apple-darwin"},
-		{"windows/amd64", "x86_64-pc-windows-msvc"},
-	} {
-		seen := 0
-		for start := 0; start < len(rows); start += 64 {
-			end := start + 64
-			if end > len(rows) {
-				end = len(rows)
-			}
-			seen += end - start
-			t.Run(fmt.Sprintf("%s/batch%d", target.name, start/64), func(t *testing.T) {
-				var assembly, declarations strings.Builder
-				for index := start; index < end; index++ {
-					name := fmt.Sprintf("Value%d", index)
-					body := fixedLocalPackedAssembly(fixedLocalConversionOperation(rows[index]))
-					assembly.WriteString(strings.Replace(body, "·Value", "·"+name, 1))
-					fmt.Fprintf(&declarations, "func %s(a uint64) uint64\n", name)
-				}
-				pkg, request, file, options := x86CMOVFixedLocalFixture(t,
-					assembly.String(), declarations.String(), target.name, target.triple)
-				source := requireGoAMD64FrameCapture(t, pkg, request)
-				// Match the actual producer's complete CPP output, including
-				// spaces before opcode suffix tokens. Keep the original file
-				// unchanged; its raw text is part of the binding fingerprint.
-				expanded, err := source.preprocess(request.AssemblyFile, []byte(assembly.String()))
-				if err != nil {
-					t.Fatal(err)
-				}
-				file, err = Parse(ArchAMD64, expanded)
-				if err != nil {
-					t.Fatal(err)
-				}
-				ctx, cancel := runtimeOracleStageContext(t)
-				defer cancel()
-				bound, err := source.BindFixedLocal(ctx, pkg, file, options)
-				if err != nil {
-					t.Fatal(err)
-				}
-				fixedLocalAPIs(t, pkg, file, bound, func(t *testing.T, ir string, err error) {
-					if err != nil {
-						t.Fatal(err)
-					}
-					if !strings.Contains(ir, "fixed_local_native") || !strings.Contains(ir, "asm sideeffect") {
-						t.Fatal("conversion did not consume native private backing")
-					}
-					for _, optimize := range []bool{false, true} {
-						input := ir
-						if optimize {
-							input = x86MulDivRoundOptimize(t, ir)
-						}
-						compileLLVMToObject(t, llc, target.triple, "frame-conversion.ll", "frame-conversion.o", input)
-					}
-				})
-			})
+	start, end, ok := fixedLocalConversionBatchRange(len(rows), batch)
+	if !ok {
+		t.Fatal("invalid complete conversion object batch", batch, len(rows))
+	}
+	t.Run(fmt.Sprintf("batch%d", batch), func(t *testing.T) {
+		var assembly, declarations strings.Builder
+		var names []string
+		for index := start; index < end; index++ {
+			name := fmt.Sprintf("Value%d", index)
+			body := fixedLocalPackedAssembly(fixedLocalConversionOperation(rows[index]))
+			assembly.WriteString(strings.Replace(body, "·Value", "·"+name, 1))
+			fmt.Fprintf(&declarations, "func %s(a uint64) uint64\n", name)
+			names = append(names, "example.invalid/framefixture."+name)
 		}
-		if seen != len(rows) {
-			t.Fatalf("%s covered %d/%d conversion forms", target.name, seen, len(rows))
+		pkg, request, file, options := x86CMOVFixedLocalFixture(t,
+			assembly.String(), declarations.String(), target, triple)
+		source := requireGoAMD64FrameCapture(t, pkg, request)
+		// Match the actual producer's complete CPP output, including
+		// spaces before opcode suffix tokens. Keep the original file
+		// unchanged; its raw text is part of the binding fingerprint.
+		expanded, err := source.preprocess(request.AssemblyFile, []byte(assembly.String()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		file, err = Parse(ArchAMD64, expanded)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ctx, cancel := runtimeOracleStageContext(t)
+		defer cancel()
+		bound, err := source.BindFixedLocal(ctx, pkg, file, options)
+		if err != nil {
+			t.Fatal(err)
+		}
+		fixedLocalAPIs(t, pkg, file, bound, func(t *testing.T, ir string, err error) {
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(ir, "fixed_local_native") || !strings.Contains(ir, "asm sideeffect") {
+				t.Fatal("conversion did not consume native private backing")
+			}
+			for _, optimize := range []bool{false, true} {
+				input := ir
+				if optimize {
+					input = x86MulDivRoundOptimize(t, ir)
+				}
+				x86CompactExpandRequireAllDefinitions(t, input, names)
+				compileLLVMToObject(t, llc, triple, "frame-conversion.ll", "frame-conversion.o", input)
+			}
+		})
+	})
+	t.Logf("%s batch%d: %d/%d forms, three LLVM APIs, O0/O2", target, batch, end-start, len(rows))
+}
+
+func TestGoAMD64FixedLocalConversionSharedCacheKeepsSourcesIndependent(t *testing.T) {
+	cache := t.TempDir()
+	t.Setenv("GOCACHE", cache)
+	for _, key := range []string{"GOPATH", "GOMODCACHE", "TMPDIR", "GOTMPDIR"} {
+		t.Setenv(key, "")
+	}
+	const assembly = "TEXT ·Value(SB),4,$0-16\nMOVQ a+0(FP),AX\nMOVQ AX,ret+8(FP)\nRET\n"
+	first, a, _, _ := x86CMOVFixedLocalFixture(t, assembly, "func Value(a uint64) uint64",
+		"linux/amd64", "x86_64-unknown-linux-gnu")
+	second, b, _, _ := x86CMOVFixedLocalFixture(t, assembly, "func Value(a uint64) uint64",
+		"linux/amd64", "x86_64-unknown-linux-gnu")
+	values := func(request GoAMD64FrameCaptureRequest) map[string]string {
+		environment := make(map[string]string)
+		for _, entry := range request.Environment {
+			key, value, _ := strings.Cut(entry, "=")
+			environment[key] = value
+		}
+		return environment
+	}
+	left, right := values(a), values(b)
+	if left["GOCACHE"] != cache || right["GOCACHE"] != cache {
+		t.Fatal("batch fixtures did not inherit their parent's owned build cache")
+	}
+	for _, key := range []string{"GOPATH", "GOMODCACHE", "TMPDIR", "GOTMPDIR"} {
+		if left[key] == "" || left[key] == right[key] || left[key] == cache || right[key] == cache {
+			t.Fatal("independent source observations shared private state", key)
 		}
 	}
-	t.Logf("complete object plan: %d forms, three actual-Go targets, three LLVM APIs, O0/O2", len(rows))
+	if a.Directory == b.Directory || first.Types == second.Types {
+		t.Fatal("sharing compiler artifacts reused an original source or typed package")
+	}
 }
