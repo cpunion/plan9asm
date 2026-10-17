@@ -41,16 +41,21 @@ func TestX86BEXTRTypedByteEffectExactInputs(t *testing.T) {
 }
 
 func TestX86BEXTRCompleteInitializedSourceObjects(t *testing.T) {
+	x86BitFieldInitializedSourceObjects(t, []string{"BEXTRL", "BEXTRQ"}, "uint16", "MOVW")
+}
+
+func x86BitFieldInitializedSourceObjects(t *testing.T, operations []string, controlType, controlMove string) {
+	t.Helper()
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("complete BEXTR objects require LLVM22 llc")
 	}
 	for _, target := range x86RawReturnTargets {
-		for _, op := range []string{"BEXTRL", "BEXTRQ"} {
+		for _, op := range operations {
 			for _, native := range []bool{false, true} {
 				t.Run(fmt.Sprintf("%s/%s/native%t", target.triple, op, native), func(t *testing.T) {
 					width, typ, move := 4, "uint32", "MOVL"
-					if target.arch == "amd64" && op == "BEXTRQ" {
+					if target.arch == "amd64" && strings.HasSuffix(op, "Q") {
 						width, typ, move = 8, "uint64", "MOVQ"
 					}
 					offset, result, input, load := width, 2*width, "BX", move
@@ -65,20 +70,20 @@ func TestX86BEXTRCompleteInitializedSourceObjects(t *testing.T) {
 							load = "MOVL"
 						}
 					}
-					declaration := fmt.Sprintf("func Value(control uint16, source %s) %s", parameter, typ)
-					body := fmt.Sprintf("MOVW control+0(FP),AX\n%s source+%d(FP),BX\n%s AX,%s,CX\n%s CX,ret0+%d(FP)\nRET\n",
-						load, offset, op, input, move, result)
+					declaration := fmt.Sprintf("func Value(control %s, source %s) %s", controlType, parameter, typ)
+					body := fmt.Sprintf("%s control+0(FP),AX\n%s source+%d(FP),BX\n%s AX,%s,CX\n%s CX,ret0+%d(FP)\nRET\n",
+						controlMove, load, offset, op, input, move, result)
 					_, _, _, source := x86ResultInitializationFixture(t, target.arch, declaration, body)
 					x86LEAActualTargetGoObject(t, target.arch, target.triple, source)
 					for _, api := range []string{"text", "module", "Go"} {
 						t.Run(api, func(t *testing.T) {
 							ir, err := x86ScalarFPBitViewAPI(t, source, declaration, target.arch, target.triple, api)
 							if err != nil || ir == "" {
-								t.Fatal("initialized complete BEXTR source remains unclosed", err)
+								t.Fatal("initialized complete bit-field source remains unclosed", op, err)
 							}
 							for _, text := range []string{ir, x86MulDivRoundOptimize(t, ir)} {
 								if native && !strings.Contains(text, fmt.Sprintf("load volatile i%d, ptr", width*8)) {
-									t.Fatal("BEXTR lost its exact observable native read, including mode32 Q", width)
+									t.Fatal("bit-field operation lost its exact native read, including mode32 Q", op, width)
 								}
 								for _, level := range []string{"-O0", "-O2"} {
 									x86PackedStringCompileObject(t, llc, target.triple, text, level)

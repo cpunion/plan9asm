@@ -48,14 +48,12 @@ func TestTranslateX86BZHICompleteGo127FormsAcrossTargets(t *testing.T) {
 			requireX86GoAssemblerResult(t, target.goarch, source, true)
 			// Preserve every original format, including its unbound registers
 			// and mode32 SP destination. These are not complete source entries.
-			file, signatures := x86UnboundVoidFormatSource(t, source, "bzhiforms", target.goarch, target.triple)
-			ir := x86InstructionFormatObjectUnit(t, file, signatures, target.goarch, target.triple, 0,
-				func(c *amd64Ctx, instruction Instr) (bool, bool, error) {
-					return c.lowerBZHI(instruction.Op, instruction)
-				})
+			ir := x86UnboundVoidScalarFormatObject(t, source, "bzhiforms", target.goarch, target.triple)
 			wants := []string{"shl i32", `"target-features"="+bmi2"`}
 			if target.goarch == "amd64" {
 				wants = append(wants, "shl i64")
+			} else if strings.Contains(ir, "shl i64") {
+				t.Fatal("mode32 Q spelling used a fictitious 64-bit zero-high operation")
 			}
 			for _, want := range wants {
 				if !strings.Contains(ir, want) {

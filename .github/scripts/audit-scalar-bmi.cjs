@@ -7,6 +7,7 @@ const {auditNativeOwners} = require('./audit-native-owners.cjs');
 const roots = [
   'TestAMD64BLSRuntimeSemantics',
   'TestAMD64BEXTRRuntimeSemanticsAndFlags',
+  'TestAMD64BZHIRuntimeSemanticsAndFlags',
 ];
 const auditScalarBMI = (inventory, raw) => auditNativeOwners(inventory, raw, roots, []);
 

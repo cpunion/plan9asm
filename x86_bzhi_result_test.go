@@ -70,6 +70,10 @@ func TestX86BZHICompleteGoRowsAndPhysicalInputs(t *testing.T) {
 	}
 }
 
+func TestX86BZHICompleteInitializedSourceObjects(t *testing.T) {
+	x86BitFieldInitializedSourceObjects(t, []string{"BZHIL", "BZHIQ"}, "byte", "MOVB")
+}
+
 func TestX86BZHIVoidAndUnusedBoolCannotInventInputs(t *testing.T) {
 	for _, target := range x86RawReturnTargets {
 		for _, op := range []string{"BZHIL", "BZHIQ"} {

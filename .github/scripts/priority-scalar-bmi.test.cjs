@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const test = require('node:test');
 const {auditScalarBMI, roots} = require('./audit-scalar-bmi.cjs');
 
-test('BLS and BEXTR runtime repairs have a required native Linux execution owner', () => {
+test('BLS, BEXTR and BZHI runtime repairs have a required native Linux execution owner', () => {
   const workflow = fs.readFileSync('.github/workflows/pr40-owned-process-probe.yml', 'utf8');
   const job = workflow.slice(workflow.indexOf('  native-x86-oracles:'), workflow.indexOf('\n  complete-windows:'));
   assert.match(job, /runs-on: ubuntu-latest/);
@@ -25,7 +25,7 @@ test('native scalar BMI execution cannot be replaced by skips, output text or an
   const raw = values => values.map(JSON.stringify).join('\n') + '\n';
   const inventory = roots.join('\n') + '\n';
   assert.deepEqual(auditScalarBMI(inventory, raw(events)),
-    {roots:2, children:0, passed:2, skipped:0, incomplete:0});
+    {roots:3, children:0, passed:3, skipped:0, incomplete:0});
   for (const root of roots) {
     assert.throws(() => auditScalarBMI(inventory, raw(events.filter(event => event.Test !== root))));
     assert.throws(() => auditScalarBMI(inventory, raw(events.map(event =>
