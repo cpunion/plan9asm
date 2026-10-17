@@ -2,9 +2,8 @@
 
 ## Bool and pointer-CAS closing batch, 2026-10-17
 
-The allowed-fork run39006691606 at `b38f28e5` has passed all63 prerequisite
-jobs, but complete Windows root and rich-CLI partitions fail. Let that run
-finish naturally before a consolidated push. PR40 still has its older draft
+The allowed-fork run39006691606 at `b38f28e5` finished naturally:77 jobs pass
+and19 fail, including complete Windows root and rich-CLI partitions. PR40 still has its older draft
 contribution head; prerequisite success is not a complete-module or benchmark
 pass. No inventory restart or external-ledger credit is part of this batch.
 
@@ -38,21 +37,35 @@ refactoring project. Preserve failed reports as failed and keep LLVM22 only.
 
 ## Complete-module repair candidate, 2026-10-17
 
-Download every failed full-module artifact from run39006691606 before claiming
-the final failure denominator. At `23bd0332`, independent RED reproduces missing
+All failed full-module artifacts from run39006691606 are retained. The Windows
+root plan has6,866 roots:6,202 pass,194 fail,257 skip,212 unattempted and one
+unterminated. The rich CLI has one additional failed root. None of those skips
+or incomplete roots is a pass. At `23bd0332`, independent RED reproduces missing
 paired native add/sub result effects on all five x86 targets and all three APIs.
 Its five retained probe/register/timestamp roots pass, but the complete RED
 suite remains failed. The earlier cold inventory timeout is not test evidence.
 
-The next candidate connects all16 existing typed add/sub members to the existing
+At `5ccbf9ea`, all18 changed/retained roots pass current Go, actual Go20 and
+race with1,486 children per lane, identical terminal sets and unchanged source/
+tool observations. All126 CI policies pass. This connects all16 existing typed add/sub members to the existing
 conditional-read consumer without changing standalone queries or adding another
 admission mechanism. Complete initialized native, broadcast, mask, merge and
 result objects retain both modes and the existing byte dependencies. Its Void
 negative uses the existing KMOV whole-source route. The RED's separate unmasked
 Void admission counterexample remains unaddressed, not a repair receipt.
 The packed-compare observer now captures LAHF before masking the popped status
-word; unmodeled RFLAGS control bits are not numerical data. Compile/runtime,
-current/historical SDK, race and full-module qualifications remain required.
+word; unmodeled RFLAGS control bits are not numerical data. Complete modules,
+runtime counterparts, final gates and the strict benchmark remain required.
+
+The conversion-object root exhausted the Windows30-minute shard deadline during
+its first platform. Three independently owned target roots retain all741 forms,
+three APIs and O0/O2. Smaller eight-function units alone still time out locally
+at `913de1a9`; that failed receipt remains failed. The live child is repeatedly
+building Go1.27's objdump in new per-batch caches. A regression first rejects
+the missing parent cache; the candidate now uses one target-test-owned GOCACHE.
+Source, typed package, module/temp directories and actual object observations
+remain independent, and every generated function must survive both IR levels.
+The complete object matrix and actual runtime improvement are not yet qualified.
 
 ## Closure queue, 2026-10-17
 

@@ -268,11 +268,13 @@ func fixedLocalConversionActualObjects(t *testing.T, target, triple string) {
 		seen += end - start
 		t.Run(fmt.Sprintf("batch%d", start/batchSize), func(t *testing.T) {
 			var assembly, declarations strings.Builder
+			var names []string
 			for index := start; index < end; index++ {
 				name := fmt.Sprintf("Value%d", index)
 				body := fixedLocalPackedAssembly(fixedLocalConversionOperation(rows[index]))
 				assembly.WriteString(strings.Replace(body, "·Value", "·"+name, 1))
 				fmt.Fprintf(&declarations, "func %s(a uint64) uint64\n", name)
+				names = append(names, "example.invalid/framefixture."+name)
 			}
 			pkg, request, file, options := x86CMOVFixedLocalFixture(t,
 				assembly.String(), declarations.String(), target, triple)
@@ -306,6 +308,7 @@ func fixedLocalConversionActualObjects(t *testing.T, target, triple string) {
 					if optimize {
 						input = x86MulDivRoundOptimize(t, ir)
 					}
+					x86CompactExpandRequireAllDefinitions(t, input, names)
 					compileLLVMToObject(t, llc, triple, "frame-conversion.ll", "frame-conversion.o", input)
 				}
 			})
