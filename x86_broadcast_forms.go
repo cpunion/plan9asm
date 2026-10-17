@@ -119,7 +119,7 @@ func x86ResultBroadcastStepWithRead(ins Instr, state *x86ResultState, owned []bo
 	if !known {
 		return false, false
 	}
-	if err != nil || f.kind == x86BroadcastMask {
+	if err != nil {
 		return false, true
 	}
 	dst, valid := amd64VectorRegisterIndex(ins.Args[f.destination].Reg, f.byteWidth)
@@ -134,7 +134,12 @@ func x86ResultBroadcastStepWithRead(ins Instr, state *x86ResultState, owned []bo
 	}
 	required := x86CallerVectorByteMask(int64(f.sourceBytes))
 	src := ins.Args[0]
-	if src.Kind != OpReg {
+	if f.kind == x86BroadcastMask {
+		mask, valid := amd64ParseKReg(src.Reg)
+		if !valid || !state.masks[mask] {
+			return false, true
+		}
+	} else if src.Kind != OpReg {
 		// Reuse the exact initialized FP/AUTO bytes or the lowering-only
 		// same-file DATA extent. The tuple is the scalar/block input, not
 		// the wider destination. A mask cannot waive any potential input.
