@@ -33,8 +33,9 @@ func x86IntegerSelfCompareCases(arch string) []x86IntegerSelfCompareCase {
 			}
 		}
 		for _, bank := range []string{"X", "Y", "Z"} {
+			width := map[string]int{"X": 16, "Y": 32, "Z": 64}[bank]
 			rows = append(rows, x86IntegerSelfCompareCase{
-				row: fmt.Sprintf("%s %s6,%s6,K0", vector, bank, bank), maskResult: true,
+				row: fmt.Sprintf("%s %s6,%s6,K0", vector, bank, bank), width: width, maskResult: true,
 			})
 			if arch == "amd64" {
 				for _, maskAlias := range []bool{false, true} {
@@ -43,8 +44,8 @@ func x86IntegerSelfCompareCases(arch string) []x86IntegerSelfCompareCase {
 						destination = "K1"
 					}
 					rows = append(rows, x86IntegerSelfCompareCase{
-						row:        fmt.Sprintf("%s %s6,%s6,K1,%s", vector, bank, bank, destination),
-						maskResult: true, masked: true, maskAlias: maskAlias,
+						row:   fmt.Sprintf("%s %s6,%s6,K1,%s", vector, bank, bank, destination),
+						width: width, maskResult: true, masked: true, maskAlias: maskAlias,
 					})
 				}
 			}
@@ -60,8 +61,8 @@ func x86IntegerSelfCompareCases(arch string) []x86IntegerSelfCompareCase {
 							mask = "K1,"
 						}
 						rows = append(rows, x86IntegerSelfCompareCase{
-							row:        fmt.Sprintf("%s $%d,%s6,%s6,%sK0", op, immediate, bank, bank, mask),
-							maskResult: true, masked: masked,
+							row:   fmt.Sprintf("%s $%d,%s6,%s6,%sK0", op, immediate, bank, bank, mask),
+							width: map[string]int{"X": 16, "Y": 32, "Z": 64}[bank], maskResult: true, masked: masked,
 						})
 					}
 				}
@@ -69,6 +70,42 @@ func x86IntegerSelfCompareCases(arch string) []x86IntegerSelfCompareCase {
 		}
 	}
 	return rows
+}
+
+func TestX86IntegerSelfCompareIndependentImmediateAndBankAxes(t *testing.T) {
+	for _, op := range x86ImmediateCompareResultMembers {
+		for _, bank := range []string{"X", "Y", "Z"} {
+			t.Run(op+"/"+bank, func(t *testing.T) {
+				var source strings.Builder
+				source.WriteString("TEXT f(SB),4,$0-0\n")
+				check := func(immediate, register int) {
+					row := fmt.Sprintf("%s $%d,%s%d,%s%d,K0", op, immediate, bank, register, bank, register)
+					ins := x86ScalarLaneInstruction(t, row)
+					state := x86ResultState{}
+					if !x86ResultTransfer(ins, &state, nil, 0, "amd64") || !state.masks[0] {
+						t.Fatal("independent imm8/register axis lost its same-view result", row)
+					}
+					source.WriteString(row + "\n")
+				}
+				for immediate := 0; immediate < 256; immediate++ {
+					check(immediate, 6)
+				}
+				for register := 0; register < 32; register++ {
+					check(0, register)
+				}
+				source.WriteString("RET\n")
+				code := x86PackedShiftActualGoBytes(t, "amd64", source.String())
+				if len(code) != (256+32)*7+1 || code[len(code)-1] != 0xc3 {
+					t.Fatal("original complete EVEX register/imm8 byte layout changed", len(code))
+				}
+				for immediate := 0; immediate < 256; immediate++ {
+					if code[7*immediate] != 0x62 || code[7*immediate+6] != byte(immediate) {
+						t.Fatal("original Go encoded a different imm8", immediate)
+					}
+				}
+			})
+		}
+	}
 }
 
 func TestX86IntegerSelfCompareCompleteNumericalEffects(t *testing.T) {
