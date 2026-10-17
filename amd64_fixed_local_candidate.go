@@ -17,6 +17,8 @@ func GoAMD64FixedLocalFrameBindingNeeded(file *File, goarch string) bool {
 				memory, eligible = form.memory, err == nil && !form.mmx
 			} else if form, known, err := amd64PackedVectorMoveProperties(ins, goarch); known {
 				memory, eligible = form.memory, err == nil && form.spec.aligned && !form.undefinedOpcode()
+			} else if form, known, err := x86NonTemporalVectorProperties(ins.Op, ins, goarch); known {
+				memory, eligible = form.move.memory, err == nil && !form.trap
 			} else if form, known, err := x86LegacyPackedMoveProperties(ins.Op, ins, goarch); known {
 				memory, eligible = form.memory, err == nil && form.aligned
 			} else if form, known, err := x86AESProperties(ins.Op, ins, goarch); known {

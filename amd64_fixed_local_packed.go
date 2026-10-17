@@ -8,6 +8,15 @@ func fixedLocalPackedMoveStep(ins *Instr, state *x86FixedLocalState, proof *x86F
 	legacy := false
 	alignment := int64(1)
 	if !known {
+		if original, recognized, originalErr := x86NonTemporalVectorProperties(ins.Op, *ins, "amd64"); recognized {
+			known, err, legacy = true, originalErr, !original.spec.vector
+			form = original.move
+			if original.trap {
+				return true, goAMD64FrameContext("fixed local non-temporal move has no numerical continuation")
+			}
+		}
+	}
+	if !known {
 		original, recognized, originalErr := x86LegacyPackedMoveProperties(ins.Op, *ins, "amd64")
 		if !recognized {
 			return false, nil

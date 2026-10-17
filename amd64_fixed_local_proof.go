@@ -189,6 +189,9 @@ func fixedLocalInstructionShape(ins Instr) bool {
 	if _, known, err := amd64PackedVectorMoveProperties(ins, "amd64"); known {
 		return err == nil
 	}
+	if form, known, err := x86NonTemporalVectorProperties(ins.Op, ins, "amd64"); known {
+		return err == nil && !form.trap
+	}
 	if _, known, err := x86LegacyPackedMoveProperties(ins.Op, ins, "amd64"); known {
 		return err == nil
 	}
