@@ -42,8 +42,8 @@ func x86ABI0BoolTailTarget(fn Func) (string, bool) {
 	return name, valid && offset == 0 && !strings.Contains(name, "<")
 }
 
-func x86ABI0BoolTailTransport(left, right FuncSig) bool {
-	if !x86ABI0BoolDeclarationRole(left, "386") || !x86ABI0BoolDeclarationRole(right, "386") {
+func x86ABI0BoolTailTransport(left, right FuncSig, arch string) bool {
+	if !x86ABI0BoolDeclarationRole(left, arch) || !x86ABI0BoolDeclarationRole(right, arch) {
 		return false
 	}
 	// Source variable/result names are descriptive, not transport. All actual
@@ -64,8 +64,9 @@ func x86ABI0BoolTailTransport(left, right FuncSig) bool {
 }
 
 func (source *x86ABI0BoolCallSource) prepareTail(fn Func, sig FuncSig, byName map[string]Func, visiting map[string]bool) (*x86ABI0BoolTail, error) {
+	arch := source.options.Goarch
 	name, valid := x86ABI0BoolTailTarget(fn)
-	if !valid || !x86ABI0BoolDeclarationRole(sig, "386") ||
+	if !valid || !x86ABI0BoolDeclarationRole(sig, arch) ||
 		fn.ArgSize != 0 && fn.ArgSize != sig.Frame.Results[0].Offset+1 {
 		return nil, x86ABI0BoolCallContext("tail lacks an exact zero-frame ordinary canonical terminal")
 	}
@@ -75,7 +76,7 @@ func (source *x86ABI0BoolCallSource) prepareTail(fn Func, sig FuncSig, byName ma
 	calleeName := source.resolved[name]
 	calleeSig, declared := source.signatures[calleeName]
 	if calleeName == "" || !declared || calleeSig.Name != "" && calleeSig.Name != calleeName ||
-		!x86ABI0BoolTailTransport(sig, calleeSig) {
+		!x86ABI0BoolTailTransport(sig, calleeSig, arch) {
 		return nil, x86ABI0BoolCallContext("tail target lacks its independent exact canonical declaration/transport")
 	}
 	if callee, exists := byName[name]; exists && !source.tailProofs[name] {
@@ -97,8 +98,8 @@ func (source *x86ABI0BoolCallSource) prepareTail(fn Func, sig FuncSig, byName ma
 			}
 			callee.x86ResultFlowBudget = &source.budget
 			resolve := func(symbol string) string { return x86ABI0BoolCallResolve(source.options, symbol) }
-			consumer := newX86Ctx(new(strings.Builder), callee, calleeSig, resolve, source.signatures, "386", source.options.TargetTriple, false)
-			consumer.fpScalarData = x86LoweredScalarDataReads(source.original, resolve, source.signatures, "386")
+			consumer := newX86Ctx(new(strings.Builder), callee, calleeSig, resolve, source.signatures, arch, source.options.TargetTriple, false)
+			consumer.fpScalarData = x86LoweredScalarDataReads(source.original, resolve, source.signatures, arch)
 			if err := consumer.checkLoweredScalarFPResultInitialization(); err != nil {
 				return nil, err
 			}
@@ -109,7 +110,7 @@ func (source *x86ABI0BoolCallSource) prepareTail(fn Func, sig FuncSig, byName ma
 }
 
 func (plan *x86ABI0BoolCallPlan) checkTailTerminal(fn Func, sig FuncSig, arch string) error {
-	if plan.tail == nil || !plan.matches(fn, sig, arch) || !x86ABI0BoolTailTransport(plan.signature, plan.tail.signature) ||
+	if plan.tail == nil || !plan.matches(fn, sig, arch) || !x86ABI0BoolTailTransport(plan.signature, plan.tail.signature, arch) ||
 		!reflect.DeepEqual(plan.source.signatures[plan.tail.target], plan.tail.signature) {
 		return x86ABI0BoolCallContext("tail consumption changed its original source or exact declaration")
 	}

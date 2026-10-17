@@ -10,7 +10,7 @@ func x86ABI0BoolCallStep(ordinal int, ins Instr, state *x86ResultState, owned []
 	}
 	if ins.Op == "CALL" {
 		sig, known := plan.calls[ordinal]
-		if !known || arch != "386" || len(ins.Args) != 1 || ins.Args[0].Kind != OpSym {
+		if !known || arch != plan.source.options.Goarch || len(ins.Args) != 1 || ins.Args[0].Kind != OpSym {
 			return false, true
 		}
 		if sig.Ret != Void && !state.shapeOnly && (!state.boolOutgoing[0] || !state.boolOutgoingCanonical[0]) {

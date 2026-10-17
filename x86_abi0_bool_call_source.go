@@ -38,7 +38,7 @@ func x86ABI0BoolCallContext(reason string) error {
 }
 
 func x86ABI0BoolCallsNeeded(file *File, arch string) bool {
-	if file == nil || file.Arch != ArchAMD64 || arch != "386" {
+	if file == nil || file.Arch != ArchAMD64 || arch != "386" && arch != "amd64" && arch != "" {
 		return false
 	}
 	for _, fn := range file.Funcs {
@@ -79,6 +79,11 @@ func prepareX86ABI0BoolCalls(file *File, options Options) (*x86ABI0BoolCallSourc
 	if !x86ABI0BoolCallsNeeded(file, options.Goarch) {
 		return nil, nil
 	}
+	if options.Goarch == "" {
+		options.Goarch = "amd64"
+	}
+	arch := options.Goarch
+	word := x86ResultPointerWord(arch)
 	signatures, err := numericalCloneSignatures(options.Sigs)
 	if err != nil {
 		return nil, err
@@ -131,8 +136,8 @@ func prepareX86ABI0BoolCalls(file *File, options Options) (*x86ABI0BoolCallSourc
 		if sig.Name != "" && sig.Name != source.resolved[fn.Sym] {
 			return nil, x86ABI0BoolCallContext("caller declaration symbol differs from its actual TEXT")
 		}
-		if !x86ScalarFloatIntegerNativeTarget("386", options.TargetTriple) {
-			return nil, x86ABI0BoolCallContext("logical target does not have the actual 32-bit x86 width")
+		if !x86ScalarFloatIntegerNativeTarget(arch, options.TargetTriple) {
+			return nil, x86ABI0BoolCallContext("logical target does not have the actual x86 word width")
 		}
 		plan := &x86ABI0BoolCallPlan{source: source, function: fn, signature: sig, calls: make(map[int]FuncSig), bytes: make(map[int64]bool)}
 		plan.signature.Name = source.resolved[fn.Sym]
@@ -175,10 +180,10 @@ func prepareX86ABI0BoolCalls(file *File, options Options) (*x86ABI0BoolCallSourc
 			}
 			if !valid || offset != 0 || !exists || !declared || strings.Contains(name, "<") ||
 				calleeSig.Name != "" && calleeSig.Name != source.resolved[name] ||
-				!x86ABI0LogicalBoolFrameRole(callee, calleeSig, "386") || len(calleeSig.Args) != 1 || calleeSig.Args[0] != I1 ||
+				!x86ABI0LogicalBoolFrameRole(callee, calleeSig, arch) || len(calleeSig.Args) != 1 || calleeSig.Args[0] != I1 ||
 				len(calleeSig.Frame.Params) != 1 || calleeSig.Frame.Params[0].Type != I1 || calleeSig.Frame.Params[0].Offset != 0 ||
 				calleeSig.Frame.Params[0].Field != -1 || len(calleeSig.Frame.Params[0].Fields) != 0 ||
-				calleeSig.Frame.Results[0].Offset != 4 || callee.ArgSize != 5 {
+				calleeSig.Frame.Results[0].Offset != word || callee.ArgSize != word+1 {
 				return nil, x86ABI0BoolCallContext("callee source, ABI or actual bool-byte declaration is not closed")
 			}
 			if !checked[name] {
@@ -193,7 +198,7 @@ func prepareX86ABI0BoolCalls(file *File, options Options) (*x86ABI0BoolCallSourc
 				leaf := callee
 				leaf.x86ResultFlowBudget = &source.budget
 				leaf.x86BoolReadonlyInputs = true
-				if err := checkX86ABI0ResultInitializationAtSource(leaf, calleeSig, "386", func(_ int, ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string) bool {
+				if err := checkX86ABI0ResultInitializationAtSource(leaf, calleeSig, arch, func(_ int, ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string) bool {
 					return x86ScalarFPResultTransfer(ins, state, owned, resultOffset, arch)
 				}, true); err != nil {
 					return nil, err
@@ -201,15 +206,15 @@ func prepareX86ABI0BoolCalls(file *File, options Options) (*x86ABI0BoolCallSourc
 				checked[name] = true
 			}
 			plan.calls[ordinal] = calleeSig
-			plan.bytes[0], plan.bytes[4] = true, true
+			plan.bytes[0], plan.bytes[word] = true, true
 		}
 		if len(plan.calls) == 0 {
 			continue
 		}
 		role := fn
 		role.FrameSize = 0
-		if fn.FrameSize < 0 || len(plan.bytes) != 0 && fn.FrameSize < 5 || fn.FrameSize > 4096 ||
-			!x86ABI0LogicalBoolFrameRole(role, sig, "386") || fn.x86DirectTailRoot != nil {
+		if fn.FrameSize < 0 || len(plan.bytes) != 0 && fn.FrameSize < word+1 || fn.FrameSize > 4096 ||
+			!x86ABI0LogicalBoolFrameRole(role, sig, arch) || fn.x86DirectTailRoot != nil {
 			return nil, x86ABI0BoolCallContext("caller lacks its complete bounded ordinary logical frame")
 		}
 		if err := plan.replay(); err != nil {
@@ -291,7 +296,7 @@ func (plan *x86ABI0BoolCallPlan) matches(fn Func, sig FuncSig, arch string) bool
 	if sig.Name == "" {
 		sig.Name = plan.source.resolved[fn.Sym]
 	}
-	return arch == "386" && reflect.DeepEqual(fn, plan.function) &&
+	return arch == plan.source.options.Goarch && reflect.DeepEqual(fn, plan.function) &&
 		(reflect.DeepEqual(sig, plan.signature) || plan.emittedSignature != nil && reflect.DeepEqual(sig, *plan.emittedSignature))
 }
 

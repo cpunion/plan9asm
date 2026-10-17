@@ -110,6 +110,15 @@ func TestX86ABI0Mode32CanonicalBoolTypedTailSourceReplayAndLayouts(t *testing.T)
 }
 
 func TestX86ABI0Mode32CanonicalBoolTypedTailCannotBorrowGoCaller(t *testing.T) {
+	x86ABI0BoolTailCannotBorrowGoCaller(t, "386", "i386-unknown-linux-gnu")
+}
+
+func TestX86AMD64CanonicalBoolTypedTailCannotBorrowGoCaller(t *testing.T) {
+	x86ABI0BoolTailCannotBorrowGoCaller(t, "amd64", "x86_64-unknown-linux-gnu")
+}
+
+func x86ABI0BoolTailCannotBorrowGoCaller(t *testing.T, arch, triple string) {
+	t.Helper()
 	source := []byte("TEXT ·wrapper(SB),4,$0\nJMP outside·target(SB)\n")
 	pkg := mustGoPackage(t, "tailbool", "package tailbool\nfunc wrapper(x bool) bool\n")
 	file, err := Parse(ArchAMD64, string(source))
@@ -117,7 +126,7 @@ func TestX86ABI0Mode32CanonicalBoolTypedTailCannotBorrowGoCaller(t *testing.T) {
 		t.Fatal(err)
 	}
 	resolve := testResolveSym("tailbool")
-	sigs, err := goSigsForAsmFile(pkg, file, resolve, "386", nil, nil, nil)
+	sigs, err := goSigsForAsmFile(pkg, file, resolve, arch, nil, nil, nil)
 	if err != nil || !sigs["outside.target"].x86BorrowedBoolTail {
 		t.Fatal("real unresolved Go target did not retain copied-caller denial", err)
 	}
@@ -128,18 +137,19 @@ func TestX86ABI0Mode32CanonicalBoolTypedTailCannotBorrowGoCaller(t *testing.T) {
 	// The positive declaration is independently derived from the target's
 	// actual Go type, not copied from the caller or reconstructed as a token.
 	calleePackage := mustGoPackage(t, "outside", "package outside\nfunc target(y bool) bool\n")
-	calleeFile, err := Parse(ArchAMD64, "TEXT ·target(SB),4,$0-5\nMOVB y+0(FP),AX\nMOVB AX,ret+4(FP)\nRET\n")
+	word := x86ResultPointerWord(arch)
+	calleeFile, err := Parse(ArchAMD64, fmt.Sprintf("TEXT ·target(SB),4,$0-%d\nMOVB y+0(FP),AX\nMOVB AX,ret+%d(FP)\nRET\n", word+1, word))
 	if err != nil {
 		t.Fatal(err)
 	}
-	actual, err := goSigsForAsmFile(calleePackage, calleeFile, testResolveSym("outside"), "386", nil, nil, nil)
+	actual, err := goSigsForAsmFile(calleePackage, calleeFile, testResolveSym("outside"), arch, nil, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, supplied := range []bool{false, true} {
 		for _, api := range []string{"text", "module", "Go"} {
 			t.Run(fmt.Sprintf("actual-declaration=%t/%s", supplied, api), func(t *testing.T) {
-				options := Options{Goarch: "386", TargetTriple: "i386-unknown-linux-gnu", ResolveSym: resolve, Sigs: sigs}
+				options := Options{Goarch: arch, TargetTriple: triple, ResolveSym: resolve, Sigs: sigs}
 				if supplied {
 					options.Sigs = map[string]FuncSig{"tailbool.wrapper": sigs["tailbool.wrapper"], "outside.target": actual["outside.target"]}
 				}
@@ -157,7 +167,7 @@ func TestX86ABI0Mode32CanonicalBoolTypedTailCannotBorrowGoCaller(t *testing.T) {
 						defer module.Dispose()
 					}
 				} else {
-					request := GoModuleOptions{GOARCH: "386", TargetTriple: options.TargetTriple, ResolveSym: resolve}
+					request := GoModuleOptions{GOARCH: arch, TargetTriple: options.TargetTriple, ResolveSym: resolve}
 					if supplied {
 						request.ManualSig = func(name string) (FuncSig, bool) { sig, found := actual[name]; return sig, found }
 					}

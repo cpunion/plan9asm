@@ -113,8 +113,8 @@ func checkX86ABI0ResultInitializationWithTrapOnly(fn Func, sig FuncSig, goarch s
 		initial.boolCalls = fn.x86BoolCalls
 		initial.boolReadonlyInputs = fn.x86BoolReadonlyInputs
 		if initial.boolCalls != nil && len(initial.boolCalls.bytes) != 0 {
-			initial.boolOutgoing = make([]bool, 5)
-			initial.boolOutgoingCanonical = make([]bool, 5)
+			initial.boolOutgoing = make([]bool, x86ResultPointerWord(goarch)+1)
+			initial.boolOutgoingCanonical = make([]bool, x86ResultPointerWord(goarch)+1)
 		}
 		if x86ABI0BoolFrameAliasNeeded(fn, goarch) {
 			initial.boolFrameGP = new([16]x86ResultSlotAddress)

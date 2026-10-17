@@ -804,7 +804,7 @@ func (b *goSigBuilder) addReferencedFuncSigs(file *File) error {
 				// via ManualSig when the inferred signature is not identical.
 				fs := callerSig
 				fs.Name = targetResolved
-				fs.x86BorrowedBoolTail = b.goarch == "386" && fs.Ret == I1
+				fs.x86BorrowedBoolTail = (b.goarch == "386" || b.goarch == "amd64") && fs.Ret == I1
 				// A borrowed scalar signature is not a declaration-backed Go
 				// register-entry proof for the unresolved helper.
 				fs.ARM64GoRegisterABI = nil

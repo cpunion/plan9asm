@@ -74,6 +74,52 @@ func TestX86ABI0CanonicalBoolArchitectureNoncanonicalResults(t *testing.T) {
 	}
 }
 
+func TestX86ABI0CanonicalBoolArchitectureAliasesAndCalls(t *testing.T) {
+	for _, target := range x86RawReturnTargets {
+		word, lea, move := x86ResultPointerWord(target.arch), "LEAQ", "MOVQ"
+		if target.arch == "386" {
+			lea, move = "LEAL", "MOVL"
+		}
+		leaf := fmt.Sprintf("TEXT ·leaf(SB),4,$0-%d\nMOVB x+0(FP),AX\nMOVB AX,ret+%d(FP)\nRET\n", word+1, word)
+		call := fmt.Sprintf("MOVB x+0(FP),AX\nMOVB AX,0(SP)\nCALL ·leaf(SB)\nMOVB %d(SP),AX\nMOVB AX,ret+%d(FP)", word, word)
+		for _, row := range []struct {
+			name, body, callee string
+			frame              int
+			good               bool
+		}{
+			{"alias-copy", fmt.Sprintf("%s x+0(FP),AX\n%s AX,DX\nMOVB (DX),BX\nMOVB BX,ret+%d(FP)", lea, move, word), "", 0, true},
+			{"alias-short-copy", fmt.Sprintf("%s x+0(FP),AX\nMOVW AX,DX\nMOVB (DX),BX\nMOVB BX,ret+%d(FP)", lea, word), "", 0, false},
+			{"alias-outside", fmt.Sprintf("%s x+0(FP),AX\nMOVB 1(AX),BX\nMOVB BX,ret+%d(FP)", lea, word), "", 0, false},
+			{"alias-raw-result", fmt.Sprintf("%s x+0(FP),AX\nMOVB $2,(AX)\nMOVB (AX),BX\nMOVB BX,ret+%d(FP)", lea, word), "", 0, false},
+			{"same-file-call", call, leaf, 16, true},
+			{"raw-outgoing-call", strings.Replace(call, "MOVB AX,0(SP)", "MOVB $2,0(SP)", 1), leaf, 16, false},
+			{"missing-outgoing-call", strings.Replace(call, "MOVB AX,0(SP)\n", "", 1), leaf, 16, false},
+			{"call-kills-flags", call + fmt.Sprintf("\nSETEQ ret+%d(FP)", word), leaf, 16, false},
+			{"raw-callee-call", call, strings.Replace(leaf, "MOVB AX,ret+", "MOVB $2,ret+", 1), 16, false},
+			{"same-file-tail", "JMP ·leaf(SB)", leaf, 0, true},
+			{"raw-callee-tail", "JMP ·leaf(SB)", strings.Replace(leaf, "MOVB AX,ret+", "MOVB $2,ret+", 1), 0, false},
+		} {
+			declarations := "func Value(x bool) bool\n"
+			if row.callee != "" {
+				declarations += "func leaf(x bool) bool\n"
+			}
+			source := fmt.Sprintf("TEXT ·Value(SB),4,$%d-%d\n%s\n", row.frame, word+1, row.body)
+			if !strings.HasPrefix(row.body, "JMP") {
+				source += "RET\n"
+			}
+			source += row.callee
+			for _, api := range []string{"text", "module", "Go"} {
+				t.Run(target.triple+"/"+row.name+"/"+api, func(t *testing.T) {
+					ir, err := x86ScalarFPBitViewAPI(t, source, declarations, target.arch, target.triple, api)
+					if row.good && (err != nil || ir == "") || !row.good && (!errors.Is(err, ErrProbeNeedsContext) || ir != "") {
+						t.Fatal("canonical byte alias/call contract changed", row.good, err)
+					}
+				})
+			}
+		}
+	}
+}
+
 // This portable oracle exercises the physical byte before canonical RET,
 // independently of native LOCK/CMPXCHG and native Go ABI execution.
 func TestX86AMD64CanonicalBoolTemporaryBytePortable(t *testing.T) {
