@@ -175,6 +175,21 @@ jobs:
           done
           go test . -run "^($roots)$" -count=1 -timeout=5m -json > "$directory/raw.jsonl" 2> "$directory/stderr.log"
           node .github/scripts/audit-floating-compare.cjs "$directory"
+      - name: Execute translated scalar BMI values and flags
+        env:
+          GOTOOLCHAIN: local
+        run: |
+          set -euo pipefail
+          directory=_out/native-x86-oracles/scalar-bmi
+          mkdir -p "$directory"
+          roots='TestAMD64BLSRuntimeSemantics'
+          roots+='|TestAMD64BEXTRRuntimeSemanticsAndFlags'
+          go test . -list "^($roots)$" > "$directory/inventory.log"
+          for root in ${roots//|/ }; do
+            grep -Fx "$root" "$directory/inventory.log"
+          done
+          go test . -run "^($roots)$" -count=1 -timeout=5m -json > "$directory/raw.jsonl" 2> "$directory/stderr.log"
+          node .github/scripts/audit-scalar-bmi.cjs "$directory"
       - name: Preserve original and translated observations
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v6
