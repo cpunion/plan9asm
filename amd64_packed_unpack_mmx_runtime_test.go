@@ -164,6 +164,7 @@ int main(int argc, char **argv) {
 	for _, level := range []string{"-O0", "-O2"} {
 		t.Run(level, func(t *testing.T) {
 			executable := execution.compileLLVM(t, "unpack-mmx-native-memory-fp", ir, main, level)
+			x86MMXExportNativeFixture(t, executable, assembly, ir, level, execution.triple, count)
 			x86CheckMemoryFaultMatrix(t, execution, executable, count)
 			for row := 0; row < count; row++ {
 				want := x86ObserveMemoryFault(t, execution, executable, row, 3, 1)
