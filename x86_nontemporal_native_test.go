@@ -1,7 +1,9 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -21,6 +23,107 @@ var x86NonTemporalNativeOracle = []struct {
 	{"VMOVNTPD", "vmovntpd", true, false},
 	{"VMOVNTPS", "vmovntps", true, false},
 	{"VMOVNTDQA", "vmovntdqa", true, true},
+}
+
+func TestX86NonTemporalVectorNativeByteAndSourceBoundaries(t *testing.T) {
+	for _, arch := range []string{"386", "amd64"} {
+		for _, row := range x86NonTemporalNativeOracle {
+			banks := []string{"X"}
+			if row.vector {
+				banks = []string{"X", "Y", "Z"}
+			}
+			for _, bank := range banks {
+				t.Run(arch+"/"+row.name+"/"+bank, func(t *testing.T) {
+					text := row.name + " " + bank + "1,(AX)"
+					if row.load {
+						text = row.name + " (AX)," + bank + "1"
+					}
+					ins := x86ScalarLaneInstruction(t, text)
+					width := int64(amd64VectorByteWidth(Reg(bank + "1")))
+					state := x86ResultState{flags: x86ByteFlagsAll, direction: x86ResultDirectionBackward}
+					state.pointerGP[0] = true
+					state.writeVector(1, 64, ^uint64(0), false)
+					before := state.clone()
+					if accepted, known := x86ResultNonTemporalVectorStep(ins, &state, nil, 0, arch, true); !known || !accepted || !reflect.DeepEqual(state, before) {
+						t.Fatal("complete native move changed flags, pointers or unrelated byte domains")
+					}
+					if accepted, _ := x86ResultNonTemporalVectorStep(ins, &state, nil, 0, arch, false); accepted {
+						t.Fatal("standalone query acquired a paired native access")
+					}
+					for _, change := range []string{"pointer", "numeric base", "index", "raw", "address size"} {
+						changed, current := ins, before.clone()
+						changed.Args = append([]Operand(nil), ins.Args...)
+						memory := 1
+						if row.load {
+							memory = 0
+							current.writeVector(1, 64, 0, false)
+						}
+						initial := current.clone()
+						switch change {
+						case "pointer", "numeric base":
+							current.pointerGP[0] = false
+							if change == "numeric base" {
+								current.gp[0] = 0xff
+							}
+							initial = current.clone()
+						case "index":
+							changed.Args[memory].Mem.Index, changed.Args[memory].Mem.Scale = DX, 2
+						case "raw":
+							changed.x86SourceRaw = &x86SourceRawInstruction{op: ins.Op, args: ins.Args}
+						case "address size":
+							changed.x86AddressBits = 16
+						}
+						if accepted, known := x86ResultNonTemporalVectorStep(changed, &current, nil, 0, arch, true); !known || accepted || !reflect.DeepEqual(current, initial) {
+							t.Fatal("unproved source supplied native bytes or changed state", change)
+						}
+					}
+					if !row.load {
+						for missing := int64(0); missing < width; missing++ {
+							current := before.clone()
+							current.writeVector(1, 64, ^(uint64(1) << uint(missing)), false)
+							if accepted, _ := x86ResultNonTemporalVectorStep(ins, &current, nil, 0, arch, true); accepted {
+								t.Fatal("non-temporal store invented a missing vector byte", missing)
+							}
+						}
+					}
+				})
+			}
+		}
+	}
+}
+
+func TestX86NonTemporalVectorVoidCannotHideNativeInputs(t *testing.T) {
+	for _, arch := range []string{"386", "amd64"} {
+		word, move, triple := 8, "MOVQ", "x86_64-unknown-linux-gnu"
+		if arch == "386" {
+			word, move, triple = 4, "MOVL", "i386-unknown-linux-gnu"
+		}
+		for _, row := range x86NonTemporalNativeOracle {
+			for _, unusedBool := range []bool{false, true} {
+				t.Run(fmt.Sprintf("%s/%s/bool-%t", arch, row.name, unusedBool), func(t *testing.T) {
+					source, _ := x86NonTemporalNativeProgram(arch, row.name, "X", 1, row.vector, row.load, true)
+					body := source[strings.Index(source, "\n")+1:]
+					body = strings.Replace(body, fmt.Sprintf("MOVL CX,ret+%d(FP)\n", word), "", 1)
+					arguments, declaration := word, "func Value(p *[64]byte)"
+					if unusedBool {
+						arguments++
+						declaration = "func Value(p *[64]byte,unused bool)"
+					}
+					source = fmt.Sprintf("TEXT ·Value(SB),4,$0-%d\n%s", arguments, body)
+					x86LEAActualTargetGoObject(t, arch, triple, source)
+					for _, api := range []string{"text", "module", "Go"} {
+						if ir, err := x86ScalarFPBitViewAPI(t, source, declaration, arch, triple, api); err != nil || ir == "" {
+							t.Fatal("complete Void source lost its native effect", api, err)
+						}
+						changed := strings.Replace(source, move+" p+0(FP),AX\n", "", 1)
+						if ir, err := x86ScalarFPBitViewAPI(t, changed, declaration, arch, triple, api); ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+							t.Fatal("Void or unused bool invented its native pointer", api, err)
+						}
+					}
+				})
+			}
+		}
+	}
 }
 
 func x86NonTemporalNativeProgram(arch, name, bank string, register int, vector, load, dead bool) (string, string) {
