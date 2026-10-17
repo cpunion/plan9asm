@@ -57,7 +57,7 @@ func x86FloatingCompareResultPrograms(arch string) (string, string, []string) {
 					fmt.Fprintf(&assembly, "%s X0,X1,$0\n", opcode)
 				}
 				if mask {
-					assembly.WriteString("KMOVL K2,AX\n")
+					assembly.WriteString("KMOVD K2,AX\n")
 				} else {
 					assembly.WriteString("MOVL " + strings.Replace(destination, bank, "X", 1) + ",AX\n")
 				}
