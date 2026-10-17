@@ -24,6 +24,12 @@ func x86TypedFPResultNeedsProof(fn Func, sig FuncSig, arch string) bool {
 	}
 	opaqueAddressResult := x86OpaqueAddressPointerResultRole(fn, sig, arch)
 	for ordinal, ins := range fn.Instrs {
+		if _, known, err := x86PackedIntegerAddProperties(ins, arch); known && err == nil {
+			return true // Native add inputs/masks remain obligations without a result or unrelated KMOV.
+		}
+		if _, known, err := x86PackedSubtractProperties(ins, arch); known && err == nil {
+			return true // Subtract shares the same whole-source obligation, not add's caller authority.
+		}
 		if _, known, err := x86BEXTRProperties(ins.Op, ins, arch); known && err == nil {
 			return true // START, LEN and source bytes remain required even for dead BEXTR results.
 		}
