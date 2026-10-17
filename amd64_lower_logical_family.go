@@ -82,12 +82,11 @@ func (c *amd64Ctx) lowerPackedLogicalFamily(op Op, ins Instr) (bool, bool, error
 		// portable logical arithmetic lose its alignment/dead-read faults.
 		result, err = c.emitPackedBinaryNativeMemory(first, form.spec.laneBits, b, strings.ToLower(string(op)))
 	} else {
-		// EVEX inactive lanes suppress faults, including scalar broadcasts.
-		// Keep the reviewed masked reader and complete virtual FP spans.
+		// Native reads remain observable with dead results. EVEX inactive
+		// lanes alone suppress their accesses, including scalar broadcasts.
 		var a string
-		if ins.x86NumericalRead != nil {
-			// The certified global remains mutable. Conditional volatile lanes
-			// retain active dead reads and the original mask fault suppression.
+		if ins.x86NumericalRead != nil ||
+			first.Kind == OpMem && x86OrdinaryNativeMemoryOperand(first, c.goarch) {
 			a, err = c.loadX86PackedShiftLanes(first, form.byteWidth, form.spec.laneBits, form.broadcast, mask)
 		} else {
 			a, err = c.loadMaskedPackedCompareLanes(first, form.byteWidth, form.spec.laneBits, form.broadcast, mask)

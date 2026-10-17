@@ -112,6 +112,10 @@ func x86ScalarFPResultTransfer(ins Instr, state *x86ResultState, owned []bool, r
 // Every typed X/Y/Z form consumes the same physical-bank byte domain. Physical
 // MMX remains separate; no vector effect turns a native pointer into FP data.
 func x86ScalarFPLogicalTransfer(ins Instr, form x86PackedLogicalForm, state *x86ResultState, owned []bool, arch string) bool {
+	return x86ScalarFPLogicalTransferWithRead(ins, form, state, owned, arch, false)
+}
+
+func x86ScalarFPLogicalTransferWithRead(ins Instr, form x86PackedLogicalForm, state *x86ResultState, owned []bool, arch string, nativeRead bool) bool {
 	if form.mmx {
 		return false
 	}
@@ -135,7 +139,7 @@ func x86ScalarFPLogicalTransfer(ins Instr, form x86PackedLogicalForm, state *x86
 	}
 	first := x86CallerVectorByteMask(int64(form.byteWidth))
 	if form.memory >= 0 {
-		if !x86ResultRead(form.source, int64(form.memoryBytes), state, owned, arch) {
+		if !x86ResultReadWithNativeContinuation(form.source, int64(form.memoryBytes), state, owned, arch, nativeRead) {
 			return false // Even a zero mask supplies no missing native envelope.
 		}
 	} else {
