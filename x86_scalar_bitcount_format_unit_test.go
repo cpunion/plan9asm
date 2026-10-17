@@ -10,7 +10,7 @@ import (
 // and emitter-only LLVM format; initialized counterparts own public execution.
 func x86ScalarCountUnboundFormatObject(t *testing.T, source, name, arch, triple string) string {
 	t.Helper()
-	x86LEAActualTargetGoObject(t, arch, triple, source)
+	x86LEAActualTargetGoObject(t, arch, triple, "#include \"textflag.h\"\n"+source)
 	for _, api := range []string{"text", "module", "Go"} {
 		ir, err := x86ScalarFPBitViewAPI(t, source, "func "+name+"()", arch, triple, api)
 		if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
@@ -24,6 +24,12 @@ func x86ScalarCountUnboundFormatObject(t *testing.T, source, name, arch, triple 
 	return x86InstructionFormatObjectUnit(t, file,
 		map[string]FuncSig{name: {Name: name, Ret: Void}}, arch, triple, 0,
 		func(c *amd64Ctx, instruction Instr) (bool, bool, error) {
+			// This object-only emitter observes the original SP destination
+			// through its virtual register slot, not a native stack contract.
+			// All public APIs above must still reject the unchanged source.
+			c.allowSPWrite = arch == "386" && len(instruction.Args) == 2 &&
+				instruction.Args[1].Kind == OpReg && instruction.Args[1].Reg == SP
+			defer func() { c.allowSPWrite = false }()
 			return c.lowerScalarBitCount(instruction.Op, instruction)
 		})
 }
