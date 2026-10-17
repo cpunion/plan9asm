@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -202,13 +203,27 @@ func TestX86VectorArithmeticSaturatingAddCompleteForms(t *testing.T) {
 					t.Fatal("incomplete or oversized form batch", count)
 				}
 				x86LEAActualTargetGoObject(t, target.arch, target.triple, source.String())
+				// Every original form and Go object remains. These unbound
+				// functions lack vectors, masks and native addresses; syntax
+				// objects cannot grant their missing public ABI0 inputs.
 				for _, api := range []string{"text", "module", "Go"} {
 					ir, err := x86ScalarFPBitViewAPI(t, source.String(), declarations.String(), target.arch, target.triple, api)
-					if err != nil {
-						t.Fatal(api, err)
+					if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+						t.Fatal("unbound saturating format invented source inputs", api, err)
 					}
-					x86ResultInitializationObject(t, llc, target.triple, ir, "saturating-add-"+api)
-					x86ResultInitializationObject(t, llc, target.triple, x86MulDivRoundOptimize(t, ir), "saturating-add-"+api+"-O2")
+				}
+				file := mustParseX86RawReturn(t, source.String())
+				signatures := make(map[string]FuncSig)
+				for _, function := range file.Funcs {
+					sig := x86WordMaddFPType(t)
+					sig.Name = strings.TrimPrefix(function.Sym, "·")
+					signatures[sig.Name] = sig
+				}
+				ir := x86ScalarFormatObjectUnit(t, file, signatures, target.arch, target.triple, 0)
+				for _, text := range []string{ir, x86MulDivRoundOptimize(t, ir)} {
+					for _, level := range []string{"-O0", "-O2"} {
+						x86PackedStringCompileObject(t, llc, target.triple, text, level)
+					}
 				}
 			})
 		}

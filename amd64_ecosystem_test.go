@@ -2981,7 +2981,7 @@ func TestTranslateAMD64PackedIntegerSubtractCompleteGoAssemblerForms(t *testing.
 		}
 	}
 	src.WriteString("\tRET\n")
-	ll := translateAMD64EcosystemCase(t, src.String(), "packedintegersubtractforms")
+	ll := x86UnboundVoidScalarFormatObject(t, src.String(), "packedintegersubtractforms", "amd64", "x86_64-unknown-linux-gnu")
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc not found")
@@ -3017,20 +3017,7 @@ func TestTranslate386PackedIntegerSubtractCompleteGoAssemblerForms(t *testing.T)
 		}
 	}
 	src.WriteString("\tRET\n")
-	file, err := Parse(ArchAMD64, src.String())
-	if err != nil {
-		t.Fatal(err)
-	}
-	ll, err := Translate(file, Options{
-		TargetTriple: "i386-unknown-linux-gnu",
-		Goarch:       "386",
-		Sigs: map[string]FuncSig{
-			"packedintegersubtractforms386": {Name: "packedintegersubtractforms386", Ret: Void},
-		},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	ll := x86UnboundVoidScalarFormatObject(t, src.String(), "packedintegersubtractforms386", "386", "i386-unknown-linux-gnu")
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc not found")
