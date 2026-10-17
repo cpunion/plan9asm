@@ -58,6 +58,9 @@ func fixedLocalPackedCompleteProgram() (string, string, int) {
 }
 
 func TestGoAMD64FixedLocalPackedCompleteFormsActualObjects(t *testing.T) {
+	// Keep lazy Go tools in this root's disposable cache, not a global cache
+	// or a different source/object observation.
+	t.Setenv("GOCACHE", t.TempDir())
 	assembly, declarations, count := fixedLocalPackedCompleteProgram()
 	if count != 195 {
 		t.Fatalf("independent width/register/mask/legacy matrix changed: %d", count)
@@ -73,6 +76,7 @@ func TestGoAMD64FixedLocalPackedCompleteFormsActualObjects(t *testing.T) {
 	} {
 		t.Run(target.name, func(t *testing.T) {
 			pkg, request, file, options := x86CMOVFixedLocalFixture(t, assembly, declarations, target.name, target.triple)
+			fixedLocalConversionPrepareToolCache(t, request)
 			source := requireGoAMD64FrameCapture(t, pkg, request)
 			if len(source.functions) != count {
 				t.Fatal("incomplete actual original Go objects")
