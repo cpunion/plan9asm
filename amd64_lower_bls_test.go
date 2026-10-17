@@ -16,18 +16,7 @@ func TestX86RawBLSMSKReportedEncoding(t *testing.T) {
 	BYTE $0xd2
 	RET
 `
-	file, err := Parse(ArchAMD64, source)
-	if err != nil {
-		t.Fatal(err)
-	}
-	ir, err := Translate(file, Options{
-		Goarch:       "amd64",
-		TargetTriple: "x86_64-unknown-linux-gnu",
-		Sigs:         map[string]FuncSig{"rawBLSMSK": {Name: "rawBLSMSK", Ret: Void}},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	ir := x86BLSRawFormatObject(t, source, "amd64", "x86_64-unknown-linux-gnu")
 	if !strings.Contains(ir, `"target-features"="+bmi"`) {
 		t.Fatalf("raw BLSMSK did not infer BMI1 target feature:\n%s", ir)
 	}
@@ -76,18 +65,7 @@ func TestTranslateX86BLSCompleteGoAssemblerForms(t *testing.T) {
 			}
 			source.WriteString("\tRET\n")
 			requireX86GoAssemblerResult(t, target.goarch, source.String(), true)
-			file, err := Parse(ArchAMD64, source.String())
-			if err != nil {
-				t.Fatal(err)
-			}
-			ir, err := Translate(file, Options{
-				Goarch:       target.goarch,
-				TargetTriple: target.triple,
-				Sigs:         map[string]FuncSig{"blsforms": {Name: "blsforms", Ret: Void}},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			ir := x86UnboundVoidScalarFormatObject(t, source.String(), "blsforms", target.goarch, target.triple)
 			if !strings.Contains(ir, `"target-features"="+bmi"`) {
 				t.Fatalf("BLS family did not infer BMI1 target feature:\n%s", ir)
 			}
@@ -238,7 +216,6 @@ func TestX86RawBLSCompleteMemoryFormsAndTargets(t *testing.T) {
 	for _, target := range targets {
 		t.Run(target.name, func(t *testing.T) {
 			var source strings.Builder
-			sigs := make(map[string]FuncSig)
 			for index, encoding := range target.encodings {
 				name := fmt.Sprintf("rawBLS_%d", index)
 				fmt.Fprintf(&source, "TEXT %s(SB),$0-0\n", name)
@@ -246,19 +223,26 @@ func TestX86RawBLSCompleteMemoryFormsAndTargets(t *testing.T) {
 					fmt.Fprintf(&source, "\tBYTE $%#02x\n", value)
 				}
 				source.WriteString("\tRET\n")
-				sigs[name] = FuncSig{Name: name, Ret: Void}
 			}
-			file, err := Parse(ArchAMD64, source.String())
-			if err != nil {
-				t.Fatal(err)
-			}
-			ir, err := Translate(file, Options{Goarch: target.goarch, TargetTriple: target.triple, Sigs: sigs})
-			if err != nil {
-				t.Fatal(err)
-			}
+			ir := x86BLSRawFormatObject(t, source.String(), target.goarch, target.triple)
 			compileLLVMToObject(t, llc, target.triple, "raw-bls.ll", "raw-bls.o", ir)
 		})
 	}
+}
+
+// Preserve every original byte and public Context check. Decoding for a
+// separate emitter-only object cannot establish native entry inputs.
+func x86BLSRawFormatObject(t *testing.T, source, arch, triple string) string {
+	t.Helper()
+	file, signatures := x86UnboundVoidFormatSources(t, source, arch, triple)
+	normalized, err := normalizeX86RawFile(file, arch)
+	if err != nil {
+		t.Fatal("original BLS bytes could not be decoded", err)
+	}
+	return x86InstructionFormatObjectUnit(t, normalized, signatures, arch, triple, 0,
+		func(c *amd64Ctx, ins Instr) (bool, bool, error) {
+			return c.lowerLowestSetBitManipulation(ins.Op, ins)
+		})
 }
 
 func TestX86RawBLSRejectsInvalidOrLayoutDependentForms(t *testing.T) {
