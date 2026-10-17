@@ -104,7 +104,7 @@ func TestX86BLSResultByteHolesAliasesAndFlags(t *testing.T) {
 func TestX86BLSGrammarRejectsDispatchAndSourceMutation(t *testing.T) {
 	for _, arch := range []string{"386", "amd64"} {
 		for _, op := range x86BLSTestNames {
-			for _, row := range []string{op + ".Z AX,BX", op + " $1,BX", op + " AL,BX", op + " X0,BX", op + " AX,(BX)", op + " (AX)(CX*3),BX"} {
+			for _, row := range []string{op + ".Z AX,BX", op + " $1,BX", op + " AL,BX", op + " X0,BX", op + " AX,(BX)"} {
 				ins := x86ScalarLaneInstruction(t, row)
 				before := ins
 				before.Args = append([]Operand(nil), ins.Args...)
@@ -114,6 +114,14 @@ func TestX86BLSGrammarRejectsDispatchAndSourceMutation(t *testing.T) {
 				if !reflect.DeepEqual(ins, before) {
 					t.Fatal("BLS grammar mutated original source", row)
 				}
+			}
+			if _, err := Parse(ArchAMD64, "TEXT f(SB),4,$0-0\n"+op+" (AX)(CX*3),BX\nRET\n"); err == nil {
+				t.Fatal("invalid BLS scale escaped the source parser", arch, op)
+			}
+			memory := x86ScalarLaneInstruction(t, op+" (AX)(CX*2),BX")
+			memory.Args[0].Mem.Scale = 3
+			if _, known, err := x86BLSProperties(memory.Op, memory, arch); !known || err == nil {
+				t.Fatal("invalid BLS scale escaped direct typed validation", arch, op)
 			}
 			ins := x86ScalarLaneInstruction(t, op+" AX,BX")
 			ins.Op = "MOVL"
