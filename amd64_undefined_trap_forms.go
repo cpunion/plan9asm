@@ -24,6 +24,11 @@ func x86UndefinedTrapProperties(op Op, ins Instr, arch string) (x86UndefinedTrap
 	}
 	spec, known := x86UndefinedTrapSpecs[Op(canonical)]
 	if !known {
+		if form, nonTemporal, err := x86NonTemporalVectorProperties(op, ins, arch); nonTemporal && err == nil && form.trap {
+			// Go's Yml register row encodes a reserved ModRM form. Preserve
+			// its terminal #UD, not fictitious source/GP or memory effects.
+			return x86UndefinedTrapSpec{native: "ud2"}, true, nil
+		}
 		return x86UndefinedTrapSpec{}, false, nil
 	}
 	if suffix || len(ins.Args) != 0 || arch != "386" && arch != "amd64" ||

@@ -24,6 +24,9 @@ func x86TypedFPResultNeedsProof(fn Func, sig FuncSig, arch string) bool {
 	}
 	opaqueAddressResult := x86OpaqueAddressPointerResultRole(fn, sig, arch)
 	for ordinal, ins := range fn.Instrs {
+		if form, known, err := x86NonTemporalVectorProperties(ins.Op, ins, arch); known && err == nil && !form.trap {
+			return true // Dead non-temporal accesses still need real memory and complete inputs, including Void.
+		}
 		if _, known, err := x86ScalarBitCountProperties(ins.Op, ins, arch); known && err == nil &&
 			isAMD64MemoryOperand(ins.Args[0]) && x86ResultNamedPredicateInstruction(ins) {
 			return true // A dead count still performs its exact native read, including Void.

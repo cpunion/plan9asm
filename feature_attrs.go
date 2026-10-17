@@ -105,6 +105,25 @@ func inferFuncTargetFeaturesForGOARCH(arch Arch, goarch string, fn Func) string 
 					add("+avx")
 				}
 			}
+			if form, known, err := x86NonTemporalVectorProperties(ins.Op, ins, moveArch); known && err == nil && !form.trap {
+				switch {
+				case !form.spec.vector && form.spec.load:
+					add("+sse4.1")
+				case !form.spec.vector && form.spec.native == "movntps":
+					add("+sse")
+				case !form.spec.vector:
+					add("+sse2")
+				case form.move.nativeEVEX(ins):
+					add("+avx512f")
+					if form.move.byteWidth < 64 {
+						add("+avx512vl")
+					}
+				case form.spec.load && form.move.byteWidth == 32:
+					add("+avx2")
+				default:
+					add("+avx")
+				}
+			}
 			if form, known, err := x86LegacyPackedMoveProperties(ins.Op, ins, moveArch); known && err == nil &&
 				form.memory >= 0 && ins.Args[form.memory].Kind != OpFP {
 				// Exact native whole128 opcodes need XMM registers on i386.

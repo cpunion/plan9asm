@@ -13,6 +13,10 @@ import (
 // Intel SDM Vol. 2A Table 2-46 keeps E1 alignment separate from page-fault
 // suppression; the runtime oracle compares both against original Go opcodes.
 func (c *amd64Ctx) lowerAlignedPackedMoveMemory(ins Instr, form amd64PackedVectorMoveForm) error {
+	return c.lowerNativeAlignedVectorMemory(ins, form, false)
+}
+
+func (c *amd64Ctx) lowerNativeAlignedVectorMemory(ins Instr, form amd64PackedVectorMoveForm, legacy bool) error {
 	pointer, pointerType, _, err := c.packedVectorMemoryPointer(ins.Args[form.memory])
 	if err != nil {
 		return err
@@ -88,5 +92,8 @@ func (c *amd64Ctx) lowerAlignedPackedMoveMemory(ins Instr, form amd64PackedVecto
 	loaded, bytes := c.newTmp(), c.newTmp()
 	fmt.Fprintf(c.b, "  %%%s = call %s asm sideeffect %q, %q(%s)\n", loaded, vectorType, assembly, constraints+",~{memory}", arguments)
 	fmt.Fprintf(c.b, "  %%%s = bitcast %s %%%s to <%d x i8>\n", bytes, vectorType, loaded, form.byteWidth)
+	if legacy {
+		return c.storeLegacyPackedLogical(ins.Args[form.destination], "%"+bytes)
+	}
 	return c.storePackedMoveOperand(ins.Args[form.destination], form.byteWidth, "%"+bytes)
 }

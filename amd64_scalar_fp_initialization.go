@@ -19,6 +19,9 @@ func checkX86ScalarFPResultInitialization(fn Func, sig FuncSig, arch string) err
 }
 
 func x86ScalarFPResultTransfer(ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string) bool {
+	if accepted, known := x86ResultNonTemporalVectorStep(ins, state, owned, resultOffset, arch, false); known {
+		return accepted
+	}
 	if accepted, known := x86MaskValueResultStep(ins, state, arch); known {
 		return accepted
 	}
