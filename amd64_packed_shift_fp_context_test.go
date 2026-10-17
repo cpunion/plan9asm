@@ -63,13 +63,36 @@ func TestX86PackedShiftCompleteFPSpanThreeAPIsFiveObjects(t *testing.T) {
 				t.Fatal(err)
 			}
 			options := Options{Goarch: target.arch, TargetTriple: target.triple, Sigs: map[string]FuncSig{"shifts": sig}}
-			ir, err := Translate(parsed, options)
-			if err != nil {
-				t.Fatalf("%s original FP read %s: Translate=%v", target.triple, row.instruction, err)
-			}
+			original := parsed
 			llc := findLLVM22Tool("llc")
 			if llc == "" {
 				t.Fatal("LLVM22 llc required")
+			}
+			if row.masked {
+				for _, api := range []string{"text", "module", "Go"} {
+					if ir, err := x86ScalarFPBitViewPackageAPI(t, source, pkg, target.arch, target.triple, api); ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+						t.Fatal("original logical FP source invented the incoming mask", row.instruction, api, err)
+					}
+				}
+				format := x86InstructionFormatObjectUnit(t, original, options.Sigs, target.arch, target.triple, 0,
+					func(c *amd64Ctx, ins Instr) (bool, bool, error) {
+						return c.lowerX86PackedShift(ins.Op, ins)
+					})
+				compileLLVMToObject(t, llc, target.triple, "fp-original-format.ll", "fp-original-format.o", format)
+				// The public positive source obtains its mask from an actual
+				// typed input. Independent FP slots still have no contiguous
+				// backing; the shift must gather precisely its complete span.
+				source = strings.Replace(source, "\n"+row.instruction,
+					"\nMOVQ a+0(FP),AX\nKMOVQ AX,K1\n"+row.instruction, 1)
+				goAssemblerOracleOutput(t, target.arch, source, "", true)
+				parsed, err = Parse(ArchAMD64, source)
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+			ir, err := Translate(parsed, options)
+			if err != nil {
+				t.Fatalf("%s original FP read %s: Translate=%v", target.triple, row.instruction, err)
 			}
 			compileLLVMToObject(t, llc, target.triple, "fp-shift.ll", "fp-shift.o", ir)
 			context := llvm.NewContext()
@@ -93,8 +116,8 @@ func TestX86PackedShiftCompleteFPSpanThreeAPIsFiveObjects(t *testing.T) {
 				}
 				compileLLVMToObject(t, llc, target.triple, "fp-go-module.ll", "fp-go-module.o", result.Module.String())
 			}()
-			instruction := parsed.Funcs[0].Instrs[1]
-			ctx, output := newAMD64CtxWithFuncForTest(t, parsed.Funcs[0], sig, nil)
+			instruction := original.Funcs[0].Instrs[1]
+			ctx, output := newAMD64CtxWithFuncForTest(t, original.Funcs[0], sig, nil)
 			if _, _, err := ctx.lowerX86PackedShift(instruction.Op, instruction); err != nil {
 				t.Fatalf("%s complete FP span: %v", row.instruction, err)
 			}
