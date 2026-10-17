@@ -27,6 +27,9 @@ func x86ResultVectorCompareStepWithRead(ins Instr, state *x86ResultState, owned 
 	}
 	required := x86CallerVectorByteMask(int64(form.byteWidth))
 	for _, input := range []int{form.first, form.second} {
+		if form.identicalVectorInputs(ins) {
+			break // Same-view integer identities need no incoming numerical bytes.
+		}
 		operand := ins.Args[input]
 		if input == form.first {
 			operand = form.source

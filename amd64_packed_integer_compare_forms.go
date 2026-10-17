@@ -38,6 +38,16 @@ type x86PackedIntegerCompareForm struct {
 	maskResult bool
 }
 
+// Integer relations of an identical physical vector view are independent of
+// its bits, including all eight immediate predicates. This is only a numerical
+// dependency rule after full grammar validation. Mask inputs remain required;
+// floating comparisons, memory, raw roles and the native MMX bank stay separate.
+func (form x86PackedIntegerCompareForm) identicalVectorInputs(ins Instr) bool {
+	return x86ResultNamedPredicateInstruction(ins) && !form.mmx && form.memory < 0 &&
+		form.source.Kind == OpReg && ins.Args[form.second].Kind == OpReg &&
+		form.source.Reg == ins.Args[form.second].Reg
+}
+
 // Properties describe the Go operand rows and physical mode, not initialized
 // inputs, native backing, memory bounds, or caller authority. The raw decoder's
 // eight-entry encoding registry remains distinct from these sixteen Go names.
@@ -155,9 +165,10 @@ func x86TypedPackedIntegerCompareByteEffect(op Op, ins Instr, arch string) (x86T
 	if form.memory >= 0 {
 		firstWidth = form.memoryBytes
 	}
+	readInputs := !form.identicalVectorInputs(ins)
 	operands := []x86TypedByteOperand{
-		{index: form.first, operand: form.source, width: int64(firstWidth), read: true},
-		{index: form.second, operand: ins.Args[form.second], width: int64(form.byteWidth), read: true},
+		{index: form.first, operand: form.source, width: int64(firstWidth), read: readInputs},
+		{index: form.second, operand: ins.Args[form.second], width: int64(form.byteWidth), read: readInputs},
 	}
 	if form.mask >= 0 {
 		operands = append(operands, x86TypedByteOperand{index: form.mask, operand: ins.Args[form.mask], width: 8, read: true})
