@@ -1,5 +1,45 @@
 # Current work: PR 40 checkpoint
 
+## Logical/compare closing batch, 2026-10-18
+
+Fork run 39054965721 at `8ca976c6` has passed all 65 prerequisites, including
+the previously failing completed-ci-repair lane. Its complete Windows modules
+are now running; let them finish naturally before another batch push. The
+current native Linux artifacts independently audit 71 roots / 228 children,
+with no failed, skipped or incomplete terminals. These receipts bind `8ca976c6`.
+PR40's body is refreshed but its draft contribution head remains `24851df2`.
+
+Independent RED at `91a1cb0d` finds 1,000 Void/unused-bool native-input bypasses
+across all 48 logical and packed EQ/GT names, with zero initialized-positive
+failures. Six production lines route the complete existing grammars through
+the existing source proof; no arithmetic or memory permission changes.
+At `54a22355`, the complete 38-root / 7,219-child union passes current Go,
+actual Go 1.20 and race with identical terminals and unchanged observations.
+It includes nine exact historical CI failure roots, not nine new opcodes.
+All original format rows and Go objects remain, with public Context controls,
+separate emitter-only objects and independently initialized public positives.
+The sealed eight-SDK audit changes exactly 266 AMD64 isolated forms per SDK
+from supported to context-required, with no other metric/form changes.
+
+The additional full old-CI regression catches the external-symbol sink fixture:
+it is explicitly format-only, has no bound external cell and retains unclosed
+x87 state. Preserve every original Go object, all-three-API Context and all
+emitter-only formats; retain existing initialized, balanced integer counterparts.
+The test driver also needs actual source-derived SIMD features and scalar FP
+dispatch. At `56b970c1`, that complete 24-root / 2,202-child union passes all
+three lanes with unchanged observations and identical terminals. Later changes
+are test-only: do not relabel the separate `54a22355` receipt as current-head
+full-module success. Both failed intermediate reports remain failed.
+
+At `56b970c1`, build, vet, nine scanner roots on current Go and Go 1.20, the
+five-arch official classification gate, CLI extraction, all 130 CI policies
+and tracked formatting pass. No local inventory scanner runs. The last complete
+Windows root denominator remains run 39034893053's 181 failed roots until a
+fresh complete result replaces it. Full canonical CI, the strict benchmark and
+fresh head review remain unqualified; do not mark ready or invent a percentage.
+Next: inspect the running fork's actual full-module failures, repair by complete
+rule class, then publish a verified batch only after this run finishes.
+
 ## Packed source obligations and completed CI feedback, 2026-10-18
 
 Fork run39050102570 at `edda1974` finished naturally:64 jobs pass, one fails
