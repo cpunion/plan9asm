@@ -165,7 +165,10 @@ jobs:
           set -euo pipefail
           directory=_out/native-x86-oracles/floating-compare
           mkdir -p "$directory"
-          roots='TestCrossLinuxRuntimeMatrixX86FloatingCompareIndependentIEEEAndMXCSR|TestCrossLinuxRuntimeMatrixX86FloatingCompareDeadResultEffects|TestCrossLinuxRuntimeMatrixX86FloatingCompareFPScalarByteSpans|TestCrossLinuxRuntimeMatrixX86FloatingCompareLegacyUpperAliases'
+          roots='TestCrossLinuxRuntimeMatrixX86FloatingCompareIndependentIEEEAndMXCSR'
+          roots+='|TestCrossLinuxRuntimeMatrixX86FloatingCompareDeadResultEffects'
+          roots+='|TestCrossLinuxRuntimeMatrixX86FloatingCompareFPScalarByteSpans'
+          roots+='|TestCrossLinuxRuntimeMatrixX86FloatingCompareLegacyUpperAliases'
           go test . -list "^($roots)$" > "$directory/inventory.log"
           for root in ${roots//|/ }; do
             grep -Fx "$root" "$directory/inventory.log"

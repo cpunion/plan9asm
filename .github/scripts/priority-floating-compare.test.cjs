@@ -12,7 +12,8 @@ const block = `      - name: Execute LLVM floating comparison results and native
           set -euo pipefail
           directory=_out/native-x86-oracles/floating-compare
           mkdir -p "$directory"
-          roots='${roots.join('|')}'
+          roots='${roots[0]}'
+${roots.slice(1).map(root => `          roots+='|${root}'`).join('\n')}
           go test . -list "^($roots)$" > "$directory/inventory.log"
           for root in \${roots//|/ }; do
             grep -Fx "$root" "$directory/inventory.log"
