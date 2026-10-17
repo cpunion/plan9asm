@@ -7,14 +7,20 @@ import (
 	"testing"
 )
 
-func x86ArithmeticShiftValueRows(string) []struct{ op, bank, mode string } {
+func x86ArithmeticShiftValueRows(arch string) []struct{ op, bank, mode string } {
 	var rows []struct{ op, bank, mode string }
 	for _, name := range x86ArithmeticShiftTestNames() {
 		for _, bank := range []string{"X", "Y", "Z"} {
 			if name[0] != 'V' && bank != "X" {
 				continue
 			}
-			rows = append(rows, struct{ op, bank, mode string }{name, bank, "plain"})
+			modes := []string{"plain"}
+			if arch == "amd64" && name[0] == 'V' {
+				modes = append(modes, "merge", "zero")
+			}
+			for _, mode := range modes {
+				rows = append(rows, struct{ op, bank, mode string }{name, bank, mode})
+			}
 		}
 	}
 	return rows
@@ -36,7 +42,7 @@ func TestX86ArithmeticShiftInitializedFiveTargetObjects(t *testing.T) {
 	if llc == "" {
 		t.Fatal("LLVM22 llc required")
 	}
-	if len(x86ArithmeticShiftValueRows("amd64")) != 20 {
+	if len(x86ArithmeticShiftValueRows("amd64")) != 56 || len(x86ArithmeticShiftValueRows("386")) != 20 {
 		t.Fatal("complete arithmetic opcode/width denominator changed")
 	}
 	for _, target := range x86RawReturnTargets {
@@ -76,9 +82,11 @@ static const struct kernel kernels[]={
 ` + rows + `};
 int main(void) {
     const uint64_t counts[]={0,1,7,8,15,16,31,32,63,64,127,255,256,UINT64_C(0x100000000),UINT64_MAX};
+    const shift_word masks[]={0,1,(shift_word)0xa55a9c63f00fc33cULL,(shift_word)-1};
     for(unsigned k=0;k<sizeof(kernels)/sizeof(kernels[0]);k++) {
         const struct kernel *p=&kernels[k];
-        for(unsigned sample=0;sample<33;sample++)for(unsigned c=0;c<sizeof(counts)/sizeof(counts[0]);c++) {
+        for(unsigned sample=0;sample<33;sample++)for(unsigned c=0;c<sizeof(counts)/sizeof(counts[0]);c++)
+                for(unsigned m=0;m<sizeof(masks)/sizeof(masks[0]);m++) {
             uint8_t a[67],b[67],a_before[67],b_before[67],out[67],want[64];
             memset(a,0xa7,sizeof(a));memset(b,0x91,sizeof(b));memset(out,0xc3,sizeof(out));
             for(unsigned i=0;i<64;i++)b[i+1]=(i*73+sample*29)^(sample>>1);
@@ -88,6 +96,10 @@ int main(void) {
             memcpy(a_before,a,67);memcpy(b_before,b,67);memcpy(want,b+1,64);
             if(!p->legacy)memset(want+p->width,0,64-p->width);
             for(unsigned lane=0;lane<p->width/(p->bits/8);lane++) {
+                if(p->mode && !(masks[m]>>lane&1)) {
+                    if(p->mode==2)memset(want+lane*(p->bits/8),0,p->bits/8);
+                    continue;
+                }
                 unsigned at=p->per_lane?lane*count_bytes:0;
                 uint64_t shift=0;
                 for(unsigned byte=0;byte<count_bytes;byte++)shift|=(uint64_t)a[1+at+byte]<<(byte*8);
@@ -100,7 +112,7 @@ int main(void) {
                     want[output/8]=(want[output/8]&~(1u<<(output%8)))|(value<<(output%8));
                 }
             }
-            p->fn(a+1,b+1,out+1,0);
+            p->fn(a+1,b+1,out+1,masks[m]);
             if(memcmp(out+1,want,64)||out[65]!=1||out[0]!=0xc3||out[66]!=0xc3||
                     memcmp(a,a_before,67)||memcmp(b,b_before,67)) {
                 fprintf(stderr,"arithmetic shift row=%u sample=%u count=%u width=%u bits=%u\n",k,sample,c,p->width,p->bits);
@@ -125,5 +137,5 @@ int main(void) {
 			}
 		})
 	}
-	t.Log("20 complete opcode/width kernels; full 64-byte aliases, CF, input/output canaries and unsigned saturating counts; portable LLVM only")
+	t.Log("complete opcode/width kernels and Go-valid merge/zero masks; full 64-byte aliases, CF, input/output canaries and unsigned saturating counts; portable LLVM only")
 }

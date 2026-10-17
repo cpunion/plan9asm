@@ -120,14 +120,11 @@ func TestTranslateRawPackedArithmeticShiftLLVM22Targets(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			ir, err := Translate(file, Options{
+			ir := x86PackedShiftRawFormatObject(t, file, Options{
 				Goarch:       target.goarch,
 				TargetTriple: target.triple,
 				Sigs:         map[string]FuncSig{"packedArithmeticShiftRaw": {Name: "packedArithmeticShiftRaw", Ret: Void}},
 			})
-			if err != nil {
-				t.Fatal(err)
-			}
 			compileLLVMToObject(t, llc, target.triple, "raw-arithmetic-shift.ll", "raw-arithmetic-shift.o", ir)
 		})
 	}
