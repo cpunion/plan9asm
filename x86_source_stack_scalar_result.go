@@ -186,8 +186,9 @@ func x86SourceStackScalarMerge(left, right x86SourceStackState) (x86SourceStackS
 			cell.partialNumericFlags = mask
 		}
 	}
-	result.scalarResult = a.clone()
-	result.scalarResult.bytes = a.bytes.intersect(b.bytes)
+	value := *a
+	value.bytes = a.bytes.intersect(b.bytes)
+	result.scalarResult = &value
 	x86SourceStackSetNumericFlags(&result, x86SourceStackNumericFlagMask(&left)&x86SourceStackNumericFlagMask(&right))
 	result.gOriginal = left.gOriginal && right.gOriginal
 	return result, true
