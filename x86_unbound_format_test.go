@@ -53,3 +53,13 @@ func x86UnboundVoidScalarFormatObject(t *testing.T, source, name, arch, triple s
 	file, signatures := x86UnboundVoidFormatSource(t, source, name, arch, triple)
 	return x86ScalarFormatObjectUnit(t, file, signatures, arch, triple, 0)
 }
+
+func x86UnboundVoidRawScalarFormatObject(t *testing.T, source, arch, triple string) string {
+	t.Helper()
+	file, signatures := x86UnboundVoidFormatSources(t, source, arch, triple)
+	normalized, err := normalizeX86RawFile(file, arch)
+	if err != nil {
+		t.Fatal("original format bytes could not be decoded", err)
+	}
+	return x86ScalarFormatObjectUnit(t, normalized, signatures, arch, triple, 0)
+}

@@ -2080,7 +2080,7 @@ func TestTranslateAMD64LegacyIntegerToFloatConversionFamilyRejectsNonGoForms(t *
 }
 
 func TestTranslateAMD64ScalarFloatBroadcastFamilyCompleteGo127Forms(t *testing.T) {
-	ll := translateAMD64EcosystemCase(t, `
+	ll := x86UnboundVoidScalarFormatObject(t, `
 TEXT scalarfloatbroadcasts(SB),NOSPLIT,$0-0
 	VBROADCASTSS X0, X1
 	VBROADCASTSS 4(AX), Y1
@@ -2093,7 +2093,7 @@ TEXT scalarfloatbroadcasts(SB),NOSPLIT,$0-0
 	VBROADCASTSD X16, K1, Y17
 	VBROADCASTSD.Z 16(AX), K2, Z18
 	RET
-`, "scalarfloatbroadcasts")
+`, "scalarfloatbroadcasts", "amd64", "x86_64-unknown-linux-gnu")
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc not found")
@@ -2479,7 +2479,12 @@ TEXT avxunpackbroadcast(SB),NOSPLIT,$0-0
 	VPSLLD $12, Z5, Z13
 	RET
 `
-	translateAMD64EcosystemCase(t, src, "avxunpackbroadcast")
+	ll := x86UnboundVoidScalarFormatObject(t, src, "avxunpackbroadcast", "amd64", "x86_64-unknown-linux-gnu")
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM 22 llc not found")
+	}
+	compileLLVMToObject(t, llc, "x86_64-unknown-linux-gnu", "avx-unpack-broadcast-formats.ll", "avx-unpack-broadcast-formats.o", ll)
 }
 
 func TestTranslateAMD64DwordShuffleCompleteGoAssemblerForms(t *testing.T) {

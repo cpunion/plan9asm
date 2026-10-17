@@ -138,7 +138,7 @@ TEXT bits(SB),NOSPLIT,$0-16
 // and klauspost/reedsolomon respectively. Keep the related unpack spellings
 // together so the source-level aliases cannot drift apart.
 func TestTranslateDiscoveredX86VectorForms(t *testing.T) {
-	ir := translateEcosystemScalarForms(t, ArchAMD64, "x86_64-unknown-linux-gnu", "amd64", `
+	ir := x86UnboundVoidScalarFormatObject(t, `
 TEXT vectors(SB),NOSPLIT,$0-0
 	PMULULQ X2, X8
 	PUNPCKLLQ X1, X2
@@ -149,12 +149,17 @@ TEXT vectors(SB),NOSPLIT,$0-0
 	POPCNTQ -8(SI)(BX*1), R11
 	POPCNTL 4(AX), R10
 	RET
-`)
+`, "vectors", "amd64", "x86_64-unknown-linux-gnu")
 	for _, want := range []string{"mul <2 x i64>", "shufflevector <4 x i32>", "shufflevector <2 x i64>", "@llvm.ctpop.i64", "@llvm.ctpop.i32"} {
 		if !strings.Contains(ir, want) {
 			t.Fatalf("discovered x86 vector forms are missing %q:\n%s", want, ir)
 		}
 	}
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM 22 llc not found")
+	}
+	compileLLVMToObject(t, llc, "x86_64-unknown-linux-gnu", "discovered-vector-formats.ll", "discovered-vector-formats.o", ir)
 }
 
 // These forms come from github.com/aead/siphash@v1.0.1,
