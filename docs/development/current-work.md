@@ -1,5 +1,47 @@
 # Current work: PR 40 checkpoint
 
+## BEXTR and retained scalar formats, 2026-10-18
+
+This section supersedes older checkpoints below. The last complete fork run
+remains39034893053 at `60b321cd`:81 passing jobs,17 failing jobs and181 failed
+root tests. Do not subtract local focused passes from that CI denominator.
+Five of those exact root names already have later focused passing receipts;
+the scalar format repair below adds six more. New regression counts are not
+counts of repaired historical failures. Publish verified closing batches to
+the allowed fork and let its complete run finish; do not defer that feedback
+while expanding independent inventories or proof infrastructure.
+
+At `044ba460`, BEXTRL/Q and retained count/bool controls pass17 roots and712
+children on current Go, actual Go1.20 and race, with identical terminal sets
+and unchanged source/SDK/LLVM22 observations. One typed grammar shares control
+START/LEN bytes, physical mode32 width, source reads, destination writes and
+defined CF/OF/ZF. Exact volatile native reads remain even for LEN=0/dead output.
+The unchanged original CI assembly and driver retain three-target objects and
+actual-host portable execution; all65,536 control pairs retain aliases, flags,
+canaries and guarded dead reads. These are not native x86 execution receipts.
+The original host-inapplicable runtime replay remains a failed strict receipt,
+not a passing or completed test. Its native CI owner still needs execution.
+
+The sealed old/current Go1.20-1.27 audit changes exactly four isolated AMD64
+BEXTR forms per SDK from supported to context-required;386 and all other
+metrics/forms remain unchanged, with no new unsupported form. The baseline
+retains missing control/source context rather than invented initial values.
+
+The original six INC/DEC, NOT and ADD/SUB format roots independently reproduce
+their CI failures at `044ba460`. At `eb7eecc2`, they pass with original Go
+objects, all-three-API Context controls and separate emitter-only LLVM objects.
+No original assembly
+row is removed and no entry/frame/input permission is broadened. Their complete
+retained17-root/7,184-child union passes current Go, actual Go1.20 and race with
+identical terminals and unchanged observations. Build, vet, seven scanner roots
+on both SDKs, the current-Go five-arch official gate, CLI extraction, all130 CI
+policy tests and tracked formatting pass. These are not complete-module passes.
+
+Next: refresh the complete fork CI failure index, then repair its remaining
+typed effects, MMX regions, raw/source roles and format contracts by rule class.
+The strict benchmark still has only its older132/184 pass,52 fail result with
+AMD64 over budget. Neither it nor current-head full CI is qualified yet.
+
 ## Floating comparison and broadcast closing batch, 2026-10-17
 
 This section supersedes older checkpoints below. Fork run39034893053 at
