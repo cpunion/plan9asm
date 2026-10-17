@@ -234,72 +234,82 @@ func TestGoAMD64FixedLocalConversionExactMemoryTuples(t *testing.T) {
 	}
 }
 
-func TestGoAMD64FixedLocalConversionActualObjects(t *testing.T) {
+func TestGoAMD64FixedLocalConversionActualObjectsLinux(t *testing.T) {
+	fixedLocalConversionActualObjects(t, "linux/amd64", "x86_64-unknown-linux-gnu")
+}
+
+func TestGoAMD64FixedLocalConversionActualObjectsDarwin(t *testing.T) {
+	fixedLocalConversionActualObjects(t, "darwin/amd64", "x86_64-apple-darwin")
+}
+
+func TestGoAMD64FixedLocalConversionActualObjectsWindows(t *testing.T) {
+	fixedLocalConversionActualObjects(t, "windows/amd64", "x86_64-pc-windows-msvc")
+}
+
+func fixedLocalConversionActualObjects(t *testing.T, target, triple string) {
+	t.Helper()
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc required")
 	}
 	rows := fixedLocalConversionOperations()
-	for _, target := range []struct{ name, triple string }{
-		{"linux/amd64", "x86_64-unknown-linux-gnu"},
-		{"darwin/amd64", "x86_64-apple-darwin"},
-		{"windows/amd64", "x86_64-pc-windows-msvc"},
-	} {
-		seen := 0
-		for start := 0; start < len(rows); start += 64 {
-			end := start + 64
-			if end > len(rows) {
-				end = len(rows)
+	// Smaller independent source/LLVM units retain every operation and API;
+	// the original 64-function units exhausted the complete-shard deadline.
+	const batchSize = 8
+	seen := 0
+	for start := 0; start < len(rows); start += batchSize {
+		end := start + batchSize
+		if end > len(rows) {
+			end = len(rows)
+		}
+		seen += end - start
+		t.Run(fmt.Sprintf("batch%d", start/batchSize), func(t *testing.T) {
+			var assembly, declarations strings.Builder
+			for index := start; index < end; index++ {
+				name := fmt.Sprintf("Value%d", index)
+				body := fixedLocalPackedAssembly(fixedLocalConversionOperation(rows[index]))
+				assembly.WriteString(strings.Replace(body, "·Value", "·"+name, 1))
+				fmt.Fprintf(&declarations, "func %s(a uint64) uint64\n", name)
 			}
-			seen += end - start
-			t.Run(fmt.Sprintf("%s/batch%d", target.name, start/64), func(t *testing.T) {
-				var assembly, declarations strings.Builder
-				for index := start; index < end; index++ {
-					name := fmt.Sprintf("Value%d", index)
-					body := fixedLocalPackedAssembly(fixedLocalConversionOperation(rows[index]))
-					assembly.WriteString(strings.Replace(body, "·Value", "·"+name, 1))
-					fmt.Fprintf(&declarations, "func %s(a uint64) uint64\n", name)
-				}
-				pkg, request, file, options := x86CMOVFixedLocalFixture(t,
-					assembly.String(), declarations.String(), target.name, target.triple)
-				source := requireGoAMD64FrameCapture(t, pkg, request)
-				// Match the actual producer's complete CPP output, including
-				// spaces before opcode suffix tokens. Keep the original file
-				// unchanged; its raw text is part of the binding fingerprint.
-				expanded, err := source.preprocess(request.AssemblyFile, []byte(assembly.String()))
+			pkg, request, file, options := x86CMOVFixedLocalFixture(t,
+				assembly.String(), declarations.String(), target, triple)
+			source := requireGoAMD64FrameCapture(t, pkg, request)
+			// Match the actual producer's complete CPP output, including
+			// spaces before opcode suffix tokens. Keep the original file
+			// unchanged; its raw text is part of the binding fingerprint.
+			expanded, err := source.preprocess(request.AssemblyFile, []byte(assembly.String()))
+			if err != nil {
+				t.Fatal(err)
+			}
+			file, err = Parse(ArchAMD64, expanded)
+			if err != nil {
+				t.Fatal(err)
+			}
+			ctx, cancel := runtimeOracleStageContext(t)
+			defer cancel()
+			bound, err := source.BindFixedLocal(ctx, pkg, file, options)
+			if err != nil {
+				t.Fatal(err)
+			}
+			fixedLocalAPIs(t, pkg, file, bound, func(t *testing.T, ir string, err error) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				file, err = Parse(ArchAMD64, expanded)
-				if err != nil {
-					t.Fatal(err)
+				if !strings.Contains(ir, "fixed_local_native") || !strings.Contains(ir, "asm sideeffect") {
+					t.Fatal("conversion did not consume native private backing")
 				}
-				ctx, cancel := runtimeOracleStageContext(t)
-				defer cancel()
-				bound, err := source.BindFixedLocal(ctx, pkg, file, options)
-				if err != nil {
-					t.Fatal(err)
+				for _, optimize := range []bool{false, true} {
+					input := ir
+					if optimize {
+						input = x86MulDivRoundOptimize(t, ir)
+					}
+					compileLLVMToObject(t, llc, triple, "frame-conversion.ll", "frame-conversion.o", input)
 				}
-				fixedLocalAPIs(t, pkg, file, bound, func(t *testing.T, ir string, err error) {
-					if err != nil {
-						t.Fatal(err)
-					}
-					if !strings.Contains(ir, "fixed_local_native") || !strings.Contains(ir, "asm sideeffect") {
-						t.Fatal("conversion did not consume native private backing")
-					}
-					for _, optimize := range []bool{false, true} {
-						input := ir
-						if optimize {
-							input = x86MulDivRoundOptimize(t, ir)
-						}
-						compileLLVMToObject(t, llc, target.triple, "frame-conversion.ll", "frame-conversion.o", input)
-					}
-				})
 			})
-		}
-		if seen != len(rows) {
-			t.Fatalf("%s covered %d/%d conversion forms", target.name, seen, len(rows))
-		}
+		})
 	}
-	t.Logf("complete object plan: %d forms, three actual-Go targets, three LLVM APIs, O0/O2", len(rows))
+	if seen != len(rows) {
+		t.Fatalf("%s covered %d/%d conversion forms", target, seen, len(rows))
+	}
+	t.Logf("complete %s object plan: %d forms, three LLVM APIs, O0/O2", target, len(rows))
 }
