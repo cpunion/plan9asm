@@ -20,14 +20,8 @@ func TestX86FloatCompareNativeOriginalInstruction(t *testing.T) {
 		"VCMPPS.BCST $31,3(AX),Z1,K3,K2", "VCMPSS.SAE $31,X0,X1,K3,K2",
 	} {
 		t.Run(row, func(t *testing.T) {
-			file, err := Parse(ArchAMD64, "TEXT f(SB),4,$0-0\n"+row+"\nRET\n")
-			if err != nil {
-				t.Fatal(err)
-			}
-			ir, err := Translate(file, Options{Goarch: "amd64", Sigs: map[string]FuncSig{"f": {Ret: Void}}})
-			if err != nil {
-				t.Fatal(err)
-			}
+			source := "TEXT f(SB),4,$0-0\n" + row + "\nRET\n"
+			ir := x86FloatingCompareUnboundFormatObject(t, source, "amd64", "x86_64-unknown-linux-gnu")
 			opcode := strings.ToLower(strings.Split(row, " ")[0])
 			opcode = strings.Split(opcode, ".")[0]
 			if !strings.Contains(ir, "asm sideeffect") || !strings.Contains(ir, opcode+" $$") || strings.Contains(ir, " = fcmp ") {
@@ -43,26 +37,17 @@ func TestX86FloatCompareNativeAllPredicatesObjectsAndDeadO2(t *testing.T) {
 		t.Fatal("LLVM22 llc required")
 	}
 	var source strings.Builder
-	sigs := map[string]FuncSig{}
 	count := 0
 	for _, opcode := range x86FloatCompareOpcodes() {
 		for _, row := range x86FloatCompareOracleCases(opcode) {
 			name := fmt.Sprintf("native_compare%d", count)
 			fmt.Fprintf(&source, "TEXT %s(SB),4,$0-0\n%s\nRET\n", name, row.row)
-			sigs[name] = FuncSig{Name: name, Ret: Void}
 			count++
 		}
 	}
-	file, err := Parse(ArchAMD64, source.String())
-	if err != nil {
-		t.Fatal(err)
-	}
 	goAssemblerOracleOutput(t, "amd64", source.String(), "", true)
 	for _, triple := range []string{"x86_64-apple-macosx", "x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc"} {
-		ir, err := Translate(file, Options{Goarch: "amd64", TargetTriple: triple, Sigs: sigs})
-		if err != nil {
-			t.Fatal(err)
-		}
+		ir := x86FloatingCompareUnboundFormatObject(t, source.String(), "amd64", triple)
 		if strings.Count(ir, "asm sideeffect") != count {
 			t.Fatalf("whole-instruction sideeffects=%d want=%d", strings.Count(ir, "asm sideeffect"), count)
 		}
@@ -96,18 +81,12 @@ func TestX86FloatCompareNativePhysicalMemoryAndPrefixContract(t *testing.T) {
 	}
 	for _, arch := range []string{"386", "amd64"} {
 		var source strings.Builder
-		sigs := map[string]FuncSig{}
 		for index, row := range []string{
 			"CMPPS 16(AX)(CX*4),X1,$127", "CMPSS 3(FS),X1,$-128",
 			"CMPPD 16(GS),X1,$-1", "CMPSD 256,X1,$7",
 		} {
 			name := fmt.Sprintf("memory%d", index)
 			fmt.Fprintf(&source, "TEXT %s(SB),4,$0-0\n%s\nRET\n", name, row)
-			sigs[name] = FuncSig{Ret: Void}
-		}
-		file, err := Parse(ArchAMD64, source.String())
-		if err != nil {
-			t.Fatal(err)
 		}
 		goAssemblerOracleOutput(t, arch, source.String(), "", true)
 		triples := []string{"x86_64-apple-macosx", "x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc"}
@@ -115,10 +94,7 @@ func TestX86FloatCompareNativePhysicalMemoryAndPrefixContract(t *testing.T) {
 			triples = []string{"i386-unknown-linux-gnu", "i686-pc-windows-msvc"}
 		}
 		for _, triple := range triples {
-			ir, err := Translate(file, Options{Goarch: arch, TargetTriple: triple, Sigs: sigs})
-			if err != nil {
-				t.Fatal(err)
-			}
+			ir := x86FloatingCompareUnboundFormatObject(t, source.String(), arch, triple)
 			for _, want := range []string{"%fs:$2", "%gs:$2", "elementtype([16 x i8])", "elementtype([4 x i8])", "elementtype([8 x i8])", "$$127", "$$128", "$$255"} {
 				if !strings.Contains(ir, want) {
 					t.Fatalf("%s original memory/predicate contract lost %s:\n%s", arch, want, ir)
@@ -169,7 +145,6 @@ func TestX86FloatCompareNativeRawMode32PhysicalForms(t *testing.T) {
 		t.Fatal("LLVM22 mc/llc required")
 	}
 	var source strings.Builder
-	sigs := map[string]FuncSig{}
 	count := 0
 	for pp := byte(0); pp < 4; pp++ {
 		widths := []byte{0, 1, 2}
@@ -205,22 +180,14 @@ func TestX86FloatCompareNativeRawMode32PhysicalForms(t *testing.T) {
 						fmt.Fprintf(&source, "BYTE $%d\n", b)
 					}
 					source.WriteString("RET\n")
-					sigs[name] = FuncSig{Name: name, Ret: Void}
 					count++
 				}
 			}
 		}
 	}
 	goAssemblerOracleOutput(t, "386", source.String(), "", true)
-	file, err := Parse(ArchAMD64, source.String())
-	if err != nil {
-		t.Fatal(err)
-	}
 	for _, triple := range []string{"i386-unknown-linux-gnu", "i686-pc-windows-msvc"} {
-		ir, err := Translate(file, Options{Goarch: "386", TargetTriple: triple, Sigs: sigs})
-		if err != nil {
-			t.Fatal(err)
-		}
+		ir := x86FloatingCompareUnboundFormatObject(t, source.String(), "386", triple)
 		compileLLVMToObject(t, llc, triple, "raw-native-compare.ll", "raw-native-compare.o", ir)
 	}
 	t.Logf("%d physical low-bank i386 forms independently decoded by LLVM22; 2 objects", count)
@@ -256,25 +223,41 @@ func TestX86FloatCompareNativeScalarFPIndependentByteFields(t *testing.T) {
 		if strings.HasPrefix(opcode, "V") {
 			row = opcode + " $3,a+0(FP),X1,K3,K2"
 		}
-		file, err := Parse(ArchAMD64, "TEXT f(SB),4,$0-8\n"+row+"\nRET\n")
-		if err != nil {
-			t.Fatal(err)
-		}
+		original := "TEXT f(SB),4,$0-8\n" + row + "\nRET\n"
 		sig := FuncSig{Ret: Void}
+		var names []string
 		for index := 0; index < width; index++ {
 			sig.Args = append(sig.Args, I8)
 			sig.Frame.Params = append(sig.Frame.Params, FrameSlot{Offset: int64(index), Type: I8, Index: index, Field: -1})
+			names = append(names, string(rune('a'+index)))
 		}
-		ir, err := Translate(file, Options{Goarch: "amd64", Sigs: map[string]FuncSig{"f": sig}})
+		declaration := "func f(" + strings.Join(names, ",") + " uint8)"
+		x86LEAActualTargetGoObject(t, "amd64", "x86_64-unknown-linux-gnu", original)
+		prefix := "PXOR X1,X1\n"
+		if strings.HasPrefix(opcode, "V") {
+			prefix += "MOVL $1,AX\nKMOVW AX,K3\n"
+		}
+		source := strings.Replace(original, row+"\n", prefix+row+"\n", 1)
+		x86LEAActualTargetGoObject(t, "amd64", "x86_64-unknown-linux-gnu", source)
+		for _, api := range []string{"text", "module", "Go"} {
+			if ir, err := x86ScalarFPBitViewAPI(t, original, declaration, "amd64", "x86_64-unknown-linux-gnu", api); ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+				t.Fatal("original FP format invented its vector or mask input", opcode, api, err)
+			}
+			ir, err := x86ScalarFPBitViewAPI(t, source, declaration, "amd64", "x86_64-unknown-linux-gnu", api)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if strings.Contains(ir, "elementtype(") || !strings.Contains(ir, "asm sideeffect") || strings.Count(ir, "load i8, ptr %fp_") != width {
+				t.Fatalf("%s invented contiguous native FP backing or omitted field bytes:\n%s", row, ir)
+			}
+			compileLLVMToObject(t, llc, "x86_64-unknown-linux-gnu", "scalar-fp.ll", "scalar-fp.o", ir)
+		}
+		// Even an inactive EVEX mask cannot bless an invalid source span.
+		sig.Frame.Params = sig.Frame.Params[:width-1]
+		file, err := Parse(ArchAMD64, source)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if strings.Contains(ir, "elementtype(") || !strings.Contains(ir, "asm sideeffect") || strings.Count(ir, "load i8, ptr %fp_") != width {
-			t.Fatalf("%s invented contiguous native FP backing or omitted field bytes:\n%s", row, ir)
-		}
-		compileLLVMToObject(t, llc, "x86_64-unknown-linux-gnu", "scalar-fp.ll", "scalar-fp.o", ir)
-		// Even an inactive EVEX mask cannot bless an invalid source span.
-		sig.Frame.Params = sig.Frame.Params[:width-1]
 		if _, err := Translate(file, Options{Goarch: "amd64", Sigs: map[string]FuncSig{"f": sig}}); err == nil {
 			t.Fatalf("%s missing final FP byte accepted", row)
 		}
@@ -282,14 +265,8 @@ func TestX86FloatCompareNativeScalarFPIndependentByteFields(t *testing.T) {
 }
 
 func TestX86FloatCompareNativeMixedISAUsesLowVEXConstraints(t *testing.T) {
-	file, err := Parse(ArchAMD64, "TEXT f(SB),4,$0-0\nCMPSS X0,X1,$3\nVCMPPS $3,Y0,Y1,Y2\nVCMPPS $3,Z0,Z1,K2\nRET\n")
-	if err != nil {
-		t.Fatal(err)
-	}
-	ir, err := Translate(file, Options{Goarch: "amd64", Sigs: map[string]FuncSig{"f": {Ret: Void}}})
-	if err != nil {
-		t.Fatal(err)
-	}
+	const source = "TEXT f(SB),4,$0-0\nCMPSS X0,X1,$3\nVCMPPS $3,Y0,Y1,Y2\nVCMPPS $3,Z0,Z1,K2\nRET\n"
+	ir := x86FloatingCompareUnboundFormatObject(t, source, "amd64", "x86_64-unknown-linux-gnu")
 	if !strings.Contains(ir, `"=x,0,x,`) || !strings.Contains(ir, `"=x,x,x,`) || !strings.Contains(ir, `"=r,v,v,`) {
 		t.Fatalf("mixed EVEX function widened a legacy/VEX physical register class:\n%s", ir)
 	}

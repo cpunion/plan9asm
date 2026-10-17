@@ -68,29 +68,20 @@ func TestX86FloatingCompareCompleteGoGrammarFiveTargets(t *testing.T) {
 	}
 	for _, arch := range []string{"386", "amd64"} {
 		var source strings.Builder
-		sigs := map[string]FuncSig{}
 		for index, row := range x86FloatCompareGoForms(arch) {
 			name := fmt.Sprintf("compare_form%d", index)
 			fmt.Fprintf(&source, "TEXT %s(SB),4,$0-0\n%s\nRET\n", name, row)
-			sigs[name] = FuncSig{Name: name, Ret: Void}
 		}
 		goAssemblerOracleOutput(t, arch, source.String(), "", true)
-		file, err := Parse(ArchAMD64, source.String())
-		if err != nil {
-			t.Fatal(err)
-		}
 		triples := []string{"x86_64-unknown-linux-gnu", "x86_64-apple-macosx", "x86_64-pc-windows-msvc"}
 		if arch == "386" {
 			triples = []string{"i386-unknown-linux-gnu", "i686-pc-windows-msvc"}
 		}
 		for _, triple := range triples {
-			ir, err := Translate(file, Options{Goarch: arch, TargetTriple: triple, Sigs: sigs})
-			if err != nil {
-				t.Fatal(err)
-			}
+			ir := x86FloatingCompareUnboundFormatObject(t, source.String(), arch, triple)
 			compileLLVMToObject(t, llc, triple, "compare-formats.ll", "compare-formats.o", ir)
 		}
-		t.Logf("%s: %d independent Go compare forms", arch, len(sigs))
+		t.Logf("%s: %d original Go compare formats; public Context and emitter-only objects", arch, len(x86FloatCompareGoForms(arch)))
 	}
 }
 

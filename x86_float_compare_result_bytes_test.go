@@ -23,7 +23,11 @@ func TestX86FloatingCompareResultEveryByteMaskAndAlias(t *testing.T) {
 			state := x86ResultState{flags: x86ByteFlagsAll, direction: x86ResultDirectionBackward}
 			state.pointerGP[0], state.gp[1], state.masks[1] = true, 0xff, true
 			for index := 0; index < 32; index++ {
-				state.writeVector(index, 64, 0xaaaaaaaaaaaaaaaa|required, false)
+				pattern := uint64(0xaaaaaaaaaaaaaaaa)
+				if index&1 != 0 {
+					pattern = ^pattern
+				}
+				state.writeVector(index, 64, pattern|required, false)
 			}
 			before := state.clone()
 			if accepted, owned := x86ResultFloatCompareStep(ins, &state, nil, arch, true); !owned || !accepted {
