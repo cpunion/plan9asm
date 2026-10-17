@@ -1,5 +1,43 @@
 # Current work: PR 40 checkpoint
 
+## BZHI complete bit-field repair, 2026-10-18
+
+At `aec6c45a1`, the complete affected union passes26 roots/620 children on
+current Go, actual Go1.20 and race. All646 terminal identities match, with no
+failed, skipped or incomplete test and unchanged source/SDK/LLVM22 observations.
+The disjoint owners are core20/382 and objects/original programs6/238. Receipts
+use `bitfield-qualified-*`; the ignored qualification summary is
+`qualified-bitfield-aec6c45a.json`. Original RED and intermediate failures remain
+failed. These are focused checks, not full-module or native-x86 qualification.
+
+BEXTR and BZHI share the complete Go `_ybextrl` grammar, physical mode width,
+memory tuples and ordered byte dependencies, but retain independent controls
+and FLAGS. BZHI needs only the low index byte and defines CF/OF/ZF/SF. Mode32
+Q still reads/operates on32 bits. Exact volatile native reads survive zero
+controls and dead results without granting caller/raw/pointer authority.
+Independent Go rows/bytes, all GP banks, byte holes, aliases, all256 indices,
+ignored high control bits, canaries and read faults cover the family. Every
+original format row and original runtime source/driver remains; unbound formats
+retain all-three-API Context plus separate emitter-only objects. Initialized
+programs keep five-target objects and actual-host portable execution.
+
+The sealed Go1.20-1.27 audit changes exactly four isolated AMD64 BZHI forms
+per SDK from supported to context-required. Other forms/metrics,386 and
+unsupported counts do not change. At the same code head, build, vet, eleven
+scanner roots on both SDKs, the five-architecture official gate, three CLI
+extraction roots, all132 CI policies and tracked formatting pass. The required
+Linux scalar-BMI owner now includes the unchanged original BZHI runtime test;
+its execution is still required in a later published run, not a local receipt.
+
+The frozen fork run39065963275 still tests `06eedf847`, not this batch. Let it
+finish; do not cancel/restart a queued or running snapshot. Stage the verified
+code in the allowed fork without another CI trigger. The last complete main
+root denominator remains run39054965721's179 failures. Keep PR40 draft; native
+execution, canonical complete CI, the strict benchmark, coverage and fresh
+review are still required. An existing idle worktree holds the next sized-NOP
+RED tests while this verified source stays frozen; only one heavy local owner
+may run at a time.
+
 ## Paired native input repair and completed fork, 2026-10-18
 
 Fork run39063200769 at `1a882975d` finished naturally:64 jobs pass and one
