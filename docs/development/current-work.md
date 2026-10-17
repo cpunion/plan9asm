@@ -41,6 +41,7 @@ execution. All128 CI policy tests pass. Scanner input/trap and CLI extraction
 regressions pass current Go; the scanner also passes actual Go1.20. The rich
 CLI declares Go1.24 as its minimum: the attempted Go1.20 invocation fails while
 parsing that module's go.mod and is not a compatible-toolchain test pass.
+Its independent extraction regression passes actual Go1.24.13 as well.
 
 The published packed-frame partition at `5fd35696` has now passed all12 actual
 object owners:195 forms on each of three targets,12 roots/48 children, complete
