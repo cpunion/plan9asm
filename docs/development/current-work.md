@@ -1,5 +1,35 @@
 # Current work: PR 40 checkpoint
 
+## Complete physical scalar source-stack checkpoint, 2026-10-17
+
+Independent RED `48569024` reproduces 99 failure terminals: missing BP/SP
+numerical composition and false acceptance of undefined results, FLAGS and
+physical input writes. The shared bounded source-stack producer now tracks
+all actual integer result bytes, retains independent canonical bool bytes,
+transports private saved values/FLAGS, and intersects only must-facts across
+acyclic joins. SP/BP identities, stack-cell widths, caller/native permissions,
+replay seals and the existing finite byte/work budgets remain separate.
+
+At `0e480c57`, all fourteen focused/retained roots and 932 children pass
+current Go without failures/skips. This includes unchanged native CI sources,
+all five x86 object targets, three APIs, ownership/revocation controls and host
+LLVM execution with matching source/target pointer width. A 32-bit physical
+stack cannot carry a 64-bit host address: its earlier portable attempt remains
+failed, and actual original-Go/LLVM i386 execution remains required in CI.
+FP constant observations use the actual selected LLVM data layout. The original
+cross-parameter Go formats remain objects; AMD64's independent private parameter
+allocations do not invent contiguous neighbor storage. A separately bounded
+field-address counterpart retains inspectable numerical results on both modes.
+
+The complete 102-root prior arithmetic union passes current Go and actual
+Go20 (5,138 children each), but its race command timed out at the unchanged
+five-minute limit. That failed/incomplete receipt remains failed. Next qualify
+the complete 125-root combined union in four disjoint scheduling groups per
+SDK/race lane, without sampling roots or children or increasing command budgets.
+Published CI still tests older `e50292a9`; physical MMX state, current native
+execution, official/full-module gates and the strict benchmark remain open.
+No new push, local inventory process or external ledger pass was made.
+
 ## Linked-header and partial-byte arithmetic checkpoint, 2026-10-17
 
 At `8d45ac49`, all 91 changed/retained roots pass current Go, actual Go20
