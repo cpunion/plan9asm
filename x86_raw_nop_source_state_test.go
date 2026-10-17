@@ -5,6 +5,25 @@ import (
 	"testing"
 )
 
+func x86RawNOPSourceStateInstruction(t *testing.T, arch string, code []byte) Instr {
+	t.Helper()
+	file, err := Parse(ArchAMD64, "TEXT value(SB),4,$0-0\n"+x86RawDisplacementDirectives(code)+"RET\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	fn, err := decodeX86RawDirectives(file.Funcs[0], arch)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, ins := range fn.Instrs {
+		if ins.x86SourceRaw != nil {
+			return ins
+		}
+	}
+	t.Fatal("missing actual original/normalized raw handoff")
+	return Instr{}
+}
+
 func TestX86RawNOPCompleteSourceStateRetention(t *testing.T) {
 	for _, mode := range []int{32, 64} {
 		arch := "amd64"
@@ -13,11 +32,7 @@ func TestX86RawNOPCompleteSourceStateRetention(t *testing.T) {
 		}
 		for _, code := range x86RawNOPWitnesses(mode) {
 			t.Run(fmt.Sprintf("mode%d/%x", mode, code), func(t *testing.T) {
-				instructions, err := decodeX86RawDirectiveGroup(code, mode, 0, "original NOP", nil)
-				if err != nil || len(instructions) != 1 {
-					t.Fatal("complete physical NOP handoff", instructions, err)
-				}
-				ins := instructions[0]
+				ins := x86RawNOPSourceStateInstruction(t, arch, code)
 				for _, direction := range []x86ResultDirection{0, 1, 2, 3} {
 					if got := x86ResultDirectionAfter(ins, direction); got != direction {
 						t.Fatal("inert raw NOP lost or invented DF", direction, got)
@@ -87,16 +102,13 @@ func TestX86RawNOPPrivateStackAndIDRetention(t *testing.T) {
 }
 
 func TestX86RawNOPStateRetentionRequiresExactHandoff(t *testing.T) {
-	instructions, err := decodeX86RawDirectiveGroup([]byte{0x0f, 0x1f, 0xc0}, 64, 0, "original NOP", nil)
-	if err != nil || len(instructions) != 1 || instructions[0].x86SourceRaw == nil {
-		t.Fatal("actual raw NOP handoff", instructions, err)
-	}
+	original := x86RawNOPSourceStateInstruction(t, "amd64", []byte{0x0f, 0x1f, 0xc0})
 	for _, mutation := range []string{
 		"original opcode", "original operands", "normalized opcode", "normalized operands",
 		"encoded", "raw return", "address size", "unbound address", "segment",
 	} {
 		t.Run(mutation, func(t *testing.T) {
-			ins := instructions[0]
+			ins := original
 			origin := *ins.x86SourceRaw
 			ins.x86SourceRaw = &origin
 			switch mutation {
