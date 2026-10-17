@@ -71,9 +71,9 @@ static void beginMMXMode(uint16_t *oldControl,uint32_t *oldCSR) {
  const uint16_t control=0x077f;
  const uint32_t csr=0x5f80;
  __asm__ volatile("fnstcw %0; stmxcsr %1; fninit; fldcw %2; ldmxcsr %3; "
-  "pcmpeqd %%mm6,%%mm6; emms; fld1"
+  "pcmpeqd %%mm0,%%mm0; pcmpeqd %%mm6,%%mm6; emms; fld1"
   : "=m"(*oldControl),"=m"(*oldCSR) : "m"(control),"m"(csr)
-  : "mm6","st","memory");
+  : "mm0","mm6","st","memory");
 }
 static int endMMXMode(uint64_t result,uint16_t control,uint32_t csr) {
  struct MMXModeImage image;
