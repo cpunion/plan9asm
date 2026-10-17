@@ -5,39 +5,17 @@ import "fmt"
 // lowerBEXTR implements Go 1.27's complete _ybextrl operand row for BEXTRL/Q:
 // register control, register/memory source, and register destination.
 func (c *amd64Ctx) lowerBEXTR(op Op, ins Instr) (ok bool, terminated bool, err error) {
-	bits := 0
-	switch op {
-	case "BEXTRL":
-		bits = 32
-	case "BEXTRQ":
-		bits = 64
-	default:
-		return false, false, nil
+	form, known, err := x86BEXTRProperties(op, ins, c.goarch)
+	if !known || err != nil {
+		return known, false, err
 	}
-	if len(ins.Args) != 3 {
-		return true, false, fmt.Errorf("%s %s expects register control, register/memory source, and register destination: %q", c.goarch, op, ins.Raw)
-	}
-	control, source, destination := ins.Args[0], ins.Args[1], ins.Args[2]
-	if control.Kind != OpReg || !isX86YrlRegisterForArch(control.Reg, c.goarch) {
-		return true, false, fmt.Errorf("%s %s control is outside Go 1.27's Yrl class: %q", c.goarch, op, ins.Raw)
-	}
-	if source.Kind == OpReg {
-		if !isX86YrlRegisterForArch(source.Reg, c.goarch) {
-			return true, false, fmt.Errorf("%s %s source is outside Go 1.27's Yml class: %q", c.goarch, op, ins.Raw)
-		}
-	} else if !isAMD64MemoryOperand(source) {
-		return true, false, fmt.Errorf("%s %s source is outside Go 1.27's Yml class: %q", c.goarch, op, ins.Raw)
-	}
-	if destination.Kind != OpReg || !isX86YrlRegisterForArch(destination.Reg, c.goarch) {
-		return true, false, fmt.Errorf("%s %s destination is outside Go 1.27's Yrl class: %q", c.goarch, op, ins.Raw)
-	}
-
+	bits := form.bits
 	typ := amd64IntegerTypeForBits(bits)
-	controlValue, err := c.evalIntSized(control, typ)
+	controlValue, err := c.evalIntSized(form.control, typ)
 	if err != nil {
 		return true, false, err
 	}
-	sourceValue, err := c.evalIntSized(source, typ)
+	sourceValue, err := c.evalBEXTRSource(ins, form, typ)
 	if err != nil {
 		return true, false, err
 	}
@@ -73,7 +51,7 @@ func (c *amd64Ctx) lowerBEXTR(op Op, ins Instr) (ok bool, terminated bool, err e
 	fmt.Fprintf(c.b, "  %%%s = select i1 %%%s, %s -1, %s %%%s\n", mask, isFullWidth, typ, typ, partialMask)
 	result := c.newTmp()
 	fmt.Fprintf(c.b, "  %%%s = and %s %%%s, %%%s\n", result, typ, shifted, mask)
-	if err := c.storeRegSized(destination.Reg, typ, "%"+result); err != nil {
+	if err := c.storeRegSized(form.destination.Reg, typ, "%"+result); err != nil {
 		return true, false, err
 	}
 	zero := c.newTmp()
@@ -82,4 +60,29 @@ func (c *amd64Ctx) lowerBEXTR(op Op, ins Instr) (ok bool, terminated bool, err e
 	fmt.Fprintf(c.b, "  store i1 false, ptr %s\n", c.flagsCFSlot)
 	fmt.Fprintf(c.b, "  store i1 false, ptr %s\n", c.flagsOFSlot)
 	return true, false, nil
+}
+
+func (c *amd64Ctx) evalBEXTRSource(ins Instr, form x86BEXTRForm, typ LLVMType) (string, error) {
+	if form.source.Kind == OpFP && x86ResultNamedPredicateInstruction(ins) {
+		if value, handled, err := c.loadIntegerFPBytesMode(form.source.FPOffset, typ, true); handled || err != nil {
+			return value, err
+		}
+	}
+	if isAMD64MemoryOperand(form.source) && form.source.Kind != OpFP &&
+		(x86OrdinaryNativeMemoryOperand(form.source, c.goarch) ||
+			x86CallerMemoryCertified(ins, 1) || c.fixedLocalMemoryCertified(ins, 1)) {
+		if ins.x86AddressBits != 0 || ins.x86UnboundAddressOverride {
+			return "", fmt.Errorf("%w: BEXTR needs its original native address size", ErrProbeNeedsContext)
+		}
+		pointer, pointerType, _, err := c.packedVectorMemoryPointer(form.source)
+		if err != nil {
+			return "", err
+		}
+		value := c.newTmp()
+		// Preserve the full physical read even for LEN=0 and dead outputs.
+		// Alignment, bounds and pointee validity are not optimizer assumptions.
+		fmt.Fprintf(c.b, "  %%%s = load volatile %s, %s %s, align 1\n", value, typ, pointerType, pointer)
+		return "%" + value, nil
+	}
+	return c.evalIntSized(form.source, typ)
 }

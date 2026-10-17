@@ -24,6 +24,9 @@ func x86TypedFPResultNeedsProof(fn Func, sig FuncSig, arch string) bool {
 	}
 	opaqueAddressResult := x86OpaqueAddressPointerResultRole(fn, sig, arch)
 	for ordinal, ins := range fn.Instrs {
+		if _, known, err := x86BEXTRProperties(ins.Op, ins, arch); known && err == nil {
+			return true // START, LEN and source bytes remain required even for dead BEXTR results.
+		}
 		if _, known, err := x86BroadcastProperties(ins.Op, ins, arch); known && err == nil {
 			return true // Dead scalar/block/mask broadcasts still require their actual input bytes.
 		}
