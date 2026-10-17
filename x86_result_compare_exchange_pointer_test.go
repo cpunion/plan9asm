@@ -149,3 +149,94 @@ func TestX86CompareExchangePointerDoesNotAcquireNUM(t *testing.T) {
 		}
 	}
 }
+
+func TestX86CompareExchangePointerConditionalWordFacts(t *testing.T) {
+	for _, arch := range []string{"386", "amd64"} {
+		for _, row := range []struct {
+			op    string
+			width int64
+			pair  bool
+		}{
+			{"CMPXCHGB", 1, false}, {"CMPXCHGW", 2, false},
+			{"CMPXCHGL", 4, false}, {"CMPXCHGQ", 8, false},
+			{"CMPXCHG8B", 4, true}, {"CMPXCHG16B", 8, true},
+		} {
+			if arch == "386" && row.width == 8 {
+				continue // The original Go grammar rejects these two forms.
+			}
+			for _, register := range []bool{false, true} {
+				if row.pair && register {
+					continue // Original pair-register encodings are #UD.
+				}
+				body := row.op + " CX,(SI)"
+				inputs := []int{0, 1}
+				if row.pair {
+					body, inputs = row.op+" (SI)", []int{0, 2, 3, 1}
+				} else if register {
+					body, inputs = row.op+" CX,BX", append(inputs, 3)
+				}
+				for _, opaque := range inputs {
+					t.Run(fmt.Sprintf("%s/%s/register=%t/opaque=%d", arch, row.op, register, opaque), func(t *testing.T) {
+						ins := x86ScalarLaneInstruction(t, body)
+						mask := uint8((uint16(1) << uint(row.width)) - 1)
+						state := x86ResultState{}
+						for _, root := range []int{0, 1, 2, 3} {
+							state.gp[root] = mask
+						}
+						state.pointerGP[6] = true
+						state.gp[opaque] = 0
+						state.pointerGP[opaque], state.callerAddressGP[opaque] = true, true
+						before := state.clone()
+						accepted, known := x86LoweredCompareExchangeResultStepWithAddressBits(ins, &state, nil, arch, true)
+						if row.width != x86ResultPointerWord(arch) {
+							if accepted || !known || !reflect.DeepEqual(state, before) {
+								t.Fatal("partial pointer bits gained an input or changed state")
+							}
+							return
+						}
+						if !accepted || !known {
+							t.Fatal("complete independently scoped caller word rejected")
+						}
+						outputs := []int{0}
+						if row.pair {
+							outputs = append(outputs, 2)
+						} else if register {
+							outputs = append(outputs, 3)
+						}
+						for _, root := range outputs {
+							numeric := root != opaque
+							if register {
+								numeric = opaque != 3 && (root == 0 && opaque != 0 || root == 3 && opaque != 1)
+							}
+							want := uint8(0)
+							if numeric {
+								want = mask
+							}
+							if state.gp[root] != want || state.pointerGP[root] {
+								t.Fatal("conditional CAS invented NUM or pointer identity", root, state.gp[root], want)
+							}
+						}
+						before.callerAddressGP[opaque] = false
+						withoutCaller := before.clone()
+						if accepted, known := x86LoweredCompareExchangeResultStepWithAddressBits(ins, &withoutCaller, nil, arch, true); accepted || !known || !reflect.DeepEqual(withoutCaller, before) {
+							t.Fatal("opaque identity alone supplied actual caller-word bits")
+						}
+					})
+				}
+			}
+		}
+	}
+}
+
+func TestX86CompareExchangeBoundPrefixKeepsOnlyPriorCallerWords(t *testing.T) {
+	for _, arch := range []string{"386", "amd64"} {
+		prefix := x86ScalarLaneInstruction(t, "LOCK")
+		before, transferred := [16]bool{true, false, true}, [16]bool{true, true, false}
+		if got := x86ResultCallerAddressesAfterTransfer(prefix, before, transferred, nil, arch); got != ([16]bool{true}) {
+			t.Fatal("paired prefix invented or revived a caller word", got)
+		}
+		if got := x86ResultCallerAddressesAfter(prefix, before, nil, arch); got != ([16]bool{}) {
+			t.Fatal("standalone overwrite query borrowed a bound source prefix", got)
+		}
+	}
+}

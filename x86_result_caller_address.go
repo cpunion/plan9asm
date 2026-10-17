@@ -44,14 +44,15 @@ func x86ResultCallerAddressTest(ins Instr, state *x86ResultState, owned []bool, 
 	return true, true
 }
 
-// A source-bound string instruction has already applied its conditional write
-// footprint. Intersect with the prior must-domain: an untouched register may
-// retain its identity, but this post-consumer cannot introduce one. Other
-// instructions keep the existing independent overwrite classification.
+// A source-bound string instruction or LOCK prefix has already passed its
+// complete paired transfer. Intersect with the prior must-domain: an untouched
+// register may retain its identity, but this post-consumer cannot introduce
+// one. Standalone LOCK still has no accepted numerical transfer or GP effect.
 func x86ResultCallerAddressesAfterTransfer(ins Instr, before, transferred [16]bool,
 	entryFP map[int64]bool, arch string) [16]bool {
-	if _, known, err := x86StringInstructionProperties(ins, arch); known && err == nil &&
-		x86ResultNamedPredicateInstruction(ins) {
+	_, stringMemory, err := x86StringInstructionProperties(ins, arch)
+	boundPrefix := ins.Op == "LOCK" && len(ins.Args) == 0
+	if (boundPrefix || stringMemory && err == nil) && x86ResultNamedPredicateInstruction(ins) {
 		for index := range before {
 			before[index] = before[index] && transferred[index]
 		}
