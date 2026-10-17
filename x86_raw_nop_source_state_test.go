@@ -86,6 +86,60 @@ func TestX86RawNOPPrivateStackAndIDRetention(t *testing.T) {
 	}
 }
 
+func TestX86RawNOPStateRetentionRequiresExactHandoff(t *testing.T) {
+	instructions, err := decodeX86RawDirectiveGroup([]byte{0x0f, 0x1f, 0xc0}, 64, 0, "original NOP", nil)
+	if err != nil || len(instructions) != 1 || instructions[0].x86SourceRaw == nil {
+		t.Fatal("actual raw NOP handoff", instructions, err)
+	}
+	for _, mutation := range []string{
+		"original opcode", "original operands", "normalized opcode", "normalized operands",
+		"encoded", "raw return", "address size", "unbound address", "segment",
+	} {
+		t.Run(mutation, func(t *testing.T) {
+			ins := instructions[0]
+			origin := *ins.x86SourceRaw
+			ins.x86SourceRaw = &origin
+			switch mutation {
+			case "original opcode":
+				origin.op = "PAUSE"
+			case "original operands":
+				origin.args = []Operand{{Kind: OpReg, Reg: AX}}
+			case "normalized opcode":
+				ins.Op = "PAUSE"
+			case "normalized operands":
+				ins.Args = []Operand{{Kind: OpReg, Reg: AX}}
+			case "encoded":
+				ins.x86Encoded = true
+			case "raw return":
+				ins.x86RawNearReturn = new(x86RawNearReturnForm)
+			case "address size":
+				ins.x86AddressBits = 32
+			case "unbound address":
+				ins.x86UnboundAddressOverride = true
+			case "segment":
+				ins.x86SegmentPrefix = 0x64
+			}
+			if got := x86ResultDirectionAfter(ins, x86ResultDirectionForward); got != x86ResultDirectionUnknown {
+				t.Fatal("changed physical effect retained DF", got)
+			}
+			if got := x86ResultStringCountAfter(ins, x86StringCountZero, x86StringCountZero, "amd64"); got != x86StringCountUnknown {
+				t.Fatal("changed physical effect retained a CX fact", got)
+			}
+			predicate := x86ResultPredicate{kind: x86ResultNonzeroComparisonBytes, register: 3, width: 32}
+			if got := x86ResultPredicateAfter(ins, predicate, "amd64"); got != (x86ResultPredicate{}) {
+				t.Fatal("changed physical effect retained a relation", got)
+			}
+			if got := x86ResultCallerAddressesAfter(ins, [16]bool{3: true}, nil, "amd64"); got != ([16]bool{}) {
+				t.Fatal("changed physical effect retained GP identities", got)
+			}
+			state := x86ResultState{valueStack: &x86ResultValueStack{bytes: make([]uint8, 8)}}
+			if x86ResultValueStackContinuation(ins, &state, "amd64") {
+				t.Fatal("changed physical effect entered live private storage")
+			}
+		})
+	}
+}
+
 func TestX86RawNOPOriginalStatusSourceObjects(t *testing.T) {
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
