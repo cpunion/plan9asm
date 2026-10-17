@@ -68,6 +68,31 @@ func TestX86StringRepeatCFGAcceptsOnlyUnambiguousAdjacency(t *testing.T) {
 					// tool-backed owner separately retains all three public APIs.
 					t.Run(arch+"/"+prefix+"/"+shape+"/"+row.op, func(t *testing.T) {
 						source, declarations := x86StringRepeatCFGFixture(row, arch, prefix, shape)
+						if shape == "loopback-to-prefix" {
+							file, err := Parse(ArchAMD64, source)
+							if err != nil {
+								t.Fatal(err)
+							}
+							if _, err := x86ResultStringMemorySourcePlan(file.Funcs[0], arch); err != nil {
+								t.Fatal("the original loop lost its unambiguous prefix binding", err)
+							}
+							for _, api := range []string{"text", "module", "Go"} {
+								ir, err := x86ScalarFPBitViewAPI(t, source, declarations, arch, triple, api)
+								if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+									t.Fatal("prefix binding granted a reusable updated native cursor", api, err)
+								}
+							}
+							// The original Go loop remains unchanged in its object
+							// owner above. This separate positive replenishes the
+							// declared inputs on every iteration; it does not certify
+							// the original loop's updated-cursor memory contract.
+							begin := strings.IndexByte(source, '\n') + 1
+							label := strings.Index(source, "repeat:\n")
+							if begin <= 0 || label <= begin {
+								t.Fatal("complete independent loop fixture changed")
+							}
+							source = strings.Replace(source, "repeat:\n", "repeat:\n"+source[begin:label], 1)
+						}
 						ir, err := x86ScalarFPBitViewAPI(t, source, declarations, arch, triple, "text")
 						if err != nil || !strings.Contains(ir, "@"+x86StringMemoryHelper(row)+"(") {
 							t.Fatal("a uniquely executed prefix lost its complete typed follower", err)
