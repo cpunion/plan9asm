@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -52,7 +53,14 @@ func TestX86PackedBroadcastGoFrameScalarWidths(t *testing.T) {
 					}
 				}
 				requireX86GoAssemblerResult(t, arch, source.String(), true)
-				file, err := Parse(ArchAMD64, source.String())
+				sourceText := source.String()
+				if arch == "386" {
+					// The mask is one in both modes. MOVL defines only a
+					// 32-bit GP input; it cannot supply KMOVQ's 64 input bits.
+					sourceText = strings.ReplaceAll(sourceText, "KMOVQ AX,", "KMOVD AX,")
+					requireX86GoAssemblerResult(t, arch, sourceText, true)
+				}
+				file, err := Parse(ArchAMD64, sourceText)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -64,6 +72,18 @@ func TestX86PackedBroadcastGoFrameScalarWidths(t *testing.T) {
 				}
 				for _, triple := range triples {
 					t.Run(triple, func(t *testing.T) {
+						if arch == "386" {
+							original, err := Parse(ArchAMD64, source.String())
+							if err != nil {
+								t.Fatal(err)
+							}
+							ir, err := Translate(original, Options{
+								Goarch: arch, TargetTriple: triple, Sigs: sigs, ResolveSym: resolve,
+							})
+							if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+								t.Fatal("original 32-bit seed supplied an unknown 64-bit mask", err)
+							}
+						}
 						ctx := llvm.NewContext()
 						defer ctx.Dispose()
 						module, err := TranslateModuleInContext(ctx, file, Options{
