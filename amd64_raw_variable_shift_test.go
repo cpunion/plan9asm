@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -121,8 +122,23 @@ func TestX86RawVariableShiftGoEncoderForms(t *testing.T) {
 				if (arch == "386") != strings.HasPrefix(triple, "i") {
 					continue
 				}
-				ir := x86PackedShiftRawFormatObject(t, file, Options{Goarch: arch, TargetTriple: triple,
-					Sigs: map[string]FuncSig{"shifts": {Name: "shifts", Ret: Void}}})
+				options := Options{Goarch: arch, TargetTriple: triple,
+					Sigs: map[string]FuncSig{"shifts": {Name: "shifts", Ret: Void}}}
+				if ir, err := Translate(file, options); ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+					t.Fatal("original raw near RET acquired a native return/memory/input contract", err)
+				}
+				// Whole-file normalization correctly rejects this unbound
+				// native RET. Compile the independently byte-checked decoder
+				// output as an instruction-only unit, preserving its RET;
+				// do not replace RET by UD2 to manufacture public success.
+				units := *file
+				units.Funcs = []Func{got}
+				units.Funcs[0].Sym = "shifts"
+				units.Funcs[0].Instrs = append([]Instr{file.Funcs[0].Instrs[0]}, got.Instrs...)
+				ir := x86InstructionFormatObjectUnit(t, &units, options.Sigs, arch, triple, 0,
+					func(c *amd64Ctx, ins Instr) (bool, bool, error) {
+						return c.lowerX86PackedShift(ins.Op, ins)
+					})
 				compileLLVMToObject(t, llc, triple, "shifts.ll", "shifts.o", ir)
 			}
 			t.Logf("%s: %d actual Go encodings", arch, len(want)-1)
