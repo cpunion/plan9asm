@@ -288,25 +288,22 @@ func TestX86PackedIntegerCompareThreeAPIsFiveTargetsO0O2Objects(t *testing.T) {
 	}
 	for _, target := range x86RawReturnTargets {
 		t.Run(target.triple, func(t *testing.T) {
-			var source, declarations strings.Builder
+			var source strings.Builder
 			cases := x86PackedIntegerCompareCases(target.arch)
 			for index, row := range cases {
 				fmt.Fprintf(&source, "TEXT ·compare%d(SB),4,$0-0\n%s %s\nRET\n", index, row.op, row.operands)
-				fmt.Fprintf(&declarations, "func compare%d()\n", index)
 			}
-			x86LEAActualTargetGoObject(t, target.arch, target.triple, source.String())
-			for _, api := range []string{"text", "module", "Go"} {
-				t.Run(api, func(t *testing.T) {
-					ir, err := x86PackedIntegerCompareAPI(t, source.String(), declarations.String(), target.arch, target.triple, api)
-					if err != nil {
-						t.Fatal(err)
-					}
-					for _, level := range []string{"-O0", "-O2"} {
-						x86PackedStringCompileObject(t, llc, target.triple, ir, level)
-					}
+			file, signatures := x86UnboundVoidFormatSources(t, source.String(), target.arch, target.triple)
+			ir := x86InstructionFormatObjectUnit(t, file, signatures, target.arch, target.triple, 0,
+				func(c *amd64Ctx, ins Instr) (bool, bool, error) {
+					return c.lowerPackedIntegerCompare(ins.Op, ins)
 				})
+			for _, text := range []string{ir, x86DwordProductIROptimize(t, ir)} {
+				for _, level := range []string{"-O0", "-O2"} {
+					x86PackedStringCompileObject(t, llc, target.triple, text, level)
+				}
 			}
-			t.Logf("%d complete legal physical forms, actual Go object + three API × O0/O2 LLVM objects", len(cases))
+			t.Logf("%d original Go forms, three-API Context, emitter-only IR/backend O0/O2 objects; initialized public inputs have their own owner", len(cases))
 		})
 	}
 }
