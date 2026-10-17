@@ -198,7 +198,10 @@ TEXT gosave_systemstack_switch<>(SB),NOSPLIT,$0
 	LEAL arg+0(FP), AX
 	RET
 `
-	if err := os.WriteFile(asm, []byte(source), 0o600); err != nil {
+	// The assembly-only helper has no Go declaration. Its inferred word must
+	// fit an explicit source extent; omitted args do not mean a four-byte frame.
+	bounded := strings.Replace(source, "NOSPLIT,$0\n", "NOSPLIT,$0-4\n", 1)
+	if err := os.WriteFile(asm, []byte(bounded), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	out := filepath.Join(dir, "asm_386.ll")
@@ -220,6 +223,16 @@ TEXT gosave_systemstack_switch<>(SB),NOSPLIT,$0
 		if !strings.Contains(string(ir), want) {
 			t.Fatalf("translated ABI0 local helper omitted %q:\n%s", want, ir)
 		}
+	}
+	if err := os.WriteFile(asm, []byte(source), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := compileOne(pkg, plan9asm.ArchAMD64, "linux", "386", "i386-unknown-linux-gnu", asmTask{
+		PkgPath: pkg.PkgPath,
+		AsmFile: asm,
+		OutLL:   filepath.Join(dir, "unknown.ll"),
+	}, false, compileConfig{}); !errors.Is(err, plan9asm.ErrProbeNeedsContext) {
+		t.Fatal("declaration-free helper with unknown args acquired a bounded frame", err)
 	}
 }
 
