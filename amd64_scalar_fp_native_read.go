@@ -214,6 +214,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		if accepted, known := x86ResultVectorArithmeticStepWithRead(ins, state, owned, arch, true); known {
 			return accepted // The same add/sub emitter retains exact E4 reads and inactive-lane suppression.
 		}
+		if accepted, known := x86ResultVectorCompareStepWithRead(ins, state, owned, arch, true); known {
+			return accepted // Complete vector/K-result compares retain their exact native source accesses.
+		}
 		if form, known, err := x86PackedLogicalProperties(ins, arch); known {
 			// Only the paired emitter supplies these conditional native values.
 			// Standalone queries and physical MMX keep their separate contracts.

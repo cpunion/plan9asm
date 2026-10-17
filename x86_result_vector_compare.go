@@ -4,6 +4,10 @@ package plan9asm
 // Their common operand grammar must not erase these different destination
 // roles. Complete numerical inputs confer no native/caller memory permission.
 func x86ResultVectorCompareStep(ins Instr, state *x86ResultState, owned []bool, arch string) (bool, bool) {
+	return x86ResultVectorCompareStepWithRead(ins, state, owned, arch, false)
+}
+
+func x86ResultVectorCompareStepWithRead(ins Instr, state *x86ResultState, owned []bool, arch string, nativeRead bool) (bool, bool) {
 	form, known, err := x86PackedIntegerCompareProperties(ins.Op, ins, arch)
 	if !known {
 		immediate, recognized, immediateErr := x86ImmediatePackedCompareProperties(ins.Op, ins, arch)
@@ -28,7 +32,7 @@ func x86ResultVectorCompareStep(ins Instr, state *x86ResultState, owned []bool, 
 			operand = form.source
 		}
 		if input == form.memory {
-			if !x86ResultRead(operand, int64(form.memoryBytes), state, owned, arch) {
+			if !x86ResultReadWithNativeContinuation(ins, operand, int64(form.memoryBytes), state, owned, arch, nativeRead) {
 				return false, true
 			}
 			continue
