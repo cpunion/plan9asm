@@ -24,6 +24,9 @@ func x86TypedFPResultNeedsProof(fn Func, sig FuncSig, arch string) bool {
 	}
 	opaqueAddressResult := x86OpaqueAddressPointerResultRole(fn, sig, arch)
 	for ordinal, ins := range fn.Instrs {
+		if _, known, err := x86BroadcastProperties(ins.Op, ins, arch); known && err == nil {
+			return true // Dead scalar/block/mask broadcasts still require their actual input bytes.
+		}
 		if _, known, err := x86FloatCompareProperties(ins, arch); known && err == nil {
 			return true // Dead comparisons still consume real vector/mask inputs and native FP effects.
 		}
