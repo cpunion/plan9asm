@@ -68,8 +68,12 @@ func (c *amd64Ctx) lowerX86PackedShift(op Op, ins Instr) (bool, bool, error) {
 			operation := "lshr"
 			if form.left {
 				operation = "shl"
+			} else if form.arithmetic {
+				operation = "ashr"
 			}
-			result = c.emitPerLaneVariableShift(amd64PerLaneVariableShiftSpec{laneBits: form.laneBits, operation: operation}, lanes, counts, data)
+			result = c.emitPerLaneVariableShift(amd64PerLaneVariableShiftSpec{
+				laneBits: form.laneBits, operation: operation, arithmetic: form.arithmetic,
+			}, lanes, counts, data)
 		} else if x86PackedShiftHasNativeCount(form) {
 			result, err = c.emitX86PackedShiftNativeCount(form, ins.Args[form.count], data)
 			if err != nil {
@@ -80,7 +84,11 @@ func (c *amd64Ctx) lowerX86PackedShift(op Op, ins Instr) (bool, bool, error) {
 			if err != nil {
 				return true, false, err
 			}
-			result = c.emitPackedLogicalShift(amd64PackedLogicalShiftSpec{laneBits: form.laneBits, left: form.left}, lanes, data, count)
+			if form.arithmetic {
+				result = c.emitPackedArithmeticRightShift(lanes, form.laneBits, data, count)
+			} else {
+				result = c.emitPackedLogicalShift(amd64PackedLogicalShiftSpec{laneBits: form.laneBits, left: form.left}, lanes, data, count)
+			}
 		}
 		if form.mask >= 0 {
 			old, err := c.loadPackedCompareLanes(ins.Args[form.destination], form.byteWidth, form.laneBits, false)

@@ -35,6 +35,9 @@ func x86PackedShiftByteInputs(form x86PackedShiftForm, output int) (data, count 
 	if first < 0 {
 		first = 0
 	}
+	if form.arithmetic && first >= laneBytes*8 {
+		first = laneBytes*8 - 1 // Every shifted-out bit reads the sign bit.
+	}
 	if last >= laneBytes*8 {
 		last = laneBytes*8 - 1
 	}

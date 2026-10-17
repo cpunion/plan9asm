@@ -20,6 +20,7 @@ type x86PackedShiftForm struct {
 	memoryBytes                            int
 	left, legacy, mmx, broadcast, zeroing  bool
 	faultSuppressed                        bool
+	arithmetic                             bool
 	countOperand                           Operand
 }
 
@@ -28,15 +29,19 @@ type x86PackedShiftForm struct {
 func x86PackedShiftProperties(op Op, ins Instr, goarch string) (x86PackedShiftForm, bool, error) {
 	base, suffix, dotted := strings.Cut(strings.ToUpper(string(op)), ".")
 	uniform, recognized := amd64PackedLogicalShiftSpecs[Op(base)]
+	arithmetic, arithmeticUniform := amd64PackedArithmeticShiftSpecs[Op(base)]
+	if arithmeticUniform {
+		uniform, recognized = arithmetic, true
+	}
 	perLane, variable := amd64PerLaneVariableShiftSpecs[base]
-	variable = variable && !perLane.arithmetic
 	byteShift := base == "PSLLO" || base == "PSLLDQ" || base == "PSRLO" || base == "PSRLDQ" || base == "VPSLLDQ" || base == "VPSRLDQ"
 	if !recognized && !variable && !byteShift {
 		return x86PackedShiftForm{}, false, nil
 	}
-	f := x86PackedShiftForm{count: 0, data: 1, destination: len(ins.Args) - 1, mask: -1, memory: -1}
+	f := x86PackedShiftForm{count: 0, data: 1, destination: len(ins.Args) - 1, mask: -1, memory: -1,
+		arithmetic: arithmeticUniform || variable && perLane.arithmetic}
 	fail := func() (x86PackedShiftForm, bool, error) {
-		return f, true, fmt.Errorf("%s %s outside Go packed logical-shift grammar: %q", goarch, op, ins.Raw)
+		return f, true, fmt.Errorf("%s %s outside Go packed shift grammar: %q", goarch, op, ins.Raw)
 	}
 	if goarch != "amd64" && goarch != "386" || ins.Op != "" && !strings.EqualFold(string(ins.Op), string(op)) {
 		return fail()
@@ -122,7 +127,8 @@ func x86PackedShiftProperties(op Op, ins Instr, goarch string) (x86PackedShiftFo
 		if variable || count.Imm < -128 || count.Imm > 255 || f.legacy && count.Imm > 127 {
 			return fail()
 		}
-		if !f.legacy && count.Imm < 0 && amd64PackedByteShiftRequiresEVEX(data, ins.Args[f.destination], f.byteWidth) || count.Imm < 0 && f.mask >= 0 {
+		if count.Imm < 0 && (base == "VPSRAQ" || f.mask >= 0 ||
+			!f.legacy && amd64PackedByteShiftRequiresEVEX(data, ins.Args[f.destination], f.byteWidth)) {
 			return fail()
 		}
 		if isAMD64MemoryOperand(data) {

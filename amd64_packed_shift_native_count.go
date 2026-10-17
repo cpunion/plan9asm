@@ -18,6 +18,8 @@ func (c *amd64Ctx) emitX86PackedShiftNativeCount(form x86PackedShiftForm, source
 	name := "psrl"
 	if form.left {
 		name = "psll"
+	} else if form.arithmetic {
+		name = "psra"
 	}
 	switch form.laneBits {
 	case 16:
