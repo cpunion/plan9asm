@@ -2564,7 +2564,12 @@ func TestTranslateAMD64PackedUniformShiftCompleteGoAssemblerForms(t *testing.T) 
 			fmt.Fprintf(&src, "\t%s.Z %s\n", op, operands)
 		}
 		src.WriteString("\tRET\n")
-		translateAMD64EcosystemCase(t, src.String(), "uniformshift"+op)
+		ll := x86UnboundVoidScalarFormatObject(t, src.String(), "uniformshift"+op, "amd64", "x86_64-unknown-linux-gnu")
+		llc := findLLVM22Tool("llc")
+		if llc == "" {
+			t.Fatal("LLVM 22 llc not found")
+		}
+		compileLLVMToObject(t, llc, "x86_64-unknown-linux-gnu", "uniform-shift.ll", "uniform-shift.o", ll)
 	}
 }
 

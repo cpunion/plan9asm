@@ -89,21 +89,7 @@ TEXT packeddoubledwordforms(SB),$0-0
 					source = strings.ReplaceAll(source, fmt.Sprintf("Y%d", n), fmt.Sprintf("Y%d", n%8))
 				}
 			}
-			requireX86GoAssemblerResult(t, target.goarch, source, true)
-			file, err := Parse(ArchAMD64, source)
-			if err != nil {
-				t.Fatal(err)
-			}
-			ll, err := Translate(file, Options{
-				TargetTriple: target.triple,
-				Goarch:       target.goarch,
-				Sigs: map[string]FuncSig{
-					"packeddoubledwordforms": {Name: "packeddoubledwordforms", Ret: Void},
-				},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			ll := x86UnboundVoidScalarFormatObject(t, source, "packeddoubledwordforms", target.goarch, target.triple)
 			for _, want := range []string{"vcvtdq2pd", "cvtpd2dq", "vcvttpd2dq"} {
 				if !strings.Contains(ll, want) {
 					t.Fatalf("packed double/dword IR is missing %q:\n%s", want, ll)

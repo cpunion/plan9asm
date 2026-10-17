@@ -71,19 +71,7 @@ func TestTranslateX86PADDDGoAliasCompleteFormsAcrossTargets(t *testing.T) {
 				fmt.Fprintf(&source, "\t%s 16(AX), X%d\n", op, lastX)
 			}
 			source.WriteString("\tRET\n")
-			requireX86GoAssemblerResult(t, target.goarch, source.String(), true)
-			file, err := Parse(ArchAMD64, source.String())
-			if err != nil {
-				t.Fatal(err)
-			}
-			ir, err := Translate(file, Options{
-				Goarch:       target.goarch,
-				TargetTriple: target.triple,
-				Sigs:         map[string]FuncSig{"padddaliasforms": {Name: "padddaliasforms", Ret: Void}},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			ir := x86UnboundVoidScalarFormatObject(t, source.String(), "padddaliasforms", target.goarch, target.triple)
 			if !strings.Contains(ir, "add <4 x i32>") {
 				t.Fatalf("PADDL/PADDD lowering omitted dword addition:\n%s", ir)
 			}
