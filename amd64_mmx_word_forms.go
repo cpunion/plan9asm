@@ -14,6 +14,7 @@ type x86MMXWordForm struct {
 	sourceM, targetM    bool
 	sourceX, targetX    bool
 	gpSpelling          bool
+	nonTemporal         bool
 }
 
 func x86MMXWordProperties(ins Instr, arch string) (x86MMXWordForm, bool, error) {
@@ -21,14 +22,15 @@ func x86MMXWordProperties(ins Instr, arch string) (x86MMXWordForm, bool, error) 
 		return x86MMXWordForm{}, false, nil // Raw bytes have their own physical-bank contract.
 	}
 	name, _, dotted := strings.Cut(strings.ToUpper(string(ins.Op)), ".")
-	if name != "MOVL" && name != "MOVQ" && name != "MOVD" && name != "MOVDQ2Q" && name != "MOVQOZX" {
+	streaming := name == "MOVNTQ"
+	if name != "MOVL" && name != "MOVQ" && name != "MOVD" && name != "MOVDQ2Q" && name != "MOVQOZX" && !streaming {
 		return x86MMXWordForm{}, false, nil
 	}
 	mmx := false
 	for _, operand := range ins.Args {
 		mmx = mmx || isAMD64MOVDMRegister(operand)
 	}
-	if !mmx {
+	if !mmx && !streaming {
 		return x86MMXWordForm{}, false, nil
 	}
 	fail := func() (x86MMXWordForm, bool, error) {
@@ -49,6 +51,13 @@ func x86MMXWordProperties(ins Instr, arch string) (x86MMXWordForm, bool, error) 
 	}
 	gp := func(operand Operand) bool {
 		return operand.Kind == OpReg && isX86YrlRegisterForArch(operand.Reg, arch)
+	}
+	if streaming {
+		if !form.sourceM || !memory(form.destination) {
+			return fail()
+		}
+		form.nonTemporal = true
+		return form, true, nil // ymr_ml: one MMX source and an m64 destination.
 	}
 	if name == "MOVQOZX" {
 		if !form.sourceM || !vector(form.destination) {

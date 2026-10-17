@@ -225,6 +225,9 @@ func x86NativeMMXAssembly(plan *x86NativeMMXRegion, gpBase, xBase int64) (string
 			if form.bytes == 4 {
 				mnemonic = "movd"
 			}
+			if form.nonTemporal {
+				mnemonic = "movntq"
+			}
 			if form.targetM {
 				source := ""
 				if form.sourceX {

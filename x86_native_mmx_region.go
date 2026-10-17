@@ -107,6 +107,9 @@ func newX86NativeMMXRegion(fn Func, sig FuncSig, arch, triple string) (*x86Nativ
 	for _, site := range plan.sites {
 		if site.word != nil {
 			form := site.word
+			if form.nonTemporal && form.destination.Kind == OpFP {
+				return fail("non-temporal FP stores need original native backing, not a private image")
+			}
 			if err := plan.operand(form.source, form.bytes, false); err != nil {
 				return fail(err.Error())
 			}

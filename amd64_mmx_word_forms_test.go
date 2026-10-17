@@ -42,6 +42,9 @@ func TestX86MMXWordCompleteSourceRows(t *testing.T) {
 			{"MOVL M0,M1", 4, false}, {"MOVL X0,M0", 4, false},
 			{"MOVQ M0,X0", 8, false}, {"MOVQOZX X0,M0", 8, false},
 			{"MOVQ $7,M0", 8, false}, {"MOVQ.Z M0,AX", 8, false},
+			{"MOVNTQ M0,1(AX)", 8, true}, {"MOVNTQ M7,1(AX)(CX*2)", 8, true},
+			{"MOVNTQ M0,M1", 8, false}, {"MOVNTQ X0,1(AX)", 8, false},
+			{"MOVNTQ AX,1(AX)", 8, false}, {"MOVNTQ.Z M0,1(AX)", 8, false},
 		} {
 			t.Run(arch+"/"+row.source, func(t *testing.T) {
 				ins := x86ScalarLaneInstruction(t, row.source)
