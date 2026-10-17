@@ -792,6 +792,7 @@ test('Void calls and text context ownership regressions run before complete modu
     'TestX86ABI0CanonicalBoolArchitectureNoncanonicalResults',
     'TestX86ABI0CanonicalBoolArchitectureAliasesAndCalls',
     'TestX86AMD64CanonicalBoolDefaultArchitecture',
+    'TestX86AMD64CanonicalBoolKeepsManualRegisterTransport',
     'TestX86AMD64CanonicalBoolTemporaryBytePortable',
     'TestX86AMD64CanonicalBoolTypedTailCannotBorrowGoCaller',
     'TestX86AMD64CanonicalBoolActualAtomicCasObjects',

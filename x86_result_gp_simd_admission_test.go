@@ -173,7 +173,9 @@ func TestX86ResultGPSIMDAdmissionOrdinaryRolesAndCachedProof(t *testing.T) {
 		{"decoder origin", "VMOVD AX,X0", "uint32", func(ins *Instr) { ins.x86Encoded = true }, false},
 		{"raw source origin", "MOVL AX,X0", "uint32", func(ins *Instr) { ins.x86SourceRaw = &x86SourceRawInstruction{} }, false},
 		{"raw only", "VMOVW AX,X0", "uint32", func(ins *Instr) { ins.x86Encoded = true }, false},
-		{"bool is separate", "MOVL AX,X0", "bool", nil, false},
+		// Bool has its independent mandatory canonical-byte proof even when
+		// no instruction happens to trigger the ordinary integer result route.
+		{"bool canonical proof", "MOVL AX,X0", "bool", nil, true},
 		{"floating is separate", "MOVL AX,X0", "float32", nil, false},
 		{"pointer is separate", "MOVL AX,X0", "*byte", nil, false},
 	} {

@@ -97,7 +97,7 @@ func prepareX86ABI0BoolCalls(file *File, options Options) (*x86ABI0BoolCallSourc
 		}
 		name := x86ABI0BoolCallResolve(options, fn.Sym)
 		source.resolved[fn.Sym] = name
-		if sig, declared := signatures[name]; declared && sig.Ret == I1 {
+		if sig, declared := signatures[name]; declared && x86ABI0BoolResultNeedsProof(sig, arch) {
 			needed = true
 		}
 	}
@@ -130,7 +130,7 @@ func prepareX86ABI0BoolCalls(file *File, options Options) (*x86ABI0BoolCallSourc
 			continue
 		}
 		sig, present := signatures[source.resolved[fn.Sym]]
-		if !present || sig.Ret != I1 {
+		if !present || !x86ABI0BoolResultNeedsProof(sig, arch) {
 			continue
 		}
 		if sig.Name != "" && sig.Name != source.resolved[fn.Sym] {
