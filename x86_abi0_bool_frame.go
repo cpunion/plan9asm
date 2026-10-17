@@ -2,6 +2,13 @@ package plan9asm
 
 import "strings"
 
+// A declared ABI0 bool must retain its physical byte until canonical RET.
+// AMD64 signatures without declared result slots keep their independent
+// register-return convention; this query grants no frame or entry permission.
+func x86ABI0BoolResultNeedsProof(sig FuncSig, arch string) bool {
+	return sig.Ret == I1 && (arch == "386" || arch == "amd64" && len(sig.Frame.Results) != 0)
+}
+
 // This lowering-only logical role extends declared bool-byte transport, not
 // SDK literal/native entry, caller backing or the direct-tail result domain.
 // Actual signature/source producers retain their independent authentication.
@@ -28,7 +35,7 @@ func x86ABI0LogicalBoolFrameRole(fn Func, sig FuncSig, arch string) bool {
 // This bounded typed-layout query grants no source, terminal or FP permission.
 // Native/borrowed target roles are not independent logical bool declarations.
 func x86ABI0BoolDeclarationRole(sig FuncSig, arch string) bool {
-	if arch != "386" || sig.Ret != I1 || len(sig.ArgRegs) != 0 || len(sig.Frame.Results) != 1 || sig.ARMEntry != nil ||
+	if arch != "386" && arch != "amd64" || sig.Ret != I1 || len(sig.ArgRegs) != 0 || len(sig.Frame.Results) != 1 || sig.ARMEntry != nil ||
 		sig.ARM64GoRegisterABI != nil || sig.ARM64ClosureABI != nil || sig.WASMContext != "" || sig.WASMNative || sig.x86BorrowedBoolTail {
 		return false
 	}
@@ -61,18 +68,22 @@ func x86ABI0BoolDeclarationRole(sig FuncSig, arch string) bool {
 	return len(represented) == len(sig.Args)
 }
 
-func x86ABI0BoolFrameAliasNeeded(fn Func) bool {
+func x86ABI0BoolFrameAliasNeeded(fn Func, arch string) bool {
+	lea := Op("LEAQ")
+	if arch == "386" {
+		lea = "LEAL"
+	}
 	for _, ins := range fn.Instrs {
-		if ins.Op == "LEAL" && len(ins.Args) == 2 && ins.Args[0].Kind == OpFP {
+		if ins.Op == lea && len(ins.Args) == 2 && ins.Args[0].Kind == OpFP {
 			return true
 		}
 	}
 	return false
 }
 
-func x86ABI0BoolFrameSlot(state *x86ResultState, offset, width int64) (FrameSlot, bool) {
+func x86ABI0BoolFrameSlot(state *x86ResultState, offset, width int64, arch string) (FrameSlot, bool) {
 	for _, slot := range state.boolFrameSlots {
-		size := x86FrameScalarBytes(slot.Type, "386")
+		size := x86FrameScalarBytes(slot.Type, arch)
 		if width > 0 && offset >= slot.Offset && offset <= slot.Offset+size-width {
 			return slot, true
 		}
@@ -97,7 +108,7 @@ func x86ABI0BoolFrameNUMTransfer(ordinal int, ins Instr, state *x86ResultState, 
 	}
 	if form, known, err := x86ConditionalSetProperties(ins.Op, ins, arch); known && err == nil &&
 		form.destination.Kind == OpFP && form.destination.FPOffset < resultOffset {
-		if slot, valid := x86ABI0BoolFrameSlot(state, form.destination.FPOffset, 1); valid && slot.Type == I1 {
+		if slot, valid := x86ABI0BoolFrameSlot(state, form.destination.FPOffset, 1, arch); valid && slot.Type == I1 {
 			required := x86ByteConditionFlags(form.condition)
 			if required != 0 && state.flags&required == required {
 				state.fp[form.destination.FPOffset] = true
@@ -107,7 +118,7 @@ func x86ABI0BoolFrameNUMTransfer(ordinal int, ins Instr, state *x86ResultState, 
 	}
 	if len(ins.Args) == 2 && ins.Args[1].Kind == OpFP && ins.Args[1].FPOffset < resultOffset {
 		width := x86RawReturnScalarMoveBytes(ins.Op)
-		if slot, valid := x86ABI0BoolFrameSlot(state, ins.Args[1].FPOffset, width); valid && slot.Type == I1 && width == 1 &&
+		if slot, valid := x86ABI0BoolFrameSlot(state, ins.Args[1].FPOffset, width, arch); valid && slot.Type == I1 && width == 1 &&
 			(ins.Args[0].Kind == OpImm || ins.Args[0].Kind == OpReg) && x86ResultRead(ins.Args[0], width, state, owned, arch) {
 			state.fp[ins.Args[1].FPOffset] = true
 			return true
@@ -123,16 +134,21 @@ func x86ABI0BoolFrameTransfer(ordinal int, original Instr, state *x86ResultState
 		return accepted
 	}
 	aliases := state.boolFrameGP
+	word := x86ResultPointerWord(arch)
+	lea, move := Op("LEAQ"), Op("MOVQ")
+	if arch == "386" {
+		lea, move = "LEAL", "MOVL"
+	}
 	alias := func(arg Operand) x86ResultSlotAddress {
 		if aliases != nil && arg.Kind == OpReg {
-			if root, _, valid := x86ResultGP(arg.Reg, 4, arch); valid {
+			if root, _, valid := x86ResultGP(arg.Reg, word, arch); valid {
 				return aliases[root]
 			}
 		}
 		return x86ResultSlotAddress{}
 	}
 	writeAlias := func(destination Operand, value x86ResultSlotAddress) bool {
-		root, _, valid := x86ResultGP(destination.Reg, 4, arch)
+		root, _, valid := x86ResultGP(destination.Reg, word, arch)
 		if aliases == nil || destination.Kind != OpReg || !valid || root == 4 || root == 5 || !value.valid {
 			return false
 		}
@@ -143,21 +159,21 @@ func x86ABI0BoolFrameTransfer(ordinal int, original Instr, state *x86ResultState
 	}
 	if len(ins.Args) == 2 {
 		first, last := ins.Args[0], ins.Args[1]
-		if ins.Op == "LEAL" && first.Kind == OpFP {
-			if width, err := x86LEAOperandWidth(ins, arch); err != nil || width != 4 {
+		if ins.Op == lea && first.Kind == OpFP {
+			if width, err := x86LEAOperandWidth(ins, arch); err != nil || width != word {
 				return false
 			}
-			slot, valid := x86ABI0BoolFrameSlot(state, first.FPOffset, 1)
+			slot, valid := x86ABI0BoolFrameSlot(state, first.FPOffset, 1, arch)
 			return valid && writeAlias(last, x86ResultSlotAddress{start: slot.Offset, end: slot.Offset + x86FrameScalarBytes(slot.Type, arch), offset: first.FPOffset, valid: true})
 		}
-		if ins.Op == "MOVL" {
+		if ins.Op == move {
 			if value := alias(first); value.valid {
 				return writeAlias(last, value)
 			}
 		}
-		if ins.Op == "LEAL" && first.Kind == OpMem {
+		if ins.Op == lea && first.Kind == OpMem {
 			if value := alias(Operand{Kind: OpReg, Reg: first.Mem.Base}); value.valid {
-				if width, err := x86LEAOperandWidth(ins, arch); err != nil || width != 4 || !x86ResultSlotMemory(first.Mem) ||
+				if width, err := x86LEAOperandWidth(ins, arch); err != nil || width != word || !x86ResultSlotMemory(first.Mem) ||
 					first.Mem.Off < value.start-value.offset || first.Mem.Off >= value.end-value.offset {
 					return false
 				}
@@ -181,7 +197,7 @@ func x86ABI0BoolFrameTransfer(ordinal int, original Instr, state *x86ResultState
 			move := x86RawReturnScalarMoveBytes(ins.Op) != 0
 			_, extension, extensionErr := x86ScalarExtensionProperties(ins.Op, ins, arch)
 			_, conditional, conditionalErr := x86ConditionalSetProperties(ins.Op, ins, arch)
-			if aliases == nil || !known || width <= 0 || width > 4 || !x86ResultSlotMemory(arg.Mem) ||
+			if aliases == nil || !known || width <= 0 || width > word || !x86ResultSlotMemory(arg.Mem) ||
 				!(move || extension && extensionErr == nil || conditional && conditionalErr == nil) {
 				if value.valid {
 					return false

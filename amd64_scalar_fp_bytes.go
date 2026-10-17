@@ -169,8 +169,8 @@ func (c *amd64Ctx) validateScalarFPSourceViews() error {
 	}
 	// A logical i1 return cannot bypass canonical Go-byte/result validation
 	// merely because the complete body contains no FP/SIMD view. The independent
-	// 386 ABI0 role requires its complete canonical declared-byte proof too.
-	if x86RegisterBoolResultNeedsProof(c.fpScalarSource, c.sig, c.goarch) || c.goarch == "386" && c.sig.Ret == I1 {
+	// ABI0 role requires its complete canonical declared-byte proof too.
+	if x86RegisterBoolResultNeedsProof(c.fpScalarSource, c.sig, c.goarch) || x86ABI0BoolResultNeedsProof(c.sig, c.goarch) {
 		if err := c.scalarFPResultInitialized(); err != nil {
 			return err
 		}

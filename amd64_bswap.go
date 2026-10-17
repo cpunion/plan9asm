@@ -88,11 +88,11 @@ func (c *amd64Ctx) integerEffectResultInitialized(family string) error {
 		return err
 	}
 	// Generic result-byte initialization is not a canonical bool witness.
-	// The ordinary386 consumer covers one logical I1 return. A mixed tuple
+	// The ordinary ABI0 consumer covers one logical I1 return. A mixed tuple
 	// instead needs the existing complete NUM/canonical preflight, whose flag
 	// is set only after the shared cached proof succeeds. Other independently
 	// authenticated consumers retain their own result/canonicality contracts.
-	canonicalABI0 := c.goarch == "386" && c.sig.Ret == I1
+	canonicalABI0 := x86ABI0LogicalBoolFrameRole(c.fpScalarSource, c.sig, c.goarch)
 	physicalBool := c.fpScalarSource.x86SourceStack != nil && c.sig.Ret == I1
 	if canonicalABI0 || physicalBool || c.fpMixedBoolBytes ||
 		c.fpScalarSource.x86FixedLocal != nil || x86RegisterBoolResultNeedsProof(c.fpScalarSource, c.sig, c.goarch) {

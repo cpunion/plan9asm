@@ -36,7 +36,7 @@ func checkX86ABI0ResultInitializationWithTrapOnly(fn Func, sig FuncSig, goarch s
 		return fmt.Errorf("%w: result initialization: %s", ErrProbeNeedsContext, reason)
 	}
 	privateVoid := scalarViews && sig.Ret == Void && len(sig.Frame.Results) == 0
-	canonicalBool := scalarViews && goarch == "386" && sig.Ret == I1
+	canonicalBool := scalarViews && x86ABI0BoolResultNeedsProof(sig, goarch)
 	if canonicalBool && !x86ABI0LogicalBoolFrameRole(fn, sig, goarch) {
 		return fail("bool byte requires its complete ordinary bounded logical ABI0 role")
 	}
@@ -116,7 +116,7 @@ func checkX86ABI0ResultInitializationWithTrapOnly(fn Func, sig FuncSig, goarch s
 			initial.boolOutgoing = make([]bool, 5)
 			initial.boolOutgoingCanonical = make([]bool, 5)
 		}
-		if x86ABI0BoolFrameAliasNeeded(fn) {
+		if x86ABI0BoolFrameAliasNeeded(fn, goarch) {
 			initial.boolFrameGP = new([16]x86ResultSlotAddress)
 		}
 		transfer = x86ABI0CanonicalBoolTransfer(transfer)
