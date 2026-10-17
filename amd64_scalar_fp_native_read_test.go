@@ -105,17 +105,19 @@ func TestX86LoweredScalarResultNativeReadBoundaries(t *testing.T) {
 		load := move + " p+0(FP),AX\n"
 		finish := fmt.Sprintf("PEXTRD $0,X1,CX\nMOVL CX,ret+%d(FP)\nRET\n", word)
 		for name, body := range map[string]string{
-			"unknown base":    "MOVOU (DI),X1\n",
-			"numeric base":    "MOVL $42,AX\nMOVOU (AX),X1\n",
-			"lost identity":   load + "MOVL $42,AX\nMOVOU (AX),X1\n",
-			"unknown index":   load + "MOVOU (AX)(DI*1),X1\n",
-			"pointer index":   load + "MOVOU (AX)(AX*1),X1\n",
-			"native store":    load + "MOVOU (AX),X1\nMOVOU X1,(AX)\n",
-			"unknown lane":    load + "MOVOU (AX),X0\n",
-			"missing path":    load + "MOVL $1,CX\nCMPL CX,$0\nJE done\nMOVOU (AX),X1\ndone:\n",
-			"incoming write":  load + "MOVOU (AX),X1\nMOVL $42,p+0(FP)\n",
-			"unbound static":  "MOVOU ·external(SB),X1\n",
-			"unbound segment": "MOVOU (FS),X1\n",
+			"unknown base":       "MOVOU (DI),X1\n",
+			"numeric base":       "MOVL $42,AX\nMOVOU (AX),X1\n",
+			"lost identity":      load + "MOVL $42,AX\nMOVOU (AX),X1\n",
+			"unknown index":      load + "MOVOU (AX)(DI*1),X1\n",
+			"pointer index":      load + "MOVOU (AX)(AX*1),X1\n",
+			"native store":       load + "MOVOU (AX),X1\nMOVOU X1,(AX)\n",
+			"unknown store data": load + "MOVOU (AX),X1\nMOVOU X0,(AX)\n",
+			"unknown store base": load + "MOVOU (AX),X1\nMOVOU X1,(DI)\n",
+			"unknown lane":       load + "MOVOU (AX),X0\n",
+			"missing path":       load + "MOVL $1,CX\nCMPL CX,$0\nJE done\nMOVOU (AX),X1\ndone:\n",
+			"incoming write":     load + "MOVOU (AX),X1\nMOVL $42,p+0(FP)\n",
+			"unbound static":     "MOVOU ·external(SB),X1\n",
+			"unbound segment":    "MOVOU (FS),X1\n",
 			"mixed pointer join": load + "MOVL $1,CX\nCMPL CX,$0\nJE other\n" + move +
 				" AX,DX\nJMP end\nother:\nMOVL $42,DX\nend:\nMOVOU (DX),X1\n",
 		} {
@@ -123,7 +125,24 @@ func TestX86LoweredScalarResultNativeReadBoundaries(t *testing.T) {
 				source := fmt.Sprintf("TEXT ·view(SB),4,$0-%d\n", word+4) + body + finish
 				goAssemblerOracleOutput(t, arch, source, "", true)
 				for _, api := range []string{"text", "module", "Go"} {
-					if _, err := x86ScalarFPBitViewAPI(t, source, "func view(p *[16]byte) uint32\n", arch, triple, api); !errors.Is(err, ErrProbeNeedsContext) {
+					ir, err := x86ScalarFPBitViewAPI(t, source, "func view(p *[16]byte) uint32\n", arch, triple, api)
+					if name == "native store" {
+						// Both inputs are now modeled by the complete paired store
+						// consumer. Keep this exact former negative as an object
+						// control, with unknown data/address negatives beside it.
+						if err != nil || ir == "" {
+							t.Fatal("complete paired native store lost its inputs", api, err)
+						}
+						llc := findLLVM22Tool("llc")
+						if llc == "" {
+							t.Fatal("LLVM22 llc required")
+						}
+						for _, text := range []string{ir, x86MulDivRoundOptimize(t, ir)} {
+							compileLLVMToObject(t, llc, triple, "paired-store.ll", "paired-store.o", text)
+						}
+						continue
+					}
+					if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
 						t.Fatalf("%s borrowed native/result authority: %v", api, err)
 					}
 				}

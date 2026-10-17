@@ -199,20 +199,42 @@ func TestX86ScalarArithmeticNativeRetainsPublicAndSourceBoundaries(t *testing.T)
 					}
 				}
 				for name, body := range map[string]string{
-					"unknown base":      op + " (DI),CX",
-					"numeric base":      "MOVL $42,DX\n" + op + " (DX),CX",
-					"unknown index":     op + " (DX)(SI*1),CX",
-					"pointer index":     op + " (DX)(DX*1),CX",
-					"unknown result":    op + " (DX),DI\n" + move + " DI,CX",
-					"pointer result":    op + " (DX),DX\n" + move + " DX,CX",
-					"native store":      op + " CX,(DX)",
-					"destroyed pointer": "MOVL $42,DX\n" + op + " (DX),CX",
+					"unknown base":       op + " (DI),CX",
+					"numeric base":       "MOVL $42,DX\n" + op + " (DX),CX",
+					"unknown index":      op + " (DX)(SI*1),CX",
+					"pointer index":      op + " (DX)(DX*1),CX",
+					"unknown result":     op + " (DX),DI\n" + move + " DI,CX",
+					"pointer result":     op + " (DX),DX\n" + move + " DX,CX",
+					"native store":       op + " CX,(DX)",
+					"unknown store data": op + " DI,(DX)",
+					"unknown store base": op + " CX,(DI)",
+					"destroyed pointer":  "MOVL $42,DX\n" + op + " (DX),CX",
 				} {
 					t.Run(name, func(t *testing.T) {
 						source, declaration := x86ExtensionNativeFixture("Value", arch, "CMPL BX,BX\n"+body, false)
 						goAssemblerOracleOutput(t, arch, source, "", true)
 						for _, api := range []string{"text", "module", "Go"} {
-							if _, err := x86ScalarFPBitViewAPI(t, source, declaration, arch, triple, api); !errors.Is(err, ErrProbeNeedsContext) {
+							ir, err := x86ScalarFPBitViewAPI(t, source, declaration, arch, triple, api)
+							if name == "native store" {
+								// The paired RMW consumer now models this complete
+								// read/write. Preserve its exact former negative and
+								// require independent missing-input controls above.
+								if err != nil || ir == "" {
+									t.Fatal("complete paired native RMW lost its inputs", api, err)
+								}
+								llc := findLLVM22Tool("llc")
+								if llc == "" {
+									t.Fatal("LLVM22 llc required")
+								}
+								for _, text := range []string{ir, x86MulDivRoundOptimize(t, ir)} {
+									if strings.Count(text, "load volatile") != 1 || strings.Count(text, "store volatile") != 1 {
+										t.Fatal("native RMW lost its exact observable read/write", api)
+									}
+									compileLLVMToObject(t, llc, triple, "paired-rmw.ll", "paired-rmw.o", text)
+								}
+								continue
+							}
+							if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
 								t.Fatal("native arithmetic acquired an unproved source effect", api, err)
 							}
 						}
