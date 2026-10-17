@@ -82,7 +82,16 @@ func TestX86AMD64CanonicalBoolTemporaryBytePortable(t *testing.T) {
 		t.Fatal("LLVM22 llc and clang required")
 	}
 	const source = "TEXT ·Value(SB),4,$0-9\nMOVB $2,x+0(FP)\nMOVB x+0(FP),AL\nCMPB AL,$2\nSETEQ ret+8(FP)\nRET\n"
-	const driver = "#include <stdbool.h>\nextern bool Value(bool);\nint main(void){return Value(false)&&Value(true)?0:1;}\n"
+	// An explicit integer shim avoids borrowing C's _Bool ABI attributes.
+	const shim = `
+define i32 @BoolByteProbe(i32 %input) {
+ %boolean = icmp ne i32 %input, 0
+ %result = call i1 @Value(i1 %boolean)
+ %output = zext i1 %result to i32
+ ret i32 %output
+}
+`
+	const driver = "extern int BoolByteProbe(int);\nint main(void){return BoolByteProbe(0)==1&&BoolByteProbe(1)==1?0:1;}\n"
 	triple := testTargetTriple(runtime.GOOS, runtime.GOARCH)
 	for _, api := range []string{"text", "module", "Go"} {
 		t.Run(api, func(t *testing.T) {
@@ -90,6 +99,7 @@ func TestX86AMD64CanonicalBoolTemporaryBytePortable(t *testing.T) {
 			if err != nil {
 				t.Fatal(api, err)
 			}
+			ir += shim
 			for _, text := range []string{ir, x86DwordProductIROptimize(t, ir)} {
 				for _, level := range []int{0, 2} {
 					compileAndRunRuntimeTestWithCompiler(t, llc, []string{clang}, "bool-byte", triple, text, driver, nil, level)

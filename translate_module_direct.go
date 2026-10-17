@@ -115,6 +115,10 @@ func translateModuleDirectInContext(ctx llvm.Context, file *File, opt Options) (
 			if arch == "" {
 				arch = "amd64" // Match the existing textual default without changing sealed Options.
 			}
+			if x86ABI0BoolResultNeedsProof(sig, arch) {
+				mod.Dispose()
+				return llvm.Module{}, directUnsupportedf("ABI0 bool result requires complete canonical byte checking for %s", name)
+			}
 			if x86IntegerFPByteMovesNeedCFG(*fn, sig, arch) || x86TypedFPResultNeedsProof(*fn, sig, arch) {
 				mod.Dispose()
 				return llvm.Module{}, directUnsupportedf("integer FP byte views require shared complete source lowering for %s", name)
