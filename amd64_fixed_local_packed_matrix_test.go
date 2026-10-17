@@ -8,8 +8,22 @@ import (
 )
 
 func fixedLocalPackedCompleteProgram() (string, string, int) {
+	return fixedLocalPackedCompleteProgramRange(0, 195)
+}
+
+func fixedLocalPackedCompleteProgramRange(start, end int) (string, string, int) {
 	var assembly, declarations strings.Builder
 	count := 0
+	emit := func(operation string) {
+		index := count
+		count++
+		if index < start || index >= end {
+			return
+		}
+		name := fmt.Sprintf("Value%d", index)
+		assembly.WriteString(strings.Replace(fixedLocalPackedAssembly(operation), "·Value", "·"+name, 1))
+		fmt.Fprintf(&declarations, "func %s(a uint64) uint64\n", name)
+	}
 	for _, row := range fixedLocalPackedMoveOracle {
 		for _, bank := range []string{"X", "Y", "Z"} {
 			if bank == "Z" && !row.evex {
@@ -38,10 +52,7 @@ func fixedLocalPackedCompleteProgram() (string, string, int) {
 					}
 					operation += fmt.Sprintf("%s 64(BP),%s%s\n%s %s,%s%s\n%s %s,%s128(BP)",
 						opcode, mask, first, opcode, first, mask, last, row.name, last, mask)
-					name := fmt.Sprintf("Value%d", count)
-					assembly.WriteString(strings.Replace(fixedLocalPackedAssembly(operation), "·Value", "·"+name, 1))
-					fmt.Fprintf(&declarations, "func %s(a uint64) uint64\n", name)
-					count++
+					emit(operation)
 				}
 			}
 		}
@@ -49,64 +60,139 @@ func fixedLocalPackedCompleteProgram() (string, string, int) {
 	// Legacy aliases retain upper bytes and share the exact same local envelope.
 	for _, name := range []string{"MOVO", "MOVOA", "MOVOU", "MOVAPS", "MOVAPD", "MOVUPS", "MOVUPD"} {
 		operation := fmt.Sprintf("%s 64(BP),X15\n%s X15,X0\n%s X0,128(BP)", name, name, name)
-		function := fmt.Sprintf("Value%d", count)
-		assembly.WriteString(strings.Replace(fixedLocalPackedAssembly(operation), "·Value", "·"+function, 1))
-		fmt.Fprintf(&declarations, "func %s(a uint64) uint64\n", function)
-		count++
+		emit(operation)
 	}
 	return assembly.String(), declarations.String(), count
 }
 
-func TestGoAMD64FixedLocalPackedCompleteFormsActualObjects(t *testing.T) {
+func TestGoAMD64FixedLocalPackedCompleteFormsActualObjectsLinuxBatch00(t *testing.T) {
+	fixedLocalPackedActualObjects(t, "linux/amd64", "x86_64-unknown-linux-gnu", 0)
+}
+
+func TestGoAMD64FixedLocalPackedCompleteFormsActualObjectsLinuxBatch01(t *testing.T) {
+	fixedLocalPackedActualObjects(t, "linux/amd64", "x86_64-unknown-linux-gnu", 1)
+}
+
+func TestGoAMD64FixedLocalPackedCompleteFormsActualObjectsLinuxBatch02(t *testing.T) {
+	fixedLocalPackedActualObjects(t, "linux/amd64", "x86_64-unknown-linux-gnu", 2)
+}
+
+func TestGoAMD64FixedLocalPackedCompleteFormsActualObjectsLinuxBatch03(t *testing.T) {
+	fixedLocalPackedActualObjects(t, "linux/amd64", "x86_64-unknown-linux-gnu", 3)
+}
+
+func TestGoAMD64FixedLocalPackedCompleteFormsActualObjectsDarwinBatch00(t *testing.T) {
+	fixedLocalPackedActualObjects(t, "darwin/amd64", "x86_64-apple-darwin", 0)
+}
+
+func TestGoAMD64FixedLocalPackedCompleteFormsActualObjectsDarwinBatch01(t *testing.T) {
+	fixedLocalPackedActualObjects(t, "darwin/amd64", "x86_64-apple-darwin", 1)
+}
+
+func TestGoAMD64FixedLocalPackedCompleteFormsActualObjectsDarwinBatch02(t *testing.T) {
+	fixedLocalPackedActualObjects(t, "darwin/amd64", "x86_64-apple-darwin", 2)
+}
+
+func TestGoAMD64FixedLocalPackedCompleteFormsActualObjectsDarwinBatch03(t *testing.T) {
+	fixedLocalPackedActualObjects(t, "darwin/amd64", "x86_64-apple-darwin", 3)
+}
+
+func TestGoAMD64FixedLocalPackedCompleteFormsActualObjectsWindowsBatch00(t *testing.T) {
+	fixedLocalPackedActualObjects(t, "windows/amd64", "x86_64-pc-windows-msvc", 0)
+}
+
+func TestGoAMD64FixedLocalPackedCompleteFormsActualObjectsWindowsBatch01(t *testing.T) {
+	fixedLocalPackedActualObjects(t, "windows/amd64", "x86_64-pc-windows-msvc", 1)
+}
+
+func TestGoAMD64FixedLocalPackedCompleteFormsActualObjectsWindowsBatch02(t *testing.T) {
+	fixedLocalPackedActualObjects(t, "windows/amd64", "x86_64-pc-windows-msvc", 2)
+}
+
+func TestGoAMD64FixedLocalPackedCompleteFormsActualObjectsWindowsBatch03(t *testing.T) {
+	fixedLocalPackedActualObjects(t, "windows/amd64", "x86_64-pc-windows-msvc", 3)
+}
+
+func TestGoAMD64FixedLocalPackedObjectBatchPlan(t *testing.T) {
+	completeAssembly, completeDeclarations, count := fixedLocalPackedCompleteProgram()
+	if count != 195 {
+		t.Fatal("complete independent packed format inventory changed", count)
+	}
+	var assembly, declarations strings.Builder
+	for batch := 0; batch < 4; batch++ {
+		start, end, ok := fixedLocalObjectBatchRange(count, batch)
+		if !ok {
+			t.Fatal("missing packed object batch", batch)
+		}
+		body, decls, total := fixedLocalPackedCompleteProgramRange(start, end)
+		file, err := Parse(ArchAMD64, body)
+		if err != nil || total != count || len(file.Funcs) != end-start {
+			t.Fatal("packed object batch lost its exact function range", batch, err)
+		}
+		assembly.WriteString(body)
+		declarations.WriteString(decls)
+	}
+	if assembly.String() != completeAssembly || declarations.String() != completeDeclarations {
+		t.Fatal("packed object batches changed, omitted or duplicated original source bytes")
+	}
+}
+
+func fixedLocalPackedActualObjects(t *testing.T, target, triple string, batch int) {
+	t.Helper()
 	// Keep lazy Go tools in this root's disposable cache, not a global cache
 	// or a different source/object observation.
 	t.Setenv("GOCACHE", t.TempDir())
-	assembly, declarations, count := fixedLocalPackedCompleteProgram()
-	if count != 195 {
-		t.Fatalf("independent width/register/mask/legacy matrix changed: %d", count)
+	start, end, ok := fixedLocalObjectBatchRange(195, batch)
+	if !ok {
+		t.Fatal("invalid complete packed object batch", batch)
 	}
+	assembly, declarations, total := fixedLocalPackedCompleteProgramRange(start, end)
+	if total != 195 {
+		t.Fatalf("independent width/register/mask/legacy matrix changed: %d", total)
+	}
+	count := end - start
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc required")
 	}
-	for _, target := range []struct{ name, triple string }{
-		{"linux/amd64", "x86_64-unknown-linux-gnu"},
-		{"darwin/amd64", "x86_64-apple-darwin"},
-		{"windows/amd64", "x86_64-pc-windows-msvc"},
-	} {
-		t.Run(target.name, func(t *testing.T) {
-			pkg, request, file, options := x86CMOVFixedLocalFixture(t, assembly, declarations, target.name, target.triple)
-			fixedLocalConversionPrepareToolCache(t, request)
-			source := requireGoAMD64FrameCapture(t, pkg, request)
-			if len(source.functions) != count {
-				t.Fatal("incomplete actual original Go objects")
+	t.Run(fmt.Sprintf("batch%d", batch), func(t *testing.T) {
+		pkg, request, file, options := x86CMOVFixedLocalFixture(t, assembly, declarations, target, triple)
+		fixedLocalConversionPrepareToolCache(t, request)
+		source := requireGoAMD64FrameCapture(t, pkg, request)
+		if len(source.functions) != count {
+			t.Fatal("incomplete actual original Go objects")
+		}
+		expanded, err := source.preprocess(request.AssemblyFile, []byte(assembly))
+		if err != nil {
+			t.Fatal(err)
+		}
+		file, err = Parse(ArchAMD64, expanded)
+		if err != nil {
+			t.Fatal(err)
+		}
+		// Consume this owner's actual complete CPP result. Its token
+		// formatting inserts a space before .Z; unexpanded Raw strings
+		// cannot impersonate that immutable source fingerprint.
+		ctx, cancel := runtimeOracleStageContext(t)
+		defer cancel()
+		bound, err := source.BindFixedLocal(ctx, pkg, file, options)
+		if err != nil {
+			t.Fatal(err)
+		}
+		fixedLocalAPIs(t, pkg, file, bound, func(t *testing.T, ir string, err error) {
+			if err != nil || strings.Count(ir, "%fixed_local_native = alloca") != count {
+				t.Fatalf("complete original frame inventory lost: %v", err)
 			}
-			expanded, err := source.preprocess(request.AssemblyFile, []byte(assembly))
-			if err != nil {
-				t.Fatal(err)
-			}
-			file, err = Parse(ArchAMD64, expanded)
-			if err != nil {
-				t.Fatal(err)
-			}
-			// Consume this owner's actual complete CPP result. Its token
-			// formatting inserts a space before .Z; unexpanded Raw strings
-			// cannot impersonate that immutable source fingerprint.
-			ctx, cancel := runtimeOracleStageContext(t)
-			defer cancel()
-			bound, err := source.BindFixedLocal(ctx, pkg, file, options)
-			if err != nil {
-				t.Fatal(err)
-			}
-			fixedLocalAPIs(t, pkg, file, bound, func(t *testing.T, ir string, err error) {
-				if err != nil || strings.Count(ir, "%fixed_local_native = alloca") != count {
-					t.Fatalf("complete original frame inventory lost: %v", err)
+			for _, text := range []string{ir, x86MulDivRoundOptimize(t, ir)} {
+				var names []string
+				for index := start; index < end; index++ {
+					names = append(names, fmt.Sprintf("example.invalid/framefixture.Value%d", index))
 				}
-				compileLLVMToObject(t, llc, target.triple, "complete-packed.ll", "complete-packed.o", ir)
-				compileLLVMToObject(t, llc, target.triple, "complete-packed-opt.ll", "complete-packed-opt.o", x86MulDivRoundOptimize(t, ir))
-			})
+				x86CompactExpandRequireAllDefinitions(t, text, names)
+				compileLLVMToObject(t, llc, triple, "complete-packed.ll", "complete-packed.o", text)
+			}
 		})
-	}
+	})
 }
 
 func TestGoAMD64FixedLocalPackedEveryByteAndUnknownRole(t *testing.T) {

@@ -51,7 +51,7 @@ func fixedLocalRequireIndependentTargetOwners(t *testing.T, filename, prefix, pl
 		}
 		target, found := want[function.Name.Name]
 		if !found {
-			t.Fatal("unknown or monolithic conversion-object owner", function.Name.Name)
+			t.Fatal("unknown or monolithic fixed-local object owner", function.Name.Name)
 		}
 		if len(function.Body.List) != 1 {
 			t.Fatal("target owner must call the complete shared object plan", function.Name.Name)
@@ -108,19 +108,28 @@ func fixedLocalRequireIndependentTargetOwners(t *testing.T, filename, prefix, pl
 }
 
 func TestFixedLocalConversionObjectCacheIsOwnedByTheWholeTarget(t *testing.T) {
+	fixedLocalRequireOwnedObjectCache(t, "amd64_fixed_local_conversion_test.go", "fixedLocalConversionActualObjects")
+}
+
+func TestFixedLocalPackedObjectCacheIsOwnedByTheWholeTarget(t *testing.T) {
+	fixedLocalRequireOwnedObjectCache(t, "amd64_fixed_local_packed_matrix_test.go", "fixedLocalPackedActualObjects")
+}
+
+func fixedLocalRequireOwnedObjectCache(t *testing.T, filename, plan string) {
+	t.Helper()
 	syntax, err := parser.ParseFile(token.NewFileSet(),
-		filepath.Join("..", "..", "amd64_fixed_local_conversion_test.go"), nil, 0)
+		filepath.Join("..", "..", filename), nil, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
 	var helper *ast.FuncDecl
 	for _, declaration := range syntax.Decls {
-		if function, ok := declaration.(*ast.FuncDecl); ok && function.Name.Name == "fixedLocalConversionActualObjects" {
+		if function, ok := declaration.(*ast.FuncDecl); ok && function.Name.Name == plan {
 			helper = function
 		}
 	}
 	if helper == nil {
-		t.Fatal("missing complete conversion object helper")
+		t.Fatal("missing complete fixed-local object helper")
 	}
 	isCache := func(node ast.Node) bool {
 		call, ok := node.(*ast.CallExpr)
@@ -173,7 +182,7 @@ func TestFixedLocalConversionPreparesLazyToolsBeforeSourceCapture(t *testing.T) 
 }
 
 func TestFixedLocalPackedPreparesLazyToolsBeforeSourceCapture(t *testing.T) {
-	fixedLocalRequirePreparedTools(t, "amd64_fixed_local_packed_matrix_test.go", "TestGoAMD64FixedLocalPackedCompleteFormsActualObjects")
+	fixedLocalRequirePreparedTools(t, "amd64_fixed_local_packed_matrix_test.go", "fixedLocalPackedActualObjects")
 }
 
 func fixedLocalRequirePreparedTools(t *testing.T, filename, helper string) {

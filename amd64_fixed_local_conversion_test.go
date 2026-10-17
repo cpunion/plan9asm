@@ -378,7 +378,7 @@ func TestGoAMD64FixedLocalConversionActualObjectsWindowsBatch11(t *testing.T) {
 	fixedLocalConversionActualObjects(t, "windows/amd64", "x86_64-pc-windows-msvc", 11)
 }
 
-func fixedLocalConversionBatchRange(total, batch int) (start, end int, ok bool) {
+func fixedLocalObjectBatchRange(total, batch int) (start, end int, ok bool) {
 	const size = 64
 	if total <= 0 || batch < 0 || batch >= (total+size-1)/size {
 		return 0, 0, false
@@ -397,7 +397,7 @@ func TestGoAMD64FixedLocalConversionObjectBatchPlan(t *testing.T) {
 	}
 	seen := make([]int, len(rows))
 	for batch := 0; batch < 12; batch++ {
-		start, end, ok := fixedLocalConversionBatchRange(len(rows), batch)
+		start, end, ok := fixedLocalObjectBatchRange(len(rows), batch)
 		if !ok || end-start > 64 || end <= start {
 			t.Fatal("invalid independent conversion batch", batch, start, end, ok)
 		}
@@ -411,7 +411,7 @@ func TestGoAMD64FixedLocalConversionObjectBatchPlan(t *testing.T) {
 		}
 	}
 	for _, input := range [][2]int{{0, 0}, {741, -1}, {741, 12}} {
-		if _, _, ok := fixedLocalConversionBatchRange(input[0], input[1]); ok {
+		if _, _, ok := fixedLocalObjectBatchRange(input[0], input[1]); ok {
 			t.Fatal("invalid conversion batch accepted", input)
 		}
 	}
@@ -427,7 +427,7 @@ func fixedLocalConversionActualObjects(t *testing.T, target, triple string, batc
 		t.Fatal("LLVM 22 llc required")
 	}
 	rows := fixedLocalConversionOperations()
-	start, end, ok := fixedLocalConversionBatchRange(len(rows), batch)
+	start, end, ok := fixedLocalObjectBatchRange(len(rows), batch)
 	if !ok {
 		t.Fatal("invalid complete conversion object batch", batch, len(rows))
 	}
