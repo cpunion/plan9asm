@@ -90,5 +90,12 @@ func x86ResultPackedWordMultiplyStep(ins Instr, state *x86ResultState, owned []b
 	if !known || err != nil {
 		return false, known
 	}
+	if !form.mmx && form.spec.mode == amd64PackedWordMultiplyLow {
+		// W/D/Q low products share per-lane numerical dependencies. Missing
+		// source bytes leave only their dependent result lanes unknown; they
+		// never become initialized implementation-slot values. Whole-source
+		// word input obligations remain in the separate scalar-FP consumer.
+		return x86ResultPackedLaneArithmeticStep(ins, form.x86PackedBinaryForm, 16, state, owned, arch), true
+	}
 	return x86ResultFixedVectorInputs(ins, form.x86PackedBinaryForm, false, state, owned, arch), true
 }
