@@ -70,7 +70,7 @@ func TestX86LogicalFloatingFieldAddressKeepsIndependentBoundaries(t *testing.T) 
 		{"result-padding", "ret+8(FP),BX", "ret+12(FP),BX"},
 		{"uninitialized-result", "x+0(FP),AX", "ret+8(FP),AX"},
 		{"cross-field-read", "MOVSS (AX),X0", "MOVSD (AX),X0"},
-		{"input-store", "LEAQ ret+8(FP),BX", "MOVSS X0,(AX)\nLEAQ ret+8(FP),BX"},
+		{"address-as-data", "MOVSS X0,(BX)", "MOVQ AX,X0\nMOVSS X0,(BX)"},
 		{"physical-SP", "LEAQ x+0(FP),AX\nMOVSS (AX),X0", "LEAQ x+0(FP),SP\nMOVSS (SP),X0"},
 	} {
 		t.Run(mutation.name, func(t *testing.T) {
@@ -86,5 +86,38 @@ func TestX86LogicalFloatingFieldAddressKeepsIndependentBoundaries(t *testing.T) 
 				}
 			}
 		})
+	}
+}
+
+// Parameter fields already have mutable private logical copies, not incoming
+// caller backing. A store confined to that copy is valid, unlike an address
+// escape or a write into padding. Keep the same contract for floating bytes.
+func TestX86LogicalFloatingFieldAddressPrivateParameterCopy(t *testing.T) {
+	for _, target := range x86RawReturnTargets {
+		for _, kind := range []string{"float32", "float64"} {
+			t.Run(target.triple+"/"+kind, func(t *testing.T) {
+				extent := 16
+				if target.arch == "386" && kind == "float32" {
+					extent = 8
+				}
+				source, declaration := x86LogicalFloatingFieldCopy(target.arch, kind, extent)
+				move := "MOVSS"
+				if kind == "float64" {
+					move = "MOVSD"
+				}
+				source = strings.Replace(source, move+" (AX),X0", "PXOR X1,X1\n"+move+" X1,(AX)\n"+move+" (AX),X0", 1)
+				x86LEAActualTargetGoObject(t, target.arch, target.triple, source)
+				for _, api := range []string{"text", "module", "Go"} {
+					ir, err := x86ScalarFPBitViewAPI(t, source, declaration, target.arch, target.triple, api)
+					if err != nil {
+						t.Error("private logical parameter-copy store failed", api, err)
+						continue
+					}
+					for _, level := range []string{"-O0", "-O2"} {
+						x86PackedStringCompileObject(t, findLLVM22Tool("llc"), target.triple, ir, level)
+					}
+				}
+			})
+		}
 	}
 }
