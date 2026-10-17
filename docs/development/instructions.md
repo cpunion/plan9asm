@@ -742,6 +742,18 @@ Actual REX changes AH/CH/DH/BH ModRM spellings to SP/BP/SI/DI low bytes;
 register allocation and effects must agree with Go's bytes. An implicit
 physical SP/BP write remains Context without its native contract.
 
+BEXTR and BZHI share Go's complete `_ybextrl` operand grammar, not their
+control bytes or status effects. BEXTR consumes START/LEN; BZHI consumes only
+the index's low byte and defines CF/OF/ZF/SF while killing AF/PF knowledge.
+The Q spelling remains intact in mode32, where VEX.W is ignored and the
+physical operand/read width is 32 bits. Use the common typed descriptor for
+lowering, memory shape and numerical inputs. Void and unused-bool entries
+still require those inputs; exact volatile paired reads survive zero controls
+and dead results without granting reusable pointer/caller authority. Retain
+original Go rows/bytes, public Context controls, initialized five-target
+objects and independent full-control/alias/FLAGS/fault execution. See
+[Intel SDM, BZHI, Vol. 2A §3-138](https://cdrdv2-public.intel.com/825743/325462-sdm-vol-1-2abcd-3abcd-4.pdf).
+
 Packed low-product W/D/Q multiplication consumes the shared binary grammar;
 W retains the word family's separate MMX bank. D/Q shape, lowering, caller
 effects, memory tuples and result definedness must agree. Legacy PMULLD m128
