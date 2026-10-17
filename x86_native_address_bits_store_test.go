@@ -83,6 +83,21 @@ int main(void) {
     }
     return 0;
 }
+`
+	for _, api := range []string{"text", "module", "Go"} {
+		t.Run(api, func(t *testing.T) {
+			ir, err := x86ScalarFPBitViewAPI(t, source, declaration, arch, triple, api)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, text := range []string{ir, x86DwordProductIROptimize(t, ir)} {
+				for _, level := range []int{0, 2} {
+					compileAndRunRuntimeTestWithCompiler(t, llc, []string{clang}, "opaque-address-bit-copy", triple, text, driver, nil, level)
+				}
+			}
+		})
+	}
+}
 
 func TestX86NativeAddressBitsStoreVoidCannotHideUnknownInputs(t *testing.T) {
 	for _, target := range x86RawReturnTargets {
@@ -112,20 +127,5 @@ func TestX86NativeAddressBitsStoreVoidCannotHideUnknownInputs(t *testing.T) {
 				}
 			}
 		}
-	}
-}
-`
-	for _, api := range []string{"text", "module", "Go"} {
-		t.Run(api, func(t *testing.T) {
-			ir, err := x86ScalarFPBitViewAPI(t, source, declaration, arch, triple, api)
-			if err != nil {
-				t.Fatal(err)
-			}
-			for _, text := range []string{ir, x86DwordProductIROptimize(t, ir)} {
-				for _, level := range []int{0, 2} {
-					compileAndRunRuntimeTestWithCompiler(t, llc, []string{clang}, "opaque-address-bit-copy", triple, text, driver, nil, level)
-				}
-			}
-		})
 	}
 }
