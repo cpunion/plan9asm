@@ -416,7 +416,9 @@ func TestX86BroadcastAuthorityAndGrammarControls(t *testing.T) {
 				for index := range state.masks {
 					state.masks[index] = true
 				}
-				ordinary := arch == "386" && row == "VPBROADCASTQ BP,X2"
+				// K0 is an ordinary initialized data source here, not a
+				// writemask or a grant of native memory permission.
+				ordinary := arch == "386" && row == "VPBROADCASTQ BP,X2" || row == "VPBROADCASTMB2Q K0,X2"
 				if consumer.step(ins, &state, nil, 0, arch) != ordinary {
 					t.Fatalf("%s borrowed native/mask/SP/BP permission: %s", consumer.name, row)
 				}

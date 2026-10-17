@@ -1,5 +1,42 @@
 # Current work: PR 40 checkpoint
 
+## Active closure queue, 2026-10-17
+
+This section supersedes older checkpoints below. PR40 remains draft at
+`24851df2`. Allowed-fork run39021103697 tests `4b01f010`; all65 prerequisites
+pass, but complete Windows modules are still running and have real failures.
+Eleven downloaded root parts retain4,479 passed,117 failed and198 explicit
+host-inapplicable roots. These partial counts do not certify the remaining five
+parts, complete modules or a newer source. Let CI finish before a batch push.
+Keep failure artifacts under `_out/ci-39021103697/`; no local inventory scanner
+or external-ledger credit belongs in this repair.
+
+The local scalar-symbol repair at `2c727452` passes its eight-root/256-child
+union on current Go, Go20 and race. File-static `<>` is not an ABI selector.
+The CLI's exact unknown-argument helper remains Context; only its explicit
+bounded counterpart supplies a callable signature.
+
+MMX streaming leaf `dbbeb51c` passes30 changed/retained roots and360 children
+per current-Go, actual-Go20 and race lane, with identical terminals and unchanged
+source/tool seals. It retains all eight MMX sources, five x86 targets, exact
+MOVNTQ, real EMMS and original-Go build-only evidence. Required original-Go and
+four LLVM native Linux execution axes are added but have not run at this head.
+
+Broadcast source `17f9c78c` passes13 roots/1,147 children on current Go:
+all20 members' independent Go rows, five-target objects, paired native reads,
+known mask-data inputs and114 actual-host portable fault kernels. This is not
+native AVX512 execution. Preserve the failed mask-data RED at `1c92cc2e`, the
+earlier host-skip receipt, and the retained stale K0 expectation failure.
+The corrected K0 boundary and integrated MMX/broadcast source need fresh
+current-Go, actual-Go20 and race qualification before publication.
+
+Next clear the complete CI failure index by rule class, not another inventory
+or broad refactoring project. Linux conversion batch08 additionally fails while
+cold-building Go's objdump at the unchanged60-second command deadline;18 other
+collected batches pass, not the complete36-owner union. Keep this infrastructure
+failure distinct from invalid source. The strict184-file benchmark remains
+failed at132/184 with52 failures and AMD64 over budget; no newer pass exists.
+
 ## Bool and pointer-CAS closing batch, 2026-10-17
 
 The allowed-fork run39006691606 at `b38f28e5` finished naturally:77 jobs pass
