@@ -1519,6 +1519,31 @@ func TestExtractSupportedOpsFindsCompleteADXSpecTable(t *testing.T) {
 	}
 }
 
+func TestExtractSupportedOpsFindsCompleteBLSSpecTable(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("../..", "amd64_bls_forms.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "amd64_bls_forms.go"), data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "translate.go"), []byte("package plan9asm\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	for _, arch := range []string{"amd64", "386"} {
+		supported, err := extractSupportedOps(dir, arch)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, op := range []string{"BLSIL", "BLSIQ", "BLSMSKL", "BLSMSKQ", "BLSRL", "BLSRQ"} {
+			if _, ok := supported[op]; !ok {
+				t.Errorf("%s typed BLS extraction omitted %s", arch, op)
+			}
+		}
+	}
+}
+
 func TestExtractSupportedOpsFindsCompleteArithmeticShiftSpecTable(t *testing.T) {
 	data, err := os.ReadFile(filepath.Join("../..", "amd64_lower_arithmetic_shift.go"))
 	if err != nil {
