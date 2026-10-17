@@ -46,19 +46,18 @@ func TestTranslateX86BZHICompleteGo127FormsAcrossTargets(t *testing.T) {
 		t.Run(target.name, func(t *testing.T) {
 			source := x86BZHICompleteFormsSource(target.goarch)
 			requireX86GoAssemblerResult(t, target.goarch, source, true)
-			file, err := Parse(ArchAMD64, source)
-			if err != nil {
-				t.Fatal(err)
+			// Preserve every original format, including its unbound registers
+			// and mode32 SP destination. These are not complete source entries.
+			file, signatures := x86UnboundVoidFormatSource(t, source, "bzhiforms", target.goarch, target.triple)
+			ir := x86InstructionFormatObjectUnit(t, file, signatures, target.goarch, target.triple, 0,
+				func(c *amd64Ctx, instruction Instr) (bool, bool, error) {
+					return c.lowerBZHI(instruction.Op, instruction)
+				})
+			wants := []string{"shl i32", `"target-features"="+bmi2"`}
+			if target.goarch == "amd64" {
+				wants = append(wants, "shl i64")
 			}
-			ir, err := Translate(file, Options{
-				Goarch:       target.goarch,
-				TargetTriple: target.triple,
-				Sigs:         map[string]FuncSig{"bzhiforms": {Name: "bzhiforms", Ret: Void}},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
-			for _, want := range []string{"shl i32", "shl i64", `"target-features"="+bmi2"`} {
+			for _, want := range wants {
 				if !strings.Contains(ir, want) {
 					t.Fatalf("BZHI lowering omitted %q:\n%s", want, ir)
 				}
