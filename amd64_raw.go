@@ -3517,127 +3517,71 @@ func decodedX86VEXRMOperand(code []byte, mode, bExt, xExt int, segment Reg, vect
 	return Operand{Kind: OpReg, Reg: Reg(fmt.Sprintf("X%d", number))}, 1, nil
 }
 
-// decodedX86VEXNonTemporalMoveInstruction recognizes the complete VEX.128 and
-// VEX.256 non-temporal vector-move family before x/arch's generic decoder.
-// x/arch v0.14 loses the VEX.L register width for VMOVNTDQ/VMOVNTDQA and can
-// decode VMOVNTPD/VMOVNTPS as legacy integer subtraction. EVEX forms are not
-// handled here because the generic decoder preserves their X/Y/Z widths.
-func decodedX86VEXNonTemporalMoveInstruction(code []byte, mode int) (instruction Instr, length int, ok bool, err error) {
+// The complete VEX/EVEX non-temporal move family shares the physical prefix
+// decoder. The historical VEX entry name is retained for its existing callers.
+// These boundaries grant no raw translation, memory or entry-state permission.
+func decodedX86VEXNonTemporalMoveInstruction(code []byte, mode int) (Instr, int, bool, error) {
 	return decodedX86VEXNonTemporalMoveInstructionWithMemory(code, mode, x86RawMemoryDecoder{})
 }
 
-func decodedX86VEXNonTemporalMoveInstructionWithMemory(code []byte, mode int, memory x86RawMemoryDecoder) (instruction Instr, length int, ok bool, err error) {
-	i := 0
-	segment := Reg("")
-	addressOverride := false
-	for i < len(code) {
-		switch code[i] {
-		case 0x64:
-			segment = FS
-			i++
-		case 0x65:
-			segment = GS
-			i++
-		case 0x67:
-			addressOverride = true
-			i++
-		default:
-			goto vex
-		}
-	}
-
-vex:
-	if mode != 32 && mode != 64 {
+func decodedX86VEXNonTemporalMoveInstructionWithMemory(code []byte, mode int, memory x86RawMemoryDecoder) (Instr, int, bool, error) {
+	p, known := decodeX86RawVectorEncoding(code)
+	if !known {
 		return Instr{}, 0, false, nil
 	}
-	if len(code) < i+3 {
-		return Instr{}, 0, false, nil
-	}
-
-	var rExt, xExt, bExt, vexLength, opcodeMap int
-	var vexBits byte
-	switch code[i] {
-	case 0xc5:
-		vexLength = 2
-		opcodeMap = 1
-		vexBits = code[i+1]
-		rExt = int(^vexBits>>7) & 1
-	case 0xc4:
-		if len(code) < i+4 {
-			return Instr{}, 0, false, nil
-		}
-		vexLength = 3
-		opcodeMap = int(code[i+1] & 0x1f)
-		vexBits = code[i+2]
-		rExt = int(^code[i+1]>>7) & 1
-		xExt = int(^code[i+1]>>6) & 1
-		bExt = int(^code[i+1]>>5) & 1
-	default:
-		return Instr{}, 0, false, nil
-	}
-	opcodeIndex := i + vexLength
-	if len(code) <= opcodeIndex {
-		return Instr{}, 0, false, nil
-	}
-
-	opcode := code[opcodeIndex]
-	prefix := vexBits & 3
+	var op Op
 	load := false
-	op := Op("")
 	switch {
-	case opcodeMap == 1 && opcode == 0xe7 && prefix == 1:
+	case p.mapNumber == 1 && p.opcode == 0xe7 && p.pp == 1:
 		op = "VMOVNTDQ"
-	case opcodeMap == 1 && opcode == 0x2b && prefix == 1:
+	case p.mapNumber == 1 && p.opcode == 0x2b && p.pp == 1:
 		op = "VMOVNTPD"
-	case opcodeMap == 1 && opcode == 0x2b && prefix == 0:
+	case p.mapNumber == 1 && p.opcode == 0x2b && p.pp == 0:
 		op = "VMOVNTPS"
-	case opcodeMap == 2 && opcode == 0x2a && prefix == 1:
-		op = "VMOVNTDQA"
-		load = true
+	case p.mapNumber == 2 && p.opcode == 0x2a && p.pp == 1:
+		op, load = "VMOVNTDQA", true
 	default:
 		return Instr{}, 0, false, nil
 	}
-	ok = true
-	if vexLength == 3 && vexBits&0x80 != 0 {
-		return Instr{}, 0, true, fmt.Errorf("VEX.W must be zero")
+	fail := func(message string) (Instr, int, bool, error) {
+		return Instr{}, 0, true, fmt.Errorf("non-temporal vector move: %s", message)
 	}
-	if vexBits&0x78 != 0x78 {
-		return Instr{}, 0, true, fmt.Errorf("VEX.vvvv must be 1111")
+	if mode != 32 && mode != 64 || p.addressOverride {
+		return fail("unknown mode or unbound address-size override")
 	}
-	if addressOverride {
-		return Instr{}, 0, true, fmt.Errorf("address-size override is not source-layout safe")
+	if p.upper != 0 || p.mask != 0 || p.zero || p.broadcast || p.vectorLength > 2 {
+		return fail("reserved input, mask, zeroing, broadcast or length")
 	}
-	modRMIndex := opcodeIndex + 1
-	if len(code) <= modRMIndex {
-		return Instr{}, 0, true, fmt.Errorf("missing ModRM byte")
+	// VEX.W is ignored; EVEX.W distinguishes PD from the W0 rows.
+	if p.evex && (!p.fixed || p.w != (op == "VMOVNTPD")) {
+		return fail("invalid EVEX fixed or width bit")
 	}
-	modRM := code[modRMIndex]
-	if modRM>>6 == 3 {
-		return Instr{}, 0, true, fmt.Errorf("register r/m operand is absent from Go 1.27's %s table", op)
+	if len(code) <= p.modRM || code[p.modRM]>>6 == 3 {
+		return fail("missing native memory ModRM")
 	}
-	vectorNumber := int(modRM>>3&7) + rExt*8
-	if mode == 32 && (rExt != 0 || xExt != 0 || bExt != 0 || vectorNumber >= 8) {
-		return Instr{}, 0, true, fmt.Errorf("extended register in 32-bit mode")
+	register := int(code[p.modRM]>>3&7) + p.r*8
+	if mode == 32 && (register >= 8 || p.x != 0 || p.b != 0) {
+		return fail("unbound extended physical register in mode32")
 	}
-	vectorPrefix := "X"
-	if vexBits&0x04 != 0 {
-		vectorPrefix = "Y"
+	bank := []string{"X", "Y", "Z"}[p.vectorLength]
+	vector := Operand{Kind: OpReg, Reg: Reg(fmt.Sprint(bank, register))}
+	var operand Operand
+	var consumed int
+	var err error
+	if p.evex {
+		operand, consumed, err = memory.evex(code[p.modRM:], mode, p.b, p.x, p.segment, bank, 16<<p.vectorLength)
+	} else {
+		operand, consumed, err = memory.vex(code[p.modRM:], mode, p.b, p.x, p.segment, bank)
 	}
-	vector := Operand{Kind: OpReg, Reg: Reg(fmt.Sprintf("%s%d", vectorPrefix, vectorNumber))}
-	operand, consumed, decodeErr := memory.vex(code[modRMIndex:], mode, bExt, xExt, segment, vectorPrefix)
-	if decodeErr != nil {
-		return Instr{}, 0, true, decodeErr
+	if err != nil {
+		return Instr{}, 0, true, err
 	}
 	args := []Operand{vector, operand}
 	if load {
 		args[0], args[1] = operand, vector
 	}
-	instruction = Instr{
-		Op:   op,
-		Args: args,
-		Raw:  fmt.Sprintf("%s %s, %s", op, args[0].String(), args[1].String()),
-	}
-	return instruction, modRMIndex + consumed, true, nil
+	return Instr{Op: op, Args: args, Raw: fmt.Sprintf("%s %s, %s", op, args[0].String(), args[1].String())},
+		p.modRM + consumed, true, nil
 }
 
 // decodedX86VINSERT128Instruction recognizes the complete VEX
