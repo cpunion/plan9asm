@@ -167,7 +167,9 @@ func TestX86ResultGPSIMDAdmissionOrdinaryRolesAndCachedProof(t *testing.T) {
 		{"ordinary GP to X", "MOVL AX,X0", "uint32", nil, true},
 		{"ordinary X to GP", "MOVQ X0,AX", "uint32", nil, true},
 		{"ordinary X to X", "MOVD X0,X1", "uint32", nil, true},
-		{"physical MMX", "MOVQ X0,M0", "uint32", nil, false},
+		// MMX has its own mandatory whole-source obligation. It must reject
+		// this uninitialized, unclosed source rather than bypass preflight.
+		{"physical MMX", "MOVQ X0,M0", "uint32", nil, true},
 		{"decoder origin", "VMOVD AX,X0", "uint32", func(ins *Instr) { ins.x86Encoded = true }, false},
 		{"raw source origin", "MOVL AX,X0", "uint32", func(ins *Instr) { ins.x86SourceRaw = &x86SourceRawInstruction{} }, false},
 		{"raw only", "VMOVW AX,X0", "uint32", func(ins *Instr) { ins.x86Encoded = true }, false},

@@ -1,5 +1,27 @@
 # Current work: PR 40 checkpoint
 
+## Closure queue, 2026-10-17
+
+This queue supersedes the historical checkpoints below. Freeze scope to actual
+CI failures; do not add inventory work or another broad proof/refactoring project.
+Candidate `94ef177e` is now published to the allowed fork. Let
+[run 39000367870](https://github.com/cpunion/plan9asm/actions/runs/39000367870)
+finish before the next consolidated push. PR40 remains draft at its older head.
+
+At that candidate, the fourteen MMX core roots and 285 children pass current
+Go, actual Go20 and race without skips. All seventeen MMX object roots pass.
+Native Linux x86 execution also passes the complete 66-root CI owner, both
+LOCK/unlocked RMW owners and the separate x87 owner. The independent physical
+MMX fixture additionally passes 96 boundary probes and 384 value/FPU-state calls.
+These are not full-module, benchmark, official-baseline or all-CI success claims.
+
+The retained XMM chain still exposes missing horizontal-integer and arithmetic
+shift result consumers. New CI failures include manual 386 register-entry
+fixtures, overlapping SDK-literal/native byte-shuffle dispatch and the old MMX
+preflight expectation. Both SDK official gates also fail changed classifications:
+retain those failures and inspect complete forms before any baseline update.
+Inventory is stopped at the requested historical boundary; ledgers remain external.
+
 ## Native MMX repair candidate, 2026-10-17
 
 The new candidate pairs a source-bound native MMX region with a separate
