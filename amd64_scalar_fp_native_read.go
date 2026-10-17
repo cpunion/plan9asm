@@ -100,6 +100,7 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		}
 	}
 	lockPrefixes := x86ResultSourceLockPrefixes(fn, arch)
+	addressBitStores := x86LeafNativeAddressBitStoreScope(fn, c.fpSourceSig, arch)
 	stringMemory, err := x86ResultStringMemorySourcePlan(fn, arch)
 	if err != nil {
 		return err
@@ -168,7 +169,7 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		if accepted, recognized := x86LoweredScalarNativeLoad(ins, state, owned, resultOffset, arch); recognized {
 			return accepted
 		}
-		if accepted, recognized := x86LoweredScalarNativeStore(ins, state, owned, arch); recognized {
+		if accepted, recognized := x86LoweredScalarNativeStoreWithAddressBits(ins, state, owned, arch, addressBitStores); recognized {
 			return accepted
 		}
 		if accepted, recognized := x86LoweredScalarMemoryRMW(ins, state, owned, arch); recognized {

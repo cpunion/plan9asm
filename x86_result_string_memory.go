@@ -150,7 +150,10 @@ func (plan *x86ResultStringMemoryPlan) transfer(ordinal int, ins Instr, state *x
 	for _, register := range indexes {
 		index, _, _ := x86ResultGP(register, word, arch)
 		state.gp[index], state.canonicalGP[index] = 0, 0
-		state.pointerGP[index], state.callerAddressGP[index], state.callerAddressOrigin[index] = false, false, 0
+		// The cursor is no longer the original native-read base. Its full
+		// address bits remain initialized and derived from the same actual
+		// entry, without acquiring NUM bytes or reusable memory permission.
+		state.pointerGP[index] = false
 		state.resultAddressGP[index] = x86ResultSlotAddress{}
 		if state.boolFrameGP != nil {
 			state.boolFrameGP[index] = x86ResultSlotAddress{}

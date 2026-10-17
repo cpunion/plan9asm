@@ -63,8 +63,7 @@ func TestX86StringLoadStorePairedEffectsCompleteFamily(t *testing.T) {
 											indexes = append(indexes, 6)
 										}
 										for _, register := range indexes {
-											expected.pointerGP[register], expected.callerAddressGP[register] = false, false
-											expected.callerAddressOrigin[register] = 0
+											expected.pointerGP[register] = false
 										}
 										if prefix != "" {
 											// Unlike SCAS/CMPS, every completed repeated transfer

@@ -1,6 +1,9 @@
 package plan9asm
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // Go's GP stores share their address classes with Zm_r loads. Yi32 immediate
 // rows retain their own encoded width, including sign extension for MOVQ.
@@ -63,6 +66,34 @@ func (c *amd64Ctx) lowerScalarNativeStore(form x86ScalarNativeStoreForm, ins Ins
 }
 
 func x86LoweredScalarNativeStore(ins Instr, state *x86ResultState, owned []bool, arch string) (bool, bool) {
+	return x86LoweredScalarNativeStoreWithAddressBits(ins, state, owned, arch, false)
+}
+
+// This scope is not an initialized-value or memory certificate. The complete
+// source flow must separately establish the actual typed address-bit input and
+// native destination. Calls, physical entries and other storage owners cannot
+// borrow this leaf-only bit-copy continuation or its lack of Go safepoints.
+func x86LeafNativeAddressBitStoreScope(fn Func, sig FuncSig, arch string) bool {
+	if arch != "386" && arch != "amd64" || fn.FrameSize != 0 || strings.Contains(fn.Sym, "<") ||
+		len(sig.ArgRegs) != 0 || len(fn.X86RawText) != 0 || fn.x86SourceStack != nil || fn.x86FixedLocal != nil ||
+		fn.x86ContinuationFlow != nil || fn.x86DirectTailRoot != nil || sig.x86CallerRegions != nil {
+		return false
+	}
+	for _, ins := range fn.Instrs {
+		if ins.Op == OpCALL || !x86ResultNamedPredicateInstruction(ins) {
+			return false
+		}
+	}
+	for _, slot := range sig.Frame.Params {
+		if slot.Type == Ptr && slot.Index >= 0 && slot.Index < len(sig.Args) && sig.Args[slot.Index] == Ptr {
+			return true
+		}
+	}
+	return false
+}
+
+func x86LoweredScalarNativeStoreWithAddressBits(ins Instr, state *x86ResultState, owned []bool,
+	arch string, addressBits bool) (bool, bool) {
 	form, known, err := x86ScalarNativeStoreProperties(ins.Op, ins, arch)
 	if !known || err != nil {
 		return false, known
@@ -72,8 +103,15 @@ func x86LoweredScalarNativeStore(ins Instr, state *x86ResultState, owned []bool,
 		!x86ResultIncomingPointerAddressIdentity(form.destination, state, arch) {
 		return false, true
 	}
-	// A native NUM store changes no GP/vector/FLAGS/DF or logical bytes.
-	// Pointer-as-data requires its separate GC/escape contract. Standalone
-	// declaration, caller, raw and frame observers cannot use this consumer.
+	if addressBits && form.bytes == x86ResultPointerWord(arch) && form.source.Kind == OpReg {
+		if root, _, valid := x86ResultGP(form.source.Reg, form.bytes, arch); valid && state.callerAddressGP[root] {
+			// Copy exactly one complete word of actual caller-address bits.
+			// No NUM, pointee, GC-root, escape-safety or reusable address fact
+			// follows from this original volatile effect, even when it succeeds.
+			return true, true
+		}
+	}
+	// A native NUM store likewise changes no logical bytes or register facts.
+	// Standalone, caller and physical-frame observers have no paired emitter.
 	return x86ResultRead(form.source, form.bytes, state, owned, arch), true
 }

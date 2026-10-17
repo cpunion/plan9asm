@@ -55,7 +55,7 @@ func TestX86StringCompareTypedContinuationChangesOnlyActualOutputs(t *testing.T)
 									}
 									for _, index := range indexes {
 										expected.gp[index], expected.canonicalGP[index] = 0, 0
-										expected.pointerGP[index], expected.callerAddressGP[index], expected.callerAddressOrigin[index] = false, false, 0
+										expected.pointerGP[index] = false
 										expected.resultAddressGP[index] = x86ResultSlotAddress{}
 									}
 									if prefix == "" || count == x86StringCountNonzero {
