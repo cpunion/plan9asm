@@ -443,6 +443,7 @@ func fixedLocalConversionActualObjects(t *testing.T, target, triple string, batc
 		}
 		pkg, request, file, options := x86CMOVFixedLocalFixture(t,
 			assembly.String(), declarations.String(), target, triple)
+		fixedLocalConversionPrepareToolCache(t, request)
 		source := requireGoAMD64FrameCapture(t, pkg, request)
 		// Match the actual producer's complete CPP output, including
 		// spaces before opcode suffix tokens. Keep the original file

@@ -324,6 +324,7 @@ func TestRuntimeOracleCommandConsumersRetainOwnedExecution(t *testing.T) {
 		"parser_label_prefix_test.go",
 		"parser_opcode_suffix_test.go",
 		"x86_official_binary_witness_test.go",
+		"amd64_fixed_local_conversion_tool_cache_test.go",
 	} {
 		t.Run(name, func(t *testing.T) {
 			file, err := parser.ParseFile(token.NewFileSet(), name, nil, 0)
