@@ -125,17 +125,34 @@ func TestX86ArithmeticShiftEverySignBitDependency(t *testing.T) {
 	}
 }
 
-func TestX86ArithmeticShiftVoidInputsThreeAPIs(t *testing.T) {
+func TestX86ArithmeticShiftWholeSourceInputBoundaries(t *testing.T) {
 	for _, name := range x86ArithmeticShiftTestNames() {
-		row := name + " X0,X1"
+		row, memory, destination := name+" X0,X1", name+" (AX),X1", "X1"
 		if name[0] == 'V' {
-			row = name + " X0,X1,X2"
+			row, memory, destination = name+" X0,X1,X2", name+" (AX),X1,X2", "X2"
 		}
 		for _, api := range []string{"text", "module", "Go"} {
-			ir, err := x86ScalarFPBitViewAPI(t, "TEXT ·view(SB),4,$0-0\n"+row+"\nRET\n",
+			// Partial numerical knowledge is intentional: an unobserved
+			// pure register result need not initialize every output byte.
+			// Observing an undefined byte must still fail, as must native
+			// reads and unknown masks even when their results are dead.
+			source := "TEXT ·view(SB),4,$0-4\n" + row + "\nPEXTRD $0," + destination + ",AX\nMOVL AX,ret+0(FP)\nRET\n"
+			ir, err := x86ScalarFPBitViewAPI(t, source, "func view() uint32", "amd64", "x86_64-unknown-linux-gnu", api)
+			if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+				t.Errorf("undefined arithmetic result accepted: %s/%s: %v", row, api, err)
+			}
+			ir, err = x86ScalarFPBitViewAPI(t, "TEXT ·view(SB),4,$0-0\n"+memory+"\nRET\n",
 				"func view()", "amd64", "x86_64-unknown-linux-gnu", api)
 			if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
-				t.Errorf("undefined arithmetic inputs accepted: %s/%s: %v", row, api, err)
+				t.Errorf("unbound dead native count accepted: %s/%s: %v", memory, api, err)
+			}
+			if name[0] == 'V' {
+				masked := name + ".Z X0,X1,K1,X2"
+				ir, err = x86ScalarFPBitViewAPI(t, "TEXT ·view(SB),4,$0-0\n"+masked+"\nRET\n",
+					"func view()", "amd64", "x86_64-unknown-linux-gnu", api)
+				if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+					t.Errorf("unknown dead mask accepted: %s/%s: %v", masked, api, err)
+				}
 			}
 		}
 	}
