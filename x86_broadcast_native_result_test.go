@@ -3,6 +3,7 @@ package plan9asm
 import (
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -136,6 +137,35 @@ func TestX86BroadcastPairedNativeReadKeepsSourceAndQueryBoundaries(t *testing.T)
 					if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
 						t.Fatal("broadcast invented a missing native input", arch, row, missing, api, err)
 					}
+				}
+			}
+		}
+	}
+}
+
+func TestX86BroadcastMaskDataCompleteResultInputs(t *testing.T) {
+	for _, arch := range []string{"386", "amd64"} {
+		for _, name := range []string{"VPBROADCASTMB2Q", "VPBROADCASTMW2D"} {
+			for _, bank := range []string{"X", "Y", "Z"} {
+				for _, mask := range []int{0, 3, 7} {
+					row := fmt.Sprintf("%s K%d,%s2", name, mask, bank)
+					t.Run(arch+"/"+row, func(t *testing.T) {
+						for _, consumer := range x86ResultGPSIMDConsumers {
+							for _, known := range []bool{false, true} {
+								state := x86ResultState{flags: x86ByteFlagsAll}
+								state.writeVector(2, 64, 0, false)
+								state.masks[mask] = known
+								before := state.clone()
+								if accepted := consumer.step(x86YMMReadSource(t, row), &state, nil, 0, arch); accepted != known {
+									t.Fatal("mask-data broadcast lost its actual input requirement", consumer.name, known)
+								}
+								if known && (state.vectorBytes(2) != ^uint64(0) || state.flags != before.flags) ||
+									!known && !reflect.DeepEqual(state, before) {
+									t.Fatal("mask-data broadcast invented bits or lost EVEX upper zeroing", consumer.name)
+								}
+							}
+						}
+					})
 				}
 			}
 		}
