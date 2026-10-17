@@ -25,7 +25,7 @@ func x86ABI0BoolArchFixture(arch string) (string, string) {
 		{"func Value(x bool) bool", fmt.Sprintf("MOVB $2,x+0(FP)\nMOVB x+0(FP),AL\nCMPB AL,$2\nSETEQ ret+%d(FP)", word), word + 1},
 		{"func Value() bool", fmt.Sprintf("%s ret+0(FP),AX\n%s AX,BX\nMOVB $1,(BX)", lea, move), 1},
 		{"func Value(x bool) bool", fmt.Sprintf("%s x+0(FP),AX\nMOVB $2,(AX)\nMOVB (AX),CL\nCMPB CL,$2\nSETEQ ret+%d(FP)", lea, word), word + 1},
-		{"func Value(p *uint32,old,new uint32) bool", fmt.Sprintf("%s p+0(FP),BX\nMOVL old+%d(FP),AX\nMOVL new+%d(FP),CX\nLOCK\nCMPXCHGL CX,(BX)\nSETEQ ret+%d(FP)", move, word, word+4, 2*word+8), 2*word + 9},
+		{"func Value(p *uint32,old,new uint32) bool", fmt.Sprintf("%s p+0(FP),BX\nMOVL old+%d(FP),AX\nMOVL new+%d(FP),CX\nLOCK\nCMPXCHGL CX,(BX)\nSETEQ ret+%d(FP)", move, word, word+4, word+8), word + 9},
 	} {
 		name := fmt.Sprintf("BoolArch%d", index)
 		fmt.Fprintf(&declarations, "%s\n", strings.Replace(row.declaration, "Value", name, 1))
