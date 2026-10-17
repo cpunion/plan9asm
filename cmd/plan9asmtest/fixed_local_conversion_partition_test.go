@@ -12,8 +12,19 @@ import (
 )
 
 func TestFixedLocalConversionObjectsHaveIndependentTargetOwners(t *testing.T) {
+	fixedLocalRequireIndependentTargetOwners(t, "amd64_fixed_local_conversion_test.go",
+		"TestGoAMD64FixedLocalConversionActualObjects", "fixedLocalConversionActualObjects", 12)
+}
+
+func TestFixedLocalPackedObjectsHaveIndependentTargetOwners(t *testing.T) {
+	fixedLocalRequireIndependentTargetOwners(t, "amd64_fixed_local_packed_matrix_test.go",
+		"TestGoAMD64FixedLocalPackedCompleteFormsActualObjects", "fixedLocalPackedActualObjects", 4)
+}
+
+func fixedLocalRequireIndependentTargetOwners(t *testing.T, filename, prefix, plan string, batches int) {
+	t.Helper()
 	syntax, err := parser.ParseFile(token.NewFileSet(),
-		filepath.Join("..", "..", "amd64_fixed_local_conversion_test.go"), nil, 0)
+		filepath.Join("..", "..", filename), nil, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -27,15 +38,15 @@ func TestFixedLocalConversionObjectsHaveIndependentTargetOwners(t *testing.T) {
 		{"Darwin", "darwin/amd64", "x86_64-apple-darwin"},
 		{"Windows", "windows/amd64", "x86_64-pc-windows-msvc"},
 	} {
-		for batch := 0; batch < 12; batch++ {
-			name := fmt.Sprintf("TestGoAMD64FixedLocalConversionActualObjects%sBatch%02d", platform.name, batch)
+		for batch := 0; batch < batches; batch++ {
+			name := fmt.Sprintf("%s%sBatch%02d", prefix, platform.name, batch)
 			want[name] = owner{platform.target, platform.triple, batch}
 		}
 	}
 	var roots []string
 	for _, declaration := range syntax.Decls {
 		function, ok := declaration.(*ast.FuncDecl)
-		if !ok || !strings.HasPrefix(function.Name.Name, "TestGoAMD64FixedLocalConversionActualObjects") {
+		if !ok || !strings.HasPrefix(function.Name.Name, prefix) {
 			continue
 		}
 		target, found := want[function.Name.Name]
@@ -54,7 +65,7 @@ func TestFixedLocalConversionObjectsHaveIndependentTargetOwners(t *testing.T) {
 			t.Fatal("target owner changed its complete-plan arguments", function.Name.Name)
 		}
 		helper, ok := call.Fun.(*ast.Ident)
-		if !ok || helper.Name != "fixedLocalConversionActualObjects" {
+		if !ok || helper.Name != plan {
 			t.Fatal("target owner substituted its complete-plan helper", function.Name.Name)
 		}
 		receiver, ok := call.Args[0].(*ast.Ident)
