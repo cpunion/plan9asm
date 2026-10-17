@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 	"strings"
@@ -252,6 +253,30 @@ func TestTranslateX86RawFloatingUnpackTargets(t *testing.T) {
 				}
 			}
 			source.WriteString("\tRET\n")
+			if target.goarch == "386" {
+				// These unmasked, register-only rows may propagate unknown
+				// bytes when every output is dead. They do not invent NUM.
+				x86LEAActualTargetGoObject(t, target.goarch, target.triple, "#include \"textflag.h\"\n"+source.String())
+				exposed := strings.Replace(source.String(), "$0-0", "$0-4", 1)
+				exposed = strings.Replace(exposed, "\tRET\n", "MOVL X5,AX\nMOVL AX,ret0+0(FP)\nRET\n", 1)
+				x86LEAActualTargetGoObject(t, target.goarch, target.triple, "#include \"textflag.h\"\n"+exposed)
+				for _, api := range []string{"text", "module", "Go"} {
+					ir, err := x86ScalarFPBitViewAPI(t, source.String(), "func raw_floating_unpack()", target.goarch, target.triple, api)
+					if err != nil || ir == "" {
+						t.Fatal("dead register-only unpack lost its complete source check", api, err)
+					}
+					for _, text := range []string{ir, x86MulDivRoundOptimize(t, ir)} {
+						for _, level := range []string{"-O0", "-O2"} {
+							x86PackedStringCompileObject(t, llc, target.triple, text, level)
+						}
+					}
+					ir, err = x86ScalarFPBitViewAPI(t, exposed, "func raw_floating_unpack() uint32", target.goarch, target.triple, api)
+					if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+						t.Fatal("dead unpack scratch acquired an observable initialized result", api, err)
+					}
+				}
+				return
+			}
 			ir := x86UnboundVoidRawScalarFormatObject(t, source.String(), target.goarch, target.triple)
 			compileLLVMToObject(t, llc, target.triple, "raw-floating-unpack-"+target.name+".ll", "raw-floating-unpack-"+target.name+".o", ir)
 		})
