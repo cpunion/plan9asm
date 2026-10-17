@@ -72,3 +72,57 @@ func TestFixedLocalConversionObjectsHaveIndependentTargetOwners(t *testing.T) {
 		}
 	}
 }
+
+func TestFixedLocalConversionObjectCacheIsOwnedByTheWholeTarget(t *testing.T) {
+	syntax, err := parser.ParseFile(token.NewFileSet(),
+		filepath.Join("..", "..", "amd64_fixed_local_conversion_test.go"), nil, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var helper *ast.FuncDecl
+	for _, declaration := range syntax.Decls {
+		if function, ok := declaration.(*ast.FuncDecl); ok && function.Name.Name == "fixedLocalConversionActualObjects" {
+			helper = function
+		}
+	}
+	if helper == nil {
+		t.Fatal("missing complete conversion object helper")
+	}
+	isCache := func(node ast.Node) bool {
+		call, ok := node.(*ast.CallExpr)
+		if !ok || len(call.Args) != 2 {
+			return false
+		}
+		selector, ok := call.Fun.(*ast.SelectorExpr)
+		if !ok || selector.Sel.Name != "Setenv" {
+			return false
+		}
+		receiver, ok := selector.X.(*ast.Ident)
+		key, literal := call.Args[0].(*ast.BasicLit)
+		return ok && receiver.Name == "t" && literal && key.Value == `"GOCACHE"`
+	}
+	all, parent := 0, 0
+	ast.Inspect(helper.Body, func(node ast.Node) bool {
+		if isCache(node) {
+			all++
+		}
+		return true
+	})
+	for _, statement := range helper.Body.List {
+		if expression, ok := statement.(*ast.ExprStmt); ok && isCache(expression.X) {
+			call := expression.X.(*ast.CallExpr)
+			cache, ok := call.Args[1].(*ast.CallExpr)
+			if !ok || len(cache.Args) != 0 {
+				t.Fatal("build cache must be created by the parent test")
+			}
+			selector, ok := cache.Fun.(*ast.SelectorExpr)
+			if !ok || selector.Sel.Name != "TempDir" {
+				t.Fatal("build cache must retain test-owned cleanup")
+			}
+			parent++
+		}
+	}
+	if all != 1 || parent != 1 {
+		t.Fatal("conversion batches must share exactly one parent-owned build cache", all, parent)
+	}
+}
