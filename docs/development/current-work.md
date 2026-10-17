@@ -123,6 +123,29 @@ conversion union, runtime counterparts, remaining complete-module failures and
 the strict benchmark are still open. No scanner or external-ledger update is
 part of this repair batch.
 
+## File-local scalar observer, 2026-10-17
+
+Fork run39021103697 is testing published `4b01f010`. Its65 prerequisites have
+passed and complete Windows module parts are executing; let it finish naturally.
+Do not credit partial module outcomes or push again during this frozen run.
+
+The older rich-CLI local-helper failure is reproduced at `4b01f010`. Go's
+`symRefAttrs` gives the file-local `<>` marker ABI0, unlike `<ABIInternal>`.
+An independent20-case RED at `afc3a643` rejects every such scalar symbol.
+The byte-result observer now removes only the final scope marker before its
+existing entry-selector rejection. All explicit selectors, register entries,
+raw state, native-memory and source-authentication boundaries remain separate.
+At `2c727452`, eight changed/retained roots pass current Go, actual Go20 and
+race, with256 children per lane and matching terminal identities. The new
+integer cases retain all five x86 targets, three APIs, original Go objects,
+default/O2 IR and backend O0/O2 objects.
+
+The CLI's original omitted-args helper still needs Context: its fallback word
+has no Go declaration or bounded TEXT argument extent. Keep that exact original
+as a negative. Its explicitly bounded four-byte counterpart tests target-word
+inference and now passes; this is not execution or translation of the original
+unknown-frame source. The namespace batch is committed locally, not published.
+
 ## Closure queue, 2026-10-17
 
 Freeze scope to actual failures; do not add inventory work or another broad
