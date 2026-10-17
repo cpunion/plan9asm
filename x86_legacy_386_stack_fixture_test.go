@@ -35,6 +35,78 @@ cpuidAvailable:
 	RET
 `
 
+const x86Legacy386OriginalStrings = `TEXT strings386(SB),NOSPLIT,$0-0
+	CLD
+	REP; MOVSB
+	STD
+	REP; MOVSL
+	CLD
+	REP; STOSL
+	REPN; SCASB
+	RET
+`
+
+const x86Legacy386OriginalMMXLoad = `TEXT mmxload(SB),NOSPLIT,$0-0
+	MOVQ (SI), M0
+	MOVL M0, AX
+	EMMS
+	RET
+`
+
+// Explicit register assignments in a format fixture do not establish a Go
+// native entry contract. These separate ABI0 counterparts retain every body
+// instruction, load their actual declared inputs and publish a typed result.
+func x86Legacy386RegisterCounterparts(t *testing.T, source string, sigs map[string]FuncSig) string {
+	t.Helper()
+	stringsBody := strings.Replace(x86Legacy386OriginalStrings, "$0-0\n", "$0-16\n"+
+		"\tMOVL src+0(FP),SI\n\tMOVL dst+4(FP),DI\n\tMOVL count+8(FP),CX\n\tMOVL value+12(FP),AX\n", 1)
+	mmxBody := strings.Replace(x86Legacy386OriginalMMXLoad, "$0-0\n", "$0-8\n\tMOVL input+0(FP),SI\n", 1)
+	mmxBody = strings.Replace(mmxBody, "\tRET\n", "\tMOVL AX,ret+4(FP)\n\tRET\n", 1)
+	for _, row := range []struct{ before, after string }{
+		{x86Legacy386OriginalStrings, stringsBody}, {x86Legacy386OriginalMMXLoad, mmxBody},
+	} {
+		if strings.Count(source, row.before) != 1 {
+			t.Fatal("complete original register fixture anchor changed")
+		}
+		source = strings.Replace(source, row.before, row.after, 1)
+	}
+	sigs["strings386"] = FuncSig{Name: "strings386", Args: []LLVMType{Ptr, Ptr, I32, I32}, Ret: Void,
+		Frame: FrameLayout{Params: []FrameSlot{
+			{Offset: 0, Type: Ptr, Index: 0, Field: -1}, {Offset: 4, Type: Ptr, Index: 1, Field: -1},
+			{Offset: 8, Type: I32, Index: 2, Field: -1}, {Offset: 12, Type: I32, Index: 3, Field: -1},
+		}}}
+	sigs["mmxload"] = FuncSig{Name: "mmxload", Args: []LLVMType{Ptr}, Ret: I32,
+		Frame: FrameLayout{
+			Params:  []FrameSlot{{Offset: 0, Type: Ptr, Index: 0, Field: -1}},
+			Results: []FrameSlot{{Offset: 4, Type: I32, Index: 0, Field: -1}},
+		}}
+	return source
+}
+
+func TestX86Legacy386RegisterCounterpartsThreeAPIs(t *testing.T) {
+	sigs := make(map[string]FuncSig)
+	source := x86Legacy386RegisterCounterparts(t, x86Legacy386OriginalStrings+x86Legacy386OriginalMMXLoad, sigs)
+	declarations := "func strings386(src,dst *byte,count,value uint32)\nfunc mmxload(input *byte) uint32\n"
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM22 llc required")
+	}
+	for _, triple := range []string{"i386-unknown-linux-gnu", "i686-pc-windows-msvc"} {
+		t.Run(triple, func(t *testing.T) {
+			x86LEAActualTargetGoObject(t, "386", triple, strings.ReplaceAll(source, ",NOSPLIT,", ",4,"))
+			for _, api := range []string{"text", "module", "Go"} {
+				ir, err := x86ScalarFPBitViewAPI(t, source, declarations, "386", triple, api)
+				if err != nil {
+					t.Fatal(api, err)
+				}
+				for _, level := range []string{"-O0", "-O2"} {
+					x86PackedStringCompileObject(t, llc, triple, ir, level)
+				}
+			}
+		})
+	}
+}
+
 // These separate programs have explicit inputs, initial FLAGS and result
 // slots. Neither supplies native entry FLAGS or physical-SP backing to an
 // original fixture. The original ADJSP and physical-memory forms stay in the

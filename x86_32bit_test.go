@@ -950,6 +950,7 @@ TEXT frameAddress(SB),NOSPLIT,$0-12
 	for name, sig := range sigs {
 		boundedSigs[name] = sig
 	}
+	boundedCounterpart = x86Legacy386RegisterCounterparts(t, boundedCounterpart, boundedSigs)
 	addressSig := boundedSigs["symbolAddress"]
 	addressSig.Frame.Results = []FrameSlot{{Offset: 0, Type: I32, Index: 0, Field: -1}}
 	boundedSigs["symbolAddress"] = addressSig
