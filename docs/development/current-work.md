@@ -1,5 +1,39 @@
 # Current work: PR 40 checkpoint
 
+## Completed fork and floating format batch, 2026-10-18
+
+This supersedes the running-CI and 181-root checkpoints below. Fork run
+39054965721 at `8ca976c6` finished naturally: 81 jobs pass and 17 fail. Its
+16 root parts / 64 shards have the exact disjoint union of 6,986 roots:
+6,544 pass, 179 fail, 263 explicit host-inapplicable skips and zero incomplete.
+Every part has the same source and inventory; inventory SHA256 is
+`92ccba2768b1acb35b9337c082f995961da4e01a841be401ae909bfa1063fe1c`.
+The raw artifacts and audited failure index remain under `_out/ci-39054965721/`.
+Do not subtract later focused successes from this completed CI denominator.
+
+At `b952e19d`, the additional floating-format union passes 12 roots / 264
+children on current Go, actual Go 1.20 and race, with identical 276 terminals
+and unchanged source/tool observations. Receipts use
+`floating-ci-contracts-qualified-*`; the ignored summary is
+`qualified-floating-ci-contracts-b952e19d.json`. Six changed files retain all
+98 original raw source strings byte-for-byte, with a net reduction of 33 lines.
+Original Go objects, public Context and emitter-only LLVM objects stay separate.
+The register-only unmasked mode32 unpack sequence legitimately propagates
+unknown dead scratch through its complete proof. Retain its public objects at
+all three APIs and both optimization axes, plus the original-Go-accepted
+mutation that exposes those unknown bytes and must fail with Context.
+
+At the same code head, build, vet, ten scanner roots on both SDKs, the five-arch
+official gate, two CLI extraction roots, all 132 CI policies and formatting pass.
+Three separately recorded local cohorts overlap 28 exact failed roots in the
+completed old CI: nine logical/compare, eleven BLS/broadcast/string/mixed format
+owners and eight floating-format owners. They are not 28 online repaired tests.
+Publish the verified batch to the allowed fork, require its new native BLS/
+BEXTR owner and complete-module feedback, and continue the remaining actual
+failure classes. The latest upstream main is already an ancestor; no rebase is
+needed. Keep PR40 draft until canonical all-platform CI, benchmark, coverage
+and fresh review qualify the contribution head.
+
 ## BLS effects and actual CI format contracts, 2026-10-18
 
 At `fe7feb1d`, the complete affected union passes 43 roots / 3,448 children
