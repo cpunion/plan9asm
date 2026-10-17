@@ -137,12 +137,15 @@ func TestX86FloatingCompareVoidCannotInventInputs(t *testing.T) {
 					x86LEAActualTargetGoObject(t, arch, triple, source)
 					first := function.Instrs[1].Raw + "\n"
 					changed := strings.Replace(source, first, "", 1)
+					both := strings.Replace(changed, function.Instrs[2].Raw+"\n", "", 1)
 					for _, api := range []string{"text", "module", "Go"} {
 						if ir, err := x86ScalarFPBitViewAPI(t, source, declaration, arch, triple, api); ir == "" || err != nil {
 							t.Fatal("initialized Void comparison lost its original native effect", api, err)
 						}
-						if ir, err := x86ScalarFPBitViewAPI(t, changed, declaration, arch, triple, api); ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
-							t.Fatal("Void or unused bool supplied undefined comparison bytes", api, err)
+						for role, missing := range map[string]string{"first source": changed, "both sources": both} {
+							if ir, err := x86ScalarFPBitViewAPI(t, missing, declaration, arch, triple, api); ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+								t.Fatal("Void or unused bool supplied undefined comparison bytes", role, api, err)
+							}
 						}
 					}
 				})
