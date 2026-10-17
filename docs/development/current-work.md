@@ -2,9 +2,16 @@
 
 ## Floating comparison and broadcast closing batch, 2026-10-17
 
-The fork's frozen run39034893053 still tests `60b321cd`; let it finish.
-PR40 is still draft at `24851df2`. No complete-module or benchmark pass exists.
-The remaining queue is the actual failed roots, not new external inventory.
+This section supersedes older checkpoints below. Fork run39034893053 at
+`60b321cd` finished naturally:81 jobs pass,17 fail. All65 prerequisites and
+both CLI modules pass. The16 main root parts have an exact disjoint union of
+6,954 roots:6,510 pass,181 fail,263 explicit host-inapplicable skips and zero
+incomplete. Their common inventory hash is
+`2bdbde597771d9b5ee981bf3870de2eb792caae6a765c16d9642e6b323c57998`.
+Artifacts and failed-job logs remain under `_out/ci-39034893053/`.
+PR40 is still draft at `24851df2`; these local repairs are not published.
+No complete-module or newer strict benchmark pass exists. Clear the actual
+failure index by rule class, not new external inventory.
 
 The comparison candidate shares exact byte writes with the existing caller
 consumer, requires actual source/mask inputs even for Void, and retains native
@@ -26,8 +33,33 @@ forms per386 SDK and171 forms perAMD64 SDK (44 comparisons,127 broadcasts)
 changing supported->context-required. All other metrics and form identities
 remain unchanged; no opcode becomes unsupported. Baseline and scanner controls
 retain these missing-input classifications. Require the complete
-`float-broadcast-closure-qualified-*` current-Go/Go20/race cohort, identical
-terminal identities, final official gate and native CI before publication.
+`float-broadcast-closure-qualified-*` cohort and native CI before claiming
+source/execution closure.
+
+At `f530330e`, the complete56-root/1,476-child union passes current Go,
+actual Go1.20 and race, with identical1,532 terminal identities and unchanged
+source/SDK/LLVM22 seals. The final verification has three disjoint owners:
+25 broadcast/retained roots,29 comparison roots and two original-program object
+roots. Receipts use `float-broadcast-closure-qualified-v3-*`. Preserve the
+earlier host-preflight selection failure and the monolithic five-minute budget
+failure as failed. Splitting changes neither the union nor the command budget.
+
+At `a17f7c4d`, the two stale BSWAP/AH AMD64 bool-role expectations are repaired,
+retaining unknown/noncanonical negatives and original Go objects. Canonical0/1
+counterparts keep all five targets, three APIs and both IR/backend levels.
+All21 changed/retained roots and1,126 children pass current Go, actual Go1.20
+and race, with identical terminals and unchanged seals. The unchanged original
+two-root source independently reproduces both CI failures at `f530330e`.
+Build, vet, current-Go/Go20 scanner input controls, the current-Go five-arch
+official gate, CLI opcode extraction and all130 CI policy tests pass.
+The official gate has zero unsupported forms/parse errors on current Go; its
+Context classifications are not complete encoder-row or runtime coverage.
+
+Remaining work includes physical MMX-region contracts, unclosed scalar/vector
+result effects, raw/source roles and original format fixtures. Investigate
+BMI scalar result effects using complete Go tables and mode32 byte witnesses;
+do not broaden pointer, raw entry or memory authority. Required native
+comparison/AVX512 execution and the181-root failure queue remain unqualified.
 
 ## Non-temporal vector closing batch, 2026-10-17
 
