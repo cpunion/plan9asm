@@ -3,6 +3,7 @@ package plan9asm
 import (
 	"errors"
 	"fmt"
+	"reflect"
 	"runtime"
 	"strconv"
 	"strings"
@@ -126,6 +127,82 @@ func TestX86NativeAddressBitsStoreVoidCannotHideUnknownInputs(t *testing.T) {
 					})
 				}
 			}
+		}
+	}
+}
+
+func TestX86NativeAddressBitsStoreCannotCreateOrWidenFacts(t *testing.T) {
+	for _, arch := range []string{"386", "amd64"} {
+		move := "MOVQ"
+		if arch == "386" {
+			move = "MOVL"
+		}
+		for _, row := range []struct {
+			name, instruction string
+			scope, want       bool
+			change            func(*x86ResultState)
+		}{
+			{"whole-word", move + " SI,1(DI)", true, true, nil},
+			{"unbound-scope", move + " SI,1(DI)", false, false, nil},
+			{"unknown-bits", move + " SI,1(DI)", true, false, func(s *x86ResultState) { s.callerAddressGP[6] = false }},
+			{"pointer-only", move + " SI,1(DI)", true, false, func(s *x86ResultState) {
+				s.callerAddressGP[6], s.pointerGP[6] = false, true
+			}},
+			{"unknown-destination", move + " SI,1(DI)", true, false, func(s *x86ResultState) { s.pointerGP[7] = false }},
+			{"unknown-index", move + " SI,1(DI)(BX*2)", true, false, nil},
+			{"narrow-byte", "MOVB SI,1(DI)", true, false, nil},
+			{"narrow-word", "MOVW SI,1(DI)", true, false, nil},
+			{"physical-frame", move + " SP,1(DI)", true, false, func(s *x86ResultState) { s.callerAddressGP[4] = true }},
+		} {
+			t.Run(arch+"/"+row.name, func(t *testing.T) {
+				state := x86ResultState{flags: x86ByteFlagCF, direction: x86ResultDirectionBackward}
+				state.pointerGP[7], state.callerAddressGP[6], state.callerAddressOrigin[6] = true, true, 1
+				if row.change != nil {
+					row.change(&state)
+				}
+				before := state.clone()
+				ins := x86ScalarLaneInstruction(t, row.instruction)
+				accepted, _ := x86LoweredScalarNativeStoreWithAddressBits(ins, &state, nil, arch, row.scope)
+				if accepted != row.want || !reflect.DeepEqual(state, before) {
+					t.Fatal("address-bit observation invented NUM, pointer, canonical or FLAGS facts", accepted, row.want)
+				}
+			})
+		}
+	}
+}
+
+func TestX86NativeAddressBitsStoreScopeCannotBorrowOtherEntries(t *testing.T) {
+	for _, arch := range []string{"386", "amd64"} {
+		source, _ := x86NativeAddressBitsStoreSource(arch, map[string]string{"386": "MOVL", "amd64": "MOVQ"}[arch])
+		file, err := Parse(ArchAMD64, source)
+		if err != nil {
+			t.Fatal(err)
+		}
+		original := file.Funcs[0]
+		sig := FuncSig{Args: []LLVMType{Ptr}, Ret: I32,
+			Frame: FrameLayout{Params: []FrameSlot{{Offset: 0, Type: Ptr, Index: 0, Field: -1}}}}
+		if !x86LeafNativeAddressBitStoreScope(original, sig, arch) {
+			t.Fatal("ordinary typed leaf lost its scope", arch)
+		}
+		for _, row := range []struct {
+			name   string
+			change func(*Func, *FuncSig)
+		}{
+			{"frame", func(fn *Func, _ *FuncSig) { fn.FrameSize = 16 }},
+			{"register-entry", func(fn *Func, _ *FuncSig) { fn.Sym += "<ABIInternal>" }},
+			{"call", func(fn *Func, _ *FuncSig) { fn.Instrs = append(fn.Instrs, Instr{Op: OpCALL}) }},
+			{"encoded", func(fn *Func, _ *FuncSig) { fn.Instrs[0].x86Encoded = true }},
+			{"numeric-parameter", func(_ *Func, sig *FuncSig) { sig.Args = []LLVMType{I64} }},
+			{"no-typed-entry", func(_ *Func, sig *FuncSig) { sig.Frame.Params = nil }},
+		} {
+			t.Run(arch+"/"+row.name, func(t *testing.T) {
+				fn, changedSig := original, sig
+				fn.Instrs = append([]Instr(nil), original.Instrs...)
+				row.change(&fn, &changedSig)
+				if x86LeafNativeAddressBitStoreScope(fn, changedSig, arch) {
+					t.Fatal("another entry/storage role acquired a leaf bit-copy scope")
+				}
+			})
 		}
 	}
 }
