@@ -156,3 +156,47 @@ func TestFixedLocalConversionObjectCacheIsOwnedByTheWholeTarget(t *testing.T) {
 		t.Fatal("conversion batches must share exactly one parent-owned build cache", all, parent)
 	}
 }
+
+func TestFixedLocalConversionPreparesLazyToolsBeforeSourceCapture(t *testing.T) {
+	syntax, err := parser.ParseFile(token.NewFileSet(),
+		filepath.Join("..", "..", "amd64_fixed_local_conversion_test.go"), nil, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var prepared, captured []token.Pos
+	for _, declaration := range syntax.Decls {
+		function, ok := declaration.(*ast.FuncDecl)
+		if !ok || function.Name.Name != "fixedLocalConversionActualObjects" {
+			continue
+		}
+		ast.Inspect(function.Body, func(node ast.Node) bool {
+			call, ok := node.(*ast.CallExpr)
+			if !ok {
+				return true
+			}
+			name, ok := call.Fun.(*ast.Ident)
+			if !ok {
+				return true
+			}
+			switch name.Name {
+			case "fixedLocalConversionPrepareToolCache":
+				if len(call.Args) != 2 {
+					t.Fatal("tool preparation lost its actual fixture request")
+				}
+				for index, expected := range []string{"t", "request"} {
+					actual, ok := call.Args[index].(*ast.Ident)
+					if !ok || actual.Name != expected {
+						t.Fatal("tool preparation substituted its owner or environment")
+					}
+				}
+				prepared = append(prepared, call.Pos())
+			case "requireGoAMD64FrameCapture":
+				captured = append(captured, call.Pos())
+			}
+			return true
+		})
+	}
+	if len(prepared) != 1 || len(captured) != 1 || prepared[0] >= captured[0] {
+		t.Fatal("lazy SDK tools must be built before the unchanged bounded source capture", prepared, captured)
+	}
+}
