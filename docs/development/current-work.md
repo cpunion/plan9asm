@@ -26,14 +26,32 @@ All sixteen x86 reports are reviewed across Go1.20–1.27. Relative to `e4a48c3e
 386 is unchanged; exactly 81 AMD64 forms per SDK move Supported to Context:
 73 unknown masks, six unbound count addresses and two original native m128
 counts. Only 24 classification fields change. Complete encoder/corpus metadata,
-form identities and unsupported/parse/runtime counts remain unchanged. Fresh
-final gates are required after this reviewed baseline update.
+form identities and unsupported/parse/runtime counts remain unchanged. All nine
+fresh gates and 126 CI policy tests pass at `841ac7f4`.
 
-Let [fork run 39002791430](https://github.com/cpunion/plan9asm/actions/runs/39002791430)
-finish naturally before the next consolidated push. Its complete native x86,
-LOCK/unlocked RMW, x87 and ARM64 cross owners pass; other jobs remain pending.
-PR40 is still draft at its older contribution head. Current-head full modules,
-strict benchmark and successful CI remain outstanding. Inventory is stopped at
+[Fork run 39002791430](https://github.com/cpunion/plan9asm/actions/runs/39002791430)
+finished naturally: 62 jobs pass, the source priority fails and the dependent
+complete-module aggregate is skipped. Its three failed roots have stale budget
+and PC-boundary assertions. Independent RED also finds both sibling x87 budget
+assertions missing the eight native-MMX bytes. One independent test-only payload
+oracle now retains every logical domain and the unchanged shared limits. The
+original IndexByte source retains its zero-count incoming-ZF boundary after the
+PC edges bind; this does not certify the complete original routine.
+
+At `d6512ee1`, the exact 127-root source owner passes 3,950 children. The eight
+failed/sibling/envelope roots pass current Go and race (538 children each), and
+the six historical-SDK roots pass actual Go20 (535 children). Zero skips/failures.
+At `22efbf58`, two hardware-independence roots pass all three lanes: Linux/Windows
+target IR has no forced AVX/AVX512 requirement and host portable values execute.
+No ISA feature defect was found; no translator change was needed for that check.
+
+Strict benchmark `841ac7f4` remains failed: 132/184 files compile, 52 fail and
+none is skipped/unattempted. AMD64 takes319s, above its unchanged300s budget;
+all five targets total382s. Group remaining failures by source/frame/caller and
+numerical-effect contracts; do not convert Context or missing tools into passes.
+Publish the verified repair batch to the allowed fork and let its CI finish.
+PR40 remains draft at its older contribution head. Current-head full modules,
+strict benchmark and successful CI are still required. Inventory is stopped at
 the requested historical boundary; scanning and ledgers remain external.
 
 ## Native MMX repair candidate, 2026-10-17
