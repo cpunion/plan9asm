@@ -248,6 +248,9 @@ func TestGoAMD64FixedLocalConversionActualObjectsWindows(t *testing.T) {
 
 func fixedLocalConversionActualObjects(t *testing.T, target, triple string) {
 	t.Helper()
+	// Go 1.27 builds objdump into GOCACHE. Reuse this target's test-owned
+	// compiler cache, not its independent source, object or lifetime records.
+	t.Setenv("GOCACHE", t.TempDir())
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc required")
@@ -312,4 +315,37 @@ func fixedLocalConversionActualObjects(t *testing.T, target, triple string) {
 		t.Fatalf("%s covered %d/%d conversion forms", target, seen, len(rows))
 	}
 	t.Logf("complete %s object plan: %d forms, three LLVM APIs, O0/O2", target, len(rows))
+}
+
+func TestGoAMD64FixedLocalConversionSharedCacheKeepsSourcesIndependent(t *testing.T) {
+	cache := t.TempDir()
+	t.Setenv("GOCACHE", cache)
+	for _, key := range []string{"GOPATH", "GOMODCACHE", "TMPDIR", "GOTMPDIR"} {
+		t.Setenv(key, "")
+	}
+	const assembly = "TEXT ·Value(SB),4,$0-16\nMOVQ a+0(FP),AX\nMOVQ AX,ret+8(FP)\nRET\n"
+	first, a, _, _ := x86CMOVFixedLocalFixture(t, assembly, "func Value(a uint64) uint64",
+		"linux/amd64", "x86_64-unknown-linux-gnu")
+	second, b, _, _ := x86CMOVFixedLocalFixture(t, assembly, "func Value(a uint64) uint64",
+		"linux/amd64", "x86_64-unknown-linux-gnu")
+	values := func(request GoAMD64FrameCaptureRequest) map[string]string {
+		environment := make(map[string]string)
+		for _, entry := range request.Environment {
+			key, value, _ := strings.Cut(entry, "=")
+			environment[key] = value
+		}
+		return environment
+	}
+	left, right := values(a), values(b)
+	if left["GOCACHE"] != cache || right["GOCACHE"] != cache {
+		t.Fatal("batch fixtures did not inherit their parent's owned build cache")
+	}
+	for _, key := range []string{"GOPATH", "GOMODCACHE", "TMPDIR", "GOTMPDIR"} {
+		if left[key] == "" || left[key] == right[key] || left[key] == cache || right[key] == cache {
+			t.Fatal("independent source observations shared private state", key)
+		}
+	}
+	if a.Directory == b.Directory || first.Types == second.Types {
+		t.Fatal("sharing compiler artifacts reused an original source or typed package")
+	}
 }

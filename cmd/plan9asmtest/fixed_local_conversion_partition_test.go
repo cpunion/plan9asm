@@ -109,6 +109,9 @@ func TestFixedLocalConversionObjectCacheIsOwnedByTheWholeTarget(t *testing.T) {
 		return true
 	})
 	for _, statement := range helper.Body.List {
+		if _, loop := statement.(*ast.ForStmt); loop && parent == 0 {
+			t.Fatal("build cache must be selected before any batch executes")
+		}
 		if expression, ok := statement.(*ast.ExprStmt); ok && isCache(expression.X) {
 			call := expression.X.(*ast.CallExpr)
 			cache, ok := call.Args[1].(*ast.CallExpr)
@@ -118,6 +121,10 @@ func TestFixedLocalConversionObjectCacheIsOwnedByTheWholeTarget(t *testing.T) {
 			selector, ok := cache.Fun.(*ast.SelectorExpr)
 			if !ok || selector.Sel.Name != "TempDir" {
 				t.Fatal("build cache must retain test-owned cleanup")
+			}
+			receiver, ok := selector.X.(*ast.Ident)
+			if !ok || receiver.Name != "t" {
+				t.Fatal("build cache must belong to this parent test")
 			}
 			parent++
 		}
