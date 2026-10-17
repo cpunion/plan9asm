@@ -6,8 +6,7 @@ import (
 	"testing"
 )
 
-func TestCrossLinuxRuntimeMatrixX86PackedUnpackMMXNativeMemoryAndFP(t *testing.T) {
-	execution := x86FloatCompareExecutionTools(t)
+func x86PackedUnpackMMXNativeProgram() (string, map[string]FuncSig, string, string, int) {
 	var assembly, declarations, rows strings.Builder
 	sigs := map[string]FuncSig{}
 	count := 0
@@ -34,8 +33,14 @@ func TestCrossLinuxRuntimeMatrixX86PackedUnpackMMXNativeMemoryAndFP(t *testing.T
 		}
 		fmt.Fprintf(&rows, "{%s, %s, %d, %d, %d},\n", name, fpName, x86UnpackTestLaneBytes(opcode), high, extent)
 	}
-	requireX86GoAssemblerResult(t, "amd64", assembly.String(), true)
-	file, err := Parse(ArchAMD64, assembly.String())
+	return assembly.String(), sigs, declarations.String(), rows.String(), count
+}
+
+func TestCrossLinuxRuntimeMatrixX86PackedUnpackMMXNativeMemoryAndFP(t *testing.T) {
+	execution := x86FloatCompareExecutionTools(t)
+	assembly, sigs, declarations, rows, count := x86PackedUnpackMMXNativeProgram()
+	requireX86GoAssemblerResult(t, "amd64", assembly, true)
+	file, err := Parse(ArchAMD64, assembly)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -43,13 +48,13 @@ func TestCrossLinuxRuntimeMatrixX86PackedUnpackMMXNativeMemoryAndFP(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	main := x86MemoryFaultSupportC + declarations.String() + `
+	main := x86MemoryFaultSupportC + declarations + `
 static const struct {
  uint64_t (*run)(const uint8_t*,uint64_t);
  uint64_t (*fp)(uint32_t,uint32_t);
  int lane, high, extent;
 } cases[] = {
-` + rows.String() + `};
+` + rows + `};
 static uint64_t expectedMMX(const uint8_t *first,uint64_t second,int lane,int high) {
  uint8_t old[8],out[8];
  memcpy(old,&second,8);
