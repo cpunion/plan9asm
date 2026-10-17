@@ -163,7 +163,7 @@ TEXT vectors(SB),NOSPLIT,$0-0
 // accepts the same register-or-memory source shape for every lane width and
 // signedness combination.
 func TestTranslateExpandedEcosystemX86VectorForms(t *testing.T) {
-	ir := translateEcosystemScalarForms(t, ArchAMD64, "x86_64-unknown-linux-gnu", "amd64", `
+	ir := x86UnboundVoidScalarFormatObject(t, `
 TEXT vectors(SB),NOSPLIT,$0-0
 	MOVQ $13, AX
 	VMOVQ AX, X0
@@ -184,7 +184,7 @@ TEXT vectors(SB),NOSPLIT,$0-0
 	VMOVQ X0, CX
 	VZEROUPPER
 	RET
-`)
+`, "vectors", "amd64", "x86_64-unknown-linux-gnu")
 	for want, count := range map[string]int{
 		"shl <2 x i64>":            1,
 		"icmp ult <16 x i8>":       1,

@@ -2019,7 +2019,7 @@ TEXT ·tlsforms(SB),4,$0-0
 }
 
 func TestTranslateAMD64LegacyIntegerToFloatConversionFamilyCompleteGo127Forms(t *testing.T) {
-	ll := translateAMD64EcosystemCase(t, `
+	ll := x86UnboundVoidScalarFormatObject(t, `
 TEXT integerfloatconversions(SB),NOSPLIT,$0-0
 	CVTSL2SS AX, X0
 	CVTSL2SS 4(BX), X1
@@ -2034,7 +2034,7 @@ TEXT integerfloatconversions(SB),NOSPLIT,$0-0
 	CVTPL2PD X4, X5
 	CVTPL2PD 48(BX), X6
 	RET
-`, "integerfloatconversions")
+`, "integerfloatconversions", "amd64", "x86_64-unknown-linux-gnu")
 	for _, want := range []string{"@llvm.experimental.constrained.sitofp.f32.i32", "@llvm.experimental.constrained.sitofp.f64.i64", "cvtdq2ps", "cvtdq2pd"} {
 		if !strings.Contains(ll, want) {
 			t.Fatalf("missing %q in integer-to-float conversion IR:\n%s", want, ll)
@@ -5079,7 +5079,12 @@ TEXT packedintegerfamilies(SB),NOSPLIT,$0-0
 	PTEST X0, X1
 	RET
 `
-	translateAMD64EcosystemCase(t, src, "packedintegerfamilies")
+	ll := x86UnboundVoidScalarFormatObject(t, src, "packedintegerfamilies", "amd64", "x86_64-unknown-linux-gnu")
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM 22 llc not found")
+	}
+	compileLLVMToObject(t, llc, "x86_64-unknown-linux-gnu", "packed-integer-formats.ll", "packed-integer-formats.o", ll)
 }
 
 func TestTranslateAMD64AdditionalConditionalMoveWidths(t *testing.T) {
