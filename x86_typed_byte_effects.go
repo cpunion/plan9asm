@@ -95,6 +95,12 @@ func x86TypedGPByteEffect(op Op, ins Instr, arch string) (x86TypedByteEffect, bo
 	if arch != "amd64" && arch != "386" {
 		return x86TypedByteEffect{}, false, nil
 	}
+	if known, err := x86SizedNOPProperties(ins, arch); known {
+		if op != ins.Op {
+			return x86TypedByteEffect{}, true, fmt.Errorf("sized NOP dispatch/source identity mismatch")
+		}
+		return x86TypedByteEffect{}, true, err
+	}
 	if effect, known, err := x86TypedAHFlagsEffect(op, ins, arch); known {
 		return effect, true, err
 	}

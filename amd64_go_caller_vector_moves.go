@@ -313,6 +313,9 @@ func x86CallerMoveMemoryShape(ins Instr, index int) (width int64, write, valid b
 }
 
 func x86InstructionMemoryShape(ins Instr, index int, arch string) (width int64, write, valid bool) {
+	if known, _ := x86SizedNOPProperties(ins, arch); known {
+		return 0, false, false // An encoding-only ModRM operand grants no access or caller envelope.
+	}
 	if form, known, err := x86NonTemporalVectorProperties(ins.Op, ins, arch); known {
 		return int64(form.move.byteWidth), !form.spec.load,
 			err == nil && !form.trap && form.move.memory == index
