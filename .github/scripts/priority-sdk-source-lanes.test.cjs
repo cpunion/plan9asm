@@ -796,6 +796,12 @@ test('Void calls and text context ownership regressions run before complete modu
     'TestX86AMD64CanonicalBoolTemporaryBytePortable',
     'TestX86AMD64CanonicalBoolTypedTailCannotBorrowGoCaller',
     'TestX86AMD64CanonicalBoolActualAtomicCasObjects',
+    'TestX86CompareExchangeCallerPointerWordObjects',
+    'TestX86CompareExchangePointerInputBoundaries',
+    'TestX86CompareExchangePointerRegisterPortable',
+    'TestX86CompareExchangePointerDoesNotAcquireNUM',
+    'TestX86CompareExchangePointerConditionalWordFacts',
+    'TestX86CompareExchangeBoundPrefixKeepsOnlyPriorCallerWords',
     'TestTranslateTextOwnsRequestLLVMContext',
     'TestTranslateTextConcurrentRequestsKeepOriginalFile',
   ]) assert.equal(source.split(`- ${root}\n`).length - 1, 1, root);

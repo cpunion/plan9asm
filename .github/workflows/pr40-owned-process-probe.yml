@@ -758,6 +758,12 @@ jobs:
               - TestX86AMD64CanonicalBoolTemporaryBytePortable
               - TestX86AMD64CanonicalBoolTypedTailCannotBorrowGoCaller
               - TestX86AMD64CanonicalBoolActualAtomicCasObjects
+              - TestX86CompareExchangeCallerPointerWordObjects
+              - TestX86CompareExchangePointerInputBoundaries
+              - TestX86CompareExchangePointerRegisterPortable
+              - TestX86CompareExchangePointerDoesNotAcquireNUM
+              - TestX86CompareExchangePointerConditionalWordFacts
+              - TestX86CompareExchangeBoundPrefixKeepsOnlyPriorCallerWords
               - TestTranslateTextOwnsRequestLLVMContext
               - TestTranslateTextConcurrentRequestsKeepOriginalFile
               - TestX86DirectionControlNumericalAndCallerThreeAPIs

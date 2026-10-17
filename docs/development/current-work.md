@@ -1,5 +1,38 @@
 # Current work: PR 40 checkpoint
 
+## Bool and pointer-CAS closing batch, 2026-10-17
+
+The allowed-fork run39006691606 at `b38f28e5` has passed all63 prerequisite
+jobs and has started the complete Windows module partitions. Let that run
+finish naturally before a consolidated push. PR40 still has its older draft
+contribution head; prerequisite success is not a complete-module or benchmark
+pass. No inventory restart or external-ledger credit is part of this batch.
+
+At `1ad61f4e`, the shared386/AMD64 ordinary ABI0 bool-byte repair passes all72
+changed/retained roots on current Go, actual Go20 and race, with2,342 children
+per lane, identical terminal identities and no failures/skips. The exact135-root
+source owner passes4,169 children. All nine build/official/scanner gates and
+all126 CI policy tests pass. Bare RET and noncanonical bytes cannot bypass the
+direct emitter; private intermediate bytes, complete SETcc, aliases, calls and
+tails share the actual target word size. Manual register signatures retain
+their separate convention. These receipts certify that exact snapshot only.
+
+The next candidate reuses the existing closed-leaf address-bit scope for the
+complete CMPXCHG value grammar, including full-word pair parts and register
+destinations. A pointer-valued successful accumulator is not NUM; conditional
+outputs retain only their actual byte dependencies and no pointer identity for
+unknown native contents. A separately accepted bound LOCK prefix preserves
+only prior caller-word facts. Standalone or malformed LOCK remains rejected.
+The ten focused roots pass428 children at `c5e5d6c1`, including the three
+original Cas/Cas64/Casp1 functions and all-five-target objects. The complete
+combined SDK/race/source qualification is still required on the next snapshot.
+
+The last full strict benchmark remains132/184 compiled,52 failed, with AMD64
+over its300-second target budget. Rerun the complete original atomic member
+after the pointer repair; isolated functions do not certify that file. Freeze
+scope to these real failures and complete gates, not another broad proof or
+refactoring project. Preserve failed reports as failed and keep LLVM22 only.
+
 ## Closure queue, 2026-10-17
 
 Freeze scope to actual failures; do not add inventory work or another broad
