@@ -3,6 +3,7 @@ package plan9asm
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 )
 
@@ -41,12 +42,27 @@ func TestX86StringCompareWholeFlowPreservesExactCallerFootprint(t *testing.T) {
 									body += stem + string(width) + "\n" + compare + " " + register + ",$0\nMOVL $7,ret+RESULT(FP)"
 									source := x86ResultGPSIMDAdmissionSource(t, target.arch, declaration, body)
 									ir, err := x86ScalarFPBitViewAPI(t, source, declaration, target.arch, target.triple, api)
-									if zero {
-										if err != nil || ir == "" {
-											t.Fatal("whole-flow post-consumer revoked an actually unwritten caller address", err)
-										}
-									} else if !errors.Is(err, ErrProbeNeedsContext) || ir != "" {
-										t.Fatal("an updated index retained its old reusable caller identity", err)
+									if err != nil || ir == "" {
+										t.Fatal("comparison lost independently initialized entry-derived address bits", err)
+									}
+									// Keep the complete original comparison above. Observing
+									// its bits is not permission to access the changed cursor.
+									for _, access := range []struct{ name, instruction string }{
+										{"native-read", "MOVBLZX (" + register + "),DX"},
+										{"native-store", "MOVB $1,(" + register + ")"},
+									} {
+										t.Run(access.name, func(t *testing.T) {
+											changed := strings.Replace(body, compare+" "+register+",$0\n", access.instruction+"\n", 1)
+											changedSource := x86ResultGPSIMDAdmissionSource(t, target.arch, declaration, changed)
+											ir, err := x86ScalarFPBitViewAPI(t, changedSource, declaration, target.arch, target.triple, api)
+											if zero {
+												if err != nil || ir == "" {
+													t.Fatal("zero iterations revoked the actual unchanged pointer", err)
+												}
+											} else if !errors.Is(err, ErrProbeNeedsContext) || ir != "" {
+												t.Fatal("cursor bits acquired a reusable native memory role", err)
+											}
+										})
 									}
 								})
 							}
