@@ -136,15 +136,18 @@ func TestX86NativeGPStoreCannotBorrowUnknownOrPointerData(t *testing.T) {
 			word, move = 4, "MOVL"
 		}
 		body := fmt.Sprintf("%s p+0(FP),DI\n%s value+%d(FP),AX\n%s AX,(DI)\nMOVL $7,ret+%d(FP)\nRET\n", move, move, word, move, word*2)
-		for _, mutation := range []struct{ name, body string }{
-			{"unknown-address", strings.Replace(body, move+" p+0(FP),DI\n", "", 1)},
-			{"numerical-address", strings.Replace(body, move+" p+0(FP),DI", fmt.Sprintf("%s value+%d(FP),DI", move, word), 1)},
-			{"unknown-data", strings.Replace(body, fmt.Sprintf("%s value+%d(FP),AX\n", move, word), "", 1)},
-			{"pointer-data", strings.Replace(body, fmt.Sprintf("%s value+%d(FP),AX", move, word), move+" p+0(FP),AX", 1)},
-			{"partial-data", strings.Replace(body, fmt.Sprintf("%s value+%d(FP),AX", move, word), fmt.Sprintf("MOVB value+%d(FP),AL", word), 1)},
-			{"raw-return", strings.Replace(body, "RET", "BYTE $0xc3\nRET", 1)},
+		for _, mutation := range []struct {
+			name, body string
+			frame      int
+		}{
+			{"unknown-address", strings.Replace(body, move+" p+0(FP),DI\n", "", 1), 0},
+			{"numerical-address", strings.Replace(body, move+" p+0(FP),DI", fmt.Sprintf("%s value+%d(FP),DI", move, word), 1), 0},
+			{"unknown-data", strings.Replace(body, fmt.Sprintf("%s value+%d(FP),AX\n", move, word), "", 1), 0},
+			{"pointer-data-foreign-frame", strings.Replace(body, fmt.Sprintf("%s value+%d(FP),AX", move, word), move+" p+0(FP),AX", 1), 16},
+			{"partial-data", strings.Replace(body, fmt.Sprintf("%s value+%d(FP),AX", move, word), fmt.Sprintf("MOVB value+%d(FP),AL", word), 1), 0},
+			{"raw-return", strings.Replace(body, "RET", "BYTE $0xc3\nRET", 1), 0},
 		} {
-			source := fmt.Sprintf("TEXT ·Value(SB),4,$0-%d\n%s", word*2+4, mutation.body)
+			source := fmt.Sprintf("TEXT ·Value(SB),4,$%d-%d\n%s", mutation.frame, word*2+4, mutation.body)
 			goAssemblerOracleOutput(t, target.arch, source, "", true)
 			for _, api := range []string{"text", "module", "Go"} {
 				t.Run(target.triple+"/"+mutation.name+"/"+api, func(t *testing.T) {
@@ -153,6 +156,17 @@ func TestX86NativeGPStoreCannotBorrowUnknownOrPointerData(t *testing.T) {
 					}
 				})
 			}
+		}
+		// Preserve the former pointer-data fixture verbatim as an explicit
+		// positive for the independently proved closed-leaf bit-copy scope.
+		pointerBody := strings.Replace(body, fmt.Sprintf("%s value+%d(FP),AX", move, word), move+" p+0(FP),AX", 1)
+		source := fmt.Sprintf("TEXT ·Value(SB),4,$0-%d\n%s", word*2+4, pointerBody)
+		for _, api := range []string{"text", "module", "Go"} {
+			t.Run(target.triple+"/closed-leaf-pointer-bits/"+api, func(t *testing.T) {
+				if ir, err := x86ScalarFPBitViewAPI(t, source, "func Value(p *byte,value uintptr) uint32", target.arch, target.triple, api); err != nil || ir == "" {
+					t.Fatal("actual complete entry-address bits need no numerical-byte permission", err)
+				}
+			})
 		}
 	}
 }
