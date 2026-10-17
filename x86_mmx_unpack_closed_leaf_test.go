@@ -79,3 +79,27 @@ func TestX86MMXUnpackCannotBorrowInitializedShadowOrUnclosedState(t *testing.T) 
 		}
 	}
 }
+
+func TestX86MMXVoidCannotHideInputsOrPhysicalState(t *testing.T) {
+	for _, declaration := range []string{"func view()", "func view(unused bool)"} {
+		args := 0
+		if strings.Contains(declaration, "bool") {
+			args = 1
+		}
+		for _, body := range []string{
+			"PUNPCKLBW M1,M0\nEMMS\nRET",
+			"MOVL $1,AX\nMOVL AX,M0\nRET",
+			"MOVQ M0,AX\nEMMS\nRET",
+		} {
+			source := fmt.Sprintf("TEXT ·view(SB),4,$0-%d\n%s\n", args, body)
+			for _, api := range []string{"text", "module", "Go"} {
+				t.Run(declaration+"/"+body+"/"+api, func(t *testing.T) {
+					ir, err := x86ScalarFPBitViewAPI(t, source, declaration, "amd64", "x86_64-unknown-linux-gnu", api)
+					if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+						t.Fatal("Void or unused bool hid an unknown MMX input or unclosed hardware state", err)
+					}
+				})
+			}
+		}
+	}
+}

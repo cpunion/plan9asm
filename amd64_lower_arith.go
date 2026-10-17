@@ -337,9 +337,10 @@ func (c *amd64Ctx) lowerArith(op Op, ins Instr) (ok bool, terminated bool, err e
 		}
 		return true, false, nil
 	case "EMMS":
-		// MMX registers are modeled as ordinary integers, so there is no
-		// hardware x87 tag state to clear.
-		return true, false, nil
+		// A closed native MMX region owns its actual EMMS before generic
+		// dispatch. Never turn an unbound physical tag-state operation into
+		// a successful logical-register no-op.
+		return true, false, fmt.Errorf("%w: EMMS needs its source-bound native MMX/x87 continuation", ErrProbeNeedsContext)
 	case "UNDEF":
 		return c.lowerX86UndefinedTrap(op, ins)
 	case "RDTSC", "RDTSCP":

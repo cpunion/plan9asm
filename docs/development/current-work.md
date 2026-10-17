@@ -1,5 +1,26 @@
 # Current work: PR 40 checkpoint
 
+## Native MMX repair candidate, 2026-10-17
+
+The new candidate pairs a source-bound native MMX region with a separate
+eight-register byte-definedness domain. It reuses all 43 official integer
+MMX-read descriptors and validates the complete word-transfer rows, including
+Go's surprising `MOVQ M0,M1` GP-AX source encoding. One native sideeffect
+region preserves the original MMX operations and real EMMS; an unbound EMMS
+cannot succeed as a no-op. Raw, caller/frame and interleaved effects cannot
+borrow this ordinary-leaf binding. The logical FP image is private and supplies
+no numerical inputs, contiguous caller storage or pointer authority.
+
+Independent tests retain the original six-row native unpack program, all
+43 integer rules over four source classes, source/signature/target mutation,
+Void input obligations and all five Go-valid x86 object targets. They are
+unqualified, not a repair receipt. A tiny LLVM22 mnemonic/constraint feasibility
+probe compiles; it does not certify the translator or native execution.
+The frozen 170-root pre-MMX source continues separately. After its current-Go
+groups finish, the local single-heavy-owner queue may insert the old-source
+MMX RED and this candidate's focused GREEN, then resume Go20/race and gates.
+No test denominator, inventory/test budget, external ledger or push changes.
+
 ## String-memory and native-store checkpoint, 2026-10-17
 
 At `2f4ccf0e`, all fourteen focused roots and 3,899 children pass current

@@ -24,6 +24,9 @@ func x86TypedFPResultNeedsProof(fn Func, sig FuncSig, arch string) bool {
 	}
 	opaqueAddressResult := x86OpaqueAddressPointerResultRole(fn, sig, arch)
 	for ordinal, ins := range fn.Instrs {
+		if _, known, err := x86NativeMMXInstruction(ins, arch); known && err == nil && x86ResultNamedPredicateInstruction(ins) {
+			return true // Actual MMX inputs and the closed x87-mode continuation remain obligations for Void.
+		}
 		if _, known, err := x86PackedShiftProperties(ins.Op, ins, arch); known && err == nil {
 			return true // Native accesses and masks stay obligations even with dead numerical outputs.
 		}

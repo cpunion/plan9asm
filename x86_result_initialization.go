@@ -356,7 +356,7 @@ func checkX86ResultSourceFlowWithTrapOnly(fn Func, initial x86ResultState, owned
 	// AUTO states do not obtain an independent frame or iteration budget.
 	byteState := len(initial.fp) + len(initial.canonicalFP) + len(initial.auto) +
 		len(initial.boolOutgoing) + len(initial.boolOutgoingCanonical) + len(initial.gp) + len(initial.canonicalGP) +
-		8*len(initial.xmm) + len(initial.masks) + 1 + len(initial.pointerGP) + len(initial.callerAddressGP) +
+		8*len(initial.xmm) + len(initial.nativeMMX) + len(initial.masks) + 1 + len(initial.pointerGP) + len(initial.callerAddressGP) +
 		2*len(initial.callerAddressOrigin) + 1 + 2 + 3 + 1 + 1 // Native string counter must-fact.
 	if len(initial.resultAddressSlots) != 0 {
 		byteState += len(initial.resultAddressGP)*25 + 2
@@ -574,6 +574,7 @@ type x86ResultState struct {
 	// A set bit means that physical byte is exactly 0/1, not merely initialized.
 	canonicalGP [16]uint8
 	xmm         [32]uint16 // high banks are consumed only by validated mode-bound forms
+	nativeMMX   [8]uint8   // Only a source-bound actual native region may transfer this bank.
 	// The disjoint upper 48 byte bits share the same physical X/Y/Z bank.
 	// Existing low-X effects preserve these bits unless their typed encoding
 	// explicitly clears the upper aliases.
@@ -745,6 +746,9 @@ func (state x86ResultState) intersect(other x86ResultState) x86ResultState {
 	for index := range merged.xmm {
 		merged.xmm[index] &= other.xmm[index]
 		merged.vectorUpper[index] &= other.vectorUpper[index]
+	}
+	for index := range merged.nativeMMX {
+		merged.nativeMMX[index] &= other.nativeMMX[index]
 	}
 	for index := range merged.masks {
 		merged.masks[index] = merged.masks[index] && other.masks[index]

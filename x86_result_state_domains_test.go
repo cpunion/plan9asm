@@ -39,6 +39,9 @@ func TestX86ABI0ResultInitializationAllStateDomainJoins(t *testing.T) {
 	for index := range left.xmm {
 		left.xmm[index], right.xmm[index] = 0xffff, 0x00ff
 	}
+	for index := range left.nativeMMX {
+		left.nativeMMX[index], right.nativeMMX[index] = 0xff, 0x55
+	}
 	for index := range left.masks {
 		left.masks[index] = true
 		right.masks[index] = index%2 == 0
@@ -52,6 +55,11 @@ func TestX86ABI0ResultInitializationAllStateDomainJoins(t *testing.T) {
 	for index := range merged.xmm {
 		if merged.xmm[index] != 0x00ff {
 			t.Errorf("X%d bypassed the must-defined join: %#x", index, merged.xmm[index])
+		}
+	}
+	for index := range merged.nativeMMX {
+		if merged.nativeMMX[index] != 0x55 {
+			t.Errorf("M%d bypassed the native-region must-defined join", index)
 		}
 	}
 	for index := range merged.masks {

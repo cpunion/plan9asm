@@ -101,6 +101,7 @@ type amd64Ctx struct {
 	fpMixedBoolBytes bool // Complete ordinary tuple NUM/canonical proof passed.
 
 	fpStaticAddressValues *x86StaticAddressValues // No dereference capability.
+	nativeMMXRegion       *x86NativeMMXRegion     // Whole source/NUM proof paired to the actual emitted MMX region.
 }
 
 func newAMD64Ctx(b *strings.Builder, fn Func, sig FuncSig, resolve func(string) string, sigs map[string]FuncSig, annotate bool) *amd64Ctx {

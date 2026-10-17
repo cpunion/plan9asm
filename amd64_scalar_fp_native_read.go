@@ -16,6 +16,18 @@ import (
 // result. In particular, this never creates a caller-memory or raw-RET token.
 func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 	fn, sig, arch := c.fpScalarSource, c.sig, c.goarch
+	var nativeMMX *x86NativeMMXRegion
+	named := true
+	for _, ins := range fn.Instrs {
+		named = named && x86ResultNamedPredicateInstruction(ins)
+	}
+	if named {
+		var err error
+		nativeMMX, err = newX86NativeMMXRegion(fn, c.fpSourceSig, arch, c.targetTriple)
+		if err != nil {
+			return err
+		}
+	}
 	if owned, err := c.checkCustomHelperBoolSource(); owned || err != nil {
 		return err
 	}
@@ -55,7 +67,7 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 				return x86ScalarFPResultTransfer(ins, state, owned, resultOffset, arch)
 			})
 	}
-	if strictErr == nil {
+	if strictErr == nil && nativeMMX == nil {
 		return nil
 	}
 	if x86TrapOnlyLogicalFPSourceRole(fn, sig, arch) {
@@ -108,6 +120,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 	transfer := func(ordinal int, ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string) bool {
 		state.loweredStaticReads = c.fpScalarData
 		defer func() { state.loweredStaticReads = nil }()
+		if accepted, known := nativeMMX.transfer(ordinal, ins, state, owned, resultOffset, arch); known {
+			return accepted
+		}
 		if accepted, known := x86LoweredNativeMXCSRStep(ins, state, arch); known {
 			return accepted
 		}
@@ -270,7 +285,11 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 	if customRegisterBool {
 		return checkX86CustomRegisterBoolResultInitialization(fn, sig, arch, transfer)
 	}
-	return checkX86ABI0ResultInitializationAtSource(fn, sig, arch, transfer, true)
+	if err := checkX86ABI0ResultInitializationAtSource(fn, sig, arch, transfer, true); err != nil {
+		return err
+	}
+	c.nativeMMXRegion = nativeMMX
+	return nil
 }
 
 // Only the lowering observer may consume a paired exact-width volatile load

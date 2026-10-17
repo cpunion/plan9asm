@@ -17,6 +17,9 @@ type x86MMXWordForm struct {
 }
 
 func x86MMXWordProperties(ins Instr, arch string) (x86MMXWordForm, bool, error) {
+	if !x86ResultNamedPredicateInstruction(ins) {
+		return x86MMXWordForm{}, false, nil // Raw bytes have their own physical-bank contract.
+	}
 	name, _, dotted := strings.Cut(strings.ToUpper(string(ins.Op)), ".")
 	if name != "MOVL" && name != "MOVQ" && name != "MOVD" && name != "MOVDQ2Q" && name != "MOVQOZX" {
 		return x86MMXWordForm{}, false, nil
@@ -58,7 +61,7 @@ func x86MMXWordProperties(ins Instr, arch string) (x86MMXWordForm, bool, error) 
 	}
 	if form.targetM {
 		if form.sourceM {
-			if form.bytes != 8 || arch != "amd64" || ins.x86Encoded || ins.x86SourceRaw != nil {
+			if form.bytes != 8 || arch != "amd64" {
 				return fail()
 			}
 			index, _ := amd64ParseMReg(form.source.Reg)
