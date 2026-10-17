@@ -38,6 +38,21 @@ func x86ArithmeticShiftValueProgram(arch string) (string, string, string, string
 		})
 }
 
+func TestX86ArithmeticShiftPortableBaselineTargetIR(t *testing.T) {
+	source, declarations, _, _ := x86ArithmeticShiftValueProgram("amd64")
+	for _, triple := range []string{"x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc"} {
+		for _, api := range []string{"text", "module", "Go"} {
+			ir, err := x86ScalarFPBitViewAPI(t, source, declarations, "amd64", triple, api)
+			if err != nil {
+				t.Fatal(api, err)
+			}
+			if regexp.MustCompile(`"target-features"="[^"]*\+avx`).MatchString(ir) {
+				t.Errorf("portable numerical oracle retains native ISA requirements: %s/%s", triple, api)
+			}
+		}
+	}
+}
+
 func TestX86ArithmeticShiftInitializedFiveTargetObjects(t *testing.T) {
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
