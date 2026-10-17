@@ -1,5 +1,24 @@
 # Current work: PR 40 checkpoint
 
+## Frozen fork run and next local format batch, 2026-10-18
+
+The accumulated40-commit batch is published only to the allowed fork at
+`edda1974`. Complete run39050102570 is in progress; let it finish naturally
+without another push/cancellation. The contribution PR remains draft at its
+older head until the fork qualifies. Its last complete failure denominator is
+still the181 failed roots from run39034893053, not a local subtraction.
+
+While CI runs, the original three packed-word multiply/multiply-add format
+roots independently reproduce failures at `edda1974`. At `f8cf4f36`, their
+repair preserves every original Go source row, actual Go objects, three-API
+Context controls and separate LLVM format objects. The14-root/345-child
+changed/retained union passes current Go, actual Go1.20 and race with identical
+terminals and unchanged source/SDK/LLVM22 snapshots. Initialized five-target
+value objects, complete Go attributes, missing inputs, caller permissions and
+legacy byte boundaries remain tested. Physical MMX entry/region restrictions
+are unchanged. This local batch is committed but not pushed or included in the
+frozen CI run. It is not a native execution or complete-module receipt.
+
 ## BEXTR and retained scalar formats, 2026-10-18
 
 This section supersedes older checkpoints below. The last complete fork run
