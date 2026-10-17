@@ -114,7 +114,36 @@ func TestAMD64BEXTRRuntimeSemanticsAndFlags(t *testing.T) {
 	if !ok {
 		t.Fatal("LLVM 22 llc/clang not found")
 	}
-	const source = `TEXT bextrsemantics(SB),NOSPLIT,$0-8
+	const source = x86BEXTROriginalRuntimeSource
+	file, err := Parse(ArchAMD64, source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	triple := testTargetTriple(runtime.GOOS, runtime.GOARCH)
+	var runPrefix []string
+	if crossRosetta {
+		triple = "x86_64-apple-macosx"
+		runPrefix = []string{"/usr/bin/arch", "-x86_64"}
+	}
+	ir, err := Translate(file, Options{
+		Goarch:       "amd64",
+		TargetTriple: triple,
+		Sigs: map[string]FuncSig{
+			"bextrsemantics": {
+				Name:  "bextrsemantics",
+				Args:  []LLVMType{Ptr},
+				Ret:   Void,
+				Frame: FrameLayout{Params: []FrameSlot{{Offset: 0, Type: Ptr, Index: 0, Field: -1}}},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	compileAndRunRuntimeTestForTarget(t, llc, clang, "bextr_semantics", triple, ir, x86BEXTROriginalRuntimeDriver, runPrefix)
+}
+
+const x86BEXTROriginalRuntimeSource = `TEXT bextrsemantics(SB),NOSPLIT,$0-8
 	MOVQ out+0(FP), DI
 
 	MOVL $0x7fffffff, R8
@@ -145,32 +174,8 @@ func TestAMD64BEXTRRuntimeSemanticsAndFlags(t *testing.T) {
 	MOVQ AX, 48(DI)
 	RET
 `
-	file, err := Parse(ArchAMD64, source)
-	if err != nil {
-		t.Fatal(err)
-	}
-	triple := testTargetTriple(runtime.GOOS, runtime.GOARCH)
-	var runPrefix []string
-	if crossRosetta {
-		triple = "x86_64-apple-macosx"
-		runPrefix = []string{"/usr/bin/arch", "-x86_64"}
-	}
-	ir, err := Translate(file, Options{
-		Goarch:       "amd64",
-		TargetTriple: triple,
-		Sigs: map[string]FuncSig{
-			"bextrsemantics": {
-				Name:  "bextrsemantics",
-				Args:  []LLVMType{Ptr},
-				Ret:   Void,
-				Frame: FrameLayout{Params: []FrameSlot{{Offset: 0, Type: Ptr, Index: 0, Field: -1}}},
-			},
-		},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	const mainC = `
+
+const x86BEXTROriginalRuntimeDriver = `
 #include <stdint.h>
 #include <string.h>
 extern void bextrsemantics(uint8_t *);
@@ -190,5 +195,3 @@ int main(void) {
   return 0;
 }
 `
-	compileAndRunRuntimeTestForTarget(t, llc, clang, "bextr_semantics", triple, ir, mainC, runPrefix)
-}
