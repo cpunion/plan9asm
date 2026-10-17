@@ -4,7 +4,7 @@ const test = require('node:test');
 
 const workflow = fs.readFileSync('.github/workflows/pr40-owned-process-probe.yml', 'utf8');
 const sdk = workflow.slice(workflow.indexOf('\n  sdk-priority:'), workflow.indexOf('\n  ownership:'));
-const sdkLaneCount = 55;
+const sdkLaneCount = 56;
 
 const crc32ProfileOwners = [
   ['llvm-crc32', 'TestCompileOneX86SDKOriginalCRC32NumericalDataJoin'],
