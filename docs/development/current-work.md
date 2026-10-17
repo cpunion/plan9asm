@@ -1,5 +1,33 @@
 # Current work: PR 40 checkpoint
 
+## String-memory and native-store checkpoint, 2026-10-17
+
+At `2f4ccf0e`, all fourteen focused roots and 3,899 children pass current
+Go with zero failures/skips and unchanged source/SDK/tool observations. The
+complete original LODS state fixture now passes unchanged. MOVS/STOS/LODS
+share the twenty-row string grammar with SCAS/CMPS, exact source-prefix binding,
+zero-iteration behavior and independent NUM, FLAGS, DF and counter facts.
+Opaque updated cursor bits can be compared or copied without becoming NUM or
+a reusable native pointer. Actual native read/store controls retain that
+boundary. Closed zero-frame ordinary leaves may copy one complete actual
+entry-derived address word; physical/raw entries, calls, other storage owners,
+partial data and unbound addresses cannot borrow the scope. All scalar native
+MOV stores now require their complete input proof, including Void and unused
+bool signatures. The independent pre-fix Void RED and first whole-flow
+comparison failure remain failed reports, not converted receipts.
+
+All 120 CI policy tests also pass on `2f4ccf0e`. The full 165-root retained
+union is being qualified separately on current Go, actual Go20 and race;
+it is not yet a pass. The published old-head fork run has completed with
+55 successful jobs, eight failed jobs and one skipped aggregate. PR40 is
+still draft at its old contribution head; none of the new local repairs has
+been published or credited to an external ledger. Physical MMX state remains
+unresolved. A shared complete native MMX unpack source now supplies independent
+public-API object regressions; those new tests are unqualified, not a repair.
+Current native execution, complete modules and the strict benchmark remain
+required. Inventory remains server-only; its last export reaches the requested
+2025-10-01 historical bound, with incremental coverage ending on 2026-10-15.
+
 ## Complete scalar-stack/arithmetic qualification, 2026-10-17
 
 At `b8023c35`, the complete 125-root changed/retained union passes current

@@ -281,6 +281,17 @@ queries keep their separate contracts. Execute live/dead, carry/borrow, width,
 status, alias and guard-page controls against actual original Go bytes; portable
 objects and Rosetta execution do not replace the required native Linux owner.
 
+The scalar native MOV-store family checks its complete inputs even for Void
+or unused-bool signatures. A separate lowering-only bit-copy scope permits a
+whole native word of actual typed entry-derived address bits in an ordinary
+zero-frame leaf without calls, raw entry or another storage owner. It grants
+no NUM bytes, pointee validity, bounds, GC root, escape-safety or pointer result.
+String cursor updates retain only their existing weaker address-bit facts;
+they revoke the reusable native-read pointer. Keep the complete original
+cursor-comparison sources plus independent positive zero-count and negative
+updated-cursor native read/store controls. The standalone store observer cannot
+borrow this source scope or manufacture it from a pointer type alone.
+
 An x86 raw-return caller-region producer is a separate, bounded source proof,
 not a pointer-type or `noescape` nonalias promise. It requires the same actual
 selected Go/ASM inventory, typed syntax, actual numerical/pointer sizes and
