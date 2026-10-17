@@ -42,17 +42,31 @@ FLAGS and unknown-pointer/index negatives even for Void/unused-bool entries.
 The exact Void RED at `d81ce31b` remains failed. At `b98a70b0`, four roots/546
 children pass current Go: the byte-identical original LZCNT program's three
 target objects/portable execution, paired-store boundary controls and command
-lifecycles. That four-root union still needs actual-Go20 and race qualification.
+lifecycles. The same four-root/546-child union passes actual-Go20 and race at
+`5cd30a9a`; these snapshots differ in scheduling fixtures, not root semantics.
 
 Three actual CI roots fail while cold-building Go's objdump at the unchanged
 60-second command deadline: conversion Linux08/Windows11 and complete packed
 frames. Conversion and packed-frame owners now prepare their own disposable
-tool cache before independently bounded capture; AST RED/GREEN passed, but
-complete actual-object replays remain pending. The other34 conversion batches
-pass, not the complete36-owner union. These are infrastructure failures, not
-invalid source. The64-shard actual union first fails because its old fixture
-fills only34 shards. Its corrected fixture retains all64 witnesses plus the
-independent32-shard owner; an actual passing rerun is still required.
+tool cache before independently bounded capture. At `398144ca`, actual Linux08
+and Windows11 owners pass in173.5/110.7 seconds, including both IR levels and
+all three APIs, with unchanged source/tool seals. The full packed owner remains
+unqualified. Its bounded12-owner candidate at `5fd35696` retains all195 forms
+on three targets and needs actual object validation. These are not benchmark
+speedup or complete-module receipts.
+
+The64-shard actual union first fails because its old fixture fills only34
+shards. At `5cd30a9a`, the corrected68-root fixture passes the actual complete
+union, independent coverage replay and negative controls in110.3 seconds.
+The independent32-shard owner is retained. All128 CI policies pass there.
+
+At `7acba746`, the current-Go official coverage gate passes all five architectures.
+An independent old/current audit across actual Go1.20-1.27 source corpora binds
+unchanged repository/SDK snapshots: exactly nine unbound count memory shapes
+and one unbound MOVNTQ shape move from supported to context-required in each
+version; every other baseline field stays unchanged. The new scanner regression
+keeps their input context separate from unsupported instruction syntax. This is
+not a claim that every encoder row or native runtime axis has been executed.
 
 Clear this complete failure index by rule class, not another inventory or broad
 refactoring project. The192 main failures' first diagnostics include124 unclosed
