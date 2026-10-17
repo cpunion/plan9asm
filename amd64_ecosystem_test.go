@@ -282,18 +282,7 @@ func TestTranslateX86StringInstructionsCompleteGoAssemblerForms(t *testing.T) {
 				}
 			}
 			src.WriteString("\tRET\n")
-			file, err := Parse(ArchAMD64, src.String())
-			if err != nil {
-				t.Fatal(err)
-			}
-			ll, err := Translate(file, Options{
-				TargetTriple: target.triple,
-				Goarch:       target.goarch,
-				Sigs:         map[string]FuncSig{"stringforms": {Name: "stringforms", Ret: Void}},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			ll := x86UnboundVoidScalarFormatObject(t, src.String(), "stringforms", target.goarch, target.triple)
 			for _, stem := range []string{"movs", "rep_stos", "rep_scas"} {
 				for _, width := range target.widths {
 					want := "@__plan9asm_" + stem + strings.ToLower(width)

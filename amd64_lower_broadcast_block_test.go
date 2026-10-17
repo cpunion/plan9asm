@@ -73,22 +73,7 @@ func TestTranslateX86PackedBlockBroadcastCompleteGoAssemblerForms(t *testing.T) 
 				// independent authority controls retain their Context cases.
 				source = strings.NewReplacer("X20", "X3", "X21", "X4", "Y20", "Y3", "Y21", "Y4").Replace(source)
 			}
-			requireX86GoAssemblerResult(t, target.goarch, source, true)
-
-			file, err := Parse(ArchAMD64, source)
-			if err != nil {
-				t.Fatal(err)
-			}
-			ll, err := Translate(file, Options{
-				TargetTriple: target.triple,
-				Goarch:       target.goarch,
-				Sigs: map[string]FuncSig{
-					"packedblockbroadcastforms": {Name: "packedblockbroadcastforms", Ret: Void},
-				},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			ll := x86UnboundVoidScalarFormatObject(t, source, "packedblockbroadcastforms", target.goarch, target.triple)
 			llc := findLLVM22Tool("llc")
 			if llc == "" {
 				t.Fatal("LLVM 22 llc not found")

@@ -43,19 +43,7 @@ func TestTranslateX86LODSCompleteGo127FormsAcrossTargets(t *testing.T) {
 	} {
 		t.Run(target.name, func(t *testing.T) {
 			source := x86LODSCompleteFormsSource(target.goarch)
-			requireX86GoAssemblerResult(t, target.goarch, source, true)
-			file, err := Parse(ArchAMD64, source)
-			if err != nil {
-				t.Fatal(err)
-			}
-			ir, err := Translate(file, Options{
-				Goarch:       target.goarch,
-				TargetTriple: target.triple,
-				Sigs:         map[string]FuncSig{"lodsforms": {Name: "lodsforms", Ret: Void}},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			ir := x86UnboundVoidScalarFormatObject(t, source, "lodsforms", target.goarch, target.triple)
 			for _, width := range []string{"b", "w", "l"} {
 				if want := "@__plan9asm_rep_lods" + width; !strings.Contains(ir, want) {
 					t.Fatalf("LODS lowering omitted %q:\n%s", want, ir)
