@@ -73,6 +73,14 @@ func x86InstructionFormatObjectUnit(t *testing.T, file *File, signatures map[str
 				} else {
 					ir.WriteString("  ret void\n")
 				}
+			case "UNDEF":
+				if ordinal != len(function.Instrs)-1 || len(instruction.Args) != 0 {
+					t.Fatal("format unit lost its original final fault")
+				}
+				known, terminated, err := consumer.lowerX86UndefinedTrap(instruction.Op, instruction)
+				if !known || !terminated || err != nil {
+					t.Fatal("original format-unit fault was not emitted", err)
+				}
 			default:
 				known, terminated, err := lower(consumer, instruction)
 				if !known || terminated || err != nil {

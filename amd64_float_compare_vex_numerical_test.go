@@ -246,7 +246,8 @@ func TestX86FloatingCompareVEXWholeEffectsIR(t *testing.T) {
 				// objects and public Context controls, then check only its
 				// complete physical syntax through the private emitter.
 				ir := x86FloatingCompareUnboundFormatObject(t, physicalSource.String(), target.arch, target.triple)
-				if strings.Contains(ir, " = fcmp ") || strings.Count(ir, "asm sideeffect") < len(cases) {
+				if strings.Contains(ir, " = fcmp ") || strings.Count(ir, "asm sideeffect \"vcmp") != len(cases) ||
+					strings.Count(ir, "asm sideeffect \"ud2\"") != len(cases) {
 					t.Fatal("physical mode32 VEX formats lost original comparison side effects")
 				}
 				compileLLVMToObject(t, llc, target.triple, "vex-whole-format.ll", "vex-whole-format.o", ir)
