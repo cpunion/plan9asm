@@ -2,6 +2,7 @@ package plan9asm
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -24,7 +25,7 @@ func TestX86BEXTRTypedByteEffectExactInputs(t *testing.T) {
 					if ordinal == 0 {
 						bytes = 2 // Only START and LEN, not the rest of the GP.
 					}
-					if operand.index != ordinal || operand.operand != ins.Args[ordinal] ||
+					if operand.index != ordinal || !reflect.DeepEqual(operand.operand, ins.Args[ordinal]) ||
 						operand.width != bytes || operand.read != (ordinal < 2) || operand.write != (ordinal == 2) {
 						t.Fatal("BEXTR changed an input, output or physical mode width", ordinal, operand)
 					}
