@@ -6,6 +6,8 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/xgo-dev/llvm"
 )
 
 func x86ABI0BoolArchFixture(arch string) (string, string) {
@@ -30,6 +32,11 @@ func x86ABI0BoolArchFixture(arch string) (string, string) {
 		name := fmt.Sprintf("BoolArch%d", index)
 		fmt.Fprintf(&declarations, "%s\n", strings.Replace(row.declaration, "Value", name, 1))
 		fmt.Fprintf(&source, "TEXT ·%s(SB),4,$0-%d\n%s\nRET\n", name, row.args, row.body)
+	}
+	for _, condition := range strings.Fields("SETCC SETCS SETEQ SETGE SETGT SETHI SETLE SETLS SETLT SETMI SETNE SETOC SETOS SETPC SETPL SETPS") {
+		name := "Bool" + condition
+		fmt.Fprintf(&declarations, "func %s(x uint32) bool\n", name)
+		fmt.Fprintf(&source, "TEXT ·%s(SB),4,$0-%d\nMOVL x+0(FP),AX\nCMPL AX,$0\n%s ret+%d(FP)\nRET\n", name, word+1, condition, word)
 	}
 	return source.String(), declarations.String()
 }
@@ -69,6 +76,49 @@ func TestX86ABI0CanonicalBoolArchitectureNoncanonicalResults(t *testing.T) {
 				if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
 					t.Errorf("noncanonical or missing bool became logical i1: %s/%s/%s: %v", target.triple, api, body, err)
 				}
+			}
+		}
+	}
+}
+
+func TestX86AMD64CanonicalBoolDefaultArchitecture(t *testing.T) {
+	for _, arch := range []string{"", "amd64"} {
+		for _, row := range []struct {
+			body string
+			good bool
+		}{
+			{"MOVB $0,ret+0(FP)\nRET", true},
+			{"MOVB $1,ret+0(FP)\nRET", true},
+			{"MOVB $2,ret+0(FP)\nRET", false},
+			{"MOVB $255,ret+0(FP)\nRET", false},
+			{"RET", false},
+			{"NOP", false},
+		} {
+			for _, api := range []string{"text", "module"} {
+				t.Run(arch+"/"+row.body+"/"+api, func(t *testing.T) {
+					_, file, sig, _ := x86ResultInitializationFixture(t, "amd64", "func Value() bool", row.body)
+					options := Options{Goarch: arch, TargetTriple: "x86_64-unknown-linux-gnu",
+						ResolveSym: func(symbol string) string { return strings.TrimPrefix(symbol, "·") },
+						Sigs:       map[string]FuncSig{"Value": sig}}
+					ctx := llvm.NewContext()
+					defer ctx.Dispose()
+					published := false
+					var err error
+					if api == "text" {
+						var ir string
+						ir, err = Translate(file, options)
+						published = ir != ""
+					} else {
+						module, failure := TranslateModuleInContext(ctx, file, options)
+						err, published = failure, !module.IsNil()
+						if !module.IsNil() {
+							module.Dispose()
+						}
+					}
+					if row.good && (!published || err != nil) || !row.good && (published || !errors.Is(err, ErrProbeNeedsContext)) {
+						t.Fatal("default architecture bypassed canonical ABI0 proof", row.good, err)
+					}
+				})
 			}
 		}
 	}
