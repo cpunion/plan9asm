@@ -97,3 +97,22 @@ func TestX86NativeMMXNonTemporalCannotBorrowInputs(t *testing.T) {
 		}
 	}
 }
+
+func TestX86NativeMMXNonTemporalFPNeedsNativeBacking(t *testing.T) {
+	for _, arch := range []string{"386", "amd64"} {
+		word, triple := 8, "x86_64-unknown-linux-gnu"
+		if arch == "386" {
+			word, triple = 4, "i386-unknown-linux-gnu"
+		}
+		source, declaration := x86NativeMMXNonTemporalFixture(arch, 0, fmt.Sprintf("ret+%d(FP)", word*2))
+		source = strings.Replace(source, fmt.Sprintf("$0-%d", word*2), fmt.Sprintf("$0-%d", word*2+8), 1)
+		declaration += " uint64"
+		x86LEAActualTargetGoObject(t, arch, triple, source)
+		for _, api := range []string{"text", "module", "Go"} {
+			ir, err := x86ScalarFPBitViewAPI(t, source, declaration, arch, triple, api)
+			if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+				t.Fatal("streaming FP store borrowed the emitter's private byte image", arch, api, err)
+			}
+		}
+	}
+}
