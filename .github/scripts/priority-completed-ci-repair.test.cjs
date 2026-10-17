@@ -19,7 +19,11 @@ const roots = [
   'TestX86AddressClassPreservesActualMemoryAndRelocationObjects',
   'TestTranslateGoModule_X87Mode',
   'TestCrossLinuxRuntimeMatrixX86BitTestNumericalAndAliases',
+  'TestProbeInstructionChecksFormsThroughLowerer',
+  'TestX86ABI0ResultLegacyIntegerArithmeticDoesNotBorrowPermission',
+  'TestAMD64RegisterResultKeepsUnknownInputsAndSourceRoles',
   'TestX86PoppedFlagWordImmediateMaskThreeAPIs',
+  'TestX86PackedIntegerCompareStatusObserverThreeTargetObjects',
   'TestX86NarrowPoppedWordCannotDefineUnwrittenHighBits',
   'TestX86NativeBitTestCompleteReachingInputsThreeAPIs',
   'TestX86NativeBitTestExactStateAndIndependentAuthorities',
@@ -35,17 +39,17 @@ const roots = [
   'TestX86StackRefinementCloneJoinAndReuse',
 ];
 const groups = [
-  ['completed-ci-repair', roots.slice(0, 14)],
-  ['native-memory-effects', roots.slice(14)],
+  ['completed-ci-repair', roots.slice(0, 17)],
+  ['native-memory-effects', roots.slice(17)],
 ];
 const blocks = groups.map(([lane, owners]) => `- lane: ${lane}\n            module: '.'\n            roots:\n` +
   owners.map(root => `              - ${root}\n`).join('') + '            timeout: 5m');
 const workflow = fs.readFileSync('.github/workflows/pr40-owned-process-probe.yml', 'utf8');
 
 function validate(source) {
-  assert.equal(roots.length, 28);
-  assert.equal(new Set(roots).size, 28);
-  assert.deepEqual(groups.map(([, owners]) => owners.length), [14, 14]);
+  assert.equal(roots.length, 32);
+  assert.equal(new Set(roots).size, 32);
+  assert.deepEqual(groups.map(([, owners]) => owners.length), [17, 15]);
   for (let index = 0; index < groups.length; index++) {
     assert.ok(source.includes(blocks[index]), 'complete independent old-failure and native-effect priorities');
     assert.equal(source.split(`- lane: ${groups[index][0]}\n`).length - 1, 1);

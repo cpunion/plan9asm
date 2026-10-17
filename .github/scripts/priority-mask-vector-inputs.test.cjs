@@ -25,6 +25,8 @@ const owners = {
   'vector-native-memory-complete': {module: '.', roots: [
     'TestX86VectorValueNativeCompleteFiveTargetsThreeAPIs', 'TestX86VectorValueNativeMissingInputsStayContext',
     'TestX86VectorValueNativeDeadEmitterKeepsInputRead', 'TestX86VectorValueVoidInputsCannotBorrowImplementationSlots',
+    'TestX86VectorArithmeticPairedNativeReadCompleteFamily', 'TestX86VectorArithmeticPairedNativeReadCannotBorrowSourceFacts',
+    'TestX86VectorArithmeticSaturatingAddNativeReadEffects',
   ]},
   'immediate-control-and-frame-hashing': {module: '.', roots: [
     'TestX86ImmediateControlHelpersRetainIntegerBoundaries', 'TestX86ImmediateControlHelpersRejectNonIntegerRoles',

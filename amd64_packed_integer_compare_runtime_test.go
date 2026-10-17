@@ -38,7 +38,11 @@ func x86PackedIntegerCompareRuntimeFixture(rows []x86PackedIntegerCompareCase) (
 		} else {
 			source.WriteString("MOVQ $0,400(DI)\n")
 		}
-		source.WriteString("PUSHFQ\nPOPQ DX\nMOVQ DX,408(DI)\nLAHF\nMOVB AH,416(DI)\nSTMXCSR 417(DI)\nRET\n")
+		// Observe LAHF before masking the popped word: AND changes FLAGS.
+		// The whole RFLAGS word includes undefined/unmodeled control bits;
+		// only the six independently seeded status bits are numerical here.
+		source.WriteString("LAHF\nMOVB AH,416(DI)\nPUSHFQ\nPOPQ DX\n" +
+			"ANDQ $0x8d5,DX\nMOVQ DX,408(DI)\nSTMXCSR 417(DI)\nRET\n")
 	}
 	return declarations.String(), source.String(), prototypes.String()
 }
@@ -94,7 +98,7 @@ __attribute__((noinline)) static int checkCompare(
             __asm__ volatile("ldmxcsr %0" : : "m"(saved));
             uint64_t expectedFlags = (mask&3) == 0 ? 0 : (mask&3) == 1 ? 0x55 : 0x895;
             if (after != csr || compareLane(output+418,4) != csr ||
-                (compareLane(output+409,8)&0x8d5) != expectedFlags || output[417] != (2|(expectedFlags&0xd5)) ||
+                compareLane(output+409,8) != expectedFlags || output[417] != (2|(expectedFlags&0xd5)) ||
                 output[0] != 0xc3 || output[422] != 0xc3 || output[423] != 0xc3 ||
                 memcmp(originalA,aStorage,96) || memcmp(originalB,bStorage,96)) {
                 fprintf(stderr,"%s CSR/flags/full-input/output canary mismatch\n",name);
@@ -151,6 +155,32 @@ __attribute__((noinline)) static int checkCompare(
     return 0;
 }
 `
+
+func TestX86PackedIntegerCompareStatusObserverThreeTargetObjects(t *testing.T) {
+	rows := []x86PackedIntegerCompareCase{{
+		op: "PCMPEQB", operands: "X0,X1", width: 16, bits: 8, legacy: true,
+	}}
+	declarations, source, _ := x86PackedIntegerCompareRuntimeFixture(rows)
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM22 llc required")
+	}
+	for _, triple := range []string{"x86_64-unknown-linux-gnu", "x86_64-apple-darwin", "x86_64-pc-windows-msvc"} {
+		t.Run(triple, func(t *testing.T) {
+			x86LEAActualTargetGoObject(t, "amd64", triple, source)
+			for _, api := range []string{"text", "module", "Go"} {
+				ir, err := x86ScalarFPBitViewAPI(t, source, declarations, "amd64", triple, api)
+				if err != nil || ir == "" {
+					t.Fatal("defined-status observer lost complete source effects", api, err)
+				}
+				for _, text := range []string{ir, x86MulDivRoundOptimize(t, ir)} {
+					x86PackedStringCompileObject(t, llc, triple, text, "-O0")
+					x86PackedStringCompileObject(t, llc, triple, text, "-O2")
+				}
+			}
+		})
+	}
+}
 
 func TestCrossLinuxRuntimeMatrixX86PackedIntegerCompareCompleteScalarSemantics(t *testing.T) {
 	llc, clang, triple, prefix := x86FloatAddSubRuntimeTools(t)

@@ -22,6 +22,11 @@ func x86ResultPackedLowMultiplyStep(ins Instr, state *x86ResultState, owned []bo
 // This dependency rule is shared by low products and wrapping/saturating
 // arithmetic, not their operations or their independent memory permissions.
 func x86ResultPackedLaneArithmeticStep(ins Instr, form x86PackedBinaryForm, bits int, state *x86ResultState, owned []bool, arch string) bool {
+	return x86ResultPackedLaneArithmeticStepWithRead(ins, form, bits, state, owned, arch, false)
+}
+
+func x86ResultPackedLaneArithmeticStepWithRead(ins Instr, form x86PackedBinaryForm, bits int,
+	state *x86ResultState, owned []bool, arch string, nativeRead bool) bool {
 	if form.mask >= 0 {
 		index, valid := amd64ParseKReg(ins.Args[form.mask].Reg)
 		if !valid || !state.masks[index] {
@@ -32,7 +37,7 @@ func x86ResultPackedLaneArithmeticStep(ins Instr, form x86PackedBinaryForm, bits
 		memory := ins.Args[form.memory]
 		// Logical FP/AUTO bytes can establish numerical dependence, not the
 		// original native alignment. Legacy lowering checks that separately.
-		if !x86ResultRead(memory, int64(form.memoryBytes), state, owned, arch) {
+		if !x86ResultReadWithNativeContinuation(ins, memory, int64(form.memoryBytes), state, owned, arch, nativeRead) {
 			return false
 		}
 	}

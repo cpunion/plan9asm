@@ -192,11 +192,15 @@ jobs:
               - TestX86AddressClassPreservesActualMemoryAndRelocationObjects
               - TestTranslateGoModule_X87Mode
               - TestCrossLinuxRuntimeMatrixX86BitTestNumericalAndAliases
+              - TestProbeInstructionChecksFormsThroughLowerer
+              - TestX86ABI0ResultLegacyIntegerArithmeticDoesNotBorrowPermission
+              - TestAMD64RegisterResultKeepsUnknownInputsAndSourceRoles
             timeout: 5m
           - lane: native-memory-effects
             module: '.'
             roots:
               - TestX86PoppedFlagWordImmediateMaskThreeAPIs
+              - TestX86PackedIntegerCompareStatusObserverThreeTargetObjects
               - TestX86NarrowPoppedWordCannotDefineUnwrittenHighBits
               - TestX86NativeBitTestCompleteReachingInputsThreeAPIs
               - TestX86NativeBitTestExactStateAndIndependentAuthorities
@@ -286,6 +290,9 @@ jobs:
               - TestX86VectorValueNativeMissingInputsStayContext
               - TestX86VectorValueNativeDeadEmitterKeepsInputRead
               - TestX86VectorValueVoidInputsCannotBorrowImplementationSlots
+              - TestX86VectorArithmeticPairedNativeReadCompleteFamily
+              - TestX86VectorArithmeticPairedNativeReadCannotBorrowSourceFacts
+              - TestX86VectorArithmeticSaturatingAddNativeReadEffects
             timeout: 5m
           - lane: immediate-control-and-frame-hashing
             module: '.'

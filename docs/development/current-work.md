@@ -3,7 +3,7 @@
 ## Bool and pointer-CAS closing batch, 2026-10-17
 
 The allowed-fork run39006691606 at `b38f28e5` has passed all63 prerequisite
-jobs and has started the complete Windows module partitions. Let that run
+jobs, but complete Windows root and rich-CLI partitions fail. Let that run
 finish naturally before a consolidated push. PR40 still has its older draft
 contribution head; prerequisite success is not a complete-module or benchmark
 pass. No inventory restart or external-ledger credit is part of this batch.
@@ -17,21 +17,42 @@ direct emitter; private intermediate bytes, complete SETcc, aliases, calls and
 tails share the actual target word size. Manual register signatures retain
 their separate convention. These receipts certify that exact snapshot only.
 
-The next candidate reuses the existing closed-leaf address-bit scope for the
+The pointer candidate reuses the existing closed-leaf address-bit scope for the
 complete CMPXCHG value grammar, including full-word pair parts and register
 destinations. A pointer-valued successful accumulator is not NUM; conditional
 outputs retain only their actual byte dependencies and no pointer identity for
 unknown native contents. A separately accepted bound LOCK prefix preserves
 only prior caller-word facts. Standalone or malformed LOCK remains rejected.
-The ten focused roots pass428 children at `c5e5d6c1`, including the three
-original Cas/Cas64/Casp1 functions and all-five-target objects. The complete
-combined SDK/race/source qualification is still required on the next snapshot.
+At `4c55b78e`, the98-root union passes current Go, actual Go20 and race with
+3,179 children per lane and identical terminals. The141-root source owner
+passes4,329 children; nine build/official/scanner gates and126 CI policies pass.
+All source/tool observations remain unchanged. The original complete Linux
+AMD64 atomic assembly member now compiles through the rich CLI, without skips
+or N/A. That file compilation does not establish whole-program execution.
 
 The last full strict benchmark remains132/184 compiled,52 failed, with AMD64
-over its300-second target budget. Rerun the complete original atomic member
-after the pointer repair; isolated functions do not certify that file. Freeze
+over its300-second target budget. A newer benchmark was explicitly interrupted
+to prioritize actual CI failures; its missing AMD64 report is not a pass. Freeze
 scope to these real failures and complete gates, not another broad proof or
 refactoring project. Preserve failed reports as failed and keep LLVM22 only.
+
+## Complete-module repair candidate, 2026-10-17
+
+Download every failed full-module artifact from run39006691606 before claiming
+the final failure denominator. At `23bd0332`, independent RED reproduces missing
+paired native add/sub result effects on all five x86 targets and all three APIs.
+Its five retained probe/register/timestamp roots pass, but the complete RED
+suite remains failed. The earlier cold inventory timeout is not test evidence.
+
+The next candidate connects all16 existing typed add/sub members to the existing
+conditional-read consumer without changing standalone queries or adding another
+admission mechanism. Complete initialized native, broadcast, mask, merge and
+result objects retain both modes and the existing byte dependencies. Its Void
+negative uses the existing KMOV whole-source route. The RED's separate unmasked
+Void admission counterexample remains unaddressed, not a repair receipt.
+The packed-compare observer now captures LAHF before masking the popped status
+word; unmodeled RFLAGS control bits are not numerical data. Compile/runtime,
+current/historical SDK, race and full-module qualifications remain required.
 
 ## Closure queue, 2026-10-17
 
