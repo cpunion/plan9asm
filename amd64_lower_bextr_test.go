@@ -45,20 +45,16 @@ func TestTranslateX86BEXTRCompleteGo127FormsAcrossTargets(t *testing.T) {
 	} {
 		t.Run(target.name, func(t *testing.T) {
 			source := x86BEXTRCompleteFormsSource(target.goarch)
-			requireX86GoAssemblerResult(t, target.goarch, source, true)
-			file, err := Parse(ArchAMD64, source)
-			if err != nil {
-				t.Fatal(err)
+			// Preserve every original row, including unknown inputs and the
+			// physical SP destination. A syntax object is not an ABI proof.
+			ir := x86UnboundVoidScalarFormatObject(t, source, "bextrforms", target.goarch, target.triple)
+			wantIR := []string{"lshr i32", `"target-features"="+bmi"`}
+			if target.goarch == "amd64" {
+				wantIR = append(wantIR, "lshr i64")
+			} else if strings.Contains(ir, "lshr i64") {
+				t.Fatal("mode32 Q spelling used a fictitious 64-bit extraction")
 			}
-			ir, err := Translate(file, Options{
-				Goarch:       target.goarch,
-				TargetTriple: target.triple,
-				Sigs:         map[string]FuncSig{"bextrforms": {Name: "bextrforms", Ret: Void}},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
-			for _, want := range []string{"lshr i32", "lshr i64", `"target-features"="+bmi"`} {
+			for _, want := range wantIR {
 				if !strings.Contains(ir, want) {
 					t.Fatalf("BEXTR lowering omitted %q:\n%s", want, ir)
 				}
