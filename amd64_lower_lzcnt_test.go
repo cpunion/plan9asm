@@ -117,16 +117,9 @@ func TestTranslateX86LZCNTRejectsFormsOutsideGo127Optab(t *testing.T) {
 	}
 }
 
-func TestAMD64LZCNTRuntimeSemantics(t *testing.T) {
-	crossRosetta := runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" && rosettaAvailable()
-	if runtime.GOARCH != "amd64" && !crossRosetta {
-		t.Skip("runtime execution test requires amd64 or Rosetta")
-	}
-	llc, clang, ok := findLlcAndClang(t)
-	if !ok {
-		t.Fatal("LLVM 22 llc/clang not found")
-	}
-	const source = `
+// Keep the complete original failing runtime program byte-for-byte, including
+// the read after a native store and all three widths' CF/ZF observations.
+const x86LZCNTOriginalRuntimeSource = `
 TEXT lzcntsemantics(SB),NOSPLIT,$0-8
 	MOVQ out+0(FP), DI
 	MOVQ $0x1122334455660000, AX
@@ -148,6 +141,17 @@ TEXT lzcntsemantics(SB),NOSPLIT,$0-8
 	SETEQ 49(DI)
 	RET
 `
+
+func TestAMD64LZCNTRuntimeSemantics(t *testing.T) {
+	crossRosetta := runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" && rosettaAvailable()
+	if runtime.GOARCH != "amd64" && !crossRosetta {
+		t.Skip("runtime execution test requires amd64 or Rosetta")
+	}
+	llc, clang, ok := findLlcAndClang(t)
+	if !ok {
+		t.Fatal("LLVM 22 llc/clang not found")
+	}
+	source := x86LZCNTOriginalRuntimeSource
 	file, err := Parse(ArchAMD64, source)
 	if err != nil {
 		t.Fatal(err)
