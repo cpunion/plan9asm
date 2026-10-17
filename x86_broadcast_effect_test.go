@@ -254,6 +254,29 @@ func TestX86BroadcastBothResultObservers(t *testing.T) {
 	}
 }
 
+func TestX86BroadcastDeadResultsRetainCompleteFamilyObligation(t *testing.T) {
+	for _, arch := range []string{"386", "amd64"} {
+		for _, spec := range x86BroadcastTestDirectory {
+			source := "(AX)"
+			if spec.source == "K" {
+				source = "K0"
+			} else if strings.Contains(spec.source, "X") {
+				source = "X1"
+			}
+			row := fmt.Sprintf("%s %s,%c2", spec.name, source, spec.destinations[0])
+			for _, declaration := range []string{"func Value()", "func Value(unused bool)"} {
+				t.Run(arch+"/"+spec.name+"/"+declaration, func(t *testing.T) {
+					_, file, signature, source := x86ResultInitializationFixture(t, arch, declaration, row+"\nRET\n")
+					goAssemblerOracleOutput(t, arch, source, "", true)
+					if !x86TypedFPResultNeedsProof(file.Funcs[0], signature, arch) {
+						t.Fatal("dead broadcast bypassed its whole-source input obligation", row)
+					}
+				})
+			}
+		}
+	}
+}
+
 func TestX86BroadcastOriginalFunctionResultClosure(t *testing.T) {
 	for _, arch := range []string{"amd64", "386"} {
 		word, move, typ, index := 8, "MOVQ", "uint64", 11

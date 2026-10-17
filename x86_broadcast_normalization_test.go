@@ -40,11 +40,17 @@ func TestX86BroadcastMaskDataLowererCaseParity(t *testing.T) {
 								t.Fatalf("%q emitted a zero-width scalar", spelling)
 							}
 							for _, consumer := range x86ResultGPSIMDConsumers {
-								state := x86ResultState{flags: x86ByteFlagsAll}
-								state.masks[0], state.masks[7] = true, true
-								before := state.clone()
-								if consumer.step(ins, &state, nil, 0, arch) || !reflect.DeepEqual(state, before) {
-									t.Fatalf("%s %q granted mask-data numerical authority", consumer.name, spelling)
+								for _, initialized := range []bool{false, true} {
+									state := x86ResultState{flags: x86ByteFlagsAll}
+									index, _ := amd64ParseKReg(ins.Args[0].Reg)
+									state.masks[index] = initialized
+									expected := state.clone()
+									if initialized {
+										expected.writeVector(3, 64, ^uint64(0), false)
+									}
+									if accepted := consumer.step(ins, &state, nil, 0, arch); accepted != initialized || !reflect.DeepEqual(state, expected) {
+										t.Fatalf("%s %q lost actual mask-data input/output effects; initialized%t", consumer.name, spelling, initialized)
+									}
 								}
 							}
 						}
