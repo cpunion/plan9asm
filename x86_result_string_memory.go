@@ -16,37 +16,32 @@ const (
 	x86StringCountNonzero
 )
 
-func x86ResultStringCompareProperties(ins Instr, arch string) (x86StringSpec, bool, error) {
-	form, known, err := x86StringInstructionProperties(ins, arch)
-	return form, known && (form.kind == "scas" || form.kind == "cmps"), err
-}
-
-type x86ResultStringCompareSite struct {
+type x86ResultStringMemorySite struct {
 	instruction Instr
 	prefix      string
 }
 
-type x86ResultStringComparePlan struct {
+type x86ResultStringMemoryPlan struct {
 	prefixes map[int]Instr
-	bodies   map[int]x86ResultStringCompareSite
+	bodies   map[int]x86ResultStringMemorySite
 }
 
 // Bind the complete original source before the result proof. The exact same
 // CFG verifier runs again at emission; a lexical prefix cannot stand in for
 // an incoming edge which bypasses its source node.
-func x86ResultStringCompareSourcePlan(fn Func, arch string) (*x86ResultStringComparePlan, error) {
-	hasCompare := false
+func x86ResultStringMemorySourcePlan(fn Func, arch string) (*x86ResultStringMemoryPlan, error) {
+	hasStrings := false
 	for _, ins := range fn.Instrs {
-		if _, known, _ := x86ResultStringCompareProperties(ins, arch); known {
-			hasCompare = true
+		if _, known, _ := x86StringInstructionProperties(ins, arch); known {
+			hasStrings = true
 			break
 		}
 	}
-	if !hasCompare {
+	if !hasStrings {
 		return nil, nil
 	}
 	fail := func(reason string) error {
-		return fmt.Errorf("%w: string comparison needs its original source CFG: %s", ErrProbeNeedsContext, reason)
+		return fmt.Errorf("%w: string instruction needs its original source CFG: %s", ErrProbeNeedsContext, reason)
 	}
 	if fn.x86DirectTailRoot != nil || fn.x86ContinuationFlow != nil {
 		return nil, fail("another source-graph role cannot supply prefix ordinals")
@@ -69,7 +64,7 @@ func x86ResultStringCompareSourcePlan(fn Func, arch string) (*x86ResultStringCom
 		}
 	}
 	positions := make([][]int, len(context.blocks))
-	plan := &x86ResultStringComparePlan{prefixes: make(map[int]Instr), bodies: make(map[int]x86ResultStringCompareSite)}
+	plan := &x86ResultStringMemoryPlan{prefixes: make(map[int]Instr), bodies: make(map[int]x86ResultStringMemorySite)}
 	at := 0
 	for block, body := range context.blocks {
 		for _, ins := range body.instrs {
@@ -78,11 +73,11 @@ func x86ResultStringCompareSourcePlan(fn Func, arch string) (*x86ResultStringCom
 			}
 			ordinal := ordinals[at]
 			positions[block] = append(positions[block], ordinal)
-			if _, known, err := x86ResultStringCompareProperties(ins, arch); known {
+			if _, known, err := x86StringInstructionProperties(ins, arch); known {
 				if err != nil || !x86ResultNamedPredicateInstruction(ins) {
-					return nil, fail("unbound string comparison shape")
+					return nil, fail("unbound string instruction shape")
 				}
-				plan.bodies[ordinal] = x86ResultStringCompareSite{instruction: ins}
+				plan.bodies[ordinal] = x86ResultStringMemorySite{instruction: ins}
 			}
 			at++
 		}
@@ -108,14 +103,14 @@ func x86ResultStringCompareSourcePlan(fn Func, arch string) (*x86ResultStringCom
 // This is the numerical continuation of the existing exact volatile helper,
 // not a readable region, extent, pointer-to-number conversion or native-entry
 // capability. An unsuccessful native access still faults in the paired emitter.
-func (plan *x86ResultStringComparePlan) transfer(ordinal int, ins Instr, state *x86ResultState, arch string) (bool, bool) {
+func (plan *x86ResultStringMemoryPlan) transfer(ordinal int, ins Instr, state *x86ResultState, arch string) (bool, bool) {
 	if plan == nil {
 		return false, false
 	}
 	if prefix, bound := plan.prefixes[ordinal]; bound {
 		return state != nil && reflect.DeepEqual(prefix, ins), true
 	}
-	form, known, err := x86ResultStringCompareProperties(ins, arch)
+	form, known, err := x86StringInstructionProperties(ins, arch)
 	if !known {
 		return false, false
 	}
@@ -140,7 +135,9 @@ func (plan *x86ResultStringComparePlan) transfer(ordinal int, ins Instr, state *
 		return false, true
 	}
 	indexes := []Reg{DI}
-	if form.kind == "cmps" {
+	if form.kind == "lods" {
+		indexes = []Reg{SI}
+	} else if form.kind == "cmps" || form.kind == "movs" {
 		indexes = append(indexes, SI)
 	} else if !x86ResultRead(Operand{Kind: OpReg, Reg: AX}, int64(form.width), state, nil, arch) {
 		return false, true
@@ -159,9 +156,28 @@ func (plan *x86ResultStringComparePlan) transfer(ordinal int, ins Instr, state *
 			state.boolFrameGP[index] = x86ResultSlotAddress{}
 		}
 	}
-	if !repeat || state.stringCount == x86StringCountNonzero {
+	comparison := form.kind == "scas" || form.kind == "cmps"
+	if comparison && (!repeat || state.stringCount == x86StringCountNonzero) {
 		state.flags = x86ByteFlagsAll
 	} // Otherwise the possible zero path retains only the old six must-bits.
+	if form.kind == "lods" {
+		mask := uint8((uint16(1) << uint(form.width)) - 1)
+		state.canonicalGP[0] &^= mask
+		if !repeat || state.stringCount == x86StringCountNonzero {
+			state.gp[0] |= mask
+			if form.width == 4 {
+				state.gp[0] |= 0xf0
+				state.canonicalGP[0] |= 0xf0
+			}
+		}
+		// A possible zero path retains only old numerical byte knowledge.
+		// A possible read cannot retain any old AX address identity.
+		state.pointerGP[0], state.callerAddressGP[0], state.callerAddressOrigin[0] = false, false, 0
+		state.resultAddressGP[0] = x86ResultSlotAddress{}
+		if state.boolFrameGP != nil {
+			state.boolFrameGP[0] = x86ResultSlotAddress{}
+		}
+	}
 	if repeat {
 		if !x86ResultStore(Operand{Kind: OpReg, Reg: CX}, word, state, nil, 0, arch) {
 			return false, true
@@ -176,6 +192,10 @@ func (plan *x86ResultStringComparePlan) transfer(ordinal int, ins Instr, state *
 			state.boolFrameGP[1] = x86ResultSlotAddress{}
 		}
 		state.stringCount = x86StringCountUnknown
+		if !comparison {
+			state.canonicalGP[1] = 0xff
+			state.stringCount = x86StringCountZero
+		}
 	}
 	return true, true
 }
@@ -187,7 +207,7 @@ func x86ResultStringCountAfter(ins Instr, before, current x86ResultStringCount, 
 	if !x86ResultNamedPredicateInstruction(ins) || ins.Op == OpCALL {
 		return x86StringCountUnknown
 	}
-	if _, known, err := x86ResultStringCompareProperties(ins, arch); known {
+	if _, known, err := x86StringInstructionProperties(ins, arch); known {
 		if err == nil {
 			return current
 		}

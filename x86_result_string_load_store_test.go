@@ -29,7 +29,7 @@ func TestX86StringLoadStorePairedEffectsCompleteFamily(t *testing.T) {
 								if err != nil {
 									t.Fatal(err)
 								}
-								plan, err := x86ResultStringCompareSourcePlan(file.Funcs[0], arch)
+								plan, err := x86ResultStringMemorySourcePlan(file.Funcs[0], arch)
 								if err != nil || plan == nil || len(plan.bodies) != 1 {
 									t.Fatal("shared typed string grammar omitted the complete load/store sibling", err)
 								}

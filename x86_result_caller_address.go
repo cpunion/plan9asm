@@ -44,13 +44,13 @@ func x86ResultCallerAddressTest(ins Instr, state *x86ResultState, owned []bool, 
 	return true, true
 }
 
-// A source-bound string comparison has already applied its conditional write
+// A source-bound string instruction has already applied its conditional write
 // footprint. Intersect with the prior must-domain: an untouched register may
 // retain its identity, but this post-consumer cannot introduce one. Other
 // instructions keep the existing independent overwrite classification.
 func x86ResultCallerAddressesAfterTransfer(ins Instr, before, transferred [16]bool,
 	entryFP map[int64]bool, arch string) [16]bool {
-	if _, known, err := x86ResultStringCompareProperties(ins, arch); known && err == nil &&
+	if _, known, err := x86StringInstructionProperties(ins, arch); known && err == nil &&
 		x86ResultNamedPredicateInstruction(ins) {
 		for index := range before {
 			before[index] = before[index] && transferred[index]
@@ -110,10 +110,16 @@ func x86ResultCallerAddressesAfter(ins Instr, before [16]bool, entryFP map[int64
 	if (ins.Op == "REP" || ins.Op == "REPN") && len(ins.Args) == 0 {
 		return before // Only an independently accepted source-bound prefix reaches this post-consumer.
 	}
-	if form, known, err := x86ResultStringCompareProperties(ins, arch); known && err == nil {
-		before[7], before[1] = false, false // DI and a possibly repeated native CX write.
-		if form.kind == "cmps" {
+	if form, known, err := x86StringInstructionProperties(ins, arch); known && err == nil {
+		before[1] = false // A possibly repeated native CX write.
+		if form.kind != "lods" {
+			before[7] = false
+		}
+		if form.kind == "cmps" || form.kind == "movs" || form.kind == "lods" {
 			before[6] = false
+		}
+		if form.kind == "lods" {
+			before[0] = false
 		}
 		return before // No implicit GP writes outside this typed footprint.
 	}

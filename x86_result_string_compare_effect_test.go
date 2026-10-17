@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func x86StringCompareModelSite(t *testing.T, arch, opcode, prefix string) (*x86ResultStringComparePlan, int, Instr) {
+func x86StringCompareModelSite(t *testing.T, arch, opcode, prefix string) (*x86ResultStringMemoryPlan, int, Instr) {
 	t.Helper()
 	body := "TEXT compare(SB),4,$0-0\n"
 	if prefix != "" {
@@ -16,7 +16,7 @@ func x86StringCompareModelSite(t *testing.T, arch, opcode, prefix string) (*x86R
 	if err != nil {
 		t.Fatal(err)
 	}
-	plan, err := x86ResultStringCompareSourcePlan(file.Funcs[0], arch)
+	plan, err := x86ResultStringMemorySourcePlan(file.Funcs[0], arch)
 	if err != nil || plan == nil || len(plan.bodies) != 1 {
 		t.Fatal("complete source model lost its typed compare", err)
 	}
@@ -109,7 +109,13 @@ func TestX86StringCompareTypedContinuationChangesOnlyActualOutputs(t *testing.T)
 					row.change(&ins)
 				}
 				before := [16]bool{1: true, 3: true, 6: true, 7: true}
-				if got := x86ResultCallerAddressesAfterTransfer(ins, before, before, nil, arch); got != [16]bool{} {
+				want := [16]bool{}
+				if row.name == "unrelated-string" {
+					// MOVS is now independently registered. This post-consumer
+					// intersects already accepted reaching facts, not permissions.
+					want = before
+				}
+				if got := x86ResultCallerAddressesAfterTransfer(ins, before, before, nil, arch); got != want {
 					t.Fatal("unbound source borrowed the paired string footprint")
 				}
 			})
@@ -184,7 +190,7 @@ func TestX86StringComparePlanBindsOriginalPrefixAndBody(t *testing.T) {
 					if err != nil {
 						t.Fatal(err)
 					}
-					plan, err := x86ResultStringCompareSourcePlan(file.Funcs[0], arch)
+					plan, err := x86ResultStringMemorySourcePlan(file.Funcs[0], arch)
 					positive := shape == "adjacent" || shape == "fallthrough-label-chain" || shape == "branch-to-prefix" || shape == "pc-to-prefix"
 					if !positive {
 						if err == nil {
