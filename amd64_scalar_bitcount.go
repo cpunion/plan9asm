@@ -83,7 +83,18 @@ func (c *amd64Ctx) lowerScalarBitCount(op Op, ins Instr) (bool, bool, error) {
 		return known, false, err
 	}
 	typ := amd64IntegerTypeForBits(spec.bits)
-	value, err := c.evalIntSized(ins.Args[0], typ)
+	var value string
+	if isAMD64MemoryOperand(ins.Args[0]) {
+		bytes, readErr := c.loadX86PackedShiftBytes(ins.Args[0], spec.bits/8, true)
+		err = readErr
+		if err == nil {
+			integer := c.newTmp()
+			fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i8> %s to %s\n", integer, spec.bits/8, bytes, typ)
+			value = "%" + integer
+		}
+	} else {
+		value, err = c.evalIntSized(ins.Args[0], typ)
+	}
 	if err != nil {
 		return true, false, err
 	}
@@ -109,4 +120,29 @@ func (c *amd64Ctx) lowerScalarBitCount(op Op, ins Instr) (bool, bool, error) {
 		fmt.Fprintf(c.b, "  store i1 %%%s, ptr %s\n", zero, c.flagsZSlot)
 	}
 	return true, false, c.storeRegSized(ins.Args[1].Reg, typ, "%"+count)
+}
+
+// Only the paired exact volatile emitter supplies native numerical bytes.
+// Widths, writes and defined/killed FLAGS remain the complete typed effect;
+// standalone queries and callers acquire no pointer or memory permission.
+func x86LoweredScalarBitCountNativeRead(ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string) (bool, bool) {
+	effect, known, err := x86TypedScalarBitCountByteEffect(ins.Op, ins, arch)
+	if !known || err != nil {
+		return false, known
+	}
+	if ins.Args[0].Kind != OpMem || ins.Args[0].Mem.Sym != "" {
+		return false, false
+	}
+	for _, operand := range effect.operands {
+		if operand.read && !x86ResultReadWithNativeContinuation(ins, operand.operand, operand.width, state, owned, arch, true) {
+			return false, true
+		}
+	}
+	for _, operand := range effect.operands {
+		if operand.write && !x86ResultStore(operand.operand, operand.width, state, owned, resultOffset, arch) {
+			return false, true
+		}
+	}
+	state.flags = state.flags&^effect.flagsKilled | effect.flagsDefined
+	return true, true
 }

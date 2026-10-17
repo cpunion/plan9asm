@@ -163,6 +163,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		if accepted, known := x86LoweredCRC32NativeRead(ins, state, owned, resultOffset, arch); known {
 			return accepted // The same typed emitter retains the exact volatile source read.
 		}
+		if accepted, known := x86LoweredScalarBitCountNativeRead(ins, state, owned, resultOffset, arch); known {
+			return accepted
+		}
 		if accepted, known := x86ResultSignedIntegerFloatStepWithRead(ins, state, owned, arch, true); known {
 			return accepted // The same typed emitter retains an exact volatile source read.
 		}
