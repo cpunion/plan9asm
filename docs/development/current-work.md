@@ -1,5 +1,29 @@
 # Current work: PR 40 checkpoint
 
+## Linked-header and partial-byte arithmetic checkpoint, 2026-10-17
+
+At `8d45ac49`, all 91 changed/retained roots pass current Go, actual Go20
+and race: 273 root executions, 11,313 children, zero failures/skips,
+identical terminal names and unchanged source/SDK/tool observations. The earlier
+89-root Go20 attempt remains failed: old test binaries can omit BuildSettings.
+Build-only verification now checks the actual linked executable header and
+selected SDK without starting TestMain or borrowing optional metadata.
+
+Independent RED `be118f43` reproduces lost low-byte numerical dependencies
+across all eleven scalar arithmetic/logical RMW stems. At `b777ea8d`, all
+eight focused/retained roots and 1,331 children pass current Go, including
+all five x86 object targets, three APIs and all 256 byte values. The dependency
+grammar retains only independently known output bytes; it grants no upper-byte,
+FLAGS, pointer or memory facts. The portable oracle explicitly adapts LLVM's
+narrow result to an i32 C boundary rather than assuming C zeroext attributes.
+The first direct-C attempt remains failed. Wider SDK/race qualification is next.
+
+Physical source-stack numerical composition and physical MMX state remain
+unresolved native CI counterexamples. Published fork CI still tests older
+`e50292a9`; PR40 remains draft at its old contribution head. Do not promote
+these local results into native, full-module, benchmark or external-ledger
+passes. No local inventory process or external ledger update was introduced.
+
 ## Private addresses and retained family qualification, 2026-10-17
 
 At `f21dadbc`, the complete 84-root changed/retained union passes current Go,
@@ -22,8 +46,8 @@ driver. At `e857ffdb`, all five focused roots and 24 children pass on current Go
 including portable numerical execution and the original wide-driver link.
 AMD64 retains independent field bounds, not mode32's contiguous frame. The
 build-only driver now uses `go test -c` and verifies the actual linked binary's
-SDK/architecture; it never executes TestMain. A complete 89-root SDK/race union
-is running on that frozen snapshot; those wider results remain pending.
+SDK/architecture; it never executes TestMain. The subsequent 89-root Go20
+failure and repaired complete 91-root qualification are recorded above.
 
 Published CI still runs older `e50292a9`; let it finish before a batch push.
 PR40 remains draft at its old contribution head. Actual native execution, the
