@@ -3,11 +3,14 @@
 ## Active closure queue, 2026-10-17
 
 This section supersedes older checkpoints below. PR40 remains draft at
-`24851df2`. Allowed-fork run39021103697 tests `4b01f010`; all65 prerequisites
-pass, but complete Windows modules are still running and have real failures.
-Eleven downloaded root parts retain4,479 passed,117 failed and198 explicit
-host-inapplicable roots. These partial counts do not certify the remaining five
-parts, complete modules or a newer source. Let CI finish before a batch push.
+`24851df2`. Allowed-fork run39021103697 at `4b01f010` finished naturally:
+79 jobs pass and19 fail. All65 prerequisites pass, but complete Windows root
+and rich-CLI modules fail. All16 root parts retain6,434 passed,192 failed,
+263 explicit host-inapplicable and39 incomplete roots. The last group contains
+38 unstarted roots and one unterminated
+`TestGoX86SDKLiteralAlignmentPublicPackageDifferentExtents`; shard5 exhausted
+its unchanged30-minute budget. The rich CLI has one additional failed helper
+root, already repaired locally below. These are not current-source passes.
 Keep failure artifacts under `_out/ci-39021103697/`; no local inventory scanner
 or external-ledger credit belongs in this repair.
 
@@ -27,14 +30,22 @@ all20 members' independent Go rows, five-target objects, paired native reads,
 known mask-data inputs and114 actual-host portable fault kernels. This is not
 native AVX512 execution. Preserve the failed mask-data RED at `1c92cc2e`, the
 earlier host-skip receipt, and the retained stale K0 expectation failure.
-The corrected K0 boundary and integrated MMX/broadcast source need fresh
-current-Go, actual-Go20 and race qualification before publication.
+At integrated `651710ef`, all47 changed/retained roots pass current Go,
+actual-Go20 and race with1,541 children per lane, identical terminal identities,
+zero skips/failures and unchanged source/tool seals. All128 CI policies pass.
+These are focused receipts, not complete modules or native AVX512 execution.
 
 Next clear the complete CI failure index by rule class, not another inventory
 or broad refactoring project. Linux conversion batch08 additionally fails while
-cold-building Go's objdump at the unchanged60-second command deadline;18 other
-collected batches pass, not the complete36-owner union. Keep this infrastructure
-failure distinct from invalid source. The strict184-file benchmark remains
+cold-building Go's objdump at the unchanged60-second command deadline; Windows
+batch11 fails the same way. The other34 batches pass, not the complete36-owner
+union. Keep these infrastructure failures distinct from invalid source.
+The scalar-count leaf has a complete nine-member native-read RED and a first
+shared typed-effect/volatile repair; it is not yet qualified or integrated.
+The candidate Windows driver keeps16 jobs/two workers but uses64 command
+shards to reduce per-command work, without narrowing the inventory or raising
+budgets. Its actual complete-union validation is still required.
+The strict184-file benchmark remains
 failed at132/184 with52 failures and AMD64 over budget; no newer pass exists.
 
 ## Bool and pointer-CAS closing batch, 2026-10-17
