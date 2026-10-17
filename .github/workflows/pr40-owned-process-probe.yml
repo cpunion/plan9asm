@@ -184,6 +184,7 @@ jobs:
           mkdir -p "$directory"
           roots='TestAMD64BLSRuntimeSemantics'
           roots+='|TestAMD64BEXTRRuntimeSemanticsAndFlags'
+          roots+='|TestAMD64BZHIRuntimeSemanticsAndFlags'
           go test . -list "^($roots)$" > "$directory/inventory.log"
           for root in ${roots//|/ }; do
             grep -Fx "$root" "$directory/inventory.log"
