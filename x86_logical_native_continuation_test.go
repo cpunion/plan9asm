@@ -71,13 +71,17 @@ func TestX86LogicalNativeEmitterRetainsDeadReadEffects(t *testing.T) {
 	}
 	for _, row := range rows {
 		t.Run(row.op+"/"+row.bank+"/"+row.mode, func(t *testing.T) {
+			wanted, _, _ := strings.Cut(row.op, ".")
+			bits := 32
+			if strings.HasSuffix(wanted, "PD") || strings.HasSuffix(wanted, "Q") {
+				bits = 64
+			}
 			source, _ := x86FixedBinaryValueFixture("amd64", row.op, row.bank, row.mode, false)
 			file := mustParseX86RawReturn(t, source)
 			var instruction Instr
 			matches := 0
 			for _, ins := range file.Funcs[0].Instrs {
 				name, _, _ := strings.Cut(string(ins.Op), ".")
-				wanted, _, _ := strings.Cut(row.op, ".")
 				if name == wanted && len(ins.Args) > 0 && ins.Args[0].Kind == OpMem {
 					instruction = ins
 					matches++
@@ -101,10 +105,6 @@ func TestX86LogicalNativeEmitterRetainsDeadReadEffects(t *testing.T) {
 				return
 			}
 			if row.mode != "plain" {
-				bits := 32
-				if strings.HasSuffix(row.op, "PD") || strings.HasSuffix(row.op, "Q") || strings.HasSuffix(row.op, "Q.BCST") || strings.HasSuffix(row.op, "PD.BCST") {
-					bits = 64
-				}
 				if !strings.Contains(text, fmt.Sprintf("load volatile i%d", bits)) || !strings.Contains(text, "br i1") {
 					t.Fatal("dead masked logical read lost its E4 conditional volatile access", instruction.Raw)
 				}
@@ -112,10 +112,7 @@ func TestX86LogicalNativeEmitterRetainsDeadReadEffects(t *testing.T) {
 			}
 			width := amd64VectorByteWidth(Reg(row.bank + "0"))
 			if strings.Contains(row.op, ".BCST") {
-				width = 4
-				if strings.HasSuffix(row.op, "Q.BCST") || strings.HasSuffix(row.op, "PD.BCST") {
-					width = 8
-				}
+				width = bits / 8
 			}
 			if !strings.Contains(text, fmt.Sprintf("load volatile <%d x i8>", width)) {
 				t.Fatal("dead unmasked logical read lost its complete volatile width", instruction.Raw)
