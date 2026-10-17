@@ -33,6 +33,15 @@ const owners = {
     'TestX86LogicalNativeOrCompleteObjects', 'TestX86LogicalNativeXorCompleteObjects',
     'TestX86LogicalNativeReadCannotBorrowSourceFacts', 'TestX86LogicalNativeEmitterRetainsDeadReadEffects',
   ]},
+  'compare-native-memory-complete': {module: '.', roots: [
+    'TestX86CompareNativeCompleteObjects', 'TestX86CompareNativeCannotBorrowInputFacts',
+    'TestX86ImmediatePackedCompareDeadMemoryRemainsObservable',
+    'TestX86ResultVectorCompareCompleteDestinationRoles', 'TestX86ResultVectorCompareRequiresEveryReadByte',
+    'TestX86ImmediatePackedCompareMaskAvailability', 'TestX86ImmediatePackedCompareMissingBytesRemainUnknown',
+    'TestX86ImmediatePackedCompareCannotBypassWholeSourceProof',
+    'TestX86PackedIntegerCompareCompleteActualGoRowsAndAttributes',
+    'TestX86ImmediatePackedCompareCompleteGoRowsAndAttributes',
+  ]},
   'immediate-control-and-frame-hashing': {module: '.', roots: [
     'TestX86ImmediateControlHelpersRetainIntegerBoundaries', 'TestX86ImmediateControlHelpersRejectNonIntegerRoles',
     'TestX86GFNIImmediateFloatZeroRejectedLikeGo', 'TestGoAMD64FrameInputVerificationHasBoundedAllocations',
