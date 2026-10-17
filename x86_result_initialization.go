@@ -939,6 +939,9 @@ func x86ResultTransfer(ins Instr, state *x86ResultState, owned []bool, resultOff
 	if accepted, known := x86ResultIndexedPermuteStep(ins, state, owned, arch); known {
 		return accepted
 	}
+	if form, oldInput, known, err := x86FixedVectorValueProperties(ins, arch); known {
+		return err == nil && x86ResultFixedVectorInputs(ins, form, oldInput, state, owned, arch)
+	}
 	if accepted, known := x86ResultCompactExpandStep(ins, state, owned, resultOffset, arch); known {
 		return accepted
 	}

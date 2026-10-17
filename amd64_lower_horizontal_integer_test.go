@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -43,16 +44,21 @@ func TestTranslateX86HorizontalIntegerCompleteGoAssemblerForms(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			ll, err := Translate(file, Options{
+			_, err = Translate(file, Options{
 				TargetTriple: target.triple,
 				Goarch:       target.goarch,
 				Sigs: map[string]FuncSig{
 					"horizontalintegerforms": {Name: "horizontalintegerforms", Ret: Void},
 				},
 			})
-			if err != nil {
-				t.Fatal(err)
+			if !errors.Is(err, ErrProbeNeedsContext) {
+				t.Fatal("uninitialized original formats acquired numerical/MMX inputs", err)
 			}
+			ll := x86InstructionFormatObjectUnit(t, file,
+				map[string]FuncSig{"horizontalintegerforms": {Name: "horizontalintegerforms", Ret: Void}},
+				target.goarch, target.triple, 0, func(c *amd64Ctx, ins Instr) (bool, bool, error) {
+					return c.lowerHorizontalInteger(ins.Op, ins)
+				})
 			llc := findLLVM22Tool("llc")
 			if llc == "" {
 				t.Fatal("LLVM 22 llc not found")

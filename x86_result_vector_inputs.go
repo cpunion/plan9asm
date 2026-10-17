@@ -45,6 +45,13 @@ func x86ResultFixedVectorInputsWithRead(ins Instr, form x86PackedBinaryForm, old
 // Share only the complete family grammar and old-destination input role.
 // This description grants no numerical, memory, frame or declaration authority.
 func x86FixedVectorValueProperties(ins Instr, arch string) (x86PackedBinaryForm, bool, bool, error) {
+	if parsed, known, err := x86HorizontalIntegerProperties(ins, arch); known {
+		return x86PackedBinaryForm{
+			first: parsed.first, second: parsed.second, destination: parsed.destination,
+			memory: parsed.memory, memoryBytes: parsed.byteWidth, byteWidth: parsed.byteWidth,
+			mask: -1, legacy: !parsed.spec.vector, mmx: parsed.mmx,
+		}, false, true, err
+	}
 	if parsed, known, err := x86PackedAverageProperties(ins.Op, ins, arch); known {
 		return parsed.x86PackedBinaryForm, false, known, err
 	}

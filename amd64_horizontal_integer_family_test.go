@@ -108,29 +108,34 @@ func TestX86HorizontalIntegerCompleteEncoderRowsThreeAPIsFiveTargets(t *testing.
 				t.Fatal(err)
 			}
 			options := Options{Goarch: arch, TargetTriple: triple, Sigs: map[string]FuncSig{"horizontal": {Name: "horizontal", Ret: Void}}}
-			ir, err := Translate(file, options)
-			if err != nil {
-				t.Fatal(err)
+			if ir, err := Translate(file, options); ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+				t.Fatal("uninitialized original formats acquired numerical/MMX inputs", err)
 			}
-			compileLLVMToObject(t, llc, triple, "horizontal-text.ll", "horizontal-text.o", ir)
 			ctx := llvm.NewContext()
 			defer ctx.Dispose()
 			module, err := TranslateModuleInContext(ctx, file, options)
 			if !module.IsNil() {
 				defer module.Dispose()
 			}
-			if err != nil {
-				t.Fatal(err)
+			if !errors.Is(err, ErrProbeNeedsContext) {
+				t.Fatal("module API invented original inputs", err)
 			}
-			compileLLVMToObject(t, llc, triple, "horizontal-module.ll", "horizontal-module.o", module.String())
 			translated, err := translateGoModuleInContext(ctx, x86SADGoPackage(t, arch, "()"), []byte(strings.Replace(source, "horizontal(SB)", "·sad(SB)", 1)), GoModuleOptions{GOARCH: arch, TargetTriple: triple})
 			if translated != nil && !translated.Module.IsNil() {
 				defer translated.Module.Dispose()
 			}
-			if err != nil {
-				t.Fatal(err)
+			if !errors.Is(err, ErrProbeNeedsContext) {
+				t.Fatal("Go API invented original inputs", err)
 			}
-			compileLLVMToObject(t, llc, triple, "horizontal-go.ll", "horizontal-go.o", translated.Module.String())
+			ir := x86InstructionFormatObjectUnit(t, file, options.Sigs, arch, triple, 0,
+				func(c *amd64Ctx, ins Instr) (bool, bool, error) {
+					return c.lowerHorizontalInteger(ins.Op, ins)
+				})
+			for _, text := range []string{ir, x86DwordProductIROptimize(t, ir)} {
+				for _, level := range []string{"-O0", "-O2"} {
+					x86PackedStringCompileObject(t, llc, triple, text, level)
+				}
+			}
 		})
 	}
 }
