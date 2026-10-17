@@ -101,11 +101,27 @@ missing-vector source as Context and initializes every vector byte in its
 positive control; a zero mask does not supply those bytes. Both RED receipts
 remain failed. This is not original native execution or complete-module success.
 
-Fork run39018694673 is executing the published `9a107643` batch. Do not cancel
-it or push again until it finishes. The subsequent comparison batch is committed
-locally for the next consolidated update. PR40 remains draft at its older head.
-Its full current-head CI, complete36-owner conversion union, runtime counterparts,
-remaining complete-module failures and strict benchmark are still open.
+Fork run39018694673 at `9a107643` finished naturally:59 jobs pass, five fail
+and the dependent complete-module job is skipped. All five failures are the same
+regression: a generic logical-family consumer shadows the authenticated mutable
+SB read in the original maps source. Those results supply no new complete-module
+denominator; the earlier195 failed roots remain the last full-module baseline.
+
+An independent dispatch-order regression first fails at `c2402cd1`. The shared
+repair puts the existing checked numerical-source consumer before native-family
+dispatch, retaining its complete binding/lifetime/width checks instead of adding
+a maps or PXOR exception. At `9f1b1eb0`, all five original Linux/Darwin/Windows,
+public and simple CLI owners pass with unchanged source/tool observations. Eight
+retained roots also pass current Go, actual Go20 and race, with2,806 children per
+lane and identical terminal identities. The dispatch/inventory policies pass
+current Go and Go20; all126 CI policies pass. These are focused receipts, not a
+complete-module or native-execution pass. The comparison and dispatch repairs
+are ready for one consolidated fork update; the prior run was not interrupted.
+
+PR40 remains draft at its older head. Full current-head CI, the complete36-owner
+conversion union, runtime counterparts, remaining complete-module failures and
+the strict benchmark are still open. No scanner or external-ledger update is
+part of this repair batch.
 
 ## Closure queue, 2026-10-17
 
