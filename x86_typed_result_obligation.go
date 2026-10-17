@@ -24,6 +24,10 @@ func x86TypedFPResultNeedsProof(fn Func, sig FuncSig, arch string) bool {
 	}
 	opaqueAddressResult := x86OpaqueAddressPointerResultRole(fn, sig, arch)
 	for ordinal, ins := range fn.Instrs {
+		if _, known, err := x86ScalarBitCountProperties(ins.Op, ins, arch); known && err == nil &&
+			isAMD64MemoryOperand(ins.Args[0]) && x86ResultNamedPredicateInstruction(ins) {
+			return true // A dead count still performs its exact native read, including Void.
+		}
 		if _, known, err := x86NativeMMXInstruction(ins, arch); known && err == nil && x86ResultNamedPredicateInstruction(ins) {
 			return true // Actual MMX inputs and the closed x87-mode continuation remain obligations for Void.
 		}

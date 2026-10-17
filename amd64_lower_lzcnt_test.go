@@ -54,19 +54,7 @@ func TestTranslateX86LZCNTCompleteGo127FormsAcrossTargets(t *testing.T) {
 	} {
 		t.Run(target.name, func(t *testing.T) {
 			source := x86LZCNTCompleteFormsSource(target.goarch)
-			requireX86GoAssemblerResult(t, target.goarch, source, true)
-			file, err := Parse(ArchAMD64, source)
-			if err != nil {
-				t.Fatal(err)
-			}
-			ll, err := Translate(file, Options{
-				Goarch:       target.goarch,
-				TargetTriple: target.triple,
-				Sigs:         map[string]FuncSig{"lzcntforms": {Name: "lzcntforms", Ret: Void}},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			ll := x86ScalarCountUnboundFormatObject(t, source, "lzcntforms", target.goarch, target.triple)
 			for _, want := range []string{"@llvm.ctlz.i16", "@llvm.ctlz.i32", `"target-features"="+lzcnt"`} {
 				if !strings.Contains(ll, want) {
 					t.Fatalf("LZCNT lowering omitted %q:\n%s", want, ll)

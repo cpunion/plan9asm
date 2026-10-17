@@ -3413,7 +3413,7 @@ TEXT populationcountforms(SB),NOSPLIT,$0-0
 	POPCNTQ R15, R14
 	RET
 `
-	ll := translateAMD64EcosystemCase(t, src, "populationcountforms")
+	ll := x86ScalarCountUnboundFormatObject(t, src, "populationcountforms", "amd64", "x86_64-unknown-linux-gnu")
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc not found")
@@ -3430,20 +3430,7 @@ TEXT populationcount386forms(SB),NOSPLIT,$0-0
 	POPCNTL (AX), CX
 	RET
 `
-	file, err := Parse(ArchAMD64, src)
-	if err != nil {
-		t.Fatal(err)
-	}
-	ll, err := Translate(file, Options{
-		TargetTriple: "i386-unknown-linux-gnu",
-		Goarch:       "386",
-		Sigs: map[string]FuncSig{
-			"populationcount386forms": {Name: "populationcount386forms", Ret: Void},
-		},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	ll := x86ScalarCountUnboundFormatObject(t, src, "populationcount386forms", "386", "i386-unknown-linux-gnu")
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc not found")
@@ -4260,7 +4247,7 @@ TEXT trailingzerocountforms(SB),NOSPLIT,$0-0
 	TZCNTQ R15, R14
 	RET
 `
-	ll := translateAMD64EcosystemCase(t, src, "trailingzerocountforms")
+	ll := x86ScalarCountUnboundFormatObject(t, src, "trailingzerocountforms", "amd64", "x86_64-unknown-linux-gnu")
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc not found")
@@ -4277,20 +4264,7 @@ TEXT trailingzerocount386forms(SB),NOSPLIT,$0-0
 	TZCNTL (AX), CX
 	RET
 `
-	file, err := Parse(ArchAMD64, src)
-	if err != nil {
-		t.Fatal(err)
-	}
-	ll, err := Translate(file, Options{
-		TargetTriple: "i386-unknown-linux-gnu",
-		Goarch:       "386",
-		Sigs: map[string]FuncSig{
-			"trailingzerocount386forms": {Name: "trailingzerocount386forms", Ret: Void},
-		},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	ll := x86ScalarCountUnboundFormatObject(t, src, "trailingzerocount386forms", "386", "i386-unknown-linux-gnu")
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc not found")
