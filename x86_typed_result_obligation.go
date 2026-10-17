@@ -24,6 +24,9 @@ func x86TypedFPResultNeedsProof(fn Func, sig FuncSig, arch string) bool {
 	}
 	opaqueAddressResult := x86OpaqueAddressPointerResultRole(fn, sig, arch)
 	for ordinal, ins := range fn.Instrs {
+		if _, known, err := x86BLSProperties(ins.Op, ins, arch); known && err == nil {
+			return true // BLS sources remain required for Void, including dead native reads.
+		}
 		if _, known, err := x86PackedLogicalProperties(ins, arch); known && err == nil {
 			return true // Dead logical results cannot excuse actual native inputs or masks.
 		}

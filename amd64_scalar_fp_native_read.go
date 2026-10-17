@@ -169,6 +169,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		if accepted, known := x86ResultBEXTRStep(ins, state, owned, resultOffset, arch, true); known {
 			return accepted
 		}
+		if accepted, known := x86LoweredBLSNativeRead(ins, state, owned, resultOffset, arch); known {
+			return accepted
+		}
 		if accepted, known := x86ResultNonTemporalVectorStep(ins, state, owned, resultOffset, arch, true); known {
 			return accepted
 		}
