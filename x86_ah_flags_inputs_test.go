@@ -179,6 +179,10 @@ func TestX86AHFlagsRejectsNonGoFormats(t *testing.T) {
 }
 
 func TestX86AHFlagsNumericalBytesAreNotCanonicalBoolWitnesses(t *testing.T) {
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("canonical AH/FLAGS objects require LLVM22 llc")
+	}
 	for _, target := range x86RawReturnTargets {
 		t.Run(target.triple, func(t *testing.T) {
 			before := [16]uint8{2, 0, 0, 1}
@@ -195,22 +199,31 @@ func TestX86AHFlagsNumericalBytesAreNotCanonicalBoolWitnesses(t *testing.T) {
 			prefix := "TEXT ·Value(SB),4,$0-1\nMOVL $0,BX\nCMPL BX,BX\nSETEQ AH\n"
 			finish := "MOVB AH,ret+0(FP)\nRET\n"
 			for _, body := range []string{"", "SAHF\n"} {
+				x86LEAActualTargetGoObject(t, target.arch, target.triple, prefix+body+finish)
 				for _, api := range []string{"text", "module", "Go"} {
 					ir, err := x86ScalarFPBitViewAPI(t, prefix+body+finish, "func Value() bool", target.arch, target.triple, api)
-					if target.arch == "amd64" {
-						// The existing ordinary single-byte ABI0 role is mode32.
-						// A flag descriptor must not silently create an AMD64 role.
-						if !errors.Is(err, ErrProbeNeedsContext) || ir != "" {
-							t.Fatal("AH byte effect created an unrelated AMD64 bool entry role", api, err)
-						}
-					} else if err != nil || ir == "" {
+					// Both modes now have the independent ordinary ABI0 bool
+					// role. SETcc supplies the actual 0/1 byte; SAHF preserves it.
+					if err != nil || ir == "" {
 						t.Fatal("SETcc's known canonical AH was lost without a GP overwrite", api, body, err)
+					}
+					for _, text := range []string{ir, x86MulDivRoundOptimize(t, ir)} {
+						for _, level := range []string{"-O0", "-O2"} {
+							x86PackedStringCompileObject(t, llc, target.triple, text, level)
+						}
 					}
 				}
 			}
-			for _, api := range []string{"text", "module", "Go"} {
-				if ir, err := x86ScalarFPBitViewAPI(t, prefix+"LAHF\n"+finish, "func Value() bool", target.arch, target.triple, api); !errors.Is(err, ErrProbeNeedsContext) || ir != "" {
-					t.Fatal("raw packed FLAGS byte retained a stale canonical AH witness", api, err)
+			for _, body := range []string{
+				prefix + "LAHF\n" + finish,
+				strings.Replace(prefix, "SETEQ AH\n", "", 1) + finish,
+				prefix + "MOVB $2,AH\n" + finish,
+			} {
+				x86LEAActualTargetGoObject(t, target.arch, target.triple, body)
+				for _, api := range []string{"text", "module", "Go"} {
+					if ir, err := x86ScalarFPBitViewAPI(t, body, "func Value() bool", target.arch, target.triple, api); !errors.Is(err, ErrProbeNeedsContext) || ir != "" {
+						t.Fatal("unknown or noncanonical AH retained a canonical bool witness", api, err)
+					}
 				}
 			}
 		})

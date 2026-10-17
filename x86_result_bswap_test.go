@@ -359,6 +359,10 @@ func TestX86ResultByteSwapUnknownPublicResult(t *testing.T) {
 }
 
 func TestX86ResultByteSwapLogicalBoolRequiresIndependentRole(t *testing.T) {
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("canonical BSWAP objects require LLVM22 llc")
+	}
 	for _, target := range x86OrderingHintTargets {
 		for _, op := range []string{"BSWAPL", "BSWAPQ"} {
 			if target.arch == "386" && op == "BSWAPQ" {
@@ -366,24 +370,40 @@ func TestX86ResultByteSwapLogicalBoolRequiresIndependentRole(t *testing.T) {
 			}
 			for _, row := range []struct {
 				name, initialize string
+				accept           bool
 			}{
-				{"unknown", ""},
-				{"noncanonical", "MOVL $0x02000000,AX\n"},
-				{"ordinary amd64 ABI0 has no canonical role", "MOVL $0,AX\n"},
+				{"unknown", "", false},
+				{"noncanonical", "MOVL $0x02000000,AX\n", false},
+				{"canonical zero", "MOVL $0,AX\n", true},
+				{"canonical one", "MOVL $0x01000000,AX\n", true},
 			} {
-				if target.arch == "386" && row.name == "ordinary amd64 ABI0 has no canonical role" {
-					continue // Its independent canonical byte role is tested separately.
+				initialize := row.initialize
+				if op == "BSWAPQ" {
+					switch row.name {
+					case "noncanonical":
+						initialize = "MOVQ $0x0200000000000000,AX\n"
+					case "canonical one":
+						initialize = "MOVQ $0x0100000000000000,AX\n"
+					}
 				}
+				source := "TEXT ·Value(SB),4,$0-1\n" + initialize + op + " AX\nMOVB AX,ret0+0(FP)\nRET\n"
+				x86LEAActualTargetGoObject(t, target.arch, target.triple, source)
 				for _, api := range []string{"text", "module", "Go"} {
 					t.Run(target.triple+"/"+op+"/"+row.name+"/"+api, func(t *testing.T) {
-						initialize := row.initialize
-						if op == "BSWAPQ" && row.name == "noncanonical" {
-							initialize = "MOVQ $0x0200000000000000,AX\n"
-						}
-						source := "TEXT ·Value(SB),4,$0-1\n" + initialize + op + " AX\nMOVB AX,ret0+0(FP)\nRET\n"
 						ir, err := x86OrderingHintTranslateAPI(t, api, source, "package ordering\nfunc Value() bool\n", target.arch, target.triple)
-						if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
-							t.Fatalf("undefined/noncanonical BSWAP bytes became a logical bool: output=%t error=%v", ir != "", err)
+						if !row.accept {
+							if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+								t.Fatalf("undefined/noncanonical BSWAP bytes became a logical bool: output=%t error=%v", ir != "", err)
+							}
+							return
+						}
+						if err != nil || ir == "" {
+							t.Fatal("canonical byte permutation lost its ordinary ABI0 bool role", err)
+						}
+						for _, text := range []string{ir, x86MulDivRoundOptimize(t, ir)} {
+							for _, level := range []string{"-O0", "-O2"} {
+								x86PackedStringCompileObject(t, llc, target.triple, text, level)
+							}
 						}
 					})
 				}
