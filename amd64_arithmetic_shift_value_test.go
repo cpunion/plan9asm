@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
@@ -129,6 +130,9 @@ int main(void) {
 			ir, err := x86ScalarFPBitViewAPI(t, source, declarations, arch, triple, api)
 			if err != nil {
 				t.Fatal(api, err)
+			}
+			if regexp.MustCompile(`"target-features"="[^"]*\+avx`).MatchString(ir) {
+				t.Fatal("portable arithmetic oracle requires native AVX/AVX512 hardware")
 			}
 			for _, text := range []string{ir, x86DwordProductIROptimize(t, ir)} {
 				for _, level := range []int{0, 2} {
