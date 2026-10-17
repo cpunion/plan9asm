@@ -16,9 +16,11 @@ MOV stores now require their complete input proof, including Void and unused
 bool signatures. The independent pre-fix Void RED and first whole-flow
 comparison failure remain failed reports, not converted receipts.
 
-All 120 CI policy tests also pass on `2f4ccf0e`. The full 165-root retained
-union is being qualified separately on current Go, actual Go20 and race;
-it is not yet a pass. The published old-head fork run has completed with
+All 120 CI policy tests also pass on `2f4ccf0e`. The initial 165-root retained
+union did not complete: its first three current-Go groups passed 84 roots and
+6,040 children, but a single five-target packed-string object root exhausted
+the unchanged command budget. The partial attempt remains failed/incomplete,
+with no new complete SDK/race credit. The published old-head fork run has completed with
 55 successful jobs, eight failed jobs and one skipped aggregate. PR40 is
 still draft at its old contribution head; none of the new local repairs has
 been published or credited to an external ledger. Physical MMX state remains
@@ -27,6 +29,20 @@ public-API object regressions; those new tests are unqualified, not a repair.
 Current native execution, complete modules and the strict benchmark remain
 required. Inventory remains server-only; its last export reaches the requested
 2025-10-01 historical bound, with incremental coverage ending on 2026-10-15.
+
+At `c8fff940`, packed-string objects have five independently schedulable
+target roots and bounded 64-function LLVM units. Their independent inventory
+retains all 168 original forms, three APIs and the original optimization axes.
+Six CI-policy regressions fail before the split and pass afterwards; all 126
+policy tests pass. Object compilation on this new snapshot is not yet qualified.
+The new 170-root complete union uses isolated heavy owners and historical
+durations only for scheduling, never as test evidence. A cold test-package
+build exhausted the separate inventory deadline before executing any tests
+while host load exceeded 300. Separate build-only prewarming now precedes
+current-Go, actual-Go20 and race qualification, followed by the nine gates.
+Build-only outputs are checked against their actual linked SDK header, never
+execute TestMain, and grant no test, native, module, benchmark or ledger pass.
+Inventory and test budgets stay unchanged; the previous failed reports remain.
 
 ## Complete scalar-stack/arithmetic qualification, 2026-10-17
 
