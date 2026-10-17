@@ -55,7 +55,7 @@ func rootSplitRequireRejected(t *testing.T, expected moduleReport, inputs string
 func TestModuleRootPartitionActualCompleteUnionAndCoverage(t *testing.T) {
 	moduleFixtureEnvironment(t)
 	binary := parallelFixtureCLI(t)
-	dir := moduleRootPartitionFixture(t)
+	dir := moduleRootPartitionFixtureForShards(t, 64)
 	inputs := t.TempDir()
 	if err := os.Mkdir(filepath.Join(inputs, "owner-0000"), 0700); err != nil {
 		t.Fatal(err)
@@ -79,7 +79,7 @@ func TestModuleRootPartitionActualCompleteUnionAndCoverage(t *testing.T) {
 		t.Fatal(err)
 	}
 	if expected.Protocol != moduleRootPartsProtocol || expected.Status != "passed" || expected.RootPartitions != 16 ||
-		expected.RootInventory == nil || len(expected.RootInventory.Names) != 36 || len(expected.Packages) != 5 ||
+		expected.RootInventory == nil || len(expected.RootInventory.Names) != 68 || len(expected.Packages) != 5 ||
 		expected.Packages[0].Shards != 64 {
 		t.Fatalf("complete fresh denominator/package union lost: %+v", expected)
 	}

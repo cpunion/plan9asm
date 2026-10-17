@@ -59,17 +59,25 @@ func TestModuleRootPartitionCLIRejectsInvalidRolesBeforeIO(t *testing.T) {
 // denominator comes from real Go -list output, not a checked-in library list.
 func moduleRootPartitionFixture(t *testing.T) string {
 	t.Helper()
+	return moduleRootPartitionFixtureForShards(t, 32)
+}
+
+func moduleRootPartitionFixtureForShards(t *testing.T, shards int) string {
+	t.Helper()
+	if shards != 32 && shards != 64 {
+		t.Fatal("first-party witness fixture requires the complete 32- or 64-shard plan")
+	}
 	dir := moduleFixture(t, false)
 	path := filepath.Join(dir, "value_test.go")
 	source, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	seen := make([]bool, 32)
+	seen := make([]bool, shards)
 	remaining := len(seen)
 	for candidate := 0; remaining != 0; candidate++ {
 		if candidate >= 4096 {
-			t.Fatal("bounded first-party witnesses did not fill the complete 32-shard plan")
+			t.Fatal("bounded first-party witnesses did not fill the complete shard plan", shards)
 		}
 		name := fmt.Sprintf("TestRootShardWitness%d", candidate)
 		hash := sha256.Sum256([]byte(name))
