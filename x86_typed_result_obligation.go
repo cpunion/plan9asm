@@ -110,15 +110,15 @@ func x86TypedFPResultNeedsProof(fn Func, sig FuncSig, arch string) bool {
 		if _, known, err := x86StringInstructionProperties(ins, arch); known && err == nil && x86ResultNamedPredicateInstruction(ins) {
 			return true // Implicit data/address/count/DF inputs remain mandatory, including Void.
 		}
+		if effect, known, err := x86TypedInstructionByteEffect(ins.Op, ins, arch); known && err == nil &&
+			effect.requiresResultProof && x86ResultNamedPredicateInstruction(ins) {
+			return true // A mandatory descriptor cannot be bypassed by Void or an absent result layout.
+		}
 		if sig.Ret == Void || len(sig.Frame.Results) == 0 {
 			continue
 		}
 		if _, known, err := x86X87WordProperties(ins, arch); known && err == nil && x86ResultNamedPredicateInstruction(ins) {
 			return true // Word results need the same whole proof without a GP-to-FP MOV.
-		}
-		if effect, known, err := x86TypedInstructionByteEffect(ins.Op, ins, arch); known && err == nil &&
-			effect.requiresResultProof && x86ResultNamedPredicateInstruction(ins) {
-			return true
 		}
 	}
 	return false
