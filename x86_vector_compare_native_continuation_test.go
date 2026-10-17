@@ -112,6 +112,17 @@ func TestX86CompareNativeCompleteObjects(t *testing.T) {
 func TestX86CompareNativeCannotBorrowInputFacts(t *testing.T) {
 	for _, row := range x86CompareNativeRows("amd64") {
 		source, declaration := x86CompareNativeFixture("amd64", row)
+		pkg := mustGoPackage(t, "compare", "package compare\n"+declaration)
+		file := mustParseX86RawReturn(t, source)
+		signatures, err := goSigsForAsmFile(pkg, file, func(name string) string {
+			return strings.TrimPrefix(name, "·")
+		}, "amd64", nil, nil, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := CheckX86ABI0ResultInitialization(file.Funcs[0], signatures["Value"], "amd64"); !errors.Is(err, ErrProbeNeedsContext) {
+			t.Fatal("declaration-only compare borrowed its paired native emitter", row, err)
+		}
 		variants := map[string]string{
 			"unknown-pointer": strings.Replace(source, "p+0(FP),AX", "p+0(FP),DI", 1),
 			"unknown-index":   strings.Replace(source, "MOVL $1,DX\n", "", 1),
