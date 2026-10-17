@@ -84,6 +84,15 @@ func TestX86IntegerSelfCompareCompleteNumericalEffects(t *testing.T) {
 		for _, row := range rows {
 			t.Run(arch+"/"+row.row, func(t *testing.T) {
 				ins := x86ScalarLaneInstruction(t, row.row)
+				effect, known, err := x86TypedPackedIntegerCompareByteEffect(ins.Op, ins, arch)
+				if !known || err != nil {
+					t.Fatal("complete comparison descriptor", effect, err)
+				}
+				for _, operand := range effect.operands {
+					if operand.read && operand.operand.Kind == OpReg && !amd64IsKOperand(operand.operand) {
+						t.Fatal("typed descriptor retains a value dependency on identical integer inputs")
+					}
+				}
 				for _, consumer := range x86ResultGPSIMDConsumers {
 					for _, seeded := range []bool{false, true} {
 						state := x86ResultState{direction: x86ResultDirectionBackward}
@@ -113,6 +122,36 @@ func TestX86IntegerSelfCompareCompleteNumericalEffects(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+func TestX86IntegerSelfCompareOriginalIdiomThreeAPIsFiveTargets(t *testing.T) {
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM 22 llc required")
+	}
+	for _, target := range x86RawReturnTargets {
+		register := "X14"
+		if target.arch == "386" {
+			register = "X6"
+		}
+		source := "TEXT Value(SB),4,$0-4\nPCMPEQL " + register + "," + register +
+			"\nPEXTRD $0," + register + ",AX\nMOVL AX,ret+0(FP)\nRET\n"
+		t.Run(target.triple, func(t *testing.T) {
+			x86LEAActualTargetGoObject(t, target.arch, target.triple, source)
+			for _, api := range []string{"text", "module", "Go"} {
+				ir, err := x86ScalarFPBitViewAPI(t, source, "func Value() uint32", target.arch, target.triple, api)
+				if err != nil {
+					t.Fatal("original self-comparison initialization idiom needs no incoming vector value", api, err)
+				}
+				x86ScalarFPNamedConstantResult(t, ir, "Value", []uint64{0xffffffff})
+				for _, text := range []string{ir, x86MulDivRoundOptimize(t, ir)} {
+					for _, level := range []string{"-O0", "-O2"} {
+						x86PackedStringCompileObject(t, llc, target.triple, text, level)
+					}
+				}
+			}
+		})
 	}
 }
 
