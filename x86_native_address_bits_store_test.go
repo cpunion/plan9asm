@@ -1,9 +1,11 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"runtime"
 	"strconv"
+	"strings"
 	"testing"
 )
 
@@ -80,6 +82,37 @@ int main(void) {
         }
     }
     return 0;
+}
+
+func TestX86NativeAddressBitsStoreVoidCannotHideUnknownInputs(t *testing.T) {
+	for _, target := range x86RawReturnTargets {
+		word, move := 8, "MOVQ"
+		if target.arch == "386" {
+			word, move = 4, "MOVL"
+		}
+		for _, unusedBool := range []bool{false, true} {
+			declaration, extent := "func CopyBits(dst,src *byte)", 2*word
+			if unusedBool {
+				declaration, extent = "func CopyBits(dst,src *byte,unused bool)", 2*word+1
+			}
+			body := fmt.Sprintf("%s dst+0(FP),DI\n%s src+%d(FP),SI\n%s SI,1(DI)\nRET\n", move, move, word, move)
+			for _, row := range []struct{ name, body string }{
+				{"unknown-source", strings.Replace(body, fmt.Sprintf("%s src+%d(FP),SI\n", move, word), "", 1)},
+				{"unknown-destination", strings.Replace(body, move+" dst+0(FP),DI\n", "", 1)},
+				{"partial-source", strings.Replace(body, move+" SI,1(DI)", "MOVW $0,SI\n"+move+" SI,1(DI)", 1)},
+			} {
+				source := fmt.Sprintf("TEXT ·CopyBits(SB),4,$0-%d\n%s", extent, row.body)
+				for _, api := range []string{"text", "module", "Go"} {
+					t.Run(fmt.Sprintf("%s/%s/unused-bool=%t/%s", target.triple, row.name, unusedBool, api), func(t *testing.T) {
+						ir, err := x86ScalarFPBitViewAPI(t, source, declaration, target.arch, target.triple, api)
+						if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+							t.Fatal("Void or an unused bool supplied missing native store input facts", err)
+						}
+					})
+				}
+			}
+		}
+	}
 }
 `
 	for _, api := range []string{"text", "module", "Go"} {
