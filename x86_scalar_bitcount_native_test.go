@@ -106,3 +106,43 @@ func TestX86ScalarBitCountPairedNativeReadKeepsInputBoundaries(t *testing.T) {
 		}
 	}
 }
+
+func TestX86ScalarBitCountVoidCannotHideNativeInputs(t *testing.T) {
+	for _, arch := range []string{"386", "amd64"} {
+		word, move, triple := 8, "MOVQ", "x86_64-unknown-linux-gnu"
+		if arch == "386" {
+			word, move, triple = 4, "MOVL", "i386-unknown-linux-gnu"
+		}
+		for _, family := range []string{"POPCNT", "LZCNT", "TZCNT"} {
+			suffixes := []string{"W", "L"}
+			if arch == "amd64" {
+				suffixes = append(suffixes, "Q")
+			}
+			for _, suffix := range suffixes {
+				for _, unusedBool := range []bool{false, true} {
+					t.Run(fmt.Sprintf("%s/%s%s/bool-%t", arch, family, suffix, unusedBool), func(t *testing.T) {
+						source, _ := x86ScalarCountNativeFixture(arch, family+suffix, true)
+						body := source[strings.Index(source, "\n")+1:]
+						body = strings.Replace(body, fmt.Sprintf("%s BX,ret+%d(FP)\n", move, word), "", 1)
+						declaration := "func Value(p *[64]byte)"
+						if unusedBool {
+							declaration = "func Value(p *[64]byte,unused bool)"
+						}
+						_, _, _, source = x86ResultInitializationFixture(t, arch, declaration, body)
+						for _, api := range []string{"text", "module", "Go"} {
+							if ir, err := x86ScalarFPBitViewAPI(t, source, declaration, arch, triple, api); err != nil || ir == "" {
+								t.Fatal("complete Void count lost its native continuation", api, err)
+							}
+							for _, input := range []string{move + " p+0(FP),AX\n", "MOVL $1,DX\n"} {
+								changed := strings.Replace(source, input, "", 1)
+								if ir, err := x86ScalarFPBitViewAPI(t, changed, declaration, arch, triple, api); ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+									t.Fatal("Void count invented a native pointer or index", input, api, err)
+								}
+							}
+						}
+					})
+				}
+			}
+		}
+	}
+}
