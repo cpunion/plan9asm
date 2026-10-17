@@ -1,5 +1,41 @@
 # Current work: PR 40 checkpoint
 
+## BLS effects and actual CI format contracts, 2026-10-18
+
+At `fe7feb1d`, the complete affected union passes 43 roots / 3,448 children
+on current Go, actual Go 1.20 and race. All 3,491 terminal identities match,
+with zero failures/skips and unchanged source/SDK/LLVM22 observations. Receipts
+are `bls-ci-contracts-complete-qualified-*`; the ignored qualification summary
+is `qualified-bls-ci-contracts-fe7feb1d.json`. Earlier RED and intermediate
+failures remain failed. These focused passes are not full-module qualification.
+
+The six BLS names now share their complete Go grammar, physical mode32 width,
+ordered numerical reads, destination writes and defined CF/OF/ZF/SF effects.
+Void and unused-bool signatures cannot hide missing inputs. Paired native
+reads remain exact-width volatile accesses and grant no memory or entry role.
+Independent Go rows/attributes, original bytes, sparse input holes, aliases,
+canaries and dead-read faults cover the complete family. The original runtime
+source and driver remain unchanged. Actual-host portable LLVM execution is
+not a native x86 receipt. The new required Linux scalar-BMI owner must execute
+the original BLS and BEXTR runtime tests in the next fork CI.
+
+Eleven observed CI format failures are repaired without deleting original
+assembly rows: named/raw broadcasts, CMPS/LODS/MOVS/STOS/SCAS and mixed vector/
+conversion fixtures retain original Go objects, all-three-API Context controls
+and separate emitter-only LLVM objects. Initialized public counterparts remain
+in the qualification union. The raw format helper is shared with BLS; it grants
+no public native-input permission. The sealed Go1.20-1.27 audit changes exactly
+12 isolated AMD64 BLS forms per SDK from supported to context-required, with
+no other form/metric drift and no new unsupported form.
+
+At the same code head, build, vet, ten scanner roots on both Go SDKs, the
+five-arch official gate, two CLI extraction roots, all 132 CI policies and
+tracked formatting pass. Fork run39054965721 still tests `8ca976c6`, not this
+local batch, and is finishing its last Windows root part. Let it finish,
+retain the complete failed-root union, then publish the verified batch to the
+allowed fork. Keep PR40 draft at its existing contribution head. Canonical
+all-platform CI, the strict benchmark and fresh head review remain unqualified.
+
 ## Logical/compare closing batch, 2026-10-18
 
 Fork run 39054965721 at `8ca976c6` has passed all 65 prerequisites, including
