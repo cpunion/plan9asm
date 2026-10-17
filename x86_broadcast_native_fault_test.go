@@ -2,12 +2,30 @@ package plan9asm
 
 import (
 	"fmt"
+	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 )
 
 func TestX86BroadcastPairedNativeMemoryFaults(t *testing.T) {
-	execution := x86FloatCompareExecutionTools(t)
+	llc, clang, found := findLlcAndClang(t)
+	if !found {
+		t.Fatal("LLVM22 llc and clang required")
+	}
+	triple := testTargetTriple(runtime.GOOS, runtime.GOARCH)
+	execution := x86FloatCompareExecution{llc: llc, triple: triple,
+		compiler: []string{clang, "-target", triple}}
+	if runtime.GOOS == "darwin" {
+		ctx, cancel := runtimeOracleStageContext(t)
+		command := runtimeOracleNativeCCommand(t, ctx, clang, "-target", triple)
+		cancel()
+		execution.compiler = command.Args
+	}
+	arch, move, maskMove, originalTriple := "amd64", "MOVQ", "KMOVQ", "x86_64-unknown-linux-gnu"
+	if strconv.IntSize == 32 {
+		arch, move, maskMove, originalTriple = "386", "MOVL", "KMOVD", "i386-unknown-linux-gnu"
+	}
 	type kernel struct {
 		source, declaration string
 		bytes               int
@@ -22,9 +40,9 @@ func TestX86BroadcastPairedNativeMemoryFaults(t *testing.T) {
 			if masked {
 				row = fmt.Sprintf("%s.Z table<>+0(SB),K3,%c2", spec.name, spec.destinations[0])
 			}
-			source, declaration := x86BroadcastNativeFixture("amd64", row, true)
+			source, declaration := x86BroadcastNativeFixture(arch, row, true)
 			source = strings.Replace(source, "3(AX)(DX*2)", "(AX)", 1)
-			source = strings.Replace(source, "MOVL $5,CX\nKMOVD CX,K3", fmt.Sprintf("MOVQ $%d,CX\nKMOVQ CX,K3", mask), 1)
+			source = strings.Replace(source, "MOVL $5,CX\nKMOVD CX,K3", fmt.Sprintf("%s $%d,CX\n%s CX,K3", move, mask, maskMove), 1)
 			readBytes := spec.bytes
 			if masked {
 				readBytes = 0
@@ -70,8 +88,8 @@ func TestX86BroadcastPairedNativeMemoryFaults(t *testing.T) {
 				fmt.Fprintf(&rows, "{run%d,%d,%d},\n", index, entry.bytes, accessible)
 				required = append(required, entry.bytes != 0)
 			}
-			x86LEAActualTargetGoObject(t, "amd64", "x86_64-unknown-linux-gnu", assembly.String())
-			ir, err := x86ScalarFPBitViewAPI(t, assembly.String(), declarations.String(), "amd64", execution.triple, "Go")
+			x86LEAActualTargetGoObject(t, arch, originalTriple, assembly.String())
+			ir, err := x86ScalarFPBitViewAPI(t, assembly.String(), declarations.String(), arch, execution.triple, "Go")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -90,4 +108,5 @@ func TestX86BroadcastPairedNativeMemoryFaults(t *testing.T) {
 			}
 		})
 	}
+	t.Log("114 scalar/block kernels; actual-host portable LLVM memory faults, not original AVX512 execution")
 }
