@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -16,10 +17,20 @@ func TestFixedLocalConversionObjectsHaveIndependentTargetOwners(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := map[string][2]string{
-		"TestGoAMD64FixedLocalConversionActualObjectsLinux":   {"linux/amd64", "x86_64-unknown-linux-gnu"},
-		"TestGoAMD64FixedLocalConversionActualObjectsDarwin":  {"darwin/amd64", "x86_64-apple-darwin"},
-		"TestGoAMD64FixedLocalConversionActualObjectsWindows": {"windows/amd64", "x86_64-pc-windows-msvc"},
+	type owner struct {
+		target, triple string
+		batch          int
+	}
+	want := make(map[string]owner)
+	for _, platform := range []struct{ name, target, triple string }{
+		{"Linux", "linux/amd64", "x86_64-unknown-linux-gnu"},
+		{"Darwin", "darwin/amd64", "x86_64-apple-darwin"},
+		{"Windows", "windows/amd64", "x86_64-pc-windows-msvc"},
+	} {
+		for batch := 0; batch < 12; batch++ {
+			name := fmt.Sprintf("TestGoAMD64FixedLocalConversionActualObjects%sBatch%02d", platform.name, batch)
+			want[name] = owner{platform.target, platform.triple, batch}
+		}
 	}
 	var roots []string
 	for _, declaration := range syntax.Decls {
@@ -39,14 +50,18 @@ func TestFixedLocalConversionObjectsHaveIndependentTargetOwners(t *testing.T) {
 			t.Fatal("target owner has no direct complete-plan call", function.Name.Name)
 		}
 		call, ok := statement.X.(*ast.CallExpr)
-		if !ok || len(call.Args) != 3 {
+		if !ok || len(call.Args) != 4 {
 			t.Fatal("target owner changed its complete-plan arguments", function.Name.Name)
 		}
 		helper, ok := call.Fun.(*ast.Ident)
 		if !ok || helper.Name != "fixedLocalConversionActualObjects" {
 			t.Fatal("target owner substituted its complete-plan helper", function.Name.Name)
 		}
-		for index, expected := range target {
+		receiver, ok := call.Args[0].(*ast.Ident)
+		if !ok || receiver.Name != "t" {
+			t.Fatal("batch owner must retain its actual test lifetime", function.Name.Name)
+		}
+		for index, expected := range []string{target.target, target.triple} {
 			literal, ok := call.Args[index+1].(*ast.BasicLit)
 			if !ok || literal.Kind != token.STRING {
 				t.Fatal("target binding must retain its literal platform", function.Name.Name)
@@ -55,6 +70,14 @@ func TestFixedLocalConversionObjectsHaveIndependentTargetOwners(t *testing.T) {
 			if err != nil || actual != expected {
 				t.Fatal("target owner changed platform or LLVM triple", function.Name.Name, actual, expected)
 			}
+		}
+		literal, ok := call.Args[3].(*ast.BasicLit)
+		if !ok || literal.Kind != token.INT {
+			t.Fatal("batch owner must retain a literal batch index", function.Name.Name)
+		}
+		batch, err := strconv.Atoi(literal.Value)
+		if err != nil || batch != target.batch {
+			t.Fatal("batch owner changed its exact conversion range", function.Name.Name, batch, target.batch)
 		}
 		delete(want, function.Name.Name)
 		roots = append(roots, function.Name.Name)
@@ -67,8 +90,8 @@ func TestFixedLocalConversionObjectsHaveIndependentTargetOwners(t *testing.T) {
 		t.Fatal(err)
 	}
 	for index, roots := range shards {
-		if len(roots) > 1 {
-			t.Fatalf("expensive conversion targets share shard %d: %v", index, roots)
+		if len(roots) > 3 {
+			t.Fatalf("too many conversion object batches share shard %d: %v", index, roots)
 		}
 	}
 }
