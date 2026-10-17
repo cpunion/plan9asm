@@ -71,15 +71,27 @@ an exact, disjoint union; at most three conversion owners share a Windows hash
 shard. The partition test first fails on the old three-root layout. Each batch
 keeps its owned compiler cache, independent source/package/object/lifetime
 observations and assertions that every function survives both IR levels.
-Splitting scheduling does not establish a speedup or a complete object pass.
+At `3fccf065`, Linux batch00 passes all64 forms through three APIs and O0/O2;
+its command finishes in116.845 seconds, below the unchanged300-second budget.
+The cache/source-isolation control passes too. This is one batch, not the
+complete36-owner object matrix or a claim that production translation is faster.
 
 The logical native-read RED at `23d158f6` fails381 terminals across the
 independent32-name AND/ANDNOT/OR/XOR inventory. The paired typed result consumer
 and volatile full/guarded read repair at `977b7f03` passes all six focused roots
-and1,908 children on current Go. Original legacy memory opcodes, standalone
-Context queries and MMX's separate role remain unchanged. That focused receipt
-does not establish current-head historical/race, complete modules or runtime.
-The merged candidate adds these exact six owners to a bounded CI priority.
+and1,908 children on current Go. The merged `3fccf065` passes all15 changed/
+retained roots with3,006 children each on current Go, actual Go20 and race.
+Terminal identities match exactly, with no failures/skips and unchanged source/
+tool observations. Original legacy memory opcodes, standalone Context queries
+and MMX's separate role remain unchanged. These exact six focused owners have a
+bounded CI priority. Its added lane requires the policy's exact lane count to
+move from55 to56; complete current-head CI and runtime remain unqualified.
+
+The next existing-CI counterexample is independently reproduced at `3fccf065`:
+the immediate packed-compare dead-memory owner fails73 terminals. Its emitters
+already retain volatile reads, but the shared result consumer lacks their
+conditional native input. The failed RED remains failed; another branch's
+complete24-name native comparison repair is not yet a qualified receipt.
 
 ## Closure queue, 2026-10-17
 
