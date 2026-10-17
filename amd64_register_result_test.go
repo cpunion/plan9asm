@@ -47,7 +47,7 @@ func TestAMD64RegisterResultKeepsUnknownInputsAndSourceRoles(t *testing.T) {
 		"hidden g":         strings.ReplaceAll(source, "$1,AX,X0", "$1,R14,X0"),
 		"hidden closure":   strings.ReplaceAll(source, "$1,AX,X0", "$1,DX,X0"),
 		"physical stack":   strings.ReplaceAll(source, "MOVQ BX,X0", "MOVQ (SP),X0"),
-		"unknown effect":   strings.ReplaceAll(source, "RET", "RDTSC\nRET"),
+		"unbound call":     strings.ReplaceAll(source, "RET", "CALL ·Unknown(SB)\nRET"),
 		"path loses value": strings.ReplaceAll(source, "RET", "CMPQ BX,$0\nJE done\nMOVQ R12,AX\ndone:\nRET"),
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -59,6 +59,15 @@ func TestAMD64RegisterResultKeepsUnknownInputsAndSourceRoles(t *testing.T) {
 			}
 		})
 	}
+	t.Run("modeled timestamp", func(t *testing.T) {
+		// Its actual AX/DX output is numerical, not an unknown source effect.
+		known := strings.ReplaceAll(source, "RET", "RDTSC\nRET")
+		for _, api := range []string{"text", "module", "Go"} {
+			if ir, err := x86ScalarFPBitViewAPI(t, known, declaration, "amd64", "x86_64-unknown-linux-gnu", api); err != nil || ir == "" {
+				t.Errorf("%s: modeled timestamp return rejected: %v", api, err)
+			}
+		}
+	})
 }
 
 func TestAMD64RegisterResultIntegerWidthsAndEveryArgumentRegister(t *testing.T) {

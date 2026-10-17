@@ -262,7 +262,7 @@ func TestX86ABI0ResultLegacyIntegerArithmeticDoesNotBorrowPermission(t *testing.
 			"AUTO partial":            "MOVSD a+0(FP),X0\nMOVQ $1,value-32(SP)\n" + op + " value-32(SP),X0\nMOVSD X0,ret0+32(FP)\nRET",
 			"FP gap or result":        "MOVSD a+0(FP),X0\n" + op + " b+28(FP),X0\nMOVSD X0,ret0+32(FP)\nRET",
 			"call kills facts":        "MOVSD a+0(FP),X0\nMOVSD c+16(FP),X1\nCALL ·Other(SB)\n" + op + " X1,X0\nMOVSD X0,ret0+32(FP)\nRET",
-			"dead unknown effect":     "MOVSD a+0(FP),X0\nMOVSD c+16(FP),X1\n" + op + " X1,X0\nMOVSD X0,ret0+32(FP)\nRET\nRDTSC\nRET",
+			"dead unbound call":       "MOVSD a+0(FP),X0\nMOVSD c+16(FP),X1\n" + op + " X1,X0\nMOVSD X0,ret0+32(FP)\nRET\nCALL ·Unknown(SB)\nRET",
 			"escape logical AUTO":     "MOVSD a+0(FP),X0\nMOVSD c+16(FP),X1\nLEAQ value-32(SP),AX\n" + op + " X1,X0\nMOVSD X0,ret0+32(FP)\nRET",
 		} {
 			t.Run(op+"/"+name, func(t *testing.T) {
@@ -272,5 +272,15 @@ func TestX86ABI0ResultLegacyIntegerArithmeticDoesNotBorrowPermission(t *testing.
 				}
 			})
 		}
+		t.Run(op+"/dead modeled timestamp", func(t *testing.T) {
+			// RDTSC has a complete implicit-output effect now. Retain its
+			// positive source-wide control instead of calling it unknown.
+			body := "MOVSD a+0(FP),X0\nMOVSD c+16(FP),X1\n" + op +
+				" X1,X0\nMOVSD X0,ret0+32(FP)\nRET\nRDTSC\nRET"
+			file, sig, _ := x86ResultAUTOFixture(t, "amd64", "func Value(a,b,c,d uint64) uint64", 64, body)
+			if err := CheckX86ABI0ResultInitialization(file.Funcs[0], sig, "amd64"); err != nil {
+				t.Fatal("modeled dead timestamp lost its closed source effect", err)
+			}
+		})
 	}
 }
