@@ -96,6 +96,9 @@ func TestX86PhysicalSourceStackScalarProofCannotBeRebound(t *testing.T) {
 			t.Fatal(err)
 		}
 		original := normalized.Funcs[0]
+		if original.x86SourceStack == nil || original.x86SourceStack.scalarResult == nil {
+			t.Fatal("complete physical scalar source did not produce its own numerical proof")
+		}
 		for _, change := range []string{"none", "source", "access", "signature", "emitted signature", "copied owner"} {
 			t.Run(arch+"/"+change, func(t *testing.T) {
 				fn := original
