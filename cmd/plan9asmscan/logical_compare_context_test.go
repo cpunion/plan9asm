@@ -12,7 +12,7 @@ func TestIntegerSelfCompareCoverageNeedsNoVectorInput(t *testing.T) {
 	comparisons := strings.Fields("PCMPEQB PCMPEQW PCMPEQL PCMPEQQ PCMPGTB PCMPGTW PCMPGTL PCMPGTQ")
 	immediate := strings.Fields("VPCMPB VPCMPW VPCMPD VPCMPQ VPCMPUB VPCMPUW VPCMPUD VPCMPUQ")
 	for _, arch := range []string{"386", "amd64"} {
-		check := func(row string) {
+		check := func(t *testing.T, row string) {
 			t.Helper()
 			if err := plan9asm.ProbeInstructionSequence(plan9asm.ArchAMD64, arch,
 				compactProbeInstructions(t, row)); err != nil {
@@ -21,17 +21,17 @@ func TestIntegerSelfCompareCoverageNeedsNoVectorInput(t *testing.T) {
 		}
 		for _, op := range comparisons {
 			t.Run(arch+"/"+op, func(t *testing.T) {
-				check(op + " X6,X6")
+				check(t, op+" X6,X6")
 				vector := "V" + strings.ReplaceAll(op, "L", "D")
 				for _, bank := range []string{"X", "Y", "Z"} {
 					if bank != "Z" {
-						check(fmt.Sprintf("%s %s6,%s6,%s2", vector, bank, bank, bank))
+						check(t, fmt.Sprintf("%s %s6,%s6,%s2", vector, bank, bank, bank))
 					}
-					check(fmt.Sprintf("%s %s6,%s6,K0", vector, bank, bank))
+					check(t, fmt.Sprintf("%s %s6,%s6,K0", vector, bank, bank))
 					if arch == "amd64" {
 						masked := fmt.Sprintf("%s %s6,%s6,K1,K1", vector, bank, bank)
 						valueProbeNeedsContext(t, arch, masked)
-						check("MOVL $85,AX\nKMOVD AX,K1\n" + masked)
+						check(t, "MOVL $85,AX\nKMOVD AX,K1\n"+masked)
 					}
 				}
 			})
@@ -40,7 +40,7 @@ func TestIntegerSelfCompareCoverageNeedsNoVectorInput(t *testing.T) {
 			for _, op := range immediate {
 				t.Run(arch+"/"+op, func(t *testing.T) {
 					for _, bank := range []string{"X", "Y", "Z"} {
-						check(fmt.Sprintf("%s $0,%s6,%s6,K0", op, bank, bank))
+						check(t, fmt.Sprintf("%s $0,%s6,%s6,K0", op, bank, bank))
 						valueProbeNeedsContext(t, arch, fmt.Sprintf("%s $0,%s5,%s6,K0", op, bank, bank))
 					}
 				})
