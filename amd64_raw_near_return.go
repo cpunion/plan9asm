@@ -80,7 +80,7 @@ func validateX86RawNearReturns(fn Func, file *File, opt Options, bindFrame bool)
 		name = opt.ResolveSym(name)
 	}
 	if bindFrame && x86SourceStackBoolCandidate(fn, opt.Sigs[name]) &&
-		(fn.x86SourceStack == nil || fn.x86SourceStack.boolResult == nil) {
+		(fn.x86SourceStack == nil || fn.x86SourceStack.scalarResult == nil) {
 		return fmt.Errorf("%w: raw ABI0 bool RET requires its complete typed canonical source-stack proof; %s", ErrProbeNeedsContext, fn.x86SourceStackFailure)
 	}
 	// The raw instruction bypasses obj6's RET epilogue. A zero-sized,

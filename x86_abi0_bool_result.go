@@ -27,7 +27,7 @@ func (c *amd64Ctx) abi0BoolResultByteStorage() bool {
 	if c.fpMixedBoolBytes {
 		return true
 	}
-	if stack := c.sourceStack; stack != nil && stack == c.fpScalarSource.x86SourceStack && stack.boolResult != nil && c.sig.Ret == I1 {
+	if stack := c.sourceStack; stack != nil && stack == c.fpScalarSource.x86SourceStack && stack.scalarResult != nil && c.sig.Ret == I1 {
 		return true // The independent physical producer/consumer already checked its complete byte role.
 	}
 	return x86ABI0LogicalBoolFrameRole(c.fpScalarSource, c.sig, c.goarch)

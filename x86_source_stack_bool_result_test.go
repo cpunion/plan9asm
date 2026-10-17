@@ -197,7 +197,7 @@ func TestX86PhysicalSourceStackBoolProofAndSignatureCannotBeRebound(t *testing.T
 						copy.normalized[0] ^= 1
 					}
 				}
-				err = consumer.checkSourceStackBoolResultInitialization()
+				err = consumer.checkSourceStackScalarResultInitialization()
 				if change == "none" && err != nil || change != "none" && !errors.Is(err, ErrProbeNeedsContext) {
 					t.Fatalf("changed=%s source-stack result: %v", change, err)
 				}
@@ -221,7 +221,7 @@ func TestX86PhysicalSourceStackBoolCloneAndByteBudget(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		initial := x86SourceStackBoolInitial(file.Funcs[0], sig, arch)
+		initial := x86SourceStackScalarInitial(file.Funcs[0], sig, arch)
 		if initial == nil {
 			t.Fatal("actual scalar bool layout rejected")
 		}

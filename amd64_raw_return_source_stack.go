@@ -11,10 +11,10 @@ import (
 // Ordinary pointers need a separately consumed complete Go caller proof.
 // Nonzero TEXT frames, calls and private-stack address escape cannot use it.
 type x86SourceStackProof struct {
-	minimum    int64
-	word       int64
-	caller     *x86GoCallerRegionProof
-	boolResult *x86SourceStackBoolProof
+	minimum      int64
+	word         int64
+	caller       *x86GoCallerRegionProof
+	scalarResult *x86SourceStackScalarProof
 	// Exact public normalized source bytes, excluding private certificates.
 	normalized [32]byte
 	// Diagnostic-only finite replay counts, never used as permission inputs.
@@ -44,7 +44,7 @@ type x86SourceStackCell struct {
 	caller              *x86CallerPointerValue
 	known               uint8
 	canonical           uint8
-	boolFlags           uint8
+	scalarFlags         uint8
 	gOriginal           bool
 }
 
@@ -59,7 +59,7 @@ type x86SourceStackState struct {
 	vectors             map[Reg]uint64
 	masks               map[Reg]bool
 	gOriginal           bool
-	boolResult          *x86SourceStackBoolState
+	scalarResult        *x86SourceStackScalarState
 }
 
 const x86SourceStackLimit = int64(1 << 20)
@@ -106,7 +106,7 @@ func normalizeX86RawReturnSourceStack(fn Func, opt Options, bindFrame bool, orig
 		// This argument is a request-local Options value. Match the public
 		// ArchAMD64 default for the complete grammar; do not rewrite the
 		// caller's bound Options or the raw decoder's original mode spelling.
-		opt.Goarch = x86SourceStackBoolArch(opt.Goarch)
+		opt.Goarch = x86SourceStackScalarArch(opt.Goarch)
 	}
 	caller := bindFrame && hasSig && x86CallerRegionSourceMatches(sig, input, opt.Goarch)
 	if !caller {
@@ -133,6 +133,9 @@ func normalizeX86RawReturnSourceStack(fn Func, opt Options, bindFrame bool, orig
 	}
 	if !caller && !physicalBool && x86RawReturnLeafStackUnobserved(fn) {
 		return fn
+	}
+	if bindFrame && hasSig && !caller {
+		opt.Goarch = x86SourceStackScalarArch(opt.Goarch)
 	}
 	if bindFrame && (!hasSig || !caller && !x86SourceStackScalarABI0(sig, fn.ArgSize, opt.Goarch)) {
 		return fn
@@ -226,11 +229,11 @@ func normalizeX86RawReturnSourceStack(fn Func, opt Options, bindFrame bool, orig
 	work := []int{0}
 	states[0] = x86SourceStackState{bp: x86SourceStackAddress{original: true}, gOriginal: true}
 	proof := &x86SourceStackProof{word: word}
-	if bindFrame && hasSig && sig.Ret == I1 {
+	if bindFrame && hasSig && (!caller || sig.Ret == I1) {
 		states[0] = x86SourceStackState{bp: x86SourceStackAddress{original: true}, gOriginal: true,
-			boolResult: x86SourceStackBoolInitial(fn, sig, opt.Goarch)}
-		if states[0].boolResult == nil || caller {
-			return reject(0, "physical bool result requires its independent scalar declaration")
+			scalarResult: x86SourceStackScalarInitial(fn, sig, opt.Goarch)}
+		if states[0].scalarResult == nil || caller {
+			return reject(0, "physical scalar result requires its independent scalar declaration")
 		}
 	}
 	if caller {
@@ -253,9 +256,8 @@ func normalizeX86RawReturnSourceStack(fn Func, opt Options, bindFrame bool, orig
 			if len(ins.Args) != 0 || state.sp != 0 || !state.bp.original || goDeltas[instructions[pc]] != 0 {
 				return false, "unproved source-stack or ABI0 continuation effect"
 			}
-			if value := state.boolResult; value != nil &&
-				(!value.bytes.fp[value.result] || !value.bytes.canonicalFP[value.result]) {
-				return false, "physical bool result is not written canonical zero/one on every return"
+			if value := state.scalarResult; value != nil && !value.complete() {
+				return false, "physical scalar result lacks initialized/canonical bytes on every return"
 			}
 			return true, ""
 		}
@@ -338,14 +340,14 @@ func normalizeX86RawReturnSourceStack(fn Func, opt Options, bindFrame bool, orig
 		if pointerFlags {
 			x86SourceStackSetNumericFlags(state, 0)
 		}
-		if state.boolResult != nil && !state.boolResult.step(*ins, opt.Goarch) {
-			return false, "physical bool result has an undefined numerical input or effect"
+		if state.scalarResult != nil && !state.scalarResult.step(*ins, opt.Goarch) {
+			return false, "physical scalar result has an undefined numerical input or effect"
 		}
 
 		return false, ""
 	}
 	returned := false
-	acyclic := caller && x86CallerReachableAcyclic(copyFn, instructions, labels)
+	acyclic := (caller || states[0].scalarResult != nil) && x86CallerReachableAcyclic(copyFn, instructions, labels)
 	if caller && !acyclic {
 		if plan := deriveX86CallerCountedPlan(input, copyFn, instructions, labels); plan != nil {
 			first, reason := replayX86CallerCountedPlan(plan, &copyFn, instructions, states[0], proof.caller, transfer)
@@ -381,7 +383,7 @@ func normalizeX86RawReturnSourceStack(fn Func, opt Options, bindFrame bool, orig
 		}
 	}
 	final := false
-	boolByteWork := 0
+	scalarByteWork := 0
 	for budget := 0; ; budget++ {
 		if len(work) == 0 {
 			if !acyclic || final {
@@ -405,17 +407,17 @@ func normalizeX86RawReturnSourceStack(fn Func, opt Options, bindFrame bool, orig
 		pc := work[0]
 		work = work[1:]
 		state := states[pc]
-		if value := state.boolResult; value != nil {
-			boolByteWork += 8 * (2*len(value.bytes.fp) + 33 + 2*len(state.cells))
-			if boolByteWork > 64<<20 {
-				return reject(instructions[pc], "physical bool source-CFG byte budget exhausted")
+		if value := state.scalarResult; value != nil {
+			scalarByteWork += 8 * (2*len(value.bytes.fp) + 33 + 2*len(state.cells))
+			if scalarByteWork > 64<<20 {
+				return reject(instructions[pc], "physical scalar source-CFG byte budget exhausted")
 			}
 		}
 		if caller {
 			state = x86CloneCallerState(state)
 		} else {
 			state.cells = append([]x86SourceStackCell(nil), state.cells...)
-			state.boolResult = state.boolResult.clone()
+			state.scalarResult = state.scalarResult.clone()
 		}
 		ins := &copyFn.Instrs[instructions[pc]]
 		ins.x86CallerMemory = nil
@@ -464,7 +466,13 @@ func normalizeX86RawReturnSourceStack(fn Func, opt Options, bindFrame bool, orig
 					if !acyclic {
 						return reject(instructions[next], "different source-stack or caller-region states at join")
 					}
-					merged, valid := x86CallerAcyclicMerge(old, state, sig.x86CallerRegions)
+					var merged x86SourceStackState
+					var valid bool
+					if caller {
+						merged, valid = x86CallerAcyclicMerge(old, state, sig.x86CallerRegions)
+					} else {
+						merged, valid = x86SourceStackScalarMerge(old, state)
+					}
 					if !valid {
 						return reject(instructions[next], "different source-stack or caller-region states at join")
 					}
@@ -489,10 +497,10 @@ func normalizeX86RawReturnSourceStack(fn Func, opt Options, bindFrame bool, orig
 	if !returned {
 		return fn
 	}
-	if bindFrame && hasSig && sig.Ret == I1 {
-		proof.boolResult = sealX86SourceStackBool(copyFn, input, sig, proof)
-		if proof.boolResult == nil {
-			return reject(0, "physical bool result source seal failed")
+	if states[0].scalarResult != nil {
+		proof.scalarResult = sealX86SourceStackScalar(copyFn, input, sig, proof)
+		if proof.scalarResult == nil {
+			return reject(0, "physical scalar result source seal failed")
 		}
 	}
 	if caller {
@@ -584,8 +592,8 @@ func x86SourceStackStep(spec amd64StackWidthSpec, ins *Instr, state *x86SourceSt
 		return false
 	}
 	cell := x86SourceStackCell{width: width, flags: flags, numericFlags: state.numericFlags, partialNumericFlags: state.partialNumericFlags}
-	if state.boolResult != nil && flags {
-		cell.boolFlags = state.boolResult.bytes.flags
+	if state.scalarResult != nil && flags {
+		cell.scalarFlags = state.scalarResult.bytes.flags
 	}
 	if !flags {
 		operand := ins.Args[0]
@@ -623,7 +631,7 @@ func x86SourceStackStep(spec amd64StackWidthSpec, ins *Instr, state *x86SourceSt
 				}
 				cell.known = state.known[root]
 			}
-			if state.boolResult != nil && operand.Reg != BP {
+			if state.scalarResult != nil && operand.Reg != BP {
 				arch := "amd64"
 				if word == 4 {
 					arch = "386"
@@ -632,11 +640,11 @@ func x86SourceStackStep(spec amd64StackWidthSpec, ins *Instr, state *x86SourceSt
 				if !valid {
 					return false
 				}
-				cell.known = state.boolResult.bytes.gp[index] & mask
-				cell.canonical = state.boolResult.bytes.canonicalGP[index] & mask
+				cell.known = state.scalarResult.bytes.gp[index] & mask
+				cell.canonical = state.scalarResult.bytes.canonicalGP[index] & mask
 			}
 		}
-		if state.boolResult != nil && operand.Kind == OpImm {
+		if state.scalarResult != nil && operand.Kind == OpImm {
 			if operand.ImmRaw != "" || operand.ImmIsFloat {
 				return false
 			}
@@ -675,11 +683,11 @@ func x86SourceStackStep(spec amd64StackWidthSpec, ins *Instr, state *x86SourceSt
 	if flags {
 		state.numericFlags = saved.numericFlags
 		state.partialNumericFlags = saved.partialNumericFlags
-		if state.boolResult != nil {
-			state.boolResult.bytes.flags = saved.boolFlags
+		if state.scalarResult != nil {
+			state.scalarResult.bytes.flags = saved.scalarFlags
 		}
 	}
-	if state.boolResult != nil && !flags && ins.Args[0].Reg != BP {
+	if state.scalarResult != nil && !flags && ins.Args[0].Reg != BP {
 		arch := "amd64"
 		if word == 4 {
 			arch = "386"
@@ -688,7 +696,7 @@ func x86SourceStackStep(spec amd64StackWidthSpec, ins *Instr, state *x86SourceSt
 		if !valid {
 			return false
 		}
-		value := &state.boolResult.bytes
+		value := &state.scalarResult.bytes
 		value.gp[index] = value.gp[index]&^mask | saved.known&mask
 		value.canonicalGP[index] = value.canonicalGP[index]&^mask | saved.canonical&mask
 		if width == 4 && word == 8 {

@@ -31,8 +31,8 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 	if fn.x86FixedLocal != nil {
 		return c.checkFixedLocalResultInitialization()
 	}
-	if fn.x86SourceStack != nil && sig.Ret == I1 {
-		return c.checkSourceStackBoolResultInitialization()
+	if fn.x86SourceStack != nil && fn.x86SourceStack.scalarResult != nil {
+		return c.checkSourceStackScalarResultInitialization()
 	}
 	if calls := fn.x86BoolCalls; calls != nil && calls.registerTail != nil {
 		return calls.checkCustomRegisterTail(fn, sig, arch)

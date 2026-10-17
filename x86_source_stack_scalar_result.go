@@ -8,13 +8,15 @@ import (
 // This state belongs only to the already bounded physical source-stack CFG.
 // It grants neither ordinary logical ABI0 entry nor caller/native memory. NUM
 // and canonical bytes stay independent, including intermediate raw 2/3 values.
-type x86SourceStackBoolState struct {
-	bytes  x86ResultState
-	owned  []bool // Immutable actual scalar layout.
-	result int64
+type x86SourceStackScalarState struct {
+	bytes           x86ResultState
+	owned           []bool // Immutable actual scalar layout.
+	result          int64
+	width           int64
+	canonicalResult bool
 }
 
-type x86SourceStackBoolProof struct {
+type x86SourceStackScalarProof struct {
 	owner             *x86SourceStackProof
 	minimum           int64
 	word              int64
@@ -34,29 +36,34 @@ func x86SourceStackBoolCandidate(fn Func, sig FuncSig) bool {
 		len(sig.Args) != 0 && len(sig.ArgRegs) == 0 && len(sig.Frame.Results) == 1 && sig.Frame.Results[0].Type == I1
 }
 
-func x86SourceStackBoolArch(arch string) string {
+func x86SourceStackScalarArch(arch string) string {
 	if arch == "" {
 		return "amd64" // The existing ArchAMD64 renderer default, not an Options/source rewrite.
 	}
 	return arch
 }
 
-func x86SourceStackBoolInitial(fn Func, sig FuncSig, arch string) *x86SourceStackBoolState {
-	arch = x86SourceStackBoolArch(arch)
-	if (arch != "386" && arch != "amd64") || sig.Ret != I1 || fn.ArgSize > 4096 ||
+func x86SourceStackScalarInitial(fn Func, sig FuncSig, arch string) *x86SourceStackScalarState {
+	arch = x86SourceStackScalarArch(arch)
+	if (arch != "386" && arch != "amd64") || fn.FrameSize != 0 || strings.Contains(fn.Sym, "<") || fn.ArgSize > 4096 ||
 		!x86SourceStackScalarABI0(sig, fn.ArgSize, arch) || sig.ARMEntry != nil ||
 		sig.ARM64GoRegisterABI != nil || sig.ARM64ClosureABI != nil || sig.WASMContext != "" || sig.WASMNative ||
 		sig.x86CallerRegions != nil || sig.x86FixedLocal != nil || sig.x86BorrowedBoolTail {
 		return nil
 	}
 	result := sig.Frame.Results[0]
-	if result.Index != 0 || result.Field != -1 || len(result.Fields) != 0 || result.Offset < 0 || result.Offset >= 4096 {
+	width := x86FrameScalarBytes(result.Type, arch)
+	if result.Index != 0 || result.Field != -1 || len(result.Fields) != 0 || result.Offset < 0 ||
+		width <= 0 || result.Offset > 4096-width {
 		return nil
 	}
-	state := &x86SourceStackBoolState{result: result.Offset, owned: make([]bool, result.Offset+1)}
+	state := &x86SourceStackScalarState{result: result.Offset, width: width, canonicalResult: sig.Ret == I1,
+		owned: make([]bool, result.Offset+width)}
 	state.bytes.fp = make([]bool, len(state.owned))
 	state.bytes.canonicalFP = make([]bool, len(state.owned))
-	state.owned[result.Offset] = true
+	for offset := result.Offset; offset < result.Offset+width; offset++ {
+		state.owned[offset] = true
+	}
 	for _, slot := range sig.Frame.Params {
 		width := x86FrameScalarBytes(slot.Type, arch)
 		if slot.Offset < 0 || slot.Offset > result.Offset-width {
@@ -73,7 +80,7 @@ func x86SourceStackBoolInitial(fn Func, sig FuncSig, arch string) *x86SourceStac
 	return state
 }
 
-func (state *x86SourceStackBoolState) clone() *x86SourceStackBoolState {
+func (state *x86SourceStackScalarState) clone() *x86SourceStackScalarState {
 	if state == nil {
 		return nil
 	}
@@ -85,8 +92,8 @@ func (state *x86SourceStackBoolState) clone() *x86SourceStackBoolState {
 // Run only after the existing physical SP/BP, access and FLAGS producer has
 // checked this exact instruction. Its access annotations are not public FP
 // permission: only this local byte-effect copy uses their exact slot offsets.
-func (state *x86SourceStackBoolState) step(ins Instr, arch string) bool {
-	arch = x86SourceStackBoolArch(arch)
+func (state *x86SourceStackScalarState) step(ins Instr, arch string) bool {
+	arch = x86SourceStackScalarArch(arch)
 	if ins.Op == OpTEXT || ins.Op == OpLABEL {
 		return true
 	}
@@ -97,8 +104,8 @@ func (state *x86SourceStackBoolState) step(ins Instr, arch string) bool {
 		if operand.Kind == OpReg && x86RawReturnStackRegister(operand.Reg) {
 			// The producer allows only its exact SP/BP control effects here.
 			// Physical address arithmetic cannot define numerical status bits.
-			if effect, known, _ := x86TypedInstructionByteEffect(ins.Op, ins, arch); known && effect.flagsKilled != 0 {
-				state.bytes.flags &^= effect.flagsKilled
+			if effect, known, _ := x86TypedInstructionByteEffect(ins.Op, ins, arch); known {
+				state.bytes.flags &^= effect.flagsDefined | effect.flagsKilled
 			}
 			return true
 		}
@@ -112,9 +119,16 @@ func (state *x86SourceStackBoolState) step(ins Instr, arch string) bool {
 		local.Args[index] = Operand{Kind: OpFP, FPOffset: offset}
 	}
 	beforeFP, beforeGP := state.bytes.canonicalFP, state.bytes.canonicalGP
-	if !x86ResultTransfer(local, &state.bytes, state.owned, state.result, arch) {
-		return false
+	next := state.bytes.clone()
+	if !x86ResultTransfer(local, &next, state.owned, state.result, arch) {
+		// An unobserved nontrapping scratch result may remain unknown. This
+		// does not excuse later result, store, address or FLAGS observations.
+		next = state.bytes.clone()
+		if !x86LoweredPureGPUnknownTransfer(local, &next, arch) {
+			return false
+		}
 	}
+	state.bytes = next
 	state.bytes.canonicalFP, state.bytes.canonicalGP = x86ABI0CanonicalBytesAfter(local, beforeFP, beforeGP, arch)
 	for offset := range state.bytes.canonicalFP {
 		state.bytes.canonicalFP[offset] = state.bytes.canonicalFP[offset] && state.bytes.fp[offset]
@@ -125,7 +139,58 @@ func (state *x86SourceStackBoolState) step(ins Instr, arch string) bool {
 	return true
 }
 
-func sealX86SourceStackBool(fn, original Func, sig FuncSig, stack *x86SourceStackProof) *x86SourceStackBoolProof {
+func (state *x86SourceStackScalarState) complete() bool {
+	for offset := state.result; offset < state.result+state.width; offset++ {
+		if !state.bytes.fp[offset] || state.canonicalResult && !state.bytes.canonicalFP[offset] {
+			return false
+		}
+	}
+	return true
+}
+
+// Only acyclic, fully checked scalar source CFGs use this must-fact join.
+// Physical stack shape, opaque BP/g cells and immutable layout stay exact.
+// Numerical/canonical bytes and FLAGS can only lose knowledge at a join.
+func x86SourceStackScalarMerge(left, right x86SourceStackState) (x86SourceStackState, bool) {
+	result := left
+	if left.scalarResult == nil || right.scalarResult == nil || left.sp != right.sp || left.bp != right.bp ||
+		left.callers != nil || right.callers != nil || left.known != nil || right.known != nil ||
+		left.vectors != nil || right.vectors != nil || left.masks != nil || right.masks != nil || len(left.cells) != len(right.cells) {
+		return result, false
+	}
+	a, b := left.scalarResult, right.scalarResult
+	if a.result != b.result || a.width != b.width || a.canonicalResult != b.canonicalResult || !reflect.DeepEqual(a.owned, b.owned) {
+		return result, false
+	}
+	result.cells = append([]x86SourceStackCell(nil), left.cells...)
+	for index, first := range left.cells {
+		second := right.cells[index]
+		first.known, second.known = 0, 0
+		first.canonical, second.canonical = 0, 0
+		first.scalarFlags, second.scalarFlags = 0, 0
+		first.numericFlags, second.numericFlags = false, false
+		first.partialNumericFlags, second.partialNumericFlags = 0, 0
+		if !reflect.DeepEqual(first, second) {
+			return result, false
+		}
+		cell := &result.cells[index]
+		cell.known &= right.cells[index].known
+		cell.canonical &= right.cells[index].canonical
+		cell.scalarFlags &= right.cells[index].scalarFlags
+		mask := x86SourceStackNumericFlagMask(x86SourceStackState{
+			numericFlags: cell.numericFlags, partialNumericFlags: cell.partialNumericFlags}) &
+			x86SourceStackNumericFlagMask(x86SourceStackState{
+				numericFlags: right.cells[index].numericFlags, partialNumericFlags: right.cells[index].partialNumericFlags})
+		cell.numericFlags, cell.partialNumericFlags = mask == x86ByteFlagsAll, mask
+	}
+	result.scalarResult = a.clone()
+	result.scalarResult.bytes = a.bytes.intersect(b.bytes)
+	x86SourceStackSetNumericFlags(&result, x86SourceStackNumericFlagMask(left)&x86SourceStackNumericFlagMask(right))
+	result.gOriginal = left.gOriginal && right.gOriginal
+	return result, true
+}
+
+func sealX86SourceStackScalar(fn, original Func, sig FuncSig, stack *x86SourceStackProof) *x86SourceStackScalarProof {
 	function, err := x86CallerSourceFingerprint(fn)
 	if err != nil {
 		return nil
@@ -141,21 +206,21 @@ func sealX86SourceStackBool(fn, original Func, sig FuncSig, stack *x86SourceStac
 		}
 		raw = replay.original
 	}
-	return &x86SourceStackBoolProof{owner: stack, minimum: stack.minimum, word: stack.word,
+	return &x86SourceStackScalarProof{owner: stack, minimum: stack.minimum, word: stack.word,
 		stackIdentity: stack.normalized, countedIterations: stack.countedIterations, signature: signature, function: function,
 		original: cloneX86ReplayInstrs(raw), normalized: cloneX86ReplayInstrs(fn.Instrs)}
 }
 
-func (c *amd64Ctx) checkSourceStackBoolResultInitialization() error {
+func (c *amd64Ctx) checkSourceStackScalarResultInitialization() error {
 	fn, sig, stack := c.fpScalarSource, c.fpSourceSig, c.sourceStack
 	fail := func() error {
-		return goAMD64FrameContext("physical source-stack bool result lost its complete source/declaration/canonical proof")
+		return goAMD64FrameContext("physical source-stack scalar result lost its complete source/declaration/numerical proof")
 	}
-	if stack == nil || fn.x86SourceStack != stack || stack.boolResult == nil || stack.word != x86ResultPointerWord(c.goarch) ||
-		fn.FrameSize != 0 || c.frameSize != fn.FrameSize || x86SourceStackBoolInitial(fn, sig, c.goarch) == nil {
+	if stack == nil || fn.x86SourceStack != stack || stack.scalarResult == nil || stack.word != x86ResultPointerWord(c.goarch) ||
+		fn.FrameSize != 0 || c.frameSize != fn.FrameSize || x86SourceStackScalarInitial(fn, sig, c.goarch) == nil {
 		return fail()
 	}
-	proof := stack.boolResult
+	proof := stack.scalarResult
 	if proof.owner != stack || proof.minimum != stack.minimum || proof.word != stack.word || stack.caller != nil ||
 		proof.stackIdentity != stack.normalized || proof.countedIterations != stack.countedIterations {
 		return fail()
@@ -166,7 +231,7 @@ func (c *amd64Ctx) checkSourceStackBoolResultInitialization() error {
 	}
 	signature, err := x86CallerSourceFingerprint(sig)
 	if err != nil || signature != proof.signature || fn.x86RawReplay == nil ||
-		x86SourceStackBoolArch(fn.x86RawReplay.goarch) != x86SourceStackBoolArch(c.goarch) ||
+		x86SourceStackScalarArch(fn.x86RawReplay.goarch) != x86SourceStackScalarArch(c.goarch) ||
 		fn.x86RawReplay.validate(fn, fn.x86RawReplay.goarch) != nil || !reflect.DeepEqual(fn.x86RawReplay.original, proof.original) {
 		return fail()
 	}
