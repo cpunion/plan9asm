@@ -62,17 +62,39 @@ fixture-only failure separately; it is not semantic RED evidence. GREEN is
 `68e3bc85`, followed by the independently verified named-NOP merge at
 `bc79fd0f`. Source remains frozen during verification, including documentation.
 
+## Strict standard-library benchmark
+
+The complete run at `bc79fd0f` finished naturally with exit 1 and unchanged
+source/SDK/LLVM 22 observations. All 184 original target/file pairs were attempted;
+132 compile and 52 fail, with zero N/A or unattempted. Compilation is not runtime
+execution. The result is failed, not a qualified performance pass.
+
+| Target | Compiled / total | Failed | Wall seconds |
+|---|---:|---:|---:|
+| linux/386 |17/33|16|73|
+| linux/amd64 |29/55|26|709|
+| linux/arm |27/30|3|5|
+| linux/arm64 |40/47|7|12|
+| js/wasm |19/19|0|5|
+
+Total target wall time 804s meets the 900s total budget, but AMD64 exceeds its
+300s target budget. A one-second diagnostic sample captures substantial
+SHA256/file-validation work; inspect `benchmark-bc79fd0f/amd64-sample.txt`
+before assuming instruction lowering is the bottleneck. The sampled diagnostic
+cannot certify a performance improvement. Full reports remain under ignored
+`compile-benchmark-bc79fd0f` and `benchmark-bc79fd0f`.
+
 ## Immediate work
 
-1. Finish the running strict five-target standard-library benchmark at
-   `bc79fd0f`. Reports are under ignored `compile-benchmark-bc79fd0f` and
-   `benchmark-bc79fd0f`. Keep the original 300s/target and 900s/total budgets;
-   failure, N/A or unattempted files are not a pass. Record its final counts
-   here once complete; do not substitute old benchmark figures.
-   AMD64 has already exceeded its 300s target budget. A one-second diagnostic
-   process sample captures substantial SHA256/file-validation work; inspect
-   `benchmark-bc79fd0f/amd64-sample.txt` before assuming instruction lowering is
-   the bottleneck. This sampled run cannot certify a performance improvement.
+1. Repair the 52 complete standard-library failures by actual shared rule class,
+   retaining their unchanged complete sources and the original 300s/target and
+   900s/total budgets. Current failures include source-input effects, private
+   helpers/custom entries, AUTO/native frames, TLS/implicit state and typed
+   result backing. A Context rejection is not successful compilation; determine
+   why a real original Go program lacks its translation contract before adding
+   a new factory, exception or validation layer. Investigate repeated checking
+   using the captured performance sample without removing mutation, lifetime
+   or source-boundary failures.
 2. Watch the published diagnostic run to its natural terminal. Its native
    owners already pass; Windows SDK priorities and complete modules still need
    their own final results. Download and inspect actual failed roots before
