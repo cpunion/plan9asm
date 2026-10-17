@@ -50,14 +50,7 @@ func TestTranslateRawEVEXVectorFloatCompareWeaviateRegression(t *testing.T) {
 	LONG $0x483cf162; WORD $0x06c2; BYTE $0x0c
 	RET
 `
-	file, err := Parse(ArchAMD64, source)
-	if err != nil {
-		t.Fatal(err)
-	}
-	ir, err := Translate(file, Options{Goarch: "amd64", TargetTriple: "x86_64-unknown-linux-gnu", Sigs: map[string]FuncSig{"rawVectorFloatCompare": {Name: "rawVectorFloatCompare", Ret: Void}}})
-	if err != nil {
-		t.Fatal(err)
-	}
+	ir := x86UnboundVoidRawScalarFormatObject(t, source, "amd64", "x86_64-unknown-linux-gnu")
 	if !strings.Contains(ir, `asm sideeffect "vcmpps $$12,`) {
 		t.Fatalf("raw EVEX VCMPPS lowering omitted floating compare:\n%s", ir)
 	}

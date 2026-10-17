@@ -4288,7 +4288,7 @@ func TestTranslateAMD64FloatingCompareCompleteGoAssemblerForms(t *testing.T) {
 	}
 	src.WriteString("\tRET\n")
 
-	ll := translateAMD64EcosystemCase(t, src.String(), "floatingcompareforms")
+	ll := x86UnboundVoidScalarFormatObject(t, src.String(), "floatingcompareforms", "amd64", "x86_64-unknown-linux-gnu")
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc not found")
@@ -4304,20 +4304,7 @@ func TestTranslate386FloatingCompareCompleteGoAssemblerForms(t *testing.T) {
 		fmt.Fprintf(&src, "\t%s (AX), X7, $127\n", op)
 	}
 	src.WriteString("\tRET\n")
-	file, err := Parse(ArchAMD64, src.String())
-	if err != nil {
-		t.Fatal(err)
-	}
-	ll, err := Translate(file, Options{
-		TargetTriple: "i386-unknown-linux-gnu",
-		Goarch:       "386",
-		Sigs: map[string]FuncSig{
-			"floatingcompareforms386": {Name: "floatingcompareforms386", Ret: Void},
-		},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	ll := x86UnboundVoidScalarFormatObject(t, src.String(), "floatingcompareforms386", "386", "i386-unknown-linux-gnu")
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc not found")
@@ -5157,7 +5144,12 @@ TEXT floatfamilies(SB),NOSPLIT,$0-0
 	UCOMISD X2, X3
 	RET
 `
-	translateAMD64EcosystemCase(t, src, "floatfamilies")
+	ll := x86UnboundVoidScalarFormatObject(t, src, "floatfamilies", "amd64", "x86_64-unknown-linux-gnu")
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM 22 llc not found")
+	}
+	compileLLVMToObject(t, llc, "x86_64-unknown-linux-gnu", "legacy-floating-formats.ll", "legacy-floating-formats.o", ll)
 }
 
 func TestTranslateAMD64DuplicateMoveFamilyCompleteGoAssemblerForms(t *testing.T) {

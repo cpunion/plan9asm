@@ -80,18 +80,11 @@ func TestX86RawLegacyFloatingCompareCompleteForms(t *testing.T) {
 			if got := assembleX87ControlBytes(t, arch, named.String()); !bytes.HasPrefix(got, expected) {
 				t.Fatalf("Go %s compare encodings disagree: got %d bytes, want prefix of %d bytes", arch, len(got), len(expected))
 			}
-			file, err := Parse(ArchAMD64, raw.String())
-			if err != nil {
-				t.Fatal(err)
-			}
 			for _, triple := range []string{"x86_64-apple-darwin", "x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc", "i386-unknown-linux-gnu", "i686-pc-windows-msvc"} {
 				if (arch == "386") != strings.HasPrefix(triple, "i") {
 					continue
 				}
-				ir, err := Translate(file, Options{Goarch: arch, TargetTriple: triple, Sigs: map[string]FuncSig{"compareforms": {Name: "compareforms", Ret: Void}}})
-				if err != nil {
-					t.Fatal(err)
-				}
+				ir := x86UnboundVoidRawScalarFormatObject(t, raw.String(), arch, triple)
 				compileLLVMToObject(t, llc, triple, "raw-compares.ll", "raw-compares.o", ir)
 			}
 		})
