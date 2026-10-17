@@ -129,8 +129,8 @@ func TestX86ABI0Mode32CanonicalBoolActualAtomicCompleteSourceNextContext(t *test
 	}
 }
 
-// These are the two complete original integer-CAS functions, not a claim
-// that the entire atomic member or pointer-data CAS has been translated.
+// These are the three complete original integer/pointer-CAS functions, not a
+// claim that the entire atomic member has been translated.
 func TestX86AMD64CanonicalBoolActualAtomicCasObjects(t *testing.T) {
 	const path = "internal/runtime/atomic"
 	pkg := x86ABI0BoolActualAtomicPackage(t, path, "amd64", []string{"stubs.go", "atomic_amd64.go", "unaligned.go"})
@@ -139,14 +139,14 @@ func TestX86AMD64CanonicalBoolActualAtomicCasObjects(t *testing.T) {
 		t.Fatal(err)
 	}
 	start := strings.Index(string(original), "TEXT ·Cas(SB)")
-	end := strings.Index(string(original), "TEXT ·Casp1(SB)")
+	end := strings.Index(string(original), "TEXT ·Casint32(SB)")
 	if start < 0 || end <= start {
 		t.Fatal("original integer-CAS function boundaries changed")
 	}
 	source := []byte("#include \"textflag.h\"\n" + string(original[start:end]))
 	t.Logf("untouched integer-CAS source bytes=%d sha256=%x original-member=%x", len(source), sha256.Sum256(source), sha256.Sum256(original))
 	file, err := ParseWithDefines(ArchAMD64, string(source), GoAssemblerDefines("linux", "amd64"))
-	if err != nil || len(file.Funcs) != 2 || file.Funcs[0].Sym != "·Cas" || file.Funcs[1].Sym != "·Cas64" {
+	if err != nil || len(file.Funcs) != 3 || file.Funcs[0].Sym != "·Cas" || file.Funcs[1].Sym != "·Cas64" || file.Funcs[2].Sym != "·Casp1" {
 		t.Fatal("complete original integer-CAS inventory changed", err)
 	}
 	resolve := testResolveSym(path)

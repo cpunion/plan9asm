@@ -151,7 +151,7 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		if accepted, known := c.x87HardwareRoundingResultStep(ins, state, owned, resultOffset, arch); known {
 			return accepted // No ambient environment fact reaches the standalone query.
 		}
-		if accepted, known := x86LoweredCompareExchangeResultStep(ins, state, owned, arch); known {
+		if accepted, known := x86LoweredCompareExchangeResultStepWithAddressBits(ins, state, owned, arch, addressBitStores); known {
 			return accepted
 		}
 		if accepted, known := x86LoweredExchangeResultStep(ins, state, owned, arch); known {

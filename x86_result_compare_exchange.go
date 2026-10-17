@@ -52,6 +52,13 @@ func x86CompareExchangeResultOutputs(form x86CompareExchangeForm) (int64, []Reg)
 // native-entry, alignment, frame or caller permission. The original complete
 // sideeffect opcode still performs its read/write cycle, faults and ordering.
 func x86LoweredCompareExchangeResultStep(ins Instr, state *x86ResultState, owned []bool, arch string) (bool, bool) {
+	return x86LoweredCompareExchangeResultStepWithAddressBits(ins, state, owned, arch, false)
+}
+
+// The existing closed-leaf address-bit scope permits one complete actual
+// caller word as a CAS value, never as NUM or a new memory/GC certificate.
+func x86LoweredCompareExchangeResultStepWithAddressBits(ins Instr, state *x86ResultState, owned []bool,
+	arch string, addressBits bool) (bool, bool) {
 	form, known, err := x86CompareExchangeProperties(ins.Op, ins, arch)
 	if !known {
 		return false, false
@@ -60,30 +67,57 @@ func x86LoweredCompareExchangeResultStep(ins Instr, state *x86ResultState, owned
 		return false, true
 	}
 	width, outputs := x86CompareExchangeResultOutputs(form)
+	read := func(operand Operand) (numeric, valid bool) {
+		if x86ResultRead(operand, width, state, owned, arch) {
+			return true, true
+		}
+		if !addressBits || width != x86ResultPointerWord(arch) || operand.Kind != OpReg ||
+			x86LogicalSourceFrameRegister(operand.Reg, arch) {
+			return false, false
+		}
+		root, _, valid := x86ResultGP(operand.Reg, width, arch)
+		return false, valid && state.pointerGP[root] && state.callerAddressGP[root]
+	}
 	inputs := []Operand{form.source, {Kind: OpReg, Reg: AX}}
 	if form.spec.pair {
 		inputs = []Operand{{Kind: OpReg, Reg: AX}, {Kind: OpReg, Reg: DX}, {Kind: OpReg, Reg: BX}, {Kind: OpReg, Reg: CX}}
 	}
 	for _, operand := range inputs {
-		if !x86ResultRead(operand, width, state, owned, arch) {
+		if _, valid := read(operand); !valid {
 			return false, true
 		}
 	}
+	var numericOutputs [2]bool
+	for index, reg := range outputs {
+		numericOutputs[index] = x86ResultRead(Operand{Kind: OpReg, Reg: reg}, width, state, owned, arch)
+	}
 	if form.destination.Kind == OpReg {
-		if !x86ResultRead(form.destination, width, state, owned, arch) {
+		destinationNumeric, valid := read(form.destination)
+		if !valid {
 			return false, true
 		}
+		sourceNumeric, _ := read(form.source)
+		numericOutputs[0] = numericOutputs[0] && destinationNumeric
+		numericOutputs[1] = sourceNumeric && destinationNumeric
 	} else if !x86ResultIncomingPointerAddressIdentity(form.destination, state, arch) {
 		return false, true // No SB, FP/AUTO, segment or numerical base is inferred.
 	}
-	for _, reg := range outputs {
+	for index, reg := range outputs {
 		root, mask, valid := x86ResultGP(reg, width, arch)
 		if !valid {
 			return false, true
 		}
 		// The accumulator write is conditional. In particular, a successful
 		// dword CAS preserves its old high half; no unconditional zero extension.
-		state.gp[root] |= mask
+		// A successful CAS may retain the opaque expected value. A register
+		// destination may instead receive opaque desired bits. Only bytes
+		// numerical on both outcomes remain NUM; neither outcome grants a
+		// pointer identity for unknown native contents or selected values.
+		if numericOutputs[index] {
+			state.gp[root] |= mask
+		} else {
+			state.gp[root] &^= mask
+		}
 		state.pointerGP[root] = false
 	}
 	if form.spec.pair {
