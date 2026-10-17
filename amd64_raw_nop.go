@@ -2,6 +2,19 @@ package plan9asm
 
 import "golang.org/x/arch/x86/x86asm"
 
+// The decoder discards NOP's inert ModRM/SIB fields only after validating the
+// complete encoding. Preserve existing source facts through that exact handoff,
+// not through a different physical instruction or an unbound address contract.
+// This observation creates no numerical, pointer, memory or raw-entry fact.
+func x86NOPPreservesSourceState(ins Instr) bool {
+	if ins.Op != "NOP" || len(ins.Args) != 0 || ins.x86Encoded || ins.x86RawNearReturn != nil ||
+		ins.x86AddressBits != 0 || ins.x86UnboundAddressOverride || ins.x86SegmentPrefix != 0 {
+		return false
+	}
+	origin := ins.x86SourceRaw
+	return origin == nil || origin.op == "NOP" && len(origin.args) == 0
+}
+
 // The pinned decoder lacks the REX.W form of 0F 1F /0 (LLVM 22 NOOPQ).
 // Only its operand width is inert. Keep every other prefix and use the decoder
 // for the complete ModRM/SIB/displacement length and prefix validity. This

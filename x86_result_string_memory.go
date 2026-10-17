@@ -207,6 +207,9 @@ func (plan *x86ResultStringMemoryPlan) transfer(ordinal int, ins Instr, state *x
 // counter fact is revoked by any overlapping write, unknown effect or CALL;
 // clone/join and the existing shared work budget account for it separately.
 func x86ResultStringCountAfter(ins Instr, before, current x86ResultStringCount, arch string) x86ResultStringCount {
+	if x86NOPPreservesSourceState(ins) {
+		return before
+	}
 	if !x86ResultNamedPredicateInstruction(ins) || ins.Op == OpCALL {
 		return x86StringCountUnknown
 	}

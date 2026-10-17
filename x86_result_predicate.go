@@ -27,6 +27,9 @@ func x86ResultNamedPredicateInstruction(ins Instr) bool {
 
 // Called only after the independent complete byte/effect transfer succeeds.
 func x86ResultPredicateAfter(ins Instr, before x86ResultPredicate, arch string) x86ResultPredicate {
+	if x86NOPPreservesSourceState(ins) {
+		return before
+	}
 	if !x86ResultNamedPredicateInstruction(ins) {
 		return x86ResultPredicate{}
 	}

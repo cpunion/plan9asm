@@ -87,7 +87,7 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 			ins.x86AddressBits != 0 || ins.x86UnboundAddressOverride {
 			return strictErr
 		}
-		if origin := ins.x86SourceRaw; origin != nil {
+		if ins.x86SourceRaw != nil {
 			if x86TimestampPreservesSourceState(ins) {
 				// The decoder's exact original and normalized zero-operand
 				// timestamp share the same implicit outputs. It adds no memory,
@@ -106,7 +106,7 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 			// Ordinary padding has no memory, register, FLAGS or entry effect.
 			// Preserve the sealed original/normalized identity; no other raw
 			// instruction may borrow a named load's conditional result rule.
-			if origin.op != "NOP" || len(origin.args) != 0 || ins.Op != "NOP" || len(ins.Args) != 0 {
+			if !x86NOPPreservesSourceState(ins) {
 				return strictErr
 			}
 		}

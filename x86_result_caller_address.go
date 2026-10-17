@@ -66,6 +66,9 @@ func x86ResultCallerAddressesAfterTransfer(ins Instr, before, transferred [16]bo
 // old provenance independently of initialized bytes or opaque pointerGP.
 // Unknown effects conservatively revoke all caller addresses, never seed one.
 func x86ResultCallerAddressesAfter(ins Instr, before [16]bool, entryFP map[int64]bool, arch string) [16]bool {
+	if x86NOPPreservesSourceState(ins) {
+		return before
+	}
 	if effect, known, err := x86TypedTimestampByteEffect(ins.Op, ins, arch); known && err == nil {
 		for _, output := range effect.operands {
 			if index, _, valid := x86ResultGP(output.operand.Reg, output.width, arch); valid {
