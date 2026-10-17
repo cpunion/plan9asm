@@ -139,7 +139,7 @@ func x86ScalarFPLogicalTransferWithRead(ins Instr, form x86PackedLogicalForm, st
 	}
 	first := x86CallerVectorByteMask(int64(form.byteWidth))
 	if form.memory >= 0 {
-		if !x86ResultReadWithNativeContinuation(form.source, int64(form.memoryBytes), state, owned, arch, nativeRead) {
+		if !x86ResultReadWithNativeContinuation(ins, form.source, int64(form.memoryBytes), state, owned, arch, nativeRead) {
 			return false // Even a zero mask supplies no missing native envelope.
 		}
 	} else {
