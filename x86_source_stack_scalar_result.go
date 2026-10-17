@@ -177,15 +177,18 @@ func x86SourceStackScalarMerge(left, right x86SourceStackState) (x86SourceStackS
 		cell.known &= right.cells[index].known
 		cell.canonical &= right.cells[index].canonical
 		cell.scalarFlags &= right.cells[index].scalarFlags
-		mask := x86SourceStackNumericFlagMask(x86SourceStackState{
+		mask := x86SourceStackNumericFlagMask(&x86SourceStackState{
 			numericFlags: cell.numericFlags, partialNumericFlags: cell.partialNumericFlags}) &
-			x86SourceStackNumericFlagMask(x86SourceStackState{
+			x86SourceStackNumericFlagMask(&x86SourceStackState{
 				numericFlags: right.cells[index].numericFlags, partialNumericFlags: right.cells[index].partialNumericFlags})
-		cell.numericFlags, cell.partialNumericFlags = mask == x86ByteFlagsAll, mask
+		cell.numericFlags, cell.partialNumericFlags = mask == x86ByteFlagsAll, 0
+		if !cell.numericFlags {
+			cell.partialNumericFlags = mask
+		}
 	}
 	result.scalarResult = a.clone()
 	result.scalarResult.bytes = a.bytes.intersect(b.bytes)
-	x86SourceStackSetNumericFlags(&result, x86SourceStackNumericFlagMask(left)&x86SourceStackNumericFlagMask(right))
+	x86SourceStackSetNumericFlags(&result, x86SourceStackNumericFlagMask(&left)&x86SourceStackNumericFlagMask(&right))
 	result.gOriginal = left.gOriginal && right.gOriginal
 	return result, true
 }

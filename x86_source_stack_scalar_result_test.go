@@ -141,26 +141,26 @@ func TestX86PhysicalSourceStackScalarJoinOnlyIntersectsFacts(t *testing.T) {
 	}
 	left := x86SourceStackState{sp: -8, bp: x86SourceStackAddress{original: true}, gOriginal: true,
 		scalarResult: initial, numericFlags: true,
-		cells: []x86SourceStackCell{{offset: -8, width: 8, flags: true, known: 0x0f,
-			canonical: 0xff, scalarFlags: x86ByteFlagsAll, numericFlags: true}}}
+		cells: []x86SourceStackCell{{offset: -8, width: 8, flags: true, known: 0x3f,
+			canonical: 0x0f, scalarFlags: x86ByteFlagsAll, numericFlags: true}}}
 	right := left
 	right.scalarResult = initial.clone()
 	right.cells = append([]x86SourceStackCell(nil), left.cells...)
 	left.scalarResult.bytes.gp[0], right.scalarResult.bytes.gp[0] = 0x0f, 0xf0
 	left.scalarResult.bytes.flags, right.scalarResult.bytes.flags = x86ByteFlagsAll, x86ByteFlagCF
 	right.numericFlags, right.partialNumericFlags = false, x86ByteFlagCF
-	right.cells[0].known, right.cells[0].canonical = 0xf0, 0x55
+	right.cells[0].known, right.cells[0].canonical = 0xf3, 0x03
 	right.cells[0].scalarFlags = x86ByteFlagCF
 	right.cells[0].numericFlags, right.cells[0].partialNumericFlags = false, x86ByteFlagCF
 	merged, valid := x86SourceStackScalarMerge(left, right)
 	if !valid || merged.scalarResult.bytes.gp[0] != 0 || merged.scalarResult.bytes.flags != x86ByteFlagCF ||
-		merged.cells[0].known != 0 || merged.cells[0].canonical != 0x55 || merged.cells[0].scalarFlags != x86ByteFlagCF ||
-		x86SourceStackNumericFlagMask(merged) != x86ByteFlagCF || merged.cells[0].numericFlags ||
+		merged.cells[0].known != 0x33 || merged.cells[0].canonical != 0x03 || merged.cells[0].scalarFlags != x86ByteFlagCF ||
+		x86SourceStackNumericFlagMask(&merged) != x86ByteFlagCF || merged.cells[0].numericFlags ||
 		merged.cells[0].partialNumericFlags != x86ByteFlagCF {
 		t.Fatal("scalar join invented numerical/canonical/FLAGS knowledge")
 	}
 	merged.scalarResult.bytes.fp[0], merged.cells[0].known = false, 0xff
-	if !left.scalarResult.bytes.fp[0] || !right.scalarResult.bytes.fp[0] || left.cells[0].known != 0x0f || right.cells[0].known != 0xf0 {
+	if !left.scalarResult.bytes.fp[0] || !right.scalarResult.bytes.fp[0] || left.cells[0].known != 0x3f || right.cells[0].known != 0xf3 {
 		t.Fatal("scalar join mutated a predecessor")
 	}
 	for _, change := range []string{"SP", "BP", "cell offset", "cell width", "opaque BP", "layout", "caller"} {
