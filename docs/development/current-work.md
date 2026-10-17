@@ -73,6 +73,14 @@ keeps its owned compiler cache, independent source/package/object/lifetime
 observations and assertions that every function survives both IR levels.
 Splitting scheduling does not establish a speedup or a complete object pass.
 
+The logical native-read RED at `23d158f6` fails381 terminals across the
+independent32-name AND/ANDNOT/OR/XOR inventory. The paired typed result consumer
+and volatile full/guarded read repair at `977b7f03` passes all six focused roots
+and1,908 children on current Go. Original legacy memory opcodes, standalone
+Context queries and MMX's separate role remain unchanged. That focused receipt
+does not establish current-head historical/race, complete modules or runtime.
+The merged candidate adds these exact six owners to a bounded CI priority.
+
 ## Closure queue, 2026-10-17
 
 Freeze scope to actual failures; do not add inventory work or another broad

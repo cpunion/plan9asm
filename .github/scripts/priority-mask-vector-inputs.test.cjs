@@ -28,6 +28,11 @@ const owners = {
     'TestX86VectorArithmeticPairedNativeReadCompleteFamily', 'TestX86VectorArithmeticPairedNativeReadCannotBorrowSourceFacts',
     'TestX86VectorArithmeticSaturatingAddNativeReadEffects',
   ]},
+  'logical-native-memory-complete': {module: '.', roots: [
+    'TestX86LogicalNativeAndCompleteObjects', 'TestX86LogicalNativeAndNotCompleteObjects',
+    'TestX86LogicalNativeOrCompleteObjects', 'TestX86LogicalNativeXorCompleteObjects',
+    'TestX86LogicalNativeReadCannotBorrowSourceFacts', 'TestX86LogicalNativeEmitterRetainsDeadReadEffects',
+  ]},
   'immediate-control-and-frame-hashing': {module: '.', roots: [
     'TestX86ImmediateControlHelpersRetainIntegerBoundaries', 'TestX86ImmediateControlHelpersRejectNonIntegerRoles',
     'TestX86GFNIImmediateFloatZeroRejectedLikeGo', 'TestGoAMD64FrameInputVerificationHasBoundedAllocations',

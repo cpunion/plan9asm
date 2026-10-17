@@ -294,6 +294,16 @@ jobs:
               - TestX86VectorArithmeticPairedNativeReadCannotBorrowSourceFacts
               - TestX86VectorArithmeticSaturatingAddNativeReadEffects
             timeout: 5m
+          - lane: logical-native-memory-complete
+            module: '.'
+            roots:
+              - TestX86LogicalNativeAndCompleteObjects
+              - TestX86LogicalNativeAndNotCompleteObjects
+              - TestX86LogicalNativeOrCompleteObjects
+              - TestX86LogicalNativeXorCompleteObjects
+              - TestX86LogicalNativeReadCannotBorrowSourceFacts
+              - TestX86LogicalNativeEmitterRetainsDeadReadEffects
+            timeout: 5m
           - lane: immediate-control-and-frame-hashing
             module: '.'
             roots:
