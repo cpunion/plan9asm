@@ -123,6 +123,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		if accepted, known := x86ResultSDKLiteralStep(ins, state, owned, resultOffset, arch); known {
 			return accepted // Consume the exact bound source before an overlapping native-memory family.
 		}
+		if accepted, known := x86ResultNumericalReadStep(ins, state, owned, resultOffset, arch); known {
+			return accepted // A checked mutable SB source keeps its own lifetime and byte effects.
+		}
 		if accepted, known := nativeMMX.transfer(ordinal, ins, state, owned, resultOffset, arch); known {
 			return accepted
 		}
