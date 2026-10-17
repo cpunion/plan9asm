@@ -98,6 +98,9 @@ func TestX86BLSInitializedPhysicalWidthsThreeAPIObjects(t *testing.T) {
 						width, typ, move = 8, "uint64", "MOVQ"
 					}
 					parameter, input, load, result := typ, "AX", move, width
+					if target.arch == "amd64" {
+						result = 8 // ABI0 result fields begin at the next native-word boundary.
+					}
 					if memory {
 						parameter, input, result = "*"+typ, "(AX)", int(goWordSize(target.arch))
 						load = "MOVL"
