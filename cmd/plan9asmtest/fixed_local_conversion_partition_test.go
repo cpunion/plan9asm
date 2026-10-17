@@ -158,15 +158,24 @@ func TestFixedLocalConversionObjectCacheIsOwnedByTheWholeTarget(t *testing.T) {
 }
 
 func TestFixedLocalConversionPreparesLazyToolsBeforeSourceCapture(t *testing.T) {
+	fixedLocalRequirePreparedTools(t, "amd64_fixed_local_conversion_test.go", "fixedLocalConversionActualObjects")
+}
+
+func TestFixedLocalPackedPreparesLazyToolsBeforeSourceCapture(t *testing.T) {
+	fixedLocalRequirePreparedTools(t, "amd64_fixed_local_packed_matrix_test.go", "TestGoAMD64FixedLocalPackedCompleteFormsActualObjects")
+}
+
+func fixedLocalRequirePreparedTools(t *testing.T, filename, helper string) {
+	t.Helper()
 	syntax, err := parser.ParseFile(token.NewFileSet(),
-		filepath.Join("..", "..", "amd64_fixed_local_conversion_test.go"), nil, 0)
+		filepath.Join("..", "..", filename), nil, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
 	var prepared, captured []token.Pos
 	for _, declaration := range syntax.Decls {
 		function, ok := declaration.(*ast.FuncDecl)
-		if !ok || function.Name.Name != "fixedLocalConversionActualObjects" {
+		if !ok || function.Name.Name != helper {
 			continue
 		}
 		ast.Inspect(function.Body, func(node ast.Node) bool {
