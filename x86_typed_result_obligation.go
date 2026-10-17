@@ -39,8 +39,8 @@ func x86TypedFPResultNeedsProof(fn Func, sig FuncSig, arch string) bool {
 		if _, known, err := x86PackedSubtractProperties(ins, arch); known && err == nil {
 			return true // Subtract shares the same whole-source obligation, not add's caller authority.
 		}
-		if _, known, err := x86BEXTRProperties(ins.Op, ins, arch); known && err == nil {
-			return true // START, LEN and source bytes remain required even for dead BEXTR results.
+		if _, known, err := x86ScalarBitFieldProperties(ins.Op, ins, arch); known && err == nil {
+			return true // Each family's exact control/source bytes remain required even for dead results.
 		}
 		if _, known, err := x86BroadcastProperties(ins.Op, ins, arch); known && err == nil {
 			return true // Dead scalar/block/mask broadcasts still require their actual input bytes.

@@ -320,7 +320,7 @@ func x86InstructionMemoryShape(ins Instr, index int, arch string) (width int64, 
 	if form, known, err := x86CRC32Properties(ins.Op, ins, arch); known {
 		return int64(form.bits / 8), false, err == nil && index == 0 && isAMD64MemoryOperand(form.source)
 	}
-	if form, known, err := x86BEXTRProperties(ins.Op, ins, arch); known {
+	if form, known, err := x86ScalarBitFieldProperties(ins.Op, ins, arch); known {
 		return int64(form.bits / 8), false, err == nil && index == 1 && isAMD64MemoryOperand(form.source)
 	}
 	if form, known, err := x86BLSProperties(ins.Op, ins, arch); known {

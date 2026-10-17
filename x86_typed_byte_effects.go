@@ -107,7 +107,7 @@ func x86TypedGPByteEffect(op Op, ins Instr, arch string) (x86TypedByteEffect, bo
 	if effect, known, err := x86TypedByteSwapEffect(op, ins, arch); known {
 		return effect, known, err
 	}
-	if effect, known, err := x86TypedBEXTRByteEffect(op, ins, arch); known {
+	if effect, known, err := x86TypedScalarBitFieldByteEffect(op, ins, arch); known {
 		return effect, known, err
 	}
 	if effect, known, err := x86TypedBLSByteEffect(op, ins, arch); known {

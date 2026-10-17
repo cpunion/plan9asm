@@ -15,7 +15,7 @@ func (c *amd64Ctx) lowerBEXTR(op Op, ins Instr) (ok bool, terminated bool, err e
 	if err != nil {
 		return true, false, err
 	}
-	sourceValue, err := c.evalBEXTRSource(ins, form, typ)
+	sourceValue, err := c.evalScalarBitFieldSource(ins, form, typ)
 	if err != nil {
 		return true, false, err
 	}
@@ -62,7 +62,7 @@ func (c *amd64Ctx) lowerBEXTR(op Op, ins Instr) (ok bool, terminated bool, err e
 	return true, false, nil
 }
 
-func (c *amd64Ctx) evalBEXTRSource(ins Instr, form x86BEXTRForm, typ LLVMType) (string, error) {
+func (c *amd64Ctx) evalScalarBitFieldSource(ins Instr, form x86ScalarBitFieldForm, typ LLVMType) (string, error) {
 	if form.source.Kind == OpFP && x86ResultNamedPredicateInstruction(ins) {
 		if value, handled, err := c.loadIntegerFPBytesMode(form.source.FPOffset, typ, true); handled || err != nil {
 			return value, err
@@ -72,14 +72,14 @@ func (c *amd64Ctx) evalBEXTRSource(ins Instr, form x86BEXTRForm, typ LLVMType) (
 		(x86OrdinaryNativeMemoryOperand(form.source, c.goarch) ||
 			x86CallerMemoryCertified(ins, 1) || c.fixedLocalMemoryCertified(ins, 1)) {
 		if ins.x86AddressBits != 0 || ins.x86UnboundAddressOverride {
-			return "", fmt.Errorf("%w: BEXTR needs its original native address size", ErrProbeNeedsContext)
+			return "", fmt.Errorf("%w: %s needs its original native address size", ErrProbeNeedsContext, ins.Op)
 		}
 		pointer, pointerType, _, err := c.packedVectorMemoryPointer(form.source)
 		if err != nil {
 			return "", err
 		}
 		value := c.newTmp()
-		// Preserve the full physical read even for LEN=0 and dead outputs.
+		// Preserve the full physical read even for zero controls/dead outputs.
 		// Alignment, bounds and pointee validity are not optimizer assumptions.
 		fmt.Fprintf(c.b, "  %%%s = load volatile %s, %s %s, align 1\n", value, typ, pointerType, pointer)
 		return "%" + value, nil

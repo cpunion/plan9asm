@@ -5,39 +5,18 @@ import "fmt"
 // lowerBZHI implements Go 1.27's complete _ybextrl operand row for BZHIL/Q:
 // register index, register/memory source, and register destination.
 func (c *amd64Ctx) lowerBZHI(op Op, ins Instr) (ok bool, terminated bool, err error) {
-	bits := 0
-	switch op {
-	case "BZHIL":
-		bits = 32
-	case "BZHIQ":
-		bits = 64
-	default:
-		return false, false, nil
-	}
-	if len(ins.Args) != 3 {
-		return true, false, fmt.Errorf("%s %s expects register index, register/memory source, and register destination: %q", c.goarch, op, ins.Raw)
-	}
-	index, source, destination := ins.Args[0], ins.Args[1], ins.Args[2]
-	if index.Kind != OpReg || !isX86YrlRegisterForArch(index.Reg, c.goarch) {
-		return true, false, fmt.Errorf("%s %s index is outside Go 1.27's Yrl class: %q", c.goarch, op, ins.Raw)
-	}
-	if source.Kind == OpReg {
-		if !isX86YrlRegisterForArch(source.Reg, c.goarch) {
-			return true, false, fmt.Errorf("%s %s source is outside Go 1.27's Yml class: %q", c.goarch, op, ins.Raw)
-		}
-	} else if !isAMD64MemoryOperand(source) {
-		return true, false, fmt.Errorf("%s %s source is outside Go 1.27's Yml class: %q", c.goarch, op, ins.Raw)
-	}
-	if destination.Kind != OpReg || !isX86YrlRegisterForArch(destination.Reg, c.goarch) {
-		return true, false, fmt.Errorf("%s %s destination is outside Go 1.27's Yrl class: %q", c.goarch, op, ins.Raw)
+	form, known, err := x86ScalarBitFieldFamilyProperties(op, ins, c.goarch, x86BitFieldZeroHigh)
+	if !known || err != nil {
+		return known, false, err
 	}
 
+	bits := form.bits
 	typ := amd64IntegerTypeForBits(bits)
-	indexValue, err := c.evalIntSized(index, typ)
+	indexValue, err := c.evalIntSized(form.control, typ)
 	if err != nil {
 		return true, false, err
 	}
-	sourceValue, err := c.evalIntSized(source, typ)
+	sourceValue, err := c.evalScalarBitFieldSource(ins, form, typ)
 	if err != nil {
 		return true, false, err
 	}
@@ -55,7 +34,7 @@ func (c *amd64Ctx) lowerBZHI(op Op, ins Instr) (ok bool, terminated bool, err er
 	fmt.Fprintf(c.b, "  %%%s = select i1 %%%s, %s %%%s, %s -1\n", mask, indexInRange, typ, partialMask, typ)
 	result := c.newTmp()
 	fmt.Fprintf(c.b, "  %%%s = and %s %s, %%%s\n", result, typ, sourceValue, mask)
-	if err := c.storeRegSized(destination.Reg, typ, "%"+result); err != nil {
+	if err := c.storeRegSized(form.destination.Reg, typ, "%"+result); err != nil {
 		return true, false, err
 	}
 	carry := c.newTmp()
