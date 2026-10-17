@@ -206,7 +206,6 @@ func TestX86FloatingCompareVEXWholeEffectsIR(t *testing.T) {
 	cases := x86FloatCompareVEXOracleCases()
 	var physicalSource strings.Builder
 	var physicalBytes strings.Builder
-	physicalSigs := make(map[string]FuncSig)
 	for index, fixture := range cases {
 		name := fmt.Sprintf("physical_vex%d", index)
 		fmt.Fprintf(&physicalSource, "TEXT %s(SB),4,$0-0\n", name)
@@ -218,7 +217,6 @@ func TestX86FloatingCompareVEXWholeEffectsIR(t *testing.T) {
 		// This is only a physical mode32 format harness. Unknown incoming
 		// pointers cannot borrow a native return contract from that byte marker.
 		physicalSource.WriteString("UNDEF\n")
-		physicalSigs[name] = FuncSig{Name: name, Ret: Void}
 	}
 	mc := findLLVM22Tool("llvm-mc")
 	if mc == "" {
@@ -243,7 +241,16 @@ func TestX86FloatingCompareVEXWholeEffectsIR(t *testing.T) {
 		t.Run(target.triple, func(t *testing.T) {
 			source, sigs := x86FloatCompareVEXOracleAssembly(cases)
 			if target.arch == "386" {
-				source, sigs = physicalSource.String(), physicalSigs
+				// The original mode32 byte fixture has neither initialized
+				// vectors nor native pointer inputs. Keep its original Go
+				// objects and public Context controls, then check only its
+				// complete physical syntax through the private emitter.
+				ir := x86FloatingCompareUnboundFormatObject(t, physicalSource.String(), target.arch, target.triple)
+				if strings.Contains(ir, " = fcmp ") || strings.Count(ir, "asm sideeffect") < len(cases) {
+					t.Fatal("physical mode32 VEX formats lost original comparison side effects")
+				}
+				compileLLVMToObject(t, llc, target.triple, "vex-whole-format.ll", "vex-whole-format.o", ir)
+				return
 			}
 			goAssemblerOracleOutput(t, target.arch, source, "", true)
 			file, err := Parse(ArchAMD64, source)

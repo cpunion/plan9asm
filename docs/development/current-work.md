@@ -1,5 +1,34 @@
 # Current work: PR 40 checkpoint
 
+## Floating comparison and broadcast closing batch, 2026-10-17
+
+The fork's frozen run39034893053 still tests `60b321cd`; let it finish.
+PR40 is still draft at `24851df2`. No complete-module or benchmark pass exists.
+The remaining queue is the actual failed roots, not new external inventory.
+
+The comparison candidate shares exact byte writes with the existing caller
+consumer, requires actual source/mask inputs even for Void, and retains native
+MXCSR effects. Original unbound formats keep Go objects and public Context
+controls, not invented entry values. The384-case VEX fixture's mode32 objects
+use that same format-only boundary; initialized AMD64 programs are unchanged.
+The required Linux job now also selects translated comparison execution;
+its older original-Go/C-only step did not exercise translated results.
+
+Independent broadcast RED at `23b39d89` finds missing whole-source obligations
+for all20 members with Void/unused-bool results and named/raw K-data sources.
+At `489f2013`, all18 changed/retained roots and805 children pass current Go,
+without failures/skips or changed source/tool seals. The two old mask-data
+negatives now distinguish actual initialized K inputs from missing inputs;
+raw provenance and byte/reserved-prefix checks remain separate.
+
+The sealed old/current audit across Go1.20-1.27 finds exactly2 comparison
+forms per386 SDK and171 forms perAMD64 SDK (44 comparisons,127 broadcasts)
+changing supported->context-required. All other metrics and form identities
+remain unchanged; no opcode becomes unsupported. Baseline and scanner controls
+retain these missing-input classifications. Require the complete
+`float-broadcast-closure-qualified-*` current-Go/Go20/race cohort, identical
+terminal identities, final official gate and native CI before publication.
+
 ## Non-temporal vector closing batch, 2026-10-17
 
 This section supersedes older checkpoints below. PR40 remains draft at
