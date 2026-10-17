@@ -203,21 +203,21 @@ func TestX86VectorArithmeticSaturatingAddCompleteForms(t *testing.T) {
 					t.Fatal("incomplete or oversized form batch", count)
 				}
 				x86LEAActualTargetGoObject(t, target.arch, target.triple, source.String())
+				file := mustParseX86RawReturn(t, source.String())
+				pkg := mustGoPackage(t, "arithmeticformats", "package arithmeticformats\n"+declarations.String())
+				resolve := func(name string) string { return strings.TrimPrefix(name, "·") }
+				signatures, err := goSigsForAsmFile(pkg, file, resolve, target.arch, nil, nil, nil)
+				if err != nil {
+					t.Fatal(err)
+				}
 				// Every original form and Go object remains. These unbound
 				// functions lack vectors, masks and native addresses; syntax
 				// objects cannot grant their missing public ABI0 inputs.
 				for _, api := range []string{"text", "module", "Go"} {
-					ir, err := x86ScalarFPBitViewAPI(t, source.String(), declarations.String(), target.arch, target.triple, api)
+					ir, err := x86ScalarFPBitViewPackageAPI(t, source.String(), pkg, target.arch, target.triple, api)
 					if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
 						t.Fatal("unbound saturating format invented source inputs", api, err)
 					}
-				}
-				file := mustParseX86RawReturn(t, source.String())
-				signatures := make(map[string]FuncSig)
-				for _, function := range file.Funcs {
-					sig := x86WordMaddFPType(t)
-					sig.Name = strings.TrimPrefix(function.Sym, "·")
-					signatures[sig.Name] = sig
 				}
 				ir := x86ScalarFormatObjectUnit(t, file, signatures, target.arch, target.triple, 0)
 				for _, text := range []string{ir, x86MulDivRoundOptimize(t, ir)} {
