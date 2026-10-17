@@ -37,6 +37,13 @@ func x86TypedPackedConversionByteEffect(op Op, ins Instr, arch string) (x86Typed
 }
 
 func x86ResultPackedConversionStep(ins Instr, state *x86ResultState, owned []bool, arch string) (bool, bool) {
+	return x86ResultPackedConversionStepWithRead(ins, state, owned, arch, false)
+}
+
+// The native conversion emitter retains the complete opcode's access and
+// MXCSR effects. This continuation grants no caller or pointee facts.
+func x86ResultPackedConversionStepWithRead(ins Instr, state *x86ResultState, owned []bool,
+	arch string, nativeRead bool) (bool, bool) {
 	f, known, err := x86PackedConversionProperties(ins, arch)
 	if !known {
 		return false, false
@@ -51,7 +58,7 @@ func x86ResultPackedConversionStep(ins Instr, state *x86ResultState, owned []boo
 		}
 	}
 	if f.memory >= 0 {
-		if !x86ResultRead(ins.Args[0], int64(f.memoryBytes), state, owned, arch) {
+		if !x86ResultReadWithNativeContinuation(ins, ins.Args[0], int64(f.memoryBytes), state, owned, arch, nativeRead) {
 			return false, true
 		}
 	} else {

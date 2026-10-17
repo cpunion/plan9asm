@@ -184,6 +184,15 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		if accepted, known := x86ResultSignedPackedFloatStep(ins, state, owned, arch, true); known {
 			return accepted // The original native opcode retains rounding, exception and memory effects.
 		}
+		if accepted, known := x86ResultPackedConversionStepWithRead(ins, state, owned, arch, true); known {
+			return accepted // The paired conversion retains its exact access and MXCSR effects.
+		}
+		if form, known, err := x86FloatAddSubProperties(ins, arch); known {
+			return err == nil && x86ScalarFPFloatBinaryTransferWithRead(ins, form.x86FloatBinaryForm, state, owned, arch, true)
+		}
+		if form, known, err := x86FloatMulDivProperties(ins, arch); known {
+			return err == nil && x86ScalarFPFloatBinaryTransferWithRead(ins, form.x86FloatBinaryForm, state, owned, arch, true)
+		}
 		if accepted, known := x86ResultPackedStringStepWithRead(ins, state, owned, arch, true); known {
 			return accepted // Paired emitter retains the full volatile m128 read.
 		}

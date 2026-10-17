@@ -5,6 +5,13 @@ package plan9asm
 // MXCSR remain the lowerer's independent contracts. X/Y/Z views share complete
 // physical-bank byte state, including legacy preservation and vector clearing.
 func x86ScalarFPFloatBinaryTransfer(ins Instr, form x86FloatBinaryForm, state *x86ResultState, owned []bool, arch string) bool {
+	return x86ScalarFPFloatBinaryTransferWithRead(ins, form, state, owned, arch, false)
+}
+
+// Only the paired native emitter can supply an active source value after its
+// exact access continues. Register, mask and merge inputs remain independent.
+func x86ScalarFPFloatBinaryTransferWithRead(ins Instr, form x86FloatBinaryForm,
+	state *x86ResultState, owned []bool, arch string, nativeRead bool) bool {
 	if form.bits != 32 && form.bits != 64 {
 		return false
 	}
@@ -31,7 +38,7 @@ func x86ScalarFPFloatBinaryTransfer(ins Instr, form x86FloatBinaryForm, state *x
 		if input == form.memory {
 			// FP/AUTO have independently initialized logical byte envelopes.
 			// A GP/SB native address cannot obtain authority from this query.
-			if !x86ResultRead(ins.Args[input], int64(form.memoryBytes), state, owned, arch) {
+			if !x86ResultReadWithNativeContinuation(ins, ins.Args[input], int64(form.memoryBytes), state, owned, arch, nativeRead) {
 				return false
 			}
 			continue

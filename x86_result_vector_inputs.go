@@ -74,6 +74,13 @@ func x86FixedVectorValueProperties(ins Instr, arch string) (x86PackedBinaryForm,
 // Complete masks, second inputs and I2/T2/merge destination bytes stay required.
 func x86LoweredFixedVectorNativeRead(ins Instr, state *x86ResultState, owned []bool, arch string) (bool, bool) {
 	form, oldInput, known, err := x86FixedVectorValueProperties(ins, arch)
+	if !known {
+		if parsed, registered, parseErr := x86PackedLowMultiplyProperties(ins.Op, ins, arch); registered {
+			form, known, err = parsed.x86PackedBinaryForm, registered, parseErr
+		} else if parsed, registered, parseErr := x86PackedMultiplyAddProperties(ins.Op, ins, arch); registered {
+			form, known, err = parsed.x86PackedBinaryForm, registered, parseErr
+		}
+	}
 	if !known || err != nil {
 		return false, known
 	}
