@@ -31,7 +31,7 @@ func (x86ABI0BoolUnsafeImporter) Import(path string) (*types.Package, error) {
 // Complete untouched Go files supply actual types without executing cmd/go or
 // manufacturing an SDK source/object observation token. This is pure source/
 // declaration/IR evidence; actual selected graph/native observations are separate.
-func x86ABI0BoolActualAtomicPackage(t *testing.T, path string, files []string) GoPackage {
+func x86ABI0BoolActualAtomicPackage(t *testing.T, path, arch string, files []string) GoPackage {
 	t.Helper()
 	fset := token.NewFileSet()
 	var syntax []*ast.File
@@ -47,7 +47,7 @@ func x86ABI0BoolActualAtomicPackage(t *testing.T, path string, files []string) G
 		}
 		syntax = append(syntax, file)
 	}
-	config := types.Config{Importer: x86ABI0BoolUnsafeImporter{}, Sizes: types.SizesFor("gc", "386")}
+	config := types.Config{Importer: x86ABI0BoolUnsafeImporter{}, Sizes: types.SizesFor("gc", arch)}
 	pkg, err := config.Check(path, fset, syntax, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -65,7 +65,7 @@ func TestX86ABI0Mode32CanonicalBoolActualAtomicCompleteSourceNextContext(t *test
 		{"sync/atomic", "asm.s", "tail target lacks its independent exact canonical declaration/transport", []string{"doc.go", "doc_32.go"}, 36},
 	} {
 		t.Run(row.path, func(t *testing.T) {
-			pkg := x86ABI0BoolActualAtomicPackage(t, row.path, row.declarations)
+			pkg := x86ABI0BoolActualAtomicPackage(t, row.path, "386", row.declarations)
 			source, err := os.ReadFile(filepath.Join(runtime.GOROOT(), "src", filepath.FromSlash(row.path), row.member))
 			if err != nil {
 				t.Fatal(err)
@@ -123,6 +123,77 @@ func TestX86ABI0Mode32CanonicalBoolActualAtomicCompleteSourceNextContext(t *test
 						t.Fatal("complete source changed its genuine next unsupported contract", published, err)
 					}
 					t.Log("complete original source still Context, not SDK/object/runtime success:", err)
+				})
+			}
+		})
+	}
+}
+
+// These are the two complete original integer-CAS functions, not a claim
+// that the entire atomic member or pointer-data CAS has been translated.
+func TestX86AMD64CanonicalBoolActualAtomicCasObjects(t *testing.T) {
+	const path = "internal/runtime/atomic"
+	pkg := x86ABI0BoolActualAtomicPackage(t, path, "amd64", []string{"stubs.go", "atomic_amd64.go", "unaligned.go"})
+	original, err := os.ReadFile(filepath.Join(runtime.GOROOT(), "src", filepath.FromSlash(path), "atomic_amd64.s"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	start := strings.Index(string(original), "TEXT ·Cas(SB)")
+	end := strings.Index(string(original), "TEXT ·Casp1(SB)")
+	if start < 0 || end <= start {
+		t.Fatal("original integer-CAS function boundaries changed")
+	}
+	source := []byte("#include \"textflag.h\"\n" + string(original[start:end]))
+	t.Logf("untouched integer-CAS source bytes=%d sha256=%x original-member=%x", len(source), sha256.Sum256(source), sha256.Sum256(original))
+	file, err := ParseWithDefines(ArchAMD64, string(source), GoAssemblerDefines("linux", "amd64"))
+	if err != nil || len(file.Funcs) != 2 || file.Funcs[0].Sym != "·Cas" || file.Funcs[1].Sym != "·Cas64" {
+		t.Fatal("complete original integer-CAS inventory changed", err)
+	}
+	resolve := testResolveSym(path)
+	sigs, err := goSigsForAsmFile(pkg, file, resolve, "amd64", nil, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM22 llc required")
+	}
+	for _, triple := range []string{"x86_64-unknown-linux-gnu", "x86_64-apple-darwin", "x86_64-pc-windows-msvc"} {
+		t.Run(triple, func(t *testing.T) {
+			x86LEAActualTargetGoObject(t, "amd64", triple, string(source))
+			for _, api := range []string{"text", "module", "Go"} {
+				t.Run(api, func(t *testing.T) {
+					ctx := llvm.NewContext()
+					defer ctx.Dispose()
+					var ir string
+					var err error
+					options := Options{Goarch: "amd64", TargetTriple: triple, ResolveSym: resolve, Sigs: sigs}
+					switch api {
+					case "text":
+						ir, err = Translate(file, options)
+					case "module":
+						module, failure := TranslateModuleInContext(ctx, file, options)
+						err = failure
+						if !module.IsNil() {
+							ir = module.String()
+							module.Dispose()
+						}
+					case "Go":
+						module, failure := translateGoModuleInContext(ctx, pkg, source, GoModuleOptions{
+							GOARCH: "amd64", GOOS: "linux", TargetTriple: triple, ResolveSym: resolve,
+						})
+						err = failure
+						if module != nil && !module.Module.IsNil() {
+							ir = module.Module.String()
+							module.Module.Dispose()
+						}
+					}
+					if err != nil || ir == "" {
+						t.Fatal("original integer-CAS canonical result rejected", err)
+					}
+					for _, level := range []string{"-O0", "-O2"} {
+						x86PackedStringCompileObject(t, llc, triple, ir, level)
+					}
 				})
 			}
 		})
