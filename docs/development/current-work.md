@@ -35,18 +35,31 @@ actual-Go20 and race with1,541 children per lane, identical terminal identities,
 zero skips/failures and unchanged source/tool seals. All128 CI policies pass.
 These are focused receipts, not complete modules or native AVX512 execution.
 
-Next clear the complete CI failure index by rule class, not another inventory
-or broad refactoring project. Linux conversion batch08 additionally fails while
-cold-building Go's objdump at the unchanged60-second command deadline; Windows
-batch11 fails the same way. The other34 batches pass, not the complete36-owner
-union. Keep these infrastructure failures distinct from invalid source.
-The scalar-count leaf has a complete nine-member native-read RED and a first
-shared typed-effect/volatile repair; it is not yet qualified or integrated.
-The candidate Windows driver keeps16 jobs/two workers but uses64 command
-shards to reduce per-command work, without narrowing the inventory or raising
-budgets. Its actual complete-union validation is still required.
-The strict184-file benchmark remains
-failed at132/184 with52 failures and AMD64 over budget; no newer pass exists.
+Scalar-count source `6af1c4df` passes13 roots/490 children per current-Go,
+actual-Go20 and race lane, with identical terminals and unchanged seals.
+All nine POPCNT/LZCNT/TZCNT names retain exact volatile native reads, defined
+FLAGS and unknown-pointer/index negatives even for Void/unused-bool entries.
+The exact Void RED at `d81ce31b` remains failed. At `b98a70b0`, four roots/546
+children pass current Go: the byte-identical original LZCNT program's three
+target objects/portable execution, paired-store boundary controls and command
+lifecycles. That four-root union still needs actual-Go20 and race qualification.
+
+Three actual CI roots fail while cold-building Go's objdump at the unchanged
+60-second command deadline: conversion Linux08/Windows11 and complete packed
+frames. Conversion and packed-frame owners now prepare their own disposable
+tool cache before independently bounded capture; AST RED/GREEN passed, but
+complete actual-object replays remain pending. The other34 conversion batches
+pass, not the complete36-owner union. These are infrastructure failures, not
+invalid source. The64-shard actual union first fails because its old fixture
+fills only34 shards. Its corrected fixture retains all64 witnesses plus the
+independent32-shard owner; an actual passing rerun is still required.
+
+Clear this complete failure index by rule class, not another inventory or broad
+refactoring project. The192 main failures' first diagnostics include124 unclosed
+typed effects,28 MMX-region failures and20 undefined-input/effect failures;
+these are triage groups, not independent root causes. The strict184-file
+benchmark remains failed at132/184 with52 failures and AMD64 over budget;
+no newer full pass exists.
 
 ## Bool and pointer-CAS closing batch, 2026-10-17
 
