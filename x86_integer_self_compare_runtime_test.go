@@ -35,14 +35,14 @@ func TestX86IntegerSelfComparePortableValuesFlagsAndCanaries(t *testing.T) {
 						selected = [8]bool{true, false, true, false, false, true, false, true}[ins.Args[0].Imm&7]
 					}
 					fmt.Fprintf(&source, "KMOVQ %s,AX\nMOVQ AX,0(DI)\n", destination)
-				} else {
-					move := "MOVOU"
-					if !row.legacy {
-						move = "VMOVUPS"
+				} else if row.legacy {
+					// Legacy MOVOU retains a native x86 memory opcode. Extract
+					// both halves instead, so the observer is also portable.
+					for lane := 0; lane < 2; lane++ {
+						fmt.Fprintf(&source, "PEXTRQ $%d,%s,AX\nMOVQ AX,%d(DI)\n", lane, destination, lane*8)
 					}
-					// Observe every result byte with ordinary stores, rather
-					// than an unrelated x86-only movemask intrinsic on ARM64.
-					fmt.Fprintf(&source, "%s %s,0(DI)\n", move, destination)
+				} else {
+					fmt.Fprintf(&source, "VMOVUPS %s,0(DI)\n", destination)
 				}
 				source.WriteString("SETCS 64(DI)\nSETOS 65(DI)\nSETEQ 66(DI)\nSETMI 67(DI)\nRET\n")
 				fmt.Fprintf(&kernels, "{%s,%d,%t,%t,%t},\n", name, bits, selected, row.masked, row.maskResult)
@@ -102,7 +102,12 @@ int main(void) {
                 }
             } else {
                 for (unsigned b=0;b<size;++b) {
-                    if (output[1+b]!=(kernel->selected ? 0xff : 0)) return 1;
+                    uint8_t want=kernel->selected ? 0xff : 0;
+                    if (output[1+b]!=want) {
+                        fprintf(stderr,"self-compare kernel=%u mask=%u byte=%u got=%x want=%x\n",
+                            k,m,b,output[1+b],want);
+                        return 1;
+                    }
                 }
             }
             if (memcmp(output+65,flags,4) || output[0]!=0xa7) {
@@ -111,7 +116,10 @@ int main(void) {
             }
             for (unsigned i=1;i<sizeof(output);++i) {
                 if (i<=size || (i>=65 && i<69)) continue;
-                if (output[i]!=0xa7) return 2;
+                if (output[i]!=0xa7) {
+                    fprintf(stderr,"self-compare kernel=%u mask=%u canary=%u\n",k,m,i);
+                    return 2;
+                }
             }
         }
     }
