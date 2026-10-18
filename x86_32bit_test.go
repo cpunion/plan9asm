@@ -225,7 +225,7 @@ func TestTranslate386RejectsInvalidInstructionForms(t *testing.T) {
 }
 
 func TestTranslate386ModelsOfficialDirectSPWrites(t *testing.T) {
-	file, err := Parse(ArchAMD64, `TEXT stack(SB),NOSPLIT,$0-0
+	const source = `TEXT stack(SB),NOSPLIT,$0-0
 	MOVL AX, SP
 	SUBL $256, SP
 	ADDL AX, SP
@@ -234,27 +234,30 @@ func TestTranslate386ModelsOfficialDirectSPWrites(t *testing.T) {
 	LEAL 4(SP), SP
 	POPL SP
 	RET
-`)
+`
+	file, err := Parse(ArchAMD64, source)
 	if err != nil {
 		t.Fatal(err)
 	}
-	ir, err := Translate(file, Options{
-		TargetTriple: "i386-unknown-linux-gnu",
-		Goarch:       "386",
-		Sigs:         map[string]FuncSig{"stack": {Name: "stack", Ret: Void}},
-	})
-	if err != nil {
-		t.Fatal(err)
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM22 llc required")
 	}
-	for _, want := range []string{
-		"%local_stack = alloca [770 x i8]",
-		"sub i32",
-		"add i32",
-		"and i32",
-	} {
-		if !strings.Contains(ir, want) {
-			t.Fatalf("386 direct SP lowering missing %q:\n%s", want, ir)
-		}
+	for _, triple := range []string{"i386-unknown-linux-gnu", "i686-pc-windows-msvc"} {
+		t.Run(triple, func(t *testing.T) {
+			x86UnboundVoidFormatSource(t, source, "stack", "386", triple)
+			ir := x86OriginalStackFormatObject(t, file.Funcs[0], Void, "386", triple)
+			for _, want := range []string{"%local_stack = alloca [770 x i8]", "sub i32", "add i32", "and i32"} {
+				if !strings.Contains(ir, want) {
+					t.Fatalf("386 direct SP format lowering missing %q:\n%s", want, ir)
+				}
+			}
+			for _, text := range []string{ir, x86DwordProductIROptimize(t, ir)} {
+				for _, level := range []string{"-O0", "-O2"} {
+					x86PackedStringCompileObject(t, llc, triple, text, level)
+				}
+			}
+		})
 	}
 }
 
