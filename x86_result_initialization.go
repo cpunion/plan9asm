@@ -197,7 +197,10 @@ func checkX86ABI0ResultInitializationWithTrapOnly(fn Func, sig FuncSig, goarch s
 			initial.pointerFP[slot.Offset] = true
 		}
 	}
-	if (fn.ArgSize != 0 || privateVoid) && (fn.ArgSize < int64(frame) || fn.ArgSize > 4096) {
+	// Go's omitted suffix is unknown, not an explicit zero-sized argument
+	// frame. The independently checked declaration above still bounds inputs.
+	if (fn.ArgSize != 0 || privateVoid && !x86TEXTArgumentsUnspecified(fn)) &&
+		(fn.ArgSize < int64(frame) || fn.ArgSize > 4096) {
 		return fail("TEXT argument extent disagrees with the typed result")
 	}
 	return checkX86ResultSourceFlowWithTrapOnly(fn, initial, owned, resultOffset, goarch, transfer,

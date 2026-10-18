@@ -330,30 +330,47 @@ func statementLabelPrefix(arch Arch, statement string) (assemblyLabelPrefix, boo
 }
 
 func parseTEXTFrame(parts []string) (frameSize, argSize int64, err error) {
+	spec, err := parseTEXTFrameSpec(parts)
+	return spec.frameSize, spec.argSize, err
+}
+
+type textFrameSpec struct {
+	frameSize, argSize int64
+	argsSpecified      bool
+}
+
+// Keep Go's omitted argument-size state distinct from an explicit zero. The
+// public numeric fields retain their historical zero value; source-sensitive
+// consumers can recover this distinction from the retained original TEXT.
+func parseTEXTFrameSpec(parts []string) (textFrameSpec, error) {
+	var result textFrameSpec
 	if len(parts) < 2 {
-		return 0, 0, nil
+		return result, nil
 	}
 	spec := strings.TrimSpace(parts[len(parts)-1])
 	if !strings.HasPrefix(spec, "$") {
-		return 0, 0, nil
+		return result, nil
 	}
 	spec = strings.TrimSpace(strings.TrimPrefix(spec, "$"))
 	frameText, argText := spec, ""
 	if i := strings.LastIndex(spec, "-"); i > 0 {
+		result.argsSpecified = true
 		frameText, argText = strings.TrimSpace(spec[:i]), strings.TrimSpace(spec[i+1:])
 	}
 	frame, ok := parseImmExpr(frameText)
 	if !ok {
-		return 0, 0, fmt.Errorf("unresolved TEXT frame size %q", frameText)
+		return result, fmt.Errorf("unresolved TEXT frame size %q", frameText)
 	}
-	if argText == "" {
-		return int64(frame), 0, nil
+	result.frameSize = int64(frame)
+	if !result.argsSpecified {
+		return result, nil
 	}
 	args, ok := parseImmExpr(argText)
 	if !ok {
-		return 0, 0, fmt.Errorf("unresolved TEXT argument size %q", argText)
+		return result, fmt.Errorf("unresolved TEXT argument size %q", argText)
 	}
-	return int64(frame), int64(args), nil
+	result.argSize = int64(args)
+	return result, nil
 }
 
 func parseDATAStmt(arch Arch, rest string) (DataStmt, error) {
