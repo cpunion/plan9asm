@@ -67,7 +67,11 @@ func (c *amd64Ctx) lowerScalarSqrt(ins Instr, f x86FloatBinaryForm) error {
 			return err
 		}
 	}
-	constraints := "=x,0,x"
+	registerClass := "x"
+	if x86SqrtNativeEVEX(ins, f) {
+		registerClass = "v"
+	}
+	constraints := "=" + registerClass + ",0," + registerClass
 	args := fmt.Sprintf("%s %s, %s %s", typ, old, amd64FMA3LLVMType(1, f.bits), source)
 	operands, maskIndex := "$2, $0", 3
 	if !f.legacy {
@@ -75,11 +79,14 @@ func (c *amd64Ctx) lowerScalarSqrt(ins Instr, f x86FloatBinaryForm) error {
 		if err != nil {
 			return err
 		}
-		constraints += ",x"
+		constraints += "," + registerClass
 		args += ", " + typ + " " + upper
 		operands, maskIndex = "$2, $3, $0", 4
 	}
 	mnemonic, _, _ := strings.Cut(strings.ToLower(string(ins.Op)), ".")
+	if x86SqrtNativeEVEX(ins, f) {
+		mnemonic = "{evex} " + mnemonic
+	}
 	assembly := mnemonic + " "
 	if f.rounding != "" {
 		assembly += "{" + strings.ToLower(strings.TrimSuffix(f.rounding, "_SAE")) + "-sae}, "
