@@ -79,6 +79,9 @@ func TestX86PackedLogicalParameterCopiesCompleteThreeAPIsFiveTargets(t *testing.
 					t.Error("initialized private parameter copies lost their logical stores", api, err)
 					continue
 				}
+				if strings.Count(ir, "define void @") != len(rows) || strings.Count(ir, "define i32 @") != len(rows) {
+					t.Fatal("translation omitted an original Void or integer-result program", api)
+				}
 				for _, text := range []string{ir, x86MulDivRoundOptimize(t, ir)} {
 					for _, level := range []string{"-O0", "-O2"} {
 						x86PackedStringCompileObject(t, llc, target.triple, text, level)
