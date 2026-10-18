@@ -121,7 +121,7 @@ func normalizeX86RawReturnSourceStack(fn Func, opt Options, bindFrame bool, orig
 				return reject(index, "conditional byte output needs a complete typed caller input proof")
 			}
 			if _, extension := amd64ScalarExtensionMoveSpecs[instruction.Op]; extension || instruction.x86RawMOVSXDNeedsCaller {
-				if x86RawMOVSXDLiteralInput(instruction) {
+				if x86RawDwordLiteralInput(instruction) {
 					continue
 				}
 				// The old scalar slot contract proves frame bounds, not GP

@@ -120,7 +120,15 @@ func (state *x86SourceStackScalarState) step(ins Instr, arch string) bool {
 	}
 	beforeFP, beforeGP := state.bytes.canonicalFP, state.bytes.canonicalGP
 	next := state.bytes.clone()
-	if !x86ResultTransfer(local, &next, state.owned, state.result, arch) {
+	if arch == "amd64" && x86RawDwordLiteralInput(ins) {
+		// The decoder-bound four-byte input belongs to this instruction
+		// only. Typed MOVL/MOVLQSX effects retain their distinct extension;
+		// the raw-return guard separately checks the actual DATA object.
+		next.literalMemoryOperand, next.literalMemoryBytes = &ins.Args[0], 4
+	}
+	accepted := x86ResultTransfer(local, &next, state.owned, state.result, arch)
+	next.literalMemoryOperand, next.literalMemoryBytes = nil, 0
+	if !accepted {
 		// An unobserved nontrapping scratch result may remain unknown. This
 		// does not excuse later result, store, address or FLAGS observations.
 		next = state.bytes.clone()

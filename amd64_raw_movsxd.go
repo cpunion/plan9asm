@@ -75,12 +75,12 @@ func decodedX86MOVSXD(inst x86asm.Inst, encoding []byte) (string, error) {
 	return x86asm.GoSyntax(inst, 0, nil), nil
 }
 
-func x86RawMOVSXDLiteralInput(ins Instr) bool {
+func x86RawDwordLiteralInput(ins Instr) bool {
 	// This is only the source-stack transfer's input-availability check. The
 	// final consumer must still bind the exact bytes to the allocated DATA
 	// object through x86RawReturnDecodedReadBound; no GP input is inferred.
 	read := ins.x86RIPMemoryRead
-	if ins.Op != "MOVLQSX" || read.source != 0 || read.width != 4 || len(ins.Args) != 2 ||
+	if ins.Op != "MOVL" && ins.Op != "MOVLQSX" || read.source != 0 || read.width != 4 || len(ins.Args) != 2 ||
 		ins.Args[1].Kind != OpReg || !x86RawReturnDecodedReadIdentity(ins) {
 		return false
 	}
