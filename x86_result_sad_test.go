@@ -179,3 +179,39 @@ func TestX86SADInitializedFiveTargetObjects(t *testing.T) {
 		})
 	}
 }
+
+func TestX86SADNativeInputsStayIndependent(t *testing.T) {
+	for _, row := range x86SADValueRows("amd64") {
+		instruction := x86SADValueInstruction(row.op, row.bank, row.mode, "3(AX)(DX*2)", 37)
+		original := "TEXT ·Value(SB),4,$0-16\nMOVQ p+0(FP),AX\nMOVQ mask+8(FP),CX\nKMOVD CX,K1\n" +
+			"MOVL $1,DX\nVPXORD Z1,Z1,Z1\nVPXORD Z2,Z2,Z2\n" + instruction + "\nRET\n"
+		declaration := "func Value(p *[128]byte,mask uintptr)"
+		variants := []struct{ name, source string }{
+			{"complete", original},
+			{"unknown-pointer", strings.Replace(original, "p+0(FP),AX", "p+0(FP),DI", 1)},
+			{"numeric-pointer", strings.Replace(original, "MOVQ p+0(FP),AX", "MOVQ $42,AX", 1)},
+			{"unknown-index", strings.Replace(original, "MOVL $1,DX\n", "", 1)},
+			{"unknown-second", strings.Replace(original, "VPXORD Z1,Z1,Z1\n", "", 1)},
+		}
+		if row.mode != "plain" {
+			variants = append(variants, struct{ name, source string }{"unknown-mask", strings.Replace(original, "KMOVD CX,K1\n", "", 1)})
+		}
+		if row.mode == "merge" {
+			variants = append(variants, struct{ name, source string }{"unknown-merge", strings.Replace(original, "VPXORD Z2,Z2,Z2\n", "", 1)})
+		}
+		for _, variant := range variants {
+			t.Run(row.op+"/"+row.bank+"/"+row.mode+"/"+variant.name, func(t *testing.T) {
+				for _, api := range []string{"text", "module", "Go"} {
+					ir, err := x86ScalarFPBitViewAPI(t, variant.source, declaration, "amd64", "x86_64-unknown-linux-gnu", api)
+					if variant.name == "complete" {
+						if err != nil || ir == "" {
+							t.Fatal("complete native SAD inputs rejected", api, err)
+						}
+					} else if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+						t.Fatal("SAD acquired unknown memory/vector/mask inputs", api, err)
+					}
+				}
+			})
+		}
+	}
+}
