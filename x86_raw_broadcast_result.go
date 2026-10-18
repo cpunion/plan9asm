@@ -9,10 +9,13 @@ import (
 // Complete source replay below binds their original bytes. Block reads also
 // retain the exact DATA identity checked by the independent raw-return guard.
 func x86RawBroadcastLiteralForm(ins Instr, arch string) bool {
-	form, known, err := x86BroadcastProperties(ins.Op, ins, arch)
-	if arch != "amd64" || !known || err != nil || !ins.x86Encoded || !ins.x86RIPLiteral ||
+	if arch != "amd64" || !ins.x86Encoded || !ins.x86RIPLiteral ||
 		ins.x86SourceRaw == nil || ins.x86RawNearReturn != nil || ins.x86AddressBits != 0 ||
 		ins.x86UnboundAddressOverride || ins.x86SegmentPrefix != 0 {
+		return false
+	}
+	form, known, err := x86BroadcastProperties(ins.Op, ins, arch)
+	if !known || err != nil {
 		return false
 	}
 	if ins.Args[0].Kind == OpImm {
