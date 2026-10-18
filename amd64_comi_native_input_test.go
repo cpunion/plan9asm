@@ -3,6 +3,7 @@ package plan9asm
 import (
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -18,6 +19,18 @@ func x86COMINativeInputSource(arch, name, op, setup, address, tail string) strin
 		name, 2*size, word, setup, op, address, tail, word, word, word, size)
 }
 
+func x86COMINativeInputStatusProjection(arch, name, op, setup, address, tail string) string {
+	source := x86COMINativeInputSource(arch, name, op, setup, address, tail)
+	word := "Q"
+	if arch == "386" {
+		word = "L"
+	}
+	// COMI defines only the six status flags, not incoming DF or ID. Keep
+	// the original full-word observation below as an explicit negative.
+	pop := "POP" + word + " AX\n"
+	return strings.Replace(source, pop, pop+"AND"+word+" $0x8d5,AX\n", 1)
+}
+
 func TestX86COMINativeInputCompleteFiveTargets(t *testing.T) {
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
@@ -27,7 +40,7 @@ func TestX86COMINativeInputCompleteFiveTargets(t *testing.T) {
 		t.Run(target.triple, func(t *testing.T) {
 			var source, declarations strings.Builder
 			for _, op := range x86COMIOracleNames() {
-				source.WriteString(x86COMINativeInputSource(target.arch, op, op, "", "-7(DX)(CX*4)", ""))
+				source.WriteString(x86COMINativeInputStatusProjection(target.arch, op, op, "", "-7(DX)(CX*4)", ""))
 				fmt.Fprintf(&declarations, "func %s(p *byte) uintptr\n", op)
 			}
 			x86LEAActualTargetGoObject(t, target.arch, target.triple, source.String())
@@ -70,7 +83,7 @@ func TestX86COMINativeInputCannotSupplyOtherRoles(t *testing.T) {
 				{"no-future-pointer", "", "", "(DX)", "MOVL (DX),DX\n" + op + " (DX),X1\n"},
 			} {
 				t.Run(arch+"/"+op+"/"+row.name, func(t *testing.T) {
-					source := x86COMINativeInputSource(arch, "view", op, row.setup, row.address, row.tail)
+					source := x86COMINativeInputStatusProjection(arch, "view", op, row.setup, row.address, row.tail)
 					if row.remove != "" {
 						source = strings.Replace(source, row.remove, "", 1)
 					}
@@ -81,6 +94,55 @@ func TestX86COMINativeInputCannotSupplyOtherRoles(t *testing.T) {
 						}
 					}
 				})
+			}
+		}
+	}
+}
+
+func TestX86COMINativeStatusDoesNotInventDFOrID(t *testing.T) {
+	for _, target := range x86RawReturnTargets {
+		for _, op := range x86COMIOracleNames() {
+			source := x86COMINativeInputSource(target.arch, "view", op, "", "-7(DX)(CX*4)", "")
+			for _, api := range []string{"text", "module", "Go"} {
+				ir, err := x86ScalarFPBitViewAPI(t, source, "func view(p *byte) uintptr\n", target.arch, target.triple, api)
+				if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+					t.Fatal("native status query invented full FLAGS including unknown DF/ID", target, op, api, err)
+				}
+			}
+		}
+	}
+}
+
+func TestX86COMINativeReadPreservesUnrelatedState(t *testing.T) {
+	for _, arch := range []string{"386", "amd64"} {
+		for _, op := range x86COMIOracleNames() {
+			for missing := -1; missing < 64; missing++ {
+				ins := x86ScalarLaneInstruction(t, op+" -7(DX)(CX*4),X1")
+				state := x86ResultState{direction: x86ResultDirectionBackward,
+					valueStack: &x86ResultValueStack{bytes: []uint8{1, 2}, id: true}}
+				state.gp[1], state.pointerGP[2], state.masks[7] = 0xff, true, true
+				state.callerAddressGP[2], state.flags = true, x86ByteFlagCF
+				bytes := ^uint64(0)
+				if missing >= 0 {
+					bytes &^= 1 << uint(missing)
+				}
+				state.writeVector(1, 64, bytes, false)
+				before := state.clone()
+				if accepted, known := x86ResultCOMIStep(ins, &state, nil, arch); !known || accepted || !reflect.DeepEqual(state, before) {
+					t.Fatal("standalone observer borrowed a conditional native read", arch, op, missing)
+				}
+				width := 4
+				if strings.HasSuffix(op, "D") {
+					width = 8
+				}
+				want := missing < 0 || missing >= width
+				accepted, known := x86ResultCOMIStepWithRead(ins, &state, nil, arch, true)
+				if want {
+					before.flags = x86ByteFlagsAll
+				}
+				if !known || accepted != want || !reflect.DeepEqual(state, before) {
+					t.Fatal("native continuation changed unrelated state or ignored a missing scalar byte", arch, op, missing)
+				}
 			}
 		}
 	}
