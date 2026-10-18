@@ -64,6 +64,21 @@ func TestX86RawVMOVWExactOriginAndNumericalState(t *testing.T) {
 						if !accepted || !known || !reflect.DeepEqual(state, want) {
 							t.Fatal("VMOVW lost low two bytes, upper zeroing or unrelated state")
 						}
+						if !load || !memory {
+							for missing := uint(0); missing < 2; missing++ {
+								partial := before.clone()
+								if !load {
+									partial.writeVector(1, 64, partial.vectorBytes(1)&^(1<<missing), false)
+								} else {
+									partial.gp[1] &^= 1 << missing
+								}
+								original := partial.clone()
+								accepted, known := x86LoweredRawVMOVWResultStep(ins, &partial, nil, 0, arch)
+								if accepted || !known || !reflect.DeepEqual(partial, original) {
+									t.Fatal("VMOVW invented a missing low byte", missing)
+								}
+							}
+						}
 						for _, mutation := range []string{"encoding", "origin", "opcode", "operand", "address", "segment", "return", "literal"} {
 							changed, rejected := ins, before.clone()
 							switch mutation {

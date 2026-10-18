@@ -36,7 +36,15 @@ func x86LoweredRawVMOVWResultStep(ins Instr, state *x86ResultState,
 		return false, false
 	}
 	form, valid := x86RawVMOVWResultForm(ins, arch)
-	if !valid || ins.Args[0].Kind == OpReg && !x86ResultRead(ins.Args[0], 2, state, owned, arch) {
+	if !valid {
+		return false, true
+	}
+	if form.sourceX {
+		index, _ := amd64ParseXReg(ins.Args[0].Reg)
+		if state.xmm[index]&3 != 3 {
+			return false, true
+		}
+	} else if ins.Args[0].Kind == OpReg && !x86ResultRead(ins.Args[0], 2, state, owned, arch) {
 		return false, true
 	}
 	// Project only this already-validated effect into the shared byte rule.
