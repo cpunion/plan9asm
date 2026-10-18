@@ -84,14 +84,45 @@ func assertX86ScalarSqrtRejected(t *testing.T, goarch, triple, instruction strin
 }
 
 func TestAMD64ScalarSqrtRuntimeSemantics(t *testing.T) {
-	crossRosetta := runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" && rosettaAvailable()
-	if runtime.GOARCH != "amd64" && !crossRosetta {
-		t.Skip("runtime execution test only runs on amd64 host")
+	if runtime.GOOS != "linux" || runtime.GOARCH != "amd64" {
+		t.Skip("native AVX512 execution belongs to TestCrossLinuxRuntimeMatrixX86ScalarSqrtNativeSemantics")
 	}
-	llc, clang, ok := findLlcAndClang(t)
-	if !ok {
-		t.Fatal("LLVM 22 llc/clang not found")
+	x86ScalarSqrtNativeRuntime(t)
+}
+
+func x86ScalarSqrtNativeRuntime(t *testing.T) {
+	t.Helper()
+	execution := x86FloatCompareRuntimeTools(t, x86FloatCompareEVEX)
+	ir, main := x86ScalarSqrtRuntimeFixture(t, execution.triple)
+	for _, level := range []string{"-O0", "-O2"} {
+		t.Run(level, func(t *testing.T) {
+			execution.compileAndRunLLVM(t, "scalar-sqrt", ir, main, level)
+		})
 	}
+}
+
+func TestX86ScalarSqrtNativeFixtureObjects(t *testing.T) {
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM 22 llc required")
+	}
+	for _, target := range x86RawReturnTargets {
+		if target.arch != "amd64" {
+			continue // The original runtime fixture uses native qword parameters.
+		}
+		t.Run(target.triple, func(t *testing.T) {
+			ir, _ := x86ScalarSqrtRuntimeFixture(t, target.triple)
+			for _, text := range []string{ir, x86DwordProductIROptimize(t, ir)} {
+				for _, level := range []string{"-O0", "-O2"} {
+					x86PackedStringCompileObject(t, llc, target.triple, text, level)
+				}
+			}
+		})
+	}
+}
+
+func x86ScalarSqrtRuntimeFixture(t *testing.T, triple string) (string, string) {
+	t.Helper()
 	source := `
 TEXT scalarsqrt(SB),NOSPLIT,$0-64
 	MOVQ out+0(FP), AX
@@ -142,12 +173,6 @@ TEXT scalarsqrt(SB),NOSPLIT,$0-64
 		{Offset: 48, Type: Ptr, Index: 6, Field: -1},
 		{Offset: 56, Type: I64, Index: 7, Field: -1},
 	}}
-	triple := testTargetTriple(runtime.GOOS, runtime.GOARCH)
-	var runPrefix []string
-	if crossRosetta {
-		triple = "x86_64-apple-macosx"
-		runPrefix = []string{"/usr/bin/arch", "-x86_64"}
-	}
 	ll, err := Translate(file, Options{
 		TargetTriple: triple,
 		Goarch:       "amd64",
@@ -160,11 +185,13 @@ TEXT scalarsqrt(SB),NOSPLIT,$0-64
 	}
 	mainC := `
 #include <stdint.h>
+#include <string.h>
+#include <xmmintrin.h>
 extern void scalarsqrt(uint8_t *, const double *, const double *, const float *, const float *, const double *, const float *, uint64_t);
 int main(void) {
-  const double source64[2] = {9.0, 77.0};
+  double source64[2] = {9.0, 77.0};
   const double passthrough64[2] = {100.0, 101.0};
-  const float source32[4] = {16.0f, 17.0f, 18.0f, 19.0f};
+  float source32[4] = {16.0f, 17.0f, 18.0f, 19.0f};
   const float passthrough32[4] = {200.0f, 201.0f, 202.0f, 203.0f};
   const double old64[2] = {300.0, 301.0};
   const float old32[4] = {400.0f, 401.0f, 402.0f, 403.0f};
@@ -174,8 +201,31 @@ int main(void) {
   if (out.f32[4] != 4.0f || out.f32[5] != 201.0f || out.f32[6] != 202.0f || out.f32[7] != 203.0f) return 2;
   if (out.d64[4] != 300.0 || out.d64[5] != 101.0) return 3;
   if (out.f32[12] != 0.0f || out.f32[13] != 201.0f || out.f32[14] != 202.0f || out.f32[15] != 203.0f) return 4;
+  scalarsqrt(out.bytes, source64, passthrough64, source32, passthrough32, old64, old32, 1);
+  if (out.d64[4] != 3.0 || out.d64[5] != 101.0 || out.f32[12] != 4.0f || out.f32[13] != 201.0f) return 5;
+
+  source64[0] = 2.0;
+  source32[0] = 2.0f;
+  scalarsqrt(out.bytes, source64, passthrough64, source32, passthrough32, old64, old32, 1);
+  uint64_t down;
+  uint32_t up;
+  memcpy(&down, out.bytes, sizeof(down));
+  memcpy(&up, out.bytes + 16, sizeof(up));
+  if (down != UINT64_C(0x3ff6a09e667f3bcc) || up != UINT32_C(0x3fb504f4)) return 6;
+
+  unsigned saved = _mm_getcsr();
+  source64[0] = -1.0;
+  source32[0] = -1.0f;
+  _mm_setcsr(0x1f80);
+  scalarsqrt(out.bytes, source64, passthrough64, source32, passthrough32, old64, old32, 0);
+  unsigned inactive = _mm_getcsr();
+  _mm_setcsr(0x1f80);
+  scalarsqrt(out.bytes, source64, passthrough64, source32, passthrough32, old64, old32, 1);
+  unsigned active = _mm_getcsr();
+  _mm_setcsr(saved);
+  if ((inactive & 0x3f) != 0 || (active & 0x3f) != 1) return 7;
   return 0;
 }
 `
-	compileAndRunRuntimeTestForTarget(t, llc, clang, "scalar_sqrt", triple, ll, mainC, runPrefix)
+	return ll, mainC
 }
