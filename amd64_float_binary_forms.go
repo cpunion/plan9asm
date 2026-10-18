@@ -20,10 +20,19 @@ type x86FloatBinaryForm struct {
 // Parse only shared operand axes. The registered family supplies precision
 // and encoding generation; its lowerer retains operation-specific semantics.
 func x86FloatBinaryOperandProperties(ins Instr, goarch string, bits int, legacy, scalar, literal bool, family string) (x86FloatBinaryForm, error) {
+	return x86FloatOperandProperties(ins, goarch, bits, legacy, scalar, literal, false, family)
+}
+
+// Unary packed arithmetic shares the width, memory and EVEX control axes,
+// but has no second numerical input and allows three-operand masks on 386.
+func x86FloatOperandProperties(ins Instr, goarch string, bits int, legacy, scalar, literal, unary bool, family string) (x86FloatBinaryForm, error) {
 	_, suffix, dotted := strings.Cut(strings.ToUpper(string(ins.Op)), ".")
 	form := x86FloatBinaryForm{
 		bits: bits, legacy: legacy, scalar: scalar, literal: literal,
 		first: 0, second: 1, destination: len(ins.Args) - 1, mask: -1, memory: -1,
+	}
+	if unary {
+		form.second = form.destination
 	}
 	fail := func() (x86FloatBinaryForm, error) {
 		return form, fmt.Errorf("%s %s operands/suffix outside Go floating %s grammar: %q", goarch, ins.Op, family, ins.Raw)
@@ -37,16 +46,20 @@ func x86FloatBinaryOperandProperties(ins Instr, goarch string, bits int, legacy,
 		}
 		form.byteWidth = 16
 	} else {
+		operands := 3
+		if unary {
+			operands = 2
+		}
 		properties, valid := parseAMD64FMA3Suffix(suffix)
-		if !valid || dotted && suffix == "" || scalar && properties.broadcast || len(ins.Args) != 3 && len(ins.Args) != 4 {
+		if !valid || dotted && suffix == "" || scalar && properties.broadcast || len(ins.Args) != operands && len(ins.Args) != operands+1 {
 			return fail()
 		}
 		form.broadcast, form.zeroing, form.rounding = properties.broadcast, properties.zeroing, properties.rounding
-		if len(ins.Args) == 4 {
-			if goarch == "386" && !ins.x86Encoded || !amd64NonzeroKOperand(ins.Args[2]) {
+		if len(ins.Args) == operands+1 {
+			if goarch == "386" && operands == 3 && !ins.x86Encoded || !amd64NonzeroKOperand(ins.Args[operands-1]) {
 				return fail()
 			}
-			form.mask = 2
+			form.mask = operands - 1
 		} else if form.zeroing {
 			return fail()
 		}

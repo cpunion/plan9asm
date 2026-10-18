@@ -73,7 +73,7 @@ func x86DirectTailResultAddressTransfer(ins Instr, state *x86ResultState, owned 
 		}
 	}
 
-	// Only the existing scalar move effects consume these logical bytes. The
+	// Only registered scalar effects consume these logical bytes. The
 	// actual lowerer still emits the original source memory operand against
 	// boundFPAddress's real logical backing. No native-memory certificate follows.
 	local := ins
@@ -156,6 +156,12 @@ func x86DirectTailResultAddressTransfer(ins Instr, state *x86ResultState, owned 
 }
 
 func x86ResultSlotMoveBytes(ins Instr, arch string) int64 {
+	if form, known, err := x86SqrtProperties(ins, arch); known {
+		if err != nil || !form.legacy || !form.scalar || form.memory != 0 {
+			return 0
+		}
+		return int64(form.bits / 8) // Read-only scalar SQRT uses the same exact logical field.
+	}
 	if form, known, err := x86GPSIMDTransferProperties(ins, arch); known {
 		if err != nil || form.mmx || form.spec.rawOnly || form.memory < 0 {
 			return 0

@@ -6,6 +6,9 @@ import (
 )
 
 func (c *amd64Ctx) lowerVec(op Op, ins Instr) (ok bool, terminated bool, err error) {
+	if known, term, err := c.lowerSqrt(op, ins); known {
+		return known, term, err
+	}
 	if known, term, err := c.lowerLegacyPackedMove(op, ins); known {
 		return known, term, err
 	}

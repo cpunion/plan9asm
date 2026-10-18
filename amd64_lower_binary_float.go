@@ -109,6 +109,9 @@ func parseAMD64BinaryFloatingSuffix(suffix string) (amd64BinaryFloatingSuffix, b
 }
 
 func (c *amd64Ctx) lowerBinaryFloating(op Op, ins Instr) (ok bool, terminated bool, err error) {
+	if known, term, err := c.lowerSqrt(op, ins); known {
+		return known, term, err
+	}
 	if ok, term, err := c.lowerFloatMulDiv(op, ins); ok {
 		return ok, term, err
 	}

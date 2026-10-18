@@ -181,6 +181,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		if accepted, known := x86ResultFloatCompareStep(ins, state, owned, arch, true); known {
 			return accepted
 		}
+		if accepted, known := x86ResultSqrtStep(ins, state, owned, arch, true); known {
+			return accepted // The paired native opcode retains scalar/packed MXCSR effects.
+		}
 		if accepted, known := x86ResultCOMIStepWithRead(ins, state, owned, arch, true); known {
 			return accepted // The original scalar comparison retains exact read and MXCSR effects.
 		}

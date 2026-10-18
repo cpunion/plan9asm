@@ -8,6 +8,9 @@ import (
 )
 
 func (c *amd64Ctx) lowerFP(op Op, ins Instr) (ok bool, terminated bool, err error) {
+	if known, term, err := c.lowerSqrt(op, ins); known {
+		return known, term, err
+	}
 	if known, term, err := c.lowerLegacyPackedMove(op, ins); known {
 		return known, term, err
 	}
@@ -192,21 +195,6 @@ func (c *amd64Ctx) lowerFP(op Op, ins Instr) (ok bool, terminated bool, err erro
 		}
 		return true, false, c.storeXLowF32(ins.Args[1].Reg, "%"+value)
 
-	case "SQRTSS":
-		if len(ins.Args) != 2 || ins.Args[1].Kind != OpReg {
-			return true, false, fmt.Errorf("amd64 SQRTSS expects src, Xdst: %q", ins.Raw)
-		}
-		if _, ok := amd64ParseXReg(ins.Args[1].Reg); !ok {
-			return false, false, nil
-		}
-		src, err := c.evalF32(ins.Args[0])
-		if err != nil {
-			return true, false, err
-		}
-		value := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = call float @llvm.sqrt.f32(float %s)\n", value, src)
-		return true, false, c.storeXLowF32(ins.Args[1].Reg, "%"+value)
-
 	case "MULPS", "DIVPS", "MAXPS", "MINPS",
 		"MULPD", "DIVPD", "MAXPD", "MINPD":
 		if len(ins.Args) != 2 || ins.Args[1].Kind != OpReg {
@@ -246,29 +234,6 @@ func (c *amd64Ctx) lowerFP(op Op, ins Instr) (ok bool, terminated bool, err erro
 			fmt.Fprintf(c.b, "  %%%s = fcmp %s %s %s, %s\n", cmp, pred, vectorType, dst, src)
 			fmt.Fprintf(c.b, "  %%%s = select <%d x i1> %%%s, %s %s, %s %s\n", value, lanes, cmp, vectorType, dst, vectorType, src)
 		}
-		bytesValue := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = bitcast %s %%%s to <16 x i8>\n", bytesValue, vectorType, value)
-		return true, false, c.storeX(ins.Args[1].Reg, "%"+bytesValue)
-
-	case "SQRTPS", "SQRTPD":
-		if len(ins.Args) != 2 || ins.Args[1].Kind != OpReg {
-			return true, false, fmt.Errorf("amd64 %s expects src, Xdst: %q", op, ins.Raw)
-		}
-		if _, ok := amd64ParseXReg(ins.Args[1].Reg); !ok {
-			return false, false, nil
-		}
-		vectorType := "<4 x float>"
-		intrinsic := "@llvm.sqrt.v4f32"
-		if op == "SQRTPD" {
-			vectorType = "<2 x double>"
-			intrinsic = "@llvm.sqrt.v2f64"
-		}
-		src, err := c.loadXTypedVectorOperand(ins.Args[0], vectorType)
-		if err != nil {
-			return true, false, err
-		}
-		value := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = call %s %s(%s %s)\n", value, vectorType, intrinsic, vectorType, src)
 		bytesValue := c.newTmp()
 		fmt.Fprintf(c.b, "  %%%s = bitcast %s %%%s to <16 x i8>\n", bytesValue, vectorType, value)
 		return true, false, c.storeX(ins.Args[1].Reg, "%"+bytesValue)
@@ -408,21 +373,6 @@ func (c *amd64Ctx) lowerFP(op Op, ins Instr) (ok bool, terminated bool, err erro
 			fmt.Fprintf(c.b, "  %%%s = fcmp olt double %s, %s\n", cmp, dst, src)
 			fmt.Fprintf(c.b, "  %%%s = select i1 %%%s, double %s, double %s\n", t, cmp, dst, src)
 		}
-		return true, false, c.storeXLowF64(ins.Args[1].Reg, "%"+t)
-
-	case "SQRTSD":
-		if len(ins.Args) != 2 || ins.Args[1].Kind != OpReg {
-			return true, false, fmt.Errorf("amd64 SQRTSD expects src, Xdst: %q", ins.Raw)
-		}
-		if _, ok := amd64ParseXReg(ins.Args[1].Reg); !ok {
-			return false, false, nil
-		}
-		src, err := c.evalF64(ins.Args[0])
-		if err != nil {
-			return true, false, err
-		}
-		t := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = call double @llvm.sqrt.f64(double %s)\n", t, src)
 		return true, false, c.storeXLowF64(ins.Args[1].Reg, "%"+t)
 
 	case "COMISS", "UCOMISS", "COMISD", "UCOMISD":

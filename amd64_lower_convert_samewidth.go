@@ -34,6 +34,9 @@ var amd64SameWidthConversionSpecs = map[Op]amd64SameWidthConversionSpec{
 // 1.27's _yvcvtdq2ps table. Although the table is shared, VCVTTPS2DQ enables
 // SAE while the other four opcodes enable explicit rounding on Z forms.
 func (c *amd64Ctx) lowerSameWidthPackedConversion(op Op, ins Instr) (ok bool, terminated bool, err error) {
+	if known, term, err := c.lowerSqrt(op, ins); known {
+		return known, term, err
+	}
 	if handled, terminated, err := c.lowerPackedNumericConversion(op, ins); handled {
 		return handled, terminated, err
 	}

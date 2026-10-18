@@ -1,0 +1,41 @@
+package plan9asm
+
+import (
+	"fmt"
+	"strings"
+)
+
+type x86SqrtSpec struct {
+	bits           int
+	legacy, scalar bool
+}
+
+// Complete named Go family. Raw-only FP16 has a distinct physical grammar.
+var x86SqrtSpecs = map[Op]x86SqrtSpec{
+	"SQRTSS": {32, true, true}, "SQRTSD": {64, true, true},
+	"SQRTPS": {32, true, false}, "SQRTPD": {64, true, false},
+	"VSQRTSS": {32, false, true}, "VSQRTSD": {64, false, true},
+	"VSQRTPS": {32, false, false}, "VSQRTPD": {64, false, false},
+}
+
+func x86SqrtProperties(ins Instr, arch string) (x86FloatBinaryForm, bool, error) {
+	base, _, _ := strings.Cut(strings.ToUpper(string(ins.Op)), ".")
+	spec, known := x86SqrtSpecs[Op(base)]
+	if !known {
+		return x86FloatBinaryForm{}, false, nil
+	}
+	f, err := x86FloatOperandProperties(ins, arch, spec.bits, spec.legacy, spec.scalar, false, !spec.scalar, "sqrt")
+	if err != nil {
+		return f, true, err
+	}
+	// Go's pre-encoding vector names are not physical mode32 registers.
+	for _, operand := range ins.Args {
+		if operand.Kind == OpReg {
+			index, vector := amd64VectorRegisterIndex(operand.Reg, f.byteWidth)
+			if vector && arch == "386" && index >= 8 {
+				return f, true, fmt.Errorf("%w: %s register %s has no physical mode32 binding", ErrProbeNeedsContext, ins.Op, operand.Reg)
+			}
+		}
+	}
+	return f, true, nil
+}
