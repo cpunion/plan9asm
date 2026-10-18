@@ -22,6 +22,8 @@ idle worktrees; do not create another for routine work.
 
 | Code snapshot | Completed evidence | Limits |
 |---|---|---|
+| `e809b3271` | Complete 32-member named/raw K-mask logical family: 27 roots / 892 children pass current Go, actual Go1.20 and race; identical 919 terminals, zero fail/skip/incomplete and unchanged source/SDK/LLVM22 seals | Includes portable values/six FLAGS, five-target three-API objects and live private-stack/DF/ID guards; not native AVX512 execution |
+| Same snapshot | All eleven final gates pass: both-SDK build/vet and 22 scanner roots, five-arch classification, five CLI extraction roots, 132 CI policies and formatting | Eight-SDK audit changes only 28 isolated AMD64 K-mask forms per SDK from supported to Context; encoding/unsupported metadata unchanged |
 | `0a4a28bf5` | Omitted TEXT argument extent: 15 portable roots / 410 children pass current Go, actual Go1.20 and race with identical 425 terminal identities; current Go/race additionally pass the complete SDK `subtle/xorBytes` on three AMD64 targets | Actual Go objects and three-API LLVM22 IR/backend O0/O2 objects, not runtime or package linkage |
 | Same snapshot | Both-SDK build/vet and scanner roots, five-arch classification, CLI extraction, 132 CI policies, tracked gofmt and diff checks pass | No coverage baseline changes; not complete CI |
 | `c11c2130d` | COMI/UCOMI native-input continuation and status contracts: 21 roots / 911 children pass current Go, actual Go1.20 and race; identical 932 terminal identities, zero fail/skip/incomplete and unchanged source/SDK/LLVM22 seals | Three-API five-target O0/O2 objects, not native x86 execution |
@@ -104,10 +106,11 @@ before changing implementation or claiming a speedup. Do not relax budgets.
 
 ## Immediate work
 
-1. Finish the 32-member K-mask logical input/status family. Independent complete
-   Go rows, initialized five-target objects, portable values/FLAGS, missing
-   inputs, same-source constants and dispatch guards are committed for RED.
-   Do not treat existing bare format fixtures as initialized programs.
+1. Finish the five-member SAD numerical-input family. RED `bd7a7c3e5` retains
+   70 failed terminals, including both original static-SB SAD owners; complete
+   Go encoder attributes pass independently. Shared byte dependencies are being
+   connected to result proofs. Physical WIG controls are being exercised separately;
+   keep original uninitialized formats distinct from initialized programs.
 2. Repair the latest 48 local failure classes: scalar SQRT input/effects;
    raw FP16/VMOVW native-read composition; raw literal and unbound-format
    contracts; MMX closure; hardware enqueue/random/mask status; custom ABI,
@@ -133,6 +136,10 @@ Resolve worktree locations with `git worktree list`. Ignored receipts include:
   actual Go1.20 has 15 / 410 because the original SDK fixture is Go1.27-only.
   RED `b92d370d2` retains ten failed terminals, including all three original
   `xorBytes` objects failing at TEXT extent before the production repair.
+- `mask-logical-qualified-e809b327.json`, `mask-logical-final-gates-e809b327/`
+  and `mask-logical-classification-audit/`: complete three-lane/final gates and
+  eight-SDK form deltas. Named RED `1d5be19d4` and raw RED `e0c058745` retain
+  142 and 50 failed terminals respectively; first greens are not full CI.
 - `comi-native-input-qualified-c11c2130.json` and
   `comi-native-input-final-gates-c11c2130/`: complete three-lane/final-gate seals.
 - `latest-failure-batch-c11c2130-{summary.json,raw.jsonl,before.json,after.json}`:
