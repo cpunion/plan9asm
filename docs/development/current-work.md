@@ -22,6 +22,8 @@ idle worktrees; do not create another for routine work.
 
 | Code snapshot | Completed evidence | Limits |
 |---|---|---|
+| `bb85d27b3` | Raw FP16 SQRT and retained conversion/named-SQRT families: 82 roots / 1,934 children pass current Go, actual Go1.20 and race; identical 2,016 terminals, zero fail/skip/incomplete | Fifty independent masked FP16 shapes on five x86 targets through three APIs and IR/backend O0/O2; exact native opcode/control bytes and full 32-lane masks, not native execution |
+| Same snapshot | All thirteen final gates pass; exact original 167-root replay has 73 pass / 5 fail / 89 explicit host skips, unchanged source/tools | Original FP16 SQRT runtime root now passes, no regressions; portable X/Y/Z values, high mask bits and scalar passthrough remain distinct from hardware MXCSR/exception execution |
 | `83b656042` | Six raw FP16 floating conversions: 36 roots / 400 children pass current Go, actual Go1.20 and race; identical 436 terminals, zero fail/skip/incomplete | All 148 independent physical forms on five x86 targets through three APIs and IR/backend O0/O2; object bytes retain actual width, mask and rounding controls, not native execution |
 | Same snapshot | All thirteen final gates pass; exact original 167-root replay has 72 pass / 6 fail / 89 explicit host skips, unchanged source/tools | Both original conversion runtime roots now pass with no regressions; portable numerical/guard-page execution remains separate from original native MXCSR and exception behavior |
 | `ef3e886d3` | Complete static scalar RMW and native FS/GS input rules: 53 roots / 4,800 children pass current Go, actual Go1.20 and race; identical 4,853 terminals, zero fail/skip/incomplete | Eleven scalar stems, complete widths/relocations, 1,560 independent segment variants and original bare/indexed LOCK objects on five targets; not native segment execution |
@@ -97,7 +99,7 @@ See earlier checkpoints in Git rather than reconstructing counts by subtraction.
 
 ## Exact failure replay and online CI
 
-The latest local diagnostic at `83b656042` selects exactly the original CI's
+The latest local diagnostic at `bb85d27b3` selects exactly the original CI's
 167 failed root names. One sealed Go test process ran the complete set,
 instead of repeatedly linking the same large test executable.
 All inventories, started/terminal identities and before/after source, SDK, LLVM
@@ -122,7 +124,19 @@ and environment observations match. This is not the canonical isolated CI runner
 | Previous batched replay, `7b1966b70` | 67 | 11 | 89 | 0 / 0 |
 | Previous batched replay, `2c112ef6e` | 69 | 9 | 89 | 0 / 0 |
 | Previous batched replay, `ef3e886d3` | 70 | 8 | 89 | 0 / 0 |
-| Latest batched replay, `83b656042` | 72 | 6 | 89 | 0 / 0 |
+| Previous batched replay, `83b656042` | 72 | 6 | 89 | 0 / 0 |
+| Latest batched replay, `bb85d27b3` | 73 | 5 | 89 | 0 / 0 |
+
+Raw FP16 SQRT reuses the named family's typed operand and byte-effect model,
+with exact decoder identity and no new caller or standalone-query permission.
+Matching x86 emission retains the original native opcode; the shared scalar
+FP16 emitter also serves conversions. Packed half-precision Z forms load all
+32 mask bits rather than truncating to sixteen. Original missing-input formats
+remain Go/emitter objects and public Context. Independently initialized public
+programs own object coverage; portable numerical execution owns a separate axis.
+The available scanner server has no AVX512-FP16 hardware, so neither result is
+reported as native FP16 execution. Retain the failed RED and first-green format
+expectations, including the unchanged scalar-binary load contract.
 
 Raw FP16 floating conversions share typed carrier/active-byte, mask, scalar
 passthrough and ER/SAE grammar. Exact original instruction identity and all
@@ -261,8 +275,9 @@ before changing implementation or claiming a speedup. Do not relax budgets.
    runtime386 `cpuidProbe` entry. Use the actual diagnostic,
    not an earlier successful preflight, to choose each next class.
    The enqueue batch is qualified at `2c112ef6e`; static/segment RMW follows
-   at `ef3e886d3`, and six FP16 floating conversions at `83b656042`.
-   The exact six failures are FP16 FMA, SQRT and binary arithmetic, two runtime386
+   at `ef3e886d3`, six FP16 floating conversions at `83b656042`, and FP16 SQRT
+   at `bb85d27b3`.
+   The exact five failures are FP16 FMA and binary arithmetic, two runtime386
    source fixtures and one x87 compare root. Repair each
    complete rule class with original Go/emitter controls and independently
    initialized public programs; do not weaken source/data or entry proofs.
@@ -281,6 +296,13 @@ develop in an existing idle worktree. Commit and preserve RED before repair.
 
 Resolve worktree locations with `git worktree list`. Ignored receipts include:
 
+- `fp16-sqrt-qualified-bb85d27b.json` and `fp16-sqrt-final-gates-bb85d27b/`:
+  complete 82-root three-lane cohort, identical 2,016-terminal unions and
+  thirteen final gates. Preserve RED `7741a3f8`, retained-format failure
+  `344c1d7f` and scalar-binary expectation failure `1a118b6b` separately.
+- `latest-failure-batch-bb85d27b-{summary.json,raw.jsonl,before.json,after.json}`:
+  exact167-root replay, 73 pass / 5 fail / 89 explicit host skips; unchanged
+  source/tools, no absent/incomplete or pass-with-skip roots.
 - `fp16-conversion-qualified-83b65604.json` and
   `fp16-conversion-final-gates-83b65604/`: complete 36-root three-lane cohort,
   identical 436-terminal unions and thirteen final gates. Preserve input RED

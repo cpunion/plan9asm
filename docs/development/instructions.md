@@ -28,6 +28,14 @@ preserve MXCSR, exceptions and masked access; cross-target numerical execution
 is a separate oracle. Check actual object controls, not just LLVM compilation.
 Dispatch conflicts and malformed addresses must fail before emitting any IR.
 
+Raw FP16 SQRT shares the named SQRT grammar and byte dependency, not its caller
+permission. Exact decoded source identity is required by the lowering-only
+continuation. Scalar upper bytes preserve their actual source knowledge;
+packed Z needs all 32 mask bits. Share the native scalar emitter with FP16
+conversions while retaining each family's memory width and arithmetic opcode.
+Original unbound formats, initialized public objects and portable numerical
+execution are separate axes; none certifies native FP16 hardware execution.
+
 Treat an external-library failure as a counterexample to the systematic
 coverage mechanism, not only as a package-specific regression. Identify where
 the independent Go rules, typed grammar, lowering/effect consumers or executed
