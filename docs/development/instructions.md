@@ -19,6 +19,15 @@ workflow, not a list of already completed instruction families.
 
 ## Instruction-family workflow
 
+Raw-only FP16 floating conversions distinguish active scalar/lane bytes from
+their X/Y/Z carriers. Decoder identity binds the original operands and vector
+length; actual mask, merge and source inputs stay mandatory for Void. Keep
+scalar passthrough unknown where its source bytes are unknown, and clear wider
+aliases according to EVEX. Matching x86 targets emit the original opcode to
+preserve MXCSR, exceptions and masked access; cross-target numerical execution
+is a separate oracle. Check actual object controls, not just LLVM compilation.
+Dispatch conflicts and malformed addresses must fail before emitting any IR.
+
 Treat an external-library failure as a counterexample to the systematic
 coverage mechanism, not only as a package-specific regression. Identify where
 the independent Go rules, typed grammar, lowering/effect consumers or executed
