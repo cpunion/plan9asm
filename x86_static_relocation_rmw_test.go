@@ -80,3 +80,64 @@ func TestX86StaticRelocationRMWCannotInventSourceStorage(t *testing.T) {
 		})
 	}
 }
+
+func TestX86StaticNumericRMWCompleteWidthFamily(t *testing.T) {
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM 22 llc required")
+	}
+	for _, arch := range []string{"386", "amd64"} {
+		word, goType, move, suffixes := 4, "uint32", "MOVL", "BWL"
+		if arch == "amd64" {
+			word, goType, move, suffixes = 8, "uint64", "MOVQ", "BWLQ"
+		}
+		var source, declarations strings.Builder
+		source.WriteString("DATA ·sink+0(SB)/8,$0x12345678\nGLOBL ·sink(SB),16,$8\n")
+		count := 0
+		for _, stem := range []string{"ADD", "SUB", "ADC", "SBB", "AND", "OR", "XOR", "INC", "DEC", "NEG", "NOT"} {
+			for _, suffix := range suffixes {
+				for _, register := range []bool{false, true} {
+					unary := stem == "INC" || stem == "DEC" || stem == "NEG" || stem == "NOT"
+					if unary && register {
+						continue
+					}
+					name := fmt.Sprintf("numeric%d", count)
+					count++
+					fmt.Fprintf(&declarations, "func %s(seed %s) %s\n", name, goType, goType)
+					operands := "·sink(SB)"
+					if !unary {
+						input := "$5"
+						if register {
+							input = "AX"
+						}
+						operands = input + "," + operands
+					}
+					fmt.Fprintf(&source, "TEXT ·%s(SB),4,$0-%d\n%s seed+0(FP),AX\nCLC\n%s%c %s\n%s ·sink(SB),AX\n%s AX,ret+%d(FP)\nRET\n",
+						name, word*2, move, stem, suffix, operands, move, move, word)
+				}
+			}
+		}
+		if count != 18*len(suffixes) {
+			t.Fatal("incomplete independent eleven-stem immediate/register/width matrix", count)
+		}
+		for _, target := range x86AddressMemoryTargets(arch) {
+			t.Run(target, func(t *testing.T) {
+				x86LEAActualTargetGoObject(t, arch, target, source.String())
+				for _, api := range []string{"text", "module", "Go"} {
+					ir, err := x86ScalarFPBitViewAPI(t, source.String(), declarations.String(), arch, target, api)
+					if err != nil {
+						t.Fatal("complete mutable static numerical family", api, err)
+					}
+					if strings.Count(ir, "store volatile") < count || strings.Count(ir, "load volatile") < count {
+						t.Fatal("static RMW lost its exact paired native access")
+					}
+					for _, text := range []string{ir, x86DwordProductIROptimize(t, ir)} {
+						for _, level := range []string{"-O0", "-O2"} {
+							x86PackedStringCompileObject(t, llc, target, text, level)
+						}
+					}
+				}
+			})
+		}
+	}
+}
