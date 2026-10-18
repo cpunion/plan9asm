@@ -74,7 +74,18 @@ func (c *amd64Ctx) lowerInsertExtractFamily(op Op, ins Instr) (bool, bool, error
 		fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i%d> %s to <%d x i8>\n", out, lanes, f.spec.laneBits, masked, f.output)
 		result = "%" + out
 	}
-	return true, false, c.storePackedMoveOperand(ins.Args[f.destination], f.output, result)
+	destination := ins.Args[f.destination]
+	if f.memoryWrite && destination.Kind != OpFP {
+		pointer, pointerType, _, err := c.packedVectorMemoryPointer(destination)
+		if err != nil {
+			return true, false, err
+		}
+		// Preserve every original unmasked write, including overwritten
+		// chunks, without reading old destination bytes or adding alignment.
+		fmt.Fprintf(c.b, "  store volatile <%d x i8> %s, %s %s, align 1\n", f.output, result, pointerType, pointer)
+		return true, false, nil
+	}
+	return true, false, c.storePackedMoveOperand(destination, f.output, result)
 }
 
 func (c *amd64Ctx) lowerNativeMaskedExtract(ins Instr, f x86InsertExtractForm) error {

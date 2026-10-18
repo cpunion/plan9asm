@@ -68,7 +68,7 @@ func TestX86BlockExtractNativeStoreContinuation(t *testing.T) {
 				state.pointerGP[3], state.masks[1] = true, true
 				state.writeVector(1, 64, selected, false)
 				before := state.clone()
-				if !x86ResultBlockTransferWithRead(ins, form, &state, nil, 0, arch, true) || !reflect.DeepEqual(state, before) {
+				if !x86ResultBlockTransferWithNativeMemory(ins, form, &state, nil, 0, arch, true) || !reflect.DeepEqual(state, before) {
 					t.Fatal("paired block store rejected exact selected bytes or changed numerical facts")
 				}
 				if x86ResultBlockTransfer(ins, form, &state, nil, 0, arch) {
@@ -88,7 +88,7 @@ func TestX86BlockExtractNativeStoreContinuation(t *testing.T) {
 						state.writeVector(1, 64, selected&^(uint64(1)<<uint(offset+missing)), false)
 					}
 					original := state.clone()
-					if x86ResultBlockTransferWithRead(ins, form, &state, nil, 0, arch, true) || !reflect.DeepEqual(state, original) {
+					if x86ResultBlockTransferWithNativeMemory(ins, form, &state, nil, 0, arch, true) || !reflect.DeepEqual(state, original) {
 						t.Fatal("missing address, mask or selected byte was fabricated", missing)
 					}
 				}
