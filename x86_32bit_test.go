@@ -36,15 +36,13 @@ func TestTranslate386SymbolIndexedMemory(t *testing.T) {
 		t.Fatal("symbol-indexed address with an empty symbol unexpectedly succeeded")
 	}
 
-	file, err := Parse(ArchAMD64, `
+	const source = `
 GLOBL masks<>(SB), RODATA, $256
 TEXT lookup(SB),NOSPLIT,$0-0
 	PAND masks<>(SB)(BX*8), X1
 	RET
-`)
-	if err != nil {
-		t.Fatal(err)
-	}
+`
+	file, signatures := x86UnboundVoidFormatSource(t, source, "lookup", "386", "i386-pc-windows-gnu")
 	src := file.Funcs[0].Instrs[1].Args[0]
 	if src.Kind != OpMem || src.Mem.Sym != "masks<>(SB)" || src.Mem.Index != BX || src.Mem.Scale != 8 {
 		t.Fatalf("parse symbol-indexed memory = %#v", src)
@@ -52,21 +50,17 @@ TEXT lookup(SB),NOSPLIT,$0-0
 	if got := src.String(); got != "masks<>(SB)(BX*8)" {
 		t.Fatalf("symbol-indexed memory string = %q", got)
 	}
-	ir, err := Translate(file, Options{
-		TargetTriple: "i386-pc-windows-gnu",
-		Goarch:       "386",
-		Sigs: map[string]FuncSig{
-			"lookup": {Name: "lookup", Ret: Void},
-		},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	ir := x86ScalarFormatObjectUnit(t, file, signatures, "386", "i386-pc-windows-gnu", 0)
 	if strings.Contains(ir, `masks<>(SB)(BX*8)`) ||
 		!strings.Contains(ir, "ptrtoint ptr @") ||
 		!strings.Contains(ir, "mul i64") {
 		t.Fatalf("symbol-indexed address was not lowered:\n%s", ir)
 	}
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM 22 llc required")
+	}
+	compileLLVMToObject(t, llc, "i386-pc-windows-gnu", "symbol-indexed.ll", "symbol-indexed.o", ir)
 }
 
 func TestParse386MMXRegister(t *testing.T) {

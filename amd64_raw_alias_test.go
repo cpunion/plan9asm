@@ -342,20 +342,9 @@ func TestTranslateAMD64MOVNTOCompleteOperandForm(t *testing.T) {
 
 GLOBL sink<>(SB),$16
 `
-	requireX86GoAssemblerResult(t, "amd64", source, true)
-	file, err := Parse(ArchAMD64, source)
-	if err != nil {
-		t.Fatal(err)
-	}
-	ir, err := Translate(file, Options{
-		Goarch: "amd64", TargetTriple: "x86_64-unknown-linux-gnu",
-		Sigs: map[string]FuncSig{"movnto": {Name: "movnto", Ret: Void}},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if count := strings.Count(ir, "store <16 x i8> %"); count != 2 {
-		t.Fatalf("MOVNTO emitted %d vector stores, want 2:\n%s", count, ir)
+	ir := x86UnboundVoidScalarFormatObject(t, source, "movnto", "amd64", "x86_64-unknown-linux-gnu")
+	if count := strings.Count(ir, `asm sideeffect "movntdq `); count != 2 {
+		t.Fatalf("MOVNTO emitted %d native stores, want 2:\n%s", count, ir)
 	}
 	llc := findLLVM22Tool("llc")
 	if llc == "" {

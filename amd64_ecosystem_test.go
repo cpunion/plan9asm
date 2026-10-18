@@ -2581,7 +2581,7 @@ func TestTranslateAMD64PackedIntegerCompareCompleteGoAssemblerForms(t *testing.T
 		}
 	}
 	src.WriteString("\tRET\n")
-	ll := translateAMD64EcosystemCase(t, src.String(), "packedintegercompareforms")
+	ll := x86UnboundVoidScalarFormatObject(t, src.String(), "packedintegercompareforms", "amd64", "x86_64-unknown-linux-gnu")
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc not found")
@@ -6937,21 +6937,12 @@ func TestTranslateX86EVEXPackedLogicalCompleteGo127Forms(t *testing.T) {
 				}
 			}
 			src.WriteString("\tRET\n")
-			requireX86GoAssemblerResult(t, target.goarch, strings.Replace(src.String(), ",NOSPLIT", "", 1), true)
+			_, signatures := x86UnboundVoidFormatSource(t, src.String(), "evex_packed_logical_forms", target.goarch, target.triple)
 			file, err := Parse(ArchAMD64, x86PhysicalMode32ObjectSource(t, src.String(), target.goarch))
 			if err != nil {
 				t.Fatal(err)
 			}
-			ll, err := Translate(file, Options{
-				TargetTriple: target.triple,
-				Goarch:       target.goarch,
-				Sigs: map[string]FuncSig{
-					"evex_packed_logical_forms": {Name: "evex_packed_logical_forms", Ret: Void},
-				},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			ll := x86ScalarFormatObjectUnit(t, file, signatures, target.goarch, target.triple, 0)
 			compileLLVMToObject(t, llc, target.triple, "evex-packed-logical-"+target.name+".ll", "evex-packed-logical-"+target.name+".o", ll)
 		})
 	}
@@ -7070,20 +7061,12 @@ func TestTranslateX86PackedFloatingLogicalCompleteGo127Forms(t *testing.T) {
 			}
 			src.WriteString("\tRET\n")
 
+			_, signatures := x86UnboundVoidFormatSource(t, src.String(), "packed_floating_logical_forms", target.goarch, target.triple)
 			file, err := Parse(ArchAMD64, x86PhysicalMode32ObjectSource(t, src.String(), target.goarch))
 			if err != nil {
 				t.Fatal(err)
 			}
-			ll, err := Translate(file, Options{
-				TargetTriple: target.triple,
-				Goarch:       target.goarch,
-				Sigs: map[string]FuncSig{
-					"packed_floating_logical_forms": {Name: "packed_floating_logical_forms", Ret: Void},
-				},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			ll := x86ScalarFormatObjectUnit(t, file, signatures, target.goarch, target.triple, 0)
 			compileLLVMToObject(t, llc, target.triple, "packed-floating-logical-"+target.name+".ll", "packed-floating-logical-"+target.name+".o", ll)
 		})
 	}

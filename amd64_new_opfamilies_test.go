@@ -73,20 +73,14 @@ TEXT crcops(SB),NOSPLIT,$0-0
 	VZEROUPPER
 	RET
 `
-	file, err := Parse(ArchAMD64, src)
-	if err != nil {
-		t.Fatal(err)
+	// This original format sequence does not supply AX, X0 or Z11.
+	// Its object checks must not invent those public-entry inputs.
+	ir := x86UnboundVoidScalarFormatObject(t, src, "crcops", "amd64", "x86_64-unknown-linux-gnu")
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM 22 llc required")
 	}
-	_, err = Translate(file, Options{
-		TargetTriple: "x86_64-unknown-linux-gnu",
-		Sigs: map[string]FuncSig{
-			"crcops": {Name: "crcops", Ret: Void},
-		},
-		Goarch: "amd64",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	compileLLVMToObject(t, llc, "x86_64-unknown-linux-gnu", "crc-subset-forms.ll", "crc-subset-forms.o", ir)
 }
 
 const x86Go126FamiliesSource = `
