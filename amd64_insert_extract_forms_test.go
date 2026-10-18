@@ -129,7 +129,6 @@ func TestX86InsertExtractFormatsAndFiveTargetObjects(t *testing.T) {
 	}
 	for _, arch := range []string{"amd64", "386"} {
 		var source strings.Builder
-		sigs := map[string]FuncSig{}
 		for index, row := range x86InsertExtractFormats() {
 			if arch == "386" && (strings.HasPrefix(row, "VINSERT") || strings.Contains(row, "K1")) {
 				goAssemblerOracleOutput(t, arch, "TEXT f(SB),4,$0-0\n"+row+"\nRET\n", "", false)
@@ -146,22 +145,25 @@ func TestX86InsertExtractFormatsAndFiveTargetObjects(t *testing.T) {
 			goAssemblerOracleOutput(t, arch, "TEXT f(SB),4,$0-0\n"+row+"\nRET\n", "", true)
 			name := fmt.Sprintf("transfer%d", index)
 			fmt.Fprintf(&source, "TEXT %s(SB),4,$0-0\n%s\nRET\n", name, row)
-			sigs[name] = FuncSig{Name: name, Ret: Void}
-		}
-		file, err := Parse(ArchAMD64, source.String())
-		if err != nil {
-			t.Fatal(err)
 		}
 		triples := []string{"x86_64-apple-darwin", "x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc"}
 		if arch == "386" {
 			triples = []string{"i386-unknown-linux-gnu", "i686-pc-windows-msvc"}
 		}
 		for _, triple := range triples {
-			ir, err := Translate(file, Options{Goarch: arch, TargetTriple: triple, Sigs: sigs})
-			if err != nil {
-				t.Fatal(err)
-			}
-			compileLLVMToObject(t, llc, triple, "transfer.ll", "transfer.o", ir)
+			t.Run(triple, func(t *testing.T) {
+				// Preserve every original uninitialized row as Go/public-Context
+				// and emitter-object coverage. Complete initialized programs have
+				// separate public object and executed-byte owners.
+				file, signatures := x86UnboundVoidFormatSources(t, source.String(), arch, triple)
+				ir := x86InstructionFormatObjectUnit(t, file, signatures, arch, triple, 0,
+					func(c *amd64Ctx, ins Instr) (bool, bool, error) {
+						return c.lowerInsertExtractFamily(ins.Op, ins)
+					})
+				for _, level := range []string{"-O0", "-O2"} {
+					x86PackedStringCompileObject(t, llc, triple, ir, level)
+				}
+			})
 		}
 	}
 }
