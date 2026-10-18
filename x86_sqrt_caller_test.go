@@ -65,3 +65,42 @@ func TestX86SqrtCallerCompleteSource(t *testing.T) {
 		})
 	}
 }
+
+func TestX86SqrtMemoryShapesAndCallerBoundaries(t *testing.T) {
+	for _, arch := range []string{"386", "amd64"} {
+		for _, row := range x86SqrtInputRows(arch) {
+			if !strings.Contains(row, "(AX)") {
+				continue
+			}
+			t.Run(arch+"/"+row, func(t *testing.T) {
+				ins := x86ScalarLaneInstruction(t, row)
+				want := int64(16)
+				if strings.HasSuffix(row, "Y2") {
+					want = 32
+				} else if strings.HasSuffix(row, "Z2") {
+					want = 64
+				}
+				op := strings.Fields(row)[0]
+				if strings.HasPrefix(op, "SQRTSS") || strings.HasPrefix(op, "VSQRTSS") || strings.Contains(op, "BCST") {
+					want = 4
+					if strings.HasPrefix(op, "VSQRTPD") {
+						want = 8
+					}
+				} else if strings.HasPrefix(op, "SQRTSD") || strings.HasPrefix(op, "VSQRTSD") {
+					want = 8
+				}
+				for index := -1; index <= len(ins.Args); index++ {
+					width, write, valid := x86InstructionMemoryShape(ins, index, arch)
+					if valid != (index == 0) || valid && (width != want || write) {
+						t.Fatal("source tuple differs", index, width, write, valid, want)
+					}
+				}
+				// Numerical and mask inputs do not supply caller pointer backing.
+				state := x86SourceStackState{vectors: map[Reg]uint64{"Z0": ^uint64(0), "Z1": ^uint64(0), "Z2": ^uint64(0)}, masks: map[Reg]bool{"K1": true}}
+				if x86CallerVectorMoveStep(&ins, &state, &x86GoCallerRegionProof{}) {
+					t.Fatal("sqrt invented a caller-memory region")
+				}
+			})
+		}
+	}
+}

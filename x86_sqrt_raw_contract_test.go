@@ -102,3 +102,52 @@ func TestX86SqrtRawPhysicalForms(t *testing.T) {
 		}
 	}
 }
+
+func TestX86SqrtRawReservedFieldsStayRejected(t *testing.T) {
+	for pp := byte(0); pp < 4; pp++ {
+		for _, mode := range []int{32, 64} {
+			decode := decodedX86SameWidthConversionInstruction
+			code := []byte{0x62, 0xf1, 0x7c | pp, 0x08, 0x51, 0xd1}
+			if pp >= 2 {
+				decode = decodedX86VEXBinaryFloatInstruction
+				code[2], code[5] = 0x6c|pp, 0xd9
+			}
+			if pp&1 != 0 {
+				code[2] |= 0x80
+			}
+			mutations := map[string]func([]byte){
+				"wrong-W":      func(b []byte) { b[2] ^= 0x80 },
+				"fixed-bit":    func(b []byte) { b[2] &^= 4 },
+				"zero-no-mask": func(b []byte) { b[3] |= 0x80 },
+			}
+			if pp < 2 {
+				mutations["packed-LL3"] = func(b []byte) { b[3] |= 0x60 }
+				mutations["packed-vvvv"] = func(b []byte) { b[2] &^= 8 }
+			} else {
+				mutations["scalar-broadcast"] = func(b []byte) { b[3] |= 0x10; b[5] = 0x18 }
+			}
+			if mode == 32 {
+				mutations["high-bank"] = func(b []byte) { b[1] &^= 0x10 }
+			}
+			for name, edit := range mutations {
+				t.Run(fmt.Sprintf("pp%d/mode%d/%s", pp, mode, name), func(t *testing.T) {
+					changed := append([]byte(nil), code...)
+					edit(changed)
+					if _, _, known, err := decode(changed, mode); !known || err == nil {
+						t.Fatal("reserved encoding acquired semantics", changed, known, err)
+					}
+				})
+			}
+			for length := 0; length < len(code); length++ {
+				if _, _, known, err := decode(code[:length], mode); known && err == nil {
+					t.Fatal("truncated encoding accepted", code[:length])
+				}
+			}
+			if pp >= 2 {
+				if _, _, known, err := decode([]byte{0xc4, 0xe1, 0x6c | pp, 0x51, 0xd9}, mode); !known || err == nil {
+					t.Fatal("unpredictable scalar VEX.L1 acquired L0 semantics")
+				}
+			}
+		}
+	}
+}
