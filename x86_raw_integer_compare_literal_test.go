@@ -204,5 +204,19 @@ func TestX86RawIntegerCompareLiteralKeepsMissingInputsAndSource(t *testing.T) {
 				}
 			}
 		}
+		file, err := normalizeX86RawFile(mustParseX86RawReturn(t, source), "amd64")
+		if err != nil || len(file.Data) != 1 {
+			t.Fatal(row.name, err)
+		}
+		if err := checkX86ScalarFPResultInitialization(file.Funcs[0], FuncSig{Name: row.name, Ret: Void}, "amd64"); !errors.Is(err, ErrProbeNeedsContext) {
+			t.Fatal("standalone comparison query borrowed the DATA owner", row.name, err)
+		}
+		file.Data[0].Payload[0] ^= 1
+		options := Options{Goarch: "amd64", TargetTriple: "x86_64-unknown-linux-gnu",
+			Sigs:       map[string]FuncSig{row.name: {Name: row.name, Ret: Void}},
+			ResolveSym: func(name string) string { return strings.TrimPrefix(name, "·") }}
+		if ir, err := Translate(file, options); ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+			t.Fatal("comparison accepted changed original DATA", row.name, err)
+		}
 	}
 }
