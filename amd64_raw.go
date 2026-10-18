@@ -6286,6 +6286,7 @@ func decodedX86EVEXBinaryFloatInstruction(code []byte, i, mode int, segment Reg,
 	mapNumber := p0 & 0x0f
 	rawHalf := mapNumber == 5 && (p1&3 == 0 || p1&3 == 2)
 	rawHalfScalar := rawHalf && p1&3 == 2
+	rawSqrt := stem == "VSQRT" && !rawHalf
 	if !recognized || mapNumber != 1 && !rawHalf {
 		return Instr{}, 0, false, nil
 	}
@@ -6320,7 +6321,7 @@ func decodedX86EVEXBinaryFloatInstruction(code []byte, i, mode int, segment Reg,
 	if broadcast && scalar {
 		return Instr{}, 0, true, fmt.Errorf("scalar binary floating instruction does not support broadcast")
 	}
-	if !embeddedControl && vectorBits == 3 && !rawHalfScalar {
+	if !embeddedControl && vectorBits == 3 && !rawHalfScalar && !rawSqrt {
 		return Instr{}, 0, true, fmt.Errorf("reserved EVEX vector length")
 	}
 
@@ -6356,7 +6357,7 @@ func decodedX86EVEXBinaryFloatInstruction(code []byte, i, mode int, segment Reg,
 	bExt := int(^p0>>5) & 1
 	secondSourceNumber := (int(^p1>>3) & 15) + (int(^p2>>3)&1)*16
 	destinationNumber := int(modRM>>3&7) + rExt*8 + rHighExt*16
-	if mode == 32 && (!rawHalf && maskNumber != 0 || rExt != 0 || rHighExt != 0 || xExt != 0 || bExt != 0 || secondSourceNumber >= 8 || destinationNumber >= 8) {
+	if mode == 32 && (!rawHalf && !rawSqrt && maskNumber != 0 || rExt != 0 || rHighExt != 0 || xExt != 0 || bExt != 0 || secondSourceNumber >= 8 || destinationNumber >= 8) {
 		return Instr{}, 0, true, fmt.Errorf("extended register or mask in 32-bit mode")
 	}
 	firstSource, consumed, decodeErr := decodedX86EVEXRMOperand(code[modRMIndex:], mode, bExt, xExt, segment, vectorPrefix, disp8Scale)
@@ -6399,7 +6400,7 @@ func decodedX86EVEXBinaryFloatInstruction(code []byte, i, mode int, segment Reg,
 	return Instr{
 		Op: op, Args: args,
 		Raw:        fmt.Sprintf("%s %s", op, strings.Join(rawArgs, ", ")),
-		x86Encoded: rawHalf,
+		x86Encoded: rawHalf || rawSqrt, x86SqrtEVEX: rawSqrt,
 	}, modRMIndex + consumed, true, nil
 }
 

@@ -86,9 +86,10 @@ vectorPrefix:
 		return Instr{}, 0, false, nil
 	}
 	ok = true
-	// CVTDQ2PS is VEX.WIG in both machine modes (Intel Vol.2 3-269).
-	// Keep the other families' existing W policy independent.
-	if vexLength == 3 && vexBits&0x80 != 0 && properties.op != "VCVTDQ2PS" {
+	// CVTDQ2PS and packed SQRT are VEX.WIG in both machine modes.
+	// This does not relax their independently validated EVEX.W fields.
+	ignoredWidth := properties.op == "VCVTDQ2PS" || properties.op == "VSQRTPS" || properties.op == "VSQRTPD"
+	if vexLength == 3 && vexBits&0x80 != 0 && !ignoredWidth {
 		return Instr{}, 0, true, fmt.Errorf("VEX.W must be zero")
 	}
 	if vexBits&0x78 != 0x78 {
@@ -194,7 +195,8 @@ func decodedX86EVEXSameWidthConversionInstructionWithMemory(code []byte, i, mode
 	xExt := int(^p0>>6) & 1
 	bExt := int(^p0>>5) & 1
 	destinationNumber := int(modRM>>3&7) + rExt*8 + rHighExt*16
-	if mode == 32 && (maskNumber != 0 && !half && properties.op != "VCVTDQ2PS" || destinationNumber >= 8 || modRM>>6 == 3 && int(modRM&7)+bExt*8+xExt*16 >= 8) {
+	sqrt := opcode == 0x51 && !half
+	if mode == 32 && (maskNumber != 0 && !half && !sqrt && properties.op != "VCVTDQ2PS" || destinationNumber >= 8 || modRM>>6 == 3 && int(modRM&7)+bExt*8+xExt*16 >= 8) {
 		return Instr{}, 0, true, fmt.Errorf("extended vector register or mask in 32-bit mode")
 	}
 	source, consumed, decodeErr := memory.evex(code[modRMIndex:], mode, bExt, xExt, segment, vectorPrefix, disp8Scale)
@@ -226,5 +228,8 @@ func decodedX86EVEXSameWidthConversionInstructionWithMemory(code []byte, i, mode
 	for index := range args {
 		rawArgs[index] = args[index].String()
 	}
-	return Instr{Op: op, Args: args, Raw: fmt.Sprintf("%s %s", op, strings.Join(rawArgs, ", ")), x86Encoded: half}, modRMIndex + consumed, true, nil
+	return Instr{
+		Op: op, Args: args, Raw: fmt.Sprintf("%s %s", op, strings.Join(rawArgs, ", ")),
+		x86Encoded: half || sqrt, x86SqrtEVEX: sqrt,
+	}, modRMIndex + consumed, true, nil
 }

@@ -44,7 +44,7 @@ func x86SqrtNativeEVEX(ins Instr, form x86FloatBinaryForm) bool {
 	if form.legacy {
 		return false
 	}
-	if form.byteWidth == 64 || form.mask >= 0 || form.broadcast || form.rounding != "" {
+	if ins.x86SqrtEVEX || form.byteWidth == 64 || form.mask >= 0 || form.broadcast || form.rounding != "" {
 		return true
 	}
 	for _, operand := range ins.Args {
