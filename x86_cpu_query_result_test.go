@@ -137,3 +137,4 @@ func TestX86CPUQueryInitializedResultsThreeAPIsFiveTargets(t *testing.T) {
 			}
 		}
 	}
+}
