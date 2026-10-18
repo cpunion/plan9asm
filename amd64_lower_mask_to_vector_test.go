@@ -31,20 +31,7 @@ func TestTranslateX86MaskToVectorMoveCompleteForms(t *testing.T) {
 				}
 			}
 			source.WriteString("\tRET\n")
-			requireX86GoAssemblerResult(t, target.goarch, source.String(), true)
-			file, err := Parse(ArchAMD64, source.String())
-			if err != nil {
-				t.Fatal(err)
-			}
-			ir, err := Translate(file, Options{Goarch: target.goarch, TargetTriple: target.triple, Sigs: map[string]FuncSig{"maskvectorforms": {Name: "maskvectorforms", Ret: Void}}})
-			if err != nil {
-				t.Fatal(err)
-			}
-			llc := findLLVM22Tool("llc")
-			if llc == "" {
-				t.Fatal("LLVM 22 llc not found")
-			}
-			compileLLVMToObject(t, llc, target.triple, fmt.Sprintf("mask-to-vector-%s.ll", target.name), fmt.Sprintf("mask-to-vector-%s.o", target.name), ir)
+			x86UnboundVoidScalarFormatObject(t, source.String(), "maskvectorforms", target.goarch, target.triple)
 		})
 	}
 }

@@ -63,6 +63,32 @@ func TestMaskValueCoverageRequiresCompleteInputs(t *testing.T) {
 	}
 }
 
+func TestMaskVectorCoverageRequiresActualData(t *testing.T) {
+	// Independent complete data-move family: K0 is an input, not writemasking.
+	ops := strings.Fields("VPMOVM2B VPMOVM2W VPMOVM2D VPMOVM2Q VPMOVB2M VPMOVW2M VPMOVD2M VPMOVQ2M")
+	for _, arch := range []string{"386", "amd64"} {
+		for _, op := range ops {
+			for _, bank := range []string{"X", "Y", "Z"} {
+				for _, mask := range []string{"K0", "K7"} {
+					t.Run(arch+"/"+op+"/"+bank+"/"+mask, func(t *testing.T) {
+						instruction := op + " " + bank + "1," + mask
+						prefix := "VPXORD Z1,Z1,Z1\n"
+						if strings.HasPrefix(op, "VPMOVM2") {
+							instruction = op + " " + mask + "," + bank + "1"
+							prefix = "MOVL $7,AX\nKMOVD AX," + mask + "\n"
+						}
+						valueProbeNeedsContext(t, arch, instruction)
+						if err := plan9asm.ProbeInstructionSequence(plan9asm.ArchAMD64, arch,
+							compactProbeInstructions(t, prefix+instruction)); err != nil {
+							t.Error("initialized complete mask/vector sequence rejected", err)
+						}
+					})
+				}
+			}
+		}
+	}
+}
+
 func TestVectorValueCoverageRequiresCompleteInputs(t *testing.T) {
 	// Register forms independently cover all 14 indexed permutes, three GFNI
 	// operations and six packed bit counts. Public probe execution is Software;
