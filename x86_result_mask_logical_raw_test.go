@@ -103,3 +103,40 @@ func TestX86MaskLogicalRawCannotBorrowOtherSourceRoles(t *testing.T) {
 		})
 	}
 }
+
+func TestX86MaskLogicalRawPrivateStateFiveTargetObjects(t *testing.T) {
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM 22 llc required")
+	}
+	for _, target := range x86RawReturnTargets {
+		t.Run(target.triple, func(t *testing.T) {
+			word := "Q"
+			if target.arch == "386" {
+				word = "L"
+			}
+			var source, declarations strings.Builder
+			for _, row := range x86MaskLogicalOracle() {
+				fmt.Fprintf(&declarations, "func %s(a,b uint64) uint32\n", row.op)
+				fmt.Fprintf(&source, "TEXT ·%s(SB),4,$0-20\nKMOVQ a+0(FP),K0\nKMOVQ b+8(FP),K7\n", row.op)
+				// Seed status, DF and ID independently, and keep a live private
+				// stack value across the raw operation. No source SP is exposed.
+				fmt.Fprintf(&source, "PUSH%s $0x200cd7\nPOPF%s\nPUSH%s $42\n", word, word, word)
+				source.WriteString(x86MaskLogicalRawOperation(t, row.op))
+				fmt.Fprintf(&source, "POP%s CX\nPUSHF%s\nPOP%s AX\nMOVL AX,ret+16(FP)\nRET\n", word, word, word)
+			}
+			x86LEAActualTargetGoObject(t, target.arch, target.triple, source.String())
+			for _, api := range []string{"text", "module", "Go"} {
+				ir, err := x86ScalarFPBitViewAPI(t, source.String(), declarations.String(), target.arch, target.triple, api)
+				if err != nil {
+					t.Fatal("raw mask operation lost independent DF/ID or private storage", api, err)
+				}
+				for _, text := range []string{ir, x86DwordProductIROptimize(t, ir)} {
+					for _, level := range []string{"-O0", "-O2"} {
+						x86PackedStringCompileObject(t, llc, target.triple, text, level)
+					}
+				}
+			}
+		})
+	}
+}
