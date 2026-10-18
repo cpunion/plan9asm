@@ -32,20 +32,10 @@ func TestTranslateX86RandomCompleteGoAssemblerForms(t *testing.T) {
 			source.WriteString("\tRET\n")
 			requireX86GoAssemblerResult(t, target.goarch, source.String(), true)
 
-			file, err := Parse(ArchAMD64, source.String())
-			if err != nil {
-				t.Fatal(err)
-			}
-			ll, err := Translate(file, Options{
-				TargetTriple: target.triple,
-				Goarch:       target.goarch,
-				Sigs: map[string]FuncSig{
-					"randomforms": {Name: "randomforms", Ret: Void},
-				},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			// Preserve every original legal encoding, including physical SP/BP.
+			// Those writes have no ordinary typed entry contract. Independent
+			// initialized GP/result programs own the public-object assertions.
+			ll := x86UnboundVoidScalarFormatObject(t, source.String(), "randomforms", target.goarch, target.triple)
 			for _, want := range []string{
 				"@llvm.x86.rdrand.16()", "@llvm.x86.rdrand.32()",
 				"@llvm.x86.rdseed.16()", "@llvm.x86.rdseed.32()",

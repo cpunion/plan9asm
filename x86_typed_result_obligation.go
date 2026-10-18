@@ -24,6 +24,9 @@ func x86TypedFPResultNeedsProof(fn Func, sig FuncSig, arch string) bool {
 	}
 	opaqueAddressResult := x86OpaqueAddressPointerResultRole(fn, sig, arch)
 	for ordinal, ins := range fn.Instrs {
+		if _, known, err := x86HardwareRandomProperties(ins.Op, ins, arch); known && err == nil {
+			return true // A random write cannot invent a physical stack or an unwritten ABI result, including raw Void sources.
+		}
 		if _, valid := x86RawVMOVWResultForm(ins, arch); valid {
 			return true // Raw GP/X/m16 moves still require inputs and addresses for Void.
 		}

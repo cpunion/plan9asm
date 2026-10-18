@@ -56,6 +56,9 @@ func x86TypedCPUQueryByteEffect(op Op, ins Instr, arch string) (x86TypedByteEffe
 }
 
 func x86TypedRegisterQueryByteEffect(op Op, ins Instr, arch string) (x86TypedByteEffect, bool, error) {
+	if effect, known, err := x86TypedHardwareRandomByteEffect(op, ins, arch); known {
+		return effect, known, err
+	}
 	if effect, known, err := x86TypedCPUQueryByteEffect(op, ins, arch); known {
 		return effect, known, err
 	}
@@ -67,9 +70,12 @@ func x86TypedRegisterQueryByteEffect(op Op, ins Instr, arch string) (x86TypedByt
 
 // Register queries keep DF and the private numerical stack. Their separate
 // descriptors retain all GP and FLAGS writes: an RTM status query, unlike a CPU
-// query or timestamp, replaces FLAGS. Other zero-operand opcodes cannot inherit
-// this exact original/normalized source boundary.
+// query or timestamp, replaces FLAGS. Random producers also replace their one
+// destination and FLAGS. Other opcodes cannot inherit this exact source boundary.
 func x86RegisterQueryPreservesSourceState(ins Instr) bool {
+	if x86HardwareRandomPreservesSourceState(ins) {
+		return true
+	}
 	name := Op(strings.ToUpper(string(ins.Op)))
 	_, cpu := x86CPUQuerySpecs[name]
 	_, timestamp := x86TimestampSpecs[name]
