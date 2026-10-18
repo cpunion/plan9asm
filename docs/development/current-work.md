@@ -25,6 +25,8 @@ of the current candidate. Do not create another worktree for routine work.
 
 | Snapshot | Evidence and limits |
 |---|---|
+| `6e2182329` | Complete block-extraction native stores: 26 portable roots / 401 children pass current Go, actual Go1.20 and race; identical 427 terminal identities, zero fail/skip/incomplete and unchanged source/SDK/LLVM22 observations. Both-SDK build/vet and twenty scanner roots, five-arch classification, five CLI extraction roots, 132 CI policies and tracked formatting pass. Two original AMD64-only auxiliary roots and the required masked native runtime owner remain separate, unexecuted requirements on this ARM64 host |
+| Same code head | Ten block-extraction names retain all 26 AMD64 and 14 mode32 memory forms. Original TDD has 150 failed terminals, including missing-input acceptance, initialized-store rejection and dead unmasked stores. Original unbound format sources remain actual-Go/public-Context/emitter objects; initialized positives retain five-target objects and complete portable byte/canary execution. Eight-SDK audit changes only 22 isolated AMD64 forms per SDK supported-to-Context; 386, unsupported counts and encoder rules stay unchanged |
 | `2d9059765` | Complete GP/SIMD native-store inputs and continuation: 42 roots / 2,627 children pass current Go, actual Go1.20 and race; identical 2,669 terminal identities, zero fail/skip/incomplete and unchanged source/SDK/LLVM22 observations. Both-SDK build/vet and nineteen scanner roots, five-arch classification, four CLI extraction roots, 132 CI policies and tracked formatting pass. Required native execution and complete CI remain separate |
 | Same code head | The eight-SDK audit changes only six isolated AMD64 forms per SDK supported-to-Context for missing inputs; 386 classifications, unsupported counts, encoder rules and unrelated metrics stay unchanged. Original RED retains 44 failed terminals, including the original overwritten-store program; the portable byte oracle already passed before this repair |
 | `cdbc92b85` | Complete multiply-add input effects and MMX format contracts: 69 roots / 772 children pass current Go, actual Go1.20 and race; identical 841 terminal identities, zero fail/skip/incomplete and unchanged source/SDK/LLVM22 observations. Both-SDK build/vet and eighteen scanner roots, five-arch classification, three CLI extraction roots, 132 CI policies and tracked formatting pass. Native Linux execution and complete CI remain separate requirements |
@@ -35,7 +37,7 @@ of the current candidate. Do not create another worktree for routine work.
 | Same code head | Both-SDK build/vet and sixteen scanner roots, five-arch official classification, three CLI extraction roots, CI policies and tracked formatting pass. Backed up in the allowed fork; neither complete CI nor the strict benchmark has qualified this source |
 | `dab3bb581` | Preserved CPU-query TDD RED: four roots / 136 children, three failed roots and 89 failed terminals with unchanged seals. The original IA32 program fails at CPUID, the implicit NUM descriptor is absent, and Void accepts missing inputs. The simple initialized-result object root already passes; it is a positive control, not a repaired failure |
 | `5df8cde37` | Eleven original failed format/witness roots plus nine initialized public-object roots pass current Go, actual Go1.20 and race: 20 roots / 2,362 children, identical 2,382 terminal identities, zero fail/skip/incomplete and unchanged source/SDK/LLVM22 observations. Production, CI and classification baselines are unchanged; this repairs test contracts, not eleven new instruction implementations |
-| `83f21268e` | The latest CI's exact 167 failed roots were fully replayed locally: 10 pass, 68 fail, 89 explicit host skips, zero absent/pending/incomplete. Original output hashes, complete run/terminal inventories and both owner source/SDK/tool/environment seals audit unchanged. This failed local replay does not certify unexecuted native counterparts or later repairs |
+| `c4c01538c` | The latest CI's exact 167 failed roots were fully replayed locally: 25 pass, 53 fail, 89 explicit host skips, zero absent/pending/incomplete. Original output hashes, complete run/terminal inventories and both owner source/SDK/tool/environment seals audit unchanged. The previous identical cohort at `83f21268e` had 10 pass / 68 fail / 89 host skips. Neither failed local replay certifies unexecuted native counterparts or later block-store repairs |
 | `252239cde` | Complete mask/vector NUM effects: 30 roots / 734 children pass current Go, actual Go1.20 and race; all 764 terminal identities match with no fail/skip/incomplete and unchanged source/SDK/LLVM22 seals. Both-SDK build/vet and fifteen scanner roots, five-arch classification, three CLI extraction roots, CI policies and tracked formatting pass. The original native x86/MXCSR counterpart remains required, not a local pass |
 | `4bcd33be9` | Packed private-parameter stores: 48 roots / 2,031 children pass current Go, actual Go1.20 and race; all 2,079 terminal identities match, no fail/skip/incomplete, unchanged source/SDK/LLVM22 observations. Build/vet, twelve scanner roots on both SDKs, five-arch classification, three CLI extraction roots, 132 CI policies and tracked formatting also pass |
 | `e7e90b7c9` | Ten historical unbound-format failures plus eight initialized/source-boundary owners pass current Go, actual Go1.20 and race: 18 roots / 605 children, identical 623 terminals, no fail/skip/incomplete. Original source rows remain; public Context and emitter-only objects are not runtime passes |
@@ -60,6 +62,15 @@ Classification, emitter-only objects, initialized public translation, portable
 execution and native execution remain different claims.
 
 ## Latest repairs
+
+Block-extraction stores reuse the existing complete insert/extract grammar.
+Paired native continuation requires the selected vector bytes, complete incoming
+address/index and mask without claiming old destination bytes or future read
+facts. Unmasked writes remain exact, unaligned and volatile, including two
+overwrites through both IR/backend optimization axes. Masked stores retain the
+original E6NF native opcode. Logical FP/AUTO, physical/raw and caller roles keep
+their independent boundaries. The original 148-row format inventory remains
+intact; it is not an initialized public-entry or runtime certificate.
 
 The six named GP/SIMD stores reuse the complete transfer grammar and require
 their exact four/eight input bytes and incoming pointer address even for Void.
@@ -248,9 +259,9 @@ cannot certify a performance improvement. Full reports remain under ignored
    changing it; keep explicit mismatch and native-frame/address controls.
 2. Use the completed `06eedf847` run's exact 167-root failure index. All 16
    parts / 64 shards have been downloaded and audited against their identical
-   actual source/head/inventory. Its complete local replay at `83f21268e`
-   has 10 passes, 68 failures and 89 host skips; eleven of those failures now
-   have the separate focused qualification above. Preserve both failed runs
+   actual source/head/inventory. Its complete local replay at `c4c01538c`
+   has 25 passes, 53 failures and 89 host skips. The later block-store batch
+   has separate focused qualification above. Preserve all failed runs
    and their host skips;
    source fixes staged afterward are not online passes. Avoid another complete
    diagnostic run while its known failure classes remain unaddressed.
@@ -271,8 +282,9 @@ cannot certify a performance improvement. Full reports remain under ignored
    qualified, as are the complete CPU-query implicit NUM and exact named/raw
    continuation effects. Scalar-shift memory effects now have the complete
    focused qualification above, followed by the complete multiply-add and MMX
-   format-contract union and GP/SIMD native-store inputs/continuation. Next close
-   native block-extraction stores and remaining MMX region composition failures. Preserve unmodified
+   format-contract union, GP/SIMD native-store inputs/continuation and complete
+   block-extraction native stores. Next close source branch-token namespace
+   collisions and remaining MMX region composition failures. Preserve unmodified
    failed sources and independently initialized positive programs. Do not assume that a whole
    format batch's first MMX rejection establishes every sibling's input checks;
    retain per-mode positive and missing-input controls.
@@ -297,6 +309,15 @@ Go 1.20 and race. One heavy local Go/LLVM owner runs at a time; develop in an
 existing idle worktree while its tested source stays frozen.
 
 Resolve branch locations with `git worktree list`. Latest ignored receipts use
+`block-extract-store-qualified-complete` at `6e2182329`;
+`block-extract-store-qualified-6e218232.json` seals the 26-root three-lane union.
+Final gates use `block-extract-store-final-gates-6e218232`, and the eight-SDK
+audit is `block-store-classification-audit`. Original RED is at `80298ffb6`;
+the first related attempt at `00f3c8704` retains its one obsolete format failure
+and two explicit AMD64-only host skips, not a passing cohort. The final portable
+qualification excludes those two native-only owners without changing or deleting
+them. `latest-failures-c4c01538/raw-outcomes-audit.json` seals the latest exact
+167-root replay. Earlier ignored receipts use
 `gp-simd-store-qualified-{contracts,results,objects}` at `2d9059765`;
 `gp-simd-store-qualified-2d905976.json` seals the complete 42-root three-lane
 union. Final gates use `gp-simd-store-final-gates-2d905976`; the eight-SDK audit

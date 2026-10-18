@@ -1009,6 +1009,16 @@ its unbound high banks remain Context. Scalar INSERTPS/EXTRACTPS result effects
 reuse their existing typed source/target/zero selectors, not a new wider-vector
 or mask permission.
 
+Block extraction shares its complete insert/extract grammar with paired native
+memory effects and mandatory Void inputs. Require every selected source byte,
+mask and complete incoming pointer/index before continuing; unknown bytes in
+unselected chunks stay unknown. Unmasked stores are exact unaligned volatile
+writes, even when overwritten. Masked E6NF stores retain their original native
+opcode without reading inactive destination bytes. Continuation establishes no
+memory facts or caller/raw/physical permission. Keep logical FP/AUTO ownership
+separate, original unbound format objects intact, and initialized public objects,
+portable byte/canary execution and required native execution distinct.
+
 Any integer-lane instruction with declared integer FP results consumes the
 whole original-function must-initialized byte proof before lowering, including
 later GP-to-FP stores and all RET paths. A final-opcode-only check is inadequate.
