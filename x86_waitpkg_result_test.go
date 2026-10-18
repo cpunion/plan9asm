@@ -78,6 +78,26 @@ func TestX86WaitPKGCompleteGoRowsAndNUMInputs(t *testing.T) {
 }
 
 func TestX86WaitPKGVoidInputsThreeAPIs(t *testing.T) {
+	x86WaitPKGVoidInputsThreeAPIs(t, false)
+}
+
+func TestX86RawWaitPKGVoidInputsThreeAPIs(t *testing.T) {
+	x86WaitPKGVoidInputsThreeAPIs(t, true)
+}
+
+func x86WaitPKGBody(op string, raw bool) string {
+	if !raw {
+		return op + " BX\n"
+	}
+	prefix := byte(0xf2)
+	if op == "TPAUSE" {
+		prefix = 0x66
+	}
+	return x86RawDisplacementDirectives([]byte{prefix, 0x0f, 0xae, 0xf3})
+}
+
+func x86WaitPKGVoidInputsThreeAPIs(t *testing.T, raw bool) {
+	t.Helper()
 	for _, target := range x86RawReturnTargets {
 		for _, op := range []string{"UMWAIT", "TPAUSE"} {
 			for _, setup := range []struct {
@@ -92,7 +112,7 @@ func TestX86WaitPKGVoidInputsThreeAPIs(t *testing.T) {
 				{"complete", "MOVL $0,AX\nMOVL $0,DX\nMOVL $0,BX\n", true},
 			} {
 				t.Run(target.triple+"/"+op+"/"+setup.name, func(t *testing.T) {
-					source := "TEXT ·Wait(SB),4,$0-0\n" + setup.source + op + " BX\nRET\n"
+					source := "TEXT ·Wait(SB),4,$0-0\n" + setup.source + x86WaitPKGBody(op, raw) + "RET\n"
 					x86LEAActualTargetGoObject(t, target.arch, target.triple, source)
 					for _, api := range []string{"text", "module", "Go"} {
 						ir, err := x86ScalarFPBitViewAPI(t, source, "func Wait()", target.arch, target.triple, api)
@@ -106,6 +126,45 @@ func TestX86WaitPKGVoidInputsThreeAPIs(t *testing.T) {
 					}
 				})
 			}
+		}
+	}
+}
+
+// Execute no WAITPKG instruction on the host: these objects retain actual
+// native operations, their flags consumers and all original argument/result
+// bytes. Native CPU availability and execution are separate requirements.
+func TestX86WaitPKGInitializedStatusFiveTargets(t *testing.T) {
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM 22 llc required")
+	}
+	for _, target := range x86RawReturnTargets {
+		word, value, offset := "L", "uint32", 12
+		if target.arch == "amd64" {
+			word, value, offset = "Q", "uint64", 16
+		}
+		for _, raw := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/raw=%t", target.triple, raw), func(t *testing.T) {
+				var source, declarations strings.Builder
+				for _, op := range []string{"UMWAIT", "TPAUSE"} {
+					fmt.Fprintf(&declarations, "func %s(control,low,high uint32) %s\n", op, value)
+					fmt.Fprintf(&source, "TEXT ·%s(SB),4,$0-%d\nMOVL control+0(FP),BX\nMOVL low+4(FP),AX\nMOVL high+8(FP),DX\nPUSH%s $0x8d7\nPOPF%s\n%sPUSHF%s\nPOP%s CX\nMOV%s CX,ret+%d(FP)\nRET\n",
+						op, offset+int(x86ResultPointerWord(target.arch)), word, word, x86WaitPKGBody(op, raw), word, word, word, offset)
+				}
+				x86LEAActualTargetGoObject(t, target.arch, target.triple, source.String())
+				for _, api := range []string{"text", "module", "Go"} {
+					ir, err := x86ScalarFPBitViewAPI(t, source.String(), declarations.String(), target.arch, target.triple, api)
+					if err != nil || ir == "" {
+						t.Error("initialized wait/status program rejected", api, err)
+						continue
+					}
+					for _, text := range []string{ir, x86DwordProductIROptimize(t, ir)} {
+						for _, level := range []string{"-O0", "-O2"} {
+							x86PackedStringCompileObject(t, llc, target.triple, text, level)
+						}
+					}
+				}
+			})
 		}
 	}
 }
