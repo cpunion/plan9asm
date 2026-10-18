@@ -31,6 +31,12 @@ func x86BitTestProperties(op Op, ins Instr, arch string) (x86BitTestForm, bool, 
 		return fail("has an invalid mode, suffix, identity or operand count")
 	}
 	form.index, form.destination = ins.Args[0], ins.Args[1]
+	if projected, segment, err := x86NamedSegmentMemorySource(ins, form.destination, arch); segment {
+		if err != nil {
+			return form, true, err
+		}
+		form.destination = projected
+	}
 	if form.index.Kind == OpImm {
 		if form.index.ImmIsFloat || form.index.ImmRaw != "" {
 			return fail("requires a resolved integer bit index")

@@ -9,11 +9,33 @@ func x86LoweredNativeBitTest(ins Instr, state *x86ResultState, owned []bool, arc
 		return false, false
 	}
 	if !x86ResultNamedPredicateInstruction(ins) ||
-		!x86ResultIncomingPointerAddressIdentity(form.destination, state, arch) ||
+		!x86ResultNativeRMWAddress(ins, form.destination, state, owned, arch) ||
 		!x86ResultRead(form.index, int64(form.bits/8), state, owned, arch) {
 		return false, true
 	}
 	effect, _, _ := x86TypedBitTestByteEffect(ins.Op, ins, arch)
 	state.flags = state.flags&^effect.flagsKilled | effect.flagsDefined
 	return true, true // No GP, vector, DF or logical storage changes.
+}
+
+// Only the paired scalar/bit-string emitter consumes this address. FS/GS
+// contributes its actual hardware base, never an AS0 pointer or storage fact.
+// A named GP offset still needs full numerical bytes; ordinary RMW addresses
+// keep their stricter incoming-pointer-base rule and cannot commute operands.
+func x86ResultNativeRMWAddress(ins Instr, address Operand, state *x86ResultState, owned []bool, arch string) bool {
+	projected, segment, err := x86NamedSegmentMemorySource(ins, address, arch)
+	if !segment {
+		return x86ResultIncomingPointerAddressIdentity(address, state, arch)
+	}
+	if err != nil || !x86OrdinaryNativeMemoryOperand(projected, arch) {
+		return false
+	}
+	base := projected.Mem.Base
+	if base == "" {
+		return true
+	}
+	word := x86ResultPointerWord(arch)
+	index, _, valid := x86ResultGP(base, word, arch)
+	return valid && (state.shapeOnly || !state.pointerGP[index]) &&
+		x86ResultRead(Operand{Kind: OpReg, Reg: base}, word, state, owned, arch)
 }

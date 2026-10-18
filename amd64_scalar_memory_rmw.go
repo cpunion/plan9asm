@@ -111,7 +111,7 @@ func x86LoweredScalarMemoryRMW(ins Instr, state *x86ResultState, owned []bool, a
 		return false, known && err != nil
 	}
 	if !x86ResultNamedPredicateInstruction(ins) || ins.x86NumericalRead != nil ||
-		!x86ResultIncomingPointerAddressIdentity(form.destination, state, arch) {
+		!x86ResultNativeRMWAddress(ins, form.destination, state, owned, arch) {
 		return false, true
 	}
 	if !form.spec.unary && !x86ResultRead(form.source, int64(form.spec.bits/8), state, owned, arch) ||

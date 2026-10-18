@@ -100,6 +100,12 @@ func x86LockScalarRMWProperties(op Op, ins Instr, arch string) (x86LockScalarRMW
 		return fail("has an incomplete operand list")
 	}
 	form := x86LockScalarRMWForm{spec: spec, destination: ins.Args[count-1]}
+	if projected, segment, err := x86NamedSegmentMemorySource(ins, form.destination, arch); segment {
+		if err != nil {
+			return form, true, err
+		}
+		form.destination = projected
+	}
 	if form.destination.Kind == OpSym && strings.HasPrefix(strings.TrimSpace(form.destination.Sym), "$") {
 		return fail("requires writable memory, not a symbol address literal")
 	}
@@ -130,7 +136,7 @@ func x86LockScalarRMWProperties(op Op, ins Instr, arch string) (x86LockScalarRMW
 		}
 	}
 	needsTLS := false
-	for _, operand := range ins.Args {
+	for _, operand := range []Operand{form.source, form.destination} {
 		if operand.Kind == OpImm && (operand.ImmRaw != "" || operand.ImmIsFloat) {
 			return fail("requires a resolved integer immediate")
 		}
