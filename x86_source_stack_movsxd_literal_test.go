@@ -9,14 +9,21 @@ import (
 
 // Opcode 63's mode64 memory family has a four-byte source for both the
 // default dword copy and effective REX.W sign extension (including 66+REX.W).
-// SP/BP and the Go g register retain their independent physical roles.
+// The ordinary 8B dword load shares that exact four-byte input role. SP/BP
+// and the Go g register retain their independent physical roles.
 func x86SourceStackMOVSXDLiteralProgram() (string, string, string) {
 	var assembly, declarations, driver strings.Builder
 	driver.WriteString("#include <stdint.h>\n#include <stdio.h>\n")
 	var checks strings.Builder
 	count := 0
-	for _, encoding := range []struct{ rexW, operandOverride bool }{
-		{}, {rexW: true}, {rexW: true, operandOverride: true},
+	for _, encoding := range []struct {
+		opcode                byte
+		rexW, operandOverride bool
+	}{
+		{opcode: 0x63},
+		{opcode: 0x63, rexW: true},
+		{opcode: 0x63, rexW: true, operandOverride: true},
+		{opcode: 0x8b},
 	} {
 		for _, register := range []byte{0, 1, 2, 3, 6, 7, 8, 9, 10, 11, 12, 13, 15} {
 			name := fmt.Sprintf("Literal%d", count)
@@ -37,7 +44,7 @@ func x86SourceStackMOVSXDLiteralProgram() (string, string, string) {
 			}
 			// The RIP displacement crosses the complete five-byte result
 			// store and the actual native RET, never executable pool data.
-			code = append(code, 0x63, (register&7)<<3|5, 6, 0, 0, 0,
+			code = append(code, encoding.opcode, (register&7)<<3|5, 6, 0, 0, 0,
 				0x48|rex&4, 0x89, (register&7)<<3|0x44, 0x24, 16, 0xc3,
 				0, 0, 0, 0x80)
 			var body strings.Builder
@@ -61,8 +68,8 @@ func x86SourceStackMOVSXDLiteralProgram() (string, string, string) {
 
 func TestX86SourceStackMOVSXDLiteralCompletePhysicalInputs(t *testing.T) {
 	source, declarations, _ := x86SourceStackMOVSXDLiteralProgram()
-	if strings.Count(source, "TEXT ") != 39 {
-		t.Fatal("physical dword/REX.W/66+REX.W register denominator changed")
+	if strings.Count(source, "TEXT ") != 52 {
+		t.Fatal("39 MOVSXD and 13 ordinary dword-load register programs required")
 	}
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
