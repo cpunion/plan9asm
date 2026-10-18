@@ -892,6 +892,12 @@ source NZCV and reject missing inputs across CFG joins. Keep original Go
 state/canary oracles, all three translation APIs plus typed Go, bounded batches,
 and required Linux/QEMU NEP/AH execution separate from object-only coverage.
 
+An ordinary typed Void source may omit TEXT's argument-size suffix: `$0` is
+Go's unknown size, not explicit `$0-0`. Recover that distinction from the
+matching retained original header; the actual declaration still bounds every
+input. Omission grants no padding, parameter writes or physical-frame role.
+Explicit mismatches and unknown source bytes remain Context.
+
 Go's original `reflect.makeFuncStub` and `methodValueCall` have empty source
 declarations but physical dynamic callers; their native TEXT retains
 `ArgsSizeUnknown`. Local outgoing-call storage, the argument-only `argLen`,
