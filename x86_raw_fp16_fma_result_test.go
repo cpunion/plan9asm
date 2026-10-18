@@ -42,32 +42,41 @@ func x86FP16FMAResultFixtures(t *testing.T, arch string, order, batch int) (stri
 					if scalar && memory && control || !scalar && length == 3 && (memory || !control) {
 						continue
 					}
-					for _, zero := range []bool{false, true} {
-						selected := variants%4 == batch
-						variants++
-						if !selected {
-							continue
+					for _, masked := range []bool{false, true} {
+						for _, zero := range []bool{false, true} {
+							if zero && !masked {
+								continue
+							}
+							selected := variants%6 == batch
+							variants++
+							if !selected {
+								continue
+							}
+							name := fmt.Sprintf("halfFMA%d", len(encodings))
+							maskMove := "kmovw"
+							if !scalar && (length == 2 || !memory && control) {
+								maskMove = "kmovd"
+							}
+							code := x86FP16FMAResultEncoding(opcode, length, memory, control, zero)
+							if !masked {
+								code[3] &^= 7
+								maskMove = ""
+							}
+							encodings[name] = x86RawFP16ObjectEncoding{
+								code: code, lengthIgnored: scalar && !control, maskMove: maskMove,
+							}
+							fmt.Fprintf(&source, "TEXT %s(SB),4,$0-%d\n%s p+0(FP),AX\n", name, word+4, move)
+							source.WriteString("MOVL $1,CX\nKMOVD CX,K1\nVPXORD Z0,Z0,Z0\nVPXORD Z1,Z1,Z1\nVPXORD Z2,Z2,Z2\n")
+							source.WriteString(x86RawDisplacementDirectives(code))
+							fmt.Fprintf(&source, "MOVL X0,DX\nMOVL DX,ret+%d(FP)\nRET\n", word)
+							fmt.Fprintf(&declarations, "func %s(p *byte) uint32\n", name)
 						}
-						name := fmt.Sprintf("halfFMA%d", len(encodings))
-						maskMove := "kmovw"
-						if !scalar && (length == 2 || !memory && control) {
-							maskMove = "kmovd"
-						}
-						code := x86FP16FMAResultEncoding(opcode, length, memory, control, zero)
-						encodings[name] = x86RawFP16ObjectEncoding{
-							code: code, lengthIgnored: scalar && !control, maskMove: maskMove,
-						}
-						fmt.Fprintf(&source, "TEXT %s(SB),4,$0-%d\n%s p+0(FP),AX\n", name, word+4, move)
-						source.WriteString("MOVL $1,CX\nKMOVD CX,K1\nVPXORD Z0,Z0,Z0\nVPXORD Z1,Z1,Z1\nVPXORD Z2,Z2,Z2\n")
-						source.WriteString(x86RawDisplacementDirectives(code))
-						fmt.Fprintf(&source, "MOVL X0,DX\nMOVL DX,ret+%d(FP)\nRET\n", word)
-						fmt.Fprintf(&declarations, "func %s(p *byte) uint32\n", name)
 					}
 				}
 			}
 		}
 	}
-	if variants != 252 || len(encodings) != 63 {
+	if variants != 378 || len(encodings) != 63 {
 		t.Fatal("incomplete independent FP16 FMA physical partition", variants, len(encodings))
 	}
 	return source.String(), declarations.String(), encodings
@@ -84,7 +93,7 @@ func x86FP16FMAInitializedObjects(t *testing.T, order int) {
 		t.Fatal("LLVM22 llc required")
 	}
 	for _, target := range x86RawReturnTargets {
-		for batch := 0; batch < 4; batch++ {
+		for batch := 0; batch < 6; batch++ {
 			t.Run(fmt.Sprintf("%s/batch%d", target.triple, batch), func(t *testing.T) {
 				source, declarations, encodings := x86FP16FMAResultFixtures(t, target.arch, order, batch)
 				x86LEAActualTargetGoObject(t, target.arch, target.triple, source)
@@ -111,16 +120,21 @@ func TestX86RawFP16FMACannotInventInputs(t *testing.T) {
 	for _, arch := range []string{"386", "amd64"} {
 		for opcode, op := range rawFP16FMAOps() {
 			for _, memory := range []bool{false, true} {
-				t.Run(fmt.Sprintf("%s/%s/memory%t", arch, op, memory), func(t *testing.T) {
-					code := x86RawDisplacementDirectives(x86FP16FMAResultEncoding(opcode, 0, memory, false, true))
-					bare := "TEXT Value(SB),4,$0-0\n" + code + "RET\n"
-					for _, api := range []string{"text", "module", "Go"} {
-						ir, err := x86ScalarFPBitViewAPI(t, bare, "func Value()", arch, x86AddressMemoryTargets(arch)[0], api)
-						if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
-							t.Fatal("Void FP16 FMA invented source, old destination or mask inputs", api, err)
+				for _, masked := range []bool{false, true} {
+					t.Run(fmt.Sprintf("%s/%s/memory%t/masked%t", arch, op, memory, masked), func(t *testing.T) {
+						code := x86FP16FMAResultEncoding(opcode, 0, memory, false, masked)
+						if !masked {
+							code[3] &^= 7
 						}
-					}
-				})
+						bare := "TEXT Value(SB),4,$0-0\n" + x86RawDisplacementDirectives(code) + "RET\n"
+						for _, api := range []string{"text", "module", "Go"} {
+							ir, err := x86ScalarFPBitViewAPI(t, bare, "func Value()", arch, x86AddressMemoryTargets(arch)[0], api)
+							if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+								t.Fatal("Void FP16 FMA invented source, old destination or mask inputs", api, err)
+							}
+						}
+					})
+				}
 			}
 		}
 	}
