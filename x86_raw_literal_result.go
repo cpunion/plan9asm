@@ -72,10 +72,19 @@ func x86RawArithmeticLiteralForm(ins Instr, arch string) bool {
 		ins.x86RIPMemoryRead.source == form.first && ins.x86RIPMemoryRead.width == int64(form.memoryBytes)
 }
 
+func x86RawFloatCompareLiteralForm(ins Instr, arch string) bool {
+	if !x86RawLiteralSourceShape(ins, arch) || !x86RawReturnDecodedReadIdentity(ins) {
+		return false
+	}
+	form, known, err := x86FloatCompareProperties(ins, arch)
+	return known && err == nil && !form.legacy && form.memory >= 0 &&
+		ins.x86RIPMemoryRead.source == form.first && ins.x86RIPMemoryRead.width == int64(form.memoryBytes)
+}
+
 func x86RawResultLiteralForm(ins Instr, arch string) bool {
 	return x86RawBroadcastLiteralForm(ins, arch) || x86RawLogicalLiteralForm(ins, arch) ||
 		x86RawByteShiftLiteralForm(ins, arch) || x86RawIntegerCompareLiteralForm(ins, arch) ||
-		x86RawArithmeticLiteralForm(ins, arch)
+		x86RawArithmeticLiteralForm(ins, arch) || x86RawFloatCompareLiteralForm(ins, arch)
 }
 
 // This bounded source uses the ordinary typed family byte effects. It does

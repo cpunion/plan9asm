@@ -8,7 +8,7 @@ func x86ResultFloatCompareStep(ins Instr, state *x86ResultState, owned []bool, a
 	if !known || err != nil {
 		return false, known
 	}
-	if !x86ResultNamedPredicateInstruction(ins) {
+	if !x86ResultNamedPredicateInstruction(ins) && !x86RawFloatCompareLiteralForm(ins, arch) {
 		return false, true
 	}
 	if form.mask >= 0 {

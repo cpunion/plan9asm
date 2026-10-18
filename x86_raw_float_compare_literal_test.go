@@ -138,8 +138,11 @@ func TestX86RawFloatCompareLiteralEveryInputByteAndTuple(t *testing.T) {
 				continue
 			}
 			address, valid := x86StaticSBReadAddress(ins.Args[1], "amd64")
-			if !valid || !x86RawReturnDecodedReadIdentity(ins) {
+			if !valid || !x86RawFloatCompareLiteralForm(ins, "amd64") {
 				t.Fatal("comparison lost decoder-bound DATA", row.name)
+			}
+			if x86RawFloatCompareLiteralForm(ins, "386") {
+				t.Fatal("mode32 borrowed an AMD64 RIP input", row.name)
 			}
 			for missing := -1; missing < row.width; missing++ {
 				state := x86ResultState{flags: x86ByteFlagsAll, direction: x86ResultDirectionBackward,

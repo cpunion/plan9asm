@@ -111,7 +111,6 @@ func TestDecodeX86RawVectorFloatCompareRIPDataRejectsUnsafeSources(t *testing.T)
 
 func TestTranslateX86RawVectorFloatCompareRIPDataObjects(t *testing.T) {
 	var source strings.Builder
-	sigs := make(map[string]FuncSig)
 	var pools [][]byte
 	index := 0
 	for pp := byte(0); pp < 4; pp++ {
@@ -130,7 +129,6 @@ func TestTranslateX86RawVectorFloatCompareRIPDataObjects(t *testing.T) {
 			for _, value := range code {
 				fmt.Fprintf(&source, "\tBYTE $%#02x\n", value)
 			}
-			sigs[name] = FuncSig{Name: name, Ret: Void}
 			dataWidth := width
 			if pp >= 2 || broadcast {
 				dataWidth = 4
@@ -167,10 +165,10 @@ func TestTranslateX86RawVectorFloatCompareRIPDataObjects(t *testing.T) {
 		"x86_64-apple-darwin", "x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc",
 	} {
 		t.Run(triple, func(t *testing.T) {
-			ir, err := Translate(file, Options{Goarch: "amd64", TargetTriple: triple, Sigs: sigs})
-			if err != nil {
-				t.Fatal(err)
-			}
+			// Original encodings lack vector and mask inputs. Preserve their
+			// entire Go/emitter object and public Context contracts; independent
+			// initialized literal programs own the public object matrix.
+			ir := x86UnboundVoidRawScalarFormatObject(t, source.String(), "amd64", triple)
 			compileLLVMToObject(t, llc, triple, "vector-compare-literal.ll", "vector-compare-literal.o", ir)
 		})
 	}
