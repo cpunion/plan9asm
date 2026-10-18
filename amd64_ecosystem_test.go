@@ -6157,20 +6157,9 @@ func TestTranslateX86MaskLogicalCompleteGo127Forms(t *testing.T) {
 		{name: "windows-386", goarch: "386", triple: "i686-pc-windows-msvc"},
 	} {
 		t.Run(target.name, func(t *testing.T) {
-			file, err := Parse(ArchAMD64, src.String())
-			if err != nil {
-				t.Fatal(err)
-			}
-			ll, err := Translate(file, Options{
-				TargetTriple: target.triple,
-				Goarch:       target.goarch,
-				Sigs: map[string]FuncSig{
-					"mask_logical_forms": {Name: "mask_logical_forms", Ret: Void},
-				},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			// Preserve the original uninitialized format inventory. Complete
+			// initialized programs have independent public API/runtime owners.
+			ll := x86UnboundVoidScalarFormatObject(t, src.String(), "mask_logical_forms", target.goarch, target.triple)
 			compileLLVMToObject(t, llc, target.triple, "mask-logical-"+target.name+".ll", "mask-logical-"+target.name+".o", ll)
 		})
 	}

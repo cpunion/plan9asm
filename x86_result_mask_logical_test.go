@@ -131,6 +131,15 @@ func x86MaskLogicalCompleteFixture(arch string) (string, string) {
 }
 
 func TestX86MaskLogicalInitializedFiveTargetObjects(t *testing.T) {
+	x86MaskLogicalFiveTargetObjects(t, false)
+}
+
+func TestX86MaskLogicalRawInitializedFiveTargetObjects(t *testing.T) {
+	x86MaskLogicalFiveTargetObjects(t, true)
+}
+
+func x86MaskLogicalFiveTargetObjects(t *testing.T, raw bool) {
+	t.Helper()
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc required")
@@ -138,6 +147,9 @@ func TestX86MaskLogicalInitializedFiveTargetObjects(t *testing.T) {
 	for _, target := range x86RawReturnTargets {
 		t.Run(target.triple, func(t *testing.T) {
 			source, declarations := x86MaskLogicalCompleteFixture(target.arch)
+			if raw {
+				source = x86MaskLogicalRawFixture(t, source)
+			}
 			x86LEAActualTargetGoObject(t, target.arch, target.triple, source)
 			for _, api := range []string{"text", "module", "Go"} {
 				ir, err := x86ScalarFPBitViewAPI(t, source, declarations, target.arch, target.triple, api)
@@ -155,11 +167,23 @@ func TestX86MaskLogicalInitializedFiveTargetObjects(t *testing.T) {
 }
 
 func TestX86MaskLogicalPortableValuesAndFlags(t *testing.T) {
+	x86MaskLogicalPortableValuesAndFlags(t, false)
+}
+
+func TestX86MaskLogicalRawPortableValuesAndFlags(t *testing.T) {
+	x86MaskLogicalPortableValuesAndFlags(t, true)
+}
+
+func x86MaskLogicalPortableValuesAndFlags(t *testing.T, raw bool) {
+	t.Helper()
 	llc, clang, found := findLlcAndClang(t)
 	if !found {
 		t.Fatal("LLVM 22 llc/clang required")
 	}
 	source, declarations := x86MaskLogicalCompleteFixture("amd64")
+	if raw {
+		source = x86MaskLogicalRawFixture(t, source)
+	}
 	var prototypes, checks strings.Builder
 	for index, row := range x86MaskLogicalOracle() {
 		bits := []int{8, 16, 32, 64}[index%4]
