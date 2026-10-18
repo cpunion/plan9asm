@@ -59,19 +59,7 @@ func TestTranslateX86MultipleSADCompleteFormsAcrossTargets(t *testing.T) {
 				fmt.Fprintf(&source, "\tVMPSADBW $7, 32(AX), Y1, Y%d\n", last)
 			}
 			source.WriteString("\tRET\n")
-			requireX86GoAssemblerResult(t, target.goarch, source.String(), true)
-			file, err := Parse(ArchAMD64, source.String())
-			if err != nil {
-				t.Fatal(err)
-			}
-			ir, err := Translate(file, Options{
-				Goarch:       target.goarch,
-				TargetTriple: target.triple,
-				Sigs:         map[string]FuncSig{"mpsadforms": {Name: "mpsadforms", Ret: Void}},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			ir := x86UnboundVoidScalarFormatObject(t, source.String(), "mpsadforms", target.goarch, target.triple)
 			if !strings.Contains(ir, "call <8 x i16> @llvm.x86.sse41.mpsadbw") {
 				t.Fatalf("MPSADBW lowering omitted the SSE4.1 intrinsic:\n%s", ir)
 			}
@@ -108,18 +96,7 @@ func TestTranslateX86DoubleSADCompleteFormsAcrossTargets(t *testing.T) {
 				fmt.Fprintf(&source, "\tVDBPSADBW.Z $255, 64(AX), %s1, K2, %s%d\n", width, width, last)
 			}
 			source.WriteString("\tRET\n")
-			requireX86GoAssemblerResult(t, target.goarch, source.String(), true)
-			file, err := Parse(ArchAMD64, source.String())
-			if err != nil {
-				t.Fatal(err)
-			}
-			ir, err := Translate(file, Options{
-				Goarch: target.goarch, TargetTriple: target.triple,
-				Sigs: map[string]FuncSig{"dbpsadforms": {Name: "dbpsadforms", Ret: Void}},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			ir := x86UnboundVoidScalarFormatObject(t, source.String(), "dbpsadforms", target.goarch, target.triple)
 			compileLLVMToObject(t, llc, target.triple, "dbpsadbw-"+target.name+".ll", "dbpsadbw-"+target.name+".o", ir)
 		})
 	}

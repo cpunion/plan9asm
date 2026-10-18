@@ -35,7 +35,7 @@ func decodedX86RawPackedSADInstruction(code []byte, mode int) (Instr, int, bool,
 	if p.addressOverride {
 		return fail("address-size override is not source-layout safe")
 	}
-	if p.w || p.vectorLength > 2 || p.evex && !p.fixed {
+	if p.w && op == "VDBPSADBW" || p.vectorLength > 2 || p.evex && !p.fixed {
 		return fail("invalid width or EVEX fixed bit")
 	}
 	if !p.evex && p.vectorLength == 2 {

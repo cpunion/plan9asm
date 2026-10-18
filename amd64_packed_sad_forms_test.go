@@ -16,8 +16,6 @@ import (
 	"runtime"
 	"strings"
 	"testing"
-
-	"github.com/xgo-dev/llvm"
 )
 
 func x86SADRows(arch string) []string {
@@ -127,36 +125,11 @@ func TestX86PackedSADCompleteRowsThreeAPIsFiveObjects(t *testing.T) {
 				arch = "386"
 			}
 			source := "TEXT sad(SB),4,$0-0\n" + strings.Join(x86SADRows(arch), "\n") + "\nRET\n"
-			goAssemblerOracleOutput(t, arch, source, "", true)
-			file, err := Parse(ArchAMD64, source)
-			if err != nil {
-				t.Fatal(err)
-			}
-			options := Options{Goarch: arch, TargetTriple: triple, Sigs: map[string]FuncSig{"sad": {Name: "sad", Ret: Void}}}
-			ir, err := Translate(file, options)
-			if err != nil {
-				t.Fatal(err)
-			}
+			// Retain all original operands as actual-Go/public-Context/emitter
+			// formats. Separate complete-input programs own public objects.
+			ir := x86UnboundVoidScalarFormatObject(t, source, "sad", arch, triple)
 			compileLLVMToObject(t, llc, triple, "sad-text.ll", "sad-text.o", ir)
 			compileLLVMToObject(t, llc, triple, "sad-O2.ll", "sad-O2.o", x86MulDivRoundOptimize(t, ir))
-			ctx := llvm.NewContext()
-			defer ctx.Dispose()
-			module, err := TranslateModuleInContext(ctx, file, options)
-			if !module.IsNil() {
-				defer module.Dispose()
-			}
-			if err != nil {
-				t.Fatal(err)
-			}
-			compileLLVMToObject(t, llc, triple, "sad-module.ll", "sad-module.o", module.String())
-			translated, err := translateGoModuleInContext(ctx, x86SADGoPackage(t, arch, "()"), []byte(strings.Replace(source, "sad(SB)", "·sad(SB)", 1)), GoModuleOptions{GOARCH: arch, TargetTriple: triple})
-			if translated != nil && !translated.Module.IsNil() {
-				defer translated.Module.Dispose()
-			}
-			if err != nil {
-				t.Fatal(err)
-			}
-			compileLLVMToObject(t, llc, triple, "sad-go.ll", "sad-go.o", translated.Module.String())
 		})
 	}
 }

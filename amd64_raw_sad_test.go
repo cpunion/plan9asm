@@ -48,17 +48,13 @@ func TestTranslateRawPackedSADGorseRegression(t *testing.T) {
 	LONG $0xd3f6edc5
 	RET
 `
-	file, err := Parse(ArchAMD64, source)
-	if err != nil {
-		t.Fatal(err)
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM 22 llc required")
 	}
-	_, err = Translate(file, Options{
-		Goarch:       "amd64",
-		TargetTriple: "x86_64-unknown-linux-gnu",
-		Sigs:         map[string]FuncSig{"rawPackedSAD": {Name: "rawPackedSAD", Ret: Void}},
-	})
-	if err != nil {
-		t.Fatal(err)
+	for _, target := range x86RawReturnTargets {
+		ir := x86UnboundVoidRawScalarFormatObject(t, source, target.arch, target.triple)
+		compileLLVMToObject(t, llc, target.triple, "raw-gorse-sad.ll", "raw-gorse-sad.o", ir)
 	}
 }
 
@@ -68,17 +64,13 @@ func TestTranslateRawPackedSADLegacyForms(t *testing.T) {
 	BYTE $0x66; BYTE $0x0f; BYTE $0x3a; BYTE $0x42; BYTE $0xc1; BYTE $0x01
 	RET
 `
-	file, err := Parse(ArchAMD64, source)
-	if err != nil {
-		t.Fatal(err)
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM 22 llc required")
 	}
-	_, err = Translate(file, Options{
-		Goarch:       "amd64",
-		TargetTriple: "x86_64-unknown-linux-gnu",
-		Sigs:         map[string]FuncSig{"rawLegacySAD": {Name: "rawLegacySAD", Ret: Void}},
-	})
-	if err != nil {
-		t.Fatal(err)
+	for _, target := range x86RawReturnTargets {
+		ir := x86UnboundVoidRawScalarFormatObject(t, source, target.arch, target.triple)
+		compileLLVMToObject(t, llc, target.triple, "raw-legacy-sad.ll", "raw-legacy-sad.o", ir)
 	}
 }
 
@@ -140,7 +132,12 @@ func TestDecodedX86RawPackedSADRejectsInvalidForms(t *testing.T) {
 		name string
 		code []byte
 	}{
-		{"VEX W1", []byte{base[0], base[1], base[2] | 0x80, base[3], base[4]}},
+		// WIG W0/W1 pairs have their own independent LLVM decoder oracle.
+		{"VDB W1", func() []byte {
+			code := encodeX86RawPackedSAD("VDBPSADBW", 0, 1, 2, 3, 0, false, false)
+			code[2] |= 0x80
+			return code
+		}()},
 		{"missing ModRM", base[:4]},
 		{"address override", append([]byte{0x67}, base...)},
 		{"missing immediate", encodeX86RawPackedSAD("VMPSADBW", 0, 1, 2, 3, 0, false, false)[:5]},
@@ -201,18 +198,7 @@ func TestTranslateRawPackedSADLLVM22Targets(t *testing.T) {
 				}
 			}
 			source.WriteString("\tRET\n")
-			file, err := Parse(ArchAMD64, source.String())
-			if err != nil {
-				t.Fatal(err)
-			}
-			ir, err := Translate(file, Options{
-				Goarch:       target.goarch,
-				TargetTriple: target.triple,
-				Sigs:         map[string]FuncSig{"rawPackedSADFamily": {Name: "rawPackedSADFamily", Ret: Void}},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			ir := x86UnboundVoidRawScalarFormatObject(t, source.String(), target.goarch, target.triple)
 			compileLLVMToObject(t, llc, target.triple, "raw-packed-sad.ll", "raw-packed-sad.o", ir)
 		})
 	}
