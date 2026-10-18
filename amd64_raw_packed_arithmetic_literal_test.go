@@ -119,7 +119,6 @@ func TestDecodeX86RawPackedArithmeticRIPDataRejectsUnsafeSources(t *testing.T) {
 
 func TestTranslateX86RawPackedArithmeticRIPDataObjects(t *testing.T) {
 	var source strings.Builder
-	sigs := make(map[string]FuncSig)
 	var pools [][]byte
 	for index, opcode := range x86PackedArithmeticOpcodes() {
 		properties := decodedX86PackedIntegerArithmeticOps[opcode]
@@ -135,7 +134,6 @@ func TestTranslateX86RawPackedArithmeticRIPDataObjects(t *testing.T) {
 		for _, value := range code {
 			fmt.Fprintf(&source, "\tBYTE $%#02x\n", value)
 		}
-		sigs[name] = FuncSig{Name: name, Ret: Void}
 		dataWidth := width
 		if broadcast {
 			dataWidth = properties.laneBytes
@@ -167,10 +165,10 @@ func TestTranslateX86RawPackedArithmeticRIPDataObjects(t *testing.T) {
 		"x86_64-apple-darwin", "x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc",
 	} {
 		t.Run(triple, func(t *testing.T) {
-			ir, err := Translate(file, Options{Goarch: "amd64", TargetTriple: triple, Sigs: sigs})
-			if err != nil {
-				t.Fatal(err)
-			}
+			// The complete original source includes EVEX forms with missing K7.
+			// Keep its Go/emitter objects and public Context independently of
+			// the initialized full-family public object programs.
+			ir := x86UnboundVoidRawScalarFormatObject(t, source.String(), "amd64", triple)
 			compileLLVMToObject(t, llc, triple, "packed-arithmetic-literal.ll", "packed-arithmetic-literal.o", ir)
 		})
 	}

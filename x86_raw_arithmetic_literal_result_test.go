@@ -112,9 +112,12 @@ func TestX86RawArithmeticLiteralKeepsLaneAndTupleDependencies(t *testing.T) {
 			if !ins.x86RIPLiteral {
 				continue
 			}
-			if string(ins.Op) != row.op || !x86RawReturnDecodedReadIdentity(ins) ||
+			if string(ins.Op) != row.op || !x86RawArithmeticLiteralForm(ins, "amd64") ||
 				ins.x86RIPMemoryRead.source != 0 || ins.x86RIPMemoryRead.width != int64(row.tuple) {
 				t.Fatal("arithmetic literal changed its independent opcode/tuple", row.name)
+			}
+			if x86RawArithmeticLiteralForm(ins, "386") {
+				t.Fatal("mode32 borrowed an AMD64 RIP input", row.name)
 			}
 			address, valid := x86StaticSBReadAddress(ins.Args[0], "amd64")
 			if !valid {
