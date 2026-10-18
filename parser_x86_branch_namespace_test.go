@@ -55,4 +55,12 @@ func TestParseX86BranchOperandsKeepNativeRegisterIdentity(t *testing.T) {
 			}
 		}
 	}
+	for _, arch := range []string{"amd64", "386"} {
+		for _, op := range []string{"JMP", "CALL", "JEQ", "LOOP", "XBEGIN"} {
+			// A label with the same spelling does not override Go's register
+			// namespace. JMP/CALL retain indirect AX; the others reject it.
+			source := fmt.Sprintf("TEXT ·Value(SB),4,$0-0\n%s AX\nAX:\nRET\n", op)
+			goAssemblerOracleOutput(t, arch, source, "", op == "JMP" || op == "CALL")
+		}
+	}
 }
