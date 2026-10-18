@@ -25,6 +25,7 @@ of the current candidate. Do not create another worktree for routine work.
 
 | Snapshot | Evidence and limits |
 |---|---|
+| `252239cde` | Complete mask/vector NUM effects: 30 roots / 734 children pass current Go, actual Go1.20 and race; all 764 terminal identities match with no fail/skip/incomplete and unchanged source/SDK/LLVM22 seals. Both-SDK build/vet and fifteen scanner roots, five-arch classification, three CLI extraction roots, CI policies and tracked formatting pass. The original native x86/MXCSR counterpart remains required, not a local pass |
 | `4bcd33be9` | Packed private-parameter stores: 48 roots / 2,031 children pass current Go, actual Go1.20 and race; all 2,079 terminal identities match, no fail/skip/incomplete, unchanged source/SDK/LLVM22 observations. Build/vet, twelve scanner roots on both SDKs, five-arch classification, three CLI extraction roots, 132 CI policies and tracked formatting also pass |
 | `e7e90b7c9` | Ten historical unbound-format failures plus eight initialized/source-boundary owners pass current Go, actual Go1.20 and race: 18 roots / 605 children, identical 623 terminals, no fail/skip/incomplete. Original source rows remain; public Context and emitter-only objects are not runtime passes |
 | `8e82392cd` | Floating logical-field addresses: 57 roots / 3,871 children pass all three lanes, identical 3,928 terminals, no fail/skip/incomplete and unchanged source/SDK/LLVM22 observations. Build/vet, twelve scanner roots on both SDKs, five-arch classification, three CLI extraction roots, 132 CI policies and tracked formatting pass; backed up in the allowed fork |
@@ -48,6 +49,27 @@ Classification, emitter-only objects, initialized public translation, portable
 execution and native execution remain different claims.
 
 ## Latest repairs
+
+The eight mask/vector B/W/D/Q moves now share their existing complete EVEX
+grammar with numerical result effects. Reverse moves need only each lane's
+sign byte; forward moves require actual K0-K7 data and clear wider aliases.
+FLAGS, DF, GP state, unrelated vectors and masks remain unchanged. Mandatory
+Void checking closes the falsely accepted missing-input case reproduced at
+`521ef9c48`; the same RED also rejects legitimate initialized programs.
+The original unbound Go sources remain as Go/public-Context/emitter-object
+controls. Separate initialized 48-program batches retain all three public APIs,
+five x86 targets and both IR/backend optimization axes. Actual-host execution
+uses the discovering fixture's unchanged complete source and observes every
+vector byte, both masks, FLAGS and input/output canaries. It does not replace
+the native x86/MXCSR or cross-runtime owner. The first attempted local cohort
+retains that explicit host skip as failed qualification; the disjoint 30-root
+host-applicable union is qualified at `252239cde`.
+
+The sealed Go1.20-Go1.27 audit changes only 24 isolated AMD64 mask/vector forms
+per SDK from supported to Context: their input data is absent. All other
+metrics and encoder rules remain unchanged, including unsupported counts.
+Initialized complete programs still translate and execute. A classification
+correction is not lost instruction support or a whole-suite runtime pass.
 
 Logical numeric field addresses now include float32/float64, without widening
 integer-only return or native-frame roles. ABI0 allocation padding does not
@@ -160,9 +182,12 @@ cannot certify a performance improvement. Full reports remain under ignored
    read composition, custom ABI/stack roles and obsolete unbound-format contracts.
    The first old local failure remains `TestGoABI0PaddedSqrtObjects`. Its logical
    floating-field address class is now qualified; SQRT arithmetic is separate.
-   Packed private-copy stores are now qualified. Next close the observed typed
-   numerical/native continuation classes, including all eight mask/vector data
-   moves, register/CPU-query result roles and three-operand shift memory effects.
+   Packed private-copy stores and all eight mask/vector data effects are now
+   qualified. Next close the observed typed numerical/native continuation
+   classes, including register/CPU-query result roles, three-operand shift
+   memory effects and MMX-region composition. Re-observe the exact latest
+   167 failures at the cumulative candidate; retain native skips and all
+   failed original receipts, and do not subtract focused successes by hand.
    Keep compiler/runtime producer gaps separate from instruction support. No
    mnemonic-only exception, padding permission or native-frame backing follows
    from a valid encoding. Inspect the final error, not a preceding successful
@@ -197,6 +222,12 @@ use `packed-logical-parameter-store-*`; the unchanged-program portable/typed-
 field selection is `packed-private-copy-complete-first-green` at `cdcd98cc6`.
 Final qualification is `packed-private-copy-qualified-4bcd33be.json`; final
 gates use `packed-private-copy-final-gates-4bcd33be`.
+Mask/vector RED uses `mask-vector-numerical-red` at `521ef9c48`;
+qualification is `mask-vector-qualified-252239cd.json`, with final gates under
+`mask-vector-final-gates-252239cd`. The eight-SDK full-form audit is
+`mask-vector-classification-audit-v2`. The next selected original-CI replay
+uses `latest-failures-<head>` and `rerun-latest-ci-failures.cjs`; its raw
+pass/fail/skip outcomes are not a new complete all-platform CI denominator.
 Earlier receipts use `nop-source-state-qualified-{nop,stack,identity}` and
 `nop-current-sdk-producers`; `qualified-nop-source-state-bc79fd0f.json` records
 the exact union. Earlier cohorts use `bitfield-qualified-*` and
