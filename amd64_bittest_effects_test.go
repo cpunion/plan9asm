@@ -79,13 +79,70 @@ func TestX86BitTestFlagsAndMemoryDoNotAcquireAuthority(t *testing.T) {
 					}
 				}
 			}
-			for _, memory := range []string{"unbound(SB)", "(DX)", "8(FS)"} {
+			for _, memory := range []string{"unbound(SB)", "(DX)", "8(DX)(FS*1)", "8(DX)(GS*1)"} {
 				source := "TEXT ·value(SB),4,$0-4\n" + op + " $0," + memory + "\nPXOR X0,X0\nPEXTRD $0,X0,AX\nMOVL AX,ret+0(FP)\nRET\n"
-				if _, err := x86ScalarFPBitViewAPI(t, source, "func value() uint32", target.arch, target.triple, "text"); !errors.Is(err, ErrProbeNeedsContext) {
-					t.Fatalf("new native/source read authority: %s/%s/%s: %v", target.triple, op, memory, err)
+				for _, api := range []string{"text", "module", "Go"} {
+					if _, err := x86ScalarFPBitViewAPI(t, source, "func value() uint32", target.arch, target.triple, api); !errors.Is(err, ErrProbeNeedsContext) {
+						t.Fatalf("new native/source read authority: %s/%s/%s/%s: %v", target.triple, op, memory, api, err)
+					}
 				}
 			}
 		}
+	}
+}
+
+func TestX86BitTestSegmentContinuationObjects(t *testing.T) {
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM22 llc required")
+	}
+	for _, target := range x86RawReturnTargets {
+		t.Run(target.triple, func(t *testing.T) {
+			var source, declarations strings.Builder
+			count := 0
+			for _, op := range x86BitTestOracleNames(target.arch) {
+				for _, segment := range []string{"FS", "GS"} {
+					for _, index := range []string{"$0", "CX"} {
+						memory := "8(" + segment + ")"
+						ins := x86PureGPUnknownInstruction(t, op+" "+index+","+memory)
+						state := x86ResultState{}
+						state.gp[1] = 0xff
+						if x86ResultTransfer(ins, &state, nil, 0, target.arch) {
+							t.Fatal("standalone observer borrowed paired native segment continuation", ins.Raw)
+						}
+
+						// Preserve the original bare-segment program. Only the
+						// register-index counterpart adds its required input.
+						name := fmt.Sprintf("segment%d", count)
+						count++
+						setup := ""
+						if index == "CX" {
+							setup = "MOVL $1,CX\n"
+						}
+						fmt.Fprintf(&source, "TEXT ·%s(SB),4,$0-4\n%s%s %s,%s\nPXOR X0,X0\nPEXTRD $0,X0,AX\nMOVL AX,ret+0(FP)\nRET\n",
+							name, setup, op, index, memory)
+						fmt.Fprintf(&declarations, "func %s() uint32\n", name)
+					}
+				}
+			}
+			x86LEAActualTargetGoObject(t, target.arch, target.triple, source.String())
+			for _, api := range []string{"text", "module", "Go"} {
+				ir, err := x86ScalarFPBitViewAPI(t, source.String(), declarations.String(), target.arch, target.triple, api)
+				if err != nil {
+					t.Fatal(api, err)
+				}
+				for _, text := range []string{ir, x86DwordProductIROptimize(t, ir)} {
+					if strings.Count(text, "load volatile") != count ||
+						strings.Count(text, "store volatile") != count*3/4 ||
+						!strings.Contains(text, "addrspace(256)") || !strings.Contains(text, "addrspace(257)") {
+						t.Fatal("dead segment bit operations lost their exact paired accesses", api)
+					}
+					for _, level := range []string{"-O0", "-O2"} {
+						x86PackedStringCompileObject(t, llc, target.triple, text, level)
+					}
+				}
+			}
+		})
 	}
 }
 
