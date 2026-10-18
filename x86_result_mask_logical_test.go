@@ -55,6 +55,9 @@ func TestX86MaskLogicalCompleteInputAndState(t *testing.T) {
 					if !reflect.DeepEqual(state, before) {
 						t.Fatal("mask operation changed unrelated state or partially accepted missing inputs")
 					}
+					if accepted && x86ResultCallerAddressesAfter(ins, before.callerAddressGP, nil, arch) != before.callerAddressGP {
+						t.Fatal("mask-only operation revoked unrelated GP address identities")
+					}
 				}
 			})
 		}
