@@ -79,10 +79,7 @@ func TestRawFP16FMAPortableRuntime(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ir, err := Translate(file, Options{Goarch: "amd64", TargetTriple: testTargetTriple(runtime.GOOS, runtime.GOARCH), Sigs: sigs})
-	if err != nil {
-		t.Fatal(err)
-	}
+	ir := x86FP16NumericalModelIR(t, file, sigs, testTargetTriple(runtime.GOOS, runtime.GOARCH))
 	mainC := "#include <stdint.h>\n#include <stddef.h>\n#include <stdio.h>\n#include <string.h>\n" + declarations.String() + x86TestGuardPagesC + `
 typedef void (*operation)(const void *, const void *, void *, uint64_t);
 struct test_case { operation run; int order, mode, lanes, scalar, zero, broadcast; };

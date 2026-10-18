@@ -19,7 +19,7 @@ type amd64FMA3Form struct {
 // caller-memory, initialized-mask and source-stack continuation proofs. FP16
 // shares the architectural grammar but keeps its raw-encoding-only boundary.
 func amd64FMA3Properties(ins Instr, goarch string) (amd64FMA3Form, bool, error) {
-	base, suffix, _ := strings.Cut(strings.ToUpper(string(ins.Op)), ".")
+	base, suffix, dotted := strings.Cut(strings.ToUpper(string(ins.Op)), ".")
 	spec, recognized := amd64FMA3Specs[Op(base)]
 	if !recognized {
 		return amd64FMA3Form{}, false, nil
@@ -31,7 +31,7 @@ func amd64FMA3Properties(ins Instr, goarch string) (amd64FMA3Form, bool, error) 
 		return form, true, fmt.Errorf("%s %s operands/suffix are outside the FMA3 grammar: %q", goarch, base, ins.Raw)
 	}
 	if goarch != "amd64" && goarch != "386" || spec.rawOnly && !ins.x86Encoded ||
-		len(ins.Args) != 3 && len(ins.Args) != 4 {
+		dotted && suffix == "" || len(ins.Args) != 3 && len(ins.Args) != 4 {
 		return fail()
 	}
 	properties, valid := parseAMD64FMA3Suffix(suffix)
@@ -67,6 +67,17 @@ func amd64FMA3Properties(ins Instr, goarch string) (amd64FMA3Form, bool, error) 
 		return fail()
 	}
 	if isAMD64MemoryOperand(first) {
+		if !x86PackedShiftMemoryValid(first, goarch) {
+			return fail()
+		}
+		if first.Kind == OpMem {
+			if err := x86SymbolIndexedMemoryError(first.Mem, goarch); err != nil {
+				return form, true, err
+			}
+			if first.Mem.OffRaw != "" || first.Mem.IndexExt != "" {
+				return fail()
+			}
+		}
 		form.memory = 0
 		form.memoryBytes = form.byteWidth
 		if spec.scalar || properties.broadcast {

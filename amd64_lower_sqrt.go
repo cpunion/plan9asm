@@ -22,12 +22,9 @@ func (c *amd64Ctx) lowerSqrt(op Op, ins Instr) (bool, bool, error) {
 		return false, false, nil // Retain the existing cross-target numerical model.
 	}
 	if f.bits == 16 && f.scalar {
-		if ins.Args[0].Kind == OpFP || ins.x86AddressBits != 0 || ins.Args[0].Kind == OpMem &&
-			!x86OrdinaryNativeMemoryOperand(ins.Args[0], c.goarch) {
-			return true, false, fmt.Errorf("%w: FP16 square root needs original native backing", ErrProbeNeedsContext)
-		}
-		return true, false, c.emitNativeFP16ScalarUnary(ins, x86NativeFP16ScalarUnary{
-			memoryBytes: f.memoryBytes, upper: f.second, destination: f.destination, mask: f.mask,
+		return true, false, c.emitNativeFP16ThreeOperand(ins, x86NativeFP16ThreeOperand{
+			byteWidth: 16, lanes: 1, memoryBytes: f.memoryBytes, second: f.second,
+			destination: f.destination, mask: f.mask,
 			controls: amd64FMA3Suffix{zeroing: f.zeroing, rounding: f.rounding},
 		})
 	}
