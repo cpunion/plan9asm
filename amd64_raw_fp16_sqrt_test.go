@@ -220,19 +220,9 @@ func TestTranslateRawFP16PackedSqrtLLVM22Targets(t *testing.T) {
 		{"386", "i686-pc-windows-msvc"},
 	} {
 		t.Run(target.triple, func(t *testing.T) {
-			requireX86GoAssemblerResult(t, target.arch, source.String(), true)
-			file, err := Parse(ArchAMD64, source.String())
-			if err != nil {
-				t.Fatal(err)
-			}
-			ir, err := Translate(file, Options{Goarch: target.arch, TargetTriple: target.triple,
-				Sigs: map[string]FuncSig{"rawHalfSqrt": {Name: "rawHalfSqrt", Ret: Void}},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
-			for _, want := range []string{"@llvm.sqrt.v8f16", "@llvm.sqrt.v16f16", "@llvm.sqrt.v32f16",
-				"@llvm.experimental.constrained.sqrt.v32f16", "@llvm.masked.load.v8i16", "phi i16"} {
+			ir := x86UnboundVoidRawScalarFormatObject(t, source.String(), target.arch, target.triple)
+			for _, want := range []string{"vsqrtph ", "{rn-sae}", "{rd-sae}", "{ru-sae}", "{rz-sae}",
+				"{1to8}", "{1to16}", "{1to32}", "kmovd", "asm sideeffect", "+avx512fp16"} {
 				if !strings.Contains(ir, want) {
 					t.Fatalf("missing %s", want)
 				}

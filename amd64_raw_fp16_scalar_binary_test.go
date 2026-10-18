@@ -166,19 +166,8 @@ func TestTranslateRawFP16ScalarBinaryLLVM22Targets(t *testing.T) {
 				}
 			}
 			source.WriteString("\tRET\n")
-			requireX86GoAssemblerResult(t, target.goarch, source.String(), true)
-			file, err := Parse(ArchAMD64, source.String())
-			if err != nil {
-				t.Fatal(err)
-			}
-			ir, err := Translate(file, Options{
-				Goarch: target.goarch, TargetTriple: target.triple,
-				Sigs: map[string]FuncSig{"rawFP16ScalarBinary": {Name: "rawFP16ScalarBinary", Ret: Void}},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
-			for _, want := range []string{"fadd half", "fsub half", "fmul half", "fdiv half", "load i16", "_scalar_load", "phi i16"} {
+			ir := x86UnboundVoidRawScalarFormatObject(t, source.String(), target.goarch, target.triple)
+			for _, want := range []string{"fadd half", "fsub half", "fmul half", "fdiv half", "load volatile i16", "_scalar_load", "phi i16", "vsqrtsh "} {
 				if !strings.Contains(ir, want) {
 					t.Fatalf("missing %s:\n%s", want, ir)
 				}
