@@ -283,6 +283,14 @@ direction and private-stack facts; it grants no memory, entry or frame role.
 Void and unused-bool signatures retain input obligations. Preserve independent
 Go encoder attributes, named/raw portable values and original unbound formats.
 
+PSADBW/VPSADBW/MPSADBW/VMPSADBW/VDBPSADBW share ordered byte selectors
+across lowering, caller and result analysis. Only corresponding-byte block SAD
+with identical register sources is input-independent; sliding/shuffled forms
+are not. Memory still consumes the complete native tuple, even with zero masks
+or dead outputs, and legacy m128 keeps its original opcode/fault behavior.
+VEX VPSADBW/VMPSADBW and EVEX VPSADBW ignore W; VDBPSADBW requires W0.
+Test physical WIG independently: Go's encoder emits only W0 for these forms.
+
 The four packed multiply-add names share the existing complete binary grammar
 with mandatory numerical inputs, result definedness and paired native reads.
 MMX keeps its separate closed physical-state owner. Every first/second input,

@@ -22,6 +22,8 @@ idle worktrees; do not create another for routine work.
 
 | Code snapshot | Completed evidence | Limits |
 |---|---|---|
+| `0c86e86ef` | Complete five-member SAD input family: 29 roots / 637 children pass current Go, actual Go1.20 and race; identical 666 terminals, zero fail/skip/incomplete and unchanged source/SDK/LLVM22 seals | Includes original static-SB failures, all 256 selectors, independent encoder attributes, WIG decoding and five-target three-API O0/O2 objects; not native x86 execution |
+| Same snapshot | All eleven final gates pass: both-SDK build/vet and 23 scanner roots, five-arch classification, five CLI extraction roots, 132 CI policies and formatting | Eight-SDK audit changes only 24 isolated AMD64 SAD forms per SDK to Context; 386 and encoding/unsupported metadata remain unchanged |
 | `e809b3271` | Complete 32-member named/raw K-mask logical family: 27 roots / 892 children pass current Go, actual Go1.20 and race; identical 919 terminals, zero fail/skip/incomplete and unchanged source/SDK/LLVM22 seals | Includes portable values/six FLAGS, five-target three-API objects and live private-stack/DF/ID guards; not native AVX512 execution |
 | Same snapshot | All eleven final gates pass: both-SDK build/vet and 22 scanner roots, five-arch classification, five CLI extraction roots, 132 CI policies and formatting | Eight-SDK audit changes only 28 isolated AMD64 K-mask forms per SDK from supported to Context; encoding/unsupported metadata unchanged |
 | `0a4a28bf5` | Omitted TEXT argument extent: 15 portable roots / 410 children pass current Go, actual Go1.20 and race with identical 425 terminal identities; current Go/race additionally pass the complete SDK `subtle/xorBytes` on three AMD64 targets | Actual Go objects and three-API LLVM22 IR/backend O0/O2 objects, not runtime or package linkage |
@@ -106,11 +108,12 @@ before changing implementation or claiming a speedup. Do not relax budgets.
 
 ## Immediate work
 
-1. Finish the five-member SAD numerical-input family. RED `bd7a7c3e5` retains
-   70 failed terminals, including both original static-SB SAD owners; complete
-   Go encoder attributes pass independently. Shared byte dependencies are being
-   connected to result proofs. Physical WIG controls are being exercised separately;
-   keep original uninitialized formats distinct from initialized programs.
+1. Finish validation of the separate wrapping-add format repair at `1d4e3ef70`.
+   Its only difference from the qualified SAD source is the original unbound
+   format test. Preserve all original Go/emitter objects and public Context;
+   initialized arithmetic/native-read/MMX programs retain separate coverage.
+   Then replay the exact 167-root queue; do not subtract focused SAD passes
+   from the historical failed replay without rerunning it.
 2. Repair the latest 48 local failure classes: scalar SQRT input/effects;
    raw FP16/VMOVW native-read composition; raw literal and unbound-format
    contracts; MMX closure; hardware enqueue/random/mask status; custom ABI,
@@ -131,6 +134,12 @@ develop in an existing idle worktree. Commit and preserve RED before repair.
 
 Resolve worktree locations with `git worktree list`. Ignored receipts include:
 
+- `sad-qualified-0c86e86e.json`, `sad-final-gates-0c86e86e/` and
+  `sad-classification-audit/`: complete three-lane/final gates and eight-SDK
+  deltas. RED `bd7a7c3e5` retains 70 failed terminals. `c2487d2fb` retains
+  WIG and unbound-format failures. `7df27388d` retains the same-source zero
+  failure and two host-inapplicable runtime skips; that run is not qualified.
+  The portable 29-root cohort excludes those two unexecuted native requirements.
 - `text-extent-qualified-0a4a28bf.json` and `text-extent-final-gates-0a4a28bf/`:
   completed three-lane/final gates. Current Go has 16 roots / 413 children;
   actual Go1.20 has 15 / 410 because the original SDK fixture is Go1.27-only.
