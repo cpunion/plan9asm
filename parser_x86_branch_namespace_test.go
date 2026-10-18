@@ -22,7 +22,16 @@ func TestParseX86BranchLabelsRespectGoRegisterCase(t *testing.T) {
 				for index, label := range labels {
 					fmt.Fprintf(&source, "TEXT ·branch%d(SB),4,$0-0\n%s %s\n%s:\nRET\n", index, op, label, label)
 				}
-				goAssemblerOracleOutput(t, arch, source.String(), "", true)
+				if op == "CALL" {
+					// Preserve the complete original CALL-label source as a
+					// frontend-only control. Go's x86 encoder cannot consume
+					// local TYPE_BRANCH calls: the retained first attempt exits
+					// 2 with "call without target" and a doasm panic. This is
+					// neither an accepted Go object nor a rejection certificate.
+					t.Log("CALL local labels: parser-only identity; no Go object or execution claim")
+				} else {
+					goAssemblerOracleOutput(t, arch, source.String(), "", true)
+				}
 				file, err := Parse(ArchAMD64, source.String())
 				if err != nil || len(file.Funcs) != len(labels) {
 					t.Fatal("complete original label inventory did not parse", err)
