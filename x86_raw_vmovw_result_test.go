@@ -3,6 +3,7 @@ package plan9asm
 import (
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -30,6 +31,70 @@ func x86RawVMOVWResultFixture(name, arch string, load, wide, memory bool) (strin
 	}
 	source += fmt.Sprintf("MOVL BX,ret+%d(FP)\nRET\n", result)
 	return source, fmt.Sprintf("func %s(p *byte,value uint32) uint32\n", name)
+}
+
+func TestX86RawVMOVWExactOriginAndNumericalState(t *testing.T) {
+	for _, arch := range []string{"386", "amd64"} {
+		for _, load := range []bool{false, true} {
+			for _, memory := range []bool{false, true} {
+				for _, wide := range []bool{false, true} {
+					t.Run(fmt.Sprintf("%s/load=%t/memory=%t/wide=%t", arch, load, memory, wide), func(t *testing.T) {
+						general := 1
+						if memory {
+							general = 0
+						}
+						file := mustParseX86RawReturn(t, "TEXT Value(SB),4,$0-0\n"+
+							x86RawDisplacementDirectives(rawVMOVW(load, wide, 1, general, memory))+"RET\n")
+						file, err := normalizeX86RawFile(file, arch)
+						if err != nil {
+							t.Fatal(err)
+						}
+						ins := file.Funcs[0].Instrs[1]
+						state := x86ResultState{flags: x86ByteFlagsAll, direction: x86ResultDirectionBackward}
+						state.pointerGP[0], state.gp[1], state.gp[2] = true, 3, 0x55
+						state.writeVector(1, 64, 0xabcdef0123450003, false)
+						before := state.clone()
+						accepted, known := x86LoweredRawVMOVWResultStep(ins, &state, nil, 0, arch)
+						want := before.clone()
+						if load {
+							want.writeVector(1, 64, ^uint64(0), false)
+						} else if !memory {
+							want.gp[1] = 0xff
+						}
+						if !accepted || !known || !reflect.DeepEqual(state, want) {
+							t.Fatal("VMOVW lost low two bytes, upper zeroing or unrelated state")
+						}
+						for _, mutation := range []string{"encoding", "origin", "opcode", "operand", "address", "segment", "return", "literal"} {
+							changed, rejected := ins, before.clone()
+							switch mutation {
+							case "encoding":
+								changed.x86Encoded = false
+							case "origin":
+								changed.x86SourceRaw = nil
+							case "opcode":
+								changed.x86SourceRaw = &x86SourceRawInstruction{op: "VMOVD", args: ins.Args}
+							case "operand":
+								changed.Args = append([]Operand(nil), ins.Args...)
+								changed.Args[0] = Operand{Kind: OpReg, Reg: "X2"}
+							case "address":
+								changed.x86AddressBits = 32
+							case "segment":
+								changed.x86SegmentPrefix = 0x64
+							case "return":
+								changed.x86RawNearReturn = new(x86RawNearReturnForm)
+							case "literal":
+								changed.x86RIPLiteral = true
+							}
+							accepted, known := x86LoweredRawVMOVWResultStep(changed, &rejected, nil, 0, arch)
+							if accepted || !known || !reflect.DeepEqual(rejected, before) {
+								t.Fatal("changed raw origin acquired numerical effects", mutation)
+							}
+						}
+					})
+				}
+			}
+		}
+	}
 }
 
 func TestX86RawVMOVWInitializedResultsFiveTargets(t *testing.T) {

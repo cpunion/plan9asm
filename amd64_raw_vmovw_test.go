@@ -124,12 +124,10 @@ func TestRawVMOVWLLVM22Targets(t *testing.T) {
 	source.WriteString("TEXT rawWordMove(SB),4,$0-0\n")
 	source.WriteString(x86RawDisplacementDirectives(complete))
 	source.WriteString("RET\n")
-	sigs := map[string]FuncSig{"rawWordMove": {Name: "rawWordMove", Ret: Void}}
 	for _, f := range forms {
 		fmt.Fprintf(&source, "TEXT %s(SB),4,$0-0\n", f.name)
 		source.WriteString(x86RawDisplacementDirectives(f.code))
 		source.WriteString("RET\n")
-		sigs[f.name] = FuncSig{Name: f.name, Ret: Void}
 	}
 	for _, arch := range []string{"amd64", "386"} {
 		// BYTE acceptance alone is not an encoding oracle: require the exact
@@ -143,13 +141,13 @@ func TestRawVMOVWLLVM22Targets(t *testing.T) {
 	} {
 		t.Run(target.triple, func(t *testing.T) {
 			goAssemblerOracleOutput(t, target.arch, source.String(), "", true)
-			file, err := Parse(ArchAMD64, source.String())
-			if err != nil {
-				t.Fatal(err)
-			}
-			ir, err := Translate(file, Options{Goarch: target.arch, TargetTriple: target.triple, Sigs: sigs})
-			if err != nil {
-				t.Fatal(err)
+			// Keep the original unknown GP/X/m16 inputs as format-only
+			// objects and public Context controls. Initialized declarations
+			// and executed guard-page checks have independent test owners.
+			ir := x86UnboundVoidRawScalarFormatObject(t, source.String(), target.arch, target.triple)
+			ir = strings.ReplaceAll(ir, "@InstructionFormat0(", "@rawWordMove(")
+			for index, f := range forms {
+				ir = strings.ReplaceAll(ir, fmt.Sprintf("@InstructionFormat%d(", index+1), "@"+f.name+"(")
 			}
 			ctx := llvm.NewContext()
 			defer ctx.Dispose()
