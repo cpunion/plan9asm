@@ -153,7 +153,8 @@ func TestX86RawIntegerCompareLiteralEveryInputByteAndTuple(t *testing.T) {
 			}
 			form, known, err := x86PackedIntegerCompareProperties(ins.Op, ins, "amd64")
 			if !known || err != nil || string(ins.Op) != row.op || form.byteWidth != row.width ||
-				form.memoryBytes != row.tuple || form.maskResult != row.maskResult || !x86RawReturnDecodedReadIdentity(ins) {
+				form.memoryBytes != row.tuple || form.maskResult != row.maskResult ||
+				!x86RawIntegerCompareLiteralForm(ins, "amd64") || x86RawIntegerCompareLiteralForm(ins, "386") {
 				t.Fatal("original bytes changed their independent tuple/destination role", row.name, err)
 			}
 			address, valid := x86StaticSBReadAddress(form.source, "amd64")

@@ -101,7 +101,6 @@ func TestDecodeX86RawPackedCompareRIPDataRejectsUnsafeSources(t *testing.T) {
 
 func TestTranslateX86RawPackedCompareRIPDataObjects(t *testing.T) {
 	var source strings.Builder
-	sigs := make(map[string]FuncSig)
 	var pools [][]byte
 	for index, op := range x86PackedCompareTestOps {
 		spec := amd64PackedIntegerCompareSpecs[Op(op)]
@@ -117,7 +116,6 @@ func TestTranslateX86RawPackedCompareRIPDataObjects(t *testing.T) {
 		for _, value := range code {
 			fmt.Fprintf(&source, "\tBYTE $%#02x\n", value)
 		}
-		sigs[name] = FuncSig{Name: name, Ret: Void}
 		dataWidth := width
 		if broadcast {
 			dataWidth = spec.laneBits / 8
@@ -149,10 +147,10 @@ func TestTranslateX86RawPackedCompareRIPDataObjects(t *testing.T) {
 		"x86_64-apple-darwin", "x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc",
 	} {
 		t.Run(triple, func(t *testing.T) {
-			ir, err := Translate(file, Options{Goarch: "amd64", TargetTriple: triple, Sigs: sigs})
-			if err != nil {
-				t.Fatal(err)
-			}
+			// Original encodings leave the second vector input undefined.
+			// Preserve their full Go/emitter objects and public Context;
+			// independent initialized literal programs own public objects.
+			ir := x86UnboundVoidRawScalarFormatObject(t, source.String(), "amd64", triple)
 			compileLLVMToObject(t, llc, triple, "packed-compare-literal.ll", "packed-compare-literal.o", ir)
 		})
 	}
