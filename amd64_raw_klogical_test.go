@@ -103,10 +103,6 @@ func TestDecodedX86RawKLogicalCompleteGo127Family(t *testing.T) {
 
 func TestTranslateRawKLogicalArgReduceAVX512Regression(t *testing.T) {
 	const source = "TEXT rawKORW(SB),$0-0\n\tLONG $0xc945fcc5\n\tRET\n"
-	file, err := Parse(ArchAMD64, source)
-	if err != nil {
-		t.Fatal(err)
-	}
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc not found")
@@ -117,12 +113,7 @@ func TestTranslateRawKLogicalArgReduceAVX512Regression(t *testing.T) {
 		"x86_64-pc-windows-msvc",
 	} {
 		t.Run(triple, func(t *testing.T) {
-			ir, err := Translate(file, Options{Goarch: "amd64", TargetTriple: triple, Sigs: map[string]FuncSig{
-				"rawKORW": {Name: "rawKORW", Ret: Void},
-			}})
-			if err != nil {
-				t.Fatal(err)
-			}
+			ir := x86UnboundVoidRawScalarFormatObject(t, source, "amd64", triple)
 			if !strings.Contains(ir, "or i64") {
 				t.Fatalf("KORW did not lower to mask OR:\n%s", ir)
 			}
@@ -155,18 +146,9 @@ func TestTranslateRawKLogicalCompleteGo127FamilyObjects(t *testing.T) {
 		{"386", "i686-pc-windows-msvc"},
 	} {
 		t.Run(target.triple, func(t *testing.T) {
-			requireX86GoAssemblerResult(t, target.goarch, source.String(), true)
-			file, err := Parse(ArchAMD64, source.String())
-			if err != nil {
-				t.Fatal(err)
-			}
-			ir, err := Translate(file, Options{
-				Goarch: target.goarch, TargetTriple: target.triple,
-				Sigs: map[string]FuncSig{"rawKLogicalFamily": {Name: "rawKLogicalFamily", Ret: Void}},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			// Keep every original byte and its Go/public-Context/emitter
+			// checks; initialized raw logical programs have separate owners.
+			ir := x86UnboundVoidRawScalarFormatObject(t, source.String(), target.goarch, target.triple)
 			compileLLVMToObject(t, llc, target.triple, "raw-klogical-family.ll", "raw-klogical-family.o", ir)
 		})
 	}

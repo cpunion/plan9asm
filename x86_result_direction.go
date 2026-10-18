@@ -38,6 +38,9 @@ func x86ResultDirectionStep(ins Instr, state *x86ResultState, arch string) (bool
 // private CALL/stack roles. This never authorizes those operations. Unknown
 // physical effects and callee/FLAGS restoration cannot retain a prior DF fact.
 func x86ResultDirectionAfter(ins Instr, direction x86ResultDirection) x86ResultDirection {
+	if x86MaskLogicalPreservesStorage(ins) {
+		return direction
+	}
 	if x86RegisterQueryPreservesSourceState(ins) || x86WaitPackagePreservesStorage(ins) || x86NOPPreservesSourceState(ins) {
 		return direction
 	}

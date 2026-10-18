@@ -2,6 +2,7 @@ package plan9asm
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 )
 
@@ -37,7 +38,7 @@ func x86MaskLogicalProperties(op Op, ins Instr, arch string) (amd64MaskLogicalSp
 
 func x86MaskLogicalResultStep(ins Instr, state *x86ResultState, arch string) (bool, bool) {
 	spec, known, err := x86MaskLogicalProperties(ins.Op, ins, arch)
-	if !known || err != nil || !x86ResultNamedPredicateInstruction(ins) {
+	if !known || err != nil || !x86MaskLogicalPreservesStorage(ins) {
 		return false, known
 	}
 	inputs := 2
@@ -63,4 +64,20 @@ func x86MaskLogicalResultStep(ins Instr, state *x86ResultState, arch string) (bo
 		state.masks[destination] = true
 	}
 	return true, true // No GP, vector, DF, memory or unrelated mask writes.
+}
+
+// These K-only forms are identical in both x86 modes and never touch GP,
+// private storage or DF/ID. Their separate transfer still checks every mask
+// input and accounts for FLAGS writes. Raw source must retain the decoder's
+// exact opcode/operands; this grants no native entry, frame or memory role.
+func x86MaskLogicalPreservesStorage(ins Instr) bool {
+	if _, known, err := x86MaskLogicalProperties(ins.Op, ins, "amd64"); !known || err != nil {
+		return false
+	}
+	if ins.x86Encoded || ins.x86RawNearReturn != nil || ins.x86AddressBits != 0 ||
+		ins.x86UnboundAddressOverride || ins.x86SegmentPrefix != 0 {
+		return false
+	}
+	origin := ins.x86SourceRaw
+	return origin == nil || origin.op == ins.Op && reflect.DeepEqual(origin.args, ins.Args)
 }

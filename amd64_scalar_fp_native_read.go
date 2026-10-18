@@ -88,6 +88,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 			return strictErr
 		}
 		if ins.x86SourceRaw != nil {
+			if x86MaskLogicalPreservesStorage(ins) {
+				continue // Exact K-only source has independent mask/FLAGS effects, not memory or entry authority.
+			}
 			if x86RegisterQueryPreservesSourceState(ins) {
 				// The decoder's exact original and normalized zero-operand
 				// query shares its checked implicit inputs/outputs. It adds no memory,
