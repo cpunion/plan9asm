@@ -39,3 +39,18 @@ func x86SqrtProperties(ins Instr, arch string) (x86FloatBinaryForm, bool, error)
 	}
 	return f, true, nil
 }
+
+func x86SqrtNativeEVEX(ins Instr, form x86FloatBinaryForm) bool {
+	if form.legacy {
+		return false
+	}
+	if form.byteWidth == 64 || form.mask >= 0 || form.broadcast || form.rounding != "" {
+		return true
+	}
+	for _, operand := range ins.Args {
+		if index, valid := amd64VectorRegisterIndex(operand.Reg, form.byteWidth); valid && index >= 16 {
+			return true
+		}
+	}
+	return false
+}

@@ -78,19 +78,8 @@ func TestTranslateRawScalarSqrtKelindarRegression(t *testing.T) {
 	LONG $0xdc51dac5
 	RET
 `
-	file, err := Parse(ArchAMD64, source)
-	if err != nil {
-		t.Fatal(err)
-	}
-	ir, err := Translate(file, Options{
-		Goarch:       "amd64",
-		TargetTriple: "x86_64-unknown-linux-gnu",
-		Sigs:         map[string]FuncSig{"rawScalarSqrt": {Name: "rawScalarSqrt", Ret: Void}},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(ir, "llvm.sqrt.f32") {
+	ir := x86UnboundVoidRawScalarFormatObject(t, source, "amd64", "x86_64-unknown-linux-gnu")
+	if !strings.Contains(ir, `asm sideeffect "vsqrtss`) {
 		t.Fatalf("raw VSQRTSS omitted square root:\n%s", ir)
 	}
 }
@@ -154,18 +143,7 @@ func TestTranslateRawScalarSqrtLLVM22Targets(t *testing.T) {
 				}
 			}
 			source.WriteString("\tRET\n")
-			file, err := Parse(ArchAMD64, source.String())
-			if err != nil {
-				t.Fatal(err)
-			}
-			ir, err := Translate(file, Options{
-				Goarch:       target.goarch,
-				TargetTriple: target.triple,
-				Sigs:         map[string]FuncSig{"rawScalarSqrtFamily": {Name: "rawScalarSqrtFamily", Ret: Void}},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			ir := x86UnboundVoidRawScalarFormatObject(t, source.String(), target.goarch, target.triple)
 			compileLLVMToObject(t, llc, target.triple, "raw-scalar-sqrt.ll", "raw-scalar-sqrt.o", ir)
 		})
 	}

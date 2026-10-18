@@ -72,6 +72,21 @@ func inferFuncTargetFeaturesForGOARCH(arch Arch, goarch string, fn Func) string 
 			if moveArch == "" {
 				moveArch = "amd64"
 			}
+			if form, known, err := x86SqrtProperties(ins, moveArch); known && err == nil {
+				switch {
+				case x86SqrtNativeEVEX(ins, form):
+					add("+avx512f")
+					if !form.scalar && form.byteWidth < 64 {
+						add("+avx512vl")
+					}
+				case !form.legacy:
+					add("+avx")
+				case form.bits == 64:
+					add("+sse2")
+				default:
+					add("+sse")
+				}
+			}
 			if _, known, err := x86ByteShuffleProperties(ins.Op, ins, moveArch); known && err == nil {
 				// Every width lowers through the SSSE3 intrinsic, including
 				// an isolated .Z function with no unsuffixed sibling.

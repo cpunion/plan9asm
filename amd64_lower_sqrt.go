@@ -25,16 +25,10 @@ func (c *amd64Ctx) lowerSqrt(op Op, ins Instr) (bool, bool, error) {
 		ins.Args[0].Kind == OpMem && !x86OrdinaryNativeMemoryOperand(ins.Args[0], c.goarch) {
 		return true, false, fmt.Errorf("%w: %s packed source lacks its original native memory binding", ErrProbeNeedsContext, op)
 	}
-	evex := f.byteWidth == 64 || f.mask >= 0 || f.broadcast || f.rounding != ""
-	for _, operand := range ins.Args {
-		if index, valid := amd64VectorRegisterIndex(operand.Reg, f.byteWidth); valid && index >= 16 {
-			evex = true
-		}
-	}
 	return true, false, c.emitNativePackedConversion(ins, x86NativePackedConversion{
 		byteWidth: f.byteWidth, sourceBytes: f.byteWidth, memoryBytes: f.memoryBytes,
 		outputBits: f.bits, destination: f.destination, mask: f.mask, lanes: f.byteWidth * 8 / f.bits,
-		legacy: f.legacy, evex: evex, broadcast: f.broadcast, zeroing: f.zeroing,
+		legacy: f.legacy, evex: x86SqrtNativeEVEX(ins, f), broadcast: f.broadcast, zeroing: f.zeroing,
 		rounding: f.rounding, mnemonic: strings.ToLower(base),
 	})
 }

@@ -63,7 +63,7 @@ func TestTranslateX86SameWidthPackedConversionCompleteGoAssemblerForms(t *testin
 			}
 			src.WriteString("\tRET\n")
 
-			ll := x86UnboundVoidScalarFormatObject(t, src.String(), "samewidthpackedconversionforms", target.goarch, target.triple)
+			ll := x86SqrtOriginalFormatObjects(t, src.String(), "samewidthpackedconversionforms", target.goarch, target.triple)
 			llc := findLLVM22Tool("llc")
 			if llc == "" {
 				t.Fatal("LLVM 22 llc not found")
