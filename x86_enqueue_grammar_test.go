@@ -2,6 +2,37 @@ package plan9asm
 
 import "testing"
 
+func TestX86EnqueueCompleteAddress16Forms(t *testing.T) {
+	rows := []struct{ base, index Reg }{
+		{BX, SI}, {BX, DI}, {BP, SI}, {BP, DI}, {SI, ""}, {DI, ""}, {BP, ""}, {BX, ""},
+	}
+	for _, prefix := range []byte{0xf2, 0xf3} {
+		for mod := byte(0); mod < 3; mod++ {
+			for rm, row := range rows {
+				code := []byte{0x67, prefix, 0x0f, 0x38, 0xf8, mod<<6 | 7<<3 | byte(rm)}
+				base, index, offset := row.base, row.index, uint16(0)
+				if mod == 1 {
+					code, offset = append(code, 0x80), 0xff80
+				} else if mod == 2 || rm == 6 {
+					code, offset = append(code, 0x00, 0x80), 0x8000
+					if mod == 0 {
+						base = "" // The absolute disp16 row replaces BP only for mod=00.
+					}
+				}
+				ins, length, known, err := decodedX86EnqueueInstruction(code, 32)
+				if err != nil || !known || length != len(code) || len(ins.Args) != 2 ||
+					ins.x86AddressBits != 16 || ins.Args[1].Reg != DI ||
+					ins.Args[0].Mem.Base != base || ins.Args[0].Mem.Index != index || uint16(ins.Args[0].Mem.Off) != offset {
+					t.Fatalf("complete address16 physical row %x: %#v / %v", code, ins, err)
+				}
+				if _, known, err := x86EnqueueProperties(ins.Op, ins, "386"); !known || err != nil {
+					t.Fatal("typed grammar lost a legal original address16 form", ins, err)
+				}
+			}
+		}
+	}
+}
+
 func TestX86EnqueueConstructedAddressGrammarBeforeIR(t *testing.T) {
 	for _, arch := range []string{"386", "amd64"} {
 		for _, op := range []Op{"ENQCMD", "ENQCMDS"} {

@@ -24,28 +24,37 @@ func TestX86EnqueueCompletePhysicalRegisterAddressFamily(t *testing.T) {
 		if mode == 64 {
 			count = 16
 		}
-		for _, prefix := range []byte{0xf2, 0xf3} {
-			for destination := 0; destination < count; destination++ {
-				for base := 0; base < count; base++ {
-					code := []byte{prefix}
-					if mode == 64 {
-						// W is ignored. Independently cover every R/B register bit.
-						code = append(code, 0x48|byte(destination/8)<<2|byte(base/8))
-					}
-					code = append(code, 0x0f, 0x38, 0xf8, 0x40|byte(destination%8)<<3|byte(base%8))
-					if base%8 == 4 {
-						code = append(code, 0x24) // Required SIB: no index, SP/R12 base.
-					}
-					code = append(code, 0x80) // Signed disp8 avoids the RIP/no-base encoding.
-					ins, length, known, err := decodedX86EnqueueInstruction(code, mode)
-					want := Op("ENQCMD")
-					if prefix == 0xf3 {
-						want = "ENQCMDS"
-					}
-					if err != nil || !known || length != len(code) || ins.Op != want || ins.x86AddressBits != mode ||
-						len(ins.Args) != 2 || ins.Args[0].Kind != OpMem || ins.Args[0].Mem.Base != registers[base] ||
-						ins.Args[0].Mem.Off != -128 || ins.Args[0].Mem.Index != "" || ins.Args[1].Reg != registers[destination] {
-						t.Fatalf("complete enqueue register/address form %x in mode %d: %#v / %v", code, mode, ins, err)
+		addressSizes := []int{mode}
+		if mode == 64 {
+			addressSizes = append(addressSizes, 32)
+		}
+		for _, addressBits := range addressSizes {
+			for _, prefix := range []byte{0xf2, 0xf3} {
+				for destination := 0; destination < count; destination++ {
+					for base := 0; base < count; base++ {
+						code := []byte{prefix}
+						if addressBits != mode {
+							code = append(code, 0x67)
+						}
+						if mode == 64 {
+							// W is ignored. Independently cover every R/B register bit.
+							code = append(code, 0x48|byte(destination/8)<<2|byte(base/8))
+						}
+						code = append(code, 0x0f, 0x38, 0xf8, 0x40|byte(destination%8)<<3|byte(base%8))
+						if base%8 == 4 {
+							code = append(code, 0x24) // Required SIB: no index, SP/R12 base.
+						}
+						code = append(code, 0x80) // Signed disp8 avoids the RIP/no-base encoding.
+						ins, length, known, err := decodedX86EnqueueInstruction(code, mode)
+						want := Op("ENQCMD")
+						if prefix == 0xf3 {
+							want = "ENQCMDS"
+						}
+						if err != nil || !known || length != len(code) || ins.Op != want || ins.x86AddressBits != addressBits ||
+							len(ins.Args) != 2 || ins.Args[0].Kind != OpMem || ins.Args[0].Mem.Base != registers[base] ||
+							ins.Args[0].Mem.Off != -128 || ins.Args[0].Mem.Index != "" || ins.Args[1].Reg != registers[destination] {
+							t.Fatalf("complete enqueue register/address form %x in mode %d: %#v / %v", code, mode, ins, err)
+						}
 					}
 				}
 			}
