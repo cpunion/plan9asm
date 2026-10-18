@@ -548,6 +548,12 @@ func parseOperandsCSV(arch Arch, op Op, s string) ([]Operand, error) {
 		if part == "" {
 			continue
 		}
+		if arch == ArchAMD64 {
+			if operand, matched := parseX86BranchIdentifier(op, part); matched {
+				out = append(out, operand)
+				continue
+			}
+		}
 		legacy := []string{part}
 		if arch == ArchAMD64 && (op == "SHLL" || op == "SHLQ" || op == "SHRL" || op == "SHRQ") {
 			legacy = splitLegacyColonOperand(part)
@@ -560,10 +566,9 @@ func parseOperandsCSV(arch Arch, op Op, s string) ([]Operand, error) {
 			out = append(out, op)
 		}
 	}
-	// Direct branches treat a bare token as a label even when it also looks like
-	// an architecture register (for example amd64 JL V1 and ARM BEQ X7 in Go
-	// 1.23's math/big assembly). Indirect branch and call opcodes stay outside
-	// this rule because their bare register operands are meaningful.
+	// ARM direct branches treat a bare token as a label even when the shared
+	// parser recognizes it as another architecture's register, such as BEQ X7.
+	// x86 uses its complete source namespace before generic operand parsing.
 	if branchRegisterTokenIsLabel(arch, op) && len(out) == 1 && out[0].Kind == OpReg {
 		out[0] = Operand{Kind: OpIdent, Ident: strings.TrimSpace(s)}
 	}
@@ -978,8 +983,6 @@ func parseWASMReg(s string) (Reg, bool) {
 func branchRegisterTokenIsLabel(arch Arch, op Op) bool {
 	name := normalizeInstructionOpcode(op)
 	switch arch {
-	case ArchAMD64:
-		return (strings.HasPrefix(name, "J") && name != "JMP") || strings.HasPrefix(name, "LOOP")
 	case ArchARM:
 		return isARMBranchOpcode(name) && name != "BL" && name != "BX" && name != "BLX" && name != "RET"
 	case ArchARM64:
