@@ -1338,3 +1338,12 @@ count of 16 or more makes every result lane zero. VEX remains register-only;
 mask, broadcast and zeroing fields remain reserved. Preserve all 256 selectors,
 128-bit lane boundaries, wider-alias clearing and original FLAGS without
 granting a standalone DATA query or raw-return frame permission.
+
+VEX/EVEX packed integer EQ/GT literals share the existing complete B/W/D/Q
+comparison grammar and byte effect. Exact source identity and full/broadcast
+tuple width remain mandatory. Vector input bytes and actual masks stay required;
+the EVEX K result is write-only, not a merging vector destination. This adds no
+legacy/MMX, native-read, frame or standalone DATA-query role. Keep original
+uninitialized formats separate from initialized public objects. C-only signal
+and exit-status controls execute on the actual host; they do not require an
+x86 native-instruction launcher or certify native AVX512 execution.
