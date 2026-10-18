@@ -5,13 +5,17 @@ import (
 	"reflect"
 )
 
+// A source shape alone supplies no input permission. The typed family, complete
+// source replay and independent raw-return/DATA consumer remain mandatory.
+func x86RawLiteralSourceShape(ins Instr, arch string) bool {
+	return arch == "amd64" && ins.x86Encoded && ins.x86RIPLiteral &&
+		ins.x86SourceRaw != nil && ins.x86RawNearReturn == nil && ins.x86AddressBits == 0 &&
+		!ins.x86UnboundAddressOverride && ins.x86SegmentPrefix == 0
+}
+
 // RIP constants are a decoder role, never a named-immediate broadcast form.
-// Complete source replay below binds their original bytes. Block reads also
-// retain the exact DATA identity checked by the independent raw-return guard.
 func x86RawBroadcastLiteralForm(ins Instr, arch string) bool {
-	if arch != "amd64" || !ins.x86Encoded || !ins.x86RIPLiteral ||
-		ins.x86SourceRaw == nil || ins.x86RawNearReturn != nil || ins.x86AddressBits != 0 ||
-		ins.x86UnboundAddressOverride || ins.x86SegmentPrefix != 0 {
+	if !x86RawLiteralSourceShape(ins, arch) {
 		return false
 	}
 	form, known, err := x86BroadcastProperties(ins.Op, ins, arch)
@@ -26,21 +30,34 @@ func x86RawBroadcastLiteralForm(ins Instr, arch string) bool {
 		ins.x86RIPMemoryRead.source == 0 && ins.x86RIPMemoryRead.width == int64(form.sourceBytes)
 }
 
-// This bounded source uses the ordinary typed broadcast byte effects. It does
+func x86RawLogicalLiteralForm(ins Instr, arch string) bool {
+	if !x86RawLiteralSourceShape(ins, arch) || !x86RawReturnDecodedReadIdentity(ins) {
+		return false
+	}
+	form, known, err := x86PackedLogicalProperties(ins, arch)
+	return known && err == nil && !form.legacy && !form.mmx && form.memory >= 0 &&
+		ins.x86RIPMemoryRead.source == form.first && ins.x86RIPMemoryRead.width == int64(form.memoryBytes)
+}
+
+func x86RawResultLiteralForm(ins Instr, arch string) bool {
+	return x86RawBroadcastLiteralForm(ins, arch) || x86RawLogicalLiteralForm(ins, arch)
+}
+
+// This bounded source uses the ordinary typed family byte effects. It does
 // not join the conditional native-read route or waive raw RET's separately
 // checked frame, memory and continuation contracts. Other raw families retain
 // their own consumers. Declaration-only queries acquire no literal permission.
-func (c *amd64Ctx) checkRawBroadcastLiteralResults() (bool, error) {
+func (c *amd64Ctx) checkRawLiteralResults() (bool, error) {
 	fn, arch := c.fpScalarSource, c.goarch
 	selected := false
 	for _, ins := range fn.Instrs {
-		selected = selected || x86RawBroadcastLiteralForm(ins, arch)
+		selected = selected || x86RawResultLiteralForm(ins, arch)
 	}
 	if !selected {
 		return false, nil
 	}
 	fail := func() (bool, error) {
-		return true, fmt.Errorf("%w: raw broadcast requires its complete literal source and independent return contract", ErrProbeNeedsContext)
+		return true, fmt.Errorf("%w: raw literal requires its complete source and independent return contract", ErrProbeNeedsContext)
 	}
 	if fn.FrameSize != 0 || len(fn.X86RawText) != 0 || fn.x86SourceStack != nil ||
 		fn.x86FixedLocal != nil || fn.x86DirectTailRoot != nil || fn.x86ContinuationFlow != nil ||
@@ -57,7 +74,7 @@ func (c *amd64Ctx) checkRawBroadcastLiteralResults() (bool, error) {
 				return fail()
 			}
 			hasReturn = true
-		} else if !x86RawBroadcastLiteralForm(ins, arch) && !x86ResultNamedPredicateInstruction(ins) {
+		} else if !x86RawResultLiteralForm(ins, arch) && !x86ResultNamedPredicateInstruction(ins) {
 			return fail()
 		}
 	}

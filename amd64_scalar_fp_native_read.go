@@ -70,7 +70,7 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 	if strictErr == nil && nativeMMX == nil {
 		return nil
 	}
-	if selected, err := c.checkRawBroadcastLiteralResults(); selected {
+	if selected, err := c.checkRawLiteralResults(); selected {
 		return err
 	}
 	if x86TrapOnlyLogicalFPSourceRole(fn, sig, arch) {

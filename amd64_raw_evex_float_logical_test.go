@@ -166,7 +166,6 @@ func TestDecodeX86RawEVEXFloatLogicalRejectsUnsafeForms(t *testing.T) {
 
 func TestTranslateX86RawEVEXFloatLogicalRIPDataObjects(t *testing.T) {
 	var source strings.Builder
-	sigs := make(map[string]FuncSig)
 	for opcode, stem := range x86VEXPackedFloatLogicalTestOpcodes {
 		for pp, suffix := range map[byte]string{0: "PS", 1: "PD"} {
 			name := "literal" + stem + suffix
@@ -174,14 +173,9 @@ func TestTranslateX86RawEVEXFloatLogicalRIPDataObjects(t *testing.T) {
 			for _, value := range x86RawEVEXFloatLogicalLiteral(opcode, pp, 64, 7, true, true) {
 				fmt.Fprintf(&source, "\tBYTE $%#02x\n", value)
 			}
-			sigs[name] = FuncSig{Name: name, Ret: Void}
 		}
 	}
 	requireX86GoAssemblerResult(t, "amd64", source.String(), true)
-	file, err := Parse(ArchAMD64, source.String())
-	if err != nil {
-		t.Fatal(err)
-	}
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc not found")
@@ -192,10 +186,9 @@ func TestTranslateX86RawEVEXFloatLogicalRIPDataObjects(t *testing.T) {
 		"x86_64-pc-windows-msvc",
 	} {
 		t.Run(triple, func(t *testing.T) {
-			ir, err := Translate(file, Options{Goarch: "amd64", TargetTriple: triple, Sigs: sigs})
-			if err != nil {
-				t.Fatal(err)
-			}
+			// The original complete bytes have no K7 producer. Preserve their
+			// objects and public Context, not a fabricated initialized mask.
+			ir := x86UnboundVoidRawScalarFormatObject(t, source.String(), "amd64", triple)
 			compileLLVMToObject(t, llc, triple, "raw-evex-float-logical-literal.ll", "raw-evex-float-logical-literal.o", ir)
 		})
 	}

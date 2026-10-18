@@ -33,14 +33,12 @@ func x86RawPackedLogicalLiteral(op Op, evex bool, width, mask int, zeroing, broa
 
 func TestTranslateX86RawPackedLogicalRIPDataObjects(t *testing.T) {
 	var source strings.Builder
-	sigs := make(map[string]FuncSig)
 	var pools [][]byte
 	add := func(name string, code []byte, width int) {
 		fmt.Fprintf(&source, "TEXT %s(SB),$0-0\n", name)
 		for _, value := range code {
 			fmt.Fprintf(&source, "\tBYTE $%#02x\n", value)
 		}
-		sigs[name] = FuncSig{Name: name, Ret: Void}
 		pools = append(pools, code[len(code)-width:])
 	}
 	for index, op := range []Op{"VPAND", "VPANDN", "VPOR", "VPXOR"} {
@@ -81,10 +79,9 @@ func TestTranslateX86RawPackedLogicalRIPDataObjects(t *testing.T) {
 		"x86_64-apple-darwin", "x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc",
 	} {
 		t.Run(triple, func(t *testing.T) {
-			ir, err := Translate(file, Options{Goarch: "amd64", TargetTriple: triple, Sigs: sigs})
-			if err != nil {
-				t.Fatal(err)
-			}
+			// Retain every original VEX and EVEX function. The EVEX functions
+			// lack K7; separate complete initialized programs own public objects.
+			ir := x86UnboundVoidRawScalarFormatObject(t, source.String(), "amd64", triple)
 			compileLLVMToObject(t, llc, triple, "logical-literal.ll", "logical-literal.o", ir)
 		})
 	}
