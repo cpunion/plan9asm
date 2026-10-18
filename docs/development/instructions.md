@@ -100,6 +100,13 @@ including dead register writes in Void functions. Only SETCC/SETCS can consume
 a lone CLC/STC producer; that CF fact does not define other predicates. Neither
 an unused bool parameter nor a native-only routing predicate supplies FLAGS.
 
+Private bool tails retain the source architecture when selecting their consumer.
+AMD64 no-CALL tails belong to the existing whole-source direct-tail proof, not
+the 386 custom-register helper graph. Handoff still verifies live source and
+declaration observations; default mode means AMD64. Keep all 16 SETcc predicates,
+canonical result bytes, independent helper frames and actual 386 helper tests.
+Portable i1-to-i32 value execution is not native entry or C bool ABI evidence.
+
 Indexed permutes and GFNI share the existing typed EVEX/VEX binary grammar;
 unary vector bit counts project their original two/three operands locally.
 Never mutate source operands to reuse a grammar. I2 old-destination indices

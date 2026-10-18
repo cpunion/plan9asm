@@ -22,6 +22,8 @@ idle worktrees; do not create another for routine work.
 
 | Code snapshot | Completed evidence | Limits |
 |---|---|---|
+| `9552a2759` | Architecture-correct bool-tail routing and stack-source contracts: 63 roots / 1,301 children pass current Go, actual Go1.20 and race; identical 1,364 terminals, zero fail/skip/incomplete | Complete 16-condition SETcc tail family, three-API objects and portable value execution; original invalid/unbound stack sources remain separate from initialized five-target objects and portable values |
+| Same snapshot | All thirteen final gates pass; exact original 167-root replay has 47 pass / 31 fail / 89 explicit host skips, unchanged source/tools and no incomplete roots | Three former failures pass, with no new failures; not complete current-head CI or native AMD64 execution |
 | `3044f1483` | Decoder-bound VMOVW and raw-format input contracts: 31 roots / 1,006 children pass current Go, actual Go1.20 and race; identical 1,037 terminals, zero fail/skip/incomplete | All eight VMOVW direction/register/m16/W forms, five-target three-API IR/backend O0/O2 objects, exact byte/origin negatives and the unchanged portable guard-page/value program; not native AVX512 execution |
 | Same snapshot | All thirteen final gates pass with unchanged source/SDK/LLVM22 observations; exact original 167-root replay has 44 pass / 34 fail / 89 explicit host skips | Five former failures pass with no regressions in that set; full current-head CI and strict standard-library benchmark remain unqualified |
 | `6d1337fde` | Legacy logical-memory fixture contracts and complete related grammar/native-read tests: 21 roots / 3,785 children pass current Go, actual Go1.20 and race; identical 3,806 terminals, zero fail/skip/incomplete | Original 60-function segment formats remain Go/emitter objects and public Context; separate 36-function ordinary-address programs and initialized SSE1 pointer programs own public objects, not native execution |
@@ -73,7 +75,7 @@ See earlier checkpoints in Git rather than reconstructing counts by subtraction.
 
 ## Exact failure replay and online CI
 
-The latest local diagnostic at `3044f1483` selects exactly the original CI's
+The latest local diagnostic at `9552a2759` selects exactly the original CI's
 167 failed root names. One sealed Go test process ran the complete set,
 instead of repeatedly linking the same large test executable.
 All inventories, started/terminal identities and before/after source, SDK, LLVM
@@ -86,12 +88,16 @@ and environment observations match. This is not the canonical isolated CI runner
 | Previous batched replay, `1d4e3ef70` | 33 | 45 | 89 | 0 / 0 |
 | Previous batched replay, `731de8a20` | 34 | 44 | 89 | 0 / 0 |
 | Previous batched replay, `0ab05d184` | 39 | 39 | 89 | 0 / 0 |
-| Latest batched replay, `3044f1483` | 44 | 34 | 89 | 0 / 0 |
+| Previous batched replay, `3044f1483` | 44 | 34 | 89 | 0 / 0 |
+| Latest batched replay, `9552a2759` | 47 | 31 | 89 | 0 / 0 |
 
-The five newly passing original roots are the unchanged VMOVW portable runtime,
-VEX logical and EVEX broadcast format fixtures, and both legacy logical-memory
-fixtures. Original unbound sources retain their Go/emitter objects and public
-Context controls; initialized counterparts supply separate public objects.
+The three newly passing original roots are AMD64 PushPop, 386 direct-SP writes
+and canonical-bool direct tails. AMD64 tails now retain their actual architecture
+instead of entering the 386-only custom-helper path. The original 386 stack
+fixture has an independently checked ordinary Go assembler rejection for
+unbalanced PUSH/POP, not a successful Go object. Both original stack fixtures
+retain complete emitter objects and public Context controls; separate initialized
+private-stack programs provide actual Go/public objects and portable values.
 A corrected Context expectation is not a new whole-source translation success.
 Earlier ENDBR, SQRT, static-SB SAD and wrapping-add repairs remain passing.
 No root passes with skipped children. Host skips remain unexecuted
@@ -136,11 +142,13 @@ before changing implementation or claiming a speedup. Do not relax budgets.
    observed classes:
    raw FP16 native-read composition; raw literal and unbound-format
    contracts; MMX closure; hardware enqueue/random/mask status; custom ABI,
-   source-stack and runtime386 `cpuidProbe` entry. Use the actual diagnostic,
+   runtime386 `cpuidProbe` entry. Use the actual diagnostic,
    not an earlier successful preflight, to choose each next class.
-   The current follow-up reproduces AMD64 bool tails incorrectly entering the
-   386-only custom-helper route and retains original unbound stack fixtures
-   separately from initialized private-stack objects/portable values.
+   The AMD64 bool-tail routing and original stack-fixture contracts are qualified
+   at `9552a2759`; all 16 conditions retain their canonical result and live
+   source/declaration checks. Remaining raw format fixtures need original
+   Go/emitter controls and independently initialized public programs, while
+   bounded RIP-literal effects need their own exact source/data proof.
 3. Rerun the unchanged complete standard-library corpus and benchmark after
    relevant source repairs. Do not convert Context into successful compilation.
    A valid encoding grants no caller frame, memory ownership or ABI transport.
@@ -156,6 +164,13 @@ develop in an existing idle worktree. Commit and preserve RED before repair.
 
 Resolve worktree locations with `git worktree list`. Ignored receipts include:
 
+- `stack-tail-routing-qualified-9552a275.json`,
+  `stack-tail-final-gates-9552a275/`: 63-root three-lane qualification and
+  thirteen final gates. Preserve first RED `f3ef04e5` (including fixture
+  mistakes), corrected RED `baffdeac` and first GREEN `9552a275` separately.
+- `latest-failure-batch-9552a275-{summary.json,raw.jsonl,before.json,after.json}`:
+  exact 167-root replay, 47 pass / 31 fail / 89 explicit host skips, unchanged
+  source/tools and no missing/incomplete roots or passing roots with skips.
 - `logical-memory-family-qualified-6d1337fd.json` and
   `logical-memory-final-gates-6d1337fd/`: complete 21-root, three-lane cohort
   and thirteen final gates, retaining both original failures and real inputs.
