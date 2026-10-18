@@ -41,7 +41,9 @@ func x86InstructionFormatObjectUnit(t *testing.T, file *File, signatures map[str
 	for index, function := range file.Funcs {
 		sig, found := signatures[resolve(function.Sym)]
 		registerI32 := sig.Ret == I32 && len(sig.Frame.Results) == 0
-		if !found || sig.Ret != Void && !registerI32 || function.FrameSize != frame || len(function.Instrs) < 2 {
+		scalarResult := (sig.Ret == I8 || sig.Ret == I16 || sig.Ret == I32 || sig.Ret == I64) &&
+			len(sig.Frame.Results) == 1 && sig.Frame.Results[0].Type == sig.Ret
+		if !found || sig.Ret != Void && !registerI32 && !scalarResult || function.FrameSize != frame || len(function.Instrs) < 2 {
 			t.Fatal("instruction format unit lost its complete original return/frame role")
 		}
 		var arguments []string
@@ -64,9 +66,9 @@ func x86InstructionFormatObjectUnit(t *testing.T, file *File, signatures map[str
 				if ordinal != len(function.Instrs)-1 || len(instruction.Args) != 0 {
 					t.Fatal("format unit lost its original final return")
 				}
-				if registerI32 {
-					// Preserve the original emitter's AX return in format-only
-					// objects. This supplies no public ABI0 result declaration.
+				if registerI32 || scalarResult {
+					// Retain the emitter's original AX or declared scalar FP
+					// transport. These format objects prove no initialized result.
 					if err := consumer.lowerRET(); err != nil {
 						t.Fatal(err)
 					}
