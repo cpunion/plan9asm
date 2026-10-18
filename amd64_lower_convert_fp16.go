@@ -1,70 +1,30 @@
 package plan9asm
 
-import (
-	"fmt"
-	"strings"
-)
+import "fmt"
 
 // FP16 map5/map6 conversions are both load forms. The lane types determine
 // access and result widths; encoded VL distinguishes the two X destinations.
 func (c *amd64Ctx) lowerRawFP16Conversion(ins Instr, spec amd64HalfConversionSpec) (bool, bool, error) {
-	if !ins.x86Encoded {
-		return true, false, fmt.Errorf("%s has no named Go assembler form: %q", ins.Op, ins.Raw)
+	f, _, err := x86FP16ConversionProperties(ins, c.goarch)
+	if err != nil {
+		return true, false, err
 	}
-	vl := ins.x86VectorBytes
-	if !spec.scalar && vl != 16 && vl != 32 && vl != 64 {
-		return true, false, fmt.Errorf("%s has invalid encoded vector length %d", ins.Op, vl)
+	if x86ScalarFloatIntegerNativeTarget(c.goarch, c.targetTriple) {
+		return true, false, c.emitNativeFP16Conversion(ins, f)
 	}
-	operandCount := 2
+	// Preserve the existing cross-target numerical implementation. It is not
+	// an x86 MXCSR/exception execution oracle; matching x86 targets use the
+	// original opcode above, even when the numerical result is dead.
+	properties := f.controls
 	if spec.scalar {
-		operandCount = 3
+		return c.lowerRawScalarHalfConversion(ins, spec, properties, f.sae)
 	}
-	if len(ins.Args) != operandCount && len(ins.Args) != operandCount+1 {
-		return true, false, fmt.Errorf("%s requires source, [K mask,] destination", ins.Op)
-	}
-	base := strings.SplitN(string(ins.Op), ".", 2)[0]
-	suffix := strings.TrimPrefix(string(ins.Op), base)
-	sae := suffix == ".SAE" || suffix == ".SAE.Z"
-	if sae {
-		suffix = strings.TrimPrefix(suffix, ".SAE")
-	}
-	properties, valid := parseAMD64FMA3Suffix(strings.TrimPrefix(suffix, "."))
-	if !valid || spec.inputBits == 16 && properties.rounding != "" || spec.outputBits == 16 && sae {
-		return true, false, fmt.Errorf("%s has invalid conversion controls", ins.Op)
-	}
-	masked := len(ins.Args) == operandCount+1
-	if properties.zeroing && !masked || masked && !amd64NonzeroKOperand(ins.Args[len(ins.Args)-2]) {
-		return true, false, fmt.Errorf("%s requires K1-K7 for masking", ins.Op)
-	}
-	if spec.scalar {
-		return c.lowerRawScalarHalfConversion(ins, spec, properties, sae)
-	}
-	source, destination := ins.Args[0], ins.Args[len(ins.Args)-1]
-	lanes := vl / 4
-	inputBytes, outputBytes := lanes*spec.inputBits/8, lanes*spec.outputBits/8
-	sourceRegisterBytes, destinationRegisterBytes := inputBytes, outputBytes
-	if sourceRegisterBytes < 16 {
-		sourceRegisterBytes = 16
-	}
-	if destinationRegisterBytes < 16 {
-		destinationRegisterBytes = 16
-	}
-	if !c.isGoEVEXVectorRegister(destination, destinationRegisterBytes) {
-		return true, false, fmt.Errorf("%s has an invalid destination register", ins.Op)
-	}
-	if source.Kind == OpReg {
-		if !c.isGoEVEXVectorRegister(source, sourceRegisterBytes) || properties.broadcast {
-			return true, false, fmt.Errorf("%s has invalid source width or register broadcast", ins.Op)
-		}
-	} else if !isAMD64MemoryOperand(source) || sae || properties.rounding != "" {
-		return true, false, fmt.Errorf("%s has invalid memory or rounding operands", ins.Op)
-	}
-	if (sae || properties.rounding != "") && vl != 64 {
-		return true, false, fmt.Errorf("%s explicit rounding/SAE requires 512-bit VL", ins.Op)
-	}
+	source, destination := ins.Args[0], ins.Args[f.destination]
+	lanes, inputBytes, outputBytes := f.lanes, f.inputBytes, f.outputBytes
+	sourceRegisterBytes, destinationRegisterBytes := f.sourceBytes, f.byteWidth
+	masked := f.mask >= 0
 
 	mask := ""
-	var err error
 	if masked {
 		mask, err = c.loadK(ins.Args[1].Reg)
 		if err != nil {
