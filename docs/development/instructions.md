@@ -248,6 +248,19 @@ obligations, even for Void. Retain full encoder attributes, all register codes,
 partial-byte negatives and original format objects; object compilation does not
 qualify native random execution.
 
+ENQCMD/ENQCMDS share exact named/raw operand and address-size grammar. Both
+GP address operands are read-only; an actual native continuation defines ZF
+retry and clears the other five status flags. Preserve the native side-effecting
+64-byte command read, memory clobber and fault/privilege behavior, not memcpy.
+Only independently established incoming addresses supply the public native
+continuation. Raw identity, original mode, initialized inputs and complete ABI
+results remain mandatory, including Void. No submission success, PASID, CPL,
+alignment, backing or later pointee-read fact follows. Check all ModRM/SIB,
+address16 and displacement boundaries before IR. Original unbound/segment/
+address-override formats keep Go/emitter objects and public Context; independent
+initialized programs own public objects. Neither objects nor status simulation
+qualifies native device execution.
+
 UMWAIT/TPAUSE share their existing implicit-system grammar with mandatory
 low-dword control and EDX:EAX inputs. Their native continuation defines CF and
 clears the other five status flags without changing GP, DF or private storage.
