@@ -102,6 +102,9 @@ func TestX86RawBroadcastLiteralKeepsMissingInputsAndSourceIdentity(t *testing.T)
 		if err != nil {
 			t.Fatal(err)
 		}
+		if err := checkX86ScalarFPResultInitialization(file.Funcs[0], FuncSig{Name: row.name, Ret: Void}, "amd64"); !errors.Is(err, ErrProbeNeedsContext) {
+			t.Fatal("standalone declaration query acquired a source-literal role", row.name, err)
+		}
 		for _, instruction := range file.Funcs[0].Instrs {
 			if !instruction.x86RIPLiteral {
 				continue
@@ -122,11 +125,51 @@ func TestX86RawBroadcastLiteralKeepsMissingInputsAndSourceIdentity(t *testing.T)
 		if !strings.HasSuffix(row.name, "_3") && !strings.HasSuffix(row.name, "_7") {
 			continue
 		}
-		for _, api := range []string{"text", "module", "Go"} {
-			if ir, err := x86ScalarFPBitViewAPI(t, x86RawBroadcastResultSource(row, false), declaration,
-				"amd64", "x86_64-unknown-linux-gnu", api); ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
-				t.Fatal("constant input invented a missing mask or merge vector", row.name, api, err)
+		variants := []string{
+			x86RawBroadcastResultSource(row, false),
+			strings.NewReplacer("KMOVD AX,K3\n", "", "KMOVD AX,K7\n", "").Replace(source),
+		}
+		if strings.HasSuffix(row.name, "_3") {
+			variants = append(variants, strings.NewReplacer("VPXORD Z0,Z0,Z0\n", "", "VPXORD Z2,Z2,Z2\n", "").Replace(source))
+		}
+		for _, changed := range variants {
+			for _, api := range []string{"text", "module", "Go"} {
+				if ir, err := x86ScalarFPBitViewAPI(t, changed, declaration,
+					"amd64", "x86_64-unknown-linux-gnu", api); ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+					t.Fatal("constant input invented a missing mask or merge vector", row.name, api, err)
+				}
 			}
+		}
+	}
+}
+
+func TestX86RawBroadcastLiteralKeepsReturnAndDataBoundaries(t *testing.T) {
+	for _, row := range x86RawBroadcastResultCases() {
+		source := x86RawBroadcastResultSource(row, true)
+		declaration := "func " + row.name + "()"
+		for _, changed := range []string{
+			strings.Replace(source, "$0-0", "$16-0", 1),
+			strings.Replace(source, "MOVL $5,AX", "MOVQ $0,SP\nMOVL $5,AX", 1),
+		} {
+			for _, api := range []string{"text", "module", "Go"} {
+				if ir, err := x86ScalarFPBitViewAPI(t, changed, declaration, "amd64", "x86_64-unknown-linux-gnu", api); ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+					t.Fatal("literal broadcast waived an independent raw-return frame", row.name, api, err)
+				}
+			}
+		}
+		if !strings.HasSuffix(row.name, "128") {
+			continue // Only the block forms materialize a separate DATA object.
+		}
+		file, err := normalizeX86RawFile(mustParseX86RawReturn(t, source), "amd64")
+		if err != nil || len(file.Data) != 1 {
+			t.Fatal("block literal lost its actual data object", row.name, err)
+		}
+		file.Data[0].Payload[0] ^= 1
+		options := Options{Goarch: "amd64", TargetTriple: "x86_64-unknown-linux-gnu",
+			Sigs:       map[string]FuncSig{row.name: {Name: row.name, Ret: Void}},
+			ResolveSym: func(name string) string { return strings.TrimPrefix(name, "·") }}
+		if ir, err := Translate(file, options); ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+			t.Fatal("changed DATA borrowed the original literal bytes", row.name, err)
 		}
 	}
 }

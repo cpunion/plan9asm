@@ -89,7 +89,6 @@ func TestDecodeX86RawPackedBroadcastRIPLiteralCompleteFamily(t *testing.T) {
 
 func TestTranslateX86RawPackedBroadcastRIPLiteralObjects(t *testing.T) {
 	var source strings.Builder
-	sigs := make(map[string]FuncSig)
 	for index, op := range []Op{"VPBROADCASTB", "VPBROADCASTW", "VPBROADCASTD", "VPBROADCASTQ"} {
 		name := fmt.Sprintf("literalBroadcast%d", index)
 		code, _ := x86RawBroadcastLiteral(op, "EVEX", 512, 3, false)
@@ -97,13 +96,8 @@ func TestTranslateX86RawPackedBroadcastRIPLiteralObjects(t *testing.T) {
 		for _, value := range code {
 			fmt.Fprintf(&source, "\tBYTE $%#02x\n", value)
 		}
-		sigs[name] = FuncSig{Name: name, Ret: Void}
 	}
 	requireX86GoAssemblerResult(t, "amd64", source.String(), true)
-	file, err := Parse(ArchAMD64, source.String())
-	if err != nil {
-		t.Fatal(err)
-	}
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc not found")
@@ -114,10 +108,9 @@ func TestTranslateX86RawPackedBroadcastRIPLiteralObjects(t *testing.T) {
 		"x86_64-pc-windows-msvc",
 	} {
 		t.Run(triple, func(t *testing.T) {
-			ir, err := Translate(file, Options{Goarch: "amd64", TargetTriple: triple, Sigs: sigs})
-			if err != nil {
-				t.Fatal(err)
-			}
+			// Literal data does not supply the original K3 or merge input.
+			// Initialized complete-family programs have their own public objects.
+			ir := x86UnboundVoidRawScalarFormatObject(t, source.String(), "amd64", triple)
 			compileLLVMToObject(t, llc, triple, "raw-broadcast-literal.ll", "raw-broadcast-literal.o", ir)
 		})
 	}
@@ -437,7 +430,6 @@ func TestDecodeX86RawScalarFloatBroadcastRIPLiteral(t *testing.T) {
 
 func TestTranslateX86RawScalarFloatBroadcastRIPLiteralObjects(t *testing.T) {
 	var source strings.Builder
-	sigs := make(map[string]FuncSig)
 	for index, test := range []struct {
 		double, evex bool
 		vectorBits   int
@@ -456,13 +448,8 @@ func TestTranslateX86RawScalarFloatBroadcastRIPLiteralObjects(t *testing.T) {
 		for _, value := range code {
 			fmt.Fprintf(&source, "\tBYTE $%#02x\n", value)
 		}
-		sigs[name] = FuncSig{Name: name, Ret: Void}
 	}
 	requireX86GoAssemblerResult(t, "amd64", source.String(), true)
-	file, err := Parse(ArchAMD64, source.String())
-	if err != nil {
-		t.Fatal(err)
-	}
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc not found")
@@ -471,10 +458,9 @@ func TestTranslateX86RawScalarFloatBroadcastRIPLiteralObjects(t *testing.T) {
 		"x86_64-apple-darwin", "x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc",
 	} {
 		t.Run(triple, func(t *testing.T) {
-			ir, err := Translate(file, Options{Goarch: "amd64", TargetTriple: triple, Sigs: sigs})
-			if err != nil {
-				t.Fatal(err)
-			}
+			// Preserve all original masked/unmasked formats without inventing
+			// missing K or merge bytes in the complete source.
+			ir := x86UnboundVoidRawScalarFormatObject(t, source.String(), "amd64", triple)
 			compileLLVMToObject(t, llc, triple, "scalar-float-literal.ll", "scalar-float-literal.o", ir)
 		})
 	}
