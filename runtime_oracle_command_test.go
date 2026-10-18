@@ -249,6 +249,7 @@ func TestRuntimeOracleCommandConsumersRetainOwnedExecution(t *testing.T) {
 		"amd64_packed_sad_runtime_test.go",
 		"amd64_conditional_set_runtime_test.go",
 		"amd64_packed_sad_forms_test.go",
+		"x86_sad_raw_width_test.go",
 		"amd64_signed_integer_scalar_float_go_oracle_test.go",
 		"amd64_float_binary_fp_span_test.go",
 		"amd64_scalar_fp_bit_runtime_test.go",
