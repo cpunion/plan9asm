@@ -22,6 +22,8 @@ idle worktrees; do not create another for routine work.
 
 | Code snapshot | Completed evidence | Limits |
 |---|---|---|
+| `0ab05d184` | ENDBR state and source-fixture contracts: 33 portable roots / 1,860 children pass current Go, actual Go1.20 and race with identical 1,893 terminals; current Go/race additionally pass two SDK-specific roots / three children | Exact named/raw numerical preservation, mandatory non-Void results and original format objects; native CET/GP/FLAGS execution remains required |
+| Same snapshot | All thirteen final gates pass; exact original 167-root replay has 39 pass / 39 fail / 89 explicit host skips, no incomplete roots or passing roots with skipped children | Five previously failing roots now pass, with no regressions in that set; this is not complete CI or a whole-SDK source pass |
 | `4024da958` | Complete eight-name SQRT contracts: 32 roots / 1,410 children pass current Go, actual Go1.20 and race; identical 1,442 terminals, zero fail/skip/incomplete and unchanged source/SDK/LLVM22 seals | Includes 180 independent physical-form controls and 54 initialized raw variants through three APIs on five targets, with IR/backend O0/O2 objects; not native execution |
 | Same snapshot | All thirteen final gates pass, including both-SDK build/vet and 24 scanner roots, five-arch classification, current/minimum-Go1.24 CLI checks, 132 CI policies and formatting | Eight-SDK audit changes only 42 isolated AMD64 SQRT forms per SDK to Context for missing inputs; 386 and encoder/unsupported metadata remain unchanged |
 | `1d4e3ef70` | Wrapping-add format contracts: 9 roots / 1,124 children pass current Go, actual Go1.20 and race; identical 1,133 terminals, zero fail/skip/incomplete and unchanged source/SDK/LLVM22 seals | Retains original unbound Go/emitter objects and public Context, with separate initialized arithmetic/native-read/MMX controls |
@@ -67,7 +69,7 @@ See earlier checkpoints in Git rather than reconstructing counts by subtraction.
 
 ## Exact failure replay and online CI
 
-The latest local diagnostic at `731de8a20` selects exactly the original CI's
+The latest local diagnostic at `0ab05d184` selects exactly the original CI's
 167 failed root names. One sealed Go test process ran the complete set,
 instead of repeatedly linking the same large test executable.
 All inventories, started/terminal identities and before/after source, SDK, LLVM
@@ -78,11 +80,16 @@ and environment observations match. This is not the canonical isolated CI runner
 | Previous isolated replay, `c4c01538c` | 25 | 53 | 89 | 0 / 0 |
 | Previous batched replay, `c11c2130d` | 30 | 48 | 89 | 0 / 0 |
 | Previous batched replay, `1d4e3ef70` | 33 | 45 | 89 | 0 / 0 |
-| Latest batched replay, `731de8a20` | 34 | 44 | 89 | 0 / 0 |
+| Previous batched replay, `731de8a20` | 34 | 44 | 89 | 0 / 0 |
+| Latest batched replay, `0ab05d184` | 39 | 39 | 89 | 0 / 0 |
 
-The latest newly passing original is the complete ABI0 indirect-field SQRT
-owner. Earlier repairs retain both static-SB SAD owners and the wrapping-add
-format owner. No root passes with skipped children. Host skips remain unexecuted
+The five newly passing original roots cover ENDBR, the fuzzer bit-test/vector
+program, packed-compare frame extents, LOCK carry rejection and the SDK equal
+source's independent Context boundary. Preserve each original failing source;
+separate format-only controls from initialized public programs. A corrected
+Context expectation is not a new whole-source translation success.
+Earlier SQRT, static-SB SAD and wrapping-add repairs remain passing.
+No root passes with skipped children. Host skips remain unexecuted
 native requirements, never successes. Different local scheduling is disclosed;
 canonical all-platform qualification is still required.
 
@@ -114,13 +121,13 @@ before changing implementation or claiming a speedup. Do not relax budgets.
 
 ## Immediate work
 
-1. SQRT's portable cohort and final gates are complete at `4024da958`.
-   Native rounding, passthrough, mask and MXCSR execution remains required in
-   the cross-runtime owner; object-only results do not qualify it.
-   The initial four-root / 236-child RED and failed CLI-count gate remain
-   preserved. The latter counted assembler directives as SQRT members and is
-   repaired without changing extraction or production code.
-2. Repair the latest 44 local failure roots: stale input/frame fixtures;
+1. ENDBR's three-lane cohort and final gates are complete at `0ab05d184`.
+   Preserve its real side-effecting CET instruction, exact raw-source identity
+   and missing-input/result negatives. The required Linux native wrapper has
+   not run locally. SQRT's native rounding/passthrough/mask/MXCSR requirement
+   likewise remains separate from its completed object-only qualification.
+2. Repair the latest 39 local failure roots: legacy logical-memory format
+   fixtures with unbound segment/pointer inputs;
    raw FP16/VMOVW native-read composition; raw literal and unbound-format
    contracts; MMX closure; hardware enqueue/random/mask status; custom ABI,
    source-stack and runtime386 `cpuidProbe` entry. Use the actual diagnostic,
@@ -140,6 +147,12 @@ develop in an existing idle worktree. Commit and preserve RED before repair.
 
 Resolve worktree locations with `git worktree list`. Ignored receipts include:
 
+- `endbranch-family-qualified-0ab05d18.json`,
+  `endbranch-final-gates-0ab05d18/`: three complete lanes and thirteen final
+  gates with unchanged source/tool seals. Named/raw state RED and the separate
+  missing-result RED remain failed receipts, not overwritten first greens.
+- `latest-failure-batch-0ab05d18-{summary.json,raw.jsonl,before.json,after.json}`:
+  exact 167-root replay with five repaired roots and no new failures.
 - `wrapping-add-format-qualified-1d4e3ef7.json`,
   `wrapping-add-final-gates-1d4e3ef7/`: complete three-lane and final gates.
 - `latest-failure-batch-1d4e3ef7-{summary.json,raw.jsonl,before.json,after.json}`:
