@@ -238,6 +238,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		if accepted, known := x86LoweredFixedVectorNativeRead(ins, state, owned, arch); known {
 			return accepted // The typed emitter retains full E4NF or guarded E4 native accesses.
 		}
+		if accepted, known := x86ResultSADStep(ins, state, owned, arch, true); known {
+			return accepted // The same SAD emitter retains the full tuple and legacy m128 opcode.
+		}
 		if accepted, known := x86ResultPackedNarrowStep(ins, state, owned, arch, true); known {
 			return accepted // The same emitter retains the complete E4NF tuple or original legacy opcode.
 		}

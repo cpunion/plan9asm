@@ -24,6 +24,9 @@ func x86TypedFPResultNeedsProof(fn Func, sig FuncSig, arch string) bool {
 	}
 	opaqueAddressResult := x86OpaqueAddressPointerResultRole(fn, sig, arch)
 	for ordinal, ins := range fn.Instrs {
+		if _, known, err := x86PackedSADProperties(ins, arch); known && err == nil {
+			return true // Dead SAD outputs still need selected input bytes, masks and native addresses.
+		}
 		if spec, _, known, err := x86ImplicitSystemProperties(ins.Op, ins, arch); known && err == nil && spec.writesCarry {
 			return true // Named/raw waits need deadline/control bytes, including Void.
 		}
