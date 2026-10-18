@@ -197,7 +197,7 @@ func TestTranslateX86RawEVEXPackedLogicalTargets(t *testing.T) {
 			}
 			// The original mode32 body only discards a pure register XOR;
 			// it neither accesses native memory nor promises result bytes.
-			x86LEAActualTargetGoObject(t, target.goarch, target.triple, source.String())
+			x86LEAActualTargetGoObject(t, target.goarch, target.triple, "#include \"textflag.h\"\n"+source.String())
 			for _, api := range []string{"text", "module", "Go"} {
 				ir, err := x86ScalarFPBitViewAPI(t, source.String(), "func raw_evex_packed_logical()", target.goarch, target.triple, api)
 				if err != nil {
