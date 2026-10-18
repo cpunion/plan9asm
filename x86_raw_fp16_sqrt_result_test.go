@@ -67,6 +67,11 @@ func TestX86RawFP16SqrtInitializedNativeObjects(t *testing.T) {
 					if strings.Count(text, "asm sideeffect") != count || !strings.Contains(text, "vsqrtph ") || !strings.Contains(text, "vsqrtsh ") {
 						t.Fatal("FP16 SQRT lost its native rounding/exception effect", api)
 					}
+					// ZMM holds 32 half lanes: a word-sized mask load would
+					// silently discard lanes 16-31. ER also selects ZMM.
+					if strings.Count(text, "kmovd ${3:k}, %k1;") != 14 {
+						t.Fatal("FP16 Z square roots truncated the 32-lane mask", api)
+					}
 					for _, level := range []string{"-O0", "-O2"} {
 						x86PackedStringCompileObject(t, llc, target.triple, text, level)
 					}
