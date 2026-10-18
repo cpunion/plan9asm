@@ -25,6 +25,8 @@ of the current candidate. Do not create another worktree for routine work.
 
 | Snapshot | Evidence and limits |
 |---|---|
+| `5df8cde37` | Eleven original failed format/witness roots plus nine initialized public-object roots pass current Go, actual Go1.20 and race: 20 roots / 2,362 children, identical 2,382 terminal identities, zero fail/skip/incomplete and unchanged source/SDK/LLVM22 observations. Production, CI and classification baselines are unchanged; this repairs test contracts, not eleven new instruction implementations |
+| `83f21268e` | The latest CI's exact 167 failed roots were fully replayed locally: 10 pass, 68 fail, 89 explicit host skips, zero absent/pending/incomplete. Original output hashes, complete run/terminal inventories and both owner source/SDK/tool/environment seals audit unchanged. This failed local replay does not certify unexecuted native counterparts or later repairs |
 | `252239cde` | Complete mask/vector NUM effects: 30 roots / 734 children pass current Go, actual Go1.20 and race; all 764 terminal identities match with no fail/skip/incomplete and unchanged source/SDK/LLVM22 seals. Both-SDK build/vet and fifteen scanner roots, five-arch classification, three CLI extraction roots, CI policies and tracked formatting pass. The original native x86/MXCSR counterpart remains required, not a local pass |
 | `4bcd33be9` | Packed private-parameter stores: 48 roots / 2,031 children pass current Go, actual Go1.20 and race; all 2,079 terminal identities match, no fail/skip/incomplete, unchanged source/SDK/LLVM22 observations. Build/vet, twelve scanner roots on both SDKs, five-arch classification, three CLI extraction roots, 132 CI policies and tracked formatting also pass |
 | `e7e90b7c9` | Ten historical unbound-format failures plus eight initialized/source-boundary owners pass current Go, actual Go1.20 and race: 18 roots / 605 children, identical 623 terminals, no fail/skip/incomplete. Original source rows remain; public Context and emitter-only objects are not runtime passes |
@@ -49,6 +51,18 @@ Classification, emitter-only objects, initialized public translation, portable
 execution and native execution remain different claims.
 
 ## Latest repairs
+
+At `5df8cde37`, eleven failures from the complete 167-root replay retain their
+original assembly and actual Go objects. Unbound named format fixtures now
+require public Context before independent emitter objects; masked subtraction
+also retains its conditional volatile reads. MOVNTO checks both real native
+stores rather than obsolete generic LLVM stores. The complete official binary
+table witnesses must still reach the actual dispatcher even when the separate
+probe correctly needs inputs. That syntax observation alone claims no LLVM
+object or execution. Nine unchanged initialized public-object roots retain the
+compare, logical, CLMUL, ternary and non-temporal positive counterparts.
+The batch removes a net 49 test lines, changes no production or CI gate, and
+does not turn any actual whole-program failure into a skip.
 
 The eight mask/vector B/W/D/Q moves now share their existing complete EVEX
 grammar with numerical result effects. Reverse moves need only each lane's
@@ -166,7 +180,10 @@ cannot certify a performance improvement. Full reports remain under ignored
    changing it; keep explicit mismatch and native-frame/address controls.
 2. Use the completed `06eedf847` run's exact 167-root failure index. All 16
    parts / 64 shards have been downloaded and audited against their identical
-   actual source/head/inventory. Preserve the failed run and its host skips;
+   actual source/head/inventory. Its complete local replay at `83f21268e`
+   has 10 passes, 68 failures and 89 host skips; eleven of those failures now
+   have the separate focused qualification above. Preserve both failed runs
+   and their host skips;
    source fixes staged afterward are not online passes. Avoid another complete
    diagnostic run while its known failure classes remain unaddressed.
 3. Repair only remaining observed rule classes. Preserve discovering sources,
@@ -174,9 +191,9 @@ cannot certify a performance improvement. Full reports remain under ignored
    Use shared typed grammar/effects rather than library-specific exceptions.
    Existing failure classes include scalar input/effect gaps, MMX-region
    composition and stale unbound-format expectations; the completed CI failure
-   index is the authority, not an estimated remaining count. The complete local
-   historical-failure replay now has 58 failed roots, not 179 unexamined ones;
-   92 host skips remain unexecuted native counterparts, never repaired tests.
+   index is the authority, not an estimated remaining count. Use the latest
+   167-root replay instead of the older 179-root local cohort. Host skips
+   remain unexecuted native counterparts, never repaired tests.
    This selected queue does not revalidate the old complete suite's passed roots.
    Its main classes are numerical/field-address effects, MMX closure, raw/native
    read composition, custom ABI/stack roles and obsolete unbound-format contracts.
@@ -185,9 +202,12 @@ cannot certify a performance improvement. Full reports remain under ignored
    Packed private-copy stores and all eight mask/vector data effects are now
    qualified. Next close the observed typed numerical/native continuation
    classes, including register/CPU-query result roles, three-operand shift
-   memory effects and MMX-region composition. Re-observe the exact latest
-   167 failures at the cumulative candidate; retain native skips and all
-   failed original receipts, and do not subtract focused successes by hand.
+   memory effects and MMX-region composition. CPUID/XGETBV already share a
+   complete zero-operand grammar and native emitter, but their implicit dword
+   inputs/outputs lack the shared NUM consumer. Close both names, mandatory
+   Void inputs and exact named/raw continuation together, retaining the original
+   IA32 source/object and required native runtime owners. Preserve failed
+   receipts and do not subtract focused successes from a completed run.
    Keep compiler/runtime producer gaps separate from instruction support. No
    mnemonic-only exception, padding permission or native-frame backing follows
    from a valid encoding. Inspect the final error, not a preceding successful
@@ -205,6 +225,11 @@ Go 1.20 and race. One heavy local Go/LLVM owner runs at a time; develop in an
 existing idle worktree while its tested source stays frozen.
 
 Resolve branch locations with `git worktree list`. Latest ignored receipts use
+`unbound-official-formats-{first-green,initialized,native}`; the complete
+20-root three-lane seal is `unbound-official-formats-qualified-5df8cde3.json`.
+`latest-failures-83f21268/raw-outcomes-audit.json` retains the complete latest
+167-root local replay, including every actual failure and host skip separately.
+Earlier receipts use
 `integer-self-compare-final-{core,effects,grammar,mandatory}`;
 `integer-self-compare-qualified-0cb14d2f.json` records the exact disjoint union.
 The eight-SDK audit is `integer-self-compare-classification-audit` at `7d0ab042d`;
