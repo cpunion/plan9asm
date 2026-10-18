@@ -22,6 +22,8 @@ idle worktrees; do not create another for routine work.
 
 | Code snapshot | Completed evidence | Limits |
 |---|---|---|
+| `83b656042` | Six raw FP16 floating conversions: 36 roots / 400 children pass current Go, actual Go1.20 and race; identical 436 terminals, zero fail/skip/incomplete | All 148 independent physical forms on five x86 targets through three APIs and IR/backend O0/O2; object bytes retain actual width, mask and rounding controls, not native execution |
+| Same snapshot | All thirteen final gates pass; exact original 167-root replay has 72 pass / 6 fail / 89 explicit host skips, unchanged source/tools | Both original conversion runtime roots now pass with no regressions; portable numerical/guard-page execution remains separate from original native MXCSR and exception behavior |
 | `ef3e886d3` | Complete static scalar RMW and native FS/GS input rules: 53 roots / 4,800 children pass current Go, actual Go1.20 and race; identical 4,853 terminals, zero fail/skip/incomplete | Eleven scalar stems, complete widths/relocations, 1,560 independent segment variants and original bare/indexed LOCK objects on five targets; not native segment execution |
 | Same snapshot | All thirteen final gates pass; exact original 167-root replay has 70 pass / 8 fail / 89 explicit host skips, unchanged source/tools | Original absolute-relocation root now passes, no regressions; original unbound sinks retain Go/emitter objects plus public Context, separate initialized DATA programs own public objects |
 | `2c112ef6e` | Complete ENQCMD/ENQCMDS input, grammar and status effects: 51 roots / 1,658 children pass current Go, actual Go1.20 and race; identical 1,709 terminals, zero fail/skip/incomplete | All 1,200 independent physical address/register forms, pre-emission rejection and initialized three-API five-target O0/O2 objects; native device submission is not executed |
@@ -95,7 +97,7 @@ See earlier checkpoints in Git rather than reconstructing counts by subtraction.
 
 ## Exact failure replay and online CI
 
-The latest local diagnostic at `ef3e886d3` selects exactly the original CI's
+The latest local diagnostic at `83b656042` selects exactly the original CI's
 167 failed root names. One sealed Go test process ran the complete set,
 instead of repeatedly linking the same large test executable.
 All inventories, started/terminal identities and before/after source, SDK, LLVM
@@ -119,7 +121,19 @@ and environment observations match. This is not the canonical isolated CI runner
 | Previous batched replay, `8aa8460f4` | 67 | 11 | 89 | 0 / 0 |
 | Previous batched replay, `7b1966b70` | 67 | 11 | 89 | 0 / 0 |
 | Previous batched replay, `2c112ef6e` | 69 | 9 | 89 | 0 / 0 |
-| Latest batched replay, `ef3e886d3` | 70 | 8 | 89 | 0 / 0 |
+| Previous batched replay, `ef3e886d3` | 70 | 8 | 89 | 0 / 0 |
+| Latest batched replay, `83b656042` | 72 | 6 | 89 | 0 / 0 |
+
+Raw FP16 floating conversions share typed carrier/active-byte, mask, scalar
+passthrough and ER/SAE grammar. Exact original instruction identity and all
+required inputs remain mandatory, including Void. Matching x86 targets retain
+the actual side-effecting native opcode; the existing cross-target numerical
+model is explicitly tested separately. Independent object bytes check all148
+physical forms, not merely successful compilation. Dispatch conflicts and
+invalid addresses fail before emission. Preserve the original uninitialized
+format programs as Go/emitter objects plus public Context, and the original
+scalar rounding program with uninitialized passthrough as a negative. Separate
+initialized programs own public objects and portable numerical execution.
 
 Static RMW inputs now consume actual same-module DATA identity, complete byte
 extent and writable destinations. Readonly address targets remain distinct from
@@ -247,7 +261,8 @@ before changing implementation or claiming a speedup. Do not relax budgets.
    runtime386 `cpuidProbe` entry. Use the actual diagnostic,
    not an earlier successful preflight, to choose each next class.
    The enqueue batch is qualified at `2c112ef6e`; static/segment RMW follows
-   at `ef3e886d3`. The exact eight failures are five FP16, two runtime386
+   at `ef3e886d3`, and six FP16 floating conversions at `83b656042`.
+   The exact six failures are FP16 FMA, SQRT and binary arithmetic, two runtime386
    source fixtures and one x87 compare root. Repair each
    complete rule class with original Go/emitter controls and independently
    initialized public programs; do not weaken source/data or entry proofs.
@@ -266,6 +281,14 @@ develop in an existing idle worktree. Commit and preserve RED before repair.
 
 Resolve worktree locations with `git worktree list`. Ignored receipts include:
 
+- `fp16-conversion-qualified-83b65604.json` and
+  `fp16-conversion-final-gates-83b65604/`: complete 36-root three-lane cohort,
+  identical 436-terminal unions and thirteen final gates. Preserve input RED
+  `3fa71bdb`, failed original-format contracts at `6852b0be`, and malformed
+  dispatch/address RED `222a22768` separately.
+- `latest-failure-batch-83b65604-{summary.json,raw.jsonl,before.json,after.json}`:
+  exact167-root replay, 72 pass / 6 fail / 89 explicit host skips; unchanged
+  source/tools, no absent/incomplete or pass-with-skip roots.
 - `static-rmw-qualified-ef3e886d.json` and `static-rmw-final-gates-ef3e886d/`:
   complete 53-root three-lane cohort, identical terminal unions and thirteen
   final gates. Preserve static RED `4824e167`, inherited LOCK failure `e29ef390`,
