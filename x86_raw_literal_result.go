@@ -39,8 +39,19 @@ func x86RawLogicalLiteralForm(ins Instr, arch string) bool {
 		ins.x86RIPMemoryRead.source == form.first && ins.x86RIPMemoryRead.width == int64(form.memoryBytes)
 }
 
+func x86RawByteShiftLiteralForm(ins Instr, arch string) bool {
+	if !x86RawLiteralSourceShape(ins, arch) || !x86RawReturnDecodedReadIdentity(ins) {
+		return false
+	}
+	form, known, err := x86PackedShiftProperties(ins.Op, ins, arch)
+	return known && err == nil && form.countMode == x86PackedShiftBytes &&
+		!form.legacy && !form.mmx && form.memory == form.data &&
+		ins.x86RIPMemoryRead.source == form.data && ins.x86RIPMemoryRead.width == int64(form.memoryBytes)
+}
+
 func x86RawResultLiteralForm(ins Instr, arch string) bool {
-	return x86RawBroadcastLiteralForm(ins, arch) || x86RawLogicalLiteralForm(ins, arch)
+	return x86RawBroadcastLiteralForm(ins, arch) || x86RawLogicalLiteralForm(ins, arch) ||
+		x86RawByteShiftLiteralForm(ins, arch)
 }
 
 // This bounded source uses the ordinary typed family byte effects. It does

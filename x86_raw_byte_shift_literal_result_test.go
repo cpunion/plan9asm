@@ -84,7 +84,8 @@ func TestX86RawByteShiftLiteralEverySelectorAndExtent(t *testing.T) {
 				ins := decoded[0]
 				form, known, err := x86PackedShiftProperties(ins.Op, ins, "amd64")
 				if !known || err != nil || form.memoryBytes != width || form.countOperand.Imm != int64(count) ||
-					form.countMode != x86PackedShiftBytes || form.left != left || !x86RawReturnDecodedReadIdentity(ins) {
+					form.countMode != x86PackedShiftBytes || form.left != left || !x86RawByteShiftLiteralForm(ins, "amd64") ||
+					x86RawByteShiftLiteralForm(ins, "386") {
 					t.Fatal("literal/selector changed its typed identity", left, width, count, err)
 				}
 				address, valid := x86StaticSBReadAddress(ins.Args[1], "amd64")
@@ -122,6 +123,9 @@ func TestX86RawByteShiftLiteralKeepsSourceAndReturnBoundaries(t *testing.T) {
 			file, err := normalizeX86RawFile(mustParseX86RawReturn(t, source), "amd64")
 			if err != nil || len(file.Data) != 1 {
 				t.Fatal(err)
+			}
+			if err := checkX86ScalarFPResultInitialization(file.Funcs[0], FuncSig{Name: "Shift", Ret: Void}, "amd64"); !errors.Is(err, ErrProbeNeedsContext) {
+				t.Fatal("standalone query borrowed the lowering-only DATA owner", left, width, err)
 			}
 			file.Data[0].Payload[0] ^= 1
 			options := Options{Goarch: "amd64", TargetTriple: "x86_64-unknown-linux-gnu",
