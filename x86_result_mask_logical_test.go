@@ -83,6 +83,26 @@ func TestX86MaskLogicalUnknownVoidInputs(t *testing.T) {
 	}
 }
 
+func TestX86MaskLogicalSameSourceConstants(t *testing.T) {
+	for _, arch := range []string{"amd64", "386"} {
+		for _, stem := range []string{"KXOR", "KXNOR", "KANDN"} {
+			for _, suffix := range []string{"B", "W", "D", "Q"} {
+				for source := 0; source < 8; source++ {
+					for destination := 0; destination < 8; destination++ {
+						ins := x86ScalarLaneInstruction(t, fmt.Sprintf("%s%s K%d,K%d,K%d", stem, suffix, source, source, destination))
+						state := x86ResultState{flags: x86ByteFlagAF}
+						want := state.clone()
+						want.masks[destination] = true
+						if !x86ScalarFPResultTransfer(ins, &state, nil, 0, arch) || !reflect.DeepEqual(state, want) {
+							t.Fatal("same-source constant required an irrelevant input or changed FLAGS", arch, ins.Raw)
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
 func TestX86MaskLogicalInitializedFiveTargetObjects(t *testing.T) {
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
