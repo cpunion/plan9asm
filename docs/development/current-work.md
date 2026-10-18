@@ -22,6 +22,8 @@ idle worktrees; do not create another for routine work.
 
 | Code snapshot | Completed evidence | Limits |
 |---|---|---|
+| `3044f1483` | Decoder-bound VMOVW and raw-format input contracts: 31 roots / 1,006 children pass current Go, actual Go1.20 and race; identical 1,037 terminals, zero fail/skip/incomplete | All eight VMOVW direction/register/m16/W forms, five-target three-API IR/backend O0/O2 objects, exact byte/origin negatives and the unchanged portable guard-page/value program; not native AVX512 execution |
+| Same snapshot | All thirteen final gates pass with unchanged source/SDK/LLVM22 observations; exact original 167-root replay has 44 pass / 34 fail / 89 explicit host skips | Five former failures pass with no regressions in that set; full current-head CI and strict standard-library benchmark remain unqualified |
 | `6d1337fde` | Legacy logical-memory fixture contracts and complete related grammar/native-read tests: 21 roots / 3,785 children pass current Go, actual Go1.20 and race; identical 3,806 terminals, zero fail/skip/incomplete | Original 60-function segment formats remain Go/emitter objects and public Context; separate 36-function ordinary-address programs and initialized SSE1 pointer programs own public objects, not native execution |
 | Same snapshot | All thirteen final gates pass, with unchanged source/SDK/LLVM22 observations | Test-only repair; complete original failure replay remains the older snapshot below until rerun |
 | `0ab05d184` | ENDBR state and source-fixture contracts: 33 portable roots / 1,860 children pass current Go, actual Go1.20 and race with identical 1,893 terminals; current Go/race additionally pass two SDK-specific roots / three children | Exact named/raw numerical preservation, mandatory non-Void results and original format objects; native CET/GP/FLAGS execution remains required |
@@ -71,7 +73,7 @@ See earlier checkpoints in Git rather than reconstructing counts by subtraction.
 
 ## Exact failure replay and online CI
 
-The latest local diagnostic at `0ab05d184` selects exactly the original CI's
+The latest local diagnostic at `3044f1483` selects exactly the original CI's
 167 failed root names. One sealed Go test process ran the complete set,
 instead of repeatedly linking the same large test executable.
 All inventories, started/terminal identities and before/after source, SDK, LLVM
@@ -83,14 +85,15 @@ and environment observations match. This is not the canonical isolated CI runner
 | Previous batched replay, `c11c2130d` | 30 | 48 | 89 | 0 / 0 |
 | Previous batched replay, `1d4e3ef70` | 33 | 45 | 89 | 0 / 0 |
 | Previous batched replay, `731de8a20` | 34 | 44 | 89 | 0 / 0 |
-| Latest batched replay, `0ab05d184` | 39 | 39 | 89 | 0 / 0 |
+| Previous batched replay, `0ab05d184` | 39 | 39 | 89 | 0 / 0 |
+| Latest batched replay, `3044f1483` | 44 | 34 | 89 | 0 / 0 |
 
-The five newly passing original roots cover ENDBR, the fuzzer bit-test/vector
-program, packed-compare frame extents, LOCK carry rejection and the SDK equal
-source's independent Context boundary. Preserve each original failing source;
-separate format-only controls from initialized public programs. A corrected
-Context expectation is not a new whole-source translation success.
-Earlier SQRT, static-SB SAD and wrapping-add repairs remain passing.
+The five newly passing original roots are the unchanged VMOVW portable runtime,
+VEX logical and EVEX broadcast format fixtures, and both legacy logical-memory
+fixtures. Original unbound sources retain their Go/emitter objects and public
+Context controls; initialized counterparts supply separate public objects.
+A corrected Context expectation is not a new whole-source translation success.
+Earlier ENDBR, SQRT, static-SB SAD and wrapping-add repairs remain passing.
 No root passes with skipped children. Host skips remain unexecuted
 native requirements, never successes. Different local scheduling is disclosed;
 canonical all-platform qualification is still required.
@@ -128,13 +131,16 @@ before changing implementation or claiming a speedup. Do not relax budgets.
    and missing-input/result negatives. The required Linux native wrapper has
    not run locally. SQRT's native rounding/passthrough/mask/MXCSR requirement
    likewise remains separate from its completed object-only qualification.
-2. The legacy logical-memory fixture batch is qualified at `6d1337fde`;
-   rerun the exact failure set before updating its totals. Repair the other
+2. The logical-memory and VMOVW/raw-format batches are qualified and included
+   in the latest exact replay. Repair the other
    observed classes:
-   raw FP16/VMOVW native-read composition; raw literal and unbound-format
+   raw FP16 native-read composition; raw literal and unbound-format
    contracts; MMX closure; hardware enqueue/random/mask status; custom ABI,
    source-stack and runtime386 `cpuidProbe` entry. Use the actual diagnostic,
    not an earlier successful preflight, to choose each next class.
+   The current follow-up reproduces AMD64 bool tails incorrectly entering the
+   386-only custom-helper route and retains original unbound stack fixtures
+   separately from initialized private-stack objects/portable values.
 3. Rerun the unchanged complete standard-library corpus and benchmark after
    relevant source repairs. Do not convert Context into successful compilation.
    A valid encoding grants no caller frame, memory ownership or ABI transport.
@@ -153,6 +159,13 @@ Resolve worktree locations with `git worktree list`. Ignored receipts include:
 - `logical-memory-family-qualified-6d1337fd.json` and
   `logical-memory-final-gates-6d1337fd/`: complete 21-root, three-lane cohort
   and thirteen final gates, retaining both original failures and real inputs.
+- `raw-vmovw-family-qualified-3044f148.json`,
+  `raw-vmovw-final-gates-3044f148/`: complete 31-root three-lane cohort and
+  thirteen gates. Preserve RED `98859951` and failed first GREEN `9effb942`;
+  the latter exposed an incorrect GP-only low-byte reader for X registers.
+- `latest-failure-batch-3044f148-{summary.json,raw.jsonl,before.json,after.json}`:
+  exact 167-root replay, 44 pass / 34 fail / 89 explicit host skips, unchanged
+  source/tools, no incomplete roots or passing roots with skipped children.
 - `endbranch-family-qualified-0ab05d18.json`,
   `endbranch-final-gates-0ab05d18/`: three complete lanes and thirteen final
   gates with unchanged source/tool seals. Named/raw state RED and the separate
