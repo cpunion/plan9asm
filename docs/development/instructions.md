@@ -478,6 +478,12 @@ target is required, even for dead source. SSE original-Go/state/guard-page
 oracles do not stand in for required Linux AMD64 native VEX/EVEX, wide-register
 preservation and unmasked IE/DE/SAE execution. Object and runtime reports retain
 those different scopes; typed byte effects grant no new memory ownership.
+The paired COMI/UCOMI native read uses the same exact scalar width and existing
+incoming-pointer identity as lowering. Its continuation defines only status
+FLAGS, never DF/ID, vector writes, memory backing or future read facts. Keep
+declaration-only observers strict and retain both initialized public objects
+and original uninitialized-format Context/emitter checks. Returning all FLAGS
+requires independent DF/ID inputs; a six-status projection cannot create them.
 VEX WIG and EVEX LLIG do not imply portable VEX.L=1 behavior: Intel's SDM
 warns of generation-dependent behavior for that encoding. Keep literal L1
 Context rather than silently emitting L0. Validate all operand/file syntax
