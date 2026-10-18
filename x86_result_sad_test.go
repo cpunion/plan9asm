@@ -157,9 +157,22 @@ func TestX86SADSameSourceBlockConstants(t *testing.T) {
 						if !x86ResultTransfer(x86ScalarLaneInstruction(t, instruction), &state, nil, 0, arch) || !reflect.DeepEqual(state, before) {
 							t.Fatal("same-byte absolute differences require no incoming values", arch, instruction)
 						}
+						ins := x86ScalarLaneInstruction(t, instruction)
+						form, _, err := x86PackedSADProperties(ins, arch)
+						caller := &x86SourceStackState{vectors: map[Reg]uint64{}}
+						if err != nil || !x86CallerSADStep(&ins, form, caller, nil) ||
+							caller.vectors[Reg(fmt.Sprintf("Z%d", destination))] != before.vectorBytes(destination) {
+							t.Fatal("caller and result disagree on the input-independent zero", arch, instruction, err)
+						}
 					}
 				}
 			}
+		}
+	}
+	for _, instruction := range []string{"MPSADBW $0,X0,X0", "VMPSADBW $0,Y0,Y0,Y1", "VDBPSADBW $0,Z0,Z0,Z1"} {
+		state := x86ResultState{}
+		if x86ResultTransfer(x86ScalarLaneInstruction(t, instruction), &state, nil, 0, "amd64") {
+			t.Fatal("sliding/shuffled SAD invented a same-source constant", instruction)
 		}
 	}
 }
@@ -176,6 +189,11 @@ func TestX86SADInitializedFiveTargetObjects(t *testing.T) {
 				move = "MOVL"
 			}
 			var source, declarations strings.Builder
+			for _, instruction := range []string{"PSADBW X0,X0", "VPSADBW X0,X0,X0", "VPSADBW Y0,Y0,Y0", "VPSADBW Z0,Z0,Z0"} {
+				name := "constant" + strings.NewReplacer(" ", "", ",", "").Replace(instruction)
+				fmt.Fprintf(&declarations, "func %s() uint32\n", name)
+				fmt.Fprintf(&source, "TEXT ·%s(SB),4,$0-4\n%s\nPEXTRD $0,X0,AX\nMOVL AX,ret+0(FP)\nRET\n", name, instruction)
+			}
 			for _, row := range x86SADValueRows(target.arch) {
 				for _, memory := range []bool{false, true} {
 					name := fmt.Sprintf("%s%s%s%t", row.op, row.bank, row.mode, memory)

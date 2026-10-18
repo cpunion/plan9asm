@@ -14,13 +14,18 @@ func x86ResultSADStep(ins Instr, state *x86ResultState, owned []bool, arch strin
 			return false, true
 		}
 	}
+	width := x86CallerVectorByteMask(int64(form.byteWidth))
+	destination, _ := amd64VectorRegisterIndex(ins.Args[form.destination].Reg, form.byteWidth)
+	if form.constantZero(ins) {
+		state.writeVector(destination, form.byteWidth, width, form.legacy)
+		return true, true
+	}
 	var requiredFirst, requiredSecond uint64
 	for output := 0; output < form.byteWidth; output += 2 {
 		first, second := form.wordInputs(output)
 		requiredFirst |= first
 		requiredSecond |= second
 	}
-	width := x86CallerVectorByteMask(int64(form.byteWidth))
 	first := ins.Args[form.first]
 	if form.memory >= 0 {
 		// The legacy m128 opcode keeps its alignment and fault behavior.
@@ -39,7 +44,6 @@ func x86ResultSADStep(ins Instr, state *x86ResultState, owned []bool, arch strin
 		}
 	}
 	second, _ := amd64VectorRegisterIndex(ins.Args[form.second].Reg, form.byteWidth)
-	destination, _ := amd64VectorRegisterIndex(ins.Args[form.destination].Reg, form.byteWidth)
 	if state.vectorBytes(second)&requiredSecond != requiredSecond ||
 		form.mask >= 0 && !form.zeroing && state.vectorBytes(destination)&width != width {
 		return false, true

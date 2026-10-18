@@ -55,6 +55,12 @@ func (c *amd64Ctx) lowerPackedSumAbsoluteDifferences(op Op, ins Instr) (bool, bo
 		return true, false, err
 	}
 	first, second, destination := ins.Args[form.first], ins.Args[form.second], ins.Args[form.destination]
+	if form.constantZero(ins) {
+		if form.legacy {
+			return true, false, c.storeLegacyPackedLogical(destination, "zeroinitializer")
+		}
+		return true, false, c.storePackedMoveOperand(destination, form.byteWidth, "zeroinitializer")
+	}
 	if form.legacy && form.memory >= 0 {
 		virtual := first.Kind == OpFP
 		if first.Kind == OpMem && !x86CallerMemoryCertified(ins, form.memory) && !c.fixedLocalMemoryCertified(ins, form.memory) {

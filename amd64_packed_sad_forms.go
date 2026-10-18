@@ -96,6 +96,14 @@ func x86PackedSADProperties(ins Instr, goarch string) (x86PackedSADForm, bool, e
 	return result, true, err
 }
 
+// Only block SAD compares corresponding bytes. Sliding and shuffled SAD do
+// not become constant merely because both operands name the same register.
+// Call this only after validating the complete instruction grammar.
+func (form x86PackedSADForm) constantZero(ins Instr) bool {
+	return form.spec.kind == amd64PackedSADBlockSum && form.memory < 0 &&
+		ins.Args[form.first].Reg == ins.Args[form.second].Reg
+}
+
 // Required byte masks for one output word. PSADBW's other six bytes in
 // each qword are independent known zero; MPS/DBPS compute all output words.
 func (form x86PackedSADForm) wordInputs(outputByte int) (first, second uint64) {

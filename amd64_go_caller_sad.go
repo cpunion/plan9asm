@@ -21,6 +21,9 @@ func x86CallerSADStep(ins *Instr, form x86PackedSADForm, state *x86SourceStackSt
 			known |= uint64(3) << uint(output)
 		}
 	}
+	if form.constantZero(*ins) {
+		known = width
+	}
 	destination := x86CallerVectorRoot(ins.Args[form.destination].Reg)
 	old := state.vectors[destination]
 	if form.mask >= 0 && !form.zeroing {
