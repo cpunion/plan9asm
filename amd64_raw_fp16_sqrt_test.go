@@ -34,6 +34,19 @@ func TestRawFP16PackedSqrtRejectsNamedForms(t *testing.T) {
 }
 
 func TestRawFP16SqrtPortableRuntime(t *testing.T) {
+	runRawFP16SqrtPortable(t, 0)
+}
+
+func TestRawFP16SqrtWideMaskPortableRuntime(t *testing.T) {
+	for _, length := range []byte{1, 2} {
+		t.Run(fmt.Sprintf("lanes%d", 8<<length), func(t *testing.T) {
+			runRawFP16SqrtPortable(t, length)
+		})
+	}
+}
+
+func runRawFP16SqrtPortable(t *testing.T, length byte) {
+	t.Helper()
 	llc, clang, ok := findLlcAndClang(t)
 	if !ok {
 		t.Fatal("LLVM 22 llc/clang not found")
@@ -46,7 +59,7 @@ func TestRawFP16SqrtPortableRuntime(t *testing.T) {
 			fmt.Fprintf(&source, "TEXT %s(SB),4,$0-32\n", name)
 			source.WriteString("MOVQ input+0(FP), DI\nMOVQ memory+8(FP), AX\nMOVQ out+16(FP), SI\nMOVQ mask+24(FP), CX\n")
 			source.WriteString("KMOVQ CX, K1\nVMOVDQU64 (DI), Z0\nVMOVDQU64 64(DI), Z1\n")
-			code := rawFP16PackedSqrt(0, 0, 0, 1, true, false, zero)
+			code := rawFP16PackedSqrt(length, 0, 0, 1, true, false, zero)
 			if scalar {
 				code = encodeRawFP16ScalarBinary(0x51, 0, 1, 0, 0, 1, true, false, zero)
 			}
@@ -64,7 +77,7 @@ func TestRawFP16SqrtPortableRuntime(t *testing.T) {
 					{Offset: 24, Type: I64, Index: 3, Field: -1},
 				}},
 			}
-			lanes, fallback := 8, "input[lane]"
+			lanes, fallback := 8<<length, "input[lane]"
 			if scalar {
 				lanes = 1
 			}
@@ -93,20 +106,26 @@ func TestRawFP16SqrtPortableRuntime(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ir := x86FP16ConversionModelIR(t, file, sigs, testTargetTriple(runtime.GOOS, runtime.GOARCH))
+	ir := x86FP16NumericalModelIR(t, file, sigs, testTargetTriple(runtime.GOOS, runtime.GOARCH))
 	mainC := "#include <stdint.h>\n#include <stddef.h>\n#include <stdio.h>\n#include <string.h>\n" + declarations.String() + x86TestGuardPagesC + `
 int main(void) {
     if (setup_guard()) return 1;
     // Independent bit-pattern oracle: sqrt(0, -0, 1, 4, 9, 16, 2^-24, +inf).
-    const uint16_t memory[] = {0, 0x8000, 0x3c00, 0x4400, 0x4880, 0x4c00, 1, 0x7c00};
-    const uint16_t roots[] = {0, 0x8000, 0x3c00, 0x4000, 0x4200, 0x4400, 0x0c00, 0x7c00};
-    const uint64_t masks[] = {0, 1, 0xff, UINT64_C(1) << 60};
+    const uint16_t seeds[] = {0, 0x8000, 0x3c00, 0x4400, 0x4880, 0x4c00, 1, 0x7c00};
+    const uint16_t answers[] = {0, 0x8000, 0x3c00, 0x4000, 0x4200, 0x4400, 0x0c00, 0x7c00};
+    const uint64_t masks[] = {0, 1, 0xff, UINT64_C(1) << 60, 0xffff, 0xffff0000, 0x80000000, 0xffffffff};
+    const uint64_t active = ` + fmt.Sprintf("UINT64_C(0x%x)", uint64(1)<<(8<<length)-1) + `;
+    uint16_t memory[32], roots[32];
+    for (int lane = 0; lane < 32; lane++) {
+        memory[lane] = seeds[lane % 8];
+        roots[lane] = answers[lane % 8];
+    }
     uint16_t input[64], output[32];
     for (int lane = 0; lane < 64; lane++) input[lane] = (uint16_t)(0x1000 + lane);
-    for (int mi = 0; mi < 4; mi++) {
+    for (unsigned mi = 0; mi < sizeof(masks) / sizeof(masks[0]); mi++) {
         uint64_t mask = masks[mi];
         const void *pointer = memory;
-        if ((mask & 0xff) == 0) pointer = NULL;
+        if ((mask & active) == 0) pointer = NULL;
         if (mask == 1) {
             memcpy(guard + page - 3, memory, 2);
             pointer = guard + page - 3;

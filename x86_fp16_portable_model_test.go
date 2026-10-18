@@ -11,7 +11,7 @@ import (
 // still run. Retarget only the resulting portable LLVM values to the host;
 // this is neither native FP16 execution nor a host MXCSR/exception oracle.
 // Independent native-object tests use each real x86 target without retargeting.
-func x86FP16ConversionModelIR(t *testing.T, file *File, sigs map[string]FuncSig, triple string) string {
+func x86FP16NumericalModelIR(t *testing.T, file *File, sigs map[string]FuncSig, triple string) string {
 	t.Helper()
 	const model = "aarch64-unknown-linux-gnu"
 	ir, err := Translate(file, Options{Goarch: "amd64", TargetTriple: model, Sigs: sigs})
@@ -19,11 +19,11 @@ func x86FP16ConversionModelIR(t *testing.T, file *File, sigs map[string]FuncSig,
 		t.Fatal(err)
 	}
 	if strings.Contains(ir, "asm sideeffect") || strings.Contains(ir, "target-features") {
-		t.Fatal("portable conversion model contains native hardware instructions or features")
+		t.Fatal("portable FP16 model contains native hardware instructions or features")
 	}
 	from := fmt.Sprintf("target triple = %q", model)
 	if strings.Count(ir, from) != 1 {
-		t.Fatal("portable conversion model lost its exact module target")
+		t.Fatal("portable FP16 model lost its exact module target")
 	}
 	return strings.Replace(ir, from, fmt.Sprintf("target triple = %q", triple), 1)
 }

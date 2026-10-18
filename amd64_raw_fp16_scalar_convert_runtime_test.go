@@ -64,7 +64,7 @@ func TestRawFP16ScalarConversionPortableRuntime(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ir := x86FP16ConversionModelIR(t, file, sigs, testTargetTriple(runtime.GOOS, runtime.GOARCH))
+	ir := x86FP16NumericalModelIR(t, file, sigs, testTargetTriple(runtime.GOOS, runtime.GOARCH))
 	mainC := "#include <stdint.h>\n#include <stddef.h>\n#include <stdio.h>\n#include <string.h>\n" + declarations.String() + x86TestGuardPagesC + `
 int main(void) {
     if (setup_guard()) return 1;
@@ -146,7 +146,7 @@ func TestRawFP16ScalarConversionRoundingRuntime(t *testing.T) {
 	if _, err := Translate(originalFile, Options{Goarch: "amd64", TargetTriple: "x86_64-unknown-linux-gnu", Sigs: sigs}); !errors.Is(err, ErrProbeNeedsContext) {
 		t.Fatal("original full-vector store borrowed missing scalar passthrough bytes", err)
 	}
-	ir := x86FP16ConversionModelIR(t, file, sigs, testTargetTriple(runtime.GOOS, runtime.GOARCH))
+	ir := x86FP16NumericalModelIR(t, file, sigs, testTargetTriple(runtime.GOOS, runtime.GOARCH))
 	mainC := "#include <stdint.h>\n#include <stdio.h>\n" + declarations.String() + `
 int main(void) {
     const double values[] = {1 + 0x1p-11, 1 + 3 * 0x1p-11, -1 - 0x1p-11, -1 - 3 * 0x1p-11,
@@ -169,7 +169,7 @@ int main(void) {
 	compileAndRunRuntimeTest(t, llc, clang, "fp16_scalar_rounding", ir, mainC)
 	if runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" && rosettaAvailable() {
 		const triple = "x86_64-apple-macosx"
-		x86IR := x86FP16ConversionModelIR(t, file, sigs, triple)
+		x86IR := x86FP16NumericalModelIR(t, file, sigs, triple)
 		compileAndRunRuntimeTestForTarget(t, llc, clang, "fp16_scalar_rounding_x86", triple, x86IR, mainC, []string{"/usr/bin/arch", "-x86_64"})
 	}
 }
