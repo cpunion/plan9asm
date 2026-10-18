@@ -149,7 +149,7 @@ func x86TypedWaitPackageByteEffect(op Op, ins Instr, arch string) (x86TypedByteE
 func x86WaitPackagePreservesStorage(ins Instr) bool {
 	spec, known := amd64ImplicitSystemSpecs[Op(strings.ToUpper(string(ins.Op)))]
 	if !known || !spec.writesCarry || len(ins.Args) != 1 ||
-		ins.Args[0] != (Operand{Kind: OpReg, Reg: ins.Args[0].Reg}) ||
+		!reflect.DeepEqual(ins.Args[0], Operand{Kind: OpReg, Reg: ins.Args[0].Reg}) ||
 		!isX86YrlRegisterForArch(ins.Args[0].Reg, "amd64") ||
 		ins.x86RawNearReturn != nil || ins.x86AddressBits != 0 ||
 		ins.x86UnboundAddressOverride || ins.x86SegmentPrefix != 0 {

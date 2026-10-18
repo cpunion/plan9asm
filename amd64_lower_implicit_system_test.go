@@ -56,19 +56,9 @@ func TestTranslateX86ImplicitSystemCompleteGoAssemblerForms(t *testing.T) {
 				"\tTPAUSE " + register + "\n" +
 				"\tRET\n"
 			requireX86GoAssemblerResult(t, target.goarch, source, true)
-			file, err := Parse(ArchAMD64, source)
-			if err != nil {
-				t.Fatal(err)
-			}
-			ir, err := Translate(file, Options{
-				Goarch: target.goarch, TargetTriple: target.triple,
-				Sigs: map[string]FuncSig{
-					"implicitsystemforms": {Name: "implicitsystemforms", Ret: Void},
-				},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			// Preserve the original format source without inventing implicit
+			// inputs. Initialized WAITPKG programs have their own public objects.
+			ir := x86UnboundVoidScalarFormatObject(t, source, "implicitsystemforms", target.goarch, target.triple)
 			for _, want := range []string{
 				`"target-features"="+pku,+waitpkg,+xsave"`,
 				`asm sideeffect "monitor"`,

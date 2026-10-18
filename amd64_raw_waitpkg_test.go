@@ -43,12 +43,18 @@ func TestX86RawWaitPackageFamily(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				ir, err := Translate(file, Options{
-					Goarch: target.arch, TargetTriple: target.triple,
-					Sigs: map[string]FuncSig{"waitpkg": {Name: "waitpkg", Ret: Void}},
-				})
-				if err != nil {
-					t.Fatal(err)
+				var ir string
+				if form.op == "UMONITOR" {
+					// Address-monitoring retains its separate existing contract.
+					ir, err = Translate(file, Options{
+						Goarch: target.arch, TargetTriple: target.triple,
+						Sigs: map[string]FuncSig{"waitpkg": {Name: "waitpkg", Ret: Void}},
+					})
+					if err != nil {
+						t.Fatal(err)
+					}
+				} else {
+					ir = x86UnboundVoidRawScalarFormatObject(t, source.String(), target.arch, target.triple)
 				}
 				if !strings.Contains(ir, strings.ToLower(string(form.op))) {
 					t.Fatalf("decoded %x as another instruction", code)
@@ -61,16 +67,8 @@ func TestX86RawWaitPackageFamily(t *testing.T) {
 
 func TestX86WaitPackageClearsOtherFlags(t *testing.T) {
 	for _, op := range []string{"UMWAIT", "TPAUSE"} {
-		file, err := Parse(ArchAMD64, "TEXT flags(SB),$0-0\n"+op+" BX\nRET\n")
-		if err != nil {
-			t.Fatal(err)
-		}
-		ir, err := Translate(file, Options{Goarch: "amd64", Sigs: map[string]FuncSig{
-			"flags": {Name: "flags", Ret: Void},
-		}})
-		if err != nil {
-			t.Fatal(err)
-		}
+		source := "TEXT flags(SB),$0-0\n" + op + " BX\nRET\n"
+		ir := x86UnboundVoidScalarFormatObject(t, source, "flags", "amd64", "x86_64-unknown-linux-gnu")
 		_, after, ok := strings.Cut(ir, "asm sideeffect")
 		if !ok {
 			t.Fatal("no hardware wait operation")

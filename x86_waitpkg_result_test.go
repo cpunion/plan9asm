@@ -26,7 +26,7 @@ func TestX86WaitPKGCompleteGoRowsAndNUMInputs(t *testing.T) {
 		}
 	}
 	for _, arch := range []string{"386", "amd64"} {
-		registers := []Reg{AX, CX, DX, BX, BP, SI, DI}
+		registers := []Reg{AX, CX, DX, BX, SP, BP, SI, DI}
 		if arch == "amd64" {
 			registers = append(registers, "R8", "R9", "R10", "R11", "R12", "R13", "R14", "R15")
 		}
@@ -70,6 +70,72 @@ func TestX86WaitPKGCompleteGoRowsAndNUMInputs(t *testing.T) {
 								t.Error("wait accepted missing data or partially updated status", input, missing)
 							}
 						}
+					}
+				})
+			}
+		}
+	}
+}
+
+func TestX86WaitPKGRawIdentityAndStorageBoundaries(t *testing.T) {
+	for _, arch := range []string{"386", "amd64"} {
+		for _, op := range []string{"UMWAIT", "TPAUSE"} {
+			file, err := Parse(ArchAMD64, "TEXT wait(SB),4,$0-0\n"+x86WaitPKGBody(op, true)+"RET\n")
+			if err != nil {
+				t.Fatal(err)
+			}
+			fn, err := decodeX86RawDirectives(file.Funcs[0], arch)
+			if err != nil || len(fn.Instrs) != 3 {
+				t.Fatal("wait lost its complete original source", err)
+			}
+			original := fn.Instrs[1]
+			for _, mutation := range []string{"unchanged", "opcode", "operand", "origin-opcode", "origin-operand",
+				"missing-origin", "address-size", "segment", "unbound-address", "raw-return", "constructed-operand"} {
+				t.Run(arch+"/"+op+"/"+mutation, func(t *testing.T) {
+					ins := original
+					ins.Args = append([]Operand(nil), original.Args...)
+					origin := *original.x86SourceRaw
+					ins.x86SourceRaw = &origin
+					switch mutation {
+					case "opcode":
+						ins.Op = "UMONITOR"
+					case "operand":
+						ins.Args[0].Reg = AX
+					case "origin-opcode":
+						origin.op = "NOP"
+					case "origin-operand":
+						origin.args = []Operand{{Kind: OpReg, Reg: AX}}
+					case "missing-origin":
+						ins.x86SourceRaw = nil
+					case "address-size":
+						ins.x86AddressBits = 32
+					case "segment":
+						ins.x86SegmentPrefix = 0x64
+					case "unbound-address":
+						ins.x86UnboundAddressOverride = true
+					case "raw-return":
+						ins.x86RawNearReturn = new(x86RawNearReturnForm)
+					case "constructed-operand":
+						ins.Args[0].ImmRaw = "$unknown"
+					}
+					valid := mutation == "unchanged"
+					if x86WaitPackagePreservesStorage(ins) != valid {
+						t.Fatal("wait storage identity did not retain its exact source boundary")
+					}
+					state := x86ResultState{direction: x86ResultDirectionBackward,
+						valueStack: &x86ResultValueStack{bytes: []uint8{1, 2, 3, 4}, id: true}}
+					state.gp[0], state.gp[2], state.gp[3] = 0x0f, 0x0f, 0x0f
+					state.callerAddressGP[7] = true
+					if valid {
+						if !x86ResultValueStackContinuation(ins, &state, arch) ||
+							x86ResultDirectionAfter(ins, state.direction) != state.direction ||
+							x86ResultCallerAddressesAfter(ins, state.callerAddressGP, nil, arch) != state.callerAddressGP {
+							t.Fatal("wait destroyed unrelated private storage/DF/address identity")
+						}
+					}
+					unchanged := state.clone()
+					if x86ResultTransfer(ins, &state, nil, 0, arch) != valid || !valid && !reflect.DeepEqual(state, unchanged) {
+						t.Fatal("mismatched raw wait acquired numerical state")
 					}
 				})
 			}
