@@ -22,6 +22,8 @@ idle worktrees; do not create another for routine work.
 
 | Code snapshot | Completed evidence | Limits |
 |---|---|---|
+| `7b1966b70` | Complete RDRAND/RDSEED W/L/Q family: 44 roots / 1,610 children pass current Go, actual Go1.20 and race; identical 1,654 terminals, zero fail/skip/incomplete | All 128 independent physical register encodings, exact raw identity, partial-byte and missing-result controls; 52 initialized target programs retain three-API O0/O2 objects |
+| Same snapshot | All thirteen final gates pass; exact original 167-root replay remains 67 pass / 11 fail / 89 explicit host skips, unchanged source/tools | Ten original random/status children now pass; their parent still fails other families. Native randomness and complete CI remain unqualified |
 | `8aa8460f4` | Complete floating-compare literal inputs: 43 roots / 481 children pass current Go, actual Go1.20 and race; identical 524 terminals, zero fail/skip/incomplete | All four PS/PD/SS/SD members, 54 independent VEX/EVEX memory shapes, all 256 selectors and 162 initialized three-API AMD64 target-object programs |
 | Same snapshot | All thirteen final gates pass; exact original 167-root replay has 67 pass / 11 fail / 89 explicit host skips, unchanged source/tools and no incomplete roots | Original missing-vector/mask source remains Go/emitter objects plus public Context; full native comparison/MXCSR/exception emission is retained, not newly executed on this host |
 | `37cd9d8a7` | Complete add/subtract literal inputs: 59 roots / 1,626 children pass current Go, actual Go1.20 and race; identical 1,685 terminals, zero fail/skip/incomplete | All sixteen wrapping/signed/unsigned saturating members, 244 independent VEX/EVEX programs and three-API AMD64 target objects; exact lane/merge/mask/tuple controls |
@@ -89,7 +91,7 @@ See earlier checkpoints in Git rather than reconstructing counts by subtraction.
 
 ## Exact failure replay and online CI
 
-The latest local diagnostic at `8aa8460f4` selects exactly the original CI's
+The latest local diagnostic at `7b1966b70` selects exactly the original CI's
 167 failed root names. One sealed Go test process ran the complete set,
 instead of repeatedly linking the same large test executable.
 All inventories, started/terminal identities and before/after source, SDK, LLVM
@@ -110,7 +112,16 @@ and environment observations match. This is not the canonical isolated CI runner
 | Previous batched replay, `fd38dcf0e` | 64 | 14 | 89 | 0 / 0 |
 | Previous batched replay, `175c84397` | 65 | 13 | 89 | 0 / 0 |
 | Previous batched replay, `37cd9d8a7` | 66 | 12 | 89 | 0 / 0 |
-| Latest batched replay, `8aa8460f4` | 67 | 11 | 89 | 0 / 0 |
+| Previous batched replay, `8aa8460f4` | 67 | 11 | 89 | 0 / 0 |
+| Latest batched replay, `7b1966b70` | 67 | 11 | 89 | 0 / 0 |
+
+The hardware-random family defines only its exact output bytes and six status
+flags; CF still independently reports availability. Its shared grammar rejects
+malformed dispatch before emission, and source identity preserves unrelated
+inputs, DF/ID and private storage. Unknown upper bytes, physical frames and
+missing ABI results remain Context. All ten original random/status children
+pass, without changing any root outcome; the two combined status roots still
+have independent enqueue, vector/mask and packed-string input failures.
 
 The original floating-compare literal root newly passes without regressions.
 Its unchanged source lacks vector/mask inputs and retains complete Go/emitter
@@ -215,7 +226,7 @@ before changing implementation or claiming a speedup. Do not relax budgets.
    in the latest exact replay. Repair the other
    observed classes:
    raw FP16 native-read composition; raw literal and unbound-format
-   contracts; MMX closure; hardware enqueue/random/mask status; custom ABI,
+   contracts; MMX closure; hardware enqueue/mask status; custom ABI,
    runtime386 `cpuidProbe` entry. Use the actual diagnostic,
    not an earlier successful preflight, to choose each next class.
    The floating-compare literal batch is qualified at `8aa8460f4`. The exact eleven
@@ -238,6 +249,13 @@ develop in an existing idle worktree. Commit and preserve RED before repair.
 
 Resolve worktree locations with `git worktree list`. Ignored receipts include:
 
+- `hardware-random-qualified-7b1966b7.json` and
+  `hardware-random-final-gates-7b1966b7/`: complete 44-root three-lane cohort,
+  identical terminal unions and thirteen final gates. Preserve RED `54d2dd8d`
+  and its separate first-green receipts.
+- `latest-failure-batch-7b1966b7-{summary.json,raw.jsonl,before.json,after.json}`:
+  exact 167-root replay, 67 pass / 11 fail / 89 explicit host skips, 109.125s;
+  unchanged source/tools, no absent/incomplete or pass-with-skip roots.
 - `raw-arithmetic-qualified-37cd9d8a.json` and
   `raw-arithmetic-final-gates-37cd9d8a/`: complete 59-root three-lane cohort,
   identical terminal unions and thirteen final gates. Preserve RED `23353639`

@@ -238,6 +238,16 @@ original bare-source Context controls, initialized all-target objects and the
 required original-Go/LLVM native AMD64 and IA32 execution owners separate.
 Timestamps reuse the identity boundary but retain their own input/output spec.
 
+RDRAND/RDSEED W/L/Q share all six Go `yrdrand` rows with the result observer.
+Their destination is write-only at the exact width: W preserves unknown upper
+bytes and L zero-extends. NUM means machine bits, not successful entropy or a
+vendor-independent CF=0 value. Only CF reports availability; the other five
+status flags clear. Exact original/raw identity preserves unrelated registers,
+DF/ID and private storage. Physical SP/BP and missing ABI results remain separate
+obligations, even for Void. Retain full encoder attributes, all register codes,
+partial-byte negatives and original format objects; object compilation does not
+qualify native random execution.
+
 UMWAIT/TPAUSE share their existing implicit-system grammar with mandatory
 low-dword control and EDX:EAX inputs. Their native continuation defines CF and
 clears the other five status flags without changing GP, DF or private storage.
