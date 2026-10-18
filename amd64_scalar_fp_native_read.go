@@ -101,8 +101,8 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 				continue // Exact K-only source has independent mask/FLAGS effects, not memory or entry authority.
 			}
 			if x86RegisterQueryPreservesSourceState(ins) {
-				// The decoder's exact original and normalized zero-operand
-				// query shares its checked implicit inputs/outputs. It adds no memory,
+				// Exact original/normalized register producers share their
+				// checked inputs/outputs. They add no memory,
 				// raw-return, stack or native-entry authority to this continuation.
 				continue
 			}
