@@ -170,6 +170,14 @@ Unresolved constants need context for an isolated instruction probe, but must
 fail full translation before raw decoding. Preserve resolved named stack
 addresses; never replace missing constants or malformed addresses with zero.
 
+X86 branch operands use the original Go case-sensitive register namespace before
+shared aliases: lowercase or foreign register-looking labels stay labels, while
+actual Go registers retain their indirect/register semantics. Apply this to the
+complete jump class, including CALL, LOOP, XBEGIN and conditional hints. A local
+CALL label can pass Go's parser and crash its encoder; parser coverage is not
+an accepted object or ordinary rejection. Preserve independent token, object and
+executed-result controls without relaxing target or callee boundaries.
+
 ARM64's fresh virtual SP allocation is disjoint from incoming pointers only
 when the complete original and normalized source excludes escaping its address
 and entry transport cannot replace SP. A source CFG proof may admit exact

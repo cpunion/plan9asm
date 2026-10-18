@@ -25,6 +25,7 @@ of the current candidate. Do not create another worktree for routine work.
 
 | Snapshot | Evidence and limits |
 |---|---|
+| `03ee09640` | X86 branch-token namespace: 70 roots / 384 children pass current Go, actual Go1.20 and race; identical 454 terminals, no fail/skip/incomplete and unchanged source/SDK/LLVM22 seals. Both-SDK build/vet, twenty scanner roots, five-arch classification, five CLI extraction roots, 132 CI policies and formatting pass. Original five-target collision objects and independent portable result execution pass; this is not a complete CI replay |
 | `6e2182329` | Complete block-extraction native stores: 26 portable roots / 401 children pass current Go, actual Go1.20 and race; identical 427 terminal identities, zero fail/skip/incomplete and unchanged source/SDK/LLVM22 observations. Both-SDK build/vet and twenty scanner roots, five-arch classification, five CLI extraction roots, 132 CI policies and tracked formatting pass. Two original AMD64-only auxiliary roots and the required masked native runtime owner remain separate, unexecuted requirements on this ARM64 host |
 | Same code head | Ten block-extraction names retain all 26 AMD64 and 14 mode32 memory forms. Original TDD has 150 failed terminals, including missing-input acceptance, initialized-store rejection and dead unmasked stores. Original unbound format sources remain actual-Go/public-Context/emitter objects; initialized positives retain five-target objects and complete portable byte/canary execution. Eight-SDK audit changes only 22 isolated AMD64 forms per SDK supported-to-Context; 386, unsupported counts and encoder rules stay unchanged |
 | `2d9059765` | Complete GP/SIMD native-store inputs and continuation: 42 roots / 2,627 children pass current Go, actual Go1.20 and race; identical 2,669 terminal identities, zero fail/skip/incomplete and unchanged source/SDK/LLVM22 observations. Both-SDK build/vet and nineteen scanner roots, five-arch classification, four CLI extraction roots, 132 CI policies and tracked formatting pass. Required native execution and complete CI remain separate |
@@ -62,6 +63,14 @@ Classification, emitter-only objects, initialized public translation, portable
 execution and native execution remain different claims.
 
 ## Latest repairs
+
+X86 branch operands now use Go's case-sensitive register namespace before the
+generic cross-architecture aliases. All 201 actual register names, their lowercase
+label counterparts, mixed/foreign aliases, conditional hints and indirect/PC/SB
+controls are retained. The original `x1` label collision has five-target objects
+and separate three-API execution at both IR/backend optimization levels. Go's
+local-label CALL crashes its encoder; that fixture explicitly tests parsing only,
+not an accepted object or ordinary rejection. Both original failed runs remain.
 
 Block-extraction stores reuse the existing complete insert/extract grammar.
 Paired native continuation requires the selected vector bytes, complete incoming
@@ -283,8 +292,9 @@ cannot certify a performance improvement. Full reports remain under ignored
    continuation effects. Scalar-shift memory effects now have the complete
    focused qualification above, followed by the complete multiply-add and MMX
    format-contract union, GP/SIMD native-store inputs/continuation and complete
-   block-extraction native stores. Next close source branch-token namespace
-   collisions and remaining MMX region composition failures. Preserve unmodified
+   block-extraction native stores and source branch-token namespace collisions.
+   Next close WAITPKG implicit input/status effects and remaining MMX region
+   composition failures. Preserve unmodified
    failed sources and independently initialized positive programs. Do not assume that a whole
    format batch's first MMX rejection establishes every sibling's input checks;
    retain per-mode positive and missing-input controls.
@@ -309,6 +319,11 @@ Go 1.20 and race. One heavy local Go/LLVM owner runs at a time; develop in an
 existing idle worktree while its tested source stays frozen.
 
 Resolve branch locations with `git worktree list`. Latest ignored receipts use
+`branch-namespace-qualified-complete` at `03ee09640`; its three-lane union is
+`branch-namespace-qualified-03ee0964.json` and final gates use
+`branch-namespace-final-gates-03ee0964`. RED at `5def1c36f` and the first green
+attempt at `bdc2fa486` retain the actual stock-Go local-CALL crashes separately
+from translator failures. Earlier completed receipts use
 `block-extract-store-qualified-complete` at `6e2182329`;
 `block-extract-store-qualified-6e218232.json` seals the 26-root three-lane union.
 Final gates use `block-extract-store-final-gates-6e218232`, and the eight-SDK
