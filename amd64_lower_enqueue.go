@@ -13,19 +13,11 @@ var x86EnqueueOps = map[string]byte{
 // Keep the 64-byte device enqueue operation in hardware. An ordinary memory
 // copy cannot implement PASID handling, atomic submission, or retry status.
 func (c *amd64Ctx) lowerEnqueue(op Op, ins Instr) (bool, bool, error) {
-	name := strings.ToUpper(string(op))
-	base := strings.SplitN(name, ".", 2)[0]
-	if _, ok := x86EnqueueOps[base]; !ok {
-		return false, false, nil
+	form, known, err := x86EnqueueProperties(op, ins, c.goarch)
+	if !known || err != nil {
+		return known, false, err
 	}
-	if name != base || len(ins.Args) != 2 || !isAMD64MemoryOperand(ins.Args[0]) ||
-		ins.Args[1].Kind != OpReg || !isX86YrlRegisterForArch(ins.Args[1].Reg, c.goarch) {
-		return true, false, fmt.Errorf("%s %s expects a memory source and GP address register without suffixes: %q", c.goarch, base, ins.Raw)
-	}
-	if ins.Args[0].Kind == OpMem && !x86MemoryRegistersValidForArch(ins.Args[0].Mem, c.goarch) {
-		return true, false, fmt.Errorf("%s %s source uses an invalid address register: %q", c.goarch, base, ins.Raw)
-	}
-	source := ins.Args[0]
+	source := form.source
 	assemblySource := "$1"
 	if source.Kind == OpMem && source.Mem.Segment != "" {
 		switch source.Mem.Segment {
@@ -43,18 +35,12 @@ func (c *amd64Ctx) lowerEnqueue(op Op, ins Instr) (bool, bool, error) {
 	if err != nil {
 		return true, false, err
 	}
-	wordType, wordBits := I64, 64
-	if c.goarch == "386" {
-		wordType, wordBits = I32, 32
-	}
-	destination, err := c.evalIntSized(ins.Args[1], wordType)
+	wordType := amd64IntegerTypeForBits(form.wordBits)
+	destination, err := c.evalIntSized(form.destination, wordType)
 	if err != nil {
 		return true, false, err
 	}
-	if bits := ins.x86AddressBits; bits != 0 && bits != wordBits {
-		if bits != wordBits/2 {
-			return true, false, fmt.Errorf("invalid %s address size %d", c.goarch, bits)
-		}
+	if bits := form.addressBits; bits != form.wordBits {
 		// Truncate the effective offset before hardware applies any explicit
 		// source-segment override.
 		address := c.newTmp()
@@ -70,7 +56,7 @@ func (c *amd64Ctx) lowerEnqueue(op Op, ins Instr) (bool, bool, error) {
 
 	status := c.newTmp()
 	fmt.Fprintf(c.b, "  %%%s = call i8 asm sideeffect %q, %q(%s elementtype([64 x i8]) %s, %s %s)\n",
-		status, strings.ToLower(base)+" "+assemblySource+", $2; sete $0",
+		status, form.native+" "+assemblySource+", $2; sete $0",
 		"=q,*m,r,~{memory},~{dirflag},~{fpsr},~{flags}", ptrType, ptr, wordType, destination)
 	c.storeSegmentQueryZF("%" + status)
 	c.clearX86StatusFlags(x86StatusAll &^ x86StatusZF)

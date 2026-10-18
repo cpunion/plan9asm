@@ -301,7 +301,8 @@ func checkX86ResultSourceFlowWithTrapOnly(fn Func, initial x86ResultState, owned
 		x86ResultX87After(ins, state, arch)
 		if state.valueStack != nil && (ins.Op == OpCALL ||
 			!x86ResultNamedPredicateInstruction(ins) && !x86RegisterQueryPreservesSourceState(ins) &&
-				!x86WaitPackagePreservesStorage(ins) && !x86PreservesNumericalSourceState(ins) && !x86MaskLogicalPreservesStorage(ins)) {
+				!x86WaitPackagePreservesStorage(ins) && !x86PreservesNumericalSourceState(ins) &&
+				!x86MaskLogicalPreservesStorage(ins) && !x86EnqueuePreservesStorage(ins)) {
 			state.valueStack.id = false
 		}
 		state.callerAddressGP = x86ResultCallerAddressesAfterTransfer(ins, before, state.callerAddressGP, state.callerAddressFP, arch)

@@ -119,18 +119,10 @@ func TestX86RawEnqueueAddressGrammar(t *testing.T) {
 			if test.mode == 32 {
 				arch, triple = "386", "i386-unknown-linux-gnu"
 			}
-			file, err := Parse(ArchAMD64, "TEXT enqueue(SB),$0-0\nRET\n")
-			if err != nil {
-				t.Fatal(err)
-			}
-			instructions := file.Funcs[0].Instrs
-			file.Funcs[0].Instrs = append([]Instr{instructions[0], ins}, instructions[1:]...)
-			ir, err := Translate(file, Options{Goarch: arch, TargetTriple: triple,
-				Sigs: map[string]FuncSig{"enqueue": {Name: "enqueue", Ret: Void}},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			// Retain every original physical address form and its actual Go
+			// bytes. This format has no initialized source/device addresses.
+			source := "TEXT enqueue(SB),$0-0\n" + x86RawDisplacementDirectives(test.code) + "RET\n"
+			ir := x86UnboundVoidRawScalarFormatObject(t, source, arch, triple)
 			for _, flag := range []string{"cf", "of", "slt", "pf"} {
 				if strings.Count(ir, "store i1 false, ptr %flags_"+flag) < 2 {
 					t.Fatalf("missing cleared %s status flag", flag)

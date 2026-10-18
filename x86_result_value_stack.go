@@ -30,7 +30,8 @@ func x86ResultValueStackContinuation(ins Instr, state *x86ResultState, arch stri
 	}
 	if state.valueStack.invalid || ins.Op == OpCALL ||
 		!x86ResultNamedPredicateInstruction(ins) && !x86RegisterQueryPreservesSourceState(ins) &&
-			!x86WaitPackagePreservesStorage(ins) && !x86PreservesNumericalSourceState(ins) && !x86MaskLogicalPreservesStorage(ins) {
+			!x86WaitPackagePreservesStorage(ins) && !x86PreservesNumericalSourceState(ins) &&
+			!x86MaskLogicalPreservesStorage(ins) && !x86EnqueuePreservesStorage(ins) {
 		return false
 	}
 	// On 386 the private byte stack moves the simulated SP. An AUTO access

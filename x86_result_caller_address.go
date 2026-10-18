@@ -72,6 +72,9 @@ func x86ResultCallerAddressesAfter(ins Instr, before [16]bool, entryFP map[int64
 	if x86WaitPackagePreservesStorage(ins) {
 		return before // No GP overwrite; this supplies no new address or memory fact.
 	}
+	if _, valid := x86EnqueueSourceForm(ins, arch); valid {
+		return before // Both GP addresses are read-only; submission supplies no memory fact.
+	}
 	if x86MaskLogicalPreservesStorage(ins) {
 		return before // Exact named/raw K-only forms never overwrite a GP identity.
 	}

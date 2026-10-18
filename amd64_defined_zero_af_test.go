@@ -62,6 +62,10 @@ func x86DefinedZeroAFSource(arch, name, instruction string) string {
 }
 
 func TestX86DefinedZeroAFWritersClearAfterOperation(t *testing.T) {
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM 22 llc required")
+	}
 	for _, arch := range []string{"386", "amd64"} {
 		for _, row := range x86DefinedZeroAFWriters() {
 			if arch == "386" && row.amd64Only {
@@ -69,26 +73,35 @@ func TestX86DefinedZeroAFWritersClearAfterOperation(t *testing.T) {
 			}
 			t.Run(arch+"/"+row.op, func(t *testing.T) {
 				source := x86DefinedZeroAFSource(arch, "status", row.instruction)
-				requireX86GoAssemblerResult(t, arch, source, true)
-				file, err := Parse(ArchAMD64, source)
-				if err != nil {
-					t.Fatal(err)
-				}
 				triple := "x86_64-unknown-linux-gnu"
 				if arch == "386" {
 					triple = "i386-unknown-linux-gnu"
 				}
-				ir, err := Translate(file, Options{Goarch: arch, TargetTriple: triple,
-					Sigs: map[string]FuncSig{"status": {Name: "status", Ret: Void}},
-				})
-				if err != nil {
-					t.Fatal(err)
+				var ir string
+				if strings.Contains(row.instruction, "X0") || strings.Contains(row.instruction, "K1") || strings.HasPrefix(row.op, "ENQCMD") {
+					// The unchanged source does not initialize vectors/masks or
+					// either device address. Keep its original format and Context;
+					// the complete combined status test owns initialized programs.
+					ir = x86UnboundVoidRawScalarFormatObject(t, source, arch, triple)
+				} else {
+					requireX86GoAssemblerResult(t, arch, source, true)
+					file, err := Parse(ArchAMD64, source)
+					if err != nil {
+						t.Fatal(err)
+					}
+					ir, err = Translate(file, Options{Goarch: arch, TargetTriple: triple,
+						Sigs: map[string]FuncSig{"status": {Name: "status", Ret: Void}},
+					})
+					if err != nil {
+						t.Fatal(err)
+					}
 				}
 				// One false store initializes the slot before the explicit AF=1
 				// seed. A defined-zero writer needs its own subsequent store.
 				if strings.Count(ir, "store i1 false, ptr %flags_af") != 2 {
 					t.Fatalf("%s retained seeded AF instead of its defined-zero status result", row.op)
 				}
+				compileLLVMToObject(t, llc, triple, "af.ll", "af.o", ir)
 			})
 		}
 	}
