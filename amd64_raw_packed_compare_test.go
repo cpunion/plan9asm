@@ -478,7 +478,8 @@ func TestX86PackedCompareFrameSpanValidation(t *testing.T) {
 				if masked {
 					mask = "K1,"
 				}
-				file, err := Parse(ArchAMD64, fmt.Sprintf("TEXT frame(SB),4,$0-8\n%s a+0(FP),%s0,%sK7\nRET\n", op, width, mask))
+				original := fmt.Sprintf("TEXT frame(SB),4,$0-8\n%s a+0(FP),%s0,%sK7\nRET\n", op, width, mask)
+				file, err := Parse(ArchAMD64, original)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -492,12 +493,29 @@ func TestX86PackedCompareFrameSpanValidation(t *testing.T) {
 						sig.Args = append(sig.Args, I64)
 						sig.Frame.Params = append(sig.Frame.Params, FrameSlot{Offset: int64(i * 8), Type: I64, Index: i, Field: -1})
 					}
-					ir, err := Translate(file, Options{Goarch: "amd64", TargetTriple: "x86_64-unknown-linux-gnu", Sigs: map[string]FuncSig{"frame": sig}})
-					if valid && err != nil || !valid && (!errors.Is(err, ErrProbeNeedsContext) || ir != "") {
-						t.Fatalf("%s %s masked=%v valid=%v: %v", op, width, masked, valid, err)
+					options := Options{Goarch: "amd64", TargetTriple: "x86_64-unknown-linux-gnu", Sigs: map[string]FuncSig{"frame": sig}}
+					// Preserve the original malformed whole-function contract:
+					// it declares eight bytes and defines neither vector nor mask.
+					requireX86GoAssemblerResult(t, "amd64", original, true)
+					if ir, err := Translate(file, options); ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+						t.Fatal("original comparison invented inputs or enlarged its explicit TEXT extent", err)
 					}
-					if valid && strings.Contains(ir, " = call <") && strings.Contains(ir, "@llvm.masked.load.") {
-						t.Fatalf("FP slots must not be loaded through a contiguous native pointer")
+					var arguments []string
+					for i := 0; i < chunks; i++ {
+						arguments = append(arguments, fmt.Sprintf("a%d uint64", i))
+					}
+					declaration := "func frame(" + strings.Join(arguments, ",") + ")"
+					initialized := fmt.Sprintf("TEXT frame(SB),4,$0-%d\nMOVL $-1,AX\nKMOVD AX,K1\nVPXORD Z0,Z0,Z0\n%s a0+0(FP),%s0,%sK7\nRET\n",
+						chunks*8, op, width, mask)
+					requireX86GoAssemblerResult(t, "amd64", initialized, true)
+					for _, api := range []string{"text", "module", "Go"} {
+						ir, err := x86ScalarFPBitViewAPI(t, initialized, declaration, "amd64", options.TargetTriple, api)
+						if valid && err != nil || !valid && (!errors.Is(err, ErrProbeNeedsContext) || ir != "") {
+							t.Fatalf("%s %s masked=%v valid=%v API=%s: %v", op, width, masked, valid, api, err)
+						}
+						if valid && strings.Contains(ir, " = call <") && strings.Contains(ir, "@llvm.masked.load.") {
+							t.Fatal("FP slots must not be loaded through a contiguous native pointer")
+						}
 					}
 				}
 			}
