@@ -103,18 +103,51 @@ func TestX86DefinedZeroAFExistingCompareWriterControls(t *testing.T) {
 		for _, op := range []string{"COMISS", "COMISD", "UCOMISS", "UCOMISD", "VCOMISS", "VCOMISD", "VUCOMISS", "VUCOMISD"} {
 			t.Run(arch+"/"+op, func(t *testing.T) {
 				source := x86DefinedZeroAFSource(arch, "status", op+" X0,X1")
-				requireX86GoAssemblerResult(t, arch, source, true)
-				file, err := Parse(ArchAMD64, source)
-				if err != nil {
-					t.Fatal(err)
+				// The original source has no X0/X1 inputs. Keep its actual Go
+				// object and explicit public Context before inspecting emission.
+				ir := x86UnboundVoidScalarFormatObject(t, source, "status", arch, triple)
+				if strings.Count(ir, "store i1 false, ptr %flags_af") != 2 {
+					t.Fatal("original compare emitter lost AF clearing")
 				}
-				ir, err := Translate(file, Options{Goarch: arch, TargetTriple: triple,
-					Sigs: map[string]FuncSig{"status": {Name: "status", Ret: Void}},
-				})
-				if err != nil || strings.Count(ir, "store i1 false, ptr %flags_af") != 2 {
-					t.Fatal("already correct compare writer lost AF clearing", err)
+				llc := findLLVM22Tool("llc")
+				if llc == "" {
+					t.Fatal("LLVM 22 llc required")
 				}
+				compileLLVMToObject(t, llc, triple, "compare-status.ll", "compare-status.o", ir)
 			})
 		}
+	}
+}
+
+func TestX86DefinedCompareStatusInitializedFiveTargetsObjects(t *testing.T) {
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM 22 llc required")
+	}
+	for _, target := range x86RawReturnTargets {
+		word, value, size := "L", "uint32", 4
+		if target.arch == "amd64" {
+			word, value, size = "Q", "uint64", 8
+		}
+		var source, declarations strings.Builder
+		for _, op := range []string{"COMISS", "COMISD", "UCOMISS", "UCOMISD", "VCOMISS", "VCOMISD", "VUCOMISS", "VUCOMISD"} {
+			fmt.Fprintf(&declarations, "func %s(seed %s) %s\n", op, value, value)
+			fmt.Fprintf(&source, "TEXT ·%s(SB),4,$0-%d\nMOVL $0,AX\nMOVL AX,X0\nMOVL AX,X1\nPUSH%s seed+0(FP)\nPOPF%s\n%s X0,X1\nPUSHF%s\nPOP%s AX\nMOV%s AX,ret+%d(FP)\nRET\n",
+				op, 2*size, word, word, op, word, word, word, size)
+		}
+		t.Run(target.triple, func(t *testing.T) {
+			x86LEAActualTargetGoObject(t, target.arch, target.triple, source.String())
+			for _, api := range []string{"text", "module", "Go"} {
+				ir, err := x86ScalarFPBitViewAPI(t, source.String(), declarations.String(), target.arch, target.triple, api)
+				if err != nil || strings.Count(ir, "store i1 false, ptr %flags_af") != 16 {
+					t.Fatal("initialized compare family lost its public status effect", api, err)
+				}
+				for _, text := range []string{ir, x86DwordProductIROptimize(t, ir)} {
+					for _, level := range []string{"-O0", "-O2"} {
+						x86PackedStringCompileObject(t, llc, target.triple, text, level)
+					}
+				}
+			}
+		})
 	}
 }
