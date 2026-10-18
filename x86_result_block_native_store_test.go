@@ -20,6 +20,34 @@ func x86BlockNativeStoreRows(arch string) []string {
 	return rows
 }
 
+func TestX86BlockExtractStoreEmitterKeepsExactAccess(t *testing.T) {
+	for _, arch := range []string{"amd64", "386"} {
+		for _, row := range x86BlockNativeStoreRows(arch) {
+			t.Run(arch+"/"+row, func(t *testing.T) {
+				ins := x86ScalarLaneInstruction(t, row)
+				ctx, output := newAMD64CtxWithFuncForTest(t, Func{Instrs: []Instr{ins}}, FuncSig{Ret: Void}, nil)
+				ctx.goarch = arch
+				before := output.Len()
+				known, _, err := ctx.lowerInsertExtractFamily(ins.Op, ins)
+				if !known || err != nil {
+					t.Fatal("complete extraction row rejected by its emitter", err)
+				}
+				text := output.String()[before:]
+				if strings.Contains(row, "K1") {
+					if !strings.Contains(text, "call void asm sideeffect") || !strings.Contains(text, "; vextract") {
+						t.Fatal("masked extraction lost its write-only native opcode")
+					}
+				} else {
+					chunk, _, _ := x86InsertExtractMaskedMemoryShape(row)
+					if strings.Count(text, fmt.Sprintf("store volatile <%d x i8>", chunk)) != 1 {
+						t.Fatal("unmasked extraction lost its exact observable native store")
+					}
+				}
+			})
+		}
+	}
+}
+
 func TestX86BlockExtractNativeStoreContinuation(t *testing.T) {
 	for _, arch := range []string{"amd64", "386"} {
 		rows := x86BlockNativeStoreRows(arch)
