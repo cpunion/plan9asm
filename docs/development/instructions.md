@@ -1348,6 +1348,15 @@ uninitialized formats separate from initialized public objects. C-only signal
 and exit-status controls execute on the actual host; they do not require an
 x86 native-instruction launcher or certify native AVX512 execution.
 
+VEX/EVEX floating-compare literals reuse their typed PS/PD/SS/SD input effects
+and existing native emitter. Preserve the entire predicate byte, MXCSR, fault
+behavior, scalar passthrough and write-only K results. Exact decoder/DATA identity
+and full/scalar/broadcast tuples supply only the current instruction's inputs,
+not native-read or frame authority. A CFG state clone deliberately revokes this
+transient DATA scope; instruction-local test oracles must not confuse that
+revocation with the instruction's own effect. Keep original unbound formats
+separate from initialized public objects and native execution.
+
 VEX/EVEX packed add/subtract literals reuse their complete typed wrapping and
 signed/unsigned saturating forms. Exact decoder read identity and full/broadcast
 tuple extent feed the existing lane-byte effect. Unknown source lanes remain

@@ -22,6 +22,8 @@ idle worktrees; do not create another for routine work.
 
 | Code snapshot | Completed evidence | Limits |
 |---|---|---|
+| `8aa8460f4` | Complete floating-compare literal inputs: 43 roots / 481 children pass current Go, actual Go1.20 and race; identical 524 terminals, zero fail/skip/incomplete | All four PS/PD/SS/SD members, 54 independent VEX/EVEX memory shapes, all 256 selectors and 162 initialized three-API AMD64 target-object programs |
+| Same snapshot | All thirteen final gates pass; exact original 167-root replay has 67 pass / 11 fail / 89 explicit host skips, unchanged source/tools and no incomplete roots | Original missing-vector/mask source remains Go/emitter objects plus public Context; full native comparison/MXCSR/exception emission is retained, not newly executed on this host |
 | `37cd9d8a7` | Complete add/subtract literal inputs: 59 roots / 1,626 children pass current Go, actual Go1.20 and race; identical 1,685 terminals, zero fail/skip/incomplete | All sixteen wrapping/signed/unsigned saturating members, 244 independent VEX/EVEX programs and three-API AMD64 target objects; exact lane/merge/mask/tuple controls |
 | Same snapshot | All thirteen final gates pass; exact original 167-root replay has 66 pass / 12 fail / 89 explicit host skips, unchanged source/tools and no incomplete roots | Original mixed source lacks K7 and remains Go/emitter objects plus public Context; initialized independent programs own public objects, not native execution |
 | `175c84397` | Complete integer-compare literal inputs: 38 roots / 3,706 children pass current Go, actual Go1.20 and race; identical 3,744 terminals, zero fail/skip/incomplete | All eight EQ/GT B/W/D/Q members, 136 independent VEX/EVEX programs and three-API AMD64 target objects; portable values/FLAGS/canaries and host signal controls also execute |
@@ -87,7 +89,7 @@ See earlier checkpoints in Git rather than reconstructing counts by subtraction.
 
 ## Exact failure replay and online CI
 
-The latest local diagnostic at `37cd9d8a7` selects exactly the original CI's
+The latest local diagnostic at `8aa8460f4` selects exactly the original CI's
 167 failed root names. One sealed Go test process ran the complete set,
 instead of repeatedly linking the same large test executable.
 All inventories, started/terminal identities and before/after source, SDK, LLVM
@@ -107,7 +109,19 @@ and environment observations match. This is not the canonical isolated CI runner
 | Previous batched replay, `f432afb24` | 63 | 15 | 89 | 0 / 0 |
 | Previous batched replay, `fd38dcf0e` | 64 | 14 | 89 | 0 / 0 |
 | Previous batched replay, `175c84397` | 65 | 13 | 89 | 0 / 0 |
-| Latest batched replay, `37cd9d8a7` | 66 | 12 | 89 | 0 / 0 |
+| Previous batched replay, `37cd9d8a7` | 66 | 12 | 89 | 0 / 0 |
+| Latest batched replay, `8aa8460f4` | 67 | 11 | 89 | 0 / 0 |
+
+The original floating-compare literal root newly passes without regressions.
+Its unchanged source lacks vector/mask inputs and retains complete Go/emitter
+objects plus public Context. All four VCMPPS/PD/SS/SD members have 162 separate
+initialized public-object programs; 54 independent memory shapes check every
+predicate byte. Exact scalar/full/broadcast reads, write-only K results, source
+lanes, masks and wider aliases remain independent. The existing native opcode,
+MXCSR and exception effects are unchanged. The first-green state oracle wrongly
+used a CFG clone that intentionally revokes transient DATA-read scope; the
+corrected oracle compares the instruction-local state without that clone.
+Preserve that failed receipt alongside the original production RED.
 
 The original packed-arithmetic literal root newly passes without regressions.
 Its unchanged mixed source lacks K7 and retains complete Go/emitter objects
@@ -204,9 +218,8 @@ before changing implementation or claiming a speedup. Do not relax budgets.
    contracts; MMX closure; hardware enqueue/random/mask status; custom ABI,
    runtime386 `cpuidProbe` entry. Use the actual diagnostic,
    not an earlier successful preflight, to choose each next class.
-   The arithmetic literal batch is qualified at `37cd9d8a7`. The exact twelve
-   failures are five FP16, one floating-compare RIP literal root,
-   two hardware-status roots, two runtime386 source
+   The floating-compare literal batch is qualified at `8aa8460f4`. The exact eleven
+   failures are five FP16, two hardware-status roots, two runtime386 source
    fixtures, one absolute relocation and one x87 compare root. Repair each
    complete rule class with original Go/emitter controls and independently
    initialized public programs; do not weaken source/data or entry proofs.
