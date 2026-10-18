@@ -831,20 +831,7 @@ func TestTranslate386PackedWordMultiplyAddCompleteGoAssemblerForms(t *testing.T)
 	VPMADDWD (AX), Z6, Z7
 	RET
 `
-	file, err := Parse(ArchAMD64, src)
-	if err != nil {
-		t.Fatal(err)
-	}
-	ll, err := Translate(file, Options{
-		TargetTriple: "i386-unknown-linux-gnu",
-		Goarch:       "386",
-		Sigs: map[string]FuncSig{
-			"packedwordmaddforms386": {Name: "packedwordmaddforms386", Ret: Void},
-		},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	ll := x86UnboundVoidScalarFormatObject(t, src, "packedwordmaddforms386", "386", "i386-unknown-linux-gnu")
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc not found")

@@ -360,6 +360,17 @@ func TestX86MADDTypedNamedAndPhysicalThreeAPIsFiveTargetObjects(t *testing.T) {
 					fmt.Fprintf(&source, "TEXT ·F%d(SB),4,$0-0\n%s\nRET\n", index, row)
 					fmt.Fprintf(&declarations, "func F%d()\n", index)
 				}
+				if !raw {
+					file, sigs := x86UnboundVoidFormatSources(t, source.String(), target.arch, target.triple)
+					ir := x86ScalarFormatObjectUnit(t, file, sigs, target.arch, target.triple, 0)
+					for _, text := range []string{ir, x86DwordProductIROptimize(t, ir)} {
+						for _, level := range []string{"-O0", "-O2"} {
+							x86PackedStringCompileObject(t, llc, target.triple, text, level)
+						}
+					}
+					t.Logf("%d original named formats: Go objects, three public Context controls and emitter-only objects", len(rows))
+					return
+				}
 				goAssemblerOracleOutput(t, target.arch, source.String(), "", true)
 				pkg := mustGoPackage(t, "example.invalid/madd", declarations.String())
 				file, err := Parse(ArchAMD64, source.String())

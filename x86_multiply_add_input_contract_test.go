@@ -3,6 +3,7 @@ package plan9asm
 import (
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -99,5 +100,68 @@ func TestX86MultiplyAddInitializedInputsFiveTargetObjects(t *testing.T) {
 				})
 			}
 		})
+	}
+}
+
+func TestX86MultiplyAddNumericalStateAndMemoryAuthority(t *testing.T) {
+	for _, arch := range []string{"amd64", "386"} {
+		for _, row := range x86MultiplyAddInputRows(arch) {
+			t.Run(arch+"/"+row, func(t *testing.T) {
+				ins := x86YMMReadSource(t, row)
+				initial := x86ResultState{flags: x86ByteFlagsAll, direction: x86ResultDirectionBackward}
+				for index := 0; index < 3; index++ {
+					initial.writeVector(index, 64, ^uint64(0), false)
+				}
+				initial.pointerGP[3], initial.gp[3], initial.masks[1] = true, 0xff, true
+				memory := strings.Contains(row, "(BX)")
+				apply := func(state *x86ResultState) bool {
+					if memory {
+						accepted, known := x86LoweredFixedVectorNativeRead(ins, state, nil, arch)
+						return known && accepted
+					}
+					return x86ResultTransfer(ins, state, nil, 0, arch)
+				}
+				state := initial.clone()
+				if !apply(&state) || !reflect.DeepEqual(state, initial) {
+					t.Fatal("complete inputs lost defined bytes or changed unrelated state")
+				}
+				for _, missing := range []string{"first", "second", "mask"} {
+					if missing == "mask" && !strings.Contains(row, "K1") {
+						continue
+					}
+					state = initial.clone()
+					switch missing {
+					case "first":
+						if memory {
+							state.pointerGP[3] = false
+						} else {
+							state.writeVector(0, 64, 0, false)
+						}
+					case "second":
+						state.writeVector(1, 64, 0, false)
+					case "mask":
+						state.masks[1] = false
+					}
+					before := state.clone()
+					if apply(&state) || !reflect.DeepEqual(state, before) {
+						t.Fatal("missing input acquired an effect or changed state", missing)
+					}
+				}
+				if memory {
+					state = initial.clone()
+					if x86ResultTransfer(ins, &state, nil, 0, arch) {
+						t.Fatal("standalone observer borrowed the lowering-only native read")
+					}
+				}
+				if strings.HasPrefix(row, "V") {
+					state = initial.clone()
+					state.writeVector(2, 64, 0, false)
+					want := !strings.Contains(row, "K1") || strings.Contains(row, ".Z ")
+					if apply(&state) != want || want && state.vectorBytes(2) != ^uint64(0) {
+						t.Fatal("merge dependency or wider-alias zero definition changed")
+					}
+				}
+			})
+		}
 	}
 }

@@ -26,14 +26,14 @@ func TestTranslateX86PackedUnsignedSignedByteMultiplyAddCompleteGoAssemblerForms
 	VPMADDUBSW.Z (AX), Z21, K6, Z22
 	RET
 `
-	ll := translateAMD64EcosystemCase(t, amd64Source, "packedmaddubswforms")
+	ll := x86UnboundVoidScalarFormatObject(t, amd64Source, "packedmaddubswforms", "amd64", "x86_64-unknown-linux-gnu")
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc not found")
 	}
 	compileLLVMToObject(t, llc, "x86_64-unknown-linux-gnu", "packed-maddubsw-amd64.ll", "packed-maddubsw-amd64.o", ll)
 
-	file, err := Parse(ArchAMD64, `TEXT packedmaddubswforms386(SB),NOSPLIT,$0-0
+	source386 := `TEXT packedmaddubswforms386(SB),NOSPLIT,$0-0
 	PMADDUBSW X0, X1
 	PMADDUBSW (AX), X7
 	VPMADDUBSW X0, X1, X2
@@ -43,20 +43,8 @@ func TestTranslateX86PackedUnsignedSignedByteMultiplyAddCompleteGoAssemblerForms
 	VPMADDUBSW Z0, Z1, Z7
 	VPMADDUBSW (AX), Z6, Z7
 	RET
-`)
-	if err != nil {
-		t.Fatal(err)
-	}
-	ll386, err := Translate(file, Options{
-		TargetTriple: "i386-unknown-linux-gnu",
-		Goarch:       "386",
-		Sigs: map[string]FuncSig{
-			"packedmaddubswforms386": {Name: "packedmaddubswforms386", Ret: Void},
-		},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+`
+	ll386 := x86UnboundVoidScalarFormatObject(t, source386, "packedmaddubswforms386", "386", "i386-unknown-linux-gnu")
 	compileLLVMToObject(t, llc, "i386-unknown-linux-gnu", "packed-maddubsw-386.ll", "packed-maddubsw-386.o", ll386)
 }
 
