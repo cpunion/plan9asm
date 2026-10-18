@@ -1331,3 +1331,10 @@ remain unknown. The complete original/decoded/normalized source and raw RET
 checks stay independent. This adds no native read, frame, legacy/MMX or
 declaration-query permission. Preserve original unbound Go/emitter objects and
 public Context separately from initialized public objects.
+
+EVEX VPSLLDQ/VPSRLDQ RIP literals use that same bounded source consumer and
+the existing typed shift effect. Read the entire X/Y/Z tuple even when a byte
+count of 16 or more makes every result lane zero. VEX remains register-only;
+mask, broadcast and zeroing fields remain reserved. Preserve all 256 selectors,
+128-bit lane boundaries, wider-alias clearing and original FLAGS without
+granting a standalone DATA query or raw-return frame permission.
