@@ -95,6 +95,7 @@ func TestX86PackedLogicalParameterStoresKeepTypedAndPhysicalBoundaries(t *testin
 			original, declaration := x86LogicalPackedStoreSource("Value", x86LogicalPackedStoreCase{op: "VMOVDQU32", bank: "X", masked: true}, result)
 			for _, mutation := range []struct{ name, before, after string }{
 				{"unknown-source", "VPXORD Z0,Z0,Z0\n", ""},
+				{"bare-unknown-source", "MOVL $0x5555,AX\nKMOVW AX,K1\nVPXORD Z0,Z0,Z0\nVMOVDQU32 X0,K1,", "VMOVDQU X0,"},
 				{"unknown-mask", "KMOVW AX,K1\n", ""},
 				{"outside-fields", "X0,K1,a0+0(FP)", "X0,K1,a0+60(FP)"},
 				{"native-SP", "X0,K1,a0+0(FP)", "X0,K1,0(SP)"},
