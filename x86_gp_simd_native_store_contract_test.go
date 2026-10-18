@@ -39,6 +39,21 @@ func TestX86GPSIMDNativeStoreNumericalContinuation(t *testing.T) {
 				if x86ResultGPSIMDTransfer(ins, form, &state, nil, 0, arch) {
 					t.Fatal("standalone observer acquired native write permission")
 				}
+				for _, mutation := range []string{"physical", "address-size", "segment"} {
+					changed := ins
+					switch mutation {
+					case "physical":
+						changed.x86Encoded = true
+					case "address-size":
+						changed.x86AddressBits = 32
+					case "segment":
+						changed.x86SegmentPrefix = 0x64
+					}
+					state = before.clone()
+					if x86ResultGPSIMDTransferWithRead(changed, form, &state, nil, 0, arch, true) || !reflect.DeepEqual(state, before) {
+						t.Fatal("named store granted an unbound physical access", mutation)
+					}
+				}
 				for missing := int64(-1); missing < row.bytes; missing++ {
 					state = before.clone()
 					if missing < 0 {
