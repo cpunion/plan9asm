@@ -49,7 +49,7 @@ func TestX86RawFP16ConversionInitializedNativeObjects(t *testing.T) {
 		for batch := 0; batch < 2; batch++ {
 			t.Run(fmt.Sprintf("%s/batch%d", target.triple, batch), func(t *testing.T) {
 				var source, declarations strings.Builder
-				encodings := make(map[string]x86FP16ConversionObjectEncoding)
+				encodings := make(map[string]x86RawFP16ObjectEncoding)
 				count := 0
 				for member := range x86FP16ConversionResultNames {
 					if member%2 != batch {
@@ -64,8 +64,10 @@ func TestX86RawFP16ConversionInitializedNativeObjects(t *testing.T) {
 								for _, zero := range []bool{false, true} {
 									name := fmt.Sprintf("conversion%d", count)
 									asm, declaration := x86FP16ConversionResultFixture(name, target.arch, member, length, memory, control, zero)
-									encodings[name] = x86FP16ConversionObjectEncoding{
-										member: member, code: x86FP16ConversionResultEncoding(member, length, memory, control, zero),
+									encodings[name] = x86RawFP16ObjectEncoding{
+										code:          x86FP16ConversionResultEncoding(member, length, memory, control, zero),
+										lengthIgnored: member >= 2 && (!control || member%2 == 0) || member == 0 && !memory && control,
+										maskMove:      "kmovw",
 									}
 									source.WriteString(asm)
 									declarations.WriteString(declaration)
@@ -97,7 +99,7 @@ func TestX86RawFP16ConversionInitializedNativeObjects(t *testing.T) {
 							}
 						}
 						for _, level := range []string{"-O0", "-O2"} {
-							x86FP16ConversionCheckObject(t, llc, target.triple, text, level, encodings)
+							x86RawFP16CheckObject(t, llc, target.triple, text, level, encodings)
 						}
 					}
 				}

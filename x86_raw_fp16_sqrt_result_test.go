@@ -33,6 +33,7 @@ func TestX86RawFP16SqrtInitializedNativeObjects(t *testing.T) {
 				word, move = 4, "MOVL"
 			}
 			var source, declarations strings.Builder
+			encodings := make(map[string]x86RawFP16ObjectEncoding)
 			count := 0
 			for _, scalar := range []bool{false, true} {
 				for length := byte(0); length < 4; length++ {
@@ -43,9 +44,17 @@ func TestX86RawFP16SqrtInitializedNativeObjects(t *testing.T) {
 							}
 							for _, zero := range []bool{false, true} {
 								name := fmt.Sprintf("halfSqrt%d", count)
+								maskMove := "kmovw"
+								if !scalar && (length == 2 || !memory && control) {
+									maskMove = "kmovd"
+								}
+								code := x86FP16SqrtResultEncoding(scalar, length, memory, control, zero)
+								encodings[name] = x86RawFP16ObjectEncoding{
+									code: code, lengthIgnored: scalar && !control, maskMove: maskMove,
+								}
 								fmt.Fprintf(&source, "TEXT %s(SB),4,$0-%d\n%s p+0(FP),AX\n", name, word+4, move)
 								source.WriteString("MOVL $1,CX\nKMOVD CX,K1\nVPXORD Z0,Z0,Z0\nVPXORD Z1,Z1,Z1\nVPXORD Z2,Z2,Z2\n")
-								source.WriteString(x86RawDisplacementDirectives(x86FP16SqrtResultEncoding(scalar, length, memory, control, zero)))
+								source.WriteString(x86RawDisplacementDirectives(code))
 								fmt.Fprintf(&source, "MOVL X0,DX\nMOVL DX,ret+%d(FP)\nRET\n", word)
 								fmt.Fprintf(&declarations, "func %s(p *byte) uint32\n", name)
 								count++
@@ -73,7 +82,7 @@ func TestX86RawFP16SqrtInitializedNativeObjects(t *testing.T) {
 						t.Fatal("FP16 Z square roots truncated the 32-lane mask", api)
 					}
 					for _, level := range []string{"-O0", "-O2"} {
-						x86PackedStringCompileObject(t, llc, target.triple, text, level)
+						x86RawFP16CheckObject(t, llc, target.triple, text, level, encodings)
 					}
 				}
 			}
