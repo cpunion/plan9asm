@@ -14,6 +14,15 @@ import (
 )
 
 func TestX86LockScalarRMWThreeAPIsFiveTargetsNativeObjects(t *testing.T) {
+	x86LockScalarRMWNativeObjectMatrix(t, false)
+}
+
+func TestX86LockScalarRMWIndexedSegmentsThreeAPIsFiveTargetsObjects(t *testing.T) {
+	x86LockScalarRMWNativeObjectMatrix(t, true)
+}
+
+func x86LockScalarRMWNativeObjectMatrix(t *testing.T, indexed bool) {
+	t.Helper()
 	llc, disassembler := findLLVM22Tool("llc"), findLLVM22Tool("llvm-objdump")
 	if llc == "" || disassembler == "" {
 		t.Fatal("LLVM22 compiler and disassembler are required")
@@ -32,6 +41,9 @@ func TestX86LockScalarRMWThreeAPIsFiveTargetsNativeObjects(t *testing.T) {
 				memory := "1(SI)"
 				if segment != "native" {
 					memory = "1(" + segment + ")"
+					if indexed {
+						memory = "1(AX)(" + segment + "*4)"
+					}
 				}
 				body := strings.Replace(row.text, "1(SI)", memory, 1)
 				name := fmt.Sprintf("rmw%d_%s", index, strings.ToLower(segment))
