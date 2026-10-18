@@ -188,10 +188,23 @@ func TestTranslateX86RawEVEXPackedLogicalTargets(t *testing.T) {
 				}
 			}
 			source.WriteString("\tRET\n")
-			// Unknown vector/mask/address inputs remain public Context;
-			// retain the original complete raw format object on every target.
-			ir := x86UnboundVoidRawScalarFormatObject(t, source.String(), target.goarch, target.triple)
-			compileLLVMToObject(t, llc, target.triple, "raw-evex-packed-logical-"+target.name+".ll", "raw-evex-packed-logical-"+target.name+".o", ir)
+			if target.goarch == "amd64" {
+				// This original includes a memory access with no address or
+				// mask input. Keep complete format objects and public Context.
+				ir := x86UnboundVoidRawScalarFormatObject(t, source.String(), target.goarch, target.triple)
+				compileLLVMToObject(t, llc, target.triple, "raw-evex-packed-logical-"+target.name+".ll", "raw-evex-packed-logical-"+target.name+".o", ir)
+				return
+			}
+			// The original mode32 body only discards a pure register XOR;
+			// it neither accesses native memory nor promises result bytes.
+			x86LEAActualTargetGoObject(t, target.goarch, target.triple, source.String())
+			for _, api := range []string{"text", "module", "Go"} {
+				ir, err := x86ScalarFPBitViewAPI(t, source.String(), "func raw_evex_packed_logical()", target.goarch, target.triple, api)
+				if err != nil {
+					t.Fatal("original pure dead XOR acquired an unrelated input requirement", api, err)
+				}
+				compileLLVMToObject(t, llc, target.triple, "raw-evex-packed-logical-"+target.name+".ll", "raw-evex-packed-logical-"+target.name+".o", ir)
+			}
 		})
 	}
 }
