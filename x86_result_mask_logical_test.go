@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -103,6 +104,29 @@ func TestX86MaskLogicalSameSourceConstants(t *testing.T) {
 	}
 }
 
+func x86MaskLogicalCompleteFixture(arch string) (string, string) {
+	var source, declarations strings.Builder
+	for _, row := range x86MaskLogicalOracle() {
+		fmt.Fprintf(&declarations, "func %s(a,b uint64) uint64\n", row.op)
+		fmt.Fprintf(&source, "TEXT ·%s(SB),4,$0-24\nKMOVQ a+0(FP),K0\nKMOVQ b+8(FP),K7\n%s %s\n",
+			row.op, row.op, row.operands)
+		if strings.Contains(row.op, "TEST") {
+			word := "Q"
+			if arch == "386" {
+				word = "L"
+			}
+			fmt.Fprintf(&source, "PUSHF%s\nPOP%s AX\nAND%s $0x8d5,AX\nMOV%s AX,ret+16(FP)\n", word, word, word, word)
+			if arch == "386" {
+				source.WriteString("MOVL $0,ret+20(FP)\n")
+			}
+		} else {
+			source.WriteString("KMOVQ K3,ret+16(FP)\n")
+		}
+		source.WriteString("RET\n")
+	}
+	return source.String(), declarations.String()
+}
+
 func TestX86MaskLogicalInitializedFiveTargetObjects(t *testing.T) {
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
@@ -110,28 +134,10 @@ func TestX86MaskLogicalInitializedFiveTargetObjects(t *testing.T) {
 	}
 	for _, target := range x86RawReturnTargets {
 		t.Run(target.triple, func(t *testing.T) {
-			var source, declarations strings.Builder
-			for _, row := range x86MaskLogicalOracle() {
-				fmt.Fprintf(&declarations, "func %s(a,b uint64) uint64\n", row.op)
-				fmt.Fprintf(&source, "TEXT ·%s(SB),4,$0-24\nKMOVQ a+0(FP),K0\nKMOVQ b+8(FP),K7\n%s %s\n",
-					row.op, row.op, row.operands)
-				if strings.Contains(row.op, "TEST") {
-					word := "Q"
-					if target.arch == "386" {
-						word = "L"
-					}
-					fmt.Fprintf(&source, "PUSHF%s\nPOP%s AX\nAND%s $0x8d5,AX\nMOV%s AX,ret+16(FP)\n", word, word, word, word)
-					if target.arch == "386" {
-						source.WriteString("MOVL $0,ret+20(FP)\n")
-					}
-				} else {
-					source.WriteString("KMOVQ K3,ret+16(FP)\n")
-				}
-				source.WriteString("RET\n")
-			}
-			x86LEAActualTargetGoObject(t, target.arch, target.triple, source.String())
+			source, declarations := x86MaskLogicalCompleteFixture(target.arch)
+			x86LEAActualTargetGoObject(t, target.arch, target.triple, source)
 			for _, api := range []string{"text", "module", "Go"} {
-				ir, err := x86ScalarFPBitViewAPI(t, source.String(), declarations.String(), target.arch, target.triple, api)
+				ir, err := x86ScalarFPBitViewAPI(t, source, declarations, target.arch, target.triple, api)
 				if err != nil {
 					t.Fatal("complete initialized mask family rejected", api, err)
 				}
@@ -139,6 +145,65 @@ func TestX86MaskLogicalInitializedFiveTargetObjects(t *testing.T) {
 					for _, level := range []string{"-O0", "-O2"} {
 						x86PackedStringCompileObject(t, llc, target.triple, text, level)
 					}
+				}
+			}
+		})
+	}
+}
+
+func TestX86MaskLogicalPortableValuesAndFlags(t *testing.T) {
+	llc, clang, found := findLlcAndClang(t)
+	if !found {
+		t.Fatal("LLVM 22 llc/clang required")
+	}
+	source, declarations := x86MaskLogicalCompleteFixture("amd64")
+	var prototypes, checks strings.Builder
+	for index, row := range x86MaskLogicalOracle() {
+		bits := []int{8, 16, 32, 64}[index%4]
+		fmt.Fprintf(&prototypes, "extern uint64_t %s(uint64_t,uint64_t);\n", row.op)
+		fmt.Fprintf(&checks, "if (check(%s,\"%s\",%d,%d)) return 1;\n", row.op, row.op, index/4, bits)
+	}
+	oracle := "#include <stdint.h>\n#include <stdio.h>\n" + prototypes.String() + `
+static int check(uint64_t (*fn)(uint64_t,uint64_t), const char *name, unsigned op, unsigned bits) {
+    const uint64_t values[] = {0, 1, UINT64_MAX, UINT64_C(0x89abcdef01234567),
+        UINT64_C(0x8000000000000000), UINT64_C(0x55555555aaaaaaaa)};
+    uint64_t mask = bits == 64 ? UINT64_MAX : (UINT64_C(1) << bits) - 1;
+    for (unsigned i = 0; i < 6; i++) {
+        for (unsigned j = 0; j < 6; j++) {
+            uint64_t a = values[i] & mask, b = values[j] & mask, expected = 0;
+            switch (op) {
+            case 0: expected = a & b; break;
+            case 1: expected = a & ~b; break;
+            case 2: expected = a | b; break;
+            case 3: expected = ~(a ^ b) & mask; break;
+            case 4: expected = a ^ b; break;
+            case 5: expected = ~a & mask; break;
+            case 6: expected = ((a & b) == 0 ? 64 : 0) | ((a & ~b) == 0 ? 1 : 0); break;
+            case 7: expected = ((a | b) == 0 ? 64 : 0) | ((a | b) == mask ? 1 : 0); break;
+            }
+            uint64_t actual = fn(values[i], values[j]);
+            if (actual != expected) {
+                fprintf(stderr, "%s a=%llx b=%llx got=%llx want=%llx\n", name,
+                    (unsigned long long)values[i], (unsigned long long)values[j],
+                    (unsigned long long)actual, (unsigned long long)expected);
+                return 1;
+            }
+        }
+    }
+    return 0;
+}
+int main(void) {
+` + checks.String() + "return 0;\n}\n"
+	triple := testTargetTriple(runtime.GOOS, runtime.GOARCH)
+	for _, api := range []string{"text", "module", "Go"} {
+		t.Run(api, func(t *testing.T) {
+			ir, err := x86ScalarFPBitViewAPI(t, source, declarations, "amd64", triple, api)
+			if err != nil {
+				t.Fatal("complete mask value/status program rejected", api, err)
+			}
+			for _, text := range []string{ir, x86DwordProductIROptimize(t, ir)} {
+				for _, level := range []int{0, 2} {
+					compileAndRunRuntimeTestWithCompiler(t, llc, []string{clang}, "mask-logical", triple, text, oracle, nil, level)
 				}
 			}
 		})
