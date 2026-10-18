@@ -81,7 +81,11 @@ func TestX86RawByteShiftLiteralEverySelectorAndExtent(t *testing.T) {
 				if err != nil || len(decoded) != 2 {
 					t.Fatal("complete physical literal failed to decode", left, width, count, err)
 				}
-				ins := decoded[0]
+				file, err := normalizeX86RawFile(mustParseX86RawReturn(t, x86RawByteShiftLiteralSource("Shift", code)), "amd64")
+				if err != nil || len(file.Funcs[0].Instrs) != 2 {
+					t.Fatal("literal lost its complete source replay", left, width, count, err)
+				}
+				ins := file.Funcs[0].Instrs[0]
 				form, known, err := x86PackedShiftProperties(ins.Op, ins, "amd64")
 				if !known || err != nil || form.memoryBytes != width || form.countOperand.Imm != int64(count) ||
 					form.countMode != x86PackedShiftBytes || form.left != left || !x86RawByteShiftLiteralForm(ins, "amd64") ||
