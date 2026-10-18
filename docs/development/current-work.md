@@ -22,6 +22,8 @@ idle worktrees; do not create another for routine work.
 
 | Code snapshot | Completed evidence | Limits |
 |---|---|---|
+| `1d4e3ef70` | Wrapping-add format contracts: 9 roots / 1,124 children pass current Go, actual Go1.20 and race; identical 1,133 terminals, zero fail/skip/incomplete and unchanged source/SDK/LLVM22 seals | Retains original unbound Go/emitter objects and public Context, with separate initialized arithmetic/native-read/MMX controls |
+| Same snapshot | All eleven final gates pass, including both-SDK build/vet and 23 scanner roots, five-arch classification, CLI extraction and 132 CI policies | Test-only repair; not complete CI or native execution |
 | `0c86e86ef` | Complete five-member SAD input family: 29 roots / 637 children pass current Go, actual Go1.20 and race; identical 666 terminals, zero fail/skip/incomplete and unchanged source/SDK/LLVM22 seals | Includes original static-SB failures, all 256 selectors, independent encoder attributes, WIG decoding and five-target three-API O0/O2 objects; not native x86 execution |
 | Same snapshot | All eleven final gates pass: both-SDK build/vet and 23 scanner roots, five-arch classification, five CLI extraction roots, 132 CI policies and formatting | Eight-SDK audit changes only 24 isolated AMD64 SAD forms per SDK to Context; 386 and encoding/unsupported metadata remain unchanged |
 | `e809b3271` | Complete 32-member named/raw K-mask logical family: 27 roots / 892 children pass current Go, actual Go1.20 and race; identical 919 terminals, zero fail/skip/incomplete and unchanged source/SDK/LLVM22 seals | Includes portable values/six FLAGS, five-target three-API objects and live private-stack/DF/ID guards; not native AVX512 execution |
@@ -63,20 +65,20 @@ See earlier checkpoints in Git rather than reconstructing counts by subtraction.
 
 ## Exact failure replay and online CI
 
-The latest local diagnostic at `c11c2130d` selects exactly the original CI's
+The latest local diagnostic at `1d4e3ef70` selects exactly the original CI's
 167 failed root names. One sealed Go test process ran the complete set in
-85.634 seconds, instead of repeatedly linking the same large test executable.
+107.398 seconds, instead of repeatedly linking the same large test executable.
 All inventories, started/terminal identities and before/after source, SDK, LLVM
 and environment observations match. This is not the canonical isolated CI runner.
 
 | Observation | Pass | Fail | Explicit host skip | Absent / incomplete |
 |---|---:|---:|---:|---:|
 | Previous isolated replay, `c4c01538c` | 25 | 53 | 89 | 0 / 0 |
-| Latest batched replay, `c11c2130d` | 30 | 48 | 89 | 0 / 0 |
+| Previous batched replay, `c11c2130d` | 30 | 48 | 89 | 0 / 0 |
+| Latest batched replay, `1d4e3ef70` | 33 | 45 | 89 | 0 / 0 |
 
-The five newly passing originals are the compare AF contract, complete scalar
-compare objects, two block-extraction masked-store owners and the source-label
-collision. No root passes with skipped children. Host skips remain unexecuted
+The three newly passing originals are both static-SB SAD owners and the
+complete wrapping-add format owner. No root passes with skipped children. Host skips remain unexecuted
 native requirements, never successes. Different local scheduling is disclosed;
 canonical all-platform qualification is still required.
 
@@ -108,13 +110,12 @@ before changing implementation or claiming a speedup. Do not relax budgets.
 
 ## Immediate work
 
-1. Finish validation of the separate wrapping-add format repair at `1d4e3ef70`.
-   Its only difference from the qualified SAD source is the original unbound
-   format test. Preserve all original Go/emitter objects and public Context;
-   initialized arithmetic/native-read/MMX programs retain separate coverage.
-   Then replay the exact 167-root queue; do not subtract focused SAD passes
-   from the historical failed replay without rerunning it.
-2. Repair the latest 48 local failure classes: scalar SQRT input/effects;
+1. Finish the complete named SQRT family. RED `3dca6099b` retains four failing
+   roots / 236 children: missing-input rejection, initialized five-target objects,
+   dead-result MXCSR effects and the original ABI0 indirect-field fixture.
+   Independent Go encoder rows are retained at `8496d612c`; production changes
+   require fresh checks, including logical-address and native-memory negatives.
+2. Repair the latest 45 local failure classes: scalar SQRT input/effects;
    raw FP16/VMOVW native-read composition; raw literal and unbound-format
    contracts; MMX closure; hardware enqueue/random/mask status; custom ABI,
    source-stack and runtime386 `cpuidProbe` entry. Use the actual diagnostic,
@@ -133,6 +134,11 @@ including docs, throughout a run. One heavy local Go/LLVM owner at a time;
 develop in an existing idle worktree. Commit and preserve RED before repair.
 
 Resolve worktree locations with `git worktree list`. Ignored receipts include:
+
+- `wrapping-add-format-qualified-1d4e3ef7.json`,
+  `wrapping-add-final-gates-1d4e3ef7/`: complete three-lane and final gates.
+- `latest-failure-batch-1d4e3ef7-{summary.json,raw.jsonl,before.json,after.json}`:
+  exact 167-root replay; all original root identities and source/tool seals match.
 
 - `sad-qualified-0c86e86e.json`, `sad-final-gates-0c86e86e/` and
   `sad-classification-audit/`: complete three-lane/final gates and eight-SDK
