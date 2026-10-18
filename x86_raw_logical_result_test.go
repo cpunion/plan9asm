@@ -181,3 +181,59 @@ func TestX86RawLogicalLiteralKeepsIndependentInputsAndSource(t *testing.T) {
 		}
 	}
 }
+
+func TestX86RawLogicalLiteralUsesExactTypedByteEffects(t *testing.T) {
+	for _, row := range x86RawLogicalResultCases() {
+		file, err := normalizeX86RawFile(mustParseX86RawReturn(t, x86RawLogicalResultSource(row)), "amd64")
+		if err != nil {
+			t.Fatal(row.name, err)
+		}
+		for _, instruction := range file.Funcs[0].Instrs {
+			if !instruction.x86RIPLiteral {
+				continue
+			}
+			form, known, err := x86PackedLogicalProperties(instruction, "amd64")
+			if !known || err != nil || !x86RawLogicalLiteralForm(instruction, "amd64") ||
+				x86RawLogicalLiteralForm(instruction, "386") {
+				t.Fatal("literal lost its typed mode64 tuple", row.name, err)
+			}
+			address, valid := x86StaticSBReadAddress(form.source, "amd64")
+			if !valid {
+				t.Fatal("literal has no static DATA identity", row.name)
+			}
+			second, _ := amd64VectorRegisterIndex(instruction.Args[form.second].Reg, form.byteWidth)
+			destination, _ := amd64VectorRegisterIndex(instruction.Args[form.destination].Reg, form.byteWidth)
+			wantDestination := 0
+			if !strings.HasPrefix(row.name, "VP") {
+				wantDestination = 1
+				if strings.Contains(row.name, "EVEX") {
+					wantDestination = 2
+				}
+			}
+			if destination != wantDestination {
+				t.Fatal("independent bytes changed the physical destination", row.name, destination)
+			}
+			for missing := -1; missing < form.byteWidth; missing++ {
+				state := x86ResultState{flags: 0x3f,
+					loweredStaticReads: map[x86StaticSBAddress]int64{address: int64(form.memoryBytes)}}
+				state.masks[3], state.masks[7] = true, true
+				for index := range state.xmm {
+					state.writeVector(index, 64, ^uint64(0), false)
+				}
+				want := ^uint64(0)
+				if missing >= 0 {
+					want &^= uint64(1) << uint(missing)
+					state.writeVector(second, 64, want, false)
+				}
+				if !x86ScalarFPLogicalTransfer(instruction, form, &state, nil, "amd64") ||
+					state.vectorBytes(destination) != want || state.flags != 0x3f {
+					t.Fatal("literal invented a source byte or changed FLAGS", row.name, missing)
+				}
+				state.loweredStaticReads[address]--
+				if x86ScalarFPLogicalTransfer(instruction, form, &state, nil, "amd64") {
+					t.Fatal("literal accepted a shortened full/broadcast tuple", row.name)
+				}
+			}
+		}
+	}
+}
