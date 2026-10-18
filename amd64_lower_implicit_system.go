@@ -2,6 +2,7 @@ package plan9asm
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 )
 
@@ -123,17 +124,40 @@ func x86TypedWaitPackageByteEffect(op Op, ins Instr, arch string) (x86TypedByteE
 	if err != nil {
 		return x86TypedByteEffect{}, true, err
 	}
-	if !x86ResultNamedPredicateInstruction(ins) {
-		return x86TypedByteEffect{}, true, fmt.Errorf("%w: WAITPKG requires its original named numerical source", ErrProbeNeedsContext)
+	if !x86WaitPackagePreservesStorage(ins) {
+		return x86TypedByteEffect{}, true, fmt.Errorf("%w: WAITPKG original/normalized numerical source differs", ErrProbeNeedsContext)
 	}
-	return x86TypedByteEffect{
+	effect := x86TypedByteEffect{
 		operands: []x86TypedByteOperand{
 			{index: 0, operand: Operand{Kind: OpReg, Reg: form.register}, width: 4, read: true},
-			{index: -1, operand: Operand{Kind: OpReg, Reg: AX}, width: 4, read: true},
-			{index: -1, operand: Operand{Kind: OpReg, Reg: DX}, width: 4, read: true},
 		},
 		flagsDefined: x86ByteFlagsAll, flagsKilled: x86ByteFlagsAll, requiresResultProof: true,
-	}, true, nil
+	}
+	for index, register := range []Reg{AX, CX, DX} {
+		if spec.inputs&(1<<uint(index)) != 0 {
+			effect.operands = append(effect.operands, x86TypedByteOperand{
+				index: -1, operand: Operand{Kind: OpReg, Reg: register}, width: 4, read: true,
+			})
+		}
+	}
+	return effect, true, nil
+}
+
+// The physical decoder retains WAITPKG's register-only identity. Unlike the
+// address-bearing UMONITOR sibling, these two operations preserve GP/DF and
+// private storage; FLAGS are independently replaced by the effect above.
+func x86WaitPackagePreservesStorage(ins Instr) bool {
+	spec, known := amd64ImplicitSystemSpecs[Op(strings.ToUpper(string(ins.Op)))]
+	if !known || !spec.writesCarry || len(ins.Args) != 1 ||
+		ins.Args[0] != (Operand{Kind: OpReg, Reg: ins.Args[0].Reg}) ||
+		!isX86YrlRegisterForArch(ins.Args[0].Reg, "amd64") ||
+		ins.x86RawNearReturn != nil || ins.x86AddressBits != 0 ||
+		ins.x86UnboundAddressOverride || ins.x86SegmentPrefix != 0 {
+		return false
+	}
+	origin := ins.x86SourceRaw
+	return origin == nil && !ins.x86Encoded || origin != nil &&
+		strings.EqualFold(string(origin.op), string(ins.Op)) && reflect.DeepEqual(origin.args, ins.Args)
 }
 
 func (c *amd64Ctx) emitImplicitSystem(op string, spec amd64ImplicitSystemSpec, form amd64ImplicitSystemForm) (bool, bool, error) {

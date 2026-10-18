@@ -69,6 +69,9 @@ func x86ResultCallerAddressesAfter(ins Instr, before [16]bool, entryFP map[int64
 	if x86NOPPreservesSourceState(ins) {
 		return before
 	}
+	if x86WaitPackagePreservesStorage(ins) {
+		return before // No GP overwrite; this supplies no new address or memory fact.
+	}
 	if effect, known, err := x86TypedRegisterQueryByteEffect(ins.Op, ins, arch); known && err == nil {
 		for _, output := range effect.operands {
 			if index, _, valid := x86ResultGP(output.operand.Reg, output.width, arch); valid && output.write {
