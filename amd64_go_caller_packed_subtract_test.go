@@ -74,6 +74,10 @@ func TestX86GoCallerPackedSubtractCompleteOriginalTypedConsumers(t *testing.T) {
 }
 
 func TestX86PackedSubtractMaskedLoadsRetainActiveLaneEffects(t *testing.T) {
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM 22 llc required")
+	}
 	for _, opcode := range []string{
 		"VPSUBB", "VPSUBW", "VPSUBD", "VPSUBQ",
 		"VPSUBSB", "VPSUBSW", "VPSUBUSB", "VPSUBUSW",
@@ -86,21 +90,11 @@ func TestX86PackedSubtractMaskedLoadsRetainActiveLaneEffects(t *testing.T) {
 				row := fmt.Sprintf("%s%s (AX),%s1,K1,%s2", opcode, suffix, bank, bank)
 				t.Run(row, func(t *testing.T) {
 					assembly := "TEXT maskedsubtract(SB),4,$0-0\n" + row + "\nRET\n"
-					requireX86GoAssemblerResult(t, "amd64", assembly, true)
-					file, err := Parse(ArchAMD64, assembly)
-					if err != nil {
-						t.Fatal(err)
-					}
-					ir, err := Translate(file, Options{
-						Goarch: "amd64", TargetTriple: "x86_64-unknown-linux-gnu",
-						Sigs: map[string]FuncSig{"maskedsubtract": {Name: "maskedsubtract", Ret: Void}},
-					})
-					if err != nil {
-						t.Fatal(err)
-					}
+					ir := x86UnboundVoidScalarFormatObject(t, assembly, "maskedsubtract", "amd64", "x86_64-unknown-linux-gnu")
 					if !strings.Contains(ir, "load volatile") || !strings.Contains(ir, "br i1") {
 						t.Fatal("masked source needs conditional volatile active-lane reads, not an unconditional vector load")
 					}
+					compileLLVMToObject(t, llc, "x86_64-unknown-linux-gnu", "masked-subtract.ll", "masked-subtract.o", ir)
 				})
 			}
 		}

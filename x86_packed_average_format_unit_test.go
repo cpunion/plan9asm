@@ -95,7 +95,7 @@ func x86InstructionFormatObjectUnit(t *testing.T, file *File, signatures map[str
 	if fileUsesX86NonTemporalMetadata(file) {
 		ir.WriteString("!0 = !{i32 1}\n\n")
 	}
-	t.Logf("all %d original instruction format rows in emitter-only objects; no public or runtime success claim", emitted)
+	t.Logf("all %d original instruction format rows emitted as IR; object compilation belongs to the caller, no public or runtime success claim", emitted)
 	return ir.String()
 }
 

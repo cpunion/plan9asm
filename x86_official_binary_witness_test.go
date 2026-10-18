@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"runtime"
 	"sort"
@@ -9,6 +10,21 @@ import (
 
 	"github.com/xgo-dev/plan9asm/internal/goasmrules"
 )
+
+// Official syntax witnesses have no entry inputs. Probe classification may
+// therefore require context; actual lowering remains mandatory independently
+// of that classification. This does not certify a public or runtime entry.
+func x86OfficialBinaryWitnessLowerer(t *testing.T, file *File, arch string) {
+	t.Helper()
+	if err := ProbeInstruction(ArchAMD64, arch, file.Funcs[0].Instrs[1]); err != nil && !errors.Is(err, ErrProbeNeedsContext) {
+		t.Fatalf("actual Go-accepted table witness failed instruction classification: %v", err)
+	}
+	triple := "x86_64-unknown-linux-gnu"
+	if arch == "386" {
+		triple = "i386-unknown-linux-gnu"
+	}
+	x86ScalarFormatObjectUnit(t, file, map[string]FuncSig{"f": {Name: "f", Ret: Void}}, arch, triple, 0)
+}
 
 func x86OfficialPackedBinaryWitnesses(t *testing.T) map[string][]string {
 	t.Helper()
@@ -102,9 +118,7 @@ func TestX86OfficialWordMultiplyWitnessesReachActualLowerer(t *testing.T) {
 					if err != nil {
 						t.Fatal(err)
 					}
-					if err := ProbeInstruction(ArchAMD64, arch, file.Funcs[0].Instrs[1]); err != nil {
-						t.Fatalf("actual Go-accepted table witness failed real lowering: %v", err)
-					}
+					x86OfficialBinaryWitnessLowerer(t, file, arch)
 				})
 			}
 		}
@@ -147,9 +161,7 @@ func TestX86OfficialPackedBinaryWitnessesReachActualLowerer(t *testing.T) {
 					if err != nil {
 						t.Fatal(err)
 					}
-					if err := ProbeInstruction(ArchAMD64, arch, file.Funcs[0].Instrs[1]); err != nil {
-						t.Fatalf("independent official grammar witness failed actual lowerer: %v", err)
-					}
+					x86OfficialBinaryWitnessLowerer(t, file, arch)
 				})
 			}
 		}

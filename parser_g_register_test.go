@@ -50,14 +50,7 @@ func TestTranslateAMD64GRegisterAcrossTargets(t *testing.T) {
 	requireX86GoAssemblerResult(t, "amd64", source, true)
 	for _, triple := range []string{"x86_64-apple-darwin", "x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc"} {
 		t.Run(triple, func(t *testing.T) {
-			file, err := Parse(ArchAMD64, source)
-			if err != nil {
-				t.Fatal(err)
-			}
-			ir, err := Translate(file, Options{Goarch: "amd64", TargetTriple: triple, Sigs: map[string]FuncSig{"gforms": {Name: "gforms", Ret: Void}}})
-			if err != nil {
-				t.Fatal(err)
-			}
+			ir := x86UnboundVoidScalarFormatObject(t, source, "gforms", "amd64", triple)
 			if strings.Contains(ir, "R28") {
 				t.Fatal("amd64 g used ARM64's R28")
 			}
