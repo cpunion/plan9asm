@@ -2339,8 +2339,10 @@ done:
 				}
 			}
 			for _, missing := range strings.Split(strings.TrimSpace(inputs), "\n") {
-				incomplete := strings.Replace(initialized, missing+"\n", "", 1)
-				x86UnboundVoidFormatSource(t, incomplete, "fuzzops", target.arch, target.triple)
+				t.Run("missing-"+missing, func(t *testing.T) {
+					incomplete := strings.Replace(initialized, missing+"\n", "", 1)
+					x86UnboundVoidFormatSource(t, incomplete, "fuzzops", target.arch, target.triple)
+				})
 			}
 		})
 	}
