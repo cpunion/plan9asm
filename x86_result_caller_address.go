@@ -78,7 +78,7 @@ func x86ResultCallerAddressesAfter(ins Instr, before [16]bool, entryFP map[int64
 				before[index] = false
 			}
 		}
-		return before // Exact named/raw implicit writes; no unrelated GP or FLAGS changes.
+		return before // Exact query GP footprint; FLAGS stay in the independent descriptor.
 	}
 	if ins.x86Encoded || ins.x86SourceRaw != nil || ins.x86RawNearReturn != nil ||
 		ins.x86AddressBits != 0 || ins.x86UnboundAddressOverride || ins.x86SegmentPrefix != 0 {

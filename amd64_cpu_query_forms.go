@@ -59,17 +59,23 @@ func x86TypedRegisterQueryByteEffect(op Op, ins Instr, arch string) (x86TypedByt
 	if effect, known, err := x86TypedCPUQueryByteEffect(op, ins, arch); known {
 		return effect, known, err
 	}
-	return x86TypedTimestampByteEffect(op, ins, arch)
+	if effect, known, err := x86TypedTimestampByteEffect(op, ins, arch); known {
+		return effect, known, err
+	}
+	return x86TypedRTMStatusByteEffect(op, ins, arch)
 }
 
-// CPU queries and timestamps keep FLAGS, DF and the private numerical stack.
-// Their independently checked implicit writes still revoke overwritten GP
-// identities. No other zero-operand opcode inherits this raw-source boundary.
+// Register queries keep DF and the private numerical stack. Their separate
+// descriptors retain all GP and FLAGS writes: an RTM status query, unlike a CPU
+// query or timestamp, replaces FLAGS. Other zero-operand opcodes cannot inherit
+// this exact original/normalized source boundary.
 func x86RegisterQueryPreservesSourceState(ins Instr) bool {
 	name := Op(strings.ToUpper(string(ins.Op)))
 	_, cpu := x86CPUQuerySpecs[name]
 	_, timestamp := x86TimestampSpecs[name]
-	if !cpu && !timestamp || len(ins.Args) != 0 || ins.x86Encoded || ins.x86RawNearReturn != nil ||
+	rtm, transaction := amd64RTMSpecs[name]
+	status := transaction && rtm.kind == amd64RTMTest
+	if !cpu && !timestamp && !status || len(ins.Args) != 0 || ins.x86Encoded || ins.x86RawNearReturn != nil ||
 		ins.x86AddressBits != 0 || ins.x86UnboundAddressOverride || ins.x86SegmentPrefix != 0 {
 		return false
 	}

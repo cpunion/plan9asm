@@ -45,6 +45,14 @@ type amd64RTMForm struct {
 }
 
 func (c *amd64Ctx) lowerRTM(bi int, ii int, op Op, ins Instr, emitCondBr amd64EmitCondBr) (ok bool, terminated bool, err error) {
+	spec, form, known, err := x86RTMProperties(op, ins, c.goarch)
+	if !known || err != nil {
+		return known, false, err
+	}
+	return c.emitRTM(bi, ii, strings.ToUpper(string(op)), spec, form, emitCondBr)
+}
+
+func x86RTMProperties(op Op, ins Instr, arch string) (amd64RTMSpec, amd64RTMForm, bool, error) {
 	rawOp := strings.ToUpper(string(op))
 	baseOp := rawOp
 	if dot := strings.IndexByte(rawOp, '.'); dot >= 0 {
@@ -52,39 +60,56 @@ func (c *amd64Ctx) lowerRTM(bi int, ii int, op Op, ins Instr, emitCondBr amd64Em
 	}
 	spec, recognized := amd64RTMSpecs[Op(baseOp)]
 	if !recognized {
-		return false, false, nil
+		return spec, amd64RTMForm{}, false, nil
 	}
-	if rawOp != baseOp {
-		return true, false, fmt.Errorf("%s %s does not accept instruction suffixes: %q", c.goarch, baseOp, ins.Raw)
+	if rawOp != baseOp || arch != "386" && arch != "amd64" ||
+		ins.Op != "" && !strings.EqualFold(string(ins.Op), rawOp) {
+		return spec, amd64RTMForm{}, true, fmt.Errorf("%s %s has an invalid suffix, mode or dispatch identity: %q", arch, op, ins.Raw)
 	}
-	form, err := c.parseRTMForm(baseOp, spec, ins)
-	if err != nil {
-		return true, false, err
-	}
-	return c.emitRTM(bi, ii, baseOp, spec, form, emitCondBr)
+	form, err := parseX86RTMForm(baseOp, spec, ins, arch)
+	return spec, form, true, err
 }
 
-func (c *amd64Ctx) parseRTMForm(op string, spec amd64RTMSpec, ins Instr) (amd64RTMForm, error) {
+func parseX86RTMForm(op string, spec amd64RTMSpec, ins Instr, arch string) (amd64RTMForm, error) {
 	var form amd64RTMForm
 	switch spec.operand {
 	case amd64RTMNoOperand:
 		if len(ins.Args) != 0 {
-			return form, fmt.Errorf("%s %s takes no operands: %q", c.goarch, op, ins.Raw)
+			return form, fmt.Errorf("%s %s takes no operands: %q", arch, op, ins.Raw)
 		}
 	case amd64RTMBranch:
 		if len(ins.Args) != 1 {
-			return form, fmt.Errorf("%s %s expects one Go 1.27 Ybr target: %q", c.goarch, op, ins.Raw)
+			return form, fmt.Errorf("%s %s expects one Go 1.27 Ybr target: %q", arch, op, ins.Raw)
 		}
 		form.branch = ins.Args[0]
 	case amd64RTMUnsignedByte:
-		if len(ins.Args) != 1 || ins.Args[0].Kind != OpImm || ins.Args[0].Imm < 0 || ins.Args[0].Imm > 255 {
-			return form, fmt.Errorf("%s %s expects one Go 1.27 Yu8 immediate: %q", c.goarch, op, ins.Raw)
+		if len(ins.Args) != 1 || ins.Args[0].Kind != OpImm || ins.Args[0].Imm < 0 || ins.Args[0].Imm > 255 ||
+			ins.Args[0].ImmRaw != "" || ins.Args[0].ImmIsFloat {
+			return form, fmt.Errorf("%s %s expects one Go 1.27 Yu8 integer immediate: %q", arch, op, ins.Raw)
 		}
 		form.immediate = uint8(ins.Args[0].Imm)
 	default:
 		panic("unknown amd64 RTM operand kind")
 	}
 	return form, nil
+}
+
+// Only the query kind is an ordinary numerical effect. Transaction begin,
+// abort and end cannot inherit this straight-line storage/FLAGS continuation.
+func x86TypedRTMStatusByteEffect(op Op, ins Instr, arch string) (x86TypedByteEffect, bool, error) {
+	spec, _, known, err := x86RTMProperties(op, ins, arch)
+	if !known || spec.kind != amd64RTMTest {
+		return x86TypedByteEffect{}, false, nil
+	}
+	if err != nil {
+		return x86TypedByteEffect{}, true, err
+	}
+	if !x86RegisterQueryPreservesSourceState(ins) {
+		return x86TypedByteEffect{}, true, fmt.Errorf("%w: RTM status query original/normalized identity differs", ErrProbeNeedsContext)
+	}
+	// XTEST reads no GP, numerical or incoming FLAGS input. Its hardware
+	// transaction observation defines ZF and clears the other five flags.
+	return x86TypedByteEffect{flagsDefined: x86ByteFlagsAll, flagsKilled: x86ByteFlagsAll}, true, nil
 }
 
 func (c *amd64Ctx) rtmBranchTarget(bi int, ii int, operand Operand) (string, error) {
