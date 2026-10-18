@@ -3,6 +3,7 @@ package plan9asm
 import (
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -103,6 +104,33 @@ func TestX86SqrtInitializedFiveTargetObjects(t *testing.T) {
 				for _, text := range []string{ir, x86DwordProductIROptimize(t, ir)} {
 					for _, level := range []string{"-O0", "-O2"} {
 						x86PackedStringCompileObject(t, llc, target.triple, text, level)
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestX86SqrtDeadResultsRetainMXCSREffects(t *testing.T) {
+	// Default-rounding sqrt can change MXCSR even when its result is dead.
+	// Intel SDM Vol. 2B, SQRTPS/PD/SS/SD; explicit SAE is a distinct form.
+	observable := regexp.MustCompile(`(?m)call[^\n]*(asm sideeffect[^\n]*sqrt|@llvm\.experimental\.constrained\.sqrt)`)
+	for _, opcode := range []string{"SQRTSS", "SQRTSD", "SQRTPS", "SQRTPD", "VSQRTSS", "VSQRTSD", "VSQRTPS", "VSQRTPD"} {
+		instruction := opcode + " X0,X2"
+		if opcode == "VSQRTSS" || opcode == "VSQRTSD" {
+			instruction = opcode + " X0,X1,X2"
+		}
+		source := "TEXT ·Value(SB),4,$0-8\nMOVQ p+0(FP),AX\nVMOVUPS (AX),Z0\nVPXORD Z1,Z1,Z1\n" + instruction + "\nRET\n"
+		t.Run(opcode, func(t *testing.T) {
+			x86LEAActualTargetGoObject(t, "amd64", "x86_64-unknown-linux-gnu", source)
+			for _, api := range []string{"text", "module", "Go"} {
+				ir, err := x86ScalarFPBitViewAPI(t, source, "func Value(p *[64]byte)", "amd64", "x86_64-unknown-linux-gnu", api)
+				if err != nil {
+					t.Fatal("complete native sqrt input rejected", api, err)
+				}
+				for _, text := range []string{ir, x86DwordProductIROptimize(t, ir)} {
+					if !observable.MatchString(text) {
+						t.Fatal("dead sqrt lost its original floating-point environment effects", api)
 					}
 				}
 			}
