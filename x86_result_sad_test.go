@@ -134,6 +134,36 @@ func TestX86SADUnknownVoidInputs(t *testing.T) {
 	}
 }
 
+func TestX86SADSameSourceBlockConstants(t *testing.T) {
+	for _, arch := range []string{"amd64", "386"} {
+		for _, op := range []string{"PSADBW", "VPSADBW"} {
+			for _, bank := range []string{"X", "Y", "Z"} {
+				if op == "PSADBW" && bank != "X" {
+					continue
+				}
+				for source := 0; source < 8; source++ {
+					for destination := 0; destination < 8; destination++ {
+						if op == "PSADBW" && source != destination {
+							continue
+						}
+						instruction := fmt.Sprintf("%s %s%d,%s%d", op, bank, source, bank, source)
+						if op == "VPSADBW" {
+							instruction += fmt.Sprintf(",%s%d", bank, destination)
+						}
+						state := x86ResultState{flags: x86ByteFlagAF}
+						before := state.clone()
+						width := map[string]int{"X": 16, "Y": 32, "Z": 64}[bank]
+						before.writeVector(destination, width, x86CallerVectorByteMask(int64(width)), op == "PSADBW")
+						if !x86ResultTransfer(x86ScalarLaneInstruction(t, instruction), &state, nil, 0, arch) || !reflect.DeepEqual(state, before) {
+							t.Fatal("same-byte absolute differences require no incoming values", arch, instruction)
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
 func TestX86SADInitializedFiveTargetObjects(t *testing.T) {
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
