@@ -17,7 +17,7 @@ func x86LoweredBlockNativeMemory(ins Instr, state *x86ResultState, owned []bool,
 		return false, false
 	}
 	memory := ins.Args[form.memory]
-	if !x86OrdinaryNativeMemoryOperand(memory, arch) {
+	if memory.Kind != OpMem || memory.Mem.Sym != "" || !x86OrdinaryNativeMemoryOperand(memory, arch) {
 		return false, false
 	}
 	address := x86ResultIncomingPointerReadAddressIdentity(memory, state, arch)

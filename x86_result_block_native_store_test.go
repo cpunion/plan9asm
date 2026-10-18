@@ -74,6 +74,22 @@ func TestX86BlockExtractNativeStoreContinuation(t *testing.T) {
 				if x86ResultBlockTransfer(ins, form, &state, nil, 0, arch) {
 					t.Fatal("standalone query acquired native write authority")
 				}
+				for _, mutation := range []string{"physical", "address-size", "segment"} {
+					changed := ins
+					switch mutation {
+					case "physical":
+						changed.x86Encoded = true
+					case "address-size":
+						changed.x86AddressBits = 32
+					case "segment":
+						changed.x86SegmentPrefix = 0x64
+					}
+					state = before.clone()
+					if x86ResultBlockTransferWithNativeMemory(changed, form, &state, nil, 0, arch, true) ||
+						!reflect.DeepEqual(state, before) {
+						t.Fatal("named block store supplied a physical entry or access", mutation)
+					}
+				}
 				for missing := -2; missing < chunk; missing++ {
 					state = before.clone()
 					switch missing {
