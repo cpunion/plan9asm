@@ -235,26 +235,41 @@ func TestX86LegacyLogicalMemoryNativeOpcodeObjects(t *testing.T) {
 }
 
 func TestX86LegacyLogicalMemoryPSRetainsSSE1Carrier(t *testing.T) {
-	llc, objdump := findLLVM22Tool("llc"), findLLVM22Tool("llvm-objdump")
-	if llc == "" || objdump == "" {
-		t.Fatal("LLVM22 llc and objdump required")
-	}
 	var source strings.Builder
 	for _, name := range []string{"ANDPS", "ANDNPS", "ORPS", "XORPS"} {
 		fmt.Fprintf(&source, "TEXT %s(SB),4,$0-0\nMOVUPS (AX),X0\n%s (AX),X0\nMOVUPS X0,(BX)\nRET\n", strings.ToLower(name), name)
 	}
-	x86LEAActualTargetGoObject(t, "386", "i386-unknown-linux-gnu", source.String())
-	file, err := Parse(ArchAMD64, source.String())
-	if err != nil {
-		t.Fatal(err)
+	file, signatures := x86UnboundVoidFormatSources(t, source.String(), "386", "i386-unknown-linux-gnu")
+	ir := x86ScalarFormatObjectUnit(t, file, signatures, "386", "i386-unknown-linux-gnu", 0)
+	x86LegacyLogicalSSE1Objects(t, ir)
+}
+
+func TestX86LegacyLogicalMemoryPSInitializedSSE1Objects(t *testing.T) {
+	var source, declaration strings.Builder
+	for _, name := range []string{"ANDPS", "ANDNPS", "ORPS", "XORPS"} {
+		fn := strings.ToLower(name)
+		fmt.Fprintf(&source, "TEXT %s(SB),4,$0-8\nMOVL p+0(FP),AX\nMOVL out+4(FP),BX\nMOVUPS (AX),X0\n%s (AX),X0\nMOVUPS X0,(BX)\nRET\n", fn, name)
+		fmt.Fprintf(&declaration, "func %s(p,out *byte)\n", fn)
 	}
-	sigs := map[string]FuncSig{}
-	for _, name := range []string{"andps", "andnps", "orps", "xorps"} {
-		sigs[name] = FuncSig{Name: name, Ret: Void}
+	for _, triple := range []string{"i386-unknown-linux-gnu", "i686-pc-windows-msvc"} {
+		x86LEAActualTargetGoObject(t, "386", triple, source.String())
+		for _, api := range []string{"text", "module", "Go"} {
+			t.Run(triple+"/"+api, func(t *testing.T) {
+				ir, err := x86ScalarFPBitViewAPI(t, source.String(), declaration.String(), "386", triple, api)
+				if err != nil {
+					t.Fatal("initialized SSE1 native-memory program", err)
+				}
+				x86LegacyLogicalSSE1Objects(t, ir)
+			})
+		}
 	}
-	ir, err := Translate(file, Options{Goarch: "386", TargetTriple: "i386-unknown-linux-gnu", Sigs: sigs})
-	if err != nil {
-		t.Fatal(err)
+}
+
+func x86LegacyLogicalSSE1Objects(t *testing.T, ir string) {
+	t.Helper()
+	llc, objdump := findLLVM22Tool("llc"), findLLVM22Tool("llvm-objdump")
+	if llc == "" || objdump == "" {
+		t.Fatal("LLVM22 llc and objdump required")
 	}
 	if !strings.Contains(ir, "call <4 x float> asm sideeffect") || strings.Contains(ir, "+sse2") {
 		t.Fatal("PS native carrier silently requires SSE2")
