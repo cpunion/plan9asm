@@ -11,8 +11,6 @@ import (
 	"strconv"
 	"strings"
 	"testing"
-
-	"github.com/xgo-dev/llvm"
 )
 
 func x86WordMaddFormats(arch string) []string {
@@ -93,11 +91,12 @@ func TestX86WordMultiplyAddCompleteFormsFiveTargetsTextModuleAndO2(t *testing.T)
 		if strings.HasPrefix(triple, "i") {
 			arch = "386"
 		}
-		var source strings.Builder
+		var source, declarations strings.Builder
 		sigs := map[string]FuncSig{}
 		for i, row := range x86WordMaddFormats(arch) {
 			name := fmt.Sprintf("wordmadd%d", i)
 			fmt.Fprintf(&source, "TEXT %s(SB),4,$0-64\n%s\nRET\n", name, row)
+			fmt.Fprintf(&declarations, "func %s(source [64]byte)\n", name)
 			sig := x86WordMaddFPType(t)
 			sig.Name = name
 			sigs[name] = sig
@@ -108,23 +107,25 @@ func TestX86WordMultiplyAddCompleteFormsFiveTargetsTextModuleAndO2(t *testing.T)
 			t.Fatal(err)
 		}
 		t.Run(triple, func(t *testing.T) {
-			opt := Options{Goarch: arch, TargetTriple: triple, Sigs: sigs}
-			ir, err := Translate(file, opt)
-			if err != nil {
-				t.Fatal(err)
+			// An FP parameter supplies only its actual bytes. It cannot supply
+			// untouched vectors, an address, a mask or a closed MMX region.
+			for _, api := range []string{"text", "module", "Go"} {
+				ir, err := x86ScalarFPBitViewAPI(t, source.String(), declarations.String(), arch, triple, api)
+				if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+					t.Fatal("original format source acquired missing inputs or physical state", api, err)
+				}
 			}
-			compileLLVMToObject(t, llc, triple, "madd-text.ll", "madd-text.o", ir)
-			ctx := llvm.NewContext()
-			defer ctx.Dispose()
-			module, err := TranslateModuleInContext(ctx, file, opt)
-			if !module.IsNil() {
-				defer module.Dispose()
+			before := fmt.Sprintf("%#v %#v", file, sigs)
+			ir := x86ScalarFormatObjectUnit(t, file, sigs, arch, triple, 0)
+			for _, text := range []string{ir, x86DwordProductIROptimize(t, ir)} {
+				for _, level := range []string{"-O0", "-O2"} {
+					x86PackedStringCompileObject(t, llc, triple, text, level)
+				}
 			}
-			if err != nil {
-				t.Fatal(err)
+			if before != fmt.Sprintf("%#v %#v", file, sigs) {
+				t.Fatal("format object emitter mutated original source or signatures")
 			}
-			compileLLVMToObject(t, llc, triple, "madd-module.ll", "madd-module.o", module.String())
-			compileLLVMToObject(t, llc, triple, "madd-opt.ll", "madd-opt.o", x86MulDivRoundOptimize(t, ir))
+			t.Log("original rows retain Go objects, three public Context checks and emitter-only objects; initialized caller/MMX owners are separate")
 		})
 	}
 }

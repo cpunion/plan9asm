@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"strings"
 	"testing"
-
-	"github.com/xgo-dev/llvm"
 )
 
 func TestX86ImmediateShuffleOfficialRowsThreeAPIsFiveTargets(t *testing.T) {
@@ -65,53 +63,25 @@ func TestX86ImmediateShuffleOfficialRowsThreeAPIsFiveTargets(t *testing.T) {
 			if len(selected) != want {
 				t.Fatal("official row/operand variation denominator changed", len(selected), want)
 			}
-			var source, declarations strings.Builder
-			declarations.WriteString("package shuffle\n")
-			sigs := map[string]FuncSig{}
+			var source strings.Builder
 			for index, row := range selected {
 				name := fmt.Sprintf("F%d", index)
 				fmt.Fprintf(&source, "TEXT ·%s(SB),4,$0-0\n%s\nRET\n", name, row)
-				fmt.Fprintf(&declarations, "func %s()\n", name)
-				sigs[name] = FuncSig{Name: name, Ret: Void}
 			}
-			goAssemblerOracleOutput(t, target.arch, source.String(), "", true)
-			file, err := Parse(ArchAMD64, source.String())
-			if err != nil {
-				t.Fatal(err)
-			}
-			resolve := func(symbol string) string { return strings.TrimPrefix(symbol, "·") }
-			options := Options{Goarch: target.arch, TargetTriple: target.triple, Sigs: sigs, ResolveSym: resolve}
+			// Preserve every original uninitialized row, including the unclosed
+			// MMX sources. Syntax objects cannot supply numerical or x87 state.
+			file, sigs := x86UnboundVoidFormatSources(t, source.String(), target.arch, target.triple)
 			before := fmt.Sprintf("%#v %#v", file, sigs)
-			ir, err := Translate(file, options)
-			if err != nil {
-				t.Fatal(err)
+			ir := x86ScalarFormatObjectUnit(t, file, sigs, target.arch, target.triple, 0)
+			for _, text := range []string{ir, x86DwordProductIROptimize(t, ir)} {
+				for _, level := range []string{"-O0", "-O2"} {
+					x86PackedStringCompileObject(t, llc, target.triple, text, level)
+				}
 			}
-			compileLLVMToObject(t, llc, target.triple, "shuffle-text.ll", "shuffle-text.o", ir)
-			ctx := llvm.NewContext()
-			defer ctx.Dispose()
-			module, err := TranslateModuleInContext(ctx, file, options)
-			if !module.IsNil() {
-				defer module.Dispose()
-			}
-			if err != nil {
-				t.Fatal(err)
-			}
-			compileLLVMToObject(t, llc, target.triple, "shuffle-module.ll", "shuffle-module.o", module.String())
-			pkg := mustGoPackage(t, "example.invalid/shuffle", declarations.String())
-			translated, err := translateGoModuleInContext(ctx, pkg, []byte(source.String()), GoModuleOptions{
-				GOARCH: target.arch, TargetTriple: target.triple, ResolveSym: resolve,
-			})
-			if translated != nil && !translated.Module.IsNil() {
-				defer translated.Module.Dispose()
-			}
-			if err != nil {
-				t.Fatal(err)
-			}
-			compileLLVMToObject(t, llc, target.triple, "shuffle-go.ll", "shuffle-go.o", translated.Module.String())
 			if before != fmt.Sprintf("%#v %#v", file, sigs) {
 				t.Fatal("object verification mutated original input or signatures")
 			}
-			t.Logf("%d original Go forms, three APIs and LLVM22 objects; not a caller/runtime certificate", len(selected))
+			t.Logf("%d original Go forms, three public Context checks and emitter-only LLVM22 objects; initialized caller/MMX owners are separate", len(selected))
 		})
 	}
 }
