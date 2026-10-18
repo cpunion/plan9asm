@@ -102,3 +102,33 @@ func TestX86EndBranchEffectsRequireExactSource(t *testing.T) {
 		}
 	}
 }
+
+func TestX86EndBranchOriginalRuntimeObjects(t *testing.T) {
+	format := x86X87FunctionLiteral(t, "amd64_raw_endbranch_test.go", "TestX86RawEndBranchRuntimePreservesState", "source")
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM 22 llc required")
+	}
+	for _, target := range x86RawReturnTargets {
+		if target.arch != "amd64" {
+			continue // The unchanged runtime program uses a 64-bit pointer declaration.
+		}
+		for _, last := range []byte{0xfa, 0xfb} {
+			t.Run(fmt.Sprintf("%s/%x", target.triple, last), func(t *testing.T) {
+				source := fmt.Sprintf(format, last)
+				x86LEAActualTargetGoObject(t, target.arch, target.triple, "#include \"textflag.h\"\n"+source)
+				for _, api := range []string{"text", "module", "Go"} {
+					ir, err := x86ScalarFPBitViewAPI(t, source, "func endbranchstate(out *byte)", target.arch, target.triple, api)
+					if err != nil {
+						t.Fatal("unchanged original GP/FLAGS ENDBR program", api, err)
+					}
+					for _, text := range []string{ir, x86DwordProductIROptimize(t, ir)} {
+						for _, level := range []string{"-O0", "-O2"} {
+							x86PackedStringCompileObject(t, llc, target.triple, text, level)
+						}
+					}
+				}
+			})
+		}
+	}
+}
