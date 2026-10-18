@@ -103,8 +103,12 @@ func amd64SDKTypedArgumentsWholeSource(t *testing.T, member string, apis ...stri
 		t.Run(api, func(t *testing.T) {
 			ir, err := amd64SDKArgumentTranslate(t, api, pkg, file, bound)
 			if member == "equal_amd64.s" {
-				if ir != "" || !errors.Is(err, ErrProbeNeedsContext) || !strings.Contains(strings.ReplaceAll(err.Error(), " ", ""), "8(DX)") {
-					t.Fatal("whole equal source must retain its separate hidden closure extent Context", err)
+				// The complete source also has a custom tail-entry obligation;
+				// either may reject before the unbound 8(DX) closure read.
+				// The declared-byte consumer matrix independently checks that
+				// exact hidden read. Neither rejection is whole-file success.
+				if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+					t.Fatal("whole equal source acquired an unproved entry or closure contract", err)
 				}
 				t.Log("complete original equal source remains Context (NOT file pass):", err)
 				return
