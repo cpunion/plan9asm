@@ -24,8 +24,9 @@ type x86SourceStackProof struct {
 // Bind raw stack producer identity before consulting Go's named PUSH/POP
 // deltasp rules. Edited normalized instructions cannot borrow that origin.
 type x86SourceRawInstruction struct {
-	op   Op
-	args []Operand
+	op          Op
+	args        []Operand
+	vectorBytes int
 }
 
 type x86SourceStackAddress struct {

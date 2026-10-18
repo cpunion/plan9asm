@@ -89,6 +89,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		if _, valid := x86RawVMOVWResultForm(ins, arch); valid {
 			continue // Exact GP/X/m16 effects share no raw entry or native frame permission.
 		}
+		if _, valid := x86RawFP16ConversionSourceForm(ins, arch); valid {
+			continue // Exact conversion identity retains independent input and mask obligations.
+		}
 		if _, valid := x86EnqueueSourceForm(ins, arch); valid {
 			continue // Exact device submission retains its own two-address native effect.
 		}
@@ -136,6 +139,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		state.loweredStaticReads = c.fpScalarData
 		defer func() { state.loweredStaticReads = nil }()
 		if accepted, known := x86LoweredRawVMOVWResultStep(ins, state, owned, resultOffset, arch); known {
+			return accepted
+		}
+		if accepted, known := x86LoweredFP16ConversionStep(ins, state, owned, arch); known {
 			return accepted
 		}
 		if accepted, known := x86LoweredEnqueueResultStep(ins, state, arch); known {

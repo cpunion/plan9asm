@@ -421,8 +421,9 @@ func decodeX86RawDirectives(fn Func, goarch string) (Func, error) {
 		}
 		for index := range decoded {
 			decoded[index].x86SourceRaw = &x86SourceRawInstruction{
-				op:   decoded[index].Op,
-				args: append([]Operand(nil), decoded[index].Args...),
+				op:          decoded[index].Op,
+				args:        append([]Operand(nil), decoded[index].Args...),
+				vectorBytes: decoded[index].x86VectorBytes,
 			}
 		}
 		normalized = append(normalized, decoded...)
