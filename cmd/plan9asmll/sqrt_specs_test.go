@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -26,7 +27,15 @@ func TestExtractSupportedOpsFindsCompleteSqrtSpec(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if len(supported) != len(wanted) {
+		// Every extraction also includes generic assembler directives. Count
+		// the complete family independently, then check each expected member.
+		family := 0
+		for opcode := range supported {
+			if strings.HasPrefix(opcode, "SQRT") || strings.HasPrefix(opcode, "VSQRT") {
+				family++
+			}
+		}
+		if family != len(wanted) {
 			t.Fatalf("%s complete sqrt-map extraction differs: %v", arch, supported)
 		}
 		for _, opcode := range wanted {
