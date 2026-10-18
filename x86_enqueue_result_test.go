@@ -3,9 +3,55 @@ package plan9asm
 import (
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
+
+func TestX86EnqueueCompletePhysicalRegisterAddressFamily(t *testing.T) {
+	table, err := os.ReadFile(filepath.Join(runtime.GOROOT(), "src/cmd/internal/obj/x86/asm6.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(table), "{AENQCMD") {
+		t.Fatal("Go acquired an enqueue spelling; bind its full encoder rows before changing the oracle")
+	}
+	registers := []Reg{AX, CX, DX, BX, SP, BP, SI, DI, "R8", "R9", "R10", "R11", "R12", "R13", "R14", "R15"}
+	for _, mode := range []int{32, 64} {
+		count := 8
+		if mode == 64 {
+			count = 16
+		}
+		for _, prefix := range []byte{0xf2, 0xf3} {
+			for destination := 0; destination < count; destination++ {
+				for base := 0; base < count; base++ {
+					code := []byte{prefix}
+					if mode == 64 {
+						// W is ignored. Independently cover every R/B register bit.
+						code = append(code, 0x48|byte(destination/8)<<2|byte(base/8))
+					}
+					code = append(code, 0x0f, 0x38, 0xf8, 0x40|byte(destination%8)<<3|byte(base%8))
+					if base%8 == 4 {
+						code = append(code, 0x24) // Required SIB: no index, SP/R12 base.
+					}
+					code = append(code, 0x80) // Signed disp8 avoids the RIP/no-base encoding.
+					ins, length, known, err := decodedX86EnqueueInstruction(code, mode)
+					want := Op("ENQCMD")
+					if prefix == 0xf3 {
+						want = "ENQCMDS"
+					}
+					if err != nil || !known || length != len(code) || ins.Op != want || ins.x86AddressBits != mode ||
+						len(ins.Args) != 2 || ins.Args[0].Kind != OpMem || ins.Args[0].Mem.Base != registers[base] ||
+						ins.Args[0].Mem.Off != -128 || ins.Args[0].Mem.Index != "" || ins.Args[1].Reg != registers[destination] {
+						t.Fatalf("complete enqueue register/address form %x in mode %d: %#v / %v", code, mode, ins, err)
+					}
+				}
+			}
+		}
+	}
+}
 
 // Intel's complete family is F2/F3 0F 38 F8 /r, m512 and an address-size
 // GP operand. Go has no mnemonic row: the independent Go witnesses use BYTE.
