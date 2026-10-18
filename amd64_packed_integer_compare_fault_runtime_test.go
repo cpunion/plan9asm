@@ -226,9 +226,10 @@ static int compare(void (*original)(const uint8_t*,uint64_t),
 `
 
 func TestX86PackedIntegerCompareFaultStatusRejectsSymmetricUnexpectedExit(t *testing.T) {
-	llc, clang, triple, prefix := x86FloatAddSubRuntimeTools(t)
+	execution := x86ScalarCountHostExecution(t)
 	// The child observations are real, but these deliberately raised signals
 	// test the oracle's status domain, not a memory fault or native opcode.
+	// Run on the actual host; this C-only control has no x86 ISA requirement.
 	program := `#include <stdint.h>
 #include <stdio.h>
 #include <signal.h>
@@ -259,12 +260,12 @@ int main(void) {
     return compare(complete,complete,0,0,0);
 }
 `
-	ir := "target triple = \"" + triple + "\"\ndefine void @status_tripwire_object() { ret void }\n"
-	compileAndRunRuntimeTestForTarget(t, llc, clang, "packed-compare-status-tripwire", triple, ir, program, prefix)
+	ir := "target triple = \"" + execution.triple + "\"\ndefine void @status_tripwire_object() { ret void }\n"
+	execution.compileAndRunLLVM(t, "packed-compare-status-tripwire", ir, program, "-O2")
 }
 
 func TestX86PackedIntegerCompareFaultStatusRequiresSuccessfulReadableControl(t *testing.T) {
-	llc, clang, triple, prefix := x86FloatAddSubRuntimeTools(t)
+	execution := x86ScalarCountHostExecution(t)
 	// Deliberately raised memory signals are classification tripwires. They do
 	// not replace the independently mapped native-width fixtures above.
 	program := `#include <stdint.h>
@@ -289,8 +290,8 @@ int main(void) {
     return compare(complete,complete,0,0,0);
 }
 `
-	ir := "target triple = \"" + triple + "\"\ndefine void @readable_tripwire_object() { ret void }\n"
-	compileAndRunRuntimeTestForTarget(t, llc, clang, "packed-compare-readable-tripwire", triple, ir, program, prefix)
+	ir := "target triple = \"" + execution.triple + "\"\ndefine void @readable_tripwire_object() { ret void }\n"
+	execution.compileAndRunLLVM(t, "packed-compare-readable-tripwire", ir, program, "-O2")
 }
 
 func TestX86PackedIntegerCompareFaultExpectedAccessMatrix(t *testing.T) {
