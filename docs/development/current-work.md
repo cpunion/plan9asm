@@ -22,6 +22,8 @@ idle worktrees; do not create another for routine work.
 
 | Code snapshot | Completed evidence | Limits |
 |---|---|---|
+| `2c112ef6e` | Complete ENQCMD/ENQCMDS input, grammar and status effects: 51 roots / 1,658 children pass current Go, actual Go1.20 and race; identical 1,709 terminals, zero fail/skip/incomplete | All 1,200 independent physical address/register forms, pre-emission rejection and initialized three-API five-target O0/O2 objects; native device submission is not executed |
+| Same snapshot | All thirteen final gates pass; exact original 167-root replay has 69 pass / 9 fail / 89 explicit host skips, unchanged source/tools | Both original hardware-status roots now pass, without regressions. Uninitialized original formats retain Go/emitter objects and public Context; no PASID, privilege, memory-backing or successful-submission claim |
 | `7b1966b70` | Complete RDRAND/RDSEED W/L/Q family: 44 roots / 1,610 children pass current Go, actual Go1.20 and race; identical 1,654 terminals, zero fail/skip/incomplete | All 128 independent physical register encodings, exact raw identity, partial-byte and missing-result controls; 52 initialized target programs retain three-API O0/O2 objects |
 | Same snapshot | All thirteen final gates pass; exact original 167-root replay remains 67 pass / 11 fail / 89 explicit host skips, unchanged source/tools | Ten original random/status children now pass; their parent still fails other families. Native randomness and complete CI remain unqualified |
 | `8aa8460f4` | Complete floating-compare literal inputs: 43 roots / 481 children pass current Go, actual Go1.20 and race; identical 524 terminals, zero fail/skip/incomplete | All four PS/PD/SS/SD members, 54 independent VEX/EVEX memory shapes, all 256 selectors and 162 initialized three-API AMD64 target-object programs |
@@ -229,9 +231,9 @@ before changing implementation or claiming a speedup. Do not relax budgets.
    contracts; MMX closure; hardware enqueue/mask status; custom ABI,
    runtime386 `cpuidProbe` entry. Use the actual diagnostic,
    not an earlier successful preflight, to choose each next class.
-   The floating-compare literal batch is qualified at `8aa8460f4`. The exact eleven
-   failures are five FP16, two hardware-status roots, two runtime386 source
-   fixtures, one absolute relocation and one x87 compare root. Repair each
+   The enqueue batch is qualified at `2c112ef6e`. The exact nine failures are
+   five FP16, two runtime386 source fixtures, one absolute relocation and one
+   x87 compare root. Repair each
    complete rule class with original Go/emitter controls and independently
    initialized public programs; do not weaken source/data or entry proofs.
 3. Rerun the unchanged complete standard-library corpus and benchmark after
@@ -249,6 +251,13 @@ develop in an existing idle worktree. Commit and preserve RED before repair.
 
 Resolve worktree locations with `git worktree list`. Ignored receipts include:
 
+- `enqueue-qualified-2c112ef6.json` and `enqueue-final-gates-2c112ef6/`:
+  complete 51-root three-lane cohort, identical terminal unions and thirteen
+  final gates. Preserve RED `b9a185b5`, first GREEN `851b354f` (format-helper
+  failure) and independent address-boundary RED `7395203c` separately.
+- `latest-failure-batch-2c112ef6-{summary.json,raw.jsonl,before.json,after.json}`:
+  exact 167-root replay, 69 pass / 9 fail / 89 explicit host skips, 157.926s;
+  unchanged source/tools, no absent/incomplete or pass-with-skip roots.
 - `hardware-random-qualified-7b1966b7.json` and
   `hardware-random-final-gates-7b1966b7/`: complete 44-root three-lane cohort,
   identical terminal unions and thirteen final gates. Preserve RED `54d2dd8d`
