@@ -291,6 +291,23 @@ or dead outputs, and legacy m128 keeps its original opcode/fault behavior.
 VEX VPSADBW/VMPSADBW and EVEX VPSADBW ignore W; VDBPSADBW requires W0.
 Test physical WIG independently: Go's encoder emits only W0 for these forms.
 
+The eight SQRT names share the floating operand grammar and one caller/result
+byte dependency. Only the first operand supplies numerical input; scalar
+VEX/EVEX copies its second operand's upper X bytes without requiring unused
+low bytes or inventing unknown passthrough bytes. Masks and merging inputs stay
+required even for Void. Retain actual side-effecting native opcodes: default
+MXCSR, dead exceptions, memory faults and explicit ER+SAE are not pure sqrt IR.
+Packed memory requires native backing; logical field addresses authorize only
+exact bounded scalar reads. Caller bounds alone do not establish legacy m128
+alignment. Physical VEX.WIG, scalar EVEX.LIG and low-bank mode32 masks need
+independent LLVM-MC witnesses; scalar VEX.L1 stays rejected as unpredictable.
+Preserve raw EVEX generation through feature inference and native emission.
+Complete initialized named/raw three-API objects on all five x86 targets are
+separate from original unbound Go/emitter formats and native execution. The
+required Linux scalar runtime checks rounding, passthrough, masking and MXCSR;
+the existing native-wide conformance retains packed SQRT. FP16 remains a
+distinct raw-only family, with no inherited caller or entry permission.
+
 The four packed multiply-add names share the existing complete binary grammar
 with mandatory numerical inputs, result definedness and paired native reads.
 MMX keeps its separate closed physical-state owner. Every first/second input,
