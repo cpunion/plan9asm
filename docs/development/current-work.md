@@ -22,6 +22,8 @@ idle worktrees; do not create another for routine work.
 
 | Code snapshot | Completed evidence | Limits |
 |---|---|---|
+| `37cd9d8a7` | Complete add/subtract literal inputs: 59 roots / 1,626 children pass current Go, actual Go1.20 and race; identical 1,685 terminals, zero fail/skip/incomplete | All sixteen wrapping/signed/unsigned saturating members, 244 independent VEX/EVEX programs and three-API AMD64 target objects; exact lane/merge/mask/tuple controls |
+| Same snapshot | All thirteen final gates pass; exact original 167-root replay has 66 pass / 12 fail / 89 explicit host skips, unchanged source/tools and no incomplete roots | Original mixed source lacks K7 and remains Go/emitter objects plus public Context; initialized independent programs own public objects, not native execution |
 | `175c84397` | Complete integer-compare literal inputs: 38 roots / 3,706 children pass current Go, actual Go1.20 and race; identical 3,744 terminals, zero fail/skip/incomplete | All eight EQ/GT B/W/D/Q members, 136 independent VEX/EVEX programs and three-API AMD64 target objects; portable values/FLAGS/canaries and host signal controls also execute |
 | Same snapshot | All thirteen final gates pass; exact original 167-root replay has 65 pass / 13 fail / 89 explicit host skips, unchanged source/tools and no incomplete roots | Original uninitialized compare source retains Go/emitter objects and public Context; separate initialized programs own public objects, not a native AVX512 execution claim |
 | `fd38dcf0e` | Complete byte-shift literal inputs: 33 roots / 291 children pass current Go, actual Go1.20 and race; identical 324 terminals, zero fail/skip/incomplete | Both directions, all X/Y/Z tuples and 256 selectors; 84 independent original programs have three-API AMD64 target objects, alongside existing portable shift execution |
@@ -85,7 +87,7 @@ See earlier checkpoints in Git rather than reconstructing counts by subtraction.
 
 ## Exact failure replay and online CI
 
-The latest local diagnostic at `175c84397` selects exactly the original CI's
+The latest local diagnostic at `37cd9d8a7` selects exactly the original CI's
 167 failed root names. One sealed Go test process ran the complete set,
 instead of repeatedly linking the same large test executable.
 All inventories, started/terminal identities and before/after source, SDK, LLVM
@@ -104,7 +106,17 @@ and environment observations match. This is not the canonical isolated CI runner
 | Previous batched replay, `ed5d22b5b` | 60 | 18 | 89 | 0 / 0 |
 | Previous batched replay, `f432afb24` | 63 | 15 | 89 | 0 / 0 |
 | Previous batched replay, `fd38dcf0e` | 64 | 14 | 89 | 0 / 0 |
-| Latest batched replay, `175c84397` | 65 | 13 | 89 | 0 / 0 |
+| Previous batched replay, `175c84397` | 65 | 13 | 89 | 0 / 0 |
+| Latest batched replay, `37cd9d8a7` | 66 | 12 | 89 | 0 / 0 |
+
+The original packed-arithmetic literal root newly passes without regressions.
+Its unchanged mixed source lacks K7 and retains complete Go/emitter objects
+plus public Context. All sixteen wrapping and signed/unsigned saturating add/sub
+members have 244 separate initialized public-object programs. The production
+adapter consumes existing typed forms and lane effects, not another opcode list
+or native-read permission. Missing source lanes, merge bytes, actual masks and
+full/broadcast DATA extents remain distinct. Logical and arithmetic object tests
+share one bounded batch helper without changing either test inventory.
 
 The original integer-compare literal root newly passes without regressions.
 Its unchanged uninitialized vector source remains actual-Go/emitter objects
@@ -192,8 +204,8 @@ before changing implementation or claiming a speedup. Do not relax budgets.
    contracts; MMX closure; hardware enqueue/random/mask status; custom ABI,
    runtime386 `cpuidProbe` entry. Use the actual diagnostic,
    not an earlier successful preflight, to choose each next class.
-   The integer-compare literal batch is qualified at `175c84397`. The exact thirteen
-   failures are five FP16, two other RIP literal/constant roots,
+   The arithmetic literal batch is qualified at `37cd9d8a7`. The exact twelve
+   failures are five FP16, one floating-compare RIP literal root,
    two hardware-status roots, two runtime386 source
    fixtures, one absolute relocation and one x87 compare root. Repair each
    complete rule class with original Go/emitter controls and independently
@@ -213,6 +225,13 @@ develop in an existing idle worktree. Commit and preserve RED before repair.
 
 Resolve worktree locations with `git worktree list`. Ignored receipts include:
 
+- `raw-arithmetic-qualified-37cd9d8a.json` and
+  `raw-arithmetic-final-gates-37cd9d8a/`: complete 59-root three-lane cohort,
+  identical terminal unions and thirteen final gates. Preserve RED `23353639`
+  (21 failed terminals) and the separate first-green receipt.
+- `latest-failure-batch-37cd9d8a-{summary.json,raw.jsonl,before.json,after.json}`:
+  exact 167-root replay, 66 pass / 12 fail / 89 explicit host skips, 101.354s;
+  unchanged source/tools, no absent/incomplete or pass-with-skip roots.
 - `raw-integer-compare-qualified-175c8439.json` and
   `raw-integer-compare-final-gates-175c8439/`: complete 38-root three-lane cohort,
   identical terminal unions and thirteen final gates. Preserve RED `b4e4df51`
