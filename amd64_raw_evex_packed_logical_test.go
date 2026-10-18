@@ -188,17 +188,9 @@ func TestTranslateX86RawEVEXPackedLogicalTargets(t *testing.T) {
 				}
 			}
 			source.WriteString("\tRET\n")
-			file, err := Parse(ArchAMD64, source.String())
-			if err != nil {
-				t.Fatal(err)
-			}
-			ir, err := Translate(file, Options{
-				Goarch: target.goarch, TargetTriple: target.triple,
-				Sigs: map[string]FuncSig{"raw_evex_packed_logical": {Name: "raw_evex_packed_logical", Ret: Void}},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			// Unknown vector/mask/address inputs remain public Context;
+			// retain the original complete raw format object on every target.
+			ir := x86UnboundVoidRawScalarFormatObject(t, source.String(), target.goarch, target.triple)
 			compileLLVMToObject(t, llc, target.triple, "raw-evex-packed-logical-"+target.name+".ll", "raw-evex-packed-logical-"+target.name+".o", ir)
 		})
 	}

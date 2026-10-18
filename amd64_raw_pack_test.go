@@ -60,10 +60,6 @@ func TestX86RawPackedSaturatingNarrowGoEncoderForms(t *testing.T) {
 				fmt.Fprintf(&raw, "BYTE $%#02x\n", value)
 			}
 			raw.WriteString("RET\n")
-			file, err := Parse(ArchAMD64, raw.String())
-			if err != nil {
-				t.Fatal(err)
-			}
 			llc := findLLVM22Tool("llc")
 			if llc == "" {
 				t.Fatal("LLVM 22 llc not found")
@@ -73,14 +69,9 @@ func TestX86RawPackedSaturatingNarrowGoEncoderForms(t *testing.T) {
 				triples = []string{"i386-unknown-linux-gnu", "i686-pc-windows-msvc"}
 			}
 			for _, triple := range triples {
-				ir, err := Translate(file, Options{
-					Goarch:       arch,
-					TargetTriple: triple,
-					Sigs:         map[string]FuncSig{"rawpackedforms": {Name: "rawpackedforms", Ret: Void}},
-				})
-				if err != nil {
-					t.Fatal(err)
-				}
+				// Preserve MMX/X/Y/Z and all mask/broadcast forms as original
+				// objects; neither physical MMX nor unknown inputs gain an entry.
+				ir := x86UnboundVoidRawScalarFormatObject(t, raw.String(), arch, triple)
 				compileLLVMToObject(t, llc, triple, "raw-packed-saturating-narrow.ll", "raw-packed-saturating-narrow.o", ir)
 			}
 		})

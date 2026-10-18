@@ -253,10 +253,7 @@ func TestX86RawPackedCompareGoEncoderForms(t *testing.T) {
 				if (arch == "386") != strings.HasPrefix(triple, "i") {
 					continue
 				}
-				ir, err := Translate(file, Options{Goarch: arch, TargetTriple: triple, Sigs: map[string]FuncSig{"compare": {Name: "compare", Ret: Void}}})
-				if err != nil {
-					t.Fatal(err)
-				}
+				ir := x86UnboundVoidRawProbeObject(t, file, arch, triple)
 				compileLLVMToObject(t, llc, triple, "compare.ll", "compare.o", ir)
 			}
 			t.Logf("%s: %d actual Go encodings", arch, len(want)-1)
@@ -462,10 +459,7 @@ func TestX86RawPackedCompare386Mask(t *testing.T) {
 		t.Fatal("LLVM 22 llc not found")
 	}
 	for _, triple := range []string{"i386-unknown-linux-gnu", "i686-pc-windows-msvc"} {
-		ir, err := Translate(file, Options{Goarch: "386", TargetTriple: triple, Sigs: map[string]FuncSig{"compare": {Name: "compare", Ret: Void}}})
-		if err != nil {
-			t.Fatal(err)
-		}
+		ir := x86UnboundVoidRawProbeObject(t, file, "386", triple)
 		compileLLVMToObject(t, llc, triple, "masked-386.ll", "masked-386.o", ir)
 	}
 }

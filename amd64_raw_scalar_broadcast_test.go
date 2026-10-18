@@ -65,10 +65,7 @@ func TestX86RawScalarBroadcastGoEncoderForms(t *testing.T) {
 				triples = []string{"i386-unknown-linux-gnu", "i686-pc-windows-msvc"}
 			}
 			for _, triple := range triples {
-				ir, err := Translate(file, Options{Goarch: arch, TargetTriple: triple, Sigs: map[string]FuncSig{"broadcasts": {Name: "broadcasts", Ret: Void}}})
-				if err != nil {
-					t.Fatal(err)
-				}
+				ir := x86UnboundVoidRawProbeObject(t, file, arch, triple)
 				compileLLVMToObject(t, llc, triple, "raw-scalar-broadcast.ll", "raw-scalar-broadcast.o", ir)
 			}
 		})

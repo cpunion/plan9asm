@@ -63,3 +63,19 @@ func x86UnboundVoidRawScalarFormatObject(t *testing.T, source, arch, triple stri
 	}
 	return x86ScalarFormatObjectUnit(t, normalized, signatures, arch, triple, 0)
 }
+
+// Encoder probes may retain a terminal UD2 instead of an unproved native RET.
+// That removes a return obligation, not the numerical/native input obligations
+// of preceding instructions. Preserve every original format and its fault.
+func x86UnboundVoidRawProbeObject(t *testing.T, file *File, arch, triple string) string {
+	t.Helper()
+	var source strings.Builder
+	for _, function := range file.Funcs {
+		text, valid := x86RawReplaySourceText(function)
+		if !valid {
+			t.Fatal("raw format probe lost its complete original source")
+		}
+		source.WriteString(text)
+	}
+	return x86UnboundVoidRawScalarFormatObject(t, source.String(), arch, triple)
+}

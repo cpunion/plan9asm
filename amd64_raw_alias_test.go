@@ -545,17 +545,9 @@ func TestTranslateX86RawAliasesThroughLLVM22(t *testing.T) {
 	} {
 		t.Run(target.goarch, func(t *testing.T) {
 			requireX86GoAssemblerResult(t, target.goarch, source, true)
-			file, err := Parse(ArchAMD64, source)
-			if err != nil {
-				t.Fatal(err)
-			}
-			ir, err := Translate(file, Options{
-				Goarch: target.goarch, TargetTriple: target.triple,
-				Sigs: map[string]FuncSig{"rawaliases": {Name: "rawaliases", Ret: Void}},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			// These original bytes supply neither X inputs nor the AX cache
+			// address. Their complete formats remain objects, not public entries.
+			ir := x86UnboundVoidRawScalarFormatObject(t, source, target.goarch, target.triple)
 			for _, want := range []string{"clflushopt $0", "clwb $0", "+clflushopt,+clwb"} {
 				if !strings.Contains(ir, want) {
 					t.Fatalf("raw alias lowering omitted %q:\n%s", want, ir)

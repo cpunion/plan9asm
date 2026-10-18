@@ -186,17 +186,9 @@ func TestTranslateX86RawEVEXUnpackLLVM22Objects(t *testing.T) {
 			}
 			source.WriteString("\tRET\n")
 			requireX86GoAssemblerResult(t, target.goarch, source.String(), true)
-			file, err := Parse(ArchAMD64, source.String())
-			if err != nil {
-				t.Fatal(err)
-			}
-			ir, err := Translate(file, Options{
-				Goarch: target.goarch, TargetTriple: target.triple,
-				Sigs: map[string]FuncSig{"rawEVEXUnpack": {Name: "rawEVEXUnpack", Ret: Void}},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			// Operand formats do not initialize the original vector/address
+			// inputs. Keep public rejection separate from emitter objects.
+			ir := x86UnboundVoidRawScalarFormatObject(t, source.String(), target.goarch, target.triple)
 			compileLLVMToObject(t, llc, target.triple, "raw-evex-unpack.ll", "raw-evex-unpack.o", ir)
 		})
 	}
