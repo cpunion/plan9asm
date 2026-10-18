@@ -58,6 +58,9 @@ func x86FixedVectorValueProperties(ins Instr, arch string) (x86PackedBinaryForm,
 	if parsed, known, err := x86PackedWordMultiplyProperties(ins.Op, ins, arch); known {
 		return parsed.x86PackedBinaryForm, false, known, err
 	}
+	if parsed, known, err := x86PackedMultiplyAddProperties(ins.Op, ins, arch); known {
+		return parsed.x86PackedBinaryForm, false, known, err
+	}
 	if parsed, spec, recognized, parseErr := x86IndexedPermuteProperties(ins.Op, ins, arch); recognized {
 		return parsed, spec.mode != amd64IndexedPermuteSingle, recognized, parseErr
 	}
@@ -76,8 +79,6 @@ func x86LoweredFixedVectorNativeRead(ins Instr, state *x86ResultState, owned []b
 	form, oldInput, known, err := x86FixedVectorValueProperties(ins, arch)
 	if !known {
 		if parsed, registered, parseErr := x86PackedLowMultiplyProperties(ins.Op, ins, arch); registered {
-			form, known, err = parsed.x86PackedBinaryForm, registered, parseErr
-		} else if parsed, registered, parseErr := x86PackedMultiplyAddProperties(ins.Op, ins, arch); registered {
 			form, known, err = parsed.x86PackedBinaryForm, registered, parseErr
 		}
 	}
