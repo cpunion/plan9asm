@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 	"testing"
@@ -170,6 +171,33 @@ func TestX86EndBranchPrivateStackState(t *testing.T) {
 							})
 						if err != nil {
 							t.Fatal(err)
+						}
+					}
+				})
+			}
+		}
+	}
+}
+
+func TestX86EndBranchCannotCreateInputsOrEntry(t *testing.T) {
+	for _, target := range x86RawReturnTargets {
+		for _, last := range []byte{0xfa, 0xfb} {
+			marker := x86RawDisplacementDirectives([]byte{0xf3, 0x0f, 0x1e, last})
+			for _, test := range []struct{ name, before, after string }{
+				{"unknown value", "", "MOVL AX,ret+0(FP)\nRET\n"},
+				{"unknown flags", "MOVL $0,AX\n", "SETEQ AL\nMOVL AX,ret+0(FP)\nRET\n"},
+				{"unknown address", "", "MOVL (AX),CX\nMOVL CX,ret+0(FP)\nRET\n"},
+				{"numeric address", "MOVL $0,AX\n", "MOVL (AX),CX\nMOVL CX,ret+0(FP)\nRET\n"},
+				{"unwritten return", "", "RET\n"},
+				{"raw return", "MOVL $7,AX\n", "MOVL AX,ret+0(FP)\nBYTE $0xc3\n"},
+			} {
+				t.Run(fmt.Sprintf("%s/%x/%s", target.triple, last, test.name), func(t *testing.T) {
+					source := "TEXT marker(SB),4,$0-4\n" + test.before + marker + test.after
+					x86LEAActualTargetGoObject(t, target.arch, target.triple, source)
+					for _, api := range []string{"text", "module", "Go"} {
+						ir, err := x86ScalarFPBitViewAPI(t, source, "func marker() uint32", target.arch, target.triple, api)
+						if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+							t.Fatal("ENDBR supplied missing source facts or native entry", api, err)
 						}
 					}
 				})
