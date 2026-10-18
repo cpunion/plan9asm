@@ -203,18 +203,28 @@ func TestTranslateX86RawEVEXPackedBroadcastTargets(t *testing.T) {
 				}
 			}
 			source.WriteString("\tRET\n")
-			file, err := Parse(ArchAMD64, source.String())
-			if err != nil {
-				t.Fatal(err)
-			}
-			ir, err := Translate(file, Options{
-				Goarch: target.goarch, TargetTriple: target.triple,
-				Sigs: map[string]FuncSig{"raw_evex_packed_broadcast": {Name: "raw_evex_packed_broadcast", Ret: Void}},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			ir := x86UnboundVoidRawScalarFormatObject(t, source.String(), target.goarch, target.triple)
 			compileLLVMToObject(t, llc, target.triple, "raw-evex-packed-broadcast-"+target.name+".ll", "raw-evex-packed-broadcast-"+target.name+".o", ir)
+
+			setup := "MOVL $19, AX\nMOVL $37, CX\nMOVL CX, X1\nKMOVW CX, K1\n"
+			if target.goarch == "amd64" {
+				setup += "MOVL $79, R10\n"
+			}
+			initialized := strings.Replace(source.String(), "\n", "\n"+setup, 1)
+			x86LEAActualTargetGoObject(t, target.goarch, target.triple, "#include \"textflag.h\"\n"+initialized)
+			for _, api := range []string{"text", "module", "Go"} {
+				t.Run(api, func(t *testing.T) {
+					ir, err := x86ScalarFPBitViewAPI(t, initialized, "func raw_evex_packed_broadcast()", target.goarch, target.triple, api)
+					if err != nil {
+						t.Fatal("initialized original raw broadcast sequence", err)
+					}
+					for _, text := range []string{ir, x86DwordProductIROptimize(t, ir)} {
+						for _, level := range []string{"-O0", "-O2"} {
+							x86PackedStringCompileObject(t, llc, target.triple, text, level)
+						}
+					}
+				})
+			}
 		})
 	}
 }

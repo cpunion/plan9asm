@@ -83,6 +83,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 	}
 	boundRawClear := false
 	for _, ins := range fn.Instrs {
+		if _, valid := x86RawVMOVWResultForm(ins, arch); valid {
+			continue // Exact GP/X/m16 effects share no raw entry or native frame permission.
+		}
 		if x86EndBranchPreservesSourceState(ins) {
 			continue // Exact native CET tracking preserves inputs, not memory or entry permissions.
 		}
@@ -126,6 +129,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 	transfer := func(ordinal int, ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string) bool {
 		state.loweredStaticReads = c.fpScalarData
 		defer func() { state.loweredStaticReads = nil }()
+		if accepted, known := x86LoweredRawVMOVWResultStep(ins, state, owned, resultOffset, arch); known {
+			return accepted
+		}
 		if accepted, known := x86ResultSDKLiteralStep(ins, state, owned, resultOffset, arch); known {
 			return accepted // Consume the exact bound source before an overlapping native-memory family.
 		}

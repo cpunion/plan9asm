@@ -1064,6 +1064,16 @@ dead volatile memory reads, original-Go NULL/guard-page faults, all register/
 address axes, complete vector/GP canaries and the three-API five-target objects.
 Accepted operand shapes never grant pointer permission or initialized data.
 
+Raw VMOVW's exact original opcode/operands may consume the same GP/X byte
+transfer inside ordinary lowering. Require both source bytes even for Void;
+retain WIG, GP zero extension, complete vector upper clearing and exact volatile
+m16 accesses. Only already-proved incoming pointers supply native addresses.
+RIP literals, address overrides, segments, native returns and frame roles keep
+their separate contracts; declaration-only observers gain no native read.
+Keep unchanged unbound Go/emitter objects and Context controls alongside
+initialized five-target objects, byte/origin mutations and the original portable
+guard-page execution. See Intel's [VMOVW specification, section 5.61](https://cdrdv2-public.intel.com/678970/intel-avx512-fp16.pdf).
+
 For ordinary GP/X native loads, the lowering-only result observer consumes the
 same exact-width volatile read as scalar lane insertion. MOVL/MOVQ/MOVD and
 VMOVD/VMOVQ retain loaded low bytes, known-zero X128 remainder and distinct
