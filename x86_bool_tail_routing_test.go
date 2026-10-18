@@ -84,6 +84,49 @@ func TestX86CustomHelperBoolTailRejectsForeignArchitecture(t *testing.T) {
 	}
 }
 
+func TestX86BoolTailRoutingDefaultModeAndSelectionRechecks(t *testing.T) {
+	for _, arch := range []string{"", "amd64"} {
+		for _, mutation := range []string{"none", "resolver", "source", "declaration"} {
+			t.Run("mode="+arch+"/"+mutation, func(t *testing.T) {
+				assembly, declarations := x86BoolTailRoutingProgram()
+				file, err := Parse(ArchAMD64, assembly)
+				if err != nil {
+					t.Fatal(err)
+				}
+				pkg := mustGoPackage(t, "bitview", "package bitview\n"+declarations)
+				resolve := func(symbol string) string { return strings.TrimPrefix(goStripABISuffix(symbol), "·") }
+				sigs, err := goSigsForAsmFile(pkg, file, resolve, "amd64", nil, nil, nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+				calls := 0
+				options := Options{Goarch: arch, TargetTriple: "x86_64-unknown-linux-gnu", Sigs: sigs}
+				options.ResolveSym = func(symbol string) string {
+					calls++
+					if calls == 1 {
+						switch mutation {
+						case "resolver":
+							return "foreign"
+						case "source":
+							file.Funcs[0].Instrs[1].Raw += " // changed during selection"
+						case "declaration":
+							sig := sigs[resolve(symbol)]
+							sig.Ret = I32
+							sigs[resolve(symbol)] = sig
+						}
+					}
+					return resolve(symbol)
+				}
+				plan, err := prepareX86ABI0BoolCalls(file, options)
+				if calls == 0 || plan != nil || mutation == "none" && err != nil ||
+					mutation != "none" && !errors.Is(err, ErrProbeNeedsContext) {
+					t.Fatal("mode routing bypassed complete source/declaration observation", calls, plan != nil, err)
+				}
+			})
+		}
+	}
+}
+
 func TestX86BoolTailRoutingPortableValues(t *testing.T) {
 	llc, clang, found := findLlcAndClang(t)
 	if !found {

@@ -27,7 +27,7 @@ func x86CustomHelperBoolFrameRole(fn Func, sig FuncSig, arch string) bool {
 
 func (source *x86ABI0BoolCallSource) prepareCustomRegisterTail(plan *x86ABI0BoolCallPlan) error {
 	fail := func(reason string) error { return x86ABI0BoolCallContext("custom register tail: " + reason) }
-	if !x86ABI0BoolDeclarationRole(plan.signature, "386") || plan.function.FrameSize != 0 ||
+	if source.options.Goarch != "386" || !x86ABI0BoolDeclarationRole(plan.signature, "386") || plan.function.FrameSize != 0 ||
 		source.options.NumericalReads != nil || source.options.X86TLSMoves != nil || source.options.ARM64ByteCarrierSource != nil ||
 		len(source.options.X86TailGroups) != 0 || len(source.original.UnlinkedPrelude) != 0 || len(source.original.x86Continuations) != 0 {
 		return fail("root or native/source role is not closed")

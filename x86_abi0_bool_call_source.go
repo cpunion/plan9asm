@@ -136,6 +136,12 @@ func prepareX86ABI0BoolCalls(file *File, options Options) (*x86ABI0BoolCallSourc
 		if sig.Name != "" && sig.Name != source.resolved[fn.Sym] {
 			return nil, x86ABI0BoolCallContext("caller declaration symbol differs from its actual TEXT")
 		}
+		if arch == "amd64" && !x86ABI0BoolHasCall(fn) && x86DirectTailRootNeeded(fn) {
+			// The ordinary direct-tail consumer owns this complete graph and
+			// its canonical register result. A private tail is not a 386-only
+			// custom helper call and grants no ABI0 bool-frame permission.
+			continue
+		}
 		if !x86ScalarFloatIntegerNativeTarget(arch, options.TargetTriple) {
 			return nil, x86ABI0BoolCallContext("logical target does not have the actual x86 word width")
 		}
@@ -222,11 +228,11 @@ func prepareX86ABI0BoolCalls(file *File, options Options) (*x86ABI0BoolCallSourc
 		}
 		source.callers[fn.Sym] = plan
 	}
-	if len(source.callers) == 0 {
-		return nil, nil
-	}
 	if err := source.verify(); err != nil {
 		return nil, err
+	}
+	if len(source.callers) == 0 {
+		return nil, nil
 	}
 	if source.customGraph != nil {
 		// Match the continuation producer's complete-file audit before any
