@@ -16,7 +16,7 @@ func TestParseX86BranchLabelsRespectGoRegisterCase(t *testing.T) {
 	// Cross-architecture names and Intel aliases are not Go x86 registers.
 	labels = append(labels, "R0", "V1", "ZR", "LR", "RAX", "EAX", "Xmm0", "aX", "G", "pc", "fp", "sb")
 	for _, arch := range []string{"amd64", "386"} {
-		for _, op := range []string{"JMP", "CALL", "JEQ", "LOOP", "XBEGIN"} {
+		for _, op := range []string{"JMP", "CALL", "JEQ", "JEQ $0,", "JEQ $1,", "LOOP", "XBEGIN"} {
 			t.Run(arch+"/"+op, func(t *testing.T) {
 				var source strings.Builder
 				for index, label := range labels {
@@ -28,7 +28,8 @@ func TestParseX86BranchLabelsRespectGoRegisterCase(t *testing.T) {
 					t.Fatal("complete original label inventory did not parse", err)
 				}
 				for index, function := range file.Funcs {
-					operand := function.Instrs[1].Args[0]
+					operands := function.Instrs[1].Args
+					operand := operands[len(operands)-1]
 					if operand.Kind != OpIdent || operand.Ident != labels[index] {
 						t.Errorf("Go label %q became a register or changed case: %+v", labels[index], operand)
 					}
@@ -39,10 +40,15 @@ func TestParseX86BranchLabelsRespectGoRegisterCase(t *testing.T) {
 }
 
 func TestParseX86BranchOperandsKeepNativeRegisterIdentity(t *testing.T) {
+	names := append(x86SymbolIndexedActualRegisterNames(t), "SB", "FP", "PC", "g")
 	for _, op := range []string{"JMP", "CALL", "JEQ", "LOOP", "XBEGIN"} {
-		for _, name := range []string{"AX", "BX", "R8", "X1", "K1", "SP", "BP", "g"} {
+		for _, name := range names {
 			operands, err := parseOperandsCSV(ArchAMD64, Op(op), name)
-			if err != nil || len(operands) != 1 || operands[0].Kind != OpReg {
+			want := Reg(name)
+			if name == "g" {
+				want = "R14"
+			}
+			if err != nil || len(operands) != 1 || operands[0].Kind != OpReg || operands[0].Reg != want {
 				t.Errorf("original register token became a local label: %s %s: %+v / %v", op, name, operands, err)
 			}
 		}
