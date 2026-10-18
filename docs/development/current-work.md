@@ -25,7 +25,9 @@ of the current candidate. Do not create another worktree for routine work.
 
 | Snapshot | Evidence and limits |
 |---|---|
-| `dab3bb581` | CPU-query TDD RED: four roots / 136 children finish with three failed roots and 89 failed terminal identities, unchanged before/after source/SDK/tool seals. The original IA32 program fails at CPUID, the shared implicit NUM descriptor is absent, and Void accepts missing inputs. The simple initialized-result object root already passes: preserve it as a positive control, not a repaired failure. No production fix is implemented at this checkpoint |
+| `e95a10314` | Complete CPU-query implicit effects: 40 roots / 1,593 children pass current Go, actual Go1.20 and race; identical 1,633 terminal identities, zero fail/skip/incomplete and unchanged source/SDK/LLVM22 observations. Original named/raw runtime sources compile through all three APIs on all five x86 targets. Native Linux AMD64/386 execution remains a separate required counterpart, not a local pass |
+| Same code head | Both-SDK build/vet and sixteen scanner roots, five-arch official classification, three CLI extraction roots, CI policies and tracked formatting pass. Backed up in the allowed fork; neither complete CI nor the strict benchmark has qualified this source |
+| `dab3bb581` | Preserved CPU-query TDD RED: four roots / 136 children, three failed roots and 89 failed terminals with unchanged seals. The original IA32 program fails at CPUID, the implicit NUM descriptor is absent, and Void accepts missing inputs. The simple initialized-result object root already passes; it is a positive control, not a repaired failure |
 | `5df8cde37` | Eleven original failed format/witness roots plus nine initialized public-object roots pass current Go, actual Go1.20 and race: 20 roots / 2,362 children, identical 2,382 terminal identities, zero fail/skip/incomplete and unchanged source/SDK/LLVM22 observations. Production, CI and classification baselines are unchanged; this repairs test contracts, not eleven new instruction implementations |
 | `83f21268e` | The latest CI's exact 167 failed roots were fully replayed locally: 10 pass, 68 fail, 89 explicit host skips, zero absent/pending/incomplete. Original output hashes, complete run/terminal inventories and both owner source/SDK/tool/environment seals audit unchanged. This failed local replay does not certify unexecuted native counterparts or later repairs |
 | `252239cde` | Complete mask/vector NUM effects: 30 roots / 734 children pass current Go, actual Go1.20 and race; all 764 terminal identities match with no fail/skip/incomplete and unchanged source/SDK/LLVM22 seals. Both-SDK build/vet and fifteen scanner roots, five-arch classification, three CLI extraction roots, CI policies and tracked formatting pass. The original native x86/MXCSR counterpart remains required, not a local pass |
@@ -52,6 +54,25 @@ Classification, emitter-only objects, initialized public translation, portable
 execution and native execution remain different claims.
 
 ## Latest repairs
+
+CPUID and XGETBV now share their existing complete zero-operand grammar and
+implicit dword input/output spec with numerical definedness. Inputs are checked
+before any overwrite, output writes revoke old pointer/address identities, and
+unrelated GP, SIMD, mask, FLAGS, DF and private-stack facts remain unchanged.
+Exact named/raw identity checks allow the paired native continuation without
+granting a caller region, native entry, source stack or fixed-local role.
+Missing/partial inputs, pointer-as-data, unused bool parameters and incomplete
+CFG joins remain Context even for Void functions. Original bare format sources
+remain actual-Go/public-Context controls; initialized counterparts retain real
+native opcodes in LLVM objects. The complete original runtime sources, including
+FLAGS and MXCSR observations, have all-five-target object coverage, not local
+native execution. The forty-root qualification is recorded above.
+
+The sealed eight-SDK audit changes exactly the isolated AMD64 CPUID/XGETBV
+forms from supported to Context per SDK; all other metrics and encoder rules
+remain unchanged, including unsupported counts. The 386 official corpus has
+no classification change; independent named/raw regressions still cover both
+modes. No benchmark or completed online CI failure count is reclassified.
 
 At `5df8cde37`, eleven failures from the complete 167-root replay retain their
 original assembly and actual Go objects. Unbound named format fixtures now
@@ -201,17 +222,17 @@ cannot certify a performance improvement. Full reports remain under ignored
    The first old local failure remains `TestGoABI0PaddedSqrtObjects`. Its logical
    floating-field address class is now qualified; SQRT arithmetic is separate.
    Packed private-copy stores and all eight mask/vector data effects are now
-   qualified. Next close the observed typed numerical/native continuation
-   classes, including register/CPU-query result roles, three-operand shift
-   memory effects and MMX-region composition. CPUID/XGETBV already share a
-   complete zero-operand grammar and native emitter, but their implicit dword
-   inputs/outputs lack the shared NUM consumer. Close both names, mandatory
-   Void inputs and exact named/raw continuation together, retaining the original
-   IA32 source/object and required native runtime owners. Preserve failed
-   receipts and do not subtract focused successes from a completed run.
-   The new CPU-query RED is committed: first repair the shared typed effect
-   and consistent source routing, then rerun all four original selected roots.
-   Do not label the already-passing simple result prototype as newly fixed.
+   qualified, as are the complete CPU-query implicit NUM and exact named/raw
+   continuation effects. Next close three-operand shift memory effects and
+   MMX-region composition. The scalar-shift grammar already independently binds
+   all 148 Go rows, but its shared byte-effect consumer explicitly admits only
+   register operands. Preserve the original `doubleShift32` program's SHLL/SHRL
+   memory destinations and fix that whole memory rule class, including exact
+   access widths, volatile effects, FLAGS, count boundaries and BMI2 sources.
+   CPU-query numerical effects do not supply the separate custom entry of the
+   runtime386 `cpuidProbe`. Preserve failed receipts, native runtime owners and
+   the already-passing simple query-result control; focused successes are not
+   subtracted from a completed run.
    Keep compiler/runtime producer gaps separate from instruction support. No
    mnemonic-only exception, padding permission or native-frame backing follows
    from a valid encoding. Inspect the final error, not a preceding successful
@@ -229,8 +250,14 @@ Go 1.20 and race. One heavy local Go/LLVM owner runs at a time; develop in an
 existing idle worktree while its tested source stays frozen.
 
 Resolve branch locations with `git worktree list`. Latest ignored receipts use
-`cpu-query-result-red` at `dab3bb581` for the active unrepaired CPU-query class.
-The latest completed qualification uses
+`cpu-query-result-red` at `dab3bb581` for the original CPU-query failures.
+The latest completed qualification uses `cpu-query-qualified-{core,state}` at
+`e95a10314`; `cpu-query-qualified-e95a1031.json` retains the complete forty-root
+three-lane union. The sealed eight-SDK audit is
+`cpu-query-classification-audit-v2`; the first audit attempt retains its strict
+report-format assertion failure, not a translator failure or a completed audit.
+Final gates use `cpu-query-final-gates-e95a1031`.
+Earlier completed qualification uses
 `unbound-official-formats-{first-green,initialized,native}`; the complete
 20-root three-lane seal is `unbound-official-formats-qualified-5df8cde3.json`.
 `latest-failures-83f21268/raw-outcomes-audit.json` retains the complete latest

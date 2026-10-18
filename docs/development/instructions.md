@@ -199,6 +199,16 @@ Lane syntax shares Go's single decimal-token rule after CPP expansion: trim
 lexical whitespace, reject signs/expressions/nondecimal or unresolved tokens,
 and retain every instruction's independent physical width/index bound.
 
+CPUID/XGETBV share the complete Go `ynone/Pm` rows with implicit low-dword
+inputs and zero-extended GP outputs. Read all inputs before writing any output;
+retain that obligation for Void and unused-bool signatures. Only actual output
+registers lose caller-address identity. Exact original/normalized query identity
+preserves FLAGS, DF and private numerical storage, not a native entry, source
+stack or caller-memory contract. Keep pointer, partial-byte and CFG negatives,
+original bare-source Context controls, initialized all-target objects and the
+required original-Go/LLVM native AMD64 and IA32 execution owners separate.
+Timestamps reuse the identity boundary but retain their own input/output spec.
+
 The eight mask/vector B/W/D/Q moves share a register-only EVEX grammar with
 X/Y/Z widths and K0-K7 data operands, never writemasking or suffixes. Caller
 and numerical effects require actual mask data or each vector lane's sign
