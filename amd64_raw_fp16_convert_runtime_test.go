@@ -74,10 +74,7 @@ func TestRawFP16ConversionPortableRuntime(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ir, err := Translate(file, Options{Goarch: "amd64", TargetTriple: testTargetTriple(runtime.GOOS, runtime.GOARCH), Sigs: sigs})
-	if err != nil {
-		t.Fatal(err)
-	}
+	ir := x86FP16ConversionModelIR(t, file, sigs, testTargetTriple(runtime.GOOS, runtime.GOARCH))
 	mainC := "#include <stdint.h>\n#include <stddef.h>\n#include <stdio.h>\n#include <string.h>\n" + declarations.String() + x86TestGuardPagesC + `
 int main(void) {
     if (setup_guard()) return 1;
@@ -151,10 +148,7 @@ func runPackedHalfRoundingRuntime(t *testing.T, legacy bool) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ir, err := Translate(file, Options{Goarch: "amd64", TargetTriple: testTargetTriple(runtime.GOOS, runtime.GOARCH), Sigs: sigs})
-	if err != nil {
-		t.Fatal(err)
-	}
+	ir := x86FP16ConversionModelIR(t, file, sigs, testTargetTriple(runtime.GOOS, runtime.GOARCH))
 	mainC := "#include <stdint.h>\n#include <stdio.h>\n#include <string.h>\n" + declarations.String() + `
 static double half_value(unsigned bits) {
     unsigned exponent = bits >> 10;
@@ -241,10 +235,7 @@ int main(void) {
 	compileAndRunRuntimeTest(t, llc, clang, "fp16_conversion_rounding", ir, mainC)
 	if runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" && rosettaAvailable() {
 		const triple = "x86_64-apple-macosx"
-		x86IR, err := Translate(file, Options{Goarch: "amd64", TargetTriple: triple, Sigs: sigs})
-		if err != nil {
-			t.Fatal(err)
-		}
+		x86IR := x86FP16ConversionModelIR(t, file, sigs, triple)
 		compileAndRunRuntimeTestForTarget(t, llc, clang, "fp16_conversion_rounding_x86", triple, x86IR, mainC, []string{"/usr/bin/arch", "-x86_64"})
 	}
 }

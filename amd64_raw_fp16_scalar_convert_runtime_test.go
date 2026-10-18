@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"runtime"
 	"strings"
@@ -63,10 +64,7 @@ func TestRawFP16ScalarConversionPortableRuntime(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ir, err := Translate(file, Options{Goarch: "amd64", TargetTriple: testTargetTriple(runtime.GOOS, runtime.GOARCH), Sigs: sigs})
-	if err != nil {
-		t.Fatal(err)
-	}
+	ir := x86FP16ConversionModelIR(t, file, sigs, testTargetTriple(runtime.GOOS, runtime.GOARCH))
 	mainC := "#include <stdint.h>\n#include <stddef.h>\n#include <stdio.h>\n#include <string.h>\n" + declarations.String() + x86TestGuardPagesC + `
 int main(void) {
     if (setup_guard()) return 1;
@@ -94,6 +92,7 @@ func TestRawFP16ScalarConversionRoundingRuntime(t *testing.T) {
 		for rounding := 0; rounding < 4; rounding++ {
 			name := fmt.Sprintf("scalarRound_%d_%d", index, rounding)
 			fmt.Fprintf(&source, "TEXT %s(SB),4,$0-16\nMOVQ input+0(FP), AX\nMOVQ out+8(FP), SI\nVMOVDQU64 (AX), Z2\n", name)
+			source.WriteString("VPXORD Z1,Z1,Z1\n") // The complete output includes this scalar passthrough.
 			for _, b := range rawFP16ScalarConversion(index, rounding, 1, 2, 0, 0, false, true, false) {
 				fmt.Fprintf(&source, "BYTE $0x%02x\n", b)
 			}
@@ -138,10 +137,16 @@ func TestRawFP16ScalarConversionRoundingRuntime(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ir, err := Translate(file, Options{Goarch: "amd64", TargetTriple: testTargetTriple(runtime.GOOS, runtime.GOARCH), Sigs: sigs})
+	original := strings.ReplaceAll(source.String(), "VPXORD Z1,Z1,Z1\n", "")
+	x86LEAActualTargetGoObject(t, "amd64", "x86_64-unknown-linux-gnu", original)
+	originalFile, err := Parse(ArchAMD64, original)
 	if err != nil {
 		t.Fatal(err)
 	}
+	if _, err := Translate(originalFile, Options{Goarch: "amd64", TargetTriple: "x86_64-unknown-linux-gnu", Sigs: sigs}); !errors.Is(err, ErrProbeNeedsContext) {
+		t.Fatal("original full-vector store borrowed missing scalar passthrough bytes", err)
+	}
+	ir := x86FP16ConversionModelIR(t, file, sigs, testTargetTriple(runtime.GOOS, runtime.GOARCH))
 	mainC := "#include <stdint.h>\n#include <stdio.h>\n" + declarations.String() + `
 int main(void) {
     const double values[] = {1 + 0x1p-11, 1 + 3 * 0x1p-11, -1 - 0x1p-11, -1 - 3 * 0x1p-11,
@@ -164,10 +169,7 @@ int main(void) {
 	compileAndRunRuntimeTest(t, llc, clang, "fp16_scalar_rounding", ir, mainC)
 	if runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" && rosettaAvailable() {
 		const triple = "x86_64-apple-macosx"
-		x86IR, err := Translate(file, Options{Goarch: "amd64", TargetTriple: triple, Sigs: sigs})
-		if err != nil {
-			t.Fatal(err)
-		}
+		x86IR := x86FP16ConversionModelIR(t, file, sigs, triple)
 		compileAndRunRuntimeTestForTarget(t, llc, clang, "fp16_scalar_rounding_x86", triple, x86IR, mainC, []string{"/usr/bin/arch", "-x86_64"})
 	}
 }

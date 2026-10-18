@@ -131,19 +131,9 @@ func TestRawFP16ConversionLLVM22Targets(t *testing.T) {
 		{"386", "i686-pc-windows-msvc"},
 	} {
 		t.Run(target.triple, func(t *testing.T) {
-			requireX86GoAssemblerResult(t, target.arch, source.String(), true)
-			file, err := Parse(ArchAMD64, source.String())
-			if err != nil {
-				t.Fatal(err)
-			}
-			ir, err := Translate(file, Options{Goarch: target.arch, TargetTriple: target.triple,
-				Sigs: map[string]FuncSig{"rawFP16Conversion": {Name: "rawFP16Conversion", Ret: Void}},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
-			for _, want := range []string{"fpext <4 x half>", "fptrunc <4 x float>", "fcmp olt <16 x float>", "fcmp ogt <16 x float>",
-				"@llvm.masked.load.v4i16", "@llvm.masked.load.v4i32", "phi i16", "phi i32", "+avx512fp16", "+avx512vl"} {
+			ir := x86UnboundVoidRawScalarFormatObject(t, source.String(), target.arch, target.triple)
+			for _, want := range []string{"vcvtph2psx ", "vcvtps2phx ", "vcvtps2phxx ", "vcvtps2phxy ",
+				"{rn-sae}", "{rd-sae}", "{ru-sae}", "{rz-sae}", "{sae}", "asm sideeffect", "+avx512fp16", "+avx512vl"} {
 				if !strings.Contains(ir, want) {
 					t.Fatalf("missing %s", want)
 				}

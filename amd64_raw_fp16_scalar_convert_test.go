@@ -140,17 +140,7 @@ func TestRawFP16ScalarConversionLLVM22Targets(t *testing.T) {
 		{"386", "i686-pc-windows-msvc"},
 	} {
 		t.Run(target.triple, func(t *testing.T) {
-			requireX86GoAssemblerResult(t, target.arch, source.String(), true)
-			file, err := Parse(ArchAMD64, source.String())
-			if err != nil {
-				t.Fatal(err)
-			}
-			ir, err := Translate(file, Options{Goarch: target.arch, TargetTriple: target.triple,
-				Sigs: map[string]FuncSig{"rawScalarHalf": {Name: "rawScalarHalf", Ret: Void}},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			ir := x86UnboundVoidRawScalarFormatObject(t, source.String(), target.arch, target.triple)
 			compileLLVMToObject(t, llc, target.triple, "raw-scalar-half.ll", "raw-scalar-half.o", ir)
 		})
 	}
