@@ -67,6 +67,26 @@ func TestX86LockScalarRMWCarryCFGAndStackSources(t *testing.T) {
 				source := x86NamedLockOracleSource(arch,
 					control.body+"\nLOCK\nADCL CX,(SI)")
 				x86LockScalarOriginalInstruction(t, arch, source)
+				file, err := Parse(ArchAMD64, source)
+				if err != nil {
+					t.Fatal(err)
+				}
+				ctx, output := newAMD64CtxWithFuncForTest(t, file.Funcs[0], FuncSig{Ret: Void}, nil)
+				ctx.goarch = arch
+				before, temporary := output.String(), ctx.tmp
+				carryErr := ctx.verifyNamedLockCarry()
+				if output.String() != before || ctx.tmp != temporary {
+					t.Fatal("carry-only proof changed emitted code")
+				}
+				if control.known {
+					if carryErr != nil {
+						t.Fatal("defined source carry was lost", carryErr)
+					}
+				} else if !errors.Is(carryErr, ErrProbeNeedsContext) || !strings.Contains(carryErr.Error(), "carry") {
+					t.Fatal("independent carry proof accepted an undefined source", carryErr)
+				}
+				// The public proof may reject an earlier undefined stack value
+				// before reaching LOCK. Its phase is not the carry-only contract.
 				for _, api := range []string{"text", "module", "Go"} {
 					t.Run(api, func(t *testing.T) {
 						ir, err := x86OrderingHintTranslateAPI(t, api, source,
@@ -75,7 +95,7 @@ func TestX86LockScalarRMWCarryCFGAndStackSources(t *testing.T) {
 							if err != nil || !strings.Contains(ir, "lock; adcl") {
 								t.Fatal("independent defined carry was not retained", err)
 							}
-						} else if !errors.Is(err, ErrProbeNeedsContext) || ir != "" || !strings.Contains(err.Error(), "carry") {
+						} else if !errors.Is(err, ErrProbeNeedsContext) || ir != "" {
 							t.Fatal("unclosed carry acquired a numerical value", err)
 						}
 					})
