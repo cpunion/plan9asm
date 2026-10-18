@@ -1328,7 +1328,7 @@ func TestAMD64FPMovCoverage(t *testing.T) {
 		"fneg double",
 		`call { i8, i8, i8 } asm sideeffect "comisd $3, $4; setb $0; sete $1; setp $2"`,
 		"fcmp ord double",
-		"call double @llvm.sqrt.f64",
+		`asm sideeffect "sqrtsd $2, $0"`,
 		`call i32 asm sideeffect "cvtsd2sil $1, $0"`,
 		"@llvm.experimental.constrained.sitofp.f64.i64",
 		"@llvm.experimental.constrained.sitofp.f64.i32",
@@ -1841,7 +1841,7 @@ func TestAMD64FPExtraCoverage(t *testing.T) {
 	if ok, term, err := c.lowerFP("ADDSD", Instr{Raw: "ADDSD X0, AX", Args: []Operand{{Kind: OpReg, Reg: Reg("X0")}, {Kind: OpReg, Reg: AX}}}); !ok || term || err == nil {
 		t.Fatalf("ADDSD non-X dst = (%v, %v, %v)", ok, term, err)
 	}
-	if ok, term, err := c.lowerFP("SQRTSD", Instr{Raw: "SQRTSD X0, AX", Args: []Operand{{Kind: OpReg, Reg: Reg("X0")}, {Kind: OpReg, Reg: AX}}}); ok || term || err != nil {
+	if ok, term, err := c.lowerFP("SQRTSD", Instr{Raw: "SQRTSD X0, AX", Args: []Operand{{Kind: OpReg, Reg: Reg("X0")}, {Kind: OpReg, Reg: AX}}}); !ok || term || err == nil {
 		t.Fatalf("SQRTSD non-X dst = (%v, %v, %v)", ok, term, err)
 	}
 	if _, _, err := c.lowerFP("COMISD", Instr{Raw: "COMISD X0", Args: []Operand{{Kind: OpReg, Reg: Reg("X0")}}}); err == nil {

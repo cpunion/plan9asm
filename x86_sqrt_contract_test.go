@@ -8,6 +8,35 @@ import (
 	"testing"
 )
 
+// Preserve every original Go row and every public Context check. The named
+// 386 high banks have no physical binding: retain those exact rows as Context,
+// not as objects using a fictitious software register. All remaining original
+// rows still receive direct-emitter objects; initialized public five-target
+// programs live in TestX86SqrtInitializedFiveTargetObjects.
+func x86SqrtOriginalFormatObjects(t *testing.T, source, name, arch, triple string) string {
+	t.Helper()
+	file, signatures := x86UnboundVoidFormatSource(t, source, name, arch, triple)
+	local := *file
+	local.Funcs = append([]Func(nil), file.Funcs...)
+	local.Funcs[0].Instrs = nil
+	contextRows := 0
+	for _, ins := range file.Funcs[0].Instrs {
+		if _, known, err := x86SqrtProperties(ins, arch); known && err != nil {
+			if arch != "386" || !errors.Is(err, ErrProbeNeedsContext) {
+				t.Fatal("original Go row became malformed", ins.Raw, err)
+			}
+			contextRows++
+			continue
+		}
+		local.Funcs[0].Instrs = append(local.Funcs[0].Instrs, ins)
+	}
+	if arch == "386" && contextRows == 0 || arch == "amd64" && contextRows != 0 {
+		t.Fatal("original physical-bank Context partition changed", arch, contextRows)
+	}
+	t.Logf("original source retained; %d unbound mode32 register rows remain Context", contextRows)
+	return x86ScalarFormatObjectUnit(t, &local, signatures, arch, triple, 0)
+}
+
 func TestX86SqrtEveryInputByteAndUpperAlias(t *testing.T) {
 	for _, arch := range []string{"386", "amd64"} {
 		for _, row := range x86SqrtInputRows(arch) {

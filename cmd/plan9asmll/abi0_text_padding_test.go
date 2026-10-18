@@ -94,7 +94,7 @@ func TestCompileOnePaddedSqrtUsesOriginalExternalTEXT(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				if !strings.Contains(string(ir), "call float @llvm.sqrt.f32(float") {
+				if !strings.Contains(string(ir), `asm sideeffect "sqrtss $2, $0"`) {
 					t.Fatalf("missing original f32 square root:\n%s", ir)
 				}
 			})
