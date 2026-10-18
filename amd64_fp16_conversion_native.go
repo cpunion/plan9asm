@@ -12,8 +12,9 @@ func (c *amd64Ctx) emitNativeFP16Conversion(ins Instr, f x86FP16ConversionForm) 
 		return fmt.Errorf("%w: FP16 conversion needs original native backing", ErrProbeNeedsContext)
 	}
 	if f.spec.scalar {
-		return c.emitNativeFP16ScalarUnary(ins, x86NativeFP16ScalarUnary{
-			memoryBytes: f.memoryBytes, upper: f.upper, destination: f.destination, mask: f.mask,
+		return c.emitNativeFP16ThreeOperand(ins, x86NativeFP16ThreeOperand{
+			byteWidth: 16, lanes: 1, memoryBytes: f.memoryBytes, second: f.upper,
+			destination: f.destination, mask: f.mask,
 			controls: f.controls, sae: f.sae,
 		})
 	}
@@ -30,32 +31,38 @@ func (c *amd64Ctx) emitNativeFP16Conversion(ins Instr, f x86FP16ConversionForm) 
 	})
 }
 
-// Scalar conversion copies upper X bytes from its independent first source.
-// Keep the original native memory operand so masking and exceptions, including
-// dead results, retain the instruction's own access and arithmetic behavior.
-type x86NativeFP16ScalarUnary struct {
-	memoryBytes, upper, destination, mask int
-	controls                              amd64FMA3Suffix
-	sae                                   bool
+// FP16 scalar conversion/SQRT and scalar/packed FMA share a three-operand
+// native encoding, not arithmetic semantics. Preserve the actual opcode and
+// memory operand so masking, rounding, exceptions and dead accesses survive.
+type x86NativeFP16ThreeOperand struct {
+	byteWidth, lanes, memoryBytes int
+	second, destination, mask     int
+	controls                      amd64FMA3Suffix
+	sae, readDestination          bool
 }
 
-func (c *amd64Ctx) emitNativeFP16ScalarUnary(ins Instr, f x86NativeFP16ScalarUnary) error {
-	const typ = "<4 x float>"
+func (c *amd64Ctx) emitNativeFP16ThreeOperand(ins Instr, f x86NativeFP16ThreeOperand) error {
+	source := ins.Args[0]
+	if source.Kind == OpFP || ins.x86AddressBits != 0 || source.Kind == OpMem &&
+		!x86OrdinaryNativeMemoryOperand(source, c.goarch) {
+		return fmt.Errorf("%w: FP16 instruction needs original native backing", ErrProbeNeedsContext)
+	}
+	typ := fmt.Sprintf("<%d x float>", f.byteWidth/4) // Bit carrier, never arithmetic precision.
 	load := func(index int) (string, error) {
-		bytes, err := c.loadX(ins.Args[index].Reg)
+		bytes, err := c.loadPackedCompareBytes(ins.Args[index], f.byteWidth)
 		if err != nil {
 			return "", err
 		}
 		value := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = bitcast <16 x i8> %s to %s\n", value, bytes, typ)
+		fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i8> %s to %s\n", value, f.byteWidth, bytes, typ)
 		return "%" + value, nil
 	}
-	upper, err := load(f.upper)
+	second, err := load(f.second)
 	if err != nil {
 		return err
 	}
 	old := "zeroinitializer"
-	if f.mask >= 0 && !f.controls.zeroing {
+	if f.readDestination || f.mask >= 0 && !f.controls.zeroing {
 		old, err = load(f.destination)
 		if err != nil {
 			return err
@@ -79,7 +86,7 @@ func (c *amd64Ctx) emitNativeFP16ScalarUnary(ins Instr, f x86NativeFP16ScalarUna
 	if err != nil {
 		return err
 	}
-	args := fmt.Sprintf("%s %s, %s %s, %s %s", typ, old, typ, upper, inputType, input)
+	args := fmt.Sprintf("%s %s, %s %s, %s %s", typ, old, typ, second, inputType, input)
 	constraints := "=v,0,v," + inputConstraint
 	mnemonic, _, _ := strings.Cut(strings.ToLower(string(ins.Op)), ".")
 	assembly := mnemonic + " "
@@ -88,13 +95,21 @@ func (c *amd64Ctx) emitNativeFP16ScalarUnary(ins Instr, f x86NativeFP16ScalarUna
 	} else if f.sae {
 		assembly += "{sae}, "
 	}
-	assembly += inputTemplate + ", $2, $0"
+	assembly += inputTemplate
+	if f.controls.broadcast {
+		assembly += fmt.Sprintf("{1to%d}", f.lanes)
+	}
+	assembly += ", $2, $0"
 	if f.mask >= 0 {
 		mask, err := c.loadK(ins.Args[f.mask].Reg)
 		if err != nil {
 			return err
 		}
-		assembly = "kmovw ${4:k}, %k1; " + assembly + " {%k1}"
+		maskMove := "kmovw"
+		if f.lanes > 16 {
+			maskMove = "kmovd"
+		}
+		assembly = maskMove + " ${4:k}, %k1; " + assembly + " {%k1}"
 		if f.controls.zeroing {
 			assembly += " {z}"
 		}
@@ -103,6 +118,6 @@ func (c *amd64Ctx) emitNativeFP16ScalarUnary(ins Instr, f x86NativeFP16ScalarUna
 	}
 	result, bytes := c.newTmp(), c.newTmp()
 	fmt.Fprintf(c.b, "  %%%s = call %s asm sideeffect %q, %q(%s)\n", result, typ, assembly, constraints+",~{memory},~{fpsr}", args)
-	fmt.Fprintf(c.b, "  %%%s = bitcast %s %%%s to <16 x i8>\n", bytes, typ, result)
-	return c.storePackedMoveOperand(ins.Args[f.destination], 16, "%"+bytes)
+	fmt.Fprintf(c.b, "  %%%s = bitcast %s %%%s to <%d x i8>\n", bytes, typ, result, f.byteWidth)
+	return c.storePackedMoveOperand(ins.Args[f.destination], f.byteWidth, "%"+bytes)
 }

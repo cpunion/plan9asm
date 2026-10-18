@@ -22,6 +22,15 @@ func x86FP16SqrtResultEncoding(scalar bool, length byte, memory, control, zero b
 }
 
 func TestX86RawFP16SqrtInitializedNativeObjects(t *testing.T) {
+	x86RawFP16SqrtInitializedObjects(t, true)
+}
+
+func TestX86RawFP16SqrtUnmaskedNativeObjects(t *testing.T) {
+	x86RawFP16SqrtInitializedObjects(t, false)
+}
+
+func x86RawFP16SqrtInitializedObjects(t *testing.T, masked bool) {
+	t.Helper()
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM22 llc required")
@@ -43,12 +52,19 @@ func TestX86RawFP16SqrtInitializedNativeObjects(t *testing.T) {
 								continue
 							}
 							for _, zero := range []bool{false, true} {
+								if zero && !masked {
+									continue
+								}
 								name := fmt.Sprintf("halfSqrt%d", count)
 								maskMove := "kmovw"
 								if !scalar && (length == 2 || !memory && control) {
 									maskMove = "kmovd"
 								}
 								code := x86FP16SqrtResultEncoding(scalar, length, memory, control, zero)
+								if !masked {
+									code[3] &^= 7
+									maskMove = ""
+								}
 								encodings[name] = x86RawFP16ObjectEncoding{
 									code: code, lengthIgnored: scalar && !control, maskMove: maskMove,
 								}
@@ -63,7 +79,11 @@ func TestX86RawFP16SqrtInitializedNativeObjects(t *testing.T) {
 					}
 				}
 			}
-			if count != 50 {
+			want, wideMasks := 50, 14
+			if !masked {
+				want, wideMasks = 25, 0
+			}
+			if count != want {
 				t.Fatal("incomplete independent FP16 SQRT physical forms", count)
 			}
 			x86LEAActualTargetGoObject(t, target.arch, target.triple, source.String())
@@ -78,7 +98,7 @@ func TestX86RawFP16SqrtInitializedNativeObjects(t *testing.T) {
 					}
 					// ZMM holds 32 half lanes: a word-sized mask load would
 					// silently discard lanes 16-31. ER also selects ZMM.
-					if strings.Count(text, "kmovd ${3:k}, %k1;") != 14 {
+					if strings.Count(text, "kmovd ${3:k}, %k1;") != wideMasks {
 						t.Fatal("FP16 Z square roots truncated the 32-lane mask", api)
 					}
 					for _, level := range []string{"-O0", "-O2"} {

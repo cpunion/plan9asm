@@ -33,7 +33,7 @@ func x86RawFP16CheckObject(t *testing.T, llc, triple, ir, level string, want map
 	}
 	x86FloatCompareCaptureCommand(t, exec.Command(llc, level, "-mtriple="+triple, "-filetype=obj", input, "-o", object))
 	listing := x86FloatCompareCaptureCommand(t, exec.Command(disassembler, "--disassemble", object))
-	sections := regexp.MustCompile(`(?m)^[0-9a-f]+ <_?((?:conversion|halfSqrt)[0-9]+)>:\n`).FindAllSubmatchIndex(listing, -1)
+	sections := regexp.MustCompile(`(?m)^[0-9a-f]+ <_?((?:conversion|halfSqrt|halfFMA)[0-9]+)>:\n`).FindAllSubmatchIndex(listing, -1)
 	seen := make(map[string]bool)
 	for index, section := range sections {
 		name := string(listing[section[2]:section[3]])
@@ -83,7 +83,11 @@ func x86RawFP16CheckObject(t *testing.T, llc, triple, ir, level string, want map
 				t.Fatalf("%s changed native source width or rounding: %x versus %x", name, code, original)
 			}
 		}
-		if operations != 1 || masks != 1 {
+		wantMasks := 1
+		if expected.maskMove == "" {
+			wantMasks = 0
+		}
+		if operations != 1 || masks != wantMasks {
 			t.Fatal("object did not retain exactly one original FP16 operation and full mask", name, operations, masks)
 		}
 		seen[name] = true

@@ -162,6 +162,17 @@ func (c *amd64Ctx) lowerFMA3(op Op, ins Instr) (ok bool, terminated bool, err er
 	}
 	spec, properties := form.spec, form.suffix
 	dstArg, byteWidth := ins.Args[form.destination], form.byteWidth
+	if spec.rawOnly && x86ScalarFloatIntegerNativeTarget(c.goarch, c.targetTriple) {
+		lanes := byteWidth * 8 / spec.laneBits
+		if spec.scalar {
+			lanes = 1
+		}
+		return true, false, c.emitNativeFP16ThreeOperand(ins, x86NativeFP16ThreeOperand{
+			byteWidth: byteWidth, lanes: lanes, memoryBytes: form.memoryBytes,
+			second: 1, destination: form.destination, mask: form.mask,
+			controls: properties, readDestination: true,
+		})
+	}
 
 	var mask string
 	if form.mask >= 0 {

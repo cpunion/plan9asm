@@ -95,6 +95,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		if x86RawFP16SqrtSource(ins, arch) {
 			continue // Square-root inputs remain guarded by the shared typed byte effect.
 		}
+		if _, valid := x86RawFP16FMASourceForm(ins, arch); valid {
+			continue // FMA retains all three inputs, including a zeroing destination.
+		}
 		if _, valid := x86EnqueueSourceForm(ins, arch); valid {
 			continue // Exact device submission retains its own two-address native effect.
 		}
@@ -145,6 +148,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 			return accepted
 		}
 		if accepted, known := x86LoweredFP16ConversionStep(ins, state, owned, arch); known {
+			return accepted
+		}
+		if accepted, known := x86LoweredFP16FMAStep(ins, state, owned, arch); known {
 			return accepted
 		}
 		if accepted, known := x86LoweredEnqueueResultStep(ins, state, arch); known {
