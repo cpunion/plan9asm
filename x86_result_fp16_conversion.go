@@ -4,15 +4,21 @@ import "reflect"
 
 func x86RawFP16ConversionSourceForm(ins Instr, arch string) (x86FP16ConversionForm, bool) {
 	f, known, err := x86FP16ConversionProperties(ins, arch)
-	if !known || err != nil || ins.x86SourceRaw == nil ||
+	return f, known && err == nil && x86RawOrdinaryVectorSource(ins, arch)
+}
+
+// A typed family must validate the opcode and operands before using this
+// original-source identity check. It grants no standalone or native entry role.
+func x86RawOrdinaryVectorSource(ins Instr, arch string) bool {
+	if len(ins.Args) == 0 || ins.x86SourceRaw == nil ||
 		ins.x86SourceRaw.op != ins.Op || !reflect.DeepEqual(ins.x86SourceRaw.args, ins.Args) ||
 		ins.x86SourceRaw.vectorBytes != ins.x86VectorBytes ||
 		ins.x86RawNearReturn != nil || ins.x86AddressBits != 0 || ins.x86UnboundAddressOverride ||
 		ins.x86SegmentPrefix != 0 || ins.x86RIPLiteral || ins.x86NumericalRead != nil {
-		return f, false
+		return false
 	}
 	source := ins.Args[0]
-	return f, source.Kind == OpReg || source.Kind == OpMem && source.Mem.Sym == "" &&
+	return source.Kind == OpReg || source.Kind == OpMem && source.Mem.Sym == "" &&
 		source.Mem.Segment == "" && x86OrdinaryNativeMemoryOperand(source, arch)
 }
 

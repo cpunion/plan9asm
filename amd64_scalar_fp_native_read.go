@@ -92,6 +92,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		if _, valid := x86RawFP16ConversionSourceForm(ins, arch); valid {
 			continue // Exact conversion identity retains independent input and mask obligations.
 		}
+		if x86RawFP16SqrtSource(ins, arch) {
+			continue // Square-root inputs remain guarded by the shared typed byte effect.
+		}
 		if _, valid := x86EnqueueSourceForm(ins, arch); valid {
 			continue // Exact device submission retains its own two-address native effect.
 		}

@@ -18,15 +18,35 @@ var x86SqrtSpecs = map[Op]x86SqrtSpec{
 	"VSQRTPS": {32, false, false}, "VSQRTPD": {64, false, false},
 }
 
+func x86SqrtSpecFor(base Op) (x86SqrtSpec, bool) {
+	if base == "VSQRTPH" || base == "VSQRTSH" {
+		return x86SqrtSpec{bits: 16, scalar: base == "VSQRTSH"}, true
+	}
+	spec, known := x86SqrtSpecs[base]
+	return spec, known
+}
+
 func x86SqrtProperties(ins Instr, arch string) (x86FloatBinaryForm, bool, error) {
 	base, _, _ := strings.Cut(strings.ToUpper(string(ins.Op)), ".")
-	spec, known := x86SqrtSpecs[Op(base)]
+	spec, known := x86SqrtSpecFor(Op(base))
 	if !known {
 		return x86FloatBinaryForm{}, false, nil
+	}
+	if spec.bits == 16 && !ins.x86Encoded {
+		return x86FloatBinaryForm{}, true, fmt.Errorf("%s has no named Go assembler form; raw encoding required", ins.Op)
 	}
 	f, err := x86FloatOperandProperties(ins, arch, spec.bits, spec.legacy, spec.scalar, false, !spec.scalar, "sqrt")
 	if err != nil {
 		return f, true, err
+	}
+	if spec.bits == 16 && ins.Args[0].Kind == OpMem {
+		memory := ins.Args[0].Mem
+		if err := x86SymbolIndexedMemoryError(memory, arch); err != nil {
+			return f, true, err
+		}
+		if memory.OffRaw != "" || memory.IndexExt != "" {
+			return f, true, fmt.Errorf("%s has an unresolved memory displacement or extension", ins.Op)
+		}
 	}
 	// Go's pre-encoding vector names are not physical mode32 registers.
 	for _, operand := range ins.Args {
@@ -44,7 +64,7 @@ func x86SqrtNativeEVEX(ins Instr, form x86FloatBinaryForm) bool {
 	if form.legacy {
 		return false
 	}
-	if ins.x86SqrtEVEX || form.byteWidth == 64 || form.mask >= 0 || form.broadcast || form.rounding != "" {
+	if form.bits == 16 || ins.x86SqrtEVEX || form.byteWidth == 64 || form.mask >= 0 || form.broadcast || form.rounding != "" {
 		return true
 	}
 	for _, operand := range ins.Args {

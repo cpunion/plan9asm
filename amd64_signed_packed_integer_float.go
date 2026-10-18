@@ -257,7 +257,11 @@ func (c *amd64Ctx) emitNativePackedConversion(ins Instr, f x86NativePackedConver
 		if err != nil {
 			return err
 		}
-		prefix += "kmovw ${3:k}, %k1; "
+		maskMove := "kmovw"
+		if f.lanes > 16 {
+			maskMove = "kmovd"
+		}
+		prefix += maskMove + " ${3:k}, %k1; "
 		constraints += ",r,~{k1}"
 		args += ", i32 " + c.approximateMathMask32(mask)
 	}

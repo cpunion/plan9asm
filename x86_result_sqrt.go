@@ -1,5 +1,10 @@
 package plan9asm
 
+func x86RawFP16SqrtSource(ins Instr, arch string) bool {
+	f, known, err := x86SqrtProperties(ins, arch)
+	return known && err == nil && f.bits == 16 && x86RawOrdinaryVectorSource(ins, arch)
+}
+
 // Sqrt computes only from its first operand. Scalar VEX/EVEX copies the
 // second operand's upper X bytes without requiring its unused low scalar.
 // Unknown copied bytes stay unknown; no pointer or storage facts are created.
@@ -7,6 +12,14 @@ func x86ResultSqrtStep(ins Instr, state *x86ResultState, owned []bool, arch stri
 	f, known, err := x86SqrtProperties(ins, arch)
 	if !known || err != nil {
 		return false, known
+	}
+	if f.bits == 16 {
+		if !nativeRead || !x86RawFP16SqrtSource(ins, arch) {
+			return false, true
+		}
+		// The original identity above remains mandatory. This local projection
+		// lets the shared numerical read consume the paired native access only.
+		ins.x86Encoded, ins.x86SourceRaw = false, nil
 	}
 	if f.mask >= 0 {
 		mask, _ := amd64ParseKReg(ins.Args[f.mask].Reg)

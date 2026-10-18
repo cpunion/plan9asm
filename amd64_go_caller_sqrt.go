@@ -1,6 +1,9 @@
 package plan9asm
 
 func x86CallerSqrtStep(ins *Instr, f x86FloatBinaryForm, state *x86SourceStackState, proof *x86GoCallerRegionProof) bool {
+	if f.bits == 16 {
+		return false // Raw FP16 retains its separate original-source continuation.
+	}
 	if f.mask >= 0 && !state.masks[ins.Args[f.mask].Reg] {
 		return false
 	}

@@ -12,7 +12,10 @@ func (c *amd64Ctx) emitNativeFP16Conversion(ins Instr, f x86FP16ConversionForm) 
 		return fmt.Errorf("%w: FP16 conversion needs original native backing", ErrProbeNeedsContext)
 	}
 	if f.spec.scalar {
-		return c.emitNativeScalarFP16Conversion(ins, f)
+		return c.emitNativeFP16ScalarUnary(ins, x86NativeFP16ScalarUnary{
+			memoryBytes: f.memoryBytes, upper: f.upper, destination: f.destination, mask: f.mask,
+			controls: f.controls, sae: f.sae,
+		})
 	}
 	mnemonic, _, _ := strings.Cut(strings.ToLower(string(ins.Op)), ".")
 	if source.Kind != OpReg && f.spec.outputBits == 16 && !f.controls.broadcast && f.sourceBytes < 64 {
@@ -30,7 +33,13 @@ func (c *amd64Ctx) emitNativeFP16Conversion(ins Instr, f x86FP16ConversionForm) 
 // Scalar conversion copies upper X bytes from its independent first source.
 // Keep the original native memory operand so masking and exceptions, including
 // dead results, retain the instruction's own access and arithmetic behavior.
-func (c *amd64Ctx) emitNativeScalarFP16Conversion(ins Instr, f x86FP16ConversionForm) error {
+type x86NativeFP16ScalarUnary struct {
+	memoryBytes, upper, destination, mask int
+	controls                              amd64FMA3Suffix
+	sae                                   bool
+}
+
+func (c *amd64Ctx) emitNativeFP16ScalarUnary(ins Instr, f x86NativeFP16ScalarUnary) error {
 	const typ = "<4 x float>"
 	load := func(index int) (string, error) {
 		bytes, err := c.loadX(ins.Args[index].Reg)

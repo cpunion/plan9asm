@@ -3,8 +3,8 @@ package plan9asm
 import "fmt"
 
 func x86CallerVectorMoveKnown(ins Instr) bool {
-	if _, known, err := x86SqrtProperties(ins, "amd64"); known {
-		return err == nil
+	if form, known, err := x86SqrtProperties(ins, "amd64"); known {
+		return err == nil && form.bits != 16
 	}
 	if _, known, err := x86ByteShuffleProperties(ins.Op, ins, "amd64"); known {
 		return err == nil

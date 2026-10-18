@@ -7,7 +7,7 @@ import (
 
 func (c *amd64Ctx) lowerSqrt(op Op, ins Instr) (bool, bool, error) {
 	base, _, _ := strings.Cut(strings.ToUpper(string(op)), ".")
-	if _, known := x86SqrtSpecs[Op(base)]; !known {
+	if _, known := x86SqrtSpecFor(Op(base)); !known {
 		return false, false, nil
 	}
 	if ins.Op != "" && !strings.EqualFold(string(op), string(ins.Op)) {
@@ -18,6 +18,19 @@ func (c *amd64Ctx) lowerSqrt(op Op, ins Instr) (bool, bool, error) {
 	if err != nil {
 		return true, false, err
 	}
+	if f.bits == 16 && !x86ScalarFloatIntegerNativeTarget(c.goarch, c.targetTriple) {
+		return false, false, nil // Retain the existing cross-target numerical model.
+	}
+	if f.bits == 16 && f.scalar {
+		if ins.Args[0].Kind == OpFP || ins.x86AddressBits != 0 || ins.Args[0].Kind == OpMem &&
+			!x86OrdinaryNativeMemoryOperand(ins.Args[0], c.goarch) {
+			return true, false, fmt.Errorf("%w: FP16 square root needs original native backing", ErrProbeNeedsContext)
+		}
+		return true, false, c.emitNativeFP16ScalarUnary(ins, x86NativeFP16ScalarUnary{
+			memoryBytes: f.memoryBytes, upper: f.second, destination: f.destination, mask: f.mask,
+			controls: amd64FMA3Suffix{zeroing: f.zeroing, rounding: f.rounding},
+		})
+	}
 	if f.scalar {
 		return true, false, c.lowerScalarSqrt(ins, f)
 	}
@@ -25,9 +38,13 @@ func (c *amd64Ctx) lowerSqrt(op Op, ins Instr) (bool, bool, error) {
 		ins.Args[0].Kind == OpMem && !x86OrdinaryNativeMemoryOperand(ins.Args[0], c.goarch) {
 		return true, false, fmt.Errorf("%w: %s packed source lacks its original native memory binding", ErrProbeNeedsContext, op)
 	}
+	carrierBits := f.bits
+	if carrierBits == 16 {
+		carrierBits = 32 // Register bit carrier, not an arithmetic precision change.
+	}
 	return true, false, c.emitNativePackedConversion(ins, x86NativePackedConversion{
 		byteWidth: f.byteWidth, sourceBytes: f.byteWidth, memoryBytes: f.memoryBytes,
-		outputBits: f.bits, destination: f.destination, mask: f.mask, lanes: f.byteWidth * 8 / f.bits,
+		outputBits: carrierBits, destination: f.destination, mask: f.mask, lanes: f.byteWidth * 8 / f.bits,
 		legacy: f.legacy, evex: x86SqrtNativeEVEX(ins, f), broadcast: f.broadcast, zeroing: f.zeroing,
 		rounding: f.rounding, mnemonic: strings.ToLower(base),
 	})

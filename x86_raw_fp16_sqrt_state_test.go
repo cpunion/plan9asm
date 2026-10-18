@@ -20,6 +20,11 @@ func TestX86RawFP16SqrtExactSourceAndState(t *testing.T) {
 								t.Fatal(err)
 							}
 							ins := file.Funcs[0].Instrs[1]
+							caller := x86SourceStackState{vectors: map[Reg]uint64{
+								"Z0": ^uint64(0), "Z1": ^uint64(0), "Z2": ^uint64(0)}, masks: map[Reg]bool{"K1": true}}
+							if x86CallerVectorMoveKnown(ins) || x86CallerVectorMoveStep(&ins, &caller, nil) {
+								t.Fatal("raw sqrt acquired a standalone caller contract")
+							}
 							width, input := 16<<length, 16<<length
 							if scalar {
 								width, input = 16, 2
