@@ -1323,3 +1323,11 @@ current source-stack numerical transfer, then clear it before saving state.
 It establishes no pointer, later-read or DATA ownership; the whole-source raw
 return guard still verifies actual literal bytes. Keep physical SP/BP/g roles,
 vendor-ambiguous word reads, original encoding identity and stale-proof controls.
+
+VEX/EVEX logical RIP literals reuse the same bounded whole-source consumer and
+existing typed logical effects. Require exact decoder read identity, source
+operand and full/broadcast tuple width; missing source, mask and merge bytes
+remain unknown. The complete original/decoded/normalized source and raw RET
+checks stay independent. This adds no native read, frame, legacy/MMX or
+declaration-query permission. Preserve original unbound Go/emitter objects and
+public Context separately from initialized public objects.
