@@ -141,6 +141,20 @@ retain independent original-Go byte witnesses. Native reads must stay exact,
 unaligned and volatile even when their result is discarded. Only the paired
 lowering continuation may consume their conditional numerical result.
 
+Scalar shifts and rotates share the complete Group2, double-shift and BMI2
+grammar with memory effects. Native RMWs retain exact volatile loads and stores,
+including count zero; BMI2 memory sources retain only their exact volatile read.
+Mode32 BMI2 Q spellings still access four bytes. Check addresses, count/data
+bytes and incoming CF before any aliased write, including Void functions.
+Continuing a paired native access defines numerical outputs, not pointer,
+pointee, caller, raw-entry or reusable memory facts. Logical FP/AUTO storage
+retains its separate byte-view contracts. W double shifts with unbounded counts
+remain Context because some counts have undefined architectural results.
+Keep the complete independent Go rows, original conformance programs, portable
+full-count/FLAGS/canary execution and the required native Linux original-Go/LLVM
+guard-page/read-only oracle separate. A zero-count original-opcode hardware
+spot check does not qualify the complete LLVM native counterpart.
+
 A proper low-mask AND projection requires both actual caller-address and
 complete pointer must-facts, never an opaque pointer alone. Its B/W/L/Q write
 defines only the written bytes and revokes every address identity. Native-word

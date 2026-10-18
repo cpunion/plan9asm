@@ -25,6 +25,8 @@ of the current candidate. Do not create another worktree for routine work.
 
 | Snapshot | Evidence and limits |
 |---|---|
+| `3d26bf2cc` | Complete scalar-shift memory effects: 23 roots / 5,793 children pass current Go, actual Go1.20 and race; identical 5,816 terminal identities, zero fail/skip/incomplete and unchanged source/SDK/LLVM22 observations. Both-SDK build/vet and seventeen scanner roots, five-arch classification, three CLI extraction roots, 132 CI policies and tracked formatting pass. Complete native Linux execution remains required |
+| Same code head | Two earlier race attempts remain failed/incomplete: one timed out including compilation, one timed out during inventory. The fresh complete retry passed within unchanged budgets. A separate Linux AMD64 original-Go zero-count diagnostic passed 84 cases (76 RMW read-only faults, eight BMI2 reads); it is not complete LLVM native qualification |
 | `e95a10314` | Complete CPU-query implicit effects: 40 roots / 1,593 children pass current Go, actual Go1.20 and race; identical 1,633 terminal identities, zero fail/skip/incomplete and unchanged source/SDK/LLVM22 observations. Original named/raw runtime sources compile through all three APIs on all five x86 targets. Native Linux AMD64/386 execution remains a separate required counterpart, not a local pass |
 | Same code head | Both-SDK build/vet and sixteen scanner roots, five-arch official classification, three CLI extraction roots, CI policies and tracked formatting pass. Backed up in the allowed fork; neither complete CI nor the strict benchmark has qualified this source |
 | `dab3bb581` | Preserved CPU-query TDD RED: four roots / 136 children, three failed roots and 89 failed terminals with unchanged seals. The original IA32 program fails at CPUID, the implicit NUM descriptor is absent, and Void accepts missing inputs. The simple initialized-result object root already passes; it is a positive control, not a repaired failure |
@@ -54,6 +56,25 @@ Classification, emitter-only objects, initialized public translation, portable
 execution and native execution remain different claims.
 
 ## Latest repairs
+
+The scalar-shift memory batch retains all 148 AMD64 and 110 IA32 independent
+memory witnesses, including explicit Context for the four unbounded W double
+shifts per mode. Group2/double shifts preserve exact volatile read/write effects;
+BMI2 sources preserve exact volatile reads, including mode32 Q's dword width.
+Complete addresses, numerical count/data and carry remain mandatory even for
+Void. The original `doubleShift32/64` conformance bodies now produce objects
+without source rewriting; portable execution checks all byte counts, FLAGS,
+unaligned memory and complete canaries through all three APIs and both IR/backend
+optimization axes. The full Linux native runtime owner is added but not locally
+qualified. Original RED at `e57ab2805` remains unchanged.
+
+The sealed eight-SDK audit changes only two 386 and 77 AMD64 isolated memory
+forms per SDK from supported to Context because their address/inputs are absent.
+Encoder rules, unsupported counts and every unrelated metric remain unchanged.
+At `3d26bf2cc`, the next two original MMX format roots are freshly reproduced:
+both fail, with ten failed terminals across ten children and no incomplete work.
+Their original unclosed MMX sources must remain negative controls alongside
+separately initialized complete programs; no source is silently given EMMS.
 
 CPUID and XGETBV now share their existing complete zero-operand grammar and
 implicit dword input/output spec with numerical definedness. Inputs are checked
@@ -223,12 +244,12 @@ cannot certify a performance improvement. Full reports remain under ignored
    floating-field address class is now qualified; SQRT arithmetic is separate.
    Packed private-copy stores and all eight mask/vector data effects are now
    qualified, as are the complete CPU-query implicit NUM and exact named/raw
-   continuation effects. Next close three-operand shift memory effects and
-   MMX-region composition. The scalar-shift grammar already independently binds
-   all 148 Go rows, but its shared byte-effect consumer explicitly admits only
-   register operands. Preserve the original `doubleShift32` program's SHLL/SHRL
-   memory destinations and fix that whole memory rule class, including exact
-   access widths, volatile effects, FLAGS, count boundaries and BMI2 sources.
+   continuation effects. Scalar-shift memory effects now have the complete
+   focused qualification above. Next close MMX format-contract and region
+   composition failures, preserving unmodified failed sources and independently
+   initialized positive programs. In particular, do not assume that a whole
+   format batch's first MMX rejection establishes every sibling's input checks;
+   retain per-mode positive and missing-input controls.
    CPU-query numerical effects do not supply the separate custom entry of the
    runtime386 `cpuidProbe`. Preserve failed receipts, native runtime owners and
    the already-passing simple query-result control; focused successes are not
@@ -250,6 +271,14 @@ Go 1.20 and race. One heavy local Go/LLVM owner runs at a time; develop in an
 existing idle worktree while its tested source stays frozen.
 
 Resolve branch locations with `git worktree list`. Latest ignored receipts use
+`scalar-shift-memory-qualified-complete` at `3d26bf2cc` for both normal SDKs and
+`scalar-shift-memory-qualified-complete-retry2` for the complete race lane;
+`scalar-shift-memory-qualified-3d26bf2c.json` seals their exact three-lane union.
+The earlier race and `-cached` attempts remain failed. Final gates use
+`scalar-shift-memory-final-gates-3d26bf2c`; the eight-SDK audit uses
+`scalar-shift-memory-classification-audit-v2`. The independent native spot check
+is `zero-shift-native-result.json`, not the full native root. Fresh MMX format
+RED uses `mmx-original-format-red` at that same code head. Earlier receipts use
 `cpu-query-result-red` at `dab3bb581` for the original CPU-query failures.
 The latest completed qualification uses `cpu-query-qualified-{core,state}` at
 `e95a10314`; `cpu-query-qualified-e95a1031.json` retains the complete forty-root
