@@ -178,6 +178,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		if accepted, known := x86ResultFloatCompareStep(ins, state, owned, arch, true); known {
 			return accepted
 		}
+		if accepted, known := x86ResultCOMIStepWithRead(ins, state, owned, arch, true); known {
+			return accepted // The original scalar comparison retains exact read and MXCSR effects.
+		}
 		if accepted, known := x86ResultSignedIntegerFloatStepWithRead(ins, state, owned, arch, true); known {
 			return accepted // The same typed emitter retains an exact volatile source read.
 		}
