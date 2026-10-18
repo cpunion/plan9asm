@@ -75,6 +75,48 @@ func TestX86RTMGrammarRejectsConstructedIdentityAndNonIntegerAbort(t *testing.T)
 	}
 }
 
+func TestX86RTMStatusQueryRawCompositionKeepsBoundaries(t *testing.T) {
+	for _, arch := range []string{"386", "amd64"} {
+		x86RegisterQueryRawCompositionRoles(t, arch, "XTEST", []byte{0x0f, 0x01, 0xd6}, "MOVL $1,AX\n")
+	}
+}
+
+func TestX86RTMAbortCompleteIntegerImmediateDomain(t *testing.T) {
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM 22 llc required")
+	}
+	var source strings.Builder
+	source.WriteString("TEXT ·Abort(SB),4,$0-0\n")
+	var bytesWant []byte
+	for immediate := 0; immediate < 256; immediate++ {
+		fmt.Fprintf(&source, "XABORT $%d\n", immediate)
+		bytesWant = append(bytesWant, 0xc6, 0xf8, byte(immediate))
+	}
+	source.WriteString("RET\n")
+	bytesWant = append(bytesWant, 0xc3)
+	for _, arch := range []string{"386", "amd64"} {
+		if got := assembleX87ControlBytes(t, arch, source.String()); !bytes.Equal(got, bytesWant) {
+			t.Fatalf("%s original Go abort immediate bytes differ", arch)
+		}
+	}
+	for _, target := range x86RawReturnTargets {
+		t.Run(target.triple, func(t *testing.T) {
+			for _, api := range []string{"text", "module", "Go"} {
+				ir, err := x86ScalarFPBitViewAPI(t, source.String(), "func Abort()", target.arch, target.triple, api)
+				if err != nil || strings.Count(ir, "call void @llvm.x86.xabort(") != 256 {
+					t.Fatal("complete integer-domain source did not reach actual aborts", api, err)
+				}
+				for _, text := range []string{ir, x86DwordProductIROptimize(t, ir)} {
+					for _, level := range []string{"-O0", "-O2"} {
+						x86PackedStringCompileObject(t, llc, target.triple, text, level)
+					}
+				}
+			}
+		})
+	}
+}
+
 func TestX86RTMStatusQueryThreeAPIsFiveTargets(t *testing.T) {
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
