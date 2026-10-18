@@ -10,8 +10,6 @@ import (
 	"strconv"
 	"strings"
 	"testing"
-
-	"github.com/xgo-dev/llvm"
 )
 
 var x86WrappingAddOpcodes = []string{"PADDB", "PADDW", "PADDL", "PADDQ", "VPADDB", "VPADDW", "VPADDD", "VPADDQ"}
@@ -132,37 +130,41 @@ func TestX86PackedWrappingAddCompleteFormsFiveTargetsThreeAPIs(t *testing.T) {
 			if strings.HasPrefix(triple, "i") {
 				arch = "386"
 			}
-			var source strings.Builder
+			var source, declarations strings.Builder
 			sigs := map[string]FuncSig{}
 			for i, row := range x86WrappingAddFormats(arch) {
 				name := fmt.Sprintf("padd%d", i)
 				fmt.Fprintf(&source, "TEXT %s(SB),4,$0-64\n%s\nRET\n", name, row)
+				fmt.Fprintf(&declarations, "func %s(source [64]byte)\n", name)
 				sig := x86WordMaddFPType(t)
 				sig.Name = name
 				sigs[name] = sig
 			}
-			requireX86GoAssemblerResult(t, arch, source.String(), true)
+			x86LEAActualTargetGoObject(t, arch, triple, source.String())
 			file, err := Parse(ArchAMD64, source.String())
 			if err != nil {
 				t.Fatal(err)
 			}
-			opt := Options{Goarch: arch, TargetTriple: triple, Sigs: sigs}
-			ir, err := Translate(file, opt)
-			if err != nil {
-				t.Fatal(err)
+			// A byte-array parameter does not initialize vector registers,
+			// masks, native addresses or a physical MMX region. Keep these
+			// exact original format rows, with independent initialized programs
+			// in the arithmetic/native-read and closed-MMX family tests.
+			for _, api := range []string{"text", "module", "Go"} {
+				ir, err := x86ScalarFPBitViewAPI(t, source.String(), declarations.String(), arch, triple, api)
+				if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+					t.Fatal("unbound wrapping-add formats acquired source inputs", api, err)
+				}
 			}
-			compileLLVMToObject(t, llc, triple, "padd-text.ll", "padd-text.o", ir)
-			ctx := llvm.NewContext()
-			defer ctx.Dispose()
-			module, err := TranslateModuleInContext(ctx, file, opt)
-			if !module.IsNil() {
-				defer module.Dispose()
+			before := fmt.Sprintf("%#v %#v", file, sigs)
+			ir := x86ScalarFormatObjectUnit(t, file, sigs, arch, triple, 0)
+			for _, text := range []string{ir, x86DwordProductIROptimize(t, ir)} {
+				for _, level := range []string{"-O0", "-O2"} {
+					x86PackedStringCompileObject(t, llc, triple, text, level)
+				}
 			}
-			if err != nil {
-				t.Fatal(err)
+			if before != fmt.Sprintf("%#v %#v", file, sigs) {
+				t.Fatal("format emitter mutated the original source or signatures")
 			}
-			compileLLVMToObject(t, llc, triple, "padd-module.ll", "padd-module.o", module.String())
-			compileLLVMToObject(t, llc, triple, "padd-O2.ll", "padd-O2.o", x86MulDivRoundOptimize(t, ir))
 		})
 	}
 }
