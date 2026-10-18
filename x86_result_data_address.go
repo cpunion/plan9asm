@@ -6,8 +6,9 @@ import "strings"
 // complete address value, not arbitrary relocation bytes, an incoming Go
 // pointer, a code address or permission to dereference the resulting number.
 type x86StaticAddressValues struct {
-	objects map[string]bool
-	cells   map[x86StaticSBAddress]bool
+	objects  map[string]bool
+	writable map[string]bool
+	cells    map[x86StaticSBAddress]bool
 }
 
 func x86LoweredStaticAddressValues(file *File, resolve func(string) string, sigs map[string]FuncSig, arch string) *x86StaticAddressValues {
@@ -19,6 +20,7 @@ func x86LoweredStaticAddressValues(file *File, resolve func(string) string, sigs
 		raw       string
 		size, end int64
 		invalid   bool
+		readOnly  bool
 	}
 	objects := make(map[string]object)
 	bind := func(raw string) (string, object) {
@@ -32,6 +34,8 @@ func x86LoweredStaticAddressValues(file *File, resolve func(string) string, sigs
 	}
 	for _, global := range file.Globl {
 		name, current := bind(global.Sym)
+		readOnly, err := globlReadOnly(global.Flags)
+		current.readOnly = current.readOnly || readOnly || err != nil
 		current.invalid = current.invalid || global.SizeRaw != "" || global.Size < 0 || global.Size > maxDataGlobalSize
 		if global.Size > current.size {
 			current.size = global.Size
@@ -68,10 +72,14 @@ func x86LoweredStaticAddressValues(file *File, resolve func(string) string, sigs
 			code[resolveAssemblyDataSymbol(symbol, resolve)] = true
 		}
 	}
-	values := &x86StaticAddressValues{objects: make(map[string]bool), cells: make(map[x86StaticSBAddress]bool)}
+	values := &x86StaticAddressValues{
+		objects: make(map[string]bool), writable: make(map[string]bool),
+		cells: make(map[x86StaticSBAddress]bool),
+	}
 	for name, current := range objects {
 		if !current.invalid && !code[name] && current.size > 0 && current.size <= maxDataGlobalSize {
 			values.objects[name] = true
+			values.writable[name] = !current.readOnly
 		}
 	}
 	word := x86ResultPointerWord(arch)
@@ -107,22 +115,29 @@ func x86StaticAddressValueMove(ins Instr, arch string) (x86StaticSBAddress, bool
 	if !valid {
 		return x86StaticSBAddress{}, false, 0, false
 	}
-	source, immediate := ins.Args[0], false
+	address, immediate, valid := x86StaticAddressValueSource(ins.Args[0], arch)
+	return address, immediate, index, valid
+}
+
+// MOV and the non-shared mode32 Yi32 arithmetic rows share address spelling,
+// including ignored source annotations. This never dereferences the address.
+func x86StaticAddressValueSource(source Operand, arch string) (x86StaticSBAddress, bool, bool) {
+	immediate := false
 	if source.Kind == OpSym && strings.HasPrefix(strings.TrimSpace(source.Sym), "$") {
 		immediate = true
 		source.Sym = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(source.Sym), "$"))
 		if memory, matched, err := parseX86SymbolIndexedMemory(source.Sym); matched {
 			if err != nil {
-				return x86StaticSBAddress{}, false, 0, false
+				return x86StaticSBAddress{}, false, false
 			}
 			if arch == "386" {
 				for _, register := range []Reg{memory.Base, memory.Index} {
 					if register != "" && !x86SymbolGoRegisterName(string(register)) {
-						return x86StaticSBAddress{}, false, 0, false
+						return x86StaticSBAddress{}, false, false
 					}
 				}
 				if memory.IndexExt != "" || memory.Index == "CS" || memory.Index == "DS" || memory.Index == "ES" || memory.Index == FS || memory.Index == GS {
-					return x86StaticSBAddress{}, false, 0, false
+					return x86StaticSBAddress{}, false, false
 				}
 				memory.Base, memory.Index, memory.Scale = "", "", 0
 			}
@@ -130,7 +145,7 @@ func x86StaticAddressValueMove(ins Instr, arch string) (x86StaticSBAddress, bool
 		}
 	}
 	address, valid := x86StaticSBSourceAddress(source, arch)
-	return address, immediate, index, valid && (immediate || address.offset >= 0)
+	return address, immediate, valid && (immediate || address.offset >= 0)
 }
 
 func (c *amd64Ctx) scalarStaticAddressValueTransfer(ins Instr, state *x86ResultState, owned []bool, arch string) (bool, bool) {

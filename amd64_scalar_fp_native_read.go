@@ -156,6 +156,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		if accepted, known := c.scalarStaticAddressValueTransfer(ins, state, owned, arch); known {
 			return accepted
 		}
+		if accepted, known := c.scalarStaticRMWTransfer(ins, state, owned, arch); known {
+			return accepted
+		}
 		if accepted, known := stringMemory.transfer(ordinal, ins, state, arch); known {
 			return accepted
 		}
