@@ -39,22 +39,38 @@ func TestTranslateRawVEXPackedFloatLogicalWeaviateRegression(t *testing.T) {
 	WORD $0xc931
 	RET
 `
-	file, err := Parse(ArchAMD64, source)
-	if err != nil {
-		t.Fatal(err)
-	}
-	ir, err := Translate(file, Options{Goarch: "amd64", TargetTriple: "x86_64-unknown-linux-gnu", Sigs: map[string]FuncSig{"rawLogical": {Name: "rawLogical", Ret: Void}}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(ir, "xor <4 x i32>") {
-		t.Fatalf("raw VXORPS lowering omitted vector xor:\n%s", ir)
-	}
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc not found")
 	}
-	compileLLVMToObject(t, llc, "x86_64-unknown-linux-gnu", "amd64-raw-vex-logical.ll", "amd64-raw-vex-logical.o", ir)
+	for _, triple := range []string{"x86_64-apple-darwin", "x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc"} {
+		t.Run(triple, func(t *testing.T) {
+			// Keep every original byte, including the read of unknown R9.
+			// Its format object is not an initialized public source program.
+			ir := x86UnboundVoidRawScalarFormatObject(t, source, "amd64", triple)
+			if !strings.Contains(ir, "xor <4 x i32>") {
+				t.Fatalf("raw VXORPS lowering omitted vector xor:\n%s", ir)
+			}
+			compileLLVMToObject(t, llc, triple, "amd64-raw-vex-logical.ll", "amd64-raw-vex-logical.o", ir)
+
+			initialized := strings.Replace(source, "TEXT rawLogical(SB), $0-0\n",
+				"TEXT rawLogical(SB), $0-4\nMOVL value+0(FP), R9\n", 1)
+			x86LEAActualTargetGoObject(t, "amd64", triple, initialized)
+			for _, api := range []string{"text", "module", "Go"} {
+				t.Run(api, func(t *testing.T) {
+					ir, err := x86ScalarFPBitViewAPI(t, initialized, "func rawLogical(value uint32)", "amd64", triple, api)
+					if err != nil {
+						t.Fatal("initialized original raw logical sequence", err)
+					}
+					for _, text := range []string{ir, x86DwordProductIROptimize(t, ir)} {
+						for _, level := range []string{"-O0", "-O2"} {
+							x86PackedStringCompileObject(t, llc, triple, text, level)
+						}
+					}
+				})
+			}
+		})
+	}
 }
 
 func TestDecodedX86VEXPackedFloatLogicalCompleteRegisterFamily(t *testing.T) {
