@@ -2315,7 +2315,38 @@ TEXT fuzzops(SB),NOSPLIT,$0-0
 done:
 	RET
 `
-	translateAMD64EcosystemCase(t, src, "fuzzops")
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM 22 llc required")
+	}
+	// Keep the exact original fuzzer source as Go/emitter format coverage.
+	// CX and both vector inputs are absent from its Void entry contract.
+	for _, target := range x86RawReturnTargets {
+		t.Run(target.triple, func(t *testing.T) {
+			original := x86UnboundVoidScalarFormatObject(t, src, "fuzzops", target.arch, target.triple)
+			for _, level := range []string{"-O0", "-O2"} {
+				x86PackedStringCompileObject(t, llc, target.triple, original, level)
+			}
+			inputs := "MOVL $0,CX\nVPXOR Y0,Y0,Y0\nVPXOR Y1,Y1,Y1\n"
+			initialized := strings.Replace(src, "BTL $16, CX", inputs+"BTL $16, CX", 1)
+			x86LEAActualTargetGoObject(t, target.arch, target.triple, "#include \"textflag.h\"\n"+initialized)
+			for _, api := range []string{"text", "module", "Go"} {
+				ir, err := x86ScalarFPBitViewAPI(t, initialized, "func fuzzops()", target.arch, target.triple, api)
+				if err != nil {
+					t.Fatal("initialized bit-test/branch/subtract program rejected", api, err)
+				}
+				for _, text := range []string{ir, x86DwordProductIROptimize(t, ir)} {
+					for _, level := range []string{"-O0", "-O2"} {
+						x86PackedStringCompileObject(t, llc, target.triple, text, level)
+					}
+				}
+			}
+			for _, missing := range strings.Split(strings.TrimSpace(inputs), "\n") {
+				incomplete := strings.Replace(initialized, missing+"\n", "", 1)
+				x86UnboundVoidFormatSource(t, incomplete, "fuzzops", target.arch, target.triple)
+			}
+		})
+	}
 }
 
 func TestTranslateX86DivisionAndFrameArithmetic(t *testing.T) {
