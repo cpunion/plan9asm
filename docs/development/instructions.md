@@ -201,8 +201,12 @@ and retain every instruction's independent physical width/index bound.
 
 The eight mask/vector B/W/D/Q moves share a register-only EVEX grammar with
 X/Y/Z widths and K0-K7 data operands, never writemasking or suffixes. Caller
-effects require initialized mask/vector inputs; forward writes clear every
-wider alias, while reverse writes zero-extend the mask remainder. Use the
+and numerical effects require actual mask data or each vector lane's sign
+byte; unrelated lower bytes do not contribute to a reverse result. Forward
+writes clear every wider alias, while reverse writes zero-extend the mask
+remainder. Missing inputs remain obligations for Void and unused-bool entries;
+internal implementation zeros supply neither data nor a named/physical entry
+contract. Use the
 encoding-aware packed writeback even for X destinations: legacy `storeX`
 preserves wider bytes. Independent whole-byte runtime checks must observe both
 directions separately rather than relying only on a round trip.
