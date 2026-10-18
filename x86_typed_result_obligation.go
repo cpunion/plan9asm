@@ -91,6 +91,10 @@ func x86TypedFPResultNeedsProof(fn Func, sig FuncSig, arch string) bool {
 			x86ResultNamedPredicateInstruction(ins) {
 			return true // Register and immediate stores retain data/address obligations, including Void.
 		}
+		if form, known, err := x86GPSIMDTransferProperties(ins, arch); known && err == nil &&
+			form.memoryWrite && x86ResultNamedPredicateInstruction(ins) {
+			return true // SIMD stores need their actual source bytes and address, including Void.
+		}
 		if _, _, known, err := x86FixedVectorValueProperties(ins, arch); known && err == nil && x86ResultNamedPredicateInstruction(ins) {
 			return true // Complete value inputs and native addresses stay required without results or masks.
 		}

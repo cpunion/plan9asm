@@ -275,8 +275,8 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		if accepted, recognized := x86ResultScalarLaneStepWithRead(ins, state, owned, resultOffset, arch, true); recognized {
 			return accepted
 		}
-		if form, known, err := x86GPSIMDTransferProperties(ins, arch); known && err == nil && form.memory == 0 {
-			return x86ResultGPSIMDTransferWithRead(ins, form, state, owned, resultOffset, arch, true)
+		if form, known, err := x86GPSIMDTransferProperties(ins, arch); known && err == nil && form.memory >= 0 {
+			return x86ResultGPSIMDTransferWithNativeMemory(ins, form, state, owned, resultOffset, arch, true)
 		}
 		if accepted, known := c.scalarCompareNativeResultTransfer(ins, state, owned, arch); known {
 			return accepted

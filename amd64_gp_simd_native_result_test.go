@@ -136,7 +136,7 @@ func TestX86GPSIMDNativeResultBytesAndOrigins(t *testing.T) {
 				if strings.HasPrefix(row.op, "V") {
 					want = ^uint64(0)
 				}
-				if !x86ResultGPSIMDTransferWithRead(ins, form, &state, nil, 0, arch, true) ||
+				if !x86ResultGPSIMDTransferWithNativeMemory(ins, form, &state, nil, 0, arch, true) ||
 					state.vectorBytes(1) != want || state.flags != before.flags ||
 					state.gp != before.gp || state.pointerGP != before.pointerGP {
 					t.Fatal("native transfer lost loaded/zero bytes or changed unrelated state")
@@ -157,7 +157,7 @@ func TestX86GPSIMDNativeResultBytesAndOrigins(t *testing.T) {
 					case "segment":
 						changed.x86SegmentPrefix = 0x64
 					}
-					if x86ResultGPSIMDTransferWithRead(changed, form, &rejected, nil, 0, arch, true) || !reflect.DeepEqual(rejected, before) {
+					if x86ResultGPSIMDTransferWithNativeMemory(changed, form, &rejected, nil, 0, arch, true) || !reflect.DeepEqual(rejected, before) {
 						t.Fatal("unbound instruction origin acquired native result bytes", mutation)
 					}
 				}

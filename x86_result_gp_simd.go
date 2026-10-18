@@ -8,11 +8,11 @@ import "strings"
 // caller permission or numerical pointer bytes.
 func x86ResultGPSIMDTransfer(ins Instr, form x86GPSIMDTransferForm, state *x86ResultState,
 	owned []bool, resultOffset int64, arch string) bool {
-	return x86ResultGPSIMDTransferWithRead(ins, form, state, owned, resultOffset, arch, false)
+	return x86ResultGPSIMDTransferWithNativeMemory(ins, form, state, owned, resultOffset, arch, false)
 }
 
-func x86ResultGPSIMDTransferWithRead(ins Instr, form x86GPSIMDTransferForm, state *x86ResultState,
-	owned []bool, resultOffset int64, arch string, conditionalNativeRead bool) bool {
+func x86ResultGPSIMDTransferWithNativeMemory(ins Instr, form x86GPSIMDTransferForm, state *x86ResultState,
+	owned []bool, resultOffset int64, arch string, nativeMemory bool) bool {
 	if form.mmx || form.spec.rawOnly {
 		return false
 	}
@@ -31,7 +31,7 @@ func x86ResultGPSIMDTransferWithRead(ins Instr, form x86GPSIMDTransferForm, stat
 			return false // Opaque addresses are not numerical GP inputs.
 		}
 		known = uint16(state.gp[index] & mask)
-	} else if !x86ResultReadWithNativeContinuation(ins, ins.Args[0], width, state, owned, arch, conditionalNativeRead) {
+	} else if !x86ResultReadWithNativeContinuation(ins, ins.Args[0], width, state, owned, arch, nativeMemory) {
 		return false
 	} else {
 		known = lowMask // Memory still needs its complete independent read role.
@@ -61,6 +61,11 @@ func x86ResultGPSIMDTransferWithRead(ins Instr, form x86GPSIMDTransferForm, stat
 	}
 	if known != lowMask {
 		return false // A stored unknown byte cannot initialize FP/AUTO/SB data.
+	}
+	if nativeMemory && form.memoryWrite && x86ResultNamedPredicateInstruction(ins) &&
+		ins.x86NumericalRead == nil && x86OrdinaryNativeMemoryOperand(ins.Args[1], arch) &&
+		x86ResultIncomingPointerAddressIdentity(ins.Args[1], state, arch) {
+		return true // The paired exact volatile store creates no reusable memory facts.
 	}
 	if form.memoryWrite && ins.Args[1].Kind == OpSym {
 		// Only the existing private memory consumer enters this branch.

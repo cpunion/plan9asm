@@ -33,7 +33,7 @@ func TestX86GPSIMDNativeStoreNumericalContinuation(t *testing.T) {
 				state.writeVector(0, 64, ^uint64(0), false)
 				state.pointerGP[3], state.gp[3], state.masks[1] = true, 0xff, true
 				before := state.clone()
-				if !x86ResultGPSIMDTransferWithRead(ins, form, &state, nil, 0, arch, true) || !reflect.DeepEqual(state, before) {
+				if !x86ResultGPSIMDTransferWithNativeMemory(ins, form, &state, nil, 0, arch, true) || !reflect.DeepEqual(state, before) {
 					t.Fatal("paired exact native store lost its input or changed numerical/storage facts")
 				}
 				if x86ResultGPSIMDTransfer(ins, form, &state, nil, 0, arch) {
@@ -50,7 +50,7 @@ func TestX86GPSIMDNativeStoreNumericalContinuation(t *testing.T) {
 						changed.x86SegmentPrefix = 0x64
 					}
 					state = before.clone()
-					if x86ResultGPSIMDTransferWithRead(changed, form, &state, nil, 0, arch, true) || !reflect.DeepEqual(state, before) {
+					if x86ResultGPSIMDTransferWithNativeMemory(changed, form, &state, nil, 0, arch, true) || !reflect.DeepEqual(state, before) {
 						t.Fatal("named store granted an unbound physical access", mutation)
 					}
 				}
@@ -62,7 +62,7 @@ func TestX86GPSIMDNativeStoreNumericalContinuation(t *testing.T) {
 						state.writeVector(0, 64, ^(uint64(1) << uint(missing)), false)
 					}
 					original := state.clone()
-					if x86ResultGPSIMDTransferWithRead(ins, form, &state, nil, 0, arch, true) || !reflect.DeepEqual(state, original) {
+					if x86ResultGPSIMDTransferWithNativeMemory(ins, form, &state, nil, 0, arch, true) || !reflect.DeepEqual(state, original) {
 						t.Fatal("missing address/data acquired a native store or changed state", missing)
 					}
 				}
