@@ -109,3 +109,25 @@ func TestX86SourceStackMOVSXDLiteralPortableValues(t *testing.T) {
 		})
 	}
 }
+
+func TestX86SourceStackMOVSXDLiteralReaderDoesNotEscape(t *testing.T) {
+	for _, prefix := range [][]byte{nil, {0x48}, {0x66, 0x48}} {
+		code := append([]byte(nil), prefix...)
+		code = append(code, 0x63, 0x05, 1, 0, 0, 0, 0xc3, 0, 0, 0, 0x80)
+		decoded, err := decodeX86RawDirectiveGroup(code, 64, 0, "literal", map[string]bool{})
+		if err != nil || len(decoded) != 2 {
+			t.Fatalf("literal decode %x: %v", code, err)
+		}
+		state := &x86SourceStackScalarState{}
+		if !state.step(decoded[0], "amd64") || state.bytes.gp[0] != 0xff {
+			t.Fatalf("exact four-byte literal did not define the complete GP result: %x", code)
+		}
+		if state.bytes.literalMemoryOperand != nil || state.bytes.literalMemoryBytes != 0 ||
+			state.bytes.loweredStaticReads != nil || state.bytes.pointerGP[0] {
+			t.Fatal("temporary literal input escaped as memory or pointer permission")
+		}
+		if x86ResultRead(decoded[0].Args[0], 4, &state.bytes, nil, "amd64") {
+			t.Fatal("a later unbound read borrowed the previous instruction's literal")
+		}
+	}
+}
