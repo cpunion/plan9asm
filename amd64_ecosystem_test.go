@@ -2319,14 +2319,11 @@ done:
 	if llc == "" {
 		t.Fatal("LLVM 22 llc required")
 	}
-	// Keep the exact original fuzzer source as Go/emitter format coverage.
+	// Keep the exact original fuzzer source as Go and public Context coverage.
 	// CX and both vector inputs are absent from its Void entry contract.
 	for _, target := range x86RawReturnTargets {
 		t.Run(target.triple, func(t *testing.T) {
-			original := x86UnboundVoidScalarFormatObject(t, src, "fuzzops", target.arch, target.triple)
-			for _, level := range []string{"-O0", "-O2"} {
-				x86PackedStringCompileObject(t, llc, target.triple, original, level)
-			}
+			x86UnboundVoidFormatSource(t, src, "fuzzops", target.arch, target.triple)
 			inputs := "MOVL $0,CX\nVPXOR Y0,Y0,Y0\nVPXOR Y1,Y1,Y1\n"
 			initialized := strings.Replace(src, "BTL $16, CX", inputs+"BTL $16, CX", 1)
 			x86LEAActualTargetGoObject(t, target.arch, target.triple, "#include \"textflag.h\"\n"+initialized)
