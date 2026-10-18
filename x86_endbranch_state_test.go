@@ -132,3 +132,48 @@ func TestX86EndBranchOriginalRuntimeObjects(t *testing.T) {
 		}
 	}
 }
+
+func TestX86EndBranchPrivateStackState(t *testing.T) {
+	for _, arch := range []string{"386", "amd64"} {
+		word := "Q"
+		if arch == "386" {
+			word = "L"
+		}
+		for _, last := range []byte{0xfa, 0xfb} {
+			for _, live := range []bool{false, true} {
+				t.Run(fmt.Sprintf("%s/%x/live=%t", arch, last, live), func(t *testing.T) {
+					body := x86RawDisplacementDirectives([]byte{0xf3, 0x0f, 0x1e, last})
+					if live {
+						body = "PUSH" + word + " $7\n" + body + "POP" + word + " AX\n"
+					}
+					file, err := Parse(ArchAMD64, "TEXT value(SB),4,$0-0\n"+body+"RET\n")
+					if err != nil {
+						t.Fatal(err)
+					}
+					fn, err := decodeX86RawDirectives(file.Funcs[0], arch)
+					if err != nil {
+						t.Fatal(err)
+					}
+					for _, initialized := range []bool{false, true} {
+						state := x86ResultState{valueStack: &x86ResultValueStack{id: initialized}}
+						if initialized {
+							state.direction, state.flags = x86ResultDirectionEither, x86ByteFlagsAll
+						}
+						err := checkX86ResultSourceFlow(fn, state, nil, 0, arch,
+							func(_ int, ins Instr, state *x86ResultState, owned []bool, offset int64, arch string) bool {
+								return x86ResultTransfer(ins, state, owned, offset, arch)
+							}, func(after x86ResultState, _ int) error {
+								if after.valueStack.id != initialized || after.direction != state.direction || after.flags != state.flags {
+									return fmt.Errorf("ENDBR changed independent private FLAGS/DF/ID")
+								}
+								return nil
+							})
+						if err != nil {
+							t.Fatal(err)
+						}
+					}
+				})
+			}
+		}
+	}
+}
