@@ -118,3 +118,30 @@ func TestX86PackedLogicalParameterStoresKeepTypedAndPhysicalBoundaries(t *testin
 		}
 	}
 }
+
+func TestX86PackedLogicalParameterStoresExcludePointersBoolsAndHoles(t *testing.T) {
+	for _, target := range x86RawReturnTargets {
+		for _, result := range []bool{false, true} {
+			source, _ := x86LogicalPackedStoreSource("Value", x86LogicalPackedStoreCase{op: "VMOVDQU", bank: "X"}, result)
+			for _, fields := range []string{
+				fmt.Sprintf("P *byte; Tail [%d]byte", 64-goWordSize(target.arch)),
+				"B bool; Tail [63]byte",
+				"B byte; W uint32; Tail [56]byte",
+			} {
+				t.Run(fmt.Sprintf("%s/result-%t/%s", target.triple, result, fields), func(t *testing.T) {
+					declaration := "func Value(a0 struct{" + fields + "})"
+					if result {
+						declaration += " uint32"
+					}
+					x86LEAActualTargetGoObject(t, target.arch, target.triple, source)
+					for _, api := range []string{"text", "module", "Go"} {
+						ir, err := x86ScalarFPBitViewAPI(t, source, declaration, target.arch, target.triple, api)
+						if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+							t.Error("packed logical store overwrote nonnumeric or unowned bytes", api, err)
+						}
+					}
+				})
+			}
+		}
+	}
+}

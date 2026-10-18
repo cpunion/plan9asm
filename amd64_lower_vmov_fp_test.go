@@ -7,6 +7,17 @@ import (
 	"testing"
 )
 
+const x86VMOVDQUAggregateFPOriginalSource = `TEXT vmovAggregateFP(SB),4,$0-24
+MOVQ out+0(FP),AX
+VMOVDQU key+8(FP),X0
+VMOVDQU X0,(AX)
+PXOR X0,X0
+VMOVDQU X0,key+8(FP)
+VMOVDQU key+8(FP),X1
+VMOVDQU X1,16(AX)
+RET
+`
+
 func TestX86VEXPackedMoveAggregateFPForms(t *testing.T) {
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
@@ -88,16 +99,7 @@ func TestAMD64VMOVDQUAggregateFPBytesRuntime(t *testing.T) {
 	if !ok {
 		t.Fatal("LLVM 22 llc/clang not found")
 	}
-	file, err := Parse(ArchAMD64, `TEXT vmovAggregateFP(SB),4,$0-24
-MOVQ out+0(FP),AX
-VMOVDQU key+8(FP),X0
-VMOVDQU X0,(AX)
-PXOR X0,X0
-VMOVDQU X0,key+8(FP)
-VMOVDQU key+8(FP),X1
-VMOVDQU X1,16(AX)
-RET
-`)
+	file, err := Parse(ArchAMD64, x86VMOVDQUAggregateFPOriginalSource)
 	if err != nil {
 		t.Fatal(err)
 	}
