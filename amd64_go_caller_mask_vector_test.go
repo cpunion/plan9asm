@@ -230,7 +230,11 @@ func TestX86GoCallerMaskVectorInitializationAndUnaffectedState(t *testing.T) {
 					state.vectors["Z1"] &^= uint64(1) << uint(missing)
 				}
 				before := x86CloneCallerState(state)
-				if x86CallerVectorMoveStep(&ins, &state, nil) || !reflect.DeepEqual(before, state) {
+				required := form.spec.maskToVector || x86MaskVectorSignBytes(row, form.byteWidth)&(uint64(1)<<uint(missing)) != 0
+				if !required {
+					before.masks["K1"] = true
+				}
+				if x86CallerVectorMoveStep(&ins, &state, nil) == required || !reflect.DeepEqual(before, state) {
 					t.Fatalf("missing input %d acquired effect or mutated state", missing)
 				}
 			}
@@ -333,15 +337,9 @@ func TestX86MaskVectorGrammarRejectsEverySiblingInvalidForm(t *testing.T) {
 
 func TestX86MaskVectorOfficialRowsThreeAPIsFiveTargets(t *testing.T) {
 	rows := x86OfficialMaskVectorRows(t)
-	var assembly, declarations strings.Builder
-	declarations.WriteString("package maskvector\n")
+	var assembly strings.Builder
 	for index, row := range rows {
 		fmt.Fprintf(&assembly, "TEXT ·F%d(SB),4,$0-0\n%s\nRET\n", index, row)
-		fmt.Fprintf(&declarations, "func F%d()\n", index)
-	}
-	llc := findLLVM22Tool("llc")
-	if llc == "" {
-		t.Fatal("LLVM22 llc required")
 	}
 	for _, target := range []struct{ arch, triple string }{
 		{"amd64", "x86_64-apple-darwin"}, {"amd64", "x86_64-unknown-linux-gnu"},
@@ -349,44 +347,9 @@ func TestX86MaskVectorOfficialRowsThreeAPIsFiveTargets(t *testing.T) {
 		{"386", "i686-pc-windows-msvc"},
 	} {
 		t.Run(target.triple, func(t *testing.T) {
-			goAssemblerOracleOutput(t, target.arch, assembly.String(), "", true)
-			file, err := Parse(ArchAMD64, assembly.String())
-			if err != nil {
-				t.Fatal(err)
-			}
-			pkg := mustGoPackage(t, "example.invalid/maskvector", declarations.String())
-			resolve := func(symbol string) string { return strings.TrimPrefix(symbol, "·") }
-			sigs, err := goSigsForAsmFile(pkg, file, resolve, target.arch, nil, nil, nil)
-			if err != nil {
-				t.Fatal(err)
-			}
-			options := Options{Goarch: target.arch, TargetTriple: target.triple, Sigs: sigs, ResolveSym: resolve}
-			ir, err := Translate(file, options)
-			if err != nil {
-				t.Fatal(err)
-			}
-			compileLLVMToObject(t, llc, target.triple, "mask-vector-family-text.ll", "mask-vector-family-text.o", ir)
-			ctx := llvm.NewContext()
-			defer ctx.Dispose()
-			module, err := TranslateModuleInContext(ctx, file, options)
-			if !module.IsNil() {
-				defer module.Dispose()
-			}
-			if err != nil {
-				t.Fatal(err)
-			}
-			compileLLVMToObject(t, llc, target.triple, "mask-vector-family-module.ll", "mask-vector-family-module.o", module.String())
-			translated, err := translateGoModuleInContext(ctx, pkg, []byte(assembly.String()), GoModuleOptions{
-				GOARCH: target.arch, TargetTriple: target.triple, ResolveSym: resolve,
-			})
-			if translated != nil && !translated.Module.IsNil() {
-				defer translated.Module.Dispose()
-			}
-			if err != nil {
-				t.Fatal(err)
-			}
-			compileLLVMToObject(t, llc, target.triple, "mask-vector-family-go.ll", "mask-vector-family-go.o", translated.Module.String())
-			t.Log("24 independently derived Go rows; three APIs and LLVM22 objects, not native entry/runtime permission")
+			file, sigs := x86UnboundVoidFormatSources(t, assembly.String(), target.arch, target.triple)
+			x86ScalarFormatObjectUnit(t, file, sigs, target.arch, target.triple, 0)
+			t.Log("24 unchanged unbound Go rows; three public Context controls and emitter-only objects; initialized programs have a separate owner")
 		})
 	}
 }

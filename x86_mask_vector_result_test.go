@@ -12,11 +12,62 @@ import (
 // unrelated bytes. The production form is used only by the consumer under test.
 func x86MaskVectorSignBytes(row string, width int) uint64 {
 	lane := map[string]int{"B": 1, "W": 2, "D": 4, "Q": 8}[strings.TrimSuffix(strings.TrimPrefix(strings.Fields(row)[0], "VPMOV"), "2M")]
+	if lane == 0 {
+		panic("sign-byte oracle requires a vector-to-mask row")
+	}
 	var required uint64
 	for offset := lane - 1; offset < width; offset += lane {
 		required |= uint64(1) << uint(offset)
 	}
 	return required
+}
+
+func TestX86MaskVectorMissingSignBytesAndSourceBoundaries(t *testing.T) {
+	for _, arch := range []string{"amd64", "386"} {
+		for _, row := range x86OfficialMaskVectorRows(t) {
+			t.Run(arch+"/"+row, func(t *testing.T) {
+				ins := x86ScalarLaneInstruction(t, row)
+				toVector := strings.HasPrefix(row, "VPMOVM2")
+				width := 16
+				if strings.Contains(row, "Y1") {
+					width = 32
+				} else if strings.Contains(row, "Z1") {
+					width = 64
+				}
+				for missing := 0; missing < 64; missing++ {
+					state := x86ResultState{flags: x86ByteFlagsAll, direction: x86ResultDirectionForward}
+					state.masks[2] = true
+					state.writeVector(1, 64, ^(uint64(1) << uint(missing)), false)
+					want := state.clone()
+					required := toVector
+					if !toVector {
+						required = x86MaskVectorSignBytes(row, width)&(uint64(1)<<uint(missing)) != 0
+						if !required {
+							want.masks[1] = true
+						}
+					}
+					if x86ScalarFPResultTransfer(ins, &state, nil, 0, arch) == required || !reflect.DeepEqual(state, want) {
+						t.Fatal("missing sign/mask input escaped or irrelevant byte became a dependency", missing)
+					}
+				}
+				for _, raw := range []bool{false, true} {
+					state := x86ResultState{}
+					state.masks[1] = true
+					state.writeVector(1, 64, ^uint64(0), false)
+					before := state.clone()
+					changed := ins
+					if raw {
+						changed.x86Encoded = true
+					} else {
+						changed.Op += ".Z"
+					}
+					if x86ScalarFPResultTransfer(changed, &state, nil, 0, arch) || !reflect.DeepEqual(before, state) {
+						t.Fatal("unbound physical source or reserved suffix borrowed a named numerical effect")
+					}
+				}
+			})
+		}
+	}
 }
 
 func TestX86MaskVectorCompleteNumericalInputsAndUnaffectedState(t *testing.T) {
