@@ -53,6 +53,14 @@ type amd64ImplicitSystemForm struct {
 }
 
 func (c *amd64Ctx) lowerImplicitSystem(op Op, ins Instr) (ok bool, terminated bool, err error) {
+	spec, form, known, err := x86ImplicitSystemProperties(op, ins, c.goarch)
+	if !known || err != nil {
+		return known, false, err
+	}
+	return c.emitImplicitSystem(strings.ToUpper(string(op)), spec, form)
+}
+
+func x86ImplicitSystemProperties(op Op, ins Instr, arch string) (amd64ImplicitSystemSpec, amd64ImplicitSystemForm, bool, error) {
 	rawOp := strings.ToUpper(string(op))
 	baseOp := rawOp
 	if dot := strings.IndexByte(rawOp, '.'); dot >= 0 {
@@ -60,39 +68,37 @@ func (c *amd64Ctx) lowerImplicitSystem(op Op, ins Instr) (ok bool, terminated bo
 	}
 	spec, recognized := amd64ImplicitSystemSpecs[Op(baseOp)]
 	if !recognized {
-		return false, false, nil
+		return spec, amd64ImplicitSystemForm{}, false, nil
 	}
-	if rawOp != baseOp {
-		return true, false, fmt.Errorf("%s %s does not accept instruction suffixes: %q", c.goarch, baseOp, ins.Raw)
+	if rawOp != baseOp || arch != "386" && arch != "amd64" ||
+		ins.Op != "" && !strings.EqualFold(string(ins.Op), rawOp) {
+		return spec, amd64ImplicitSystemForm{}, true, fmt.Errorf("%s %s has an invalid suffix, mode or dispatch identity: %q", arch, op, ins.Raw)
 	}
-	form, err := c.parseImplicitSystemForm(baseOp, spec, ins)
-	if err != nil {
-		return true, false, err
-	}
-	return c.emitImplicitSystem(baseOp, spec, form)
+	form, err := parseX86ImplicitSystemForm(baseOp, spec, ins, arch)
+	return spec, form, true, err
 }
 
-func (c *amd64Ctx) parseImplicitSystemForm(op string, spec amd64ImplicitSystemSpec, ins Instr) (amd64ImplicitSystemForm, error) {
+func parseX86ImplicitSystemForm(op string, spec amd64ImplicitSystemSpec, ins Instr, arch string) (amd64ImplicitSystemForm, error) {
 	var form amd64ImplicitSystemForm
 	switch spec.operand {
 	case amd64ImplicitSystemNoOperand:
 		if len(ins.Args) != 0 {
-			return form, fmt.Errorf("%s %s takes no operands: %q", c.goarch, op, ins.Raw)
+			return form, fmt.Errorf("%s %s takes no operands: %q", arch, op, ins.Raw)
 		}
 	case amd64ImplicitSystemGP, amd64ImplicitSystemAddressGP:
-		if len(ins.Args) != 1 || ins.Args[0].Kind != OpReg || !isX86YrlRegisterForArch(ins.Args[0].Reg, c.goarch) {
-			return form, fmt.Errorf("%s %s expects one Go 1.27 Yrl register: %q", c.goarch, op, ins.Raw)
+		if len(ins.Args) != 1 || ins.Args[0].Kind != OpReg || !isX86YrlRegisterForArch(ins.Args[0].Reg, arch) {
+			return form, fmt.Errorf("%s %s expects one Go 1.27 Yrl register: %q", arch, op, ins.Raw)
 		}
 		form.register = ins.Args[0].Reg
 		if spec.operand == amd64ImplicitSystemAddressGP {
 			form.addressBits = 64
-			if c.goarch == "386" {
+			if arch == "386" {
 				form.addressBits = 32
 			}
 			if ins.x86Encoded {
 				if ins.x86AddressBits != 0 {
 					if ins.x86AddressBits != form.addressBits && ins.x86AddressBits != form.addressBits/2 {
-						return form, fmt.Errorf("invalid %s address size %d", c.goarch, ins.x86AddressBits)
+						return form, fmt.Errorf("invalid %s address size %d", arch, ins.x86AddressBits)
 					}
 					form.addressBits = ins.x86AddressBits
 				}
@@ -103,6 +109,31 @@ func (c *amd64Ctx) parseImplicitSystemForm(op string, spec amd64ImplicitSystemSp
 		panic("unknown amd64 implicit-system operand kind")
 	}
 	return form, nil
+}
+
+// UMWAIT/TPAUSE consume their complete dword control and EDX:EAX deadline.
+// Intel SDM defines CF and clears AF/PF/SF/ZF/OF on continuation; GP, DF and
+// storage are unchanged. This numerical descriptor grants no monitor address,
+// raw/native entry or promise that the operation cannot fault.
+func x86TypedWaitPackageByteEffect(op Op, ins Instr, arch string) (x86TypedByteEffect, bool, error) {
+	spec, form, known, err := x86ImplicitSystemProperties(op, ins, arch)
+	if !known || !spec.writesCarry {
+		return x86TypedByteEffect{}, false, nil
+	}
+	if err != nil {
+		return x86TypedByteEffect{}, true, err
+	}
+	if !x86ResultNamedPredicateInstruction(ins) {
+		return x86TypedByteEffect{}, true, fmt.Errorf("%w: WAITPKG requires its original named numerical source", ErrProbeNeedsContext)
+	}
+	return x86TypedByteEffect{
+		operands: []x86TypedByteOperand{
+			{index: 0, operand: Operand{Kind: OpReg, Reg: form.register}, width: 4, read: true},
+			{index: -1, operand: Operand{Kind: OpReg, Reg: AX}, width: 4, read: true},
+			{index: -1, operand: Operand{Kind: OpReg, Reg: DX}, width: 4, read: true},
+		},
+		flagsDefined: x86ByteFlagsAll, flagsKilled: x86ByteFlagsAll, requiresResultProof: true,
+	}, true, nil
 }
 
 func (c *amd64Ctx) emitImplicitSystem(op string, spec amd64ImplicitSystemSpec, form amd64ImplicitSystemForm) (bool, bool, error) {

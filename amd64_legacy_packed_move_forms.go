@@ -88,6 +88,9 @@ func x86TypedLegacyPackedMoveByteEffect(op Op, ins Instr, arch string) (x86Typed
 }
 
 func x86TypedInstructionByteEffect(op Op, ins Instr, arch string) (x86TypedByteEffect, bool, error) {
+	if effect, known, err := x86TypedWaitPackageByteEffect(op, ins, arch); known {
+		return effect, known, err
+	}
 	if effect, known, err := x86TypedRegisterQueryByteEffect(op, ins, arch); known {
 		return effect, true, err
 	}
