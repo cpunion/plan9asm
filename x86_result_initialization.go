@@ -627,9 +627,10 @@ type x86ResultState struct {
 	logicalFrameParameters bool // Immutable private numeric parameter-copy role; never caller storage.
 	shapeOnly              bool // source-wide effect validation, never a reaching state
 
-	// Installed only for one lowering transfer over the actual emitted DATA.
-	// It is cleared before a CFG state can escape and never supplies a native
+	// Temporary numerical inputs for one guarded transfer. The consumer
+	// independently binds the actual DATA; these facts cannot establish a
 	// caller, raw-return, pointer or declaration-only query permission.
+	// Clear them before any state escapes into the CFG.
 	loweredStaticReads   map[x86StaticSBAddress]int64
 	literalMemoryOperand *Operand
 	literalMemoryBytes   int64
