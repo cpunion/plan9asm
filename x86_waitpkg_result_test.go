@@ -151,6 +151,45 @@ func TestX86RawWaitPKGVoidInputsThreeAPIs(t *testing.T) {
 	x86WaitPKGVoidInputsThreeAPIs(t, true)
 }
 
+func TestX86WaitPKGEntryAndJoinInputsThreeAPIs(t *testing.T) {
+	for _, arch := range []string{"386", "amd64"} {
+		move, word, triple := "MOVL", 4, "i386-unknown-linux-gnu"
+		if arch == "amd64" {
+			move, word, triple = "MOVQ", 8, "x86_64-unknown-linux-gnu"
+		}
+		for _, op := range []string{"UMWAIT", "TPAUSE"} {
+			for _, raw := range []bool{false, true} {
+				for _, row := range []struct {
+					name, declaration, setup string
+					frame                    int
+					valid                    bool
+				}{
+					{"pointer-control", "p *uint32", move + " p+0(FP),BX\nMOVL $0,AX\nMOVL $0,DX\n", word, false},
+					{"unused-bool", "unused bool", "", 1, false},
+					{"complete-unused-bool", "unused bool", "MOVL $0,AX\nMOVL $0,DX\nMOVL $0,BX\n", 1, true},
+					{"missing-join", "selector uint32", "MOVL selector+0(FP),AX\nMOVL $0,DX\nCMPL AX,$0\nJE ready\nMOVL $0,BX\nready:\n", 4, false},
+					{"complete-join", "selector uint32", "MOVL selector+0(FP),AX\nMOVL $0,DX\nMOVL $0,BX\nCMPL AX,$0\nJE ready\nMOVL $1,BX\nready:\n", 4, true},
+				} {
+					t.Run(fmt.Sprintf("%s/%s/raw=%t/%s", arch, op, raw, row.name), func(t *testing.T) {
+						source := fmt.Sprintf("TEXT ·Wait(SB),4,$0-%d\n%s%sRET\n", row.frame, row.setup, x86WaitPKGBody(op, raw))
+						x86LEAActualTargetGoObject(t, arch, triple, source)
+						for _, api := range []string{"text", "module", "Go"} {
+							ir, err := x86ScalarFPBitViewAPI(t, source, "func Wait("+row.declaration+")", arch, triple, api)
+							if row.valid {
+								if err != nil || ir == "" {
+									t.Error("complete wait lost entry/CFG inputs", api, err)
+								}
+							} else if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+								t.Error("wait borrowed numerical inputs from pointer/bool/missing CFG path", api, err)
+							}
+						}
+					})
+				}
+			}
+		}
+	}
+}
+
 func x86WaitPKGBody(op string, raw bool) string {
 	if !raw {
 		return op + " BX\n"
