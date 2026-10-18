@@ -1,6 +1,6 @@
 # PR 40: current checkpoint
 
-Updated 2026-10-18. This is a handoff, not a completion certificate.
+Updated 2026-10-19. This is a handoff, not a completion certificate.
 Earlier checkpoints and original failed fixtures remain in Git; ignored failed
 reports must not be overwritten. Read [instruction contracts](instructions.md)
 and [validation](validation.md) before changing a family.
@@ -22,6 +22,8 @@ idle worktrees; do not create another for routine work.
 
 | Code snapshot | Completed evidence | Limits |
 |---|---|---|
+| `ef3e886d3` | Complete static scalar RMW and native FS/GS input rules: 53 roots / 4,800 children pass current Go, actual Go1.20 and race; identical 4,853 terminals, zero fail/skip/incomplete | Eleven scalar stems, complete widths/relocations, 1,560 independent segment variants and original bare/indexed LOCK objects on five targets; not native segment execution |
+| Same snapshot | All thirteen final gates pass; exact original 167-root replay has 70 pass / 8 fail / 89 explicit host skips, unchanged source/tools | Original absolute-relocation root now passes, no regressions; original unbound sinks retain Go/emitter objects plus public Context, separate initialized DATA programs own public objects |
 | `2c112ef6e` | Complete ENQCMD/ENQCMDS input, grammar and status effects: 51 roots / 1,658 children pass current Go, actual Go1.20 and race; identical 1,709 terminals, zero fail/skip/incomplete | All 1,200 independent physical address/register forms, pre-emission rejection and initialized three-API five-target O0/O2 objects; native device submission is not executed |
 | Same snapshot | All thirteen final gates pass; exact original 167-root replay has 69 pass / 9 fail / 89 explicit host skips, unchanged source/tools | Both original hardware-status roots now pass, without regressions. Uninitialized original formats retain Go/emitter objects and public Context; no PASID, privilege, memory-backing or successful-submission claim |
 | `7b1966b70` | Complete RDRAND/RDSEED W/L/Q family: 44 roots / 1,610 children pass current Go, actual Go1.20 and race; identical 1,654 terminals, zero fail/skip/incomplete | All 128 independent physical register encodings, exact raw identity, partial-byte and missing-result controls; 52 initialized target programs retain three-API O0/O2 objects |
@@ -93,7 +95,7 @@ See earlier checkpoints in Git rather than reconstructing counts by subtraction.
 
 ## Exact failure replay and online CI
 
-The latest local diagnostic at `7b1966b70` selects exactly the original CI's
+The latest local diagnostic at `ef3e886d3` selects exactly the original CI's
 167 failed root names. One sealed Go test process ran the complete set,
 instead of repeatedly linking the same large test executable.
 All inventories, started/terminal identities and before/after source, SDK, LLVM
@@ -115,15 +117,28 @@ and environment observations match. This is not the canonical isolated CI runner
 | Previous batched replay, `175c84397` | 65 | 13 | 89 | 0 / 0 |
 | Previous batched replay, `37cd9d8a7` | 66 | 12 | 89 | 0 / 0 |
 | Previous batched replay, `8aa8460f4` | 67 | 11 | 89 | 0 / 0 |
-| Latest batched replay, `7b1966b70` | 67 | 11 | 89 | 0 / 0 |
+| Previous batched replay, `7b1966b70` | 67 | 11 | 89 | 0 / 0 |
+| Previous batched replay, `2c112ef6e` | 69 | 9 | 89 | 0 / 0 |
+| Latest batched replay, `ef3e886d3` | 70 | 8 | 89 | 0 / 0 |
+
+Static RMW inputs now consume actual same-module DATA identity, complete byte
+extent and writable destinations. Readonly address targets remain distinct from
+mutable sinks. Named FS/GS operands share existing normalization across scalar
+and bit-string families, requiring every explicit GP offset and data input.
+Bare segment addressing retains its original conditional native access, not
+an initialized memory or declaration-query fact. The full regression found an
+inherited LOCK-segment failure and an obsolete blanket segment-rejection test;
+both failed receipts remain. Complete bare/indexed LOCK decoding and unlocked
+BT/BTC/BTR/BTS volatile object checks now pass. Runtime segment behavior and
+complete CI remain separate, unqualified requirements.
 
 The hardware-random family defines only its exact output bytes and six status
 flags; CF still independently reports availability. Its shared grammar rejects
 malformed dispatch before emission, and source identity preserves unrelated
 inputs, DF/ID and private storage. Unknown upper bytes, physical frames and
 missing ABI results remain Context. All ten original random/status children
-pass, without changing any root outcome; the two combined status roots still
-have independent enqueue, vector/mask and packed-string input failures.
+pass at that earlier snapshot, without changing any root outcome. The later
+enqueue batch repairs both combined hardware-status roots; neither has regressed.
 
 The original floating-compare literal root newly passes without regressions.
 Its unchanged source lacks vector/mask inputs and retains complete Go/emitter
@@ -231,9 +246,9 @@ before changing implementation or claiming a speedup. Do not relax budgets.
    contracts; MMX closure; hardware enqueue/mask status; custom ABI,
    runtime386 `cpuidProbe` entry. Use the actual diagnostic,
    not an earlier successful preflight, to choose each next class.
-   The enqueue batch is qualified at `2c112ef6e`. The exact nine failures are
-   five FP16, two runtime386 source fixtures, one absolute relocation and one
-   x87 compare root. Repair each
+   The enqueue batch is qualified at `2c112ef6e`; static/segment RMW follows
+   at `ef3e886d3`. The exact eight failures are five FP16, two runtime386
+   source fixtures and one x87 compare root. Repair each
    complete rule class with original Go/emitter controls and independently
    initialized public programs; do not weaken source/data or entry proofs.
 3. Rerun the unchanged complete standard-library corpus and benchmark after
@@ -251,6 +266,13 @@ develop in an existing idle worktree. Commit and preserve RED before repair.
 
 Resolve worktree locations with `git worktree list`. Ignored receipts include:
 
+- `static-rmw-qualified-ef3e886d.json` and `static-rmw-final-gates-ef3e886d/`:
+  complete 53-root three-lane cohort, identical terminal unions and thirteen
+  final gates. Preserve static RED `4824e167`, inherited LOCK failure `e29ef390`,
+  segment RED `c6e50807` and old bit-test expectation failure `fd9b906f`.
+- `latest-failure-batch-ef3e886d-{summary.json,raw.jsonl,before.json,after.json}`:
+  exact 167-root replay, 70 pass / 8 fail / 89 explicit host skips, 101.871s;
+  unchanged source/tools, no absent/incomplete or pass-with-skip roots.
 - `enqueue-qualified-2c112ef6.json` and `enqueue-final-gates-2c112ef6/`:
   complete 51-root three-lane cohort, identical terminal unions and thirteen
   final gates. Preserve RED `b9a185b5`, first GREEN `851b354f` (format-helper

@@ -429,6 +429,22 @@ queries keep their separate contracts. Execute live/dead, carry/borrow, width,
 status, alias and guard-page controls against actual original Go bytes; portable
 objects and Rosetta execution do not replace the required native Linux owner.
 
+Static scalar RMWs share that numerical grammar but require the actual
+same-module DATA directory, complete access extent and writable destination.
+Readonly address targets are not mutable sinks. Non-shared 386 TYPE_ADDR
+arithmetic consumes a bound relocation value, not a pointee load or pointer
+permission. Missing symbols, CF, result bytes and readonly/short sinks remain
+Context. Keep original unbound formats separate from initialized DATA objects.
+
+Named FS/GS scalar and bit-string RMWs share Go's existing segment normalization.
+The segment supplies its hardware base; each explicit GP offset needs complete
+numerical bytes. Ordinary addresses retain their incoming-pointer rule.
+Exact volatile accesses or the native LOCK opcode remain observable, including
+dead results; continuation creates no memory, TLS or future-read facts.
+Standalone observers cannot borrow this paired rule. Retain all family widths,
+bare/indexed Go bytes, five-target native objects and missing-input controls;
+object compilation does not qualify native segment execution.
+
 The scalar native MOV-store family checks its complete inputs even for Void
 or unused-bool signatures. A separate lowering-only bit-copy scope permits a
 whole native word of actual typed entry-derived address bits in an ordinary
