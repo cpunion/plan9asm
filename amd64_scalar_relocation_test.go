@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -31,7 +32,23 @@ func TestX86ScalarAbsoluteRelocationCompleteFamily(t *testing.T) {
 				for _, target := range x86AddressMemoryTargets("386") {
 					for _, api := range []string{"text", "module", "go"} {
 						ir, err := x86AddressMemoryAPI(t, api, source, "386", target)
-						if err != nil {
+						if destination == "·sink(SB)" {
+							// The original source declares neither external object's
+							// storage. Keep its complete Go/emitter objects, not a
+							// fabricated public numerical-memory proof. Independent
+							// initialized DATA counterparts exercise public lowering.
+							if !errors.Is(err, ErrProbeNeedsContext) || ir != "" {
+								t.Fatal("unbound original storage acquired public input facts", err)
+							}
+							if api != "text" {
+								continue
+							}
+							file, parseErr := Parse(ArchAMD64, source)
+							if parseErr != nil {
+								t.Fatal(parseErr)
+							}
+							ir = x86ScalarFormatObjectUnit(t, file, map[string]FuncSig{"Value": {Name: "Value", Ret: Void}}, "386", target, 0)
+						} else if err != nil {
 							t.Fatalf("%s %s: %v", target, api, err)
 						}
 						if !strings.Contains(ir, "ptrtoint ptr") || strings.Contains(ir, "load i32, ptr @cell") {
