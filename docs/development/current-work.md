@@ -24,7 +24,9 @@ of the current candidate. Do not create another worktree for routine work.
 
 | Snapshot | Evidence and limits |
 |---|---|
-| `d0505fd99` | Active branch `codex/pr40-scalar-fp-address-closing-20261018` is TDD only: three roots / 22 children reproduce 20 failed terminals, including a falsely accepted uninitialized floating result; no production repair or qualification yet |
+| `cdcd98cc6` | Active branch `codex/pr40-logical-packed-param-store-20261018` repairs packed private-parameter stores; initial three roots / 90 children pass at `d85723a5b`, but final complete qualification is pending. Keep the current frozen test source unchanged |
+| `e7e90b7c9` | Ten historical unbound-format failures plus eight initialized/source-boundary owners pass current Go, actual Go1.20 and race: 18 roots / 605 children, identical 623 terminals, no fail/skip/incomplete. Original source rows remain; public Context and emitter-only objects are not runtime passes |
+| `8e82392cd` | Floating logical-field addresses: 57 roots / 3,871 children pass all three lanes, identical 3,928 terminals, no fail/skip/incomplete and unchanged source/SDK/LLVM22 observations. Build/vet, twelve scanner roots on both SDKs, five-arch classification, three CLI extraction roots, 132 CI policies and tracked formatting pass; backed up in the allowed fork |
 | `d5bdb0399` | All 179 historical failed roots re-observed locally: 29 pass, 58 fail, 92 explicit host skips, zero absent/pending/incomplete. Original output hashes, all run/terminal identities and both source/SDK/tool/environment seals audit unchanged; selected aggregate remains failed, not a full/native CI pass |
 | `0cb14d2fa` | Integer self-comparison and mandatory Void repair: 54 roots / 7,277 children pass current Go, actual Go1.20 and race; all 7,331 terminals match, zero fail/skip/incomplete, unchanged source/SDK/LLVM22 observations |
 | Same code head | Build/vet, twelve scanner roots on both SDKs, five-arch official classification, three CLI extraction roots, 132 CI policies and tracked formatting pass; staged in allowed fork branch `codex/pr40-integer-self-compare-closing-20261018`, not the contribution head |
@@ -44,6 +46,35 @@ Classification, emitter-only objects, initialized public translation, portable
 execution and native execution remain different claims.
 
 ## Latest repairs
+
+Logical numeric field addresses now include float32/float64, without widening
+integer-only return or native-frame roles. ABI0 allocation padding does not
+extend a field or create initialized bytes. The independent copy tests retain
+five-target objects, all three APIs, 80 negative boundaries and exact-bit/private-
+copy execution. Original RED includes a falsely accepted uninitialized floating
+result; that hole is closed at `8e82392cd`. The original SqrtByAddress program
+still needs its separate complete SQRT arithmetic-effect repair.
+
+The frozen Windows diagnostic has started its complete module owners and has
+real failures, not only queued jobs. Inspect each owner's raw report as it
+finishes; do not cancel the rest. Part3 has 426 roots: 391 pass, 13 fail and
+22 explicit skips. Its shared private-parameter VMOVDQU store defect is now
+independently reproduced across 41 complete unaligned store shapes. A bare
+unknown-input Void store additionally reproduces false acceptance on all five
+targets at `867cf9f17`. `d85723a5b` shares existing move effects for numeric
+logical stores and routes every valid packed FP store through whole-source
+checking. Pointers, bools, holes, native alignment and SP keep their boundaries.
+The discovering program's complete source is byte-identical after extraction;
+its actual-host portable execution and typed-field negatives are pending at
+the active code head, not certified by the initial green.
+
+At `e7e90b7c9`, ten old format tests retain their complete original Go objects
+and explicitly reject missing inputs through all three public APIs before
+checking emitter-only objects. The NOTB oracle now requires exact volatile
+byte loads/stores and an LLVM object. The net test-code change is smaller.
+The original attempted 19-root qualification retains its explicit amd64-host
+runtime skip as a failed qualification. The disjoint 18-root host-applicable
+cohort does not replace or certify that required native counterpart.
 
 All 24 fixed/immediate integer EQ/GT comparison names share the same validated
 same-vector dependency rule. Self comparisons need no incoming numerical vector
@@ -122,15 +153,15 @@ cannot certify a performance improvement. Full reports remain under ignored
    This selected queue does not revalidate the old complete suite's passed roots.
    Its main classes are numerical/field-address effects, MMX closure, raw/native
    read composition, custom ABI/stack roles and obsolete unbound-format contracts.
-   The first actual failure remains `TestGoABI0PaddedSqrtObjects`. The new floating
-   field-copy tests separate address/storage transport from SQRT arithmetic.
-   Current roles admit integer/bool parameters and integer results only; parameter
-   backing also requires exact logical end rather than ABI0 rounded allocation.
-   The uninitialized-floating-result negative additionally exposes missing cost
-   routing, not a fixture error. Keep all five target Go objects, three APIs and
-   padding/input-write/SP negatives; do not special-case SqrtByAddress or grant
-   contiguous/native frame backing. Run complete affected Go forms before adding
-   SQRT effects, and retain the unchanged original discovering program.
+   The first old local failure remains `TestGoABI0PaddedSqrtObjects`. Its logical
+   floating-field address class is now qualified; SQRT arithmetic is separate.
+   First finish the current packed-copy repair discovered by complete Windows
+   owners, including the unchanged original program and current Go/Go1.20/race.
+   Then close the observed typed numerical/native continuation classes. No
+   mnemonic-only exception, padding permission or native-frame backing follows
+   from a valid encoding. Inspect the final error, not a preceding successful
+   tool/CPU preflight log: Windows conformance reaches an unclosed three-operand
+   SHLL memory effect, not an AVX512 hardware-availability failure.
 4. Require current-head complete CI, benchmark, coverage and fresh review before
    ready. Keep ABI/context failures visible; do not weaken the benchmark or
    treat Context classification as successful program compilation.
@@ -149,7 +180,14 @@ The eight-SDK audit is `integer-self-compare-classification-audit` at `7d0ab042d
 later changes before qualification are only test contracts and their baseline.
 The local 179-root replay is `previous-failures-d5bdb039`; its
 `raw-outcomes-audit.json` retains every actual failure and skip separately.
-The floating-field RED is `logical-floating-field-address-red` at `d0505fd99`.
+The floating-field RED is `logical-floating-field-address-red` at `d0505fd99`;
+the 57-root seal is `logical-floating-qualified-8e82392c.json` and final gates
+use `logical-floating-final-gates-8e82392c`. Format-contract qualification uses
+`unbound-format-contracts-host-applicable-qualified-e7e90b7c.json`.
+Windows complete-owner artifacts use `ci-39065963275-windows-root-*`.
+Packed-copy RED/initial green receipts use `packed-logical-parameter-store-*`;
+the unchanged-program portable/typed-field selection is
+`packed-private-copy-complete-first-green` at `cdcd98cc6`.
 Earlier receipts use `nop-source-state-qualified-{nop,stack,identity}` and
 `nop-current-sdk-producers`; `qualified-nop-source-state-bc79fd0f.json` records
 the exact union. Earlier cohorts use `bitfield-qualified-*` and
