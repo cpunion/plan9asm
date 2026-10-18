@@ -167,8 +167,9 @@ func TestX86LegacyLogicalMemoryNativeOpcodeObjects(t *testing.T) {
 		t.Fatal("LLVM22 llc required")
 	}
 	for _, target := range x86LegacyLogicalMemoryTargets {
-		var source, declaration strings.Builder
+		var source, ordinary, declaration strings.Builder
 		source.WriteString("GLOBL ·data(SB),8,$16\n")
+		ordinary.WriteString("GLOBL ·data(SB),8,$16\n")
 		declaration.WriteString("var data [16]byte\n")
 		for _, name := range x86LegacyLogicalMemoryNames {
 			move, size := "MOVQ", 8
@@ -177,14 +178,47 @@ func TestX86LegacyLogicalMemoryNativeOpcodeObjects(t *testing.T) {
 			}
 			for i, address := range []string{"(AX)", "16(AX)(CX*2)", "·data(SB)", "(FS)", "(GS)"} {
 				fn := fmt.Sprintf("%s%d", strings.ToLower(name), i)
-				fmt.Fprintf(&source, "TEXT ·%s(SB),4,$0-%d\n%s p+0(FP),AX\n%s index+%d(FP),CX\nPXOR X0,X0\n%s %s,X0\nRET\n", fn, size*2, move, move, size, name, address)
+				body := fmt.Sprintf("TEXT ·%s(SB),4,$0-%d\n%s p+0(FP),AX\n%s index+%d(FP),CX\nPXOR X0,X0\n%s %s,X0\nRET\n", fn, size*2, move, move, size, name, address)
+				source.WriteString(body)
+				if i < 3 {
+					ordinary.WriteString(body)
+				}
 				fmt.Fprintf(&declaration, "func %s(p *byte,index uintptr)\n", fn)
 			}
 		}
 		x86LEAActualTargetGoObject(t, target.arch, target.triple, source.String())
+		file, err := Parse(ArchAMD64, source.String())
+		if err != nil {
+			t.Fatal(err)
+		}
+		pkg := mustGoPackage(t, "logical", "package logical\n"+declaration.String())
+		resolve := func(name string) string { return strings.TrimPrefix(name, "·") }
+		signatures, err := goSigsForAsmFile(pkg, file, resolve, target.arch, nil, nil, nil)
+		if err != nil || len(file.Funcs) != 60 {
+			t.Fatal("original logical-memory format inventory changed", err)
+		}
+		// Original FS/GS operands have no Go TLS/segment contract. Keep all
+		// sixty formats as emitter objects and public Context, not public success.
+		formatIR := x86ScalarFormatObjectUnit(t, file, signatures, target.arch, target.triple, 0)
+		for _, name := range x86LegacyLogicalMemoryNames {
+			for _, segment := range []string{"fs", "gs"} {
+				want := "asm sideeffect \"" + strings.ToLower(name) + " %" + segment + ":($2), $0\""
+				if !strings.Contains(formatIR, want) {
+					t.Fatal("original native segment format lost its prefix", name, segment)
+				}
+			}
+		}
+		for _, level := range []string{"-O0", "-O2"} {
+			x86PackedStringCompileObject(t, llc, target.triple, formatIR, level)
+		}
+		x86LEAActualTargetGoObject(t, target.arch, target.triple, ordinary.String())
 		for _, api := range []string{"text", "module", "Go"} {
 			t.Run(target.triple+"/"+api, func(t *testing.T) {
 				ir, err := x86ScalarFPBitViewAPI(t, source.String(), declaration.String(), target.arch, target.triple, api)
+				if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+					t.Fatal("original segmented source acquired an unbound TLS contract", api, err)
+				}
+				ir, err = x86ScalarFPBitViewAPI(t, ordinary.String(), declaration.String(), target.arch, target.triple, api)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -192,12 +226,6 @@ func TestX86LegacyLogicalMemoryNativeOpcodeObjects(t *testing.T) {
 					want := "asm sideeffect \"" + strings.ToLower(name) + " ($2), $0\", \"=x,0,r,~{memory}\""
 					if !strings.Contains(ir, want) {
 						t.Fatalf("dead result lost original single native %s memory effect", name)
-					}
-					for _, segment := range []string{"fs", "gs"} {
-						want := "asm sideeffect \"" + strings.ToLower(name) + " %" + segment + ":($2), $0\""
-						if !strings.Contains(ir, want) {
-							t.Fatalf("native %s/%s source prefix disappeared", name, segment)
-						}
 					}
 				}
 				compileLLVMToObject(t, llc, target.triple, "logical-native.ll", "logical-native.o", ir)
