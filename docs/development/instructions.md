@@ -231,6 +231,16 @@ original bare-source Context controls, initialized all-target objects and the
 required original-Go/LLVM native AMD64 and IA32 execution owners separate.
 Timestamps reuse the identity boundary but retain their own input/output spec.
 
+UMWAIT/TPAUSE share their existing implicit-system grammar with mandatory
+low-dword control and EDX:EAX inputs. Their native continuation defines CF and
+clears the other five status flags without changing GP, DF or private storage.
+Raw source retains exact original/normalized opcode and operands; it cannot
+borrow address-size, segment, raw-return or monitor-address roles. Input proofs
+remain mandatory for Void, unused bool and every CFG path. Original unbound
+formats retain Go/public-Context/emitter coverage; separate initialized status
+programs own public objects, not a native-execution claim. The other system/RTM
+and hardware-status families retain their independent effect obligations.
+
 The eight mask/vector B/W/D/Q moves share a register-only EVEX grammar with
 X/Y/Z widths and K0-K7 data operands, never writemasking or suffixes. Caller
 and numerical effects require actual mask data or each vector lane's sign

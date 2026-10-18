@@ -25,6 +25,8 @@ of the current candidate. Do not create another worktree for routine work.
 
 | Snapshot | Evidence and limits |
 |---|---|
+| `3db1fe799` | WAITPKG named/raw input and status effects: 41 roots / 1,965 children pass current Go, actual Go1.20 and race; identical 2,006 terminals, no fail/skip/incomplete and unchanged source/SDK/LLVM22 seals. Both-SDK build/vet and 21 scanner roots, five-arch classification, five CLI roots, 132 policies and formatting pass. Original Go objects and three-API O0/O2 LLVM objects cover five x86 targets; native WAITPKG execution is not qualified |
+| Same code head | The eight-SDK audit changes only the two isolated AMD64 UMWAIT/TPAUSE forms to Context for missing inputs; 386, encoding rules and unsupported counts stay unchanged. Original named RED has 110 failed terminals and raw RED 57. The original aggregate status test advances from UMWAIT to its separate XTEST gap and remains failed; old complete-CI counts are not reduced |
 | `03ee09640` | X86 branch-token namespace: 70 roots / 384 children pass current Go, actual Go1.20 and race; identical 454 terminals, no fail/skip/incomplete and unchanged source/SDK/LLVM22 seals. Both-SDK build/vet, twenty scanner roots, five-arch classification, five CLI extraction roots, 132 CI policies and formatting pass. Original five-target collision objects and independent portable result execution pass; this is not a complete CI replay |
 | `6e2182329` | Complete block-extraction native stores: 26 portable roots / 401 children pass current Go, actual Go1.20 and race; identical 427 terminal identities, zero fail/skip/incomplete and unchanged source/SDK/LLVM22 observations. Both-SDK build/vet and twenty scanner roots, five-arch classification, five CLI extraction roots, 132 CI policies and tracked formatting pass. Two original AMD64-only auxiliary roots and the required masked native runtime owner remain separate, unexecuted requirements on this ARM64 host |
 | Same code head | Ten block-extraction names retain all 26 AMD64 and 14 mode32 memory forms. Original TDD has 150 failed terminals, including missing-input acceptance, initialized-store rejection and dead unmasked stores. Original unbound format sources remain actual-Go/public-Context/emitter objects; initialized positives retain five-target objects and complete portable byte/canary execution. Eight-SDK audit changes only 22 isolated AMD64 forms per SDK supported-to-Context; 386, unsupported counts and encoder rules stay unchanged |
@@ -63,6 +65,17 @@ Classification, emitter-only objects, initialized public translation, portable
 execution and native execution remain different claims.
 
 ## Latest repairs
+
+WAITPKG uses the existing implicit-system grammar for lowering and numerical
+effects. UMWAIT/TPAUSE require complete low-dword control and EDX:EAX deadline
+inputs, even for Void, unused bool or raw source. Exact normalized/raw identity
+preserves unrelated GP, DF and private stack facts while replacing all six
+status flags. It grants no raw entry, monitor address or caller-memory role.
+Original unbound named/raw formats retain actual-Go/public-Context/emitter
+objects; initialized status transport has independent public objects. Pointer,
+partial-byte, join, source-mutation and physical-frame controls remain strict.
+The shared all-status CI owner still fails at XTEST and other unmodeled status
+families; it is not replaced by the focused WAITPKG qualification.
 
 X86 branch operands now use Go's case-sensitive register namespace before the
 generic cross-architecture aliases. All 201 actual register names, their lowercase
@@ -293,7 +306,8 @@ cannot certify a performance improvement. Full reports remain under ignored
    focused qualification above, followed by the complete multiply-add and MMX
    format-contract union, GP/SIMD native-store inputs/continuation and complete
    block-extraction native stores and source branch-token namespace collisions.
-   Next close WAITPKG implicit input/status effects and remaining MMX region
+   WAITPKG implicit input/status effects are now qualified as recorded above.
+   Next close RTM/random/mask status effects and remaining MMX region
    composition failures. Preserve unmodified
    failed sources and independently initialized positive programs. Do not assume that a whole
    format batch's first MMX rejection establishes every sibling's input checks;
@@ -319,6 +333,13 @@ Go 1.20 and race. One heavy local Go/LLVM owner runs at a time; develop in an
 existing idle worktree while its tested source stays frozen.
 
 Resolve branch locations with `git worktree list`. Latest ignored receipts use
+`waitpkg-qualified-complete` at `3db1fe799`, sealed by
+`waitpkg-qualified-3db1fe79.json`; final gates use `waitpkg-final-gates-3db1fe79`.
+The eight-SDK audit is `waitpkg-classification-audit-v2`; the first audit attempt
+stopped on an incorrect previous-report path before collecting any result.
+Named RED at `76db9084a`, raw RED at `fd6a63e56`, the first related green failure
+at `a1720c7e6` and the compilation failure at `9550e8cac` remain unchanged.
+Earlier qualified receipts use
 `branch-namespace-qualified-complete` at `03ee09640`; its three-lane union is
 `branch-namespace-qualified-03ee0964.json` and final gates use
 `branch-namespace-final-gates-03ee0964`. RED at `5def1c36f` and the first green
