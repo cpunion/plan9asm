@@ -25,6 +25,8 @@ of the current candidate. Do not create another worktree for routine work.
 
 | Snapshot | Evidence and limits |
 |---|---|
+| `2d9059765` | Complete GP/SIMD native-store inputs and continuation: 42 roots / 2,627 children pass current Go, actual Go1.20 and race; identical 2,669 terminal identities, zero fail/skip/incomplete and unchanged source/SDK/LLVM22 observations. Both-SDK build/vet and nineteen scanner roots, five-arch classification, four CLI extraction roots, 132 CI policies and tracked formatting pass. Required native execution and complete CI remain separate |
+| Same code head | The eight-SDK audit changes only six isolated AMD64 forms per SDK supported-to-Context for missing inputs; 386 classifications, unsupported counts, encoder rules and unrelated metrics stay unchanged. Original RED retains 44 failed terminals, including the original overwritten-store program; the portable byte oracle already passed before this repair |
 | `cdbc92b85` | Complete multiply-add input effects and MMX format contracts: 69 roots / 772 children pass current Go, actual Go1.20 and race; identical 841 terminal identities, zero fail/skip/incomplete and unchanged source/SDK/LLVM22 observations. Both-SDK build/vet and eighteen scanner roots, five-arch classification, three CLI extraction roots, 132 CI policies and tracked formatting pass. Native Linux execution and complete CI remain separate requirements |
 | Same code head | The sealed eight-SDK audit changes only 27 isolated AMD64 multiply-add forms per SDK from supported to Context for missing inputs; 386 classifications, encoder rules, unsupported counts and unrelated metrics stay unchanged. Original TDD at `87ae8fb66` retains 126 failed terminals: both missing-input acceptance and initialized-vector rejection |
 | `3d26bf2cc` | Complete scalar-shift memory effects: 23 roots / 5,793 children pass current Go, actual Go1.20 and race; identical 5,816 terminal identities, zero fail/skip/incomplete and unchanged source/SDK/LLVM22 observations. Both-SDK build/vet and seventeen scanner roots, five-arch classification, three CLI extraction roots, 132 CI policies and tracked formatting pass. Complete native Linux execution remains required |
@@ -58,6 +60,16 @@ Classification, emitter-only objects, initialized public translation, portable
 execution and native execution remain different claims.
 
 ## Latest repairs
+
+The six named GP/SIMD stores reuse the complete transfer grammar and require
+their exact four/eight input bytes and incoming pointer address even for Void.
+Paired native continuation preserves numerical/storage facts; it grants no
+future memory read, caller, physical MMX or raw-entry permission. Existing
+unaligned volatile emission keeps overwritten stores observable. Original
+read-then-store source is retained as a separate initialized five-target
+positive; uninitialized format rows retain Go/public-Context/emitter objects.
+The complete 42-root qualification above includes portable byte/canary execution,
+not a claim of native execution or a reduction of the old online CI count.
 
 PMADDWL, PMADDUBSW, VPMADDWD and VPMADDUBSW now share their existing complete
 grammar with mandatory numerical inputs, result definedness and paired native
@@ -259,8 +271,8 @@ cannot certify a performance improvement. Full reports remain under ignored
    qualified, as are the complete CPU-query implicit NUM and exact named/raw
    continuation effects. Scalar-shift memory effects now have the complete
    focused qualification above, followed by the complete multiply-add and MMX
-   format-contract union. Next close the GP/SIMD native-store input/continuation
-   gap and remaining MMX region composition failures. Preserve unmodified
+   format-contract union and GP/SIMD native-store inputs/continuation. Next close
+   native block-extraction stores and remaining MMX region composition failures. Preserve unmodified
    failed sources and independently initialized positive programs. Do not assume that a whole
    format batch's first MMX rejection establishes every sibling's input checks;
    retain per-mode positive and missing-input controls.
@@ -285,6 +297,13 @@ Go 1.20 and race. One heavy local Go/LLVM owner runs at a time; develop in an
 existing idle worktree while its tested source stays frozen.
 
 Resolve branch locations with `git worktree list`. Latest ignored receipts use
+`gp-simd-store-qualified-{contracts,results,objects}` at `2d9059765`;
+`gp-simd-store-qualified-2d905976.json` seals the complete 42-root three-lane
+union. Final gates use `gp-simd-store-final-gates-2d905976`; the eight-SDK audit
+is `gp-simd-store-classification-audit`. Original RED uses
+`gp-simd-native-store-red` at `e2e2406fa`; the related replay's two obsolete
+contract failures remain preserved, with original sources and separate
+initialized positives retained in the qualified batch. Earlier receipts use
 `multiply-add-qualified-{contracts,multiply,physical,initialized}` at `cdbc92b85`;
 `multiply-add-qualified-cdbc92b8.json` seals the complete 69-root three-lane
 union. Final gates use `multiply-add-final-gates-cdbc92b8`, and the sealed
