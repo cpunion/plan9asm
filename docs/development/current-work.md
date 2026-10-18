@@ -16,15 +16,16 @@ scanner runs locally. Do not expand that workload in this translator PR.
 
 Push only to the allowed `cpunion` or `dastai` fork. PR40 remains draft at
 `24851df2`; verified local or backup branches do not qualify that contribution
-head. Promote one verified batch after the frozen CI finishes, without a
-direct upstream push or merge. Latest upstream main `e2164ac0` is an ancestor
+head. The last frozen CI has finished; repair its actual failures before another
+diagnostic batch, without a direct upstream push or merge. Latest upstream main
+`e2164ac0` is an ancestor
 of the current candidate. Do not create another worktree for routine work.
 
 ## Frozen snapshots and evidence
 
 | Snapshot | Evidence and limits |
 |---|---|
-| `cdcd98cc6` | Active branch `codex/pr40-logical-packed-param-store-20261018` repairs packed private-parameter stores; initial three roots / 90 children pass at `d85723a5b`, but final complete qualification is pending. Keep the current frozen test source unchanged |
+| `4bcd33be9` | Packed private-parameter stores: 48 roots / 2,031 children pass current Go, actual Go1.20 and race; all 2,079 terminal identities match, no fail/skip/incomplete, unchanged source/SDK/LLVM22 observations. Build/vet, twelve scanner roots on both SDKs, five-arch classification, three CLI extraction roots, 132 CI policies and tracked formatting also pass |
 | `e7e90b7c9` | Ten historical unbound-format failures plus eight initialized/source-boundary owners pass current Go, actual Go1.20 and race: 18 roots / 605 children, identical 623 terminals, no fail/skip/incomplete. Original source rows remain; public Context and emitter-only objects are not runtime passes |
 | `8e82392cd` | Floating logical-field addresses: 57 roots / 3,871 children pass all three lanes, identical 3,928 terminals, no fail/skip/incomplete and unchanged source/SDK/LLVM22 observations. Build/vet, twelve scanner roots on both SDKs, five-arch classification, three CLI extraction roots, 132 CI policies and tracked formatting pass; backed up in the allowed fork |
 | `d5bdb0399` | All 179 historical failed roots re-observed locally: 29 pass, 58 fail, 92 explicit host skips, zero absent/pending/incomplete. Original output hashes, all run/terminal identities and both source/SDK/tool/environment seals audit unchanged; selected aggregate remains failed, not a full/native CI pass |
@@ -35,9 +36,10 @@ of the current candidate. Do not create another worktree for routine work.
 | Same code head | Build, vet, eleven scanner roots on both SDKs, five-architecture official classification, three CLI extraction roots, 132 CI policies and tracked formatting pass |
 | `aec6c45a` | BZHI/BEXTR/BLS affected union: 26 roots / 620 children pass all three lanes; eight-SDK audit changes only four isolated AMD64 BZHI forms per SDK supported-to-context, no unsupported drift |
 | `92acfbb2` | Paired native-input repair: 44 roots / 3,522 children pass all three lanes; the original latest failed priority selection is retained |
-| `06eedf847` | Published frozen diagnostic [run 39065963275](https://github.com/cpunion/plan9asm/actions/runs/39065963275); do not cancel/restart it for a small push |
+| `06eedf847` | Latest diagnostic [run 39065963275](https://github.com/cpunion/plan9asm/actions/runs/39065963275) finished naturally: 81 jobs pass and 17 fail. All 16 Windows root parts and their completion fail |
 | Same published run | Audited actual native execution: 73 roots / 228 children pass, zero fail/skip/duplicate/incomplete; these receipts do not certify later BZHI/NOP repairs |
-| `8ca976c6` | Last completed full main-root denominator: [run 39054965721](https://github.com/cpunion/plan9asm/actions/runs/39054965721), 16 parts / 64 shards, 6,986 roots: 6,544 pass, 179 fail, 263 explicit host-inapplicable skips, zero incomplete |
+| Same latest run | Complete raw root union: 16 parts / 64 shards, 6,998 roots: 6,568 pass, 167 fail, 263 explicit host skips, zero incomplete. Every part shares the actual head/source and exact inventory; disjoint starts/terminals match all 6,998 names. This is a failed raw union, not canonical all-platform qualification |
+| `8ca976c6` | Previous full denominator: [run 39054965721](https://github.com/cpunion/plan9asm/actions/runs/39054965721), 6,986 roots: 6,544 pass, 179 fail, 263 explicit host skips, zero incomplete |
 
 Do not subtract newer focused successes from that completed CI denominator.
 Canonical complete modules, all-platform execution, the strict benchmark,
@@ -55,18 +57,21 @@ copy execution. Original RED includes a falsely accepted uninitialized floating
 result; that hole is closed at `8e82392cd`. The original SqrtByAddress program
 still needs its separate complete SQRT arithmetic-effect repair.
 
-The frozen Windows diagnostic has started its complete module owners and has
-real failures, not only queued jobs. Inspect each owner's raw report as it
-finishes; do not cancel the rest. Part3 has 426 roots: 391 pass, 13 fail and
-22 explicit skips. Its shared private-parameter VMOVDQU store defect is now
+The Windows diagnostic's complete root owners have real failures, not queue or
+installation failures. Its exact 167-root queue is the next CI authority;
+the older local 179-root replay does not supersede it. The private-parameter
+VMOVDQU store defect from part3 is now
 independently reproduced across 41 complete unaligned store shapes. A bare
 unknown-input Void store additionally reproduces false acceptance on all five
 targets at `867cf9f17`. `d85723a5b` shares existing move effects for numeric
 logical stores and routes every valid packed FP store through whole-source
 checking. Pointers, bools, holes, native alignment and SP keep their boundaries.
-The discovering program's complete source is byte-identical after extraction;
-its actual-host portable execution and typed-field negatives are pending at
-the active code head, not certified by the initial green.
+The discovering program's complete source is byte-identical after extraction.
+Its three-API actual-host execution passes 257 input tuples and full canaries
+under both IR and backend optimization axes. All 82 original Void/integer-result
+functions per target remain in the objects. The complete 48-root affected union
+and final gates pass at `4bcd33be9`; this portable evidence does not certify a
+new native Windows run or change the completed online 167 failures.
 
 At `e7e90b7c9`, ten old format tests retain their complete original Go objects
 and explicitly reject missing inputs through all three public APIs before
@@ -137,11 +142,11 @@ cannot certify a performance improvement. Full reports remain under ignored
    Go's assembler retains ArgsSizeUnknown for the first; the private Void extent
    check rejects both. `subtle/xorBytes` reaches this error. Reproduce before
    changing it; keep explicit mismatch and native-frame/address controls.
-2. Watch the published diagnostic run to its natural terminal. Its native
-   owners already pass; Windows SDK priorities and complete modules still need
-   their own final results. Download and inspect actual failed roots before
-   another diagnostic-branch push. No full result exists merely because all
-   prerequisites pass.
+2. Use the completed `06eedf847` run's exact 167-root failure index. All 16
+   parts / 64 shards have been downloaded and audited against their identical
+   actual source/head/inventory. Preserve the failed run and its host skips;
+   source fixes staged afterward are not online passes. Avoid another complete
+   diagnostic run while its known failure classes remain unaddressed.
 3. Repair only remaining observed rule classes. Preserve discovering sources,
    independent complete Go rows/attributes, initialized positives and negatives.
    Use shared typed grammar/effects rather than library-specific exceptions.
@@ -155,9 +160,10 @@ cannot certify a performance improvement. Full reports remain under ignored
    read composition, custom ABI/stack roles and obsolete unbound-format contracts.
    The first old local failure remains `TestGoABI0PaddedSqrtObjects`. Its logical
    floating-field address class is now qualified; SQRT arithmetic is separate.
-   First finish the current packed-copy repair discovered by complete Windows
-   owners, including the unchanged original program and current Go/Go1.20/race.
-   Then close the observed typed numerical/native continuation classes. No
+   Packed private-copy stores are now qualified. Next close the observed typed
+   numerical/native continuation classes, including all eight mask/vector data
+   moves, register/CPU-query result roles and three-operand shift memory effects.
+   Keep compiler/runtime producer gaps separate from instruction support. No
    mnemonic-only exception, padding permission or native-frame backing follows
    from a valid encoding. Inspect the final error, not a preceding successful
    tool/CPU preflight log: Windows conformance reaches an unclosed three-operand
@@ -185,9 +191,12 @@ the 57-root seal is `logical-floating-qualified-8e82392c.json` and final gates
 use `logical-floating-final-gates-8e82392c`. Format-contract qualification uses
 `unbound-format-contracts-host-applicable-qualified-e7e90b7c.json`.
 Windows complete-owner artifacts use `ci-39065963275-windows-root-*`.
-Packed-copy RED/initial green receipts use `packed-logical-parameter-store-*`;
-the unchanged-program portable/typed-field selection is
-`packed-private-copy-complete-first-green` at `cdcd98cc6`.
+The exact latest completed raw root union is
+`ci-39065963275/root-union-audit.json`. Packed-copy RED/initial green receipts
+use `packed-logical-parameter-store-*`; the unchanged-program portable/typed-
+field selection is `packed-private-copy-complete-first-green` at `cdcd98cc6`.
+Final qualification is `packed-private-copy-qualified-4bcd33be.json`; final
+gates use `packed-private-copy-final-gates-4bcd33be`.
 Earlier receipts use `nop-source-state-qualified-{nop,stack,identity}` and
 `nop-current-sdk-producers`; `qualified-nop-source-state-bc79fd0f.json` records
 the exact union. Earlier cohorts use `bitfield-qualified-*` and
