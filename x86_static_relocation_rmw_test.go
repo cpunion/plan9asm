@@ -12,7 +12,7 @@ import (
 func x86StaticRelocationRMWFixture(memory bool) (string, string) {
 	var source, declarations strings.Builder
 	source.WriteString("DATA ·cell+0(SB)/8,$0x1234\nGLOBL ·cell(SB),8,$16\n" +
-		"DATA ·sink+0(SB)/4,$0x12345678\nGLOBL ·sink(SB),8,$4\n")
+		"DATA ·sink+0(SB)/4,$0x12345678\nGLOBL ·sink(SB),16,$4\n")
 	for index, stem := range []string{"ADD", "SUB", "ADC", "SBB", "AND", "OR", "XOR"} {
 		name := fmt.Sprintf("relocation%d", index)
 		fmt.Fprintf(&declarations, "func %s(seed uint32) uint32\n", name)
@@ -59,8 +59,9 @@ func TestX86StaticRelocationInitializedCompleteRMWFamily(t *testing.T) {
 func TestX86StaticRelocationRMWCannotInventSourceStorage(t *testing.T) {
 	for _, mutation := range []struct{ name, before, after string }{
 		{"unbound-address", "DATA ·cell+0(SB)/8,$0x1234\nGLOBL ·cell(SB),8,$16\n", ""},
-		{"missing-destination", "DATA ·sink+0(SB)/4,$0x12345678\nGLOBL ·sink(SB),8,$4\n", ""},
-		{"short-destination", "DATA ·sink+0(SB)/4,$0x12345678\nGLOBL ·sink(SB),8,$4", "DATA ·sink+0(SB)/2,$1\nGLOBL ·sink(SB),8,$2"},
+		{"missing-destination", "DATA ·sink+0(SB)/4,$0x12345678\nGLOBL ·sink(SB),16,$4\n", ""},
+		{"short-destination", "DATA ·sink+0(SB)/4,$0x12345678\nGLOBL ·sink(SB),16,$4", "DATA ·sink+0(SB)/2,$1\nGLOBL ·sink(SB),16,$2"},
+		{"readonly-destination", "GLOBL ·sink(SB),16,$4", "GLOBL ·sink(SB),8,$4"},
 		{"missing-carry", "CLC\n", ""},
 		{"missing-result", "MOVL AX,ret+4(FP)\n", ""},
 	} {
