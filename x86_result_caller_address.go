@@ -234,6 +234,9 @@ func x86ResultCallerAddressesAfter(ins Instr, before [16]bool, entryFP map[int64
 	if _, known, err := x86VectorTestProperties(ins.Op, ins, arch); known && err == nil {
 		return before // Only FLAGS change; source/memory definedness is checked independently.
 	}
+	if _, known, err := x86MaskLogicalProperties(ins.Op, ins, arch); known && err == nil {
+		return before // Only mask registers or FLAGS change, never a GP identity.
+	}
 	if form, known, err := x86ScalarBitScanProperties(ins.Op, ins, arch); known && err == nil {
 		kill(ins.Args[1], int64(form.bits/8))
 		return before // Conditional numerical definedness does not widen the write footprint.

@@ -35,21 +35,12 @@ var amd64MaskLogicalSpecs = map[Op]amd64MaskLogicalSpec{
 }
 
 func (c *amd64Ctx) lowerMaskLogical(op Op, ins Instr) error {
-	spec := amd64MaskLogicalSpecs[op]
-	wantArgs := 3
-	if spec.kind == amd64MaskNot || spec.kind == amd64MaskTest || spec.kind == amd64MaskOrTest {
-		wantArgs = 2
+	spec, known, err := x86MaskLogicalProperties(op, ins, c.goarch)
+	if err != nil {
+		return err
 	}
-	if len(ins.Args) != wantArgs {
-		return fmt.Errorf("amd64 %s expects %d K-register operands: %q", op, wantArgs, ins.Raw)
-	}
-	for _, arg := range ins.Args {
-		if arg.Kind != OpReg {
-			return fmt.Errorf("amd64 %s expects only K-register operands: %q", op, ins.Raw)
-		}
-		if _, ok := amd64ParseKReg(arg.Reg); !ok {
-			return fmt.Errorf("amd64 %s operand is not K0..K7: %q", op, ins.Raw)
-		}
+	if !known {
+		return fmt.Errorf("%s unknown mask logical opcode %q", c.goarch, op)
 	}
 
 	load := func(arg Operand) (string, error) {
@@ -69,11 +60,14 @@ func (c *amd64Ctx) lowerMaskLogical(op Op, ins Instr) error {
 	if err != nil {
 		return err
 	}
-	second, err := load(ins.Args[1])
-	if err != nil {
-		return err
+	var second string
+	if spec.kind != amd64MaskNot {
+		second, err = load(ins.Args[1])
+		if err != nil {
+			return err
+		}
 	}
-	if spec.kind == amd64MaskTest || spec.kind == amd64MaskOrTest {
+	if spec.writesFlags() {
 		return c.lowerMaskLogicalFlags(spec, first, second)
 	}
 
@@ -114,7 +108,7 @@ func (c *amd64Ctx) lowerMaskLogical(op Op, ins Instr) error {
 		fmt.Fprintf(c.b, "  %%%s = and i64 %s, %s\n", masked, result, amd64MaskWidthLiteral(spec.bits))
 		result = "%" + masked
 	}
-	return c.storeK(ins.Args[wantArgs-1].Reg, result)
+	return c.storeK(ins.Args[spec.argumentCount()-1].Reg, result)
 }
 
 func (c *amd64Ctx) lowerMaskLogicalFlags(spec amd64MaskLogicalSpec, first, second string) error {

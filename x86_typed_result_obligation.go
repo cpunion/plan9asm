@@ -112,6 +112,9 @@ func x86TypedFPResultNeedsProof(fn Func, sig FuncSig, arch string) bool {
 		if _, known, err := x86MaskValueProperties(ins.Op, ins, arch); known && err == nil && x86ResultNamedPredicateInstruction(ins) {
 			return true // KADD/KSHIFT/KUNPCK retain their complete input obligation for Void.
 		}
+		if _, known, err := x86MaskLogicalProperties(ins.Op, ins, arch); known && err == nil && x86ResultNamedPredicateInstruction(ins) {
+			return true // Logical masks retain actual inputs and FLAGS even for dead Void outputs.
+		}
 		if _, known, err := x86MaskVectorProperties(ins, arch); known && err == nil && x86ResultNamedPredicateInstruction(ins) {
 			return true // Register data moves require source values even for dead outputs and Void.
 		}
