@@ -127,6 +127,17 @@ func TestX86EndBranch32RemainsRawOnly(t *testing.T) {
 	}
 }
 
+const x86EndBranchRuntimeSource = `TEXT endbranchstate(SB),NOSPLIT,$0-8
+	MOVQ out+0(FP), DI
+	MOVL $17, AX
+	CMPL AX, AX
+	BYTE $0xf3; BYTE $0x0f; BYTE $0x1e; BYTE $0x%02x
+	SETEQ 0(DI)
+	SETCS 1(DI)
+	MOVL AX, 4(DI)
+	RET
+`
+
 func TestX86RawEndBranchRuntimePreservesState(t *testing.T) {
 	crossRosetta := runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" && rosettaAvailable()
 	if runtime.GOARCH != "amd64" && !crossRosetta {
@@ -146,16 +157,7 @@ func TestX86RawEndBranchRuntimePreservesState(t *testing.T) {
 	// Both instructions remain executable bytes, even on pre-CET CPUs.
 	for _, last := range []byte{0xfa, 0xfb} {
 		t.Run(fmt.Sprintf("%02x", last), func(t *testing.T) {
-			source := fmt.Sprintf(`TEXT endbranchstate(SB),NOSPLIT,$0-8
-	MOVQ out+0(FP), DI
-	MOVL $17, AX
-	CMPL AX, AX
-	BYTE $0xf3; BYTE $0x0f; BYTE $0x1e; BYTE $0x%02x
-	SETEQ 0(DI)
-	SETCS 1(DI)
-	MOVL AX, 4(DI)
-	RET
-`, last)
+			source := fmt.Sprintf(x86EndBranchRuntimeSource, last)
 			file, err := Parse(ArchAMD64, source)
 			if err != nil {
 				t.Fatal(err)
