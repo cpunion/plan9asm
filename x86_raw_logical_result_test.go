@@ -49,7 +49,7 @@ func x86RawLogicalResultCases() []x86RawLogicalResultCase {
 			for _, vex3 := range []bool{false, true} {
 				code := x86RawPackedLogicalLiteral(op, false, width, 0, false, false)
 				if !vex3 {
-					code = append([]byte{0xc5, code[2]}, code[3:]...)
+					code = append([]byte{0xc5, code[2] | 0x80}, code[3:]...)
 				}
 				rows = append(rows, x86RawLogicalResultCase{
 					name: fmt.Sprintf("%sVEX%d_%t", op, width, vex3), code: code,
