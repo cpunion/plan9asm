@@ -24,6 +24,9 @@ func x86TypedFPResultNeedsProof(fn Func, sig FuncSig, arch string) bool {
 	}
 	opaqueAddressResult := x86OpaqueAddressPointerResultRole(fn, sig, arch)
 	for ordinal, ins := range fn.Instrs {
+		if _, valid := x86RawVMOVWResultForm(ins, arch); valid {
+			return true // Raw GP/X/m16 moves still require inputs and addresses for Void.
+		}
 		if sig.Ret != Void && x86EndBranchPreservesSourceState(ins) {
 			return true // End markers preserve existing result bytes; they never supply an ABI return value.
 		}
