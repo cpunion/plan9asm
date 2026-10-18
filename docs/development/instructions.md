@@ -379,6 +379,15 @@ does not grant caller memory or a standalone declaration-query permission.
 Current-Go PCALIGN source is a separate producer fixture; the complete literal
 NOP/read matrix still runs on the historical SDK, which lacks that directive.
 
+ENDBR32/64 preserve numerical registers, FLAGS, DF/ID and private storage,
+but update CET tracking. Keep their actual side-effecting native instructions,
+never replace them with NOPs. Share only source-state preservation, requiring
+exact raw origin/opcode/operand identity; ENDBR32 remains raw-only. This creates
+no memory, missing-input, ABI frame or raw-return permission. Retain complete
+current-Go encoder rows, both physical encodings, five-target public objects,
+private-stack checks and the original native GP/FLAGS runtime owner.
+See Intel's [CET specification](https://cdrdv2-public.intel.com/874239/252046-082-sdm-change-document.pdf).
+
 Scalar ADD/SUB/ADC/SBB native memory-to-register reads reuse the existing
 complete B/W/L/Q grammar for widths, carry and physical REX byte aliases. The
 paired lowerer must retain an exact volatile load even for dead data/FLAGS;
