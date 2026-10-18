@@ -73,7 +73,7 @@ func x86InstructionFormatObjectUnit(t *testing.T, file *File, signatures map[str
 				} else {
 					ir.WriteString("  ret void\n")
 				}
-			case "UNDEF":
+			case "UNDEF", "UD2":
 				if ordinal != len(function.Instrs)-1 || len(instruction.Args) != 0 {
 					t.Fatal("format unit lost its original final fault")
 				}
