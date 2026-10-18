@@ -2,22 +2,13 @@ package plan9asm
 
 import "fmt"
 
-func (c *amd64Ctx) lowerRawScalarHalfConversion(ins Instr, spec amd64HalfConversionSpec, properties amd64FMA3Suffix, sae bool) (bool, bool, error) {
-	source, upper, destination := ins.Args[0], ins.Args[1], ins.Args[len(ins.Args)-1]
-	if !c.isGoEVEXVectorRegister(upper, 16) || !c.isGoEVEXVectorRegister(destination, 16) || properties.broadcast {
-		return true, false, fmt.Errorf("%s requires X registers without broadcast", ins.Op)
-	}
-	if source.Kind == OpReg {
-		if !c.isGoEVEXVectorRegister(source, 16) {
-			return true, false, fmt.Errorf("%s source must be X or scalar memory", ins.Op)
-		}
-	} else if !isAMD64MemoryOperand(source) || sae || properties.rounding != "" {
-		return true, false, fmt.Errorf("%s has invalid source or memory rounding", ins.Op)
-	}
+func (c *amd64Ctx) lowerRawScalarHalfConversion(ins Instr, f x86FP16ConversionForm) (bool, bool, error) {
+	spec, properties := f.spec, f.controls
+	source, upper, destination := ins.Args[0], ins.Args[f.upper], ins.Args[f.destination]
 	mask := ""
 	var err error
-	if len(ins.Args) == 4 {
-		mask, err = c.loadK(ins.Args[2].Reg)
+	if f.mask >= 0 {
+		mask, err = c.loadK(ins.Args[f.mask].Reg)
 		if err != nil {
 			return true, false, err
 		}

@@ -74,8 +74,16 @@ func x86FP16ConversionProperties(ins Instr, arch string) (x86FP16ConversionForm,
 		if !amd64GoPackedVectorMoveRegister(source, f.sourceBytes, arch) || f.controls.broadcast {
 			return fail()
 		}
-	} else if !isAMD64MemoryOperand(source) || f.sae || f.controls.rounding != "" {
+	} else if !x86PackedShiftMemoryValid(source, arch) || f.sae || f.controls.rounding != "" {
 		return fail()
+	}
+	if source.Kind == OpMem {
+		if err := x86SymbolIndexedMemoryError(source.Mem, arch); err != nil {
+			return f, true, err
+		}
+		if source.Mem.OffRaw != "" || source.Mem.IndexExt != "" {
+			return fail()
+		}
 	}
 	if !spec.scalar && (f.sae || f.controls.rounding != "") && ins.x86VectorBytes != 64 {
 		return fail()

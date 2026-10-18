@@ -66,7 +66,10 @@ func (c *amd64Ctx) lowerPackedHalfConversion(op Op, ins Instr) (ok bool, termina
 		return false, false, nil
 	}
 	if spec.rawOnly {
-		return c.lowerRawFP16Conversion(ins, spec)
+		if !strings.EqualFold(string(op), string(ins.Op)) {
+			return true, false, fmt.Errorf("raw FP16 conversion opcode identity mismatch: %s versus %s", op, ins.Op)
+		}
+		return c.lowerRawFP16Conversion(ins)
 	}
 	properties, err := parseAMD64HalfConversionSuffix(rawOp, baseOp)
 	if err != nil {

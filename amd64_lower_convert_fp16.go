@@ -4,10 +4,10 @@ import "fmt"
 
 // FP16 map5/map6 conversions are both load forms. The lane types determine
 // access and result widths; encoded VL distinguishes the two X destinations.
-func (c *amd64Ctx) lowerRawFP16Conversion(ins Instr, spec amd64HalfConversionSpec) (bool, bool, error) {
-	f, _, err := x86FP16ConversionProperties(ins, c.goarch)
-	if err != nil {
-		return true, false, err
+func (c *amd64Ctx) lowerRawFP16Conversion(ins Instr) (bool, bool, error) {
+	f, known, err := x86FP16ConversionProperties(ins, c.goarch)
+	if !known || err != nil {
+		return known, false, err
 	}
 	if x86ScalarFloatIntegerNativeTarget(c.goarch, c.targetTriple) {
 		return true, false, c.emitNativeFP16Conversion(ins, f)
@@ -15,9 +15,9 @@ func (c *amd64Ctx) lowerRawFP16Conversion(ins Instr, spec amd64HalfConversionSpe
 	// Preserve the existing cross-target numerical implementation. It is not
 	// an x86 MXCSR/exception execution oracle; matching x86 targets use the
 	// original opcode above, even when the numerical result is dead.
-	properties := f.controls
+	spec, properties := f.spec, f.controls
 	if spec.scalar {
-		return c.lowerRawScalarHalfConversion(ins, spec, properties, f.sae)
+		return c.lowerRawScalarHalfConversion(ins, f)
 	}
 	source, destination := ins.Args[0], ins.Args[f.destination]
 	lanes, inputBytes, outputBytes := f.lanes, f.inputBytes, f.outputBytes
