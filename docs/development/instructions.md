@@ -248,6 +248,16 @@ FLAGS. They supply no reusable memory, pointee, raw-entry or caller permission.
 Format-only sources keep original Go objects and explicit Context controls;
 separate initialized counterparts own executable and public LLVM coverage.
 
+The four packed multiply-add names share the existing complete binary grammar
+with mandatory numerical inputs, result definedness and paired native reads.
+MMX keeps its separate closed physical-state owner. Every first/second input,
+mask and merging destination stays required even for Void or an unused bool.
+Zero masking removes only the merge dependency; it supplies no data/address
+permission. Reuse encoding-aware writeback and preserve unrelated GP, FLAGS,
+DF, masks and storage facts. Keep original unbound sources as actual-Go and
+public-Context format controls alongside complete initialized public objects;
+raw objects, caller proofs and native execution remain independent claims.
+
 The eight immediate shuffles share their integer-only source grammar and exact
 byte selectors with lowering, caller definedness and memory shapes. Bind the
 complete legacy and VEX/EVEX rows independently, including signed MMX Yi8,

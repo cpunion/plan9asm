@@ -25,6 +25,8 @@ of the current candidate. Do not create another worktree for routine work.
 
 | Snapshot | Evidence and limits |
 |---|---|
+| `cdbc92b85` | Complete multiply-add input effects and MMX format contracts: 69 roots / 772 children pass current Go, actual Go1.20 and race; identical 841 terminal identities, zero fail/skip/incomplete and unchanged source/SDK/LLVM22 observations. Both-SDK build/vet and eighteen scanner roots, five-arch classification, three CLI extraction roots, 132 CI policies and tracked formatting pass. Native Linux execution and complete CI remain separate requirements |
+| Same code head | The sealed eight-SDK audit changes only 27 isolated AMD64 multiply-add forms per SDK from supported to Context for missing inputs; 386 classifications, encoder rules, unsupported counts and unrelated metrics stay unchanged. Original TDD at `87ae8fb66` retains 126 failed terminals: both missing-input acceptance and initialized-vector rejection |
 | `3d26bf2cc` | Complete scalar-shift memory effects: 23 roots / 5,793 children pass current Go, actual Go1.20 and race; identical 5,816 terminal identities, zero fail/skip/incomplete and unchanged source/SDK/LLVM22 observations. Both-SDK build/vet and seventeen scanner roots, five-arch classification, three CLI extraction roots, 132 CI policies and tracked formatting pass. Complete native Linux execution remains required |
 | Same code head | Two earlier race attempts remain failed/incomplete: one timed out including compilation, one timed out during inventory. The fresh complete retry passed within unchanged budgets. A separate Linux AMD64 original-Go zero-count diagnostic passed 84 cases (76 RMW read-only faults, eight BMI2 reads); it is not complete LLVM native qualification |
 | `e95a10314` | Complete CPU-query implicit effects: 40 roots / 1,593 children pass current Go, actual Go1.20 and race; identical 1,633 terminal identities, zero fail/skip/incomplete and unchanged source/SDK/LLVM22 observations. Original named/raw runtime sources compile through all three APIs on all five x86 targets. Native Linux AMD64/386 execution remains a separate required counterpart, not a local pass |
@@ -57,6 +59,17 @@ execution and native execution remain different claims.
 
 ## Latest repairs
 
+PMADDWL, PMADDUBSW, VPMADDWD and VPMADDUBSW now share their existing complete
+grammar with mandatory numerical inputs, result definedness and paired native
+reads. The production repair adds three lines and removes a duplicated two-line
+fallback; it changes no arithmetic emitter or memory permission. Independent
+register/memory, X/Y/Z, mask/merge/zero and mode32 controls retain all 56 input
+shapes. An unused bool or Void return cannot supply absent inputs. Original
+unbound shuffle/multiply-add sources remain actual-Go/public-Context/emitter-only
+format controls; independently initialized programs retain three public APIs,
+five-target objects and both IR/backend optimization axes. Closed MMX state,
+raw encoding and actual caller boundaries retain their independent owners.
+
 The scalar-shift memory batch retains all 148 AMD64 and 110 IA32 independent
 memory witnesses, including explicit Context for the four unbounded W double
 shifts per mode. Group2/double shifts preserve exact volatile read/write effects;
@@ -71,10 +84,10 @@ qualified. Original RED at `e57ab2805` remains unchanged.
 The sealed eight-SDK audit changes only two 386 and 77 AMD64 isolated memory
 forms per SDK from supported to Context because their address/inputs are absent.
 Encoder rules, unsupported counts and every unrelated metric remain unchanged.
-At `3d26bf2cc`, the next two original MMX format roots are freshly reproduced:
-both fail, with ten failed terminals across ten children and no incomplete work.
-Their original unclosed MMX sources must remain negative controls alongside
-separately initialized complete programs; no source is silently given EMMS.
+The original MMX format RED at `3d26bf2cc` remains failed. Its initial contract
+repair exposed the separate mode32 multiply-add input bypass, subsequently
+reproduced by the independent full-family tests above. No original source was
+silently given EMMS or replaced by an initialized program.
 
 CPUID and XGETBV now share their existing complete zero-operand grammar and
 implicit dword input/output spec with numerical definedness. Inputs are checked
@@ -245,9 +258,10 @@ cannot certify a performance improvement. Full reports remain under ignored
    Packed private-copy stores and all eight mask/vector data effects are now
    qualified, as are the complete CPU-query implicit NUM and exact named/raw
    continuation effects. Scalar-shift memory effects now have the complete
-   focused qualification above. Next close MMX format-contract and region
-   composition failures, preserving unmodified failed sources and independently
-   initialized positive programs. In particular, do not assume that a whole
+   focused qualification above, followed by the complete multiply-add and MMX
+   format-contract union. Next close the GP/SIMD native-store input/continuation
+   gap and remaining MMX region composition failures. Preserve unmodified
+   failed sources and independently initialized positive programs. Do not assume that a whole
    format batch's first MMX rejection establishes every sibling's input checks;
    retain per-mode positive and missing-input controls.
    CPU-query numerical effects do not supply the separate custom entry of the
@@ -271,7 +285,14 @@ Go 1.20 and race. One heavy local Go/LLVM owner runs at a time; develop in an
 existing idle worktree while its tested source stays frozen.
 
 Resolve branch locations with `git worktree list`. Latest ignored receipts use
-`scalar-shift-memory-qualified-complete` at `3d26bf2cc` for both normal SDKs and
+`multiply-add-qualified-{contracts,multiply,physical,initialized}` at `cdbc92b85`;
+`multiply-add-qualified-cdbc92b8.json` seals the complete 69-root three-lane
+union. Final gates use `multiply-add-final-gates-cdbc92b8`, and the sealed
+eight-SDK audit is `multiply-add-classification-audit`. Initial RED uses
+`multiply-add-input-red` at `87ae8fb66`. A first orchestration attempt stopped
+on its invalid mixed-case phase name after the contracts group passed; the
+version-two driver retained that receipt and completed the exact full union.
+Earlier receipts use `scalar-shift-memory-qualified-complete` at `3d26bf2cc` for both normal SDKs and
 `scalar-shift-memory-qualified-complete-retry2` for the complete race lane;
 `scalar-shift-memory-qualified-3d26bf2c.json` seals their exact three-lane union.
 The earlier race and `-cached` attempts remain failed. Final gates use
