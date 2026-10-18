@@ -52,6 +52,29 @@ func TestX86RTMStatusQueryGoRowAndState(t *testing.T) {
 	}
 }
 
+func TestX86RTMGrammarRejectsConstructedIdentityAndNonIntegerAbort(t *testing.T) {
+	for _, arch := range []string{"386", "amd64"} {
+		for _, spelling := range []string{"XABORT $0.0", "XTEST"} {
+			t.Run(arch+"/"+spelling, func(t *testing.T) {
+				ins := x86ScalarLaneInstruction(t, spelling)
+				if ins.Op == "XABORT" {
+					requireX86GoAssemblerResult(t, arch, "TEXT bad(SB),4,$0-0\n"+spelling+"\nRET\n", false)
+				} else {
+					ins.Op = "XEND" // A dispatcher may not reinterpret a different original opcode.
+				}
+				ctx, output := newAMD64CtxWithFuncForTest(t, Func{}, FuncSig{Ret: Void}, nil)
+				ctx.goarch = arch
+				before, temporary := output.String(), ctx.tmp
+				op := Op(strings.Fields(spelling)[0])
+				known, terminated, err := ctx.lowerRTM(0, 0, op, ins, nil)
+				if !known || terminated || err == nil || output.String() != before || ctx.tmp != temporary {
+					t.Fatal("malformed RTM source emitted an instruction", known, terminated, err)
+				}
+			})
+		}
+	}
+}
+
 func TestX86RTMStatusQueryThreeAPIsFiveTargets(t *testing.T) {
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
