@@ -59,7 +59,7 @@ func (c *amd64Ctx) lowerBMI2VariableShift(op Op, ins Instr) (ok bool, terminated
 	if err != nil {
 		return true, false, err
 	}
-	sourceValue, err := c.evalIntSized(source, typ)
+	sourceValue, _, err := c.loadScalarShiftOperand(ins, 1, typ)
 	if err != nil {
 		return true, false, err
 	}

@@ -193,8 +193,14 @@ func TestX86ScalarShiftGrammarAndMemoryAuthorityControls(t *testing.T) {
 		}
 		for _, row := range []string{"SHLL $1,(AX)", "SHRL CL,tmp-4(SP)", "ROLW $1,data(SB)", "SHRXL AX,(BX),CX"} {
 			ins := x86YMMReadSource(t, row)
-			if _, known, err := x86TypedInstructionByteEffect(ins.Op, ins, arch); known || err != nil {
-				t.Fatal("register family acquired a memory effect certificate")
+			if effect, known, err := x86TypedInstructionByteEffect(ins.Op, ins, arch); !known || err != nil || !effect.requiresResultProof {
+				t.Fatal("memory shape lost its mandatory numerical obligation", err)
+			}
+			for _, consumer := range x86ResultGPSIMDConsumers {
+				state := x86ResultState{flags: x86ByteFlagsAll}
+				if consumer.step(ins, &state, nil, 0, arch) {
+					t.Fatal("a memory byte shape supplied unproved storage")
+				}
 			}
 		}
 	}

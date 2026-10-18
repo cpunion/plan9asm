@@ -45,7 +45,7 @@ func (c *amd64Ctx) lowerScalarShiftRotate(op Op, ins Instr) (ok bool, terminated
 		return true, false, fmt.Errorf("%s %s destination is outside Go 1.27's Ymb/Yml class: %q", c.goarch, baseOp, ins.Raw)
 	}
 	ty := amd64IntegerTypeForBits(bits)
-	value, err := c.evalIntSized(dst, ty)
+	value, store, err := c.loadScalarShiftOperand(ins, 1, ty)
 	if err != nil {
 		return true, false, err
 	}
@@ -56,7 +56,7 @@ func (c *amd64Ctx) lowerScalarShiftRotate(op Op, ins Instr) (ok bool, terminated
 		result = c.emitScalarShiftRotate(stem, bits, value, count)
 		c.emitScalarShiftFlags(stem, bits, value, result, count, false)
 	}
-	if err := c.storeScalarIntegerOperand(dst, ty, result); err != nil {
+	if err := store(result); err != nil {
 		return true, false, err
 	}
 	return true, false, nil
@@ -278,7 +278,7 @@ func (c *amd64Ctx) lowerScalarDoubleShift(baseOp string, left bool, bits int, in
 	if err != nil {
 		return true, false, err
 	}
-	destination, err := c.evalIntSized(ins.Args[2], ty)
+	destination, store, err := c.loadScalarShiftOperand(ins, 2, ty)
 	if err != nil {
 		return true, false, err
 	}
@@ -326,7 +326,7 @@ func (c *amd64Ctx) lowerScalarDoubleShift(baseOp string, left bool, bits int, in
 		value = "%" + corrected
 	}
 	c.emitScalarShiftFlags(baseOp[:len(baseOp)-1], bits, destination, value, count, true)
-	if err := c.storeScalarIntegerOperand(ins.Args[2], ty, value); err != nil {
+	if err := store(value); err != nil {
 		return true, false, err
 	}
 	return true, false, nil

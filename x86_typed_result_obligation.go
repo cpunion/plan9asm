@@ -24,6 +24,10 @@ func x86TypedFPResultNeedsProof(fn Func, sig FuncSig, arch string) bool {
 	}
 	opaqueAddressResult := x86OpaqueAddressPointerResultRole(fn, sig, arch)
 	for ordinal, ins := range fn.Instrs {
+		if form, known, err := x86ScalarShiftProperties(ins.Op, ins, arch); known && err == nil &&
+			form.hasMemory() && x86ResultNamedPredicateInstruction(ins) {
+			return true // Dead native accesses and undefined W counts remain obligations for Void.
+		}
 		if _, known, err := x86CPUQueryProperties(ins.Op, ins, arch); known && err == nil {
 			return true // Named/raw implicit query inputs remain required even for dead Void outputs.
 		}

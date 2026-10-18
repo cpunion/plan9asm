@@ -1528,7 +1528,7 @@ func (c *amd64Ctx) lowerArith(op Op, ins Instr) (ok bool, terminated bool, err e
 		}
 		dst := ins.Args[2].Reg
 		if op == "RORXQ" && c.goarch == "amd64" {
-			src, err := c.evalIntSized(ins.Args[1], I64)
+			src, _, err := c.loadScalarShiftOperand(ins, 1, I64)
 			if err != nil {
 				return true, false, err
 			}
@@ -1545,7 +1545,7 @@ func (c *amd64Ctx) lowerArith(op Op, ins Instr) (ok bool, terminated bool, err e
 			fmt.Fprintf(c.b, "  %%%s = or i64 %%%s, %%%s\n", rot, lhs, rhs)
 			return true, false, c.storeReg(dst, "%"+rot)
 		}
-		src, err := c.evalIntSized(ins.Args[1], I32)
+		src, _, err := c.loadScalarShiftOperand(ins, 1, I32)
 		if err != nil {
 			return true, false, err
 		}
