@@ -191,7 +191,11 @@ func TestX86EndBranchCannotCreateInputsOrEntry(t *testing.T) {
 				{"raw return", "MOVL $7,AX\n", "MOVL AX,ret+0(FP)\nBYTE $0xc3\n"},
 			} {
 				t.Run(fmt.Sprintf("%s/%x/%s", target.triple, last, test.name), func(t *testing.T) {
-					source := "TEXT marker(SB),4,$0-4\n" + test.before + marker + test.after
+					frame := 0
+					if test.name == "raw return" {
+						frame = 8 // Raw RET cannot borrow Go's nonzero-frame epilogue.
+					}
+					source := fmt.Sprintf("TEXT marker(SB),4,$%d-4\n", frame) + test.before + marker + test.after
 					x86LEAActualTargetGoObject(t, target.arch, target.triple, source)
 					for _, api := range []string{"text", "module", "Go"} {
 						ir, err := x86ScalarFPBitViewAPI(t, source, "func marker() uint32", target.arch, target.triple, api)

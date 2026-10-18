@@ -24,6 +24,9 @@ func x86TypedFPResultNeedsProof(fn Func, sig FuncSig, arch string) bool {
 	}
 	opaqueAddressResult := x86OpaqueAddressPointerResultRole(fn, sig, arch)
 	for ordinal, ins := range fn.Instrs {
+		if sig.Ret != Void && x86EndBranchPreservesSourceState(ins) {
+			return true // End markers preserve existing result bytes; they never supply an ABI return value.
+		}
 		if _, known, err := x86SqrtProperties(ins, arch); known && err == nil {
 			return true // Dead square roots still consume numerical inputs and masks.
 		}
