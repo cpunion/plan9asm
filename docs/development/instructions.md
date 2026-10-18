@@ -1347,3 +1347,11 @@ legacy/MMX, native-read, frame or standalone DATA-query role. Keep original
 uninitialized formats separate from initialized public objects. C-only signal
 and exit-status controls execute on the actual host; they do not require an
 x86 native-instruction launcher or certify native AVX512 execution.
+
+VEX/EVEX packed add/subtract literals reuse their complete typed wrapping and
+signed/unsigned saturating forms. Exact decoder read identity and full/broadcast
+tuple extent feed the existing lane-byte effect. Unknown source lanes remain
+unknown, merging requires old destination bytes, and zeroing does not invent a
+mask or memory extent. Whole-source/raw-return checks, mode32, native-read,
+legacy/MMX and declaration-only boundaries stay independent. Keep original
+missing-mask formats and independently initialized public programs distinct.
