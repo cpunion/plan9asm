@@ -15,16 +15,18 @@ func x86SourceStackMOVSXDLiteralProgram() (string, string, string) {
 	driver.WriteString("#include <stdint.h>\n#include <stdio.h>\n")
 	var checks strings.Builder
 	count := 0
-	for _, width := range []int{32, 64, 664} {
+	for _, encoding := range []struct{ rexW, operandOverride bool }{
+		{}, {rexW: true}, {rexW: true, operandOverride: true},
+	} {
 		for _, register := range []byte{0, 1, 2, 3, 6, 7, 8, 9, 10, 11, 12, 13, 15} {
 			name := fmt.Sprintf("Literal%d", count)
 			count++
 			var code []byte
-			if width == 664 {
+			if encoding.operandOverride {
 				code = append(code, 0x66)
 			}
 			rex := byte(0x40)
-			if width != 32 {
+			if encoding.rexW {
 				rex |= 8
 			}
 			if register >= 8 {
@@ -47,7 +49,7 @@ func x86SourceStackMOVSXDLiteralProgram() (string, string, string) {
 			fmt.Fprintf(&declarations, "func %s(x uint64) uint64\n", name)
 			fmt.Fprintf(&driver, "extern uint64_t %s(uint64_t);\n", name)
 			want := "UINT64_C(0xffffffff80000000)"
-			if width == 32 {
+			if !encoding.rexW {
 				want = "UINT64_C(0x80000000)"
 			}
 			fmt.Fprintf(&checks, "if (%s(UINT64_MAX) != %s) {fprintf(stderr,\"%s failed\\n\"); return 1;}\n", name, want, name)
