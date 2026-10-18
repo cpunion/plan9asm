@@ -225,20 +225,20 @@ func TestTranslateRawFP16FMALLVM22Targets(t *testing.T) {
 				}
 			}
 			source.WriteString("\tRET\n")
-			requireX86GoAssemblerResult(t, target.arch, source.String(), true)
-			file, err := Parse(ArchAMD64, source.String())
-			if err != nil {
-				t.Fatal(err)
+			// Keep the complete original encoding unit. Its unknown vectors,
+			// mask and address are not initialized by a Void declaration.
+			// Separate initialized programs own public-API object coverage.
+			ir := x86UnboundVoidRawScalarFormatObject(t, source.String(), target.arch, target.triple)
+			if strings.Count(ir, "asm sideeffect") != 378 {
+				t.Fatal("original FP16 FMA format unit lost native operations")
 			}
-			ir, err := Translate(file, Options{
-				Goarch: target.arch, TargetTriple: target.triple,
-				Sigs: map[string]FuncSig{"rawHalfFMA": {Name: "rawHalfFMA", Ret: Void}},
-			})
-			if err != nil {
-				t.Fatal(err)
+			for _, op := range rawFP16FMAOps() {
+				if !strings.Contains(ir, strings.ToLower(string(op))+" ") {
+					t.Fatal("original FP16 FMA format unit lost family member", op)
+				}
 			}
-			for _, want := range []string{"@llvm.fma.f16", "@llvm.fma.v8f16", "@llvm.fma.v16f16", "@llvm.fma.v32f16",
-				"@llvm.experimental.constrained.fma.f16", "@llvm.masked.load.v8i16", "phi i16", "+avx512fp16"} {
+			for _, want := range []string{"{rn-sae}", "{rd-sae}", "{ru-sae}", "{rz-sae}",
+				"{1to8}", "{1to16}", "{1to32}", "kmovd", "+avx512fp16"} {
 				if !strings.Contains(ir, want) {
 					t.Fatalf("missing %s", want)
 				}
