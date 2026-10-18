@@ -2,6 +2,7 @@ package plan9asm
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -91,8 +92,8 @@ func TestX86CPUQueryBareAcceptedSourceAcrossThreeAPIs(t *testing.T) {
 							ir = translated.Module.String()
 						}
 					}
-					if err != nil || !strings.Contains(ir, "asm sideeffect \""+strings.ToLower(string(op))+"\"") {
-						t.Fatalf("accepted zero-operand query lost by %s consumer: %v\n%s", api, err, ir)
+					if !errors.Is(err, ErrProbeNeedsContext) || ir != "" {
+						t.Fatalf("Go-accepted syntax supplied missing implicit inputs to %s: %v\n%s", api, err, ir)
 					}
 				})
 			}

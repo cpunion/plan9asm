@@ -103,75 +103,87 @@ func TestX86TimestampInitializedScalarResultsThreeAPIsFiveTargets(t *testing.T) 
 
 func TestX86TimestampRawCompositionRetainsExactOriginalRoles(t *testing.T) {
 	for _, arch := range []string{"386", "amd64"} {
-		move, word := "MOVL", 4
-		if arch == "amd64" {
-			move, word = "MOVQ", 8
-		}
 		for _, opcode := range []Op{"RDTSC", "RDTSCP"} {
 			code := []byte{0x0f, 0x31}
 			if opcode == "RDTSCP" {
 				code = []byte{0x0f, 0x01, 0xf9}
 			}
-			body := fmt.Sprintf("%s p+0(FP),DI\n%sMOVL AX,ret+%d(FP)\nSTMXCSR (DI)\nRET",
-				move, x86RawDisplacementDirectives(code), word)
-			_, file, sig, _ := x86ResultInitializationFixture(t, arch, "func Value(p *uint32) uint32", body)
-			normalized, err := decodeX86RawDirectives(file.Funcs[0], arch)
-			if err != nil {
-				t.Fatal(err)
-			}
-			position := -1
-			for index, ins := range normalized.Instrs {
-				if ins.x86SourceRaw != nil {
-					if ins.Op != opcode || position != -1 {
-						t.Fatal("original timestamp did not decode to exactly one instruction")
-					}
-					position = index
-				}
-			}
-			if position < 0 {
-				t.Fatal("missing exact raw timestamp handoff")
-			}
-			for _, mutation := range []string{"unchanged", "original-opcode", "original-operands", "normalized-opcode",
-				"normalized-operands", "encoded", "address-size", "raw-return", "raw-TEXT", "source-stack", "fixed-local"} {
-				t.Run(arch+"/"+string(opcode)+"/"+mutation, func(t *testing.T) {
-					fn := normalized
-					fn.Instrs = append([]Instr(nil), fn.Instrs...)
-					ins := &fn.Instrs[position]
-					origin := *ins.x86SourceRaw
-					ins.x86SourceRaw = &origin
-					switch mutation {
-					case "original-opcode":
-						origin.op = "NOP"
-					case "original-operands":
-						origin.args = []Operand{{Kind: OpReg, Reg: AX}}
-					case "normalized-opcode":
-						ins.Op = "NOP"
-					case "normalized-operands":
-						ins.Args = []Operand{{Kind: OpReg, Reg: AX}}
-					case "encoded":
-						ins.x86Encoded = true
-					case "address-size":
-						ins.x86AddressBits = 32
-					case "raw-return":
-						ins.x86RawNearReturn = new(x86RawNearReturnForm)
-					case "raw-TEXT":
-						fn.X86RawText = code
-					case "source-stack":
-						fn.x86SourceStack = new(x86SourceStackProof)
-					case "fixed-local":
-						fn.x86FixedLocal = new(x86FixedLocalProof)
-					}
-					consumer := &amd64Ctx{fpScalarSource: fn, sig: sig, fpSourceSig: sig, goarch: arch}
-					err := consumer.checkLoweredScalarFPResultInitialization()
-					if mutation == "unchanged" {
-						if err != nil {
-							t.Fatal("complete matching timestamp lost its paired native continuation", err)
-						}
-					} else if !errors.Is(err, ErrProbeNeedsContext) {
-						t.Fatal("raw timestamp granted a mismatched source/entry/storage role", err)
-					}
-				})
-			}
+			x86RegisterQueryRawCompositionRoles(t, arch, opcode, code, "")
 		}
+	}
+}
+
+// The same original/normalized identity boundary protects timestamps and CPU
+// queries; each caller supplies independent bytes and required input setup.
+func x86RegisterQueryRawCompositionRoles(t *testing.T, arch string, opcode Op, code []byte, initialization string) {
+	t.Helper()
+	move, word := "MOVL", 4
+	if arch == "amd64" {
+		move, word = "MOVQ", 8
+	}
+	body := fmt.Sprintf("%s p+0(FP),DI\n%sMOVL AX,ret+%d(FP)\nSTMXCSR (DI)\nRET",
+		move, initialization+x86RawDisplacementDirectives(code), word)
+	_, file, sig, _ := x86ResultInitializationFixture(t, arch, "func Value(p *uint32) uint32", body)
+	normalized, err := decodeX86RawDirectives(file.Funcs[0], arch)
+	if err != nil {
+		t.Fatal(err)
+	}
+	position := -1
+	for index, ins := range normalized.Instrs {
+		if ins.x86SourceRaw != nil {
+			if ins.Op != opcode || position != -1 {
+				t.Fatal("original timestamp did not decode to exactly one instruction")
+			}
+			position = index
+		}
+	}
+	if position < 0 {
+		t.Fatal("missing exact raw timestamp handoff")
+	}
+	for _, mutation := range []string{"unchanged", "original-opcode", "original-operands", "normalized-opcode",
+		"normalized-operands", "encoded", "address-size", "unbound-address", "segment-prefix",
+		"raw-return", "raw-TEXT", "source-stack", "fixed-local"} {
+		t.Run(arch+"/"+string(opcode)+"/"+mutation, func(t *testing.T) {
+			fn := normalized
+			fn.Instrs = append([]Instr(nil), fn.Instrs...)
+			ins := &fn.Instrs[position]
+			origin := *ins.x86SourceRaw
+			ins.x86SourceRaw = &origin
+			switch mutation {
+			case "original-opcode":
+				origin.op = "NOP"
+			case "original-operands":
+				origin.args = []Operand{{Kind: OpReg, Reg: AX}}
+			case "normalized-opcode":
+				ins.Op = "NOP"
+			case "normalized-operands":
+				ins.Args = []Operand{{Kind: OpReg, Reg: AX}}
+			case "encoded":
+				ins.x86Encoded = true
+			case "address-size":
+				ins.x86AddressBits = 32
+			case "unbound-address":
+				ins.x86UnboundAddressOverride = true
+			case "segment-prefix":
+				ins.x86SegmentPrefix = 0x64
+			case "raw-return":
+				ins.x86RawNearReturn = new(x86RawNearReturnForm)
+			case "raw-TEXT":
+				fn.X86RawText = code
+			case "source-stack":
+				fn.x86SourceStack = new(x86SourceStackProof)
+			case "fixed-local":
+				fn.x86FixedLocal = new(x86FixedLocalProof)
+			}
+			consumer := &amd64Ctx{fpScalarSource: fn, sig: sig, fpSourceSig: sig, goarch: arch}
+			err := consumer.checkLoweredScalarFPResultInitialization()
+			if mutation == "unchanged" {
+				if err != nil {
+					t.Fatal("complete matching register query lost its paired native continuation", err)
+				}
+			} else if !errors.Is(err, ErrProbeNeedsContext) {
+				t.Fatal("raw register query granted a mismatched source/entry/storage role", err)
+			}
+		})
 	}
 }

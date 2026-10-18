@@ -2,6 +2,7 @@ package plan9asm
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -186,9 +187,15 @@ func TestX86CPUQueryNamedRawThreeAPIsFiveTargetsProduceActualObjects(t *testing.
 				}
 				source := "TEXT ·query(SB),4,$0-0\n" + body + "RET\n"
 				goAssemblerOracleOutput(t, target.arch, source, "", true)
+				initialized := "TEXT ·query(SB),4,$0-0\nMOVL $0,AX\nMOVL $0,CX\n" + body + "RET\n"
+				x86LEAActualTargetGoObject(t, target.arch, target.triple, initialized)
 				for _, api := range []string{"text", "module", "Go"} {
 					t.Run(target.triple+"/"+string(op)+fmt.Sprint("/raw=", raw)+"/"+api, func(t *testing.T) {
-						ir := x86CPUQueryIR(t, source, target.arch, target.triple, api)
+						unbound, err := x86ScalarFPBitViewAPI(t, source, "func query()", target.arch, target.triple, api)
+						if !errors.Is(err, ErrProbeNeedsContext) || unbound != "" {
+							t.Fatal("original uninitialized query acquired an entry-register contract", err)
+						}
+						ir := x86CPUQueryIR(t, initialized, target.arch, target.triple, api)
 						for _, optimized := range []bool{false, true} {
 							t.Run(fmt.Sprint("O2=", optimized), func(t *testing.T) {
 								input := ir

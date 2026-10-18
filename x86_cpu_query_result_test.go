@@ -26,6 +26,7 @@ func TestX86CPUQueryImplicitNUMEffects(t *testing.T) {
 			t.Run(arch+"/"+row.name, func(t *testing.T) {
 				ins := x86ScalarLaneInstruction(t, row.name)
 				before := x86ResultState{flags: x86ByteFlagsAll, direction: x86ResultDirectionBackward}
+				before.valueStack = &x86ResultValueStack{bytes: []uint8{1, 2, 3, 4, 5, 6, 7, 8}, id: true}
 				before.xmm[3], before.masks[2] = 0x8888, true
 				for index := range before.pointerGP {
 					before.pointerGP[index], before.callerAddressGP[index] = true, true
@@ -36,6 +37,13 @@ func TestX86CPUQueryImplicitNUMEffects(t *testing.T) {
 				state, want := before.clone(), before.clone()
 				for _, index := range row.outputs {
 					want.gp[index], want.pointerGP[index] = 0xff, false
+				}
+				addresses := before.callerAddressGP
+				for _, index := range row.outputs {
+					addresses[index] = false
+				}
+				if after := x86ResultCallerAddressesAfter(ins, before.callerAddressGP, nil, arch); after != addresses {
+					t.Error("implicit output footprint retained a stale pointer or killed an input-only address")
 				}
 				if !x86ResultTransfer(ins, &state, nil, 0, arch) || !reflect.DeepEqual(state, want) {
 					t.Error("query must consume only low dword inputs, define its full outputs and preserve unrelated state")
@@ -74,6 +82,7 @@ func TestX86CPUQueryVoidRequiresActualInputsThreeAPIs(t *testing.T) {
 					{"missing-both", "", false},
 					{"missing-cx", "MOVL $0,AX\n", false},
 					{"partial-cx", "MOVL $0,AX\nMOVB $0,CL\n", false},
+					{"partial-ax", "MOVB $0,AL\nMOVL $0,CX\n", row.name == "XGETBV"},
 					{"missing-ax", "MOVL $0,CX\n", row.name == "XGETBV"},
 					{"complete", "MOVL $0,AX\nMOVL $0,CX\n", true},
 				} {
@@ -89,6 +98,57 @@ func TestX86CPUQueryVoidRequiresActualInputsThreeAPIs(t *testing.T) {
 								}
 							} else if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
 								t.Error("Void query borrowed uninitialized implementation-slot inputs", api, err)
+							}
+						}
+					})
+				}
+			}
+		}
+	}
+}
+
+func TestX86CPUQueryRawCompositionRetainsExactOriginalRoles(t *testing.T) {
+	for _, arch := range []string{"386", "amd64"} {
+		for _, row := range x86CPUQueryResultOracle {
+			x86RegisterQueryRawCompositionRoles(t, arch, Op(row.name), row.bytes, "MOVL $0,AX\nMOVL $0,CX\n")
+		}
+	}
+}
+
+func TestX86CPUQueryEntryAndJoinInputsThreeAPIs(t *testing.T) {
+	for _, arch := range []string{"386", "amd64"} {
+		move, word, triple := "MOVL", 4, "i386-unknown-linux-gnu"
+		if arch == "amd64" {
+			move, word, triple = "MOVQ", 8, "x86_64-unknown-linux-gnu"
+		}
+		for _, row := range x86CPUQueryResultOracle {
+			for _, raw := range []bool{false, true} {
+				body := row.name + "\n"
+				if raw {
+					body = x86RawDisplacementDirectives(row.bytes)
+				}
+				for _, fixture := range []struct {
+					name, declaration, setup string
+					frame                    int
+					valid                    bool
+				}{
+					{"pointer-input", "p *uint32", move + " p+0(FP),CX\nMOVL $0,AX\n", word, false},
+					{"unused-bool", "unused bool", "", 1, false},
+					{"initialized-unused-bool", "unused bool", "MOVL $0,AX\nMOVL $0,CX\n", 1, true},
+					{"missing-join", "selector uint32", "MOVL selector+0(FP),AX\nCMPL AX,$0\nJE ready\nMOVL $0,CX\nready:\n", 4, false},
+					{"complete-join", "selector uint32", "MOVL selector+0(FP),AX\nMOVL $0,CX\nCMPL AX,$0\nJE ready\nMOVL $1,CX\nready:\n", 4, true},
+				} {
+					t.Run(fmt.Sprintf("%s/%s/raw=%t/%s", arch, row.name, raw, fixture.name), func(t *testing.T) {
+						source := fmt.Sprintf("TEXT ·Query(SB),4,$0-%d\n%s%sRET\n", fixture.frame, fixture.setup, body)
+						x86LEAActualTargetGoObject(t, arch, triple, source)
+						for _, api := range []string{"text", "module", "Go"} {
+							ir, err := x86ScalarFPBitViewAPI(t, source, "func Query("+fixture.declaration+")", arch, triple, api)
+							if fixture.valid {
+								if err != nil || ir == "" {
+									t.Error("initialized query lost an independent entry/CFG control", api, err)
+								}
+							} else if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+								t.Error("query invented numerical inputs from pointers, bools or a missing CFG path", api, err)
 							}
 						}
 					})
