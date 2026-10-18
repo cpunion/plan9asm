@@ -83,6 +83,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 	}
 	boundRawClear := false
 	for _, ins := range fn.Instrs {
+		if x86EndBranchPreservesSourceState(ins) {
+			continue // Exact native CET tracking preserves inputs, not memory or entry permissions.
+		}
 		if ins.x86Encoded || ins.x86RawNearReturn != nil ||
 			ins.x86AddressBits != 0 || ins.x86UnboundAddressOverride {
 			return strictErr

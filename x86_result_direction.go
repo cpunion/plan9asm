@@ -41,7 +41,7 @@ func x86ResultDirectionAfter(ins Instr, direction x86ResultDirection) x86ResultD
 	if x86MaskLogicalPreservesStorage(ins) {
 		return direction
 	}
-	if x86RegisterQueryPreservesSourceState(ins) || x86WaitPackagePreservesStorage(ins) || x86NOPPreservesSourceState(ins) {
+	if x86RegisterQueryPreservesSourceState(ins) || x86WaitPackagePreservesStorage(ins) || x86PreservesNumericalSourceState(ins) {
 		return direction
 	}
 	if !x86ResultNamedPredicateInstruction(ins) || ins.Op == OpCALL {
