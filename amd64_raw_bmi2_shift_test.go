@@ -247,19 +247,11 @@ func TestX86RawBMI2ShiftGoEncoderForms(t *testing.T) {
 func TestX86BMI2Shift386IgnoresW(t *testing.T) {
 	for _, op := range []string{"SARXQ", "SHLXQ", "SHRXQ"} {
 		t.Run(op, func(t *testing.T) {
-			file, err := Parse(ArchAMD64, "TEXT shift(SB),4,$0-0\n"+op+" AX,(BX),CX\nRET\n")
-			if err != nil {
-				t.Fatal(err)
-			}
-			ir, err := Translate(file, Options{
-				Goarch:       "386",
-				TargetTriple: "i386-unknown-linux-gnu",
-				Sigs:         map[string]FuncSig{"shift": {Name: "shift", Ret: Void}},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
-			if !strings.Contains(ir, "load i32, ptr") || !strings.Contains(ir, ", 31\n") ||
+			// Retain the original Go-accepted source and its missing-input
+			// Context controls. Initialized whole programs have separate owners.
+			source := "TEXT shift(SB),4,$0-0\n" + op + " AX,(BX),CX\nRET\n"
+			ir := x86UnboundVoidScalarFormatObject(t, source, "shift", "386", "i386-unknown-linux-gnu")
+			if !strings.Contains(ir, "load volatile i32, ptr") || !strings.Contains(ir, ", 31\n") ||
 				strings.Contains(ir, "ashr i64") || strings.Contains(ir, "shl i64") || strings.Contains(ir, "lshr i64") {
 				t.Fatalf("386 %s must read exactly four bytes:\n%s", op, ir)
 			}

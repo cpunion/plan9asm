@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -232,6 +233,71 @@ func TestX86DoubleShiftOriginalConformanceObjects(t *testing.T) {
 						for _, level := range []string{"-O0", "-O2"} {
 							x86PackedStringCompileObject(t, llc, triple, text, level)
 						}
+					}
+				}
+			})
+		}
+	}
+}
+
+func TestX86ScalarShiftMemoryContinuationBoundaries(t *testing.T) {
+	for _, arch := range []string{"amd64", "386"} {
+		for _, row := range x86ScalarShiftMemoryRows(arch) {
+			t.Run(arch+"/"+row.text, func(t *testing.T) {
+				ins := x86ScalarLaneInstruction(t, row.text)
+				state := x86ResultState{flags: x86ByteFlagsAll}
+				base, _, _ := x86ResultGP(DI, 4, arch)
+				value, _, _ := x86ResultGP(AX, 4, arch)
+				count, _, _ := x86ResultGP(CX, 4, arch)
+				state.pointerGP[base] = true
+				state.gp[value], state.gp[count] = 0xff, 0xff
+				for _, consumer := range x86ResultGPSIMDConsumers {
+					standalone := state.clone()
+					if consumer.step(ins, &standalone, nil, 0, arch) {
+						t.Fatal("standalone numerical observer borrowed a native continuation")
+					}
+				}
+				complete := state.clone()
+				accepted, known := x86LoweredScalarShiftMemory(ins, &complete, nil, 0, arch)
+				if !known || accepted == row.needsCount {
+					t.Fatal("paired numerical effect lost its defined-count boundary", accepted, known)
+				}
+				if row.needsCount {
+					return // This is an explicit rejection assertion, not an omitted positive.
+				}
+				if complete.gp != state.gp || complete.pointerGP != state.pointerGP {
+					t.Fatal("native shift created unrelated GP or pointer facts")
+				}
+				for _, mutation := range []string{"missing-address", "numerical-address", "pointer-count", "missing-count",
+					"encoded", "raw", "return", "address-size", "unbound-address", "segment"} {
+					changed, rejected := ins, state.clone()
+					switch mutation {
+					case "missing-address":
+						rejected.pointerGP[base] = false
+					case "numerical-address":
+						rejected.pointerGP[base], rejected.gp[base] = false, 0xff
+					case "pointer-count", "missing-count":
+						if ins.Args[0].Kind != OpReg {
+							continue
+						}
+						rejected.gp[count] = 0
+						rejected.pointerGP[count] = mutation == "pointer-count"
+					case "encoded":
+						changed.x86Encoded = true
+					case "raw":
+						changed.x86SourceRaw = new(x86SourceRawInstruction)
+					case "return":
+						changed.x86RawNearReturn = new(x86RawNearReturnForm)
+					case "address-size":
+						changed.x86AddressBits = 32
+					case "unbound-address":
+						changed.x86UnboundAddressOverride = true
+					case "segment":
+						changed.x86SegmentPrefix = 0x64
+					}
+					before := rejected.clone()
+					if accepted, _ := x86LoweredScalarShiftMemory(changed, &rejected, nil, 0, arch); accepted || !reflect.DeepEqual(rejected, before) {
+						t.Fatal("missing source or foreign role acquired effects", mutation)
 					}
 				}
 			})

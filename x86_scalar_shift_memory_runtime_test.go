@@ -158,6 +158,7 @@ typedef struct {
     uint64_t flags;
 } Kernel;
 static const Kernel kernels[] = {@ROWS@};
+/* Original Go opcode definitions. */
 
 static uint64_t reference(Kernel k, uint64_t input, uint64_t source,
         unsigned count, uint64_t seed, uint64_t *status) {
@@ -270,18 +271,35 @@ int main(void) {
                     memcpy(wanted,&status,sizeof(word));
                     memcpy(wanted+1,&resultWord,sizeof(word));
                     memcpy(wanted+2,&count,sizeof(word));
+#ifdef ORIGINAL_NATIVE
+                    uint8_t originalMemory[128];
+                    uint64_t originalOutput[8];
+                    memcpy(originalMemory,memory,sizeof(memory));
+                    memcpy(originalOutput,output,sizeof(output));
+#endif
                     k.fn(memory+offset-1,output,value,count,seed);
                     if (memcmp(memory,expected,sizeof(memory)) || memcmp(output,wanted,sizeof(output))) {
                         fprintf(stderr,"kernel%u bits%u kind%u count%u sample%u carry%u: memory/FLAGS/GP/canary mismatch\n",
                             kernel,k.bits,k.kind,n,sample,carry);
                         return 1;
                     }
+#ifdef ORIGINAL_NATIVE
+                    originals[kernel](originalMemory+offset-1,originalOutput,value,count,seed);
+                    if (memcmp(originalMemory,expected,sizeof(memory)) || memcmp(originalOutput,wanted,sizeof(output))) {
+                        fprintf(stderr,"original kernel%u bits%u kind%u count%u sample%u carry%u mismatch\n",
+                            kernel,k.bits,k.kind,n,sample,carry);
+                        return 3;
+                    }
+#endif
                     observations++;
                 }
             }
         }
     }
     if (observations != sizeof(kernels)/sizeof(kernels[0])*256*7*2) return 2;
+#ifdef ORIGINAL_NATIVE
+    if (check_faults()) return 4;
+#endif
     printf("scalar shift memory observations %u\n",observations);
     return 0;
 }
