@@ -22,6 +22,8 @@ idle worktrees; do not create another for routine work.
 
 | Code snapshot | Completed evidence | Limits |
 |---|---|---|
+| `ed5d22b5b` | Physical MOVSXD/dword literal inputs: 35 roots / 820 children pass current Go, actual Go1.20 and race; identical 855 terminals, zero fail/skip/incomplete | All 52 independent register/prefix programs have three-API objects and portable zero/sign-extension values; temporary four-byte input facts do not escape |
+| Same snapshot | All thirteen final gates pass; exact original 167-root replay has 60 pass / 18 fail / 89 explicit host skips, unchanged source/tools and no incomplete roots | Both original MOVSXD literal failures pass, with no regressions; not complete CI or native x86 execution |
 | `9e3234ed2` | Bound RIP broadcasts and original raw-format contracts: 86 roots / 3,274 children pass current Go, actual Go1.20 and race; identical 3,360 terminals, zero fail/skip/incomplete | Complete 64-variant literal family, three-API objects and portable data values; missing mask/merge/register inputs remain independent Context controls |
 | Same snapshot | All thirteen final gates pass; exact original 167-root replay has 58 pass / 20 fail / 89 explicit host skips, unchanged source/tools and no incomplete roots | Eleven former failures pass with no regressions; one oversized race process timed out, then the exact 36-root cohort passed in disjoint 7/10/19-root batches without increasing its five-minute budget |
 | `9552a2759` | Architecture-correct bool-tail routing and stack-source contracts: 63 roots / 1,301 children pass current Go, actual Go1.20 and race; identical 1,364 terminals, zero fail/skip/incomplete | Complete 16-condition SETcc tail family, three-API objects and portable value execution; original invalid/unbound stack sources remain separate from initialized five-target objects and portable values |
@@ -77,7 +79,7 @@ See earlier checkpoints in Git rather than reconstructing counts by subtraction.
 
 ## Exact failure replay and online CI
 
-The latest local diagnostic at `9e3234ed2` selects exactly the original CI's
+The latest local diagnostic at `ed5d22b5b` selects exactly the original CI's
 167 failed root names. One sealed Go test process ran the complete set,
 instead of repeatedly linking the same large test executable.
 All inventories, started/terminal identities and before/after source, SDK, LLVM
@@ -92,9 +94,17 @@ and environment observations match. This is not the canonical isolated CI runner
 | Previous batched replay, `0ab05d184` | 39 | 39 | 89 | 0 / 0 |
 | Previous batched replay, `3044f1483` | 44 | 34 | 89 | 0 / 0 |
 | Previous batched replay, `9552a2759` | 47 | 31 | 89 | 0 / 0 |
-| Latest batched replay, `9e3234ed2` | 58 | 20 | 89 | 0 / 0 |
+| Previous batched replay, `9e3234ed2` | 58 | 20 | 89 | 0 / 0 |
+| Latest batched replay, `ed5d22b5b` | 60 | 18 | 89 | 0 / 0 |
 
-Eleven original roots newly pass: four RIP-broadcast roots and seven raw-format
+Both original physical MOVSXD literal roots newly pass. Opcode 63's default
+dword, REX.W and 66+REX.W forms plus ordinary 8B dword loads share one exact
+four-byte input role. Its transfer-local availability fact cannot survive the
+instruction or supply pointer/storage permission. Actual DATA and complete
+raw-source/return identity remain independently required. All 52 independent
+programs retain original Go objects, three-API LLVM objects and portable values.
+
+The preceding eleven repaired roots remain passing: four RIP-broadcast roots and seven raw-format
 roots. Bound broadcast inputs now reach the existing typed byte effects without
 inventing masks, merge bytes, native reads or entry contracts. The independent
 whole-source raw-return/DATA checks still run. Unbound original encodings retain
@@ -148,9 +158,9 @@ before changing implementation or claiming a speedup. Do not relax budgets.
    contracts; MMX closure; hardware enqueue/random/mask status; custom ABI,
    runtime386 `cpuidProbe` entry. Use the actual diagnostic,
    not an earlier successful preflight, to choose each next class.
-   The broadcast/raw-format batch is qualified at `9e3234ed2`. The exact twenty
-   failures are five FP16, seven other RIP literal/constant roots, two physical
-   MOVSXD literal results, two hardware-status roots, two runtime386 source
+   The physical MOVSXD literal batch is qualified at `ed5d22b5b`. The exact eighteen
+   failures are five FP16, seven other RIP literal/constant roots,
+   two hardware-status roots, two runtime386 source
    fixtures, one absolute relocation and one x87 compare root. Repair each
    complete rule class with original Go/emitter controls and independently
    initialized public programs; do not weaken source/data or entry proofs.
@@ -169,6 +179,13 @@ develop in an existing idle worktree. Commit and preserve RED before repair.
 
 Resolve worktree locations with `git worktree list`. Ignored receipts include:
 
+- `movsxd-literal-qualified-ed5d22b5.json` and
+  `movsxd-literal-final-gates-ed5d22b5/`: complete 35-root three-lane cohort,
+  identical terminal identities and thirteen final gates. Preserve the original
+  `b52c5426` RED and separate first-green receipts.
+- `latest-failure-batch-ed5d22b5-{summary.json,raw.jsonl,before.json,after.json}`:
+  exact 167-root replay, 60 pass / 18 fail / 89 explicit host skips, 208.505s
+  test time; unchanged source/tools, no absent/incomplete or pass-with-skip roots.
 - `raw-broadcast-qualified-9e3234ed.json`,
   `raw-format-contract-qualified-9e3234ed.json` and
   `raw-broadcast-final-gates-9e3234ed/`: disjoint 50/36-root cohorts, identical

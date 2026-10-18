@@ -1315,3 +1315,11 @@ frames, conditional native reads and declaration-only queries gain nothing.
 Portable broadcast data values execute on the actual host target; do not hide
 them behind an unrelated x86-only native launcher. Original AVX512 execution
 remains a separate required test axis.
+
+Physical MOVSXD and ordinary dword literal loads share an exact four-byte
+decoder input role. Opcode 63's default dword, REX.W and 66+REX.W forms keep
+their independent zero/sign-extension writes. Supply that fact only to the
+current source-stack numerical transfer, then clear it before saving state.
+It establishes no pointer, later-read or DATA ownership; the whole-source raw
+return guard still verifies actual literal bytes. Keep physical SP/BP/g roles,
+vendor-ambiguous word reads, original encoding identity and stale-proof controls.
