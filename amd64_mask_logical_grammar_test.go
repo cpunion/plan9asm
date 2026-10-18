@@ -62,9 +62,13 @@ func TestX86MaskLogicalLowererDispatchIdentity(t *testing.T) {
 	for _, row := range x86MaskLogicalOracle() {
 		t.Run(row.op, func(t *testing.T) {
 			ins := x86ScalarLaneInstruction(t, row.op+" "+row.operands)
+			ctx, ir := newAMD64CtxWithFuncForTest(t, Func{Instrs: []Instr{ins}}, FuncSig{Ret: Void}, nil)
+			ctx.goarch = "amd64"
+			if err := ctx.lowerMaskLogical(ins.Op, ins); err != nil {
+				t.Fatal("matching source did not reach the actual emitter", err)
+			}
+			ir.Reset()
 			ins.Op = "MOVQ"
-			var ir strings.Builder
-			ctx := amd64Ctx{b: &ir, goarch: "amd64"}
 			if err := ctx.lowerMaskLogical(Op(row.op), ins); err == nil || ir.Len() != 0 {
 				t.Fatal("mismatched source reached mask lowering", err)
 			}
