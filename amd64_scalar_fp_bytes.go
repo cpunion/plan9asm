@@ -183,6 +183,11 @@ func (c *amd64Ctx) validateScalarFPSourceViews() error {
 		}
 	}
 	for _, ins := range c.fpScalarSource.Instrs {
+		if x86LogicalPackedFPStoreBytes(ins, c.goarch) != 0 {
+			if err := c.scalarFPResultInitialized(); err != nil {
+				return err
+			}
+		}
 		if _, known, err := x86TimestampProperties(ins.Op, ins, c.goarch); c.sig.Ret == Void && known && err == nil {
 			if err := c.scalarFPResultInitialized(); err != nil {
 				return err

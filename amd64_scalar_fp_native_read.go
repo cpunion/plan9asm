@@ -257,6 +257,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		if accepted, recognized := x86LoweredScalarArithmeticNativeRead(ins, state, owned, resultOffset, arch); recognized {
 			return accepted
 		}
+		if accepted, known := c.scalarPackedLogicalFPWriteTransfer(ins, state, owned, arch); known {
+			return accepted
+		}
 		if accepted, known := c.scalarPSLogicalFPWriteTransfer(ins, state, owned, arch); known {
 			return accepted
 		}
