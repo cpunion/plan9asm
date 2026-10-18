@@ -99,3 +99,49 @@ func TestX86BlockExtractNativeStoreVoidRequiresInputs(t *testing.T) {
 		}
 	}
 }
+
+func TestX86BlockExtractNativeStoresFiveTargets(t *testing.T) {
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM22 llc required")
+	}
+	for _, target := range x86RawReturnTargets {
+		t.Run(target.triple, func(t *testing.T) {
+			move, word := "MOVQ", 8
+			if target.arch == "386" {
+				move, word = "MOVL", 4
+			}
+			var source, declarations strings.Builder
+			masked, plain := 0, 0
+			for index, row := range x86BlockNativeStoreRows(target.arch) {
+				name := fmt.Sprint("Copy", index)
+				fmt.Fprintf(&declarations, "func %s(out, input *byte, mask uint32)\n", name)
+				fmt.Fprintf(&source, "TEXT ·%s(SB),4,$0-%d\n%s out+0(FP),BX\n%s input+%d(FP),DX\nMOVL mask+%d(FP),AX\nKMOVW AX,K1\nVMOVUPS (DX),Z1\n%s\n%s\nRET\n",
+					name, 2*word+4, move, move, word, 2*word, row, row)
+				if strings.Contains(row, "K1") {
+					masked++
+				} else {
+					plain++
+				}
+			}
+			x86LEAActualTargetGoObject(t, target.arch, target.triple, source.String())
+			for _, api := range []string{"text", "module", "Go"} {
+				t.Run(api, func(t *testing.T) {
+					ir, err := x86ScalarFPBitViewAPI(t, source.String(), declarations.String(), target.arch, target.triple, api)
+					if err != nil || ir == "" {
+						t.Fatal("complete original native block stores rejected", err)
+					}
+					for _, text := range []string{ir, x86DwordProductIROptimize(t, ir)} {
+						if strings.Count(text, "store volatile <") != 2*plain ||
+							strings.Count(text, "; vextract") != 2*masked {
+							t.Fatal("overwritten block stores lost exact native effects", plain, masked)
+						}
+						for _, level := range []string{"-O0", "-O2"} {
+							x86PackedStringCompileObject(t, llc, target.triple, text, level)
+						}
+					}
+				})
+			}
+		})
+	}
+}
