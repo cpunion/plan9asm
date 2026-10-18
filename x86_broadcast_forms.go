@@ -115,6 +115,10 @@ func x86ResultBroadcastStep(ins Instr, state *x86ResultState, owned []bool, arch
 }
 
 func x86ResultBroadcastStepWithRead(ins Instr, state *x86ResultState, owned []bool, arch string, nativeRead bool) (bool, bool) {
+	return x86ResultBroadcastInputs(ins, state, owned, arch, nativeRead, false)
+}
+
+func x86ResultBroadcastInputs(ins Instr, state *x86ResultState, owned []bool, arch string, nativeRead, boundLiteral bool) (bool, bool) {
 	f, known, err := x86BroadcastProperties(ins.Op, ins, arch)
 	if !known {
 		return false, false
@@ -138,6 +142,10 @@ func x86ResultBroadcastStepWithRead(ins Instr, state *x86ResultState, owned []bo
 		mask, valid := amd64ParseKReg(src.Reg)
 		if !valid || !state.masks[mask] {
 			return false, true
+		}
+	} else if src.Kind == OpImm {
+		if !boundLiteral {
+			return false, true // Only the complete lowering-bound raw source supplies this input.
 		}
 	} else if src.Kind != OpReg {
 		// Reuse the exact initialized FP/AUTO bytes or the lowering-only
