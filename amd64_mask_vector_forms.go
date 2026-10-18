@@ -65,11 +65,44 @@ func x86CallerMaskVectorStep(ins *Instr, form x86MaskVectorForm, state *x86Sourc
 		state.vectors[vector] = ^uint64(0)
 		return true
 	}
-	width := x86CallerVectorByteMask(int64(form.byteWidth))
-	if state.vectors[vector]&width != width {
+	required := form.signByteInputs()
+	if state.vectors[vector]&required != required {
 		return false // An entry/partially initialized vector is not numeric data.
 	}
 	// Sign bits fill the low mask lanes and all remaining K bits become zero.
 	state.masks[mask] = true
 	return true
+}
+
+// Only each lane's sign bit contributes to a vector-to-mask result. At byte
+// granularity its containing byte is sufficient; unrelated bytes stay unknown.
+func (form x86MaskVectorForm) signByteInputs() uint64 {
+	lane := form.spec.laneBits / 8
+	var required uint64
+	for offset := lane - 1; offset < form.byteWidth; offset += lane {
+		required |= uint64(1) << uint(offset)
+	}
+	return required
+}
+
+func x86MaskVectorResultStep(ins Instr, state *x86ResultState, arch string) (bool, bool) {
+	form, known, err := x86MaskVectorProperties(ins, arch)
+	if !known || err != nil || !x86ResultNamedPredicateInstruction(ins) {
+		return false, known
+	}
+	mask, _ := amd64ParseKReg(ins.Args[form.mask].Reg)
+	vector, _ := amd64VectorRegisterIndex(ins.Args[form.vector].Reg, form.byteWidth)
+	if form.spec.maskToVector {
+		if !state.masks[mask] {
+			return false, true
+		}
+		state.writeVector(vector, form.byteWidth, x86CallerVectorByteMask(int64(form.byteWidth)), false)
+		return true, true // EVEX clears wider aliases; this is not writemasking.
+	}
+	required := form.signByteInputs()
+	if state.vectorBytes(vector)&required != required {
+		return false, true
+	}
+	state.masks[mask] = true // Every inactive high K bit is architecturally zero.
+	return true, true
 }
