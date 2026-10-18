@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"runtime"
 	"strings"
@@ -53,14 +54,30 @@ func TestX86RawEndBranchFamily(t *testing.T) {
 					Goarch: target.arch, TargetTriple: target.triple,
 					Sigs: map[string]FuncSig{"endbranch": {Name: "endbranch", Ret: I32}},
 				})
-				if err != nil {
-					t.Fatal(err)
+				if !errors.Is(err, ErrProbeNeedsContext) || ir != "" {
+					t.Fatal("frame-less manual result acquired an ABI return slot", err)
 				}
 				want := fmt.Sprintf(".byte 0xf3, 0x0f, 0x1e, 0x%02x", form.last)
-				if !strings.Contains(ir, want) {
-					t.Fatalf("IR lost ENDBR encoding %q", want)
+				for _, result := range []bool{false, true} {
+					program, declaration := source, "func endbranch()"
+					if result {
+						program = strings.Replace(program, "$0-0", "$0-4", 1)
+						program = strings.Replace(program, "\tRET", "\tMOVL AX,ret+0(FP)\n\tRET", 1)
+						declaration = "func endbranch() uint32"
+					}
+					x86LEAActualTargetGoObject(t, target.arch, target.triple, program)
+					for _, api := range []string{"text", "module", "Go"} {
+						ir, err := x86ScalarFPBitViewAPI(t, program, declaration, target.arch, target.triple, api)
+						if err != nil || !strings.Contains(ir, want) {
+							t.Fatal("source-bound ENDBR program lost its encoding", api, result, err)
+						}
+						for _, text := range []string{ir, x86DwordProductIROptimize(t, ir)} {
+							for _, level := range []string{"-O0", "-O2"} {
+								x86PackedStringCompileObject(t, llc, target.triple, text, level)
+							}
+						}
+					}
 				}
-				compileLLVMToObject(t, llc, target.triple, "endbranch.ll", "endbranch.o", ir)
 			})
 		}
 	}
