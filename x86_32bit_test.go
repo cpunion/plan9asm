@@ -245,7 +245,13 @@ func TestTranslate386ModelsOfficialDirectSPWrites(t *testing.T) {
 	}
 	for _, triple := range []string{"i386-unknown-linux-gnu", "i686-pc-windows-msvc"} {
 		t.Run(triple, func(t *testing.T) {
-			x86UnboundVoidFormatSource(t, source, "stack", "386", triple)
+			x86OriginalUnbalancedStackGoRejection(t, source, triple)
+			for _, api := range []string{"text", "module", "Go"} {
+				ir, err := x86ScalarFPBitViewAPI(t, source, "func stack()", "386", triple, api)
+				if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+					t.Fatal("original unknown/unbalanced SP acquired a public frame", api, err)
+				}
+			}
 			ir := x86OriginalStackFormatObject(t, file.Funcs[0], Void, "386", triple)
 			for _, want := range []string{"%local_stack = alloca [770 x i8]", "sub i32", "add i32", "and i32"} {
 				if !strings.Contains(ir, want) {

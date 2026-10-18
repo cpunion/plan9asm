@@ -15,8 +15,8 @@ func x86BoolTailRoutingProgram() (string, string) {
 	var source, declarations strings.Builder
 	for _, condition := range amd64RegisterBoolConditions {
 		name := "Tail" + condition
-		fmt.Fprintf(&source, "TEXT ·%s<ABIInternal>(SB),4,$0-17\nCMPQ AX,BX\nJMP %s<>(SB)\n"+
-			"TEXT %s<>(SB),4,$0-0\n%s AL\nMOVBLZX AL,AX\nRET\n", name, name, name, condition)
+		fmt.Fprintf(&source, "TEXT ·%s<ABIInternal>(SB),4,$0-17\nCMPQ AX,BX\nJMP body%s<>(SB)\n"+
+			"TEXT body%s<>(SB),4,$0-0\n%s AL\nMOVBLZX AL,AX\nRET\n", name, name, name, condition)
 		fmt.Fprintf(&declarations, "func %s(a,b uint64) bool\n", name)
 	}
 	return source.String(), declarations.String()

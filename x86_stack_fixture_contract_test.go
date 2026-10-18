@@ -2,10 +2,43 @@ package plan9asm
 
 import (
 	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
 )
+
+// This complete original fixture is rejected by Go itself, not a successful
+// object or an invalid individual opcode. Require its precise ordinary exit
+// and diagnostic; infrastructure failures must never stand in for rejection.
+func x86OriginalUnbalancedStackGoRejection(t *testing.T, source, triple string) {
+	t.Helper()
+	dir := t.TempDir()
+	input, output := filepath.Join(dir, "stack.s"), filepath.Join(dir, "stack.o")
+	original := "#include \"textflag.h\"\n" + source
+	if err := os.WriteFile(input, []byte(original), 0600); err != nil {
+		t.Fatal(err)
+	}
+	goos := "linux"
+	if strings.Contains(triple, "windows") {
+		goos = "windows"
+	}
+	ctx, cancel := runtimeOracleStageContext(t)
+	defer cancel()
+	command := exec.CommandContext(ctx, "go", "tool", "asm", "-I", filepath.Join(runtime.GOROOT(), "pkg", "include"), "-o", output, input)
+	command.Env = append(os.Environ(), "GOOS="+goos, "GOARCH=386", "GOTOOLCHAIN=local")
+	diagnostic, err := runtimeOracleCombinedOutput(ctx, command)
+	exit, ordinary := err.(*exec.ExitError)
+	if ctx.Err() != nil || !ordinary || exit.ProcessState == nil || !exit.ProcessState.Exited() ||
+		exit.ExitCode() != 1 || string(diagnostic) != "asm: stack: unbalanced PUSH/POP\nasm: assembly failed\n" {
+		t.Fatalf("unknown original stack observation: %v; context=%v\n%s", err, ctx.Err(), diagnostic)
+	}
+	if data, err := os.ReadFile(input); err != nil || string(data) != original {
+		t.Fatal("original stack rejection source changed", err)
+	}
+}
 
 // Retain every instruction, original TEXT and original register return in the
 // old stack fixtures. These emitter-only objects establish no public source
