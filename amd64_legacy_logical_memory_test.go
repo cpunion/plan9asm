@@ -178,7 +178,9 @@ func TestX86LegacyLogicalMemoryNativeOpcodeObjects(t *testing.T) {
 			}
 			for i, address := range []string{"(AX)", "16(AX)(CX*2)", "·data(SB)", "(FS)", "(GS)"} {
 				fn := fmt.Sprintf("%s%d", strings.ToLower(name), i)
-				body := fmt.Sprintf("TEXT ·%s(SB),4,$0-%d\n%s p+0(FP),AX\n%s index+%d(FP),CX\nPXOR X0,X0\n%s %s,X0\nRET\n", fn, size*2, move, move, size, name, address)
+				body := fmt.Sprintf("TEXT ·%s(SB),4,$0-%d\n"+
+					"%s p+0(FP),AX\n%s index+%d(FP),CX\nPXOR X0,X0\n%s %s,X0\nRET\n",
+					fn, size*2, move, move, size, name, address)
 				source.WriteString(body)
 				if i < 3 {
 					ordinary.WriteString(body)
@@ -248,7 +250,9 @@ func TestX86LegacyLogicalMemoryPSInitializedSSE1Objects(t *testing.T) {
 	var source, declaration strings.Builder
 	for _, name := range []string{"ANDPS", "ANDNPS", "ORPS", "XORPS"} {
 		fn := strings.ToLower(name)
-		fmt.Fprintf(&source, "TEXT %s(SB),4,$0-8\nMOVL p+0(FP),AX\nMOVL out+4(FP),BX\nMOVUPS (AX),X0\n%s (AX),X0\nMOVUPS X0,(BX)\nRET\n", fn, name)
+		fmt.Fprintf(&source, "TEXT %s(SB),4,$0-8\n"+
+			"MOVL p+0(FP),AX\nMOVL out+4(FP),BX\nMOVUPS (AX),X0\n"+
+			"%s (AX),X0\nMOVUPS X0,(BX)\nRET\n", fn, name)
 		fmt.Fprintf(&declaration, "func %s(p,out *byte)\n", fn)
 	}
 	for _, triple := range []string{"i386-unknown-linux-gnu", "i686-pc-windows-msvc"} {
