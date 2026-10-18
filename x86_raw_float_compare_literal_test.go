@@ -153,13 +153,15 @@ func TestX86RawFloatCompareLiteralEveryInputByteAndTuple(t *testing.T) {
 					input &^= uint64(1) << uint(missing)
 				}
 				state.writeVector(0, 64, input, false)
-				before := state.clone()
+				// Compare inside this instruction-local DATA scope. The ordinary
+				// CFG clone deliberately discards that transient read permission.
+				before := state
 				accepted, known := x86ResultFloatCompareStep(ins, &state, nil, "amd64", false)
 				want := missing < 0 || missing >= row.input
 				if !known || accepted != want {
 					t.Fatal("raw comparison lost required or passthrough input", row.name, missing, accepted)
 				}
-				expected := before.clone()
+				expected := before
 				if want {
 					if row.maskResult {
 						expected.masks[2] = true
@@ -170,7 +172,7 @@ func TestX86RawFloatCompareLiteralEveryInputByteAndTuple(t *testing.T) {
 				if !reflect.DeepEqual(state, expected) {
 					t.Fatal("comparison changed FLAGS, masks or source/result aliases", row.name, missing)
 				}
-				before.loweredStaticReads[address]--
+				before.loweredStaticReads = map[x86StaticSBAddress]int64{address: int64(row.tuple - 1)}
 				if accepted, _ := x86ResultFloatCompareStep(ins, &before, nil, "amd64", false); accepted {
 					t.Fatal("comparison borrowed missing literal bytes", row.name)
 				}
