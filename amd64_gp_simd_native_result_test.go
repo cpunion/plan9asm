@@ -95,14 +95,14 @@ func TestX86GPSIMDNativeResultsRetainSourceBoundaries(t *testing.T) {
 			load := row.op + " (DX),X0"
 			missing := strings.Replace(source, load, "CMPL BX,$0\nJE after\n"+load+"\nafter:", 1)
 			for name, bad := range map[string]string{
-				"unknown base":   strings.Replace(source, "(DX)", "(SI)", 1),
-				"unknown index":  strings.Replace(source, "(DX)", "(DX)(SI*1)", 1),
-				"pointer index":  strings.Replace(source, "(DX)", "(DX)(DX*1)", 1),
-				"virtual frame":  strings.Replace(source, "(DX)", "(SP)", 1),
-				"unknown static": strings.Replace(source, "(DX)", "·external(SB)", 1),
-				"numeric base":   strings.Replace(source, load, "MOVL $42,DX\n"+load, 1),
-				"native store":   strings.Replace(source, load, load+"\n"+row.op+" X0,(DX)", 1),
-				"missing path":   missing,
+				"unknown base":       strings.Replace(source, "(DX)", "(SI)", 1),
+				"unknown index":      strings.Replace(source, "(DX)", "(DX)(SI*1)", 1),
+				"pointer index":      strings.Replace(source, "(DX)", "(DX)(DX*1)", 1),
+				"virtual frame":      strings.Replace(source, "(DX)", "(SP)", 1),
+				"unknown static":     strings.Replace(source, "(DX)", "·external(SB)", 1),
+				"numeric base":       strings.Replace(source, load, "MOVL $42,DX\n"+load, 1),
+				"unknown store data": strings.Replace(source, load, load+"\n"+row.op+" X1,(DX)", 1),
+				"missing path":       missing,
 			} {
 				t.Run(name, func(t *testing.T) {
 					goAssemblerOracleOutput(t, "amd64", bad, "", true)

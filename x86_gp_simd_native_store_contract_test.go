@@ -39,6 +39,12 @@ func TestX86GPSIMDNativeStoreNumericalContinuation(t *testing.T) {
 				if x86ResultGPSIMDTransfer(ins, form, &state, nil, 0, arch) {
 					t.Fatal("standalone observer acquired native write permission")
 				}
+				state = before.clone()
+				state.writeVector(0, 64, uint64(1)<<uint(row.bytes)-1, false)
+				minimal := state.clone()
+				if !x86ResultGPSIMDTransferWithNativeMemory(ins, form, &state, nil, 0, arch, true) || !reflect.DeepEqual(state, minimal) {
+					t.Fatal("native store required or invented bytes above its exact scalar width")
+				}
 				for _, mutation := range []string{"physical", "address-size", "segment"} {
 					changed := ins
 					switch mutation {
@@ -68,6 +74,44 @@ func TestX86GPSIMDNativeStoreNumericalContinuation(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+// Retain the original native-read followed by native-store sequence as an
+// initialized positive, independently of missing-data/address controls.
+func TestX86GPSIMDNativeReadStoreCompositionFiveTargets(t *testing.T) {
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM22 llc required")
+	}
+	for _, target := range x86RawReturnTargets {
+		t.Run(target.triple, func(t *testing.T) {
+			var source, declarations strings.Builder
+			for index, row := range x86GPSIMDNativeStoreRows {
+				assembly, declaration := x86GPSIMDNativeFixture(fmt.Sprint("Copy", index), target.arch, row.op, "(DX)", "X0", 0)
+				load := row.op + " (DX),X0"
+				source.WriteString(strings.Replace(assembly, load, load+"\n"+row.op+" X0,(DX)", 1))
+				declarations.WriteString(declaration)
+			}
+			x86LEAActualTargetGoObject(t, target.arch, target.triple, source.String())
+			for _, api := range []string{"text", "module", "Go"} {
+				t.Run(api, func(t *testing.T) {
+					ir, err := x86ScalarFPBitViewAPI(t, source.String(), declarations.String(), target.arch, target.triple, api)
+					if err != nil || ir == "" {
+						t.Fatal("complete paired native read/store rejected", err)
+					}
+					for _, text := range []string{ir, x86DwordProductIROptimize(t, ir)} {
+						if strings.Count(text, "load volatile i") != len(x86GPSIMDNativeStoreRows) ||
+							strings.Count(text, "store volatile i") != len(x86GPSIMDNativeStoreRows) {
+							t.Fatal("original separate volatile read/store effects were removed")
+						}
+						for _, level := range []string{"-O0", "-O2"} {
+							x86PackedStringCompileObject(t, llc, target.triple, text, level)
+						}
+					}
+				})
+			}
+		})
 	}
 }
 

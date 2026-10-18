@@ -10,8 +10,6 @@ import (
 	"runtime"
 	"strings"
 	"testing"
-
-	"github.com/xgo-dev/llvm"
 )
 
 func TestX86GPSIMDTransferCompleteLegacyOriginalTables(t *testing.T) {
@@ -141,38 +139,16 @@ func TestX86GPSIMDTransferAllRegisterAndAddressAxes(t *testing.T) {
 			if count != want {
 				t.Fatalf("independent register/address denominator changed: %d, want %d", count, want)
 			}
-			file, err := Parse(ArchAMD64, assembly.String())
-			if err != nil {
-				t.Fatal(err)
-			}
-			pkg := x86FloatMulDivShapesPackage(t, "package shapes\nfunc f()\n", arch)
 			for _, triple := range triples {
 				t.Run(triple, func(t *testing.T) {
-					options := Options{Goarch: arch, TargetTriple: triple, Sigs: map[string]FuncSig{"f": {Name: "f", Ret: Void}}}
-					ir, err := Translate(file, options)
-					if err != nil {
-						t.Fatal(err)
+					// Keep every original uninitialized axis as a Go/public-Context
+					// control, separate from initialized public object owners.
+					ir := x86UnboundVoidScalarFormatObject(t, assembly.String(), "f", arch, triple)
+					for _, text := range []string{ir, x86DwordProductIROptimize(t, ir)} {
+						for _, level := range []string{"-O0", "-O2"} {
+							x86PackedStringCompileObject(t, llc, triple, text, level)
+						}
 					}
-					compileLLVMToObject(t, llc, triple, "transfer-axes-text.ll", "transfer-axes-text.o", ir)
-					ctx := llvm.NewContext()
-					defer ctx.Dispose()
-					module, err := TranslateModuleInContext(ctx, file, options)
-					if !module.IsNil() {
-						defer module.Dispose()
-					}
-					if err != nil {
-						t.Fatal(err)
-					}
-					compileLLVMToObject(t, llc, triple, "transfer-axes-module.ll", "transfer-axes-module.o", module.String())
-					goSource := strings.Replace(assembly.String(), "TEXT f(SB)", "TEXT ·f(SB)", 1)
-					result, err := translateGoModuleInContext(ctx, pkg, []byte(goSource), GoModuleOptions{GOARCH: arch, TargetTriple: triple})
-					if result != nil && !result.Module.IsNil() {
-						defer result.Module.Dispose()
-					}
-					if err != nil {
-						t.Fatal(err)
-					}
-					compileLLVMToObject(t, llc, triple, "transfer-axes-go.ll", "transfer-axes-go.o", result.Module.String())
 				})
 			}
 		})
