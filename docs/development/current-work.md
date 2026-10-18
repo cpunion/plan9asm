@@ -25,6 +25,7 @@ of the current candidate. Do not create another worktree for routine work.
 
 | Snapshot | Evidence and limits |
 |---|---|
+| `dab3bb581` | CPU-query TDD RED: four roots / 136 children finish with three failed roots and 89 failed terminal identities, unchanged before/after source/SDK/tool seals. The original IA32 program fails at CPUID, the shared implicit NUM descriptor is absent, and Void accepts missing inputs. The simple initialized-result object root already passes: preserve it as a positive control, not a repaired failure. No production fix is implemented at this checkpoint |
 | `5df8cde37` | Eleven original failed format/witness roots plus nine initialized public-object roots pass current Go, actual Go1.20 and race: 20 roots / 2,362 children, identical 2,382 terminal identities, zero fail/skip/incomplete and unchanged source/SDK/LLVM22 observations. Production, CI and classification baselines are unchanged; this repairs test contracts, not eleven new instruction implementations |
 | `83f21268e` | The latest CI's exact 167 failed roots were fully replayed locally: 10 pass, 68 fail, 89 explicit host skips, zero absent/pending/incomplete. Original output hashes, complete run/terminal inventories and both owner source/SDK/tool/environment seals audit unchanged. This failed local replay does not certify unexecuted native counterparts or later repairs |
 | `252239cde` | Complete mask/vector NUM effects: 30 roots / 734 children pass current Go, actual Go1.20 and race; all 764 terminal identities match with no fail/skip/incomplete and unchanged source/SDK/LLVM22 seals. Both-SDK build/vet and fifteen scanner roots, five-arch classification, three CLI extraction roots, CI policies and tracked formatting pass. The original native x86/MXCSR counterpart remains required, not a local pass |
@@ -208,6 +209,9 @@ cannot certify a performance improvement. Full reports remain under ignored
    Void inputs and exact named/raw continuation together, retaining the original
    IA32 source/object and required native runtime owners. Preserve failed
    receipts and do not subtract focused successes from a completed run.
+   The new CPU-query RED is committed: first repair the shared typed effect
+   and consistent source routing, then rerun all four original selected roots.
+   Do not label the already-passing simple result prototype as newly fixed.
    Keep compiler/runtime producer gaps separate from instruction support. No
    mnemonic-only exception, padding permission or native-frame backing follows
    from a valid encoding. Inspect the final error, not a preceding successful
@@ -225,6 +229,8 @@ Go 1.20 and race. One heavy local Go/LLVM owner runs at a time; develop in an
 existing idle worktree while its tested source stays frozen.
 
 Resolve branch locations with `git worktree list`. Latest ignored receipts use
+`cpu-query-result-red` at `dab3bb581` for the active unrepaired CPU-query class.
+The latest completed qualification uses
 `unbound-official-formats-{first-green,initialized,native}`; the complete
 20-root three-lane seal is `unbound-official-formats-qualified-5df8cde3.json`.
 `latest-failures-83f21268/raw-outcomes-audit.json` retains the complete latest
