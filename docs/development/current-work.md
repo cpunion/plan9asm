@@ -22,6 +22,8 @@ idle worktrees; do not create another for routine work.
 
 | Code snapshot | Completed evidence | Limits |
 |---|---|---|
+| `6d1337fde` | Legacy logical-memory fixture contracts and complete related grammar/native-read tests: 21 roots / 3,785 children pass current Go, actual Go1.20 and race; identical 3,806 terminals, zero fail/skip/incomplete | Original 60-function segment formats remain Go/emitter objects and public Context; separate 36-function ordinary-address programs and initialized SSE1 pointer programs own public objects, not native execution |
+| Same snapshot | All thirteen final gates pass, with unchanged source/SDK/LLVM22 observations | Test-only repair; complete original failure replay remains the older snapshot below until rerun |
 | `0ab05d184` | ENDBR state and source-fixture contracts: 33 portable roots / 1,860 children pass current Go, actual Go1.20 and race with identical 1,893 terminals; current Go/race additionally pass two SDK-specific roots / three children | Exact named/raw numerical preservation, mandatory non-Void results and original format objects; native CET/GP/FLAGS execution remains required |
 | Same snapshot | All thirteen final gates pass; exact original 167-root replay has 39 pass / 39 fail / 89 explicit host skips, no incomplete roots or passing roots with skipped children | Five previously failing roots now pass, with no regressions in that set; this is not complete CI or a whole-SDK source pass |
 | `4024da958` | Complete eight-name SQRT contracts: 32 roots / 1,410 children pass current Go, actual Go1.20 and race; identical 1,442 terminals, zero fail/skip/incomplete and unchanged source/SDK/LLVM22 seals | Includes 180 independent physical-form controls and 54 initialized raw variants through three APIs on five targets, with IR/backend O0/O2 objects; not native execution |
@@ -126,8 +128,9 @@ before changing implementation or claiming a speedup. Do not relax budgets.
    and missing-input/result negatives. The required Linux native wrapper has
    not run locally. SQRT's native rounding/passthrough/mask/MXCSR requirement
    likewise remains separate from its completed object-only qualification.
-2. Repair the latest 39 local failure roots: legacy logical-memory format
-   fixtures with unbound segment/pointer inputs;
+2. The legacy logical-memory fixture batch is qualified at `6d1337fde`;
+   rerun the exact failure set before updating its totals. Repair the other
+   observed classes:
    raw FP16/VMOVW native-read composition; raw literal and unbound-format
    contracts; MMX closure; hardware enqueue/random/mask status; custom ABI,
    source-stack and runtime386 `cpuidProbe` entry. Use the actual diagnostic,
@@ -147,6 +150,9 @@ develop in an existing idle worktree. Commit and preserve RED before repair.
 
 Resolve worktree locations with `git worktree list`. Ignored receipts include:
 
+- `logical-memory-family-qualified-6d1337fd.json` and
+  `logical-memory-final-gates-6d1337fd/`: complete 21-root, three-lane cohort
+  and thirteen final gates, retaining both original failures and real inputs.
 - `endbranch-family-qualified-0ab05d18.json`,
   `endbranch-final-gates-0ab05d18/`: three complete lanes and thirteen final
   gates with unchanged source/tool seals. Named/raw state RED and the separate
