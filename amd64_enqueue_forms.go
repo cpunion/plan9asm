@@ -48,6 +48,7 @@ func x86EnqueueProperties(op Op, ins Instr, arch string) (x86EnqueueForm, bool, 
 		memory := source.Mem
 		if !reflect.DeepEqual(source, Operand{Kind: OpMem, Mem: memory}) ||
 			memory.OffRaw != "" || memory.IndexExt != "" || !x86MemoryRegistersValidForArch(memory, arch) ||
+			!x86EnqueueAddressEncoding(memory, form.addressBits) ||
 			memory.Segment != "" && memory.Segment != FS && memory.Segment != GS ||
 			memory.Index == SP || memory.Index == "" && memory.Scale != 0 ||
 			memory.Index != "" && memory.Scale != 1 && memory.Scale != 2 && memory.Scale != 4 && memory.Scale != 8 {
@@ -65,6 +66,24 @@ func x86EnqueueProperties(op Op, ins Instr, arch string) (x86EnqueueForm, bool, 
 		return fail()
 	}
 	return form, true, nil
+}
+
+func x86EnqueueAddressEncoding(memory MemRef, bits int) bool {
+	if bits == 16 {
+		if memory.Off < -1<<15 || memory.Off > 1<<16-1 {
+			return false
+		}
+		if memory.Index != "" {
+			return (memory.Base == BX || memory.Base == BP) &&
+				(memory.Index == SI || memory.Index == DI) && memory.Scale == 1
+		}
+		return memory.Base == "" || memory.Base == BX || memory.Base == BP || memory.Base == SI || memory.Base == DI
+	}
+	maximum := int64(1<<31 - 1)
+	if bits == 32 {
+		maximum = 1<<32 - 1
+	}
+	return memory.Off >= -1<<31 && memory.Off <= maximum
 }
 
 // This exact ordinary-address source boundary is shared by the paired native
