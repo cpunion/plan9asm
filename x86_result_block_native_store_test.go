@@ -74,6 +74,25 @@ func TestX86BlockExtractNativeStoreContinuation(t *testing.T) {
 				if x86ResultBlockTransfer(ins, form, &state, nil, 0, arch) {
 					t.Fatal("standalone query acquired native write authority")
 				}
+				indexed := ins
+				indexed.Args = append([]Operand(nil), ins.Args...)
+				indexed.Args[form.destination].Mem.Index = CX
+				indexed.Args[form.destination].Mem.Scale = 4
+				indexed.Args[form.destination].Mem.Off = 3
+				state = before.clone()
+				wordMask := uint8(1)<<uint(x86ResultPointerWord(arch)) - 1
+				state.gp[1] = wordMask
+				indexedBefore := state.clone()
+				if !x86ResultBlockTransferWithNativeMemory(indexed, form, &state, nil, 0, arch, true) ||
+					!reflect.DeepEqual(state, indexedBefore) {
+					t.Fatal("complete numerical index lost the exact native store")
+				}
+				state.gp[1] = wordMask >> 1
+				indexedBefore = state.clone()
+				if x86ResultBlockTransferWithNativeMemory(indexed, form, &state, nil, 0, arch, true) ||
+					!reflect.DeepEqual(state, indexedBefore) {
+					t.Fatal("partial index supplied a native write address")
+				}
 				for _, mutation := range []string{"physical", "address-size", "segment"} {
 					changed := ins
 					switch mutation {
