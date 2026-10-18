@@ -54,3 +54,24 @@ func x86SqrtNativeEVEX(ins Instr, form x86FloatBinaryForm) bool {
 	}
 	return false
 }
+
+// Numerical definedness is shared by result and caller analysis. This says
+// nothing about the backing or validity of a memory source. The caller must
+// establish that separately before supplying its conditional source bytes.
+func x86SqrtDefinedBytes(f x86FloatBinaryForm, source, upper, old uint64) (uint64, bool) {
+	width := f.byteWidth
+	if f.scalar {
+		width = f.bits / 8
+	}
+	required := x86CallerVectorByteMask(int64(width))
+	if source&required != required || f.mask >= 0 && !f.zeroing && old&required != required {
+		return 0, false
+	}
+	if f.legacy {
+		return old | required, true
+	}
+	if f.scalar {
+		return ^uint64(0xffff) | required | upper&(0xffff&^required), true
+	}
+	return ^uint64(0), true
+}

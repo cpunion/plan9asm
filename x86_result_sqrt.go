@@ -14,11 +14,7 @@ func x86ResultSqrtStep(ins Instr, state *x86ResultState, owned []bool, arch stri
 			return false, true
 		}
 	}
-	width := f.byteWidth
-	if f.scalar {
-		width = f.bits / 8
-	}
-	required := x86CallerVectorByteMask(int64(width))
+	input := ^uint64(0)
 	if f.memory >= 0 {
 		if !f.scalar && ins.Args[0].Kind == OpFP {
 			return false, true // Packed original memory needs contiguous native backing.
@@ -28,21 +24,14 @@ func x86ResultSqrtStep(ins Instr, state *x86ResultState, owned []bool, arch stri
 		}
 	} else {
 		source, _ := amd64VectorRegisterIndex(ins.Args[0].Reg, f.byteWidth)
-		if state.vectorBytes(source)&required != required {
-			return false, true
-		}
+		input = state.vectorBytes(source)
 	}
 	destination, _ := amd64VectorRegisterIndex(ins.Args[f.destination].Reg, f.byteWidth)
 	old := state.vectorBytes(destination)
-	if f.mask >= 0 && !f.zeroing && old&required != required {
+	upper, _ := amd64VectorRegisterIndex(ins.Args[f.second].Reg, f.byteWidth)
+	value, valid := x86SqrtDefinedBytes(f, input, state.vectorBytes(upper), old)
+	if !valid {
 		return false, true
-	}
-	value := required
-	if f.legacy && f.scalar {
-		value |= old
-	} else if f.scalar {
-		upper, _ := amd64VectorRegisterIndex(ins.Args[f.second].Reg, 16)
-		value |= state.vectorBytes(upper) & (0xffff &^ required)
 	}
 	state.writeVector(destination, f.byteWidth, value, f.legacy)
 	return true, true
