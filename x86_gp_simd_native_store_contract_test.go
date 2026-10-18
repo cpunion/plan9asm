@@ -4,6 +4,9 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"runtime"
+	"strconv"
+	"strings"
 	"testing"
 )
 
@@ -77,5 +80,69 @@ func TestX86GPSIMDNativeStoreVoidCannotInventInputs(t *testing.T) {
 				})
 			}
 		}
+	}
+}
+
+func TestX86GPSIMDNativeStorePortableBytes(t *testing.T) {
+	llc, clang, found := findLlcAndClang(t)
+	if !found {
+		t.Fatal("LLVM22 llc and clang required")
+	}
+	arch, originalTriple, move, word := "amd64", "x86_64-unknown-linux-gnu", "MOVQ", 8
+	if strconv.IntSize == 32 {
+		arch, originalTriple, move, word = "386", "i386-unknown-linux-gnu", "MOVL", 4
+	}
+	var source, declarations, prototypes, rows strings.Builder
+	for index, row := range x86GPSIMDNativeStoreRows {
+		name := fmt.Sprint("Store", index)
+		fmt.Fprintf(&declarations, "func %s(p *byte,value uint64)\n", name)
+		fmt.Fprintf(&source, "TEXT ·%s(SB),4,$0-%d\n%s p+0(FP),BX\nMOVQ value+%d(FP),X0\n%s X0,1(BX)\nRET\n",
+			name, word+8, move, word, row.op)
+		fmt.Fprintf(&prototypes, "extern void %s(void*,uint64_t);\n", name)
+		fmt.Fprintf(&rows, "{%s,%d},\n", name, row.bytes)
+	}
+	x86LEAActualTargetGoObject(t, arch, originalTriple, source.String())
+	driver := "#include <stdint.h>\n#include <stdio.h>\n#include <string.h>\n" + prototypes.String() + `
+static const struct { void (*run)(void*,uint64_t); unsigned width; } cases[] = {
+` + rows.String() + `};
+int main(void) {
+    for (unsigned row = 0; row < sizeof(cases)/sizeof(cases[0]); ++row) {
+        for (unsigned sample = 0; sample < 257; ++sample) {
+            uint8_t output[16], expected[16];
+            uint64_t value = UINT64_C(0x9876543210fedcba) * sample;
+            memset(output, 0xa5, sizeof(output));
+            memcpy(expected, output, sizeof(output));
+            for (unsigned byte = 0; byte < cases[row].width; ++byte)
+                expected[byte+2] = (uint8_t)(value >> (byte*8));
+            cases[row].run(output+1, value);
+            if (memcmp(output, expected, sizeof(output))) {
+                fprintf(stderr, "row=%u sample=%u store width or canary mismatch\n", row, sample);
+                return 1;
+            }
+        }
+    }
+    return 0;
+}
+`
+	triple := testTargetTriple(runtime.GOOS, runtime.GOARCH)
+	for _, api := range []string{"text", "module", "Go"} {
+		t.Run(api, func(t *testing.T) {
+			ir, err := x86ScalarFPBitViewAPI(t, source.String(), declarations.String(), arch, triple, api)
+			if err != nil || ir == "" {
+				t.Fatal("complete numerical native store rejected", err)
+			}
+			for _, optimized := range []bool{false, true} {
+				text := ir
+				if optimized {
+					text = x86DwordProductIROptimize(t, ir)
+				}
+				for _, level := range []int{0, 2} {
+					t.Run(fmt.Sprintf("IR-O2=%t/backend-O%d", optimized, level), func(t *testing.T) {
+						compileAndRunRuntimeTestWithCompiler(t, llc, []string{clang}, "gp-simd-native-store",
+							triple, text, driver, nil, level)
+					})
+				}
+			}
+		})
 	}
 }
