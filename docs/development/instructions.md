@@ -275,6 +275,14 @@ FLAGS. They supply no reusable memory, pointee, raw-entry or caller permission.
 Format-only sources keep original Go objects and explicit Context controls;
 separate initialized counterparts own executable and public LLVM coverage.
 
+KAND/KANDN/KOR/KXNOR/KXOR/KNOT/KTEST/KORTEST share the complete B/W/D/Q
+K-register grammar. KNOT never reads its write-only destination; only equal-source
+XOR/XNOR/ANDN is input-independent. TEST variants define all six status flags,
+not DF/ID. Exact original/normalized raw identity may preserve existing GP,
+direction and private-stack facts; it grants no memory, entry or frame role.
+Void and unused-bool signatures retain input obligations. Preserve independent
+Go encoder attributes, named/raw portable values and original unbound formats.
+
 The four packed multiply-add names share the existing complete binary grammar
 with mandatory numerical inputs, result definedness and paired native reads.
 MMX keeps its separate closed physical-state owner. Every first/second input,
