@@ -69,9 +69,9 @@ func x86ResultCallerAddressesAfter(ins Instr, before [16]bool, entryFP map[int64
 	if x86NOPPreservesSourceState(ins) {
 		return before
 	}
-	if effect, known, err := x86TypedTimestampByteEffect(ins.Op, ins, arch); known && err == nil {
+	if effect, known, err := x86TypedRegisterQueryByteEffect(ins.Op, ins, arch); known && err == nil {
 		for _, output := range effect.operands {
-			if index, _, valid := x86ResultGP(output.operand.Reg, output.width, arch); valid {
+			if index, _, valid := x86ResultGP(output.operand.Reg, output.width, arch); valid && output.write {
 				before[index] = false
 			}
 		}

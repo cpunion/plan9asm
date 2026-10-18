@@ -30,6 +30,53 @@ func x86CPUQueryProperties(op Op, ins Instr, arch string) (x86CPUQuerySpec, bool
 	return spec, true, nil
 }
 
+// The native emitter consumes these same low dword inputs before overwriting
+// its zero-extended outputs. Continued execution supplies numerical bytes,
+// not a pointer, caller region, raw entry or promise that XGETBV cannot fault.
+func x86TypedCPUQueryByteEffect(op Op, ins Instr, arch string) (x86TypedByteEffect, bool, error) {
+	spec, known, err := x86CPUQueryProperties(op, ins, arch)
+	if !known || err != nil {
+		return x86TypedByteEffect{}, known, err
+	}
+	if !x86RegisterQueryPreservesSourceState(ins) {
+		return x86TypedByteEffect{}, true, fmt.Errorf("%w: CPU query original/normalized source identity differs", ErrProbeNeedsContext)
+	}
+	effect := x86TypedByteEffect{requiresResultProof: true}
+	for _, register := range spec.inputs {
+		effect.operands = append(effect.operands, x86TypedByteOperand{
+			index: -1, operand: Operand{Kind: OpReg, Reg: register}, width: 4, read: true,
+		})
+	}
+	for _, register := range spec.outputs {
+		effect.operands = append(effect.operands, x86TypedByteOperand{
+			index: -1, operand: Operand{Kind: OpReg, Reg: register}, width: 4, write: true,
+		})
+	}
+	return effect, true, nil
+}
+
+func x86TypedRegisterQueryByteEffect(op Op, ins Instr, arch string) (x86TypedByteEffect, bool, error) {
+	if effect, known, err := x86TypedCPUQueryByteEffect(op, ins, arch); known {
+		return effect, known, err
+	}
+	return x86TypedTimestampByteEffect(op, ins, arch)
+}
+
+// CPU queries and timestamps keep FLAGS, DF and the private numerical stack.
+// Their independently checked implicit writes still revoke overwritten GP
+// identities. No other zero-operand opcode inherits this raw-source boundary.
+func x86RegisterQueryPreservesSourceState(ins Instr) bool {
+	name := Op(strings.ToUpper(string(ins.Op)))
+	_, cpu := x86CPUQuerySpecs[name]
+	_, timestamp := x86TimestampSpecs[name]
+	if !cpu && !timestamp || len(ins.Args) != 0 || ins.x86Encoded || ins.x86RawNearReturn != nil ||
+		ins.x86AddressBits != 0 || ins.x86UnboundAddressOverride || ins.x86SegmentPrefix != 0 {
+		return false
+	}
+	origin := ins.x86SourceRaw
+	return origin == nil || len(origin.args) == 0 && strings.EqualFold(string(origin.op), string(ins.Op))
+}
+
 func (spec x86CPUQuerySpec) resultType() LLVMType {
 	return LLVMType("{ " + strings.TrimSuffix(strings.Repeat("i32, ", len(spec.outputs)), ", ") + " }")
 }

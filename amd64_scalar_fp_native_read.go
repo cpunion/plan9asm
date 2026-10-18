@@ -88,9 +88,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 			return strictErr
 		}
 		if ins.x86SourceRaw != nil {
-			if x86TimestampPreservesSourceState(ins) {
+			if x86RegisterQueryPreservesSourceState(ins) {
 				// The decoder's exact original and normalized zero-operand
-				// timestamp share the same implicit outputs. It adds no memory,
+				// query shares its checked implicit inputs/outputs. It adds no memory,
 				// raw-return, stack or native-entry authority to this continuation.
 				continue
 			}

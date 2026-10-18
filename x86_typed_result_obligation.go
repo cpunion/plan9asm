@@ -24,6 +24,9 @@ func x86TypedFPResultNeedsProof(fn Func, sig FuncSig, arch string) bool {
 	}
 	opaqueAddressResult := x86OpaqueAddressPointerResultRole(fn, sig, arch)
 	for ordinal, ins := range fn.Instrs {
+		if _, known, err := x86CPUQueryProperties(ins.Op, ins, arch); known && err == nil {
+			return true // Named/raw implicit query inputs remain required even for dead Void outputs.
+		}
 		if _, known, err := x86BLSProperties(ins.Op, ins, arch); known && err == nil {
 			return true // BLS sources remain required for Void, including dead native reads.
 		}
