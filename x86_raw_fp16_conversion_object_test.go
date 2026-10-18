@@ -83,7 +83,11 @@ func x86RawFP16CheckObject(t *testing.T, llc, triple, ir, level string, want map
 				t.Fatalf("%s changed native source width or rounding: %x versus %x", name, code, original)
 			}
 		}
-		if operations != 1 || masks != 1 {
+		wantMasks := 1
+		if expected.maskMove == "" {
+			wantMasks = 0
+		}
+		if operations != 1 || masks != wantMasks {
 			t.Fatal("object did not retain exactly one original FP16 operation and full mask", name, operations, masks)
 		}
 		seen[name] = true
