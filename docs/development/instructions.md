@@ -241,6 +241,15 @@ formats retain Go/public-Context/emitter coverage; separate initialized status
 programs own public objects, not a native-execution claim. The other system/RTM
 and hardware-status families retain their independent effect obligations.
 
+RTM's four-name grammar is shared by lowering and XTEST's numerical effect.
+Only the exact zero-operand query defines all six status flags without numerical
+inputs and preserves unrelated GP, DF and private storage. The same identity
+checks apply to decoded raw source; no entry, frame or memory role follows.
+Do not grant transaction begin/end/abort an ordinary straight-line effect.
+XABORT requires a resolved integer in 0..255, not a floating token with an
+integer zero field. Retain dispatch identity and complete byte-domain objects;
+compiling the native RTM opcode is not hardware execution qualification.
+
 The eight mask/vector B/W/D/Q moves share a register-only EVEX grammar with
 X/Y/Z widths and K0-K7 data operands, never writemasking or suffixes. Caller
 and numerical effects require actual mask data or each vector lane's sign

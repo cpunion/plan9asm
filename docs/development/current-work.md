@@ -25,6 +25,8 @@ of the current candidate. Do not create another worktree for routine work.
 
 | Snapshot | Evidence and limits |
 |---|---|
+| `96f91e566` | Complete RTM grammar/status and the WAITPKG/query/storage union: 49 roots / 2,029 children pass current Go, actual Go1.20 and race; identical 2,078 terminals, no fail/skip/incomplete and unchanged source/SDK/LLVM22 seals. Both-SDK build/vet and 21 scanner roots, five-arch classification, five CLI roots, 132 policies and formatting pass. XABORT covers all 256 integer immediates; native RTM execution is not qualified |
+| Same code head | XTEST defines all six status flags while preserving unrelated storage through exact named/raw identity. Transaction begin/end/abort gain no straight-line effect. Non-integer XABORT and mismatched dispatch fail before emission. Both original RED runs remain; the original aggregate status test now reaches the separate ENQCMD gap and remains failed. No old full-CI count is reduced |
 | `3db1fe799` | WAITPKG named/raw input and status effects: 41 roots / 1,965 children pass current Go, actual Go1.20 and race; identical 2,006 terminals, no fail/skip/incomplete and unchanged source/SDK/LLVM22 seals. Both-SDK build/vet and 21 scanner roots, five-arch classification, five CLI roots, 132 policies and formatting pass. Original Go objects and three-API O0/O2 LLVM objects cover five x86 targets; native WAITPKG execution is not qualified |
 | Same code head | The eight-SDK audit changes only the two isolated AMD64 UMWAIT/TPAUSE forms to Context for missing inputs; 386, encoding rules and unsupported counts stay unchanged. Original named RED has 110 failed terminals and raw RED 57. The original aggregate status test advances from UMWAIT to its separate XTEST gap and remains failed; old complete-CI counts are not reduced |
 | `03ee09640` | X86 branch-token namespace: 70 roots / 384 children pass current Go, actual Go1.20 and race; identical 454 terminals, no fail/skip/incomplete and unchanged source/SDK/LLVM22 seals. Both-SDK build/vet, twenty scanner roots, five-arch classification, five CLI extraction roots, 132 CI policies and formatting pass. Original five-target collision objects and independent portable result execution pass; this is not a complete CI replay |
@@ -66,6 +68,14 @@ execution and native execution remain different claims.
 
 ## Latest repairs
 
+RTM lowering and XTEST numerical effects now share the existing four-name
+grammar. Only the zero-operand status query defines FLAGS without numerical
+inputs; begin/abort/end retain their independent control-flow obligations.
+Exact original/normalized identity preserves GP, DF and private storage, never
+raw entry or memory authority. XABORT accepts only resolved integer bytes and
+retains the complete 256-value actual-Go/object matrix. Dispatch mismatch and
+floating-immediate REDs remain. The aggregate status test still fails at ENQCMD.
+
 WAITPKG uses the existing implicit-system grammar for lowering and numerical
 effects. UMWAIT/TPAUSE require complete low-dword control and EDX:EAX deadline
 inputs, even for Void, unused bool or raw source. Exact normalized/raw identity
@@ -74,7 +84,7 @@ status flags. It grants no raw entry, monitor address or caller-memory role.
 Original unbound named/raw formats retain actual-Go/public-Context/emitter
 objects; initialized status transport has independent public objects. Pointer,
 partial-byte, join, source-mutation and physical-frame controls remain strict.
-The shared all-status CI owner still fails at XTEST and other unmodeled status
+The shared all-status CI owner still fails at ENQCMD and other unmodeled status
 families; it is not replaced by the focused WAITPKG qualification.
 
 X86 branch operands now use Go's case-sensitive register namespace before the
@@ -306,8 +316,8 @@ cannot certify a performance improvement. Full reports remain under ignored
    focused qualification above, followed by the complete multiply-add and MMX
    format-contract union, GP/SIMD native-store inputs/continuation and complete
    block-extraction native stores and source branch-token namespace collisions.
-   WAITPKG implicit input/status effects are now qualified as recorded above.
-   Next close RTM/random/mask status effects and remaining MMX region
+   WAITPKG implicit input/status and RTM query effects are now qualified above.
+   Next close enqueue/random/mask status effects and remaining MMX region
    composition failures. Preserve unmodified
    failed sources and independently initialized positive programs. Do not assume that a whole
    format batch's first MMX rejection establishes every sibling's input checks;
@@ -332,7 +342,13 @@ Run focused RED first, then the complete affected union on current Go, actual
 Go 1.20 and race. One heavy local Go/LLVM owner runs at a time; develop in an
 existing idle worktree while its tested source stays frozen.
 
-Resolve branch locations with `git worktree list`. Latest ignored receipts use
+Resolve branch locations with `git worktree list`. Latest RTM receipts use
+`rtm-status-qualified-complete` at `96f91e566`, sealed by
+`rtm-status-qualified-96f91e56.json`; final gates use
+`rtm-status-final-gates-96f91e56`. Status RED at `c36a0f8f9` and grammar RED at
+`696c83919` retain their 16 and five failed terminals. The first green at
+`0a611da5f` passes six RTM roots but retains the separate ENQCMD aggregate
+failure. Earlier ignored receipts use
 `waitpkg-qualified-complete` at `3db1fe799`, sealed by
 `waitpkg-qualified-3db1fe79.json`; final gates use `waitpkg-final-gates-3db1fe79`.
 The eight-SDK audit is `waitpkg-classification-audit-v2`; the first audit attempt
