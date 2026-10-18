@@ -987,8 +987,14 @@ For ordinary GP/X native loads, the lowering-only result observer consumes the
 same exact-width volatile read as scalar lane insertion. MOVL/MOVQ/MOVD and
 VMOVD/VMOVQ retain loaded low bytes, known-zero X128 remainder and distinct
 legacy/VEX/EVEX wider aliases. Memory Q remains eight bytes on 386, unlike its
-GP-register WIG form. This continuation rule cannot replace public declaration,
-caller, raw/frame, MMX or physical-bank contracts, and never authorizes a store.
+GP-register WIG form. The paired named native-store continuation separately
+requires every stored low byte and an incoming pointer address, even for Void.
+It keeps the original exact unaligned volatile write without changing numerical
+or storage facts; a masked/logical read rule cannot supply a write envelope.
+These continuations cannot replace public declaration, caller, raw/frame, MMX
+or physical-bank contracts or establish future memory validity. Keep original
+unbound format objects, initialized read/store programs, overwritten-store
+observations and portable byte/canary execution as separate evidence.
 
 Scalar integer lane insert/extract shares `x86ScalarLaneProperties` across the
 original-source validator, lowerer, caller-region effects and ABI0 result-byte
