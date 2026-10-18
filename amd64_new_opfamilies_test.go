@@ -19,11 +19,16 @@ TEXT notb(SB),NOSPLIT,$0-0
 	if got := strings.Count(ir, "xor i8"); got != 2 {
 		t.Fatalf("NOTB xor count = %d, want 2:\n%s", got, ir)
 	}
-	for _, want := range []string{"and i64", "or i64", "load i8", "store i8"} {
+	for _, want := range []string{"and i64", "or i64", "load volatile i8", "store volatile i8"} {
 		if !strings.Contains(ir, want) {
 			t.Fatalf("NOTB output missing %q:\n%s", want, ir)
 		}
 	}
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM 22 llc required")
+	}
+	compileLLVMToObject(t, llc, "x86_64-unknown-linux-gnu", "not-byte-forms.ll", "not-byte-forms.o", ir)
 }
 
 func TestTranslateAMD64SHA1Family(t *testing.T) {
