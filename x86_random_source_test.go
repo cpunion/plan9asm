@@ -100,9 +100,9 @@ func TestX86HardwareRandomOriginalStatusWriterSource(t *testing.T) {
 
 func TestX86HardwareRandomLivePrivateStackAndCanonicalResult(t *testing.T) {
 	for _, target := range x86RawReturnTargets {
-		word, size := "L", 4
+		word := "L"
 		if target.arch == "amd64" {
-			word, size = "Q", 8
+			word = "Q"
 		}
 		for _, row := range x86RandomResultOracle {
 			if target.arch == "386" && row.width == 8 {
@@ -114,7 +114,7 @@ func TestX86HardwareRandomLivePrivateStackAndCanonicalResult(t *testing.T) {
 					if raw {
 						body = x86RawDisplacementDirectives(x86RandomOracleBytes(row.width, row.extension, 0))
 					}
-					source := fmt.Sprintf("TEXT ·Value(SB),4,$0-%d\nMOVL $1,AX\nPUSH%s AX\n%sPOP%s BX\nMOVB BX,ret+0(FP)\nRET\n", size, word, body, word)
+					source := fmt.Sprintf("TEXT ·Value(SB),4,$0-1\nMOVL $1,AX\nPUSH%s AX\n%sPOP%s BX\nMOVB BX,ret+0(FP)\nRET\n", word, body, word)
 					x86LEAActualTargetGoObject(t, target.arch, target.triple, source)
 					for _, api := range []string{"text", "module", "Go"} {
 						// A preserved numerical private stack is not a canonical bool
