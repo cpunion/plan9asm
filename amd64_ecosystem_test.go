@@ -2326,22 +2326,39 @@ done:
 			x86UnboundVoidFormatSource(t, src, "fuzzops", target.arch, target.triple)
 			inputs := "MOVL $0,CX\nVPXOR Y0,Y0,Y0\nVPXOR Y1,Y1,Y1\n"
 			initialized := strings.Replace(src, "BTL $16, CX", inputs+"BTL $16, CX", 1)
-			x86LEAActualTargetGoObject(t, target.arch, target.triple, "#include \"textflag.h\"\n"+initialized)
-			for _, api := range []string{"text", "module", "Go"} {
-				ir, err := x86ScalarFPBitViewAPI(t, initialized, "func fuzzops()", target.arch, target.triple, api)
-				if err != nil {
-					t.Fatal("initialized bit-test/branch/subtract program rejected", api, err)
-				}
-				for _, text := range []string{ir, x86DwordProductIROptimize(t, ir)} {
-					for _, level := range []string{"-O0", "-O2"} {
-						x86PackedStringCompileObject(t, llc, target.triple, text, level)
+			live := strings.Replace(initialized, "$0-0", "$0-32", 1)
+			live = strings.Replace(live, inputs, "VPXOR Y2,Y2,Y2\n"+inputs, 1)
+			live = strings.Replace(live, "done:", "done:\nVMOVDQU Y2,ret+0(FP)", 1)
+			const liveDeclaration = "func fuzzops() (ret, b, c, d uint64)"
+			for _, program := range []struct{ source, declaration string }{
+				{initialized, "func fuzzops()"},
+				{live, liveDeclaration},
+			} {
+				x86LEAActualTargetGoObject(t, target.arch, target.triple, "#include \"textflag.h\"\n"+program.source)
+				for _, api := range []string{"text", "module", "Go"} {
+					ir, err := x86ScalarFPBitViewAPI(t, program.source, program.declaration, target.arch, target.triple, api)
+					if err != nil {
+						t.Fatal("initialized bit-test/branch/subtract program rejected", api, err)
+					}
+					for _, text := range []string{ir, x86DwordProductIROptimize(t, ir)} {
+						for _, level := range []string{"-O0", "-O2"} {
+							x86PackedStringCompileObject(t, llc, target.triple, text, level)
+						}
 					}
 				}
 			}
 			for _, missing := range strings.Split(strings.TrimSpace(inputs), "\n") {
 				t.Run("missing-"+missing, func(t *testing.T) {
-					incomplete := strings.Replace(initialized, missing+"\n", "", 1)
-					x86UnboundVoidFormatSource(t, incomplete, "fuzzops", target.arch, target.triple)
+					// Pure dead integer arithmetic may retain unknown bytes.
+					// Returning the full Y register makes every byte observable.
+					incomplete := strings.Replace(live, missing+"\n", "", 1)
+					x86LEAActualTargetGoObject(t, target.arch, target.triple, "#include \"textflag.h\"\n"+incomplete)
+					for _, api := range []string{"text", "module", "Go"} {
+						ir, err := x86ScalarFPBitViewAPI(t, incomplete, liveDeclaration, target.arch, target.triple, api)
+						if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+							t.Fatal("live result acquired missing control or vector inputs", api, err)
+						}
+					}
 				})
 			}
 		})
