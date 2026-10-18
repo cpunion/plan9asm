@@ -2,6 +2,7 @@ package plan9asm
 
 import (
 	"fmt"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -10,7 +11,15 @@ import (
 // The independent byte reference samples the last dword of each X/Y/Z result;
 // this is portable LLVM execution, not original native AVX512 execution.
 func TestX86BroadcastDataResultsLLVMRuntime(t *testing.T) {
-	execution := x86FloatCompareExecutionTools(t)
+	llc, clang, found := findLlcAndClang(t)
+	if !found {
+		t.Fatal("LLVM22 llc and clang required")
+	}
+	// These source-local broadcasts use portable byte/vector lowering. Keep
+	// the original AMD64 Go oracle below, but execute LLVM on the actual host;
+	// an x86-only floating comparison transport unnecessarily skipped ARM64.
+	execution := x86FloatCompareExecution{llc: llc, compiler: []string{clang},
+		triple: testTargetTriple(runtime.GOOS, runtime.GOARCH)}
 	rows := x86BroadcastMemoryRows()
 	for start := 0; start < len(rows); start += 64 {
 		end := start + 64

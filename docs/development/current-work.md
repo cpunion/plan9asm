@@ -22,6 +22,8 @@ idle worktrees; do not create another for routine work.
 
 | Code snapshot | Completed evidence | Limits |
 |---|---|---|
+| `9e3234ed2` | Bound RIP broadcasts and original raw-format contracts: 86 roots / 3,274 children pass current Go, actual Go1.20 and race; identical 3,360 terminals, zero fail/skip/incomplete | Complete 64-variant literal family, three-API objects and portable data values; missing mask/merge/register inputs remain independent Context controls |
+| Same snapshot | All thirteen final gates pass; exact original 167-root replay has 58 pass / 20 fail / 89 explicit host skips, unchanged source/tools and no incomplete roots | Eleven former failures pass with no regressions; one oversized race process timed out, then the exact 36-root cohort passed in disjoint 7/10/19-root batches without increasing its five-minute budget |
 | `9552a2759` | Architecture-correct bool-tail routing and stack-source contracts: 63 roots / 1,301 children pass current Go, actual Go1.20 and race; identical 1,364 terminals, zero fail/skip/incomplete | Complete 16-condition SETcc tail family, three-API objects and portable value execution; original invalid/unbound stack sources remain separate from initialized five-target objects and portable values |
 | Same snapshot | All thirteen final gates pass; exact original 167-root replay has 47 pass / 31 fail / 89 explicit host skips, unchanged source/tools and no incomplete roots | Three former failures pass, with no new failures; not complete current-head CI or native AMD64 execution |
 | `3044f1483` | Decoder-bound VMOVW and raw-format input contracts: 31 roots / 1,006 children pass current Go, actual Go1.20 and race; identical 1,037 terminals, zero fail/skip/incomplete | All eight VMOVW direction/register/m16/W forms, five-target three-API IR/backend O0/O2 objects, exact byte/origin negatives and the unchanged portable guard-page/value program; not native AVX512 execution |
@@ -75,7 +77,7 @@ See earlier checkpoints in Git rather than reconstructing counts by subtraction.
 
 ## Exact failure replay and online CI
 
-The latest local diagnostic at `9552a2759` selects exactly the original CI's
+The latest local diagnostic at `9e3234ed2` selects exactly the original CI's
 167 failed root names. One sealed Go test process ran the complete set,
 instead of repeatedly linking the same large test executable.
 All inventories, started/terminal identities and before/after source, SDK, LLVM
@@ -89,17 +91,19 @@ and environment observations match. This is not the canonical isolated CI runner
 | Previous batched replay, `731de8a20` | 34 | 44 | 89 | 0 / 0 |
 | Previous batched replay, `0ab05d184` | 39 | 39 | 89 | 0 / 0 |
 | Previous batched replay, `3044f1483` | 44 | 34 | 89 | 0 / 0 |
-| Latest batched replay, `9552a2759` | 47 | 31 | 89 | 0 / 0 |
+| Previous batched replay, `9552a2759` | 47 | 31 | 89 | 0 / 0 |
+| Latest batched replay, `9e3234ed2` | 58 | 20 | 89 | 0 / 0 |
 
-The three newly passing original roots are AMD64 PushPop, 386 direct-SP writes
-and canonical-bool direct tails. AMD64 tails now retain their actual architecture
-instead of entering the 386-only custom-helper path. The original 386 stack
-fixture has an independently checked ordinary Go assembler rejection for
-unbalanced PUSH/POP, not a successful Go object. Both original stack fixtures
-retain complete emitter objects and public Context controls; separate initialized
-private-stack programs provide actual Go/public objects and portable values.
-A corrected Context expectation is not a new whole-source translation success.
-Earlier ENDBR, SQRT, static-SB SAD and wrapping-add repairs remain passing.
+Eleven original roots newly pass: four RIP-broadcast roots and seven raw-format
+roots. Bound broadcast inputs now reach the existing typed byte effects without
+inventing masks, merge bytes, native reads or entry contracts. The independent
+whole-source raw-return/DATA checks still run. Unbound original encodings retain
+Go/emitter objects and public Context; separate initialized programs own public
+objects. A corrected Context expectation is not a new whole-source translation
+success. The original valid dead mode32 XOR program still translates, rather
+than being incorrectly reclassified as Context. Portable broadcast data values
+now execute on the actual host instead of borrowing an x86-only test launcher.
+Earlier bool-tail, stack, ENDBR, SQRT, SAD and wrapping-add repairs remain passing.
 No root passes with skipped children. Host skips remain unexecuted
 native requirements, never successes. Different local scheduling is disclosed;
 canonical all-platform qualification is still required.
@@ -144,11 +148,12 @@ before changing implementation or claiming a speedup. Do not relax budgets.
    contracts; MMX closure; hardware enqueue/random/mask status; custom ABI,
    runtime386 `cpuidProbe` entry. Use the actual diagnostic,
    not an earlier successful preflight, to choose each next class.
-   The AMD64 bool-tail routing and original stack-fixture contracts are qualified
-   at `9552a2759`; all 16 conditions retain their canonical result and live
-   source/declaration checks. Remaining raw format fixtures need original
-   Go/emitter controls and independently initialized public programs, while
-   bounded RIP-literal effects need their own exact source/data proof.
+   The broadcast/raw-format batch is qualified at `9e3234ed2`. The exact twenty
+   failures are five FP16, seven other RIP literal/constant roots, two physical
+   MOVSXD literal results, two hardware-status roots, two runtime386 source
+   fixtures, one absolute relocation and one x87 compare root. Repair each
+   complete rule class with original Go/emitter controls and independently
+   initialized public programs; do not weaken source/data or entry proofs.
 3. Rerun the unchanged complete standard-library corpus and benchmark after
    relevant source repairs. Do not convert Context into successful compilation.
    A valid encoding grants no caller frame, memory ownership or ABI transport.
@@ -164,6 +169,15 @@ develop in an existing idle worktree. Commit and preserve RED before repair.
 
 Resolve worktree locations with `git worktree list`. Ignored receipts include:
 
+- `raw-broadcast-qualified-9e3234ed.json`,
+  `raw-format-contract-qualified-9e3234ed.json` and
+  `raw-broadcast-final-gates-9e3234ed/`: disjoint 50/36-root cohorts, identical
+  three-lane terminal unions and all thirteen final gates. Preserve the first
+  raw-format failures, literal RED, missing-NOSPLIT oracle failure, earlier
+  portable-runtime skip and unpartitioned race timeout as failed receipts.
+- `latest-failure-batch-9e3234ed-{summary.json,raw.jsonl,before.json,after.json}`:
+  exact 167-root replay, 58 pass / 20 fail / 89 explicit host skips, 145.433s
+  test time; unchanged source/tools, no absent/incomplete or pass-with-skip roots.
 - `stack-tail-routing-qualified-9552a275.json`,
   `stack-tail-final-gates-9552a275/`: 63-root three-lane qualification and
   thirteen final gates. Preserve first RED `f3ef04e5` (including fixture

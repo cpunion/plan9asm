@@ -1306,3 +1306,12 @@ owner; source/raw address overrides retain their separate contracts. Keep the
 eighteen memory members, full Go rows, five-target objects, mask/extent negatives
 and portable numerical execution together. Historical Go maskless `.Z` objects
 are reserved-encoding observations, not accepted forms or runtime passes.
+
+RIP broadcast constants retain their private decoder role, never a named
+immediate grammar. A bounded whole-source replay may hand exact scalar constants
+or block DATA tuples to those same typed effects. It still requires actual mask
+and merge bytes, independently checked raw RET and complete source/DATA identity;
+frames, conditional native reads and declaration-only queries gain nothing.
+Portable broadcast data values execute on the actual host target; do not hide
+them behind an unrelated x86-only native launcher. Original AVX512 execution
+remains a separate required test axis.
