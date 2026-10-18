@@ -167,7 +167,7 @@ func TestTranslateRawFP16ScalarBinaryLLVM22Targets(t *testing.T) {
 			}
 			source.WriteString("\tRET\n")
 			ir := x86UnboundVoidRawScalarFormatObject(t, source.String(), target.goarch, target.triple)
-			for _, want := range []string{"fadd half", "fsub half", "fmul half", "fdiv half", "load volatile i16", "_scalar_load", "phi i16", "vsqrtsh "} {
+			for _, want := range []string{"fadd half", "fsub half", "fmul half", "fdiv half", "load i16", "_scalar_load", "phi i16", "vsqrtsh "} {
 				if !strings.Contains(ir, want) {
 					t.Fatalf("missing %s:\n%s", want, ir)
 				}
