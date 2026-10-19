@@ -90,6 +90,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		if x86RawVectorTestSource(ins, arch) {
 			continue // Exact data tests retain all input bytes and native source accesses.
 		}
+		if x86RawIFMASource(ins, arch) {
+			continue // Exact integer FMA retains its separate accumulator, mask and native-read obligations.
+		}
 		if x86RawAESSource(ins, arch) {
 			continue // Exact integer-crypto data keeps every source and state-byte obligation.
 		}
@@ -346,6 +349,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		}
 		if accepted, known := x86LoweredNativeConditionalSet(ins, state, arch); known {
 			return accepted // The same typed SETcc emitter preserves its exact volatile byte write.
+		}
+		if accepted, known := x86LoweredIFMAStep(ins, state, owned, arch); known {
+			return accepted // The typed emitter retains exact guarded qword reads and EVEX upper-zeroing.
 		}
 		if accepted, known := x86LoweredFixedVectorNativeRead(ins, state, owned, arch); known {
 			return accepted // The typed emitter retains full E4NF or guarded E4 native accesses.

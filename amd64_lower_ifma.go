@@ -2,10 +2,10 @@ package plan9asm
 
 import (
 	"fmt"
-	"strings"
 )
 
 type amd64IFMASpec struct {
+	x86PackedBinarySpec
 	high bool
 }
 
@@ -13,87 +13,55 @@ type amd64IFMASpec struct {
 // Both instructions use _yvblendmpd and operate on the low unsigned 52 bits
 // of each qword source. LUQ adds product bits 51:0; HUQ adds bits 103:52.
 var amd64IFMASpecs = map[Op]amd64IFMASpec{
-	"VPMADD52HUQ": {high: true},
-	"VPMADD52LUQ": {},
+	"VPMADD52HUQ": {x86PackedBinarySpec: x86PackedBinarySpec{encoding: x86PackedLogicalEVEX, broadcastBytes: 8, zeroing: true}, high: true},
+	"VPMADD52LUQ": {x86PackedBinarySpec: x86PackedBinarySpec{encoding: x86PackedLogicalEVEX, broadcastBytes: 8, zeroing: true}},
 }
 
 func (c *amd64Ctx) lowerIFMA(op Op, ins Instr) (ok bool, terminated bool, err error) {
-	rawOp := strings.ToUpper(string(op))
-	baseOp, suffix := rawOp, ""
-	if dot := strings.IndexByte(rawOp, '.'); dot >= 0 {
-		baseOp, suffix = rawOp[:dot], rawOp[dot+1:]
+	form, known, err := x86IFMAProperties(op, ins, c.goarch)
+	if !known || err != nil {
+		return known, false, err
 	}
-	spec, recognized := amd64IFMASpecs[Op(baseOp)]
-	if !recognized {
-		return false, false, nil
-	}
-
-	properties, validSuffix := parseAMD64BinaryFloatingSuffix(suffix)
-	if !validSuffix || properties.sae || properties.rounding != "" {
-		return true, false, fmt.Errorf("%s %s suffix is absent from Go 1.27's _yvblendmpd encoding: %q", c.goarch, baseOp, ins.Raw)
-	}
-	if len(ins.Args) != 3 && len(ins.Args) != 4 {
-		return true, false, fmt.Errorf("%s %s expects source2, source1, [K mask,] accumulator: %q", c.goarch, baseOp, ins.Raw)
-	}
-	masked := len(ins.Args) == 4
-	if c.goarch == "386" && masked {
-		return true, false, fmt.Errorf("386 %s mask forms exceed the Go assembler frontend's three-operand limit: %q", baseOp, ins.Raw)
-	}
-	if properties.zeroing && !masked {
-		return true, false, fmt.Errorf("%s %s zeroing requires a K1-K7 mask: %q", c.goarch, baseOp, ins.Raw)
-	}
-	if masked && !amd64NonzeroKOperand(ins.Args[2]) {
-		return true, false, fmt.Errorf("%s %s masked form expects K1-K7 as its third operand: %q", c.goarch, baseOp, ins.Raw)
-	}
-
-	destination := ins.Args[len(ins.Args)-1]
-	if destination.Kind != OpReg {
-		return true, false, fmt.Errorf("%s %s accumulator must be X, Y, or Z: %q", c.goarch, baseOp, ins.Raw)
-	}
-	byteWidth := amd64VectorByteWidth(destination.Reg)
-	if byteWidth != 16 && byteWidth != 32 && byteWidth != 64 ||
-		!c.isGoPackedVectorMoveRegister(destination, byteWidth) ||
-		!c.isGoPackedVectorMoveRegister(ins.Args[1], byteWidth) {
-		return true, false, fmt.Errorf("%s %s source1 and accumulator must be matching Go vector registers: %q", c.goarch, baseOp, ins.Raw)
-	}
-	rmSource := ins.Args[0]
-	if properties.broadcast {
-		if !isAMD64MemoryOperand(rmSource) {
-			return true, false, fmt.Errorf("%s %s.BCST requires a scalar memory source2: %q", c.goarch, baseOp, ins.Raw)
+	source, destination := ins.Args[form.first], ins.Args[form.destination]
+	if form.memory >= 0 {
+		if source.Kind == OpMem && !x86OrdinaryNativeMemoryOperand(source, c.goarch) &&
+			!x86CallerMemoryCertified(ins, form.memory) && !c.fixedLocalMemoryCertified(ins, form.memory) {
+			return true, false, fmt.Errorf("%w: IFMA source needs its original native storage binding", ErrProbeNeedsContext)
 		}
-	} else if rmSource.Kind == OpReg {
-		if !c.isGoPackedVectorMoveRegister(rmSource, byteWidth) {
-			return true, false, fmt.Errorf("%s %s source2 register must match the accumulator width: %q", c.goarch, baseOp, ins.Raw)
+		if source.Kind == OpFP {
+			if err := c.validateX86PackedShiftFPSpan(source.FPOffset, form.memoryBytes); err != nil {
+				return true, false, err
+			}
 		}
-	} else if !isAMD64MemoryOperand(rmSource) {
-		return true, false, fmt.Errorf("%s %s source2 must be a matching vector register or memory: %q", c.goarch, baseOp, ins.Raw)
 	}
-
-	lanes := byteWidth / 8
-	first, err := c.loadPackedCompareLanes(rmSource, byteWidth, 64, properties.broadcast)
+	mask := ""
+	if form.mask >= 0 {
+		mask, err = c.loadK(ins.Args[form.mask].Reg)
+		if err != nil {
+			return true, false, err
+		}
+	}
+	first, err := c.loadX86PackedShiftLanes(source, form.byteWidth, 64, form.broadcast, mask)
 	if err != nil {
 		return true, false, err
 	}
-	second, err := c.loadPackedCompareLanes(ins.Args[1], byteWidth, 64, false)
+	second, err := c.loadPackedCompareLanes(ins.Args[form.second], form.byteWidth, 64, false)
 	if err != nil {
 		return true, false, err
 	}
-	oldBytes, err := c.loadPackedCompareBytes(destination, byteWidth)
+	oldBytes, err := c.loadPackedCompareBytes(destination, form.byteWidth)
 	if err != nil {
 		return true, false, err
 	}
-	old := c.bitcastVectorBytesToIntegerLanes(byteWidth, lanes, 64, oldBytes)
-	computed := c.emitIFMA(spec, lanes, first, second, old)
-	if masked {
-		mask, loadErr := c.loadK(ins.Args[2].Reg)
-		if loadErr != nil {
-			return true, false, loadErr
-		}
-		computed = amd64ApplyIntegerLaneMask(c, lanes, 64, computed, old, mask, properties.zeroing)
+	lanes := form.byteWidth / 8
+	old := c.bitcastVectorBytesToIntegerLanes(form.byteWidth, lanes, 64, oldBytes)
+	computed := c.emitIFMA(form.spec, lanes, first, second, old)
+	if form.mask >= 0 {
+		computed = amd64ApplyIntegerLaneMask(c, lanes, 64, computed, old, mask, form.zeroing)
 	}
 	out := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i64> %s to <%d x i8>\n", out, lanes, computed, byteWidth)
-	return true, false, c.storeVectorBytes(destination.Reg, byteWidth, "%"+out)
+	fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i64> %s to <%d x i8>\n", out, lanes, computed, form.byteWidth)
+	return true, false, c.storePackedMoveOperand(destination, form.byteWidth, "%"+out)
 }
 
 func (c *amd64Ctx) emitIFMA(spec amd64IFMASpec, lanes int, first, second, accumulator string) string {

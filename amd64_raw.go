@@ -9320,10 +9320,6 @@ evex:
 	if zeroing && maskNumber == 0 {
 		return Instr{}, 0, true, fmt.Errorf("EVEX zeroing requires a nonzero mask")
 	}
-	if mode == 32 && maskNumber != 0 {
-		return Instr{}, 0, true, fmt.Errorf("386 %s mask form exceeds the Go assembler frontend's operand limit", op)
-	}
-
 	rExt := int(^p0>>7) & 1
 	rHighExt := int(^p0>>4) & 1
 	xExt := int(^p0>>6) & 1
