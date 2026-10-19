@@ -124,33 +124,7 @@ func TestAMD64ADXRuntimeSemanticsAndIndependentFlags(t *testing.T) {
 		triple = "x86_64-apple-macosx"
 		runPrefix = []string{"/usr/bin/arch", "-x86_64"}
 	}
-	const mainC = `
-#include <stdint.h>
-#include <string.h>
-extern void adxsemantics(uint8_t *);
-static uint64_t load64(const uint8_t *p) {
-  uint64_t value;
-  memcpy(&value, p, sizeof(value));
-  return value;
-}
-int main(void) {
-  uint8_t out[72] = {0};
-  adxsemantics(out);
-  if (load64(out + 0) != 0) return 10;
-  const uint8_t adcx_flags[4] = {1, 1, 0, 1};
-  for (int i = 0; i < 4; i++) if (out[8+i] != adcx_flags[i]) return 20+i;
-  if (load64(out + 16) != 0) return 30;
-  const uint8_t adox_flags[4] = {1, 1, 0, 1};
-  for (int i = 0; i < 4; i++) if (out[24+i] != adox_flags[i]) return 40+i;
-  if (load64(out + 40) != 0) return 50;
-  const uint8_t adcxq_flags[3] = {1, 0, 1};
-  for (int i = 0; i < 3; i++) if (out[48+i] != adcxq_flags[i]) return 60+i;
-  if (load64(out + 56) != 0) return 70;
-  const uint8_t adoxq_flags[4] = {1, 1, 0, 1};
-  for (int i = 0; i < 4; i++) if (out[64+i] != adoxq_flags[i]) return 80+i;
-  return 0;
-}
-`
+	mainC := x86ADXOriginalRuntimeDriver
 	rawSource := x86ADXOriginalRawSource(source)
 	for _, form := range []struct{ name, source string }{{"text", source}, {"raw", rawSource}} {
 		t.Run(form.name, func(t *testing.T) {
