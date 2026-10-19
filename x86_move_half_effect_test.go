@@ -127,7 +127,7 @@ func TestX86MoveHalfSelectedBytesUpperAliasesAndState(t *testing.T) {
 				ins := x86ScalarLaneInstruction(t, row.op+" "+args)
 				inputOwned := []bool{true, true, true, true, true, true, true, true}
 				for missing := -1; missing < 16; missing++ {
-					initial := x86ResultState{fp: map[int64]bool{}, flags: x86ByteFlagsAll, direction: x86ResultDirectionBackward}
+					initial := x86ResultState{fp: make([]bool, 8), flags: x86ByteFlagsAll, direction: x86ResultDirectionBackward}
 					for offset := int64(0); offset < 8; offset++ {
 						initial.fp[offset] = true
 					}
@@ -152,7 +152,7 @@ func TestX86MoveHalfSelectedBytesUpperAliasesAndState(t *testing.T) {
 				}
 				for missing := -1; missing < 16; missing++ {
 					ins := x86ScalarLaneInstruction(t, row.op+" X1,ret0+8(FP)")
-					state := x86ResultState{fp: map[int64]bool{}, flags: x86ByteFlagsAll}
+					state := x86ResultState{fp: make([]bool, 16), flags: x86ByteFlagsAll}
 					state.xmm[1] = 0xffff
 					if missing >= 0 {
 						state.xmm[1] &^= 1 << uint(missing)
