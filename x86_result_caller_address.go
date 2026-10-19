@@ -78,7 +78,7 @@ func x86ResultCallerAddressesAfter(ins Instr, before [16]bool, entryFP map[int64
 	if x86MaskLogicalPreservesStorage(ins) {
 		return before // Exact named/raw K-only forms never overwrite a GP identity.
 	}
-	if x86RawPackedConversionSource(ins, arch) {
+	if x86RawPackedConversionSource(ins, arch) || x86RawPackedReductionSource(ins, arch) {
 		return before // Exact physical conversions write no GP or caller-address identity.
 	}
 	if effect, known, err := x86TypedRegisterQueryByteEffect(ins.Op, ins, arch); known && err == nil {
