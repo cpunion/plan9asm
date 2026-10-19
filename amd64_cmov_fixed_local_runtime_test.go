@@ -37,12 +37,11 @@ func TestCrossLinuxRuntimeMatrixX86CMOVFixedLocalAUTOWholeBytesBatch06(t *testin
 func x86CMOVFixedLocalRuntimeBatch(t *testing.T, batch int) {
 	t.Helper()
 	execution := x86FloatCompareExecutionTools(t)
-	target := "linux/amd64"
-	triple := "x86_64-unknown-linux-gnu"
-	if strings.Contains(execution.triple, "apple") {
-		target = "darwin/amd64"
-		triple = "x86_64-apple-darwin"
+	target, ok := x86CMOVFixedLocalExecutionTarget(execution.triple)
+	if !ok {
+		t.Fatal("CMOV frame capture requires the actual execution target", execution.triple)
 	}
+	triple := execution.triple
 	kernels := x86CMOVFixedLocalKernels(true)
 	start, end, ok := fixedLocalObjectBatchRange(len(kernels), batch)
 	if !ok {
@@ -88,6 +87,35 @@ func x86CMOVFixedLocalRuntimeBatch(t *testing.T, batch int) {
 	}
 	x86WordMultiplyRunOriginalGo(t, execution, "package oracle\n"+declarations.String(), assembly.String(), fmt.Sprintf(x86CMOVFixedLocalOriginalGo, rows.String()))
 	t.Logf("batch%d: %d/%d independently executed actual Go ABI0 local CMOV/GP/SIMD kernels ×64 full-width input pairs; host native/Rosetta is not strict Linux evidence", batch, count, len(kernels))
+}
+
+func x86CMOVFixedLocalExecutionTarget(triple string) (string, bool) {
+	switch triple {
+	case "x86_64-unknown-linux-gnu":
+		return "linux/amd64", true
+	case "x86_64-apple-darwin":
+		return "darwin/amd64", true
+	case "x86_64-pc-windows-msvc":
+		return "windows/amd64", true
+	default:
+		return "", false
+	}
+}
+
+func TestX86CMOVFixedLocalExecutionTargets(t *testing.T) {
+	for _, row := range []struct{ triple, target string }{
+		{"x86_64-unknown-linux-gnu", "linux/amd64"},
+		{"x86_64-apple-darwin", "darwin/amd64"},
+		{"x86_64-pc-windows-msvc", "windows/amd64"},
+		{"aarch64-unknown-linux-gnu", ""},
+		{"i686-pc-windows-msvc", ""},
+		{"", ""},
+	} {
+		actual, ok := x86CMOVFixedLocalExecutionTarget(row.triple)
+		if actual != row.target || ok != (row.target != "") {
+			t.Fatal("capture must retain the actual native execution platform", row, actual, ok)
+		}
+	}
 }
 
 const x86CMOVFixedLocalWholeBytesC = `
