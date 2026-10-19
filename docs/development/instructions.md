@@ -97,7 +97,11 @@ typed operand index; bind every original operand, including the selector,
 before using that index. Memory retains its complete physical envelope even
 when only selected register subwords contribute numerically. Preserve original
 legacy alignment faults, VEX/EVEX upper-zeroing, and independent FLAGS/DF/ID.
-Dead outputs cannot borrow uninitialized input bytes from implementation slots.
+The existing nontrapping register domain may propagate unknown result bytes;
+accepting that transfer never initializes them. Later observable data/control
+uses still require their exact bytes. Native reads retain their complete input
+and access obligations even for dead results. No value comes from an
+implementation slot merely initialized to zero.
 
 Physical MMX observers keep the entire source branch-free and their region
 uninterrupted through real EMMS. Seed status and prepare unrelated state before
