@@ -30,6 +30,9 @@ func x86ResultValueStackLimit(arch string) int {
 // changes data registers, but neither accesses SP nor changes private FLAGS.
 // Exact decoder identity supplies no input, pointer or entry permission.
 func x86ResultPreservesPrivateStorage(ins Instr, arch string) bool {
+	if x86RawIntegerMinMaxSource(ins, arch) {
+		return true // Exact vector data effects do not access private SP or FLAGS.
+	}
 	return ins.Op != OpCALL && (x86ResultNamedPredicateInstruction(ins) ||
 		x86RegisterQueryPreservesSourceState(ins) || x86WaitPackagePreservesStorage(ins) ||
 		x86PreservesNumericalSourceState(ins) || x86MaskLogicalPreservesStorage(ins) ||

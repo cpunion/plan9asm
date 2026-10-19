@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -142,40 +143,32 @@ func TestX86MinMaxZeroMaskDoesNotAccessMemory(t *testing.T) {
 		t.Fatal("LLVM 22 llc/clang not found")
 	}
 	triple := testTargetTriple(runtime.GOOS, runtime.GOARCH)
-	var prefix []string
-	if runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" && rosettaAvailable() {
-		triple = "x86_64-apple-macosx"
-		prefix = []string{"/usr/bin/arch", "-x86_64"}
-	} else if runtime.GOARCH != "amd64" {
-		t.Skip("execution requires amd64 or Rosetta; five-target objects remain required")
+	if runtime.GOARCH != "amd64" && runtime.GOARCH != "arm64" {
+		t.Skip("portable values require the native 64-bit host counterpart")
 	}
 
-	file, err := Parse(ArchAMD64, `TEXT zero_mask(SB),4,$0-24
+	const original = `TEXT zero_mask(SB),4,$0-24
 MOVQ source+0(FP), AX
 MOVQ out+8(FP), DI
 KMOVQ mask+16(FP), K1
 VPMINUD (AX), Y0, K1, Y1
 VMOVUPS Y1, (DI)
 RET
-`)
-	if err != nil {
-		t.Fatal(err)
+`
+	x86LEAActualTargetGoObject(t, "amd64", "x86_64-unknown-linux-gnu", original)
+	for _, api := range []string{"text", "module", "Go"} {
+		if ir, err := x86ScalarFPBitViewAPI(t, original,
+			"func zero_mask(source,out *byte,mask uint64)", "amd64", triple, api); ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+			t.Fatal("original unbound input/merging destination acquired numerical bytes", api, err)
+		}
 	}
-	sig := FuncSig{
-		Name: "zero_mask",
-		Args: []LLVMType{Ptr, Ptr, I64},
-		Ret:  Void,
-		Frame: FrameLayout{Params: []FrameSlot{
-			{Offset: 0, Type: Ptr, Index: 0, Field: -1},
-			{Offset: 8, Type: Ptr, Index: 1, Field: -1},
-			{Offset: 16, Type: I64, Index: 2, Field: -1},
-		}},
-	}
-	ir, err := Translate(file, Options{
-		Goarch:       "amd64",
-		TargetTriple: triple,
-		Sigs:         map[string]FuncSig{"zero_mask": sig},
-	})
+	// Keep the original source above. This separate initialized program owns
+	// the actual masked-off NULL read, not an invented incoming Y0/Y1 value.
+	initialized := strings.Replace(original, "zero_mask(SB)", "zero_mask_initialized(SB)", 1)
+	initialized = strings.Replace(initialized, "KMOVQ mask", "VPXORD Z0,Z0,Z0\nVPXORD Z1,Z1,Z1\nKMOVQ mask", 1)
+	x86LEAActualTargetGoObject(t, "amd64", "x86_64-unknown-linux-gnu", initialized)
+	ir, err := x86ScalarFPBitViewAPI(t, initialized,
+		"func zero_mask_initialized(source,out *byte,mask uint64)", "amd64", triple, "text")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -192,7 +185,8 @@ int main(void) {
     return 0;
 }
 `
-	compileAndRunRuntimeTestForTarget(t, llc, clang, "minmax_zero_mask", triple, ir, mainC, prefix)
+	mainC = strings.ReplaceAll(mainC, "zero_mask", "zero_mask_initialized")
+	x86ConflictFunnelPortableRuntime(t, llc, clang, "minmax_zero_mask_initialized", triple, ir, mainC)
 }
 
 func TestX86RawMinMaxEncodingFields(t *testing.T) {
@@ -300,24 +294,13 @@ func TestX86RawMinMax386MaskedObjects(t *testing.T) {
 		}
 	}
 	source.WriteString("RET\n")
-	file, err := Parse(ArchAMD64, source.String())
-	if err != nil {
-		t.Fatal(err)
-	}
 
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc not found")
 	}
 	for _, triple := range []string{"i386-unknown-linux-gnu", "i686-pc-windows-msvc"} {
-		ir, err := Translate(file, Options{
-			Goarch:       "386",
-			TargetTriple: triple,
-			Sigs:         map[string]FuncSig{"masked_minmax": {Name: "masked_minmax", Ret: Void}},
-		})
-		if err != nil {
-			t.Fatal(err)
-		}
+		ir := x86UnboundVoidRawScalarFormatObject(t, source.String(), "386", triple)
 		compileLLVMToObject(t, llc, triple, "masked-minmax-386.ll", "masked-minmax-386.o", ir)
 	}
 }
@@ -395,14 +378,7 @@ func TestX86RawMinMaxGoEncoderForms(t *testing.T) {
 				if (arch == "386") != strings.HasPrefix(triple, "i") {
 					continue
 				}
-				ir, err := Translate(file, Options{
-					Goarch:       arch,
-					TargetTriple: triple,
-					Sigs:         map[string]FuncSig{"minmax": {Name: "minmax", Ret: Void}},
-				})
-				if err != nil {
-					t.Fatal(err)
-				}
+				ir := x86UnboundVoidRawProbeObject(t, file, arch, triple)
 				compileLLVMToObject(t, llc, triple, "minmax.ll", "minmax.o", ir)
 			}
 			t.Logf("%s: %d actual Go encodings", arch, len(want)-1)

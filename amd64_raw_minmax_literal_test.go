@@ -112,7 +112,6 @@ func TestDecodeX86RawMinMaxRIPDataRejectsUnsafeSources(t *testing.T) {
 
 func TestTranslateX86RawMinMaxRIPDataObjects(t *testing.T) {
 	var source strings.Builder
-	sigs := make(map[string]FuncSig)
 	var pools [][]byte
 	for index, op := range x86MinMaxTestOps {
 		spec := amd64PackedIntegerMinMaxSpecs[op]
@@ -132,7 +131,6 @@ func TestTranslateX86RawMinMaxRIPDataObjects(t *testing.T) {
 		for _, value := range code {
 			fmt.Fprintf(&source, "\tBYTE $%#02x\n", value)
 		}
-		sigs[name] = FuncSig{Name: name, Ret: Void}
 		dataWidth := width
 		if broadcast {
 			dataWidth = spec.laneBits / 8
@@ -164,10 +162,7 @@ func TestTranslateX86RawMinMaxRIPDataObjects(t *testing.T) {
 		"x86_64-apple-darwin", "x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc",
 	} {
 		t.Run(triple, func(t *testing.T) {
-			ir, err := Translate(file, Options{Goarch: "amd64", TargetTriple: triple, Sigs: sigs})
-			if err != nil {
-				t.Fatal(err)
-			}
+			ir := x86UnboundVoidRawScalarFormatObject(t, source.String(), "amd64", triple)
 			compileLLVMToObject(t, llc, triple, "minmax-literal.ll", "minmax-literal.o", ir)
 		})
 	}

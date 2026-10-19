@@ -90,12 +90,20 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 	}
 	boundRawClear := false
 	boundRawConversion := false
+	boundRawMinMax := false
 	for _, ins := range fn.Instrs {
 		if x86RawMoveHalfSource(ins, arch) {
 			continue // Exact sealed m64 moves grant no missing input, storage or raw-entry fact.
 		}
 		if x86RawVectorMoveSource(ins, arch) {
 			continue // Exact typed moves retain all numerical, mask and native address obligations.
+		}
+		if x86RawIntegerMinMaxSource(ins, arch) {
+			if !boundRawMinMax && (fn.x86RawReplay == nil || fn.x86RawReplay.validate(fn, arch) != nil) {
+				return strictErr
+			}
+			boundRawMinMax = true
+			continue // Complete replay and typed shape supply no missing inputs or raw entry.
 		}
 		if x86RawCompactSource(ins, arch) {
 			continue // Exact compact/expand bytes retain all mask, data and native address obligations.
@@ -210,6 +218,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 	transfer := func(ordinal int, ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string) bool {
 		state.loweredStaticReads = c.fpScalarData
 		defer func() { state.loweredStaticReads = nil }()
+		if accepted, known := x86ResultIntegerMinMaxStep(ins, state, owned, arch, true); known {
+			return accepted // The paired E4 reader retains active exact-width volatile faults.
+		}
 		if accepted, known := x86ResultMaskBlendStep(ins, state, owned, arch, true); known {
 			return accepted // The shared E4 reader retains exact volatile active-lane accesses.
 		}

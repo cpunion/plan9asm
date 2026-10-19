@@ -67,20 +67,14 @@ func TestTranslateX86PackedIntegerMinMaxCompleteGoAssemblerForms(t *testing.T) {
 			}
 			source.WriteString("\tRET\n")
 			assembleX87ControlBytes(t, target.goarch, strings.ReplaceAll(source.String(), "NOSPLIT", "4"))
-			file, err := Parse(ArchAMD64, source.String())
-			if err != nil {
-				t.Fatal(err)
+			file, signatures := x86UnboundVoidFormatSources(t, source.String(), target.goarch, target.triple)
+			if target.goarch == "386" {
+				// Go accepts the original high X/Y spellings without proving
+				// physical mode32 identities. Retain its whole Go object and
+				// Context result; initialized low-bank objects have five owners.
+				return
 			}
-			ll, err := Translate(file, Options{
-				TargetTriple: target.triple,
-				Goarch:       target.goarch,
-				Sigs: map[string]FuncSig{
-					"packedintegerminmaxforms": {Name: "packedintegerminmaxforms", Ret: Void},
-				},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			ll := x86ScalarFormatObjectUnit(t, file, signatures, target.goarch, target.triple, 0)
 			llc := findLLVM22Tool("llc")
 			if llc == "" {
 				t.Fatal("LLVM 22 llc not found")
