@@ -23,9 +23,9 @@ idle worktrees; do not create another for routine work.
 | Code snapshot | Completed evidence | Limits |
 |---|---|---|
 | `4c6cc0964` | Complete ANDN/PDEP/PEXT repair: 36 roots / 2,699 children pass current Go, actual Go1.20 and race; identical 2,735 terminals, zero fail/skip/incomplete and unchanged source/tools | Six named/raw members share the complete operand grammar, distinct numerical/FLAGS effects and exact volatile reads; original values/aliases, five-target objects, unused-bool controls and twelve dead-read fault rows. Portable execution is not original BMI opcode execution |
-| Same snapshot | Go1.20–Go1.27 audit changes exactly twelve isolated AMD64 probes per SDK from supported to Context; other families, 386 and encoder/unsupported metrics unchanged | Original probes lack their two data inputs. Initialized sequences and public objects remain independently tested; MULX's different effects are not registered by this grammar |
+| `701fe8661`, before test/baseline-only updates | Go1.20–Go1.27 audit changes exactly twelve isolated AMD64 probes per SDK from supported to Context; other families, 386 and encoder/unsupported metrics unchanged | Classifier production code is identical to `4c6cc0964`. Original probes lack their two data inputs; MULX's different effects are not registered by this grammar |
 | `9673cc995` | Complete ADCX/ADOX input repair: 24 roots / 1,781 children pass current Go, actual Go1.20 and race; identical 1,805 terminals, zero fail/skip/incomplete, unchanged source and tools | Four named/raw members share one grammar, ordered input bytes and independent CF/OF chains; five-target objects, original portable values and exact dead volatile reads. Native original execution and complete CI remain separate |
-| Same snapshot | Go1.20–Go1.27 classification audit changes exactly eight isolated AMD64 ADX probes per SDK from supported to Context; 386, other families and encoder/unsupported metrics unchanged | Those original probes lack numerical inputs and selected carry. Separate initialized whole-source probes and public objects establish successful translation |
+| `2d14fdff5`, before baseline-only update | Go1.20–Go1.27 classification audit changes exactly eight isolated AMD64 ADX probes per SDK from supported to Context; 386, other families and encoder/unsupported metrics unchanged | Classifier production code is identical to `9673cc995`. Those probes lack numerical inputs and selected carry; initialized whole-source probes and public objects establish successful translation |
 | `5e5379ada` | Raw count/move-mask and MMX batch: 25 roots / 933 children pass current Go, actual Go1.20 and race; identical 958 terminals, zero fail/skip/incomplete | Nine scalar-count members and six move-mask names share existing effects; original Void/native-output objects, exact origin/byte controls and original count portable values pass. Four additional MMX runtime fixture families retain complete objects; native execution remains separate |
 | `197521fb1` | BMI2/vector-zero/MMX batch: 33 roots / 1,386 children pass current Go, actual Go1.20 and race; identical 1,419 terminals, zero fail/skip/incomplete | Eight BMI2 members, two vector-zero members and original MMX fixture repairs; official audit and final gates remain separate |
 | Same snapshot | Complete Go1.20–Go1.27 386/amd64 classification audit: zero changed forms or metrics, unchanged source/SDK/LLVM22 seals | Current Go still has zero unsupported forms; Go1.20's one pre-existing AMD64 unsupported form is unchanged. Not complete CI or benchmark qualification |
@@ -394,6 +394,11 @@ is not a claim that uninitialized original programs gained public translation.
    whole rule classes, including raw numerical continuations,
    missing typed effects and invalid format-fixture assumptions. Do not use the
    older 167-root replay as the denominator for these newly reached modules.
+   The next MOVBE TDD fixtures are preserved on the existing accumulator-effects
+   branch (`00f215152` before merging this checkpoint). Check the actual Go
+   object first: its original native program contains an unencodable imm64
+   memory store. Keep source-fixture validity separate from the independent
+   initialized five-target load/store/alias matrix's translation requirement.
 2. Run the final gates and batch coherent qualified repairs in the allowed
    fork. Each source snapshot retains its own three-lane and classification
    receipts; the cancellation-retention change has 139 passing policy tests.
