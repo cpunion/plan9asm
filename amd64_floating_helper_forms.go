@@ -112,8 +112,17 @@ func x86FloatingHelperProperties(ins Instr, arch string) (x86FloatingHelperForm,
 		}
 		if first.Kind == OpMem {
 			if x86SymbolIndexedMemoryError(first.Mem, arch) != nil || first.Mem.OffRaw != "" || first.Mem.IndexExt != "" ||
+				first.Mem.Off != int64(int32(first.Mem.Off)) && (arch != "386" || first.Mem.Off != int64(uint32(first.Mem.Off))) ||
 				!x86MemoryRegistersValidForArch(first.Mem, arch) || first.Mem.Index != "" &&
 				(first.Mem.Index == SP || first.Mem.Scale != 1 && first.Mem.Scale != 2 && first.Mem.Scale != 4 && first.Mem.Scale != 8) {
+				return fail()
+			}
+		}
+		if first.Kind == OpSym {
+			symbol := strings.TrimSpace(first.Sym)
+			address, absolute := parseInt(symbol)
+			if strings.HasPrefix(symbol, "$") || !strings.HasSuffix(symbol, "(SB)") && absolute != nil ||
+				absolute == nil && address != int64(int32(address)) && (arch != "386" || address != int64(uint32(address))) {
 				return fail()
 			}
 		}
@@ -145,8 +154,48 @@ func (form x86FloatingHelperForm) activeBytes() int {
 
 func (form x86FloatingHelperForm) nativeMnemonic(ins Instr) string {
 	name, _, _ := strings.Cut(strings.ToLower(string(ins.Op)), ".")
-	if form.spec.maskResult && !form.spec.scalar {
+	if form.spec.maskResult && !form.spec.scalar && (form.memory < 0 || form.properties.broadcast) {
 		name = name[:len(name)-1] // Go specializes FPCLASS's source width.
 	}
 	return name
+}
+
+func x86TypedFloatingHelperByteEffect(op Op, ins Instr, arch string) (x86TypedByteEffect, bool, error) {
+	local := ins
+	local.Op = op
+	form, known, err := x86FloatingHelperProperties(local, arch)
+	if known && ins.Op != "" && !strings.EqualFold(string(ins.Op), string(op)) {
+		err = fmt.Errorf("floating-helper dispatch/source opcode mismatch")
+	}
+	if !known || err != nil {
+		return x86TypedByteEffect{}, known, err
+	}
+	firstWidth := int64(form.activeBytes())
+	if form.memory >= 0 {
+		firstWidth = int64(form.memoryBytes)
+	}
+	outputWidth := int64(form.byteWidth)
+	if form.spec.maskResult {
+		outputWidth = 8
+	}
+	effect := x86TypedByteEffect{requiresResultProof: true, operands: []x86TypedByteOperand{
+		{index: form.first, operand: ins.Args[form.first], width: firstWidth, read: true},
+	}}
+	if form.second >= 0 {
+		// A scalar upper source is copied as bits. Sparse numerical knowledge
+		// is retained separately by the precise result-byte transfer.
+		effect.operands = append(effect.operands, x86TypedByteOperand{
+			index: form.second, operand: ins.Args[form.second], width: int64(form.byteWidth), read: true,
+		})
+	}
+	effect.operands = append(effect.operands, x86TypedByteOperand{
+		index: form.destination, operand: ins.Args[form.destination], width: outputWidth,
+		read: !form.spec.maskResult && (form.spec.readDestination || form.mask >= 0 && !form.properties.zeroing), write: true,
+	})
+	if form.mask >= 0 {
+		effect.operands = append(effect.operands, x86TypedByteOperand{
+			index: form.mask, operand: ins.Args[form.mask], width: 8, read: true,
+		})
+	}
+	return effect, true, nil
 }

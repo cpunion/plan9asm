@@ -98,7 +98,11 @@ func TestX86FloatingHelperCompleteNativeOpcodes(t *testing.T) {
 					fmt.Fprintf(&source, "TEXT ·%s(SB),4,$0-0\n%s\nRET\n", name,
 						x86FloatingHelperOracleInstruction(member, memory))
 					signatures[name] = FuncSig{Name: name, Ret: Void}
-					expected = append(expected, member.mnemonic)
+					mnemonic := member.mnemonic
+					if memory && member.maskResult && !member.scalar {
+						mnemonic += strings.ToLower(member.bank)
+					}
+					expected = append(expected, mnemonic)
 				}
 			}
 			x86LEAActualTargetGoObject(t, target.arch, target.triple, source.String())
