@@ -71,6 +71,21 @@ func TestTranslateX86QwordBitLookupCompleteGoAssemblerForms(t *testing.T) {
 			if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
 				t.Fatal("uninitialized qword lookup formats invented numerical/native inputs", err)
 			}
+			if target.goarch == "386" {
+				// The retained original source includes X31/Y31 spellings:
+				// Go accepts their syntax without a physical mode32 binding.
+				// Check that precise boundary independently; the initialized
+				// low-bank matrix owns successful LLVM objects for both OSes.
+				for _, row := range []string{"VPMULTISHIFTQB X1,X2,X31", "VPMULTISHIFTQB Y1,Y2,Y31"} {
+					ins := x86ScalarLaneInstruction(t, row)
+					_, known, err := x86QwordLookupProperties(ins.Op, ins, "386")
+					if !known || !errors.Is(err, ErrProbeNeedsContext) || !strings.Contains(err.Error(), "physical mode32 binding") {
+						t.Fatal("original high-bank syntax invented a physical mode32 vector", row, err)
+					}
+				}
+				t.Log("original Go high-bank formats retained as Context; initialized low-bank tests own LLVM objects")
+				return
+			}
 			ir = x86InstructionFormatObjectUnit(t, file,
 				map[string]FuncSig{"qwordbitlookupforms": {Name: "qwordbitlookupforms", Ret: Void}}, target.goarch, target.triple, 0,
 				func(c *amd64Ctx, ins Instr) (bool, bool, error) { return c.lowerQwordBitLookup(ins.Op, ins) })
