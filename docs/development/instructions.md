@@ -19,6 +19,18 @@ workflow, not a list of already completed instruction families.
 
 ## Instruction-family workflow
 
+ADCXL/Q and ADOXL/Q share the complete `yml_rl` grammar, encoder offset and
+ordered source/old-destination byte effect. Only the selected CF or OF chain
+is read and written; all other FLAGS and unrelated storage stay unchanged.
+Exact raw opcode, operands and original default address size permit only a
+paired numerical projection. Overrides, physical segments, raw entry and
+caller/frame roles remain independent. Native reads retain their exact width,
+unaligned volatile effect and input requirements even for dead results.
+Keep original uninitialized formats as Go/emitter objects plus public Context;
+initialized public objects and portable carry-chain values are separate from
+required original native execution. The raw continuation guard belongs after
+authenticated numerical readers, not in the physical MMX ownership scan.
+
 The eight BMI2 L/Q shifts and rotates share their complete opcode table,
 source grammar, physical-mode width and count masking with lowering. Exact
 decoded operands permit only a paired numerical continuation. Native sources
