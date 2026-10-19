@@ -147,8 +147,12 @@ func x86TypedFPResultNeedsProof(fn Func, sig FuncSig, arch string) bool {
 			return true // SIMD stores need their actual source bytes and address, including Void.
 		}
 		if form, known, err := x86InsertExtractProperties(ins, arch); known && err == nil &&
-			form.memoryWrite && !form.spec.scalar && x86ResultNamedPredicateInstruction(ins) {
-			return true // Block stores require selected bytes, masks and addresses even for Void.
+			form.memoryWrite && x86ResultNamedPredicateInstruction(ins) {
+			return true // Block and PS scalar stores need selected bytes and addresses even for Void.
+		}
+		if form, known, err := x86ScalarLaneProperties(ins, arch); known && err == nil &&
+			!form.insert && form.memory >= 0 && x86ResultNamedPredicateInstruction(ins) {
+			return true // All B/W/D/Q extraction stores retain their selected input bytes, including Void.
 		}
 		if _, _, known, err := x86FixedVectorValueProperties(ins, arch); known && err == nil && x86ResultNamedPredicateInstruction(ins) {
 			return true // Complete value inputs and native addresses stay required without results or masks.

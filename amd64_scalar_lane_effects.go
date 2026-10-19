@@ -88,7 +88,19 @@ func x86ResultScalarLaneStepWithRead(ins Instr, state *x86ResultState, owned []b
 		destination.Reg = f.transferReg
 		width = int64(f.gpBits / 8)
 	}
+	if x86ResultScalarLaneNativeStore(ins, destination, state, arch, conditionalNativeRead) {
+		return true, true
+	}
 	return x86ResultStore(destination, width, state, owned, resultOffset, arch), true
+}
+
+// Only the paired exact-width volatile emitter may continue a named native
+// scalar store. Its selected source bytes have already been checked; the
+// write creates no numerical, storage, pointer or later-read fact.
+func x86ResultScalarLaneNativeStore(ins Instr, destination Operand, state *x86ResultState, arch string, paired bool) bool {
+	return paired && x86ResultNamedPredicateInstruction(ins) && ins.x86NumericalRead == nil &&
+		x86OrdinaryNativeMemoryOperand(destination, arch) &&
+		x86ResultIncomingPointerAddressIdentity(destination, state, arch)
 }
 
 func x86ResultScalarPSLaneStep(ins Instr, f x86InsertExtractForm, state *x86ResultState, owned []bool, resultOffset int64, arch string, conditionalNativeRead bool) bool {
@@ -106,6 +118,9 @@ func x86ResultScalarPSLaneStep(ins Instr, f x86InsertExtractForm, state *x86Resu
 		index, _ := amd64ParseXReg(ins.Args[f.source].Reg)
 		if state.xmm[index]>>uint(f.offset)&0xf != 0xf {
 			return false
+		}
+		if x86ResultScalarLaneNativeStore(ins, ins.Args[f.destination], state, arch, conditionalNativeRead) {
+			return true
 		}
 		return x86ResultStore(ins.Args[f.destination], 4, state, owned, resultOffset, arch)
 	}

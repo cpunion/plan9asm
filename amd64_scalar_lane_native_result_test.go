@@ -201,11 +201,11 @@ func TestX86ScalarLaneNativeResultsKeepWholeSourceBoundaries(t *testing.T) {
 			missing := strings.Replace(source, row.op+" $", "CMPL BX,$0\nJE after\n"+row.op+" $", 1)
 			missing = strings.Replace(missing, extract, "after:\n"+extract, 1)
 			for name, bad := range map[string]string{
-				"unknown lane":   strings.Replace(source, extract, "PEXTRD $0,"+destination+",AX", 1),
-				"lost pointer":   strings.Replace(source, row.op+" $", "MOVL $1,DX\n"+row.op+" $", 1),
-				"missing path":   missing,
-				"native store":   strings.Replace(source, extract, row.extract+","+destination+",(DX)\n"+extract, 1),
-				"incoming write": strings.Replace(source, extract, "MOVQ $42,p+0(FP)\n"+extract, 1),
+				"unknown lane":         strings.Replace(source, extract, "PEXTRD $0,"+destination+",AX", 1),
+				"lost pointer":         strings.Replace(source, row.op+" $", "MOVL $1,DX\n"+row.op+" $", 1),
+				"missing path":         missing,
+				"unknown native store": strings.Replace(source, extract, row.extract+","+destination+",(DI)\n"+extract, 1),
+				"incoming write":       strings.Replace(source, extract, "MOVQ $42,p+0(FP)\n"+extract, 1),
 			} {
 				t.Run(name, func(t *testing.T) {
 					goAssemblerOracleOutput(t, "amd64", bad, "", true)
