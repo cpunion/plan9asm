@@ -32,7 +32,12 @@ func x86PackedReductionOriginalRawRows(t *testing.T, rows []x86PackedReductionOr
 		offset += length
 	}
 	if offset != len(code) {
-		t.Fatal("original reduction bytes not completely consumed")
+		// Keep the failed source's complete actual byte stream. A finite
+		// independent listing adds only RET and exposes Go's own PCs without
+		// trusting our instruction lengths or discarding unexplained bytes.
+		body := strings.TrimPrefix(assembly.String(), "TEXT raw(SB),4,$0-0\n")
+		listing, err := x86ExtensionGoListing(t, "amd64", body)
+		t.Fatalf("original reduction bytes not completely consumed: decoded=%d actual=%d suffix=%x complete=%x\nindependent finite Go PC listing (extra terminal RET), error=%v:\n%s", offset, len(code), code[offset:], code, err, listing)
 	}
 	return raw
 }

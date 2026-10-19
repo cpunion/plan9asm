@@ -136,9 +136,25 @@ func TestX86PackedReductionOriginalInitializedNativePrograms(t *testing.T) {
 					if err != nil {
 						t.Fatal("original initialized input/FLAGS/output program needs its missing native numerical continuation", err)
 					}
-					if strings.Count(ir, "asm sideeffect") != 1 || !strings.Contains(ir, original.opcode+" ") || !strings.Contains(ir, "~{fpsr}") {
-						t.Fatal("reduction lost original whole opcode, MXCSR or dead exception/access effects", original.opcode)
+					var native, reductions []string
+					moves := 0
+					for _, line := range strings.Split(ir, "\n") {
+						if !strings.Contains(line, "asm sideeffect") {
+							continue
+						}
+						native = append(native, strings.TrimSpace(line))
+						if strings.Contains(line, `asm sideeffect "`+original.opcode+" ") {
+							reductions = append(reductions, line)
+						}
+						if strings.Contains(line, `asm sideeffect "movups `) {
+							moves++
+						}
 					}
+					if len(reductions) != 1 || !strings.Contains(reductions[0], "~{fpsr}") || !strings.Contains(reductions[0], "~{memory}") ||
+						original.name == "dot" && moves != 3 {
+						t.Fatalf("original reduction/native moves lost exact effects: opcode=%s reductions=%d MOVUPS=%d\n%s", original.opcode, len(reductions), moves, strings.Join(native, "\n"))
+					}
+					t.Logf("original %s: %d whole reduction and %d native MOVUPS; exact IR effects:\n%s", original.opcode, len(reductions), moves, strings.Join(native, "\n"))
 				})
 			}
 		})
