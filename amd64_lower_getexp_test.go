@@ -2,7 +2,6 @@ package plan9asm
 
 import (
 	"fmt"
-	"runtime"
 	"strings"
 	"testing"
 )
@@ -126,14 +125,7 @@ func TestTranslateX86GetExpRejectsFormsOutsideGoAssemblerTable(t *testing.T) {
 }
 
 func TestAMD64GetExpRuntimeSemantics(t *testing.T) {
-	crossRosetta := runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" && rosettaAvailable()
-	if runtime.GOARCH != "amd64" && !crossRosetta {
-		t.Skip("runtime execution test requires amd64 or Rosetta")
-	}
-	llc, clang, ok := findLlcAndClang(t)
-	if !ok {
-		t.Fatal("LLVM 22 llc/clang not found")
-	}
+	execution := x86FloatingHelperRuntimeTools(t)
 	const source = `TEXT getexpsemantics(SB),$0-56
 	MOVQ out+0(FP), AX
 	MOVQ source32+8(FP), BX
@@ -175,12 +167,7 @@ func TestAMD64GetExpRuntimeSemantics(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	triple := testTargetTriple(runtime.GOOS, runtime.GOARCH)
-	var runPrefix []string
-	if crossRosetta {
-		triple = "x86_64-apple-macosx"
-		runPrefix = []string{"/usr/bin/arch", "-x86_64"}
-	}
+	triple := execution.triple
 	ir, err := Translate(file, Options{
 		Goarch: "amd64", TargetTriple: triple,
 		Sigs: map[string]FuncSig{"getexpsemantics": {
@@ -263,5 +250,5 @@ int main(void) {
   return 0;
 }
 `
-	compileAndRunRuntimeTestForTarget(t, llc, clang, "getexp_semantics", triple, ir, mainC, runPrefix)
+	x86FloatingHelperRunNativePipelines(t, execution, "getexp_semantics", ir, mainC)
 }
