@@ -210,17 +210,17 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 	transfer := func(ordinal int, ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string) bool {
 		state.loweredStaticReads = c.fpScalarData
 		defer func() { state.loweredStaticReads = nil }()
-		if accepted, known := x86ResultScalarReciprocalStep(ins, state, owned, arch, true); known {
-			return accepted // Actual scalar estimate keeps the independent exact m32 access and MXCSR contract.
-		}
-		if accepted, known := x86ResultLegacyScalarMoveStep(ins, state, owned, resultOffset, arch, true); known {
-			return accepted // Only the paired exact volatile legacy m32/m64 read supplies its conditional scalar bytes.
-		}
 		if accepted, known := x86ResultSDKLiteralStep(ins, state, owned, resultOffset, arch); known {
 			return accepted // Consume the exact bound source before an overlapping native-memory family.
 		}
 		if accepted, known := x86ResultNumericalReadStep(ins, state, owned, resultOffset, arch); known {
 			return accepted // A checked mutable SB source keeps its own lifetime and byte effects.
+		}
+		if accepted, known := x86ResultScalarReciprocalStep(ins, state, owned, arch, true); known {
+			return accepted // Actual scalar estimate keeps the independent exact m32 access and MXCSR contract.
+		}
+		if accepted, known := x86ResultLegacyScalarMoveStep(ins, state, owned, resultOffset, arch, true); known {
+			return accepted // Only the paired exact volatile legacy m32/m64 read supplies its conditional scalar bytes.
 		}
 		if accepted, known := x86ResultSegmentQueryStep(ins, state, owned, arch, true); known {
 			return accepted // Paired exact volatile m16; no backing or reusable read permission.
