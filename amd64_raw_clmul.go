@@ -130,8 +130,9 @@ encoding:
 	destination := Operand{Kind: OpReg, Reg: Reg(fmt.Sprintf("X%d", destinationNumber))}
 	imm := Operand{Kind: OpImm, Imm: int64(code[immIndex])}
 	return Instr{
-		Op:   "PCLMULQDQ",
-		Args: []Operand{imm, source, destination},
-		Raw:  fmt.Sprintf("PCLMULQDQ %s, %s, %s", imm.String(), source.String(), destination.String()),
+		Op:         "PCLMULQDQ",
+		Args:       []Operand{imm, source, destination},
+		Raw:        fmt.Sprintf("PCLMULQDQ %s, %s, %s", imm.String(), source.String(), destination.String()),
+		x86Encoded: true,
 	}, immIndex + 1, true, nil
 }
