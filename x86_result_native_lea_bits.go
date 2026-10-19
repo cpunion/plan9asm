@@ -40,6 +40,14 @@ func x86ResultNativeLEAAddressBitsStep(ins Instr, state *x86ResultState, owned [
 	if !valid {
 		return false, true
 	}
+	observed := mask
+	if output.width == 2 && state.callerAddressGP[register] {
+		// LEAW leaves the old destination's high bytes unchanged. An
+		// actual caller-address identity already supplies their observable
+		// representation, not NUM or a new pointer. Retain those bytes only
+		// in this same adjacent-store carrier; LEAL instead zeroes upper32.
+		observed = x86CallerByteMask(output.operand.Reg, x86ResultPointerWord(arch))
+	}
 	state.gp[register] &^= mask
 	state.canonicalGP[register] &^= mask
 	state.pointerGP[register] = false
@@ -49,6 +57,6 @@ func x86ResultNativeLEAAddressBitsStep(ins Instr, state *x86ResultState, owned [
 		state.gp[register] = 0xf0
 		state.canonicalGP[register] |= 0xf0
 	}
-	state.nativeLEAAddressBits = x86NativeLEAAddressBits{uint8(register), mask}
+	state.nativeLEAAddressBits = x86NativeLEAAddressBits{uint8(register), observed}
 	return true, true
 }
