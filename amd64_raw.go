@@ -430,6 +430,7 @@ func decodeX86RawDirectives(fn Func, goarch string) (Func, error) {
 				packedReduction:    x86PackedReductionRawIdentity(decoded[index], goarch),
 				ternaryLogic:       x86TernaryLogicRawIdentity(decoded[index], goarch),
 				legacyFloatCompare: x86LegacyFloatCompareRawIdentity(decoded[index], goarch),
+				floatMinMax:        x86FloatMinMaxRawIdentity(decoded[index], goarch),
 			}
 		}
 		normalized = append(normalized, decoded...)
@@ -6455,6 +6456,7 @@ func decodedX86EVEXBinaryFloatInstruction(code []byte, i, mode int, segment Reg,
 		Op: op, Args: args,
 		Raw:        fmt.Sprintf("%s %s", op, strings.Join(rawArgs, ", ")),
 		x86Encoded: rawHalf || rawSqrt, x86SqrtEVEX: rawSqrt,
+		x86FloatMinMaxEVEX: !rawHalf && (stem == "VMIN" || stem == "VMAX"),
 	}, modRMIndex + consumed, true, nil
 }
 

@@ -27,6 +27,9 @@ func x86TypedFPResultNeedsProof(fn Func, sig FuncSig, arch string) bool {
 	}
 	opaqueAddressResult := x86OpaqueAddressPointerResultRole(fn, sig, arch)
 	for ordinal, ins := range fn.Instrs {
+		if _, known, err := x86FloatMinMaxProperties(ins, arch); known && err == nil {
+			return true // Dead MIN/MAX still consumes actual lane, merge and mask inputs.
+		}
 		if form, known, err := amd64PackedVectorMoveProperties(ins, arch); known && err == nil && !form.undefinedOpcode() &&
 			(ins.x86SourceRaw != nil || ins.x86Encoded ||
 				form.ordinaryMemory(ins, arch) && x86ResultNamedPredicateInstruction(ins)) {

@@ -167,10 +167,12 @@ func TestTranslateX86RawBinaryFloatRIPDataObjects(t *testing.T) {
 		"x86_64-apple-darwin", "x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc",
 	} {
 		t.Run(triple, func(t *testing.T) {
-			ir, err := Translate(file, Options{Goarch: "amd64", TargetTriple: triple, Sigs: sigs})
-			if err != nil {
-				t.Fatal(err)
-			}
+			// Retain the entire original raw RET and constant pools as Go
+			// objects and public Context controls. This format-only source
+			// has no vector or mask producers; initialized public objects
+			// are independently owned by the complete 124-case directory.
+			x86UnboundVoidFormatSources(t, source.String(), "amd64", triple)
+			ir := x86ScalarFormatObjectUnit(t, normalized, sigs, "amd64", triple, 0)
 			compileLLVMToObject(t, llc, triple, "binary-float-literal.ll", "binary-float-literal.o", ir)
 		})
 	}

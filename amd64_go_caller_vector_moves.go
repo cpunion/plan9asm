@@ -72,6 +72,9 @@ func x86CallerVectorMoveKnown(ins Instr) bool {
 	if _, recognized, err := x86FloatMulDivProperties(ins, "amd64"); recognized {
 		return err == nil
 	}
+	if _, recognized, err := x86FloatMinMaxProperties(ins, "amd64"); recognized {
+		return err == nil
+	}
 	if _, recognized, err := x86PackedZeroExtendProperties(ins, "amd64"); recognized {
 		return err == nil
 	}
@@ -210,6 +213,9 @@ func x86CallerVectorMoveStep(ins *Instr, state *x86SourceStackState, proof *x86G
 		return err == nil && x86CallerSignedPackedFloatStep(ins, f, state, proof)
 	}
 	if form, recognized, err := x86FloatMulDivProperties(*ins, "amd64"); recognized {
+		return err == nil && x86CallerFloatBinaryStep(ins, form.x86FloatBinaryForm, state, proof)
+	}
+	if form, recognized, err := x86FloatMinMaxProperties(*ins, "amd64"); recognized {
 		return err == nil && x86CallerFloatBinaryStep(ins, form.x86FloatBinaryForm, state, proof)
 	}
 	if form, recognized, err := x86PackedZeroExtendProperties(*ins, "amd64"); recognized {
@@ -436,6 +442,9 @@ func x86InstructionMemoryShape(ins Instr, index int, arch string) (width int64, 
 		return int64(f.sourceBits / 8), false, err == nil && f.memory == index
 	}
 	if form, recognized, err := x86FloatMulDivProperties(ins, arch); recognized {
+		return int64(form.memoryBytes), false, err == nil && form.memory == index
+	}
+	if form, recognized, err := x86FloatMinMaxProperties(ins, arch); recognized {
 		return int64(form.memoryBytes), false, err == nil && form.memory == index
 	}
 	if f, recognized, err := x86InsertExtractProperties(ins, arch); recognized {

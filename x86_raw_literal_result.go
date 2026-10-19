@@ -13,6 +13,31 @@ func x86RawLiteralSourceShape(ins Instr, arch string) bool {
 		!ins.x86UnboundAddressOverride && ins.x86SegmentPrefix == 0
 }
 
+// Raw replay keeps decoder operands before the normalizer allocates a module
+// DATA symbol. Bind that single private relocation without rewriting the
+// immutable decoder checkpoint or accepting another changed source operand.
+func x86RawLiteralSourceIdentity(ins Instr, arch string) bool {
+	if !x86RawLiteralSourceShape(ins, arch) || !x86RawReturnDecodedReadIdentity(ins) {
+		return false
+	}
+	origin, read := ins.x86SourceRaw, ins.x86RIPMemoryRead
+	if origin.op != ins.Op || len(origin.args) != len(ins.Args) ||
+		origin.vectorBytes != ins.x86VectorBytes || origin.addressBits != ins.x86AddressBits {
+		return false
+	}
+	for index, operand := range origin.args {
+		if index == read.source {
+			pending := Operand{Kind: OpSym, Sym: "·__plan9asm_raw_literal_pending(SB)"}
+			if !reflect.DeepEqual(operand, pending) {
+				return false
+			}
+		} else if !reflect.DeepEqual(operand, ins.Args[index]) {
+			return false
+		}
+	}
+	return true
+}
+
 // RIP constants are a decoder role, never a named-immediate broadcast form.
 func x86RawBroadcastLiteralForm(ins Instr, arch string) bool {
 	if !x86RawLiteralSourceShape(ins, arch) {
@@ -81,12 +106,43 @@ func x86RawFloatCompareLiteralForm(ins Instr, arch string) bool {
 		ins.x86RIPMemoryRead.source == form.first && ins.x86RIPMemoryRead.width == int64(form.memoryBytes)
 }
 
+// Scalar SQRT and packed/scalar binary arithmetic share an exact decoded first
+// operand, not native-address authority. MIN/MAX keeps its distinct controls
+// and physical generation; FP16, packed SQRT and legacy remain separate roles.
+func x86RawBinaryFloatLiteralForm(ins Instr, arch string) bool {
+	if !x86RawLiteralSourceIdentity(ins, arch) {
+		return false
+	}
+	f, known, err := x86SqrtProperties(ins, arch)
+	if known && (!f.scalar || f.bits != 32 && f.bits != 64) {
+		return false
+	}
+	if !known {
+		addsub, recognized, parseErr := x86FloatAddSubProperties(ins, arch)
+		f, known, err = addsub.x86FloatBinaryForm, recognized, parseErr
+	}
+	if !known {
+		muldiv, recognized, parseErr := x86FloatMulDivProperties(ins, arch)
+		f, known, err = muldiv.x86FloatBinaryForm, recognized, parseErr
+	}
+	if !known {
+		minmax, recognized, parseErr := x86FloatMinMaxProperties(ins, arch)
+		f, known, err = minmax.x86FloatBinaryForm, recognized, parseErr
+		if known && !x86RawFloatMinMaxEncodingSource(ins, arch) {
+			return false
+		}
+	}
+	return known && err == nil && !f.legacy && f.memory == f.first &&
+		ins.x86RIPMemoryRead.source == f.first && ins.x86RIPMemoryRead.width == int64(f.memoryBytes)
+}
+
 func x86RawResultLiteralForm(ins Instr, arch string) bool {
 	return x86RawVectorMoveLiteralSource(ins, arch) || x86RawIntegerMinMaxLiteralForm(ins, arch) ||
 		x86RawTernaryLogicLiteralForm(ins, arch) ||
 		x86RawBroadcastLiteralForm(ins, arch) || x86RawLogicalLiteralForm(ins, arch) ||
 		x86RawByteShiftLiteralForm(ins, arch) || x86RawIntegerCompareLiteralForm(ins, arch) ||
-		x86RawArithmeticLiteralForm(ins, arch) || x86RawFloatCompareLiteralForm(ins, arch)
+		x86RawArithmeticLiteralForm(ins, arch) || x86RawFloatCompareLiteralForm(ins, arch) ||
+		x86RawBinaryFloatLiteralForm(ins, arch)
 }
 
 // This bounded source uses the ordinary typed family byte effects. It does

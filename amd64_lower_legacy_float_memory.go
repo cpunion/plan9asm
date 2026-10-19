@@ -14,6 +14,10 @@ func x86LegacyPackedFloatingNativeMemoryBits(ins Instr, goarch string) int {
 		muldiv, recognized, parseErr := x86FloatMulDivProperties(ins, goarch)
 		known, err, form = recognized, parseErr, muldiv.x86FloatBinaryForm
 	}
+	if !known {
+		minmax, recognized, parseErr := x86FloatMinMaxProperties(ins, goarch)
+		known, err, form = recognized, parseErr, minmax.x86FloatBinaryForm
+	}
 	if !known || err != nil || !form.legacy || form.scalar || form.memory < 0 || ins.Args[form.memory].Kind == OpFP {
 		return 0
 	}
@@ -64,7 +68,7 @@ func (c *amd64Ctx) lowerLegacyPackedFloatingMemory(ins Instr, form x86FloatBinar
 	// SSE1 admits a <4 x float> XMM carrier on physical i386; a byte-vector
 	// constraint there requires SSE2 and fails LLVM legalization. These are
 	// only bitcasts, not extra arithmetic or an x87 transport ABI.
-	fmt.Fprintf(c.b, "  %%%s = call %s asm sideeffect %q, %q(%s %%%s, %s %s)\n", result, carrierType, assembly, "=x,0,r,~{memory}", carrierType, carrier, pointerType, pointer)
+	fmt.Fprintf(c.b, "  %%%s = call %s asm sideeffect %q, %q(%s %%%s, %s %s)\n", result, carrierType, assembly, "=x,0,r,~{memory},~{fpsr}", carrierType, carrier, pointerType, pointer)
 	fmt.Fprintf(c.b, "  %%%s = bitcast %s %%%s to <16 x i8>\n", bytes, carrierType, result)
 	return c.storeLegacyPackedLogical(ins.Args[form.destination], "%"+bytes)
 }

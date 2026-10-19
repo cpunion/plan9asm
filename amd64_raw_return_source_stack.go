@@ -37,6 +37,7 @@ type x86SourceRawInstruction struct {
 	ternaryLogic    x86RawTernaryLogicIdentity
 	// An absent mode snapshot cannot claim a legacy compare continuation.
 	legacyFloatCompare x86RawLegacyFloatCompareIdentity
+	floatMinMax        x86RawFloatMinMaxIdentity
 }
 
 type x86SourceStackAddress struct {
