@@ -19,6 +19,21 @@ workflow, not a list of already completed instruction families.
 
 ## Instruction-family workflow
 
+The eight BMI2 L/Q shifts and rotates share their complete opcode table,
+source grammar, physical-mode width and count masking with lowering. Exact
+decoded operands permit only a paired numerical continuation. Native sources
+retain their exact volatile reads; no caller, frame or later-read fact follows.
+The existing closed nontrapping GP domain may keep a dead result unknown.
+Do not confuse that with initialized bytes: result, address, store and control
+uses still require their actual numerical inputs. Keep original source replay,
+every-byte/alias negatives, five-target objects and portable value/FLAGS tests.
+
+VZEROUPPER/VZEROALL compose with named native reads only after exact decoded
+zero-operand identity checks. Share that identity check with implicit GP
+extensions, not their distinct effects. Mode32 writes only banks 0-7, amd64
+0-15; upper banks and preserved low bytes retain their original knowledge.
+Full-bank portable execution is separate from native opcode/MXCSR execution.
+
 The six implicit accumulator sign extensions share one complete `ynone`
 grammar with lowering and exact GP effects. Zero source operands do not mean
 zero AX inputs: require the actual byte/word/dword/qword source even for Void.
@@ -233,8 +248,10 @@ lowering continuation may consume their conditional numerical result.
 Scalar shifts and rotates share the complete Group2, double-shift and BMI2
 grammar with memory effects. Native RMWs retain exact volatile loads and stores,
 including count zero; BMI2 memory sources retain only their exact volatile read.
-Mode32 BMI2 Q spellings still access four bytes. Check addresses, count/data
-bytes and incoming CF before any aliased write, including Void functions.
+Mode32 BMI2 Q spellings still access four bytes. Check every observable count/data
+byte, address and incoming CF before aliased writes; native accesses retain
+their input obligations even for Void. The closed nontrapping register domain
+may propagate dead unknown values, never use them as initialized outputs.
 Continuing a paired native access defines numerical outputs, not pointer,
 pointee, caller, raw-entry or reusable memory facts. Logical FP/AUTO storage
 retains its separate byte-view contracts. W double shifts with unbounded counts

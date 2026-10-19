@@ -22,6 +22,7 @@ idle worktrees; do not create another for routine work.
 
 | Code snapshot | Completed evidence | Limits |
 |---|---|---|
+| `197521fb1` | BMI2/vector-zero/MMX batch: 33 roots / 1,386 children pass current Go, actual Go1.20 and race; identical 1,419 terminals, zero fail/skip/incomplete | Eight BMI2 members, two vector-zero members and original MMX fixture repairs; official audit and final gates remain separate |
 | `7cfe15222` | Complete product/accumulator repair: 28 roots / 665 children pass current Go, actual Go1.20 and race; identical 693 terminals, zero fail/skip/incomplete; seventeen focused gates pass | Four DWORD-product and six accumulator-extension members, named/raw input obligations, five-target three-API objects and actual-host integer values; original native runtime requirements remain separate |
 | Same snapshot | Go1.20–Go1.27 audit changes exactly 34 AMD64 probes per SDK from supported to Context: 28 products and six implicit AX operations; 386 and all encoder metrics remain unchanged | Probe sources lack initialized inputs. Go1.20's pre-existing unsupported count is unchanged; neither these classifications nor the initialized objects certify complete CI |
 | `259fbbcb8` | Cancellation-evidence RED/GREEN plus all 139 CI policy tests pass | Windows owners retain partial reports after cancellation; strict aggregation and missing-report errors are unchanged. This is a diagnostic fix, not a cancelled-test pass |
@@ -152,11 +153,12 @@ authenticated-read dispatch ordering regression. Commit `fb45f528a` restores
 the SDK literal and numerical readers before every native family, retaining
 the independent AST ordering guard rather than weakening it.
 
-The subsequent diagnostic `39198807147` at `a1bd240cf` passes ownership,
-all SDK priorities and all six native/cross priorities, but complete Windows
-modules expose additional source/effect failures. Let it finish without another
-diagnostic push. A partial artifact audit collected 76 failed roots; its cancelled
-CLI owner and unfinished owners remain unknown, not complete inventory evidence.
+The subsequent diagnostic `39198807147` at `a1bd240cf` finished naturally:
+78 jobs pass, 19 fail and one is cancelled. Both ownership versions,
+all SDK priorities and all six native/cross priorities pass, but complete
+Windows modules expose additional source/effect failures. Collected completed
+artifacts report 88 failed roots; the cancelled CLI owner still lacks a complete
+inventory and remains unknown, not passing evidence.
 The CLI owner reached the job deadline and suppressed its artifact upload.
 Cancellation-independent retention is repaired separately; original deadlines,
 test outcomes and strict complete-module verification are not relaxed.
@@ -350,8 +352,9 @@ before changing implementation or claiming a speedup. Do not relax budgets.
 
 ## Immediate work
 
-1. Finish `39198807147` and collect the complete additional failure inventory.
-   Prioritize those whole rule classes, including raw numerical continuations,
+1. Continue the 88-root inventory from completed `39198807147` artifacts;
+   the cancelled CLI owner's missing inventory remains unknown. Prioritize
+   whole rule classes, including raw numerical continuations,
    missing typed effects and invalid format-fixture assumptions. Do not use the
    older 167-root replay as the denominator for these newly reached modules.
 2. Qualify and batch the current repair candidate in the allowed fork. Source
