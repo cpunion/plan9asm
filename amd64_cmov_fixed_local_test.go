@@ -127,40 +127,176 @@ func x86CMOVFixedLocalFixture(t *testing.T, assembly, declarations, target, trip
 		ResolveSym: func(symbol string) string { return strings.Replace(symbol, "·", pkg.Path+".", 1) }}
 }
 
-func TestX86CMOVFamilyFixedLocalAUTOActualBoundWholeFamily(t *testing.T) {
+type x86CMOVFixedLocalKernel struct {
+	name, assembly         string
+	width, condition, mode int
+}
+
+func x86CMOVFixedLocalKernels(includeMoves bool) []x86CMOVFixedLocalKernel {
+	var kernels []x86CMOVFixedLocalKernel
+	for _, width := range []string{"W", "L", "Q"} {
+		for condition, row := range x86CMOVOracleConditions {
+			for _, source := range append([]string{"AX", "8(SP)"}, x86CMOVAUTOSources...) {
+				name := fmt.Sprintf("F%d", len(kernels))
+				kernels = append(kernels, x86CMOVFixedLocalKernel{
+					name:      name,
+					assembly:  x86CMOVFixedLocalAssembly(name, "CMOV"+width+row.name, source),
+					width:     map[string]int{"W": 2, "L": 4, "Q": 8}[width],
+					condition: condition,
+				})
+			}
+		}
+	}
+	if includeMoves {
+		for mode, operation := range []string{
+			"MOVQ tmp-8(SP),BX",
+			"MOVQ AX,tmp-8(SP)\nMOVQ tmp-8(SP),BX",
+			"MOVOU tmp-16(SP),X0\nMOVQ X0,BX",
+		} {
+			name := fmt.Sprintf("F%d", len(kernels))
+			kernels = append(kernels, x86CMOVFixedLocalKernel{
+				name: name, width: 8, mode: mode + 1,
+				assembly: fmt.Sprintf("TEXT ·%s(SB),4,$16-24\nMOVQ a+0(FP),AX\nMOVQ b+8(FP),BX\nMOVQ AX,0(SP)\nMOVQ BX,8(SP)\n%s\nMOVQ BX,ret+16(FP)\nRET\n", name, operation),
+			})
+		}
+	}
+	return kernels
+}
+
+func TestX86CMOVFixedLocalCompleteBatchPlan(t *testing.T) {
+	for _, includeMoves := range []bool{false, true} {
+		kernels := x86CMOVFixedLocalKernels(includeMoves)
+		count, batches := 384, 6
+		if includeMoves {
+			count, batches = 387, 7
+		}
+		if len(kernels) != count {
+			t.Fatal("complete original CMOV/GP/SIMD kernel inventory changed", includeMoves, len(kernels))
+		}
+		seen := make([]int, count)
+		for batch := 0; batch < batches; batch++ {
+			start, end, ok := fixedLocalObjectBatchRange(count, batch)
+			if !ok || end-start > 64 || end <= start {
+				t.Fatal("invalid bounded CMOV batch", batch, start, end, ok)
+			}
+			for index := start; index < end; index++ {
+				seen[index]++
+				kernel := kernels[index]
+				if kernel.name != fmt.Sprintf("F%d", index) ||
+					!strings.HasPrefix(kernel.assembly, "TEXT ·"+kernel.name+"(SB),4,$16-24\n") {
+					t.Fatal("batch changed original source symbol or ABI0 frame", index, kernel)
+				}
+				if index < 384 {
+					width := []int{2, 4, 8}[index/128]
+					if kernel.width != width || kernel.condition != index/8%16 || kernel.mode != 0 {
+						t.Fatal("batch changed independent width/condition/source ordering", index, kernel)
+					}
+				} else if kernel.width != 8 || kernel.condition != 0 || kernel.mode != index-383 {
+					t.Fatal("batch lost original private GP/SIMD AUTO kernel", index, kernel)
+				}
+			}
+		}
+		for index, owners := range seen {
+			if owners != 1 {
+				t.Fatal("missing or duplicated original kernel", index, owners)
+			}
+		}
+		for _, batch := range []int{-1, batches} {
+			if _, _, ok := fixedLocalObjectBatchRange(count, batch); ok {
+				t.Fatal("out-of-range CMOV batch accepted", count, batch)
+			}
+		}
+	}
+}
+
+func TestX86CMOVFamilyFixedLocalAUTOActualObjectsLinuxBatch00(t *testing.T) {
+	x86CMOVFixedLocalActualObjects(t, "linux/amd64", "x86_64-unknown-linux-gnu", 0)
+}
+
+func TestX86CMOVFamilyFixedLocalAUTOActualObjectsLinuxBatch01(t *testing.T) {
+	x86CMOVFixedLocalActualObjects(t, "linux/amd64", "x86_64-unknown-linux-gnu", 1)
+}
+
+func TestX86CMOVFamilyFixedLocalAUTOActualObjectsLinuxBatch02(t *testing.T) {
+	x86CMOVFixedLocalActualObjects(t, "linux/amd64", "x86_64-unknown-linux-gnu", 2)
+}
+
+func TestX86CMOVFamilyFixedLocalAUTOActualObjectsLinuxBatch03(t *testing.T) {
+	x86CMOVFixedLocalActualObjects(t, "linux/amd64", "x86_64-unknown-linux-gnu", 3)
+}
+
+func TestX86CMOVFamilyFixedLocalAUTOActualObjectsLinuxBatch04(t *testing.T) {
+	x86CMOVFixedLocalActualObjects(t, "linux/amd64", "x86_64-unknown-linux-gnu", 4)
+}
+
+func TestX86CMOVFamilyFixedLocalAUTOActualObjectsLinuxBatch05(t *testing.T) {
+	x86CMOVFixedLocalActualObjects(t, "linux/amd64", "x86_64-unknown-linux-gnu", 5)
+}
+
+func TestX86CMOVFamilyFixedLocalAUTOActualObjectsDarwinBatch00(t *testing.T) {
+	x86CMOVFixedLocalActualObjects(t, "darwin/amd64", "x86_64-apple-darwin", 0)
+}
+
+func TestX86CMOVFamilyFixedLocalAUTOActualObjectsDarwinBatch01(t *testing.T) {
+	x86CMOVFixedLocalActualObjects(t, "darwin/amd64", "x86_64-apple-darwin", 1)
+}
+
+func TestX86CMOVFamilyFixedLocalAUTOActualObjectsDarwinBatch02(t *testing.T) {
+	x86CMOVFixedLocalActualObjects(t, "darwin/amd64", "x86_64-apple-darwin", 2)
+}
+
+func TestX86CMOVFamilyFixedLocalAUTOActualObjectsDarwinBatch03(t *testing.T) {
+	x86CMOVFixedLocalActualObjects(t, "darwin/amd64", "x86_64-apple-darwin", 3)
+}
+
+func TestX86CMOVFamilyFixedLocalAUTOActualObjectsDarwinBatch04(t *testing.T) {
+	x86CMOVFixedLocalActualObjects(t, "darwin/amd64", "x86_64-apple-darwin", 4)
+}
+
+func TestX86CMOVFamilyFixedLocalAUTOActualObjectsDarwinBatch05(t *testing.T) {
+	x86CMOVFixedLocalActualObjects(t, "darwin/amd64", "x86_64-apple-darwin", 5)
+}
+
+func x86CMOVFixedLocalActualObjects(t *testing.T, target, triple string, batch int) {
+	t.Helper()
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM22 required")
 	}
+	kernels := x86CMOVFixedLocalKernels(false)
+	start, end, ok := fixedLocalObjectBatchRange(len(kernels), batch)
+	if !ok {
+		t.Fatal("invalid complete CMOV object batch", batch, len(kernels))
+	}
 	var assembly, declarations strings.Builder
-	count := 0
-	for _, op := range x86CMOVOracleNames("amd64") {
-		for _, source := range append([]string{"AX", "8(SP)"}, x86CMOVAUTOSources...) {
-			name := fmt.Sprintf("F%d", count)
-			count++
-			assembly.WriteString(x86CMOVFixedLocalAssembly(name, op, source))
-			fmt.Fprintf(&declarations, "func %s(a,b uint64) uint64\n", name)
+	var names []string
+	for _, kernel := range kernels[start:end] {
+		assembly.WriteString(kernel.assembly)
+		fmt.Fprintf(&declarations, "func %s(a,b uint64) uint64\n", kernel.name)
+		names = append(names, "example.invalid/framefixture."+kernel.name)
+	}
+	pkg, request, file, options := x86CMOVFixedLocalFixture(t, assembly.String(), declarations.String(), target, triple)
+	observer := requireGoAMD64FrameCapture(t, pkg, request)
+	ctx, cancel := runtimeOracleStageContext(t)
+	defer cancel()
+	bound, err := observer.BindFixedLocal(ctx, pkg, file, options)
+	if err != nil {
+		t.Fatal("actual numeric CMOV source retains the existing bounded private local contract", err)
+	}
+	fixedLocalAPIs(t, pkg, file, bound, func(t *testing.T, ir string, err error) {
+		if err != nil || !strings.Contains(ir, "fixed_local_native") {
+			t.Fatal("exact sealed original local storage", err)
 		}
-	}
-	for _, target := range []struct{ name, triple string }{{"linux/amd64", "x86_64-unknown-linux-gnu"}, {"darwin/amd64", "x86_64-apple-darwin"}} {
-		t.Run(target.name, func(t *testing.T) {
-			pkg, request, file, options := x86CMOVFixedLocalFixture(t, assembly.String(), declarations.String(), target.name, target.triple)
-			observer := requireGoAMD64FrameCapture(t, pkg, request)
-			ctx, cancel := runtimeOracleStageContext(t)
-			defer cancel()
-			bound, err := observer.BindFixedLocal(ctx, pkg, file, options)
-			if err != nil {
-				t.Fatal("actual numeric CMOV source retains the existing bounded private local contract", err)
+		for _, optimize := range []bool{false, true} {
+			input := ir
+			if optimize {
+				input = x86DwordProductIROptimize(t, ir)
 			}
-			fixedLocalAPIs(t, pkg, file, bound, func(t *testing.T, ir string, err error) {
-				if err != nil || !strings.Contains(ir, "fixed_local_native") {
-					t.Fatal("exact sealed original local storage", err)
-				}
-				compileLLVMToObject(t, llc, target.triple, "cmov-fixed-local.ll", "cmov-fixed-local.o", ir)
-			})
-			t.Logf("%d complete actual-object condition/width/register/physical/AUTO kernels; NAME_AUTO source bias is not caller or saved-BP storage", count)
-		})
-	}
+			x86CompactExpandRequireAllDefinitions(t, input, names)
+			compileLLVMToObject(t, llc, triple, "cmov-fixed-local.ll", "cmov-fixed-local.o", input)
+		}
+	})
+	t.Logf("%s batch%d: %d/%d original condition/width/register/physical/AUTO kernels; three APIs, O0/O2", target, batch, end-start, len(kernels))
 }
 
 func TestX86CMOVFamilyFixedLocalEveryReadAndAuthorityNegatives(t *testing.T) {

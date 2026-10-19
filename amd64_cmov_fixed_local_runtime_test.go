@@ -6,7 +6,36 @@ import (
 	"testing"
 )
 
-func TestCrossLinuxRuntimeMatrixX86CMOVFixedLocalAUTOWholeBytes(t *testing.T) {
+func TestCrossLinuxRuntimeMatrixX86CMOVFixedLocalAUTOWholeBytesBatch00(t *testing.T) {
+	x86CMOVFixedLocalRuntimeBatch(t, 0)
+}
+
+func TestCrossLinuxRuntimeMatrixX86CMOVFixedLocalAUTOWholeBytesBatch01(t *testing.T) {
+	x86CMOVFixedLocalRuntimeBatch(t, 1)
+}
+
+func TestCrossLinuxRuntimeMatrixX86CMOVFixedLocalAUTOWholeBytesBatch02(t *testing.T) {
+	x86CMOVFixedLocalRuntimeBatch(t, 2)
+}
+
+func TestCrossLinuxRuntimeMatrixX86CMOVFixedLocalAUTOWholeBytesBatch03(t *testing.T) {
+	x86CMOVFixedLocalRuntimeBatch(t, 3)
+}
+
+func TestCrossLinuxRuntimeMatrixX86CMOVFixedLocalAUTOWholeBytesBatch04(t *testing.T) {
+	x86CMOVFixedLocalRuntimeBatch(t, 4)
+}
+
+func TestCrossLinuxRuntimeMatrixX86CMOVFixedLocalAUTOWholeBytesBatch05(t *testing.T) {
+	x86CMOVFixedLocalRuntimeBatch(t, 5)
+}
+
+func TestCrossLinuxRuntimeMatrixX86CMOVFixedLocalAUTOWholeBytesBatch06(t *testing.T) {
+	x86CMOVFixedLocalRuntimeBatch(t, 6)
+}
+
+func x86CMOVFixedLocalRuntimeBatch(t *testing.T, batch int) {
+	t.Helper()
 	execution := x86FloatCompareExecutionTools(t)
 	target := "linux/amd64"
 	triple := "x86_64-unknown-linux-gnu"
@@ -14,35 +43,22 @@ func TestCrossLinuxRuntimeMatrixX86CMOVFixedLocalAUTOWholeBytes(t *testing.T) {
 		target = "darwin/amd64"
 		triple = "x86_64-apple-darwin"
 	}
-	var assembly, declarations, prototypes, rows, goRows strings.Builder
-	count := 0
+	kernels := x86CMOVFixedLocalKernels(true)
+	start, end, ok := fixedLocalObjectBatchRange(len(kernels), batch)
+	if !ok {
+		t.Fatal("invalid complete CMOV runtime batch", batch, len(kernels))
+	}
+	var assembly, declarations, prototypes, rows strings.Builder
 	prefix := ""
 	if target == "darwin/amd64" {
 		prefix = "_"
 	}
-	for _, width := range []string{"W", "L", "Q"} {
-		for condition, row := range x86CMOVOracleConditions {
-			for _, source := range append([]string{"AX", "8(SP)"}, x86CMOVAUTOSources...) {
-				fn := fmt.Sprintf("F%d", count)
-				count++
-				assembly.WriteString(x86CMOVFixedLocalAssembly(fn, "CMOV"+width+row.name, source))
-				fmt.Fprintf(&declarations, "func %s(a,b uint64) uint64\n", fn)
-				symbol := prefix + "example.invalid/framefixture." + fn
-				fmt.Fprintf(&prototypes, "extern uint64_t %s(uint64_t,uint64_t) __asm__(%s);\n", fn, runtimeCAsmLabel(symbol))
-				fmt.Fprintf(&rows, "{%s,%d,%d,0},\n", fn, map[string]int{"W": 2, "L": 4, "Q": 8}[width], condition)
-				fmt.Fprintf(&goRows, "{%s,%d,%d,0},\n", fn, map[string]int{"W": 2, "L": 4, "Q": 8}[width], condition)
-			}
-		}
-	}
-	for mode, operation := range []string{"MOVQ tmp-8(SP),BX", "MOVQ AX,tmp-8(SP)\nMOVQ tmp-8(SP),BX", "MOVOU tmp-16(SP),X0\nMOVQ X0,BX"} {
-		fn := fmt.Sprintf("F%d", count)
-		count++
-		fmt.Fprintf(&assembly, "TEXT ·%s(SB),4,$16-24\nMOVQ a+0(FP),AX\nMOVQ b+8(FP),BX\nMOVQ AX,0(SP)\nMOVQ BX,8(SP)\n%s\nMOVQ BX,ret+16(FP)\nRET\n", fn, operation)
-		fmt.Fprintf(&declarations, "func %s(a,b uint64) uint64\n", fn)
-		symbol := prefix + "example.invalid/framefixture." + fn
-		fmt.Fprintf(&prototypes, "extern uint64_t %s(uint64_t,uint64_t) __asm__(%s);\n", fn, runtimeCAsmLabel(symbol))
-		fmt.Fprintf(&rows, "{%s,8,0,%d},\n", fn, mode+1)
-		fmt.Fprintf(&goRows, "{%s,8,0,%d},\n", fn, mode+1)
+	for _, kernel := range kernels[start:end] {
+		assembly.WriteString(kernel.assembly)
+		fmt.Fprintf(&declarations, "func %s(a,b uint64) uint64\n", kernel.name)
+		symbol := prefix + "example.invalid/framefixture." + kernel.name
+		fmt.Fprintf(&prototypes, "extern uint64_t %s(uint64_t,uint64_t) __asm__(%s);\n", kernel.name, runtimeCAsmLabel(symbol))
+		fmt.Fprintf(&rows, "{%s,%d,%d,%d},\n", kernel.name, kernel.width, kernel.condition, kernel.mode)
 	}
 	pkg, request, file, options := x86CMOVFixedLocalFixture(t, assembly.String(), declarations.String(), target, triple)
 	observer := requireGoAMD64FrameCapture(t, pkg, request)
@@ -56,6 +72,7 @@ func TestCrossLinuxRuntimeMatrixX86CMOVFixedLocalAUTOWholeBytes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	count := end - start
 	reference := runtimeCAsmLabelPreamble + fmt.Sprintf(x86CMOVFixedLocalWholeBytesC, prototypes.String(), rows.String())
 	for _, pipeline := range []struct{ name, backend, ir string }{
 		{"backend_O0", "-O0", ir}, {"backend_O2", "-O2", ir}, {"IR_O2/backend_O2", "-O2", x86DwordProductIROptimize(t, ir)},
@@ -69,8 +86,8 @@ func TestCrossLinuxRuntimeMatrixX86CMOVFixedLocalAUTOWholeBytes(t *testing.T) {
 			t.Log(strings.TrimSpace(string(output)))
 		})
 	}
-	x86WordMultiplyRunOriginalGo(t, execution, "package oracle\n"+declarations.String(), assembly.String(), fmt.Sprintf(x86CMOVFixedLocalOriginalGo, goRows.String()))
-	t.Logf("%d independently executed actual Go ABI0 local CMOV/GP/SIMD kernels ×64 full-width input pairs; host native/Rosetta is not strict Linux evidence", count)
+	x86WordMultiplyRunOriginalGo(t, execution, "package oracle\n"+declarations.String(), assembly.String(), fmt.Sprintf(x86CMOVFixedLocalOriginalGo, rows.String()))
+	t.Logf("batch%d: %d/%d independently executed actual Go ABI0 local CMOV/GP/SIMD kernels ×64 full-width input pairs; host native/Rosetta is not strict Linux evidence", batch, count, len(kernels))
 }
 
 const x86CMOVFixedLocalWholeBytesC = `
