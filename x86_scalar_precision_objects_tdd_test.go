@@ -89,9 +89,68 @@ func x86ScalarPrecisionRequireNativeEffects(t *testing.T, ir string, functions m
 		}
 		body := function.String()
 		for _, operation := range operations {
-			if !strings.Contains(body, "asm sideeffect \""+strings.ToLower(operation)+" ") ||
-				!strings.Contains(body, "~{fpsr}") || !strings.Contains(body, "~{memory}") {
+			found := false
+			for _, line := range strings.Split(body, "\n") {
+				found = found || x86ScalarPrecisionNativeEffectLine(line, operation)
+			}
+			if !found {
 				t.Fatal("original conversion opcode/MXCSR/exception effect was replaced by unowned pure LLVM arithmetic", name, operation, body)
+			}
+		}
+	}
+}
+
+func x86ScalarPrecisionNativeEffectLine(line, operation string) bool {
+	_, rest, present := strings.Cut(line, "asm sideeffect \"")
+	if !present {
+		return false
+	}
+	assembly, rest, present := strings.Cut(rest, "\"")
+	if !present {
+		return false
+	}
+	// A mask's kmovw and the forced EVEX encoding belong to the same actual
+	// opcode call. Do not accept unrelated prefixes, comments or other calls.
+	if strings.HasPrefix(assembly, "kmovw ") {
+		_, assembly, present = strings.Cut(assembly, "; ")
+		if !present {
+			return false
+		}
+	}
+	assembly = strings.TrimPrefix(assembly, "{evex} ")
+	if !strings.HasPrefix(assembly, strings.ToLower(operation)+" ") {
+		return false
+	}
+	rest = strings.TrimSpace(rest)
+	if !strings.HasPrefix(rest, ", \"") {
+		return false
+	}
+	constraints, _, present := strings.Cut(rest[len(", \""):], "\"")
+	memory, status := false, false
+	for _, constraint := range strings.Split(constraints, ",") {
+		memory = memory || constraint == "~{memory}"
+		status = status || constraint == "~{fpsr}"
+	}
+	return present && memory && status
+}
+
+func TestX86ScalarPrecisionOpcodeReceiptBindsOneActualCall(t *testing.T) {
+	for _, prefix := range []string{"", "{evex} ", "kmovw ${4:k}, %k1; ", "kmovw ${4:k}, %k1; {evex} "} {
+		line := "  %x = call <4 x float> asm sideeffect \"" + prefix +
+			"vcvtss2sd $3, $2, $0\", \"=v,0,v,v,~{memory},~{fpsr}\"()"
+		if !x86ScalarPrecisionNativeEffectLine(line, "VCVTSS2SD") {
+			t.Fatal("receipt rejected actual same-call mask/EVEX prefixes", prefix)
+		}
+		for _, changed := range []string{
+			strings.Replace(line, "sideeffect", "", 1),
+			strings.Replace(line, "~{memory}", "~{cc}", 1),
+			strings.Replace(line, "~{fpsr}", "~{cc}", 1),
+			strings.Replace(line, "vcvtss2sd", "vcvtsd2ss", 1),
+			strings.Replace(line, "vcvtss2sd", "# vcvtss2sd", 1),
+			strings.Replace(line, "vcvtss2sd", "nop; vcvtss2sd", 1),
+		} {
+			if x86ScalarPrecisionNativeEffectLine(changed, "VCVTSS2SD") {
+				t.Fatal("receipt borrowed another instruction, comment, unowned status or memory effect", changed)
 			}
 		}
 	}
