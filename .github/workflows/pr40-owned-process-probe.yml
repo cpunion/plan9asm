@@ -211,6 +211,48 @@ jobs:
           done
           go test . -run "^($roots)$" -count=1 -timeout=5m -json > "$directory/raw.jsonl" 2> "$directory/stderr.log"
           node .github/scripts/audit-product-cmov.cjs "$directory"
+      - name: Execute original native duplicate moves and whole-vector effects
+        env:
+          GOTOOLCHAIN: local
+        run: |
+          set -euo pipefail
+          directory=_out/native-x86-oracles/duplicate-moves
+          mkdir -p "$directory"
+          roots='TestCrossLinuxRuntimeMatrixX86DuplicateMoveOriginalGoAndNativeAMD64'
+          roots+='|TestCrossLinuxRuntimeMatrixX86DuplicateMoveOriginalGoAndNative386'
+          go test . -list "^($roots)$" > "$directory/inventory.log"
+          for root in ${roots//|/ }; do
+            grep -Fx "$root" "$directory/inventory.log"
+          done
+          go test . -run "^($roots)$" -count=1 -timeout=5m -json > "$directory/raw.jsonl" 2> "$directory/stderr.log"
+          node .github/scripts/audit-duplicate-native-families.cjs "$directory"
+      - name: Execute original native scalar reciprocal estimates
+        env:
+          GOTOOLCHAIN: local
+        run: |
+          set -euo pipefail
+          directory=_out/native-x86-oracles/scalar-reciprocal
+          mkdir -p "$directory"
+          roots='TestCrossLinuxRuntimeMatrixX86ScalarReciprocalOriginalGoAndNativeAMD64'
+          roots+='|TestCrossLinuxRuntimeMatrixX86ScalarReciprocalOriginalGoAndNative386'
+          go test . -list "^($roots)$" > "$directory/inventory.log"
+          for root in ${roots//|/ }; do
+            grep -Fx "$root" "$directory/inventory.log"
+          done
+          go test . -run "^($roots)$" -count=1 -timeout=5m -json > "$directory/raw.jsonl" 2> "$directory/stderr.log"
+          node .github/scripts/audit-scalar-reciprocal-native.cjs "$directory"
+      - name: Execute original native retained LEAW pointer bytes and flags
+        env:
+          GOTOOLCHAIN: local
+        run: |
+          set -euo pipefail
+          directory=_out/native-x86-oracles/retained-leaw
+          mkdir -p "$directory"
+          root='TestCrossLinuxRuntimeMatrixX86LEAWRetainedPointerOriginalBytesAndNativeDF'
+          go test . -list "^($root)$" > "$directory/inventory.log"
+          grep -Fx "$root" "$directory/inventory.log"
+          go test . -run "^($root)$" -count=1 -timeout=5m -json > "$directory/raw.jsonl" 2> "$directory/stderr.log"
+          node .github/scripts/audit-native-leaw.cjs "$directory"
       - name: Execute original complete floating programs with actual EVEX DQ state
         env:
           GOTOOLCHAIN: local
@@ -251,36 +293,6 @@ jobs:
           done
           go test . -run "^($roots)$" -count=1 -timeout=5m -json > "$directory/raw.jsonl" 2> "$directory/stderr.log"
           node .github/scripts/audit-integer-native-families.cjs "$directory"
-      - name: Execute original native duplicate moves and whole-vector effects
-        env:
-          GOTOOLCHAIN: local
-        run: |
-          set -euo pipefail
-          directory=_out/native-x86-oracles/duplicate-moves
-          mkdir -p "$directory"
-          roots='TestCrossLinuxRuntimeMatrixX86DuplicateMoveOriginalGoAndNativeAMD64'
-          roots+='|TestCrossLinuxRuntimeMatrixX86DuplicateMoveOriginalGoAndNative386'
-          go test . -list "^($roots)$" > "$directory/inventory.log"
-          for root in ${roots//|/ }; do
-            grep -Fx "$root" "$directory/inventory.log"
-          done
-          go test . -run "^($roots)$" -count=1 -timeout=5m -json > "$directory/raw.jsonl" 2> "$directory/stderr.log"
-          node .github/scripts/audit-duplicate-native-families.cjs "$directory"
-      - name: Execute original native scalar reciprocal estimates
-        env:
-          GOTOOLCHAIN: local
-        run: |
-          set -euo pipefail
-          directory=_out/native-x86-oracles/scalar-reciprocal
-          mkdir -p "$directory"
-          roots='TestCrossLinuxRuntimeMatrixX86ScalarReciprocalOriginalGoAndNativeAMD64'
-          roots+='|TestCrossLinuxRuntimeMatrixX86ScalarReciprocalOriginalGoAndNative386'
-          go test . -list "^($roots)$" > "$directory/inventory.log"
-          for root in ${roots//|/ }; do
-            grep -Fx "$root" "$directory/inventory.log"
-          done
-          go test . -run "^($roots)$" -count=1 -timeout=5m -json > "$directory/raw.jsonl" 2> "$directory/stderr.log"
-          node .github/scripts/audit-scalar-reciprocal-native.cjs "$directory"
       - name: Preserve original and translated observations
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v6

@@ -137,4 +137,10 @@ test('native LEAW exact CI owner and SSE steps precede the hardware-dependent fl
   assert.throws(() => checkCI(workflow.replace(root, 'TestUnrelated')), 'changed root');
   assert.throws(() => checkCI(workflow.replace('audit-native-leaw.cjs', 'audit-native-owners.cjs')), 'wrong auditor');
   assert.throws(() => checkCI(workflow.replace(root, root + "'\n          root+='|" + root)), 'duplicate root');
+  const floating = 'Execute original complete floating programs with actual EVEX DQ state';
+  for (const name of ['Execute original native retained LEAW pointer bytes and flags',
+    'Execute original native duplicate moves and whole-vector effects', 'Execute original native scalar reciprocal estimates']) {
+    const reordered = workflow.replace(name, '__owned_step_swap__').replace(floating, name).replace('__owned_step_swap__', floating);
+    assert.throws(() => checkCI(reordered), 'AVX512 failure must not block ' + name);
+  }
 });
