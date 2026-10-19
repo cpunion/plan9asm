@@ -12,7 +12,15 @@ func x86ScalarFPFloatBinaryTransfer(ins Instr, form x86FloatBinaryForm, state *x
 // exact access continues. Register, mask and merge inputs remain independent.
 func x86ScalarFPFloatBinaryTransferWithRead(ins Instr, form x86FloatBinaryForm,
 	state *x86ResultState, owned []bool, arch string, nativeRead bool) bool {
-	if form.bits != 32 && form.bits != 64 {
+	if form.bits == 16 {
+		original, valid := x86RawFP16BinarySourceForm(ins, arch)
+		if !nativeRead || !valid || original.x86FloatBinaryForm != form {
+			return false
+		}
+		// Only this local read consumes the paired access. Original identity
+		// remains required and no raw/caller/memory permission escapes.
+		ins.x86Encoded, ins.x86SourceRaw = false, nil
+	} else if form.bits != 32 && form.bits != 64 {
 		return false
 	}
 	width := int64(form.byteWidth)

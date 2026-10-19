@@ -24,6 +24,9 @@ func x86TypedFPResultNeedsProof(fn Func, sig FuncSig, arch string) bool {
 	}
 	opaqueAddressResult := x86OpaqueAddressPointerResultRole(fn, sig, arch)
 	for ordinal, ins := range fn.Instrs {
+		if _, known, err := x86FP16BinaryProperties(ins, arch); known && err == nil {
+			return true // Dead raw arithmetic still needs source, merge and mask inputs.
+		}
 		if f, known, err := amd64FMA3Properties(ins, arch); known && err == nil && f.spec.rawOnly {
 			return true // All three raw FMA inputs remain mandatory even for Void.
 		}

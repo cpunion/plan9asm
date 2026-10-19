@@ -31,7 +31,7 @@ func (c *amd64Ctx) emitNativeFP16Conversion(ins Instr, f x86FP16ConversionForm) 
 	})
 }
 
-// FP16 scalar conversion/SQRT and scalar/packed FMA share a three-operand
+// FP16 scalar conversion/SQRT and scalar/packed arithmetic share a three-operand
 // native encoding, not arithmetic semantics. Preserve the actual opcode and
 // memory operand so masking, rounding, exceptions and dead accesses survive.
 type x86NativeFP16ThreeOperand struct {

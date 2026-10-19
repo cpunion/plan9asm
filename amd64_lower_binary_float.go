@@ -109,6 +109,9 @@ func parseAMD64BinaryFloatingSuffix(suffix string) (amd64BinaryFloatingSuffix, b
 }
 
 func (c *amd64Ctx) lowerBinaryFloating(op Op, ins Instr) (ok bool, terminated bool, err error) {
+	if known, term, err := c.lowerFP16Binary(op, ins); known {
+		return known, term, err
+	}
 	if known, term, err := c.lowerSqrt(op, ins); known {
 		return known, term, err
 	}
@@ -211,6 +214,19 @@ func (c *amd64Ctx) lowerPackedBinaryFloating(spec amd64BinaryFloatingSpec, prope
 	lanes := byteWidth * 8 / spec.laneBits
 	llvmType := amd64FMA3LLVMType(lanes, spec.laneBits)
 	load := func(operand Operand, allowBroadcast bool) (string, error) {
+		if spec.rawOnly {
+			sourceMask := ""
+			if allowBroadcast {
+				sourceMask = mask
+			}
+			bits, err := c.loadMaskedPackedCompareLanes(operand, byteWidth, spec.laneBits, allowBroadcast && properties.broadcast, sourceMask)
+			if err != nil {
+				return "", err
+			}
+			value := c.newTmp()
+			fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i%d> %s to %s\n", value, lanes, spec.laneBits, bits, llvmType)
+			return "%" + value, nil
+		}
 		if allowBroadcast && properties.broadcast {
 			var scalar string
 			var err error
@@ -264,6 +280,9 @@ func (c *amd64Ctx) lowerPackedBinaryFloating(spec amd64BinaryFloatingSpec, prope
 	}
 	out := c.newTmp()
 	fmt.Fprintf(c.b, "  %%%s = bitcast %s %s to <%d x i8>\n", out, llvmType, computed, byteWidth)
+	if spec.rawOnly {
+		return true, false, c.storePackedMoveOperand(destination, byteWidth, "%"+out)
+	}
 	return true, false, c.storeVectorBytes(destination.Reg, byteWidth, "%"+out)
 }
 

@@ -98,6 +98,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		if _, valid := x86RawFP16FMASourceForm(ins, arch); valid {
 			continue // FMA retains all three inputs, including a zeroing destination.
 		}
+		if _, valid := x86RawFP16BinarySourceForm(ins, arch); valid {
+			continue // Binary input/merge/upper bytes retain their own typed effect.
+		}
 		if _, valid := x86EnqueueSourceForm(ins, arch); valid {
 			continue // Exact device submission retains its own two-address native effect.
 		}
@@ -151,6 +154,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 			return accepted
 		}
 		if accepted, known := x86LoweredFP16FMAStep(ins, state, owned, arch); known {
+			return accepted
+		}
+		if accepted, known := x86LoweredFP16BinaryStep(ins, state, owned, arch); known {
 			return accepted
 		}
 		if accepted, known := x86LoweredEnqueueResultStep(ins, state, arch); known {
