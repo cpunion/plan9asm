@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 	"strings"
@@ -61,13 +62,25 @@ func TestX86RawExplicitMaskMoveGoEncoderForms(t *testing.T) {
 				triples = []string{"i386-unknown-linux-gnu", "i686-pc-windows-msvc"}
 			}
 			for _, triple := range triples {
+				signatures := map[string]FuncSig{"rawmaskmoveforms": {Name: "rawmaskmoveforms", Ret: Void}}
 				ir, err := Translate(file, Options{
 					Goarch: arch, TargetTriple: triple,
-					Sigs: map[string]FuncSig{"rawmaskmoveforms": {Name: "rawmaskmoveforms", Ret: Void}},
+					Sigs: signatures,
 				})
+				if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+					t.Fatal("original raw formats borrowed missing native address/data/mask inputs", err)
+				}
+				if arch == "386" {
+					// The decoder's exact original high-bank inventory stays above;
+					// physical mode32 success is owned by separate initialized
+					// low-bank named/raw objects, not by rewriting these bytes.
+					continue
+				}
+				normalized, err := normalizeX86RawFile(file, arch)
 				if err != nil {
 					t.Fatal(err)
 				}
+				ir = x86ScalarFormatObjectUnit(t, normalized, signatures, arch, triple, 0)
 				compileLLVMToObject(t, llc, triple, "raw-explicit-mask-move.ll", "raw-explicit-mask-move.o", ir)
 			}
 		})
