@@ -97,5 +97,8 @@ func decodedX86PackedMoveInstructionWithMemory(code []byte, mode int, memory x86
 	for i := range args {
 		printed[i] = args[i].String()
 	}
-	return Instr{Op: op, Args: args, Raw: fmt.Sprintf("%s %s", op, strings.Join(printed, ", "))}, p.modRM + consumed, true, nil
+	return Instr{
+		Op: op, Args: args, Raw: fmt.Sprintf("%s %s", op, strings.Join(printed, ", ")),
+		x86PackedVectorMoveEVEX: p.evex,
+	}, p.modRM + consumed, true, nil
 }

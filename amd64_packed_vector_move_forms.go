@@ -38,13 +38,14 @@ var amd64PackedVectorMoveSpecs = map[Op]amd64PackedVectorMoveSpec{
 }
 
 type amd64PackedVectorMoveForm struct {
-	spec        amd64PackedVectorMoveSpec
-	byteWidth   int
-	destination int
-	mask        int // -1 for unmasked forms
-	memory      int // -1 for register-to-register forms
-	memoryWrite bool
-	zeroing     bool // native EVEX.z; memory destinations raise #UD
+	spec         amd64PackedVectorMoveSpec
+	byteWidth    int
+	destination  int
+	mask         int // -1 for unmasked forms
+	memory       int // -1 for register-to-register forms
+	memoryWrite  bool
+	zeroing      bool // native EVEX.z; memory destinations raise #UD
+	physicalEVEX bool // Exact decoded generation, including unmasked low X/Y registers.
 }
 
 // Go's frontend accepts .Z memory stores and sets EVEX.z in their objects,
@@ -77,11 +78,13 @@ func amd64PackedVectorMoveProperties(ins Instr, goarch string) (amd64PackedVecto
 	form := amd64PackedVectorMoveForm{
 		spec: spec, destination: len(ins.Args) - 1,
 		mask: -1, memory: -1, zeroing: suffix == "Z",
+		physicalEVEX: ins.x86PackedVectorMoveEVEX,
 	}
 	fail := func() (amd64PackedVectorMoveForm, bool, error) {
 		return form, true, fmt.Errorf("%s %s operands/suffix are outside the packed vector-move grammar: %q", goarch, base, ins.Raw)
 	}
 	if goarch != "amd64" && goarch != "386" || dotted && suffix != "Z" ||
+		form.physicalEVEX && spec.encoding == amd64PackedMoveVEX ||
 		len(ins.Args) != 2 && len(ins.Args) != 3 {
 		return fail()
 	}
@@ -152,7 +155,7 @@ func (form amd64PackedVectorMoveForm) ordinaryMemory(ins Instr, arch string) boo
 }
 
 func (form amd64PackedVectorMoveForm) nativeEVEX(ins Instr) bool {
-	if form.spec.encoding == amd64PackedMoveEVEX || form.mask >= 0 || form.byteWidth == 64 {
+	if form.physicalEVEX || form.spec.encoding == amd64PackedMoveEVEX || form.mask >= 0 || form.byteWidth == 64 {
 		return true
 	}
 	for _, operand := range ins.Args {
