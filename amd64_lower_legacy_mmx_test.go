@@ -72,13 +72,14 @@ func TestAMD64LegacyMMXRuntimeSemantics(t *testing.T) {
 	}
 	const source = `TEXT legacymmxsemantics(SB),NOSPLIT,$0-16
 	MOVQ value+0(FP), AX
-	MOVQ AX, M1
 	MOVQ out+8(FP), DI
+	MOVQ AX, M1
 	PSHUFW $0x1b, M1, M2
 	MOVNTQ M2, 0(DI)
 	MOVQOZX M2, X1
 	MOVDQ2Q X1, M3
 	MOVNTQ M3, 8(DI)
+	EMMS
 	MOVNTDQ X1, 16(DI)
 	SFENCE
 	RET
