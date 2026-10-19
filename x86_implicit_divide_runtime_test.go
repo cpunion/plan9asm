@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"math/big"
 	"os"
-	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -281,19 +281,47 @@ func x86RunImplicitDivideNative(t *testing.T, execution x86FloatCompareExecution
 			if calls != len(rows)*2 {
 				t.Fatal("an observable or dead division lost its mandatory native opcode")
 			}
-			output := execution.compileAndRunLLVM(t, "division-values", pipeline.ir, valueDriver, pipeline.level)
+			valueExecutable := execution.compileLLVM(t, "division-values", pipeline.ir, valueDriver, pipeline.level)
+			var output []byte
+			if arch == "386" {
+				program := x86DivideNativeIA32Executable(t, execution, valueExecutable)
+				output = x87IA32RunDirect(t, program, nil, os.Environ())
+			} else {
+				output = execution.run(t, valueExecutable)
+			}
 			want := fmt.Sprintf("native division whole-register/DF/canary outcomes %d failures 0\n", len(values))
 			if string(output) != want {
 				t.Fatal("independent mathematical whole-register results", string(output), want)
 			}
 			executable := execution.compileLLVM(t, "division-faults", pipeline.ir, faultDriver, pipeline.level)
+			var ia32 *x87IA32Executable
+			if arch == "386" {
+				program := x86DivideNativeIA32Executable(t, execution, executable)
+				ia32 = &program
+			}
+			observe := func(index, probe, original int) string {
+				// A genuine native signal still has to come from the exact
+				// static IA32 file inspected before this direct invocation.
+				if ia32 != nil {
+					if err := ia32.verify(); err != nil {
+						t.Fatal(err)
+					}
+				}
+				result := x86ObserveMemoryFault(t, execution, executable, index, probe, original)
+				if ia32 != nil {
+					if err := ia32.verify(); err != nil {
+						t.Fatal(err)
+					}
+				}
+				return result
+			}
 			for index, fault := range faults {
 				probes := 1
 				if rows[fault.row].memory {
 					probes = 5
 				}
 				for probe := 0; probe < probes; probe++ {
-					want := x86ObserveMemoryFault(t, execution, executable, index, probe, 1)
+					want := observe(index, probe, 1)
 					if probe == 1 || probe == 2 {
 						if want != "segv" && want != "bus" {
 							t.Fatal("original memory access did not precede #DE", arch, index, probe, want)
@@ -301,7 +329,7 @@ func x86RunImplicitDivideNative(t *testing.T, execution x86FloatCompareExecution
 					} else if want != "fpe" {
 						t.Fatal("original zero/overflow division did not raise native #DE", arch, index, probe, want)
 					}
-					if got := x86ObserveMemoryFault(t, execution, executable, index, probe, 0); got != want {
+					if got := observe(index, probe, 0); got != want {
 						t.Fatal("dead native division exception class/priority mismatch", arch, index, probe, got, want)
 					}
 				}
@@ -310,6 +338,51 @@ func x86RunImplicitDivideNative(t *testing.T, execution x86FloatCompareExecution
 	}
 	x86DivideRunOriginalGo(t, execution, arch, declarations.String(), assembly.String(),
 		fmt.Sprintf(x86DivideNativeOriginalGo, goRows.String(), goCases.String()))
+}
+
+func x86DivideNativeIA32Executable(t *testing.T, execution x86FloatCompareExecution, path string) x87IA32Executable {
+	t.Helper()
+	if execution.triple != "i386-unknown-linux-gnu" || len(execution.prefix) != 0 || execution.preserveArgv0 {
+		t.Fatal("native division IA32 execution forbids an emulator or guest argv transport")
+	}
+	program, err := x87IA32StaticExecutable(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("native division static IA32 ELF bytes=%d sha256=%x", program.size, program.hash)
+	return program
+}
+
+func x86DivideOriginalGoEnvironment(arch string, inherited []string) []string {
+	env := append([]string(nil), inherited...)
+	return append(env, "GOENV=off", "GOWORK=off", "GOTOOLCHAIN=local",
+		"GOROOT="+runtime.GOROOT(), "GOFLAGS=", "GOEXPERIMENT=", "GOOS=linux",
+		"GOARCH="+arch, "CGO_ENABLED=0", "GOMAXPROCS=2")
+}
+
+func TestX86ImplicitDivideOriginalGoEnvironmentIsBoundToSDK(t *testing.T) {
+	for _, arch := range []string{"386", "amd64"} {
+		inherited := []string{"PATH=sentinel", "GOROOT=untrusted", "GOENV=untrusted", "GOWORK=untrusted",
+			"GOTOOLCHAIN=auto", "GOFLAGS=-race", "GOEXPERIMENT=untrusted", "GOOS=untrusted",
+			"GOARCH=untrusted", "CGO_ENABLED=1", "GOMAXPROCS=64"}
+		actual := make(map[string]string)
+		for _, entry := range x86DivideOriginalGoEnvironment(arch, inherited) {
+			name, value, _ := strings.Cut(entry, "=")
+			actual[name] = value
+		}
+		for name, want := range map[string]string{
+			"PATH": "sentinel", "GOROOT": runtime.GOROOT(), "GOENV": "off", "GOWORK": "off",
+			"GOTOOLCHAIN": "local", "GOFLAGS": "", "GOEXPERIMENT": "", "GOOS": "linux",
+			"GOARCH": arch, "CGO_ENABLED": "0", "GOMAXPROCS": "2",
+		} {
+			if actual[name] != want {
+				t.Fatalf("%s %s=%q, want %q", arch, name, actual[name], want)
+			}
+		}
+		if inherited[1] != "GOROOT=untrusted" {
+			t.Fatal("oracle environment mutated its caller's inherited environment")
+		}
+	}
 }
 
 func x86DivideRunOriginalGo(t *testing.T, execution x86FloatCompareExecution, arch, declarations, assembly, testSource string) {
@@ -324,17 +397,20 @@ func x86DivideRunOriginalGo(t *testing.T, execution x86FloatCompareExecution, ar
 		}
 	}
 	binary := filepath.Join(directory, "original.test")
-	command := exec.Command("go", "test", "-p=1", "-vet=off", "-c", "-o", binary, ".")
-	command.Dir = directory
-	command.Env = append(os.Environ(), "GOENV=off", "GOWORK=off", "GOTOOLCHAIN=local", "GOOS=linux", "GOARCH="+arch, "CGO_ENABLED=0", "GOMAXPROCS=2")
-	x86FloatCompareCaptureCommand(t, command)
+	goBinary := filepath.Join(runtime.GOROOT(), "bin", "go")
+	env := x86DivideOriginalGoEnvironment(arch, os.Environ())
+	version, err := x87IA32Capture(t, goBinary, []string{"version"}, directory, env)
+	if err != nil || !strings.HasPrefix(string(version), "go version "+runtime.Version()+" ") {
+		t.Fatalf("native division oracle SDK identity mismatch: %v\n%s", err, version)
+	}
+	output, err := x87IA32Capture(t, goBinary,
+		[]string{"test", "-p=1", "-vet=off", "-c", "-o", binary, "."}, directory, env)
+	if err != nil || len(output) != 0 {
+		t.Fatalf("original Go division compile failed: %v\n%s", err, output)
+	}
 	arguments := []string{"-test.run=^TestOriginal$", "-test.count=1", "-test.v"}
-	var output []byte
 	if arch == "386" {
-		program, err := x87IA32StaticExecutable(binary)
-		if err != nil {
-			t.Fatal(err)
-		}
+		program := x86DivideNativeIA32Executable(t, execution, binary)
 		output = x87IA32RunDirect(t, program, arguments, os.Environ())
 	} else {
 		output = execution.run(t, binary, arguments...)
