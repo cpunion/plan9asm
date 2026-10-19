@@ -821,7 +821,13 @@ func compileOneAttempt(pkg *packages.Package, arch plan9asm.Arch, goos, goarch, 
 	if tailSource != nil {
 		signaturePackage = tailSource.actual
 	}
-	sigs, declaredArgSizes, err := sigsForAsmFile(signaturePackage, file, resolve, goarch)
+	var testDeclarations asmDeclarationLookup
+	if cppProof != nil {
+		testDeclarations = func(original, symbol string) (plan9asm.FuncSig, int64, bool, error) {
+			return ccfg.Feature.testDeclarationSignature(signaturePackage, filepath.Dir(t.AsmFile), original, symbol, goarch)
+		}
+	}
+	sigs, declaredArgSizes, err := sigsForAsmFileWithDeclarations(signaturePackage, file, resolve, goarch, testDeclarations)
 	if err != nil {
 		return fmt.Errorf("infer signatures: %w", err)
 	}
@@ -1480,7 +1486,13 @@ func stripABISuffix(sym string) string {
 	return abiSuffixRe.ReplaceAllString(sym, "")
 }
 
+type asmDeclarationLookup func(original, symbol string) (plan9asm.FuncSig, int64, bool, error)
+
 func sigsForAsmFile(pkg *packages.Package, file *plan9asm.File, resolve func(string) string, goarch string) (map[string]plan9asm.FuncSig, map[string]int64, error) {
+	return sigsForAsmFileWithDeclarations(pkg, file, resolve, goarch, nil)
+}
+
+func sigsForAsmFileWithDeclarations(pkg *packages.Package, file *plan9asm.File, resolve func(string) string, goarch string, declarations asmDeclarationLookup) (map[string]plan9asm.FuncSig, map[string]int64, error) {
 	sigs := map[string]plan9asm.FuncSig{}
 	declaredArgSizes := map[string]int64{}
 	declaredSigs := map[string]bool{}
@@ -1516,6 +1528,9 @@ func sigsForAsmFile(pkg *packages.Package, file *plan9asm.File, resolve func(str
 			continue
 		}
 		fs, argSize, ok, err := tryDeclSig(scope, sym, resolved, linknames, goarch, sz, strings.HasSuffix(fn.Sym, "<ABIInternal>"))
+		if err == nil && !ok && declarations != nil {
+			fs, argSize, ok, err = declarations(fn.Sym, resolved)
+		}
 		if err != nil {
 			return nil, nil, err
 		}
@@ -1592,6 +1607,13 @@ func sigsForAsmFile(pkg *packages.Package, file *plan9asm.File, resolve func(str
 			}
 		}
 		fs, _, ok, err := tryDeclSig(scope, sym, resolved, linknames, goarch, sz, internal)
+		if err == nil && !ok && declarations != nil {
+			fs, _, ok, err = declarations(sym, resolved)
+			if err != nil {
+				targetSigErr = err
+				return
+			}
+		}
 		if internal && err != nil {
 			targetSigErr = err
 			return
