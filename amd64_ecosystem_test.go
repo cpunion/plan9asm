@@ -6632,10 +6632,6 @@ func TestTranslateAMD64TernaryLogicCompleteGo127Forms(t *testing.T) {
 	}
 	src.WriteString("\tRET\n")
 
-	file, err := Parse(ArchAMD64, src.String())
-	if err != nil {
-		t.Fatal(err)
-	}
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc not found")
@@ -6649,16 +6645,11 @@ func TestTranslateAMD64TernaryLogicCompleteGo127Forms(t *testing.T) {
 		{name: "windows-amd64", triple: "x86_64-pc-windows-msvc"},
 	} {
 		t.Run(target.name, func(t *testing.T) {
-			ll, err := Translate(file, Options{
-				TargetTriple: target.triple,
-				Goarch:       "amd64",
-				Sigs: map[string]FuncSig{
-					"ternary_logic_forms": {Name: "ternary_logic_forms", Ret: Void},
-				},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			// Keep all554 original rows, including high banks and every
+			// selector. Missing BX/K1-K3 inputs make this an original Go
+			// and emitter format object, not a public initialized program.
+			file, signatures := x86UnboundVoidFormatSources(t, src.String(), "amd64", target.triple)
+			ll := x86ScalarFormatObjectUnit(t, file, signatures, "amd64", target.triple, 0)
 			compileLLVMToObject(t, llc, target.triple, "ternary-logic-"+target.name+".ll", "ternary-logic-"+target.name+".o", ll)
 		})
 	}
