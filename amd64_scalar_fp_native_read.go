@@ -19,9 +19,6 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 	var nativeMMX *x86NativeMMXRegion
 	named := true
 	for _, ins := range fn.Instrs {
-		if x86RawADXSource(ins, arch) {
-			continue // Only the bound default address mode shares the typed carry chain.
-		}
 		named = named && x86ResultNamedPredicateInstruction(ins)
 	}
 	if named {
@@ -90,6 +87,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 	}
 	boundRawClear := false
 	for _, ins := range fn.Instrs {
+		if x86RawADXSource(ins, arch) {
+			continue // Only the bound default address mode shares the typed carry chain.
+		}
 		if x86RawScalarObserverSource(ins, arch) {
 			continue // Existing typed count/mask effects retain all numerical inputs.
 		}
