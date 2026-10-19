@@ -88,48 +88,71 @@ func TestX86ScalarShiftArchitecturalChoiceRawOriginBoundaries(t *testing.T) {
 					t.Fatal("complete original raw scalar input lost exact source identity")
 				}
 				for _, mutation := range []string{"origin", "opcode", "operand", "source-operand", "vector", "address", "override", "segment", "literal", "return", "reader"} {
-					changed := ins
-					changed.Args = append([]Operand(nil), ins.Args...)
-					origin := *ins.x86SourceRaw
-					origin.args = append([]Operand(nil), origin.args...)
-					changed.x86SourceRaw = &origin
-					switch mutation {
-					case "origin":
-						changed.x86SourceRaw = nil
-					case "opcode":
-						changed.x86SourceRaw.op = "UNKNOWN"
-					case "operand":
-						changed.Args[0] = Operand{Kind: OpReg, Reg: DX}
-					case "source-operand":
-						changed.x86SourceRaw.args[0] = Operand{Kind: OpReg, Reg: DX}
-					case "vector":
-						changed.x86VectorBytes = 16
-					case "address":
-						changed.x86AddressBits = 32
-					case "override":
-						changed.x86UnboundAddressOverride = true
-					case "segment":
-						changed.x86SegmentPrefix = 0x64
-					case "literal":
-						changed.x86RIPLiteral = true
-					case "return":
-						changed.x86RawNearReturn = new(x86RawNearReturnForm)
-					case "reader":
-						changed.x86NumericalRead = &x86NumericalReadCertificate{}
-					}
-					state := x86ResultState{flags: x86ByteFlagsAll}
-					for register := range state.gp {
-						state.gp[register] = 0xff
-					}
-					before := state.clone()
-					accepted, _ := x86LoweredScalarShiftChoiceStep(changed, &state, nil, 0, arch)
-					if accepted || x86RawLegacyScalarShiftSource(changed, arch) || !reflect.DeepEqual(state, before) {
-						t.Fatal("foreign source role acquired finite scalar outcomes", mutation)
-					}
+					t.Run(mutation, func(t *testing.T) {
+						changed := x86ShiftChoiceMutatedOrigin(ins, mutation)
+						if x86RawLegacyScalarShiftSource(changed, arch) {
+							t.Fatal("changed source retained its exact raw identity")
+						}
+						state := x86ResultState{flags: x86ByteFlagsAll}
+						for register := range state.gp {
+							state.gp[register] = 0xff
+						}
+						before := state.clone()
+						accepted, _ := x86LoweredScalarShiftChoiceStep(changed, &state, nil, 0, arch)
+						if mutation == "origin" {
+							// x86Encoded relaxes physical operand grammar; it is not
+							// a universal raw-origin bit. These legacy instructions
+							// have exactly named metadata after dropping origin. The
+							// complete immutable Func replay, tested independently,
+							// must detect that edit; a standalone step cannot.
+							named := Instr{Op: changed.Op, Args: append([]Operand(nil), changed.Args...), Raw: changed.Raw}
+							if ins.x86Encoded || !reflect.DeepEqual(changed, named) || !x86ResultNamedPredicateInstruction(changed) {
+								t.Fatal("origin deletion unexpectedly retained another physical restriction")
+							}
+							want := before.clone()
+							wantAccepted, _ := x86LoweredScalarShiftChoiceStep(named, &want, nil, 0, arch)
+							if accepted != wantAccepted || !reflect.DeepEqual(state, want) {
+								t.Fatal("indistinguishable named instructions acquired different numerical contracts")
+							}
+							return
+						}
+						if accepted || !reflect.DeepEqual(state, before) {
+							t.Fatal("foreign source role acquired finite scalar outcomes")
+						}
+					})
 				}
 			})
 		}
 	}
+}
+
+func x86ShiftChoiceMutatedOrigin(ins Instr, mutation string) Instr {
+	changed := cloneX86ReplayInstrs([]Instr{ins})[0]
+	switch mutation {
+	case "origin":
+		changed.x86SourceRaw = nil
+	case "opcode":
+		changed.x86SourceRaw.op = "UNKNOWN"
+	case "operand":
+		changed.Args[0] = Operand{Kind: OpReg, Reg: DX}
+	case "source-operand":
+		changed.x86SourceRaw.args[0] = Operand{Kind: OpReg, Reg: DX}
+	case "vector":
+		changed.x86VectorBytes = 16
+	case "address":
+		changed.x86AddressBits = 32
+	case "override":
+		changed.x86UnboundAddressOverride = true
+	case "segment":
+		changed.x86SegmentPrefix = 0x64
+	case "literal":
+		changed.x86RIPLiteral = true
+	case "return":
+		changed.x86RawNearReturn = new(x86RawNearReturnForm)
+	case "reader":
+		changed.x86NumericalRead = &x86NumericalReadCertificate{}
+	}
+	return changed
 }
 
 func TestX86ScalarShiftArchitecturalChoiceProducerIRGuards(t *testing.T) {
