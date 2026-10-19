@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"os/exec"
 	"runtime"
@@ -73,28 +74,52 @@ func TestTranslateX86MOVNTICompleteGo127FormsAcrossTargets(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			ir, err := Translate(file, Options{Goarch: target.goarch, TargetTriple: target.triple, Sigs: sigs})
-			if err != nil {
-				t.Fatal(err)
+			if ir, err := Translate(file, Options{Goarch: target.goarch, TargetTriple: target.triple, Sigs: sigs}); ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+				t.Fatal("original unbound MOVNTI format source invented numerical/native inputs", err)
 			}
-			for _, want := range []string{`store i32`, `!nontemporal !0`, `!0 = !{i32 1}`, `"target-features"="+sse2"`, `asm sideeffect "ud2"`, "unreachable"} {
+			// Preserve every original source and Go object. This private
+			// emitter unit measures the accepted encoding rows, not a public
+			// native FP frame or initialized result. The register-only row is
+			// independently translated as its actual terminal #UD below.
+			formats := *file
+			formats.Funcs = append([]Func(nil), file.Funcs[:len(file.Funcs)-1]...)
+			ir := x86InstructionFormatObjectUnit(t, &formats, sigs, target.goarch, target.triple, 0,
+				func(c *amd64Ctx, ins Instr) (bool, bool, error) {
+					form, known, err := x86MOVNTIProperties(ins.Op, ins, target.goarch)
+					if !known || err != nil || form.trap {
+						return known, false, err
+					}
+					return true, false, c.emitMOVNTI(form)
+				})
+			for _, want := range []string{`asm sideeffect "movnti ${0:k}`, `~{memory}`, `"target-features"="+sse2"`} {
 				if !strings.Contains(ir, want) {
 					t.Fatalf("MOVNTI lowering omitted %q:\n%s", want, ir)
 				}
 			}
-			if target.goarch == "amd64" && !strings.Contains(ir, "store i64") {
-				t.Fatalf("MOVNTIQ lowering omitted i64 store:\n%s", ir)
+			if strings.Contains(ir, "!nontemporal") || target.goarch == "amd64" && !strings.Contains(ir, `asm sideeffect "movnti ${0:q}`) {
+				t.Fatalf("MOVNTI lost its mandatory original-width native store:\n%s", ir)
 			}
 			compileLLVMToObject(t, llc, target.triple, "movnti-"+target.name+".ll", "movnti-"+target.name+".o", ir)
-			command := exec.Command(llc, "-mtriple="+target.triple, "-filetype=asm", "-o=-", "-")
+			ctx, cancel := runtimeOracleStageContext(t)
+			defer cancel()
+			command := exec.CommandContext(ctx, llc, "-mtriple="+target.triple, "-filetype=asm", "-o=-", "-")
 			command.Stdin = strings.NewReader(ir)
-			assembly, err := command.CombinedOutput()
+			assembly, err := runtimeOracleCombinedOutput(ctx, command)
 			if err != nil {
 				t.Fatalf("llc MOVNTI assembly failed: %v\n%s", err, assembly)
 			}
 			if !strings.Contains(strings.ToLower(string(assembly)), "movnti") {
 				t.Fatalf("LLVM 22 did not preserve the non-temporal integer store:\n%s", assembly)
 			}
+			trap, err := Parse(ArchAMD64, "TEXT movntiregtrap(SB),$0-0\nMOVNTIL AX,BX\nRET\n")
+			if err != nil {
+				t.Fatal(err)
+			}
+			trapIR, err := Translate(trap, Options{Goarch: target.goarch, TargetTriple: target.triple, Sigs: sigs})
+			if err != nil || !strings.Contains(trapIR, `asm sideeffect "ud2"`) || !strings.Contains(trapIR, "unreachable") {
+				t.Fatal("original Go register row lost its input-independent #UD", err)
+			}
+			compileLLVMToObject(t, llc, target.triple, "movnti-trap.ll", "movnti-trap.o", trapIR)
 		})
 	}
 }

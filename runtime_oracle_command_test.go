@@ -146,6 +146,8 @@ func TestRuntimeOracleCommandConsumersRetainOwnedExecution(t *testing.T) {
 		"amd64_raw_nop_handoff_test.go",
 		"amd64_scalar_bitcount_test.go",
 		"amd64_movemask_grammar_test.go",
+		"amd64_lower_movnti_test.go",
+		"amd64_movnti_runtime_test.go",
 		"x86_result_bitcount_test.go",
 		"amd64_scalar_lane_original_go_test.go",
 		"amd64_scalar_lane_mode32_test.go",

@@ -7,59 +7,53 @@ import (
 
 const x86NonTemporalMetadata = ", !nontemporal !0"
 
-// lowerMOVNTI implements Go 1.27's complete yrl_ml row for MOVNTIL/Q. Yrl is
-// a general-register source and Yml accepts ordinary, symbol, and FP memory.
-// Go's compatibility closure also accepts a general-register destination;
-// Intel defines only a memory destination for that ModRM encoding, so model
-// the Go-accepted register form as an explicit undefined-instruction trap
-// rather than silently treating it as an ordinary register move.
 func (c *amd64Ctx) lowerMOVNTI(op Op, ins Instr) (ok bool, terminated bool, err error) {
-	rawOp := strings.ToUpper(string(op))
-	baseOp := rawOp
-	if dot := strings.IndexByte(rawOp, '.'); dot >= 0 {
-		baseOp = rawOp[:dot]
+	form, known, err := x86MOVNTIProperties(op, ins, c.goarch)
+	if !known || err != nil {
+		return known, false, err
 	}
-	typ := LLVMType("")
-	switch baseOp {
-	case "MOVNTIL":
-		typ = I32
-	case "MOVNTIQ":
-		if c.goarch == "386" {
-			return true, false, fmt.Errorf("386 MOVNTIQ is illegal in 32-bit mode: %q", ins.Raw)
-		}
-		typ = I64
-	default:
-		return false, false, nil
-	}
-	if rawOp != baseOp {
-		return true, false, fmt.Errorf("%s %s has no suffixed forms in Go 1.27's yrl_ml table: %q", c.goarch, baseOp, ins.Raw)
-	}
-	if len(ins.Args) != 2 {
-		return true, false, fmt.Errorf("%s %s expects exactly two operands: %q", c.goarch, baseOp, ins.Raw)
-	}
-	source, destination := ins.Args[0], ins.Args[1]
-	if source.Kind != OpReg || !isX86YrlRegisterForArch(source.Reg, c.goarch) {
-		return true, false, fmt.Errorf("%s %s source must be an in-range general register: %q", c.goarch, baseOp, ins.Raw)
-	}
-	if destination.Kind == OpReg {
-		if !isX86YrlRegisterForArch(destination.Reg, c.goarch) {
-			return true, false, fmt.Errorf("%s %s destination is outside Go 1.27's Yml compatibility closure: %q", c.goarch, baseOp, ins.Raw)
-		}
+	if form.trap {
 		c.b.WriteString("  call void asm sideeffect \"ud2\", \"~{memory}\"()\n")
 		c.b.WriteString("  unreachable\n")
 		return true, true, nil
 	}
-	if !isAMD64MemoryOperand(destination) {
-		return true, false, fmt.Errorf("%s %s destination must be Yml memory or a Go-compatible general register: %q", c.goarch, baseOp, ins.Raw)
+	if !x86ScalarFloatIntegerNativeTarget(c.goarch, c.targetTriple) ||
+		!x86ResultNamedPredicateInstruction(ins) || ins.x86NumericalRead != nil {
+		return true, false, fmt.Errorf("%w: MOVNTI needs its original named x86 target and address size", ErrProbeNeedsContext)
 	}
-	if destination.Kind == OpMem && !x86MemoryRegistersValidForArch(destination.Mem, c.goarch) {
-		return true, false, fmt.Errorf("%s %s destination uses an out-of-range address register: %q", c.goarch, baseOp, ins.Raw)
+	if !x86OrdinaryNativeMemoryOperand(form.destination, c.goarch) {
+		return true, false, fmt.Errorf("%w: MOVNTI needs native storage, not logical FP/AUTO bytes", ErrProbeNeedsContext)
 	}
-	value, err := c.evalIntSized(source, typ)
+	return true, false, c.emitMOVNTI(form)
+}
+
+// Intel SDM MOVNTI retains its actual WC/cache policy, dead write and faults.
+// LLVM nontemporal metadata on an ordinary store makes none of those effects
+// mandatory. Pass only the exact integer and opaque address to the native
+// opcode, without asserting alignment, extent, aliasing or pointee validity.
+func (c *amd64Ctx) emitMOVNTI(form x86MOVNTIForm) error {
+	typ := amd64IntegerTypeForBits(form.bits)
+	value, err := c.evalIntSized(form.source, typ)
 	if err != nil {
-		return true, false, err
+		return err
 	}
-	return true, false, c.storeMOVNTIMemory(destination, typ, value)
+	pointer, pointerType, _, err := c.packedVectorMemoryPointer(form.destination)
+	if err != nil {
+		return err
+	}
+	segment, modifier := "", "k"
+	if pointerType == "ptr addrspace(256)" {
+		segment = "%gs:"
+	} else if pointerType == "ptr addrspace(257)" {
+		segment = "%fs:"
+	}
+	if form.bits == 64 {
+		modifier = "q"
+	}
+	assembly := "movnti ${0:" + modifier + "}, " + segment + "($1)"
+	fmt.Fprintf(c.b, "  call void asm sideeffect %q, %q(%s %s, %s %s)\n", assembly,
+		"r,r,~{memory}", typ, value, pointerType, pointer)
+	return nil
 }
 
 func x86MemoryRegistersValidForArch(memory MemRef, goarch string) bool {
@@ -102,7 +96,7 @@ func fileUsesX86NonTemporalMetadata(file *File) bool {
 		for _, instruction := range function.Instrs {
 			op := strings.ToUpper(string(instruction.Op))
 			switch op {
-			case "MOVNTIL", "MOVNTIQ", "MOVNTQ", "MOVNTDQ", "MOVNTO", "MOVNTPD", "MOVNTPS", "VMOVNTDQ", "VMOVNTPD", "VMOVNTPS":
+			case "MOVNTQ", "MOVNTDQ", "MOVNTO", "MOVNTPD", "MOVNTPS", "VMOVNTDQ", "VMOVNTPD", "VMOVNTPS":
 				return true
 			}
 		}
