@@ -21,9 +21,17 @@ Reuse persistent idle worktrees and preserve existing changes.
 ## Latest online evidence
 
 [39285088077](https://github.com/cpunion/plan9asm/actions/runs/39285088077)
-is still running at `47e44aa7d`; let it finish naturally before pushing again.
-The first two completed main-root owners (parts 2 and 9) retain nine failed
-roots. They are not a full-suite denominator. Scalar lane/POP priority's exact
+finished naturally at `47e44aa7d`: 83 jobs pass and 16 fail, none cancelled.
+Fifteen main-root owners fail and their aggregate correctly rejects the run;
+both CLI module owners and aggregates pass. The complete sixteen-owner main
+union is 7,379 roots: 7,063 pass, 52 fail and 264 explicit host skips, zero
+absent/incomplete. Every root is owned exactly once. The independent ignored
+`ci392850/root-union-outcomes-audit.json` binds the raw events and inventory.
+Compared with the preceding complete run, eighteen old failures now pass and
+there are no newly failing roots. Local later repairs do not rewrite this
+online inventory or qualify a whole-suite percentage.
+
+Scalar lane/POP priority's exact
 sixteen roots and 846 children pass, including all four original Windows
 runtime failures. Its independent raw audit has zero skips or incomplete
 outcomes. The numerical product/CMOV audit passes seven roots and 24 children,
@@ -115,7 +123,7 @@ Evidence is not tracked repository data.
 
 ## Immediate next work
 
-1. Continue the exact seventy-root failure list from the completed run. The
+1. Continue the exact fifty-two-root failure list from the completed run. The
    new local repairs are not online passes. Prioritize new regressions as well
    as the old runtime families; retain complete source, Go/emitter objects and
    explicit Context for genuinely unbound formats, with independent initialized
