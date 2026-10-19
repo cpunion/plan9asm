@@ -23,9 +23,9 @@ func TestX86MOVBEInitializedWidthsDirectionsAndTargets(t *testing.T) {
 	for _, target := range x86RawReturnTargets {
 		t.Run(target.triple, func(t *testing.T) {
 			word, move := goWordSize(target.arch), "MOVQ"
-			widths := []string{"W", "L", "Q", "QQ"}
+			widths := []string{"W", "WW", "L", "LL", "Q", "QQ"}
 			if word == 4 {
-				move, widths = "MOVL", widths[:2]
+				move, widths = "MOVL", widths[:4]
 			}
 			var source, declarations strings.Builder
 			count := 0
