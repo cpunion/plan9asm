@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"runtime"
 	"strconv"
@@ -45,8 +46,20 @@ func TestX86PackedAbsSignWholeBytesMinimumWrapAndFlags(t *testing.T) {
 					flag(row.sign), flag(row.legacy), flag(row.source == "broadcast"),
 					flag(row.mode == "merge" || row.mode == "zero"), flag(row.mode == "zero"))
 			}
-			x86LEAActualTargetGoObject(t, arch, triple, source.String())
-			ir, err := x86ScalarFPBitViewAPI(t, source.String(), declarations.String(), arch, triple, "Go")
+			original := source.String()
+			x86LEAActualTargetGoObject(t, arch, triple, original)
+			legacyMemory := 0
+			for _, row := range rows[start:end] {
+				if row.legacy && row.memory {
+					legacyMemory++
+				}
+			}
+			// This companion owns mathematics on the actual host, not the
+			// original x86 alignment exception. Preserve legacy writeback by
+			// transporting only the checked memory source through an unused X
+			// bank. Actual native objects/faults have independent owners.
+			instrumented := x86PackedAbsSignPortableMemoryInstrumentation(t, original, legacyMemory)
+			ir, err := x86ScalarFPBitViewAPI(t, instrumented, declarations.String(), arch, triple, "Go")
 			if err != nil {
 				t.Fatal("complete initialized ABS/sign source failed before independent minimum-wrap comparison", err)
 			}
@@ -54,6 +67,87 @@ func TestX86PackedAbsSignWholeBytesMinimumWrapAndFlags(t *testing.T) {
 				fmt.Sprintf(x86PackedAbsSignWholeBytesC, prototypes.String(), metadata.String()))
 		})
 	}
+}
+
+// Instrumentation is deliberately limited to these six original legacy m128
+// instructions. It does not change their opcode to VEX (which would clear
+// upper aliases), infer backing, or claim execution of the original program.
+func x86PackedAbsSignPortableMemoryInstrumentation(t *testing.T, source string, expected int) string {
+	t.Helper()
+	originalHash := sha256.Sum256([]byte(source))
+	file, err := Parse(ArchAMD64, source)
+	if err != nil {
+		t.Fatal("portable ABS/sign instrumentation requires the complete parsed original", err)
+	}
+	used := [8]bool{}
+	for _, function := range file.Funcs {
+		for _, ins := range function.Instrs {
+			for _, arg := range ins.Args {
+				register := string(arg.Reg)
+				if arg.Kind == OpReg && len(register) > 1 && strings.ContainsRune("XYZ", rune(register[0])) {
+					index, err := strconv.Atoi(register[1:])
+					if err != nil {
+						t.Fatal("unrecognized original vector alias", register)
+					}
+					if index < len(used) {
+						used[index] = true
+					}
+				}
+			}
+		}
+	}
+	scratch := -1
+	for index, live := range used {
+		if !live {
+			scratch = index
+			break
+		}
+	}
+	if scratch < 0 {
+		t.Fatal("complete original ABS/sign program has no genuinely unused mode32 X bank")
+	}
+	replacements := make(map[string]string)
+	count := 0
+	for _, function := range file.Funcs {
+		for _, ins := range function.Instrs {
+			switch ins.Op {
+			case "PABSB", "PABSW", "PABSD", "PSIGNB", "PSIGNW", "PSIGND":
+				if len(ins.Args) != 2 {
+					t.Fatal("portable instrumentation requires the exact legacy two-operand grammar", ins)
+				}
+				if ins.Args[0].Kind == OpReg {
+					continue
+				}
+				if ins.Args[0].Kind != OpMem || ins.Args[1].Kind != OpReg || !strings.HasPrefix(string(ins.Args[1].Reg), "X") {
+					t.Fatal("portable instrumentation refuses any different legacy storage/operand role", ins)
+				}
+				key := strings.TrimSpace(ins.Raw)
+				if key == "" {
+					t.Fatal("portable instrumentation lost original source spelling")
+				}
+				// VMOVDQU is the portable unaligned byte transport. MOVOU's
+				// native bridge would itself introduce x86 inline assembly.
+				replacements[key] = fmt.Sprintf("VMOVDQU %s,X%d\n%s X%d,%s", ins.Args[0], scratch, ins.Op, scratch, ins.Args[1])
+				count++
+			}
+		}
+	}
+	if count != expected {
+		t.Fatal("portable original legacy m128 inventory changed", count, expected)
+	}
+	lines := strings.Split(source, "\n")
+	replaced := 0
+	for index, line := range lines {
+		if replacement, found := replacements[strings.TrimSpace(line)]; found {
+			lines[index] = replacement
+			replaced++
+		}
+	}
+	if replaced != expected || originalHash != sha256.Sum256([]byte(source)) {
+		t.Fatal("portable instrumentation did not bind every unchanged original source instruction", replaced, expected)
+	}
+	t.Logf("portable ABS/sign mathematical instrumentation: original sha256=%x checked legacy m128 replacements=%d unused X bank=%d; not original alignment/fault execution", originalHash, replaced, scratch)
+	return strings.Join(lines, "\n")
 }
 
 const x86PackedAbsSignWholeBytesC = `
