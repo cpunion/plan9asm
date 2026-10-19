@@ -82,7 +82,8 @@ func x86RawFloatCompareLiteralForm(ins Instr, arch string) bool {
 }
 
 func x86RawResultLiteralForm(ins Instr, arch string) bool {
-	return x86RawBroadcastLiteralForm(ins, arch) || x86RawLogicalLiteralForm(ins, arch) ||
+	return x86RawIntegerMinMaxLiteralForm(ins, arch) ||
+		x86RawBroadcastLiteralForm(ins, arch) || x86RawLogicalLiteralForm(ins, arch) ||
 		x86RawByteShiftLiteralForm(ins, arch) || x86RawIntegerCompareLiteralForm(ins, arch) ||
 		x86RawArithmeticLiteralForm(ins, arch) || x86RawFloatCompareLiteralForm(ins, arch)
 }
