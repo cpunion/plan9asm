@@ -48,6 +48,9 @@ test('independent native receipt owners keep running after another owner fails',
 test('native isolation policy rejects missing setup gates and masked failures', () => {
   // Construct a qualifying policy fixture without changing the workflow.
   let qualified = workflow
+    .replace('        id: native_toolchain\n', '')
+    .replace('        id: native_go\n', '')
+    .replaceAll('        if: ' + condition + '\n', '')
     .replace('      - name: Install LLVM 22 and required native i386 toolchain\n',
       '      - name: Install LLVM 22 and required native i386 toolchain\n        id: native_toolchain\n')
     .replace('      - uses: ./.github/actions/setup-go\n',
