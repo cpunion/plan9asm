@@ -22,6 +22,8 @@ idle worktrees; do not create another for routine work.
 
 | Code snapshot | Completed evidence | Limits |
 |---|---|---|
+| `9673cc995` | Complete ADCX/ADOX input repair: 24 roots / 1,781 children pass current Go, actual Go1.20 and race; identical 1,805 terminals, zero fail/skip/incomplete, unchanged source and tools | Four named/raw members share one grammar, ordered input bytes and independent CF/OF chains; five-target objects, original portable values and exact dead volatile reads. Native original execution and complete CI remain separate |
+| Same snapshot | Go1.20–Go1.27 classification audit changes exactly eight isolated AMD64 ADX probes per SDK from supported to Context; 386, other families and encoder/unsupported metrics unchanged | Those original probes lack numerical inputs and selected carry. Separate initialized whole-source probes and public objects establish successful translation |
 | `5e5379ada` | Raw count/move-mask and MMX batch: 25 roots / 933 children pass current Go, actual Go1.20 and race; identical 958 terminals, zero fail/skip/incomplete | Nine scalar-count members and six move-mask names share existing effects; original Void/native-output objects, exact origin/byte controls and original count portable values pass. Four additional MMX runtime fixture families retain complete objects; native execution remains separate |
 | `197521fb1` | BMI2/vector-zero/MMX batch: 33 roots / 1,386 children pass current Go, actual Go1.20 and race; identical 1,419 terminals, zero fail/skip/incomplete | Eight BMI2 members, two vector-zero members and original MMX fixture repairs; official audit and final gates remain separate |
 | Same snapshot | Complete Go1.20–Go1.27 386/amd64 classification audit: zero changed forms or metrics, unchanged source/SDK/LLVM22 seals | Current Go still has zero unsupported forms; Go1.20's one pre-existing AMD64 unsupported form is unchanged. Not complete CI or benchmark qualification |
@@ -367,9 +369,14 @@ was the original Void/native-output continuation. Preserve the separate failed
 Go-object fixture that omitted textflag.h: it is not source rejection or proof
 of the translator defect. With that header repaired, an old-guard overlay
 reproduces both original translation failures on all three AMD64 targets.
-The ADX source preflights on `codex/pr40-accumulator-typed-effects-20261019`
-are not merged into this qualified candidate. Preserve the original RORX
-physical-BP and partial-controller failures as well.
+The next ADX batch is qualified at `9673cc995` with its own twenty-four-root
+three-lane union. Exact raw default address size is captured independently and
+bound before a local numerical projection; overrides and physical segments
+retain their separate Context/emitter contracts. Both ordered inputs and the
+selected CF/OF chain remain required, including dead native outputs. Preserve
+the original thirteen-terminal RED and the failed first GREEN whose raw guard
+was inserted in the unrelated MMX loop. Original RORX physical-BP and partial
+controller failures remain failed evidence as well.
 
 1. Continue the 88-root inventory from completed `39198807147` artifacts;
    the cancelled CLI owner's missing inventory remains unknown. Prioritize
@@ -414,6 +421,11 @@ develop in an existing idle worktree. Commit and preserve RED before repair.
 
 Resolve worktree locations with `git worktree list`. Ignored receipts include:
 
+- `windows-adx-qualified-9673cc99.json` and `adx-classification-audit/`:
+  complete twenty-four-root three-lane union and sealed sixteen-report audit.
+  `compact-325c9759-adx-original-and-family-red-*` retains the original source
+  and initialized-family failures; `e776df82` retains the failed first GREEN.
+  Do not count those failed attempts or native host exclusions as passes.
 - `windows-product-inputs-qualified-7cfe1522.json`: complete 28-root / 665-child
   three-lane qualification and identical 693-terminal unions. The earlier
   16-root / 546-child product-only qualification remains at `1f6694616`.
