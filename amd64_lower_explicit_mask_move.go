@@ -22,7 +22,9 @@ func (c *amd64Ctx) lowerExplicitMaskMove(op Op, ins Instr) (bool, bool, error) {
 		if err := c.validateX86PackedShiftFPSpan(ins.Args[f.memory].FPOffset, f.byteWidth); err != nil {
 			return true, false, err
 		}
-	} else if x86ScalarFloatIntegerNativeTarget(c.goarch, c.targetTriple) {
+	} else if x86ScalarFloatIntegerNativeTarget(c.goarch, c.targetTriple) &&
+		(x86OrdinaryNativeMemoryOperand(ins.Args[f.memory], c.goarch) ||
+			x86CallerMemoryCertified(ins, f.memory) || c.fixedLocalMemoryCertified(ins, f.memory)) {
 		return true, false, c.lowerNativeExplicitMaskMove(op, ins, f)
 	}
 	return true, false, c.lowerPortableExplicitMaskMove(ins, f)

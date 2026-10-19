@@ -36,7 +36,7 @@ func x86ExplicitMaskMoveRawReplayRequired(fn Func, arch string) bool {
 // Continued execution of the exact paired operation supplies active loaded
 // lanes; inactive lanes are zero. This grants no backing, bounds, future-read
 // fact or entry permission. Stores change no numerical memory facts.
-func x86ResultExplicitMaskMoveStep(ins Instr, state *x86ResultState, owned []bool, arch string, native bool) (bool, bool) {
+func x86ResultExplicitMaskMoveStep(ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string, native bool) (bool, bool) {
 	f, known, err := x86ExplicitMaskMoveProperties(ins.Op, ins, arch)
 	if !known || err != nil || x86Mode32VectorRegisterContext(ins, arch) != nil {
 		return false, known
@@ -53,6 +53,10 @@ func x86ResultExplicitMaskMoveStep(ins Instr, state *x86ResultState, owned []boo
 	}
 	width := int64(f.byteWidth)
 	memory := ins.Args[f.memory]
+	if !f.load && (memory.Kind == OpFP && memory.FPOffset < resultOffset || memory.Kind == OpSym ||
+		memory.Kind == OpMem && memory.Mem.Sym != "") {
+		return false, true // Readable parameter/static bytes are not a writable result/backing role.
+	}
 	if !f.load && !x86ResultPackedVectorRead(ins.Args[0], width, state, owned, arch) {
 		return false, true
 	}
