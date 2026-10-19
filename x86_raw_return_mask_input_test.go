@@ -14,7 +14,9 @@ func x86RawReturnMaskInputFixture(t *testing.T, arch, instruction string, sig Fu
 	source := "TEXT Bound(SB),4,$0-32\n" + instruction + "\nBYTE $0xc3\n"
 	file, err := Parse(ArchAMD64, source)
 	if err == nil {
-		file, err = NormalizeRawFileForTranslation(file, arch)
+		// Exercise the exact memory consumer, not an earlier normalization
+		// rejection for the deliberately unbound native-pointer controls.
+		file.Funcs[0], err = decodeX86RawDirectives(file.Funcs[0], arch)
 	}
 	if err != nil {
 		t.Fatal("original mask input and canonical raw RET lost their source", err)
