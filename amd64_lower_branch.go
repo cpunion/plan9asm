@@ -57,16 +57,11 @@ func (c *amd64Ctx) lowerBranch(bi int, ii int, op Op, ins Instr, emitBr amd64Emi
 			return false, false, nil
 		}
 	}
-	args := ins.Args
 	// The Go assembler accepts a legacy x86 branch-hint operand such as
 	// JEQ $1, target. It is not part of the encoded instruction on current
-	// toolchains, so preserve control flow and ignore the hint value.
-	if op != "JMP" && op != "LOOP" && !isAMD64CounterZeroBranch(op) && len(args) == 2 && args[0].Kind == OpImm {
-		if args[0].Imm != 0 && args[0].Imm != 1 {
-			return true, false, fmt.Errorf("amd64 %s branch hint must be $0 or $1: %q", op, ins.Raw)
-		}
-		args = args[1:]
-	}
+	// toolchains. Share its complete resolved-integer grammar with the source
+	// CFG observers; floating/unresolved tokens cannot become zero hints.
+	args := x86DirectTailBranchArgs(ins)
 	if len(args) != 1 {
 		return true, false, fmt.Errorf("amd64 %s expects 1 operand: %q", op, ins.Raw)
 	}

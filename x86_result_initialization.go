@@ -476,10 +476,11 @@ func checkX86ResultSourceFlowWithTrapOnly(fn Func, initial x86ResultState, owned
 		} else if fn.x86ContinuationFlow != nil {
 			next = fn.x86ContinuationFlow.edges[pc]
 		} else if ins.Op == OpJMP || isAMD64ConditionalBranch(ins.Op) {
-			if len(ins.Args) != 1 {
+			args := x86DirectTailBranchArgs(ins)
+			if len(args) != 1 {
 				return fail("unbound branch operands")
 			}
-			arg := ins.Args[0]
+			arg := args[0]
 			label := arg.Sym
 			if arg.Kind == OpIdent {
 				label = arg.Ident
