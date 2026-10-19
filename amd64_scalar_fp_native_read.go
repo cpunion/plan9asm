@@ -88,6 +88,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 	if len(fn.X86RawText) != 0 || fn.x86SourceStack != nil || fn.x86FixedLocal != nil {
 		return strictErr
 	}
+	if err := x86ScalarShiftChoiceReplay(fn, arch); err != nil {
+		return err // One restriction-only source check, never an input/native capability.
+	}
 	boundRawClear := false
 	boundRawUnaligned := false
 	boundRawConversion := false

@@ -1,6 +1,36 @@
 package plan9asm
 
-import "reflect"
+import (
+	"fmt"
+	"reflect"
+)
+
+// The standalone step cannot distinguish a legacy decoded instruction whose
+// origin was erased from an otherwise identical named instruction. Check the
+// immutable complete source once before admitting the paired proof instead.
+// Inspect both current and sealed decoded instructions so erasing an origin
+// or changing the current opcode cannot erase this restriction.
+func x86ScalarShiftChoiceReplay(fn Func, arch string) error {
+	hasProducer := func(instructions []Instr) bool {
+		for _, ins := range instructions {
+			if ins.x86SourceRaw == nil {
+				continue
+			}
+			if form, known, _ := x86ScalarShiftProperties(ins.Op, ins, arch); known && !form.bmi2 {
+				return true
+			}
+		}
+		return false
+	}
+	replay := fn.x86RawReplay
+	if !hasProducer(fn.Instrs) && (replay == nil || !hasProducer(replay.decoded)) {
+		return nil // Ordinary named source keeps its existing input/unknown domain.
+	}
+	if replay == nil {
+		return fmt.Errorf("%w: scalar shift choice needs its original whole-source replay", ErrProbeNeedsContext)
+	}
+	return replay.validate(fn, arch)
+}
 
 func x86RawLegacyScalarShiftSource(ins Instr, arch string) bool {
 	form, known, err := x86ScalarShiftProperties(ins.Op, ins, arch)
