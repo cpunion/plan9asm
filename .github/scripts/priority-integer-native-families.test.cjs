@@ -90,6 +90,7 @@ test('native integer families reject malformed packages, inventory changes and p
     completeEvents().slice(0, -1),
     [event('start'), ...completeEvents()],
     [...completeEvents(), event('pass')],
+    [...completeEvents(), {Action: 'build-output', ImportPath: 'runtime', Output: 'late'}],
     [event('run', owners[0] + '/objects-only'), ...completeEvents()],
     completeEvents().map(value => ({...value, Package: 'foreign/package'})),
   ]) assert.throws(() => auditIntegerNativeFamilies(inventory, serialize(changed)));
@@ -120,13 +121,30 @@ test('division native hosts and actual Go SDK builds bracket all three axes', ()
     changed.splice(before + 2, 0, late);
     assert.throws(() => auditIntegerNativeFamilies(inventory, serialize(changed)), 'late preflight');
     const wrongTool = completeEvents().map(value => value.Test === owner && value.Output
-      ? {...value, Output: value.Output.replace('/sdk/bin/go', '/other/bin/go')} : value);
+      ? {...value, Output: value.Output.replaceAll('/sdk/bin/go', '/other/bin/go')} : value);
     // A different actual SDK path is valid if both commands bind the same tool.
     assert.doesNotThrow(() => auditIntegerNativeFamilies(inventory, serialize(wrongTool)));
     const splitTool = completeEvents().map(value => value.Test === owner && value.Output
       ? {...value, Output: value.Output.replace(sdk(compileArgs), sdk(compileArgs).replace(hash, imageHash))}
       : value);
     assert.throws(() => auditIntegerNativeFamilies(inventory, serialize(splitTool)), 'changed SDK');
+    const liveHostHashes = completeEvents();
+    const lastHost = liveHostHashes.findLastIndex(value => value.Test === owner && value.Output === host);
+    liveHostHashes[lastHost] = {...liveHostHashes[lastHost], Output: host.replaceAll(hash, imageHash)};
+    assert.doesNotThrow(() => auditIntegerNativeFamilies(inventory, serialize(liveHostHashes)));
+    const unboundArgs = completeEvents().map(value => value.Test === owner && value.Output
+      ? {...value, Output: value.Output.replace('"-p=1" "-vet=off"', '"-p=8"')} : value);
+    assert.throws(() => auditIntegerNativeFamilies(inventory, serialize(unboundArgs)), 'changed build');
+    const missingPost = completeEvents();
+    const post = missingPost.findLastIndex(value => value.Test === owner && value.Output === host);
+    missingPost.splice(post, 1);
+    assert.throws(() => auditIntegerNativeFamilies(inventory, serialize(missingPost)), 'missing final host');
+    const earlyGo = completeEvents();
+    const goAt = earlyGo.findIndex(value => value.Test === owner && value.Output?.includes('actual executable='));
+    const [originalGo] = earlyGo.splice(goAt, 1);
+    const finalChild = earlyGo.findIndex(value => value.Test === owner + '/' + axes[2] && value.Action === 'pass');
+    earlyGo.splice(finalChild, 0, originalGo);
+    assert.throws(() => auditIntegerNativeFamilies(inventory, serialize(earlyGo)), 'Go before final axis');
   }
 });
 

@@ -232,6 +232,23 @@ jobs:
           done
           go test . -run "^($roots)$" -count=1 -timeout=5m -json > "$directory/raw.jsonl" 2> "$directory/stderr.log"
           node .github/scripts/audit-floating-helpers.cjs "$directory"
+      - name: Execute original native integer stores align and division
+        env:
+          GOTOOLCHAIN: local
+        run: |
+          set -euo pipefail
+          directory=_out/native-x86-oracles/integer-families
+          mkdir -p "$directory"
+          roots='TestCrossLinuxRuntimeMatrixX86MOVNTIOriginalFlagsAndFaults'
+          roots+='|TestCrossLinuxRuntimeMatrixX86PackedAlignLegacyNativeFaults'
+          roots+='|TestCrossLinuxRuntimeMatrixX86ImplicitDivideOriginalGoAndNativeAMD64'
+          roots+='|TestCrossLinuxRuntimeMatrixX86ImplicitDivideOriginalGoAndNative386'
+          go test . -list "^($roots)$" > "$directory/inventory.log"
+          for root in ${roots//|/ }; do
+            grep -Fx "$root" "$directory/inventory.log"
+          done
+          go test . -run "^($roots)$" -count=1 -timeout=5m -json > "$directory/raw.jsonl" 2> "$directory/stderr.log"
+          node .github/scripts/audit-integer-native-families.cjs "$directory"
       - name: Preserve original and translated observations
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v6
