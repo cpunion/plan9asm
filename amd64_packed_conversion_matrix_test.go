@@ -267,35 +267,30 @@ func TestX86PackedConversionFiveTargetsThreeAPIObjects(t *testing.T) {
 					end = len(rows)
 				}
 				t.Run(fmt.Sprintf("batch-%04d", start), func(t *testing.T) {
-					var source, declarations strings.Builder
+					var source strings.Builder
 					for index, row := range rows[start:end] {
 						if seen[row] {
 							t.Fatal("duplicate matrix row", row)
 						}
 						seen[row] = true
 						fmt.Fprintf(&source, "TEXT ·f%d(SB),4,$0-0\n%s\nRET\n", index, row)
-						fmt.Fprintf(&declarations, "func f%d()\n", index)
 					}
 					goAssemblerOracleOutput(t, target.arch, source.String(), "", true)
-					for _, api := range []string{"text", "module", "Go"} {
-						ir, err := x86ScalarFPBitViewAPI(t, source.String(), declarations.String(), target.arch, target.triple, api)
-						if err != nil {
-							t.Fatal(start, api, err)
+					file, signatures := x86UnboundVoidFormatSources(t, source.String(), target.arch, target.triple)
+					ir := x86ScalarFormatObjectUnit(t, file, signatures, target.arch, target.triple, 0)
+					for _, optimized := range []bool{false, true} {
+						input := ir
+						if optimized {
+							input = x86MulDivRoundOptimize(t, input)
 						}
-						for _, optimized := range []bool{false, true} {
-							input := ir
-							if optimized {
-								input = x86MulDivRoundOptimize(t, input)
-							}
-							compileLLVMToObject(t, llc, target.triple, "packed-conversion.ll", "packed-conversion.o", input)
-						}
+						compileLLVMToObject(t, llc, target.triple, "packed-conversion.ll", "packed-conversion.o", input)
 					}
 				})
 			}
 			if len(seen) != len(rows) {
 				t.Fatal("incomplete batch union")
 			}
-			t.Logf("%d unique forms, <=96 functions/module, 3 APIs x 2 IR pipelines", len(rows))
+			t.Logf("%d unchanged unique formats, <=96 functions/module, 3 public Context APIs and 2 emitter IR pipelines; initialized public objects are separate", len(rows))
 		})
 	}
 }

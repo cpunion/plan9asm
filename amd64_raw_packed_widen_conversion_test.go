@@ -122,13 +122,7 @@ func TestTranslateX86RawPackedWidenConversionLLVM22Objects(t *testing.T) {
 		"x86_64-pc-windows-msvc",
 	} {
 		t.Run(triple, func(t *testing.T) {
-			ir, err := Translate(file, Options{
-				Goarch: "amd64", TargetTriple: triple,
-				Sigs: map[string]FuncSig{"rawPackedWidenConversion": {Name: "rawPackedWidenConversion", Ret: Void}},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			ir := x86UnboundVoidRawProbeObject(t, file, "amd64", triple)
 			compileLLVMToObject(t, llc, triple, "raw-packed-widen.ll", "raw-packed-widen.o", ir)
 		})
 	}

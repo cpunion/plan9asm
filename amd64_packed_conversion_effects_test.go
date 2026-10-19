@@ -116,7 +116,9 @@ func TestX86PackedConversionPhysicalBroadcastTuple(t *testing.T) {
 		for _, shape := range spec.shapes() {
 			bank := map[int]string{16: "X", 32: "Y", 64: "Z"}[shape.destination]
 			row := spec.name + ".BCST (AX)," + bank + "1"
-			ir, err := x86ScalarFPBitViewAPI(t, "TEXT ·f(SB),4,$0-0\n"+row+"\nRET\n", "func f()", "amd64", "x86_64-unknown-linux-gnu", "text")
+			x86UnboundVoidScalarFormatObject(t, "TEXT ·f(SB),4,$0-0\n"+row+"\nRET\n", "f", "amd64", "x86_64-unknown-linux-gnu")
+			initialized := "TEXT ·f(SB),4,$0-8\nMOVQ p+0(FP),AX\n" + row + "\nRET\n"
+			ir, err := x86ScalarFPBitViewAPI(t, initialized, "func f(p *byte)", "amd64", "x86_64-unknown-linux-gnu", "text")
 			if err != nil {
 				t.Fatal(row, err)
 			}

@@ -188,14 +188,9 @@ func TestX86SignedPackedIntegerFloatActualGoObjectSourceWidths(t *testing.T) {
 			if !known || err != nil {
 				t.Fatal(row, "raw physical properties", err)
 			}
-			file, err := Parse(ArchAMD64, "TEXT f(SB),4,$0-0\n"+row+"\nRET\n")
-			if err != nil {
-				t.Fatal(err)
-			}
-			file.Funcs[0].Instrs[1] = decoded.Instrs[0]
-			if _, err := Translate(file, Options{Goarch: arch, Sigs: map[string]FuncSig{"f": {Ret: Void}}}); err != nil {
-				t.Fatal(row, f, err)
-			}
+			triple := x86AddressMemoryTargets(arch)[0]
+			source := "TEXT f(SB),4,$0-0\n" + x86RawDisplacementDirectives(code[:len(code)-1]) + "RET\n"
+			x86UnboundVoidRawScalarFormatObject(t, source, arch, triple)
 		}
 	}
 }
