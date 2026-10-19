@@ -91,6 +91,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 	boundRawClear := false
 	boundRawConversion := false
 	for _, ins := range fn.Instrs {
+		if x86RawMoveHalfSource(ins, arch) {
+			continue // Exact sealed m64 moves grant no missing input, storage or raw-entry fact.
+		}
 		if x86RawCompactSource(ins, arch) {
 			continue // Exact compact/expand bytes retain all mask, data and native address obligations.
 		}
@@ -212,6 +215,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		}
 		if accepted, known := x86ResultSegmentQueryStep(ins, state, owned, arch, true); known {
 			return accepted // Paired exact volatile m16; no backing or reusable read permission.
+		}
+		if accepted, known := x86ResultMoveHalfStep(ins, state, owned, resultOffset, arch, true); known {
+			return accepted // Paired volatile m64 and selected halves preserve independent native inputs.
 		}
 		if accepted, known := x86LoweredADXResultStep(ins, state, owned, resultOffset, arch); known {
 			return accepted
