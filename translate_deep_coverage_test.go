@@ -423,7 +423,7 @@ func TestTranslateModuleDirectAndFallbackCoverage(t *testing.T) {
 		if !original.IsNil() {
 			original.Dispose()
 		}
-		t.Fatalf("original CPU query acquired an unknown CX input: %v", err)
+		t.Fatalf("original query fixture acquired a missing scalar ABI0 declaration: %v", err)
 	}
 	// A separately initialized source uses the checked fallback, not the
 	// scalar prototype or its implicit zero-valued registers.
@@ -431,14 +431,29 @@ func TestTranslateModuleDirectAndFallbackCoverage(t *testing.T) {
 	initialized.Funcs = append([]Func(nil), file.Funcs...)
 	var instructions []Instr
 	for _, ins := range file.Funcs[0].Instrs {
+		if ins.Op == OpTEXT {
+			ins.Raw = "TEXT ·linear(SB),NOSPLIT,$0-8"
+		}
 		if ins.Op == OpCPUID {
 			instructions = append(instructions, Instr{Op: OpMOVL,
 				Args: []Operand{{Kind: OpImm, Imm: 0}, {Kind: OpReg, Reg: CX}}, Raw: "MOVL $0,CX"})
 		}
+		if ins.Op == OpRET {
+			instructions = append(instructions, Instr{Op: OpMOVQ,
+				Args: []Operand{{Kind: OpReg, Reg: AX}, {Kind: OpFP, FPOffset: 0}}, Raw: "MOVQ AX,ret+0(FP)"})
+		}
 		instructions = append(instructions, ins)
 	}
 	initialized.Funcs[0].Instrs = instructions
-	mod, err := TranslateModule(&initialized, options)
+	initialized.Funcs[0].ArgSize = 8
+	initializedOptions := options
+	initializedOptions.Sigs = make(map[string]FuncSig)
+	for name, signature := range options.Sigs {
+		initializedOptions.Sigs[name] = signature
+	}
+	initializedOptions.Sigs["example.linear"] = FuncSig{Name: "example.linear", Ret: I64,
+		Frame: FrameLayout{Results: []FrameSlot{{Offset: 0, Type: I64, Index: 0, Field: -1}}}}
+	mod, err := TranslateModule(&initialized, initializedOptions)
 	if err != nil {
 		t.Fatalf("TranslateModule(checked initialized amd64 fallback) error = %v", err)
 	}
@@ -446,7 +461,7 @@ func TestTranslateModuleDirectAndFallbackCoverage(t *testing.T) {
 	modIR := mod.String()
 	for _, want := range []string{`@example.linear`, `@example.pair`, `@example.blob`} {
 		if !strings.Contains(modIR, want) {
-			t.Fatalf("missing %q in direct module:\n%s", want, modIR)
+			t.Fatalf("missing %q in checked fallback module:\n%s", want, modIR)
 		}
 	}
 	// Keep an actual independent positive owner for the supported direct
@@ -527,7 +542,11 @@ func TestTranslateModuleDirectAndFallbackCoverage(t *testing.T) {
 	initializedCFG.Funcs[0].Instrs = append([]Instr(nil), cfgFile.Funcs[0].Instrs[:2]...)
 	initializedCFG.Funcs[0].Instrs = append(initializedCFG.Funcs[0].Instrs,
 		Instr{Op: OpMOVL, Args: []Operand{{Kind: OpImm, Imm: 9}, {Kind: OpReg, Reg: AX}}, Raw: "MOVL $9,AX"},
+		Instr{Op: OpMOVQ, Args: []Operand{{Kind: OpReg, Reg: AX}, {Kind: OpFP, FPOffset: 0}}, Raw: "MOVQ AX,ret+0(FP)"},
 		cfgFile.Funcs[0].Instrs[2])
+	initializedCFG.Funcs[0].ArgSize = 8
+	cfgOptions.Sigs = map[string]FuncSig{"example.cfg": {Name: "example.cfg", Ret: I64,
+		Frame: FrameLayout{Results: []FrameSlot{{Offset: 0, Type: I64, Index: 0, Field: -1}}}}}
 	fallbackMod, err := TranslateModule(&initializedCFG, cfgOptions)
 	if err != nil {
 		t.Fatalf("TranslateModule(fallback) error = %v", err)
