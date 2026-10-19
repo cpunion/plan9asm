@@ -22,7 +22,10 @@ function pipelineEvidence(arch) {
   return `duplicate native arch=${arch} live=60 dead=30 whole64-outcomes=5760 fault-processes=712; legacy original opcode/all mod16, E4NF/E5NF independent full-span references\n`;
 }
 
-function auditDuplicateNativeFamilies(inventory, raw) {
+// Each first-party wrapper supplies its own fixed inventory and exact program
+// completion witnesses. Reports can never choose the denominator or family.
+function auditSSEAVXNativeFamilies(inventory, raw, roots, pipelineEvidence, originalEvidence) {
+  const children = roots.flatMap(root => axes.map(axis => root + '/' + axis));
   const result = auditNativeOwners(inventory, raw, roots, children);
   const outputs = new Map([...roots, ...children].map(name => [name, '']));
   const outputSpans = new Map(roots.map(root => [root, []]));
@@ -123,7 +126,11 @@ function auditDuplicateNativeFamilies(inventory, raw) {
   return {...result, nativeHosts, avxPreflights, sdkBuilds, staticIA32Images, directIA32Executions};
 }
 
-module.exports = {auditDuplicateNativeFamilies, roots, children};
+function auditDuplicateNativeFamilies(inventory, raw) {
+  return auditSSEAVXNativeFamilies(inventory, raw, roots, pipelineEvidence, originalEvidence);
+}
+
+module.exports = {auditDuplicateNativeFamilies, auditSSEAVXNativeFamilies, roots, children};
 if (require.main === module) {
   const directory = process.argv[2];
   const result = auditDuplicateNativeFamilies(fs.readFileSync(path.join(directory, 'inventory.log'), 'utf8'),
