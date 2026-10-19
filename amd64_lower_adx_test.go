@@ -58,18 +58,7 @@ func TestTranslateX86ADXCompleteGo127FormsAcrossTargets(t *testing.T) {
 		t.Run(target.name, func(t *testing.T) {
 			source := x86ADXCompleteFormsSource(target.goarch)
 			requireX86GoAssemblerResult(t, target.goarch, source, true)
-			file, err := Parse(ArchAMD64, source)
-			if err != nil {
-				t.Fatal(err)
-			}
-			ll, err := Translate(file, Options{
-				Goarch:       target.goarch,
-				TargetTriple: target.triple,
-				Sigs:         map[string]FuncSig{"adxforms": {Name: "adxforms", Ret: Void}},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			ll := x86UnboundVoidScalarFormatObject(t, source, "adxforms", target.goarch, target.triple)
 			for _, want := range []string{"add i32", "icmp ult i32", `"target-features"="+adx"`} {
 				if !strings.Contains(ll, want) {
 					t.Fatalf("ADX lowering omitted %q:\n%s", want, ll)

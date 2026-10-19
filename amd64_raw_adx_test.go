@@ -112,19 +112,11 @@ func TestX86RawADXAddressAndSegmentForms(t *testing.T) {
 						fmt.Fprintf(&source, "BYTE $0x%02x\n", b)
 					}
 					source.WriteString("RET\n")
-					file, err := Parse(ArchAMD64, source.String())
-					if err != nil {
-						t.Fatal(err)
-					}
 					arch, triple := "amd64", "x86_64-unknown-linux-gnu"
 					if mode == 32 {
 						arch, triple = "386", "i386-unknown-linux-gnu"
 					}
-					ir, err := Translate(file, Options{Goarch: arch, TargetTriple: triple,
-						Sigs: map[string]FuncSig{"adxaddress": {Name: "adxaddress", Ret: Void}}})
-					if err != nil {
-						t.Fatal(err)
-					}
+					ir := x86UnboundVoidRawScalarFormatObject(t, source.String(), arch, triple)
 					if override && !strings.Contains(ir, fmt.Sprintf(" to i%d", bits)) {
 						t.Fatal("address-size wrapping was not lowered")
 					}
@@ -270,15 +262,7 @@ func TestX86RawADXObjectsAcrossTargets(t *testing.T) {
 			}
 			source.WriteString("RET\n")
 			requireX86GoAssemblerResult(t, target.arch, source.String(), true)
-			file, err := Parse(ArchAMD64, source.String())
-			if err != nil {
-				t.Fatal(err)
-			}
-			ir, err := Translate(file, Options{Goarch: target.arch, TargetTriple: target.triple,
-				Sigs: map[string]FuncSig{"adxraw": {Name: "adxraw", Ret: Void}}})
-			if err != nil {
-				t.Fatal(err)
-			}
+			ir := x86UnboundVoidRawScalarFormatObject(t, source.String(), target.arch, target.triple)
 			compileLLVMToObject(t, llc, target.triple, "adx-raw.ll", "adx-raw.o", ir)
 		})
 	}
