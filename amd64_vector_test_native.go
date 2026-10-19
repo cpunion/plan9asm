@@ -28,10 +28,13 @@ func (c *amd64Ctx) emitVectorTestNativeMemory(ins Instr, form x86VectorTestForm,
 		operand = "%fs:" + operand
 	}
 	assembly := strings.ToLower(string(ins.Op)) + " " + operand + ", $3; setb $0; sete $1"
-	result := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = call { i8, i8 } asm sideeffect %q, %q(%s elementtype([%d x i8]) %s, <%d x i8> %s)\n",
+	// A bitcast-only floating carrier needs AVX, not AVX2, for a Y input.
+	// No floating arithmetic or conversion can change the source bits.
+	carrier, result := c.newTmp(), c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i8> %s to <%d x float>\n", carrier, form.byteWidth, value, form.byteWidth/4)
+	fmt.Fprintf(c.b, "  %%%s = call { i8, i8 } asm sideeffect %q, %q(%s elementtype([%d x i8]) %s, <%d x float> %%%s)\n",
 		result, assembly, "=q,=q,*m,x,~{flags},~{fpsr},~{memory}", pointerType, form.byteWidth,
-		pointer, form.byteWidth, value)
+		pointer, form.byteWidth/4, carrier)
 	for index, slot := range []string{c.flagsCFSlot, c.flagsZSlot} {
 		byteValue, boolean := c.newTmp(), c.newTmp()
 		fmt.Fprintf(c.b, "  %%%s = extractvalue { i8, i8 } %%%s, %d\n", byteValue, result, index)

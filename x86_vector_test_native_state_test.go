@@ -62,7 +62,7 @@ func TestX86VectorTestPairedBytesFlagsAndStandaloneBoundary(t *testing.T) {
 			for missing := -1; missing < width; missing++ {
 				state := x86ResultState{flags: x86ByteFlagAF, direction: x86ResultDirectionEither}
 				state.pointerGP[6], state.gp[3] = true, 0x55
-				state.xmm[1], state.vectorUpper[1], state.masks[2] = 0xffff, ^uint64(0), true
+				state.xmm[1], state.vectorUpper[1], state.masks[2] = 0xffff, ^uint64(0)&^0xffff, true
 				if missing >= 0 {
 					state.writeVector(1, width, state.vectorBytes(1)&^(uint64(1)<<uint(missing)), true)
 				}

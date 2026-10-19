@@ -92,6 +92,14 @@ func inferFuncTargetFeaturesForGOARCH(arch Arch, goarch string, fn Func) string 
 				// an isolated .Z function with no unsuffixed sibling.
 				add("+ssse3")
 			}
+			if form, known, err := x86VectorTestProperties(ins.Op, ins, moveArch); known && err == nil &&
+				ins.Args[0].Kind != OpReg && ins.Args[0].Kind != OpFP {
+				if form.vector {
+					add("+avx")
+				} else {
+					add("+sse4.1")
+				}
+			}
 			if form, known, err := x86MoveMaskProperties(ins.Op, ins, moveArch); known && err == nil &&
 				moveArch == "386" && form.floatingLaneBits == 0 && form.byteWidth >= 16 {
 				// Both packed byte-mask widths lower through the SSE2 i128
