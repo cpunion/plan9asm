@@ -127,7 +127,7 @@ int main(void) {
                     int active = lane < test.lanes && ((mask>>lane)&1);
                     if (active) want = reference(test.mode,input[32+lane],memory[test.broadcast?0:lane]);
                     else if (lane < test.lanes && !test.zero) want = input[lane];
-                    else if (test.scalar && lane < 8) want = input[32+lane];
+                    else if (test.scalar && lane > 0 && lane < 8) want = input[32+lane];
                     uint16_t got = output[lane+1];
                     if (test.mode < 4 && active && half_nan(want) && half_nan(got)) continue;
                     if (got != want) {
