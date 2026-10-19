@@ -18,7 +18,7 @@ func TestX86ADXGrammarMatchesCompleteGoEncoder(t *testing.T) {
 	text := string(data)
 	table := regexp.MustCompile(`(?s)var yml_rl = \[\]ytab\{(.*?)\n\}`).FindStringSubmatch(text)
 	if len(table) != 2 || strings.Count(table[1], "argList{") != 1 ||
-		!strings.Contains(table[1], "argList{Yml, Yrl}") {
+		!regexp.MustCompile(`\{Zm_r,\s*1,\s*argList\{Yml, Yrl\}\}`).MatchString(table[1]) {
 		t.Fatal("Go ADX register/memory operand grammar changed")
 	}
 	rows := regexp.MustCompile(`\{A((?:ADCX|ADOX)[LQ]),\s*yml_rl,\s*(Pq[45]w?),\s*opBytes\{0xf6\}\}`).FindAllStringSubmatch(text, -1)
