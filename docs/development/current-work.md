@@ -298,8 +298,10 @@ before changing implementation or claiming a speedup. Do not relax budgets.
    move members and the W/L/Q native PUSH input family lack their paired
    numerical continuation. The local candidate at `fbe79524d` adds exact
    volatile accesses, shared typed effects, mandatory Void inputs, five-target
-   objects and actual-host numerical/fault tests. Its first GREEN is running;
-   that candidate is not yet qualified or published. Retain the original
+   objects and actual-host numerical/fault tests. Its first GREEN passes all
+   eleven roots / 478 children with unchanged source/tools; three-lane
+   qualification and final gates remain pending. The candidate is not yet
+   published. Retain the original
    32-kernel comparison source and its native counterpart.
 3. Rerun the unchanged complete standard-library corpus and benchmark after
    relevant source repairs. Do not convert Context into successful compilation.

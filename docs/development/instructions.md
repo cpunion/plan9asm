@@ -140,6 +140,16 @@ declaration observations; default mode means AMD64. Keep all 16 SETcc predicates
 canonical result bytes, independent helper frames and actual 386 helper tests.
 Portable i1-to-i32 value execution is not native entry or C bool ABI evidence.
 
+All four floating x87 moves share their existing F/D, load/store, pop and
+register grammar. Paired native 4/8-byte accesses remain unaligned and volatile;
+reads consume an incoming pointer and numerical indexes, while stores retain
+the stricter pointer-base role. Reuse x87 value/depth effects and require source
+bytes even for Void. W/L/Q PUSH reads use their exact stack-width grammar and
+a transfer-local read view; no later backing or standalone-query fact follows.
+Retain original Go objects, three-mode target objects, portable values/canaries
+and exact dead-access faults. Native x87 environment/exception execution stays
+with its required original-source runtime owners.
+
 Mode32 zero-argument manual I8/I16/I32 returns use the existing logical AX
 transport. Share its CFG and exact-byte return obligation with the distinct
 custom-register bool checker; I1 still needs canonical zero/one. Route absent
