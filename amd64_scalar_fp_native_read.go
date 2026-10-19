@@ -240,6 +240,16 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 	transfer := func(ordinal int, ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string) bool {
 		state.loweredStaticReads = c.fpScalarData
 		defer func() { state.loweredStaticReads = nil }()
+		keepAddressBits := false
+		defer func() {
+			if !keepAddressBits {
+				state.nativeLEAAddressBits = x86NativeLEAAddressBits{}
+			}
+		}()
+		if accepted, known := x86ResultNativeLEAAddressBitsStep(ins, state, owned, arch, addressBitStores); known {
+			keepAddressBits = accepted
+			return accepted
+		}
 		if accepted, known := x86ResultIntegerMinMaxStep(ins, state, owned, arch, true); known {
 			return accepted // The paired E4 reader retains active exact-width volatile faults.
 		}

@@ -625,16 +625,17 @@ type x86ResultState struct {
 	// The disjoint upper 48 byte bits share the same physical X/Y/Z bank.
 	// Existing low-X effects preserve these bits unless their typed encoding
 	// explicitly clears the upper aliases.
-	vectorUpper    [32]uint64
-	masks          [8]bool // used only by the private scalar bit-view transfer
-	flags          uint8
-	direction      x86ResultDirection          // DF only; no numerical/status/pointer permission.
-	stringCount    x86ResultStringCount        // Full native CX zero/nonzero; never NUM or a memory role.
-	valueStack     *x86ResultValueStack        // Private numerical storage; never physical SP or an entry slot.
-	x87            *x86ResultX87State          // Private logical availability; never hardware entry/control state.
-	continuation   *x86ContinuationResultState // Separate opaque control/table identities, never NUM/native storage.
-	bitScanPending x86ResultBitScanPending
-	predicate      x86ResultPredicate
+	vectorUpper          [32]uint64
+	masks                [8]bool // used only by the private scalar bit-view transfer
+	flags                uint8
+	direction            x86ResultDirection          // DF only; no numerical/status/pointer permission.
+	stringCount          x86ResultStringCount        // Full native CX zero/nonzero; never NUM or a memory role.
+	valueStack           *x86ResultValueStack        // Private numerical storage; never physical SP or an entry slot.
+	x87                  *x86ResultX87State          // Private logical availability; never hardware entry/control state.
+	continuation         *x86ContinuationResultState // Separate opaque control/table identities, never NUM/native storage.
+	bitScanPending       x86ResultBitScanPending
+	predicate            x86ResultPredicate
+	nativeLEAAddressBits x86NativeLEAAddressBits
 
 	// Incoming pointer identities are not numerical register bytes. This is
 	// only an initialization observation, never a pointee/backing permission.
@@ -851,6 +852,9 @@ func (state x86ResultState) intersect(other x86ResultState) x86ResultState {
 	}
 	if merged.predicate != other.predicate {
 		merged.predicate = x86ResultPredicate{}
+	}
+	if merged.nativeLEAAddressBits != other.nativeLEAAddressBits {
+		merged.nativeLEAAddressBits = x86NativeLEAAddressBits{}
 	}
 	merged.resultAddressWritten = state.resultAddressWritten || other.resultAddressWritten
 	return merged
