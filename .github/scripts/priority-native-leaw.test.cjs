@@ -60,6 +60,10 @@ test('native LEAW rejects missing duplicated failed skipped and incomplete lifec
       events.splice(at, 0, events[at]);
       assert.throws(() => audit(events), name + ' duplicate ' + Action);
     }
+    const late = completeEvents();
+    const at = late.findIndex(value => value.Test === name && value.Action === 'pass');
+    late.splice(at + 1, 0, event('output', name, 'late output after the terminal\n'));
+    assert.throws(() => audit(late), name + ' output after pass');
   }
   for (const discovered of ['', inventory + root + '\n', inventory.replace(root, 'TestUnrelated')]) {
     assert.throws(() => audit(completeEvents(), discovered));

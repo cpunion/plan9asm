@@ -22,7 +22,7 @@ const sdk = /actual LEA source\/object receipt: SDK=go[1-9][0-9]*\.[0-9]+(?:\.[0
 function auditNativeLEAW(inventory, raw) {
   const result = auditNativeOwners(inventory, raw, [root], children);
   const outputs = new Map([root, ...children].map(name => [name, '']));
-  const passed = new Map(), spans = [];
+  const passed = new Map(), states = new Map(), spans = [];
   let started = false, complete = false;
   for (const [sequence, line] of raw.split(/\r?\n/).filter(Boolean).entries()) {
     const event = JSON.parse(line);
@@ -43,6 +43,8 @@ function auditNativeLEAW(inventory, raw) {
     assert.ok(started, 'LEAW test before its package start');
     assert.ok(['run', 'output', 'pass'].includes(event.Action), 'unknown LEAW test lifecycle action');
     if (event.Action === 'run') {
+      assert.ok(!states.has(event.Test), 'LEAW test restarted after its original lifecycle');
+      states.set(event.Test, 'running');
       if (event.Test !== root) {
         const output = outputs.get(root);
         const hosts = [...output.matchAll(host)], captures = [...output.matchAll(sdk)];
@@ -55,12 +57,14 @@ function auditNativeLEAW(inventory, raw) {
       }
       continue;
     }
+    assert.equal(states.get(event.Test), 'running', 'LEAW observation outside its live execution owner');
     if (event.Action === 'output') {
       assert.equal(typeof event.Output, 'string', 'LEAW output must be text');
       if (event.Test === root) spans.push({offset: outputs.get(root).length, sequence});
       outputs.set(event.Test, outputs.get(event.Test) + event.Output);
       continue;
     }
+    states.set(event.Test, 'passed');
     passed.set(event.Test, sequence);
     const output = outputs.get(event.Test);
     if (event.Test !== root) {
