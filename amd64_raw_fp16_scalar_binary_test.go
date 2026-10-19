@@ -167,9 +167,17 @@ func TestTranslateRawFP16ScalarBinaryLLVM22Targets(t *testing.T) {
 			}
 			source.WriteString("\tRET\n")
 			ir := x86UnboundVoidRawScalarFormatObject(t, source.String(), target.goarch, target.triple)
-			for _, want := range []string{"fadd half", "fsub half", "fmul half", "fdiv half", "load i16", "_scalar_load", "phi i16", "vsqrtsh "} {
+			if strings.Count(ir, "asm sideeffect") != 14 {
+				t.Fatal("original scalar FP16 format inventory changed")
+			}
+			for _, op := range rawFP16ScalarBinaryOpcodes {
+				if !strings.Contains(ir, strings.ToLower(string(op))+" ") {
+					t.Fatal("missing original native scalar FP16 operation", op)
+				}
+			}
+			for _, want := range []string{"elementtype([2 x i8])", "{ru-sae}", "{sae}", "kmovw "} {
 				if !strings.Contains(ir, want) {
-					t.Fatalf("missing %s:\n%s", want, ir)
+					t.Fatal("missing original scalar FP16 access or control", want)
 				}
 			}
 			compileLLVMToObject(t, llc, target.triple, "raw-fp16-scalar-binary.ll", "raw-fp16-scalar-binary.o", ir)

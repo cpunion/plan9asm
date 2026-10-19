@@ -101,10 +101,6 @@ func TestTranslateRawFP16BinaryLLVM22Targets(t *testing.T) {
 	}
 	source.WriteString("\tRET\n")
 	requireX86GoAssemblerResult(t, "amd64", source.String(), true)
-	file, err := Parse(ArchAMD64, source.String())
-	if err != nil {
-		t.Fatal(err)
-	}
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc not found")
@@ -115,18 +111,22 @@ func TestTranslateRawFP16BinaryLLVM22Targets(t *testing.T) {
 		"x86_64-pc-windows-msvc",
 	} {
 		t.Run(triple, func(t *testing.T) {
-			ir, err := Translate(file, Options{
-				Goarch: "amd64", TargetTriple: triple,
-				Sigs: map[string]FuncSig{"rawFP16Binary": {Name: "rawFP16Binary", Ret: Void}},
-			})
-			if err != nil {
-				t.Fatal(err)
+			// Keep the entire original format source. Its absent numerical
+			// inputs require public Context; initialized counterparts below
+			// own complete public objects, independently of this emitter unit.
+			ir := x86UnboundVoidRawScalarFormatObject(t, source.String(), "amd64", triple)
+			if strings.Count(ir, "asm sideeffect") != 36 {
+				t.Fatal("original packed FP16 format inventory changed")
 			}
-			if !strings.Contains(ir, "fadd <8 x half>") ||
-				!strings.Contains(ir, "fsub <16 x half>") ||
-				!strings.Contains(ir, "fdiv <32 x half>") ||
-				!strings.Contains(ir, "load i16, ptr") {
-				t.Fatalf("missing FP16 lane operation or broadcast:\n%s", ir)
+			for _, op := range rawFP16BinaryOpcodes {
+				if !strings.Contains(ir, strings.ToLower(string(op))+" ") {
+					t.Fatal("missing original native FP16 operation", op)
+				}
+			}
+			for _, control := range []string{"{1to8}", "{1to16}", "{1to32}", "kmovd "} {
+				if !strings.Contains(ir, control) {
+					t.Fatal("missing original broadcast or full mask", control)
+				}
 			}
 			compileLLVMToObject(t, llc, triple, "raw-fp16-binary.ll", "raw-fp16-binary.o", ir)
 		})
@@ -214,22 +214,16 @@ func TestTranslateRawFP16Binary386Mask(t *testing.T) {
 	}
 	source.WriteString("\tRET\n")
 	requireX86GoAssemblerResult(t, "386", source.String(), true)
-	file, err := Parse(ArchAMD64, source.String())
-	if err != nil {
-		t.Fatal(err)
-	}
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc not found")
 	}
 	for _, triple := range []string{"i386-unknown-linux-gnu", "i686-pc-windows-msvc"} {
 		t.Run(triple, func(t *testing.T) {
-			ir, err := Translate(file, Options{
-				Goarch: "386", TargetTriple: triple,
-				Sigs: map[string]FuncSig{"rawFP16386": {Name: "rawFP16386", Ret: Void}},
-			})
-			if err != nil {
-				t.Fatal(err)
+			ir := x86UnboundVoidRawScalarFormatObject(t, source.String(), "386", triple)
+			if strings.Count(ir, "asm sideeffect") != 2 ||
+				!strings.Contains(ir, "vaddph ") || !strings.Contains(ir, "vsubph ") {
+				t.Fatal("original mode32 FP16 format inventory changed")
 			}
 			compileLLVMToObject(t, llc, triple, "raw-fp16-386.ll", "raw-fp16-386.o", ir)
 		})
