@@ -24,6 +24,14 @@ func TestX86VectorTestDeadNativeReadsKeepExactOpcodesAndFeatures(t *testing.T) {
 				suffix = "L"
 			}
 			for index, row := range x86VectorTestInputRows() {
+				ins := x86ScalarLaneInstruction(t, row)
+				want := "+avx"
+				if strings.HasPrefix(row, "PTEST") {
+					want = "+sse4.1"
+				}
+				if got := inferFuncTargetFeaturesForGOARCH(ArchAMD64, target.arch, Func{Instrs: []Instr{ins}}); got != want {
+					t.Fatal("isolated native vector test borrowed sibling ISA features", row, got, want)
+				}
 				move, bank := "MOVUPS", "X"
 				if strings.HasSuffix(row, "Y1") {
 					move, bank = "VMOVUPS", "Y"
@@ -40,9 +48,11 @@ func TestX86VectorTestDeadNativeReadsKeepExactOpcodesAndFeatures(t *testing.T) {
 				if err != nil {
 					t.Fatal("initialized dead memory effects lost their actual incoming pointers", api, err)
 				}
-				if strings.Count(ir, "asm sideeffect") != 7 ||
-					!strings.Contains(ir, `"target-features"="+sse4.1"`) ||
-					!strings.Contains(ir, `"target-features"="+avx"`) || strings.Contains(ir, "+avx2") {
+				// Original MOVUPS input producers retain their own native
+				// instructions and SSE feature; do not count them as PTESTs.
+				tests := regexp.MustCompile(`asm sideeffect "(?:v?ptest|vtestpd|vtestps) `)
+				if len(tests.FindAllString(ir, -1)) != 7 || !strings.Contains(ir, "+sse4.1") ||
+					!strings.Contains(ir, "+avx") || strings.Contains(ir, "+avx2") {
 					t.Fatal("native vector-test opcode or minimal carrier features lost", api)
 				}
 				for _, input := range []string{ir, x86DwordProductIROptimize(t, ir)} {
