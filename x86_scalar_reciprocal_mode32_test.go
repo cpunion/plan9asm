@@ -2,12 +2,14 @@ package plan9asm
 
 import (
 	"errors"
+	"fmt"
 	"testing"
 )
 
 func TestX86ScalarReciprocalMode32FrontendAddressHasNoPhysicalPermission(t *testing.T) {
 	for _, op := range []string{"VRCPSS", "VRSQRTSS"} {
-		for _, memory := range []string{"16(R9)"} {
+		for _, base := range []string{"R8", "R9", "R10", "R11", "R13", "R14", "R15"} {
+			memory := fmt.Sprintf("16(%s)", base)
 			t.Run(op+"/"+memory, func(t *testing.T) {
 				source := "TEXT f(SB),4,$0-0\n" + op + " " + memory + ",X1,X2\nRET\n"
 				goAssemblerOracleOutput(t, "386", source, "", true)
@@ -25,13 +27,13 @@ func TestX86ScalarReciprocalMode32FrontendAddressHasNoPhysicalPermission(t *test
 				}
 			})
 		}
-		for _, memory := range []string{"16(AX)(R9*2)", "16(R9)(CX*2)"} {
+		for _, memory := range []string{"16(AX)(R9*2)", "16(R9)(CX*2)", "16(R12)"} {
 			t.Run(op+"/rejected-SIB/"+memory, func(t *testing.T) {
 				ins := x86ScalarLaneInstruction(t, op+" "+memory+",X1,X2")
 				if _, known, err := x86ScalarReciprocalProperties(ins.Op, ins, "386"); !known || err == nil || errors.Is(err, ErrProbeNeedsContext) {
 					t.Fatal("simple VEX base compatibility was incorrectly extended to SIB syntax", known, err)
 				}
-				if memory == "16(R9)(CX*2)" {
+				if memory != "16(AX)(R9*2)" {
 					goAssemblerOracleOutput(t, "386", "TEXT f(SB),4,$0-0\n"+ins.Raw+"\nRET\n", "", false)
 				} else {
 					// Actual Go 1.27 emitted this positionless stderr in the
