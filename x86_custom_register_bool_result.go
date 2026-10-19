@@ -15,8 +15,15 @@ func checkX86CustomRegisterBoolResultInitialization(fn Func, sig FuncSig, arch s
 // This selector routes the existing no-argument AX return transport to its
 // proof. It supplies no ABI layout, incoming register bytes or frame storage.
 func x86LogicalScalarResultNeedsProof(sig FuncSig, arch string) bool {
-	return arch == "386" && (sig.Ret == I8 || sig.Ret == I16 || sig.Ret == I32) &&
-		len(sig.Args) == 0 && len(sig.ArgRegs) == 0 &&
+	if arch != "386" && arch != "amd64" {
+		return false
+	}
+	switch sig.Ret {
+	case I1, I8, I16, I32, I64:
+	default:
+		return false
+	}
+	return len(sig.Args) == 0 && len(sig.ArgRegs) == 0 &&
 		len(sig.Frame.Params) == 0 && len(sig.Frame.Results) == 0
 }
 
@@ -39,7 +46,7 @@ func checkX86LogicalRegisterResultInitialization(fn Func, sig FuncSig, arch stri
 		sig.ARMEntry != nil || sig.ARM64GoRegisterABI != nil || sig.ARM64ClosureABI != nil || sig.WASMContext != "" || sig.WASMNative ||
 		strings.Contains(fn.Sym, "<") || len(fn.X86RawText) != 0 || fn.x86SourceStack != nil || fn.x86FixedLocal != nil ||
 		fn.x86DirectTailRoot != nil || fn.x86BoolCalls != nil || sig.x86BorrowedBoolTail {
-		return fail("requires a complete distinct ordinary mode32 logical register transport")
+		return fail("requires a complete distinct ordinary x86 logical register transport")
 	}
 	for _, ins := range fn.Instrs {
 		if ins.x86Encoded || ins.x86SourceRaw != nil || ins.x86RawNearReturn != nil ||
@@ -101,8 +108,16 @@ func checkX86LogicalRegisterResultInitialization(fn Func, sig FuncSig, arch stri
 	}
 	return checkX86ResultSourceFlow(fn, initial, nil, 0, arch, transfer,
 		func(state x86ResultState, pc int) error {
-			root, mask, _ := x86ResultGP(AX, width, arch)
-			if state.gp[root]&mask != mask {
+			viewWidth := width
+			if arch == "386" && viewWidth == 8 {
+				// Logical AX uses the emitter's i64 slot. Existing mode32
+				// dword writes zero its upper bytes; this does not admit a
+				// physical qword register operand or an EDX:AX ABI result.
+				viewWidth = 4
+			}
+			root, _, valid := x86ResultGP(AX, viewWidth, arch)
+			mask := x86CallerByteMask(AX, width)
+			if !valid || mask == 0 || state.gp[root]&mask != mask {
 				return fail(fmt.Sprintf("AX low %d result bytes are not initialized on every path to RET %d", width, pc))
 			}
 			if canonicalBool && state.canonicalGP[root]&mask != mask {
