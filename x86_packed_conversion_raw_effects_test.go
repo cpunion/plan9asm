@@ -213,8 +213,24 @@ func TestX86PackedConversionRawIdentityAndNativeBoundaries(t *testing.T) {
 					} else {
 						accepted, known = x86LoweredPackedConversionResultStep(ins, &state, nil, arch)
 					}
-					if accepted || !known || !reflect.DeepEqual(before, state) {
+					// Some original legacy/VEX decoder forms have no encoded
+					// grammar relaxation. Removing their sole raw-origin marker
+					// makes a real named instruction, which this raw-only adapter
+					// must leave to the independent strict named effect.
+					becameNamed := mutation == "origin" && x86ResultNamedPredicateInstruction(ins)
+					if accepted || known == becameNamed || !reflect.DeepEqual(before, state) {
 						t.Fatal("conversion borrowed physical identity, native backing or standalone authority", rows[ordinal], mutation, accepted, known)
+					}
+					if becameNamed {
+						accepted, known = x86ResultSignedPackedFloatStep(ins, &state, nil, arch, false)
+						if !known {
+							accepted, known = x86ResultPackedConversionStep(ins, &state, nil, arch)
+						}
+						// Only an initialized register input is a standalone
+						// positive; native memory still has no paired reader.
+						if !known || accepted != (ins.Args[0].Kind == OpReg) || x86RawPackedConversionSource(ins, arch) {
+							t.Fatal("removed origin confused the raw-only and strict named effects", rows[ordinal], accepted, known)
+						}
 					}
 				}
 				copy := cloneX86ReplayInstrs([]Instr{original})[0]
