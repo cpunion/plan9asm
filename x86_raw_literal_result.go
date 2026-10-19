@@ -129,6 +129,9 @@ func (c *amd64Ctx) checkRawLiteralResults() (bool, error) {
 	transfer := func(_ int, ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string) bool {
 		state.loweredStaticReads = c.fpScalarData
 		defer func() { state.loweredStaticReads = nil }()
+		if accepted, known := x86ResultRawVectorMoveLiteralStep(ins, state, owned, resultOffset, arch); known {
+			return accepted
+		}
 		if x86RawBroadcastLiteralForm(ins, arch) {
 			accepted, _ := x86ResultBroadcastInputs(ins, state, owned, arch, false, true)
 			return accepted

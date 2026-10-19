@@ -71,6 +71,21 @@ func x86RawVectorMoveLiteralSource(ins Instr, arch string) bool {
 		ins.x86RIPMemoryRead.width == int64(form.spec.bits/8)
 }
 
+func x86ResultRawVectorMoveLiteralStep(ins Instr, state *x86ResultState, owned []bool,
+	resultOffset int64, arch string) (bool, bool) {
+	if !x86RawVectorMoveLiteralSource(ins, arch) {
+		return false, false
+	}
+	if form, known, _ := amd64PackedVectorMoveProperties(ins, arch); known && form.mask >= 0 && !form.zeroing {
+		destination, _ := amd64VectorRegisterIndex(ins.Args[form.destination].Reg, form.byteWidth)
+		required := x86CallerVectorByteMask(int64(form.byteWidth))
+		if state.vectorBytes(destination)&required != required {
+			return false, true // A possible inactive lane still consumes its actual old byte, including Void.
+		}
+	}
+	return x86ScalarFPResultTransfer(ins, state, owned, resultOffset, arch), true
+}
+
 // Exact decoded moves compose only in the paired lowering observer. Retain the
 // captured physical form while projecting provenance locally; original source,
 // native entry, caller, FP/AUTO and standalone declaration roles are unchanged.
