@@ -105,7 +105,10 @@ func TestTranslateAMD64ScalarShiftRotateCompleteGoAssemblerForms(t *testing.T) {
 		fmt.Fprintf(&src, "\t%s CX, R11, (DI)\n", op)
 	}
 	src.WriteString("\tRET\n")
-	ll := translateAMD64EcosystemCase(t, src.String(), "scalarshiftrotateforms")
+	// The complete original encoder inventory has no input declaration and
+	// includes undefined word double-shift counts. It is a format object,
+	// not an initialized numerical program; keep its public Context result.
+	ll := x86UnboundVoidScalarFormatObject(t, src.String(), "scalarshiftrotateforms", "amd64", "x86_64-unknown-linux-gnu")
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc not found")
@@ -142,20 +145,7 @@ func TestTranslate386ScalarShiftRotateCompleteGoAssemblerForms(t *testing.T) {
 		fmt.Fprintf(&src, "\t%s CX, SI, (DI)\n", op)
 	}
 	src.WriteString("\tRET\n")
-	file, err := Parse(ArchAMD64, src.String())
-	if err != nil {
-		t.Fatal(err)
-	}
-	ll, err := Translate(file, Options{
-		TargetTriple: "i386-unknown-linux-gnu",
-		Goarch:       "386",
-		Sigs: map[string]FuncSig{
-			"scalarshiftrotateforms386": {Name: "scalarshiftrotateforms386", Ret: Void},
-		},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	ll := x86UnboundVoidScalarFormatObject(t, src.String(), "scalarshiftrotateforms386", "386", "i386-unknown-linux-gnu")
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc not found")
