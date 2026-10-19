@@ -77,6 +77,35 @@ func TestX86PackedConversionRawInitializedFiveTargetObjects(t *testing.T) {
 			if consumed != len(rows) {
 				t.Fatal("incomplete raw conversion object partition", consumed, len(rows))
 			}
+			t.Run("original-low-bank-EVEX", func(t *testing.T) {
+				var source, declarations strings.Builder
+				for index, member := range []struct {
+					row  string
+					code []byte
+				}{
+					{"VCVTDQ2PS X0,X1", []byte{0x62, 0xf1, 0x7c, 0x08, 0x5b, 0xc8}},
+					{"VCVTDQ2PD X0,X1", []byte{0x62, 0xf1, 0x7e, 0x08, 0xe6, 0xc8}},
+				} {
+					body, declaration := x86PackedConversionContinuationFixture(t, fmt.Sprintf("OriginalEVEX%d", index), target.arch, member.row)
+					source.WriteString(strings.Replace(body, member.row+"\n", x86RawDisplacementDirectives(member.code), 1))
+					declarations.WriteString(declaration)
+				}
+				x86LEAActualTargetGoObject(t, target.arch, target.triple, source.String())
+				for _, api := range []string{"text", "module", "Go"} {
+					ir, err := x86ScalarFPBitViewAPI(t, source.String(), declarations.String(), target.arch, target.triple, api)
+					if err != nil || strings.Count(ir, "{evex} vcvtdq2p") != 2 || !strings.Contains(ir, "+avx512vl") {
+						t.Fatal("low-bank original EVEX was reinterpreted as VEX or borrowed sibling features", api, err)
+					}
+					for _, pipeline := range []struct{ ir, backend string }{
+						{ir, "-O0"}, {ir, "-O2"}, {x86DwordProductIROptimize(t, ir), "-O2"},
+					} {
+						if strings.Count(pipeline.ir, "{evex} vcvtdq2p") != 2 {
+							t.Fatal("IR optimization erased physical EVEX opcode identity", api)
+						}
+						x86PackedStringCompileObject(t, llc, target.triple, pipeline.ir, pipeline.backend)
+					}
+				}
+			})
 			t.Logf("%d raw functions: all42 members and each physical shape, register/native tuple, merge and zero-broadcast; 3 APIs x 3 optimization paths, objects only", consumed)
 		})
 	}
