@@ -90,6 +90,24 @@ func TestX86AccumulatorSignExtendVoidNeedsSource(t *testing.T) {
 	}
 }
 
+func TestX86AccumulatorSignExtendDispatchRejectsBeforeIR(t *testing.T) {
+	for _, row := range x86AccumulatorSignExtendOracle {
+		for _, arch := range []string{"386", "amd64"} {
+			for _, bad := range []Instr{
+				{Op: "MOVL", Raw: "foreign dispatch"},
+				{Op: Op(row.op), Args: []Operand{{Kind: OpReg, Reg: AX}}, Raw: "extra operand"},
+			} {
+				var ir strings.Builder
+				consumer := &amd64Ctx{b: &ir, goarch: arch}
+				known, terminated, err := consumer.lowerAccumulatorSignExtend(Op(row.op), bad)
+				if !known || terminated || err == nil || ir.Len() != 0 {
+					t.Fatal("invalid complete grammar emitted IR before rejection", row.op, arch, err, ir.String())
+				}
+			}
+		}
+	}
+}
+
 func TestX86AccumulatorSignExtendInitializedFiveTargetObjects(t *testing.T) {
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
