@@ -220,6 +220,9 @@ func TestX86RawCompactOriginalIdentityAndEveryInputByte(t *testing.T) {
 							case "mask":
 								current.masks[1] = false
 							case "record":
+								// Keep an encoded origin while removing its record.
+								// Removing both denotes an ordinary valid named row.
+								changed.x86Encoded = true
 								changed.x86SourceRaw = nil
 							case "opcode":
 								changed.Op = Op(member + ".Z")
