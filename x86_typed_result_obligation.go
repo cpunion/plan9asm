@@ -66,6 +66,9 @@ func x86TypedFPResultNeedsProof(fn Func, sig FuncSig, arch string) bool {
 		if sig.Ret != Void && x86EndBranchPreservesSourceState(ins) {
 			return true // End markers preserve existing result bytes; they never supply an ABI return value.
 		}
+		if _, known, err := x86FloatingHelperProperties(ins, arch); known && err == nil {
+			return true // Dead native floating helpers retain every input, mask and exception obligation.
+		}
 		if _, known, err := x86SqrtProperties(ins, arch); known && err == nil {
 			return true // Dead square roots still consume numerical inputs and masks.
 		}

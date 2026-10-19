@@ -30,6 +30,9 @@ func (c *amd64Ctx) lowerFloatingRange(op Op, ins Instr) (ok bool, terminated boo
 	if !recognized {
 		return false, false, nil
 	}
+	if x86ScalarFloatIntegerNativeTarget(c.goarch, c.targetTriple) {
+		return c.lowerNativeFloatingHelper(op, ins)
+	}
 	if c.goarch == "386" {
 		return true, false, fmt.Errorf("386 %s exceeds the Go assembler frontend's three-operand limit: %q", baseOp, ins.Raw)
 	}

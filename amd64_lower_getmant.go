@@ -24,6 +24,9 @@ func (c *amd64Ctx) lowerGetMant(op Op, ins Instr) (ok bool, terminated bool, err
 	if !recognized {
 		return false, false, nil
 	}
+	if x86ScalarFloatIntegerNativeTarget(c.goarch, c.targetTriple) {
+		return c.lowerNativeFloatingHelper(op, ins)
+	}
 	form, err := c.parseUnaryImmediateFloatingForm(baseOp, suffix, spec, ins)
 	if err != nil {
 		return true, false, err

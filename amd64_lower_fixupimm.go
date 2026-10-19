@@ -27,6 +27,9 @@ func (c *amd64Ctx) lowerFixupImmediate(op Op, ins Instr) (ok bool, terminated bo
 	if !recognized {
 		return false, false, nil
 	}
+	if x86ScalarFloatIntegerNativeTarget(c.goarch, c.targetTriple) {
+		return c.lowerNativeFloatingHelper(op, ins)
+	}
 	shape := amd64UnaryImmediateFloatingShape{laneBits: spec.laneBits, scalar: spec.scalar, twoSource: true}
 	form, err := c.parseUnaryImmediateFloatingForm(baseOp, suffix, shape, ins)
 	if err != nil {

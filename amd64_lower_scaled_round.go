@@ -39,6 +39,9 @@ func (c *amd64Ctx) lowerScaledRound(op Op, ins Instr) (ok bool, terminated bool,
 	if !recognized {
 		return false, false, nil
 	}
+	if x86ScalarFloatIntegerNativeTarget(c.goarch, c.targetTriple) {
+		return c.lowerNativeFloatingHelper(op, ins)
+	}
 	shape := amd64UnaryImmediateFloatingShape{laneBits: spec.laneBits, scalar: spec.scalar}
 	form, err := c.parseUnaryImmediateFloatingForm(baseOp, suffix, shape, ins)
 	if err != nil {
