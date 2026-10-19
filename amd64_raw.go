@@ -428,6 +428,7 @@ func decodeX86RawDirectives(fn Func, goarch string) (Func, error) {
 				packedConversion: x86PackedConversionRawIdentity(decoded[index], goarch),
 				packedMove:       x86PackedMoveRawIdentity(decoded[index], goarch),
 				packedReduction:  x86PackedReductionRawIdentity(decoded[index], goarch),
+				ternaryLogic:     x86TernaryLogicRawIdentity(decoded[index], goarch),
 			}
 		}
 		normalized = append(normalized, decoded...)
@@ -8433,9 +8434,22 @@ vectorPrefix:
 // complete Go 1.27 _yvalignd table. x/arch v0.14 rejects the EVEX encodings
 // used by github.com/minio/sha256-simd.
 func decodedX86TernaryLogicInstruction(code []byte, mode int) (instruction Instr, length int, ok bool, err error) {
-	instruction, length, ok, err = decodedX86EVEXImmediateThreeVectorInstruction(code, mode, 0x25, "VPTERNLOGD", "VPTERNLOGQ", "VPTERNLOG")
+	return decodedX86TernaryLogicInstructionWithMemory(code, mode, x86RawMemoryDecoder{})
+}
+
+func decodedX86TernaryLogicInstructionWithMemory(code []byte, mode int, memory x86RawMemoryDecoder) (instruction Instr, length int, ok bool, err error) {
+	instruction, length, ok, err = decodedX86EVEXImmediateThreeVectorPhysical(code, mode,
+		0x25, "VPTERNLOGD", "VPTERNLOGQ", "VPTERNLOG", memory, true)
 	if ok && err == nil {
-		_, _, err = x86TernaryLogicProperties(instruction.Op, instruction, "amd64")
+		instruction.x86Encoded = true
+		instruction.x86VectorBytes = amd64VectorByteWidth(instruction.Args[len(instruction.Args)-1].Reg)
+		if !memory.physicalPC {
+			arch := "amd64"
+			if mode == 32 {
+				arch = "386"
+			}
+			_, _, err = x86TernaryLogicProperties(instruction.Op, instruction, arch)
+		}
 	}
 	return instruction, length, ok, err
 }
@@ -8607,6 +8621,10 @@ func decodedX86EVEXImmediateThreeVectorInstruction(code []byte, mode int, opcode
 }
 
 func decodedX86EVEXImmediateThreeVectorInstructionWithMemory(code []byte, mode int, opcode byte, dwordOp, qwordOp Op, family string, memory x86RawMemoryDecoder) (instruction Instr, length int, ok bool, err error) {
+	return decodedX86EVEXImmediateThreeVectorPhysical(code, mode, opcode, dwordOp, qwordOp, family, memory, false)
+}
+
+func decodedX86EVEXImmediateThreeVectorPhysical(code []byte, mode int, opcode byte, dwordOp, qwordOp Op, family string, memory x86RawMemoryDecoder, physicalMode32 bool) (instruction Instr, length int, ok bool, err error) {
 	i := 0
 	segment := Reg("")
 	addressOverride := false
@@ -8637,7 +8655,7 @@ evex:
 	if addressOverride {
 		return Instr{}, 0, true, fmt.Errorf("address-size override is not source-layout safe")
 	}
-	if mode == 32 {
+	if mode == 32 && !physicalMode32 {
 		return Instr{}, 0, true, fmt.Errorf("386 %s is rejected by the Go assembler frontend's operand limit", family)
 	}
 	p0, p1, p2 := code[i+1], code[i+2], code[i+3]
@@ -8683,6 +8701,12 @@ evex:
 	}
 	destinationNumber := int(modRM>>3&7) + rExt*8 + rHighExt*16
 	secondSourceNumber := (int(^p1>>3) & 15) + (int(^p2>>3)&1)*16
+	if mode == 32 {
+		firstNumber, firstRegister := amd64VectorRegisterIndex(firstSource.Reg, vectorWidth)
+		if destinationNumber >= 8 || secondSourceNumber >= 8 || firstRegister && firstNumber >= 8 {
+			return Instr{}, 0, true, fmt.Errorf("extended vector register in 32-bit %s", family)
+		}
+	}
 	immediate := Operand{Kind: OpImm, Imm: int64(code[immediateIndex])}
 	secondSource := Operand{Kind: OpReg, Reg: Reg(fmt.Sprintf("%s%d", vectorName, secondSourceNumber))}
 	destination := Operand{Kind: OpReg, Reg: Reg(fmt.Sprintf("%s%d", vectorName, destinationNumber))}
