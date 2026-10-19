@@ -23,6 +23,25 @@ Update the contribution only after qualifying its staged source.
 
 ## Latest online evidence
 
+[39325946539](https://github.com/cpunion/plan9asm/actions/runs/39325946539)
+finished naturally at `a46ca8ab2`: 72 jobs pass, eight fail, one dependent gate
+skips, none cancelled. The full Windows modules did not run, so this run does
+not replace the last complete root inventory below. Both ownership SDKs and
+all SDK priorities except `source` pass. The three source-priority failures
+come from the independent budget oracle missing the existing two-byte LEA
+observation; production already charges it. Duplicate native fixtures fail on
+a duplicate Go package clause; the same defect also affects division fixtures.
+The next local batch fixes both without changing native ASM/C or budget limits.
+
+All four native reduction owners and their aggregate pass. Native conversion
+owners 0, 5 and 7 actually pass with AVX512F/DQ/BW/VL. Owners 1, 2, 3, 4 and 6
+fail required CPU preflight with AVX512F/VL absent and XCR0=7; their aggregate
+correctly fails. The official Linux pool is mixed, not uniformly incapable.
+A successful allocation is not a stable capability guarantee. Never substitute
+objects, portable values or skips for these native owners. Independent native
+steps now retain strict failure status while allowing unrelated owners to run;
+the next workflow has 190 passing local policy tests, not an online pass.
+
 [39285088077](https://github.com/cpunion/plan9asm/actions/runs/39285088077)
 finished naturally at `47e44aa7d`: 83 jobs pass, 16 fail, none cancelled.
 The sixteen-owner main-module union is 7,379 roots: 7,063 pass, 52 fail,
@@ -49,6 +68,9 @@ merge. Objects, portable values, native execution and ABI authority are distinct
 
 | Snapshot | Focused evidence | Lane and limits |
 |---|---|---|
+| `d5ce4441e` | Actual duplicate/division fixture package ownership, original-source controls and duplicate five-target three-API objects: 7 / 34 | Current Go, actual Go1.20 and race on this exact snapshot; native opcode execution is still separate |
+| `d16fb9ea3` | Complete raw legacy floating compare inputs, all selectors, immutable identities and five-target objects: 16 / 328 | Two disjoint current-Go cohorts; original complete source/C remains unchanged and still requires its native owner |
+| `cabff6cd8` | Complete ABS/sign Go rows, typed roles, initialized five-target objects, portable values and WIG/EVEX boundaries: 11 / 419 | Current Go; all 13 names, 42 official rows and 114 named forms; no named MMX or original AVX512 execution claim |
 | `579c4cba1` | MOVNTI, floating helpers, conflict/funnel and compact/expand: 64 roots / 1,472 children | Current Go, actual Go1.20 and race; original native execution remains separate |
 | `013181561` | ALIGN, DIV/IDIV, raw logical returns and original formats: 53 / 2,130 | Current Go, actual Go1.20 and race; no new entry or memory permission |
 | `47e44aa7d` | Raw IFMA/lookup and shared decoder: 23 / 378 | Current Go, actual Go1.20 and race |
