@@ -138,3 +138,25 @@ func TestX86X87NativeFloatingMoveOriginalGoAndLLVMObjects(t *testing.T) {
 		}
 	}
 }
+
+func TestX86X87AndStackNativeReadsDoNotSupplyStandaloneBacking(t *testing.T) {
+	for _, arch := range []string{"386", "amd64"} {
+		for _, op := range []string{"FMOVF", "FMOVFP", "FMOVD", "FMOVDP"} {
+			source, declaration := x86X87NativeMoveProgram(arch, op)
+			file, err := Parse(ArchAMD64, source)
+			if err != nil {
+				t.Fatal(err)
+			}
+			pkg := mustGoPackage(t, "nativeinputs", "package nativeinputs\n"+declaration)
+			sigs, err := goSigsForAsmFile(pkg, file, func(name string) string { return strings.TrimPrefix(name, "·") }, arch, nil, nil, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, check := range []func(Func, FuncSig, string) error{CheckX86ABI0ResultInitialization, checkX86ScalarFPResultInitialization} {
+				if !errors.Is(check(file.Funcs[0], sigs["Value"], arch), ErrProbeNeedsContext) {
+					t.Fatal("unpaired query acquired a native floating read/write", arch, op)
+				}
+			}
+		}
+	}
+}
