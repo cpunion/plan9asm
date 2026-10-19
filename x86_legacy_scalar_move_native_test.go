@@ -59,8 +59,10 @@ func TestX86LegacyScalarMoveRegisterAndMemoryByteRules(t *testing.T) {
 						direction: x86ResultDirectionBackward}
 					initial.xmm[0], initial.xmm[2], initial.vectorUpper[2] = 0xffff, 0x5450, 0x55aa00ff00000000
 					initial.pointerGP[7] = true
+					owned := make([]bool, len(initial.fp))
 					for index := range initial.fp {
 						initial.fp[index] = true
+						owned[index] = true
 					}
 					mask := uint16(1)<<uint(row.width) - 1
 					expected := initial.clone()
@@ -69,8 +71,14 @@ func TestX86LegacyScalarMoveRegisterAndMemoryByteRules(t *testing.T) {
 						expected.xmm[2] = 0xffff
 					}
 					state := initial.clone()
-					if !x86ResultTransfer(ins, &state, nil, 0, arch) || !reflect.DeepEqual(state, expected) {
+					if !x86ResultTransfer(ins, &state, owned, 0, arch) || !reflect.DeepEqual(state, expected) {
 						t.Fatal("legacy scalar copy lost low width, memory upper-zero or old Y/Z preservation", state, expected)
+					}
+					if source != "X0" {
+						state = initial.clone()
+						if x86ResultTransfer(ins, &state, nil, 0, arch) || !reflect.DeepEqual(state, initial) {
+							t.Fatal("FP scalar source acquired its missing independent owned layout", state)
+						}
 					}
 				})
 			}
