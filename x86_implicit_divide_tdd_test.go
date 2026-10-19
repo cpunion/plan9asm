@@ -88,7 +88,7 @@ func TestX86ImplicitDivideInitializedFamilyFiveTargets(t *testing.T) {
 				for _, source := range []string{"CX", "1(SI)"} {
 					name := fmt.Sprint("Divide", count)
 					fmt.Fprintf(&declarations, "func %s(p *byte) uint32\n", name)
-					fmt.Fprintf(&assembly, "TEXT ·%s(SB),4,$0-%d\n%s p+0(FP),SI\n%sMOVL AX,ret+%d(FP)\nRET\n",
+					fmt.Fprintf(&assembly, "TEXT ·%s(SB),4,$0-%d\n%s p+0(FP),SI\nMOVL $0,AX\n%sMOVL AX,ret+%d(FP)\nRET\n",
 						name, word+4, move, x86ImplicitDivideInitializedBody(row.name, row.suffix, row.bits, source), word)
 					count++
 				}
