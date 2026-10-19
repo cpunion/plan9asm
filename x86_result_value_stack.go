@@ -25,14 +25,22 @@ func x86ResultValueStackLimit(arch string) int {
 	return 63 * int(x86ResultPointerWord(arch))
 }
 
+// Private numerical storage and ID survive these independently accepted
+// transfers. This is not the stronger inert-source rule: a vector product
+// changes data registers, but neither accesses SP nor changes private FLAGS.
+// Exact decoder identity supplies no input, pointer or entry permission.
+func x86ResultPreservesPrivateStorage(ins Instr, arch string) bool {
+	return ins.Op != OpCALL && (x86ResultNamedPredicateInstruction(ins) ||
+		x86RegisterQueryPreservesSourceState(ins) || x86WaitPackagePreservesStorage(ins) ||
+		x86PreservesNumericalSourceState(ins) || x86MaskLogicalPreservesStorage(ins) ||
+		x86EnqueuePreservesStorage(ins) || x86RawDwordProductResultSource(ins, arch))
+}
+
 func x86ResultValueStackContinuation(ins Instr, state *x86ResultState, arch string) bool {
 	if state.valueStack == nil || state.shapeOnly || len(state.valueStack.bytes) == 0 && !state.valueStack.invalid {
 		return true
 	}
-	if state.valueStack.invalid || ins.Op == OpCALL ||
-		!x86ResultNamedPredicateInstruction(ins) && !x86RegisterQueryPreservesSourceState(ins) &&
-			!x86WaitPackagePreservesStorage(ins) && !x86PreservesNumericalSourceState(ins) &&
-			!x86MaskLogicalPreservesStorage(ins) && !x86EnqueuePreservesStorage(ins) {
+	if state.valueStack.invalid || !x86ResultPreservesPrivateStorage(ins, arch) {
 		return false
 	}
 	// On 386 the private byte stack moves the simulated SP. An AUTO access

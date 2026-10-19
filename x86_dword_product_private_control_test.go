@@ -29,17 +29,23 @@ func TestX86DwordProductRawPrivateFlagsFiveTargetObjects(t *testing.T) {
 				}
 				raw := x86RawNumericalInstruction(t, target.arch, instruction)
 				body = strings.Replace(body, fmt.Sprintf("$0-%d", word*2), fmt.Sprintf("$0-%d", word*3), 1)
-				body = strings.Replace(body, instruction, fmt.Sprintf("PUSH%s mask+%d(FP)\nPOPF%s\n%s"+
-					"PUSHF%s\nPOP%s CX\n%s CX,ret+%d(FP)\n", suffix, word, suffix, raw,
-					suffix, suffix, move, word*2), 1)
-				name := fmt.Sprint("ProductFlags", count)
-				source.WriteString(strings.ReplaceAll(body, "Value", name))
-				declarations.WriteString(strings.ReplaceAll(declaration, "Value", name) + " uintptr\n")
-				count++
+				for _, live := range []bool{false, true} {
+					control := fmt.Sprintf("PUSH%s mask+%d(FP)\nPOPF%s\n", suffix, word, suffix)
+					product := raw
+					if live {
+						product = fmt.Sprintf("PUSH%s mask+%d(FP)\n%sPOP%s DX\n", suffix, word, raw, suffix)
+					}
+					capture := fmt.Sprintf("PUSHF%s\nPOP%s CX\n%s CX,ret+%d(FP)\n", suffix, suffix, move, word*2)
+					initialized := strings.Replace(body, instruction, control+product+capture, 1)
+					name := fmt.Sprint("ProductFlags", count)
+					source.WriteString(strings.ReplaceAll(initialized, "Value", name))
+					declarations.WriteString(strings.ReplaceAll(declaration, "Value", name) + " uintptr\n")
+					count++
+				}
 			}
-			want := 36
+			want := 72
 			if word == 4 {
-				want = 12
+				want = 24
 			}
 			if count != want {
 				t.Fatal("complete raw product full/broadcast/mask private-control inventory changed", count)

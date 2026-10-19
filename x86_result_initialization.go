@@ -320,10 +320,7 @@ func checkX86ResultSourceFlowWithTrapOnly(fn Func, initial x86ResultState, owned
 			return false
 		}
 		x86ResultX87After(ins, state, arch)
-		if state.valueStack != nil && (ins.Op == OpCALL ||
-			!x86ResultNamedPredicateInstruction(ins) && !x86RegisterQueryPreservesSourceState(ins) &&
-				!x86WaitPackagePreservesStorage(ins) && !x86PreservesNumericalSourceState(ins) &&
-				!x86MaskLogicalPreservesStorage(ins) && !x86EnqueuePreservesStorage(ins)) {
+		if state.valueStack != nil && !x86ResultPreservesPrivateStorage(ins, arch) {
 			state.valueStack.id = false
 		}
 		state.callerAddressGP = x86ResultCallerAddressesAfterTransfer(ins, before, state.callerAddressGP, state.callerAddressFP, arch)
@@ -331,7 +328,7 @@ func checkX86ResultSourceFlowWithTrapOnly(fn Func, initial x86ResultState, owned
 		state.predicate = x86ResultPredicateAfter(ins, predicate, arch)
 		state.stringCount = x86ResultStringCountAfter(ins, stringCount, state.stringCount, arch)
 		if !popFlags {
-			state.direction = x86ResultDirectionAfter(ins, state.direction)
+			state.direction = x86ResultDirectionAfterSource(ins, state.direction, arch)
 		}
 		x86ResultFlagsCorrelationAfter(ins, state, arch)
 		return true

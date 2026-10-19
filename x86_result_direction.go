@@ -55,3 +55,13 @@ func x86ResultDirectionAfter(ins Instr, direction x86ResultDirection) x86ResultD
 	}
 	return direction
 }
+
+// Only the paired source-flow consumer has a target mode and authenticated
+// raw product. Preserve an existing DF fact without making that data-changing
+// operation inert or extending the standalone observer's raw-source boundary.
+func x86ResultDirectionAfterSource(ins Instr, direction x86ResultDirection, arch string) x86ResultDirection {
+	if x86RawDwordProductResultSource(ins, arch) {
+		return direction
+	}
+	return x86ResultDirectionAfter(ins, direction)
+}
