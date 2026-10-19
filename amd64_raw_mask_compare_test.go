@@ -136,8 +136,10 @@ func TestDecodeX86RawMaskCompareRejectsInvalidForms(t *testing.T) {
 			t.Fatalf("invalid encoding %x returned ok=%v err=%v", code, ok, err)
 		}
 	}
-	if _, _, ok, err := decodedX86RawMaskCompareInstruction(base, 32); !ok || err == nil {
-		t.Fatalf("accepted 386 mask compare: ok=%v err=%v", ok, err)
+	extended := append([]byte(nil), base...)
+	extended[2] &^= 0x40 // Physical source X12, not the valid low-register mode32 row.
+	if _, _, ok, err := decodedX86RawMaskCompareInstruction(extended, 32); !ok || err == nil {
+		t.Fatalf("accepted unbound mode32 source vector: ok=%v err=%v", ok, err)
 	}
 }
 

@@ -19,6 +19,13 @@ func x86ResultVectorCompareStepWithRead(ins Instr, state *x86ResultState, owned 
 	if err != nil || form.mmx {
 		return false, true
 	}
+	return x86ResultVectorCompareTransfer(ins, form, state, owned, arch, nativeRead)
+}
+
+// A validated physical form survives the lowering-local provenance handoff.
+// Do not reparse it under named mode32 operand limits after that handoff.
+func x86ResultVectorCompareTransfer(ins Instr, form x86PackedIntegerCompareForm, state *x86ResultState,
+	owned []bool, arch string, nativeRead bool) (bool, bool) {
 	if form.mask >= 0 {
 		index, valid := amd64ParseKReg(ins.Args[form.mask].Reg)
 		if !valid || !state.masks[index] {

@@ -87,6 +87,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 	}
 	boundRawClear := false
 	for _, ins := range fn.Instrs {
+		if x86RawImmediatePackedCompareSource(ins, arch) {
+			continue // Exact immediate/data identity supplies no entry or missing numerical/memory input.
+		}
 		if x86RawQwordLookupSource(ins, arch) {
 			continue // Complete raw data/control inputs retain their separate memory and result obligations.
 		}
@@ -382,6 +385,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		}
 		if accepted, known := x86ResultVectorArithmeticStepWithRead(ins, state, owned, arch, true); known {
 			return accepted // The same add/sub emitter retains exact E4 reads and inactive-lane suppression.
+		}
+		if accepted, known := x86LoweredImmediatePackedCompareStep(ins, state, owned, arch); known {
+			return accepted // Original raw selectors retain their complete paired E4 input effects.
 		}
 		if accepted, known := x86ResultVectorCompareStepWithRead(ins, state, owned, arch, true); known {
 			return accepted // Complete vector/K-result compares retain their exact native source accesses.

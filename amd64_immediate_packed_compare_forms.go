@@ -27,7 +27,8 @@ func x86ImmediatePackedCompareProperties(op Op, ins Instr, arch string) (x86Imme
 	}
 	// The named Go 386 frontend cannot represent these four/five-operand
 	// instructions. It does not borrow the distinct physical raw EVEX role.
-	if arch != "amd64" || ins.Op != "" && !strings.EqualFold(string(ins.Op), string(op)) ||
+	physicalMode32 := arch == "386" && (ins.x86Encoded || ins.x86SourceRaw != nil)
+	if arch != "amd64" && !physicalMode32 || ins.Op != "" && !strings.EqualFold(string(ins.Op), string(op)) ||
 		len(ins.Args) != 4 && len(ins.Args) != 5 {
 		return fail()
 	}
@@ -38,6 +39,9 @@ func x86ImmediatePackedCompareProperties(op Op, ins Instr, arch string) (x86Imme
 	binary, valid := x86PackedMaskCompareProperties(ins, arch, 1, spec.laneBits, dotted, suffix)
 	if !valid {
 		return fail()
+	}
+	if err := x86Mode32VectorRegisterContext(ins, arch); err != nil {
+		return form, true, err
 	}
 	form.x86PackedBinaryForm = binary
 	form.source, form.predicate = ins.Args[form.first], uint8(immediate.Imm)

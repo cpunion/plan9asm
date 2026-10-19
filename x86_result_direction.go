@@ -62,7 +62,7 @@ func x86ResultDirectionAfter(ins Instr, direction x86ResultDirection) x86ResultD
 func x86ResultDirectionAfterSource(ins Instr, direction x86ResultDirection, arch string) x86ResultDirection {
 	if x86RawDwordProductResultSource(ins, arch) || x86RawCMOVSource(ins, arch) ||
 		x86RawAESSource(ins, arch) || x86RawVectorTestSource(ins, arch) || x86RawIFMASource(ins, arch) ||
-		x86RawQwordLookupSource(ins, arch) {
+		x86RawQwordLookupSource(ins, arch) || x86RawImmediatePackedCompareSource(ins, arch) {
 		return direction
 	}
 	return x86ResultDirectionAfter(ins, direction)

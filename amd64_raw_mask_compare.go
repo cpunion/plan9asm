@@ -39,8 +39,8 @@ func decodedX86RawMaskCompareInstruction(code []byte, mode int) (Instr, int, boo
 	fail := func(message string) (Instr, int, bool, error) {
 		return Instr{}, 0, true, fmt.Errorf("EVEX mask compare: %s", message)
 	}
-	if mode != 64 {
-		return fail("Go's 386 assembler frontend cannot express mask compare operands")
+	if mode != 64 && mode != 32 {
+		return fail("unknown physical x86 mode")
 	}
 	if !p.fixed || p.addressOverride || p.vectorLength > 2 || p.zero || p.r != 0 {
 		return fail("invalid EVEX fixed, address, vector length, zeroing, or K destination extension")
@@ -49,6 +49,9 @@ func decodedX86RawMaskCompareInstruction(code []byte, mode int) (Instr, int, boo
 		return fail("missing ModRM byte")
 	}
 	modRM := code[p.modRM]
+	if mode == 32 && (p.upper >= 8 || modRM>>6 == 3 && int(modRM&7)+8*p.b+16*p.x >= 8) {
+		return fail("extended source vector has no physical mode32 binding")
+	}
 	if p.broadcast && (form.laneBytes < 4 || modRM>>6 == 3) {
 		return fail("broadcast requires a D/Q scalar-memory first source")
 	}
