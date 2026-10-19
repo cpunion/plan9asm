@@ -52,6 +52,7 @@ func TestX86TernaryInitializedNativeReadRetainsConstantAccess(t *testing.T) {
 	x86TernaryOriginalRuntimeProgramsUnchanged(t)
 	for _, opcode := range []string{"VPTERNLOGD", "VPTERNLOGQ"} {
 		for _, bank := range []string{"X", "Y", "Z"} {
+			width := map[string]int{"X": 16, "Y": 32, "Z": 64}[bank]
 			fixture := func(first string) string {
 				return "TEXT ·view(SB),4,$0-16\nMOVQ out+0(FP),AX\nMOVQ p+8(FP),SI\n" +
 					opcode + " $0," + first + "," + bank + "1," + bank + "2\nVMOVDQU64 Z2,(AX)\nRET\n"
@@ -70,7 +71,7 @@ func TestX86TernaryInitializedNativeReadRetainsConstantAccess(t *testing.T) {
 					if err != nil {
 						t.Fatal("changing only r/m to a genuine incoming pointer lost paired E4 continuation", err)
 					}
-					if !strings.Contains(ir, "load volatile i") {
+					if !strings.Contains(ir, fmt.Sprintf("load volatile <%d x i8>", width)) {
 						t.Fatal("constant truth table or dead numerical input removed the original memory access")
 					}
 				})
