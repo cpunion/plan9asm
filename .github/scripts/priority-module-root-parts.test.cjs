@@ -4,6 +4,7 @@ const path = require('node:path');
 const os = require('node:os');
 const { spawnSync } = require('node:child_process');
 const { test } = require('node:test');
+const {requireJobNeeds} = require('./workflow-needs.cjs');
 
 const workflow = fs.readFileSync(
   path.join(__dirname, '../workflows/go-ci.yml'), 'utf8',
@@ -142,7 +143,7 @@ test('each root part has an exact separate artifact and strict download destinat
   assert.match(step(aggregate, 'Download profile owner'), /-profile$/m);
   assert.match(step(aggregate, 'Download remaining-package owner'), /-other$/m);
   assert.doesNotMatch(aggregate, /merge-multiple:|pattern:/);
-  assert.match(aggregate, /needs: \[test, race, coverage\]/);
+  requireJobNeeds(workflow, 'module-completion', ['test', 'race', 'coverage']);
   assert.match(aggregate, /^    if: \$\{\{ !cancelled\(\) \}\}$/m);
 });
 
@@ -189,7 +190,7 @@ test('Windows modules retain disjoint scheduling and complete coverage readback'
     assert.doesNotMatch(owner, /max-parallel:|continue-on-error:|codecov-action/);
   }
   const complete = job('complete', native);
-  assert.match(complete, /needs: \[root-parts, other-owners\]/);
+  requireJobNeeds(native, 'complete', ['root-parts', 'other-owners']);
   assert.match(complete, /^    if: \$\{\{ !cancelled\(\) \}\}$/m);
   assert.doesNotMatch(complete, /merge-multiple:|pattern:/);
   assert.deepEqual(Array.from(complete.matchAll(

@@ -3,6 +3,7 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const test = require('node:test');
+const {requireCompleteWindowsNeeds} = require('./workflow-needs.cjs');
 
 const workflow = fs.readFileSync('.github/workflows/pr40-owned-process-probe.yml', 'utf8');
 const owners = {
@@ -54,7 +55,6 @@ const owners = {
     'TestMaskValueCoverageRequiresCompleteInputs', 'TestVectorValueCoverageRequiresCompleteInputs',
   ]},
 };
-const dependencies = 'needs: [ownership, native-x86-oracles, sdk-priority, arm64-fallback-cross-priority, lock-native-priority, unlocked-rmw-native-priority, vector-value-fault-priority, packed-conversion-native-complete]';
 const block = (lane, owner) => `- lane: ${lane}\n            module: '${owner.module}'\n            roots:\n` +
   owner.roots.map(root => `              - ${root}\n`).join('') + '            timeout: 5m';
 
@@ -64,7 +64,7 @@ function requireInputFamilies(source) {
     assert.equal(source.split(`- lane: ${lane}\n`).length-1, 1);
     for (const root of owner.roots) assert.equal(source.split(`- ${root}\n`).length-1, 1);
   }
-  assert.ok(source.includes(dependencies));
+  requireCompleteWindowsNeeds(source);
   assert.doesNotMatch(source, /max-parallel:/);
   const marker = '\n  vector-value-fault-priority:\n';
   assert.equal(source.split(marker).length-1, 1);
