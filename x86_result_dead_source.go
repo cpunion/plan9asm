@@ -10,23 +10,31 @@ import (
 // even when a constant selector, zero mask or unreachable result discards data.
 // Logical FP/AUTO and independently bound SB/DATA keep their separate owners.
 func x86ResultDeadExternalInputs(ins Instr, arch string) bool {
-	for _, operand := range ins.Args {
+	externalMemory := func(operand Operand) bool {
 		if operand.Kind != OpMem || operand.Mem.Sym != "" || x86LogicalSourceFrameRegister(operand.Mem.Base, arch) {
-			continue
+			return false
 		}
 		_, _, base := x86ResultGP(operand.Mem.Base, x86ResultPointerWord(arch), arch)
 		_, _, index := x86ResultGP(operand.Mem.Index, x86ResultPointerWord(arch), arch)
-		if base || index {
-			return true
-		}
+		return base || index
 	}
 	if effect, known, err := x86TypedInstructionByteEffect(ins.Op, ins, arch); known && err == nil {
 		for _, operand := range effect.operands {
+			if (operand.read || operand.write) && externalMemory(operand.operand) {
+				return true
+			}
 			if _, mask := amd64ParseKReg(operand.operand.Reg); operand.read && mask {
 				return true
 			}
 		}
+		// Typed address calculations may spell OpMem in the source while
+		// describing only GP inputs. Syntax alone must not invent a read.
 		return false
+	}
+	for _, operand := range ins.Args {
+		if externalMemory(operand) {
+			return true
+		}
 	}
 	// Families without a byte descriptor still expose their explicit K input
 	// before the final output. A final write-only K result is not an input.
