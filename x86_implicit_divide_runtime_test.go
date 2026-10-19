@@ -148,12 +148,20 @@ func x86DivideNativeCases(rows []x86DivideNativeRow, arch string) (values, fault
 	seeds := []uint64{0, ^uint64(0), 1, ^uint64(0) - 1, 7, ^uint64(0) - 6,
 		127, ^uint64(0) - 126, 128, ^uint64(0) - 127, 255, ^uint64(0) - 254,
 		256, ^uint64(0) - 255, 257, ^uint64(0) - 256, 0x1122334455667788, 0x8877665544332211}
+	for value := uint64(2); value < 34; value++ {
+		seeds = append(seeds, value, ^uint64(0)-(value-1))
+	}
 	for index, row := range rows {
 		widthMask := ^uint64(0)
 		if row.bits != 64 {
 			widthMask = uint64(1)<<uint(row.bits) - 1
 		}
 		seenFaults, selected := make(map[string]bool), 0
+		seenValues := make(map[[3]uint64]bool)
+		wordMask := ^uint64(0)
+		if arch == "386" {
+			wordMask = 0xffffffff
+		}
 		for _, low := range seeds {
 			chosen := false
 			preferredHigh := uint64(0)
@@ -169,11 +177,32 @@ func x86DivideNativeCases(rows []x86DivideNativeRow, arch string) (values, fault
 							faults = append(faults, current)
 						}
 					} else if !chosen && selected < 16 {
-						values = append(values, current)
-						selected++
-						chosen = true
+						key := [3]uint64{low & wordMask, high & wordMask, current.operand}
+						if !seenValues[key] {
+							seenValues[key] = true
+							values = append(values, current)
+							selected++
+							chosen = true
+						}
 					}
 				}
+			}
+		}
+		if row.signed && (row.source == "CX" || row.memory) {
+			for _, boundary := range []string{"wide-min/-1", "narrow-min/-1"} {
+				low, high := uint64(0), uint64(1)<<uint(row.bits-1)
+				if boundary == "narrow-min/-1" {
+					low, high = uint64(1)<<uint(row.bits-1), widthMask
+				}
+				if row.bits == 8 {
+					low, high = low|high<<8, 0
+				}
+				current := x86DivideNativeEvaluate(row, index, low, high, ^uint64(0), arch)
+				if current.fault != "overflow" {
+					panic("independent signed division overflow boundary is not #DE")
+				}
+				current.fault = boundary
+				faults = append(faults, current)
 			}
 		}
 	}
@@ -184,11 +213,11 @@ func TestX86ImplicitDivideIndependentNativeVectorDirectory(t *testing.T) {
 	for _, arch := range []string{"386", "amd64"} {
 		rows := x86DivideNativeRows(arch)
 		values, faults := x86DivideNativeCases(rows, arch)
-		wantRows, wantValues := 36, 512
+		wantRows, wantValues, wantFaults := 36, 512, 88
 		if arch == "386" {
-			wantRows, wantValues = 46, 688
+			wantRows, wantValues, wantFaults = 46, 688, 104
 		}
-		if len(rows) != wantRows || len(rows)*2 > 96 || len(values) != wantValues || len(faults) != wantRows*2 {
+		if len(rows) != wantRows || len(rows)*2 > 96 || len(values) != wantValues || len(faults) != wantFaults {
 			t.Fatal("independent complete source/alias/defined-value/#DE directory changed", arch, len(rows), len(values), len(faults))
 		}
 		for index, row := range rows {
@@ -248,7 +277,8 @@ func x86RunImplicitDivideNative(t *testing.T, execution x86FloatCompareExecution
 		{"backend_O0", "-O0", ir}, {"backend_O2", "-O2", ir}, {"IR_O2/backend_O2", "-O2", x86DwordProductIROptimize(t, ir)},
 	} {
 		t.Run(pipeline.name, func(t *testing.T) {
-			if strings.Count(pipeline.ir, "asm sideeffect") != len(rows)*2 {
+			calls := strings.Count(pipeline.ir, `asm sideeffect "div`) + strings.Count(pipeline.ir, `asm sideeffect "idiv`)
+			if calls != len(rows)*2 {
 				t.Fatal("an observable or dead division lost its mandatory native opcode")
 			}
 			output := execution.compileAndRunLLVM(t, "division-values", pipeline.ir, valueDriver, pipeline.level)
