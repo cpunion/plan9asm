@@ -25,19 +25,8 @@ func TestTranslateX86MoveHalfCompleteGoAssemblerForms(t *testing.T) {
 			}
 			source.WriteString("\tRET\n")
 
-			requireX86GoAssemblerResult(t, target.goarch, source.String(), true)
-			file, err := Parse(ArchAMD64, source.String())
-			if err != nil {
-				t.Fatal(err)
-			}
-			ll, err := Translate(file, Options{
-				TargetTriple: target.triple,
-				Goarch:       target.goarch,
-				Sigs:         map[string]FuncSig{"movehalfforms": {Name: "movehalfforms", Ret: Void}},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			file, signatures := x86UnboundVoidFormatSource(t, source.String(), "movehalfforms", target.goarch, target.triple)
+			ll := x86MoveHalfFormatObjectUnit(t, file, signatures, target.goarch, target.triple)
 			if !strings.Contains(ll, "extractelement <2 x i64>") || !strings.Contains(ll, "insertelement <2 x i64>") {
 				t.Fatalf("translation omitted half-vector lane operations:\n%s", ll)
 			}

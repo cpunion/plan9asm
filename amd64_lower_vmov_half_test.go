@@ -58,15 +58,8 @@ func TestTranslateX86VEXMoveHalfCompleteFormsAcrossTargets(t *testing.T) {
 				fmt.Fprintf(&source, "\t%s 8(AX), X%d, X%d\n", op, base, last)
 			}
 			source.WriteString("\tRET\n")
-			requireX86GoAssemblerResult(t, target.goarch, source.String(), true)
-			file, err := Parse(ArchAMD64, source.String())
-			if err != nil {
-				t.Fatal(err)
-			}
-			ir, err := Translate(file, Options{Goarch: target.goarch, TargetTriple: target.triple, Sigs: map[string]FuncSig{"vmovhalfforms": {Name: "vmovhalfforms", Ret: Void}}})
-			if err != nil {
-				t.Fatal(err)
-			}
+			file, signatures := x86UnboundVoidFormatSource(t, source.String(), "vmovhalfforms", target.goarch, target.triple)
+			ir := x86MoveHalfFormatObjectUnit(t, file, signatures, target.goarch, target.triple)
 			if !strings.Contains(ir, "extractelement <2 x i64>") || !strings.Contains(ir, "insertelement <2 x i64>") {
 				t.Fatalf("VEX half-move lowering omitted lane operations:\n%s", ir)
 			}
