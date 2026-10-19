@@ -46,20 +46,11 @@ func TestTranslateX86VMOVDVMOVQCompleteGoAssemblerForms(t *testing.T) {
 			}
 			source += "\tRET\n"
 			goAssemblerOracleOutput(t, target.goarch, source, "", true)
-			file, err := Parse(ArchAMD64, source)
-			if err != nil {
-				t.Fatal(err)
-			}
-			ll, err := Translate(file, Options{
-				TargetTriple: target.triple,
-				Goarch:       target.goarch,
-				Sigs: map[string]FuncSig{
-					"vmovintegerscalarforms": {Name: "vmovintegerscalarforms", Ret: Void},
-				},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			// Retain every original GP/SP/X/native-memory spelling. This
+			// format program has no actual data, pointer or physical SP entry
+			// contract. Complete initialized GP/X and native transfer matrices
+			// independently cover public success on all five targets.
+			ll := x86UnboundVoidScalarFormatObject(t, source, "vmovintegerscalarforms", target.goarch, target.triple)
 			llc := findLLVM22Tool("llc")
 			if llc == "" {
 				t.Fatal("LLVM 22 llc not found")

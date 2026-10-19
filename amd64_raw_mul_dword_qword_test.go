@@ -14,10 +14,6 @@ TEXT rawVPMULUDQ(SB),$0-0
 	BYTE $0xc2
 	RET
 `
-	file, err := Parse(ArchAMD64, source)
-	if err != nil {
-		t.Fatal(err)
-	}
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc not found")
@@ -33,14 +29,10 @@ TEXT rawVPMULUDQ(SB),$0-0
 		{goarch: "amd64", triple: "x86_64-pc-windows-msvc"},
 	} {
 		t.Run(target.triple, func(t *testing.T) {
-			ir, err := Translate(file, Options{
-				Goarch:       target.goarch,
-				TargetTriple: target.triple,
-				Sigs:         map[string]FuncSig{"rawVPMULUDQ": {Name: "rawVPMULUDQ", Ret: Void}},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			// The original reported bytes have unknown Y inputs. Preserve the
+			// real Go object, public Context and complete emitter object;
+			// initialized product-family objects own the numerical contract.
+			ir := x86UnboundVoidRawScalarFormatObject(t, source, target.goarch, target.triple)
 			compileLLVMToObject(t, llc, target.triple, "raw-vpmuludq.ll", "raw-vpmuludq.o", ir)
 		})
 	}
