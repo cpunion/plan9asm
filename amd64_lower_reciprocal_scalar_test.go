@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"runtime"
 	"strings"
@@ -67,27 +68,45 @@ func TestTranslateX86ScalarReciprocalCompleteGo127FormsAcrossTargets(t *testing.
 			if err != nil {
 				t.Fatal(err)
 			}
-			ir, err := Translate(file, Options{
-				TargetTriple: target.triple,
-				Goarch:       target.goarch,
-				Sigs: map[string]FuncSig{
-					"scalarreciprocalforms": {
-						Name: "scalarreciprocalforms", Args: []LLVMType{LLVMType("float")}, Ret: Void,
-						Frame: FrameLayout{Params: []FrameSlot{{Offset: 0, Type: LLVMType("float"), Index: 0, Field: -1}}},
-					},
+			signatures := map[string]FuncSig{
+				"scalarreciprocalforms": {
+					Name: "scalarreciprocalforms", Args: []LLVMType{LLVMType("float")}, Ret: Void,
+					Frame: FrameLayout{Params: []FrameSlot{{Offset: 0, Type: LLVMType("float"), Index: 0, Field: -1}}},
 				},
-			})
-			if err != nil {
-				t.Fatal(err)
 			}
+			for _, api := range []string{"text", "module", "Go"} {
+				ir, err := x86ScalarFPBitViewAPI(t, source.String(), "func scalarreciprocalforms(arg float32)\n", target.goarch, target.triple, api)
+				if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+					t.Fatal("original uninitialized format rows acquired numerical or native input permission", api, err)
+				}
+			}
+			ir := x86InstructionFormatObjectUnit(t, file, signatures, target.goarch, target.triple, 0,
+				func(c *amd64Ctx, ins Instr) (bool, bool, error) {
+					// Preserve Go's original mode32 VEX compatibility formats as
+					// private object rows, not initialized physical entry states.
+					grammarArch := target.goarch
+					if strings.HasPrefix(string(ins.Op), "V") {
+						grammarArch = "amd64"
+					}
+					form, known, err := x86ScalarReciprocalProperties(ins.Op, ins, grammarArch)
+					if !known || err != nil {
+						return known, false, err
+					}
+					return true, false, c.emitScalarReciprocalEstimate(ins, form)
+				})
 			for _, want := range []string{
-				"@llvm.x86.sse.rcp.ps", "@llvm.x86.sse.rsqrt.ps",
-				"extractelement <4 x float>", "insertelement <4 x float>",
+				`asm sideeffect "rcpss `, `asm sideeffect "rsqrtss `,
+				`asm sideeffect "vrcpss `, `asm sideeffect "vrsqrtss `,
+				"elementtype([4 x i8])", "insertelement <4 x float>",
 				`"target-features"="+avx,+sse"`,
 			} {
 				if !strings.Contains(ir, want) {
 					t.Fatalf("scalar reciprocal lowering omitted %q:\n%s", want, ir)
 				}
+			}
+			if strings.Contains(ir, "call <4 x float> @llvm.x86.sse.rcp.ps") ||
+				strings.Contains(ir, "call <4 x float> @llvm.x86.sse.rsqrt.ps") {
+				t.Fatal("scalar source opcode was replaced with a packed estimate")
 			}
 			compileLLVMToObject(t, llc, target.triple, "scalar-reciprocal-"+target.name+".ll", "scalar-reciprocal-"+target.name+".o", ir)
 		})

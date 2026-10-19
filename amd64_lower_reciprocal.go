@@ -276,79 +276,74 @@ func (c *amd64Ctx) lowerReciprocalEstimate(rawOp Op, ins Instr) (ok bool, termin
 }
 
 func (c *amd64Ctx) lowerScalarReciprocalEstimate(base string, ins Instr) (bool, bool, error) {
-	legacy := base == "RCPSS" || base == "RSQRTSS"
-	wantArgs := 3
-	if legacy {
-		wantArgs = 2
-	}
-	if len(ins.Args) != wantArgs {
-		return true, false, fmt.Errorf("%s %s expects %d operands from its Go 1.27 table: %q", c.goarch, base, wantArgs, ins.Raw)
-	}
-
-	source := ins.Args[0]
-	destination := ins.Args[len(ins.Args)-1]
-	passthrough := destination
-	if !legacy {
-		passthrough = ins.Args[1]
-	}
-	if legacy {
-		if destination.Kind != OpReg || !c.isGoLegacyXReg(destination.Reg) {
-			return true, false, fmt.Errorf("%s %s destination is outside Go 1.27's legacy X register class: %q", c.goarch, base, ins.Raw)
-		}
-		if source.Kind == OpReg && !c.isGoLegacyXReg(source.Reg) {
-			return true, false, fmt.Errorf("%s %s source must be an in-range X register or scalar memory: %q", c.goarch, base, ins.Raw)
-		}
-		if source.Kind == OpMem && !x86MemoryRegistersValidForArch(source.Mem, c.goarch) {
-			return true, false, fmt.Errorf("%s %s source uses an out-of-range legacy address register: %q", c.goarch, base, ins.Raw)
-		}
-	} else {
-		if !amd64VEXVectorRegister(passthrough, 16) || !amd64VEXVectorRegister(destination, 16) {
-			return true, false, fmt.Errorf("%s %s passthrough and destination must be VEX X registers: %q", c.goarch, base, ins.Raw)
-		}
-		if source.Kind == OpReg && !amd64VEXVectorRegister(source, 16) {
-			return true, false, fmt.Errorf("%s %s source must be a VEX X register or scalar memory: %q", c.goarch, base, ins.Raw)
-		}
-	}
-	if source.Kind != OpReg && !isAMD64MemoryOperand(source) {
-		return true, false, fmt.Errorf("%s %s source must be an X register or scalar memory: %q", c.goarch, base, ins.Raw)
-	}
-
-	scalar, err := c.loadScalarReciprocalSource(source)
+	form, _, err := x86ScalarReciprocalProperties(Op(base), ins, c.goarch)
 	if err != nil {
 		return true, false, err
 	}
-	input := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = insertelement <4 x float> zeroinitializer, float %s, i32 0\n", input, scalar)
-	intrinsic := "llvm.x86.sse.rcp.ps"
-	if strings.Contains(base, "RSQRT") {
-		intrinsic = "llvm.x86.sse.rsqrt.ps"
-	}
-	estimates := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = call <4 x float> @%s(<4 x float> %%%s)\n", estimates, intrinsic, input)
-	estimate := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = extractelement <4 x float> %%%s, i32 0\n", estimate, estimates)
-	upper, err := c.loadFloatingVectorOperand(passthrough, 16, 4, 32)
-	if err != nil {
-		return true, false, err
-	}
-	result := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = insertelement <4 x float> %s, float %%%s, i32 0\n", result, upper, estimate)
-	bytesValue := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = bitcast <4 x float> %%%s to <16 x i8>\n", bytesValue, result)
-	return true, false, c.storeVectorBytes(destination.Reg, 16, "%"+bytesValue)
+	return true, false, c.emitScalarReciprocalEstimate(ins, form)
 }
 
-func (c *amd64Ctx) loadScalarReciprocalSource(source Operand) (string, error) {
-	if source.Kind == OpSym {
-		// A bare integer is absolute memory in the Go assembler; '$' is the
-		// immediate spelling and is intentionally rejected by this family.
-		if address, err := parseInt(source.Sym); err == nil {
-			value := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = load float, ptr %s, align 1\n", value, c.ptrFromAddrI64(fmt.Sprintf("%d", address)))
-			return "%" + value, nil
-		}
+func (c *amd64Ctx) emitScalarReciprocalEstimate(ins Instr, form x86ScalarReciprocalForm) error {
+	if ins.x86AddressBits != 0 {
+		return fmt.Errorf("%w: %s needs its original address-size binding", ErrProbeNeedsContext, ins.Op)
 	}
-	return c.loadFloatingScalarOperand(source, 32)
+	upper, err := c.loadFloatingVectorOperand(ins.Args[form.base], 16, 4, 32)
+	if err != nil {
+		return err
+	}
+	value, sourceType, constraint, template, err := c.scalarReciprocalNativeSource(ins.Args[0])
+	if err != nil {
+		return err
+	}
+	// Keep the scalar hardware approximation, not a packed estimate or generic
+	// division/sqrt. The original opcode has no SIMD exceptions, ignores RC,
+	// treats denormals as signed zero and leaves all MXCSR status untouched.
+	assembly := strings.ToLower(string(ins.Op)) + " "
+	constraints, args := "=x,", ""
+	if form.spec.vector {
+		assembly += template + ", $2, $0"
+		constraints += constraint + ",x"
+		args = fmt.Sprintf("%s %s, <4 x float> %s", sourceType, value, upper)
+	} else {
+		assembly += strings.Replace(template, "$1", "$2", 1) + ", $0"
+		constraints += "0," + constraint
+		args = fmt.Sprintf("<4 x float> %s, %s %s", upper, sourceType, value)
+	}
+	result, bytes := c.newTmp(), c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = call <4 x float> asm sideeffect %q, %q(%s)\n", result, assembly, constraints+",~{memory},~{fpsr}", args)
+	fmt.Fprintf(c.b, "  %%%s = bitcast <4 x float> %%%s to <16 x i8>\n", bytes, result)
+	if !form.spec.vector {
+		return c.storeLegacyXViews(ins.Args[form.destination].Reg, "%"+bytes)
+	}
+	return c.storePackedMoveOperand(ins.Args[form.destination], 16, "%"+bytes)
+}
+
+func (c *amd64Ctx) scalarReciprocalNativeSource(source Operand) (value, typ, constraint, template string, err error) {
+	if source.Kind == OpReg {
+		value, err = c.loadFloatingVectorOperand(source, 16, 4, 32)
+		return value, "<4 x float>", "x", "$1", err
+	}
+	if source.Kind == OpFP {
+		bits, loadErr := c.loadScalarLaneFPBits(source.FPOffset, 32)
+		if loadErr != nil {
+			return "", "", "", "", loadErr
+		}
+		scalar, inserted := c.newTmp(), c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = bitcast i32 %s to float\n", scalar, bits)
+		fmt.Fprintf(c.b, "  %%%s = insertelement <4 x float> zeroinitializer, float %%%s, i32 0\n", inserted, scalar)
+		return "%" + inserted, "<4 x float>", "x", "$1", nil
+	}
+	// A sideeffecting m32 operand keeps the original access even for Void.
+	// This pointer is not a widened virtual FP slot or invented backing.
+	pointer, pointerType, _, err := c.packedVectorMemoryPointer(source)
+	if err != nil {
+		return "", "", "", "", err
+	}
+	segment := ""
+	if source.Kind == OpMem && source.Mem.Segment != "" {
+		segment = "%" + strings.ToLower(string(source.Mem.Segment)) + ":"
+	}
+	return pointer, pointerType + " elementtype([4 x i8])", "*m", segment + "$1", nil
 }
 
 func (c *amd64Ctx) loadPackedReciprocalSource(source Operand, byteWidth, lanes int) (string, error) {
