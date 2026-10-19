@@ -72,6 +72,10 @@ func inferFuncTargetFeaturesForGOARCH(arch Arch, goarch string, fn Func) string 
 			if moveArch == "" {
 				moveArch = "amd64"
 			}
+			if form, known, err := x86DuplicateMoveProperties(ins.Op, ins, moveArch); known && err == nil &&
+				form.legacy && form.spec.laneBytes == 4 && form.memory >= 0 {
+				add("+sse3") // Only the original aligned legacy opcode needs a native carrier.
+			}
 			if form, known, err := x86FloatingHelperProperties(ins, moveArch); known && err == nil {
 				add("+avx512f")
 				if form.spec.dq {

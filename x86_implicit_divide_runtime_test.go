@@ -284,7 +284,7 @@ func x86RunImplicitDivideNative(t *testing.T, execution x86FloatCompareExecution
 			valueExecutable := execution.compileLLVM(t, "division-values", pipeline.ir, valueDriver, pipeline.level)
 			var output []byte
 			if arch == "386" {
-				program := x86DivideNativeIA32Executable(t, execution, valueExecutable)
+				program := x86NativeOracleIA32Executable(t, execution, valueExecutable)
 				output = x87IA32RunDirect(t, program, nil, os.Environ())
 			} else {
 				output = execution.run(t, valueExecutable)
@@ -296,7 +296,7 @@ func x86RunImplicitDivideNative(t *testing.T, execution x86FloatCompareExecution
 			executable := execution.compileLLVM(t, "division-faults", pipeline.ir, faultDriver, pipeline.level)
 			var ia32 *x87IA32Executable
 			if arch == "386" {
-				program := x86DivideNativeIA32Executable(t, execution, executable)
+				program := x86NativeOracleIA32Executable(t, execution, executable)
 				ia32 = &program
 			}
 			observe := func(index, probe, original int) string {
@@ -336,24 +336,24 @@ func x86RunImplicitDivideNative(t *testing.T, execution x86FloatCompareExecution
 			}
 		})
 	}
-	x86DivideRunOriginalGo(t, execution, arch, declarations.String(), assembly.String(),
+	x86RunOriginalGoNativeSource(t, execution, arch, declarations.String(), assembly.String(),
 		fmt.Sprintf(x86DivideNativeOriginalGo, goRows.String(), goCases.String()))
 }
 
-func x86DivideNativeIA32Executable(t *testing.T, execution x86FloatCompareExecution, path string) x87IA32Executable {
+func x86NativeOracleIA32Executable(t *testing.T, execution x86FloatCompareExecution, path string) x87IA32Executable {
 	t.Helper()
 	if execution.triple != "i386-unknown-linux-gnu" || len(execution.prefix) != 0 || execution.preserveArgv0 {
-		t.Fatal("native division IA32 execution forbids an emulator or guest argv transport")
+		t.Fatal("native IA32 oracle forbids an emulator or guest argv transport")
 	}
 	program, err := x87IA32StaticExecutable(path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Logf("native division static IA32 ELF bytes=%d sha256=%x", program.size, program.hash)
+	t.Logf("native oracle static IA32 ELF bytes=%d sha256=%x", program.size, program.hash)
 	return program
 }
 
-func x86DivideOriginalGoEnvironment(arch string, inherited []string) []string {
+func x86OriginalGoNativeEnvironment(arch string, inherited []string) []string {
 	env := append([]string(nil), inherited...)
 	return append(env, "GOENV=off", "GOWORK=off", "GOTOOLCHAIN=local",
 		"GOROOT="+runtime.GOROOT(), "GOFLAGS=", "GOEXPERIMENT=", "GOOS=linux",
@@ -366,7 +366,7 @@ func TestX86ImplicitDivideOriginalGoEnvironmentIsBoundToSDK(t *testing.T) {
 			"GOTOOLCHAIN=auto", "GOFLAGS=-race", "GOEXPERIMENT=untrusted", "GOOS=untrusted",
 			"GOARCH=untrusted", "CGO_ENABLED=1", "GOMAXPROCS=64"}
 		actual := make(map[string]string)
-		for _, entry := range x86DivideOriginalGoEnvironment(arch, inherited) {
+		for _, entry := range x86OriginalGoNativeEnvironment(arch, inherited) {
 			name, value, _ := strings.Cut(entry, "=")
 			actual[name] = value
 		}
@@ -385,7 +385,9 @@ func TestX86ImplicitDivideOriginalGoEnvironmentIsBoundToSDK(t *testing.T) {
 	}
 }
 
-func x86DivideRunOriginalGo(t *testing.T, execution x86FloatCompareExecution, arch, declarations, assembly, testSource string) {
+// Shared exact-SDK execution is only a test-driver lifecycle. Neither family
+// obtains source, numerical, ABI or native-storage permissions from it.
+func x86RunOriginalGoNativeSource(t *testing.T, execution x86FloatCompareExecution, arch, declarations, assembly, testSource string) {
 	t.Helper()
 	directory := t.TempDir()
 	for name, contents := range map[string]string{
@@ -398,19 +400,19 @@ func x86DivideRunOriginalGo(t *testing.T, execution x86FloatCompareExecution, ar
 	}
 	binary := filepath.Join(directory, "original.test")
 	goBinary := filepath.Join(runtime.GOROOT(), "bin", "go")
-	env := x86DivideOriginalGoEnvironment(arch, os.Environ())
+	env := x86OriginalGoNativeEnvironment(arch, os.Environ())
 	version, err := x87IA32Capture(t, goBinary, []string{"version"}, directory, env)
 	if err != nil || !strings.HasPrefix(string(version), "go version "+runtime.Version()+" ") {
-		t.Fatalf("native division oracle SDK identity mismatch: %v\n%s", err, version)
+		t.Fatalf("native oracle SDK identity mismatch: %v\n%s", err, version)
 	}
 	output, err := x87IA32Capture(t, goBinary,
 		[]string{"test", "-p=1", "-vet=off", "-c", "-o", binary, "."}, directory, env)
 	if err != nil || len(output) != 0 {
-		t.Fatalf("original Go division compile failed: %v\n%s", err, output)
+		t.Fatalf("original Go native oracle compile failed: %v\n%s", err, output)
 	}
 	arguments := []string{"-test.run=^TestOriginal$", "-test.count=1", "-test.v"}
 	if arch == "386" {
-		program := x86DivideNativeIA32Executable(t, execution, binary)
+		program := x86NativeOracleIA32Executable(t, execution, binary)
 		output = x87IA32RunDirect(t, program, arguments, os.Environ())
 	} else {
 		output = execution.run(t, binary, arguments...)

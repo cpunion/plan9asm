@@ -95,7 +95,6 @@ func TestDecodeX86RawDuplicateMoveConstantRejectsUnsafeSources(t *testing.T) {
 
 func TestTranslateX86RawDuplicateMoveConstantObjects(t *testing.T) {
 	var source strings.Builder
-	sigs := make(map[string]FuncSig)
 	for index, spec := range rawDuplicateMoveSpecs {
 		code := x86RawDuplicateMoveConstant(spec, "evex", 64, 3, true)
 		name := fmt.Sprintf("rawDuplicateConstant%d", index)
@@ -103,13 +102,8 @@ func TestTranslateX86RawDuplicateMoveConstantObjects(t *testing.T) {
 		for _, value := range code {
 			fmt.Fprintf(&source, "\tBYTE $%#02x\n", value)
 		}
-		sigs[name] = FuncSig{Name: name, Ret: Void}
 	}
 	requireX86GoAssemblerResult(t, "amd64", source.String(), true)
-	file, err := Parse(ArchAMD64, source.String())
-	if err != nil {
-		t.Fatal(err)
-	}
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc not found")
@@ -118,10 +112,12 @@ func TestTranslateX86RawDuplicateMoveConstantObjects(t *testing.T) {
 		"x86_64-apple-darwin", "x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc",
 	} {
 		t.Run(triple, func(t *testing.T) {
-			ir, err := Translate(file, Options{Goarch: "amd64", TargetTriple: triple, Sigs: sigs})
+			original, signatures := x86UnboundVoidFormatSources(t, source.String(), "amd64", triple)
+			normalized, err := normalizeX86RawFile(original, "amd64")
 			if err != nil {
 				t.Fatal(err)
 			}
+			ir := x86DuplicateMoveFormatObjectUnit(t, normalized, signatures, "amd64", triple)
 			compileLLVMToObject(t, llc, triple, "raw-duplicate-literal.ll", "raw-duplicate-literal.o", ir)
 		})
 	}

@@ -5,152 +5,105 @@ import (
 	"strings"
 )
 
-// lowerDuplicateMove implements the complete Go x86 duplicate-move family.
-// The legacy forms use yxm (X/m -> X), while all V-prefixed forms share
-// _yvmovddup (X/Y/Z memory or matching register, with optional EVEX K mask).
-func (c *amd64Ctx) lowerDuplicateMove(op Op, ins Instr) (ok bool, terminated bool, err error) {
-	rawOp := string(op)
-	baseOp := rawOp
-	if dot := strings.IndexByte(rawOp, '.'); dot >= 0 {
-		baseOp = rawOp[:dot]
+func (c *amd64Ctx) lowerDuplicateMove(op Op, ins Instr) (bool, bool, error) {
+	form, known, err := x86DuplicateMoveProperties(op, ins, c.goarch)
+	if !known || err != nil {
+		return known, false, err
 	}
-	switch baseOp {
-	case "MOVDDUP", "VMOVDDUP", "MOVSHDUP", "VMOVSHDUP", "MOVSLDUP", "VMOVSLDUP":
-		// handled below
-	default:
-		return false, false, nil
-	}
-	zeroMasking := false
-	if dot := strings.IndexByte(rawOp, '.'); dot >= 0 {
-		for _, suffix := range strings.Split(rawOp[dot+1:], ".") {
-			if suffix != "Z" || zeroMasking {
-				return true, false, fmt.Errorf("amd64 %s has unsupported suffix .%s: %q", rawOp[:dot], suffix, ins.Raw)
-			}
-			zeroMasking = true
+	ins.Op = op
+	return true, false, c.emitDuplicateMove(ins, form)
+}
+
+func (c *amd64Ctx) emitDuplicateMove(ins Instr, form x86DuplicateMoveForm) error {
+	destination := ins.Args[form.destination]
+	if form.legacy && form.spec.laneBytes == 4 && form.memory >= 0 {
+		if !x86ScalarFloatIntegerNativeTarget(c.goarch, c.targetTriple) ||
+			form.source.Kind == OpFP || form.source.Kind == OpMem &&
+			!x86OrdinaryNativeMemoryOperand(form.source, c.goarch) &&
+			!x86CallerMemoryCertified(ins, form.memory) && !c.fixedLocalMemoryCertified(ins, form.memory) {
+			return fmt.Errorf("%w: legacy duplicate m128 needs its original native alignment and storage", ErrProbeNeedsContext)
 		}
-		rawOp = baseOp
+		return c.emitLegacyDuplicateMemory(ins.Op, form, destination)
 	}
-
-	elemBits := 0
-	duplicateOdd := false
-	switch rawOp {
-	case "MOVDDUP", "VMOVDDUP":
-		elemBits = 64
-	case "MOVSHDUP", "VMOVSHDUP":
-		elemBits = 32
-		duplicateOdd = true
-	case "MOVSLDUP", "VMOVSLDUP":
-		elemBits = 32
-	default:
-		panic("duplicate-move opcode precheck drift")
+	laneBits := form.spec.laneBytes * 8
+	lanes, sourceBytes := form.byteWidth/form.spec.laneBytes, form.byteWidth
+	if form.memory >= 0 {
+		sourceBytes = form.memoryBytes
 	}
-
-	vectorForm := strings.HasPrefix(rawOp, "V")
-	wantArgs := 2
-	if vectorForm {
-		wantArgs = 3
+	bytes, err := c.loadDuplicateMoveSource(form)
+	if err != nil {
+		return err
 	}
-	if len(ins.Args) != 2 && (!vectorForm || len(ins.Args) != wantArgs) {
-		return true, false, fmt.Errorf("amd64 %s expects src, [K mask,] vector dst: %q", rawOp, ins.Raw)
-	}
-	masked := len(ins.Args) == 3
-	if !vectorForm && (masked || zeroMasking) {
-		return true, false, fmt.Errorf("amd64 %s legacy form does not accept EVEX masking: %q", rawOp, ins.Raw)
-	}
-	if zeroMasking && !masked {
-		return true, false, fmt.Errorf("amd64 %s .Z form requires a K mask: %q", rawOp, ins.Raw)
-	}
-
-	dstArg := ins.Args[len(ins.Args)-1]
-	if dstArg.Kind != OpReg {
-		return true, false, fmt.Errorf("amd64 %s expects vector destination: %q", rawOp, ins.Raw)
-	}
-	byteWidth := 0
-	var loadOperand func(Operand) (string, error)
-	var loadDst func() (string, error)
-	var storeDst func(string) error
-	switch {
-	case isAMD64XReg(dstArg.Reg):
-		byteWidth = 16
-		loadOperand = c.loadXVecOperand
-		loadDst = func() (string, error) { return c.loadX(dstArg.Reg) }
-		storeDst = func(value string) error { return c.storeX(dstArg.Reg, value) }
-	case vectorForm && isAMD64YReg(dstArg.Reg):
-		byteWidth = 32
-		loadOperand = c.loadYVecOperand
-		loadDst = func() (string, error) { return c.loadY(dstArg.Reg) }
-		storeDst = func(value string) error { return c.storeY(dstArg.Reg, value) }
-	case vectorForm && isAMD64ZReg(dstArg.Reg):
-		byteWidth = 64
-		loadOperand = c.loadZVecOperand
-		loadDst = func() (string, error) { return c.loadZ(dstArg.Reg) }
-		storeDst = func(value string) error { return c.storeZ(dstArg.Reg, value) }
-	default:
-		return true, false, fmt.Errorf("amd64 %s has mismatched or non-vector destination: %q", rawOp, ins.Raw)
-	}
-
-	lanes := byteWidth * 8 / elemBits
-	var sourceLanes string
-	// MOVDDUP's 128-bit memory form reads one scalar double and duplicates it.
-	// Wider memory forms read a full Y/Z vector and duplicate the low double of
-	// each 128-bit lane. A register source always reads the full vector.
-	if elemBits == 64 && byteWidth == 16 && ins.Args[0].Kind != OpReg {
-		scalar, err := c.evalF64(ins.Args[0])
-		if err != nil {
-			return true, false, err
-		}
-		bits := c.newTmp()
-		seed := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = bitcast double %s to i64\n", bits, scalar)
-		fmt.Fprintf(c.b, "  %%%s = insertelement <2 x i64> poison, i64 %%%s, i32 0\n", seed, bits)
-		sourceLanes = "%" + seed
-	} else {
-		sourceBytes, err := loadOperand(ins.Args[0])
-		if err != nil {
-			return true, false, err
-		}
-		cast := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i8> %s to <%d x i%d>\n", cast, byteWidth, sourceBytes, lanes, elemBits)
-		sourceLanes = "%" + cast
-	}
-
+	cast := c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i8> %s to <%d x i%d>\n", cast, sourceBytes, bytes,
+		sourceBytes/form.spec.laneBytes, laneBits)
+	// X-width m64 DDUP's source has one lane; every other source is full
+	// width. Register and memory forms share exactly the same lane selector.
 	indices := make([]int, lanes)
 	for lane := range indices {
-		if duplicateOdd {
-			indices[lane] = lane | 1
-		} else {
-			indices[lane] = lane &^ 1
-		}
+		indices[lane] = form.sourceByte(lane*form.spec.laneBytes) / form.spec.laneBytes
 	}
 	shuffle := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = shufflevector <%d x i%d> %s, <%d x i%d> poison, <%d x i32> %s\n",
-		shuffle, lanes, elemBits, sourceLanes, lanes, elemBits, lanes, llvmI32Mask(indices))
+	fmt.Fprintf(c.b, "  %%%s = shufflevector <%d x i%d> %%%s, <%d x i%d> poison, <%d x i32> %s\n",
+		shuffle, sourceBytes/form.spec.laneBytes, laneBits, cast,
+		sourceBytes/form.spec.laneBytes, laneBits, lanes, llvmI32Mask(indices))
 	result := "%" + shuffle
-
-	if masked {
-		maskArg := ins.Args[1]
-		if maskArg.Kind != OpReg {
-			return true, false, fmt.Errorf("amd64 %s masked form expects K register: %q", rawOp, ins.Raw)
-		}
-		if maskIndex, ok := amd64ParseKReg(maskArg.Reg); !ok || maskIndex == 0 {
-			return true, false, fmt.Errorf("amd64 %s masked form expects K register: %q", rawOp, ins.Raw)
-		}
-		mask, err := c.loadK(maskArg.Reg)
+	if form.mask >= 0 {
+		mask, err := c.loadK(ins.Args[form.mask].Reg)
 		if err != nil {
-			return true, false, err
+			return err
 		}
-		oldBytes, err := loadDst()
-		if err != nil {
-			return true, false, err
+		old := "zeroinitializer"
+		if !form.zeroing {
+			old, err = c.loadPackedCompareLanes(destination, form.byteWidth, laneBits, false)
+			if err != nil {
+				return err
+			}
 		}
-		old := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i8> %s to <%d x i%d>\n", old, byteWidth, oldBytes, lanes, elemBits)
-		result = amd64ApplyIntegerLaneMask(c, lanes, elemBits, result, "%"+old, mask, zeroMasking)
+		result = amd64ApplyIntegerLaneMask(c, lanes, laneBits, result, old, mask, form.zeroing)
 	}
-
 	out := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i%d> %s to <%d x i8>\n", out, lanes, elemBits, result, byteWidth)
-	return true, false, storeDst("%" + out)
+	fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i%d> %s to <%d x i8>\n", out, lanes, laneBits, result, form.byteWidth)
+	if form.legacy {
+		return c.storeLegacyPackedLogical(destination, "%"+out)
+	}
+	return c.storePackedMoveOperand(destination, form.byteWidth, "%"+out)
+}
+
+func (c *amd64Ctx) loadDuplicateMoveSource(form x86DuplicateMoveForm) (string, error) {
+	if form.source.Kind == OpReg {
+		return c.loadPackedCompareBytes(form.source, form.byteWidth)
+	}
+	if form.source.Kind == OpFP {
+		return c.loadFPVectorBytes(form.source.FPOffset, form.memoryBytes)
+	}
+	pointer, pointerType, _, err := c.packedVectorMemoryPointer(form.source)
+	if err != nil {
+		return "", err
+	}
+	value := c.newTmp()
+	// E4NF.nb and E5NF retain the complete access even for a dead result or
+	// zero mask. No alignment or initialized-pointee assumption is introduced.
+	fmt.Fprintf(c.b, "  %%%s = load volatile <%d x i8>, %s %s, align 1\n", value, form.memoryBytes, pointerType, pointer)
+	return "%" + value, nil
+}
+
+func (c *amd64Ctx) emitLegacyDuplicateMemory(op Op, form x86DuplicateMoveForm, destination Operand) error {
+	pointer, pointerType, _, err := c.packedVectorMemoryPointer(form.source)
+	if err != nil {
+		return err
+	}
+	segment := ""
+	if pointerType == "ptr addrspace(256)" {
+		segment = "%gs:"
+	} else if pointerType == "ptr addrspace(257)" {
+		segment = "%fs:"
+	}
+	loaded, bytes := c.newTmp(), c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = call <4 x float> asm sideeffect %q, %q(%s %s)\n", loaded,
+		strings.ToLower(string(op))+" "+segment+"($1), $0", "=x,r,~{memory}", pointerType, pointer)
+	fmt.Fprintf(c.b, "  %%%s = bitcast <4 x float> %%%s to <16 x i8>\n", bytes, loaded)
+	return c.storeLegacyPackedLogical(destination, "%"+bytes)
 }
 
 func llvmI32Mask(indices []int) string {
