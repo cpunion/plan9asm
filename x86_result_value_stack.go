@@ -33,7 +33,7 @@ func x86ResultPreservesPrivateStorage(ins Instr, arch string) bool {
 	return ins.Op != OpCALL && (x86ResultNamedPredicateInstruction(ins) ||
 		x86RegisterQueryPreservesSourceState(ins) || x86WaitPackagePreservesStorage(ins) ||
 		x86PreservesNumericalSourceState(ins) || x86MaskLogicalPreservesStorage(ins) ||
-		x86EnqueuePreservesStorage(ins) || x86RawDwordProductResultSource(ins, arch))
+		x86EnqueuePreservesStorage(ins) || x86RawDwordProductResultSource(ins, arch) || x86RawCMOVSource(ins, arch))
 }
 
 func x86ResultValueStackContinuation(ins Instr, state *x86ResultState, arch string) bool {

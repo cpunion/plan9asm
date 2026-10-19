@@ -45,6 +45,33 @@ func TestX86MandatoryDescriptorObligationIndependentOfResultLayout(t *testing.T)
 	}
 }
 
+func TestX86MandatoryRawDescriptorCannotBypassResultLayout(t *testing.T) {
+	for _, arch := range []string{"386", "amd64"} {
+		for _, row := range []string{"LAHF", "SAHF", "CRC32L BX,AX", "MULL BX", "CMOVLLE BX,AX"} {
+			t.Run(arch+"/"+row, func(t *testing.T) {
+				file, err := Parse(ArchAMD64, "TEXT Value(SB),4,$0-0\n"+x86RawNumericalInstruction(t, arch, row)+"RET\n")
+				if err != nil {
+					t.Fatal(err)
+				}
+				file, err = normalizeX86RawFile(file, arch)
+				if err != nil {
+					t.Fatal(err)
+				}
+				ins := file.Funcs[0].Instrs[1]
+				effect, known, err := x86TypedInstructionByteEffect(ins.Op, ins, arch)
+				if !known || err != nil || !effect.requiresResultProof || x86ResultNamedPredicateInstruction(ins) {
+					t.Fatal("raw mandatory descriptor witness changed", known, err)
+				}
+				for _, result := range []LLVMType{Void, I32} {
+					if !x86TypedFPResultNeedsProof(file.Funcs[0], FuncSig{Name: "Value", Ret: result}, arch) {
+						t.Fatal("raw syntax bypassed a mandatory descriptor", result)
+					}
+				}
+			})
+		}
+	}
+}
+
 func TestX86MandatoryCRCAndImplicitMultiplyVoidThreeAPIs(t *testing.T) {
 	for _, target := range x86RawReturnTargets {
 		var rows []string

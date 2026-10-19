@@ -183,8 +183,8 @@ func x86TypedFPResultNeedsProof(fn Func, sig FuncSig, arch string) bool {
 			return true // Implicit data/address/count/DF inputs remain mandatory, including Void.
 		}
 		if effect, known, err := x86TypedInstructionByteEffect(ins.Op, ins, arch); known && err == nil &&
-			effect.requiresResultProof && x86ResultNamedPredicateInstruction(ins) {
-			return true // A mandatory descriptor cannot be bypassed by Void or an absent result layout.
+			effect.requiresResultProof {
+			return true // Mandatory input checks cannot be bypassed by raw syntax, Void or an absent result layout.
 		}
 		if sig.Ret == Void || len(sig.Frame.Results) == 0 {
 			continue
