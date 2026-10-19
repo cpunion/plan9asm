@@ -36,6 +36,14 @@ conversions while retaining each family's memory width and arithmetic opcode.
 Original unbound formats, initialized public objects and portable numerical
 execution are separate axes; none certifies native FP16 hardware execution.
 
+Raw FP16 FMA shares the existing thirty-member typed family. Each order reads
+both explicit sources and the old destination, including .Z. Scalar upper X
+bytes come from the old destination, not the second source; retain unknown
+bytes as unknown. Reuse the three-operand native emitter with scalar
+conversion/SQRT, preserving the actual opcode, memory tuple and full 32-lane
+mask. Exact raw identity only permits the paired lowering result; it grants
+no caller, standalone query, physical entry or memory-backing authority.
+
 Treat an external-library failure as a counterexample to the systematic
 coverage mechanism, not only as a package-specific regression. Identify where
 the independent Go rules, typed grammar, lowering/effect consumers or executed
