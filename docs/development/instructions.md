@@ -84,10 +84,12 @@ Original uninitialized format/disp32 probes retain Go/emitter objects plus
 three-API Context controls. Independent initialized objects own public success;
 neither a direct emitter nor a classification change grants caller memory.
 
-Conditional moves consume the old destination and actual predicate FLAGS even
-when the condition is false or the result is unused. Their native source read
-is unconditional. Exact raw identity permits a lowering-local numerical view,
-not a pointer, frame, standalone-query or native-entry fact.
+Conditional moves retain the old destination and actual predicate dependencies;
+their native source read is unconditional, including false predicates and Void.
+The existing nontrapping GP domain may leave a dead named-register result
+unknown, but no later result, address, store or control use may consume it as
+initialized. Exact raw identity permits a lowering-local numerical view, not
+a pointer, frame, standalone-query or native-entry fact.
 
 AES/VAES share complete round, inverse-mix and key-assist forms and byte
 dependencies. Immediate-first key assist selects its data source through the
