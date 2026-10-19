@@ -14,11 +14,8 @@ func TestX86MinMaxMemoryAndViewsRuntime(t *testing.T) {
 	}
 	triple := testTargetTriple(runtime.GOOS, runtime.GOARCH)
 	var prefix []string
-	if runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" && rosettaAvailable() {
-		triple = "x86_64-apple-macosx"
-		prefix = []string{"/usr/bin/arch", "-x86_64"}
-	} else if runtime.GOARCH != "amd64" {
-		t.Skip("execution requires amd64 or Rosetta; five-target objects remain required")
+	if runtime.GOARCH != "amd64" && runtime.GOARCH != "arm64" {
+		t.Skip("portable values require the native 64-bit host counterpart")
 	}
 
 	var source, declarations strings.Builder
