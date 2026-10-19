@@ -353,6 +353,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		if accepted, known := x86LoweredIFMAStep(ins, state, owned, arch); known {
 			return accepted // The typed emitter retains exact guarded qword reads and EVEX upper-zeroing.
 		}
+		if accepted, known := x86ResultQwordLookupStep(ins, state, owned, arch, true); known {
+			return accepted // E4 controls and E4NF qword data retain their separate native access shapes.
+		}
 		if accepted, known := x86LoweredFixedVectorNativeRead(ins, state, owned, arch); known {
 			return accepted // The typed emitter retains full E4NF or guarded E4 native accesses.
 		}

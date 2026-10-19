@@ -2,7 +2,6 @@ package plan9asm
 
 import (
 	"fmt"
-	"strings"
 )
 
 type amd64QwordBitLookupOutput uint8
@@ -26,88 +25,39 @@ var amd64QwordBitLookupSpecs = map[Op]amd64QwordBitLookupSpec{
 }
 
 func (c *amd64Ctx) lowerQwordBitLookup(op Op, ins Instr) (ok bool, terminated bool, err error) {
-	rawOp := strings.ToUpper(string(op))
-	baseOp := rawOp
-	if dot := strings.IndexByte(rawOp, '.'); dot >= 0 {
-		baseOp = rawOp[:dot]
+	form, known, err := x86QwordLookupProperties(op, ins, c.goarch)
+	if !known || err != nil {
+		return known, false, err
 	}
-	spec, recognized := amd64QwordBitLookupSpecs[Op(baseOp)]
-	if !recognized {
-		return false, false, nil
-	}
-
-	suffixes, err := amd64ParseTwoSourcePermuteSuffixes(rawOp, baseOp)
-	if err != nil {
-		return true, false, fmt.Errorf("%w: %q", err, ins.Raw)
-	}
-	if spec.output == amd64QwordBitLookupMask && (suffixes.broadcast || suffixes.zeroing) {
-		return true, false, fmt.Errorf("%s %s has no instruction suffixes in Go 1.27: %q", c.goarch, baseOp, ins.Raw)
-	}
-	if suffixes.broadcast && !spec.broadcast {
-		return true, false, fmt.Errorf("%s %s does not support broadcast: %q", c.goarch, baseOp, ins.Raw)
-	}
-	if len(ins.Args) != 3 && len(ins.Args) != 4 {
-		return true, false, fmt.Errorf("%s %s expects first source, second source, [K mask,] destination: %q", c.goarch, baseOp, ins.Raw)
-	}
-	masked := len(ins.Args) == 4
-	if c.goarch == "386" && masked {
-		return true, false, fmt.Errorf("386 %s masked form exceeds the Go assembler frontend's three-operand limit: %q", baseOp, ins.Raw)
-	}
-	if suffixes.zeroing && !masked {
-		return true, false, fmt.Errorf("%s %s.Z requires a K1-K7 mask: %q", c.goarch, baseOp, ins.Raw)
-	}
-	if masked && !amd64NonzeroKOperand(ins.Args[2]) {
-		return true, false, fmt.Errorf("%s %s masked form requires K1-K7: %q", c.goarch, baseOp, ins.Raw)
-	}
-
-	first, second := ins.Args[0], ins.Args[1]
-	destination := ins.Args[len(ins.Args)-1]
-	byteWidth := 0
-	switch spec.output {
-	case amd64QwordBitLookupBytes:
-		if destination.Kind != OpReg {
-			return true, false, fmt.Errorf("%s %s destination must be X, Y, or Z: %q", c.goarch, baseOp, ins.Raw)
-		}
-		byteWidth = amd64VectorByteWidth(destination.Reg)
-		if byteWidth == 0 || !c.isGoPackedVectorMoveRegister(destination, byteWidth) {
-			return true, false, fmt.Errorf("%s %s destination is outside Go 1.27's vector class: %q", c.goarch, baseOp, ins.Raw)
-		}
-	case amd64QwordBitLookupMask:
-		if destination.Kind != OpReg {
-			return true, false, fmt.Errorf("%s %s destination must be K0-K7: %q", c.goarch, baseOp, ins.Raw)
-		}
-		if _, valid := amd64ParseKReg(destination.Reg); !valid {
-			return true, false, fmt.Errorf("%s %s destination must be K0-K7: %q", c.goarch, baseOp, ins.Raw)
-		}
-		if second.Kind == OpReg {
-			byteWidth = amd64VectorByteWidth(second.Reg)
+	spec, byteWidth := form.spec, form.byteWidth
+	first, second := ins.Args[form.first], ins.Args[form.second]
+	destination := ins.Args[form.destination]
+	var writeMask string
+	if form.mask >= 0 {
+		writeMask, err = c.loadK(ins.Args[form.mask].Reg)
+		if err != nil {
+			return true, false, err
 		}
 	}
-	if byteWidth == 0 || !c.isGoPackedVectorMoveRegister(second, byteWidth) {
-		return true, false, fmt.Errorf("%s %s second source must be an in-range X, Y, or Z register: %q", c.goarch, baseOp, ins.Raw)
+	if form.memory >= 0 && first.Kind == OpMem && !x86OrdinaryNativeMemoryOperand(first, c.goarch) &&
+		!x86CallerMemoryCertified(ins, form.memory) && !c.fixedLocalMemoryCertified(ins, form.memory) {
+		return true, false, fmt.Errorf("%w: qword lookup needs its original native storage binding", ErrProbeNeedsContext)
 	}
-	if first.Kind == OpReg {
-		if !c.isGoPackedVectorMoveRegister(first, byteWidth) {
-			return true, false, fmt.Errorf("%s %s first source register must match the vector width: %q", c.goarch, baseOp, ins.Raw)
-		}
-	} else if !isAMD64MemoryOperand(first) {
-		return true, false, fmt.Errorf("%s %s first source must be a matching vector register or memory: %q", c.goarch, baseOp, ins.Raw)
-	}
-	if suffixes.broadcast && !isAMD64MemoryOperand(first) {
-		return true, false, fmt.Errorf("%s %s.BCST requires a memory qword source: %q", c.goarch, baseOp, ins.Raw)
-	}
-
 	var dataQwords, controls string
 	switch spec.output {
 	case amd64QwordBitLookupBytes:
-		dataQwords, err = c.loadPackedCompareLanes(first, byteWidth, 64, suffixes.broadcast)
+		// VPMULTISHIFTQB is E4NF: even a zero write mask retains the full
+		// source tuple, or the independent m64 broadcast.
+		dataQwords, err = c.loadX86PackedShiftLanes(first, byteWidth, 64, form.broadcast, "")
 		if err == nil {
 			controls, err = c.loadPackedCompareBytes(second, byteWidth)
 		}
 	case amd64QwordBitLookupMask:
 		dataQwords, err = c.loadPackedCompareLanes(second, byteWidth, 64, false)
 		if err == nil {
-			controls, err = c.loadPackedCompareBytes(first, byteWidth)
+			// VPSHUFBITQMB is E4 with byte-granular fault suppression. Its
+			// mask is not a license to suppress the other family's E4NF read.
+			controls, err = c.loadX86PackedShiftLanes(first, byteWidth, 8, false, writeMask)
 		}
 	}
 	if err != nil {
@@ -115,22 +65,15 @@ func (c *amd64Ctx) lowerQwordBitLookup(op Op, ins Instr) (ok bool, terminated bo
 	}
 	selectedBytes := c.emitQwordBitLookupBytes(byteWidth, dataQwords, controls)
 
-	var writeMask string
-	if masked {
-		writeMask, err = c.loadK(ins.Args[2].Reg)
-		if err != nil {
-			return true, false, err
-		}
-	}
 	if spec.output == amd64QwordBitLookupBytes {
-		if masked {
+		if form.mask >= 0 {
 			old, loadErr := c.loadPackedCompareBytes(destination, byteWidth)
 			if loadErr != nil {
 				return true, false, loadErr
 			}
-			selectedBytes = amd64ApplyIntegerLaneMask(c, byteWidth, 8, selectedBytes, old, writeMask, suffixes.zeroing)
+			selectedBytes = amd64ApplyIntegerLaneMask(c, byteWidth, 8, selectedBytes, old, writeMask, form.zeroing)
 		}
-		return true, false, c.storeVectorBytes(destination.Reg, byteWidth, selectedBytes)
+		return true, false, c.storePackedMoveOperand(destination, byteWidth, selectedBytes)
 	}
 
 	ones := c.newTmp()
@@ -146,7 +89,7 @@ func (c *amd64Ctx) lowerQwordBitLookup(op Op, ins Instr) (ok bool, terminated bo
 		fmt.Fprintf(c.b, "  %%%s = zext %s %s to i64\n", wide, packedType, result)
 		result = "%" + wide
 	}
-	if masked {
+	if form.mask >= 0 {
 		maskedResult := c.newTmp()
 		fmt.Fprintf(c.b, "  %%%s = and i64 %s, %s\n", maskedResult, result, writeMask)
 		result = "%" + maskedResult
