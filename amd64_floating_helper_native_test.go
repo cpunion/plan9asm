@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -15,6 +16,73 @@ type x86FloatingHelperOracleMember struct {
 	scalar         bool
 	maskResult     bool
 	bank           string
+}
+
+func TestX86FloatingHelperInitializedFiveTargetThreeAPIObjects(t *testing.T) {
+	for _, target := range x86RawReturnTargets {
+		t.Run(target.triple, func(t *testing.T) {
+			var source, declarations strings.Builder
+			count := 0
+			for _, member := range x86FloatingHelperOracleMembers() {
+				instruction := x86FloatingHelperOracleInstruction(member, false)
+				ins := x86ScalarLaneInstruction(t, instruction)
+				if target.arch == "386" && len(ins.Args) > 3 {
+					continue
+				}
+				name := fmt.Sprintf("F%d", count)
+				count++
+				fmt.Fprintf(&source, "TEXT ·%s(SB),4,$0-4\nVPXORD Z0,Z0,Z0\nVPXORD Z1,Z1,Z1\nVPXORD Z2,Z2,Z2\n%s\n", name, instruction)
+				if member.maskResult {
+					source.WriteString("KMOVD K2,AX\n")
+				} else {
+					source.WriteString("PEXTRD $0,X2,AX\n")
+				}
+				source.WriteString("MOVL AX,ret+0(FP)\nRET\n")
+				fmt.Fprintf(&declarations, "func %s() uint32\n", name)
+			}
+			want := 36
+			if target.arch == "386" {
+				want = 22
+			}
+			if count != want {
+				t.Fatal("initialized named family omitted an applicable member", target, count, want)
+			}
+			x86LEAActualTargetGoObject(t, target.arch, target.triple, source.String())
+			llc := findLLVM22Tool("llc")
+			if llc == "" {
+				t.Fatal("LLVM 22 llc not found")
+			}
+			for _, api := range []string{"text", "module", "Go"} {
+				ir, err := x86ScalarFPBitViewAPI(t, source.String(), declarations.String(), target.arch, target.triple, api)
+				if err != nil {
+					t.Fatal("initialized floating family failed public translation", api, err)
+				}
+				if got := strings.Count(ir, "asm sideeffect"); got != count {
+					t.Fatal("public translation lost original floating instructions", api, got, count)
+				}
+				compileLLVMToObject(t, llc, target.triple, api+"-helpers.ll", api+"-helpers.o", ir)
+			}
+		})
+	}
+}
+
+func TestX86FloatingHelperVoidAndUnusedBoolCannotSupplyInputs(t *testing.T) {
+	for _, member := range x86FloatingHelperOracleMembers() {
+		instruction := x86FloatingHelperOracleInstruction(member, false)
+		for _, unusedBool := range []bool{false, true} {
+			declaration, extent := "func Missing()", 0
+			if unusedBool {
+				declaration, extent = "func Missing(unused bool)", 1
+			}
+			source := fmt.Sprintf("TEXT ·Missing(SB),4,$0-%d\n%s\nRET\n", extent, instruction)
+			for _, api := range []string{"text", "module", "Go"} {
+				ir, err := x86ScalarFPBitViewAPI(t, source, declaration, "amd64", "x86_64-unknown-linux-gnu", api)
+				if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+					t.Fatal("Void or unused bool invented missing floating inputs", member.name, unusedBool, api, err)
+				}
+			}
+		}
+	}
 }
 
 func x86FloatingHelperOracleMembers() []x86FloatingHelperOracleMember {
