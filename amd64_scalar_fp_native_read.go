@@ -19,6 +19,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 	var nativeMMX *x86NativeMMXRegion
 	named := true
 	for _, ins := range fn.Instrs {
+		if x86RawADXSource(ins, arch) {
+			continue // Only the bound default address mode shares the typed carry chain.
+		}
 		named = named && x86ResultNamedPredicateInstruction(ins)
 	}
 	if named {
@@ -168,6 +171,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		}
 		if accepted, known := x86ResultNumericalReadStep(ins, state, owned, resultOffset, arch); known {
 			return accepted // A checked mutable SB source keeps its own lifetime and byte effects.
+		}
+		if accepted, known := x86LoweredADXResultStep(ins, state, owned, resultOffset, arch); known {
+			return accepted
 		}
 		if accepted, known := x86LoweredRawScalarObserverStep(ins, state, owned, resultOffset, arch); known {
 			return accepted

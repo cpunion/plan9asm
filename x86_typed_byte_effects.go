@@ -122,6 +122,9 @@ func x86TypedGPByteEffect(op Op, ins Instr, arch string) (x86TypedByteEffect, bo
 	if effect, known, err := x86TypedBLSByteEffect(op, ins, arch); known {
 		return effect, known, err
 	}
+	if effect, known, err := x86TypedADXByteEffect(op, ins, arch); known {
+		return effect, known, err
+	}
 	if effect, known, err := x86TypedLEAByteEffect(op, ins, arch); known {
 		return effect, known, err
 	}

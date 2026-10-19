@@ -27,6 +27,7 @@ type x86SourceRawInstruction struct {
 	op          Op
 	args        []Operand
 	vectorBytes int
+	addressBits int // Exact decoded mode; not an address-size or native-entry permission.
 }
 
 type x86SourceStackAddress struct {
