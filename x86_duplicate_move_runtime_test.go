@@ -112,25 +112,14 @@ func TestX86DuplicateMoveNativeSourceFiveTargets(t *testing.T) {
 	}
 	for _, target := range x86RawReturnTargets {
 		t.Run(target.triple, func(t *testing.T) {
-			var source, declarations strings.Builder
-			count := 0
-			for _, row := range x86DuplicateNativeRows() {
-				source.WriteString(x86DuplicateNativeAssembly(row, target.arch, false, false))
-				fmt.Fprintf(&declarations, "func %s(out *[96]byte,input,old *[64]byte,mask uint64)\n", row.name)
-				count++
-				if row.memory {
-					source.WriteString(x86DuplicateNativeAssembly(row, target.arch, false, true))
-					fmt.Fprintf(&declarations, "func Dead%s(out *[96]byte,input,old *[64]byte,mask uint64)\n", row.name)
-					count++
-				}
+			program := x86BuildDuplicateNativeProgram(target.arch)
+			if strings.Count(program.source, "TEXT ·") != 90 {
+				t.Fatal("complete initialized live/dead native source changed")
 			}
-			if count != 90 {
-				t.Fatal("complete initialized live/dead native source changed", count)
-			}
-			x86LEAActualTargetGoObject(t, target.arch, target.triple, source.String())
+			x86LEAActualTargetGoObject(t, target.arch, target.triple, program.source)
 			for _, api := range []string{"text", "module", "Go"} {
 				t.Run(api, func(t *testing.T) {
-					ir, err := x86ScalarFPBitViewAPI(t, source.String(), declarations.String(), target.arch, target.triple, api)
+					ir, err := x86ScalarFPBitViewAPI(t, program.source, program.declarations, target.arch, target.triple, api)
 					if err != nil {
 						t.Fatal("complete native runtime source lost initialized data/FLAGS/MXCSR/storage", err)
 					}
