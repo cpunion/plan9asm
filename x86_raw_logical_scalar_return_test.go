@@ -3,6 +3,7 @@ package plan9asm
 import (
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -62,6 +63,41 @@ func TestX86Mode32LogicalScalarResultsComposeWithBoundZeroCleanupReturn(t *testi
 				})
 			}
 		}
+	}
+}
+
+func TestX86Mode32RawLogicalReturnRetainsExactReplayAndSource(t *testing.T) {
+	file, err := Parse(ArchAMD64, "TEXT value(SB),4,$0-0\nMOVL $17,AX\nBYTE $0xc3\nRET\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	file, err = NormalizeRawFileForTranslation(file, "386")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, mutate := range map[string]func(*Func){
+		"unchanged":            func(*Func) {},
+		"missing-replay":       func(fn *Func) { fn.x86RawReplay = nil },
+		"changed-move":         func(fn *Func) { fn.Instrs[1].Args[0].Imm++ },
+		"changed-raw-spelling": func(fn *Func) { fn.Instrs[2].Raw += " changed" },
+		"changed-return-width": func(fn *Func) { fn.Instrs[2].x86RawNearReturn.nativeWidth = false },
+		"changed-cleanup":      func(fn *Func) { fn.Instrs[2].x86RawNearReturn.cleanup = 4 },
+	} {
+		t.Run(name, func(t *testing.T) {
+			fn := file.Funcs[0]
+			fn.Instrs = cloneX86ReplayInstrs(fn.Instrs)
+			mutate(&fn)
+			before := cloneX86ReplayInstrs(fn.Instrs)
+			context := amd64Ctx{goarch: "386", fpScalarSource: fn, sig: FuncSig{Name: "value", Ret: I32}}
+			selected, err := context.checkRawLogicalScalarResult()
+			if !selected || (name == "unchanged" && err != nil) ||
+				(name != "unchanged" && !errors.Is(err, ErrProbeNeedsContext)) {
+				t.Fatal("raw return acquired a changed or incomplete source role", selected, err)
+			}
+			if !reflect.DeepEqual(before, fn.Instrs) {
+				t.Fatal("logical result consumer edited the sealed original source")
+			}
+		})
 	}
 }
 
