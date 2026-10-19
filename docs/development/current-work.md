@@ -1,222 +1,140 @@
 # PR 40: current checkpoint
 
 Updated 2026-10-20. This is a handoff, not a completion certificate.
-Earlier checkpoints remain in Git; do not duplicate their accumulated tables
-or overwrite ignored failed evidence. Read [instruction contracts](instructions.md)
-and [validation](validation.md) before changing a family.
+Earlier checkpoints remain in Git; preserve ignored failed evidence.
+Read [instruction contracts](instructions.md) and [validation](validation.md)
+before changing a family.
 
 ## Scope and publication
 
-PR40 owns translation, complete typed instruction families and independent
-tests for 386, amd64, arm, arm64 and wasm. External inventories, scanners,
-ledgers and compatibility batches belong to
+This repository owns translation, complete typed instruction families and
+independent tests for 386, amd64, arm, arm64 and wasm. External inventories,
+scanners, ledgers and compatibility batches belong to
 [llgo-compat/plan9asm](https://github.com/llgo-compat/plan9asm).
 No inventory scanner runs locally.
 
-Push only to a cpunion/dastai fork. PR40 remains draft at `24851df2`;
-staged branches do not qualify that contribution head. Last checked upstream
-main `e2164ac0` is an ancestor of this candidate; recheck before publishing.
-Reuse persistent idle worktrees and preserve existing changes.
+Push only to an allowed cpunion/dastai fork. PR40 remains draft at
+`24851df2`; a staging branch is not that contribution head. Recheck upstream
+main before publishing; last checked `e2164ac0` is an ancestor of this batch.
+Stage the coherent batch on the fork's
+`codex/pr40-windows-owned-process-probe-20261013` branch, whose push starts
+the diagnostic workflow. Let each run finish; do not supersede active runs.
+Update the contribution only after qualifying its staged source.
 
 ## Latest online evidence
 
 [39285088077](https://github.com/cpunion/plan9asm/actions/runs/39285088077)
-finished naturally at `47e44aa7d`: 83 jobs pass and 16 fail, none cancelled.
-Fifteen main-root owners fail and their aggregate correctly rejects the run;
-both CLI module owners and aggregates pass. The complete sixteen-owner main
-union is 7,379 roots: 7,063 pass, 52 fail and 264 explicit host skips, zero
-absent/incomplete. Every root is owned exactly once. The independent ignored
-`ci392850/root-union-outcomes-audit.json` binds the raw events and inventory.
-Compared with the preceding complete run, eighteen old failures now pass and
-there are no newly failing roots. Local later repairs do not rewrite this
-online inventory or qualify a whole-suite percentage.
+finished naturally at `47e44aa7d`: 83 jobs pass, 16 fail, none cancelled.
+The sixteen-owner main-module union is 7,379 roots: 7,063 pass, 52 fail,
+264 explicit host skips, zero absent/incomplete. Every root is owned once.
+Fifteen root owners and their strict aggregate fail; both complete CLI modules
+pass. Compared with the preceding complete run, eighteen old failures now
+pass and there are no newly failing roots. Local repairs do not rewrite
+this online inventory or qualify a whole-suite percentage.
 
-Scalar lane/POP priority's exact
-sixteen roots and 846 children pass, including all four original Windows
-runtime failures. Its independent raw audit has zero skips or incomplete
-outcomes. The numerical product/CMOV audit passes seven roots and 24 children,
-including the original CMOV FP-span Go/LLVM execution and portable IFMA/lookup
-C oracles. Portable integer values are not native AVX512 qualification.
+The ignored `ci392850/root-union-outcomes-audit.json` binds the raw events
+and complete inventory. Earlier failed runs and local recorder failures remain
+failed. Do not combine different-source receipts into a current-head pass.
 
-The downloaded Linux floating-compare CPU receipt reports `AVX512F=0`,
-`AVX512VL=0` and `XCR0=7`. Some Windows root owners report F/VL=1 and
-enabled extended state; other Windows owners report F/VL=0. Do not infer
-either Linux capability or stable runner allocation from those Windows
-receipts. The recorded Linux runner cannot qualify the new complete
-AVX512 conversion, floating-helper or physical 512-bit/DF oracles. Keep the
-required capability checks and native owners; object compilation and portable
-values must not replace original-opcode execution. A capable execution
-environment remains unresolved. Earlier SSE/AVX native passes are not evidence
-of AVX512 support.
+The sole formal PR40 review thread is resolved, not reviewer approval.
+The orphaned-IR and symlink-include regressions remain required. Complete
+current-head CI, coverage and the strict benchmark are not yet qualified.
 
-[39258001772](https://github.com/cpunion/plan9asm/actions/runs/39258001772)
-finished naturally at `e890858c5`: 81 jobs pass and 17 fail, none cancelled.
-All 65 priorities, including `completed-ci-repair`, pass. Both CLI modules pass
-their complete Windows owner/aggregate checks. All sixteen main-root owners
-fail, and the main aggregate correctly rejects those failed plans.
+## Focused local evidence
 
-The complete main-root union is 7,326 roots: 6,992 pass, 70 fail and 264 explicit
-host skips, zero absent/incomplete. Every root is owned exactly once. The
-ignored `ci392580/root-union-outcomes-audit.json` retains all raw-backed outcomes;
-it is an inventory diagnostic, not a complete-module or coverage certificate.
+Every success below has zero failed, skipped or incomplete terminals within
+its own scope. Scopes overlap and cannot be added into a coverage percentage.
+A source/tool-sealed receipt qualifies its own unchanged snapshot, not a later
+merge. Objects, portable values, native execution and ABI authority are distinct.
 
-All six Linux/native priorities and both Windows ownership jobs pass.
-The downloaded product/CMOV/AES/vector-test numerical artifact independently
-audits four roots and fifteen execution children: nineteen passed terminals,
-no skips or incomplete outcomes. Vector tests retain all six original named/raw
-optimization paths. CMOV executes original Go opcode bytes; wide product/AES
-portable LLVM values are not original AVX512 execution.
-
-The preceding run `39251569206` at `755bbb710` finished naturally with
-64 passed jobs, one failed CAS/AES root and the dependent Windows job skipped.
-Preserve that failed evidence; the later priority pass does not rewrite it.
-
-The older complete Windows main-root inventory at
-[39228817887](https://github.com/cpunion/plan9asm/actions/runs/39228817887)
-at `17669bdbd`: 7,288 roots = 6,954 pass + 70 fail + 264 explicit host skips,
-zero absent/incomplete. Its failed rich-CLI owners additionally retain five
-failed roots; their partial inventory is not the main-module denominator.
-Ten old failures now pass, while ten previously passing roots fail under the
-new checks. Diagnose both sets; do not subtract later local focused repairs
-from either historical inventory.
-
-The sole formal PR40 review thread is resolved. The no-orphaned-IR regression
-`TestAMD64RejectedLegacyVectorDestinationDoesNotMutateIR` covers PSUBUSB,
-PABSD and PTEST; the separate symlink-include escape regression also passes.
-The exponential discovery search moved outside this repository and the
-readability parentheses are fixed. Resolved comments are not reviewer approval.
-Current-head coverage and complete CI remain unqualified.
-
-## Qualified focused batches
-
-These scopes overlap. Their counts cannot be added into a whole-suite percentage.
-Each receipt binds its own unchanged source and tools; all listed three-lane
-cohorts have zero failed, skipped or incomplete terminals.
-
-Recent current-Go-only receipts are separate, overlapping scopes, not a
-three-lane or native execution certificate:
-
-- `4f0119031`: raw moves, physical EVEX identity and complete return inputs,
-  33 roots / 3,322 children; integer min/max, 25 roots / 472 children.
-- `c79436c1e`: six original packed-compare literal/RIP roots / 39 children,
-  following `5a43e3e10`'s complete thirteen-root / 1,770-child raw input matrix.
-- `0733cd2fc`: reciprocal/legacy scalar moves and genuine SDK owner controls,
-  12 roots / 467 children. The broader SDK-priority regression at `43a78b514`
-  still fails; its correction is awaiting complete verification.
-- `84e8e7704`: complete LDDQU grammar, initialized five-target objects and
-  physical decoder limits, eight roots / 45 children. `bc7b77bae` also passes
-  these eight roots plus the strict horizontal assertion on actual Go1.20.
-- `51ffd142a`: twenty-name raw broadcast input family, fifteen roots /
-  2,531 children. Original value/fault/literal regressions remain required.
-
-The integrated reduction run at `8e6e5a6ba` passes 34 of 35 roots and fails
-one old whole-module assertion. Its isolated correction at `bc7b77bae` passes
-with actual Go1.20; the complete integrated union remains to be rerun.
-Do not turn these receipts into online passes or claim their unfinished
-minimum/race, original native, coverage or benchmark gates have completed.
-
-| Snapshot | Complete focused evidence | Important limits |
+| Snapshot | Focused evidence | Lane and limits |
 |---|---|---|
-| `579c4cba1` | MOVNTI, 36 floating helpers, conflict/funnel and raw compact/expand: 64 roots / 1,472 children, current Go, actual Go1.20 and race; identical 1,536 terminals | Complete typed input, mask, source-identity and native-access obligations. Cross-target objects and portable value/fault checks do not qualify original AVX512 or MOVNTI execution |
-| `013181561` | Integrated ALIGN, DIV/IDIV, mode32 raw logical returns, original scalar formats and floating-owner policies: 53 roots / 2,130 children, current Go, actual Go1.20 and race; identical 2,183 terminals | Bound raw RET composes only with the existing register-only leaf result; no entry or memory permission. Original undefined division status remains unavailable. Required native MOVNTI/ALIGN/DIV and eight floating programs still need the next online run |
-| `47e44aa7d` | Raw IFMA/lookup and shared decoder: 23 roots / 378 children, current Go, actual Go1.20 and race; identical 401 terminals | Complete original identities, initialized raw five-target objects and physical mode32 mask rows; no raw/native entry or missing-input permission |
-| `9769cc2c1` | Scalar lane/POP stores and original format repairs: 26 roots / 1,219 children, current Go, actual Go1.20 and race; identical 1,245 terminals | Complete selected-byte native stores, Void/unused-bool obligations, exact volatile POP widths, private stack balance/bit/origin controls and five-target objects. Local x86 runtime skips are excluded from this certificate; original execution remains required online |
-| `66dcd0d31` | CMOV FP views: 2 roots / 183 children, current Go, actual Go1.20 and race; identical 185 terminals | Original uninitialized formats remain Go objects plus Context; independent initialized AX/FLAGS sources own complete, partial, cross-field and pointer/hole checks. No new caller or FP storage permission |
-| `1cebb3c38` | Branch hints and original CMOV/KVM formats: 5 roots / 15 children, current Go, actual Go1.20 and race | All sixteen conditions and both hints compile on five targets with actual word-aligned results. The original signed-division compound test still fails at IDIV; mode32 hypercall objects do not supply a logical scalar/native entry contract |
-| `9738b0376` | Raw immediate compares: 14 roots / 657 children, current Go, actual Go1.20 and race; identical 671 terminals | Eight signed/unsigned B/W/D/Q members, complete Go rows, initialized X/Y/Z five-target raw objects, selectors/predicates and missing/native/standalone controls. Physical mode32 arity is distinct from the named frontend |
-| `313f7afc5` | Named qword lookup plus portable numerical programs: 13 roots / 39 children, current Go, actual Go1.20 and race; identical 52 terminals | Both opcode families, complete independent attributes, every input byte, write-only K versus merging vector results and E4/E4NF reads. IFMA/lookup original C oracles execute on the actual AMD64/ARM64 host at three optimization paths; not native AVX512 |
-| `eac2dcdb4` | IFMA: 16 roots / 382 children, current Go, actual Go1.20 and race; identical 398 terminals | Complete two-opcode Go rows, X/Y/Z initialized named/raw five-target objects, actual mode32 masks, every meaningful source/accumulator byte and independently nonzero upper aliases. Native numerical execution remains required in the next CI |
-| `e6d340706` | AES/CAS: 22 roots / 2,471 children, current Go, actual Go1.20 and race; identical 2,493 terminals | Restores the existing nontrapping unknown-register domain without initializing unknown bytes. Original CAS predicate remains independent; observable AES data/control uses still reject. Native addresses and complete reads remain mandatory |
-| `475ffc681` | PTEST/VPTEST/VTESTPD/VTESTPS: 15 roots / 72 children, current Go, actual Go1.20 and race; identical 87 terminals | Complete independent Go rows, five-target three-API objects, every-byte/state controls and exact original dead memory opcodes through IR/backend O0/O2. Native execution remains required in the next CI |
-| `805a2e667` | CMOV: 16 roots / 1,075 children, current Go, actual Go1.20 and race | Complete conditions and widths, old destination, predicate and unconditional native reads. Dead named GP results may remain unknown, never initialized |
-| `ae7f42184` | Rich-CLI tail/declarations: 13 roots / 246 children, current Go, minimum Go1.24 and race | Actual root/terminal declarations precede private-node heuristics; ABI selectors and strict graph/dependency checks remain |
-| `4d1416874` | Raw DWORD private controls: 16 roots / 1,891 children, current Go, actual Go1.20 and race | Exact data-changing products preserve existing DF/ID/private storage, not inert-NOP or caller authority |
-| `39378d6b6` | MOVBE/BMI2/oracle repair: 34 roots / 1,658 children, current Go, actual Go1.20 and race | Complete six MOVBE canonical/alias names, original Go-rejected imm64 stores, forty oracle aliases, values/faults and source boundaries. Eight-SDK audit and 22 final gates pass at later baseline-only snapshots |
+| `579c4cba1` | MOVNTI, floating helpers, conflict/funnel and compact/expand: 64 roots / 1,472 children | Current Go, actual Go1.20 and race; original native execution remains separate |
+| `013181561` | ALIGN, DIV/IDIV, raw logical returns and original formats: 53 / 2,130 | Current Go, actual Go1.20 and race; no new entry or memory permission |
+| `47e44aa7d` | Raw IFMA/lookup and shared decoder: 23 / 378 | Current Go, actual Go1.20 and race |
+| `4f0119031` | Raw moves and physical EVEX identity: 33 / 3,322 | Current Go; actual Go1.20 independently passes the same complete scope at `ae667fabb` |
+| `06c8615cf` | Complete integer min/max: 25 / 472 | Actual Go1.20, two disjoint owners on this same snapshot; current-Go scope passes at `4f0119031` |
+| `5982a0612` | Complete reduction plus original format/literal regressions: 35 / 638 | Actual Go1.20; includes the strict assertion on the actual function body, not unused declarations |
+| `5982a0612` | All numerical/native/raw LEA and retained-pointer controls: 42 / 670 | Race; portable DF instrumentation is explicitly separate from unmodified native execution |
+| `8206232b5` | CLMUL complete physical/input matrix: 15 / 1,759; original/decoder regressions: 16 / 607 | Two overlapping current-Go scopes, not a summed denominator or original native execution |
+| `5b153b532` | Complete ternary named/raw initialized matrix: 10 / 352 | Current Go; subsequent shared source-closure correction is independently tested below |
+| `356457017` | Shared dead-source closure and original ternary guard-page program: 8 / 368 | Current Go; all 36 E4 forms × 5 masks × 5 boundaries × 2 IR pipelines execute on the actual host |
+| `767c98550` | Shared source-closure RED regressions plus original whole-CFG root: 3 / 312 | Actual Go1.20; no synthetic shape facts authorize native addresses or read masks |
+| `75c9095f7` | Genuine SDK owner precedence: 3 / 234 | Current Go; SDK literal/numerical consumers remain ahead of native family hooks |
 
-Preserve the failed AES/CAS RED at `075c9832c` and the earlier overstrict AES
-qualification at `a731d124d`; the latter is not the restored-domain certificate.
-PTEST RED `fdaded1c0` and first GREEN `f9ceee21e` remain failed. The latter
-found missing isolated native carrier features as well as uninitialized old
-format fixtures. Keep original formats as Go/emitter objects plus Context,
-separate from initialized public objects.
+The initial shared closure RED at `c1f23961b` has 302 failed terminals.
+Its correction keeps dead states separate from reachable states, uses actual
+preceding source facts, and shares the existing 16,384-visit / 64MiB budget.
+Typed accesses distinguish memory effects from LEA address syntax. The
+ordinary unknown scratch domain remains unchanged. The detector RED at
+`1460cb8cb` fails six direct classifications; its nine public controls already
+pass and must not be reported as a public-source regression.
 
-The eight-SDK audit at `796dfb1d9` changes exactly fourteen AMD64 vector-test
-probes to Context and restores twenty pure-register AES probes per SDK.
-No AES memory form, unrelated opcode, 386 form, encoder or unsupported metric
-changes. The one historical Go1.20 unsupported form is unchanged; current Go's
-five-architecture gate still requires zero unsupported forms and parse errors.
+Retained LEAW keeps old caller-address high bytes only in the existing
+single-use address-bit carrier, never NUM, pointer or backing facts.
+`146bb6a2a` passes six current-Go roots / 145 children. The cross-host companion
+isolates exactly the checked native STD/CLD sideeffect calls while retaining
+the full logical DF lifecycle, original source/C and all 300 input triples.
+It is instrumentation, not unmodified x86 execution.
 
-Ignored receipts include `windows-aes-cas-qualified-e6d34070.json`,
-`windows-vector-test-qualified-475ffc68.json`, prior family qualification files,
-`windows-ifma-qualified-eac2dcdb.json`,
-`windows-qword-lookup-qualified-313f7afc.json`,
-`windows-raw-mask-compare-qualified-9738b037.json`, and original raw test streams.
-Actual filenames may be in another persistent worktree; inspect worktrees first.
-Evidence is not tracked repository data.
+Required Linux native owners now separately retain actual Go bytes and
+original LLVM bodies for LEAW, and complete SSE/AVX reduction and reciprocal
+programs. Their fixtures/ownership pass locally; their native execution does
+not. LEAW, duplicate and reciprocal steps run before AVX512-dependent steps.
+The independent LEAW auditor requires all fourteen terminals, actual host/SDK
+brackets and every execution marker; missing, duplicate, skipped, incomplete
+or late observations fail.
 
-## Immediate next work
+## Classification baseline
 
-1. Continue the exact fifty-two-root failure list from the completed run. The
-   new local repairs are not online passes. Prioritize new regressions as well
-   as the old runtime families; retain complete source, Go/emitter objects and
-   explicit Context for genuinely unbound formats, with independent initialized
-   public counterparts. Never relabel a valid initialized program as a format.
-   The original CMOV fixed-local object and runtime roots also exhausted their
-   five-minute capture context. They now retain all384 object kernels per target
-   in six independent batches, and all387 runtime kernels in seven batches.
-   Source/ABI capture and the original Go/C oracles remain mandatory. Independent
-   policies reject missing or monolithic owners; the complete batch union is
-   not yet qualified. Only Linux/Darwin batch00 has actual current-Go objects.
-   Scalar lane and POP repairs have their own Windows priority, including the
-   unchanged original runtime failures. Do not count the new local cohort as
-   a successful online run or subtract it from the historical seventy failures.
-2. The eight-SDK audit at `579c4cba1` changes exactly 286 AMD64 input-deficient
-   probes per SDK, exclusively within the 52 MOVNTI/conflict/funnel/floating
-   names. All 386 forms and unrelated fields are unchanged, with no additional
-   unsupported form. Baseline-only commit `262e140b1` records the audited
-   classification; ALIGN/DIV need their own next audit. Context is not an
-   initialized program pass. Preserve the complete positive object matrices.
-3. The integrated 53-root current/minimum/race receipt is
-   `windows-native-vector-new-qualified-01318156.json`; the earlier 64-root
-   receipt is `windows-native-vector-families-qualified-579c4cba.json`. Ignored
-   source/tool-sealed raw streams remain in persistent worktrees. Finish new
-   scanner/isolated-CLI checks and required native completion ownership, then
-   rerun final gates on an unchanged batch before an allowed-fork push.
-4. Complete named/raw conversion, duplicate, segment-query, blend and
-   half-vector repairs are integrated locally, not qualified online. The
-   eight-SDK audit at `db0abbfc8` allows exactly 62 family names: each SDK
-   changes 290 AMD64 probes from supported to Context, zero 386 probes and
-   no unrelated metric. Baseline-only `f834e4377` records that exact audit.
-   Its complete current-Go conversion legacy union passes 62 roots and
-   1,914 children; minimum/race and integrated final gates remain unfinished.
-   Preserve failed and different-head receipts without combining them into
-   a current-head certificate. Half-vector values/objects at `063ef9c19`
-   pass 19 roots; the separate indirect ownership repair at `d25f0e9fd`
-   passes three roots and 219 children. Full native DF/512-bit execution is
-   still required. Complete raw-move, min/max, raw-compare, reciprocal and
-   broadcast focused matrices now pass as listed above; their remaining
-   integrated and native qualifications must stay explicit. The new reduction
-   native driver and broader SDK-priority correction are awaiting verification.
-   Continue native LEA address observations, CLMUL, shuffle, ternary,
-   physical SP/BP/g and undefined-shift observations. Retain original source
-   and separate format objects, initialized values and ABI authority.
-5. Preserve the separately qualified logical integer return batch
-   `53a93cfd4` and incomplete floating MIN/MAX candidate `7009ff18f`.
-   They are not merged into this repair candidate.
-6. After fork CI, review comments and coverage qualify, update the contribution
-   head and PR body. Do not merge/approve upstream or mark the PR ready early.
+The eight-SDK audit at `356457017` inspects all sixteen Go1.20–Go1.27 x86
+reports. Exactly 343 input-deficient AMD64 forms per SDK, across 58 opcode
+names, change from supported to Context. All 386 forms, unrelated fields and
+encoder/unsupported/parse metrics remain unchanged. Complete report forms and
+fingerprints equal the earlier independent observation at `8206232b5`.
+Baseline-only `05782c0d2` records this audit.
+
+Current Go AMD64 has 3,292 supported and 3,444 Context forms, zero unsupported.
+Context is not a successful initialized-program translation. The historical
+Go1.20 unsupported form remains unchanged; the current five-architecture gate
+still requires zero unsupported forms and parse errors.
+
+## Remaining work and hardware
+
+1. Freeze the integrated batch, run minimum/race shared-rule regressions and
+   the final build/vet, scanner, isolated-CLI, policy and five-arch gates.
+   Publish one coherent allowed-fork batch and inspect every resulting owner
+   and aggregate. Do not subtract local repairs from the old 52-root inventory.
+2. The conservative source mapping at `8206232b5` has 37 corresponding repairs
+   or format corrections, fourteen unclosed/runtime-unverified roots and the
+   then-open ternary regression (now corrected above). This is triage, not a
+   predicted new-CI result. Preserve original initialized runtime programs.
+3. Remaining families include conditional shift/FLAGS outcomes, physical
+   SP/BP/g, MMX, packed abs/sign, four-source operations, scalar precision,
+   immediate/variable shuffles, explicit mask stores and raw FP/RIP consumers.
+   Fix complete rule classes, then rerun original roots to discover later
+   failures. Do not infer missing family support from a repaired initial load.
+4. Required original AVX512 qualification needs suitable execution hardware.
+   The recorded Linux runner has F=0, VL=0, XCR0=7. Windows owners are mixed;
+   some report F/VL=1 and others F/VL=0, so allocation is not a stable guarantee.
+   Conversion needs F/DQ/BW/VL, floating helpers F/DQ/VL, and physical wide
+   half-move execution F. Do not weaken checks, replace execution with objects,
+   or count skips as passes. Reduction and reciprocal require only SSE/AVX;
+   retained LEAW only scalar x86, so those are not AVX512 blockers.
+5. Keep PR40 draft until current-head CI, review and coverage qualify. Update
+   its head/body only with the actual staged result; never merge or approve
+   upstream.
 
 ## Benchmark and verification discipline
 
 The last strict standard-library benchmark at `18bb77a09` remains failed:
-all 184 target/file pairs were attempted, 129 compiled and 55 failed, no N/A.
-AMD64 took 392s, exceeding the unchanged 300s target budget; total 504s is below 900s.
-No new benchmark or controlled speedup has been certified.
+all 184 target/file pairs attempted, 129 compiled, 55 failed, no N/A.
+AMD64 took 392s, over the unchanged 300s target budget; total 504s is below
+900s. No newer speedup or complete benchmark pass has been certified.
 
-Use Go1.27 and exact LLVM22; root-module minimum is actual Go1.20 and rich-CLI
-minimum is Go1.24. One heavy local Go/LLVM owner at a time. Commit before
-validation; freeze tracked files, documentation and used tools for each run.
-Develop in a different idle worktree while a snapshot runs. Missing tools fail,
-never skip. Native host exclusions retain a required cross/native counterpart.
-A format object, Context classification, runtime value, ABI proof and complete
-CI receipt are distinct evidence; none can silently substitute for another.
+Use current Go1.27 and exact LLVM22; root-module minimum is actual Go1.20,
+rich-CLI minimum Go1.24. One heavy local Go/LLVM owner at a time.
+Commit before validation; freeze tracked source, documentation and used tools.
+Develop in another idle worktree while a snapshot runs. Release LLVM objects
+and owned subprocess resources promptly. Missing tools fail, never skip.
+Native host exclusions require an explicit counterpart.
