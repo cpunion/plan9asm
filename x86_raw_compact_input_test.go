@@ -48,7 +48,7 @@ func x86RawCompactInputObjects(t *testing.T, bank string, expand bool) {
 						name := fmt.Sprint("Compact", count)
 						fmt.Fprintf(&source, "TEXT ·%s(SB),4,$0-%d\n"+
 							"MOV%s out+0(FP),DI\nMOV%s input+%d(FP),SI\nMOV%s old+%d(FP),BX\n"+
-							"VMOVUPS (SI),Z2\nVMOVUPS (BX),Z3\nMOVL $-1431655766,AX\nKMOVQ AX,K1\n"+
+							"VMOVUPS (SI),Z2\nVMOVUPS (BX),Z3\nKXNORQ K1,K1,K1\n"+
 							"%s\nVMOVUPS Z3,65(DI)\nRET\n", name, 3*word,
 							suffix, suffix, word, suffix, 2*word, literal)
 						fmt.Fprintf(&declarations, "func %s(out *[144]byte,input,old *[64]byte)\n", name)
