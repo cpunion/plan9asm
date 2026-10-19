@@ -113,6 +113,14 @@ func TestX86NativeLEAAddressBitsDoNotInventNumericalOrPointerFacts(t *testing.T)
 				initial.gp[0], initial.gp[2] = 0xff, 0xff
 				initial.pointerGP[6], initial.callerAddressGP[6] = true, true
 				initial.pointerGP[7], initial.callerAddressGP[7] = true, true
+				if x86LEAWidth(instruction.Op, arch) >= word {
+					state := initial.clone()
+					accepted, known := x86ResultNativeLEAAddressBitsStep(instruction, &state, nil, arch, true)
+					if accepted || known || !reflect.DeepEqual(state, initial) {
+						t.Fatal("narrow observation intercepted the existing complete pointer consumer")
+					}
+					return
+				}
 				for _, control := range []string{"complete", "no-leaf", "unknown-base", "unknown-index"} {
 					state := initial.clone()
 					if control == "unknown-base" {
@@ -183,6 +191,26 @@ func TestX86NativeLEAAddressBitsCannotSurviveAConflictingWrite(t *testing.T) {
 					}
 				})
 			}
+		}
+	}
+}
+
+func TestX86NativeLEANarrowObserverDoesNotStealFullPointerContinuation(t *testing.T) {
+	for _, arch := range []string{"386", "amd64"} {
+		word, move, lea, triple := 8, "MOVQ", "LEAQ", "x86_64-unknown-linux-gnu"
+		if arch == "386" {
+			word, move, lea, triple = 4, "MOVL", "LEAL", "i386-unknown-linux-gnu"
+		}
+		source := fmt.Sprintf("TEXT ·Value(SB),4,$0-%d\n%s out+0(FP),DI\n%s input+%d(FP),SI\n"+
+			"MOVL $3,DX\n%s 1(SI)(DX*2),BX\nMOVB (BX),AX\nMOVB AX,(DI)\nRET\n", 2*word, move, move, word, lea)
+		x86LEAActualTargetGoObject(t, arch, triple, source)
+		for _, api := range []string{"text", "module", "Go"} {
+			t.Run(arch+"/"+api, func(t *testing.T) {
+				ir, err := x86ScalarFPBitViewAPI(t, source, "func Value(out,input *byte)\n", arch, triple, api)
+				if err != nil || ir == "" {
+					t.Fatal("narrow address observation stole the existing complete pointer continuation", err)
+				}
+			})
 		}
 	}
 }

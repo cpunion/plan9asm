@@ -14,6 +14,10 @@ func x86ResultNativeLEAAddressBitsStep(ins Instr, state *x86ResultState, owned [
 	if !known || err != nil {
 		return false, false // Existing physical, stack and malformed-source consumers remain separate.
 	}
+	output := effect.operands[len(effect.operands)-1]
+	if output.width >= x86ResultPointerWord(arch) {
+		return false, false // Preserve the existing full-word incoming-pointer continuation.
+	}
 	address := false
 	for _, operand := range effect.operands {
 		if !operand.read {
@@ -32,7 +36,6 @@ func x86ResultNativeLEAAddressBitsStep(ins Instr, state *x86ResultState, owned [
 	if !leaf || !x86ResultNamedPredicateInstruction(ins) {
 		return false, true
 	}
-	output := effect.operands[len(effect.operands)-1]
 	register, mask, valid := x86ResultGP(output.operand.Reg, output.width, arch)
 	if !valid {
 		return false, true
