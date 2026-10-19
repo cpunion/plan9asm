@@ -9,6 +9,9 @@ func x86TypedFPResultNeedsProof(fn Func, sig FuncSig, arch string) bool {
 	if arch != "386" && arch != "amd64" {
 		return false
 	}
+	if x86LogicalScalarResultNeedsProof(sig, arch) {
+		return true // An absent or partial AX write must not borrow implementation zeroes.
+	}
 	if x86StaticIntegerResultSourceCandidate(fn, sig, arch) {
 		return true
 	}

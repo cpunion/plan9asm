@@ -54,11 +54,12 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 	}
 	strictErr := checkX86ScalarFPResultInitialization(fn, sig, arch)
 	customRegisterBool := arch == "386" && sig.Ret == I1 && len(sig.ArgRegs) != 0
-	if customRegisterBool {
-		strictErr = checkX86CustomRegisterBoolResultInitialization(fn, sig, arch,
+	logicalScalar := x86LogicalScalarResultNeedsProof(sig, arch)
+	if customRegisterBool || logicalScalar {
+		strictErr = checkX86LogicalRegisterResultInitialization(fn, sig, arch,
 			func(_ int, ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string) bool {
 				return x86ScalarFPResultTransfer(ins, state, owned, resultOffset, arch)
-			})
+			}, customRegisterBool)
 	}
 	registerEntry := arch == "amd64" && strings.HasSuffix(fn.Sym, "<ABIInternal>")
 	if registerEntry {
@@ -388,8 +389,8 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 	if registerEntry {
 		return checkAMD64RegisterResultInitialization(fn, sig, transfer)
 	}
-	if customRegisterBool {
-		return checkX86CustomRegisterBoolResultInitialization(fn, sig, arch, transfer)
+	if customRegisterBool || logicalScalar {
+		return checkX86LogicalRegisterResultInitialization(fn, sig, arch, transfer, customRegisterBool)
 	}
 	if err := checkX86ABI0ResultInitializationAtSource(fn, sig, arch, transfer, true); err != nil {
 		return err
