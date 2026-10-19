@@ -23,12 +23,13 @@ test('full modules cannot bypass the complete native conversion barrier', () => 
   const workflow = fs.readFileSync('.github/workflows/pr40-owned-process-probe.yml', 'utf8');
   requireCompleteNativeBarrier(workflow);
   const complete = jobBody(workflow, 'complete-windows');
-  const others = jobNeeds(workflow, 'complete-windows').filter(name => name !== 'packed-conversion-native-complete');
-  for (const replacements of [[], ['packed-conversion-native-priority'],
+  const others = jobNeeds(workflow, 'complete-windows').filter(name =>
+    name !== 'packed-conversion-native-complete');
+  for (const replacement of [[], ['packed-conversion-native-priority'],
     ['packed-conversion-native-complete', 'packed-conversion-native-complete']]) {
-    const declaration = '    needs: [' + [...others, ...replacements].join(', ') + ']';
-    const changed = workflow.replace(complete, complete.replace(/^    needs:.*$/m, declaration));
-    assert.notEqual(changed, workflow, 'negative native barrier control must change its actual job');
+    const changed = workflow.replace(complete, complete.replace(/^    needs:.*$/m,
+      '    needs: [' + [...others, ...replacement].join(', ') + ']'));
+    assert.notEqual(changed, workflow, 'each negative must edit its actual dependency');
     assert.throws(() => requireCompleteNativeBarrier(changed));
   }
 });
