@@ -32,7 +32,7 @@ jobs:
         shell: bash
         run: bash scripts/test-windows-module-ci.sh ${{ inputs.module }} execute 0 ${{ matrix.part }}
       - name: Retain actual root evidence
-        if: ${{ !cancelled() }}
+        if: ${{ always() }}
         uses: actions/upload-artifact@v6
         with:
           name: windows-module-${{ inputs.module }}-root-${{ matrix.part }}
@@ -60,7 +60,7 @@ jobs:
         shell: bash
         run: bash scripts/test-windows-module-ci.sh ${{ inputs.module }} execute ${{ matrix.owner }} -1
       - name: Retain actual package evidence
-        if: ${{ !cancelled() }}
+        if: ${{ always() }}
         uses: actions/upload-artifact@v6
         with:
           name: windows-module-${{ inputs.module }}-owner-${{ matrix.owner }}
