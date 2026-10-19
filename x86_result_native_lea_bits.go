@@ -4,7 +4,7 @@ package plan9asm
 // They are not numerical inputs, canonical bools, pointers or backing facts.
 // Every other successful effect revokes this short-lived observation.
 type x86NativeLEAAddressBits struct {
-	register int
+	register uint8
 	bytes    uint8
 }
 
@@ -46,6 +46,6 @@ func x86ResultNativeLEAAddressBitsStep(ins Instr, state *x86ResultState, owned [
 		state.gp[register] = 0xf0
 		state.canonicalGP[register] |= 0xf0
 	}
-	state.nativeLEAAddressBits = x86NativeLEAAddressBits{register, mask}
+	state.nativeLEAAddressBits = x86NativeLEAAddressBits{uint8(register), mask}
 	return true, true
 }

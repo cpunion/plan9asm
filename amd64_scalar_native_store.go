@@ -113,7 +113,7 @@ func x86LoweredScalarNativeStoreWithAddressBits(ins Instr, state *x86ResultState
 	}
 	if addressBits && form.source.Kind == OpReg {
 		if register, mask, valid := x86ResultGP(form.source.Reg, form.bytes, arch); valid &&
-			state.nativeLEAAddressBits.register == register && state.nativeLEAAddressBits.bytes != 0 &&
+			int(state.nativeLEAAddressBits.register) == register && state.nativeLEAAddressBits.bytes != 0 &&
 			(state.gp[register]|state.nativeLEAAddressBits.bytes)&mask == mask {
 			return true, true // Observe exact adjacent LEA bits without granting numerical initialization.
 		}
