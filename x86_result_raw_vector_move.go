@@ -37,7 +37,8 @@ func x86RawScalarVectorMoveIdentity(ins Instr, arch string) bool {
 
 func x86RawPackedVectorMoveSourceForm(ins Instr, arch string) (amd64PackedVectorMoveForm, bool) {
 	form, known, err := amd64PackedVectorMoveProperties(ins, arch)
-	return form, known && err == nil && !form.undefinedOpcode() && x86RawVectorMoveOperandIdentity(ins, arch)
+	return form, known && err == nil && !form.undefinedOpcode() &&
+		x86RawPackedMoveEncodingSource(ins, arch) && x86RawVectorMoveOperandIdentity(ins, arch)
 }
 
 func x86RawScalarVectorMoveSourceForm(ins Instr, arch string) (amd64ScalarVectorMoveForm, bool) {
@@ -63,7 +64,7 @@ func x86RawVectorMoveLiteralSource(ins Instr, arch string) bool {
 		return false
 	}
 	if form, known, err := amd64PackedVectorMoveProperties(ins, arch); known {
-		return err == nil && !form.spec.aligned && form.memory == 0 &&
+		return err == nil && !form.spec.aligned && form.memory == 0 && x86RawPackedMoveEncodingSource(ins, arch) &&
 			ins.x86RIPMemoryRead.width == int64(form.byteWidth)
 	}
 	form, known, err := amd64ScalarVectorMoveProperties(ins, arch)

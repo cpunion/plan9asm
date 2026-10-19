@@ -990,6 +990,10 @@ type Instr struct {
 	// requirement even when its low-X operands also have a VEX spelling.
 	x86ScalarFloatIntegerEVEX bool
 	x86PackedNumericEVEX      bool
+	// A physical packed float move can use EVEX with unmasked low X/Y
+	// operands too. Retain that generation for the existing native bridge;
+	// neither this restriction nor its CPU features grant input permission.
+	x86PackedVectorMoveEVEX bool
 	// Preserve physical EVEX generation even without a high bank or SAE suffix.
 	x86ScalarFlagCompareEVEX bool
 	x86SqrtEVEX              bool
