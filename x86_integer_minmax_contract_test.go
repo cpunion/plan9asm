@@ -64,8 +64,10 @@ func TestX86IntegerMinMaxPhysicalMode32DoesNotGrantNamedArity(t *testing.T) {
 	if len(pcs) != len(rows)+1 {
 		t.Fatal("incomplete physical instruction boundaries")
 	}
+	// This observer owns decoded instruction identity, not a raw-return PC
+	// contract. Keep the terminator named while preserving every min/max byte.
 	file := mustParseX86RawReturn(t, "TEXT Value(SB),4,$0-0\n"+
-		x86RawDisplacementDirectives(code)+"RET\n")
+		x86RawDisplacementDirectives(code[:pcs[len(rows)]])+"RET\n")
 	file, err := normalizeX86RawFile(file, "386")
 	if err != nil {
 		t.Fatal(err)
