@@ -18,7 +18,7 @@ const hash = 'a'.repeat(64);
 const imageHash = 'b'.repeat(64);
 const inventory = owners.join('\n') + '\nok\t' + packageName + '\n';
 const host = `IA32 direct host: linux/amd64 kernel=x86_64 CPUsha=${hash} mapsha=${hash}\n`;
-const staticImage = `native division static IA32 ELF bytes=4096 sha256=${imageHash}\n`;
+const staticImage = `native oracle static IA32 ELF bytes=4096 sha256=${imageHash}\n`;
 const directImage = args => `IA32 direct ELF bytes=4096 sha256=${imageHash} argv=${args}\n`;
 const sdk = args => `actual executable=/sdk/bin/go sha256=${hash} argv=${args}\n`;
 const originalArgs = '["-test.run=^TestOriginal$" "-test.count=1" "-test.v"]';

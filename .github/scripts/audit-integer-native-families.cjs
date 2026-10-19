@@ -17,7 +17,7 @@ const nativeHost = /IA32 direct host: linux\/amd64 kernel=x86_64 CPUsha=[a-f0-9]
 const originalArgs = '["-test.run=^TestOriginal$" "-test.count=1" "-test.v"]';
 
 function requireIA32Images(output, staticCount, args) {
-  const images = [...output.matchAll(/native division static IA32 ELF bytes=([1-9][0-9]*) sha256=([a-f0-9]{64})\b/g)];
+  const images = [...output.matchAll(/native oracle static IA32 ELF bytes=([1-9][0-9]*) sha256=([a-f0-9]{64})\b/g)];
   const direct = [...output.matchAll(/IA32 direct ELF bytes=([1-9][0-9]*) sha256=([a-f0-9]{64}) argv=(\[[^\r\n]*\])/g)];
   assert.equal(images.length, staticCount, 'missing complete static IA32 observations');
   assert.equal(direct.length, 1, 'missing direct IA32 execution');
