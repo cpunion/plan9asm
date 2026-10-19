@@ -128,36 +128,7 @@ func TestAMD64MOVBERuntimeSemanticsWidthsDirectionsAndFlags(t *testing.T) {
 	if !ok {
 		t.Fatal("LLVM 22 llc/clang not found")
 	}
-	const source = `TEXT movesemantics(SB),NOSPLIT,$0-8
-	MOVQ out+0(FP), DI
-	MOVL $0x7fffffff, R8
-	ADDL $1, R8
-	STC
-
-	MOVW $0x3412, 0(DI)
-	MOVQ $0x1122334455667788, AX
-	MOVBEW 0(DI), AX
-	MOVQ AX, 8(DI)
-
-	MOVL $0x78563412, 16(DI)
-	MOVBEL 16(DI), BX
-	MOVQ BX, 24(DI)
-
-	MOVQ $0xefcdab8967452301, 32(DI)
-	MOVBEQ 32(DI), CX
-	MOVQ CX, 40(DI)
-
-	MOVQ $0x1122334455667788, AX
-	MOVBEW AX, 48(DI)
-	MOVBEL AX, 50(DI)
-	MOVBEQ AX, 54(DI)
-
-	SETCS 62(DI)
-	SETOS 63(DI)
-	SETEQ 64(DI)
-	SETMI 65(DI)
-	RET
-`
+	source := x86MOVBEOriginalRuntimeSource
 	file, err := Parse(ArchAMD64, source)
 	if err != nil {
 		t.Fatal(err)
