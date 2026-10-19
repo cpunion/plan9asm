@@ -17,7 +17,6 @@ func TestX86RawMaskCompareMissingInputsCannotBorrowVoidOrBool(t *testing.T) {
 						ir, err := x86ScalarFPBitViewAPI(t, source, declaration, target.arch, target.triple, api)
 						if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
 							t.Fatal("raw compare acquired missing data/mask/native address through a dead result", target, name, operand, api, err)
-							}
 						}
 					}
 				}
