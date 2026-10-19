@@ -87,6 +87,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 	}
 	boundRawClear := false
 	for _, ins := range fn.Instrs {
+		if x86RawDwordProductResultSource(ins, arch) {
+			continue // Exact decoded integer inputs retain their own mask/address obligations.
+		}
 		if _, valid := x86RawVMOVWResultForm(ins, arch); valid {
 			continue // Exact GP/X/m16 effects share no raw entry or native frame permission.
 		}
@@ -153,6 +156,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		}
 		if accepted, known := x86ResultNumericalReadStep(ins, state, owned, resultOffset, arch); known {
 			return accepted // A checked mutable SB source keeps its own lifetime and byte effects.
+		}
+		if accepted, known := x86LoweredDwordProductResultStep(ins, state, owned, arch); known {
+			return accepted
 		}
 		if accepted, known := x86LoweredRawVMOVWResultStep(ins, state, owned, resultOffset, arch); known {
 			return accepted
