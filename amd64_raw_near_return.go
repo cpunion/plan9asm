@@ -174,6 +174,10 @@ func x86RawReturnMemoryBound(fn Func, file *File, opt Options, bindFrame bool) b
 				if !bindFrame {
 					continue // Pure prepartition normalization retains metadata.
 				}
+				if fn.x86SourceStack == nil && fn.x86FixedLocal == nil &&
+					x86RawReturnMaskParameterReadBound(ins, index, sig, opt.Goarch) {
+					continue // Exact logical numeric input bytes, not native frame/pointer permission.
+				}
 				width := x86ScalarMoveMemoryBytes(ins, index, opt.Goarch)
 				if width == 0 || !x86RawReturnFPBound(arg.FPOffset, width, sig, opt.Goarch) {
 					return false
