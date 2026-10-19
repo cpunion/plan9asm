@@ -127,9 +127,10 @@ func TestTranslateX86IFMARejectsFormsOutsideGo127Table(t *testing.T) {
 }
 
 func TestAMD64IFMARuntimeSemantics(t *testing.T) {
-	crossRosetta := runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" && rosettaAvailable()
-	if runtime.GOARCH != "amd64" && !crossRosetta {
-		t.Skip("runtime execution test only runs on amd64 or Rosetta")
+	// Integer LLVM and the independent i128 C reference are portable on
+	// both supported 64-bit hosts; no AVX512 or Rosetta execution is implied.
+	if runtime.GOARCH != "amd64" && runtime.GOARCH != "arm64" {
+		t.Skip("portable runtime oracle requires its native 64-bit host counterpart")
 	}
 	llc, clang, ok := findLlcAndClang(t)
 	if !ok {
@@ -175,11 +176,6 @@ func TestAMD64IFMARuntimeSemantics(t *testing.T) {
 		{Offset: 40, Type: I64, Index: 5, Field: -1},
 	}}
 	triple := testTargetTriple(runtime.GOOS, runtime.GOARCH)
-	var runPrefix []string
-	if crossRosetta {
-		triple = "x86_64-apple-macosx"
-		runPrefix = []string{"/usr/bin/arch", "-x86_64"}
-	}
 	ir, err := Translate(file, Options{
 		Goarch:       "amd64",
 		TargetTriple: triple,
@@ -242,7 +238,7 @@ int main(void) {
 				text = x86DwordProductIROptimize(t, ir)
 			}
 			compileAndRunRuntimeTestWithCompiler(t, llc, compiler, "ifma", triple,
-				text, mainC, runPrefix, pipeline.backend)
+				text, mainC, nil, pipeline.backend)
 		})
 	}
 }
