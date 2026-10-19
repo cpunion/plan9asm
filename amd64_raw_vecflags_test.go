@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 	"strings"
@@ -179,9 +180,22 @@ func TestX86RawVectorTestCompilesEveryForm(t *testing.T) {
 				Goarch: target.goarch, TargetTriple: target.triple,
 				Sigs: map[string]FuncSig{"rawvectortest": {Name: "rawvectortest", Ret: Void}},
 			})
+			if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+				t.Fatal("original raw vector-test formats invented native or register inputs", err)
+			}
+			x86LEAActualTargetGoObject(t, target.goarch, target.triple, "#include \"textflag.h\"\n"+source.String())
+			file, err = normalizeX86RawFile(file, target.goarch)
 			if err != nil {
 				t.Fatal(err)
 			}
+			ir = x86InstructionFormatObjectUnit(t, file,
+				map[string]FuncSig{"rawvectortest": {Name: "rawvectortest", Ret: Void}}, target.goarch, target.triple, 0,
+				func(c *amd64Ctx, ins Instr) (bool, bool, error) {
+					if ins.Op == "NOP" {
+						return true, false, nil
+					}
+					return c.lowerVectorTest(ins.Op, ins)
+				})
 			compileLLVMToObject(t, llc, target.triple, "raw-vector-test.ll", "raw-vector-test.o", ir)
 		})
 	}

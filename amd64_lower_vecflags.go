@@ -86,6 +86,19 @@ func x86VectorTestProperties(op Op, ins Instr, arch string) (x86VectorTestForm, 
 	return form, true, nil
 }
 
+func x86TypedVectorTestByteEffect(op Op, ins Instr, arch string) (x86TypedByteEffect, bool, error) {
+	form, known, err := x86VectorTestProperties(op, ins, arch)
+	if !known || err != nil {
+		return x86TypedByteEffect{}, known, err
+	}
+	width := int64(form.byteWidth)
+	return x86TypedByteEffect{requiresResultProof: true, flagsDefined: x86ByteFlagsAll,
+		operands: []x86TypedByteOperand{
+			{index: 0, operand: ins.Args[0], width: width, read: true},
+			{index: 1, operand: ins.Args[1], width: width, read: true},
+		}}, true, nil
+}
+
 func (c *amd64Ctx) lowerVectorTest(op Op, ins Instr) (ok bool, terminated bool, err error) {
 	arch := c.goarch
 	if arch == "" {
@@ -97,7 +110,22 @@ func (c *amd64Ctx) lowerVectorTest(op Op, ins Instr) (ok bool, terminated bool, 
 	}
 	source, destination := ins.Args[0], ins.Args[1]
 	spec, byteWidth := form.amd64VectorTestSpec, form.byteWidth
-	sourceBytes, err := c.loadPackedCompareBytes(source, byteWidth)
+	if source.Kind != OpReg && source.Kind != OpFP {
+		if source.Kind == OpMem && !x86OrdinaryNativeMemoryOperand(source, arch) &&
+			!x86CallerMemoryCertified(ins, 0) && !c.fixedLocalMemoryCertified(ins, 0) {
+			return true, false, fmt.Errorf("%w: vector test needs its original native memory binding", ErrProbeNeedsContext)
+		}
+		return true, false, c.emitVectorTestNativeMemory(ins, form, arch)
+	}
+	if source.Kind == OpFP {
+		if !spec.vector {
+			return true, false, fmt.Errorf("%w: legacy PTEST needs its original memory envelope", ErrProbeNeedsContext)
+		}
+		if err := c.validateX86PackedShiftFPSpan(source.FPOffset, byteWidth); err != nil {
+			return true, false, err
+		}
+	}
+	sourceBytes, err := c.loadX86PackedShiftBytes(source, byteWidth, true)
 	if err != nil {
 		return true, false, err
 	}

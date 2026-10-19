@@ -115,6 +115,9 @@ func x86TypedInstructionByteEffect(op Op, ins Instr, arch string) (x86TypedByteE
 	if effect, known, err := x86TypedAESByteEffect(op, ins, arch); known {
 		return effect, known, err
 	}
+	if effect, known, err := x86TypedVectorTestByteEffect(op, ins, arch); known {
+		return effect, known, err
+	}
 	if _, known, err := x86OrderingHintProperties(op, ins, arch); known {
 		return x86TypedByteEffect{}, true, err
 	}

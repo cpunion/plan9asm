@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"runtime"
 	"strings"
@@ -76,9 +77,12 @@ func TestTranslateX86VectorTestCompleteGoFormsAcrossTargets(t *testing.T) {
 					"vectortestforms": {Name: "vectortestforms", Ret: Void},
 				},
 			})
-			if err != nil {
-				t.Fatal(err)
+			if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+				t.Fatal("original vector-test formats invented register or native-pointer inputs", err)
 			}
+			ir = x86InstructionFormatObjectUnit(t, file,
+				map[string]FuncSig{"vectortestforms": {Name: "vectortestforms", Ret: Void}}, target.goarch, target.triple, 0,
+				func(c *amd64Ctx, ins Instr) (bool, bool, error) { return c.lowerVectorTest(ins.Op, ins) })
 			for _, want := range []string{"<16 x i8>", "<32 x i8>", "store i1"} {
 				if !strings.Contains(ir, want) {
 					t.Fatalf("vector-test lowering omitted %q:\n%s", want, ir)
