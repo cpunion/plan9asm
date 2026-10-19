@@ -25,7 +25,9 @@ func TestX86PackedConversionOriginalInitializedNamedRawParity(t *testing.T) {
 				if err != nil || ir == "" {
 					t.Fatalf("same initialized original program, %s conversion identity only: %v", spelling.name, err)
 				}
-				for _, op := range []string{"vcvtdq2pd", "vcvttpd2dq", "vcvtpd2dq", "cvtpd2dq"} {
+				// LLVM's narrowing memory spelling carries the physical Y
+				// source width; it is not the register-source base mnemonic.
+				for _, op := range []string{"vcvtdq2pd", "vcvttpd2dqy", "vcvtpd2dq", "cvtpd2dq"} {
 					if !strings.Contains(ir, op+" ") {
 						t.Fatal("original conversion opcode or exception obligation disappeared", spelling.name, op)
 					}
