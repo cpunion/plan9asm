@@ -6,7 +6,7 @@ func TestX86RawNumericalOriginRequiresOriginalAddressMode(t *testing.T) {
 	for _, arch := range []string{"386", "amd64"} {
 		for _, line := range []string{
 			"MOVBEW (AX),BX", "ANDNL AX,BX,CX", "PDEPL AX,BX,CX", "PEXTL AX,BX,CX",
-			"VADDPD X0,X1,X2", "VPSHUFB X0,X1,X2",
+			"VADDPD X0,X1,X2", "VPSHUFB X0,X1,X2", "CMOVLLE AX,BX",
 		} {
 			t.Run(arch+"/"+line, func(t *testing.T) {
 				file, err := Parse(ArchAMD64, "TEXT Value(SB),4,$0-0\n"+

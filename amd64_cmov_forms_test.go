@@ -324,10 +324,26 @@ func TestX86CMOVFamilyThreeAPIsFiveTargetObjects(t *testing.T) {
 				goAssemblerOracleOutput(t, target.arch, source, "", true)
 				for _, api := range []string{"text", "module", "Go"} {
 					ir, err := x86OrderingHintTranslateAPI(t, api, source, "package ordering\nfunc Forms(value uint64)\n", target.arch, target.triple)
-					if err != nil {
-						t.Fatal(api, err)
+					if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+						t.Fatal("original formats invented predicate, data or native input bytes", api, err)
 					}
-					compileLLVMToObject(t, llc, target.triple, "cmov-"+api+".ll", "cmov-"+api+".o", ir)
+				}
+				file, err := Parse(ArchAMD64, source)
+				if err != nil {
+					t.Fatal(err)
+				}
+				file, err = normalizeX86RawFile(file, target.arch)
+				if err != nil {
+					t.Fatal(err)
+				}
+				signatures := map[string]FuncSig{"Forms": {Name: "Forms", Args: []LLVMType{I64}, Ret: Void,
+					Frame: FrameLayout{Params: []FrameSlot{{Offset: 0, Type: I64, Index: 0, Field: -1}}}}}
+				ir := x86InstructionFormatObjectUnit(t, file, signatures, target.arch, target.triple, 0,
+					func(c *amd64Ctx, ins Instr) (bool, bool, error) { return c.lowerConditionalMove(ins.Op, ins) })
+				for _, input := range []string{ir, x86DwordProductIROptimize(t, ir)} {
+					for _, level := range []string{"-O0", "-O2"} {
+						x86PackedStringCompileObject(t, llc, target.triple, input, level)
+					}
 				}
 			})
 		}
@@ -364,6 +380,16 @@ func TestX86CMOVFamilyBoundFrameNumericalExtent(t *testing.T) {
 						size = 0
 					}
 					source := fmt.Sprintf("TEXT ·Value(SB),4,$0-%d\nCMOV%sLE %s,AX\nRET\n", size, width, test.field)
+					if test.valid {
+						ir, err := x86OrderingHintTranslateAPI(t, api, source, "package ordering\n"+test.declaration+"\n", target.arch, target.triple)
+						if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+							t.Fatal("original FP format invented old destination or predicate bytes", api, err)
+						}
+					}
+					// Only the source storage varies: give every row independent
+					// old-destination data and FLAGS before testing its exact span.
+					source = strings.Replace(source, fmt.Sprintf("$0-%d\n", size),
+						fmt.Sprintf("$0-%d\nMOVL $7,AX\nCMPL AX,$0\n", size), 1)
 					_, err := x86OrderingHintTranslateAPI(t, api, source, "package ordering\n"+test.declaration+"\n", target.arch, target.triple)
 					if test.valid && err != nil || !test.valid && !errors.Is(err, ErrProbeNeedsContext) {
 						t.Fatal("numerical FP bit extent/hole/type permission", target.triple, width, test.declaration, api, err)
