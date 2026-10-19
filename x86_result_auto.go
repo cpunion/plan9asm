@@ -13,8 +13,15 @@ var x86ResultAUTOLiteral = regexp.MustCompile(`^(.+)\(\s*SP\s*\)$`)
 // bytes. Its extent is not an allocator size, physical SP, native backing,
 // alignment, caller region or address-lifetime certificate.
 func x86ResultAUTOExtent(fn Func, arch string) (int, error) {
+	return x86ResultAUTOExtentWithPrivateStack(fn, arch, false)
+}
+
+func x86ResultAUTOExtentWithPrivateStack(fn Func, arch string, privateStack bool) (int, error) {
 	needed := false
 	for _, ins := range fn.Instrs {
+		if _, _, private := x86ResultPrivateStackXORForm(ins, arch); privateStack && private {
+			continue // Only the separately bound, reaching private stack owns this access.
+		}
 		for _, arg := range ins.Args {
 			if _, outgoing := x86ABI0BoolOutgoingOffset(arg, fn.x86BoolCalls); outgoing {
 				continue
@@ -63,6 +70,9 @@ func x86ResultAUTOExtent(fn Func, arch string) (int, error) {
 		}
 	}
 	for _, ins := range fn.Instrs {
+		if _, _, private := x86ResultPrivateStackXORForm(ins, arch); privateStack && private {
+			continue
+		}
 		for index, arg := range ins.Args {
 			if _, outgoing := x86ABI0BoolOutgoingOffset(arg, fn.x86BoolCalls); outgoing {
 				continue

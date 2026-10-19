@@ -62,7 +62,7 @@ func (c *amd64Ctx) checkTrapOnlyLogicalFPResultInitialization() error {
 		}
 		return x86ScalarFPResultTransfer(ins, state, owned, offset, arch)
 	}
-	return checkX86ABI0ResultInitializationWithTrapOnly(c.fpScalarSource, c.sig, c.goarch, transfer, true, true)
+	return checkX86ABI0ResultInitializationWithTrapOnly(c.fpScalarSource, c.sig, c.goarch, transfer, true, true, false)
 }
 
 // Reverse closure requires every successor to terminate, not merely one path

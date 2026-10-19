@@ -14,7 +14,8 @@ type x86ResultValueStack struct {
 	// Nil means the existing ordinary NUM bytes. FLAGS pushes additionally
 	// retain precisely which source bits the adjacent mask may refine. Keep
 	// those masks in stack-byte order through mixed widths, not GP positions.
-	refinable []uint8
+	refinable   []uint8
+	correlation *x86ResultFlagsCorrelation // Paired mode32 lowering only; no native stack permission.
 }
 
 func x86ResultValueStackLimit(arch string) int {
@@ -37,6 +38,9 @@ func x86ResultValueStackContinuation(ins Instr, state *x86ResultState, arch stri
 	// On 386 the private byte stack moves the simulated SP. An AUTO access
 	// cannot borrow the independent unchanged-SP local-byte proof while live.
 	if arch == "386" {
+		if _, _, private := x86ResultPrivateStackXORForm(ins, arch); private && state.valueStack.correlation != nil {
+			return true // The transfer still checks every byte against reaching private depth.
+		}
 		for _, arg := range ins.Args {
 			if arg.Kind == OpMem && x86LogicalSourceFrameRegister(arg.Mem.Base, arch) {
 				return false
@@ -64,7 +68,8 @@ func x86ResultValueStackStep(ins Instr, state *x86ResultState, owned []bool, res
 		return false, true // Numerical storage cannot rebind the physical/private stack pointer.
 	}
 	if len(stack.bytes)%2 != 0 || len(stack.bytes) > x86ResultValueStackLimit(arch) ||
-		stack.refinable != nil && len(stack.refinable) != len(stack.bytes) {
+		stack.refinable != nil && len(stack.refinable) != len(stack.bytes) ||
+		stack.correlation != nil && (arch != "386" || len(stack.correlation.bytes) != len(stack.bytes)) {
 		return false, true
 	}
 	if arch == "amd64" && (len(stack.bytes)%8 != 0 || stack.wordCells>>uint(len(stack.bytes)/8) != 0) {
@@ -118,6 +123,7 @@ func x86ResultValueStackStep(ins Instr, state *x86ResultState, owned []bool, res
 		if len(stack.bytes) > x86ResultValueStackLimit(arch)-storage {
 			return false, true
 		}
+		x86ResultFlagsStackPush(stack, bits, storage, spec.mode == amd64StackPushFlags)
 		if arch == "amd64" && width == 2 {
 			stack.wordCells |= uint64(1) << uint(len(stack.bytes)/8)
 		}
@@ -141,6 +147,7 @@ func x86ResultValueStackStep(ins Instr, state *x86ResultState, owned []bool, res
 	}
 	bits := ^uint64(0)
 	refinable := bits
+	var origins [32]uint8
 	if !state.shapeOnly {
 		if len(stack.bytes) < storage {
 			return false, true
@@ -163,6 +170,7 @@ func x86ResultValueStackStep(ins Instr, state *x86ResultState, owned []bool, res
 			}
 			refinable |= uint64(eligible) << uint(8*index)
 		}
+		origins = x86ResultFlagsStackPop(stack, storage)
 		if stack.refinable != nil {
 			stack.refinable = stack.refinable[:len(stack.bytes)-storage]
 			if len(stack.refinable) == 0 {
@@ -172,6 +180,9 @@ func x86ResultValueStackStep(ins Instr, state *x86ResultState, owned []bool, res
 		stack.bytes = stack.bytes[:len(stack.bytes)-storage]
 	}
 	if spec.mode == amd64StackPopFlags {
+		if stack.correlation != nil && !state.shapeOnly {
+			copy(stack.correlation.flags[:spec.bits], origins[:spec.bits])
+		}
 		state.flags = 0
 		for index, physical := range []uint{0, 2, 4, 6, 7, 11} {
 			if bits&(1<<physical) != 0 {
@@ -220,6 +231,9 @@ func x86ResultValueStackStep(ins Instr, state *x86ResultState, owned []bool, res
 			}
 		}
 		stack.popped = x86ResultPoppedWord{bits: known, register: index, valid: true}
+		if stack.correlation != nil {
+			stack.correlation.popped = origins
+		}
 		return true, true
 	}
 	for b := int64(0); b < width; b++ {

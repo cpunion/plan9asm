@@ -9,7 +9,7 @@ import (
 // ABI0. It supplies only the declared register bytes and an opaque pointer
 // identity; no FP/AUTO, native entry, caller backing or spill storage exists.
 func checkX86CustomRegisterBoolResultInitialization(fn Func, sig FuncSig, arch string, transfer x86ResultSourceTransfer) error {
-	return checkX86LogicalRegisterResultInitialization(fn, sig, arch, transfer, true)
+	return checkX86LogicalRegisterResultInitialization(fn, sig, arch, transfer, true, false)
 }
 
 // This selector routes the existing no-argument AX return transport to its
@@ -21,7 +21,7 @@ func x86LogicalScalarResultNeedsProof(sig FuncSig, arch string) bool {
 }
 
 func checkX86LogicalRegisterResultInitialization(fn Func, sig FuncSig, arch string,
-	transfer x86ResultSourceTransfer, canonicalBool bool) error {
+	transfer x86ResultSourceTransfer, canonicalBool, privateStack bool) error {
 	role := "logical scalar register result"
 	validRole := x86LogicalScalarResultNeedsProof(sig, arch)
 	width := x86ResultScalarBytes(sig.Ret, arch)
@@ -48,6 +48,13 @@ func checkX86LogicalRegisterResultInitialization(fn Func, sig FuncSig, arch stri
 		}
 	}
 	initial := x86ResultState{}
+	if privateStack {
+		stack, err := x86ResultPrivateFlagsSource(fn, arch)
+		if err != nil {
+			return err
+		}
+		initial.valueStack = stack
+	}
 	occupied := [16]bool{}
 	for index, typ := range sig.Args {
 		width := int64(0)

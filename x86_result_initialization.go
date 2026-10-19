@@ -27,11 +27,11 @@ func checkX86ABI0ResultInitialization(fn Func, sig FuncSig, goarch string,
 // authorize an effect; a private observer may join it to an exact source fact.
 func checkX86ABI0ResultInitializationAtSource(fn Func, sig FuncSig, goarch string,
 	transfer func(int, Instr, *x86ResultState, []bool, int64, string) bool, scalarViews bool) error {
-	return checkX86ABI0ResultInitializationWithTrapOnly(fn, sig, goarch, transfer, scalarViews, false)
+	return checkX86ABI0ResultInitializationWithTrapOnly(fn, sig, goarch, transfer, scalarViews, false, false)
 }
 
 func checkX86ABI0ResultInitializationWithTrapOnly(fn Func, sig FuncSig, goarch string,
-	transfer x86ResultSourceTransfer, scalarViews, trapOnly bool) error {
+	transfer x86ResultSourceTransfer, scalarViews, trapOnly, privateStack bool) error {
 	fail := func(reason string) error {
 		return fmt.Errorf("%w: result initialization: %s", ErrProbeNeedsContext, reason)
 	}
@@ -150,7 +150,14 @@ func checkX86ABI0ResultInitializationWithTrapOnly(fn Func, sig FuncSig, goarch s
 		}
 	}
 	initial.callerAddressFP = initial.pointerFP // Immutable actual typed entry layout.
-	autoExtent, autoErr := x86ResultAUTOExtent(fn, goarch)
+	if privateStack {
+		stack, err := x86ResultPrivateFlagsSource(fn, goarch)
+		if err != nil {
+			return err
+		}
+		initial.valueStack = stack
+	}
+	autoExtent, autoErr := x86ResultAUTOExtentWithPrivateStack(fn, goarch, initial.valueStack != nil)
 	if autoErr != nil {
 		return autoErr
 	}
@@ -252,9 +259,14 @@ func checkX86ResultSourceFlowWithTrapOnly(fn Func, initial x86ResultState, owned
 			return false
 		}
 		popped := x86ResultPoppedWord{}
+		var poppedOrigins [32]uint8
 		if state.valueStack != nil {
 			popped = state.valueStack.popped
 			state.valueStack.popped = x86ResultPoppedWord{}
+			if correlation := state.valueStack.correlation; correlation != nil {
+				poppedOrigins = correlation.popped
+				correlation.popped = [32]uint8{}
+			}
 		}
 		spec, stack, _ := x86StackWidthProperties(ins, arch)
 		popFlags := stack && spec.mode == amd64StackPopFlags
@@ -287,12 +299,21 @@ func checkX86ResultSourceFlowWithTrapOnly(fn Func, initial x86ResultState, owned
 			}
 		}
 		step := originalTransfer
+		if state.valueStack != nil && state.valueStack.correlation != nil {
+			step = func(ordinal int, ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string) bool {
+				if accepted, known := x86ResultPrivateStackXORStep(ins, popped, poppedOrigins, state, owned, resultOffset, arch); known {
+					return accepted
+				}
+				return originalTransfer(ordinal, ins, state, owned, resultOffset, arch)
+			}
+		}
 		if popped.valid {
+			previous := step
 			step = func(ordinal int, ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string) bool {
 				if accepted, known := x86ResultPoppedWordMaskStep(ins, popped, state, owned, resultOffset, arch); known {
 					return accepted
 				}
-				return originalTransfer(ordinal, ins, state, owned, resultOffset, arch)
+				return previous(ordinal, ins, state, owned, resultOffset, arch)
 			}
 		}
 		if !handled && !x86DirectTailResultAddressTransfer(ins, state, owned, resultOffset, arch, step, ordinal) {
@@ -312,6 +333,7 @@ func checkX86ResultSourceFlowWithTrapOnly(fn Func, initial x86ResultState, owned
 		if !popFlags {
 			state.direction = x86ResultDirectionAfter(ins, state.direction)
 		}
+		x86ResultFlagsCorrelationAfter(ins, state, arch)
 		return true
 	}
 	fail := func(reason string) error {
@@ -380,6 +402,9 @@ func checkX86ResultSourceFlowWithTrapOnly(fn Func, initial x86ResultState, owned
 		byteState += x86ResultValueStackLimit(goarch) + 14
 		if flagProjection {
 			byteState += x86ResultValueStackLimit(goarch) // Exact source-position refinement masks.
+		}
+		if initial.valueStack.correlation != nil {
+			byteState += 8*x86ResultValueStackLimit(goarch) + 64
 		}
 	}
 	if initial.continuation != nil {
@@ -659,6 +684,11 @@ func (state x86ResultState) clone() x86ResultState {
 		stack := *state.valueStack
 		stack.bytes = append([]uint8(nil), stack.bytes...)
 		stack.refinable = append([]uint8(nil), stack.refinable...)
+		if stack.correlation != nil {
+			copy := *stack.correlation
+			copy.bytes = append([][8]uint8(nil), copy.bytes...)
+			stack.correlation = &copy
+		}
 		state.valueStack = &stack
 	}
 	if state.continuation != nil {
@@ -816,6 +846,7 @@ func (state x86ResultState) intersect(other x86ResultState) x86ResultState {
 		} else {
 			merged.valueStack.popped.bits &= other.valueStack.popped.bits
 		}
+		x86ResultIntersectFlagsCorrelation(merged.valueStack, other.valueStack)
 	}
 	if merged.bitScanPending != other.bitScanPending {
 		merged.bitScanPending = x86ResultBitScanPending{}

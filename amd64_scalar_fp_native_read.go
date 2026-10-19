@@ -59,7 +59,7 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		strictErr = checkX86LogicalRegisterResultInitialization(fn, sig, arch,
 			func(_ int, ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string) bool {
 				return x86ScalarFPResultTransfer(ins, state, owned, resultOffset, arch)
-			}, customRegisterBool)
+			}, customRegisterBool, false)
 	}
 	registerEntry := arch == "amd64" && strings.HasSuffix(fn.Sym, "<ABIInternal>")
 	if registerEntry {
@@ -390,9 +390,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		return checkAMD64RegisterResultInitialization(fn, sig, transfer)
 	}
 	if customRegisterBool || logicalScalar {
-		return checkX86LogicalRegisterResultInitialization(fn, sig, arch, transfer, customRegisterBool)
+		return checkX86LogicalRegisterResultInitialization(fn, sig, arch, transfer, customRegisterBool, true)
 	}
-	if err := checkX86ABI0ResultInitializationAtSource(fn, sig, arch, transfer, true); err != nil {
+	if err := checkX86ABI0ResultInitializationWithTrapOnly(fn, sig, arch, transfer, true, false, true); err != nil {
 		return err
 	}
 	c.nativeMMXRegion = nativeMMX

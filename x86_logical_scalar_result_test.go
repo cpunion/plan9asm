@@ -84,7 +84,7 @@ func TestX86Mode32LogicalScalarReturnRoleBoundaries(t *testing.T) {
 			sig := FuncSig{Name: "logical", Ret: I32}
 			mutate(&fn, &sig)
 			before := x86DirectTailSnapshot(&File{Arch: ArchAMD64, Funcs: []Func{fn}}).Funcs[0]
-			if err := checkX86LogicalRegisterResultInitialization(fn, sig, "386", transfer, false); !errors.Is(err, ErrProbeNeedsContext) {
+			if err := checkX86LogicalRegisterResultInitialization(fn, sig, "386", transfer, false, false); !errors.Is(err, ErrProbeNeedsContext) {
 				t.Fatal("logical return supplied an unrelated entry role", err)
 			}
 			if !reflect.DeepEqual(before, fn) {

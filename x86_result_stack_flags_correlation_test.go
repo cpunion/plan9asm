@@ -3,6 +3,7 @@ package plan9asm
 import (
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -26,7 +27,7 @@ func TestX86Mode32PrivateFlagsCopiesCancelUnknownInputs(t *testing.T) {
 		{"W", "uint16", 2, []uint32{0, 1, 0x40, 0x400, 0x8d5}},
 		{"L", "uint32", 4, []uint32{0, 1, 0x400, 0x200000, 0x200cd5}},
 	} {
-		for _, register := range []string{"AX", "BX", "CX", "DX", "SI", "DI"} {
+		for _, register := range []string{"AX", "BX", "CX", "DX", "BP", "SI", "DI"} {
 			for _, mask := range row.masks {
 				body := x86StackFlagsCorrelationBody(row.width, register, mask)
 				source := fmt.Sprintf("TEXT ·Value(SB),4,$0-%d\n%sMOV%s %s,ret+0(FP)\nRET\n",
@@ -125,7 +126,7 @@ func TestX86Mode32PrivateFlagsCorrelationOriginalGoAndLLVMObjects(t *testing.T) 
 		{"W", "uint16", 2, 0xcd5},
 		{"L", "uint32", 4, 0x200cd5},
 	} {
-		for index, register := range []string{"AX", "BX", "CX", "DX", "SI", "DI"} {
+		for index, register := range []string{"AX", "BX", "CX", "DX", "BP", "SI", "DI"} {
 			name := fmt.Sprintf("flags%s%d", row.width, index)
 			fmt.Fprintf(&declarations, "func %s() %s\n", name, row.typ)
 			fmt.Fprintf(&source, "TEXT ·%s(SB),4,$0-%d\n%sMOV%s %s,ret+0(FP)\nRET\n",
@@ -151,5 +152,78 @@ func TestX86Mode32PrivateFlagsCorrelationOriginalGoAndLLVMObjects(t *testing.T) 
 				}
 			})
 		}
+	}
+}
+
+func TestX86Mode32PrivateFlagsSourceAndQueryBoundaries(t *testing.T) {
+	source := "TEXT ·Value(SB),4,$0-4\n" + x86StackFlagsCorrelationBody("L", "AX", 0x200000) + "MOVL AX,ret+0(FP)\nRET\n"
+	file, err := Parse(ArchAMD64, source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sig := FuncSig{Name: "Value", Ret: I32, Frame: FrameLayout{
+		Results: []FrameSlot{{Type: I32, Index: 0, Field: -1}},
+	}}
+	if !errors.Is(CheckX86ABI0ResultInitialization(file.Funcs[0], sig, "386"), ErrProbeNeedsContext) ||
+		!errors.Is(checkX86ScalarFPResultInitialization(file.Funcs[0], sig, "386"), ErrProbeNeedsContext) {
+		t.Fatal("standalone queries acquired private lowering storage")
+	}
+	for name, change := range map[string]func(*Func){
+		"operand": func(fn *Func) {
+			for index := range fn.Instrs {
+				if fn.Instrs[index].Op == "XORL" {
+					fn.Instrs[index].Args[1].Mem.Off = 1
+					return
+				}
+			}
+		},
+		"frame": func(fn *Func) { fn.FrameSize = 8 },
+		"literal": func(fn *Func) {
+			for index := range fn.Instrs {
+				if fn.Instrs[index].Op == "XORL" {
+					fn.Instrs[index].Raw = "XORL $1,0(SP)"
+					return
+				}
+			}
+		},
+		"raw": func(fn *Func) { fn.Instrs[1].x86Encoded = true },
+	} {
+		t.Run(name, func(t *testing.T) {
+			fn := x86DirectTailSnapshot(file).Funcs[0]
+			change(&fn)
+			if _, err := x86ResultPrivateFlagsSource(fn, "386"); !errors.Is(err, ErrProbeNeedsContext) {
+				t.Fatal("changed original source retained private storage identity", err)
+			}
+		})
+	}
+}
+
+func TestX86Mode32PrivateFlagsCloneAndJoinIdentity(t *testing.T) {
+	file, err := Parse(ArchAMD64, "TEXT ·Value(SB),4,$0-0\n"+x86StackFlagsCorrelationBody("L", "AX", 1)+"RET\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	stack, err := x86ResultPrivateFlagsSource(file.Funcs[0], "386")
+	if err != nil || stack == nil {
+		t.Fatal("independent private source", err)
+	}
+	left := x86ResultState{valueStack: stack}
+	push := x86ScalarLaneInstruction(t, "PUSHFL")
+	if !x86ResultTransfer(push, &left, nil, 0, "386") {
+		t.Fatal("private FLAGS copy")
+	}
+	before := left.clone()
+	right := left.clone()
+	right.valueStack.correlation.flags[0] = 255
+	right.valueStack.correlation.bytes[3][0] = 255
+	right.valueStack.correlation.popped[0] = 1
+	merged := left.intersect(right)
+	if !reflect.DeepEqual(before, left) || merged.valueStack.correlation == nil ||
+		merged.valueStack.correlation.flags[0] != 255 || merged.valueStack.correlation.bytes[3][0] != 255 ||
+		merged.valueStack.correlation.popped[0] != 255 {
+		t.Fatal("clone/join retained an unequal relation or mutated a predecessor")
+	}
+	if got := left.intersect(left); !reflect.DeepEqual(got, left) {
+		t.Fatal("identical CFG paths lost their original relation")
 	}
 }
