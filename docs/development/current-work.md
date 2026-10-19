@@ -1,6 +1,6 @@
 # PR 40: current checkpoint
 
-Updated 2026-10-19. This is a handoff, not a completion certificate.
+Updated 2026-10-20. This is a handoff, not a completion certificate.
 Earlier checkpoints remain in Git; do not duplicate their accumulated tables
 or overwrite ignored failed evidence. Read [instruction contracts](instructions.md)
 and [validation](validation.md) before changing a family.
@@ -19,6 +19,16 @@ main `e2164ac0` is an ancestor of this candidate; recheck before publishing.
 Reuse persistent idle worktrees and preserve existing changes.
 
 ## Latest online evidence
+
+[39285088077](https://github.com/cpunion/plan9asm/actions/runs/39285088077)
+is still running at `47e44aa7d`; let it finish naturally before pushing again.
+The first two completed main-root owners (parts 2 and 9) retain nine failed
+roots. They are not a full-suite denominator. Scalar lane/POP priority's exact
+sixteen roots and 846 children pass, including all four original Windows
+runtime failures. Its independent raw audit has zero skips or incomplete
+outcomes. The numerical product/CMOV audit passes seven roots and 24 children,
+including the original CMOV FP-span Go/LLVM execution and portable IFMA/lookup
+C oracles. Portable integer values are not native AVX512 qualification.
 
 [39258001772](https://github.com/cpunion/plan9asm/actions/runs/39258001772)
 finished naturally at `e890858c5`: 81 jobs pass and 17 fail, none cancelled.
@@ -66,6 +76,9 @@ cohorts have zero failed, skipped or incomplete terminals.
 
 | Snapshot | Complete focused evidence | Important limits |
 |---|---|---|
+| `579c4cba1` | MOVNTI, 36 floating helpers, conflict/funnel and raw compact/expand: 64 roots / 1,472 children, current Go, actual Go1.20 and race; identical 1,536 terminals | Complete typed input, mask, source-identity and native-access obligations. Cross-target objects and portable value/fault checks do not qualify original AVX512 or MOVNTI execution |
+| `013181561` | Integrated ALIGN, DIV/IDIV, mode32 raw logical returns, original scalar formats and floating-owner policies: 53 roots / 2,130 children, current Go, actual Go1.20 and race; identical 2,183 terminals | Bound raw RET composes only with the existing register-only leaf result; no entry or memory permission. Original undefined division status remains unavailable. Required native MOVNTI/ALIGN/DIV and eight floating programs still need the next online run |
+| `47e44aa7d` | Raw IFMA/lookup and shared decoder: 23 roots / 378 children, current Go, actual Go1.20 and race; identical 401 terminals | Complete original identities, initialized raw five-target objects and physical mode32 mask rows; no raw/native entry or missing-input permission |
 | `9769cc2c1` | Scalar lane/POP stores and original format repairs: 26 roots / 1,219 children, current Go, actual Go1.20 and race; identical 1,245 terminals | Complete selected-byte native stores, Void/unused-bool obligations, exact volatile POP widths, private stack balance/bit/origin controls and five-target objects. Local x86 runtime skips are excluded from this certificate; original execution remains required online |
 | `66dcd0d31` | CMOV FP views: 2 roots / 183 children, current Go, actual Go1.20 and race; identical 185 terminals | Original uninitialized formats remain Go objects plus Context; independent initialized AX/FLAGS sources own complete, partial, cross-field and pointer/hole checks. No new caller or FP storage permission |
 | `1cebb3c38` | Branch hints and original CMOV/KVM formats: 5 roots / 15 children, current Go, actual Go1.20 and race | All sixteen conditions and both hints compile on five targets with actual word-aligned results. The original signed-division compound test still fails at IDIV; mode32 hypercall objects do not supply a logical scalar/native entry contract |
@@ -116,26 +129,26 @@ Evidence is not tracked repository data.
    Scalar lane and POP repairs have their own Windows priority, including the
    unchanged original runtime failures. Do not count the new local cohort as
    a successful online run or subtract it from the historical seventy failures.
-2. IFMA and qword lookup eight-SDK audits move only eighteen and seventeen
-   AMD64 input-deficient probes per SDK to Context respectively. The combined
-   baseline is local at `ce97dbf60`; 386, unrelated opcodes, encoder and
-   unsupported metrics do not drift. Current/minimum/race scanner and isolated
-   CLI extraction checks pass. Raw lookup objects and all 42 physical mode32
-   mask rows additionally pass current Go at `60599a10b`; finish their complete
-   three-lane qualification, including the shared IFMA decoder regression.
-3. The next native numerical audit requires IFMA and qword lookup's unchanged
-   original C programs at O0/O2 and optimized-IR O2. Keep their portable integer
-   scope distinct from AVX512. Require CMOV's original-Go/LLVM FP-span oracle
-   before declaring its partial/cross-field byte semantics exercised online.
-   Rerun final gates on the final unchanged batch, then publish only to the
-   allowed fork after the preceding run ends. Never supersede active runs.
-4. Continue remaining original failure classes: scalar division (the existing
-   unguarded sdiv/udiv emitter must not acquire a numerical proof), raw compact/
-   expand, scalar lane stores, non-temporal GP stores, native POP,
-   funnel/align, floating dot, FPCLASS/GETEXP/GETMANT/SCALEF/range/fixup/rounding,
-   scalar conversions/moves, and physical SP/BP/g-register
-   or undefined-W-shift fixtures. Reproduce first, consult complete Go rows,
-   share typed grammar/effects and repair a class rather than one library.
+2. The eight-SDK audit at `579c4cba1` changes exactly 286 AMD64 input-deficient
+   probes per SDK, exclusively within the 52 MOVNTI/conflict/funnel/floating
+   names. All 386 forms and unrelated fields are unchanged, with no additional
+   unsupported form. Baseline-only commit `262e140b1` records the audited
+   classification; ALIGN/DIV need their own next audit. Context is not an
+   initialized program pass. Preserve the complete positive object matrices.
+3. The integrated 53-root current/minimum/race receipt is
+   `windows-native-vector-new-qualified-01318156.json`; the earlier 64-root
+   receipt is `windows-native-vector-families-qualified-579c4cba.json`. Ignored
+   source/tool-sealed raw streams remain in persistent worktrees. Finish new
+   scanner/isolated-CLI checks and required native completion ownership, then
+   rerun final gates on an unchanged batch before an allowed-fork push.
+4. Active independent TDD work covers the complete 42-member named/raw packed
+   conversion continuation and six-name duplicate-move family. Named/raw
+   conversion RED is `49dc93a15`; the preceding `8ef582903` failed an incorrect
+   named mnemonic assertion and is not raw-gap evidence. Duplicate RED
+   `6f147234d` has unchanged before/after seals. Continue the remaining scalar
+   reciprocal, blends, dot, CLMUL, shuffle, ternary, raw scalar/compare,
+   physical SP/BP/g and undefined-shift observation failures. Retain original
+   source and separate format objects, initialized values and ABI authority.
 5. Preserve the separately qualified logical integer return batch
    `53a93cfd4` and incomplete floating MIN/MAX candidate `7009ff18f`.
    They are not merged into this repair candidate.
