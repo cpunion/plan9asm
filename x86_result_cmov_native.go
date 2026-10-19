@@ -15,7 +15,9 @@ func x86LoweredCMOVNativeRead(ins Instr, state *x86ResultState, owned []bool, re
 	}
 	width := int64(form.bits / 8)
 	required := x86ByteConditionFlags(form.condition)
-	if !x86ResultNamedPredicateInstruction(ins) || required == 0 || state.flags&required != required ||
+	destination, _, valid := x86ResultGP(form.destination.Reg, width, arch)
+	if !valid || state.pointerGP[destination] || !x86ResultNamedPredicateInstruction(ins) ||
+		required == 0 || state.flags&required != required ||
 		!x86ResultRead(form.destination, width, state, owned, arch) ||
 		!x86ResultReadWithNativeContinuation(ins, form.source, width, state, owned, arch, true) {
 		return false, true

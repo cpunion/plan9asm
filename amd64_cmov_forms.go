@@ -91,7 +91,7 @@ func x86TypedConditionalMoveByteEffect(op Op, ins Instr, arch string) (x86TypedB
 	return x86TypedByteEffect{operands: []x86TypedByteOperand{
 		{index: 0, operand: form.source, width: width, read: true},
 		{index: 1, operand: form.destination, width: width, read: true, write: true},
-	}, flagsRead: x86ByteConditionFlags(form.condition)}, true, nil
+	}, flagsRead: x86ByteConditionFlags(form.condition), requiresResultProof: true}, true, nil
 }
 
 func x86CallerConditionalMoveStep(ins *Instr, state *x86SourceStackState, proof *x86GoCallerRegionProof) (bool, bool) {
