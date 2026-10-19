@@ -192,6 +192,12 @@ func x86LoweredImplicitDivideStep(ins Instr, state *x86ResultState, owned []bool
 		if !x86ResultStore(output.operand, output.width, state, owned, 0, arch) {
 			return false, true
 		}
+		index, mask, _ := x86ResultGP(output.operand.Reg, output.width, arch)
+		state.canonicalGP[index] &^= mask
+		if output.width == 4 && arch == "amd64" {
+			state.canonicalGP[index] |= 0xf0
+		}
+		state.callerAddressGP[index] = false
 	}
 	state.flags = 0 // All six status flags are architecturally undefined; DF/ID stay unchanged.
 	return true, true

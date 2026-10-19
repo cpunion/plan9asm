@@ -50,7 +50,6 @@ func TestDecodeX86RawImplicitMulDivWidths(t *testing.T) {
 
 func TestTranslateX86RawImplicitMulDivWidthsObjects(t *testing.T) {
 	var source strings.Builder
-	sigs := make(map[string]FuncSig)
 	for index, code := range [][]byte{
 		{0xf6, 0xe2, 0xc3},
 		{0x66, 0xf7, 0xea, 0xc3},
@@ -62,13 +61,8 @@ func TestTranslateX86RawImplicitMulDivWidthsObjects(t *testing.T) {
 		for _, value := range code {
 			fmt.Fprintf(&source, "\tBYTE $%#02x\n", value)
 		}
-		sigs[name] = FuncSig{Name: name, Ret: Void}
 	}
 	requireX86GoAssemblerResult(t, "amd64", source.String(), true)
-	file, err := Parse(ArchAMD64, source.String())
-	if err != nil {
-		t.Fatal(err)
-	}
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc not found")
@@ -77,10 +71,25 @@ func TestTranslateX86RawImplicitMulDivWidthsObjects(t *testing.T) {
 		"x86_64-apple-darwin", "x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc",
 	} {
 		t.Run(triple, func(t *testing.T) {
-			ir, err := Translate(file, Options{Goarch: "amd64", TargetTriple: triple, Sigs: sigs})
+			original, signatures := x86UnboundVoidFormatSources(t, source.String(), "amd64", triple)
+			normalized, err := normalizeX86RawFile(original, "amd64")
 			if err != nil {
 				t.Fatal(err)
 			}
+			// Original raw bytes and all public Context results stay bound
+			// above. These private units measure native encoding syntax only;
+			// they supply no implicit inputs or raw/native entry contract.
+			ir := x86InstructionFormatObjectUnit(t, normalized, signatures, "amd64", triple, 0,
+				func(c *amd64Ctx, ins Instr) (bool, bool, error) {
+					if form, known, err := x86ImplicitDivideProperties(ins.Op, ins, "amd64"); known {
+						if err != nil {
+							return true, false, err
+						}
+						return true, false, c.emitNativeImplicitDivide(form)
+					}
+					terminated, err := c.lowerInstr(0, 0, ins, nil, nil)
+					return true, terminated, err
+				})
 			compileLLVMToObject(t, llc, triple, "raw-muldiv-width.ll", "raw-muldiv-width.o", ir)
 		})
 	}
