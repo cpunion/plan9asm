@@ -39,20 +39,10 @@ func TestTranslateX86CarryRotateCompleteGoAssemblerForms(t *testing.T) {
 				}
 			}
 			source.WriteString("\tRET\n")
-			file, err := Parse(ArchAMD64, source.String())
-			if err != nil {
-				t.Fatal(err)
-			}
-			ll, err := Translate(file, Options{
-				TargetTriple: target.triple,
-				Goarch:       target.goarch,
-				Sigs: map[string]FuncSig{
-					"carryrotateforms": {Name: "carryrotateforms", Ret: Void},
-				},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			// Counts, CF, data and native addresses are intentionally absent.
+			// Preserve every original Go row and private emitter object, not
+			// a public numerical or caller-memory contract.
+			ll := x86UnboundVoidScalarFormatObject(t, source.String(), "carryrotateforms", target.goarch, target.triple)
 			llc := findLLVM22Tool("llc")
 			if llc == "" {
 				t.Fatal("LLVM 22 llc not found")

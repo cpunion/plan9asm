@@ -83,18 +83,19 @@ func TestTranslateX86MaskBlendCompleteGoAssemblerForms(t *testing.T) {
 			source.WriteString("\tRET\n")
 			requireX86GoAssemblerResult(t, target.goarch, source.String(), true)
 
-			file, err := Parse(ArchAMD64, source.String())
-			if err != nil {
-				t.Fatal(err)
-			}
-			ll, err := Translate(file, Options{
-				TargetTriple: target.triple,
-				Goarch:       target.goarch,
-				Sigs:         map[string]FuncSig{"maskblendforms": {Name: "maskblendforms", Ret: Void}},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			file, signatures := x86UnboundVoidFormatSource(t, source.String(),
+				"maskblendforms", target.goarch, target.triple)
+			ll := x86InstructionFormatObjectUnit(t, file, signatures, target.goarch,
+				target.triple, 0, func(c *amd64Ctx, ins Instr) (bool, bool, error) {
+					// Go accepts EVEX high banks in named mode32 fixtures;
+					// this private emitter view does not bind public registers.
+					arch := c.goarch
+					if arch == "386" && x86Mode32VectorRegisterContext(ins, arch) != nil {
+						c.goarch = "amd64"
+						defer func() { c.goarch = arch }()
+					}
+					return c.lowerMaskBlend(ins.Op, ins)
+				})
 			llc := findLLVM22Tool("llc")
 			if llc == "" {
 				t.Fatal("LLVM 22 llc not found")
