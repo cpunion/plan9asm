@@ -23,6 +23,23 @@ type x86ScalarPrecisionForm struct {
 	sae  bool
 }
 
+// Generation is a native ISA restriction, not numerical-input authority.
+// Plain low-bank physical EVEX must not silently become its VEX spelling.
+func x86ScalarPrecisionNativeEVEX(ins Instr, form x86ScalarPrecisionForm) bool {
+	if form.spec.legacy {
+		return false
+	}
+	if ins.x86ScalarPrecisionEVEX || form.mask >= 0 || form.sae || form.rounding != "" {
+		return true
+	}
+	for _, operand := range ins.Args {
+		if index, vector := amd64ParseXReg(operand.Reg); operand.Kind == OpReg && vector && index >= 16 {
+			return true
+		}
+	}
+	return false
+}
+
 func x86ScalarPrecisionProperties(op Op, ins Instr, arch string) (x86ScalarPrecisionForm, bool, error) {
 	base, suffix, dotted := strings.Cut(strings.ToUpper(string(op)), ".")
 	spec, known := x86ScalarPrecisionSpecs[Op(base)]

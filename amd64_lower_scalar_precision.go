@@ -40,11 +40,7 @@ func (c *amd64Ctx) emitScalarPrecisionConvert(ins Instr, form x86ScalarPrecision
 			return err
 		}
 	}
-	evex := form.mask >= 0 || form.sae || form.rounding != ""
-	for _, operand := range ins.Args {
-		index, vector := amd64ParseXReg(operand.Reg)
-		evex = evex || operand.Kind == OpReg && vector && index >= 16
-	}
+	evex := x86ScalarPrecisionNativeEVEX(ins, form)
 	register := "x"
 	if evex {
 		register = "v"

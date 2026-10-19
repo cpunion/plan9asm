@@ -126,6 +126,17 @@ func TestX86ScalarPrecisionRawGenerationAndWholeSourceIdentity(t *testing.T) {
 					{"producer changed", func(fn *Func) { fn.Instrs[1].Raw += " " }},
 					{"origin only", func(fn *Func) { fn.Instrs[ordinal].x86SourceRaw = nil }},
 					{"encoded only", func(fn *Func) { fn.Instrs[ordinal].x86Encoded = false }},
+					{"physical generation", func(fn *Func) {
+						fn.Instrs[ordinal].x86ScalarPrecisionEVEX = !fn.Instrs[ordinal].x86ScalarPrecisionEVEX
+					}},
+					{"snapshot generation", func(fn *Func) {
+						origin := fn.Instrs[ordinal].x86SourceRaw
+						origin.scalarPrecision.evex = !origin.scalarPrecision.evex
+					}},
+					{"snapshot mode", func(fn *Func) { fn.Instrs[ordinal].x86SourceRaw.scalarPrecision.arch = "arm64" }},
+					{"missing snapshot", func(fn *Func) {
+						fn.Instrs[ordinal].x86SourceRaw.scalarPrecision = x86RawScalarPrecisionIdentity{}
+					}},
 					{"named laundering", func(fn *Func) {
 						fn.Instrs[ordinal].x86Encoded, fn.Instrs[ordinal].x86SourceRaw = false, nil
 					}},

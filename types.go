@@ -997,6 +997,9 @@ type Instr struct {
 	// Preserve physical EVEX generation even without a high bank or SAE suffix.
 	x86ScalarFlagCompareEVEX bool
 	x86SqrtEVEX              bool
+	// Scalar precision conversions retain their physical EVEX generation even
+	// when every low-X operand also has an unmasked VEX spelling.
+	x86ScalarPrecisionEVEX bool
 	// Recomputed per-operand source-SP to typed ABI0 slot certificate. Keep
 	// original physical operands intact across repeated normalization.
 	x86SourceStackFP map[int]int64
