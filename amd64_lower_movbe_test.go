@@ -78,6 +78,7 @@ func TestTranslateX86MOVBERejectsFormsOutsideGo127Optab(t *testing.T) {
 		{goarch: "amd64", instruction: "MOVBEQQ AX"},
 		{goarch: "amd64", instruction: "MOVBEL.Z 0(AX), BX"},
 		{goarch: "386", instruction: "MOVBEQ 0(AX), BX"},
+		{goarch: "386", instruction: "MOVBEQQ 0(AX), BX"},
 		{goarch: "386", instruction: "MOVBEL R8, 0(AX)"},
 	} {
 		t.Run(test.goarch+"/"+strings.NewReplacer(" ", "_", ",", "").Replace(test.instruction), func(t *testing.T) {

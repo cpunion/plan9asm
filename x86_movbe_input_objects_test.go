@@ -7,7 +7,7 @@ import (
 )
 
 func TestX86MOVBEOriginalInvalidImmediateIsGoRejected(t *testing.T) {
-	requireX86GoAssemblerResult(t, "amd64", x86MOVBEOriginalRuntimeSource, false)
+	goAssemblerOracleOutput(t, "amd64", "#include \"textflag.h\"\n"+x86MOVBEOriginalRuntimeSource, "", false)
 }
 
 func TestX86MOVBERepairedOriginalRuntimeSourceObjects(t *testing.T) {
