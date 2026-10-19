@@ -86,7 +86,15 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		return strictErr
 	}
 	boundRawClear := false
+	boundRawConversion := false
 	for _, ins := range fn.Instrs {
+		if x86RawPackedConversionSource(ins, arch) {
+			if !boundRawConversion && (fn.x86RawReplay == nil || fn.x86RawReplay.validate(fn, arch) != nil) {
+				return strictErr
+			}
+			boundRawConversion = true
+			continue // Exact physical identity retains every typed input and native MXCSR/access obligation.
+		}
 		if x86RawImmediatePackedCompareSource(ins, arch) {
 			continue // Exact immediate/data identity supplies no entry or missing numerical/memory input.
 		}
@@ -219,6 +227,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		}
 		if accepted, known := x86LoweredDwordProductResultStep(ins, state, owned, arch); known {
 			return accepted
+		}
+		if accepted, known := x86LoweredPackedConversionResultStep(ins, state, owned, arch); known {
+			return accepted // The complete original conversion is still emitted, including dead native effects.
 		}
 		if accepted, known := x86LoweredRawVMOVWResultStep(ins, state, owned, resultOffset, arch); known {
 			return accepted

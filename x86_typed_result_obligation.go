@@ -138,8 +138,11 @@ func x86TypedFPResultNeedsProof(fn Func, sig FuncSig, arch string) bool {
 		if _, known, err := x86AHFlagsProperties(ins.Op, ins, arch); known && err == nil && x86ResultNamedPredicateInstruction(ins) {
 			return true // Dead AH/FLAGS transfers still need their actual source byte or five flags.
 		}
-		if _, known, err := x86SignedPackedFloatProperties(ins, arch); known && err == nil && x86ResultNamedPredicateInstruction(ins) {
+		if _, known, err := x86SignedPackedFloatProperties(ins, arch); known && err == nil {
 			return true // Complete conversion inputs stay required for Void without a KMOV routing prerequisite.
+		}
+		if _, known, err := x86PackedConversionProperties(ins, arch); known && err == nil {
+			return true // Named/raw dead conversions still retain all numerical, mask and native access inputs.
 		}
 		if _, known, err := x86ScalarNativeStoreProperties(ins.Op, ins, arch); known && err == nil &&
 			x86ResultNamedPredicateInstruction(ins) {
