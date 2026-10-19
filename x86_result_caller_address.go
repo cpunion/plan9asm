@@ -214,6 +214,12 @@ func x86ResultCallerAddressesAfter(ins Instr, before [16]bool, entryFP map[int64
 		// still close every input, depth, memory and FLAGS effect first.
 		return before
 	}
+	if form, known, err := x86ImplicitDivideProperties(ins.Op, ins, arch); known && err == nil {
+		for _, output := range x86ImplicitDivideWrites(form) {
+			kill(output.operand, output.width)
+		}
+		return before // A native continuation changes only the implicit GP output footprint.
+	}
 	if effect, known, err := x86TypedInstructionByteEffect(ins.Op, ins, arch); known && err == nil {
 		for _, operand := range effect.operands {
 			if operand.write {

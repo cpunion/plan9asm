@@ -42,6 +42,9 @@ func x86TypedFPResultNeedsProof(fn Func, sig FuncSig, arch string) bool {
 		if _, known, err := x86AccumulatorSignExtendProperties(ins.Op, ins, arch); known && err == nil {
 			return true // Raw/named implicit AX inputs remain mandatory even for a dead Void result.
 		}
+		if _, known, err := x86ImplicitDivideProperties(ins.Op, ins, arch); known && err == nil {
+			return true // Trapping division still needs its divisor and complete AX or DX:AX even for Void.
+		}
 		if _, known, err := x86DwordProductProperties(ins.Op, ins, arch); known && err == nil {
 			return true // Named/raw dead products retain numerical input and mask obligations.
 		}
