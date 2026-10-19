@@ -16,6 +16,11 @@ import (
 // result. In particular, this never creates a caller-memory or raw-RET token.
 func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 	fn, sig, arch := c.fpScalarSource, c.sig, c.goarch
+	if x86ScalarPrecisionRawReplayRequired(fn, arch) {
+		if err := fn.x86RawReplay.validate(fn, arch); err != nil {
+			return err
+		}
+	}
 	var nativeMMX *x86NativeMMXRegion
 	named := true
 	for _, ins := range fn.Instrs {
@@ -95,7 +100,15 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 	boundRawReduction := false
 	boundRawTernary := false
 	boundRawLegacyFloatCompare := false
+	boundRawScalarPrecision := false
 	for _, ins := range fn.Instrs {
+		if x86RawScalarPrecisionSource(ins, arch) {
+			if !boundRawScalarPrecision && (fn.x86RawReplay == nil || fn.x86RawReplay.validate(fn, arch) != nil) {
+				return strictErr
+			}
+			boundRawScalarPrecision = true
+			continue // Exact mode/generation retains every active, merge, mask and native input obligation.
+		}
 		if x86RawLegacyFloatCompareSource(ins, arch) {
 			if !boundRawLegacyFloatCompare && (fn.x86RawReplay == nil || fn.x86RawReplay.validate(fn, arch) != nil) {
 				return strictErr
