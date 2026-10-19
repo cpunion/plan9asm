@@ -79,6 +79,25 @@ func TestX86PackedAbsSignLowBankPhysicalGenerationISAProfiles(t *testing.T) {
 	}
 }
 
+func TestX86PackedAbsSignISAProfilesRejectMalformedOrForeignGeneration(t *testing.T) {
+	for _, arch := range []string{"386", "amd64"} {
+		for _, instruction := range []string{"PABSB Y0,X1", "PSIGND X0,Y1", "VPABSB X0,Y1", "VPABSW.Z X0,X1", "VPSIGNB Z0,Z1,Z2", "VPABSQ X0,K0,X1"} {
+			ins := x86ScalarLaneInstruction(t, instruction)
+			if got := inferFuncTargetFeaturesForGOARCH(ArchAMD64, arch, Func{Instrs: []Instr{ins}}); got != "" {
+				t.Fatal("malformed ABS/sign form acquired an ISA profile", instruction, got)
+			}
+		}
+		for _, instruction := range []string{"PABSB X0,X1", "PSIGNW X0,X1", "VPSIGND X0,X1,X2"} {
+			ins := x86ScalarLaneInstruction(t, instruction)
+			ins.x86PackedAbsEVEX = true
+			if _, known, err := x86PackedAbsSignProperties(ins.Op, ins, arch); !known || err == nil ||
+				inferFuncTargetFeaturesForGOARCH(ArchAMD64, arch, Func{Instrs: []Instr{ins}}) != "" {
+				t.Fatal("a foreign physical EVEX tag created an unsupported generation", instruction, err)
+			}
+		}
+	}
+}
+
 // No MOVOU, AVX zero or other sibling supplies a native XMM register class.
 // PSIGN's data is initialized by its existing pure self-XOR transfer; PABS
 // has no old destination input. These are actual Go/LLVM native objects.
