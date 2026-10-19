@@ -1,11 +1,30 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 	"strings"
 	"testing"
 )
+
+func TestX86MaskBlendVoidAndUnusedBoolNeverSupplyInputs(t *testing.T) {
+	for _, row := range x86MaskBlendIndependentRows("amd64") {
+		for _, unusedBool := range []bool{false, true} {
+			declaration, extent := "func Missing()", 0
+			if unusedBool {
+				declaration, extent = "func Missing(unused bool)", 1
+			}
+			source := fmt.Sprintf("TEXT ·Missing(SB),4,$0-%d\n%s\nRET\n", extent, row)
+			for _, api := range []string{"text", "module", "Go"} {
+				ir, err := x86ScalarFPBitViewAPI(t, source, declaration, "amd64", "x86_64-unknown-linux-gnu", api)
+				if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+					t.Fatal("Void or unused bool supplied unbound blend inputs", row, unusedBool, api, err)
+				}
+			}
+		}
+	}
+}
 
 // Independent Go _yvblendmpd inventory: six width/mask rows per member,
 // register or memory source, with per-opcode broadcast and zeroing attributes.
