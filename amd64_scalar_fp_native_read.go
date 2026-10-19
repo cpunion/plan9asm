@@ -453,6 +453,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		if form, known, err := x86FloatMulDivProperties(ins, arch); known {
 			return err == nil && x86ScalarFPFloatBinaryTransferWithRead(ins, form.x86FloatBinaryForm, state, owned, arch, true)
 		}
+		if form, known, err := x86FloatMinMaxProperties(ins, arch); known {
+			return err == nil && x86ScalarFPFloatBinaryTransferWithRead(ins, form.x86FloatBinaryForm, state, owned, arch, true)
+		}
 		if accepted, known := x86ResultPackedStringStepWithRead(ins, state, owned, arch, true); known {
 			return accepted // Paired emitter retains the full volatile m128 read.
 		}

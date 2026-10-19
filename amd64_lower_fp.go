@@ -23,6 +23,9 @@ func (c *amd64Ctx) lowerFP(op Op, ins Instr) (ok bool, terminated bool, err erro
 	if ok, term, err := c.lowerFloatAddSub(op, ins); ok {
 		return ok, term, err
 	}
+	if ok, term, err := c.lowerFloatMinMax(op, ins); ok {
+		return ok, term, err
+	}
 	if spec, recognized := amd64ScalarVectorMoveSpecs[op]; recognized && spec.legacy {
 		if _, _, err := amd64ScalarVectorMoveProperties(ins, c.goarch); err != nil {
 			return true, false, err

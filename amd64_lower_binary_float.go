@@ -121,6 +121,9 @@ func (c *amd64Ctx) lowerBinaryFloating(op Op, ins Instr) (ok bool, terminated bo
 	if ok, term, err := c.lowerFloatAddSub(op, ins); ok {
 		return ok, term, err
 	}
+	if ok, term, err := c.lowerFloatMinMax(op, ins); ok {
+		return ok, term, err
+	}
 	rawOp := strings.ToUpper(string(op))
 	baseOp, suffix := rawOp, ""
 	if dot := strings.IndexByte(rawOp, '.'); dot >= 0 {

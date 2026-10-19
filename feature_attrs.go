@@ -122,6 +122,21 @@ func inferFuncTargetFeaturesForGOARCH(arch Arch, goarch string, fn Func) string 
 				// an isolated .Z function with no unsuffixed sibling.
 				add("+ssse3")
 			}
+			if form, known, err := x86FloatMinMaxProperties(ins, moveArch); known && err == nil {
+				switch {
+				case x86FloatMinMaxNativeEVEX(ins, form):
+					add("+avx512f")
+					if !form.scalar && form.byteWidth < 64 {
+						add("+avx512vl")
+					}
+				case !form.legacy:
+					add("+avx")
+				case form.bits == 64:
+					add("+sse2")
+				default:
+					add("+sse")
+				}
+			}
 			if form, known, err := x86PackedAlignProperties(ins.Op, ins, moveArch); known && err == nil &&
 				form.legacy && form.memory >= 0 && ins.Args[form.memory].Kind != OpFP {
 				add("+sse2", "+ssse3") // The isolated original PALIGNR m128 needs its physical carrier.

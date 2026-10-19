@@ -24,6 +24,9 @@ func (c *amd64Ctx) lowerVec(op Op, ins Instr) (ok bool, terminated bool, err err
 	if ok, term, err := c.lowerFloatAddSub(op, ins); ok {
 		return ok, term, err
 	}
+	if ok, term, err := c.lowerFloatMinMax(op, ins); ok {
+		return ok, term, err
+	}
 	if ok, term, err := c.lowerPackedLogicalFamily(op, ins); ok {
 		return ok, term, err
 	}

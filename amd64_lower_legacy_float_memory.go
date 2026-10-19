@@ -14,6 +14,10 @@ func x86LegacyPackedFloatingNativeMemoryBits(ins Instr, goarch string) int {
 		muldiv, recognized, parseErr := x86FloatMulDivProperties(ins, goarch)
 		known, err, form = recognized, parseErr, muldiv.x86FloatBinaryForm
 	}
+	if !known {
+		minmax, recognized, parseErr := x86FloatMinMaxProperties(ins, goarch)
+		known, err, form = recognized, parseErr, minmax.x86FloatBinaryForm
+	}
 	if !known || err != nil || !form.legacy || form.scalar || form.memory < 0 || ins.Args[form.memory].Kind == OpFP {
 		return 0
 	}
