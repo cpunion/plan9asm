@@ -84,6 +84,17 @@ Original uninitialized format/disp32 probes retain Go/emitter objects plus
 three-API Context controls. Independent initialized objects own public success;
 neither a direct emitter nor a classification change grants caller memory.
 
+The two IFMA names share their complete six-row EVEX grammar and ordered
+numerical inputs. Each qword consumes source bits 51:0 and every accumulator
+byte, even with zero masking. Unknown register results may stay unknown; masks
+and every observable byte remain actual inputs. Memory retains the full E4
+tuple or eight-byte broadcast with guarded volatile reads. Physical mode32
+mask encodings do not inherit Go's named four-operand cap; exact source identity
+and all remaining bank/address checks still apply. Encoding-aware writeback
+clears wider aliases. Preserve independent full Go attributes, every-byte and
+nonzero-upper controls, original unbound formats and initialized public objects.
+Portable integer LLVM execution does not qualify original AVX512 execution.
+
 Conditional moves retain the old destination and actual predicate dependencies;
 their native source read is unconditional, including false predicates and Void.
 The existing nontrapping GP domain may leave a dead named-register result
