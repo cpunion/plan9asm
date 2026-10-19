@@ -13,7 +13,12 @@ func (c *amd64Ctx) prepareLogicalAUTOStorage() error {
 		fn.x86ContinuationFlow != nil || fn.x86BoolCalls != nil {
 		return nil
 	}
-	extent, err := x86ResultAUTOExtent(fn, c.goarch)
+	stack, err := x86ResultPrivateFlagsSource(fn, c.goarch)
+	if err != nil {
+		return err
+	}
+	c.privateFlagsStack = stack != nil
+	extent, err := x86ResultAUTOExtentWithPrivateStack(fn, c.goarch, c.privateFlagsStack)
 	if err != nil {
 		return err
 	}
@@ -27,6 +32,10 @@ func (c *amd64Ctx) prepareLogicalAUTOStorage() error {
 func (c *amd64Ctx) logicalAUTOAddress(mem MemRef) (string, bool, error) {
 	if c.logicalAUTOExtent == 0 || mem.Base != SP {
 		return "", false, nil
+	}
+	if c.privateFlagsStack && mem.Off >= 0 && mem.Sym == "" && mem.OffRaw == "" &&
+		mem.Index == "" && mem.IndexExt == "" && mem.Segment == "" && mem.Scale == 0 {
+		return "", false, nil // Reaching PUSH depth, rather than the immutable AUTO base, owns this access.
 	}
 	if _, static := x86SBMemoryAddressRole(Operand{Kind: OpMem, Mem: mem}, c.goarch); static {
 		return "", false, nil

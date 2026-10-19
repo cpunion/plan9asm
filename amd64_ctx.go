@@ -75,6 +75,7 @@ type amd64Ctx struct {
 	localStackSlot    string // byte-addressable backing storage for x86 SP references
 	logicalAUTOBase   string // immutable entry-SP SSA address, not a source pointer fact
 	logicalAUTOExtent int    // proved ordinary logical frame bytes above entry SP
+	privateFlagsStack bool   // complete paired mode32 proof owns bare nonnegative SP offsets
 	sourceStack       *x86SourceStackProof
 	fixedLocal        *x86FixedLocalProof
 	fixedMemRoles     map[MemRef]MemRef // exact certified current-instruction native role projection
