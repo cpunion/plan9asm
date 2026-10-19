@@ -3094,7 +3094,10 @@ TEXT packedsadforms(SB),NOSPLIT,$0-0
 	VPSADBW (AX), Z2, Z3
 	RET
 `
-	ll := translateAMD64EcosystemCase(t, src, "packedsadforms")
+	// These original formats have neither vector inputs nor a pointer entry.
+	// Retain their Go objects and public Context checks; initialized public
+	// objects for the complete SAD family live in x86_result_sad_test.go.
+	ll := x86UnboundVoidScalarFormatObject(t, src, "packedsadforms", "amd64", "x86_64-unknown-linux-gnu")
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc not found")

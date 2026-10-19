@@ -132,13 +132,16 @@ func TestCrossLinuxRuntimeMatrixX86MADDTypedIndependentWholeBytes(t *testing.T) 
 		name := fmt.Sprintf("madd%d", index)
 		fmt.Fprintf(&declarations, "func %s(out *[80]byte,a,b,old *[64]byte,mask,flags uint64,csr uint32)\n", name)
 		fmt.Fprintf(&assembly, "TEXT ·%s(SB),4,$0-52\nMOVQ out+0(FP),AX\nMOVQ a+8(FP),CX\nMOVQ b+16(FP),DX\nMOVQ old+24(FP),R8\nMOVQ mask+32(FP),R9\n", name)
+		// Set the independent state before entering MMX. Its physical x87
+		// region must remain uninterrupted through the real EMMS instruction.
+		assembly.WriteString("LDMXCSR csr+48(FP)\nPUSHQ flags+40(FP)\nPOPFQ\n")
 		if row.mmx {
 			assembly.WriteString("MOVQ (CX),M0\nMOVQ (DX),M1\n")
 		} else {
 			assembly.WriteString("VMOVUPS (CX),Z0\nVMOVUPS (DX),Z1\nVMOVUPS (R8),Z2\nKMOVQ R9,K1\n")
 		}
 		instruction, destination := row.instruction()
-		fmt.Fprintf(&assembly, "LDMXCSR csr+48(FP)\nPUSHQ flags+40(FP)\nPOPFQ\n%s\n", instruction)
+		fmt.Fprintf(&assembly, "%s\n", instruction)
 		if row.mmx {
 			fmt.Fprintf(&assembly, "MOVQ %s,(AX)\nEMMS\n", destination)
 		} else {

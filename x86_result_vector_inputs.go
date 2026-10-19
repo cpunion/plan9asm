@@ -61,6 +61,9 @@ func x86FixedVectorValueProperties(ins Instr, arch string) (x86PackedBinaryForm,
 	if parsed, known, err := x86PackedMultiplyAddProperties(ins.Op, ins, arch); known {
 		return parsed.x86PackedBinaryForm, false, known, err
 	}
+	if parsed, known, err := x86DwordProductProperties(ins.Op, ins, arch); known {
+		return parsed.x86PackedBinaryForm, false, known, err
+	}
 	if parsed, spec, recognized, parseErr := x86IndexedPermuteProperties(ins.Op, ins, arch); recognized {
 		return parsed, spec.mode != amd64IndexedPermuteSingle, recognized, parseErr
 	}

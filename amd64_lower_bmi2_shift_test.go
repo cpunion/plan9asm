@@ -52,18 +52,7 @@ func TestTranslateX86BMI2VariableShiftCompleteGo127FormsAcrossTargets(t *testing
 		t.Run(target.name, func(t *testing.T) {
 			source := x86BMI2VariableShiftFormsSource(target.goarch)
 			requireX86GoAssemblerResult(t, target.goarch, source, true)
-			file, err := Parse(ArchAMD64, source)
-			if err != nil {
-				t.Fatal(err)
-			}
-			ll, err := Translate(file, Options{
-				Goarch:       target.goarch,
-				TargetTriple: target.triple,
-				Sigs:         map[string]FuncSig{"bmi2shiftforms": {Name: "bmi2shiftforms", Ret: Void}},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			ll := x86UnboundVoidScalarFormatObject(t, source, "bmi2shiftforms", target.goarch, target.triple)
 			operations := []string{"ashr i32", "shl i32", "lshr i32", `"target-features"="+bmi2"`}
 			if target.goarch == "amd64" {
 				operations = append(operations, "ashr i64", "shl i64", "lshr i64")
