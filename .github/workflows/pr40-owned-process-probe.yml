@@ -213,6 +213,7 @@ jobs:
       module: ${{ matrix.module }}
 
   sdk-priority:
+    needs: ownership
     name: SDK priority (${{ matrix.lane }})
     runs-on: windows-latest
     timeout-minutes: 20
