@@ -296,6 +296,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		if accepted, known := x86ResultNonTemporalVectorStep(ins, state, owned, resultOffset, arch, true); known {
 			return accepted
 		}
+		if accepted, known := x86LoweredMOVNTIResultStep(ins, state, owned, arch); known {
+			return accepted // The original opcode retains cache policy and mandatory native write/faults.
+		}
 		if accepted, known := x86ResultFloatCompareStep(ins, state, owned, arch, true); known {
 			return accepted
 		}
