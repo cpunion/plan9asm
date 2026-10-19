@@ -2,7 +2,12 @@ package plan9asm
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
+	"go/ast"
+	"go/build"
+	"go/parser"
+	"go/token"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -103,6 +108,92 @@ func TestX86LegacyAbsSignAlignmentIndependentOriginalBytes(t *testing.T) {
 	x86PackedAbsSignOriginalProgramUnchanged(t)
 	for _, arch := range []string{"386", "amd64"} {
 		t.Run(arch, func(t *testing.T) { x86AbsSignAlignmentOriginalBytes(t, arch) })
+	}
+}
+
+func TestX86LegacyAbsSignAlignmentNeedsActualNativeBackingAndTarget(t *testing.T) {
+	for _, target := range x86RawReturnTargets {
+		for _, row := range x86AbsSignAlignmentRows()[:6] {
+			for _, api := range []string{"text", "module", "Go"} {
+				t.Run(target.triple+"/"+row.opcode+"/"+api, func(t *testing.T) {
+					source := "TEXT ·Value(SB),4,$0-16\nPXOR X0,X0\n" + row.opcode + " a+0(FP),X0\nRET\n"
+					ir, err := x86ScalarFPBitViewAPI(t, source, "func Value(a,b uint64)", target.arch, target.triple, api)
+					if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+						t.Fatal("logical FP bytes acquired original native m128 alignment and backing", err)
+					}
+				})
+			}
+		}
+	}
+	for _, triple := range []string{"aarch64-unknown-linux-gnu", "armv7-unknown-linux-gnueabihf", "wasm32-unknown-unknown"} {
+		t.Run(triple, func(t *testing.T) {
+			source, declarations := x86AbsSignAlignmentProgram("amd64", false)
+			ir, err := x86ScalarFPBitViewAPI(t, source, declarations, "amd64", triple, "Go")
+			if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+				t.Fatal("a nonmatching target silently erased original x86 alignment/fault behavior", err)
+			}
+		})
+	}
+}
+
+func TestX86LegacyAbsSignAlignmentRequiredNativeOwners(t *testing.T) {
+	const name = "x86_legacy_abs_sign_alignment_native_linux_amd64_test.go"
+	for _, target := range []struct{ os, arch string }{
+		{"linux", "amd64"}, {"linux", "386"}, {"linux", "arm64"},
+		{"darwin", "amd64"}, {"darwin", "arm64"}, {"windows", "amd64"},
+	} {
+		context := build.Default
+		context.GOOS, context.GOARCH = target.os, target.arch
+		selected, err := context.MatchFile(".", name)
+		if err != nil || selected != (target.os == "linux" && target.arch == "amd64") {
+			t.Fatal("required actual-native fault owner selected on the wrong host", target, selected, err)
+		}
+	}
+	syntax, err := parser.ParseFile(token.NewFileSet(), name, nil, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wanted := map[string]bool{
+		"TestCrossLinuxRuntimeMatrixX86LegacyAbsSignOriginalAlignmentFaultsAMD64": false,
+		"TestCrossLinuxRuntimeMatrixX86LegacyAbsSignOriginalAlignmentFaults386":   false,
+	}
+	for _, declaration := range syntax.Decls {
+		function, ok := declaration.(*ast.FuncDecl)
+		if !ok {
+			continue
+		}
+		ast.Inspect(function, func(node ast.Node) bool {
+			if selector, ok := node.(*ast.SelectorExpr); ok && strings.HasPrefix(selector.Sel.Name, "Skip") {
+				t.Fatal("required native ABS/sign execution became an optional skip", function.Name.Name)
+			}
+			return true
+		})
+		if _, found := wanted[function.Name.Name]; !found {
+			continue
+		}
+		host, full := 0, 0
+		ast.Inspect(function.Body, func(node ast.Node) bool {
+			if call, ok := node.(*ast.CallExpr); ok {
+				if callee, ok := call.Fun.(*ast.Ident); ok {
+					if callee.Name == "x87IA32RequireNativeHost" {
+						host++
+					}
+					if callee.Name == "x86LegacyAbsSignNativeAlignment" {
+						full++
+					}
+				}
+			}
+			return true
+		})
+		if host != 2 || full != 1 || wanted[function.Name.Name] {
+			t.Fatal("required native owner lost host brackets or its entire fault matrix", function.Name.Name, host, full)
+		}
+		wanted[function.Name.Name] = true
+	}
+	for root, found := range wanted {
+		if !found {
+			t.Fatal("required native owner is absent", root)
+		}
 	}
 }
 
