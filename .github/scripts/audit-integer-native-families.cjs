@@ -10,11 +10,13 @@ const roots = [
   'TestCrossLinuxRuntimeMatrixX86PackedAlignLegacyNativeFaults',
   'TestCrossLinuxRuntimeMatrixX86ImplicitDivideOriginalGoAndNativeAMD64',
   'TestCrossLinuxRuntimeMatrixX86ImplicitDivideOriginalGoAndNative386',
+  'TestCrossLinuxRuntimeMatrixX86SegmentQueryOriginalFlagsAliasesAndFaults',
 ];
 const axes = ['backend_O0', 'backend_O2', 'IR_O2/backend_O2'];
 const children = roots.flatMap(root => axes.map(axis => root + '/' + axis));
 const nativeHost = /IA32 direct host: linux\/amd64 kernel=x86_64 CPUsha=[a-f0-9]{64} mapsha=[a-f0-9]{64}\b/g;
 const originalArgs = '["-test.run=^TestOriginal$" "-test.count=1" "-test.v"]';
+const segmentEvidence = '48 original-Go opcode rows × 16 inputs; full GP aliases, six status flags, canaries; 160 live/dead m16 fault processes\n';
 
 function requireIA32Images(output, staticCount, args) {
   const images = [...output.matchAll(/native oracle static IA32 ELF bytes=([1-9][0-9]*) sha256=([a-f0-9]{64})\b/g)];
@@ -29,6 +31,18 @@ function requireIA32Images(output, staticCount, args) {
     assert.ok(direct[0].index < images[1].index, 'fault image inspection preceded value execution');
   }
   return {images, direct};
+}
+
+function requireSDKCommands(output) {
+  const commands = [...output.matchAll(/actual executable=([^\r\n]+\/bin\/go) sha256=([a-f0-9]{64}) argv=(\[[^\r\n]*\])/g)];
+  assert.equal(commands.length, 2, 'must observe the actual SDK version and original Go build');
+  assert.equal(commands[0][1], commands[1][1], 'SDK executable changed');
+  assert.equal(commands[0][2], commands[1][2], 'SDK hash changed');
+  assert.equal(commands[0][3], '["version"]', 'actual SDK version was not observed');
+  assert.match(commands[1][3], /^\["test" "-p=1" "-vet=off" "-c" "-o" "\/[^"\r\n]+\/original\.test" "\."\]$/,
+    'original Go compile did not retain its complete actual SDK command');
+  assert.ok(commands[0].index < commands[1].index, 'original Go build preceded actual SDK version');
+  return commands;
 }
 
 function auditIntegerNativeFamilies(inventory, raw) {
@@ -59,13 +73,13 @@ function auditIntegerNativeFamilies(inventory, raw) {
     assert.ok(packageStarted, 'native test before package start');
     assert.ok(['run', 'output', 'pass'].includes(event.Action), 'unknown native test action');
     const root = event.Test.split('/')[0];
-    const divide = root.includes('ImplicitDivide');
+    const observed = root.includes('ImplicitDivide') || root.includes('SegmentQuery');
     const ia32 = root.endsWith('386');
     if (event.Action === 'run') {
       states.set(event.Test, 'running');
-      if (divide && event.Test !== root) {
+      if (observed && event.Test !== root) {
         assert.equal([...outputs.get(root).matchAll(nativeHost)].length, 1,
-          'division axis lacks its preceding actual native host observation');
+          'integer axis lacks its preceding actual native host observation');
         assert.ok(!outputs.get(root).includes('actual executable='),
           'original Go compilation must follow all three native axes');
       }
@@ -83,6 +97,10 @@ function auditIntegerNativeFamilies(inventory, raw) {
     states.set(event.Test, 'passed');
     if (event.Test !== root) {
       lastChildPass.set(root, sequence);
+      if (root.includes('SegmentQuery')) {
+        assert.equal(outputs.get(event.Test).split(segmentEvidence).length - 1, 1,
+          'segment query axis lacks its complete opcode flags alias and fault evidence');
+      }
       if (ia32) {
         requireIA32Images(outputs.get(event.Test), 2, '[]');
         staticIA32Images += 2;
@@ -90,20 +108,14 @@ function auditIntegerNativeFamilies(inventory, raw) {
       }
       continue;
     }
-    if (!divide) continue;
+    if (!observed) continue;
 
     const output = outputs.get(root);
     const hosts = [...output.matchAll(nativeHost)];
-    const commands = [...output.matchAll(/actual executable=([^\r\n]+\/bin\/go) sha256=([a-f0-9]{64}) argv=(\[[^\r\n]*\])/g)];
-    assert.equal(hosts.length, 2, 'division must retain pre/post actual native host observations');
-    assert.equal(commands.length, 2, 'division must observe the actual SDK version and original Go build');
-    assert.equal(commands[0][1], commands[1][1], 'division SDK executable changed');
-    assert.equal(commands[0][2], commands[1][2], 'division SDK hash changed');
-    assert.equal(commands[0][3], '["version"]', 'actual SDK version was not observed');
-    assert.match(commands[1][3], /^\["test" "-p=1" "-vet=off" "-c" "-o" "\/[^"\r\n]+\/original\.test" "\."\]$/,
-      'original Go compile did not retain its complete actual SDK command');
+    const commands = requireSDKCommands(output);
+    assert.equal(hosts.length, 2, 'integer root must retain pre/post actual native host observations');
     assert.ok(hosts[0].index < commands[0].index && commands[0].index < commands[1].index &&
-      commands[1].index < hosts[1].index, 'division native/SDK observation order changed');
+      commands[1].index < hosts[1].index, 'integer native/SDK observation order changed');
 
     // The SDK and final host observations occur after every execution child.
     // A printed root PASS before original Go execution cannot certify it.
@@ -127,7 +139,7 @@ function auditIntegerNativeFamilies(inventory, raw) {
   return {...result, nativeHosts, sdkBuilds, staticIA32Images, directIA32Executions};
 }
 
-module.exports = {auditIntegerNativeFamilies, roots, children};
+module.exports = {auditIntegerNativeFamilies, requireIA32Images, requireSDKCommands, roots, children};
 if (require.main === module) {
   const directory = process.argv[2];
   const result = auditIntegerNativeFamilies(fs.readFileSync(path.join(directory, 'inventory.log'), 'utf8'),

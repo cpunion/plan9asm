@@ -243,12 +243,28 @@ jobs:
           roots+='|TestCrossLinuxRuntimeMatrixX86PackedAlignLegacyNativeFaults'
           roots+='|TestCrossLinuxRuntimeMatrixX86ImplicitDivideOriginalGoAndNativeAMD64'
           roots+='|TestCrossLinuxRuntimeMatrixX86ImplicitDivideOriginalGoAndNative386'
+          roots+='|TestCrossLinuxRuntimeMatrixX86SegmentQueryOriginalFlagsAliasesAndFaults'
           go test . -list "^($roots)$" > "$directory/inventory.log"
           for root in ${roots//|/ }; do
             grep -Fx "$root" "$directory/inventory.log"
           done
           go test . -run "^($roots)$" -count=1 -timeout=5m -json > "$directory/raw.jsonl" 2> "$directory/stderr.log"
           node .github/scripts/audit-integer-native-families.cjs "$directory"
+      - name: Execute original native duplicate moves and whole-vector effects
+        env:
+          GOTOOLCHAIN: local
+        run: |
+          set -euo pipefail
+          directory=_out/native-x86-oracles/duplicate-moves
+          mkdir -p "$directory"
+          roots='TestCrossLinuxRuntimeMatrixX86DuplicateMoveOriginalGoAndNativeAMD64'
+          roots+='|TestCrossLinuxRuntimeMatrixX86DuplicateMoveOriginalGoAndNative386'
+          go test . -list "^($roots)$" > "$directory/inventory.log"
+          for root in ${roots//|/ }; do
+            grep -Fx "$root" "$directory/inventory.log"
+          done
+          go test . -run "^($roots)$" -count=1 -timeout=5m -json > "$directory/raw.jsonl" 2> "$directory/stderr.log"
+          node .github/scripts/audit-duplicate-native-families.cjs "$directory"
       - name: Preserve original and translated observations
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v6
