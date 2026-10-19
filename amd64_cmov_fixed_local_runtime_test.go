@@ -93,9 +93,9 @@ func x86CMOVFixedLocalExecutionTarget(triple string) (string, bool) {
 	switch triple {
 	case "x86_64-unknown-linux-gnu":
 		return "linux/amd64", true
-	case "x86_64-apple-darwin":
+	case "x86_64-apple-darwin", "x86_64-apple-macosx":
 		return "darwin/amd64", true
-	case "x86_64-pc-windows-msvc":
+	case "x86_64-pc-windows-msvc", "x86_64-w64-windows-gnu":
 		return "windows/amd64", true
 	default:
 		return "", false
@@ -106,7 +106,9 @@ func TestX86CMOVFixedLocalExecutionTargets(t *testing.T) {
 	for _, row := range []struct{ triple, target string }{
 		{"x86_64-unknown-linux-gnu", "linux/amd64"},
 		{"x86_64-apple-darwin", "darwin/amd64"},
+		{"x86_64-apple-macosx", "darwin/amd64"},
 		{"x86_64-pc-windows-msvc", "windows/amd64"},
+		{"x86_64-w64-windows-gnu", "windows/amd64"},
 		{"aarch64-unknown-linux-gnu", ""},
 		{"i686-pc-windows-msvc", ""},
 		{"", ""},
@@ -114,6 +116,12 @@ func TestX86CMOVFixedLocalExecutionTargets(t *testing.T) {
 		actual, ok := x86CMOVFixedLocalExecutionTarget(row.triple)
 		if actual != row.target || ok != (row.target != "") {
 			t.Fatal("capture must retain the actual native execution platform", row, actual, ok)
+		}
+	}
+	for _, platform := range []string{"linux", "darwin", "windows"} {
+		triple := testTargetTriple(platform, "amd64")
+		if actual, ok := x86CMOVFixedLocalExecutionTarget(triple); !ok || actual != platform+"/amd64" {
+			t.Fatal("actual shared runtime triple lost its capture platform", triple, actual, ok)
 		}
 	}
 }
