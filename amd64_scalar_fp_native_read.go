@@ -210,6 +210,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		if accepted, known := x86ResultNumericalReadStep(ins, state, owned, resultOffset, arch); known {
 			return accepted // A checked mutable SB source keeps its own lifetime and byte effects.
 		}
+		if accepted, known := x86ResultSegmentQueryStep(ins, state, owned, arch, true); known {
+			return accepted // Paired exact volatile m16; no backing or reusable read permission.
+		}
 		if accepted, known := x86LoweredADXResultStep(ins, state, owned, resultOffset, arch); known {
 			return accepted
 		}

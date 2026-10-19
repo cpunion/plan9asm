@@ -77,20 +77,27 @@ func TestTranslateX86SegmentQueryCompleteGoAssemblerForms(t *testing.T) {
 			}
 			source += "\tRET\n"
 			requireX86GoAssemblerResult(t, target.goarch, source, true)
-			file, err := Parse(ArchAMD64, source)
-			if err != nil {
-				t.Fatal(err)
-			}
-			ir, err := Translate(file, Options{
-				Goarch: target.goarch, TargetTriple: target.triple,
-				Sigs: map[string]FuncSig{"segmentqueryforms": {Name: "segmentqueryforms", Ret: Void}},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			file, signatures := x86UnboundVoidFormatSource(t, source, "segmentqueryforms", target.goarch, target.triple)
+			ir := x86InstructionFormatObjectUnit(t, file, signatures, target.goarch, target.triple, 0,
+				x86SegmentQueryOriginalFormatRow)
 			compileLLVMToObject(t, llc, target.triple, "segment-query-"+target.name+".ll", "segment-query-"+target.name+".o", ir)
 		})
 	}
+}
+
+// The original Go Yrl format includes SP in mode32. This private object-only
+// carrier observes that physical destination through a virtual slot; the
+// unchanged original source still has Go objects and public Context checks.
+// It supplies no public stack, initialized input or native-entry contract.
+func x86SegmentQueryOriginalFormatRow(c *amd64Ctx, ins Instr) (bool, bool, error) {
+	form, known, err := x86SegmentQueryProperties(ins.Op, ins, c.goarch)
+	if !known || err != nil {
+		return known, false, err
+	}
+	previous := c.allowSPWrite
+	c.allowSPWrite = c.goarch == "386" && form.destination == SP
+	defer func() { c.allowSPWrite = previous }()
+	return c.lowerSegmentQuery(ins.Op, ins)
 }
 
 func TestTranslateX86SegmentQueryRejectsFormsOutsideGoTables(t *testing.T) {
@@ -153,17 +160,9 @@ func TestTranslateX86SegmentValidationCompleteGoAssemblerForms(t *testing.T) {
 				"\tVERR AX\n\tVERR (BX)\n\tVERR " + high + "\n" +
 				"\tVERW DX\n\tVERW 2(BX)\n\tVERW " + high + "\n\tRET\n"
 			requireX86GoAssemblerResult(t, target.goarch, source, true)
-			file, err := Parse(ArchAMD64, source)
-			if err != nil {
-				t.Fatal(err)
-			}
-			ir, err := Translate(file, Options{
-				Goarch: target.goarch, TargetTriple: target.triple,
-				Sigs: map[string]FuncSig{"segmentvalidationforms": {Name: "segmentvalidationforms", Ret: Void}},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			file, signatures := x86UnboundVoidFormatSource(t, source, "segmentvalidationforms", target.goarch, target.triple)
+			ir := x86InstructionFormatObjectUnit(t, file, signatures, target.goarch, target.triple, 0,
+				func(c *amd64Ctx, ins Instr) (bool, bool, error) { return c.lowerSegmentQuery(ins.Op, ins) })
 			compileLLVMToObject(t, llc, target.triple, "segment-validation-"+target.name+".ll", "segment-validation-"+target.name+".o", ir)
 		})
 	}

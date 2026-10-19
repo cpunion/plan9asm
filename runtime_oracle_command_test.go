@@ -176,6 +176,7 @@ func TestRuntimeOracleCommandConsumersRetainOwnedExecution(t *testing.T) {
 		"amd64_movnti_runtime_test.go",
 		"amd64_packed_align_fault_unix_test.go",
 		"x86_implicit_divide_runtime_test.go",
+		"x86_segment_query_runtime_linux_amd64_test.go",
 		"amd64_dword_product_forms_test.go",
 		"amd64_packed_narrow_independent_runtime_test.go",
 		"x86_explicit_imul_immediate_semantics_test.go",

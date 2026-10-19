@@ -23,6 +23,9 @@ func x86RegisterBoolResultNeedsProof(fn Func, sig FuncSig, arch string) bool {
 // these facts with its actual initialized GP bytes. Unmodeled effects revoke
 // facts, never invent a value. Original Op/Raw/certificate identity is retained.
 func x86RegisterCanonicalBytesAfter(original Instr, before [16]uint8, arch string) [16]uint8 {
+	if next, known := x86SegmentQueryCanonicalBytesAfter(original, before, arch); known {
+		return next
+	}
 	ins := x86GoMOVQSourceInstruction(original)
 	next := before
 	if _, known, err := x86DuplicateMoveProperties(ins.Op, ins, arch); known && err == nil && x86ResultNamedPredicateInstruction(ins) {
