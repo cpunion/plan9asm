@@ -64,6 +64,7 @@ func TestCrossLinuxRuntimeMatrixX86LEAWRetainedPointerOriginalBytesAndNativeDF(t
 					if string(output) != "LEAW_RETAINED_POINTER_300_VALUES_STATUS_CANARIES_PASS\n" {
 						t.Fatal("native LEAW/FLAGS/DF/canary observation incomplete", string(output))
 					}
+					t.Logf("native retained LEAW LLVM execution: %s", output)
 				})
 			}
 		})
@@ -80,6 +81,7 @@ func TestCrossLinuxRuntimeMatrixX86LEAWRetainedPointerOriginalBytesAndNativeDF(t
 		if string(output) != "LEAW_RETAINED_POINTER_300_VALUES_STATUS_CANARIES_PASS\n" {
 			t.Fatal("actual Go bytes did not establish real DF=1/status/canaries and DF=0 return", string(output))
 		}
+		t.Logf("native retained LEAW actual Go bytes execution: %s", output)
 	})
 	t.Log("300 inputs: actual Go bytes/explicit ABI0 stack adapter observe hardware DF=1 inside and DF=0 at return; original native LLVM bodies retain STD/CLD and check packed logical DF/status plus hardware DF=0 return, with all byte canaries")
 	x87IA32RequireNativeHost(t)
