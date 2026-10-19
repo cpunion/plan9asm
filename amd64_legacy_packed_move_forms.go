@@ -91,6 +91,9 @@ func x86TypedInstructionByteEffect(op Op, ins Instr, arch string) (x86TypedByteE
 	if effect, known, err := x86TypedScalarReciprocalByteEffect(op, ins, arch); known {
 		return effect, known, err
 	}
+	if effect, known, err := x86TypedUnalignedLoadByteEffect(op, ins, arch); known {
+		return effect, known, err
+	}
 	if effect, known, err := x86TypedMoveHalfByteEffect(op, ins, arch); known {
 		return effect, known, err
 	}
