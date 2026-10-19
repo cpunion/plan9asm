@@ -205,9 +205,9 @@ func (c *amd64Ctx) truncateReciprocal14Mask(mask string, bits int) string {
 
 // lowerReciprocalEstimate implements the complete Go 1.27 legacy and VEX
 // RCP/RSQRT estimate family: packed RCPPS/RSQRTPS/VRCPPS/VRSQRTPS plus scalar
-// RCPSS/RSQRTSS/VRCPSS/VRSQRTSS. LLVM's target intrinsics preserve the
-// instructions' approximate semantics instead of replacing them with exact
-// generic floating-point operations.
+// RCPSS/RSQRTSS/VRCPSS/VRSQRTSS. Packed estimates retain their target
+// intrinsics; scalar estimates preserve their complete source opcode,
+// approximation, native m32 access and independent copied upper lanes.
 func (c *amd64Ctx) lowerReciprocalEstimate(rawOp Op, ins Instr) (ok bool, terminated bool, err error) {
 	raw := strings.ToUpper(string(rawOp))
 	base := raw
