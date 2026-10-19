@@ -262,6 +262,26 @@ jobs:
               - TestX86ABI0ResultLegacyIntegerArithmeticDoesNotBorrowPermission
               - TestAMD64RegisterResultKeepsUnknownInputsAndSourceRoles
             timeout: 5m
+          - lane: scalar-lane-pop-repairs
+            module: '.'
+            roots:
+              - TestX86ScalarLaneNativeStoresSelectedBytesAndOrigins
+              - TestX86ScalarLaneNativeStoresFiveTargets
+              - TestX86ScalarLaneNativeStoreVoidRequiresSelectedInputs
+              - TestX86ScalarLaneNativeResultsKeepWholeSourceBoundaries
+              - TestX86PrivatePOPNativeStoresFiveTargets
+              - TestX86PrivatePOPNativeStoreExactBitsAndOrigins
+              - TestX86ResultValueStackCompleteWidthsAndBoundaries
+              - TestX86ResultValueStackPackedBitDefinedness
+              - TestAMD64ExtractPSRuntimeSemantics
+              - TestAMD64StackWidthRuntimeValuesAndFlags
+              - TestCrossLinuxRuntimeMatrixX86ScalarLaneCompleteBytes
+              - TestCrossLinuxRuntimeMatrixX86InsertExtractByteSemantics
+              - TestTranslateX86ExtractPSCompleteGo127Forms
+              - TestTranslateAMD64VExtractPSCompleteGo127Forms
+              - TestTranslateAMD64VectorLaneExtractCompleteGoAssemblerForms
+              - TestTranslateAMD64PackedScalarExtractCompleteGoAssemblerForms
+            timeout: 5m
           - lane: native-memory-effects
             module: '.'
             roots:
