@@ -78,6 +78,26 @@ int main(void) {
     }
     return 0;
 }
+`
+	source, declaration := x86NativeLEAAddressBitsProgram("amd64")
+	triple := testTargetTriple(runtime.GOOS, runtime.GOARCH)
+	for _, api := range []string{"text", "module", "Go"} {
+		t.Run(api, func(t *testing.T) {
+			ir, err := x86ScalarFPBitViewAPI(t, source, declaration, "amd64", triple, api)
+			if err != nil || ir == "" {
+				t.Fatal("complete native-address LEA program rejected before portable value execution", err)
+			}
+			for _, pipeline := range []struct {
+				input string
+				level int
+			}{
+				{ir, 0}, {ir, 2}, {x86DwordProductIROptimize(t, ir), 2},
+			} {
+				compileAndRunRuntimeTestWithCompiler(t, llc, []string{clang}, "lea-address-bits", triple, pipeline.input, driver, nil, pipeline.level)
+			}
+		})
+	}
+}
 
 func TestX86NativeLEAAddressBitsDoNotInventNumericalOrPointerFacts(t *testing.T) {
 	for _, arch := range []string{"386", "amd64"} {
@@ -131,25 +151,5 @@ func TestX86NativeLEAAddressBitsDoNotInventNumericalOrPointerFacts(t *testing.T)
 				}
 			})
 		}
-	}
-}
-`
-	source, declaration := x86NativeLEAAddressBitsProgram("amd64")
-	triple := testTargetTriple(runtime.GOOS, runtime.GOARCH)
-	for _, api := range []string{"text", "module", "Go"} {
-		t.Run(api, func(t *testing.T) {
-			ir, err := x86ScalarFPBitViewAPI(t, source, declaration, "amd64", triple, api)
-			if err != nil || ir == "" {
-				t.Fatal("complete native-address LEA program rejected before portable value execution", err)
-			}
-			for _, pipeline := range []struct {
-				input string
-				level int
-			}{
-				{ir, 0}, {ir, 2}, {x86DwordProductIROptimize(t, ir), 2},
-			} {
-				compileAndRunRuntimeTestWithCompiler(t, llc, []string{clang}, "lea-address-bits", triple, pipeline.input, driver, nil, pipeline.level)
-			}
-		})
 	}
 }
