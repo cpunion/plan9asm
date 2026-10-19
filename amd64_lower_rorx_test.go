@@ -62,16 +62,14 @@ TEXT rorxforms(SB),$0-0
 	RET
 `
 	requireX86GoAssemblerResult(t, "amd64", source, true)
-	file, err := Parse(ArchAMD64, source)
-	if err != nil {
-		t.Fatal(err)
+	const triple = "x86_64-unknown-linux-gnu"
+	ir := x86UnboundVoidScalarFormatObject(t, source, "rorxforms", "amd64", triple)
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM22 llc required")
 	}
-	if _, err := Translate(file, Options{
-		Goarch:       "amd64",
-		TargetTriple: "x86_64-unknown-linux-gnu",
-		Sigs:         map[string]FuncSig{"rorxforms": {Name: "rorxforms", Ret: Void}},
-	}); err != nil {
-		t.Fatal(err)
+	for _, level := range []string{"-O0", "-O2"} {
+		x86PackedStringCompileObject(t, llc, triple, ir, level)
 	}
 }
 
