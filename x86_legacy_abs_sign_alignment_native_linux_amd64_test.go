@@ -99,7 +99,7 @@ int main(void) {
 								t.Fatal("translated native alignment/dead fault differs from original Go bytes", probe, got, want)
 							}
 						}
-						t.Log("ABS/sign original Go bytes and LLVM native alignment/access/CF/canary probes 20 failures 0")
+						t.Log("ABS/sign original Go bytes and LLVM native alignment/access/CF/MXCSR=0x1f80/canary probes 20 failures 0")
 					})
 				}
 			}
@@ -155,12 +155,21 @@ int main(int argc,char **argv) {
     memset(out,0xc3,sizeof(out));memset(expected,0xc3,sizeof(expected));
     if (returns && k.live) abs_sign_expected(expected+1,input,old+1,k);
     expected[17]=1;
+    /* AMD MisAlignSSE permits an optional MXCSR.MM bit17. Fix the exact
+       Intel/AMD common MM=0 mode, rather than assuming an inherited value
+       or guessing exception behavior from a vendor name or CPUID alone. */
+    uint32_t fixed_mxcsr=UINT32_C(0x1f80),observed_mxcsr=0;
+    __asm__ volatile("ldmxcsr %0" : : "m"(fixed_mxcsr) : "memory");
+    __asm__ volatile("stmxcsr %0" : "=m"(observed_mxcsr) : : "memory");
+    if (observed_mxcsr!=fixed_mxcsr) return 90;
     printf("memory enter %u %u %u\n",row,probe,original);
     if (fflush(stdout)) return 84;
     (original?k.original:k.translated)(out+1,input,old+1);
     /* Never read an inaccessible source after an unexpected normal return:
        that would manufacture a C fault and falsely qualify the opcode. */
     if (!returns) return 85;
+    __asm__ volatile("stmxcsr %0" : "=m"(observed_mxcsr) : : "memory");
+    if (observed_mxcsr!=fixed_mxcsr) return 91;
     if (memcmp(out,expected,sizeof(out)) || memcmp(old,before_old,sizeof(old))) return 86;
     for (size_t i=0;i<page;i++) if (guard[i]!=(uint8_t)(i*13+17)) return 87;
     if (free_guard()) return 88;
