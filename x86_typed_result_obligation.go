@@ -16,15 +16,11 @@ func x86TypedFPResultNeedsProof(fn Func, sig FuncSig, arch string) bool {
 		return true
 	}
 	for _, ins := range x86X87FlowInstructions(fn) {
-		if form, known, err := x86X87ValueProperties(ins, arch); known && err == nil &&
-			form.spec.kind == x86X87FloatMove && x86ResultNamedPredicateInstruction(ins) {
-			return true // Discarding a floating result cannot initialize an address, F0 or the x87 stack.
-		}
 		if _, known, err := x86X87EnvironmentReadProperties(ins, arch); known && err == nil {
 			return true // Dead environment reads retain input and stack obligations for Void.
 		}
 		if form, known, err := x86X87ValueProperties(ins, arch); known && err == nil &&
-			(form.spec.kind == x86X87IntegerMove || form.spec.kind == x86X87Round ||
+			(form.spec.kind == x86X87FloatMove || form.spec.kind == x86X87IntegerMove || form.spec.kind == x86X87Round ||
 				form.spec.kind == x86X87ConditionalMove) && x86ResultNamedPredicateInstruction(ins) {
 			return true // Input/control/stack obligations also apply to Void; private slots cannot supply unknown facts.
 		}

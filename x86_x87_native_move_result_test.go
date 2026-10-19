@@ -100,3 +100,41 @@ func TestX86X87NativeFloatingMoveCannotBypassVoidProof(t *testing.T) {
 		}
 	}
 }
+
+func TestX86X87NativeFloatingMoveOriginalGoAndLLVMObjects(t *testing.T) {
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("x87 native floating moves require LLVM22 llc")
+	}
+	for _, target := range x86RawReturnTargets {
+		var source, declarations strings.Builder
+		for _, op := range []string{"FMOVF", "FMOVFP", "FMOVD", "FMOVDP"} {
+			text, declaration := x86X87NativeMoveProgram(target.arch, op)
+			source.WriteString(strings.ReplaceAll(text, "Value", op))
+			declarations.WriteString(strings.ReplaceAll(declaration, "Value", op) + "\n")
+		}
+		requireX86GoAssemblerResult(t, target.arch, source.String(), true)
+		for _, mode := range []X87Mode{X87Auto, X87Hardware, X87Software} {
+			for _, api := range []string{"text", "module", "Go"} {
+				t.Run(fmt.Sprintf("%s/mode%d/%s", target.triple, mode, api), func(t *testing.T) {
+					ir, err := x86X87InitializedWordAPI(t, source.String(), declarations.String(), target.arch, target.triple, api, mode)
+					if err != nil || ir == "" {
+						t.Fatal("complete original floating move source", err)
+					}
+					for _, text := range []string{ir, x86MulDivRoundOptimize(t, ir)} {
+						for _, operation := range []string{"load", "store"} {
+							for _, typ := range []string{"float", "double"} {
+								if strings.Count(text, operation+" volatile "+typ) != 2 {
+									t.Fatal("native floating move lost its exact width or observable access", operation, typ)
+								}
+							}
+						}
+						for _, level := range []string{"-O0", "-O2"} {
+							x86PackedStringCompileObject(t, llc, target.triple, text, level)
+						}
+					}
+				})
+			}
+		}
+	}
+}
