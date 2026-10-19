@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"runtime"
 	"strings"
@@ -65,7 +66,7 @@ func TestX86MOVNTICompleteGoRegisterAndAddressClasses(t *testing.T) {
 						text := name + " " + register + "," + destination
 						ins := x86YMMReadSource(t, text)
 						form, known, err := x86MOVNTIProperties(ins.Op, ins, arch)
-						if !known || err != nil || form.trap != (ins.Args[1].Kind == OpReg) || form.source != ins.Args[0] {
+						if !known || err != nil || form.trap != (ins.Args[1].Kind == OpReg) || !reflect.DeepEqual(form.source, ins.Args[0]) {
 							t.Fatal("complete Go Yrl/Yml row lost source shape or trap priority", text, err)
 						}
 						fmt.Fprintf(&source, "TEXT ·Format%d(SB),4,$0-8\n%s\nRET\n", count, text)
