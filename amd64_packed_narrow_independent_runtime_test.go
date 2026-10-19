@@ -130,6 +130,25 @@ static void independent_pack(uint8_t *out,const uint8_t *first,const uint8_t *se
 }
 `
 
+func x86NarrowIndependentAssembly(name string, row x86NarrowOracleRow) string {
+	var assembly strings.Builder
+	fmt.Fprintf(&assembly, "TEXT ·%s(SB),4,$0-52\nMOVQ out+0(FP),AX\nMOVQ a+8(FP),CX\nMOVQ b+16(FP),DX\nMOVQ old+24(FP),R8\nMOVQ mask+32(FP),R9\n", name)
+	if row.bank == "M" {
+		assembly.WriteString("MOVQ (CX),M0\nMOVQ (DX),M1\n")
+	} else {
+		assembly.WriteString("VMOVUPS (CX),Z0\nVMOVUPS (DX),Z1\nVMOVUPS (R8),Z2\nKMOVQ R9,K1\n")
+	}
+	instruction, destination := row.instruction()
+	fmt.Fprintf(&assembly, "LDMXCSR csr+48(FP)\nPUSHQ flags+40(FP)\nPOPFQ\n%s\n", instruction)
+	if row.bank == "M" {
+		fmt.Fprintf(&assembly, "MOVQ %s,(AX)\nEMMS\n", destination)
+	} else {
+		fmt.Fprintf(&assembly, "VMOVUPS Z%s,(AX)\n", destination[1:])
+	}
+	assembly.WriteString("PUSHFQ\nPOPQ R10\nMOVQ R10,64(AX)\nSTMXCSR 72(AX)\nRET\n")
+	return assembly.String()
+}
+
 func TestCrossLinuxRuntimeMatrixX86PackedNarrowIndependentWholeBytes(t *testing.T) {
 	execution := x86FloatCompareExecutionTools(t)
 	rows := x86NarrowOracleRows()
@@ -143,20 +162,7 @@ typedef void (*kernel)(void*,const void*,const void*,const void*,uint64_t,uint64
 	for index, row := range rows {
 		name := fmt.Sprintf("numeric%d", index)
 		fmt.Fprintf(&declarations, "func %s(out *[80]byte,a,b,old *[64]byte,mask,flags uint64,csr uint32)\n", name)
-		fmt.Fprintf(&assembly, "TEXT ·%s(SB),4,$0-52\nMOVQ out+0(FP),AX\nMOVQ a+8(FP),CX\nMOVQ b+16(FP),DX\nMOVQ old+24(FP),R8\nMOVQ mask+32(FP),R9\n", name)
-		if row.bank == "M" {
-			assembly.WriteString("MOVQ (CX),M0\nMOVQ (DX),M1\n")
-		} else {
-			assembly.WriteString("VMOVUPS (CX),Z0\nVMOVUPS (DX),Z1\nVMOVUPS (R8),Z2\nKMOVQ R9,K1\n")
-		}
-		instruction, destination := row.instruction()
-		fmt.Fprintf(&assembly, "LDMXCSR csr+48(FP)\nPUSHQ flags+40(FP)\nPOPFQ\n%s\n", instruction)
-		if row.bank == "M" {
-			fmt.Fprintf(&assembly, "MOVQ %s,(AX)\nEMMS\n", destination)
-		} else {
-			fmt.Fprintf(&assembly, "VMOVUPS Z%s,(AX)\n", destination[1:])
-		}
-		assembly.WriteString("PUSHFQ\nPOPQ R10\nMOVQ R10,64(AX)\nSTMXCSR 72(AX)\nRET\n")
+		assembly.WriteString(x86NarrowIndependentAssembly(name, row))
 		fmt.Fprintf(&main, "extern void %s(void*,const void*,const void*,const void*,uint64_t,uint64_t,uint32_t);\n", name)
 		fmt.Fprintf(&table, "{%s,%d,%d,%t,%d,%d,%d,%t},\n", name, row.width, row.family.inputBytes,
 			row.family.unsigned, row.source, row.alias, row.masking, row.legacy)
