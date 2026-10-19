@@ -28,6 +28,9 @@ type x86SourceRawInstruction struct {
 	args        []Operand
 	vectorBytes int
 	addressBits int // Exact decoded mode; not an address-size or native-entry permission.
+	// Conversion-only physical identity, captured explicitly by the decoder.
+	// A zero value is absent, not an SSE/VEX or non-MMX assertion.
+	packedConversion x86RawPackedConversionIdentity
 }
 
 type x86SourceStackAddress struct {

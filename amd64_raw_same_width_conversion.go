@@ -231,5 +231,6 @@ func decodedX86EVEXSameWidthConversionInstructionWithMemory(code []byte, i, mode
 	return Instr{
 		Op: op, Args: args, Raw: fmt.Sprintf("%s %s", op, strings.Join(rawArgs, ", ")),
 		x86Encoded: half || sqrt, x86SqrtEVEX: sqrt,
+		x86PackedNumericEVEX: properties.op == "VCVTDQ2PS",
 	}, modRMIndex + consumed, true, nil
 }
