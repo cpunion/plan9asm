@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -121,5 +122,35 @@ func TestX86RawCompactPhysicalMode32Masks(t *testing.T) {
 	}
 	if count != 252 {
 		t.Fatal("complete physical compact mask inventory changed", count)
+	}
+}
+
+func TestX86RawCompactDeadInputsCannotBorrowVoidOrBool(t *testing.T) {
+	for _, member := range []string{
+		"VPCOMPRESSB", "VPCOMPRESSW", "VPCOMPRESSD", "VPCOMPRESSQ", "VCOMPRESSPS", "VCOMPRESSPD",
+		"VPEXPANDB", "VPEXPANDW", "VPEXPANDD", "VPEXPANDQ", "VEXPANDPS", "VEXPANDPD",
+	} {
+		for _, memory := range []bool{false, true} {
+			first, last := "X2", "X3"
+			if memory {
+				if strings.Contains(member, "EXPAND") {
+					first = "(SI)"
+				} else {
+					last = "(DI)"
+				}
+			}
+			literal := x86RawNumericalInstruction(t, "amd64", member+" "+first+",K1,"+last)
+			for _, target := range x86RawReturnTargets {
+				for _, declaration := range []string{"func Value()", "func Value(unused bool)"} {
+					for _, api := range []string{"text", "module", "Go"} {
+						source := "TEXT ·Value(SB),4,$0\n" + literal + "RET\n"
+						ir, err := x86ScalarFPBitViewAPI(t, source, declaration, target.arch, target.triple, api)
+						if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+							t.Fatal("raw compact inputs borrowed an implementation zero", target, member, memory, api, err)
+						}
+					}
+				}
+			}
+		}
 	}
 }
