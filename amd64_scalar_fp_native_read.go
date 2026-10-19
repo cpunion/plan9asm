@@ -74,6 +74,13 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 			})
 	}
 	if strictErr == nil && nativeMMX == nil {
+		// Complete numerical bytes do not authenticate the original source.
+		// Keep the existing native/frame owners independent, but apply the
+		// same restriction-only replay before ordinary strict success too.
+		// This branch returns, so the later paired path never repeats it.
+		if len(fn.X86RawText) == 0 && fn.x86SourceStack == nil && fn.x86FixedLocal == nil {
+			return x86LoweredNumericalProducerReplay(fn, arch)
+		}
 		return nil
 	}
 	if selected, err := c.checkRawLogicalScalarResult(); selected {
