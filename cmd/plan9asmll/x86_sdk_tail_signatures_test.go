@@ -143,6 +143,24 @@ func TestX86SDKDirectTailSignaturesUseActualCompleteDeclarations(t *testing.T) {
 	}
 }
 
+func TestX86SDKDirectTailInventoryRetainsOriginalABISelectors(t *testing.T) {
+	for _, arch := range []string{"386", "amd64"} {
+		for _, selector := range []string{"", "<ABIInternal>"} {
+			t.Run(arch+"/"+selector, func(t *testing.T) {
+				assembly := strings.ReplaceAll(x86SDKTailDeclarationASM, "·First(SB)", "·First"+selector+"(SB)")
+				pkg, file, options := x86SDKTailTypedDeclarationFixture(t, arch, x86SDKTailDeclarationGo, assembly)
+				signatures, sizes, needed, err := x86SDKDirectTailDeclarationInventory(pkg, file, options)
+				if err != nil || !needed || len(signatures) != 3 || len(sizes) != 3 {
+					t.Fatal("original ABI selector hid an actual declaration or invented a private ABI", needed, err)
+				}
+				if file.Funcs[0].Sym != "·First"+selector {
+					t.Fatal("declaration inventory rewrote the original ABI selector")
+				}
+			})
+		}
+	}
+}
+
 func TestX86SDKDirectTailSignaturesNeverBorrowRootForOrdinaryTarget(t *testing.T) {
 	for _, arch := range []string{"386", "amd64"} {
 		for _, role := range []string{"missing-declaration", "wrong-target-transport", "changed-root", "extra-entry", "missing-root"} {
