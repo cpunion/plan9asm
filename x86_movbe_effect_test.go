@@ -120,6 +120,12 @@ func TestX86MOVBERawIdentityCannotSupplyPointerOrNumericalBytes(t *testing.T) {
 						control.change(&changed)
 						state := x86ResultState{flags: x86ByteFlagsAll}
 						state.pointerGP[0], state.gp[3] = true, 0xff
+						if control.name == "origin" {
+							// With every physical marker absent this is ordinary
+							// named source, not a malformed encoded instruction.
+							// Numerical AX still cannot invent a native pointer.
+							state.pointerGP[0], state.gp[0] = false, 0xff
+						}
 						before := state.clone()
 						accepted, _ := x86LoweredMOVBEResultStep(changed, &state, nil, 0, arch)
 						if accepted || x86RawMOVBESource(changed, arch) || !reflect.DeepEqual(before, state) {
