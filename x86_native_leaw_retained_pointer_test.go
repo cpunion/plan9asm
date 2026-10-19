@@ -48,7 +48,13 @@ func x86NativeLEAWRetainedPointerSource(arch, variant, control string) (string, 
 	if control == "nonadjacent" {
 		source.WriteString("NOP\n")
 	}
-	fmt.Fprintf(&source, "%s AX,1(DI)\nPUSHF%s\nPOP%s CX\nANDL $0xcd5,CX\nMOVL CX,32(DI)\nCLD\nRET\n", move, suffix, suffix)
+	fmt.Fprintf(&source, "%s AX,1(DI)\n", move)
+	if control == "reuse" {
+		fmt.Fprintf(&source, "%s AX,9(DI)\n", move)
+	} else if control == "dereference" {
+		source.WriteString("MOVB (AX),BX\n")
+	}
+	fmt.Fprintf(&source, "PUSHF%s\nPOP%s CX\nANDL $0xcd5,CX\nMOVL CX,32(DI)\nCLD\nRET\n", suffix, suffix)
 	return source.String(), "func Retain(out *[48]byte,base,old *byte,index uint32)\n"
 }
 
@@ -105,7 +111,7 @@ func TestX86NativeLEAWRetainedNumericUpperControls(t *testing.T) {
 func TestX86NativeLEAWRetainedPointerNeedsOldIdentityAndAdjacency(t *testing.T) {
 	for _, arch := range []string{"386", "amd64"} {
 		for _, variant := range []string{"Direct", "Copied", "Alias"} {
-			for _, control := range []string{"unknown old", "foreign address", "nonadjacent"} {
+			for _, control := range []string{"unknown old", "foreign address", "nonadjacent", "reuse", "dereference"} {
 				source, declaration := x86NativeLEAWRetainedPointerSource(arch, variant, control)
 				triple := x86AddressMemoryTargets(arch)[0]
 				x86LEAActualTargetGoObject(t, arch, triple, source)
