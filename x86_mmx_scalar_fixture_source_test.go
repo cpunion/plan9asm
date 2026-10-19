@@ -1,6 +1,10 @@
 package plan9asm
 
-import "testing"
+import (
+	"fmt"
+	"strings"
+	"testing"
+)
 
 const x86LegacyPackedLogicalMMXRuntimeSource = `TEXT legacypackedlogicalsemantics(SB),$0-24
 	MOVQ out+0(FP), AX
@@ -47,4 +51,39 @@ func TestX86MMXOriginalScalarLogicalAndPADDDObjects(t *testing.T) {
 			x86MMXOriginalFixtureObjects(t, fixture.source, fixture.declaration)
 		})
 	}
+}
+
+func TestX86MMXAverageOriginalFixtureObjects(t *testing.T) {
+	var rows []x86AverageNumericCase
+	for _, row := range x86AverageNumericCases() {
+		if row.mmx {
+			rows = append(rows, row)
+		}
+	}
+	if len(rows) != 4 {
+		t.Fatal("complete original MMX average denominator changed", len(rows))
+	}
+	source, _, _ := x86AverageNumericFixture(t, rows)
+	var declarations strings.Builder
+	for index := range rows {
+		fmt.Fprintf(&declarations, "func average%d(out,a,b *byte,mask,flags uint64)\n", index)
+	}
+	x86MMXOriginalFixtureObjects(t, source, declarations.String())
+}
+
+func TestX86MMXWrappingAddOriginalFixtureObjects(t *testing.T) {
+	var source, declarations strings.Builder
+	count := 0
+	for _, op := range []string{"PADDB", "PADDW", "PADDL"} {
+		for _, input := range []string{"M1", "(BX)"} {
+			name := fmt.Sprintf("Add%d", count)
+			source.WriteString(x86PackedAddMMXAssembly(name, op, input))
+			fmt.Fprintf(&declarations, "func %s(out,a,b *byte,mask uint64)\n", name)
+			count++
+		}
+	}
+	if count != 6 {
+		t.Fatal("complete original MMX wrapping add denominator changed", count)
+	}
+	x86MMXOriginalFixtureObjects(t, source.String(), declarations.String())
 }
