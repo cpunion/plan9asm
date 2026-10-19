@@ -57,7 +57,9 @@ func TestX86RawPackedSignRejectsFormsOutsideGoTable(t *testing.T) {
 		mutate func([]byte) []byte
 	}{
 		{"wrong prefix", func(code []byte) []byte { code[2] &^= 3; return code }},
-		{"wrong width", func(code []byte) []byte { code[2] |= 0x80; return code }},
+		{"EVEX outside SIGN", func([]byte) []byte {
+			return encodeX86EVEXPackedWordMultiply(2, 0x08, 0, 0, false, false, 4, 3, 2)
+		}},
 		{"address override", func(code []byte) []byte { return append([]byte{0x67}, code...) }},
 		{"missing ModRM", func(code []byte) []byte { return code[:4] }},
 		{"high register on 386", func(code []byte) []byte { code[1] &^= 0x80; return code }},
