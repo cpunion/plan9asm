@@ -15,16 +15,23 @@ func x86ResultTernaryLogicContinuationStep(ins Instr, state *x86ResultState, own
 	if err != nil {
 		return false, true
 	}
+	if nativeRead && !x86ResultNamedPredicateInstruction(ins) {
+		return false, true
+	}
+	return x86ResultTernaryLogicInputs(ins, form, state, owned, arch, nativeRead), true
+}
+
+func x86ResultTernaryLogicInputs(ins Instr, form x86TernaryLogicForm, state *x86ResultState, owned []bool, arch string, nativeRead bool) bool {
 	if form.mask >= 0 {
 		index, _ := amd64ParseKReg(ins.Args[form.mask].Reg)
 		if !state.masks[index] {
-			return false, true
+			return false
 		}
 	}
 	// Fault suppression and truth-table independence never grant authority to
 	// read an unknown address or a partially described memory tuple.
 	if form.memory >= 0 && !x86ResultReadWithNativeContinuation(ins, ins.Args[form.memory], int64(form.memoryBytes), state, owned, arch, nativeRead) {
-		return false, true
+		return false
 	}
 	known := x86CallerVectorByteMask(int64(form.byteWidth))
 	dependencies := form.dependencies()
@@ -40,5 +47,5 @@ func x86ResultTernaryLogicContinuationStep(ins Instr, state *x86ResultState, own
 	}
 	destination, _ := amd64VectorRegisterIndex(ins.Args[form.destination].Reg, form.byteWidth)
 	state.writeVector(destination, form.byteWidth, known, false)
-	return true, true
+	return true
 }
