@@ -89,3 +89,39 @@ func TestX86AccumulatorSignExtendVoidNeedsSource(t *testing.T) {
 		}
 	}
 }
+
+func TestX86AccumulatorSignExtendInitializedFiveTargetObjects(t *testing.T) {
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM22 llc required")
+	}
+	for _, target := range x86RawReturnTargets {
+		t.Run(target.triple, func(t *testing.T) {
+			word, move, typ := 8, "MOVQ", "uint64"
+			if target.arch == "386" {
+				word, move, typ = 4, "MOVL", "uint32"
+			}
+			var source, declarations strings.Builder
+			for _, row := range x86AccumulatorSignExtendOracle {
+				if target.arch == "386" && row.write == 8 {
+					continue
+				}
+				fmt.Fprintf(&declarations, "func Value%s() %s\n", row.op, typ)
+				fmt.Fprintf(&source, "TEXT ·Value%s(SB),4,$0-%d\n%s $-1,AX\n%s $7,DX\n%s\n%s %s,ret+0(FP)\nRET\n",
+					row.op, word, move, move, row.op, move, row.destination)
+			}
+			x86LEAActualTargetGoObject(t, target.arch, target.triple, source.String())
+			for _, api := range []string{"text", "module", "Go"} {
+				ir, err := x86ScalarFPBitViewAPI(t, source.String(), declarations.String(), target.arch, target.triple, api)
+				if err != nil {
+					t.Fatal("initialized implicit-source family lost its public result", api, err)
+				}
+				for _, text := range []string{ir, x86DwordProductIROptimize(t, ir)} {
+					for _, level := range []string{"-O0", "-O2"} {
+						x86PackedStringCompileObject(t, llc, target.triple, text, level)
+					}
+				}
+			}
+		})
+	}
+}
