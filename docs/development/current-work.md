@@ -39,7 +39,10 @@ including the original CMOV FP-span Go/LLVM execution and portable IFMA/lookup
 C oracles. Portable integer values are not native AVX512 qualification.
 
 The downloaded Linux floating-compare CPU receipt reports `AVX512F=0`,
-`AVX512VL=0` and `XCR0=7`. That runner cannot qualify the new complete
+`AVX512VL=0` and `XCR0=7`. Some Windows root owners report F/VL=1 and
+enabled extended state; other Windows owners report F/VL=0. Do not infer
+either Linux capability or stable runner allocation from those Windows
+receipts. The recorded Linux runner cannot qualify the new complete
 AVX512 conversion, floating-helper or physical 512-bit/DF oracles. Keep the
 required capability checks and native owners; object compilation and portable
 values must not replace original-opcode execution. A capable execution
@@ -89,6 +92,28 @@ Current-head coverage and complete CI remain unqualified.
 These scopes overlap. Their counts cannot be added into a whole-suite percentage.
 Each receipt binds its own unchanged source and tools; all listed three-lane
 cohorts have zero failed, skipped or incomplete terminals.
+
+Recent current-Go-only receipts are separate, overlapping scopes, not a
+three-lane or native execution certificate:
+
+- `4f0119031`: raw moves, physical EVEX identity and complete return inputs,
+  33 roots / 3,322 children; integer min/max, 25 roots / 472 children.
+- `c79436c1e`: six original packed-compare literal/RIP roots / 39 children,
+  following `5a43e3e10`'s complete thirteen-root / 1,770-child raw input matrix.
+- `0733cd2fc`: reciprocal/legacy scalar moves and genuine SDK owner controls,
+  12 roots / 467 children. The broader SDK-priority regression at `43a78b514`
+  still fails; its correction is awaiting complete verification.
+- `84e8e7704`: complete LDDQU grammar, initialized five-target objects and
+  physical decoder limits, eight roots / 45 children. `bc7b77bae` also passes
+  these eight roots plus the strict horizontal assertion on actual Go1.20.
+- `51ffd142a`: twenty-name raw broadcast input family, fifteen roots /
+  2,531 children. Original value/fault/literal regressions remain required.
+
+The integrated reduction run at `8e6e5a6ba` passes 34 of 35 roots and fails
+one old whole-module assertion. Its isolated correction at `bc7b77bae` passes
+with actual Go1.20; the complete integrated union remains to be rerun.
+Do not turn these receipts into online passes or claim their unfinished
+minimum/race, original native, coverage or benchmark gates have completed.
 
 | Snapshot | Complete focused evidence | Important limits |
 |---|---|---|
@@ -168,9 +193,11 @@ Evidence is not tracked repository data.
    a current-head certificate. Half-vector values/objects at `063ef9c19`
    pass 19 roots; the separate indirect ownership repair at `d25f0e9fd`
    passes three roots and 219 children. Full native DF/512-bit execution is
-   still required. Dot/horizontal and raw-move candidates still fail their
-   first complete checks; integer min/max physical mode32 is under repair.
-   Continue scalar reciprocal, CLMUL, shuffle, ternary, raw compare/broadcast,
+   still required. Complete raw-move, min/max, raw-compare, reciprocal and
+   broadcast focused matrices now pass as listed above; their remaining
+   integrated and native qualifications must stay explicit. The new reduction
+   native driver and broader SDK-priority correction are awaiting verification.
+   Continue native LEA address observations, CLMUL, shuffle, ternary,
    physical SP/BP/g and undefined-shift observations. Retain original source
    and separate format objects, initialized values and ABI authority.
 5. Preserve the separately qualified logical integer return batch
