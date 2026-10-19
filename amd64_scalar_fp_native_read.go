@@ -87,6 +87,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 	}
 	boundRawClear := false
 	for _, ins := range fn.Instrs {
+		if x86RawAccumulatorSignExtendSource(ins, arch) {
+			continue // Exact implicit GP arithmetic preserves its independent input obligations.
+		}
 		if x86RawDwordProductResultSource(ins, arch) {
 			continue // Exact decoded integer inputs retain their own mask/address obligations.
 		}
@@ -156,6 +159,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		}
 		if accepted, known := x86ResultNumericalReadStep(ins, state, owned, resultOffset, arch); known {
 			return accepted // A checked mutable SB source keeps its own lifetime and byte effects.
+		}
+		if accepted, known := x86LoweredAccumulatorSignExtendResultStep(ins, state, owned, resultOffset, arch); known {
+			return accepted
 		}
 		if accepted, known := x86LoweredDwordProductResultStep(ins, state, owned, arch); known {
 			return accepted
