@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"go/types"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -128,6 +129,53 @@ func TestX86DwordProductRawVoidCannotInventInputs(t *testing.T) {
 				ir, err := x86ScalarFPBitViewAPI(t, source, "func Value()", target.arch, target.triple, api)
 				if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
 					t.Fatal("raw Void opcode borrowed zeroed implementation registers", instruction, target.triple, api, err)
+				}
+			}
+		}
+	}
+}
+
+func TestX86DwordProductRawSourceCannotBeRebound(t *testing.T) {
+	for _, name := range []string{"VPMULDQ", "VPMULUDQ"} {
+		for _, instruction := range []string{
+			name + " X0,X1,X2", name + " Y0,Y1,Y2", name + " Z0,Z1,K1,Z2",
+			name + ".BCST.Z 8(AX),Y1,K1,Y2",
+		} {
+			code := x86OrderingHintGoBytes(t, "amd64", "TEXT original(SB),4,$0-0\n"+instruction+"\nRET\n")
+			file, err := Parse(ArchAMD64, "TEXT Value(SB),4,$0-0\n"+x86DwordProductDirectives(code[:len(code)-1])+"RET\n")
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, arch := range []string{"386", "amd64"} {
+				normalized, err := normalizeX86RawFile(file, arch)
+				if err != nil {
+					t.Fatal(err)
+				}
+				ins := normalized.Funcs[0].Instrs[1]
+				if !x86RawDwordProductResultSource(ins, arch) {
+					t.Fatal("fresh original physical source was not bound", instruction, arch)
+				}
+				for label, change := range map[string]func(*Instr){
+					"absent-origin": func(ins *Instr) { ins.x86SourceRaw = nil },
+					"opcode": func(ins *Instr) {
+						ins.Op = Op(strings.Replace(string(ins.Op), name, map[string]string{"VPMULDQ": "VPMULUDQ", "VPMULUDQ": "VPMULDQ"}[name], 1))
+					},
+					"destination": func(ins *Instr) { ins.Args[len(ins.Args)-1].Reg = "X3" },
+					"address":     func(ins *Instr) { ins.x86AddressBits = 32 },
+					"segment":     func(ins *Instr) { ins.x86SegmentPrefix = 0x64 },
+					"literal":     func(ins *Instr) { ins.x86RIPLiteral = true },
+				} {
+					t.Run(arch+"/"+instruction+"/"+label, func(t *testing.T) {
+						changed := ins
+						changed.Args = append([]Operand(nil), ins.Args...)
+						change(&changed)
+						state := x86ResultState{flags: x86ByteFlagsAll}
+						before := state.clone()
+						accepted, known := x86LoweredDwordProductResultStep(changed, &state, nil, arch)
+						if accepted || !known || x86RawDwordProductResultSource(changed, arch) || !reflect.DeepEqual(before, state) {
+							t.Fatal("changed raw source borrowed a paired numerical continuation", accepted, known)
+						}
+					})
 				}
 			}
 		}
