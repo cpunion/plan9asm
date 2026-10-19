@@ -117,9 +117,45 @@ func TestX86RawScalarObserverOriginsAndEveryInputByte(t *testing.T) {
 						if next.gp[3] != want {
 							t.Fatal("wrong exact GP write/zero-extension", next.gp[3], want)
 						}
+						before.gp[3] = want
+						if !mask && !strings.HasPrefix(row, "POPCNT") {
+							before.flags = x86ByteFlagCF | x86ByteFlagZF
+						}
+						if !reflect.DeepEqual(before, next) {
+							t.Fatal("count/mask changed unrelated state or retained undefined FLAGS")
+						}
 					}
 				})
 			}
+		}
+	}
+}
+
+func TestX86RawScalarObserverDoesNotGrantMemoryOrMMXRoles(t *testing.T) {
+	for _, arch := range []string{"386", "amd64"} {
+		for _, row := range []string{"POPCNTW (DI),BX", "LZCNTL (DI),BX", "TZCNTL (DI),BX", "PMOVMSKB M1,BX"} {
+			file, err := Parse(ArchAMD64, "TEXT Value(SB),4,$0-0\n"+x86RawNumericalInstruction(t, arch, row)+"RET\n")
+			if err != nil {
+				t.Fatal(err)
+			}
+			file, err = normalizeX86RawFile(file, arch)
+			if err != nil {
+				t.Fatal(err)
+			}
+			ins := file.Funcs[0].Instrs[1]
+			t.Run(arch+"/"+row, func(t *testing.T) {
+				state := x86ResultState{flags: x86ByteFlagsAll}
+				state.gp[7] = 0xff        // A numerical DI is not an incoming pointer.
+				state.nativeMMX[1] = 0xff // Bytes alone are not an x87/MMX owner.
+				before := state.clone()
+				accepted, known := x86LoweredRawScalarObserverStep(ins, &state, nil, 0, arch)
+				if accepted || !known || !reflect.DeepEqual(before, state) {
+					t.Fatal("raw count/mask acquired missing native address or physical MMX authority", accepted, known)
+				}
+				if strings.HasPrefix(row, "PMOVMSKB") && x86RawScalarObserverSource(ins, arch) {
+					t.Fatal("ordinary numerical source allowed physical MMX input")
+				}
+			})
 		}
 	}
 }
