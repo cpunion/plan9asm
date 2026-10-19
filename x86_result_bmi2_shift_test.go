@@ -147,3 +147,121 @@ func TestX86BMI2ResultInitializedFiveTargetObjects(t *testing.T) {
 		})
 	}
 }
+
+func TestX86BMI2ResultRawOriginCannotBeRebound(t *testing.T) {
+	for _, arch := range []string{"386", "amd64"} {
+		for _, op := range x86BMI2ResultNames {
+			file, err := Parse(ArchAMD64, "TEXT Value(SB),4,$0-0\n"+
+				x86BMI2ResultInstruction(t, arch, op, "BX", true)+"RET\n")
+			if err != nil {
+				t.Fatal(err)
+			}
+			file, err = normalizeX86RawFile(file, arch)
+			if err != nil {
+				t.Fatal(err)
+			}
+			ins := file.Funcs[0].Instrs[1]
+			if !x86RawBMI2ShiftSource(ins, arch) {
+				t.Fatal("original shift/rotate lost its complete source binding", arch, op)
+			}
+			for _, control := range []struct {
+				name   string
+				change func(*Instr)
+			}{
+				{"origin", func(ins *Instr) { ins.x86SourceRaw = nil }},
+				{"opcode", func(ins *Instr) {
+					ins.Op = "SHLXL"
+					if strings.HasPrefix(op, "SHLX") {
+						ins.Op = "SARXL"
+					} else if strings.HasPrefix(op, "RORX") {
+						ins.Op = "RORXQ"
+						if ins.x86SourceRaw.op == "RORXQ" {
+							ins.Op = "RORXL"
+						}
+					}
+				}},
+				{"operand", func(ins *Instr) { ins.Args[1].Reg = DX }},
+				{"source-operand", func(ins *Instr) { ins.x86SourceRaw.args[1].Reg = DX }},
+				{"vector", func(ins *Instr) { ins.x86VectorBytes = 16 }},
+				{"address", func(ins *Instr) { ins.x86AddressBits = 32 }},
+				{"override", func(ins *Instr) { ins.x86UnboundAddressOverride = true }},
+				{"segment", func(ins *Instr) { ins.x86SegmentPrefix = 0x64 }},
+				{"literal", func(ins *Instr) { ins.x86RIPLiteral = true }},
+			} {
+				t.Run(arch+"/"+op+"/"+control.name, func(t *testing.T) {
+					changed := ins
+					changed.Args = append([]Operand(nil), ins.Args...)
+					origin := *ins.x86SourceRaw
+					origin.args = append([]Operand(nil), origin.args...)
+					changed.x86SourceRaw = &origin
+					control.change(&changed)
+					state := x86ResultState{flags: x86ByteFlagsAll}
+					for i := range state.gp {
+						state.gp[i] = 0xff
+					}
+					before := state.clone()
+					accepted, known := x86LoweredBMI2ShiftResultStep(changed, &state, nil, 0, arch)
+					if accepted || known != (control.name != "origin") ||
+						x86RawBMI2ShiftSource(changed, arch) || !reflect.DeepEqual(state, before) {
+						t.Fatal("changed source acquired raw shift/rotate authority", accepted, known)
+					}
+				})
+			}
+		}
+	}
+}
+
+func TestX86BMI2ResultEveryInputByteBeforeAliasedWrite(t *testing.T) {
+	for _, arch := range []string{"386", "amd64"} {
+		for _, op := range x86BMI2ResultNames {
+			for _, raw := range []bool{false, true} {
+				file, err := Parse(ArchAMD64, "TEXT Value(SB),4,$0-0\n"+
+					x86BMI2ResultInstruction(t, arch, op, "AX", raw)+"\nRET\n")
+				if err != nil {
+					t.Fatal(err)
+				}
+				file, err = normalizeX86RawFile(file, arch)
+				if err != nil {
+					t.Fatal(err)
+				}
+				ins := file.Funcs[0].Instrs[1]
+				width := 4
+				if arch == "amd64" && strings.HasSuffix(op, "Q") {
+					width = 8
+				}
+				for missing := -2; missing < width; missing++ {
+					t.Run(fmt.Sprintf("%s/%s/raw=%t/missing=%d", arch, op, raw, missing), func(t *testing.T) {
+						state := x86ResultState{flags: x86ByteFlagsAll}
+						state.gp[0] = (1 << uint(width)) - 1
+						state.gp[1] = 1 // Only the count's low byte is consumed.
+						if missing >= 0 {
+							state.gp[0] &^= 1 << uint(missing)
+						} else if missing == -1 {
+							state.gp[1] = 0
+							if strings.HasPrefix(op, "RORX") {
+								return // Immediate rotates have no register-count input.
+							}
+						}
+						before := state.clone()
+						accepted := false
+						if raw {
+							var known bool
+							accepted, known = x86LoweredBMI2ShiftResultStep(ins, &state, nil, 0, arch)
+							if !known {
+								t.Fatal("exact raw input not owned by its paired transfer")
+							}
+						} else {
+							accepted = x86ResultTransfer(ins, &state, nil, 0, arch)
+						}
+						if accepted != (missing == -2) || !accepted && !reflect.DeepEqual(state, before) {
+							t.Fatal("aliased destination hid missing data/count or mutated rejected state", accepted)
+						}
+						if accepted && (state.gp[0] != 0xff || state.flags != x86ByteFlagsAll) {
+							t.Fatal("BMI2 failed zero extension or FLAGS preservation", state.gp[0], state.flags)
+						}
+					})
+				}
+			}
+		}
+	}
+}
