@@ -110,6 +110,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		if x86RawPackedIntegerCompareSource(ins, arch) {
 			continue // Exact legacy/VEX/EVEX data retains every input, mask and paired native access obligation.
 		}
+		if x86RawBroadcastSource(ins, arch) {
+			continue // Exact scalar/block/K-data source retains every numerical and native E6 input obligation.
+		}
 		if x86RawImmediatePackedCompareSource(ins, arch) {
 			continue // Exact immediate/data identity supplies no entry or missing numerical/memory input.
 		}
@@ -453,6 +456,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		}
 		if accepted, known := x86ResultVectorCompareStepWithRead(ins, state, owned, arch, true); known {
 			return accepted // Complete vector/K-result compares retain their exact native source accesses.
+		}
+		if accepted, known := x86LoweredRawBroadcastStep(ins, state, owned, arch); known {
+			return accepted // Exact raw scalar/block/K-data forms share only their paired typed E6 effects.
 		}
 		if len(ins.Args) != 0 && ins.Args[0].Kind == OpMem && ins.Args[0].Mem.Sym == "" {
 			if accepted, known := x86ResultBroadcastStepWithRead(ins, state, owned, arch, true); known {
