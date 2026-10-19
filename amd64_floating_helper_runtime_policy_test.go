@@ -128,3 +128,105 @@ func TestX86FloatingHelperRuntimeNativeOwnerAndPipelinePolicy(t *testing.T) {
 		})
 	}
 }
+
+func TestX86FloatingHelperRuntimeNativeDriverPolicy(t *testing.T) {
+	data, err := os.ReadFile("amd64_floating_helper_runtime_test.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	positions := token.NewFileSet()
+	file, err := parser.ParseFile(positions, "amd64_floating_helper_runtime_test.go", data, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	functions := make(map[string]*ast.FuncDecl)
+	for _, declaration := range file.Decls {
+		if function, ok := declaration.(*ast.FuncDecl); ok {
+			functions[function.Name.Name] = function
+		}
+	}
+	tools := functions["x86FloatingHelperRuntimeTools"]
+	pipelines := functions["x86FloatingHelperRunNativePipelines"]
+	if tools == nil || pipelines == nil {
+		t.Fatal("required native tools or complete pipeline driver missing")
+	}
+	calls := func(function *ast.FuncDecl) map[string]int {
+		result := make(map[string]int)
+		ast.Inspect(function.Body, func(node ast.Node) bool {
+			if call, ok := node.(*ast.CallExpr); ok {
+				switch target := call.Fun.(type) {
+				case *ast.Ident:
+					result[target.Name]++
+				case *ast.SelectorExpr:
+					result[target.Sel.Name]++
+				}
+			}
+			return true
+		})
+		return result
+	}
+	toolsCalls, pipelineCalls := calls(tools), calls(pipelines)
+	if toolsCalls["x86FloatCompareRuntimeTools"] != 1 || toolsCalls["compileC"] != 1 || toolsCalls["run"] != 1 ||
+		toolsCalls["Skip"] != 1 || pipelineCalls["compileAndRunLLVM"] != 1 ||
+		pipelineCalls["x86PackedShiftOptimizedIR"] != 1 || pipelineCalls["Run"] != 1 || pipelineCalls["Skip"] != 0 {
+		t.Fatal("native preflight or actual compiler/run obligations changed", toolsCalls, pipelineCalls)
+	}
+	if len(tools.Body.List) < 3 {
+		t.Fatal("native host and EVEX checks missing")
+	}
+	host, ok := tools.Body.List[1].(*ast.IfStmt)
+	if !ok {
+		t.Fatal("native host exclusion is not an explicit platform boundary")
+	}
+	condition := string(data[positions.Position(host.Cond.Pos()).Offset:positions.Position(host.Cond.End()).Offset])
+	if condition != `runtime.GOOS != "linux" || runtime.GOARCH != "amd64"` {
+		t.Fatal("native platform exclusion became a CPU/tool skip", condition)
+	}
+	var actual []string
+	ast.Inspect(pipelines.Body, func(node ast.Node) bool {
+		loop, ok := node.(*ast.RangeStmt)
+		if !ok {
+			return true
+		}
+		rows, ok := loop.X.(*ast.CompositeLit)
+		if !ok {
+			t.Fatal("native execution pipelines lost their complete explicit inventory")
+		}
+		for _, element := range rows.Elts {
+			row, ok := element.(*ast.CompositeLit)
+			if !ok {
+				t.Fatal("native pipeline row is not a complete fixture")
+			}
+			values := make(map[string]string)
+			for _, field := range row.Elts {
+				pair, ok := field.(*ast.KeyValueExpr)
+				if !ok {
+					t.Fatal("native pipeline lacks explicit axes")
+				}
+				key, ok := pair.Key.(*ast.Ident)
+				if !ok {
+					t.Fatal("native pipeline key is not bound")
+				}
+				values[key.Name] = string(data[positions.Position(pair.Value.Pos()).Offset:positions.Position(pair.Value.End()).Offset])
+			}
+			actual = append(actual, values["name"]+"/"+values["backend"]+"/"+values["optimizeIR"])
+		}
+		return true
+	})
+	want := []string{`"backend_O0"/"-O0"/`, `"backend_O2"/"-O2"/`, `"IR_O2/backend_O2"/"-O2"/true`}
+	if strings.Join(actual, "\n") != strings.Join(want, "\n") {
+		t.Fatal("native execution narrowed or changed backend/IR optimization axes", actual)
+	}
+	for _, required := range []string{
+		`x86FloatCompareRuntimeTools(t, x86FloatCompareEVEX)`,
+		`if (!f || !dq || !vl || !osxsave || (xcr0&0xe6)!=0xe6) return 1;`,
+		`if (!original_dq()) return 2;`,
+		`vfpclassps $2,%%zmm0,%%k1;`,
+		`vfpclassps $2,%%xmm0,%%k1;`,
+		`vfpclasssd $2,%%xmm0,%%k1;`,
+	} {
+		if !strings.Contains(string(data), required) {
+			t.Fatal("native CPU, original opcode or OS state obligation missing", required)
+		}
+	}
+}
