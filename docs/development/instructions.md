@@ -44,6 +44,14 @@ conversion/SQRT, preserving the actual opcode, memory tuple and full 32-lane
 mask. Exact raw identity only permits the paired lowering result; it grants
 no caller, standalone query, physical entry or memory-backing authority.
 
+Raw FP16 binary arithmetic shares the existing floating binary grammar and
+byte dependencies. Keep all twelve packed/scalar members, full 32-lane masks,
+scalar upper bytes from the second source, and old destination bytes only for
+merging. MIN/MAX SAE and arithmetic ER have distinct native controls. Exact
+decoded identity gates the paired lowering continuation, including Void;
+unbound original format objects remain separate from initialized public objects.
+Portable numerical/guard-page execution does not certify native FP16 execution.
+
 Treat an external-library failure as a counterexample to the systematic
 coverage mechanism, not only as a package-specific regression. Identify where
 the independent Go rules, typed grammar, lowering/effect consumers or executed

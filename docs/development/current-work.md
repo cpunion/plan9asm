@@ -22,6 +22,8 @@ idle worktrees; do not create another for routine work.
 
 | Code snapshot | Completed evidence | Limits |
 |---|---|---|
+| `1cafc5b2f` | Raw FP16 binary and retained families: 53 roots / 3,157 children pass current Go, actual Go1.20 and race; identical 3,210 terminals, zero fail/skip/incomplete | All twelve raw members, 450 independent physical shapes on five targets through three APIs and IR/backend O0/O2; original opcode/control/mask bytes, not native execution |
+| Same snapshot | All thirteen final gates pass; exact original 167-root replay has 75 pass / 3 fail / 89 explicit host skips, unchanged source/tools | Original FP16 binary format root now passes with no regressions; complete CI and native FP16 hardware execution remain separate requirements |
 | `4acf97d89` | Raw FP16 FMA and retained conversion/SQRT families: 112 roots / 5,475 children pass current Go, actual Go1.20 and race; identical 5,587 terminals, zero fail/skip/incomplete | All thirty raw FMA members, 1,134 independent physical shapes on five targets through three APIs and IR/backend O0/O2; exact opcode/control/mask bytes, not native execution |
 | Same snapshot | All thirteen final gates pass; exact original 167-root replay has 74 pass / 4 fail / 89 explicit host skips, unchanged source/tools | Original FP16 FMA portable runtime now passes with no regressions; native FP16 hardware execution and complete CI remain separate requirements |
 | `bb85d27b3` | Raw FP16 SQRT and retained conversion/named-SQRT families: 82 roots / 1,934 children pass current Go, actual Go1.20 and race; identical 2,016 terminals, zero fail/skip/incomplete | Fifty independent masked FP16 shapes on five x86 targets through three APIs and IR/backend O0/O2; exact native opcode/control bytes and full 32-lane masks, not native execution |
@@ -101,7 +103,7 @@ See earlier checkpoints in Git rather than reconstructing counts by subtraction.
 
 ## Exact failure replay and online CI
 
-The latest local diagnostic at `4acf97d89` selects exactly the original CI's
+The latest local diagnostic at `1cafc5b2f` selects exactly the original CI's
 167 failed root names. One sealed Go test process ran the complete set,
 instead of repeatedly linking the same large test executable.
 All inventories, started/terminal identities and before/after source, SDK, LLVM
@@ -128,7 +130,17 @@ and environment observations match. This is not the canonical isolated CI runner
 | Previous batched replay, `ef3e886d3` | 70 | 8 | 89 | 0 / 0 |
 | Previous batched replay, `83b656042` | 72 | 6 | 89 | 0 / 0 |
 | Previous batched replay, `bb85d27b3` | 73 | 5 | 89 | 0 / 0 |
-| Latest batched replay, `4acf97d89` | 74 | 4 | 89 | 0 / 0 |
+| Previous batched replay, `4acf97d89` | 74 | 4 | 89 | 0 / 0 |
+| Latest batched replay, `1cafc5b2f` | 75 | 3 | 89 | 0 / 0 |
+
+Raw FP16 binary arithmetic now shares complete typed input/control grammar and
+the existing native emitter. Source bytes, masks and merge inputs remain required
+even for Void. Scalar upper bytes come from the second source; zeroing removes
+only the destination merge dependency. All 450 independent physical forms retain
+native object controls. The separate 84-function portable oracle covers values,
+NaN/signed-zero MIN/MAX, high mask bits, inactive access and upper aliases.
+Original unbound formats retain actual Go/emitter objects and public Context;
+their corrected expectations are not new whole-source translation successes.
 
 Raw FP16 FMA reuses the complete typed FMA family and a shared native
 three-operand emitter. All three inputs, including old destination under .Z,
@@ -289,11 +301,15 @@ before changing implementation or claiming a speedup. Do not relax budgets.
    not an earlier successful preflight, to choose each next class.
    The enqueue batch is qualified at `2c112ef6e`; static/segment RMW follows
    at `ef3e886d3`, six FP16 floating conversions at `83b656042`, and FP16 SQRT
-   at `bb85d27b3`, followed by raw FP16 FMA at `4acf97d89`.
-   The exact four failures are FP16 binary arithmetic, two runtime386
-   source fixtures and one x87 compare root. Repair each
+   at `bb85d27b3`, followed by raw FP16 FMA at `4acf97d89` and binary arithmetic
+   at `1cafc5b2f`. The exact three failures are two runtime386 source fixtures
+   and one x87 compare root. Repair each
    complete rule class with original Go/emitter controls and independently
    initialized public programs; do not weaken source/data or entry proofs.
+   The local `codex/pr40-mode32-stack-correlation-20261019` branch retains
+   unpublished independent W/L FLAGS-copy, B/W/L subword, negative stack and
+   logical AX-result tests. Establish RED before implementing their shared
+   state rule; do not publish this test-only branch as a qualified repair.
 3. Rerun the unchanged complete standard-library corpus and benchmark after
    relevant source repairs. Do not convert Context into successful compilation.
    A valid encoding grants no caller frame, memory ownership or ABI transport.
@@ -309,6 +325,20 @@ develop in an existing idle worktree. Commit and preserve RED before repair.
 
 Resolve worktree locations with `git worktree list`. Ignored receipts include:
 
+- `fp16-binary-qualified-1cafc5b2.json` and `fp16-binary-final-gates-1cafc5b2/`:
+  complete 53-root three-lane cohort, identical 3,210-terminal unions and all
+  thirteen gates. Preserve RED `a15d65d5`, first-green `32c1f749`, and the failed
+  `56d63ca2` qualification (one original embedded-control format contract).
+- `latest-failure-batch-1cafc5b2-{summary.json,raw.jsonl,before.json,after.json}`:
+  exact 167-root replay, 75 pass / 3 fail / 89 explicit host skips; unchanged
+  source/tools, no absent/incomplete or pass-with-skip roots. Only the original
+  FP16 binary format root changed from fail to pass relative to `4acf97d89`.
+- `ci-38236001451-race-root-0-original/` and
+  `pr40-race-root-0-audit-20261019.json`: old online race failure at `24851df2`.
+  The reentry fixture timed the whole Verify call, not the actual callback lock.
+  Staged commit `7bdc112a8` checks that lock directly; this artifact audit is not
+  a current-head race pass. SDK globals/AES binding already exists; inspect
+  current receipts before reimplementing a failure from the old online head.
 - `fp16-fma-qualified-4acf97d8.json` and `fp16-fma-final-gates-4acf97d8/`:
   complete 112-root three-lane cohort, identical 5,587-terminal unions and
   thirteen final gates. Preserve RED `57792901`, retained-format failure
