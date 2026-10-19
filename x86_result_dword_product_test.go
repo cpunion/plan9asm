@@ -3,9 +3,49 @@ package plan9asm
 import (
 	"errors"
 	"fmt"
+	"go/types"
 	"strings"
 	"testing"
 )
+
+// The original format probes declare a frame but never initialize vector or
+// address inputs. Keep all three public Context checks and original emitter
+// objects; the separate initialized matrices below own public object success.
+func x86DwordProductOriginalFormatObject(t *testing.T, source, declarations, arch, triple string, frame int64) string {
+	t.Helper()
+	_, declarations, found := strings.Cut(declarations, "\n")
+	if !found {
+		t.Fatal("original format declarations lost their package header")
+	}
+	for _, api := range []string{"text", "module", "Go"} {
+		ir, err := x86ScalarFPBitViewAPI(t, source, declarations, arch, triple, api)
+		if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+			t.Fatal("original formats invented vector, mask or native address inputs", api, err)
+		}
+	}
+	file, err := Parse(ArchAMD64, source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pkg := mustGoPackage(t, "formatprobe", "package formatprobe\n"+declarations)
+	signatures := make(map[string]FuncSig)
+	for _, function := range file.Funcs {
+		name := strings.TrimPrefix(function.Sym, "·")
+		sig, err := DeriveGoFuncABI0Signature(name, pkg.Types.Scope().Lookup(name).(*types.Func), arch, types.SizesFor("gc", arch))
+		if err != nil {
+			t.Fatal(err)
+		}
+		signatures[name] = sig
+	}
+	file, err = normalizeX86RawFile(file, arch)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return x86InstructionFormatObjectUnit(t, file, signatures, arch, triple, frame,
+		func(c *amd64Ctx, ins Instr) (bool, bool, error) {
+			return c.lowerDwordToQwordMultiply(ins.Op, ins)
+		})
+}
 
 // These four names and the complete encoder rows are independently checked in
 // TestX86DwordProductCompleteIndependentEncoderRows. Reuse the common native

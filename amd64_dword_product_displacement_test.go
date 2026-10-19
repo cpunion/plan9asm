@@ -166,42 +166,11 @@ func TestX86DwordProductTupleOffsetsThreeAPIsFiveTargetObjects(t *testing.T) {
 					count++
 				}
 				goAssemblerOracleOutput(t, arch, source.String(), "", true)
-				file, err := Parse(ArchAMD64, source.String())
-				if err != nil {
-					t.Fatal(err)
+				ir := x86DwordProductOriginalFormatObject(t, source.String(), declarations.String(), arch, triple, 0)
+				for _, level := range []string{"-O0", "-O2"} {
+					x86PackedStringCompileObject(t, llc, triple, ir, level)
 				}
-				pkg := mustGoPackage(t, "tuples", declarations.String())
-				sigs := map[string]FuncSig{}
-				for i := 0; i < count; i++ {
-					name := fmt.Sprintf("F%d", i)
-					sigs[name] = FuncSig{Name: name, Ret: Void}
-				}
-				resolve := func(name string) string { return strings.TrimPrefix(name, "·") }
-				options := Options{Goarch: arch, TargetTriple: triple, ResolveSym: resolve, Sigs: sigs}
-				ir, err := Translate(file, options)
-				if err != nil {
-					t.Fatal(err)
-				}
-				compileLLVMToObject(t, llc, triple, "tuple-text.ll", "tuple-text.o", ir)
-				ctx := llvm.NewContext()
-				defer ctx.Dispose()
-				module, err := TranslateModuleInContext(ctx, file, options)
-				if !module.IsNil() {
-					defer module.Dispose()
-				}
-				if err != nil {
-					t.Fatal(err)
-				}
-				compileLLVMToObject(t, llc, triple, "tuple-module.ll", "tuple-module.o", module.String())
-				goModule, err := translateGoModuleInContext(ctx, pkg, []byte(source.String()), GoModuleOptions{GOARCH: arch, TargetTriple: triple, ResolveSym: resolve})
-				if goModule != nil && !goModule.Module.IsNil() {
-					defer goModule.Module.Dispose()
-				}
-				if err != nil {
-					t.Fatal(err)
-				}
-				compileLLVMToObject(t, llc, triple, "tuple-go.ll", "tuple-go.o", goModule.Module.String())
-				t.Logf("%d independently assembled tuple/disp32 boundary forms ×three APIs", count)
+				t.Logf("%d original tuple/disp32 forms: three public Context checks plus emitter objects", count)
 			})
 		}
 	}

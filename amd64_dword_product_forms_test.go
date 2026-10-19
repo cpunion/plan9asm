@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"go/types"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -240,46 +239,11 @@ func TestX86DwordProductThreeAPIsFiveTargetObjects(t *testing.T) {
 					count++
 				}
 				goAssemblerOracleOutput(t, arch, source.String(), "", true)
-				pkg := mustGoPackage(t, "product", declarations.String())
-				file, err := Parse(ArchAMD64, source.String())
-				if err != nil {
-					t.Fatal(err)
+				ir := x86DwordProductOriginalFormatObject(t, source.String(), declarations.String(), arch, triple, 64)
+				for _, level := range []string{"-O0", "-O2"} {
+					x86PackedStringCompileObject(t, llc, triple, ir, level)
 				}
-				sigs := map[string]FuncSig{}
-				for i := 0; i < count; i++ {
-					name := fmt.Sprintf("F%d", i)
-					sig, err := DeriveGoFuncABI0Signature(name, pkg.Types.Scope().Lookup(name).(*types.Func), arch, types.SizesFor("gc", arch))
-					if err != nil {
-						t.Fatal(err)
-					}
-					sigs[name] = sig
-				}
-				resolve := func(symbol string) string { return strings.TrimPrefix(symbol, "·") }
-				options := Options{Goarch: arch, TargetTriple: triple, Sigs: sigs, ResolveSym: resolve}
-				ir, err := Translate(file, options)
-				if err != nil {
-					t.Fatal(err)
-				}
-				compileLLVMToObject(t, llc, triple, "product-text.ll", "product-text.o", ir)
-				ctx := llvm.NewContext()
-				defer ctx.Dispose()
-				module, err := TranslateModuleInContext(ctx, file, options)
-				if !module.IsNil() {
-					defer module.Dispose()
-				}
-				if err != nil {
-					t.Fatal(err)
-				}
-				compileLLVMToObject(t, llc, triple, "product-module.ll", "product-module.o", module.String())
-				translated, err := translateGoModuleInContext(ctx, pkg, []byte(source.String()), GoModuleOptions{GOARCH: arch, TargetTriple: triple, ResolveSym: resolve})
-				if translated != nil && !translated.Module.IsNil() {
-					defer translated.Module.Dispose()
-				}
-				if err != nil {
-					t.Fatal(err)
-				}
-				compileLLVMToObject(t, llc, triple, "product-go.ll", "product-go.o", translated.Module.String())
-				t.Logf("%d independent forms compiled through each of the three APIs", count)
+				t.Logf("%d original formats: three public Context checks and emitter objects, not initialized public entries", count)
 			})
 		}
 	}
