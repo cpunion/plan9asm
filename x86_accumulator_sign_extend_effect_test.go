@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
 	"testing"
@@ -169,5 +170,59 @@ func x86AccumulatorSignExtendTargetObjects(t *testing.T, raw bool) {
 				}
 			}
 		})
+	}
+}
+
+func TestX86AccumulatorSignExtendRawOriginCannotBeRebound(t *testing.T) {
+	for _, arch := range []string{"386", "amd64"} {
+		for _, row := range x86AccumulatorSignExtendOracle {
+			if arch == "386" && row.write == 8 {
+				continue
+			}
+			code := x86AccumulatorSignExtendSource(t, row.op, arch, true)
+			file, err := Parse(ArchAMD64, "TEXT Value(SB),4,$0-0\n"+code+"RET\n")
+			if err != nil {
+				t.Fatal(err)
+			}
+			file, err = normalizeX86RawFile(file, arch)
+			if err != nil {
+				t.Fatal(err)
+			}
+			ins := file.Funcs[0].Instrs[1]
+			if !x86RawAccumulatorSignExtendSource(ins, arch) {
+				t.Fatal("actual original implicit instruction lost its source identity", row.op, arch)
+			}
+			for _, control := range []struct {
+				name   string
+				change func(*Instr)
+			}{
+				{"absent-origin", func(ins *Instr) { ins.x86SourceRaw = nil }},
+				{"opcode", func(ins *Instr) {
+					ins.Op = "CBW"
+					if row.op == "CBW" {
+						ins.Op = "CWD"
+					}
+				}},
+				{"operand", func(ins *Instr) { ins.Args = []Operand{{Kind: OpReg, Reg: AX}} }},
+				{"source-operand", func(ins *Instr) { ins.x86SourceRaw.args = []Operand{{Kind: OpReg, Reg: AX}} }},
+				{"vector-width", func(ins *Instr) { ins.x86VectorBytes = 16 }},
+				{"address", func(ins *Instr) { ins.x86AddressBits = 32 }},
+				{"segment", func(ins *Instr) { ins.x86SegmentPrefix = 0x64 }},
+				{"literal", func(ins *Instr) { ins.x86RIPLiteral = true }},
+			} {
+				t.Run(arch+"/"+row.op+"/"+control.name, func(t *testing.T) {
+					changed := ins
+					origin := *ins.x86SourceRaw
+					changed.x86SourceRaw = &origin
+					control.change(&changed)
+					state := x86ResultState{flags: x86ByteFlagsAll}
+					before := state.clone()
+					accepted, known := x86LoweredAccumulatorSignExtendResultStep(changed, &state, nil, 0, arch)
+					if accepted || !known || x86RawAccumulatorSignExtendSource(changed, arch) || !reflect.DeepEqual(before, state) {
+						t.Fatal("changed raw origin borrowed implicit GP inputs or writes", accepted, known)
+					}
+				})
+			}
+		}
 	}
 }
