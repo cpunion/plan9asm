@@ -97,7 +97,7 @@ func TestCrossLinuxRuntimeMatrixX86SegmentQueryOriginalFlagsAliasesAndFaults(t *
 	}
 	originalSource := source.String() + "TEXT ·OriginalCS(SB),4,$0-2\nMOVW CS,AX\nMOVW AX,ret0+0(FP)\nRET\n"
 	goAssemblerOracleOutput(t, "amd64", originalSource, "", true)
-	x86RunOriginalGoNativeSource(t, execution, "amd64", declarations.String()+"func OriginalCS() uint16\n", originalSource,
+	x86RunOriginalGoNativeSource(t, execution, "amd64", "package oracle\n"+declarations.String()+"func OriginalCS() uint16\n", originalSource,
 		fmt.Sprintf(x86SegmentQueryOriginalGo, goRows.String()))
 	x87IA32RequireNativeHost(t)
 }
