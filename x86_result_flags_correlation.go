@@ -198,6 +198,10 @@ func x86ResultPrivateStackXORStep(ins Instr, popped x86ResultPoppedWord, poppedO
 		}
 	}
 	allKnown := true
+	if memory == 1 && !state.shapeOnly {
+		stack.revokePointerCells(len(stack.bytes)-offset-width, len(stack.bytes)-offset,
+			int(x86ResultPointerWord(arch)))
+	}
 	for b := 0; b < width; b++ {
 		var origins [8]uint8
 		var bits uint8

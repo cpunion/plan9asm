@@ -398,6 +398,12 @@ func checkX86ResultSourceFlowWithTrapOnly(fn Func, initial x86ResultState, owned
 		// Bit masks, two-byte depth, invalid join, ID and the ten-byte
 		// transient popped register/validity/eight-byte initialized-bit view.
 		byteState += x86ResultValueStackLimit(goarch) + 14
+		// Pointer cell endpoints use complete bitmap words spanning the
+		// bounded byte domain: 64 logical bytes on AMD64, 32 on mode32.
+		byteState += ((x86ResultValueStackLimit(goarch) + 63) / 64) * 8
+		if goarch == "amd64" {
+			byteState += 8 // Existing W/Q source-cell identity; unused in mode32.
+		}
 		if flagProjection {
 			byteState += x86ResultValueStackLimit(goarch) // Exact source-position refinement masks.
 		}
@@ -828,7 +834,11 @@ func (state x86ResultState) intersect(other x86ResultState) x86ResultState {
 			merged.valueStack.bytes, merged.valueStack.invalid = nil, true
 			merged.valueStack.refinable = nil
 			merged.valueStack.wordCells = 0
+			merged.valueStack.pointerCells = [8]uint64{}
 		} else {
+			for index := range merged.valueStack.pointerCells {
+				merged.valueStack.pointerCells[index] &= other.valueStack.pointerCells[index]
+			}
 			if merged.valueStack.refinable != nil || other.valueStack.refinable != nil {
 				left, right := merged.valueStack.refinable, other.valueStack.refinable
 				if left == nil {
