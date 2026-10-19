@@ -237,7 +237,31 @@ int main(void) {
   return 0;
 }
 `
-	compileAndRunRuntimeTestForTarget(t, llc, clang, "vector_test_semantics", triple, ir, mainC, runPrefix)
+	compiler := []string{clang}
+	if triple != testTargetTriple(runtime.GOOS, runtime.GOARCH) {
+		compiler = append(compiler, "-target", triple)
+	}
+	runKernel := func(encoding, input string) {
+		for _, pipeline := range []struct {
+			name      string
+			optimized bool
+			backend   int
+		}{
+			{name: "backend_O0"},
+			{name: "backend_O2", backend: 2},
+			{name: "IR_O2/backend_O2", optimized: true, backend: 2},
+		} {
+			t.Run(encoding+"/"+pipeline.name, func(t *testing.T) {
+				text := input
+				if pipeline.optimized {
+					text = x86DwordProductIROptimize(t, input)
+				}
+				compileAndRunRuntimeTestWithCompiler(t, llc, compiler, "vector_test_"+encoding,
+					triple, text, mainC, runPrefix, pipeline.backend)
+			})
+		}
+	}
+	runKernel("named", ir)
 
 	// Exercise the raw-byte path with the same independently checked flag
 	// oracle. Keep the displacements and operand order identical to the named
@@ -268,5 +292,5 @@ int main(void) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	compileAndRunRuntimeTestForTarget(t, llc, clang, "raw_vector_test_semantics", triple, rawIR, mainC, runPrefix)
+	runKernel("raw", rawIR)
 }

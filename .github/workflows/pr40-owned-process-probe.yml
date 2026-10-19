@@ -191,7 +191,7 @@ jobs:
           done
           go test . -run "^($roots)$" -count=1 -timeout=5m -json > "$directory/raw.jsonl" 2> "$directory/stderr.log"
           node .github/scripts/audit-scalar-bmi.cjs "$directory"
-      - name: Execute complete product, CMOV and AES numerical programs
+      - name: Execute complete numerical regression programs
         env:
           GOTOOLCHAIN: local
         run: |
@@ -201,6 +201,7 @@ jobs:
           roots='TestCrossLinuxRuntimeMatrixX86DwordProductIndependentWholeBytes'
           roots+='|TestCrossLinuxRuntimeMatrixX86CMOVIndependentWholeBytes'
           roots+='|TestCrossLinuxRuntimeMatrixX86AESFamilyWholeByteAliases'
+          roots+='|TestAMD64VectorTestRuntimeSemantics'
           go test . -list "^($roots)$" > "$directory/inventory.log"
           for root in ${roots//|/ }; do
             grep -Fx "$root" "$directory/inventory.log"
