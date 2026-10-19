@@ -88,16 +88,22 @@ func TestX86CMOVNativeCompleteFamilyFiveTargetObjects(t *testing.T) {
 			if word == 4 {
 				suffix = "L"
 			}
-			var source, declarations strings.Builder
-			for index, name := range x86CMOVOracleNames(target.arch) {
-				function := fmt.Sprint("ConditionalRead", index)
-				fmt.Fprintf(&source, "TEXT ·%s(SB),4,$0-%d\nMOV%s p+0(FP),SI\n"+
-					"MOV%s old+%d(FP),AX\nPUSH%s flags+%d(FP)\nPOPF%s\n%s (SI),AX\n"+
-					"MOV%s AX,ret+%d(FP)\nRET\n", function, 4*word, suffix,
-					suffix, word, suffix, 2*word, suffix, name, suffix, 3*word)
-				fmt.Fprintf(&declarations, "func %s(p *byte,old,flags uintptr) uintptr\n", function)
+			for _, raw := range []bool{false, true} {
+				var source, declarations strings.Builder
+				for index, name := range x86CMOVOracleNames(target.arch) {
+					operation := name + " (SI),AX"
+					if raw {
+						operation = x86RawNumericalInstruction(t, target.arch, operation)
+					}
+					function := fmt.Sprint("ConditionalRead", index)
+					fmt.Fprintf(&source, "TEXT ·%s(SB),4,$0-%d\nMOV%s p+0(FP),SI\n"+
+						"MOV%s old+%d(FP),AX\nMOV%s out+%d(FP),DI\nPUSH%s flags+%d(FP)\nPOPF%s\n%s\n"+
+						"PUSHF%s\nPOP%s BX\nMOV%s BX,(DI)\nMOV%s AX,ret+%d(FP)\nRET\n", function, 5*word, suffix,
+						suffix, word, suffix, 3*word, suffix, 2*word, suffix, operation, suffix, suffix, suffix, suffix, 4*word)
+					fmt.Fprintf(&declarations, "func %s(p *byte,old,flags uintptr,out *uintptr) uintptr\n", function)
+				}
+				x86RawNumericalFamilyObjects(t, source.String(), declarations.String(), target.arch, target.triple)
 			}
-			x86RawNumericalFamilyObjects(t, source.String(), declarations.String(), target.arch, target.triple)
 		})
 	}
 }
