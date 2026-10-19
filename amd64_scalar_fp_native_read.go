@@ -87,6 +87,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 	}
 	boundRawClear := false
 	for _, ins := range fn.Instrs {
+		if x86RawMOVBESource(ins, arch) {
+			continue // Decoder identity grants neither native input bytes nor a destination pointer.
+		}
 		if x86RawTernaryGPSource(ins, arch) {
 			continue // Exact source identity does not supply numerical inputs or native memory.
 		}
@@ -179,6 +182,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 			return accepted
 		}
 		if accepted, known := x86LoweredTernaryGPResultStep(ins, state, owned, resultOffset, arch); known {
+			return accepted
+		}
+		if accepted, known := x86LoweredMOVBEResultStep(ins, state, owned, resultOffset, arch); known {
 			return accepted
 		}
 		if accepted, known := x86LoweredRawScalarObserverStep(ins, state, owned, resultOffset, arch); known {

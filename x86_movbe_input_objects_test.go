@@ -6,10 +6,14 @@ import (
 	"testing"
 )
 
-func TestX86MOVBEOriginalRuntimeSourceObjects(t *testing.T) {
+func TestX86MOVBEOriginalInvalidImmediateIsGoRejected(t *testing.T) {
+	requireX86GoAssemblerResult(t, "amd64", x86MOVBEOriginalRuntimeSource, false)
+}
+
+func TestX86MOVBERepairedOriginalRuntimeSourceObjects(t *testing.T) {
 	for _, triple := range []string{"x86_64-apple-darwin", "x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc"} {
 		t.Run(triple, func(t *testing.T) {
-			x86RawNumericalFamilyObjects(t, x86MOVBEOriginalRuntimeSource,
+			x86RawNumericalFamilyObjects(t, x86MOVBERepairedRuntimeSource(t),
 				"func movesemantics(out *[72]byte)", "amd64", triple)
 		})
 	}

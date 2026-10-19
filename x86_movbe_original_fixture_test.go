@@ -1,5 +1,20 @@
 package plan9asm
 
+import (
+	"strings"
+	"testing"
+)
+
+func x86MOVBERepairedRuntimeSource(t *testing.T) string {
+	t.Helper()
+	source := strings.Replace(x86MOVBEOriginalRuntimeSource, "MOVQ $0xefcdab8967452301, 32(DI)",
+		"MOVQ $0xefcdab8967452301, R9\n\tMOVQ R9, 32(DI)", 1)
+	if source == x86MOVBEOriginalRuntimeSource {
+		t.Fatal("original MOVBE fixture lost its identified invalid imm64 store")
+	}
+	return source
+}
+
 const x86MOVBEOriginalRuntimeSource = `TEXT movesemantics(SB),NOSPLIT,$0-8
 	MOVQ out+0(FP), DI
 	MOVL $0x7fffffff, R8

@@ -27,6 +27,9 @@ func x86TypedFPResultNeedsProof(fn Func, sig FuncSig, arch string) bool {
 	}
 	opaqueAddressResult := x86OpaqueAddressPointerResultRole(fn, sig, arch)
 	for ordinal, ins := range fn.Instrs {
+		if _, known, err := x86MOVBEProperties(ins.Op, ins, arch); known && err == nil {
+			return true // Both native directions retain their complete input obligations, including Void.
+		}
 		if _, known, err := x86TernaryGPProperties(ins.Op, ins, arch); known && err == nil {
 			return true // Both actual input words remain mandatory for named/raw dead outputs.
 		}

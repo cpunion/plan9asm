@@ -128,7 +128,7 @@ func TestAMD64MOVBERuntimeSemanticsWidthsDirectionsAndFlags(t *testing.T) {
 	if !ok {
 		t.Fatal("LLVM 22 llc/clang not found")
 	}
-	source := x86MOVBEOriginalRuntimeSource
+	source := x86MOVBERepairedRuntimeSource(t)
 	file, err := Parse(ArchAMD64, source)
 	if err != nil {
 		t.Fatal(err)
