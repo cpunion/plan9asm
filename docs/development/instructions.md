@@ -140,6 +140,23 @@ declaration observations; default mode means AMD64. Keep all 16 SETcc predicates
 canonical result bytes, independent helper frames and actual 386 helper tests.
 Portable i1-to-i32 value execution is not native entry or C bool ABI evidence.
 
+Mode32 zero-argument manual I8/I16/I32 returns use the existing logical AX
+transport. Share its CFG and exact-byte return obligation with the distinct
+custom-register bool checker; I1 still needs canonical zero/one. Route absent
+and partial AX writes through that proof even without another numerical effect.
+The role has no FP layout, native frame, raw entry or incoming register bytes.
+
+Mode32 private FLAGS copies retain bounded bit dependencies across W/L PUSHF
+and POPF. Shared B/W/L XOR grammar consumes only original bare SP offsets
+within reaching PUSH depth. An adjacent popped register may cancel identical
+unknown dependencies; it cannot expose an unrelated unknown bit. Clone and
+join those dependencies conservatively, charge them to the shared byte budget,
+and revoke the popped view after one instruction. Complete source replay and
+paired lowering own this storage; standalone queries retain their old boundary.
+Keep negative named AUTO separate from the mutable private SP projection in
+both the proof and emitter. Original source objects and portable numerical
+execution remain separate from native FLAGS/ABI conformance.
+
 Indexed permutes and GFNI share the existing typed EVEX/VEX binary grammar;
 unary vector bit counts project their original two/three operands locally.
 Never mutate source operands to reuse a grammar. I2 old-destination indices
