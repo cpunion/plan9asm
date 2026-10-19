@@ -15,6 +15,14 @@ func x86BinaryFloatLiteralInput(t *testing.T, row x86RawVectorLiteralCase) (*Fil
 	}
 	for _, ins := range file.Funcs[0].Instrs {
 		if ins.x86RIPLiteral {
+			// These are intentionally distinct source coordinates: replay
+			// owns the pre-relocation decoder operand; the module read owns
+			// the actual allocated DATA symbol and complete source tuple.
+			pending := Operand{Kind: OpSym, Sym: "·__plan9asm_raw_literal_pending(SB)"}
+			if ins.x86SourceRaw == nil || !reflect.DeepEqual(ins.x86SourceRaw.args[0], pending) ||
+				ins.Args[0].Sym == pending.Sym || ins.Args[0].Sym != ins.x86RIPMemoryRead.symbol {
+				t.Fatal("decoder and module literal coordinates lost their independent binding", row.name)
+			}
 			return file, ins
 		}
 	}

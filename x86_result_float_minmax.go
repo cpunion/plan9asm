@@ -20,7 +20,7 @@ func x86RawFloatMinMaxEncodingSource(ins Instr, arch string) bool {
 	origin := ins.x86SourceRaw
 	return origin != nil && origin.floatMinMax.arch == arch &&
 		origin.floatMinMax == x86FloatMinMaxRawIdentity(ins, arch) &&
-		origin.op == ins.Op && reflect.DeepEqual(origin.args, ins.Args) &&
+		origin.op == ins.Op && (reflect.DeepEqual(origin.args, ins.Args) || x86RawLiteralSourceIdentity(ins, arch)) &&
 		origin.vectorBytes == ins.x86VectorBytes && origin.addressBits == ins.x86AddressBits
 }
 

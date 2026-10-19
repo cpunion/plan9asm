@@ -13,6 +13,31 @@ func x86RawLiteralSourceShape(ins Instr, arch string) bool {
 		!ins.x86UnboundAddressOverride && ins.x86SegmentPrefix == 0
 }
 
+// Raw replay keeps decoder operands before the normalizer allocates a module
+// DATA symbol. Bind that single private relocation without rewriting the
+// immutable decoder checkpoint or accepting another changed source operand.
+func x86RawLiteralSourceIdentity(ins Instr, arch string) bool {
+	if !x86RawLiteralSourceShape(ins, arch) || !x86RawReturnDecodedReadIdentity(ins) {
+		return false
+	}
+	origin, read := ins.x86SourceRaw, ins.x86RIPMemoryRead
+	if origin.op != ins.Op || len(origin.args) != len(ins.Args) ||
+		origin.vectorBytes != ins.x86VectorBytes || origin.addressBits != ins.x86AddressBits {
+		return false
+	}
+	for index, operand := range origin.args {
+		if index == read.source {
+			pending := Operand{Kind: OpSym, Sym: "·__plan9asm_raw_literal_pending(SB)"}
+			if !reflect.DeepEqual(operand, pending) {
+				return false
+			}
+		} else if !reflect.DeepEqual(operand, ins.Args[index]) {
+			return false
+		}
+	}
+	return true
+}
+
 // RIP constants are a decoder role, never a named-immediate broadcast form.
 func x86RawBroadcastLiteralForm(ins Instr, arch string) bool {
 	if !x86RawLiteralSourceShape(ins, arch) {
@@ -85,12 +110,7 @@ func x86RawFloatCompareLiteralForm(ins Instr, arch string) bool {
 // operand, not native-address authority. MIN/MAX keeps its distinct controls
 // and physical generation; FP16, packed SQRT and legacy remain separate roles.
 func x86RawBinaryFloatLiteralForm(ins Instr, arch string) bool {
-	if !x86RawLiteralSourceShape(ins, arch) || !x86RawReturnDecodedReadIdentity(ins) {
-		return false
-	}
-	origin := ins.x86SourceRaw
-	if origin.op != ins.Op || !reflect.DeepEqual(origin.args, ins.Args) ||
-		origin.vectorBytes != ins.x86VectorBytes || origin.addressBits != ins.x86AddressBits {
+	if !x86RawLiteralSourceIdentity(ins, arch) {
 		return false
 	}
 	f, known, err := x86SqrtProperties(ins, arch)
