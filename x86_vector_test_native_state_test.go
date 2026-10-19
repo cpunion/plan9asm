@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -133,10 +134,11 @@ func TestX86VectorTestLogicalFPBytesDoNotAcquireLegacyNativeStorage(t *testing.T
 			}
 			source := fmt.Sprintf("TEXT ·Value(SB),4,$0-%d\nVPXORD Y1,Y1,Y1\n%s\nRET\n",
 				width, strings.Replace(row, "(SI)", "a+0(FP)", 1))
+			x86LEAActualTargetGoObject(t, target.arch, target.triple, source)
 			for _, api := range []string{"text", "module", "Go"} {
 				ir, err := x86ScalarFPBitViewAPI(t, source, "func Value("+parameters+")", target.arch, target.triple, api)
 				if strings.HasPrefix(row, "PTEST") {
-					if err == nil || ir != "" {
+					if !errors.Is(err, ErrProbeNeedsContext) || ir != "" {
 						t.Fatal("logical FP values supplied legacy native storage", target, api)
 					}
 				} else if err != nil || ir == "" {
