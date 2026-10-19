@@ -54,3 +54,34 @@ func TestX86DuplicateNativeActualSourceOwnsExactlyOnePackage(t *testing.T) {
 		})
 	}
 }
+
+func TestX86DivideNativeActualSourceOwnsExactlyOnePackage(t *testing.T) {
+	for _, arch := range []string{"amd64", "386"} {
+		t.Run(arch, func(t *testing.T) {
+			rows := x86DivideNativeRows(arch)
+			declarations, original := x86DivideNativeDeclarationSources(rows)
+			for _, fixture := range []struct{ name, source, pkg string }{
+				{"api.go", "package bitview\n" + declarations, "bitview"},
+				{"original.go", original, "oracle"},
+			} {
+				t.Run(fixture.name, func(t *testing.T) {
+					file, err := parser.ParseFile(token.NewFileSet(), fixture.name, fixture.source, parser.AllErrors)
+					if err != nil {
+						t.Fatal("actual division fixture is not a valid Go file", err)
+					}
+					if file.Name.Name != fixture.pkg || len(file.Decls) != len(rows)*2 {
+						t.Fatal("division live/dead declaration inventory changed", file.Name.Name, len(file.Decls))
+					}
+					for _, broken := range []string{
+						"package other\n" + fixture.source,
+						strings.TrimPrefix(fixture.source, "package "+fixture.pkg+"\n"),
+					} {
+						if _, err := parser.ParseFile(token.NewFileSet(), fixture.name, broken, parser.AllErrors); err == nil {
+							t.Fatal("division guard accepted a duplicate or absent package clause")
+						}
+					}
+				})
+			}
+		})
+	}
+}
