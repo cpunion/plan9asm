@@ -116,6 +116,18 @@ func TestTranslateX86RawScalarMoveRIPDataObjects(t *testing.T) {
 			t.Fatalf("constant %d = %x, want %x", index, datum.Payload, pools[index])
 		}
 	}
+	var initializedSource, initializedDeclarations strings.Builder
+	for index, function := range file.Funcs {
+		if index%3 == 2 {
+			continue // The original EVEX source has no K7 producer.
+		}
+		text, valid := x86RawReplaySourceText(function)
+		if !valid {
+			t.Fatal("original initialized VEX constant source lost its bytes")
+		}
+		initializedSource.WriteString(text)
+		fmt.Fprintf(&initializedDeclarations, "func %s()\n", function.Sym)
+	}
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc not found")
@@ -124,11 +136,17 @@ func TestTranslateX86RawScalarMoveRIPDataObjects(t *testing.T) {
 		"x86_64-apple-darwin", "x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc",
 	} {
 		t.Run(triple, func(t *testing.T) {
-			ir, err := Translate(file, Options{Goarch: "amd64", TargetTriple: triple, Sigs: sigs})
-			if err != nil {
-				t.Fatal(err)
-			}
+			// Keep all six original functions and pools in format coverage.
+			// Only the two EVEX functions lack numerical mask inputs.
+			ir := x86UnboundVoidVectorMoveFormatObject(t, source.String(), "amd64", triple)
 			compileLLVMToObject(t, llc, triple, "scalar-move-literal.ll", "scalar-move-literal.o", ir)
+			for _, api := range []string{"text", "module", "Go"} {
+				ir, err := x86ScalarFPBitViewAPI(t, initializedSource.String(), initializedDeclarations.String(), "amd64", triple, api)
+				if err != nil {
+					t.Fatal("valid original unmasked constants regressed", api, err)
+				}
+				compileLLVMToObject(t, llc, triple, "initialized-scalar-literal.ll", "initialized-scalar-literal.o", ir)
+			}
 		})
 	}
 }

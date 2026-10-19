@@ -2,6 +2,7 @@ package plan9asm
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -105,5 +106,57 @@ func TestX86RawMoveInitializedLiteralInputsAndReturnStillWork(t *testing.T) {
 				})
 			}
 		})
+	}
+}
+
+func TestX86RawMoveLiteralInputsDoNotGrantMasksMergeOrReturnRoles(t *testing.T) {
+	rows := x86RawMoveLiteralInputCases()
+	code, payloads := x86RawMoveLiteralInputBytes(t, rows)
+	for index, row := range rows {
+		if row.masking == "plain" {
+			continue
+		}
+		for _, control := range []string{"mask", "merge", "raw return width", "raw return cleanup", "frame"} {
+			if control == "merge" && row.masking != "merge" {
+				continue
+			}
+			t.Run(row.row+"/"+control, func(t *testing.T) {
+				var source strings.Builder
+				frame := 0
+				if control == "frame" {
+					frame = 16
+				}
+				fmt.Fprintf(&source, "TEXT ·Literal(SB),4,$%d-8\n", frame)
+				if control != "mask" {
+					source.WriteString("KMOVD mask+0(FP),K1\n")
+				}
+				if control != "merge" {
+					source.WriteString("VPXORQ Z2,Z2,Z2\n")
+				}
+				original := append([]byte(nil), code[index]...)
+				if strings.HasPrefix(control, "raw return") {
+					// The original source has one instruction then C3 and the
+					// exact pool. Keep that pool's target and complete tuple.
+					ret := len(original) - len(payloads[index]) - 1
+					if ret < 5 || original[ret] != 0xc3 {
+						t.Fatal("independent literal return boundary missing")
+					}
+					replacement := []byte{0x66, 0xc3}
+					if control == "raw return cleanup" {
+						replacement = []byte{0xc2, 8, 0}
+					}
+					original[ret-4] = byte(len(replacement))
+					original = append(append(append([]byte(nil), original[:ret]...), replacement...), original[ret+1:]...)
+				}
+				for _, value := range original {
+					fmt.Fprintf(&source, "BYTE $%d\n", value)
+				}
+				for _, api := range []string{"text", "module", "Go"} {
+					if ir, err := x86ScalarFPBitViewAPI(t, source.String(), "func Literal(mask uint64)", "amd64", "x86_64-unknown-linux-gnu", api); ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+						t.Fatal("literal DATA invented an input or native return/frame role", api, err)
+					}
+				}
+			})
+		}
 	}
 }

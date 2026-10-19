@@ -55,10 +55,7 @@ func TestDecodeX86RawScalarMoveCompleteGoForms(t *testing.T) {
 	}
 	rawFile := x86RawUnprovedReturnFormProbeFile(t, "amd64", "scalarmoves", code)
 	for _, triple := range []string{"x86_64-apple-darwin", "x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc"} {
-		ir, err := Translate(rawFile, Options{Goarch: "amd64", TargetTriple: triple, Sigs: map[string]FuncSig{"scalarmoves": {Name: "scalarmoves", Ret: Void}}})
-		if err != nil {
-			t.Fatal(err)
-		}
+		ir := x86UnboundVoidRawVectorMoveProbeObject(t, rawFile, "amd64", triple)
 		compileLLVMToObject(t, llc, triple, "raw-scalar-moves.ll", "raw-scalar-moves.o", ir)
 	}
 }
@@ -77,15 +74,8 @@ func TestTranslate386VectorScalarMoveCompleteGoForms(t *testing.T) {
 	}
 	source.WriteString("RET\n")
 	requireX86GoAssemblerResult(t, "386", source.String(), true)
-	file, err := Parse(ArchAMD64, source.String())
-	if err != nil {
-		t.Fatal(err)
-	}
 	for _, triple := range []string{"i386-unknown-linux-gnu", "i686-pc-windows-msvc"} {
-		ir, err := Translate(file, Options{Goarch: "386", TargetTriple: triple, Sigs: map[string]FuncSig{"moves386": {Name: "moves386", Ret: Void}}})
-		if err != nil {
-			t.Fatal(err)
-		}
+		ir := x86UnboundVoidVectorMoveFormatObject(t, source.String(), "386", triple)
 		compileLLVMToObject(t, llc, triple, "scalar-moves386.ll", "scalar-moves386.o", ir)
 	}
 	// Raw 32-bit encodings use the architectural X0-X7 range; named Go
