@@ -136,6 +136,38 @@ func TestX86DeadExternalSourceBudgetIsSharedAcrossComponents(t *testing.T) {
 	}
 }
 
+func TestX86DeadExternalDetectorUsesTypedAccessesNotAddressSyntax(t *testing.T) {
+	for _, width := range []string{"W", "L", "Q"} {
+		for _, address := range []string{"7(AX)", "7(AX)(CX*8)"} {
+			body := "LEA" + width + " " + address + ",BX"
+			t.Run(body, func(t *testing.T) {
+				ins := x86PureGPUnknownInstruction(t, body)
+				effect, known, err := x86TypedInstructionByteEffect(ins.Op, ins, "amd64")
+				if !known || err != nil {
+					t.Fatal("independent typed address-computation control is missing", known, err)
+				}
+				for _, operand := range effect.operands {
+					if operand.operand.Kind == OpMem {
+						t.Fatal("pure address computation acquired a real memory byte effect")
+					}
+				}
+				if x86ResultDeadExternalInputs(ins, "amd64") {
+					t.Fatal("address syntax was mistaken for an external memory access")
+				}
+			})
+		}
+		for _, api := range []string{"text", "module", "Go"} {
+			t.Run(width+"/"+api, func(t *testing.T) {
+				source := "TEXT ·Value(SB),4,$0-0\nJMP finish\nLEA" + width + " (AX),BX\nfinish:\nRET\n"
+				ir, err := x86ScalarFPBitViewAPI(t, source, "func Value()", "amd64", "x86_64-unknown-linux-gnu", api)
+				if ir == "" || err != nil {
+					t.Fatal("unreachable pure address result lost its existing unknown-register domain", err)
+				}
+			})
+		}
+	}
+}
+
 func TestX86TernaryDeadNamedRawMasksAndAddressesRemainObligations(t *testing.T) {
 	for _, row := range x86TernaryCompleteOracleRows() {
 		if !row.memory && row.mask < 0 {
