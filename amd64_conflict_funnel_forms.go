@@ -95,6 +95,24 @@ func x86ConflictFunnelOperandGrammar(ins Instr, arch string, spec x86PackedBinar
 	if form.memory >= 0 && !contextual && !x86PackedShiftMemoryValid(ins.Args[form.memory], arch) {
 		return form, fmt.Errorf("%s %s has an unresolved or unbound memory operand", arch, ins.Op)
 	}
+	if form.memory >= 0 {
+		source := ins.Args[form.memory]
+		if source.Kind == OpMem {
+			if !x86ConditionalMoveOffsetKnown(source.Mem) || source.Mem.IndexExt != "" ||
+				source.Mem.Segment != "" && source.Mem.Segment != FS && source.Mem.Segment != GS {
+				return form, fmt.Errorf("%s %s has an unresolved or foreign address", arch, ins.Op)
+			}
+			if err := x86SymbolIndexedMemoryError(source.Mem, arch); err != nil {
+				return form, err
+			}
+		}
+		if source.Kind == OpSym {
+			if address, parseErr := parseInt(strings.TrimSpace(source.Sym)); parseErr == nil &&
+				address != int64(int32(address)) && !(arch == "386" && address == int64(uint32(address))) {
+				return form, fmt.Errorf("%s %s absolute source exceeds its disp32 extent", arch, ins.Op)
+			}
+		}
+	}
 	if contextual {
 		return form, x86VectorValueMemoryContext(ins)
 	}
