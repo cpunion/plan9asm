@@ -92,6 +92,7 @@ func TestX86ScalarLaneNativeStoresSelectedBytesAndOrigins(t *testing.T) {
 						input.gp[1] >>= 1
 					case "pointer-index":
 						input.pointerGP[1] = true
+						input.gp[1] = 0 // An actual opaque-pointer import revokes NUM bytes.
 					case "encoded":
 						changed.x86Encoded = true
 					case "raw":
