@@ -424,6 +424,7 @@ func decodeX86RawDirectives(fn Func, goarch string) (Func, error) {
 				op:          decoded[index].Op,
 				args:        append([]Operand(nil), decoded[index].Args...),
 				vectorBytes: decoded[index].x86VectorBytes,
+				addressBits: decoded[index].x86AddressBits,
 			}
 		}
 		normalized = append(normalized, decoded...)
