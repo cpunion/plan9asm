@@ -87,6 +87,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 	}
 	boundRawClear := false
 	for _, ins := range fn.Instrs {
+		if x86RawCMOVSource(ins, arch) {
+			continue // Exact conditional data retains its own predicate and potential inputs.
+		}
 		if x86RawMOVBESource(ins, arch) {
 			continue // Decoder identity grants neither native input bytes nor a destination pointer.
 		}
@@ -317,7 +320,7 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		if accepted, recognized := x86LoweredScalarExtensionRead(ins, state, owned, resultOffset, arch); recognized {
 			return accepted
 		}
-		if accepted, known := x86LoweredCMOVNativeRead(ins, state, owned, resultOffset, arch); known {
+		if accepted, known := x86LoweredCMOVResultStep(ins, state, owned, resultOffset, arch); known {
 			return accepted // The complete source read remains unconditional, regardless of the predicate.
 		}
 		if accepted, recognized := x86LoweredScalarNativeLoad(ins, state, owned, resultOffset, arch); recognized {

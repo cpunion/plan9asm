@@ -31,7 +31,7 @@ func TestX86CMOVNativeExactByteFlagsAndSourceState(t *testing.T) {
 				check := func(changed Instr, state x86ResultState, want bool) {
 					t.Helper()
 					before := state.clone()
-					accepted, known := x86LoweredCMOVNativeRead(changed, &state, nil, 0, arch)
+					accepted, known := x86LoweredCMOVResultStep(changed, &state, nil, 0, arch)
 					if accepted != want || !known || !reflect.DeepEqual(state, before) {
 						t.Fatal("native CMOV changed an unrelated byte, FLAGS, address or failed state", accepted, want, known)
 					}
@@ -49,7 +49,7 @@ func TestX86CMOVNativeExactByteFlagsAndSourceState(t *testing.T) {
 					state.gp[0] &^= 1 << uint(missing)
 					// A successful L write independently clears the upper half.
 					if width == 4 && missing >= 4 {
-						if accepted, known := x86LoweredCMOVNativeRead(ins, &state, nil, 0, arch); !known || !accepted || state.gp[0] != 0xff {
+						if accepted, known := x86LoweredCMOVResultStep(ins, &state, nil, 0, arch); !known || !accepted || state.gp[0] != 0xff {
 							t.Fatal("dword CMOV failed to zero-extend even on a false predicate")
 						}
 						continue
