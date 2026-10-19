@@ -27,5 +27,12 @@ func x86LoweredBMI2ShiftResultStep(ins Instr, state *x86ResultState, owned []boo
 	if accepted, known := x86LoweredScalarShiftMemory(local, state, owned, resultOffset, arch); known {
 		return accepted, true
 	}
-	return x86ResultTransfer(local, state, owned, resultOffset, arch), true
+	next := state.clone()
+	if x86ResultTransfer(local, &next, owned, resultOffset, arch) {
+		*state = next
+		return true, true
+	}
+	// The existing nontrapping GP domain may retain a dead unknown result.
+	// It never initializes that result or grants a subsequent observable use.
+	return x86LoweredPureGPUnknownTransfer(local, state, arch), true
 }

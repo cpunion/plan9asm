@@ -76,7 +76,7 @@ func x86BMI2ResultInstruction(t *testing.T, arch, op, input string, raw bool) st
 	return x86DwordProductDirectives(code[:len(code)-1])
 }
 
-func TestX86BMI2ResultVoidCannotBorrowInputs(t *testing.T) {
+func TestX86BMI2ResultDeadAndObservableUnknownInputs(t *testing.T) {
 	for _, target := range x86RawReturnTargets {
 		for _, op := range x86BMI2ResultNames {
 			for _, raw := range []bool{false, true} {
@@ -88,10 +88,26 @@ func TestX86BMI2ResultVoidCannotBorrowInputs(t *testing.T) {
 						}
 						source := fmt.Sprintf("TEXT ·Value(SB),4,$0-%d\n%s\nRET\n", extent,
 							x86BMI2ResultInstruction(t, target.arch, op, "BX", raw))
+						word, move := 8, "MOVQ"
+						if target.arch == "386" {
+							word, move = 4, "MOVL"
+						}
 						for _, api := range []string{"text", "module", "Go"} {
-							ir, err := x86ScalarFPBitViewAPI(t, source, declaration, target.arch, target.triple, api)
+							if ir, err := x86ScalarFPBitViewAPI(t, source, declaration, target.arch, target.triple, api); err != nil || ir == "" {
+								t.Fatal("dead nontrapping GP value must remain unknown, not prevent an independent return", api, err)
+							}
+							// Observing that same low result must fail. No private
+							// implementation zeros or dead-value rule supply its bytes.
+							observed := fmt.Sprintf("TEXT ·Value(SB),4,$0-%d\n%s\n%s AX,ret+%d(FP)\nRET\n",
+								extent+word, x86BMI2ResultInstruction(t, target.arch, op, "BX", raw), move, extent)
+							if unusedBool {
+								// uintptr results use the compiler's actual word alignment.
+								observed = fmt.Sprintf("TEXT ·Value(SB),4,$0-%d\n%s\n%s AX,ret+%d(FP)\nRET\n",
+									2*word, x86BMI2ResultInstruction(t, target.arch, op, "BX", raw), move, word)
+							}
+							ir, err := x86ScalarFPBitViewAPI(t, observed, declaration+" uintptr", target.arch, target.triple, api)
 							if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
-								t.Fatal("dead BMI2 input borrowed zeroed implementation registers", api, err)
+								t.Fatal("unknown BMI2 result borrowed implementation zeros", api, err)
 							}
 						}
 					})
@@ -114,8 +130,11 @@ func TestX86BMI2ResultVoidRoutesCompleteInputProof(t *testing.T) {
 				t.Fatal("dead named shift lost its mandatory source proof", arch, op)
 			}
 			ctx := &amd64Ctx{fpScalarSource: fn, sig: sig, goarch: arch}
-			if err := ctx.validateScalarFPSourceViews(); !errors.Is(err, ErrProbeNeedsContext) {
-				t.Fatal("mandatory named source proof accepted missing input", arch, op, err)
+			if err := checkX86ScalarFPResultInitialization(fn, sig, arch); !errors.Is(err, ErrProbeNeedsContext) {
+				t.Fatal("strict result observer invented missing input", arch, op, err)
+			}
+			if err := ctx.validateScalarFPSourceViews(); err != nil {
+				t.Fatal("whole lowering proof lost the bounded dead-unknown GP contract", arch, op, err)
 			}
 		}
 	}
@@ -272,6 +291,19 @@ func TestX86BMI2ResultEveryInputByteBeforeAliasedWrite(t *testing.T) {
 							}
 						} else {
 							accepted = x86ResultTransfer(ins, &state, nil, 0, arch)
+						}
+						if raw && missing != -2 {
+							// The lowering-only nontrapping continuation retains an
+							// unknown output, just like its named counterpart. It must
+							// never invent bytes from the aliased old destination.
+							before.gp[0] = 0
+							if width == 4 {
+								before.gp[0] = 0xf0
+							}
+							if !accepted || !reflect.DeepEqual(state, before) {
+								t.Fatal("paired dead-unknown output acquired numerical bytes or changed unrelated state")
+							}
+							return
 						}
 						if accepted != (missing == -2) || !accepted && !reflect.DeepEqual(state, before) {
 							t.Fatal("aliased destination hid missing data/count or mutated rejected state", accepted)
