@@ -5208,24 +5208,29 @@ TEXT duplicatemoveforms(SB),NOSPLIT,$0-8
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = Translate(file, Options{
-		TargetTriple: "x86_64-unknown-linux-gnu",
-		Goarch:       "amd64",
-		Sigs: map[string]FuncSig{"duplicatemoveforms": {
-			Name: "duplicatemoveforms",
-			Args: []LLVMType{LLVMType("double")},
-			Ret:  Void,
-			Frame: FrameLayout{Params: []FrameSlot{{
-				Offset: 0,
-				Type:   LLVMType("double"),
-				Index:  0,
-				Field:  -1,
-			}}},
-		}},
-	})
-	if err != nil {
-		t.Fatal(err)
+	signatures := map[string]FuncSig{"duplicatemoveforms": {
+		Name: "duplicatemoveforms",
+		Args: []LLVMType{LLVMType("double")},
+		Ret:  Void,
+		Frame: FrameLayout{Params: []FrameSlot{{
+			Offset: 0,
+			Type:   LLVMType("double"),
+			Index:  0,
+			Field:  -1,
+		}}},
+	}}
+	x86LEAActualTargetGoObject(t, "amd64", "x86_64-unknown-linux-gnu", "#include \"textflag.h\"\n"+src)
+	for _, api := range []string{"text", "module", "Go"} {
+		if ir, err := x86ScalarFPBitViewAPI(t, src, "func duplicatemoveforms(alpha float64)", "amd64", "x86_64-unknown-linux-gnu", api); ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+			t.Fatal("original format table invented its missing register/address/mask inputs", api, err)
+		}
 	}
+	ir := x86DuplicateMoveFormatObjectUnit(t, file, signatures, "amd64", "x86_64-unknown-linux-gnu")
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM22 llc required")
+	}
+	compileLLVMToObject(t, llc, "x86_64-unknown-linux-gnu", "duplicate-formats.ll", "duplicate-formats.o", ir)
 }
 
 func TestTranslateAMD64DuplicateMoveFamilyRejectsFormsOutsideGoOptabs(t *testing.T) {

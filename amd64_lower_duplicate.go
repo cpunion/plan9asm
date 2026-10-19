@@ -10,15 +10,20 @@ func (c *amd64Ctx) lowerDuplicateMove(op Op, ins Instr) (bool, bool, error) {
 	if !known || err != nil {
 		return known, false, err
 	}
+	ins.Op = op
+	return true, false, c.emitDuplicateMove(ins, form)
+}
+
+func (c *amd64Ctx) emitDuplicateMove(ins Instr, form x86DuplicateMoveForm) error {
 	destination := ins.Args[form.destination]
 	if form.legacy && form.spec.laneBytes == 4 && form.memory >= 0 {
 		if !x86ScalarFloatIntegerNativeTarget(c.goarch, c.targetTriple) ||
 			form.source.Kind == OpFP || form.source.Kind == OpMem &&
 			!x86OrdinaryNativeMemoryOperand(form.source, c.goarch) &&
 			!x86CallerMemoryCertified(ins, form.memory) && !c.fixedLocalMemoryCertified(ins, form.memory) {
-			return true, false, fmt.Errorf("%w: legacy duplicate m128 needs its original native alignment and storage", ErrProbeNeedsContext)
+			return fmt.Errorf("%w: legacy duplicate m128 needs its original native alignment and storage", ErrProbeNeedsContext)
 		}
-		return true, false, c.emitLegacyDuplicateMemory(op, form, destination)
+		return c.emitLegacyDuplicateMemory(ins.Op, form, destination)
 	}
 	laneBits := form.spec.laneBytes * 8
 	lanes, sourceBytes := form.byteWidth/form.spec.laneBytes, form.byteWidth
@@ -27,7 +32,7 @@ func (c *amd64Ctx) lowerDuplicateMove(op Op, ins Instr) (bool, bool, error) {
 	}
 	bytes, err := c.loadDuplicateMoveSource(form)
 	if err != nil {
-		return true, false, err
+		return err
 	}
 	cast := c.newTmp()
 	fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i8> %s to <%d x i%d>\n", cast, sourceBytes, bytes,
@@ -46,13 +51,13 @@ func (c *amd64Ctx) lowerDuplicateMove(op Op, ins Instr) (bool, bool, error) {
 	if form.mask >= 0 {
 		mask, err := c.loadK(ins.Args[form.mask].Reg)
 		if err != nil {
-			return true, false, err
+			return err
 		}
 		old := "zeroinitializer"
 		if !form.zeroing {
 			old, err = c.loadPackedCompareLanes(destination, form.byteWidth, laneBits, false)
 			if err != nil {
-				return true, false, err
+				return err
 			}
 		}
 		result = amd64ApplyIntegerLaneMask(c, lanes, laneBits, result, old, mask, form.zeroing)
@@ -60,9 +65,9 @@ func (c *amd64Ctx) lowerDuplicateMove(op Op, ins Instr) (bool, bool, error) {
 	out := c.newTmp()
 	fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i%d> %s to <%d x i8>\n", out, lanes, laneBits, result, form.byteWidth)
 	if form.legacy {
-		return true, false, c.storeLegacyPackedLogical(destination, "%"+out)
+		return c.storeLegacyPackedLogical(destination, "%"+out)
 	}
-	return true, false, c.storePackedMoveOperand(destination, form.byteWidth, "%"+out)
+	return c.storePackedMoveOperand(destination, form.byteWidth, "%"+out)
 }
 
 func (c *amd64Ctx) loadDuplicateMoveSource(form x86DuplicateMoveForm) (string, error) {

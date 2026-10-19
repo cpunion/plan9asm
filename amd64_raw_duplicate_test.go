@@ -238,20 +238,12 @@ func TestTranslateX86RawDuplicateMoveTargets(t *testing.T) {
 				}
 			}
 			source.WriteString("\tRET\n")
-			file, err := Parse(ArchAMD64, source.String())
+			file, signatures := x86UnboundVoidFormatSources(t, source.String(), target.goarch, target.triple)
+			normalized, err := normalizeX86RawFile(file, target.goarch)
 			if err != nil {
 				t.Fatal(err)
 			}
-			ll, err := Translate(file, Options{
-				TargetTriple: target.triple,
-				Goarch:       target.goarch,
-				Sigs: map[string]FuncSig{
-					"raw_duplicate_move": {Name: "raw_duplicate_move", Ret: Void},
-				},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			ll := x86DuplicateMoveFormatObjectUnit(t, normalized, signatures, target.goarch, target.triple)
 			compileLLVMToObject(t, llc, target.triple, "raw-duplicate-move-"+target.name+".ll", "raw-duplicate-move-"+target.name+".o", ll)
 		})
 	}
