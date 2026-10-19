@@ -23,6 +23,7 @@ idle worktrees; do not create another for routine work.
 | Code snapshot | Completed evidence | Limits |
 |---|---|---|
 | `18bb77a09` | CI dispatch ordering and Go loader identity: complete runner package passes actual Go1.20 and current Go, each with 79 roots / 182 children; six focused race roots pass, unchanged source/tools | The earlier complete Go1.27 package timeout and failed recorder remain failed observations; real independent source/tool/library and loader execution checks remain mandatory |
+| Same snapshot | All thirteen final gates pass; exact original 167-root replay has 78 pass / 0 fail / 89 explicit host skips, 3,323 children, unchanged source/tools | No absent/incomplete or passing roots with skipped children; complete CI and the strict benchmark remain failed/unqualified |
 | `7b97c31de` | x87 native floating moves and PUSH native reads: 69 roots / 4,988 children pass current Go, actual Go1.20 and race; identical 5,057 terminals, zero fail/skip/incomplete; all thirteen final gates pass | Complete four-member floating move and W/L/Q PUSH families, exact volatile widths, five-target objects and portable values/faults; no native FP80 or hardware exception claim |
 | Same snapshot | Exact original 167-root replay: 78 pass / 0 fail / 89 explicit host skips; unchanged source/tools, zero absent/incomplete or passing roots with skipped children | Only the two original mode32 complete-source roots and x87 direct-compare object root changed fail to pass relative to `1cafc5b2f`; no regressions |
 | `30a1c2679` | Mode32 logical AX returns and private FLAGS correlation: 45 roots / 2,500 children pass current Go, actual Go1.20 and race; identical 2,545 terminals, zero fail/skip/incomplete | Original two Windows386 complete-source failures pass; W/L, B/W/L subword, seven GP registers, clone/join and source/query boundaries retain independent controls |
@@ -108,7 +109,7 @@ See earlier checkpoints in Git rather than reconstructing counts by subtraction.
 
 ## Exact failure replay and online CI
 
-The latest local diagnostic at `7b97c31de` selects exactly the original CI's
+The latest local diagnostic at `18bb77a09` selects exactly the original CI's
 167 failed root names. One sealed Go test process ran the complete set,
 instead of repeatedly linking the same large test executable.
 All inventories, started/terminal identities and before/after source, SDK, LLVM
@@ -137,7 +138,8 @@ and environment observations match. This is not the canonical isolated CI runner
 | Previous batched replay, `bb85d27b3` | 73 | 5 | 89 | 0 / 0 |
 | Previous batched replay, `4acf97d89` | 74 | 4 | 89 | 0 / 0 |
 | Previous batched replay, `1cafc5b2f` | 75 | 3 | 89 | 0 / 0 |
-| Latest batched replay, `7b97c31de` | 78 | 0 | 89 | 0 / 0 |
+| Previous batched replay, `7b97c31de` | 78 | 0 | 89 | 0 / 0 |
+| Latest batched replay, `18bb77a09` | 78 | 0 | 89 | 0 / 0 |
 
 The fork diagnostic run `39192383617` tests `7b97c31de` and must finish before
 another diagnostic push. Its native x86, x87, ARM64 fallback, LOCK, unlocked
@@ -300,19 +302,25 @@ None of these receipts qualifies a later staged source or the PR40 head.
 
 ## Strict standard-library benchmark
 
-The last complete run at `bc79fd0f` failed with unchanged source/tools.
-All 184 original target/file pairs were attempted: 132 compile, 52 fail,
+The last complete run at `18bb77a09` failed with unchanged source/tools.
+All 184 original target/file pairs were attempted: 129 compile, 55 fail,
 zero N/A or unattempted. Compilation is not runtime execution.
 
 | Target | Compiled / total | Failed | Wall seconds |
 |---|---:|---:|---:|
-| linux/386 | 17 / 33 | 16 | 73 |
-| linux/amd64 | 29 / 55 | 26 | 709 |
-| linux/arm | 27 / 30 | 3 | 5 |
+| linux/386 | 14 / 33 | 19 | 94 |
+| linux/amd64 | 29 / 55 | 26 | 392 |
+| linux/arm | 27 / 30 | 3 | 3 |
 | linux/arm64 | 40 / 47 | 7 | 12 |
-| js/wasm | 19 / 19 | 0 | 5 |
+| js/wasm | 19 / 19 | 0 | 3 |
 
-Total 804s meets 900s, but AMD64 exceeds its unchanged 300s target budget.
+Total 504s meets 900s, but AMD64 exceeds its unchanged 300s target budget.
+Compared with `bc79fd0f`, three additional 386 failures expose unbound default
+scalar returns or native entry context in checktest's static TEXT, abi_test's
+test-only undeclared TEXT, and the Linux bootstrap entry. Do not restore false
+success by borrowing initialized register allocas or assuming a native ABI.
+The measured AMD64 time was previously 709s; the different snapshots/workloads
+are not a controlled performance comparison or proof of a specific speedup.
 A diagnostic sample shows substantial repeated SHA256/file validation; measure
 before changing implementation or claiming a speedup. Do not relax budgets.
 
@@ -336,9 +344,9 @@ before changing implementation or claiming a speedup. Do not relax budgets.
 3. Finish the active fork diagnostic, then batch the qualified ordering and
    loader-test repairs into its next push. Keep full Windows module validation
    required even if a failed prerequisite prevents it from starting this round.
-   At `18bb77a09`, final gates, a fresh exact failure replay and the unchanged
-   five-target benchmark are running; do not infer their outcomes from older
-   evidence.
+   At `18bb77a09`, thirteen final gates and the exact failure replay pass;
+   the complete five-target benchmark fails as recorded above. Do not infer
+   complete current-head CI or benchmark success from focused tests.
 4. Rerun the unchanged complete standard-library corpus and benchmark after
    relevant source repairs. Do not convert Context into successful compilation.
    A valid encoding grants no caller frame, memory ownership or ABI transport.
@@ -357,6 +365,8 @@ Resolve worktree locations with `git worktree list`. Ignored receipts include:
 - `ci-dispatch-loader-18bb77a0/go120/`,
   `ci-dispatch-loader-continuation-18bb77a0/`: actual complete SDK runner
   reports and focused race outcomes, with preserved failed-controller evidence.
+- `ci-dispatch-final-18bb77a0/`: thirteen final gates, exact original failure
+  replay and complete failed five-target benchmark, with unchanged source.
 - `x87-native-input-qualified-7b97c31d.json` and
   `x87-native-input-final-gates-7b97c31d/`: complete three-lane 69-root cohort
   and thirteen gates. The compact receipts retain exact started/terminal unions
