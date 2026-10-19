@@ -3,9 +3,84 @@ package plan9asm
 import (
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 )
+
+func TestX86PrivatePOPNativeStoreExactBitsAndOrigins(t *testing.T) {
+	for _, arch := range []string{"amd64", "386"} {
+		word, wide := int(x86ResultPointerWord(arch)), "Q"
+		if arch == "386" {
+			wide = "L"
+		}
+		for _, width := range []struct {
+			suffix string
+			bytes  int
+		}{{"W", 2}, {wide, word}} {
+			t.Run(arch+"/"+width.suffix, func(t *testing.T) {
+				push := x86ScalarLaneInstruction(t, "PUSH"+width.suffix+" AX")
+				pop := x86ScalarLaneInstruction(t, "POP"+width.suffix+" -1(DX)(CX*2)")
+				for missing := -1; missing < width.bytes; missing++ {
+					state := x86ResultState{flags: x86ByteFlagsAll, direction: x86ResultDirectionBackward,
+						valueStack: &x86ResultValueStack{id: true}}
+					state.pointerGP[2] = true
+					state.gp[0], state.gp[1] = 255, uint8(1)<<uint(word)-1
+					if missing >= 0 {
+						state.gp[0] &^= 1 << uint(missing)
+					}
+					if accepted, known := x86ResultValueStackStep(push, &state, nil, 0, arch); !accepted || !known {
+						t.Fatal("private copy cannot invent but must retain unknown pushed bytes")
+					}
+					before := state.clone()
+					accepted, known := x86LoweredStackNativeStore(pop, &state, nil, 0, arch)
+					if !known || accepted != (missing == -1) {
+						t.Fatal("native POP did not retain exact-byte requirements", missing, accepted, known)
+					}
+					if !accepted {
+						if !reflect.DeepEqual(state, before) {
+							t.Fatal("rejected native POP mutated reaching private state")
+						}
+						continue
+					}
+					want := before.clone()
+					want.valueStack.bytes = want.valueStack.bytes[:0]
+					want.valueStack.wordCells = 0
+					if !reflect.DeepEqual(state, want) {
+						t.Fatal("native POP changed facts beyond the independently popped private cell")
+					}
+					for _, mutation := range []string{"pointer", "index", "physical", "raw", "address", "segment", "native-return"} {
+						input, changed := before.clone(), pop
+						switch mutation {
+						case "pointer":
+							input.pointerGP[2] = false
+						case "index":
+							input.gp[1] >>= 1
+						case "physical":
+							changed.x86Encoded = true
+						case "raw":
+							changed.x86SourceRaw = new(x86SourceRawInstruction)
+						case "address":
+							changed.x86AddressBits = 32
+						case "segment":
+							changed.x86SegmentPrefix = 0x64
+						case "native-return":
+							changed.x86RawNearReturn = new(x86RawNearReturnForm)
+						}
+						original := input.clone()
+						if accepted, _ := x86LoweredStackNativeStore(changed, &input, nil, 0, arch); accepted || !reflect.DeepEqual(input, original) {
+							t.Fatal("native POP invented address/origin permission", mutation)
+						}
+					}
+					standalone := before.clone()
+					if accepted, _ := x86ResultValueStackStep(pop, &standalone, nil, 0, arch); accepted {
+						t.Fatal("standalone numerical POP observer acquired native store permission")
+					}
+				}
+			})
+		}
+	}
+}
 
 func TestX86PrivatePOPNativeStoresFiveTargets(t *testing.T) {
 	llc := findLLVM22Tool("llc")
