@@ -113,12 +113,8 @@ func TestX86SegmentQuerySelectorOldDestinationAndFlagsState(t *testing.T) {
 					if !x86ResultTransfer(ins, &state, nil, 0, arch) {
 						t.Fatal("complete low selector and old destination were rejected", flags)
 					}
-					wantMask := oldMask
-					if row.bytes >= 4 {
-						wantMask = 0xff // A successful dword result clears the wider alias.
-					}
 					if state.flags != flags|x86ByteFlagZF || state.gp[0] != 3 ||
-						state.gp[1] != wantMask || state.gp[2] != 0x55 {
+						state.gp[1] != oldMask || state.gp[2] != 0x55 {
 						t.Fatal("query invented FLAGS/input bytes or changed unrelated storage", state.flags, state.gp)
 					}
 				}

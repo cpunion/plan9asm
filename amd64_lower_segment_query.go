@@ -1,9 +1,6 @@
 package plan9asm
 
-import (
-	"fmt"
-	"strings"
-)
+import "fmt"
 
 type amd64SegmentQueryKind uint8
 
@@ -34,70 +31,22 @@ var amd64SegmentQuerySpecs = map[Op]amd64SegmentQuerySpec{
 }
 
 type amd64SegmentQueryForm struct {
+	spec        amd64SegmentQuerySpec
 	selector    Operand
 	destination Reg
 }
 
 func (c *amd64Ctx) lowerSegmentQuery(op Op, ins Instr) (ok bool, terminated bool, err error) {
-	rawOp := strings.ToUpper(string(op))
-	baseOp := rawOp
-	if dot := strings.IndexByte(rawOp, '.'); dot >= 0 {
-		baseOp = rawOp[:dot]
+	form, known, err := x86SegmentQueryProperties(op, ins, c.goarch)
+	if !known || err != nil {
+		return known, false, err
 	}
-	spec, recognized := amd64SegmentQuerySpecs[Op(baseOp)]
-	if !recognized {
-		return false, false, nil
-	}
-	if rawOp != baseOp {
-		return true, false, fmt.Errorf("%s %s does not accept instruction suffixes: %q", c.goarch, baseOp, ins.Raw)
-	}
-	if c.goarch == "386" && spec.bits == 64 {
-		return true, false, fmt.Errorf("386 %s is absent from Go 1.27's 32-bit encoding table: %q", baseOp, ins.Raw)
-	}
-	form, err := c.parseSegmentQueryForm(baseOp, spec, ins)
-	if err != nil {
-		return true, false, err
-	}
-	return c.emitSegmentQuery(spec, form)
+	return c.emitSegmentQuery(ins, form)
 }
 
-func (c *amd64Ctx) parseSegmentQueryForm(op string, spec amd64SegmentQuerySpec, ins Instr) (amd64SegmentQueryForm, error) {
-	var form amd64SegmentQueryForm
-	wantArgs := 2
-	if spec.bits == 0 {
-		wantArgs = 1
-	}
-	if len(ins.Args) != wantArgs {
-		if wantArgs == 1 {
-			return form, fmt.Errorf("%s %s expects one selector source: %q", c.goarch, op, ins.Raw)
-		}
-		return form, fmt.Errorf("%s %s expects selector source and GP destination: %q", c.goarch, op, ins.Raw)
-	}
-	selector := ins.Args[0]
-	if selector.Kind == OpReg {
-		if !isX86YrlRegisterForArch(selector.Reg, c.goarch) {
-			return form, fmt.Errorf("%s %s selector register is outside Go 1.27's Yml class: %q", c.goarch, op, ins.Raw)
-		}
-	} else if !isAMD64MemoryOperand(selector) {
-		return form, fmt.Errorf("%s %s selector must be a GP register or memory: %q", c.goarch, op, ins.Raw)
-	}
-	if selector.Kind == OpMem && !x86MemoryRegistersValidForArch(selector.Mem, c.goarch) {
-		return form, fmt.Errorf("%s %s selector address uses an out-of-range register: %q", c.goarch, op, ins.Raw)
-	}
-	form.selector = selector
-	if wantArgs == 1 {
-		return form, nil
-	}
-	destination := ins.Args[1]
-	if destination.Kind != OpReg || !isX86YrlRegisterForArch(destination.Reg, c.goarch) {
-		return form, fmt.Errorf("%s %s destination must be a Go 1.27 Yrl register: %q", c.goarch, op, ins.Raw)
-	}
-	form.destination = destination.Reg
-	return form, nil
-}
-
-func (c *amd64Ctx) emitSegmentQuery(spec amd64SegmentQuerySpec, form amd64SegmentQueryForm) (bool, bool, error) {
-	selector, err := c.evalIntSized(form.selector, I16)
+func (c *amd64Ctx) emitSegmentQuery(ins Instr, form amd64SegmentQueryForm) (bool, bool, error) {
+	spec := form.spec
+	selector, err := c.evalSegmentQuerySelector(ins, form.selector)
 	if err != nil {
 		return true, false, err
 	}
@@ -113,7 +62,19 @@ func (c *amd64Ctx) emitSegmentQuery(spec amd64SegmentQuerySpec, form amd64Segmen
 		return true, false, nil
 	}
 
-	typ := amd64IntegerTypeForBits(spec.bits)
+	// A query can fail without writing its destination. Retain the whole
+	// native GP carrier in the tied operand, rather than unconditionally
+	// zero-extending an i32 result after a failed LARL/LSLL. The actual opcode
+	// determines the physical upper-half behavior on this processor.
+	typ, destination := I64, "$0"
+	if c.goarch == "386" {
+		typ = I32
+	}
+	if spec.bits == 16 {
+		destination = "${0:w}"
+	} else if spec.bits == 32 {
+		destination = "${0:k}"
+	}
 	previousDestination, err := c.evalIntSized(Operand{Kind: OpReg, Reg: form.destination}, typ)
 	if err != nil {
 		return true, false, err
@@ -130,7 +91,7 @@ func (c *amd64Ctx) emitSegmentQuery(spec amd64SegmentQuerySpec, form amd64Segmen
 		mnemonic = "lsl"
 	}
 	width := map[int]string{16: "w", 32: "l", 64: "q"}[spec.bits]
-	assembly := mnemonic + width + " $3, $0; sete $1"
+	assembly := mnemonic + width + " $3, " + destination + "; sete $1"
 	fmt.Fprintf(c.b, "  %%%s = call { %s, i8 } asm sideeffect %q, %q(%s %s, i16 %s)\n",
 		result, typ, assembly, "=r,=q,0,r,~{dirflag},~{fpsr},~{flags}", typ, previousDestination, selector)
 	value := c.newTmp()
@@ -142,6 +103,17 @@ func (c *amd64Ctx) emitSegmentQuery(spec amd64SegmentQuerySpec, form amd64Segmen
 		return true, false, err
 	}
 	return true, false, nil
+}
+
+func (c *amd64Ctx) evalSegmentQuerySelector(ins Instr, selector Operand) (string, error) {
+	if selector.Kind == OpFP && x86ResultNamedPredicateInstruction(ins) {
+		if value, handled, err := c.loadIntegerFPBytesMode(selector.FPOffset, I16, true); handled || err != nil {
+			return value, err
+		}
+	}
+	// Share the exact unaligned volatile scalar emitter. This is a two-byte
+	// read even for Q spellings and dead results; it creates no backing fact.
+	return c.evalSizedNativeGPSource(selector, I16, ins.x86AddressBits)
 }
 
 func (c *amd64Ctx) storeSegmentQueryZF(status string) {
