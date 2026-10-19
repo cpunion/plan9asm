@@ -21,13 +21,8 @@ func x86ScalarShiftProperties(op Op, ins Instr, arch string) (x86ScalarShiftForm
 	stem, bits, known := amd64ScalarShiftRotateProperties(base)
 	bmi2 := false
 	if !known {
-		if spec, present := amd64BMI2ShiftSpecs[base]; present {
+		if spec, present := amd64BMI2ShiftSpecs[Op(base)]; present {
 			stem, bits, known, bmi2 = base[:len(base)-1], spec.bits, true, true
-		} else if base == "RORXL" || base == "RORXQ" {
-			stem, bits, known, bmi2 = "RORX", 32, true, true
-			if base == "RORXQ" {
-				bits = 64
-			}
 		}
 	}
 	if !known {
@@ -114,7 +109,7 @@ func x86TypedScalarShiftByteEffect(op Op, ins Instr, arch string) (x86TypedByteE
 	// A numerical byte effect is not memory authority. Logical FP/AUTO
 	// consumers still need initialized storage; native operands require the
 	// lowering-only continuation paired with their exact volatile access.
-	effect := x86TypedByteEffect{requiresResultProof: f.hasMemory()}
+	effect := x86TypedByteEffect{requiresResultProof: f.bmi2 || f.hasMemory()}
 	if variable {
 		// Both CX spelling and every BMI2 Yrl count consume only low CL bits.
 		effect.operands = append(effect.operands, x86TypedByteOperand{index: 0, operand: f.count, width: 1, read: true})

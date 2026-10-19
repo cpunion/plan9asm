@@ -246,7 +246,7 @@ func (c *amd64Ctx) lowerArith(op Op, ins Instr) (ok bool, terminated bool, err e
 	if ok, terminated, err := c.lowerScalarBitCount(op, ins); ok {
 		return ok, terminated, err
 	}
-	if ok, terminated, err := c.lowerBMI2VariableShift(op, ins); ok {
+	if ok, terminated, err := c.lowerBMI2ShiftRotate(op, ins); ok {
 		return ok, terminated, err
 	}
 	if ok, terminated, err := c.lowerScalarUnaryYmb(op, ins); ok {
@@ -1502,62 +1502,6 @@ func (c *amd64Ctx) lowerArith(op Op, ins Instr) (ok bool, terminated bool, err e
 		fmt.Fprintf(c.b, "  %%%s = lshr i32 %%%s, %s\n", lhs, dv32, cnt32)
 		rhs := c.newTmp()
 		fmt.Fprintf(c.b, "  %%%s = shl i32 %%%s, %%%s\n", rhs, dv32, nm)
-		rot := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = or i32 %%%s, %%%s\n", rot, lhs, rhs)
-		z := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = zext i32 %%%s to i64\n", z, rot)
-		return true, false, c.storeReg(dst, "%"+z)
-
-	case "RORXL", "RORXQ":
-		if _, _, err := x86ScalarShiftProperties(op, ins, c.goarch); err != nil {
-			return true, false, err
-		}
-		// BMI2 rotate-right without flags. Go's Yml source class accepts a
-		// general register or every ModRM/SIB memory form; Yrl is the complete
-		// destination class. In 386 mode Go accepts the Q spelling too, but
-		// VEX.W is ignored and the architectural operation remains 32-bit.
-		if len(ins.Args) != 3 || ins.Args[0].Kind != OpImm || ins.Args[2].Kind != OpReg || !isX86YrlRegisterForArch(ins.Args[2].Reg, c.goarch) {
-			return true, false, fmt.Errorf("%s %s expects $imm, GP/memory source, in-range GP destination: %q", c.goarch, op, ins.Raw)
-		}
-		if ins.Args[1].Kind == OpReg {
-			if !isX86YrlRegisterForArch(ins.Args[1].Reg, c.goarch) {
-				return true, false, fmt.Errorf("%s %s source is outside Go 1.27's Yml class: %q", c.goarch, op, ins.Raw)
-			}
-		} else if !isAMD64MemoryOperand(ins.Args[1]) {
-			return true, false, fmt.Errorf("%s %s source is outside Go 1.27's Yml class: %q", c.goarch, op, ins.Raw)
-		}
-		dst := ins.Args[2].Reg
-		if op == "RORXQ" && c.goarch == "amd64" {
-			src, _, err := c.loadScalarShiftOperand(ins, 1, I64)
-			if err != nil {
-				return true, false, err
-			}
-			n := uint64(ins.Args[0].Imm) & 63
-			neg := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = sub i64 64, %d\n", neg, n)
-			nm := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = and i64 %%%s, 63\n", nm, neg)
-			lhs := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = lshr i64 %s, %d\n", lhs, src, n)
-			rhs := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = shl i64 %s, %%%s\n", rhs, src, nm)
-			rot := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = or i64 %%%s, %%%s\n", rot, lhs, rhs)
-			return true, false, c.storeReg(dst, "%"+rot)
-		}
-		src, _, err := c.loadScalarShiftOperand(ins, 1, I32)
-		if err != nil {
-			return true, false, err
-		}
-		n := uint32(ins.Args[0].Imm) & 31
-		neg := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = sub i32 32, %d\n", neg, n)
-		nm := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = and i32 %%%s, 31\n", nm, neg)
-		lhs := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = lshr i32 %s, %d\n", lhs, src, n)
-		rhs := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = shl i32 %s, %%%s\n", rhs, src, nm)
 		rot := c.newTmp()
 		fmt.Fprintf(c.b, "  %%%s = or i32 %%%s, %%%s\n", rot, lhs, rhs)
 		z := c.newTmp()

@@ -35,8 +35,8 @@ func decodedX86BMI2ShiftInstruction(code []byte, mode int) (Instr, int, bool, er
 	}
 	var op Op
 	for name, spec := range amd64BMI2ShiftSpecs {
-		if spec.bits == bits && spec.prefix == p.pp {
-			op = Op(name)
+		if !spec.immediate && spec.bits == bits && spec.prefix == p.pp {
+			op = name
 			break
 		}
 	}

@@ -23,11 +23,11 @@ func TestX86BMI2ShiftGrammarMatchesGoEncoder(t *testing.T) {
 	}
 	pattern := `(?s)\{as: A((?:SARX|SHLX|SHRX)[LQ]), ytab: (\w+), prefix: Pavx, op: opBytes\{(.*?)\}\}`
 	rows := regexp.MustCompile(pattern).FindAllStringSubmatch(string(data), -1)
-	if len(rows) != 6 || len(amd64BMI2ShiftSpecs) != len(rows) {
+	if len(rows) != 6 || len(amd64BMI2ShiftSpecs) != 8 {
 		t.Fatalf("Go family=%d, typed family=%d", len(rows), len(amd64BMI2ShiftSpecs))
 	}
 	for _, row := range rows {
-		spec, ok := amd64BMI2ShiftSpecs[row[1]]
+		spec, ok := amd64BMI2ShiftSpecs[Op(row[1])]
 		prefix := map[int]string{1: "vex66", 2: "vexF3", 3: "vexF2"}[spec.prefix]
 		wide := strings.HasSuffix(row[1], "Q")
 		if !ok || row[2] != "_ybextrl" || (spec.bits == 64) != wide {

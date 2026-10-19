@@ -1017,7 +1017,7 @@ func models386SPWrite(ins Instr) bool {
 	if !is386SPDestination(ins) {
 		return false
 	}
-	if _, ok := amd64BMI2ShiftSpecs[op]; ok {
+	if _, ok := amd64BMI2ShiftSpecs[Op(op)]; ok {
 		return true
 	}
 	if _, known, err := x86ScalarFloatIntegerProperties(ins, "386"); known {
@@ -1030,7 +1030,6 @@ func models386SPWrite(ins Instr) bool {
 		"POPCNTW", "POPCNTL", "TZCNTW", "TZCNTL", "LZCNTW", "LZCNTL", "PMOVMSKB", "VPMOVMSKB",
 		"BEXTRL", "BEXTRQ", "BZHIL", "BZHIQ", "BLSIL", "BLSIQ", "BLSMSKL", "BLSMSKQ", "BLSRL", "BLSRQ",
 		"ANDNL", "ANDNQ",
-		"RORXL", "RORXQ",
 		"PDEPL", "PDEPQ", "PEXTL", "PEXTQ":
 		// These are the direct SP forms used by the official 386 corpus. MOVL
 		// and non-SP LEAL rebase to an explicitly supplied stack context;
