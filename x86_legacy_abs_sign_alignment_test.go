@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -104,10 +105,92 @@ func x86AbsSignAlignmentProgram(arch string, vectorControls bool) (string, strin
 	return source.String(), declarations.String()
 }
 
+// Native runtime and host-independent C-object checks consume this same
+// generator. Quote actual assembly newlines once as a C string literal,
+// rather than stacking raw-Go, fmt and C backslash escape conventions.
+func x86AbsSignAlignmentNativeReferences(t *testing.T, code [][]byte) (string, string) {
+	t.Helper()
+	rows := x86AbsSignAlignmentRows()
+	if len(code) != len(rows) {
+		t.Fatal("native original reference lacks the complete independent byte directory")
+	}
+	var references, kernels strings.Builder
+	for index, row := range rows {
+		literal := make([]string, len(code[index]))
+		for at, value := range code[index] {
+			literal[at] = fmt.Sprintf("0x%02x", value)
+		}
+		for _, role := range []string{"live", "dead"} {
+			name := fmt.Sprintf("AbsAlignment%d_%s", index, role)
+			assembly := "movdqu (%1),%%xmm0\n\tstc\n\t.byte " + strings.Join(literal, ",") + "\n\t"
+			live := 0
+			if role == "live" {
+				assembly += "movdqu %%xmm0,(%2)\n\t"
+				live = 1
+			}
+			assembly += "setc 16(%2)"
+			fmt.Fprintf(&references, `extern void %[1]s(uint8_t*,const uint8_t*,const uint8_t*);
+static __attribute__((noinline,used)) void original_%[1]s(uint8_t *out,const uint8_t *input,const uint8_t *old) {
+    __asm__ volatile(%[2]s : : "b"(input),"r"(old),"r"(out) : "xmm0","memory","cc");
+}
+`, name, strconv.Quote(assembly))
+			legacy, sign := 0, 0
+			if row.legacy {
+				legacy = 1
+			}
+			if row.sign {
+				sign = 1
+			}
+			fmt.Fprintf(&kernels, "{%s,original_%s,%d,%d,%d,%d},\n", name, name, row.bits/8, sign, legacy, live)
+		}
+	}
+	return references.String(), kernels.String()
+}
+
 func TestX86LegacyAbsSignAlignmentIndependentOriginalBytes(t *testing.T) {
 	x86PackedAbsSignOriginalProgramUnchanged(t)
 	for _, arch := range []string{"386", "amd64"} {
 		t.Run(arch, func(t *testing.T) { x86AbsSignAlignmentOriginalBytes(t, arch) })
+	}
+}
+
+func TestX86LegacyAbsSignAlignmentOriginalCWrappersCompile(t *testing.T) {
+	clang, objdump := findLLVM22Tool("clang"), findLLVM22Tool("llvm-objdump")
+	if clang == "" || objdump == "" {
+		t.Fatal("actual native original wrappers require exact LLVM22 clang and llvm-objdump")
+	}
+	for _, target := range x86RawReturnTargets {
+		t.Run(target.triple, func(t *testing.T) {
+			references, _ := x86AbsSignAlignmentNativeReferences(t, x86AbsSignAlignmentOriginalBytes(t, target.arch))
+			for _, level := range []string{"-O0", "-O2"} {
+				t.Run(level, func(t *testing.T) {
+					directory := t.TempDir()
+					source, object := filepath.Join(directory, "original.c"), filepath.Join(directory, "original.o")
+					if err := os.WriteFile(source, []byte("typedef unsigned char uint8_t;\n"+references), 0600); err != nil {
+						t.Fatal(err)
+					}
+					// Object-only, freestanding C: no host headers, SDK, libc or
+					// link fallback can hide a wrong 386/AMD64 register constraint.
+					stage, cancel := runtimeOracleStageContext(t)
+					output, err := runtimeOracleCombinedOutput(stage, exec.CommandContext(stage, clang, "--no-default-config",
+						"-target", target.triple, "-nostdinc", "-ffreestanding", "-mssse3", level, "-c", source, "-o", object))
+					cancel()
+					if err != nil {
+						t.Fatalf("actual original native C wrappers failed compilation: %v\n%s", err, output)
+					}
+					stage, cancel = runtimeOracleStageContext(t)
+					listing, err := runtimeOracleCombinedOutput(stage, exec.CommandContext(stage, objdump, "-d", object))
+					cancel()
+					if err != nil {
+						t.Fatalf("actual original native C objects failed independent disassembly: %v\n%s", err, listing)
+					}
+					pattern := `(?m)^[0-9a-f]+ <_?original_AbsAlignment[0-9]+_(?:live|dead)>:\r?\n`
+					if got := len(regexp.MustCompile(pattern).FindAll(listing, -1)); got != 24 {
+						t.Fatal("actual C object lost an original live/dead opcode wrapper", got)
+					}
+				})
+			}
+		})
 	}
 }
 

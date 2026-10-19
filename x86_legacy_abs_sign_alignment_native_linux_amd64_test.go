@@ -1,7 +1,6 @@
 package plan9asm
 
 import (
-	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -56,36 +55,9 @@ int main(void) {
 	source, declarations := x86AbsSignAlignmentProgram(arch, true)
 	x86LEAActualTargetGoObject(t, arch, execution.triple, source)
 	code := x86AbsSignAlignmentOriginalBytes(t, arch)
-	var references, kernels strings.Builder
-	for index, row := range x86AbsSignAlignmentRows() {
-		literal := make([]string, len(code[index]))
-		for at, value := range code[index] {
-			literal[at] = fmt.Sprintf("0x%02x", value)
-		}
-		for _, role := range []string{"live", "dead"} {
-			name := fmt.Sprintf("AbsAlignment%d_%s", index, role)
-			store, live := "", 0
-			if role == "live" {
-				store, live = "movdqu %%xmm0,(%2)\\n\\t", 1
-			}
-			fmt.Fprintf(&references, `extern void %[1]s(uint8_t*,const uint8_t*,const uint8_t*);
-static __attribute__((noinline)) void original_%[1]s(uint8_t *out,const uint8_t *input,const uint8_t *old) {
-    __asm__ volatile("movdqu (%%1),%%%%xmm0\n\tstc\n\t.byte %[2]s\n\t%[3]ssetc 16(%%2)"
-        : : "b"(input),"r"(old),"r"(out) : "xmm0","memory","cc");
-}
-`, name, strings.Join(literal, ","), store)
-			legacy, sign := 0, 0
-			if row.legacy {
-				legacy = 1
-			}
-			if row.sign {
-				sign = 1
-			}
-			fmt.Fprintf(&kernels, "{%s,original_%s,%d,%d,%d,%d},\n", name, name, row.bits/8, sign, legacy, live)
-		}
-	}
-	driver := x86MemoryFaultSupportC + references.String() + x86LegacyAbsSignAlignmentNativeC +
-		"static const struct abs_sign_case cases[]={\n" + kernels.String() + "};\n" + x86LegacyAbsSignAlignmentNativeMainC
+	references, kernels := x86AbsSignAlignmentNativeReferences(t, code)
+	driver := x86MemoryFaultSupportC + references + x86LegacyAbsSignAlignmentNativeC +
+		"static const struct abs_sign_case cases[]={\n" + kernels + "};\n" + x86LegacyAbsSignAlignmentNativeMainC
 	ir, err := x86ScalarFPBitViewAPI(t, source, declarations, arch, execution.triple, "Go")
 	if err != nil || ir == "" {
 		t.Fatal("original initialized native live/dead program rejected", err)

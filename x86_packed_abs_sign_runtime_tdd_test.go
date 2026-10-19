@@ -125,7 +125,9 @@ func x86PackedAbsSignPortableMemoryInstrumentation(t *testing.T, source string, 
 				if key == "" {
 					t.Fatal("portable instrumentation lost original source spelling")
 				}
-				replacements[key] = fmt.Sprintf("MOVOU %s,X%d\n%s X%d,%s", ins.Args[0], scratch, ins.Op, scratch, ins.Args[1])
+				// VMOVDQU is the portable unaligned byte transport. MOVOU's
+				// native bridge would itself introduce x86 inline assembly.
+				replacements[key] = fmt.Sprintf("VMOVDQU %s,X%d\n%s X%d,%s", ins.Args[0], scratch, ins.Op, scratch, ins.Args[1])
 				count++
 			}
 		}
