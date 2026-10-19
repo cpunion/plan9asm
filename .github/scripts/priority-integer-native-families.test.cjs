@@ -11,6 +11,7 @@ const owners = [
   'TestCrossLinuxRuntimeMatrixX86PackedAlignLegacyNativeFaults',
   'TestCrossLinuxRuntimeMatrixX86ImplicitDivideOriginalGoAndNativeAMD64',
   'TestCrossLinuxRuntimeMatrixX86ImplicitDivideOriginalGoAndNative386',
+  'TestCrossLinuxRuntimeMatrixX86SegmentQueryOriginalFlagsAliasesAndFaults',
 ];
 const axes = ['backend_O0', 'backend_O2', 'IR_O2/backend_O2'];
 const packageName = 'github.com/xgo-dev/plan9asm';
@@ -23,6 +24,7 @@ const directImage = args => `IA32 direct ELF bytes=4096 sha256=${imageHash} argv
 const sdk = args => `actual executable=/sdk/bin/go sha256=${hash} argv=${args}\n`;
 const originalArgs = '["-test.run=^TestOriginal$" "-test.count=1" "-test.v"]';
 const compileArgs = '["test" "-p=1" "-vet=off" "-c" "-o" "/tmp/owned/original.test" "."]';
+const segmentEvidence = '48 original-Go opcode rows × 16 inputs; full GP aliases, six status flags, canaries; 160 live/dead m16 fault processes\n';
 const event = (Action, Test, Output) => ({Action, Package: packageName,
   ...(Test ? {Test} : {}), ...(Output !== undefined ? {Output} : {})});
 const serialize = events => events.map(value => JSON.stringify(value)).join('\n');
@@ -30,19 +32,20 @@ const serialize = events => events.map(value => JSON.stringify(value)).join('\n'
 function completeEvents() {
   const events = [event('start')];
   for (const owner of owners) {
-    const divide = owner.includes('ImplicitDivide');
+    const observed = owner.includes('ImplicitDivide') || owner.includes('SegmentQuery');
     const ia32 = owner.endsWith('386');
     events.push(event('run', owner));
-    if (divide) events.push(event('output', owner, host));
+    if (observed) events.push(event('output', owner, host));
     for (const axis of axes) {
       const child = owner + '/' + axis;
       events.push(event('run', child));
       if (ia32) {
         events.push(event('output', child, staticImage + directImage('[]') + staticImage));
       }
+      if (owner.includes('SegmentQuery')) events.push(event('output', child, segmentEvidence));
       events.push(event('pass', child));
     }
-    if (divide) {
+    if (observed) {
       events.push(event('output', owner, sdk('["version"]') + sdk(compileArgs)));
       if (ia32) events.push(event('output', owner, staticImage + directImage(originalArgs)));
       events.push(event('output', owner, host));
@@ -53,10 +56,10 @@ function completeEvents() {
   return events;
 }
 
-test('native integer families require all four roots and twelve complete execution axes', () => {
+test('native integer families require all five roots and fifteen complete execution axes', () => {
   assert.deepEqual(auditIntegerNativeFamilies(inventory, serialize(completeEvents())),
-    {roots: 4, children: 12, passed: 16, skipped: 0, incomplete: 0,
-      nativeHosts: 4, sdkBuilds: 2, staticIA32Images: 7, directIA32Executions: 4});
+    {roots: 5, children: 15, passed: 20, skipped: 0, incomplete: 0,
+      nativeHosts: 6, sdkBuilds: 3, staticIA32Images: 7, directIA32Executions: 4});
 });
 
 test('native integer families reject each missing, failed, skipped or duplicate terminal', () => {
@@ -102,7 +105,7 @@ test('native integer families reject malformed packages, inventory changes and p
   assert.throws(() => auditIntegerNativeFamilies(inventory, '{not JSON}'));
 });
 
-test('division native hosts and actual Go SDK builds bracket all three axes', () => {
+test('division and segment native hosts and actual Go SDK builds bracket all three axes', () => {
   for (const owner of owners.slice(2)) {
     for (const replacement of ['', host.replace('linux/amd64', 'linux/arm64'),
       host.replace('kernel=x86_64', 'kernel=aarch64'), host.replace(hash, 'not-a-digest')]) {
@@ -145,6 +148,18 @@ test('division native hosts and actual Go SDK builds bracket all three axes', ()
     const finalChild = earlyGo.findIndex(value => value.Test === owner + '/' + axes[2] && value.Action === 'pass');
     earlyGo.splice(finalChild, 0, originalGo);
     assert.throws(() => auditIntegerNativeFamilies(inventory, serialize(earlyGo)), 'Go before final axis');
+  }
+});
+
+test('segment query axes require their complete actual opcode flags alias and fault evidence', () => {
+  const owner = owners[4];
+  for (const axis of axes) {
+    for (const replacement of ['', segmentEvidence.replace('160', '159'),
+      segmentEvidence.replace('six status flags', 'ZF only')]) {
+      const changed = completeEvents().map(value => value.Test === owner + '/' + axis && value.Output
+        ? {...value, Output: value.Output.replace(segmentEvidence, replacement)} : value);
+      assert.throws(() => auditIntegerNativeFamilies(inventory, serialize(changed)), axis);
+    }
   }
 });
 
