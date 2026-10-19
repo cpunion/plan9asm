@@ -1,6 +1,7 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const test = require('node:test');
+const {requireCompleteWindowsNeeds} = require('./workflow-needs.cjs');
 const {auditNativeUnlocked, roots, children} = require('./audit-unlocked-native.cjs');
 
 const workflow = fs.readFileSync('.github/workflows/pr40-owned-process-probe.yml', 'utf8');
@@ -24,7 +25,7 @@ function requireUnlockedOwner(source) {
   assert.match(body, /if: \$\{\{ !cancelled\(\) \}\}/);
   assert.match(body, /name: native-unlocked\n          path: _out\/native-unlocked\/\n          if-no-files-found: error/);
   assert.doesNotMatch(body, /continue-on-error|max-parallel|qemu|rosetta|PLAN9ASM_CROSS_EXEC|overlay/);
-  assert.match(source, /needs: \[ownership, native-x86-oracles, sdk-priority, arm64-fallback-cross-priority, lock-native-priority, unlocked-rmw-native-priority, vector-value-fault-priority\]/);
+  requireCompleteWindowsNeeds(source);
   return body;
 }
 

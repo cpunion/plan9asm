@@ -3,6 +3,7 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const test = require('node:test');
+const {requireCompleteWindowsNeeds} = require('./workflow-needs.cjs');
 const {auditIntegerNativeFamilies} = require('./audit-integer-native-families.cjs');
 
 // Independent owner/axis inventory: do not import the auditor's denominator.
@@ -199,6 +200,6 @@ test('native integer CI is a required exact Linux owner with retained raw observ
   assert.ok(block.includes('go test . -run "^($roots)$" -count=1 -timeout=5m -json > "$directory/raw.jsonl" 2> "$directory/stderr.log"'));
   assert.ok(block.includes('node .github/scripts/audit-integer-native-families.cjs "$directory"'));
   assert.doesNotMatch(block, /continue-on-error|\|\| true|qemu|objects-only/);
-  assert.match(workflow, /needs: \[ownership, native-x86-oracles, sdk-priority,/);
+  requireCompleteWindowsNeeds(workflow);
   assert.match(job, /path: _out\/native-x86-oracles\//);
 });

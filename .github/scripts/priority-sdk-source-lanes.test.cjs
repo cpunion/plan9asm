@@ -1,6 +1,7 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const test = require('node:test');
+const {requireCompleteWindowsNeeds} = require('./workflow-needs.cjs');
 
 const workflow = fs.readFileSync('.github/workflows/pr40-owned-process-probe.yml', 'utf8');
 const sdk = workflow.slice(workflow.indexOf('\n  sdk-priority:'), workflow.indexOf('\n  ownership:'));
@@ -492,7 +493,7 @@ test('Every lane retains exact inventory and an independent artifact', () => {
   assert.match(sdk, /grep -Fx "\$root" "\$report\/inventory.log"/);
   assert.match(sdk, /-timeout="\$SDK_PRIORITY_TIMEOUT"/);
   assert.match(sdk, /name: windows-sdk-priority-\$\{\{ matrix.lane \}\}/);
-  assert.match(workflow, /needs: \[ownership, native-x86-oracles, sdk-priority, arm64-fallback-cross-priority, lock-native-priority, unlocked-rmw-native-priority, vector-value-fault-priority\]/);
+  requireCompleteWindowsNeeds(workflow);
   assert.doesNotMatch(sdk, /continue-on-error|max-parallel|go test[^\n]* -skip/);
 });
 
