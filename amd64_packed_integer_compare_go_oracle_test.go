@@ -79,7 +79,7 @@ func wideLane(p []byte, bytes int) uint64 {
     return result
 }
 
-func checkWide(t *testing.T,fn func(*byte,*byte,*byte,uint64,uint32),name string,
+func checkWide(t *testing.T,fn func(*byte,*byte,*byte,uint64,uint32,uint64),name string,
                width,bytes int,greater,legacy,mmx,maskResult,masked,memory,broadcast bool,
                firstBank,secondBank,destination int) {
     t.Helper()
@@ -100,10 +100,10 @@ func checkWide(t *testing.T,fn func(*byte,*byte,*byte,uint64,uint32),name string
             var out [424]byte
             for i := range out { out[i] = 0xc3 }
             csr := uint32(0x1f80 | (round%4)<<13 | round)
-            fn(&out[1],&a[0],&b[0],mask,csr)
             expectedFlags := uint64(0x895)
             if mask&3 == 0 { expectedFlags = 0 }
             if mask&3 == 1 { expectedFlags = 0x55 }
+            fn(&out[1],&a[0],&b[0],mask,csr,2|expectedFlags)
             if binary.LittleEndian.Uint64(out[409:417])&0x8d5 != expectedFlags || out[417] != byte(2|(expectedFlags&0xd5)) ||
                binary.LittleEndian.Uint32(out[418:422]) != csr || out[0] != 0xc3 ||
                out[422] != 0xc3 || out[423] != 0xc3 || originalA != aStorage || originalB != bStorage {

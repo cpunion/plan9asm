@@ -12,31 +12,30 @@ func x86PackedIntegerCompareRuntimeFixture(rows []x86PackedIntegerCompareCase) (
 	var declarations, source, prototypes strings.Builder
 	for index, row := range rows {
 		name := fmt.Sprintf("compare%d", index)
-		fmt.Fprintf(&declarations, "func %s(out,a,b *byte, mask uint64, csr uint32)\n", name)
-		fmt.Fprintf(&prototypes, "extern void %s(uint8_t*,const uint8_t*,const uint8_t*,uint64_t,uint32_t);\n", name)
-		fmt.Fprintf(&source, "TEXT ·%s(SB),4,$0-36\nMOVQ out+0(FP),DI\nMOVQ a+8(FP),BX\nMOVQ b+16(FP),CX\nMOVQ mask+24(FP),DX\nLDMXCSR csr+32(FP)\n", name)
+		fmt.Fprintf(&declarations, "func %s(out,a,b *byte, mask uint64, csr uint32, flags uint64)\n", name)
+		fmt.Fprintf(&prototypes, "extern void %s(uint8_t*,const uint8_t*,const uint8_t*,uint64_t,uint32_t,uint64_t);\n", name)
+		fmt.Fprintf(&source, "TEXT ·%s(SB),4,$0-48\nMOVQ out+0(FP),DI\nMOVQ a+8(FP),BX\nMOVQ b+16(FP),CX\nMOVQ mask+24(FP),DX\nLDMXCSR csr+32(FP)\n", name)
 		source.WriteString("VMOVUPS (BX),Z0\nVMOVUPS (CX),Z1\nVMOVUPS (CX),Z2\n")
 		for mask := 0; mask < 8; mask++ {
 			fmt.Fprintf(&source, "KMOVQ DX,K%d\n", mask)
 		}
+		// Seed the independently selected status before the physical MMX
+		// region. No CFG or unrelated effect can split that region's state.
+		source.WriteString("PUSHQ flags+40(FP)\nPOPFQ\n")
 		if row.mmx {
 			source.WriteString("MOVQ (BX),M0\nMOVQ (CX),M1\n")
 		}
-		source.WriteString("MOVL DX,SI\nANDL $3,SI\nCMPL SI,$0\nJE compare_zero\nCMPL SI,$1\nJE compare_one\n" +
-			"MOVL $0x7fffffff,SI\nADDL $1,SI\nSTC\nJMP compare_flags_done\n" +
-			"compare_zero:\nMOVL $1,SI\nADDL $1,SI\nJMP compare_flags_done\n" +
-			"compare_one:\nMOVL $-1,SI\nADDL $1,SI\ncompare_flags_done:\n")
 		fmt.Fprintf(&source, "%s %s\n", row.op, row.operands)
+		if row.mmx {
+			source.WriteString("MOVQ M1,400(DI)\nEMMS\n")
+		} else {
+			source.WriteString("MOVQ $0,400(DI)\n")
+		}
 		for bank := 0; bank < 3; bank++ {
 			fmt.Fprintf(&source, "MOVOU X%d,%d(DI)\nVMOVUPS Y%d,%d(DI)\nVMOVUPS Z%d,%d(DI)\n", bank, bank*112, bank, bank*112+16, bank, bank*112+48)
 		}
 		for mask := 0; mask < 8; mask++ {
 			fmt.Fprintf(&source, "KMOVQ K%d,%d(DI)\n", mask, 336+mask*8)
-		}
-		if row.mmx {
-			source.WriteString("MOVQ M1,400(DI)\nEMMS\n")
-		} else {
-			source.WriteString("MOVQ $0,400(DI)\n")
 		}
 		// Observe LAHF before masking the popped word: AND changes FLAGS.
 		// The whole RFLAGS word includes undefined/unmodeled control bits;
@@ -65,7 +64,7 @@ static int compareValue(uint64_t first, uint64_t second, int bytes, int greater)
 }
 
 __attribute__((noinline)) static int checkCompare(
-    void (*fn)(uint8_t*,const uint8_t*,const uint8_t*,uint64_t,uint32_t),
+    void (*fn)(uint8_t*,const uint8_t*,const uint8_t*,uint64_t,uint32_t,uint64_t),
     const char *name, int width, int bytes, int greater, int legacy, int mmx,
     int maskResult, int masked, int memory, int broadcast,
     int firstBank, int secondBank, int destination) {
@@ -93,10 +92,10 @@ __attribute__((noinline)) static int checkCompare(
             uint32_t saved, csr = 0x1f80 | ((round%4)<<13) | round, after;
             __asm__ volatile("stmxcsr %0" : "=m"(saved));
             __asm__ volatile("ldmxcsr %0" : : "m"(csr));
-            fn(output+1,a,b,mask,csr);
+            uint64_t expectedFlags = (mask&3) == 0 ? 0 : (mask&3) == 1 ? 0x55 : 0x895;
+            fn(output+1,a,b,mask,csr,2|expectedFlags);
             __asm__ volatile("stmxcsr %0" : "=m"(after));
             __asm__ volatile("ldmxcsr %0" : : "m"(saved));
-            uint64_t expectedFlags = (mask&3) == 0 ? 0 : (mask&3) == 1 ? 0x55 : 0x895;
             if (after != csr || compareLane(output+418,4) != csr ||
                 compareLane(output+409,8) != expectedFlags || output[417] != (2|(expectedFlags&0xd5)) ||
                 output[0] != 0xc3 || output[422] != 0xc3 || output[423] != 0xc3 ||
