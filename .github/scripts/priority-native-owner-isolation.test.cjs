@@ -17,6 +17,7 @@ const owners = [
   'Execute original native duplicate moves and whole-vector effects',
   'Execute original native scalar reciprocal estimates',
   'Execute original native retained LEAW pointer bytes and flags',
+  'Execute original legacy ABS sign alignment faults',
   'Execute original complete floating programs with actual EVEX DQ state',
   'Execute original native integer stores align and division',
 ];

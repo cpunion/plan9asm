@@ -176,7 +176,7 @@ test('legacy ABS/sign native faults are explicitly owned with strict setup gates
   const workflow = fs.readFileSync('.github/workflows/pr40-owned-process-probe.yml', 'utf8');
   checkCI(workflow);
   for (const needle of [...roots, 'node .github/scripts/audit-legacy-abs-sign-native.cjs "$directory"']) {
-    assert.throws(() => checkCI(workflow.replace(needle, 'removed')), needle);
+    assert.throws(() => checkCI(workflow.replace(needle, 'removed')), 'removed required owner component: ' + needle);
   }
   for (const mutation of [
     workflow.replace('directory=_out/native-x86-oracles/legacy-abs-sign', 'directory=_out/unbound'),
