@@ -39,18 +39,7 @@ func TestTranslateX86AccumulatorSignExtendCompleteGo127FormsAcrossTargets(t *tes
 		t.Run(target.name, func(t *testing.T) {
 			source := x86AccumulatorSignExtendCompleteFormsSource(target.goarch)
 			requireX86GoAssemblerResult(t, target.goarch, source, true)
-			file, err := Parse(ArchAMD64, source)
-			if err != nil {
-				t.Fatal(err)
-			}
-			ir, err := Translate(file, Options{
-				Goarch:       target.goarch,
-				TargetTriple: target.triple,
-				Sigs:         map[string]FuncSig{"signextendforms": {Name: "signextendforms", Ret: Void}},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			ir := x86UnboundVoidScalarFormatObject(t, source, "signextendforms", target.goarch, target.triple)
 			for _, want := range []string{"sext i8", "sext i16", "ashr i16", "ashr i32"} {
 				if !strings.Contains(ir, want) {
 					t.Fatalf("accumulator sign-extension lowering omitted %q:\n%s", want, ir)
