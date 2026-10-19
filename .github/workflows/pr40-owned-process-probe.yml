@@ -273,6 +273,73 @@ jobs:
           path: _out/native-x86-oracles/
           if-no-files-found: error
 
+  packed-conversion-native-priority:
+    name: Complete packed conversion native (${{ matrix.owner }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        owner: [0, 1, 2, 3, 4, 5, 6, 7]
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install exact LLVM 22
+        timeout-minutes: 14
+        run: bash scripts/install-ci-llvm22-ubuntu.sh
+      - uses: ./.github/actions/setup-go
+        with:
+          go-version: '1.27.2'
+          cache: true
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+      - name: Execute the complete assigned native values and faults
+        env:
+          GOTOOLCHAIN: local
+          OWNER: ${{ matrix.owner }}
+        run: |
+          set -euo pipefail
+          directory="_out/packed-conversion-native-owner-$OWNER"
+          mkdir -p "$directory"
+          node -e 'const fs=require("node:fs"); fs.writeFileSync(process.argv[1],JSON.stringify({schema:1,head:process.env.GITHUB_SHA,owner:Number(process.env.OWNER)})+"\n")' "$directory/context.json"
+          roots=$(node .github/scripts/audit-packed-conversion-native.cjs roots "$OWNER")
+          go test . -list "^($roots)$" > "$directory/inventory.log"
+          go test . -run "^($roots)$" -count=1 -timeout=8m -json > "$directory/raw.jsonl" 2> "$directory/stderr.log"
+          node .github/scripts/audit-packed-conversion-native.cjs owner "$OWNER" "$directory" > "$directory/audit.json"
+      - name: Preserve complete native owner evidence
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: packed-conversion-native-owner-${{ matrix.owner }}
+          path: _out/packed-conversion-native-owner-${{ matrix.owner }}/
+          if-no-files-found: error
+
+  packed-conversion-native-complete:
+    needs: packed-conversion-native-priority
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+      - uses: actions/download-artifact@v7
+        with:
+          pattern: packed-conversion-native-owner-*
+          path: _out/packed-conversion-native-artifacts
+      - name: Reaudit all eight unchanged raw native owner receipts
+        run: |
+          set -euo pipefail
+          node .github/scripts/audit-packed-conversion-native.cjs complete _out/packed-conversion-native-artifacts > _out/packed-conversion-native-complete.json
+      - name: Preserve strict complete native receipt
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: packed-conversion-native-complete
+          path: _out/packed-conversion-native-complete.json
+          if-no-files-found: error
+
   complete-windows:
     needs: [ownership, native-x86-oracles, sdk-priority, arm64-fallback-cross-priority, lock-native-priority, unlocked-rmw-native-priority, vector-value-fault-priority]
     permissions:

@@ -15,6 +15,7 @@ type x86PackedConversionFaultRow struct {
 	name       string
 	width      int
 	laneBytes  int
+	lanes      int
 	masked     bool
 	floating   bool
 	precision  bool
@@ -32,13 +33,13 @@ func x86PackedConversionFaultRows(wide bool) []x86PackedConversionFaultRow {
 			destination := map[int]string{16: "X1", 32: "Y1", 64: "Z1"}[shape.destination]
 			floating := strings.Contains(strings.Split(spec.name, "2")[0], "PS") || strings.Contains(strings.Split(spec.name, "2")[0], "PD")
 			precision := floating || spec.input > map[int]int{32: 24, 64: 53}[spec.output]
-			rows = append(rows, x86PackedConversionFaultRow{name: spec.name, width: shape.lanes * spec.input / 8, laneBytes: spec.input / 8,
+			rows = append(rows, x86PackedConversionFaultRow{name: spec.name, width: shape.lanes * spec.input / 8, laneBytes: spec.input / 8, lanes: shape.lanes,
 				floating: floating, precision: precision, aligned: spec.legacy, conversion: spec.name + " (DI)," + destination})
 			if !spec.legacy {
 				rows = append(rows,
-					x86PackedConversionFaultRow{name: spec.name + ".Z", width: shape.lanes * spec.input / 8, laneBytes: spec.input / 8, masked: true,
+					x86PackedConversionFaultRow{name: spec.name + ".Z", width: shape.lanes * spec.input / 8, laneBytes: spec.input / 8, lanes: shape.lanes, masked: true,
 						floating: floating, precision: precision, conversion: spec.name + ".Z (DI),K1," + destination},
-					x86PackedConversionFaultRow{name: spec.name + ".BCST.Z", width: spec.input / 8, laneBytes: spec.input / 8, masked: true,
+					x86PackedConversionFaultRow{name: spec.name + ".BCST.Z", width: spec.input / 8, laneBytes: spec.input / 8, lanes: shape.lanes, masked: true,
 						floating: floating, precision: precision, conversion: spec.name + ".BCST.Z (DI),K1," + destination})
 			}
 		}
@@ -75,6 +76,12 @@ func x86PackedConversionFaultOriginalBytes(t *testing.T, rows []x86PackedConvers
 		offset += len(header)
 		_, length, known, err := decodedX86PackedNumericConversionInstruction(code[offset:], 64)
 		if !known {
+			_, length, known, err = decodedX86SameWidthConversionInstruction(code[offset:], 64)
+		}
+		if !known {
+			_, length, known, err = decodedX86PackedDoubleDwordInstruction(code[offset:], 64)
+		}
+		if !known {
 			native, decodeErr := x86asm.Decode(code[offset:], 64)
 			err, length = decodeErr, native.Len
 		}
@@ -98,15 +105,37 @@ func x86PackedConversionDeadFaults(t *testing.T, wide, nativeTraps bool) {
 	}
 	execution := x86FloatCompareRuntimeTools(t, axis)
 	rows := x86PackedConversionFaultRows(wide)
-	const limit = 96
-	for start := 0; start < len(rows); start += limit {
+	x86PackedConversionRunFaultRows(t, execution, rows, 96, 0, 1, nativeTraps, false)
+}
+
+func x86PackedConversionRunFaultRows(t *testing.T, execution x86FloatCompareExecution, rows []x86PackedConversionFaultRow, limit, owner, owners int, nativeTraps, complete bool) {
+	t.Helper()
+	consumed := 0
+	for batchNumber, start := 0, 0; start < len(rows); batchNumber, start = batchNumber+1, start+limit {
+		if batchNumber%owners != owner {
+			continue
+		}
 		end := start + limit
 		if end > len(rows) {
 			end = len(rows)
 		}
 		t.Run(fmt.Sprintf("batch-%04d", start), func(t *testing.T) {
 			batch := rows[start:end]
-			original := x86PackedConversionFaultOriginalBytes(t, batch)
+			var original [][]byte
+			observe := func(t *testing.T) {
+				original = x86PackedConversionFaultOriginalBytes(t, batch)
+				if len(original) != len(batch) {
+					t.Fatal("incomplete original Go opcode reference")
+				}
+			}
+			if complete {
+				t.Run("original_go_opcode_reference", observe)
+			} else {
+				observe(t)
+			}
+			if len(original) != len(batch) {
+				t.Fatal("missing original Go opcode reference")
+			}
 			var source, decl, native, prototypes, pairs strings.Builder
 			for index, row := range batch {
 				name, reference := fmt.Sprintf("fault%d", index), fmt.Sprintf("original%d", index)
@@ -126,12 +155,12 @@ func x86PackedConversionDeadFaults(t *testing.T, wide, nativeTraps bool) {
 				}
 				fmt.Fprintf(&native, "__asm__(%q);\n", ".text\n.globl "+symbol+"\n"+symbol+":\n.byte "+strings.Join(octets, ",")+"\n")
 				fmt.Fprintf(&prototypes, "extern void %s(uint64_t*,uint32_t*,uint32_t),%s(uint64_t*,uint32_t*,uint32_t);\n", name, reference)
-				fmt.Fprintf(&pairs, "{%s,%s,%d,%d,%d,%d,%d,%d},\n", reference, name, row.width, row.laneBytes,
+				fmt.Fprintf(&pairs, "{%s,%s,%d,%d,%d,%d,%d,%d,%d},\n", reference, name, row.width, row.laneBytes, row.lanes,
 					x86FloatAddSubBoolInt(row.masked), x86FloatAddSubBoolInt(row.floating),
 					x86FloatAddSubBoolInt(row.precision), x86FloatAddSubBoolInt(row.aligned))
 			}
 			goAssemblerOracleOutput(t, "amd64", source.String(), "", true)
-			driver := fmt.Sprintf("#define NATIVE_TRAPS %d\n", x86FloatAddSubBoolInt(nativeTraps)) + `#include <stdint.h>
+			driver := fmt.Sprintf("#define NATIVE_TRAPS %d\n#define COMPLETE_NATIVE %d\n", x86FloatAddSubBoolInt(nativeTraps), x86FloatAddSubBoolInt(complete)) + `#include <stdint.h>
 #include <stdio.h>
 #include <signal.h>
 #include <string.h>
@@ -141,7 +170,7 @@ func x86PackedConversionDeadFaults(t *testing.T, wide, nativeTraps bool) {
 #include <unistd.h>
 ` + native.String() + prototypes.String() + `
 typedef void (*program)(uint64_t*,uint32_t*,uint32_t);
-static const struct {program original,translated;int width,lane,masked,floating,precision,aligned;} pairs[]={
+static const struct {program original,translated;int width,lane,lanes,masked,floating,precision,aligned;} pairs[]={
 ` + pairs.String() + `};
 static int outcome(program fn,uint8_t *p,uint32_t csr,uint32_t mask) {
     pid_t child=fork();if(child<0) return -1;
@@ -161,9 +190,9 @@ int main(void) {
     memset(p,0,page);
     for(unsigned i=0;i<sizeof(pairs)/sizeof(*pairs);i++) {
         int limits[]={0,pairs[i].width-1,pairs[i].width,pairs[i].width+1};
-        for(unsigned m=0;m<(pairs[i].masked?3u:1u);m++) for(unsigned n=0;n<4;n++) {
-            uint32_t mask=m==0?0xffff:(m==1?0:1);
-            int expected=limits[n]<(m==1?0:(m==2?pairs[i].lane:pairs[i].width));
+        for(unsigned m=0;m<(pairs[i].masked?(COMPLETE_NATIVE?4u:3u):1u);m++) for(unsigned n=0;n<4;n++) {
+            uint32_t mask=m==0?0xffff:(m==1?0:(m==2?1:(1u<<pairs[i].lanes)));
+            int expected=limits[n]<((m==1||m==3)?0:(m==2?pairs[i].lane:pairs[i].width));
             int a=outcome(pairs[i].original,p+page-limits[n],0x1f80,mask),b=outcome(pairs[i].translated,p+page-limits[n],0x1f80,mask);
             int unaligned=pairs[i].aligned&&((uintptr_t)(p+page-limits[n])%16)!=0;
             if(unaligned&&NATIVE_TRAPS) expected=1;
@@ -197,6 +226,33 @@ int main(void) {
     puts("complete original Go/LLVM packed dead-fault receipt");return 0;
 }
 `
+			if complete {
+				raw := source.String()
+				for index, row := range batch {
+					header := 3
+					if row.masked {
+						header += 4
+					}
+					conversion := original[index][header : len(original[index])-1]
+					raw = strings.Replace(raw, row.conversion+"\nRET\n", x86RawDisplacementDirectives(conversion)+"RET\n", 1)
+				}
+				for _, spelling := range []struct{ name, source string }{{"named", source.String()}, {"raw", raw}} {
+					t.Run(spelling.name, func(t *testing.T) {
+						goAssemblerOracleOutput(t, "amd64", spelling.source, "", true)
+						for _, api := range []string{"text", "module", "Go"} {
+							t.Run(api, func(t *testing.T) {
+								ir, err := x86ScalarFPBitViewAPI(t, spelling.source, decl.String(), "amd64", execution.triple, api)
+								if err != nil {
+									t.Fatal("initialized dead native conversion rejected", err)
+								}
+								x86PackedConversionNativePipelines(t, execution, ir, driver, []byte("complete original Go/LLVM packed dead-fault receipt\n"))
+							})
+						}
+					})
+				}
+				consumed += len(batch)
+				return
+			}
 			for _, api := range []string{"text", "module", "Go"} {
 				ir, err := x86ScalarFPBitViewAPI(t, source.String(), decl.String(), "amd64", execution.triple, api)
 				if err != nil {
@@ -215,8 +271,13 @@ int main(void) {
 					}
 				}
 			}
+			consumed += len(batch)
 		})
 	}
+	if consumed == 0 {
+		t.Fatal("empty dead-fault owner")
+	}
+	t.Logf("%d/%d original-Go-opcode native memory and unmasked-fault kernels owned here", consumed, len(rows))
 }
 
 func TestCrossLinuxRuntimeMatrixX86PackedConversionLegacyDeadFaults(t *testing.T) {
@@ -224,8 +285,11 @@ func TestCrossLinuxRuntimeMatrixX86PackedConversionLegacyDeadFaults(t *testing.T
 }
 
 func TestX86PackedConversionCompleteFaultOriginalBoundaries(t *testing.T) {
-	rows := x86PackedConversionFaultRows(true)
-	const limit = 96
+	rows := x86PackedConversionCompleteFaultRows()
+	if len(rows) != 222 {
+		t.Fatal("complete42 original fault boundary denominator changed", len(rows))
+	}
+	const limit = x86PackedConversionFaultCapture
 	consumed := 0
 	for start := 0; start < len(rows); start += limit {
 		end := start + limit
