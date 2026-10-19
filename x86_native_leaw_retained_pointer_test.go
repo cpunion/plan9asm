@@ -182,6 +182,7 @@ func TestX86NativeLEAWRetainedPointerPortableValuesStatusAndCanaries(t *testing.
 			if err != nil || ir == "" {
 				t.Fatal("retained typed-pointer program rejected before independent value/status/canary execution", err)
 			}
+			ir = x86NativeLEAWRetainedPointerLogicalDF(t, ir, runtime.GOARCH != "amd64" && runtime.GOARCH != "386")
 			for _, pipeline := range []struct {
 				text  string
 				level int
@@ -190,5 +191,5 @@ func TestX86NativeLEAWRetainedPointerPortableValuesStatusAndCanaries(t *testing.
 			}
 		})
 	}
-	t.Log("300 input triples x 3 APIs x 3 pipelines; actual-host portable integer/status values, not original x86 or native 386 execution")
+	t.Log("300 input triples x 3 APIs x 3 pipelines; non-x86 hosts execute logical-DF/value instrumentation excluding only the checked native STD/CLD calls, not the unmodified LLVM program or native x86 DF")
 }
