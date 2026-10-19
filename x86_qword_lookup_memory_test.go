@@ -43,7 +43,7 @@ func TestX86QwordLookupZeroMasksRetainDistinctNativeReadShapes(t *testing.T) {
 	}
 }
 
-func checkQwordLookupReadShape(t *testing.T, arch, triple string, word int64, suffix, instruction string, width int, suppressed bool) {
+func checkQwordLookupReadShape(t *testing.T, arch, triple string, word int, suffix, instruction string, width int, suppressed bool) {
 	t.Helper()
 	for _, api := range []string{"text", "module", "Go"} {
 		source := fmt.Sprintf("TEXT ·Value(SB),4,$0-%d\nMOV%s p+0(FP),AX\n"+
