@@ -142,18 +142,7 @@ func TestX86RawMoveMaskRuntime(t *testing.T) {
 	if !ok {
 		t.Fatal("LLVM 22 llc/clang not found")
 	}
-	const source = `TEXT rawmovemasksemantics(SB),4,$0-16
-	MOVQ input+0(FP), DI
-	MOVQ out+8(FP), SI
-	VMOVDQU (DI), Y1
-	BYTE $0xc5; BYTE $0xfd; BYTE $0xd7; BYTE $0xc1
-	MOVL AX, 0(SI)
-	BYTE $0xc5; BYTE $0xf8; BYTE $0x50; BYTE $0xc1
-	MOVL AX, 4(SI)
-	BYTE $0xc5; BYTE $0xfd; BYTE $0x50; BYTE $0xc1
-	MOVL AX, 8(SI)
-	RET
-`
+	source := x86RawMoveMaskOriginalRuntimeSource
 	requireX86GoAssemblerResult(t, "amd64", source, true)
 	file, err := Parse(ArchAMD64, source)
 	if err != nil {
