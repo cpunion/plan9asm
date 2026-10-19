@@ -51,6 +51,14 @@ func TestTranslateX86AESCompleteGoAssemblerForms(t *testing.T) {
 			fmt.Fprintf(&source, "\tVAESKEYGENASSIST $255, 8(AX), X%d\n", legacyLast)
 			source.WriteString("\tRET\n")
 			file, err := Parse(ArchAMD64, source.String())
+			if err != nil {
+				t.Fatal(err)
+			}
+			ll, err := Translate(file, Options{
+				TargetTriple: target.triple,
+				Goarch:       target.goarch,
+				Sigs:         map[string]FuncSig{"aesforms": {Name: "aesforms", Ret: Void}},
+			})
 			if ll != "" || !errors.Is(err, ErrProbeNeedsContext) {
 				t.Fatal("original AES formats invented vector or native-pointer inputs", err)
 			}
@@ -58,14 +66,6 @@ func TestTranslateX86AESCompleteGoAssemblerForms(t *testing.T) {
 			ll = x86InstructionFormatObjectUnit(t, file,
 				map[string]FuncSig{"aesforms": {Name: "aesforms", Ret: Void}}, target.goarch, target.triple, 0,
 				func(c *amd64Ctx, ins Instr) (bool, bool, error) { return c.lowerAES(ins.Op, ins) })
-			ll, err := Translate(file, Options{
-				TargetTriple: target.triple,
-				Goarch:       target.goarch,
-				Sigs:         map[string]FuncSig{"aesforms": {Name: "aesforms", Ret: Void}},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
 			llc := findLLVM22Tool("llc")
 			if llc == "" {
 				t.Fatal("LLVM 22 llc not found")
