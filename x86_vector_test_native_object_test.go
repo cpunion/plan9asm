@@ -18,6 +18,7 @@ func TestX86VectorTestDeadNativeReadsKeepExactOpcodesAndFeatures(t *testing.T) {
 	for _, target := range x86RawReturnTargets {
 		t.Run(target.triple, func(t *testing.T) {
 			var source, declarations strings.Builder
+			declarations.WriteString("package deadvector\n")
 			word, suffix := goWordSize(target.arch), "Q"
 			if word == 4 {
 				suffix = "L"
