@@ -44,7 +44,8 @@ func TestX86ExplicitMaskMoveActualHostValuesAliasesAndFaults(t *testing.T) {
 	if err != nil {
 		t.Fatal("actual initialized complete mask move execution source rejected", err)
 	}
-	driver := x86ExplicitMaskMoveActualHostDriver + externs.String() +
+	driver := x86ExplicitMaskMoveActualHostHeader + numericalRuntimeFaultObservationC +
+		x86ExplicitMaskMoveActualHostDriver + externs.String() +
 		"static const struct testcase cases[]={\n" + cases.String() + "};\n" + x86ExplicitMaskMoveActualHostMain
 	for _, pipeline := range []struct {
 		name     string
@@ -63,9 +64,10 @@ func TestX86ExplicitMaskMoveActualHostValuesAliasesAndFaults(t *testing.T) {
 	t.Log("16 shapes; every lane-mask value, data canaries, Y aliases/CF and5 masks x3 guard extents x3 pipelines; original Go/native reference execution remains separate")
 }
 
-const x86ExplicitMaskMoveActualHostDriver = `#include <stdint.h>
+const x86ExplicitMaskMoveActualHostHeader = `#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
+#include <errno.h>
 #include <signal.h>
 #include <unistd.h>
 #include <sys/mman.h>
@@ -78,25 +80,32 @@ struct testcase {
     void (*run)(uint8_t*,const uint8_t*,const uint8_t*,uint8_t*);
     unsigned width,lane,store;
 };
+`
+
+const x86ExplicitMaskMoveActualHostDriver = `
 static void setmask(uint8_t *mask,unsigned width,unsigned lane,unsigned bits) {
     for(unsigned i=0;i<32;i++) mask[i]=(uint8_t)(0x35+17*i);
     for(unsigned i=0;i<width/lane;i++)
         mask[(i+1)*lane-1]=(uint8_t)((mask[(i+1)*lane-1]&127)|(((bits>>i)&1)<<7));
 }
-static int observe(const struct testcase *test,uint8_t *p,const uint8_t *data,const uint8_t *mask) {
+static int observe(const struct testcase *test,uint8_t *p,const uint8_t *data,const uint8_t *mask,
+                   uint8_t *protectedPage,size_t protectedBytes) {
     pid_t child=fork();
     if(child<0) return -1;
     if(child==0) {
         struct rlimit no_core={0,0};
-        uint8_t out[33]={0};
         if(setrlimit(RLIMIT_CORE,&no_core)) _exit(120);
+        uint8_t out[33]={0};
+        numerical_fault_begin(protectedPage,protectedBytes);
         test->run(p,data,mask,out);
         _exit(out[32]==1?0:121);
     }
     int status=0;
-    if(waitpid(child,&status,0)!=child) return -2;
+    pid_t waited;
+    do { waited=waitpid(child,&status,0); } while(waited<0 && errno==EINTR);
+    if(waited!=child) return -2;
     if(WIFEXITED(status) && WEXITSTATUS(status)==0) return 0;
-    if(WIFSIGNALED(status) && (WTERMSIG(status)==SIGSEGV || WTERMSIG(status)==SIGBUS)) return 1;
+    if(numerical_fault_status(status)) return 1;
     return -3;
 }
 static int host_preflight(void) {
@@ -161,7 +170,7 @@ int main(void) {
             unsigned required=0;
             setmask(mask,test->width,test->lane,masks[m]);
             for(unsigned i=0;i<lanes;i++) if((masks[m]>>i)&1) required=(i+1)*test->lane;
-            int got=observe(test,region+page-extents[e],data,mask);
+            int got=observe(test,region+page-extents[e],data,mask,region+page,(size_t)page);
             if(got!=(required>extents[e])) {
                 fprintf(stderr,"case=%u mask=%x extent=%u got=%d required=%u\n",n,masks[m],extents[e],got,required);
                 return 8;
