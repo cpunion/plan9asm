@@ -214,7 +214,7 @@ func x86RawNumericalFamilyObjects(t *testing.T, source, declarations, arch, trip
 	if llc == "" {
 		t.Fatal("LLVM22 llc required")
 	}
-	x86LEAActualTargetGoObject(t, arch, triple, source)
+	x86LEAActualTargetGoObject(t, arch, triple, "#include \"textflag.h\"\n"+source)
 	for _, api := range []string{"text", "module", "Go"} {
 		ir, err := x86ScalarFPBitViewAPI(t, source, declarations, arch, triple, api)
 		if err != nil {
