@@ -53,3 +53,25 @@ func TestX86Mode32LogicalScalarReturnMustBeInitialized(t *testing.T) {
 		}
 	}
 }
+
+func TestX86Mode32LogicalScalarReturnCannotBypassProof(t *testing.T) {
+	for _, body := range []string{"", "MOVL $7,BX\n", "MOVB $7,AX\n", "MOVW $7,AX\n"} {
+		file, err := Parse(ArchAMD64, "TEXT ·logical(SB),4,$0-0\n"+body+"RET\n")
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, api := range []string{"Translate", "TranslateModule", "TranslateModuleInContext"} {
+			t.Run(fmt.Sprintf("%q/%s", body, api), func(t *testing.T) {
+				options := Options{
+					Goarch: "386", TargetTriple: "i386-unknown-linux-gnu",
+					Sigs:       map[string]FuncSig{"logical": {Name: "logical", Ret: I32}},
+					ResolveSym: func(name string) string { return strings.TrimPrefix(name, "·") },
+				}
+				ir, err := x86PackedFloatStorageAPI(api, file, options)
+				if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+					t.Fatal("missing AX bytes escaped through a cost-only proof selector", err)
+				}
+			})
+		}
+	}
+}
