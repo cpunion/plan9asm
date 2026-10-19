@@ -266,6 +266,21 @@ jobs:
           done
           go test . -run "^($roots)$" -count=1 -timeout=5m -json > "$directory/raw.jsonl" 2> "$directory/stderr.log"
           node .github/scripts/audit-duplicate-native-families.cjs "$directory"
+      - name: Execute original native scalar reciprocal estimates
+        env:
+          GOTOOLCHAIN: local
+        run: |
+          set -euo pipefail
+          directory=_out/native-x86-oracles/scalar-reciprocal
+          mkdir -p "$directory"
+          roots='TestCrossLinuxRuntimeMatrixX86ScalarReciprocalOriginalGoAndNativeAMD64'
+          roots+='|TestCrossLinuxRuntimeMatrixX86ScalarReciprocalOriginalGoAndNative386'
+          go test . -list "^($roots)$" > "$directory/inventory.log"
+          for root in ${roots//|/ }; do
+            grep -Fx "$root" "$directory/inventory.log"
+          done
+          go test . -run "^($roots)$" -count=1 -timeout=5m -json > "$directory/raw.jsonl" 2> "$directory/stderr.log"
+          node .github/scripts/audit-scalar-reciprocal-native.cjs "$directory"
       - name: Preserve original and translated observations
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v6
