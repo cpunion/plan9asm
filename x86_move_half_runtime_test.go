@@ -16,7 +16,28 @@ func TestX86MoveHalfCompleteBytesFlagsAndUpperAliases(t *testing.T) {
 		t.Fatal("LLVM22 llc and clang required")
 	}
 	triple := testTargetTriple(runtime.GOOS, runtime.GOARCH)
-	var source, declarations, prototypes, metadata strings.Builder
+	source, declarations, prototypes, metadata, _ := x86MoveHalfValueProgram()
+	// Always retain the complete original x86 DF source and its Go object.
+	x86LEAActualTargetGoObject(t, "amd64", "x86_64-unknown-linux-gnu", source)
+	driver := fmt.Sprintf(x86MoveHalfWholeBytesC, prototypes, metadata)
+	if runtime.GOARCH != "amd64" {
+		// STD/CLD are hardware x86 controls, not portable vector operations.
+		// This independent companion projects DF out of its value observation;
+		// the required Linux native owner executes the original with DF=1.
+		source = strings.ReplaceAll(strings.ReplaceAll(source, "STD\n", ""), "CLD\n", "")
+		source = strings.ReplaceAll(source, "ANDL $0xcd5,DX", "ANDL $0x8d5,DX")
+		driver = strings.Replace(driver, "flags=UINT64_C(0xc91)", "flags=UINT64_C(0x891)", 1)
+		t.Log("independent portable half-move companion: DF observation projected to zero; complete original x86 STD/CLD source retained separately, no native-x86 DF execution claim")
+	}
+	ir, err := x86ScalarFPBitViewAPI(t, source, declarations, "amd64", triple, "Go")
+	if err != nil {
+		t.Fatal("complete initialized half-move value source rejected", err)
+	}
+	x86ConflictFunnelPortableRuntime(t, llc, clang, "move_half_whole_bytes", triple, ir, driver)
+}
+
+func x86MoveHalfValueProgram() (string, string, string, string, string) {
+	var source, declarations, prototypes, metadata, goRows strings.Builder
 	for index, row := range x86MoveHalfOracle {
 		for _, alias := range []bool{false, true} {
 			name, destination := fmt.Sprintf("Half%d_%t", index, alias), 2
@@ -40,16 +61,35 @@ func TestX86MoveHalfCompleteBytesFlagsAndUpperAliases(t *testing.T) {
 				return 0
 			}
 			fmt.Fprintf(&metadata, "{%s,%d,%d,%d},\n", name, flag(row.vector), flag(row.high), flag(alias))
+			fmt.Fprintf(&goRows, "{%s,%t,%t,%t},\n", name, row.vector, row.high, alias)
 		}
 	}
-	goAssemblerOracleOutput(t, "amd64", source.String(), "", true)
-	ir, err := x86ScalarFPBitViewAPI(t, source.String(), declarations.String(), "amd64", triple, "Go")
-	if err != nil {
-		t.Fatal("complete original initialized half-move value source rejected", err)
-	}
-	driver := fmt.Sprintf(x86MoveHalfWholeBytesC, prototypes.String(), metadata.String())
-	x86ConflictFunnelPortableRuntime(t, llc, clang, "move_half_whole_bytes", triple, ir, driver)
+	return source.String(), declarations.String(), prototypes.String(), metadata.String(), goRows.String()
 }
+
+const x86MoveHalfOriginalGo = `package oracle
+import("bytes";"encoding/binary";"testing")
+func TestOriginal(t *testing.T) {
+  rows:=[]struct{run func(*[112]byte,*[64]byte,*[64]byte,*uint64);vector,high,alias bool}{%s}
+  patterns:=[]uint64{0,^uint64(0),0x8000000000000000,0x7ff0000000000001,0xfff123456789abcd,0x7ff8123456789abc,0xaaaaaaaa55555555,0x0123456789abcdef}
+  outcomes:=0
+  for r,row:=range rows {for sample:=0;sample<32;sample++ {
+    var first,second [64]byte
+    var out,want [112]byte
+    for b:=range first {first[b]=byte(sample*13+b*17);second[b]=byte(sample*23+b*31+7)}
+    for b:=range out {out[b]=0xa5;want[b]=0xa5}
+    half:=patterns[sample%%8];if sample>=8 {half^=uint64(sample)<<21}
+    base:=second;if row.vector||row.alias {base=first};copy(want[:64],base[:])
+    lane:=0;if row.high {lane=8};binary.LittleEndian.PutUint64(want[lane:],half)
+    if row.vector {for b:=16;b<64;b++ {want[b]=0}}
+    want[64]=1;binary.LittleEndian.PutUint64(want[72:],0xc91);binary.LittleEndian.PutUint64(want[88:],half)
+    row.run(&out,&first,&second,&half)
+    if !bytes.Equal(out[:],want[:]) {t.Fatalf("original half row=%%d sample=%%d got=%%x want=%%x",r,sample,out,want)}
+    outcomes++
+  }}
+  if outcomes!=512 {t.Fatal("incomplete original whole64/FLAGS/DF/canary observations",outcomes)}
+}
+`
 
 const x86MoveHalfWholeBytesC = `
 #include <stdint.h>
