@@ -28,7 +28,7 @@ func x86CLMULProperties(op Op, ins Instr, arch string) (x86CLMULForm, bool, erro
 	}
 	if arch != "amd64" && arch != "386" || dotted ||
 		ins.Op != "" && !strings.EqualFold(string(ins.Op), string(op)) ||
-		len(ins.Args) != f.destination+1 || arch == "386" && !f.legacy {
+		len(ins.Args) != f.destination+1 || arch == "386" && !f.legacy && !ins.x86Encoded {
 		return fail()
 	}
 	constant, valid := x86ImmediateShuffleConstant(ins.Args[0], arch, ins.x86Encoded)
@@ -45,9 +45,9 @@ func x86CLMULProperties(op Op, ins Instr, arch string) (x86CLMULForm, bool, erro
 		limit := 32
 		if f.legacy {
 			limit = 16
-			if arch == "386" {
-				limit = 8
-			}
+		}
+		if arch == "386" {
+			limit = 8 // A physical raw binding is not a high-bank or named-frontend permission.
 		}
 		return operand.Kind == OpReg && valid && index < limit
 	}

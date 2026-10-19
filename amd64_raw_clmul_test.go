@@ -172,7 +172,7 @@ func TestDecodeX86RawCLMULRejectsReservedForms(t *testing.T) {
 		"zeroing":           func(code []byte) []byte { code[3] |= 0x80; return code },
 		"broadcast":         func(code []byte) []byte { code[3] |= 0x10; return code },
 		"width":             func(code []byte) []byte { code[3] |= 0x60; return code },
-		"W":                 func(code []byte) []byte { code[2] |= 0x80; return code },
+		"fixed bit":         func(code []byte) []byte { code[2] &^= 4; return code },
 		"address override":  func(code []byte) []byte { return append([]byte{0x67}, code...) },
 		"missing immediate": func(code []byte) []byte { return code[:len(code)-1] },
 	} {
