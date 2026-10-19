@@ -2,9 +2,127 @@ package plan9asm
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 )
+
+func TestX86RawScalarObserverOriginsAndEveryInputByte(t *testing.T) {
+	for _, arch := range []string{"386", "amd64"} {
+		var rows []string
+		for _, stem := range []string{"POPCNT", "LZCNT", "TZCNT"} {
+			widths := []string{"W", "L"}
+			if arch == "amd64" {
+				widths = append(widths, "Q")
+			}
+			for _, width := range widths {
+				rows = append(rows, stem+width+" AX,BX")
+			}
+		}
+		for _, op := range []string{"PMOVMSKB", "MOVMSKPS", "MOVMSKPD", "VPMOVMSKB", "VMOVMSKPS", "VMOVMSKPD"} {
+			rows = append(rows, op+" X1,BX")
+			if strings.HasPrefix(op, "V") {
+				rows = append(rows, op+" Y1,BX")
+			}
+		}
+		for _, row := range rows {
+			file, err := Parse(ArchAMD64, "TEXT Value(SB),4,$0-0\n"+x86RawNumericalInstruction(t, arch, row)+"RET\n")
+			if err != nil {
+				t.Fatal(err)
+			}
+			file, err = normalizeX86RawFile(file, arch)
+			if err != nil {
+				t.Fatal(err)
+			}
+			ins := file.Funcs[0].Instrs[1]
+			if !x86RawScalarObserverSource(ins, arch) {
+				t.Fatal("complete original count/mask source not recognized", row)
+			}
+			state := x86ResultState{flags: x86ByteFlagsAll}
+			state.gp[0], state.gp[3] = 0xff, 0x80
+			state.writeVector(1, 64, ^uint64(0), false)
+			for _, control := range []struct {
+				name   string
+				change func(*Instr)
+			}{
+				{"origin", func(ins *Instr) { ins.x86SourceRaw = nil }},
+				{"opcode", func(ins *Instr) {
+					if strings.Contains(row, "CNT") {
+						ins.Op = "TZCNTL"
+						if ins.x86SourceRaw.op == "TZCNTL" {
+							ins.Op = "LZCNTL"
+						}
+					} else {
+						ins.Op = "VMOVMSKPS"
+						if ins.x86SourceRaw.op == "VMOVMSKPS" {
+							ins.Op = "VMOVMSKPD"
+						}
+					}
+				}},
+				{"operand", func(ins *Instr) { ins.Args[1].Reg = DX }},
+				{"source-operand", func(ins *Instr) { ins.x86SourceRaw.args[1].Reg = DX }},
+				{"vector", func(ins *Instr) { ins.x86VectorBytes = 64 }},
+				{"address", func(ins *Instr) { ins.x86AddressBits = 32 }},
+				{"override", func(ins *Instr) { ins.x86UnboundAddressOverride = true }},
+				{"segment", func(ins *Instr) { ins.x86SegmentPrefix = 0x64 }},
+				{"literal", func(ins *Instr) { ins.x86RIPLiteral = true }},
+			} {
+				t.Run(arch+"/"+row+"/"+control.name, func(t *testing.T) {
+					changed, next := ins, state.clone()
+					changed.Args = append([]Operand(nil), ins.Args...)
+					origin := *ins.x86SourceRaw
+					origin.args = append([]Operand(nil), origin.args...)
+					changed.x86SourceRaw = &origin
+					control.change(&changed)
+					accepted, known := x86LoweredRawScalarObserverStep(changed, &next, nil, 0, arch)
+					if accepted || known != (control.name != "origin") || x86RawScalarObserverSource(changed, arch) || !reflect.DeepEqual(state, next) {
+						t.Fatal("changed source acquired a numerical/native role", accepted, known)
+					}
+				})
+			}
+			width := 16
+			mask := !strings.Contains(row, "CNT")
+			if mask {
+				if ins.Args[0].Reg == "Y1" {
+					width = 32
+				}
+			} else {
+				width = 4
+				if strings.HasSuffix(string(ins.Op), "W") {
+					width = 2
+				} else if strings.HasSuffix(string(ins.Op), "Q") {
+					width = 8
+				}
+			}
+			for missing := -1; missing < width; missing++ {
+				t.Run(fmt.Sprintf("%s/%s/missing=%d", arch, row, missing), func(t *testing.T) {
+					next := state.clone()
+					if missing >= 0 {
+						if mask {
+							next.writeVector(1, 64, ^uint64(0)&^(1<<uint(missing)), false)
+						} else {
+							next.gp[0] &^= 1 << uint(missing)
+						}
+					}
+					before := next.clone()
+					accepted, known := x86LoweredRawScalarObserverStep(ins, &next, nil, 0, arch)
+					if !known || accepted != (missing < 0) || !accepted && !reflect.DeepEqual(before, next) {
+						t.Fatal("raw projection invented an input byte or mutated failed state", accepted, known)
+					}
+					if accepted {
+						want := uint8(0xff)
+						if width == 2 {
+							want = 0x83
+						}
+						if next.gp[3] != want {
+							t.Fatal("wrong exact GP write/zero-extension", next.gp[3], want)
+						}
+					}
+				})
+			}
+		}
+	}
+}
 
 func x86RawNumericalInstruction(t *testing.T, arch, instruction string) string {
 	t.Helper()
