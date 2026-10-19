@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-func x86QwordLookupCompleteInputObjects(t *testing.T, bank string) {
+func x86QwordLookupCompleteInputObjects(t *testing.T, bank string, raw bool) {
 	t.Helper()
 	for _, target := range x86RawReturnTargets {
 		t.Run(target.triple, func(t *testing.T) {
@@ -19,7 +19,7 @@ func x86QwordLookupCompleteInputObjects(t *testing.T, bank string) {
 			count := 0
 			for _, name := range []string{"VPMULTISHIFTQB", "VPSHUFBITQMB"} {
 				modes := []string{"plain"}
-				if target.arch == "amd64" {
+				if target.arch == "amd64" || raw {
 					modes = append(modes, "merge")
 					if name == "VPMULTISHIFTQB" {
 						modes = append(modes, "zero")
@@ -45,21 +45,29 @@ func x86QwordLookupCompleteInputObjects(t *testing.T, bank string) {
 						if name == "VPSHUFBITQMB" {
 							destination, store = "K3", "KMOVQ K3,(DI)\n"
 						}
+						instruction := op + " " + operand + "," + bank + "1," + mask + destination
+						if raw {
+							encoderArch := target.arch
+							if mode != "plain" {
+								encoderArch = "amd64" // Low-register physical row, not named mode32 syntax.
+							}
+							instruction = x86RawNumericalInstruction(t, encoderArch, instruction)
+						}
 						function := fmt.Sprint("Lookup", count)
 						fmt.Fprintf(&source, "TEXT ·%s(SB),4,$0-%d\nMOV%s out+0(FP),DI\n"+
 							"MOV%s a+%d(FP),SI\nMOV%s b+%d(FP),BX\nMOV%s old+%d(FP),CX\n"+
 							"VMOVUPS (SI),Z0\nVMOVUPS (BX),Z1\nVMOVUPS (CX),Z2\n"+
-							"MOVL $-1431655766,AX\nKMOVD AX,K1\nPUSH%s $0\nPOPF%s\n%s %s,%s1,%s%s\n"+
+							"MOVL $-1431655766,AX\nKMOVD AX,K1\nPUSH%s $0\nPOPF%s\n%s\n"+
 							"%sPUSHF%s\nPOP%s AX\nMOV%s AX,64(DI)\nRET\n",
 							function, 4*word, suffix, suffix, word, suffix, 2*word, suffix, 3*word,
-							suffix, suffix, op, operand, bank, mask, destination, store, suffix, suffix, suffix)
+							suffix, suffix, instruction, store, suffix, suffix, suffix)
 						fmt.Fprintf(&declarations, "func %s(out *[80]byte,a,b,old *[64]byte)\n", function)
 						count++
 					}
 				}
 			}
 			want := 13
-			if target.arch == "386" {
+			if target.arch == "386" && !raw {
 				want = 5
 			}
 			if count != want {
@@ -71,13 +79,56 @@ func x86QwordLookupCompleteInputObjects(t *testing.T, bank string) {
 }
 
 func TestX86QwordLookupCompleteXInputObjects(t *testing.T) {
-	x86QwordLookupCompleteInputObjects(t, "X")
+	x86QwordLookupCompleteInputObjects(t, "X", false)
 }
 func TestX86QwordLookupCompleteYInputObjects(t *testing.T) {
-	x86QwordLookupCompleteInputObjects(t, "Y")
+	x86QwordLookupCompleteInputObjects(t, "Y", false)
 }
 func TestX86QwordLookupCompleteZInputObjects(t *testing.T) {
-	x86QwordLookupCompleteInputObjects(t, "Z")
+	x86QwordLookupCompleteInputObjects(t, "Z", false)
+}
+
+func TestX86QwordLookupCompleteRawXInputObjects(t *testing.T) {
+	x86QwordLookupCompleteInputObjects(t, "X", true)
+}
+func TestX86QwordLookupCompleteRawYInputObjects(t *testing.T) {
+	x86QwordLookupCompleteInputObjects(t, "Y", true)
+}
+func TestX86QwordLookupCompleteRawZInputObjects(t *testing.T) {
+	x86QwordLookupCompleteInputObjects(t, "Z", true)
+}
+
+func TestX86QwordLookupPhysicalMode32Masks(t *testing.T) {
+	count := 0
+	for _, name := range []string{"VPMULTISHIFTQB", "VPSHUFBITQMB"} {
+		for _, bank := range []string{"X", "Y", "Z"} {
+			for mask := 1; mask <= 7; mask++ {
+				destination := bank + "2"
+				if name == "VPSHUFBITQMB" {
+					destination = "K3"
+				}
+				row := fmt.Sprintf("%s %s0,%s1,K%d,%s", name, bank, bank, mask, destination)
+				bytes := x86RawNumericalInstruction(t, "amd64", row)
+				file, err := Parse(ArchAMD64, "TEXT Value(SB),4,$0-0\n"+bytes+"RET\n")
+				if err != nil {
+					t.Fatal(err)
+				}
+				file, err = normalizeX86RawFile(file, "386")
+				if err != nil {
+					t.Fatal("physical mode32 lookup inherited missing decoding or a named operand cap", row, err)
+				}
+				ins := file.Funcs[0].Instrs[1]
+				form, known, err := x86QwordLookupProperties(ins.Op, ins, "386")
+				if !known || err != nil || form.mask != 2 || ins.Args[form.mask].Reg != Reg(fmt.Sprint("K", mask)) {
+					t.Fatal("physical lookup mask/width identity changed", row, form, err)
+				}
+				count++
+			}
+		}
+	}
+	if count != 42 {
+		t.Fatal("complete physical lookup mask/width inventory changed", count)
+	}
 }
 
 func TestX86QwordLookupDeadNativeInputsCannotBorrowVoidOrBool(t *testing.T) {
