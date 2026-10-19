@@ -184,7 +184,7 @@ func TestX86SignedPackedIntegerFloatActualGoObjectSourceWidths(t *testing.T) {
 			if err != nil || len(decoded.Instrs) != 1 {
 				t.Fatal(row, err, decoded.Instrs)
 			}
-			f, known, err := x86SignedPackedFloatProperties(decoded.Instrs[0], arch)
+			_, known, err := x86SignedPackedFloatProperties(decoded.Instrs[0], arch)
 			if !known || err != nil {
 				t.Fatal(row, "raw physical properties", err)
 			}

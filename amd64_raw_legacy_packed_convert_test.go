@@ -56,7 +56,6 @@ func TestX86RawLegacyPackedConversionCompilesEveryForm(t *testing.T) {
 	} {
 		t.Run(target.name, func(t *testing.T) {
 			var source strings.Builder
-			sigs := make(map[string]FuncSig, len(x86LegacyPackedConversionForms))
 			for index, form := range x86LegacyPackedConversionForms {
 				name := fmt.Sprintf("rawlegacyconversion%d", index)
 				var one strings.Builder
@@ -81,19 +80,9 @@ func TestX86RawLegacyPackedConversionCompilesEveryForm(t *testing.T) {
 					continue
 				}
 				source.WriteString(one.String())
-				sigs[name] = FuncSig{Name: name, Ret: Void}
 			}
 			requireX86GoAssemblerResult(t, target.goarch, source.String(), true)
-			file, err := Parse(ArchAMD64, source.String())
-			if err != nil {
-				t.Fatal(err)
-			}
-			ir, err := Translate(file, Options{
-				Goarch: target.goarch, TargetTriple: target.triple, Sigs: sigs,
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			ir := x86UnboundVoidRawScalarFormatObject(t, source.String(), target.goarch, target.triple)
 			compileLLVMToObject(t, llc, target.triple, "raw-legacy-conversion.ll", "raw-legacy-conversion.o", ir)
 		})
 	}
