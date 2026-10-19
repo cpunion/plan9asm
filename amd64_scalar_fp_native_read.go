@@ -213,6 +213,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		if accepted, known := x86ResultScalarReciprocalStep(ins, state, owned, arch, true); known {
 			return accepted // Actual scalar estimate keeps the independent exact m32 access and MXCSR contract.
 		}
+		if accepted, known := x86ResultLegacyScalarMoveStep(ins, state, owned, resultOffset, arch, true); known {
+			return accepted // Only the paired exact volatile legacy m32/m64 read supplies its conditional scalar bytes.
+		}
 		if accepted, known := x86ResultSDKLiteralStep(ins, state, owned, resultOffset, arch); known {
 			return accepted // Consume the exact bound source before an overlapping native-memory family.
 		}
