@@ -22,6 +22,11 @@ idle worktrees; do not create another for routine work.
 
 | Code snapshot | Completed evidence | Limits |
 |---|---|---|
+| `a731d124d` | Complete AES input repair: 19 roots / 2,312 children pass current Go, actual Go1.20 and race; identical 2,331 terminals, zero fail/skip/incomplete and unchanged source/tools | All twelve names share their complete grammar and numerical dependencies. Immediate-first key assist binds the original selector and typed data role without rewriting operands. Initialized five-target objects are separate from original uninitialized Go/emitter formats and required native execution |
+| `805a2e667` | Complete CMOV repair: 16 roots / 1,075 children pass current Go, actual Go1.20 and race; identical 1,091 terminals, zero fail/skip/incomplete and unchanged source/tools | Complete W/L/Q conditions retain the old destination, predicate and unconditional native read, including false predicates and Void. Exact raw identity grants neither pointer inputs nor standalone authority |
+| `ae7f42184` | Complete rich-CLI tail/declaration inventory: 13 roots / 246 children pass current Go, minimum Go1.24 and race; identical 259 terminals, zero fail/skip/incomplete and unchanged source/tools | Actual root and terminal declarations precede private-node heuristics; original ABI selectors, strict graph binding and missing-dependency controls remain required |
+| `4d1416874` | Raw DWORD-product private-control repair: 16 roots / 1,891 children pass current Go, actual Go1.20 and race; identical 1,907 terminals, zero fail/skip/incomplete and unchanged source/tools | Exact data-changing raw products preserve existing DF/ID and live private-stack state, not inert-NOP semantics. The original whole-byte runtime program is unchanged and remains a required native counterpart |
+| `dbf719df9`, before baseline-only update | Eight-SDK audit changes exactly 48 AMD64 CMOV and 49 AMD64 AES probes per SDK from supported to Context; all other forms, 386 and encoder/unsupported metrics unchanged | Those isolated probes lack actual inputs. The audited baseline changes only supported/context counts and the classification fingerprint. Neither this audit nor focused receipts certify current-head complete CI |
 | `39378d6b6` | MOVBE/BMI2/oracle repair: 34 roots / 1,658 children pass current Go, actual Go1.20 and race; identical 1,692 terminals, zero fail/skip/incomplete and unchanged source/tools | Six canonical/alias MOVBE names share both complete Go rows, ordered byte effects and exact volatile accesses; actual-host original values, dead read/write faults, five-target objects, original Go-rejected imm64 stores and all forty diagnostic aliases. Eight-SDK audit/final gates and original native instruction execution remain separate |
 | `6d3459426` | Actual test-declaration precedence: six rich-CLI roots / 144 children pass current Go, minimum Go1.24 and current-Go race with unchanged source/tools | Actual bodyless declarations and callee exports precede fallback frame checks; missing dependencies, source/proof mutations and unbound fallback extents still reject. Not complete CLI or current-head Windows qualification |
 | `57992cc23`, production unchanged from the rows above | All22 focused final gates pass; the sealed eight-SDK audit changes exactly six isolated AMD64 MOVBE probes per SDK to Context, with no other family/386/encoder/unsupported changes | The baseline changes only three fields per AMD64 SDK. This qualified batch is staged in the allowed fork, not the PR40 contribution or diagnostic branch |
@@ -184,12 +189,16 @@ SDK direct-tail inventory test preempted by generic fallback frame validation.
 The precedence fix has its own six-root three-lane receipt above. The direct-tail
 inventory repair retains actual root/terminal declarations before generic
 private-node heuristics, including original ABI selectors. Its new selector RED
-and original ABI0 root RED are preserved; complete focused qualification is still
-required. Never exempt arbitrary private TEXT from its missing extent.
+and original ABI0 root RED are preserved; the complete thirteen-root three-lane
+qualification now passes at `ae7f42184`. Never exempt arbitrary private TEXT
+from its missing extent.
 The DWORD-product whole-byte oracle additionally reaches raw P31 and loses
-already-defined private DF/ID before a full FLAGS store. Preserve the original
-program; investigate accepted raw vector control preservation separately from
-GP/SIMD effects, caller facts and inert NOP/CET preservation.
+already-defined private DF/ID before a full FLAGS store. The separate sixteen-root
+three-lane repair at `4d1416874` now passes. It preserves the original program
+and separates accepted raw control preservation from GP/SIMD effects, caller
+facts and inert NOP/CET preservation. Linux CI additionally requires the original
+product, CMOV and AES runtime roots and all nine execution children; missing,
+skipped or unfinished outcomes fail their independent audit.
 The sole formal PR40 review thread is already resolved; its three-opcode
 no-orphaned-IR regression and the separate symlink-include escape regression
 pass in the complete 34-root receipt. Resolved comments are not reviewer approval.
@@ -425,12 +434,13 @@ is not a claim that uninitialized original programs gained public translation.
    final gates completed at the snapshots above. Retain its original Go-rejected
    imm64 stores, missing-header failures and diagnostic-join REDs as separate
    evidence. The new raw-product DF/ID/private-stack repair has 16 roots /
-   1,891 children passing current Go and actual Go1.20 at `4d1416874`; race is
-   pending. The original runtime program is unchanged and remains a required
-   native counterpart. The complete CMOV native-read repair is still unqualified;
+   1,891 children passing all three lanes at `4d1416874`. The original runtime
+   program is unchanged and remains a required native counterpart. The complete
+   CMOV native-read repair is qualified at `805a2e667` and AES at `a731d124d`;
    retain its old-destination, predicate and incoming-pointer obligations even
    for false conditions and Void. Original uninitialized DI is a negative, not
-   another dead-read success.
+   another dead-read success. Keep the failed AES first GREEN at `6a1cbdfbf`:
+   it exposed immediate-first source selection and old uninitialized fixtures.
 2. Run the final gates and batch coherent qualified repairs in the allowed
    fork. Each source snapshot retains its own three-lane and classification
    receipts; the cancellation-retention change has 139 passing policy tests.
