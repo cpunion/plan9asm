@@ -22,6 +22,7 @@ idle worktrees; do not create another for routine work.
 
 | Code snapshot | Completed evidence | Limits |
 |---|---|---|
+| `5e5379ada` | Raw count/move-mask and MMX batch: 25 roots / 933 children pass current Go, actual Go1.20 and race; identical 958 terminals, zero fail/skip/incomplete | Nine scalar-count members and six move-mask names share existing effects; original Void/native-output objects, exact origin/byte controls and original count portable values pass. Four additional MMX runtime fixture families retain complete objects; native execution remains separate |
 | `197521fb1` | BMI2/vector-zero/MMX batch: 33 roots / 1,386 children pass current Go, actual Go1.20 and race; identical 1,419 terminals, zero fail/skip/incomplete | Eight BMI2 members, two vector-zero members and original MMX fixture repairs; official audit and final gates remain separate |
 | Same snapshot | Complete Go1.20–Go1.27 386/amd64 classification audit: zero changed forms or metrics, unchanged source/SDK/LLVM22 seals | Current Go still has zero unsupported forms; Go1.20's one pre-existing AMD64 unsupported form is unchanged. Not complete CI or benchmark qualification |
 | `7cfe15222` | Complete product/accumulator repair: 28 roots / 665 children pass current Go, actual Go1.20 and race; identical 693 terminals, zero fail/skip/incomplete; seventeen focused gates pass | Four DWORD-product and six accumulator-extension members, named/raw input obligations, five-target three-API objects and actual-host integer values; original native runtime requirements remain separate |
@@ -359,10 +360,16 @@ Initial dead-Void rejection assertions conflicted with the existing closed
 nontrapping GP contract and remain failed observations, not implementation
 defects. An overlay of the actual earlier native-read guard independently
 reproduces the original 72-function failure through all three APIs.
-The next scalar-count/move-mask and additional MMX fixture RED tests are on
-`codex/pr40-accumulator-typed-effects-20261019`; they are not merged into the
-qualified staging candidate. Never certify them using the thirty-three-root
-receipt. Preserve the original RORX physical-BP and partial-controller failures.
+The next batch at `5e5379ada` has its own complete twenty-five-root receipt,
+not the earlier thirty-three-root certificate. Scalar-count and move-mask
+register-return matrices already passed before this repair; the actual defect
+was the original Void/native-output continuation. Preserve the separate failed
+Go-object fixture that omitted textflag.h: it is not source rejection or proof
+of the translator defect. With that header repaired, an old-guard overlay
+reproduces both original translation failures on all three AMD64 targets.
+The ADX source preflights on `codex/pr40-accumulator-typed-effects-20261019`
+are not merged into this qualified candidate. Preserve the original RORX
+physical-BP and partial-controller failures as well.
 
 1. Continue the 88-root inventory from completed `39198807147` artifacts;
    the cancelled CLI owner's missing inventory remains unknown. Prioritize
@@ -388,6 +395,12 @@ receipt. Preserve the original RORX physical-BP and partial-controller failures.
 
 ## Reproducing and locating evidence
 
+- `windows-raw-scalar-mmx-qualified-5e5379ad.json`: complete twenty-five-root
+  three-lane union, including original raw count execution and all typed input,
+  native-address, MMX and retained vector-zero/BMI2 controls.
+  `raw-scalar-original-void-repaired-header-red/` restores the actual earlier
+  native-read guard and retains six original text-API translation failures,
+  separate from the initial missing-header Go-object failure.
 - `windows-bmi2-vector-mmx-qualified-197521fb.json` and
   `bmi2-classification-audit/`: complete thirty-three-root three-lane union and
   eight-SDK zero-delta audit. `bmi2-original-native-read-red/` independently

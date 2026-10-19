@@ -34,6 +34,16 @@ extensions, not their distinct effects. Mode32 writes only banks 0-7, amd64
 0-15; upper banks and preserved low bytes retain their original knowledge.
 Full-bank portable execution is separate from native opcode/MXCSR execution.
 
+Raw scalar counts and X/Y move-mask sources compose with native output only
+after their complete existing grammar and exact original operands validate.
+Keep count input widths, W preservation, L zero extension and CF/ZF versus
+all-status availability distinct. Move-mask preserves vector aliases and FLAGS.
+Both reuse existing typed effects; neither grants memory backing or physical
+MMX/x87 state. A numerical address is not an incoming pointer. Preserve exact
+original Void/native-output counterexamples as well as register-return objects;
+the latter alone did not find this routing defect. Original named text flags
+require their real header in the independent Go object, never a rejection guess.
+
 The six implicit accumulator sign extensions share one complete `ynone`
 grammar with lowering and exact GP effects. Zero source operands do not mean
 zero AX inputs: require the actual byte/word/dword/qword source even for Void.
