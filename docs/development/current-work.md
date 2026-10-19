@@ -23,6 +23,7 @@ idle worktrees; do not create another for routine work.
 | Code snapshot | Completed evidence | Limits |
 |---|---|---|
 | `197521fb1` | BMI2/vector-zero/MMX batch: 33 roots / 1,386 children pass current Go, actual Go1.20 and race; identical 1,419 terminals, zero fail/skip/incomplete | Eight BMI2 members, two vector-zero members and original MMX fixture repairs; official audit and final gates remain separate |
+| Same snapshot | Complete Go1.20–Go1.27 386/amd64 classification audit: zero changed forms or metrics, unchanged source/SDK/LLVM22 seals | Current Go still has zero unsupported forms; Go1.20's one pre-existing AMD64 unsupported form is unchanged. Not complete CI or benchmark qualification |
 | `7cfe15222` | Complete product/accumulator repair: 28 roots / 665 children pass current Go, actual Go1.20 and race; identical 693 terminals, zero fail/skip/incomplete; seventeen focused gates pass | Four DWORD-product and six accumulator-extension members, named/raw input obligations, five-target three-API objects and actual-host integer values; original native runtime requirements remain separate |
 | Same snapshot | Go1.20–Go1.27 audit changes exactly 34 AMD64 probes per SDK from supported to Context: 28 products and six implicit AX operations; 386 and all encoder metrics remain unchanged | Probe sources lack initialized inputs. Go1.20's pre-existing unsupported count is unchanged; neither these classifications nor the initialized objects certify complete CI |
 | `259fbbcb8` | Cancellation-evidence RED/GREEN plus all 139 CI policy tests pass | Windows owners retain partial reports after cancellation; strict aggregation and missing-report errors are unchanged. This is a diagnostic fix, not a cancelled-test pass |
@@ -352,6 +353,17 @@ before changing implementation or claiming a speedup. Do not relax budgets.
 
 ## Immediate work
 
+The BMI2/vector-zero/MMX code is qualified at `197521fb1`; its thirty-three
+roots retain original portable executions and exact input/origin controls.
+Initial dead-Void rejection assertions conflicted with the existing closed
+nontrapping GP contract and remain failed observations, not implementation
+defects. An overlay of the actual earlier native-read guard independently
+reproduces the original 72-function failure through all three APIs.
+The next scalar-count/move-mask and additional MMX fixture RED tests are on
+`codex/pr40-accumulator-typed-effects-20261019`; they are not merged into the
+qualified staging candidate. Never certify them using the thirty-three-root
+receipt. Preserve the original RORX physical-BP and partial-controller failures.
+
 1. Continue the 88-root inventory from completed `39198807147` artifacts;
    the cancelled CLI owner's missing inventory remains unknown. Prioritize
    whole rule classes, including raw numerical continuations,
@@ -376,6 +388,13 @@ before changing implementation or claiming a speedup. Do not relax budgets.
 
 ## Reproducing and locating evidence
 
+- `windows-bmi2-vector-mmx-qualified-197521fb.json` and
+  `bmi2-classification-audit/`: complete thirty-three-root three-lane union and
+  eight-SDK zero-delta audit. `bmi2-original-native-read-red/` independently
+  replays the original complete numerical/FLAGS fixture against the old guard;
+  raw JSON retains all three API failures. Initial false dead-input assertions,
+  the physical-BP format failure and invalid-phase controller remain failed
+  evidence rather than overwritten qualification attempts.
 Use [validation commands](validation.md). Freeze tracked sources and tools,
 including docs, throughout a run. One heavy local Go/LLVM owner at a time;
 develop in an existing idle worktree. Commit and preserve RED before repair.
