@@ -128,7 +128,7 @@ func TestX86MoveHalfNativeContinuationNeverCreatesMemoryFacts(t *testing.T) {
 func TestX86MoveHalfLegacyPDRegisterHasNoNumericalPermission(t *testing.T) {
 	mc := findLLVM22Tool("llvm-mc")
 	if mc == "" {
-		t.Fatal("LLVM22 llvm-mc required for independent invalid-encoding control")
+		t.Fatal("LLVM22 llvm-mc required for independent encoding observation")
 	}
 	// Intel SDM Vol.2B MOVLPD/MOVHPD and Intel XED xed-isa.txt both
 	// require a memory ModRM (MOD!=3). Go's broad yxmov is not an ISA proof.
@@ -145,28 +145,31 @@ func TestX86MoveHalfLegacyPDRegisterHasNoNumericalPermission(t *testing.T) {
 					opcode = 0x16
 				}
 				if !reflect.DeepEqual(code, []byte{0x66, 0x0f, opcode, 0xd1, 0xc3}) {
-					t.Fatal("actual Go's invalid PD register bytes changed", code)
+					t.Fatal("actual Go's undocumented PD register bytes changed", code)
 				}
 				ctx, cancel := runtimeOracleStageContext(t)
 				defer cancel()
 				command := exec.CommandContext(ctx, mc, "--disassemble", "--triple="+triple, "--mattr=+sse2")
 				command.Stdin = strings.NewReader(fmt.Sprintf("0x66 0x0f 0x%02x 0xd1\n", opcode))
 				output, err := runtimeOracleCombinedOutput(ctx, command)
-				var exit *exec.ExitError
-				if ctx.Err() != nil || err != nil && (!errors.As(err, &exit) || exit.ExitCode() != 1) ||
-					!strings.Contains(string(output), "invalid instruction encoding") || strings.Contains(string(output), strings.ToLower(op)) {
-					t.Fatal("LLVM22 did not independently reject the original invalid PD bytes", string(output))
+				alias := "movhlps"
+				if op == "MOVHPD" {
+					alias = "movlhps"
 				}
+				if err != nil || ctx.Err() != nil || !strings.Contains(string(output), alias) || strings.Contains(string(output), "warning:") {
+					t.Fatal("LLVM22's actual ignored-66 PS-alias observation changed", err, string(output))
+				}
+				t.Logf("actual Go bytes=%x; LLVM22 decoder=%s; an ignored-prefix decoder observation is not documented PD register semantics or a #UD proof", code, strings.TrimSpace(string(output)))
 				ins := x86ScalarLaneInstruction(t, op+" X1,X2")
 				state := x86ResultState{}
 				state.xmm[1], state.xmm[2] = 0xffff, 0xffff
 				before := state.clone()
 				if accepted, known := x86ResultMoveHalfStep(ins, &state, nil, 0, arch, true); !known || accepted || !reflect.DeepEqual(state, before) {
-					t.Fatal("invalid 66-prefixed register bytes acquired PS numerical semantics")
+					t.Fatal("undocumented 66-prefixed register bytes acquired assumed PS numerical semantics")
 				}
 				context := newX86Ctx(new(strings.Builder), Func{}, FuncSig{}, nil, nil, arch, triple, false)
 				if known, _, err := context.lowerMOVHalf(ins.Op, ins); !known || !errors.Is(err, ErrProbeNeedsContext) {
-					t.Fatal("public lowering promised a numerical invalid-encoding implementation", known, err)
+					t.Fatal("public lowering promised undocumented PD register semantics", known, err)
 				}
 			})
 		}
@@ -236,6 +239,7 @@ func TestX86MoveHalfExactRawSourceKeepsAllInputsAndIdentity(t *testing.T) {
 						changed.Args[at].Mem.Off++
 					case "source":
 						changed.x86SourceRaw = nil
+						changed.x86Encoded = true // Retain physical-origin evidence, not a new named instruction.
 					case "address":
 						changed.x86AddressBits = 32
 					case "segment":
@@ -247,6 +251,15 @@ func TestX86MoveHalfExactRawSourceKeepsAllInputsAndIdentity(t *testing.T) {
 					if accepted, _ := x86ResultMoveHalfStep(changed, &state, nil, 0, "amd64", true); accepted || !reflect.DeepEqual(state, before) {
 						t.Fatal("raw continuation widened a changed identity or missing input", mutation)
 					}
+				}
+				// Removing every physical-origin field constructs an independent
+				// valid named instruction. Its existing inputs still remain required.
+				named := raw
+				named.x86Encoded, named.x86SourceRaw = false, nil
+				state := x86ResultState{}
+				state.pointerGP[2], state.xmm[1] = true, 0xffff
+				if accepted, known := x86ResultMoveHalfStep(named, &state, nil, 0, "amd64", true); !known || !accepted {
+					t.Fatal("physical-origin negative accidentally rejected the separate legal named effect")
 				}
 			})
 		}
@@ -264,13 +277,13 @@ func x86MoveHalfFormatObjectUnit(t *testing.T, file *File, signatures map[string
 		if err != nil {
 			return true, false, err
 		}
-		if form.invalidPDRegister {
+		if form.undocumentedPDRegister {
 			code := assembleX87ControlBytes(t, arch, "TEXT f(SB),4,$0-0\n"+ins.Raw+"\nRET\n")
 			var bytes []string
 			for _, value := range code[:len(code)-1] {
 				bytes = append(bytes, fmt.Sprintf("0x%02x", value))
 			}
-			// Preserve the original illegal opcode, not an invented PS copy.
+			// Preserve the original undocumented opcode, not an invented PS copy.
 			// This carrier certifies object bytes only, never a public entry.
 			fmt.Fprintf(c.b, "  call void asm sideeffect %q, %q()\n", ".byte "+strings.Join(bytes, ","), "~{memory}")
 			return true, false, nil

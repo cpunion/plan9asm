@@ -761,8 +761,8 @@ func (c *amd64Ctx) lowerMOVHalf(op Op, ins Instr) (bool, bool, error) {
 	if !known || err != nil {
 		return known, false, err
 	}
-	if form.invalidPDRegister {
-		return true, false, fmt.Errorf("%w: %s's Go register encoding is not an Intel PD instruction", ErrProbeNeedsContext, op)
+	if form.undocumentedPDRegister {
+		return true, false, fmt.Errorf("%w: %s's Go register encoding lacks documented Intel PD semantics", ErrProbeNeedsContext, op)
 	}
 	return true, false, c.emitMoveHalf(form, ins)
 }

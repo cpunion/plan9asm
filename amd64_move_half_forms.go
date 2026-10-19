@@ -9,7 +9,7 @@ type x86MoveHalfForm struct {
 	spec                           amd64MoveHalfSpec
 	source, base, destination      int
 	memory, sourceLane, outputLane int
-	store, invalidPDRegister       bool
+	store, undocumentedPDRegister  bool
 }
 
 // All eight names share Go's complete yxmov/_yvmovhpd operand grammar.
@@ -62,7 +62,7 @@ func x86MoveHalfProperties(op Op, ins Instr, arch string) (x86MoveHalfForm, bool
 			// Intel SDM/XED require ModRM.MOD!=3 for 66 0F12/16.
 			// Go's shared yxmov encoder accepts these bytes anyway; this
 			// records the format without inventing PS-alias semantics.
-			form.invalidPDRegister = strings.HasSuffix(name, "PD")
+			form.undocumentedPDRegister = strings.HasSuffix(name, "PD")
 		} else if isAMD64MemoryOperand(ins.Args[0]) {
 			form.memory = 0
 		} else {

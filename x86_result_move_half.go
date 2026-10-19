@@ -4,7 +4,7 @@ package plan9asm
 // access is mandatory independently of any selected output, including Void.
 func x86ResultMoveHalfStep(ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string, native bool) (bool, bool) {
 	form, known, err := x86MoveHalfProperties(ins.Op, ins, arch)
-	if !known || err != nil || form.invalidPDRegister {
+	if !known || err != nil || form.undocumentedPDRegister {
 		return false, known
 	}
 	if !x86ResultNamedPredicateInstruction(ins) {
