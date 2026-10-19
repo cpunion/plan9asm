@@ -159,20 +159,14 @@ func TestDecodeRawFP16BinaryEmbeddedControlAndRejections(t *testing.T) {
 	}
 	source.WriteString("\tRET\n")
 	requireX86GoAssemblerResult(t, "amd64", source.String(), true)
-	file, err := Parse(ArchAMD64, source.String())
-	if err != nil {
-		t.Fatal(err)
+	ir := x86UnboundVoidRawScalarFormatObject(t, source.String(), "amd64", "x86_64-unknown-linux-gnu")
+	if strings.Count(ir, "asm sideeffect") != 24 {
+		t.Fatal("original embedded-control format inventory changed")
 	}
-	ir, err := Translate(file, Options{
-		Goarch: "amd64", TargetTriple: "x86_64-unknown-linux-gnu",
-		Sigs: map[string]FuncSig{"rawFP16Control": {Name: "rawFP16Control", Ret: Void}},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(ir, "llvm.experimental.constrained.fadd.v32f16") ||
-		!strings.Contains(ir, "llvm.experimental.constrained.fdiv.v32f16") {
-		t.Fatal("embedded FP16 rounding did not reach constrained LLVM operations")
+	for _, control := range []string{"{rn-sae}", "{rd-sae}", "{ru-sae}", "{rz-sae}", "{sae}"} {
+		if !strings.Contains(ir, control) {
+			t.Fatal("native FP16 operation lost an original embedded control", control)
+		}
 	}
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
