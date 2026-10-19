@@ -196,8 +196,7 @@ func TestX86DuplicateMoveDeadMemoryKeepsExactAccessAfterO2(t *testing.T) {
 							if !strings.Contains(body, `asm sideeffect "`+strings.ToLower(row.name)+` `) || !strings.Contains(body, `~{memory}`) {
 								t.Fatal("legacy Type4 aligned memory fault was replaced by an ordinary or stronger access")
 							}
-						} else if !strings.Contains(body, fmt.Sprintf("load volatile <%d x i8>", width)) &&
-							!strings.Contains(body, fmt.Sprintf("load volatile i%d", width*8)) &&
+						} else if !x86DuplicateMoveExactVolatileRead(body, width) &&
 							!strings.Contains(body, `asm sideeffect "`+strings.ToLower(row.name)+` `) {
 							t.Fatal("E4NF/E5NF dead or zero-mask access vanished or shrank", width, body)
 						}
@@ -206,4 +205,20 @@ func TestX86DuplicateMoveDeadMemoryKeepsExactAccessAfterO2(t *testing.T) {
 			}
 		}
 	}
+}
+
+func x86DuplicateMoveExactVolatileRead(ir string, width int) bool {
+	if strings.Contains(ir, fmt.Sprintf("load volatile i%d", width*8)) ||
+		width == 8 && strings.Contains(ir, "load volatile double") {
+		return true
+	}
+	for _, element := range []struct {
+		name string
+		bits int
+	}{{"i8", 8}, {"i16", 16}, {"i32", 32}, {"i64", 64}, {"float", 32}, {"double", 64}} {
+		if strings.Contains(ir, fmt.Sprintf("load volatile <%d x %s>", width*8/element.bits, element.name)) {
+			return true
+		}
+	}
+	return false
 }
