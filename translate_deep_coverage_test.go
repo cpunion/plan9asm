@@ -529,7 +529,8 @@ func TestTranslateModuleDirectAndFallbackCoverage(t *testing.T) {
 	cfgOptions := Options{
 		ResolveSym: resolve,
 		Goarch:     "amd64",
-		Sigs:       map[string]FuncSig{"example.cfg": {Name: "example.cfg", Ret: I64}},
+		Sigs: map[string]FuncSig{"example.cfg": {Name: "example.cfg", Ret: I64,
+			Frame: FrameLayout{Results: []FrameSlot{{Offset: 0, Type: I64, Index: 0, Field: -1}}}}},
 	}
 	if original, err := TranslateModule(cfgFile, cfgOptions); !errors.Is(err, ErrProbeNeedsContext) {
 		if !original.IsNil() {
@@ -545,8 +546,7 @@ func TestTranslateModuleDirectAndFallbackCoverage(t *testing.T) {
 		Instr{Op: OpMOVQ, Args: []Operand{{Kind: OpReg, Reg: AX}, {Kind: OpFP, FPOffset: 0}}, Raw: "MOVQ AX,ret+0(FP)"},
 		cfgFile.Funcs[0].Instrs[2])
 	initializedCFG.Funcs[0].ArgSize = 8
-	cfgOptions.Sigs = map[string]FuncSig{"example.cfg": {Name: "example.cfg", Ret: I64,
-		Frame: FrameLayout{Results: []FrameSlot{{Offset: 0, Type: I64, Index: 0, Field: -1}}}}}
+	initializedCFG.Funcs[0].Instrs[0].Raw = "TEXT ·cfg(SB),NOSPLIT,$0-8"
 	fallbackMod, err := TranslateModule(&initializedCFG, cfgOptions)
 	if err != nil {
 		t.Fatalf("TranslateModule(fallback) error = %v", err)
