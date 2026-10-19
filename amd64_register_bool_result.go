@@ -25,6 +25,9 @@ func x86RegisterBoolResultNeedsProof(fn Func, sig FuncSig, arch string) bool {
 func x86RegisterCanonicalBytesAfter(original Instr, before [16]uint8, arch string) [16]uint8 {
 	ins := x86GoMOVQSourceInstruction(original)
 	next := before
+	if _, known, err := x86DuplicateMoveProperties(ins.Op, ins, arch); known && err == nil && x86ResultNamedPredicateInstruction(ins) {
+		return next // No GP write; vector results cannot create canonical bool facts.
+	}
 	read := func(operand Operand, width int64) uint8 {
 		if operand.Kind == OpImm && operand.ImmRaw == "" && !operand.ImmIsFloat {
 			return fixedLocalConstantBooleans(operand.Imm, width)

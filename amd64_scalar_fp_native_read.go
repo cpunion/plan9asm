@@ -395,6 +395,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		if accepted, known := x86ResultPackedUnpackStepWithRead(ins, state, owned, arch, true); known {
 			return accepted // Unpack retains the full E4NF tuple even with zero masks or dead results.
 		}
+		if accepted, known := x86ResultDuplicateMoveStep(ins, state, owned, arch, true); known {
+			return accepted // Duplicate selectors retain exact E4NF/E5NF tuples and legacy alignment faults.
+		}
 		if accepted, known := x86ResultVectorArithmeticStepWithRead(ins, state, owned, arch, true); known {
 			return accepted // The same add/sub emitter retains exact E4 reads and inactive-lane suppression.
 		}
