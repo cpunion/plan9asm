@@ -138,6 +138,7 @@ func TestX86PrivatePointerStackClosedCellsKeepCloneAndJoinRoles(t *testing.T) {
 			makeSaved := func(pointer bool) x86ResultState {
 				state := x86ResultState{valueStack: new(x86ResultValueStack)}
 				state.pointerGP[bx] = pointer
+				state.callerAddressGP[bx] = true // Deliberately separate: the new tag must not transport it.
 				if !pointer {
 					state.gp[bx] = 0xff
 				}
@@ -152,7 +153,7 @@ func TestX86PrivatePointerStackClosedCellsKeepCloneAndJoinRoles(t *testing.T) {
 				if accepted, known := x86ResultValueStackStep(pop, &joined, nil, 0, arch); !known || !accepted || joined.pointerGP[ax] != paired {
 					t.Fatal("private cell join invented or discarded a must-pointer role", paired)
 				}
-				if paired && joined.gp[ax]&mask != 0 {
+				if joined.callerAddressGP[ax] || paired && joined.gp[ax]&mask != 0 {
 					t.Fatal("restoring opaque address bits invented numerical pointer bytes")
 				}
 				clone := left.clone()
