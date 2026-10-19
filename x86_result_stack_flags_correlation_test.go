@@ -76,3 +76,42 @@ func TestX86Mode32PrivateFlagsCorrelationCannotInventValues(t *testing.T) {
 		}
 	}
 }
+
+func TestX86Mode32PrivateFlagsCorrelationOriginalGoAndLLVMObjects(t *testing.T) {
+	var source, declarations strings.Builder
+	for _, row := range []struct {
+		width, typ string
+		bytes      int
+		mask       uint32
+	}{
+		{"W", "uint16", 2, 0xcd5},
+		{"L", "uint32", 4, 0x200cd5},
+	} {
+		for index, register := range []string{"AX", "BX", "CX", "DX", "SI", "DI"} {
+			name := fmt.Sprintf("flags%s%d", row.width, index)
+			fmt.Fprintf(&declarations, "func %s() %s\n", name, row.typ)
+			fmt.Fprintf(&source, "TEXT ·%s(SB),4,$0-%d\n%sMOV%s %s,ret+0(FP)\nRET\n",
+				name, row.bytes, x86StackFlagsCorrelationBody(row.width, register, row.mask), row.width, register)
+		}
+	}
+	// Actual Go owns the independent W/L stack and yaddl operand grammar.
+	// The LLVM objects below retain the complete source, without seeding flags.
+	requireX86GoAssemblerResult(t, "386", source.String(), true)
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("private FLAGS objects require LLVM 22 llc")
+	}
+	for _, triple := range []string{"i386-unknown-linux-gnu", "i686-pc-windows-msvc"} {
+		for _, api := range []string{"text", "module", "Go"} {
+			t.Run(triple+"/"+api, func(t *testing.T) {
+				ir, err := x86ScalarFPBitViewAPI(t, source.String(), declarations.String(), "386", triple, api)
+				if err != nil || ir == "" {
+					t.Fatal("complete original private FLAGS program", err)
+				}
+				for _, level := range []string{"-O0", "-O2"} {
+					x86PackedStringCompileObject(t, llc, triple, ir, level)
+				}
+			})
+		}
+	}
+}
