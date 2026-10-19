@@ -72,6 +72,15 @@ func inferFuncTargetFeaturesForGOARCH(arch Arch, goarch string, fn Func) string 
 			if moveArch == "" {
 				moveArch = "amd64"
 			}
+			if form, known, err := x86FloatingHelperProperties(ins, moveArch); known && err == nil {
+				add("+avx512f")
+				if form.spec.dq {
+					add("+avx512dq")
+				}
+				if !form.spec.scalar && form.byteWidth < 64 {
+					add("+avx512vl")
+				}
+			}
 			if form, known, err := x86SqrtProperties(ins, moveArch); known && err == nil {
 				switch {
 				case x86SqrtNativeEVEX(ins, form):
