@@ -10,6 +10,9 @@ import (
 // tables. The one-operand forms use the architectural accumulator pairs;
 // IMULW/L/Q also have the table's explicit two- and three-operand forms.
 func (c *amd64Ctx) lowerScalarMultiplyDivide(op Op, ins Instr) (ok bool, terminated bool, err error) {
+	if known, terminated, err := c.lowerImplicitDivide(op, ins); known {
+		return known, terminated, err
+	}
 	name := strings.ToUpper(string(op))
 	stem, bits, threeOperandName, recognized := x86ScalarMultiplyDivideProperties(name)
 	if !recognized {
@@ -58,10 +61,6 @@ func (c *amd64Ctx) lowerScalarMultiplyDivide(op Op, ins Instr) (ok bool, termina
 		return true, false, c.emitX86ImplicitMultiply(bits, false, ins.Args[0], x86ResultNamedPredicateInstruction(ins))
 	case "IMUL":
 		return true, false, c.emitX86ImplicitMultiply(bits, true, ins.Args[0], x86ResultNamedPredicateInstruction(ins))
-	case "DIV":
-		return true, false, c.emitX86ImplicitDivide(bits, false, ins.Args[0])
-	case "IDIV":
-		return true, false, c.emitX86ImplicitDivide(bits, true, ins.Args[0])
 	default:
 		panic("unreachable scalar multiply/divide stem")
 	}
@@ -276,68 +275,6 @@ func x86IMULEncodedImmediate(value int64, bits int) int64 {
 	default:
 		panic("unsupported explicit IMUL width")
 	}
-}
-
-func (c *amd64Ctx) emitX86ImplicitDivide(bits int, signed bool, source Operand) error {
-	narrow := amd64IntegerTypeForBits(bits)
-	wide := x86ScalarMultiplyDivideWideType(bits)
-	divisorNarrow, err := c.evalIntSized(source, narrow)
-	if err != nil {
-		return err
-	}
-	divisor := c.extendX86MulDivValue(divisorNarrow, narrow, wide, signed)
-
-	var dividend string
-	if bits == 8 {
-		dividend, err = c.evalIntSized(Operand{Kind: OpReg, Reg: AX}, I16)
-		if err != nil {
-			return err
-		}
-	} else {
-		low, err := c.evalIntSized(Operand{Kind: OpReg, Reg: AX}, narrow)
-		if err != nil {
-			return err
-		}
-		high, err := c.evalIntSized(Operand{Kind: OpReg, Reg: DX}, narrow)
-		if err != nil {
-			return err
-		}
-		lowWide := c.extendX86MulDivValue(low, narrow, wide, false)
-		highWide := c.extendX86MulDivValue(high, narrow, wide, signed)
-		shifted := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = shl %s %s, %d\n", shifted, wide, highWide, bits)
-		joined := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = or %s %%%s, %s\n", joined, wide, shifted, lowWide)
-		dividend = "%" + joined
-	}
-
-	divide := "udiv"
-	remainder := "urem"
-	if signed {
-		divide = "sdiv"
-		remainder = "srem"
-	}
-	quotientWide := c.newTmp()
-	remainderWide := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = %s %s %s, %s\n", quotientWide, divide, wide, dividend, divisor)
-	fmt.Fprintf(c.b, "  %%%s = %s %s %s, %s\n", remainderWide, remainder, wide, dividend, divisor)
-	quotient := c.newTmp()
-	remainderValue := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = trunc %s %%%s to %s\n", quotient, wide, quotientWide, narrow)
-	fmt.Fprintf(c.b, "  %%%s = trunc %s %%%s to %s\n", remainderValue, wide, remainderWide, narrow)
-	if bits == 8 {
-		q16 := c.extendX86MulDivValue("%"+quotient, I8, I16, false)
-		r16 := c.extendX86MulDivValue("%"+remainderValue, I8, I16, false)
-		shifted := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = shl i16 %s, 8\n", shifted, r16)
-		combined := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = or i16 %%%s, %s\n", combined, shifted, q16)
-		return c.storeRegSized(AX, I16, "%"+combined)
-	}
-	if err := c.storeRegSized(AX, narrow, "%"+quotient); err != nil {
-		return err
-	}
-	return c.storeRegSized(DX, narrow, "%"+remainderValue)
 }
 
 func (c *amd64Ctx) extendX86MulDivValue(value string, from, to LLVMType, signed bool) string {
