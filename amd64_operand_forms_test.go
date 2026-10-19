@@ -8,20 +8,7 @@ TEXT pextrdmem(SB),NOSPLIT,$0-0
 	PEXTRD $3, X5, 16(DI)
 	RET
 `
-	file, err := Parse(ArchAMD64, src)
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = Translate(file, Options{
-		TargetTriple: "x86_64-unknown-linux-gnu",
-		Sigs: map[string]FuncSig{
-			"pextrdmem": {Name: "pextrdmem", Ret: Void},
-		},
-		Goarch: "amd64",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	x86UnboundVoidScalarFormatObject(t, src, "pextrdmem", "amd64", "x86_64-unknown-linux-gnu")
 }
 
 func TestTranslateAMD64PEXTRQToMemory(t *testing.T) {
@@ -30,20 +17,7 @@ TEXT pextrqmem(SB),NOSPLIT,$0-0
 	PEXTRQ $1, X5, 16(DI)
 	RET
 `
-	file, err := Parse(ArchAMD64, src)
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = Translate(file, Options{
-		TargetTriple: "x86_64-unknown-linux-gnu",
-		Sigs: map[string]FuncSig{
-			"pextrqmem": {Name: "pextrqmem", Ret: Void},
-		},
-		Goarch: "amd64",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	x86UnboundVoidScalarFormatObject(t, src, "pextrqmem", "amd64", "x86_64-unknown-linux-gnu")
 }
 
 func TestTranslateAMD64VectorBroadcastForms(t *testing.T) {

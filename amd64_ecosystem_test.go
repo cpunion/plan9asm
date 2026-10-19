@@ -3166,7 +3166,7 @@ func TestTranslateAMD64VectorLaneExtractCompleteGoAssemblerForms(t *testing.T) {
 		fmt.Fprintf(&src, "\t%s.Z $1, Z1, K1, Y2\n", op)
 	}
 	src.WriteString("\tRET\n")
-	ll := translateAMD64EcosystemCase(t, src.String(), "vectorlaneextractforms")
+	ll := x86UnboundVoidScalarFormatObject(t, src.String(), "vectorlaneextractforms", "amd64", "x86_64-unknown-linux-gnu")
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc not found")
@@ -3249,7 +3249,7 @@ func TestTranslateAMD64PackedScalarExtractCompleteGoAssemblerForms(t *testing.T)
 	}
 	src.WriteString("\tRET\n")
 
-	ll := translateAMD64EcosystemCase(t, src.String(), "packedscalarextractforms")
+	ll := x86UnboundVoidScalarFormatObject(t, src.String(), "packedscalarextractforms", "amd64", "x86_64-unknown-linux-gnu")
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc not found")

@@ -52,17 +52,7 @@ func TestTranslateX86ExtractPSCompleteGo127Forms(t *testing.T) {
 				"\tVPEXTRQ $0, X0, (BX)\n" +
 				"\tRET\n"
 			requireX86GoAssemblerResult(t, target.goarch, source, true)
-			file, err := Parse(ArchAMD64, source)
-			if err != nil {
-				t.Fatal(err)
-			}
-			ir, err := Translate(file, Options{
-				Goarch: target.goarch, TargetTriple: target.triple,
-				Sigs: map[string]FuncSig{"extractpsforms": {Name: "extractpsforms", Ret: Void}},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			ir := x86UnboundVoidScalarFormatObject(t, source, "extractpsforms", target.goarch, target.triple)
 			compileLLVMToObject(t, llc, target.triple, "extractps-"+target.name+".ll", "extractps-"+target.name+".o", ir)
 		})
 	}
@@ -174,17 +164,7 @@ func TestTranslateAMD64VExtractPSCompleteGo127Forms(t *testing.T) {
 	} {
 		t.Run(target.name, func(t *testing.T) {
 			requireX86GoAssemblerResult(t, "amd64", source, true)
-			file, err := Parse(ArchAMD64, source)
-			if err != nil {
-				t.Fatal(err)
-			}
-			ir, err := Translate(file, Options{
-				Goarch: "amd64", TargetTriple: target.triple,
-				Sigs: map[string]FuncSig{"vextractpsforms": {Name: "vextractpsforms", Ret: Void}},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			ir := x86UnboundVoidScalarFormatObject(t, source, "vextractpsforms", "amd64", target.triple)
 			llc := findLLVM22Tool("llc")
 			if llc == "" {
 				t.Fatal("LLVM 22 llc not found")
