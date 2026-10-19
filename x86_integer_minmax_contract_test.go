@@ -58,6 +58,61 @@ func TestX86IntegerMinMaxCompleteTypedNamedRows(t *testing.T) {
 	}
 }
 
+func TestX86IntegerMinMaxPhysicalMode32DoesNotGrantNamedArity(t *testing.T) {
+	rows := x86IntegerMinMaxIndependentRows("amd64")
+	code, pcs := x86NumericalBoundaryGoBytes(t, "amd64", strings.Join(rows, "\n")+"\nRET")
+	if len(pcs) != len(rows)+1 {
+		t.Fatal("incomplete physical instruction boundaries")
+	}
+	file := mustParseX86RawReturn(t, "TEXT Value(SB),4,$0-0\n"+
+		x86RawDisplacementDirectives(code)+"RET\n")
+	file, err := normalizeX86RawFile(file, "386")
+	if err != nil {
+		t.Fatal(err)
+	}
+	count := 0
+	for _, ins := range file.Funcs[0].Instrs {
+		_, known, err := x86IntegerMinMaxProperties(ins.Op, ins, "386")
+		if !known {
+			continue
+		}
+		if err != nil || !x86RawIntegerMinMaxSource(ins, "386") {
+			t.Fatal("physical mode32 min/max lost its decoded mask form", ins.Raw, err)
+		}
+		count++
+		for _, mutation := range []string{"origin", "encoded", "operand", "address", "segment"} {
+			changed := ins
+			switch mutation {
+			case "origin":
+				changed.x86SourceRaw = nil
+			case "encoded":
+				changed.x86Encoded = false
+			case "operand":
+				changed.Args = append([]Operand(nil), ins.Args...)
+				changed.Args[1] = Operand{Kind: OpReg, Reg: "Z7"}
+			case "address":
+				changed.x86AddressBits = 16
+			case "segment":
+				changed.x86SegmentPrefix = 0x64
+			}
+			if x86RawIntegerMinMaxSource(changed, "386") {
+				t.Fatal("edited physical source borrowed its old shape", ins.Raw, mutation)
+			}
+		}
+		if len(ins.Args) == 4 {
+			named := x86ScalarLaneInstruction(t, string(ins.Op)+" "+
+				strings.Join([]string{ins.Args[0].String(), ins.Args[1].String(),
+					ins.Args[2].String(), ins.Args[3].String()}, ","))
+			if _, _, err := x86IntegerMinMaxProperties(named.Op, named, "386"); err == nil {
+				t.Fatal("physical decoder expanded the named mode32 frontend", named.Raw)
+			}
+		}
+	}
+	if count != len(rows) {
+		t.Fatal("incomplete physical min/max family", count, len(rows))
+	}
+}
+
 func TestX86IntegerMinMaxSelectedBytesAndState(t *testing.T) {
 	for _, row := range x86IntegerMinMaxIndependentRows("amd64") {
 		ins := x86ScalarLaneInstruction(t, row)

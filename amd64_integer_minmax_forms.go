@@ -29,8 +29,12 @@ func x86IntegerMinMaxProperties(op Op, ins Instr, arch string) (x86IntegerMinMax
 	}
 	local := ins
 	local.Op = op
+	// Physical mode32 EVEX bytes have mask operands even though Go's named
+	// frontend caps instruction arity at three. Preserve that decoder-only
+	// shape; whole-function replay and numerical inputs remain separate checks.
+	physical := ins.x86Encoded && x86RawOrdinaryVectorSource(ins, arch)
 	var err error
-	form.x86PackedBinaryForm, err = x86ConflictFunnelOperandGrammar(local, arch, grammar, false)
+	form.x86PackedBinaryForm, err = x86ConflictFunnelOperandGrammar(local, arch, grammar, physical)
 	return form, true, err
 }
 

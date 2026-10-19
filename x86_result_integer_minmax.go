@@ -2,7 +2,7 @@ package plan9asm
 
 func x86RawIntegerMinMaxSource(ins Instr, arch string) bool {
 	_, known, err := x86IntegerMinMaxProperties(ins.Op, ins, arch)
-	return known && err == nil && x86RawOrdinaryVectorSource(ins, arch)
+	return known && err == nil && ins.x86Encoded && x86RawOrdinaryVectorSource(ins, arch)
 }
 
 func x86ResultIntegerMinMaxStep(ins Instr, state *x86ResultState, owned []bool, arch string, native bool) (bool, bool) {
