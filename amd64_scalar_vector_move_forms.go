@@ -50,7 +50,7 @@ func amd64ScalarVectorMoveProperties(ins Instr, goarch string) (amd64ScalarVecto
 		return form, true, fmt.Errorf("%s %s operands/suffix are outside the scalar vector-move grammar: %q", goarch, base, ins.Raw)
 	}
 	if spec.rawOnly && !ins.x86Encoded || suffix != "" && suffix != "Z" ||
-		goarch == "386" && len(ins.Args) > 3 && !ins.x86Encoded {
+		goarch == "386" && len(ins.Args) > 3 && !ins.x86Encoded && !x86RawScalarVectorMoveIdentity(ins, goarch) {
 		return fail()
 	}
 	vector := func(operand Operand) bool {

@@ -74,7 +74,7 @@ func (c *amd64Ctx) lowerVectorScalarMoveTwoOperand(baseOp string, elemBits int, 
 		if err != nil {
 			return true, false, err
 		}
-		return true, false, c.storeVectorScalarMemory(dst, elemBits, value, "")
+		return true, false, c.storeVectorScalarMoveMemory(dst, elemBits, value, "")
 	}
 	if isAMD64MemoryOperand(src) && amd64ScalarXOperand(dst) {
 		value, err := c.loadScalarMoveMemory(src, elemBits)
@@ -102,7 +102,7 @@ func (c *amd64Ctx) lowerVectorScalarMoveMaskedMemory(baseOp string, elemBits int
 		if err != nil {
 			return true, false, err
 		}
-		return true, false, c.storeVectorScalarMemory(ins.Args[2], elemBits, value, mask)
+		return true, false, c.storeVectorScalarMoveMemory(ins.Args[2], elemBits, value, mask)
 	}
 	if isAMD64MemoryOperand(ins.Args[0]) && amd64ScalarXOperand(ins.Args[2]) {
 		value, err := c.loadVectorScalarMemory(ins.Args[0], elemBits, mask)
@@ -139,6 +139,9 @@ func (c *amd64Ctx) loadX86ScalarMemoryIf(src Operand, elemBits int, condition st
 }
 
 func (c *amd64Ctx) loadScalarMoveMemory(src Operand, bits int) (string, error) {
+	if x86ScalarVectorMoveOrdinaryMemory(src, bits, c.goarch) {
+		return c.loadScalarVectorMoveNativeMemory(src, bits)
+	}
 	if src.Kind == OpFP && bits != 16 {
 		return c.loadScalarFPBits(src.FPOffset, bits)
 	}
@@ -265,6 +268,16 @@ func (c *amd64Ctx) storeScalarMoveRegister(dst Reg, elemBits int, low, base, mas
 }
 
 func (c *amd64Ctx) storeVectorScalarMemory(dst Operand, elemBits int, value, mask string) error {
+	return c.storeVectorScalarMemoryWithNativeAccess(dst, elemBits, value, mask, false)
+}
+
+func (c *amd64Ctx) storeVectorScalarMoveMemory(dst Operand, elemBits int, value, mask string) error {
+	return c.storeVectorScalarMemoryWithNativeAccess(dst, elemBits, value, mask, true)
+}
+
+// Other users of the scalar byte-store helper retain their original emitter.
+// Only the typed VMOVSS/SD native path requests an observable access here.
+func (c *amd64Ctx) storeVectorScalarMemoryWithNativeAccess(dst Operand, elemBits int, value, mask string, nativeMove bool) error {
 	if dst.Kind == OpFP && elemBits != 16 {
 		result, err := c.scalarFPSpan(dst.FPOffset, elemBits)
 		if err != nil {
@@ -281,7 +294,7 @@ func (c *amd64Ctx) storeVectorScalarMemory(dst Operand, elemBits int, value, mas
 		storeLabel := c.newTmp() + "_scalar_store"
 		joinLabel := c.newTmp() + "_scalar_join"
 		fmt.Fprintf(c.b, "  br i1 %s, label %%%s, label %%%s\n%s:\n", condition, storeLabel, joinLabel, storeLabel)
-		if err := c.storeVectorScalarMemory(dst, elemBits, value, ""); err != nil {
+		if err := c.storeVectorScalarMemoryWithNativeAccess(dst, elemBits, value, "", nativeMove); err != nil {
 			return err
 		}
 		fmt.Fprintf(c.b, "  br label %%%s\n%s:\n", joinLabel, joinLabel)
@@ -293,7 +306,11 @@ func (c *amd64Ctx) storeVectorScalarMemory(dst Operand, elemBits int, value, mas
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(c.b, "  store i%d %s, %s %s, align 1\n", elemBits, value, ptrType, ptr)
+		volatile := ""
+		if nativeMove && x86ScalarVectorMoveOrdinaryMemory(dst, elemBits, c.goarch) {
+			volatile = "volatile "
+		}
+		fmt.Fprintf(c.b, "  store %si%d %s, %s %s, align 1\n", volatile, elemBits, value, ptrType, ptr)
 		return nil
 	case OpSym:
 		ptr, err := c.ptrFromSB(dst.Sym)

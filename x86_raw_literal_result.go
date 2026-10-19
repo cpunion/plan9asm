@@ -82,7 +82,8 @@ func x86RawFloatCompareLiteralForm(ins Instr, arch string) bool {
 }
 
 func x86RawResultLiteralForm(ins Instr, arch string) bool {
-	return x86RawBroadcastLiteralForm(ins, arch) || x86RawLogicalLiteralForm(ins, arch) ||
+	return x86RawVectorMoveLiteralSource(ins, arch) ||
+		x86RawBroadcastLiteralForm(ins, arch) || x86RawLogicalLiteralForm(ins, arch) ||
 		x86RawByteShiftLiteralForm(ins, arch) || x86RawIntegerCompareLiteralForm(ins, arch) ||
 		x86RawArithmeticLiteralForm(ins, arch) || x86RawFloatCompareLiteralForm(ins, arch)
 }
@@ -128,6 +129,9 @@ func (c *amd64Ctx) checkRawLiteralResults() (bool, error) {
 	transfer := func(_ int, ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string) bool {
 		state.loweredStaticReads = c.fpScalarData
 		defer func() { state.loweredStaticReads = nil }()
+		if accepted, known := x86ResultRawVectorMoveLiteralStep(ins, state, owned, resultOffset, arch); known {
+			return accepted
+		}
 		if x86RawBroadcastLiteralForm(ins, arch) {
 			accepted, _ := x86ResultBroadcastInputs(ins, state, owned, arch, false, true)
 			return accepted

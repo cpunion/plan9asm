@@ -27,6 +27,18 @@ func x86TypedFPResultNeedsProof(fn Func, sig FuncSig, arch string) bool {
 	}
 	opaqueAddressResult := x86OpaqueAddressPointerResultRole(fn, sig, arch)
 	for ordinal, ins := range fn.Instrs {
+		if form, known, err := amd64PackedVectorMoveProperties(ins, arch); known && err == nil && !form.undefinedOpcode() &&
+			(ins.x86SourceRaw != nil || ins.x86Encoded ||
+				form.ordinaryMemory(ins, arch) && x86ResultNamedPredicateInstruction(ins)) {
+			return true // Raw/native move inputs, masks and addresses remain obligations even for Void.
+		}
+		if form, known, err := amd64ScalarVectorMoveProperties(ins, arch); known && err == nil &&
+			!form.spec.legacy && !form.spec.rawOnly &&
+			(ins.x86SourceRaw != nil || ins.x86Encoded ||
+				form.memory >= 0 && x86ScalarVectorMoveOrdinaryMemory(ins.Args[form.memory], form.spec.bits, arch) &&
+					x86ResultNamedPredicateInstruction(ins)) {
+			return true // Scalar dead reads/writes retain exact active native effects and source bytes.
+		}
 		if _, known, err := x86DuplicateMoveProperties(ins.Op, ins, arch); known && err == nil {
 			return true // Dead duplicate moves still need selected bytes, masks, merges and native accesses.
 		}

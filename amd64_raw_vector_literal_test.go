@@ -244,10 +244,6 @@ func TestTranslateX86RawEVEXPackedIntegerMoveRIPDataObjects(t *testing.T) {
 		sigs[name] = FuncSig{Name: name, Ret: Void}
 	}
 	requireX86GoAssemblerResult(t, "amd64", source.String(), true)
-	file, err := Parse(ArchAMD64, source.String())
-	if err != nil {
-		t.Fatal(err)
-	}
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc not found")
@@ -256,10 +252,9 @@ func TestTranslateX86RawEVEXPackedIntegerMoveRIPDataObjects(t *testing.T) {
 		"x86_64-apple-darwin", "x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc",
 	} {
 		t.Run(triple, func(t *testing.T) {
-			ir, err := Translate(file, Options{Goarch: "amd64", TargetTriple: triple, Sigs: sigs})
-			if err != nil {
-				t.Fatal(err)
-			}
+			// These original six sources have no K7 producer. Preserve their
+			// complete byte/format coverage, not invented initialized masks.
+			ir := x86UnboundVoidVectorMoveFormatObject(t, source.String(), "amd64", triple)
 			compileLLVMToObject(t, llc, triple, "evex-integer-literal.ll", "evex-integer-literal.o", ir)
 		})
 	}

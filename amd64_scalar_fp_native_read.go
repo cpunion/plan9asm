@@ -94,6 +94,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		if x86RawMoveHalfSource(ins, arch) {
 			continue // Exact sealed m64 moves grant no missing input, storage or raw-entry fact.
 		}
+		if x86RawVectorMoveSource(ins, arch) {
+			continue // Exact typed moves retain all numerical, mask and native address obligations.
+		}
 		if x86RawCompactSource(ins, arch) {
 			continue // Exact compact/expand bytes retain all mask, data and native address obligations.
 		}
@@ -215,6 +218,12 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		}
 		if accepted, known := x86ResultNumericalReadStep(ins, state, owned, resultOffset, arch); known {
 			return accepted // A checked mutable SB source keeps its own lifetime and byte effects.
+		}
+		if accepted, known := x86LoweredRawVectorMoveStep(ins, state, owned, resultOffset, arch); known {
+			return accepted // Only the exact move form shares this lowering-local provenance projection.
+		}
+		if accepted, known := x86LoweredScalarVectorMoveMemoryStep(ins, state, owned, resultOffset, arch); known {
+			return accepted // Exact active volatile m32/m64, without a reusable pointee fact.
 		}
 		if accepted, known := x86ResultSegmentQueryStep(ins, state, owned, arch, true); known {
 			return accepted // Paired exact volatile m16; no backing or reusable read permission.

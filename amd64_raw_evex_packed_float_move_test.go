@@ -54,17 +54,7 @@ func TestX86RawEVEXPackedFloatMoveCompleteGo127Family(t *testing.T) {
 		}
 	}
 	source.WriteString("\tRET\n")
-	file, err := Parse(ArchAMD64, source.String())
-	if err != nil {
-		t.Fatal(err)
-	}
-	ir, err := Translate(file, Options{
-		Goarch: "amd64", TargetTriple: "x86_64-unknown-linux-gnu",
-		Sigs: map[string]FuncSig{"raw_evex_packed_float_move": {Name: "raw_evex_packed_float_move", Ret: Void}},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	ir := x86UnboundVoidVectorMoveFormatObject(t, source.String(), "amd64", "x86_64-unknown-linux-gnu")
 	compileLLVMToObject(t, llc, "x86_64-unknown-linux-gnu", "raw-evex-packed-float-move.ll", "raw-evex-packed-float-move.o", ir)
 }
 

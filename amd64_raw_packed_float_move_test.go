@@ -80,7 +80,6 @@ func TestX86RawPackedMoveGoEncoderForms(t *testing.T) {
 				}
 			}
 			var raw strings.Builder
-			sigs := make(map[string]FuncSig)
 			mode := 64
 			if arch == "386" {
 				mode = 32
@@ -95,7 +94,6 @@ func TestX86RawPackedMoveGoEncoderForms(t *testing.T) {
 					}
 					name := fmt.Sprintf("packedmoves%d", index/64)
 					fmt.Fprintf(&raw, "TEXT %s(SB),4,$0-0\n", name)
-					sigs[name] = FuncSig{Name: name, Ret: Void}
 				}
 				_, size, matched, err := decodedX86PackedMoveInstruction(code[offset:], mode)
 				if !matched {
@@ -110,19 +108,14 @@ func TestX86RawPackedMoveGoEncoderForms(t *testing.T) {
 				offset += size
 			}
 			raw.WriteString("RET\n")
-			file, err := Parse(ArchAMD64, raw.String())
-			if err != nil {
-				t.Fatal(err)
-			}
 			triples := []string{"x86_64-apple-darwin", "x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc"}
 			if arch == "386" {
 				triples = []string{"i386-unknown-linux-gnu", "i686-pc-windows-msvc"}
 			}
 			for _, triple := range triples {
-				ir, err := Translate(file, Options{Goarch: arch, TargetTriple: triple, Sigs: sigs})
-				if err != nil {
-					t.Fatal(err)
-				}
+				// Every original format byte remains; the source never supplied
+				// incoming native addresses, masks or complete numerical inputs.
+				ir := x86UnboundVoidVectorMoveFormatObject(t, raw.String(), arch, triple)
 				compileLLVMToObject(t, llc, triple, "raw-packed-float-moves.ll", "raw-packed-float-moves.o", ir)
 			}
 		})
