@@ -3,6 +3,9 @@ package plan9asm
 import "fmt"
 
 func x86CallerVectorMoveKnown(ins Instr) bool {
+	if _, known, err := x86ExplicitMaskMoveProperties(ins.Op, ins, "amd64"); known {
+		return err == nil
+	}
 	if _, known, err := x86PackedAlignProperties(ins.Op, ins, "amd64"); known {
 		return err == nil
 	}
@@ -146,6 +149,9 @@ func x86CallerVectorByteMask(width int64) uint64 {
 }
 
 func x86CallerVectorMoveStep(ins *Instr, state *x86SourceStackState, proof *x86GoCallerRegionProof) bool {
+	if form, known, err := x86ExplicitMaskMoveProperties(ins.Op, *ins, "amd64"); known {
+		return err == nil && x86CallerExplicitMaskMoveStep(ins, form, state, proof)
+	}
 	if form, known, err := x86SqrtProperties(*ins, "amd64"); known {
 		return err == nil && x86CallerSqrtStep(ins, form, state, proof)
 	}
@@ -331,6 +337,9 @@ func x86CallerMoveMemoryShape(ins Instr, index int) (width int64, write, valid b
 }
 
 func x86InstructionMemoryShape(ins Instr, index int, arch string) (width int64, write, valid bool) {
+	if form, known, err := x86ExplicitMaskMoveProperties(ins.Op, ins, arch); known {
+		return int64(form.byteWidth), !form.load, err == nil && form.memory == index
+	}
 	if form, known, err := x86SqrtProperties(ins, arch); known {
 		return int64(form.memoryBytes), false, err == nil && form.memory >= 0 && form.memory == index
 	}

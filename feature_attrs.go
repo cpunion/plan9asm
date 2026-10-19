@@ -72,6 +72,13 @@ func inferFuncTargetFeaturesForGOARCH(arch Arch, goarch string, fn Func) string 
 			if moveArch == "" {
 				moveArch = "amd64"
 			}
+			if _, known, err := x86ExplicitMaskMoveProperties(ins.Op, ins, moveArch); known && err == nil {
+				if strings.HasPrefix(op, "VPMASK") {
+					add("+avx2")
+				} else {
+					add("+avx")
+				}
+			}
 			if form, known, err := x86PackedReductionProperties(ins, moveArch); known && err == nil {
 				if form.dot {
 					add("+sse4.1")

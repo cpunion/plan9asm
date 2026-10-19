@@ -38,6 +38,7 @@ type x86SourceRawInstruction struct {
 	// An absent mode snapshot cannot claim a legacy compare continuation.
 	legacyFloatCompare x86RawLegacyFloatCompareIdentity
 	floatMinMax        x86RawFloatMinMaxIdentity
+	explicitMaskMove   x86RawExplicitMaskMoveIdentity
 }
 
 type x86SourceStackAddress struct {
