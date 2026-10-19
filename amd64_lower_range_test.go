@@ -2,7 +2,6 @@ package plan9asm
 
 import (
 	"fmt"
-	"runtime"
 	"strings"
 	"testing"
 )
@@ -128,14 +127,7 @@ func TestTranslateX86FloatingRangeRejectsFormsOutsideGoAssemblerTable(t *testing
 }
 
 func TestAMD64FloatingRangeRuntimeSemantics(t *testing.T) {
-	crossRosetta := runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" && rosettaAvailable()
-	if runtime.GOARCH != "amd64" && !crossRosetta {
-		t.Skip("runtime execution test requires amd64 or Rosetta")
-	}
-	llc, clang, ok := findLlcAndClang(t)
-	if !ok {
-		t.Fatal("LLVM 22 llc/clang not found")
-	}
+	execution := x86FloatingHelperRuntimeTools(t)
 	var source strings.Builder
 	source.WriteString(`TEXT floatingrangesemantics(SB),$0-40
 	MOVQ out+0(FP), AX
@@ -167,12 +159,7 @@ func TestAMD64FloatingRangeRuntimeSemantics(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	triple := testTargetTriple(runtime.GOOS, runtime.GOARCH)
-	var runPrefix []string
-	if crossRosetta {
-		triple = "x86_64-apple-macosx"
-		runPrefix = []string{"/usr/bin/arch", "-x86_64"}
-	}
+	triple := execution.triple
 	ir, err := Translate(file, Options{
 		Goarch: "amd64", TargetTriple: triple,
 		Sigs: map[string]FuncSig{"floatingrangesemantics": {
@@ -244,18 +231,11 @@ int main(void) {
   return 0;
 }
 `
-	compileAndRunRuntimeTestForTarget(t, llc, clang, "floating_range_semantics", triple, ir, mainC, runPrefix)
+	x86FloatingHelperRunNativePipelines(t, execution, "floating_range_semantics", ir, mainC)
 }
 
 func TestAMD64FloatingRangeDoubleAndScalarRuntimeSemantics(t *testing.T) {
-	crossRosetta := runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" && rosettaAvailable()
-	if runtime.GOARCH != "amd64" && !crossRosetta {
-		t.Skip("runtime execution test requires amd64 or Rosetta")
-	}
-	llc, clang, ok := findLlcAndClang(t)
-	if !ok {
-		t.Fatal("LLVM 22 llc/clang not found")
-	}
+	execution := x86FloatingHelperRuntimeTools(t)
 	var source strings.Builder
 	source.WriteString(`TEXT floatingrangedoublesemantics(SB),$0-40
 	MOVQ out+0(FP), AX
@@ -290,12 +270,7 @@ func TestAMD64FloatingRangeDoubleAndScalarRuntimeSemantics(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	triple := testTargetTriple(runtime.GOOS, runtime.GOARCH)
-	var runPrefix []string
-	if crossRosetta {
-		triple = "x86_64-apple-macosx"
-		runPrefix = []string{"/usr/bin/arch", "-x86_64"}
-	}
+	triple := execution.triple
 	ir, err := Translate(file, Options{
 		Goarch: "amd64", TargetTriple: triple,
 		Sigs: map[string]FuncSig{"floatingrangedoublesemantics": {
@@ -359,5 +334,5 @@ int main(void) {
   return 0;
 }
 `
-	compileAndRunRuntimeTestForTarget(t, llc, clang, "floating_range_double_scalar_semantics", triple, ir, mainC, runPrefix)
+	x86FloatingHelperRunNativePipelines(t, execution, "floating_range_double_scalar_semantics", ir, mainC)
 }
