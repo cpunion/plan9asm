@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"runtime"
 	"strings"
@@ -51,9 +52,12 @@ func TestTranslateX86IFMACompleteGo127Forms(t *testing.T) {
 					"ifma_forms": {Name: "ifma_forms", Ret: Void},
 				},
 			})
-			if err != nil {
-				t.Fatal(err)
+			if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+				t.Fatal("original IFMA formats invented native input addresses", err)
 			}
+			ir = x86InstructionFormatObjectUnit(t, file,
+				map[string]FuncSig{"ifma_forms": {Name: "ifma_forms", Ret: Void}}, target.goarch, target.triple, 0,
+				func(c *amd64Ctx, ins Instr) (bool, bool, error) { return c.lowerIFMA(ins.Op, ins) })
 			llc := findLLVM22Tool("llc")
 			if llc == "" {
 				t.Fatal("LLVM 22 llc not found")

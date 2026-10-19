@@ -74,7 +74,7 @@ func TestDecodedX86RawIFMARejectsReservedAndUnsafeForms(t *testing.T) {
 		encoding []byte
 		wantOK   bool
 	}{
-		{name: "386 masked operand limit", mode: 32, encoding: []byte{0x62, 0xf2, 0xf5, 0x09, 0xb4, 0xc2}, wantOK: true},
+		{name: "386 masked extended source", mode: 32, encoding: []byte{0x62, 0xf2, 0xb5, 0x09, 0xb4, 0xc2}, wantOK: true},
 		{name: "386 extended register", mode: 32, encoding: []byte{0x62, 0x72, 0xf5, 0x08, 0xb4, 0xc2}, wantOK: true},
 		{name: "reserved vector length", mode: 64, encoding: []byte{0x62, 0xf2, 0xf5, 0x68, 0xb4, 0xc2}, wantOK: true},
 		{name: "broadcast register", mode: 64, encoding: []byte{0x62, 0xf2, 0xf5, 0x18, 0xb4, 0xc2}, wantOK: true},
