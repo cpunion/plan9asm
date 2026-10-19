@@ -6,107 +6,191 @@ import (
 	"testing"
 )
 
-func x86PackedConversionContinuationObjectRows() []string {
-	bank := map[int]string{16: "X", 32: "Y", 64: "Z"}
-	var rows []string
-	for _, spec := range x86PackedConversionOracleSpecs() {
-		for _, shape := range spec.shapes() {
-			destination := bank[shape.destination] + "1"
-			rows = append(rows, spec.name+" "+bank[shape.source]+"0,"+destination)
-			if spec.legacy {
-				rows = append(rows, spec.name+" (AX),"+destination)
-			} else {
-				rows = append(rows, spec.name+" (AX),K1,"+destination,
-					spec.name+".BCST.Z 3(BX)(CX*4),K7,"+destination)
-			}
-		}
-	}
-	for _, row := range x86SignedPackedValueRows() {
-		if strings.Contains(row.op, ".") || row.mask != "" {
-			continue
-		}
-		rows = append(rows, row.op+" "+row.input+","+row.bank+"1")
-	}
-	return rows
-}
+const (
+	x86PackedConversionObjectBatchSize = 48
+	x86PackedConversionObjectOwners    = 4
+)
 
-func TestX86PackedConversionRawInitializedFiveTargetObjects(t *testing.T) {
+// Scheduling alone is partitioned. Every original row retains initialized
+// named/raw functions, all public APIs and three real LLVM22 object paths.
+// Each synchronous capture owns at most48 functions and releases its objects.
+func x86PackedConversionPublicObjectOwner(t *testing.T, arch, triple string, owner int) {
+	t.Helper()
+	if owner < 0 || owner >= x86PackedConversionObjectOwners {
+		t.Fatal("invalid complete conversion object owner", owner)
+	}
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM22 llc required")
 	}
-	rows := x86PackedConversionContinuationObjectRows()
-	for _, target := range x86RawReturnTargets {
-		t.Run(target.triple, func(t *testing.T) {
-			rawRows := x86PackedConversionContinuationRawRows(t, target.arch, rows)
-			const batchSize = 64
-			consumed := 0
-			for start := 0; start < len(rows); start += batchSize {
-				end := start + batchSize
-				if end > len(rows) {
-					end = len(rows)
-				}
-				t.Run(fmt.Sprintf("batch-%04d", start), func(t *testing.T) {
-					var source, declarations strings.Builder
-					for index := start; index < end; index++ {
-						name := fmt.Sprintf("RawConversion%d", index)
-						body, declaration := x86PackedConversionContinuationFixture(t, name, target.arch, rows[index])
-						source.WriteString(strings.Replace(body, rows[index]+"\n", rawRows[index]+"\n", 1))
-						declarations.WriteString(declaration)
-					}
-					x86LEAActualTargetGoObject(t, target.arch, target.triple, source.String())
+	rows := x86PackedConversionContinuationRows(arch)
+	rawRows := x86PackedConversionContinuationRawRows(t, arch, rows)
+	consumed := 0
+	for batch, start := 0, 0; start < len(rows); batch, start = batch+1, start+x86PackedConversionObjectBatchSize {
+		if batch%x86PackedConversionObjectOwners != owner {
+			continue
+		}
+		end := start + x86PackedConversionObjectBatchSize
+		if end > len(rows) {
+			end = len(rows)
+		}
+		t.Run(fmt.Sprintf("batch-%04d", start), func(t *testing.T) {
+			var named, raw, declarations strings.Builder
+			for index := start; index < end; index++ {
+				name := fmt.Sprintf("Conversion%d", index)
+				body, declaration := x86PackedConversionContinuationFixture(t, name, arch, rows[index])
+				named.WriteString(body)
+				raw.WriteString(strings.Replace(body, rows[index]+"\n", rawRows[index]+"\n", 1))
+				declarations.WriteString(declaration)
+			}
+			for _, spelling := range []struct{ name, source string }{{"named", named.String()}, {"raw", raw.String()}} {
+				t.Run(spelling.name, func(t *testing.T) {
+					x86LEAActualTargetGoObject(t, arch, triple, spelling.source)
 					for _, api := range []string{"text", "module", "Go"} {
-						ir, err := x86ScalarFPBitViewAPI(t, source.String(), declarations.String(), target.arch, target.triple, api)
-						if err != nil || ir == "" {
-							t.Fatal("initialized original raw conversion lost its public object path", api, err)
-						}
-						optimized := x86DwordProductIROptimize(t, ir)
-						for _, pipeline := range []struct{ ir, backend string }{
-							{ir, "-O0"}, {ir, "-O2"}, {optimized, "-O2"},
-						} {
-							if strings.Count(pipeline.ir, "asm sideeffect") != end-start ||
-								strings.Contains(pipeline.ir, " fptosi ") || strings.Contains(pipeline.ir, " fptoui ") {
-								t.Fatal("original raw conversions lost native exception/MXCSR or dead effects", api, pipeline.backend)
+						t.Run(api, func(t *testing.T) {
+							ir, err := x86ScalarFPBitViewAPI(t, spelling.source, declarations.String(), arch, triple, api)
+							if err != nil || ir == "" {
+								t.Fatal("initialized complete conversion lost its original public path", err)
 							}
-							x86PackedStringCompileObject(t, llc, target.triple, pipeline.ir, pipeline.backend)
-						}
+							optimized := x86DwordProductIROptimize(t, ir)
+							for _, pipeline := range []struct{ name, ir, backend string }{
+								{"backend_O0", ir, "-O0"}, {"backend_O2", ir, "-O2"}, {"IR_O2_backend_O2", optimized, "-O2"},
+							} {
+								t.Run(pipeline.name, func(t *testing.T) {
+									if strings.Count(pipeline.ir, "asm sideeffect") != end-start ||
+										strings.Contains(pipeline.ir, " fptosi ") || strings.Contains(pipeline.ir, " fptoui ") {
+										t.Fatal("complete conversion lost native MXCSR/exception or dead effects")
+									}
+									x86PackedStringCompileObject(t, llc, triple, pipeline.ir, pipeline.backend)
+								})
+							}
+						})
 					}
-					consumed += end - start
 				})
 			}
-			if consumed != len(rows) {
-				t.Fatal("incomplete raw conversion object partition", consumed, len(rows))
+			consumed += end - start
+		})
+	}
+	if consumed == 0 {
+		t.Fatal("empty initialized conversion object owner", owner)
+	}
+	t.Logf("%d/%d original rows owned here; named+raw,3 APIs,3 actual LLVM22 object paths, no runtime claim", consumed, len(rows))
+}
+
+func TestX86PackedConversionPublicObjectsLinux386Part0(t *testing.T) {
+	x86PackedConversionPublicObjectOwner(t, "386", "i386-unknown-linux-gnu", 0)
+}
+
+func TestX86PackedConversionPublicObjectsLinux386Part1(t *testing.T) {
+	x86PackedConversionPublicObjectOwner(t, "386", "i386-unknown-linux-gnu", 1)
+}
+
+func TestX86PackedConversionPublicObjectsLinux386Part2(t *testing.T) {
+	x86PackedConversionPublicObjectOwner(t, "386", "i386-unknown-linux-gnu", 2)
+}
+
+func TestX86PackedConversionPublicObjectsLinux386Part3(t *testing.T) {
+	x86PackedConversionPublicObjectOwner(t, "386", "i386-unknown-linux-gnu", 3)
+}
+
+func TestX86PackedConversionPublicObjectsWindows386Part0(t *testing.T) {
+	x86PackedConversionPublicObjectOwner(t, "386", "i686-pc-windows-msvc", 0)
+}
+
+func TestX86PackedConversionPublicObjectsWindows386Part1(t *testing.T) {
+	x86PackedConversionPublicObjectOwner(t, "386", "i686-pc-windows-msvc", 1)
+}
+
+func TestX86PackedConversionPublicObjectsWindows386Part2(t *testing.T) {
+	x86PackedConversionPublicObjectOwner(t, "386", "i686-pc-windows-msvc", 2)
+}
+
+func TestX86PackedConversionPublicObjectsWindows386Part3(t *testing.T) {
+	x86PackedConversionPublicObjectOwner(t, "386", "i686-pc-windows-msvc", 3)
+}
+
+func TestX86PackedConversionPublicObjectsLinuxAMD64Part0(t *testing.T) {
+	x86PackedConversionPublicObjectOwner(t, "amd64", "x86_64-unknown-linux-gnu", 0)
+}
+
+func TestX86PackedConversionPublicObjectsLinuxAMD64Part1(t *testing.T) {
+	x86PackedConversionPublicObjectOwner(t, "amd64", "x86_64-unknown-linux-gnu", 1)
+}
+
+func TestX86PackedConversionPublicObjectsLinuxAMD64Part2(t *testing.T) {
+	x86PackedConversionPublicObjectOwner(t, "amd64", "x86_64-unknown-linux-gnu", 2)
+}
+
+func TestX86PackedConversionPublicObjectsLinuxAMD64Part3(t *testing.T) {
+	x86PackedConversionPublicObjectOwner(t, "amd64", "x86_64-unknown-linux-gnu", 3)
+}
+
+func TestX86PackedConversionPublicObjectsDarwinAMD64Part0(t *testing.T) {
+	x86PackedConversionPublicObjectOwner(t, "amd64", "x86_64-apple-darwin", 0)
+}
+
+func TestX86PackedConversionPublicObjectsDarwinAMD64Part1(t *testing.T) {
+	x86PackedConversionPublicObjectOwner(t, "amd64", "x86_64-apple-darwin", 1)
+}
+
+func TestX86PackedConversionPublicObjectsDarwinAMD64Part2(t *testing.T) {
+	x86PackedConversionPublicObjectOwner(t, "amd64", "x86_64-apple-darwin", 2)
+}
+
+func TestX86PackedConversionPublicObjectsDarwinAMD64Part3(t *testing.T) {
+	x86PackedConversionPublicObjectOwner(t, "amd64", "x86_64-apple-darwin", 3)
+}
+
+func TestX86PackedConversionPublicObjectsWindowsAMD64Part0(t *testing.T) {
+	x86PackedConversionPublicObjectOwner(t, "amd64", "x86_64-pc-windows-msvc", 0)
+}
+
+func TestX86PackedConversionPublicObjectsWindowsAMD64Part1(t *testing.T) {
+	x86PackedConversionPublicObjectOwner(t, "amd64", "x86_64-pc-windows-msvc", 1)
+}
+
+func TestX86PackedConversionPublicObjectsWindowsAMD64Part2(t *testing.T) {
+	x86PackedConversionPublicObjectOwner(t, "amd64", "x86_64-pc-windows-msvc", 2)
+}
+
+func TestX86PackedConversionPublicObjectsWindowsAMD64Part3(t *testing.T) {
+	x86PackedConversionPublicObjectOwner(t, "amd64", "x86_64-pc-windows-msvc", 3)
+}
+
+func TestX86PackedConversionOriginalLowBankEVEXObjects(t *testing.T) {
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM22 llc required")
+	}
+	for _, target := range x86RawReturnTargets {
+		t.Run(target.triple, func(t *testing.T) {
+			var source, declarations strings.Builder
+			for index, member := range []struct {
+				row  string
+				code []byte
+			}{
+				{"VCVTDQ2PS X0,X1", []byte{0x62, 0xf1, 0x7c, 0x08, 0x5b, 0xc8}},
+				{"VCVTDQ2PD X0,X1", []byte{0x62, 0xf1, 0x7e, 0x08, 0xe6, 0xc8}},
+			} {
+				body, declaration := x86PackedConversionContinuationFixture(t, fmt.Sprintf("OriginalEVEX%d", index), target.arch, member.row)
+				source.WriteString(strings.Replace(body, member.row+"\n", x86RawDisplacementDirectives(member.code), 1))
+				declarations.WriteString(declaration)
 			}
-			t.Run("original-low-bank-EVEX", func(t *testing.T) {
-				var source, declarations strings.Builder
-				for index, member := range []struct {
-					row  string
-					code []byte
-				}{
-					{"VCVTDQ2PS X0,X1", []byte{0x62, 0xf1, 0x7c, 0x08, 0x5b, 0xc8}},
-					{"VCVTDQ2PD X0,X1", []byte{0x62, 0xf1, 0x7e, 0x08, 0xe6, 0xc8}},
+			x86LEAActualTargetGoObject(t, target.arch, target.triple, source.String())
+			for _, api := range []string{"text", "module", "Go"} {
+				ir, err := x86ScalarFPBitViewAPI(t, source.String(), declarations.String(), target.arch, target.triple, api)
+				if err != nil || strings.Count(ir, "{evex} vcvtdq2p") != 2 || !strings.Contains(ir, "+avx512vl") {
+					t.Fatal("low-bank original EVEX became VEX or borrowed sibling features", api, err)
+				}
+				for _, pipeline := range []struct{ ir, backend string }{
+					{ir, "-O0"}, {ir, "-O2"}, {x86DwordProductIROptimize(t, ir), "-O2"},
 				} {
-					body, declaration := x86PackedConversionContinuationFixture(t, fmt.Sprintf("OriginalEVEX%d", index), target.arch, member.row)
-					source.WriteString(strings.Replace(body, member.row+"\n", x86RawDisplacementDirectives(member.code), 1))
-					declarations.WriteString(declaration)
-				}
-				x86LEAActualTargetGoObject(t, target.arch, target.triple, source.String())
-				for _, api := range []string{"text", "module", "Go"} {
-					ir, err := x86ScalarFPBitViewAPI(t, source.String(), declarations.String(), target.arch, target.triple, api)
-					if err != nil || strings.Count(ir, "{evex} vcvtdq2p") != 2 || !strings.Contains(ir, "+avx512vl") {
-						t.Fatal("low-bank original EVEX was reinterpreted as VEX or borrowed sibling features", api, err)
+					if strings.Count(pipeline.ir, "{evex} vcvtdq2p") != 2 {
+						t.Fatal("IR optimization erased physical EVEX opcode identity", api)
 					}
-					for _, pipeline := range []struct{ ir, backend string }{
-						{ir, "-O0"}, {ir, "-O2"}, {x86DwordProductIROptimize(t, ir), "-O2"},
-					} {
-						if strings.Count(pipeline.ir, "{evex} vcvtdq2p") != 2 {
-							t.Fatal("IR optimization erased physical EVEX opcode identity", api)
-						}
-						x86PackedStringCompileObject(t, llc, target.triple, pipeline.ir, pipeline.backend)
-					}
+					x86PackedStringCompileObject(t, llc, target.triple, pipeline.ir, pipeline.backend)
 				}
-			})
-			t.Logf("%d raw functions: all42 members and each physical shape, register/native tuple, merge and zero-broadcast; 3 APIs x 3 optimization paths, objects only", consumed)
+			}
 		})
 	}
 }
