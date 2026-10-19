@@ -128,17 +128,7 @@ func TestAMD64PADDDGoAliasRuntimeSemantics(t *testing.T) {
 	if !ok {
 		t.Fatal("LLVM 22 llc/clang not found")
 	}
-	const source = `TEXT padddaliassemantics(SB),$0-24
-	MOVQ out+0(FP), AX
-	MOVQ a+8(FP), M0
-	MOVQ b+16(FP), M1
-	STC
-	PADDD M0, M1
-	MOVQ M1, 0(AX)
-	SETCS 8(AX)
-	EMMS
-	RET
-`
+	source := x86PADDDGoAliasRuntimeSource
 	requireX86GoAssemblerResult(t, "amd64", source, true)
 	file, err := Parse(ArchAMD64, source)
 	if err != nil {
