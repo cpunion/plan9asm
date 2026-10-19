@@ -14,7 +14,8 @@ func TestExtractSupportedOpsAccumulatorSignExtendTypedTable(t *testing.T) {
 	}
 	directory := t.TempDir()
 	for name, contents := range map[string][]byte{
-		file: source, "translate.go": []byte("package plan9asm\n"),
+		file:           source,
+		"translate.go": []byte("package plan9asm\n"),
 	} {
 		if err := os.WriteFile(filepath.Join(directory, name), contents, 0o600); err != nil {
 			t.Fatal(err)

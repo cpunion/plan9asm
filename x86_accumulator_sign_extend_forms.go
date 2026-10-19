@@ -13,8 +13,12 @@ type x86AccumulatorSignExtendSpec struct {
 // Complete ynone / 98,99 family. The prefix selects the operand width; the
 // destination distinguishes sign extension from the sign-only high half.
 var x86AccumulatorSignExtendSpecs = map[Op]x86AccumulatorSignExtendSpec{
-	"CBW": {1, 2, AX}, "CWDE": {2, 4, AX}, "CDQE": {4, 8, AX},
-	"CWD": {2, 2, DX}, "CDQ": {4, 4, DX}, "CQO": {8, 8, DX},
+	"CBW":  {1, 2, AX},
+	"CWDE": {2, 4, AX},
+	"CDQE": {4, 8, AX},
+	"CWD":  {2, 2, DX},
+	"CDQ":  {4, 4, DX},
+	"CQO":  {8, 8, DX},
 }
 
 func x86AccumulatorSignExtendProperties(op Op, ins Instr, arch string) (x86AccumulatorSignExtendSpec, bool, error) {

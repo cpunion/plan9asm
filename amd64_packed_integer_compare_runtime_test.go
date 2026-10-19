@@ -160,6 +160,13 @@ func TestX86PackedIntegerCompareStatusObserverThreeTargetObjects(t *testing.T) {
 	rows := []x86PackedIntegerCompareCase{{
 		op: "PCMPEQB", operands: "X0,X1", width: 16, bits: 8, legacy: true,
 	}}
+	for index, op := range []string{"PCMPEQB", "PCMPEQW", "PCMPEQL", "PCMPGTB", "PCMPGTW", "PCMPGTL"} {
+		for _, operands := range []string{"M0,M1", "M1,M1", "(BX),M1"} {
+			rows = append(rows, x86PackedIntegerCompareCase{
+				op: op, operands: operands, width: 8, bits: 8 << uint(index%3), legacy: true, mmx: true,
+			})
+		}
+	}
 	declarations, source, _ := x86PackedIntegerCompareRuntimeFixture(rows)
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
