@@ -520,7 +520,8 @@ func checkX86ResultSourceFlowWithTrapOnly(fn Func, initial x86ResultState, owned
 	queue := []int{0}
 	returned := false
 	trapped := false
-	for visits := 0; len(queue) != 0; visits++ {
+	visits, sourceWork := 0, byteWork
+	for ; len(queue) != 0; visits++ {
 		if visits >= 16384 {
 			return fail("must-defined fixed-point budget exhausted")
 		}
@@ -531,6 +532,9 @@ func checkX86ResultSourceFlowWithTrapOnly(fn Func, initial x86ResultState, owned
 				return fail("combined source-graph must-defined budget exhausted")
 			}
 		}
+		// A later dead-external-input proof shares this function's actual
+		// visits and byte work, including normally unbounded scalar views.
+		sourceWork += 8 * byteState
 		if boundedWork {
 			byteWork += 8 * byteState // conservative bound for copies and joins
 			if byteWork > byteWorkLimit {
@@ -577,6 +581,10 @@ func checkX86ResultSourceFlowWithTrapOnly(fn Func, initial x86ResultState, owned
 			}
 			queue = append(queue, target)
 		}
+	}
+	if err := x86ResultCheckDeadExternalInputs(fn, instructions, ordinals, edges, states,
+		owned, resultOffset, goarch, transfer, &visits, &sourceWork, byteState); err != nil {
+		return err
 	}
 	if trapOnly && !x86ResultAllPathsTerminateInTrap(instructions, edges, states, goarch) {
 		return fail("trap-only logical shadow has a reachable non-trap continuation or cycle")
