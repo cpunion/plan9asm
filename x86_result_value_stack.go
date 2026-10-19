@@ -36,6 +36,9 @@ func x86ResultPreservesPrivateStorage(ins Instr, arch string) bool {
 	if x86RawIntegerMinMaxSource(ins, arch) {
 		return true // Exact vector data effects do not access private SP or FLAGS.
 	}
+	if x86RawTernaryLogicSource(ins, arch) {
+		return true // Exact bitwise vector writes do not create or replace private storage.
+	}
 	return ins.Op != OpCALL && (x86ResultNamedPredicateInstruction(ins) ||
 		x86RegisterQueryPreservesSourceState(ins) || x86WaitPackagePreservesStorage(ins) ||
 		x86PreservesNumericalSourceState(ins) || x86MaskLogicalPreservesStorage(ins) ||

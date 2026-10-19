@@ -72,6 +72,9 @@ func x86ResultCallerAddressesAfter(ins Instr, before [16]bool, entryFP map[int64
 	if x86RawIntegerMinMaxSource(ins, arch) {
 		return before // Preserves existing identities, never creates a GP address.
 	}
+	if x86RawTernaryLogicSource(ins, arch) {
+		return before // Exact vector/mask inputs and writes have no GP destination.
+	}
 	if x86PreservesNumericalSourceState(ins) {
 		return before
 	}
