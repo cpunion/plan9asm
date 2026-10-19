@@ -57,7 +57,7 @@ func (row x86AverageNumericCase) instruction() string {
 	return fmt.Sprintf("%s %s,%s%d", op, args, bank, row.destination)
 }
 
-func x86AverageNumericProgram(t *testing.T, triple string, cases []x86AverageNumericCase) (string, string) {
+func x86AverageNumericFixture(t *testing.T, cases []x86AverageNumericCase) (string, map[string]FuncSig, string) {
 	t.Helper()
 	var source, declarations, table strings.Builder
 	sigs := make(map[string]FuncSig)
@@ -75,10 +75,11 @@ KMOVQ DX,K1
 		if !row.memory || row.destination == 1 {
 			source.WriteString("VMOVUPS (BX),Z1\n")
 		}
+		source.WriteString("PUSHQ flags+32(FP)\nPOPFQ\n")
 		if row.mmx {
-			source.WriteString("MOVQ (CX),M0\nMOVQ (BX),M1\nVMOVUPS Z0,(AX)\n")
+			source.WriteString("VMOVUPS Z0,(AX)\nMOVQ (CX),M0\nMOVQ (BX),M1\n")
 		}
-		source.WriteString("PUSHQ flags+32(FP)\nPOPFQ\n" + row.instruction() + "\n")
+		source.WriteString(row.instruction() + "\n")
 		if row.mmx {
 			source.WriteString("MOVQ M0,(AX)\nEMMS\n")
 		} else {
@@ -96,7 +97,14 @@ KMOVQ DX,K1
 			row.masking, row.destination, x86FloatAddSubBoolInt(!strings.HasPrefix(row.op, "V")))
 	}
 	goAssemblerOracleOutput(t, "amd64", source.String(), "", true)
-	file, err := Parse(ArchAMD64, source.String())
+	driver := declarations.String() + "static const struct {Kernel run;int width,bytes,masking,destination,legacy;} cases[]={\n" + table.String() + "};\n"
+	return source.String(), sigs, driver
+}
+
+func x86AverageNumericProgram(t *testing.T, triple string, cases []x86AverageNumericCase) (string, string) {
+	t.Helper()
+	source, sigs, driver := x86AverageNumericFixture(t, cases)
+	file, err := Parse(ArchAMD64, source)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -104,7 +112,6 @@ KMOVQ DX,K1
 	if err != nil {
 		t.Fatal(err)
 	}
-	driver := declarations.String() + "static const struct {Kernel run;int width,bytes,masking,destination,legacy;} cases[]={\n" + table.String() + "};\n"
 	return ir, driver
 }
 

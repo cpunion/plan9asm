@@ -45,6 +45,10 @@ __attribute__((noinline)) static int checkAdd(
 }
 `
 
+func x86PackedAddMMXAssembly(name, opcode, input string) string {
+	return fmt.Sprintf("TEXT %s(SB),4,$0-32\nMOVQ out+0(FP),AX\nMOVQ a+8(FP),BX\nMOVQ b+16(FP),CX\nVMOVUPS (CX),Z0\nVMOVUPS Z0,(AX)\nCMPQ AX,AX\nSTC\nMOVQ (CX),M0\nMOVQ (BX),M1\n%s %s,M0\nMOVQ M0,(AX)\nEMMS\nSETCS 64(AX)\nSETNE 65(AX)\nRET\n", name, opcode, input)
+}
+
 func TestCrossLinuxRuntimeMatrixX86PackedWrappingAddCompleteSemantics(t *testing.T) {
 	llc, clang, triple, prefix := x86FloatAddSubRuntimeTools(t)
 	var source, declarations, checks strings.Builder
@@ -110,7 +114,7 @@ func TestCrossLinuxRuntimeMatrixX86PackedWrappingAddCompleteSemantics(t *testing
 			if memory {
 				first = "(BX)"
 			}
-			fmt.Fprintf(&source, "TEXT %s(SB),4,$0-32\nMOVQ out+0(FP),AX\nMOVQ a+8(FP),BX\nMOVQ b+16(FP),CX\nVMOVUPS (CX),Z0\nVMOVUPS Z0,(AX)\nMOVQ (CX),M0\nMOVQ (BX),M1\nCMPQ AX,AX\nSTC\n%s %s,M0\nMOVQ M0,(AX)\nSETCS 64(AX)\nSETNE 65(AX)\nEMMS\nRET\n", name, opcode, first)
+			source.WriteString(x86PackedAddMMXAssembly(name, opcode, first))
 			sigs[name] = FuncSig{Name: name, Args: []LLVMType{Ptr, Ptr, Ptr, I64}, Ret: Void, Frame: FrameLayout{Params: []FrameSlot{
 				{Offset: 0, Type: Ptr, Index: 0, Field: -1}, {Offset: 8, Type: Ptr, Index: 1, Field: -1}, {Offset: 16, Type: Ptr, Index: 2, Field: -1}, {Offset: 24, Type: I64, Index: 3, Field: -1},
 			}}}

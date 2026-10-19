@@ -186,31 +186,7 @@ func TestX86RawBitCountRuntimeSemantics(t *testing.T) {
 	if !ok {
 		t.Fatal("LLVM 22 llc/clang not found")
 	}
-	const source = `
-TEXT rawbitcountsemantics(SB),NOSPLIT,$0-8
-	MOVQ out+0(FP), DI
-	MOVQ $0x12340000, AX
-	BYTE $0x66; BYTE $0xf3; BYTE $0x0f; BYTE $0xbc; BYTE $0xc0 // TZCNTW AX, AX
-	MOVQ AX, 0(DI)
-	SETCS 8(DI)
-	SETEQ 9(DI)
-	MOVQ $0x1122334480000000, AX
-	BYTE $0xf3; BYTE $0x0f; BYTE $0xbd; BYTE $0xc0 // LZCNTL AX, AX
-	MOVQ AX, 16(DI)
-	SETCS 24(DI)
-	SETEQ 25(DI)
-	MOVQ $0, AX
-	BYTE $0xf3; BYTE $0x48; BYTE $0x0f; BYTE $0xbc; BYTE $0xc0 // TZCNTQ AX, AX
-	MOVQ AX, 32(DI)
-	SETCS 40(DI)
-	SETEQ 41(DI)
-	MOVQ $0x100, 48(DI)
-	BYTE $0xf3; BYTE $0x48; BYTE $0x0f; BYTE $0xbd; BYTE $0x4f; BYTE $0x30 // LZCNTQ 48(DI), CX
-	MOVQ CX, 56(DI)
-	SETCS 64(DI)
-	SETEQ 65(DI)
-	RET
-`
+	source := x86RawCountOriginalRuntimeSource
 	file, err := Parse(ArchAMD64, source)
 	if err != nil {
 		t.Fatal(err)
