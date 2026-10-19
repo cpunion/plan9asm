@@ -247,6 +247,10 @@ static int check(kernel call, const char *name, int lane,
 `
 
 func x87DirectFlagCompareRuntime(t *testing.T, arch, triple string, run func(*testing.T, string, string)) {
+	x87DirectFlagCompareRuntimeWithMode(t, arch, triple, X87Auto, run)
+}
+
+func x87DirectFlagCompareRuntimeWithMode(t *testing.T, arch, triple string, mode X87Mode, run func(*testing.T, string, string)) {
 	t.Helper()
 	file, err := Parse(ArchAMD64, x87FlagCompareAssembly(arch))
 	if err != nil {
@@ -271,7 +275,9 @@ int main(void) {
 ` + checks.String() + "   }\n  }\n }\n return 0;\n}\n"
 	for _, optimized := range []bool{false, true} {
 		t.Run(fmt.Sprintf("O2=%t", optimized), func(t *testing.T) {
-			ir, err := Translate(file, x87FlagCompareOptions(arch, triple))
+			options := x87FlagCompareOptions(arch, triple)
+			options.X87Mode = mode
+			ir, err := Translate(file, options)
 			if err != nil {
 				t.Fatal(err)
 			}

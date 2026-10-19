@@ -95,3 +95,17 @@ func TestX86StackNativeReadWidthsRemainObservable(t *testing.T) {
 		}
 	}
 }
+
+func TestX87DirectFlagCompareOriginalProgramPortable(t *testing.T) {
+	execution := x86ScalarCountHostExecution(t)
+	arch := "amd64"
+	if strconv.IntSize == 32 {
+		arch = "386"
+	}
+	requireX86GoAssemblerResult(t, arch, x87FlagCompareAssembly(arch), true)
+	x87DirectFlagCompareRuntimeWithMode(t, arch, execution.triple, X87Software, func(t *testing.T, ir, main string) {
+		for _, level := range []string{"-O0", "-O2"} {
+			execution.compileAndRunLLVM(t, "original-x87-direct-flags", ir, main, level)
+		}
+	})
+}
