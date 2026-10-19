@@ -2,6 +2,7 @@ package plan9asm
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 )
 
@@ -16,6 +17,40 @@ func TestX86TernaryGPOriginalRuntimeObjects(t *testing.T) {
 				x86RawNumericalFamilyObjects(t, row.source, row.declaration, "amd64", triple)
 			})
 		}
+	}
+}
+
+func TestX86YmlYrlYrlInitializedFiveTargetObjects(t *testing.T) {
+	for _, target := range x86RawReturnTargets {
+		t.Run(target.triple, func(t *testing.T) {
+			word, move := goWordSize(target.arch), "MOVQ"
+			if word == 4 {
+				move = "MOVL"
+			}
+			var source, declarations strings.Builder
+			count := 0
+			for _, op := range []string{"ANDNL", "ANDNQ", "PDEPL", "PDEPQ", "PEXTL", "PEXTQ"} {
+				for _, memory := range []bool{false, true} {
+					for _, raw := range []bool{false, true} {
+						name, first := fmt.Sprintf("Value%d", count), "AX"
+						if memory {
+							first = "(SI)"
+						}
+						line := op + " " + first + ",BX,CX"
+						if raw {
+							line = x86RawNumericalInstruction(t, target.arch, line)
+						}
+						fmt.Fprintf(&source, "TEXT ·%s(SB),4,$0-%d\n%s value+0(FP),AX\n%s input+%d(FP),SI\n%s $-1,BX\n%s\n%s CX,ret+%d(FP)\nRET\n", name, word*3, move, move, word, move, line, move, word*2)
+						fmt.Fprintf(&declarations, "func %s(value uintptr,input *[8]byte) uintptr\n", name)
+						count++
+					}
+				}
+			}
+			if count != 24 {
+				t.Fatal("complete six-member named/raw register/memory grammar changed", count)
+			}
+			x86RawNumericalFamilyObjects(t, source.String(), declarations.String(), target.arch, target.triple)
+		})
 	}
 }
 
