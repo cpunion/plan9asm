@@ -22,6 +22,8 @@ idle worktrees; do not create another for routine work.
 
 | Code snapshot | Completed evidence | Limits |
 |---|---|---|
+| `30a1c2679` | Mode32 logical AX returns and private FLAGS correlation: 45 roots / 2,500 children pass current Go, actual Go1.20 and race; identical 2,545 terminals, zero fail/skip/incomplete | Original two Windows386 complete-source failures pass; W/L, B/W/L subword, seven GP registers, clone/join and source/query boundaries retain independent controls |
+| Same snapshot | All thirteen final gates pass, unchanged source/tools; seventy independent cancellation programs execute through three APIs, optimized/unoptimized IR and O0/O2 | No new complete 167-root replay or whole-CI claim; original Windows386 native execution remains separately required |
 | `1cafc5b2f` | Raw FP16 binary and retained families: 53 roots / 3,157 children pass current Go, actual Go1.20 and race; identical 3,210 terminals, zero fail/skip/incomplete | All twelve raw members, 450 independent physical shapes on five targets through three APIs and IR/backend O0/O2; original opcode/control/mask bytes, not native execution |
 | Same snapshot | All thirteen final gates pass; exact original 167-root replay has 75 pass / 3 fail / 89 explicit host skips, unchanged source/tools | Original FP16 binary format root now passes with no regressions; complete CI and native FP16 hardware execution remain separate requirements |
 | `4acf97d89` | Raw FP16 FMA and retained conversion/SQRT families: 112 roots / 5,475 children pass current Go, actual Go1.20 and race; identical 5,587 terminals, zero fail/skip/incomplete | All thirty raw FMA members, 1,134 independent physical shapes on five targets through three APIs and IR/backend O0/O2; exact opcode/control/mask bytes, not native execution |
@@ -287,29 +289,18 @@ before changing implementation or claiming a speedup. Do not relax budgets.
 
 ## Immediate work
 
-1. ENDBR's three-lane cohort and final gates are complete at `0ab05d184`.
-   Preserve its real side-effecting CET instruction, exact raw-source identity
-   and missing-input/result negatives. The required Linux native wrapper has
-   not run locally. SQRT's native rounding/passthrough/mask/MXCSR requirement
-   likewise remains separate from its completed object-only qualification.
-2. The logical-memory and VMOVW/raw-format batches are qualified and included
-   in the latest exact replay. Repair the other
-   observed classes:
-   raw FP16 native-read composition; raw literal and unbound-format
-   contracts; MMX closure; hardware enqueue/mask status; custom ABI,
-   runtime386 `cpuidProbe` entry. Use the actual diagnostic,
-   not an earlier successful preflight, to choose each next class.
-   The enqueue batch is qualified at `2c112ef6e`; static/segment RMW follows
-   at `ef3e886d3`, six FP16 floating conversions at `83b656042`, and FP16 SQRT
-   at `bb85d27b3`, followed by raw FP16 FMA at `4acf97d89` and binary arithmetic
-   at `1cafc5b2f`. The exact three failures are two runtime386 source fixtures
-   and one x87 compare root. Repair each
-   complete rule class with original Go/emitter controls and independently
-   initialized public programs; do not weaken source/data or entry proofs.
-   The local `codex/pr40-mode32-stack-correlation-20261019` branch retains
-   unpublished independent W/L FLAGS-copy, B/W/L subword, negative stack and
-   logical AX-result tests. Establish RED before implementing their shared
-   state rule; do not publish this test-only branch as a qualified repair.
+1. Mode32's 45-root three-lane qualification and thirteen gates are complete
+   at `30a1c2679`. Preserve the two original complete-source fixtures, including
+   their original undefined-BX and unbounded-SP negatives. Portable cancellation
+   execution does not certify the original Windows386 native C driver.
+2. Finish the remaining x87 direct-compare class. The independent RED at
+   `04ee565af` retains 335 children and 98 failed terminals: all four floating
+   move members and the W/L/Q native PUSH input family lack their paired
+   numerical continuation. The local candidate at `fbe79524d` adds exact
+   volatile accesses, shared typed effects, mandatory Void inputs, five-target
+   objects and actual-host numerical/fault tests. Its first GREEN is running;
+   that candidate is not yet qualified or published. Retain the original
+   32-kernel comparison source and its native counterpart.
 3. Rerun the unchanged complete standard-library corpus and benchmark after
    relevant source repairs. Do not convert Context into successful compilation.
    A valid encoding grants no caller frame, memory ownership or ABI transport.
@@ -325,6 +316,14 @@ develop in an existing idle worktree. Commit and preserve RED before repair.
 
 Resolve worktree locations with `git worktree list`. Ignored receipts include:
 
+- `mode32-flags-qualified-30a1c267.json` and
+  `mode32-flags-final-gates-30a1c267/`: complete 45-root three-lane qualification
+  and thirteen gates, with unchanged source/tools. Preserve logical-return RED
+  `88602041`, FLAGS RED `1dbeae3a`, and failed first GREEN `e5610822`; the latter
+  exposed the separate AUTO emitter's stale private-SP rejection.
+- `compact-04ee565a-x87-floating-push-native-input-red-go127-normal-*`:
+  original and independent native-input RED, with no infrastructure failure.
+  These compact runner receipts live in the shared ignored receipt directory.
 - `fp16-binary-qualified-1cafc5b2.json` and `fp16-binary-final-gates-1cafc5b2/`:
   complete 53-root three-lane cohort, identical 3,210-terminal unions and all
   thirteen gates. Preserve RED `a15d65d5`, first-green `32c1f749`, and the failed
