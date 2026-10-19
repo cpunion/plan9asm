@@ -55,7 +55,7 @@ func x86IFMAResultTransfer(ins Instr, form x86IFMAForm, state *x86ResultState, o
 	other, old := state.vectorBytes(second), state.vectorBytes(destination)
 	var defined uint64
 	for offset := 0; offset < form.byteWidth; offset += 8 {
-		// Bits51:0 require seven source bytes, not irrelevant byte7. The
+		// Bits 51:0 require seven source bytes, not irrelevant byte7. The
 		// complete eight-byte accumulator is data even with EVEX.z.
 		firstMask := uint64(0x7f) << uint(offset)
 		if form.broadcast {

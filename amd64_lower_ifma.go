@@ -13,8 +13,17 @@ type amd64IFMASpec struct {
 // Both instructions use _yvblendmpd and operate on the low unsigned 52 bits
 // of each qword source. LUQ adds product bits 51:0; HUQ adds bits 103:52.
 var amd64IFMASpecs = map[Op]amd64IFMASpec{
-	"VPMADD52HUQ": {x86PackedBinarySpec: x86PackedBinarySpec{encoding: x86PackedLogicalEVEX, broadcastBytes: 8, zeroing: true}, high: true},
-	"VPMADD52LUQ": {x86PackedBinarySpec: x86PackedBinarySpec{encoding: x86PackedLogicalEVEX, broadcastBytes: 8, zeroing: true}},
+	"VPMADD52HUQ": {
+		x86PackedBinarySpec: x86PackedBinarySpec{
+			encoding: x86PackedLogicalEVEX, broadcastBytes: 8, zeroing: true,
+		},
+		high: true,
+	},
+	"VPMADD52LUQ": {
+		x86PackedBinarySpec: x86PackedBinarySpec{
+			encoding: x86PackedLogicalEVEX, broadcastBytes: 8, zeroing: true,
+		},
+	},
 }
 
 func (c *amd64Ctx) lowerIFMA(op Op, ins Instr) (ok bool, terminated bool, err error) {
