@@ -118,7 +118,14 @@ encoder/unsupported/parse metrics remain unchanged. Complete report forms and
 fingerprints equal the earlier independent observation at `8206232b5`.
 Baseline-only `05782c0d2` records this audit.
 
-Current Go AMD64 has 3,292 supported and 3,444 Context forms, zero unsupported.
+The next independent audit at `79dd1ca75` compares all sixteen reports with
+that baseline. Exactly 53 AMD64 input-deficient probes per SDK change from
+supported to Context, limited to the thirteen ABS/sign names and SHLW/SHRW.
+Every 386 form and all unrelated encoder/unsupported/parse metrics stay
+unchanged. Baseline-only `420233de8` records precisely those 24 metric fields;
+the ignored `closeout-classification-79dd1ca7-initial` reports retain every form.
+
+Current Go AMD64 has 3,239 supported and 3,497 Context forms, zero unsupported.
 Context is not a successful initialized-program translation. The historical
 Go1.20 unsupported form remains unchanged; the current five-architecture gate
 still requires zero unsupported forms and parse errors.
