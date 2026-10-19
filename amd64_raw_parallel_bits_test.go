@@ -191,37 +191,7 @@ func TestX86ParallelBitsRuntime(t *testing.T) {
 	if runtime.GOARCH != "amd64" && !crossRosetta {
 		t.Skip("execution requires amd64 or Rosetta; separate five-target object tests are required")
 	}
-	var source, decl, checks strings.Builder
-	sigs := make(map[string]FuncSig)
-	index := 0
-	for _, op := range []string{"PDEPL", "PDEPQ", "PEXTL", "PEXTQ"} {
-		for _, memory := range []bool{false, true} {
-			for dst := 8; dst <= 10; dst++ {
-				name := fmt.Sprintf("parallelbits%d", index)
-				index++
-				fmt.Fprintf(&source, "TEXT %s(SB),4,$0-24\nMOVQ value+0(FP),R8\nMOVQ mask+8(FP),SI\nMOVQ (SI),R9\nMOVQ out+16(FP),DI\nMOVQ $-1,R10\nMOVL $2147483647,CX\nADDL $1,CX\n", name)
-				mask := "R9"
-				if memory {
-					mask = "(SI)"
-				}
-				code := assembleX87ControlBytes(t, "amd64", fmt.Sprintf("TEXT probe(SB),4,$0-0\n%s %s,R8,R%d\nRET\n", op, mask, dst))
-				for _, b := range code[:len(code)-1] {
-					fmt.Fprintf(&source, "BYTE $%#02x\n", b)
-				}
-				fmt.Fprintf(&source, "MOVQ R%d,(DI)\nSETCS 8(DI)\nSETEQ 9(DI)\nSETPS 10(DI)\nSETMI 11(DI)\nSETOS 12(DI)\nRET\n", dst)
-				sigs[name] = FuncSig{Name: name, Args: []LLVMType{I64, Ptr, Ptr}, Ret: Void, Frame: FrameLayout{Params: []FrameSlot{{Offset: 0, Type: I64, Index: 0, Field: -1}, {Offset: 8, Type: Ptr, Index: 1, Field: -1}, {Offset: 16, Type: Ptr, Index: 2, Field: -1}}}}
-				fmt.Fprintf(&decl, "extern void %s(uint64_t,const void *,void *);\n", name)
-				bits, deposit := 32, 0
-				if strings.HasSuffix(op, "Q") {
-					bits = 64
-				}
-				if strings.HasPrefix(op, "PDEP") {
-					deposit = 1
-				}
-				fmt.Fprintf(&checks, "if(check(%s,%d,%d)) return %d;\n", name, bits, deposit, index)
-			}
-		}
-	}
+	source, decl, checks, sigs := x86ParallelBitsOriginalRuntimeFixture(t)
 	file, err := Parse(ArchAMD64, source.String())
 	if err != nil {
 		t.Fatal(err)

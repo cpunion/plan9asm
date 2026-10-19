@@ -195,34 +195,7 @@ func TestX86ANDNRuntimeSemanticsAndFlags(t *testing.T) {
 	if !ok {
 		t.Fatal("LLVM 22 llc/clang not found")
 	}
-	const source = `TEXT andnsemantics(SB),$0-8
-	MOVQ out+0(FP), DI
-	MOVQ $0xf0, AX
-	MOVQ $0xcc, BX
-	ANDNQ AX, BX, CX
-	MOVQ CX, 0(DI)
-	SETCS 24(DI)
-	SETEQ 25(DI)
-	SETMI 26(DI)
-	SETOS 27(DI)
-	MOVQ $0, AX
-	MOVQ $0, BX
-	ANDNQ AX, BX, CX
-	MOVQ CX, 8(DI)
-	SETCS 28(DI)
-	SETEQ 29(DI)
-	SETMI 30(DI)
-	SETOS 31(DI)
-	MOVL $0x80000000, AX
-	MOVL $0, BX
-	ANDNL AX, BX, CX
-	MOVQ CX, 16(DI)
-	SETCS 32(DI)
-	SETEQ 33(DI)
-	SETMI 34(DI)
-	SETOS 35(DI)
-	RET
-`
+	source := x86ANDNOriginalRuntimeSource
 	file, err := Parse(ArchAMD64, source)
 	if err != nil {
 		t.Fatal(err)
