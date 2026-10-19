@@ -125,6 +125,7 @@ func TestX86MoveHalfSelectedBytesUpperAliasesAndState(t *testing.T) {
 					args, base = "value+0(FP),X1,X2", 1
 				}
 				ins := x86ScalarLaneInstruction(t, row.op+" "+args)
+				inputOwned := []bool{true, true, true, true, true, true, true, true}
 				for missing := -1; missing < 16; missing++ {
 					initial := x86ResultState{fp: map[int64]bool{}, flags: x86ByteFlagsAll, direction: x86ResultDirectionBackward}
 					for offset := int64(0); offset < 8; offset++ {
@@ -145,7 +146,7 @@ func TestX86MoveHalfSelectedBytesUpperAliasesAndState(t *testing.T) {
 					if row.vector {
 						want.vectorUpper[2] = ^uint64(0xffff)
 					}
-					if !x86ResultTransfer(ins, &initial, nil, 0, arch) || !reflect.DeepEqual(initial, want) {
+					if !x86ResultTransfer(ins, &initial, inputOwned, 0, arch) || !reflect.DeepEqual(initial, want) {
 						t.Fatal("selected-byte propagation invented unknown merge bytes, lost upper alias, or changed unrelated state", missing, before, initial, want)
 					}
 				}
