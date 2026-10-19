@@ -187,6 +187,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		if x86RawBMI2ShiftSource(ins, arch) {
 			continue // Exact shifts/rotates retain their complete count/data obligations.
 		}
+		if x86RawLegacyScalarShiftSource(ins, arch) {
+			continue // Exact legacy counts/data retain the paired ISA-outcome and native RMW proof.
+		}
 		if x86RawAccumulatorSignExtendSource(ins, arch) {
 			continue // Exact implicit GP arithmetic preserves its independent input obligations.
 		}
@@ -323,6 +326,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		}
 		if accepted, known := x86LoweredBMI2ShiftResultStep(ins, state, owned, resultOffset, arch); known {
 			return accepted
+		}
+		if accepted, known := x86LoweredScalarShiftChoiceStep(ins, state, owned, resultOffset, arch); known {
+			return accepted // Only this producer-specific emitter materializes finite ISA-undefined outputs.
 		}
 		if accepted, known := x86LoweredAccumulatorSignExtendResultStep(ins, state, owned, resultOffset, arch); known {
 			return accepted
