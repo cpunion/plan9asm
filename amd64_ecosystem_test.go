@@ -5448,7 +5448,7 @@ func TestTranslateAMD64ConditionalMoveFamilyCompleteGoAssemblerForms(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Translate(file, Options{
+	options := Options{
 		TargetTriple: "x86_64-unknown-linux-gnu",
 		Goarch:       "amd64",
 		Sigs: map[string]FuncSig{"conditionalmoveforms": {
@@ -5459,9 +5459,24 @@ func TestTranslateAMD64ConditionalMoveFamilyCompleteGoAssemblerForms(t *testing.
 				Offset: 0, Type: I64, Index: 0, Field: -1,
 			}}},
 		}},
-	}); err != nil {
-		t.Fatal(err)
 	}
+	// All original register and native memory rows remain format witnesses,
+	// not initialized public programs. Keep the actual FP input declaration.
+	original := strings.Replace(src.String(), "TEXT conditionalmoveforms", "TEXT ·conditionalmoveforms", 1)
+	x86LEAActualTargetGoObject(t, "amd64", options.TargetTriple, "#include \"textflag.h\"\n"+original)
+	for _, api := range []string{"text", "module", "Go"} {
+		ir, err := x86ScalarFPBitViewAPI(t, original,
+			"package formats\nfunc conditionalmoveforms(input uint64)\n", "amd64", options.TargetTriple, api)
+		if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+			t.Fatal("uninitialized CMOV data/address/predicate became public input", api, err)
+		}
+	}
+	ir := x86ScalarFormatObjectUnit(t, file, options.Sigs, "amd64", options.TargetTriple, 0)
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM22 required")
+	}
+	compileLLVMToObject(t, llc, options.TargetTriple, "cmov-original-formats.ll", "cmov-original-formats.o", ir)
 }
 
 func TestTranslateAMD64ConditionalMoveFamilyRejectsFormsOutsideGoOptab(t *testing.T) {

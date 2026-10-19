@@ -84,10 +84,9 @@ func TestX86RawShiftRotateCompleteGoForms(t *testing.T) {
 				if (arch == "386") != strings.HasPrefix(triple, "i") {
 					continue
 				}
-				ir, err := Translate(file, Options{Goarch: arch, TargetTriple: triple, Sigs: map[string]FuncSig{"shifts": {Name: "shifts", Ret: Void}}})
-				if err != nil {
-					t.Fatal(err)
-				}
+				// Counts, carry, data and physical addresses remain unbound.
+				// Replay the complete original source before direct format emission.
+				ir := x86UnboundVoidRawProbeObject(t, file, arch, triple)
 				compileLLVMToObject(t, llc, triple, "raw-shifts.ll", "raw-shifts.o", ir)
 			}
 		})

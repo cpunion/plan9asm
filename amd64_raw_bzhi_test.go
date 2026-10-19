@@ -85,13 +85,9 @@ func TestTranslateX86RawBZHIRealMemoryObjects(t *testing.T) {
 		"x86_64-apple-darwin", "x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc",
 	} {
 		t.Run(triple, func(t *testing.T) {
-			ir, err := Translate(file, Options{
-				Goarch: "amd64", TargetTriple: triple,
-				Sigs: map[string]FuncSig{"rawBZHI": {Name: "rawBZHI", Ret: Void}},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			// The original physical memory/index inputs are not initialized.
+			// Keep Go objects and public Context separately from emitter objects.
+			ir := x86UnboundVoidRawProbeObject(t, file, "amd64", triple)
 			compileLLVMToObject(t, llc, triple, "raw-bzhi.ll", "raw-bzhi.o", ir)
 		})
 	}
