@@ -50,11 +50,30 @@ func TestX86AESFamilyNamedAndRawThreeAPIFiveTargetObjects(t *testing.T) {
 				for _, api := range []string{"text", "module", "Go"} {
 					t.Run(api, func(t *testing.T) {
 						ir, err := x86OrderingHintTranslateAPI(t, api, source.String(), declarations.String(), target.arch, target.triple)
-						if err != nil {
-							t.Fatal(err)
+						if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+							t.Fatal("original AES formats invented native addresses or vector inputs", api, err)
 						}
-						compileLLVMToObject(t, llc, target.triple, "aes-object-"+api+".ll", "aes-object-"+api+".o", ir)
 					})
+				}
+				file, err := Parse(ArchAMD64, source.String())
+				if err != nil {
+					t.Fatal(err)
+				}
+				file, err = normalizeX86RawFile(file, target.arch)
+				if err != nil {
+					t.Fatal(err)
+				}
+				signatures := make(map[string]FuncSig)
+				for _, fn := range file.Funcs {
+					name := strings.TrimPrefix(fn.Sym, "·")
+					signatures[name] = FuncSig{Name: name, Ret: Void}
+				}
+				ir := x86InstructionFormatObjectUnit(t, file, signatures, target.arch, target.triple, 0,
+					func(c *amd64Ctx, ins Instr) (bool, bool, error) { return c.lowerAES(ins.Op, ins) })
+				for _, input := range []string{ir, x86DwordProductIROptimize(t, ir)} {
+					for _, level := range []string{"-O0", "-O2"} {
+						x86PackedStringCompileObject(t, llc, target.triple, input, level)
+					}
 				}
 			})
 		}
@@ -230,13 +249,38 @@ func TestX86AESFamilyLogicalFPNumericalSpanContracts(t *testing.T) {
 			for _, contract := range []struct {
 				parameters string
 				accepted   bool
-			}{{"a,b uint64", true}, {"a,b,c,d float32", true}, {"a,b float64", true}, {"a uint8,b uint64", false}, {"a,b *byte", false}} {
+			}{{"a,b uint64", true}, {"a,b,c,d float32", true}, {"a,b float64", true},
+				{"a uint8,b uint64", false}, {"a uint8,b uint64,c uint32", false}, {"a,b *byte", false}, {"a,b,c,d *byte", false}} {
 				t.Run(target.triple+"/"+name+"/"+contract.parameters, func(t *testing.T) {
-					source := "TEXT ·F(SB),4,$0-16\n" + row + "\nRET\n"
+					size := 16
+					switch contract.parameters {
+					case "a uint8,b uint64":
+						if target.arch == "386" {
+							size = 12
+						}
+					case "a uint8,b uint64,c uint32":
+						if target.arch == "amd64" {
+							size = 20
+						}
+					case "a,b *byte":
+						size = int(goWordSize(target.arch)) * 2
+					case "a,b,c,d *byte":
+						size = int(goWordSize(target.arch)) * 4
+					}
+					source := fmt.Sprintf("TEXT ·F(SB),4,$0-%d\n%s\nRET\n", size, row)
 					x86LEAActualTargetGoObject(t, target.arch, target.triple, source)
+					initialized := strings.Replace(source, fmt.Sprintf("$0-%d\n", size),
+						fmt.Sprintf("$0-%d\nMOVL $1,AX\nMOVL AX,X1\n", size), 1)
 					for _, api := range []string{"text", "module", "Go"} {
 						t.Run(api, func(t *testing.T) {
-							ir, err := x86ScalarFPBitViewAPI(t, source, "func F("+contract.parameters+")\n", target.arch, target.triple, api)
+							declaration := "func F(" + contract.parameters + ")\n"
+							if contract.accepted && strings.HasPrefix(name, "V") && !strings.Contains(name, "IMC") && !strings.Contains(name, "KEYGEN") {
+								ir, err := x86ScalarFPBitViewAPI(t, source, declaration, target.arch, target.triple, api)
+								if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+									t.Fatal("original FP round format invented its vector-state input", api, err)
+								}
+							}
+							ir, err := x86ScalarFPBitViewAPI(t, initialized, declaration, target.arch, target.triple, api)
 							accepted := contract.accepted && strings.HasPrefix(name, "V")
 							if (err == nil) != accepted || !accepted && ir != "" {
 								t.Fatal("numeric FP bytes cannot supply native legacy AES alignment, holes or pointer backing", accepted, err)

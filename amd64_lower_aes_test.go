@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -50,9 +51,13 @@ func TestTranslateX86AESCompleteGoAssemblerForms(t *testing.T) {
 			fmt.Fprintf(&source, "\tVAESKEYGENASSIST $255, 8(AX), X%d\n", legacyLast)
 			source.WriteString("\tRET\n")
 			file, err := Parse(ArchAMD64, source.String())
-			if err != nil {
-				t.Fatal(err)
+			if ll != "" || !errors.Is(err, ErrProbeNeedsContext) {
+				t.Fatal("original AES formats invented vector or native-pointer inputs", err)
 			}
+			x86LEAActualTargetGoObject(t, target.goarch, target.triple, "#include \"textflag.h\"\n"+source.String())
+			ll = x86InstructionFormatObjectUnit(t, file,
+				map[string]FuncSig{"aesforms": {Name: "aesforms", Ret: Void}}, target.goarch, target.triple, 0,
+				func(c *amd64Ctx, ins Instr) (bool, bool, error) { return c.lowerAES(ins.Op, ins) })
 			ll, err := Translate(file, Options{
 				TargetTriple: target.triple,
 				Goarch:       target.goarch,
