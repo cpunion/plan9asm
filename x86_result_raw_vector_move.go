@@ -53,6 +53,24 @@ func x86RawVectorMoveSource(ins Instr, arch string) bool {
 	return valid
 }
 
+// Source-local constants retain their existing bounded literal/replay/DATA and
+// raw-return consumer. This is not the ordinary native-read continuation above.
+// Aligned packed loads still need their independent original pool alignment;
+// a newly materialized DATA global must not invent that physical backing.
+func x86RawVectorMoveLiteralSource(ins Instr, arch string) bool {
+	if !x86RawLiteralSourceShape(ins, arch) || !x86RawReturnDecodedReadIdentity(ins) ||
+		ins.x86RIPMemoryRead.source != 0 {
+		return false
+	}
+	if form, known, err := amd64PackedVectorMoveProperties(ins, arch); known {
+		return err == nil && !form.spec.aligned && form.memory == 0 &&
+			ins.x86RIPMemoryRead.width == int64(form.byteWidth)
+	}
+	form, known, err := amd64ScalarVectorMoveProperties(ins, arch)
+	return known && err == nil && !form.spec.legacy && !form.spec.rawOnly && form.memory == 0 &&
+		ins.x86RIPMemoryRead.width == int64(form.spec.bits/8)
+}
+
 // Exact decoded moves compose only in the paired lowering observer. Retain the
 // captured physical form while projecting provenance locally; original source,
 // native entry, caller, FP/AUTO and standalone declaration roles are unchanged.
