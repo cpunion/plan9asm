@@ -150,11 +150,20 @@ Retain original Go objects, three-mode target objects, portable values/canaries
 and exact dead-access faults. Native x87 environment/exception execution stays
 with its required original-source runtime owners.
 
-Mode32 zero-argument manual I8/I16/I32 returns use the existing logical AX
-transport. Share its CFG and exact-byte return obligation with the distinct
-custom-register bool checker; I1 still needs canonical zero/one. Route absent
-and partial AX writes through that proof even without another numerical effect.
-The role has no FP layout, native frame, raw entry or incoming register bytes.
+Both x86 modes route every zero-argument manual I1/I8/I16/I32/I64 return
+through the existing logical AX proof, even without another numerical effect.
+Share its CFG and exact-byte obligation with the distinct custom-register bool
+checker. Manual I1 returns the emitter's low bit; the custom Go-bool transport
+still requires canonical zero/one. No FP layout, native frame, raw entry or
+incoming register bytes follow. Standalone ABI0 queries remain strict.
+
+Mode32 logical I64 returns use the emitter's virtual i64 AX slot, not EDX:AX.
+Existing dword writes zero its upper bytes. Check all eight known-byte bits
+through a valid mode32 dword register view; an invalid physical qword view
+must not yield an empty mask that falsely passes. Runtime oracles observe
+the exact LLVM return type before an explicit extension bridge crosses the C
+boundary: signless narrow LLVM results do not imply C signext/zeroext ABI
+attributes. Keep native Go/C ABI tests independent.
 
 Mode32 private FLAGS copies retain bounded bit dependencies across W/L PUSHF
 and POPF. Shared B/W/L XOR grammar consumes only original bare SP offsets

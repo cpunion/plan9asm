@@ -22,6 +22,8 @@ idle worktrees; do not create another for routine work.
 
 | Code snapshot | Completed evidence | Limits |
 |---|---|---|
+| `53a93cfd4` | Complete logical integer AX returns on both x86 modes: 12 roots / 614 children pass current Go, actual Go1.20 and race, with identical 626 terminals and zero fail/skip/incomplete | I1/I8/I16/I32/I64, five targets, three APIs, original missing/partial-write negatives, O0/O2 objects and actual logical-value execution; no Go or narrow C ABI is inferred |
+| `073c835ee` | Same Go source plus ownership-first SDK scheduling: thirteen final gates pass, including 134 CI policies; exact original 167 roots remain 78 pass / 0 fail / 89 explicit host skips, 3,323 children | Both runs retain unchanged source/tools; this does not qualify the failed whole-standard-library benchmark or a different CI head |
 | `18bb77a09` | CI dispatch ordering and Go loader identity: complete runner package passes actual Go1.20 and current Go, each with 79 roots / 182 children; six focused race roots pass, unchanged source/tools | The earlier complete Go1.27 package timeout and failed recorder remain failed observations; real independent source/tool/library and loader execution checks remain mandatory |
 | Same snapshot | All thirteen final gates pass; exact original 167-root replay has 78 pass / 0 fail / 89 explicit host skips, 3,323 children, unchanged source/tools | No absent/incomplete or passing roots with skipped children; complete CI and the strict benchmark remain failed/unqualified |
 | `7b97c31de` | x87 native floating moves and PUSH native reads: 69 roots / 4,988 children pass current Go, actual Go1.20 and race; identical 5,057 terminals, zero fail/skip/incomplete; all thirteen final gates pass | Complete four-member floating move and W/L/Q PUSH families, exact volatile widths, five-target objects and portable values/faults; no native FP80 or hardware exception claim |
@@ -109,7 +111,7 @@ See earlier checkpoints in Git rather than reconstructing counts by subtraction.
 
 ## Exact failure replay and online CI
 
-The latest local diagnostic at `18bb77a09` selects exactly the original CI's
+The latest local diagnostic at `073c835ee` selects exactly the original CI's
 167 failed root names. One sealed Go test process ran the complete set,
 instead of repeatedly linking the same large test executable.
 All inventories, started/terminal identities and before/after source, SDK, LLVM
@@ -139,14 +141,34 @@ and environment observations match. This is not the canonical isolated CI runner
 | Previous batched replay, `4acf97d89` | 74 | 4 | 89 | 0 / 0 |
 | Previous batched replay, `1cafc5b2f` | 75 | 3 | 89 | 0 / 0 |
 | Previous batched replay, `7b97c31de` | 78 | 0 | 89 | 0 / 0 |
-| Latest batched replay, `18bb77a09` | 78 | 0 | 89 | 0 / 0 |
+| Previous batched replay, `18bb77a09` | 78 | 0 | 89 | 0 / 0 |
+| Latest batched replay, `073c835ee` | 78 | 0 | 89 | 0 / 0 |
 
-The fork diagnostic run `39192383617` tests `7b97c31de` and must finish before
-another diagnostic push. Its native x86, x87, ARM64 fallback, LOCK, unlocked
-RMW and value/fault priorities pass. Both ownership versions expose the same
-authenticated-read dispatch ordering regression. Commit `fb45f528a` restores
+The fork diagnostic `39192383617` at `7b97c31de` finished naturally: 63 jobs
+pass, both ownership versions fail, and complete Windows modules are blocked.
+Its native x86, x87, ARM64 fallback, LOCK, unlocked RMW and value/fault
+priorities pass. Both ownership failures expose the same authenticated-read
+dispatch ordering regression. Commit `fb45f528a` restores
 the SDK literal and numerical readers before every native family, retaining
 the independent AST ordering guard rather than weakening it.
+
+The next diagnostic, `39198807147` at `a1bd240cf`, is running. Both previously
+failing ownership versions now pass online, along with all six native/cross
+priorities. The SDK matrix waits for both ownership versions; 134 independent
+scheduling policies pass, including missing/substituted/duplicate dependency
+controls. Full Windows modules must still execute and aggregate successfully.
+Let this run finish before another diagnostic push. The logical integer return
+extension is a separately qualified local batch, not that CI's source.
+
+The complete logical-return matrix independently reproduced 161 failed
+terminals / 300 children at `964053e4`: uninitialized logical returns escaped
+outside the old mode32 I8/I16/I32 selector. The shared proof now covers both
+x86 modes and all five integer types. Preserve the first compile failure
+(`097f0499`, an invalid test type name), and the first runtime-fixture failure
+(`d30e0736`, a narrow C ABI assumption). Exact LLVM-type extension bridges
+then pass actual logical values without claiming native narrow-return ABI.
+The complete three-lane cohort is sealed at `53a93cfd4`; all thirteen gates
+and the unchanged original failure replay pass at `073c835ee`.
 
 The complete actual-Go1.20 runner regression then exposed a separate test
 contract error: external linking can change Mach-O UUIDs and the binary-content
@@ -326,27 +348,19 @@ before changing implementation or claiming a speedup. Do not relax budgets.
 
 ## Immediate work
 
-1. Mode32's 45-root three-lane qualification and thirteen gates are complete
-   at `30a1c2679`. Preserve the two original complete-source fixtures, including
-   their original undefined-BX and unbounded-SP negatives. Portable cancellation
-   execution does not certify the original Windows386 native C driver.
-2. The x87 direct-compare class is qualified. The independent RED at
-   `04ee565af` retains 335 children and 98 failed terminals: all four floating
-   move members and the W/L/Q native PUSH input family lack their paired
-   numerical continuation. The local candidate at `fbe79524d` adds exact
-   volatile accesses, shared typed effects, mandatory Void inputs, five-target
-   objects and actual-host numerical/fault tests. Its first GREEN passes all
-   eleven roots / 478 children with unchanged source/tools. The complete
-   69-root / 4,988-child three-lane qualification and thirteen final gates pass
-   at `7b97c31de`; it is published only to the fork diagnostic branch, not the
-   PR40 contribution branch. Retain the original
-   32-kernel comparison source and its native counterpart.
-3. Finish the active fork diagnostic, then batch the qualified ordering and
-   loader-test repairs into its next push. Keep full Windows module validation
-   required even if a failed prerequisite prevents it from starting this round.
-   At `18bb77a09`, thirteen final gates and the exact failure replay pass;
-   the complete five-target benchmark fails as recorded above. Do not infer
-   complete current-head CI or benchmark success from focused tests.
+1. Watch `39198807147` through SDK priorities and complete Windows modules.
+   The two previous ownership failures already pass. Do not cancel/supersede
+   this active run or qualify its source with another branch's tests.
+2. Keep the complete logical integer return extension separate until its
+   later whole-CI batch. Preserve original mode32/x87 sources and negatives;
+   the native Windows386 and x87 owners remain distinct from portable tests.
+3. Repair benchmark failures as complete rule classes. The current original
+   `math/hypot_amd64.s` reaches MAXSD: legacy floating MIN/MAX is not routed
+   through the shared typed binary numerical transfer. Inspect all official
+   legacy/VEX/EVEX MIN/MAX formats and attributes before adding an independent
+   family RED. Do not implement a math-specific exception or misclassify every
+   remaining failure as an ABI problem. Other failures still need exact source,
+   frame, native-entry, caller or syscall contracts.
 4. Rerun the unchanged complete standard-library corpus and benchmark after
    relevant source repairs. Do not convert Context into successful compilation.
    A valid encoding grants no caller frame, memory ownership or ABI transport.
@@ -362,6 +376,13 @@ develop in an existing idle worktree. Commit and preserve RED before repair.
 
 Resolve worktree locations with `git worktree list`. Ignored receipts include:
 
+- `logical-return-widths-qualified-53a93cfd.json`: complete three-lane
+  12-root / 614-child qualification and exact terminal unions. Compact RED and
+  failed-first-green receipts remain in the shared receipt directory.
+- `latest-failure-batch-073c835e-*` and
+  `x87-native-input-final-gates-073c835e/`: exact original 167-root replay and
+  thirteen final gates, unchanged source/tools. The replay lives alongside
+  earlier failure-batch receipts, not necessarily this worktree's `_out/`.
 - `ci-dispatch-loader-18bb77a0/go120/`,
   `ci-dispatch-loader-continuation-18bb77a0/`: actual complete SDK runner
   reports and focused race outcomes, with preserved failed-controller evidence.
