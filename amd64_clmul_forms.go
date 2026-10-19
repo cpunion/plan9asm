@@ -98,9 +98,17 @@ func x86ResultCLMULStep(ins Instr, state *x86ResultState, owned []bool, arch str
 	if err != nil {
 		return false, true
 	}
+	return x86ResultCLMULTransfer(ins, f, state, owned, arch, false)
+}
+
+// Keep the complete captured form across a source-local provenance projection.
+// Memory always consumes the original full tuple; numerical availability still
+// depends only on the two selected qwords of each independent 128-bit lane.
+func x86ResultCLMULTransfer(ins Instr, f x86CLMULForm, state *x86ResultState,
+	owned []bool, arch string, nativeRead bool) (bool, bool) {
 	source := x86CallerVectorByteMask(int64(f.byteWidth))
 	if f.memory >= 0 {
-		if !x86ResultRead(ins.Args[f.memory], int64(f.byteWidth), state, owned, arch) {
+		if !x86ResultReadWithNativeContinuation(ins, ins.Args[f.memory], int64(f.byteWidth), state, owned, arch, nativeRead) {
 			return false, true
 		}
 	} else {
