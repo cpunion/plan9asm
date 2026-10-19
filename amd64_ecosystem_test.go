@@ -5466,7 +5466,7 @@ func TestTranslateAMD64ConditionalMoveFamilyCompleteGoAssemblerForms(t *testing.
 	x86LEAActualTargetGoObject(t, "amd64", options.TargetTriple, "#include \"textflag.h\"\n"+original)
 	for _, api := range []string{"text", "module", "Go"} {
 		ir, err := x86ScalarFPBitViewAPI(t, original,
-			"package formats\nfunc conditionalmoveforms(input uint64)\n", "amd64", options.TargetTriple, api)
+			"func conditionalmoveforms(input uint64)\n", "amd64", options.TargetTriple, api)
 		if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
 			t.Fatal("uninitialized CMOV data/address/predicate became public input", api, err)
 		}
