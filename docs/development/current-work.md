@@ -22,6 +22,8 @@ idle worktrees; do not create another for routine work.
 
 | Code snapshot | Completed evidence | Limits |
 |---|---|---|
+| `4c6cc0964` | Complete ANDN/PDEP/PEXT repair: 36 roots / 2,699 children pass current Go, actual Go1.20 and race; identical 2,735 terminals, zero fail/skip/incomplete and unchanged source/tools | Six named/raw members share the complete operand grammar, distinct numerical/FLAGS effects and exact volatile reads; original values/aliases, five-target objects, unused-bool controls and twelve dead-read fault rows. Portable execution is not original BMI opcode execution |
+| Same snapshot | Go1.20–Go1.27 audit changes exactly twelve isolated AMD64 probes per SDK from supported to Context; other families, 386 and encoder/unsupported metrics unchanged | Original probes lack their two data inputs. Initialized sequences and public objects remain independently tested; MULX's different effects are not registered by this grammar |
 | `9673cc995` | Complete ADCX/ADOX input repair: 24 roots / 1,781 children pass current Go, actual Go1.20 and race; identical 1,805 terminals, zero fail/skip/incomplete, unchanged source and tools | Four named/raw members share one grammar, ordered input bytes and independent CF/OF chains; five-target objects, original portable values and exact dead volatile reads. Native original execution and complete CI remain separate |
 | Same snapshot | Go1.20–Go1.27 classification audit changes exactly eight isolated AMD64 ADX probes per SDK from supported to Context; 386, other families and encoder/unsupported metrics unchanged | Those original probes lack numerical inputs and selected carry. Separate initialized whole-source probes and public objects establish successful translation |
 | `5e5379ada` | Raw count/move-mask and MMX batch: 25 roots / 933 children pass current Go, actual Go1.20 and race; identical 958 terminals, zero fail/skip/incomplete | Nine scalar-count members and six move-mask names share existing effects; original Void/native-output objects, exact origin/byte controls and original count portable values pass. Four additional MMX runtime fixture families retain complete objects; native execution remains separate |
@@ -377,16 +379,25 @@ selected CF/OF chain remain required, including dead native outputs. Preserve
 the original thirteen-terminal RED and the failed first GREEN whose raw guard
 was inserted in the unrelated MMX loop. Original RORX physical-BP and partial
 controller failures remain failed evidence as well.
+The following six-member ANDN/PDEP/PEXT batch is qualified at `4c6cc0964`.
+Its complete Go rows bind zcase, offsets, prefix/opcode attributes and physical
+mode widths. Shared load emission also retains ADX's independent carry rules.
+ANDN kills undefined AF/PF knowledge; PDEP/PEXT preserve all source FLAGS.
+Ordinary named-register/logical-storage effects stay in the strict transfer;
+only exact raw identity or a paired native read enters the special adapter.
+Preserve the original fourteen-terminal RED, first-green unbound-format
+failures and the separate raw-adapter/mode32-format failures. Their correction
+is not a claim that uninitialized original programs gained public translation.
 
 1. Continue the 88-root inventory from completed `39198807147` artifacts;
    the cancelled CLI owner's missing inventory remains unknown. Prioritize
    whole rule classes, including raw numerical continuations,
    missing typed effects and invalid format-fixture assumptions. Do not use the
    older 167-root replay as the denominator for these newly reached modules.
-2. Qualify and batch the current repair candidate in the allowed fork. Source
-   code at `7cfe15222` has the complete 28-root three-lane cohort and seventeen
-   gates; the cancellation-retention change has 139 passing policy tests.
-   The PR40 contribution and active diagnostic still have their older heads.
+2. Run the final gates and batch coherent qualified repairs in the allowed
+   fork. Each source snapshot retains its own three-lane and classification
+   receipts; the cancellation-retention change has 139 passing policy tests.
+   The PR40 contribution and completed diagnostic still have older heads.
 3. Preserve the separately qualified logical integer return batch `53a93cfd4`
    and the incomplete floating MIN/MAX candidate `7009ff18f` on the prior
    source-fixture branch. Neither is merged into this CI-repair candidate.
@@ -421,6 +432,11 @@ develop in an existing idle worktree. Commit and preserve RED before repair.
 
 Resolve worktree locations with `git worktree list`. Ignored receipts include:
 
+- `windows-ternary-gp-qualified-4c6cc096.json`: complete thirty-six-root
+  three-lane union. `ternary-gp-classification-audit/` is in the existing
+  typed-string worktree and retains all sixteen sealed SDK reports.
+  RED `d7f841a4`, first GREEN `e3ff46bf` and native/origin/width attempt
+  `548b5f7c` remain separate failed receipts, not overwritten qualifications.
 - `windows-adx-qualified-9673cc99.json` and `adx-classification-audit/`:
   complete twenty-four-root three-lane union and sealed sixteen-report audit.
   `compact-325c9759-adx-original-and-family-red-*` retains the original source

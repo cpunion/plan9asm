@@ -19,6 +19,18 @@ workflow, not a list of already completed instruction families.
 
 ## Instruction-family workflow
 
+ANDNL/Q and PDEPL/Q/PEXTL/Q share Go's complete `_yandnl` operand grammar
+and ordered two-input/one-output byte effect, not their numerical or FLAGS
+operation. Mode32 ignores VEX.W, including Q memory widths. ANDN defines only
+CF/OF/SF/ZF and kills AF/PF knowledge; PDEP/PEXT preserve FLAGS. MULX's
+different input/output roles do not inherit this registration. Lowering shares
+exact-width native GP read emission with ADX, not its carry obligation or memory
+permission. Keep ordinary named register/logical storage in the strict transfer;
+the special adapter consumes only an exact raw origin or independently paired
+native read. Preserve original Go/emitter format objects and public Context,
+initialized objects, original portable values/aliases and live/dead NULL/page
+fault controls. Infrastructure errors are not Go assembler rejection witnesses.
+
 ADCXL/Q and ADOXL/Q share the complete `yml_rl` grammar, encoder offset and
 ordered source/old-destination byte effect. Only the selected CF or OF chain
 is read and written; all other FLAGS and unrelated storage stay unchanged.
