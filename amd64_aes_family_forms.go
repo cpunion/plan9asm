@@ -135,7 +135,8 @@ func x86TypedAESByteEffect(op Op, ins Instr, arch string) (x86TypedByteEffect, b
 	if !known || err != nil {
 		return x86TypedByteEffect{}, known, err
 	}
-	e := x86TypedByteEffect{operands: []x86TypedByteOperand{{index: f.source, operand: f.sourceOperand, width: int64(f.byteWidth), read: true}}}
+	e := x86TypedByteEffect{requiresResultProof: true,
+		operands: []x86TypedByteOperand{{index: f.source, operand: f.sourceOperand, width: int64(f.byteWidth), read: true}}}
 	if f.state >= 0 && f.state != f.destination {
 		e.operands = append(e.operands, x86TypedByteOperand{index: f.state, operand: ins.Args[f.state], width: int64(f.byteWidth), read: true})
 	}
@@ -184,6 +185,10 @@ func x86AESDefinedBytes(f x86AESForm, source, state uint64) uint64 {
 }
 
 func x86ResultAESStep(ins Instr, state *x86ResultState, owned []bool, arch string) (bool, bool) {
+	return x86ResultAESStepWithRead(ins, state, owned, arch, false)
+}
+
+func x86ResultAESStepWithRead(ins Instr, state *x86ResultState, owned []bool, arch string, native bool) (bool, bool) {
 	f, known, err := x86AESProperties(ins.Op, ins, arch)
 	if !known {
 		return false, false
@@ -203,7 +208,8 @@ func x86ResultAESStep(ins Instr, state *x86ResultState, owned []bool, arch strin
 			}
 			return state.vectorBytes(i), true
 		}
-		return x86CallerVectorByteMask(int64(f.byteWidth)), x86ResultRead(a, int64(f.byteWidth), state, owned, arch)
+		return x86CallerVectorByteMask(int64(f.byteWidth)),
+			x86ResultReadWithNativeContinuation(ins, a, int64(f.byteWidth), state, owned, arch, native && index == f.source)
 	}
 	source, valid := read(f.source)
 	if !valid {
@@ -220,6 +226,10 @@ func x86ResultAESStep(ins Instr, state *x86ResultState, owned []bool, arch strin
 	if destination >= len(state.xmm) {
 		return false, true
 	}
-	state.writeVector(destination, f.byteWidth, x86AESDefinedBytes(f, source, input), !f.spec.vector)
+	defined := x86AESDefinedBytes(f, source, input)
+	if defined != x86CallerVectorByteMask(int64(f.byteWidth)) {
+		return false, true // Dead outputs do not register another unknown-input arithmetic domain.
+	}
+	state.writeVector(destination, f.byteWidth, defined, !f.spec.vector)
 	return true, true
 }
