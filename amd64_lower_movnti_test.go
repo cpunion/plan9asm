@@ -104,7 +104,7 @@ func TestTranslateX86MOVNTICompleteGo127FormsAcrossTargets(t *testing.T) {
 			defer cancel()
 			command := exec.CommandContext(ctx, llc, "-mtriple="+target.triple, "-filetype=asm", "-o=-", "-")
 			command.Stdin = strings.NewReader(ir)
-			assembly, err := runtimeOracleCombinedOutput(command)
+			assembly, err := runtimeOracleCombinedOutput(ctx, command)
 			if err != nil {
 				t.Fatalf("llc MOVNTI assembly failed: %v\n%s", err, assembly)
 			}
