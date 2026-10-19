@@ -23,6 +23,17 @@ func TestFixedLocalPackedObjectsHaveIndependentTargetOwners(t *testing.T) {
 
 func fixedLocalRequireIndependentTargetOwners(t *testing.T, filename, prefix, plan string, batches int) {
 	t.Helper()
+	fixedLocalRequireTargetOwners(t, filename, prefix, plan, batches,
+		[]struct{ name, target, triple string }{
+			{"Linux", "linux/amd64", "x86_64-unknown-linux-gnu"},
+			{"Darwin", "darwin/amd64", "x86_64-apple-darwin"},
+			{"Windows", "windows/amd64", "x86_64-pc-windows-msvc"},
+		})
+}
+
+func fixedLocalRequireTargetOwners(t *testing.T, filename, prefix, plan string, batches int,
+	platforms []struct{ name, target, triple string }) {
+	t.Helper()
 	syntax, err := parser.ParseFile(token.NewFileSet(),
 		filepath.Join("..", "..", filename), nil, 0)
 	if err != nil {
@@ -33,11 +44,7 @@ func fixedLocalRequireIndependentTargetOwners(t *testing.T, filename, prefix, pl
 		batch          int
 	}
 	want := make(map[string]owner)
-	for _, platform := range []struct{ name, target, triple string }{
-		{"Linux", "linux/amd64", "x86_64-unknown-linux-gnu"},
-		{"Darwin", "darwin/amd64", "x86_64-apple-darwin"},
-		{"Windows", "windows/amd64", "x86_64-pc-windows-msvc"},
-	} {
+	for _, platform := range platforms {
 		for batch := 0; batch < batches; batch++ {
 			name := fmt.Sprintf("%s%sBatch%02d", prefix, platform.name, batch)
 			want[name] = owner{platform.target, platform.triple, batch}
