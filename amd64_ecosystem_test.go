@@ -3603,7 +3603,7 @@ func TestTranslateAMD64ParallelBitDepositExtractCompleteGoAssemblerForms(t *test
 		fmt.Fprintf(&src, "\t%s parallelBitMask(SB), R9, R10\n", op)
 	}
 	src.WriteString("\tRET\n")
-	ll := translateAMD64EcosystemCase(t, src.String(), "parallelbitforms")
+	ll := x86UnboundVoidScalarFormatObject(t, src.String(), "parallelbitforms", "amd64", "x86_64-unknown-linux-gnu")
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc not found")
@@ -3625,20 +3625,7 @@ func TestTranslate386ParallelBitDepositExtractCompleteGoAssemblerForms(t *testin
 		fmt.Fprintf(&src, "\t%s AX, BX, SP\n", op)
 	}
 	src.WriteString("\tRET\n")
-	file, err := Parse(ArchAMD64, src.String())
-	if err != nil {
-		t.Fatal(err)
-	}
-	ll, err := Translate(file, Options{
-		TargetTriple: "i386-unknown-linux-gnu",
-		Goarch:       "386",
-		Sigs: map[string]FuncSig{
-			"parallelbitforms386": {Name: "parallelbitforms386", Ret: Void},
-		},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	ll := x86UnboundVoidScalarFormatObject(t, src.String(), "parallelbitforms386", "386", "i386-unknown-linux-gnu")
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc not found")

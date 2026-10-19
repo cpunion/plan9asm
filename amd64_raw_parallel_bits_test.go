@@ -61,10 +61,7 @@ func TestX86RawParallelBitsGoEncoderForms(t *testing.T) {
 				triples = []string{"i386-unknown-linux-gnu", "i686-pc-windows-msvc"}
 			}
 			for _, triple := range triples {
-				ir, err := Translate(file, Options{Goarch: arch, TargetTriple: triple, Sigs: map[string]FuncSig{"parallelbits": {Name: "parallelbits", Ret: Void}}})
-				if err != nil {
-					t.Fatal(err)
-				}
+				ir := x86UnboundVoidRawProbeObject(t, file, arch, triple)
 				compileLLVMToObject(t, llc, triple, "raw-parallel-bits.ll", "raw-parallel-bits.o", ir)
 			}
 			t.Logf("checked %d Go encodings", len(want)-1)

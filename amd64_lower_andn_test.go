@@ -17,10 +17,6 @@ TEXT rawANDN(SB),$0-0
 	BYTE $0xe2
 	RET
 `
-	file, err := Parse(ArchAMD64, source)
-	if err != nil {
-		t.Fatal(err)
-	}
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc not found")
@@ -34,14 +30,7 @@ TEXT rawANDN(SB),$0-0
 		{goarch: "amd64", triple: "x86_64-pc-windows-msvc"},
 	} {
 		t.Run(target.triple, func(t *testing.T) {
-			ir, err := Translate(file, Options{
-				Goarch:       target.goarch,
-				TargetTriple: target.triple,
-				Sigs:         map[string]FuncSig{"rawANDN": {Name: "rawANDN", Ret: Void}},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			ir := x86UnboundVoidRawScalarFormatObject(t, source, target.goarch, target.triple)
 			if !strings.Contains(ir, `"target-features"="+bmi"`) {
 				t.Fatalf("raw ANDN did not infer BMI1 target feature:\n%s", ir)
 			}
@@ -84,18 +73,7 @@ func TestX86ANDNCompleteGo127FormsAcrossTargets(t *testing.T) {
 			}
 			source.WriteString("\tRET\n")
 			requireX86GoAssemblerResult(t, target.goarch, source.String(), true)
-			file, err := Parse(ArchAMD64, source.String())
-			if err != nil {
-				t.Fatal(err)
-			}
-			ir, err := Translate(file, Options{
-				Goarch:       target.goarch,
-				TargetTriple: target.triple,
-				Sigs:         map[string]FuncSig{"andnall": {Name: "andnall", Ret: Void}},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			ir := x86UnboundVoidScalarFormatObject(t, source.String(), "andnall", target.goarch, target.triple)
 			if !strings.Contains(ir, `"target-features"="+bmi"`) {
 				t.Fatalf("ANDN family did not infer BMI1 target feature:\n%s", ir)
 			}
