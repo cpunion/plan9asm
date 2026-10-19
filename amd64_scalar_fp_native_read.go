@@ -338,6 +338,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		if accepted, known := x86ResultByteShuffleStepWithRead(ins, state, owned, arch, true); known {
 			return accepted // Same full-tuple E4NF read or original legacy m128 opcode.
 		}
+		if accepted, known := x86ResultPackedAlignStep(ins, state, owned, arch, true); known {
+			return accepted // Full E4NF tuples and the original legacy alignment/fault opcode.
+		}
 		if accepted, known := x86ResultLegacyIntegerNativeReadStep(ins, state, owned, resultOffset, arch); known {
 			return accepted
 		}

@@ -29,10 +29,6 @@ func TestTranslateAMD64VectorAlignCompleteGo127Forms(t *testing.T) {
 	source.WriteString("\tRET\n")
 
 	requireX86GoAssemblerResult(t, "amd64", source.String(), true)
-	file, err := Parse(ArchAMD64, source.String())
-	if err != nil {
-		t.Fatal(err)
-	}
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc not found")
@@ -46,16 +42,9 @@ func TestTranslateAMD64VectorAlignCompleteGo127Forms(t *testing.T) {
 		{name: "windows-amd64", triple: "x86_64-pc-windows-msvc"},
 	} {
 		t.Run(target.name, func(t *testing.T) {
-			ir, err := Translate(file, Options{
-				Goarch:       "amd64",
-				TargetTriple: target.triple,
-				Sigs: map[string]FuncSig{
-					"vector_align_forms": {Name: "vector_align_forms", Ret: Void},
-				},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			file, signatures := x86UnboundVoidFormatSources(t, source.String(), "amd64", target.triple)
+			ir := x86InstructionFormatObjectUnit(t, file, signatures, "amd64", target.triple, 0,
+				func(c *amd64Ctx, ins Instr) (bool, bool, error) { return c.lowerVectorAlign(ins.Op, ins) })
 			compileLLVMToObject(t, llc, target.triple, "vector-align-"+target.name+".ll", "vector-align-"+target.name+".o", ir)
 		})
 	}
@@ -128,9 +117,8 @@ func TestTranslate386VectorAlignMatchesGoAssemblerOperandLimit(t *testing.T) {
 }
 
 func TestAMD64VectorAlignRuntimeSemantics(t *testing.T) {
-	crossRosetta := runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" && rosettaAvailable()
-	if runtime.GOARCH != "amd64" && !crossRosetta {
-		t.Skip("runtime execution test only runs on amd64 or Rosetta")
+	if runtime.GOARCH != "amd64" && runtime.GOARCH != "arm64" {
+		t.Skip("portable integer oracle requires its native 64-bit host counterpart")
 	}
 	llc, clang, ok := findLlcAndClang(t)
 	if !ok {
@@ -159,6 +147,7 @@ func TestAMD64VectorAlignRuntimeSemantics(t *testing.T) {
 	VMOVDQU32 X7, 80(AX)
 	RET
 `
+	x86LEAActualTargetGoObject(t, "amd64", "x86_64-unknown-linux-gnu", "#include \"textflag.h\"\n"+source)
 	file, err := Parse(ArchAMD64, source)
 	if err != nil {
 		t.Fatal(err)
@@ -171,11 +160,6 @@ func TestAMD64VectorAlignRuntimeSemantics(t *testing.T) {
 		{Offset: 32, Type: I64, Index: 4, Field: -1},
 	}}
 	triple := testTargetTriple(runtime.GOOS, runtime.GOARCH)
-	var runPrefix []string
-	if crossRosetta {
-		triple = "x86_64-apple-macosx"
-		runPrefix = []string{"/usr/bin/arch", "-x86_64"}
-	}
 	ir, err := Translate(file, Options{
 		Goarch:       "amd64",
 		TargetTriple: triple,
@@ -212,5 +196,5 @@ int main(void) {
   return 0;
 }
 `
-	compileAndRunRuntimeTestForTarget(t, llc, clang, "vector_align", triple, ir, mainC, runPrefix)
+	x86ConflictFunnelPortableRuntime(t, llc, clang, "vector_align", triple, ir, mainC)
 }

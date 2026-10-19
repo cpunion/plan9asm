@@ -975,6 +975,9 @@ func x86ResultTransfer(ins Instr, state *x86ResultState, owned []bool, resultOff
 	if accepted, known := x86ResultFloatingHelperStep(ins, state, owned, arch, false); known {
 		return accepted
 	}
+	if accepted, known := x86ResultPackedAlignStep(ins, state, owned, arch, false); known {
+		return accepted
+	}
 	if accepted, known := x86ResultSqrtStep(ins, state, owned, arch, false); known {
 		return accepted
 	}

@@ -40,20 +40,9 @@ func TestTranslateX86PackedAlignRightCompleteGoAssemblerForms(t *testing.T) {
 			}
 			source.WriteString("\tRET\n")
 			requireX86GoAssemblerResult(t, target.goarch, source.String(), true)
-			file, err := Parse(ArchAMD64, source.String())
-			if err != nil {
-				t.Fatal(err)
-			}
-			ll, err := Translate(file, Options{
-				TargetTriple: target.triple,
-				Goarch:       target.goarch,
-				Sigs: map[string]FuncSig{
-					"packedalignrightforms": {Name: "packedalignrightforms", Ret: Void},
-				},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			file, signatures := x86UnboundVoidFormatSources(t, source.String(), target.goarch, target.triple)
+			ll := x86InstructionFormatObjectUnit(t, file, signatures, target.goarch, target.triple, 0,
+				func(c *amd64Ctx, ins Instr) (bool, bool, error) { return c.lowerPackedAlignRight(ins.Op, ins) })
 			llc := findLLVM22Tool("llc")
 			if llc == "" {
 				t.Fatal("LLVM 22 llc not found")
