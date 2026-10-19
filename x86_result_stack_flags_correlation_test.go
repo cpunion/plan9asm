@@ -45,6 +45,44 @@ func TestX86Mode32PrivateFlagsCopiesCancelUnknownInputs(t *testing.T) {
 	}
 }
 
+func TestX86Mode32PrivateFlagsSubwordCopiesCancel(t *testing.T) {
+	for _, carrier := range []struct {
+		width, typ string
+		bytes      int
+	}{
+		{"W", "uint16", 2}, {"L", "uint32", 4},
+	} {
+		for _, access := range []struct {
+			width string
+			bytes int
+		}{
+			{"B", 1}, {"W", 2}, {"L", 4},
+		} {
+			for offset := 0; offset+access.bytes <= carrier.bytes; offset++ {
+				mask := uint32(0x200cd5) >> uint(offset*8)
+				if access.bytes < 4 {
+					mask &= uint32(1)<<uint(access.bytes*8) - 1
+				}
+				body := x86StackFlagsCorrelationBody(carrier.width, "AX", 0)
+				body = strings.Replace(body, "XOR"+carrier.width+" $0,0(SP)",
+					fmt.Sprintf("XOR%s $%d,%d(SP)", access.width, mask, offset), 1)
+				source := fmt.Sprintf("TEXT ·Value(SB),4,$0-%d\n%sMOV%s AX,ret+0(FP)\nRET\n",
+					carrier.bytes, body, carrier.width)
+				requireX86GoAssemblerResult(t, "386", source, true)
+				for _, api := range []string{"text", "module", "Go"} {
+					t.Run(fmt.Sprintf("%s/%s/%d/%s", carrier.width, access.width, offset, api), func(t *testing.T) {
+						ir, err := x86ScalarFPBitViewAPI(t, source, "func Value() "+carrier.typ,
+							"386", "i386-unknown-linux-gnu", api)
+						if err != nil || ir == "" {
+							t.Fatal("bounded B/W/L XOR lost the copied FLAGS bit identities", err)
+						}
+					})
+				}
+			}
+		}
+	}
+}
+
 func TestX86Mode32PrivateFlagsCorrelationCannotInventValues(t *testing.T) {
 	const prefix = "TEXT ·Value(SB),4,$0-4\n"
 	const suffix = "MOVL AX,ret+0(FP)\nRET\n"
