@@ -87,6 +87,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 	}
 	boundRawClear := false
 	for _, ins := range fn.Instrs {
+		if x86RawTernaryGPSource(ins, arch) {
+			continue // Exact source identity does not supply numerical inputs or native memory.
+		}
 		if x86RawADXSource(ins, arch) {
 			continue // Only the bound default address mode shares the typed carry chain.
 		}
@@ -173,6 +176,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 			return accepted // A checked mutable SB source keeps its own lifetime and byte effects.
 		}
 		if accepted, known := x86LoweredADXResultStep(ins, state, owned, resultOffset, arch); known {
+			return accepted
+		}
+		if accepted, known := x86LoweredTernaryGPResultStep(ins, state, owned, resultOffset, arch); known {
 			return accepted
 		}
 		if accepted, known := x86LoweredRawScalarObserverStep(ins, state, owned, resultOffset, arch); known {

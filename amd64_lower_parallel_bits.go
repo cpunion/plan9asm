@@ -1,72 +1,29 @@
 package plan9asm
 
-import (
-	"fmt"
-	"strings"
-)
+import "fmt"
 
-type amd64ParallelBitSpec struct {
-	bits, prefix int
-	deposit      bool
-}
-
-var amd64ParallelBitSpecs = map[string]amd64ParallelBitSpec{
-	"PDEPL": {bits: 32, prefix: 3, deposit: true},
-	"PDEPQ": {bits: 64, prefix: 3, deposit: true},
-	"PEXTL": {bits: 32, prefix: 2},
-	"PEXTQ": {bits: 64, prefix: 2},
-}
-
-// lowerParallelBitDepositExtract implements the complete Go 1.27 PDEP/PEXT
-// family. All four instructions share _yandnl's single Yml, Yrl, Yrl row.
-func (c *amd64Ctx) lowerParallelBitDepositExtract(op Op, ins Instr) (ok bool, terminated bool, err error) {
-	rawOp := strings.ToUpper(string(op))
-	baseOp := rawOp
-	if dot := strings.IndexByte(rawOp, '.'); dot >= 0 {
-		baseOp = rawOp[:dot]
-	}
-	spec, supported := amd64ParallelBitSpecs[baseOp]
-	if !supported {
+// Both BMI2 families share the complete three-word grammar with ANDN.
+// Their operation and preserved FLAGS remain separate.
+func (c *amd64Ctx) lowerParallelBitDepositExtract(op Op, ins Instr) (bool, bool, error) {
+	form, known, err := x86TernaryGPProperties(op, ins, c.goarch)
+	if !known || form.spec.operation == x86TernaryANDN {
 		return false, false, nil
 	}
-	bits := spec.bits
-	// Go accepts Q names on 386, but VEX.W is ignored in not64 mode.
-	// In particular, a memory mask must not accidentally read eight bytes.
-	if c.goarch == "386" {
-		bits = 32
+	if err != nil {
+		return true, false, err
 	}
-	if rawOp != baseOp {
-		return true, false, fmt.Errorf("amd64 %s has no instruction suffixes in Go 1.27's optab: %q", baseOp, ins.Raw)
-	}
-	if len(ins.Args) != 3 {
-		return true, false, fmt.Errorf("amd64 %s expects mask, source, destination: %q", baseOp, ins.Raw)
-	}
-	maskOperand := ins.Args[0]
-	if maskOperand.Kind == OpReg {
-		if !isX86YrlRegisterForArch(maskOperand.Reg, c.goarch) {
-			return true, false, fmt.Errorf("amd64 %s first operand is outside Go 1.27's Yml class: %q", baseOp, ins.Raw)
-		}
-	} else if !isAMD64MemoryOperand(maskOperand) {
-		return true, false, fmt.Errorf("amd64 %s first operand is outside Go 1.27's Yml class: %q", baseOp, ins.Raw)
-	}
-	if ins.Args[1].Kind != OpReg || !isX86YrlRegisterForArch(ins.Args[1].Reg, c.goarch) {
-		return true, false, fmt.Errorf("amd64 %s second operand is outside Go 1.27's Yrl class: %q", baseOp, ins.Raw)
-	}
-	if ins.Args[2].Kind != OpReg || !isX86YrlRegisterForArch(ins.Args[2].Reg, c.goarch) {
-		return true, false, fmt.Errorf("amd64 %s destination is outside Go 1.27's Yrl class: %q", baseOp, ins.Raw)
-	}
-
+	bits := form.spec.bits
 	typ := amd64IntegerTypeForBits(bits)
-	mask, err := c.evalIntSized(maskOperand, typ)
+	mask, err := c.evalSizedNativeGPSource(form.first, typ, ins.x86AddressBits)
 	if err != nil {
 		return true, false, err
 	}
-	source, err := c.evalIntSized(ins.Args[1], typ)
+	source, err := c.evalIntSized(form.second, typ)
 	if err != nil {
 		return true, false, err
 	}
-	result := c.emitParallelBitOperation(spec.deposit, bits, mask, source)
-	return true, false, c.storeRegSized(ins.Args[2].Reg, typ, result)
+	result := c.emitParallelBitOperation(form.spec.operation == x86TernaryPDEP, bits, mask, source)
+	return true, false, c.storeRegSized(form.destination.Reg, typ, result)
 }
 
 // emitParallelBitOperation emits target-independent LLVM so translated code

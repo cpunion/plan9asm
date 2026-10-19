@@ -243,6 +243,9 @@ func (c *amd64Ctx) lowerArith(op Op, ins Instr) (ok bool, terminated bool, err e
 	if ok, terminated, err := c.lowerADX(op, ins); ok {
 		return ok, terminated, err
 	}
+	if ok, terminated, err := c.lowerANDN(op, ins); ok {
+		return ok, terminated, err
+	}
 	if ok, terminated, err := c.lowerScalarBitCount(op, ins); ok {
 		return ok, terminated, err
 	}
@@ -1146,44 +1149,6 @@ func (c *amd64Ctx) lowerArith(op Op, ins Instr) (ok bool, terminated bool, err e
 		sel := c.newTmp()
 		fmt.Fprintf(c.b, "  %%%s = select i1 %s, %s %s, %s %s\n", sel, cond, ty, src, ty, cur)
 		return true, false, c.storeRegSized(dst, ty, "%"+sel)
-
-	case "ANDNL", "ANDNQ":
-		// BMI1 ANDN: destination = ~second & first. Go's _yandnl table
-		// accepts Yml,Yrl,Yrl for both spellings. VEX.W is ignored in 386.
-		if len(ins.Args) != 3 || ins.Args[1].Kind != OpReg || !isX86YrlRegisterForArch(ins.Args[1].Reg, c.goarch) || ins.Args[2].Kind != OpReg || !isX86YrlRegisterForArch(ins.Args[2].Reg, c.goarch) {
-			return true, false, fmt.Errorf("%s %s expects GP/memory source, GP source, GP destination: %q", c.goarch, op, ins.Raw)
-		}
-		if ins.Args[0].Kind == OpReg {
-			if !isX86YrlRegisterForArch(ins.Args[0].Reg, c.goarch) {
-				return true, false, fmt.Errorf("%s %s first source is outside Go 1.27's Yml class: %q", c.goarch, op, ins.Raw)
-			}
-		} else if !isAMD64MemoryOperand(ins.Args[0]) {
-			return true, false, fmt.Errorf("%s %s first source is outside Go 1.27's Yml class: %q", c.goarch, op, ins.Raw)
-		}
-		typ := I32
-		if op == "ANDNQ" && c.goarch == "amd64" {
-			typ = I64
-		}
-		first, err := c.evalIntSized(ins.Args[0], typ)
-		if err != nil {
-			return true, false, err
-		}
-		second, err := c.evalIntSized(ins.Args[1], typ)
-		if err != nil {
-			return true, false, err
-		}
-		inverted := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = xor %s %s, -1\n", inverted, typ, second)
-		result := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = and %s %%%s, %s\n", result, typ, inverted, first)
-		if typ == I64 {
-			c.setZSFlagsFromI64("%" + result)
-		} else {
-			c.setZSFlagsFromI32("%" + result)
-		}
-		fmt.Fprintf(c.b, "  store i1 false, ptr %s\n", c.flagsCFSlot)
-		fmt.Fprintf(c.b, "  store i1 false, ptr %s\n", c.flagsOFSlot)
-		return true, false, c.storeRegSized(ins.Args[2].Reg, typ, "%"+result)
 
 	case "SHRQ", "SHLQ", "SARQ", "SHLL", "SHRL", "SARL", "SALQ", "SALL":
 		// Shift ops:

@@ -33,9 +33,9 @@ func decodedX86ParallelBitsInstruction(code []byte, mode int) (Instr, int, bool,
 		bits = 64
 	}
 	var op Op
-	for name, spec := range amd64ParallelBitSpecs {
-		if spec.bits == bits && spec.prefix == p.pp {
-			op = Op(name)
+	for name, spec := range x86TernaryGPSpecs {
+		if spec.operation != x86TernaryANDN && spec.bits == bits && spec.prefix == p.pp {
+			op = name
 			break
 		}
 	}
