@@ -71,6 +71,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 	if strictErr == nil && nativeMMX == nil {
 		return nil
 	}
+	if selected, err := c.checkRawLogicalScalarResult(); selected {
+		return err
+	}
 	if selected, err := c.checkRawLiteralResults(); selected {
 		return err
 	}
