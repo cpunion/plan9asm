@@ -89,9 +89,17 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		return strictErr
 	}
 	boundRawClear := false
+	boundRawUnaligned := false
 	boundRawConversion := false
 	boundRawMinMax := false
 	for _, ins := range fn.Instrs {
+		if x86RawUnalignedLoadSource(ins, arch) {
+			if !boundRawUnaligned && (fn.x86RawReplay == nil || fn.x86RawReplay.validate(fn, arch) != nil) {
+				return strictErr
+			}
+			boundRawUnaligned = true
+			continue // Exact original load/replay supplies no pointer or raw-entry permission.
+		}
 		if x86RawMoveHalfSource(ins, arch) {
 			continue // Exact sealed m64 moves grant no missing input, storage or raw-entry fact.
 		}
@@ -229,6 +237,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		}
 		if accepted, known := x86ResultNumericalReadStep(ins, state, owned, resultOffset, arch); known {
 			return accepted // A checked mutable SB source keeps its own lifetime and byte effects.
+		}
+		if accepted, known := x86ResultUnalignedLoadStep(ins, state, owned, arch, true); known {
+			return accepted // Only the paired original opcode retains native overfetch and optional #AC.
 		}
 		if accepted, known := x86LoweredRawVectorMoveStep(ins, state, owned, resultOffset, arch); known {
 			return accepted // Only the exact move form shares this lowering-local provenance projection.
