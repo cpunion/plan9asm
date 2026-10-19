@@ -218,7 +218,11 @@ func TestX86AccumulatorSignExtendRawOriginCannotBeRebound(t *testing.T) {
 					state := x86ResultState{flags: x86ByteFlagsAll}
 					before := state.clone()
 					accepted, known := x86LoweredAccumulatorSignExtendResultStep(changed, &state, nil, 0, arch)
-					if accepted || !known || x86RawAccumulatorSignExtendSource(changed, arch) || !reflect.DeepEqual(before, state) {
+					// This decoder's ordinary scalar form has no encoded-only
+					// flag. Removing its origin leaves a named instruction: the
+					// paired raw consumer must decline ownership, not accept it.
+					wantKnown := control.name != "absent-origin"
+					if accepted || known != wantKnown || x86RawAccumulatorSignExtendSource(changed, arch) || !reflect.DeepEqual(before, state) {
 						t.Fatal("changed raw origin borrowed implicit GP inputs or writes", accepted, known)
 					}
 				})
