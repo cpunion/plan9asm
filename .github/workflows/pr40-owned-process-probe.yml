@@ -202,6 +202,7 @@ jobs:
           roots+='|TestCrossLinuxRuntimeMatrixX86CMOVIndependentWholeBytes'
           roots+='|TestCrossLinuxRuntimeMatrixX86AESFamilyWholeByteAliases'
           roots+='|TestAMD64VectorTestRuntimeSemantics'
+          roots+='|TestAMD64IFMARuntimeSemantics'
           go test . -list "^($roots)$" > "$directory/inventory.log"
           for root in ${roots//|/ }; do
             grep -Fx "$root" "$directory/inventory.log"

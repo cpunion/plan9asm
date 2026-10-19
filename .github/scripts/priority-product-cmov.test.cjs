@@ -11,6 +11,7 @@ test('complete numerical regression programs execute before the exhaustive Windo
     'TestCrossLinuxRuntimeMatrixX86CMOVIndependentWholeBytes',
     'TestCrossLinuxRuntimeMatrixX86AESFamilyWholeByteAliases',
     'TestAMD64VectorTestRuntimeSemantics',
+    'TestAMD64IFMARuntimeSemantics',
   ]);
   const workflow = fs.readFileSync('.github/workflows/pr40-owned-process-probe.yml', 'utf8');
   const job = workflow.slice(workflow.indexOf('  native-x86-oracles:'), workflow.indexOf('\n  complete-windows:'));
@@ -40,7 +41,7 @@ test('product and CMOV execution retains every root and optimization child witho
   const raw = values => values.map(JSON.stringify).join('\n') + '\n';
   const inventory = roots.join('\n') + '\n';
   assert.deepEqual(auditProductCMOV(inventory, raw(events)),
-    {roots: 4, children: 15, passed: 19, skipped: 0, incomplete: 0});
+    {roots: 5, children: 18, passed: 23, skipped: 0, incomplete: 0});
   for (const name of [...roots, ...children]) {
     assert.throws(() => auditProductCMOV(inventory, raw(events.filter(event => event.Test !== name))));
     for (const Action of ['skip', 'fail']) {

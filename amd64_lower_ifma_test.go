@@ -223,5 +223,26 @@ int main(void) {
   return 0;
 }
 `
-	compileAndRunRuntimeTestForTarget(t, llc, clang, "ifma", triple, ir, mainC, runPrefix)
+	compiler := []string{clang}
+	if triple != testTargetTriple(runtime.GOOS, runtime.GOARCH) {
+		compiler = append(compiler, "-target", triple)
+	}
+	for _, pipeline := range []struct {
+		name      string
+		optimized bool
+		backend   int
+	}{
+		{name: "backend_O0"},
+		{name: "backend_O2", backend: 2},
+		{name: "IR_O2/backend_O2", optimized: true, backend: 2},
+	} {
+		t.Run(pipeline.name, func(t *testing.T) {
+			text := ir
+			if pipeline.optimized {
+				text = x86DwordProductIROptimize(t, ir)
+			}
+			compileAndRunRuntimeTestWithCompiler(t, llc, compiler, "ifma", triple,
+				text, mainC, runPrefix, pipeline.backend)
+		})
+	}
 }
