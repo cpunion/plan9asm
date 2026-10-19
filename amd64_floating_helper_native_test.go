@@ -83,7 +83,7 @@ func TestX86FloatingHelperCompleteNativeOpcodes(t *testing.T) {
 		t.Fatal("independent floating-helper family denominator changed", len(members))
 	}
 	for _, target := range x86RawReturnTargets {
-		t.Run(target.name, func(t *testing.T) {
+		t.Run(target.triple, func(t *testing.T) {
 			var source strings.Builder
 			signatures := make(map[string]FuncSig)
 			var expected []string
