@@ -254,9 +254,15 @@ func TestX86HorizontalFloatPairsUseSingleStrictVectorOperation(t *testing.T) {
 		// One original native reduction owns its joint exception, pair NaN
 		// priority and ambient MXCSR semantics. No scalar reconstruction or
 		// pure arithmetic carrier can replace it, including a dead output.
-		if got := strings.Count(ir, "asm sideeffect"); got != 1 || !strings.Contains(ir, "~{fpsr}") ||
-			!strings.Contains(ir, strings.ToLower(strings.Fields(row)[0])+" ") || strings.Contains(ir, "@llvm.experimental.constrained") {
-			t.Fatalf("%s lost its one native strict horizontal operation (%d)", row, got)
+		// The common prelude still declares unrelated constrained intrinsics.
+		// Inspect this original instruction's body, not global declarations.
+		_, body, found := strings.Cut(ir, "define void @InstructionFormat0(")
+		body, _, ended := strings.Cut(body, "\n}")
+		opcode := `asm sideeffect "` + strings.ToLower(strings.Fields(row)[0]) + ` `
+		if got := strings.Count(body, opcode); !found || !ended || got != 1 ||
+			strings.Count(body, "asm sideeffect") != 1 || !strings.Contains(body, "~{fpsr}") ||
+			!strings.Contains(body, "~{memory}") || strings.Contains(body, "@llvm.experimental.constrained") {
+			t.Fatalf("%s lost its one native strict horizontal operation (%d):\n%s", row, got, ir)
 		}
 	}
 }
