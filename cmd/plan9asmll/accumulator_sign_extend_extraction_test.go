@@ -7,7 +7,7 @@ import (
 )
 
 func TestExtractSupportedOpsAccumulatorSignExtendTypedTable(t *testing.T) {
-	const file = "x86_accumulator_sign_extend_forms.go"
+	const file = "amd64_accumulator_sign_extend_forms.go"
 	source, err := os.ReadFile(filepath.Join("../..", file))
 	if err != nil {
 		t.Fatal(err)
