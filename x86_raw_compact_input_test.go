@@ -3,6 +3,7 @@ package plan9asm
 import (
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -149,6 +150,101 @@ func TestX86RawCompactDeadInputsCannotBorrowVoidOrBool(t *testing.T) {
 							t.Fatal("raw compact inputs borrowed an implementation zero", target, member, memory, api, err)
 						}
 					}
+				}
+			}
+		}
+	}
+}
+
+func TestX86RawCompactOriginalIdentityAndEveryInputByte(t *testing.T) {
+	for _, arch := range []string{"386", "amd64"} {
+		for _, member := range x86CompactExpandResultMembers {
+			for _, width := range []struct {
+				bank  string
+				bytes int
+			}{{"X", 16}, {"Y", 32}, {"Z", 64}} {
+				for _, mode := range []string{"merge", "zero"} {
+					t.Run(arch+"/"+member+"/"+width.bank+"/"+mode, func(t *testing.T) {
+						op := member
+						if mode == "zero" {
+							op += ".Z"
+						}
+						row := fmt.Sprintf("%s %s2,K1,%s3", op, width.bank, width.bank)
+						literal := x86RawNumericalInstruction(t, "amd64", row)
+						file, err := Parse(ArchAMD64, "TEXT Value(SB),4,$0-0\n"+literal+"RET\n")
+						if err != nil {
+							t.Fatal(err)
+						}
+						file, err = normalizeX86RawFile(file, arch)
+						if err != nil {
+							t.Fatal(err)
+						}
+						ins := file.Funcs[0].Instrs[1]
+						state := x86ResultState{flags: x86ByteFlagsAll, direction: x86ResultDirectionBackward}
+						state.masks[1] = true
+						state.writeVector(2, 64, ^uint64(0), false)
+						state.writeVector(4, 64, ^uint64(0), false)
+						if mode == "merge" {
+							state.writeVector(3, 64, ^uint64(0), false)
+						}
+						before := state.clone()
+						if accepted, known := x86ResultCompactExpandMemoryStep(ins, &state, nil, 0, arch, true); !known || !accepted {
+							t.Fatal("complete physical inputs lost their paired continuation", row)
+						}
+						expected := before.clone()
+						expected.writeVector(3, width.bytes, x86CallerVectorByteMask(int64(width.bytes)), false)
+						if !reflect.DeepEqual(state, expected) {
+							t.Fatal("raw compact changed unrelated state or failed to clear wider aliases")
+						}
+						strict := before.clone()
+						if accepted, known := x86ResultCompactExpandMemoryStep(ins, &strict, nil, 0, arch, false); !known || accepted || !reflect.DeepEqual(strict, before) {
+							t.Fatal("standalone observer borrowed a lowering-only raw view")
+						}
+						for _, input := range []int{2, 3} {
+							if input == 3 && mode == "zero" {
+								continue // Zeroing does not consume old merge bytes.
+							}
+							for missing := 0; missing < width.bytes; missing++ {
+								current := before.clone()
+								current.writeVector(input, 64, ^(uint64(1) << uint(missing)), false)
+								initial := current.clone()
+								if accepted, known := x86ResultCompactExpandMemoryStep(ins, &current, nil, 0, arch, true); !known || accepted || !reflect.DeepEqual(current, initial) {
+									t.Fatal("raw compact consumed a missing input byte", input, missing)
+								}
+							}
+						}
+						for _, mutation := range []string{"mask", "record", "opcode", "operand", "vector-width", "address-size", "override", "segment", "RIP"} {
+							changed, current := ins, before.clone()
+							changed.Args = append([]Operand(nil), ins.Args...)
+							switch mutation {
+							case "mask":
+								current.masks[1] = false
+							case "record":
+								changed.x86SourceRaw = nil
+							case "opcode":
+								changed.Op = Op(member + ".Z")
+								if mode == "zero" {
+									changed.Op = Op(member)
+								}
+							case "operand":
+								changed.Args[0].Reg = Reg(width.bank + "4")
+							case "vector-width":
+								changed.x86VectorBytes ^= 16
+							case "address-size":
+								changed.x86AddressBits = 16
+							case "override":
+								changed.x86UnboundAddressOverride = true
+							case "segment":
+								changed.x86SegmentPrefix = 0x64
+							case "RIP":
+								changed.x86RIPLiteral = true
+							}
+							initial := current.clone()
+							if accepted, known := x86ResultCompactExpandMemoryStep(changed, &current, nil, 0, arch, true); !known || accepted || !reflect.DeepEqual(current, initial) {
+								t.Fatal("unbound raw origin or mask changed numerical state", mutation)
+							}
+						}
+					})
 				}
 			}
 		}
