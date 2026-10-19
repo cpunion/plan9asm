@@ -148,6 +148,12 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 	transfer := func(ordinal int, ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string) bool {
 		state.loweredStaticReads = c.fpScalarData
 		defer func() { state.loweredStaticReads = nil }()
+		if accepted, known := x86ResultSDKLiteralStep(ins, state, owned, resultOffset, arch); known {
+			return accepted // Consume the exact bound source before an overlapping native-memory family.
+		}
+		if accepted, known := x86ResultNumericalReadStep(ins, state, owned, resultOffset, arch); known {
+			return accepted // A checked mutable SB source keeps its own lifetime and byte effects.
+		}
 		if accepted, known := x86LoweredRawVMOVWResultStep(ins, state, owned, resultOffset, arch); known {
 			return accepted
 		}
@@ -162,12 +168,6 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		}
 		if accepted, known := x86LoweredEnqueueResultStep(ins, state, arch); known {
 			return accepted
-		}
-		if accepted, known := x86ResultSDKLiteralStep(ins, state, owned, resultOffset, arch); known {
-			return accepted // Consume the exact bound source before an overlapping native-memory family.
-		}
-		if accepted, known := x86ResultNumericalReadStep(ins, state, owned, resultOffset, arch); known {
-			return accepted // A checked mutable SB source keeps its own lifetime and byte effects.
 		}
 		if accepted, known := nativeMMX.transfer(ordinal, ins, state, owned, resultOffset, arch); known {
 			return accepted
