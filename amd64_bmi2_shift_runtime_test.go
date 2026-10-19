@@ -21,6 +21,21 @@ func TestX86BMI2ShiftRuntime(t *testing.T) {
 		t.Skip("execution requires amd64 or Rosetta; five-target objects remain required")
 	}
 
+	source, sigs, declarations, checks := x86BMI2ShiftRuntimeFixture(t)
+	file, err := Parse(ArchAMD64, source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ir, err := Translate(file, Options{Goarch: "amd64", TargetTriple: triple, Sigs: sigs})
+	if err != nil {
+		t.Fatal(err)
+	}
+	mainC := x86BMI2ShiftRuntimeDriver(declarations, checks)
+	compileAndRunRuntimeTestForTarget(t, llc, clang, "bmi2_shift", triple, ir, mainC, prefix)
+}
+
+func x86BMI2ShiftRuntimeFixture(t *testing.T) (string, map[string]FuncSig, string, string) {
+	t.Helper()
 	var source, declarations, checks strings.Builder
 	sigs := make(map[string]FuncSig)
 	index := 0
@@ -72,16 +87,12 @@ func TestX86BMI2ShiftRuntime(t *testing.T) {
 		t.Fatalf("generated %d functions, want 72", index)
 	}
 
-	file, err := Parse(ArchAMD64, source.String())
-	if err != nil {
-		t.Fatal(err)
-	}
-	ir, err := Translate(file, Options{Goarch: "amd64", TargetTriple: triple, Sigs: sigs})
-	if err != nil {
-		t.Fatal(err)
-	}
-	mainC := "#include <stdint.h>\n#include <stdio.h>\n#include <string.h>\n" +
-		declarations.String() + x86BMI2ShiftOracleC + `
+	return source.String(), sigs, declarations.String(), checks.String()
+}
+
+func x86BMI2ShiftRuntimeDriver(declarations, checks string) string {
+	return "#include <stdint.h>\n#include <stdio.h>\n#include <string.h>\n" +
+		declarations + x86BMI2ShiftOracleC + `
 static int check(void (*fn)(uint64_t, const void*, void*), int bits, int kind) {
     uint64_t values[] = {0, 1, UINT64_MAX, UINT64_C(0x8000000080000000),
                          UINT64_C(0x7fffffff7fffffff), UINT64_C(0xfedcba9876543210)};
@@ -104,8 +115,7 @@ static int check(void (*fn)(uint64_t, const void*, void*), int bits, int kind) {
 }
 
 int main(void) {
-` + checks.String() + "    return 0;\n}\n"
-	compileAndRunRuntimeTestForTarget(t, llc, clang, "bmi2_shift", triple, ir, mainC, prefix)
+` + checks + "    return 0;\n}\n"
 }
 
 const x86BMI2ShiftOracleC = `
