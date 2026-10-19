@@ -22,6 +22,9 @@ idle worktrees; do not create another for routine work.
 
 | Code snapshot | Completed evidence | Limits |
 |---|---|---|
+| `18bb77a09` | CI dispatch ordering and Go loader identity: complete runner package passes actual Go1.20 and current Go, each with 79 roots / 182 children; six focused race roots pass, unchanged source/tools | The earlier complete Go1.27 package timeout and failed recorder remain failed observations; real independent source/tool/library and loader execution checks remain mandatory |
+| `7b97c31de` | x87 native floating moves and PUSH native reads: 69 roots / 4,988 children pass current Go, actual Go1.20 and race; identical 5,057 terminals, zero fail/skip/incomplete; all thirteen final gates pass | Complete four-member floating move and W/L/Q PUSH families, exact volatile widths, five-target objects and portable values/faults; no native FP80 or hardware exception claim |
+| Same snapshot | Exact original 167-root replay: 78 pass / 0 fail / 89 explicit host skips; unchanged source/tools, zero absent/incomplete or passing roots with skipped children | Only the two original mode32 complete-source roots and x87 direct-compare object root changed fail to pass relative to `1cafc5b2f`; no regressions |
 | `30a1c2679` | Mode32 logical AX returns and private FLAGS correlation: 45 roots / 2,500 children pass current Go, actual Go1.20 and race; identical 2,545 terminals, zero fail/skip/incomplete | Original two Windows386 complete-source failures pass; W/L, B/W/L subword, seven GP registers, clone/join and source/query boundaries retain independent controls |
 | Same snapshot | All thirteen final gates pass, unchanged source/tools; seventy independent cancellation programs execute through three APIs, optimized/unoptimized IR and O0/O2 | No new complete 167-root replay or whole-CI claim; original Windows386 native execution remains separately required |
 | `1cafc5b2f` | Raw FP16 binary and retained families: 53 roots / 3,157 children pass current Go, actual Go1.20 and race; identical 3,210 terminals, zero fail/skip/incomplete | All twelve raw members, 450 independent physical shapes on five targets through three APIs and IR/backend O0/O2; original opcode/control/mask bytes, not native execution |
@@ -105,7 +108,7 @@ See earlier checkpoints in Git rather than reconstructing counts by subtraction.
 
 ## Exact failure replay and online CI
 
-The latest local diagnostic at `1cafc5b2f` selects exactly the original CI's
+The latest local diagnostic at `7b97c31de` selects exactly the original CI's
 167 failed root names. One sealed Go test process ran the complete set,
 instead of repeatedly linking the same large test executable.
 All inventories, started/terminal identities and before/after source, SDK, LLVM
@@ -133,7 +136,33 @@ and environment observations match. This is not the canonical isolated CI runner
 | Previous batched replay, `83b656042` | 72 | 6 | 89 | 0 / 0 |
 | Previous batched replay, `bb85d27b3` | 73 | 5 | 89 | 0 / 0 |
 | Previous batched replay, `4acf97d89` | 74 | 4 | 89 | 0 / 0 |
-| Latest batched replay, `1cafc5b2f` | 75 | 3 | 89 | 0 / 0 |
+| Previous batched replay, `1cafc5b2f` | 75 | 3 | 89 | 0 / 0 |
+| Latest batched replay, `7b97c31de` | 78 | 0 | 89 | 0 / 0 |
+
+The fork diagnostic run `39192383617` tests `7b97c31de` and must finish before
+another diagnostic push. Its native x86, x87, ARM64 fallback, LOCK, unlocked
+RMW and value/fault priorities pass. Both ownership versions expose the same
+authenticated-read dispatch ordering regression. Commit `fb45f528a` restores
+the SDK literal and numerical readers before every native family, retaining
+the independent AST ordering guard rather than weakening it.
+
+The complete actual-Go1.20 runner regression then exposed a separate test
+contract error: external linking can change Mach-O UUIDs and the binary-content
+part of Go's four-part build ID even when all build inputs are identical.
+An independent minimal cgo program reproduces this without plan9asm or LLVM.
+Commit `18bb77a09` validates all four hashes and compares the link action,
+main-package action and main-package content. Both scopes still build and
+execute their own binary, verify source ownership/bytes, and independently
+observe the actual loaded LLVM library. Mutations of each input component and
+malformed IDs remain negative controls; no binary or observation is reused.
+At that snapshot both SDKs pass the complete 79-root / 182-child runner package,
+and the six affected race roots pass with unchanged source/tools.
+
+Preserve the earlier five-minute unsplit package timeout and the first local
+recorder's incorrect `pass`/`passed` label failure. The latter's actual complete
+Go1.20 command passed; a fresh reader checks its raw complete report and frozen
+source/tools before continuing the other lane. Neither failed controller is
+rewritten as a successful receipt. Original command budgets remain unchanged.
 
 Raw FP16 binary arithmetic now shares complete typed input/control grammar and
 the existing native emitter. Source bytes, masks and merge inputs remain required
@@ -293,20 +322,27 @@ before changing implementation or claiming a speedup. Do not relax budgets.
    at `30a1c2679`. Preserve the two original complete-source fixtures, including
    their original undefined-BX and unbounded-SP negatives. Portable cancellation
    execution does not certify the original Windows386 native C driver.
-2. Finish the remaining x87 direct-compare class. The independent RED at
+2. The x87 direct-compare class is qualified. The independent RED at
    `04ee565af` retains 335 children and 98 failed terminals: all four floating
    move members and the W/L/Q native PUSH input family lack their paired
    numerical continuation. The local candidate at `fbe79524d` adds exact
    volatile accesses, shared typed effects, mandatory Void inputs, five-target
    objects and actual-host numerical/fault tests. Its first GREEN passes all
-   eleven roots / 478 children with unchanged source/tools; three-lane
-   qualification and final gates remain pending. The candidate is not yet
-   published. Retain the original
+   eleven roots / 478 children with unchanged source/tools. The complete
+   69-root / 4,988-child three-lane qualification and thirteen final gates pass
+   at `7b97c31de`; it is published only to the fork diagnostic branch, not the
+   PR40 contribution branch. Retain the original
    32-kernel comparison source and its native counterpart.
-3. Rerun the unchanged complete standard-library corpus and benchmark after
+3. Finish the active fork diagnostic, then batch the qualified ordering and
+   loader-test repairs into its next push. Keep full Windows module validation
+   required even if a failed prerequisite prevents it from starting this round.
+   At `18bb77a09`, final gates, a fresh exact failure replay and the unchanged
+   five-target benchmark are running; do not infer their outcomes from older
+   evidence.
+4. Rerun the unchanged complete standard-library corpus and benchmark after
    relevant source repairs. Do not convert Context into successful compilation.
    A valid encoding grants no caller frame, memory ownership or ABI transport.
-4. Run complete current-head modules, native/cross-runtime CI, coverage and
+5. Run complete current-head modules, native/cross-runtime CI, coverage and
    fresh review before ready. Keep known failures visible and batch pushes;
    do not launch another broad diagnostic merely to rediscover known failures.
 
@@ -318,6 +354,16 @@ develop in an existing idle worktree. Commit and preserve RED before repair.
 
 Resolve worktree locations with `git worktree list`. Ignored receipts include:
 
+- `ci-dispatch-loader-18bb77a0/go120/`,
+  `ci-dispatch-loader-continuation-18bb77a0/`: actual complete SDK runner
+  reports and focused race outcomes, with preserved failed-controller evidence.
+- `x87-native-input-qualified-7b97c31d.json` and
+  `x87-native-input-final-gates-7b97c31d/`: complete three-lane 69-root cohort
+  and thirteen gates. The compact receipts retain exact started/terminal unions
+  and before/after source, SDK and LLVM22 equality.
+- `latest-failure-batch-7b97c31d-{summary.json,raw.jsonl,before.json,after.json}`:
+  exact original 167 roots, 78 pass / 0 fail / 89 explicit host skips;
+  unchanged source/tools and no incomplete roots.
 - `mode32-flags-qualified-30a1c267.json` and
   `mode32-flags-final-gates-30a1c267/`: complete 45-root three-lane qualification
   and thirteen gates, with unchanged source/tools. Preserve logical-return RED
