@@ -19,6 +19,28 @@ workflow, not a list of already completed instruction families.
 
 ## Instruction-family workflow
 
+The six implicit accumulator sign extensions share one complete `ynone`
+grammar with lowering and exact GP effects. Zero source operands do not mean
+zero AX inputs: require the actual byte/word/dword/qword source even for Void.
+Word writes preserve unknown upper destination bytes; dword writes zero-extend.
+Named and exact decoded forms preserve FLAGS. Only the lowering continuation
+consumes raw origin; public queries gain no native entry or frame permission.
+Keep isolated named/raw negatives, initialized five-target objects, every-bit
+portable values and original native FLAGS execution as separate axes.
+
+DWORD-to-qword products consume the existing complete binary grammar and
+shared numerical input model. Masks and merge bytes remain required, including
+Void; raw continuations bind their original operands and complete physical mode.
+Original uninitialized format/disp32 probes retain Go/emitter objects plus
+three-API Context controls. Independent initialized objects own public success;
+neither a direct emitter nor a classification change grants caller memory.
+
+Physical MMX observers keep the entire source branch-free and their region
+uninterrupted through real EMMS. Seed status and prepare unrelated state before
+entering the region; do not relax that boundary to accommodate an old fixture.
+Architecture-scoped dispatch maps must remain visible to supported-op extraction;
+test the isolated source file as well as whole-repository reporting.
+
 Raw-only FP16 floating conversions distinguish active scalar/lane bytes from
 their X/Y/Z carriers. Decoder identity binds the original operands and vector
 length; actual mask, merge and source inputs stay mandatory for Void. Keep

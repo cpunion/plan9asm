@@ -22,6 +22,9 @@ idle worktrees; do not create another for routine work.
 
 | Code snapshot | Completed evidence | Limits |
 |---|---|---|
+| `7cfe15222` | Complete product/accumulator repair: 28 roots / 665 children pass current Go, actual Go1.20 and race; identical 693 terminals, zero fail/skip/incomplete; seventeen focused gates pass | Four DWORD-product and six accumulator-extension members, named/raw input obligations, five-target three-API objects and actual-host integer values; original native runtime requirements remain separate |
+| Same snapshot | Go1.20–Go1.27 audit changes exactly 34 AMD64 probes per SDK from supported to Context: 28 products and six implicit AX operations; 386 and all encoder metrics remain unchanged | Probe sources lack initialized inputs. Go1.20's pre-existing unsupported count is unchanged; neither these classifications nor the initialized objects certify complete CI |
+| `259fbbcb8` | Cancellation-evidence RED/GREEN plus all 139 CI policy tests pass | Windows owners retain partial reports after cancellation; strict aggregation and missing-report errors are unchanged. This is a diagnostic fix, not a cancelled-test pass |
 | `18bb77a09` | CI dispatch ordering and Go loader identity: complete runner package passes actual Go1.20 and current Go, each with 79 roots / 182 children; six focused race roots pass, unchanged source/tools | The earlier complete Go1.27 package timeout and failed recorder remain failed observations; real independent source/tool/library and loader execution checks remain mandatory |
 | Same snapshot | All thirteen final gates pass; exact original 167-root replay has 78 pass / 0 fail / 89 explicit host skips, 3,323 children, unchanged source/tools | No absent/incomplete or passing roots with skipped children; complete CI and the strict benchmark remain failed/unqualified |
 | `7b97c31de` | x87 native floating moves and PUSH native reads: 69 roots / 4,988 children pass current Go, actual Go1.20 and race; identical 5,057 terminals, zero fail/skip/incomplete; all thirteen final gates pass | Complete four-member floating move and W/L/Q PUSH families, exact volatile widths, five-target objects and portable values/faults; no native FP80 or hardware exception claim |
@@ -141,12 +144,33 @@ and environment observations match. This is not the canonical isolated CI runner
 | Previous batched replay, `7b97c31de` | 78 | 0 | 89 | 0 / 0 |
 | Latest batched replay, `18bb77a09` | 78 | 0 | 89 | 0 / 0 |
 
-The fork diagnostic run `39192383617` tests `7b97c31de` and must finish before
-another diagnostic push. Its native x86, x87, ARM64 fallback, LOCK, unlocked
-RMW and value/fault priorities pass. Both ownership versions expose the same
+The fork diagnostic `39192383617` finished naturally at `7b97c31de`: 63 jobs
+pass, both ownership versions fail and complete Windows modules are blocked.
+Its native x86, x87, ARM64 fallback, LOCK, unlocked RMW and value/fault priorities
+pass. Both ownership versions expose the same
 authenticated-read dispatch ordering regression. Commit `fb45f528a` restores
 the SDK literal and numerical readers before every native family, retaining
 the independent AST ordering guard rather than weakening it.
+
+The subsequent diagnostic `39198807147` at `a1bd240cf` passes ownership,
+all SDK priorities and all six native/cross priorities, but complete Windows
+modules expose additional source/effect failures. Let it finish without another
+diagnostic push. A partial artifact audit collected 76 failed roots; its cancelled
+CLI owner and unfinished owners remain unknown, not complete inventory evidence.
+The CLI owner reached the job deadline and suppressed its artifact upload.
+Cancellation-independent retention is repaired separately; original deadlines,
+test outcomes and strict complete-module verification are not relaxed.
+
+The current local candidate closes complete product and implicit-accumulator
+input rules, preserves uninitialized format objects as public Context controls,
+and adds initialized public objects. The six sign-extension names share one
+grammar with lowering and exact GP effects; raw forms require their original
+decoder identity even for Void. The portable integer oracle executes every bit,
+preserved upper bytes and both encoding sources through three APIs and IR/backend
+O0/O2. MMX comparison observers seed status outside a branch-free, uninterrupted
+region and close it with real EMMS; original-Go build/link and native execution
+remain distinct. CLI fallback FP words now require their original explicit TEXT
+extent, without rejecting independently proved pure tail forwarders.
 
 The complete actual-Go1.20 runner regression then exposed a separate test
 contract error: external linking can change Mach-O UUIDs and the binary-content
@@ -326,27 +350,20 @@ before changing implementation or claiming a speedup. Do not relax budgets.
 
 ## Immediate work
 
-1. Mode32's 45-root three-lane qualification and thirteen gates are complete
-   at `30a1c2679`. Preserve the two original complete-source fixtures, including
-   their original undefined-BX and unbounded-SP negatives. Portable cancellation
-   execution does not certify the original Windows386 native C driver.
-2. The x87 direct-compare class is qualified. The independent RED at
-   `04ee565af` retains 335 children and 98 failed terminals: all four floating
-   move members and the W/L/Q native PUSH input family lack their paired
-   numerical continuation. The local candidate at `fbe79524d` adds exact
-   volatile accesses, shared typed effects, mandatory Void inputs, five-target
-   objects and actual-host numerical/fault tests. Its first GREEN passes all
-   eleven roots / 478 children with unchanged source/tools. The complete
-   69-root / 4,988-child three-lane qualification and thirteen final gates pass
-   at `7b97c31de`; it is published only to the fork diagnostic branch, not the
-   PR40 contribution branch. Retain the original
-   32-kernel comparison source and its native counterpart.
-3. Finish the active fork diagnostic, then batch the qualified ordering and
-   loader-test repairs into its next push. Keep full Windows module validation
-   required even if a failed prerequisite prevents it from starting this round.
-   At `18bb77a09`, thirteen final gates and the exact failure replay pass;
-   the complete five-target benchmark fails as recorded above. Do not infer
-   complete current-head CI or benchmark success from focused tests.
+1. Finish `39198807147` and collect the complete additional failure inventory.
+   Prioritize those whole rule classes, including raw numerical continuations,
+   missing typed effects and invalid format-fixture assumptions. Do not use the
+   older 167-root replay as the denominator for these newly reached modules.
+2. Qualify and batch the current repair candidate in the allowed fork. Source
+   code at `7cfe15222` has the complete 28-root three-lane cohort and seventeen
+   gates; the cancellation-retention change has 139 passing policy tests.
+   The PR40 contribution and active diagnostic still have their older heads.
+3. Preserve the separately qualified logical integer return batch `53a93cfd4`
+   and the incomplete floating MIN/MAX candidate `7009ff18f` on the prior
+   source-fixture branch. Neither is merged into this CI-repair candidate.
+   MIN/MAX has a first numerical/object GREEN, not complete format/raw/native
+   qualification. Return to it after closing current CI failures; it addresses
+   the original `math/hypot_amd64.s` MAXSD benchmark failure, not every ABI gap.
 4. Rerun the unchanged complete standard-library corpus and benchmark after
    relevant source repairs. Do not convert Context into successful compilation.
    A valid encoding grants no caller frame, memory ownership or ABI transport.
@@ -362,6 +379,19 @@ develop in an existing idle worktree. Commit and preserve RED before repair.
 
 Resolve worktree locations with `git worktree list`. Ignored receipts include:
 
+- `windows-product-inputs-qualified-7cfe1522.json`: complete 28-root / 665-child
+  three-lane qualification and identical 693-terminal unions. The earlier
+  16-root / 546-child product-only qualification remains at `1f6694616`.
+- `windows-product-final-gates-v2-7cfe1522/`: seventeen focused gates. Preserve
+  the earlier missing-script/syntax attempts, `3bd2aae3` extraction failure and
+  `256325d2` official-classification failure separately, not as successful gates.
+- `product-accumulator-classification-audit/`: sealed sixteen-report audit
+  across eight SDKs, matching prior baseline reports and unchanged tool/source
+  observations before the reviewed 24-line baseline update.
+- `ci391988/partial-failure-audit-*.json`: diagnostic-only downloaded Windows
+  outcomes; cancellation/missing owners cannot certify a full module union.
+- `cancelled-evidence-69ccb097/`: original failed retention policy and the
+  complete 139-policy GREEN. Native execution and cancelled tests remain separate.
 - `ci-dispatch-loader-18bb77a0/go120/`,
   `ci-dispatch-loader-continuation-18bb77a0/`: actual complete SDK runner
   reports and focused race outcomes, with preserved failed-controller evidence.
