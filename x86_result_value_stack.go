@@ -34,7 +34,7 @@ func x86ResultPreservesPrivateStorage(ins Instr, arch string) bool {
 		x86RegisterQueryPreservesSourceState(ins) || x86WaitPackagePreservesStorage(ins) ||
 		x86PreservesNumericalSourceState(ins) || x86MaskLogicalPreservesStorage(ins) ||
 		x86EnqueuePreservesStorage(ins) || x86RawDwordProductResultSource(ins, arch) ||
-		x86RawCMOVSource(ins, arch) || x86RawAESSource(ins, arch))
+		x86RawCMOVSource(ins, arch) || x86RawAESSource(ins, arch) || x86RawVectorTestSource(ins, arch))
 }
 
 func x86ResultValueStackContinuation(ins Instr, state *x86ResultState, arch string) bool {
