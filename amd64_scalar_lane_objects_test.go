@@ -59,6 +59,17 @@ func TestX86ScalarLaneNativeWidthsVolatileFiveTargets(t *testing.T) {
 					}
 					source := "TEXT ·view(SB),4,$0-0\n" + row + "\nRET\n"
 					goAssemblerOracleOutput(t, target.arch, source, "", true)
+					if !insert {
+						// Keep every original native/segment spelling and width.
+						// Unknown source bytes/addresses are Context, not a public
+						// initialized store; the independent matrix owns that axis.
+						ir := x86UnboundVoidScalarFormatObject(t, source, "view", target.arch, target.triple)
+						if !strings.Contains(ir, fmt.Sprintf("store volatile i%d", bits)) {
+							t.Fatal("original extraction format lost its exact native write")
+						}
+						compileLLVMToObject(t, findLLVM22Tool("llc"), target.triple, "native-width.ll", "native-width.o", ir)
+						return
+					}
 					for _, api := range []string{"text", "module", "Go"} {
 						ir, err := x86ScalarFPBitViewAPI(t, source, "func view()\n", target.arch, target.triple, api)
 						if err != nil {
