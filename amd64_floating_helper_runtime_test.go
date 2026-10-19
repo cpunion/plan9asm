@@ -83,7 +83,7 @@ func x86FloatingHelperRunNativePipelines(t *testing.T, execution x86FloatCompare
 		t.Run(pipeline.name, func(t *testing.T) {
 			input := ir
 			if pipeline.optimizeIR {
-				input = x86PackedShiftOptimizedIR(t, ir)
+				input = x86DwordProductIROptimize(t, ir)
 			}
 			execution.compileAndRunLLVM(t, name, input, mainC, pipeline.backend)
 		})

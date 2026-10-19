@@ -168,7 +168,7 @@ func TestX86FloatingHelperRuntimeNativeDriverPolicy(t *testing.T) {
 	toolsCalls, pipelineCalls := calls(tools), calls(pipelines)
 	if toolsCalls["x86FloatCompareRuntimeTools"] != 1 || toolsCalls["compileC"] != 1 || toolsCalls["run"] != 1 ||
 		toolsCalls["Skip"] != 1 || pipelineCalls["compileAndRunLLVM"] != 1 ||
-		pipelineCalls["x86PackedShiftOptimizedIR"] != 1 || pipelineCalls["Run"] != 1 || pipelineCalls["Skip"] != 0 {
+		pipelineCalls["x86DwordProductIROptimize"] != 1 || pipelineCalls["Run"] != 1 || pipelineCalls["Skip"] != 0 {
 		t.Fatal("native preflight or actual compiler/run obligations changed", toolsCalls, pipelineCalls)
 	}
 	if len(tools.Body.List) < 3 {
