@@ -5077,7 +5077,12 @@ TEXT conditionalmoves(SB),NOSPLIT,$0-0
 	CMOVWCC CX, DX
 	RET
 `
-	translateAMD64EcosystemCase(t, src, "conditionalmoves")
+	ir := x86UnboundVoidScalarFormatObject(t, src, "conditionalmoves", "amd64", "x86_64-unknown-linux-gnu")
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM 22 llc not found")
+	}
+	compileLLVMToObject(t, llc, "x86_64-unknown-linux-gnu", "conditional-move-formats.ll", "conditional-move-formats.o", ir)
 }
 
 func TestTranslateAMD64LegacyScalarAndPackedFloatingPointFamilies(t *testing.T) {

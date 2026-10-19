@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -59,7 +60,19 @@ func TestX86RawKVMHypercallFamily(t *testing.T) {
 					Goarch: target.arch, TargetTriple: target.triple,
 					Sigs: map[string]FuncSig{"hypercall": {Name: "hypercall", Ret: word}},
 				})
-				if err != nil {
+				if target.arch == "386" {
+					if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+						t.Fatal("logical mode32 scalar result acquired a raw/native entry contract", err)
+					}
+					normalized, err := normalizeX86RawFile(file, target.arch)
+					if err != nil {
+						t.Fatal(err)
+					}
+					// Retain the actual hypercall opcode/constraints and AX
+					// return as an object, not an executable logical ABI proof.
+					ir = x86ScalarFormatObjectUnit(t, normalized,
+						map[string]FuncSig{"hypercall": {Name: "hypercall", Ret: word}}, target.arch, target.triple, 0)
+				} else if err != nil {
 					t.Fatal(err)
 				}
 				for _, want := range []string{
