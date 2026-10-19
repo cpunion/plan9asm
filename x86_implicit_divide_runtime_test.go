@@ -237,11 +237,10 @@ func TestX86ImplicitDivideIndependentNativeVectorDirectory(t *testing.T) {
 
 func x86DivideNativeDeclarationSources(rows []x86DivideNativeRow) (apiDeclarations, originalFile string) {
 	var declarations strings.Builder
-	declarations.WriteString("package oracle\n")
 	for index, row := range rows {
 		fmt.Fprintf(&declarations, "func %s(out *[4]uint64,low,high,divisor uint64)\nfunc Dead%d(out *[4]uint64,low,high,divisor uint64)\n", row.name, index)
 	}
-	return declarations.String(), declarations.String()
+	return declarations.String(), "package oracle\n" + declarations.String()
 }
 
 func x86RunImplicitDivideNative(t *testing.T, execution x86FloatCompareExecution, arch string) {

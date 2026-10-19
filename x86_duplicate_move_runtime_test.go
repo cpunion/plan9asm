@@ -156,7 +156,6 @@ func x86BuildDuplicateNativeProgram(arch string) x86DuplicateNativeProgram {
 	var source, declarations, prototypes, cRows, faultRows strings.Builder
 	var originalSource, originalDeclarations, originalRows strings.Builder
 	var faultAligned []bool
-	declarations.WriteString("package oracle\n")
 	originalDeclarations.WriteString("package oracle\n")
 	flag := func(value bool) int {
 		if value {
