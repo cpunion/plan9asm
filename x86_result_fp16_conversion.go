@@ -10,7 +10,14 @@ func x86RawFP16ConversionSourceForm(ins Instr, arch string) (x86FP16ConversionFo
 // A typed family must validate the opcode and operands before using this
 // original-source identity check. It grants no standalone or native entry role.
 func x86RawOrdinaryVectorSource(ins Instr, arch string) bool {
-	if len(ins.Args) == 0 || ins.x86SourceRaw == nil ||
+	return x86RawOrdinaryVectorSourceAt(ins, arch, 0)
+}
+
+// Validate the complete original identity before selecting the typed data
+// operand. An immediate-first family must not rewrite operands to borrow the
+// first-data grammar, or leave its selector outside the original identity.
+func x86RawOrdinaryVectorSourceAt(ins Instr, arch string, sourceIndex int) bool {
+	if sourceIndex < 0 || sourceIndex >= len(ins.Args) || ins.x86SourceRaw == nil ||
 		ins.x86SourceRaw.op != ins.Op || !reflect.DeepEqual(ins.x86SourceRaw.args, ins.Args) ||
 		ins.x86SourceRaw.vectorBytes != ins.x86VectorBytes ||
 		ins.x86SourceRaw.addressBits != ins.x86AddressBits ||
@@ -18,7 +25,7 @@ func x86RawOrdinaryVectorSource(ins Instr, arch string) bool {
 		ins.x86SegmentPrefix != 0 || ins.x86RIPLiteral || ins.x86NumericalRead != nil {
 		return false
 	}
-	source := ins.Args[0]
+	source := ins.Args[sourceIndex]
 	return source.Kind == OpReg || source.Kind == OpMem && source.Mem.Sym == "" &&
 		source.Mem.Segment == "" && x86OrdinaryNativeMemoryOperand(source, arch)
 }

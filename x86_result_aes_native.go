@@ -1,8 +1,8 @@
 package plan9asm
 
 func x86RawAESSource(ins Instr, arch string) bool {
-	_, known, err := x86AESProperties(ins.Op, ins, arch)
-	return known && err == nil && x86RawOrdinaryVectorSource(ins, arch)
+	form, known, err := x86AESProperties(ins.Op, ins, arch)
+	return known && err == nil && x86RawOrdinaryVectorSourceAt(ins, arch, form.source)
 }
 
 // The complete AES grammar and byte dependencies are shared, not re-listed.
