@@ -59,6 +59,14 @@ func x86ScalarReciprocalProperties(op Op, ins Instr, arch string) (x86ScalarReci
 	}
 	source := ins.Args[0]
 	if !vector(source) {
+		// Go's non-SIB asmandsz branch accepts an extended base spelling
+		// before physical mode32 binding. asmidx explicitly rejects extended
+		// base/index SIB forms, so this compatibility is not interchangeable.
+		if spec.vector && arch == "386" && source.Kind == OpMem && source.Mem.Index == "" &&
+			x86PackedShiftMemoryValid(source, "amd64") && x86NamedMultiplyMemoryError(source, "amd64") == nil &&
+			!x86MemoryRegistersValidForArch(source.Mem, arch) {
+			return form, true, fmt.Errorf("%w: 386 %s extended source base has no physical address binding", ErrProbeNeedsContext, op)
+		}
 		if !isAMD64MemoryOperand(source) || !x86PackedShiftMemoryValid(source, arch) {
 			return fail()
 		}
