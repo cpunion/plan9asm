@@ -158,5 +158,18 @@ func TestX86X87AndStackNativeReadsDoNotSupplyStandaloneBacking(t *testing.T) {
 				}
 			}
 		}
+		word, move, suffix := 8, "MOVQ", "Q"
+		if arch == "386" {
+			word, move, suffix = 4, "MOVL", "L"
+		}
+		for _, width := range []string{"W", suffix} {
+			body := fmt.Sprintf("%s src+0(FP),SI\nPUSH%s 1(SI)\nPOP%s AX\nMOVWLZX AX,AX\nMOVL AX,ret+%d(FP)\nRET", move, width, width, word)
+			_, file, sig, _ := x86ResultInitializationFixture(t, arch, "func Value(src *byte) uint32", body)
+			for _, check := range []func(Func, FuncSig, string) error{CheckX86ABI0ResultInitialization, checkX86ScalarFPResultInitialization} {
+				if !errors.Is(check(file.Funcs[0], sig, arch), ErrProbeNeedsContext) {
+					t.Fatal("unpaired query acquired a native PUSH read", arch, width)
+				}
+			}
+		}
 	}
 }
