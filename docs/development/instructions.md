@@ -84,6 +84,19 @@ Original uninitialized format/disp32 probes retain Go/emitter objects plus
 three-API Context controls. Independent initialized objects own public success;
 neither a direct emitter nor a classification change grants caller memory.
 
+Conditional moves consume the old destination and actual predicate FLAGS even
+when the condition is false or the result is unused. Their native source read
+is unconditional. Exact raw identity permits a lowering-local numerical view,
+not a pointer, frame, standalone-query or native-entry fact.
+
+AES/VAES share complete round, inverse-mix and key-assist forms and byte
+dependencies. Immediate-first key assist selects its data source through the
+typed operand index; bind every original operand, including the selector,
+before using that index. Memory retains its complete physical envelope even
+when only selected register subwords contribute numerically. Preserve original
+legacy alignment faults, VEX/EVEX upper-zeroing, and independent FLAGS/DF/ID.
+Dead outputs cannot borrow uninitialized input bytes from implementation slots.
+
 Physical MMX observers keep the entire source branch-free and their region
 uninterrupted through real EMMS. Seed status and prepare unrelated state before
 entering the region; do not relax that boundary to accommodate an old fixture.
