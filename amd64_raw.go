@@ -5044,9 +5044,8 @@ encoding:
 		if addressOverride {
 			return Instr{}, 0, true, fmt.Errorf("address-size override is not source-layout safe")
 		}
-		if vexLength == 3 && vexBits&0x80 != 0 {
-			return Instr{}, 0, true, fmt.Errorf("VEX.W must be zero")
-		}
+		// All three VEX duplicate-move opcodes are WIG. Unlike the EVEX
+		// encodings below, either W value denotes the same operation.
 		if vexBits&0x78 != 0x78 {
 			return Instr{}, 0, true, fmt.Errorf("VEX.vvvv must be reserved")
 		}

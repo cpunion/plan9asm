@@ -66,6 +66,101 @@ func TestDecodeX86DuplicateMoveVEXWIGCompleteShapes(t *testing.T) {
 	}
 }
 
+func TestDecodeX86DuplicateMoveVEXWIGRIPLiteralBoundaries(t *testing.T) {
+	count := 0
+	x86DuplicateWIGWitnesses(func(name, bank string, memory, w bool, witness []byte) {
+		if !memory {
+			return
+		}
+		t.Run(fmt.Sprintf("%s/%s/W=%t", name, bank, w), func(t *testing.T) {
+			width := 16
+			if bank == "Y" {
+				width = 32
+			} else if name == "VMOVDDUP" {
+				width = 8
+			}
+			code := append([]byte(nil), witness...)
+			code[4] = 0x15 // RIP+disp32 -> vector2, not the witness's (BX).
+			code = append(code, 1, 0, 0, 0, 0xc3)
+			for i := 0; i < width; i++ {
+				code = append(code, byte(i*37+3))
+			}
+			original := append([]byte(nil), code...)
+			for _, offset := range []int{0, 3} {
+				t.Run(fmt.Sprintf("offset%d", offset), func(t *testing.T) {
+					input := append(bytes.Repeat([]byte{0x90}, offset), code...)
+					decoded, size, literal, matched, err := decodeX86RawDuplicateMoveRIPData(input, offset, 64)
+					if err != nil || !matched || size != 9 || decoded.Op != Op(name) ||
+						len(decoded.Args) != 2 || decoded.Args[0].Kind != OpSym || decoded.Args[1].Reg != Reg(bank+"2") ||
+						!decoded.x86RIPLiteral || literal != (x86RawLiteralRange{first: offset + 10, last: offset + 10 + width}) ||
+						!bytes.Equal(decoded.x86RIPLiteralData, original[10:]) ||
+						decoded.x86RIPMemoryRead.width != int64(width) ||
+						!bytes.Equal(decoded.x86RIPMemoryRead.object, original[10:]) ||
+						!bytes.Equal(input[offset:], original) {
+						t.Fatal("WIG changed the exact RIP tuple, next-IP, data or immutable source", decoded, size, literal, matched, err)
+					}
+				})
+			}
+			decoded, err := decodeX86RawDirectiveGroup(code, 64, 0, name, map[string]bool{})
+			if err != nil || len(decoded) != 2 || decoded[0].Op != Op(name) ||
+				!decoded[0].x86RIPLiteral || decoded[0].Args[0].Kind != OpSym ||
+				!bytes.Equal(decoded[0].x86RIPLiteralData, original[10:]) || decoded[1].Op != OpRET ||
+				!bytes.Equal(code, original) {
+				t.Fatal("full WIG directive group changed its source-local data or return", decoded, err)
+			}
+			if _, _, _, matched, err := decodeX86RawDuplicateMoveRIPData(code, 0, 32); matched || err != nil {
+				t.Fatal("WIG granted a mode32 absolute address a RIP literal role", matched, err)
+			}
+			absolute, size, matched, err := decodedX86DuplicateMoveInstruction(code, 32)
+			if err != nil || !matched || size != 9 || absolute.Args[0].Kind != OpMem ||
+				absolute.Args[0].Mem != (MemRef{Off: 1}) || absolute.x86RIPLiteral {
+				t.Fatal("mode32 original absolute address changed under WIG", absolute, size, matched, err)
+			}
+			for name, mutate := range map[string]func([]byte) []byte{
+				"truncated tuple": func(input []byte) []byte { return input[:len(input)-1] },
+				"overlap return": func(input []byte) []byte {
+					input[5] = 0
+					return input
+				},
+				"overlap instruction": func(input []byte) []byte {
+					copy(input[5:9], []byte{0xf8, 0xff, 0xff, 0xff})
+					return input
+				},
+				"before source": func(input []byte) []byte {
+					copy(input[5:9], []byte{0xf6, 0xff, 0xff, 0xff})
+					return input
+				},
+				"outside source": func(input []byte) []byte {
+					input[5] = 127
+					return input
+				},
+				"reserved vvvv": func(input []byte) []byte {
+					input[2] &^= 0x08
+					return input
+				},
+				"FS segment":   func(input []byte) []byte { return append([]byte{0x64}, input...) },
+				"GS segment":   func(input []byte) []byte { return append([]byte{0x65}, input...) },
+				"address size": func(input []byte) []byte { return append([]byte{0x67}, input...) },
+			} {
+				t.Run(name, func(t *testing.T) {
+					input := mutate(append([]byte(nil), code...))
+					unchanged := append([]byte(nil), input...)
+					if got, err := decodeX86RawDirectiveGroup(input, 64, 0, name, map[string]bool{}); err == nil {
+						t.Fatal("WIG widened unsafe RIP source permissions", got)
+					}
+					if !bytes.Equal(input, unchanged) {
+						t.Fatal("rejected WIG source mutated its original bytes")
+					}
+				})
+			}
+		})
+		count++
+	})
+	if count != 12 {
+		t.Fatal("incomplete WIG RIP opcode/width/W matrix", count)
+	}
+}
+
 func x86DuplicateWIGOriginalSource() string {
 	var source strings.Builder
 	index := 0

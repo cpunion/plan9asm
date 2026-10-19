@@ -156,7 +156,6 @@ func TestDecodedX86RawDuplicateMoveMemoryAndInvalidForms(t *testing.T) {
 	validVEX := encodeX86RawVEXDuplicateMove(rawDuplicateMoveSpecs[1], 0, 7, 7)
 	validEVEX := encodeX86RawEVEXDuplicateMove(rawDuplicateMoveSpecs[1], 2, 0, false, 7, 5)
 	for name, invalid := range map[string][]byte{
-		"vex W":                {validVEX[0], validVEX[1], validVEX[2] | 0x80, validVEX[3], validVEX[4]},
 		"vex vvvv":             {validVEX[0], validVEX[1], validVEX[2] &^ 0x08, validVEX[3], validVEX[4]},
 		"evex fixed bit":       {validEVEX[0], validEVEX[1], validEVEX[2] &^ 0x04, validEVEX[3], validEVEX[4], validEVEX[5]},
 		"evex wrong W":         {validEVEX[0], validEVEX[1], validEVEX[2] | 0x80, validEVEX[3], validEVEX[4], validEVEX[5]},
