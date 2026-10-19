@@ -1,5 +1,10 @@
 package plan9asm
 
+func x86RawQwordLookupSource(ins Instr, arch string) bool {
+	_, known, err := x86QwordLookupProperties(ins.Op, ins, arch)
+	return known && err == nil && x86RawOrdinaryVectorSource(ins, arch)
+}
+
 func x86ResultQwordLookupStep(ins Instr, state *x86ResultState, owned []bool, arch string, native bool) (bool, bool) {
 	form, known, err := x86QwordLookupProperties(ins.Op, ins, arch)
 	if !known || err != nil {

@@ -87,6 +87,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 	}
 	boundRawClear := false
 	for _, ins := range fn.Instrs {
+		if x86RawQwordLookupSource(ins, arch) {
+			continue // Complete raw data/control inputs retain their separate memory and result obligations.
+		}
 		if x86RawVectorTestSource(ins, arch) {
 			continue // Exact data tests retain all input bytes and native source accesses.
 		}
