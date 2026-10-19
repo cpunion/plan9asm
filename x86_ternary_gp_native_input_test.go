@@ -56,3 +56,32 @@ func TestX86TernaryGPDeadNativeReadsKeepExactWidthAndInputs(t *testing.T) {
 		}
 	}
 }
+
+func TestX86TernaryGPUnusedBoolCannotHideMissingData(t *testing.T) {
+	for _, target := range x86RawReturnTargets {
+		for _, op := range []string{"ANDNL", "ANDNQ", "PDEPL", "PDEPQ", "PEXTL", "PEXTQ"} {
+			for _, raw := range []bool{false, true} {
+				line := op + " AX,BX,CX"
+				if raw {
+					line = x86RawNumericalInstruction(t, target.arch, line)
+				}
+				for _, missing := range []string{"", "MOVL $7,AX\n", "MOVL $3,BX\n"} {
+					source := "TEXT ·Value(SB),4,$0-1\nMOVL $7,AX\nMOVL $3,BX\n" + line + "\nRET\n"
+					if missing != "" {
+						source = strings.Replace(source, missing, "", 1)
+					}
+					for _, api := range []string{"text", "module", "Go"} {
+						ir, err := x86ScalarFPBitViewAPI(t, source, "func Value(unused bool)", target.arch, target.triple, api)
+						if missing == "" {
+							if err != nil || ir == "" {
+								t.Fatal("initialized Void/bool inputs rejected", target.triple, op, api, err)
+							}
+						} else if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+							t.Fatal("unused bool hid a missing data input", target.triple, op, api, err)
+						}
+					}
+				}
+			}
+		}
+	}
+}
