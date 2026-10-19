@@ -1,10 +1,34 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
 )
+
+func TestX86DwordProductRawPrivateFlagsDoNotInventInputs(t *testing.T) {
+	for _, target := range x86RawReturnTargets {
+		word, suffix := goWordSize(target.arch), "Q"
+		if word == 4 {
+			suffix = "L"
+		}
+		for _, name := range []string{"VPMULDQ", "VPMULUDQ"} {
+			for _, seed := range []string{"", "XORL AX,AX\n", "XORL AX,AX\nCLD\n"} {
+				source := fmt.Sprintf("TEXT ·Value(SB),4,$0-%d\nVPXOR X0,X0,X0\nVPXOR X1,X1,X1\n%s%s"+
+					"PUSHF%s\nPOP%s AX\nMOV%s AX,ret+0(FP)\nRET\n", word, seed,
+					x86RawNumericalInstruction(t, target.arch, name+" X0,X1,X2"), suffix, suffix, suffix)
+				x86LEAActualTargetGoObject(t, target.arch, target.triple, source)
+				for _, api := range []string{"text", "module", "Go"} {
+					ir, err := x86ScalarFPBitViewAPI(t, source, "func Value() uintptr", target.arch, target.triple, api)
+					if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+						t.Fatal("raw product invented missing full-FLAGS inputs", target.triple, name, seed, api, err)
+					}
+				}
+			}
+		}
+	}
+}
 
 func TestX86DwordProductRawPrivateFlagsFiveTargetObjects(t *testing.T) {
 	for _, target := range x86RawReturnTargets {
