@@ -133,13 +133,15 @@ static void independent_pack(uint8_t *out,const uint8_t *first,const uint8_t *se
 func x86NarrowIndependentAssembly(name string, row x86NarrowOracleRow) string {
 	var assembly strings.Builder
 	fmt.Fprintf(&assembly, "TEXT ·%s(SB),4,$0-52\nMOVQ out+0(FP),AX\nMOVQ a+8(FP),CX\nMOVQ b+16(FP),DX\nMOVQ old+24(FP),R8\nMOVQ mask+32(FP),R9\n", name)
+	// Prepare status before entering the uninterrupted physical MMX region.
+	assembly.WriteString("LDMXCSR csr+48(FP)\nPUSHQ flags+40(FP)\nPOPFQ\n")
 	if row.bank == "M" {
 		assembly.WriteString("MOVQ (CX),M0\nMOVQ (DX),M1\n")
 	} else {
 		assembly.WriteString("VMOVUPS (CX),Z0\nVMOVUPS (DX),Z1\nVMOVUPS (R8),Z2\nKMOVQ R9,K1\n")
 	}
 	instruction, destination := row.instruction()
-	fmt.Fprintf(&assembly, "LDMXCSR csr+48(FP)\nPUSHQ flags+40(FP)\nPOPFQ\n%s\n", instruction)
+	fmt.Fprintln(&assembly, instruction)
 	if row.bank == "M" {
 		fmt.Fprintf(&assembly, "MOVQ %s,(AX)\nEMMS\n", destination)
 	} else {

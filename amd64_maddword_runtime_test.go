@@ -145,7 +145,7 @@ int main(void) {
 func x86WordMaddLogicalFPAssembly(name string, width, mode int) string {
 	bank := map[int]string{8: "M", 16: "X", 32: "Y", 64: "Z"}[width]
 	row := "PMADDWL source+0(FP),M1"
-	load, store := "MOVQ (AX),M1", "MOVQ M1,(AX)"
+	load, store := "MOVQ (AX),M1", "MOVQ M1,(AX)\nEMMS"
 	if width != 8 {
 		row = "VPMADDWD source+0(FP)," + bank + "1"
 		if mode == 2 {
