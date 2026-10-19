@@ -22,8 +22,13 @@ func x86ResultMaskBlendStep(ins Instr, state *x86ResultState, owned []bool, arch
 	if form.memory >= 0 {
 		firstWidth = int64(form.memoryBytes)
 	}
-	if !x86ResultReadWithNativeContinuation(ins, ins.Args[form.first], firstWidth, state, owned, arch, nativeRead) ||
-		form.mask >= 0 && !form.zeroing && !x86ResultRead(ins.Args[form.second], width, state, owned, arch) {
+	first := ins.Args[form.first]
+	firstKnown := x86ResultPackedVectorRead(first, firstWidth, state, owned, arch)
+	if !firstKnown && nativeRead && first.Kind != OpReg {
+		firstKnown = x86ResultReadWithNativeContinuation(ins, first, firstWidth, state, owned, arch, true)
+	}
+	if !firstKnown || form.mask >= 0 && !form.zeroing &&
+		!x86ResultPackedVectorRead(ins.Args[form.second], width, state, owned, arch) {
 		return false, true
 	}
 	destination, valid := amd64VectorRegisterIndex(ins.Args[form.destination].Reg, form.byteWidth)
