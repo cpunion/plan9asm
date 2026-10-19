@@ -15,13 +15,15 @@ const roots = [
   'TestCrossLinuxRuntimeMatrixX86AESFamilyWholeByteAliases',
   'TestAMD64VectorTestRuntimeSemantics',
   'TestAMD64IFMARuntimeSemantics',
+  'TestAMD64QwordBitLookupRuntimeSemantics',
 ];
 const children = ['-O0', '-O2', 'IR_O2/backend_O2'].map(axis => roots[0] + '/' + axis)
   .concat(['backend_O0', 'backend_O2', 'IR_O2/backend_O2'].map(axis => roots[1] + '/' + axis))
   .concat(['-O0', '-O2', 'IR_O2/backend_O2'].map(axis => roots[2] + '/' + axis))
   .concat(['named', 'raw'].flatMap(encoding =>
     ['backend_O0', 'backend_O2', 'IR_O2/backend_O2'].map(axis => roots[3] + '/' + encoding + '/' + axis)))
-  .concat(['backend_O0', 'backend_O2', 'IR_O2/backend_O2'].map(axis => roots[4] + '/' + axis));
+  .concat([4, 5].flatMap(index =>
+    ['backend_O0', 'backend_O2', 'IR_O2/backend_O2'].map(axis => roots[index] + '/' + axis)));
 const auditProductCMOV = (inventory, raw) => auditNativeOwners(inventory, raw, roots, children);
 
 module.exports = {auditProductCMOV, roots, children};
