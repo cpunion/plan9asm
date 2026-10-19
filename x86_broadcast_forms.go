@@ -126,6 +126,14 @@ func x86ResultBroadcastInputs(ins Instr, state *x86ResultState, owned []bool, ar
 	if err != nil {
 		return false, true
 	}
+	return x86ResultBroadcastTransfer(ins, f, state, owned, arch, nativeRead, boundLiteral)
+}
+
+// Retain the validated physical form when a source-local consumer projects
+// provenance. The mode32 GP-Q opcode still reads and repeats dword lanes;
+// projecting its identity must not change the captured input or tuple roles.
+func x86ResultBroadcastTransfer(ins Instr, f x86BroadcastForm, state *x86ResultState,
+	owned []bool, arch string, nativeRead, boundLiteral bool) (bool, bool) {
 	dst, valid := amd64VectorRegisterIndex(ins.Args[f.destination].Reg, f.byteWidth)
 	if !valid || dst >= len(state.xmm) {
 		return false, true
