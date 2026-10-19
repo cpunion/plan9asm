@@ -47,7 +47,10 @@ func TestX86MandatoryDescriptorObligationIndependentOfResultLayout(t *testing.T)
 
 func TestX86MandatoryRawDescriptorCannotBypassResultLayout(t *testing.T) {
 	for _, arch := range []string{"386", "amd64"} {
-		for _, row := range []string{"LAHF", "SAHF", "CRC32L BX,AX", "MULL BX", "CMOVLLE BX,AX"} {
+		// These decoded forms retain actual registered mandatory descriptors.
+		// Raw CRC/MUL have distinct unregistered physical roles; their named
+		// descriptors cannot serve as a witness for this metadata contract.
+		for _, row := range []string{"LAHF", "SAHF", "CMOVLLE BX,AX"} {
 			t.Run(arch+"/"+row, func(t *testing.T) {
 				file, err := Parse(ArchAMD64, "TEXT Value(SB),4,$0-0\n"+x86RawNumericalInstruction(t, arch, row)+"RET\n")
 				if err != nil {
