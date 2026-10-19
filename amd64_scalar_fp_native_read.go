@@ -115,6 +115,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 			boundRawConversion = true
 			continue // Exact physical identity retains every typed input and native MXCSR/access obligation.
 		}
+		if x86RawPackedIntegerCompareSource(ins, arch) {
+			continue // Exact legacy/VEX/EVEX data retains every input, mask and paired native access obligation.
+		}
 		if x86RawImmediatePackedCompareSource(ins, arch) {
 			continue // Exact immediate/data identity supplies no entry or missing numerical/memory input.
 		}
@@ -452,6 +455,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		}
 		if accepted, known := x86ResultVectorArithmeticStepWithRead(ins, state, owned, arch, true); known {
 			return accepted // The same add/sub emitter retains exact E4 reads and inactive-lane suppression.
+		}
+		if accepted, known := x86LoweredPackedIntegerCompareStep(ins, state, owned, arch); known {
+			return accepted // The exact original form shares only the existing vector/K-result and E4 effects.
 		}
 		if accepted, known := x86LoweredImmediatePackedCompareStep(ins, state, owned, arch); known {
 			return accepted // Original raw selectors retain their complete paired E4 input effects.
