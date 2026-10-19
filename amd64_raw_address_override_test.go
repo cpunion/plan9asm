@@ -363,9 +363,19 @@ func TestX86RawAddressOverrideExistingTypedConsumersRemainBound(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				ir, err := Translate(file, Options{Goarch: target.arch, TargetTriple: target.triple,
-					Sigs: map[string]FuncSig{"raw": {Name: "raw", Ret: Void}},
-				})
+				var ir string
+				if form.name == "UMONITOR" {
+					// Retain this family's existing physical-width observation;
+					// it does not establish a monitor extent or runtime result.
+					ir, err = Translate(file, Options{Goarch: target.arch, TargetTriple: target.triple,
+						Sigs: map[string]FuncSig{"raw": {Name: "raw", Ret: Void}},
+					})
+				} else {
+					// ADX and enqueue inputs are absent. Original Go/emitter
+					// objects remain required, while every public API retains
+					// Context instead of inventing numerical or native authority.
+					ir = x86UnboundVoidRawScalarFormatObject(t, assembly, target.arch, target.triple)
+				}
 				if err != nil || !strings.Contains(ir, fmt.Sprintf("to i%d", mode/2)) {
 					t.Fatalf("dedicated consumer lost physical truncation: %v", err)
 				}

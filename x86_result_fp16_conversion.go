@@ -13,6 +13,7 @@ func x86RawOrdinaryVectorSource(ins Instr, arch string) bool {
 	if len(ins.Args) == 0 || ins.x86SourceRaw == nil ||
 		ins.x86SourceRaw.op != ins.Op || !reflect.DeepEqual(ins.x86SourceRaw.args, ins.Args) ||
 		ins.x86SourceRaw.vectorBytes != ins.x86VectorBytes ||
+		ins.x86SourceRaw.addressBits != ins.x86AddressBits ||
 		ins.x86RawNearReturn != nil || ins.x86AddressBits != 0 || ins.x86UnboundAddressOverride ||
 		ins.x86SegmentPrefix != 0 || ins.x86RIPLiteral || ins.x86NumericalRead != nil {
 		return false
