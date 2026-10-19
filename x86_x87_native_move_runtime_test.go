@@ -109,3 +109,46 @@ func TestX87DirectFlagCompareOriginalProgramPortable(t *testing.T) {
 		}
 	})
 }
+
+func TestX86X87AndStackNativeDeadAccessFaults(t *testing.T) {
+	execution := x86ScalarCountHostExecution(t)
+	arch, word, move, suffix := "amd64", 8, "MOVQ", "Q"
+	if strconv.IntSize == 32 {
+		arch, word, move, suffix = "386", 4, "MOVL", "L"
+	}
+	var source, declarations, prototypes, callbacks, rows strings.Builder
+	add := func(body string, bytes int) {
+		name := fmt.Sprintf("nativeDeadAccess%d", strings.Count(declarations.String(), "func "))
+		fmt.Fprintf(&source, "TEXT ·%s(SB),4,$0-%d\n%s input+0(FP),SI\n%sMOVL $7,AX\nMOVL AX,ret+%d(FP)\nRET\n", name, word+4, move, body, word)
+		fmt.Fprintf(&declarations, "func %s(input *byte) uint32\n", name)
+		fmt.Fprintf(&prototypes, "extern uint32_t %s(const uint8_t*);\n", name)
+		fmt.Fprintf(&callbacks, "static int run%s(const uint8_t *p) {return %s((const uint8_t*)((uintptr_t)p-1))==7 ? 0 : 91;}\n", name, name)
+		fmt.Fprintf(&rows, "{run%s,%d,%d},\n", name, bytes, bytes-1)
+	}
+	for _, row := range []struct {
+		op    string
+		bytes int
+	}{{"FMOVF", 4}, {"FMOVD", 8}} {
+		add("FINIT\n"+row.op+" 1(SI),F0\nFINIT\n", row.bytes)
+		for _, pop := range []string{"", "P"} {
+			add("FINIT\nFLD1\n"+row.op+pop+" F0,1(SI)\nFINIT\n", row.bytes)
+		}
+	}
+	add("PUSHW 1(SI)\nPOPW AX\n", 2)
+	add("PUSH"+suffix+" 1(SI)\nPOP"+suffix+" AX\n", word)
+	driver := x86MemoryFaultDriver(prototypes.String()+callbacks.String(), rows.String())
+	for _, api := range []string{"text", "module", "Go"} {
+		t.Run(api, func(t *testing.T) {
+			ir, err := x86X87InitializedWordAPI(t, source.String(), declarations.String(), arch, execution.triple, api, X87Software)
+			if err != nil || ir == "" {
+				t.Fatal("native dead-access source", err)
+			}
+			for _, text := range []string{ir, x86MulDivRoundOptimize(t, ir)} {
+				for _, level := range []string{"-O0", "-O2"} {
+					executable := execution.compileLLVM(t, "x87-stack-dead-faults", text, driver, level)
+					x86CheckMemoryFaultMatrix(t, execution, executable, 8)
+				}
+			}
+		})
+	}
+}
