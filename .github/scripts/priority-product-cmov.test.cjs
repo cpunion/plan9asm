@@ -34,7 +34,7 @@ test('product and CMOV execution retains every root and optimization child witho
   const raw = values => values.map(JSON.stringify).join('\n') + '\n';
   const inventory = roots.join('\n') + '\n';
   assert.deepEqual(auditProductCMOV(inventory, raw(events)),
-    {roots: 2, children: 6, passed: 2, skipped: 0, incomplete: 0});
+    {roots: 2, children: 6, passed: 8, skipped: 0, incomplete: 0});
   for (const name of [...roots, ...children]) {
     assert.throws(() => auditProductCMOV(inventory, raw(events.filter(event => event.Test !== name))));
     for (const Action of ['skip', 'fail']) {
