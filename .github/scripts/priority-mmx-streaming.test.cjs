@@ -6,6 +6,7 @@ const test = require('node:test');
 const {auditMMXStreaming, roots, children} = require('./audit-mmx-streaming.cjs');
 const workflow = fs.readFileSync('.github/workflows/pr40-owned-process-probe.yml', 'utf8');
 const block = `      - name: Execute original Go and LLVM native MMX streaming stores
+        if: \${{ !cancelled() && steps.native_toolchain.outcome == 'success' && steps.native_go.outcome == 'success' }}
         env:
           GOTOOLCHAIN: local
         run: |
