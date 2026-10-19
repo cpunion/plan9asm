@@ -276,8 +276,8 @@ func TestX86AESFamilyLogicalFPNumericalSpanContracts(t *testing.T) {
 							declaration := "func F(" + contract.parameters + ")\n"
 							if contract.accepted && strings.HasPrefix(name, "V") && !strings.Contains(name, "IMC") && !strings.Contains(name, "KEYGEN") {
 								ir, err := x86ScalarFPBitViewAPI(t, source, declaration, target.arch, target.triple, api)
-								if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
-									t.Fatal("original FP round format invented its vector-state input", api, err)
+								if ir == "" || err != nil {
+									t.Fatal("unused original FP round result cannot change an unrelated source contract", api, err)
 								}
 							}
 							ir, err := x86ScalarFPBitViewAPI(t, initialized, declaration, target.arch, target.triple, api)

@@ -227,9 +227,10 @@ func x86ResultAESStepWithRead(ins Instr, state *x86ResultState, owned []bool, ar
 		return false, true
 	}
 	defined := x86AESDefinedBytes(f, source, input)
-	if defined != x86CallerVectorByteMask(int64(f.byteWidth)) {
-		return false, true // Dead outputs do not register another unknown-input arithmetic domain.
-	}
+	// Preserve the existing nontrapping register NUM domain: an accepted
+	// transfer may leave result bytes unknown, never initialized to alloca
+	// zeroes. Every later result, store, address or control use still consumes
+	// its actual known bytes. Native memory retains its full read above.
 	state.writeVector(destination, f.byteWidth, defined, !f.spec.vector)
 	return true, true
 }

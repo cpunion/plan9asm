@@ -41,9 +41,17 @@ func TestX86AESKeyAssistRequiresOnlyItsNumericalRegisterSubwords(t *testing.T) {
 					state.xmm[0] &^= 1 << uint(missing)
 				}
 				before := state.clone()
-				want := missing < 0 || missing%8 < 4
+				defined := uint64(0xffff)
+				if missing >= 0 && missing%8 >= 4 {
+					// Each used input byte contributes to the unrotated and
+					// rotated output dwords in its eight-byte half.
+					half, at := missing/8*8, missing%4
+					defined &^= uint64(1)<<uint(half+at) | uint64(1)<<uint(half+4+(at+3)%4)
+				}
+				want := before.clone()
+				want.writeVector(2, 16, defined, !strings.HasPrefix(name, "V"))
 				accepted, known := x86LoweredAESResultStep(ins, &state, nil, arch)
-				if !known || accepted != want || !accepted && !reflect.DeepEqual(state, before) {
+				if !known || !accepted || !reflect.DeepEqual(state, want) {
 					t.Fatal("key assist invented used bytes or required irrelevant register data", arch, name, missing, accepted)
 				}
 			}

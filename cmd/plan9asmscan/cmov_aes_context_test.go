@@ -57,6 +57,13 @@ func TestAESCoverageRequiresActualVectorInputs(t *testing.T) {
 					if strings.Contains(name, "KEYGEN") {
 						line = name + " $27," + bank + "0," + bank + "1"
 					}
+					destination := "X1"
+					if strings.HasPrefix(name, "V") && !unary {
+						destination = "X2"
+					}
+					// Existing dead register arithmetic may remain unknown;
+					// observing it cannot borrow implementation-slot values.
+					line += "\nMOVL " + destination + ",AX\nTESTL AX,AX\nSETEQ CX"
 					prefix := "VPXORD Z0,Z0,Z0\nVPXORD Z1,Z1,Z1\n"
 					valueProbeNeedsContext(t, arch, line)
 					if err := plan9asm.ProbeInstructionSequence(plan9asm.ArchAMD64, arch,
