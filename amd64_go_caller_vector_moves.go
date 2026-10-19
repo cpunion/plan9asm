@@ -3,6 +3,9 @@ package plan9asm
 import "fmt"
 
 func x86CallerVectorMoveKnown(ins Instr) bool {
+	if _, known, err := x86PackedAlignProperties(ins.Op, ins, "amd64"); known {
+		return err == nil
+	}
 	if form, known, err := x86SqrtProperties(ins, "amd64"); known {
 		return err == nil && form.bits != 16
 	}
@@ -169,6 +172,9 @@ func x86CallerVectorMoveStep(ins *Instr, state *x86SourceStackState, proof *x86G
 	}
 	if form, known, err := x86ImmediateShuffleProperties(*ins, "amd64"); known {
 		return err == nil && x86CallerImmediateShuffleStep(ins, form, state, proof)
+	}
+	if form, known, err := x86PackedAlignProperties(ins.Op, *ins, "amd64"); known {
+		return err == nil && x86CallerPackedAlignStep(ins, form, state, proof)
 	}
 	if form, known, err := x86MaskVectorProperties(*ins, "amd64"); known {
 		return err == nil && x86CallerMaskVectorStep(ins, form, state)
@@ -377,6 +383,9 @@ func x86InstructionMemoryShape(ins Instr, index int, arch string) (width int64, 
 	}
 	if form, known, err := x86ImmediateShuffleProperties(ins, arch); known {
 		return int64(form.memoryBytes), false, err == nil && !form.spec.legacy && form.memory == index
+	}
+	if form, known, err := x86PackedAlignProperties(ins.Op, ins, arch); known {
+		return int64(form.memoryBytes), false, err == nil && !form.legacy && form.memory == index
 	}
 	if form, known, err := x86PackedLowMultiplyProperties(ins.Op, ins, arch); known {
 		return int64(form.memoryBytes), false, err == nil && form.memory == index

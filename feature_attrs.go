@@ -92,6 +92,10 @@ func inferFuncTargetFeaturesForGOARCH(arch Arch, goarch string, fn Func) string 
 				// an isolated .Z function with no unsuffixed sibling.
 				add("+ssse3")
 			}
+			if form, known, err := x86PackedAlignProperties(ins.Op, ins, moveArch); known && err == nil &&
+				form.legacy && form.memory >= 0 && ins.Args[form.memory].Kind != OpFP {
+				add("+sse2", "+ssse3") // The isolated original PALIGNR m128 needs its physical carrier.
+			}
 			if form, known, err := x86VectorTestProperties(ins.Op, ins, moveArch); known && err == nil &&
 				ins.Args[0].Kind != OpReg && ins.Args[0].Kind != OpFP {
 				if form.vector {
