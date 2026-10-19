@@ -48,7 +48,7 @@ func x86ResultPackedConversionStepWithRead(ins Instr, state *x86ResultState, own
 	if !known {
 		return false, false
 	}
-	if err != nil || f.mmx {
+	if err != nil || f.mmx || !x86ResultNamedPredicateInstruction(ins) {
 		return false, true
 	}
 	if f.mask >= 0 {
