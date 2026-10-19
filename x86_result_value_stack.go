@@ -42,6 +42,9 @@ func x86ResultPreservesPrivateStorage(ins Instr, arch string) bool {
 	if x86RawLegacyFloatCompareSource(ins, arch) {
 		return true // Numerical X writes do not access the private stack or ID.
 	}
+	if x86FloatMinMaxPreservesSourceState(ins, arch) {
+		return true // Exact floating vector writes do not access private storage or ID.
+	}
 	return ins.Op != OpCALL && (x86ResultNamedPredicateInstruction(ins) ||
 		x86RegisterQueryPreservesSourceState(ins) || x86WaitPackagePreservesStorage(ins) ||
 		x86PreservesNumericalSourceState(ins) || x86MaskLogicalPreservesStorage(ins) ||

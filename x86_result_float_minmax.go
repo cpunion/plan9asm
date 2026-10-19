@@ -28,6 +28,11 @@ func x86RawFloatMinMaxSource(ins Instr, arch string) bool {
 	return x86RawFloatMinMaxEncodingSource(ins, arch) && x86RawOrdinaryVectorSource(ins, arch)
 }
 
+func x86FloatMinMaxPreservesSourceState(ins Instr, arch string) bool {
+	return x86RawFloatMinMaxSource(ins, arch) ||
+		x86RawFloatMinMaxEncodingSource(ins, arch) && x86RawBinaryFloatLiteralForm(ins, arch)
+}
+
 // Consult the sealed decoded inventory, not a mutable current origin pointer.
 // Removing an origin must not turn a physical instruction into a named one.
 func x86FloatMinMaxRawReplayRequired(fn Func, arch string) bool {

@@ -72,6 +72,9 @@ func x86ResultDirectionAfterSource(ins Instr, direction x86ResultDirection, arch
 	if x86RawLegacyFloatCompareSource(ins, arch) {
 		return direction // MXCSR effects do not write the independent DF control.
 	}
+	if x86FloatMinMaxPreservesSourceState(ins, arch) {
+		return direction // Native MXCSR effects do not change the independent DF input.
+	}
 	if x86RawPackedConversionSource(ins, arch) || x86RawPackedReductionSource(ins, arch) || x86RawDwordProductResultSource(ins, arch) || x86RawCMOVSource(ins, arch) ||
 		x86RawAESSource(ins, arch) || x86RawVectorTestSource(ins, arch) || x86RawIFMASource(ins, arch) ||
 		x86RawQwordLookupSource(ins, arch) || x86RawPackedIntegerCompareSource(ins, arch) ||
