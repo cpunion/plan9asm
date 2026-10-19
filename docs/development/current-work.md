@@ -71,6 +71,8 @@ merge. Objects, portable values, native execution and ABI authority are distinct
 | `d5ce4441e` | Actual duplicate/division fixture package ownership, original-source controls and duplicate five-target three-API objects: 7 / 34 | Current Go, actual Go1.20 and race on this exact snapshot; native opcode execution is still separate |
 | `d16fb9ea3` | Complete raw legacy floating compare inputs, all selectors, immutable identities and five-target objects: 16 / 328 | Two disjoint current-Go cohorts; original complete source/C remains unchanged and still requires its native owner |
 | `cabff6cd8` | Complete ABS/sign Go rows, typed roles, initialized five-target objects, portable values and WIG/EVEX boundaries: 11 / 419 | Current Go; all 13 names, 42 official rows and 114 named forms; no named MMX or original AVX512 execution claim |
+| `c82b27515` | Scalar shift/rotate guarded architectural outcomes, complete Go rows, initialized objects, original source controls and immutable replay: 23 / 7,846 | Current Go; ISA-undefined producer outputs become finite only after actual inputs are proved. Ordinary queries stay conservative; original native owners remain required |
+| `3b21b7720` | Whole-word private opaque-pointer cells: 9 / 249 | Current Go; original g-alias source, three-target objects and actual-host LLVM/C companion. No numerical bits, caller/frame/entry role or physical stack authority follows |
 | `579c4cba1` | MOVNTI, floating helpers, conflict/funnel and compact/expand: 64 roots / 1,472 children | Current Go, actual Go1.20 and race; original native execution remains separate |
 | `013181561` | ALIGN, DIV/IDIV, raw logical returns and original formats: 53 / 2,130 | Current Go, actual Go1.20 and race; no new entry or memory permission |
 | `47e44aa7d` | Raw IFMA/lookup and shared decoder: 23 / 378 | Current Go, actual Go1.20 and race |
@@ -131,13 +133,14 @@ still requires zero unsupported forms and parse errors.
    or format corrections, fourteen unclosed/runtime-unverified roots and the
    then-open ternary regression (now corrected above). This is triage, not a
    predicted new-CI result. Preserve original initialized runtime programs.
-3. Remaining families include conditional shift/FLAGS outcomes, physical
-   SP/BP/g, MMX, packed abs/sign, four-source operations, scalar precision,
+3. The current batch repairs guarded scalar shift/FLAGS outcomes, explicit
+   g-alias pointer roundtrips, packed abs/sign and raw legacy compare. Remaining
+   families include physical SP/BP, MMX, four-source operations, scalar precision,
    immediate/variable shuffles, explicit mask stores and raw FP/RIP consumers.
    Fix complete rule classes, then rerun original roots to discover later
    failures. Do not infer missing family support from a repaired initial load.
 4. Required original AVX512 qualification needs suitable execution hardware.
-   The recorded Linux runner has F=0, VL=0, XCR0=7. Windows owners are mixed;
+   The official Linux allocations are mixed as recorded above. Windows owners are mixed;
    some report F/VL=1 and others F/VL=0, so allocation is not a stable guarantee.
    Conversion needs F/DQ/BW/VL, floating helpers F/DQ/VL, and physical wide
    half-move execution F. Do not weaken checks, replace execution with objects,
