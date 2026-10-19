@@ -45,17 +45,7 @@ func TestTranslateAMD64VCVTSS2SDCompleteGo127Forms(t *testing.T) {
 			}
 			source.WriteString("\tRET\n")
 			requireX86GoAssemblerResult(t, target.goarch, source.String(), true)
-			file, err := Parse(ArchAMD64, source.String())
-			if err != nil {
-				t.Fatal(err)
-			}
-			ir, err := Translate(file, Options{
-				Goarch: target.goarch, TargetTriple: target.triple,
-				Sigs: map[string]FuncSig{"vcvtss2sdforms": {Name: "vcvtss2sdforms", Ret: Void}},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			ir := x86ScalarPrecisionOriginalFormatObject(t, source.String(), "vcvtss2sdforms", target.goarch, target.triple, false)
 			llc := findLLVM22Tool("llc")
 			if llc == "" {
 				t.Fatal("LLVM 22 llc not found")

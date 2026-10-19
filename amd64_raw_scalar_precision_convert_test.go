@@ -246,20 +246,7 @@ func TestTranslateX86RawScalarPrecisionConvertTargets(t *testing.T) {
 				}
 			}
 			source.WriteString("\tRET\n")
-			file, err := Parse(ArchAMD64, source.String())
-			if err != nil {
-				t.Fatal(err)
-			}
-			ll, err := Translate(file, Options{
-				TargetTriple: target.triple,
-				Goarch:       target.goarch,
-				Sigs: map[string]FuncSig{
-					"raw_scalar_precision_convert": {Name: "raw_scalar_precision_convert", Ret: Void},
-				},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			ll := x86ScalarPrecisionOriginalFormatObject(t, source.String(), "raw_scalar_precision_convert", target.goarch, target.triple, true)
 			compileLLVMToObject(t, llc, target.triple, "raw-scalar-precision-convert-"+target.name+".ll", "raw-scalar-precision-convert-"+target.name+".o", ll)
 		})
 	}

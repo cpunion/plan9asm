@@ -72,6 +72,16 @@ func inferFuncTargetFeaturesForGOARCH(arch Arch, goarch string, fn Func) string 
 			if moveArch == "" {
 				moveArch = "amd64"
 			}
+			if form, known, err := x86ScalarPrecisionProperties(ins.Op, ins, moveArch); known && err == nil {
+				switch {
+				case form.spec.legacy:
+					add("+sse2") // Both scalar precision conversions are SSE2, including CVTSS2SD.
+				case x86ScalarPrecisionNativeEVEX(ins, form):
+					add("+avx512f") // Scalar EVEX needs F, not the packed narrow VL feature.
+				default:
+					add("+avx")
+				}
+			}
 			if form, known, err := x86PackedReductionProperties(ins, moveArch); known && err == nil {
 				if form.dot {
 					add("+sse4.1")

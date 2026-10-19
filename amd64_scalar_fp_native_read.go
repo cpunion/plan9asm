@@ -16,7 +16,7 @@ import (
 // result. In particular, this never creates a caller-memory or raw-RET token.
 func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 	fn, sig, arch := c.fpScalarSource, c.sig, c.goarch
-	if x86FloatMinMaxRawReplayRequired(fn, arch) {
+	if x86FloatMinMaxRawReplayRequired(fn, arch) || x86ScalarPrecisionRawReplayRequired(fn, arch) {
 		if err := fn.x86RawReplay.validate(fn, arch); err != nil {
 			return err
 		}
@@ -104,6 +104,7 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 	boundRawTernary := false
 	boundRawLegacyFloatCompare := false
 	boundRawFloatMinMax := false
+	boundRawScalarPrecision := false
 	for _, ins := range fn.Instrs {
 		if x86RawFloatMinMaxSource(ins, arch) {
 			if !boundRawFloatMinMax && (fn.x86RawReplay == nil || fn.x86RawReplay.validate(fn, arch) != nil) {
@@ -111,6 +112,13 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 			}
 			boundRawFloatMinMax = true
 			continue // Physical generation supplies no missing inputs, memory or entry role.
+		}
+		if x86RawScalarPrecisionSource(ins, arch) {
+			if !boundRawScalarPrecision && (fn.x86RawReplay == nil || fn.x86RawReplay.validate(fn, arch) != nil) {
+				return strictErr
+			}
+			boundRawScalarPrecision = true
+			continue // Exact mode/generation retains every active, merge, mask and native input obligation.
 		}
 		if x86RawLegacyFloatCompareSource(ins, arch) {
 			if !boundRawLegacyFloatCompare && (fn.x86RawReplay == nil || fn.x86RawReplay.validate(fn, arch) != nil) {
@@ -292,6 +300,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		}
 		if accepted, known := x86ResultNumericalReadStep(ins, state, owned, resultOffset, arch); known {
 			return accepted // A checked mutable SB source keeps its own lifetime and byte effects.
+		}
+		if accepted, known := x86ResultScalarPrecisionStep(ins, state, owned, arch, true); known {
+			return accepted // The paired original scalar conversion retains m32/m64 and MXCSR effects.
 		}
 		if accepted, known := x86ResultPackedAbsSignStep(ins, state, owned, arch, true); known {
 			return accepted // Exact native reads and K inputs remain required for dead packed integer results.

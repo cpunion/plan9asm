@@ -105,8 +105,8 @@ func (c *amd64Ctx) lowerFP(op Op, ins Instr) (ok bool, terminated bool, err erro
 		if dot := strings.IndexByte(raw, '.'); dot >= 0 {
 			base = raw[:dot]
 		}
-		if base == "VCVTSS2SD" || base == "VCVTSD2SS" {
-			return c.lowerVEXScalarFloatConvert(op, ins)
+		if _, known := x86ScalarPrecisionSpecs[Op(base)]; known {
+			return c.lowerScalarPrecisionConvert(op, ins)
 		}
 	}
 	switch op {
@@ -127,10 +127,10 @@ func (c *amd64Ctx) lowerFP(op Op, ins Instr) (ok bool, terminated bool, err erro
 
 	switch op {
 	case "VCVTSS2SD":
-		return c.lowerVEXScalarFloatConvert(op, ins)
+		return c.lowerScalarPrecisionConvert(op, ins)
 
 	case "VCVTSD2SS":
-		return c.lowerVEXScalarFloatConvert(op, ins)
+		return c.lowerScalarPrecisionConvert(op, ins)
 
 	case "MOVSS":
 		if len(ins.Args) != 2 {
@@ -433,35 +433,8 @@ func (c *amd64Ctx) lowerFP(op Op, ins Instr) (ok bool, terminated bool, err erro
 		fmt.Fprintf(c.b, "  %%%s = select i1 %%%s, i64 -1, i64 0\n", mask, cmp)
 		return true, false, c.storeXLowI64(ins.Args[1].Reg, "%"+mask)
 
-	case "CVTSS2SD":
-		if len(ins.Args) != 2 || ins.Args[1].Kind != OpReg {
-			return true, false, fmt.Errorf("amd64 CVTSS2SD expects src, Xdst: %q", ins.Raw)
-		}
-		if _, ok := amd64ParseXReg(ins.Args[1].Reg); !ok {
-			return false, false, nil
-		}
-		src, err := c.evalF32(ins.Args[0])
-		if err != nil {
-			return true, false, err
-		}
-		converted := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = fpext float %s to double\n", converted, src)
-		return true, false, c.storeXLowF64(ins.Args[1].Reg, "%"+converted)
-
-	case "CVTSD2SS":
-		if len(ins.Args) != 2 || ins.Args[1].Kind != OpReg {
-			return true, false, fmt.Errorf("amd64 CVTSD2SS expects src, Xdst: %q", ins.Raw)
-		}
-		if _, ok := amd64ParseXReg(ins.Args[1].Reg); !ok {
-			return false, false, nil
-		}
-		src, err := c.evalF64(ins.Args[0])
-		if err != nil {
-			return true, false, err
-		}
-		converted := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = fptrunc double %s to float\n", converted, src)
-		return true, false, c.storeXLowF32(ins.Args[1].Reg, "%"+converted)
+	case "CVTSS2SD", "CVTSD2SS":
+		return c.lowerScalarPrecisionConvert(op, ins)
 
 	}
 	return false, false, nil
@@ -811,159 +784,6 @@ func (c *amd64Ctx) emitMoveHalf(form x86MoveHalfForm, ins Instr) error {
 		return c.storePackedMoveOperand(ins.Args[form.destination], 16, "%"+bytes)
 	}
 	return c.storeLegacyXViews(ins.Args[form.destination].Reg, "%"+bytes)
-}
-
-func (c *amd64Ctx) lowerVEXScalarFloatConvert(op Op, ins Instr) (bool, bool, error) {
-	rawOp := strings.ToUpper(string(op))
-	parts := strings.Split(rawOp, ".")
-	baseOp := parts[0]
-	rounding := ""
-	sae, zeroing := false, false
-	for _, suffix := range parts[1:] {
-		switch suffix {
-		case "Z":
-			if zeroing {
-				return true, false, fmt.Errorf("%s %s repeats .Z: %q", c.goarch, baseOp, ins.Raw)
-			}
-			zeroing = true
-		case "SAE":
-			if baseOp != "VCVTSS2SD" || sae || rounding != "" {
-				return true, false, fmt.Errorf("%s %s suffix .%s is absent from its Go 1.27 EVEX form: %q", c.goarch, baseOp, suffix, ins.Raw)
-			}
-			sae = true
-		case "RN_SAE", "RD_SAE", "RU_SAE", "RZ_SAE":
-			if baseOp != "VCVTSD2SS" || sae || rounding != "" {
-				return true, false, fmt.Errorf("%s %s suffix .%s is absent from its Go 1.27 EVEX form: %q", c.goarch, baseOp, suffix, ins.Raw)
-			}
-			rounding = suffix
-		default:
-			return true, false, fmt.Errorf("%s %s has unsupported suffix .%s: %q", c.goarch, baseOp, suffix, ins.Raw)
-		}
-	}
-	if baseOp != "VCVTSS2SD" && baseOp != "VCVTSD2SS" {
-		return false, false, nil
-	}
-	if len(ins.Args) != 3 && len(ins.Args) != 4 {
-		return true, false, fmt.Errorf("%s %s expects src, upper Xsrc, [K mask,] Xdst: %q", c.goarch, baseOp, ins.Raw)
-	}
-	masked := len(ins.Args) == 4
-	if c.goarch == "386" && masked {
-		return true, false, fmt.Errorf("386 %s mask forms exceed the Go assembler frontend's operand limit: %q", baseOp, ins.Raw)
-	}
-	if zeroing && !masked {
-		return true, false, fmt.Errorf("%s %s zeroing requires K1-K7: %q", c.goarch, baseOp, ins.Raw)
-	}
-	if masked && !amd64NonzeroKOperand(ins.Args[2]) {
-		return true, false, fmt.Errorf("%s %s masked form expects K1-K7: %q", c.goarch, baseOp, ins.Raw)
-	}
-	destination := ins.Args[len(ins.Args)-1]
-	if !c.isGoEVEXVectorRegister(ins.Args[1], 16) {
-		return true, false, fmt.Errorf("%s %s upper source must be a Go 1.27 X register: %q", c.goarch, baseOp, ins.Raw)
-	}
-	if !c.isGoEVEXVectorRegister(destination, 16) {
-		return true, false, fmt.Errorf("%s %s destination must be a Go 1.27 X register: %q", c.goarch, baseOp, ins.Raw)
-	}
-	if ins.Args[0].Kind == OpReg {
-		if !c.isGoEVEXVectorRegister(ins.Args[0], 16) {
-			return true, false, fmt.Errorf("%s %s register source must be a Go 1.27 X register: %q", c.goarch, baseOp, ins.Raw)
-		}
-	} else if !isAMD64MemoryOperand(ins.Args[0]) {
-		return true, false, fmt.Errorf("%s %s source must be an X register or memory operand: %q", c.goarch, baseOp, ins.Raw)
-	}
-	if (sae || rounding != "") && ins.Args[0].Kind != OpReg {
-		return true, false, fmt.Errorf("%s %s embedded rounding/SAE requires a register source: %q", c.goarch, baseOp, ins.Raw)
-	}
-	var converted string
-	var err error
-	if baseOp == "VCVTSS2SD" {
-		src, e := c.evalF32(ins.Args[0])
-		if e != nil {
-			return true, false, e
-		}
-		converted = c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = fpext float %s to double\n", converted, src)
-	} else {
-		src, e := c.evalF64(ins.Args[0])
-		if e != nil {
-			return true, false, e
-		}
-		converted = c.emitRoundedF64ToF32(src, rounding)
-	}
-	upperBytes, err := c.loadX(ins.Args[1].Reg)
-	if err != nil {
-		return true, false, err
-	}
-	mask := ""
-	if masked {
-		mask, err = c.loadK(ins.Args[2].Reg)
-		if err != nil {
-			return true, false, err
-		}
-	}
-	if baseOp == "VCVTSS2SD" {
-		upperWords := c.bitcastVectorBytesToIntegerLanes(16, 2, 64, upperBytes)
-		lowBits := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = bitcast double %%%s to i64\n", lowBits, converted)
-		return true, false, c.storeVectorScalarRegister(destination.Reg, 64, "%"+lowBits, upperWords, mask, zeroing)
-	}
-
-	upperWords := c.bitcastVectorBytesToIntegerLanes(16, 4, 32, upperBytes)
-	lowBits := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = bitcast float %%%s to i32\n", lowBits, converted)
-	return true, false, c.storeVectorScalarRegister(destination.Reg, 32, "%"+lowBits, upperWords, mask, zeroing)
-}
-
-// emitRoundedF64ToF32 implements EVEX embedded rounding independently of the
-// host floating-point environment. LLVM's scalar constrained fptrunc may lower
-// to the ambient MXCSR mode on targets without AVX-512, so compute the nearest
-// result first and step one IEEE-754 float toward the requested direction only
-// when extending it back to double proves that adjustment is necessary.
-func (c *amd64Ctx) emitRoundedF64ToF32(source, rounding string) string {
-	nearest := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = fptrunc double %s to float\n", nearest, source)
-	if rounding == "" || rounding == "RN_SAE" {
-		return nearest
-	}
-	expanded := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = fpext float %%%s to double\n", expanded, nearest)
-	bits := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = bitcast float %%%s to i32\n", bits, nearest)
-	negativeBits := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = icmp slt i32 %%%s, 0\n", negativeBits, bits)
-	incremented := c.newTmp()
-	decremented := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = add i32 %%%s, 1\n", incremented, bits)
-	fmt.Fprintf(c.b, "  %%%s = sub i32 %%%s, 1\n", decremented, bits)
-	nextUpBits := c.newTmp()
-	nextDownBits := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = select i1 %%%s, i32 %%%s, i32 %%%s\n", nextUpBits, negativeBits, decremented, incremented)
-	fmt.Fprintf(c.b, "  %%%s = select i1 %%%s, i32 %%%s, i32 %%%s\n", nextDownBits, negativeBits, incremented, decremented)
-	nextUp := c.newTmp()
-	nextDown := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = bitcast i32 %%%s to float\n", nextUp, nextUpBits)
-	fmt.Fprintf(c.b, "  %%%s = bitcast i32 %%%s to float\n", nextDown, nextDownBits)
-	needsUp := c.newTmp()
-	needsDown := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = fcmp olt double %%%s, %s\n", needsUp, expanded, source)
-	fmt.Fprintf(c.b, "  %%%s = fcmp ogt double %%%s, %s\n", needsDown, expanded, source)
-	upResult := c.newTmp()
-	downResult := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = select i1 %%%s, float %%%s, float %%%s\n", upResult, needsUp, nextUp, nearest)
-	fmt.Fprintf(c.b, "  %%%s = select i1 %%%s, float %%%s, float %%%s\n", downResult, needsDown, nextDown, nearest)
-	switch rounding {
-	case "RD_SAE":
-		return downResult
-	case "RU_SAE":
-		return upResult
-	case "RZ_SAE":
-		negativeSource := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = fcmp olt double %s, 0.000000e+00\n", negativeSource, source)
-		result := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = select i1 %%%s, float %%%s, float %%%s\n", result, negativeSource, upResult, downResult)
-		return result
-	default:
-		return nearest
-	}
 }
 
 func (c *amd64Ctx) evalF32(op Operand) (string, error) {

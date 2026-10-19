@@ -431,6 +431,7 @@ func decodeX86RawDirectives(fn Func, goarch string) (Func, error) {
 				ternaryLogic:       x86TernaryLogicRawIdentity(decoded[index], goarch),
 				legacyFloatCompare: x86LegacyFloatCompareRawIdentity(decoded[index], goarch),
 				floatMinMax:        x86FloatMinMaxRawIdentity(decoded[index], goarch),
+				scalarPrecision:    x86ScalarPrecisionRawIdentity(decoded[index], goarch),
 			}
 		}
 		normalized = append(normalized, decoded...)
@@ -4817,7 +4818,10 @@ encoding:
 				return Instr{}, 0, true, decodeErr
 			}
 			destination := Operand{Kind: OpReg, Reg: Reg(fmt.Sprintf("X%d", destinationNumber))}
-			return Instr{Op: op, Args: []Operand{source, destination}, Raw: fmt.Sprintf("%s %s, %s", op, source.String(), destination.String())}, modRMIndex + consumed, true, nil
+			return Instr{
+				Op: op, Args: []Operand{source, destination}, x86Encoded: true,
+				Raw: fmt.Sprintf("%s %s, %s", op, source.String(), destination.String()),
+			}, modRMIndex + consumed, true, nil
 		}
 	}
 
@@ -4875,7 +4879,10 @@ encoding:
 		}
 		second := Operand{Kind: OpReg, Reg: Reg(fmt.Sprintf("X%d", secondNumber))}
 		destination := Operand{Kind: OpReg, Reg: Reg(fmt.Sprintf("X%d", destinationNumber))}
-		return Instr{Op: op, Args: []Operand{first, second, destination}, Raw: fmt.Sprintf("%s %s, %s, %s", op, first.String(), second.String(), destination.String())}, modRMIndex + consumed, true, nil
+		return Instr{
+			Op: op, Args: []Operand{first, second, destination}, x86Encoded: true,
+			Raw: fmt.Sprintf("%s %s, %s, %s", op, first.String(), second.String(), destination.String()),
+		}, modRMIndex + consumed, true, nil
 	}
 
 	if len(code) < i+6 || code[i] != 0x62 || code[i+1]&0x0f != 1 || code[i+4] != 0x5a {
@@ -4962,7 +4969,10 @@ encoding:
 	for index := range args {
 		rawArgs[index] = args[index].String()
 	}
-	return Instr{Op: op, Args: args, Raw: fmt.Sprintf("%s %s", op, strings.Join(rawArgs, ", "))}, modRMIndex + consumed, true, nil
+	return Instr{
+		Op: op, Args: args, x86Encoded: true, x86ScalarPrecisionEVEX: true,
+		Raw: fmt.Sprintf("%s %s", op, strings.Join(rawArgs, ", ")),
+	}, modRMIndex + consumed, true, nil
 }
 
 // decodedX86DuplicateMoveInstruction recognizes every Go 1.27 yxm and
