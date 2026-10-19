@@ -180,8 +180,8 @@ func x86TypedFPResultNeedsProof(fn Func, sig FuncSig, arch string) bool {
 			return true // Mask inputs/results cannot borrow zeroed implementation slots, even for Void.
 		}
 		if form, known, err := x86PackedCompactProperties(ins.Op, ins, arch); known && err == nil &&
-			!form.undefinedOpcode() && x86ResultNamedPredicateInstruction(ins) {
-			return true // Dead named compact/expand inputs remain obligations even for Void.
+			!form.undefinedOpcode() && (x86ResultNamedPredicateInstruction(ins) || x86RawCompactSource(ins, arch)) {
+			return true // Named and exact raw compact/expand inputs remain obligations even for Void.
 		}
 		if _, _, _, known := x86StaticAddressValueMove(ins, arch); known && !opaqueAddressResult {
 			return true // The address source cannot hide an unwritten result.

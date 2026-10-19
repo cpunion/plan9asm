@@ -110,8 +110,10 @@ func TestDecodeX86RawExpandRejectsInvalidForms(t *testing.T) {
 			t.Fatalf("invalid encoding %x returned ok=%v err=%v", code, ok, err)
 		}
 	}
-	if _, _, ok, err := decodedX86PackedExpandInstruction(encodeX86RawExpand(0x88, 0, 2, 1, false, false), 32); !ok || err == nil {
-		t.Fatalf("accepted 386 masked expand: ok=%v err=%v", ok, err)
+	badMode32 := encodeX86RawExpand(0x88, 0, 2, 1, false, false)
+	badMode32[1] &^= 0x80 // The destination field has no physical mode32 register.
+	if _, _, ok, err := decodedX86PackedExpandInstruction(badMode32, 32); !ok || err == nil {
+		t.Fatalf("accepted unbound mode32 destination bank: ok=%v err=%v", ok, err)
 	}
 }
 
@@ -147,17 +149,10 @@ func TestTranslateX86RawExpandLLVM22Objects(t *testing.T) {
 			}
 			source.WriteString("\tRET\n")
 			requireX86GoAssemblerResult(t, target.goarch, source.String(), true)
-			file, err := Parse(ArchAMD64, source.String())
-			if err != nil {
-				t.Fatal(err)
-			}
-			ir, err := Translate(file, Options{
-				Goarch: target.goarch, TargetTriple: target.triple,
-				Sigs: map[string]FuncSig{"rawExpand": {Name: "rawExpand", Ret: Void}},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			// These original bytes do not establish numerical/native inputs.
+			// Preserve Go, public Context and emitter objects independently
+			// from the complete initialized raw public-object counterparts.
+			ir := x86UnboundVoidRawScalarFormatObject(t, source.String(), target.goarch, target.triple)
 			compileLLVMToObject(t, llc, target.triple, "raw-expand.ll", "raw-expand.o", ir)
 		})
 	}

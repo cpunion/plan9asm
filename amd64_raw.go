@@ -9191,9 +9191,6 @@ evex:
 	if zeroing && maskNumber == 0 {
 		return Instr{}, 0, true, fmt.Errorf("EVEX zeroing requires a nonzero mask")
 	}
-	if mode == 32 && maskNumber != 0 {
-		return Instr{}, 0, true, fmt.Errorf("386 packed compact mask form exceeds the Go assembler operand limit")
-	}
 	width64 := p1&0x80 != 0
 	op := Op("")
 	laneBytes := 0
@@ -9241,10 +9238,10 @@ evex:
 	bExt := int(^p0>>5) & 1
 	modRMIndex := i + 5
 	modRM := code[modRMIndex]
-	if mode == 32 && vectorBits == 2 &&
+	if mode == 32 &&
 		(int(modRM>>3&7)+rExt*8+rHighExt*16 >= 8 ||
 			modRM>>6 == 3 && int(modRM&7)+bExt*8+xExt*16 >= 8) {
-		return Instr{}, 0, true, fmt.Errorf("386 Z register exceeds the Go assembler frontend's register class")
+		return Instr{}, 0, true, fmt.Errorf("extended vector register has no physical 32-bit binding")
 	}
 	regNumber := int(modRM>>3&7) + rExt*8 + rHighExt*16
 	reg := Operand{Kind: OpReg, Reg: Reg(fmt.Sprintf("%s%d", vectorPrefix, regNumber))}
