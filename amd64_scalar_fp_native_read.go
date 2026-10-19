@@ -87,6 +87,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 	}
 	boundRawClear := false
 	for _, ins := range fn.Instrs {
+		if x86RawVectorZeroSource(ins, arch) {
+			continue // Exact implicit SIMD writes preserve independent native input roles.
+		}
 		if x86RawBMI2ShiftSource(ins, arch) {
 			continue // Exact shifts/rotates retain their complete count/data obligations.
 		}
@@ -162,6 +165,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		}
 		if accepted, known := x86ResultNumericalReadStep(ins, state, owned, resultOffset, arch); known {
 			return accepted // A checked mutable SB source keeps its own lifetime and byte effects.
+		}
+		if accepted, known := x86LoweredVectorZeroResultStep(ins, state, owned, resultOffset, arch); known {
+			return accepted
 		}
 		if accepted, known := x86LoweredBMI2ShiftResultStep(ins, state, owned, resultOffset, arch); known {
 			return accepted
