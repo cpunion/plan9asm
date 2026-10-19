@@ -74,12 +74,22 @@ func TestX86AccumulatorSignExtendCompleteEffectsAndGoRows(t *testing.T) {
 }
 
 func TestX86AccumulatorSignExtendVoidNeedsSource(t *testing.T) {
+	x86AccumulatorSignExtendVoidInputs(t, false)
+}
+
+func TestX86AccumulatorSignExtendRawVoidNeedsSource(t *testing.T) {
+	x86AccumulatorSignExtendVoidInputs(t, true)
+}
+
+func x86AccumulatorSignExtendVoidInputs(t *testing.T, raw bool) {
+	t.Helper()
 	for _, row := range x86AccumulatorSignExtendOracle {
 		for _, target := range x86RawReturnTargets {
 			if target.arch == "386" && row.write == 8 {
 				continue // Actual Go mode rejection is checked separately above.
 			}
-			source := "TEXT ·Value(SB),4,$0-0\n" + row.op + "\nRET\n"
+			instruction := x86AccumulatorSignExtendSource(t, row.op, target.arch, raw)
+			source := "TEXT ·Value(SB),4,$0-0\n" + instruction + "\nRET\n"
 			for _, api := range []string{"text", "module", "Go"} {
 				ir, err := x86ScalarFPBitViewAPI(t, source, "func Value()", target.arch, target.triple, api)
 				if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
@@ -109,6 +119,24 @@ func TestX86AccumulatorSignExtendDispatchRejectsBeforeIR(t *testing.T) {
 }
 
 func TestX86AccumulatorSignExtendInitializedFiveTargetObjects(t *testing.T) {
+	x86AccumulatorSignExtendTargetObjects(t, false)
+}
+
+func TestX86AccumulatorSignExtendRawInitializedFiveTargetObjects(t *testing.T) {
+	x86AccumulatorSignExtendTargetObjects(t, true)
+}
+
+func x86AccumulatorSignExtendSource(t *testing.T, op, arch string, raw bool) string {
+	t.Helper()
+	if !raw {
+		return op
+	}
+	code := x86OrderingHintGoBytes(t, arch, "TEXT original(SB),4,$0-0\n"+op+"\nRET\n")
+	return x86DwordProductDirectives(code[:len(code)-1])
+}
+
+func x86AccumulatorSignExtendTargetObjects(t *testing.T, raw bool) {
+	t.Helper()
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM22 llc required")
@@ -126,7 +154,7 @@ func TestX86AccumulatorSignExtendInitializedFiveTargetObjects(t *testing.T) {
 				}
 				fmt.Fprintf(&declarations, "func Value%s() %s\n", row.op, typ)
 				fmt.Fprintf(&source, "TEXT ·Value%s(SB),4,$0-%d\n%s $-1,AX\n%s $7,DX\n%s\n%s %s,ret+0(FP)\nRET\n",
-					row.op, word, move, move, row.op, move, row.destination)
+					row.op, word, move, move, x86AccumulatorSignExtendSource(t, row.op, target.arch, raw), move, row.destination)
 			}
 			x86LEAActualTargetGoObject(t, target.arch, target.triple, source.String())
 			for _, api := range []string{"text", "module", "Go"} {
