@@ -31,6 +31,7 @@ type x86SourceRawInstruction struct {
 	// Conversion-only physical identity, captured explicitly by the decoder.
 	// A zero value is absent, not an SSE/VEX or non-MMX assertion.
 	packedConversion x86RawPackedConversionIdentity
+	packedReduction  x86RawPackedReductionIdentity
 }
 
 type x86SourceStackAddress struct {

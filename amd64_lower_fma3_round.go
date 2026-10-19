@@ -93,9 +93,6 @@ func emitAMD64FMA3RoundingHelpers(b *strings.Builder, file *File, goarch string)
 			if form, known, err := x86FloatMulDivProperties(ins, goarch); known && err == nil && form.rounding != "" {
 				mulDivNeeded[form.bits] = true
 			}
-			if form, known, err := x86HorizontalFloatProperties(ins, goarch); known && err == nil {
-				addSubSpecial[form.spec.laneBits] = true
-			}
 			if form, known, err := x86FloatAddSubProperties(ins, goarch); known && err == nil {
 				addSubSpecial[form.spec.bits] = true
 				if form.rounding != "" {
