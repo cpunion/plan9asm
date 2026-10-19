@@ -49,11 +49,20 @@ func amd64DirectTailDeclaredIR(t *testing.T, declarations, source, api string) (
 		t.Fatal(err)
 	}
 	resolve := resolveSymFunc(pkg.PkgPath)
-	sigs, _, err := sigsForAsmFile(pkg, file, resolve, "amd64")
+	options := plan9asm.Options{Goarch: "amd64", TargetTriple: "x86_64-unknown-linux-gnu", ResolveSym: resolve}
+	// A private tail node has no independent callable frame. Start this
+	// complete-source fixture from its actual typed roots and terminals; the
+	// translator still proves every helper edge, input and return obligation.
+	sigs, _, needed, err := x86SDKDirectTailDeclarationInventory(plan9asm.GoPackage{
+		Path: pkg.PkgPath, Types: pkg.Types, Syntax: pkg.Syntax,
+	}, file, options)
+	if err == nil && !needed {
+		sigs, _, err = sigsForAsmFile(pkg, file, resolve, "amd64")
+	}
 	if err != nil {
 		return "", err
 	}
-	options := plan9asm.Options{Goarch: "amd64", TargetTriple: "x86_64-unknown-linux-gnu", ResolveSym: resolve, Sigs: sigs}
+	options.Sigs = sigs
 	defer func() {
 		if !reflect.DeepEqual(file, before) {
 			t.Error("translation changed original TEXT/instruction/operand/Raw identity")

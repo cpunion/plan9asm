@@ -43,8 +43,9 @@ func x86SDKDirectTailDeclarationInventory(pkg plan9asm.GoPackage, file *plan9asm
 		if strings.Contains(request.original, "<>") {
 			continue // A private graph node has no independent callable ABI.
 		}
-		actual, size, found, err := tryDeclSig(pkg.Types.Scope(), request.original, symbol,
-			linknameRemoteToLocal(pkg.Syntax), options.Goarch, types.SizesFor("gc", options.Goarch))
+		actual, size, found, err := tryDeclSig(pkg.Types.Scope(), stripABISuffix(request.original), symbol,
+			linknameRemoteToLocal(pkg.Syntax), options.Goarch, types.SizesFor("gc", options.Goarch),
+			strings.HasSuffix(request.original, "<ABIInternal>"))
 		if err != nil || !found {
 			return nil, nil, true, fmt.Errorf("%w: SDK tail inventory lacks actual declaration %s: %v", plan9asm.ErrProbeNeedsContext, symbol, err)
 		}
