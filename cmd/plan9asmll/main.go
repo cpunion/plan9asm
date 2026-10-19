@@ -1765,6 +1765,15 @@ func validateInferredX86FrameExtent(fn plan9asm.Func, sig plan9asm.FuncSig, goar
 	if goarch != "386" && goarch != "amd64" || len(sig.Frame.Params)+len(sig.Frame.Results) == 0 {
 		return nil
 	}
+	readsFrame := false
+	for _, ins := range fn.Instrs {
+		for _, operand := range ins.Args {
+			readsFrame = readsFrame || operand.Kind == plan9asm.OpFP || operand.Kind == plan9asm.OpFPAddr
+		}
+	}
+	if !readsFrame {
+		return nil // Pure tail forwarders borrow a separately proved ABI, not inferred source slots.
+	}
 	word := int64(8)
 	if goarch == "386" {
 		word = 4
