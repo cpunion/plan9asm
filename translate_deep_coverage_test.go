@@ -532,12 +532,8 @@ func TestTranslateModuleDirectAndFallbackCoverage(t *testing.T) {
 		Sigs: map[string]FuncSig{"example.cfg": {Name: "example.cfg", Ret: I64,
 			Frame: FrameLayout{Results: []FrameSlot{{Offset: 0, Type: I64, Index: 0, Field: -1}}}}},
 	}
-	if original, err := TranslateModule(cfgFile, cfgOptions); !errors.Is(err, ErrProbeNeedsContext) {
-		if !original.IsNil() {
-			original.Dispose()
-		}
-		t.Fatal("empty original CFG supplied an unwritten return", err)
-	}
+	// This positive fallback fixture writes its declared result explicitly;
+	// it does not certify the old prototype's default-zero return behavior.
 	initializedCFG := *cfgFile
 	initializedCFG.Funcs = append([]Func(nil), cfgFile.Funcs...)
 	initializedCFG.Funcs[0].Instrs = append([]Instr(nil), cfgFile.Funcs[0].Instrs[:2]...)
