@@ -3,6 +3,7 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const test = require('node:test');
+const {requireCompleteWindowsNeeds} = require('./workflow-needs.cjs');
 const {auditProductCMOV, roots, children} = require('./audit-product-cmov.cjs');
 
 test('complete numerical regression programs execute before the exhaustive Windows modules', () => {
@@ -26,7 +27,7 @@ test('complete numerical regression programs execute before the exhaustive Windo
   assert.ok(block.includes('go test . -run "^($roots)$" -count=1 -timeout=5m -json'));
   assert.ok(block.includes('node .github/scripts/audit-product-cmov.cjs "$directory"'));
   assert.doesNotMatch(block, /continue-on-error|\|\| true/);
-  assert.match(workflow, /needs: \[ownership, native-x86-oracles, sdk-priority,/);
+  requireCompleteWindowsNeeds(workflow);
 });
 
 test('product and CMOV execution retains every root and optimization child without skips', () => {

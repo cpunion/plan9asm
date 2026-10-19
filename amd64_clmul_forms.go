@@ -28,7 +28,7 @@ func x86CLMULProperties(op Op, ins Instr, arch string) (x86CLMULForm, bool, erro
 	}
 	if arch != "amd64" && arch != "386" || dotted ||
 		ins.Op != "" && !strings.EqualFold(string(ins.Op), string(op)) ||
-		len(ins.Args) != f.destination+1 || arch == "386" && !f.legacy {
+		len(ins.Args) != f.destination+1 || arch == "386" && !f.legacy && !ins.x86Encoded {
 		return fail()
 	}
 	constant, valid := x86ImmediateShuffleConstant(ins.Args[0], arch, ins.x86Encoded)
@@ -45,9 +45,9 @@ func x86CLMULProperties(op Op, ins Instr, arch string) (x86CLMULForm, bool, erro
 		limit := 32
 		if f.legacy {
 			limit = 16
-			if arch == "386" {
-				limit = 8
-			}
+		}
+		if arch == "386" {
+			limit = 8 // A physical raw binding is not a high-bank or named-frontend permission.
 		}
 		return operand.Kind == OpReg && valid && index < limit
 	}
@@ -98,9 +98,17 @@ func x86ResultCLMULStep(ins Instr, state *x86ResultState, owned []bool, arch str
 	if err != nil {
 		return false, true
 	}
+	return x86ResultCLMULTransfer(ins, f, state, owned, arch, false)
+}
+
+// Keep the complete captured form across a source-local provenance projection.
+// Memory always consumes the original full tuple; numerical availability still
+// depends only on the two selected qwords of each independent 128-bit lane.
+func x86ResultCLMULTransfer(ins Instr, f x86CLMULForm, state *x86ResultState,
+	owned []bool, arch string, nativeRead bool) (bool, bool) {
 	source := x86CallerVectorByteMask(int64(f.byteWidth))
 	if f.memory >= 0 {
-		if !x86ResultRead(ins.Args[f.memory], int64(f.byteWidth), state, owned, arch) {
+		if !x86ResultReadWithNativeContinuation(ins, ins.Args[f.memory], int64(f.byteWidth), state, owned, arch, nativeRead) {
 			return false, true
 		}
 	} else {

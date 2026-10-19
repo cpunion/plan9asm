@@ -6,6 +6,7 @@ const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
 const auditor = require('./audit-packed-conversion-native.cjs');
+const {jobBody, jobNeeds, requireJobNeeds} = require('./workflow-needs.cjs');
 
 function job(source, name) {
   const begin = source.indexOf('\n  ' + name + ':\n');
@@ -15,21 +16,21 @@ function job(source, name) {
 }
 
 function requireCompleteNativeBarrier(source) {
-  const complete = job(source, 'complete-windows');
-  const dependencies = complete.match(/^    needs: \[([^\r\n]+)\]$/m);
-  assert.ok(dependencies, 'missing complete native dependency barrier');
-  assert.equal(dependencies[1].split(', ').filter(name =>
-    name === 'packed-conversion-native-complete').length, 1,
-  'full modules must wait for the complete native conversion union');
+  requireJobNeeds(source, 'complete-windows', ['packed-conversion-native-complete']);
 }
 
 test('full modules cannot bypass the complete native conversion barrier', () => {
   const workflow = fs.readFileSync('.github/workflows/pr40-owned-process-probe.yml', 'utf8');
   requireCompleteNativeBarrier(workflow);
-  for (const replacement of ['', ', packed-conversion-native-priority',
-    ', packed-conversion-native-complete, packed-conversion-native-complete']) {
-    assert.throws(() => requireCompleteNativeBarrier(workflow.replace(
-      ', packed-conversion-native-complete]', replacement + ']')));
+  const complete = jobBody(workflow, 'complete-windows');
+  const others = jobNeeds(workflow, 'complete-windows').filter(name =>
+    name !== 'packed-conversion-native-complete');
+  for (const replacement of [[], ['packed-conversion-native-priority'],
+    ['packed-conversion-native-complete', 'packed-conversion-native-complete']]) {
+    const changed = workflow.replace(complete, complete.replace(/^    needs:.*$/m,
+      '    needs: [' + [...others, ...replacement].join(', ') + ']'));
+    assert.notEqual(changed, workflow, 'each negative must edit its actual dependency');
+    assert.throws(() => requireCompleteNativeBarrier(changed));
   }
 });
 

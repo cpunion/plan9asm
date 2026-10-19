@@ -42,7 +42,8 @@ func x86ResultPreservesPrivateStorage(ins Instr, arch string) bool {
 		x86EnqueuePreservesStorage(ins) || x86RawPackedConversionSource(ins, arch) || x86RawPackedReductionSource(ins, arch) || x86RawDwordProductResultSource(ins, arch) ||
 		x86RawCMOVSource(ins, arch) || x86RawAESSource(ins, arch) || x86RawVectorTestSource(ins, arch) ||
 		x86RawIFMASource(ins, arch) || x86RawQwordLookupSource(ins, arch) ||
-		x86RawPackedIntegerCompareSource(ins, arch) || x86RawImmediatePackedCompareSource(ins, arch))
+		x86RawPackedIntegerCompareSource(ins, arch) || x86RawImmediatePackedCompareSource(ins, arch) ||
+		x86RawBroadcastSource(ins, arch) || x86RawCLMULSource(ins, arch))
 }
 
 func x86ResultValueStackContinuation(ins Instr, state *x86ResultState, arch string) bool {

@@ -137,6 +137,12 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		if x86RawPackedIntegerCompareSource(ins, arch) {
 			continue // Exact legacy/VEX/EVEX data retains every input, mask and paired native access obligation.
 		}
+		if x86RawBroadcastSource(ins, arch) {
+			continue // Exact scalar/block/K-data source retains every numerical and native E6 input obligation.
+		}
+		if x86RawCLMULSource(ins, arch) {
+			continue // Exact selector/data identity retains its whole native tuple and independent selected qwords.
+		}
 		if x86RawImmediatePackedCompareSource(ins, arch) {
 			continue // Exact immediate/data identity supplies no entry or missing numerical/memory input.
 		}
@@ -246,6 +252,12 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 				state.nativeLEAAddressBits = x86NativeLEAAddressBits{}
 			}
 		}()
+		if accepted, known := x86ResultSDKLiteralStep(ins, state, owned, resultOffset, arch); known {
+			return accepted // Consume the exact bound source before an overlapping native-memory family.
+		}
+		if accepted, known := x86ResultNumericalReadStep(ins, state, owned, resultOffset, arch); known {
+			return accepted // A checked mutable SB source keeps its own lifetime and byte effects.
+		}
 		if accepted, known := x86ResultIntegerMinMaxStep(ins, state, owned, arch, true); known {
 			return accepted // The paired E4 reader retains active exact-width volatile faults.
 		}
@@ -257,12 +269,6 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		}
 		if accepted, known := x86ResultMaskBlendStep(ins, state, owned, arch, true); known {
 			return accepted // The shared E4 reader retains exact volatile active-lane accesses.
-		}
-		if accepted, known := x86ResultSDKLiteralStep(ins, state, owned, resultOffset, arch); known {
-			return accepted // Consume the exact bound source before an overlapping native-memory family.
-		}
-		if accepted, known := x86ResultNumericalReadStep(ins, state, owned, resultOffset, arch); known {
-			return accepted // A checked mutable SB source keeps its own lifetime and byte effects.
 		}
 		if accepted, known := x86ResultNativeLEAAddressBitsStep(ins, state, owned, arch, addressBitStores); known {
 			keepAddressBits = accepted
@@ -508,6 +514,12 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		}
 		if accepted, known := x86ResultVectorCompareStepWithRead(ins, state, owned, arch, true); known {
 			return accepted // Complete vector/K-result compares retain their exact native source accesses.
+		}
+		if accepted, known := x86LoweredRawBroadcastStep(ins, state, owned, arch); known {
+			return accepted // Exact raw scalar/block/K-data forms share only their paired typed E6 effects.
+		}
+		if accepted, known := x86LoweredCLMULStep(ins, state, owned, arch); known {
+			return accepted // Original legacy opcode or whole volatile vector tuple retains every native read.
 		}
 		if len(ins.Args) != 0 && ins.Args[0].Kind == OpMem && ins.Args[0].Mem.Sym == "" {
 			if accepted, known := x86ResultBroadcastStepWithRead(ins, state, owned, arch, true); known {

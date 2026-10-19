@@ -4,7 +4,9 @@ import "fmt"
 
 // decodedX86RawCLMULInstruction covers Go's complete PCLMULQDQ and
 // VPCLMULQDQ tables: legacy X, VEX X/Y, and EVEX X/Y/Z, each with imm8.
-// Go's vector form has no mask, broadcast, or W1 encoding.
+// The vector ISA has no mask or broadcast, but W is ignored. Go selects W0
+// and limits its named four-operand frontend to amd64; neither restriction
+// invalidates original low-bank WIG bytes in physical 32-bit mode.
 func decodedX86RawCLMULInstruction(code []byte, mode int) (Instr, int, bool, error) {
 	p, matched := decodeX86RawVectorEncoding(code)
 	if matched && p.mapNumber == 3 && p.pp == 1 && p.opcode == 0x44 {
@@ -21,10 +23,10 @@ func decodedX86RawVectorCLMULInstructionWithMemory(code []byte, mode int, p x86R
 	fail := func(message string) (Instr, int, bool, error) {
 		return Instr{}, 0, true, fmt.Errorf("VPCLMULQDQ: %s", message)
 	}
-	if mode != 64 {
-		return fail("Go's four-operand vector form requires amd64")
+	if mode != 32 && mode != 64 {
+		return fail("unsupported x86 mode")
 	}
-	if p.addressOverride || p.w || p.vectorLength > 2 ||
+	if p.addressOverride || p.vectorLength > 2 ||
 		p.evex && (!p.fixed || p.mask != 0 || p.zero || p.broadcast) {
 		return fail("invalid prefix, mask, broadcast or vector length")
 	}
@@ -32,6 +34,9 @@ func decodedX86RawVectorCLMULInstructionWithMemory(code []byte, mode int, p x86R
 		return fail("missing ModRM byte")
 	}
 	modRM := code[p.modRM]
+	if mode == 32 && (p.r != 0 || p.upper >= 8 || p.b != 0 || p.x != 0) {
+		return fail("extended register is unavailable in physical 32-bit mode")
+	}
 	width := [...]string{"X", "Y", "Z"}[p.vectorLength]
 	var source Operand
 	var consumed int
@@ -56,9 +61,10 @@ func decodedX86RawVectorCLMULInstructionWithMemory(code []byte, mode int, p x86R
 	destination := Operand{Kind: OpReg, Reg: Reg(fmt.Sprintf("%s%d", width, int(modRM>>3&7)+p.r*8))}
 	imm := Operand{Kind: OpImm, Imm: int64(code[immIndex])}
 	return Instr{
-		Op:   "VPCLMULQDQ",
-		Args: []Operand{imm, source, second, destination},
-		Raw:  fmt.Sprintf("VPCLMULQDQ %s, %s, %s, %s", imm.String(), source.String(), second.String(), destination.String()),
+		Op:         "VPCLMULQDQ",
+		Args:       []Operand{imm, source, second, destination},
+		Raw:        fmt.Sprintf("VPCLMULQDQ %s, %s, %s, %s", imm.String(), source.String(), second.String(), destination.String()),
+		x86Encoded: true,
 	}, immIndex + 1, true, nil
 }
 
@@ -124,8 +130,9 @@ encoding:
 	destination := Operand{Kind: OpReg, Reg: Reg(fmt.Sprintf("X%d", destinationNumber))}
 	imm := Operand{Kind: OpImm, Imm: int64(code[immIndex])}
 	return Instr{
-		Op:   "PCLMULQDQ",
-		Args: []Operand{imm, source, destination},
-		Raw:  fmt.Sprintf("PCLMULQDQ %s, %s, %s", imm.String(), source.String(), destination.String()),
+		Op:         "PCLMULQDQ",
+		Args:       []Operand{imm, source, destination},
+		Raw:        fmt.Sprintf("PCLMULQDQ %s, %s, %s", imm.String(), source.String(), destination.String()),
+		x86Encoded: true,
 	}, immIndex + 1, true, nil
 }
