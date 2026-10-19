@@ -102,6 +102,9 @@ func x86LoweredTernaryGPResultStep(ins Instr, state *x86ResultState, owned []boo
 	if !known || err != nil {
 		return false, known
 	}
+	if x86ResultNamedPredicateInstruction(ins) && !x86OrdinaryNativeMemoryOperand(form.first, arch) {
+		return false, false // Ordinary named register/logical storage uses the strict transfer.
+	}
 	local := ins
 	if !x86ResultNamedPredicateInstruction(ins) {
 		if !x86RawTernaryGPSource(ins, arch) {

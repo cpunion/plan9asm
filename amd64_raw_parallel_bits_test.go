@@ -2,9 +2,6 @@ package plan9asm
 
 import (
 	"fmt"
-	"os"
-	"os/exec"
-	"path/filepath"
 	"reflect"
 	"runtime"
 	"strings"
@@ -153,16 +150,7 @@ func TestX86ParallelBitsGoRejectedForms(t *testing.T) {
 		for _, op := range []string{"PDEPL", "PDEPQ", "PEXTL", "PEXTQ"} {
 			for _, args := range []string{" AX,BX", " X0,AX,BX", " AX,X0,BX", " AX,BX,X0", " AX,(BX),CX", " AX,BX,(CX)", " $1,BX,CX", ".Z AX,BX,CX", ".BCST (AX),BX,CX"} {
 				source := "TEXT invalid(SB),4,$0-0\n" + op + args + "\nRET\n"
-				dir := t.TempDir()
-				path := filepath.Join(dir, "invalid.s")
-				if err := os.WriteFile(path, []byte(source), 0600); err != nil {
-					t.Fatal(err)
-				}
-				cmd := exec.Command("go", "tool", "asm", "-o", filepath.Join(dir, "invalid.o"), path)
-				cmd.Env = append(os.Environ(), "GOOS=linux", "GOARCH="+arch)
-				if output, err := cmd.CombinedOutput(); err == nil {
-					t.Fatalf("Go %s accepted %s%s: %s", arch, op, args, output)
-				}
+				requireX86GoAssemblerResult(t, arch, source, false)
 				file, err := Parse(ArchAMD64, source)
 				if err != nil {
 					t.Fatal(err)
@@ -213,15 +201,8 @@ func TestX86ParallelBits386IgnoresW(t *testing.T) {
 	for _, op := range []string{"PDEPQ", "PEXTQ"} {
 		source := "TEXT width386(SB),4,$0-0\n" + op + " (AX),BX,CX\nRET\n"
 		assembleX87ControlBytes(t, "386", source)
-		file, err := Parse(ArchAMD64, source)
-		if err != nil {
-			t.Fatal(err)
-		}
-		ir, err := Translate(file, Options{Goarch: "386", TargetTriple: "i386-unknown-linux-gnu", Sigs: map[string]FuncSig{"width386": {Name: "width386", Ret: Void}}})
-		if err != nil {
-			t.Fatal(err)
-		}
-		if strings.Contains(ir, "lshr i64") || !strings.Contains(ir, "lshr i32") || !strings.Contains(ir, "load i32, ptr") {
+		ir := x86UnboundVoidScalarFormatObject(t, source, "width386", "386", "i386-unknown-linux-gnu")
+		if strings.Contains(ir, "lshr i64") || !strings.Contains(ir, "lshr i32") || !strings.Contains(ir, "load volatile i32, ptr") {
 			t.Fatalf("386 %s failed to normalize width", op)
 		}
 	}
