@@ -79,7 +79,10 @@ func x86DuplicateNativeAssembly(row x86DuplicateNativeRow, arch string, original
 		source.WriteString("CLD\nRET\n")
 		return source.String()
 	}
-	fmt.Fprintf(&source, "%s\n%s DX\nCLD\nANDL $0xcd5,DX\n%s %s2,(AX)\nMOVL DX,64(AX)\nSTMXCSR 68(AX)\nRET\n",
+	// ID and unrelated FLAGS bits are intentionally unknown. Project the
+	// declared status/DF bits immediately after POP, while its precise bit
+	// witness is live, then clear DF before any whole-vector memory transport.
+	fmt.Fprintf(&source, "%s\n%s DX\nANDL $0xcd5,DX\nCLD\n%s %s2,(AX)\nMOVL DX,64(AX)\nSTMXCSR 68(AX)\nRET\n",
 		push, pop, store, wide)
 	return source.String()
 }
