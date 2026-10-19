@@ -117,6 +117,18 @@ func TestX86PackedAlignSelectedBytesAndUnknownDeadDomain(t *testing.T) {
 								if !x86ResultTransfer(ins, &state, nil, 0, "amd64") || !reflect.DeepEqual(state, want) {
 									t.Fatal("selector invented bytes, rejected a dead unknown register result or changed independent state", immediate, seed)
 								}
+								caller := x86SourceStackState{
+									vectors: map[Reg]uint64{"Z0": seed, "Z1": seed ^ 0xf037954aa19359a7, "Z2": seed ^ 0xa37b9351b4a78c67},
+									masks:   map[Reg]bool{"K1": true}, known: map[Reg]uint8{AX: 0xff},
+									callers: map[Reg]x86CallerPointerValue{DI: {argument: 0}},
+								}
+								wantCaller := x86CloneCallerState(caller)
+								wantCaller.vectors[Reg(fmt.Sprint("Z", destination))] = x86PackedAlignExpectedKnown(row.op, width, immediate,
+									first, second, old, mode == "merge", row.legacy)
+								form, known, err := x86PackedAlignProperties(ins.Op, ins, "amd64")
+								if !known || err != nil || !x86CallerPackedAlignStep(&ins, form, &caller, nil) || !reflect.DeepEqual(caller, wantCaller) {
+									t.Fatal("caller and result consumers diverged on the independent selector", immediate, seed, err)
+								}
 							}
 						}
 					})
