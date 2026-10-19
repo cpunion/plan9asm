@@ -33,7 +33,7 @@ func x86FloatMinMaxNativeEVEX(ins Instr, f x86FloatMinMaxForm) bool {
 	if f.legacy {
 		return false
 	}
-	if f.byteWidth == 64 || f.mask >= 0 || f.broadcast || f.sae {
+	if ins.x86FloatMinMaxEVEX || f.byteWidth == 64 || f.mask >= 0 || f.broadcast || f.sae {
 		return true
 	}
 	for _, operand := range ins.Args {

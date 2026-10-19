@@ -997,6 +997,9 @@ type Instr struct {
 	// Preserve physical EVEX generation even without a high bank or SAE suffix.
 	x86ScalarFlagCompareEVEX bool
 	x86SqrtEVEX              bool
+	// MIN/MAX retains low-bank, unmasked physical EVEX independently of its
+	// operand-inferred native encoding and ordinary numerical input facts.
+	x86FloatMinMaxEVEX bool
 	// Recomputed per-operand source-SP to typed ABI0 slot certificate. Keep
 	// original physical operands intact across repeated normalization.
 	x86SourceStackFP map[int]int64

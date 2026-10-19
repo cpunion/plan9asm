@@ -64,8 +64,8 @@ func x86ScalarFPResultTransfer(ins Instr, state *x86ResultState, owned []bool, r
 	if form, recognized, err := x86FloatMulDivProperties(ins, arch); recognized {
 		return err == nil && x86ScalarFPFloatBinaryTransfer(ins, form.x86FloatBinaryForm, state, owned, arch)
 	}
-	if form, recognized, err := x86FloatMinMaxProperties(ins, arch); recognized {
-		return err == nil && x86ScalarFPFloatBinaryTransfer(ins, form.x86FloatBinaryForm, state, owned, arch)
+	if accepted, known := x86ResultFloatMinMaxStep(ins, state, owned, arch, false); known {
+		return accepted
 	}
 	if accepted, known := x86MaskMoveResultStep(ins, state, owned, resultOffset, arch, false); known {
 		return accepted

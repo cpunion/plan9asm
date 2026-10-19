@@ -18,6 +18,9 @@ func (c *amd64Ctx) lowerFloatMinMax(op Op, ins Instr) (bool, bool, error) {
 	if err != nil || !known {
 		return known, false, err
 	}
+	if (ins.x86Encoded || ins.x86SourceRaw != nil) && !x86RawFloatMinMaxEncodingSource(ins, c.goarch) {
+		return true, false, fmt.Errorf("%w: MIN/MAX original physical source identity changed", ErrProbeNeedsContext)
+	}
 	if x86ScalarFloatIntegerNativeTarget(c.goarch, c.targetTriple) {
 		if f.legacy && !f.scalar && f.memory >= 0 {
 			return true, false, c.lowerLegacyPackedFloatingMemory(ins, f.x86FloatBinaryForm)

@@ -16,6 +16,11 @@ import (
 // result. In particular, this never creates a caller-memory or raw-RET token.
 func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 	fn, sig, arch := c.fpScalarSource, c.sig, c.goarch
+	if x86FloatMinMaxRawReplayRequired(fn, arch) {
+		if err := fn.x86RawReplay.validate(fn, arch); err != nil {
+			return err
+		}
+	}
 	var nativeMMX *x86NativeMMXRegion
 	named := true
 	for _, ins := range fn.Instrs {
@@ -95,7 +100,15 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 	boundRawReduction := false
 	boundRawTernary := false
 	boundRawLegacyFloatCompare := false
+	boundRawFloatMinMax := false
 	for _, ins := range fn.Instrs {
+		if x86RawFloatMinMaxSource(ins, arch) {
+			if !boundRawFloatMinMax && (fn.x86RawReplay == nil || fn.x86RawReplay.validate(fn, arch) != nil) {
+				return strictErr
+			}
+			boundRawFloatMinMax = true
+			continue // Physical generation supplies no missing inputs, memory or entry role.
+		}
 		if x86RawLegacyFloatCompareSource(ins, arch) {
 			if !boundRawLegacyFloatCompare && (fn.x86RawReplay == nil || fn.x86RawReplay.validate(fn, arch) != nil) {
 				return strictErr
@@ -453,8 +466,8 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		if form, known, err := x86FloatMulDivProperties(ins, arch); known {
 			return err == nil && x86ScalarFPFloatBinaryTransferWithRead(ins, form.x86FloatBinaryForm, state, owned, arch, true)
 		}
-		if form, known, err := x86FloatMinMaxProperties(ins, arch); known {
-			return err == nil && x86ScalarFPFloatBinaryTransferWithRead(ins, form.x86FloatBinaryForm, state, owned, arch, true)
+		if accepted, known := x86ResultFloatMinMaxStep(ins, state, owned, arch, true); known {
+			return accepted
 		}
 		if accepted, known := x86ResultPackedStringStepWithRead(ins, state, owned, arch, true); known {
 			return accepted // Paired emitter retains the full volatile m128 read.
