@@ -36,7 +36,7 @@ func x86ResultPreservesPrivateStorage(ins Instr, arch string) bool {
 	return ins.Op != OpCALL && (x86ResultNamedPredicateInstruction(ins) ||
 		x86RegisterQueryPreservesSourceState(ins) || x86WaitPackagePreservesStorage(ins) ||
 		x86PreservesNumericalSourceState(ins) || x86MaskLogicalPreservesStorage(ins) ||
-		x86EnqueuePreservesStorage(ins) || x86RawPackedConversionSource(ins, arch) || x86RawDwordProductResultSource(ins, arch) ||
+		x86EnqueuePreservesStorage(ins) || x86RawPackedConversionSource(ins, arch) || x86RawPackedReductionSource(ins, arch) || x86RawDwordProductResultSource(ins, arch) ||
 		x86RawCMOVSource(ins, arch) || x86RawAESSource(ins, arch) || x86RawVectorTestSource(ins, arch) ||
 		x86RawIFMASource(ins, arch) || x86RawQwordLookupSource(ins, arch) ||
 		x86RawPackedIntegerCompareSource(ins, arch) || x86RawImmediatePackedCompareSource(ins, arch))

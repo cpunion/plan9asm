@@ -27,31 +27,13 @@ func TestX86HorizontalFloatArithmeticPreservesTypedLaneWidth(t *testing.T) {
 				}
 				source := "TEXT f(SB),4,$0-0\n" + row + "\nRET\n"
 				requireX86GoAssemblerResult(t, "amd64", source, true)
-				file, err := Parse(ArchAMD64, source)
-				if err != nil {
-					t.Fatal(err)
-				}
-				ir, err := Translate(file, Options{
-					Goarch: "amd64", TargetTriple: "x86_64-unknown-linux-gnu",
-					Sigs: map[string]FuncSig{"f": {Name: "f", Ret: Void}},
-				})
-				if err != nil {
-					t.Fatal(err)
-				}
-				bits, element, width := 32, "float", 16
-				if strings.HasSuffix(opcode, "PD") {
-					bits, element = 64, "double"
-				}
+				ir := x86UnboundVoidScalarFormatObject(t, source, "f", "amd64", "x86_64-unknown-linux-gnu")
+				width := 16
 				if bank == "Y" {
 					width = 32
 				}
-				operation := "fadd"
-				if strings.Contains(opcode, "SUB") {
-					operation = "fsub"
-				}
-				lanes := width * 8 / bits
-				call := fmt.Sprintf("call <%d x %s> @llvm.experimental.constrained.%s.v%df%d(", lanes, element, operation, lanes, bits)
-				if strings.Count(ir, call) != 1 {
+				call := fmt.Sprintf("call <%d x float> asm sideeffect", width/4)
+				if strings.Count(ir, call) != 1 || !strings.Contains(ir, strings.ToLower(opcode)+" ") || !strings.Contains(ir, "~{fpsr}") {
 					t.Fatalf("%s lost its complete typed arithmetic carrier %q", row, call)
 				}
 			})

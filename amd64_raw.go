@@ -427,6 +427,7 @@ func decodeX86RawDirectives(fn Func, goarch string) (Func, error) {
 				addressBits:      decoded[index].x86AddressBits,
 				packedConversion: x86PackedConversionRawIdentity(decoded[index], goarch),
 				packedMove:       x86PackedMoveRawIdentity(decoded[index], goarch),
+				packedReduction:  x86PackedReductionRawIdentity(decoded[index], goarch),
 			}
 		}
 		normalized = append(normalized, decoded...)
@@ -1649,6 +1650,18 @@ func decodeX86RawDirectiveGroupWithOpaque(
 				instruction.Raw = fmt.Sprintf("%s /* decoded from %s */", instruction.Raw, rawGroup)
 				decodedByOffset[offset] = x86RawDecodedInstruction{length: length, instrs: []Instr{instruction}}
 				recordLiteral(offset, literal)
+				offset += length
+				continue
+			}
+			if instruction, length, ok, err := decodedX86VEXPackedDotInstruction(code[offset:], mode); ok {
+				if err != nil {
+					return nil, fmt.Errorf("decode raw x86 VEX packed dot at instruction %d byte %d: %w: %q", start, offset, err, rawGroup)
+				}
+				if err := markInstruction(offset, length); err != nil {
+					return nil, err
+				}
+				instruction.Raw = fmt.Sprintf("%s /* decoded from %s */", instruction.Raw, rawGroup)
+				decodedByOffset[offset] = x86RawDecodedInstruction{length: length, instrs: []Instr{instruction}}
 				offset += length
 				continue
 			}

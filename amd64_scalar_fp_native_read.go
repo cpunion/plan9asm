@@ -91,6 +91,7 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 	boundRawClear := false
 	boundRawConversion := false
 	boundRawMinMax := false
+	boundRawReduction := false
 	for _, ins := range fn.Instrs {
 		if x86RawMoveHalfSource(ins, arch) {
 			continue // Exact sealed m64 moves grant no missing input, storage or raw-entry fact.
@@ -104,6 +105,13 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 			}
 			boundRawMinMax = true
 			continue // Complete replay and typed shape supply no missing inputs or raw entry.
+		}
+		if x86RawPackedReductionSource(ins, arch) {
+			if !boundRawReduction && (fn.x86RawReplay == nil || fn.x86RawReplay.validate(fn, arch) != nil) {
+				return strictErr
+			}
+			boundRawReduction = true
+			continue // Exact selectors, physical mode and native effects remain independent obligations.
 		}
 		if x86RawCompactSource(ins, arch) {
 			continue // Exact compact/expand bytes retain all mask, data and native address obligations.
@@ -223,6 +231,12 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		defer func() { state.loweredStaticReads = nil }()
 		if accepted, known := x86ResultIntegerMinMaxStep(ins, state, owned, arch, true); known {
 			return accepted // The paired E4 reader retains active exact-width volatile faults.
+		}
+		if accepted, known := x86LoweredRawPackedReductionStep(ins, state, owned, arch); known {
+			return accepted
+		}
+		if accepted, known := x86ResultPackedReductionStep(ins, state, owned, arch, true); known {
+			return accepted // Paired whole native reduction retains exact reads and MXCSR/exception behavior.
 		}
 		if accepted, known := x86ResultMaskBlendStep(ins, state, owned, arch, true); known {
 			return accepted // The shared E4 reader retains exact volatile active-lane accesses.

@@ -72,6 +72,16 @@ func inferFuncTargetFeaturesForGOARCH(arch Arch, goarch string, fn Func) string 
 			if moveArch == "" {
 				moveArch = "amd64"
 			}
+			if form, known, err := x86PackedReductionProperties(ins, moveArch); known && err == nil {
+				if form.dot {
+					add("+sse4.1")
+				} else if form.legacy {
+					add("+sse3")
+				}
+				if !form.legacy {
+					add("+avx")
+				}
+			}
 			if form, known, err := x86DuplicateMoveProperties(ins.Op, ins, moveArch); known && err == nil &&
 				form.legacy && form.spec.laneBytes == 4 && form.memory >= 0 {
 				add("+sse3") // Only the original aligned legacy opcode needs a native carrier.
@@ -414,10 +424,6 @@ func inferFuncTargetFeaturesForGOARCH(arch Arch, goarch string, fn Func) string 
 				add("+avx512f")
 			case strings.HasPrefix(op, "VRCP14") || strings.HasPrefix(op, "VRSQRT14"):
 				add("+avx512f", "+avx512vl")
-			case op == "VDPPD" || op == "VDPPS":
-				add("+avx", "+sse4.1")
-			case op == "DPPD" || op == "DPPS":
-				add("+sse4.1")
 			case op == "VMPSADBW":
 				add("+avx", "+sse4.1")
 				for _, arg := range ins.Args {

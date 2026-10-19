@@ -32,7 +32,8 @@ type x86SourceRawInstruction struct {
 	// A zero value is absent, not an SSE/VEX or non-MMX assertion.
 	packedConversion x86RawPackedConversionIdentity
 	// A low-bank unmasked packed move still retains its physical generation.
-	packedMove x86RawPackedMoveIdentity
+	packedMove      x86RawPackedMoveIdentity
+	packedReduction x86RawPackedReductionIdentity
 }
 
 type x86SourceStackAddress struct {

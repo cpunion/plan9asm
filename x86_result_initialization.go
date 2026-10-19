@@ -975,6 +975,9 @@ func x86ResultTransfer(ins Instr, state *x86ResultState, owned []bool, resultOff
 	if accepted, known := x86ResultMoveHalfStep(ins, state, owned, resultOffset, arch, false); known {
 		return accepted
 	}
+	if accepted, known := x86ResultPackedReductionStep(ins, state, owned, arch, false); known {
+		return accepted
+	}
 	if accepted, known := x86ResultDuplicateMoveStep(ins, state, owned, arch, false); known {
 		return accepted
 	}

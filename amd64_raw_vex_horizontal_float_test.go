@@ -29,15 +29,8 @@ func TestTranslateRawVEXHorizontalFloatWeaviateRegression(t *testing.T) {
 	LONG $0xc07cffc5
 	RET
 `
-	file, err := Parse(ArchAMD64, source)
-	if err != nil {
-		t.Fatal(err)
-	}
-	ir, err := Translate(file, Options{Goarch: "amd64", TargetTriple: "x86_64-unknown-linux-gnu", Sigs: map[string]FuncSig{"rawHorizontal": {Name: "rawHorizontal", Ret: Void}}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(ir, "@llvm.experimental.constrained.fadd.v8f32") {
+	ir := x86UnboundVoidRawScalarFormatObject(t, source, "amd64", "x86_64-unknown-linux-gnu")
+	if !strings.Contains(ir, "vhaddps ") || !strings.Contains(ir, "~{fpsr}") {
 		t.Fatalf("raw VHADDPS lowering omitted horizontal addition:\n%s", ir)
 	}
 	llc := findLLVM22Tool("llc")
