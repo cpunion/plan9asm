@@ -394,11 +394,20 @@ is not a claim that uninitialized original programs gained public translation.
    whole rule classes, including raw numerical continuations,
    missing typed effects and invalid format-fixture assumptions. Do not use the
    older 167-root replay as the denominator for these newly reached modules.
-   The next MOVBE TDD fixtures are preserved on the existing accumulator-effects
-   branch (`00f215152` before merging this checkpoint). Check the actual Go
-   object first: its original native program contains an unencodable imm64
-   memory store. Keep source-fixture validity separate from the independent
-   initialized five-target load/store/alias matrix's translation requirement.
+   Continue the local MOVBE candidate on the existing accumulator-effects
+   branch. Its real RED at `2336535a8` has two failed roots / eight children:
+   the original fixture's imm64 memory store is rejected by actual Go on all
+   three AMD64 OSes; the independent valid five-target matrix fails translation.
+   Code at `5525e6253` has a first GREEN: eight roots / 56 children, no failures
+   or skips, unchanged source/tools. The invalid original stays a Go-rejection
+   control; a register materialization repairs only that source line. Typed W/L/Q
+   and QQ-alias effects, exact volatile reads/writes, five-target public objects
+   and repaired original portable values/FLAGS pass. Native execution remains
+   separate. Preserve the first `5dd520b0` GREEN attempt's unbound-format failures.
+   This candidate is not pushed or fully qualified: add complete encoder/alias
+   and isolated CLI extraction tests, every-byte/Void/address/origin negatives,
+   dead read/write fault checks, the eight-SDK classification audit and baseline
+   review, then current Go/actual Go1.20/race and final gates before publication.
 2. Run the final gates and batch coherent qualified repairs in the allowed
    fork. Each source snapshot retains its own three-lane and classification
    receipts; the cancellation-retention change has 139 passing policy tests.
