@@ -5,18 +5,22 @@ import (
 	"reflect"
 )
 
-// The standalone step cannot distinguish a legacy decoded instruction whose
-// origin was erased from an otherwise identical named instruction. Check the
-// immutable complete source once before admitting the paired proof instead.
-// Inspect both current and sealed decoded instructions so erasing an origin
-// or changing the current opcode cannot erase this restriction.
-func x86ScalarShiftChoiceReplay(fn Func, arch string) error {
+// The standalone steps cannot distinguish a legacy decoded instruction whose
+// origin was erased from an otherwise identical named instruction. These two
+// producer families therefore check the immutable complete source once before
+// their paired proof. Inspect current and sealed decoded instructions so an
+// erased origin or edited opcode cannot erase that restriction. This is never
+// an input, caller, native-entry or memory-backing permission.
+func x86LoweredNumericalProducerReplay(fn Func, arch string) error {
 	hasProducer := func(instructions []Instr) bool {
 		for _, ins := range instructions {
 			if ins.x86SourceRaw == nil {
 				continue
 			}
 			if form, known, _ := x86ScalarShiftProperties(ins.Op, ins, arch); known && !form.bmi2 {
+				return true
+			}
+			if form, known, _ := x86FloatCompareProperties(ins, arch); known && form.legacy {
 				return true
 			}
 		}
@@ -27,7 +31,7 @@ func x86ScalarShiftChoiceReplay(fn Func, arch string) error {
 		return nil // Ordinary named source keeps its existing input/unknown domain.
 	}
 	if replay == nil {
-		return fmt.Errorf("%w: scalar shift choice needs its original whole-source replay", ErrProbeNeedsContext)
+		return fmt.Errorf("%w: lowering producer needs its original whole-source replay", ErrProbeNeedsContext)
 	}
 	return replay.validate(fn, arch)
 }

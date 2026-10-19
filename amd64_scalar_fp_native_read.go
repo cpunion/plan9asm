@@ -93,7 +93,7 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 	if len(fn.X86RawText) != 0 || fn.x86SourceStack != nil || fn.x86FixedLocal != nil {
 		return strictErr
 	}
-	if err := x86ScalarShiftChoiceReplay(fn, arch); err != nil {
+	if err := x86LoweredNumericalProducerReplay(fn, arch); err != nil {
 		return err // One restriction-only source check, never an input/native capability.
 	}
 	boundRawClear := false
@@ -102,7 +102,6 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 	boundRawMinMax := false
 	boundRawReduction := false
 	boundRawTernary := false
-	boundRawLegacyFloatCompare := false
 	boundRawFloatMinMax := false
 	boundRawScalarPrecision := false
 	for _, ins := range fn.Instrs {
@@ -121,10 +120,6 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 			continue // Exact mode/generation retains every active, merge, mask and native input obligation.
 		}
 		if x86RawLegacyFloatCompareSource(ins, arch) {
-			if !boundRawLegacyFloatCompare && (fn.x86RawReplay == nil || fn.x86RawReplay.validate(fn, arch) != nil) {
-				return strictErr
-			}
-			boundRawLegacyFloatCompare = true
 			continue // Exact legacy compare bytes supply no missing input, native entry or backing.
 		}
 		if x86RawTernaryLogicSource(ins, arch) {

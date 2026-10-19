@@ -280,6 +280,39 @@ func TestX86LegacyAbsSignAlignmentRequiredNativeOwners(t *testing.T) {
 	}
 }
 
+func TestX86LegacyAbsSignAlignmentNativeOracleFixesAndObservesMXCSRMode(t *testing.T) {
+	syntax, err := parser.ParseFile(token.NewFileSet(), "x86_legacy_abs_sign_alignment_native_linux_amd64_test.go", nil, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := ""
+	ast.Inspect(syntax, func(node ast.Node) bool {
+		declaration, ok := node.(*ast.ValueSpec)
+		if !ok || len(declaration.Names) != 1 || declaration.Names[0].Name != "x86LegacyAbsSignAlignmentNativeMainC" {
+			return true
+		}
+		if len(declaration.Values) != 1 || source != "" {
+			t.Fatal("native MXCSR driver source ownership changed")
+		}
+		literal, ok := declaration.Values[0].(*ast.BasicLit)
+		if !ok || literal.Kind != token.STRING {
+			t.Fatal("native MXCSR driver is not the actual compiled C source")
+		}
+		source, err = strconv.Unquote(literal.Value)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return false
+	})
+	load, read := strings.Index(source, "ldmxcsr"), strings.Index(source, "stmxcsr")
+	witness, call := strings.Index(source, `printf("memory enter`), strings.Index(source, "(original?k.original:k.translated)")
+	if !strings.Contains(source, "fixed_mxcsr=UINT32_C(0x1f80)") || load < 0 || read <= load || witness <= read || call <= witness ||
+		strings.Count(source, "stmxcsr") != 2 || strings.LastIndex(source, "stmxcsr") <= call ||
+		strings.Count(source, "observed_mxcsr!=fixed_mxcsr") != 2 {
+		t.Fatal("oracle must fix and observe MM=0 before the exact entry witness and check successful-return MXCSR preservation")
+	}
+}
+
 // Real LLVM22 machine objects, not IR spelling or align16 metadata, must
 // retain each legacy m128 opcode in both live and dead-result functions.
 // Original-process signal behavior is a separate required native owner.

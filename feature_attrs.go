@@ -132,6 +132,26 @@ func inferFuncTargetFeaturesForGOARCH(arch Arch, goarch string, fn Func) string 
 				// an isolated .Z function with no unsuffixed sibling.
 				add("+ssse3")
 			}
+			if form, known, err := x86PackedAbsSignProperties(ins.Op, ins, moveArch); known && err == nil {
+				// Each original form owns its minimum ISA; an unrelated MOVOU
+				// must not accidentally supply an i386 native XMM carrier.
+				switch {
+				case form.legacy:
+					add("+sse2", "+ssse3")
+				case form.evex(ins):
+					add("+avx512f")
+					if form.spec.laneBits < 32 {
+						add("+avx512bw")
+					}
+					if form.byteWidth < 64 {
+						add("+avx512vl")
+					}
+				case form.byteWidth == 32:
+					add("+avx2")
+				default:
+					add("+avx")
+				}
+			}
 			if form, known, err := x86FloatMinMaxProperties(ins, moveArch); known && err == nil {
 				switch {
 				case x86FloatMinMaxNativeEVEX(ins, form):

@@ -69,7 +69,10 @@ func TestX86RawLegacyFloatingCompareRejectsEditedIdentityAtomically(t *testing.T
 					name string
 					edit func(*Instr)
 				}{
-					{"origin", func(ins *Instr) { ins.x86SourceRaw, ins.x86Encoded = nil, true }},
+					// This is an encoded instruction without a source witness,
+					// not an origin-only mutation. Legacy decoding does not set
+					// x86Encoded; erasing only origin can look exactly named.
+					{"unbound-encoded", func(ins *Instr) { ins.x86SourceRaw, ins.x86Encoded = nil, true }},
 					{"snapshot", func(ins *Instr) { ins.x86SourceRaw.legacyFloatCompare = x86RawLegacyFloatCompareIdentity{} }},
 					{"mode", func(ins *Instr) { ins.x86SourceRaw.legacyFloatCompare.arch = "arm64" }},
 					{"generation", func(ins *Instr) { ins.x86Encoded = !ins.x86Encoded }},
@@ -91,14 +94,16 @@ func TestX86RawLegacyFloatingCompareRejectsEditedIdentityAtomically(t *testing.T
 					{"return", func(ins *Instr) { ins.x86RawNearReturn = new(x86RawNearReturnForm) }},
 					{"numerical-read", func(ins *Instr) { ins.x86NumericalRead = new(x86NumericalReadCertificate) }},
 				} {
-					changed := cloneX86ReplayInstrs([]Instr{original})[0]
-					control.edit(&changed)
-					state := x86RawLegacyFloatCompareState()
-					before := state.clone()
-					if accepted, _ := x86ResultFloatCompareStep(changed, &state, nil, arch, true); accepted ||
-						x86RawLegacyFloatCompareSource(changed, arch) || !reflect.DeepEqual(state, before) {
-						t.Fatal("changed raw identity acquired numerical input, native or independent DATA permission", control.name)
-					}
+					t.Run(control.name, func(t *testing.T) {
+						changed := cloneX86ReplayInstrs([]Instr{original})[0]
+						control.edit(&changed)
+						state := x86RawLegacyFloatCompareState()
+						before := state.clone()
+						if accepted, _ := x86ResultFloatCompareStep(changed, &state, nil, arch, true); accepted ||
+							x86RawLegacyFloatCompareSource(changed, arch) || !reflect.DeepEqual(state, before) {
+							t.Fatal("changed raw identity acquired numerical input, native or independent DATA permission", control.name)
+						}
+					})
 				}
 				if !x86RawLegacyFloatCompareSource(original, arch) {
 					t.Fatal("editing a mutable clone corrupted the immutable original mode snapshot")
@@ -141,6 +146,12 @@ func TestX86RawLegacyFloatingCompareNeedsWholeReplayAndActualInputs(t *testing.T
 				changed.Instrs[2].Op = "XORPS" // Equivalent zero producer, different original source.
 				if changed.x86RawReplay.validate(changed, "amd64") == nil || original.x86RawReplay.validate(original, "amd64") != nil {
 					t.Fatal("rewritten producer borrowed or mutated the original immutable source replay")
+				}
+				// validate alone only tests the private replay object. Exercise
+				// the actual whole-Func consumer that must enforce this identity.
+				check := x86LegacyFloatReplayCheck(t, "amd64", source, "func Value(p *byte)")
+				if check(original) != nil || !errors.Is(check(changed), ErrProbeNeedsContext) {
+					t.Fatal("actual lowering consumer failed to retain its original complete-source replay restriction")
 				}
 			})
 		}

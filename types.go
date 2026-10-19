@@ -1003,6 +1003,9 @@ type Instr struct {
 	// Scalar precision conversions retain their physical EVEX generation even
 	// when every low-X operand also has an unmasked VEX spelling.
 	x86ScalarPrecisionEVEX bool
+	// ABS retains physical EVEX even for unmasked low X/Y operands that
+	// otherwise have a VEX spelling. CPU generation supplies no input facts.
+	x86PackedAbsEVEX bool
 	// Recomputed per-operand source-SP to typed ABI0 slot certificate. Keep
 	// original physical operands intact across repeated normalization.
 	x86SourceStackFP map[int]int64
