@@ -106,7 +106,7 @@ func TestX86MoveHalfCompleteIndependentGoRowsAndTypedEffects(t *testing.T) {
 						if !row.vector && !store && write {
 							read = true // The untouched half remains an independent old input.
 						}
-						if operand.index != index || operand.operand != ins.Args[index] || operand.width != width || operand.read != read || operand.write != write {
+						if operand.index != index || !reflect.DeepEqual(operand.operand, ins.Args[index]) || operand.width != width || operand.read != read || operand.write != write {
 							t.Fatal("typed envelope does not retain exact memory/selected-register roles", index, operand)
 						}
 					}
