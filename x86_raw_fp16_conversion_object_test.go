@@ -33,7 +33,7 @@ func x86RawFP16CheckObject(t *testing.T, llc, triple, ir, level string, want map
 	}
 	x86FloatCompareCaptureCommand(t, exec.Command(llc, level, "-mtriple="+triple, "-filetype=obj", input, "-o", object))
 	listing := x86FloatCompareCaptureCommand(t, exec.Command(disassembler, "--disassemble", object))
-	sections := regexp.MustCompile(`(?m)^[0-9a-f]+ <_?((?:conversion|halfSqrt|halfFMA)[0-9]+)>:\n`).FindAllSubmatchIndex(listing, -1)
+	sections := regexp.MustCompile(`(?m)^[0-9a-f]+ <_?((?:conversion|halfSqrt|halfFMA|halfBinary)[0-9]+)>:\n`).FindAllSubmatchIndex(listing, -1)
 	seen := make(map[string]bool)
 	for index, section := range sections {
 		name := string(listing[section[2]:section[3]])
