@@ -80,3 +80,23 @@ func TestX86StackNativeValueReadsCompleteWidthsThreeAPIs(t *testing.T) {
 		}
 	}
 }
+
+func TestX86X87NativeFloatingMoveCannotBypassVoidProof(t *testing.T) {
+	for _, target := range x86RawReturnTargets {
+		word, move := 8, "MOVQ"
+		if target.arch == "386" {
+			word, move = 4, "MOVL"
+		}
+		for _, op := range []string{"FMOVF", "FMOVFP", "FMOVD", "FMOVDP"} {
+			source := fmt.Sprintf("TEXT ·Value(SB),4,$0-%d\n%s dst+0(FP),DI\nFINIT\n%s F0,1(DI)\nFINIT\nRET\n", word, move, op)
+			for _, api := range []string{"text", "module", "Go"} {
+				t.Run(target.triple+"/"+op+"/"+api, func(t *testing.T) {
+					ir, err := x86ScalarFPBitViewAPI(t, source, "func Value(dst *byte)", target.arch, target.triple, api)
+					if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+						t.Fatal("discarded x87 results supplied unknown F0 bytes", err)
+					}
+				})
+			}
+		}
+	}
+}

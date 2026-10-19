@@ -194,6 +194,12 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		if accepted, known := c.x87EnvironmentReadResultStep(ins, state, arch); known {
 			return accepted
 		}
+		if accepted, known := c.x87NativeFloatingMoveResultStep(ins, state, owned, resultOffset, arch); known {
+			return accepted
+		}
+		if accepted, known := x86LoweredStackNativeRead(ins, state, owned, resultOffset, arch); known {
+			return accepted
+		}
 		if accepted, known := c.x87HardwareControlResultStep(ins, state, owned, resultOffset, arch); known {
 			return accepted // The same actual hardware emitter writes the full i16.
 		}

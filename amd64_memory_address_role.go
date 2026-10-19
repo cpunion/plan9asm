@@ -51,6 +51,10 @@ func x86OrdinaryNativeMemoryOperand(operand Operand, arch string) bool {
 	return !x86LogicalSourceFrameRegister(memory.Base, arch) && !x86LogicalSourceFrameRegister(memory.Index, arch)
 }
 
+func x86RegisterAddressedNativeMemoryOperand(operand Operand, arch string) bool {
+	return operand.Kind == OpMem && operand.Mem.Sym == "" && x86OrdinaryNativeMemoryOperand(operand, arch)
+}
+
 // The key includes the complete effective displacement, not Operand.String:
 // raw AST memory can hold a displacement in addition to its symbolic offset.
 type x86StaticSBAddress struct {

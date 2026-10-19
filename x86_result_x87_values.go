@@ -122,6 +122,13 @@ func x86ResultX87ValueStep(ins Instr, state *x86ResultState, owned []bool, resul
 // a default X87Mode value is not a source/control or native continuation fact.
 func x86ResultX87ValueStepWithHardwareRounding(ins Instr, state *x86ResultState, owned []bool,
 	resultOffset int64, arch string, hardwareRounding bool) (bool, bool) {
+	return x86ResultX87ValueStepWithMemory(ins, state, owned, resultOffset, arch, hardwareRounding, false)
+}
+
+// nativeMemory is confined to the paired floating-move emitter. The shared
+// grammar, x87 depth and numerical inputs still own every ordinary effect.
+func x86ResultX87ValueStepWithMemory(ins Instr, state *x86ResultState, owned []bool,
+	resultOffset int64, arch string, hardwareRounding, nativeMemory bool) (bool, bool) {
 	if accepted, known := x86ResultX87WordStep(ins, state, owned, resultOffset, arch); known {
 		return accepted, true
 	}
@@ -133,6 +140,7 @@ func x86ResultX87ValueStepWithHardwareRounding(ins Instr, state *x86ResultState,
 		return false, true
 	}
 	x87 := state.x87
+	nativeMemory = nativeMemory && form.spec.kind == x86X87FloatMove
 	hardwareRounding = hardwareRounding && (form.spec.kind == x86X87Round ||
 		form.spec.kind == x86X87IntegerMove && form.spec.width == 'V' && form.spec.pop == 1)
 	read := func(operand Operand) bool {
@@ -142,7 +150,9 @@ func x86ResultX87ValueStepWithHardwareRounding(ins Instr, state *x86ResultState,
 		if operand.Kind == OpImm {
 			return true // The descriptor already validated the exact Go FLOAT rewrite.
 		}
-		return x86ResultRead(operand, form.memoryBytes(), state, owned, arch)
+		return x86ResultRead(operand, form.memoryBytes(), state, owned, arch) ||
+			nativeMemory && x86RegisterAddressedNativeMemoryOperand(operand, arch) &&
+				x86ResultIncomingPointerReadAddressIdentity(operand, state, arch)
 	}
 	write := func(operand Operand) bool {
 		if isX87RegisterOperand(operand) {
@@ -150,6 +160,9 @@ func x86ResultX87ValueStepWithHardwareRounding(ins Instr, state *x86ResultState,
 		}
 		if form.spec.kind == x86X87IntegerMove {
 			return x86ResultX87NaturalWordStore(operand, form.memoryBytes(), state, owned, resultOffset, arch)
+		}
+		if nativeMemory && x86RegisterAddressedNativeMemoryOperand(operand, arch) {
+			return x86ResultIncomingPointerAddressIdentity(operand, state, arch)
 		}
 		return x86ResultStore(operand, form.memoryBytes(), state, owned, resultOffset, arch)
 	}

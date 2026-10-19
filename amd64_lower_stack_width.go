@@ -230,7 +230,7 @@ func (c *amd64Ctx) lowerStackWidth(op Op, ins Instr) (ok bool, terminated bool, 
 		if operand.Kind == OpMem && !x86MemoryRegistersValidForArch(operand.Mem, c.goarch) {
 			return true, false, fmt.Errorf("%s %s memory source uses an out-of-range address register: %q", c.goarch, baseOp, ins.Raw)
 		}
-		value, err := c.evalIntSized(operand, amd64StackLLVMType(spec.bits))
+		value, err := c.loadStackValue(operand, spec.bits)
 		if err != nil {
 			return true, false, err
 		}

@@ -134,7 +134,7 @@ func (c *amd64Ctx) lowerX87(op Op, ins Instr) (ok bool, terminated bool, err err
 				return true, false, nil
 			}
 		}
-		v, err := c.evalX87F64(ins.Args[0])
+		v, err := c.loadX87FloatingMove(ins.Args[0], 64)
 		if err != nil {
 			return true, false, err
 		}
@@ -704,7 +704,7 @@ func isX87MemoryOperand(op Operand) bool {
 func (c *amd64Ctx) loadX87MoveValue(op Op, src Operand) (string, error) {
 	switch op {
 	case "FMOVF":
-		value, err := c.evalF32(src)
+		value, err := c.loadX87FloatingMove(src, 32)
 		if err != nil {
 			return "", err
 		}
@@ -747,6 +747,11 @@ func (c *amd64Ctx) storeX87MoveValue(op Op, dst Operand, value string) error {
 }
 
 func (c *amd64Ctx) storeX87TypedMemory(dst Operand, typ LLVMType, value string) error {
+	if typ == LLVMType("float") || typ == LLVMType("double") {
+		if handled, err := c.storeX87NativeFloatingMove(dst, typ, value); handled {
+			return err
+		}
+	}
 	if dst.Kind == OpFP {
 		if typ == LLVMType("float") {
 			return c.storeScalarFPFloat(dst.FPOffset, 32, value)
@@ -1031,6 +1036,9 @@ func (c *amd64Ctx) evalX87F64(op Operand) (string, error) {
 }
 
 func (c *amd64Ctx) storeX87F64(dst Operand, value string) error {
+	if handled, err := c.storeX87NativeFloatingMove(dst, LLVMType("double"), value); handled {
+		return err
+	}
 	if index, ok := x87OperandReg(dst); ok {
 		c.storeX87(index, value)
 		return nil
