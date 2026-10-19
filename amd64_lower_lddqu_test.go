@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"runtime"
 	"strings"
@@ -54,16 +55,23 @@ func TestTranslateX86LDDQUCompleteFormsAcrossTargets(t *testing.T) {
 				source += "\tVLDDQU 4(R9), Y8\n"
 			}
 			source += "\tRET\n"
-			requireX86GoAssemblerResult(t, target.goarch, source, true)
-			file, err := Parse(ArchAMD64, source)
-			if err != nil {
-				t.Fatal(err)
+			file, signatures := x86UnboundVoidFormatSource(t, source, "lddquforms", target.goarch, target.triple)
+			if target.goarch == "386" {
+				// Keep the complete original Go object and all three public
+				// Context controls above. Go accepts the high names, but they
+				// do not describe a physical mode32 R9/Y8 instruction. The
+				// initialized low-bank five-target objects are independent.
+				instruction := file.Funcs[0].Instrs[len(file.Funcs[0].Instrs)-2]
+				if _, known, err := x86UnalignedLoadProperties(instruction.Op, instruction, "386"); !known || !errors.Is(err, ErrProbeNeedsContext) {
+					t.Fatal("Go's named high registers invented a mode32 physical instruction", err)
+				}
+				return
 			}
-			ir, err := Translate(file, Options{Goarch: target.goarch, TargetTriple: target.triple, Sigs: map[string]FuncSig{"lddquforms": {Name: "lddquforms", Ret: Void}}})
-			if err != nil {
-				t.Fatal(err)
-			}
-			for _, want := range []string{"load <16 x i8>", "load <32 x i8>"} {
+			ir := x86InstructionFormatObjectUnit(t, file, signatures, target.goarch, target.triple, 0,
+				func(c *amd64Ctx, instruction Instr) (bool, bool, error) {
+					return c.lowerUnalignedVectorLoad(instruction.Op, instruction)
+				})
+			for _, want := range []string{"asm sideeffect \"lddqu ", "asm sideeffect \"vlddqu "} {
 				if !strings.Contains(ir, want) {
 					t.Fatalf("LDDQU/VLDDQU lowering omitted %q:\n%s", want, ir)
 				}

@@ -24,6 +24,9 @@ func decodedX86VEXUnalignedLoadInstruction(code []byte, mode int) (Instr, int, b
 	if err != nil {
 		return Instr{}, 0, true, err
 	}
+	if p.modRM+size > 15 {
+		return fail("instruction exceeds 15 bytes")
+	}
 	destination := Operand{Kind: OpReg, Reg: Reg(fmt.Sprintf("%s%d", bank, int(code[p.modRM]>>3&7)+p.r*8))}
 	ins := Instr{Op: "VLDDQU", Args: []Operand{source, destination}, x86Encoded: true}
 	ins.Raw = fmt.Sprintf("VLDDQU %s,%s", source.String(), destination.String())
