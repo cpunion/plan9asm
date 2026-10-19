@@ -71,6 +71,12 @@ found missing isolated native carrier features as well as uninitialized old
 format fixtures. Keep original formats as Go/emitter objects plus Context,
 separate from initialized public objects.
 
+The eight-SDK audit at `796dfb1d9` changes exactly fourteen AMD64 vector-test
+probes to Context and restores twenty pure-register AES probes per SDK.
+No AES memory form, unrelated opcode, 386 form, encoder or unsupported metric
+changes. The one historical Go1.20 unsupported form is unchanged; current Go's
+five-architecture gate still requires zero unsupported forms and parse errors.
+
 Ignored receipts include `windows-aes-cas-qualified-e6d34070.json`,
 `windows-vector-test-qualified-475ffc68.json`, prior family qualification files,
 `ci392515/run-final.json`, and original raw test streams.
@@ -79,8 +85,8 @@ Evidence is not tracked repository data.
 
 ## Immediate next work
 
-1. Finish the eight-SDK 386/amd64 classification audit and minimal baseline
-   update for the restored AES register domain and new vector-test guards.
+1. Apply the audited minimal baseline update and finish the final gates for
+   the restored AES register domain and new vector-test guards.
    Permit no unrelated opcode, memory, encoder or unsupported changes.
    Run final gates, including the complete sixteen portable roots from the
    failed priority on current/minimum Go; its excluded runtime owner remains
@@ -107,8 +113,8 @@ Evidence is not tracked repository data.
 ## Benchmark and verification discipline
 
 The last strict standard-library benchmark at `18bb77a09` remains failed:
-all184 target/file pairs were attempted, 129 compiled and 55 failed, no N/A.
-AMD64 took392s, exceeding the unchanged300s target budget; total504s is below900s.
+all 184 target/file pairs were attempted, 129 compiled and 55 failed, no N/A.
+AMD64 took 392s, exceeding the unchanged 300s target budget; total 504s is below 900s.
 No new benchmark or controlled speedup has been certified.
 
 Use Go1.27 and exact LLVM22; root-module minimum is actual Go1.20 and rich-CLI
