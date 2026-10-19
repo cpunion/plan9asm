@@ -28,9 +28,15 @@ func TestX86CMOVFamilyFPBitViewsThreeAPIFiveTargets(t *testing.T) {
 				size := map[string]int{"float32": 4, "float64": 8}[typ]
 				source := fmt.Sprintf("TEXT ·Value(SB),4,$0-%d\n%sRET\n", size, assembly.String())
 				goAssemblerOracleOutput(t, target.arch, source, "", true)
+				initialized := strings.Replace(source, "\nCMOV", "\nXORL AX,AX\nCMOV", 1)
+				goAssemblerOracleOutput(t, target.arch, initialized, "", true)
 				for _, api := range []string{"text", "module", "Go"} {
 					t.Run(target.triple+"/"+typ+"/"+width+"/"+api, func(t *testing.T) {
 						ir, err := x86OrderingHintTranslateAPI(t, api, source, "package ordering\nfunc Value(f "+typ+")\n", target.arch, target.triple)
+						if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+							t.Fatal("original FP formats invented old AX or predicate FLAGS", api, err)
+						}
+						ir, err = x86OrderingHintTranslateAPI(t, api, initialized, "package ordering\nfunc Value(f "+typ+")\n", target.arch, target.triple)
 						if err != nil {
 							t.Fatal("existing complete floating logical bit-view was lost", err)
 						}
@@ -72,9 +78,15 @@ func TestX86CMOVFamilyFPBitViewsExactPartialAndCrossSlotExtent(t *testing.T) {
 			}
 			source := fmt.Sprintf("TEXT ·Value(SB),4,$0-%d\nCMOV%sLE %s,AX\nRET\n", test.size, test.width, test.source)
 			goAssemblerOracleOutput(t, target.arch, source, "", true)
+			initialized := strings.Replace(source, "\nCMOV", "\nXORL AX,AX\nCMOV", 1)
+			goAssemblerOracleOutput(t, target.arch, initialized, "", true)
 			for _, api := range []string{"text", "module", "Go"} {
 				t.Run(target.triple+"/"+test.declaration+"/"+test.width+"/"+test.source+"/"+api, func(t *testing.T) {
 					ir, err := x86OrderingHintTranslateAPI(t, api, source, "package ordering\n"+test.declaration+"\n", target.arch, target.triple)
+					if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+						t.Fatal("original partial FP format invented old AX or predicate FLAGS", api, err)
+					}
+					ir, err = x86OrderingHintTranslateAPI(t, api, initialized, "package ordering\n"+test.declaration+"\n", target.arch, target.triple)
 					if test.valid && err != nil || !test.valid && !errors.Is(err, ErrProbeNeedsContext) {
 						t.Fatal("complete bit span/holes/Ptr contract", err)
 					}
