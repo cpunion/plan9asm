@@ -7648,20 +7648,7 @@ func TestTranslateX86HorizontalFloatingCompleteGo127Forms(t *testing.T) {
 			}
 			src.WriteString("\tRET\n")
 			goAssemblerOracleOutput(t, target.goarch, src.String(), "", true)
-			file, err := Parse(ArchAMD64, src.String())
-			if err != nil {
-				t.Fatal(err)
-			}
-			ll, err := Translate(file, Options{
-				TargetTriple: target.triple,
-				Goarch:       target.goarch,
-				Sigs: map[string]FuncSig{
-					"horizontal_floating_complete_forms": {Name: "horizontal_floating_complete_forms", Ret: Void},
-				},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			ll := x86UnboundVoidScalarFormatObject(t, src.String(), "horizontal_floating_complete_forms", target.goarch, target.triple)
 			compileLLVMToObject(t, llc, target.triple, "horizontal-floating-complete-"+target.name+".ll", "horizontal-floating-complete-"+target.name+".o", ll)
 		})
 	}

@@ -64,28 +64,16 @@ func TestTranslateX86PackedFloatingDotCompleteFormsAcrossTargets(t *testing.T) {
 			sourceBuilder.WriteString("\tRET\n")
 			source := sourceBuilder.String()
 			requireX86GoAssemblerResult(t, target.goarch, source, true)
-			file, err := Parse(ArchAMD64, source)
-			if err != nil {
-				t.Fatal(err)
-			}
-			ir, err := Translate(file, Options{
-				Goarch:       target.goarch,
-				TargetTriple: target.triple,
-				Sigs:         map[string]FuncSig{"floatdotforms": {Name: "floatdotforms", Ret: Void}},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			ir := x86UnboundVoidScalarFormatObject(t, source, "floatdotforms", target.goarch, target.triple)
 			for _, want := range []string{
-				"call <2 x double> @llvm.x86.sse41.dppd",
-				"call <4 x float> @llvm.x86.sse41.dpps",
+				"dppd ", "dpps ", "asm sideeffect", "~{fpsr}",
 			} {
 				if !strings.Contains(ir, want) {
 					t.Fatalf("packed floating dot lowering omitted %q:\n%s", want, ir)
 				}
 			}
-			if target.goarch == "amd64" && !strings.Contains(ir, "call <8 x float> @llvm.x86.avx.dp.ps.256") {
-				t.Fatalf("packed floating dot lowering omitted Y-width intrinsic:\n%s", ir)
+			if target.goarch == "amd64" && (!strings.Contains(ir, "call <8 x float> asm sideeffect") || !strings.Contains(ir, "vdpps ")) {
+				t.Fatalf("packed floating dot lowering omitted Y-width original opcode:\n%s", ir)
 			}
 			wantFeatures := `"target-features"="+sse4.1"`
 			if target.goarch == "amd64" {

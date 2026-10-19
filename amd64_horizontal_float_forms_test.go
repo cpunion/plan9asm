@@ -119,26 +119,18 @@ func TestX86HorizontalFloatGoFormatsFiveLLVMTargets(t *testing.T) {
 	}
 	for _, arch := range []string{"386", "amd64"} {
 		var source strings.Builder
-		sigs := map[string]FuncSig{}
 		for index, row := range x86HorizontalFloatFormats() {
 			name := fmt.Sprintf("horizontal%d", index)
 			fmt.Fprintf(&source, "TEXT %s(SB),4,$0-0\n%s\nRET\n", name, row)
-			sigs[name] = FuncSig{Name: name, Ret: Void}
 		}
 		goAssemblerOracleOutput(t, arch, source.String(), "", true)
-		file, err := Parse(ArchAMD64, source.String())
-		if err != nil {
-			t.Fatal(err)
-		}
 		triples := []string{"x86_64-unknown-linux-gnu", "x86_64-apple-darwin", "x86_64-pc-windows-msvc"}
 		if arch == "386" {
 			triples = []string{"i386-unknown-linux-gnu", "i686-pc-windows-msvc"}
 		}
 		for _, triple := range triples {
-			ir, err := Translate(file, Options{Goarch: arch, TargetTriple: triple, Sigs: sigs})
-			if err != nil {
-				t.Fatal(err)
-			}
+			file, signatures := x86UnboundVoidFormatSources(t, source.String(), arch, triple)
+			ir := x86ScalarFormatObjectUnit(t, file, signatures, arch, triple, 0)
 			compileLLVMToObject(t, llc, triple, "horizontal-formats.ll", "horizontal-formats.o", ir)
 		}
 	}
@@ -244,7 +236,8 @@ func TestX86HorizontalFloatCompleteTypedFPSpanBeforeEmission(t *testing.T) {
 			ins := file.Funcs[0].Instrs[1]
 			before := output.String()
 			known, term, err := ctx.lowerHorizontalFloating(ins.Op, ins)
-			if !known || term || (err != nil) != (missing >= 0) || missing >= 0 && output.String() != before {
+			needsContext := missing >= 0 || !strings.HasPrefix(row, "V")
+			if !known || term || (err != nil) != needsContext || needsContext && output.String() != before {
 				t.Fatalf("%s missing typed slot %d: %t/%t/%v", row, missing, known, term, err)
 			}
 		}
@@ -257,14 +250,13 @@ func TestX86HorizontalFloatPairsUseSingleStrictVectorOperation(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		ir, err := Translate(file, Options{Goarch: "amd64", TargetTriple: "x86_64-unknown-linux-gnu", Sigs: map[string]FuncSig{"f": {Ret: Void}}})
-		if err != nil {
-			t.Fatal(err)
-		}
-		// Pair projection may shuffle integers/floats, but must not add more
-		// arithmetic, reassociate, or split one strict vector into scalar pairs.
-		if got := strings.Count(ir, "metadata !\"fpexcept.strict\")"); got != 1 || !strings.Contains(ir, "= call <") {
-			t.Fatalf("%s split strict horizontal operation into %d scalar operations", row, got)
+		ir := x86ScalarFormatObjectUnit(t, file, map[string]FuncSig{"f": {Ret: Void}}, "amd64", "x86_64-unknown-linux-gnu", 0)
+		// One original native reduction owns its joint exception, pair NaN
+		// priority and ambient MXCSR semantics. No scalar reconstruction or
+		// pure arithmetic carrier can replace it, including a dead output.
+		if got := strings.Count(ir, "asm sideeffect"); got != 1 || !strings.Contains(ir, "~{fpsr}") ||
+			!strings.Contains(ir, strings.ToLower(strings.Fields(row)[0])+" ") || strings.Contains(ir, "@llvm.experimental.constrained") {
+			t.Fatalf("%s lost its one native strict horizontal operation (%d)", row, got)
 		}
 	}
 }

@@ -61,7 +61,6 @@ func TestDecodeX86RawHorizontalFloatRIPDataRejectsUnsafeSources(t *testing.T) {
 
 func TestTranslateX86RawHorizontalFloatRIPDataObjects(t *testing.T) {
 	var source strings.Builder
-	sigs := make(map[string]FuncSig)
 	for opcode, stem := range map[byte]string{0x7c: "VHADD", 0x7d: "VHSUB", 0xd0: "VADDSUB"} {
 		for pp, suffix := range map[byte]string{1: "PD", 3: "PS"} {
 			name := "literal" + stem + suffix
@@ -69,14 +68,9 @@ func TestTranslateX86RawHorizontalFloatRIPDataObjects(t *testing.T) {
 			for _, value := range x86RawHorizontalFloatLiteral(opcode, pp, true, 32) {
 				fmt.Fprintf(&source, "\tBYTE $%#02x\n", value)
 			}
-			sigs[name] = FuncSig{Name: name, Ret: Void}
 		}
 	}
 	requireX86GoAssemblerResult(t, "amd64", source.String(), true)
-	file, err := Parse(ArchAMD64, source.String())
-	if err != nil {
-		t.Fatal(err)
-	}
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc not found")
@@ -87,10 +81,7 @@ func TestTranslateX86RawHorizontalFloatRIPDataObjects(t *testing.T) {
 		"x86_64-pc-windows-msvc",
 	} {
 		t.Run(triple, func(t *testing.T) {
-			ir, err := Translate(file, Options{Goarch: "amd64", TargetTriple: triple, Sigs: sigs})
-			if err != nil {
-				t.Fatal(err)
-			}
+			ir := x86UnboundVoidRawScalarFormatObject(t, source.String(), "amd64", triple)
 			compileLLVMToObject(t, llc, triple, "raw-horizontal-float-literal.ll", "raw-horizontal-float-literal.o", ir)
 		})
 	}
