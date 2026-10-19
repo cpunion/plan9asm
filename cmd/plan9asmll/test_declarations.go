@@ -45,34 +45,12 @@ func (consumer *featureConsumer) bindSignatureSources(pkg *packages.Package, fil
 		if ordinary {
 			role = "ordinary_decl"
 			known[symbol] = true
-		} else if !strings.Contains(requested.original, "<>") && strings.HasPrefix(symbol, pkg.PkgPath+".") {
-			name := strings.TrimPrefix(symbol, pkg.PkgPath+".")
-			candidate, err := consumer.testDeclarationCandidate(pkg, filepath.Dir(asm), name)
+		} else {
+			derived, size, found, err := consumer.testDeclarationSignature(pkg, filepath.Dir(asm), requested.original, symbol, goarch)
 			if err != nil {
 				return nil, err
 			}
-			if candidate {
-				testPkg, err := consumer.loadTestDeclarationPackage(pkg)
-				if err != nil {
-					return nil, err
-				}
-				decl, err := consumer.typedBodylessTestDeclaration(testPkg, name)
-				if err != nil {
-					return nil, err
-				}
-				derived, size, found, err := tryDeclSig(testPkg.Types.Scope(), requested.original, symbol,
-					linknameRemoteToLocal(testPkg.Syntax), goarch, testPkg.TypesSizes, strings.HasSuffix(requested.original, "<ABIInternal>"))
-				if err != nil || !found {
-					return nil, fmt.Errorf("derive actual test declaration %s: %v (found=%v)", symbol, err, found)
-				}
-				layout, err := json.Marshal(derived)
-				if err != nil {
-					return nil, err
-				}
-				decl.Symbol, decl.Layout = symbol, layout
-				if err := consumer.retainTestDeclaration(pkg.PkgPath, decl); err != nil {
-					return nil, err
-				}
+			if found {
 				sigs[symbol], sizes[symbol], role = derived, size, "inpackage_test_decl"
 				known[symbol] = true
 			}
@@ -96,6 +74,48 @@ func (consumer *featureConsumer) bindSignatureSources(pkg *packages.Package, fil
 	}
 	sort.Slice(sources, func(i, j int) bool { return sources[i].Symbol < sources[j].Symbol })
 	return sources, nil
+}
+
+// The same actual export/typecheck proof owns early signature selection and
+// final source-role retention. A syntax candidate alone grants no layout.
+func (consumer *featureConsumer) testDeclarationSignature(pkg *packages.Package, dir, original, symbol, goarch string) (plan9asm.FuncSig, int64, bool, error) {
+	var empty plan9asm.FuncSig
+	if consumer.Input.SignatureSourceProtocol == "" {
+		return empty, 0, false, nil
+	}
+	if consumer.Input.SignatureSourceProtocol != gotoolprofile.SignatureSourceProtocol {
+		return empty, 0, false, fmt.Errorf("unknown signature-source protocol")
+	}
+	if strings.Contains(original, "<>") || !strings.HasPrefix(symbol, pkg.PkgPath+".") {
+		return empty, 0, false, nil
+	}
+	name := strings.TrimPrefix(symbol, pkg.PkgPath+".")
+	candidate, err := consumer.testDeclarationCandidate(pkg, dir, name)
+	if err != nil || !candidate {
+		return empty, 0, false, err
+	}
+	testPkg, err := consumer.loadTestDeclarationPackage(pkg)
+	if err != nil {
+		return empty, 0, false, err
+	}
+	decl, err := consumer.typedBodylessTestDeclaration(testPkg, name)
+	if err != nil {
+		return empty, 0, false, err
+	}
+	derived, size, found, err := tryDeclSig(testPkg.Types.Scope(), original, symbol,
+		linknameRemoteToLocal(testPkg.Syntax), goarch, testPkg.TypesSizes, strings.HasSuffix(original, "<ABIInternal>"))
+	if err != nil || !found {
+		return empty, 0, false, fmt.Errorf("derive actual test declaration %s: %v (found=%v)", symbol, err, found)
+	}
+	layout, err := json.Marshal(derived)
+	if err != nil {
+		return empty, 0, false, err
+	}
+	decl.Symbol, decl.Layout = symbol, layout
+	if err := consumer.retainTestDeclaration(pkg.PkgPath, decl); err != nil {
+		return empty, 0, false, err
+	}
+	return derived, size, true, nil
 }
 
 type assemblySignatureRequest struct {
