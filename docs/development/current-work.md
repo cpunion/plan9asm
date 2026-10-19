@@ -38,6 +38,14 @@ outcomes. The numerical product/CMOV audit passes seven roots and 24 children,
 including the original CMOV FP-span Go/LLVM execution and portable IFMA/lookup
 C oracles. Portable integer values are not native AVX512 qualification.
 
+The downloaded Linux floating-compare CPU receipt reports `AVX512F=0`,
+`AVX512VL=0` and `XCR0=7`. That runner cannot qualify the new complete
+AVX512 conversion, floating-helper or physical 512-bit/DF oracles. Keep the
+required capability checks and native owners; object compilation and portable
+values must not replace original-opcode execution. A capable execution
+environment remains unresolved. Earlier SSE/AVX native passes are not evidence
+of AVX512 support.
+
 [39258001772](https://github.com/cpunion/plan9asm/actions/runs/39258001772)
 finished naturally at `e890858c5`: 81 jobs pass and 17 fail, none cancelled.
 All 65 priorities, including `completed-ci-repair`, pass. Both CLI modules pass
@@ -149,14 +157,22 @@ Evidence is not tracked repository data.
    source/tool-sealed raw streams remain in persistent worktrees. Finish new
    scanner/isolated-CLI checks and required native completion ownership, then
    rerun final gates on an unchanged batch before an allowed-fork push.
-4. Active independent TDD work covers the complete 42-member named/raw packed
-   conversion continuation and six-name duplicate-move family. Named/raw
-   conversion RED is `49dc93a15`; the preceding `8ef582903` failed an incorrect
-   named mnemonic assertion and is not raw-gap evidence. Duplicate RED
-   `6f147234d` has unchanged before/after seals. Continue the remaining scalar
-   reciprocal, blends, dot, CLMUL, shuffle, ternary, raw scalar/compare,
-   physical SP/BP/g and undefined-shift observation failures. Retain original
-   source and separate format objects, initialized values and ABI authority.
+4. Complete named/raw conversion, duplicate, segment-query, blend and
+   half-vector repairs are integrated locally, not qualified online. The
+   eight-SDK audit at `db0abbfc8` allows exactly 62 family names: each SDK
+   changes 290 AMD64 probes from supported to Context, zero 386 probes and
+   no unrelated metric. Baseline-only `f834e4377` records that exact audit.
+   Its complete current-Go conversion legacy union passes 62 roots and
+   1,914 children; minimum/race and integrated final gates remain unfinished.
+   Preserve failed and different-head receipts without combining them into
+   a current-head certificate. Half-vector values/objects at `063ef9c19`
+   pass 19 roots; the separate indirect ownership repair at `d25f0e9fd`
+   passes three roots and 219 children. Full native DF/512-bit execution is
+   still required. Dot/horizontal and raw-move candidates still fail their
+   first complete checks; integer min/max physical mode32 is under repair.
+   Continue scalar reciprocal, CLMUL, shuffle, ternary, raw compare/broadcast,
+   physical SP/BP/g and undefined-shift observations. Retain original source
+   and separate format objects, initialized values and ABI authority.
 5. Preserve the separately qualified logical integer return batch
    `53a93cfd4` and incomplete floating MIN/MAX candidate `7009ff18f`.
    They are not merged into this repair candidate.
