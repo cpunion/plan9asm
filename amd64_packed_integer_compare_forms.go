@@ -142,7 +142,7 @@ func x86PackedMaskCompareProperties(ins Instr, arch string, first, laneBits int,
 	}
 	if len(ins.Args) == first+4 {
 		mask := first + 2
-		if !amd64NonzeroKOperand(ins.Args[mask]) || arch == "386" && !ins.x86Encoded {
+		if !amd64NonzeroKOperand(ins.Args[mask]) || arch == "386" && !ins.x86Encoded && ins.x86SourceRaw == nil {
 			return form, false
 		}
 		form.mask = mask
