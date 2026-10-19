@@ -827,9 +827,20 @@ func compileOneAttempt(pkg *packages.Package, arch plan9asm.Arch, goos, goarch, 
 			return ccfg.Feature.testDeclarationSignature(signaturePackage, filepath.Dir(t.AsmFile), original, symbol, goarch)
 		}
 	}
-	sigs, declaredArgSizes, err := sigsForAsmFileWithDeclarations(signaturePackage, file, resolve, goarch, testDeclarations)
-	if err != nil {
-		return fmt.Errorf("infer signatures: %w", err)
+	var sigs map[string]plan9asm.FuncSig
+	var declaredArgSizes map[string]int64
+	if numericalSource != nil {
+		sigs, declaredArgSizes, _, err = x86SDKDirectTailDeclarationInventory(numericalSource.goPackage, file,
+			plan9asm.Options{Goarch: goarch, ResolveSym: resolve})
+		if err != nil {
+			return fmt.Errorf("collect actual SDK tail declarations: %w", err)
+		}
+	}
+	if sigs == nil {
+		sigs, declaredArgSizes, err = sigsForAsmFileWithDeclarations(signaturePackage, file, resolve, goarch, testDeclarations)
+		if err != nil {
+			return fmt.Errorf("infer signatures: %w", err)
+		}
 	}
 	if err := rebindARM64ABI0TailSignatures(sigs, tailSigs); err != nil {
 		return err

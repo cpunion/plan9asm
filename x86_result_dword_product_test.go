@@ -155,6 +155,20 @@ func TestX86DwordProductRawSourceCannotBeRebound(t *testing.T) {
 				if !x86RawDwordProductResultSource(ins, arch) {
 					t.Fatal("fresh original physical source was not bound", instruction, arch)
 				}
+				if !x86ResultPreservesPrivateStorage(ins, arch) || x86PreservesNumericalSourceState(ins) {
+					t.Fatal("product private-control preservation was confused with inert numerical state")
+				}
+				for _, direction := range []x86ResultDirection{x86ResultDirectionUnknown,
+					x86ResultDirectionForward, x86ResultDirectionBackward, x86ResultDirectionEither} {
+					if x86ResultDirectionAfterSource(ins, direction, arch) != direction ||
+						x86ResultDirectionAfter(ins, direction) != x86ResultDirectionUnknown {
+						t.Fatal("paired product invented DF or granted a standalone raw-source fact")
+					}
+				}
+				state := x86ResultState{valueStack: &x86ResultValueStack{bytes: []uint8{255, 255}, id: true}}
+				if !x86ResultValueStackContinuation(ins, &state, arch) {
+					t.Fatal("exact product revoked independent live private storage")
+				}
 				for label, change := range map[string]func(*Instr){
 					"absent-origin": func(ins *Instr) { ins.x86SourceRaw = nil },
 					"opcode": func(ins *Instr) {
@@ -174,6 +188,10 @@ func TestX86DwordProductRawSourceCannotBeRebound(t *testing.T) {
 						accepted, known := x86LoweredDwordProductResultStep(changed, &state, nil, arch)
 						if accepted || !known || x86RawDwordProductResultSource(changed, arch) || !reflect.DeepEqual(before, state) {
 							t.Fatal("changed raw source borrowed a paired numerical continuation", accepted, known)
+						}
+						if x86ResultPreservesPrivateStorage(changed, arch) ||
+							x86ResultDirectionAfterSource(changed, x86ResultDirectionEither, arch) != x86ResultDirectionUnknown {
+							t.Fatal("changed raw source borrowed private storage or DF preservation")
 						}
 					})
 				}

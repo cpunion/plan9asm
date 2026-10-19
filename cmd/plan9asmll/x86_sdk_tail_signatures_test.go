@@ -31,7 +31,7 @@ TEXT shared<>(SB),4,$0
 JMP ·Ordinary(SB)
 `
 
-func x86SDKTailDeclarationFixture(t *testing.T, arch, source, assembly string) (plan9asm.GoPackage, *plan9asm.File, plan9asm.Options) {
+func x86SDKTailTypedDeclarationFixture(t *testing.T, arch, source, assembly string) (plan9asm.GoPackage, *plan9asm.File, plan9asm.Options) {
 	t.Helper()
 	const path = "example.invalid/taildecl"
 	fset := token.NewFileSet()
@@ -50,12 +50,20 @@ func x86SDKTailDeclarationFixture(t *testing.T, arch, source, assembly string) (
 		t.Fatal(err)
 	}
 	resolve := func(symbol string) string { return sdkfrontend.Resolve(path, symbol) }
-	loaded := &packages.Package{PkgPath: path, Types: typed, TypesSizes: sizes, Syntax: pkg.Syntax}
-	sigs, _, err := sigsForAsmFile(loaded, file, resolve, arch)
+	return pkg, file, plan9asm.Options{Goarch: arch, ResolveSym: resolve}
+}
+
+func x86SDKTailDeclarationFixture(t *testing.T, arch, source, assembly string) (plan9asm.GoPackage, *plan9asm.File, plan9asm.Options) {
+	t.Helper()
+	pkg, file, options := x86SDKTailTypedDeclarationFixture(t, arch, source, assembly)
+	sizes := types.SizesFor("gc", arch)
+	loaded := &packages.Package{PkgPath: pkg.Path, Types: pkg.Types, TypesSizes: sizes, Syntax: pkg.Syntax}
+	sigs, _, err := sigsForAsmFile(loaded, file, options.ResolveSym, arch)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return pkg, file, plan9asm.Options{Goarch: arch, ResolveSym: resolve, Sigs: sigs}
+	options.Sigs = sigs
+	return pkg, file, options
 }
 
 func TestX86SDKDirectTailBoundInventoryRetainsStrictTranslationConsumer(t *testing.T) {
@@ -69,7 +77,16 @@ TEXT shared<>(SB),4,$0
 MOVQ AX,out+8(FP)
 RET
 `
-	pkg, file, requested := x86SDKTailDeclarationFixture(t, "amd64", x86SDKTailDeclarationGo, assembly)
+	pkg, file, requested := x86SDKTailTypedDeclarationFixture(t, "amd64", x86SDKTailDeclarationGo, assembly)
+	loaded := &packages.Package{PkgPath: pkg.Path, Types: pkg.Types, TypesSizes: types.SizesFor("gc", "amd64"), Syntax: pkg.Syntax}
+	if _, _, err := sigsForAsmFile(loaded, file, requested.ResolveSym, "amd64"); !errors.Is(err, plan9asm.ErrProbeNeedsContext) {
+		t.Fatal("unbound private FP words escaped the generic original-extent check", err)
+	}
+	actual, _, needed, err := x86SDKDirectTailDeclarationInventory(pkg, file, requested)
+	if err != nil || !needed || len(actual) != 2 {
+		t.Fatal("actual typed root inventory was replaced by private-node heuristics", needed, err)
+	}
+	requested.Sigs = actual
 	bound, err := x86SDKDirectTailDeclarationOptions(pkg, file, requested)
 	if err != nil {
 		t.Fatal(err)
@@ -77,10 +94,16 @@ RET
 	bound.TargetTriple = "x86_64-unknown-linux-gnu"
 	config := compileConfig{numericalOptions: &bound}
 	task := asmTask{OutLL: filepath.Join(t.TempDir(), "complete.ll")}
+	stale := make(map[string]plan9asm.FuncSig)
+	for name, sig := range actual {
+		stale[name] = sig
+	}
+	helper := requested.ResolveSym(file.Funcs[2].Sym)
+	stale[helper] = fallbackSigForAsmFunc(file.Funcs[2], helper, "amd64") // Deliberately unbound; negative control only.
 	// This is the CLI's existing equality handoff, not a numerical source token.
 	// The old local inventory must still fail, and forwarding the exact admitted
 	// root inventory must reach the ordinary complete-file translator.
-	err = translateAndCompileModule(file, bound.TargetTriple, "amd64", task, false, config, requested.ResolveSym, requested.Sigs)
+	err = translateAndCompileModule(file, bound.TargetTriple, "amd64", task, false, config, requested.ResolveSym, stale)
 	if !errors.Is(err, plan9asm.ErrProbeNeedsContext) || !strings.Contains(err.Error(), "options changed after binding") {
 		t.Fatal("strict consumer stopped detecting the stale helper signature", err)
 	}
@@ -114,6 +137,24 @@ func TestX86SDKDirectTailSignaturesUseActualCompleteDeclarations(t *testing.T) {
 				}
 				if len(original) != 4 || !reflect.DeepEqual(file.Funcs[2].Sym, helper+"<>") {
 					t.Fatal("adapter mutated caller source/signature inventory")
+				}
+			})
+		}
+	}
+}
+
+func TestX86SDKDirectTailInventoryRetainsOriginalABISelectors(t *testing.T) {
+	for _, arch := range []string{"386", "amd64"} {
+		for _, selector := range []string{"", "<ABIInternal>"} {
+			t.Run(arch+"/"+selector, func(t *testing.T) {
+				assembly := strings.ReplaceAll(x86SDKTailDeclarationASM, "·First(SB)", "·First"+selector+"(SB)")
+				pkg, file, options := x86SDKTailTypedDeclarationFixture(t, arch, x86SDKTailDeclarationGo, assembly)
+				signatures, sizes, needed, err := x86SDKDirectTailDeclarationInventory(pkg, file, options)
+				if err != nil || !needed || len(signatures) != 3 || len(sizes) != 3 {
+					t.Fatal("original ABI selector hid an actual declaration or invented a private ABI", needed, err)
+				}
+				if file.Funcs[0].Sym != "·First"+selector {
+					t.Fatal("declaration inventory rewrote the original ABI selector")
 				}
 			})
 		}
