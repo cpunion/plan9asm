@@ -11,6 +11,9 @@ type x86ResultValueStack struct {
 	// AMD64 has at most 63 private cells. A set bit marks a source W cell,
 	// not a Q cell; equal virtual depth does not imply equal native SP delta.
 	wordCells uint64
+	// Eight bounded bitmap words cover at most 504 private byte positions.
+	// Mode32 uses only the first four; unused positions must remain zero.
+	pointerCells [8]uint64
 	// Nil means the existing ordinary NUM bytes. FLAGS pushes additionally
 	// retain precisely which source bits the adjacent mask may refine. Keep
 	// those masks in stack-byte order through mixed widths, not GP positions.
@@ -96,6 +99,7 @@ func x86ResultValueStackStepWithNativeStore(ins Instr, state *x86ResultState, ow
 		return false, true // Numerical storage cannot rebind the physical/private stack pointer.
 	}
 	if len(stack.bytes)%2 != 0 || len(stack.bytes) > x86ResultValueStackLimit(arch) ||
+		!stack.pointerCellsBounded(arch) ||
 		stack.refinable != nil && len(stack.refinable) != len(stack.bytes) ||
 		stack.correlation != nil && (arch != "386" || len(stack.correlation.bytes) != len(stack.bytes)) {
 		return false, true
@@ -106,6 +110,7 @@ func x86ResultValueStackStepWithNativeStore(ins Instr, state *x86ResultState, ow
 	push := spec.mode == amd64StackPushValue || spec.mode == amd64StackPushFlags
 	if push {
 		bits := ^uint64(0)
+		pointer := false
 		if spec.mode == amd64StackPushValue {
 			arg := ins.Args[0]
 			if x86SegmentRegisterOperand(arg) {
@@ -116,12 +121,13 @@ func x86ResultValueStackStepWithNativeStore(ins Instr, state *x86ResultState, ow
 				if !valid {
 					return false, true
 				}
+				pointer = width == x86ResultPointerWord(arch) && state.pointerGP[index]
 				// This is a bit-preserving private copy, not a numerical use.
 				// Retain only independently known bytes; narrow virtual slots
 				// zero-extend exactly as the paired existing emitter does.
 				bits = ^uint64(0) << uint(8*width)
 				for offset := int64(0); offset < width; offset++ {
-					if state.gp[index]&(1<<uint(offset)) != 0 {
+					if !pointer && state.gp[index]&(1<<uint(offset)) != 0 {
 						bits |= uint64(255) << uint(8*offset)
 					}
 				}
@@ -171,9 +177,13 @@ func x86ResultValueStackStepWithNativeStore(ins Instr, state *x86ResultState, ow
 			}
 			stack.bytes = append(stack.bytes, initialized)
 		}
+		if pointer {
+			stack.markPointerCell(len(stack.bytes))
+		}
 		return true, true
 	}
 	bits := ^uint64(0)
+	pointer := false
 	refinable := bits
 	var origins [32]uint8
 	if !state.shapeOnly {
@@ -187,6 +197,8 @@ func x86ResultValueStackStepWithNativeStore(ins Instr, state *x86ResultState, ow
 			}
 			stack.wordCells &^= cell
 		}
+		pointer = width == x86ResultPointerWord(arch) && stack.pointerCell(len(stack.bytes))
+		stack.revokePointerCells(len(stack.bytes)-storage, len(stack.bytes), int(x86ResultPointerWord(arch)))
 		bits = 0
 		refinable = 0
 		for index := 0; index < storage; index++ {
@@ -245,7 +257,7 @@ func x86ResultValueStackStepWithNativeStore(ins Instr, state *x86ResultState, ow
 		if width == 4 {
 			state.gp[index] |= 0xf0
 		}
-		state.pointerGP[index], state.callerAddressGP[index] = false, false
+		state.pointerGP[index], state.callerAddressGP[index] = pointer, false
 		state.canonicalGP[index] &^= mask
 		// Preserve partial-bit knowledge for exactly the next instruction.
 		// Whole known bytes outside a narrow POP remain independently known.
