@@ -93,6 +93,11 @@ func TestX86FloatingMinMaxPhysicalGenerationAndWholeReplay(t *testing.T) {
 					x86FloatMinMaxNativeEVEX(ins, f) != row.evex {
 					t.Fatal("physical MIN/MAX lost its mode/generation snapshot", row.name, err)
 				}
+				features := inferFuncTargetFeaturesForGOARCH(ArchAMD64, arch, Func{Instrs: []Instr{ins}})
+				if strings.Contains(features, "+avx512f") != row.evex ||
+					strings.Contains(features, "+avx512vl") != (row.evex && !f.scalar && row.width < 64) {
+					t.Fatal("raw MIN/MAX lost its isolated original native ISA", row.name, features)
+				}
 				check := func(fn Func) error {
 					ctx := newX86Ctx(new(strings.Builder), fn, FuncSig{Name: row.name, Ret: Void}, nil, nil,
 						arch, map[string]string{"386": "i386-unknown-linux-gnu", "amd64": "x86_64-unknown-linux-gnu"}[arch], false)
