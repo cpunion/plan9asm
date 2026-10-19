@@ -4,7 +4,9 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -14,6 +16,56 @@ import (
 	"testing"
 	"time"
 )
+
+// cmd/go/internal/work/buildid.go defines an executable build ID as
+// linkAction/mainAction/mainContent/binaryContent. Compare the complete build
+// inputs, not the last output hash: external linkers can change Mach-O UUIDs
+// between otherwise identical builds. Source/tool/library scopes and both
+// independently built and executed outputs are still checked below.
+func moduleLLVMLoaderBuildInputs(data []byte) ([3]string, error) {
+	var inputs [3]string
+	parts := strings.Split(strings.TrimSpace(string(data)), "/")
+	if len(parts) != 4 {
+		return inputs, fmt.Errorf("expected four-part Go executable build ID")
+	}
+	for _, part := range parts {
+		hash, err := base64.RawURLEncoding.DecodeString(part)
+		if err != nil || len(hash) != 15 {
+			return inputs, fmt.Errorf("invalid Go executable build ID hash")
+		}
+	}
+	copy(inputs[:], parts[:3])
+	return inputs, nil
+}
+
+func TestModuleLLVMLoaderBuildInputIdentityContract(t *testing.T) {
+	parts := []string{
+		"4Sv_jAoZLEHEiToUJqjp", "Gh9vhQpOPgyFAE1zV7cQ",
+		"54B443LuDoOsCwYlS76d", "d1YRB_sIJnUt9MGYvdNO",
+	}
+	want, err := moduleLLVMLoaderBuildInputs([]byte(strings.Join(parts, "/") + "\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for index, role := range []string{"link-action", "main-action", "main-content", "binary-content"} {
+		t.Run(role, func(t *testing.T) {
+			changed := append([]string(nil), parts...)
+			changed[index] = "YjHc7jzVQ6eG97PMevqY"
+			got, err := moduleLLVMLoaderBuildInputs([]byte(strings.Join(changed, "/")))
+			if err != nil || (got == want) != (index == 3) {
+				t.Fatalf("input/output identities confused: got=%v want=%v err=%v", got, want, err)
+			}
+		})
+	}
+	for _, malformed := range []string{
+		"", strings.Join(parts[:3], "/"), strings.Join(parts, "/") + "/extra",
+		"!/" + strings.Join(parts[1:], "/"), strings.Join(parts[:3], "/") + "/!",
+	} {
+		if _, err := moduleLLVMLoaderBuildInputs([]byte(malformed)); err == nil {
+			t.Errorf("malformed build ID accepted: %q", malformed)
+		}
+	}
+}
 
 func TestModuleLLVMLoaderRepeatedBuildRetainsIndependentActualScopes(t *testing.T) {
 	moduleFixtureEnvironment(t)
@@ -53,8 +105,16 @@ func TestModuleLLVMLoaderRepeatedBuildRetainsIndependentActualScopes(t *testing.
 	if err != nil {
 		t.Fatal("actual second Go loader build identity", err)
 	}
-	if string(firstID) != string(lastID) {
-		t.Errorf("identical request-owned probe content still changes the actual Go build identity: first=%q second=%q", firstID, lastID)
+	firstInputs, err := moduleLLVMLoaderBuildInputs(firstID)
+	if err != nil {
+		t.Fatal("actual first Go loader build inputs", err)
+	}
+	lastInputs, err := moduleLLVMLoaderBuildInputs(lastID)
+	if err != nil {
+		t.Fatal("actual second Go loader build inputs", err)
+	}
+	if firstInputs != lastInputs {
+		t.Errorf("identical request-owned probe content changes actual Go build inputs: first=%q second=%q", firstID, lastID)
 	}
 	if !reflect.DeepEqual(first, last) {
 		t.Fatal("independent unchanged scopes differ")
