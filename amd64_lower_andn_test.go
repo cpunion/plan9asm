@@ -194,23 +194,6 @@ func TestX86ANDNRuntimeSemanticsAndFlags(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	const mainC = `
-#include <stdint.h>
-#include <string.h>
-extern void andnsemantics(uint8_t *);
-int main(void) {
-  uint8_t out[40] = {0};
-  andnsemantics(out);
-  const uint64_t want[3] = {UINT64_C(0x30), 0, UINT64_C(0x80000000)};
-  for (int i = 0; i < 3; i++) {
-    uint64_t got;
-    memcpy(&got, out + i * 8, sizeof(got));
-    if (got != want[i]) return 10 + i;
-  }
-  const uint8_t flags[12] = {0,0,0,0, 0,1,0,0, 0,0,1,0};
-  for (int i = 0; i < 12; i++) if (out[24+i] != flags[i]) return 30+i;
-  return 0;
-}
-`
+	mainC := x86ANDNOriginalRuntimeDriver
 	compileAndRunRuntimeTestForTarget(t, llc, clang, "andn_semantics", triple, ir, mainC, runPrefix)
 }
