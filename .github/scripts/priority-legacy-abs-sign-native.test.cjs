@@ -18,7 +18,7 @@ const inventory = roots.join('\n') + '\nok\tgithub.com/xgo-dev/plan9asm\n';
 const digest = 'a'.repeat(64);
 const host = `IA32 direct host: linux/amd64 kernel=x86_64 CPUsha=${digest} mapsha=${digest}\n`;
 const preflight = 'ABS/sign actual native SSSE3=1 AVX=1\n';
-const marker = 'ABS/sign original Go bytes and LLVM native alignment/access/CF/canary probes 20 failures 0\n';
+const marker = 'ABS/sign original Go bytes and LLVM native alignment/access/CF/MXCSR=0x1f80/canary probes 20 failures 0\n';
 const image = `native oracle static IA32 ELF bytes=4096 sha256=${digest}\n`;
 const sdk = arch => `actual LEA source/object receipt: SDK=go1.27.2 target=linux/${arch} source=${digest} driver=${digest} object=${digest}\n`;
 const event = (Action, Test, Output) => ({Action, Package: 'github.com/xgo-dev/plan9asm',
@@ -94,6 +94,7 @@ test('legacy ABS/sign binds each actual 20-probe completion marker to its own li
   audit();
   for (const name of children.filter(name => name.endsWith('/live') || name.endsWith('/dead'))) {
     for (const replacement of ['', marker + marker, marker.replace('20', '19'), marker.replace('failures 0', 'failures 1'),
+      marker.replace('MXCSR=0x1f80', 'MXCSR=inherited'), marker.replace('MXCSR=0x1f80', 'MXCSR=0x21f80'),
       host + marker, preflight + marker, sdk('amd64') + marker, image + marker]) {
       assert.throws(() => audit(completeEvents().map(value => value.Test === name && value.Output
         ? {...value, Output: value.Output.replace(marker, replacement)} : value)), name);

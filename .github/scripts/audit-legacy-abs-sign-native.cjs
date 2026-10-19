@@ -14,7 +14,7 @@ const roles = ['live', 'dead'];
 const parents = roots.flatMap(root => axes.map(axis => root + '/' + axis));
 const leaves = parents.flatMap(parent => operations.flatMap(op => roles.map(role => parent + '/' + op + '/' + role)));
 const children = [...parents, ...leaves];
-const marker = 'ABS/sign original Go bytes and LLVM native alignment/access/CF/canary probes 20 failures 0\n';
+const marker = 'ABS/sign original Go bytes and LLVM native alignment/access/CF/MXCSR=0x1f80/canary probes 20 failures 0\n';
 const preflight = 'ABS/sign actual native SSSE3=1 AVX=1\n';
 const hostPrefix = 'IA32 direct host:';
 const sdkPrefix = 'actual LEA source/object receipt:';
