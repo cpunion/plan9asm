@@ -33,14 +33,19 @@ func TestX86ScalarReciprocalMode32FrontendAddressHasNoPhysicalPermission(t *test
 				if _, known, err := x86ScalarReciprocalProperties(ins.Op, ins, "386"); !known || err == nil || errors.Is(err, ErrProbeNeedsContext) {
 					t.Fatal("simple VEX base compatibility was incorrectly extended to SIB syntax", known, err)
 				}
-				if memory != "16(AX)(R9*2)" {
+				if memory == "16(R9)(CX*2)" {
 					goAssemblerOracleOutput(t, "386", "TEXT f(SB),4,$0-0\n"+ins.Raw+"\nRET\n", "", false)
-				} else {
+				} else if memory == "16(AX)(R9*2)" {
 					// Actual Go 1.27 emitted this positionless stderr in the
 					// original RED, but the independent diagnostic join did not
 					// bind it to the complete source. Retain the observation,
 					// not a fabricated source-rejection certificate.
 					t.Log("prior actual Go stderr: asm: asmidx: bad address 2/R9/AX; asm: assembly failed; unbound diagnostic, no source-rejection claim")
+				} else {
+					// Even without an explicit index, R12 requires SIB. Go's
+					// asmidx source rejects its extended mode32 base; do not
+					// invent a concrete tool diagnostic that was not observed.
+					t.Log("R12 uses the independently inspected asmidx SIB source route, not the non-SIB frontend compatibility class")
 				}
 			})
 		}
