@@ -113,6 +113,14 @@ func TestX86NativeLEAAddressBitsDoNotInventNumericalOrPointerFacts(t *testing.T)
 				initial.gp[0], initial.gp[2] = 0xff, 0xff
 				initial.pointerGP[6], initial.callerAddressGP[6] = true, true
 				initial.pointerGP[7], initial.callerAddressGP[7] = true, true
+				if x86LEAWidth(instruction.Op, arch) >= word {
+					state := initial.clone()
+					accepted, known := x86ResultNativeLEAAddressBitsStep(instruction, &state, nil, arch, true)
+					if accepted || known || !reflect.DeepEqual(state, initial) {
+						t.Fatal("narrow observation intercepted the existing complete pointer consumer")
+					}
+					return
+				}
 				for _, control := range []string{"complete", "no-leaf", "unknown-base", "unknown-index"} {
 					state := initial.clone()
 					if control == "unknown-base" {
