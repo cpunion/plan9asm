@@ -108,8 +108,10 @@ func TestDecodeX86RawCompressRejectsInvalidForms(t *testing.T) {
 			t.Fatalf("invalid encoding %x returned ok=%v err=%v", code, ok, err)
 		}
 	}
-	if _, _, ok, err := decodedX86PackedCompressInstruction(encodeX86RawCompress(0x8a, 0, 2, 1, false, false), 32); !ok || err == nil {
-		t.Fatalf("accepted 386 masked compress: ok=%v err=%v", ok, err)
+	badMode32 := encodeX86RawCompress(0x8a, 0, 2, 1, false, false)
+	badMode32[1] &^= 0x80 // The source field has no physical mode32 register.
+	if _, _, ok, err := decodedX86PackedCompressInstruction(badMode32, 32); !ok || err == nil {
+		t.Fatalf("accepted unbound mode32 source bank: ok=%v err=%v", ok, err)
 	}
 }
 
@@ -145,17 +147,10 @@ func TestTranslateX86RawCompressLLVM22Objects(t *testing.T) {
 			}
 			source.WriteString("\tRET\n")
 			requireX86GoAssemblerResult(t, target.goarch, source.String(), true)
-			file, err := Parse(ArchAMD64, source.String())
-			if err != nil {
-				t.Fatal(err)
-			}
-			ir, err := Translate(file, Options{
-				Goarch: target.goarch, TargetTriple: target.triple,
-				Sigs: map[string]FuncSig{"rawCompress": {Name: "rawCompress", Ret: Void}},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			// Keep the complete original encoding program, not fictitious
+			// source/mask/address inputs. Initialized raw counterparts have
+			// separate complete X/Y/Z public-object matrices.
+			ir := x86UnboundVoidRawScalarFormatObject(t, source.String(), target.goarch, target.triple)
 			compileLLVMToObject(t, llc, target.triple, "raw-compress.ll", "raw-compress.o", ir)
 		})
 	}
