@@ -396,7 +396,7 @@ func TestTranslateModuleDirectAndFallbackCoverage(t *testing.T) {
 		Data:  []DataStmt{{Sym: "blob", Off: 0, Width: 2, Value: 0x2211}},
 		Globl: []GloblStmt{{Sym: "blob", Size: 4}},
 	}
-	mod, err := translateModuleDirect(file, Options{
+	options := Options{
 		ResolveSym: resolve,
 		Goarch:     "amd64",
 		Sigs: map[string]FuncSig{
@@ -412,9 +412,35 @@ func TestTranslateModuleDirectAndFallbackCoverage(t *testing.T) {
 				},
 			},
 		},
-	})
+	}
+	if direct, err := translateModuleDirect(file, options); !errors.Is(err, errDirectModuleUnsupported) {
+		if !direct.IsNil() {
+			direct.Dispose()
+		}
+		t.Fatalf("typed x86 source bypassed complete lowering: %v", err)
+	}
+	if original, err := TranslateModule(file, options); !errors.Is(err, ErrProbeNeedsContext) {
+		if !original.IsNil() {
+			original.Dispose()
+		}
+		t.Fatalf("original CPU query acquired an unknown CX input: %v", err)
+	}
+	// A separately initialized source uses the checked fallback, not the
+	// scalar prototype or its implicit zero-valued registers.
+	initialized := *file
+	initialized.Funcs = append([]Func(nil), file.Funcs...)
+	var instructions []Instr
+	for _, ins := range file.Funcs[0].Instrs {
+		if ins.Op == OpCPUID {
+			instructions = append(instructions, Instr{Op: OpMOVL,
+				Args: []Operand{{Kind: OpImm, Imm: 0}, {Kind: OpReg, Reg: CX}}, Raw: "MOVL $0,CX"})
+		}
+		instructions = append(instructions, ins)
+	}
+	initialized.Funcs[0].Instrs = instructions
+	mod, err := TranslateModule(&initialized, options)
 	if err != nil {
-		t.Fatalf("translateModuleDirect(amd64) error = %v", err)
+		t.Fatalf("TranslateModule(checked initialized amd64 fallback) error = %v", err)
 	}
 	defer mod.Dispose()
 	modIR := mod.String()
@@ -422,6 +448,24 @@ func TestTranslateModuleDirectAndFallbackCoverage(t *testing.T) {
 		if !strings.Contains(modIR, want) {
 			t.Fatalf("missing %q in direct module:\n%s", want, modIR)
 		}
+	}
+	// Keep an actual independent positive owner for the supported direct
+	// prototype. It neither returns unknown AX nor consumes implicit CPU input.
+	directFile := &File{Arch: ArchAMD64, Funcs: []Func{{Sym: "·direct", Instrs: []Instr{
+		{Op: OpTEXT, Raw: "TEXT ·direct(SB),4,$0-0"},
+		{Op: OpMOVQ, Args: []Operand{{Kind: OpImm, Imm: 1}, {Kind: OpReg, Reg: AX}}, Raw: "MOVQ $1,AX"},
+		{Op: OpRET, Raw: "RET"},
+	}}}}
+	directMod, err := translateModuleDirect(directFile, Options{
+		Goarch: "amd64", ResolveSym: resolve,
+		Sigs: map[string]FuncSig{"example.direct": {Name: "example.direct", Ret: Void}},
+	})
+	if err != nil {
+		t.Fatal("independent direct prototype fixture rejected", err)
+	}
+	defer directMod.Dispose()
+	if err := llvm.VerifyModule(directMod, llvm.ReturnStatusAction); err != nil {
+		t.Fatal("direct prototype produced invalid LLVM", err)
 	}
 
 	arm64File := &File{
@@ -467,11 +511,24 @@ func TestTranslateModuleDirectAndFallbackCoverage(t *testing.T) {
 			},
 		}},
 	}
-	fallbackMod, err := TranslateModule(cfgFile, Options{
+	cfgOptions := Options{
 		ResolveSym: resolve,
 		Goarch:     "amd64",
 		Sigs:       map[string]FuncSig{"example.cfg": {Name: "example.cfg", Ret: I64}},
-	})
+	}
+	if original, err := TranslateModule(cfgFile, cfgOptions); !errors.Is(err, ErrProbeNeedsContext) {
+		if !original.IsNil() {
+			original.Dispose()
+		}
+		t.Fatal("empty original CFG supplied an unwritten return", err)
+	}
+	initializedCFG := *cfgFile
+	initializedCFG.Funcs = append([]Func(nil), cfgFile.Funcs...)
+	initializedCFG.Funcs[0].Instrs = append([]Instr(nil), cfgFile.Funcs[0].Instrs[:2]...)
+	initializedCFG.Funcs[0].Instrs = append(initializedCFG.Funcs[0].Instrs,
+		Instr{Op: OpMOVL, Args: []Operand{{Kind: OpImm, Imm: 9}, {Kind: OpReg, Reg: AX}}, Raw: "MOVL $9,AX"},
+		cfgFile.Funcs[0].Instrs[2])
+	fallbackMod, err := TranslateModule(&initializedCFG, cfgOptions)
 	if err != nil {
 		t.Fatalf("TranslateModule(fallback) error = %v", err)
 	}
