@@ -9,8 +9,9 @@ import (
 )
 
 // Independent runtime metadata follows the test's Go encoder rows, never the
-// production descriptor. The four unbounded W double shifts keep their
-// explicit Context checks in the complete object owner.
+// production descriptor. This exact-result oracle excludes four W double
+// forms with unspecified low16 outcomes. Their whole-object/paired-access and
+// producer-consistency controls have independent architectural-choice owners.
 type x86ShiftMemoryRuntimeRow struct {
 	x86ShiftMemoryOracle
 	kind, count int
@@ -20,7 +21,7 @@ type x86ShiftMemoryRuntimeRow struct {
 func x86ShiftMemoryRuntimeRows(arch string) []x86ShiftMemoryRuntimeRow {
 	var rows []x86ShiftMemoryRuntimeRow
 	for _, row := range x86ScalarShiftMemoryRows(arch) {
-		if row.needsCount {
+		if row.valueChoice {
 			continue
 		}
 		op, operands, _ := strings.Cut(row.text, " ")

@@ -106,19 +106,7 @@ func x86TypedScalarShiftByteEffect(op Op, ins Instr, arch string) (x86TypedByteE
 	if f.double && f.bits == 16 && (variable || count > 16) {
 		return x86TypedByteEffect{}, true, fmt.Errorf("%w: W double-shift has an unproved or undefined numerical count", ErrProbeNeedsContext)
 	}
-	// A numerical byte effect is not memory authority. Logical FP/AUTO
-	// consumers still need initialized storage; native operands require the
-	// lowering-only continuation paired with their exact volatile access.
-	effect := x86TypedByteEffect{requiresResultProof: f.bmi2 || f.hasMemory()}
-	if variable {
-		// Both CX spelling and every BMI2 Yrl count consume only low CL bits.
-		effect.operands = append(effect.operands, x86TypedByteOperand{index: 0, operand: f.count, width: 1, read: true})
-	}
-	width := int64(f.bits / 8)
-	if f.sourceIndex >= 0 {
-		effect.operands = append(effect.operands, x86TypedByteOperand{index: f.sourceIndex, operand: f.source, width: width, read: f.bmi2 || variable || count != 0})
-	}
-	effect.operands = append(effect.operands, x86TypedByteOperand{index: f.destinationIndex, operand: f.destination, width: width, read: !f.bmi2, write: true})
+	effect := f.inputEffect()
 	if f.bmi2 || !variable && count == 0 {
 		return effect, true, nil // BMI2 never writes flags; Group2 count0 preserves.
 	}
@@ -126,9 +114,6 @@ func x86TypedScalarShiftByteEffect(op Op, ins Instr, arch string) (x86TypedByteE
 	carry := f.stem == "RCL" || f.stem == "RCR"
 	if rotate {
 		effect.flagsKilled = x86ByteFlagOF
-		if carry && (variable || count%int64(f.bits+1) != 0) {
-			effect.flagsRead = x86ByteFlagCF
-		}
 		if !variable {
 			if !carry || count%int64(f.bits+1) != 0 {
 				effect.flagsDefined = x86ByteFlagCF
@@ -157,6 +142,27 @@ func x86TypedScalarShiftByteEffect(op Op, ins Instr, arch string) (x86TypedByteE
 		}
 	}
 	return effect, true, nil
+}
+
+func (f x86ScalarShiftForm) inputEffect() x86TypedByteEffect {
+	count, variable := f.maskedCount(), f.count.Kind == OpReg
+	// A numerical byte effect is not memory authority. Logical FP/AUTO
+	// consumers still need initialized storage; native operands require the
+	// lowering-only continuation paired with their exact volatile access.
+	effect := x86TypedByteEffect{requiresResultProof: f.bmi2 || f.hasMemory()}
+	if variable {
+		// Both CX spelling and every BMI2 Yrl count consume only low CL bits.
+		effect.operands = append(effect.operands, x86TypedByteOperand{index: 0, operand: f.count, width: 1, read: true})
+	}
+	width := int64(f.bits / 8)
+	if f.sourceIndex >= 0 {
+		effect.operands = append(effect.operands, x86TypedByteOperand{index: f.sourceIndex, operand: f.source, width: width, read: f.bmi2 || variable || count != 0})
+	}
+	effect.operands = append(effect.operands, x86TypedByteOperand{index: f.destinationIndex, operand: f.destination, width: width, read: !f.bmi2, write: true})
+	if (f.stem == "RCL" || f.stem == "RCR") && (variable || count%int64(f.bits+1) != 0) {
+		effect.flagsRead = x86ByteFlagCF
+	}
+	return effect
 }
 
 func (f x86ScalarShiftForm) hasMemory() bool {

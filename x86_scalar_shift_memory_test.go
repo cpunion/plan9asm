@@ -10,10 +10,10 @@ import (
 )
 
 type x86ShiftMemoryOracle struct {
-	text       string
-	bits       int
-	readOnly   bool
-	needsCount bool // W double shifts may have architecturally undefined counts.
+	text        string
+	bits        int
+	readOnly    bool
+	valueChoice bool // W double shifts include ISA-unspecified low16 results.
 }
 
 // One memory witness per independently checked Go encoder row. This directory
@@ -101,16 +101,6 @@ func TestX86ScalarShiftMemoryCompleteObjects(t *testing.T) {
 				var source, declarations strings.Builder
 				for index, row := range rows[first:last] {
 					assembly, declaration := x86ScalarShiftMemoryFixture(target.arch, row.text, true)
-					if row.needsCount {
-						x86LEAActualTargetGoObject(t, target.arch, target.triple, assembly)
-						for _, api := range []string{"text", "module", "Go"} {
-							ir, err := x86ScalarFPBitViewAPI(t, assembly, declaration, target.arch, target.triple, api)
-							if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
-								t.Error("unbounded W double-shift count acquired defined numerical effects", row.text, api, err)
-							}
-						}
-						continue
-					}
 					name := fmt.Sprint("Shift", first+index)
 					source.WriteString(strings.ReplaceAll(assembly, "Value", name))
 					declarations.WriteString(strings.ReplaceAll(declaration, "Value", name) + "\n")
@@ -259,11 +249,8 @@ func TestX86ScalarShiftMemoryContinuationBoundaries(t *testing.T) {
 				}
 				complete := state.clone()
 				accepted, known := x86LoweredScalarShiftMemory(ins, &complete, nil, 0, arch)
-				if !known || accepted == row.needsCount {
-					t.Fatal("paired numerical effect lost its defined-count boundary", accepted, known)
-				}
-				if row.needsCount {
-					return // This is an explicit rejection assertion, not an omitted positive.
+				if !known || !accepted {
+					t.Fatal("paired initialized shift lost its finite ISA outcome", accepted, known)
 				}
 				if complete.gp != state.gp || complete.pointerGP != state.pointerGP {
 					t.Fatal("native shift created unrelated GP or pointer facts")

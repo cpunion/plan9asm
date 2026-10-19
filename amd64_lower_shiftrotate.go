@@ -134,8 +134,8 @@ func (c *amd64Ctx) emitScalarCarryRotate(stem string, bits int, value, count64 s
 	fmt.Fprintf(c.b, "  store i1 %%%s, ptr %s\n", newCF, c.flagsCFSlot)
 
 	// OF uses the masked count, not the modulo-9/17 count: e.g. RCLB $10
-	// rotates once but has undefined OF. Keep an old representative for those
-	// undefined cases; the byte-effect consumer independently kills availability.
+	// rotates once but has undefined OF. A zero-bit carry rotation preserves
+	// old FLAGS; only the other count>1 arm chooses a new finite OF value.
 	msbShifted := c.newTmp()
 	fmt.Fprintf(c.b, "  %%%s = lshr %s %%%s, %d\n", msbShifted, amd64IntegerTypeForBits(bits), result, bits-1)
 	msb := c.newTmp()
@@ -150,11 +150,14 @@ func (c *amd64Ctx) emitScalarCarryRotate(stem string, bits int, value, count64 s
 		fmt.Fprintf(c.b, "  %%%s = trunc %s %%%s to i1\n", nextMSB, amd64IntegerTypeForBits(bits), nextShifted)
 		fmt.Fprintf(c.b, "  %%%s = xor i1 %%%s, %%%s\n", definedOF, msb, nextMSB)
 	}
-	isOne := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = icmp eq i64 %s, 1\n", isOne, count64)
+	multiple := c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = icmp ugt i64 %s, 1\n", multiple, count64)
+	chosenOF := c.emitScalarShiftArchitecturalChoice(I1, "%"+multiple, "%"+definedOF)
+	nonzero := c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = icmp ne i64 %%%s, 0\n", nonzero, effective64)
 	oldOF := c.loadFlag(c.flagsOFSlot)
 	newOF := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = select i1 %%%s, i1 %%%s, i1 %s\n", newOF, isOne, definedOF, oldOF)
+	fmt.Fprintf(c.b, "  %%%s = select i1 %%%s, i1 %s, i1 %s\n", newOF, nonzero, chosenOF, oldOF)
 	fmt.Fprintf(c.b, "  store i1 %%%s, ptr %s\n", newOF, c.flagsOFSlot)
 	return "%" + result
 }
@@ -283,9 +286,9 @@ func (c *amd64Ctx) lowerScalarDoubleShift(baseOp string, left bool, bits int, in
 		return true, false, err
 	}
 
-	// W double shifts mask the hardware count to five bits, leaving counts
-	// 17-31 architecturally undefined. Reduce that undefined region modulo the
-	// lane width so generated LLVM never shifts by the type width.
+	// W double shifts mask the hardware count to five bits. Keep the temporary
+	// arithmetic bounded, then replace only the ISA-undefined 17..31 output
+	// with one finite choice. No shift-by-width LLVM poison reaches a select.
 	effective64 := count
 	if bits == 16 {
 		masked := c.newTmp()
@@ -324,6 +327,9 @@ func (c *amd64Ctx) lowerScalarDoubleShift(baseOp string, left bool, bits int, in
 		fmt.Fprintf(c.b, "  %%%s = icmp eq i64 %s, 16\n", full, count)
 		fmt.Fprintf(c.b, "  %%%s = select i1 %%%s, i16 %s, i16 %s\n", corrected, full, source, value)
 		value = "%" + corrected
+		outside := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = icmp ugt i64 %s, 16\n", outside, count)
+		value = c.emitScalarShiftArchitecturalChoice(I16, "%"+outside, value)
 	}
 	c.emitScalarShiftFlags(baseOp[:len(baseOp)-1], bits, destination, value, count, true)
 	if err := store(value); err != nil {

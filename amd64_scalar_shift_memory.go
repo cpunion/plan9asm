@@ -51,9 +51,18 @@ func x86LoweredScalarShiftMemory(ins Instr, state *x86ResultState, owned []bool,
 	if !x86ResultNamedPredicateInstruction(ins) || ins.x86NumericalRead != nil {
 		return false, true
 	}
-	effect, _, err := x86TypedScalarShiftByteEffect(ins.Op, ins, arch)
-	if err != nil || state.flags&effect.flagsRead != effect.flagsRead {
-		return false, true
+	return x86LoweredScalarShiftTransfer(ins, form, state, owned, resultOffset, arch), true
+}
+
+func x86LoweredScalarShiftTransfer(ins Instr, form x86ScalarShiftForm, state *x86ResultState,
+	owned []bool, resultOffset int64, arch string) bool {
+	effect := form.inputEffect()
+	if state.flags&effect.flagsRead != effect.flagsRead {
+		return false
+	}
+	nativeDestination := x86OrdinaryNativeMemoryOperand(form.destination, arch)
+	if !x86ResultNamedPredicateInstruction(ins) || ins.x86NumericalRead != nil {
+		return false
 	}
 	// Check every input and address before overwriting aliased registers.
 	for _, input := range effect.operands {
@@ -62,23 +71,23 @@ func x86LoweredScalarShiftMemory(ins Instr, state *x86ResultState, owned []bool,
 		}
 		if nativeDestination && input.index == form.destinationIndex {
 			if !x86ResultIncomingPointerAddressIdentity(input.operand, state, arch) {
-				return false, true
+				return false
 			}
 			continue
 		}
 		if input.operand.Kind == OpReg {
 			index, _, valid := x86ResultGP(input.operand.Reg, input.width, arch)
 			if !valid || state.pointerGP[index] {
-				return false, true
+				return false
 			}
 		}
 		if !x86ResultReadWithNativeContinuation(ins, input.operand, input.width, state, owned, arch, true) {
-			return false, true
+			return false
 		}
 	}
 	if !nativeDestination && !x86ResultStore(form.destination, int64(form.bits/8), state, owned, resultOffset, arch) {
-		return false, true
+		return false
 	}
-	state.flags = state.flags&^effect.flagsKilled | effect.flagsDefined
-	return true, true
+	state.flags = form.outcome().availableFlags(state.flags)
+	return true
 }
