@@ -48,16 +48,17 @@ func TestDecodeX86RawMOVBECompleteWidthsAndDirections(t *testing.T) {
 
 func TestTranslateX86RawMOVBEObjects(t *testing.T) {
 	file := &File{Arch: ArchAMD64}
-	sigs := make(map[string]FuncSig)
 	index := 0
 	for _, width := range []int{16, 32, 64} {
 		for _, store := range []bool{false, true} {
 			name := fmt.Sprintf("rawMOVBE%d", index)
 			probe := x86RawUnprovedReturnFormProbeFile(t, "amd64", name, x86RawMOVBE(width, store, 8))
 			file.Funcs = append(file.Funcs, probe.Funcs...)
-			sigs[name] = FuncSig{Name: name, Ret: Void}
 			index++
 		}
+	}
+	if index != 6 {
+		t.Fatal("complete raw MOVBE width/direction directory changed", index)
 	}
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
@@ -67,10 +68,7 @@ func TestTranslateX86RawMOVBEObjects(t *testing.T) {
 		"x86_64-apple-darwin", "x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc",
 	} {
 		t.Run(triple, func(t *testing.T) {
-			ir, err := Translate(file, Options{Goarch: "amd64", TargetTriple: triple, Sigs: sigs})
-			if err != nil {
-				t.Fatal(err)
-			}
+			ir := x86UnboundVoidRawProbeObject(t, file, "amd64", triple)
 			compileLLVMToObject(t, llc, triple, "raw-movbe.ll", "raw-movbe.o", ir)
 		})
 	}

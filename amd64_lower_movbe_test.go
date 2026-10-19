@@ -56,18 +56,7 @@ func TestTranslateX86MOVBECompleteGo127FormsAcrossTargets(t *testing.T) {
 		t.Run(target.name, func(t *testing.T) {
 			source := x86MOVBECompleteFormsSource(target.goarch)
 			requireX86GoAssemblerResult(t, target.goarch, source, true)
-			file, err := Parse(ArchAMD64, source)
-			if err != nil {
-				t.Fatal(err)
-			}
-			ir, err := Translate(file, Options{
-				Goarch:       target.goarch,
-				TargetTriple: target.triple,
-				Sigs:         map[string]FuncSig{"moveforms": {Name: "moveforms", Ret: Void}},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			ir := x86UnboundVoidScalarFormatObject(t, source, "moveforms", target.goarch, target.triple)
 			for _, want := range []string{"@llvm.bswap.i16", "@llvm.bswap.i32", `"target-features"="+movbe"`} {
 				if !strings.Contains(ir, want) {
 					t.Fatalf("MOVBE lowering omitted %q:\n%s", want, ir)
@@ -152,26 +141,6 @@ func TestAMD64MOVBERuntimeSemanticsWidthsDirectionsAndFlags(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	const mainC = `
-#include <stdint.h>
-#include <string.h>
-extern void movesemantics(uint8_t *);
-static uint64_t load64(const uint8_t *p) {
-  uint64_t value;
-  memcpy(&value, p, sizeof(value));
-  return value;
-}
-int main(void) {
-  uint8_t out[72] = {0};
-  movesemantics(out);
-  if (load64(out+8) != UINT64_C(0x1122334455661234)) return 10;
-  if (load64(out+24) != UINT64_C(0x12345678)) return 11;
-  if (load64(out+40) != UINT64_C(0x0123456789abcdef)) return 12;
-  const uint8_t stores[14] = {0x77,0x88, 0x55,0x66,0x77,0x88, 0x11,0x22,0x33,0x44,0x55,0x66,0x77,0x88};
-  if (memcmp(out+48, stores, sizeof(stores)) != 0) return 13;
-  if (out[62] != 1 || out[63] != 1 || out[64] != 0 || out[65] != 1) return 14;
-  return 0;
-}
-`
+	mainC := x86MOVBEOriginalRuntimeDriver
 	compileAndRunRuntimeTestForTarget(t, llc, clang, "movbe_semantics", triple, ir, mainC, runPrefix)
 }
