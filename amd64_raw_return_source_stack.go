@@ -35,6 +35,8 @@ type x86SourceRawInstruction struct {
 	packedMove      x86RawPackedMoveIdentity
 	packedReduction x86RawPackedReductionIdentity
 	ternaryLogic    x86RawTernaryLogicIdentity
+	// An absent mode snapshot cannot claim a legacy compare continuation.
+	legacyFloatCompare x86RawLegacyFloatCompareIdentity
 }
 
 type x86SourceStackAddress struct {

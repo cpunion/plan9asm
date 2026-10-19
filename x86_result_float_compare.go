@@ -9,7 +9,13 @@ func x86ResultFloatCompareStep(ins Instr, state *x86ResultState, owned []bool, a
 		return false, known
 	}
 	if !x86ResultNamedPredicateInstruction(ins) && !x86RawFloatCompareLiteralForm(ins, arch) {
-		return false, true
+		if !nativeRead || !x86RawLegacyFloatCompareSource(ins, arch) {
+			return false, true
+		}
+		// Only this paired numerical transfer consumes a named local view.
+		// The emitter and immutable replay retain every original selector and
+		// operand, and neither raw entry nor independent DATA authority follows.
+		ins.x86Encoded, ins.x86SourceRaw = false, nil
 	}
 	if form.mask >= 0 {
 		mask, valid := amd64ParseKReg(ins.Args[form.mask].Reg)

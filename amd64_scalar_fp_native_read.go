@@ -94,7 +94,15 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 	boundRawMinMax := false
 	boundRawReduction := false
 	boundRawTernary := false
+	boundRawLegacyFloatCompare := false
 	for _, ins := range fn.Instrs {
+		if x86RawLegacyFloatCompareSource(ins, arch) {
+			if !boundRawLegacyFloatCompare && (fn.x86RawReplay == nil || fn.x86RawReplay.validate(fn, arch) != nil) {
+				return strictErr
+			}
+			boundRawLegacyFloatCompare = true
+			continue // Exact legacy compare bytes supply no missing input, native entry or backing.
+		}
 		if x86RawTernaryLogicSource(ins, arch) {
 			if !boundRawTernary && (fn.x86RawReplay == nil || fn.x86RawReplay.validate(fn, arch) != nil) {
 				return strictErr

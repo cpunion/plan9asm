@@ -39,6 +39,9 @@ func x86ResultPreservesPrivateStorage(ins Instr, arch string) bool {
 	if x86RawTernaryLogicSource(ins, arch) {
 		return true // Exact bitwise vector writes do not create or replace private storage.
 	}
+	if x86RawLegacyFloatCompareSource(ins, arch) {
+		return true // Numerical X writes do not access the private stack or ID.
+	}
 	return ins.Op != OpCALL && (x86ResultNamedPredicateInstruction(ins) ||
 		x86RegisterQueryPreservesSourceState(ins) || x86WaitPackagePreservesStorage(ins) ||
 		x86PreservesNumericalSourceState(ins) || x86MaskLogicalPreservesStorage(ins) ||

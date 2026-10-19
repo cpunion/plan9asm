@@ -75,6 +75,9 @@ func x86ResultCallerAddressesAfter(ins Instr, before [16]bool, entryFP map[int64
 	if x86RawTernaryLogicSource(ins, arch) {
 		return before // Exact vector/mask inputs and writes have no GP destination.
 	}
+	if x86RawLegacyFloatCompareSource(ins, arch) {
+		return before // Exact legacy comparisons write X, not an existing GP identity.
+	}
 	if x86PreservesNumericalSourceState(ins) {
 		return before
 	}
