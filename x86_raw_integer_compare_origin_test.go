@@ -103,8 +103,12 @@ func x86RawIntegerCompareOriginSource(row x86RawIntegerCompareOriginCase, code [
 	// changes none of them; the adjacent masked PUSHF observation consumes
 	// only these defined bits, not unknown reserved/privileged FLAGS bits.
 	source.WriteString("MOVL $3,CX\nCMPL CX,$3\nSTD\n")
-	for _, value := range code {
-		fmt.Fprintf(&source, "BYTE $%d\n", value)
+	if control == "named" {
+		source.WriteString(row.row + "\n")
+	} else {
+		for _, value := range code {
+			fmt.Fprintf(&source, "BYTE $%d\n", value)
+		}
 	}
 	if row.destination == "K2" {
 		source.WriteString("KMOVQ K2,(DI)\nVMOVUPS Z0,16(DI)\n")
@@ -140,6 +144,38 @@ func TestX86RawIntegerCompareCompleteIndependentOriginDirectory(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+// Use exactly the same initialized loads, fields, result uses and defined-only
+// FLAGS/DF observation. Only the compare's original representation changes.
+// This independently distinguishes its raw-origin gap from an earlier named
+// native load that a whole-source diagnostic might otherwise report first.
+func TestX86RawIntegerCompareSameSourceNamedControls(t *testing.T) {
+	rows := x86RawIntegerCompareOriginCases()
+	for start := 0; start < len(rows); start += x86RawIntegerCompareOriginBatchSize {
+		end := start + x86RawIntegerCompareOriginBatchSize
+		if end > len(rows) {
+			end = len(rows)
+		}
+		t.Run(fmt.Sprint(start/x86RawIntegerCompareOriginBatchSize), func(t *testing.T) {
+			var source, declarations strings.Builder
+			for index, row := range rows[start:end] {
+				body, declaration := x86RawIntegerCompareOriginSource(row, nil, "amd64", "named")
+				name := fmt.Sprint("Compare", start+index)
+				source.WriteString(strings.ReplaceAll(body, "Compare", name))
+				declarations.WriteString(strings.ReplaceAll(declaration, "Compare", name))
+			}
+			x86LEAActualTargetGoObject(t, "amd64", "x86_64-unknown-linux-gnu", source.String())
+			for _, api := range []string{"text", "module", "Go"} {
+				t.Run(api, func(t *testing.T) {
+					ir, err := x86ScalarFPBitViewAPI(t, source.String(), declarations.String(), "amd64", "x86_64-unknown-linux-gnu", api)
+					if err != nil || ir == "" {
+						t.Fatal("same-source named control lost an initialized load, input or defined-only FLAGS/DF observation", err)
+					}
+				})
+			}
+		})
 	}
 }
 
