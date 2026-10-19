@@ -17,7 +17,7 @@ func decodedX86ExplicitMaskMoveInstruction(code []byte, mode int) (Instr, int, b
 	if !matched || p.evex || p.mapNumber != 2 {
 		return Instr{}, 0, false, nil
 	}
-	// The floating store opcodes are 2E/2F, integer stores 8E/8F.
+	// The floating store opcodes are 2E/2F; integer stores use 8E.
 	base := p.opcode &^ 2
 	op, known := x86RawExplicitMaskMoveOps[base]
 	if !known {
@@ -59,8 +59,9 @@ func decodedX86ExplicitMaskMoveInstruction(code []byte, mode int) (Instr, int, b
 		args = []Operand{data, mask, memory}
 	}
 	return Instr{
-		Op:   op,
-		Args: args,
-		Raw:  fmt.Sprintf("%s %s, %s, %s", op, args[0].String(), args[1].String(), args[2].String()),
+		Op:         op,
+		Args:       args,
+		Raw:        fmt.Sprintf("%s %s, %s, %s", op, args[0].String(), args[1].String(), args[2].String()),
+		x86Encoded: true,
 	}, p.modRM + consumed, true, nil
 }
