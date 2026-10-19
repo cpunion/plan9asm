@@ -142,7 +142,13 @@ TEXT bmi2shiftsemantics(SB),NOSPLIT,$0-8
 	SETEQ 41(DI)
 	RET
 `
-	file, err := Parse(ArchAMD64, source)
+	// Preserve the original literal above as an independent Go-rejected
+	// counterexample. Only the unencodable imm64 memory store is repaired.
+	repaired := x86BMI2VariableShiftRepairedRuntimeSource(t)
+	if repaired == source {
+		t.Fatal("BMI2 fixture repair did not change its invalid store")
+	}
+	file, err := Parse(ArchAMD64, repaired)
 	if err != nil {
 		t.Fatal(err)
 	}
