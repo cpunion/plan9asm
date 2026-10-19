@@ -18,7 +18,7 @@ func x86FloatingHelperInitializedState() x86ResultState {
 func x86FloatingHelperMaskedInstruction(ins Instr, zero bool) Instr {
 	ins.Args = append([]Operand(nil), ins.Args...)
 	last := ins.Args[len(ins.Args)-1]
-	ins.Args = append(ins.Args[:len(ins.Args)-1], Operand{Kind: OpReg, Reg: K1}, last)
+	ins.Args = append(ins.Args[:len(ins.Args)-1], Operand{Kind: OpReg, Reg: "K1"}, last)
 	if zero {
 		ins.Op += ".Z"
 	}
