@@ -168,6 +168,42 @@ func TestX86DeadExternalDetectorUsesTypedAccessesNotAddressSyntax(t *testing.T) 
 	}
 }
 
+func TestX86DeadExternalSourceRetainsOrdinaryUnknownScratch(t *testing.T) {
+	// The existing lowering fallback, not a dead-source-specific exemption,
+	// owns this operation. Its unknown low bytes must remain unavailable.
+	state := x86ResultState{flags: x86ByteFlagsAll}
+	ax, _, _ := x86ResultGP("AX", 8, "amd64")
+	cx, _, _ := x86ResultGP("CX", 8, "amd64")
+	state.pointerGP[ax] = true
+	if !x86LoweredPureGPUnknownTransfer(x86PureGPUnknownInstruction(t, "ADDL $1,CX"), &state, "amd64") ||
+		state.gp[cx] != 0xf0 || !state.pointerGP[ax] || state.flags != 0 {
+		t.Fatal("existing nontrapping scratch domain changed or invented unknown low bytes", state)
+	}
+	for _, row := range []struct {
+		name, body string
+		accept     bool
+	}{
+		{"unused-scratch", "VPTERNLOGD $0,(AX),Z1,Z2", true},
+		{"scratch-is-address-index", "VPTERNLOGD $0,(AX)(CX*1),Z1,Z2", false},
+		{"scratch-is-mask", "KMOVD CX,K7\nVPTERNLOGD.Z $0,(AX),Z1,K7,Z2", false},
+	} {
+		for _, api := range []string{"text", "module", "Go"} {
+			t.Run(row.name+"/"+api, func(t *testing.T) {
+				source := "TEXT ·Value(SB),4,$0-8\nMOVQ p+0(FP),AX\nJMP finish\n" +
+					"ADDL $1,CX\n" + row.body + "\nfinish:\nRET\n"
+				ir, err := x86ScalarFPBitViewAPI(t, source, "func Value(p *byte)", "amd64", "x86_64-unknown-linux-gnu", api)
+				if row.accept {
+					if err != nil || ir == "" {
+						t.Fatal("unrelated dead scratch operation lost its old unknown-value domain", err)
+					}
+				} else if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+					t.Fatal("unknown scratch bytes became an external address or mask input", err)
+				}
+			})
+		}
+	}
+}
+
 func TestX86TernaryDeadNamedRawMasksAndAddressesRemainObligations(t *testing.T) {
 	for _, row := range x86TernaryCompleteOracleRows() {
 		if !row.memory && row.mask < 0 {
