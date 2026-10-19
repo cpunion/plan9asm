@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 	"runtime"
@@ -150,6 +151,38 @@ func TestX86NativeLEAAddressBitsDoNotInventNumericalOrPointerFacts(t *testing.T)
 					}
 				}
 			})
+		}
+	}
+}
+
+func TestX86NativeLEAAddressBitsCannotSurviveAConflictingWrite(t *testing.T) {
+	for _, arch := range []string{"386", "amd64"} {
+		move, triple := "MOVQ", "x86_64-unknown-linux-gnu"
+		if arch == "386" {
+			move, triple = "MOVL", "i386-unknown-linux-gnu"
+		}
+		source, declaration := x86NativeLEAAddressBitsProgram(arch)
+		for _, change := range []struct {
+			instruction string
+			complete    bool
+		}{{"MOVB $0,AL", false}, {"MOVW $0,AX", true}, {"MOVB 1(SI),AL", false}} {
+			modified := strings.Replace(source, move+" AX,0(DI)", change.instruction+"\n"+move+" AX,0(DI)", 1)
+			if modified == source {
+				t.Fatal("address observation control did not modify its original producer")
+			}
+			x86LEAActualTargetGoObject(t, arch, triple, modified)
+			for _, api := range []string{"text", "module", "Go"} {
+				t.Run(arch+"/"+change.instruction+"/"+api, func(t *testing.T) {
+					ir, err := x86ScalarFPBitViewAPI(t, modified, declaration, arch, triple, api)
+					if change.complete {
+						if err != nil || ir == "" {
+							t.Fatal("independent complete numerical overwrite lost its own bytes", err)
+						}
+					} else if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+						t.Fatal("an intervening partial write reused stale address-derived bytes", err)
+					}
+				})
+			}
 		}
 	}
 }
