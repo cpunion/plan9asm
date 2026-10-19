@@ -10,6 +10,7 @@ import (
 
 type x86PackedConversionRuntimeRow struct {
 	instruction string
+	rawOverride string
 	wide, dead  bool
 	inputBits   int
 	mask        bool
@@ -97,13 +98,15 @@ func x86PackedConversionRuntimeFixture(rows []x86PackedConversionRuntimeRow) (as
 		fmt.Fprintf(&cValues, "UINT64_C(%#x),", value)
 	}
 	original = `package main
-import "fmt"
+import ("fmt";"unsafe")
 var values=[]uint64{` + gValues.String() + `}
 var masks=[]uint32{0xffff,0,1,0xaaaa}
 func check(index,bits,maskCount,sae int,fn func(*[12]uint64,*[8]uint64,uint32,uint32)) {
     hash:=uint64(1469598103934665603); count:=0
     for n:=range values { for rc:=0;rc<4;rc++ { for controls:=0;controls<8;controls++ { for m:=0;m<maskCount;m++ {
-        var input [8]uint64
+        var backing [10]uint64
+        address:=unsafe.Pointer(&backing[0])
+        input:=(*[8]uint64)(unsafe.Add(address,(-uintptr(address))&15))
         for lane:=range input {
             if bits==32 {input[lane]=uint64(uint32(values[(n+2*lane)%len(values)]))|uint64(uint32(values[(n+2*lane+1)%len(values)]))<<32
             } else {input[lane]=values[(n+lane)%len(values)]}
@@ -114,7 +117,7 @@ func check(index,bits,maskCount,sae int,fn func(*[12]uint64,*[8]uint64,uint32,ui
         if controls&1!=0 {csr|=0x40};if controls&2!=0 {csr|=0x8000}
         if controls&4!=0 {csr|=0x21}
         if sae!=0 {csr &^=0x1080}
-        fn(&out,&input,csr,masks[m])
+        fn(&out,input,csr,masks[m])
         for _,word:=range out { for shift:=0;shift<64;shift+=8 {hash=(hash^uint64(byte(word>>shift)))*1099511628211} }
         count++
     }}}}
@@ -128,7 +131,7 @@ static const uint32_t masks[]={0xffff,0,1,0xaaaa};
 static void check(unsigned index,unsigned bits,unsigned maskCount,unsigned sae,void (*fn)(uint64_t*,const uint64_t*,uint32_t,uint32_t)) {
     uint64_t hash=UINT64_C(1469598103934665603);unsigned count=0,N=sizeof(values)/sizeof(*values);
     for(unsigned n=0;n<N;n++) for(unsigned rc=0;rc<4;rc++) for(unsigned controls=0;controls<8;controls++) for(unsigned m=0;m<maskCount;m++) {
-        uint64_t input[8],out[12];
+        _Alignas(16) uint64_t input[8],out[12];
         for(unsigned lane=0;lane<8;lane++) input[lane]=bits==32 ? (uint64_t)(uint32_t)values[(n+2*lane)%N]|(uint64_t)(uint32_t)values[(n+2*lane+1)%N]<<32 : values[(n+lane)%N];
         for(unsigned lane=0;lane<12;lane++) out[lane]=(lane+1)*UINT64_C(0x0101010101010101);
         uint32_t csr=0x1f80|(rc<<13);

@@ -160,7 +160,7 @@ func TestTranslateX86PackedNumericConversionRejectsFormsOutsideGoAssemblerTables
 }
 
 func amd64PackedNumericConversionNativeRuntimeSemantics(t *testing.T) {
-	execution := x86FloatCompareRuntimeTools(t, x86FloatCompareEVEX)
+	execution := x86PackedConversionNativeTools(t)
 	const source = `TEXT packednumericconversionsemantics(SB),$0-64
 	MOVQ out+0(FP), AX
 	MOVQ f64+8(FP), BX
@@ -285,5 +285,5 @@ int main(void){
  _mm_setcsr(original);fesetround(FE_TONEAREST);return 0;
 }
 `
-	execution.compileAndRunLLVM(t, "packed_numeric_conversion_semantics", ir, mainC, "-O2")
+	x86PackedConversionNativePipelines(t, execution, ir, mainC, nil)
 }
