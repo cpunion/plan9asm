@@ -972,6 +972,9 @@ func x86ResultStore(arg Operand, width int64, state *x86ResultState, owned []boo
 }
 
 func x86ResultTransfer(ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string) bool {
+	if accepted, known := x86ResultScalarReciprocalStep(ins, state, owned, arch, false); known {
+		return accepted
+	}
 	if accepted, known := x86ResultMoveHalfStep(ins, state, owned, resultOffset, arch, false); known {
 		return accepted
 	}
@@ -1192,32 +1195,8 @@ func x86ResultTransfer(ins Instr, state *x86ResultState, owned []bool, resultOff
 			x86ResultRead(ins.Args[0], width, state, owned, arch) &&
 			x86ResultStore(ins.Args[1], width, state, owned, resultOffset, arch)
 	}
-	if form, recognized, err := amd64ScalarVectorMoveProperties(ins, arch); recognized {
-		if err != nil || !form.spec.legacy || form.mask >= 0 || len(ins.Args) != 2 {
-			return false
-		}
-		width := int64(form.spec.bits / 8)
-		mask := uint16(1)<<uint(width) - 1
-		xreg := func(arg Operand) (int, bool) {
-			index, valid := amd64ParseXReg(arg.Reg)
-			return index, arg.Kind == OpReg && valid && index < 16 && (arch != "386" || index < 8)
-		}
-		first, last := ins.Args[0], ins.Args[1]
-		if source, valid := xreg(first); valid {
-			if state.xmm[source]&mask != mask {
-				return false
-			}
-		} else if !form.literal && !x86ResultRead(first, width, state, owned, arch) {
-			return false
-		}
-		if destination, valid := xreg(last); valid {
-			state.xmm[destination] |= mask
-			if form.memory == 0 || form.legacyZero {
-				state.xmm[destination] = 0xffff
-			}
-			return true
-		}
-		return x86ResultStore(last, width, state, owned, resultOffset, arch)
+	if accepted, known := x86ResultLegacyScalarMoveStep(ins, state, owned, resultOffset, arch, false); known {
+		return accepted
 	}
 	// Registered scalar RMW instructions are handled by the typed effect above.
 	// Comparisons share the emitter's complete grammar and physical byte views.

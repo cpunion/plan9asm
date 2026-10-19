@@ -93,6 +93,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 	boundRawMinMax := false
 	boundRawReduction := false
 	for _, ins := range fn.Instrs {
+		if x86RawScalarReciprocalSource(ins, arch) {
+			continue // Exact source identity retains scalar data, upper bytes and native m32 obligations.
+		}
 		if x86RawMoveHalfSource(ins, arch) {
 			continue // Exact sealed m64 moves grant no missing input, storage or raw-entry fact.
 		}
@@ -252,6 +255,12 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		}
 		if accepted, known := x86LoweredScalarVectorMoveMemoryStep(ins, state, owned, resultOffset, arch); known {
 			return accepted // Exact active volatile m32/m64, without a reusable pointee fact.
+		}
+		if accepted, known := x86ResultScalarReciprocalStep(ins, state, owned, arch, true); known {
+			return accepted // Actual scalar estimate keeps the independent exact m32 access and MXCSR contract.
+		}
+		if accepted, known := x86ResultLegacyScalarMoveStep(ins, state, owned, resultOffset, arch, true); known {
+			return accepted // Only the paired exact volatile legacy m32/m64 read supplies its conditional scalar bytes.
 		}
 		if accepted, known := x86ResultSegmentQueryStep(ins, state, owned, arch, true); known {
 			return accepted // Paired exact volatile m16; no backing or reusable read permission.

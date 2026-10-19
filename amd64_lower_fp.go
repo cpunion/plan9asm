@@ -133,7 +133,7 @@ func (c *amd64Ctx) lowerFP(op Op, ins Instr) (ok bool, terminated bool, err erro
 		if len(ins.Args) != 2 {
 			return true, false, fmt.Errorf("amd64 MOVSS expects src, dst: %q", ins.Raw)
 		}
-		v, err := c.evalF32(ins.Args[0])
+		v, err := c.loadLegacyScalarMoveSource(ins, 32)
 		if err != nil {
 			return true, false, err
 		}
@@ -312,7 +312,7 @@ func (c *amd64Ctx) lowerFP(op Op, ins Instr) (ok bool, terminated bool, err erro
 		if len(ins.Args) != 2 {
 			return true, false, fmt.Errorf("amd64 MOVSD expects src, dst: %q", ins.Raw)
 		}
-		v, err := c.evalF64(ins.Args[0])
+		v, err := c.loadLegacyScalarMoveSource(ins, 64)
 		if err != nil {
 			return true, false, err
 		}
