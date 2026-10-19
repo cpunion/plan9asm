@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"runtime"
 	"strings"
@@ -67,9 +68,12 @@ func TestTranslateX86QwordBitLookupCompleteGoAssemblerForms(t *testing.T) {
 				Goarch: target.goarch, TargetTriple: target.triple,
 				Sigs: map[string]FuncSig{"qwordbitlookupforms": {Name: "qwordbitlookupforms", Ret: Void}},
 			})
-			if err != nil {
-				t.Fatal(err)
+			if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+				t.Fatal("uninitialized qword lookup formats invented numerical/native inputs", err)
 			}
+			ir = x86InstructionFormatObjectUnit(t, file,
+				map[string]FuncSig{"qwordbitlookupforms": {Name: "qwordbitlookupforms", Ret: Void}}, target.goarch, target.triple, 0,
+				func(c *amd64Ctx, ins Instr) (bool, bool, error) { return c.lowerQwordBitLookup(ins.Op, ins) })
 			llc := findLLVM22Tool("llc")
 			if llc == "" {
 				t.Fatal("LLVM 22 llc not found")
@@ -120,9 +124,10 @@ func TestTranslateX86QwordBitLookupRejectsFormsOutsideGoAssemblerTable(t *testin
 }
 
 func TestAMD64QwordBitLookupRuntimeSemantics(t *testing.T) {
-	crossRosetta := runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" && rosettaAvailable()
-	if runtime.GOARCH != "amd64" && !crossRosetta {
-		t.Skip("runtime execution test requires amd64 or Rosetta")
+	// This oracle executes portable integer LLVM, not native AVX512. Use
+	// the actual 64-bit host rather than an unrelated Rosetta requirement.
+	if runtime.GOARCH != "amd64" && runtime.GOARCH != "arm64" {
+		t.Skip("portable runtime oracle requires its native 64-bit host counterpart")
 	}
 	llc, clang, ok := findLlcAndClang(t)
 	if !ok {
@@ -160,11 +165,6 @@ func TestAMD64QwordBitLookupRuntimeSemantics(t *testing.T) {
 		t.Fatal(err)
 	}
 	triple := testTargetTriple(runtime.GOOS, runtime.GOARCH)
-	var runPrefix []string
-	if crossRosetta {
-		triple = "x86_64-apple-macosx"
-		runPrefix = []string{"/usr/bin/arch", "-x86_64"}
-	}
 	ir, err := Translate(file, Options{
 		Goarch: "amd64", TargetTriple: triple,
 		Sigs: map[string]FuncSig{"qwordbitlookupsemantics": {
@@ -215,5 +215,22 @@ int main(void) {
   return 0;
 }
 `
-	compileAndRunRuntimeTestForTarget(t, llc, clang, "qword_bit_lookup_semantics", triple, ir, mainC, runPrefix)
+	for _, pipeline := range []struct {
+		name      string
+		optimized bool
+		backend   int
+	}{
+		{name: "backend_O0"},
+		{name: "backend_O2", backend: 2},
+		{name: "IR_O2/backend_O2", optimized: true, backend: 2},
+	} {
+		t.Run(pipeline.name, func(t *testing.T) {
+			text := ir
+			if pipeline.optimized {
+				text = x86DwordProductIROptimize(t, ir)
+			}
+			compileAndRunRuntimeTestWithCompiler(t, llc, []string{clang}, "qword_bit_lookup_semantics",
+				triple, text, mainC, nil, pipeline.backend)
+		})
+	}
 }
