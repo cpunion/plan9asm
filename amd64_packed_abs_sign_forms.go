@@ -36,6 +36,22 @@ type x86PackedAbsSignForm struct {
 	spec x86PackedAbsSignSpec
 }
 
+func (form x86PackedAbsSignForm) evex(ins Instr) bool {
+	if form.legacy {
+		return false
+	}
+	if ins.x86PackedAbsEVEX || form.spec.encoding == x86PackedLogicalEVEX ||
+		form.byteWidth == 64 || form.mask >= 0 || form.broadcast {
+		return true
+	}
+	for _, arg := range ins.Args {
+		if index, valid := amd64VectorRegisterIndex(arg.Reg, form.byteWidth); arg.Kind == OpReg && valid && index >= 16 {
+			return true
+		}
+	}
+	return false
+}
+
 func x86PackedAbsSignProperties(op Op, ins Instr, arch string) (x86PackedAbsSignForm, bool, error) {
 	base, _, _ := strings.Cut(strings.ToUpper(string(op)), ".")
 	spec, known := x86PackedAbsSignSpecs[Op(base)]
@@ -45,6 +61,9 @@ func x86PackedAbsSignProperties(op Op, ins Instr, arch string) (x86PackedAbsSign
 	}
 	if ins.Op != "" && !strings.EqualFold(string(ins.Op), string(op)) {
 		return form, true, fmt.Errorf("ABS/sign dispatch/source opcode mismatch")
+	}
+	if ins.x86PackedAbsEVEX && spec.encoding != x86PackedLogicalVEXOrEVEX && spec.encoding != x86PackedLogicalEVEX {
+		return form, true, fmt.Errorf("%s %s has no physical EVEX generation", arch, op)
 	}
 	local := ins
 	local.Op = op

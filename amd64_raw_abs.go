@@ -76,5 +76,6 @@ func decodedX86RawPackedAbsInstruction(code []byte, mode int) (Instr, int, bool,
 	for index := range args {
 		printed[index] = args[index].String()
 	}
-	return Instr{Op: op, Args: args, Raw: fmt.Sprintf("%s %s", op, strings.Join(printed, ", "))}, p.modRM + consumed, true, nil
+	return Instr{Op: op, Args: args, Raw: fmt.Sprintf("%s %s", op, strings.Join(printed, ", ")),
+		x86PackedAbsEVEX: p.evex}, p.modRM + consumed, true, nil
 }

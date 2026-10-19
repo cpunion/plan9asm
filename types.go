@@ -1000,6 +1000,9 @@ type Instr struct {
 	// MIN/MAX retains low-bank, unmasked physical EVEX independently of its
 	// operand-inferred native encoding and ordinary numerical input facts.
 	x86FloatMinMaxEVEX bool
+	// ABS retains physical EVEX even for unmasked low X/Y operands that
+	// otherwise have a VEX spelling. CPU generation supplies no input facts.
+	x86PackedAbsEVEX bool
 	// Recomputed per-operand source-SP to typed ABI0 slot certificate. Keep
 	// original physical operands intact across repeated normalization.
 	x86SourceStackFP map[int]int64
