@@ -217,6 +217,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		if accepted, known := x86LoweredAccumulatorSignExtendResultStep(ins, state, owned, resultOffset, arch); known {
 			return accepted
 		}
+		if accepted, known := x86LoweredImplicitDivideStep(ins, state, owned, arch); known {
+			return accepted // Only the original native #DE/access emitter supplies this continuation.
+		}
 		if accepted, known := x86LoweredDwordProductResultStep(ins, state, owned, arch); known {
 			return accepted
 		}

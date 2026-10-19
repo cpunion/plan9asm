@@ -135,6 +135,12 @@ func x86RegisterCanonicalBytesAfter(original Instr, before [16]uint8, arch strin
 	if _, known, err := x86DirectiveProperties(ins); known && err == nil {
 		return next
 	}
+	if form, known, err := x86ImplicitDivideProperties(ins.Op, ins, arch); known && err == nil && x86ResultNamedPredicateInstruction(ins) {
+		for _, output := range x86ImplicitDivideWrites(form) {
+			write(output.operand.Reg, output.width, 0)
+		}
+		return next // A quotient/remainder is numerical, never a newly canonical bool.
+	}
 	if effect, known, err := x86TypedInstructionByteEffect(ins.Op, ins, arch); known && err == nil {
 		for _, operand := range effect.operands {
 			if operand.write && operand.operand.Kind == OpReg {
