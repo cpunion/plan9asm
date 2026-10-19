@@ -235,15 +235,22 @@ func TestX86ImplicitDivideIndependentNativeVectorDirectory(t *testing.T) {
 	}
 }
 
+func x86DivideNativeDeclarationSources(rows []x86DivideNativeRow) (apiDeclarations, originalFile string) {
+	var declarations strings.Builder
+	for index, row := range rows {
+		fmt.Fprintf(&declarations, "func %s(out *[4]uint64,low,high,divisor uint64)\nfunc Dead%d(out *[4]uint64,low,high,divisor uint64)\n", row.name, index)
+	}
+	return declarations.String(), "package oracle\n" + declarations.String()
+}
+
 func x86RunImplicitDivideNative(t *testing.T, execution x86FloatCompareExecution, arch string) {
 	t.Helper()
 	rows := x86DivideNativeRows(arch)
 	values, faults := x86DivideNativeCases(rows, arch)
-	var assembly, declarations, cRows, cCases, goRows, goCases, faultRows, faultCases strings.Builder
-	declarations.WriteString("package oracle\n")
+	var assembly, cRows, cCases, goRows, goCases, faultRows, faultCases strings.Builder
+	declarations, originalDeclarations := x86DivideNativeDeclarationSources(rows)
 	for index, row := range rows {
 		assembly.WriteString(row.assembly)
-		fmt.Fprintf(&declarations, "func %s(out *[4]uint64,low,high,divisor uint64)\nfunc Dead%d(out *[4]uint64,low,high,divisor uint64)\n", row.name, index)
 		fmt.Fprintf(&cRows, "{ %s },\n", row.name)
 		fmt.Fprintf(&goRows, "%s,\n", row.name)
 		signed, memory := 0, 0
@@ -267,7 +274,7 @@ func x86RunImplicitDivideNative(t *testing.T, execution x86FloatCompareExecution
 		fmt.Fprintf(&prototypes, "extern void %s(uint64_t *,uint64_t,uint64_t,uint64_t);\nextern void Dead%d(uint64_t *,uint64_t,uint64_t,uint64_t);\n", row.name, index)
 	}
 	goAssemblerOracleOutput(t, arch, assembly.String(), "", true)
-	ir, err := x86ScalarFPBitViewAPI(t, assembly.String(), declarations.String(), arch, execution.triple, "Go")
+	ir, err := x86ScalarFPBitViewAPI(t, assembly.String(), declarations, arch, execution.triple, "Go")
 	if err != nil {
 		t.Fatal("complete original division runtime source rejected", arch, err)
 	}
@@ -336,7 +343,7 @@ func x86RunImplicitDivideNative(t *testing.T, execution x86FloatCompareExecution
 			}
 		})
 	}
-	x86RunOriginalGoNativeSource(t, execution, arch, declarations.String(), assembly.String(),
+	x86RunOriginalGoNativeSource(t, execution, arch, originalDeclarations, assembly.String(),
 		fmt.Sprintf(x86DivideNativeOriginalGo, goRows.String(), goCases.String()))
 }
 

@@ -6,6 +6,7 @@ const test = require('node:test');
 const {auditFloatingCompare, roots, children} = require('./audit-floating-compare.cjs');
 const workflow = fs.readFileSync('.github/workflows/pr40-owned-process-probe.yml', 'utf8');
 const block = `      - name: Execute LLVM floating comparison results and native FP effects
+        if: \${{ !cancelled() && steps.native_toolchain.outcome == 'success' && steps.native_go.outcome == 'success' }}
         env:
           GOTOOLCHAIN: local
         run: |

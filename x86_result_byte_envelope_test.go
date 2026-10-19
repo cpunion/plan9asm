@@ -11,7 +11,7 @@ func TestX86ABI0ResultInitializationCompleteStateByteEnvelope(t *testing.T) {
 	// 1944 FP bytes + 16 AUTO bytes + (16 GP + 16 canonical GP + 256 Z +
 	// 8 native MMX + 8 K + 1 flags + 16 pointer + 16 caller-address identities + 32 origin
 	// IDs + 2 scan-pending + 3 predicate + 1 DF + 1 string counter +
-	// 1 shape discriminator) is the logical payload
+	// 1 shape discriminator + 2 adjacent LEA observation bytes) is the logical payload
 	// bytes. Every vector bank now tracks all 64 byte-definedness bits; the
 	// redundant representation of its low-X bits is not another logical value.
 	// A linear CFG pays its source scan and

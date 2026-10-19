@@ -112,25 +112,14 @@ func TestX86DuplicateMoveNativeSourceFiveTargets(t *testing.T) {
 	}
 	for _, target := range x86RawReturnTargets {
 		t.Run(target.triple, func(t *testing.T) {
-			var source, declarations strings.Builder
-			count := 0
-			for _, row := range x86DuplicateNativeRows() {
-				source.WriteString(x86DuplicateNativeAssembly(row, target.arch, false, false))
-				fmt.Fprintf(&declarations, "func %s(out *[96]byte,input,old *[64]byte,mask uint64)\n", row.name)
-				count++
-				if row.memory {
-					source.WriteString(x86DuplicateNativeAssembly(row, target.arch, false, true))
-					fmt.Fprintf(&declarations, "func Dead%s(out *[96]byte,input,old *[64]byte,mask uint64)\n", row.name)
-					count++
-				}
+			program := x86BuildDuplicateNativeProgram(target.arch)
+			if strings.Count(program.source, "TEXT ·") != 90 {
+				t.Fatal("complete initialized live/dead native source changed")
 			}
-			if count != 90 {
-				t.Fatal("complete initialized live/dead native source changed", count)
-			}
-			x86LEAActualTargetGoObject(t, target.arch, target.triple, source.String())
+			x86LEAActualTargetGoObject(t, target.arch, target.triple, program.source)
 			for _, api := range []string{"text", "module", "Go"} {
 				t.Run(api, func(t *testing.T) {
-					ir, err := x86ScalarFPBitViewAPI(t, source.String(), declarations.String(), target.arch, target.triple, api)
+					ir, err := x86ScalarFPBitViewAPI(t, program.source, program.declarations, target.arch, target.triple, api)
 					if err != nil {
 						t.Fatal("complete native runtime source lost initialized data/FLAGS/MXCSR/storage", err)
 					}
@@ -143,13 +132,19 @@ func TestX86DuplicateMoveNativeSourceFiveTargets(t *testing.T) {
 	}
 }
 
-func x86RunDuplicateMoveNative(t *testing.T, execution x86FloatCompareExecution, arch string) {
-	t.Helper()
+type x86DuplicateNativeProgram struct {
+	source, declarations, prototypes, cRows, faultRows string
+	originalSource, originalDeclarations, originalRows string
+	faultAligned                                       []bool
+}
+
+// Keep the exact native fixture available to host-independent source checks.
+// Building it must not require an x86 execution host or hide a failed oracle.
+func x86BuildDuplicateNativeProgram(arch string) x86DuplicateNativeProgram {
 	rows := x86DuplicateNativeRows()
 	var source, declarations, prototypes, cRows, faultRows strings.Builder
 	var originalSource, originalDeclarations, originalRows strings.Builder
 	var faultAligned []bool
-	declarations.WriteString("package oracle\n")
 	originalDeclarations.WriteString("package oracle\n")
 	flag := func(value bool) int {
 		if value {
@@ -188,15 +183,26 @@ func x86RunDuplicateMoveNative(t *testing.T, execution x86FloatCompareExecution,
 			fmt.Fprintf(&originalRows, "{%s,%s},\n", row.name, fields)
 		}
 	}
+	return x86DuplicateNativeProgram{
+		source: source.String(), declarations: declarations.String(),
+		prototypes: prototypes.String(), cRows: cRows.String(), faultRows: faultRows.String(),
+		originalSource: originalSource.String(), originalDeclarations: originalDeclarations.String(),
+		originalRows: originalRows.String(), faultAligned: faultAligned,
+	}
+}
+
+func x86RunDuplicateMoveNative(t *testing.T, execution x86FloatCompareExecution, arch string) {
+	t.Helper()
+	program := x86BuildDuplicateNativeProgram(arch)
 	// All 90 complete source kernels are compiled by Go, including the EVEX
 	// rows. Only the separate 18-row AVX/SSE3 source is claimed as Go execution.
-	goAssemblerOracleOutput(t, arch, source.String(), "", true)
-	ir, err := x86ScalarFPBitViewAPI(t, source.String(), declarations.String(), arch, execution.triple, "Go")
+	goAssemblerOracleOutput(t, arch, program.source, "", true)
+	ir, err := x86ScalarFPBitViewAPI(t, program.source, program.declarations, arch, execution.triple, "Go")
 	if err != nil {
 		t.Fatal("complete original duplicate runtime source rejected", err)
 	}
-	valueDriver := x86DuplicateNativeValuesC(prototypes.String(), cRows.String())
-	faultDriver := x86DuplicateNativeFaultsC(prototypes.String(), faultRows.String())
+	valueDriver := x86DuplicateNativeValuesC(program.prototypes, program.cRows)
+	faultDriver := x86DuplicateNativeFaultsC(program.prototypes, program.faultRows)
 	for _, pipeline := range []struct{ name, level, ir string }{
 		{"backend_O0", "-O0", ir}, {"backend_O2", "-O2", ir}, {"IR_O2/backend_O2", "-O2", x86DwordProductIROptimize(t, ir)},
 	} {
@@ -217,7 +223,7 @@ func x86RunDuplicateMoveNative(t *testing.T, execution x86FloatCompareExecution,
 				program := x86NativeOracleIA32Executable(t, execution, executable)
 				ia32 = &program
 			}
-			for row, aligned := range faultAligned {
+			for row, aligned := range program.faultAligned {
 				for mask := 0; mask < 2; mask++ {
 					probes := 5
 					if aligned {
@@ -254,10 +260,10 @@ func x86RunDuplicateMoveNative(t *testing.T, execution x86FloatCompareExecution,
 		})
 	}
 	t.Run("OriginalGo", func(t *testing.T) {
-		originalDeclarations.WriteString("func MXCSR(value uint32) uint32\n")
-		originalSource.WriteString("TEXT ·MXCSR(SB),4,$0-8\nSTMXCSR ret+4(FP)\nLDMXCSR value+0(FP)\nRET\n")
-		x86RunOriginalGoNativeSource(t, execution, arch, originalDeclarations.String(), originalSource.String(),
-			fmt.Sprintf(x86DuplicateOriginalGo, originalRows.String()))
+		declarations := program.originalDeclarations + "func MXCSR(value uint32) uint32\n"
+		source := program.originalSource + "TEXT ·MXCSR(SB),4,$0-8\nSTMXCSR ret+4(FP)\nLDMXCSR value+0(FP)\nRET\n"
+		x86RunOriginalGoNativeSource(t, execution, arch, declarations, source,
+			fmt.Sprintf(x86DuplicateOriginalGo, program.originalRows))
 		t.Log("actual original Go legacy/VEX: 18 rows × 16 IEEE/bit patterns × 6 masks = 1728 whole32/FLAGS/DF/MXCSR/canary outcomes; no EVEX execution claim")
 	})
 }
