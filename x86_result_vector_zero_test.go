@@ -2,10 +2,86 @@ package plan9asm
 
 import (
 	"fmt"
+	"reflect"
 	"runtime"
 	"strings"
 	"testing"
 )
+
+func TestX86VectorZeroRawPairedStateAndOrigin(t *testing.T) {
+	for _, arch := range []string{"386", "amd64"} {
+		for _, code := range []string{
+			"WORD $0xf8c5\nBYTE $0x77", "WORD $0xfcc5\nBYTE $0x77",
+			"LONG $0x77f8e1c4", "LONG $0x77fce1c4",
+			"LONG $0x7778e1c4", "LONG $0x777ce1c4",
+		} {
+			file, err := Parse(ArchAMD64, "TEXT Value(SB),4,$0-0\n"+code+"\nRET\n")
+			if err != nil {
+				t.Fatal(err)
+			}
+			file, err = normalizeX86RawFile(file, arch)
+			if err != nil {
+				t.Fatal(err)
+			}
+			ins := file.Funcs[0].Instrs[1]
+			if !x86RawVectorZeroSource(ins, arch) {
+				t.Fatal("original zero-operand encoding lost its source identity", arch, code)
+			}
+			t.Run(arch+"/"+code, func(t *testing.T) {
+				state := x86ResultState{flags: x86ByteFlagsAll}
+				for register := 0; register < 32; register++ {
+					state.writeVector(register, 64, uint64(0x8123456789abcdef)>>uint(register%8), false)
+				}
+				before, want := state.clone(), state.clone()
+				last, first := 16, 16
+				if arch == "386" {
+					last = 8
+				}
+				if ins.Op == "VZEROALL" {
+					first = 0
+				}
+				for register := 0; register < last; register++ {
+					want.writeVector(register, 64, want.vectorBytes(register)|(^uint64(0)<<uint(first)), false)
+				}
+				accepted, known := x86LoweredVectorZeroResultStep(ins, &state, nil, 0, arch)
+				if !accepted || !known || !reflect.DeepEqual(state, want) {
+					t.Fatal("complete implicit bank/preserved unknown/FLAGS effect differs", accepted, known)
+				}
+				for _, control := range []struct {
+					name   string
+					change func(*Instr)
+				}{
+					{"origin", func(ins *Instr) { ins.x86SourceRaw = nil }},
+					{"opcode", func(ins *Instr) {
+						ins.Op = "VZEROALL"
+						if ins.x86SourceRaw.op == "VZEROALL" {
+							ins.Op = "VZEROUPPER"
+						}
+					}},
+					{"operand", func(ins *Instr) { ins.Args = []Operand{{Kind: OpReg, Reg: AX}} }},
+					{"source-operand", func(ins *Instr) { ins.x86SourceRaw.args = []Operand{{Kind: OpReg, Reg: AX}} }},
+					{"vector", func(ins *Instr) { ins.x86VectorBytes = 16 }},
+					{"address", func(ins *Instr) { ins.x86AddressBits = 32 }},
+					{"override", func(ins *Instr) { ins.x86UnboundAddressOverride = true }},
+					{"segment", func(ins *Instr) { ins.x86SegmentPrefix = 0x64 }},
+					{"literal", func(ins *Instr) { ins.x86RIPLiteral = true }},
+				} {
+					t.Run(control.name, func(t *testing.T) {
+						changed, state := ins, before.clone()
+						origin := *ins.x86SourceRaw
+						changed.x86SourceRaw = &origin
+						control.change(&changed)
+						accepted, known := x86LoweredVectorZeroResultStep(changed, &state, nil, 0, arch)
+						if accepted || known != (control.name != "origin") ||
+							x86RawVectorZeroSource(changed, arch) || !reflect.DeepEqual(state, before) {
+							t.Fatal("changed zero-operand source acquired a native continuation", accepted, known)
+						}
+					})
+				}
+			})
+		}
+	}
+}
 
 // The complete original eight named/VEX2/VEX3/WIG source programs retain every
 // X/Y/Z bank and K/FLAGS canary. Actual native MXCSR checks remain separate.

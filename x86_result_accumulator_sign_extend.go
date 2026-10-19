@@ -2,11 +2,7 @@ package plan9asm
 
 func x86RawAccumulatorSignExtendSource(ins Instr, arch string) bool {
 	_, known, err := x86AccumulatorSignExtendProperties(ins.Op, ins, arch)
-	origin := ins.x86SourceRaw
-	return known && err == nil && origin != nil && origin.op == ins.Op && len(origin.args) == 0 &&
-		origin.vectorBytes == ins.x86VectorBytes && ins.x86RawNearReturn == nil &&
-		ins.x86AddressBits == 0 && !ins.x86UnboundAddressOverride && ins.x86SegmentPrefix == 0 &&
-		!ins.x86RIPLiteral && ins.x86NumericalRead == nil
+	return known && err == nil && x86RawOperandFreeSource(ins)
 }
 
 // Only the exact decoded implicit GP instruction shares the named byte effect.

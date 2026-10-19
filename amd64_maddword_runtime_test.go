@@ -142,13 +142,31 @@ int main(void) {
 	t.Logf("%d opcode/width/memory/mask/alias programs × 32 signed-pair/MXCSR/flags/canary cases at O0 and O2; translated wide-vector execution is not native AVX512 evidence", count)
 }
 
+func x86WordMaddLogicalFPAssembly(name string, width, mode int) string {
+	bank := map[int]string{8: "M", 16: "X", 32: "Y", 64: "Z"}[width]
+	row := "PMADDWL source+0(FP),M1"
+	load, store := "MOVQ (AX),M1", "MOVQ M1,(AX)\nEMMS"
+	if width != 8 {
+		row = "VPMADDWD source+0(FP)," + bank + "1"
+		if mode == 2 {
+			row = strings.Replace(row, "VPMADDWD ", "VPMADDWD.Z ", 1)
+		}
+		if mode != 0 {
+			row += ",K1"
+		}
+		row += "," + bank + "1"
+		load = "VMOVUPS (AX),Z1"
+		store = "VMOVUPS " + bank + "1,(AX)"
+	}
+	return fmt.Sprintf("TEXT %s(SB),4,$0-80\nMOVQ out+64(FP),AX\nMOVQ mask+72(FP),DX\nKMOVQ DX,K1\n%s\n%s\n%s\nRET\n", name, load, row, store)
+}
+
 func TestCrossLinuxRuntimeMatrixX86WordMultiplyAddLogicalFPFields(t *testing.T) {
 	llc, clang, triple, prefix := x86FloatAddSubRuntimeTools(t)
 	var definitions, wrappers, declarations, checks strings.Builder
 	sigs := map[string]FuncSig{}
 	index := 0
 	for _, width := range []int{8, 16, 32, 64} {
-		bank := map[int]string{8: "M", 16: "X", 32: "Y", 64: "Z"}[width]
 		for mode := 0; mode < 3; mode++ {
 			if width == 8 && mode != 0 {
 				continue
@@ -162,21 +180,7 @@ func TestCrossLinuxRuntimeMatrixX86WordMultiplyAddLogicalFPFields(t *testing.T) 
 				t.Fatal(err)
 			}
 			sigs[name] = sig
-			row := "PMADDWL source+0(FP),M1"
-			load, store := "MOVQ (AX),M1", "MOVQ M1,(AX)"
-			if width != 8 {
-				row = "VPMADDWD source+0(FP)," + bank + "1"
-				if mode == 2 {
-					row = strings.Replace(row, "VPMADDWD ", "VPMADDWD.Z ", 1)
-				}
-				if mode != 0 {
-					row += ",K1"
-				}
-				row += "," + bank + "1"
-				load = "VMOVUPS (AX),Z1"
-				store = "VMOVUPS " + bank + "1,(AX)"
-			}
-			fmt.Fprintf(&definitions, "TEXT %s(SB),4,$0-80\nMOVQ out+64(FP),AX\nMOVQ mask+72(FP),DX\nKMOVQ DX,K1\n%s\n%s\n%s\nRET\n", name, load, row, store)
+			definitions.WriteString(x86WordMaddLogicalFPAssembly(name, width, mode))
 			fmt.Fprintf(&wrappers, "define void @check_%s(ptr %%input,ptr %%output,i64 %%mask){\n", name)
 			packed := "poison"
 			for i := 0; i < 64; i++ {
