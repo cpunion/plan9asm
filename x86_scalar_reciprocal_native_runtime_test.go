@@ -70,7 +70,6 @@ func x86ScalarReciprocalNativeAssembly(row x86ScalarReciprocalNativeRow, arch st
 
 func x86ScalarReciprocalNativeProgram(arch string) (source, declarations, prototypes, metadata string) {
 	var assembly, decl, c, rows strings.Builder
-	decl.WriteString("package oracle\n")
 	dead := make(map[int]bool)
 	for _, row := range x86ScalarReciprocalNativeRows() {
 		assembly.WriteString(x86ScalarReciprocalNativeAssembly(row, arch, false))
@@ -124,12 +123,22 @@ func TestX86ScalarReciprocalNativeDirectoryAndOriginalGoSource(t *testing.T) {
 			t.Fatal("native source lost complete live/dead SSE/AVX-only inventory", arch)
 		}
 		for name, text := range map[string]string{
-			"value.go":      declarations + refDecl,
+			"value.go":      "package oracle\n" + declarations + refDecl,
+			"api.go":        "package bitview\n" + declarations,
 			"value_test.go": fmt.Sprintf(x86ScalarReciprocalNativeOriginalGo, metadata),
 		} {
 			file, err := parser.ParseFile(token.NewFileSet(), name, text, parser.AllErrors)
-			if err != nil || file.Name.Name != "oracle" {
+			want := "oracle"
+			if name == "api.go" {
+				want = "bitview"
+			}
+			if err != nil || file.Name.Name != want {
 				t.Fatal("complete actual original Go source is not parseable", arch, name, err)
+			}
+			if name == "api.go" {
+				if _, err := parser.ParseFile(token.NewFileSet(), name, "package bitview\npackage oracle\n"+declarations, parser.AllErrors); err == nil {
+					t.Fatal("API source control accepted the old duplicate package clause")
+				}
 			}
 		}
 	}
@@ -228,7 +237,7 @@ func x86RunScalarReciprocalNative(t *testing.T, execution x86FloatCompareExecuti
 	}
 	t.Run("OriginalGo", func(t *testing.T) {
 		references, refDecl := x86ScalarReciprocalOriginalReferences()
-		x86RunOriginalGoNativeSource(t, execution, arch, declarations+refDecl, source+references,
+		x86RunOriginalGoNativeSource(t, execution, arch, "package oracle\n"+declarations+refDecl, source+references,
 			fmt.Sprintf(x86ScalarReciprocalNativeOriginalGo, metadata))
 		t.Log("actual original Go scalar estimates: 20 aliases × 24 bit patterns × 64 MXCSR profiles = 30720 whole32/FLAGS/DF/MXCSR/canary outcomes; independent scalar references, no AVX512/Z execution claim")
 	})
