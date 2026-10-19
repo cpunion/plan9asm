@@ -11,12 +11,16 @@ const roots = [
   'TestCrossLinuxRuntimeMatrixX86ImplicitDivideOriginalGoAndNativeAMD64',
   'TestCrossLinuxRuntimeMatrixX86ImplicitDivideOriginalGoAndNative386',
   'TestCrossLinuxRuntimeMatrixX86SegmentQueryOriginalFlagsAliasesAndFaults',
+  'TestCrossLinuxRuntimeMatrixX86MoveHalfOriginalGoFlagsDFAliases',
 ];
 const axes = ['backend_O0', 'backend_O2', 'IR_O2/backend_O2'];
 const children = roots.flatMap(root => axes.map(axis => root + '/' + axis));
 const nativeHost = /IA32 direct host: linux\/amd64 kernel=x86_64 CPUsha=[a-f0-9]{64} mapsha=[a-f0-9]{64}\b/g;
 const originalArgs = '["-test.run=^TestOriginal$" "-test.count=1" "-test.v"]';
 const segmentEvidence = '48 original-Go opcode rows × 16 inputs; full GP aliases, six status flags, canaries; 160 live/dead m16 fault processes\n';
+const halfPreflight = 'half native CPUID/XCR0 AVX512F=1; original EVEX transport opcode executed\n';
+const halfEvidence = 'half native full64/FLAGS/DF=1/canary outcomes=512; complete original STD/CLD source and all eight named half moves\n';
+const halfOriginal = 'half actual original Go full64/FLAGS/DF=1/canary outcomes=512\n';
 
 function requireIA32Images(output, staticCount, args) {
   const images = [...output.matchAll(/native oracle static IA32 ELF bytes=([1-9][0-9]*) sha256=([a-f0-9]{64})\b/g)];
@@ -73,7 +77,8 @@ function auditIntegerNativeFamilies(inventory, raw) {
     assert.ok(packageStarted, 'native test before package start');
     assert.ok(['run', 'output', 'pass'].includes(event.Action), 'unknown native test action');
     const root = event.Test.split('/')[0];
-    const observed = root.includes('ImplicitDivide') || root.includes('SegmentQuery');
+    const half = root.includes('MoveHalf');
+    const observed = root.includes('ImplicitDivide') || root.includes('SegmentQuery') || half;
     const ia32 = root.endsWith('386');
     if (event.Action === 'run') {
       states.set(event.Test, 'running');
@@ -82,6 +87,10 @@ function auditIntegerNativeFamilies(inventory, raw) {
           'integer axis lacks its preceding actual native host observation');
         assert.ok(!outputs.get(root).includes('actual executable='),
           'original Go compilation must follow all three native axes');
+        if (half) {
+          assert.equal(outputs.get(root).split(halfPreflight).length - 1, 1,
+            'half axis lacks actual CPUID/XCR0 and native EVEX transport preflight');
+        }
       }
       continue;
     }
@@ -101,6 +110,10 @@ function auditIntegerNativeFamilies(inventory, raw) {
         assert.equal(outputs.get(event.Test).split(segmentEvidence).length - 1, 1,
           'segment query axis lacks its complete opcode flags alias and fault evidence');
       }
+      if (half) {
+        assert.equal(outputs.get(event.Test).split(halfEvidence).length - 1, 1,
+          'half axis lacks all 512 full64/FLAGS/DF/canary observations');
+      }
       if (ia32) {
         requireIA32Images(outputs.get(event.Test), 2, '[]');
         staticIA32Images += 2;
@@ -116,6 +129,12 @@ function auditIntegerNativeFamilies(inventory, raw) {
     assert.equal(hosts.length, 2, 'integer root must retain pre/post actual native host observations');
     assert.ok(hosts[0].index < commands[0].index && commands[0].index < commands[1].index &&
       commands[1].index < hosts[1].index, 'integer native/SDK observation order changed');
+    if (half) {
+      assert.equal(output.split(halfPreflight).length - 1, 1, 'duplicate or absent half native CPU preflight');
+      assert.equal(output.split(halfOriginal).length - 1, 1, 'missing complete actual original Go DF observations');
+      assert.ok(commands[1].index < output.indexOf(halfOriginal) && output.indexOf(halfOriginal) < hosts[1].index,
+        'original Go DF terminal escaped its SDK/native host bracket');
+    }
 
     // The SDK and final host observations occur after every execution child.
     // A printed root PASS before original Go execution cannot certify it.

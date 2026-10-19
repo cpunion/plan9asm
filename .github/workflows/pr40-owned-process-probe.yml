@@ -244,6 +244,7 @@ jobs:
           roots+='|TestCrossLinuxRuntimeMatrixX86ImplicitDivideOriginalGoAndNativeAMD64'
           roots+='|TestCrossLinuxRuntimeMatrixX86ImplicitDivideOriginalGoAndNative386'
           roots+='|TestCrossLinuxRuntimeMatrixX86SegmentQueryOriginalFlagsAliasesAndFaults'
+          roots+='|TestCrossLinuxRuntimeMatrixX86MoveHalfOriginalGoFlagsDFAliases'
           go test . -list "^($roots)$" > "$directory/inventory.log"
           for root in ${roots//|/ }; do
             grep -Fx "$root" "$directory/inventory.log"

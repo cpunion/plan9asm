@@ -12,6 +12,7 @@ const owners = [
   'TestCrossLinuxRuntimeMatrixX86ImplicitDivideOriginalGoAndNativeAMD64',
   'TestCrossLinuxRuntimeMatrixX86ImplicitDivideOriginalGoAndNative386',
   'TestCrossLinuxRuntimeMatrixX86SegmentQueryOriginalFlagsAliasesAndFaults',
+  'TestCrossLinuxRuntimeMatrixX86MoveHalfOriginalGoFlagsDFAliases',
 ];
 const axes = ['backend_O0', 'backend_O2', 'IR_O2/backend_O2'];
 const packageName = 'github.com/xgo-dev/plan9asm';
@@ -25,6 +26,9 @@ const sdk = args => `actual executable=/sdk/bin/go sha256=${hash} argv=${args}\n
 const originalArgs = '["-test.run=^TestOriginal$" "-test.count=1" "-test.v"]';
 const compileArgs = '["test" "-p=1" "-vet=off" "-c" "-o" "/tmp/owned/original.test" "."]';
 const segmentEvidence = '48 original-Go opcode rows × 16 inputs; full GP aliases, six status flags, canaries; 160 live/dead m16 fault processes\n';
+const halfPreflight = 'half native CPUID/XCR0 AVX512F=1; original EVEX transport opcode executed\n';
+const halfEvidence = 'half native full64/FLAGS/DF=1/canary outcomes=512; complete original STD/CLD source and all eight named half moves\n';
+const halfOriginal = 'half actual original Go full64/FLAGS/DF=1/canary outcomes=512\n';
 const event = (Action, Test, Output) => ({Action, Package: packageName,
   ...(Test ? {Test} : {}), ...(Output !== undefined ? {Output} : {})});
 const serialize = events => events.map(value => JSON.stringify(value)).join('\n');
@@ -32,10 +36,11 @@ const serialize = events => events.map(value => JSON.stringify(value)).join('\n'
 function completeEvents() {
   const events = [event('start')];
   for (const owner of owners) {
-    const observed = owner.includes('ImplicitDivide') || owner.includes('SegmentQuery');
+    const observed = owner.includes('ImplicitDivide') || owner.includes('SegmentQuery') || owner.includes('MoveHalf');
     const ia32 = owner.endsWith('386');
     events.push(event('run', owner));
     if (observed) events.push(event('output', owner, host));
+    if (owner.includes('MoveHalf')) events.push(event('output', owner, halfPreflight));
     for (const axis of axes) {
       const child = owner + '/' + axis;
       events.push(event('run', child));
@@ -43,11 +48,13 @@ function completeEvents() {
         events.push(event('output', child, staticImage + directImage('[]') + staticImage));
       }
       if (owner.includes('SegmentQuery')) events.push(event('output', child, segmentEvidence));
+      if (owner.includes('MoveHalf')) events.push(event('output', child, halfEvidence));
       events.push(event('pass', child));
     }
     if (observed) {
       events.push(event('output', owner, sdk('["version"]') + sdk(compileArgs)));
       if (ia32) events.push(event('output', owner, staticImage + directImage(originalArgs)));
+      if (owner.includes('MoveHalf')) events.push(event('output', owner, halfOriginal));
       events.push(event('output', owner, host));
     }
     events.push(event('pass', owner));
@@ -56,10 +63,10 @@ function completeEvents() {
   return events;
 }
 
-test('native integer families require all five roots and fifteen complete execution axes', () => {
+test('native integer families require all six roots and eighteen complete execution axes', () => {
   assert.deepEqual(auditIntegerNativeFamilies(inventory, serialize(completeEvents())),
-    {roots: 5, children: 15, passed: 20, skipped: 0, incomplete: 0,
-      nativeHosts: 6, sdkBuilds: 3, staticIA32Images: 7, directIA32Executions: 4});
+    {roots: 6, children: 18, passed: 24, skipped: 0, incomplete: 0,
+      nativeHosts: 8, sdkBuilds: 4, staticIA32Images: 7, directIA32Executions: 4});
 });
 
 test('native integer families reject each missing, failed, skipped or duplicate terminal', () => {
@@ -159,6 +166,21 @@ test('segment query axes require their complete actual opcode flags alias and fa
       const changed = completeEvents().map(value => value.Test === owner + '/' + axis && value.Output
         ? {...value, Output: value.Output.replace(segmentEvidence, replacement)} : value);
       assert.throws(() => auditIntegerNativeFamilies(inventory, serialize(changed)), axis);
+    }
+  }
+});
+
+test('native half moves require actual CPU original Go and each complete DF=1 axis', () => {
+  const owner = owners[5];
+  for (const name of [owner, ...axes.map(axis => owner + '/' + axis)]) {
+    const needles = name === owner ? [halfPreflight, halfOriginal] : [halfEvidence];
+    for (const needle of needles) {
+      for (const replacement of ['', needle + needle, needle.replace('=512', '=511').replace('AVX512F=1', 'AVX512F=0')]) {
+        if (replacement === needle) continue;
+        const changed = completeEvents().map(value => value.Test === name && value.Output
+          ? {...value, Output: value.Output.replace(needle, replacement)} : value);
+        assert.throws(() => auditIntegerNativeFamilies(inventory, serialize(changed)), name);
+      }
     }
   }
 });

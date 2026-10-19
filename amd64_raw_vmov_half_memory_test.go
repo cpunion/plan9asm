@@ -55,21 +55,12 @@ TEXT rawVMOVHPD(SB),$0-0
 	LONG $0x0217f9c5 // VMOVHPD X0, (DX)
 	RET
 `
-	requireX86GoAssemblerResult(t, "amd64", source, true)
-	file, err := Parse(ArchAMD64, source)
+	file, signatures := x86UnboundVoidFormatSource(t, source, "rawVMOVHPD", "amd64", "x86_64-unknown-linux-gnu")
+	file, err := normalizeX86RawFile(file, "amd64")
 	if err != nil {
 		t.Fatal(err)
 	}
-	ll, err := Translate(file, Options{
-		TargetTriple: "x86_64-unknown-linux-gnu",
-		Goarch:       "amd64",
-		Sigs: map[string]FuncSig{
-			"rawVMOVHPD": {Name: "rawVMOVHPD", Ret: Void},
-		},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	ll := x86MoveHalfFormatObjectUnit(t, file, signatures, "amd64", "x86_64-unknown-linux-gnu")
 	if !strings.Contains(ll, "extractelement <2 x i64>") {
 		t.Fatalf("raw VMOVHPD did not store the high lane:\n%s", ll)
 	}
@@ -212,21 +203,12 @@ func TestTranslateRawX86VectorHalfMemoryLLVM22Targets(t *testing.T) {
 				}
 			}
 			source.WriteString("\tRET\n")
-			requireX86GoAssemblerResult(t, target.goarch, source.String(), true)
-			file, err := Parse(ArchAMD64, source.String())
+			file, signatures := x86UnboundVoidFormatSource(t, source.String(), "rawHalfMemory", target.goarch, target.triple)
+			file, err := normalizeX86RawFile(file, target.goarch)
 			if err != nil {
 				t.Fatal(err)
 			}
-			ll, err := Translate(file, Options{
-				TargetTriple: target.triple,
-				Goarch:       target.goarch,
-				Sigs: map[string]FuncSig{
-					"rawHalfMemory": {Name: "rawHalfMemory", Ret: Void},
-				},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			ll := x86MoveHalfFormatObjectUnit(t, file, signatures, target.goarch, target.triple)
 			for _, want := range []string{"extractelement <2 x i64>", "insertelement <2 x i64>"} {
 				if !strings.Contains(ll, want) {
 					t.Fatalf("half-vector lowering omitted %q", want)

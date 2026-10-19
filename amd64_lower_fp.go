@@ -743,7 +743,7 @@ type amd64MoveHalfSpec struct {
 }
 
 // amd64MoveHalfSpecs is the complete Go 1.27 yxmov/_yvmovhpd family. Legacy
-// register forms alias MOVHLPS/MOVLHPS; VEX/EVEX forms deliberately accept
+// PS register forms alias MOVHLPS/MOVLHPS; VEX/EVEX forms deliberately accept
 // only memory loads (memory, upper-lane X, destination X) and memory stores.
 var amd64MoveHalfSpecs = map[Op]amd64MoveHalfSpec{
 	"MOVLPS":  {},
@@ -757,162 +757,57 @@ var amd64MoveHalfSpecs = map[Op]amd64MoveHalfSpec{
 }
 
 func (c *amd64Ctx) lowerMOVHalf(op Op, ins Instr) (bool, bool, error) {
-	rawOp := strings.ToUpper(string(op))
-	baseOp := rawOp
-	if dot := strings.IndexByte(rawOp, '.'); dot >= 0 {
-		baseOp = rawOp[:dot]
+	form, known, err := x86MoveHalfProperties(op, ins, c.goarch)
+	if !known || err != nil {
+		return known, false, err
 	}
-	spec, recognized := amd64MoveHalfSpecs[Op(baseOp)]
-	if !recognized {
-		return false, false, nil
+	if form.undocumentedPDRegister {
+		return true, false, fmt.Errorf("%w: %s's Go register encoding lacks documented Intel PD semantics", ErrProbeNeedsContext, op)
 	}
-	if rawOp != baseOp {
-		return true, false, fmt.Errorf("%s %s has no suffixed form in Go 1.27: %q", c.goarch, baseOp, ins.Raw)
-	}
-	if spec.vector {
-		return c.lowerVEXMOVHalf(baseOp, spec, ins)
-	}
-	if len(ins.Args) != 2 {
-		return true, false, fmt.Errorf("amd64 %s expects src, dst: %q", baseOp, ins.Raw)
-	}
-	destinationLane := int64(0)
-	if spec.high {
-		destinationLane = 1
-	}
-	if ins.Args[1].Kind == OpReg {
-		if !c.isGoLegacyXReg(ins.Args[1].Reg) {
-			return true, false, fmt.Errorf("amd64 %s destination is outside Go 1.27's X register class: %q", baseOp, ins.Raw)
-		}
-		bits := ""
-		if ins.Args[0].Kind == OpReg {
-			if !c.isGoLegacyXReg(ins.Args[0].Reg) {
-				return true, false, fmt.Errorf("amd64 %s source is outside Go 1.27's X register class: %q", baseOp, ins.Raw)
-			}
-			source, err := c.loadXAsI64x2(ins.Args[0].Reg)
-			if err != nil {
-				return true, false, err
-			}
-			// Register encodings of the low/high moves alias MOVHLPS and
-			// MOVLHPS respectively, regardless of the PS/PD prefix.
-			sourceLane := int64(0)
-			if destinationLane == 0 {
-				sourceLane = 1
-			}
-			extracted := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = extractelement <2 x i64> %s, i32 %d\n", extracted, source, sourceLane)
-			bits = "%" + extracted
-		} else {
-			if !isAMD64MemoryOperand(ins.Args[0]) {
-				return true, false, fmt.Errorf("amd64 %s source must be X or memory: %q", baseOp, ins.Raw)
-			}
-			value, err := c.evalF64(ins.Args[0])
-			if err != nil {
-				return true, false, err
-			}
-			loadedBits := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = bitcast double %s to i64\n", loadedBits, value)
-			bits = "%" + loadedBits
-		}
-		cur, err := c.loadXAsI64x2(ins.Args[1].Reg)
-		if err != nil {
-			return true, false, err
-		}
-		inserted := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = insertelement <2 x i64> %s, i64 %s, i32 %d\n", inserted, cur, bits, destinationLane)
-		return true, false, c.storeXFromI64x2(ins.Args[1].Reg, "%"+inserted)
-	}
-	if ins.Args[0].Kind != OpReg || !c.isGoLegacyXReg(ins.Args[0].Reg) || !isAMD64MemoryOperand(ins.Args[1]) {
-		return true, false, fmt.Errorf("amd64 %s store expects X source and memory destination: %q", baseOp, ins.Raw)
-	}
-	src, err := c.loadXAsI64x2(ins.Args[0].Reg)
-	if err != nil {
-		return true, false, err
-	}
-	bits := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = extractelement <2 x i64> %s, i32 %d\n", bits, src, destinationLane)
-	value := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = bitcast i64 %%%s to double\n", value, bits)
-	switch ins.Args[1].Kind {
-	case OpFP:
-		return true, false, c.storeFPResult(ins.Args[1].FPOffset, LLVMType("double"), "%"+value)
-	case OpMem:
-		addr, err := c.addrFromMem(ins.Args[1].Mem)
-		if err != nil {
-			return true, false, err
-		}
-		fmt.Fprintf(c.b, "  store double %%%s, ptr %s, align 1\n", value, c.ptrFromAddrI64(addr))
-		return true, false, nil
-	case OpSym:
-		p, err := c.ptrFromSB(ins.Args[1].Sym)
-		if err != nil {
-			return true, false, err
-		}
-		fmt.Fprintf(c.b, "  store double %%%s, ptr %s, align 1\n", value, p)
-		return true, false, nil
-	default:
-		return true, false, fmt.Errorf("amd64 %s unsupported destination: %q", baseOp, ins.Raw)
-	}
+	return true, false, c.emitMoveHalf(form, ins)
 }
 
-func (c *amd64Ctx) lowerVEXMOVHalf(baseOp string, spec amd64MoveHalfSpec, ins Instr) (bool, bool, error) {
-	lane := int64(0)
-	if spec.high {
-		lane = 1
-	}
-	if len(ins.Args) == 2 {
-		if !c.isGoPackedVectorMoveRegister(ins.Args[0], 16) || !isAMD64MemoryOperand(ins.Args[1]) {
-			return true, false, fmt.Errorf("%s %s store expects X source and memory destination: %q", c.goarch, baseOp, ins.Raw)
-		}
-		source, err := c.loadXAsI64x2(ins.Args[0].Reg)
+func (c *amd64Ctx) emitMoveHalf(form x86MoveHalfForm, ins Instr) error {
+	if form.store {
+		source, err := c.loadXAsI64x2(ins.Args[form.source].Reg)
 		if err != nil {
-			return true, false, err
+			return err
 		}
 		bits := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = extractelement <2 x i64> %s, i32 %d\n", bits, source, lane)
-		return true, false, c.storeMOVHalfBits(ins.Args[1], "%"+bits)
+		fmt.Fprintf(c.b, "  %%%s = extractelement <2 x i64> %s, i32 %d\n", bits, source, form.sourceLane)
+		return c.storePackedScalarExtractMemory(ins.Args[form.destination], I64, "%"+bits)
 	}
-	if len(ins.Args) != 3 || !isAMD64MemoryOperand(ins.Args[0]) ||
-		!c.isGoPackedVectorMoveRegister(ins.Args[1], 16) || !c.isGoPackedVectorMoveRegister(ins.Args[2], 16) {
-		return true, false, fmt.Errorf("%s %s load expects memory, upper-lane X, destination X: %q", c.goarch, baseOp, ins.Raw)
-	}
-	value, err := c.evalF64(ins.Args[0])
-	if err != nil {
-		return true, false, err
-	}
-	bits := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = bitcast double %s to i64\n", bits, value)
-	base, err := c.loadXAsI64x2(ins.Args[1].Reg)
-	if err != nil {
-		return true, false, err
-	}
-	inserted := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = insertelement <2 x i64> %s, i64 %%%s, i32 %d\n", inserted, base, bits, lane)
-	return true, false, c.storeXFromI64x2(ins.Args[2].Reg, "%"+inserted)
-}
-
-func (c *amd64Ctx) storeMOVHalfBits(destination Operand, bits string) error {
-	value := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = bitcast i64 %s to double\n", value, bits)
-	switch destination.Kind {
-	case OpFP:
-		return c.storeFPResult(destination.FPOffset, LLVMType("double"), "%"+value)
-	case OpMem:
-		addr, err := c.addrFromMem(destination.Mem)
+	var bits string
+	if form.memory >= 0 {
+		var err error
+		if source := ins.Args[form.source]; source.Kind == OpFP {
+			bits, err = c.loadScalarLaneFPBits(source.FPOffset, 64)
+		} else {
+			bits, err = c.evalSizedNativeGPSource(source, I64, ins.x86AddressBits)
+		}
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(c.b, "  store double %%%s, ptr %s, align 1\n", value, c.ptrFromAddrI64(addr))
-		return nil
-	case OpSym:
-		p, err := c.ptrFromSB(destination.Sym)
+	} else {
+		source, err := c.loadXAsI64x2(ins.Args[form.source].Reg)
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(c.b, "  store double %%%s, ptr %s, align 1\n", value, p)
-		return nil
-	default:
-		return fmt.Errorf("unsupported half-vector destination %s", destination.String())
+		extracted := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = extractelement <2 x i64> %s, i32 %d\n", extracted, source, form.sourceLane)
+		bits = "%" + extracted
 	}
+	base, err := c.loadXAsI64x2(ins.Args[form.base].Reg)
+	if err != nil {
+		return err
+	}
+	inserted, bytes := c.newTmp(), c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = insertelement <2 x i64> %s, i64 %s, i32 %d\n", inserted, base, bits, form.outputLane)
+	fmt.Fprintf(c.b, "  %%%s = bitcast <2 x i64> %%%s to <16 x i8>\n", bytes, inserted)
+	if form.spec.vector {
+		return c.storePackedMoveOperand(ins.Args[form.destination], 16, "%"+bytes)
+	}
+	return c.storeLegacyXViews(ins.Args[form.destination].Reg, "%"+bytes)
 }
 
 func (c *amd64Ctx) lowerVEXScalarFloatConvert(op Op, ins Instr) (bool, bool, error) {

@@ -151,6 +151,8 @@ func TestRuntimeOracleCommandConsumersRetainOwnedExecution(t *testing.T) {
 		"x86_implicit_divide_runtime_test.go",
 		"x86_duplicate_move_runtime_test.go",
 		"x86_duplicate_move_wig_test.go",
+		"amd64_move_half_complete_test.go",
+		"x86_move_half_fault_unix_test.go",
 		"x86_result_bitcount_test.go",
 		"amd64_scalar_lane_original_go_test.go",
 		"amd64_scalar_lane_mode32_test.go",
