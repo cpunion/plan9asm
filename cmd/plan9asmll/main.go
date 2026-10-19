@@ -1489,6 +1489,9 @@ func sigsForAsmFile(pkg *packages.Package, file *plan9asm.File, resolve func(str
 	if pkg == nil || pkg.Types == nil || pkg.Types.Scope() == nil {
 		for _, fn := range file.Funcs {
 			fs := fallbackSigForAsmFunc(fn, resolve(stripABISuffix(fn.Sym)), goarch)
+			if err := validateInferredX86FrameExtent(fn, fs, goarch); err != nil {
+				return nil, nil, err
+			}
 			sigs[fs.Name] = fs
 		}
 		asmsig.RefineTailForwarders(file, sigs, resolve, nil)
@@ -1742,8 +1745,38 @@ func sigsForAsmFile(pkg *packages.Package, file *plan9asm.File, resolve func(str
 	}
 
 	asmsig.RefineTailForwarders(file, sigs, resolve, knownABISigs)
+	for _, fn := range file.Funcs {
+		name := resolve(stripABISuffix(fn.Sym))
+		if fallbackAsmSigs[name] && !knownABISigs[name] {
+			if err := validateInferredX86FrameExtent(fn, sigs[name], goarch); err != nil {
+				return nil, nil, err
+			}
+		}
+	}
 
 	return sigs, declaredArgSizes, nil
+}
+
+// A fallback's observed FP offsets suggest types, not an argument envelope.
+// Only the original explicit TEXT bounds those heuristic words. An actual Go
+// declaration (including an independently established tail ABI) has its own
+// layout and is deliberately not routed through this check.
+func validateInferredX86FrameExtent(fn plan9asm.Func, sig plan9asm.FuncSig, goarch string) error {
+	if goarch != "386" && goarch != "amd64" || len(sig.Frame.Params)+len(sig.Frame.Results) == 0 {
+		return nil
+	}
+	word := int64(8)
+	if goarch == "386" {
+		word = 4
+	}
+	for _, slots := range [][]plan9asm.FrameSlot{sig.Frame.Params, sig.Frame.Results} {
+		for _, slot := range slots {
+			if !hasExplicitTextArgSize(fn) || slot.Offset < 0 || slot.Offset > fn.ArgSize-word {
+				return fmt.Errorf("%w: %s inferred FP word lacks its original explicit TEXT extent", plan9asm.ErrProbeNeedsContext, fn.Sym)
+			}
+		}
+	}
+	return nil
 }
 
 func validateDeclaredTextArgSizes(file *plan9asm.File, resolve func(string) string, declaredArgSizes map[string]int64, goarch string) error {
