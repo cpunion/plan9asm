@@ -13,10 +13,11 @@ func TestX86MinMaxMemoryAndViewsRuntime(t *testing.T) {
 		t.Fatal("LLVM 22 llc/clang not found")
 	}
 	triple := testTargetTriple(runtime.GOOS, runtime.GOARCH)
-	var prefix []string
 	if runtime.GOARCH != "amd64" && runtime.GOARCH != "arm64" {
 		t.Skip("portable values require the native 64-bit host counterpart")
 	}
+	// Execute the unchanged complete logical-vector program on the actual
+	// host. This is not original AVX512 opcode or physical-register evidence.
 
 	var source, declarations strings.Builder
 	checks := map[string]*strings.Builder{"views": {}, "memory": {}}
@@ -126,7 +127,7 @@ func TestX86MinMaxMemoryAndViewsRuntime(t *testing.T) {
 		t.Run(kind, func(t *testing.T) {
 			body := mainC + "\nint main(void) {\n    if (setup_guard()) return 2;\n" +
 				checks[kind].String() + "    return free_guard();\n}\n"
-			compileAndRunRuntimeTestForTarget(t, llc, clang, "minmax_"+kind, triple, ir, body, prefix)
+			x86ConflictFunnelPortableRuntime(t, llc, clang, "minmax_"+kind, triple, ir, body)
 		})
 	}
 }
