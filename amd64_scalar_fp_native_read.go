@@ -87,6 +87,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 	}
 	boundRawClear := false
 	for _, ins := range fn.Instrs {
+		if x86RawCompactSource(ins, arch) {
+			continue // Exact compact/expand bytes retain all mask, data and native address obligations.
+		}
 		if x86RawImmediatePackedCompareSource(ins, arch) {
 			continue // Exact immediate/data identity supplies no entry or missing numerical/memory input.
 		}

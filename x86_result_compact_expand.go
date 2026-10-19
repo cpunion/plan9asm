@@ -1,5 +1,16 @@
 package plan9asm
 
+func x86RawCompactSource(ins Instr, arch string) bool {
+	form, known, err := x86PackedCompactProperties(ins.Op, ins, arch)
+	if !known || err != nil || !x86RawOrdinaryVectorSource(ins, arch) {
+		return false
+	}
+	// Compression's memory is its destination, not the first data operand.
+	// Check that role as well: exact bytes grant neither RIP/static backing
+	// nor a segment, frame or nondefault-address continuation.
+	return form.memory < 0 || x86RawOrdinaryVectorSourceAt(ins, arch, form.memory)
+}
+
 // Unknown mask values can select any source lane and any merge byte. Require
 // the complete source and, for merging, the complete old destination. A mask's
 // definedness is not a constant-value or memory-access certificate.
@@ -12,8 +23,16 @@ func x86ResultCompactExpandMemoryStep(ins Instr, state *x86ResultState, owned []
 	if !known {
 		return false, false
 	}
-	if err != nil || form.undefinedOpcode() || !x86ResultNamedPredicateInstruction(ins) {
+	if err != nil || form.undefinedOpcode() {
 		return false, true
+	}
+	if !x86ResultNamedPredicateInstruction(ins) {
+		if !pairedNative || !x86RawCompactSource(ins, arch) {
+			return false, true
+		}
+		// Consume only this instruction's exact original identity. Preserve
+		// the validated physical form; no standalone query gains this view.
+		ins.x86Encoded, ins.x86SourceRaw = false, nil
 	}
 	required := x86CallerVectorByteMask(int64(form.byteWidth))
 	for index, operand := range ins.Args {
