@@ -73,7 +73,16 @@ func TestX86TernaryPhysicalMode32KeepsCompleteRawClass(t *testing.T) {
 	if len(raw) != 54 {
 		t.Fatal("complete physical ternary matrix changed", len(raw))
 	}
-	for index, row := range rows {
+	var source strings.Builder
+	for index, instruction := range raw {
+		fmt.Fprintf(&source, "TEXT rawTernary%d(SB),4,$0-0\n%s\nRET\n", index, instruction)
+	}
+	for _, target := range x86RawReturnTargets {
+		if target.arch == "386" {
+			x86LEAActualTargetGoObject(t, target.arch, target.triple, source.String())
+		}
+	}
+	for _, row := range rows {
 		t.Run(row.row, func(t *testing.T) {
 			named := x86ScalarLaneInstruction(t, row.row)
 			if _, known, err := x86TernaryLogicProperties(named.Op, named, "386"); !known || err == nil {
@@ -89,13 +98,6 @@ func TestX86TernaryPhysicalMode32KeepsCompleteRawClass(t *testing.T) {
 				form.byteWidth != row.width || form.memoryBytes != row.sourceWidth && row.memory ||
 				form.broadcast != row.broadcast || form.zeroing != row.zeroing || form.mask != row.mask {
 				t.Fatal("physical mode/width/mask/broadcast metadata lost", ins, form, known, err)
-			}
-			for _, target := range x86RawReturnTargets {
-				if target.arch != "386" {
-					continue
-				}
-				source := fmt.Sprintf("TEXT rawTernary%d(SB),4,$0-0\n%s\nRET\n", index, raw[index])
-				x86LEAActualTargetGoObject(t, target.arch, target.triple, source)
 			}
 		})
 	}
