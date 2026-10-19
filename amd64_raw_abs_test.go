@@ -78,8 +78,12 @@ func TestDecodedX86RawPackedAbsCompleteFamily(t *testing.T) {
 func TestDecodedX86RawPackedAbsRejectsInvalidForms(t *testing.T) {
 	valid := encodeX86RawPackedAbs(2, 32, 0, 1, 2, false, false)
 	for name, edit := range map[string]func([]byte) []byte{
-		"reserved vvvv":    func(b []byte) []byte { b[2] &^= 0x08; return b },
-		"W1":               func(b []byte) []byte { b[2] |= 0x80; return b },
+		"reserved vvvv": func(b []byte) []byte { b[2] &^= 0x08; return b },
+		"EVEX W1": func([]byte) []byte {
+			code := encodeX86RawPackedAbs(2, 64, 0, 1, 2, false, false)
+			code[2] |= 0x80
+			return code
+		},
 		"truncated":        func(b []byte) []byte { return b[:4] },
 		"address override": func(b []byte) []byte { return append([]byte{0x67}, b...) },
 	} {

@@ -274,6 +274,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		if accepted, known := x86ResultNumericalReadStep(ins, state, owned, resultOffset, arch); known {
 			return accepted // A checked mutable SB source keeps its own lifetime and byte effects.
 		}
+		if accepted, known := x86ResultPackedAbsSignStep(ins, state, owned, arch, true); known {
+			return accepted // Exact native reads and K inputs remain required for dead packed integer results.
+		}
 		if accepted, known := x86ResultIntegerMinMaxStep(ins, state, owned, arch, true); known {
 			return accepted // The paired E4 reader retains active exact-width volatile faults.
 		}
