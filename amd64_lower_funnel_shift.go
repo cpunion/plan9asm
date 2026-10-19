@@ -2,7 +2,6 @@ package plan9asm
 
 import (
 	"fmt"
-	"strings"
 )
 
 type amd64FunnelShiftSpec struct {
@@ -29,87 +28,35 @@ var amd64FunnelShiftSpecs = map[Op]amd64FunnelShiftSpec{
 }
 
 func (c *amd64Ctx) lowerFunnelShift(op Op, ins Instr) (ok bool, terminated bool, err error) {
-	rawOp := strings.ToUpper(string(op))
-	baseOp, suffix := rawOp, ""
-	if dot := strings.IndexByte(rawOp, '.'); dot >= 0 {
-		baseOp, suffix = rawOp[:dot], rawOp[dot+1:]
+	form, known, err := x86FunnelShiftProperties(op, ins, c.goarch)
+	if !known || err != nil {
+		return known, false, err
 	}
-	spec, recognized := amd64FunnelShiftSpecs[Op(baseOp)]
-	if !recognized {
-		return false, false, nil
+	if err := c.validateConflictFunnelMemory(ins, form.x86PackedBinaryForm); err != nil {
+		return true, false, err
 	}
-	properties, validSuffix := parseAMD64BinaryFloatingSuffix(suffix)
-	if !validSuffix || properties.sae || properties.rounding != "" {
-		return true, false, fmt.Errorf("%s %s suffix is absent from Go 1.27's funnel-shift encoding: %q", c.goarch, baseOp, ins.Raw)
-	}
-	if spec.laneBits == 16 && properties.broadcast {
-		return true, false, fmt.Errorf("%s %s word forms do not enable EVEX broadcast: %q", c.goarch, baseOp, ins.Raw)
-	}
-
-	unmaskedArgs := 4
-	maskedArgs := 5
-	if spec.variable {
-		unmaskedArgs, maskedArgs = 3, 4
-	}
-	if len(ins.Args) != unmaskedArgs && len(ins.Args) != maskedArgs {
-		return true, false, fmt.Errorf("%s %s has an operand count outside Go 1.27's encoding table: %q", c.goarch, baseOp, ins.Raw)
-	}
-	masked := len(ins.Args) == maskedArgs
-	if !spec.variable && c.goarch == "386" {
-		return true, false, fmt.Errorf("386 %s is rejected by the Go assembler frontend's operand limit: %q", baseOp, ins.Raw)
-	}
-	if spec.variable && c.goarch == "386" && masked {
-		return true, false, fmt.Errorf("386 %s mask forms exceed the Go assembler frontend's three-operand limit: %q", baseOp, ins.Raw)
-	}
-	if properties.zeroing && !masked {
-		return true, false, fmt.Errorf("%s %s zeroing requires a K1-K7 mask: %q", c.goarch, baseOp, ins.Raw)
-	}
-
-	immediateOffset := 0
-	if !spec.variable {
-		if !amd64UnsignedImmediate(ins.Args[0], 8) {
-			return true, false, fmt.Errorf("%s %s first operand must be Go 1.27's unsigned-imm8 class: %q", c.goarch, baseOp, ins.Raw)
+	spec, byteWidth := form.spec, form.byteWidth
+	destination := ins.Args[form.destination]
+	mask := ""
+	if form.mask >= 0 {
+		mask, err = c.loadK(ins.Args[form.mask].Reg)
+		if err != nil {
+			return true, false, err
 		}
-		immediateOffset = 1
 	}
-	destination := ins.Args[len(ins.Args)-1]
-	if destination.Kind != OpReg {
-		return true, false, fmt.Errorf("%s %s destination must be X, Y, or Z: %q", c.goarch, baseOp, ins.Raw)
-	}
-	byteWidth := amd64VectorByteWidth(destination.Reg)
-	if byteWidth != 16 && byteWidth != 32 && byteWidth != 64 ||
-		!c.isGoPackedVectorMoveRegister(destination, byteWidth) ||
-		!c.isGoPackedVectorMoveRegister(ins.Args[immediateOffset+1], byteWidth) {
-		return true, false, fmt.Errorf("%s %s second vector source and destination must be matching Go vector registers: %q", c.goarch, baseOp, ins.Raw)
-	}
-	rmSource := ins.Args[immediateOffset]
-	if properties.broadcast {
-		if !isAMD64MemoryOperand(rmSource) {
-			return true, false, fmt.Errorf("%s %s.BCST requires a scalar memory first vector source: %q", c.goarch, baseOp, ins.Raw)
-		}
-	} else if rmSource.Kind == OpReg {
-		if !c.isGoPackedVectorMoveRegister(rmSource, byteWidth) {
-			return true, false, fmt.Errorf("%s %s first vector source must match the destination width: %q", c.goarch, baseOp, ins.Raw)
-		}
-	} else if !isAMD64MemoryOperand(rmSource) {
-		return true, false, fmt.Errorf("%s %s first vector source must be a matching vector register or memory: %q", c.goarch, baseOp, ins.Raw)
-	}
-	maskOperandIndex := len(ins.Args) - 2
-	if masked && !amd64NonzeroKOperand(ins.Args[maskOperandIndex]) {
-		return true, false, fmt.Errorf("%s %s masked form expects K1-K7 before the destination: %q", c.goarch, baseOp, ins.Raw)
-	}
-
 	lanes := byteWidth * 8 / spec.laneBits
-	first, err := c.loadPackedCompareLanes(rmSource, byteWidth, spec.laneBits, properties.broadcast)
+	// Every VBMI2 member is E4: retain exact volatile active-lane reads,
+	// including discarded data/counts, and suppress only masked-off lanes.
+	first, err := c.loadX86PackedShiftLanes(ins.Args[form.first], byteWidth, spec.laneBits, form.broadcast, mask)
 	if err != nil {
 		return true, false, err
 	}
-	second, err := c.loadPackedCompareLanes(ins.Args[immediateOffset+1], byteWidth, spec.laneBits, false)
+	second, err := c.loadPackedCompareLanes(ins.Args[form.second], byteWidth, spec.laneBits, false)
 	if err != nil {
 		return true, false, err
 	}
-	old := ""
-	if spec.variable || masked {
+	old := "zeroinitializer"
+	if spec.variable || form.mask >= 0 && !form.zeroing {
 		oldBytes, loadErr := c.loadPackedCompareBytes(destination, byteWidth)
 		if loadErr != nil {
 			return true, false, loadErr
@@ -135,14 +82,10 @@ func (c *amd64Ctx) lowerFunnelShift(op Op, ins Instr) (ok bool, terminated bool,
 		computedName, vectorType, intrinsic, lanes, spec.laneBits,
 		vectorType, firstArgument, vectorType, secondArgument, vectorType, count)
 	computed := "%" + computedName
-	if masked {
-		mask, loadErr := c.loadK(ins.Args[maskOperandIndex].Reg)
-		if loadErr != nil {
-			return true, false, loadErr
-		}
-		computed = amd64ApplyIntegerLaneMask(c, lanes, spec.laneBits, computed, old, mask, properties.zeroing)
+	if form.mask >= 0 {
+		computed = amd64ApplyIntegerLaneMask(c, lanes, spec.laneBits, computed, old, mask, form.zeroing)
 	}
 	out := c.newTmp()
 	fmt.Fprintf(c.b, "  %%%s = bitcast %s %s to <%d x i8>\n", out, vectorType, computed, byteWidth)
-	return true, false, c.storeVectorBytes(destination.Reg, byteWidth, "%"+out)
+	return true, false, c.storePackedMoveOperand(destination, byteWidth, "%"+out)
 }

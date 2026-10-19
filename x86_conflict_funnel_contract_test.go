@@ -113,7 +113,19 @@ func x86ConflictFunnelInputObjects(t *testing.T, bank string) {
 				move = "MOVL"
 			}
 			var source, declarations strings.Builder
-			count := 0
+			count, batches, inBatch := 0, 0, 0
+			flush := func() {
+				if inBatch == 0 || inBatch > 64 {
+					t.Fatal("invalid bounded family batch", inBatch)
+				}
+				t.Run(fmt.Sprintf("batch%02d", batches), func(t *testing.T) {
+					x86RawNumericalFamilyObjects(t, source.String(), declarations.String(), target.arch, target.triple)
+				})
+				batches++
+				inBatch = 0
+				source.Reset()
+				declarations.Reset()
+			}
 			for _, row := range x86ConflictFunnelRows() {
 				if target.arch == "386" && !row.unary && !row.variable {
 					continue
@@ -146,6 +158,10 @@ func x86ConflictFunnelInputObjects(t *testing.T, bank string) {
 							"MOVL $-1431655766,AX\nKMOVD AX,K1\nSTC\n%s\nVMOVUPS Z2,(DI)\nRET\n",
 							name, 4*word, move, move, word, move, 2*word, move, 3*word, instruction)
 						count++
+						inBatch++
+						if inBatch == 64 {
+							flush()
+						}
 					}
 				}
 			}
@@ -156,7 +172,12 @@ func x86ConflictFunnelInputObjects(t *testing.T, bank string) {
 			if count != want {
 				t.Fatal("independent complete family/memory/mask inventory changed", count, want)
 			}
-			x86RawNumericalFamilyObjects(t, source.String(), declarations.String(), target.arch, target.triple)
+			if inBatch != 0 {
+				flush()
+			}
+			if batches != (want+63)/64 {
+				t.Fatal("incomplete family batch union", batches)
+			}
 		})
 	}
 }
