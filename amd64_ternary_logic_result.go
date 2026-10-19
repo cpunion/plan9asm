@@ -15,8 +15,14 @@ func x86ResultTernaryLogicContinuationStep(ins Instr, state *x86ResultState, own
 	if err != nil {
 		return false, true
 	}
-	if nativeRead && !x86ResultNamedPredicateInstruction(ins) {
-		return false, true
+	if !x86ResultNamedPredicateInstruction(ins) {
+		literal := state.loweredStaticReads != nil && x86RawTernaryLogicLiteralForm(ins, arch)
+		if !literal && (!nativeRead || !x86RawTernaryLogicSource(ins, arch)) {
+			return false, true
+		}
+		// Capture the physical form above. A lowering-local numerical view
+		// must not reapply the separate named386 arity limit afterward.
+		ins.x86Encoded, ins.x86SourceRaw = false, nil
 	}
 	return x86ResultTernaryLogicInputs(ins, form, state, owned, arch, nativeRead), true
 }
