@@ -1,10 +1,13 @@
 package plan9asm
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
-// The complete shared grammar retains each source/data/mask role. Native
-// Type4 and E4 reads are exact, observable and unaligned; no speculative
-// eager memory load may replace EVEX active-lane suppression.
+// The complete shared grammar retains each source/data/mask role. Legacy
+// Type4 keeps its original aligned m128 instruction; VEX is unaligned and
+// EVEX E4 suppresses only inactive lanes. These access rules are distinct.
 func (c *amd64Ctx) lowerPackedAbsSign(op Op, ins Instr) (bool, bool, error) {
 	form, known, err := x86PackedAbsSignProperties(op, ins, c.goarch)
 	if !known || err != nil {
@@ -12,6 +15,9 @@ func (c *amd64Ctx) lowerPackedAbsSign(op Op, ins Instr) (bool, bool, error) {
 	}
 	if err := c.validateConflictFunnelMemory(ins, form.x86PackedBinaryForm); err != nil {
 		return true, false, err
+	}
+	if form.legacy && form.memory >= 0 {
+		return true, false, c.lowerLegacyAbsSignMemory(ins, form)
 	}
 	mask := ""
 	if form.mask >= 0 {
@@ -54,6 +60,53 @@ func (c *amd64Ctx) lowerPackedAbsSign(op Op, ins Instr) (bool, bool, error) {
 		return true, false, c.storeLegacyXViews(destination.Reg, "%"+out)
 	}
 	return true, false, c.storePackedMoveOperand(destination, width, "%"+out)
+}
+
+// Intel Type4's legacy SSE m128 alignment exception applies to all six
+// PABS[BWD]/PSIGN[BWD] names, unlike their VEX counterparts. A volatile
+// align-1 read followed by arithmetic loses that exception, and align16 is
+// merely an LLVM precondition, not a runtime check. Keep the actual opcode
+// even for a dead result. Virtual FP bytes are not original native storage.
+func (c *amd64Ctx) lowerLegacyAbsSignMemory(ins Instr, form x86PackedAbsSignForm) error {
+	source := ins.Args[form.first]
+	if !x86ScalarFloatIntegerNativeTarget(c.goarch, c.targetTriple) || source.Kind == OpFP {
+		return fmt.Errorf("%w: legacy ABS/sign m128 needs its original native x86 storage and alignment", ErrProbeNeedsContext)
+	}
+	bits := form.spec.laneBits
+	mnemonic := strings.ToLower(string(ins.Op))
+	var result string
+	var err error
+	if form.spec.sign {
+		data, failure := c.loadPackedCompareLanes(ins.Args[form.second], 16, bits, false)
+		if failure != nil {
+			return failure
+		}
+		result, err = c.emitPackedBinaryNativeMemory(source, bits, data, mnemonic)
+	} else {
+		// Unary ABS has no old-destination input. Do not manufacture one just
+		// to reuse the tied binary carrier used by PSIGN and other families.
+		pointer, pointerType, _, failure := c.packedVectorMemoryPointer(source)
+		if failure != nil {
+			return failure
+		}
+		segment := ""
+		if pointerType == "ptr addrspace(256)" {
+			segment = "%gs:"
+		} else if pointerType == "ptr addrspace(257)" {
+			segment = "%fs:"
+		}
+		call, lanes := c.newTmp(), c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = call <4 x float> asm sideeffect %q, %q(%s %s)\n",
+			call, mnemonic+" "+segment+"($1), $0", "=x,r,~{memory}", pointerType, pointer)
+		fmt.Fprintf(c.b, "  %%%s = bitcast <4 x float> %%%s to <%d x i%d>\n", lanes, call, 128/bits, bits)
+		result = "%" + lanes
+	}
+	if err != nil {
+		return err
+	}
+	bytes := c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i%d> %s to <16 x i8>\n", bytes, 128/bits, bits, result)
+	return c.storeLegacyXViews(ins.Args[form.destination].Reg, "%"+bytes)
 }
 
 func (c *amd64Ctx) emitPackedAbs(values string, byteWidth, laneBits int) string {
