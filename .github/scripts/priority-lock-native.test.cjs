@@ -1,6 +1,7 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const test = require('node:test');
+const {requireCompleteWindowsNeeds} = require('./workflow-needs.cjs');
 
 const workflow = fs.readFileSync('.github/workflows/pr40-owned-process-probe.yml', 'utf8');
 const roots = ['TestCrossLinuxRuntimeMatrixX86LockScalarRMWNativeAMD64',
@@ -31,7 +32,7 @@ function requireLockOwners(source) {
   assert.match(body, /if: \$\{\{ !cancelled\(\) \}\}/);
   assert.match(body, /name: native-lock\n          path: _out\/native-lock\/\n          if-no-files-found: error/);
   assert.doesNotMatch(body, /continue-on-error|max-parallel|qemu|rosetta|PLAN9ASM_CROSS_EXEC|overlay/);
-  assert.match(source, /needs: \[ownership, native-x86-oracles, sdk-priority, arm64-fallback-cross-priority, lock-native-priority, unlocked-rmw-native-priority, vector-value-fault-priority, packed-conversion-native-complete\]/);
+  requireCompleteWindowsNeeds(source);
   assert.ok(source.includes(priority), 'complete source-body dispatch before module tests');
   assert.equal(source.split('- lane: lock-scalar-dispatch\n').length - 1, 1);
   assert.equal(source.split(`- ${dispatch}\n`).length - 1, 1);

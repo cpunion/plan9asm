@@ -35,6 +35,17 @@ var x86PackedReductionListingInstruction = regexp.MustCompile(`^\s*0x([0-9a-f]+)
 // including the terminal RET. Neither padding nor an unexplained suffix is
 // silently dropped from the source used by the raw continuation tests.
 func x86PackedReductionRawRowsFromGoListing(listing string, rows []x86PackedReductionOracleRow) ([]string, error) {
+	var expected [][]byte
+	for _, row := range rows {
+		expected = append(expected, x86PackedReductionIndependentFixtureBytes(row))
+	}
+	return x86PackedReductionRawRowsFromGoListingWithExpected(listing, rows, expected)
+}
+
+func x86PackedReductionRawRowsFromGoListingWithExpected(listing string, rows []x86PackedReductionOracleRow, expected [][]byte) ([]string, error) {
+	if len(expected) != len(rows) {
+		return nil, fmt.Errorf("incomplete independent original byte inventory")
+	}
 	var code []byte
 	var pcs []int
 	for _, line := range strings.Split(listing, "\n") {
@@ -80,7 +91,7 @@ func x86PackedReductionRawRowsFromGoListing(listing string, rows []x86PackedRedu
 		if end > len(code) {
 			return nil, fmt.Errorf("original Go PC outside byte listing: %s at %d:%d", row.row, start, end)
 		}
-		want := x86PackedReductionIndependentFixtureBytes(row)
+		want := expected[index]
 		if !bytes.Equal(code[start:end], want) {
 			return nil, fmt.Errorf("original Go instruction bytes changed: %s at %d:%d got=%x want=%x", row.row, start, end, code[start:end], want)
 		}
