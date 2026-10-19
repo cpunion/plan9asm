@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -175,9 +176,16 @@ func TestTranslateX86RawMaskCompareLLVM22Objects(t *testing.T) {
 				Goarch: "amd64", TargetTriple: triple,
 				Sigs: map[string]FuncSig{"rawMaskCompare": {Name: "rawMaskCompare", Ret: Void}},
 			})
-			if err != nil {
-				t.Fatal(err)
+			if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+				t.Fatal("original raw compare formats invented native/mask inputs", err)
 			}
+			normalized, err := normalizeX86RawFile(file, "amd64")
+			if err != nil {
+				t.Fatal("original raw compare format bytes no longer decode", err)
+			}
+			ir = x86InstructionFormatObjectUnit(t, normalized,
+				map[string]FuncSig{"rawMaskCompare": {Name: "rawMaskCompare", Ret: Void}}, "amd64", triple, 0,
+				func(c *amd64Ctx, ins Instr) (bool, bool, error) { return c.lowerImmediatePackedCompare(ins.Op, ins) })
 			compileLLVMToObject(t, llc, triple, "raw-mask-compare.ll", "raw-mask-compare.o", ir)
 		})
 	}
