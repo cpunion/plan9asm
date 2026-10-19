@@ -7,7 +7,8 @@ import (
 
 // decodedX86RawPackedAbsInstruction implements Go's complete VPABS B/W/D/Q
 // rows: VEX X/Y for B/W/D, EVEX X/Y/Z with optional K masking, and EVEX
-// D/Q memory broadcast. VPABSQ is EVEX-only; W is fixed by the lane width.
+// D/Q memory broadcast. VPABSQ is EVEX-only. VEX B/W/D ignore W; EVEX
+// requires W0 for B/W/D and W1 for Q, independently of the named Go encoder.
 func decodedX86RawPackedAbsInstruction(code []byte, mode int) (Instr, int, bool, error) {
 	p, matched := decodeX86RawVectorEncoding(code)
 	if !matched || p.mapNumber != 2 || p.pp != 1 || p.opcode < 0x1c || p.opcode > 0x1f {
@@ -29,7 +30,7 @@ func decodedX86RawPackedAbsInstruction(code []byte, mode int) (Instr, int, bool,
 		return fail("missing ModRM byte")
 	}
 	laneBytes := [...]int{1, 2, 4, 8}[p.opcode-0x1c]
-	if p.w != (laneBytes == 8) || !p.evex && (laneBytes == 8 || p.vectorLength == 2) {
+	if p.evex && p.w != (laneBytes == 8) || !p.evex && (laneBytes == 8 || p.vectorLength == 2) {
 		return fail("invalid W bit or vector length for opcode")
 	}
 	if p.zero && p.mask == 0 {

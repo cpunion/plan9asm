@@ -20,8 +20,8 @@ func decodedX86RawPackedSignInstruction(code []byte, mode int) (Instr, int, bool
 	if mode != 32 && mode != 64 {
 		return fail("unsupported x86 mode")
 	}
-	if p.evex || p.pp != 1 || p.w || p.addressOverride {
-		return fail("Go's packed sign table only permits VEX.66.0F38.W0 without address override")
+	if p.evex || p.pp != 1 || p.addressOverride {
+		return fail("packed sign requires VEX.66.0F38.WIG without address override")
 	}
 	if len(code) <= p.modRM {
 		return fail("missing ModRM byte")
