@@ -64,7 +64,7 @@ func TestX86Mode32LogicalScalarReturnRoleBoundaries(t *testing.T) {
 		return x86ScalarFPResultTransfer(ins, state, owned, offset, arch)
 	}
 	for name, mutate := range map[string]func(*Func, *FuncSig){
-		"float-result":     func(_ *Func, sig *FuncSig) { sig.Ret = F64 },
+		"float-result":     func(_ *Func, sig *FuncSig) { sig.Ret = "double" },
 		"pointer-result":   func(_ *Func, sig *FuncSig) { sig.Ret = Ptr },
 		"aggregate-result": func(_ *Func, sig *FuncSig) { sig.Ret = "{ i32, i32 }" },
 		"incoming-value":   func(_ *Func, sig *FuncSig) { sig.Args = []LLVMType{I32} },
