@@ -59,20 +59,15 @@ func TestTranslateX86PackedConflictCompleteGoFormsAcrossTargets(t *testing.T) {
 			}
 			source.WriteString("\tRET\n")
 			requireX86GoAssemblerResult(t, target.goarch, source.String(), true)
-			file, err := Parse(ArchAMD64, source.String())
-			if err != nil {
-				t.Fatal(err)
+			file, signatures := x86UnboundVoidFormatSources(t, source.String(), target.goarch, target.triple)
+			if target.goarch == "386" {
+				// Original accepted X31/Y31 and R9 source spellings do not
+				// establish physical mode32 banks or an incoming address.
+				// The independent initialized low-bank family owns objects.
+				return
 			}
-			ir, err := Translate(file, Options{
-				Goarch:       target.goarch,
-				TargetTriple: target.triple,
-				Sigs: map[string]FuncSig{
-					"packedconflictforms": {Name: "packedconflictforms", Ret: Void},
-				},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			ir := x86InstructionFormatObjectUnit(t, file, signatures, target.goarch, target.triple, 0,
+				func(c *amd64Ctx, ins Instr) (bool, bool, error) { return c.lowerPackedConflict(ins.Op, ins) })
 			for _, want := range []string{"icmp eq", "select i1", "<16 x i32>", "<8 x i64>"} {
 				if !strings.Contains(ir, want) {
 					t.Fatalf("packed-conflict lowering omitted %q:\n%s", want, ir)
@@ -122,9 +117,8 @@ func TestTranslateX86PackedConflictRejectsFormsOutsideGoTable(t *testing.T) {
 }
 
 func TestAMD64PackedConflictRuntimeSemantics(t *testing.T) {
-	crossRosetta := runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" && rosettaAvailable()
-	if runtime.GOARCH != "amd64" && !crossRosetta {
-		t.Skip("runtime execution test requires amd64 or Rosetta")
+	if runtime.GOARCH != "amd64" && runtime.GOARCH != "arm64" {
+		t.Skip("portable integer oracle requires its native 64-bit host counterpart")
 	}
 	llc, clang, ok := findLlcAndClang(t)
 	if !ok {
@@ -161,11 +155,6 @@ func TestAMD64PackedConflictRuntimeSemantics(t *testing.T) {
 		t.Fatal(err)
 	}
 	triple := testTargetTriple(runtime.GOOS, runtime.GOARCH)
-	var runPrefix []string
-	if crossRosetta {
-		triple = "x86_64-apple-macosx"
-		runPrefix = []string{"/usr/bin/arch", "-x86_64"}
-	}
 	ir, err := Translate(file, Options{
 		Goarch:       "amd64",
 		TargetTriple: triple,
@@ -217,5 +206,5 @@ int main(void) {
   return 0;
 }
 `
-	compileAndRunRuntimeTestForTarget(t, llc, clang, "packed_conflict_semantics", triple, ir, mainC, runPrefix)
+	x86ConflictFunnelPortableRuntime(t, llc, clang, "packed_conflict_semantics", triple, ir, mainC)
 }
