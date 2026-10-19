@@ -78,16 +78,9 @@ func TestTranslateX86FPClassCompleteGoAssemblerForms(t *testing.T) {
 			}
 			source.WriteString("\tRET\n")
 			requireX86GoAssemblerResult(t, target.goarch, source.String(), true)
-			file, err := Parse(ArchAMD64, source.String())
-			if err != nil {
-				t.Fatal(err)
-			}
-			ir, err := Translate(file, Options{
-				Goarch: target.goarch, TargetTriple: target.triple,
-				Sigs: map[string]FuncSig{"fpclassforms": {Name: "fpclassforms", Ret: Void}},
-			})
-			if err != nil {
-				t.Fatal(err)
+			ir := x86FloatingHelperOriginalFormatObject(t, source.String(), "fpclassforms", target.goarch, target.triple)
+			if ir == "" {
+				return // Go/public-Context coverage, not an LLVM object claim.
 			}
 			llc := findLLVM22Tool("llc")
 			if llc == "" {

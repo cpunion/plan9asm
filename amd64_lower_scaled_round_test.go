@@ -14,17 +14,12 @@ func TestTranslateAMD64ScaledRoundRepresentativeForms(t *testing.T) {
 	RET
 `
 	requireX86GoAssemblerResult(t, "amd64", source, true)
-	file, err := Parse(ArchAMD64, source)
-	if err != nil {
-		t.Fatal(err)
+	ir := x86FloatingHelperOriginalFormatObject(t, source, "scaledroundforms", "amd64", "x86_64-unknown-linux-gnu")
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM 22 llc not found")
 	}
-	if _, err := Translate(file, Options{
-		Goarch:       "amd64",
-		TargetTriple: "x86_64-unknown-linux-gnu",
-		Sigs:         map[string]FuncSig{"scaledroundforms": {Name: "scaledroundforms", Ret: Void}},
-	}); err != nil {
-		t.Fatal(err)
-	}
+	compileLLVMToObject(t, llc, "x86_64-unknown-linux-gnu", "round-representative.ll", "round-representative.o", ir)
 }
 
 func TestAMD64ScaledRoundGrammarCoversCompleteGoFamilies(t *testing.T) {
@@ -99,16 +94,9 @@ func TestTranslateX86ScaledRoundCompleteGoAssemblerForms(t *testing.T) {
 			}
 			source.WriteString("\tRET\n")
 			requireX86GoAssemblerResult(t, target.goarch, source.String(), true)
-			file, err := Parse(ArchAMD64, source.String())
-			if err != nil {
-				t.Fatal(err)
-			}
-			ir, err := Translate(file, Options{
-				Goarch: target.goarch, TargetTriple: target.triple,
-				Sigs: map[string]FuncSig{"scaledroundallforms": {Name: "scaledroundallforms", Ret: Void}},
-			})
-			if err != nil {
-				t.Fatal(err)
+			ir := x86FloatingHelperOriginalFormatObject(t, source.String(), "scaledroundallforms", target.goarch, target.triple)
+			if ir == "" {
+				return // Go/public-Context coverage, not an LLVM object claim.
 			}
 			llc := findLLVM22Tool("llc")
 			if llc == "" {

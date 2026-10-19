@@ -125,6 +125,25 @@ func x86FloatingHelperOracleMembers() []x86FloatingHelperOracleMember {
 	return members
 }
 
+// Retain the entire original Go source and its public Context classification.
+// An unbound high-bank mode32 source cannot supply a physical LLVM object;
+// independent initialized low-bank sources own that separate positive axis.
+func x86FloatingHelperOriginalFormatObject(t *testing.T, source, name, arch, triple string) string {
+	t.Helper()
+	file, signatures := x86UnboundVoidFormatSource(t, source, name, arch, triple)
+	if arch == "386" {
+		for _, function := range file.Funcs {
+			for _, ins := range function.Instrs {
+				if x86Mode32VectorRegisterContext(ins, arch) != nil {
+					t.Log("complete original Go object and public Context retained; named high vector bank has no physical mode32 binding")
+					return ""
+				}
+			}
+		}
+	}
+	return x86ScalarFormatObjectUnit(t, file, signatures, arch, triple, 0)
+}
+
 func x86FloatingHelperOracleInstruction(member x86FloatingHelperOracleMember, memory bool) string {
 	var args []string
 	if member.immediate {

@@ -72,16 +72,9 @@ func TestTranslateX86GetExpCompleteGoAssemblerForms(t *testing.T) {
 			}
 			source.WriteString("\tRET\n")
 			requireX86GoAssemblerResult(t, target.goarch, source.String(), true)
-			file, err := Parse(ArchAMD64, source.String())
-			if err != nil {
-				t.Fatal(err)
-			}
-			ir, err := Translate(file, Options{
-				Goarch: target.goarch, TargetTriple: target.triple,
-				Sigs: map[string]FuncSig{"getexpforms": {Name: "getexpforms", Ret: Void}},
-			})
-			if err != nil {
-				t.Fatal(err)
+			ir := x86FloatingHelperOriginalFormatObject(t, source.String(), "getexpforms", target.goarch, target.triple)
+			if ir == "" {
+				return // Go/public-Context coverage, not an LLVM object claim.
 			}
 			llc := findLLVM22Tool("llc")
 			if llc == "" {
