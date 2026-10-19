@@ -1,6 +1,13 @@
 package plan9asm
 
 func x86ResultTernaryLogicStep(ins Instr, state *x86ResultState, owned []bool, arch string) (bool, bool) {
+	return x86ResultTernaryLogicContinuationStep(ins, state, owned, arch, false)
+}
+
+// Only the paired lowering observer may consume the exact E4 volatile reads.
+// Boolean independence, zero masks and dead results supply no pointer or
+// reusable backing. The standalone transfer retains its original boundary.
+func x86ResultTernaryLogicContinuationStep(ins Instr, state *x86ResultState, owned []bool, arch string, nativeRead bool) (bool, bool) {
 	form, recognized, err := x86TernaryLogicProperties(ins.Op, ins, arch)
 	if !recognized {
 		return false, false
@@ -16,7 +23,7 @@ func x86ResultTernaryLogicStep(ins Instr, state *x86ResultState, owned []bool, a
 	}
 	// Fault suppression and truth-table independence never grant authority to
 	// read an unknown address or a partially described memory tuple.
-	if form.memory >= 0 && !x86ResultRead(ins.Args[form.memory], int64(form.memoryBytes), state, owned, arch) {
+	if form.memory >= 0 && !x86ResultReadWithNativeContinuation(ins, ins.Args[form.memory], int64(form.memoryBytes), state, owned, arch, nativeRead) {
 		return false, true
 	}
 	known := x86CallerVectorByteMask(int64(form.byteWidth))

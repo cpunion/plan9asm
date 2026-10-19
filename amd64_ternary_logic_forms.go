@@ -135,3 +135,34 @@ func (f x86TernaryLogicForm) dependencies() uint8 {
 	}
 	return inputs
 }
+
+func x86TypedTernaryLogicByteEffect(op Op, ins Instr, arch string) (x86TypedByteEffect, bool, error) {
+	form, known, err := x86TernaryLogicProperties(op, ins, arch)
+	if !known || err != nil {
+		return x86TypedByteEffect{}, known, err
+	}
+	dependencies := form.dependencies()
+	if form.mask >= 0 && !form.zeroing {
+		dependencies |= 1 // An inactive merging lane retains the old A value.
+	}
+	effect := x86TypedByteEffect{requiresResultProof: true}
+	for role, index := range form.inputs {
+		width := form.byteWidth
+		read := dependencies>>uint(role)&1 != 0
+		if index == form.memory {
+			// Physical E4 access remains observable even when the selected
+			// Boolean function does not depend on its loaded numerical value.
+			width, read = form.memoryBytes, true
+		}
+		effect.operands = append(effect.operands, x86TypedByteOperand{
+			index: index, operand: ins.Args[index], width: int64(width),
+			read: read, write: index == form.destination,
+		})
+	}
+	if form.mask >= 0 {
+		effect.operands = append(effect.operands, x86TypedByteOperand{
+			index: form.mask, operand: ins.Args[form.mask], width: 8, read: true,
+		})
+	}
+	return effect, true, nil
+}
