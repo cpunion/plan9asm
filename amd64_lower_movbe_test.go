@@ -12,9 +12,9 @@ func x86MOVBECompleteFormsSource(goarch string) string {
 	source.WriteString("DATA movedata+0(SB)/8, $1\n")
 	source.WriteString("GLOBL movedata(SB), $8\n")
 	source.WriteString("TEXT moveforms(SB),$0-0\n")
-	widths := []string{"W", "L"}
+	widths := []string{"W", "WW", "L", "LL"}
 	if goarch == "amd64" {
-		widths = append(widths, "Q")
+		widths = append(widths, "Q", "QQ")
 	}
 	for _, width := range widths {
 		op := "MOVBE" + width
@@ -26,12 +26,6 @@ func x86MOVBECompleteFormsSource(goarch string) string {
 			fmt.Fprintf(&source, "\t%s 24(R11), R12\n", op)
 			fmt.Fprintf(&source, "\t%s R13, 32(R14)\n", op)
 		}
-	}
-	if goarch == "amd64" {
-		// Older external packages use the Go assembler's MOVBEQQ alias for
-		// the 64-bit MOVBE form. Keep this spelling covered alongside MOVBEQ.
-		source.WriteString("\tMOVBEQQ 40(R11), R12\n")
-		source.WriteString("\tMOVBEQQ R13, 48(R14)\n")
 	}
 	source.WriteString("\tRET\n")
 	return source.String()

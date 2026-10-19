@@ -6,7 +6,9 @@ import (
 )
 
 var x86MOVBEWidths = map[Op]int{
-	"MOVBEW": 16, "MOVBEL": 32, "MOVBEQ": 64, "MOVBEQQ": 64,
+	"MOVBEW": 16, "MOVBEWW": 16,
+	"MOVBEL": 32, "MOVBELL": 32,
+	"MOVBEQ": 64, "MOVBEQQ": 64,
 }
 
 type x86MOVBEForm struct {
