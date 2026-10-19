@@ -10,7 +10,7 @@ type x86AccumulatorSignExtendSpec struct {
 	destination                   Reg
 }
 
-// Complete ynone / 98,99 family. The prefix selects the operand width; the
+// Complete x86 ynone / 98,99 family. The prefix selects the operand width; the
 // destination distinguishes sign extension from the sign-only high half.
 var x86AccumulatorSignExtendSpecs = map[Op]x86AccumulatorSignExtendSpec{
 	"CBW":  {1, 2, AX},

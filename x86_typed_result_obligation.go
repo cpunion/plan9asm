@@ -27,6 +27,9 @@ func x86TypedFPResultNeedsProof(fn Func, sig FuncSig, arch string) bool {
 	}
 	opaqueAddressResult := x86OpaqueAddressPointerResultRole(fn, sig, arch)
 	for ordinal, ins := range fn.Instrs {
+		if _, known, err := x86AccumulatorSignExtendProperties(ins.Op, ins, arch); known && err == nil {
+			return true // Raw/named implicit AX inputs remain mandatory even for a dead Void result.
+		}
 		if _, known, err := x86DwordProductProperties(ins.Op, ins, arch); known && err == nil {
 			return true // Named/raw dead products retain numerical input and mask obligations.
 		}
