@@ -36,13 +36,20 @@ TEXT rawRORX(SB),$0-0
 		{goarch: "amd64", triple: "x86_64-pc-windows-msvc"},
 	} {
 		t.Run(target.triple, func(t *testing.T) {
-			ir, err := Translate(file, Options{
-				Goarch:       target.goarch,
-				TargetTriple: target.triple,
-				Sigs:         map[string]FuncSig{"rawRORX": {Name: "rawRORX", Ret: Void}},
-			})
-			if err != nil {
-				t.Fatal(err)
+			var ir string
+			if target.goarch == "amd64" {
+				// The original ModRM writes physical BP. Its encoding remains
+				// covered, but an ordinary logical entry has no native-frame role.
+				ir = x86UnboundVoidRawScalarFormatObject(t, source, target.goarch, target.triple)
+			} else {
+				ir, err = Translate(file, Options{
+					Goarch:       target.goarch,
+					TargetTriple: target.triple,
+					Sigs:         map[string]FuncSig{"rawRORX": {Name: "rawRORX", Ret: Void}},
+				})
+				if err != nil {
+					t.Fatal(err)
+				}
 			}
 			if !strings.Contains(ir, `"target-features"="+bmi2"`) {
 				t.Fatalf("raw RORX did not infer BMI2 target feature:\n%s", ir)
