@@ -48,6 +48,12 @@ func x86MOVNTIProperties(op Op, ins Instr, arch string) (x86MOVNTIForm, bool, er
 		return fail()
 	}
 	memory := form.destination
+	if projected, segment, err := x86NamedSegmentMemorySource(ins, memory, arch); segment {
+		if err != nil {
+			return form, true, err
+		}
+		memory, form.destination = projected, projected
+	}
 	if memory.Kind == OpMem {
 		if err := x86SymbolIndexedMemoryError(memory.Mem, arch); err != nil {
 			return form, true, err
@@ -59,7 +65,7 @@ func x86MOVNTIProperties(op Op, ins Instr, arch string) (x86MOVNTIForm, bool, er
 			memory.Mem.Base = "" // Go discards this named annotation, not Index.
 		}
 	}
-	if !x86PackedShiftMemoryValid(memory, arch) {
+	if !x86ScalarCompareMemoryValid(memory, arch) {
 		return fail()
 	}
 	return form, true, nil

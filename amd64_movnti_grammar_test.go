@@ -2,6 +2,7 @@ package plan9asm
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -25,16 +26,62 @@ func TestX86MOVNTICompleteIndependentGoEncoderRows(t *testing.T) {
 	if len(rows) != 2 {
 		t.Fatal("complete Go scalar non-temporal family changed", rows)
 	}
+	if len(x86MOVNTIWidths) != len(rows) {
+		t.Fatal("typed scalar non-temporal directory is not the complete independent Go family")
+	}
 	for _, row := range rows {
-		prefix, encoding := "Pm", "0xc3"
+		prefix, encoding, bits := "Pm", "0xc3", 32
 		if row[1] == "MOVNTIQ" {
-			prefix, encoding = "Pw", "0x0f,0xc3"
+			prefix, encoding, bits = "Pw", "0x0f,0xc3", 64
 		} else if row[1] != "MOVNTIL" {
 			t.Fatal("unmodeled Go scalar non-temporal member", row[1])
 		}
-		if row[2] != prefix || strings.Join(strings.Fields(row[3]), "") != encoding {
+		if row[2] != prefix || strings.Join(strings.Fields(row[3]), "") != encoding || x86MOVNTIWidths[Op(row[1])] != bits {
 			t.Fatal("complete Go MOVNTI physical encoding changed", row)
 		}
+	}
+}
+
+func TestX86MOVNTICompleteGoRegisterAndAddressClasses(t *testing.T) {
+	for _, arch := range []string{"386", "amd64"} {
+		t.Run(arch, func(t *testing.T) {
+			registers := []string{"AX", "CX", "DX", "BX", "SP", "BP", "SI", "DI"}
+			if arch == "amd64" {
+				registers = append(registers, "R8", "R9", "R10", "R11", "R12", "R13", "R14", "R15")
+			}
+			destinations := append([]string(nil), registers...)
+			destinations = append(destinations,
+				"(AX)", "-1(AX)(CX*2)", "128(BX)(SI*8)", "tmp-4(SP)",
+				"ret+0(FP)", "·cell(SB)", "17", "8(AX)(GS)", "8(AX)(FS)")
+			var source strings.Builder
+			source.WriteString("DATA ·cell+0(SB)/8,$0\nGLOBL ·cell(SB),$8\n")
+			count := 0
+			for _, name := range []string{"MOVNTIL", "MOVNTIQ"} {
+				if arch == "386" && name == "MOVNTIQ" {
+					continue
+				}
+				for _, register := range registers {
+					for _, destination := range destinations {
+						text := name + " " + register + "," + destination
+						ins := x86YMMReadSource(t, text)
+						form, known, err := x86MOVNTIProperties(ins.Op, ins, arch)
+						if !known || err != nil || form.trap != (ins.Args[1].Kind == OpReg) || form.source != ins.Args[0] {
+							t.Fatal("complete Go Yrl/Yml row lost source shape or trap priority", text, err)
+						}
+						fmt.Fprintf(&source, "TEXT ·Format%d(SB),4,$0-8\n%s\nRET\n", count, text)
+						count++
+					}
+				}
+			}
+			want := 136
+			if arch == "amd64" {
+				want = 800
+			}
+			if count != want {
+				t.Fatal("independent complete scalar non-temporal source/address inventory changed", count)
+			}
+			requireX86GoAssemblerResult(t, arch, source.String(), true)
+		})
 	}
 }
 
