@@ -108,18 +108,7 @@ func TestX86RORXCompleteGo127FormsAcrossTargets(t *testing.T) {
 			}
 			source.WriteString("\tRET\n")
 			requireX86GoAssemblerResult(t, target.goarch, source.String(), true)
-			file, err := Parse(ArchAMD64, source.String())
-			if err != nil {
-				t.Fatal(err)
-			}
-			ir, err := Translate(file, Options{
-				Goarch:       target.goarch,
-				TargetTriple: target.triple,
-				Sigs:         map[string]FuncSig{"rorxall": {Name: "rorxall", Ret: Void}},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			ir := x86UnboundVoidScalarFormatObject(t, source.String(), "rorxall", target.goarch, target.triple)
 			if !strings.Contains(ir, `"target-features"="+bmi2"`) {
 				t.Fatalf("RORX family did not infer BMI2 target feature:\n%s", ir)
 			}

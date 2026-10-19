@@ -101,6 +101,26 @@ func TestX86BMI2ResultVoidCannotBorrowInputs(t *testing.T) {
 	}
 }
 
+func TestX86BMI2ResultVoidRoutesCompleteInputProof(t *testing.T) {
+	for _, arch := range []string{"386", "amd64"} {
+		for _, op := range x86BMI2ResultNames {
+			source := "TEXT Value(SB),4,$0-0\n" + x86BMI2ResultInstruction(t, arch, op, "BX", false) + "\nRET\n"
+			file, err := Parse(ArchAMD64, source)
+			if err != nil {
+				t.Fatal(err)
+			}
+			fn, sig := file.Funcs[0], FuncSig{Name: "Value", Ret: Void}
+			if !x86TypedFPResultNeedsProof(fn, sig, arch) {
+				t.Fatal("dead named shift lost its mandatory source proof", arch, op)
+			}
+			ctx := &amd64Ctx{fpScalarSource: fn, sig: sig, goarch: arch}
+			if err := ctx.validateScalarFPSourceViews(); !errors.Is(err, ErrProbeNeedsContext) {
+				t.Fatal("mandatory named source proof accepted missing input", arch, op, err)
+			}
+		}
+	}
+}
+
 func TestX86BMI2ResultInitializedFiveTargetObjects(t *testing.T) {
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
