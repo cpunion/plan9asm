@@ -112,8 +112,7 @@ func x86NumericalVectorBoundary(code []byte, mode int) (int, error) {
 	}
 	// The complete physical EVEX grammar is shared with the source decoder.
 	// Its separate source-syntax validation deliberately cannot interpret RIP.
-	if _, length, known, err := decodedX86EVEXImmediateThreeVectorInstructionWithMemory(code, mode,
-		0x25, "VPTERNLOGD", "VPTERNLOGQ", "VPTERNLOG", memory); known || err != nil {
+	if _, length, known, err := decodedX86TernaryLogicInstructionWithMemory(code, mode, memory); known || err != nil {
 		return length, err
 	}
 	if _, length, known, err := decodedX86VectorZeroInstruction(code, mode); known || err != nil {

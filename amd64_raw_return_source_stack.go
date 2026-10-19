@@ -34,6 +34,7 @@ type x86SourceRawInstruction struct {
 	// A low-bank unmasked packed move still retains its physical generation.
 	packedMove      x86RawPackedMoveIdentity
 	packedReduction x86RawPackedReductionIdentity
+	ternaryLogic    x86RawTernaryLogicIdentity
 }
 
 type x86SourceStackAddress struct {

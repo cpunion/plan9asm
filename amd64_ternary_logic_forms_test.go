@@ -93,18 +93,20 @@ func TestX86TernaryNativeSegmentsAndUnboundAddresses(t *testing.T) {
 		if target.arch != "amd64" {
 			continue // Both actual Go mode32 rejection axes are covered above.
 		}
-		x86LEAActualTargetGoObject(t, target.arch, target.triple, source.String())
-		for _, api := range []string{"text", "module", "Go"} {
-			ir, err := x86ScalarFPBitViewAPI(t, source.String(), "func view()\n", target.arch, target.triple, api)
-			if err != nil {
-				t.Fatal(api, err)
+		// Retain the original twelve source rows, actual Go objects, both
+		// segment address spaces and emitter objects. This source has neither
+		// an initialized K1 nor a bound segment address; it is not a public
+		// numerical or ABI success. Complete initialized ordinary-memory
+		// counterparts live in the independent 54-row public object matrix.
+		file, signatures := x86UnboundVoidFormatSources(t, source.String(), target.arch, target.triple)
+		ir := x86ScalarFormatObjectUnit(t, file, signatures, target.arch, target.triple, 0)
+		for _, space := range []string{"ptr addrspace(256)", "ptr addrspace(257)"} {
+			if !strings.Contains(ir, space) {
+				t.Fatal("original segment format address space erased", space)
 			}
-			for _, space := range []string{"ptr addrspace(256)", "ptr addrspace(257)"} {
-				if !strings.Contains(ir, space) {
-					t.Fatal("segment address space erased", api, space)
-				}
-			}
-			compileLLVMToObject(t, llc, target.triple, "ternary-segments.ll", "ternary-segments.o", ir)
+		}
+		for _, level := range []string{"-O0", "-O2"} {
+			x86PackedStringCompileObject(t, llc, target.triple, ir, level)
 		}
 	}
 	for _, unbound := range []bool{false, true} {

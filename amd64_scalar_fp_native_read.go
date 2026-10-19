@@ -93,7 +93,15 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 	boundRawConversion := false
 	boundRawMinMax := false
 	boundRawReduction := false
+	boundRawTernary := false
 	for _, ins := range fn.Instrs {
+		if x86RawTernaryLogicSource(ins, arch) {
+			if !boundRawTernary && (fn.x86RawReplay == nil || fn.x86RawReplay.validate(fn, arch) != nil) {
+				return strictErr
+			}
+			boundRawTernary = true
+			continue // Exact mode/selector/operands supply no entry, pointer or reusable backing.
+		}
 		if x86RawScalarReciprocalSource(ins, arch) {
 			continue // Exact source identity retains scalar data, upper bytes and native m32 obligations.
 		}
@@ -260,6 +268,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		}
 		if accepted, known := x86ResultIntegerMinMaxStep(ins, state, owned, arch, true); known {
 			return accepted // The paired E4 reader retains active exact-width volatile faults.
+		}
+		if accepted, known := x86ResultTernaryLogicContinuationStep(ins, state, owned, arch, true); known {
+			return accepted // Exact E4 reads survive constant selectors and dead Boolean results.
 		}
 		if accepted, known := x86LoweredRawPackedReductionStep(ins, state, owned, arch); known {
 			return accepted

@@ -25,8 +25,10 @@ func x86TernaryLogicProperties(op Op, ins Instr, arch string) (x86TernaryLogicFo
 	fail := func() (x86TernaryLogicForm, bool, error) {
 		return f, true, fmt.Errorf("%s %s outside Go ternary-logic grammar: %q", arch, op, ins.Raw)
 	}
-	// The 386 assembler frontend rejects all four/five-operand rows.
-	if arch != "amd64" || ins.Op != "" && !strings.EqualFold(string(ins.Op), string(op)) {
+	// The named 386 frontend rejects four/five operands, independently of
+	// the legal low-bank EVEX physical forms observed by the raw decoder.
+	physical32 := arch == "386" && (ins.x86Encoded || ins.x86SourceRaw != nil)
+	if arch != "amd64" && !physical32 || ins.Op != "" && !strings.EqualFold(string(ins.Op), string(op)) {
 		return fail()
 	}
 	switch suffix {
@@ -59,7 +61,11 @@ func x86TernaryLogicProperties(op Op, ins Instr, arch string) (x86TernaryLogicFo
 		return fail()
 	}
 	f.byteWidth = amd64VectorByteWidth(ins.Args[f.destination].Reg)
-	if !amd64EVEXVectorRegister(ins.Args[f.destination], f.byteWidth) || !amd64EVEXVectorRegister(ins.Args[2], f.byteWidth) {
+	register := func(operand Operand) bool {
+		index, valid := amd64VectorRegisterIndex(operand.Reg, f.byteWidth)
+		return amd64EVEXVectorRegister(operand, f.byteWidth) && valid && (arch != "386" || index < 8)
+	}
+	if !register(ins.Args[f.destination]) || !register(ins.Args[2]) {
 		return fail()
 	}
 	source := ins.Args[1]
@@ -82,7 +88,7 @@ func x86TernaryLogicProperties(op Op, ins Instr, arch string) (x86TernaryLogicFo
 		if f.broadcast {
 			f.memoryBytes = bits / 8
 		}
-	} else if f.broadcast || !amd64EVEXVectorRegister(source, f.byteWidth) {
+	} else if f.broadcast || !register(source) {
 		return fail()
 	}
 	f.inputs = [3]int{f.destination, 2, 1}
@@ -134,4 +140,35 @@ func (f x86TernaryLogicForm) dependencies() uint8 {
 		}
 	}
 	return inputs
+}
+
+func x86TypedTernaryLogicByteEffect(op Op, ins Instr, arch string) (x86TypedByteEffect, bool, error) {
+	form, known, err := x86TernaryLogicProperties(op, ins, arch)
+	if !known || err != nil {
+		return x86TypedByteEffect{}, known, err
+	}
+	dependencies := form.dependencies()
+	if form.mask >= 0 && !form.zeroing {
+		dependencies |= 1 // An inactive merging lane retains the old A value.
+	}
+	effect := x86TypedByteEffect{requiresResultProof: true}
+	for role, index := range form.inputs {
+		width := form.byteWidth
+		read := dependencies>>uint(role)&1 != 0
+		if index == form.memory {
+			// Physical E4 access remains observable even when the selected
+			// Boolean function does not depend on its loaded numerical value.
+			width, read = form.memoryBytes, true
+		}
+		effect.operands = append(effect.operands, x86TypedByteOperand{
+			index: index, operand: ins.Args[index], width: int64(width),
+			read: read, write: index == form.destination,
+		})
+	}
+	if form.mask >= 0 {
+		effect.operands = append(effect.operands, x86TypedByteOperand{
+			index: form.mask, operand: ins.Args[form.mask], width: 8, read: true,
+		})
+	}
+	return effect, true, nil
 }

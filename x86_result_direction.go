@@ -66,6 +66,9 @@ func x86ResultDirectionAfterSource(ins Instr, direction x86ResultDirection, arch
 	if x86RawIntegerMinMaxSource(ins, arch) {
 		return direction // The exact vector operation has no DF effect.
 	}
+	if x86RawTernaryLogicSource(ins, arch) {
+		return direction // The data-changing Boolean operation leaves the existing DF unchanged.
+	}
 	if x86RawPackedConversionSource(ins, arch) || x86RawPackedReductionSource(ins, arch) || x86RawDwordProductResultSource(ins, arch) || x86RawCMOVSource(ins, arch) ||
 		x86RawAESSource(ins, arch) || x86RawVectorTestSource(ins, arch) || x86RawIFMASource(ins, arch) ||
 		x86RawQwordLookupSource(ins, arch) || x86RawPackedIntegerCompareSource(ins, arch) ||
