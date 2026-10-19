@@ -17,7 +17,11 @@ func TestCMOVCoverageRequiresDataAndPredicateInputs(t *testing.T) {
 			for _, condition := range conditions {
 				op := "CMOV" + width + condition
 				t.Run(arch+"/"+op, func(t *testing.T) {
-					line := op + " AX,BX"
+					// The existing closed, nontrapping GP domain may leave a
+					// dead named-register result unknown. Consume that result
+					// through TEST/SETcc so missing data/predicate bytes cannot
+					// be mistaken for initialized implementation-slot values.
+					line := op + " AX,BX\nTEST" + width + " BX,BX\nSETEQ CX"
 					prefix := "MOVL $3,AX\nMOVL $7,BX\nMOVL $1,DX\nCMPL DX,DX\n"
 					valueProbeNeedsContext(t, arch, line)
 					if err := plan9asm.ProbeInstructionSequence(plan9asm.ArchAMD64, arch,
