@@ -21,11 +21,15 @@ Reuse persistent idle worktrees and preserve existing changes.
 ## Latest online evidence
 
 [39258001772](https://github.com/cpunion/plan9asm/actions/runs/39258001772)
-is still active at `e890858c5`; do not cancel or supersede it. The previously
-failed `SDK priority (completed-ci-repair)` now passes. Its original CAS/AES
-program keeps the restored unknown-register domain; an unknown dead AES output
-does not destroy independent predicate FLAGS. No complete Windows-module pass
-is certified until its actual owner artifacts and aggregate finish.
+finished naturally at `e890858c5`: 81 jobs pass and 17 fail, none cancelled.
+All 65 priorities, including `completed-ci-repair`, pass. Both CLI modules pass
+their complete Windows owner/aggregate checks. All sixteen main-root owners
+fail, and the main aggregate correctly rejects those failed plans.
+
+The complete main-root union is 7,326 roots: 6,992 pass, 70 fail and 264 explicit
+host skips, zero absent/incomplete. Every root is owned exactly once. The
+ignored `ci392580/root-union-outcomes-audit.json` retains all raw-backed outcomes;
+it is an inventory diagnostic, not a complete-module or coverage certificate.
 
 All six Linux/native priorities and both Windows ownership jobs pass.
 The downloaded product/CMOV/AES/vector-test numerical artifact independently
@@ -38,12 +42,14 @@ The preceding run `39251569206` at `755bbb710` finished naturally with
 64 passed jobs, one failed CAS/AES root and the dependent Windows job skipped.
 Preserve that failed evidence; the later priority pass does not rewrite it.
 
-The last complete Windows main-root inventory is still the older
+The older complete Windows main-root inventory at
 [39228817887](https://github.com/cpunion/plan9asm/actions/runs/39228817887)
 at `17669bdbd`: 7,288 roots = 6,954 pass + 70 fail + 264 explicit host skips,
 zero absent/incomplete. Its failed rich-CLI owners additionally retain five
 failed roots; their partial inventory is not the main-module denominator.
-Do not subtract later focused repairs from those historical counts.
+Ten old failures now pass, while ten previously passing roots fail under the
+new checks. Diagnose both sets; do not subtract later local focused repairs
+from either historical inventory.
 
 The sole formal PR40 review thread is resolved. The no-orphaned-IR regression
 `TestAMD64RejectedLegacyVectorDestinationDoesNotMutateIR` covers PSUBUSB,
@@ -60,6 +66,10 @@ cohorts have zero failed, skipped or incomplete terminals.
 
 | Snapshot | Complete focused evidence | Important limits |
 |---|---|---|
+| `66dcd0d31` | CMOV FP views: 2 roots / 183 children, current Go, actual Go1.20 and race; identical 185 terminals | Original uninitialized formats remain Go objects plus Context; independent initialized AX/FLAGS sources own complete, partial, cross-field and pointer/hole checks. No new caller or FP storage permission |
+| `1cebb3c38` | Branch hints and original CMOV/KVM formats: 5 roots / 15 children, current Go, actual Go1.20 and race | All sixteen conditions and both hints compile on five targets with actual word-aligned results. The original signed-division compound test still fails at IDIV; mode32 hypercall objects do not supply a logical scalar/native entry contract |
+| `9738b0376` | Raw immediate compares: 14 roots / 657 children, current Go, actual Go1.20 and race; identical 671 terminals | Eight signed/unsigned B/W/D/Q members, complete Go rows, initialized X/Y/Z five-target raw objects, selectors/predicates and missing/native/standalone controls. Physical mode32 arity is distinct from the named frontend |
+| `313f7afc5` | Named qword lookup plus portable numerical programs: 13 roots / 39 children, current Go, actual Go1.20 and race; identical 52 terminals | Both opcode families, complete independent attributes, every input byte, write-only K versus merging vector results and E4/E4NF reads. IFMA/lookup original C oracles execute on the actual AMD64/ARM64 host at three optimization paths; not native AVX512 |
 | `eac2dcdb4` | IFMA: 16 roots / 382 children, current Go, actual Go1.20 and race; identical 398 terminals | Complete two-opcode Go rows, X/Y/Z initialized named/raw five-target objects, actual mode32 masks, every meaningful source/accumulator byte and independently nonzero upper aliases. Native numerical execution remains required in the next CI |
 | `e6d340706` | AES/CAS: 22 roots / 2,471 children, current Go, actual Go1.20 and race; identical 2,493 terminals | Restores the existing nontrapping unknown-register domain without initializing unknown bytes. Original CAS predicate remains independent; observable AES data/control uses still reject. Native addresses and complete reads remain mandatory |
 | `475ffc681` | PTEST/VPTEST/VTESTPD/VTESTPS: 15 roots / 72 children, current Go, actual Go1.20 and race; identical 87 terminals | Complete independent Go rows, five-target three-API objects, every-byte/state controls and exact original dead memory opcodes through IR/backend O0/O2. Native execution remains required in the next CI |
@@ -83,30 +93,37 @@ five-architecture gate still requires zero unsupported forms and parse errors.
 
 Ignored receipts include `windows-aes-cas-qualified-e6d34070.json`,
 `windows-vector-test-qualified-475ffc68.json`, prior family qualification files,
-`ci392515/run-final.json`, and original raw test streams.
+`windows-ifma-qualified-eac2dcdb.json`,
+`windows-qword-lookup-qualified-313f7afc.json`,
+`windows-raw-mask-compare-qualified-9738b037.json`, and original raw test streams.
 Actual filenames may be in another persistent worktree; inspect worktrees first.
 Evidence is not tracked repository data.
 
 ## Immediate next work
 
-1. AES/vector-test repairs are published at `e890858c5`: all 24 final gates,
-   eight-SDK classification audit and the old sixteen portable priority roots
-   passed locally. Finish the current online run and inspect its exact head.
-2. IFMA input classifications and isolated CLI extraction pass current/minimum
-   Go and race at `997d70af5`. Its eight-SDK audit changes only eighteen AMD64
-   mask-bearing probes per SDK to Context; 386, all unrelated opcodes, encoder
-   and unsupported metrics stay unchanged. The baseline-only update is local
-   at `300b51833`. Finish its final gates before publication. The next native
-   numerical audit additionally requires the unchanged original IFMA source/C
-   oracle at backend O0/O2 and optimized-IR O2; portable LLVM is not AVX512.
-   Batch qualified repairs only after the preceding run has ended.
-   Never cancel or supersede active diagnostics to obtain a newer result.
-3. Once priorities pass, collect the complete Windows module artifacts.
-   Audit actual inventories, disjoint ownership, raw terminals and strict
-   module completion before claiming a full pass or publishing coverage.
-4. Continue remaining original failure classes: qword bit lookup,
+1. Continue the exact seventy-root failure list from the completed run. The
+   new local repairs are not online passes. Prioritize new regressions as well
+   as the old runtime families; retain complete source, Go/emitter objects and
+   explicit Context for genuinely unbound formats, with independent initialized
+   public counterparts. Never relabel a valid initialized program as a format.
+2. IFMA and qword lookup eight-SDK audits move only eighteen and seventeen
+   AMD64 input-deficient probes per SDK to Context respectively. The combined
+   baseline is local at `ce97dbf60`; 386, unrelated opcodes, encoder and
+   unsupported metrics do not drift. Current/minimum/race scanner and isolated
+   CLI extraction checks pass. Raw lookup objects and all 42 physical mode32
+   mask rows additionally pass current Go at `60599a10b`; finish their complete
+   three-lane qualification, including the shared IFMA decoder regression.
+3. The next native numerical audit requires IFMA and qword lookup's unchanged
+   original C programs at O0/O2 and optimized-IR O2. Keep their portable integer
+   scope distinct from AVX512. Require CMOV's original-Go/LLVM FP-span oracle
+   before declaring its partial/cross-field byte semantics exercised online.
+   Rerun final gates on the final unchanged batch, then publish only to the
+   allowed fork after the preceding run ends. Never supersede active runs.
+4. Continue remaining original failure classes: scalar division (the existing
+   unguarded sdiv/udiv emitter must not acquire a numerical proof), raw compact/
+   expand, scalar lane stores, non-temporal GP stores, native POP,
    funnel/align, floating dot, FPCLASS/GETEXP/GETMANT/SCALEF/range/fixup/rounding,
-   scalar conversions/moves, native POP/MOVNTI, and physical SP/BP/g-register
+   scalar conversions/moves, and physical SP/BP/g-register
    or undefined-W-shift fixtures. Reproduce first, consult complete Go rows,
    share typed grammar/effects and repair a class rather than one library.
 5. Preserve the separately qualified logical integer return batch

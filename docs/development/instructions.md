@@ -95,6 +95,24 @@ clears wider aliases. Preserve independent full Go attributes, every-byte and
 nonzero-upper controls, original unbound formats and initialized public objects.
 Portable integer LLVM execution does not qualify original AVX512 execution.
 
+Qword bit lookup shares complete binary/K-result grammars and EVEX field
+decoding with IFMA, not its numerical or access policy. VPMULTISHIFTQB retains
+the full E4NF tuple or m64 broadcast even with a zero mask; VPSHUFBITQMB uses
+byte-granular E4 suppression and a write-only K result. Bind all Go rows and
+attributes independently. Source data, masks and merging bytes remain required,
+and encoding-aware vector writeback clears wider aliases. See Intel's
+[E4NF reference](https://cdrdv2-public.intel.com/843829/325383-sdm-vol-2abcd-dec-24.pdf)
+and [BITALG encoding/access metadata](https://github.com/intelxed/xed/blob/main/datafiles/bitalg/bitalg-isa.xed.txt).
+
+All eight raw immediate packed compares reuse their existing typed shape and
+numerical transfer. Bind the full original selector and operand identity before
+selecting source index one. Capture the physical form before a lowering-local
+provenance projection: reparsing it afterward must not reapply named mode32
+arity limits. Complete incoming-pointer and E4 input obligations remain; no
+standalone query, caller, physical entry or frame authority follows. Preserve
+original unbound format objects plus Context separately from initialized
+five-target public objects, every predicate and missing-input mutations.
+
 Conditional moves retain the old destination and actual predicate dependencies;
 their native source read is unconditional, including false predicates and Void.
 The existing nontrapping GP domain may leave a dead named-register result
