@@ -169,9 +169,9 @@ func x86Legacy386StackCounterparts(t *testing.T, original string) string {
 	return original
 }
 
-// The full original functions, including ADJSP, both returns and the ID branch,
-// are emitted as format-only objects. This bypasses no public source proof:
-// the public APIs independently require Context for the originals below.
+// Preserve the complete ADJSP and ID sources. The former still needs physical
+// storage. The latter's bounded private FLAGS copies cancel the unknown entry
+// ID bit, so its separately checked logical result needs no native SP backing.
 func x86Legacy386StackFormatObject(t *testing.T, triple string) string {
 	t.Helper()
 	file, err := Parse(ArchAMD64, x86Legacy386OriginalStackAdjust+x86Legacy386OriginalIDProbe)
@@ -221,7 +221,16 @@ func TestX86Legacy386StackFixturesKeepOriginalContextAndObjects(t *testing.T) {
 						func(name string) (FuncSig, bool) {
 							return FuncSig{Name: row.name, Ret: row.ret}, name == row.name
 						})
-					if !errors.Is(err, ErrProbeNeedsContext) || ir != "" {
+					if row.name == "cpuidProbe" {
+						if err != nil {
+							t.Fatal("balanced private ID correlation lost its defined logical result", api, err)
+						}
+						for _, text := range []string{ir, x86DwordProductIROptimize(t, ir)} {
+							for _, level := range []string{"-O0", "-O2"} {
+								x86PackedStringCompileObject(t, llc, triple, text, level)
+							}
+						}
+					} else if !errors.Is(err, ErrProbeNeedsContext) || ir != "" {
 						t.Fatal("original physical stack acquired a public entry/backing contract", row.name, api, err)
 					}
 				}

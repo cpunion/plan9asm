@@ -210,7 +210,15 @@ func TestX86CMOVFamilyIndependentDeadNativeRead(t *testing.T) {
 		t.Run(row, func(t *testing.T) {
 			source := "TEXT ·Dead(SB),4,$0-0\nMOVQ $7,AX\nMOVQ $9,BX\nCMPQ AX,BX\n" + row + "\nRET\n"
 			goAssemblerOracleOutput(t, "amd64", source, "", true)
-			ir := x86NarrowOracleIR(t, source, "package cmov\nfunc Dead()\n", "x86_64-unknown-linux-gnu")
+			for _, api := range []string{"text", "module", "Go"} {
+				ir, err := x86ScalarFPBitViewAPI(t, source, "func Dead()", "amd64", "x86_64-unknown-linux-gnu", api)
+				if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+					t.Fatal("original uninitialized DI acquired native memory permission", api, err)
+				}
+			}
+			initialized := strings.Replace(source, "$0-0\n", "$0-8\nMOVQ p+0(FP),DI\n", 1)
+			goAssemblerOracleOutput(t, "amd64", initialized, "", true)
+			ir := x86NarrowOracleIR(t, initialized, "package cmov\nfunc Dead(p *byte)\n", "x86_64-unknown-linux-gnu")
 			optimized := x86DwordProductIROptimize(t, ir)
 			t.Logf("original loads=%t; actual IR default<O2> retains any read=%t", strings.Contains(ir, " = load "), strings.Contains(optimized, " = load "))
 			if !strings.Contains(ir, "load volatile") || !strings.Contains(optimized, "load volatile") {

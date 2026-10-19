@@ -24,6 +24,7 @@ idle worktrees; do not create another for routine work.
 |---|---|---|
 | `39378d6b6` | MOVBE/BMI2/oracle repair: 34 roots / 1,658 children pass current Go, actual Go1.20 and race; identical 1,692 terminals, zero fail/skip/incomplete and unchanged source/tools | Six canonical/alias MOVBE names share both complete Go rows, ordered byte effects and exact volatile accesses; actual-host original values, dead read/write faults, five-target objects, original Go-rejected imm64 stores and all forty diagnostic aliases. Eight-SDK audit/final gates and original native instruction execution remain separate |
 | `6d3459426` | Actual test-declaration precedence: six rich-CLI roots / 144 children pass current Go, minimum Go1.24 and current-Go race with unchanged source/tools | Actual bodyless declarations and callee exports precede fallback frame checks; missing dependencies, source/proof mutations and unbound fallback extents still reject. Not complete CLI or current-head Windows qualification |
+| `57992cc23`, production unchanged from the rows above | All22 focused final gates pass; the sealed eight-SDK audit changes exactly six isolated AMD64 MOVBE probes per SDK to Context, with no other family/386/encoder/unsupported changes | The baseline changes only three fields per AMD64 SDK. This qualified batch is staged in the allowed fork, not the PR40 contribution or diagnostic branch |
 | `4c6cc0964` | Complete ANDN/PDEP/PEXT repair: 36 roots / 2,699 children pass current Go, actual Go1.20 and race; identical 2,735 terminals, zero fail/skip/incomplete and unchanged source/tools | Six named/raw members share the complete operand grammar, distinct numerical/FLAGS effects and exact volatile reads; original values/aliases, five-target objects, unused-bool controls and twelve dead-read fault rows. Portable execution is not original BMI opcode execution |
 | `701fe8661`, before test/baseline-only updates | Go1.20–Go1.27 audit changes exactly twelve isolated AMD64 probes per SDK from supported to Context; other families, 386 and encoder/unsupported metrics unchanged | Classifier production code is identical to `4c6cc0964`. Original probes lack their two data inputs; MULX's different effects are not registered by this grammar |
 | `9673cc995` | Complete ADCX/ADOX input repair: 24 roots / 1,781 children pass current Go, actual Go1.20 and race; identical 1,805 terminals, zero fail/skip/incomplete, unchanged source and tools | Four named/raw members share one grammar, ordered input bytes and independent CF/OF chains; five-target objects, original portable values and exact dead volatile reads. Native original execution and complete CI remain separate |
@@ -171,14 +172,20 @@ The CLI owner reached the job deadline and suppressed its artifact upload.
 Cancellation-independent retention is repaired separately; original deadlines,
 test outcomes and strict complete-module verification are not relaxed.
 
-The next fork diagnostic `39228817887` runs at the qualified staged `17669bdbd`
-and must finish naturally. All65 priority jobs passed before complete Windows
-modules started. Do not subtract locally repaired roots from an unfinished run.
+Fork diagnostic `39228817887` finished naturally at staged `17669bdbd`:
+77 jobs pass, 21 fail, zero cancelled. All65 priority jobs passed before
+complete Windows modules. All16 root owners retain one exact complete inventory:
+7,288 roots = 6,954 pass + 70 fail + 264 explicit host skips, zero missing or
+incomplete roots. The three failed CLI owners additionally report five failed
+roots; do not mix their partial inventory with the main-module denominator.
+The strict module completions fail, and coverage remains unqualified.
 Its first rich-CLI failures were actual test-declaration precedence and an
 SDK direct-tail inventory test preempted by generic fallback frame validation.
 The precedence fix has its own six-root three-lane receipt above. The direct-tail
-route still needs its actual declared inventory before generic heuristics;
-never exempt an arbitrary private TEXT from its missing extent.
+inventory repair retains actual root/terminal declarations before generic
+private-node heuristics, including original ABI selectors. Its new selector RED
+and original ABI0 root RED are preserved; complete focused qualification is still
+required. Never exempt arbitrary private TEXT from its missing extent.
 The DWORD-product whole-byte oracle additionally reaches raw P31 and loses
 already-defined private DF/ID before a full FLAGS store. Preserve the original
 program; investigate accepted raw vector control preservation separately from
@@ -407,25 +414,23 @@ Preserve the original fourteen-terminal RED, first-green unbound-format
 failures and the separate raw-adapter/mode32-format failures. Their correction
 is not a claim that uninitialized original programs gained public translation.
 
-1. Continue the 88-root inventory from completed `39198807147` artifacts;
-   the cancelled CLI owner's missing inventory remains unknown. Prioritize
+1. Continue the 70 main-module and five rich-CLI failed roots from completed
+   `39228817887` artifacts. Its complete main root inventory supersedes the
+   older 88-root partial diagnostic; counts from different heads are not a
+   repair percentage. Prioritize
    whole rule classes, including raw numerical continuations,
    missing typed effects and invalid format-fixture assumptions. Do not use the
    older 167-root replay as the denominator for these newly reached modules.
-   Continue the local MOVBE candidate on the existing accumulator-effects
-   branch. Its real RED at `2336535a8` has two failed roots / eight children:
-   the original fixture's imm64 memory store is rejected by actual Go on all
-   three AMD64 OSes; the independent valid five-target matrix fails translation.
-   Code at `5525e6253` has a first GREEN: eight roots / 56 children, no failures
-   or skips, unchanged source/tools. The invalid original stays a Go-rejection
-   control; a register materialization repairs only that source line. Typed W/L/Q
-   and QQ-alias effects, exact volatile reads/writes, five-target public objects
-   and repaired original portable values/FLAGS pass. Native execution remains
-   separate. Preserve the first `5dd520b0` GREEN attempt's unbound-format failures.
-   This candidate is not pushed or fully qualified: add complete encoder/alias
-   and isolated CLI extraction tests, every-byte/Void/address/origin negatives,
-   dead read/write fault checks, the eight-SDK classification audit and baseline
-   review, then current Go/actual Go1.20/race and final gates before publication.
+   MOVBE/BMI2/oracle code is now qualified at `39378d6b6`, with its audit and
+   final gates completed at the snapshots above. Retain its original Go-rejected
+   imm64 stores, missing-header failures and diagnostic-join REDs as separate
+   evidence. The new raw-product DF/ID/private-stack repair has 16 roots /
+   1,891 children passing current Go and actual Go1.20 at `4d1416874`; race is
+   pending. The original runtime program is unchanged and remains a required
+   native counterpart. The complete CMOV native-read repair is still unqualified;
+   retain its old-destination, predicate and incoming-pointer obligations even
+   for false conditions and Void. Original uninitialized DI is a negative, not
+   another dead-read success.
 2. Run the final gates and batch coherent qualified repairs in the allowed
    fork. Each source snapshot retains its own three-lane and classification
    receipts; the cancellation-retention change has 139 passing policy tests.
