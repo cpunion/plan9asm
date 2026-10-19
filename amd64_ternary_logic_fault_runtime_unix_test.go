@@ -4,15 +4,28 @@ package plan9asm
 
 import (
 	"fmt"
+	"runtime"
 	"strings"
 	"testing"
 )
+
+// This oracle's original C uses only integers and POSIX page protection. It
+// executes the portable lowering on the actual host, not an AVX512 instruction
+// or MXCSR substitute. The separate MXCSR value owner keeps its x86 tools.
+func x86TernaryGuardPageRuntimeTools(t *testing.T) (llc, clang, triple string, prefix []string) {
+	t.Helper()
+	llc, clang, found := findLlcAndClang(t)
+	if !found {
+		t.Fatal("LLVM22 llc and clang required")
+	}
+	return llc, clang, testTargetTriple(runtime.GOOS, runtime.GOARCH), nil
+}
 
 // E4 permits suppression by inactive mask lanes, not by a constant truth table
 // or a dead destination. This portable guard-page oracle does not execute
 // original AVX512 instructions; actual Go objects establish source acceptance.
 func TestCrossLinuxRuntimeMatrixX86TernaryDeadReadsAndMaskedFaults(t *testing.T) {
-	llc, clang, triple, prefix := x86FloatAddSubRuntimeTools(t)
+	llc, clang, triple, prefix := x86TernaryGuardPageRuntimeTools(t)
 	var source, declarations, cases strings.Builder
 	sigs := map[string]FuncSig{}
 	count := 0
