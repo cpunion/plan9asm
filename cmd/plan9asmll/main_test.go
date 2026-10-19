@@ -1519,6 +1519,31 @@ func TestExtractSupportedOpsFindsCompleteADXSpecTable(t *testing.T) {
 	}
 }
 
+func TestExtractSupportedOpsFindsCompleteTernaryGPTable(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("../..", "amd64_ternary_gp_forms.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "amd64_ternary_gp_forms.go"), data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "translate.go"), []byte("package plan9asm\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	for _, arch := range []string{"386", "amd64"} {
+		supported, err := extractSupportedOps(dir, arch)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, op := range []string{"ANDNL", "ANDNQ", "PDEPL", "PDEPQ", "PEXTL", "PEXTQ"} {
+			if _, ok := supported[op]; !ok {
+				t.Error("isolated complete ternary GP table omitted", arch, op)
+			}
+		}
+	}
+}
+
 func TestExtractSupportedOpsFindsCompleteBLSSpecTable(t *testing.T) {
 	data, err := os.ReadFile(filepath.Join("../..", "amd64_bls_forms.go"))
 	if err != nil {
