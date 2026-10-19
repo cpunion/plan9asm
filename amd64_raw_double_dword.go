@@ -152,5 +152,8 @@ func decodedX86PackedDoubleDwordInstructionWithMemory(code []byte, mode int, mem
 	for i, arg := range args {
 		printed[i] = arg.String()
 	}
-	return Instr{Op: op, Args: args, Raw: fmt.Sprintf("%s %s", op, strings.Join(printed, ", "))}, p.modRM + consumed, true, nil
+	return Instr{
+		Op: op, Args: args, Raw: fmt.Sprintf("%s %s", op, strings.Join(printed, ", ")),
+		x86PackedNumericEVEX: p.evex,
+	}, p.modRM + consumed, true, nil
 }

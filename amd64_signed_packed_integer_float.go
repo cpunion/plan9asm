@@ -110,7 +110,7 @@ func x86SignedPackedFloatProperties(ins Instr, goarch string) (x86SignedPackedFl
 		return fail()
 	}
 	if !spec.legacy {
-		f.evex = f.byteWidth == 64 || f.mask >= 0 || f.broadcast || f.rounding != ""
+		f.evex = ins.x86PackedNumericEVEX || f.byteWidth == 64 || f.mask >= 0 || f.broadcast || f.rounding != ""
 		for _, operand := range []Operand{source, destination} {
 			if operand.Kind == OpReg {
 				index, _ := amd64VectorRegisterIndex(operand.Reg, amd64VectorByteWidth(operand.Reg))
