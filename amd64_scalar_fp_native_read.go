@@ -459,7 +459,7 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		if accepted, known := x86ResultFloatCompareStep(ins, state, owned, arch, true); known {
 			return accepted
 		}
-		if accepted, known := x86ResultExplicitMaskMoveStep(ins, state, owned, arch, true); known {
+		if accepted, known := x86ResultExplicitMaskMoveStep(ins, state, owned, resultOffset, arch, true); known {
 			return accepted // The whole original mask move retains active memory faults and writes.
 		}
 		if accepted, known := x86ResultFloatingHelperStep(ins, state, owned, arch, true); known {
