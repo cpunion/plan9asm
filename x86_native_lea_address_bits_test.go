@@ -2,6 +2,7 @@ package plan9asm
 
 import (
 	"fmt"
+	"reflect"
 	"runtime"
 	"strings"
 	"testing"
@@ -76,6 +77,61 @@ int main(void) {
         for (unsigned j=flags+4;j<sizeof(out);j++) if (out[j]!=0xa5) return 3;
     }
     return 0;
+}
+
+func TestX86NativeLEAAddressBitsDoNotInventNumericalOrPointerFacts(t *testing.T) {
+	for _, arch := range []string{"386", "amd64"} {
+		word, move := int64(8), "MOVQ"
+		if arch == "386" {
+			word, move = 4, "MOVL"
+		}
+		for _, width := range x86NumericalLEAWidths(arch) {
+			t.Run(arch+"/"+width, func(t *testing.T) {
+				instruction := x86ScalarLaneInstruction(t, "LEA"+width+" -7(SI)(DX*8),AX")
+				initial := x86ResultState{flags: x86ByteFlagsAll, direction: x86ResultDirectionBackward}
+				initial.gp[0], initial.gp[2] = 0xff, 0xff
+				initial.pointerGP[6], initial.callerAddressGP[6] = true, true
+				initial.pointerGP[7], initial.callerAddressGP[7] = true, true
+				for _, control := range []string{"complete", "no-leaf", "unknown-base", "unknown-index"} {
+					state := initial.clone()
+					if control == "unknown-base" {
+						state.pointerGP[6], state.callerAddressGP[6] = false, false
+					}
+					if control == "unknown-index" {
+						state.gp[2] = 0
+					}
+					before := state.clone()
+					accepted, known := x86ResultNativeLEAAddressBitsStep(instruction, &state, nil, arch, control != "no-leaf")
+					if !known || accepted != (control == "complete") {
+						t.Fatal("native address observation invented a missing source or leaf scope", control, accepted, known)
+					}
+					if !accepted {
+						if !reflect.DeepEqual(state, before) {
+							t.Fatal("rejected address observation partially mutated state", control)
+						}
+						continue
+					}
+					if x86ResultRead(Operand{Kind: OpReg, Reg: AX}, word, &state, nil, arch) ||
+						state.pointerGP[0] || state.callerAddressGP[0] || state.flags != before.flags || state.direction != before.direction {
+						t.Fatal("LEA address bits became numerical, pointer or status permissions")
+					}
+					store := x86ScalarLaneInstruction(t, move+" AX,(DI)")
+					for _, leaf := range []bool{false, true} {
+						copy := state.clone()
+						accepted, known := x86LoweredScalarNativeStoreWithAddressBits(store, &copy, nil, arch, leaf)
+						if !known || accepted != leaf || !reflect.DeepEqual(copy, state) {
+							t.Fatal("exact observation supplied a new byte or escaped its native leaf scope", leaf)
+						}
+					}
+					empty := state.clone()
+					empty.nativeLEAAddressBits = x86NativeLEAAddressBits{}
+					if merged := state.intersect(empty); merged.nativeLEAAddressBits.bytes != 0 {
+						t.Fatal("join retained a missing address observation")
+					}
+				}
+			})
+		}
+	}
 }
 `
 	source, declaration := x86NativeLEAAddressBitsProgram("amd64")
