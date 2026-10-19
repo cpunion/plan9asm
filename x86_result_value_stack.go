@@ -61,6 +61,10 @@ func x86ResultValueStackContinuation(ins Instr, state *x86ResultState, arch stri
 }
 
 func x86ResultValueStackStep(ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string) (bool, bool) {
+	return x86ResultValueStackStepWithNativeStore(ins, state, owned, resultOffset, arch, false)
+}
+
+func x86ResultValueStackStepWithNativeStore(ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string, nativeStore bool) (bool, bool) {
 	spec, known, err := x86StackWidthProperties(ins, arch)
 	if !known {
 		return false, false
@@ -250,6 +254,10 @@ func x86ResultValueStackStep(ins Instr, state *x86ResultState, owned []bool, res
 		if uint8(bits>>uint(8*b)) != 0xff {
 			return false, true
 		}
+	}
+	if nativeStore && ins.x86NumericalRead == nil && x86OrdinaryNativeMemoryOperand(arg, arch) &&
+		x86ResultIncomingPointerAddressIdentity(arg, state, arch) {
+		return true, true // Only the existing private pop changes; no pointee or later-read fact.
 	}
 	return x86ResultStore(arg, width, state, owned, resultOffset, arch), true
 }

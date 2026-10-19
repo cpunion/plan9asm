@@ -361,14 +361,14 @@ func (c *amd64Ctx) storeStackWidth(destination Operand, bits int, value string) 
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(c.b, "  store %s %s, %s %s, align 1\n", typ, value, ptrType, ptr)
+		fmt.Fprintf(c.b, "  store volatile %s %s, %s %s, align 1\n", typ, value, ptrType, ptr)
 		return nil
 	case OpSym:
 		ptr, err := c.ptrFromSB(destination.Sym)
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(c.b, "  store %s %s, ptr %s, align 1\n", typ, value, ptr)
+		fmt.Fprintf(c.b, "  store volatile %s %s, ptr %s, align 1\n", typ, value, ptr)
 		return nil
 	case OpFP:
 		return c.storeFPResult(destination.FPOffset, typ, value)

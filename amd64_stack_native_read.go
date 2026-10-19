@@ -33,3 +33,25 @@ func x86LoweredStackNativeRead(ins Instr, state *x86ResultState, owned []bool,
 	defer func() { state.literalMemoryOperand, state.literalMemoryBytes = nil, 0 }()
 	return x86ResultValueStackStep(ins, state, owned, resultOffset, arch)
 }
+
+// This consumes the paired exact volatile POP store, not physical entry SP.
+// Keep the complete private-width/balance/bit proof and reject atomically when
+// an address, source bit or native origin is missing. No memory fact follows.
+func x86LoweredStackNativeStore(ins Instr, state *x86ResultState, owned []bool,
+	resultOffset int64, arch string) (bool, bool) {
+	spec, known, err := x86StackWidthProperties(ins, arch)
+	if !known || err != nil || spec.mode != amd64StackPopValue ||
+		!x86OrdinaryNativeMemoryOperand(ins.Args[0], arch) {
+		return false, false
+	}
+	if !x86ResultNamedPredicateInstruction(ins) || ins.x86NumericalRead != nil ||
+		!x86ResultIncomingPointerAddressIdentity(ins.Args[0], state, arch) {
+		return false, true
+	}
+	candidate := state.clone()
+	accepted, recognized := x86ResultValueStackStepWithNativeStore(ins, &candidate, owned, resultOffset, arch, true)
+	if accepted {
+		*state = candidate
+	}
+	return accepted, recognized
+}
