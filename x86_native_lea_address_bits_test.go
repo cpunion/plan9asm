@@ -186,3 +186,23 @@ func TestX86NativeLEAAddressBitsCannotSurviveAConflictingWrite(t *testing.T) {
 		}
 	}
 }
+
+func TestX86NativeLEANarrowObserverDoesNotStealFullPointerContinuation(t *testing.T) {
+	for _, arch := range []string{"386", "amd64"} {
+		word, move, lea, triple := 8, "MOVQ", "LEAQ", "x86_64-unknown-linux-gnu"
+		if arch == "386" {
+			word, move, lea, triple = 4, "MOVL", "LEAL", "i386-unknown-linux-gnu"
+		}
+		source := fmt.Sprintf("TEXT ·Value(SB),4,$0-%d\n%s out+0(FP),DI\n%s input+%d(FP),SI\n"+
+			"MOVL $3,DX\n%s 1(SI)(DX*2),BX\nMOVB (BX),AX\nMOVB AX,(DI)\nRET\n", 2*word, move, move, word, lea)
+		x86LEAActualTargetGoObject(t, arch, triple, source)
+		for _, api := range []string{"text", "module", "Go"} {
+			t.Run(arch+"/"+api, func(t *testing.T) {
+				ir, err := x86ScalarFPBitViewAPI(t, source, "func Value(out,input *byte)\n", arch, triple, api)
+				if err != nil || ir == "" {
+					t.Fatal("narrow address observation stole the existing complete pointer continuation", err)
+				}
+			})
+		}
+	}
+}
