@@ -227,3 +227,57 @@ func TestX86Mode32PrivateFlagsCloneAndJoinIdentity(t *testing.T) {
 		t.Fatal("identical CFG paths lost their original relation")
 	}
 }
+
+func TestX86Mode32PrivateFlagsXOROriginTruthTable(t *testing.T) {
+	for _, left := range []uint8{0, 1, 2, 3, 255} {
+		for _, right := range []uint8{0, 1, 2, 3, 255} {
+			// Enumerate independent input bits. Untracked left/right values
+			// deliberately use different variables even for the same tag.
+			first, constant := uint8(0), true
+			for input := uint8(0); input < 32; input++ {
+				value := func(origin uint8, untracked uint8) uint8 {
+					if origin == 0 {
+						return 0
+					}
+					if origin == 255 {
+						origin = untracked
+					}
+					return input >> (origin - 1) & 1
+				}
+				got := value(left, 4) ^ value(right, 5)
+				if input == 0 {
+					first = got
+				}
+				constant = constant && got == first
+			}
+			if (x86FlagsXOROrigin(left, right) == 0) != constant {
+				t.Fatal("XOR dependency disagrees with exhaustive independent bit assignments", left, right)
+			}
+		}
+	}
+}
+
+func TestX86Mode32PrivateFlagsCompleteXORRows(t *testing.T) {
+	for _, row := range []struct{ width, register string }{
+		{"B", "AL"}, {"B", "AH"}, {"W", "AX"}, {"L", "AX"},
+	} {
+		for _, address := range []string{"(SP)", "0(SP)", "0x0(SP)"} {
+			for _, modify := range []string{
+				"XOR" + row.width + " $1," + address,
+				"MOVL $1,AX\nXOR" + row.width + " " + row.register + "," + address,
+			} {
+				body := "PUSHFL\nPUSHFL\n" + modify + "\nPOPFL\nPUSHFL\nPOPL AX\nXORL " + address + ",AX\nPOPFL\n"
+				source := "TEXT ·Value(SB),4,$0-4\n" + body + "MOVL AX,ret+0(FP)\nRET\n"
+				requireX86GoAssemblerResult(t, "386", source, true)
+				for _, api := range []string{"text", "module", "Go"} {
+					t.Run(fmt.Sprintf("%s/%s/%s/%s", row.width, row.register, modify, api), func(t *testing.T) {
+						ir, err := x86ScalarFPBitViewAPI(t, source, "func Value() uint32", "386", "i386-unknown-linux-gnu", api)
+						if err != nil || ir == "" {
+							t.Fatal("complete typed XOR row lost its private storage dependency", err)
+						}
+					})
+				}
+			}
+		}
+	}
+}

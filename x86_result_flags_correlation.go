@@ -59,6 +59,9 @@ func x86ResultPrivateStackXORForm(ins Instr, arch string) (x86LockScalarRMWForm,
 		if len(args) != 2 {
 			return form, 0, false
 		}
+		if strings.TrimSpace(args[index]) == "(SP)" {
+			return form, index, m.Off == 0
+		}
 		literal := x86ResultAUTOLiteral.FindStringSubmatch(args[index])
 		if literal == nil {
 			return form, 0, false
