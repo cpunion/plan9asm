@@ -27,6 +27,9 @@ func (c *amd64Ctx) lowerGetExp(op Op, ins Instr) (ok bool, terminated bool, err 
 	if !recognized {
 		return false, false, nil
 	}
+	if x86ScalarFloatIntegerNativeTarget(c.goarch, c.targetTriple) {
+		return c.lowerNativeFloatingHelper(op, ins)
+	}
 	properties, validSuffix := parseAMD64BinaryFloatingSuffix(suffix)
 	if !validSuffix || properties.rounding != "" {
 		return true, false, fmt.Errorf("%s %s has a suffix absent from Go 1.27's GETEXP optab: %q", c.goarch, baseOp, ins.Raw)

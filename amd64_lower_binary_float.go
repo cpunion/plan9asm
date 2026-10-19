@@ -130,6 +130,9 @@ func (c *amd64Ctx) lowerBinaryFloating(op Op, ins Instr) (ok bool, terminated bo
 	if !recognized {
 		return false, false, nil
 	}
+	if spec.mode == amd64BinaryFloatingScale && x86ScalarFloatIntegerNativeTarget(c.goarch, c.targetTriple) {
+		return c.lowerNativeFloatingHelper(op, ins)
+	}
 	if spec.rawOnly && !ins.x86Encoded {
 		return true, false, fmt.Errorf("%s has no named Go assembler form: %q", baseOp, ins.Raw)
 	}
