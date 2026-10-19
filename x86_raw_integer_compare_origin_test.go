@@ -119,6 +119,13 @@ func x86RawIntegerCompareOriginSource(row x86RawIntegerCompareOriginCase, code [
 	return source.String(), "func Compare(a,b,out *[128]byte,mask uint64)\n"
 }
 
+func x86RawIntegerCompareUnusedBoolSource(source, declaration, arch string) (string, string) {
+	extent := 3*goWordSize(arch) + 8
+	source = strings.Replace(source, fmt.Sprintf("$0-%d\n", extent), fmt.Sprintf("$0-%d\n", extent+1), 1)
+	declaration = strings.Replace(declaration, "mask uint64)", "mask uint64,unused bool)", 1)
+	return source, declaration
+}
+
 func TestX86RawIntegerCompareCompleteIndependentOriginDirectory(t *testing.T) {
 	rows := x86RawIntegerCompareOriginCases()
 	if len(rows) != 168 {
@@ -137,7 +144,9 @@ func TestX86RawIntegerCompareCompleteIndependentOriginDirectory(t *testing.T) {
 			t.Run(arch+"/"+row.row, func(t *testing.T) {
 				ins := x86RawMoveObservedInstruction(t, arch, code[index])
 				form, known, err := x86PackedIntegerCompareProperties(ins.Op, ins, arch)
-				if !known || err != nil || form.legacy != row.legacy || form.mmx ||
+				if !known || err != nil || string(ins.Op) != strings.Fields(row.row)[0] ||
+					form.byteWidth != map[string]int{"X": 16, "Y": 32, "Z": 64}[row.bank] ||
+					form.broadcast != strings.Contains(row.row, ".BCST ") || form.legacy != row.legacy || form.mmx ||
 					(form.memory >= 0) != row.memory || (form.mask >= 0) != row.mask ||
 					ins.Args[form.destination].Reg != Reg(row.destination) {
 					t.Fatal("original Go bytes lost their complete independent typed comparison roles", err)
@@ -255,12 +264,12 @@ func TestX86RawIntegerCompareVoidAndUnusedBoolCannotBorrowInputs(t *testing.T) {
 				for _, arch := range []string{"386", "amd64"} {
 					source, declaration := x86RawIntegerCompareOriginSource(row, code[index], arch, control)
 					for _, unused := range []bool{false, true} {
-						decl := declaration
+						body, decl := source, declaration
 						if unused {
-							decl = strings.Replace(decl, "mask uint64)", "mask uint64,unused bool)", 1)
+							body, decl = x86RawIntegerCompareUnusedBoolSource(body, decl, arch)
 						}
 						for _, api := range []string{"text", "module", "Go"} {
-							ir, err := x86ScalarFPBitViewAPI(t, source, decl, arch, x86AddressMemoryTargets(arch)[0], api)
+							ir, err := x86ScalarFPBitViewAPI(t, body, decl, arch, x86AddressMemoryTargets(arch)[0], api)
 							if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
 								t.Fatal("dead/unused-bool compare acquired missing data, mask or native pointer facts", arch, unused, api, err)
 							}
@@ -269,5 +278,39 @@ func TestX86RawIntegerCompareVoidAndUnusedBoolCannotBorrowInputs(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+func TestX86RawIntegerCompareInitializedUnusedBoolAllSourceForms(t *testing.T) {
+	rows := x86RawIntegerCompareOriginCases()
+	code := x86RawIntegerCompareOriginBytes(t, rows)
+	for start := 0; start < len(rows); start += x86RawIntegerCompareOriginBatchSize {
+		end := start + x86RawIntegerCompareOriginBatchSize
+		if end > len(rows) {
+			end = len(rows)
+		}
+		t.Run(fmt.Sprint(start/x86RawIntegerCompareOriginBatchSize), func(t *testing.T) {
+			for _, target := range x86RawReturnTargets {
+				t.Run(target.triple, func(t *testing.T) {
+					var source, declarations strings.Builder
+					for index, row := range rows[start:end] {
+						body, declaration := x86RawIntegerCompareOriginSource(row, code[start+index], target.arch, "")
+						body, declaration = x86RawIntegerCompareUnusedBoolSource(body, declaration, target.arch)
+						name := fmt.Sprint("Compare", start+index)
+						source.WriteString(strings.ReplaceAll(body, "Compare", name))
+						declarations.WriteString(strings.ReplaceAll(declaration, "Compare", name))
+					}
+					x86LEAActualTargetGoObject(t, target.arch, target.triple, source.String())
+					for _, api := range []string{"text", "module", "Go"} {
+						t.Run(api, func(t *testing.T) {
+							ir, err := x86ScalarFPBitViewAPI(t, source.String(), declarations.String(), target.arch, target.triple, api)
+							if err != nil || ir == "" {
+								t.Fatal("unused bool changed a completely initialized raw comparison with its exact source extent", err)
+							}
+						})
+					}
+				})
+			}
+		})
 	}
 }
