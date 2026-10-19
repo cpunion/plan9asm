@@ -54,7 +54,7 @@ const owners = {
     'TestMaskValueCoverageRequiresCompleteInputs', 'TestVectorValueCoverageRequiresCompleteInputs',
   ]},
 };
-const dependencies = 'needs: [ownership, native-x86-oracles, sdk-priority, arm64-fallback-cross-priority, lock-native-priority, unlocked-rmw-native-priority, vector-value-fault-priority]';
+const dependencies = 'needs: [ownership, native-x86-oracles, sdk-priority, arm64-fallback-cross-priority, lock-native-priority, unlocked-rmw-native-priority, vector-value-fault-priority, packed-conversion-native-complete]';
 const block = (lane, owner) => `- lane: ${lane}\n            module: '${owner.module}'\n            roots:\n` +
   owner.roots.map(root => `              - ${root}\n`).join('') + '            timeout: 5m';
 
@@ -103,7 +103,7 @@ test('input-family priority rejects omissions, duplicates, sampling and larger c
     }
     assert.throws(() => requireInputFamilies(workflow+'\n          '+original));
   }
-  for (const changed of [workflow.replace(', vector-value-fault-priority]', ']'),
+  for (const changed of [workflow.replace(', vector-value-fault-priority,', ','),
     workflow.replace('roots=\'TestX86VectorValueNativePortableFaults\'', 'roots=\'TestUnrelatedFault\''),
     workflow.replace('roots+=\'|TestGoX86NumericalSBReadRuntimeFaultCorePolicy\'', ''),
     workflow+'\n    max-parallel: 8\n']) {

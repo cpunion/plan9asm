@@ -27,7 +27,7 @@ function requirePriority(source) {
   assert.match(body, /run: \|\n          set -euo pipefail\n          mkdir -p _out\/cross-runtime-owner\n          bash scripts\/test-arm64-fallback-ci\.sh execute/);
   assert.equal((body.match(/bash scripts\/test-arm64-fallback-ci\.sh execute/g) || []).length, 1);
   assert.match(body, /if: \$\{\{ !cancelled\(\) \}\}\n        uses: actions\/upload-artifact@v6\n        with:\n          name: arm64-fallback-cross-priority\n          path: _out\/cross-runtime-owner\/arm64-fallback-cross\/\n          if-no-files-found: error/);
-  assert.match(job(source, 'complete-windows'), /^    needs: \[ownership, native-x86-oracles, sdk-priority, arm64-fallback-cross-priority, lock-native-priority, unlocked-rmw-native-priority, vector-value-fault-priority\]$/m);
+  assert.match(job(source, 'complete-windows'), /^    needs: \[ownership, native-x86-oracles, sdk-priority, arm64-fallback-cross-priority, lock-native-priority, unlocked-rmw-native-priority, vector-value-fault-priority, packed-conversion-native-complete\]$/m);
 }
 
 test('complete ARM64 CLI oracle is a required bounded Linux cross priority', () => {
@@ -60,7 +60,7 @@ test('ARM64 fork priority rejects missing ownership, tools, execution, artifacts
     assert.throws(() => requirePriority(changed), undefined, `must reject mutation: ${before}`);
   }
   assert.throws(() => requirePriority(workflow.replace(
-    'needs: [ownership, native-x86-oracles, sdk-priority, arm64-fallback-cross-priority, lock-native-priority, unlocked-rmw-native-priority, vector-value-fault-priority]', 'needs: [ownership, sdk-priority]')));
+    'needs: [ownership, native-x86-oracles, sdk-priority, arm64-fallback-cross-priority, lock-native-priority, unlocked-rmw-native-priority, vector-value-fault-priority, packed-conversion-native-complete]', 'needs: [ownership, sdk-priority]')));
   assert.throws(() => requirePriority(workflow.replace(marker, marker + '    continue-on-error: true\n')));
   assert.throws(() => requirePriority(workflow.replace(marker, marker + '    if: ${{ always() }}\n')));
   assert.throws(() => requirePriority(workflow + marker));

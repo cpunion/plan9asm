@@ -43,7 +43,7 @@ function requireCompleteFamilies(source) {
     assert.equal(source.split(`- lane: ${lane}\n`).length - 1, 1);
     for (const root of roots) assert.equal(source.split(`- ${root}\n`).length - 1, 1);
   }
-  assert.match(source, /needs: \[ownership, native-x86-oracles, sdk-priority, arm64-fallback-cross-priority, lock-native-priority, unlocked-rmw-native-priority, vector-value-fault-priority\]/);
+  assert.match(source, /needs: \[ownership, native-x86-oracles, sdk-priority, arm64-fallback-cross-priority, lock-native-priority, unlocked-rmw-native-priority, vector-value-fault-priority, packed-conversion-native-complete\]/);
 }
 
 test('complete compact-memory and vector-value families run before full modules', () => {

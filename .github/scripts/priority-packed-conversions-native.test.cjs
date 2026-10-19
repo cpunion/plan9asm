@@ -14,6 +14,25 @@ function job(source, name) {
   return source.slice(begin, end < 0 ? undefined : begin + 1 + end);
 }
 
+function requireCompleteNativeBarrier(source) {
+  const complete = job(source, 'complete-windows');
+  const dependencies = complete.match(/^    needs: \[([^\r\n]+)\]$/m);
+  assert.ok(dependencies, 'missing complete native dependency barrier');
+  assert.equal(dependencies[1].split(', ').filter(name =>
+    name === 'packed-conversion-native-complete').length, 1,
+  'full modules must wait for the complete native conversion union');
+}
+
+test('full modules cannot bypass the complete native conversion barrier', () => {
+  const workflow = fs.readFileSync('.github/workflows/pr40-owned-process-probe.yml', 'utf8');
+  requireCompleteNativeBarrier(workflow);
+  for (const replacement of ['', ', packed-conversion-native-priority',
+    ', packed-conversion-native-complete, packed-conversion-native-complete']) {
+    assert.throws(() => requireCompleteNativeBarrier(workflow.replace(
+      ', packed-conversion-native-complete]', replacement + ']')));
+  }
+});
+
 test('complete native conversions have eight non-cancelling real Linux execution owners', () => {
   const workflow = fs.readFileSync('.github/workflows/pr40-owned-process-probe.yml', 'utf8');
   const native = job(workflow, 'packed-conversion-native-priority');
