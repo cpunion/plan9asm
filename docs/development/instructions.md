@@ -1337,6 +1337,20 @@ memory facts or caller/raw/physical permission. Keep logical FP/AUTO ownership
 separate, original unbound format objects intact, and initialized public objects,
 portable byte/canary execution and required native execution distinct.
 
+Scalar PEXTRB/W/D/Q, VPEXTRB/W/D/Q and EXTRACTPS/VEXTRACTPS stores consume
+their existing typed lane selector and the exact selected bytes. The paired
+volatile native write needs an incoming pointer base and numerical index;
+Void and unused bool cannot waive these obligations. A store creates no
+memory or later-read fact. Original uninitialized native/segment formats retain
+Go/emitter objects and public Context, not initialized public success.
+
+Private POPW/L/Q native stores reuse the complete existing stack-width and
+bit-initialization proof. Keep native widths, cell identity, underflow, balance,
+FLAGS/DF/ID correlations and missing-byte checks. Only a paired exact volatile
+store can consume those popped numerical bytes at an incoming-pointer address;
+the standalone observer gains no native memory or physical entry role.
+Rejected paired stores must not mutate the reaching private state.
+
 Any integer-lane instruction with declared integer FP results consumes the
 whole original-function must-initialized byte proof before lowering, including
 later GP-to-FP stores and all RET paths. A final-opcode-only check is inadequate.

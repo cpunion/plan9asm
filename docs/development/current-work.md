@@ -66,6 +66,7 @@ cohorts have zero failed, skipped or incomplete terminals.
 
 | Snapshot | Complete focused evidence | Important limits |
 |---|---|---|
+| `9769cc2c1` | Scalar lane/POP stores and original format repairs: 26 roots / 1,219 children, current Go, actual Go1.20 and race; identical 1,245 terminals | Complete selected-byte native stores, Void/unused-bool obligations, exact volatile POP widths, private stack balance/bit/origin controls and five-target objects. Local x86 runtime skips are excluded from this certificate; original execution remains required online |
 | `66dcd0d31` | CMOV FP views: 2 roots / 183 children, current Go, actual Go1.20 and race; identical 185 terminals | Original uninitialized formats remain Go objects plus Context; independent initialized AX/FLAGS sources own complete, partial, cross-field and pointer/hole checks. No new caller or FP storage permission |
 | `1cebb3c38` | Branch hints and original CMOV/KVM formats: 5 roots / 15 children, current Go, actual Go1.20 and race | All sixteen conditions and both hints compile on five targets with actual word-aligned results. The original signed-division compound test still fails at IDIV; mode32 hypercall objects do not supply a logical scalar/native entry contract |
 | `9738b0376` | Raw immediate compares: 14 roots / 657 children, current Go, actual Go1.20 and race; identical 671 terminals | Eight signed/unsigned B/W/D/Q members, complete Go rows, initialized X/Y/Z five-target raw objects, selectors/predicates and missing/native/standalone controls. Physical mode32 arity is distinct from the named frontend |
@@ -106,6 +107,15 @@ Evidence is not tracked repository data.
    as the old runtime families; retain complete source, Go/emitter objects and
    explicit Context for genuinely unbound formats, with independent initialized
    public counterparts. Never relabel a valid initialized program as a format.
+   The original CMOV fixed-local object and runtime roots also exhausted their
+   five-minute capture context. They now retain all384 object kernels per target
+   in six independent batches, and all387 runtime kernels in seven batches.
+   Source/ABI capture and the original Go/C oracles remain mandatory. Independent
+   policies reject missing or monolithic owners; the complete batch union is
+   not yet qualified. Only Linux/Darwin batch00 has actual current-Go objects.
+   Scalar lane and POP repairs have their own Windows priority, including the
+   unchanged original runtime failures. Do not count the new local cohort as
+   a successful online run or subtract it from the historical seventy failures.
 2. IFMA and qword lookup eight-SDK audits move only eighteen and seventeen
    AMD64 input-deficient probes per SDK to Context respectively. The combined
    baseline is local at `ce97dbf60`; 386, unrelated opcodes, encoder and

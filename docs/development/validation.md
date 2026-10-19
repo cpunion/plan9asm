@@ -102,6 +102,12 @@ requires every target/batch exactly once and at most three such owners per
 Windows hash shard. A passing batch is not a complete-target receipt: require
 the exact union of all twelve, without skipped or unfinished children.
 
+CMOV fixed-local objects likewise retain all384 original kernels per Linux and
+Darwin target in six independently scheduled batches. Runtime keeps all387
+CMOV/GP/SIMD kernels in seven batches, their three optimization paths and actual
+original-Go execution. Require every batch exactly once; a single passing
+batch or structural partition check is not a complete-family runtime receipt.
+
 ```sh
 go run ./cmd/plan9asmtest -module -out _out/module-suite \
   -shards 32 -workers 2 -timeout 45m
