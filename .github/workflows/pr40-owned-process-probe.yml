@@ -191,7 +191,7 @@ jobs:
           done
           go test . -run "^($roots)$" -count=1 -timeout=5m -json > "$directory/raw.jsonl" 2> "$directory/stderr.log"
           node .github/scripts/audit-scalar-bmi.cjs "$directory"
-      - name: Execute complete product and CMOV numerical programs
+      - name: Execute complete product, CMOV and AES numerical programs
         env:
           GOTOOLCHAIN: local
         run: |
@@ -200,6 +200,7 @@ jobs:
           mkdir -p "$directory"
           roots='TestCrossLinuxRuntimeMatrixX86DwordProductIndependentWholeBytes'
           roots+='|TestCrossLinuxRuntimeMatrixX86CMOVIndependentWholeBytes'
+          roots+='|TestCrossLinuxRuntimeMatrixX86AESFamilyWholeByteAliases'
           go test . -list "^($roots)$" > "$directory/inventory.log"
           for root in ${roots//|/ }; do
             grep -Fx "$root" "$directory/inventory.log"

@@ -5,11 +5,11 @@ const fs = require('node:fs');
 const test = require('node:test');
 const {auditProductCMOV, roots, children} = require('./audit-product-cmov.cjs');
 
-test('complete product and CMOV programs execute before the exhaustive Windows modules', () => {
+test('complete product, CMOV and AES programs execute before the exhaustive Windows modules', () => {
   const workflow = fs.readFileSync('.github/workflows/pr40-owned-process-probe.yml', 'utf8');
   const job = workflow.slice(workflow.indexOf('  native-x86-oracles:'), workflow.indexOf('\n  complete-windows:'));
   assert.match(job, /runs-on: ubuntu-latest/);
-  const start = job.indexOf('      - name: Execute complete product and CMOV numerical programs');
+  const start = job.indexOf('      - name: Execute complete product, CMOV and AES numerical programs');
   assert.ok(start >= 0, 'original discovering programs need their own native execution step');
   const block = job.slice(start, job.indexOf('      - name:', start + 1));
   for (const root of roots) assert.ok(block.includes(root));
@@ -34,7 +34,7 @@ test('product and CMOV execution retains every root and optimization child witho
   const raw = values => values.map(JSON.stringify).join('\n') + '\n';
   const inventory = roots.join('\n') + '\n';
   assert.deepEqual(auditProductCMOV(inventory, raw(events)),
-    {roots: 2, children: 6, passed: 8, skipped: 0, incomplete: 0});
+    {roots: 3, children: 9, passed: 12, skipped: 0, incomplete: 0});
   for (const name of [...roots, ...children]) {
     assert.throws(() => auditProductCMOV(inventory, raw(events.filter(event => event.Test !== name))));
     for (const Action of ['skip', 'fail']) {
