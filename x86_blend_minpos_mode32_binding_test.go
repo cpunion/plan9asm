@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"os/exec"
 	"strings"
 	"testing"
 )
@@ -24,6 +25,142 @@ func x86BlendMinposBankProgram(arch string, registers []int) (string, string) {
 		fmt.Fprintf(&declarations, "func Bank%d(out *[16]byte)\n", register)
 	}
 	return source.String(), declarations.String()
+}
+
+func x86BlendMinposFourOperandProgram(row x86BlendMinposCase, code []byte, arch string, raw bool) (string, string) {
+	word, move := goWordSize(arch), "MOVQ"
+	if arch == "386" {
+		move = "MOVL"
+	}
+	var source strings.Builder
+	fmt.Fprintf(&source, "TEXT ·Value(SB),4,$0-%d\n%s out+0(FP),DI\n%s input+%d(FP),BX\n", 2*word, move, move, word)
+	for register := 0; register < 3; register++ {
+		fmt.Fprintf(&source, "VXORPS %s%d,%s%d,%s%d\n", row.bank, register, row.bank, register, row.bank, register)
+	}
+	if raw {
+		source.WriteString(x86RawDisplacementDirectives(code))
+	} else {
+		source.WriteString(row.instruction() + "\n")
+	}
+	fmt.Fprintf(&source, "VMOVUPS %s3,(DI)\nRET\n", row.bank)
+	return source.String(), "func Value(out,input *[32]byte)\n"
+}
+
+func TestX86BlendMinposMode32NamedFourOperandCannotBorrowPhysicalRaw(t *testing.T) {
+	var rows []x86BlendMinposCase
+	for _, row := range x86BlendMinposCanonicalRows() {
+		if !row.legacy && !row.minimum {
+			rows = append(rows, row)
+		}
+	}
+	if len(rows) != 12 {
+		t.Fatal("complete three-name X/Y register/memory named/raw partition changed")
+	}
+	codes := x86BlendMinposOriginalCodes(t, rows)
+	var input strings.Builder
+	for index, row := range rows {
+		named, _ := x86BlendMinposFourOperandProgram(row, nil, "386", false)
+		goAssemblerOracleOutput(t, "386", named, "", false)
+		for _, value := range codes[index] {
+			fmt.Fprintf(&input, "0x%02x ", value)
+		}
+		input.WriteByte('\n')
+		x86HandoffOriginalBytes(t, "386", codes[index])
+	}
+	mc, llc := findLLVM22Tool("llvm-mc"), findLLVM22Tool("llc")
+	if mc == "" || llc == "" {
+		t.Fatal("genuine physical low-bank VEX prior and complete objects require LLVM22 llvm-mc/llc")
+	}
+	for _, triple := range []string{"i386-unknown-linux-gnu", "x86_64-unknown-linux-gnu"} {
+		stage, cancel := runtimeOracleStageContext(t)
+		command := exec.CommandContext(stage, mc, "--disassemble", "--triple="+triple, "--mattr=+avx2")
+		command.Stdin = strings.NewReader(input.String())
+		output, err := runtimeOracleCombinedOutput(stage, command)
+		cancel()
+		if err != nil || strings.Contains(string(output), "warning") || strings.Contains(string(output), "invalid") {
+			t.Fatalf("independent low-bank VEX physical prior: %v\n%s", err, output)
+		}
+		for _, name := range []string{"vblendvps", "vblendvpd", "vpblendvb"} {
+			count := 0
+			for _, line := range strings.Split(string(output), "\n") {
+				fields := strings.Fields(line)
+				if len(fields) != 0 && fields[0] == name {
+					count++
+				}
+			}
+			if count != 4 {
+				t.Fatal("LLVM22 lost complete X/Y register/memory physical rows", triple, name, count, string(output))
+			}
+		}
+	}
+	// Complete initialized positive batches retain AMD64's named grammar
+	// and mode32's genuinely decoded physical instruction independently.
+	for _, arch := range []string{"386", "amd64"} {
+		raw := arch == "386"
+		triple := "x86_64-unknown-linux-gnu"
+		if raw {
+			triple = "i386-unknown-linux-gnu"
+		}
+		var source, declarations strings.Builder
+		for index, row := range rows {
+			body, declaration := x86BlendMinposFourOperandProgram(row, codes[index], arch, raw)
+			name := fmt.Sprintf("Variant%d", index)
+			source.WriteString(strings.Replace(body, "·Value(SB)", "·"+name+"(SB)", 1))
+			declarations.WriteString(strings.Replace(declaration, "Value(", name+"(", 1))
+		}
+		x86LEAActualTargetGoObject(t, arch, triple, source.String())
+		for _, api := range []string{"text", "module", "Go"} {
+			t.Run(arch+"/positive/"+api, func(t *testing.T) {
+				ir, err := x86ScalarFPBitViewAPI(t, source.String(), declarations.String(), arch, triple, api)
+				if err != nil || ir == "" {
+					t.Fatal("actual physical/raw or legal AMD64 named initialized family failed", err)
+				}
+				compileLLVMToObject(t, llc, triple, "bound-four-operand.ll", "bound-four-operand.o", ir)
+			})
+		}
+	}
+	for index, row := range rows {
+		t.Run(row.instruction(), func(t *testing.T) {
+			named, declaration := x86BlendMinposFourOperandProgram(row, nil, "386", false)
+			for _, api := range []string{"text", "module", "Go"} {
+				t.Run(api, func(t *testing.T) {
+					ir, err := x86ScalarFPBitViewAPI(t, named, declaration, "386", "i386-unknown-linux-gnu", api)
+					if err == nil || ir != "" {
+						t.Fatal("Go-invalid mode32 named grammar borrowed physical raw permission", err)
+					}
+				})
+			}
+			t.Run("typed-named-grammar", func(t *testing.T) {
+				ins := x86ScalarLaneInstruction(t, row.instruction())
+				if _, known, err := x86BlendMinposProperties(ins.Op, ins, "386"); !known || err == nil {
+					t.Fatal("typed named grammar accepted Go-rejected mode32 four operands", err)
+				}
+			})
+			t.Run("physical-identity-replay", func(t *testing.T) {
+				source, declaration := x86BlendMinposFourOperandProgram(row, codes[index], "386", true)
+				file, err := normalizeX86RawFile(mustParseX86RawReturn(t, source), "386")
+				if err != nil || len(file.Funcs) != 1 || file.Funcs[0].x86RawReplay == nil {
+					t.Fatal("complete physical source lacks its original replay", err)
+				}
+				candidate := file.Funcs[0]
+				candidate.Instrs = cloneX86ReplayInstrs(candidate.Instrs)
+				changed := 0
+				for at := range candidate.Instrs {
+					if candidate.Instrs[at].Op == Op(row.op) {
+						candidate.Instrs[at].x86Encoded = !candidate.Instrs[at].x86Encoded
+						changed++
+					}
+				}
+				if changed != 1 {
+					t.Fatal("physical source target inventory changed", changed)
+				}
+				check := x86LegacyFloatReplayCheck(t, "386", source, declaration)
+				if err := check(candidate); !errors.Is(err, ErrProbeNeedsContext) {
+					t.Fatal("edited physical/named projection acquired original source permission", err)
+				}
+			})
+		})
+	}
 }
 
 func TestX86BlendMinposMode32HighNamedNeedsPhysicalBinding(t *testing.T) {
