@@ -63,6 +63,10 @@ func TestX86PackedAbsSignWholeBytesMinimumWrapAndFlags(t *testing.T) {
 			if err != nil {
 				t.Fatal("complete initialized ABS/sign source failed before independent minimum-wrap comparison", err)
 			}
+			ir, err = x86PackedAbsSignPortableIR(instrumented, ir, arch)
+			if err != nil {
+				t.Fatal("portable ABS/sign IR projection failed", err)
+			}
 			x86ConflictFunnelPortableRuntime(t, llc, clang, "packed-abs-sign-whole-bytes", triple, ir,
 				fmt.Sprintf(x86PackedAbsSignWholeBytesC, prototypes.String(), metadata.String()))
 		})
