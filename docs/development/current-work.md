@@ -1,6 +1,6 @@
 # PR 40: current checkpoint
 
-Updated 2026-10-20. Implementation handoff: `2257ffd5a`. This is not a
+Updated 2026-10-20. Implementation handoff: `5e4cf7d0e`. This is not a
 current-head completion certificate. Preserve ignored failed evidence and
 read [instruction contracts](instructions.md) and [validation](validation.md).
 
@@ -65,6 +65,8 @@ differ. Older qualifications remain in earlier Git checkpoints.
 
 | Snapshot | Independent local scope | Limits |
 |---|---|---|
+| `dc3c228b4` | Ordinary floating numerical declarations: 15 / 97 current and race, 11 / 80 actual Go1.20 | Direct/named/alias F32/F64 language and ABI0 slots; ordinary frame, caller, pointer/composite and register-entry negative controls remain strict. Four current-SDK roots are absent by minimum build role |
+| `5e4cf7d0e` | All 33 command gates exit zero, including 206 Node policies; source/tools unchanged | Supersedes the failed `bdb7ed6bb` attempt for this scope, without erasing it; not full CI, the strict benchmark or initialized FMA3 execution |
 | `5a3b67fb7` | Shared integer grammar and existing consumers: 25 / 4,783 on current Go, actual Go1.20 and race | Complete expr/term/factor, 55 independently Go-validated values, DATA/SB/GLOBL, five targets and three public APIs; malformed/unknown offsets cannot create images |
 | `d887767b0` | Complete floating native boundaries and existing consumers: 14 / 144 current and race, 13 / 144 minimum | 88 FMA/arithmetic/SQRT members, exact original MathExp bytes/PCs, valid inline-literal NUM negatives and actual mode32 legacy identity. Current-SDK original source root is absent by minimum build role |
 | `b2d198ae8` | All 33 command gates exit zero; source/tools unchanged | Current/minimum build/vet and consumers, official five-arch gate, 206 Node policies, shared current/minimum/race state. Not complete CI, the strict benchmark or the two newer RED families |
@@ -93,8 +95,9 @@ result. At `bdb7ed6bb`, 21 command gates passed before policies failed: 205 of
 second limit. Eleven remaining command gates did not run. Source/tool seals
 were unchanged. Isolated and complete recorded-environment replays passed,
 but do not erase this failed receipt or qualify the unrun commands. Preserve
-the budget and rerun the complete frozen candidate after the scalar declaration
-repair. Previous receipts cannot fill those gaps.
+the failed receipt and unchanged budget. The fresh `5e4cf7d0e` snapshot now
+passes every one of the 33 commands and all 206 policies, with unchanged seals;
+it does not certify later FMA3 work or the separate strict benchmark.
 
 Raw continuations retain sealed complete producer replay, not just a mutable
 origin pointer. SDK literal/numerical owners precede native family hooks.
@@ -127,7 +130,8 @@ four-source, precision, mask, MIN/MAX and XLAT families; every 386 form and
 unrelated encoder/unsupported/parse metric stayed unchanged.
 Current-SDK AMD64 counts are 3,113 supported, 3,623 Context and zero unsupported.
 These counts are rechecked at `bdb7ed6bb`, not a later-head qualification.
-Context is not an initialized-program success. Retain the historical Go1.20 unsupported form;
+Context is not an initialized-program success. Retain the historical Go1.20
+unsupported form;
 the current five-architecture gate still requires zero unsupported/parse errors.
 Re-audit complete forms and fingerprints before changing any baseline.
 
@@ -140,17 +144,19 @@ floating boundary described below. Neither a speedup nor a complete pass is
 qualified. Many remaining runtime/reflect files require explicit special-entry
 ABI contracts rather than more opcode names; keep their failures visible.
 
-The complete original SDK math/exp CLI regression is still red at `93cb20885`.
+The complete original SDK math/exp CLI regression is still red at `5e4cf7d0e`.
 Bounded package inventory, complete 34-name generated float-pool ownership and
 mixed ordinary readonly/generated-metadata accounting are repaired. The next
 GLOBL identity and complete floating native boundaries now pass. The unchanged
-MathExp object has 579 TEXT bytes / 101 instruction PCs. The next failure is
-numerical-source binding incorrectly requiring an integer-only declaration
-observer for ordinary float64 arguments/results. Test a separate F32/F64
-numerical declaration role; retain float language identity and reject forged
-integer/precision/ABI/slot changes. Do not open ordinary FrameSource, caller,
-ABIInternal register or aggregate permissions. This ordinary scalar role is
-distinct from unresolved runtime/reflect special-entry ABI contracts.
+MathExp object has 579 TEXT bytes / 101 instruction PCs. Ordinary F32/F64
+numerical declaration binding now passes its independent source/archive and
+language/layout controls. The next full-source failure is `VFNMADD231SD`:
+the ordinary sixty-member FMA3 family has typed forms and caller effects but
+is omitted from result/mandatory-effect dispatch. Its existing F32/F64
+arithmetic also needs independent original-opcode/MXCSR/dead-access obligations,
+not just a registration patch. Keep both defects under whole-family TDD.
+Do not open ordinary FrameSource, caller, ABIInternal register or aggregate
+permissions; this is distinct from runtime/reflect special-entry ABI contracts.
 
 Go-AST integer evaluation has been replaced with the bounded complete assembler
 grammar. Preserve its RED history: `5934717d1` mixed five upstream assembler
@@ -169,7 +175,7 @@ does not certify original native Go execution or the final integrated head.
 
 ## Next work and verification
 
-1. Qualify the independent numerical-source F32/F64 declaration role, then
+1. Qualify complete FMA3 result/input and native floating-effect rules, then
    rerun the complete original MathExp CLI. Keep special-entry ABI work separate.
    Integrate completed rule-class repairs without editing active snapshots;
    preserve original inputs and all earlier failed evidence.
