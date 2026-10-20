@@ -24,6 +24,7 @@ func TestCrossLinuxRuntimeMatrixX86FMA3GoCallerNumericalFamily(t *testing.T) {
 	if crossRosetta {
 		runner = []string{"/usr/bin/arch", "-x86_64"}
 	}
+	x86OriginalFloatingRuntimeRequireCPU(t, "fma-caller", clang, testTargetTriple(runtime.GOOS, "amd64"), runner)
 	// Caller proofs fingerprint the complete source selection. Keep that
 	// selection bounded instead of repeatedly hashing a giant fixture for
 	// every function. Each format still has its own actual typed Go caller,
