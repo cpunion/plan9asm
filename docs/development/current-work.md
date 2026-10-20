@@ -1,6 +1,6 @@
 # PR 40: current checkpoint
 
-Updated 2026-10-20. Implementation handoff: `b2d198ae8`. This is not a
+Updated 2026-10-20. Implementation handoff: `2257ffd5a`. This is not a
 current-head completion certificate. Preserve ignored failed evidence and
 read [instruction contracts](instructions.md) and [validation](validation.md).
 
@@ -65,6 +65,8 @@ differ. Older qualifications remain in earlier Git checkpoints.
 
 | Snapshot | Independent local scope | Limits |
 |---|---|---|
+| `5a3b67fb7` | Shared integer grammar and existing consumers: 25 / 4,783 on current Go, actual Go1.20 and race | Complete expr/term/factor, 55 independently Go-validated values, DATA/SB/GLOBL, five targets and three public APIs; malformed/unknown offsets cannot create images |
+| `d887767b0` | Complete floating native boundaries and existing consumers: 14 / 144 current and race, 13 / 144 minimum | 88 FMA/arithmetic/SQRT members, exact original MathExp bytes/PCs, valid inline-literal NUM negatives and actual mode32 legacy identity. Current-SDK original source root is absent by minimum build role |
 | `b2d198ae8` | All 33 command gates exit zero; source/tools unchanged | Current/minimum build/vet and consumers, official five-arch gate, 206 Node policies, shared current/minimum/race state. Not complete CI, the strict benchmark or the two newer RED families |
 | `bea55cdaa` | GLOBL zero addends: 4 / 1,984 on current Go, actual Go1.20 and race | Five arches, original Go objects and three public APIs. A subsequent independent review exposes shared integer grammar differences; these receipts do not certify arbitrary expressions |
 | `1cbe5377d` | Integrated source-defined BP, SDK directory and orphan-IR controls: 16 roots / 228 children | Current Go, including unchanged complete MD5 across three public APIs |
@@ -133,22 +135,26 @@ floating boundary described below. Neither a speedup nor a complete pass is
 qualified. Many remaining runtime/reflect files require explicit special-entry
 ABI contracts rather than more opcode names; keep their failures visible.
 
-The complete original SDK math/exp CLI regression is still red at `b2d198ae8`.
+The complete original SDK math/exp CLI regression is still red at `93cb20885`.
 Bounded package inventory, complete 34-name generated float-pool ownership and
 mixed ordinary readonly/generated-metadata accounting are repaired. The next
-GLOBL's explicit zero displacement now associates correctly. The next failure
-is an unregistered whole native floating-vector boundary at offset 420.
-Independent test-only `943015de9` confirms complete Go FMA/arithmetic/SQRT
-objects and reproduces the missing boundary consumer. Its unchanged original
-MathExp object has 579 TEXT bytes / 101 instruction PCs. Qualify the complete
-typed-family projection, never a MathExp-specific decoder or NUM permission.
+GLOBL identity and complete floating native boundaries now pass. The unchanged
+MathExp object has 579 TEXT bytes / 101 instruction PCs. The next failure is
+numerical-source binding incorrectly requiring an integer-only declaration
+observer for ordinary float64 arguments/results. Test a separate F32/F64
+numerical declaration role; retain float language identity and reject forged
+integer/precision/ABI/slot changes. Do not open ordinary FrameSource, caller,
+ABIInternal register or aggregate permissions. This ordinary scalar role is
+distinct from unresolved runtime/reflect special-entry ABI contracts.
 
-Independent review also exposes Go-AST integer evaluation differing from
-cmd/asm's expr/term/factor grammar: right-shift association, left-shift remaining
-tokens, rune contents and high-bit arithmetic. Test-only `5934717d1` covers the
-shared DATA/SB/GLOBL consumers. Preserve its actual Go prerequisites and RED
-evidence; do not normalize a Go-rejected nonzero/invalid address into a real
-initializer. Repair the shared grammar, not individual expression spellings.
+Go-AST integer evaluation has been replaced with the bounded complete assembler
+grammar. Preserve its RED history: `5934717d1` mixed five upstream assembler
+panics with real failures; uniformly bounded DATA-displacement fixtures at
+`1864b5e28` and expanded `ca7fd4bdc` establish normal Go rejection instead.
+The latter validates 55 complete Go symbol/images per architecture. Two old
+synthetic positives (`7&^3` and byte-rune `\\377`) were independently rejected
+by Go and corrected in separate fixture commits. Never count compiler panics,
+timeouts or unknown process outcomes as valid rejection evidence.
 
 The packed-shift portable driver now consumes normalized TEXT and retains unused
 intrinsic declarations and their generic attributes byte-for-byte. Actual native
@@ -158,8 +164,8 @@ does not certify original native Go execution or the final integrated head.
 
 ## Next work and verification
 
-1. Qualify complete native floating boundaries and the shared integer grammar,
-   then rerun the complete original MathExp CLI.
+1. Qualify the independent numerical-source F32/F64 declaration role, then
+   rerun the complete original MathExp CLI. Keep special-entry ABI work separate.
    Integrate completed rule-class repairs without editing active snapshots;
    preserve original inputs and all earlier failed evidence.
 2. Freeze the final integrated head, including documentation and used tools.
