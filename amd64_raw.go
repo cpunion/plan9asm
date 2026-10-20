@@ -6236,6 +6236,10 @@ vex:
 // zeroing, packed broadcasts, rounding, and SAE.
 // Recover every register and ModRM/SIB memory form before the generic decoder.
 func decodedX86VEXBinaryFloatInstruction(code []byte, mode int) (instruction Instr, length int, ok bool, err error) {
+	return decodedX86VEXBinaryFloatInstructionWithMemory(code, mode, x86RawMemoryDecoder{})
+}
+
+func decodedX86VEXBinaryFloatInstructionWithMemory(code []byte, mode int, memory x86RawMemoryDecoder) (instruction Instr, length int, ok bool, err error) {
 	i := 0
 	segment := Reg("")
 	addressOverride := false
@@ -6260,7 +6264,7 @@ vex:
 		return Instr{}, 0, false, nil
 	}
 	if len(code) > i && code[i] == 0x62 {
-		return decodedX86EVEXBinaryFloatInstruction(code, i, mode, segment, addressOverride)
+		return decodedX86EVEXBinaryFloatInstructionWithMemory(code, i, mode, segment, addressOverride, memory)
 	}
 	var vexLength, rExt, xExt, bExt int
 	var vexBits, opcode byte
@@ -6320,7 +6324,7 @@ vex:
 	if mode == 32 && (rExt != 0 || xExt != 0 || bExt != 0 || secondSourceNumber >= 8 || destinationNumber >= 8) {
 		return Instr{}, 0, true, fmt.Errorf("extended register in 32-bit mode")
 	}
-	firstSource, consumed, decodeErr := decodedX86VEXVectorRMOperand(code[modRMIndex:], mode, bExt, xExt, segment, vectorPrefix)
+	firstSource, consumed, decodeErr := memory.vex(code[modRMIndex:], mode, bExt, xExt, segment, vectorPrefix)
 	if decodeErr != nil {
 		return Instr{}, 0, true, decodeErr
 	}
@@ -6336,6 +6340,10 @@ vex:
 }
 
 func decodedX86EVEXBinaryFloatInstruction(code []byte, i, mode int, segment Reg, addressOverride bool) (instruction Instr, length int, ok bool, err error) {
+	return decodedX86EVEXBinaryFloatInstructionWithMemory(code, i, mode, segment, addressOverride, x86RawMemoryDecoder{})
+}
+
+func decodedX86EVEXBinaryFloatInstructionWithMemory(code []byte, i, mode int, segment Reg, addressOverride bool, memory x86RawMemoryDecoder) (instruction Instr, length int, ok bool, err error) {
 	if len(code) < i+6 {
 		return Instr{}, 0, false, nil
 	}
@@ -6427,7 +6435,7 @@ func decodedX86EVEXBinaryFloatInstruction(code []byte, i, mode int, segment Reg,
 	if mode == 32 && (!rawHalf && !rawSqrt && maskNumber != 0 || rExt != 0 || rHighExt != 0 || xExt != 0 || bExt != 0 || secondSourceNumber >= 8 || destinationNumber >= 8) {
 		return Instr{}, 0, true, fmt.Errorf("extended register or mask in 32-bit mode")
 	}
-	firstSource, consumed, decodeErr := decodedX86EVEXRMOperand(code[modRMIndex:], mode, bExt, xExt, segment, vectorPrefix, disp8Scale)
+	firstSource, consumed, decodeErr := memory.evex(code[modRMIndex:], mode, bExt, xExt, segment, vectorPrefix, disp8Scale)
 	if decodeErr != nil {
 		return Instr{}, 0, true, decodeErr
 	}
@@ -7005,6 +7013,10 @@ var decodedX86VEXFMA3Ops = map[byte]decodedX86VEXFMA3Spec{
 // raw FMA encodings emitted by generated ecosystem assembly, so recover the
 // family before the generic decoder.
 func decodedX86VEXFMA3Instruction(code []byte, mode int) (instruction Instr, length int, ok bool, err error) {
+	return decodedX86VEXFMA3InstructionWithMemory(code, mode, x86RawMemoryDecoder{})
+}
+
+func decodedX86VEXFMA3InstructionWithMemory(code []byte, mode int, memory x86RawMemoryDecoder) (instruction Instr, length int, ok bool, err error) {
 	i := 0
 	segment := Reg("")
 	addressOverride := false
@@ -7029,7 +7041,7 @@ vex:
 		return Instr{}, 0, false, nil
 	}
 	if len(code) > i && code[i] == 0x62 {
-		return decodedX86EVEXFMA3Instruction(code, i, mode, segment, addressOverride)
+		return decodedX86EVEXFMA3InstructionWithMemory(code, i, mode, segment, addressOverride, memory)
 	}
 	if len(code) < i+5 || code[i] != 0xc4 || code[i+1]&0x1f != 2 {
 		return Instr{}, 0, false, nil
@@ -7064,7 +7076,7 @@ vex:
 	if mode == 32 && (rExt != 0 || xExt != 0 || bExt != 0 || secondSourceNumber >= 8 || destinationNumber >= 8) {
 		return Instr{}, 0, true, fmt.Errorf("extended register in 32-bit mode")
 	}
-	firstSource, consumed, decodeErr := decodedX86VEXVectorRMOperand(code[modRMIndex:], mode, bExt, xExt, segment, vectorPrefix)
+	firstSource, consumed, decodeErr := memory.vex(code[modRMIndex:], mode, bExt, xExt, segment, vectorPrefix)
 	if decodeErr != nil {
 		return Instr{}, 0, true, decodeErr
 	}
@@ -7080,6 +7092,10 @@ vex:
 }
 
 func decodedX86EVEXFMA3Instruction(code []byte, i, mode int, segment Reg, addressOverride bool) (instruction Instr, length int, ok bool, err error) {
+	return decodedX86EVEXFMA3InstructionWithMemory(code, i, mode, segment, addressOverride, x86RawMemoryDecoder{})
+}
+
+func decodedX86EVEXFMA3InstructionWithMemory(code []byte, i, mode int, segment Reg, addressOverride bool, memory x86RawMemoryDecoder) (instruction Instr, length int, ok bool, err error) {
 	if len(code) < i+6 {
 		return Instr{}, 0, false, nil
 	}
@@ -7152,7 +7168,7 @@ func decodedX86EVEXFMA3Instruction(code []byte, i, mode int, segment Reg, addres
 	if mode == 32 && (maskNumber != 0 && !half || rExt != 0 || rHighExt != 0 || xExt != 0 || bExt != 0 || secondSourceNumber >= 8 || destinationNumber >= 8) {
 		return Instr{}, 0, true, fmt.Errorf("extended register or mask in 32-bit mode")
 	}
-	firstSource, consumed, decodeErr := decodedX86EVEXRMOperand(code[modRMIndex:], mode, bExt, xExt, segment, vectorPrefix, disp8Scale)
+	firstSource, consumed, decodeErr := memory.evex(code[modRMIndex:], mode, bExt, xExt, segment, vectorPrefix, disp8Scale)
 	if decodeErr != nil {
 		return Instr{}, 0, true, decodeErr
 	}
