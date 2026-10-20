@@ -79,6 +79,7 @@ func TestX86FMA3GrammarMatchesEveryCurrentGoTableMember(t *testing.T) {
 	if named != len(wanted) {
 		t.Fatalf("named family count mismatch: %d/%d", named, len(wanted))
 	}
+	x86FMA3CheckCompleteEncoderAttributes(t)
 }
 
 // Independent opcode enumeration and format axes. Every form has a separate
