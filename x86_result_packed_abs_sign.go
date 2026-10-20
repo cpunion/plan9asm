@@ -8,7 +8,7 @@ func x86ResultPackedAbsSignStep(ins Instr, state *x86ResultState, owned []bool, 
 	if !known || err != nil {
 		return false, known
 	}
-	if !x86ResultNamedPredicateInstruction(ins) {
+	if !x86ResultNamedPredicateInstruction(ins) && !x86RawPackedAbsLiteralForm(ins, arch) {
 		return false, true
 	}
 	if form.mask >= 0 {

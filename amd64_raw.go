@@ -435,6 +435,7 @@ func decodeX86RawDirectives(fn Func, goarch string) (Func, error) {
 				fma3:               x86FMA3RawIdentity(decoded[index], goarch),
 				explicitMaskMove:   x86ExplicitMaskMoveRawIdentity(decoded[index], goarch),
 				packedShift:        x86PackedShiftRawIdentity(decoded[index], goarch),
+				packedAbs:          x86PackedAbsRawIdentity(decoded[index], goarch),
 			}
 		}
 		normalized = append(normalized, decoded...)

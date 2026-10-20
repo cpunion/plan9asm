@@ -43,6 +43,7 @@ type x86SourceRawInstruction struct {
 	fma3             x86RawFMA3Identity
 	explicitMaskMove x86RawExplicitMaskMoveIdentity
 	packedShift      x86RawPackedShiftIdentity
+	packedAbs        x86RawPackedAbsIdentity
 }
 
 type x86SourceStackAddress struct {

@@ -143,7 +143,8 @@ func x86RawResultLiteralForm(ins Instr, arch string) bool {
 		x86RawBroadcastLiteralForm(ins, arch) || x86RawLogicalLiteralForm(ins, arch) ||
 		x86RawByteShiftLiteralForm(ins, arch) || x86RawIntegerCompareLiteralForm(ins, arch) ||
 		x86RawArithmeticLiteralForm(ins, arch) || x86RawFloatCompareLiteralForm(ins, arch) ||
-		x86RawBinaryFloatLiteralForm(ins, arch) || x86RawFMA3LiteralForm(ins, arch)
+		x86RawBinaryFloatLiteralForm(ins, arch) || x86RawFMA3LiteralForm(ins, arch) ||
+		x86RawPackedAbsLiteralForm(ins, arch)
 }
 
 // This bounded source uses the ordinary typed family byte effects. It does
