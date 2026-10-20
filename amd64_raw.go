@@ -432,6 +432,7 @@ func decodeX86RawDirectives(fn Func, goarch string) (Func, error) {
 				legacyFloatCompare: x86LegacyFloatCompareRawIdentity(decoded[index], goarch),
 				floatMinMax:        x86FloatMinMaxRawIdentity(decoded[index], goarch),
 				scalarPrecision:    x86ScalarPrecisionRawIdentity(decoded[index], goarch),
+				explicitMaskMove:   x86ExplicitMaskMoveRawIdentity(decoded[index], goarch),
 			}
 		}
 		normalized = append(normalized, decoded...)

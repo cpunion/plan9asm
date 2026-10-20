@@ -69,6 +69,9 @@ func x86ResultCallerAddressesAfter(ins Instr, before [16]bool, entryFP map[int64
 	if x86RawScalarPrecisionSource(ins, arch) {
 		return before // The exact conversion writes X/MXCSR, never a new GP identity.
 	}
+	if x86RawExplicitMaskMoveSource(ins, arch) {
+		return before // Existing GP identities survive; no new address is created.
+	}
 	if x86RawUnalignedLoadSource(ins, arch) {
 		return before
 	}

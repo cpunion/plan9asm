@@ -16,7 +16,8 @@ import (
 // result. In particular, this never creates a caller-memory or raw-RET token.
 func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 	fn, sig, arch := c.fpScalarSource, c.sig, c.goarch
-	if x86FloatMinMaxRawReplayRequired(fn, arch) || x86ScalarPrecisionRawReplayRequired(fn, arch) {
+	if x86FloatMinMaxRawReplayRequired(fn, arch) || x86ScalarPrecisionRawReplayRequired(fn, arch) ||
+		x86ExplicitMaskMoveRawReplayRequired(fn, arch) {
 		if err := fn.x86RawReplay.validate(fn, arch); err != nil {
 			return err
 		}
@@ -111,7 +112,15 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 	boundRawTernary := false
 	boundRawFloatMinMax := false
 	boundRawScalarPrecision := false
+	boundRawExplicitMaskMove := false
 	for _, ins := range fn.Instrs {
+		if x86RawExplicitMaskMoveSource(ins, arch) {
+			if !boundRawExplicitMaskMove && (fn.x86RawReplay == nil || fn.x86RawReplay.validate(fn, arch) != nil) {
+				return strictErr
+			}
+			boundRawExplicitMaskMove = true
+			continue // Exact VEX source grants no mask, address, memory or entry fact.
+		}
 		if x86RawFloatMinMaxSource(ins, arch) {
 			if !boundRawFloatMinMax && (fn.x86RawReplay == nil || fn.x86RawReplay.validate(fn, arch) != nil) {
 				return strictErr
@@ -463,6 +472,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		}
 		if accepted, known := x86ResultFloatCompareStep(ins, state, owned, arch, true); known {
 			return accepted
+		}
+		if accepted, known := x86ResultExplicitMaskMoveStep(ins, state, owned, resultOffset, arch, true); known {
+			return accepted // The whole original mask move retains active memory faults and writes.
 		}
 		if accepted, known := x86ResultFloatingHelperStep(ins, state, owned, arch, true); known {
 			return accepted // The complete native opcode retains MXCSR, exceptions and masked accesses.

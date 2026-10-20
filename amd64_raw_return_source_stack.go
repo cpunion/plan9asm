@@ -39,7 +39,8 @@ type x86SourceRawInstruction struct {
 	legacyFloatCompare x86RawLegacyFloatCompareIdentity
 	floatMinMax        x86RawFloatMinMaxIdentity
 	// Neither an absent snapshot nor a low bank implies a VEX conversion.
-	scalarPrecision x86RawScalarPrecisionIdentity
+	scalarPrecision  x86RawScalarPrecisionIdentity
+	explicitMaskMove x86RawExplicitMaskMoveIdentity
 }
 
 type x86SourceStackAddress struct {

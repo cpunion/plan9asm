@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"runtime"
 	"strings"
@@ -54,16 +55,33 @@ func TestTranslateX86ExplicitMaskMoveCompleteGoAssemblerForms(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			signatures := map[string]FuncSig{"explicitmaskmoveforms": {Name: "explicitmaskmoveforms", Ret: Void}}
 			ir, err := Translate(file, Options{
 				Goarch: target.goarch, TargetTriple: target.triple,
-				Sigs: map[string]FuncSig{"explicitmaskmoveforms": {Name: "explicitmaskmoveforms", Ret: Void}},
+				Sigs: signatures,
 			})
-			if err != nil {
-				t.Fatal(err)
+			if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+				t.Fatal("unbound original formats acquired mask/data/address inputs", err)
 			}
-			for _, want := range []string{"@llvm.masked.load.v4i32", "@llvm.masked.store.v8i32", "@llvm.masked.load.v2i64", "@llvm.masked.store.v4i64"} {
-				if !strings.Contains(ir, want) {
-					t.Errorf("IR omitted fault-suppressing intrinsic %s", want)
+			if target.goarch == "386" {
+				// Keep every original accepted high-bank named row. Its mode32
+				// physical-bank boundary is not an object success; independently
+				// initialized low-bank owners cover all sixteen rows on both
+				// 386 targets without changing this original source.
+				for _, ins := range file.Funcs[0].Instrs {
+					if _, known, _ := x86ExplicitMaskMoveProperties(ins.Op, ins, target.goarch); known &&
+						!errors.Is(x86Mode32VectorRegisterContext(ins, target.goarch), ErrProbeNeedsContext) {
+						t.Fatal("original accepted high-bank named row lost its physical mode32 boundary")
+					}
+				}
+				return
+			}
+			// Direct units preserve every original format and exact native
+			// opcode, but supply neither public input nor execution evidence.
+			ir = x86ScalarFormatObjectUnit(t, file, signatures, target.goarch, target.triple, 0)
+			for _, op := range []string{"vmaskmovps ", "vmaskmovpd ", "vpmaskmovd ", "vpmaskmovq "} {
+				if !strings.Contains(ir, op) || !strings.Contains(ir, "asm sideeffect") {
+					t.Fatal("original direct format unit lost its complete Type6 native opcode", op)
 				}
 			}
 			llc := findLLVM22Tool("llc")

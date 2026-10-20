@@ -63,6 +63,9 @@ func x86ResultDirectionAfterSource(ins Instr, direction x86ResultDirection, arch
 	if x86RawScalarPrecisionSource(ins, arch) {
 		return direction // Native MXCSR effects do not alter the independent DF control.
 	}
+	if x86RawExplicitMaskMoveSource(ins, arch) {
+		return direction // The exact masked move has no FLAGS/DF write.
+	}
 	if x86RawUnalignedLoadSource(ins, arch) {
 		return direction
 	}
