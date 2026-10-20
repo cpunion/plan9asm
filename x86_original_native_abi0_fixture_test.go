@@ -2,6 +2,7 @@ package plan9asm
 
 import (
 	"crypto/sha256"
+	"errors"
 	"fmt"
 	"go/ast"
 	"go/parser"
@@ -187,12 +188,10 @@ func TestX86OriginalNativeSegmentQueryUsesCompleteGoSETccSpelling(t *testing.T) 
 		for role, operand := range []string{"AX", "(SI)", "CX"} {
 			for seed := 0; seed < 2; seed++ {
 				name := fmt.Sprintf("Query%d_%d_%d", index, role, seed)
-				operation, prepare := row.op+" "+operand, "XORL DX,DX\nSTC\n"
+				operation := row.op + " " + operand
+				prepare, _ := x86SegmentQueryNativeFlagSeed(seed == 1)
 				if row.bytes != 0 {
 					operation += ",CX"
-				}
-				if seed != 0 {
-					prepare = "MOVB $127,DL\nADDB $1,DL\nSTC\n"
 				}
 				source.WriteString(fmt.Sprintf(format, name, prepare, operation))
 				fmt.Fprintf(&declarations, "func %s(out *[18]byte,selector,old uint64,p *uint16)\n", name)
@@ -202,10 +201,22 @@ func TestX86OriginalNativeSegmentQueryUsesCompleteGoSETccSpelling(t *testing.T) 
 	// The real complete producer must have a valid original Go object before
 	// any translator result can count. No invalid spelling is relabelled Context.
 	goAssemblerOracleOutput(t, "amd64", source.String(), "", true)
+	seed, _ := x86SegmentQueryNativeFlagSeed(false)
+	if strings.Count(source.String(), seed) != 24 {
+		t.Fatal("complete original zero-overflow seed denominator changed")
+	}
+	legacy := strings.ReplaceAll(source.String(), seed, "XORL DX,DX\nSTC\n")
+	goAssemblerOracleOutput(t, "amd64", legacy, "", true)
 	for _, api := range []string{"text", "module", "Go"} {
-		t.Run(api, func(t *testing.T) {
+		t.Run(api+"/all-six-status-inputs", func(t *testing.T) {
 			if ir, err := x86ScalarFPBitViewAPI(t, source.String(), declarations.String(), "amd64", "x86_64-unknown-linux-gnu", api); err != nil || ir == "" {
 				t.Fatal("original Go-compatible complete segment-query observer rejected", err)
+			}
+		})
+		t.Run(api+"/original-XOR-undefined-AF", func(t *testing.T) {
+			ir, err := x86ScalarFPBitViewAPI(t, legacy, declarations.String(), "amd64", "x86_64-unknown-linux-gnu", api)
+			if ir != "" || !errors.Is(err, ErrProbeNeedsContext) || !strings.Contains(err.Error(), "LAHF") {
+				t.Fatal("original XOR's undefined AF became an initialized complete LAHF byte", err)
 			}
 		})
 	}

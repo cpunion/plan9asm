@@ -28,12 +28,7 @@ func TestCrossLinuxRuntimeMatrixX86SegmentQueryOriginalFlagsAliasesAndFaults(t *
 			}
 			for seed := 0; seed < 2; seed++ {
 				name := fmt.Sprintf("Query%d_%d_%d", operation, role, seed)
-				prepare := "XORL DX,DX\nSTC\n"
-				cPrepare := "xorl %%edx,%%edx; stc; "
-				if seed == 1 {
-					prepare = "MOVB $127,DL\nADDB $1,DL\nSTC\n"
-					cPrepare = "movb $127,%%dl; addb $1,%%dl; stc; "
-				}
+				prepare, cPrepare := x86SegmentQueryNativeFlagSeed(seed == 1)
 				fmt.Fprintf(&source, "TEXT ·%s(SB),4,$0-32\nMOVQ out+0(FP),DI\nMOVQ selector+8(FP),AX\n"+
 					"MOVQ old+16(FP),CX\nMOVQ p+24(FP),SI\n%s%s\nMOVQ CX,0(DI)\nMOVQ AX,10(DI)\n"+
 					"LAHF\nMOVB AH,8(DI)\nSETOS 9(DI)\nRET\n", name, prepare, query)
