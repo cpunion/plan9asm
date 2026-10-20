@@ -228,5 +228,6 @@ int main(void) {
   return 0;
 }
 `
+	x86OriginalFloatingRuntimeRequireCPU(t, "packed-abs-sign", clang, triple, runPrefix)
 	compileAndRunRuntimeTestForTarget(t, llc, clang, "packed_abs_sign", triple, ll, mainC, runPrefix)
 }
