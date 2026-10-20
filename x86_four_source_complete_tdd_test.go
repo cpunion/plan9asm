@@ -154,12 +154,13 @@ func x86FourSourceInitializedSource(row x86FourSourceOracleRow, arch, name strin
 	} else if row.missing != "address" {
 		fmt.Fprintf(&source, "%s memory+%d(FP),BX\n", move, 3*word)
 	}
+	base := row.first &^ 3
 	for register := 0; register < 4; register++ {
 		if row.missing != fmt.Sprint("source", register) {
-			fmt.Fprintf(&source, "VMOVUPS %d(SI),Z%d\n", 64*register, register)
+			fmt.Fprintf(&source, "VMOVUPS %d(SI),Z%d\n", 64*register, base+register)
 		}
 	}
-	if row.dest >= 4 && row.missing != "old" {
+	if (row.dest < base || row.dest >= base+4) && row.missing != "old" {
 		fmt.Fprintf(&source, "VMOVUPS (CX),Z%d\n", row.dest)
 	}
 	if row.missing != "mask" {

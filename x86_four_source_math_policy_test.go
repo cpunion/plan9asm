@@ -92,3 +92,35 @@ func TestX86FourSourceMathDriverPolicyRejectsFalseExecution(t *testing.T) {
 		})
 	}
 }
+
+func TestX86FourSourceOriginalMathProjectionBindsAllSourceAndOracleBytes(t *testing.T) {
+	source, oracle := x86FourSourceOriginalProgram(t)
+	if file, err := x86FourSourceOriginalMathSource(source, oracle); err != nil || file == nil || len(file.Funcs) != 2 {
+		t.Fatal("the actual complete original mathematics projector lost its positive control", err)
+	}
+	for _, mutation := range []struct{ name, source, oracle string }{
+		{"source truncation", strings.TrimSuffix(source, "\n"), oracle},
+		{"source append", source + "\n", oracle},
+		{"first missing", source[strings.Index(source, "\nTEXT foursourcefaultsuppression"):], oracle},
+		{"second missing", strings.Split(source, "\nTEXT foursourcefaultsuppression")[0], oracle},
+		{"opcode", strings.Replace(source, "V4FMADDPS", "V4FNMADDPS", 1), oracle},
+		{"mask", strings.Replace(source, "K1, Z5", "K2, Z5", 1), oracle},
+		{"memory", strings.Replace(source, "128(AX)", "124(AX)", 1), oracle},
+		{"source block", strings.Replace(source, "[Z2-Z5]", "[Z4-Z7]", 1), oracle},
+		{"accumulator", strings.Replace(source, "[Z2-Z5], Z4", "[Z2-Z5], Z5", 1), oracle},
+		{"fault producer", strings.Replace(source, "\tKMOVQ CX, K1\n\tV4FMADDPS.Z (AX)", "\tV4FMADDPS.Z (AX)", 1), oracle},
+		{"C replacement", source, "int main(void){return 0;}"},
+		{"C observation", source, strings.Replace(oracle, "return 10", "return 0", 1)},
+		{"C missing fault", source, strings.Replace(oracle, "  foursourcefaultsuppression(0, faultOut, 0);", "", 1)},
+	} {
+		t.Run(mutation.name, func(t *testing.T) {
+			if mutation.source == source && mutation.oracle == oracle {
+				t.Fatal("an independent mutation did not change the actual original input")
+			}
+			file, err := x86FourSourceOriginalMathSource(mutation.source, mutation.oracle)
+			if err == nil || file != nil {
+				t.Fatal("the actual projector consumed changed original source/C or leaked a partial derived program", err)
+			}
+		})
+	}
+}

@@ -64,6 +64,7 @@ func TestX86FourSourceLiveAndDeadRetainActualNativeOpcodes(t *testing.T) {
 	for _, target := range x86RawReturnTargets {
 		t.Run(target.triple, func(t *testing.T) {
 			var source, declarations strings.Builder
+			functions := make(map[string]string)
 			for index, member := range x86FourSourceOracle {
 				for _, mode := range []string{"plain", "merge", "zero"} {
 					if target.arch == "386" && mode != "plain" {
@@ -72,9 +73,11 @@ func TestX86FourSourceLiveAndDeadRetainActualNativeOpcodes(t *testing.T) {
 					for _, dead := range []bool{false, true} {
 						row := x86FourSourceOracleRow{op: member.op, scalar: member.scalar, dot: member.dot,
 							first: 2, dest: 6, mode: mode}
-						body, declaration := x86FourSourceInitializedSource(row, target.arch, fmt.Sprintf("NativeFour%d_%s_%t", index, mode, dead), dead)
+						name := fmt.Sprintf("NativeFour%d_%s_%t", index, mode, dead)
+						body, declaration := x86FourSourceInitializedSource(row, target.arch, name, dead)
 						source.WriteString(body)
 						declarations.WriteString(declaration)
+						functions[strings.ToLower(name)] = strings.ToLower(member.op)
 					}
 				}
 			}
@@ -85,21 +88,38 @@ func TestX86FourSourceLiveAndDeadRetainActualNativeOpcodes(t *testing.T) {
 					if err != nil || ir == "" {
 						t.Fatal("initialized original four-source source rejected before actual opcode observation", err)
 					}
+					if strings.Count(ir, " asm sideeffect ") != len(functions) || strings.Count(ir, "~{fpsr}") != len(functions)*4/6 {
+						t.Fatal("complete original opcodes lost memory sideeffects or floating-only ambient MXCSR/exception effects")
+					}
 					for _, pipeline := range []struct{ name, level, body string }{
 						{"backend_O0", "-O0", ir}, {"backend_O2", "-O2", ir},
 						{"IR_O2_backend_O2", "-O2", x86DwordProductIROptimize(t, ir)},
 					} {
 						t.Run(pipeline.name, func(t *testing.T) {
 							listing := x86FourSourceNativeObjectListing(t, llc, objdump, target.triple, pipeline.level, pipeline.body)
-							want := 6 // plain/merge/zero, each live/dead.
-							if target.arch == "386" {
-								want = 2
+							sections := regexp.MustCompile(`(?m)^[0-9a-f]+ <_?(nativefour[0-5]_(?:plain|merge|zero)_(?:false|true))>:\r?\n`).FindAllStringSubmatchIndex(listing, -1)
+							if len(sections) != len(functions) {
+								t.Fatal("actual object lost a complete live/dead original function", len(sections), len(functions))
 							}
-							for _, member := range x86FourSourceOracle {
-								pattern := regexp.MustCompile(`\b` + strings.ToLower(member.op) + `\b`)
-								if got := len(pattern.FindAllStringIndex(listing, -1)); got != want {
-									t.Fatal("actual opcode disappeared or duplicated: dead results must retain MXCSR and complete native access", member.op, got, want)
+							seen := make(map[string]bool)
+							for index, section := range sections {
+								name := listing[section[2]:section[3]]
+								opcode, found := functions[name]
+								if !found || seen[name] {
+									t.Fatal("unobserved or duplicate physical original function", name)
 								}
+								seen[name] = true
+								end := len(listing)
+								if index+1 < len(sections) {
+									end = sections[index+1][0]
+								}
+								body := listing[section[1]:end]
+								t.Run(name, func(t *testing.T) {
+									pattern := regexp.MustCompile(`\b` + opcode + `\b`)
+									if got := len(pattern.FindAllStringIndex(body, -1)); got != 1 {
+										t.Fatal("this original live/dead function lost its single exact memory opcode", opcode, got)
+									}
+								})
 							}
 						})
 					}

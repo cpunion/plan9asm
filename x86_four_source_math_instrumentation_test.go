@@ -1,7 +1,12 @@
 package plan9asm
 
 import (
+	"crypto/sha256"
 	"fmt"
+	"regexp"
+	"runtime"
+	"strings"
+	"testing"
 )
 
 // Private test-only lane mathematics, retained from the earlier implementation.
@@ -10,6 +15,160 @@ import (
 type x86FourSourceMathForm struct {
 	amd64FourSourceForm
 	mask string
+}
+
+func x86FourSourceMathIR(t *testing.T, file *File, signatures map[string]FuncSig, triple string, expected int) string {
+	t.Helper()
+	count := 0
+	ir := x86InstructionFormatObjectUnit(t, file, signatures, "amd64", triple, 0,
+		func(c *amd64Ctx, ins Instr) (bool, bool, error) {
+			form, known, err := x86FourSourceProperties(ins.Op, ins, "amd64")
+			if known {
+				if err != nil {
+					return true, false, err
+				}
+				count++
+				mathematical := x86FourSourceMathForm{amd64FourSourceForm: form}
+				if form.maskIndex >= 0 {
+					mathematical.mask, err = c.loadK(ins.Args[form.maskIndex].Reg)
+					if err != nil {
+						return true, false, err
+					}
+				}
+				if form.spec.mode == amd64FourSourceFMA {
+					return c.lowerFourSourceFMA(form.spec, mathematical)
+				}
+				return c.lowerFourSourceDotWords(form.spec, mathematical)
+			}
+			terminated, err := c.lowerInstr(0, 0, ins, nil, nil)
+			return true, terminated, err
+		})
+	if count != expected {
+		t.Fatal("private mathematical instrumentation lost a complete original opcode", count, expected)
+	}
+	// These are exact per-function x86 feature groups, not host capabilities.
+	// Remove each complete checked group and all its references only here;
+	// otherwise LLVM could choose a rare/native ISA in this numerical oracle.
+	profiles := make(map[string]int)
+	for _, function := range file.Funcs {
+		features := inferFuncTargetFeaturesForGOARCH(ArchAMD64, "amd64", function)
+		if features == "" {
+			t.Fatal("private mathematical fixture lost its original x86 feature identity")
+		}
+		profiles[features]++
+	}
+	groups := regexp.MustCompile(`(?m)^attributes (#[0-9]+) = \{ "target-features"="([^"]+)" \}\r?\n`).FindAllStringSubmatch(ir, -1)
+	if len(groups) != len(profiles) {
+		t.Fatal("private mathematical feature-group inventory changed", len(groups), len(profiles))
+	}
+	for _, group := range groups {
+		uses, found := profiles[group[2]]
+		if !found || uses == 0 || strings.Count(ir, group[0]) != 1 {
+			t.Fatal("unobserved private mathematical ISA group", group[2])
+		}
+		ir = strings.Replace(ir, group[0], "", 1)
+		if strings.Count(ir, " "+group[1]) != uses {
+			t.Fatal("private mathematical ISA group lost exact function ownership", group[1], uses)
+		}
+		ir = strings.ReplaceAll(ir, " "+group[1], "")
+		delete(profiles, group[2])
+	}
+	if len(profiles) != 0 || strings.Contains(ir, "target-features") || strings.Contains(ir, " asm ") {
+		t.Fatal("private mathematical IR still contains unchecked native/rare machine behavior")
+	}
+	t.Logf("private four-source mathematical instrumentation: checked replacements=%d; exact x86 feature groups removed=%d; no native inline assembly; not original MXCSR, exception or fault execution", count, len(groups))
+	return ir
+}
+
+func x86FourSourceOriginalMathCompanion(t *testing.T, original, mainC string) {
+	t.Helper()
+	observed, oracle := x86FourSourceOriginalProgram(t)
+	if original != observed || mainC != oracle {
+		t.Fatal("mathematical companion did not consume both complete unchanged original literals")
+	}
+	file, err := x86FourSourceOriginalMathSource(original, mainC)
+	if err != nil {
+		t.Fatal(err)
+	}
+	signatures := x86FourSourceOriginalSignatures()
+	triple := testTargetTriple(runtime.GOOS, runtime.GOARCH)
+	ir := x86FourSourceMathIR(t, file, signatures, triple, 8)
+	for index, name := range []string{"foursourcesemantics", "foursourcefaultsuppression"} {
+		old := fmt.Sprint("@InstructionFormat", index, "(")
+		if strings.Count(ir, old) != 1 {
+			t.Fatal("private mathematical C identity lost its single actual function definition", name)
+		}
+		ir = strings.Replace(ir, old, "@"+name+"(", 1)
+	}
+	llc, clang, found := findLlcAndClang(t)
+	if !found {
+		t.Fatal("actual-host mathematical companion requires exact LLVM22 llc/clang")
+	}
+	t.Log("original complete ASM/C literals retained; derived fault source has six explicit zero producers and seven portable byte transports; no original rare-ISA execution claim")
+	x86ConflictFunnelPortableRuntime(t, llc, clang, "four-source-original-mathematics", triple, ir, mainC)
+}
+
+// Both positive execution and mutation controls call this actual projector.
+// A changed source returns no partially instrumented file, not a later-stage
+// t.Fatal that could be mistaken for an expected source rejection.
+func x86FourSourceOriginalMathSource(original, mainC string) (*File, error) {
+	if fmt.Sprintf("%x", sha256.Sum256([]byte(original))) != "c68bfc687ce73e04389fd0e3f57146554f85d3967d9c44c80ac6e1dbefbd5070" ||
+		fmt.Sprintf("%x", sha256.Sum256([]byte(mainC))) != "44e5e74ea2f0f24009632362a848a5bc0e9f6c8002e04d8e4310a2f4270bc3a4" {
+		return nil, fmt.Errorf("private four-source mathematics needs its two complete unchanged original literals")
+	}
+	// The original fault TEXT lacks initialized source/accumulator inputs. Its
+	// separate public Context remains mandatory. This explicit derived fixture
+	// supplies real producers, rather than relying on C passing mask=0 or on
+	// the emitter's zero-initialized implementation slots.
+	anchor := "\tKMOVQ CX, K1\n\tV4FMADDPS.Z (AX)"
+	if strings.Count(original, anchor) != 1 {
+		return nil, fmt.Errorf("the complete original fault-source instrumentation anchor changed")
+	}
+	var producers strings.Builder
+	for register := 0; register < 6; register++ {
+		fmt.Fprintf(&producers, "\tVPXORD Z%d,Z%d,Z%d\n", register, register, register)
+	}
+	derived := strings.Replace(original, anchor, "\tKMOVQ CX, K1\n"+producers.String()+"\tV4FMADDPS.Z (AX)", 1)
+	file, err := Parse(ArchAMD64, derived)
+	if err != nil || len(file.Funcs) != 2 {
+		return nil, fmt.Errorf("private mathematics lost the complete original two-TEXT program: %v", err)
+	}
+	// Original legacy MOVUPS would select the original native bridge. Here
+	// all seven are explicit portable byte transports. Their upper-alias
+	// difference is outside this instrumented program's C observations; native
+	// alias behavior has independent complete initialized/state/object controls.
+	transports := 0
+	for function := range file.Funcs {
+		for index := range file.Funcs[function].Instrs {
+			ins := &file.Funcs[function].Instrs[index]
+			if ins.Op == "MOVUPS" {
+				if len(ins.Args) != 2 {
+					return nil, fmt.Errorf("unobserved original legacy byte-transport grammar")
+				}
+				ins.Op = "VMOVUPS"
+				ins.Raw = strings.Replace(ins.Raw, "MOVUPS", "VMOVUPS", 1)
+				transports++
+			}
+		}
+	}
+	if transports != 7 || file.Funcs[0].Sym != "foursourcesemantics" || file.Funcs[1].Sym != "foursourcefaultsuppression" {
+		return nil, fmt.Errorf("private mathematics lost its seven byte transports or two original function identities: %d", transports)
+	}
+	return file, nil
+}
+
+func x86FourSourceOriginalSignatures() map[string]FuncSig {
+	result := make(map[string]FuncSig)
+	for _, name := range []string{"foursourcesemantics", "foursourcefaultsuppression"} {
+		result[name] = FuncSig{Name: name, Args: []LLVMType{Ptr, Ptr, I64}, Ret: Void,
+			Frame: FrameLayout{Params: []FrameSlot{
+				{Offset: 0, Type: Ptr, Index: 0, Field: -1},
+				{Offset: 8, Type: Ptr, Index: 1, Field: -1},
+				{Offset: 16, Type: I64, Index: 2, Field: -1},
+			}},
+		}
+	}
+	return result
 }
 
 func (c *amd64Ctx) lowerFourSourceFMA(spec amd64FourSourceSpec, form x86FourSourceMathForm) (bool, bool, error) {
@@ -111,7 +270,7 @@ func (c *amd64Ctx) lowerFourSourceScalarFMA(spec amd64FourSourceSpec, form x86Fo
 	fmt.Fprintf(c.b, "  %%%s = bitcast float %s to i32\n", bits, accumulator)
 	fmt.Fprintf(c.b, "  %%%s = insertelement <4 x i32> %%%s, i32 %%%s, i32 0\n", inserted, words, bits)
 	fmt.Fprintf(c.b, "  %%%s = bitcast <4 x i32> %%%s to <16 x i8>\n", out, inserted)
-	return true, false, c.storeX(form.destination.Reg, "%"+out)
+	return true, false, c.storePackedMoveOperand(form.destination, 16, "%"+out)
 }
 
 func (c *amd64Ctx) lowerFourSourceDotWords(spec amd64FourSourceSpec, form x86FourSourceMathForm) (bool, bool, error) {
