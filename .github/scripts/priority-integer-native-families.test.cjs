@@ -14,6 +14,8 @@ const owners = [
   'TestCrossLinuxRuntimeMatrixX86ImplicitDivideOriginalGoAndNative386',
   'TestCrossLinuxRuntimeMatrixX86SegmentQueryOriginalFlagsAliasesAndFaults',
   'TestCrossLinuxRuntimeMatrixX86MoveHalfOriginalGoFlagsDFAliases',
+  'TestCrossLinuxRuntimeMatrixX86ImplicitDivideLogicalFPOriginalGoAndNativeAMD64',
+  'TestCrossLinuxRuntimeMatrixX86ImplicitDivideLogicalFPOriginalGoAndNative386',
 ];
 const axes = ['backend_O0', 'backend_O2', 'IR_O2/backend_O2'];
 const packageName = 'github.com/xgo-dev/plan9asm';
@@ -30,6 +32,15 @@ const segmentEvidence = '48 original-Go opcode rows × 16 inputs; full GP aliase
 const halfPreflight = 'half native CPUID/XCR0 AVX512F=1; original EVEX transport opcode executed\n';
 const halfEvidence = 'half native full64/FLAGS/DF=1/canary outcomes=512; complete original STD/CLD source and all eight named half moves\n';
 const halfOriginal = 'half actual original Go full64/FLAGS/DF=1/canary outcomes=512\n';
+function logicalFPEvidence(owner, original = false) {
+  const arch = owner.endsWith('386') ? '386' : 'amd64';
+  const rows = arch === '386' ? 6 : 8;
+  const values = arch === '386' ? 96 : 128;
+  const faults = arch === '386' ? 18 : 24;
+  return original
+    ? `logical FP actual original Go arch=${arch} rows=${rows} values=${values}; complete original FP divisor source and whole AX/DX/DF/canary observations\n`
+    : `logical FP native arch=${arch} rows=${rows} values=${values} dead-division-faults=${faults}; whole AX/DX, DF and canaries; zero/overflow and signed-min/-1 SIGFPE\n`;
+}
 const event = (Action, Test, Output) => ({Action, Package: packageName,
   ...(Test ? {Test} : {}), ...(Output !== undefined ? {Output} : {})});
 const serialize = events => events.map(value => JSON.stringify(value)).join('\n');
@@ -50,12 +61,14 @@ function completeEvents() {
       }
       if (owner.includes('SegmentQuery')) events.push(event('output', child, segmentEvidence));
       if (owner.includes('MoveHalf')) events.push(event('output', child, halfEvidence));
+      if (owner.includes('LogicalFP')) events.push(event('output', child, logicalFPEvidence(owner)));
       events.push(event('pass', child));
     }
     if (observed) {
       events.push(event('output', owner, sdk('["version"]') + sdk(compileArgs)));
       if (ia32) events.push(event('output', owner, staticImage + directImage(originalArgs)));
       if (owner.includes('MoveHalf')) events.push(event('output', owner, halfOriginal));
+      if (owner.includes('LogicalFP')) events.push(event('output', owner, logicalFPEvidence(owner, true)));
       events.push(event('output', owner, host));
     }
     events.push(event('pass', owner));
@@ -64,10 +77,34 @@ function completeEvents() {
   return events;
 }
 
-test('native integer families require all six roots and eighteen complete execution axes', () => {
+test('native integer families require all eight roots and twenty-four complete execution axes', () => {
   assert.deepEqual(auditIntegerNativeFamilies(inventory, serialize(completeEvents())),
-    {roots: 6, children: 18, passed: 24, skipped: 0, incomplete: 0,
-      nativeHosts: 8, sdkBuilds: 4, staticIA32Images: 7, directIA32Executions: 4});
+    {roots: 8, children: 24, passed: 32, skipped: 0, incomplete: 0,
+      nativeHosts: 12, sdkBuilds: 6, staticIA32Images: 14, directIA32Executions: 8});
+});
+
+test('logical FP division requires every actual native and original Go completion', () => {
+  for (const owner of owners.filter(name => name.includes('LogicalFP'))) {
+    for (const name of [owner, ...axes.map(axis => owner + '/' + axis)]) {
+      const marker = logicalFPEvidence(owner, name === owner);
+      for (const replacement of ['', marker + marker, marker.replace('rows=', 'partial-rows='),
+        marker.replace('arch=', 'emulated-arch='), marker.replace('values=', 'ignored-values=')]) {
+        const changed = completeEvents().map(value => value.Test === name && value.Output
+          ? {...value, Output: value.Output.replace(marker, replacement)} : value);
+        assert.throws(() => auditIntegerNativeFamilies(inventory, serialize(changed)), name);
+      }
+      const early = completeEvents();
+      const at = early.findIndex(value => value.Test === name && value.Output?.includes(marker));
+      const [completion] = early.splice(at, 1);
+      const beforeRun = early.findIndex(value => value.Test === name && value.Action === 'run');
+      early.splice(beforeRun, 0, completion);
+      assert.throws(() => auditIntegerNativeFamilies(inventory, serialize(early)), 'completion before run');
+      const late = completeEvents();
+      const terminal = late.findIndex(value => value.Test === name && value.Action === 'pass');
+      late.splice(terminal + 1, 0, event('output', name, marker));
+      assert.throws(() => auditIntegerNativeFamilies(inventory, serialize(late)), 'completion after terminal');
+    }
+  }
 });
 
 test('native integer families reject each missing, failed, skipped or duplicate terminal', () => {
@@ -187,13 +224,14 @@ test('native half moves require actual CPU original Go and each complete DF=1 ax
 });
 
 test('division IA32 requires actual static and direct images in every axis and original Go', () => {
-  const owner = owners[3];
-  const required = [owner, ...axes.map(axis => owner + '/' + axis)];
-  for (const name of required) {
-    for (const needle of [staticImage, directImage(name === owner ? originalArgs : '[]')]) {
-      const changed = completeEvents().map(value => value.Test === name && value.Output
-        ? {...value, Output: value.Output.replace(needle, '')} : value);
-      assert.throws(() => auditIntegerNativeFamilies(inventory, serialize(changed)), name + needle);
+  for (const owner of [owners[3], owners[7]]) {
+    const required = [owner, ...axes.map(axis => owner + '/' + axis)];
+    for (const name of required) {
+      for (const needle of [staticImage, directImage(name === owner ? originalArgs : '[]')]) {
+        const changed = completeEvents().map(value => value.Test === name && value.Output
+          ? {...value, Output: value.Output.replace(needle, '')} : value);
+        assert.throws(() => auditIntegerNativeFamilies(inventory, serialize(changed)), name + needle);
+      }
     }
   }
   for (const replacement of ['bytes=0', 'bytes=-1', 'bytes=guest']) {
@@ -206,8 +244,7 @@ test('division IA32 requires actual static and direct images in every axis and o
   assert.throws(() => auditIntegerNativeFamilies(inventory, serialize(forged)));
 });
 
-test('native integer CI is a required exact Linux owner with retained raw observations', () => {
-  const workflow = fs.readFileSync('.github/workflows/pr40-owned-process-probe.yml', 'utf8');
+function requireIntegerNativeWorkflow(workflow) {
   const job = workflow.slice(workflow.indexOf('  native-x86-oracles:'), workflow.indexOf('\n  complete-windows:'));
   assert.match(job, /runs-on: ubuntu-latest/);
   assert.match(job, /install-ci-llvm22-ubuntu\.sh gcc-i686-linux-gnu libc6-dev-i386-cross/);
@@ -222,6 +259,27 @@ test('native integer CI is a required exact Linux owner with retained raw observ
   assert.ok(block.includes('go test . -run "^($roots)$" -count=1 -timeout=5m -json > "$directory/raw.jsonl" 2> "$directory/stderr.log"'));
   assert.ok(block.includes('node .github/scripts/audit-integer-native-families.cjs "$directory"'));
   assert.doesNotMatch(block, /continue-on-error|\|\| true|qemu|objects-only/);
+  assert.ok(block.includes("if: ${{ !cancelled() && steps.native_toolchain.outcome == 'success' && steps.native_go.outcome == 'success' }}"));
   requireCompleteWindowsNeeds(workflow);
   assert.match(job, /path: _out\/native-x86-oracles\//);
+}
+
+test('native integer CI is a required exact Linux owner with retained raw observations', () => {
+  requireIntegerNativeWorkflow(fs.readFileSync('.github/workflows/pr40-owned-process-probe.yml', 'utf8'));
+});
+
+test('logical FP owners cannot disappear duplicate or substitute partial objects in CI', () => {
+  const workflow = fs.readFileSync('.github/workflows/pr40-owned-process-probe.yml', 'utf8');
+  for (const owner of owners.filter(name => name.includes('LogicalFP'))) {
+    for (const replacement of ['', owner + '|' + owner, owner.replace('LogicalFP', 'RegisterOnly')]) {
+      assert.throws(() => requireIntegerNativeWorkflow(workflow.replace(owner, replacement)), owner);
+    }
+  }
+  for (const [old, replacement] of [
+    ['-run "^($roots)$" -count=1 -timeout=5m', '-run "partial-only" -count=1 -timeout=5m'],
+    ['-run "^($roots)$" -count=1 -timeout=5m', '-run "^($roots)$" -count=1 -timeout=10m'],
+    ['node .github/scripts/audit-integer-native-families.cjs "$directory"', 'true'],
+  ]) {
+    assert.throws(() => requireIntegerNativeWorkflow(workflow.replaceAll(old, replacement)), old);
+  }
 });
