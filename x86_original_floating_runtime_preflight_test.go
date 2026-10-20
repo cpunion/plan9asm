@@ -19,6 +19,8 @@ func x86OriginalFloatingRuntimeRequireCPU(t *testing.T, profile, clang, triple s
 		required = 1
 	case "fma-caller":
 		required = 2
+	case "unsigned-scalar-integer":
+		required = 3
 	default:
 		t.Fatal("unknown original floating execution profile", profile)
 	}
@@ -48,7 +50,7 @@ static int original_floating_required_state(unsigned profile,unsigned sse2,unsig
                                             unsigned osxsave,unsigned f,unsigned vl,
                                             unsigned fma,uint64_t xcr0) {
     if (!sse2 || !avx || !osxsave || !f || (xcr0&0xe6)!=0xe6) return 0;
-    return profile==1 || (profile==2 && vl && fma);
+    return profile==1 || profile==3 || (profile==2 && vl && fma);
 }
 `
 
@@ -90,6 +92,21 @@ static int original_fma_caller(void) {
     return 1;
 }
 
+__attribute__((target("avx512f")))
+static int original_unsigned_scalar_integer(void) {
+    uint32_t source32=0xffffffffu,narrow[2]={1,1};
+    uint64_t source64=0xffffffffffffffffULL,wide[2]={1,1};
+    __asm__ volatile("vxorps %%xmm0,%%xmm0,%%xmm0; "
+                     "vcvtusi2sdl %4,%%xmm0,%%xmm1; vmovsd %%xmm1,%0; "
+                     "vcvtusi2sdq %5,%{rz-sae%},%%xmm0,%%xmm1; vmovsd %%xmm1,%1; "
+                     "vcvtusi2ssl %6,%{rd-sae%},%%xmm0,%%xmm1; vmovss %%xmm1,%2; "
+                     "vcvtusi2ssq %5,%{rn-sae%},%%xmm0,%%xmm1; vmovss %%xmm1,%3"
+                     : "=m"(wide[0]),"=m"(wide[1]),"=m"(narrow[0]),"=m"(narrow[1])
+                     : "m"(source32),"r"(source64),"r"(source32) : "xmm0","xmm1","memory");
+    return wide[0]==0x41efffffffe00000ULL && wide[1]==0x43efffffffffffffULL &&
+           narrow[0]==0x4f7fffffu && narrow[1]==0x5f800000u;
+}
+
 int main(void) {
 #if !defined(_WIN32)
     struct rlimit no_core={0,0};
@@ -115,6 +132,7 @@ int main(void) {
     if (!original_floating_required_state(profile,sse2,avx,osxsave,f,vl,fma,xcr0)) return 78;
     if (profile==1 && !original_scalar_precision()) return 79;
     if (profile==2 && !original_fma_caller()) return 80;
+    if (profile==3 && !original_unsigned_scalar_integer()) return 81;
     puts("ORIGINAL_FLOATING_RUNTIME_CPU_OPCODES_OK");
     return 0;
 }

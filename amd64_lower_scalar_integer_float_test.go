@@ -179,6 +179,7 @@ TEXT scalarintegerfloat(SB),NOSPLIT,$0-56
 		triple = "x86_64-apple-macosx"
 		runPrefix = []string{"/usr/bin/arch", "-x86_64"}
 	}
+	x86OriginalFloatingRuntimeRequireCPU(t, "unsigned-scalar-integer", clang, triple, runPrefix)
 	ll, err := Translate(file, Options{
 		TargetTriple: triple,
 		Goarch:       "amd64",
