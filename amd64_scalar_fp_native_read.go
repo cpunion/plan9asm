@@ -238,6 +238,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		if x86RawBlendMinposSource(ins, arch) {
 			continue // Exact raw data retains independent mask, aliases and full native tuple obligations.
 		}
+		if x86RawImmediateBlendSource(ins, arch) {
+			continue // Whole replay retains selector, original mode and every native/source input obligation.
+		}
 		if x86RawCLMULSource(ins, arch) {
 			continue // Exact selector/data identity retains its whole native tuple and independent selected qwords.
 		}
@@ -364,6 +367,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		}
 		if accepted, known := x86ResultNumericalReadStep(ins, state, owned, resultOffset, arch); known {
 			return accepted // A checked mutable SB source keeps its own lifetime and byte effects.
+		}
+		if accepted, known := x86ResultImmediateBlendStep(ins, state, owned, arch, true); known {
+			return accepted // Legacy Type4 opcode or exact volatile VEX tuple retains dead reads and faults.
 		}
 		if accepted, known := x86ResultBlendMinposStep(ins, state, owned, arch, true); known {
 			return accepted // Legacy original opcodes and VEX whole volatile reads retain exact native faults.

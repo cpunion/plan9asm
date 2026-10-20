@@ -998,6 +998,9 @@ func x86ResultTransfer(ins Instr, state *x86ResultState, owned []bool, resultOff
 	if accepted, known := x86ResultImplicitMaskMoveStep(ins, state, arch, false); known {
 		return accepted
 	}
+	if accepted, known := x86ResultImmediateBlendStep(ins, state, owned, arch, false); known {
+		return accepted
+	}
 	if accepted, known := x86ResultNamedHalfStep(ins, state, owned, arch, false); known {
 		return accepted
 	}

@@ -78,6 +78,9 @@ func x86ResultCallerAddressesAfter(ins Instr, before [16]bool, entryFP map[int64
 	if x86RawZeroExtendSource(ins, arch) {
 		return before // Preserve existing GP identities without creating one.
 	}
+	if x86RawImmediateBlendSource(ins, arch) {
+		return before // Exact vector selection has no GP output or new caller-address role.
+	}
 	if x86RawPermute128Source(ins, arch) {
 		return before // Retain existing identities without creating a GP/pointee fact.
 	}

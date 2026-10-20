@@ -213,6 +213,16 @@ func inferFuncTargetFeaturesForGOARCH(arch Arch, goarch string, fn Func) string 
 					add("+avx")
 				}
 			}
+			if form, known, err := x86ImmediateBlendProperties(ins.Op, ins, moveArch); known && err == nil {
+				switch {
+				case form.legacy:
+					add("+sse2", "+sse4.1")
+				case ins.Op == "VPBLENDD" || ins.Op == "VPBLENDW" && form.byteWidth == 32:
+					add("+avx2")
+				default:
+					add("+avx")
+				}
+			}
 			if form, known, err := x86FloatMinMaxProperties(ins, moveArch); known && err == nil {
 				switch {
 				case x86FloatMinMaxNativeEVEX(ins, form):

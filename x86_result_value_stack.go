@@ -45,6 +45,9 @@ func x86ResultPreservesPrivateStorage(ins Instr, arch string) bool {
 	if x86RawBlendMinposSource(ins, arch) {
 		return true // Exact vector data effects do not access private SP or ID.
 	}
+	if x86RawImmediateBlendSource(ins, arch) {
+		return true // Exact vector selection does not access private SP or ID.
+	}
 	if x86FMA3PreservesPrivateSourceState(ins, arch) {
 		return true // Exact vector/MXCSR effects do not access private SP or ID.
 	}
