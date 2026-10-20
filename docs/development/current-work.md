@@ -1,7 +1,7 @@
 # PR 40: current checkpoint
 
 Updated 2026-10-20. Implementation handoff: source-storage repair after
-`2547cc6e5`. This is not a
+`2547cc6e5`, with the independent bigmod priority owner. This is not a
 current-head completion certificate. Preserve ignored failed evidence and
 read [instruction contracts](instructions.md) and [validation](validation.md).
 
@@ -72,6 +72,7 @@ differ. Older qualifications remain in earlier Git checkpoints.
 
 | Snapshot | Independent local scope | Limits |
 |---|---|---|
+| `b2d639a6e` | Complete MULX/GP/ADX format, physical storage and source contracts: 25 / 780 on current Go, actual Go1.20 and race | Zero failure/skip, unchanged complete seals; two exact historical macOS linker warnings retained. Not the complete command gate, native execution or a new strict benchmark |
 | `2fe616991` | Complete MULX/GP/ADX original-format and source contracts: 24 / 714 on current Go and actual Go1.20 | Zero failure/skip and unchanged complete seals. Historical macOS linker warnings retained. The later physical-memory-source repair needs its own complete current/minimum/race replay |
 | `fbdfb33b9` | Fresh sixteen-report official classification comparison after the reviewed baseline update | Zero form, encoder or metric deltas; complete seals unchanged. Not an initialized-program or later-head qualification |
 | `e8c985358` | Complete original MathExp, field and bigmod CLI sources: three roots pass in 218.138 seconds | Original ASM and stock-Go archive priors, LLVM22 objects, zero failure/skip/stderr and unchanged complete seals. Bigmod alone takes 192.1 seconds; neither native execution nor a benchmark performance pass |
@@ -215,9 +216,10 @@ the completion of a single focused scope.
   source failures across three APIs; actual Go/LLVM priors, raw controls,
   incoming-pointer, mode32 BP and owned-DATA positives pass. The minimal
   candidate sends physical SP/AMD64 BP base/index sources through the existing
-  whole-source proof. Preserve Go386's ignored static-SB base annotation and
+  whole-source proof, and passes all three lanes at `b2d639a6e` above.
+  Preserve Go386's ignored static-SB base annotation and
   exact absolute/native accesses; do not invent new Context negatives from
-  the routing predicate alone. Complete 25-root current/minimum/race is pending.
+  the routing predicate alone.
 - Five original GP DATA negatives were already successful before the decoder
   repair; they were invalid negatives, not permission regressions. Keep their
   original owned-DATA controls and thirteen actual missing-BX counterexamples.
@@ -236,6 +238,13 @@ the completion of a single focused scope.
 - Required native hardware remains pending, never a skipped success. The
   original ABS/sign, scalar precision and FMA caller SIGILL failures do not
   establish hardware absence without their own actual-allocation CPU receipt.
+
+The first `b2d639a6e` full command attempt passes 21 gates, then correctly fails
+policies: 220 of 221 pass, with the new original bigmod root missing from the
+priority inventory. Eleven later commands remain unrun; complete seals match.
+An independent five-minute bigmod owner now supplements the unchanged original
+MathExp/field owner. The policy RED detects that missing lane and retains exact
+root, module, disjointness, substitution and budget negatives.
 
 Newly integrated changes have not passed the full 33 command gates, final-head
 classification replay or a new strict benchmark. Preserve the failed benchmark

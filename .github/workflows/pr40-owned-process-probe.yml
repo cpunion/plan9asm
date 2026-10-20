@@ -752,6 +752,11 @@ jobs:
               - TestCompileOneOriginalSDKMathExpScalarShiftAndNumericalSource
               - TestCompileOneOriginalSDKFieldImplicitMultiplySource
             timeout: 5m
+          - lane: llvm-original-bigmod
+            module: cmd/plan9asmll
+            roots:
+              - TestCompileOneOriginalSDKBigmodNativeListingSource
+            timeout: 5m
           - lane: llvm-crc32
             module: cmd/plan9asmll
             roots:
