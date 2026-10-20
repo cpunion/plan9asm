@@ -234,6 +234,10 @@ func x86ScaledRoundOriginalCReference(t *testing.T) string {
 	return reference[start:end]
 }
 
+func x86ScaledRoundOriginalCReportComplete(output []byte) bool {
+	return string(output) == "original C exact IEEE observations 35328 failures 0\n"
+}
+
 func TestX86ScaledRoundOriginalCReferenceSelectedRounding(t *testing.T) {
 	clang := findLLVM22Tool("clang")
 	if clang == "" {
@@ -279,7 +283,7 @@ int main(void) {
 			defer cancel()
 			x86FloatCompareCaptureCommand(t, runtimeOracleNativeCCommand(t, ctx, clang, arguments...))
 			output := x86FloatCompareCaptureCommand(t, exec.Command(executable))
-			if string(output) != "original C exact IEEE observations 35328 failures 0\n" {
+			if !x86ScaledRoundOriginalCReportComplete(output) {
 				t.Fatalf("incomplete original C observations: %s", output)
 			}
 		})
