@@ -19,14 +19,33 @@ import (
 // Go-defined CPU-choice byte and independently initialized assembly literals.
 // Child package directories do not make its own direct compiler inputs flat.
 func TestCompileOneOriginalSDKMathExpScalarShiftAndNumericalSource(t *testing.T) {
+	compileOriginalSDKX86FamilySource(t, "math", "math", "exp_amd64.s",
+		"CMPB ·useFMA(SB), $1", "exprodata<>")
+}
+
+// Keep the whole original field multiplication source, rather than extracting
+// its first MULQ or substituting a synthetic register-source program.
+func TestCompileOneOriginalSDKFieldImplicitMultiplySource(t *testing.T) {
+	const packagePath = "crypto/internal/fips140/edwards25519/field"
+	compileOriginalSDKX86FamilySource(t, packagePath, packagePath, "fe_amd64.s",
+		"TEXT ·feMul(SB)", "MULQ (BX)", "IMUL3Q")
+}
+
+func compileOriginalSDKX86FamilySource(t *testing.T, relativeDirectory, packagePath, assemblyFile string, witnesses ...string) {
+	t.Helper()
 	setX86SDKNumericalCLIProfile(t, "explicit")
 	ctx := arm64PrivateCLIContext(t)
-	directory := filepath.Join(runtime.GOROOT(), "src", "math")
-	input := filepath.Join(directory, "exp_amd64.s")
+
+	directory := filepath.Join(runtime.GOROOT(), "src", filepath.FromSlash(relativeDirectory))
+	input := filepath.Join(directory, assemblyFile)
 	original, err := os.ReadFile(input)
-	if err != nil || !strings.Contains(string(original), "CMPB ·useFMA(SB), $1") ||
-		!strings.Contains(string(original), "exprodata<>") {
-		t.Fatal("complete original SDK math source is absent", err)
+	if err != nil {
+		t.Fatal("complete original SDK source is absent", err)
+	}
+	for _, witness := range witnesses {
+		if !strings.Contains(string(original), witness) {
+			t.Fatalf("complete original SDK source %s lacks witness %q", assemblyFile, witness)
+		}
 	}
 	environment := os.Environ()
 	pkgs, err := packages.Load(&packages.Config{
@@ -35,7 +54,7 @@ func TestCompileOneOriginalSDKMathExpScalarShiftAndNumericalSource(t *testing.T)
 			packages.NeedModule | packages.NeedDeps | packages.NeedImports |
 			packages.NeedTypes | packages.NeedTypesSizes,
 	}, ".")
-	if err != nil || len(pkgs) != 1 || pkgs[0].PkgPath != "math" || len(pkgs[0].Errors) != 0 {
+	if err != nil || len(pkgs) != 1 || pkgs[0].PkgPath != packagePath || len(pkgs[0].Errors) != 0 {
 		t.Fatalf("actual original SDK selection failed: %v %+v", err, pkgs)
 	}
 	selection, stderr, err := gotoolprofile.RunBounded(ctx, directory, environment, "go",
@@ -51,10 +70,10 @@ func TestCompileOneOriginalSDKMathExpScalarShiftAndNumericalSource(t *testing.T)
 	}
 	config.Context = ctx
 	config.x86CallerSelections = captureX86CallerSelections(pkgs, "linux/amd64", nil)
-	output := filepath.Join(t.TempDir(), "exp.ll")
+	output := filepath.Join(t.TempDir(), strings.TrimSuffix(assemblyFile, ".s")+".ll")
 	if err := compileOne(pkgs[0], plan9asm.ArchAMD64, "linux", "amd64", "x86_64-unknown-linux-gnu",
 		asmTask{PkgPath: pkgs[0].PkgPath, AsmFile: input, OutLL: output}, false, config); err != nil {
-		t.Fatal("original initialized math source did not retain its complete LLVM object", err)
+		t.Fatal("original SDK source did not retain its complete LLVM object", err)
 	}
 	after, err := os.ReadFile(input)
 	if err != nil || sha256.Sum256(after) != sha256.Sum256(original) {
