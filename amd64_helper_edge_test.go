@@ -1249,8 +1249,21 @@ func TestAMD64FPMovCoverage(t *testing.T) {
 		{Op: "VFMADD213SD", Args: []Operand{{Kind: OpReg, Reg: "X0"}, {Kind: OpReg, Reg: "X1"}, {Kind: OpReg, Reg: "X2"}}, Raw: "VFMADD213SD X0, X1, X2"},
 		{Op: "VFNMADD231SD", Args: []Operand{{Kind: OpReg, Reg: "X0"}, {Kind: OpReg, Reg: "X1"}, {Kind: OpReg, Reg: "X2"}}, Raw: "VFNMADD231SD X0, X1, X2"},
 	} {
+		before := b.Len()
 		ok, _, err := c.lowerFP(ins.Op, ins)
 		check("lowerFP", ins, ok, err)
+		if ins.Op == "VFMADD213SD" || ins.Op == "VFNMADD231SD" {
+			// This fragment has an explicit native target. Preserve its
+			// original fused opcode/MXCSR effects rather than demanding the
+			// separate portable numerical lowerer's fneg/llvm.fma sequence.
+			fragment := b.String()[before:]
+			native := `asm sideeffect "` + strings.ToLower(string(ins.Op)) + " "
+			if strings.Count(fragment, native) != 1 || !strings.Contains(fragment, "~{fpsr}") ||
+				!strings.Contains(fragment, "~{memory}") || !strings.Contains(fragment, ",0,") ||
+				strings.Contains(fragment, "fneg double") || strings.Contains(fragment, "@llvm.fma.") {
+				t.Fatal("native scalar FMA lost its exact fused opcode or floating effects", ins.Raw)
+			}
+		}
 	}
 
 	c.setCmpFlags("1", "2")
@@ -1325,7 +1338,6 @@ func TestAMD64FPMovCoverage(t *testing.T) {
 		"call double @llvm.experimental.constrained.fsub.f64",
 		"call double @llvm.experimental.constrained.fmul.f64",
 		"call double @llvm.experimental.constrained.fdiv.f64",
-		"fneg double",
 		`call { i8, i8, i8 } asm sideeffect "comisd $3, $4; setb $0; sete $1; setp $2"`,
 		"fcmp ord double",
 		`asm sideeffect "sqrtsd $2, $0"`,
