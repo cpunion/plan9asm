@@ -67,7 +67,7 @@ func TestDecodedX86RawVectorByteShiftCompleteFamily(t *testing.T) {
 func TestDecodedX86RawVectorByteShiftRejectsInvalidForms(t *testing.T) {
 	valid := encodeX86RawVectorByteShift(true, false, 16, 0, 0, 15)
 	for name, edit := range map[string]func([]byte) []byte{
-		"W1":               func(b []byte) []byte { b[2] |= 0x80; return b },
+		"wrong pp":         func(b []byte) []byte { b[2] = b[2]&^3 | 2; return b },
 		"truncated imm8":   func(b []byte) []byte { return b[:len(b)-1] },
 		"address override": func(b []byte) []byte { return append([]byte{0x67}, b...) },
 		"wrong group":      func(b []byte) []byte { b[len(b)-2] &^= 0x38; return b },

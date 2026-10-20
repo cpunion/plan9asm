@@ -8284,9 +8284,6 @@ vectorPrefix:
 		if vexBits&3 != 1 {
 			return Instr{}, 0, true, fmt.Errorf("VEX.pp must be 66")
 		}
-		if vexHasW && vexBits&0x80 != 0 {
-			return Instr{}, 0, true, fmt.Errorf("VEX.W must be zero")
-		}
 		vectorName := "X"
 		if vexBits&0x04 != 0 {
 			vectorName = "Y"
@@ -8294,6 +8291,9 @@ vectorPrefix:
 		modRM := code[modRMIndex]
 		vvvvNumber := int(^vexBits>>3) & 15
 		if properties.immediate {
+			if modRM>>6 != 3 {
+				return Instr{}, 0, true, fmt.Errorf("VEX immediate packed shift requires a register source")
+			}
 			if rExt != 0 {
 				return Instr{}, 0, true, fmt.Errorf("VEX.R must not extend the shift opcode selector")
 			}
@@ -8354,7 +8354,7 @@ vectorPrefix:
 	if addressOverride {
 		return Instr{}, 0, true, fmt.Errorf("address-size override is not source-layout safe")
 	}
-	if (p1&0x80 != 0) != (properties.laneBytes == 8) {
+	if properties.laneBytes != 2 && (p1&0x80 != 0) != (properties.laneBytes == 8) {
 		return Instr{}, 0, true, fmt.Errorf("EVEX.W does not match %s", properties.op)
 	}
 	vectorBits := (p2 >> 5) & 3

@@ -24,7 +24,7 @@ func decodedX86RawVectorByteShiftInstruction(code []byte, mode int) (Instr, int,
 	if mode != 32 && mode != 64 {
 		return fail("unsupported x86 mode")
 	}
-	if p.addressOverride || p.w || p.r != 0 || p.vectorLength > 2 ||
+	if p.addressOverride || p.r != 0 || p.vectorLength > 2 ||
 		p.evex && !p.fixed || p.mask != 0 || p.zero || p.broadcast {
 		return fail("invalid prefix, mask or vector length")
 	}
