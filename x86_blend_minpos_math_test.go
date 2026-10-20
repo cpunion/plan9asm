@@ -185,13 +185,20 @@ func TestX86BlendMinposPrivateMathTransportAndBoundaries(t *testing.T) {
 							changed = strings.Replace(source, "$0-", "$8-", 1)
 						case "no-scratch":
 							var occupied strings.Builder
-							for index := 4; index < 8; index++ {
+							// Blend uses banks 0-3, but minimum uses only 0-1.
+							// Occupy the entire candidate set, independently of
+							// which banks the original builder already touches.
+							for index := 0; index < 8; index++ {
 								fmt.Fprintf(&occupied, "VMOVUPS Z%d,Z%d\n", index, index)
 							}
 							changed = strings.Replace(source, "RET", occupied.String()+"RET", 1)
 						}
-						if output, err := x86BlendMinposMathSource(changed, count, memory, transports); err == nil || output != "" {
+						output, err := x86BlendMinposMathSource(changed, count, memory, transports)
+						if err == nil || output != "" {
 							t.Fatal("different original source acquired the private mathematical instrumentation", mutation, err)
+						}
+						if mutation == "no-scratch" && !strings.Contains(err.Error(), "no unused mode32 X alias bank") {
+							t.Fatal("occupied scratch banks were rejected for an unrelated source error", err)
 						}
 					})
 				}
