@@ -72,13 +72,18 @@ func x86ResultPackedShiftStepWithRead(ins Instr, state *x86ResultState, owned []
 	if !known {
 		return false, false
 	}
-	if err != nil || form.mmx {
-		return false, true // Physical MMX remains a separate register domain.
+	if err != nil || form.mmx || !x86ResultNamedPredicateInstruction(ins) ||
+		ins.x86PackedShiftEncoding != x86RawPackedShiftAbsent || ins.x86PackedShiftW {
+		return false, true // Raw identity and physical MMX have separate owners.
 	}
+	return x86ResultPackedShiftInputs(ins, form, state, owned, arch, nativeRead), true
+}
+
+func x86ResultPackedShiftInputs(ins Instr, form x86PackedShiftForm, state *x86ResultState, owned []bool, arch string, nativeRead bool) bool {
 	if form.mask >= 0 {
 		index, valid := amd64ParseKReg(ins.Args[form.mask].Reg)
 		if !valid || !state.masks[index] {
-			return false, true
+			return false
 		}
 	}
 	if form.memory >= 0 {
@@ -89,10 +94,10 @@ func x86ResultPackedShiftStepWithRead(ins Instr, state *x86ResultState, owned []
 		memory := ins.Args[form.memory]
 		if _, static := x86StaticSBReadAddress(memory, arch); form.legacy && !static &&
 			(!nativeRead || !x86OrdinaryNativeMemoryOperand(memory, arch)) {
-			return false, true
+			return false
 		}
 		if !x86ResultReadWithNativeContinuation(ins, memory, int64(form.memoryBytes), state, owned, arch, nativeRead) {
-			return false, true
+			return false
 		}
 	}
 	bytes := func(index int) uint64 {
@@ -110,5 +115,5 @@ func x86ResultPackedShiftStepWithRead(ins Instr, state *x86ResultState, owned []
 	destination, _ := amd64VectorRegisterIndex(ins.Args[form.destination].Reg, form.byteWidth)
 	state.writeVector(destination, form.byteWidth,
 		x86PackedShiftDefinedBytes(form, data, counts, state.vectorBytes(destination)), form.legacy)
-	return true, true
+	return true
 }
