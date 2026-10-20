@@ -207,6 +207,41 @@ func TestDecodeX86RawQQToFloatRIPLiteral(t *testing.T) {
 	}
 }
 
+// Preserve this original complete byte-only fixture for both its direct-format
+// objects and its separate public missing-input contract.
+func x86RawQQToFloatOriginalSource(arch string) string {
+	var source strings.Builder
+	source.WriteString("TEXT rawQQToFloat(SB),$0-0\n")
+	appendBytes := func(code []byte) {
+		for _, value := range code {
+			fmt.Fprintf(&source, "\tBYTE $0x%02x\n", value)
+		}
+	}
+	for _, encode := range []func(bool, int, int, bool, bool, bool) []byte{
+		x86RawQQToPSEncoding,
+		x86RawQQToPDEncoding,
+	} {
+		for _, unsigned := range []bool{false, true} {
+			for width := 0; width < 3; width++ {
+				appendBytes(encode(unsigned, width, 0, false, false, false))
+				appendBytes(encode(unsigned, width, 0, false, false, true))
+				appendBytes(encode(unsigned, width, 0, false, true, true))
+				if arch == "amd64" {
+					appendBytes(encode(unsigned, width, 7, true, false, false))
+					appendBytes(encode(unsigned, width, 7, true, true, true))
+				}
+			}
+			if arch == "amd64" {
+				for rounding := 0; rounding < 4; rounding++ {
+					appendBytes(encode(unsigned, rounding, 4, true, true, false))
+				}
+			}
+		}
+	}
+	source.WriteString("\tRET\n")
+	return source.String()
+}
+
 func TestTranslateX86RawQQToFloatLLVM22Objects(t *testing.T) {
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
@@ -224,47 +259,13 @@ func TestTranslateX86RawQQToFloatLLVM22Objects(t *testing.T) {
 		{"windows-386", "386", "i686-pc-windows-msvc"},
 	} {
 		t.Run(target.name, func(t *testing.T) {
-			var source strings.Builder
-			source.WriteString("TEXT rawQQToFloat(SB),$0-0\n")
-			appendBytes := func(code []byte) {
-				for _, value := range code {
-					fmt.Fprintf(&source, "\tBYTE $0x%02x\n", value)
-				}
-			}
-			for _, encode := range []func(bool, int, int, bool, bool, bool) []byte{
-				x86RawQQToPSEncoding,
-				x86RawQQToPDEncoding,
-			} {
-				for _, unsigned := range []bool{false, true} {
-					for width := 0; width < 3; width++ {
-						appendBytes(encode(unsigned, width, 0, false, false, false))
-						appendBytes(encode(unsigned, width, 0, false, false, true))
-						appendBytes(encode(unsigned, width, 0, false, true, true))
-						if target.goarch == "amd64" {
-							appendBytes(encode(unsigned, width, 7, true, false, false))
-							appendBytes(encode(unsigned, width, 7, true, true, true))
-						}
-					}
-					if target.goarch == "amd64" {
-						for rounding := 0; rounding < 4; rounding++ {
-							appendBytes(encode(unsigned, rounding, 4, true, true, false))
-						}
-					}
-				}
-			}
-			source.WriteString("\tRET\n")
-			requireX86GoAssemblerResult(t, target.goarch, source.String(), true)
-			file, err := Parse(ArchAMD64, source.String())
-			if err != nil {
-				t.Fatal(err)
-			}
-			ir, err := Translate(file, Options{
-				Goarch: target.goarch, TargetTriple: target.triple,
-				Sigs: map[string]FuncSig{"rawQQToFloat": {Name: "rawQQToFloat", Ret: Void}},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			source := x86RawQQToFloatOriginalSource(target.goarch)
+			requireX86GoAssemblerResult(t, target.goarch, source, true)
+			// These unchanged byte-only formats have no input producers.
+			// Keep their actual Go objects and all three public Context
+			// controls, then compile every row through the format-only owner.
+			// Initialized public objects have their independent counterpart.
+			ir := x86UnboundVoidRawScalarFormatObject(t, source, target.goarch, target.triple)
 			compileLLVMToObject(t, llc, target.triple, "raw-qq-to-float.ll", "raw-qq-to-float.o", ir)
 		})
 	}
