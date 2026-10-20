@@ -31,6 +31,14 @@ func TestCompileOneOriginalSDKFieldImplicitMultiplySource(t *testing.T) {
 		"TEXT ·feMul(SB)", "MULQ (BX)", "IMUL3Q")
 }
 
+// Retain all three original bigmod functions and both CPU-choice paths. The
+// FIPS text-kind listing is an observation, not a substituted SB/entry role.
+func TestCompileOneOriginalSDKBigmodNativeListingSource(t *testing.T) {
+	const packagePath = "crypto/internal/fips140/bigmod"
+	compileOriginalSDKX86FamilySource(t, packagePath, packagePath, "nat_amd64.s",
+		"CMPB ·supportADX+0(SB), $0x01", "MULXQ", "ADCXQ", "ADOXQ")
+}
+
 func compileOriginalSDKX86FamilySource(t *testing.T, relativeDirectory, packagePath, assemblyFile string, witnesses ...string) {
 	t.Helper()
 	setX86SDKNumericalCLIProfile(t, "explicit")
