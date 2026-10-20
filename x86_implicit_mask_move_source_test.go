@@ -154,3 +154,64 @@ func TestX86ImplicitMaskMoveUnknownInputsRemainContext(t *testing.T) {
 		}
 	}
 }
+
+func TestX86ImplicitMaskMoveBareFormsCannotInventInputs(t *testing.T) {
+	for _, arch := range []string{"386", "amd64"} {
+		for _, op := range x86ImplicitMaskMoveOracleNames {
+			bank := "X"
+			if op == "MASKMOVQ" {
+				bank = "M"
+			}
+			source := fmt.Sprintf("TEXT ·Store(SB),4,$0-0\n%s %s0,%s1\nRET\n", op, bank, bank)
+			goAssemblerOracleOutput(t, arch, source, "", true)
+			for _, api := range []string{"text", "module", "Go"} {
+				t.Run(arch+"/"+op+"/"+api, func(t *testing.T) {
+					ir, err := x86ScalarFPBitViewAPI(t, source, "func Store()", arch, testTargetTriple("linux", arch), api)
+					if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+						t.Fatal("bare implicit store invented a mask, data or native DI address", err)
+					}
+				})
+			}
+		}
+	}
+}
+
+func TestX86ImplicitMaskMoveTypedRoles(t *testing.T) {
+	for _, arch := range []string{"386", "amd64"} {
+		for _, op := range x86ImplicitMaskMoveOracleNames {
+			t.Run(arch+"/"+op, func(t *testing.T) {
+				bank, width := "X", int64(16)
+				if op == "MASKMOVQ" {
+					bank, width = "M", 8
+				}
+				ins := x86ScalarLaneInstruction(t, fmt.Sprintf("%s %s0,%s1", op, bank, bank))
+				effect, known, err := x86TypedInstructionByteEffect(ins.Op, ins, arch)
+				if !known || err != nil || !effect.requiresResultProof ||
+					effect.flagsRead|effect.flagsDefined|effect.flagsKilled != 0 || effect.dynamicMemory {
+					t.Fatal("implicit store lacks its mandatory pure typed memory obligation", known, err)
+				}
+				reads, writes := 0, 0
+				for _, operand := range effect.operands {
+					if operand.width != width {
+						t.Fatal("implicit byte mask narrowed its possible native write extent", operand.width)
+					}
+					if operand.read {
+						reads++
+						if operand.write || operand.index < 0 || operand.index > 1 || operand.operand != ins.Args[operand.index] {
+							t.Fatal("implicit store changed a mask or data source role")
+						}
+					}
+					if operand.write {
+						writes++
+						if operand.index != -1 || operand.operand != (Operand{Kind: OpMem, Mem: Mem{Base: DI}}) {
+							t.Fatal("implicit destination lost its architectural DI address")
+						}
+					}
+				}
+				if reads != 2 || writes != 1 || len(effect.operands) != 3 {
+					t.Fatal("implicit source/write denominator changed", reads, writes)
+				}
+			})
+		}
+	}
+}
