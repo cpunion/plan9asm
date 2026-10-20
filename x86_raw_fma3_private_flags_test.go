@@ -16,6 +16,7 @@ func TestX86RawFMA3PrivateFlagsSpanNativeInstruction(t *testing.T) {
 			suffix = "L"
 		}
 		var original strings.Builder
+		var cases []struct{ name, source, declaration, control string }
 		for _, row := range []x86RawFMA3SourceCase{
 			{op: "VFMADD132PS", opcode: 0x98, bank: "X"},
 			{op: "VFNMADD231SD", opcode: 0xbd, bank: "X", evex: true},
@@ -30,23 +31,26 @@ func TestX86RawFMA3PrivateFlagsSpanNativeInstruction(t *testing.T) {
 				source = strings.Replace(source, push, "", 1)
 				source = strings.Replace(source, "STD\n", "STD\n"+push, 1)
 				original.WriteString(source)
-				for _, api := range []string{"text", "module", "Go"} {
-					t.Run(arch+"/"+name+"/"+api, func(t *testing.T) {
-						ir, err := x86ScalarFPBitViewAPI(t, source, declaration, arch, x86AddressMemoryTargets(arch)[0], api)
-						if control == "named" || control == "raw" {
-							if err != nil || ir == "" {
-								t.Fatal("initialized FMA revoked saved FLAGS or the independently defined DF", err)
-							}
-						} else if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
-							t.Fatal("saved FLAGS or an exact origin supplied an absent FMA arithmetic input", err)
-						}
-					})
-				}
+				cases = append(cases, struct{ name, source, declaration, control string }{name, source, declaration, control})
 			}
 		}
 		// These are original complete programs, including missing-register
 		// negatives; Go's assembler permits those encodings but supplies no values.
 		x86LEAActualTargetGoObject(t, arch, x86AddressMemoryTargets(arch)[0], original.String())
+		for _, row := range cases {
+			for _, api := range []string{"text", "module", "Go"} {
+				t.Run(arch+"/"+row.name+"/"+api, func(t *testing.T) {
+					ir, err := x86ScalarFPBitViewAPI(t, row.source, row.declaration, arch, x86AddressMemoryTargets(arch)[0], api)
+					if row.control == "named" || row.control == "raw" {
+						if err != nil || ir == "" {
+							t.Fatal("initialized FMA revoked saved FLAGS or the independently defined DF", err)
+						}
+					} else if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+						t.Fatal("saved FLAGS or an exact origin supplied an absent FMA arithmetic input", err)
+					}
+				})
+			}
+		}
 
 		t.Run(arch+"/complete-physical-family-state", func(t *testing.T) {
 			push := x86ScalarLaneInstruction(t, "PUSHF"+suffix)
