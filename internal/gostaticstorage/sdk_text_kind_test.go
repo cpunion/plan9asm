@@ -62,6 +62,31 @@ func TestSDKCurrentTextKindsKeepDistinctABIIdentities(t *testing.T) {
 func TestSDKCurrentTextKindsKeepStorageAndNamespaceBoundaries(t *testing.T) {
 	for _, kind := range []uint8{1, 2} {
 		first := sdkTextKindFixture(kind, 0)
+		for _, abi := range []uint16{0, 1} {
+			for _, reverse := range []bool{false, true} {
+				t.Run(fmt.Sprintf("kind%d/mixed-kind-ABI%d/reverse%t", kind, abi, reverse), func(t *testing.T) {
+					second := sdkTextKindFixture(3-kind, abi)
+					second.Flags = 1
+					inputs := []indexedObjectSymbol{first, second}
+					if reverse {
+						inputs[0], inputs[1] = inputs[1], inputs[0]
+					}
+					// Classifying both kinds as current text does not choose
+					// between differently typed definitions of the same name.
+					members := []ASMDataMember{sdkTextKindMember(inputs[0]), sdkTextKindMember(inputs[1])}
+					if err := validateASMDataArchiveNames(members); !errors.Is(err, ErrContext) {
+						t.Fatal("mixed STEXT/STEXTFIPS bodies acquired an archive winner", err)
+					}
+					observed := make(sdkAssemblyNamedDefinitions)
+					if err := observed.observe(inputs[0], false); err != nil {
+						t.Fatal("original single text definition precondition", err)
+					}
+					if err := observed.observe(inputs[1], false); !errors.Is(err, ErrContext) {
+						t.Fatal("mixed STEXT/STEXTFIPS bodies acquired a named winner", err)
+					}
+				})
+			}
+		}
 		t.Run(fmt.Sprintf("kind%d/same-member-DUPok", kind), func(t *testing.T) {
 			copy := first
 			copy.Flags = 1
