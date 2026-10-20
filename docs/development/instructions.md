@@ -113,6 +113,18 @@ standalone query, caller, physical entry or frame authority follows. Preserve
 original unbound format objects plus Context separately from initialized
 five-target public objects, every predicate and missing-input mutations.
 
+MULXL/Q has its own complete source/implicit-DX/two-output form, not ANDN's
+read/write roles. Capture both inputs before either output, zero-extend L
+results, and preserve FLAGS/DF and unrelated private/caller state. Native
+reads retain exact volatile widths even for Void. Exact raw continuations
+require complete immutable producer replay; a decoder origin is not NUM or
+backing. Physical SP/AMD64 BP outputs need their separate whole-source role.
+Preserve ordinary owned-DATA dead-register controls. Mode32 WIG observation
+does not grant an ordinary qword entry. Keep uninitialized original formats
+as actual Go/LLVM objects plus public Context, separately from initialized
+public programs. Private format units call the same pure emitter after shape
+validation; never set a cached proof flag or invent input/pointer authority.
+
 Conditional moves retain the old destination and actual predicate dependencies;
 their native source read is unconditional, including false predicates and Void.
 The existing nontrapping GP domain may leave a dead named-register result

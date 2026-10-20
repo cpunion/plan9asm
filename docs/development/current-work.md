@@ -1,6 +1,6 @@
 # PR 40: current checkpoint
 
-Updated 2026-10-20. Implementation handoff: `0b744db7b`. This is not a
+Updated 2026-10-20. Implementation handoff: `b8ffd18eb`. This is not a
 current-head completion certificate. Preserve ignored failed evidence and
 read [instruction contracts](instructions.md) and [validation](validation.md).
 
@@ -71,6 +71,13 @@ differ. Older qualifications remain in earlier Git checkpoints.
 
 | Snapshot | Independent local scope | Limits |
 |---|---|---|
+| `e8c985358` | Complete original MathExp, field and bigmod CLI sources: three roots pass in 218.138 seconds | Original ASM and stock-Go archive priors, LLVM22 objects, zero failure/skip/stderr and unchanged complete seals. Bigmod alone takes 192.1 seconds; neither native execution nor a benchmark performance pass |
+| `376f4f02d` | MULX typed inputs, native reads, five-target objects and original owned DATA: 6 / 427 current, 6.671 seconds | Sixty-four initialized function instances; three APIs and original/O2 IR to backend O0. Exact reads, two outputs and FLAGS obligations, not executed values/faults. Later physical-output and format repairs need the complete current/minimum/race replay |
+| `2e4320f62` | Complete ADX physical boundaries and existing raw/read contracts: 12 / 583 current, 4.233 seconds | Four official rows, 98 actual Go/LLVM physical witnesses, eight RIP priors; no scalar/NUM/source permission. Zero failure/skip/stderr and unchanged complete seals |
+| `c9fcc52ee` | Existing complete VEX GP register/memory/default-role decoder controls: 19 / 276 current, 1.594 seconds | Zero failure/skip/stderr and unchanged complete seals; the new public MULX input contract subsequently requires separating its old uninitialized format fixtures |
+| `846526a6e` | Native listing and floating backend compatibility: 10 / 880 actual Go1.20, 18.424 seconds | Sixteen current-SDK roots are absent by build role, not skipped. Zero failure/skip, unchanged complete seals; two exact macOS linker warnings retained |
+| `ecb95a59b` | Complete listing, source lifecycle and floating backend objects: 26 / 947 current, 191.722 seconds | Zero failure/skip/stderr and unchanged complete seals. Original Go headers include real split-static and FIPS producers |
+| `dab65118f` | Isolated floating backend objects/profile: 4 / 570 race, 78.587 seconds | All three targets and three pipelines retained, zero failure/skip/stderr and unchanged complete seals. Does not erase the preceding combined five-minute-budget failure |
 | `bcab1e58d` | Complete named/raw half, raw-only isolation and original floating diagnostics: 49 / 1,334 current, 95.756 seconds | Zero failure/skip/stderr and unchanged complete seals. Original fixed-rounding ASM/C and native objects remain separate from explicitly private mathematical execution; no native MXCSR execution claim |
 | `89d5189e9` | Half, floating diagnostics and legacy scalar stores: 56 / 2,315 actual Go1.20, 94.029 seconds | Zero failure/skip and unchanged complete seals; two exact macOS linker build warnings retained. The current-SDK encoder root is absent by build role, not skipped |
 | `bcab1e58d` | Complete packed precision, unsigned scalar and shared consumers: 50 / 2,820 actual Go1.20, 73.306 seconds | Historical reserved maskless-zero bytes are observed, not accepted semantics. Zero failure/skip, unchanged complete seals; two macOS linker build warnings retained |
@@ -153,7 +160,8 @@ the completion of a single focused scope.
   existing eight integer owners are unchanged. All 25 focused native-policy
   tests pass. The first full 221-policy run failed two isolation tests because
   its independent owner inventory omitted the new scope. `fc3d7f7ba` adds that
-  obligation; its two tests pass, but the full policy union must be rerun.
+  obligation; the later frozen preliminary union passes all 221 policies.
+  The complete current-head command qualification remains pending.
 - Permute128 now has its complete thirty-root GREEN above. Preserve the
   earlier dead-NULL observer failure and minimal LLVM22 experiment: backend
   legalization may read either sixteen-byte half first, so test-only NULL
@@ -178,32 +186,48 @@ the completion of a single focused scope.
   KMOVW and F-only scalar from F/VL FMA. All three object/profile roots pass
   at `0b744db7b`, including three targets and all three pipelines; actual CPU
   execution still belongs to the original owners.
-- Complete STEXT/STEXTFIPS listing ownership has independent real Go1.27
-  bigmod original/mapped objects and ABI0/ABI1 archive priors. Unknown and
-  truncated non-text displays revoke the previous PC owner. The first 25-root
-  integration at `0b744db7b` attempts 25 roots / 945 children: 24 roots pass,
-  while one old fixture wrongly requires nosplit. A test-only repair retains
-  its six negatives and adds an actual large-frame split-static Go prior;
-  rerun the complete 26-root current and build-role-adjusted minimum/race scope.
-- The complete original bigmod CLI still fails after the listing repair:
-  whole-native VEX boundary decoding rejects PC519. Original MathExp and field
-  sources pass in that same three-root attempt at `0b744db7b`; complete seals
-  match. Fix the complete VEX GP decoder/consumer class, not only MULX or that
-  package. No source boundary observation grants NUM, RIP data, frame or ABI.
-- The sixteen-report classification diagnostic at `bcab1e58d` retains every
-  complete form, encoder field and unrelated metric. Each AMD64 SDK moves 179
-  input-deficient probes to Context; every 386 report is unchanged. Seven
-  reviewed classes account for 177; the other two are exact legacy MOVSS/MOVSD
-  native-store forms. Preserve the first unreviewed-class failure. The explicit
-  eight-class comparison passes on the captured reports, but fresh collection
-  and baseline update remain pending; do not blindly refresh fingerprints.
+- Complete STEXT/STEXTFIPS ownership now passes the 26-root current and
+  ten-root actual-minimum scopes above. Retain the earlier 25-root failure:
+  one old fixture wrongly required nosplit. Unknown/truncated non-text still
+  revokes ownership. The combined 26-root race attempt at `d00d05088` fails
+  after exhausting its shared five-minute budget during Windows FMA objects;
+  25 roots pass. The isolated complete backend race passes at `dab65118f`.
+  Rebalance the final union without increasing budgets or omitting objects.
+- Full bigmod replay exposed two independent byte-observer gaps, PC519 VEX
+  GP and PC524 legacy ADX. Their complete shared decoder projections now
+  retain 26 GP names/28 Go rows and all four ADX names; physical observations
+  enter neither scalar nor NUM reads. Complete original bigmod now passes
+  beside MathExp/field above. Source roles and original execution stay separate.
+- MULXL/Q now share typed implicit-DX/two-output effects and exact volatile
+  native reads. Independent RED proves missing-pointer Void acceptance and
+  absent initialized effects; the first six-root GREEN is above. Further
+  valid RED covers physical SP/AMD64 BP outputs; the two-line source-obligation
+  repair passes those controls in the 24-root attempt at `b8ffd18eb`.
+  That attempt still fails only its new private-format whole-module product
+  count: SIB address multiplication is not a MULX product. Retain all nine
+  original byte formats, all targets, public Context and initialized objects;
+  fix the per-function assertion, then rerun complete current/minimum/race.
+- Five original GP DATA negatives were already successful before the decoder
+  repair; they were invalid negatives, not permission regressions. Keep their
+  original owned-DATA controls and thirteen actual missing-BX counterexamples.
+  Actual Go1.20 additionally reproduces numeric versus named R_PCREL display;
+  test-only compatibility binds the exact selected SDK enum and unique full
+  relocation row. Do not skip historical RIP cases or call that a compiler RED.
+- Fresh eight-class audit at `2e4320f62` passes all sixteen reports with
+  exactly 179 supported-to-Context changes per AMD64 SDK and no 386 changes.
+  The subsequent nine-class audit at `24aaae415` adds only the two complete
+  MULX native-memory forms, 181 total. Complete encoder/form fields and all
+  unrelated metrics remain identical. Only the audited status counters and
+  fingerprints update the eight AMD64 baselines. Current Go is 2,390 supported,
+  4,346 Context and zero unsupported. Preserve historical Go1.20's one existing
+  unsupported form. Fresh final-head zero-delta replay remains required.
 - Required native hardware remains pending, never a skipped success. The
   original ABS/sign, scalar precision and FMA caller SIGILL failures do not
   establish hardware absence without their own actual-allocation CPU receipt.
 
-Newly integrated changes have not passed the full 33 command gates, the
-sixteen-report classification audit or a new strict benchmark. Preserve the
-failed benchmark below; do not turn local repairs into an inferred full pass.
+Newly integrated changes have not passed the full 33 command gates, final-head
+classification replay or a new strict benchmark. Preserve the failed benchmark
+below; do not turn local repairs into an inferred full pass.
 
 Raw continuations retain sealed complete producer replay, not just a mutable
 origin pointer. SDK literal/numerical owners precede native family hooks.
@@ -281,6 +305,13 @@ times are 56/505/5/11/2 seconds, total 579 seconds. AMD64 exceeds the unchanged
 One diagnostic sample and source audit locate repeated live input hashing and
 complete observation serialization; neither is a controlled speedup result.
 Do not remove live verification boundaries or increase budgets to claim a pass.
+
+Readonly classification joins all 52 failures to the original reports:
+eight ordinary positive-frame ABI0 cases, nine helper/code-address closures,
+four inventory-budget barriers, 21 special runtime/compiler/OS entry contracts,
+nine other independent contracts and one unresolved SDK-graph cause. These
+are blocking layers, not promises that a single repair compiles each full file.
+The later bigmod success is not a new 184-file benchmark or speedup measurement.
 
 The complete original SDK math/exp CLI regression passes at `cbb448b58`.
 Bounded package inventory, complete 34-name generated float-pool ownership and
