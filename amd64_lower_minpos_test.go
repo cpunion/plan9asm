@@ -29,20 +29,7 @@ func TestTranslateX86PackedUnsignedWordMinimumPositionCompleteGoAssemblerForms(t
 				"\tVPHMINPOSUW X0, X%d\n"+
 				"\tVPHMINPOSUW 8(AX), X%d\n"+
 				"\tRET\n", last, last, last, last)
-			file, err := Parse(ArchAMD64, source)
-			if err != nil {
-				t.Fatal(err)
-			}
-			ll, err := Translate(file, Options{
-				TargetTriple: target.triple,
-				Goarch:       target.goarch,
-				Sigs: map[string]FuncSig{
-					"packedminimumpositionforms": {Name: "packedminimumpositionforms", Ret: Void},
-				},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			ll := x86UnboundBlendMinposFormatObject(t, source, target.goarch, target.triple)
 			llc := findLLVM22Tool("llc")
 			if llc == "" {
 				t.Fatal("LLVM 22 llc not found")
