@@ -75,6 +75,8 @@ func x86NumericalVectorBoundary(code []byte, mode int) (int, error) {
 	memory := x86RawMemoryDecoder{physicalPC: true}
 	decoders := [...]func([]byte, int, x86RawMemoryDecoder) (Instr, int, bool, error){
 		decodedX86NumericalConversionBoundary,
+		decodedX86VEXFMA3InstructionWithMemory,
+		decodedX86VEXBinaryFloatInstructionWithMemory,
 		decodedX86AESInstructionWithMemory,
 		decodedX86MaskMoveInstructionWithMemory,
 		decodedX86PackedMoveInstructionWithMemory,
@@ -128,6 +130,8 @@ func decodedX86NumericalConversionBoundary(code []byte, mode int, memory x86RawM
 	p, known := decodeX86RawVectorEncoding(code)
 	if known && p.mapNumber == 1 {
 		switch {
+		case p.opcode == 0x51 && p.pp < 2:
+			return decodedX86SameWidthConversionInstructionWithMemory(code, mode, memory)
 		case p.opcode == 0x5b && p.pp == 0:
 			return decodedX86SameWidthConversionInstructionWithMemory(code, mode, memory)
 		case p.opcode == 0xe6 && p.pp == 2:
