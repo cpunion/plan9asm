@@ -69,6 +69,45 @@ func TestX86FixupRuntimeInputMatchesIndependentOldDestinationReference(t *testin
 	}
 }
 
+func TestX86FixupCorrectedRuntimeCompleteThreeAPITargetObjects(t *testing.T) {
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM 22 llc not found")
+	}
+	original := x86FixupOriginalRuntimeSource(t)
+	source := x86FixupRuntimeSource(t, original)
+	const load = "\tVMOVDQU32 0(DX), Z3\n"
+	if strings.Count(source, load) != 1 || strings.Replace(source, load, "", 1) != original {
+		t.Fatal("runtime repair changed more than the unique old32 input load")
+	}
+	// These are complete public-program objects, not executed native semantics.
+	for _, triple := range []string{
+		"x86_64-unknown-linux-gnu", "x86_64-apple-darwin", "x86_64-pc-windows-msvc",
+	} {
+		t.Run(triple, func(t *testing.T) {
+			x86LEAActualTargetGoObject(t, "amd64", triple, source)
+			for _, api := range []string{"text", "module", "Go"} {
+				t.Run(api, func(t *testing.T) {
+					ir, err := x86ScalarFPBitViewAPI(t, source, x86FixupRuntimeDeclaration,
+						"amd64", triple, api)
+					if err != nil || ir == "" {
+						t.Fatal("corrected complete FIXUPIMM program did not translate", err)
+					}
+					for _, optimize := range []bool{false, true} {
+						t.Run(fmt.Sprintf("IR_O2=%t", optimize), func(t *testing.T) {
+							input := ir
+							if optimize {
+								input = x86DwordProductIROptimize(t, ir)
+							}
+							x86PackedStringCompileObject(t, llc, triple, input, "-O0")
+						})
+					}
+				})
+			}
+		})
+	}
+}
+
 func TestX86FixupImmediateZeroingStillReadsOldActiveDestination(t *testing.T) {
 	var directory strings.Builder
 	directory.WriteString("TEXT fixupoldinputs(SB),$0-0\n")
