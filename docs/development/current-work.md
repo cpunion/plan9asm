@@ -1,6 +1,6 @@
 # PR 40: current checkpoint
 
-Updated 2026-10-20. Implementation handoff: `1cbe5377d`. This is not a
+Updated 2026-10-20. Implementation handoff: `bf1ec0a5b`. This is not a
 current-head completion certificate. Preserve ignored failed evidence and
 read [instruction contracts](instructions.md) and [validation](validation.md).
 
@@ -41,6 +41,11 @@ Windows to succeed; failure, cancellation, skip or missing observations cannot
 qualify. This only improves diagnostic scheduling, not AVX512 availability or
 native execution qualification. The online run above remains failed.
 
+The user has explicitly deferred unavailable AVX512 execution to a separate
+pending-hardware acceptance item. Preserve its failed/pending status; this is
+not permission to skip the required owner, emulate native execution or report
+the whole CI as passed. Continue qualifying every independent software repair.
+
 The last complete main-module inventory is still
 [39285088077](https://github.com/cpunion/plan9asm/actions/runs/39285088077) at
 `47e44aa7d`: 7,379 roots = 7,063 pass + 52 fail + 264 explicit host skips,
@@ -60,8 +65,12 @@ differ. Older qualifications remain in earlier Git checkpoints.
 
 | Snapshot | Independent local scope | Limits |
 |---|---|---|
-| `1cbe5377d` | Integrated source-defined BP, SDK directory and orphan-IR controls: 16 roots / 228 children | Current Go, including complete original MD5 across three public APIs. Minimum-Go run exposes a test observer assuming only the new PUSH/POP prologue; the complete historical SP-cell observation repair is not yet qualified |
-| `1cbe5377d` | Complete 850-witness raw packed-shift object matrices for Linux/386 and Windows/386: four roots / 260 children each | Three public APIs and three pipelines. These are object compilation, not original native execution or the remaining three targets |
+| `1cbe5377d` | Integrated source-defined BP, SDK directory and orphan-IR controls: 16 roots / 228 children | Current Go, including unchanged complete MD5 across three public APIs |
+| `72af0cff1` | BP overwrite and historical frame controls: 9 / 925 on current Go and actual Go1.20 | Ordered old/new prologues, partial writes, aliases, joins and FP-slot reimports; no caller/frame authority inferred from BP |
+| `1cbe5377d`, `bdd6a0397` | Complete 850-witness raw packed-shift object matrices for all five x86 targets: four roots / 260 children per target | Three public APIs and three pipelines. Linux/386 and Windows/386 use the earlier snapshot; the three amd64 targets use the latter. Objects are not original native execution |
+| `bdd6a0397` | Original 396 shift forms compile for Linux/Darwin/Windows amd64: one root / 143 children per target | Complete original source, three public APIs and three pipelines |
+| `cfa4197d3`, `0e3833aac`, `72af0cff1`, `bdd6a0397` | All nine packed-shift members pass complete portable value/fault programs | Original 396-form companion plus 36 independent word-immediate forms; not native AVX512 execution or a single-snapshot certificate |
+| `08010ffe1`, `bf1ec0a5b` | Generated DATA metadata and readonly plans: 17 / 613 current; integrated shared 14 / 126 on actual Go1.20 and race | Exact float-pool/FUNCDATA ownership explains inventory, never grants ordinary initializer images or NUM permission |
 | `9e187e272` | Scalar-shift entry-shape/reaching-state controls: 7 / 131; complete SDK compare: 3 / 21 | Separate current-Go scopes. Shape classification no longer borrows stale entry pointers; reaching NUM and FLAGS obligations remain unchanged |
 | `7948b7ece`, `94f85c871` | Complete four-source rules and objects: current 30 / 2,118, minimum 29 / 2,118 | The current-SDK-only official encoder root is absent by build role on actual Go1.20, not skipped. Native rare-ISA execution and private portable mathematics remain distinct |
 | `b2c4c110b` | Previous frozen batch: all 33 command gates exit zero | Current/minimum build/vet and scanner; CLI on current Go and its Go1.24 minimum; official five-arch gate, 190 Node policies and 16 shared roots in current/minimum/race lanes. Not 33 test roots or a current-union certificate |
@@ -121,27 +130,26 @@ exposes MD5's source-defined BP, SDK compare's stale entry shape and math/exp's
 SDK data observation. Local repairs do not rewrite this benchmark; no speedup
 or complete pass is qualified.
 
-The complete original SDK math/exp CLI regression is still red at `063acd42b`.
-Its bounded direct-package inventory now correctly includes inactive files and
-child identities without granting child-include authority. Actual Go-created
-float pools remain missing from the source/object join. Test-only `c5cc21fec`
-independently passes all five targets' complete 34-name stock-Go object controls
-and reproduces all five joins failing. Authenticate these as separate generated
-metadata, never ordinary DATA layouts, literal initializers or NUM permission.
+The complete original SDK math/exp CLI regression is still red at `bf1ec0a5b`.
+Bounded package inventory, complete 34-name generated float-pool ownership and
+mixed ordinary readonly/generated-metadata accounting are repaired. The next
+failure is GLOBL's explicit zero displacement being retained in symbol identity.
+Independent test-only `b06f62d55` confirms all original Go objects on five
+architectures and reproduces our parser/public-path identity loss. Qualify its
+generic fix and then rerun the complete unchanged MathExp source; do not waive
+readonly identity or use a library-specific exception.
 
-Raw packed-shift driver RED receipts are also retained. The normalized TEXT
-header repair reveals a second observation defect: unused intrinsic declarations
-and their generic attributes are incorrectly treated as executed native code.
-The candidate must retain those declarations byte-for-byte, reject actual native
-calls/addresses and pass the original complete portable value/fault programs;
-this is not a native Go execution certificate.
+The packed-shift portable driver now consumes normalized TEXT and retains unused
+intrinsic declarations and their generic attributes byte-for-byte. Actual native
+calls/addresses, foreign attributes and ambiguous ownership still reject. All
+nine portable value/fault members passed their recorded snapshots above; this
+does not certify original native Go execution or the final integrated head.
 
 ## Next work and verification
 
-1. Finish generated float-pool source/object association and qualify complete
-   original math/exp. Qualify the historical BP observer and the raw packed-shift
-   driver, all object targets and portable runtime members. Integrate completed
-   rule-class repairs without editing active snapshots; preserve original inputs.
+1. Qualify the independent GLOBL zero-addend fix and complete original math/exp.
+   Integrate completed rule-class repairs without editing active snapshots;
+   preserve original inputs and all earlier failed evidence.
 2. Freeze the final integrated head, including documentation and used tools.
    Complete its current-Go, actual Go1.20 and race regressions and final command
    gates; older or partial receipts do not qualify this union.
