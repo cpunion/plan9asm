@@ -144,7 +144,16 @@ func runPackedHalfRoundingRuntime(t *testing.T, legacy bool) {
     }
 `, name, rounding, name)
 	}
-	file, err := Parse(ArchAMD64, source.String())
+	modelSource := source.String()
+	if legacy {
+		var err error
+		modelSource, err = x86NamedHalfRoundingMathematicalSource(modelSource)
+		if err != nil {
+			t.Fatal(err)
+		}
+		x86NamedHalfRoundingOriginalObjects(t, source.String(), llc)
+	}
+	file, err := Parse(ArchAMD64, modelSource)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -232,6 +241,9 @@ int main(void) {
     return 0;
 }
 `
+	if legacy {
+		x86NamedHalfCheckOriginalRoundingC(t, mainC)
+	}
 	compileAndRunRuntimeTest(t, llc, clang, "fp16_conversion_rounding", ir, mainC)
 	if runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" && rosettaAvailable() {
 		const triple = "x86_64-apple-macosx"
