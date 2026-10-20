@@ -14,9 +14,12 @@ const source = 'package fixture\n\nconst assembly = `TEXT original(SB),4,$0-0\nR
 const fixtures = {
   'original.go': source,
   'nested/original_test.go': source,
+  'original.s': 'TEXT original(SB),4,$0-0\nRET\n',
+  'nested/conformance.s': fs.readFileSync('testdata/conformance/amd64/conformance_amd64.s', 'utf8'),
   'script.sh': '#!/bin/sh\nprintf "original\\n"\n',
   'ordinary.txt': 'ordinary text\nsecond line\n',
-  'external.s': 'TEXT original(SB),4,$0-0\nRET\n',
+  'ordinary.asm': 'TEXT ordinary(SB),4,$0-0\nRET\n',
+  'downloaded/original.s': 'TEXT downloaded(SB),4,$0-0\r\nRET\r\n',
 };
 const digest = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
 
@@ -45,6 +48,7 @@ function checkoutFixture(rules) {
     git(['config', '--local', 'core.autocrlf', 'true']);
     git(['config', '--local', 'core.safecrlf', 'false']);
     fs.writeFileSync(path.join(directory, '.gitattributes'), rules);
+    fs.writeFileSync(path.join(directory, '.gitignore'), 'downloaded/\n');
     for (const [name, text] of Object.entries(fixtures)) {
       const target = path.join(directory, name);
       fs.mkdirSync(path.dirname(target), {recursive: true});
@@ -52,7 +56,9 @@ function checkoutFixture(rules) {
     }
     git(['add', '.']);
     git(['commit', '--quiet', '-m', 'original fixture']);
-    for (const name of Object.keys(fixtures)) fs.unlinkSync(path.join(directory, name));
+    for (const name of Object.keys(fixtures)) {
+      if (!name.startsWith('downloaded/')) fs.unlinkSync(path.join(directory, name));
+    }
     // This actually restores bytes through Git's worktree conversion, not a
     // handcrafted CRLF replacement or a global user configuration change.
     git(['checkout-index', '--all', '--force']);
@@ -63,33 +69,38 @@ function checkoutFixture(rules) {
   }
 }
 
-function requireOriginalGoBytes(observed) {
-  for (const name of ['original.go', 'nested/original_test.go']) {
+function requireOriginalSourceBytes(observed) {
+  for (const name of ['original.go', 'nested/original_test.go', 'original.s', 'nested/conformance.s']) {
     assert.equal(digest(observed[name]), digest(Buffer.from(fixtures[name])),
-      'checkout must preserve complete original Go driver/ASM/C bytes: ' + name);
+      'checkout must preserve complete original repository Go/ASM/C bytes: ' + name);
     assert.equal(observed[name].includes(Buffer.from('\r\n')), false, name);
   }
   assert.equal(observed['script.sh'].toString(), fixtures['script.sh']);
-  for (const name of ['ordinary.txt', 'external.s']) {
+  for (const name of ['ordinary.txt', 'ordinary.asm']) {
     assert.equal(observed[name].toString(), fixtures[name].replaceAll('\n', '\r\n'),
-      'control must prove autocrlf conversion without normalizing external authority: ' + name);
+      'control must prove actual autocrlf conversion outside the source policy: ' + name);
   }
+  assert.equal(digest(observed['downloaded/original.s']), digest(Buffer.from(fixtures['downloaded/original.s'])),
+    'Git source policy must not normalize ignored external authority bytes');
 }
 
-test('actual autocrlf checkout preserves complete Go source hashes and existing shell LF policy', () => {
-  requireOriginalGoBytes(checkoutFixture(attributes));
+test('actual autocrlf checkout preserves complete Go and ASM hashes without altering downloads', () => {
+  requireOriginalSourceBytes(checkoutFixture(attributes));
 });
 
-test('Go checkout policy rejects missing substituted or CRLF source rules using real Git controls', () => {
-  const complete = '*.sh text eol=lf\n*.go text eol=lf\n';
-  requireOriginalGoBytes(checkoutFixture(complete));
+test('checkout policy rejects missing substituted or CRLF Go and ASM rules using real Git controls', () => {
+  const complete = '*.sh text eol=lf\n*.go text eol=lf\n*.s text eol=lf\n';
+  requireOriginalSourceBytes(checkoutFixture(complete));
   for (const changed of [
     complete.replace('*.go text eol=lf\n', ''),
     complete.replace('*.go text', '*.notgo text'),
     complete.replace('*.go text eol=lf', '*.go text eol=crlf'),
+    complete.replace('*.s text eol=lf\n', ''),
+    complete.replace('*.s text', '*.notasm text'),
+    complete.replace('*.s text eol=lf', '*.s text eol=crlf'),
   ]) {
     const observed = checkoutFixture(changed);
     assert.equal(observed['ordinary.txt'].toString(), fixtures['ordinary.txt'].replaceAll('\n', '\r\n'));
-    assert.throws(() => requireOriginalGoBytes(observed));
+    assert.throws(() => requireOriginalSourceBytes(observed));
   }
 });
