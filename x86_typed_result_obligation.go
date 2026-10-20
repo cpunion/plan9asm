@@ -39,7 +39,7 @@ func x86TypedFPResultNeedsProof(fn Func, sig FuncSig, arch string) bool {
 			return true // Raw/native move inputs, masks and addresses remain obligations even for Void.
 		}
 		if form, known, err := amd64ScalarVectorMoveProperties(ins, arch); known && err == nil &&
-			!form.spec.legacy && !form.spec.rawOnly &&
+			(!form.spec.legacy || form.memoryWrite) && !form.spec.rawOnly &&
 			(ins.x86SourceRaw != nil || ins.x86Encoded ||
 				form.memory >= 0 && x86ScalarVectorMoveOrdinaryMemory(ins.Args[form.memory], form.spec.bits, arch) &&
 					x86ResultNamedPredicateInstruction(ins)) {
