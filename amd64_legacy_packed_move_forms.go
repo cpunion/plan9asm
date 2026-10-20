@@ -91,6 +91,9 @@ func x86TypedInstructionByteEffect(op Op, ins Instr, arch string) (x86TypedByteE
 	if effect, known, err := x86TypedXLATByteEffect(op, ins, arch); known {
 		return effect, known, err
 	}
+	if effect, known, err := x86TypedFourSourceByteEffect(op, ins, arch); known {
+		return effect, known, err
+	}
 	if effect, known, err := x86TypedScalarPrecisionByteEffect(op, ins, arch); known {
 		return effect, known, err
 	}

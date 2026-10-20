@@ -1,7 +1,6 @@
 package plan9asm
 
 import (
-	"runtime"
 	"sort"
 	"strings"
 	"testing"
@@ -60,18 +59,10 @@ func TestTranslateX86FourSourceCompleteGoAssemblerForms(t *testing.T) {
 `
 			}
 			source += "\tRET\n"
-			requireX86GoAssemblerResult(t, target.goarch, source, true)
-			file, err := Parse(ArchAMD64, source)
-			if err != nil {
-				t.Fatal(err)
-			}
-			ir, err := Translate(file, Options{
-				Goarch: target.goarch, TargetTriple: target.triple,
-				Sigs: map[string]FuncSig{"foursourceforms": {Name: "foursourceforms", Ret: Void}},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			// Preserve this entire original format and actual Go object.
+			// It does not initialize BX, sources, accumulator or K inputs;
+			// the three public APIs must retain Context, not fake success.
+			ir := x86UnboundVoidScalarFormatObject(t, source, "foursourceforms", target.goarch, target.triple)
 			compileLLVMToObject(t, llc, target.triple, "four-source-"+target.name+".ll", "four-source-"+target.name+".o", ir)
 		})
 	}
@@ -115,14 +106,6 @@ func TestTranslateX86FourSourceRejectsFormsOutsideGoTables(t *testing.T) {
 }
 
 func TestAMD64FourSourceRuntimeSemantics(t *testing.T) {
-	crossRosetta := runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" && rosettaAvailable()
-	if runtime.GOARCH != "amd64" && !crossRosetta {
-		t.Skip("runtime execution test requires amd64 or Rosetta")
-	}
-	llc, clang, ok := findLlcAndClang(t)
-	if !ok {
-		t.Fatal("LLVM 22 llc/clang not found")
-	}
 	const source = `TEXT foursourcesemantics(SB),NOSPLIT,$0-24
 	MOVQ in+0(FP), AX
 	MOVQ out+8(FP), BX
@@ -170,40 +153,6 @@ TEXT foursourcefaultsuppression(SB),NOSPLIT,$0-24
 	VMOVUPS Z5, 80(BX)
 	RET
 `
-	file, err := Parse(ArchAMD64, source)
-	if err != nil {
-		t.Fatal(err)
-	}
-	triple := testTargetTriple(runtime.GOOS, runtime.GOARCH)
-	var runPrefix []string
-	if crossRosetta {
-		triple = "x86_64-apple-macosx"
-		runPrefix = []string{"/usr/bin/arch", "-x86_64"}
-	}
-	ir, err := Translate(file, Options{
-		Goarch: "amd64", TargetTriple: triple,
-		Sigs: map[string]FuncSig{
-			"foursourcesemantics": {
-				Name: "foursourcesemantics", Args: []LLVMType{Ptr, Ptr, I64}, Ret: Void,
-				Frame: FrameLayout{Params: []FrameSlot{
-					{Offset: 0, Type: Ptr, Index: 0, Field: -1},
-					{Offset: 8, Type: Ptr, Index: 1, Field: -1},
-					{Offset: 16, Type: I64, Index: 2, Field: -1},
-				}},
-			},
-			"foursourcefaultsuppression": {
-				Name: "foursourcefaultsuppression", Args: []LLVMType{Ptr, Ptr, I64}, Ret: Void,
-				Frame: FrameLayout{Params: []FrameSlot{
-					{Offset: 0, Type: Ptr, Index: 0, Field: -1},
-					{Offset: 8, Type: Ptr, Index: 1, Field: -1},
-					{Offset: 16, Type: I64, Index: 2, Field: -1},
-				}},
-			},
-		},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
 	const mainC = `
 #include <limits.h>
 #include <stdint.h>
@@ -238,5 +187,5 @@ int main(void) {
 	return 0;
 }
 `
-	compileAndRunRuntimeTestForTarget(t, llc, clang, "four_source_semantics", triple, ir, mainC, runPrefix)
+	x86FourSourceOriginalMathCompanion(t, source, mainC)
 }
