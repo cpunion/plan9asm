@@ -176,18 +176,10 @@ func TestX86RawMULXReportedEncoding(t *testing.T) {
 	BYTE $0xf6
 	RET
 `
-	file, err := Parse(ArchAMD64, source)
-	if err != nil {
-		t.Fatal(err)
-	}
-	ir, err := Translate(file, Options{
-		Goarch:       "amd64",
-		TargetTriple: "x86_64-unknown-linux-gnu",
-		Sigs:         map[string]FuncSig{"rawMULX": {Name: "rawMULX", Ret: Void}},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	// These original bytes have no R14/DX producers. Keep the complete Go
+	// encoding and private LLVM format object, not a fictitious public entry.
+	ir := x86MULXOriginalFormatObject(t, source, "amd64", "x86_64-unknown-linux-gnu",
+		[]string{"MULXQ R14,BX,R14"})
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc not found")
@@ -203,6 +195,7 @@ func TestX86RawMULXCompleteGoAssemblerForms(t *testing.T) {
 		goarch string
 		triple string
 		forms  [][]byte
+		rows   []string
 	}{
 		{
 			goarch: "amd64",
@@ -214,6 +207,11 @@ func TestX86RawMULXCompleteGoAssemblerForms(t *testing.T) {
 				{0xc4, 0xe2, 0x6b, 0xf6, 0x5c, 0x48, 0x08},                   // MULXL 8(AX)(CX*2), DX, BX
 				{0xc4, 0xe2, 0xfb, 0xf6, 0x0c, 0x25, 0x78, 0x56, 0x34, 0x12}, // MULXQ 0x12345678, AX, CX
 			},
+			rows: []string{
+				"MULXQ R14,BX,R14", "MULXL R14,R8,R15",
+				"MULXQ 16(AX)(R9*4),R10,R11", "MULXL 8(AX)(CX*2),DX,BX",
+				"MULXQ 0x12345678,AX,CX",
+			},
 		},
 		{
 			goarch: "386",
@@ -223,6 +221,7 @@ func TestX86RawMULXCompleteGoAssemblerForms(t *testing.T) {
 				{0xc4, 0xe2, 0x6b, 0xf6, 0x5c, 0x48, 0x08},             // MULXL 8(AX)(CX*2), DX, BX
 				{0xc4, 0xe2, 0x7b, 0xf6, 0x0d, 0x78, 0x56, 0x34, 0x12}, // MULXL 0x12345678, AX, CX
 			},
+			rows: []string{"MULXL AX,CX,DX", "MULXL 8(AX)(CX*2),DX,BX", "MULXL 0x12345678,AX,CX"},
 		},
 	}
 	llc := findLLVM22Tool("llc")
@@ -232,7 +231,6 @@ func TestX86RawMULXCompleteGoAssemblerForms(t *testing.T) {
 	for _, target := range targets {
 		t.Run(target.goarch, func(t *testing.T) {
 			var source strings.Builder
-			sigs := make(map[string]FuncSig)
 			for i, encoding := range target.forms {
 				name := fmt.Sprintf("rawMULX_%d", i)
 				fmt.Fprintf(&source, "TEXT %s(SB), NOSPLIT, $0-0\n", name)
@@ -240,16 +238,10 @@ func TestX86RawMULXCompleteGoAssemblerForms(t *testing.T) {
 					fmt.Fprintf(&source, "\tBYTE $%#02x\n", value)
 				}
 				source.WriteString("\tRET\n")
-				sigs[name] = FuncSig{Name: name, Ret: Void}
 			}
-			file, err := Parse(ArchAMD64, source.String())
-			if err != nil {
-				t.Fatal(err)
-			}
-			ir, err := Translate(file, Options{Goarch: target.goarch, TargetTriple: target.triple, Sigs: sigs})
-			if err != nil {
-				t.Fatal(err)
-			}
+			// The absolute-address rows remain unbound formats. They cannot
+			// borrow a numerical pointer, DX or a raw-entry permission.
+			ir := x86MULXOriginalFormatObject(t, source.String(), target.goarch, target.triple, target.rows)
 			compileLLVMToObject(t, llc, target.triple, "raw-mulx-forms.ll", "raw-mulx-forms.o", ir)
 		})
 	}
