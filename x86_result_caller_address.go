@@ -72,7 +72,7 @@ func x86ResultCallerAddressesAfter(ins Instr, before [16]bool, entryFP map[int64
 	if x86RawPermute128Source(ins, arch) {
 		return before // Retain existing identities without creating a GP/pointee fact.
 	}
-	if x86RawScalarPrecisionSource(ins, arch) {
+	if x86RawScalarPrecisionSource(ins, arch) || x86RawPackedPrecisionSource(ins, arch) {
 		return before // The exact conversion writes X/MXCSR, never a new GP identity.
 	}
 	if x86RawExplicitMaskMoveSource(ins, arch) {

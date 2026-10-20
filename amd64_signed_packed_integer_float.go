@@ -201,6 +201,7 @@ type x86NativePackedConversion struct {
 	destination, mask, lanes                        int
 	mmx, legacy, evex, broadcast, zeroing, sae      bool
 	rounding, mnemonic                              string
+	logicalFPBits                                   int // Explicit owned-value projection, never native FP backing.
 }
 
 func (c *amd64Ctx) emitNativePackedConversion(ins Instr, f x86NativePackedConversion) error {
@@ -234,6 +235,11 @@ func (c *amd64Ctx) emitNativePackedConversion(ins Instr, f x86NativePackedConver
 		}
 		input = "%" + c.newTmp()
 		fmt.Fprintf(c.b, "  %s = bitcast <%d x i8> %s to %s\n", input, f.sourceBytes, bytes, inputType)
+	} else if source.Kind == OpFP && f.logicalFPBits != 0 {
+		input, err = c.loadPackedConversionFPValue(source, f.sourceBytes, f.memoryBytes, f.logicalFPBits, f.broadcast)
+		if err != nil {
+			return err
+		}
 	} else {
 		var pointerType string
 		input, pointerType, _, err = c.packedVectorMemoryPointer(source)
@@ -272,7 +278,7 @@ func (c *amd64Ctx) emitNativePackedConversion(ins Instr, f x86NativePackedConver
 	if f.sae {
 		assembly += "{sae}, "
 	}
-	if f.broadcast {
+	if f.broadcast && source.Kind != OpFP {
 		inputTemplate += fmt.Sprintf(" {1to%d}", f.lanes)
 	}
 	assembly += inputTemplate + ", $0"

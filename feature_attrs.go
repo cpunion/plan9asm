@@ -90,6 +90,19 @@ func inferFuncTargetFeaturesForGOARCH(arch Arch, goarch string, fn Func) string 
 					add("+avx")
 				}
 			}
+			if form, known, err := x86PackedPrecisionProperties(ins.Op, ins, moveArch); known && err == nil {
+				switch {
+				case form.spec.legacy:
+					add("+sse2")
+				case form.evex:
+					add("+avx512f")
+					if form.shape.sourceBytes < 64 && form.shape.destinationBytes < 64 {
+						add("+avx512vl")
+					}
+				default:
+					add("+avx")
+				}
+			}
 			if _, known, err := x86UnsignedIntegerFloatProperties(ins, moveArch); known && err == nil {
 				add("+avx512f") // Scalar unsigned EVEX needs F, not packed narrow VL.
 			}

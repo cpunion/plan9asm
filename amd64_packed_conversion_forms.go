@@ -59,12 +59,18 @@ type x86PackedConversionForm struct {
 // This grammar supplies widths, not a native frame, caller, pointee or MMX/x87
 // certificate. Memory consumers must independently retain those boundaries.
 func x86PackedConversionProperties(ins Instr, arch string) (x86PackedConversionForm, bool, error) {
-	base, suffix, _ := strings.Cut(strings.ToUpper(string(ins.Op)), ".")
+	base, _, _ := strings.Cut(strings.ToUpper(string(ins.Op)), ".")
 	spec, known := x86PackedConversionSpecification(Op(base))
-	f := x86PackedConversionForm{spec: spec, destination: len(ins.Args) - 1, memory: -1, mask: -1}
 	if !known {
-		return f, false, nil
+		return x86PackedConversionForm{}, false, nil
 	}
+	return x86PackedConversionOperandProperties(ins, arch, spec)
+}
+
+// Share operand axes, not a family namespace, source proof or caller registry.
+func x86PackedConversionOperandProperties(ins Instr, arch string, spec x86PackedConversionSpec) (x86PackedConversionForm, bool, error) {
+	_, suffix, _ := strings.Cut(strings.ToUpper(string(ins.Op)), ".")
+	f := x86PackedConversionForm{spec: spec, destination: len(ins.Args) - 1, memory: -1, mask: -1}
 	fail := func() (x86PackedConversionForm, bool, error) {
 		return f, true, fmt.Errorf("%s %s outside packed numeric conversion grammar: %q", arch, ins.Op, ins.Raw)
 	}
