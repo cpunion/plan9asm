@@ -41,17 +41,13 @@ func TestTranslateRawVEXFMA3WeaviateRegression(t *testing.T) {
 	LONG $0x985de2c4; BYTE $0x1e
 	RET
 `
-	file, err := Parse(ArchAMD64, source)
-	if err != nil {
-		t.Fatal(err)
-	}
-	ir, err := Translate(file, Options{Goarch: "amd64", TargetTriple: "x86_64-unknown-linux-gnu", Sigs: map[string]FuncSig{"rawFMA": {Name: "rawFMA", Ret: Void}}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(ir, "@llvm.fma.v8f32") {
-		t.Fatalf("raw VFMADD132PS lowering omitted vector FMA:\n%s", ir)
-	}
+	// The complete original lacks its SI address and Y3/Y4 producers. Keep
+	// its actual Go object and all three public Context results. This private
+	// emitter object is not initialized public translation or native execution;
+	// TestX86RawFMA3OriginalWeaviateInputsAndInitializedCounterparts owns that
+	// independent, genuinely initialized public object matrix.
+	ir := x86UnboundVoidRawScalarFormatObject(t, source, "amd64", "x86_64-unknown-linux-gnu")
+	x86RawFMA3RequireOriginalNativeFormat(t, ir, "vfmadd132ps", 32, 32, false)
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc not found")
@@ -64,22 +60,47 @@ func TestTranslateRawEVEXFMA3WeaviateRegression(t *testing.T) {
 	LONG $0x4835d262; WORD $0xc9b8
 	RET
 `
-	file, err := Parse(ArchAMD64, source)
-	if err != nil {
-		t.Fatal(err)
-	}
-	ir, err := Translate(file, Options{Goarch: "amd64", TargetTriple: "x86_64-unknown-linux-gnu", Sigs: map[string]FuncSig{"rawFMAEVEX": {Name: "rawFMAEVEX", Ret: Void}}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(ir, "@llvm.fma.v16f32") {
-		t.Fatalf("raw EVEX VFMADD231PS lowering omitted vector FMA:\n%s", ir)
-	}
+	// Unchanged original bytes have no Z1/Z9 producers. The public Context,
+	// private format object and initialized public counterpart are distinct.
+	ir := x86UnboundVoidRawScalarFormatObject(t, source, "amd64", "x86_64-unknown-linux-gnu")
+	x86RawFMA3RequireOriginalNativeFormat(t, ir, "vfmadd231ps", 64, 0, true)
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc not found")
 	}
 	compileLLVMToObject(t, llc, "x86_64-unknown-linux-gnu", "amd64-raw-evex-fma3.ll", "amd64-raw-evex-fma3.o", ir)
+}
+
+func x86RawFMA3RequireOriginalNativeFormat(t *testing.T, ir, mnemonic string, width, memoryBytes int, evex bool) {
+	t.Helper()
+	var native string
+	for _, line := range strings.Split(ir, "\n") {
+		if strings.Contains(line, "asm sideeffect") && strings.Contains(line, mnemonic+" ") {
+			if native != "" {
+				t.Fatal("original format duplicated its native FMA opcode", mnemonic)
+			}
+			native = line
+		}
+		if strings.Contains(line, "call ") && strings.Contains(line, "@llvm.fma.") {
+			t.Fatal("original native FMA format was replaced by pure arithmetic", mnemonic, line)
+		}
+	}
+	constraint := "=x,0,"
+	if evex {
+		constraint = "=v,0,"
+	}
+	if native == "" || !strings.Contains(native, fmt.Sprintf("<%d x float> asm sideeffect", width/4)) ||
+		!strings.Contains(native, "\""+constraint) || !strings.Contains(native, "~{fpsr}") ||
+		!strings.Contains(native, "~{memory}") || strings.Contains(native, "~{flags}") {
+		t.Fatal("original native FMA lost physical carrier, tied old destination, FP/access effects or FLAGS preservation", mnemonic, native)
+	}
+	if memoryBytes != 0 {
+		if !strings.Contains(native, fmt.Sprintf("elementtype([%d x i8])", memoryBytes)) || !strings.Contains(native, ",*m") {
+			t.Fatal("original native FMA lost its exact memory tuple", mnemonic, native)
+		}
+	} else if strings.Contains(native, "elementtype(") || strings.Contains(native, ",*m") {
+		t.Fatal("original register FMA invented a memory operand", mnemonic, native)
+	}
 }
 
 func TestDecodedX86VEXFMA3CompleteRegisterFamily(t *testing.T) {
@@ -220,8 +241,33 @@ func TestDecodedX86EVEXFMA3ModifiersAndMemory(t *testing.T) {
 	}
 
 	mode32 := encodeX86EVEXFMA3(0x98, false, 0, false, false, 1, 0, 0, 0)
-	if _, _, ok, err := decodedX86VEXFMA3Instruction(mode32, 32); !ok || err == nil {
-		t.Fatalf("masked EVEX form in 32-bit mode returned ok=%v err=%v", ok, err)
+	got, length, ok, err := decodedX86VEXFMA3Instruction(mode32, 32)
+	if !ok || err != nil || length != len(mode32) || got.Op != "VFMADD132PS" || len(got.Args) != 4 ||
+		got.x86FMA3Encoding != x86RawFMA3EVEX || got.x86Encoded {
+		t.Fatalf("valid physical mode32 masked EVEX lost its complete decode/generation: %+v length=%d ok=%v err=%v", got, length, ok, err)
+	}
+	for index, want := range []string{"X0", "X0", "K1", "X0"} {
+		if got.Args[index].Kind != OpReg || got.Args[index].String() != want {
+			t.Fatal("physical mode32 masked EVEX changed an original register/mask operand", index, got.Args)
+		}
+	}
+	// Physical low-bank EVEX validity does not authorize unaddressable mode32
+	// banks. Exercise each source/destination extension independently.
+	for _, registers := range [][3]int{{8, 0, 0}, {0, 8, 0}, {0, 0, 8}, {16, 0, 0}, {0, 16, 0}, {0, 0, 16}} {
+		extended := encodeX86EVEXFMA3(0x98, false, 0, false, false, 1,
+			registers[0], registers[1], registers[2])
+		if _, _, matched, decodeErr := decodedX86VEXFMA3Instruction(extended, 32); !matched || decodeErr == nil ||
+			!strings.Contains(decodeErr.Error(), "extended register in 32-bit mode") {
+			t.Fatalf("physical mode32 extended-bank form %v returned ok=%v err=%v", registers, matched, decodeErr)
+		}
+	}
+	// Go's named four-operand mode32 grammar remains a distinct restriction.
+	// Require an actual normal assembler rejection as well as the typed guard;
+	// raw physical acceptance must not silently widen that named grammar.
+	const named = "TEXT named386(SB),4,$0-0\nVFMADD132PS X0,X0,K1,X0\nRET\n"
+	goAssemblerOracleOutput(t, "386", named, "", false)
+	if _, known, err := amd64FMA3Properties(x86ScalarLaneInstruction(t, "VFMADD132PS X0,X0,K1,X0"), "386"); !known || err == nil {
+		t.Fatal("raw physical acceptance widened Go's named mode32 mask grammar", known, err)
 	}
 }
 
