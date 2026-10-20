@@ -1,6 +1,6 @@
 # PR 40: current checkpoint
 
-Updated 2026-10-20. Implementation handoff: `5529f23d3`. This is not a
+Updated 2026-10-20. Implementation handoff: `dccc7ddd5`. This is not a
 current-head completion certificate. Preserve ignored failed evidence and
 read [instruction contracts](instructions.md) and [validation](validation.md).
 
@@ -23,10 +23,17 @@ reviewer approval; orphaned-IR and symlink-include regressions remain required.
 ## Online evidence is not yet qualified
 
 [39379754007](https://github.com/cpunion/plan9asm/actions/runs/39379754007)
-is the active run at `a530a1688`. Let it finish naturally; do not cancel,
-supersede or rerun unfinished owners. Its actual SDK source artifact has all
-141 roots passing, with zero failure, skip or missing observations. This
-closes the earlier source-budget fixture failure, not the whole CI run.
+finished naturally at `a530a1688`: 89 successful and 25 failed jobs, with
+none cancelled or skipped. Both complete CLI gates and all 58 priority SDK
+lanes passed. The complete Windows root inventory is 7,903 roots: 7,571 pass,
+60 fail and 272 explicit host skips, zero absent/incomplete, each owned once.
+The skips are 237 ARM64, 23 ARM and 12 required Linux-x86 counterparts, not
+missing-tool exemptions. The root and diagnostic aggregates correctly fail.
+The ignored `root-union-outcomes-audit.json` joins all sixteen owners to raw
+events and unchanged complete source/tool/environment observations. Its only
+registered environment normalization is the actual Go build-directory nonce
+in GOGCCFLAGS; PATH remains strict. Do not subtract local repairs below from
+these online failures or combine different heads into a coverage percentage.
 
 All four native reduction owners and their aggregate passed. Native conversion
 owners 1 and 4 passed on their actual allocations; owners 0, 2, 3, 5, 6 and 7
@@ -46,14 +53,13 @@ A separate final qualification still requires all nine and complete Windows to
 succeed. Failure, cancellation, skip or missing observations cannot qualify.
 Diagnostic scheduling does not weaken the final gate.
 
-The last complete main-module inventory is still
+The preceding complete main-module inventory is
 [39285088077](https://github.com/cpunion/plan9asm/actions/runs/39285088077) at
 `47e44aa7d`: 7,379 roots = 7,063 pass + 52 fail + 264 explicit host skips,
 zero absent/incomplete, each owned exactly once. Its jobs were 83 pass and
 16 fail; both complete CLI modules passed. The ignored
 `ci392850/root-union-outcomes-audit.json` binds that inventory to raw events.
-Do not subtract local repairs from its 52 failures or combine different heads
-into a new whole-suite coverage percentage.
+This older inventory does not qualify later code.
 
 ## Recent focused local evidence
 
@@ -65,6 +71,13 @@ differ. Older qualifications remain in earlier Git checkpoints.
 
 | Snapshot | Independent local scope | Limits |
 |---|---|---|
+| `3cc0ff5cf` | Complete raw ABS literal family: 13 / 484 on current Go | Independent 66 physical cases, actual LLVM decoding, every-byte/mask/identity negatives and three-API literal objects; minimum/race and original native execution remain separate |
+| `d4d0d8519` | Five original unbound format drivers and initialized controls: 11 / 270 current | Original Go bytes and public Context retained; private format objects are not initialized public programs |
+| `3f5e0bb26` | Logical-FP DIV/IDIV and existing arithmetic: 23 / 2,656 current | Exact inputs and native division effects; new AMD64/386 original-value/fault owners await CI execution |
+| `153f85f78` (integrated at `c56a9f3aa`) | Current-SDK text identity and existing observers: 12 / 276 current | Actual independent Go archive kind/ABI priors; same-name mixed-kind collisions stay rejected, raw/historical ownership unchanged |
+| `60b691f35` | Complete legacy scalar native stores: 9 / 991 current | Exact volatile m32/m64 stores, unknown-input boundaries and portable values/faults; original x86 execution remains separate |
+| `e3e24a9af` | Complete original vector-move formats and initialized controls: 15 / 141 current | Five-target objects preserve original Go rows, including architectural faults; no source-input exemption |
+| `a951f91b6` | Variable blend/minpos typed inputs and original initialized objects: 10 / 678 current | Core qualification only. Legacy alignment native faults, corrected private mathematical driver and six old format drivers remain in progress |
 | `5529f23d3` | Complete original SDK field-multiply and MathExp CLI sources compile to LLVM22 objects | Actual stock-Go archive priors, unchanged whole assembly and complete seals; not native execution or a full benchmark |
 | `59fb59445` | Complete implicit/explicit multiply: 34 / 4,296 on current Go, actual Go1.20 and race | Exact native reads, CF/OF, all-byte masks, negative authority controls and five-target three-API objects. The 35th original-x86 runtime root requires a real x86 host, not a local pass |
 | `f6a73b3e3` | Native fixture source/layout controls: 6 / 42 on current Go, actual Go1.20 and race | Actual Go assembler/object and asmdecl priors, all return widths, 386/AMD64 ABI0 slots, complete SETOS source and defined AF seed; repaired original programs still need CI execution |
