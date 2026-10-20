@@ -259,7 +259,10 @@ func (c *amd64Ctx) emitReduceResult(laneBits int, sourceBits, finiteRoundedBits,
 	fmt.Fprintf(c.b, "  %%%s = bitcast i%d %%%s to %s\n", sourceFloat, laneBits, safeSourceBits, floatType)
 	fmt.Fprintf(c.b, "  %%%s = bitcast i%d %%%s to %s\n", roundedFloat, laneBits, safeRoundedBits, floatType)
 	reducedFloat, reducedBits := c.newTmp(), c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = fsub %s %%%s, %%%s\n", reducedFloat, floatType, sourceFloat, roundedFloat)
+	// REDUCE's final subtraction obeys the selected immediate/MXCSR RC too.
+	// Its source has already undergone DAZ preprocessing; the exact helper
+	// must not apply the host's ambient rounding or flush its tiny result.
+	fmt.Fprintf(c.b, "  %%%s = call %s @__plan9asm_add_sub_round_f%d(%s %%%s, %s %%%s, i1 true, i32 %s, i32 0)\n", reducedFloat, floatType, laneBits, floatType, sourceFloat, floatType, roundedFloat, roundingMode)
 	fmt.Fprintf(c.b, "  %%%s = bitcast %s %%%s to i%d\n", reducedBits, floatType, reducedFloat, laneBits)
 	reducedMagnitude, reducedZero := c.newTmp(), c.newTmp()
 	fmt.Fprintf(c.b, "  %%%s = and i%d %%%s, %d\n", reducedMagnitude, laneBits, reducedBits, signBit-1)
