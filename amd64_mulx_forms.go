@@ -122,15 +122,21 @@ func (c *amd64Ctx) lowerMULX(op Op, ins Instr) (bool, bool, error) {
 			return true, false, err
 		}
 	}
+	return true, false, c.emitMULX(form, ins)
+}
+
+// Emission consumes already validated operands; it supplies no numerical,
+// address or entry permission. The public lowerer retains those checks above.
+func (c *amd64Ctx) emitMULX(form x86MULXForm, ins Instr) error {
 	narrow := amd64IntegerTypeForBits(form.bits)
 	wide := x86ScalarMultiplyDivideWideType(form.bits)
 	source, err := c.evalSizedNativeGPSource(form.source, narrow, ins.x86AddressBits)
 	if err != nil {
-		return true, false, err
+		return err
 	}
 	dx, err := c.evalIntSized(Operand{Kind: OpReg, Reg: DX}, narrow)
 	if err != nil {
-		return true, false, err
+		return err
 	}
 	lhs := c.extendX86MulDivValue(dx, narrow, wide, false)
 	rhs := c.extendX86MulDivValue(source, narrow, wide, false)
@@ -140,7 +146,7 @@ func (c *amd64Ctx) lowerMULX(op Op, ins Instr) (bool, bool, error) {
 	fmt.Fprintf(c.b, "  %%%s = lshr %s %%%s, %d\n", shifted, wide, product, form.bits)
 	fmt.Fprintf(c.b, "  %%%s = trunc %s %%%s to %s\n", high, wide, shifted, narrow)
 	if err := c.storeRegSized(form.low.Reg, narrow, "%"+low); err != nil {
-		return true, false, err
+		return err
 	}
-	return true, false, c.storeRegSized(form.high.Reg, narrow, "%"+high)
+	return c.storeRegSized(form.high.Reg, narrow, "%"+high)
 }
