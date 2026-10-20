@@ -272,20 +272,11 @@ func TestTranslateX86RawInLaneFloatingPermuteTargets(t *testing.T) {
 				}
 			}
 			source.WriteString("\tRET\n")
-			file, err := Parse(ArchAMD64, source.String())
-			if err != nil {
-				t.Fatal(err)
+			physical, contextual := 8, 0
+			if target.goarch == "386" {
+				physical, contextual = 6, 2
 			}
-			ll, err := Translate(file, Options{
-				TargetTriple: target.triple,
-				Goarch:       target.goarch,
-				Sigs: map[string]FuncSig{
-					"raw_in_lane_floating_permute": {Name: "raw_in_lane_floating_permute", Ret: Void},
-				},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			ll := x86InLanePermuteUnboundFormatObject(t, source.String(), target.goarch, target.triple, physical, contextual)
 			compileLLVMToObject(t, llc, target.triple, "raw-in-lane-floating-permute-"+target.name+".ll", "raw-in-lane-floating-permute-"+target.name+".o", ll)
 		})
 	}

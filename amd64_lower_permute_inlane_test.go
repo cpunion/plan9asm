@@ -51,20 +51,11 @@ func TestTranslateX86InLaneFloatingPermuteCompleteGoAssemblerForms(t *testing.T)
 			}
 			src.WriteString("\tRET\n")
 
-			file, err := Parse(ArchAMD64, src.String())
-			if err != nil {
-				t.Fatal(err)
+			physical, contextual := 52, 0
+			if target.goarch == "386" {
+				physical, contextual = 20, 8
 			}
-			ll, err := Translate(file, Options{
-				TargetTriple: target.triple,
-				Goarch:       target.goarch,
-				Sigs: map[string]FuncSig{
-					"inlanefloatingpermuteforms": {Name: "inlanefloatingpermuteforms", Ret: Void},
-				},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			ll := x86InLanePermuteUnboundFormatObject(t, src.String(), target.goarch, target.triple, physical, contextual)
 			llc := findLLVM22Tool("llc")
 			if llc == "" {
 				t.Fatal("LLVM 22 llc not found")
