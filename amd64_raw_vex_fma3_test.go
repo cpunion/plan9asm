@@ -241,8 +241,33 @@ func TestDecodedX86EVEXFMA3ModifiersAndMemory(t *testing.T) {
 	}
 
 	mode32 := encodeX86EVEXFMA3(0x98, false, 0, false, false, 1, 0, 0, 0)
-	if _, _, ok, err := decodedX86VEXFMA3Instruction(mode32, 32); !ok || err == nil {
-		t.Fatalf("masked EVEX form in 32-bit mode returned ok=%v err=%v", ok, err)
+	got, length, ok, err := decodedX86VEXFMA3Instruction(mode32, 32)
+	if !ok || err != nil || length != len(mode32) || got.Op != "VFMADD132PS" || len(got.Args) != 4 ||
+		got.x86FMA3Encoding != x86RawFMA3EVEX || got.x86Encoded {
+		t.Fatalf("valid physical mode32 masked EVEX lost its complete decode/generation: %+v length=%d ok=%v err=%v", got, length, ok, err)
+	}
+	for index, want := range []string{"X0", "X0", "K1", "X0"} {
+		if got.Args[index].Kind != OpReg || got.Args[index].String() != want {
+			t.Fatal("physical mode32 masked EVEX changed an original register/mask operand", index, got.Args)
+		}
+	}
+	// Physical low-bank EVEX validity does not authorize unaddressable mode32
+	// banks. Exercise each source/destination extension independently.
+	for _, registers := range [][3]int{{8, 0, 0}, {0, 8, 0}, {0, 0, 8}, {16, 0, 0}, {0, 16, 0}, {0, 0, 16}} {
+		extended := encodeX86EVEXFMA3(0x98, false, 0, false, false, 1,
+			registers[0], registers[1], registers[2])
+		if _, _, matched, decodeErr := decodedX86VEXFMA3Instruction(extended, 32); !matched || decodeErr == nil ||
+			!strings.Contains(decodeErr.Error(), "extended register in 32-bit mode") {
+			t.Fatalf("physical mode32 extended-bank form %v returned ok=%v err=%v", registers, matched, decodeErr)
+		}
+	}
+	// Go's named four-operand mode32 grammar remains a distinct restriction.
+	// Require an actual normal assembler rejection as well as the typed guard;
+	// raw physical acceptance must not silently widen that named grammar.
+	const named = "TEXT named386(SB),4,$0-0\nVFMADD132PS X0,X0,K1,X0\nRET\n"
+	goAssemblerOracleOutput(t, "386", named, "", false)
+	if _, known, err := amd64FMA3Properties(x86ScalarLaneInstruction(t, "VFMADD132PS X0,X0,K1,X0"), "386"); !known || err == nil {
+		t.Fatal("raw physical acceptance widened Go's named mode32 mask grammar", known, err)
 	}
 }
 
