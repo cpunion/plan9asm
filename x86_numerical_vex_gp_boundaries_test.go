@@ -209,15 +209,36 @@ func TestX86NumericalVEXGPRIPIsOnlyPhysicalBoundary(t *testing.T) {
 				})
 			}
 		}
-		t.Run(family.stem+"/no-NUM-or-source-DATA", func(t *testing.T) {
+		t.Run(family.stem+"/owned-DATA-versus-missing-pointer", func(t *testing.T) {
 			source := "TEXT ·Value(SB),4,$0-0\n" + x86NumericalVEXGPRow(family.stem, "Q", "table(SB)") + "\nRET\n" +
 				"DATA table+0(SB)/8,$7\nGLOBL table(SB),8,$8\n"
-			x86LEAActualTargetGoObject(t, "amd64", "x86_64-unknown-linux-gnu", source)
-			for _, api := range []string{"text", "module", "Go"} {
-				ir, err := x86ScalarFPBitViewAPI(t, source, "func Value()", "amd64", "x86_64-unknown-linux-gnu", api)
-				if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
-					t.Fatal("whole boundary observation invented missing GP/NUM or DATA permission", api, err)
-				}
+			// This complete DATA was already a legitimate source before the
+			// physical observer existed. BLS/RORX need no extra GP operand;
+			// ordinary nontrapping MULX may leave its dead result unknown.
+			// The other families still lack their explicit CX control/source.
+			ownedAccepted := strings.HasPrefix(family.stem, "BLS") || family.stem == "MULX" || family.stem == "RORX"
+			for _, control := range []struct {
+				name, source string
+				accepted     bool
+			}{
+				{"original-owned-DATA", source, ownedAccepted},
+				// Change only the instruction's address. The unrelated original
+				// DATA cannot supply BX: this exact func Value() has no pointer.
+				{"missing-BX-pointer", strings.Replace(source, "table(SB)", "(BX)", 1), false},
+			} {
+				t.Run(control.name, func(t *testing.T) {
+					x86LEAActualTargetGoObject(t, "amd64", "x86_64-unknown-linux-gnu", control.source)
+					for _, api := range []string{"text", "module", "Go"} {
+						ir, err := x86ScalarFPBitViewAPI(t, control.source, "func Value()", "amd64", "x86_64-unknown-linux-gnu", api)
+						if control.accepted {
+							if err != nil || ir == "" {
+								t.Fatal("ordinary owned DATA lost its independent preexisting source role", api, err)
+							}
+						} else if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+							t.Fatal("physical boundary or unrelated DATA invented a missing GP/pointer input", api, err)
+						}
+					}
+				})
 			}
 		})
 	}
