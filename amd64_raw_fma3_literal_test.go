@@ -169,9 +169,25 @@ func TestTranslateX86RawFMA3RIPDataObjects(t *testing.T) {
 		"x86_64-apple-darwin", "x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc",
 	} {
 		t.Run(triple, func(t *testing.T) {
-			ir, err := Translate(file, Options{Goarch: "amd64", TargetTriple: triple, Sigs: sigs})
-			if err != nil {
-				t.Fatal(err)
+			// Preserve the entire original raw RET and DATA directory as actual
+			// Go objects plus three-API Context: it has no vector/mask inputs.
+			// TestX86RawFMA3InitializedRIPWholeSourceAndRawReturn separately
+			// owns all 60 genuinely initialized public RIP counterparts.
+			x86UnboundVoidFormatSources(t, source.String(), "amd64", triple)
+			ir := x86ScalarFormatObjectUnit(t, normalized, sigs, "amd64", triple, 0)
+			for _, function := range normalized.Funcs {
+				for _, instruction := range function.Instrs {
+					form, known, err := amd64FMA3Properties(instruction, "amd64")
+					if !known {
+						continue
+					}
+					if err != nil {
+						t.Fatal("original RIP format lost its physical operand grammar", err)
+					}
+					mnemonic, _, _ := strings.Cut(strings.ToLower(string(instruction.Op)), ".")
+					x86RawFMA3RequireOriginalNativeFormat(t, ir, mnemonic, form.byteWidth, form.memoryBytes,
+						x86FMA3NativeEVEX(instruction, form))
+				}
 			}
 			compileLLVMToObject(t, llc, triple, "fma3-literal.ll", "fma3-literal.o", ir)
 		})
