@@ -6,7 +6,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"go/ast"
 	"go/parser"
@@ -357,8 +356,10 @@ func TestGoSDKASMGeneratedFloatPoolWholeFamilyObservation(t *testing.T) {
 					t.Fatal("generated float pools replaced whole objects, explicit DATA or FUNCDATA roles")
 				}
 				asmGeneratedFloatPoolMetadataControls(t, observation.Sources[0], cases)
-				if images, err := ReadonlyLiteralDataInitializers(observation); !errors.Is(err, ErrContext) || images != nil {
-					t.Fatal("a generated-pool observation acquired private literal initialization authority", images, err)
+				images, err := ReadonlyLiteralDataInitializers(observation)
+				if err != nil || len(images) != 1 || images[0].Definition.Name != "ordinary" ||
+					!bytes.Equal(images[0].Initial, []byte{0x88, 0x77, 0x66, 0x55, 0x44, 0x33, 0x22, 0x11}) {
+					t.Fatal("generated pools entered the image plan or blocked ordinary private RODATA", images, err)
 				}
 			})
 			t.Run("complete-source-and-binary-guards", func(t *testing.T) {

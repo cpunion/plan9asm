@@ -146,11 +146,20 @@ func generatedASMFuncdataWithTextOrder(source []byte, packagePath string, member
 			}
 		}
 	}
+	if err := validateGeneratedFuncdataReferences(member, definition, owners); err != nil {
+		return nil, err
+	}
+	return []ASMGeneratedFuncdata{*metadata}, nil
+}
+
+// Recheck every use, not only the auxiliary entry selected by one owner. The
+// source observer and pure readonly planner share this closed metadata role.
+func validateGeneratedFuncdataReferences(member ASMDataMember, definition ASMDataDefinition, owners map[int]bool) error {
 	uses := 0
 	for ordinal, text := range member.Texts {
 		for _, relocation := range text.Relocations {
 			if generatedFuncdataReference(definition, relocation.Target) || relocation.Target.Name == definition.Name {
-				return nil, contextError("generated metadata is an ordinary TEXT relocation target")
+				return contextError("generated metadata is an ordinary TEXT relocation target")
 			}
 		}
 		slot := -1
@@ -160,7 +169,7 @@ func generatedASMFuncdataWithTextOrder(source []byte, packagePath string, member
 			}
 			if generatedFuncdataReference(definition, auxiliary.Target) || auxiliary.Target.Name == definition.Name {
 				if auxiliary.Type != 2 || slot != 1 || !owners[ordinal] || !generatedFuncdataReference(definition, auxiliary.Target) {
-					return nil, contextError("generated metadata has an unassociated auxiliary owner or slot")
+					return contextError("generated metadata has an unassociated auxiliary owner or slot")
 				}
 				uses++
 			}
@@ -169,14 +178,14 @@ func generatedASMFuncdataWithTextOrder(source []byte, packagePath string, member
 	for _, data := range member.Definitions {
 		for _, relocation := range data.Relocations {
 			if generatedFuncdataReference(definition, relocation.Target) || relocation.Target.Name == definition.Name {
-				return nil, contextError("generated metadata is an ordinary DATA relocation target")
+				return contextError("generated metadata is an ordinary DATA relocation target")
 			}
 		}
 	}
-	if uses != len(metadata.Owners) {
-		return nil, contextError("generated metadata auxiliary inventory differs from its complete source owners")
+	if uses != len(owners) {
+		return contextError("generated metadata auxiliary inventory differs from its complete source owners")
 	}
-	return []ASMGeneratedFuncdata{*metadata}, nil
+	return nil
 }
 
 func generatedFuncdataSlot(text TextRecord, wanted int) (TextReference, bool) {
