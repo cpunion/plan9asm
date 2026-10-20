@@ -170,14 +170,20 @@ func TestX86InLanePermuteRegisterEffectsPreserveIndependentState(t *testing.T) {
 				if ins.Args[0].Kind == OpImm && source == 0 {
 					continue
 				}
+				hole := 0
+				if ins.Args[0].Kind == OpImm && strings.HasPrefix(row, "VPERMILPD") {
+					// Independent SDM selector: imm8=0x1b has low bits 11,
+					// so both outputs in the first pair read qword one.
+					hole = 8
+				}
 				state = before.clone()
-				state.writeVector(source, 64, state.vectorBytes(source)&^1, false)
+				state.writeVector(source, 64, state.vectorBytes(source)&^(uint64(1)<<uint(hole)), false)
 				initial := state.clone()
 				accepted := x86ResultTransfer(ins, &state, nil, 0, "amd64")
 				width := amd64VectorByteWidth(ins.Args[len(ins.Args)-1].Reg)
 				known := x86CallerVectorByteMask(int64(width))
 				if accepted && state.vectorBytes(2)&known == known || !accepted && !reflect.DeepEqual(state, initial) {
-					t.Fatal("missing data/selector byte became NUM or failed transfer partly mutated state", source)
+					t.Fatal("missing selected data/control byte became NUM or failed transfer partly mutated state", source, hole)
 				}
 			}
 		})
