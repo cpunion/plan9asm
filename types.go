@@ -445,20 +445,6 @@ func isSymbolicImmPlaceholder(s string) bool {
 	return strings.ContainsAny(inner, "+-*/%<>&|^ \t")
 }
 
-func parseImmExpr(v string) (uint64, bool) {
-	// Plan9 asm frequently uses C-style unary "~" for bitwise-not in immediates.
-	// Go expressions use "^", so normalize before parsing.
-	exprText := strings.ReplaceAll(strings.TrimSpace(v), "~", "^")
-	if exprText == "" {
-		return 0, false
-	}
-	expr, err := parser.ParseExpr(exprText)
-	if err != nil {
-		return 0, false
-	}
-	return evalImmExpr(expr)
-}
-
 func parseVectorLengthScaleExpr(v string) (int64, bool) {
 	expr := strings.ToUpper(strings.ReplaceAll(strings.TrimSpace(v), " ", ""))
 	for strings.HasPrefix(expr, "(") && strings.HasSuffix(expr, ")") {
@@ -554,102 +540,6 @@ func evalFloatExpr(e ast.Expr) (float64, bool) {
 				return 0, false
 			}
 			return lv / rv, true
-		default:
-			return 0, false
-		}
-	default:
-		return 0, false
-	}
-}
-
-func evalImmExpr(e ast.Expr) (uint64, bool) {
-	switch x := e.(type) {
-	case *ast.ParenExpr:
-		return evalImmExpr(x.X)
-	case *ast.BasicLit:
-		if x.Kind == token.CHAR {
-			if len(x.Value) < 2 || x.Value[0] != '\'' {
-				return 0, false
-			}
-			value, _, tail, err := strconv.UnquoteChar(x.Value[1:], '\'')
-			if err != nil {
-				return 0, false
-			}
-			if tail != "'" {
-				return 0, false
-			}
-			return uint64(value), true
-		}
-		if x.Kind != token.INT {
-			return 0, false
-		}
-		if u, err := strconv.ParseUint(x.Value, 0, 64); err == nil {
-			return u, true
-		}
-		n, err := strconv.ParseInt(x.Value, 0, 64)
-		if err != nil {
-			return 0, false
-		}
-		return uint64(n), true
-	case *ast.UnaryExpr:
-		v, ok := evalImmExpr(x.X)
-		if !ok {
-			return 0, false
-		}
-		switch x.Op {
-		case token.ADD:
-			return v, true
-		case token.SUB:
-			return uint64(0) - v, true
-		case token.XOR:
-			return ^v, true
-		default:
-			return 0, false
-		}
-	case *ast.BinaryExpr:
-		lv, ok := evalImmExpr(x.X)
-		if !ok {
-			return 0, false
-		}
-		rv, ok := evalImmExpr(x.Y)
-		if !ok {
-			return 0, false
-		}
-		switch x.Op {
-		case token.ADD:
-			return lv + rv, true
-		case token.SUB:
-			return lv - rv, true
-		case token.MUL:
-			return lv * rv, true
-		case token.QUO:
-			if rv == 0 {
-				return 0, false
-			}
-			return lv / rv, true
-		case token.REM:
-			if rv == 0 {
-				return 0, false
-			}
-			return lv % rv, true
-		case token.SHL:
-			if rv >= 64 {
-				return 0, true
-			}
-			return lv << rv, true
-		case token.SHR:
-			if rv >= 64 {
-				return 0, true
-			}
-			return lv >> rv, true
-		case token.AND:
-			return lv & rv, true
-		case token.OR:
-			return lv | rv, true
-		case token.XOR:
-			return lv ^ rv, true
-		case token.AND_NOT:
-			return lv &^ rv, true
 		default:
 			return 0, false
 		}
