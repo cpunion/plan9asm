@@ -101,3 +101,35 @@ func TestGoX86NumericalNativeListingUnknownOwnersFailClosed(t *testing.T) {
 		})
 	}
 }
+
+func TestGoX86NumericalNativeListingTruncatedNonTextCannotBorrowOwner(t *testing.T) {
+	const text = "sample.first STEXT nosplit asm size=1 align=0x0 args=0x0 locals=0x0 funcid=0x0\n"
+	for name, header := range map[string]string{
+		"rodata":       "sample.data SRODATA",
+		"data":         "sample.data SDATA align=0x1",
+		"bss":          "sample.data SNOPTRBSS dupok",
+		"unknown-kind": "sample.future SFUTURE",
+		"foreign-kind": "sample.future MYSTERY",
+	} {
+		for _, previous := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/previous=%t", name, previous), func(t *testing.T) {
+				prefix := ""
+				if previous {
+					prefix = text + numericalListingKindTestRow
+				}
+				listing := prefix + header + "\n" + numericalListingKindTestRow
+				if rows, err := numericalListingRows([]byte(listing)); rows != nil || !errors.Is(err, ErrProbeNeedsContext) {
+					t.Fatal("truncated non-text header borrowed the preceding native owner", header, rows, err)
+				}
+			})
+		}
+	}
+	// A real non-text display has data bytes, not Prog rows. It terminates the
+	// previous body without preventing a later complete TEXT from owning PCs.
+	listing := text + numericalListingKindTestRow + "sample.data SRODATA size=1 align=0x1\n\t0x0000 00 .\n" +
+		strings.Replace(text, "sample.first", "sample.second", 1) + numericalListingKindTestRow
+	if rows, err := numericalListingRows([]byte(listing)); err != nil || len(rows) != 2 ||
+		len(rows["sample.first"][0]) != 1 || len(rows["sample.second"][0]) != 1 {
+		t.Fatal("non-text display changed the two independent native body owners", rows, err)
+	}
+}
