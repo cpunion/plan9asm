@@ -118,7 +118,9 @@ read/write roles. Capture both inputs before either output, zero-extend L
 results, and preserve FLAGS/DF and unrelated private/caller state. Native
 reads retain exact volatile widths even for Void. Exact raw continuations
 require complete immutable producer replay; a decoder origin is not NUM or
-backing. Physical SP/AMD64 BP outputs need their separate whole-source role.
+backing. Physical SP/AMD64 BP outputs and effective memory base/index sources
+need their separate whole-source role; virtual stack storage is not native
+backing. Go386's ignored static-SB base annotation remains a different role.
 Preserve ordinary owned-DATA dead-register controls. Mode32 WIG observation
 does not grant an ordinary qword entry. Keep uninitialized original formats
 as actual Go/LLVM objects plus public Context, separately from initialized

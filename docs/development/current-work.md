@@ -1,6 +1,7 @@
 # PR 40: current checkpoint
 
-Updated 2026-10-20. Implementation handoff: `b8ffd18eb`. This is not a
+Updated 2026-10-20. Implementation handoff: source-storage repair after
+`2547cc6e5`. This is not a
 current-head completion certificate. Preserve ignored failed evidence and
 read [instruction contracts](instructions.md) and [validation](validation.md).
 
@@ -71,6 +72,8 @@ differ. Older qualifications remain in earlier Git checkpoints.
 
 | Snapshot | Independent local scope | Limits |
 |---|---|---|
+| `2fe616991` | Complete MULX/GP/ADX original-format and source contracts: 24 / 714 on current Go and actual Go1.20 | Zero failure/skip and unchanged complete seals. Historical macOS linker warnings retained. The later physical-memory-source repair needs its own complete current/minimum/race replay |
+| `fbdfb33b9` | Fresh sixteen-report official classification comparison after the reviewed baseline update | Zero form, encoder or metric deltas; complete seals unchanged. Not an initialized-program or later-head qualification |
 | `e8c985358` | Complete original MathExp, field and bigmod CLI sources: three roots pass in 218.138 seconds | Original ASM and stock-Go archive priors, LLVM22 objects, zero failure/skip/stderr and unchanged complete seals. Bigmod alone takes 192.1 seconds; neither native execution nor a benchmark performance pass |
 | `376f4f02d` | MULX typed inputs, native reads, five-target objects and original owned DATA: 6 / 427 current, 6.671 seconds | Sixty-four initialized function instances; three APIs and original/O2 IR to backend O0. Exact reads, two outputs and FLAGS obligations, not executed values/faults. Later physical-output and format repairs need the complete current/minimum/race replay |
 | `2e4320f62` | Complete ADX physical boundaries and existing raw/read contracts: 12 / 583 current, 4.233 seconds | Four official rows, 98 actual Go/LLVM physical witnesses, eight RIP priors; no scalar/NUM/source permission. Zero failure/skip/stderr and unchanged complete seals |
@@ -203,10 +206,18 @@ the completion of a single focused scope.
   absent initialized effects; the first six-root GREEN is above. Further
   valid RED covers physical SP/AMD64 BP outputs; the two-line source-obligation
   repair passes those controls in the 24-root attempt at `b8ffd18eb`.
-  That attempt still fails only its new private-format whole-module product
-  count: SIB address multiplication is not a MULX product. Retain all nine
-  original byte formats, all targets, public Context and initialized objects;
-  fix the per-function assertion, then rerun complete current/minimum/race.
+  The private-format assertion failures are repaired separately: SIB address
+  multiplication is not a MULX product, and a private missing DX slot can
+  appear as an exact zero literal in a correctly typed zero extension.
+  All nine original byte formats, targets, public Context controls and
+  initialized objects pass in the 24-root current/minimum receipt above.
+  A further test-only RED at `2547cc6e5` establishes 21 named physical-memory
+  source failures across three APIs; actual Go/LLVM priors, raw controls,
+  incoming-pointer, mode32 BP and owned-DATA positives pass. The minimal
+  candidate sends physical SP/AMD64 BP base/index sources through the existing
+  whole-source proof. Preserve Go386's ignored static-SB base annotation and
+  exact absolute/native accesses; do not invent new Context negatives from
+  the routing predicate alone. Complete 25-root current/minimum/race is pending.
 - Five original GP DATA negatives were already successful before the decoder
   repair; they were invalid negatives, not permission regressions. Keep their
   original owned-DATA controls and thirteen actual missing-BX counterexamples.
@@ -220,7 +231,8 @@ the completion of a single focused scope.
   unrelated metrics remain identical. Only the audited status counters and
   fingerprints update the eight AMD64 baselines. Current Go is 2,390 supported,
   4,346 Context and zero unsupported. Preserve historical Go1.20's one existing
-  unsupported form. Fresh final-head zero-delta replay remains required.
+  unsupported form. Fresh zero-delta replay passes at `fbdfb33b9` above;
+  final integrated-head comparison remains required.
 - Required native hardware remains pending, never a skipped success. The
   original ABS/sign, scalar precision and FMA caller SIGILL failures do not
   establish hardware absence without their own actual-allocation CPU receipt.
