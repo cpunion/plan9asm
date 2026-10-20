@@ -16,6 +16,10 @@ var x86ImplicitMaskMoveOracleNames = []string{
 }
 
 func x86ImplicitMaskMoveOracleProgram(arch, op, name string) (string, string) {
+	return x86ImplicitMaskMoveOracleRegisters(arch, op, name, 0, 1)
+}
+
+func x86ImplicitMaskMoveOracleRegisters(arch, op, name string, mask, data int) (string, string) {
 	word, move, bank, width := 8, "MOVQ", "X", 16
 	if arch == "386" {
 		word, move = 4, "MOVL"
@@ -26,9 +30,9 @@ func x86ImplicitMaskMoveOracleProgram(arch, op, name string) (string, string) {
 	}
 	source := fmt.Sprintf("TEXT ·%s(SB),4,$0-%d\n"+
 		"%s out+0(FP),DI\n%s mask+%d(FP),AX\n%s data+%d(FP),BX\n"+
-		"%s (AX),%s0\n%s (BX),%s1\n%s %s0,%s1\n%sSFENCE\nRET\n",
+		"%s (AX),%s%d\n%s (BX),%s%d\n%s %s%d,%s%d\n%sSFENCE\nRET\n",
 		name, 3*word, move, move, word, move, 2*word,
-		load, bank, load, bank, op, bank, bank, closeTags)
+		load, bank, mask, load, bank, data, op, bank, mask, bank, data, closeTags)
 	declaration := fmt.Sprintf("func %s(out,mask,data *[%d]byte)\n", name, width)
 	return source, declaration
 }
@@ -83,10 +87,19 @@ func TestX86ImplicitMaskMoveInitializedNativeObjects(t *testing.T) {
 	for _, target := range x86RawReturnTargets {
 		t.Run(target.triple, func(t *testing.T) {
 			var source, declarations strings.Builder
-			for index, op := range x86ImplicitMaskMoveOracleNames {
-				program, declaration := x86ImplicitMaskMoveOracleProgram(target.arch, op, fmt.Sprint("Store", index))
-				source.WriteString(program)
-				declarations.WriteString(declaration)
+			var operations []string
+			for _, op := range x86ImplicitMaskMoveOracleNames {
+				last := 15
+				if target.arch == "386" || op == "MASKMOVQ" {
+					last = 7
+				}
+				for _, registers := range [][2]int{{0, 1}, {0, last}, {last, 0}} {
+					name := fmt.Sprint("Store", len(operations))
+					program, declaration := x86ImplicitMaskMoveOracleRegisters(target.arch, op, name, registers[0], registers[1])
+					source.WriteString(program)
+					declarations.WriteString(declaration)
+					operations = append(operations, op)
+				}
 			}
 			x86LEAActualTargetGoObject(t, target.arch, target.triple, source.String())
 			for _, api := range []string{"text", "module", "Go"} {
@@ -96,7 +109,7 @@ func TestX86ImplicitMaskMoveInitializedNativeObjects(t *testing.T) {
 						t.Fatal("initialized original implicit mask-store lost its own inputs", err)
 					}
 					for _, text := range []string{ir, x86DwordProductIROptimize(t, ir)} {
-						for index, op := range x86ImplicitMaskMoveOracleNames {
+						for index, op := range operations {
 							body := x86StringMemoryFunction(t, text, fmt.Sprint("Store", index))
 							mnemonic := strings.ToLower(op)
 							if op == "MASKMOVOU" {

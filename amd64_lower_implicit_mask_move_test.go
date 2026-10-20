@@ -29,25 +29,24 @@ func TestTranslateX86ImplicitMaskMoveCompleteGoAssemblerForms(t *testing.T) {
 				"\tMASKMOVDQU X0, X%d\n"+
 				"\tVMASKMOVDQU X0, X%d\n"+
 				"\tRET\n", last, last, last)
-			file, err := Parse(ArchAMD64, source)
-			if err != nil {
-				t.Fatal(err)
+			// Preserve all four original rows and their actual Go objects.
+			// These bare registers/DI cannot establish a successful public
+			// translation. The independently initialized full-family root
+			// compiles real translated objects at the same five targets.
+			file, _ := x86UnboundVoidFormatSources(t, source, target.goarch, target.triple)
+			count := 0
+			for _, instruction := range file.Funcs[0].Instrs {
+				if instruction.Op == OpTEXT || instruction.Op == OpRET {
+					continue
+				}
+				if _, known, err := x86ImplicitMaskMoveProperties(instruction.Op, instruction, target.goarch); !known || err != nil {
+					t.Fatal("original implicit mask-store format disappeared", instruction.Raw, err)
+				}
+				count++
 			}
-			ll, err := Translate(file, Options{
-				TargetTriple: target.triple,
-				Goarch:       target.goarch,
-				Sigs: map[string]FuncSig{
-					"implicitmaskmoveforms": {Name: "implicitmaskmoveforms", Ret: Void},
-				},
-			})
-			if err != nil {
-				t.Fatal(err)
+			if count != 4 {
+				t.Fatal("original complete implicit mask-store denominator changed", count)
 			}
-			llc := findLLVM22Tool("llc")
-			if llc == "" {
-				t.Fatal("LLVM 22 llc not found")
-			}
-			compileLLVMToObject(t, llc, target.triple, "implicit-mask-move-"+target.name+".ll", "implicit-mask-move-"+target.name+".o", ll)
 		})
 	}
 }
