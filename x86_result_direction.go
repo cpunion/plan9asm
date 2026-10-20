@@ -69,6 +69,9 @@ func x86ResultDirectionAfterSource(ins Instr, direction x86ResultDirection, arch
 	if x86RawExplicitMaskMoveSource(ins, arch) {
 		return direction // The exact masked move has no FLAGS/DF write.
 	}
+	if x86RawPackedDotSource(ins, arch) {
+		return direction // The exact integer dot operation does not write DF.
+	}
 	if x86RawUnalignedLoadSource(ins, arch) {
 		return direction
 	}

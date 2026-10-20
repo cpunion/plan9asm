@@ -102,6 +102,9 @@ func x86ResultCallerAddressesAfter(ins Instr, before [16]bool, entryFP map[int64
 	if x86RawPackedConversionSource(ins, arch) || x86RawPackedReductionSource(ins, arch) {
 		return before // Exact physical conversions write no GP or caller-address identity.
 	}
+	if x86RawPackedDotSource(ins, arch) {
+		return before // Preserve only existing identities; no dot-product GP output exists.
+	}
 	if effect, known, err := x86TypedRegisterQueryByteEffect(ins.Op, ins, arch); known && err == nil {
 		for _, output := range effect.operands {
 			if index, _, valid := x86ResultGP(output.operand.Reg, output.width, arch); valid && output.write {
