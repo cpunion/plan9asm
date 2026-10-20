@@ -3,7 +3,7 @@ package plan9asm
 // Only the lowering-paired E4NF read supplies conditional native bytes. Raw
 // boundaries, caller memory, SDK literals and native entry retain their owners.
 func x86ResultInLanePermuteStep(ins Instr, state *x86ResultState, owned []bool, arch string, native bool) (bool, bool) {
-	f, known, err := x86InLanePermuteProperties(ins.Op, ins, arch)
+	f, known, err := x86ElementPermuteProperties(ins.Op, ins, arch)
 	if !known || err != nil || !x86ResultNamedPredicateInstruction(ins) {
 		return false, known
 	}
@@ -30,17 +30,25 @@ func x86ResultInLanePermuteStep(ins Instr, state *x86ResultState, owned []bool, 
 		}
 	} else {
 		index, _ := amd64VectorRegisterIndex(ins.Args[f.data].Reg, f.byteWidth)
-		data := state.vectorBytes(index)
-		if data&x86CallerVectorByteMask(int64(f.byteWidth)) != x86CallerVectorByteMask(int64(f.byteWidth)) {
+		data, control := state.vectorBytes(index), source
+		dataWidth := f.byteWidth
+		if f.qword {
+			data, control = source, data
+			if f.broadcast {
+				dataWidth = f.memoryBytes
+			}
+		}
+		dataMask := x86CallerVectorByteMask(int64(dataWidth))
+		if data&dataMask != dataMask {
 			return false, true // Even a dead variable permute consumes its numerical data input.
 		}
 		bytes := f.bits / 8
 		for lane := 0; lane < f.byteWidth/bytes; lane++ {
-			control := lane * bytes
-			if f.broadcast {
-				control = 0
+			controlByte := lane * bytes
+			if f.broadcast && !f.qword {
+				controlByte = 0
 			}
-			if source>>uint(control)&1 == 0 {
+			if control>>uint(controlByte)&1 == 0 {
 				return false, true // Only selector bits in the low control byte are read.
 			}
 		}

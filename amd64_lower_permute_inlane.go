@@ -12,6 +12,10 @@ func (c *amd64Ctx) lowerInLaneFloatingPermute(op Op, ins Instr) (ok bool, termin
 	if !known || err != nil {
 		return known, false, err
 	}
+	return c.lowerElementPermute(form, ins)
+}
+
+func (c *amd64Ctx) lowerElementPermute(form x86ElementPermuteForm, ins Instr) (bool, bool, error) {
 	lanes := form.byteWidth * 8 / form.bits
 	readWidth := form.byteWidth
 	if form.memory >= 0 {
@@ -34,14 +38,18 @@ func (c *amd64Ctx) lowerInLaneFloatingPermute(op Op, ins Instr) (ok bool, termin
 	}
 	var result string
 	if form.immediate {
-		result = c.emitImmediateInLanePermute(input, lanes, form.bits, form.selector)
+		result = c.emitImmediateElementPermute(input, form)
 	} else {
 		dataBytes, err := c.loadPackedCompareBytes(ins.Args[form.data], form.byteWidth)
 		if err != nil {
 			return true, false, err
 		}
 		data := c.bitcastVectorBytesToIntegerLanes(form.byteWidth, lanes, form.bits, dataBytes)
-		result = c.emitVariableInLanePermute(data, input, lanes, form.bits)
+		if form.qword {
+			// Qword r/m is data, whereas VPERMIL r/m is control.
+			data, input = input, data
+		}
+		result = c.emitVariableElementPermute(data, input, form)
 	}
 	if form.mask >= 0 {
 		mask, err := c.loadK(ins.Args[form.mask].Reg)
@@ -62,17 +70,11 @@ func (c *amd64Ctx) lowerInLaneFloatingPermute(op Op, ins Instr) (ok bool, termin
 	return true, false, c.storePackedMoveOperand(ins.Args[form.destination], form.byteWidth, "%"+out)
 }
 
-func (c *amd64Ctx) emitImmediateInLanePermute(data string, lanes, laneBits int, imm uint8) string {
+func (c *amd64Ctx) emitImmediateElementPermute(data string, form x86ElementPermuteForm) string {
+	lanes, laneBits := form.byteWidth*8/form.bits, form.bits
 	result := "poison"
 	for lane := 0; lane < lanes; lane++ {
-		var sourceLane int
-		if laneBits == 32 {
-			groupBase := lane / 4 * 4
-			sourceLane = groupBase + int(imm>>uint(2*(lane%4)))&3
-		} else {
-			groupBase := lane / 2 * 2
-			sourceLane = groupBase + int(imm>>uint(lane))&1
-		}
+		sourceLane := form.sourceByte(lane*(laneBits/8)) / (laneBits / 8)
 		value := c.newTmp()
 		inserted := c.newTmp()
 		fmt.Fprintf(c.b, "  %%%s = extractelement <%d x i%d> %s, i32 %d\n", value, lanes, laneBits, data, sourceLane)
@@ -82,14 +84,18 @@ func (c *amd64Ctx) emitImmediateInLanePermute(data string, lanes, laneBits int, 
 	return result
 }
 
-func (c *amd64Ctx) emitVariableInLanePermute(data, control string, lanes, laneBits int) string {
+func (c *amd64Ctx) emitVariableElementPermute(data, control string, form x86ElementPermuteForm) string {
+	lanes, laneBits := form.byteWidth*8/form.bits, form.bits
 	result := "poison"
 	groupLanes := 128 / laneBits
+	if form.qword {
+		groupLanes = lanes
+	}
 	for lane := 0; lane < lanes; lane++ {
 		controlLane := c.newTmp()
 		fmt.Fprintf(c.b, "  %%%s = extractelement <%d x i%d> %s, i32 %d\n", controlLane, lanes, laneBits, control, lane)
 		selectorValue := "%" + controlLane
-		if laneBits == 64 {
+		if laneBits == 64 && !form.qword {
 			shifted := c.newTmp()
 			fmt.Fprintf(c.b, "  %%%s = lshr i64 %%%s, 1\n", shifted, controlLane)
 			selectorValue = "%" + shifted

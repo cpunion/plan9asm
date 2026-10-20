@@ -9,21 +9,36 @@ import (
 // immediate selects data bytes; variable control reads a separate vector.
 var x86InLanePermuteBits = map[Op]int{"VPERMILPS": 32, "VPERMILPD": 64}
 
-type x86InLanePermuteForm struct {
+// Both permute families share their operand, mask and E4NF envelopes. Their
+// selector topology and which variable operand is data remain distinct.
+type x86ElementPermuteForm struct {
 	bits, byteWidth, source, data, destination, mask, memory, memoryBytes int
-	immediate, broadcast, zeroing                                         bool
+	immediate, broadcast, zeroing, qword                                  bool
 	selector                                                              uint8
 }
 
-func x86InLanePermuteProperties(op Op, ins Instr, arch string) (x86InLanePermuteForm, bool, error) {
-	base, suffix, dotted := strings.Cut(strings.ToUpper(string(op)), ".")
+func x86InLanePermuteProperties(op Op, ins Instr, arch string) (x86ElementPermuteForm, bool, error) {
+	base, _, _ := strings.Cut(strings.ToUpper(string(op)), ".")
 	bits, known := x86InLanePermuteBits[Op(base)]
-	f := x86InLanePermuteForm{bits: bits, source: 0, data: 1, destination: len(ins.Args) - 1, mask: -1, memory: -1}
 	if !known {
-		return f, false, nil
+		return x86ElementPermuteForm{}, false, nil
 	}
-	fail := func() (x86InLanePermuteForm, bool, error) {
-		return f, true, fmt.Errorf("%s %s outside Go's complete in-lane permute grammar: %q", arch, op, ins.Raw)
+	return x86ElementPermuteFormProperties(op, ins, arch, bits, false)
+}
+
+func x86ElementPermuteProperties(op Op, ins Instr, arch string) (x86ElementPermuteForm, bool, error) {
+	if form, known, err := x86InLanePermuteProperties(op, ins, arch); known {
+		return form, true, err
+	}
+	return x86QwordPermuteProperties(op, ins, arch)
+}
+
+func x86ElementPermuteFormProperties(op Op, ins Instr, arch string, bits int, qword bool) (x86ElementPermuteForm, bool, error) {
+	_, suffix, dotted := strings.Cut(strings.ToUpper(string(op)), ".")
+	f := x86ElementPermuteForm{bits: bits, qword: qword, source: 0, data: 1,
+		destination: len(ins.Args) - 1, mask: -1, memory: -1}
+	fail := func() (x86ElementPermuteForm, bool, error) {
+		return f, true, fmt.Errorf("%s %s outside Go's complete element-permute grammar: %q", arch, op, ins.Raw)
 	}
 	if arch == "" {
 		arch = "amd64"
@@ -48,7 +63,7 @@ func x86InLanePermuteProperties(op Op, ins Instr, arch string) (x86InLanePermute
 	}
 	if len(ins.Args) == 4 {
 		if arch == "386" || !amd64NonzeroKOperand(ins.Args[2]) {
-			return fail() // Named mode32 and its existing raw decoder have no masked row.
+			return fail() // Named mode32's three-operand limit is not a physical EVEX restriction.
 		}
 		f.mask = 2
 	} else if f.zeroing {
@@ -62,7 +77,8 @@ func x86InLanePermuteProperties(op Op, ins Instr, arch string) (x86InLanePermute
 		index, _ := amd64VectorRegisterIndex(operand.Reg, f.byteWidth)
 		return arch != "386" || f.byteWidth != 64 || index < 8
 	}
-	if f.byteWidth != 16 && f.byteWidth != 32 && f.byteWidth != 64 || !register(ins.Args[f.destination]) {
+	if f.byteWidth != 16 && f.byteWidth != 32 && f.byteWidth != 64 || qword && f.byteWidth == 16 ||
+		!register(ins.Args[f.destination]) {
 		return fail()
 	}
 	f.immediate = ins.Args[0].Kind == OpImm
@@ -91,12 +107,15 @@ func x86InLanePermuteProperties(op Op, ins Instr, arch string) (x86InLanePermute
 	return f, true, x86Mode32VectorRegisterContext(ins, arch)
 }
 
-func (f x86InLanePermuteForm) sourceByte(output int) int {
+func (f x86ElementPermuteForm) sourceByte(output int) int {
 	if f.broadcast {
 		return output % (f.bits / 8)
 	}
 	bytes := f.bits / 8
 	lane := output / bytes
+	if f.qword {
+		return output/32*32 + int(f.selector>>uint(2*(lane%4))&3)*8 + output%8
+	}
 	control, mask := uint(lane), uint8(1)
 	if f.bits == 32 {
 		control, mask = uint(2*(lane%4)), 3
@@ -105,7 +124,7 @@ func (f x86InLanePermuteForm) sourceByte(output int) int {
 }
 
 func x86TypedInLanePermuteByteEffect(op Op, ins Instr, arch string) (x86TypedByteEffect, bool, error) {
-	f, known, err := x86InLanePermuteProperties(op, ins, arch)
+	f, known, err := x86ElementPermuteProperties(op, ins, arch)
 	if !known || err != nil {
 		return x86TypedByteEffect{}, known, err
 	}
