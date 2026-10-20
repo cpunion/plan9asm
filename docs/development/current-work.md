@@ -1,6 +1,6 @@
 # PR 40: current checkpoint
 
-Updated 2026-10-20. Implementation handoff: `dccc7ddd5`. This is not a
+Updated 2026-10-20. Implementation handoff: `ddf4a082a`. This is not a
 current-head completion certificate. Preserve ignored failed evidence and
 read [instruction contracts](instructions.md) and [validation](validation.md).
 
@@ -71,13 +71,14 @@ differ. Older qualifications remain in earlier Git checkpoints.
 
 | Snapshot | Independent local scope | Limits |
 |---|---|---|
+| `ddf4a082a` | Complete unsigned scalar integer-to-float family: 18 / 1,091 current, 126.145 seconds | Four members, all legal ER forms, five-target objects and 76 independently Go/LLVM-checked mode32 producer displacement cases; zero failure/skip, unchanged complete seals. Minimum/race and original AVX512 execution remain separate |
 | `3cc0ff5cf` | Complete raw ABS literal family: 13 / 484 on current Go | Independent 66 physical cases, actual LLVM decoding, every-byte/mask/identity negatives and three-API literal objects; minimum/race and original native execution remain separate |
 | `d4d0d8519` | Five original unbound format drivers and initialized controls: 11 / 270 current | Original Go bytes and public Context retained; private format objects are not initialized public programs |
 | `3f5e0bb26` | Logical-FP DIV/IDIV and existing arithmetic: 23 / 2,656 current | Exact inputs and native division effects; new AMD64/386 original-value/fault owners await CI execution |
 | `153f85f78` (integrated at `c56a9f3aa`) | Current-SDK text identity and existing observers: 12 / 276 current | Actual independent Go archive kind/ABI priors; same-name mixed-kind collisions stay rejected, raw/historical ownership unchanged |
 | `60b691f35` | Complete legacy scalar native stores: 9 / 991 current | Exact volatile m32/m64 stores, unknown-input boundaries and portable values/faults; original x86 execution remains separate |
 | `e3e24a9af` | Complete original vector-move formats and initialized controls: 15 / 141 current | Five-target objects preserve original Go rows, including architectural faults; no source-input exemption |
-| `a951f91b6` | Variable blend/minpos typed inputs and original initialized objects: 10 / 678 current | Core qualification only. Legacy alignment native faults, corrected private mathematical driver and six old format drivers remain in progress |
+| `a951f91b6` | Variable blend/minpos typed inputs and original initialized objects: 10 / 678 current | Core qualification only. Native faults, private mathematical driver and format corrections are integrated candidates, not a complete later-head qualification |
 | `5529f23d3` | Complete original SDK field-multiply and MathExp CLI sources compile to LLVM22 objects | Actual stock-Go archive priors, unchanged whole assembly and complete seals; not native execution or a full benchmark |
 | `59fb59445` | Complete implicit/explicit multiply: 34 / 4,296 on current Go, actual Go1.20 and race | Exact native reads, CF/OF, all-byte masks, negative authority controls and five-target three-API objects. The 35th original-x86 runtime root requires a real x86 host, not a local pass |
 | `f6a73b3e3` | Native fixture source/layout controls: 6 / 42 on current Go, actual Go1.20 and race | Actual Go assembler/object and asmdecl priors, all return widths, 386/AMD64 ABI0 slots, complete SETOS source and defined AF seed; repaired original programs still need CI execution |
@@ -128,6 +129,43 @@ The first FMA3 race attempt did not execute tests because its shared Go build
 cache lost required files. Preserve that infrastructure failure. A fresh owned
 cache passes the exact five-root scope at `0d35d8b1e`; no tool fallback or budget
 increase was used. Every successful scope above has unchanged complete seals.
+
+## Active repair queue
+
+Keep the integration branch `codex/pr40-typed-ci-batch-20261020` frozen during
+qualification. Three authorized agents work separately; only the coordinator
+runs heavy Go/LLVM locally. No scanner runs here. Batch publication follows
+current/minimum/race, policy, classification and benchmark verification, not
+the completion of a single focused scope.
+
+- VNNI candidate `4a28f8d8` is integrated. The prior 24-root attempt passed
+  23 roots; its sole failing memory-read fixture is now independently green
+  for all 72 rows. Rerun the complete 24-root union on the integration head.
+- Raw unsigned widening has real initialized original-block and five-target
+  object passes at `c233cb9cb`. Its three stale unbound format drivers are
+  corrected by `d7de10c96`. Independent RED `a33c68b7e` proves twelve DF,
+  private-storage and GP-address preservation failures; minimal `323c5264c`
+  fixes the shared post-consumers. Complete family GREEN is still required.
+- Blend/minpos mode32 RED `5b7b1fe33` has two genuine failures and two passing
+  physical/AMD64 controls. Integrated `79a46c3bc` distinguishes named Go386
+  grammar from authenticated physical bytes. Qualify all 27 portable roots;
+  the two new required Linux native fault owners need independent CI wiring
+  and execution, without replacing the existing eight integer owners.
+- Permute128 test-only `905562962` has valid RED: six roots / 620 children,
+  official rows and all selector byte priors pass, five consumer/effect roots
+  fail. The two-member implementation is pending. Preserve both initialized
+  original kernels, full unconditional m256 reads and every selector dependency.
+- Packed precision test-only `b0358b2b5` covers six names / eighteen official
+  rows and 53 orthogonal shapes. Establish valid RED before implementing it.
+  The separate named-half conversion family still needs its own complete
+  repair, including dynamic MXCSR rounding for immediate controls 4–7.
+- Required native hardware remains pending, never a skipped success. The
+  original ABS/sign, scalar precision and FMA caller SIGILL failures do not
+  establish hardware absence without their own actual-allocation CPU receipt.
+
+Newly integrated changes have not passed the full 33 command gates, the
+sixteen-report classification audit or a new strict benchmark. Preserve the
+failed benchmark below; do not turn local repairs into an inferred full pass.
 
 Raw continuations retain sealed complete producer replay, not just a mutable
 origin pointer. SDK literal/numerical owners precede native family hooks.
