@@ -82,7 +82,7 @@ static int original_fma_caller(void) {
                      "vfmadd132ss %%xmm0,%%xmm0,%%xmm0; vmovss %%xmm0,%0; "
                      "vxorps %%ymm0,%%ymm0,%%ymm0; kmovw %3,%%k1; "
                      "vfmadd132ps %%ymm0,%%ymm0,%%ymm0%{%%k1%}; vmovups %%ymm0,%1; "
-                     "vxorpd %%zmm0,%%zmm0,%%zmm0; "
+                     "vpxord %%zmm0,%%zmm0,%%zmm0; "
                      "vfmadd132pd %%zmm0,%%zmm0,%%zmm0; vmovupd %%zmm0,%2"
                      : "=m"(scalar),"=m"(packed),"=m"(wide) : "r"(mask) : "zmm0","k1","memory");
     if (scalar) return 0;
