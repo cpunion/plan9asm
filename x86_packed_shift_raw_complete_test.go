@@ -213,6 +213,16 @@ func (row x86PackedShiftRawCase) program(arch string, raw bool) (string, string,
 
 func x86PackedShiftRawOriginalUnchanged(t *testing.T) {
 	t.Helper()
+	var originalMembers []string
+	for _, member := range x86PackedShiftRawMembers {
+		if member.mode == "lane" {
+			originalMembers = append(originalMembers, member.op)
+		}
+	}
+	if !reflect.DeepEqual(x86VariableShiftTestOps, originalMembers) ||
+		fmt.Sprintf("%x", sha256.Sum256([]byte(x86TestGuardPagesC))) != "559a08f4f5e496e4321d167a9f2ef942db8761e035fe9b0fdf236632c4f1956e" {
+		t.Fatal("original nine-member order or complete guard-page C changed")
+	}
 	const filename = "amd64_raw_variable_shift_test.go"
 	data, err := os.ReadFile(filename)
 	if err != nil {

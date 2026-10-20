@@ -84,6 +84,13 @@ func TestX86PackedShiftRawCompletePhysicalLLVM22AndWIG(t *testing.T) {
 						if !known || err != nil || consumed != len(code) {
 							t.Fatal("ISA WIG does not close the complete typed shift grammar", w, known, consumed, err)
 						}
+						generation := x86RawPackedShiftVEX
+						if row.evex {
+							generation = x86RawPackedShiftEVEX
+						}
+						if !ins.x86Encoded || ins.x86PackedShiftEncoding != generation || ins.x86PackedShiftW != w {
+							t.Fatal("ignored W lost its actual physical generation or bit", w, ins.x86PackedShiftEncoding, ins.x86PackedShiftW)
+						}
 						if !w {
 							control = ins
 						} else if ins.Op != control.Op || !reflect.DeepEqual(ins.Args, control.Args) {
@@ -165,6 +172,9 @@ func TestX86PackedShiftRawSDMWordCountWIGAndLLVM22Difference(t *testing.T) {
 					ins, consumed, known, err := x86PackedShiftRawDecode(code, mode)
 					if !known || err != nil || consumed != len(code) {
 						t.Fatal("SDM/XED word-count WIG source is missing from the complete decoder", w, known, consumed, err)
+					}
+					if !ins.x86Encoded || ins.x86PackedShiftEncoding != x86RawPackedShiftEVEX || ins.x86PackedShiftW != w {
+						t.Fatal("word-count WIG lost its original EVEX/W physical snapshot", w, ins.x86PackedShiftEncoding, ins.x86PackedShiftW)
 					}
 					if !w {
 						named = ins
