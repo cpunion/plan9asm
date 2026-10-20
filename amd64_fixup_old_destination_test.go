@@ -24,15 +24,19 @@ func x86FixupOriginalRuntimeSource(t *testing.T) string {
 	return source
 }
 
-// This test-only driver is initially the original program. The independent
-// runtime input regression below must expose its missing old-DEST input before
-// the fixture is repaired. Neither the source literal nor its C oracle changes.
+// Table response 0000 retains the active old DEST even with zero masking.
+// Supply the old32 input expected by the unchanged independent C reference;
+// the complete historical source remains an independent Context negative.
 func x86FixupRuntimeSource(t *testing.T, original string) string {
 	t.Helper()
 	if actual := fmt.Sprintf("%x", sha256.Sum256([]byte(original))); actual != x86FixupOriginalSourceSHA {
 		t.Fatal("foreign source acquired FIXUPIMM runtime fixture transport", actual)
 	}
-	return original
+	const instruction = "\tVFIXUPIMMPS.Z $0, Z0, Z1, K1, Z3\n"
+	if strings.Count(original, instruction) != 1 {
+		t.Fatal("complete FIXUPIMM runtime lost its unique old32 destination consumer")
+	}
+	return strings.Replace(original, instruction, "\tVMOVDQU32 0(DX), Z3\n"+instruction, 1)
 }
 
 func TestX86FixupRuntimeOriginalSourceRequiresOldDestination(t *testing.T) {
