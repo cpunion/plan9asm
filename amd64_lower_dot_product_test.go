@@ -50,20 +50,11 @@ func TestTranslateX86PackedDotProductCompleteGoAssemblerForms(t *testing.T) {
 			}
 			source.WriteString("\tRET\n")
 
-			file, err := Parse(ArchAMD64, source.String())
-			if err != nil {
-				t.Fatal(err)
-			}
-			ll, err := Translate(file, Options{
-				TargetTriple: target.triple,
-				Goarch:       target.goarch,
-				Sigs: map[string]FuncSig{
-					"packeddotproductforms": {Name: "packeddotproductforms", Ret: Void},
-				},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			// The original complete source has no data, accumulator, mask
+			// or pointer inputs. Preserve its Go and private emitter objects
+			// plus all three public Context controls; initialized public
+			// counterparts have separate complete-family owners.
+			ll := x86UnboundVoidScalarFormatObject(t, source.String(), "packeddotproductforms", target.goarch, target.triple)
 			llc := findLLVM22Tool("llc")
 			if llc == "" {
 				t.Fatal("LLVM 22 llc not found")

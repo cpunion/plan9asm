@@ -10,10 +10,6 @@ func TestTranslateX86RawVEXVNNIAndVariableDwordPermuteAllTargets(t *testing.T) {
 	BYTE $0xc4; BYTE $0xe2; BYTE $0x65; BYTE $0x36; BYTE $0xe5
 	RET
 `
-	file, err := Parse(ArchAMD64, source)
-	if err != nil {
-		t.Fatal(err)
-	}
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc not found")
@@ -30,17 +26,9 @@ func TestTranslateX86RawVEXVNNIAndVariableDwordPermuteAllTargets(t *testing.T) {
 		{name: "windows-386", goarch: "386", triple: "i686-pc-windows-msvc"},
 	} {
 		t.Run(target.name, func(t *testing.T) {
-			requireX86GoAssemblerResult(t, target.goarch, source, true)
-			ll, err := Translate(file, Options{
-				TargetTriple: target.triple,
-				Goarch:       target.goarch,
-				Sigs: map[string]FuncSig{
-					"rawvexfamilies": {Name: "rawvexfamilies", Ret: Void},
-				},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			// Keep both original raw opcodes and their whole Go object, but
+			// do not mistake this input-free format unit for a numerical ABI.
+			ll := x86UnboundVoidRawScalarFormatObject(t, source, target.goarch, target.triple)
 			compileLLVMToObject(t, llc, target.triple, "raw-vex-families-"+target.name+".ll", "raw-vex-families-"+target.name+".o", ll)
 		})
 	}
