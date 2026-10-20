@@ -279,6 +279,19 @@ jobs:
           done
           go test . -run "^($roots)$" -count=1 -timeout=5m -json > "$directory/raw.jsonl" 2> "$directory/stderr.log"
           node .github/scripts/audit-legacy-abs-sign-native.cjs "$directory"
+      - name: Execute private LEAVE width mathematics on actual AMD64 and IA32
+        if: ${{ !cancelled() && steps.native_toolchain.outcome == 'success' && steps.native_go.outcome == 'success' }}
+        env:
+          GOTOOLCHAIN: local
+        run: |
+          set -euo pipefail
+          directory=_out/native-x86-oracles/private-leave
+          mkdir -p "$directory"
+          root='TestCrossLinuxRuntimeMatrixX86LeavePrivateEmitterWidthsAndFlags'
+          go test . -list "^($root)$" > "$directory/inventory.log"
+          grep -Fx "$root" "$directory/inventory.log"
+          go test . -run "^($root)$" -count=1 -timeout=5m -json > "$directory/raw.jsonl" 2> "$directory/stderr.log"
+          node .github/scripts/audit-private-leave-native.cjs "$directory"
       - name: Execute original complete floating programs with actual EVEX DQ state
         if: ${{ !cancelled() && steps.native_toolchain.outcome == 'success' && steps.native_go.outcome == 'success' }}
         env:
