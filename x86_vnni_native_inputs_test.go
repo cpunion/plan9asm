@@ -109,12 +109,18 @@ func TestX86VNNIIntegerDeadAccessRetainsExactNativeTuple(t *testing.T) {
 				return // An original native opcode may own the complete access.
 			}
 			width := amd64VectorByteWidth(Reg(row.bank + "0"))
-			loadType := "i32"
+			loadType, count := "(?:i32|<4 x i8>)", 1
 			if row.mode == "plain" && row.input != "broadcast" {
-				loadType = fmt.Sprintf("(?:i32|<%d x i32>|<%d x i8>)", width/4, width)
+				loadType = fmt.Sprintf("(?:<%d x i32>|<%d x i8>)", width/4, width)
+			} else if row.input != "broadcast" {
+				loadType, count = "i32", width/4
 			}
+			// This unit contains exactly one operation, no parameters and
+			// no producer loads. Every observed volatile load belongs to its
+			// actual source: m32 has either a scalar or byte-vector bit view.
 			load := regexp.MustCompile(`(?m)^\s+%[^\n]+ = load volatile ` + loadType + `, [^\n]*, align 1$`)
-			if !load.MatchString(ir) || strings.Contains(ir, "@llvm.masked.load") || row.mode != "plain" && !strings.Contains(ir, "br i1") {
+			if len(load.FindAllString(ir, -1)) != count || strings.Count(ir, "load volatile ") != count ||
+				strings.Count(ir, "\ndefine ") != 1 || strings.Contains(ir, "@llvm.masked.load") || row.mode != "plain" && !strings.Contains(ir, "br i1") {
 				t.Fatal("dead VNNI access lost its exact volatile dword/full tuple or active-lane fault suppression")
 			}
 		})
