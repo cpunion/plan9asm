@@ -63,21 +63,12 @@ func TestTranslateRawHalfConversionGorseRegression(t *testing.T) {
 	BYTE $0xf0
 	RET
 `
-	file, err := Parse(ArchAMD64, source)
-	if err != nil {
-		t.Fatal(err)
+	ir := x86NamedHalfOriginalFormatObject(t, source, "amd64", "x86_64-unknown-linux-gnu")
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("original Gorse half format requires LLVM22")
 	}
-	ir, err := Translate(file, Options{
-		Goarch:       "amd64",
-		TargetTriple: "x86_64-unknown-linux-gnu",
-		Sigs:         map[string]FuncSig{"rawHalfToSingle": {Name: "rawHalfToSingle", Ret: Void}},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(ir, "fpext <8 x half>") {
-		t.Fatalf("raw VCVTPH2PS omitted half-to-single conversion:\n%s", ir)
-	}
+	compileLLVMToObject(t, llc, "x86_64-unknown-linux-gnu", "gorse-half-format.ll", "gorse-half-format.o", ir)
 }
 
 func TestDecodedX86PackedHalfConversionGorseEVEXMemory(t *testing.T) {
@@ -243,21 +234,7 @@ func TestTranslateRawPackedHalfConversionLLVM22Targets(t *testing.T) {
 				}
 			}
 			source.WriteString("\tRET\n")
-			file, err := Parse(ArchAMD64, source.String())
-			if err != nil {
-				t.Fatal(err)
-			}
-			ir, err := Translate(file, Options{
-				Goarch:       target.goarch,
-				TargetTriple: target.triple,
-				Sigs:         map[string]FuncSig{"rawPackedHalfConversions": {Name: "rawPackedHalfConversions", Ret: Void}},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
-			if !strings.Contains(ir, "fpext <") || !strings.Contains(ir, "fptrunc <") {
-				t.Fatalf("raw half-conversion family was not lowered:\n%s", ir)
-			}
+			ir := x86NamedHalfOriginalFormatObject(t, source.String(), target.goarch, target.triple)
 			compileLLVMToObject(t, llc, target.triple, "raw-half-conversions.ll", "raw-half-conversions.o", ir)
 		})
 	}

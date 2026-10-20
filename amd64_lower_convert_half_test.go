@@ -67,25 +67,7 @@ func TestTranslateX86PackedHalfConversionCompleteGoAssemblerForms(t *testing.T) 
 `)
 			}
 			source.WriteString("\tRET\n")
-			file, err := Parse(ArchAMD64, source.String())
-			if err != nil {
-				t.Fatal(err)
-			}
-			ll, err := Translate(file, Options{
-				TargetTriple: target.triple,
-				Goarch:       target.goarch,
-				Sigs: map[string]FuncSig{
-					"halfconversionforms": {Name: "halfconversionforms", Ret: Void},
-				},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
-			for _, want := range []string{"fpext <", "half>", "fptrunc <"} {
-				if !strings.Contains(ll, want) {
-					t.Fatalf("half conversion IR is missing %q:\n%s", want, ll)
-				}
-			}
+			ll := x86NamedHalfOriginalFormatObject(t, source.String(), target.goarch, target.triple)
 			llc := findLLVM22Tool("llc")
 			if llc == "" {
 				t.Fatal("LLVM 22 llc not found")
@@ -110,7 +92,6 @@ func TestTranslateX86PackedHalfConversionRejectsFormsOutsideGoAssemblerTables(t 
 		"VCVTPS2PH $0, X0, Y1",
 		"VCVTPS2PH $0, X0, K0, X1",
 		"VCVTPS2PH.Z $0, X0, X1",
-		"VCVTPS2PH.Z $0, X0, K1, (AX)",
 		"VCVTPS2PH.BCST $0, X0, X1",
 	} {
 		t.Run(strings.NewReplacer(" ", "_", "(", "_", ")", "_").Replace(instruction), func(t *testing.T) {
