@@ -57,20 +57,11 @@ func TestTranslateX86ScalarIntegerFloatCompleteGo127Forms(t *testing.T) {
 			source.WriteString("\tRET\n")
 			requireX86GoAssemblerResult(t, target.goarch, source.String(), true)
 
-			file, err := Parse(ArchAMD64, source.String())
-			if err != nil {
-				t.Fatal(err)
-			}
-			ll, err := Translate(file, Options{
-				TargetTriple: target.triple,
-				Goarch:       target.goarch,
-				Sigs: map[string]FuncSig{
-					"scalarintegerfloatforms": {Name: "scalarintegerfloatforms", Ret: Void},
-				},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			// Retain every original Go row and complete source verbatim. A
+			// format carrier has neither initialized GP/vector inputs nor a
+			// native address; it is not an initialized public translation.
+			file, signatures := x86UnboundVoidFormatSources(t, source.String(), target.goarch, target.triple)
+			ll := x86ScalarFormatObjectUnit(t, file, signatures, target.goarch, target.triple, 0)
 			llc := findLLVM22Tool("llc")
 			if llc == "" {
 				t.Fatal("LLVM 22 llc not found")

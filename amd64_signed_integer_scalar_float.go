@@ -26,14 +26,21 @@ type x86SignedIntegerFloatForm struct {
 }
 
 func x86SignedIntegerFloatProperties(ins Instr, goarch string) (x86SignedIntegerFloatForm, bool, error) {
-	base, suffix, dotted := strings.Cut(strings.ToUpper(string(ins.Op)), ".")
+	base, _, _ := strings.Cut(strings.ToUpper(string(ins.Op)), ".")
 	spec, recognized := x86SignedIntegerFloatSpecs[Op(base)]
 	if !recognized {
 		return x86SignedIntegerFloatForm{}, false, nil
 	}
+	return x86IntegerScalarFloatOperandProperties(ins, goarch, spec)
+}
+
+// The signed and unsigned families share operand axes, not arithmetic,
+// native generation or source/caller permissions.
+func x86IntegerScalarFloatOperandProperties(ins Instr, goarch string, spec x86SignedIntegerFloatSpec) (x86SignedIntegerFloatForm, bool, error) {
+	_, suffix, dotted := strings.Cut(strings.ToUpper(string(ins.Op)), ".")
 	f := x86SignedIntegerFloatForm{spec: spec, sourceBits: spec.sourceBits, upper: 1, destination: len(ins.Args) - 1, memory: -1}
 	fail := func() (x86SignedIntegerFloatForm, bool, error) {
-		return f, true, fmt.Errorf("%s %s operands/suffix outside Go signed integer-to-scalar-float grammar: %q", goarch, ins.Op, ins.Raw)
+		return f, true, fmt.Errorf("%s %s operands/suffix outside Go integer-to-scalar-float grammar: %q", goarch, ins.Op, ins.Raw)
 	}
 	if goarch != "amd64" && goarch != "386" {
 		return fail()

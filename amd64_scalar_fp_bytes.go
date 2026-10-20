@@ -212,6 +212,11 @@ func (c *amd64Ctx) validateScalarFPSourceViews() error {
 				return err
 			}
 		}
+		if _, known, err := x86UnsignedIntegerFloatProperties(ins, c.goarch); integerResult && known && err == nil {
+			if err := c.scalarFPResultInitialized(); err != nil {
+				return err
+			}
+		}
 		if _, known, err := x86MXCSRProperties(ins, c.goarch); known && err == nil {
 			if err := c.scalarFPResultInitialized(); err != nil {
 				return err
