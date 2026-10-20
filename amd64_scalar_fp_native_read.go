@@ -303,6 +303,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		if accepted, known := x86ResultNumericalReadStep(ins, state, owned, resultOffset, arch); known {
 			return accepted // A checked mutable SB source keeps its own lifetime and byte effects.
 		}
+		if accepted, known := x86ResultFourSourceStep(ins, state, owned, arch, true); known {
+			return accepted // One complete original opcode owns its m128 access and sequential native exceptions.
+		}
 		if accepted, known := x86ResultScalarPrecisionStep(ins, state, owned, arch, true); known {
 			return accepted // The paired original scalar conversion retains m32/m64 and MXCSR effects.
 		}

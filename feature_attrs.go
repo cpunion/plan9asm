@@ -72,6 +72,14 @@ func inferFuncTargetFeaturesForGOARCH(arch Arch, goarch string, fn Func) string 
 			if moveArch == "" {
 				moveArch = "amd64"
 			}
+			if form, known, err := x86FourSourceProperties(ins.Op, ins, moveArch); known && err == nil {
+				add("+avx512f") // Exact physical carriers, including scalar SS and isolated mode32.
+				if form.spec.mode == amd64FourSourceFMA {
+					add("+avx5124fmaps")
+				} else {
+					add("+avx5124vnniw")
+				}
+			}
 			if form, known, err := x86ScalarPrecisionProperties(ins.Op, ins, moveArch); known && err == nil {
 				switch {
 				case form.spec.legacy:
