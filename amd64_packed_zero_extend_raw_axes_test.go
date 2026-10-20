@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"os/exec"
 	"strings"
@@ -57,28 +58,44 @@ func TestX86PackedExtendRawWBitMatchesIndependentLLVMDecoder(t *testing.T) {
 }
 
 func TestX86PackedZeroExtendActualGoLowMaskedMode32(t *testing.T) {
-	for _, ratio := range x86ZeroExtendTestRatios {
-		for _, bank := range []string{"X", "Y", "Z"} {
-			source := "X0"
-			if bank == "Z" && ratio.output == 2*ratio.input {
-				source = "Y0"
+	rows := x86ZeroExtendLowMaskedMode32Rows(t)
+	for _, row := range rows {
+		t.Run(row, func(t *testing.T) {
+			listing, err := x86ExtensionGoListing(t, "386", row)
+			if err != nil {
+				t.Fatalf("actual mode32 Go acceptance: %s: %v\n%s", row, err, listing)
 			}
-			for _, input := range []string{source, "(AX)"} {
-				for _, suffix := range []string{"", ".Z"} {
-					row := fmt.Sprintf("VPMOVZX%s%s %s,K7,%s7", ratio.suffix, suffix, input, bank)
-					listing, err := x86ExtensionGoListing(t, "386", row)
-					if err != nil {
-						t.Fatalf("actual mode32 Go acceptance: %s: %v\n%s", row, err, listing)
-					}
-					file, err := Parse(ArchAMD64, "TEXT f(SB),4,$0-0\n"+row+"\nRET\n")
-					if err != nil {
-						t.Fatal(err)
-					}
-					if _, err := Translate(file, Options{Goarch: "386", TargetTriple: "i386-unknown-linux-gnu", Sigs: map[string]FuncSig{"f": {Ret: Void}}}); err != nil {
-						t.Fatalf("actual Go low-bank mask form incorrectly rejected: %s: %v", row, err)
-					}
+			// Keep the complete original uninitialized source. The Go object
+			// proves this syntax, not its missing source, K7, merge or address.
+			source := "TEXT f(SB),4,$0-0\n" + row + "\nRET\n"
+			for _, api := range []string{"text", "module", "Go"} {
+				ir, err := x86ScalarFPBitViewAPI(t, source, "func f()\n", "386", "i386-unknown-linux-gnu", api)
+				if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+					t.Fatal("uninitialized original mask form invented numerical inputs", row, api, err)
 				}
 			}
+		})
+	}
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM22 llc required for all original private formats")
+	}
+	for _, triple := range []string{"i386-unknown-linux-gnu", "i686-pc-windows-msvc"} {
+		for batch := 0; batch < 2; batch++ {
+			t.Run(fmt.Sprintf("private-formats/%s/batch%d", triple, batch), func(t *testing.T) {
+				var source strings.Builder
+				for index, row := range rows[batch*36 : (batch+1)*36] {
+					fmt.Fprintf(&source, "TEXT Format%d(SB),4,$0-0\n%s\nRET\n", index, row)
+				}
+				file, signatures := x86UnboundVoidFormatSources(t, source.String(), "386", triple)
+				ir := x86InstructionFormatObjectUnit(t, file, signatures, "386", triple, 0,
+					func(ctx *amd64Ctx, ins Instr) (bool, bool, error) {
+						return ctx.lowerPackedZeroExtendMove(ins.Op, ins)
+					})
+				for _, level := range []string{"-O0", "-O2"} {
+					x86PackedStringCompileObject(t, llc, triple, ir, level)
+				}
+			})
 		}
 	}
 }
