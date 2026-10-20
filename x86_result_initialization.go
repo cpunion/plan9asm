@@ -1145,6 +1145,9 @@ func x86ResultTransfer(ins Instr, state *x86ResultState, owned []bool, resultOff
 	if accepted, known := x86ResultImmediateShuffleStep(ins, state, owned, arch); known {
 		return accepted
 	}
+	if accepted, known := x86ResultPackedFloatShuffleStep(ins, state, owned, arch, false); known {
+		return accepted
+	}
 	if accepted, known := x86ResultPackedLowMultiplyStep(ins, state, owned, arch); known {
 		return accepted
 	}

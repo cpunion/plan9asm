@@ -418,6 +418,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		if accepted, known := x86ResultInLanePermuteStep(ins, state, owned, arch, true); known {
 			return accepted // E4NF retains the whole tuple/broadcast even at K=0 or for Void.
 		}
+		if accepted, known := x86ResultPackedFloatShuffleStep(ins, state, owned, arch, true); known {
+			return accepted // Same full E4NF access, with both selected numerical sources.
+		}
 		if accepted, known := x86ResultNativeLEAAddressBitsStep(ins, state, owned, arch, addressBitStores); known {
 			keepAddressBits = accepted
 			return accepted

@@ -48,6 +48,9 @@ func x86CallerVectorMoveKnown(ins Instr) bool {
 	if form, known, err := x86ImmediateShuffleProperties(ins, "amd64"); known {
 		return err == nil && !form.spec.mmx
 	}
+	if _, known, err := x86PackedFloatShuffleProperties(ins.Op, ins, "amd64"); known {
+		return err == nil && x86ResultNamedPredicateInstruction(ins)
+	}
 	if _, known, err := x86MaskVectorProperties(ins, "amd64"); known {
 		return err == nil
 	}
@@ -193,6 +196,9 @@ func x86CallerVectorMoveStep(ins *Instr, state *x86SourceStackState, proof *x86G
 	}
 	if form, known, err := x86ImmediateShuffleProperties(*ins, "amd64"); known {
 		return err == nil && x86CallerImmediateShuffleStep(ins, form, state, proof)
+	}
+	if form, known, err := x86PackedFloatShuffleProperties(ins.Op, *ins, "amd64"); known {
+		return err == nil && x86CallerPackedFloatShuffleStep(ins, form, state, proof)
 	}
 	if form, known, err := x86PackedAlignProperties(ins.Op, *ins, "amd64"); known {
 		return err == nil && x86CallerPackedAlignStep(ins, form, state, proof)
@@ -413,6 +419,9 @@ func x86InstructionMemoryShape(ins Instr, index int, arch string) (width int64, 
 	}
 	if form, known, err := x86ImmediateShuffleProperties(ins, arch); known {
 		return int64(form.memoryBytes), false, err == nil && !form.spec.legacy && form.memory == index
+	}
+	if form, known, err := x86PackedFloatShuffleProperties(ins.Op, ins, arch); known {
+		return int64(form.memoryBytes), false, err == nil && !form.legacy && form.memory == index
 	}
 	if form, known, err := x86PackedAlignProperties(ins.Op, ins, arch); known {
 		return int64(form.memoryBytes), false, err == nil && !form.legacy && form.memory == index
