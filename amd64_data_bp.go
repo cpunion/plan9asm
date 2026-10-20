@@ -56,6 +56,9 @@ func x86DataBPSourceScope(fn Func, sig FuncSig, arch string) bool {
 		if _, stack, _ := x86StackWidthProperties(ins, arch); stack {
 			return false // Private PUSH/FLAGS storage keeps its own source owner.
 		}
+		if x86LEAWidth(ins.Op, arch) != 0 && len(ins.Args) != 0 && ins.Args[0].Kind == OpFP {
+			return false // LEA's Ym operand takes the FP address without OpFPAddr.
+		}
 		for _, operand := range ins.Args {
 			if operand.Kind == OpFPAddr || operand.Kind == OpSym {
 				return false

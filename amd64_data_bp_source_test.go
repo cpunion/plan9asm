@@ -109,3 +109,39 @@ func TestAMD64SourceDefinedDataBPDoesNotGrantMissingInputsOrFrameRoles(t *testin
 		})
 	}
 }
+
+func TestAMD64SourceDefinedDataBPRejectsUnusedFPAddressesThreeAPIs(t *testing.T) {
+	for _, address := range []string{
+		"LEAW n+8(FP),AX", "LEAL n+8(FP),AX", "LEAQ n+8(FP),AX",
+		"MOVQ $n+8(FP),AX", "MOVD $n+8(FP),AX", "MOVDQ2Q $n+8(FP),AX",
+	} {
+		t.Run(address, func(t *testing.T) {
+			for _, takeAddress := range []bool{false, true} {
+				t.Run(fmt.Sprintf("take-address=%t", takeAddress), func(t *testing.T) {
+					body := "MOVL (BP),AX\nROLL $7,AX\nMOVL AX,12(BP)"
+					if takeAddress {
+						// n is a real initialized numerical parameter, not a missing
+						// slot or pointer. AX is overwritten before observation, so
+						// unused-address transfer cannot conceal a missing input.
+						body = address + "\n" + body
+					}
+					source := strings.Replace(amd64DataBPSource(8, "MOVQ p+0(FP),BP", body), "$8-8", "$8-16", 1)
+					goAssemblerOracleOutput(t, "amd64", source, "", true)
+					for _, api := range []string{"text", "module", "Go"} {
+						t.Run(api, func(t *testing.T) {
+							ir, err := x86ScalarFPBitViewAPI(t, source, "func Value(p *[4]uint32,n uint64)\n",
+								"amd64", "x86_64-unknown-linux-gnu", api)
+							if takeAddress {
+								if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+									t.Fatal("an unused but actual FP address borrowed the data BP source scope", err)
+								}
+							} else if err != nil || ir == "" {
+								t.Fatal("the same complete initialized program without FP-address observation must remain supported", err)
+							}
+						})
+					}
+				})
+			}
+		})
+	}
+}

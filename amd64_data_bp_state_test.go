@@ -181,4 +181,17 @@ func TestAMD64SourceDefinedDataBPScopeDoesNotBorrowOtherOwners(t *testing.T) {
 			}
 		})
 	}
+	for _, address := range []string{
+		"LEAW p+0(FP),AX", "LEAL p+0(FP),AX", "LEAQ p+0(FP),AX",
+		"MOVQ $p+0(FP),AX", "MOVD $p+0(FP),AX", "MOVDQ2Q $p+0(FP),AX",
+	} {
+		t.Run("complete-FP-address-family/"+address, func(t *testing.T) {
+			fn := file.Funcs[0]
+			fn.Instrs = append([]Instr(nil), fn.Instrs...)
+			fn.Instrs[2] = x86ScalarLaneInstruction(t, address)
+			if x86DataBPSourceScope(fn, signature, "amd64") {
+				t.Fatal("the complete LEA width/address-MOV alias family acquired a data BP source role")
+			}
+		})
+	}
 }
