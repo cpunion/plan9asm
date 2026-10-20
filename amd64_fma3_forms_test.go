@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"go/ast"
 	"go/parser"
@@ -95,9 +96,11 @@ func TestX86FMA3FixedRoundingDefaultArchitecture(t *testing.T) {
 		TargetTriple: "x86_64-unknown-linux-gnu",
 		Sigs:         map[string]FuncSig{"defaultFMA": {Name: "defaultFMA", Ret: Void}},
 	})
-	if err != nil {
-		t.Fatal(err)
+	if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+		t.Fatal("default-architecture format source invented its missing FMA inputs", err)
 	}
+	file, signatures := x86UnboundVoidFormatSource(t, source, "defaultFMA", "amd64", "x86_64-unknown-linux-gnu")
+	ir = x86ScalarFormatObjectUnit(t, file, signatures, "amd64", "x86_64-unknown-linux-gnu", 0)
 	llc, _, found := findLlcAndClang(t)
 	if !found {
 		t.Fatal("LLVM 22 llc/clang not found")
@@ -179,20 +182,21 @@ func TestX86FMA3GrammarAxesActualGoAndFiveLLVM22Targets(t *testing.T) {
 			source.WriteString(entry)
 			sigs[name] = FuncSig{Name: name, Ret: Void}
 		}
-		requireX86GoAssemblerResult(t, arch, source.String(), true)
-		file, err := Parse(ArchAMD64, source.String())
-		if err != nil {
-			t.Fatal(err)
+		wanted := map[string]int{"amd64": 1836, "386": 612}[arch]
+		if len(sigs) != wanted {
+			t.Fatal("complete original FMA3 format denominator changed", arch, len(sigs), wanted)
 		}
+		requireX86GoAssemblerResult(t, arch, source.String(), true)
 		triples := []string{"x86_64-unknown-linux-gnu", "x86_64-apple-darwin", "x86_64-pc-windows-msvc"}
 		if arch == "386" {
 			triples = []string{"i386-unknown-linux-gnu", "i686-pc-windows-msvc"}
 		}
 		for _, triple := range triples {
-			ir, err := Translate(file, Options{Goarch: arch, TargetTriple: triple, Sigs: sigs})
-			if err != nil {
-				t.Fatal(err)
+			file, observed := x86UnboundVoidFormatSources(t, source.String(), arch, triple)
+			if !reflect.DeepEqual(observed, sigs) {
+				t.Fatal("complete original FMA format inventory changed its function signatures")
 			}
+			ir := x86ScalarFormatObjectUnit(t, file, sigs, arch, triple, 0)
 			compileLLVMToObject(t, llc, triple, "fma-formats.ll", "fma-formats.o", ir)
 		}
 		t.Logf("%s: %d independently emitted original-Go format entries", arch, len(sigs))
