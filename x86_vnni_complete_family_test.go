@@ -96,15 +96,16 @@ func TestX86VNNIIntegerEveryInputByteAccumulatorAndState(t *testing.T) {
 							state.writeVector(input, 64, state.vectorBytes(input)&^(uint64(1)<<uint(missing)), false)
 						}
 						before := state.clone()
-						defined := x86CallerVectorByteMask(int64(width))
-						if missing >= 0 && missing < width {
-							// Every corresponding four source bytes (or two words)
-							// and every old dword are needed, even with EVEX.z.
-							defined &^= uint64(15) << uint(missing/4*4)
+						// Every corresponding four source bytes (or two words)
+						// and every old dword are needed, even with EVEX.z.
+						// Use the same complete active-input boundary for direct
+						// and whole-source observers, including Void programs.
+						want := missing < 0 || missing >= width
+						if want {
+							before.writeVector(0, width, x86CallerVectorByteMask(int64(width)), false)
 						}
-						before.writeVector(0, width, defined, false)
-						if !x86ScalarFPResultTransfer(ins, &state, nil, 0, arch) || !reflect.DeepEqual(state, before) {
-							t.Fatal("integer dot product invented a lane or changed aliases/FLAGS/DF/pointer state", input, missing)
+						if accepted := x86ScalarFPResultTransfer(ins, &state, nil, 0, arch); accepted != want || !reflect.DeepEqual(state, before) {
+							t.Fatal("integer dot product borrowed an active input or changed aliases/FLAGS/DF/pointer state", input, missing, accepted, want)
 						}
 					}
 				}
