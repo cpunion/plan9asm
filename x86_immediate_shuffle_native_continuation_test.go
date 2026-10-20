@@ -17,10 +17,14 @@ func x86ImmediateShuffleNativePrograms(arch string) (string, string, int) {
 	}
 	var source, declarations strings.Builder
 	count := 0
-	for _, op := range []string{"VPSHUFD", "VPSHUFHW", "VPSHUFLW"} {
+	for _, op := range []string{"PSHUFL", "PSHUFD", "PSHUFHW", "PSHUFLW", "VPSHUFD", "VPSHUFHW", "VPSHUFLW"} {
+		legacy := !strings.HasPrefix(op, "V")
 		for _, bank := range []string{"X", "Y", "Z"} {
+			if legacy && bank != "X" {
+				continue
+			}
 			for mode := 0; mode < 3; mode++ {
-				if arch == "386" && mode != 0 {
+				if (legacy || arch == "386") && mode != 0 {
 					continue // Go's named mode32 arity, not a physical raw restriction.
 				}
 				for _, broadcast := range []bool{false, true} {
@@ -59,9 +63,9 @@ func TestX86ImmediateShuffleInitializedNativeReadCompleteObjects(t *testing.T) {
 	for _, target := range x86RawReturnTargets {
 		t.Run(target.triple, func(t *testing.T) {
 			source, declarations, count := x86ImmediateShuffleNativePrograms(target.arch)
-			want := 36
+			want := 40
 			if target.arch == "386" {
-				want = 12
+				want = 16
 			}
 			if count != want {
 				t.Fatal("complete source-format denominator changed", count, want)
