@@ -162,6 +162,36 @@ func x86ScaledRoundSelectedRoundingRows() string {
 			}
 		}
 	}
+	// Retain the complete original 8,192-row matrix above. Supplement only
+	// the small/grid boundary that makes the final subtraction inexact:
+	// either side of half-step, retained-unit ties and discarded bits.
+	for _, bits := range []int{32, 64} {
+		fraction, bias := uint(23), uint64(127)
+		if bits == 64 {
+			fraction, bias = 52, 1023
+		}
+		for scale := 0; scale < 16; scale++ {
+			regular := bias - uint64(scale)
+			half := (regular - 1) << fraction
+			middle := (regular - 4) << fraction
+			unit := (regular - 1 - uint64(fraction)) << fraction
+			inputs := []uint64{half - 1, half, half + 1, middle, middle + 1,
+				middle + (uint64(1) << (fraction - 1)) - 1,
+				middle + (uint64(1) << fraction) - 1, unit, unit + 1,
+				unit - 1}
+			for _, magnitude := range inputs {
+				for negative := 0; negative < 2; negative++ {
+					input, mode := magnitude, 2
+					if negative != 0 {
+						input |= uint64(1) << (bits - 1)
+						mode = 1
+					}
+					want := x86ScaledRoundExactIEEE(input, bits, scale, mode, false, true)
+					fmt.Fprintf(&rows, "{%d,%d,%d,0,1,UINT64_C(0x%x),UINT64_C(0x%x)},\n", bits, scale, mode, input, want)
+				}
+			}
+		}
+	}
 	return rows.String()
 }
 
@@ -249,7 +279,7 @@ int main(void) {
 			defer cancel()
 			x86FloatCompareCaptureCommand(t, runtimeOracleNativeCCommand(t, ctx, clang, arguments...))
 			output := x86FloatCompareCaptureCommand(t, exec.Command(executable))
-			if string(output) != "original C exact IEEE observations 32768 failures 0\n" {
+			if string(output) != "original C exact IEEE observations 35328 failures 0\n" {
 				t.Fatalf("incomplete original C observations: %s", output)
 			}
 		})
@@ -263,6 +293,14 @@ func TestX86ScaledRoundPortableSelectedRoundingExactIEEE(t *testing.T) {
 	}
 	triple := testTargetTriple(runtime.GOOS, runtime.GOARCH)
 	var ir, declarations strings.Builder
+	source, _ := x86ScaledRoundSelectedPublicSource("amd64")
+	file, err := Parse(ArchAMD64, source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Use the real whole-module requirements, not hand-written declarations
+	// that could conceal a missing public helper registration.
+	emitAMD64Prelude(&ir, "amd64", file)
 	for _, bits := range []int{32, 64} {
 		for operation := 0; operation < 2; operation++ {
 			for scale := 0; scale < 16; scale++ {

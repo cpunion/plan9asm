@@ -90,6 +90,12 @@ func emitAMD64FMA3RoundingHelpers(b *strings.Builder, file *File, goarch string)
 	mulDivNeeded := make(map[int]bool)
 	for _, fn := range file.Funcs {
 		for _, ins := range fn.Instrs {
+			if form, known, err := x86FloatingHelperProperties(ins, goarch); known && err == nil {
+				base, _, _ := strings.Cut(strings.ToUpper(string(ins.Op)), ".")
+				if spec, scaled := amd64ScaledRoundSpecs[Op(base)]; scaled && spec.mode == amd64Reduce {
+					needed[form.spec.bits], addSubNeeded[form.spec.bits] = true, true
+				}
+			}
 			if form, known, err := x86FloatMulDivProperties(ins, goarch); known && err == nil && form.rounding != "" {
 				mulDivNeeded[form.bits] = true
 			}
