@@ -207,12 +207,20 @@ func (c *amd64Ctx) lowerFMA3(op Op, ins Instr) (ok bool, terminated bool, err er
 func (c *amd64Ctx) lowerPackedFMA3(spec amd64FMA3Spec, properties amd64FMA3Suffix, ins Instr, dstArg Operand, byteWidth int, mask string) (bool, bool, error) {
 	lanes := byteWidth * 8 / spec.laneBits
 	llvmType := amd64FMA3LLVMType(lanes, spec.laneBits)
+	loadLanes := c.loadMaskedPackedCompareLanes
+	if !spec.rawOnly && x86ResultNamedPredicateInstruction(ins) &&
+		(ins.Args[0].Kind == OpMem || ins.Args[0].Kind == OpSym) {
+		// This portable continuation still owes the original native access,
+		// including dead results and per-lane/broadcast mask suppression.
+		// Logical FP slots and independently owned raw forms stay separate.
+		loadLanes = c.loadX86PackedShiftLanes
+	}
 	load := func(arg Operand, allowBroadcast bool) (string, error) {
 		sourceMask := ""
 		if allowBroadcast {
 			sourceMask = mask
 		}
-		bits, err := c.loadMaskedPackedCompareLanes(arg, byteWidth, spec.laneBits, allowBroadcast && properties.broadcast, sourceMask)
+		bits, err := loadLanes(arg, byteWidth, spec.laneBits, allowBroadcast && properties.broadcast, sourceMask)
 		if err != nil {
 			return "", err
 		}
@@ -249,7 +257,12 @@ func (c *amd64Ctx) lowerPackedFMA3(spec amd64FMA3Spec, properties amd64FMA3Suffi
 }
 
 func (c *amd64Ctx) lowerScalarFMA3(spec amd64FMA3Spec, properties amd64FMA3Suffix, ins Instr, dstArg Operand, mask string) (bool, bool, error) {
-	first, err := c.loadFMA3Scalar(ins.Args[0], spec.laneBits, mask)
+	loadFirst := c.loadFMA3Scalar
+	if !spec.rawOnly && x86ResultNamedPredicateInstruction(ins) &&
+		(ins.Args[0].Kind == OpMem || ins.Args[0].Kind == OpSym) {
+		loadFirst = c.loadFMA3ObservableScalar
+	}
+	first, err := loadFirst(ins.Args[0], spec.laneBits, mask)
 	if err != nil {
 		return true, false, err
 	}
@@ -272,6 +285,19 @@ func (c *amd64Ctx) lowerScalarFMA3(spec amd64FMA3Spec, properties amd64FMA3Suffi
 	bits := c.newTmp()
 	fmt.Fprintf(c.b, "  %%%s = bitcast %s %s to i%d\n", bits, llvmType, computed, spec.laneBits)
 	return true, false, c.storeScalarMoveRegister(dstArg.Reg, spec.laneBits, "%"+bits, base, mask, properties.zeroing)
+}
+
+// Only the already validated named FMA memory continuation uses this reader.
+// One guarded volatile lane preserves its exact m32/m64 access independently
+// of the numerical result. It does not certify x86 MXCSR or FP exceptions.
+func (c *amd64Ctx) loadFMA3ObservableScalar(source Operand, laneBits int, mask string) (string, error) {
+	bits, err := c.loadX86PackedShiftLanes(source, laneBits/8, laneBits, false, mask)
+	if err != nil {
+		return "", err
+	}
+	value := c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = bitcast <1 x i%d> %s to %s\n", value, laneBits, bits, amd64FMA3LLVMType(1, laneBits))
+	return "%" + value, nil
 }
 
 func (c *amd64Ctx) loadFMA3Scalar(arg Operand, laneBits int, mask string) (string, error) {
