@@ -54,8 +54,26 @@ func x86PackedShiftPortableIR(source, ir string) (string, error) {
 }
 
 func x86PackedShiftPortableFeatureProjection(ir string, profiles map[string]string) (string, error) {
-	if len(profiles) == 0 || regexp.MustCompile(`\basm\b|@llvm\.(?:x86|aarch64|arm|wasm|ppc|riscv)\.|"target-cpu"`).MatchString(ir) {
-		return "", fmt.Errorf("portable packed-shift IR contains native behavior or no owned functions")
+	if len(profiles) == 0 {
+		return "", fmt.Errorf("portable packed-shift IR has no owned functions")
+	}
+	// The production prelude declares native intrinsics even when no function
+	// uses them. Observe complete, singly referenced declarations without
+	// removing any bytes from the actual projected IR. A body use is native.
+	view, declarationGroups, err := x86PackedShiftInertDeclarations(ir)
+	if err != nil {
+		return "", err
+	}
+	if native := regexp.MustCompile(`\basm\b|@llvm\.(?:x86|aarch64|arm|wasm|ppc|riscv)\.|@"|"target-cpu"`).FindStringIndex(view); native != nil {
+		start := strings.LastIndex(view[:native[0]], "\n") + 1
+		end := strings.IndexByte(view[native[1]:], '\n')
+		if end < 0 {
+			end = len(view)
+		} else {
+			end += native[1]
+		}
+		attributes := regexp.MustCompile(`(?m)^attributes [^\r\n]*`).FindAllString(ir, -1)
+		return "", fmt.Errorf("portable packed-shift native guard: token=%q line=%q complete attribute inventory=%q", view[native[0]:native[1]], view[start:end], attributes)
 	}
 	groupPattern := regexp.MustCompile(`(?m)^attributes (#[0-9]+) = \{ "target-features"="([^"]+)" \}\r?\n`)
 	groups := groupPattern.FindAllStringSubmatch(ir, -1)
@@ -66,8 +84,11 @@ func x86PackedShiftPortableFeatureProjection(ir string, profiles map[string]stri
 		}
 		byProfile[group[2]], byGroup[group[1]] = group[1], group[2]
 	}
-	if len(regexp.MustCompile(`(?m)^attributes `).FindAllString(ir, -1)) != len(groups) ||
-		strings.Count(ir, "target-features") != len(groups) {
+	genericGroups, err := x86PackedShiftInertDeclarationAttributes(ir, declarationGroups, byGroup)
+	if err != nil {
+		return "", err
+	}
+	if strings.Count(ir, "target-features") != len(groups) {
 		return "", fmt.Errorf("unobserved portable packed-shift attribute group")
 	}
 	definitionPattern := regexp.MustCompile(`(?m)^define [^\r\n]*@([A-Za-z_][A-Za-z0-9_.$]*)\([^\r\n]*\)[^\r\n]*\{`)
@@ -110,10 +131,129 @@ func x86PackedShiftPortableFeatureProjection(ir string, profiles map[string]stri
 	projected = definitionPattern.ReplaceAllStringFunc(projected, func(header string) string {
 		return regexp.MustCompile(` #[0-9]+\b`).ReplaceAllString(header, "")
 	})
-	if strings.Contains(projected, "target-features") || referencePattern.MatchString(projected) {
+	if strings.Contains(projected, "target-features") {
 		return "", fmt.Errorf("portable packed-shift IR retains an unchecked ISA reference")
 	}
+	for _, reference := range referencePattern.FindAllString(projected, -1) {
+		if !genericGroups[reference] {
+			return "", fmt.Errorf("portable packed-shift IR retains an unowned declaration attribute: %s", reference)
+		}
+	}
 	return projected, nil
+}
+
+func x86PackedShiftInertDeclarations(ir string) (string, map[string]int, error) {
+	declarations := regexp.MustCompile(`(?m)^declare [^@\r\n]+(@[A-Za-z_][A-Za-z0-9_.$]*)\(([^@\r\n]*)\)(?: (#[0-9]+))?\r?$`)
+	symbols := regexp.MustCompile(`@[A-Za-z_][A-Za-z0-9_.$]*`).FindAllString(ir, -1)
+	uses := make(map[string]int)
+	for _, symbol := range symbols {
+		uses[symbol]++
+	}
+	groups := make(map[string]int)
+	native := regexp.MustCompile(`^@llvm\.(?:x86|aarch64|arm|wasm|ppc|riscv)\.`)
+	var failure error
+	view := declarations.ReplaceAllStringFunc(ir, func(line string) string {
+		parts := declarations.FindStringSubmatch(line)
+		depth := 0
+		for _, character := range parts[2] {
+			switch character {
+			case '(':
+				depth++
+			case ')':
+				depth--
+			}
+			if depth < 0 {
+				break
+			}
+		}
+		if depth != 0 {
+			failure = fmt.Errorf("portable packed-shift declaration has incomplete parameters: %s", line)
+			return line
+		}
+		if parts[3] != "" {
+			groups[parts[3]]++
+		}
+		if native.MatchString(parts[1]) {
+			if uses[parts[1]] != 1 {
+				failure = fmt.Errorf("portable packed-shift native intrinsic is not an inert unique declaration: %s", parts[1])
+				return line
+			}
+			return ""
+		}
+		return line
+	})
+	return view, groups, failure
+}
+
+func x86PackedShiftInertDeclarationAttributes(ir string, declarationGroups map[string]int, featureGroups map[string]string) (map[string]bool, error) {
+	pattern := regexp.MustCompile(`(?m)^attributes (#[0-9]+) = \{ ([^\r\n]*) \}\r?\n`)
+	groups := pattern.FindAllStringSubmatch(ir, -1)
+	if len(regexp.MustCompile(`(?m)^attributes `).FindAllString(ir, -1)) != len(groups) {
+		return nil, fmt.Errorf("portable packed-shift IR has an incomplete attribute group")
+	}
+	seen, generic := make(map[string]bool), make(map[string]bool)
+	for _, group := range groups {
+		if seen[group[1]] {
+			return nil, fmt.Errorf("portable packed-shift IR has a duplicate attribute identity: %s", group[1])
+		}
+		seen[group[1]] = true
+		if _, feature := featureGroups[group[1]]; feature {
+			continue
+		}
+		// LLVM22 attaches these generic properties to prelude declarations.
+		// The declaration itself must own every reference; no function body or
+		// definition can borrow this group, and no target attribute is accepted.
+		properties := regexp.MustCompile(`memory\((?:none|read|write|readwrite|(?:argmem|inaccessiblemem):[ \t]*(?:read|write|readwrite)(?:,[ \t]*(?:argmem|inaccessiblemem):[ \t]*(?:read|write|readwrite))*)\)`).ReplaceAllString(group[2], "")
+		for _, property := range strings.Fields(properties) {
+			switch property {
+			case "nocallback", "nofree", "nosync", "nounwind", "speculatable", "willreturn", "nocreateundeforpoison", "strictfp":
+			default:
+				return nil, fmt.Errorf("portable packed-shift declaration gained an unobserved attribute: %s", property)
+			}
+		}
+		references := regexp.MustCompile(regexp.QuoteMeta(group[1])+`\b`).FindAllString(ir, -1)
+		if declarationGroups[group[1]] == 0 || len(references) != declarationGroups[group[1]]+1 {
+			return nil, fmt.Errorf("portable packed-shift generic attribute is not owned only by declarations: %s", group[1])
+		}
+		generic[group[1]] = true
+	}
+	return generic, nil
+}
+
+func TestX86PackedShiftPortableUnusedDeclarationsStayInert(t *testing.T) {
+	const declaration = "declare i32 @llvm.x86.rdpid() #0\n"
+	const attributes = "attributes #0 = { nocallback nofree nosync nounwind willreturn }\n"
+	const body = "define void @A(ptr %p) {\n  %v = load volatile i8, ptr %p, align 1\n" +
+		"  store volatile i8 %v, ptr %p, align 1\n  ret void\n}\n"
+	input := declaration + body + attributes
+	profiles := map[string]string{"A": ""}
+	if projected, err := x86PackedShiftPortableFeatureProjection(input, profiles); err != nil || projected != input {
+		t.Error("single unused native declaration and its own generic attributes must remain byte-for-byte inert", err)
+	}
+	shared := input + "declare i32 @llvm.x86.rdpid.extension() #0\n"
+	if projected, err := x86PackedShiftPortableFeatureProjection(shared, profiles); err != nil || projected != shared {
+		t.Error("inert declarations may share their exact generic group without confusing symbol prefixes", err)
+	}
+	for name, changed := range map[string]string{
+		"called-native":          strings.Replace(input, "  ret void", "  %native = call i32 @llvm.x86.rdpid()\n  ret void", 1),
+		"native-address":         input + "@escape = global ptr @llvm.x86.rdpid\n",
+		"duplicate-declaration":  input + declaration,
+		"incomplete-declaration": strings.Replace(input, "@llvm.x86.rdpid() #0", "@llvm.x86.rdpid( #0", 1),
+		"trailing-body":          strings.Replace(input, "@llvm.x86.rdpid() #0", "@llvm.x86.rdpid() #0 call i32 @llvm.x86.rdpid()", 1),
+		"foreign-attribute":      input + "attributes #7 = { nounwind }\n",
+		"definition-attribute":   strings.Replace(input, "@A(ptr %p) {", "@A(ptr %p) #0 {", 1),
+		"native-attribute":       strings.Replace(input, "nocallback nofree nosync nounwind willreturn", `"target-cpu"="skylake-avx512"`, 1),
+		"native-inline-asm":      strings.Replace(input, "  ret void", `  call void asm sideeffect "nop", ""()`+"\n  ret void", 1),
+		"quoted-native-address":  input + "@escape = global ptr @\"llvm.x86.rdpid\"\n",
+		"escaped-native-address": input + "@escape = global ptr @\"llvm\\2Ex86\\2Erdpid\"\n",
+		"native-prefix-call":     strings.Replace(input, "  ret void", "  %native = call i32 @llvm.x86.rdpid.extension()\n  ret void", 1),
+	} {
+		t.Run(name, func(t *testing.T) {
+			if projected, err := x86PackedShiftPortableFeatureProjection(changed, profiles); err == nil || projected != "" {
+				t.Fatal("unused-declaration policy accepted a native body, address or unrelated attribute", err)
+			}
+		})
+	}
 }
 
 func TestX86PackedShiftPortableProjectionConsumesNormalizedProductionIR(t *testing.T) {
@@ -180,8 +320,11 @@ func TestX86PackedShiftPortableProjectionOwnsEveryFunctionAndEffect(t *testing.T
 		"missing-function":              strings.Replace(input, "@B(ptr %p)", "@Unknown(ptr %p)", 1),
 		"extra-definition":              input + "define void @D() {\nret void\n}\n",
 		"native-asm":                    strings.Replace(input, "ret void", `call void asm sideeffect "nop", ""()`, 1),
-		"native-intrinsic":              input + "declare void @llvm.x86.sse.pause()\n",
-		"extra-attribute":               input + "attributes #3 = { nounwind }\n",
+		// The independent b6ef80f8a RED proves that a declaration alone is
+		// inert. This negative must contain an actual native body operation.
+		"native-intrinsic": strings.Replace(input, "ret void", "call void @llvm.x86.sse.pause()\n  ret void", 1) +
+			"declare void @llvm.x86.sse.pause()\n",
+		"extra-attribute": input + "attributes #3 = { nounwind }\n",
 	} {
 		t.Run(name, func(t *testing.T) {
 			if actual, err := x86PackedShiftPortableFeatureProjection(changed, profiles); err == nil || actual != "" {
