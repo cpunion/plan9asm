@@ -362,3 +362,57 @@ func TestX86PackedShiftRawWholeReplayAndMissingInputBoundaries(t *testing.T) {
 		}
 	}
 }
+
+func TestX86PackedShiftRawPhysicalSnapshotRejectsAtomically(t *testing.T) {
+	for _, arch := range []string{"386", "amd64"} {
+		for _, row := range x86PackedShiftRawCases() {
+			t.Run(arch+"/"+row.name(), func(t *testing.T) {
+				ins := x86RawMoveObservedInstruction(t, arch, row.code(false))
+				encoding := x86RawPackedShiftVEX
+				if row.evex {
+					encoding = x86RawPackedShiftEVEX
+				}
+				w := row.member.mode == "lane" && row.member.bits != 32 ||
+					row.evex && row.member.mode == "uniform" && row.member.bits == 64
+				if ins.x86PackedShiftEncoding != encoding || ins.x86PackedShiftW != w ||
+					!ins.x86Encoded || !x86RawPackedShiftSource(ins, arch) {
+					t.Fatal("actual generation, W and mode were not captured before source replay", ins.Raw)
+				}
+				state := x86ResultState{flags: x86ByteFlagsAll, direction: x86ResultDirectionBackward}
+				for index := 0; index < 3; index++ {
+					state.writeVector(index, 64, ^uint64(0), false)
+				}
+				state.pointerGP[3], state.masks[1] = true, true
+				before := state.clone()
+				if accepted, known := x86LoweredRawPackedShiftStep(ins, &state, nil, arch); !known || !accepted ||
+					!reflect.DeepEqual(state, before) {
+					t.Fatal("complete original typed inputs lost the paired effect or unrelated state", accepted, known)
+				}
+				for _, control := range []struct {
+					name string
+					edit func(*Instr)
+				}{
+					{"missing-origin", func(ins *Instr) { ins.x86SourceRaw = nil }},
+					{"missing-snapshot", func(ins *Instr) { ins.x86SourceRaw.packedShift = x86RawPackedShiftIdentity{} }},
+					{"snapshot-mode", func(ins *Instr) { ins.x86SourceRaw.packedShift.arch = "foreign" }},
+					{"snapshot-W", func(ins *Instr) { ins.x86SourceRaw.packedShift.w = !ins.x86SourceRaw.packedShift.w }},
+					{"snapshot-generation", func(ins *Instr) { ins.x86SourceRaw.packedShift.encoding = x86RawPackedShiftAbsent }},
+					{"physical-W", func(ins *Instr) { ins.x86PackedShiftW = !ins.x86PackedShiftW }},
+					{"physical-generation", func(ins *Instr) { ins.x86PackedShiftEncoding = x86RawPackedShiftAbsent }},
+					{"physical-grammar", func(ins *Instr) { ins.x86Encoded = false }},
+				} {
+					changed := cloneX86ReplayInstrs([]Instr{ins})[0]
+					control.edit(&changed)
+					candidate := before.clone()
+					if accepted, _ := x86LoweredRawPackedShiftStep(changed, &candidate, nil, arch); accepted ||
+						x86RawPackedShiftSource(changed, arch) || !reflect.DeepEqual(candidate, before) {
+						t.Fatal("edited physical snapshot borrowed or partially committed a paired effect", control.name)
+					}
+					if !x86RawPackedShiftSource(ins, arch) {
+						t.Fatal("editing a replay clone mutated the original physical snapshot", control.name)
+					}
+				}
+			})
+		}
+	}
+}

@@ -32,7 +32,7 @@ func TestX86PackedShiftRawCompletePhysicalLLVM22AndWIG(t *testing.T) {
 	wantMnemonics := map[string]int{}
 	for _, row := range x86PackedShiftRawCases() {
 		values := []bool{false}
-		if row.wig() {
+		if row.wig() && !row.llvm22WordCountWIGGap() {
 			rows = append(rows, row)
 			values = append(values, true)
 		}
@@ -44,13 +44,22 @@ func TestX86PackedShiftRawCompletePhysicalLLVM22AndWIG(t *testing.T) {
 			wantMnemonics[strings.ToLower(row.member.op)]++
 		}
 	}
-	if len(rows) != 172 || len(wantMnemonics) != 20 {
+	if len(rows) != 118 || len(wantMnemonics) != 20 {
 		t.Fatal("complete uniform-word/byte WIG directory changed", len(rows), len(wantMnemonics))
+	}
+	count := 0
+	for _, expected := range wantMnemonics {
+		count += expected
+	}
+	if count != 796 {
+		t.Fatal("complete LLVM22-positive physical row denominator changed", count)
 	}
 	for _, mode := range []int{32, 64} {
 		triple := map[int]string{32: "i386-unknown-linux-gnu", 64: "x86_64-unknown-linux-gnu"}[mode]
 		t.Run(triple, func(t *testing.T) {
-			// An external decoder must recognize every exact W0/W1 byte first.
+			// An external decoder must recognize all 796 positive bytes first.
+			// The 54 valid-but-unrecognized word-count W1 forms have a separate
+			// one-instruction receipt below; none enters this positive batch.
 			// Go choosing W0 is not evidence that W1 is an invalid instruction.
 			stage, cancel := runtimeOracleStageContext(t)
 			command := exec.CommandContext(stage, mc, "--disassemble", "--triple="+triple,
@@ -87,6 +96,87 @@ func TestX86PackedShiftRawCompletePhysicalLLVM22AndWIG(t *testing.T) {
 	}
 }
 
+func (row x86PackedShiftRawCase) llvm22WordCountWIGGap() bool {
+	return row.evex && row.member.mode == "uniform" && row.member.bits == 16 && !row.immediate
+}
+
+func x86PackedShiftRawSingleMC(t *testing.T, mc, triple string, code []byte) string {
+	t.Helper()
+	var input strings.Builder
+	for _, value := range code {
+		fmt.Fprintf(&input, "0x%02x ", value)
+	}
+	input.WriteByte('\n')
+	stage, cancel := runtimeOracleStageContext(t)
+	command := exec.CommandContext(stage, mc, "--disassemble", "--triple="+triple,
+		"--mattr=+avx,+avx2,+avx512f,+avx512bw,+avx512vl")
+	command.Stdin = strings.NewReader(input.String())
+	output, err := runtimeOracleCombinedOutput(stage, command)
+	cancel()
+	if err != nil {
+		t.Fatalf("independent one-instruction LLVM22 observation: %v\n%s", err, output)
+	}
+	return string(output)
+}
+
+func TestX86PackedShiftRawSDMWordCountWIGAndLLVM22Difference(t *testing.T) {
+	// Intel SDM 325462-089 Vol.2B 4-443..445 and Intel XED's
+	// datafiles/avx512-skx/skx-isa.xed.txt specify EVEX.WIG F1/D1/E1.
+	// LLVM22 X86InstrAVX512.td avx512_shift_types omits WIG on its W
+	// count branch, although avx512_shift_rmi_w has it. Observe that exact
+	// external decoder difference separately; it is never a positive LLVM
+	// witness or a justification to drop these 54 valid physical shapes.
+	mc := findLLVM22Tool("llvm-mc")
+	if mc == "" {
+		t.Fatal("independent word-count WIG observations require LLVM22 llvm-mc")
+	}
+	var rows []x86PackedShiftRawCase
+	for _, row := range x86PackedShiftRawCases() {
+		if row.llvm22WordCountWIGGap() {
+			rows = append(rows, row)
+		}
+	}
+	if len(rows) != 54 {
+		t.Fatal("complete external word-count WIG difference denominator changed", len(rows))
+	}
+	for _, mode := range []int{32, 64} {
+		triple := map[int]string{32: "i386-unknown-linux-gnu", 64: "x86_64-unknown-linux-gnu"}[mode]
+		for _, row := range rows {
+			t.Run(triple+"/"+row.name(), func(t *testing.T) {
+				mnemonic := regexp.MustCompile(`(?m)\b` + strings.ToLower(row.member.op) + `[ \t]+`)
+				control := x86PackedShiftRawSingleMC(t, mc, triple, row.code(false))
+				if strings.Contains(control, "warning") || strings.Contains(control, "invalid") ||
+					len(mnemonic.FindAllString(control, -1)) != 1 {
+					t.Fatal("independent fresh-process W0 prerequisite failed", control)
+				}
+				observation := x86PackedShiftRawSingleMC(t, mc, triple, row.code(true))
+				if !strings.Contains(observation, "warning: invalid instruction encoding") ||
+					strings.Contains(observation, "error:") || mnemonic.MatchString(observation) {
+					t.Fatal("LLVM22 word-count W1 difference changed; audit the independent decoder before updating this receipt", observation)
+				}
+				// A fresh process contains exactly this six-byte instruction. Its
+				// warning cannot desynchronize the subsequent W0/other-family rows.
+				if len(row.code(true)) != 6 {
+					t.Fatal("external decoder difference grew beyond its exact instruction")
+				}
+				var named Instr
+				for _, w := range []bool{false, true} {
+					code := row.code(w)
+					ins, consumed, known, err := x86PackedShiftRawDecode(code, mode)
+					if !known || err != nil || consumed != len(code) {
+						t.Fatal("SDM/XED word-count WIG source is missing from the complete decoder", w, known, consumed, err)
+					}
+					if !w {
+						named = ins
+					} else if ins.Op != named.Op || !reflect.DeepEqual(ins.Args, named.Args) {
+						t.Fatal("ignored word-count W changed its exact semantic operands")
+					}
+				}
+			})
+		}
+	}
+}
+
 func TestX86PackedShiftRawPhysicalRestrictionsStayLocal(t *testing.T) {
 	for _, row := range x86PackedShiftRawCases() {
 		if row.input != "register" || row.mask != 0 {
@@ -120,6 +210,11 @@ func TestX86PackedShiftRawPhysicalRestrictionsStayLocal(t *testing.T) {
 				code := append([]byte(nil), valid...)
 				code[1] &^= 0x20
 				controls["physical-register8"] = code
+				if row.immediate {
+					code := append([]byte(nil), valid...)
+					code[4] = row.member.group<<3 | 3
+					controls["VEX-immediate-memory"] = code
+				}
 			}
 			if row.member.mode == "lane" && row.member.bits == 16 {
 				code := append([]byte(nil), valid...)
