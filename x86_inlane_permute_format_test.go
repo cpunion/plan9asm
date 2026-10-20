@@ -10,6 +10,11 @@ import (
 // Go-accepted mode32 high banks remain physical Context, not low-bank aliases.
 func x86InLanePermuteUnboundFormatObject(t *testing.T, source, arch, triple string, wantPhysical, wantContext int) string {
 	t.Helper()
+	return x86ElementPermuteUnboundFormatObject(t, source, arch, triple, wantPhysical, wantContext)
+}
+
+func x86ElementPermuteUnboundFormatObject(t *testing.T, source, arch, triple string, wantPhysical, wantContext int) string {
+	t.Helper()
 	file, signatures := x86UnboundVoidFormatSources(t, source, arch, triple)
 	normalized, err := normalizeX86RawFile(file, arch)
 	if err != nil {
@@ -23,7 +28,7 @@ func x86InLanePermuteUnboundFormatObject(t *testing.T, source, arch, triple stri
 		unit.Instrs = nil
 		for _, instruction := range function.Instrs {
 			if instruction.Op != OpTEXT && instruction.Op != OpRET {
-				_, known, err := x86InLanePermuteProperties(instruction.Op, instruction, arch)
+				_, known, err := x86ElementPermuteProperties(instruction.Op, instruction, arch)
 				if known && errors.Is(err, ErrProbeNeedsContext) && arch == "386" &&
 					x86Mode32VectorRegisterContext(instruction, arch) != nil {
 					contextual++
@@ -44,6 +49,19 @@ func x86InLanePermuteUnboundFormatObject(t *testing.T, source, arch, triple stri
 	t.Logf("complete original Go/public Context retained; %d physical emitter formats and %d Go-accepted mode32 high-bank Context rows; no initialized/native execution claim", physical, contextual)
 	return x86InstructionFormatObjectUnit(t, &units, signatures, arch, triple, 0,
 		func(c *amd64Ctx, instruction Instr) (bool, bool, error) {
-			return c.lowerInLaneFloatingPermute(instruction.Op, instruction)
+			form, known, err := x86ElementPermuteProperties(instruction.Op, instruction, arch)
+			if !known || err != nil {
+				return known, false, err
+			}
+			return c.lowerElementPermute(form, instruction)
 		})
+}
+
+func x86ElementPermuteCompileFormatObjects(t *testing.T, llc, triple, ir string) {
+	t.Helper()
+	for _, pipeline := range []struct{ ir, level string }{
+		{ir, "-O0"}, {ir, "-O2"}, {x86DwordProductIROptimize(t, ir), "-O2"},
+	} {
+		x86PackedStringCompileObject(t, llc, triple, pipeline.ir, pipeline.level)
+	}
 }

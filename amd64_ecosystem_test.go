@@ -1311,12 +1311,14 @@ func TestTranslateAMD64QwordPermuteCompleteGoAssemblerForms(t *testing.T) {
 		fmt.Fprintf(&src, "\t%s.BCST.Z (AX), Z21, K3, Z22\n", op)
 	}
 	src.WriteString("\tRET\n")
-	ll := translateAMD64EcosystemCase(t, src.String(), "qwordpermuteforms")
+	// All original 32 rows remain Go/public-Context inputs. These private
+	// format objects are distinct from the initialized public family matrix.
+	ll := x86ElementPermuteUnboundFormatObject(t, src.String(), "amd64", "x86_64-unknown-linux-gnu", 32, 0)
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc not found")
 	}
-	compileLLVMToObject(t, llc, "x86_64-unknown-linux-gnu", "qword-permute-forms.ll", "qword-permute-forms.o", ll)
+	x86ElementPermuteCompileFormatObjects(t, llc, "x86_64-unknown-linux-gnu", ll)
 }
 
 func TestTranslate386QwordPermuteCompleteGoAssemblerForms(t *testing.T) {
@@ -1336,25 +1338,15 @@ func TestTranslate386QwordPermuteCompleteGoAssemblerForms(t *testing.T) {
 		fmt.Fprintf(&src, "\t%s.BCST (AX), Z1, Z7\n", op)
 	}
 	src.WriteString("\tRET\n")
-	file, err := Parse(ArchAMD64, src.String())
-	if err != nil {
-		t.Fatal(err)
-	}
-	ll, err := Translate(file, Options{
-		TargetTriple: "i386-unknown-linux-gnu",
-		Goarch:       "386",
-		Sigs: map[string]FuncSig{
-			"qwordpermuteforms386": {Name: "qwordpermuteforms386", Ret: Void},
-		},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	// Go accepts six extended-Y rows, but they do not authorize physical
+	// mode32 registers. Preserve all 22 original Go/Context rows before
+	// compiling the other 16 physical rows through the private emitter.
+	ll := x86ElementPermuteUnboundFormatObject(t, src.String(), "386", "i386-unknown-linux-gnu", 16, 6)
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc not found")
 	}
-	compileLLVMToObject(t, llc, "i386-unknown-linux-gnu", "qword-permute-386-forms.ll", "qword-permute-386-forms.o", ll)
+	x86ElementPermuteCompileFormatObjects(t, llc, "i386-unknown-linux-gnu", ll)
 }
 
 func TestTranslateAMD64QwordPermuteRejectsFormsOutsideGoAssemblerTables(t *testing.T) {

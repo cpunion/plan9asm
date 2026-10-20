@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"bytes"
 	"fmt"
 	"reflect"
 	"strings"
@@ -130,19 +131,14 @@ func TestTranslateX86RawQwordPermuteLLVM22AllTargets(t *testing.T) {
 				for _, value := range code {
 					fmt.Fprintf(&raw, "BYTE $%#02x\n", value)
 				}
-				file, err := Parse(ArchAMD64, raw.String())
-				if err != nil {
-					t.Fatal(err)
+				if actual := assembleX87ControlBytes(t, target.goarch, raw.String()); !bytes.Equal(actual, code) {
+					t.Fatal("complete original Go BYTE source changed its instruction or RET bytes", actual, code)
 				}
-				ir, err := Translate(file, Options{
-					Goarch:       target.goarch,
-					TargetTriple: target.triple,
-					Sigs:         map[string]FuncSig{"rawqwordpermute": {Name: "rawqwordpermute", Ret: Void}},
-				})
-				if err != nil {
-					t.Fatal(err)
-				}
-				compileLLVMToObject(t, llc, target.triple, "raw-qword-permute.ll", "raw-qword-permute.o", ir)
+				// Preserve complete BYTE/RET Go objects and all public Context
+				// controls before independently normalizing the private emitter
+				// unit. Neither raw identity nor an unbound RET supplies NUM.
+				ir := x86ElementPermuteUnboundFormatObject(t, raw.String(), target.goarch, target.triple, 1, 0)
+				x86ElementPermuteCompileFormatObjects(t, llc, target.triple, ir)
 			})
 		}
 	}
