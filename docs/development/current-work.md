@@ -130,7 +130,7 @@ retained LEAW portable DF instrumentation is not unmodified native execution.
 
 ## Classification and performance references
 
-The fresh independent classification comparison at `bdb7ed6bb` covers all
+The earlier independent classification comparison at `bdb7ed6bb` covers all
 sixteen Go1.20–Go1.27 x86 reports. Every form, status, fingerprint and metric
 matches the separately qualified `18a4052d3` reference; no baseline was edited.
 That reference, recorded by baseline-only `ae2579cf2`, moved exactly 126 further
@@ -143,6 +143,13 @@ Context is not an initialized-program success. Retain the historical Go1.20
 unsupported form;
 the current five-architecture gate still requires zero unsupported/parse errors.
 Re-audit complete forms and fingerprints before changing any baseline.
+
+The subsequent `68fbaa638` audit independently checks all sixteen reports
+against that qualified prior. Exactly 542 input-deficient FMA3 forms per AMD64
+SDK move from supported to Context; all 386 forms and every other metric stay
+unchanged. Current Go AMD64 is now 2,571 supported / 4,165 Context / zero
+unsupported. Only these audited classifications and their fingerprints update
+the baseline. Initialized family programs and objects remain separate evidence.
 
 The latest full benchmark diagnostic at `47e432d4e` remains failed: all 184
 target/file pairs attempted, 129 compiled, 55 failed, no N/A/unattempted. The
