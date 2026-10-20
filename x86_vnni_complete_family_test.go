@@ -128,27 +128,35 @@ func x86VNNIOriginalConformance(t *testing.T) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	start := strings.Index(string(data), "TEXT ·packedDotProductSemantics(SB)")
-	if start < 0 {
-		t.Fatal("original complete integer-dot conformance entry disappeared")
-	}
-	end := strings.Index(string(data[start:]), "\n// packedIntegerMinMaxSemantics")
-	if end < 0 {
-		t.Fatal("original integer-dot source boundary disappeared")
-	}
-	body := string(data[start : start+end])
-	if fmt.Sprintf("%x", sha256.Sum256([]byte(body))) != "4096e21a32435046699e0e1a02379246b7ba6e1be681f8868515e838e511b410" {
-		t.Fatal("original complete six-pointer ASM program changed")
-	}
-	data, err = os.ReadFile("amd64_conformance_test.go")
+	reference, err := os.ReadFile("amd64_conformance_test.go")
 	if err != nil {
 		t.Fatal(err)
 	}
-	function, err := x86SegmentMOVSourceFunction(data, "amd64ConformanceRuntimeC")
-	if err != nil || fmt.Sprintf("%x", sha256.Sum256(function)) != "41b0fc284d1aea9a9d24d613f84a6f4ad416d25a84dfa9664f81c7f1a9eef1b4" {
-		t.Fatal("original whole C reference/observations changed", err)
+	source, err := x86VNNIOriginalConformanceSource(data, reference)
+	if err != nil {
+		t.Fatal(err)
 	}
-	return "#include \"textflag.h\"\n" + body
+	return source
+}
+
+func x86VNNIOriginalConformanceSource(assembly, reference []byte) (string, error) {
+	start := strings.Index(string(assembly), "TEXT ·packedDotProductSemantics(SB)")
+	if start < 0 {
+		return "", fmt.Errorf("original complete integer-dot conformance entry disappeared")
+	}
+	end := strings.Index(string(assembly[start:]), "\n// packedIntegerMinMaxSemantics")
+	if end < 0 {
+		return "", fmt.Errorf("original integer-dot source boundary disappeared")
+	}
+	body := string(assembly[start : start+end])
+	if fmt.Sprintf("%x", sha256.Sum256([]byte(body))) != "4096e21a32435046699e0e1a02379246b7ba6e1be681f8868515e838e511b410" {
+		return "", fmt.Errorf("original complete six-pointer ASM program changed")
+	}
+	function, err := x86SegmentMOVSourceFunction(reference, "amd64ConformanceRuntimeC")
+	if err != nil || fmt.Sprintf("%x", sha256.Sum256(function)) != "41b0fc284d1aea9a9d24d613f84a6f4ad416d25a84dfa9664f81c7f1a9eef1b4" {
+		return "", fmt.Errorf("original whole C reference/observations changed: %v", err)
+	}
+	return "#include \"textflag.h\"\n" + body, nil
 }
 
 func TestX86VNNIIntegerOriginalInitializedConformanceObjects(t *testing.T) {
