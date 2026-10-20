@@ -7,6 +7,10 @@ import "fmt"
 // unknown AVX opcode, so recover every register and safe ModRM/SIB memory form
 // before generic decoding.
 func decodedX86ANDNInstruction(code []byte, mode int) (instruction Instr, length int, ok bool, err error) {
+	return decodedX86ANDNInstructionWithMemory(code, mode, x86RawMemoryDecoder{})
+}
+
+func decodedX86ANDNInstructionWithMemory(code []byte, mode int, memory x86RawMemoryDecoder) (instruction Instr, length int, ok bool, err error) {
 	i := 0
 	segment := Reg("")
 	addressOverride := false
@@ -62,7 +66,7 @@ vex:
 	if !valid {
 		return Instr{}, 0, true, fmt.Errorf("invalid destination register %d", destinationNumber)
 	}
-	first, consumed, err := decodedX86VEXRMSource(code[i+4:], mode, bExt, xExt, segment)
+	first, consumed, err := memory.scalar(code[i+4:], mode, bExt, xExt, segment, 1)
 	if err != nil {
 		return Instr{}, 0, true, err
 	}

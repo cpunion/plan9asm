@@ -7,6 +7,10 @@ import "fmt"
 // memory form. x/arch v0.14 reports the VEX.0F3A encoding as an unknown AVX
 // opcode, so it must be recovered before generic decoding.
 func decodedX86RORXInstruction(code []byte, mode int) (instruction Instr, length int, ok bool, err error) {
+	return decodedX86RORXInstructionWithMemory(code, mode, x86RawMemoryDecoder{})
+}
+
+func decodedX86RORXInstructionWithMemory(code []byte, mode int, memory x86RawMemoryDecoder) (instruction Instr, length int, ok bool, err error) {
 	i := 0
 	segment := Reg("")
 	addressOverride := false
@@ -57,7 +61,7 @@ vex:
 	if !valid {
 		return Instr{}, 0, true, fmt.Errorf("invalid destination register %d", destinationNumber)
 	}
-	source, consumed, err := decodedX86VEXRMSource(code[i+4:], mode, bExt, xExt, segment)
+	source, consumed, err := memory.scalar(code[i+4:], mode, bExt, xExt, segment, 1)
 	if err != nil {
 		return Instr{}, 0, true, err
 	}

@@ -6,6 +6,10 @@ import "fmt"
 // datafiles/hswbmi/hsw-bmi-vex-isa.xed.txt confirms W is ignored in not64
 // mode, while L must be zero. This is BMI2, not an arbitrary AVX fallback.
 func decodedX86ParallelBitsInstruction(code []byte, mode int) (Instr, int, bool, error) {
+	return decodedX86ParallelBitsInstructionWithMemory(code, mode, x86RawMemoryDecoder{})
+}
+
+func decodedX86ParallelBitsInstructionWithMemory(code []byte, mode int, memory x86RawMemoryDecoder) (Instr, int, bool, error) {
 	p, matched := decodeX86RawVectorEncoding(code)
 	if !matched || p.mapNumber != 2 || p.opcode != 0xf5 || (p.pp != 2 && p.pp != 3) {
 		return Instr{}, 0, false, nil
@@ -39,7 +43,7 @@ func decodedX86ParallelBitsInstruction(code []byte, mode int) (Instr, int, bool,
 			break
 		}
 	}
-	mask, size, err := decodedX86VEXRMSource(code[p.modRM:], mode, p.b, p.x, p.segment)
+	mask, size, err := memory.scalar(code[p.modRM:], mode, p.b, p.x, p.segment, 1)
 	if err != nil {
 		return Instr{}, 0, true, err
 	}

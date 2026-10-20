@@ -6,12 +6,27 @@ import "fmt"
 // Both use VEX.128.0F38.W{0,1} F5 /r with a register index, register or
 // memory source, and register destination. In 32-bit mode W is ignored.
 func decodedX86RawBZHIInstruction(code []byte, mode int) (Instr, int, bool, error) {
+	return decodedX86RawBZHIInstructionWithMemory(code, mode, x86RawMemoryDecoder{})
+}
+
+func decodedX86RawBZHIInstructionWithMemory(code []byte, mode int, memory x86RawMemoryDecoder) (Instr, int, bool, error) {
+	return decodedX86ScalarBitFieldInstructionWithMemory(code, mode, memory, 0xf5, "BZHI")
+}
+
+// BEXTR has the same complete VEX/ModRM/SIB field grammar as BZHI, not
+// its numerical control or FLAGS. Only the physical boundary consumer uses
+// this entry; ordinary source decoding keeps its existing x86asm contract.
+func decodedX86BEXTRInstructionWithMemory(code []byte, mode int, memory x86RawMemoryDecoder) (Instr, int, bool, error) {
+	return decodedX86ScalarBitFieldInstructionWithMemory(code, mode, memory, 0xf7, "BEXTR")
+}
+
+func decodedX86ScalarBitFieldInstructionWithMemory(code []byte, mode int, memory x86RawMemoryDecoder, opcode byte, stem string) (Instr, int, bool, error) {
 	p, matched := decodeX86RawVectorEncoding(code)
-	if !matched || p.mapNumber != 2 || p.opcode != 0xf5 || p.pp != 0 {
+	if !matched || p.mapNumber != 2 || p.opcode != opcode || p.pp != 0 {
 		return Instr{}, 0, false, nil
 	}
 	fail := func(message string) (Instr, int, bool, error) {
-		return Instr{}, 0, true, fmt.Errorf("BZHI: %s", message)
+		return Instr{}, 0, true, fmt.Errorf("%s: %s", stem, message)
 	}
 	if mode != 32 && mode != 64 {
 		return fail("unsupported x86 mode")
@@ -28,11 +43,11 @@ func decodedX86RawBZHIInstruction(code []byte, mode int) (Instr, int, bool, erro
 	if mode == 32 && (p.r != 0 || p.b != 0 || p.x != 0 || p.upper >= 8) {
 		return fail("extended register in 32-bit mode")
 	}
-	op := Op("BZHIL")
+	op := Op(stem + "L")
 	if p.w && mode == 64 {
-		op = "BZHIQ"
+		op = Op(stem + "Q")
 	}
-	source, size, err := decodedX86VEXRMSource(code[p.modRM:], mode, p.b, p.x, p.segment)
+	source, size, err := memory.scalar(code[p.modRM:], mode, p.b, p.x, p.segment, 1)
 	if err != nil {
 		return Instr{}, 0, true, err
 	}

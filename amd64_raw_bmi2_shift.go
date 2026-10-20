@@ -5,6 +5,10 @@ import "fmt"
 // All six Go _ybextrl forms use VEX.L0. Intel XED's hsw-bmi-vex-isa
 // table leaves W unconstrained in not64 mode, so Q bytes decode as L on 386.
 func decodedX86BMI2ShiftInstruction(code []byte, mode int) (Instr, int, bool, error) {
+	return decodedX86BMI2ShiftInstructionWithMemory(code, mode, x86RawMemoryDecoder{})
+}
+
+func decodedX86BMI2ShiftInstructionWithMemory(code []byte, mode int, memory x86RawMemoryDecoder) (Instr, int, bool, error) {
 	p, matched := decodeX86RawVectorEncoding(code)
 	if !matched || p.mapNumber != 2 || p.opcode != 0xf7 || p.pp == 0 {
 		return Instr{}, 0, false, nil
@@ -41,7 +45,7 @@ func decodedX86BMI2ShiftInstruction(code []byte, mode int) (Instr, int, bool, er
 		}
 	}
 
-	source, size, err := decodedX86VEXRMSource(code[p.modRM:], mode, p.b, p.x, p.segment)
+	source, size, err := memory.scalar(code[p.modRM:], mode, p.b, p.x, p.segment, 1)
 	if err != nil {
 		return Instr{}, 0, true, err
 	}

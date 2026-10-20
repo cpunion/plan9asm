@@ -10070,6 +10070,10 @@ rex:
 // register and ModRM/SIB memory families. x/arch v0.14 reports these VEX.NDD
 // encodings as unknown AVX opcodes, so recover them before generic decoding.
 func decodedX86BLSInstruction(code []byte, mode int) (instruction Instr, length int, ok bool, err error) {
+	return decodedX86BLSInstructionWithMemory(code, mode, x86RawMemoryDecoder{})
+}
+
+func decodedX86BLSInstructionWithMemory(code []byte, mode int, memory x86RawMemoryDecoder) (instruction Instr, length int, ok bool, err error) {
 	i := 0
 	segment := Reg("")
 	addressOverride := false
@@ -10121,7 +10125,7 @@ vex:
 		return Instr{}, 0, true, fmt.Errorf("address-size override is not source-layout safe")
 	}
 
-	source, consumed, err := decodedX86VEXRMSource(code[i+4:], mode, bExt, xExt, segment)
+	source, consumed, err := memory.scalar(code[i+4:], mode, bExt, xExt, segment, 1)
 	if err != nil {
 		return Instr{}, 0, true, err
 	}
@@ -10145,6 +10149,10 @@ vex:
 // ModRM/SIB memory family. x/arch rejects this VEX.NDD encoding even though
 // Go's assembler and the semantic lowerer support MULXL/MULXQ.
 func decodedX86MULXInstruction(code []byte, mode int) (instruction Instr, length int, ok bool, err error) {
+	return decodedX86MULXInstructionWithMemory(code, mode, x86RawMemoryDecoder{})
+}
+
+func decodedX86MULXInstructionWithMemory(code []byte, mode int, memory x86RawMemoryDecoder) (instruction Instr, length int, ok bool, err error) {
 	i := 0
 	segment := Reg("")
 	addressOverride := false
@@ -10180,7 +10188,10 @@ vex:
 	lowRegister := int(^vex2>>3) & 15
 	modRM := code[i+4]
 	highRegister := int(modRM>>3&7) + rExt*8
-	if mode == 32 && (width64 || rExt != 0 || xExt != 0 || bExt != 0 || lowRegister >= 8 || highRegister >= 8) {
+	// Native-PC observation ignores W outside long mode, as the actual ISA
+	// does. The zero-value ordinary raw decoder retains its old role/width
+	// restriction; a byte boundary cannot broaden that source contract.
+	if mode == 32 && (width64 && !memory.physicalPC || rExt != 0 || xExt != 0 || bExt != 0 || lowRegister >= 8 || highRegister >= 8) {
 		return Instr{}, 0, true, fmt.Errorf("64-bit width or extended register in 32-bit mode")
 	}
 	if mode != 32 && mode != 64 {
@@ -10190,7 +10201,7 @@ vex:
 		return Instr{}, 0, true, fmt.Errorf("address-size override is not source-layout safe")
 	}
 
-	source, consumed, err := decodedX86VEXRMSource(code[i+4:], mode, bExt, xExt, segment)
+	source, consumed, err := memory.scalar(code[i+4:], mode, bExt, xExt, segment, 1)
 	if err != nil {
 		return Instr{}, 0, true, err
 	}
@@ -10203,7 +10214,7 @@ vex:
 		return Instr{}, 0, true, fmt.Errorf("invalid high destination register %d", highRegister)
 	}
 	op := Op("MULXL")
-	if width64 {
+	if width64 && mode == 64 {
 		op = "MULXQ"
 	}
 	instruction = Instr{
