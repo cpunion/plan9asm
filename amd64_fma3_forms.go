@@ -15,6 +15,61 @@ type amd64FMA3Form struct {
 	memory      int // -1 for a register first source
 }
 
+// Only independently apparent named controls/register banks select EVEX here.
+// An unmasked low-bank raw instruction needs its own physical generation
+// observation; this selector neither supplies that identity nor admits raw NUM.
+func x86FMA3NativeEVEX(ins Instr, form amd64FMA3Form) bool {
+	if form.byteWidth == 64 || form.mask >= 0 || form.suffix.broadcast || form.suffix.rounding != "" {
+		return true
+	}
+	for _, operand := range ins.Args {
+		if index, valid := amd64VectorRegisterIndex(operand.Reg, form.byteWidth); operand.Kind == OpReg && valid && index >= 16 {
+			return true
+		}
+	}
+	return false
+}
+
+func x86TypedFMA3ByteEffect(op Op, ins Instr, arch string) (x86TypedByteEffect, bool, error) {
+	if ins.Op != "" && !strings.EqualFold(string(op), string(ins.Op)) {
+		base, _, _ := strings.Cut(strings.ToUpper(string(op)), ".")
+		if _, known := amd64FMA3Specs[Op(base)]; known {
+			return x86TypedByteEffect{}, true, fmt.Errorf("FMA3 effect/source opcode mismatch: %s/%s", op, ins.Op)
+		}
+		return x86TypedByteEffect{}, false, nil
+	}
+	ins.Op = op
+	form, known, err := amd64FMA3Properties(ins, arch)
+	if !known || form.spec.rawOnly {
+		return x86TypedByteEffect{}, false, nil
+	}
+	if err != nil {
+		return x86TypedByteEffect{}, true, err
+	}
+	active := int64(form.byteWidth)
+	if form.spec.scalar {
+		active = int64(form.spec.laneBits / 8)
+	}
+	effect := x86TypedByteEffect{requiresResultProof: true}
+	for index, operand := range ins.Args {
+		width := active
+		if index == form.memory {
+			width = int64(form.memoryBytes)
+		} else if index == form.mask {
+			width = 8
+		}
+		effect.operands = append(effect.operands, x86TypedByteOperand{
+			index: index, operand: operand, width: width, read: true,
+		})
+	}
+	// Scalar active inputs and the full destination write are distinct axes.
+	// Numerical upper-X passthrough is handled by the shared result transfer.
+	effect.operands = append(effect.operands, x86TypedByteOperand{
+		index: form.destination, operand: ins.Args[form.destination], width: int64(form.byteWidth), write: true,
+	})
+	return effect, true, nil
+}
+
 // The complete _yvaddpd/_yvaddsd axes are independent of numerical input,
 // caller-memory, initialized-mask and source-stack continuation proofs. FP16
 // shares the architectural grammar but keeps its raw-encoding-only boundary.

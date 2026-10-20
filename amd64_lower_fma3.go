@@ -173,7 +173,23 @@ func (c *amd64Ctx) lowerFMA3(op Op, ins Instr) (ok bool, terminated bool, err er
 			controls: properties, readDestination: true,
 		})
 	}
+	if !spec.rawOnly && x86ResultNamedPredicateInstruction(ins) && x86ScalarFloatIntegerNativeTarget(c.goarch, c.targetTriple) {
+		lanes, logicalFPBits := byteWidth*8/spec.laneBits, 0
+		if spec.scalar {
+			lanes, logicalFPBits = 1, spec.laneBits
+		}
+		evex := x86FMA3NativeEVEX(ins, form)
+		return true, false, c.emitNativeFloatingOperands(ins, x86NativeFloatingOperands{
+			byteWidth: byteWidth, lanes: lanes, memoryBytes: form.memoryBytes,
+			second: 1, destination: form.destination, mask: form.mask,
+			controls: properties, readDestination: true, logicalFPBits: logicalFPBits,
+			lowBank: !evex, forceEVEX: evex && byteWidth < 64 && form.mask < 0 &&
+				!properties.broadcast && properties.rounding == "",
+		})
+	}
 
+	// Portable numerical arithmetic is not an x86 MXCSR/native-exception
+	// certificate. Raw F32/F64 still requires its independent source owner.
 	var mask string
 	if form.mask >= 0 {
 		loadedMask, loadErr := c.loadK(ins.Args[form.mask].Reg)
