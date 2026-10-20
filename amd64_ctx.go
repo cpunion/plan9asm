@@ -100,6 +100,7 @@ type amd64Ctx struct {
 	fpScalarCheckErr error
 	fpScalarTrapOnly bool // Complete private logical-shadow proof: every path ends in an exact trap.
 	fpMixedBoolBytes bool // Complete ordinary tuple NUM/canonical proof passed.
+	dataBPSource     bool // Complete named leaf's private opaque-pointer holder, never physical BP.
 
 	fpStaticAddressValues *x86StaticAddressValues // No dereference capability.
 	nativeMMXRegion       *x86NativeMMXRegion     // Whole source/NUM proof paired to the actual emitted MMX region.
@@ -141,6 +142,7 @@ func newX86Ctx(b *strings.Builder, fn Func, sig FuncSig, resolve func(string) st
 		fpResAddrTaken: map[int]bool{},
 		fpScalarSource: fn,
 		fpSourceSig:    sig,
+		dataBPSource:   x86DataBPSourceScope(fn, sig, goarch),
 		blockByIdx:     map[int]int{},
 	}
 	if fn.x86DirectTailRoot != nil {
