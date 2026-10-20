@@ -1,6 +1,6 @@
 # PR 40: current checkpoint
 
-Updated 2026-10-20. Implementation handoff: `044ee4030`. This is not a
+Updated 2026-10-20. Implementation handoff: `cf4b519e2`. This is not a
 current-head completion certificate. Preserve ignored failed evidence and
 read [instruction contracts](instructions.md) and [validation](validation.md).
 
@@ -65,6 +65,8 @@ differ. Older qualifications remain in earlier Git checkpoints.
 
 | Snapshot | Independent local scope | Limits |
 |---|---|---|
+| `d63bc455a` | Ordinary raw FMA3: 16 / 6,872 on current Go | Exact VEX/EVEX, 528 physical shapes, whole-source inputs/replay and private FLAGS/DF. Five-target objects, not original native floating execution; integrated minimum/race are still required |
+| `0b0cd1a7f` | Original raw FMA formats, physical mode32 and initialized controls: 6 / 47 current | Original bytes and DATA remain unchanged; private format objects, public Context and initialized public objects are separately checked |
 | `044ee4030` | All 33 command gates exit zero, including current/minimum build/vet, official five-arch coverage and 206 Node policies; complete seals unchanged | Integrated named FMA, portable access, format objects and audited baseline; not full CI, the strict benchmark or the unintegrated ordinary raw FMA candidate |
 | `8ec12ae76` | Original FMA3 formats and initialized axes: 8 / 69 on current Go | Complete original formats remain separate from 178 amd64 / 94 mode32 orthogonal initialized entries, 144 LLVM object compilations across five targets; not a full initialized Cartesian matrix or native execution |
 | `f194e6a1e` | Portable FMA access and original native controls: 7 / 378 on current Go, actual Go1.20 and race | Three APIs and three executed ARM64 pipelines each admit all 14 access classes: 98 independent references / 98 translated probes, zero Context. This preserves access/faults, not original x86 MXCSR execution |
@@ -158,8 +160,10 @@ fifteen-root attempt fails at `ANDL $0xcd5,DX` in both x86 modes. The FMA result
 step leaves the six status flags intact; the paired source-flow fallback loses
 the independently defined DF, so saved FLAGS lacks bit 10. The independent
 saved-FLAGS-across-FMA RED is `09a2e66ac`; the minimal private-state repair is
-`d63bc455a`, still awaiting validation. Preserve the failed candidate report;
-do not integrate or call the whole ordinary raw family qualified yet.
+`d63bc455a` now passes the complete sixteen-root current-Go scope above with
+unchanged source/tool seals. Both the candidate failure and independent RED
+remain preserved. The integrated head still needs minimum/race, decoder and
+command-gate qualification before publication.
 
 The latest full benchmark diagnostic at `47e432d4e` remains failed: all 184
 target/file pairs attempted, 129 compiled, 55 failed, no N/A/unattempted. The
@@ -208,10 +212,10 @@ does not certify original native Go execution or the final integrated head.
 
 ## Next work and verification
 
-1. Finish raw FMA3 physical generation and complete-source result rules; qualify
-   original format objects and independent initialized axes. The named-family,
-   portable-access and complete MathExp scopes above are qualified at their
-   recorded snapshots. Keep special-entry ABI work separate.
+1. Qualify the integrated named/raw FMA3 families, complete decoder regressions
+   and initialized objects on current Go, actual Go1.20 and race. The earlier
+   named/raw, portable-access, original-format and complete MathExp scopes above
+   are qualified at their recorded snapshots. Keep special-entry ABI work separate.
    Integrate completed rule-class repairs without editing active snapshots;
    preserve original inputs and all earlier failed evidence.
 2. Freeze the final integrated head, including documentation and used tools.
