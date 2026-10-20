@@ -24,46 +24,55 @@ ready until exact-head CI, review and coverage qualify.
 
 ## Latest completed online run
 
-Fork run [39437363187](https://github.com/cpunion/plan9asm/actions/runs/39437363187)
-finished naturally at `e7c6b5fa7`: 117 jobs = 101 PASS + 16 FAIL.
-The complete raw-owner audit identifies 27 unique failed test roots.
-Local repairs below do not subtract from those failures. No current integration
-head has subsequently completed successful CI.
+Fork run [39462713494](https://github.com/cpunion/plan9asm/actions/runs/39462713494)
+finished naturally at `51d546835`: 117 jobs = 104 PASS + 13 FAIL, with no
+cancelled or skipped job. Of the preceding run's 27 failed Go roots, 24 now
+actually pass and three still fail. This is not a successful CI certificate.
 
-Keep software failures separate from actual-allocation CPU/OS-state failures.
-Late jobs also exposed Go patch drift; the pinned-tool repair needs its own
-new run. Neither tool drift nor a translation error is hardware unavailability.
-Required owners and the final aggregate must still reject failures or missing
-outcomes; diagnostic scheduling does not weaken qualification.
+The complete raw-owner audit identifies 15 unique failed Go roots: 13 own
+CPU/XCR0 preflights report unavailable AVX512, while two are software failures.
+These are the original conformance program's SHUFPS source-effect closure and
+the original scaled-round C report's Windows CRLF assertion. The latter reports
+35,328 observations and zero mathematical failures at both optimization levels.
+A separate coverage-upload failure uses Python 3.15 beyond PyO3's supported
+maximum; its module's Go qualification passed. Aggregate failures add no new
+test root. Do not attribute these three software/infrastructure issues to ISA.
 
 The user deferred unavailable AVX512 execution to pending-hardware acceptance.
 This is not skip, pass, emulated native execution or whole-CI success. Original
 owners still require their actual CPU/XCR0 receipt; do not infer missing ISA
 from a SIGILL alone or assume different hosted allocations have equal features.
 
-## Recent qualified local scopes
+## Recent qualified scopes and staged repairs
 
 Each receipt certifies only its recorded snapshot and scope, with unchanged
 complete source/tool/environment seals. Roots and children overlap: never add
 them or turn object/portable checks into original native execution claims.
 
-- `89992764d`: complete 25-root / 804-child repair combination passes current
-  Go in 26.344 seconds, with no failure, skip or incomplete terminal. This is
-  not minimum-Go, race, original native execution or later-head qualification.
-- `4ed846d96`: the eight static-storage capture/live-selection roots pass with
-  59 children in 4.867 seconds. Initial capture still forces actual compiler
-  archives; repeated live selection alone omits `-a`.
-- At that performance snapshot, SDK CPU's eight targets and SDK Globals'
-  five targets pass as two roots / 13 children in 22.976 seconds. These are
-  actual source/archive/report checks, not instruction-runtime execution.
-- Five TOCTOU, final-callback revoke and concurrent Verify/Close roots pass
-  with 12 children in 178.061 seconds. No capability cache, weaker live hash,
-  restored revoked lease or omitted final guard is authorized.
-- Complete original bigmod compiles once in 45.29 seconds with the same ASM
-  digest prefix `32fd` and archive digest prefix `894c`; full digests remain
-  in the ignored receipt. Earlier normal runs were 177.680 and 201.710 seconds.
-  These observations are not a controlled speedup measurement, successful CI
-  or a replacement for the complete strict benchmark.
+- At `51d546835`, all 33 complete final commands pass and all sixteen official
+  x86 SDK classification reports reproduce their reviewed fingerprints without
+  changes. These receipts do not certify later integration heads.
+- The complete original bigmod now actually passes Windows in 72.80 seconds;
+  the ASM digest remains `32fd0923150ddd1206a59270c4349e22cb7bbb6c82508e6fa0e1c959e0c57660`.
+  This is source/archive compilation evidence, not native execution or a
+  controlled performance ratio. Capture still forces compiler archives; only
+  repeated live selection omits `-a`. Revoke, live-hash and Close checks remain.
+- Staged CI repairs let Windows schedule after ownership while retaining all
+  ten original final-success dependencies. Current formal SDK scopes use the
+  audited Go1.27.2, not a floating patch rejected by the observation contract.
+  Historical SDKs' once-per-run exact-version resolution remains unfinished;
+  do not describe the current pin as a complete patch-drift mechanism.
+- CRLF has an independent 25-child RED with exactly the legal CRLF child
+  failing. The minimal repair accepts only the two exact complete LF/CRLF
+  reports; 25 format children plus the original O0/O2 mathematics pass on
+  current Go at `06d305eaf`. No trimming, extra output or reduced count is valid.
+- Coverage-upload setup selects Python3.13 only after Go qualification and
+  completion evidence. Python, PATH pip and the installed CLI are checked;
+  original OIDC/files/fail-on-error inputs remain unchanged. Its independent
+  RED and full 250-test Node GREEN are not a real Windows upload certificate.
+- SHUFPS/SHUFPD/VSHUFPS/VSHUFPD need one complete typed two-source family
+  repair and independent original-source regressions; do not fix only SHUFPS
+  or modify the original conformance ASM/C to bypass its proof failure.
 
 ## Latest replay repair and official classification
 
@@ -82,7 +91,8 @@ Each AMD64 SDK changes exactly 45 input-deficient forms from supported to
 Context. All 386 forms, encoder/form identities and every unrelated metric
 remain unchanged. Baseline-only `059d894ac` records those audited classifications.
 Context is not initialized-program success; do not count it as executed code.
-Fresh final-head comparison of all sixteen reports is still required.
+All sixteen final reports reproduce this reviewed baseline at `51d546835`.
+Fresh comparison remains required after subsequent translator changes.
 
 VPERMILPS/PD now share complete immediate/variable typed grammar, selected-byte
 effects and exact E4NF native reads, including dead/Void and zero-mask access
@@ -98,16 +108,19 @@ this root as a local pass or replace its original ASM/C with object-only evidenc
 
 ## Strict benchmark remains failed
 
-The last complete strict benchmark is `4d129bcd3`: all 184 target/file pairs
-attempted, 132 PASS and 52 FAIL, zero N/A or unattempted. Complete seals and
+The last complete strict benchmark is `51d546835`: all 184 target/file pairs
+attempted, 133 PASS and 51 FAIL, zero N/A or unattempted. Complete seals and
 timestamped completion/report joins match; original failed evidence remains.
-Target wall times are 56/505/5/11/2 seconds for 386/amd64/arm/arm64/wasm,
-total 579 seconds. AMD64's 505 seconds exceeds its unchanged 300-second budget.
-The unchanged 900-second total limit does not excuse a failed target limit.
+Target wall times are 24/262/2/7/1 seconds for 386/amd64/arm/arm64/wasm,
+total 296 seconds. The unchanged 300-second target and 900-second total budgets
+qualify on this host, but the benchmark still fails its content checks.
 
-Source/frame, helper/code-address, inventory and special runtime/OS-entry
-contracts remain distinct blocking layers. A complete bigmod pass does not
-promise other full SDK files pass or remove this benchmark's failures.
+The remaining failures comprise eight ordinary-frame, nine helper/code-address,
+four SDK inventory, 21 special runtime/OS-entry, eight other-contract and one
+unresolved math/big graph case. A complete bigmod pass does not remove them.
+The older 52-failure receipt differs only by that bigmod pass; no source was
+deleted or relabelled. The independent frame-header clobber RED is retained,
+but has no production repair or native-execution qualification yet.
 Do not raise budgets, remove failed sources or relabel them N/A to qualify.
 
 ## Non-negotiable implementation boundaries
