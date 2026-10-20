@@ -58,7 +58,7 @@ func ASMSourceTextOrder(source []byte, packagePath string, member ASMDataMember)
 	indices := make(map[uint32]bool, len(names))
 	var previous TextRecord
 	for ordinal, record := range member.Texts {
-		if record.Name == "" || record.Kind != 1 && record.Kind != 2 ||
+		if record.Name == "" || !currentSDKObjectIsText(record.Kind) ||
 			record.Namespace != TextSymbolSelf && record.Namespace != TextSymbolNonpkgDefinition ||
 			record.Namespace == TextSymbolSelf && (record.ABI != 65535 || record.Index != record.Relative) ||
 			record.Namespace == TextSymbolNonpkgDefinition && record.ABI != 0 && record.ABI != 1 ||

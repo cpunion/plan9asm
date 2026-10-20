@@ -237,7 +237,7 @@ func readTextObjectKinds(data []byte, target string, flags uint32, empty bool, b
 	var result []TextRecord
 	for index := 0; index < object.count; index++ {
 		definition := definitions[index]
-		if definition.Kind != 1 && !(fipsText && definition.Kind == 2) { // Go IsText, not a symbol-name inference.
+		if definition.Kind != 1 && !(fipsText && currentSDKObjectIsText(definition.Kind)) {
 			continue
 		}
 		value := TextRecord{Index: uint32(index), Namespace: definition.Namespace, Relative: definition.Relative,

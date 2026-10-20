@@ -41,7 +41,7 @@ func observeASMDataObject(data, builtin []byte, target string, flags uint32, ref
 	}
 	member.Flags = flags
 	for _, symbol := range symbols {
-		if symbol.Namespace == TextSymbolNonpkgReference || symbol.Kind == 1 || symbol.Kind == 2 {
+		if symbol.Namespace == TextSymbolNonpkgReference || currentSDKObjectIsText(symbol.Kind) {
 			continue
 		}
 		index := int(symbol.Index)
@@ -105,7 +105,7 @@ func validateASMDataArchiveNames(members []ASMDataMember) error {
 		if group.kind != kind {
 			return contextError("SDK ASM DATA named definition collides with a different TEXT/storage kind")
 		}
-		if kind != 1 && group.storageABI != abi {
+		if !currentSDKObjectIsText(kind) && group.storageABI != abi {
 			return contextError("SDK ASM DATA named storage has multiple ABI identities")
 		}
 		identities := group.abis[abi]

@@ -62,19 +62,26 @@ func (object *checkedGoObject) indexedSymbols() ([]indexedObjectSymbol, error) {
 // groups are observed in full, never reduced to a chosen linker/body winner.
 type sdkAssemblyNamedDefinitions map[string][]indexedObjectSymbol
 
+// This is the IsText role of the independently pinned current SDK schema,
+// not a producer, namespace, ABI or storage permission. Historical readers
+// keep their own enum: Kind 2 was SRODATA in older Go versions.
+func currentSDKObjectIsText(kind uint8) bool {
+	return kind == 1 || kind == 2 // STEXT, STEXTFIPS.
+}
+
 func (definitions sdkAssemblyNamedDefinitions) observe(symbol indexedObjectSymbol, assembly bool) error {
 	if symbol.Namespace == TextSymbolNonpkgReference || symbol.Name == "" {
 		return nil
 	}
-	if assembly && symbol.Kind != 1 {
+	if assembly && !currentSDKObjectIsText(symbol.Kind) {
 		return contextError("assembly DATA definition needs an independent role: " + symbol.Name)
 	}
 	if symbol.Namespace == TextSymbolHashed64 || symbol.Namespace == TextSymbolHashed || symbol.ABI == 65535 {
 		return nil
 	}
 	for _, previous := range definitions[symbol.Name] {
-		if symbol.Kind != 1 || previous.Kind != 1 {
-			return contextError("SDK name collides with native storage: " + symbol.Name)
+		if !currentSDKObjectIsText(symbol.Kind) || symbol.Kind != previous.Kind {
+			return contextError("SDK name collides with a different TEXT/storage kind: " + symbol.Name)
 		}
 		if symbol.ABI != previous.ABI {
 			continue
