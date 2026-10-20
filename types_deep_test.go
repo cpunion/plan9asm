@@ -99,7 +99,9 @@ func TestTypeHelperCoverage(t *testing.T) {
 		{"7&3", 3, true},
 		{"7|8", 15, true},
 		{"7^3", 4, true},
-		{"7&^3", 4, true},
+		// cmd/asm has unary ~, not Go's &^ operator. The independent
+		// integer-grammar oracle retains 7&^3 as an actual Go rejection.
+		{"7&~3", 4, true},
 		{"~1", ^uint64(1), true},
 		{"1/0", 0, false},
 	} {
