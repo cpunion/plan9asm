@@ -177,6 +177,16 @@ func inferFuncTargetFeaturesForGOARCH(arch Arch, goarch string, fn Func) string 
 					add("+avx")
 				}
 			}
+			if form, known, err := x86BlendMinposProperties(ins.Op, ins, moveArch); known && err == nil {
+				switch {
+				case form.legacy:
+					add("+sse2", "+sse4.1")
+				case !form.minimum && form.laneBits == 8 && form.byteWidth == 32:
+					add("+avx2")
+				default:
+					add("+avx")
+				}
+			}
 			if form, known, err := x86FloatMinMaxProperties(ins, moveArch); known && err == nil {
 				switch {
 				case x86FloatMinMaxNativeEVEX(ins, form):

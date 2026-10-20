@@ -2,7 +2,6 @@ package plan9asm
 
 import (
 	"fmt"
-	"strings"
 )
 
 type amd64MinimumPositionSpec struct {
@@ -23,39 +22,17 @@ var amd64MinimumPositionSpecs = map[Op]amd64MinimumPositionSpec{
 // to a single X/m128 source and an X destination; the VEX spelling is also a
 // two-operand, destructive-looking Plan 9 form.
 func (c *amd64Ctx) lowerPackedUnsignedWordMinimumPosition(op Op, ins Instr) (ok bool, terminated bool, err error) {
-	rawOp := strings.ToUpper(string(op))
-	baseOp := rawOp
-	if dot := strings.IndexByte(rawOp, '.'); dot >= 0 {
-		baseOp = rawOp[:dot]
-	}
-	spec, recognized := amd64MinimumPositionSpecs[Op(baseOp)]
-	if !recognized {
+	form, recognized, err := x86BlendMinposProperties(op, ins, c.goarch)
+	if !recognized || !form.minimum {
 		return false, false, nil
 	}
-	if rawOp != baseOp {
-		return true, false, fmt.Errorf("%s %s has no suffixed forms in Go 1.27: %q", c.goarch, baseOp, ins.Raw)
+	if err != nil {
+		return true, false, err
 	}
-	if len(ins.Args) != 2 || ins.Args[1].Kind != OpReg {
-		return true, false, fmt.Errorf("%s %s expects X/m128, X: %q", c.goarch, baseOp, ins.Raw)
+	if form.legacy && form.memory {
+		return true, false, c.lowerLegacyBlendMinposMemory(ins, form)
 	}
-	validRegister := func(arg Operand, allowMemory bool) bool {
-		if spec.vector {
-			if allowMemory && isAMD64MemoryOperand(arg) {
-				return true
-			}
-			// Go's VEX frontend accepts X8-X15 on 386. Physical raw encodings
-			// remain restricted by the decoder, as for the other VEX families.
-			return amd64VEXVectorRegister(arg, 16)
-		}
-		if allowMemory && isAMD64MemoryOperand(arg) {
-			return true
-		}
-		return arg.Kind == OpReg && c.isGoLegacyXReg(arg.Reg)
-	}
-	if !validRegister(ins.Args[0], true) || !validRegister(ins.Args[1], false) {
-		return true, false, fmt.Errorf("%s %s requires an in-range X/m128 source and X destination: %q", c.goarch, baseOp, ins.Raw)
-	}
-	bytesValue, err := c.loadPackedCompareBytes(ins.Args[0], 16)
+	bytesValue, err := c.loadX86PackedShiftBytes(ins.Args[0], 16, true)
 	if err != nil {
 		return true, false, err
 	}
@@ -63,7 +40,7 @@ func (c *amd64Ctx) lowerPackedUnsignedWordMinimumPosition(op Op, ins Instr) (ok 
 	result := c.emitPackedUnsignedWordMinimumPosition(words)
 	out := c.newTmp()
 	fmt.Fprintf(c.b, "  %%%s = bitcast <8 x i16> %s to <16 x i8>\n", out, result)
-	if spec.vector {
+	if !form.legacy {
 		return true, false, c.storePackedMoveOperand(ins.Args[1], 16, "%"+out)
 	}
 	return true, false, c.storeLegacyXViews(ins.Args[1].Reg, "%"+out)

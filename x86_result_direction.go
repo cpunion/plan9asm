@@ -63,6 +63,9 @@ func x86ResultDirectionAfterSource(ins Instr, direction x86ResultDirection, arch
 	if x86FMA3PreservesPrivateSourceState(ins, arch) {
 		return direction // The original floating operation does not write DF.
 	}
+	if x86RawBlendMinposSource(ins, arch) {
+		return direction // The exact data selection/reduction has no FLAGS/DF write.
+	}
 	if x86RawScalarPrecisionSource(ins, arch) {
 		return direction // Native MXCSR effects do not alter the independent DF control.
 	}

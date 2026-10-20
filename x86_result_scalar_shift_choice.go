@@ -23,6 +23,9 @@ func x86LoweredNumericalProducerReplay(fn Func, arch string) error {
 			if form, known, _ := x86FloatCompareProperties(ins, arch); known && form.legacy {
 				return true
 			}
+			if _, known, _ := x86BlendMinposProperties(ins.Op, ins, arch); known {
+				return true
+			}
 		}
 		return false
 	}
