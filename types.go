@@ -894,6 +894,9 @@ type Instr struct {
 	// when every low-X operand also has an unmasked VEX spelling.
 	x86ScalarPrecisionEVEX bool
 	x86PackedPrecisionEVEX bool
+	// Ordinary F16C/AVX512F half conversions retain an explicit generation;
+	// zero is absent identity, not VEX or raw-only AVX512-FP16 permission.
+	x86NamedHalfEncoding x86RawNamedHalfEncoding
 	// F32/F64 FMA keeps an explicit physical generation. A zero value is not
 	// a VEX observation and does not borrow raw-only FP16's encoded grammar.
 	x86FMA3Encoding x86RawFMA3Encoding

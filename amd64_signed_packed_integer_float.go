@@ -199,9 +199,11 @@ func (c *amd64Ctx) emitSignedPackedIntegerFloat(ins Instr, f x86SignedPackedFloa
 type x86NativePackedConversion struct {
 	byteWidth, sourceBytes, memoryBytes, outputBits int
 	destination, mask, lanes                        int
+	source                                          int // Explicit family-selected data operand; default zero.
 	mmx, legacy, evex, broadcast, zeroing, sae      bool
 	rounding, mnemonic                              string
-	logicalFPBits                                   int // Explicit owned-value projection, never native FP backing.
+	logicalFPBits                                   int   // Explicit owned-value projection, never native FP backing.
+	immediate                                       *byte // Explicit original imm8, not an arithmetic rounding approximation.
 }
 
 func (c *amd64Ctx) emitNativePackedConversion(ins Instr, f x86NativePackedConversion) error {
@@ -225,7 +227,7 @@ func (c *amd64Ctx) emitNativePackedConversion(ins Instr, f x86NativePackedConver
 	inputConstraint, inputType, inputTemplate := constraint, fmt.Sprintf("<%d x float>", f.sourceBytes/4), "$2"
 	var input string
 	var err error
-	source := ins.Args[0]
+	source := ins.Args[f.source]
 	mnemonic := f.mnemonic
 	prefix := ""
 	if source.Kind == OpReg {
@@ -272,6 +274,9 @@ func (c *amd64Ctx) emitNativePackedConversion(ins Instr, f x86NativePackedConver
 		args += ", i32 " + c.approximateMathMask32(mask)
 	}
 	assembly := prefix + mnemonic + " "
+	if f.immediate != nil {
+		assembly += fmt.Sprintf("$$%d, ", *f.immediate)
+	}
 	if f.rounding != "" {
 		assembly += "{" + strings.ToLower(strings.TrimSuffix(f.rounding, "_SAE")) + "-sae}, "
 	}
