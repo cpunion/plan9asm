@@ -202,13 +202,7 @@ func TestX86RawMinimumPositionGoEncoderForms(t *testing.T) {
 				triples = []string{"i386-unknown-linux-gnu", "i686-pc-windows-msvc"}
 			}
 			for _, triple := range triples {
-				ir, err := Translate(file, Options{
-					Goarch: arch, TargetTriple: triple,
-					Sigs: map[string]FuncSig{"minpos": {Name: "minpos", Ret: Void}},
-				})
-				if err != nil {
-					t.Fatal(err)
-				}
+				ir := x86UnboundBlendMinposProbeObject(t, file, arch, triple)
 				compileLLVMToObject(t, llc, triple, "raw-minpos.ll", "raw-minpos.o", ir)
 			}
 			t.Logf("checked %d actual Go encodings", len(want)-1)
@@ -228,18 +222,8 @@ func TestX86MinimumPositionGoAccepted386HighNamedRegisters(t *testing.T) {
 	}
 	source.WriteString("RET\n")
 	requireX86GoAssemblerResult(t, "386", source.String(), true)
-	file, err := Parse(ArchAMD64, source.String())
-	if err != nil {
-		t.Fatal(err)
-	}
 	for _, triple := range []string{"i386-unknown-linux-gnu", "i686-pc-windows-msvc"} {
-		ir, err := Translate(file, Options{
-			Goarch: "386", TargetTriple: triple,
-			Sigs: map[string]FuncSig{"minpos": {Name: "minpos", Ret: Void}},
-		})
-		if err != nil {
-			t.Fatal(err)
-		}
+		ir := x86UnboundBlendMinposFormatObject(t, source.String(), "386", triple)
 		compileLLVMToObject(t, llc, triple, "named-minpos.ll", "named-minpos.o", ir)
 	}
 }

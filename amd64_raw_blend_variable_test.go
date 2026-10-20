@@ -326,13 +326,7 @@ func TestX86RawVariableBlendGoEncoderForms(t *testing.T) {
 						triples = []string{"i386-unknown-linux-gnu", "i686-pc-windows-msvc"}
 					}
 					for _, triple := range triples {
-						ir, err := Translate(file, Options{
-							Goarch: arch, TargetTriple: triple,
-							Sigs: map[string]FuncSig{"blend": {Name: "blend", Ret: Void}},
-						})
-						if err != nil {
-							t.Fatal(err)
-						}
+						ir := x86UnboundBlendMinposProbeObject(t, file, arch, triple)
 						compileLLVMToObject(t, llc, triple, "raw-blend.ll", "raw-blend.o", ir)
 					}
 					t.Logf("checked %d actual Go encodings", len(want)-1)

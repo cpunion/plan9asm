@@ -8,7 +8,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/xgo-dev/llvm"
 	"golang.org/x/arch/x86/x86asm"
 )
 
@@ -163,40 +162,15 @@ func TestX86RawMinimumPositionGoAddressFormsAllAPIs(t *testing.T) {
 				if target.arch != arch {
 					continue
 				}
-				for _, api := range []string{"text", "module", "context"} {
-					t.Run(target.triple+"/"+api, func(t *testing.T) {
-						options := Options{Goarch: arch, TargetTriple: target.triple,
-							Sigs: map[string]FuncSig{"addresses": {Name: "addresses", Ret: Void}}}
-						var ir string
-						switch api {
-						case "text":
-							ir, err = Translate(file, options)
-						case "module":
-							module, callErr := TranslateModule(file, options)
-							err = callErr
-							if err == nil {
-								ir = module.String()
-								module.Dispose()
-							}
-						case "context":
-							ctx := llvm.NewContext()
-							defer ctx.Dispose()
-							module, callErr := TranslateModuleInContext(ctx, file, options)
-							err = callErr
-							if err == nil {
-								ir = module.String()
-								module.Dispose()
-							}
-						}
-						if err != nil {
-							t.Fatal(err)
-						}
-						if before != fmt.Sprintf("%#v", file.Funcs) {
-							t.Fatal("public translation changed its original raw source")
-						}
-						compileLLVMToObject(t, llc, target.triple, "addresses.ll", "addresses.o", ir)
-					})
-				}
+				t.Run(target.triple, func(t *testing.T) {
+					// The helper first checks the complete Go object and all
+					// three public Context APIs, then emits a private format unit.
+					ir := x86UnboundBlendMinposProbeObject(t, file, arch, target.triple)
+					if before != fmt.Sprintf("%#v", file.Funcs) {
+						t.Fatal("public translation changed its original raw source")
+					}
+					compileLLVMToObject(t, llc, target.triple, "addresses.ll", "addresses.o", ir)
+				})
 			}
 			t.Logf("actual Go address encodings=%d; bounded LLVM probe encodings=%d; original SP extremes remain an allocator limitation, not N/A or native stack/return permission", completeCount, boundedCount)
 		})

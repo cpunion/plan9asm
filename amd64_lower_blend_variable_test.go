@@ -38,19 +38,11 @@ func TestTranslateX86VariableBlendCompleteGoAssemblerForms(t *testing.T) {
 				fmt.Fprintf(&src, "\t%s Y12, Y13, Y14, Y15\n", op)
 			}
 			src.WriteString("\tRET\n")
-			file, err := Parse(ArchAMD64, src.String())
-			if err != nil {
-				t.Fatal(err)
-			}
-			ll, err := Translate(file, Options{
-				TargetTriple: target.triple,
-				Goarch:       target.goarch,
-				Sigs: map[string]FuncSig{
-					"variableblendforms": {Name: "variableblendforms", Ret: Void},
-				},
-			})
-			if err != nil {
-				t.Fatal(err)
+			var ll string
+			if target.goarch == "386" {
+				ll = x86BlendMinposOriginal386NamedFormats(t, src.String(), target.triple)
+			} else {
+				ll = x86UnboundBlendMinposFormatObject(t, src.String(), target.goarch, target.triple)
 			}
 			llc := findLLVM22Tool("llc")
 			if llc == "" {
