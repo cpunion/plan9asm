@@ -26,6 +26,14 @@ type x86DivideNativeCase struct {
 }
 
 func x86DivideNativeRows(arch string) []x86DivideNativeRow {
+	return x86DivideNativeSourceRows(arch, false)
+}
+
+func x86DivideLogicalFPNativeRows(arch string) []x86DivideNativeRow {
+	return x86DivideNativeSourceRows(arch, true)
+}
+
+func x86DivideNativeSourceRows(arch string, logicalFP bool) []x86DivideNativeRow {
 	word, move, push, pop := 8, "MOVQ", "PUSHFQ", "POPQ"
 	if arch == "386" {
 		word, move, push, pop = 4, "MOVL", "PUSHFL", "POPL"
@@ -42,6 +50,9 @@ func x86DivideNativeRows(arch string) []x86DivideNativeRow {
 		if arch == "386" {
 			sources = append(sources, "BP", "SI", "DI")
 		}
+		if logicalFP {
+			sources = []string{"FP"}
+		}
 		for _, source := range sources {
 			row := x86DivideNativeRow{name: fmt.Sprint("Value", len(rows)), source: source,
 				bits: member.bits, signed: member.signed, memory: source == "memory"}
@@ -51,6 +62,8 @@ func x86DivideNativeRows(arch string) []x86DivideNativeRow {
 			}
 			if row.memory {
 				divisor = "(" + pointer + ")"
+			} else if source == "FP" {
+				divisor = fmt.Sprintf("divisor+%d(FP)", word+16)
 			}
 			setup := fmt.Sprintf("%s out+0(FP),%s\n%s low+%d(FP),AX\n%s high+%d(FP),DX\n%s divisor+%d(FP),CX\n",
 				move, pointer, move, word, move, word+8, move, word+16)
@@ -188,7 +201,7 @@ func x86DivideNativeCases(rows []x86DivideNativeRow, arch string) (values, fault
 				}
 			}
 		}
-		if row.signed && (row.source == "CX" || row.memory) {
+		if row.signed && (row.source == "CX" || row.source == "FP" || row.memory) {
 			for _, boundary := range []string{"wide-min/-1", "narrow-min/-1"} {
 				low, high := uint64(0), uint64(1)<<uint(row.bits-1)
 				if boundary == "narrow-min/-1" {
@@ -245,7 +258,11 @@ func x86DivideNativeDeclarationSources(rows []x86DivideNativeRow) (apiDeclaratio
 
 func x86RunImplicitDivideNative(t *testing.T, execution x86FloatCompareExecution, arch string) {
 	t.Helper()
-	rows := x86DivideNativeRows(arch)
+	x86RunImplicitDivideNativeRows(t, execution, arch, x86DivideNativeRows(arch))
+}
+
+func x86RunImplicitDivideNativeRows(t *testing.T, execution x86FloatCompareExecution, arch string, rows []x86DivideNativeRow) {
+	t.Helper()
 	values, faults := x86DivideNativeCases(rows, arch)
 	var assembly, cRows, cCases, goRows, goCases, faultRows, faultCases strings.Builder
 	declarations, originalDeclarations := x86DivideNativeDeclarationSources(rows)
@@ -341,10 +358,16 @@ func x86RunImplicitDivideNative(t *testing.T, execution x86FloatCompareExecution
 					}
 				}
 			}
+			if rows[0].source == "FP" {
+				t.Logf("logical FP native arch=%s rows=%d values=%d dead-division-faults=%d; whole AX/DX, DF and canaries; zero/overflow and signed-min/-1 SIGFPE", arch, len(rows), len(values), len(faults))
+			}
 		})
 	}
 	x86RunOriginalGoNativeSource(t, execution, arch, originalDeclarations, assembly.String(),
 		fmt.Sprintf(x86DivideNativeOriginalGo, goRows.String(), goCases.String()))
+	if rows[0].source == "FP" {
+		t.Logf("logical FP actual original Go arch=%s rows=%d values=%d; complete original FP divisor source and whole AX/DX/DF/canary observations", arch, len(rows), len(values))
+	}
 }
 
 func x86NativeOracleIA32Executable(t *testing.T, execution x86FloatCompareExecution, path string) x87IA32Executable {
