@@ -5,12 +5,14 @@ import (
 	"strings"
 )
 
-type x86PackedZeroExtendSpec struct {
+type x86PackedExtendSpec struct {
 	inputBits  int
 	outputBits int
 	vector     bool
 	opcode     byte
 }
+
+type x86PackedZeroExtendSpec = x86PackedExtendSpec
 
 // Legacy yxm_q4 and the two AVX tables have different physical source widths:
 // ratio two uses _yvcvtdq2pd (Y/m256 to Z); the other ratios _yvbroadcastss.
@@ -30,8 +32,8 @@ var x86PackedZeroExtendSpecs = map[Op]x86PackedZeroExtendSpec{
 	"VPMOVZXDQ": {32, 64, true, 0x35},
 }
 
-type x86PackedZeroExtendForm struct {
-	spec                x86PackedZeroExtendSpec
+type x86PackedExtendForm struct {
+	spec                x86PackedExtendSpec
 	byteWidth           int
 	sourceRegisterBytes int
 	memoryBytes         int
@@ -39,21 +41,39 @@ type x86PackedZeroExtendForm struct {
 	memory              int
 	mask                int
 	zeroing             bool
+	signed              bool
 }
+
+type x86PackedZeroExtendForm = x86PackedExtendForm
 
 // This specifies encoding and byte effects, never caller bounds or permission.
 func x86PackedZeroExtendProperties(ins Instr, goarch string) (x86PackedZeroExtendForm, bool, error) {
+	base, _, _ := strings.Cut(strings.ToUpper(string(ins.Op)), ".")
+	if _, known := x86PackedZeroExtendSpecs[Op(base)]; !known {
+		return x86PackedExtendForm{}, false, nil
+	}
+	return x86PackedExtendProperties(ins, goarch)
+}
+
+// Sign and zero extension share operand shape, shrinking tuples and masked
+// access rules, not membership, sign-byte dependencies or raw authority.
+func x86PackedExtendProperties(ins Instr, goarch string) (x86PackedExtendForm, bool, error) {
 	base, suffix, dotted := strings.Cut(strings.ToUpper(string(ins.Op)), ".")
 	spec, recognized := x86PackedZeroExtendSpecs[Op(base)]
+	signed := false
 	if !recognized {
-		return x86PackedZeroExtendForm{}, false, nil
+		spec, recognized = x86PackedSignExtendSpecs[Op(base)]
+		signed = true
 	}
-	form := x86PackedZeroExtendForm{
+	if !recognized {
+		return x86PackedExtendForm{}, false, nil
+	}
+	form := x86PackedExtendForm{
 		spec: spec, destination: len(ins.Args) - 1, memory: -1, mask: -1,
-		zeroing: suffix == "Z", sourceRegisterBytes: 16,
+		zeroing: suffix == "Z", sourceRegisterBytes: 16, signed: signed,
 	}
-	fail := func() (x86PackedZeroExtendForm, bool, error) {
-		return form, true, fmt.Errorf("%s %s operands/suffix outside Go packed zero-extension grammar: %q", goarch, ins.Op, ins.Raw)
+	fail := func() (x86PackedExtendForm, bool, error) {
+		return form, true, fmt.Errorf("%s %s operands/suffix outside Go packed widening grammar: %q", goarch, ins.Op, ins.Raw)
 	}
 	if goarch != "amd64" && goarch != "386" || len(ins.Args) != 2 && len(ins.Args) != 3 ||
 		dotted && (!spec.vector || suffix != "Z") {
@@ -115,12 +135,19 @@ func x86PackedZeroExtendProperties(ins Instr, goarch string) (x86PackedZeroExten
 }
 
 func x86TypedPackedZeroExtendByteEffect(op Op, ins Instr, arch string) (x86TypedByteEffect, bool, error) {
-	form, known, err := x86PackedZeroExtendProperties(ins, arch)
+	if _, known, err := x86PackedZeroExtendProperties(ins, arch); !known || err != nil {
+		return x86TypedByteEffect{}, known, err
+	}
+	return x86TypedPackedExtendByteEffect(op, ins, arch)
+}
+
+func x86TypedPackedExtendByteEffect(op Op, ins Instr, arch string) (x86TypedByteEffect, bool, error) {
+	form, known, err := x86PackedExtendProperties(ins, arch)
 	if !known || err != nil {
 		return x86TypedByteEffect{}, known, err
 	}
 	if op != ins.Op {
-		return x86TypedByteEffect{}, true, fmt.Errorf("packed zero-extension effect/source opcode mismatch")
+		return x86TypedByteEffect{}, true, fmt.Errorf("packed widening effect/source opcode mismatch")
 	}
 	effect := x86TypedByteEffect{requiresResultProof: true, operands: []x86TypedByteOperand{
 		{index: 0, operand: ins.Args[0], width: int64(form.memoryBytes), read: true},

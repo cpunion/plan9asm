@@ -6,14 +6,15 @@ import (
 )
 
 func (c *amd64Ctx) lowerPackedZeroExtendMove(op Op, ins Instr) (bool, bool, error) {
-	if ins.Op != "" && !strings.EqualFold(string(ins.Op), string(op)) {
-		return true, false, fmt.Errorf("packed zero-extension dispatch/source opcode mismatch: %s/%s", op, ins.Op)
+	base, _, _ := strings.Cut(strings.ToUpper(string(op)), ".")
+	if _, known := x86PackedZeroExtendSpecs[Op(base)]; !known {
+		return false, false, nil
 	}
-	ins.Op = op // Preserve the pre-existing helper's empty-op dispatch contract.
-	form, recognized, err := x86PackedZeroExtendProperties(ins, c.goarch)
-	if !recognized || err != nil {
-		return recognized, false, err
-	}
+	return c.lowerPackedExtendMove(op, ins)
+}
+
+func (c *amd64Ctx) emitPackedExtendMove(ins Instr, form x86PackedExtendForm) (bool, bool, error) {
+	var err error
 	source, destination := ins.Args[0], ins.Args[form.destination]
 	lanes := form.byteWidth * 8 / form.spec.outputBits
 	if source.Kind == OpFP {
@@ -49,10 +50,14 @@ func (c *amd64Ctx) lowerPackedZeroExtendMove(op Op, ins Instr) (bool, bool, erro
 		return true, false, err
 	}
 	result := "zeroinitializer"
+	extension := "zext"
+	if form.signed {
+		extension = "sext"
+	}
 	for lane := 0; lane < lanes; lane++ {
 		input, extended, inserted := c.newTmp(), c.newTmp(), c.newTmp()
 		fmt.Fprintf(c.b, "  %%%s = extractelement <%d x i%d> %s, i32 %d\n", input, lanes, form.spec.inputBits, inputs, lane)
-		fmt.Fprintf(c.b, "  %%%s = zext i%d %%%s to i%d\n", extended, form.spec.inputBits, input, form.spec.outputBits)
+		fmt.Fprintf(c.b, "  %%%s = %s i%d %%%s to i%d\n", extended, extension, form.spec.inputBits, input, form.spec.outputBits)
 		fmt.Fprintf(c.b, "  %%%s = insertelement <%d x i%d> %s, i%d %%%s, i32 %d\n", inserted, lanes, form.spec.outputBits, result, form.spec.outputBits, extended, lane)
 		result = "%" + inserted
 	}

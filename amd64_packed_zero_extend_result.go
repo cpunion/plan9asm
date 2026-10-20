@@ -11,10 +11,23 @@ func x86ResultPackedZeroExtendStep(ins Instr, state *x86ResultState, owned []boo
 		}
 		ins.x86Encoded, ins.x86SourceRaw = false, nil
 	}
+	return x86ResultPackedExtendTransfer(ins, form, state, owned, arch, conditionalNativeRead), true
+}
+
+func x86ResultPackedSignExtendStep(ins Instr, state *x86ResultState, owned []bool, arch string, native bool) (bool, bool) {
+	form, known, err := x86PackedSignExtendProperties(ins, arch)
+	if !known || err != nil || !x86ResultNamedPredicateInstruction(ins) {
+		return false, known // No raw SX role follows from the separate ZX identity.
+	}
+	return x86ResultPackedExtendTransfer(ins, form, state, owned, arch, native), true
+}
+
+func x86ResultPackedExtendTransfer(ins Instr, form x86PackedExtendForm, state *x86ResultState,
+	owned []bool, arch string, conditionalNativeRead bool) bool {
 	if form.mask >= 0 {
 		index, valid := amd64ParseKReg(ins.Args[form.mask].Reg)
 		if !valid || !state.masks[index] {
-			return false, true
+			return false
 		}
 	}
 	var input uint64
@@ -23,7 +36,7 @@ func x86ResultPackedZeroExtendStep(ins Instr, state *x86ResultState, owned []boo
 		// The full potential tuple remains required for FP/AUTO/caller proofs;
 		// a numerical mask cannot manufacture a smaller owned envelope.
 		if !x86ResultReadWithNativeContinuation(ins, ins.Args[0], int64(form.memoryBytes), state, owned, arch, conditionalNativeRead) {
-			return false, true
+			return false
 		}
 		input = x86CallerVectorByteMask(int64(form.memoryBytes))
 	} else {
@@ -31,7 +44,7 @@ func x86ResultPackedZeroExtendStep(ins Instr, state *x86ResultState, owned []boo
 		input = state.vectorBytes(index)
 	}
 	destination, _ := amd64VectorRegisterIndex(ins.Args[form.destination].Reg, form.byteWidth)
-	initialized := x86PackedZeroExtendDefinedBytes(form, input, state.vectorBytes(destination))
+	initialized := x86PackedExtendDefinedBytes(form, input, state.vectorBytes(destination))
 	state.writeVector(destination, form.byteWidth, initialized, !form.spec.vector)
-	return true, true
+	return true
 }
