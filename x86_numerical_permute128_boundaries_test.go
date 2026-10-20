@@ -108,7 +108,7 @@ func TestX86NumericalPermute128RIPBoundaryIsNotSourceNUM(t *testing.T) {
 				expected := []byte{0xc4, 0xe3, 0x75, member.opcode, 0x15, 0, 0, 0, 0, 0x21, 0xc3}
 				// The trailing imm8 is after disp32: cmd/asm subtracts one
 				// from the R_PCREL addend, relative to the relocation's end.
-				relocation := fmt.Sprintf("rel 5+4 t=R_PCREL table%+d", offset-1)
+				relocation := fmt.Sprintf("rel 5+4 t=R_PCREL table+%d", offset-1)
 				if !bytes.Equal(code, expected) || !reflect.DeepEqual(pcs, []int64{0, 10}) ||
 					strings.Count(string(listing), "t=R_PCREL") != 1 ||
 					!strings.Contains(string(listing), relocation+"\n") {
