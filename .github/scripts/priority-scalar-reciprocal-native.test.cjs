@@ -16,6 +16,7 @@ const avx = 'actual guest CPUID/XCR0 preflight: AVX=1 AVX2=0 AVX512F=0\n';
 const image = `native oracle static IA32 ELF bytes=4096 sha256=${imageHash}\n`;
 const direct = args => `IA32 direct ELF bytes=4096 sha256=${imageHash} argv=${args}\n`;
 const sdk = args => `actual executable=/sdk/bin/go sha256=${hash} argv=${args}\n`;
+const executable = (filename, args) => `actual executable=/tmp/owned/${filename} sha256=${imageHash} argv=${args}\n`;
 const originalArgs = '["-test.run=^TestOriginal$" "-test.count=1" "-test.v"]';
 const compileArgs = '["test" "-p=1" "-vet=off" "-c" "-o" "/tmp/owned/original.test" "."]';
 const evidence = arch => `scalar estimates native arch=${arch} live=20 dead=4 whole32-outcomes=30720 fault-processes=40; SSE/AVX actual scalar opcodes, no AVX512/Z transport\n`;
@@ -35,10 +36,12 @@ function completeEvents() {
       events.push(event('run', child));
       if (axis === 'OriginalGo') {
         events.push(event('output', child, sdk('["version"]') + sdk(compileArgs)));
-        if (arch === '386') events.push(event('output', child, image + direct(originalArgs)));
+        if (arch === '386') events.push(event('output', child,
+          image + executable('original.test', originalArgs) + direct(originalArgs)));
         events.push(event('output', child, originalEvidence));
       } else {
-        if (arch === '386') events.push(event('output', child, image + direct('[]') + image));
+        if (arch === '386') events.push(event('output', child,
+          image + executable('comparison', '[]') + direct('[]') + image));
         events.push(event('output', child, evidence(arch)));
       }
       events.push(event('pass', child));
@@ -136,4 +139,33 @@ test('scalar estimates have a separate required native CI owner, not an AVX512 o
     'go test . -run "^($roots)$" -count=1 -timeout=5m -json > "$directory/raw.jsonl" 2> "$directory/stderr.log"',
     'node .github/scripts/audit-scalar-reciprocal-native.cjs "$directory"']) assert.ok(block.includes(command), command);
   assert.doesNotMatch(block, /continue-on-error|\|\| true|qemu|objects-only|avx512/i);
+});
+
+test('scalar estimate executable receipts cannot replace or escape original Go ownership', () => {
+  audit();
+  for (const axis of axes) {
+    const child = roots[1] + '/' + axis;
+    const original = axis === 'OriginalGo';
+    const receipt = executable(original ? 'original.test' : 'comparison', original ? originalArgs : '[]');
+    for (const replacement of ['', receipt + receipt,
+      receipt.replace(imageHash, hash), receipt.replace('sha256=' + imageHash, 'sha256=invalid'),
+      receipt.replace(original ? 'original.test' : 'comparison', 'unrelated'),
+      receipt.replace(original ? originalArgs : '[]', '["unobserved"]'), sdk(compileArgs)]) {
+      assert.throws(() => audit(completeEvents().map(value => value.Test === child && value.Output
+        ? {...value, Output: value.Output.replace(receipt, replacement)} : value)), axis + '/foreign or absent executable');
+    }
+    const events = completeEvents();
+    const at = events.findIndex(value => value.Test === child && value.Output?.includes(receipt));
+    events[at].Output = events[at].Output.replace(receipt, '');
+    const first = events.findIndex(value => value.Test === child && value.Action === 'output');
+    events.splice(first, 0, event('output', child, receipt));
+    assert.throws(() => audit(events), axis + '/execution before inspected image');
+  }
+  const events = completeEvents();
+  const child = roots[1] + '/OriginalGo';
+  const at = events.findIndex(value => value.Test === child && value.Output?.includes(sdk(compileArgs)));
+  events[at].Output = events[at].Output.replace(sdk(compileArgs), '');
+  const pipeline = events.findIndex(value => value.Test === roots[1] + '/backend_O0' && value.Action === 'output');
+  events.splice(pipeline, 0, event('output', roots[1] + '/backend_O0', sdk(compileArgs)));
+  assert.throws(() => audit(events), 'pipeline cannot own original Go compilation');
 });
