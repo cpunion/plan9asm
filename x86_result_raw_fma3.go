@@ -51,6 +51,13 @@ func x86RawFMA3LiteralForm(ins Instr, arch string) bool {
 		ins.x86RIPMemoryRead.source == 0 && ins.x86RIPMemoryRead.width == int64(form.memoryBytes)
 }
 
+// An authenticated FMA changes its vector destination and MXCSR, not DF, ID
+// or private FLAGS storage. Preserving those independent facts supplies no
+// arithmetic inputs, memory backing, entry authority or inert-data predicate.
+func x86FMA3PreservesPrivateSourceState(ins Instr, arch string) bool {
+	return x86RawFMA3Source(ins, arch) || x86RawFMA3LiteralForm(ins, arch)
+}
+
 // A restriction selected from immutable original instructions precedes strict
 // NUM success too. Removing a mutable origin cannot erase its replay duty.
 func x86FMA3RawReplayRequired(fn Func, arch string) bool {
