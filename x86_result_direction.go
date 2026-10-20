@@ -72,7 +72,7 @@ func x86ResultDirectionAfterSource(ins Instr, direction x86ResultDirection, arch
 	if x86RawBlendMinposSource(ins, arch) {
 		return direction // The exact data selection/reduction has no FLAGS/DF write.
 	}
-	if x86RawScalarPrecisionSource(ins, arch) || x86RawPackedPrecisionSource(ins, arch) {
+	if x86RawScalarPrecisionSource(ins, arch) || x86RawPackedPrecisionSource(ins, arch) || x86RawNamedHalfSource(ins, arch) {
 		return direction // Native MXCSR effects do not alter the independent DF control.
 	}
 	if x86RawExplicitMaskMoveSource(ins, arch) {

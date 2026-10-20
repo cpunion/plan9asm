@@ -103,6 +103,16 @@ func inferFuncTargetFeaturesForGOARCH(arch Arch, goarch string, fn Func) string 
 					add("+avx")
 				}
 			}
+			if form, known, err := x86NamedHalfProperties(ins.Op, ins, moveArch); known && err == nil {
+				if form.evex {
+					add("+avx512f")
+					if form.sourceBytes < 64 && form.destinationBytes < 64 {
+						add("+avx512vl")
+					}
+				} else {
+					add("+avx", "+f16c")
+				}
+			}
 			if _, known, err := x86UnsignedIntegerFloatProperties(ins, moveArch); known && err == nil {
 				add("+avx512f") // Scalar unsigned EVEX needs F, not packed narrow VL.
 			}

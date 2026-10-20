@@ -121,6 +121,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 	boundRawZeroExtend := false
 	boundRawPackedPrecision := false
 	for _, ins := range fn.Instrs {
+		if x86RawNamedHalfSource(ins, arch) {
+			continue // One whole-producer replay above; no new value, address or entry fact.
+		}
 		if x86RawPermute128Source(ins, arch) {
 			if !rawPermute128 {
 				return strictErr
@@ -378,6 +381,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		}
 		if accepted, known := x86ResultScalarPrecisionStep(ins, state, owned, arch, true); known {
 			return accepted // The paired original scalar conversion retains m32/m64 and MXCSR effects.
+		}
+		if accepted, known := x86ResultNamedHalfStep(ins, state, owned, arch, true); known {
+			return accepted // The exact original conversion/store retains MXCSR and active native accesses.
 		}
 		if accepted, known := x86ResultPackedPrecisionStep(ins, state, owned, arch, true); known {
 			return accepted // The paired original packed conversion retains exact E2 reads and MXCSR effects.

@@ -433,6 +433,7 @@ func decodeX86RawDirectives(fn Func, goarch string) (Func, error) {
 				floatMinMax:        x86FloatMinMaxRawIdentity(decoded[index], goarch),
 				scalarPrecision:    x86ScalarPrecisionRawIdentity(decoded[index], goarch),
 				packedPrecision:    x86PackedPrecisionRawIdentity(decoded[index], goarch),
+				namedHalf:          x86NamedHalfRawIdentity(decoded[index], goarch),
 				fma3:               x86FMA3RawIdentity(decoded[index], goarch),
 				explicitMaskMove:   x86ExplicitMaskMoveRawIdentity(decoded[index], goarch),
 				packedShift:        x86PackedShiftRawIdentity(decoded[index], goarch),

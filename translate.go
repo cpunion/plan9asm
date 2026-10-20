@@ -339,6 +339,9 @@ func translateIRText(file *File, opt Options) (resultText string, result error) 
 	if err := validateX86PackedPrecisionFile(file, opt); err != nil {
 		return "", err
 	}
+	if err := validateX86NamedHalfFile(file, opt); err != nil {
+		return "", err
+	}
 	if err := validateX86COMIFile(file, opt); err != nil {
 		return "", err
 	}

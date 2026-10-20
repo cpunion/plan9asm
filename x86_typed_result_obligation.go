@@ -27,6 +27,9 @@ func x86TypedFPResultNeedsProof(fn Func, sig FuncSig, arch string) bool {
 	}
 	opaqueAddressResult := x86OpaqueAddressPointerResultRole(fn, sig, arch)
 	for ordinal, ins := range fn.Instrs {
+		if form, known, err := x86NamedHalfProperties(ins.Op, ins, arch); known && err == nil && !form.undefinedOpcode() {
+			return true // Void still consumes active source, merge, mask and native address inputs.
+		}
 		if _, known, err := x86ExplicitMaskMoveProperties(ins.Op, ins, arch); known && err == nil {
 			return true // Dead loads/stores retain actual masks, data and address obligations.
 		}

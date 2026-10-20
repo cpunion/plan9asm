@@ -30,7 +30,8 @@ func x86LoweredNumericalProducerReplay(fn Func, arch string) error {
 		return false
 	}
 	replay := fn.x86RawReplay
-	if !x86FMA3RawReplayRequired(fn, arch) && !hasProducer(fn.Instrs) && (replay == nil || !hasProducer(replay.decoded)) {
+	if !x86FMA3RawReplayRequired(fn, arch) && !x86NamedHalfRawReplayRequired(fn, arch) &&
+		!hasProducer(fn.Instrs) && (replay == nil || !hasProducer(replay.decoded)) {
 		return nil // Ordinary named source keeps its existing input/unknown domain.
 	}
 	if replay == nil {

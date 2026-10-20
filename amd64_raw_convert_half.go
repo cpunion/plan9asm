@@ -159,9 +159,16 @@ func decodedX86PackedHalfConversionInstruction(code []byte, mode int) (Instr, in
 	for index, arg := range args {
 		printed[index] = arg.String()
 	}
+	encoding := x86RawNamedHalfAbsent
+	if !form.rawOnly {
+		encoding = x86RawNamedHalfVEX
+		if p.evex {
+			encoding = x86RawNamedHalfEVEX
+		}
+	}
 	return Instr{
 		Op: op, Args: args, Raw: fmt.Sprintf("%s %s", op, strings.Join(printed, ", ")),
-		x86Encoded: form.rawOnly, x86VectorBytes: 16 << vectorLength,
+		x86Encoded: form.rawOnly, x86VectorBytes: 16 << vectorLength, x86NamedHalfEncoding: encoding,
 	}, p.modRM + consumed, true, nil
 }
 
