@@ -57,14 +57,9 @@ func TestTranslateRawEVEXPackedExtendWeaviateRegression(t *testing.T) {
 	BYTE $0x07
 	RET
 `
-	file, err := Parse(ArchAMD64, source)
-	if err != nil {
-		t.Fatal(err)
-	}
-	ir, err := Translate(file, Options{Goarch: "amd64", TargetTriple: "x86_64-unknown-linux-gnu", Sigs: map[string]FuncSig{"rawPackedExtend": {Name: "rawPackedExtend", Ret: Void}}})
-	if err != nil {
-		t.Fatal(err)
-	}
+	// Original bytes lack DI/AX producers. Keep their Go object and
+	// three-API Context; the independent initialized block owns public success.
+	ir := x86UnboundVoidRawScalarFormatObject(t, source, "amd64", "x86_64-unknown-linux-gnu")
 	if !strings.Contains(ir, "zext i8") || !strings.Contains(ir, "to i64") {
 		t.Fatalf("raw VPMOVZXBQ lowering omitted byte-to-qword zero extension:\n%s", ir)
 	}
@@ -95,14 +90,9 @@ func TestTranslateRawVEXPackedExtendWeaviateBlockRegression(t *testing.T) {
 	LONG $0xb845e2c4; WORD $0x6047
 	RET
 `
-	file, err := Parse(ArchAMD64, source)
-	if err != nil {
-		t.Fatal(err)
-	}
-	ir, err := Translate(file, Options{Goarch: "amd64", TargetTriple: "x86_64-unknown-linux-gnu", Sigs: map[string]FuncSig{"rawPackedExtendBlock": {Name: "rawPackedExtendBlock", Ret: Void}}})
-	if err != nil {
-		t.Fatal(err)
-	}
+	// This complete unchanged block lacks SI/DI and old accumulator inputs.
+	// Its format object is not initialized public translation or execution.
+	ir := x86UnboundVoidRawScalarFormatObject(t, source, "amd64", "x86_64-unknown-linux-gnu")
 	if strings.Count(ir, "zext i8") < 4 || strings.Count(ir, "asm sideeffect \"vcvtdq2ps") != 4 {
 		t.Fatalf("raw VPMOVZXBD/VCVTDQ2PS block omitted conversions:\n%s", ir)
 	}

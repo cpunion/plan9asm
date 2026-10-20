@@ -119,7 +119,10 @@ func TestX86RawZeroExtendOrthogonalInitializedFiveTargetObjects(t *testing.T) {
 						if memory {
 							code[len(code)-1] = 0x08 // Exact mN at the imported AX pointer.
 						}
-						fmt.Fprintf(&source, "TEXT ·%s(SB),4,$0-%d\nVZEROALL\nMOVL $5,AX\nKMOVD AX,K1\n%s p+0(FP),AX\n", name, word, move)
+						// Only banks 0/1 are read. Their VEX zero producers also
+						// define the wider aliases without clearing sixteen banks
+						// in every independent object witness.
+						fmt.Fprintf(&source, "TEXT ·%s(SB),4,$0-%d\nVPXOR Y0,Y0,Y0\nVPXOR Y1,Y1,Y1\nMOVL $5,AX\nKMOVD AX,K1\n%s p+0(FP),AX\n", name, word, move)
 						for _, value := range code {
 							fmt.Fprintf(&source, "BYTE $%#x\n", value)
 						}

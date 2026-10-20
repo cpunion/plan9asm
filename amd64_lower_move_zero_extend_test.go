@@ -1,14 +1,8 @@
 package plan9asm
 
 import (
-	"go/ast"
-	"go/parser"
-	"go/token"
-	"go/types"
 	"strings"
 	"testing"
-
-	"github.com/xgo-dev/llvm"
 )
 
 func TestTranslateX86PackedZeroExtendMoveCompleteGoAssemblerForms(t *testing.T) {
@@ -34,58 +28,15 @@ func TestTranslateX86PackedZeroExtendMoveCompleteGoAssemblerForms(t *testing.T) 
 				}
 			}
 			source.WriteString("\tRET\n")
-			requireX86GoAssemblerResult(t, target.goarch, source.String(), true)
-
-			file, err := Parse(ArchAMD64, source.String())
-			if err != nil {
-				t.Fatal(err)
-			}
-			ll, err := Translate(file, Options{
-				TargetTriple: target.triple,
-				Goarch:       target.goarch,
-				Sigs: map[string]FuncSig{
-					"packedzeroextendmoveforms": {Name: "packedzeroextendmoveforms", Ret: Void},
-				},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			// This unchanged format directory has no address, data or mask
+			// producers. Its Go object and public Context checks remain
+			// separate from the initialized three-API object matrices.
+			ll := x86UnboundVoidScalarFormatObject(t, source.String(), "packedzeroextendmoveforms", target.goarch, target.triple)
 			llc := findLLVM22Tool("llc")
 			if llc == "" {
 				t.Fatal("LLVM 22 llc not found")
 			}
 			compileLLVMToObject(t, llc, target.triple, "packed-zero-extend-move-"+target.name+".ll", "packed-zero-extend-move-"+target.name+".o", ll)
-
-			ctx := llvm.NewContext()
-			defer ctx.Dispose()
-			module, err := TranslateModuleInContext(ctx, file, Options{
-				TargetTriple: target.triple,
-				Goarch:       target.goarch,
-				Sigs:         map[string]FuncSig{"packedzeroextendmoveforms": {Ret: Void}},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
-			defer module.Dispose()
-			compileLLVMToObject(t, llc, target.triple, "zero-context.ll", "zero-context.o", module.String())
-
-			fset := token.NewFileSet()
-			declaration, err := parser.ParseFile(fset, "forms.go", "package forms\nfunc packedzeroextendmoveforms()\n", 0)
-			if err != nil {
-				t.Fatal(err)
-			}
-			typed, err := (&types.Config{Sizes: types.SizesFor("gc", target.goarch)}).Check("forms", fset, []*ast.File{declaration}, nil)
-			if err != nil {
-				t.Fatal(err)
-			}
-			bound, err := translateGoModuleInContext(ctx, GoPackage{Path: "forms", Types: typed, Syntax: []*ast.File{declaration}}, []byte(source.String()), GoModuleOptions{
-				GOARCH: target.goarch, TargetTriple: target.triple, FileName: "forms.s",
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
-			defer bound.Module.Dispose()
-			compileLLVMToObject(t, llc, target.triple, "zero-go-module.ll", "zero-go-module.o", bound.Module.String())
 		})
 	}
 }
