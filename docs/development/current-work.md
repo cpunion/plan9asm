@@ -35,6 +35,12 @@ aggregate correctly failed. Official Linux and Windows allocations are mixed:
 one capable allocation is not a stable hardware guarantee. Independent native
 steps keep their own failure status while allowing unrelated owners to run.
 
+The next workflow lets Windows execute after all nine prerequisites finish,
+even if one fails. A separate final qualification requires all nine and complete
+Windows to succeed; failure, cancellation, skip or missing observations cannot
+qualify. This only improves diagnostic scheduling, not AVX512 availability or
+native execution qualification. The online run above remains failed.
+
 The last complete main-module inventory is still
 [39285088077](https://github.com/cpunion/plan9asm/actions/runs/39285088077) at
 `47e44aa7d`: 7,379 roots = 7,063 pass + 52 fail + 264 explicit host skips,

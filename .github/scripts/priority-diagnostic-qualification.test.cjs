@@ -104,10 +104,19 @@ test('only all ten genuine success results qualify; Windows cannot replace an or
 
 test('the actual qualification command exits nonzero for failed, skipped, absent or malformed needs', () => {
   const script = path.join(__dirname, 'diagnostic-qualification.cjs');
-  const execute = input => spawnSync(process.execPath, [script], {
-    encoding: 'utf8', timeout: 5000,
-    env: {...process.env, DIAGNOSTIC_NEEDS_JSON: input},
-  });
+  const execute = input => {
+    const env = {...process.env};
+    if (input === undefined) delete env.DIAGNOSTIC_NEEDS_JSON;
+    else env.DIAGNOSTIC_NEEDS_JSON = input;
+    return spawnSync(process.execPath, [script], {encoding: 'utf8', timeout: 5000, env});
+  };
+  const rejects = (input, label) => {
+    const failed = execute(input);
+    assert.equal(failed.error, undefined, label);
+    assert.equal(failed.signal, null, label);
+    assert.ok(Number.isInteger(failed.status) && failed.status > 0, label);
+    assert.equal(failed.stdout, '', label);
+  };
   const success = execute(JSON.stringify(successfulNeeds()));
   assert.equal(success.error, undefined);
   assert.equal(success.status, 0, success.stderr);
@@ -116,16 +125,13 @@ test('the actual qualification command exits nonzero for failed, skipped, absent
     for (const result of ['failure', 'skipped', 'cancelled']) {
       const needs = successfulNeeds();
       needs[name].result = result;
-      const failed = execute(JSON.stringify(needs));
-      assert.equal(failed.error, undefined);
-      assert.notEqual(failed.status, 0, name + ': ' + result);
-      assert.equal(failed.stdout, '');
+      rejects(JSON.stringify(needs), name + ': ' + result);
     }
     const missing = successfulNeeds();
     delete missing[name];
-    assert.notEqual(execute(JSON.stringify(missing)).status, 0, 'missing ' + name);
+    rejects(JSON.stringify(missing), 'missing ' + name);
   }
-  for (const input of ['', '{', 'null', '[]', '{}']) {
-    assert.notEqual(execute(input).status, 0, input);
+  for (const input of [undefined, '', '{', 'null', '[]', '{}']) {
+    rejects(input, 'malformed actual context: ' + input);
   }
 });
