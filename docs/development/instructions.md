@@ -138,6 +138,18 @@ entering the region; do not relax that boundary to accommodate an old fixture.
 Architecture-scoped dispatch maps must remain visible to supported-op extraction;
 test the isolated source file as well as whole-repository reporting.
 
+The two ordinary half conversions share their complete eighteen-row Go grammar
+and precision-family carrier/input helpers, not raw-only FP16 permission.
+Preserve VEX/EVEX physical identity, integer-expression imm8 classification,
+mode32 named/raw arity, active bytes, merge and mask inputs, including Void.
+Narrowing memory uses its real masked native opcode, not conversion plus an
+ordinary store. EVEX.z memory faults before source, mask or address evaluation;
+Go's SAE-memory rejection is separate. Matching x86 emission retains original
+MXCSR and exception effects, including dynamic immediate controls 4–7.
+Authenticate the complete raw producer before any continuation. Original Go
+objects, initialized five-target public objects and explicitly private fixed-
+rounding mathematics are separate evidence; the latter is not native execution.
+
 Raw-only FP16 floating conversions distinguish active scalar/lane bytes from
 their X/Y/Z carriers. Decoder identity binds the original operands and vector
 length; actual mask, merge and source inputs stay mandatory for Void. Keep

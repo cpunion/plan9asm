@@ -1,6 +1,6 @@
 # PR 40: current checkpoint
 
-Updated 2026-10-20. Implementation handoff: `a1c543838`. This is not a
+Updated 2026-10-20. Implementation handoff: `0b744db7b`. This is not a
 current-head completion certificate. Preserve ignored failed evidence and
 read [instruction contracts](instructions.md) and [validation](validation.md).
 
@@ -71,6 +71,9 @@ differ. Older qualifications remain in earlier Git checkpoints.
 
 | Snapshot | Independent local scope | Limits |
 |---|---|---|
+| `bcab1e58d` | Complete named/raw half, raw-only isolation and original floating diagnostics: 49 / 1,334 current, 95.756 seconds | Zero failure/skip/stderr and unchanged complete seals. Original fixed-rounding ASM/C and native objects remain separate from explicitly private mathematical execution; no native MXCSR execution claim |
+| `89d5189e9` | Half, floating diagnostics and legacy scalar stores: 56 / 2,315 actual Go1.20, 94.029 seconds | Zero failure/skip and unchanged complete seals; two exact macOS linker build warnings retained. The current-SDK encoder root is absent by build role, not skipped |
+| `bcab1e58d` | Complete packed precision, unsigned scalar and shared consumers: 50 / 2,820 actual Go1.20, 73.306 seconds | Historical reserved maskless-zero bytes are observed, not accepted semantics. Zero failure/skip, unchanged complete seals; two macOS linker build warnings retained |
 | `32a5aadbb` | Complete permute128 and SDK physical boundaries: 30 / 1,188 current, 20.038 seconds | Two-member grammar, every selector, initialized objects, portable values/faults, actual Go/LLVM mode32 and RIP-length priors; no NUM/DATA/caller permission. Zero failure/skip, unchanged complete seals. Original AVX/AVX2 execution remains separate |
 | `e22831f42` | Complete packed precision and shared consumers: 35 / 2,024 current, 34.973 seconds | Six names/eighteen Go rows, fifty-three initialized shapes, original raw/named objects, exact native opcodes and strict aliases. Zero failure/skip, unchanged complete seals; not original x86 execution or minimum/race |
 | `f7e631cfa` | Complete blend/minpos: 27 / 1,012 current, 66.509 seconds | Complete original formats, initialized objects, mode32 grammar and portable mathematics; zero failure/skip and unchanged complete seals. Two original Linux native owners are wired, not locally executed |
@@ -161,14 +164,39 @@ the completion of a single focused scope.
   Preserve the initial thirteen-root production RED and later failed 23-root
   integration receipt. Independent fixtures retain all original unbound rows,
   explicit mode32 physical-bank Context and strict same-call memory aliases.
-- Named-half has valid eighteen-row TDD RED at `a1c543838`: fifteen roots /
-  640 children, 407 failed terminals, zero skip or infrastructure failure and
-  unchanged complete seals. All Go/LLVM priors pass, including the complete
-  initialized/dynamic programs. Original directed-rounding runtime also fails.
-  Preserve the earlier invalid-CMP fixture attempt separately. Before core
-  implementation, supplement ordinary raw nonfault generation/replay tests;
-  dynamic MXCSR 4–7 and architectural zero-store #UD stay distinct from SAE
-  memory forms rejected by the actual Go assembler.
+- Named/ordinary raw half now has the complete current/minimum scopes above.
+  Preserve the valid eighteen-root RED at `48460ca6`, the separately validated
+  integer-expression RED at `113697d1f`, and earlier invalid-CMP/identical-literal
+  fixture attempts as distinct evidence. Whole-producer replay, physical
+  generation and mandatory source/mask/merge bytes stay independent of raw-only
+  FP16. Dynamic MXCSR 4–7 retains its original opcode; fixed-rounding private
+  mathematics is not native F16C/MXCSR execution. Go-accepted zero-store #UD
+  precedes inputs; actual-Go SAE-memory rejection is a different boundary.
+- At `f6a860154`, all 221 Node policies pass in a source-frozen preliminary
+  diagnostic. This is not the complete 33-command qualification. The actual
+  backend object audit now distinguishes original Go KMOVQ from translated
+  KMOVW and F-only scalar from F/VL FMA. All three object/profile roots pass
+  at `0b744db7b`, including three targets and all three pipelines; actual CPU
+  execution still belongs to the original owners.
+- Complete STEXT/STEXTFIPS listing ownership has independent real Go1.27
+  bigmod original/mapped objects and ABI0/ABI1 archive priors. Unknown and
+  truncated non-text displays revoke the previous PC owner. The first 25-root
+  integration at `0b744db7b` attempts 25 roots / 945 children: 24 roots pass,
+  while one old fixture wrongly requires nosplit. A test-only repair retains
+  its six negatives and adds an actual large-frame split-static Go prior;
+  rerun the complete 26-root current and build-role-adjusted minimum/race scope.
+- The complete original bigmod CLI still fails after the listing repair:
+  whole-native VEX boundary decoding rejects PC519. Original MathExp and field
+  sources pass in that same three-root attempt at `0b744db7b`; complete seals
+  match. Fix the complete VEX GP decoder/consumer class, not only MULX or that
+  package. No source boundary observation grants NUM, RIP data, frame or ABI.
+- The sixteen-report classification diagnostic at `bcab1e58d` retains every
+  complete form, encoder field and unrelated metric. Each AMD64 SDK moves 179
+  input-deficient probes to Context; every 386 report is unchanged. Seven
+  reviewed classes account for 177; the other two are exact legacy MOVSS/MOVSD
+  native-store forms. Preserve the first unreviewed-class failure. The explicit
+  eight-class comparison passes on the captured reports, but fresh collection
+  and baseline update remain pending; do not blindly refresh fingerprints.
 - Required native hardware remains pending, never a skipped success. The
   original ABS/sign, scalar precision and FMA caller SIGILL failures do not
   establish hardware absence without their own actual-allocation CPU receipt.
@@ -233,7 +261,7 @@ minimum/current/race scope, all 33 command gates, unchanged complete forms and
 baseline fields against `68fbaa638`, and the full MathExp CLI. Older receipts
 do not qualify the later multiply/native-fixture integration.
 
-The latest full benchmark at `a530a1688` remains failed: all 184 target/file
+The preceding full benchmark at `a530a1688` remains failed: all 184 target/file
 pairs attempted, 130 compiled, 54 failed, no N/A/unattempted. Target wall times
 are 33/274/1/7/1 seconds for 386/amd64/arm/arm64/wasm, total 316 seconds,
 within unchanged 300/900 budgets. All timestamped completion rows join the
@@ -243,6 +271,16 @@ speedup measurement. MathExp is the one removed failure versus `47e432d4e`;
 do not extrapolate the later field-source fix into a new benchmark percentage.
 Ordinary SHA/GCM local-frame and private-helper failures are not all
 runtime/reflect special-entry ABI failures. Preserve both classes explicitly.
+
+The newer `4d129bcd3` benchmark still fails: all 184 pairs attempted, 132
+compiled, 52 failed, zero N/A/unattempted; complete source/tool/environment
+seals match and all completion rows join their reports. Only `vlop_386.s` and
+`fe_amd64.s` leave the previous failure set; no new file fails. Target wall
+times are 56/505/5/11/2 seconds, total 579 seconds. AMD64 exceeds the unchanged
+300-second target budget; a total below 900 seconds does not qualify it.
+One diagnostic sample and source audit locate repeated live input hashing and
+complete observation serialization; neither is a controlled speedup result.
+Do not remove live verification boundaries or increase budgets to claim a pass.
 
 The complete original SDK math/exp CLI regression passes at `cbb448b58`.
 Bounded package inventory, complete 34-name generated float-pool ownership and
