@@ -498,6 +498,15 @@ func parseGLOBLStmt(rest string) (GloblStmt, error) {
 	if sym == "" {
 		return GloblStmt{}, fmt.Errorf("GLOBL empty symbol: %q", "GLOBL "+rest)
 	}
+	// cmd/asm evaluates the symbol displacement before requiring it to be
+	// zero. Keep a zero expression out of the declaration's identity so DATA
+	// and GLOBL name the same object. Unresolved expressions remain in sym;
+	// they must not be guessed to be the underlying symbol's zero address.
+	var off int64
+	sym, off = splitSymPlusOff(sym)
+	if off != 0 {
+		return GloblStmt{}, fmt.Errorf("GLOBL symbol must not be offset from SB: %q", "GLOBL "+rest)
+	}
 	if !strings.HasPrefix(sizePart, "$") {
 		return GloblStmt{}, fmt.Errorf("GLOBL size must be an immediate: %q", sizePart)
 	}
