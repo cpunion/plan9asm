@@ -261,7 +261,7 @@ func x86RunDuplicateMoveNative(t *testing.T, execution x86FloatCompareExecution,
 	}
 	t.Run("OriginalGo", func(t *testing.T) {
 		declarations := program.originalDeclarations + "func MXCSR(value uint32) uint32\n"
-		source := program.originalSource + "TEXT ·MXCSR(SB),4,$0-8\nSTMXCSR ret+4(FP)\nLDMXCSR value+0(FP)\nRET\n"
+		source := program.originalSource + x86OriginalNativeMXCSRSource(arch)
 		x86RunOriginalGoNativeSource(t, execution, arch, declarations, source,
 			fmt.Sprintf(x86DuplicateOriginalGo, program.originalRows))
 		t.Log("actual original Go legacy/VEX: 18 rows × 16 IEEE/bit patterns × 6 masks = 1728 whole32/FLAGS/DF/MXCSR/canary outcomes; no EVEX execution claim")

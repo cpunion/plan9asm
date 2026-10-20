@@ -86,7 +86,7 @@ func x86ScalarReciprocalNativeProgram(arch string) (source, declarations, protot
 	return assembly.String(), decl.String(), c.String(), rows.String()
 }
 
-func x86ScalarReciprocalOriginalReferences() (string, string) {
+func x86ScalarReciprocalOriginalReferences(arch string) (string, string) {
 	var source, declarations strings.Builder
 	for kind, op := range []string{"RCPSS", "RSQRTSS", "VRCPSS", "VRSQRTSS"} {
 		fmt.Fprintf(&declarations, "func Reference%d(bits uint32) uint32\n", kind)
@@ -97,7 +97,7 @@ func x86ScalarReciprocalOriginalReferences() (string, string) {
 		source.WriteString("\nMOVSS X0,ret+4(FP)\nRET\n")
 	}
 	declarations.WriteString("func MXCSR(value uint32) uint32\n")
-	source.WriteString("TEXT ·MXCSR(SB),4,$0-8\nSTMXCSR ret+4(FP)\nLDMXCSR value+0(FP)\nRET\n")
+	source.WriteString(x86OriginalNativeMXCSRSource(arch))
 	return source.String(), declarations.String()
 }
 
@@ -115,8 +115,8 @@ func TestX86ScalarReciprocalNativeDirectoryAndOriginalGoSource(t *testing.T) {
 	if len(rows) != 20 || kinds != [4]int{3, 3, 7, 7} {
 		t.Fatal("complete four-name native alias basis changed", len(rows), kinds)
 	}
-	refs, refDecl := x86ScalarReciprocalOriginalReferences()
 	for _, arch := range []string{"amd64", "386"} {
+		refs, refDecl := x86ScalarReciprocalOriginalReferences(arch)
 		source, declarations, _, metadata := x86ScalarReciprocalNativeProgram(arch)
 		if strings.Count(source, "TEXT ·Estimate") != 20 || strings.Count(source, "TEXT ·Dead") != 4 ||
 			strings.Contains(source+refs, "Z0") || strings.Contains(source+refs, "VMOVDQU64") {
@@ -236,7 +236,7 @@ func x86RunScalarReciprocalNative(t *testing.T, execution x86FloatCompareExecuti
 		})
 	}
 	t.Run("OriginalGo", func(t *testing.T) {
-		references, refDecl := x86ScalarReciprocalOriginalReferences()
+		references, refDecl := x86ScalarReciprocalOriginalReferences(arch)
 		x86RunOriginalGoNativeSource(t, execution, arch, "package oracle\n"+declarations+refDecl, source+references,
 			fmt.Sprintf(x86ScalarReciprocalNativeOriginalGo, metadata))
 		t.Log("actual original Go scalar estimates: 20 aliases × 24 bit patterns × 64 MXCSR profiles = 30720 whole32/FLAGS/DF/MXCSR/canary outcomes; independent scalar references, no AVX512/Z execution claim")
