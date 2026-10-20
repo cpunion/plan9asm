@@ -88,9 +88,13 @@ differ. Older qualifications remain in earlier Git checkpoints.
 
 All 206 Node policies passed at `b2d198ae8`, including the independent final
 diagnostic qualification. These are local policy receipts, not an online CI
-result. The next integrated candidate needs fresh command/family qualifications
-and classification audit after the two pending rule-class repairs. Previous
-receipts cannot fill those gaps.
+result. At `bdb7ed6bb`, 21 command gates passed before policies failed: 205 of
+206 policies passed, with one fake-shell child exceeding its unchanged five
+second limit. Eleven remaining command gates did not run. Source/tool seals
+were unchanged. Isolated and complete recorded-environment replays passed,
+but do not erase this failed receipt or qualify the unrun commands. Preserve
+the budget and rerun the complete frozen candidate after the scalar declaration
+repair. Previous receipts cannot fill those gaps.
 
 Raw continuations retain sealed complete producer replay, not just a mutable
 origin pointer. SDK literal/numerical owners precede native family hooks.
@@ -114,15 +118,16 @@ retained LEAW portable DF instrumentation is not unmodified native execution.
 
 ## Classification and performance references
 
-The last independent classification comparison is at `18a4052d3`, recorded by
-baseline-only `ae2579cf2`: all sixteen Go1.20–Go1.27 x86 reports were inspected.
-Exactly 126 further AMD64 input-deficient probes per SDK changed supported to
-Context across complete four-source, precision, mask, MIN/MAX and XLAT families;
-every 386 form and unrelated encoder/unsupported/parse metric stayed unchanged.
+The fresh independent classification comparison at `bdb7ed6bb` covers all
+sixteen Go1.20–Go1.27 x86 reports. Every form, status, fingerprint and metric
+matches the separately qualified `18a4052d3` reference; no baseline was edited.
+That reference, recorded by baseline-only `ae2579cf2`, moved exactly 126 further
+AMD64 input-deficient probes per SDK from supported to Context across complete
+four-source, precision, mask, MIN/MAX and XLAT families; every 386 form and
+unrelated encoder/unsupported/parse metric stayed unchanged.
 Current-SDK AMD64 counts are 3,113 supported, 3,623 Context and zero unsupported.
-These are historical reference counts, not a classification of the present
-union. Context is not an
-initialized-program success. Retain the historical Go1.20 unsupported form;
+These counts are rechecked at `bdb7ed6bb`, not a later-head qualification.
+Context is not an initialized-program success. Retain the historical Go1.20 unsupported form;
 the current five-architecture gate still requires zero unsupported/parse errors.
 Re-audit complete forms and fingerprints before changing any baseline.
 
