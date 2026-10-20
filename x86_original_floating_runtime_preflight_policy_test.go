@@ -178,7 +178,7 @@ int main(void) {
             const unsigned positions[]={1,2,5,6,7}; uint64_t xcr0=0;
             for(unsigned i=0;i<5;i++) if(bits&(1u<<i)) xcr0|=UINT64_C(1)<<positions[i];
             int expected=sse2&&avx&&os&&f&&bits==31&&
-                         (profile==1||(profile==2&&vl&&fma));
+                         (profile==1||profile==3||(profile==2&&vl&&fma));
             if(original_floating_required_state(profile,sse2,avx,os,f,vl,fma,xcr0)!=expected ||
                original_floating_required_state(profile,sse2,avx,os,f,vl,fma,xcr0|0x101)!=expected) return 1;
         }
@@ -224,7 +224,7 @@ func TestX86OriginalFloatingRuntimeBaselineObjectsAndFaultBoundary(t *testing.T)
 	if flush < 0 || guard <= flush || strings.Index(main[guard:], "return 78;") < 0 {
 		t.Fatal("real CPU receipt must precede the mandatory missing-capability failure")
 	}
-	for _, opcode := range []string{"original_scalar_precision()", "original_fma_caller()"} {
+	for _, opcode := range []string{"original_scalar_precision()", "original_fma_caller()", "original_unsigned_scalar_integer()"} {
 		if at := strings.Index(main, opcode); at <= guard {
 			t.Fatal("original opcode executes before its actual feature/OS-state proof", opcode)
 		}
@@ -264,8 +264,8 @@ func TestX86OriginalFloatingRuntimeBaselineObjectsAndFaultBoundary(t *testing.T)
 					t.Fatal(err)
 				}
 			}
-			for caseID := 0; caseID < 4; caseID++ {
-				profile, level := caseID%2+1, []string{"-O0", "-O2"}[caseID/2]
+			for caseID := 0; caseID < 6; caseID++ {
+				profile, level := caseID%3+1, []string{"-O0", "-O2"}[caseID/3]
 				source, object := filepath.Join(directory, "preflight.c"), filepath.Join(directory, "preflight.o")
 				program := fmt.Sprintf("#define REQUIRED_PROFILE %d\n", profile) + state + opcodes
 				if err := os.WriteFile(source, []byte(program), 0600); err != nil {
@@ -297,6 +297,26 @@ func TestX86OriginalFloatingRuntimeBaselineObjectsAndFaultBoundary(t *testing.T)
 						group := regexp.MustCompile(`(?m)^attributes #` + string(identity[1]) + ` = [^\n]*`).Find(payload)
 						if len(group) == 0 || bytes.Contains(group, []byte("+avx")) || bytes.Contains(group, []byte("+fma")) {
 							t.Fatal("preflight main can fault before its CPUID/OS-state guard", string(group))
+						}
+						if profile == 3 {
+							probe := regexp.MustCompile(`(?m)^define [^\n]*@original_unsigned_scalar_integer\([^\n]* #([0-9]+)`).FindSubmatch(payload)
+							if len(probe) != 2 {
+								t.Fatal("actual unsigned original-opcode function is missing from the compiled baseline driver")
+							}
+							probeGroup := regexp.MustCompile(`(?m)^attributes #` + string(probe[1]) + ` = [^\n]*`).Find(payload)
+							if !bytes.Contains(probeGroup, []byte("+avx512f")) {
+								t.Fatal("actual unsigned probe lost its F-only ISA requirement", string(probeGroup))
+							}
+							for _, forbidden := range []string{"+avx512vl", "+avx512dq", "+avx512bw"} {
+								if bytes.Contains(probeGroup, []byte(forbidden)) {
+									t.Fatal("unsigned scalar probe borrowed a stronger ISA", forbidden, string(probeGroup))
+								}
+							}
+							for _, opcode := range []string{"vcvtusi2sdl ", "vcvtusi2sdq ", "vcvtusi2ssl ", "vcvtusi2ssq "} {
+								if !bytes.Contains(payload, []byte(opcode)) {
+									t.Fatal("compiled actual unsigned probe lost an original opcode", opcode)
+								}
+							}
 						}
 					}
 				}
