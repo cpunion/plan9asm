@@ -433,6 +433,7 @@ func decodeX86RawDirectives(fn Func, goarch string) (Func, error) {
 				floatMinMax:        x86FloatMinMaxRawIdentity(decoded[index], goarch),
 				scalarPrecision:    x86ScalarPrecisionRawIdentity(decoded[index], goarch),
 				explicitMaskMove:   x86ExplicitMaskMoveRawIdentity(decoded[index], goarch),
+				packedShift:        x86PackedShiftRawIdentity(decoded[index], goarch),
 			}
 		}
 		normalized = append(normalized, decoded...)
@@ -8310,10 +8311,12 @@ vectorPrefix:
 			immediate := Operand{Kind: OpImm, Imm: int64(code[immediateIndex])}
 			destination := Operand{Kind: OpReg, Reg: Reg(fmt.Sprintf("%s%d", vectorName, vvvvNumber))}
 			return Instr{
-				Op:         properties.op,
-				Args:       []Operand{immediate, source, destination},
-				Raw:        fmt.Sprintf("%s %s, %s, %s", properties.op, immediate.String(), source.String(), destination.String()),
-				x86Encoded: true,
+				Op:                     properties.op,
+				Args:                   []Operand{immediate, source, destination},
+				Raw:                    fmt.Sprintf("%s %s, %s, %s", properties.op, immediate.String(), source.String(), destination.String()),
+				x86Encoded:             true,
+				x86PackedShiftEncoding: x86RawPackedShiftVEX,
+				x86PackedShiftW:        vexHasW && vexBits&0x80 != 0,
 			}, immediateIndex + 1, true, nil
 		}
 
@@ -8328,10 +8331,12 @@ vectorPrefix:
 		data := Operand{Kind: OpReg, Reg: Reg(fmt.Sprintf("%s%d", vectorName, vvvvNumber))}
 		destination := Operand{Kind: OpReg, Reg: Reg(fmt.Sprintf("%s%d", vectorName, destinationNumber))}
 		return Instr{
-			Op:         properties.op,
-			Args:       []Operand{count, data, destination},
-			Raw:        fmt.Sprintf("%s %s, %s, %s", properties.op, count.String(), data.String(), destination.String()),
-			x86Encoded: true,
+			Op:                     properties.op,
+			Args:                   []Operand{count, data, destination},
+			Raw:                    fmt.Sprintf("%s %s, %s, %s", properties.op, count.String(), data.String(), destination.String()),
+			x86Encoded:             true,
+			x86PackedShiftEncoding: x86RawPackedShiftVEX,
+			x86PackedShiftW:        vexHasW && vexBits&0x80 != 0,
 		}, modRMIndex + consumed, true, nil
 	}
 
@@ -8412,7 +8417,10 @@ vectorPrefix:
 		for index := range args {
 			rawArgs[index] = args[index].String()
 		}
-		return Instr{Op: op, Args: args, Raw: fmt.Sprintf("%s %s", op, strings.Join(rawArgs, ", ")), x86Encoded: true}, immediateIndex + 1, true, nil
+		return Instr{
+			Op: op, Args: args, Raw: fmt.Sprintf("%s %s", op, strings.Join(rawArgs, ", ")),
+			x86Encoded: true, x86PackedShiftEncoding: x86RawPackedShiftEVEX, x86PackedShiftW: p1&0x80 != 0,
+		}, immediateIndex + 1, true, nil
 	}
 
 	if broadcast {
@@ -8441,7 +8449,10 @@ vectorPrefix:
 	for index := range args {
 		rawArgs[index] = args[index].String()
 	}
-	return Instr{Op: op, Args: args, Raw: fmt.Sprintf("%s %s", op, strings.Join(rawArgs, ", ")), x86Encoded: true}, modRMIndex + consumed, true, nil
+	return Instr{
+		Op: op, Args: args, Raw: fmt.Sprintf("%s %s", op, strings.Join(rawArgs, ", ")),
+		x86Encoded: true, x86PackedShiftEncoding: x86RawPackedShiftEVEX, x86PackedShiftW: p1&0x80 != 0,
+	}, modRMIndex + consumed, true, nil
 }
 
 // decodedX86TernaryLogicInstruction recognizes VPTERNLOGD/Q across the

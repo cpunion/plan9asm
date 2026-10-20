@@ -38,5 +38,13 @@ func decodedX86PerLaneVariableShiftInstruction(code []byte, mode int) (Instr, in
 		return fail("instruction requires EVEX encoding")
 	}
 
-	return decodedX86BinaryVectorOperands(code, p, mode, op, spec.laneBits)
+	ins, consumed, known, err := decodedX86BinaryVectorOperands(code, p, mode, op, spec.laneBits)
+	if known && err == nil {
+		ins.x86PackedShiftEncoding = x86RawPackedShiftVEX
+		if p.evex {
+			ins.x86PackedShiftEncoding = x86RawPackedShiftEVEX
+		}
+		ins.x86PackedShiftW = p.w
+	}
+	return ins, consumed, known, err
 }

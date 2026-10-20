@@ -57,8 +57,14 @@ func decodedX86RawVectorByteShiftInstruction(code []byte, mode int) (Instr, int,
 	}
 	destination := Operand{Kind: OpReg, Reg: Reg(fmt.Sprintf("%s%d", width, p.upper))}
 	args := []Operand{{Kind: OpImm, Imm: int64(code[immIndex])}, source, destination}
+	encoding := x86RawPackedShiftVEX
+	if p.evex {
+		encoding = x86RawPackedShiftEVEX
+	}
 	return Instr{
-		Op: op, Args: args,
-		Raw: fmt.Sprintf("%s %s, %s, %s", op, args[0].String(), source.String(), destination.String()),
+		Op: op, Args: args, x86Encoded: true,
+		Raw:                    fmt.Sprintf("%s %s, %s, %s", op, args[0].String(), source.String(), destination.String()),
+		x86PackedShiftEncoding: encoding,
+		x86PackedShiftW:        p.w,
 	}, immIndex + 1, true, nil
 }

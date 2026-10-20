@@ -17,7 +17,7 @@ import (
 func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 	fn, sig, arch := c.fpScalarSource, c.sig, c.goarch
 	if x86FloatMinMaxRawReplayRequired(fn, arch) || x86ScalarPrecisionRawReplayRequired(fn, arch) ||
-		x86ExplicitMaskMoveRawReplayRequired(fn, arch) {
+		x86ExplicitMaskMoveRawReplayRequired(fn, arch) || x86PackedShiftRawReplayRequired(fn, arch) {
 		if err := fn.x86RawReplay.validate(fn, arch); err != nil {
 			return err
 		}
@@ -113,7 +113,15 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 	boundRawFloatMinMax := false
 	boundRawScalarPrecision := false
 	boundRawExplicitMaskMove := false
+	boundRawPackedShift := false
 	for _, ins := range fn.Instrs {
+		if x86RawPackedShiftSource(ins, arch) {
+			if !boundRawPackedShift && (fn.x86RawReplay == nil || fn.x86RawReplay.validate(fn, arch) != nil) {
+				return strictErr
+			}
+			boundRawPackedShift = true
+			continue // Exact physical identity grants no count, data, mask, address or entry fact.
+		}
 		if x86RawExplicitMaskMoveSource(ins, arch) {
 			if !boundRawExplicitMaskMove && (fn.x86RawReplay == nil || fn.x86RawReplay.validate(fn, arch) != nil) {
 				return strictErr
@@ -568,6 +576,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		}
 		if accepted, known := x86ResultPackedNarrowStep(ins, state, owned, arch, true); known {
 			return accepted // The same emitter retains the complete E4NF tuple or original legacy opcode.
+		}
+		if accepted, known := x86LoweredRawPackedShiftStep(ins, state, owned, arch); known {
+			return accepted // Only the exact sealed shift projects onto the existing typed byte effect.
 		}
 		if accepted, known := x86ResultPackedShiftStepWithRead(ins, state, owned, arch, true); known {
 			return accepted // Uniform m128, E4NF tuples and guarded E4 reads retain their independent shapes.
