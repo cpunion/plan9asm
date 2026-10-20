@@ -243,6 +243,9 @@ func (c *amd64Ctx) lowerArith(op Op, ins Instr) (ok bool, terminated bool, err e
 	if ok, terminated, err := c.lowerADX(op, ins); ok {
 		return ok, terminated, err
 	}
+	if ok, terminated, err := c.lowerMULX(op, ins); ok {
+		return ok, terminated, err
+	}
 	if ok, terminated, err := c.lowerANDN(op, ins); ok {
 		return ok, terminated, err
 	}
@@ -1472,96 +1475,6 @@ func (c *amd64Ctx) lowerArith(op Op, ins Instr) (ok bool, terminated bool, err e
 		z := c.newTmp()
 		fmt.Fprintf(c.b, "  %%%s = zext i32 %%%s to i64\n", z, rot)
 		return true, false, c.storeReg(dst, "%"+z)
-
-	case "MULXL":
-		// BMI2 MULXL src, loDst, hiDst multiplies the low 32 bits of DX by
-		// a 32-bit register or memory source and zero-extends both results.
-		if len(ins.Args) != 3 || ins.Args[1].Kind != OpReg || ins.Args[2].Kind != OpReg {
-			return true, false, fmt.Errorf("amd64 MULXL expects src, loDst, hiDst: %q", ins.Raw)
-		}
-		var src32 string
-		switch ins.Args[0].Kind {
-		case OpReg:
-			src64, err := c.loadReg(ins.Args[0].Reg)
-			if err != nil {
-				return true, false, err
-			}
-			value := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = trunc i64 %s to i32\n", value, src64)
-			src32 = "%" + value
-		case OpMem:
-			pointer, pointerType, err := c.ptrFromMem(ins.Args[0].Mem)
-			if err != nil {
-				return true, false, err
-			}
-			value := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = load i32, %s %s, align 1\n", value, pointerType, pointer)
-			src32 = "%" + value
-		default:
-			return true, false, fmt.Errorf("amd64 MULXL source must be register or memory: %q", ins.Raw)
-		}
-		dx64, err := c.loadReg(DX)
-		if err != nil {
-			return true, false, err
-		}
-		dx32 := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = trunc i64 %s to i32\n", dx32, dx64)
-		a64 := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = zext i32 %%%s to i64\n", a64, dx32)
-		b64 := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = zext i32 %s to i64\n", b64, src32)
-		product := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = mul i64 %%%s, %%%s\n", product, a64, b64)
-		lo32 := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = trunc i64 %%%s to i32\n", lo32, product)
-		hiShift := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = lshr i64 %%%s, 32\n", hiShift, product)
-		hi32 := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = trunc i64 %%%s to i32\n", hi32, hiShift)
-		lo64 := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = zext i32 %%%s to i64\n", lo64, lo32)
-		hi64 := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = zext i32 %%%s to i64\n", hi64, hi32)
-		if err := c.storeReg(ins.Args[1].Reg, "%"+lo64); err != nil {
-			return true, false, err
-		}
-		if err := c.storeReg(ins.Args[2].Reg, "%"+hi64); err != nil {
-			return true, false, err
-		}
-		return true, false, nil
-
-	case "MULXQ":
-		// BMI2 MULXQ src, loDst, hiDst: {hi,lo} = RDX * src (unsigned).
-		if len(ins.Args) != 3 || ins.Args[1].Kind != OpReg || ins.Args[2].Kind != OpReg {
-			return true, false, fmt.Errorf("amd64 MULXQ expects src, loDst, hiDst: %q", ins.Raw)
-		}
-		src, err := c.evalI64(ins.Args[0])
-		if err != nil {
-			return true, false, err
-		}
-		dx, err := c.loadReg(DX)
-		if err != nil {
-			return true, false, err
-		}
-		a128 := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = zext i64 %s to i128\n", a128, dx)
-		b128 := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = zext i64 %s to i128\n", b128, src)
-		p := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = mul i128 %%%s, %%%s\n", p, a128, b128)
-		lo := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = trunc i128 %%%s to i64\n", lo, p)
-		hiShift := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = lshr i128 %%%s, 64\n", hiShift, p)
-		hi := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = trunc i128 %%%s to i64\n", hi, hiShift)
-		if err := c.storeReg(ins.Args[1].Reg, "%"+lo); err != nil {
-			return true, false, err
-		}
-		if err := c.storeReg(ins.Args[2].Reg, "%"+hi); err != nil {
-			return true, false, err
-		}
-		return true, false, nil
 
 	}
 	return false, false, nil
