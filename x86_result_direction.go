@@ -63,6 +63,9 @@ func x86ResultDirectionAfterSource(ins Instr, direction x86ResultDirection, arch
 	if x86RawZeroExtendSource(ins, arch) {
 		return direction // Exact widening writes no independent DF control.
 	}
+	if x86RawPermute128Source(ins, arch) {
+		return direction // Exact vector selection does not write the independent DF domain.
+	}
 	if x86FMA3PreservesPrivateSourceState(ins, arch) {
 		return direction // The original floating operation does not write DF.
 	}

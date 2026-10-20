@@ -36,6 +36,9 @@ func x86ResultPreservesPrivateStorage(ins Instr, arch string) bool {
 	if x86RawZeroExtendSource(ins, arch) {
 		return true // Exact vector widening does not access private SP or ID.
 	}
+	if x86RawPermute128Source(ins, arch) {
+		return true // No private SP or ID effect follows from vector selection.
+	}
 	if x86RawBlendMinposSource(ins, arch) {
 		return true // Exact vector data effects do not access private SP or ID.
 	}

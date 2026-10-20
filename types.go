@@ -903,6 +903,9 @@ type Instr struct {
 	// Integer dot products retain VEX versus EVEX independently of operand
 	// spelling. This is physical identity, never an incoming data/entry fact.
 	x86PackedDotEncoding x86RawPackedDotEncoding
+	// Set only by the fixed W0/L1 permute128 decoder. False is absent
+	// physical identity, not permission to infer a VEX source from Y names.
+	x86Permute128VEX bool
 	// ABS retains physical EVEX even for unmasked low X/Y operands that
 	// otherwise have a VEX spelling. CPU generation supplies no input facts.
 	x86PackedAbsEVEX bool

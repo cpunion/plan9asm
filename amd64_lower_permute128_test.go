@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"runtime"
 	"strings"
 	"testing"
@@ -28,16 +29,19 @@ func TestTranslateX86Permute128CompleteGoAssemblerForms(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			ll, err := Translate(file, Options{
-				TargetTriple: target.triple,
-				Goarch:       "amd64",
-				Sigs: map[string]FuncSig{
-					"permute128forms": {Name: "permute128forms", Ret: Void},
-				},
-			})
-			if err != nil {
-				t.Fatal(err)
+			for _, api := range []string{"text", "module", "Go"} {
+				ir, err := x86ScalarFPBitViewAPI(t, source, "func permute128forms()", "amd64", target.triple, api)
+				if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+					t.Fatal("original bare format acquired unknown Y bytes or a native pointer", api, err)
+				}
 			}
+			// Preserve all four original format rows and their target objects
+			// without claiming initialized public or executable semantics.
+			ll := x86InstructionFormatObjectUnit(t, file,
+				map[string]FuncSig{"permute128forms": {Name: "permute128forms", Ret: Void}},
+				"amd64", target.triple, 0, func(c *amd64Ctx, ins Instr) (bool, bool, error) {
+					return c.lowerPermute128(ins.Op, ins)
+				})
 			llc := findLLVM22Tool("llc")
 			if llc == "" {
 				t.Fatal("LLVM 22 llc not found")
