@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -43,12 +44,16 @@ var asmGeneratedFloatPoolValues = []struct {
 	{"1.000000059604644775390625", 0x3f800000, 0x3ff0000010000000, false},
 	{"1e-50", 0, 0x358dee7a4ad4b81f, false},
 	{"1e40", 0x7f800000, 0x483d6329f1c35ca5, false},
+	{"(+(-2.5))", 0xc0200000, 0xc004000000000000, false},
+	{"0x1.4p+0", 0x3fa00000, 0x3ff4000000000000, false},
+	{"1.2_5", 0x3fa00000, 0x3ff4000000000000, false},
+	{"-(-0.0)", 0, 0, true},
 }
 
 type asmGeneratedFloatPoolCase struct {
 	name, instruction, pool string
 	width                   uint32
-	bits                    uint64
+	bits, sourceBits        uint64
 }
 
 func asmGeneratedFloatPoolSource(arch, pkg string) ([]byte, []byte, []asmGeneratedFloatPoolCase) {
@@ -78,7 +83,7 @@ func asmGeneratedFloatPoolSource(arch, pkg string) ([]byte, []byte, []asmGenerat
 			pool = "" // The original float64 +0 bits select legacy XORPS.
 		}
 		fmt.Fprintf(&source, "TEXT %s(SB),4,$0-0\n%s\nRET\n", name, instruction)
-		cases = append(cases, asmGeneratedFloatPoolCase{objectName, instruction, pool, uint32(size), bits})
+		cases = append(cases, asmGeneratedFloatPoolCase{objectName, instruction, pool, uint32(size), bits, literal.bits64})
 	}
 	for precision, names := range asmGeneratedFloatPoolNames {
 		for _, op := range names {
@@ -218,10 +223,47 @@ func asmGeneratedFloatPoolStockControls(t *testing.T, member ASMDataMember, case
 	}
 }
 
+func asmGeneratedFloatPoolMetadataControls(t *testing.T, source ASMDataSourceObservation, cases []asmGeneratedFloatPoolCase) {
+	t.Helper()
+	if len(source.GeneratedFloatPools) != 13 || len(source.TextOrder) != len(cases) {
+		t.Fatal("the complete deduplicated metadata or source TEXT directory differs")
+	}
+	byOwner := make(map[int]ASMGeneratedFloatPoolOwner)
+	for _, pool := range source.GeneratedFloatPools {
+		for _, owner := range pool.Owners {
+			if owner.TextSourceOrdinal < 0 || owner.TextSourceOrdinal >= len(cases) {
+				t.Fatal("generated pool owner escaped the complete source", owner)
+			}
+			row := cases[owner.TextSourceOrdinal]
+			text := source.TextOrder[owner.TextSourceOrdinal]
+			actual := source.Original.Texts[text.ObjectOrdinal]
+			if _, duplicate := byOwner[owner.TextSourceOrdinal]; duplicate || pool.Definition.Name != row.pool ||
+				owner.StatementOrdinal != 3*owner.TextSourceOrdinal+1 || owner.TextObjectOrdinal != text.ObjectOrdinal ||
+				owner.TextNamespace != text.Namespace || owner.TextRelative != text.Relative || owner.TextIndex != text.Index ||
+				actual.Name != row.name || owner.Opcode != strings.Fields(row.instruction)[0] || owner.SourceFloat64Bits != row.sourceBits ||
+				owner.RelocationOrdinal != 0 || len(actual.Relocations) != 1 || !reflect.DeepEqual(owner.Relocation, actual.Relocations[0]) {
+				t.Fatal("the FCONST/TEXT/physical-relocation metadata association differs", row, owner)
+			}
+			byOwner[owner.TextSourceOrdinal] = owner
+		}
+	}
+	for ordinal, row := range cases {
+		_, associated := byOwner[ordinal]
+		if associated != (row.pool != "") {
+			t.Fatal("source pool and original positive-zero XOR roles were confused", row)
+		}
+	}
+}
+
 func TestGoSDKASMGeneratedFloatPoolWholeFamilyObservation(t *testing.T) {
 	directory, driver, _ := fixture(t)
 	root := filepath.Dir(filepath.Dir(driver))
 	asmGeneratedFloatPoolOfficialDirectory(t, root)
+	if err := GeneratedFloatPoolSources(runtime.Version(), func(role string) ([]byte, error) {
+		return os.ReadFile(filepath.Join(root, filepath.FromSlash(role)))
+	}); err != nil {
+		t.Fatal("the independent actual SDK producer sources differ", err)
+	}
 	dataOracle := officialReaderForSource(t, driver, sdkASMDataReaderSource)
 	textOracle := officialReaderForSource(t, driver, sdkTextReaderSource)
 	builtin, err := os.ReadFile(filepath.Join(root, builtinSourceRole))
@@ -314,6 +356,7 @@ func TestGoSDKASMGeneratedFloatPoolWholeFamilyObservation(t *testing.T) {
 					observation.Sources[0].Layouts[0].Name != "ordinary" || len(observation.Sources[0].GeneratedFuncdata) != 0 {
 					t.Fatal("generated float pools replaced whole objects, explicit DATA or FUNCDATA roles")
 				}
+				asmGeneratedFloatPoolMetadataControls(t, observation.Sources[0], cases)
 				if images, err := ReadonlyLiteralDataInitializers(observation); !errors.Is(err, ErrContext) || images != nil {
 					t.Fatal("a generated-pool observation acquired private literal initialization authority", images, err)
 				}

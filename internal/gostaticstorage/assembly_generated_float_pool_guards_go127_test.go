@@ -138,6 +138,10 @@ func asmGeneratedFloatPoolGuards(t *testing.T, original SDKASMDataObservationReq
 		"source-width":          "MOVSD $-0.0",
 		"source-without-FCONST": "XORPS X0",
 		"prefix-without-FCONST": "MOVSS \"$f32.80000000\"(SB)",
+		"integer-only":          "MOVSS $0",
+		"parenthesized-integer": "MOVSS $(0)",
+		"binary-floating":       "MOVSS $(1.0*0.0)",
+		"mixed-floating":        "MOVSS $(1+0.0)",
 	} {
 		t.Run(name, func(t *testing.T) {
 			changed := cloneASMDataRequest(t, original)

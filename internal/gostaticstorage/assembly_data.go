@@ -111,6 +111,7 @@ type ASMDataSourceObservation struct {
 	Original, Expanded             ASMDataMember
 	TextOrder                      []ASMSourceText
 	GeneratedFuncdata              []ASMGeneratedFuncdata
+	GeneratedFloatPools            []ASMGeneratedFloatPool
 }
 
 type SDKASMDataObservation struct {
@@ -307,11 +308,21 @@ func observeX86SDKASMData(request SDKASMDataObservationRequest, cpp bool) (*SDKA
 		if err != nil || !sameGeneratedFuncdata(generated, expandedGenerated) {
 			return nil, contextError("original/expanded generated FUNCDATA roles differ")
 		}
-		layouts, err := joinASMDataLayouts(originalStates, asmDataWithoutGeneratedFuncdata(original, generated))
+		pools, err := generatedASMFloatPools(originalGrammar, request.Target, original, textOrder)
 		if err != nil {
 			return nil, err
 		}
-		expandedLayouts, err := joinASMDataLayouts(expandedStates, asmDataWithoutGeneratedFuncdata(expanded, expandedGenerated))
+		expandedPools, err := generatedASMFloatPools(expandedGrammar, request.Target, expanded, expandedOrder)
+		if err != nil || !sameGeneratedFloatPools(pools, expandedPools) {
+			return nil, contextError("original/expanded generated float-pool roles differ")
+		}
+		ordinary := asmDataWithoutGeneratedFloatPools(asmDataWithoutGeneratedFuncdata(original, generated), pools)
+		layouts, err := joinASMDataLayouts(originalStates, ordinary)
+		if err != nil {
+			return nil, err
+		}
+		expandedOrdinary := asmDataWithoutGeneratedFloatPools(asmDataWithoutGeneratedFuncdata(expanded, expandedGenerated), expandedPools)
+		expandedLayouts, err := joinASMDataLayouts(expandedStates, expandedOrdinary)
 		if err != nil {
 			return nil, err
 		}
@@ -352,7 +363,8 @@ func observeX86SDKASMData(request SDKASMDataObservationRequest, cpp bool) (*SDKA
 			OriginalSHA256: digest(source.Original), ExpandedSHA256: digest(source.Expanded),
 			OriginalObjectSHA256: digest(source.OriginalObject), ExpandedObjectSHA256: digest(source.ExpandedObject),
 			OriginalProgramSHA256: originalProgram, ExpandedProgramSHA256: expandedProgram,
-			Layouts: layouts, ExpandedLayouts: expandedLayouts, Original: original, Expanded: expanded, TextOrder: textOrder, GeneratedFuncdata: generated})
+			Layouts: layouts, ExpandedLayouts: expandedLayouts, Original: original, Expanded: expanded, TextOrder: textOrder,
+			GeneratedFuncdata: generated, GeneratedFloatPools: pools})
 	}
 	return observation, nil
 }
