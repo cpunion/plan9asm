@@ -1,8 +1,10 @@
 package plan9asm
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -103,7 +105,40 @@ func TestX86PackedPrecisionInvalidFormsMatchActualGo(t *testing.T) {
 		"VCVTPD2PS.RN_SAE (BX),Y1", "VCVTPD2PS.SAE Z0,Y1", "VCVTPD2PSX.RN_SAE X0,X1",
 	} {
 		t.Run(instruction, func(t *testing.T) {
-			goAssemblerOracleOutput(t, "amd64", "TEXT rejected(SB),4,$0-0\n"+instruction+"\nRET\n", "", false)
+			source := "TEXT rejected(SB),4,$0-0\n" + instruction + "\nRET\n"
+			masklessZero := instruction == "VCVTPS2PD.Z X0,X1"
+			historicalReserved := masklessZero && !goToolchainAtLeast(runtime.Version(), 1, 21)
+			goAssemblerOracleOutput(t, "amd64", source, "", historicalReserved)
+			if masklessZero {
+				// Go 1.20's issue-57952 bug emitted EVEX.z=1/aaa=0.
+				// Those actual bytes are reserved, not an additional legal
+				// format. New Go must retain its ordinary source diagnostic.
+				code := []byte{0x62, 0xf1, 0x7c, 0x88, 0x5a, 0xc8}
+				if historicalReserved {
+					listing := x86InsertExtractGoListing(t, "amd64", source)
+					var observed []byte
+					for _, line := range strings.Split(string(listing), "\n") {
+						observed = append(observed, x86InsertExtractListedBytes(line)...)
+					}
+					if !bytes.Equal(observed, append(append([]byte(nil), code...), 0xc3)) {
+						t.Fatalf("historical reserved precision bytes changed: %x", observed)
+					}
+					t.Logf("%s actual Go object emitted reserved z=1/aaa=0 bytes %x, not a legal form", runtime.Version(), code)
+				}
+				if _, _, known, err := decodedX86PackedPrecisionConvertInstruction(code, 64); !known || err == nil {
+					t.Fatal("reserved precision zeroing acquired raw semantics", known, err)
+				}
+				raw := x86RawINSERTPSSource("rejected", code)
+				goAssemblerOracleOutput(t, "amd64", raw, "", true)
+				for _, program := range []string{source, raw} {
+					for _, api := range []string{"text", "module", "Go"} {
+						ir, err := x86ScalarFPBitViewAPI(t, program, "func rejected()\n", "amd64", "x86_64-unknown-linux-gnu", api)
+						if ir != "" || err == nil || errors.Is(err, ErrProbeNeedsContext) {
+							t.Fatal("reserved named/raw zeroing lost syntax rejection or produced IR", api, err)
+						}
+					}
+				}
+			}
 			ins := x86ScalarLaneInstruction(t, instruction)
 			if _, known, err := x86TypedInstructionByteEffect(ins.Op, ins, "amd64"); !known || err == nil {
 				t.Fatal("known precision family lacks a closed independent Go grammar", known, err)
