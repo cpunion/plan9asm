@@ -468,7 +468,7 @@ func (source *GoX86NumericalReadSource) numericalDeclarations(ctx context.Contex
 	if source.sdkAssemblyJoin() != nil && (foreignEntry || x86DirectTailSourceNeeded(source.file) || len(source.native.ArgumentRules) != 0) {
 		return source.numericalSDKOrdinaryTailDeclarations(ctx, pkg, arch, entries)
 	}
-	declarations, err := guard.typedDeclarationsForArchRole(pkg, false, arch, source.role == numericalSBSDKSource, localEntries)
+	declarations, err := guard.typedNumericalDeclarationsForArchRole(pkg, arch, source.role == numericalSBSDKSource, localEntries)
 	if err != nil {
 		return nil, err
 	}

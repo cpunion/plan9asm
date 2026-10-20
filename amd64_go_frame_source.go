@@ -91,6 +91,7 @@ type goAMD64FrameTransport uint8
 const (
 	goAMD64FrameNumericTransport goAMD64FrameTransport = iota + 1
 	goAMD64FrameCompositeTransport
+	goAMD64FrameFloatingScalarTransport
 )
 
 type goAMD64FrameDeclaration struct {
@@ -866,6 +867,21 @@ func (source *GoAMD64FrameSource) typedDeclarationsForArch(pkg GoPackage, numeri
 func (source *GoAMD64FrameSource) typedDeclarationsForArchRole(pkg GoPackage, numericOnly bool, arch string,
 	opaqueUnsafePointer bool, entries map[string]bool,
 ) (map[string]goAMD64FrameDeclaration, error) {
+	return source.typedDeclarationsForSourceRole(pkg, numericOnly, arch, opaqueUnsafePointer, entries, false)
+}
+
+// Numerical-source binding observes ordinary F32/F64 declaration identity and
+// ABI0 slots, not the frame factory's integer transport. This separate route
+// supplies no physical frame, caller, register-entry or numerical input facts.
+func (source *GoAMD64FrameSource) typedNumericalDeclarationsForArchRole(pkg GoPackage, arch string,
+	opaqueUnsafePointer bool, entries map[string]bool,
+) (map[string]goAMD64FrameDeclaration, error) {
+	return source.typedDeclarationsForSourceRole(pkg, false, arch, opaqueUnsafePointer, entries, true)
+}
+
+func (source *GoAMD64FrameSource) typedDeclarationsForSourceRole(pkg GoPackage, numericOnly bool, arch string,
+	opaqueUnsafePointer bool, entries map[string]bool, floatingScalars bool,
+) (map[string]goAMD64FrameDeclaration, error) {
 	fset := token.NewFileSet()
 	var syntax []*ast.File
 	var compiled []string
@@ -941,6 +957,10 @@ func (source *GoAMD64FrameSource) typedDeclarationsForArchRole(pkg GoPackage, nu
 	if !reflect.DeepEqual(typed.Scope().Names(), pkg.Types.Scope().Names()) {
 		return nil, goAMD64FrameContext("actual selected declarations differ from supplied types")
 	}
+	languageType := goAMD64FrameLanguageTypeRole
+	if floatingScalars {
+		languageType = goAMD64NumericalScalarLanguageType
+	}
 	declarations := make(map[string]goAMD64FrameDeclaration)
 	for _, name := range typed.Scope().Names() {
 		if named, ok := typed.Scope().Lookup(name).(*types.TypeName); ok {
@@ -988,7 +1008,11 @@ func (source *GoAMD64FrameSource) typedDeclarationsForArchRole(pkg GoPackage, nu
 				typ := tuple.At(i).Type()
 				switch underlying := typ.Underlying().(type) {
 				case *types.Basic:
-					if underlying.Kind() == types.Bool || opaqueUnsafePointer && underlying.Kind() == types.UnsafePointer {
+					if floatingScalars && goAMD64NumericalFloatingScalar(typ) {
+						if role == goAMD64FrameNumericTransport {
+							role = goAMD64FrameFloatingScalarTransport
+						}
+					} else if underlying.Kind() == types.Bool || opaqueUnsafePointer && underlying.Kind() == types.UnsafePointer {
 						role = goAMD64FrameCompositeTransport
 					} else if underlying.Info()&types.IsInteger == 0 {
 						return nil, goAMD64FrameContext("observation excludes noninteger scalar transport")
@@ -998,7 +1022,7 @@ func (source *GoAMD64FrameSource) typedDeclarationsForArchRole(pkg GoPackage, nu
 				default:
 					return nil, goAMD64FrameContext("by-value aggregate transport needs a separate observation contract")
 				}
-				identity, err := goAMD64FrameLanguageTypeRole(typ, sizes, opaqueUnsafePointer)
+				identity, err := languageType(typ, sizes, opaqueUnsafePointer)
 				if err != nil {
 					return nil, err
 				}
@@ -1022,7 +1046,7 @@ func (source *GoAMD64FrameSource) typedDeclarationsForArchRole(pkg GoPackage, nu
 			}
 			priorLanguage.WriteString("[")
 			for i := 0; i < tuple.Len(); i++ {
-				identity, err := goAMD64FrameLanguageTypeRole(tuple.At(i).Type(), sizes, opaqueUnsafePointer)
+				identity, err := languageType(tuple.At(i).Type(), sizes, opaqueUnsafePointer)
 				if err != nil {
 					return nil, err
 				}
@@ -1065,9 +1089,48 @@ func goAMD64FrameLanguageTypeRole(typ types.Type, sizes types.Sizes, opaqueUnsaf
 	return goAMD64LanguageTypeRole(typ, sizes, opaqueUnsafePointer, false)
 }
 
+func goAMD64NumericalFloatingScalar(typ types.Type) bool {
+	for depth := 0; depth <= 32 && typ != nil; depth++ {
+		switch concrete := typ.(type) {
+		case *types.Basic:
+			return concrete.Kind() == types.Float32 || concrete.Kind() == types.Float64
+		case *types.Named:
+			if concrete.TypeParams().Len() != 0 {
+				return false
+			}
+			typ = concrete.Underlying()
+		default:
+			if !goAMD64FrameIsAlias(typ) {
+				return false // Never sample caller-defined types.Type callbacks.
+			}
+			rhs := reflect.ValueOf(typ).MethodByName("Rhs")
+			if !rhs.IsValid() || rhs.Type().NumIn() != 0 || rhs.Type().NumOut() != 1 {
+				return false
+			}
+			var valid bool
+			typ, valid = rhs.Call(nil)[0].Interface().(types.Type)
+			if !valid {
+				return false
+			}
+		}
+	}
+	return false
+}
+
+// Only a top-level scalar (including its named/alias identity) selects this
+// language role. Pointers, slices and aggregates keep the ordinary recursive
+// restrictions; this cannot borrow the broader ABIInternal argument grammar.
+func goAMD64NumericalScalarLanguageType(typ types.Type, sizes types.Sizes, opaqueUnsafePointer bool) (string, error) {
+	return goAMD64LanguageTypeForSourceRole(typ, sizes, opaqueUnsafePointer, false, goAMD64NumericalFloatingScalar(typ))
+}
+
 // The SDK argument role compares language identities only. It never grants
 // the ordinary frame observer floating/string storage or a pointee extent.
 func goAMD64LanguageTypeRole(typ types.Type, sizes types.Sizes, opaqueUnsafePointer, argumentCarriers bool) (string, error) {
+	return goAMD64LanguageTypeForSourceRole(typ, sizes, opaqueUnsafePointer, argumentCarriers, false)
+}
+
+func goAMD64LanguageTypeForSourceRole(typ types.Type, sizes types.Sizes, opaqueUnsafePointer, argumentCarriers, floatingScalar bool) (string, error) {
 	if sizes == nil {
 		return "", goAMD64FrameContext("missing target language layout")
 	}
@@ -1087,7 +1150,8 @@ func goAMD64LanguageTypeRole(typ types.Type, sizes types.Sizes, opaqueUnsafePoin
 		switch concrete := typ.(type) {
 		case *types.Basic:
 			if concrete.Info()&(types.IsInteger|types.IsBoolean) == 0 && !(opaqueUnsafePointer && concrete.Kind() == types.UnsafePointer) &&
-				!(argumentCarriers && concrete.Info()&(types.IsFloat|types.IsComplex|types.IsString) != 0) ||
+				!(argumentCarriers && concrete.Info()&(types.IsFloat|types.IsComplex|types.IsString) != 0) &&
+				!(floatingScalar && goAMD64NumericalFloatingScalar(concrete)) ||
 				concrete.Info()&types.IsUntyped != 0 {
 				return goAMD64FrameContext("unsupported noninteger or untyped language type")
 			}
@@ -1127,6 +1191,8 @@ func goAMD64LanguageTypeRole(typ types.Type, sizes types.Sizes, opaqueUnsafePoin
 				output.WriteString("bool")
 			} else if typ.Info()&types.IsInteger != 0 {
 				fmt.Fprintf(&output, "integer%d", typ.Kind())
+			} else if floatingScalar && goAMD64NumericalFloatingScalar(typ) {
+				fmt.Fprintf(&output, "floating_scalar%d", typ.Kind())
 			} else if argumentCarriers && typ.Info()&(types.IsFloat|types.IsComplex|types.IsString) != 0 {
 				fmt.Fprintf(&output, "argument_scalar%d", typ.Kind())
 			} else {
