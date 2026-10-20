@@ -86,3 +86,64 @@ func TestX86RawExtendOriginalInitializedFiveTargetObjects(t *testing.T) {
 		}
 	}
 }
+
+// Orthogonal raw objects exercise all six unsigned ratios, both source roles
+// and all five VEX/EVEX widths. Existing independent encoder and typed-byte
+// matrices own the full mask/register/address Cartesian axes separately.
+func TestX86RawZeroExtendOrthogonalInitializedFiveTargetObjects(t *testing.T) {
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM22 llc required")
+	}
+	for _, target := range x86RawReturnTargets {
+		t.Run(target.triple, func(t *testing.T) {
+			word, move := 8, "MOVQ"
+			if target.arch == "386" {
+				word, move = 4, "MOVL"
+			}
+			var source, declarations strings.Builder
+			count := 0
+			for opcode := byte(0x30); opcode <= 0x35; opcode++ {
+				for shape := 0; shape < 5; shape++ {
+					for _, memory := range []bool{false, true} {
+						name := fmt.Sprintf("WidenRaw%d", count)
+						count++
+						code := []byte{0xc4, 0xe2, 0x79 | byte(shape)<<2, opcode, 0xc8}
+						if shape >= 2 {
+							control := byte(0x09 | (shape-2)<<5)
+							if shape == 3 {
+								control |= 0x80
+							}
+							code = []byte{0x62, 0xf2, 0x7d, control, opcode, 0xc8}
+						}
+						if memory {
+							code[len(code)-1] = 0x08 // Exact mN at the imported AX pointer.
+						}
+						fmt.Fprintf(&source, "TEXT ·%s(SB),4,$0-%d\nVZEROALL\nMOVL $5,AX\nKMOVD AX,K1\n%s p+0(FP),AX\n", name, word, move)
+						for _, value := range code {
+							fmt.Fprintf(&source, "BYTE $%#x\n", value)
+						}
+						source.WriteString("RET\n")
+						fmt.Fprintf(&declarations, "func %s(p *[32]byte)\n", name)
+					}
+				}
+			}
+			if count != 60 {
+				t.Fatal("incomplete independent raw unsigned widening directory", count)
+			}
+			x86LEAActualTargetGoObject(t, target.arch, target.triple, source.String())
+			for _, api := range []string{"text", "module", "Go"} {
+				ir, err := x86ScalarFPBitViewAPI(t, source.String(), declarations.String(), target.arch, target.triple, api)
+				if err != nil || ir == "" {
+					t.Fatal("initialized raw widening family lost its source owner", api, err)
+				}
+				for _, text := range []string{ir, x86SignedIntegerFloatOptimize(t, ir)} {
+					if !strings.Contains(text, "load volatile ") {
+						t.Fatal("dead widening results discarded their observable input reads")
+					}
+					x86ResultInitializationObject(t, llc, target.triple, text, "raw-widen-"+api)
+				}
+			}
+		})
+	}
+}
