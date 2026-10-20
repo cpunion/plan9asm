@@ -1,6 +1,6 @@
 # PR 40: current checkpoint
 
-Updated 2026-10-20. Implementation handoff: `bf1ec0a5b`. This is not a
+Updated 2026-10-20. Implementation handoff: `b2d198ae8`. This is not a
 current-head completion certificate. Preserve ignored failed evidence and
 read [instruction contracts](instructions.md) and [validation](validation.md).
 
@@ -65,6 +65,8 @@ differ. Older qualifications remain in earlier Git checkpoints.
 
 | Snapshot | Independent local scope | Limits |
 |---|---|---|
+| `b2d198ae8` | All 33 command gates exit zero; source/tools unchanged | Current/minimum build/vet and consumers, official five-arch gate, 206 Node policies, shared current/minimum/race state. Not complete CI, the strict benchmark or the two newer RED families |
+| `bea55cdaa` | GLOBL zero addends: 4 / 1,984 on current Go, actual Go1.20 and race | Five arches, original Go objects and three public APIs. A subsequent independent review exposes shared integer grammar differences; these receipts do not certify arbitrary expressions |
 | `1cbe5377d` | Integrated source-defined BP, SDK directory and orphan-IR controls: 16 roots / 228 children | Current Go, including unchanged complete MD5 across three public APIs |
 | `72af0cff1` | BP overwrite and historical frame controls: 9 / 925 on current Go and actual Go1.20 | Ordered old/new prologues, partial writes, aliases, joins and FP-slot reimports; no caller/frame authority inferred from BP |
 | `1cbe5377d`, `bdd6a0397` | Complete 850-witness raw packed-shift object matrices for all five x86 targets: four roots / 260 children per target | Three public APIs and three pipelines. Linux/386 and Windows/386 use the earlier snapshot; the three amd64 targets use the latter. Objects are not original native execution |
@@ -82,11 +84,11 @@ differ. Older qualifications remain in earlier Git checkpoints.
 | `cc350e9cd` | Complete scalar precision conversion and original regressions: 22 / 609 | Current Go; exact raw architecture/generation/replay and minimum SSE2/AVX/EVEX profiles; original MXCSR execution remains separate |
 | `6fb23fe5d` | Floating MIN/MAX generation, replay and DATA coordinate bindings: 14 / 260 | Current Go; physical low-bank EVEX and decoder/literal identity cannot be replaced by a named spelling |
 
-All 206 Node policies passed at `1cbe5377d`, including the independent final
+All 206 Node policies passed at `b2d198ae8`, including the independent final
 diagnostic qualification. These are local policy receipts, not an online CI
-result. The present union still needs its own consumer checks,
-final 33-command gate batch, current/minimum/race regression qualification,
-classification audit and benchmark. Previous receipts cannot fill those gaps.
+result. The next integrated candidate needs fresh command/family qualifications
+and classification audit after the two pending rule-class repairs. Previous
+receipts cannot fill those gaps.
 
 Raw continuations retain sealed complete producer replay, not just a mutable
 origin pointer. SDK literal/numerical owners precede native family hooks.
@@ -122,22 +124,31 @@ initialized-program success. Retain the historical Go1.20 unsupported form;
 the current five-architecture gate still requires zero unsupported/parse errors.
 Re-audit complete forms and fingerprints before changing any baseline.
 
-The last strict standard-library benchmark at `ae2579cf2` remains failed:
-184 target/file pairs attempted, 127 compiled, 57 failed, no N/A/unattempted.
-AMD64 took 310s, exceeding its unchanged 300s budget; total 379s is below 900s.
-MIN/MAX fixes make original hypot compile. The stricter scalar-shift proof
-exposes MD5's source-defined BP, SDK compare's stale entry shape and math/exp's
-SDK data observation. Local repairs do not rewrite this benchmark; no speedup
-or complete pass is qualified.
+The fresh strict standard-library benchmark at `b2d198ae8` remains failed:
+184 target/file pairs attempted, 129 compiled, 55 failed, no N/A/unattempted.
+AMD64 took 315s, exceeding its unchanged 300s budget; total 366s is below 900s.
+Original MD5 and bytealg/compare now compile, with no new failing files compared
+with `ae2579cf2` (127 compiled / 57 failed). MathExp still fails at the native
+floating boundary described below. Neither a speedup nor a complete pass is
+qualified. Many remaining runtime/reflect files require explicit special-entry
+ABI contracts rather than more opcode names; keep their failures visible.
 
-The complete original SDK math/exp CLI regression is still red at `bf1ec0a5b`.
+The complete original SDK math/exp CLI regression is still red at `b2d198ae8`.
 Bounded package inventory, complete 34-name generated float-pool ownership and
 mixed ordinary readonly/generated-metadata accounting are repaired. The next
-failure is GLOBL's explicit zero displacement being retained in symbol identity.
-Independent test-only `b06f62d55` confirms all original Go objects on five
-architectures and reproduces our parser/public-path identity loss. Qualify its
-generic fix and then rerun the complete unchanged MathExp source; do not waive
-readonly identity or use a library-specific exception.
+GLOBL's explicit zero displacement now associates correctly. The next failure
+is an unregistered whole native floating-vector boundary at offset 420.
+Independent test-only `943015de9` confirms complete Go FMA/arithmetic/SQRT
+objects and reproduces the missing boundary consumer. Its unchanged original
+MathExp object has 579 TEXT bytes / 101 instruction PCs. Qualify the complete
+typed-family projection, never a MathExp-specific decoder or NUM permission.
+
+Independent review also exposes Go-AST integer evaluation differing from
+cmd/asm's expr/term/factor grammar: right-shift association, left-shift remaining
+tokens, rune contents and high-bit arithmetic. Test-only `5934717d1` covers the
+shared DATA/SB/GLOBL consumers. Preserve its actual Go prerequisites and RED
+evidence; do not normalize a Go-rejected nonzero/invalid address into a real
+initializer. Repair the shared grammar, not individual expression spellings.
 
 The packed-shift portable driver now consumes normalized TEXT and retains unused
 intrinsic declarations and their generic attributes byte-for-byte. Actual native
@@ -147,7 +158,8 @@ does not certify original native Go execution or the final integrated head.
 
 ## Next work and verification
 
-1. Qualify the independent GLOBL zero-addend fix and complete original math/exp.
+1. Qualify complete native floating boundaries and the shared integer grammar,
+   then rerun the complete original MathExp CLI.
    Integrate completed rule-class repairs without editing active snapshots;
    preserve original inputs and all earlier failed evidence.
 2. Freeze the final integrated head, including documentation and used tools.
