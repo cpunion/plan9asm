@@ -118,7 +118,7 @@ func CaptureGoX86SDKLiteralAlignment(ctx context.Context, owner *GoX86SDKReadonl
 	if err != nil {
 		return nil, err
 	}
-	if err := guard.snapshotDirectory(); err != nil {
+	if err := captureSDKPackageDirectoryInputs(guard, observed.retainDirectory); err != nil {
 		return nil, err
 	}
 	for _, dir := range []string{request.Directory, guard.env["GOROOT"], guard.env["GOTOOLDIR"], guard.env["GOCACHE"], guard.owned} {

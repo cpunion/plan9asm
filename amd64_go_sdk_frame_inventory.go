@@ -13,10 +13,17 @@ import (
 // to separate packages/generators, not the selected compiler package. Any
 // selected dependency retains its independent complete original source/export
 // graph; active relative CPP includes remain unsupported. Root membership and
-// child identities are rechecked before/after commands. Existing ordinary/CPU
-// flat inventory and the 256-member/16MiB primary bounds stay unchanged.
+// child identities are rechecked before/after commands. The ordinary owned
+// flat inventory and the 256-member/16MiB SDK bounds stay unchanged.
 func (source *GoX86SDKASMDataSource) snapshotSDKPrimaryDirectory() error {
-	guard := source.guard
+	return captureSDKPackageDirectoryInputs(source.guard, source.retainDirectory)
+}
+
+// SDK assembly, numerical reads and literal alignment share only this input
+// inventory. It grants neither child-package source/include authority nor any
+// frame, native entry or initialized-storage role. Each caller authenticates
+// its own complete SDK selection and retains/rechecks every child identity.
+func captureSDKPackageDirectoryInputs(guard *GoAMD64FrameSource, retainDirectory func(string) error) error {
 	resolved, err := sourcepath.Resolve(guard.request.Directory)
 	if err != nil || resolved != guard.request.Directory {
 		return sdkASMDataContext("SDK-primary package directory is not canonical")
@@ -31,7 +38,7 @@ func (source *GoX86SDKASMDataSource) snapshotSDKPrimaryDirectory() error {
 		guard.entries = append(guard.entries, entry.Name())
 		path := filepath.Join(resolved, entry.Name())
 		if entry.IsDir() {
-			if err := source.retainDirectory(path); err != nil {
+			if err := retainDirectory(path); err != nil {
 				return err
 			}
 			continue

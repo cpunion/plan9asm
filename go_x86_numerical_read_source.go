@@ -136,14 +136,17 @@ func captureGoX86NumericalReadSource(ctx context.Context, request GoX86Numerical
 	source.guard = newGoOriginalInputGuard(GoAMD64FrameCaptureRequest{GoBinary: request.GoBinary, Directory: request.Directory,
 		AssemblyFile: request.AssemblyFile, Target: request.Target, Environment: request.Environment})
 	for _, directory := range append([]string{request.Directory}, provided["GOCACHE"], provided["GOMODCACHE"], provided["GOPATH"], provided["TMPDIR"], provided["GOTMPDIR"]) {
-		resolved, err := sourcepath.Resolve(directory)
-		info, statErr := sourcepath.Lstat(directory)
-		if !filepath.IsAbs(directory) || err != nil || resolved != directory || statErr != nil || !info.IsDir() {
-			return nil, numericalSBContext("redirected or missing command/source root")
+		if err := source.retainDirectory(directory); err != nil {
+			return nil, err
 		}
-		source.dirs[directory] = info
 	}
-	if err := source.guard.snapshotDirectory(); err != nil {
+	snapshot := source.guard.snapshotDirectory
+	if role == numericalSBSDKSource {
+		snapshot = func() error {
+			return captureSDKPackageDirectoryInputs(source.guard, source.retainDirectory)
+		}
+	}
+	if err := snapshot(); err != nil {
 		return nil, err
 	}
 	owned, err := os.MkdirTemp(provided["TMPDIR"], "plan9asm-numerical-read-")
@@ -268,6 +271,16 @@ func captureGoX86NumericalReadSource(ctx context.Context, request GoX86Numerical
 		return nil, err
 	}
 	return source, nil
+}
+
+func (source *GoX86NumericalReadSource) retainDirectory(directory string) error {
+	resolved, err := sourcepath.Resolve(directory)
+	info, statErr := sourcepath.Lstat(directory)
+	if !filepath.IsAbs(directory) || err != nil || resolved != directory || statErr != nil || !info.IsDir() {
+		return numericalSBContext("redirected or missing command/source root")
+	}
+	source.dirs[directory] = info
+	return nil
 }
 
 func (source *GoX86NumericalReadSource) recordCommand(stdout []byte, arguments ...string) {

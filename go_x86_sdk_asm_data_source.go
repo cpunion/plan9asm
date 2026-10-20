@@ -145,11 +145,7 @@ func captureGoX86SDKASMDataSourceRole(ctx context.Context, request GoX86SDKASMDa
 			return nil, err
 		}
 	}
-	snapshot := source.guard.snapshotDirectory
-	if originalProfile {
-		snapshot = source.snapshotSDKPrimaryDirectory
-	}
-	if err := snapshot(); err != nil {
+	if err := source.snapshotSDKPrimaryDirectory(); err != nil {
 		return nil, err
 	}
 	owned, err := os.MkdirTemp(provided["TMPDIR"], "plan9asm-sdk-asm-data-")
