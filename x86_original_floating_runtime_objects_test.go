@@ -22,8 +22,9 @@ func x86OriginalFloatingOpcodeListing(t *testing.T, profile, triple, level, ir s
 		t.Fatal("actual floating runtime ISA requires LLVM22 llc and llvm-objdump")
 	}
 	listing := x86FourSourceNativeObjectListing(t, llc, objdump, triple, level, ir)
+	var violations []string
 	if strings.Contains(listing, "<unknown>") || strings.Contains(listing, "invalid") {
-		t.Fatal("actual original floating runtime object contains an undecoded instruction", listing)
+		violations = append(violations, "actual object contains an undecoded instruction:\n"+listing)
 	}
 	rows := regexp.MustCompile(`(?m)^\s*[0-9a-f]+:\s+((?:[0-9a-f]{2}\s+)+)([a-z][a-z0-9.]*)`).FindAllStringSubmatch(listing, -1)
 	if len(rows) == 0 {
@@ -42,18 +43,19 @@ func x86OriginalFloatingOpcodeListing(t *testing.T, profile, triple, level, ir s
 		// BW/DQ opmask transports are not interchangeable with the F-only
 		// same-call KMOVW used by these floating native emitters.
 		if strings.HasPrefix(op, "k") && !x86OriginalFloatingFMaskOpcode(op) {
-			t.Fatal("actual LLVM runtime requires an unobserved non-F opmask ISA", row[0])
+			violations = append(violations, "non-F opmask ISA: "+row[0])
 		}
 		code, err := hex.DecodeString(strings.Join(strings.Fields(row[1]), ""))
 		if err != nil || len(code) == 0 {
-			t.Fatal("actual machine instruction lost its complete physical bytes", row[0], err)
+			violations = append(violations, fmt.Sprintf("incomplete physical bytes: %s: %v", row[0], err))
+			continue
 		}
 		if code[0] == 0x62 && !x86OriginalFloatingEVEXWithinProfile(profile, op, code) {
-			t.Fatal("actual LLVM runtime contains an EVEX opcode outside its own F or F/VL profile", profile, row[0])
+			violations = append(violations, "EVEX outside actual owner profile: "+row[0])
 		}
 	}
 	if masked && kmovw == 0 || fmaCount != fmas {
-		t.Fatal("actual original runtime lost its same-call mask transport or original native operations", kmovw, fmaCount, fmas, listing)
+		violations = append(violations, fmt.Sprintf("native operation inventory differs: KMOVW=%d masked=%t FMA=%d want=%d", kmovw, masked, fmaCount, fmas))
 	}
 	var inventory []string
 	for op := range seen {
@@ -62,6 +64,10 @@ func x86OriginalFloatingOpcodeListing(t *testing.T, profile, triple, level, ir s
 	sort.Strings(inventory)
 	t.Logf("actual LLVM22 %s %s %s: %d instructions, KMOVW=%d, FMA=%d, opcodes=%s; object evidence, not CPU execution",
 		profile, triple, level, len(rows), kmovw, fmaCount, strings.Join(inventory, ","))
+	if len(violations) != 0 {
+		t.Fatalf("actual %s %s %s has %d ISA/identity violations:\n%s\ncomplete actual opcode inventory: %s",
+			profile, triple, level, len(violations), strings.Join(violations, "\n"), strings.Join(inventory, ","))
+	}
 }
 
 func x86OriginalFloatingFMaskOpcode(op string) bool {
@@ -96,7 +102,10 @@ func x86OriginalFloatingEVEXWithinProfile(profile, op string, code []byte) bool 
 		"vinsertf32x4", "vinserti32x4", "vinsertf64x4", "vinserti64x4", "vshuff32x4", "vshufi32x4",
 		"vshufps", "vshufpd", "vpermilps", "vpermilpd",
 		"vpslld", "vpsllq", "vpsrld", "vpsrlq", "vpsrad", "vpsraq",
-		"vpsllvd", "vpsllvq", "vpsrlvd", "vpsrlvq", "vpsravd", "vpsravq":
+		"vpsllvd", "vpsllvq", "vpsrlvd", "vpsrlvq", "vpsravd", "vpsravq",
+		"vpmovdb", "vpmovdw", "vpmovqb", "vpmovqd", "vpmovqw",
+		"vpmovsdb", "vpmovsdw", "vpmovsqb", "vpmovsqd", "vpmovsqw",
+		"vpmovusdb", "vpmovusdw", "vpmovusqb", "vpmovusqd", "vpmovusqw":
 		known = true
 	}
 	if !known {
@@ -113,12 +122,13 @@ func x86OriginalFloatingEVEXWithinProfile(profile, op string, code []byte) bool 
 }
 
 func TestX86OriginalFloatingRuntimeEVEXProfileBoundaries(t *testing.T) {
-	rows := []struct {
+	type axis struct {
 		op      string
 		scalar  bool
 		rounder bool
 		memory  bool
-	}{
+	}
+	rows := []axis{
 		{op: "vmovups"}, {op: "vmovdqa64"}, {op: "vpxord"}, {op: "vfmadd132ps"},
 		{op: "vcvtsd2ss", scalar: true}, {op: "vcvtss2sd", scalar: true},
 		{op: "vfmadd132ss", scalar: true}, {op: "vfmadd132pd", rounder: true},
@@ -131,17 +141,20 @@ func TestX86OriginalFloatingRuntimeEVEXProfileBoundaries(t *testing.T) {
 	for _, stem := range []string{"vpsll", "vpsrl", "vpsra"} {
 		for _, variable := range []string{"", "v"} {
 			for _, lane := range []string{"d", "q"} {
-				rows = append(rows, struct {
-					op      string
-					scalar  bool
-					rounder bool
-					memory  bool
-				}{op: stem + variable + lane})
+				rows = append(rows, axis{op: stem + variable + lane})
 			}
 		}
 	}
-	if len(rows) != 21 {
-		t.Fatal("complete original profile and twelve-member F-shift inventory changed", len(rows))
+	// SDM Vol.2C 5-577..599 gives all five D/Q-source narrowing ratios
+	// with truncation, signed saturation and unsigned saturation. Their LL
+	// field measures the source carrier, not the smaller byte/word result.
+	for _, saturation := range []string{"", "s", "us"} {
+		for _, ratio := range []string{"db", "dw", "qb", "qd", "qw"} {
+			rows = append(rows, axis{op: "vpmov" + saturation + ratio})
+		}
+	}
+	if len(rows) != 36 {
+		t.Fatal("complete original profile, twelve F shifts or fifteen F narrowing names changed", len(rows))
 	}
 	for _, profile := range []string{"scalar-precision", "fma-caller"} {
 		for length := byte(0); length < 4; length++ {
@@ -166,6 +179,7 @@ func TestX86OriginalFloatingRuntimeEVEXProfileBoundaries(t *testing.T) {
 		}
 		for _, op := range []string{
 			"vpsllw", "vpsrlw", "vpsraw", "vpsllvw", "vpsrlvw", "vpsravw", "vpslldq", "vpsrldq", "vpmullq",
+			"vpmovwb", "vpmovswb", "vpmovuswb",
 		} {
 			if x86OriginalFloatingEVEXWithinProfile(profile, op, []byte{0x62, 0xf1, 0x7c, 0x48, 0x10, 0xc0}) {
 				t.Fatal("F-only D/Q shifts admitted an independent BW word/byte or DQ operation", profile, op)
