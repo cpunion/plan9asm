@@ -56,7 +56,7 @@ func TestX86Permute128PhysicalModeAndWholeProducerReplay(t *testing.T) {
 						t.Fatal("standalone raw query borrowed a named/native source role")
 					}
 					check := x86LegacyFloatReplayCheck(t, arch, source, declaration)
-					for _, mutation := range []string{"original", "origin-only", "missing-replay", "producer", "operand", "encoded", "vector-width", "original-bytes"} {
+					for _, mutation := range []string{"original", "origin-only", "missing-replay", "producer", "operand", "encoded", "vector-width", "original-bytes", "generation", "snapshot", "named-forgery"} {
 						t.Run(mutation, func(t *testing.T) {
 							candidate := original
 							candidate.Instrs = cloneX86ReplayInstrs(original.Instrs)
@@ -74,6 +74,14 @@ func TestX86Permute128PhysicalModeAndWholeProducerReplay(t *testing.T) {
 								ins.x86Encoded = !ins.x86Encoded
 							case "vector-width":
 								ins.x86VectorBytes = 7
+							case "generation":
+								ins.x86Permute128VEX = false
+							case "snapshot":
+								origin := *ins.x86SourceRaw
+								origin.permute128.vex = false
+								ins.x86SourceRaw = &origin
+							case "named-forgery":
+								ins.x86Encoded, ins.x86Permute128VEX, ins.x86SourceRaw, ins.x86VectorBytes = false, false, nil, 0
 							case "original-bytes":
 								replay := *original.x86RawReplay
 								replay.source = strings.Replace(replay.source, "BYTE $", "BYTE $1+", 1)
@@ -94,6 +102,23 @@ func TestX86Permute128PhysicalModeAndWholeProducerReplay(t *testing.T) {
 					}
 				})
 			}
+		}
+	}
+}
+
+// This is the exact low-bank encoding formerly rejected by a named Go
+// arity check. Keep it as a physical positive, not a deleted old fixture.
+func TestDecodedX86RawVPERM2X128OriginalMode32LowBank(t *testing.T) {
+	for _, member := range x86Permute128Members {
+		code := encodeX86RawVPERM2X128(member.opcode, 1, 0, 1, 2)
+		actual, _ := x86NumericalBoundaryGoBytes(t, "386", x86RawDisplacementDirectives(code)+"RET")
+		if !bytes.Equal(actual, append(append([]byte(nil), code...), 0xc3)) {
+			t.Fatal("original mode32 BYTE encoding changed", actual, code)
+		}
+		got, length, known, err := decodedX86Permute128Instruction(code, 32)
+		if !known || err != nil || length != len(code) || got.Raw != member.op+" $1, Y0, Y1, Y2" ||
+			!got.x86Encoded || !got.x86Permute128VEX || got.x86VectorBytes != 32 {
+			t.Fatal("original complete physical mode32 form inherited a named Go cap", got, length, known, err)
 		}
 	}
 }

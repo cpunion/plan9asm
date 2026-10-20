@@ -85,7 +85,7 @@ func TestDecodedX86RawVPERM2X128MemoryAndInvalidForms(t *testing.T) {
 		encoding []byte
 		wantOK   bool
 	}{
-		{name: "386 operand limit", mode: 32, encoding: encodeX86RawVPERM2X128(0x46, 1, 0, 1, 2), wantOK: true},
+		{name: "386 unavailable vvvv register", mode: 32, encoding: encodeX86RawVPERM2X128(0x46, 1, 0, 8, 2), wantOK: true},
 		{name: "wrong pp", mode: 64, encoding: []byte{0xc4, 0xe3, 0x6c, 0x46, 0xc3, 4}, wantOK: true},
 		{name: "W", mode: 64, encoding: []byte{0xc4, 0xe3, 0xed, 0x46, 0xc3, 4}, wantOK: true},
 		{name: "128-bit vector length", mode: 64, encoding: []byte{0xc4, 0xe3, 0x69, 0x46, 0xc3, 4}, wantOK: true},
