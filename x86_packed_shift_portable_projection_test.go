@@ -54,8 +54,19 @@ func x86PackedShiftPortableIR(source, ir string) (string, error) {
 }
 
 func x86PackedShiftPortableFeatureProjection(ir string, profiles map[string]string) (string, error) {
-	if len(profiles) == 0 || regexp.MustCompile(`\basm\b|@llvm\.(?:x86|aarch64|arm|wasm|ppc|riscv)\.|"target-cpu"`).MatchString(ir) {
-		return "", fmt.Errorf("portable packed-shift IR contains native behavior or no owned functions")
+	if len(profiles) == 0 {
+		return "", fmt.Errorf("portable packed-shift IR has no owned functions")
+	}
+	if native := regexp.MustCompile(`\basm\b|@llvm\.(?:x86|aarch64|arm|wasm|ppc|riscv)\.|"target-cpu"`).FindStringIndex(ir); native != nil {
+		start := strings.LastIndex(ir[:native[0]], "\n") + 1
+		end := strings.IndexByte(ir[native[1]:], '\n')
+		if end < 0 {
+			end = len(ir)
+		} else {
+			end += native[1]
+		}
+		attributes := regexp.MustCompile(`(?m)^attributes [^\r\n]*`).FindAllString(ir, -1)
+		return "", fmt.Errorf("portable packed-shift native guard: token=%q line=%q complete attribute inventory=%q", ir[native[0]:native[1]], ir[start:end], attributes)
 	}
 	groupPattern := regexp.MustCompile(`(?m)^attributes (#[0-9]+) = \{ "target-features"="([^"]+)" \}\r?\n`)
 	groups := groupPattern.FindAllStringSubmatch(ir, -1)
@@ -114,6 +125,35 @@ func x86PackedShiftPortableFeatureProjection(ir string, profiles map[string]stri
 		return "", fmt.Errorf("portable packed-shift IR retains an unchecked ISA reference")
 	}
 	return projected, nil
+}
+
+func TestX86PackedShiftPortableUnusedDeclarationsStayInert(t *testing.T) {
+	const declaration = "declare i32 @llvm.x86.rdpid() #0\n"
+	const attributes = "attributes #0 = { nocallback nofree nosync nounwind willreturn }\n"
+	const body = "define void @A(ptr %p) {\n  %v = load volatile i8, ptr %p, align 1\n" +
+		"  store volatile i8 %v, ptr %p, align 1\n  ret void\n}\n"
+	input := declaration + body + attributes
+	profiles := map[string]string{"A": ""}
+	if projected, err := x86PackedShiftPortableFeatureProjection(input, profiles); err != nil || projected != input {
+		t.Error("single unused native declaration and its own generic attributes must remain byte-for-byte inert", err)
+	}
+	for name, changed := range map[string]string{
+		"called-native":          strings.Replace(input, "  ret void", "  %native = call i32 @llvm.x86.rdpid()\n  ret void", 1),
+		"native-address":         input + "@escape = global ptr @llvm.x86.rdpid\n",
+		"duplicate-declaration":  input + declaration,
+		"incomplete-declaration": strings.Replace(input, "@llvm.x86.rdpid() #0", "@llvm.x86.rdpid( #0", 1),
+		"trailing-body":          strings.Replace(input, "@llvm.x86.rdpid() #0", "@llvm.x86.rdpid() #0 call i32 @llvm.x86.rdpid()", 1),
+		"foreign-attribute":      input + "attributes #7 = { nounwind }\n",
+		"definition-attribute":   strings.Replace(input, "@A(ptr %p) {", "@A(ptr %p) #0 {", 1),
+		"native-attribute":       strings.Replace(input, "nocallback nofree nosync nounwind willreturn", `"target-cpu"="skylake-avx512"`, 1),
+		"native-inline-asm":      strings.Replace(input, "  ret void", `  call void asm sideeffect "nop", ""()`+"\n  ret void", 1),
+	} {
+		t.Run(name, func(t *testing.T) {
+			if projected, err := x86PackedShiftPortableFeatureProjection(changed, profiles); err == nil || projected != "" {
+				t.Fatal("unused-declaration policy accepted a native body, address or unrelated attribute", err)
+			}
+		})
+	}
 }
 
 func TestX86PackedShiftPortableProjectionConsumesNormalizedProductionIR(t *testing.T) {
