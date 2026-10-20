@@ -105,7 +105,12 @@ func TestX86VNNIIntegerDeadAccessRetainsExactNativeTuple(t *testing.T) {
 				"amd64", "x86_64-unknown-linux-gnu", func(c *amd64Ctx, ins Instr) (bool, bool, error) {
 					return c.lowerPackedDotProduct(ins.Op, ins)
 				})
-			if strings.Contains(ir, "asm sideeffect") && strings.Contains(ir, strings.ToLower(row.op)) && strings.Contains(ir, "~{memory}") {
+			_, body, found := strings.Cut(ir, "define void @InstructionFormat0(")
+			body, _, ended := strings.Cut(body, "\n}")
+			if !found || !ended || strings.Count(ir, "\ndefine ") != 1 {
+				t.Fatal("dead VNNI access lost its sole complete instruction body")
+			}
+			if strings.Contains(body, "asm sideeffect") && strings.Contains(body, strings.ToLower(row.op)) && strings.Contains(body, "~{memory}") {
 				return // An original native opcode may own the complete access.
 			}
 			width := amd64VectorByteWidth(Reg(row.bank + "0"))
@@ -118,10 +123,15 @@ func TestX86VNNIIntegerDeadAccessRetainsExactNativeTuple(t *testing.T) {
 			// This unit contains exactly one operation, no parameters and
 			// no producer loads. Every observed volatile load belongs to its
 			// actual source: m32 has either a scalar or byte-vector bit view.
+			// The common prelude declares unrelated masked-load intrinsics;
+			// only this complete owned body can execute a source read.
 			load := regexp.MustCompile(`(?m)^\s+%[^\n]+ = load volatile ` + loadType + `, [^\n]*, align 1$`)
-			if len(load.FindAllString(ir, -1)) != count || strings.Count(ir, "load volatile ") != count ||
-				strings.Count(ir, "\ndefine ") != 1 || strings.Contains(ir, "@llvm.masked.load") || row.mode != "plain" && !strings.Contains(ir, "br i1") {
-				t.Fatal("dead VNNI access lost its exact volatile dword/full tuple or active-lane fault suppression")
+			reads := load.FindAllString(body, -1)
+			volatile := strings.Count(body, "load volatile ")
+			masked := strings.Contains(body, "@llvm.masked.load")
+			conditional := strings.Contains(body, "br i1")
+			if len(reads) != count || volatile != count || masked || row.mode != "plain" && !conditional {
+				t.Fatalf("dead VNNI access lost its exact volatile tuple/fault suppression: want=%d matched=%q volatile=%d masked=%t conditional=%t", count, reads, volatile, masked, conditional)
 			}
 		})
 	}
