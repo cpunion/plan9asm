@@ -235,7 +235,9 @@ func x86ScaledRoundOriginalCReference(t *testing.T) string {
 }
 
 func x86ScaledRoundOriginalCReportComplete(output []byte) bool {
-	return string(output) == "original C exact IEEE observations 35328 failures 0\n"
+	report := string(output)
+	return report == "original C exact IEEE observations 35328 failures 0\n" ||
+		report == "original C exact IEEE observations 35328 failures 0\r\n"
 }
 
 func TestX86ScaledRoundOriginalCReferenceSelectedRounding(t *testing.T) {
