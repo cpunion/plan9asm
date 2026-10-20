@@ -1,6 +1,6 @@
 # PR 40: current checkpoint
 
-Updated 2026-10-20. Implementation handoff: `5e4cf7d0e`. This is not a
+Updated 2026-10-20. Implementation handoff: `0ff2f2c11`. This is not a
 current-head completion certificate. Preserve ignored failed evidence and
 read [instruction contracts](instructions.md) and [validation](validation.md).
 
@@ -65,6 +65,10 @@ differ. Older qualifications remain in earlier Git checkpoints.
 
 | Snapshot | Independent local scope | Limits |
 |---|---|---|
+| `8ec12ae76` | Original FMA3 formats and initialized axes: 8 / 69 on current Go | Complete original formats remain separate from 178 amd64 / 94 mode32 orthogonal initialized entries, 144 LLVM object compilations across five targets; not a full initialized Cartesian matrix or native execution |
+| `f194e6a1e` | Portable FMA access and original native controls: 7 / 378 on current Go, actual Go1.20 and race | Three APIs and three executed ARM64 pipelines each admit all 14 access classes: 98 independent references / 98 translated probes, zero Context. This preserves access/faults, not original x86 MXCSR execution |
+| `cbb448b58` | Complete original SDK MathExp CLI source and LLVM object pass | Unchanged original assembly, actual stock-Go archive prior and complete source/tool seals; not a full benchmark receipt |
+| `0d35d8b1e` | Complete named FMA3: 5 / 282 on current Go, actual Go1.20 and race | All 60 members, three inputs including old destination, native floating effects and initialized live/dead programs. Ordinary raw F32/F64 generation and source ownership remain separate work |
 | `dc3c228b4` | Ordinary floating numerical declarations: 15 / 97 current and race, 11 / 80 actual Go1.20 | Direct/named/alias F32/F64 language and ABI0 slots; ordinary frame, caller, pointer/composite and register-entry negative controls remain strict. Four current-SDK roots are absent by minimum build role |
 | `5e4cf7d0e` | All 33 command gates exit zero, including 206 Node policies; source/tools unchanged | Supersedes the failed `bdb7ed6bb` attempt for this scope, without erasing it; not full CI, the strict benchmark or initialized FMA3 execution |
 | `5a3b67fb7` | Shared integer grammar and existing consumers: 25 / 4,783 on current Go, actual Go1.20 and race | Complete expr/term/factor, 55 independently Go-validated values, DATA/SB/GLOBL, five targets and three public APIs; malformed/unknown offsets cannot create images |
@@ -98,6 +102,11 @@ but do not erase this failed receipt or qualify the unrun commands. Preserve
 the failed receipt and unchanged budget. The fresh `5e4cf7d0e` snapshot now
 passes every one of the 33 commands and all 206 policies, with unchanged seals;
 it does not certify later FMA3 work or the separate strict benchmark.
+
+The first FMA3 race attempt did not execute tests because its shared Go build
+cache lost required files. Preserve that infrastructure failure. A fresh owned
+cache passes the exact five-root scope at `0d35d8b1e`; no tool fallback or budget
+increase was used. Every successful scope above has unchanged complete seals.
 
 Raw continuations retain sealed complete producer replay, not just a mutable
 origin pointer. SDK literal/numerical owners precede native family hooks.
@@ -147,17 +156,21 @@ Original MD5 and bytealg/compare compile, while MathExp's next blocker is below.
 Many runtime/reflect failures need explicit special-entry ABI contracts rather
 than more opcode names; keep those failures visible.
 
-The complete original SDK math/exp CLI regression is still red at `5e4cf7d0e`.
+The complete original SDK math/exp CLI regression passes at `cbb448b58`.
 Bounded package inventory, complete 34-name generated float-pool ownership and
 mixed ordinary readonly/generated-metadata accounting are repaired. The next
 GLOBL identity and complete floating native boundaries now pass. The unchanged
 MathExp object has 579 TEXT bytes / 101 instruction PCs. Ordinary F32/F64
-numerical declaration binding now passes its independent source/archive and
-language/layout controls. The next full-source failure is `VFNMADD231SD`:
-the ordinary sixty-member FMA3 family has typed forms and caller effects but
-is omitted from result/mandatory-effect dispatch. Its existing F32/F64
-arithmetic also needs independent original-opcode/MXCSR/dead-access obligations,
-not just a registration patch. Keep both defects under whole-family TDD.
+numerical declaration binding passes its independent source/archive and
+language/layout controls. The former `VFNMADD231SD` failure is repaired for the
+complete sixty-member named family, including original-opcode floating effects.
+An independent cross-target RED at `90e4fcb07` proves that IR O2 previously
+deleted dead input accesses; `f194e6a1e` reuses exact volatile/guarded readers.
+Ordinary raw VEX/EVEX has a separate valid RED at `cad09be57`: independent Go
+and LLVM physical priors pass, but generation/ISA and initialized complete raw
+source continuations fail. Finish that rule class without borrowing named or
+FP16 permissions. Keep original unbound format sources, objects and explicit
+Context distinct from initialized program and execution evidence.
 Do not open ordinary FrameSource, caller, ABIInternal register or aggregate
 permissions; this is distinct from runtime/reflect special-entry ABI contracts.
 
@@ -178,8 +191,10 @@ does not certify original native Go execution or the final integrated head.
 
 ## Next work and verification
 
-1. Qualify complete FMA3 result/input and native floating-effect rules, then
-   rerun the complete original MathExp CLI. Keep special-entry ABI work separate.
+1. Finish raw FMA3 physical generation and complete-source result rules; qualify
+   original format objects and independent initialized axes. The named-family,
+   portable-access and complete MathExp scopes above are qualified at their
+   recorded snapshots. Keep special-entry ABI work separate.
    Integrate completed rule-class repairs without editing active snapshots;
    preserve original inputs and all earlier failed evidence.
 2. Freeze the final integrated head, including documentation and used tools.
