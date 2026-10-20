@@ -275,10 +275,16 @@ func TestX86PackedFloatShuffleMissingNativeInputsAndDeadAccess(t *testing.T) {
 							if width == 4 || width == 8 {
 								tuple = fmt.Sprintf("(?:%s|i%d)", tuple, width*8)
 							}
-							read := regexp.MustCompile(`(?m)load volatile ` + tuple + ` [^\n]*align 1(?:\D|$)`)
+							read := regexp.MustCompile(`(?m)load volatile ` + tuple + `, [^\n]*align 1(?:\D|$)`)
 							if len(read.FindAllString(body, -1)) != 1 || strings.Count(body, "load volatile ") != 1 ||
 								strings.Contains(body, "@llvm.masked.load") {
-								t.Fatal("dead E4NF access lost its one unconditional full/broadcast tuple", width, body)
+								var accesses []string
+								for _, line := range strings.Split(body, "\n") {
+									if strings.Contains(line, "load volatile ") || strings.Contains(line, "@llvm.masked.load") {
+										accesses = append(accesses, strings.TrimSpace(line))
+									}
+								}
+								t.Fatal("dead E4NF access lost its one unconditional full/broadcast tuple", width, accesses)
 							}
 						} else if !strings.Contains(body, "asm sideeffect") || !strings.Contains(body, strings.ToLower(row.op)) || !strings.Contains(body, "~{memory}") {
 							t.Fatal("legacy m128 lost its original Type4 alignment/access opcode", body)
