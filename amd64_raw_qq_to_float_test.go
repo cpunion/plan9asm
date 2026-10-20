@@ -261,17 +261,11 @@ func TestTranslateX86RawQQToFloatLLVM22Objects(t *testing.T) {
 		t.Run(target.name, func(t *testing.T) {
 			source := x86RawQQToFloatOriginalSource(target.goarch)
 			requireX86GoAssemblerResult(t, target.goarch, source, true)
-			file, err := Parse(ArchAMD64, source)
-			if err != nil {
-				t.Fatal(err)
-			}
-			ir, err := Translate(file, Options{
-				Goarch: target.goarch, TargetTriple: target.triple,
-				Sigs: map[string]FuncSig{"rawQQToFloat": {Name: "rawQQToFloat", Ret: Void}},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			// These unchanged byte-only formats have no input producers.
+			// Keep their actual Go objects and all three public Context
+			// controls, then compile every row through the format-only owner.
+			// Initialized public objects have their independent counterpart.
+			ir := x86UnboundVoidRawScalarFormatObject(t, source, target.goarch, target.triple)
 			compileLLVMToObject(t, llc, target.triple, "raw-qq-to-float.ll", "raw-qq-to-float.o", ir)
 		})
 	}
