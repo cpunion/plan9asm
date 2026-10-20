@@ -36,11 +36,16 @@ func x86SingleInstructionFormatObjectUnits(t *testing.T, file *File, signatures 
 	lower func(*amd64Ctx, Instr) (bool, bool, error)) string {
 	t.Helper()
 	for _, function := range file.Funcs {
-		if len(function.Instrs) != 3 || function.Instrs[0].Op != OpTEXT || function.Instrs[2].Op != OpRET {
-			t.Fatal("isolated format function must retain exactly TEXT, one row and RET")
+		if len(function.Instrs) != 3 || function.Instrs[0].Op != OpTEXT || !x86InstructionFormatTerminal(function.Instrs[2]) {
+			t.Fatal("isolated format function must retain exactly TEXT, one row and its return/fault")
 		}
 	}
 	return x86InstructionFormatObjectUnits(t, file, signatures, arch, triple, 0, true, lower)
+}
+
+func x86InstructionFormatTerminal(instruction Instr) bool {
+	return len(instruction.Args) == 0 &&
+		(instruction.Op == OpRET || instruction.Op == "UD2" || instruction.Op == "UNDEF")
 }
 
 func x86InstructionFormatObjectUnits(t *testing.T, file *File, signatures map[string]FuncSig, arch, triple string,
@@ -102,6 +107,9 @@ func x86InstructionFormatObjectUnits(t *testing.T, file *File, signatures map[st
 			case "UNDEF", "UD2":
 				if ordinal != len(function.Instrs)-1 || len(instruction.Args) != 0 {
 					t.Fatal("format unit lost its original final fault")
+				}
+				if terminal {
+					continue // An isolated architectural-fault row cannot reach its fault footer.
 				}
 				known, terminated, err := consumer.lowerX86UndefinedTrap(instruction.Op, instruction)
 				if !known || !terminated || err != nil {

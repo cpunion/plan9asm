@@ -25,9 +25,8 @@ func x86UnboundVoidVectorMoveFormatObject(t *testing.T, source, arch, triple str
 	rows := 0
 	for _, function := range normalized.Funcs {
 		last := len(function.Instrs) - 1
-		if last < 2 || function.Instrs[0].Op != OpTEXT || function.Instrs[last].Op != OpRET ||
-			len(function.Instrs[last].Args) != 0 {
-			t.Fatal("original move formats lost their complete TEXT/RET envelope")
+		if last < 2 || function.Instrs[0].Op != OpTEXT || !x86InstructionFormatTerminal(function.Instrs[last]) {
+			t.Fatal("original move formats lost their complete TEXT/return/fault envelope")
 		}
 		for _, instruction := range function.Instrs[1:last] {
 			name := fmt.Sprintf("MoveFormatRow%d", rows)
