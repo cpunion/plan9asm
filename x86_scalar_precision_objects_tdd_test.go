@@ -101,6 +101,9 @@ func x86ScalarPrecisionRequireNativeEffects(t *testing.T, ir string, functions m
 }
 
 func x86ScalarPrecisionNativeEffectLine(line, operation string) bool {
+	if strings.ContainsAny(line, "\r\n") {
+		return false
+	}
 	_, rest, present := strings.Cut(line, "asm sideeffect \"")
 	if !present {
 		return false
@@ -118,20 +121,24 @@ func x86ScalarPrecisionNativeEffectLine(line, operation string) bool {
 		}
 	}
 	assembly = strings.TrimPrefix(assembly, "{evex} ")
-	if !strings.HasPrefix(assembly, strings.ToLower(operation)+" ") {
-		return false
-	}
+	canonical := strings.HasPrefix(assembly, strings.ToLower(operation)+" ")
 	rest = strings.TrimSpace(rest)
 	if !strings.HasPrefix(rest, ", \"") {
 		return false
 	}
-	constraints, _, present := strings.Cut(rest[len(", \""):], "\"")
+	constraints, arguments, present := strings.Cut(rest[len(", \""):], "\"")
 	memory, status := false, false
 	for _, constraint := range strings.Split(constraints, ",") {
 		memory = memory || constraint == "~{memory}"
 		status = status || constraint == "~{fpsr}"
 	}
-	return present && memory && status
+	if !present || !memory || !status {
+		return false
+	}
+	if canonical {
+		return true
+	}
+	return x86PackedPrecisionNativeMemoryAlias(assembly, constraints, arguments, operation)
 }
 
 func TestX86ScalarPrecisionOpcodeReceiptBindsOneActualCall(t *testing.T) {
