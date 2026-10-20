@@ -893,6 +893,7 @@ type Instr struct {
 	// Scalar precision conversions retain their physical EVEX generation even
 	// when every low-X operand also has an unmasked VEX spelling.
 	x86ScalarPrecisionEVEX bool
+	x86PackedPrecisionEVEX bool
 	// F32/F64 FMA keeps an explicit physical generation. A zero value is not
 	// a VEX observation and does not borrow raw-only FP16's encoded grammar.
 	x86FMA3Encoding x86RawFMA3Encoding

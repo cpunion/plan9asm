@@ -124,5 +124,6 @@ func decodedX86PackedPrecisionConvertInstruction(code []byte, mode int) (Instr, 
 	for i, arg := range args {
 		printed[i] = arg.String()
 	}
-	return Instr{Op: op, Args: args, Raw: fmt.Sprintf("%s %s", op, strings.Join(printed, ", "))}, p.modRM + consumed, true, nil
+	return Instr{Op: op, Args: args, x86Encoded: true, x86PackedPrecisionEVEX: p.evex,
+		Raw: fmt.Sprintf("%s %s", op, strings.Join(printed, ", "))}, p.modRM + consumed, true, nil
 }

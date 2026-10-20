@@ -51,30 +51,37 @@ func x86ResultPackedConversionStepWithRead(ins Instr, state *x86ResultState, own
 	if err != nil || f.mmx || !x86ResultNamedPredicateInstruction(ins) {
 		return false, true
 	}
+	return x86ResultPackedConversionInputs(ins, f, state, owned, arch, nativeRead), true
+}
+
+// The caller selects and authenticates its own family before sharing these
+// lane/input dependencies. No source or native-read capability follows.
+func x86ResultPackedConversionInputs(ins Instr, f x86PackedConversionForm, state *x86ResultState, owned []bool,
+	arch string, nativeRead bool) bool {
 	if f.mask >= 0 {
 		index, valid := amd64ParseKReg(ins.Args[f.mask].Reg)
 		if !valid || !state.masks[index] {
-			return false, true
+			return false
 		}
 	}
 	if f.memory >= 0 {
 		if !x86ResultReadWithNativeContinuation(ins, ins.Args[0], int64(f.memoryBytes), state, owned, arch, nativeRead) {
-			return false, true
+			return false
 		}
 	} else {
 		index, _ := amd64VectorRegisterIndex(ins.Args[0].Reg, f.shape.sourceBytes)
 		input := x86CallerVectorByteMask(int64(f.inputBytes))
 		if state.vectorBytes(index)&input != input {
-			return false, true
+			return false
 		}
 	}
 	index, _ := amd64VectorRegisterIndex(ins.Args[f.destination].Reg, f.shape.destinationBytes)
 	active := x86CallerVectorByteMask(int64(f.shape.lanes * f.spec.destinationBits / 8))
 	if f.mask >= 0 && !f.properties.zeroing && state.vectorBytes(index)&active != active {
-		return false, true
+		return false
 	}
 	state.writeVector(index, f.shape.destinationBytes, x86CallerVectorByteMask(int64(f.shape.destinationBytes)), f.spec.legacy)
-	return true, true
+	return true
 }
 
 func x86CallerPackedConversionStep(ins *Instr, f x86PackedConversionForm, state *x86SourceStackState, proof *x86GoCallerRegionProof) bool {
