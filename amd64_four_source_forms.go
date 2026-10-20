@@ -63,7 +63,7 @@ func (form amd64FourSourceForm) source(index int) Operand {
 }
 
 func x86FourSourceProperties(op Op, ins Instr, arch string) (amd64FourSourceForm, bool, error) {
-	base, suffix, _ := strings.Cut(strings.ToUpper(string(op)), ".")
+	base, suffix, dotted := strings.Cut(strings.ToUpper(string(op)), ".")
 	spec, known := amd64FourSourceSpecs[Op(base)]
 	form := amd64FourSourceForm{spec: spec, maskIndex: -1, zeroing: suffix == "Z"}
 	if !known {
@@ -73,7 +73,7 @@ func x86FourSourceProperties(op Op, ins Instr, arch string) (amd64FourSourceForm
 		return form, true, fmt.Errorf("%s %s outside complete Go four-source grammar: %q", arch, op, ins.Raw)
 	}
 	if arch != "386" && arch != "amd64" || ins.Op != "" && !strings.EqualFold(string(ins.Op), string(op)) ||
-		suffix != "" && suffix != "Z" || len(ins.Args) != 3 && len(ins.Args) != 4 ||
+		dotted && suffix == "" || suffix != "" && suffix != "Z" || len(ins.Args) != 3 && len(ins.Args) != 4 ||
 		arch == "386" && len(ins.Args) == 4 || suffix == "Z" && len(ins.Args) != 4 {
 		return fail()
 	}
