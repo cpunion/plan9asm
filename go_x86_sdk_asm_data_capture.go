@@ -223,14 +223,22 @@ func (source *GoX86SDKASMDataSource) capture(ctx context.Context, provided map[s
 		return sdkASMDataContext("complete original/expanded/compiler DATA/TEXT join differs: %v", err)
 	}
 	source.observation.ObjectInputs, source.observation.Objects = objectInputs, objects
+	readProducer := func(role string) ([]byte, error) {
+		return source.guard.read(filepath.Join(env["GOROOT"], filepath.FromSlash(role)))
+	}
+	funcdataChecked, floatPoolsChecked := false, false
 	for _, observed := range objects.Sources {
-		if len(observed.GeneratedFuncdata) != 0 {
-			if err := gostaticstorage.GeneratedFuncdataSources(env["GOVERSION"], func(role string) ([]byte, error) {
-				return source.guard.read(filepath.Join(env["GOROOT"], filepath.FromSlash(role)))
-			}); err != nil {
+		if !funcdataChecked && len(observed.GeneratedFuncdata) != 0 {
+			if err := gostaticstorage.GeneratedFuncdataSources(env["GOVERSION"], readProducer); err != nil {
 				return sdkASMDataContext("generated metadata lacks its exact original producer source: %v", err)
 			}
-			break
+			funcdataChecked = true
+		}
+		if !floatPoolsChecked && len(observed.GeneratedFloatPools) != 0 {
+			if err := gostaticstorage.GeneratedFloatPoolSources(env["GOVERSION"], readProducer); err != nil {
+				return sdkASMDataContext("generated float pools lack their exact original producer source: %v", err)
+			}
+			floatPoolsChecked = true
 		}
 	}
 	if source.captureRole == sdkASMDataOriginalFrameRole {
