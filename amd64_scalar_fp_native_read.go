@@ -312,6 +312,11 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		if accepted, known := x86ResultNumericalReadStep(ins, state, owned, resultOffset, arch); known {
 			return accepted // A checked mutable SB source keeps its own lifetime and byte effects.
 		}
+		if c.dataBPSource {
+			if accepted, known := x86ResultDataBPStep(ins, state, owned, resultOffset); known {
+				return accepted // Source-defined opaque BP, never physical frame or numerical pointer bits.
+			}
+		}
 		if accepted, known := x86ResultXLATStep(ins, state, owned, arch, true); known {
 			return accepted // Only the paired exact volatile m8 consumes the unsigned AL index and native BX input.
 		}
