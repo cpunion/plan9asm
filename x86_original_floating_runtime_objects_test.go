@@ -94,7 +94,9 @@ func x86OriginalFloatingEVEXWithinProfile(profile, op string, code []byte) bool 
 		"vpandd", "vpandq", "vpandnd", "vpandnq", "vpord", "vporq", "vpternlogd", "vpternlogq",
 		"vbroadcastss", "vbroadcastsd", "vextractf32x4", "vextracti32x4", "vextractf64x4", "vextracti64x4",
 		"vinsertf32x4", "vinserti32x4", "vinsertf64x4", "vinserti64x4", "vshuff32x4", "vshufi32x4",
-		"vshufps", "vshufpd", "vpermilps", "vpermilpd":
+		"vshufps", "vshufpd", "vpermilps", "vpermilpd",
+		"vpslld", "vpsllq", "vpsrld", "vpsrlq", "vpsrad", "vpsraq",
+		"vpsllvd", "vpsllvq", "vpsrlvd", "vpsrlvq", "vpsravd", "vpsravq":
 		known = true
 	}
 	if !known {
@@ -111,19 +113,39 @@ func x86OriginalFloatingEVEXWithinProfile(profile, op string, code []byte) bool 
 }
 
 func TestX86OriginalFloatingRuntimeEVEXProfileBoundaries(t *testing.T) {
+	rows := []struct {
+		op      string
+		scalar  bool
+		rounder bool
+		memory  bool
+	}{
+		{op: "vmovups"}, {op: "vmovdqa64"}, {op: "vpxord"}, {op: "vfmadd132ps"},
+		{op: "vcvtsd2ss", scalar: true}, {op: "vcvtss2sd", scalar: true},
+		{op: "vfmadd132ss", scalar: true}, {op: "vfmadd132pd", rounder: true},
+		{op: "vfmadd132pd", memory: true},
+	}
+	// Intel SDM Vol.2B PSLL/PSRL/PSRA and Vol.2C VPSLLV/VPSRLV/
+	// VPSRAV independently specify all twelve EVEX D/Q shifts as F for
+	// Z512 and F+VL for X/Y. Uniform/immediate and per-lane count roles
+	// do not turn those into the separate BW word/byte shift operations.
+	for _, stem := range []string{"vpsll", "vpsrl", "vpsra"} {
+		for _, variable := range []string{"", "v"} {
+			for _, lane := range []string{"d", "q"} {
+				rows = append(rows, struct {
+					op      string
+					scalar  bool
+					rounder bool
+					memory  bool
+				}{op: stem + variable + lane})
+			}
+		}
+	}
+	if len(rows) != 21 {
+		t.Fatal("complete original profile and twelve-member F-shift inventory changed", len(rows))
+	}
 	for _, profile := range []string{"scalar-precision", "fma-caller"} {
 		for length := byte(0); length < 4; length++ {
-			for _, row := range []struct {
-				op      string
-				scalar  bool
-				rounder bool
-				memory  bool
-			}{
-				{op: "vmovups"}, {op: "vmovdqa64"}, {op: "vpxord"}, {op: "vfmadd132ps"},
-				{op: "vcvtsd2ss", scalar: true}, {op: "vcvtss2sd", scalar: true},
-				{op: "vfmadd132ss", scalar: true}, {op: "vfmadd132pd", rounder: true},
-				{op: "vfmadd132pd", memory: true},
-			} {
+			for _, row := range rows {
 				t.Run(fmt.Sprintf("%s/%s/memory%t/LL%d", profile, row.op, row.memory, length), func(t *testing.T) {
 					// Synthetic field projection, not an independent valid-encoding
 					// prior. Actual object checks above own complete LLVM decoding.
@@ -140,6 +162,13 @@ func TestX86OriginalFloatingRuntimeEVEXProfileBoundaries(t *testing.T) {
 						t.Fatal("scalar LLIG or Z512 ER granted VL to a packed transport", code, want)
 					}
 				})
+			}
+		}
+		for _, op := range []string{
+			"vpsllw", "vpsrlw", "vpsraw", "vpsllvw", "vpsrlvw", "vpsravw", "vpslldq", "vpsrldq", "vpmullq",
+		} {
+			if x86OriginalFloatingEVEXWithinProfile(profile, op, []byte{0x62, 0xf1, 0x7c, 0x48, 0x10, 0xc0}) {
+				t.Fatal("F-only D/Q shifts admitted an independent BW word/byte or DQ operation", profile, op)
 			}
 		}
 	}
