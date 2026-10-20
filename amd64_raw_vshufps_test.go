@@ -14,6 +14,8 @@ func TestDecodedX86VSHUFPSInstructionCompleteVEXForms(t *testing.T) {
 	}{
 		{name: "x_register", code: []byte{0xc5, 0x78, 0xc6, 0xc1, 0x44}, mode: 64, want: "VSHUFPS $68, X1, X0, X8"},
 		{name: "y_register", code: []byte{0xc5, 0x6c, 0xc6, 0xcb, 0x44}, mode: 64, want: "VSHUFPS $68, Y3, Y2, Y9"},
+		// Retain the old negative's exact bytes as the ISA's valid WIG form.
+		{name: "vex_w_one", code: []byte{0xc4, 0xe1, 0xbc, 0xc6, 0xc1, 0x44}, mode: 64, want: "VSHUFPS $68, Y1, Y8, Y0"},
 		{name: "extended_registers", code: []byte{0xc4, 0x41, 0x3c, 0xc6, 0xd1, 0xdd}, mode: 64, want: "VSHUFPS $221, Y9, Y8, Y10"},
 		{name: "memory_disp8", code: []byte{0xc5, 0xec, 0xc6, 0x56, 0x20, 0x01}, mode: 64, want: "VSHUFPS $1, 32(SI), Y2, Y2"},
 		{name: "pd extended registers", code: []byte{0xc4, 0x41, 0x3d, 0xc6, 0xd1, 0xdd}, mode: 64, want: "VSHUFPD $221, Y9, Y8, Y10"},
@@ -95,7 +97,6 @@ func TestDecodedX86VSHUFPSInstructionRejectsInvalidVEXForms(t *testing.T) {
 		{name: "truncated_modrm", code: []byte{0xc5, 0x7c, 0xc6}, mode: 64},
 		{name: "truncated_immediate", code: []byte{0xc5, 0x7c, 0xc6, 0xc1}, mode: 64},
 		{name: "vex_pp_f3", code: []byte{0xc5, 0x7e, 0xc6, 0xc1, 0x44}, mode: 64},
-		{name: "vex_w_one", code: []byte{0xc4, 0xe1, 0xbc, 0xc6, 0xc1, 0x44}, mode: 64},
 		{name: "extended_register_in_386", code: []byte{0xc5, 0x78, 0xc6, 0xc1, 0x44}, mode: 32},
 		{name: "rip_relative", code: []byte{0xc5, 0xfc, 0xc6, 0x05, 0, 0, 0, 0, 0x44}, mode: 64},
 	}
