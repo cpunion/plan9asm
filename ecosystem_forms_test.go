@@ -203,12 +203,15 @@ TEXT vectors(SB),NOSPLIT,$0-0
 		"icmp ugt <8 x i16>":       1,
 		"icmp sgt <8 x i16>":       1,
 		"icmp ugt <4 x i32>":       1,
-		"icmp sgt <4 x i32>":       1,
+		"icmp sgt <4 x i32>":       0,
 		"extractelement <2 x i64>": 1,
 	} {
 		if got := strings.Count(ir, want); got != count {
 			t.Fatalf("expanded ecosystem form %q count = %d, want %d:\n%s", want, got, count, ir)
 		}
+	}
+	if got := strings.Count(ir, `call <4 x float> asm sideeffect "pmaxsd ($2), $0", "=x,0,r,~{memory}"`); got != 1 {
+		t.Fatalf("original PMAXSD m128 must retain its exact native opcode and memory effect, got %d:\n%s", got, ir)
 	}
 	if !strings.Contains(ir, "store <16 x i8> zeroinitializer") {
 		t.Fatalf("PSRLQ with an oversized count must clear the vector:\n%s", ir)

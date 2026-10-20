@@ -91,9 +91,20 @@ func TestAMD64VectorLoweringBranchCoverage(t *testing.T) {
 	check("punpckllq-memory", "PUNPCKLLQ", Instr{Args: []Operand{mem("AX"), reg("X1")}}, false, true)
 	for _, op := range []Op{"PMINUB", "PMINSB", "PMINUW", "PMINSW", "PMINUD", "PMINSD", "PMAXUB", "PMAXSB", "PMAXUW", "PMAXSW", "PMAXUD", "PMAXSD"} {
 		check(string(op)+"-args", op, Instr{Args: []Operand{reg("X0")}}, true, true)
-		check(string(op)+"-dst", op, Instr{Args: []Operand{reg("X0"), reg("Y1")}}, false, false)
+		invalid := Instr{Args: []Operand{reg("X0"), reg("Y1")}}
+		rejected, rejectionIR := newAMD64CtxWithFuncForTest(t, Func{}, FuncSig{Ret: Void}, nil)
+		before := rejectionIR.String()
+		known, terminated, err := rejected.lowerVec(op, invalid)
+		if !known || terminated || err == nil || rejectionIR.String() != before {
+			t.Fatalf("%s-dst: invalid legacy width must reject before emitting IR: known=%v terminated=%v err=%v", op, known, terminated, err)
+		}
 		check(string(op)+"-source", op, Instr{Args: []Operand{ident("bad"), reg("X1")}}, true, true)
+		// The private format emitter retains the original native m128 opcode;
+		// this test must supply its actual x86 target, not virtual storage.
+		previousTarget := c.targetTriple
+		c.targetTriple = "x86_64-unknown-linux-gnu"
 		check(string(op)+"-memory", op, Instr{Args: []Operand{mem("AX"), reg("X1")}}, false, true)
+		c.targetTriple = previousTarget
 	}
 	for _, op := range []Op{"PSLLQ", "PSRLQ"} {
 		check(string(op)+"-args", op, Instr{Args: []Operand{imm(1)}}, true, true)
