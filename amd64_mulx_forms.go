@@ -76,8 +76,11 @@ func x86RawMULXSource(ins Instr, arch string) bool {
 }
 
 func (form x86MULXForm) needsNativeProof(ins Instr, arch string) bool {
+	_, static := x86SBMemoryAddressRole(form.source, arch)
+	frameSource := form.source.Kind == OpMem && !static &&
+		(x86LogicalSourceFrameRegister(form.source.Mem.Base, arch) || x86LogicalSourceFrameRegister(form.source.Mem.Index, arch))
 	return !x86ResultNamedPredicateInstruction(ins) || x86RegisterAddressedNativeMemoryOperand(form.source, arch) ||
-		x86LogicalSourceFrameRegister(form.low.Reg, arch) || x86LogicalSourceFrameRegister(form.high.Reg, arch)
+		frameSource || x86LogicalSourceFrameRegister(form.low.Reg, arch) || x86LogicalSourceFrameRegister(form.high.Reg, arch)
 }
 
 func x86LoweredMULXResultStep(ins Instr, state *x86ResultState, owned []bool,
