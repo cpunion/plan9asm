@@ -35,6 +35,9 @@ func x86LoweredNumericalProducerReplay(fn Func, arch string) error {
 			if _, known, _ := x86ElementPermuteProperties(ins.Op, ins, arch); known {
 				return true
 			}
+			if _, known, _ := x86PackedSignExtendProperties(ins, arch); known {
+				return true // Restrict erased raw origins; this does not grant a raw SX result role.
+			}
 			if _, known, _ := x86PackedFloatShuffleProperties(ins.Op, ins, arch); known {
 				return true
 			}

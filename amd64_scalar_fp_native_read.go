@@ -615,6 +615,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		if accepted, known := x86ResultPackedZeroExtendStep(ins, state, owned, arch, true); known {
 			return accepted
 		}
+		if accepted, known := x86ResultPackedSignExtendStep(ins, state, owned, arch, true); known {
+			return accepted // Named SX shares exact E5 reads, never the separate raw ZX identity.
+		}
 		if accepted, known := x86ResultByteShuffleStepWithRead(ins, state, owned, arch, true); known {
 			return accepted // Same full-tuple E4NF read or original legacy m128 opcode.
 		}

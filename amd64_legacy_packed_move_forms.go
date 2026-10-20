@@ -97,7 +97,7 @@ func x86TypedInstructionByteEffect(op Op, ins Instr, arch string) (x86TypedByteE
 	if effect, known, err := x86TypedPackedPrecisionByteEffect(op, ins, arch); known {
 		return effect, known, err
 	}
-	if effect, known, err := x86TypedPackedZeroExtendByteEffect(op, ins, arch); known {
+	if effect, known, err := x86TypedPackedExtendByteEffect(op, ins, arch); known {
 		return effect, known, err
 	}
 	if effect, known, err := x86TypedBlendMinposByteEffect(op, ins, arch); known {

@@ -90,8 +90,8 @@ func x86CallerVectorMoveKnown(ins Instr) bool {
 	if _, recognized, err := x86FloatMinMaxProperties(ins, "amd64"); recognized {
 		return err == nil
 	}
-	if _, recognized, err := x86PackedZeroExtendProperties(ins, "amd64"); recognized {
-		return err == nil
+	if form, recognized, err := x86PackedExtendProperties(ins, "amd64"); recognized {
+		return err == nil && (!form.signed || x86ResultNamedPredicateInstruction(ins))
 	}
 	if _, recognized, err := x86VectorZeroProperties(ins, "amd64"); recognized {
 		return err == nil
@@ -251,8 +251,9 @@ func x86CallerVectorMoveStep(ins *Instr, state *x86SourceStackState, proof *x86G
 	if form, recognized, err := x86FloatMinMaxProperties(*ins, "amd64"); recognized {
 		return err == nil && x86CallerFloatBinaryStep(ins, form.x86FloatBinaryForm, state, proof)
 	}
-	if form, recognized, err := x86PackedZeroExtendProperties(*ins, "amd64"); recognized {
-		return err == nil && x86CallerPackedZeroExtendStep(ins, form, state, proof)
+	if form, recognized, err := x86PackedExtendProperties(*ins, "amd64"); recognized {
+		return err == nil && (!form.signed || x86ResultNamedPredicateInstruction(*ins)) &&
+			x86CallerPackedExtendStep(ins, form, state, proof)
 	}
 	if form, recognized, err := x86VectorZeroProperties(*ins, "amd64"); recognized {
 		return err == nil && x86CallerVectorZeroStep(form, state)
@@ -477,8 +478,9 @@ func x86InstructionMemoryShape(ins Instr, index int, arch string) (width int64, 
 	if f, known, err := x86SignedPackedFloatProperties(ins, arch); known {
 		return int64(f.memoryBytes), false, err == nil && !f.mmx && f.memory == index
 	}
-	if form, recognized, err := x86PackedZeroExtendProperties(ins, arch); recognized {
-		return int64(form.memoryBytes), false, err == nil && form.memory == index
+	if form, recognized, err := x86PackedExtendProperties(ins, arch); recognized {
+		return int64(form.memoryBytes), false, err == nil && form.memory == index &&
+			(!form.signed || x86ResultNamedPredicateInstruction(ins))
 	}
 	if form, recognized, err := x86FloatCompareProperties(ins, arch); recognized {
 		return int64(form.memoryBytes), false, err == nil && form.memory == index
