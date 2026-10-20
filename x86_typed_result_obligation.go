@@ -72,8 +72,8 @@ func x86TypedFPResultNeedsProof(fn Func, sig FuncSig, arch string) bool {
 		if _, known, err := x86FP16BinaryProperties(ins, arch); known && err == nil {
 			return true // Dead raw arithmetic still needs source, merge and mask inputs.
 		}
-		if f, known, err := amd64FMA3Properties(ins, arch); known && err == nil && f.spec.rawOnly {
-			return true // All three raw FMA inputs remain mandatory even for Void.
+		if _, known, err := amd64FMA3Properties(ins, arch); known && err == nil {
+			return true // All three FMA inputs remain mandatory even for dead or zero-masked results.
 		}
 		if _, known, err := x86FP16ConversionProperties(ins, arch); known && err == nil {
 			return true // Raw conversion masks and numerical inputs remain mandatory for Void.
