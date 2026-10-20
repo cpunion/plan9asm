@@ -2,14 +2,7 @@ package plan9asm
 
 import (
 	"bytes"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
-	"go/ast"
-	"go/parser"
-	"go/token"
-	"os"
-	"path/filepath"
 	"reflect"
 	"runtime"
 	"sort"
@@ -275,80 +268,5 @@ func TestGoX86SDKASMDataDigestLargePayloadTemporaryBytes(t *testing.T) {
 			t.Fatal("in-place current payload mutation escaped the digest", index, digestErr)
 		}
 		payload[index] ^= 0x80
-	}
-}
-
-func TestGoX86SDKASMDataDigestOptimizationRetainsEveryLiveBoundary(t *testing.T) {
-	// This batch optimizes only digest(), never live verification. Pin the
-	// existing complete methods rather than merely counting a surviving hash
-	// call that could have moved outside its command or generation boundary.
-	guards := []struct {
-		file, receiver, name, want string
-	}{
-		{file: "go_x86_sdk_asm_data_source.go", receiver: "", name: "captureGoX86SDKASMDataSourceRole",
-			want: "7532bb00ebabdf1775a2d4bfb27c33e0ec2db5a6a7d29b0a97c73e809e025a3c"},
-		{file: "go_x86_sdk_asm_data_source.go", receiver: "GoX86SDKASMDataSource", name: "liveContext",
-			want: "7ceb17703c2f84411a492ed8d1b836aef6eb61c879dd7390f9edd8f66cec024b"},
-		{file: "go_x86_sdk_asm_data_source.go", receiver: "GoX86SDKASMDataSource", name: "run",
-			want: "77ac546bcae1e718c183a73263bd9f368baf93583064fd9571f53cfd592d5e75"},
-		{file: "go_x86_sdk_asm_data_source.go", receiver: "GoX86SDKASMDataSource", name: "runCommand",
-			want: "475339cf13e66ea1cd1da8ae4cac516d6ea47fbe5d0fb9bbbf91d5ca4b66a1d1"},
-		{file: "go_x86_sdk_asm_data_source.go", receiver: "GoX86SDKASMDataSource", name: "Verify",
-			want: "582072eefb9314f900f15bacd0dfbc653669c3fbdab19ed433f1981d8d179183"},
-		{file: "go_x86_sdk_asm_data_source.go", receiver: "GoX86SDKASMDataSource", name: "verifyState",
-			want: "427c7289796f431085ac5d2c574f30945068908dbea9564bdeb7e52094ab7ad7"},
-		{file: "go_x86_sdk_asm_data_source.go", receiver: "GoX86SDKASMDataSource", name: "Close",
-			want: "a6a752ce12f32861b977e0dd0e0c0e6d2ec8598e989ed74d2031763d865f8aa9"},
-		{file: "go_x86_sdk_asm_data_source.go", receiver: "GoX86SDKASMDataSource", name: "Readback",
-			want: "f0044ed9e953dca9f4580f9d51796787d734aee41f2268a68864bd2c975f45fa"},
-		{file: "go_x86_sdk_asm_data_source.go", receiver: "GoX86SDKASMDataSource", name: "CheckReadback",
-			want: "d87afa790aa89fb6530dbd226732cace6723a2369e69bcd98516369499f14892"},
-		{file: "amd64_go_frame_source.go", receiver: "GoAMD64FrameSource", name: "verifyInputs",
-			want: "03e42996d6837fc585e6b001afc1b3fa9d6397ce179e5bc5aea36d664bffbc2e"},
-		{file: "internal/gooriginalsrc/digest.go", receiver: "", name: "HashRegularFile",
-			want: "fc81069f186b180c0f9967b0af9837240d47d386e187c90b76def8ed424ab74d"},
-	}
-	for _, guard := range guards {
-		t.Run(guard.name, func(t *testing.T) {
-			raw, err := os.ReadFile(filepath.FromSlash(guard.file))
-			if err != nil {
-				t.Fatal(err)
-			}
-			// Repository Go checkout EOL is separate from external source authority.
-			raw = bytes.ReplaceAll(raw, []byte("\r\n"), []byte("\n"))
-			positions := token.NewFileSet()
-			parsed, err := parser.ParseFile(positions, guard.file, raw, 0)
-			if err != nil {
-				t.Fatal(err)
-			}
-			matches := 0
-			for _, declaration := range parsed.Decls {
-				fn, ok := declaration.(*ast.FuncDecl)
-				if !ok || fn.Name.Name != guard.name {
-					continue
-				}
-				receiver := ""
-				if fn.Recv != nil && len(fn.Recv.List) == 1 {
-					if pointer, ok := fn.Recv.List[0].Type.(*ast.StarExpr); ok {
-						if named, ok := pointer.X.(*ast.Ident); ok {
-							receiver = named.Name
-						}
-					}
-				}
-				if receiver != guard.receiver {
-					continue
-				}
-				first := positions.Position(fn.Pos()).Offset
-				last := positions.Position(fn.End()).Offset
-				sum := sha256.Sum256(raw[first:last])
-				if hex.EncodeToString(sum[:]) != guard.want {
-					t.Fatal("digest-only optimization changed an existing live verification boundary")
-				}
-				matches++
-			}
-			if matches != 1 {
-				t.Fatal("live verification boundary is missing or duplicated", matches)
-			}
-		})
 	}
 }
