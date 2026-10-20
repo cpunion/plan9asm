@@ -13,13 +13,6 @@ func TestX86VariableBlendMemoryAndViewsRuntime(t *testing.T) {
 		t.Fatal("LLVM 22 llc/clang not found")
 	}
 	triple := testTargetTriple(runtime.GOOS, runtime.GOARCH)
-	var prefix []string
-	if runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" && rosettaAvailable() {
-		triple = "x86_64-apple-macosx"
-		prefix = []string{"/usr/bin/arch", "-x86_64"}
-	} else if runtime.GOARCH != "amd64" {
-		t.Skip("execution requires amd64 or Rosetta; native amd64 CI and five-target objects are required")
-	}
 	for _, raw := range []bool{false, true} {
 		t.Run(fmt.Sprintf("raw=%t", raw), func(t *testing.T) {
 			var source, declarations, checks strings.Builder
@@ -74,15 +67,24 @@ func TestX86VariableBlendMemoryAndViewsRuntime(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			x86LEAActualTargetGoObject(t, "amd64", "x86_64-unknown-linux-gnu", source.String())
+			// The unchanged C intentionally asks for unaligned numerical
+			// values. Execute its explicit private mathematical companion,
+			// not the original legacy memory opcode's different #GP contract.
+			file = x86BlendMinposPrivateMathCompanion(t, source.String(), 72, 12, 96)
 			ir, err := Translate(file, Options{Goarch: "amd64", TargetTriple: triple, Sigs: sigs})
 			if err != nil {
 				t.Fatal(err)
+			}
+			ir, err = x86BlendMinposMathIR(file, ir)
+			if err != nil {
+				t.Fatal("private mathematical companion lost exact source/IR ownership", err)
 			}
 			body := "#include <stdint.h>\n#include <stdio.h>\n#include <string.h>\n" +
 				x86TestGuardPagesC + declarations.String() + x86VariableBlendOracleC +
 				"\nint main(void) {\n    if (setup_guard()) return 2;\n" +
 				checks.String() + "    return free_guard();\n}\n"
-			compileAndRunRuntimeTestForTarget(t, llc, clang, "variable-blend", triple, ir, body, prefix)
+			x86ConflictFunnelPortableRuntime(t, llc, clang, "variable-blend-private-math", triple, ir, body)
 		})
 	}
 }
