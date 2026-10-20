@@ -136,6 +136,9 @@ func x86ResultCallerAddressesAfter(ins Instr, before [16]bool, entryFP map[int64
 	if _, known, err := x86DuplicateMoveProperties(ins.Op, ins, arch); known && err == nil {
 		return before // A validated vector-only write preserves, but never creates, a GP identity.
 	}
+	if _, known, err := x86InLanePermuteProperties(ins.Op, ins, arch); known && err == nil {
+		return before // Named vector selection has no GP output or new address authority.
+	}
 	if _, known, err := x86MXCSRProperties(ins, arch); known && err == nil {
 		return before // All four original m32 opcodes preserve GP identities.
 	}
