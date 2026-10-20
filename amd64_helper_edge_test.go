@@ -714,7 +714,10 @@ func TestAMD64ArithmeticCoverage(t *testing.T) {
 	// trapping DIV still requires an explicit physical instruction target;
 	// missing target must fail without emitting a partial native operation.
 	beforeDivideBytes, beforeDivideTemporary := b.Len(), c.tmp
-	if known, terminated, err := c.lowerArith("DIVL", Instr{Raw: "DIVL CX", Args: []Operand{{Kind: OpReg, Reg: CX}}}); !known || terminated || !errors.Is(err, ErrProbeNeedsContext) || b.Len() != beforeDivideBytes || c.tmp != beforeDivideTemporary {
+	divide := Instr{Raw: "DIVL CX", Args: []Operand{{Kind: OpReg, Reg: CX}}}
+	known, terminated, err := c.lowerArith("DIVL", divide)
+	if !known || terminated || !errors.Is(err, ErrProbeNeedsContext) ||
+		b.Len() != beforeDivideBytes || c.tmp != beforeDivideTemporary {
 		t.Fatal("untargeted direct division acquired a native operation or partial IR", known, terminated, err)
 	}
 	oldDivideTarget := c.targetTriple

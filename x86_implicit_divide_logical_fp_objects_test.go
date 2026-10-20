@@ -23,7 +23,7 @@ func x86LogicalFPDivideSource(name, op, arch string, bits int, registerControl b
 		source += op + " divisor+16(FP)\n"
 	}
 	source += fmt.Sprintf("%s AX,quotient+24(FP)\n%s DX,remainder+%d(FP)\nRET\n", move, move, 24+word)
-	return source, fmt.Sprintf("func %s(low,high,divisor uint64) (%s,%s)\n", name, resultType, resultType)
+	return source, fmt.Sprintf("func %s(low,high,divisor uint64) (quotient %s,remainder %s)\n", name, resultType, resultType)
 }
 
 func TestX86ImplicitDivideLogicalFPOriginalGoAndThreeAPIFiveTargetObjects(t *testing.T) {
