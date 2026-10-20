@@ -65,7 +65,8 @@ func x86RawLogicalLiteralForm(ins Instr, arch string) bool {
 }
 
 func x86RawByteShiftLiteralForm(ins Instr, arch string) bool {
-	if !x86RawLiteralSourceShape(ins, arch) || !x86RawReturnDecodedReadIdentity(ins) {
+	if !x86RawLiteralSourceShape(ins, arch) || !x86RawReturnDecodedReadIdentity(ins) ||
+		!x86RawPackedShiftEncodingSource(ins, arch) {
 		return false
 	}
 	form, known, err := x86PackedShiftProperties(ins.Op, ins, arch)

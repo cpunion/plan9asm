@@ -1003,6 +1003,10 @@ type Instr struct {
 	// Scalar precision conversions retain their physical EVEX generation even
 	// when every low-X operand also has an unmasked VEX spelling.
 	x86ScalarPrecisionEVEX bool
+	// Packed shifts retain actual decoder generation and W, including WIG.
+	// The zero generation is absent identity, not an inferred VEX encoding.
+	x86PackedShiftEncoding x86RawPackedShiftEncoding
+	x86PackedShiftW        bool
 	// ABS retains physical EVEX even for unmasked low X/Y operands that
 	// otherwise have a VEX spelling. CPU generation supplies no input facts.
 	x86PackedAbsEVEX bool

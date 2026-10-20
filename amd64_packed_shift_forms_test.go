@@ -311,7 +311,7 @@ func TestX86PackedShiftFullNativeMemoryReadAndSuppression(t *testing.T) {
 		{"VPSRLW (AX),Y0,K1,Y1", 16, false},
 		{"VPSRLD (AX),Z0,K1,Z1", 16, false},
 		{"VPSRLQ (AX),Z0,K1,Z1", 16, false},
-		{"VPSRLW.Z $1,(AX),K1,Z1", 64, false},
+		{"VPSRLW.Z $1,(AX),K1,Z1", 64, true},
 		{"VPSRLD.Z $1,(AX),K1,Z1", 64, true},
 		{"VPSRLQ.BCST.Z $1,(AX),K1,Z1", 8, true},
 		{"VPSRLVW.Z (AX),Z0,K1,Z1", 64, true},

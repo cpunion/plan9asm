@@ -41,6 +41,7 @@ type x86SourceRawInstruction struct {
 	// Neither an absent snapshot nor a low bank implies a VEX conversion.
 	scalarPrecision  x86RawScalarPrecisionIdentity
 	explicitMaskMove x86RawExplicitMaskMoveIdentity
+	packedShift      x86RawPackedShiftIdentity
 }
 
 type x86SourceStackAddress struct {
