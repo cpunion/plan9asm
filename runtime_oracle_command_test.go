@@ -224,6 +224,7 @@ func TestRuntimeOracleCommandConsumersRetainOwnedExecution(t *testing.T) {
 		"amd64_comi_fixture_compile_unix_test.go",
 		"amd64_packed_vector_move_aligned_oracle_unix_test.go",
 		"amd64_float_compare_preflight_portability_test.go",
+		"x86_original_floating_runtime_preflight_policy_test.go",
 		"amd64_conformance_native_test.go",
 		"amd64_insert_extract_native_runtime_test.go",
 		"amd64_packed_double_dword_native_test.go",
