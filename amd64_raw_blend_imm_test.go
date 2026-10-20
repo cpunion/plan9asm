@@ -102,10 +102,12 @@ func TestDecodedX86RawImmediatePackedBlendMemoryAndInvalidForms(t *testing.T) {
 
 	validLegacy := encodeX86RawLegacyImmediatePackedBlend(rawImmediatePackedBlendSpecs[0], 7, 7, 1)
 	validVEX := encodeX86RawVEXImmediatePackedBlend(rawImmediatePackedBlendSpecs[0], 0, 7, 7, 7, 1)
+	reservedW := encodeX86RawVEXImmediatePackedBlend(rawImmediatePackedBlendSpecs[3], 0, 7, 7, 7, 1)
+	reservedW[2] |= 0x80 // VPBLENDD alone is W0; the other three VEX members are WIG.
 	for name, invalid := range map[string][]byte{
 		"legacy missing immediate": validLegacy[:len(validLegacy)-1],
 		"vex missing immediate":    validVEX[:len(validVEX)-1],
-		"vex W":                    {validVEX[0], validVEX[1], validVEX[2] | 0x80, validVEX[3], validVEX[4], validVEX[5]},
+		"reserved VPBLENDD W":      reservedW,
 		"vex prefix":               {validVEX[0], validVEX[1], validVEX[2] &^ 0x01, validVEX[3], validVEX[4], validVEX[5]},
 		"address override":         append([]byte{0x67}, validVEX...),
 	} {
@@ -113,8 +115,16 @@ func TestDecodedX86RawImmediatePackedBlendMemoryAndInvalidForms(t *testing.T) {
 			t.Fatalf("%s encoding %x decoded as %+v, ok=%v, err=%v", name, invalid, instruction, matched, decodeErr)
 		}
 	}
-	if instruction, _, matched, decodeErr := decodedX86ImmediatePackedBlendInstruction(validVEX, 32); !matched || decodeErr == nil {
-		t.Fatalf("386 VEX encoding %x decoded as %+v, ok=%v, err=%v", validVEX, instruction, matched, decodeErr)
+	for _, mode := range []int{32, 64} {
+		for _, w := range []byte{0, 0x80} {
+			physical := append([]byte(nil), validVEX...)
+			physical[2] |= w
+			x86NumericalNativeRequireMC(t, physical, mode, 1, "+avx2")
+			instruction, length, matched, decodeErr := decodedX86ImmediatePackedBlendInstruction(physical, mode)
+			if !matched || decodeErr != nil || length != len(physical) || instruction.Op != "VPBLENDW" || !instruction.x86Encoded {
+				t.Fatalf("physical mode%d WIG VEX encoding %x decoded as %+v, ok=%v, err=%v", mode, physical, instruction, matched, decodeErr)
+			}
+		}
 	}
 }
 

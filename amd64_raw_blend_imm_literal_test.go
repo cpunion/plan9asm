@@ -146,11 +146,19 @@ func TestTranslateX86RawImmediatePackedBlendRIPDataObjects(t *testing.T) {
 		"x86_64-pc-windows-msvc",
 	} {
 		t.Run(triple, func(t *testing.T) {
-			ir, err := Translate(file, Options{Goarch: "amd64", TargetTriple: triple, Sigs: sigs})
-			if err != nil {
-				t.Fatal(err)
+			// Keep the complete original raw RET and literal bytes as actual
+			// Go objects plus three public Context outcomes. These seven bare
+			// functions have no old-destination or second-source producers.
+			// Initialized full register/native-memory programs have the separate
+			// 22-form five-target object and whole-producer replay owners.
+			x86UnboundVoidFormatSources(t, source.String(), "amd64", triple)
+			ir := x86InstructionFormatObjectUnit(t, normalized, sigs, "amd64", triple, 0,
+				func(c *amd64Ctx, instruction Instr) (bool, bool, error) {
+					return c.lowerImmediatePackedBlend(instruction.Op, instruction)
+				})
+			for _, input := range []string{ir, x86DwordProductIROptimize(t, ir)} {
+				compileLLVMToObject(t, llc, triple, "raw-blend-imm-literal.ll", "raw-blend-imm-literal.o", input)
 			}
-			compileLLVMToObject(t, llc, triple, "raw-blend-imm-literal.ll", "raw-blend-imm-literal.o", ir)
 		})
 	}
 }

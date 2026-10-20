@@ -134,7 +134,17 @@ func TestX86ImmediateBlendIntegerExpressionsAndInvalidGrammar(t *testing.T) {
 		for _, suffix := range []string{".", ".Z", ".BCST", ".SAE", ".RN_SAE", ".Z.Z"} {
 			t.Run(row.op+suffix, func(t *testing.T) {
 				operation := strings.Replace(row.instruction("0xa5"), row.op, row.op+suffix, 1)
-				ins := x86ScalarLaneInstruction(t, operation)
+				if suffix == "." {
+					_, err := Parse(ArchAMD64, "TEXT invalid(SB),4,$0-0\n"+operation+"\nRET\n")
+					if err == nil || !strings.Contains(err.Error(), "instruction suffix expected identifier") {
+						t.Fatal("actual parser lost its independent trailing-dot rejection", err)
+					}
+					t.Log("original malformed source remains rejected by the parser:", err)
+				}
+				// Exercise the lowerer's independent grammar too, without asking
+				// a helper to parse the very syntax that must already be rejected.
+				ins := x86ScalarLaneInstruction(t, row.instruction("0xa5"))
+				ins.Op, ins.Raw = Op(row.op+suffix), operation
 				ctx, output := newAMD64CtxWithFuncForTest(t, Func{}, FuncSig{Ret: Void}, nil)
 				before := output.String()
 				known, _, err := ctx.lowerImmediatePackedBlend(ins.Op, ins)
