@@ -7,15 +7,16 @@ import (
 
 type amd64PackedDotProductSpec struct {
 	inputBits int
+	opcode    byte
 	saturate  bool
 	bfloat    bool
 }
 
 var amd64PackedDotProductSpecs = map[Op]amd64PackedDotProductSpec{
-	"VPDPBUSD":  {inputBits: 8},
-	"VPDPBUSDS": {inputBits: 8, saturate: true},
-	"VPDPWSSD":  {inputBits: 16},
-	"VPDPWSSDS": {inputBits: 16, saturate: true},
+	"VPDPBUSD":  {inputBits: 8, opcode: 0x50},
+	"VPDPBUSDS": {inputBits: 8, opcode: 0x51, saturate: true},
+	"VPDPWSSD":  {inputBits: 16, opcode: 0x52},
+	"VPDPWSSDS": {inputBits: 16, opcode: 0x53, saturate: true},
 	"VDPBF16PS": {inputBits: 16, bfloat: true},
 }
 
@@ -31,6 +32,9 @@ func (c *amd64Ctx) lowerPackedDotProduct(op Op, ins Instr) (ok bool, terminated 
 	spec, recognized := amd64PackedDotProductSpecs[Op(baseOp)]
 	if !recognized {
 		return false, false, nil
+	}
+	if !spec.bfloat {
+		return c.lowerIntegerPackedDotProduct(op, ins)
 	}
 	if spec.bfloat && !ins.x86Encoded {
 		return true, false, fmt.Errorf("%s has no named Go encoder form; raw encoding required", baseOp)

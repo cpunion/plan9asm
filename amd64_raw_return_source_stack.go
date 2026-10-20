@@ -44,6 +44,7 @@ type x86SourceRawInstruction struct {
 	explicitMaskMove x86RawExplicitMaskMoveIdentity
 	packedShift      x86RawPackedShiftIdentity
 	packedAbs        x86RawPackedAbsIdentity
+	packedDot        x86RawPackedDotIdentity
 }
 
 type x86SourceStackAddress struct {

@@ -45,6 +45,9 @@ func x86ResultPreservesPrivateStorage(ins Instr, arch string) bool {
 	if x86RawExplicitMaskMoveSource(ins, arch) {
 		return true // Exact native vector/memory effects do not access private SP or ID.
 	}
+	if x86RawPackedDotSource(ins, arch) {
+		return true // Exact vector arithmetic does not access private SP or ID.
+	}
 	if x86RawUnalignedLoadSource(ins, arch) {
 		return true
 	}

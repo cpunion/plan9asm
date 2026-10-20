@@ -155,6 +155,7 @@ func TestRuntimeOracleCommandConsumersRetainOwnedExecution(t *testing.T) {
 		"amd64_raw_packed_sign_test.go",
 		"x86_raw_abs_literal_test.go",
 		"x86_packed_shift_raw_physical_test.go",
+		"x86_vnni_raw_replay_test.go",
 		"amd64_move_half_complete_test.go",
 		"x86_move_half_fault_unix_test.go",
 		"x86_result_bitcount_test.go",

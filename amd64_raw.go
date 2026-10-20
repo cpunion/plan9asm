@@ -436,6 +436,7 @@ func decodeX86RawDirectives(fn Func, goarch string) (Func, error) {
 				explicitMaskMove:   x86ExplicitMaskMoveRawIdentity(decoded[index], goarch),
 				packedShift:        x86PackedShiftRawIdentity(decoded[index], goarch),
 				packedAbs:          x86PackedAbsRawIdentity(decoded[index], goarch),
+				packedDot:          x86PackedDotRawIdentity(decoded[index], goarch),
 			}
 		}
 		normalized = append(normalized, decoded...)
@@ -9613,89 +9614,10 @@ func decodedX86VEXVectorRMOperand(code []byte, mode, bExt, xExt int, segment Reg
 	return Operand{Kind: OpReg, Reg: Reg(fmt.Sprintf("%s%d", vectorPrefix, number))}, 1, nil
 }
 
-// decodedX86VNNIInstruction recognizes the complete VEX.128/VEX.256
-// AVX-VNNI dot-product family. Go's assembler exposes the equivalent named
-// EVEX forms, while generated third-party assembly uses raw VEX encodings that
-// x/arch v0.14 cannot decode. Recover all four opcodes and every register or
-// ModRM/SIB memory source before consulting the generic decoder.
+// Preserve both physical integer-dot generations before generic decoding.
+// The equivalent Go-named EVEX row cannot identify an original VEX opcode.
 func decodedX86VNNIInstruction(code []byte, mode int) (instruction Instr, length int, ok bool, err error) {
-	i := 0
-	segment := Reg("")
-	addressOverride := false
-	for i < len(code) {
-		switch code[i] {
-		case 0x64:
-			segment = FS
-			i++
-		case 0x65:
-			segment = GS
-			i++
-		case 0x67:
-			addressOverride = true
-			i++
-		default:
-			goto vex
-		}
-	}
-
-vex:
-	if mode != 32 && mode != 64 {
-		return Instr{}, 0, false, nil
-	}
-	if len(code) < i+4 || code[i] != 0xc4 || code[i+1]&0x1f != 2 {
-		return Instr{}, 0, false, nil
-	}
-	vexBits := code[i+2]
-	opcode := code[i+3]
-	op, recognized := map[byte]Op{
-		0x50: "VPDPBUSD",
-		0x51: "VPDPBUSDS",
-		0x52: "VPDPWSSD",
-		0x53: "VPDPWSSDS",
-	}[opcode]
-	if !recognized {
-		return Instr{}, 0, false, nil
-	}
-	ok = true
-	if vexBits&3 != 1 {
-		return Instr{}, 0, true, fmt.Errorf("VEX.pp must be 66")
-	}
-	if vexBits&0x80 != 0 {
-		return Instr{}, 0, true, fmt.Errorf("VEX.W must be zero")
-	}
-	if addressOverride {
-		return Instr{}, 0, true, fmt.Errorf("address-size override is not source-layout safe")
-	}
-
-	vex1 := code[i+1]
-	rExt := int(^vex1>>7) & 1
-	xExt := int(^vex1>>6) & 1
-	bExt := int(^vex1>>5) & 1
-	modRMIndex := i + 4
-	if len(code) <= modRMIndex {
-		return Instr{}, 0, true, fmt.Errorf("missing ModRM byte")
-	}
-	vectorPrefix := "X"
-	if vexBits&0x04 != 0 {
-		vectorPrefix = "Y"
-	}
-	secondSourceNumber := int(^vexBits>>3) & 15
-	destinationNumber := int(code[modRMIndex]>>3&7) + rExt*8
-	if mode == 32 && (rExt != 0 || xExt != 0 || bExt != 0 || secondSourceNumber >= 8 || destinationNumber >= 8) {
-		return Instr{}, 0, true, fmt.Errorf("extended register in 32-bit mode")
-	}
-	firstSource, consumed, err := decodedX86VEXVectorRMOperand(code[modRMIndex:], mode, bExt, xExt, segment, vectorPrefix)
-	if err != nil {
-		return Instr{}, 0, true, err
-	}
-	secondSource := Operand{Kind: OpReg, Reg: Reg(fmt.Sprintf("%s%d", vectorPrefix, secondSourceNumber))}
-	destination := Operand{Kind: OpReg, Reg: Reg(fmt.Sprintf("%s%d", vectorPrefix, destinationNumber))}
-	instruction = Instr{
-		Op:   op,
-		Args: []Operand{firstSource, secondSource, destination},
-		Raw:  fmt.Sprintf("%s %s, %s, %s", op, firstSource.String(), secondSource.String(), destination.String()),
-	}
-	return instruction, modRMIndex + consumed, true, nil
+	return decodedX86IntegerPackedDotInstruction(code, mode)
 }
 
 // decodedX86VariableDwordPermuteInstruction recognizes the complete VEX.256

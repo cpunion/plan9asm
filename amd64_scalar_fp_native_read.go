@@ -17,7 +17,8 @@ import (
 func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 	fn, sig, arch := c.fpScalarSource, c.sig, c.goarch
 	if x86FloatMinMaxRawReplayRequired(fn, arch) || x86ScalarPrecisionRawReplayRequired(fn, arch) ||
-		x86ExplicitMaskMoveRawReplayRequired(fn, arch) || x86PackedShiftRawReplayRequired(fn, arch) {
+		x86ExplicitMaskMoveRawReplayRequired(fn, arch) || x86PackedShiftRawReplayRequired(fn, arch) ||
+		x86PackedDotRawReplayRequired(fn, arch) {
 		if err := fn.x86RawReplay.validate(fn, arch); err != nil {
 			return err
 		}
@@ -114,7 +115,15 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 	boundRawScalarPrecision := false
 	boundRawExplicitMaskMove := false
 	boundRawPackedShift := false
+	boundRawPackedDot := false
 	for _, ins := range fn.Instrs {
+		if x86RawPackedDotSource(ins, arch) {
+			if !boundRawPackedDot && (fn.x86RawReplay == nil || fn.x86RawReplay.validate(fn, arch) != nil) {
+				return strictErr
+			}
+			boundRawPackedDot = true
+			continue // Exact generation/replay grants no arithmetic input or memory fact.
+		}
 		if x86RawPackedShiftSource(ins, arch) {
 			if !boundRawPackedShift && (fn.x86RawReplay == nil || fn.x86RawReplay.validate(fn, arch) != nil) {
 				return strictErr
@@ -363,6 +372,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		}
 		if accepted, known := x86ResultMaskBlendStep(ins, state, owned, arch, true); known {
 			return accepted // The shared E4 reader retains exact volatile active-lane accesses.
+		}
+		if accepted, known := x86ResultPackedDotStep(ins, state, owned, arch, true); known {
+			return accepted // Paired E4 dwords retain active volatile reads, even for dead results.
 		}
 		if accepted, known := x86ResultNativeLEAAddressBitsStep(ins, state, owned, arch, addressBitStores); known {
 			keepAddressBits = accepted
