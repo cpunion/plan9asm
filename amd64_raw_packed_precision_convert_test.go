@@ -211,18 +211,11 @@ func TestX86RawPackedPrecisionConvertCompilesEveryBaseForm(t *testing.T) {
 				source.WriteString("\tNOP\n")
 			}
 			source.WriteString("\tRET\n")
-			requireX86GoAssemblerResult(t, target.goarch, source.String(), true)
-			file, err := Parse(ArchAMD64, source.String())
-			if err != nil {
-				t.Fatal(err)
-			}
-			ir, err := Translate(file, Options{
-				Goarch: target.goarch, TargetTriple: target.triple,
-				Sigs: map[string]FuncSig{"rawprecisionconversion": {Name: "rawprecisionconversion", Ret: Void}},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			// Every original byte/NOP/RET and its actual Go object stay intact.
+			// The complete bare source lacks inputs; only the private emitter
+			// checks bound formats, while the initialized raw family is separate.
+			ir := x86PackedPrecisionOriginalFormatObject(t, source.String(), "rawprecisionconversion",
+				target.goarch, target.triple, true, 15, 1)
 			compileLLVMToObject(t, llc, target.triple, "raw-precision-conversion.ll", "raw-precision-conversion.o", ir)
 		})
 	}
