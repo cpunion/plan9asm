@@ -33,7 +33,7 @@ func (c *amd64Ctx) loadLegacyScalarMoveSource(ins Instr, bits int) (string, erro
 	return "%" + scalar, nil
 }
 
-// The public observer keeps logical-only reads. Only the paired legacy
+// The public observer keeps logical-only storage. Only the paired legacy
 // volatile emitter can continue an actual incoming-pointer m32/m64 access.
 // Register copies preserve old high X bytes; memory copies zero those bytes.
 // Both preserve every bit above 127, with no new storage or pointer facts.
@@ -65,6 +65,11 @@ func x86ResultLegacyScalarMoveStep(ins Instr, state *x86ResultState, owned []boo
 			known = 0xffff
 		}
 		state.writeVector(destination, 16, uint64(known), true)
+		return true, true
+	}
+	if x86ResultScalarLaneNativeStore(ins, last, state, arch, native) {
+		// The selected source bytes were checked above. The exact native
+		// write defines no logical bytes or reusable memory/address fact.
 		return true, true
 	}
 	return x86ResultStore(last, width, state, owned, resultOffset, arch), true

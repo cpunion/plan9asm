@@ -153,7 +153,7 @@ func (c *amd64Ctx) lowerFP(op Op, ins Instr) (ok bool, terminated bool, err erro
 			if err != nil {
 				return true, false, err
 			}
-			fmt.Fprintf(c.b, "  store float %s, ptr %s, align 1\n", v, c.ptrFromAddrI64(addr))
+			fmt.Fprintf(c.b, "  store volatile float %s, ptr %s, align 1\n", v, c.ptrFromAddrI64(addr))
 			return true, false, nil
 		case OpSym:
 			p, err := c.ptrFromSB(ins.Args[1].Sym)
@@ -333,7 +333,7 @@ func (c *amd64Ctx) lowerFP(op Op, ins Instr) (ok bool, terminated bool, err erro
 				return true, false, err
 			}
 			p := c.ptrFromAddrI64(addr)
-			fmt.Fprintf(c.b, "  store double %s, ptr %s, align 1\n", v, p)
+			fmt.Fprintf(c.b, "  store volatile double %s, ptr %s, align 1\n", v, p)
 			return true, false, nil
 		case OpSym:
 			p, err := c.ptrFromSB(ins.Args[1].Sym)
