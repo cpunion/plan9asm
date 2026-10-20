@@ -156,8 +156,61 @@ func TestX86NumericalFloatingBoundaryRIPIsNotSourceOrNumericalAuthority(t *testi
 			for _, api := range []string{"text", "module", "Go"} {
 				ir, err := x86ScalarFPBitViewAPI(t, source.String(), "func Value()", "amd64",
 					"x86_64-unknown-linux-gnu", api)
-				if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
-					t.Fatal("a boundary-only RIP observation became public source or NUM authority", api, err)
+				// The assembler object's relocation is deliberately not linked.
+				// Copying its zero disp32 into BYTE source leaves no actual pool:
+				// this is malformed literal/source rejection, not missing NUM.
+				if ir != "" || err == nil {
+					t.Fatal("an unlinked RIP relocation became a public literal source", api, err)
+				}
+			}
+		})
+	}
+}
+
+func TestX86NumericalFloatingBoundaryCannotCreateLiteralNumericalInputs(t *testing.T) {
+	for _, row := range []struct {
+		name      string
+		opcode    byte
+		prefix    byte
+		width     int
+		evex      bool
+		broadcast bool
+	}{
+		{"LiteralAddSD", 0x58, 3, 16, false, false},
+		{"LiteralMulPS", 0x59, 0, 32, false, false},
+		{"LiteralMinPD", 0x5d, 1, 16, false, false},
+		{"LiteralDivPD", 0x5e, 1, 64, true, false},
+		{"LiteralMaxPS", 0x5f, 0, 32, true, true},
+		{"LiteralSubSS", 0x5c, 2, 16, true, false},
+	} {
+		t.Run(row.name, func(t *testing.T) {
+			code := x86RawBinaryFloatLiteral(row.opcode, row.prefix, row.evex, row.width, row.broadcast)
+			source := x86RawVectorLiteralSource(x86RawVectorLiteralCase{name: row.name, code: code})
+			file, err := normalizeX86RawFile(mustParseX86RawReturn(t, source), "amd64")
+			if err != nil || len(file.Data) != 1 || len(file.Data[0].Payload) == 0 {
+				t.Fatal("independent complete inline literal/RET prerequisite failed", err)
+			}
+			x86LEAActualTargetGoObject(t, "amd64", "x86_64-unknown-linux-gnu", source)
+			for _, api := range []string{"text", "module", "Go"} {
+				declaration := "func " + row.name + "()"
+				ir, err := x86ScalarFPBitViewAPI(t, source, declaration, "amd64",
+					"x86_64-unknown-linux-gnu", api)
+				if err != nil || ir == "" {
+					t.Fatal("complete initialized inline literal positive control failed", api, err)
+				}
+				for _, missing := range []string{"VPXORD Z0,Z0,Z0\n", "KMOVD AX,K7\n"} {
+					if missing == "KMOVD AX,K7\n" && !row.evex {
+						continue
+					}
+					changed := strings.Replace(source, missing, "", 1)
+					if changed == source {
+						t.Fatal("missing-input control did not change the real source", missing)
+					}
+					ir, err := x86ScalarFPBitViewAPI(t, changed, declaration, "amd64",
+						"x86_64-unknown-linux-gnu", api)
+					if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+						t.Fatal("complete literal bytes invented missing vector/mask NUM inputs", api, missing, err)
+					}
 				}
 			}
 		})
@@ -204,18 +257,57 @@ func TestX86NumericalFloatingBoundariesRetainCompleteEncodingGuards(t *testing.T
 		}
 	}
 	for _, code := range [][]byte{
-		encodeX86VEXFMA3(0x98, true, true, 15, 14, 13),
-		encodeX86EVEXFMA3(0xb9, true, 0, false, false, 0, 31, 30, 29),
-		encodeX86VEXBinaryFloat(0x58, 1, true, true, true, 15, 14, 13),
-		encodeX86EVEXBinaryFloat(0x5f, 1, 0, false, false, 0, 31, 30, 29),
+		// Keep the mode32 vector discriminator intact; only vvvv/V' selects
+		// an unavailable physical bank. Extended R/B can instead encode LES
+		// or BOUND in that mode and is not an invalid vector witness.
+		encodeX86VEXFMA3(0x98, true, true, 2, 15, 0),
+		encodeX86EVEXFMA3(0xb9, true, 0, false, false, 0, 2, 31, 0),
+		encodeX86VEXBinaryFloat(0x58, 1, true, true, true, 2, 15, 0),
+		encodeX86EVEXBinaryFloat(0x5f, 1, 0, false, false, 0, 2, 31, 0),
 	} {
 		boundaries, scalar, err := x86NumericalNativeBoundaries(code, 64)
 		if err != nil || len(boundaries) != 1 || boundaries[0].Length != len(code) || len(scalar) != 0 {
 			t.Fatal("complete actual mode64 physical bank lost its boundary", boundaries, scalar, err)
 		}
+		if !x86NumericalVectorPrefix(code, 32) {
+			t.Fatal("mode32 negative no longer has a physical vector prefix", code)
+		}
 		if boundaries, scalar, err := x86NumericalNativeBoundaries(code, 32); !errors.Is(err, ErrProbeNeedsContext) ||
 			boundaries != nil || scalar != nil {
 			t.Fatal("physical mode32 acquired an extended vector bank", boundaries, scalar, err)
+		}
+	}
+}
+
+func TestX86NumericalFloatingBoundaryKeepsMode32LegacyDiscriminator(t *testing.T) {
+	// These exact bytes were the incorrect high-bank vector negatives in the
+	// first GREEN candidate. In mode32 they are complete ordinary instructions,
+	// independently decoded by x86asm, not vector encodings with bad registers.
+	for _, fixture := range []struct {
+		code []byte
+		ops  []x86asm.Op
+	}{
+		{[]byte{0xc4, 0x42, 0x8d, 0x98, 0xfd}, []x86asm.Op{x86asm.LES, x86asm.CWDE, x86asm.STD}},
+		{[]byte{0xc4, 0x41, 0x8d, 0x58, 0xfd}, []x86asm.Op{x86asm.LES, x86asm.POP, x86asm.STD}},
+	} {
+		if x86NumericalVectorPrefix(fixture.code, 32) || !x86NumericalVectorPrefix(fixture.code, 64) {
+			t.Fatal("physical legacy/vector discriminator changed", fixture.code)
+		}
+		boundaries, scalar, err := x86NumericalNativeBoundaries(fixture.code, 32)
+		if err != nil || len(boundaries) != len(fixture.ops) || len(scalar) != len(fixture.ops) {
+			t.Fatal("legitimate mode32 legacy sequence lost its complete boundary", boundaries, scalar, err)
+		}
+		pc := 0
+		for index, opcode := range fixture.ops {
+			native, err := x86asm.Decode(fixture.code[pc:], 32)
+			if err != nil || native.Op != opcode || native.Len <= 0 ||
+				boundaries[index].PC != int64(pc) || boundaries[index].Length != native.Len || scalar[int64(pc)] != native {
+				t.Fatal("mode32 scalar identity differs from independent x86asm", index, native, err)
+			}
+			pc += native.Len
+		}
+		if pc != len(fixture.code) {
+			t.Fatal("mode32 observer discarded native legacy bytes", pc, len(fixture.code))
 		}
 	}
 }
