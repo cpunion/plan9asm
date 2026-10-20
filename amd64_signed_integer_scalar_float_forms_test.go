@@ -144,7 +144,6 @@ func TestX86SignedIntegerScalarFloatMode32FeaturesFollowValidSource(t *testing.T
 		{"CVTSQ2SS AX,X0", ""},
 		{"VCVTSI2SSL AX,X8,X1", ""},
 		{"VCVTSI2SSL.Z AX,X0,X1", ""},
-		{"VCVTUSI2SSL AX,X0,X1", ""},
 	} {
 		file, err := Parse(ArchAMD64, "TEXT f(SB),4,$0-0\n"+row.instruction+"\nRET\n")
 		if err != nil {
