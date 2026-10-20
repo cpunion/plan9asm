@@ -173,7 +173,10 @@ func TestGoASMIntegerGrammarRejectsInvalidSharedConsumers(t *testing.T) {
 				}
 			})
 			t.Run("DATA-displacement", func(t *testing.T) {
-				statement := "literal<>+(" + row.expression + ")(SB)/8,$17"
+				// Some cmd/asm errors continue into DATA allocation. Keep the
+				// resulting offset bounded even after an expression diagnostic;
+				// an assembler panic cannot stand in for source rejection.
+				statement := "literal<>+(((" + row.expression + "))&0)(SB)/8,$17"
 				goAssemblerOracleOutput(t, "amd64", "DATA "+statement+"\nGLOBL literal<>(SB),8,$8\n", "", false)
 				if datum, err := parseDATAStmt(ArchAMD64, statement); err == nil && datum.Sym == "literal<>" {
 					t.Fatal("a rejected displacement acquired a real DATA-symbol identity", datum)
