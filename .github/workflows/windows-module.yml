@@ -197,9 +197,33 @@ jobs:
           name: windows-module-${{ inputs.module }}-completion
           path: _out/windows-module-${{ inputs.module }}-verified/
           if-no-files-found: error
-      - uses: actions/setup-python@v7
+      - name: Set up compatible Python for coverage upload
+        id: codecov_python
+        uses: actions/setup-python@v7
         with:
-          python-version: '3.x'
+          python-version: '3.13'
+      - name: Check Codecov Python and pip ownership
+        shell: bash
+        env:
+          CODECOV_PYTHON: ${{ steps.codecov_python.outputs.python-path }}
+        run: |
+          python - <<'PY'
+          import os
+          import shutil
+          import subprocess
+          import sys
+          if sys.version_info[:2] != (3, 13):
+              raise SystemExit("Codecov upload requires Python 3.13")
+          if not os.path.samefile(sys.executable, os.environ["CODECOV_PYTHON"]):
+              raise SystemExit("Codecov Python differs from setup-python output")
+          pip = shutil.which("pip")
+          expected = os.path.join(os.path.dirname(sys.executable), "Scripts", "pip.exe")
+          if not pip or not os.path.samefile(pip, expected):
+              raise SystemExit("Codecov pip is not owned by the selected Python")
+          print("Codecov upload Python:", sys.version, sys.executable, flush=True)
+          print("Codecov upload pip:", pip, flush=True)
+          subprocess.run([pip, "--version"], check=True)
+          PY
       - name: Upload verified complete Windows module coverage
         uses: codecov/codecov-action@v7
         with:
@@ -211,3 +235,22 @@ jobs:
           name: windows-go1.27-${{ inputs.module }}
           fail_ci_if_error: true
           verbose: true
+      - name: Check installed Codecov CLI ownership
+        shell: bash
+        env:
+          CODECOV_PYTHON: ${{ steps.codecov_python.outputs.python-path }}
+        run: |
+          python - <<'PY'
+          import os
+          import shutil
+          import subprocess
+          import sys
+          if not os.path.samefile(sys.executable, os.environ["CODECOV_PYTHON"]):
+              raise SystemExit("Codecov Python changed during upload")
+          cli = shutil.which("codecovcli")
+          expected = os.path.join(os.path.dirname(sys.executable), "Scripts", "codecovcli.exe")
+          if not cli or not os.path.samefile(cli, expected):
+              raise SystemExit("Codecov CLI is not owned by the selected Python")
+          print("Codecov upload CLI:", cli, flush=True)
+          subprocess.run([cli, "--help"], check=True)
+          PY
