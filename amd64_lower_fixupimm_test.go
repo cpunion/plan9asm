@@ -162,7 +162,9 @@ func TestAMD64FixupImmediateRuntimeSemantics(t *testing.T) {
 	RET
 `
 	requireX86GoAssemblerResult(t, "amd64", source, true)
-	file, err := Parse(ArchAMD64, source)
+	runtimeSource := x86FixupRuntimeSource(t, source)
+	requireX86GoAssemblerResult(t, "amd64", runtimeSource, true)
+	file, err := Parse(ArchAMD64, runtimeSource)
 	if err != nil {
 		t.Fatal(err)
 	}
