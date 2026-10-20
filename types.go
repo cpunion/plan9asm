@@ -900,6 +900,9 @@ type Instr struct {
 	// The zero generation is absent identity, not an inferred VEX encoding.
 	x86PackedShiftEncoding x86RawPackedShiftEncoding
 	x86PackedShiftW        bool
+	// Integer dot products retain VEX versus EVEX independently of operand
+	// spelling. This is physical identity, never an incoming data/entry fact.
+	x86PackedDotEncoding x86RawPackedDotEncoding
 	// ABS retains physical EVEX even for unmasked low X/Y operands that
 	// otherwise have a VEX spelling. CPU generation supplies no input facts.
 	x86PackedAbsEVEX bool
