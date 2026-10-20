@@ -5,15 +5,15 @@ const fs = require('node:fs');
 const path = require('node:path');
 const {spawnSync} = require('node:child_process');
 const test = require('node:test');
-const {jobBody, jobNeeds, windowsRequiredNeeds} = require('./workflow-needs.cjs');
+const {jobBody, jobNeeds, windowsSchedulingNeeds, finalRequiredNeeds} = require('./workflow-needs.cjs');
 
 const workflow = fs.readFileSync('.github/workflows/pr40-owned-process-probe.yml', 'utf8');
-const allNeeds = [...windowsRequiredNeeds, 'complete-windows'];
+const allNeeds = finalRequiredNeeds.slice();
 const condition = '    if: ${{ !cancelled() }}';
 
 function requireSchedule(source) {
   assert.deepEqual(jobNeeds(source, 'complete-windows').slice().sort(),
-    windowsRequiredNeeds.slice().sort());
+    windowsSchedulingNeeds.slice().sort());
   const windows = jobBody(source, 'complete-windows');
   assert.deepEqual(windows.split('\n').filter(line => /^    if:/.test(line)), [condition],
     'Windows execution must wait for terminal dependencies, not require their success');
@@ -37,8 +37,9 @@ function clone(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
-test('Windows execution retains all nine predecessors but is not hidden by their failure', () => {
-  assert.equal(windowsRequiredNeeds.length, 9);
+test('Windows execution waits only for ownership and is not hidden by its failure', () => {
+  assert.deepEqual(windowsSchedulingNeeds, ['ownership']);
+  assert.equal(finalRequiredNeeds.length, 10);
   requireSchedule(workflow);
 });
 
@@ -55,7 +56,7 @@ test('qualification policy rejects removed gates, success-only scheduling and un
       const changed = workflow.replace(body, body.replace(condition, replacement));
       assert.throws(() => name === 'complete-windows' ? requireSchedule(changed) : requireQualification(changed));
     }
-    const expected = name === 'complete-windows' ? windowsRequiredNeeds : allNeeds;
+    const expected = name === 'complete-windows' ? windowsSchedulingNeeds : allNeeds;
     for (const missing of expected) {
       const changed = workflow.replace(body, body.replace(/^    needs:.*$/m,
         '    needs: [' + expected.filter(value => value !== missing).join(', ') + ']'));

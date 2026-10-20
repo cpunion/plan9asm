@@ -2,10 +2,13 @@
 
 const assert = require('node:assert/strict');
 
-const windowsRequiredNeeds = [
+// Scheduling discovers Windows outcomes as soon as its ownership check ends.
+// Qualification independently waits for every original success barrier.
+const windowsSchedulingNeeds = ['ownership'];
+const finalRequiredNeeds = [
   'ownership', 'native-x86-oracles', 'sdk-priority', 'arm64-fallback-cross-priority',
   'lock-native-priority', 'unlocked-rmw-native-priority', 'vector-value-fault-priority',
-  'packed-conversion-native-complete', 'packed-reduction-native-complete',
+  'packed-conversion-native-complete', 'packed-reduction-native-complete', 'complete-windows',
 ];
 
 function jobBody(source, name) {
@@ -65,7 +68,16 @@ function requireJobNeeds(source, name, required) {
 }
 
 function requireCompleteWindowsNeeds(source) {
-  return requireJobNeeds(source, 'complete-windows', windowsRequiredNeeds);
+  const scheduling = requireJobNeeds(source, 'complete-windows', windowsSchedulingNeeds);
+  assert.deepEqual(scheduling.slice().sort(), windowsSchedulingNeeds.slice().sort(),
+    'Windows scheduling must not wait for final qualification owners');
+  // Existing native-family policies call this shared guard. Keep their final
+  // success obligations here even though those owners no longer block launch.
+  const qualification = requireJobNeeds(source, 'diagnostic-qualification', finalRequiredNeeds);
+  assert.deepEqual(qualification.slice().sort(), finalRequiredNeeds.slice().sort(),
+    'final qualification must retain every original owner and complete Windows');
+  return scheduling;
 }
 
-module.exports = {jobBody, jobNeeds, requireJobNeeds, requireCompleteWindowsNeeds, windowsRequiredNeeds};
+module.exports = {jobBody, jobNeeds, requireJobNeeds, requireCompleteWindowsNeeds,
+  windowsSchedulingNeeds, finalRequiredNeeds};

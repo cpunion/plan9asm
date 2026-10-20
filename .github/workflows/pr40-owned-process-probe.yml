@@ -495,7 +495,7 @@ jobs:
           if-no-files-found: error
 
   complete-windows:
-    needs: [ownership, native-x86-oracles, sdk-priority, arm64-fallback-cross-priority, lock-native-priority, unlocked-rmw-native-priority, vector-value-fault-priority, packed-conversion-native-complete, packed-reduction-native-complete]
+    needs: ownership
     if: ${{ !cancelled() }}
     permissions:
       contents: read

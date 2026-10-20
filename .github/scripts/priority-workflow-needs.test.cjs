@@ -13,6 +13,7 @@ const gates = [
   'lock-native-priority', 'unlocked-rmw-native-priority', 'vector-value-fault-priority',
   'packed-conversion-native-complete', 'packed-reduction-native-complete',
 ];
+const finalGates = [...gates, 'complete-windows'];
 
 function replaceNeeds(source, name, declaration) {
   const body = jobBody(source, name);
@@ -21,31 +22,31 @@ function replaceNeeds(source, name, declaration) {
   return source.replace(body, changed);
 }
 
-test('required Windows gates use their own parsed dependency set, independent of order', () => {
-  assert.deepEqual(jobNeeds(workflow, 'complete-windows').slice().sort(), gates.slice().sort());
+test('Windows scheduling and final qualification have distinct parsed dependency sets', () => {
+  assert.deepEqual(jobNeeds(workflow, 'complete-windows'), ['ownership']);
+  assert.deepEqual(jobNeeds(workflow, 'diagnostic-qualification').slice().sort(), finalGates.slice().sort());
   requireCompleteWindowsNeeds(workflow);
-  const reversed = replaceNeeds(workflow, 'complete-windows', '[' + gates.slice().reverse().join(', ') + ']');
+  const reversed = replaceNeeds(workflow, 'diagnostic-qualification', '[' + finalGates.slice().reverse().join(', ') + ']');
   requireCompleteWindowsNeeds(reversed);
-  const quotes = replaceNeeds(workflow, 'complete-windows', JSON.stringify(gates));
+  const quotes = replaceNeeds(workflow, 'diagnostic-qualification', JSON.stringify(finalGates));
   requireCompleteWindowsNeeds(quotes);
+  requireCompleteWindowsNeeds(replaceNeeds(workflow, 'complete-windows', '["ownership"]'));
   const extended = reversed + '\n  additional-required-gate:\n    runs-on: ubuntu-latest\n';
-  requireCompleteWindowsNeeds(replaceNeeds(extended, 'complete-windows',
-    '[' + [...gates, 'additional-required-gate'].join(', ') + ']'));
+  assert.throws(() => requireCompleteWindowsNeeds(replaceNeeds(extended, 'diagnostic-qualification',
+    '[' + [...finalGates, 'additional-required-gate'].join(', ') + ']')));
 });
 
-test('omitting any original or either new native gate still fails', () => {
-  for (const gate of gates) {
-    const reduced = '[' + gates.filter(name => name !== gate).join(', ') + ']';
-    assert.throws(() => requireCompleteWindowsNeeds(replaceNeeds(workflow, 'complete-windows', reduced)),
+test('omitting any original final gate or complete Windows still fails', () => {
+  for (const gate of finalGates) {
+    const reduced = '[' + finalGates.filter(name => name !== gate).join(', ') + ']';
+    assert.throws(() => requireCompleteWindowsNeeds(replaceNeeds(workflow, 'diagnostic-qualification', reduced)),
       undefined, 'missing gate must fail: ' + gate);
   }
 });
 
 test('duplicate, non-concrete, self, absent or borrowed dependency declarations fail', () => {
   for (const declaration of [
-    '[' + [...gates, gates[0]].join(', ') + ']',
-    '[' + [...gates, 'not-a-real-job'].join(', ') + ']',
-    '[' + [...gates, 'complete-windows'].join(', ') + ']',
+    '[ownership, ownership]', '[ownership, not-a-real-job]', '[ownership, complete-windows]',
     '${{ needs.from_another_job }}', '[]', '[ownership,]',
   ]) assert.throws(() => requireCompleteWindowsNeeds(replaceNeeds(workflow, 'complete-windows', declaration)));
   const body = jobBody(workflow, 'complete-windows');

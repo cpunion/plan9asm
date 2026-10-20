@@ -1,9 +1,7 @@
 'use strict';
 
 const assert = require('node:assert/strict');
-const {windowsRequiredNeeds} = require('./workflow-needs.cjs');
-
-const required = [...windowsRequiredNeeds, 'complete-windows'];
+const {finalRequiredNeeds} = require('./workflow-needs.cjs');
 
 // Scheduling Windows after a failed predecessor discovers its real failures;
 // it cannot supply success for that predecessor. GitHub's current-run needs
@@ -11,16 +9,16 @@ const required = [...windowsRequiredNeeds, 'complete-windows'];
 function qualifyDiagnosticNeeds(needs) {
   assert.ok(needs && typeof needs === 'object' && !Array.isArray(needs),
     'missing actual diagnostic dependency observations');
-  assert.deepEqual(Object.keys(needs).sort(), required.slice().sort(),
+  assert.deepEqual(Object.keys(needs).sort(), finalRequiredNeeds.slice().sort(),
     'diagnostic qualification requires every original gate and complete Windows');
-  for (const name of required) {
+  for (const name of finalRequiredNeeds) {
     const observation = needs[name];
     assert.ok(observation && typeof observation === 'object' && !Array.isArray(observation),
       'malformed actual dependency result: ' + name);
     assert.ok(Object.hasOwn(observation, 'result'), 'absent actual dependency result: ' + name);
     assert.equal(observation.result, 'success', 'required diagnostic gate did not succeed: ' + name);
   }
-  return {schema: 1, successfulJobs: required.slice()};
+  return {schema: 1, successfulJobs: finalRequiredNeeds.slice()};
 }
 
 module.exports = {qualifyDiagnosticNeeds};

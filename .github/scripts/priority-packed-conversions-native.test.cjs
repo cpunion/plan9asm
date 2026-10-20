@@ -16,14 +16,14 @@ function job(source, name) {
 }
 
 function requireCompleteNativeBarrier(source) {
-  requireJobNeeds(source, 'complete-windows', ['packed-conversion-native-complete']);
+  requireJobNeeds(source, 'diagnostic-qualification', ['packed-conversion-native-complete']);
 }
 
-test('full modules cannot bypass the complete native conversion barrier', () => {
+test('final qualification cannot bypass the complete native conversion barrier', () => {
   const workflow = fs.readFileSync('.github/workflows/pr40-owned-process-probe.yml', 'utf8');
   requireCompleteNativeBarrier(workflow);
-  const complete = jobBody(workflow, 'complete-windows');
-  const others = jobNeeds(workflow, 'complete-windows').filter(name =>
+  const complete = jobBody(workflow, 'diagnostic-qualification');
+  const others = jobNeeds(workflow, 'diagnostic-qualification').filter(name =>
     name !== 'packed-conversion-native-complete');
   for (const replacement of [[], ['packed-conversion-native-priority'],
     ['packed-conversion-native-complete', 'packed-conversion-native-complete']]) {
