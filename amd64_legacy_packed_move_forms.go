@@ -190,7 +190,7 @@ func x86TypedInstructionByteEffect(op Op, ins Instr, arch string) (x86TypedByteE
 	if effect, known, err := x86TypedPermute128ByteEffect(op, ins, arch); known {
 		return effect, known, err
 	}
-	if effect, known, err := x86TypedInLanePermuteByteEffect(op, ins, arch); known {
+	if effect, known, err := x86TypedElementPermuteByteEffect(op, ins, arch); known {
 		return effect, known, err
 	}
 	if effect, known, err := x86TypedQwordLookupByteEffect(op, ins, arch); known {

@@ -123,7 +123,7 @@ func (f x86ElementPermuteForm) sourceByte(output int) int {
 	return output/16*16 + int(f.selector>>control&mask)*bytes + output%bytes
 }
 
-func x86TypedInLanePermuteByteEffect(op Op, ins Instr, arch string) (x86TypedByteEffect, bool, error) {
+func x86TypedElementPermuteByteEffect(op Op, ins Instr, arch string) (x86TypedByteEffect, bool, error) {
 	f, known, err := x86ElementPermuteProperties(op, ins, arch)
 	if !known || err != nil {
 		return x86TypedByteEffect{}, known, err

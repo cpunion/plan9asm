@@ -421,7 +421,7 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		if accepted, known := x86ResultPermute128Step(ins, state, owned, arch, true); known {
 			return accepted // Type6 retains the whole m256 access even for two zero halves.
 		}
-		if accepted, known := x86ResultInLanePermuteStep(ins, state, owned, arch, true); known {
+		if accepted, known := x86ResultElementPermuteStep(ins, state, owned, arch, true); known {
 			return accepted // E4NF retains the whole tuple/broadcast even at K=0 or for Void.
 		}
 		if accepted, known := x86ResultPackedFloatShuffleStep(ins, state, owned, arch, true); known {

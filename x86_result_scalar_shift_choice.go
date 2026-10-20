@@ -32,7 +32,7 @@ func x86LoweredNumericalProducerReplay(fn Func, arch string) error {
 			if _, known, _ := x86MULXProperties(ins.Op, ins, arch); known {
 				return true
 			}
-			if _, known, _ := x86InLanePermuteProperties(ins.Op, ins, arch); known {
+			if _, known, _ := x86ElementPermuteProperties(ins.Op, ins, arch); known {
 				return true
 			}
 			if _, known, _ := x86PackedFloatShuffleProperties(ins.Op, ins, arch); known {

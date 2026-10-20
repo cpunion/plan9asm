@@ -2,7 +2,7 @@ package plan9asm
 
 // Only the lowering-paired E4NF read supplies conditional native bytes. Raw
 // boundaries, caller memory, SDK literals and native entry retain their owners.
-func x86ResultInLanePermuteStep(ins Instr, state *x86ResultState, owned []bool, arch string, native bool) (bool, bool) {
+func x86ResultElementPermuteStep(ins Instr, state *x86ResultState, owned []bool, arch string, native bool) (bool, bool) {
 	f, known, err := x86ElementPermuteProperties(ins.Op, ins, arch)
 	if !known || err != nil || !x86ResultNamedPredicateInstruction(ins) {
 		return false, known
