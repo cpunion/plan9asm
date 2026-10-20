@@ -271,6 +271,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		if x86RawADXSource(ins, arch) {
 			continue // Only the bound default address mode shares the typed carry chain.
 		}
+		if x86RawMULXSource(ins, arch) {
+			continue // Exact identity supplies neither implicit DX nor native address inputs.
+		}
 		if x86RawScalarObserverSource(ins, arch) {
 			continue // Existing typed count/mask effects retain all numerical inputs.
 		}
@@ -439,6 +442,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		}
 		if accepted, known := x86LoweredADXResultStep(ins, state, owned, resultOffset, arch); known {
 			return accepted
+		}
+		if accepted, known := x86LoweredMULXResultStep(ins, state, owned, resultOffset, arch); known {
+			return accepted // Exact native read, implicit DX and both products; no FLAGS write.
 		}
 		if accepted, known := x86LoweredTernaryGPResultStep(ins, state, owned, resultOffset, arch); known {
 			return accepted

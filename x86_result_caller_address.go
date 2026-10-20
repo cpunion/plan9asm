@@ -66,6 +66,15 @@ func x86ResultCallerAddressesAfterTransfer(ins Instr, before, transferred [16]bo
 // old provenance independently of initialized bytes or opaque pointerGP.
 // Unknown effects conservatively revoke all caller addresses, never seed one.
 func x86ResultCallerAddressesAfter(ins Instr, before [16]bool, entryFP map[int64]bool, arch string) [16]bool {
+	if x86RawMULXSource(ins, arch) {
+		form, _, _ := x86MULXProperties(ins.Op, ins, arch)
+		for _, output := range []Operand{form.low, form.high} {
+			if index, _, valid := x86ResultGP(output.Reg, int64(form.bits/8), arch); valid {
+				before[index] = false
+			}
+		}
+		return before // Retain unrelated identities, never a pointer from either product.
+	}
 	if x86RawZeroExtendSource(ins, arch) {
 		return before // Preserve existing GP identities without creating one.
 	}
