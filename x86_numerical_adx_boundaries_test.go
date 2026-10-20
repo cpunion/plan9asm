@@ -96,11 +96,10 @@ func TestX86NumericalADXRIPBoundaryKeepsSourceRoles(t *testing.T) {
 					disp, width = 6, 8
 				}
 				length := int64(disp + 4)
-				if !reflect.DeepEqual(pcs, []int64{0, length}) || len(code) != int(length)+1 ||
-					strings.Count(string(listing), "t=R_PCREL") != 1 ||
-					!strings.Contains(string(listing), fmt.Sprintf("rel %d+4 t=R_PCREL table+%d\n", disp, offset)) {
+				if !reflect.DeepEqual(pcs, []int64{0, length}) || len(code) != int(length)+1 {
 					t.Fatalf("actual Go ADX RIP relocation/extent prerequisite differs: %x %v\n%s", code, pcs, listing)
 				}
+				x86NumericalRequirePCRelListing(t, listing, disp, offset)
 				x86NumericalNativeRequireMC(t, code, 64, 2, "+adx")
 				// The existing raw decoder requires real in-group literal bytes,
 				// whereas physical PC observation must not require or patch them.

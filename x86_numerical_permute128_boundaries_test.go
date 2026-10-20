@@ -108,12 +108,10 @@ func TestX86NumericalPermute128RIPBoundaryIsNotSourceNUM(t *testing.T) {
 				expected := []byte{0xc4, 0xe3, 0x75, member.opcode, 0x15, 0, 0, 0, 0, 0x21, 0xc3}
 				// The trailing imm8 is after disp32: cmd/asm subtracts one
 				// from the R_PCREL addend, relative to the relocation's end.
-				relocation := fmt.Sprintf("rel 5+4 t=R_PCREL table+%d", offset-1)
-				if !bytes.Equal(code, expected) || !reflect.DeepEqual(pcs, []int64{0, 10}) ||
-					strings.Count(string(listing), "t=R_PCREL") != 1 ||
-					!strings.Contains(string(listing), relocation+"\n") {
+				if !bytes.Equal(code, expected) || !reflect.DeepEqual(pcs, []int64{0, 10}) {
 					t.Fatalf("actual Go RIP bytes/PCs/relocation prerequisite changed: %x %v\n%s", code, pcs, listing)
 				}
+				x86NumericalRequirePCRelListing(t, listing, 5, offset-1)
 				if _, _, known, err := decodedX86Permute128Instruction(code, 64); !known || err == nil ||
 					!strings.Contains(err.Error(), "RIP-relative") {
 					t.Fatal("default raw decoder acquired a source RIP/literal role", known, err)

@@ -190,11 +190,10 @@ func TestX86NumericalVEXGPRIPIsOnlyPhysicalBoundary(t *testing.T) {
 					if family.stem == "RORX" {
 						length, add = 10, offset-1
 					}
-					if !reflect.DeepEqual(pcs, []int64{0, length}) || len(code) != int(length)+1 ||
-						strings.Count(string(listing), "t=R_PCREL") != 1 ||
-						!strings.Contains(string(listing), fmt.Sprintf("rel 5+4 t=R_PCREL table+%d\n", add)) {
+					if !reflect.DeepEqual(pcs, []int64{0, length}) || len(code) != int(length)+1 {
 						t.Fatalf("actual original RIP PC/relocation prior differs: %x %v\n%s", code, pcs, listing)
 					}
+					x86NumericalRequirePCRelListing(t, listing, 5, add)
 					x86NumericalVEXGPRequireMC(t, code, 64, 2)
 					boundaries, scalar, err := x86NumericalNativeBoundaries(code, 64)
 					if err != nil || !reflect.DeepEqual(boundaries, []x86NumericalNativeBoundary{{PC: 0, Length: int(length)}, {PC: length, Length: 1}}) ||
