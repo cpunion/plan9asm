@@ -60,20 +60,11 @@ func TestTranslateX86PackedDoubleToSingleCompleteGoAssemblerForms(t *testing.T) 
 			fmt.Fprintf(&src, "\tVCVTPD2PS.RN_SAE.Z Z%d, K7, Y6\n", lastZ)
 			src.WriteString("\tRET\n")
 
-			file, err := Parse(ArchAMD64, src.String())
-			if err != nil {
-				t.Fatal(err)
-			}
-			ll, err := Translate(file, Options{
-				TargetTriple: target.triple,
-				Goarch:       target.goarch,
-				Sigs: map[string]FuncSig{
-					"packeddoubletosingleforms": {Name: "packeddoubletosingleforms", Ret: Void},
-				},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			// Preserve the entire original table and independent Go object.
+			// Missing inputs and mode32 high banks are public Context, not
+			// initialized programs. All bound rows retain private LLVM objects.
+			ll := x86PackedPrecisionOriginalFormatObject(t, src.String(), "packeddoubletosingleforms",
+				target.goarch, target.triple, false, 25, 5)
 			llc := findLLVM22Tool("llc")
 			if llc == "" {
 				t.Fatal("LLVM 22 llc not found")

@@ -5456,7 +5456,11 @@ TEXT packedsingletodoubleforms(SB),NOSPLIT,$0-0
 	VCVTPS2PD.SAE.Z Y16, K1, Z17
 	RET
 `
-	ll := translateAMD64EcosystemCase(t, src, "packedsingletodoubleforms")
+	// This original complete format inventory has no vector/address/mask
+	// producers. Keep its actual Go object and all three public Context results;
+	// private format objects do not replace the initialized 53-row public matrix.
+	ll := x86PackedPrecisionOriginalFormatObject(t, src, "packedsingletodoubleforms",
+		"amd64", "x86_64-unknown-linux-gnu", false, 26, 0)
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc not found")
