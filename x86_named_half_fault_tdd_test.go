@@ -84,18 +84,18 @@ func TestX86NamedHalfZeroStoreFaultBeforeInputsThreeAPIFiveTargetObjects(t *test
 	for _, target := range x86RawReturnTargets {
 		t.Run(target.triple, func(t *testing.T) {
 			var source, declarations strings.Builder
-			count := 0
+			var names []string
 			for index, bank := range []string{"X", "Y", "Z"} {
 				// Go386 rejects the named four-operand spelling. Exact original
 				// low-bank physical bytes remain valid format inputs in mode32.
 				if target.arch == "amd64" {
 					fmt.Fprintf(&source, "TEXT NamedFault%d(SB),4,$0-0\nVCVTPS2PH.Z $7,%s1,K1,(AX)\nRET\n", index, bank)
 					fmt.Fprintf(&declarations, "func NamedFault%d()\n", index)
-					count++
+					names = append(names, fmt.Sprint("NamedFault", index))
 				}
 				fmt.Fprintf(&source, "TEXT PhysicalFault%d(SB),4,$0-0\n%sRET\n", index, x86RawDisplacementDirectives(codes[index]))
 				fmt.Fprintf(&declarations, "func PhysicalFault%d()\n", index)
-				count++
+				names = append(names, fmt.Sprint("PhysicalFault", index))
 			}
 			x86LEAActualTargetGoObject(t, target.arch, target.triple, source.String())
 			for _, api := range []string{"text", "module", "Go"} {
@@ -104,12 +104,22 @@ func TestX86NamedHalfZeroStoreFaultBeforeInputsThreeAPIFiveTargetObjects(t *test
 					if err != nil {
 						t.Fatal("Go-accepted #UD required unknown data, mask, address or native entry before faulting", err)
 					}
-					for _, body := range []string{ir, x86DwordProductIROptimize(t, ir)} {
-						if strings.Count(body, `call void asm sideeffect "ud2", "~{memory}"()`) != count ||
-							strings.Contains(body, "llvm.masked.store") || strings.Contains(body, "asm sideeffect \"vcvtps2ph") {
-							t.Fatal("half zero-store became an ordinary conversion/store or lost exact #UD", body)
+					for _, module := range []string{ir, x86DwordProductIROptimize(t, ir)} {
+						const trap = `call void asm sideeffect "ud2", "~{memory}"()`
+						if strings.Count(module, trap) != len(names) {
+							t.Fatal("half zero-store lost its complete original function inventory")
 						}
-						compileLLVMToObject(t, llc, target.triple, "half-zero-store.ll", "half-zero-store.o", body)
+						for _, name := range names {
+							// Unused module declarations are not executed stores.
+							// Inspect every original function, including raw #UD.
+							body := x86StringMemoryFunction(t, module, name)
+							if strings.Count(body, trap) != 1 || !strings.Contains(body, "\n  unreachable\n") ||
+								strings.Contains(body, "llvm.masked.store") || strings.Contains(body, "vcvtps2ph") ||
+								strings.Contains(body, " = load ") {
+								t.Fatal("half zero-store read inputs, performed a store or lost exact #UD", name, body)
+							}
+						}
+						compileLLVMToObject(t, llc, target.triple, "half-zero-store.ll", "half-zero-store.o", module)
 					}
 				})
 			}
