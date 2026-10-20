@@ -63,7 +63,7 @@ func x86NativeIndependentReturnLayout(arch string, bytes int) (string, string, i
 	declaration := fmt.Sprintf("func Copy(bits uint%d) (ret uint%d)\n", bytes*8, bytes*8)
 	body := fmt.Sprintf("TEXT ·Copy(SB),4,$0-%d\n", offset+bytes)
 	if bytes == 8 && arch == "386" {
-		body += fmt.Sprintf("MOVL bits+0(FP),AX\nMOVL AX,ret+%d(FP)\nMOVL bits+4(FP),AX\nMOVL AX,ret+%d(FP)\n", offset, offset+4)
+		body += fmt.Sprintf("MOVL bits_lo+0(FP),AX\nMOVL AX,ret_lo+%d(FP)\nMOVL bits_hi+4(FP),AX\nMOVL AX,ret_hi+%d(FP)\n", offset, offset+4)
 	} else {
 		move := map[int]string{1: "MOVB", 2: "MOVW", 4: "MOVL", 8: "MOVQ"}[bytes]
 		body += fmt.Sprintf("%s bits+0(FP),AX\n%s AX,ret+%d(FP)\n", move, move, offset)
@@ -78,8 +78,12 @@ func TestX86OriginalNativeABI0ReturnLayoutActualGoPrior(t *testing.T) {
 				source, declaration, offset := x86NativeIndependentReturnLayout(arch, bytes)
 				goAssemblerOracleOutput(t, arch, source, "", true)
 				x86NativeFixtureASMDecl(t, arch, declaration, source, "")
-				wrong := strings.Replace(source, fmt.Sprintf("ret+%d(FP)", offset), fmt.Sprintf("ret+%d(FP)", offset-1), 1)
-				x86NativeFixtureASMDecl(t, arch, declaration, wrong, fmt.Sprintf("invalid offset ret+%d(FP)", offset-1))
+				result := "ret"
+				if arch == "386" && bytes == 8 {
+					result = "ret_lo"
+				}
+				wrong := strings.Replace(source, fmt.Sprintf("%s+%d(FP)", result, offset), fmt.Sprintf("%s+%d(FP)", result, offset-1), 1)
+				x86NativeFixtureASMDecl(t, arch, declaration, wrong, fmt.Sprintf("invalid offset %s+%d(FP)", result, offset-1))
 				wrong = strings.Replace(source, fmt.Sprintf("$0-%d", offset+bytes), fmt.Sprintf("$0-%d", offset+bytes+1), 1)
 				x86NativeFixtureASMDecl(t, arch, declaration, wrong, "wrong argument size")
 			})
