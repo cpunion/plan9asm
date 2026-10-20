@@ -3,6 +3,8 @@ package plan9asm
 import (
 	"bytes"
 	"errors"
+	"fmt"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -69,9 +71,27 @@ func x86MULXOriginalFormatObject(t *testing.T, source, arch, triple string, rows
 			}
 			return true, false, c.emitMULX(form, instruction)
 		})
-	if strings.Count(ir, "define void @InstructionFormat") != len(rows) ||
-		strings.Count(ir, " = mul i") != len(rows) {
+	if strings.Count(ir, "define void @InstructionFormat") != len(rows) {
 		t.Fatal("original MULX formats lost an externally visible emitter unit")
+	}
+	for index, row := range rows {
+		body := x86StringMemoryFunction(t, ir, fmt.Sprintf("InstructionFormat%d", index))
+		narrow, wide := "i32", "i64"
+		if strings.HasPrefix(row, "MULXQ ") {
+			narrow, wide = "i64", "i128"
+		}
+		// SIB address calculation may also multiply, but its scale is a
+		// constant, not two independently zero-extended numerical inputs.
+		products := regexp.MustCompile(`(?m)^[\t ]*%t[0-9]+ = mul `+wide+` (%t[0-9]+), (%t[0-9]+)$`).FindAllStringSubmatch(body, -1)
+		if len(products) != 1 {
+			t.Fatal("original MULX format lost its one width-correct unsigned product", row, products)
+		}
+		for _, operand := range products[0][1:] {
+			extension := `(?m)^[\t ]*` + regexp.QuoteMeta(operand) + ` = zext ` + narrow + ` %t[0-9]+ to ` + wide + `$`
+			if !regexp.MustCompile(extension).MatchString(body) {
+				t.Fatal("original MULX product lost an exact zero-extended source", row, operand)
+			}
+		}
 	}
 	return ir
 }
