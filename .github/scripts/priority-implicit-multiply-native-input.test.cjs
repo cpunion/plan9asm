@@ -23,9 +23,11 @@ const cliRoots = [
   'TestCompileOneOriginalSDKMathExpScalarShiftAndNumericalSource',
   'TestCompileOneOriginalSDKFieldImplicitMultiplySource',
 ];
+const bigmodRoots = ['TestCompileOneOriginalSDKBigmodNativeListingSource'];
 const groups = [
   ['implicit-multiply-native-inputs', "'.'", nativeRoots],
   ['llvm-original-math-field', 'cmd/plan9asmll', cliRoots],
+  ['llvm-original-bigmod', 'cmd/plan9asmll', bigmodRoots],
 ];
 const blocks = groups.map(([lane, module, roots]) =>
   `          - lane: ${lane}\n            module: ${module}\n            roots:\n` +
@@ -33,9 +35,9 @@ const blocks = groups.map(([lane, module, roots]) =>
 const workflow = fs.readFileSync('.github/workflows/pr40-owned-process-probe.yml', 'utf8');
 
 function checkOwners(text) {
-  assert.deepEqual(groups.map(([, , roots]) => roots.length), [10, 2]);
+  assert.deepEqual(groups.map(([, , roots]) => roots.length), [10, 2, 1]);
   const roots = groups.flatMap(([, , roots]) => roots);
-  assert.equal(new Set(roots).size, 12, 'disjoint exact native and original-file roots');
+  assert.equal(new Set(roots).size, 13, 'disjoint exact native and original-file roots');
   for (let index = 0; index < groups.length; index++) {
     const [lane, , owners] = groups[index];
     const marker = `          - lane: ${lane}\n`;
@@ -62,10 +64,10 @@ test('native multiply priority exactly covers all ten new source state and five-
   assert.equal(new Set(actual).size, 10);
   assert.deepEqual(actual.sort(), [...nativeRoots].sort());
   const original = testRoots('cmd/plan9asmll/x86_sdk_math_shift_go127_test.go');
-  assert.deepEqual(original.sort(), [...cliRoots].sort());
+  assert.deepEqual(original.sort(), [...cliRoots, ...bigmodRoots].sort());
 });
 
-test('native multiply and both original rich CLI files have independent complete five-minute owners', () => {
+test('native multiply and all three original rich CLI files have complete bounded owners', () => {
   const sdk = jobBody(workflow, 'sdk-priority');
   checkOwners(sdk);
   const previous = sdk.slice(sdk.indexOf('          - lane: scalar-fp-byte-spans\n'));
