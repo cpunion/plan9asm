@@ -710,7 +710,17 @@ func TestAMD64ArithmeticCoverage(t *testing.T) {
 	mustLower("MULQ", Instr{Raw: "MULQ CX", Args: []Operand{{Kind: OpReg, Reg: CX}}})
 	mustLower("MULXQ", Instr{Raw: "MULXQ BX, CX, DI", Args: []Operand{{Kind: OpReg, Reg: BX}, {Kind: OpReg, Reg: CX}, {Kind: OpReg, Reg: DI}}})
 	mustLower("MULL", Instr{Raw: "MULL CX", Args: []Operand{{Kind: OpReg, Reg: CX}}})
+	// This direct emitter fragment has no public entry/NUM certificate. Its
+	// trapping DIV still requires an explicit physical instruction target;
+	// missing target must fail without emitting a partial native operation.
+	beforeDivideBytes, beforeDivideTemporary := b.Len(), c.tmp
+	if known, terminated, err := c.lowerArith("DIVL", Instr{Raw: "DIVL CX", Args: []Operand{{Kind: OpReg, Reg: CX}}}); !known || terminated || !errors.Is(err, ErrProbeNeedsContext) || b.Len() != beforeDivideBytes || c.tmp != beforeDivideTemporary {
+		t.Fatal("untargeted direct division acquired a native operation or partial IR", known, terminated, err)
+	}
+	oldDivideTarget := c.targetTriple
+	c.targetTriple = "x86_64-unknown-linux-gnu"
 	mustLower("DIVL", Instr{Raw: "DIVL CX", Args: []Operand{{Kind: OpReg, Reg: CX}}})
+	c.targetTriple = oldDivideTarget
 	mustLower("IMULQ", Instr{Raw: "IMULQ CX", Args: []Operand{{Kind: OpReg, Reg: CX}}})
 	mustLower("IMULQ", Instr{Raw: "IMULQ CX, DX", Args: []Operand{{Kind: OpReg, Reg: CX}, {Kind: OpReg, Reg: DX}}})
 	mustLower("IMUL3Q", Instr{Raw: "IMUL3Q $3, CX, DI", Args: []Operand{{Kind: OpImm, Imm: 3}, {Kind: OpReg, Reg: CX}, {Kind: OpReg, Reg: DI}}})
@@ -727,8 +737,7 @@ func TestAMD64ArithmeticCoverage(t *testing.T) {
 		"call i64 @llvm.bswap.i64",
 		"call i32 @llvm.bswap.i32",
 		"mul i128",
-		"udiv i64",
-		"urem i64",
+		`asm sideeffect "divl ${4:k}", "=&{ax},=&{dx},0,1,r,~{flags}"`,
 		"select i1",
 		"ptrtoint ptr @\"example.global\" to i64",
 		"store i8",
@@ -736,6 +745,11 @@ func TestAMD64ArithmeticCoverage(t *testing.T) {
 	} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("missing %q in output:\n%s", want, out)
+		}
+	}
+	for _, forbidden := range []string{"udiv ", "urem ", "sdiv ", "srem "} {
+		if strings.Contains(out, forbidden) {
+			t.Fatal("native division was replaced by LLVM poison-producing arithmetic", forbidden)
 		}
 	}
 }
