@@ -417,11 +417,42 @@ func TestX86RawAddressOverrideImplicitMaskedStoreAndMonitor(t *testing.T) {
 					t.Fatalf("implicit physical address override borrowed default addressing: %v", err)
 				}
 
-				// The same actual opcode without an address override retains
-				// its prior ordinary lowering. This is object coverage, not
-				// permission to execute an unknown implicit native address.
+				// Keep the complete original default-address byte control.
+				// Removing 0x67 cannot supply an initialized mask/data/DI or
+				// a complete MMX/EMMS region to a bare public entry.
 				control := "TEXT raw(SB),4,$0-0\n" + x86RawDisplacementDirectives(form.code[1:]) + "RET\n"
 				x86LEAActualTargetGoObject(t, target.arch, target.triple, control)
+				if form.name != "MONITOR" {
+					for _, api := range []string{"text", "module", "Go"} {
+						ir, err := x86ScalarFPBitViewAPI(t, control, "func raw()", target.arch, target.triple, api)
+						if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+							t.Fatal("default raw mask store invented its native input owner", api, err)
+						}
+					}
+					// The same physical register/opcode control has genuine LLVM
+					// objects only with independently initialized named inputs.
+					// This does not grant a raw numerical or implicit-address role.
+					source, declaration := x86ImplicitMaskMoveOracleRegisters(target.arch, form.name, "Default", 1, 0)
+					x86LEAActualTargetGoObject(t, target.arch, target.triple, source)
+					for _, api := range []string{"text", "module", "Go"} {
+						ir, err := x86ScalarFPBitViewAPI(t, source, declaration, target.arch, target.triple, api)
+						if err != nil || ir == "" {
+							t.Fatal("initialized default mask-store control lost its original opcode", api, err)
+						}
+						for _, text := range []string{ir, x86DwordProductIROptimize(t, ir)} {
+							body := x86StringMemoryFunction(t, text, "Default")
+							if !strings.Contains(body, "asm sideeffect") || !strings.Contains(body, strings.ToLower(form.name)) ||
+								!strings.Contains(body, "~{memory}") || strings.Contains(body, "call void @llvm.masked.store") ||
+								form.name == "MASKMOVQ" && !strings.Contains(body, "emms") {
+								t.Fatal("default opcode lost its native access or MMX cleanup", api)
+							}
+							for _, level := range []string{"-O0", "-O2"} {
+								x86PackedStringCompileObject(t, llc, target.triple, text, level)
+							}
+						}
+					}
+					return
+				}
 				file, err = Parse(ArchAMD64, control)
 				if err != nil {
 					t.Fatal(err)
