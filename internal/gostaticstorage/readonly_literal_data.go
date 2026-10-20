@@ -137,6 +137,20 @@ func ReadonlyLiteralDataInitializers(observation *SDKASMDataObservation) ([]Read
 			}
 			images = append(images, image)
 		}
+		metadata, err := readonlyGeneratedMetadata(source, observation.Target)
+		if err != nil {
+			return nil, err
+		}
+		for _, definition := range metadata {
+			key := identity{definition.Namespace, definition.Index}
+			actual, present := definitions[key]
+			first, second := actual, definition
+			first.DataOffset, second.DataOffset = 0, 0
+			if !present || used[key] || !reflect.DeepEqual(first, second) {
+				return nil, contextError("readonly metadata lost its exact definition or overlaps an ordinary DATA layout")
+			}
+			used[key] = true // Inventory only: metadata never produces an image.
+		}
 		for _, definition := range member.Definitions {
 			if definition.Name != "" && !used[identity{definition.Namespace, definition.Index}] {
 				return nil, contextError("readonly literal DATA omits a named definition from the complete source")
