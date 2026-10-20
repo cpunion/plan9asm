@@ -71,7 +71,10 @@ static int observe(Kernel run,const uint8_t *p,int fault,
     int status=0; pid_t waited;
     do {waited=waitpid(child,&status,0);} while(waited<0 && errno==EINTR);
     if(waited!=child) return 1;
-    return fault ? !numerical_fault_status(status) : !(WIFEXITED(status)&&WEXITSTATUS(status)==0);
+    int rejected=fault ? !numerical_fault_status(status) : !(WIFEXITED(status)&&WEXITSTATUS(status)==0);
+    if(rejected) fprintf(stderr,"permute128 tuple input=%p expected-fault=%d owned=%p+%zu status=%#x\n",
+                         (const void *)p,fault,(void *)protectedPage,protectedBytes,status);
+    return rejected;
 }
 int main(void) {
     long page=sysconf(_SC_PAGESIZE); if(page<64) return 1;
@@ -81,7 +84,9 @@ int main(void) {
     const Kernel rows[]={DeadPermute0,DeadPermute1};
     int failed=0;
     for(size_t i=0;i<sizeof(rows)/sizeof(rows[0]);i++) {
-        failed|=observe(rows[i],0,1,0,1);
+        // Legalization may read either half first. Own exactly the m256
+        // NULL tuple, not a single byte, a whole page or a C-side read.
+        failed|=observe(rows[i],0,1,0,32);
         failed|=observe(rows[i],region+1,0,region+page,(size_t)page);
         failed|=observe(rows[i],region+page-32,0,region+page,(size_t)page);
         failed|=observe(rows[i],region+page-31,1,region+page,(size_t)page);
@@ -94,7 +99,10 @@ int main(void) {
 `
 
 func TestX86Permute128FaultObserverPolicy(t *testing.T) {
-	for _, control := range []string{"original", "missing-observer", "unowned-signal", "unchecked-core", "missing-EINTR"} {
+	for _, control := range []string{
+		"original", "missing-observer", "unowned-signal", "unchecked-core",
+		"missing-EINTR", "narrow-null-span", "oversized-null-span",
+	} {
 		t.Run(control, func(t *testing.T) {
 			driver := x86Permute128FaultDriver
 			switch control {
@@ -106,6 +114,10 @@ func TestX86Permute128FaultObserverPolicy(t *testing.T) {
 				driver = strings.Replace(driver, "if(setrlimit(RLIMIT_CORE,&no_core)) _exit(120);", "setrlimit(RLIMIT_CORE,&no_core);", 1)
 			case "missing-EINTR":
 				driver = strings.Replace(driver, "while(waited<0 && errno==EINTR)", "while(0)", 1)
+			case "narrow-null-span":
+				driver = strings.Replace(driver, "observe(rows[i],0,1,0,32)", "observe(rows[i],0,1,0,1)", 1)
+			case "oversized-null-span":
+				driver = strings.Replace(driver, "observe(rows[i],0,1,0,32)", "observe(rows[i],0,1,0,33)", 1)
 			}
 			if control != "original" && driver == x86Permute128FaultDriver {
 				t.Fatal("fault policy negative did not change its actual driver")
@@ -115,6 +127,7 @@ func TestX86Permute128FaultObserverPolicy(t *testing.T) {
 				setup < strings.Index(driver, "run(p);") &&
 				strings.Contains(driver, "while(waited<0 && errno==EINTR)") &&
 				strings.Contains(driver, "if(waited!=child) return 1;") &&
+				strings.Count(driver, "observe(rows[i],0,1,0,32)") == 1 &&
 				strings.Contains(driver, "numerical_fault_status(status)") && !strings.Contains(driver, "WIFSIGNALED")
 			if valid != (control == "original") {
 				t.Fatal("fault observer lost ownership, core-limit or wait contract", control)
