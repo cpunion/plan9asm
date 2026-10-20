@@ -5504,8 +5504,9 @@ encoding:
 		}
 	}
 
-	// All vector forms are VEX.128/256.66.0F3A.W0. Go's 386 frontend
-	// cannot represent their four Plan 9 operands and rejects them.
+	// All vector forms are VEX.128/256.66.0F3A. VPBLENDD is W0;
+	// VBLENDPS/PD and VPBLENDW are WIG. Go386's named arity limit does
+	// not invalidate these independently decoded low-bank physical forms.
 	if len(code) < i+5 || code[i] != 0xc4 || code[i+1]&0x1f != 3 {
 		return Instr{}, 0, false, nil
 	}
@@ -5522,15 +5523,12 @@ encoding:
 	if addressOverride {
 		return Instr{}, 0, true, fmt.Errorf("address-size override is not source-layout safe")
 	}
-	if mode == 32 {
-		return Instr{}, 0, true, fmt.Errorf("386 %s exceeds the Go assembler frontend's operand limit", op)
-	}
 	vex0, vexBits := code[i+1], code[i+2]
 	if vexBits&3 != 1 {
 		return Instr{}, 0, true, fmt.Errorf("VEX.pp must be 66")
 	}
-	if vexBits&0x80 != 0 {
-		return Instr{}, 0, true, fmt.Errorf("VEX.W must be zero")
+	if vexBits&0x80 != 0 && op == "VPBLENDD" {
+		return Instr{}, 0, true, fmt.Errorf("VPBLENDD VEX.W must be zero")
 	}
 	vectorName := "X"
 	if vexBits&0x04 != 0 {
@@ -5539,6 +5537,12 @@ encoding:
 	rExt := int(^vex0>>7) & 1
 	xExt := int(^vex0>>6) & 1
 	bExt := int(^vex0>>5) & 1
+	if mode == 32 {
+		if rExt != 0 || xExt != 0 {
+			return Instr{}, 0, true, fmt.Errorf("legacy LES encoding is not a 32-bit VEX instruction")
+		}
+		bExt = 0 // The physical high B and vvvv bits are ignored outside 64-bit mode.
+	}
 	modRMIndex := i + 4
 	modRM := code[modRMIndex]
 	first, consumed, decodeErr := decodedX86VEXVectorRMOperand(code[modRMIndex:], mode, bExt, xExt, segment, vectorName)
@@ -5551,13 +5555,15 @@ encoding:
 	}
 	immediate := Operand{Kind: OpImm, Imm: int64(code[immediateIndex])}
 	secondNumber := int(^vexBits>>3) & 15
+	if mode == 32 {
+		secondNumber &= 7
+	}
 	destinationNumber := int(modRM>>3&7) + rExt*8
 	second := Operand{Kind: OpReg, Reg: Reg(fmt.Sprintf("%s%d", vectorName, secondNumber))}
 	destination := Operand{Kind: OpReg, Reg: Reg(fmt.Sprintf("%s%d", vectorName, destinationNumber))}
 	return Instr{
-		Op:   op,
-		Args: []Operand{immediate, first, second, destination},
-		Raw:  fmt.Sprintf("%s %s, %s, %s, %s", op, immediate.String(), first.String(), second.String(), destination.String()),
+		Op: op, Args: []Operand{immediate, first, second, destination}, x86Encoded: true,
+		Raw: fmt.Sprintf("%s %s, %s, %s, %s", op, immediate.String(), first.String(), second.String(), destination.String()),
 	}, immediateIndex + 1, true, nil
 }
 

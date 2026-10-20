@@ -10,23 +10,26 @@ import (
 // V-prefixed instructions use _yvblendpd and therefore have VEX X/Y forms
 // only (no EVEX Z, mask, zeroing, broadcast, or SAE forms).
 func (c *amd64Ctx) lowerImmediatePackedBlend(op Op, ins Instr) (ok bool, terminated bool, err error) {
-	rawOp := strings.ToUpper(string(op))
-	baseOp := rawOp
-	suffix := ""
-	if dot := strings.IndexByte(rawOp, '.'); dot >= 0 {
-		baseOp, suffix = rawOp[:dot], rawOp[dot+1:]
+	f, known, err := x86ImmediateBlendProperties(op, ins, c.goarch)
+	if !known || err != nil {
+		return known, false, err
 	}
-	laneBits, vector, recognized := amd64ImmediatePackedBlendProperties(baseOp)
-	if !recognized {
-		return false, false, nil
+	if f.legacy && f.memory {
+		return true, false, c.lowerLegacyImmediateBlendMemory(ins, f)
 	}
-	if suffix != "" {
-		return true, false, fmt.Errorf("%s %s has a suffix absent from its Go 1.27 optab: %q", c.goarch, baseOp, ins.Raw)
+	first, err := c.loadX86PackedShiftBytes(ins.Args[f.source], f.byteWidth, true)
+	if err != nil {
+		return true, false, err
 	}
-	if !vector {
-		return c.lowerLegacyImmediatePackedBlend(baseOp, laneBits, ins)
+	base, err := c.loadPackedCompareBytes(ins.Args[f.base], f.byteWidth)
+	if err != nil {
+		return true, false, err
 	}
-	return c.lowerVectorImmediatePackedBlend(baseOp, laneBits, ins)
+	result := c.emitImmediatePackedBlend(f.byteWidth, f.laneBytes*8, f.selector, first, base)
+	if f.legacy {
+		return true, false, c.storeLegacyXViews(ins.Args[f.destination].Reg, result)
+	}
+	return true, false, c.storePackedMoveOperand(ins.Args[f.destination], f.byteWidth, result)
 }
 
 func amd64ImmediatePackedBlendProperties(op string) (laneBits int, vector, ok bool) {
@@ -48,75 +51,34 @@ func amd64ImmediatePackedBlendProperties(op string) (laneBits int, vector, ok bo
 	}
 }
 
-func (c *amd64Ctx) lowerLegacyImmediatePackedBlend(baseOp string, laneBits int, ins Instr) (bool, bool, error) {
-	if len(ins.Args) != 3 {
-		return true, false, fmt.Errorf("%s %s expects $u8, X/m128, X: %q", c.goarch, baseOp, ins.Raw)
+// Legacy Type4 m128 retains its original alignment/fault behavior, including
+// imm8=0 and dead results. Logical FP bytes are not native aligned backing.
+func (c *amd64Ctx) lowerLegacyImmediateBlendMemory(ins Instr, f x86ImmediateBlendForm) error {
+	source := ins.Args[f.source]
+	if !x86ScalarFloatIntegerNativeTarget(c.goarch, c.targetTriple) || source.Kind == OpFP {
+		return fmt.Errorf("%w: legacy immediate blend needs original native m128 storage", ErrProbeNeedsContext)
 	}
-	imm, ok := amd64UnsignedImm8(ins.Args[0])
-	if !ok {
-		return true, false, fmt.Errorf("%s %s immediate is outside Go 1.27's unsigned-imm8 class: %q", c.goarch, baseOp, ins.Raw)
-	}
-	if ins.Args[2].Kind != OpReg || !c.isGoLegacyXReg(ins.Args[2].Reg) {
-		return true, false, fmt.Errorf("%s %s destination is outside Go 1.27's legacy X class: %q", c.goarch, baseOp, ins.Raw)
-	}
-	if ins.Args[1].Kind == OpReg {
-		if !c.isGoLegacyXReg(ins.Args[1].Reg) {
-			return true, false, fmt.Errorf("%s %s source is outside Go 1.27's legacy X class: %q", c.goarch, baseOp, ins.Raw)
-		}
-	} else if !isAMD64MemoryOperand(ins.Args[1]) {
-		return true, false, fmt.Errorf("%s %s source must be X or memory: %q", c.goarch, baseOp, ins.Raw)
-	}
-	firstBytes, err := c.loadPackedCompareBytes(ins.Args[1], 16)
+	pointer, pointerType, _, err := c.packedVectorMemoryPointer(source)
 	if err != nil {
-		return true, false, err
+		return err
 	}
-	secondBytes, err := c.loadX(ins.Args[2].Reg)
+	segment := ""
+	if pointerType == "ptr addrspace(256)" {
+		segment = "%gs:"
+	} else if pointerType == "ptr addrspace(257)" {
+		segment = "%fs:"
+	}
+	base, err := c.loadPackedCompareBytes(ins.Args[f.base], 16)
 	if err != nil {
-		return true, false, err
+		return err
 	}
-	result := c.emitImmediatePackedBlend(16, laneBits, imm, firstBytes, secondBytes)
-	return true, false, c.storeX(ins.Args[2].Reg, result)
-}
-
-func (c *amd64Ctx) lowerVectorImmediatePackedBlend(baseOp string, laneBits int, ins Instr) (bool, bool, error) {
-	if c.goarch != "amd64" {
-		return true, false, fmt.Errorf("386 %s exceeds the Go assembler frontend's three-operand limit: %q", baseOp, ins.Raw)
-	}
-	if len(ins.Args) != 4 {
-		return true, false, fmt.Errorf("amd64 %s expects $u8, X/Y memory-or-register, X/Y register, X/Y destination: %q", baseOp, ins.Raw)
-	}
-	imm, ok := amd64UnsignedImm8(ins.Args[0])
-	if !ok {
-		return true, false, fmt.Errorf("amd64 %s immediate is outside Go 1.27's unsigned-imm8 class: %q", baseOp, ins.Raw)
-	}
-	dstArg := ins.Args[3]
-	if dstArg.Kind != OpReg {
-		return true, false, fmt.Errorf("amd64 %s expects a vector-register destination: %q", baseOp, ins.Raw)
-	}
-	byteWidth := amd64VectorByteWidth(dstArg.Reg)
-	if byteWidth != 16 && byteWidth != 32 {
-		return true, false, fmt.Errorf("amd64 %s expects an X or Y destination: %q", baseOp, ins.Raw)
-	}
-	if !amd64VEXVectorRegister(dstArg, byteWidth) || !amd64VEXVectorRegister(ins.Args[2], byteWidth) {
-		return true, false, fmt.Errorf("amd64 %s second source and destination must be same-width VEX X/Y registers: %q", baseOp, ins.Raw)
-	}
-	if ins.Args[1].Kind == OpReg {
-		if !amd64VEXVectorRegister(ins.Args[1], byteWidth) {
-			return true, false, fmt.Errorf("amd64 %s first source must match its destination's VEX width: %q", baseOp, ins.Raw)
-		}
-	} else if !isAMD64MemoryOperand(ins.Args[1]) {
-		return true, false, fmt.Errorf("amd64 %s first source must be a vector register or memory: %q", baseOp, ins.Raw)
-	}
-	firstBytes, err := c.loadPackedCompareBytes(ins.Args[1], byteWidth)
-	if err != nil {
-		return true, false, err
-	}
-	secondBytes, err := c.loadPackedCompareBytes(ins.Args[2], byteWidth)
-	if err != nil {
-		return true, false, err
-	}
-	result := c.emitImmediatePackedBlend(byteWidth, laneBits, imm, firstBytes, secondBytes)
-	return true, false, c.storeVectorBytes(dstArg.Reg, byteWidth, result)
+	carrier, result, bytes := c.newTmp(), c.newTmp(), c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = bitcast <16 x i8> %s to <4 x float>\n", carrier, base)
+	assembly := fmt.Sprintf("%s $$%d, %s($2), $0", strings.ToLower(string(ins.Op)), f.selector, segment)
+	fmt.Fprintf(c.b, "  %%%s = call <4 x float> asm sideeffect %q, %q(<4 x float> %%%s, %s %s)\n",
+		result, assembly, "=x,0,r,~{memory}", carrier, pointerType, pointer)
+	fmt.Fprintf(c.b, "  %%%s = bitcast <4 x float> %%%s to <16 x i8>\n", bytes, result)
+	return c.storeLegacyXViews(ins.Args[f.destination].Reg, "%"+bytes)
 }
 
 // emitImmediatePackedBlend selects the first (r/m) source when the immediate
