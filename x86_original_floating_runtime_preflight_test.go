@@ -21,6 +21,8 @@ func x86OriginalFloatingRuntimeRequireCPU(t *testing.T, profile, clang, triple s
 		required = 2
 	case "unsigned-scalar-integer":
 		required = 3
+	case "packed-abs-sign":
+		required = 4
 	default:
 		t.Fatal("unknown original floating execution profile", profile)
 	}
@@ -44,13 +46,17 @@ func x86OriginalFloatingRuntimeRequireCPU(t *testing.T, profile, clang, triple s
 
 // Scalar EVEX conversions require F, not packed narrow VL, DQ or BW. The
 // complete FMA owner additionally executes VEX FMA and narrow packed EVEX.
+// ABS/sign needs F/VL plus its independently observed legacy SSSE3/AVX2.
 // Keep this predicate portable so independent negative rows never execute ISA.
 const x86OriginalFloatingRuntimeStateC = `#include <stdint.h>
 static int original_floating_required_state(unsigned profile,unsigned sse2,unsigned avx,
                                             unsigned osxsave,unsigned f,unsigned vl,
                                             unsigned fma,uint64_t xcr0) {
     if (!sse2 || !avx || !osxsave || !f || (xcr0&0xe6)!=0xe6) return 0;
-    return profile==1 || profile==3 || (profile==2 && vl && fma);
+    return profile==1 || profile==3 || (profile==2 && vl && fma) || (profile==4 && vl);
+}
+static int original_packed_abs_sign_required_legacy(unsigned ssse3,unsigned avx2) {
+    return ssse3 && avx2;
 }
 `
 
@@ -107,15 +113,36 @@ static int original_unsigned_scalar_integer(void) {
            narrow[0]==0x4f7fffffu && narrow[1]==0x5f800000u;
 }
 
+__attribute__((target("ssse3,avx2,avx512f,avx512vl")))
+static int original_packed_abs_sign(void) {
+    uint32_t source[16] __attribute__((aligned(64)))={0};
+    uint32_t legacy[4],vex[8],masked[8];
+    uint64_t wide[8];
+    unsigned mask=1;
+    __asm__ volatile("vpxor %%ymm0,%%ymm0,%%ymm0; vpabsb %%xmm0,%%xmm0; "
+                     "psignw %4,%%xmm0; vmovdqu %%xmm0,%0; "
+                     "vpsignd %%ymm0,%%ymm0,%%ymm0; vmovdqu %%ymm0,%1; "
+                     "kmovw %5,%%k1; vpxor %%ymm1,%%ymm1,%%ymm1; "
+                     "vpabsd %4%{1to8%},%%ymm1%{%%k1%}; vmovdqu %%ymm1,%2; "
+                     "vpxord %%zmm0,%%zmm0,%%zmm0; "
+                     "vpabsq %%zmm0,%%zmm1%{%%k1%}%{z%}; vmovdqu64 %%zmm1,%3"
+                     : "=m"(legacy),"=m"(vex),"=m"(masked),"=m"(wide)
+                     : "m"(source),"r"(mask) : "zmm0","zmm1","k1","memory");
+    for (unsigned i=0;i<4;i++) if (legacy[i]) return 0;
+    for (unsigned i=0;i<8;i++) if (vex[i] || masked[i] || wide[i]) return 0;
+    return 1;
+}
+
 int main(void) {
 #if !defined(_WIN32)
     struct rlimit no_core={0,0};
     if (setrlimit(RLIMIT_CORE,&no_core)) return 77;
 #endif
-    unsigned a,b,c,d,sse2=0,avx=0,osxsave=0,f=0,vl=0,fma=0;
+    unsigned a,b,c,d,sse2=0,avx=0,osxsave=0,f=0,vl=0,fma=0,ssse3=0,avx2=0;
     uint64_t xcr0=0;
     if (__get_cpuid(1,&a,&b,&c,&d)) {
         sse2=(d>>26)&1; avx=(c>>28)&1; osxsave=(c>>27)&1; fma=(c>>12)&1;
+        ssse3=(c>>9)&1;
         if (osxsave) {
             unsigned low,high;
             __asm__ volatile("xgetbv" : "=a"(low),"=d"(high) : "c"(0));
@@ -124,15 +151,18 @@ int main(void) {
     }
     if (__get_cpuid_count(7,0,&a,&b,&c,&d)) {
         f=(b>>16)&1; vl=(b>>31)&1;
+        avx2=(b>>5)&1;
     }
     unsigned profile=REQUIRED_PROFILE;
-    printf("original-floating profile=%u SSE2=%u AVX=%u OSXSAVE=%u AVX512F=%u AVX512VL=%u FMA=%u XCR0=%llx\n",
-           profile,sse2,avx,osxsave,f,vl,fma,(unsigned long long)xcr0);
+    printf("original-floating profile=%u SSE2=%u AVX=%u OSXSAVE=%u AVX512F=%u AVX512VL=%u FMA=%u SSSE3=%u AVX2=%u XCR0=%llx\n",
+           profile,sse2,avx,osxsave,f,vl,fma,ssse3,avx2,(unsigned long long)xcr0);
     fflush(stdout);
     if (!original_floating_required_state(profile,sse2,avx,osxsave,f,vl,fma,xcr0)) return 78;
+    if (profile==4 && !original_packed_abs_sign_required_legacy(ssse3,avx2)) return 78;
     if (profile==1 && !original_scalar_precision()) return 79;
     if (profile==2 && !original_fma_caller()) return 80;
     if (profile==3 && !original_unsigned_scalar_integer()) return 81;
+    if (profile==4 && !original_packed_abs_sign()) return 82;
     puts("ORIGINAL_FLOATING_RUNTIME_CPU_OPCODES_OK");
     return 0;
 }
