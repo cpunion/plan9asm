@@ -96,9 +96,14 @@ func x86NumericalVEXGPRow(stem, suffix, input string) string {
 
 func x86NumericalVEXGPRequireMC(t *testing.T, code []byte, mode, instructions int) {
 	t.Helper()
+	x86NumericalNativeRequireMC(t, code, mode, instructions, "+bmi,+bmi2")
+}
+
+func x86NumericalNativeRequireMC(t *testing.T, code []byte, mode, instructions int, features string) {
+	t.Helper()
 	mc := findLLVM22Tool("llvm-mc")
 	if mc == "" {
-		t.Fatal("independent complete VEX GP boundary prior requires LLVM22 llvm-mc")
+		t.Fatal("independent complete native boundary prior requires LLVM22 llvm-mc")
 	}
 	triple := "x86_64-unknown-linux-gnu"
 	if mode == 32 {
@@ -110,7 +115,7 @@ func x86NumericalVEXGPRequireMC(t *testing.T, code []byte, mode, instructions in
 	}
 	input.WriteByte('\n')
 	stage, cancel := runtimeOracleStageContext(t)
-	command := exec.CommandContext(stage, mc, "--disassemble", "--triple="+triple, "--mattr=+bmi,+bmi2")
+	command := exec.CommandContext(stage, mc, "--disassemble", "--triple="+triple, "--mattr="+features)
 	command.Stdin = strings.NewReader(input.String())
 	output, err := runtimeOracleCombinedOutput(stage, command)
 	cancel()
