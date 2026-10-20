@@ -185,5 +185,6 @@ int main(void) {
   return 0;
 }
 `
+	x86OriginalFloatingRuntimeRequireCPU(t, "scalar-precision", clang, triple, runPrefix)
 	compileAndRunRuntimeTestForTarget(t, llc, clang, "scalar_precision_convert", triple, ll, mainC, runPrefix)
 }
