@@ -5,14 +5,19 @@ import (
 	"strings"
 )
 
+type x86UnsignedIntegerFloatForm struct {
+	x86SignedIntegerFloatForm
+	nativeSource Operand
+}
+
 // All four unsigned names have one EVEX three-operand row. Reuse the signed
 // family's operand axes, including mode32 WIG, without registering its caller
 // or raw-source permissions. The original Op and physical source stay intact.
-func x86UnsignedIntegerFloatProperties(ins Instr, arch string) (x86SignedIntegerFloatForm, bool, error) {
+func x86UnsignedIntegerFloatProperties(ins Instr, arch string) (x86UnsignedIntegerFloatForm, bool, error) {
 	base, _, _ := strings.Cut(strings.ToUpper(string(ins.Op)), ".")
 	spec, known := amd64ScalarIntegerFloatOps[base]
 	if !known {
-		return x86SignedIntegerFloatForm{}, false, nil
+		return x86UnsignedIntegerFloatForm{}, false, nil
 	}
 	form, _, err := x86IntegerScalarFloatOperandProperties(ins, arch, x86SignedIntegerFloatSpec{
 		sourceBits: spec.sourceBits, resultBits: spec.resultBits, rounding: spec.rounding,
@@ -20,7 +25,24 @@ func x86UnsignedIntegerFloatProperties(ins Instr, arch string) (x86SignedInteger
 	if err == nil {
 		err = x86NamedMultiplyMemoryError(ins.Args[0], arch)
 	}
-	return form, true, err
+	result := x86UnsignedIntegerFloatForm{x86SignedIntegerFloatForm: form}
+	if err != nil {
+		return result, true, err
+	}
+	result.nativeSource = ins.Args[0]
+	if arch == "386" && spec.sourceBits == 64 && x86ResultNamedPredicateInstruction(ins) &&
+		result.nativeSource.Kind == OpMem && result.nativeSource.Mem.Sym == "" && result.nativeSource.Mem.Base != "" {
+		// Go's Q row compresses with N8 even in mode32, where hardware
+		// ignores W and scales the encoded disp8 by N4. Preserve the actual
+		// producer address, not the written offset, in a local projection.
+		// A disp32, an absolute/symbolic address and a logical FP field do
+		// not acquire that register-addressed compressed-displacement role.
+		offset := int64(int32(result.nativeSource.Mem.Off))
+		if offset%8 == 0 && offset/8 >= -128 && offset/8 <= 127 {
+			result.nativeSource.Mem.Off = offset / 2
+		}
+	}
+	return result, true, nil
 }
 
 func x86TypedUnsignedIntegerFloatByteEffect(op Op, ins Instr, arch string) (x86TypedByteEffect, bool, error) {
@@ -37,7 +59,7 @@ func x86TypedUnsignedIntegerFloatByteEffect(op Op, ins Instr, arch string) (x86T
 		return x86TypedByteEffect{}, known, err
 	}
 	return x86TypedByteEffect{requiresResultProof: true, operands: []x86TypedByteOperand{
-		{index: 0, operand: ins.Args[0], width: int64(form.sourceBits / 8), read: true},
+		{index: 0, operand: form.nativeSource, width: int64(form.sourceBits / 8), read: true},
 		{index: form.upper, operand: ins.Args[form.upper], width: 16, read: true},
 		{index: form.destination, operand: ins.Args[form.destination], width: 16, write: true},
 	}}, true, nil
@@ -48,7 +70,7 @@ func x86ResultUnsignedIntegerFloatStep(ins Instr, state *x86ResultState, owned [
 	if !known || err != nil {
 		return false, known
 	}
-	return x86ResultIntegerScalarFloatInputs(ins, form, state, owned, arch, nativeRead), true
+	return x86ResultIntegerScalarFloatInputs(ins, form.x86SignedIntegerFloatForm, state, owned, arch, nativeRead), true
 }
 
 func (c *amd64Ctx) lowerUnsignedIntegerScalarFloat(op Op, ins Instr) (bool, bool, error) {
@@ -80,9 +102,9 @@ func (c *amd64Ctx) lowerUnsignedIntegerScalarFloat(op Op, ins Instr) (bool, bool
 // One complete native opcode owns MXCSR rounding/precision, embedded SAE and
 // exact m32/m64 access, even for dead results. Integer FP is gathered through
 // its existing exact-bit consumer, never presented as a native stack address.
-func (c *amd64Ctx) emitNativeUnsignedIntegerScalarFloat(ins Instr, form x86SignedIntegerFloatForm) error {
+func (c *amd64Ctx) emitNativeUnsignedIntegerScalarFloat(ins Instr, form x86UnsignedIntegerFloatForm) error {
 	const carrier = "<4 x float>"
-	source := ins.Args[0]
+	source := form.nativeSource
 	width := amd64IntegerTypeForBits(form.sourceBits)
 	var value, inputType, constraint, operand string
 	var err error
