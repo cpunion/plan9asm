@@ -7,15 +7,55 @@ import (
 	"go/token"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 )
 
-// Mechanical extraction of the old driver boundary: it currently passes the
-// original production IR through unchanged. The independent tests below expose
-// that this does not yet establish the advertised portable mathematical role.
+// This private mathematical driver accepts only the complete generated kernels,
+// including every original input/output/FLAGS transport. It removes ISA choices,
+// never operations. The separate original-native/alignment owners are unchanged.
 func x86PackedAbsSignPortableIR(source, ir, arch string) (string, error) {
-	return ir, nil
+	if arch != "386" && arch != "amd64" {
+		return "", fmt.Errorf("portable ABS/sign source has an unknown x86 mode")
+	}
+	file, err := Parse(ArchAMD64, source)
+	if err != nil || len(file.Funcs) == 0 {
+		return "", fmt.Errorf("portable ABS/sign source has no complete kernels: %v", err)
+	}
+	rows := x86PackedAbsSignOracleRows()
+	profiles := make(map[string]string)
+	var expected strings.Builder
+	for _, function := range file.Funcs {
+		name := strings.TrimPrefix(function.Sym, "·")
+		index, err := strconv.Atoi(strings.TrimPrefix(name, "AbsSign"))
+		if err != nil || index < 0 || index >= len(rows) || name != fmt.Sprint("AbsSign", index) {
+			return "", fmt.Errorf("portable ABS/sign source has an unobserved kernel: %s", name)
+		}
+		if _, duplicate := profiles[name]; duplicate {
+			return "", fmt.Errorf("portable ABS/sign source repeats a kernel: %s", name)
+		}
+		row := rows[index]
+		body, _ := x86PackedAbsSignInitializedSource(index, row, arch)
+		if row.legacy && row.memory {
+			base := "AX"
+			if row.sign {
+				base = "BX"
+			}
+			// These fixtures use only banks 0..2. Their existing, independently
+			// checked legacy-memory instrumentation selects unused X3 exactly.
+			replacement := fmt.Sprintf("VMOVDQU 0(%s),X3\n%s X3,X2", base, row.op)
+			body = strings.Replace(body, row.instruction(), replacement, 1)
+		}
+		expected.WriteString(body)
+		profiles[name] = inferFuncTargetFeaturesForGOARCH(ArchAMD64, arch, function)
+	}
+	if source != expected.String() {
+		return "", fmt.Errorf("portable ABS/sign source changed its complete mathematical/transport effects")
+	}
+	// Reuse the existing exact group/reference and inert-declaration observer.
+	// It rejects actual native calls/assembly instead of deleting their effects.
+	return x86PackedShiftPortableFeatureProjection(ir, profiles)
 }
 
 func x86PackedAbsSignPortableFixture(t *testing.T, start, end int, arch string) (string, string) {
