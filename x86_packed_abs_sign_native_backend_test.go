@@ -25,6 +25,16 @@ func x86PackedAbsSignRuntimeOpcodeWithinProfile(op string, code []byte) bool {
 		if len(code) < 6 || code[3]>>5&3 == 3 {
 			return false
 		}
+		// SDM Table 5-19 names all eight VPCMP predicates. Objdump may
+		// print the pseudo-op instead of the identical D/Q instruction plus
+		// its immediate. Byte/word aliases still require independent BW.
+		for _, suffix := range []string{"d", "q", "ud", "uq"} {
+			for _, predicate := range []string{"eq", "lt", "le", "false", "neq", "nlt", "nle", "true"} {
+				if op == "vpcmp"+predicate+suffix {
+					op = "vpcmp" + suffix
+				}
+			}
+		}
 		for _, member := range strings.Fields(`
 vpabsd vpabsq vpaddd vpaddq vpsubd vpsubq
 vpcmpd vpcmpq vpcmpud vpcmpuq vpcmpeqd vpcmpeqq vpcmpgtd vpcmpgtq
@@ -51,6 +61,7 @@ vpsllw vpslld vpsllq vpsrlw vpsrld vpsrlq vpsraw vpsrad vpslldq vpsrldq
 vpsllvd vpsllvq vpsrlvd vpsrlvq vpsravd
 vpbroadcastb vpbroadcastw vpbroadcastd vpbroadcastq vbroadcastss vbroadcastsd
 vextracti128 vextractf128 vinserti128 vinsertf128
+vpextrb vpextrw vpextrd vpextrq vpinsrb vpinsrw vpinsrd vpinsrq
 vpunpcklbw vpunpcklwd vpunpckldq vpunpcklqdq vpunpckhbw vpunpckhwd vpunpckhdq vpunpckhqdq
 vpmovmskb vpmovzxbw vpmovzxbd vpmovzxbq vpmovzxwd vpmovzxwq vpmovzxdq
 vpmovsxbw vpmovsxbd vpmovsxbq vpmovsxwd vpmovsxwq vpmovsxdq
@@ -62,6 +73,32 @@ vpacksswb vpackssdw vpackuswb vpackusdw vptest`) {
 		return false
 	}
 	return !strings.HasPrefix(op, "v")
+}
+
+func TestX86PackedAbsSignRuntimeISAProfileAliases(t *testing.T) {
+	// These are profile field projections, not valid-encoding certificates.
+	// The complete actual three-target object matrix below independently
+	// observes both full bytes and each mnemonic through LLVM22 objdump.
+	evex := []byte{0x62, 0xf3, 0x75, 0x28, 0x1f, 0xc2, 1}
+	for _, suffix := range []string{"d", "q", "ud", "uq", "b", "w", "ub", "uw"} {
+		for _, predicate := range []string{"eq", "lt", "le", "false", "neq", "nlt", "nle", "true"} {
+			op := "vpcmp" + predicate + suffix
+			t.Run(op, func(t *testing.T) {
+				want := suffix == "d" || suffix == "q" || suffix == "ud" || suffix == "uq"
+				if x86PackedAbsSignRuntimeOpcodeWithinProfile(op, evex) != want {
+					t.Fatal("VPCMP predicate alias changed its D/Q F/VL versus byte/word BW requirement", op)
+				}
+			})
+		}
+	}
+	for _, op := range []string{"vpextrb", "vpextrw", "vpextrd", "vpextrq", "vpinsrb", "vpinsrw", "vpinsrd", "vpinsrq"} {
+		t.Run(op, func(t *testing.T) {
+			if !x86PackedAbsSignRuntimeOpcodeWithinProfile(op, []byte{0xc4, 0xe3, 0x79, 0x16, 0xc8, 1}) ||
+				x86PackedAbsSignRuntimeOpcodeWithinProfile(op, evex) {
+				t.Fatal("VEX GP lane transport borrowed its separate EVEX BW/DQ encoding", op)
+			}
+		})
+	}
 }
 
 func TestX86PackedAbsSignOriginalRuntimeActualBackendISA(t *testing.T) {
