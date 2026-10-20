@@ -211,10 +211,6 @@ func TestX86RawMinimumPositionGoEncoderForms(t *testing.T) {
 }
 
 func TestX86MinimumPositionGoAccepted386HighNamedRegisters(t *testing.T) {
-	llc := findLLVM22Tool("llc")
-	if llc == "" {
-		t.Fatal("LLVM 22 llc not found")
-	}
 	var source strings.Builder
 	source.WriteString("TEXT minpos(SB),4,$0-0\n")
 	for reg := 8; reg < 16; reg++ {
@@ -223,7 +219,7 @@ func TestX86MinimumPositionGoAccepted386HighNamedRegisters(t *testing.T) {
 	source.WriteString("RET\n")
 	requireX86GoAssemblerResult(t, "386", source.String(), true)
 	for _, triple := range []string{"i386-unknown-linux-gnu", "i686-pc-windows-msvc"} {
-		ir := x86UnboundBlendMinposFormatObject(t, source.String(), "386", triple)
-		compileLLVMToObject(t, llc, triple, "named-minpos.ll", "named-minpos.o", ir)
+		x86UnboundVoidFormatSources(t, source.String(), "386", triple)
 	}
+	t.Log("24 Go-accepted high named rows retain original Go objects and public Context, not physical mode32 format objects; complete initialized low-bank objects have a separate five-target owner")
 }
