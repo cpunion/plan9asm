@@ -214,6 +214,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		if x86RawIFMASource(ins, arch) {
 			continue // Exact integer FMA retains its separate accumulator, mask and native-read obligations.
 		}
+		if x86RawFMA3Source(ins, arch) {
+			continue // Whole producer replay and native FMA preserve all three input obligations.
+		}
 		if x86RawAESSource(ins, arch) {
 			continue // Exact integer-crypto data keeps every source and state-byte obligation.
 		}
