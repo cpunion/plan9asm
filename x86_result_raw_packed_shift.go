@@ -1,5 +1,7 @@
 package plan9asm
 
+import "reflect"
+
 // Zero is absent physical identity, never an assertion that an instruction was
 // VEX. Low-bank unmasked X/Y operands do not distinguish VEX from EVEX.
 type x86RawPackedShiftEncoding uint8
@@ -25,11 +27,18 @@ func x86PackedShiftRawIdentity(ins Instr, arch string) x86RawPackedShiftIdentity
 	return x86RawPackedShiftIdentity{arch, ins.x86PackedShiftEncoding, ins.x86PackedShiftW}
 }
 
-func x86RawPackedShiftSource(ins Instr, arch string) bool {
+func x86RawPackedShiftEncodingSource(ins Instr, arch string) bool {
 	form, known, err := x86PackedShiftProperties(ins.Op, ins, arch)
 	origin := ins.x86SourceRaw
-	if !known || err != nil || form.legacy || origin == nil || origin.packedShift.arch != arch ||
-		origin.packedShift != x86PackedShiftRawIdentity(ins, arch) ||
+	return known && err == nil && !form.legacy && origin != nil && origin.packedShift.arch == arch &&
+		origin.packedShift == x86PackedShiftRawIdentity(ins, arch) && origin.op == ins.Op &&
+		origin.vectorBytes == ins.x86VectorBytes && origin.addressBits == ins.x86AddressBits &&
+		(reflect.DeepEqual(origin.args, ins.Args) || x86RawLiteralSourceIdentity(ins, arch))
+}
+
+func x86RawPackedShiftSource(ins Instr, arch string) bool {
+	form, known, err := x86PackedShiftProperties(ins.Op, ins, arch)
+	if !known || err != nil || !x86RawPackedShiftEncodingSource(ins, arch) ||
 		x86Mode32VectorRegisterContext(ins, arch) != nil {
 		return false
 	}

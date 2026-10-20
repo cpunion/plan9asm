@@ -72,10 +72,14 @@ func x86ResultPackedShiftStepWithRead(ins Instr, state *x86ResultState, owned []
 	if !known {
 		return false, false
 	}
-	if err != nil || form.mmx || !x86ResultNamedPredicateInstruction(ins) ||
-		ins.x86PackedShiftEncoding != x86RawPackedShiftAbsent || ins.x86PackedShiftW {
+	literal := x86RawByteShiftLiteralForm(ins, arch)
+	if err != nil || form.mmx || !literal && (!x86ResultNamedPredicateInstruction(ins) ||
+		ins.x86PackedShiftEncoding != x86RawPackedShiftAbsent || ins.x86PackedShiftW) {
 		return false, true // Raw identity and physical MMX have separate owners.
 	}
+	// This is the existing independent same-source DATA role, not ordinary
+	// native continuation. Its full tuple still needs loweredStaticReads;
+	// leaving the raw origin intact prevents an incoming-pointer fallback.
 	return x86ResultPackedShiftInputs(ins, form, state, owned, arch, nativeRead), true
 }
 
