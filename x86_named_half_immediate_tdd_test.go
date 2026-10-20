@@ -16,7 +16,7 @@ func TestX86NamedHalfOriginalIntegerExpressionImmediates(t *testing.T) {
 			}{
 				{"(1<<2)|3", 7, 16},
 				{"255&7", 7, 64},
-				{"-1", -1, 32},
+				{"-1+0", -1, 32},
 				{"~0&255", 255, 64},
 				{"(7-3)*2", 8, 16},
 			}
