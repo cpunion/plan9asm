@@ -135,14 +135,17 @@ unsupported form;
 the current five-architecture gate still requires zero unsupported/parse errors.
 Re-audit complete forms and fingerprints before changing any baseline.
 
-The fresh strict standard-library benchmark at `b2d198ae8` remains failed:
-184 target/file pairs attempted, 129 compiled, 55 failed, no N/A/unattempted.
-AMD64 took 315s, exceeding its unchanged 300s budget; total 366s is below 900s.
-Original MD5 and bytealg/compare now compile, with no new failing files compared
-with `ae2579cf2` (127 compiled / 57 failed). MathExp still fails at the native
-floating boundary described below. Neither a speedup nor a complete pass is
-qualified. Many remaining runtime/reflect files require explicit special-entry
-ABI contracts rather than more opcode names; keep their failures visible.
+The latest full benchmark diagnostic at `47e432d4e` remains failed: all 184
+target/file pairs attempted, 129 compiled, 55 failed, no N/A/unattempted. The
+five targets, script and 300s/900s budgets are unchanged; AMD64 took 450s and
+total target wall time was 497s. All 184 timestamped completion rows join the
+original reports, with unchanged source/tool seals and no owned-process cleanup
+errors. These are parent receipt intervals, not pure lowering CPU times.
+Every failed filename matches the earlier strict `b2d198ae8` run (AMD64 315s,
+total 366s); do not claim a controlled performance comparison or a speedup.
+Original MD5 and bytealg/compare compile, while MathExp's next blocker is below.
+Many runtime/reflect failures need explicit special-entry ABI contracts rather
+than more opcode names; keep those failures visible.
 
 The complete original SDK math/exp CLI regression is still red at `5e4cf7d0e`.
 Bounded package inventory, complete 34-name generated float-pool ownership and
