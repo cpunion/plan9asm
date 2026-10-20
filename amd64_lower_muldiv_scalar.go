@@ -181,6 +181,12 @@ func (c *amd64Ctx) emitX86ImplicitMultiply(bits int, signed bool, source Operand
 	handled := false
 	if named && source.Kind == OpFP {
 		src, handled, err = c.loadIntegerFPBytesMode(source.FPOffset, narrow, true)
+	} else if named && x86RegisterAddressedNativeMemoryOperand(source, c.goarch) && source.Mem.Segment == "" {
+		// Keep the exact source access even for a zero accumulator or dead
+		// product. Address and AX inputs precede either implicit overwrite;
+		// this emitter creates no caller, frame or reusable memory fact.
+		src, err = c.evalSizedNativeGPSource(source, narrow, 0)
+		handled = true
 	}
 	if !handled && err == nil {
 		src, err = c.evalIntSized(source, narrow)
