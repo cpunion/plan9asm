@@ -1,6 +1,6 @@
 # PR 40: current checkpoint
 
-Updated 2026-10-20. Implementation handoff: `afa117ae1`. This is not a
+Updated 2026-10-20. Implementation handoff: `5529f23d3`. This is not a
 current-head completion certificate. Preserve ignored failed evidence and
 read [instruction contracts](instructions.md) and [validation](validation.md).
 
@@ -20,31 +20,31 @@ the contribution only after qualifying the exact staged source. Never push,
 merge or approve upstream. The sole formal review thread is resolved, not
 reviewer approval; orphaned-IR and symlink-include regressions remain required.
 
-## Online evidence remains failed
+## Online evidence is not yet qualified
 
-[39325946539](https://github.com/cpunion/plan9asm/actions/runs/39325946539)
-finished naturally at `a46ca8ab2`: 72 jobs pass, eight fail, one dependent gate
-skips, none cancelled. Full Windows modules did not run. Source-priority budget
-oracle and duplicate/division fixture-package defects are repaired locally;
-this does not change that run's failed status or establish current-head CI.
+[39379754007](https://github.com/cpunion/plan9asm/actions/runs/39379754007)
+is the active run at `a530a1688`. Let it finish naturally; do not cancel,
+supersede or rerun unfinished owners. Its actual SDK source artifact has all
+141 roots passing, with zero failure, skip or missing observations. This
+closes the earlier source-budget fixture failure, not the whole CI run.
 
 All four native reduction owners and their aggregate passed. Native conversion
-owners 0, 5 and 7 passed on actual AVX512F/DQ/BW/VL allocations; owners 1, 2,
-3, 4 and 6 failed required CPU preflight with F/VL absent and XCR0=7. Their
-aggregate correctly failed. Official Linux and Windows allocations are mixed:
-one capable allocation is not a stable hardware guarantee. Independent native
-steps keep their own failure status while allowing unrelated owners to run.
+owners 1 and 4 passed on their actual allocations; owners 0, 2, 3, 5, 6 and 7
+failed required CPU preflight with AVX512F/VL absent and XCR0=7. Their aggregate
+correctly failed. Native duplicate/reciprocal ABI0 helpers and segment-query
+fixtures exposed real failures, repaired locally below. Their corrected
+original programs still need execution; floating helpers and wide half-moves
+also retain their independent required hardware checks.
 
-The next workflow lets Windows execute after all nine prerequisites finish,
-even if one fails. A separate final qualification requires all nine and complete
-Windows to succeed; failure, cancellation, skip or missing observations cannot
-qualify. This only improves diagnostic scheduling, not AVX512 availability or
-native execution qualification. The online run above remains failed.
+The user explicitly deferred unavailable AVX512 execution to pending-hardware
+acceptance. Preserve its failed/pending status: no skipped required owner,
+emulated native execution or whole-CI pass claim. Mixed official runner
+allocations are not a stable hardware guarantee.
 
-The user has explicitly deferred unavailable AVX512 execution to a separate
-pending-hardware acceptance item. Preserve its failed/pending status; this is
-not permission to skip the required owner, emulate native execution or report
-the whole CI as passed. Continue qualifying every independent software repair.
+Windows now executes after all nine prerequisites finish, even if one fails.
+A separate final qualification still requires all nine and complete Windows to
+succeed. Failure, cancellation, skip or missing observations cannot qualify.
+Diagnostic scheduling does not weaken the final gate.
 
 The last complete main-module inventory is still
 [39285088077](https://github.com/cpunion/plan9asm/actions/runs/39285088077) at
@@ -65,6 +65,10 @@ differ. Older qualifications remain in earlier Git checkpoints.
 
 | Snapshot | Independent local scope | Limits |
 |---|---|---|
+| `5529f23d3` | Complete original SDK field-multiply and MathExp CLI sources compile to LLVM22 objects | Actual stock-Go archive priors, unchanged whole assembly and complete seals; not native execution or a full benchmark |
+| `59fb59445` | Complete implicit/explicit multiply: 34 / 4,296 on current Go, actual Go1.20 and race | Exact native reads, CF/OF, all-byte masks, negative authority controls and five-target three-API objects. The 35th original-x86 runtime root requires a real x86 host, not a local pass |
+| `f6a73b3e3` | Native fixture source/layout controls: 6 / 42 on current Go, actual Go1.20 and race | Actual Go assembler/object and asmdecl priors, all return widths, 386/AMD64 ABI0 slots, complete SETOS source and defined AF seed; repaired original programs still need CI execution |
+| `a530a1688` | Integrated FMA3: 49 / 8,431 on current/minimum/race; 33 command gates, 206 Node policies and unchanged sixteen-report classification comparison pass | Complete seals unchanged; not a later-head, full-CI, strict-benchmark or 50th original-x86 caller execution qualification |
 | `afa117ae1` | Integrated named/raw FMA3: 49 / 8,431 on current Go, actual Go1.20 and race | Zero failures/skips, unchanged complete source/tool seals. Includes exhaustive decoder, caller-effect, five-target object, portable rounding and access regressions. The fiftieth original x86 caller runtime root remains separately pending suitable hardware |
 | `d63bc455a` | Ordinary raw FMA3: 16 / 6,872 on current Go | Exact VEX/EVEX, 528 physical shapes, whole-source inputs/replay and private FLAGS/DF. Five-target objects, not original native floating execution; integrated minimum/race are still required |
 | `0b0cd1a7f` | Original raw FMA formats, physical mode32 and initialized controls: 6 / 47 current | Original bytes and DATA remain unchanged; private format objects, public Context and initialized public objects are separately checked |
@@ -160,26 +164,24 @@ ISA, snapshot, initialized Weaviate and complete RIP controls, but its full
 fifteen-root attempt fails at `ANDL $0xcd5,DX` in both x86 modes. The FMA result
 step leaves the six status flags intact; the paired source-flow fallback loses
 the independently defined DF, so saved FLAGS lacks bit 10. The independent
-saved-FLAGS-across-FMA RED is `09a2e66ac`; the minimal private-state repair is
+saved-FLAGS-across-FMA RED is `09a2e66ac`; the minimal private-state repair
 `d63bc455a` now passes the complete sixteen-root current-Go scope above with
 unchanged source/tool seals. Both the candidate failure and independent RED
-remain preserved. The integrated `afa117ae1` snapshot passes the full 49-root
-minimum/current/race scope above, including both complete decoder loops. Its
-final command gates, unchanged classification comparison and full MathExp CLI
-still need fresh qualification before publication. Older command receipts do
-not qualify this later union.
+remain preserved. The integrated `a530a1688` snapshot passes the full 49-root
+minimum/current/race scope, all 33 command gates, unchanged complete forms and
+baseline fields against `68fbaa638`, and the full MathExp CLI. Older receipts
+do not qualify the later multiply/native-fixture integration.
 
-The latest full benchmark diagnostic at `47e432d4e` remains failed: all 184
-target/file pairs attempted, 129 compiled, 55 failed, no N/A/unattempted. The
-five targets, script and 300s/900s budgets are unchanged; AMD64 took 450s and
-total target wall time was 497s. All 184 timestamped completion rows join the
-original reports, with unchanged source/tool seals and no owned-process cleanup
-errors. These are parent receipt intervals, not pure lowering CPU times.
-Every failed filename matches the earlier strict `b2d198ae8` run (AMD64 315s,
-total 366s); do not claim a controlled performance comparison or a speedup.
-Original MD5 and bytealg/compare compile, while MathExp's next blocker is below.
-Many runtime/reflect failures need explicit special-entry ABI contracts rather
-than more opcode names; keep those failures visible.
+The latest full benchmark at `a530a1688` remains failed: all 184 target/file
+pairs attempted, 130 compiled, 54 failed, no N/A/unattempted. Target wall times
+are 33/274/1/7/1 seconds for 386/amd64/arm/arm64/wasm, total 316 seconds,
+within unchanged 300/900 budgets. All timestamped completion rows join the
+original reports; complete seals match and owned-process cleanup is clean.
+These parent receipt intervals are not pure lowering CPU times or a controlled
+speedup measurement. MathExp is the one removed failure versus `47e432d4e`;
+do not extrapolate the later field-source fix into a new benchmark percentage.
+Ordinary SHA/GCM local-frame and private-helper failures are not all
+runtime/reflect special-entry ABI failures. Preserve both classes explicitly.
 
 The complete original SDK math/exp CLI regression passes at `cbb448b58`.
 Bounded package inventory, complete 34-name generated float-pool ownership and
@@ -191,11 +193,13 @@ language/layout controls. The former `VFNMADD231SD` failure is repaired for the
 complete sixty-member named family, including original-opcode floating effects.
 An independent cross-target RED at `90e4fcb07` proves that IR O2 previously
 deleted dead input accesses; `f194e6a1e` reuses exact volatile/guarded readers.
-Ordinary raw VEX/EVEX has a separate valid RED at `cad09be57`: independent Go
-and LLVM physical priors pass, but generation/ISA and initialized complete raw
-source continuations fail. Finish that rule class without borrowing named or
-FP16 permissions. Keep original unbound format sources, objects and explicit
+Ordinary raw VEX/EVEX has a separate valid RED at `cad09be57`; independent Go
+and LLVM physical priors pass. The repaired generation, ISA and complete raw
+continuations now pass the integrated scope without borrowing named or FP16
+permissions. Keep original unbound format sources, objects and explicit
 Context distinct from initialized program and execution evidence.
+
+
 Do not open ordinary FrameSource, caller, ABIInternal register or aggregate
 permissions; this is distinct from runtime/reflect special-entry ABI contracts.
 
@@ -216,13 +220,14 @@ does not certify original native Go execution or the final integrated head.
 
 ## Next work and verification
 
-1. Preserve the integrated FMA3 current/minimum/race qualification at `afa117ae1`.
-   Freeze the publication candidate and complete its command gates, unchanged
-   sixteen-report classification comparison and full MathExp CLI. The earlier
-   scopes above remain qualified only at their recorded snapshots. Keep
-   special-entry ABI work separate.
-   Integrate completed rule-class repairs without editing active snapshots;
-   preserve original inputs and all earlier failed evidence.
+1. Preserve the qualified FMA3, complete multiply and native-fixture snapshots.
+   The field CLI has a valid test-only RED at `3d6b7048d`: stock Go compiles,
+   but translation fails at instruction 3, `MULQ (BX)`. The shared typed fix
+   closes all 25 such accesses in the unchanged file, not a package exemption.
+   Add complete priority owners without shrinking existing inventories.
+   Keep special-entry ABI work separate. Integrate repairs without editing
+   active snapshots; preserve original inputs and all earlier failed evidence.
+
 2. Freeze the final integrated head, including documentation and used tools.
    Complete its current-Go, actual Go1.20 and race regressions and final command
    gates; older or partial receipts do not qualify this union.
