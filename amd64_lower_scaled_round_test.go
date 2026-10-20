@@ -257,8 +257,49 @@ static uint64_t round64(uint64_t u,unsigned scale,unsigned rc,int daz) {
   if(e>=regular) { unsigned drop=52+1023-scale-(unsigned)e; uint64_t q=sig>>drop, rem=sig&((UINT64_C(1)<<drop)-1), half=UINT64_C(1)<<(drop-1); int n=rem>half||(rem==half&&(q&1)); q+=(uint64_t)inc(rc,s!=0,rem!=0,n); uint64_t rs=q<<drop, carry=(rs&(ib<<1))!=0; return s|((e+carry)<<52)|(rs&fm); }
   int half=e==regular-1, n=half&&sig>ib; return s|(inc(rc,s!=0,1,n)?((uint64_t)(1023-scale)<<52):0);
 }
-static uint32_t reduce32(uint32_t u,unsigned scale,unsigned rc,int daz) { uint32_t e=u&0x7f800000,f=u&0x007fffff,s=u&0x80000000; if(e==0x7f800000) return f?(u|0x00400000):0; uint32_t effective=(e==0&&(f==0||daz))?s:u, rounded=round32(u,scale,rc,daz), r; float a,b,c; memcpy(&a,&effective,4); memcpy(&b,&rounded,4); c=a-b; memcpy(&r,&c,4); return (r&0x7fffffff)?r:(rc==1?0x80000000:0); }
-static uint64_t reduce64(uint64_t u,unsigned scale,unsigned rc,int daz) { uint64_t e=u&UINT64_C(0x7ff0000000000000),f=u&UINT64_C(0x000fffffffffffff),s=u&UINT64_C(0x8000000000000000); if(e==UINT64_C(0x7ff0000000000000)) return f?(u|UINT64_C(0x0008000000000000)):0; uint64_t effective=(e==0&&(f==0||daz))?s:u, rounded=round64(u,scale,rc,daz), r; double a,b,c; memcpy(&a,&effective,8); memcpy(&b,&rounded,8); c=a-b; memcpy(&r,&c,8); return (r&UINT64_C(0x7fffffffffffffff))?r:(rc==1?UINT64_C(0x8000000000000000):0); }
+/* For |src|<step/2 and a nonzero rounded value, only directed rounding
+   towards the other side of zero is possible. The final result is +/-
+   (step-|src|), rounded towards zero in magnitude. Compute the number of
+   representable units below step with integers: step-ceil(|src|/ulp).
+   This is independent of the host's rounding, DAZ and FTZ controls. */
+static uint64_t reduce_tiny(uint64_t u,unsigned scale,unsigned bits) {
+  unsigned fraction=bits==32?23:52, bias=bits==32?127:1023;
+  uint64_t sign=UINT64_C(1)<<(bits-1), magnitude=u&(sign-1);
+  unsigned exponent=(unsigned)(magnitude>>fraction);
+  uint64_t significand=magnitude&((UINT64_C(1)<<fraction)-1);
+  if(exponent) significand|=UINT64_C(1)<<fraction;
+  unsigned drop=bias-scale-1-(exponent?exponent:1);
+  uint64_t units=1;
+  if(drop<=fraction) {
+    uint64_t remainder=significand&((UINT64_C(1)<<drop)-1);
+    units=(significand>>drop)+(remainder!=0);
+  }
+  uint64_t step=(uint64_t)(bias-scale)<<fraction;
+  return ((u^sign)&sign)|(step-units);
+}
+static uint32_t reduce32(uint32_t u,unsigned scale,unsigned rc,int daz) {
+  uint32_t e=u&0x7f800000,f=u&0x007fffff,s=u&0x80000000;
+  if(e==0x7f800000) return f?(u|0x00400000):0;
+  uint32_t effective=(e==0&&(f==0||daz))?s:u, rounded=round32(u,scale,rc,daz), r;
+  if(!(rounded&0x7fffffff)) return (effective&0x7fffffff)?effective:(rc==1?0x80000000:0);
+  if((effective&0x7fffffff)<((127-scale-1)<<23)) return (uint32_t)reduce_tiny(effective,scale,32);
+  /* Both nonzero magnitudes now differ by at most a factor of two:
+     Sterbenz subtraction is exact under every ambient RC. At scale<=15
+     the source ULP near the grid is normal, so FTZ cannot change it. */
+  float a,b,c; memcpy(&a,&effective,4); memcpy(&b,&rounded,4);
+  c=a-b; memcpy(&r,&c,4);
+  return (r&0x7fffffff)?r:(rc==1?0x80000000:0);
+}
+static uint64_t reduce64(uint64_t u,unsigned scale,unsigned rc,int daz) {
+  uint64_t e=u&UINT64_C(0x7ff0000000000000),f=u&UINT64_C(0x000fffffffffffff),s=u&UINT64_C(0x8000000000000000);
+  if(e==UINT64_C(0x7ff0000000000000)) return f?(u|UINT64_C(0x0008000000000000)):0;
+  uint64_t effective=(e==0&&(f==0||daz))?s:u, rounded=round64(u,scale,rc,daz), r;
+  if(!(rounded&UINT64_C(0x7fffffffffffffff))) return (effective&UINT64_C(0x7fffffffffffffff))?effective:(rc==1?UINT64_C(0x8000000000000000):0);
+  if((effective&UINT64_C(0x7fffffffffffffff))<((uint64_t)(1023-scale-1)<<52)) return reduce_tiny(effective,scale,64);
+  double a,b,c; memcpy(&a,&effective,8); memcpy(&b,&rounded,8);
+  c=a-b; memcpy(&r,&c,8);
+  return (r&UINT64_C(0x7fffffffffffffff))?r:(rc==1?UINT64_C(0x8000000000000000):0);
+}
 static uint32_t u32(const uint8_t *p) { uint32_t v; memcpy(&v,p,4); return v; }
 static uint64_t u64(const uint8_t *p) { uint64_t v; memcpy(&v,p,8); return v; }
 int main(void) {

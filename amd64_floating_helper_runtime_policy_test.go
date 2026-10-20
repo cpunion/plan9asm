@@ -50,7 +50,7 @@ var x86FloatingHelperOriginalRuntimeOwners = []struct {
 	{
 		root: "TestAMD64ScaledRoundRuntimeSemantics", file: "amd64_lower_scaled_round_test.go",
 		sourceSHA: "c53a42b278d22ca13a3144f75dd58be991b8971ab70754f4bcffbbe952f2c413",
-		cSHA:      "6777ff33b41286f21812a46efea484c3d368d58e66018feac6b194b2d8eaa228",
+		cSHA:      "090f1b1990362807062dfe8709bd4094cfad1fcb2b6b9470ea0c56e516429db9",
 	},
 	{
 		root: "TestAMD64FPClassRuntimeSemantics", file: "amd64_lower_fpclass_test.go",
