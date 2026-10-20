@@ -280,3 +280,49 @@ func TestX86NumericalVEXGPBoundariesRetainAllGuards(t *testing.T) {
 		}
 	}
 }
+
+func TestX86NumericalVEXGPPhysicalProjectionPreservesDefaultRawRole(t *testing.T) {
+	for _, row := range []struct {
+		stem    string
+		decode  x86RawInstructionDecoder
+		project func([]byte, int, x86RawMemoryDecoder) (Instr, int, bool, error)
+	}{
+		{"ANDN", decodedX86ANDNInstruction, decodedX86ANDNInstructionWithMemory},
+		{"BLSI", decodedX86BLSInstruction, decodedX86BLSInstructionWithMemory},
+		{"BZHI", decodedX86RawBZHIInstruction, decodedX86RawBZHIInstructionWithMemory},
+		{"MULX", decodedX86MULXInstruction, decodedX86MULXInstructionWithMemory},
+		{"PDEP", decodedX86ParallelBitsInstruction, decodedX86ParallelBitsInstructionWithMemory},
+		{"RORX", decodedX86RORXInstruction, decodedX86RORXInstructionWithMemory},
+		{"SHLX", decodedX86BMI2ShiftInstruction, decodedX86BMI2ShiftInstructionWithMemory},
+	} {
+		t.Run(row.stem, func(t *testing.T) {
+			code, pcs := x86NumericalBoundaryGoBytes(t, "amd64", x86NumericalVEXGPRow(row.stem, "Q", "table+17(SB)")+"\nRET")
+			code = code[:pcs[1]]
+			x86NumericalVEXGPRequireMC(t, code, 64, 1)
+			_, _, known, err := row.decode(code, 64)
+			if !known || err == nil || !strings.Contains(err.Error(), "RIP-relative") {
+				t.Fatal("the original default raw entry gained physical RIP permission", known, err)
+			}
+			_, _, known, err = row.project(code, 64, x86RawMemoryDecoder{})
+			if !known || err == nil || !strings.Contains(err.Error(), "RIP-relative") {
+				t.Fatal("the zero-value memory strategy no longer preserves the raw-source contract", known, err)
+			}
+			instruction, size, known, err := row.project(code, 64, x86RawMemoryDecoder{physicalPC: true})
+			if !known || err != nil || size != len(code) {
+				t.Fatal("the separate physical observer lost an independently decoded instruction", instruction, size, known, err)
+			}
+		})
+	}
+	t.Run("MULX-mode32-WIG-is-not-raw-entry", func(t *testing.T) {
+		code, pcs := x86NumericalBoundaryGoBytes(t, "386", "MULXQ AX,CX,DX\nRET")
+		code = code[:pcs[1]]
+		x86NumericalVEXGPRequireMC(t, code, 32, 1)
+		if _, _, known, err := decodedX86MULXInstruction(code, 32); !known || err == nil {
+			t.Fatal("native-PC WIG observation broadened the old ordinary MULX raw entry", known, err)
+		}
+		instruction, size, known, err := decodedX86MULXInstructionWithMemory(code, 32, x86RawMemoryDecoder{physicalPC: true})
+		if !known || err != nil || size != len(code) || instruction.Op != "MULXL" {
+			t.Fatal("physical mode32 WIG projection acquired a qword operation or lost its real PC", instruction, size, known, err)
+		}
+	})
+}
