@@ -1,6 +1,6 @@
 # PR 40: current checkpoint
 
-Updated 2026-10-20. Implementation handoff: `798bff706`. This is not a
+Updated 2026-10-20. Implementation handoff: `1cbe5377d`. This is not a
 current-head completion certificate. Preserve ignored failed evidence and
 read [instruction contracts](instructions.md) and [validation](validation.md).
 
@@ -60,6 +60,10 @@ differ. Older qualifications remain in earlier Git checkpoints.
 
 | Snapshot | Independent local scope | Limits |
 |---|---|---|
+| `1cbe5377d` | Integrated source-defined BP, SDK directory and orphan-IR controls: 16 roots / 228 children | Current Go, including complete original MD5 across three public APIs. Minimum-Go run exposes a test observer assuming only the new PUSH/POP prologue; the complete historical SP-cell observation repair is not yet qualified |
+| `1cbe5377d` | Complete 850-witness raw packed-shift object matrices for Linux/386 and Windows/386: four roots / 260 children each | Three public APIs and three pipelines. These are object compilation, not original native execution or the remaining three targets |
+| `9e187e272` | Scalar-shift entry-shape/reaching-state controls: 7 / 131; complete SDK compare: 3 / 21 | Separate current-Go scopes. Shape classification no longer borrows stale entry pointers; reaching NUM and FLAGS obligations remain unchanged |
+| `7948b7ece`, `94f85c871` | Complete four-source rules and objects: current 30 / 2,118, minimum 29 / 2,118 | The current-SDK-only official encoder root is absent by build role on actual Go1.20, not skipped. Native rare-ISA execution and private portable mathematics remain distinct |
 | `b2c4c110b` | Previous frozen batch: all 33 command gates exit zero | Current/minimum build/vet and scanner; CLI on current Go and its Go1.24 minimum; official five-arch gate, 190 Node policies and 16 shared roots in current/minimum/race lanes. Not 33 test roots or a current-union certificate |
 | `b5e621d0b` | Explicit vector-mask moves: 24 roots / 1,390 children | Current Go; typed inputs, aliases, objects and owned guarded-access controls |
 | `ad92005db` | Complete producer replay through strict numerical success: 3 / 4,142 | Current Go; edited original producers cannot inherit a successful numerical continuation |
@@ -69,9 +73,9 @@ differ. Older qualifications remain in earlier Git checkpoints.
 | `cc350e9cd` | Complete scalar precision conversion and original regressions: 22 / 609 | Current Go; exact raw architecture/generation/replay and minimum SSE2/AVX/EVEX profiles; original MXCSR execution remains separate |
 | `6fb23fe5d` | Floating MIN/MAX generation, replay and DATA coordinate bindings: 14 / 260 | Current Go; physical low-bank EVEX and decoder/literal identity cannot be replaced by a named spelling |
 
-All 194 Node policies passed at `58997e227`; thirteen merge-sensitive policies
-passed after integration at `798bff706`. These are local policy receipts, not
-an online CI result. The present union still needs its own consumer checks,
+All 206 Node policies passed at `1cbe5377d`, including the independent final
+diagnostic qualification. These are local policy receipts, not an online CI
+result. The present union still needs its own consumer checks,
 final 33-command gate batch, current/minimum/race regression qualification,
 classification audit and benchmark. Previous receipts cannot fill those gaps.
 
@@ -97,27 +101,47 @@ retained LEAW portable DF instrumentation is not unmodified native execution.
 
 ## Classification and performance references
 
-The last committed independent classification comparison is at `79dd1ca75`,
-baseline-only `420233de8`: all sixteen Go1.20–Go1.27 x86 reports were inspected.
-Exactly 53 AMD64 input-deficient probes per SDK changed supported to Context,
-limited to thirteen ABS/sign names and SHLW/SHRW; every 386 form and unrelated
-encoder/unsupported/parse metric stayed unchanged. Its current-SDK AMD64 counts
-were 3,239 supported, 3,497 Context and zero unsupported. These are historical
-reference counts, not a classification of `798bff706`. Context is not an
+The last independent classification comparison is at `18a4052d3`, recorded by
+baseline-only `ae2579cf2`: all sixteen Go1.20–Go1.27 x86 reports were inspected.
+Exactly 126 further AMD64 input-deficient probes per SDK changed supported to
+Context across complete four-source, precision, mask, MIN/MAX and XLAT families;
+every 386 form and unrelated encoder/unsupported/parse metric stayed unchanged.
+Current-SDK AMD64 counts are 3,113 supported, 3,623 Context and zero unsupported.
+These are historical reference counts, not a classification of the present
+union. Context is not an
 initialized-program success. Retain the historical Go1.20 unsupported form;
 the current five-architecture gate still requires zero unsupported/parse errors.
 Re-audit complete forms and fingerprints before changing any baseline.
 
-The last strict standard-library benchmark at `18bb77a09` remains failed:
-184 target/file pairs attempted, 129 compiled, 55 failed, no N/A. AMD64 took
-392s, exceeding its unchanged 300s budget; total 504s is below 900s. No newer
-complete pass or performance improvement is qualified.
+The last strict standard-library benchmark at `ae2579cf2` remains failed:
+184 target/file pairs attempted, 127 compiled, 57 failed, no N/A/unattempted.
+AMD64 took 310s, exceeding its unchanged 300s budget; total 379s is below 900s.
+MIN/MAX fixes make original hypot compile. The stricter scalar-shift proof
+exposes MD5's source-defined BP, SDK compare's stale entry shape and math/exp's
+SDK data observation. Local repairs do not rewrite this benchmark; no speedup
+or complete pass is qualified.
+
+The complete original SDK math/exp CLI regression is still red at `063acd42b`.
+Its bounded direct-package inventory now correctly includes inactive files and
+child identities without granting child-include authority. Actual Go-created
+float pools remain missing from the source/object join. Test-only `c5cc21fec`
+independently passes all five targets' complete 34-name stock-Go object controls
+and reproduces all five joins failing. Authenticate these as separate generated
+metadata, never ordinary DATA layouts, literal initializers or NUM permission.
+
+Raw packed-shift driver RED receipts are also retained. The normalized TEXT
+header repair reveals a second observation defect: unused intrinsic declarations
+and their generic attributes are incorrectly treated as executed native code.
+The candidate must retain those declarations byte-for-byte, reject actual native
+calls/addresses and pass the original complete portable value/fault programs;
+this is not a native Go execution certificate.
 
 ## Next work and verification
 
-1. Finish the independently assigned four-source and raw-variable families.
-   Integrate completed rule-class repairs without overlapping active/frozen
-   worktrees. Preserve original initialized programs and independent oracles.
+1. Finish generated float-pool source/object association and qualify complete
+   original math/exp. Qualify the historical BP observer and the raw packed-shift
+   driver, all object targets and portable runtime members. Integrate completed
+   rule-class repairs without editing active snapshots; preserve original inputs.
 2. Freeze the final integrated head, including documentation and used tools.
    Complete its current-Go, actual Go1.20 and race regressions and final command
    gates; older or partial receipts do not qualify this union.
