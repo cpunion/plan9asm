@@ -192,17 +192,17 @@ func numericalListingRows(raw []byte) (map[string]map[int64][]numericalListingRo
 		}
 		match := goAMD64FrameRow.FindStringSubmatch(line)
 		if match == nil {
-			boundary := false
-			for index, field := range strings.Fields(line) {
+			fields := strings.Fields(line)
+			for index, field := range fields {
 				if index > 0 && strings.HasPrefix(field, "STEXT") ||
 					strings.HasPrefix(field, "args=") || strings.HasPrefix(field, "locals=") {
 					return nil, numericalSBContext("unknown complete native listing TEXT role")
 				}
-				boundary = boundary || strings.HasPrefix(field, "size=")
 			}
-			if boundary {
-				// Non-text symbol displays have no Prog rows. Their bytes and
-				// relocations remain object observations, never the previous TEXT.
+			if len(fields) != 0 {
+				// The writer emits Prog rows before byte/relocation displays.
+				// No other display, including a truncated or unknown header,
+				// can carry the previous TEXT's PC ownership forward.
 				name = ""
 			}
 			continue // Complete binary records, not this display parser, validate objects.
