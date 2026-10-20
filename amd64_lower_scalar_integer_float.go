@@ -1,9 +1,6 @@
 package plan9asm
 
-import (
-	"fmt"
-	"strings"
-)
+import "fmt"
 
 type amd64ScalarIntegerFloatSpec struct {
 	sourceBits int
@@ -12,91 +9,20 @@ type amd64ScalarIntegerFloatSpec struct {
 	rounding   bool
 }
 
-// This is the complete Go 1.27 scalar integer-to-floating-point family from
-// _yvcvtsi2sdl and _yvcvtusi2sdl. It is also the source of truth used by the
-// supported-opcode extractor.
+// Complete unsigned _yvcvtusi2sdl family. Signed legacy/VEX forms retain their
+// independent table. Supported-op extraction reads both registries.
 var amd64ScalarIntegerFloatOps = map[string]amd64ScalarIntegerFloatSpec{
-	"VCVTSI2SDL":  {sourceBits: 32, resultBits: 64},
-	"VCVTSI2SDQ":  {sourceBits: 64, resultBits: 64, rounding: true},
-	"VCVTSI2SSL":  {sourceBits: 32, resultBits: 32, rounding: true},
-	"VCVTSI2SSQ":  {sourceBits: 64, resultBits: 32, rounding: true},
 	"VCVTUSI2SDL": {sourceBits: 32, resultBits: 64, unsigned: true},
 	"VCVTUSI2SDQ": {sourceBits: 64, resultBits: 64, unsigned: true, rounding: true},
 	"VCVTUSI2SSL": {sourceBits: 32, resultBits: 32, unsigned: true, rounding: true},
 	"VCVTUSI2SSQ": {sourceBits: 64, resultBits: 32, unsigned: true, rounding: true},
 }
 
-func (c *amd64Ctx) lowerScalarIntegerToFloat(op Op, ins Instr) (ok bool, terminated bool, err error) {
+func (c *amd64Ctx) lowerScalarIntegerToFloat(op Op, ins Instr) (bool, bool, error) {
 	if ok, term, err := c.lowerSignedIntegerScalarFloat(op, ins); ok {
 		return ok, term, err
 	}
-	rawOp := strings.ToUpper(string(op))
-	baseOp, suffix := rawOp, ""
-	if dot := strings.IndexByte(rawOp, '.'); dot >= 0 {
-		baseOp, suffix = rawOp[:dot], rawOp[dot+1:]
-	}
-	spec, recognized := amd64ScalarIntegerFloatOps[baseOp]
-	if !recognized {
-		return false, false, nil
-	}
-	rounding := ""
-	switch suffix {
-	case "":
-	case "RN_SAE", "RD_SAE", "RU_SAE", "RZ_SAE":
-		if !spec.rounding {
-			return true, false, fmt.Errorf("%s %s does not enable explicit rounding: %q", c.goarch, baseOp, ins.Raw)
-		}
-		rounding = suffix
-	default:
-		return true, false, fmt.Errorf("%s %s suffix is absent from Go 1.27's scalar integer-to-float tables: %q", c.goarch, baseOp, ins.Raw)
-	}
-	if len(ins.Args) != 3 {
-		return true, false, fmt.Errorf("%s %s expects integer source, X passthrough, X destination: %q", c.goarch, baseOp, ins.Raw)
-	}
-	source, passthrough, destination := ins.Args[0], ins.Args[1], ins.Args[2]
-	if source.Kind == OpReg {
-		if !c.isGoYrlRegister(source) {
-			return true, false, fmt.Errorf("%s %s integer source is outside Go 1.27's GP-register class: %q", c.goarch, baseOp, ins.Raw)
-		}
-	} else if !isAMD64MemoryOperand(source) {
-		return true, false, fmt.Errorf("%s %s integer source must be a GP register or memory: %q", c.goarch, baseOp, ins.Raw)
-	}
-	if rounding != "" && source.Kind != OpReg {
-		return true, false, fmt.Errorf("%s %s explicit rounding requires a GP-register source: %q", c.goarch, baseOp, ins.Raw)
-	}
-	if !c.isGoEVEXVectorRegister(passthrough, 16) || !c.isGoEVEXVectorRegister(destination, 16) {
-		return true, false, fmt.Errorf("%s %s passthrough and destination must be Go 1.27 X registers: %q", c.goarch, baseOp, ins.Raw)
-	}
-
-	integerType := amd64IntegerTypeForBits(spec.sourceBits)
-	integer, err := c.evalIntSized(source, integerType)
-	if err != nil {
-		return true, false, err
-	}
-	floatType := LLVMType("float")
-	if spec.resultBits == 64 {
-		floatType = LLVMType("double")
-	}
-	conversion := "sitofp"
-	if spec.unsigned {
-		conversion = "uitofp"
-	}
-	var low string
-	if rounding == "" {
-		converted := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = %s %s %s to %s\n", converted, conversion, integerType, integer, floatType)
-		bits := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = bitcast %s %%%s to i%d\n", bits, floatType, converted, spec.resultBits)
-		low = "%" + bits
-	} else {
-		low = c.emitRoundedScalarIntegerToFloatBits(integer, spec, rounding)
-	}
-	passthroughBytes, err := c.loadX(passthrough.Reg)
-	if err != nil {
-		return true, false, err
-	}
-	base := c.bitcastVectorBytesToIntegerLanes(16, 128/spec.resultBits, spec.resultBits, passthroughBytes)
-	return true, false, c.storeVectorScalarRegister(destination.Reg, spec.resultBits, low, base, "", false)
+	return c.lowerUnsignedIntegerScalarFloat(op, ins)
 }
 
 // emitRoundedScalarIntegerToFloatBits converts through an explicit integer

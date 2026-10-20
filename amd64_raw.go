@@ -6623,10 +6623,9 @@ func decodedX86EVEXScalarIntegerFloatInstruction(code []byte, i, mode int, segme
 		return Instr{}, 0, true, fmt.Errorf("extended register in 32-bit mode")
 	}
 	sourceBytes := 4
-	if width64 && (mode == 64 || opcode == 0x7b) {
-		// Signed VCVTSI2SS/SD ignore W1 in mode32, including the
-		// compressed-displacement tuple. Keep the separate unsigned
-		// family unchanged until its own complete physical proof.
+	if width64 && mode == 64 {
+		// Signed and unsigned scalar conversions ignore W1 in mode32,
+		// including the independently observed m32 compressed tuple.
 		sourceBytes = 8
 	}
 	source, consumed, decodeErr := decodedX86RMSource(code[modRMIndex:], mode, bExt, xExt, segment, sourceBytes)
