@@ -245,6 +245,11 @@ priority inventory. Eleven later commands remain unrun; complete seals match.
 An independent five-minute bigmod owner now supplements the unchanged original
 MathExp/field owner. The policy RED detects that missing lane and retains exact
 root, module, disjointness, substitution and budget negatives.
+The next `31aa48004` attempt again passes 21 command gates before policies:
+208 of 221 pass, with thirteen failures all caused by the shared SDK lane-count
+constant still expecting 60 instead of 61. Source/tool seals remain unchanged;
+the eleven later commands did not run. The one count is updated; exact lane
+and original-root checks remain mandatory.
 
 Newly integrated changes have not passed the full 33 command gates, final-head
 classification replay or a new strict benchmark. Preserve the failed benchmark
