@@ -142,13 +142,15 @@ func (c *amd64Ctx) emitNativeUnsignedIntegerScalarFloat(ins Instr, form x86Unsig
 		mnemonic = "vcvtusi2sd"
 	}
 	mnemonic += map[int]string{32: "l", 64: "q"}[form.sourceBits]
-	assembly := mnemonic + " "
+	assembly := mnemonic + " " + operand
 	// Mode32 W1 behaves as W0. In particular, double's exact uint32
 	// conversion ignores EVEX embedded rounding, rather than acquiring Q data.
+	// LLVM's AT&T integer-to-float grammar places RC after the GP source,
+	// unlike its floating-source arithmetic and precision conversions.
 	if form.rounding != "" && (form.sourceBits == 64 || form.spec.resultBits == 32) {
-		assembly += "{" + strings.ToLower(strings.TrimSuffix(form.rounding, "_SAE")) + "-sae}, "
+		assembly += ", {" + strings.ToLower(strings.TrimSuffix(form.rounding, "_SAE")) + "-sae}"
 	}
-	assembly += operand + ", $1, $0"
+	assembly += ", $1, $0"
 	result, bytes := c.newTmp(), c.newTmp()
 	fmt.Fprintf(c.b, "  %%%s = call %s asm sideeffect %q, %q(%s %s, %s %s)\n", result, carrier, assembly,
 		"=v,v,"+constraint+",~{memory},~{fpsr}", carrier, upper, inputType, value)
