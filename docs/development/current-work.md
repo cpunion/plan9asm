@@ -1,6 +1,6 @@
 # PR 40: current checkpoint
 
-Updated 2026-10-20. Implementation handoff: `498d29f76`. This is not a
+Updated 2026-10-20. Implementation handoff: `044ee4030`. This is not a
 current-head completion certificate. Preserve ignored failed evidence and
 read [instruction contracts](instructions.md) and [validation](validation.md).
 
@@ -65,6 +65,7 @@ differ. Older qualifications remain in earlier Git checkpoints.
 
 | Snapshot | Independent local scope | Limits |
 |---|---|---|
+| `044ee4030` | All 33 command gates exit zero, including current/minimum build/vet, official five-arch coverage and 206 Node policies; complete seals unchanged | Integrated named FMA, portable access, format objects and audited baseline; not full CI, the strict benchmark or the unintegrated ordinary raw FMA candidate |
 | `8ec12ae76` | Original FMA3 formats and initialized axes: 8 / 69 on current Go | Complete original formats remain separate from 178 amd64 / 94 mode32 orthogonal initialized entries, 144 LLVM object compilations across five targets; not a full initialized Cartesian matrix or native execution |
 | `f194e6a1e` | Portable FMA access and original native controls: 7 / 378 on current Go, actual Go1.20 and race | Three APIs and three executed ARM64 pipelines each admit all 14 access classes: 98 independent references / 98 translated probes, zero Context. This preserves access/faults, not original x86 MXCSR execution |
 | `cbb448b58` | Complete original SDK MathExp CLI source and LLVM object pass | Unchanged original assembly, actual stock-Go archive prior and complete source/tool seals; not a full benchmark receipt |
@@ -150,6 +151,15 @@ SDK move from supported to Context; all 386 forms and every other metric stay
 unchanged. Current Go AMD64 is now 2,571 supported / 4,165 Context / zero
 unsupported. Only these audited classifications and their fingerprints update
 the baseline. Initialized family programs and objects remain separate evidence.
+
+Ordinary raw FMA candidate `837d6e955` passes its physical generation, isolated
+ISA, snapshot, initialized Weaviate and complete RIP controls, but its full
+fifteen-root attempt fails at `ANDL $0xcd5,DX` in both x86 modes. The FMA result
+step leaves the six status flags intact; the paired source-flow fallback loses
+the independently defined DF, so saved FLAGS lacks bit 10. The independent
+saved-FLAGS-across-FMA RED is `09a2e66ac`; the minimal private-state repair is
+`d63bc455a`, still awaiting validation. Preserve the failed candidate report;
+do not integrate or call the whole ordinary raw family qualified yet.
 
 The latest full benchmark diagnostic at `47e432d4e` remains failed: all 184
 target/file pairs attempted, 129 compiled, 55 failed, no N/A/unattempted. The
