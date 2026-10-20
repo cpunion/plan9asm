@@ -93,15 +93,15 @@ func TestX86VNNIIntegerDeadAccessRetainsExactNativeTuple(t *testing.T) {
 	var rows []x86VNNIOracleRow
 	for _, row := range x86VNNIOracleRows("amd64") {
 		if row.input != "register" {
-			fmt.Fprintf(&original, "TEXT F%d(SB),4,$0-0\n%s\nRET\n", len(rows), row.instruction())
+			fmt.Fprintf(&original, "TEXT DotAccess%d(SB),4,$0-0\n%s\nRET\n", len(rows), row.instruction())
 			rows = append(rows, row)
 		}
 	}
 	x86LEAActualTargetGoObject(t, "amd64", "x86_64-unknown-linux-gnu", original.String())
 	for _, row := range rows {
 		t.Run(row.instruction(), func(t *testing.T) {
-			file := mustParseX86RawReturn(t, "TEXT F(SB),4,$0-0\n"+row.instruction()+"\nRET\n")
-			ir := x86SingleInstructionFormatObjectUnits(t, file, map[string]FuncSig{"F": {Name: "F", Ret: Void}},
+			file := mustParseX86RawReturn(t, "TEXT DotAccess(SB),4,$0-0\n"+row.instruction()+"\nRET\n")
+			ir := x86SingleInstructionFormatObjectUnits(t, file, map[string]FuncSig{"DotAccess": {Name: "DotAccess", Ret: Void}},
 				"amd64", "x86_64-unknown-linux-gnu", func(c *amd64Ctx, ins Instr) (bool, bool, error) {
 					return c.lowerPackedDotProduct(ins.Op, ins)
 				})
