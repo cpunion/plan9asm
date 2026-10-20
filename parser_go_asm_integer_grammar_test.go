@@ -34,6 +34,12 @@ var goASMIntegerGrammarValues = []struct {
 	{"rune-left-shift-character", "'<'", 60},
 	{"rune-right-shift-character", "'>'", 62},
 	{"rune-divide-character", "'/'", 47},
+	{"rune-comma-character", "','", 44},
+	{"rune-open-parenthesis", "'('", 40},
+	{"rune-close-parenthesis", "')'", 41},
+	{"rune-semicolon-character", "';'", 59},
+	{"rune-double-quote", `'"'`, 34},
+	{"rune-backtick", "'`'", 96},
 	{"rune-hexadecimal-escape", "'\\x7e'", 126},
 	{"rune-unicode-escape", "'\\u007e'", 126},
 	{"rune-unicode", "'世'", 19990},
@@ -54,6 +60,7 @@ var goASMIntegerGrammarValues = []struct {
 	{"right-shift-recursive-division", "64>>3/2", 32},
 	{"right-shift-recursive-remainder", "64>>3%2", 32},
 	{"right-shift-recursive-left-shift", "64>>1<<2", 4},
+	{"right-shift-consumes-left-shift-remainder", "64>>1<<2*3", 12},
 	{"right-shift-after-product", "8*2>>1*2", 4},
 	{"right-shift-expr-boundary", "64>>3+1", 9},
 	{"left-shift-expr-boundary", "1<<3+1", 9},
@@ -75,6 +82,7 @@ var goASMIntegerGrammarInvalid = []struct{ name, expression string }{
 	{"division-zero", "1/0"},
 	{"remainder-zero", "1%0"},
 	{"Go-only-and-not", "1&^1"},
+	{"Go-only-and-not-nonzero", "7&^3"},
 	{"Go-only-unary-caret", "^0+1"},
 	{"left-shift-remaining-product", "1<<1*0"},
 	{"left-shift-remaining-and", "1<<1&0"},
@@ -84,6 +92,42 @@ var goASMIntegerGrammarInvalid = []struct{ name, expression string }{
 	{"remaining-literal", "(1)2"},
 	{"uint64-overflow-literal", "18446744073709551616"},
 	{"float-in-integer-expression", "1.0-1.0"},
+	{"rune-invalid-UTF8-byte", "'\\377'"},
+}
+
+func TestGoASMIntegerGrammarBoundsAndUnresolvedQueryIdentity(t *testing.T) {
+	for _, expression := range []string{
+		strings.Repeat("(", 32) + "1" + strings.Repeat(")", 32),
+		strings.Repeat("+", 32) + "1",
+	} {
+		if value, valid := parseImmExpr(expression); !valid || value != 1 {
+			t.Fatal("ordinary bounded nesting lost its complete numerical value", expression, value, valid)
+		}
+	}
+	for _, row := range []struct{ name, expression string }{
+		{"bytes", "1" + strings.Repeat("/*x*/", 14000)},
+		{"tokens", "1" + strings.Repeat("+1", 3000)},
+		{"depth", strings.Repeat("+", 256) + "1"},
+		{"unknown-then-zero", "UNKNOWN+0"},
+		{"invalid-then-zero", "(1&^1)+0"},
+		{"invalid-shift-then-zero", "(1<<1*0)+0"},
+	} {
+		t.Run(row.name, func(t *testing.T) {
+			if value, valid := parseImmExpr(row.expression); valid {
+				t.Fatal("an unresolved or over-budget expression acquired a numerical result", value)
+			}
+			original := "literal<>+(" + row.expression + ")"
+			if name, offset := SplitSymbolOffset(original); name != original || offset != 0 {
+				t.Fatal("the public unresolved query lost its original identity", name, offset)
+			}
+			if _, _, valid := parseSBRef(original + "(SB)"); valid {
+				t.Fatal("an unresolved expression acquired an SB reference")
+			}
+			if _, err := parseGLOBLStmt(original + "(SB),8,$8"); err == nil {
+				t.Fatal("an unresolved expression acquired a concrete declaration")
+			}
+		})
+	}
 }
 
 func goASMIntegerZeroOffset(expression string, value uint64) string {
