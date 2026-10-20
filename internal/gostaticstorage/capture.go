@@ -459,7 +459,7 @@ func (o *Observation) Verify(ctx context.Context) error {
 			return fail(contextError("actual source/tool/export bytes changed"))
 		}
 	}
-	raw, err := o.run(ctx, o.selectionArguments()...)
+	raw, err := o.run(ctx, o.verificationArguments()...)
 	if err != nil || !sameSelection(raw, o.report.RawSelection) {
 		return fail(contextError("actual selected package/import/export changed"))
 	}
@@ -508,6 +508,20 @@ func (o *Observation) selectionArguments() []string {
 		return sdkGlobalsArguments(o.report.PackagePath)
 	}
 	return selectionArguments()
+}
+
+// Capture retains its forced compiler prior. Live verification still queries
+// the same complete selection/export graph and guards every current byte on
+// both sides of that command; it need not force recompilation of that graph.
+func (o *Observation) verificationArguments() []string {
+	arguments := o.selectionArguments()
+	result := make([]string, 0, len(arguments))
+	for _, argument := range arguments {
+		if argument != "-a" {
+			result = append(result, argument)
+		}
+	}
+	return result
 }
 
 func referenceKey(ref Reference) string { return ref.PackagePath + "\x00" + ref.Name }
