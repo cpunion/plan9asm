@@ -14,7 +14,7 @@ func x86IntegerMinMaxProperties(op Op, ins Instr, arch string) (x86IntegerMinMax
 	base, _, _ := strings.Cut(strings.ToUpper(string(op)), ".")
 	spec, known := amd64PackedIntegerMinMaxSpecs[base]
 	legacy := false
-	if !known {
+	if !known && (strings.HasPrefix(base, "PMIN") || strings.HasPrefix(base, "PMAX")) {
 		// The twelve legacy B/W/D names have the same operation as their
 		// V siblings, but Go's yxm/yxm_q4 rows admit only X, not MMX/Q.
 		spec, known = amd64PackedIntegerMinMaxSpecs["V"+base]
