@@ -5,6 +5,12 @@ func x86ResultPackedZeroExtendStep(ins Instr, state *x86ResultState, owned []boo
 	if !known || err != nil {
 		return false, known
 	}
+	if !x86ResultNamedPredicateInstruction(ins) {
+		if !conditionalNativeRead || !x86RawZeroExtendSource(ins, arch) {
+			return false, true
+		}
+		ins.x86Encoded, ins.x86SourceRaw = false, nil
+	}
 	if form.mask >= 0 {
 		index, valid := amd64ParseKReg(ins.Args[form.mask].Reg)
 		if !valid || !state.masks[index] {

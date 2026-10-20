@@ -45,6 +45,7 @@ type x86SourceRawInstruction struct {
 	packedShift      x86RawPackedShiftIdentity
 	packedAbs        x86RawPackedAbsIdentity
 	packedDot        x86RawPackedDotIdentity
+	zeroExtend       x86RawZeroExtendIdentity
 }
 
 type x86SourceStackAddress struct {

@@ -18,7 +18,7 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 	fn, sig, arch := c.fpScalarSource, c.sig, c.goarch
 	if x86FloatMinMaxRawReplayRequired(fn, arch) || x86ScalarPrecisionRawReplayRequired(fn, arch) ||
 		x86ExplicitMaskMoveRawReplayRequired(fn, arch) || x86PackedShiftRawReplayRequired(fn, arch) ||
-		x86PackedDotRawReplayRequired(fn, arch) {
+		x86PackedDotRawReplayRequired(fn, arch) || x86ZeroExtendRawReplayRequired(fn, arch) {
 		if err := fn.x86RawReplay.validate(fn, arch); err != nil {
 			return err
 		}
@@ -116,7 +116,15 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 	boundRawExplicitMaskMove := false
 	boundRawPackedShift := false
 	boundRawPackedDot := false
+	boundRawZeroExtend := false
 	for _, ins := range fn.Instrs {
+		if x86RawZeroExtendSource(ins, arch) {
+			if !boundRawZeroExtend && (fn.x86RawReplay == nil || fn.x86RawReplay.validate(fn, arch) != nil) {
+				return strictErr
+			}
+			boundRawZeroExtend = true
+			continue // Exact source identity supplies no missing address, mask or data bytes.
+		}
 		if x86RawPackedDotSource(ins, arch) {
 			if !boundRawPackedDot && (fn.x86RawReplay == nil || fn.x86RawReplay.validate(fn, arch) != nil) {
 				return strictErr

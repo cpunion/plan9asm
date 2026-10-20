@@ -113,3 +113,24 @@ func x86PackedZeroExtendProperties(ins Instr, goarch string) (x86PackedZeroExten
 	}
 	return form, true, x86Mode32VectorRegisterContext(ins, goarch)
 }
+
+func x86TypedPackedZeroExtendByteEffect(op Op, ins Instr, arch string) (x86TypedByteEffect, bool, error) {
+	form, known, err := x86PackedZeroExtendProperties(ins, arch)
+	if !known || err != nil {
+		return x86TypedByteEffect{}, known, err
+	}
+	if op != ins.Op {
+		return x86TypedByteEffect{}, true, fmt.Errorf("packed zero-extension effect/source opcode mismatch")
+	}
+	effect := x86TypedByteEffect{requiresResultProof: true, operands: []x86TypedByteOperand{
+		{index: 0, operand: ins.Args[0], width: int64(form.memoryBytes), read: true},
+		{index: form.destination, operand: ins.Args[form.destination], width: int64(form.byteWidth),
+			read: form.mask >= 0 && !form.zeroing, write: true},
+	}}
+	if form.mask >= 0 {
+		effect.operands = append(effect.operands, x86TypedByteOperand{
+			index: form.mask, operand: ins.Args[form.mask], width: 8, read: true,
+		})
+	}
+	return effect, true, nil
+}
