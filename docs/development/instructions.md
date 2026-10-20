@@ -113,6 +113,19 @@ standalone query, caller, physical entry or frame authority follows. Preserve
 original unbound format objects plus Context separately from initialized
 five-target public objects, every predicate and missing-input mutations.
 
+VPERMILPS/PD share all eighteen Go rows with lowering and result definedness.
+Immediate selectors consume only selected bytes within each 128-bit lane;
+variable selectors require the actual data and low control byte for each
+element. Unknown result bytes stay unknown. Masks and merging bytes remain
+inputs; zeroing does not supply a missing pointer or selector. E4NF memory
+reads retain the entire volatile tuple, or exact m32/m64 broadcast, even for
+Void and zero masks. Encoding-aware writeback clears wider aliases while
+preserving independent GP, FLAGS and private state. Complete sealed raw
+producer replay remains a restriction even when only origin metadata is erased;
+neither decoder identity nor private format objects authorize named inputs,
+native memory or raw entry. Keep original unbound Go/public Context controls
+separate from initialized public objects and required runtime execution.
+
 MULXL/Q has its own complete source/implicit-DX/two-output form, not ANDN's
 read/write roles. Capture both inputs before either output, zero-extend L
 results, and preserve FLAGS/DF and unrelated private/caller state. Native

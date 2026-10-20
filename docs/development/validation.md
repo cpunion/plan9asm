@@ -95,6 +95,16 @@ unchanged one-minute command limit. Each case still captures independent
 original sources, outputs, leases and revocable owners. Do not share those
 mutable observations or increase command budgets to hide cache setup costs.
 
+Static-storage capture retains its actual forced stock-Go compiler prior and
+original command report. Every live Verify still runs a real owned selection
+and export query with the same scope, environment and deadline, but omits only
+the repeated `-a` rebuild. Complete source, tool and archive bytes remain
+checked before and after that command; selected exports and unknown JSON fields
+must still match. This is reuse of Go's compiler cache, never a cached mutable
+observation or capability. Run actual SDKCPU and SDKGlobals target controls,
+source/command mutation, final callback revocation and concurrent Close tests,
+then measure the complete original CLI source before claiming a speedup.
+
 Fixed-local conversion objects keep all741 independent forms on each of three
 AMD64 targets. Twelve top-level batches per target retain64 functions each
 (37 in the last batch), all three APIs and both IR levels. The inventory policy
