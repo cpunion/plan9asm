@@ -4278,6 +4278,10 @@ opcode:
 // VPERM2I128 encoding represented by Go 1.27's _yvperm2f128 table: an
 // immediate, Y/m256 first source, Y second source, and Y destination.
 func decodedX86Permute128Instruction(code []byte, mode int) (instruction Instr, length int, ok bool, err error) {
+	return decodedX86Permute128InstructionWithMemory(code, mode, x86RawMemoryDecoder{})
+}
+
+func decodedX86Permute128InstructionWithMemory(code []byte, mode int, memory x86RawMemoryDecoder) (instruction Instr, length int, ok bool, err error) {
 	if mode != 32 && mode != 64 {
 		return Instr{}, 0, false, nil
 	}
@@ -4350,7 +4354,7 @@ opcode:
 	bExt := int(^vex0>>5) & 1
 	modRMIndex := i + 4
 	modRM := code[modRMIndex]
-	firstSource, consumed, decodeErr := decodedX86VEXVectorRMOperand(code[modRMIndex:], mode, bExt, xExt, segment, "Y")
+	firstSource, consumed, decodeErr := memory.vex(code[modRMIndex:], mode, bExt, xExt, segment, "Y")
 	if decodeErr != nil {
 		return Instr{}, 0, true, decodeErr
 	}
