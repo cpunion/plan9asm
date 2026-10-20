@@ -173,7 +173,9 @@ func (c *amd64Ctx) lowerFMA3(op Op, ins Instr) (ok bool, terminated bool, err er
 			controls: properties, readDestination: true,
 		})
 	}
-	if !spec.rawOnly && x86ResultNamedPredicateInstruction(ins) && x86ScalarFloatIntegerNativeTarget(c.goarch, c.targetTriple) {
+	named := x86ResultNamedPredicateInstruction(ins) && ins.x86FMA3Encoding == x86RawFMA3Absent
+	raw := !spec.rawOnly && (x86RawFMA3Source(ins, c.goarch) || x86RawFMA3LiteralForm(ins, c.goarch))
+	if !spec.rawOnly && (named || raw) && x86ScalarFloatIntegerNativeTarget(c.goarch, c.targetTriple) {
 		lanes, logicalFPBits := byteWidth*8/spec.laneBits, 0
 		if spec.scalar {
 			lanes, logicalFPBits = 1, spec.laneBits
@@ -186,6 +188,9 @@ func (c *amd64Ctx) lowerFMA3(op Op, ins Instr) (ok bool, terminated bool, err er
 			lowBank: !evex, forceEVEX: evex && byteWidth < 64 && form.mask < 0 &&
 				!properties.broadcast && properties.rounding == "",
 		})
+	}
+	if !spec.rawOnly && !named {
+		return true, false, fmt.Errorf("%w: %s requires its exact original FMA source and native x86 target", ErrProbeNeedsContext, ins.Op)
 	}
 
 	// Portable numerical arithmetic is not an x86 MXCSR/native-exception

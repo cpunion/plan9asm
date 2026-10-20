@@ -6,7 +6,7 @@ import (
 )
 
 // The standalone steps cannot distinguish a legacy decoded instruction whose
-// origin was erased from an otherwise identical named instruction. These two
+// origin was erased from an otherwise identical named instruction. These
 // producer families therefore check the immutable complete source once before
 // their paired proof. Inspect current and sealed decoded instructions so an
 // erased origin or edited opcode cannot erase that restriction. This is never
@@ -27,7 +27,7 @@ func x86LoweredNumericalProducerReplay(fn Func, arch string) error {
 		return false
 	}
 	replay := fn.x86RawReplay
-	if !hasProducer(fn.Instrs) && (replay == nil || !hasProducer(replay.decoded)) {
+	if !x86FMA3RawReplayRequired(fn, arch) && !hasProducer(fn.Instrs) && (replay == nil || !hasProducer(replay.decoded)) {
 		return nil // Ordinary named source keeps its existing input/unknown domain.
 	}
 	if replay == nil {
