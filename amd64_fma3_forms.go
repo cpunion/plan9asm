@@ -15,10 +15,16 @@ type amd64FMA3Form struct {
 	memory      int // -1 for a register first source
 }
 
-// Only independently apparent named controls/register banks select EVEX here.
-// An unmasked low-bank raw instruction needs its own physical generation
-// observation; this selector neither supplies that identity nor admits raw NUM.
+// Original physical generation wins over an indistinguishable named spelling.
+// Named controls/register banks remain the fallback only when that observation
+// is absent. Neither this selector nor CPU features admit raw numerical inputs.
 func x86FMA3NativeEVEX(ins Instr, form amd64FMA3Form) bool {
+	switch ins.x86FMA3Encoding {
+	case x86RawFMA3EVEX:
+		return true
+	case x86RawFMA3VEX:
+		return false
+	}
 	if form.byteWidth == 64 || form.mask >= 0 || form.suffix.broadcast || form.suffix.rounding != "" {
 		return true
 	}
@@ -89,13 +95,17 @@ func amd64FMA3Properties(ins Instr, goarch string) (amd64FMA3Form, bool, error) 
 		dotted && suffix == "" || len(ins.Args) != 3 && len(ins.Args) != 4 {
 		return fail()
 	}
+	if ins.x86FMA3Encoding != x86RawFMA3Absent &&
+		(spec.rawOnly || ins.x86FMA3Encoding != x86RawFMA3VEX && ins.x86FMA3Encoding != x86RawFMA3EVEX) {
+		return fail()
+	}
 	properties, valid := parseAMD64FMA3Suffix(suffix)
 	if !valid || spec.scalar && properties.broadcast {
 		return fail()
 	}
 	form.suffix = properties
 	if len(ins.Args) == 4 {
-		if goarch == "386" && !ins.x86Encoded || !amd64NonzeroKOperand(ins.Args[2]) {
+		if goarch == "386" && !ins.x86Encoded && ins.x86FMA3Encoding != x86RawFMA3EVEX || !amd64NonzeroKOperand(ins.Args[2]) {
 			return fail()
 		}
 		form.mask = 2
@@ -137,6 +147,16 @@ func amd64FMA3Properties(ins Instr, goarch string) (amd64FMA3Form, bool, error) 
 		form.memoryBytes = form.byteWidth
 		if spec.scalar || properties.broadcast {
 			form.memoryBytes = spec.laneBits / 8
+		}
+	}
+	if ins.x86FMA3Encoding == x86RawFMA3VEX {
+		if form.byteWidth == 64 || form.mask >= 0 || properties.broadcast || properties.rounding != "" {
+			return fail()
+		}
+		for _, operand := range ins.Args {
+			if index, valid := amd64VectorRegisterIndex(operand.Reg, form.byteWidth); operand.Kind == OpReg && valid && index >= 16 {
+				return fail()
+			}
 		}
 	}
 	return form, true, x86Mode32VectorRegisterContext(ins, goarch)

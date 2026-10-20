@@ -432,6 +432,7 @@ func decodeX86RawDirectives(fn Func, goarch string) (Func, error) {
 				legacyFloatCompare: x86LegacyFloatCompareRawIdentity(decoded[index], goarch),
 				floatMinMax:        x86FloatMinMaxRawIdentity(decoded[index], goarch),
 				scalarPrecision:    x86ScalarPrecisionRawIdentity(decoded[index], goarch),
+				fma3:               x86FMA3RawIdentity(decoded[index], goarch),
 				explicitMaskMove:   x86ExplicitMaskMoveRawIdentity(decoded[index], goarch),
 				packedShift:        x86PackedShiftRawIdentity(decoded[index], goarch),
 			}
@@ -7084,9 +7085,10 @@ vex:
 	destination := Operand{Kind: OpReg, Reg: Reg(fmt.Sprintf("%s%d", vectorPrefix, destinationNumber))}
 	op := spec.op(vexBits&0x80 != 0)
 	instruction = Instr{
-		Op:   op,
-		Args: []Operand{firstSource, secondSource, destination},
-		Raw:  fmt.Sprintf("%s %s, %s, %s", op, firstSource.String(), secondSource.String(), destination.String()),
+		Op:              op,
+		Args:            []Operand{firstSource, secondSource, destination},
+		Raw:             fmt.Sprintf("%s %s, %s, %s", op, firstSource.String(), secondSource.String(), destination.String()),
+		x86FMA3Encoding: x86RawFMA3VEX,
 	}
 	return instruction, modRMIndex + consumed, true, nil
 }
@@ -7165,8 +7167,8 @@ func decodedX86EVEXFMA3InstructionWithMemory(code []byte, i, mode int, segment R
 	bExt := int(^p0>>5) & 1
 	secondSourceNumber := (int(^p1>>3) & 15) + (int(^p2>>3)&1)*16
 	destinationNumber := int(modRM>>3&7) + rExt*8 + rHighExt*16
-	if mode == 32 && (maskNumber != 0 && !half || rExt != 0 || rHighExt != 0 || xExt != 0 || bExt != 0 || secondSourceNumber >= 8 || destinationNumber >= 8) {
-		return Instr{}, 0, true, fmt.Errorf("extended register or mask in 32-bit mode")
+	if mode == 32 && (rExt != 0 || rHighExt != 0 || xExt != 0 || bExt != 0 || secondSourceNumber >= 8 || destinationNumber >= 8) {
+		return Instr{}, 0, true, fmt.Errorf("extended register in 32-bit mode")
 	}
 	firstSource, consumed, decodeErr := memory.evex(code[modRMIndex:], mode, bExt, xExt, segment, vectorPrefix, disp8Scale)
 	if decodeErr != nil {
@@ -7200,7 +7202,12 @@ func decodedX86EVEXFMA3InstructionWithMemory(code []byte, i, mode int, segment R
 	for index := range args {
 		rawArgs[index] = args[index].String()
 	}
-	return Instr{Op: op, Args: args, Raw: fmt.Sprintf("%s %s", op, strings.Join(rawArgs, ", ")), x86Encoded: half}, modRMIndex + consumed, true, nil
+	encoding := x86RawFMA3EVEX
+	if half {
+		encoding = x86RawFMA3Absent // The existing FP16 owner remains distinct.
+	}
+	return Instr{Op: op, Args: args, Raw: fmt.Sprintf("%s %s", op, strings.Join(rawArgs, ", ")),
+		x86Encoded: half, x86FMA3Encoding: encoding}, modRMIndex + consumed, true, nil
 }
 
 // decodedX86VEXTRACT128Instruction recognizes the complete Go 1.27 vector
