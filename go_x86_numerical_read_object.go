@@ -164,10 +164,16 @@ type numericalListingRow struct {
 	ins      Instr
 }
 
-// Static continuation TEXT has a separate native symbol namespace and may
-// carry ArgsSizeUnknown. This display grammar does not make it a Go entry;
-// complete original/expanded/compiler records still bind its physical identity.
-var numericalListingHeader = regexp.MustCompile(`^(\S+) STEXT(?: static)? nosplit(?: asm)? size=([0-9]+) (?:align=0x[0-9a-f]+ )?args=0x([0-9a-f]+) locals=0x([0-9a-f]+)(?: funcid=0x[0-9a-f]+)?(?: align=0x[0-9a-f]+)?$`)
+// cmd/internal/obj's writer emits the same ordered flags and PC rows for both
+// IsText kinds. Historical writers put align after the frame; current writers
+// put it before. Neither this display nor ArgsSizeUnknown creates a Go entry:
+// complete original/expanded/compiler objects still bind kind, ABI and bytes.
+const numericalListingFlags = `(?: static)?(?: dupok)?(?: cfunc)?(?: nosplit)?(?: topframe)?(?: asm)?`
+const numericalListingFrame = `args=0x[0-9a-f]+ locals=0x[0-9a-f]+(?: funcid=0x[0-9a-f]+)?`
+
+var numericalListingHeader = regexp.MustCompile(`^(\S+) STEXT(?:FIPS)?` + numericalListingFlags +
+	` size=[0-9]+ (?:align=0x[0-9a-f]+ ` + numericalListingFrame + `|` +
+	numericalListingFrame + `(?: align=0x[0-9a-f]+)?)(?: leaf)?$`)
 
 func numericalListingRows(raw []byte) (map[string]map[int64][]numericalListingRow, error) {
 	rows := make(map[string]map[int64][]numericalListingRow)
@@ -184,13 +190,21 @@ func numericalListingRows(raw []byte) (map[string]map[int64][]numericalListingRo
 			rows[name] = make(map[int64][]numericalListingRow)
 			continue
 		}
-		for _, field := range strings.Fields(line) {
-			if field == "STEXT" {
-				return nil, numericalSBContext("unknown complete native listing TEXT role")
-			}
-		}
 		match := goAMD64FrameRow.FindStringSubmatch(line)
 		if match == nil {
+			boundary := false
+			for index, field := range strings.Fields(line) {
+				if index > 0 && strings.HasPrefix(field, "STEXT") ||
+					strings.HasPrefix(field, "args=") || strings.HasPrefix(field, "locals=") {
+					return nil, numericalSBContext("unknown complete native listing TEXT role")
+				}
+				boundary = boundary || strings.HasPrefix(field, "size=")
+			}
+			if boundary {
+				// Non-text symbol displays have no Prog rows. Their bytes and
+				// relocations remain object observations, never the previous TEXT.
+				name = ""
+			}
 			continue // Complete binary records, not this display parser, validate objects.
 		}
 		pc, err := strconv.ParseInt(match[1], 16, 64)
