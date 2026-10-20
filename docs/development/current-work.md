@@ -1,6 +1,6 @@
 # PR 40: current checkpoint
 
-Updated 2026-10-20. Implementation handoff: `cf4b519e2`. This is not a
+Updated 2026-10-20. Implementation handoff: `afa117ae1`. This is not a
 current-head completion certificate. Preserve ignored failed evidence and
 read [instruction contracts](instructions.md) and [validation](validation.md).
 
@@ -65,6 +65,7 @@ differ. Older qualifications remain in earlier Git checkpoints.
 
 | Snapshot | Independent local scope | Limits |
 |---|---|---|
+| `afa117ae1` | Integrated named/raw FMA3: 49 / 8,431 on current Go, actual Go1.20 and race | Zero failures/skips, unchanged complete source/tool seals. Includes exhaustive decoder, caller-effect, five-target object, portable rounding and access regressions. The fiftieth original x86 caller runtime root remains separately pending suitable hardware |
 | `d63bc455a` | Ordinary raw FMA3: 16 / 6,872 on current Go | Exact VEX/EVEX, 528 physical shapes, whole-source inputs/replay and private FLAGS/DF. Five-target objects, not original native floating execution; integrated minimum/race are still required |
 | `0b0cd1a7f` | Original raw FMA formats, physical mode32 and initialized controls: 6 / 47 current | Original bytes and DATA remain unchanged; private format objects, public Context and initialized public objects are separately checked |
 | `044ee4030` | All 33 command gates exit zero, including current/minimum build/vet, official five-arch coverage and 206 Node policies; complete seals unchanged | Integrated named FMA, portable access, format objects and audited baseline; not full CI, the strict benchmark or the unintegrated ordinary raw FMA candidate |
@@ -162,8 +163,11 @@ the independently defined DF, so saved FLAGS lacks bit 10. The independent
 saved-FLAGS-across-FMA RED is `09a2e66ac`; the minimal private-state repair is
 `d63bc455a` now passes the complete sixteen-root current-Go scope above with
 unchanged source/tool seals. Both the candidate failure and independent RED
-remain preserved. The integrated head still needs minimum/race, decoder and
-command-gate qualification before publication.
+remain preserved. The integrated `afa117ae1` snapshot passes the full 49-root
+minimum/current/race scope above, including both complete decoder loops. Its
+final command gates, unchanged classification comparison and full MathExp CLI
+still need fresh qualification before publication. Older command receipts do
+not qualify this later union.
 
 The latest full benchmark diagnostic at `47e432d4e` remains failed: all 184
 target/file pairs attempted, 129 compiled, 55 failed, no N/A/unattempted. The
@@ -212,10 +216,11 @@ does not certify original native Go execution or the final integrated head.
 
 ## Next work and verification
 
-1. Qualify the integrated named/raw FMA3 families, complete decoder regressions
-   and initialized objects on current Go, actual Go1.20 and race. The earlier
-   named/raw, portable-access, original-format and complete MathExp scopes above
-   are qualified at their recorded snapshots. Keep special-entry ABI work separate.
+1. Preserve the integrated FMA3 current/minimum/race qualification at `afa117ae1`.
+   Freeze the publication candidate and complete its command gates, unchanged
+   sixteen-report classification comparison and full MathExp CLI. The earlier
+   scopes above remain qualified only at their recorded snapshots. Keep
+   special-entry ABI work separate.
    Integrate completed rule-class repairs without editing active snapshots;
    preserve original inputs and all earlier failed evidence.
 2. Freeze the final integrated head, including documentation and used tools.
