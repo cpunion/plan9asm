@@ -279,6 +279,22 @@ jobs:
           done
           go test . -run "^($roots)$" -count=1 -timeout=5m -json > "$directory/raw.jsonl" 2> "$directory/stderr.log"
           node .github/scripts/audit-legacy-abs-sign-native.cjs "$directory"
+      - name: Execute original blend minimum alignment and zero-mask faults
+        if: ${{ !cancelled() && steps.native_toolchain.outcome == 'success' && steps.native_go.outcome == 'success' }}
+        env:
+          GOTOOLCHAIN: local
+        run: |
+          set -euo pipefail
+          directory=_out/native-x86-oracles/blend-minpos
+          mkdir -p "$directory"
+          roots='TestCrossLinuxRuntimeMatrixX86BlendMinposOriginalFaultsAMD64'
+          roots+='|TestCrossLinuxRuntimeMatrixX86BlendMinposOriginalFaults386'
+          go test . -list "^($roots)$" > "$directory/inventory.log"
+          for root in ${roots//|/ }; do
+            grep -Fx "$root" "$directory/inventory.log"
+          done
+          go test . -run "^($roots)$" -count=1 -timeout=5m -json > "$directory/raw.jsonl" 2> "$directory/stderr.log"
+          node .github/scripts/audit-blend-minpos-native.cjs "$directory"
       - name: Execute private LEAVE width mathematics on actual AMD64 and IA32
         if: ${{ !cancelled() && steps.native_toolchain.outcome == 'success' && steps.native_go.outcome == 'success' }}
         env:
