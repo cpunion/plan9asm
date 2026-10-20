@@ -7477,9 +7477,6 @@ vex:
 		return Instr{}, 0, false, nil
 	}
 	ok = true
-	if vexLength == 3 && vexBits&0x80 != 0 {
-		return Instr{}, 0, true, fmt.Errorf("VEX.W must be zero")
-	}
 	op := Op("")
 	switch vexBits & 3 {
 	case 0:
@@ -7489,6 +7486,8 @@ vex:
 	default:
 		return Instr{}, 0, true, fmt.Errorf("VEX.pp does not select VSHUFPS or VSHUFPD")
 	}
+	// Both VEX members are WIG in the ISA, independently of Go's W0
+	// encoder choice. EVEX retains its separate PS W0 / PD W1 grammar.
 	if addressOverride {
 		return Instr{}, 0, true, fmt.Errorf("address-size override is not source-layout safe")
 	}
