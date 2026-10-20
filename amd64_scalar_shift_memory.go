@@ -77,7 +77,11 @@ func x86LoweredScalarShiftTransfer(ins Instr, form x86ScalarShiftForm, state *x8
 		}
 		if input.operand.Kind == OpReg {
 			index, _, valid := x86ResultGP(input.operand.Reg, input.width, arch)
-			if !valid || state.pointerGP[index] {
+			// The independent shape clone retains original entry pointer
+			// roles, not this instruction's reaching register roles. Earlier
+			// source writes may already have replaced them. Only real
+			// dataflow states decide whether an input is opaque or numerical.
+			if !valid || !state.shapeOnly && state.pointerGP[index] {
 				return false
 			}
 		}
