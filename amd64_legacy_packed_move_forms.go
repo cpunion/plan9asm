@@ -118,6 +118,9 @@ func x86TypedInstructionByteEffect(op Op, ins Instr, arch string) (x86TypedByteE
 	if effect, known, err := x86TypedExplicitMaskMoveByteEffect(op, ins, arch); known {
 		return effect, known, err
 	}
+	if effect, known, err := x86TypedImplicitMaskMoveByteEffect(op, ins, arch); known {
+		return effect, known, err
+	}
 	if effect, known, err := x86TypedPackedAbsSignByteEffect(op, ins, arch); known {
 		return effect, known, err
 	}

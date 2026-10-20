@@ -10,6 +10,7 @@ type x86NativeMMXSite struct {
 	instruction Instr
 	word        *x86MMXWordForm
 	integer     *x86LegacyMMXReadForm
+	maskStore   *amd64ImplicitMaskMoveSpec
 }
 
 // This private source-bound region keeps the real MMX/x87 instructions
@@ -42,6 +43,10 @@ func x86NativeMMXInstruction(ins Instr, arch string) (x86NativeMMXSite, bool, er
 	}
 	if form, known, err := x86LegacyMMXReadProperties(ins, arch); known && form.mmx {
 		site.integer = &form
+		return site, true, err
+	}
+	if spec, known, err := x86ImplicitMaskMoveProperties(ins.Op, ins, arch); known && spec.byteWidth == 8 {
+		site.maskStore = &spec
 		return site, true, err
 	}
 	return site, false, nil
@@ -123,6 +128,15 @@ func newX86NativeMMXRegion(fn Func, sig FuncSig, arch, triple string) (*x86Nativ
 		} else if site.integer != nil {
 			form := site.integer
 			if err := plan.operand(form.source, int64(form.memoryBytes), false); err != nil {
+				return fail(err.Error())
+			}
+		} else if site.maskStore != nil {
+			for _, operand := range site.instruction.Args {
+				if err := plan.operand(operand, 8, false); err != nil {
+					return fail(err.Error())
+				}
+			}
+			if err := plan.operand(Operand{Kind: OpMem, Mem: MemRef{Base: DI}}, 8, true); err != nil {
 				return fail(err.Error())
 			}
 		}
@@ -257,6 +271,14 @@ func (plan *x86NativeMMXRegion) transfer(ordinal int, ins Instr, state *x86Resul
 			state.resultAddressGP[index] = x86ResultSlotAddress{}
 		}
 		return x86ResultStore(form.destination, form.bytes, state, owned, resultOffset, arch), true
+	}
+	if site.maskStore != nil {
+		for _, operand := range ins.Args {
+			if !read(operand, 8) {
+				return false, true
+			}
+		}
+		return x86ResultIncomingPointerAddressIdentity(Operand{Kind: OpMem, Mem: MemRef{Base: DI}}, state, arch), true
 	}
 	form := site.integer
 	destination, _ := amd64ParseMReg(ins.Args[form.destination].Reg)

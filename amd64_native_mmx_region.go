@@ -127,6 +127,12 @@ func (c *amd64Ctx) emitNativeMMXRegion(plan *x86NativeMMXRegion) error {
 		scratch = []string{"eax", "edx", "xmm7"}
 	}
 	constraints := []string{"r"}
+	for _, site := range plan.sites {
+		if site.maskStore != nil {
+			constraints = append(constraints, "~{di}")
+			break
+		}
+	}
 	for _, reg := range scratch {
 		constraints = append(constraints, "~{"+reg+"}")
 	}
@@ -285,6 +291,21 @@ func x86NativeMMXAssembly(plan *x86NativeMMXRegion, gpBase, xBase int64) (string
 				}
 				code = append(code, fmt.Sprintf("%s %%mm%d, %s", mnemonic, source, destination))
 			}
+			continue
+		}
+		if site.maskStore != nil {
+			offset, err := gp(DI)
+			if err != nil {
+				return "", err
+			}
+			destination := "%rdi"
+			if plan.arch == "386" {
+				destination = "%edi"
+			}
+			mask, _ := amd64ParseMReg(site.instruction.Args[0].Reg)
+			data, _ := amd64ParseMReg(site.instruction.Args[1].Reg)
+			code = append(code, fmt.Sprintf("%s %d($0), %s", word, offset, destination),
+				fmt.Sprintf("maskmovq %%mm%d, %%mm%d", mask, data))
 			continue
 		}
 		form := site.integer

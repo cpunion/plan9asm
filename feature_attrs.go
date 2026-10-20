@@ -268,6 +268,17 @@ func inferFuncTargetFeaturesForGOARCH(arch Arch, goarch string, fn Func) string 
 					add("+avx")
 				}
 			}
+			if spec, known, err := x86ImplicitMaskMoveProperties(ins.Op, ins, moveArch); known && err == nil {
+				switch {
+				case spec.byteWidth == 8:
+					add("+mmx")
+					add("+sse")
+				case spec.vector:
+					add("+avx")
+				default:
+					add("+sse2")
+				}
+			}
 			if form, known, err := x86NonTemporalVectorProperties(ins.Op, ins, moveArch); known && err == nil && !form.trap {
 				switch {
 				case !form.spec.vector && form.spec.load:

@@ -567,6 +567,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		if accepted, known := x86ResultExplicitMaskMoveStep(ins, state, owned, resultOffset, arch, true); known {
 			return accepted // The whole original mask move retains active memory faults and writes.
 		}
+		if accepted, known := x86ResultImplicitMaskMoveStep(ins, state, arch, true); known {
+			return accepted // Preserve the original implicit address and non-temporal access, including zero masks.
+		}
 		if accepted, known := x86ResultFloatingHelperStep(ins, state, owned, arch, true); known {
 			return accepted // The complete native opcode retains MXCSR, exceptions and masked accesses.
 		}
