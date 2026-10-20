@@ -12,6 +12,8 @@ const roots = [
   'TestCrossLinuxRuntimeMatrixX86ImplicitDivideOriginalGoAndNative386',
   'TestCrossLinuxRuntimeMatrixX86SegmentQueryOriginalFlagsAliasesAndFaults',
   'TestCrossLinuxRuntimeMatrixX86MoveHalfOriginalGoFlagsDFAliases',
+  'TestCrossLinuxRuntimeMatrixX86ImplicitDivideLogicalFPOriginalGoAndNativeAMD64',
+  'TestCrossLinuxRuntimeMatrixX86ImplicitDivideLogicalFPOriginalGoAndNative386',
 ];
 const axes = ['backend_O0', 'backend_O2', 'IR_O2/backend_O2'];
 const children = roots.flatMap(root => axes.map(axis => root + '/' + axis));
@@ -21,6 +23,16 @@ const segmentEvidence = '48 original-Go opcode rows × 16 inputs; full GP aliase
 const halfPreflight = 'half native CPUID/XCR0 AVX512F=1; original EVEX transport opcode executed\n';
 const halfEvidence = 'half native full64/FLAGS/DF=1/canary outcomes=512; complete original STD/CLD source and all eight named half moves\n';
 const halfOriginal = 'half actual original Go full64/FLAGS/DF=1/canary outcomes=512\n';
+
+function logicalFPCompletion(ia32, original) {
+  const arch = ia32 ? '386' : 'amd64';
+  const rows = ia32 ? 6 : 8;
+  const values = ia32 ? 96 : 128;
+  const faults = ia32 ? 18 : 24;
+  return original
+    ? `logical FP actual original Go arch=${arch} rows=${rows} values=${values}; complete original FP divisor source and whole AX/DX/DF/canary observations\n`
+    : `logical FP native arch=${arch} rows=${rows} values=${values} dead-division-faults=${faults}; whole AX/DX, DF and canaries; zero/overflow and signed-min/-1 SIGFPE\n`;
+}
 
 function requireIA32Images(output, staticCount, args) {
   const images = [...output.matchAll(/native oracle static IA32 ELF bytes=([1-9][0-9]*) sha256=([a-f0-9]{64})\b/g)];
@@ -78,6 +90,7 @@ function auditIntegerNativeFamilies(inventory, raw) {
     assert.ok(['run', 'output', 'pass'].includes(event.Action), 'unknown native test action');
     const root = event.Test.split('/')[0];
     const half = root.includes('MoveHalf');
+    const logicalFP = root.includes('ImplicitDivideLogicalFP');
     const observed = root.includes('ImplicitDivide') || root.includes('SegmentQuery') || half;
     const ia32 = root.endsWith('386');
     if (event.Action === 'run') {
@@ -114,6 +127,10 @@ function auditIntegerNativeFamilies(inventory, raw) {
         assert.equal(outputs.get(event.Test).split(halfEvidence).length - 1, 1,
           'half axis lacks all 512 full64/FLAGS/DF/canary observations');
       }
+      if (logicalFP) {
+        assert.equal(outputs.get(event.Test).split(logicalFPCompletion(ia32, false)).length - 1, 1,
+          'logical FP axis lacks complete native whole-register values and dead #DE execution');
+      }
       if (ia32) {
         requireIA32Images(outputs.get(event.Test), 2, '[]');
         staticIA32Images += 2;
@@ -134,6 +151,13 @@ function auditIntegerNativeFamilies(inventory, raw) {
       assert.equal(output.split(halfOriginal).length - 1, 1, 'missing complete actual original Go DF observations');
       assert.ok(commands[1].index < output.indexOf(halfOriginal) && output.indexOf(halfOriginal) < hosts[1].index,
         'original Go DF terminal escaped its SDK/native host bracket');
+    }
+    if (logicalFP) {
+      const completion = logicalFPCompletion(ia32, true);
+      assert.equal(output.split(completion).length - 1, 1,
+        'logical FP root lacks complete actual original Go value execution');
+      assert.ok(commands[1].index < output.indexOf(completion) && output.indexOf(completion) < hosts[1].index,
+        'original Go logical FP completion escaped its SDK/native host bracket');
     }
 
     // The SDK and final host observations occur after every execution child.
