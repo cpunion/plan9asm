@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
 	"testing"
@@ -197,13 +198,13 @@ func TestX86ImplicitMaskMoveTypedRoles(t *testing.T) {
 					}
 					if operand.read {
 						reads++
-						if operand.write || operand.index < 0 || operand.index > 1 || operand.operand != ins.Args[operand.index] {
+						if operand.write || operand.index < 0 || operand.index > 1 || !reflect.DeepEqual(operand.operand, ins.Args[operand.index]) {
 							t.Fatal("implicit store changed a mask or data source role")
 						}
 					}
 					if operand.write {
 						writes++
-						if operand.index != -1 || operand.operand != (Operand{Kind: OpMem, Mem: Mem{Base: DI}}) {
+						if operand.index != -1 || !reflect.DeepEqual(operand.operand, Operand{Kind: OpMem, Mem: MemRef{Base: DI}}) {
 							t.Fatal("implicit destination lost its architectural DI address")
 						}
 					}
