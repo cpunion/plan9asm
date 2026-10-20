@@ -728,6 +728,12 @@ jobs:
               - TestOrdinaryPackageLoadOutsideSDKRetainsInternalImportRejection
               - TestMapsLiteralMinimumTargetsHaveIndependentCompleteOwners
             timeout: 5m
+          - lane: llvm-original-math-field
+            module: cmd/plan9asmll
+            roots:
+              - TestCompileOneOriginalSDKMathExpScalarShiftAndNumericalSource
+              - TestCompileOneOriginalSDKFieldImplicitMultiplySource
+            timeout: 5m
           - lane: llvm-crc32
             module: cmd/plan9asmll
             roots:
@@ -841,6 +847,20 @@ jobs:
               - TestX86ImplicitMultiplyFiveTargetOriginalGoAndLLVMObjects
               - TestX86ImplicitMultiplyIndependentStorageCannotBypassNUM
               - TestTranslate386InstructionFamilies
+            timeout: 5m
+          - lane: implicit-multiply-native-inputs
+            module: '.'
+            roots:
+              - TestX86ImplicitMultiplyNativeMemoryIndependentGoEncoding
+              - TestX86ImplicitMultiplyNativeMemoryInitializedThreeAPIs
+              - TestX86ImplicitMultiplyNativeMemoryDeadAccessAndExactWidths
+              - TestX86ImplicitMultiplyNativeMemoryInputsStatusAndAuthority
+              - TestX86ImplicitMultiplyNativeMemoryEveryByteAndExactOutputState
+              - TestX86ImplicitMultiplyNativeMemoryLinuxAMD64Objects
+              - TestX86ImplicitMultiplyNativeMemoryDarwinAMD64Objects
+              - TestX86ImplicitMultiplyNativeMemoryWindowsAMD64Objects
+              - TestX86ImplicitMultiplyNativeMemoryLinux386Objects
+              - TestX86ImplicitMultiplyNativeMemoryWindows386Objects
             timeout: 5m
           - lane: crc32-typed-effects
             module: '.'
