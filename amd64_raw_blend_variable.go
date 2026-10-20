@@ -65,7 +65,10 @@ func decodedX86VariableBlendInstruction(code []byte, mode int) (Instr, int, bool
 	}
 	args := []Operand{reg(mask), source, reg(p.upper), reg(int(code[p.modRM]>>3&7) + p.r*8)}
 	return Instr{
-		Op: op, Args: args,
+		// This exact physical four-operand instruction is valid in mode32,
+		// unlike Go's named frontend spelling. No other raw family acquires
+		// that syntax role; the complete source replay seals this flag too.
+		Op: op, Args: args, x86Encoded: true,
 		Raw: fmt.Sprintf("%s %s, %s, %s, %s", op, args[0].String(), source.String(), args[2].String(), args[3].String()),
 	}, immediate + 1, true, nil
 }

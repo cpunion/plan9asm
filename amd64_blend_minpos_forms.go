@@ -44,6 +44,12 @@ func x86BlendMinposProperties(op Op, ins Instr, arch string) (x86BlendMinposForm
 	if len(ins.Args) != form.destination+1 {
 		return fail()
 	}
+	if arch == "386" && len(ins.Args) > 3 && !ins.x86Encoded {
+		// The ordinary Go frontend cannot express this VEX form in mode32.
+		// Only a validated physical decoder supplies its distinct grammar;
+		// original bytes and all producer inputs still need whole replay.
+		return fail()
+	}
 	form.byteWidth = amd64VectorByteWidth(ins.Args[form.destination].Reg)
 	if form.byteWidth != 16 && (form.byteWidth != 32 || form.legacy || form.minimum) {
 		return fail()
@@ -65,7 +71,7 @@ func x86BlendMinposProperties(op Op, ins Instr, arch string) (x86BlendMinposForm
 	if !register(source) && (!form.memory || !x86PackedShiftMemoryValid(source, arch)) {
 		return fail()
 	}
-	return form, true, nil
+	return form, true, x86Mode32VectorRegisterContext(ins, arch)
 }
 
 func x86TypedBlendMinposByteEffect(op Op, ins Instr, arch string) (x86TypedByteEffect, bool, error) {
