@@ -27,9 +27,10 @@ func TestInLanePermuteCoverageRetainsActualInputsAndVoidReads(t *testing.T) {
 							operands, memory = "$0x1b,"+bank+"1", "$0x1b,(AX)"
 						}
 						row := op + " " + operands + "," + bank + "2"
-						// Observing the low result distinguishes unknown-byte
-						// propagation from an initialized numerical value.
-						observed := row + "\nMOVL X2,AX"
+						// A dead GP copy may correctly remain unknown. TEST
+						// consumes its value and SETEQ consumes the resulting ZF,
+						// as in the existing IFMA and AES scanner controls.
+						observed := row + "\nMOVL X2,AX\nTESTL AX,AX\nSETEQ CX"
 						valueProbeNeedsContext(t, arch, observed)
 						if err := plan9asm.ProbeInstructionSequence(plan9asm.ArchAMD64, arch,
 							compactProbeInstructions(t, prefix.String()+observed)); err != nil {
