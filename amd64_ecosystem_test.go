@@ -915,12 +915,20 @@ func TestTranslateAMD64PackedFloatShuffleCompleteGoAssemblerForms(t *testing.T) 
 		fmt.Fprintf(&src, "\t%s.BCST.Z $9, (AX), Z1, K3, Z2\n", op)
 	}
 	src.WriteString("\tRET\n")
-	ll := translateAMD64EcosystemCase(t, src.String(), "packedfloatshuffleforms")
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc not found")
 	}
-	compileLLVMToObject(t, llc, "x86_64-unknown-linux-gnu", "packed-float-shuffle-forms.ll", "packed-float-shuffle-forms.o", ll)
+	for _, triple := range []string{"x86_64-unknown-linux-gnu", "x86_64-apple-darwin", "x86_64-pc-windows-msvc"} {
+		t.Run(triple, func(t *testing.T) {
+			ir := x86PackedFloatShuffleUnboundFormatObject(t, src.String(), "amd64", triple, 26)
+			for _, pipeline := range []struct{ text, level string }{
+				{ir, "-O0"}, {ir, "-O2"}, {x86DwordProductIROptimize(t, ir), "-O2"},
+			} {
+				x86PackedStringCompileObject(t, llc, triple, pipeline.text, pipeline.level)
+			}
+		})
+	}
 }
 
 func TestTranslate386PackedFloatShuffleCompleteGoAssemblerForms(t *testing.T) {
@@ -932,25 +940,20 @@ TEXT packedfloatshuffleforms386(SB),NOSPLIT,$0-0
 	SHUFPD $255, (AX), X7
 	RET
 `
-	file, err := Parse(ArchAMD64, src)
-	if err != nil {
-		t.Fatal(err)
-	}
-	ll, err := Translate(file, Options{
-		TargetTriple: "i386-unknown-linux-gnu",
-		Goarch:       "386",
-		Sigs: map[string]FuncSig{
-			"packedfloatshuffleforms386": {Name: "packedfloatshuffleforms386", Ret: Void},
-		},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc not found")
 	}
-	compileLLVMToObject(t, llc, "i386-unknown-linux-gnu", "packed-float-shuffle-386-forms.ll", "packed-float-shuffle-386-forms.o", ll)
+	for _, triple := range []string{"i386-unknown-linux-gnu", "i686-pc-windows-msvc"} {
+		t.Run(triple, func(t *testing.T) {
+			ir := x86PackedFloatShuffleUnboundFormatObject(t, src, "386", triple, 4)
+			for _, pipeline := range []struct{ text, level string }{
+				{ir, "-O0"}, {ir, "-O2"}, {x86DwordProductIROptimize(t, ir), "-O2"},
+			} {
+				x86PackedStringCompileObject(t, llc, triple, pipeline.text, pipeline.level)
+			}
+		})
+	}
 }
 
 func TestTranslateAMD64PackedFloatShuffleRejectsFormsOutsideGoAssemblerTables(t *testing.T) {
