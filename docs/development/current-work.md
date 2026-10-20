@@ -1,6 +1,6 @@
 # PR 40: current checkpoint
 
-Updated 2026-10-20. Implementation handoff: `ddf4a082a`. This is not a
+Updated 2026-10-20. Implementation handoff: `3458508fd`. This is not a
 current-head completion certificate. Preserve ignored failed evidence and
 read [instruction contracts](instructions.md) and [validation](validation.md).
 
@@ -71,6 +71,9 @@ differ. Older qualifications remain in earlier Git checkpoints.
 
 | Snapshot | Independent local scope | Limits |
 |---|---|---|
+| `f7e631cfa` | Complete blend/minpos: 27 / 1,012 current, 66.509 seconds | Complete original formats, initialized objects, mode32 grammar and portable mathematics; zero failure/skip and unchanged complete seals. Two original Linux native owners are wired, not locally executed |
+| `53dda86fc` | Complete VNNI integration: 24 / 963 current, 68.012 seconds | Independent Go rows, every-byte inputs, exact dead-access tuples, raw replay, five-target objects and BF16 controls; zero failure/skip, unchanged complete seals. Original native VNNI execution remains separate |
+| `53dda86fc` | Complete raw unsigned zero-extension: 15 / 414 current, 13.293 seconds | Full original initialized source, sixty orthogonal five-target kernels, source-identity and DF/private/GP preservation controls; zero failure/skip, unchanged complete seals. Minimum/race remain required |
 | `ddf4a082a` | Complete unsigned scalar integer-to-float family: 18 / 1,091 current, 126.145 seconds | Four members, all legal ER forms, five-target objects and 76 independently Go/LLVM-checked mode32 producer displacement cases; zero failure/skip, unchanged complete seals. Minimum/race and original AVX512 execution remain separate |
 | `3cc0ff5cf` | Complete raw ABS literal family: 13 / 484 on current Go | Independent 66 physical cases, actual LLVM decoding, every-byte/mask/identity negatives and three-API literal objects; minimum/race and original native execution remain separate |
 | `d4d0d8519` | Five original unbound format drivers and initialized controls: 11 / 270 current | Original Go bytes and public Context retained; private format objects are not initialized public programs |
@@ -138,27 +141,31 @@ runs heavy Go/LLVM locally. No scanner runs here. Batch publication follows
 current/minimum/race, policy, classification and benchmark verification, not
 the completion of a single focused scope.
 
-- VNNI candidate `4a28f8d8` is integrated. The prior 24-root attempt passed
-  23 roots; its sole failing memory-read fixture is now independently green
-  for all 72 rows. Rerun the complete 24-root union on the integration head.
-- Raw unsigned widening has real initialized original-block and five-target
-  object passes at `c233cb9cb`. Its three stale unbound format drivers are
-  corrected by `d7de10c96`. Independent RED `a33c68b7e` proves twelve DF,
-  private-storage and GP-address preservation failures; minimal `323c5264c`
-  fixes the shared post-consumers. Complete family GREEN is still required.
-- Blend/minpos mode32 RED `5b7b1fe33` has two genuine failures and two passing
-  physical/AMD64 controls. Integrated `79a46c3bc` distinguishes named Go386
-  grammar from authenticated physical bytes. Qualify all 27 portable roots;
-  the two new required Linux native fault owners need independent CI wiring
-  and execution, without replacing the existing eight integer owners.
-- Permute128 test-only `905562962` has valid RED: six roots / 620 children,
-  official rows and all selector byte priors pass, five consumer/effect roots
-  fail. The two-member implementation is pending. Preserve both initialized
-  original kernels, full unconditional m256 reads and every selector dependency.
-- Packed precision test-only `b0358b2b5` covers six names / eighteen official
-  rows and 53 orthogonal shapes. Establish valid RED before implementing it.
-  The separate named-half conversion family still needs its own complete
-  repair, including dynamic MXCSR rounding for immediate controls 4–7.
+- VNNI, raw unsigned widening, unsigned scalar conversion and blend/minpos
+  have the complete current-Go scopes above. New shared changes still need
+  integrated minimum/race, command gates and original native qualification.
+- Blend/minpos has a separate required two-root Linux native scope; the
+  existing eight integer owners are unchanged. All 25 focused native-policy
+  tests pass. The first full 221-policy run failed two isolation tests because
+  its independent owner inventory omitted the new scope. `fc3d7f7ba` adds that
+  obligation; its two tests pass, but the full policy union must be rerun.
+- Permute128 implementation `f3759be9f` is integrated. Its complete twenty-root
+  attempt at `2a762f611` passes nineteen roots, including all original objects,
+  byte dependencies and 8,192 raw register cases. One portable fault observer
+  wrongly limits NULL ownership to one byte: actual LLVM22 ARM64 O2 reads the
+  upper sixteen-byte half first. A minimal same-IR/C experiment reproduces the
+  failure and passes with the exact 32-byte tuple. Test-only `3458508fd` repairs
+  this observer without changing access, page boundaries or production code;
+  rerun the complete union. SDK physical-PC observation needs separate TDD.
+- Packed precision `b0358b2b5` has valid RED: thirteen roots / 1,485 children,
+  652 failed terminals with actual Go priors and unchanged complete seals.
+  Six-member production `4282cd492` is integrated. The first 23-root attempt
+  at `994535ace` passes seventeen roots; six failures are three old unbound
+  format drivers and three exact-opcode receipts that reject LLVM's width-bound
+  VCVTPD2PSX/Y memory aliases. Preserve this failed receipt and correct the
+  fixtures independently, retaining every original row and actual object.
+- The separate named-half conversion family needs its complete eighteen-row
+  TDD repair, including dynamic MXCSR rounding for immediate controls 4–7.
 - Required native hardware remains pending, never a skipped success. The
   original ABS/sign, scalar precision and FMA caller SIGILL failures do not
   establish hardware absence without their own actual-allocation CPU receipt.
