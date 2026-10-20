@@ -1458,7 +1458,7 @@ func TestTranslateAMD64PackedFloatMoveCompleteGoAssemblerForms(t *testing.T) {
 		}
 	}
 	src.WriteString("\tRET\n")
-	ll := translateAMD64EcosystemCase(t, src.String(), "packedfloatmoveforms")
+	ll := x86UnboundVoidVectorMoveFormatObject(t, src.String(), "amd64", "x86_64-unknown-linux-gnu")
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc not found")
@@ -1470,20 +1470,8 @@ func TestTranslate386PackedFloatMoveCompleteGoAssemblerForms(t *testing.T) {
 	// Go accepts high X/Y spellings and all three-operand mask rows. Observe
 	// their Context separately; actual mode32 objects use the physical low bank.
 	source := x86EVEXPackedFloat386OriginalSource()
-	file, err := Parse(ArchAMD64, x86PhysicalMode32ObjectSource(t, source, "386"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	ll, err := Translate(file, Options{
-		TargetTriple: "i386-unknown-linux-gnu",
-		Goarch:       "386",
-		Sigs: map[string]FuncSig{
-			"packedfloatmoveforms386": {Name: "packedfloatmoveforms386", Ret: Void},
-		},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	physical := x86PhysicalMode32ObjectSource(t, source, "386")
+	ll := x86UnboundVoidVectorMoveFormatObject(t, physical, "386", "i386-unknown-linux-gnu")
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc not found")
@@ -1570,20 +1558,8 @@ func TestTranslateX86EVEXPackedIntegerMoveCompleteGoAssemblerForms(t *testing.T)
 	} {
 		t.Run(target.goarch, func(t *testing.T) {
 			source := x86EVEXPackedIntegerMoveOriginalSource(target.goarch)
-			file, err := Parse(ArchAMD64, x86PhysicalMode32ObjectSource(t, source, target.goarch))
-			if err != nil {
-				t.Fatal(err)
-			}
-			ll, err := Translate(file, Options{
-				TargetTriple: target.triple,
-				Goarch:       target.goarch,
-				Sigs: map[string]FuncSig{
-					"evexpackedintegermoveforms": {Name: "evexpackedintegermoveforms", Ret: Void},
-				},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			physical := x86PhysicalMode32ObjectSource(t, source, target.goarch)
+			ll := x86UnboundVoidVectorMoveFormatObject(t, physical, target.goarch, target.triple)
 			llc := findLLVM22Tool("llc")
 			if llc == "" {
 				t.Fatal("LLVM 22 llc not found")
@@ -4745,7 +4721,7 @@ func TestTranslateAMD64VectorScalarMoveCompleteGoAssemblerForms(t *testing.T) {
 	}
 	src.WriteString("\tRET\n")
 
-	ll := translateAMD64EcosystemCase(t, src.String(), "vectorscalarmoveforms")
+	ll := x86UnboundVoidVectorMoveFormatObject(t, src.String(), "amd64", "x86_64-unknown-linux-gnu")
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc not found")

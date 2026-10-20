@@ -135,12 +135,10 @@ func TestX86PackedMoveAlignedNativeCompleteMemoryAxes(t *testing.T) {
 		t.Run(target.triple, func(t *testing.T) {
 			var source strings.Builder
 			source.WriteString("GLOBL table<>(SB),8,$128\n")
-			sigs := make(map[string]FuncSig)
 			count := 0
 			add := func(instruction string) {
 				name := fmt.Sprintf("aligned%d", count)
 				fmt.Fprintf(&source, "TEXT %s(SB),4,$0-0\n%s\nRET\n", name, instruction)
-				sigs[name] = FuncSig{Name: name, Ret: Void}
 				count++
 			}
 			for _, row := range x86PackedMoveResultOracle {
@@ -183,14 +181,7 @@ func TestX86PackedMoveAlignedNativeCompleteMemoryAxes(t *testing.T) {
 				}
 			}
 			x86LEAActualTargetGoObject(t, target.arch, target.triple, source.String())
-			file, err := Parse(ArchAMD64, source.String())
-			if err != nil {
-				t.Fatal(err)
-			}
-			ir, err := Translate(file, Options{Goarch: target.arch, TargetTriple: target.triple, Sigs: sigs})
-			if err != nil {
-				t.Fatal(err)
-			}
+			ir := x86UnboundVoidVectorMoveFormatObject(t, source.String(), target.arch, target.triple)
 			for _, segment := range []string{"%fs:", "%gs:", "ptr addrspace(256)", "ptr addrspace(257)"} {
 				if !strings.Contains(ir, segment) {
 					t.Fatal("native address-space lost", segment)

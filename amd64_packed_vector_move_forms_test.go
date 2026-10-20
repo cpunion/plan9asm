@@ -151,19 +151,12 @@ func TestX86PackedMoveGrammarAxesAndFiveLLVM22Targets(t *testing.T) {
 			}
 		}
 		requireX86GoAssemblerResult(t, arch, source.String(), true)
-		parsed, err := Parse(ArchAMD64, source.String())
-		if err != nil {
-			t.Fatal(err)
-		}
 		triples := []string{"x86_64-unknown-linux-gnu", "x86_64-apple-darwin", "x86_64-pc-windows-msvc"}
 		if arch == "386" {
 			triples = []string{"i386-unknown-linux-gnu", "i686-pc-windows-msvc"}
 		}
 		for _, triple := range triples {
-			ir, err := Translate(parsed, Options{Goarch: arch, TargetTriple: triple, Sigs: sigs})
-			if err != nil {
-				t.Fatal(err)
-			}
+			ir := x86UnboundVoidVectorMoveFormatObject(t, source.String(), arch, triple)
 			compileLLVMToObject(t, llc, triple, "packed-grammar.ll", "packed-grammar.o", ir)
 		}
 	}
