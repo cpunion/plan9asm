@@ -26,6 +26,26 @@ func x86WordMultiplyFormatObjectUnit(t *testing.T, file *File, signatures map[st
 func x86InstructionFormatObjectUnit(t *testing.T, file *File, signatures map[string]FuncSig, arch, triple string,
 	frame int64, lower func(*amd64Ctx, Instr) (bool, bool, error)) string {
 	t.Helper()
+	return x86InstructionFormatObjectUnits(t, file, signatures, arch, triple, frame, false, lower)
+}
+
+// Each visible function owns exactly one original format row. This permits a
+// terminal opcode without allowing it to hide later rows in an unreachable
+// block. The ordinary multi-row format helper retains its stricter contract.
+func x86SingleInstructionFormatObjectUnits(t *testing.T, file *File, signatures map[string]FuncSig, arch, triple string,
+	lower func(*amd64Ctx, Instr) (bool, bool, error)) string {
+	t.Helper()
+	for _, function := range file.Funcs {
+		if len(function.Instrs) != 3 || function.Instrs[0].Op != OpTEXT || function.Instrs[2].Op != OpRET {
+			t.Fatal("isolated format function must retain exactly TEXT, one row and RET")
+		}
+	}
+	return x86InstructionFormatObjectUnits(t, file, signatures, arch, triple, 0, true, lower)
+}
+
+func x86InstructionFormatObjectUnits(t *testing.T, file *File, signatures map[string]FuncSig, arch, triple string,
+	frame int64, isolated bool, lower func(*amd64Ctx, Instr) (bool, bool, error)) string {
+	t.Helper()
 	resolve := func(name string) string { return strings.TrimPrefix(name, "·") }
 	var ir strings.Builder
 	fmt.Fprintf(&ir, "target triple = %q\n", triple)
@@ -56,6 +76,7 @@ func x86InstructionFormatObjectUnit(t *testing.T, file *File, signatures map[str
 		if err := consumer.emitEntryAllocas(); err != nil {
 			t.Fatal(err)
 		}
+		terminal := false
 		for ordinal, instruction := range function.Instrs {
 			switch instruction.Op {
 			case OpTEXT:
@@ -65,6 +86,9 @@ func x86InstructionFormatObjectUnit(t *testing.T, file *File, signatures map[str
 			case OpRET:
 				if ordinal != len(function.Instrs)-1 || len(instruction.Args) != 0 {
 					t.Fatal("format unit lost its original final return")
+				}
+				if terminal {
+					continue
 				}
 				if registerI32 || scalarResult {
 					// Retain the emitter's original AX or declared scalar FP
@@ -85,9 +109,10 @@ func x86InstructionFormatObjectUnit(t *testing.T, file *File, signatures map[str
 				}
 			default:
 				known, terminated, err := lower(consumer, instruction)
-				if !known || terminated || err != nil {
+				if !known || terminated && (!isolated || ordinal != 1) || err != nil {
 					t.Fatal("complete original instruction format row not emitted", instruction.Raw, err)
 				}
+				terminal = terminated
 				emitted++
 			}
 		}
