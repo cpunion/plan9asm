@@ -71,8 +71,8 @@ func (c *amd64Ctx) lowerImplicitDivide(op Op, ins Instr) (bool, bool, error) {
 		if x86LogicalSourceFrameRegister(form.source.Reg, c.goarch) {
 			return true, false, fmt.Errorf("%w: division cannot consume an unbound physical SP/BP source", ErrProbeNeedsContext)
 		}
-	} else if !x86OrdinaryNativeMemoryOperand(form.source, c.goarch) {
-		return true, false, fmt.Errorf("%w: division memory needs original native backing, not logical FP/AUTO bytes", ErrProbeNeedsContext)
+	} else if form.source.Kind != OpFP && !x86OrdinaryNativeMemoryOperand(form.source, c.goarch) {
+		return true, false, fmt.Errorf("%w: division needs owned logical FP bytes or original native memory backing", ErrProbeNeedsContext)
 	}
 	return true, false, c.emitNativeImplicitDivide(form)
 }
@@ -109,8 +109,8 @@ func (c *amd64Ctx) emitNativeImplicitDivide(form x86ImplicitDivideForm) error {
 		operandIndex = 4
 	}
 	assembly, memoryClobber := "", ""
-	if form.source.Kind == OpReg {
-		value, err := c.evalIntSized(form.source, width)
+	if form.source.Kind == OpReg || form.source.Kind == OpFP {
+		value, err := c.implicitDivideRegisterValue(form.source, width)
 		if err != nil {
 			return err
 		}
@@ -153,6 +153,24 @@ func (c *amd64Ctx) emitNativeImplicitDivide(form x86ImplicitDivideForm) error {
 	return nil
 }
 
+// Logical FP is a collection of separately owned scalar fields, not native
+// contiguous stack backing. Gather its exact initialized bits into the same
+// register-source opcode used above. The opcode, rather than LLVM arithmetic,
+// still owns zero-divisor and quotient-overflow #DE, including dead results.
+func (c *amd64Ctx) implicitDivideRegisterValue(source Operand, width LLVMType) (string, error) {
+	if source.Kind != OpFP {
+		return c.evalIntSized(source, width)
+	}
+	value, handled, err := c.loadIntegerFPBytesMode(source.FPOffset, width, true)
+	if err != nil {
+		return "", err
+	}
+	if !handled {
+		return "", fmt.Errorf("%w: division divisor lacks exact owned logical FP bytes", ErrProbeNeedsContext)
+	}
+	return value, nil
+}
+
 // This descriptor is deliberately not in x86TypedInstructionByteEffect.
 // Only the paired native lowerer supplies a numerical continuation. The two
 // post-transfer footprint consumers may still revoke exactly the GP outputs.
@@ -176,7 +194,7 @@ func x86LoweredImplicitDivideStep(ins Instr, state *x86ResultState, owned []bool
 		form.source.Kind == OpReg && x86LogicalSourceFrameRegister(form.source.Reg, arch) {
 		return false, true
 	}
-	if form.source.Kind != OpReg && !x86RegisterAddressedNativeMemoryOperand(form.source, arch) {
+	if form.source.Kind != OpReg && form.source.Kind != OpFP && !x86RegisterAddressedNativeMemoryOperand(form.source, arch) {
 		return false, true
 	}
 	width, accumulatorWidth := int64(form.spec.bits/8), int64(form.spec.bits/8)
