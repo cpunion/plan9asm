@@ -66,6 +66,9 @@ func x86ResultCallerAddressesAfterTransfer(ins Instr, before, transferred [16]bo
 // old provenance independently of initialized bytes or opaque pointerGP.
 // Unknown effects conservatively revoke all caller addresses, never seed one.
 func x86ResultCallerAddressesAfter(ins Instr, before [16]bool, entryFP map[int64]bool, arch string) [16]bool {
+	if x86RawPermute128Source(ins, arch) {
+		return before // Retain existing identities without creating a GP/pointee fact.
+	}
 	if x86RawScalarPrecisionSource(ins, arch) {
 		return before // The exact conversion writes X/MXCSR, never a new GP identity.
 	}

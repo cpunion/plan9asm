@@ -16,9 +16,10 @@ import (
 // result. In particular, this never creates a caller-memory or raw-RET token.
 func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 	fn, sig, arch := c.fpScalarSource, c.sig, c.goarch
+	rawPermute128 := x86Permute128RawReplayRequired(fn, arch)
 	if x86FloatMinMaxRawReplayRequired(fn, arch) || x86ScalarPrecisionRawReplayRequired(fn, arch) ||
 		x86ExplicitMaskMoveRawReplayRequired(fn, arch) || x86PackedShiftRawReplayRequired(fn, arch) ||
-		x86PackedDotRawReplayRequired(fn, arch) || x86ZeroExtendRawReplayRequired(fn, arch) {
+		x86PackedDotRawReplayRequired(fn, arch) || x86ZeroExtendRawReplayRequired(fn, arch) || rawPermute128 {
 		if err := fn.x86RawReplay.validate(fn, arch); err != nil {
 			return err
 		}
@@ -118,6 +119,12 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 	boundRawPackedDot := false
 	boundRawZeroExtend := false
 	for _, ins := range fn.Instrs {
+		if x86RawPermute128Source(ins, arch) {
+			if !rawPermute128 {
+				return strictErr
+			}
+			continue // The complete replay above grants no missing input or memory fact.
+		}
 		if x86RawZeroExtendSource(ins, arch) {
 			if !boundRawZeroExtend && (fn.x86RawReplay == nil || fn.x86RawReplay.validate(fn, arch) != nil) {
 				return strictErr
@@ -383,6 +390,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		}
 		if accepted, known := x86ResultPackedDotStep(ins, state, owned, arch, true); known {
 			return accepted // Paired E4 dwords retain active volatile reads, even for dead results.
+		}
+		if accepted, known := x86ResultPermute128Step(ins, state, owned, arch, true); known {
+			return accepted // Type6 retains the whole m256 access even for two zero halves.
 		}
 		if accepted, known := x86ResultNativeLEAAddressBitsStep(ins, state, owned, arch, addressBitStores); known {
 			keepAddressBits = accepted

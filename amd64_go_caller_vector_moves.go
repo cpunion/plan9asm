@@ -3,6 +3,9 @@ package plan9asm
 import "fmt"
 
 func x86CallerVectorMoveKnown(ins Instr) bool {
+	if _, known, err := x86Permute128Properties(ins.Op, ins, "amd64"); known {
+		return err == nil && x86ResultNamedPredicateInstruction(ins) && !ins.x86Permute128VEX
+	}
 	if _, known, err := x86PackedDotProperties(ins.Op, ins, "amd64"); known {
 		return err == nil && x86ResultNamedPredicateInstruction(ins)
 	}
@@ -152,6 +155,9 @@ func x86CallerVectorByteMask(width int64) uint64 {
 }
 
 func x86CallerVectorMoveStep(ins *Instr, state *x86SourceStackState, proof *x86GoCallerRegionProof) bool {
+	if form, known, err := x86Permute128Properties(ins.Op, *ins, "amd64"); known {
+		return err == nil && x86CallerPermute128Step(ins, form, state, proof)
+	}
 	if form, known, err := x86PackedDotProperties(ins.Op, *ins, "amd64"); known {
 		return err == nil && x86CallerPackedDotStep(ins, form, state, proof)
 	}
@@ -407,6 +413,9 @@ func x86InstructionMemoryShape(ins Instr, index int, arch string) (width int64, 
 	}
 	if form, known, err := x86PackedAlignProperties(ins.Op, ins, arch); known {
 		return int64(form.memoryBytes), false, err == nil && !form.legacy && form.memory == index
+	}
+	if form, known, err := x86Permute128Properties(ins.Op, ins, arch); known {
+		return 32, false, err == nil && form.memory == index
 	}
 	if form, known, err := x86PackedLowMultiplyProperties(ins.Op, ins, arch); known {
 		return int64(form.memoryBytes), false, err == nil && form.memory == index
