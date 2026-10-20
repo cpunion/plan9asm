@@ -2,6 +2,7 @@ package plan9asm
 
 import (
 	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"regexp"
 	"sort"
@@ -14,7 +15,7 @@ import (
 // The original Go programs contain KMOVQ, but their runtime owners execute
 // translated LLVM, not the Go machine objects. Observe that actual backend
 // output before inferring a BW requirement from a source spelling.
-func x86OriginalFloatingOpcodeListing(t *testing.T, triple, level, ir string, masked bool, fmas int) {
+func x86OriginalFloatingOpcodeListing(t *testing.T, profile, triple, level, ir string, masked bool, fmas int) {
 	t.Helper()
 	llc, objdump := findLLVM22Tool("llc"), findLLVM22Tool("llvm-objdump")
 	if llc == "" || objdump == "" {
@@ -40,11 +41,15 @@ func x86OriginalFloatingOpcodeListing(t *testing.T, triple, level, ir string, ma
 		}
 		// BW/DQ opmask transports are not interchangeable with the F-only
 		// same-call KMOVW used by these floating native emitters.
-		if strings.HasPrefix(op, "k") && !strings.HasSuffix(op, "w") {
+		if strings.HasPrefix(op, "k") && !x86OriginalFloatingFMaskOpcode(op) {
 			t.Fatal("actual LLVM runtime requires an unobserved non-F opmask ISA", row[0])
 		}
-		if strings.Fields(row[1])[0] == "62" && !x86OriginalFloatingEVEXWithinProfile(op) {
-			t.Fatal("actual LLVM runtime contains an EVEX opcode outside its independently bounded F/VL profile", row[0])
+		code, err := hex.DecodeString(strings.Join(strings.Fields(row[1]), ""))
+		if err != nil || len(code) == 0 {
+			t.Fatal("actual machine instruction lost its complete physical bytes", row[0], err)
+		}
+		if code[0] == 0x62 && !x86OriginalFloatingEVEXWithinProfile(profile, op, code) {
+			t.Fatal("actual LLVM runtime contains an EVEX opcode outside its own F or F/VL profile", profile, row[0])
 		}
 	}
 	if masked && kmovw == 0 || fmaCount != fmas {
@@ -55,38 +60,115 @@ func x86OriginalFloatingOpcodeListing(t *testing.T, triple, level, ir string, ma
 		inventory = append(inventory, op)
 	}
 	sort.Strings(inventory)
-	t.Logf("actual LLVM22 %s %s: %d instructions, KMOVW=%d, FMA=%d, opcodes=%s; object evidence, not CPU execution",
-		triple, level, len(rows), kmovw, fmaCount, strings.Join(inventory, ","))
+	t.Logf("actual LLVM22 %s %s %s: %d instructions, KMOVW=%d, FMA=%d, opcodes=%s; object evidence, not CPU execution",
+		profile, triple, level, len(rows), kmovw, fmaCount, strings.Join(inventory, ","))
 }
 
-// This is a deliberately bounded independent ISA contract for these two
-// original runtime programs, not a general instruction/CPUID classifier.
-// Unknown backend choices require review instead of silently adding a CPU bit.
-func x86OriginalFloatingEVEXWithinProfile(op string) bool {
-	for _, member := range append(go127FMA3PackedOps(), go127FMA3ScalarOps()...) {
-		if op == strings.ToLower(member) {
-			return true
-		}
-	}
+func x86OriginalFloatingFMaskOpcode(op string) bool {
 	switch op {
-	case "vcvtsd2ss", "vcvtss2sd", "vmovaps", "vmovapd", "vmovups", "vmovupd", "vmovss", "vmovsd",
-		"vmovdqa32", "vmovdqa64", "vmovdqu32", "vmovdqu64", "vpxord", "vpxorq",
-		"vpandd", "vpandq", "vpandnd", "vpandnq", "vpord", "vporq", "vpternlogd", "vpternlogq",
-		"vbroadcastss", "vbroadcastsd", "vextractf32x4", "vextracti32x4", "vextractf64x4", "vextracti64x4",
-		"vinsertf32x4", "vinserti32x4", "vinsertf64x4", "vinserti64x4", "vshuff32x4", "vshufi32x4",
-		"vshufps", "vshufpd", "vpermilps", "vpermilpd":
+	case "kmovw", "kandw", "kandnw", "korw", "kxorw", "kxnorw", "knotw", "kortestw":
 		return true
 	}
 	return false
 }
 
-func x86OriginalFloatingRuntimeObjectPipelines(t *testing.T, triple, ir string, masked bool, fmas int) {
+// This is a deliberately bounded independent ISA contract for these two
+// original runtime programs, not a general instruction/CPUID classifier.
+// Unknown backend choices require review instead of silently adding a CPU bit.
+func x86OriginalFloatingEVEXWithinProfile(profile, op string, code []byte) bool {
+	if profile != "scalar-precision" && profile != "fma-caller" || len(code) < 6 || code[0] != 0x62 {
+		return false
+	}
+	known, scalar, fma := false, false, false
+	for _, member := range append(go127FMA3PackedOps(), go127FMA3ScalarOps()...) {
+		if op == strings.ToLower(member) {
+			known, fma = true, true
+			scalar = strings.HasSuffix(member, "SS") || strings.HasSuffix(member, "SD")
+		}
+	}
+	switch op {
+	case "vcvtsd2ss", "vcvtss2sd", "vmovss", "vmovsd":
+		known, scalar = true, true
+	case "vmovaps", "vmovapd", "vmovups", "vmovupd",
+		"vmovdqa32", "vmovdqa64", "vmovdqu32", "vmovdqu64", "vpxord", "vpxorq",
+		"vpandd", "vpandq", "vpandnd", "vpandnq", "vpord", "vporq", "vpternlogd", "vpternlogq",
+		"vbroadcastss", "vbroadcastsd", "vextractf32x4", "vextracti32x4", "vextractf64x4", "vextracti64x4",
+		"vinsertf32x4", "vinserti32x4", "vinsertf64x4", "vinserti64x4", "vshuff32x4", "vshufi32x4",
+		"vshufps", "vshufpd", "vpermilps", "vpermilpd":
+		known = true
+	}
+	if !known {
+		return false
+	}
+	// The disassembler has already validated each complete instruction. LL
+	// is ignored by scalar forms, and is RC (not vector width) for packed
+	// register FMA with embedded rounding; that latter form is always Z512.
+	if scalar || fma && code[3]&0x10 != 0 && code[5]&0xc0 == 0xc0 {
+		return true
+	}
+	length := code[3] >> 5 & 3
+	return length == 2 || profile == "fma-caller" && length < 2
+}
+
+func TestX86OriginalFloatingRuntimeEVEXProfileBoundaries(t *testing.T) {
+	for _, profile := range []string{"scalar-precision", "fma-caller"} {
+		for length := byte(0); length < 4; length++ {
+			for _, row := range []struct {
+				op      string
+				scalar  bool
+				rounder bool
+				memory  bool
+			}{
+				{op: "vmovups"}, {op: "vmovdqa64"}, {op: "vpxord"}, {op: "vfmadd132ps"},
+				{op: "vcvtsd2ss", scalar: true}, {op: "vcvtss2sd", scalar: true},
+				{op: "vfmadd132ss", scalar: true}, {op: "vfmadd132pd", rounder: true},
+				{op: "vfmadd132pd", memory: true},
+			} {
+				t.Run(fmt.Sprintf("%s/%s/memory%t/LL%d", profile, row.op, row.memory, length), func(t *testing.T) {
+					// Synthetic field projection, not an independent valid-encoding
+					// prior. Actual object checks above own complete LLVM decoding.
+					code := []byte{0x62, 0xf1, 0x7c, length << 5, 0x10, 0xc0}
+					if row.rounder {
+						code[3] |= 0x10
+					}
+					if row.memory {
+						code[3] |= 0x10
+						code[5] = 0
+					}
+					want := row.scalar || row.rounder || length == 2 || profile == "fma-caller" && length < 2
+					if x86OriginalFloatingEVEXWithinProfile(profile, row.op, code) != want {
+						t.Fatal("scalar LLIG or Z512 ER granted VL to a packed transport", code, want)
+					}
+				})
+			}
+		}
+	}
+	for _, op := range []string{"kmovb", "kmovd", "kmovq", "kaddw", "ktestw", "kandq"} {
+		if x86OriginalFloatingFMaskOpcode(op) {
+			t.Fatal("F-only mask inventory borrowed a BW/DQ opcode", op)
+		}
+	}
+	for _, row := range []struct {
+		profile string
+		code    []byte
+	}{
+		{"unknown", []byte{0x62, 0xf1, 0x7c, 0x48, 0x10, 0xc0}},
+		{"scalar-precision", []byte{0x62, 0xf1, 0x7c, 0x48, 0x10}},
+		{"fma-caller", []byte{0xc4, 0xf1, 0x7c, 0x48, 0x10, 0xc0}},
+	} {
+		if x86OriginalFloatingEVEXWithinProfile(row.profile, "vmovups", row.code) {
+			t.Fatal("profile projection invented a known owner or complete EVEX instruction", row)
+		}
+	}
+}
+
+func x86OriginalFloatingRuntimeObjectPipelines(t *testing.T, profile, triple, ir string, masked bool, fmas int) {
 	t.Helper()
 	for _, pipeline := range []struct{ name, body, level string }{
 		{"O0", ir, "-O0"}, {"O2", ir, "-O2"}, {"IR_O2_backend_O2", x86DwordProductIROptimize(t, ir), "-O2"},
 	} {
 		t.Run(pipeline.name, func(t *testing.T) {
-			x86OriginalFloatingOpcodeListing(t, triple, pipeline.level, pipeline.body, masked, fmas)
+			x86OriginalFloatingOpcodeListing(t, profile, triple, pipeline.level, pipeline.body, masked, fmas)
 		})
 	}
 }
@@ -119,7 +201,7 @@ func TestX86OriginalScalarPrecisionRuntimeActualBackendISA(t *testing.T) {
 			if err != nil {
 				t.Fatal("original scalar runtime translation failed before actual backend ISA observation", err)
 			}
-			x86OriginalFloatingRuntimeObjectPipelines(t, triple, ir, true, 0)
+			x86OriginalFloatingRuntimeObjectPipelines(t, "scalar-precision", triple, ir, true, 0)
 		})
 	}
 }
@@ -170,7 +252,7 @@ func TestX86OriginalFMACallerRuntimeActualBackendISA(t *testing.T) {
 		"vmovdqu8", "vmovdqu16", "vpmovb2m", "vpmovw2m", "vpaddb", "vpsllw",
 		"vxorps", "vxorpd", "vextractf64x2", "vinserti64x2", "vfmadd132ph", "vfmadd132sh",
 	} {
-		if x86OriginalFloatingEVEXWithinProfile(op) {
+		if x86OriginalFloatingEVEXWithinProfile("fma-caller", op, []byte{0x62, 0xf1, 0x7c, 0x48, 0x10, 0xc0}) {
 			t.Fatal("object opcode contract admitted an independent BW, DQ or FP16 dependency", op)
 		}
 	}
@@ -212,7 +294,7 @@ func TestX86OriginalFMACallerRuntimeActualBackendISA(t *testing.T) {
 					for _, row := range rows[first:end] {
 						masked = masked || strings.Contains(row, "K1")
 					}
-					x86OriginalFloatingRuntimeObjectPipelines(t, triple, translation.Module.String(), masked, end-first)
+					x86OriginalFloatingRuntimeObjectPipelines(t, "fma-caller", triple, translation.Module.String(), masked, end-first)
 				})
 			}
 		})
