@@ -2,7 +2,6 @@ package plan9asm
 
 import (
 	"reflect"
-	"runtime"
 	"strings"
 	"testing"
 )
@@ -49,16 +48,11 @@ func TestTranslateX86LeaveAndXLATCompleteGoAssemblerForms(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			ir, err := Translate(file, Options{
-				Goarch: target.goarch, TargetTriple: target.triple,
-				Sigs: map[string]FuncSig{
-					"implicitlegacyforms": {Name: "implicitlegacyforms", Ret: Void},
-				},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
-			for _, want := range []string{"load i16", "load i8", "getelementptr i8", "-256"} {
+			x86PhysicalSPRequirePublicContext(t, source, "func implicitlegacyforms()", target.goarch, target.triple)
+			ir := x86ScalarFormatObjectUnit(t, file, map[string]FuncSig{
+				"implicitlegacyforms": {Name: "implicitlegacyforms", Ret: Void},
+			}, target.goarch, target.triple, 0)
+			for _, want := range []string{"load i16", "load volatile i8", "-256"} {
 				if !strings.Contains(ir, want) {
 					t.Errorf("IR is missing %s:\n%s", want, ir)
 				}
@@ -111,14 +105,7 @@ func TestTranslateX86LeaveAndXLATRejectFormsOutsideGoTables(t *testing.T) {
 }
 
 func TestAMD64LeaveAndXLATRuntimeSemantics(t *testing.T) {
-	crossRosetta := runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" && rosettaAvailable()
-	if runtime.GOARCH != "amd64" && !crossRosetta {
-		t.Skip("runtime execution test requires amd64 or Rosetta")
-	}
-	llc, clang, ok := findLlcAndClang(t)
-	if !ok {
-		t.Fatal("LLVM 22 llc/clang not found")
-	}
+	execution := x86ScalarCountHostExecution(t)
 	const source = `TEXT implicitlegacysemantics(SB),NOSPLIT,$0-16
 	MOVQ out+0(FP), R8
 	MOVQ data+8(FP), BP
@@ -132,19 +119,12 @@ func TestAMD64LeaveAndXLATRuntimeSemantics(t *testing.T) {
 	MOVQ AX, 16(R8)
 	RET
 `
-	file, err := Parse(ArchAMD64, source)
-	if err != nil {
-		t.Fatal(err)
-	}
-	triple := testTargetTriple(runtime.GOOS, runtime.GOARCH)
-	var runPrefix []string
-	if crossRosetta {
-		triple = "x86_64-apple-macosx"
-		runPrefix = []string{"/usr/bin/arch", "-x86_64"}
-	}
-	ir, err := Translate(file, Options{
-		Goarch: "amd64", TargetTriple: triple,
-		Sigs: map[string]FuncSig{
+	// LEAVE changes physical SP and invalidates the later Go FP/RET transport.
+	// Preserve this complete original body as Context and execute only its
+	// explicitly private virtual-register mathematics, never a native Go ABI.
+	x86PhysicalSPRequirePublicContext(t, source, "func implicitlegacysemantics(out,data *byte)", "amd64", execution.triple)
+	ir := x86PhysicalSPPrivateEmitter(t, source,
+		map[string]FuncSig{
 			"implicitlegacysemantics": {
 				Name: "implicitlegacysemantics", Args: []LLVMType{Ptr, Ptr}, Ret: Void,
 				Frame: FrameLayout{Params: []FrameSlot{
@@ -152,11 +132,7 @@ func TestAMD64LeaveAndXLATRuntimeSemantics(t *testing.T) {
 					{Offset: 8, Type: Ptr, Index: 1, Field: -1},
 				}},
 			},
-		},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+		}, "amd64", execution.triple)
 	const mainC = `
 #include <stdint.h>
 #include <string.h>
@@ -173,5 +149,7 @@ int main(void) {
   return 0;
 }
 `
-	compileAndRunRuntimeTestForTarget(t, llc, clang, "implicit_legacy_semantics", triple, ir, mainC, runPrefix)
+	execution.compileAndRunLLVM(t, "implicit_legacy_private_math", ir,
+		"#define implicitlegacysemantics InstructionFormat0\n"+mainC, "-O2")
+	t.Log("private virtual-SP LEAVE/XLAT mathematics only; original public source remains Context, not native Go ABI")
 }

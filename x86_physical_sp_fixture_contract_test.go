@@ -163,7 +163,11 @@ func TestX86PhysicalSPOriginalProgramsRetainContextAndActualGoBytes(t *testing.T
 	// The actual frameless Go byte stream does not repair the changed SP.
 	// Its later logical data+8(FP) still encodes 16(RSP), now based in data,
 	// not the original caller stack. Do not run this invalid body as a C ABI.
-	leaveCode := amd64RegisterBoolOriginalBytes(t, "#include \"textflag.h\"\n"+leave)
+	// This standalone byte helper has no -I option. Resolve the selected SDK's
+	// real header explicitly, rather than treating its missing include as an
+	// assembler rejection of the original body.
+	header := fmt.Sprintf("#include %q\n", filepath.Join(runtime.GOROOT(), "pkg", "include", "textflag.h"))
+	leaveCode := amd64RegisterBoolOriginalBytes(t, header+leave)
 	left, lateFP, restoresSP := false, false, false
 	var last x86asm.Op
 	for len(leaveCode) != 0 {

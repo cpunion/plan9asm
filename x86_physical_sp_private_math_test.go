@@ -7,6 +7,15 @@ import (
 	"testing"
 )
 
+func x86PhysicalSPRequirePublicContext(t *testing.T, source, declarations, arch, triple string) {
+	t.Helper()
+	for _, api := range []string{"text", "module", "Go"} {
+		if ir, err := x86ScalarFPBitViewAPI(t, source, declarations, arch, triple, api); ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+			t.Fatal("private physical-SP mathematics acquired an unproved public entry/frame/return", api, err)
+		}
+	}
+}
+
 // Test-only direct emission. Neither this helper nor a native C call into its
 // LLVM output certifies the original physical Go entry, stack or RET. SP/BP
 // here are virtual integer slots and never replace LLVM's real return stack.

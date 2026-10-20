@@ -237,14 +237,7 @@ int main(void) {
 }
 
 func TestAMD64UnaryYmbAliasesRuntime(t *testing.T) {
-	crossRosetta := runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" && rosettaAvailable()
-	if runtime.GOARCH != "amd64" && !crossRosetta {
-		t.Skip("runtime execution test requires amd64 or Rosetta")
-	}
-	llc, clang, ok := findLlcAndClang(t)
-	if !ok {
-		t.Fatal("LLVM 22 llc/clang not found")
-	}
+	execution := x86ScalarCountHostExecution(t)
 	var source, checks strings.Builder
 	source.WriteString("TEXT unaryaliases(SB),$0-8\n\tMOVQ out+0(FP), R14\n")
 	index := 0
@@ -277,22 +270,16 @@ func TestAMD64UnaryYmbAliasesRuntime(t *testing.T) {
 	}
 	source.WriteString("\tRET\n")
 	requireX86GoAssemblerResult(t, "amd64", source.String(), true)
-	file, err := Parse(ArchAMD64, source.String())
-	if err != nil {
-		t.Fatal(err)
-	}
-	triple := testTargetTriple(runtime.GOOS, runtime.GOARCH)
-	var runPrefix []string
-	if crossRosetta {
-		triple, runPrefix = "x86_64-apple-macosx", []string{"/usr/bin/arch", "-x86_64"}
-	}
-	ir, err := Translate(file, Options{Goarch: "amd64", TargetTriple: triple, Sigs: map[string]FuncSig{
+	// Wide AH/CH aliases select physical SP/BP. The unchanged original body
+	// never restores its real return stack: this remains a private arithmetic
+	// oracle, separately from public Context and actual Go byte identities.
+	x86PhysicalSPRequirePublicContext(t, source.String(), "func unaryaliases(out *uint64)", "amd64", execution.triple)
+	ir := x86PhysicalSPPrivateEmitter(t, source.String(), map[string]FuncSig{
 		"unaryaliases": {Name: "unaryaliases", Args: []LLVMType{Ptr}, Ret: Void,
 			Frame: FrameLayout{Params: []FrameSlot{{Offset: 0, Type: Ptr, Index: 0, Field: -1}}}},
-	}})
-	if err != nil {
-		t.Fatal(err)
-	}
+	}, "amd64", execution.triple)
 	mainC := fmt.Sprintf("#include <stdint.h>\nextern void unaryaliases(uint64_t *);\nint main(void) {\n  uint64_t out[%d] = {0};\n  unaryaliases(out);\n%s  return 0;\n}\n", index, checks.String())
-	compileAndRunRuntimeTestForTarget(t, llc, clang, "unary_aliases", triple, ir, mainC, runPrefix)
+	execution.compileAndRunLLVM(t, "unary_aliases_private_math", ir,
+		"#define unaryaliases InstructionFormat0\n"+mainC, "-O2")
+	t.Log("all 78 original Ymb aliases execute private virtual-register mathematics only, not the invalid physical Go return sequence")
 }
