@@ -500,6 +500,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		if accepted, known := x86ResultByteShuffleStepWithRead(ins, state, owned, arch, true); known {
 			return accepted // Same full-tuple E4NF read or original legacy m128 opcode.
 		}
+		if accepted, known := x86ResultImmediateShuffleStepWithRead(ins, state, owned, arch, true); known {
+			return accepted // The paired full tuple or m32 read survives zero masks and dead results.
+		}
 		if accepted, known := x86ResultPackedAlignStep(ins, state, owned, arch, true); known {
 			return accepted // Full E4NF tuples and the original legacy alignment/fault opcode.
 		}
