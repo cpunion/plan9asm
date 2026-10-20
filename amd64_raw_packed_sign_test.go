@@ -113,7 +113,21 @@ func TestTranslateX86RawPackedSignLLVM22AllTargets(t *testing.T) {
 				// must report Context, while a private emitter proves objects.
 				// The independent 114-row initialized family is exercised by
 				// TestX86PackedAbsSignInitializedObjectsThreeAPIsFiveTargets.
-				ir := x86UnboundVoidRawScalarFormatObject(t, raw.String(), target.goarch, target.triple)
+				file, signatures := x86UnboundVoidFormatSources(t, raw.String(), target.goarch, target.triple)
+				if len(file.Funcs) != 1 || len(file.Data) != 0 || len(file.Globl) != 0 {
+					t.Fatal("original packed-sign format lost its single byte-only body")
+				}
+				decoded, err := decodeX86RawDirectives(file.Funcs[0], target.goarch)
+				if err != nil || len(decoded.Instrs) != 3 || decoded.Instrs[1].Op != Op(strings.Fields(form)[0]) ||
+					decoded.Instrs[2].Op != OpRET || decoded.Instrs[2].x86RawNearReturn == nil {
+					t.Fatal("original packed-sign instruction and encoded RET were not retained", err)
+				}
+				// Private format emission is not the public normalizer's
+				// physical return/nonalias contract. In particular the memory
+				// row cannot borrow that contract merely to compile its format.
+				unit := *file
+				unit.Funcs = []Func{decoded}
+				ir := x86ScalarFormatObjectUnit(t, &unit, signatures, target.goarch, target.triple, 0)
 				for _, operation := range []string{"icmp slt <", "icmp sgt <", "sub <", "select <"} {
 					if !strings.Contains(ir, operation) {
 						t.Fatal("original raw sign format lost its complete integer operation", operation)
