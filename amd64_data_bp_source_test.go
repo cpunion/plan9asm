@@ -3,7 +3,6 @@ package plan9asm
 import (
 	"errors"
 	"fmt"
-	"regexp"
 	"strings"
 	"testing"
 )
@@ -25,17 +24,11 @@ func TestAMD64DataBPActualGoSavedFramePrologue(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			for _, instruction := range []string{
-				`\tPUSHQ\tBP(?:\n|\r\n)`,
-				`\tMOVQ\tSP, BP(?:\n|\r\n)`,
-				`\tPOPQ\tBP(?:\n|\r\n)`,
-			} {
-				if count := len(regexp.MustCompile(instruction).FindAllStringIndex(listing, -1)); count != 1 {
-					t.Fatalf("original Go did not independently preserve the caller BP exactly once: %s count=%d\n%s",
-						instruction, count, listing)
-				}
+			style, err := amd64DataBPSavedFrameListing(listing, frame)
+			if err != nil {
+				t.Fatalf("original Go did not preserve the complete ordered BP/frame envelope: %v\n%s", err, listing)
 			}
-			t.Log("original Go preserves its physical BP; this observation grants no translator frame capability")
+			t.Logf("original Go preserves its physical BP using %s; this observation grants no translator frame capability", style)
 		})
 	}
 }
