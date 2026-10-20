@@ -171,7 +171,6 @@ func TestDecodeX86RawMaskBlendRejectsUnsafeForms(t *testing.T) {
 
 func TestTranslateX86RawMaskBlendRIPDataObjects(t *testing.T) {
 	var source strings.Builder
-	sigs := make(map[string]FuncSig)
 	index := 0
 	for op, spec := range amd64MaskBlendSpecs {
 		for _, broadcast := range []bool{false, true} {
@@ -184,14 +183,9 @@ func TestTranslateX86RawMaskBlendRIPDataObjects(t *testing.T) {
 			for _, value := range x86RawMaskBlendLiteral(op, 64, 7, true, broadcast) {
 				fmt.Fprintf(&source, "\tBYTE $%#02x\n", value)
 			}
-			sigs[name] = FuncSig{Name: name, Ret: Void}
 		}
 	}
 	requireX86GoAssemblerResult(t, "amd64", source.String(), true)
-	file, err := Parse(ArchAMD64, source.String())
-	if err != nil {
-		t.Fatal(err)
-	}
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc not found")
@@ -202,10 +196,7 @@ func TestTranslateX86RawMaskBlendRIPDataObjects(t *testing.T) {
 		"x86_64-pc-windows-msvc",
 	} {
 		t.Run(triple, func(t *testing.T) {
-			ir, err := Translate(file, Options{Goarch: "amd64", TargetTriple: triple, Sigs: sigs})
-			if err != nil {
-				t.Fatal(err)
-			}
+			ir := x86UnboundVoidRawScalarFormatObject(t, source.String(), "amd64", triple)
 			compileLLVMToObject(t, llc, triple, "raw-mask-blend-literal.ll", "raw-mask-blend-literal.o", ir)
 		})
 	}

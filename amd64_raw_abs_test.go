@@ -107,10 +107,6 @@ func TestTranslateX86RawPackedAbsObjects(t *testing.T) {
 	RET
 `
 	requireX86GoAssemblerResult(t, "amd64", source, true)
-	file, err := Parse(ArchAMD64, source)
-	if err != nil {
-		t.Fatal(err)
-	}
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc not found")
@@ -119,13 +115,7 @@ func TestTranslateX86RawPackedAbsObjects(t *testing.T) {
 		"x86_64-apple-darwin", "x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc",
 	} {
 		t.Run(triple, func(t *testing.T) {
-			ir, err := Translate(file, Options{
-				Goarch: "amd64", TargetTriple: triple,
-				Sigs: map[string]FuncSig{"rawPackedAbs": {Name: "rawPackedAbs", Ret: Void}},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			ir := x86UnboundVoidRawScalarFormatObject(t, source, "amd64", triple)
 			compileLLVMToObject(t, llc, triple, "raw-packed-abs.ll", "raw-packed-abs.o", ir)
 		})
 	}

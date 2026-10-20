@@ -5308,20 +5308,7 @@ TEXT packedfloattodwordforms(SB),NOSPLIT,$0-0
 	CVTTPS2PL source(SB), X2
 	RET
 `
-	file, err := Parse(ArchAMD64, src)
-	if err != nil {
-		t.Fatal(err)
-	}
-	ll, err := Translate(file, Options{
-		TargetTriple: "x86_64-unknown-linux-gnu",
-		Goarch:       "amd64",
-		Sigs: map[string]FuncSig{
-			"packedfloattodwordforms": {Name: "packedfloattodwordforms", Ret: Void},
-		},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	ll := x86UnboundVoidScalarFormatObject(t, src, "packedfloattodwordforms", "amd64", "x86_64-unknown-linux-gnu")
 	for _, intrinsic := range []string{"asm sideeffect \"cvtps2dq", "asm sideeffect \"cvttps2dq"} {
 		if !strings.Contains(ll, intrinsic) {
 			t.Fatalf("packed float-to-dword lowering omitted %s", intrinsic)

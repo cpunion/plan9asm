@@ -49,20 +49,8 @@ func TestTranslateX86PackedAbsSignCompleteGoAssemblerForms(t *testing.T) {
 	VPABSQ.BCST.Z 480(AX), K7, Y7
 	RET
 `)
-			file, err := Parse(ArchAMD64, source.String())
-			if err != nil {
-				t.Fatal(err)
-			}
-			ll, err := Translate(file, Options{
-				TargetTriple: target.triple,
-				Goarch:       target.goarch,
-				Sigs: map[string]FuncSig{
-					"packedabssignforms": {Name: "packedabssignforms", Ret: Void},
-				},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			physical := x86PhysicalMode32ObjectSource(t, source.String(), target.goarch)
+			ll := x86UnboundVoidScalarFormatObject(t, physical, "packedabssignforms", target.goarch, target.triple)
 			for _, want := range []string{"icmp slt <", "icmp sgt <", "sub <", "select <"} {
 				if !strings.Contains(ll, want) {
 					t.Fatalf("packed abs/sign IR is missing %q:\n%s", want, ll)
