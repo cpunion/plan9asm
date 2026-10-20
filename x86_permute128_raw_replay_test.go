@@ -51,9 +51,22 @@ func TestX86Permute128PhysicalModeAndWholeProducerReplay(t *testing.T) {
 					}
 					state := x86FMA3ResultInputState()
 					state.pointerGP[0] = true
+					state.valueStack = &x86ResultValueStack{bytes: []uint8{0xa5, 0x37}, id: true}
 					before := state.clone()
 					if x86ScalarFPResultTransfer(original.Instrs[ordinal], &state, nil, 0, arch) || !reflect.DeepEqual(state, before) {
 						t.Fatal("standalone raw query borrowed a named/native source role")
+					}
+					// This private paired step consumes the exact original above;
+					// it does not stand in for the complete public replay check.
+					ins := original.Instrs[ordinal]
+					expected := before.clone()
+					expected.writeVector(2, 32, 0xffffffff, false)
+					accepted, owned := x86ResultPermute128Step(ins, &state, nil, arch, true)
+					if !accepted || !owned || !reflect.DeepEqual(state, expected) ||
+						x86ResultDirectionAfterSource(ins, before.direction, arch) != before.direction ||
+						!x86ResultPreservesPrivateStorage(ins, arch) ||
+						x86ResultCallerAddressesAfter(ins, before.callerAddressGP, nil, arch) != before.callerAddressGP {
+						t.Fatal("paired VEX selection changed FLAGS/DF/ID/private cells or existing GP identities", accepted, owned)
 					}
 					check := x86LegacyFloatReplayCheck(t, arch, source, declaration)
 					for _, mutation := range []string{"original", "origin-only", "missing-replay", "producer", "operand", "encoded", "vector-width", "original-bytes", "generation", "snapshot", "named-forgery"} {
