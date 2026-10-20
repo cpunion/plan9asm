@@ -56,6 +56,8 @@ func x86ResultPackedDotStep(ins Instr, state *x86ResultState, owned []bool, arch
 			return false, true
 		}
 		ins.x86Encoded, ins.x86SourceRaw = false, nil
+	} else if ins.x86PackedDotEncoding != x86RawPackedDotAbsent {
+		return false, true // A named source cannot invent a decoder generation.
 	}
 	if form.mask >= 0 {
 		mask, _ := amd64ParseKReg(ins.Args[form.mask].Reg)
@@ -75,8 +77,10 @@ func x86ResultPackedDotStep(ins Instr, state *x86ResultState, owned []bool, arch
 	}
 	second, _ := amd64VectorRegisterIndex(ins.Args[form.second].Reg, form.byteWidth)
 	destination, _ := amd64VectorRegisterIndex(ins.Args[form.destination].Reg, form.byteWidth)
-	defined := form.definedBytes(first, state.vectorBytes(second), state.vectorBytes(destination))
-	state.writeVector(destination, form.byteWidth, defined, false)
+	if !form.inputsDefined(first, state.vectorBytes(second), state.vectorBytes(destination)) {
+		return false, true
+	}
+	state.writeVector(destination, form.byteWidth, x86CallerVectorByteMask(int64(form.byteWidth)), false)
 	return true, true // FLAGS, DF, masks, pointers and storage are unchanged.
 }
 
@@ -97,7 +101,9 @@ func x86CallerPackedDotStep(ins *Instr, form x86PackedDotForm, state *x86SourceS
 	}
 	second := state.vectors[x86CallerVectorRoot(ins.Args[form.second].Reg)]
 	destination := x86CallerVectorRoot(ins.Args[form.destination].Reg)
-	state.vectors[destination] = form.definedBytes(first, second, state.vectors[destination]) |
-		^x86CallerVectorByteMask(int64(form.byteWidth))
+	if !form.inputsDefined(first, second, state.vectors[destination]) {
+		return false
+	}
+	state.vectors[destination] = ^uint64(0)
 	return true
 }

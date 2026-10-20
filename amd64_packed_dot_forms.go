@@ -40,7 +40,12 @@ func x86PackedDotProperties(op Op, ins Instr, arch string) (x86PackedDotForm, bo
 			source.Mem.Segment != "" && source.Mem.Segment != FS && source.Mem.Segment != GS) {
 		return result, true, fmt.Errorf("%s has an unresolved or foreign memory source", op)
 	}
-	if source.Kind == OpMem {
+	if source.Kind == OpSym {
+		if address, parseErr := parseInt(strings.TrimSpace(source.Sym)); parseErr == nil &&
+			address != int64(int32(address)) && !(arch == "386" && address == int64(uint32(address))) {
+			err = fmt.Errorf("%s absolute source exceeds its disp32 extent", op)
+		}
+	} else if source.Kind == OpMem {
 		err = x86SymbolIndexedMemoryError(source.Mem, arch)
 	}
 	if err == nil && (ins.x86AddressBits != 0 || ins.x86UnboundAddressOverride) {
@@ -71,19 +76,13 @@ func x86TypedPackedDotByteEffect(op Op, ins Instr, arch string) (x86TypedByteEff
 }
 
 // All three inputs contribute the corresponding dword, including the old
-// destination with zero masking. Unknown bytes stay unknown; neither a mask
-// nor an implementation zero initializes an arithmetic input.
-func (form x86PackedDotForm) definedBytes(first, second, old uint64) uint64 {
-	var defined uint64
-	for offset := 0; offset < form.byteWidth; offset += 4 {
-		output := uint64(15) << uint(offset)
-		input := output
-		if form.broadcast {
-			input = 15
-		}
-		if first&input == input && second&output == output && old&output == output {
-			defined |= output
-		}
+// destination with zero masking. Neither a mask nor an implementation zero
+// initializes an arithmetic input, including dead results in Void functions.
+func (form x86PackedDotForm) inputsDefined(first, second, old uint64) bool {
+	output := x86CallerVectorByteMask(int64(form.byteWidth))
+	input := output
+	if form.broadcast {
+		input = 15
 	}
-	return defined
+	return first&input == input && second&output == output && old&output == output
 }
