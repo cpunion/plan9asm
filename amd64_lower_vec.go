@@ -39,6 +39,9 @@ func (c *amd64Ctx) lowerVec(op Op, ins Instr) (ok bool, terminated bool, err err
 	if ok, term, err := c.lowerExplicitMaskMove(op, ins); ok {
 		return ok, term, err
 	}
+	if ok, term, err := c.lowerPermute128(op, ins); ok {
+		return ok, term, err
+	}
 	if ok, term, err := c.lowerIndexedPermute(op, ins); ok {
 		return ok, term, err
 	}
@@ -201,9 +204,6 @@ func (c *amd64Ctx) lowerVec(op Op, ins Instr) (ok bool, terminated bool, err err
 	}
 	if op == "PSRLO" {
 		op = "PSRLDQ"
-	}
-	if op == "VPERM2F128" {
-		op = "VPERM2I128"
 	}
 	if op == "VMOVAPS" || op == "VMOVAPD" {
 		if len(ins.Args) == 2 {
@@ -659,86 +659,6 @@ func (c *amd64Ctx) lowerVec(op Op, ins Instr) (ok bool, terminated bool, err err
 
 	case "VPALIGNR":
 		return c.lowerPackedAlignRight(rawOp, ins)
-
-	case "VPERM2I128":
-		// VPERM2I128 $imm, Ysrc1, Ysrc2, Ydst
-		if rawOp != "VPERM2I128" && rawOp != "VPERM2F128" {
-			return true, false, fmt.Errorf("amd64 %s does not accept instruction suffixes: %q", op, ins.Raw)
-		}
-		if c.goarch != "amd64" {
-			return true, false, fmt.Errorf("%s %s exceeds the Go assembler frontend's operand limit: %q", c.goarch, rawOp, ins.Raw)
-		}
-		if len(ins.Args) != 4 || !amd64UnsignedImmediate(ins.Args[0], 8) || ins.Args[2].Kind != OpReg || ins.Args[3].Kind != OpReg {
-			return true, false, fmt.Errorf("amd64 %s expects $imm8, Y/m256, Ysrc, Ydst: %q", rawOp, ins.Raw)
-		}
-		if ins.Args[1].Kind == OpReg {
-			if _, ok := amd64ParseYReg(ins.Args[1].Reg); !ok {
-				return true, false, fmt.Errorf("amd64 %s expects a Y/m256 first source: %q", rawOp, ins.Raw)
-			}
-		} else if ins.Args[1].Kind != OpMem && ins.Args[1].Kind != OpSym {
-			return true, false, fmt.Errorf("amd64 %s expects a Y/m256 first source: %q", rawOp, ins.Raw)
-		}
-		if _, ok := amd64ParseYReg(ins.Args[2].Reg); !ok {
-			return true, false, fmt.Errorf("amd64 %s expects a Y-register second source: %q", rawOp, ins.Raw)
-		}
-		if _, ok := amd64ParseYReg(ins.Args[3].Reg); !ok {
-			return true, false, fmt.Errorf("amd64 %s expects a Y-register destination: %q", rawOp, ins.Raw)
-		}
-		imm := uint64(ins.Args[0].Imm)
-		// AT&T order: imm, src1, src2, dst ; choose lanes from src2 (arg2) + src1 (arg1).
-		src1, err := c.loadYVecOperand(ins.Args[1])
-		if err != nil {
-			return true, false, err
-		}
-		src2, err := c.loadY(ins.Args[2].Reg)
-		if err != nil {
-			return true, false, err
-		}
-		sel := func(bits uint64) int {
-			switch bits & 0x3 {
-			case 0:
-				return 0 // src2 low
-			case 1:
-				return 1 // src2 high
-			case 2:
-				return 2 // src1 low
-			default:
-				return 3 // src1 high
-			}
-		}
-		lowSel := sel(imm)
-		hiSel := sel(imm >> 4)
-		mask := fmt.Sprintf("<4 x i32> <i32 %d, i32 %d, i32 %d, i32 %d>", lowSel*2, lowSel*2+1, hiSel*2, hiSel*2+1)
-		b2 := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = bitcast <32 x i8> %s to <4 x i64>\n", b2, src2)
-		b1 := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = bitcast <32 x i8> %s to <4 x i64>\n", b1, src1)
-		sh := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = shufflevector <4 x i64> %%%s, <4 x i64> %%%s, %s\n", sh, b2, b1, mask)
-		// Zeroing controls.
-		zeroLo := (imm>>3)&1 == 1
-		zeroHi := (imm>>7)&1 == 1
-		if zeroLo || zeroHi {
-			cur := "%" + sh
-			if zeroLo {
-				i0 := c.newTmp()
-				fmt.Fprintf(c.b, "  %%%s = insertelement <4 x i64> %s, i64 0, i32 0\n", i0, cur)
-				i1 := c.newTmp()
-				fmt.Fprintf(c.b, "  %%%s = insertelement <4 x i64> %%%s, i64 0, i32 1\n", i1, i0)
-				cur = "%" + i1
-			}
-			if zeroHi {
-				i2 := c.newTmp()
-				fmt.Fprintf(c.b, "  %%%s = insertelement <4 x i64> %s, i64 0, i32 2\n", i2, cur)
-				i3 := c.newTmp()
-				fmt.Fprintf(c.b, "  %%%s = insertelement <4 x i64> %%%s, i64 0, i32 3\n", i3, i2)
-				cur = "%" + i3
-			}
-			sh = strings.TrimPrefix(cur, "%")
-		}
-		out := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = bitcast <4 x i64> %%%s to <32 x i8>\n", out, sh)
-		return true, false, c.storeY(ins.Args[3].Reg, "%"+out)
 
 	case "VINSERTI128":
 		// VINSERTI128 $imm, Xsrc, Ysrc, Ydst

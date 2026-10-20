@@ -437,6 +437,7 @@ func decodeX86RawDirectives(fn Func, goarch string) (Func, error) {
 				packedShift:        x86PackedShiftRawIdentity(decoded[index], goarch),
 				packedAbs:          x86PackedAbsRawIdentity(decoded[index], goarch),
 				packedDot:          x86PackedDotRawIdentity(decoded[index], goarch),
+				permute128:         x86Permute128RawIdentity(decoded[index], goarch),
 				zeroExtend:         x86ZeroExtendRawIdentity(decoded[index], goarch),
 			}
 		}
@@ -4318,15 +4319,22 @@ opcode:
 		return Instr{}, 0, false, nil
 	}
 	vex0, vexBits, opcode := code[i+1], code[i+2], code[i+3]
-	if vex0&0x1f != 3 || (opcode != 0x06 && opcode != 0x46) {
+	if vex0&0x1f != 3 {
+		return Instr{}, 0, false, nil
+	}
+	var op Op
+	for name, encoding := range x86Permute128Specs {
+		if encoding == opcode {
+			op = name
+			break
+		}
+	}
+	if op == "" {
 		return Instr{}, 0, false, nil
 	}
 	ok = true
 	if addressOverride {
 		return Instr{}, 0, true, fmt.Errorf("address-size override is not source-layout safe")
-	}
-	if mode == 32 {
-		return Instr{}, 0, true, fmt.Errorf("386 VPERM2F128/VPERM2I128 exceeds the Go assembler frontend's operand limit")
 	}
 	if vexBits&3 != 1 {
 		return Instr{}, 0, true, fmt.Errorf("VEX.pp must be 66")
@@ -4350,12 +4358,14 @@ opcode:
 	if len(code) <= immediateIndex {
 		return Instr{}, 0, true, fmt.Errorf("missing immediate byte")
 	}
-	op := Op("VPERM2F128")
-	if opcode == 0x46 {
-		op = "VPERM2I128"
-	}
 	secondSourceNumber := int(^vexBits>>3) & 15
 	destinationNumber := int(modRM>>3&7) + rExt*8
+	if mode == 32 && (rExt != 0 || xExt != 0 || bExt != 0 || secondSourceNumber >= 8 || destinationNumber >= 8) {
+		return Instr{}, 0, true, fmt.Errorf("extended register in physical mode32 permute128")
+	}
+	if immediateIndex+1 > 15 {
+		return Instr{}, 0, true, fmt.Errorf("permute128 instruction exceeds 15 bytes")
+	}
 	args := []Operand{
 		{Kind: OpImm, Imm: int64(code[immediateIndex])},
 		firstSource,
@@ -4366,7 +4376,8 @@ opcode:
 	for index := range args {
 		rawArgs[index] = args[index].String()
 	}
-	return Instr{Op: op, Args: args, Raw: fmt.Sprintf("%s %s", op, strings.Join(rawArgs, ", "))}, immediateIndex + 1, true, nil
+	return Instr{Op: op, Args: args, Raw: fmt.Sprintf("%s %s", op, strings.Join(rawArgs, ", ")),
+		x86Encoded: true, x86VectorBytes: 32, x86Permute128VEX: true}, immediateIndex + 1, true, nil
 }
 
 // decodedX86InsertPSInstruction recognizes all encodings represented by Go

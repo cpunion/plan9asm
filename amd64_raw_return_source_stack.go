@@ -45,6 +45,7 @@ type x86SourceRawInstruction struct {
 	packedShift      x86RawPackedShiftIdentity
 	packedAbs        x86RawPackedAbsIdentity
 	packedDot        x86RawPackedDotIdentity
+	permute128       x86RawPermute128Identity
 	zeroExtend       x86RawZeroExtendIdentity
 }
 
