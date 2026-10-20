@@ -9,9 +9,18 @@ import (
 )
 
 func TestInLanePermuteCoverageRetainsActualInputsAndVoidReads(t *testing.T) {
+	testElementPermuteCoverageInputs(t, []string{"VPERMILPS", "VPERMILPD"}, []string{"X", "Y", "Z"})
+}
+
+func TestQwordPermuteCoverageRetainsActualInputsAndVoidReads(t *testing.T) {
+	testElementPermuteCoverageInputs(t, []string{"VPERMQ", "VPERMPD"}, []string{"Y", "Z"})
+}
+
+func testElementPermuteCoverageInputs(t *testing.T, members, banks []string) {
+	t.Helper()
 	for _, arch := range []string{"amd64", "386"} {
-		for _, op := range []string{"VPERMILPS", "VPERMILPD"} {
-			for _, bank := range []string{"X", "Y", "Z"} {
+		for _, op := range members {
+			for _, bank := range banks {
 				for _, immediate := range []bool{false, true} {
 					t.Run(fmt.Sprintf("%s/%s/%s/immediate=%t", arch, op, bank, immediate), func(t *testing.T) {
 						zero := "VPXOR"
