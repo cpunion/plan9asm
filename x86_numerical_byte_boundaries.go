@@ -8,8 +8,8 @@ type x86NumericalNativeBoundary struct {
 }
 
 // This is a byte-boundary observation, not a raw/source/literal or memory
-// capability. In particular, VEX/EVEX instructions, including GP operations,
-// are never put into scalar:
+// capability. In particular, VEX/EVEX instructions and the separate legacy
+// ADX physical projection are never put into scalar:
 // numerical-read binding still needs a real x86asm scalar decode, its exact
 // original source ordinal, relocation, layout, owner and live source guard.
 // Failure discards the complete observation, including otherwise valid prefixes
@@ -29,6 +29,11 @@ func x86NumericalNativeBoundaries(code []byte, mode int) ([]x86NumericalNativeBo
 			if err != nil {
 				return nil, nil, numericalSBContext("whole native vector boundary at %d: %v", pc, err)
 			}
+		} else if _, adxLength, _, known, err := decodeX86RawADXWithMemory(remaining, 0, mode, x86RawMemoryDecoder{physicalPC: true}); known || err != nil {
+			if err != nil {
+				return nil, nil, numericalSBContext("whole native ADX boundary at %d: %v", pc, err)
+			}
+			length = adxLength
 		} else {
 			native, err := x86asm.Decode(remaining, mode)
 			if err != nil || native.Op == 0 || native.Op == x86asm.CALL || native.Op == x86asm.LCALL {
