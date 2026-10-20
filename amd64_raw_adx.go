@@ -10,6 +10,10 @@ import (
 // alone selects 64 bits: 0x66 is mandatory, not a 16-bit width override.
 // Reuse the decoder's ADD r/m,reg ModRM/SIB grammar, never its flag semantics.
 func decodeX86RawADX(code []byte, offset, mode int) (Instr, int, x86RawLiteralRange, bool, error) {
+	return decodeX86RawADXWithMemory(code, offset, mode, x86RawMemoryDecoder{})
+}
+
+func decodeX86RawADXWithMemory(code []byte, offset, mode int, strategy x86RawMemoryDecoder) (Instr, int, x86RawLiteralRange, bool, error) {
 	if mode != 32 && mode != 64 || offset < 0 || offset >= len(code) {
 		return Instr{}, 0, x86RawLiteralRange{}, false, nil
 	}
@@ -86,6 +90,12 @@ opcode:
 	length := i + 3 + decoded.Len - header
 	if length > 15 {
 		return fail("encoding exceeds the 15-byte instruction limit")
+	}
+	if strategy.physicalPC {
+		// A whole-object observer needs only the validated instruction's PC
+		// and length. Do not patch RIP bytes, require source-local literal
+		// storage, or return operands that could be mistaken for read facts.
+		return Instr{}, length, x86RawLiteralRange{}, true, nil
 	}
 	if decoded.PCRel != 0 {
 		if decoded.AddrSize != 64 || segment == 0x64 || segment == 0x65 {
