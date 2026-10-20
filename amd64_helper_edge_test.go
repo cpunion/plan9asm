@@ -723,6 +723,12 @@ func TestAMD64ArithmeticCoverage(t *testing.T) {
 	oldDivideTarget := c.targetTriple
 	c.targetTriple = "x86_64-unknown-linux-gnu"
 	mustLower("DIVL", Instr{Raw: "DIVL CX", Args: []Operand{{Kind: OpReg, Reg: CX}}})
+	divideIR := b.String()[beforeDivideBytes:]
+	for _, forbidden := range []string{"udiv ", "urem ", "sdiv ", "srem "} {
+		if strings.Contains(divideIR, forbidden) {
+			t.Fatal("native division was replaced by LLVM poison-producing arithmetic", forbidden)
+		}
+	}
 	c.targetTriple = oldDivideTarget
 	mustLower("IMULQ", Instr{Raw: "IMULQ CX", Args: []Operand{{Kind: OpReg, Reg: CX}}})
 	mustLower("IMULQ", Instr{Raw: "IMULQ CX, DX", Args: []Operand{{Kind: OpReg, Reg: CX}, {Kind: OpReg, Reg: DX}}})
@@ -748,11 +754,6 @@ func TestAMD64ArithmeticCoverage(t *testing.T) {
 	} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("missing %q in output:\n%s", want, out)
-		}
-	}
-	for _, forbidden := range []string{"udiv ", "urem ", "sdiv ", "srem "} {
-		if strings.Contains(out, forbidden) {
-			t.Fatal("native division was replaced by LLVM poison-producing arithmetic", forbidden)
 		}
 	}
 }

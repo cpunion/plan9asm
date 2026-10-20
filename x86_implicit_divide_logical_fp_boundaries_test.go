@@ -66,7 +66,10 @@ func x86LogicalFPDivideVoidMutations(t *testing.T, arch, op string, bits int, or
 			source, decl = x86LogicalFPDivideSource("Value", op, arch, bits, false)
 			source = strings.Replace(source, "divisor+16(FP)", "quotient+24(FP)", 1)
 		}
-		if source == original {
+		// On AMD64 a pointer and uint64 have the same physical argument
+		// extent. Their identical assembly bytes must still consume distinct
+		// real Go declaration roles, never a fabricated numerical pointer.
+		if source == original && decl == declaration {
 			t.Fatal("logical FP source mutation did not apply", change)
 		}
 		mutations = append(mutations, x86LogicalFPDivideMutation{change, source, decl, change == "missing-DX" && bits == 8})
