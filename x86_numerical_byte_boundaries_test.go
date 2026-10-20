@@ -18,6 +18,12 @@ import (
 // and no data, alignment directives, or assembler-inserted frame instructions.
 func x86NumericalBoundaryGoBytes(t *testing.T, arch, body string) ([]byte, []int64) {
 	t.Helper()
+	code, pcs, _ := x86NumericalBoundaryGoBytesAndListing(t, arch, body)
+	return code, pcs
+}
+
+func x86NumericalBoundaryGoBytesAndListing(t *testing.T, arch, body string) ([]byte, []int64, []byte) {
+	t.Helper()
 	listing := x86InsertExtractGoListing(t, arch, "TEXT boundary(SB),4,$0-0\n"+body+"\n")
 	var code []byte
 	var pcs []int64
@@ -43,7 +49,7 @@ func x86NumericalBoundaryGoBytes(t *testing.T, arch, body string) ([]byte, []int
 	if len(code) == 0 || len(pcs) == 0 || pcs[0] != 0 {
 		t.Fatal("missing original Go instruction bytes/PCs")
 	}
-	return code, pcs
+	return code, pcs, listing
 }
 
 func TestX86NumericalNativeBoundariesOriginalGoMixedEVEX(t *testing.T) {
