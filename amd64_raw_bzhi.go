@@ -20,7 +20,7 @@ func decodedX86BEXTRInstructionWithMemory(code []byte, mode int, memory x86RawMe
 	return decodedX86ScalarBitFieldInstructionWithMemory(code, mode, memory, 0xf7, "BEXTR")
 }
 
-func decodedX86ScalarBitFieldInstructionWithMemory(code []byte, mode int, memory x86RawMemoryDecoder, opcode byte, stem string) (Instr, int, bool, error) {
+func decodedX86ScalarBitFieldInstructionWithMemory(code []byte, mode int, memory x86RawMemoryDecoder, opcode int, stem string) (Instr, int, bool, error) {
 	p, matched := decodeX86RawVectorEncoding(code)
 	if !matched || p.mapNumber != 2 || p.opcode != opcode || p.pp != 0 {
 		return Instr{}, 0, false, nil
