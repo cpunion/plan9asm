@@ -1,6 +1,6 @@
 # PR 40: current checkpoint
 
-Updated 2026-10-20. Implementation handoff: `3458508fd`. This is not a
+Updated 2026-10-20. Implementation handoff: `a1c543838`. This is not a
 current-head completion certificate. Preserve ignored failed evidence and
 read [instruction contracts](instructions.md) and [validation](validation.md).
 
@@ -71,6 +71,8 @@ differ. Older qualifications remain in earlier Git checkpoints.
 
 | Snapshot | Independent local scope | Limits |
 |---|---|---|
+| `32a5aadbb` | Complete permute128 and SDK physical boundaries: 30 / 1,188 current, 20.038 seconds | Two-member grammar, every selector, initialized objects, portable values/faults, actual Go/LLVM mode32 and RIP-length priors; no NUM/DATA/caller permission. Zero failure/skip, unchanged complete seals. Original AVX/AVX2 execution remains separate |
+| `e22831f42` | Complete packed precision and shared consumers: 35 / 2,024 current, 34.973 seconds | Six names/eighteen Go rows, fifty-three initialized shapes, original raw/named objects, exact native opcodes and strict aliases. Zero failure/skip, unchanged complete seals; not original x86 execution or minimum/race |
 | `f7e631cfa` | Complete blend/minpos: 27 / 1,012 current, 66.509 seconds | Complete original formats, initialized objects, mode32 grammar and portable mathematics; zero failure/skip and unchanged complete seals. Two original Linux native owners are wired, not locally executed |
 | `53dda86fc` | Complete VNNI integration: 24 / 963 current, 68.012 seconds | Independent Go rows, every-byte inputs, exact dead-access tuples, raw replay, five-target objects and BF16 controls; zero failure/skip, unchanged complete seals. Original native VNNI execution remains separate |
 | `53dda86fc` | Complete raw unsigned zero-extension: 15 / 414 current, 13.293 seconds | Full original initialized source, sixty orthogonal five-target kernels, source-identity and DF/private/GP preservation controls; zero failure/skip, unchanged complete seals. Minimum/race remain required |
@@ -149,23 +151,24 @@ the completion of a single focused scope.
   tests pass. The first full 221-policy run failed two isolation tests because
   its independent owner inventory omitted the new scope. `fc3d7f7ba` adds that
   obligation; its two tests pass, but the full policy union must be rerun.
-- Permute128 implementation `f3759be9f` is integrated. Its complete twenty-root
-  attempt at `2a762f611` passes nineteen roots, including all original objects,
-  byte dependencies and 8,192 raw register cases. One portable fault observer
-  wrongly limits NULL ownership to one byte: actual LLVM22 ARM64 O2 reads the
-  upper sixteen-byte half first. A minimal same-IR/C experiment reproduces the
-  failure and passes with the exact 32-byte tuple. Test-only `3458508fd` repairs
-  this observer without changing access, page boundaries or production code;
-  rerun the complete union. SDK physical-PC observation needs separate TDD.
-- Packed precision `b0358b2b5` has valid RED: thirteen roots / 1,485 children,
-  652 failed terminals with actual Go priors and unchanged complete seals.
-  Six-member production `4282cd492` is integrated. The first 23-root attempt
-  at `994535ace` passes seventeen roots; six failures are three old unbound
-  format drivers and three exact-opcode receipts that reject LLVM's width-bound
-  VCVTPD2PSX/Y memory aliases. Preserve this failed receipt and correct the
-  fixtures independently, retaining every original row and actual object.
-- The separate named-half conversion family needs its complete eighteen-row
-  TDD repair, including dynamic MXCSR rounding for immediate controls 4–7.
+- Permute128 now has its complete thirty-root GREEN above. Preserve the
+  earlier dead-NULL observer failure and minimal LLVM22 experiment: backend
+  legalization may read either sixteen-byte half first, so test-only NULL
+  ownership is exactly the original 32-byte tuple. Separate actual Go/LLVM
+  physical-PC/RIP RED precedes the six-line decoder/registry fix. Boundary
+  observation never supplies NUM, symbolic reads, DATA or caller authority.
+- Packed precision now has its complete thirty-five-root GREEN above.
+  Preserve the initial thirteen-root production RED and later failed 23-root
+  integration receipt. Independent fixtures retain all original unbound rows,
+  explicit mode32 physical-bank Context and strict same-call memory aliases.
+- Named-half has valid eighteen-row TDD RED at `a1c543838`: fifteen roots /
+  640 children, 407 failed terminals, zero skip or infrastructure failure and
+  unchanged complete seals. All Go/LLVM priors pass, including the complete
+  initialized/dynamic programs. Original directed-rounding runtime also fails.
+  Preserve the earlier invalid-CMP fixture attempt separately. Before core
+  implementation, supplement ordinary raw nonfault generation/replay tests;
+  dynamic MXCSR 4–7 and architectural zero-store #UD stay distinct from SAE
+  memory forms rejected by the actual Go assembler.
 - Required native hardware remains pending, never a skipped success. The
   original ABS/sign, scalar precision and FMA caller SIGILL failures do not
   establish hardware absence without their own actual-allocation CPU receipt.
