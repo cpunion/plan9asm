@@ -120,7 +120,7 @@ func TestX86LegacyIntegerMinMaxOriginalExpandedConformanceObjects(t *testing.T) 
 		t.Fatal("original complete C/reference observations changed", err)
 	}
 	x86PackedFaultProgramObjects(t, "#include \"textflag.h\"\n"+body,
-		"func expandedEcosystemVectors(out *[816]byte,a,b *[32]byte)")
+		"func expandedEcosystemVectors(out *[816]byte,a,b *[16]byte)")
 }
 
 func TestX86LegacyIntegerMinMaxEveryByteAliasAndFlags(t *testing.T) {
