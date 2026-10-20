@@ -1469,27 +1469,8 @@ func TestTranslateAMD64PackedFloatMoveCompleteGoAssemblerForms(t *testing.T) {
 func TestTranslate386PackedFloatMoveCompleteGoAssemblerForms(t *testing.T) {
 	// Go accepts high X/Y spellings and all three-operand mask rows. Observe
 	// their Context separately; actual mode32 objects use the physical low bank.
-	var src strings.Builder
-	src.WriteString("TEXT packedfloatmoveforms386(SB),NOSPLIT,$0-0\n")
-	for _, op := range []string{"VMOVAPD", "VMOVAPS", "VMOVUPD", "VMOVUPS"} {
-		for _, width := range []string{"X", "Y"} {
-			fmt.Fprintf(&src, "\t%s %s0, %s1\n", op, width, width)
-			fmt.Fprintf(&src, "\t%s %s20, %s21\n", op, width, width)
-			fmt.Fprintf(&src, "\t%s %s20, (AX)\n", op, width)
-			fmt.Fprintf(&src, "\t%s (AX), %s21\n", op, width)
-			fmt.Fprintf(&src, "\t%s %s20, K1, %s21\n", op, width, width)
-			fmt.Fprintf(&src, "\t%s.Z %s20, K2, (AX)\n", op, width)
-			fmt.Fprintf(&src, "\t%s.Z (AX), K3, %s21\n", op, width)
-		}
-		fmt.Fprintf(&src, "\t%s Z0, Z7\n", op)
-		fmt.Fprintf(&src, "\t%s Z7, (AX)\n", op)
-		fmt.Fprintf(&src, "\t%s (AX), Z7\n", op)
-		fmt.Fprintf(&src, "\t%s Z0, K1, Z7\n", op)
-		fmt.Fprintf(&src, "\t%s.Z Z0, K2, (AX)\n", op)
-		fmt.Fprintf(&src, "\t%s.Z (AX), K3, Z7\n", op)
-	}
-	src.WriteString("\tRET\n")
-	file, err := Parse(ArchAMD64, x86PhysicalMode32ObjectSource(t, src.String(), "386"))
+	source := x86EVEXPackedFloat386OriginalSource()
+	file, err := Parse(ArchAMD64, x86PhysicalMode32ObjectSource(t, source, "386"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1583,35 +1564,13 @@ func TestTranslateX86EVEXPackedIntegerMoveCompleteGoAssemblerForms(t *testing.T)
 	for _, target := range []struct {
 		goarch string
 		triple string
-		zregs  []int
 	}{
-		{goarch: "386", triple: "i386-unknown-linux-gnu", zregs: []int{0, 7}},
-		{goarch: "amd64", triple: "x86_64-unknown-linux-gnu", zregs: []int{0, 21}},
+		{goarch: "386", triple: "i386-unknown-linux-gnu"},
+		{goarch: "amd64", triple: "x86_64-unknown-linux-gnu"},
 	} {
 		t.Run(target.goarch, func(t *testing.T) {
-			var src strings.Builder
-			src.WriteString("TEXT evexpackedintegermoveforms(SB),NOSPLIT,$0-0\n")
-			for _, op := range []string{"VMOVDQA32", "VMOVDQA64", "VMOVDQU8", "VMOVDQU16", "VMOVDQU32", "VMOVDQU64"} {
-				for _, width := range []string{"X", "Y"} {
-					fmt.Fprintf(&src, "\t%s %s0, %s1\n", op, width, width)
-					fmt.Fprintf(&src, "\t%s %s20, (AX)\n", op, width)
-					fmt.Fprintf(&src, "\t%s (AX), %s21\n", op, width)
-					fmt.Fprintf(&src, "\t%s %s1, K1, %s2\n", op, width, width)
-					fmt.Fprintf(&src, "\t%s %s1, K2, (AX)\n", op, width)
-					fmt.Fprintf(&src, "\t%s (AX), K3, %s2\n", op, width)
-					fmt.Fprintf(&src, "\t%s.Z %s1, K4, %s2\n", op, width, width)
-					fmt.Fprintf(&src, "\t%s.Z %s1, K5, (AX)\n", op, width)
-					fmt.Fprintf(&src, "\t%s.Z (AX), K6, %s2\n", op, width)
-				}
-				fmt.Fprintf(&src, "\t%s Z%d, Z%d\n", op, target.zregs[0], target.zregs[1])
-				fmt.Fprintf(&src, "\t%s Z%d, (AX)\n", op, target.zregs[0])
-				fmt.Fprintf(&src, "\t%s (AX), Z%d\n", op, target.zregs[1])
-				fmt.Fprintf(&src, "\t%s Z%d, K1, Z%d\n", op, target.zregs[0], target.zregs[1])
-				fmt.Fprintf(&src, "\t%s.Z Z%d, K2, (AX)\n", op, target.zregs[0])
-				fmt.Fprintf(&src, "\t%s.Z (AX), K3, Z%d\n", op, target.zregs[1])
-			}
-			src.WriteString("\tRET\n")
-			file, err := Parse(ArchAMD64, x86PhysicalMode32ObjectSource(t, src.String(), target.goarch))
+			source := x86EVEXPackedIntegerMoveOriginalSource(target.goarch)
+			file, err := Parse(ArchAMD64, x86PhysicalMode32ObjectSource(t, source, target.goarch))
 			if err != nil {
 				t.Fatal(err)
 			}
