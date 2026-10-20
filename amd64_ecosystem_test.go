@@ -7242,20 +7242,19 @@ func TestTranslateX86FMA3CompleteGo127Forms(t *testing.T) {
 			}
 			src.WriteString("\tRET\n")
 
-			file, err := Parse(ArchAMD64, x86PhysicalMode32ObjectSource(t, src.String(), target.goarch))
-			if err != nil {
-				t.Fatal(err)
+			wanted := map[string]int{"amd64": 1596, "386": 744}[target.goarch]
+			if rows := strings.Count(src.String(), "\n\tV"); rows != wanted {
+				t.Fatal("complete original FMA3 source denominator changed", target.goarch, rows, wanted)
 			}
-			ll, err := Translate(file, Options{
-				TargetTriple: target.triple,
-				Goarch:       target.goarch,
-				Sigs: map[string]FuncSig{
-					"fma3_complete_forms": {Name: "fma3_complete_forms", Ret: Void},
-				},
-			})
-			if err != nil {
-				t.Fatal(err)
+			if target.goarch == "386" {
+				// Preserve the full original Go object before the existing
+				// separate low-bank physical projection. It is not equivalent
+				// to the unbound high-bank source or a native runtime witness.
+				x86LEAActualTargetGoObject(t, target.goarch, target.triple, "#include \"textflag.h\"\n"+src.String())
 			}
+			physical := x86PhysicalMode32ObjectSource(t, src.String(), target.goarch)
+			file, signatures := x86UnboundVoidFormatSource(t, physical, "fma3_complete_forms", target.goarch, target.triple)
+			ll := x86ScalarFormatObjectUnit(t, file, signatures, target.goarch, target.triple, 0)
 			compileLLVMToObject(t, llc, target.triple, "fma3-complete-"+target.name+".ll", "fma3-complete-"+target.name+".o", ll)
 		})
 	}
