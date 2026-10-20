@@ -18,7 +18,7 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 	fn, sig, arch := c.fpScalarSource, c.sig, c.goarch
 	if x86FloatMinMaxRawReplayRequired(fn, arch) || x86ScalarPrecisionRawReplayRequired(fn, arch) ||
 		x86ExplicitMaskMoveRawReplayRequired(fn, arch) || x86PackedShiftRawReplayRequired(fn, arch) ||
-		x86PackedDotRawReplayRequired(fn, arch) || x86ZeroExtendRawReplayRequired(fn, arch) {
+		x86PackedDotRawReplayRequired(fn, arch) || x86ZeroExtendRawReplayRequired(fn, arch) || x86PackedPrecisionRawReplayRequired(fn, arch) {
 		if err := fn.x86RawReplay.validate(fn, arch); err != nil {
 			return err
 		}
@@ -117,7 +117,15 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 	boundRawPackedShift := false
 	boundRawPackedDot := false
 	boundRawZeroExtend := false
+	boundRawPackedPrecision := false
 	for _, ins := range fn.Instrs {
+		if x86RawPackedPrecisionSource(ins, arch) {
+			if !boundRawPackedPrecision && (fn.x86RawReplay == nil || fn.x86RawReplay.validate(fn, arch) != nil) {
+				return strictErr
+			}
+			boundRawPackedPrecision = true
+			continue // Exact source/generation grants no missing FP, mask, merge or memory input.
+		}
 		if x86RawZeroExtendSource(ins, arch) {
 			if !boundRawZeroExtend && (fn.x86RawReplay == nil || fn.x86RawReplay.validate(fn, arch) != nil) {
 				return strictErr
@@ -362,6 +370,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		}
 		if accepted, known := x86ResultScalarPrecisionStep(ins, state, owned, arch, true); known {
 			return accepted // The paired original scalar conversion retains m32/m64 and MXCSR effects.
+		}
+		if accepted, known := x86ResultPackedPrecisionStep(ins, state, owned, arch, true); known {
+			return accepted // The paired original packed conversion retains exact E2 reads and MXCSR effects.
 		}
 		if accepted, known := x86ResultPackedAbsSignStep(ins, state, owned, arch, true); known {
 			return accepted // Exact native reads and K inputs remain required for dead packed integer results.

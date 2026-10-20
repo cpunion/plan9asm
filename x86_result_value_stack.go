@@ -39,7 +39,7 @@ func x86ResultPreservesPrivateStorage(ins Instr, arch string) bool {
 	if x86FMA3PreservesPrivateSourceState(ins, arch) {
 		return true // Exact vector/MXCSR effects do not access private SP or ID.
 	}
-	if x86RawScalarPrecisionSource(ins, arch) {
+	if x86RawScalarPrecisionSource(ins, arch) || x86RawPackedPrecisionSource(ins, arch) {
 		return true // The exact X/MXCSR conversion does not access private SP or ID.
 	}
 	if x86RawExplicitMaskMoveSource(ins, arch) {
