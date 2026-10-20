@@ -90,6 +90,9 @@ func inferFuncTargetFeaturesForGOARCH(arch Arch, goarch string, fn Func) string 
 					add("+avx")
 				}
 			}
+			if _, known, err := x86UnsignedIntegerFloatProperties(ins, moveArch); known && err == nil {
+				add("+avx512f") // Scalar unsigned EVEX needs F, not packed narrow VL.
+			}
 			if _, known, err := x86ExplicitMaskMoveProperties(ins.Op, ins, moveArch); known && err == nil {
 				if strings.HasPrefix(op, "VPMASK") {
 					add("+avx2")

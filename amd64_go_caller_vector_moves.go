@@ -450,6 +450,9 @@ func x86InstructionMemoryShape(ins Instr, index int, arch string) (width int64, 
 	if f, recognized, err := x86SignedIntegerFloatProperties(ins, arch); recognized {
 		return int64(f.sourceBits / 8), false, err == nil && f.memory == index
 	}
+	if f, recognized, err := x86UnsignedIntegerFloatProperties(ins, arch); recognized {
+		return int64(f.sourceBits / 8), false, err == nil && f.memory == index
+	}
 	if form, recognized, err := x86FloatMulDivProperties(ins, arch); recognized {
 		return int64(form.memoryBytes), false, err == nil && form.memory == index
 	}
