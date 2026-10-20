@@ -1705,54 +1705,7 @@ func (c *amd64Ctx) lowerVec(op Op, ins Instr) (ok bool, terminated bool, err err
 
 	case "PMINUB", "PMINSB", "PMINUW", "PMINSW", "PMINUD", "PMINSD",
 		"PMAXUB", "PMAXSB", "PMAXUW", "PMAXSW", "PMAXUD", "PMAXSD":
-		// Two-operand packed integer min/max: dst = min|max(dst, src).
-		if len(ins.Args) != 2 || ins.Args[1].Kind != OpReg {
-			return true, false, fmt.Errorf("amd64 %s expects Xsrc/mem, Xdst: %q", op, ins.Raw)
-		}
-		dst, err := c.loadX(ins.Args[1].Reg)
-		if err != nil {
-			return false, false, nil
-		}
-		src, err := c.loadXVecOperand(ins.Args[0])
-		if err != nil {
-			return true, false, err
-		}
-		vecTy := "<16 x i8>"
-		maskTy := "<16 x i1>"
-		if strings.HasSuffix(string(op), "W") {
-			vecTy = "<8 x i16>"
-			maskTy = "<8 x i1>"
-		} else if strings.HasSuffix(string(op), "D") {
-			vecTy = "<4 x i32>"
-			maskTy = "<4 x i1>"
-		}
-		srcv, dstv := src, dst
-		if vecTy != "<16 x i8>" {
-			srcBits := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = bitcast <16 x i8> %s to %s\n", srcBits, src, vecTy)
-			srcv = "%" + srcBits
-			dstBits := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = bitcast <16 x i8> %s to %s\n", dstBits, dst, vecTy)
-			dstv = "%" + dstBits
-		}
-		pred := "slt"
-		if strings.Contains(string(op), "U") {
-			pred = "ult"
-		}
-		if strings.HasPrefix(string(op), "PMAX") {
-			pred = strings.Replace(pred, "lt", "gt", 1)
-		}
-		cmp := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = icmp %s %s %s, %s\n", cmp, pred, vecTy, dstv, srcv)
-		sel := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = select %s %%%s, %s %s, %s %s\n", sel, maskTy, cmp, vecTy, dstv, vecTy, srcv)
-		out := "%" + sel
-		if vecTy != "<16 x i8>" {
-			back := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = bitcast %s %%%s to <16 x i8>\n", back, vecTy, sel)
-			out = "%" + back
-		}
-		return true, false, c.storeX(ins.Args[1].Reg, out)
+		return c.lowerPackedIntegerMinMax(rawOp, ins)
 
 	case "PSLLW", "PSRLW", "PSLLL", "PSRLL", "PSRAL":
 		// Two-operand packed integer shift immediate.

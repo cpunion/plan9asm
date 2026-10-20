@@ -14,9 +14,9 @@ type amd64PackedIntegerMinMaxSpec struct {
 	opcode    int
 }
 
-// lowerPackedIntegerMinMax implements the complete 16-opcode min/max family
-// in Go 1.27. B/W/D forms use _yvandnpd, Q forms use _yvblendmpd, and only
-// D/Q encodings enable scalar-memory broadcast.
+// The twelve legacy and sixteen VEX/EVEX members share typed operand and
+// numerical rules. Legacy retains its RMW/upper aliases and original m128
+// opcode; only VEX/EVEX D/Q has scalar-memory broadcast.
 func (c *amd64Ctx) lowerPackedIntegerMinMax(op Op, ins Instr) (ok bool, terminated bool, err error) {
 	form, known, err := x86IntegerMinMaxProperties(op, ins, c.goarch)
 	if !known || err != nil {
@@ -25,10 +25,29 @@ func (c *amd64Ctx) lowerPackedIntegerMinMax(op Op, ins Instr) (ok bool, terminat
 	if err := c.validateConflictFunnelMemory(ins, form.x86PackedBinaryForm); err != nil {
 		return true, false, err
 	}
+	first := ins.Args[form.first]
+	if form.legacy && form.memory >= 0 &&
+		(first.Kind == OpFP || first.Kind == OpMem && !x86OrdinaryNativeMemoryOperand(first, c.goarch) ||
+			!x86ScalarFloatIntegerNativeTarget(c.goarch, c.targetTriple)) {
+		return true, false, fmt.Errorf("%w: legacy integer min/max m128 needs its original native storage/target", ErrProbeNeedsContext)
+	}
 	spec := form.spec
 	destination := ins.Args[form.destination]
 	byteWidth := form.byteWidth
 	lanes := byteWidth * 8 / spec.laneBits
+	if form.legacy && form.memory >= 0 {
+		old, err := c.loadPackedCompareLanes(ins.Args[form.second], 16, spec.laneBits, false)
+		if err != nil {
+			return true, false, err
+		}
+		value, err := c.emitPackedBinaryNativeMemory(first, spec.laneBits, old, strings.ToLower(string(op)))
+		if err != nil {
+			return true, false, err
+		}
+		bytes := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i%d> %s to <16 x i8>\n", bytes, lanes, spec.laneBits, value)
+		return true, false, c.storeLegacyPackedLogical(destination, "%"+bytes)
+	}
 	masked := form.mask >= 0
 	mask := ""
 	if masked {
@@ -67,6 +86,9 @@ func (c *amd64Ctx) lowerPackedIntegerMinMax(op Op, ins Instr) (ok bool, terminat
 	}
 	out := c.newTmp()
 	fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i%d> %s to <%d x i8>\n", out, lanes, spec.laneBits, result, byteWidth)
+	if form.legacy {
+		return true, false, c.storeLegacyPackedLogical(destination, "%"+out)
+	}
 	return true, false, c.storePackedMoveOperand(destination, byteWidth, "%"+out)
 }
 
