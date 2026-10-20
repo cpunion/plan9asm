@@ -82,12 +82,15 @@ func x86MULXOriginalFormatObject(t *testing.T, source, arch, triple string, rows
 		}
 		// SIB address calculation may also multiply, but its scale is a
 		// constant, not two independently zero-extended numerical inputs.
-		products := regexp.MustCompile(`(?m)^[\t ]*%t[0-9]+ = mul `+wide+` (%t[0-9]+), (%t[0-9]+)$`).FindAllStringSubmatch(body, -1)
+		products := regexp.MustCompile(`(?m)^[\t ]*%[^ \t=]+ = mul `+wide+` (%[^ \t,]+), (%[^ \t,]+)$`).FindAllStringSubmatch(body, -1)
 		if len(products) != 1 {
 			t.Fatal("original MULX format lost its one width-correct unsigned product", row, products)
 		}
 		for _, operand := range products[0][1:] {
-			extension := `(?m)^[\t ]*` + regexp.QuoteMeta(operand) + ` = zext ` + narrow + ` %t[0-9]+ to ` + wide + `$`
+			// Missing private register slots may render as literal zero. That
+			// emitter representation is not a NUM fact: every original public
+			// source above still requires Context, with no input producers added.
+			extension := `(?m)^[\t ]*` + regexp.QuoteMeta(operand) + ` = zext ` + narrow + ` (%[^ \t]+|0) to ` + wide + `$`
 			if !regexp.MustCompile(extension).MatchString(body) {
 				t.Fatal("original MULX product lost an exact zero-extended source", row, operand)
 			}
