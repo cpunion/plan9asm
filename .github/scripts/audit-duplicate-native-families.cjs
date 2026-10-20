@@ -22,6 +22,33 @@ function pipelineEvidence(arch) {
   return `duplicate native arch=${arch} live=60 dead=30 whole64-outcomes=5760 fault-processes=712; legacy original opcode/all mod16, E4NF/E5NF independent full-span references\n`;
 }
 
+function requireExecutableRoles(output, arch, original, commands, observed) {
+  const receipts = [...output.matchAll(/actual executable=(\/[^\r\n]+?) sha256=([a-f0-9]{64}) argv=(\[[^\r\n]*\])\r?\n/g)];
+  assert.equal(receipts.length, output.split('actual executable=').length - 1,
+    'malformed actual executable receipt');
+  assert.equal(receipts.length, (original ? 2 : 0) + (arch === '386' ? 1 : 0),
+    'actual executable receipts escaped their original Go or native pipeline role');
+  if (original) {
+    assert.deepEqual(receipts.slice(0, 2).map(receipt => receipt.slice(1)),
+      commands.map(command => command.slice(1)), 'SDK commands lost their explicit OriginalGo ownership');
+  }
+  if (arch !== '386') return;
+
+  const executable = receipts[original ? 2 : 0];
+  if (original) {
+    const binary = / "-o" "([^"\r\n]+)" /.exec(commands[1][3]);
+    assert.ok(binary, 'original Go build lost its exact output executable');
+    assert.equal(executable[1], binary[1], 'original execution differs from the actual Go build output');
+  } else {
+    assert.equal(path.posix.basename(executable[1]), 'comparison',
+      'native pipeline cannot substitute original Go compilation or a foreign executable');
+  }
+  assert.equal(executable[2], observed.images[0][2], 'actual executable differs from inspected IA32 image');
+  assert.equal(executable[3], original ? originalArgs : '[]', 'actual executable arguments changed');
+  assert.ok(observed.images[0].index < executable.index && executable.index < observed.direct[0].index,
+    'actual executable escaped its inspected image/direct execution bracket');
+}
+
 // Each first-party wrapper supplies its own fixed inventory and exact program
 // completion witnesses. Reports can never choose the denominator or family.
 function auditSSEAVXNativeFamilies(inventory, raw, roots, pipelineEvidence, originalEvidence) {
@@ -92,21 +119,24 @@ function auditSSEAVXNativeFamilies(inventory, raw, roots, pipelineEvidence, orig
         const commands = requireSDKCommands(output);
         assert.ok(commands[1].index < output.indexOf(evidence), 'original Go terminal preceded actual SDK build');
         sdkBuilds++;
+        let observed;
         if (arch === '386') {
-          const observed = requireIA32Images(output, 1, originalArgs);
+          observed = requireIA32Images(output, 1, originalArgs);
           assert.ok(commands[1].index < observed.images[0].index &&
             observed.direct[0].index < output.indexOf(evidence), 'original Go IA32 execution escaped SDK/terminal bracket');
           staticIA32Images++;
           directIA32Executions++;
         }
+        requireExecutableRoles(output, arch, true, commands, observed);
       } else {
-        assert.ok(!output.includes('actual executable='), 'native pipeline cannot substitute original Go compilation');
+        let observed;
         if (arch === '386') {
-          const observed = requireIA32Images(output, 2, '[]');
+          observed = requireIA32Images(output, 2, '[]');
           assert.ok(observed.images[1].index < output.indexOf(evidence), 'fault image observation followed complete execution');
           staticIA32Images += 2;
           directIA32Executions++;
         }
+        requireExecutableRoles(output, arch, false, undefined, observed);
       }
       continue;
     }
