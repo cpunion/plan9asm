@@ -175,7 +175,7 @@ func x86NamedHalfInitialized(name, arch string, row x86NamedHalfCase, dead bool)
 	if row.narrow || !row.memory {
 		header += fmt.Sprintf("VMOVUPS (AX),Z%d\n", source)
 	}
-	header += fmt.Sprintf("VMOVUPS (BX),Z%d\nLDMXCSR (SI)\nMOVL $3,DX\nCMPL $1,DX\nSTD\n", destination)
+	header += fmt.Sprintf("VMOVUPS (BX),Z%d\nLDMXCSR (SI)\nMOVL $3,DX\nCMPL DX,$1\nSTD\n", destination)
 	tail := ""
 	if !dead {
 		tail = fmt.Sprintf("VMOVUPS Z%d,(DI)\n", destination)
