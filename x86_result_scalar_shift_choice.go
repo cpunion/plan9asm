@@ -38,6 +38,9 @@ func x86LoweredNumericalProducerReplay(fn Func, arch string) error {
 			if _, known, _ := x86PackedFloatShuffleProperties(ins.Op, ins, arch); known {
 				return true
 			}
+			if form, known, _ := x86IntegerMinMaxProperties(ins.Op, ins, arch); known && form.legacy {
+				return true
+			}
 		}
 		return false
 	}

@@ -51,6 +51,9 @@ func x86CallerVectorMoveKnown(ins Instr) bool {
 	if _, known, err := x86PackedFloatShuffleProperties(ins.Op, ins, "amd64"); known {
 		return err == nil && x86ResultNamedPredicateInstruction(ins)
 	}
+	if form, known, err := x86IntegerMinMaxProperties(ins.Op, ins, "amd64"); known && form.legacy {
+		return err == nil && form.memory < 0 && x86ResultNamedPredicateInstruction(ins)
+	}
 	if _, known, err := x86MaskVectorProperties(ins, "amd64"); known {
 		return err == nil
 	}
@@ -199,6 +202,12 @@ func x86CallerVectorMoveStep(ins *Instr, state *x86SourceStackState, proof *x86G
 	}
 	if form, known, err := x86PackedFloatShuffleProperties(ins.Op, *ins, "amd64"); known {
 		return err == nil && x86CallerPackedFloatShuffleStep(ins, form, state, proof)
+	}
+	if form, known, err := x86IntegerMinMaxProperties(ins.Op, *ins, "amd64"); known && form.legacy {
+		// Existing register callers share the lane rule. A caller slice does
+		// not grant the original m128's separate native alignment contract.
+		return err == nil && form.memory < 0 && x86ResultNamedPredicateInstruction(*ins) &&
+			x86CallerPackedLaneArithmeticStep(ins, form.x86PackedBinaryForm, form.spec.laneBits, state, proof)
 	}
 	if form, known, err := x86PackedAlignProperties(ins.Op, *ins, "amd64"); known {
 		return err == nil && x86CallerPackedAlignStep(ins, form, state, proof)

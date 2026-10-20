@@ -349,6 +349,13 @@ func inferFuncTargetFeaturesForGOARCH(arch Arch, goarch string, fn Func) string 
 					add("+sse2")
 				}
 			}
+			if form, known, err := x86IntegerMinMaxProperties(ins.Op, ins, moveArch); known && err == nil &&
+				form.legacy && form.memory >= 0 && ins.Args[form.memory].Kind != OpFP {
+				add("+sse2")
+				if form.spec.mapNumber == 2 {
+					add("+sse4.1")
+				}
+			}
 			if form, known, err := x86PackedIntegerCompareProperties(ins.Op, ins, goarch); known && err == nil && form.legacy && !form.mmx && form.memory >= 0 && form.source.Kind != OpFP {
 				add("+sse2")
 				if form.spec.laneBits == 64 {
