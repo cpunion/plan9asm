@@ -3,7 +3,7 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const test = require('node:test');
-const {jobBody, requireCompleteWindowsNeeds} = require('./workflow-needs.cjs');
+const {jobBody, requireCompleteWindowsNeeds, requireJobNeeds} = require('./workflow-needs.cjs');
 
 // Independent of the auditor and production instruction maps.
 const roots = ['TestCrossLinuxRuntimeMatrixX86BlendMinposOriginalFaultsAMD64',
@@ -160,10 +160,38 @@ test('blend/minimum rejects foreign inventories events packages and out-of-lifec
   }
 });
 
+test('blend/minimum fixed leaves retain their own package and live root/axis lifecycle', () => {
+  audit();
+  for (const leaf of [leaves[0], leaves.at(-1)]) {
+    for (const Action of ['run', 'output', 'pass']) {
+      assert.throws(() => audit(completeEvents().map(value => value.Test === leaf && value.Action === Action
+        ? {...value, Package: 'foreign/package'} : value)), 'foreign leaf ' + Action);
+      assert.throws(() => audit(completeEvents().map(value => value.Test === leaf && value.Action === Action
+        ? {...value, Action: 'unrecognized'} : value)), 'unknown leaf ' + Action);
+    }
+    const parent = leaf.split('/').slice(0, 2).join('/');
+    for (const before of [leaf.split('/')[0], parent]) {
+      const events = completeEvents();
+      const own = events.filter(value => value.Test === leaf);
+      const others = events.filter(value => value.Test !== leaf);
+      const at = others.findIndex(value => value.Test === before && value.Action === 'run');
+      others.splice(at, 0, ...own);
+      assert.throws(() => audit(others), 'leaf before actual parent ' + before);
+    }
+    const events = completeEvents();
+    events.push(event('output', leaf, marker));
+    assert.throws(() => audit(events), 'leaf after completed package');
+  }
+  const foreign = completeEvents();
+  foreign.splice(4, 0, event('run', parents[0] + '/unknown/opcode'));
+  assert.throws(() => audit(foreign), 'unknown leaf cannot evade fixed ancestry');
+});
+
 function checkWorkflow(workflow) {
   const job = jobBody(workflow, 'native-x86-oracles');
   assert.match(job, /runs-on: ubuntu-latest/);
   assert.match(job, /timeout-minutes: 25/);
+  assert.doesNotMatch(job, /continue-on-error:/, 'native owner failure must remain a failed job');
   assert.match(job, /install-ci-llvm22-ubuntu\.sh gcc-i686-linux-gnu libc6-dev-i386-cross/);
   assert.ok(job.includes("go-version: '1.27.2'"));
   const title = '      - name: Execute original blend minimum alignment and zero-mask faults';
@@ -193,16 +221,39 @@ function checkWorkflow(workflow) {
     assert.equal(integer.split(root).length - 1, 1, 'old integer owner disappeared: ' + root);
   }
   requireCompleteWindowsNeeds(workflow);
+  requireJobNeeds(workflow, 'diagnostic-qualification', ['native-x86-oracles', 'complete-windows']);
+  const aggregate = jobBody(workflow, 'diagnostic-qualification');
+  assert.ok(aggregate.includes('DIAGNOSTIC_NEEDS_JSON: ${{ toJSON(needs) }}'));
+  assert.ok(aggregate.includes('run: node .github/scripts/diagnostic-qualification.cjs'));
 }
 
 test('blend/minimum CI is a separate required scope without shrinking old eight-root obligations', () => {
   const workflow = fs.readFileSync('.github/workflows/pr40-owned-process-probe.yml', 'utf8');
   checkWorkflow(workflow);
   for (const needle of [...roots, 'node .github/scripts/audit-blend-minpos-native.cjs "$directory"']) {
-    assert.throws(() => checkWorkflow(workflow.replace(needle, 'removed')), needle);
+    assert.throws(() => checkWorkflow(workflow.replace(needle, 'removed')), 'removed owner component: ' + needle);
   }
   for (const [old, replacement] of [
     ['directory=_out/native-x86-oracles/blend-minpos', 'directory=_out/unbound'],
     ['Execute original blend minimum alignment and zero-mask faults', 'unowned math only'],
   ]) assert.throws(() => checkWorkflow(workflow.replace(old, replacement)));
+  const title = '      - name: Execute original blend minimum alignment and zero-mask faults';
+  const start = workflow.indexOf(title), end = workflow.indexOf('      - name:', start + title.length);
+  const block = workflow.slice(start, end);
+  for (const [old, replacement] of [
+    ['-timeout=5m', '-timeout=10m'],
+    ['-run "^($roots)$"', '-run "^TestObjectsOnly$"'],
+    ['!cancelled()', 'success()'],
+    ["steps.native_toolchain.outcome == 'success'", 'true'],
+    ["steps.native_go.outcome == 'success'", 'true'],
+    ['        env:', '        continue-on-error: true\n        env:'],
+  ]) {
+    assert.ok(block.includes(old));
+    assert.throws(() => checkWorkflow(workflow.replace(block, block.replace(old, replacement))), old);
+  }
+  assert.throws(() => checkWorkflow(workflow.replace('    timeout-minutes: 25', '    timeout-minutes: 30')));
+  assert.throws(() => checkWorkflow(workflow.replace('      - name: Execute original native integer stores align and division',
+    '      - name: Execute original native integer stores align and division\n        continue-on-error: true')));
+  assert.throws(() => checkWorkflow(workflow.replace('DIAGNOSTIC_NEEDS_JSON: ${{ toJSON(needs) }}',
+    'DIAGNOSTIC_NEEDS_JSON: untrusted')));
 });
