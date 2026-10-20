@@ -88,6 +88,19 @@ func TestX86OriginalFloatingRuntimeOwnersKeepAllocationPreflight(t *testing.T) {
 					}
 				}
 				x86LEAActualTargetGoObject(t, "amd64", "x86_64-unknown-linux-gnu", "#include \"textflag.h\"\n"+constants["source"])
+				original, err := Parse(ArchAMD64, constants["source"])
+				if err != nil || len(original.Funcs) != 1 {
+					t.Fatal("complete original scalar precision source changed", err)
+				}
+				features := inferFuncTargetFeaturesForGOARCH(ArchAMD64, "amd64", original.Funcs[0])
+				if !strings.Contains(features, "+avx512f") {
+					t.Fatal("original scalar precision lost its actual native ISA requirement", features)
+				}
+				for _, extra := range []string{"+avx512vl", "+avx512dq", "+avx512bw", "+fma"} {
+					if strings.Contains(features, extra) {
+						t.Fatal("scalar runtime borrowed a stronger ISA profile to hide an opcode error", features)
+					}
+				}
 			} else {
 				batch := x86OriginalFloatingPolicyFunction(t, file, owner.boundary)
 				original := data[set.Position(batch.Pos()).Offset:set.Position(batch.End()).Offset]
@@ -251,7 +264,8 @@ func TestX86OriginalFloatingRuntimeBaselineObjectsAndFaultBoundary(t *testing.T)
 					t.Fatal(err)
 				}
 			}
-			for profile := 1; profile <= 2; profile++ {
+			for caseID := 0; caseID < 4; caseID++ {
+				profile, level := caseID%2+1, []string{"-O0", "-O2"}[caseID/2]
 				source, object := filepath.Join(directory, "preflight.c"), filepath.Join(directory, "preflight.o")
 				program := fmt.Sprintf("#define REQUIRED_PROFILE %d\n", profile) + state + opcodes
 				if err := os.WriteFile(source, []byte(program), 0600); err != nil {
@@ -259,7 +273,7 @@ func TestX86OriginalFloatingRuntimeBaselineObjectsAndFaultBoundary(t *testing.T)
 				}
 				for _, ir := range []bool{false, true} {
 					output := object
-					args := []string{"-target", target.triple, "-nostdinc", "-I", directory, "-O0", "-c"}
+					args := []string{"-target", target.triple, "-nostdinc", "-I", directory, level, "-c"}
 					if ir {
 						output = filepath.Join(directory, "preflight.ll")
 						args = append(args, "-S", "-emit-llvm")
@@ -269,7 +283,7 @@ func TestX86OriginalFloatingRuntimeBaselineObjectsAndFaultBoundary(t *testing.T)
 					observed, err := runtimeOracleCombinedOutput(ctx, exec.CommandContext(ctx, clang, args...))
 					cancel()
 					if err != nil {
-						t.Fatalf("complete baseline preflight profile%d: %v\n%s", profile, err, observed)
+						t.Fatalf("complete baseline preflight profile%d %s: %v\n%s", profile, level, err, observed)
 					}
 					payload, err := os.ReadFile(output)
 					if err != nil || len(payload) == 0 {
