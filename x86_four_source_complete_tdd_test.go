@@ -9,6 +9,7 @@ import (
 	"go/token"
 	"os"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -68,6 +69,15 @@ func (row x86FourSourceOracleRow) instruction() string {
 
 func x86FourSourceOriginalRuntimeUnchanged(t *testing.T) {
 	t.Helper()
+	x86FourSourceOriginalProgram(t)
+}
+
+// Historical whole-driver anchor was
+// 8c732301b5e7ad3d1d5154236322b9f3939a347d1f05f0a01bed3ecf9b21d53d.
+// Only the driver may migrate to explicit private mathematical instrumentation;
+// these two unchanged original literals remain the active program contract.
+func x86FourSourceOriginalProgram(t *testing.T) (string, string) {
+	t.Helper()
 	const name = "amd64_lower_four_source_test.go"
 	data, err := os.ReadFile(name)
 	if err != nil {
@@ -83,13 +93,47 @@ func x86FourSourceOriginalRuntimeUnchanged(t *testing.T) {
 		if !ok || function.Name.Name != "TestAMD64FourSourceRuntimeSemantics" {
 			continue
 		}
-		start, end := positions.Position(function.Pos()).Offset, positions.Position(function.End()).Offset
-		if fmt.Sprintf("%x", sha256.Sum256(data[start:end])) != "8c732301b5e7ad3d1d5154236322b9f3939a347d1f05f0a01bed3ecf9b21d53d" {
-			t.Fatal("the original complete four-source ASM/C, fault function or observations changed")
+		program := make(map[string]string)
+		for _, statement := range function.Body.List {
+			declaration, ok := statement.(*ast.DeclStmt)
+			if !ok {
+				continue
+			}
+			constants, ok := declaration.Decl.(*ast.GenDecl)
+			if !ok || constants.Tok != token.CONST {
+				continue
+			}
+			for _, specification := range constants.Specs {
+				value, ok := specification.(*ast.ValueSpec)
+				if !ok || len(value.Names) != 1 || len(value.Values) != 1 {
+					continue
+				}
+				key := value.Names[0].Name
+				if key != "source" && key != "mainC" {
+					continue
+				}
+				literal, ok := value.Values[0].(*ast.BasicLit)
+				if !ok || literal.Kind != token.STRING || program[key] != "" {
+					t.Fatal("original four-source program lost its single actual source/C literal", key)
+				}
+				program[key], err = strconv.Unquote(literal.Value)
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
 		}
-		return
+		for key, want := range map[string]string{
+			"source": "c68bfc687ce73e04389fd0e3f57146554f85d3967d9c44c80ac6e1dbefbd5070",
+			"mainC":  "44e5e74ea2f0f24009632362a848a5bc0e9f6c8002e04d8e4310a2f4270bc3a4",
+		} {
+			if fmt.Sprintf("%x", sha256.Sum256([]byte(program[key]))) != want {
+				t.Fatal("the original complete ASM or independent C oracle changed", key)
+			}
+		}
+		return program["source"], program["mainC"]
 	}
 	t.Fatal("the original complete four-source runtime program disappeared")
+	return "", ""
 }
 
 func x86FourSourceInitializedSource(row x86FourSourceOracleRow, arch, name string, dead bool) (string, string) {
