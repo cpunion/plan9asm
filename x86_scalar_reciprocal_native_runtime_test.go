@@ -88,13 +88,14 @@ func x86ScalarReciprocalNativeProgram(arch string) (source, declarations, protot
 
 func x86ScalarReciprocalOriginalReferences(arch string) (string, string) {
 	var source, declarations strings.Builder
+	result := goWordSize(arch)
 	for kind, op := range []string{"RCPSS", "RSQRTSS", "VRCPSS", "VRSQRTSS"} {
 		fmt.Fprintf(&declarations, "func Reference%d(bits uint32) uint32\n", kind)
-		fmt.Fprintf(&source, "TEXT ·Reference%d(SB),4,$0-8\nMOVSS bits+0(FP),X0\n%s X0,X0", kind, op)
+		fmt.Fprintf(&source, "TEXT ·Reference%d(SB),4,$0-%d\nMOVSS bits+0(FP),X0\n%s X0,X0", kind, result+4, op)
 		if kind >= 2 {
 			source.WriteString(",X0")
 		}
-		source.WriteString("\nMOVSS X0,ret+4(FP)\nRET\n")
+		fmt.Fprintf(&source, "\nMOVSS X0,ret+%d(FP)\nRET\n", result)
 	}
 	declarations.WriteString("func MXCSR(value uint32) uint32\n")
 	source.WriteString(x86OriginalNativeMXCSRSource(arch))

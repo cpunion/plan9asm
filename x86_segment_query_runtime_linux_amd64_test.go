@@ -36,7 +36,7 @@ func TestCrossLinuxRuntimeMatrixX86SegmentQueryOriginalFlagsAliasesAndFaults(t *
 				}
 				fmt.Fprintf(&source, "TEXT ·%s(SB),4,$0-32\nMOVQ out+0(FP),DI\nMOVQ selector+8(FP),AX\n"+
 					"MOVQ old+16(FP),CX\nMOVQ p+24(FP),SI\n%s%s\nMOVQ CX,0(DI)\nMOVQ AX,10(DI)\n"+
-					"LAHF\nMOVB AH,8(DI)\nSETO 9(DI)\nRET\n", name, prepare, query)
+					"LAHF\nMOVB AH,8(DI)\nSETOS 9(DI)\nRET\n", name, prepare, query)
 				fmt.Fprintf(&declarations, "func %s(out *[18]byte,selector,old uint64,p *uint16)\n", name)
 				fmt.Fprintf(&prototypes, "extern void %s(uint8_t *,uint64_t,uint64_t,const uint16_t *);\n", name)
 				fmt.Fprintf(&references, `__attribute__((noinline)) static void original_%s(uint8_t *out,uint64_t selector,uint64_t old,const uint16_t *p) {

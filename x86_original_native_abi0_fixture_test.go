@@ -16,11 +16,12 @@ import (
 	"testing"
 )
 
-// Mechanical extraction of the original duplicated fixture. The RED snapshot
-// deliberately preserves its old bytes; actual asmdecl, not this spelling,
-// establishes whether its return slot matches the selected Go architecture.
-func x86OriginalNativeMXCSRSource(_ string) string {
-	return "TEXT ·MXCSR(SB),4,$0-8\nSTMXCSR ret+4(FP)\nLDMXCSR value+0(FP)\nRET\n"
+// ABI0 starts the result area at a word boundary, even for a uint32 parameter.
+// Actual Go asmdecl independently checks both target modes below. This helper
+// changes only the original-Go fixture's layout, not any translated program.
+func x86OriginalNativeMXCSRSource(arch string) string {
+	result := goWordSize(arch)
+	return fmt.Sprintf("TEXT ·MXCSR(SB),4,$0-%d\nSTMXCSR ret+%d(FP)\nLDMXCSR value+0(FP)\nRET\n", result+4, result)
 }
 
 func x86NativeFixtureASMDecl(t *testing.T, arch, declarations, source string, diagnostic string) {
