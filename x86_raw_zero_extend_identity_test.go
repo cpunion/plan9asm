@@ -53,6 +53,12 @@ func TestX86RawZeroExtendSourceIdentityAndPreservedDomains(t *testing.T) {
 					if x86RawZeroExtendSource(changed, mode) {
 						t.Fatal("mutated instruction acquired another raw producer's identity")
 					}
+					if mutation == "origin" {
+						// A VEX origin-only mutation can look exactly like a
+						// genuine named instruction. The immutable whole-source
+						// replay below, not a standalone step, must reject it.
+						return
+					}
 					state := x86FMA3ResultInputState()
 					before := state.clone()
 					if accepted, _ := x86ResultPackedZeroExtendStep(changed, &state, nil, mode, true); accepted || !reflect.DeepEqual(state, before) {
