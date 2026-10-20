@@ -13,7 +13,7 @@ func dataAddress(d DataStmt) (string, int64, error) {
 		return "", 0, fmt.Errorf("DATA %s: address must name an SB symbol: %q", d.Sym, d.Addr)
 	}
 	base, offset, ok := parseSBRef(d.Addr)
-	if !ok || base == "" || strings.ContainsAny(base, "+- \t\r\n()") {
+	if !ok || base == "" || strings.ContainsAny(base, "+- \t\r\n()\"'`") {
 		return "", 0, fmt.Errorf("DATA %s: unresolved or malformed address %q", d.Sym, d.Addr)
 	}
 	return base, offset, nil

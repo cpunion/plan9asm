@@ -375,21 +375,21 @@ func parseTEXTFrameSpec(parts []string) (textFrameSpec, error) {
 
 func parseDATAStmt(arch Arch, rest string) (DataStmt, error) {
 	// DATA sym+off(SB)/width, $value
-	lhs, rhs, ok := strings.Cut(rest, ",")
-	if !ok {
+	parts := splitTopLevelCSV(rest)
+	if len(parts) != 2 {
 		return DataStmt{}, fmt.Errorf("invalid DATA: %q", "DATA "+rest)
 	}
-	lhs = strings.TrimSpace(lhs)
-	rhs = strings.TrimSpace(rhs)
+	lhs, rhs := parts[0], parts[1]
 	if lhs == "" || rhs == "" {
 		return DataStmt{}, fmt.Errorf("invalid DATA: %q", "DATA "+rest)
 	}
 
 	// lhs: sym+off(SB)/width
-	symPart, widthStr, ok := strings.Cut(lhs, "/")
-	if !ok {
+	widthSeparator := strings.LastIndexByte(lhs, '/')
+	if widthSeparator < 0 {
 		return DataStmt{}, fmt.Errorf("DATA missing /width: %q", "DATA "+rest)
 	}
+	symPart, widthStr := lhs[:widthSeparator], lhs[widthSeparator+1:]
 	width, err := parseWidth(arch, widthStr)
 	if err != nil || width <= 0 {
 		return DataStmt{}, fmt.Errorf("DATA invalid width %q: %q", widthStr, "DATA "+rest)
@@ -405,14 +405,17 @@ func parseDATAStmt(arch Arch, rest string) (DataStmt, error) {
 		return DataStmt{}, fmt.Errorf("DATA empty symbol: %q", "DATA "+rest)
 	}
 
-	sym, off := splitSymPlusOff(symPart)
+	sym, off, concrete := parseSymbolOffset(symPart)
+	if !concrete || strings.ContainsAny(sym, "\"'`") {
+		return DataStmt{}, fmt.Errorf("DATA unresolved or malformed displacement: %q", "DATA "+rest)
+	}
 
 	// DATA's width applies to the value's type, not to a generic immediate
 	// bit pattern. cmd/asm converts a FLOAT leaf to float32 before writing
 	// four bytes; truncating the low bits of float64 would silently corrupt it.
 	expression := strings.TrimSpace(strings.TrimPrefix(rhs, "$"))
 	val, integerError := strconv.ParseUint(expression, 0, 64)
-	ok = integerError == nil
+	ok := integerError == nil
 	if !ok {
 		val, ok = parseImmExpr(expression)
 	}
@@ -479,7 +482,7 @@ func parseWidth(arch Arch, s string) (int64, error) {
 func parseGLOBLStmt(rest string) (GloblStmt, error) {
 	// GLOBL sym(SB), $size
 	// GLOBL sym(SB), flags, $size
-	parts := strings.Split(rest, ",")
+	parts := splitTopLevelCSV(rest)
 	if len(parts) != 2 && len(parts) != 3 {
 		return GloblStmt{}, fmt.Errorf("invalid GLOBL: %q", "GLOBL "+rest)
 	}
@@ -500,10 +503,14 @@ func parseGLOBLStmt(rest string) (GloblStmt, error) {
 	}
 	// cmd/asm evaluates the symbol displacement before requiring it to be
 	// zero. Keep a zero expression out of the declaration's identity so DATA
-	// and GLOBL name the same object. Unresolved expressions remain in sym;
-	// they must not be guessed to be the underlying symbol's zero address.
+	// and GLOBL name the same object. A declaration cannot retain an
+	// unresolved expression as a different, phantom storage identity.
 	var off int64
-	sym, off = splitSymPlusOff(sym)
+	var concrete bool
+	sym, off, concrete = parseSymbolOffset(sym)
+	if !concrete || strings.ContainsAny(sym, "\"'`") {
+		return GloblStmt{}, fmt.Errorf("GLOBL unresolved or malformed symbol displacement: %q", "GLOBL "+rest)
+	}
 	if off != 0 {
 		return GloblStmt{}, fmt.Errorf("GLOBL symbol must not be offset from SB: %q", "GLOBL "+rest)
 	}
@@ -524,27 +531,42 @@ func parseGLOBLStmt(rest string) (GloblStmt, error) {
 }
 
 func splitSymPlusOff(s string) (sym string, off int64) {
-	// Go's assembler parses the displacement as a constant expression after
-	// the symbol token. Whitespace around the operator and expressions such
-	// as name+(2*4) are therefore valid, not part of the symbol name.
-	// If no suffix parses as an expression, retain the entire symbol.
 	s = strings.TrimSpace(s)
-	if s == "" {
-		return "", 0
-	}
-	for sep := 1; sep < len(s); sep++ {
-		if s[sep] != '+' && s[sep] != '-' {
-			continue
-		}
-		name := strings.TrimSpace(s[:sep])
-		if name == "" {
-			continue
-		}
-		if n, ok := parseImmExpr(s[sep:]); ok {
-			return name, int64(n)
-		}
+	if name, offset, concrete := parseSymbolOffset(s); concrete {
+		return name, offset
 	}
 	return s, 0
+}
+
+// Separate the first explicit displacement outside quoted tokens. A later
+// parseable suffix cannot repair an invalid earlier expression. The public
+// query keeps unresolved input verbatim; DATA/GLOBL consumers require concrete.
+func parseSymbolOffset(s string) (name string, offset int64, concrete bool) {
+	s = strings.TrimSpace(s)
+	var quote byte
+	for index := 0; index < len(s); index++ {
+		character := s[index]
+		if quote != 0 {
+			if character == '\\' && quote != '`' && index+1 < len(s) {
+				index++
+			} else if character == quote {
+				quote = 0
+			}
+			continue
+		}
+		switch character {
+		case '\'', '"', '`':
+			quote = character
+		case '+', '-':
+			if index == 0 {
+				return "", 0, false
+			}
+			name = strings.TrimSpace(s[:index])
+			value, valid := parseImmExpr(s[index:])
+			return name, int64(value), name != "" && valid
+		}
+	}
+	return s, 0, s != "" && quote == 0
 }
 
 // SplitSymbolOffset parses a Go assembly symbol and its constant-expression

@@ -2233,8 +2233,7 @@ func parseSBRef(sym string) (base string, off int64, ok bool) {
 		if s == "" {
 			return "", 0, false
 		}
-		base, off = splitSymPlusOff(s)
-		return base, off, true
+		return parseSymbolOffset(s)
 	}
 	// Also accept bare symbol names used by a few platform asm stubs
 	// (e.g. windows arm64 shared-user-data aliases).
@@ -2244,8 +2243,8 @@ func parseSBRef(sym string) (base string, off int64, ok bool) {
 	if _, ok := parseMem(sym); ok {
 		return "", 0, false
 	}
-	base, off = splitSymPlusOff(sym)
-	if strings.TrimSpace(base) == "" {
+	base, off, ok = parseSymbolOffset(sym)
+	if !ok || strings.TrimSpace(base) == "" {
 		return "", 0, false
 	}
 	return base, off, true

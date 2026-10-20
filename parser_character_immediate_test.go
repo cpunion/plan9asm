@@ -10,7 +10,7 @@ func TestParseCharacterImmediateAndExpressions(t *testing.T) {
 		{text: "$'\\n'", want: 10},
 		{text: "$'Z'", want: 'Z'},
 		{text: "$'\\x7f'", want: 0x7f},
-		{text: "$'\\377'", want: 0xff},
+		{text: "$'\\u00ff'", want: 0xff},
 		{text: "$'\\u03bb'", want: '\u03bb'},
 		{text: "$'A'+1", want: 'B'},
 		{text: "$('A' * 2)", want: 130},

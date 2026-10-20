@@ -46,7 +46,7 @@ func memoryOffsetExpressionNeedsContext(raw string) bool {
 			symbolic = true
 			return true
 		case *ast.BasicLit:
-			_, ok := evalImmExpr(expr)
+			_, ok := parseImmExpr(expr.Value)
 			return ok
 		case *ast.ParenExpr:
 			return valid(expr.X)
