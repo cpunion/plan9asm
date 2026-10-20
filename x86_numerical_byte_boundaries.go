@@ -8,7 +8,8 @@ type x86NumericalNativeBoundary struct {
 }
 
 // This is a byte-boundary observation, not a raw/source/literal or memory
-// capability. In particular, vector instructions are never put into scalar:
+// capability. In particular, VEX/EVEX instructions, including GP operations,
+// are never put into scalar:
 // numerical-read binding still needs a real x86asm scalar decode, its exact
 // original source ordinal, relocation, layout, owner and live source guard.
 // Failure discards the complete observation, including otherwise valid prefixes
@@ -74,6 +75,14 @@ func x86NumericalVectorPrefix(code []byte, mode int) bool {
 func x86NumericalVectorBoundary(code []byte, mode int) (int, error) {
 	memory := x86RawMemoryDecoder{physicalPC: true}
 	decoders := [...]func([]byte, int, x86RawMemoryDecoder) (Instr, int, bool, error){
+		decodedX86ANDNInstructionWithMemory,
+		decodedX86BEXTRInstructionWithMemory,
+		decodedX86BLSInstructionWithMemory,
+		decodedX86RawBZHIInstructionWithMemory,
+		decodedX86MULXInstructionWithMemory,
+		decodedX86ParallelBitsInstructionWithMemory,
+		decodedX86RORXInstructionWithMemory,
+		decodedX86BMI2ShiftInstructionWithMemory,
 		decodedX86NumericalConversionBoundary,
 		decodedX86VEXFMA3InstructionWithMemory,
 		decodedX86VEXBinaryFloatInstructionWithMemory,
