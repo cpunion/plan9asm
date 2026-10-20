@@ -139,9 +139,9 @@ func x86PackedShiftProperties(op Op, ins Instr, goarch string) (x86PackedShiftFo
 		} else if f.broadcast || !register(data, f.byteWidth) {
 			return fail()
 		}
-		// EVEX W uniform shifts and byte shifts do not suppress faults.
-		// D/Q immediate rows use E4, independently of the count rows.
-		f.faultSuppressed = !f.legacy && !byteShift && f.laneBits != 16
+		// All W/D/Q immediate Full tuples use E4/E4.nb. Byte shifts
+		// retain E4NF.nb; uniform Mem128 count rows are handled below.
+		f.faultSuppressed = !f.legacy && !byteShift
 	} else {
 		if byteShift || f.broadcast && !variable || !register(data, f.byteWidth) {
 			return fail()

@@ -17,7 +17,7 @@ func x86PackedShiftFaultProgram() (string, map[string]FuncSig, string, string, [
 		{"VPSRLW.Z (CX),Y0,K1,Y1", 16, 8},
 		{"VPSRLD.Z (CX),Y0,K1,Y1", 16, 8},
 		{"VPSRLQ.Z (CX),Y0,K1,Y1", 16, 8},
-		{"VPSRLW.Z $1,(CX),K1,Y1", 32, 8},
+		{"VPSRLW.Z $1,(CX),K1,Y1", 0, 0},
 		{"VPSRLDQ $1,(CX),Y1", 32, 8},
 		{"VPSRLD.Z $1,(CX),K1,Y1", 0, 0},
 		{"VPSRLQ.BCST.Z $1,(CX),K1,Y1", 0, 0},
@@ -81,5 +81,5 @@ func TestCrossLinuxRuntimeMatrixX86PackedShiftNativeReadFaults(t *testing.T) {
 			x86CheckMemoryAccessMatrix(t, execution, executable, required)
 		})
 	}
-	t.Log("8 full/active native reads and 4 lane-mask suppression cases, including readable controls")
+	t.Log("7 full/active native reads and 5 lane-mask suppression cases, including readable controls")
 }
