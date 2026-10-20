@@ -314,7 +314,7 @@ func cloneSDKASMDataInputs(inputs map[string][32]byte) map[string][32]byte {
 }
 
 func (source *GoX86SDKASMDataSource) digest() ([32]byte, error) {
-	raw, err := json.Marshal(struct {
+	return digestSDKASMDataState(struct {
 		Request           GoX86SDKASMDataCaptureRequest
 		Guard             GoAMD64FrameCaptureRequest
 		Selection         goAMD64FrameSelection
@@ -332,7 +332,6 @@ func (source *GoX86SDKASMDataSource) digest() ([32]byte, error) {
 	}{source.request, source.guard.request, source.guard.selection, source.guard.env, source.guard.imports,
 		source.guard.inputs, source.guard.entries, source.misses, source.observation, source.originalDeadline,
 		source.originalProfile, source.captureRole, source.originalConfig, source.frameListingBytes})
-	return sha256.Sum256(raw), err
 }
 
 // Verify samples every caller context outside both locks. A lifetime lease
