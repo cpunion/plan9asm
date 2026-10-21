@@ -199,8 +199,19 @@ func TestX86ReciprocalSIBOriginalOwnerUsesSelectedDiagnostic(t *testing.T) {
 	}
 	old := `goAssemblerOracleOutput(t, "386", "TEXT f(SB),4,$0-0\n"+ins.Raw+"\nRET\n", "", false)`
 	bound := `x86ReciprocalSIBOriginalGoRejection(t, "386", "TEXT f(SB),4,$0-0\n"+ins.Raw+"\nRET\n")`
-	complete := strings.Replace(string(source), old, bound, 1)
-	if complete == string(source) || x86ReciprocalSIBOriginalOwnerWiring([]byte(complete)) != nil {
+	unwired := string(source)
+	oldCount, boundCount := strings.Count(unwired, old), strings.Count(unwired, bound)
+	if oldCount+boundCount != 1 {
+		t.Fatal("original owner has an unknown, duplicated or missing diagnostic route")
+	}
+	if boundCount == 1 {
+		unwired = strings.Replace(unwired, bound, old, 1)
+	}
+	if strings.Count(unwired, old) != 1 || strings.Count(unwired, bound) != 0 {
+		t.Fatal("independent unwired baseline lost its exact original source route")
+	}
+	complete := strings.Replace(unwired, old, bound, 1)
+	if complete == unwired || x86ReciprocalSIBOriginalOwnerWiring([]byte(complete)) != nil {
 		t.Fatal("independent complete source/diagnostic routing control")
 	}
 	for _, change := range [][2]string{
