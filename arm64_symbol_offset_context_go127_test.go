@@ -154,8 +154,38 @@ func TestARM64SymbolOffsetConcreteFormsStayConcrete(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if err := ProbeInstruction(ArchARM64, "arm64", file.Funcs[0].Instrs[1]); err != nil {
-				t.Fatalf("a concrete GP symbol displacement became unresolved: %v", err)
+			instruction := file.Funcs[0].Instrs[1]
+			if strings.Contains(row, "$·memory") {
+				if err := ProbeInstruction(ArchARM64, "arm64", instruction); err != nil {
+					t.Fatalf("a concrete GP address became unresolved: %v", err)
+				}
+				return
+			}
+			op, _ := splitOpcode(row)
+			form, handled, err := parseARM64ScalarMemoryForm(Op(op), instruction)
+			store := strings.Contains(row, " R2,")
+			wantSymbol, wantOffset := "·memory+4(SB)", int64(4)
+			if store {
+				wantSymbol, wantOffset = "·memory-4(SB)", -4
+			}
+			bits := map[string]int{"MOVB": 8, "MOVBU": 8, "MOVH": 16, "MOVHU": 16,
+				"MOVW": 32, "MOVWU": 32, "MOVD": 64}[op]
+			if !handled || err != nil || form.memory.Kind != OpSym || form.memory.Sym != wantSymbol ||
+				form.data != "R2" || form.store != store || form.bits != bits ||
+				form.signed != (op == "MOVB" || op == "MOVH" || op == "MOVW") ||
+				form.pre || form.post || !form.scratch || !form.scratchAddress || form.scratchKnown {
+				t.Fatalf("concrete typed symbol/access facts changed: %+v handled=%v error=%v", form, handled, err)
+			}
+			if symbol, offset, resolved := parseSBRef(form.memory.Sym); !resolved ||
+				symbol != "·memory" || offset != wantOffset {
+				t.Fatalf("concrete relocation was not retained: %q offset=%d resolved=%v", symbol, offset, resolved)
+			}
+			// This isolated probe has no original Go R27/layout observation.
+			// Concrete syntax cannot manufacture that independent authority.
+			if err := ProbeInstruction(ArchARM64, "arm64", instruction); !errors.Is(err, ErrProbeNeedsContext) ||
+				!strings.Contains(err.Error(), "unbound original Go memory scratch") ||
+				strings.Contains(err.Error(), "generated assembler constants") {
+				t.Fatalf("concrete offset lost its existing physical-scratch boundary: %v", err)
 			}
 		})
 	}
