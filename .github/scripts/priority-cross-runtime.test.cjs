@@ -67,3 +67,53 @@ test('ARM64 execution cannot lose its unique owner, success guard or reader', ()
   }
   assert.throws(() => requireARM64FallbackOwner(workflow + '\n      - name: Execute rich CLI ARM64 fallback oracle\n'));
 });
+
+const moduleExecutionJobs = ['test', 'race', 'coverage', 'module-completion'];
+const moduleCompilerInstall = 'bash scripts/install-ci-llvm22-ubuntu.sh ' +
+  'gcc-i686-linux-gnu libc6-dev-i386-cross gcc-aarch64-linux-gnu';
+
+// The unchanged portable FMA access oracle executes AArch64 on Linux/amd64
+// in ordinary module owners too. Its linker cannot be supplied solely by the
+// separate cross-runtime job, nor can missing infrastructure become a skip.
+function requireModuleCrossTools(source, name) {
+  const body = job(name, source);
+  const installs = body.split(/(?=^      - )/m).filter(step =>
+    step.includes('run: bash scripts/install-ci-llvm22-ubuntu.sh'));
+  assert.equal(installs.length, 1, `${name}: one LLVM/cross-compiler install`);
+  assert.match(installs[0], /^        timeout-minutes: 14$/m);
+  assert.ok(installs[0].includes(`        run: ${moduleCompilerInstall}\n`),
+    `${name}: both 386 and AArch64 module execution dependencies required`);
+  assert.doesNotMatch(installs[0], /continue-on-error:|\|\|\s*true/);
+  assert.match(body, /^        run: bash scripts\/install-ci-qemu\.sh$/m);
+}
+
+// The intended complete installation is an independent positive control; the
+// real workflow below must satisfy exactly the same requirement on its own.
+const moduleToolsFixture = workflow.replaceAll(
+  'bash scripts/install-ci-llvm22-ubuntu.sh gcc-i686-linux-gnu libc6-dev-i386-cross\n',
+  moduleCompilerInstall + '\n');
+
+for (const name of moduleExecutionJobs) {
+  test(`${name}: real module execution owns its required cross tools`, () => {
+    requireModuleCrossTools(workflow, name);
+  });
+
+  test(`${name}: complete cross tools reject missing dependencies or swallowed errors`, () => {
+    requireModuleCrossTools(moduleToolsFixture, name);
+    const original = job(name, moduleToolsFixture);
+    for (const [before, after] of [
+      [' gcc-aarch64-linux-gnu', ''],
+      [' gcc-i686-linux-gnu', ''],
+      [' libc6-dev-i386-cross', ''],
+      ['install-ci-llvm22-ubuntu.sh', 'install-unpinned-llvm.sh'],
+      [moduleCompilerInstall, moduleCompilerInstall + ' || true'],
+      ['install-ci-qemu.sh', 'install-unpinned-qemu.sh'],
+    ]) {
+      const mutated = original.replace(before, after);
+      assert.notEqual(mutated, original, `${name}: mutation changed its own job`);
+      const changed = moduleToolsFixture.replace(original, mutated);
+      assert.throws(() => requireModuleCrossTools(changed, name), undefined,
+        `${name}: reject ${before}`);
+    }
+  });
+}
