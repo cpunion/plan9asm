@@ -11,7 +11,9 @@ const exactSDK = '1.27.2';
 const minors = ['1.20.x', '1.21.x', '1.22.x', '1.23.x', '1.24.x',
   '1.25.x', '1.26.x', exactSDK];
 const matrixJobs = new Set(['stdlib-corpus', 'test', 'module-completion']);
-const jobs = ['fmt', 'build', 'benchmark', 'stdlib-corpus', 'cross-runtime',
+// The independent SDK/runtime integration workflow has its own exact-SDK
+// policy. These remain the required PR instruction and module owners.
+const jobs = ['fmt', 'build', 'stdlib-corpus', 'cross-runtime',
   'cross-runtime-verify', 'test', 'arm-scan', 'race', 'coverage', 'module-completion'];
 
 function requireSetups(workflow) {

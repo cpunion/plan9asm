@@ -15,7 +15,7 @@ function jobSection(name) {
 
 test('translator jobs require policy preflight, not external compatibility', () => {
   for (const name of [
-    'fmt', 'build', 'benchmark',
+    'fmt', 'build',
     'stdlib-corpus', 'cross-runtime', 'test', 'arm-scan', 'race', 'coverage',
   ]) {
     const section = jobSection(name);
