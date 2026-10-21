@@ -112,7 +112,12 @@ func x86ResultScalarFloatIntegerStepWithRead(ins Instr, state *x86ResultState, o
 		return false, known
 	}
 	if native && !x86ResultNamedPredicateInstruction(ins) {
-		return false, true
+		if !x86RawScalarFloatIntegerSource(ins, arch) {
+			return false, true
+		}
+		// Only this exact original opcode owns its native access. Keep its
+		// physical EVEX metadata and every input obligation unchanged.
+		ins.x86Encoded, ins.x86SourceRaw = false, nil
 	}
 	width := int64(f.spec.inputBits / 8)
 	source := ins.Args[0]
