@@ -1,11 +1,9 @@
 package plan9asm
 
 import (
-	"fmt"
 	"os"
 	"os/exec"
 	"runtime"
-	"strings"
 	"testing"
 )
 
@@ -27,58 +25,9 @@ func TestCrossLinuxRuntimeMatrixBMI2Shift386(t *testing.T) {
 		}
 	}
 
-	var source, declarations, checks strings.Builder
-	sigs := make(map[string]FuncSig)
-	index := 0
-	for _, op := range x86BMI2ShiftTestOps {
-		kind := 0
-		if strings.HasPrefix(op, "SHRX") {
-			kind = 1
-		} else if strings.HasPrefix(op, "SARX") {
-			kind = 2
-		}
+	source, sigs, declarations, checks := x86BMI2Shift386Fixture(t, "SP")
 
-		for _, raw := range []bool{false, true} {
-			for _, destination := range []string{"CX", "SP"} {
-				name := fmt.Sprintf("shift386_%d", index)
-				index++
-				fmt.Fprintf(&source, "TEXT %s(SB),4,$0-12\n", name)
-				source.WriteString("MOVL count+0(FP),AX\nMOVL source+4(FP),BX\n")
-				line := fmt.Sprintf("%s AX,(BX),%s\n", op, destination)
-				if raw {
-					code := assembleX87ControlBytes(t, "386", "TEXT probe(SB),4,$0-0\n"+line+"RET\n")
-					for _, b := range code[:len(code)-1] {
-						fmt.Fprintf(&source, "BYTE $%#02x\n", b)
-					}
-				} else {
-					source.WriteString(line)
-				}
-				fmt.Fprintf(&source, "MOVL %s,ret+8(FP)\nRET\n", destination)
-
-				sigs[name] = FuncSig{
-					Name: name,
-					Args: []LLVMType{I32, Ptr},
-					Ret:  I32,
-					Frame: FrameLayout{
-						Params: []FrameSlot{
-							{Offset: 0, Type: I32, Index: 0, Field: -1},
-							{Offset: 4, Type: Ptr, Index: 1, Field: -1},
-						},
-						Results: []FrameSlot{
-							{Offset: 8, Type: I32, Index: 0, Field: -1},
-						},
-					},
-				}
-				fmt.Fprintf(&declarations, "extern uint32_t %s(uint32_t, const uint32_t*);\n", name)
-				fmt.Fprintf(&checks, "    if (check(%s, value, %d)) return %d;\n", name, kind, index)
-			}
-		}
-	}
-	if index != 24 {
-		t.Fatalf("generated %d functions, want 24", index)
-	}
-
-	file, err := Parse(ArchAMD64, source.String())
+	file, err := Parse(ArchAMD64, source)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,7 +41,7 @@ func TestCrossLinuxRuntimeMatrixBMI2Shift386(t *testing.T) {
 #include <signal.h>
 #include <sys/mman.h>
 #include <unistd.h>
-` + declarations.String() + x86BMI2ShiftOracleC + `
+` + declarations + x86BMI2ShiftOracleC + `
 static void memory_fault(int signal_number) {
     (void)signal_number;
     _exit(98);
@@ -120,7 +69,7 @@ int main(void) {
                            MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     if (memory == MAP_FAILED || mprotect(memory + page, page, PROT_NONE)) return 91;
     uint32_t *value = (uint32_t *)(memory + page - 4);
-` + checks.String() + "    return munmap(memory, page * 2) != 0;\n}\n"
+` + checks + "    return munmap(memory, page * 2) != 0;\n}\n"
 	compileAndRunRuntimeTestWithCompiler(t, llc, []string{"i686-linux-gnu-gcc"}, "bmi2_shift_386",
 		"i386-unknown-linux-gnu", ir, mainC, []string{"qemu-i386", "-L", "/usr/i686-linux-gnu"})
 }
