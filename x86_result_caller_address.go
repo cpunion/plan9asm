@@ -73,6 +73,9 @@ func x86ResultCallerAddressesAfter(ins Instr, before [16]bool, entryFP map[int64
 		}
 		return before // Only the native GP result loses its old caller-address identity.
 	}
+	if x86RawCOMISource(ins, arch) {
+		return before // The exact scalar comparison has no GP output or new address role.
+	}
 	if x86RawMULXSource(ins, arch) {
 		form, _, _ := x86MULXProperties(ins.Op, ins, arch)
 		for _, output := range []Operand{form.low, form.high} {

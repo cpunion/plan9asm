@@ -60,6 +60,9 @@ func x86ResultDirectionAfter(ins Instr, direction x86ResultDirection) x86ResultD
 // raw product. Preserve an existing DF fact without making that data-changing
 // operation inert or extending the standalone observer's raw-source boundary.
 func x86ResultDirectionAfterSource(ins Instr, direction x86ResultDirection, arch string) x86ResultDirection {
+	if x86RawCOMISource(ins, arch) {
+		return direction // Six scalar status writes do not change the independent DF control.
+	}
 	if x86RawMULXSource(ins, arch) {
 		return direction // The exact integer product does not write DF.
 	}

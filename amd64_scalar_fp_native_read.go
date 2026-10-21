@@ -17,7 +17,7 @@ import (
 func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 	fn, sig, arch := c.fpScalarSource, c.sig, c.goarch
 	rawPermute128 := x86Permute128RawReplayRequired(fn, arch)
-	if x86FloatMinMaxRawReplayRequired(fn, arch) || x86ScalarPrecisionRawReplayRequired(fn, arch) ||
+	if x86COMIRawReplayRequired(fn, arch) || x86FloatMinMaxRawReplayRequired(fn, arch) || x86ScalarPrecisionRawReplayRequired(fn, arch) ||
 		x86ExplicitMaskMoveRawReplayRequired(fn, arch) || x86PackedShiftRawReplayRequired(fn, arch) ||
 		x86PackedDotRawReplayRequired(fn, arch) || x86ZeroExtendRawReplayRequired(fn, arch) ||
 		x86PackedPrecisionRawReplayRequired(fn, arch) || rawPermute128 {
@@ -184,6 +184,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		}
 		if x86RawLegacyFloatCompareSource(ins, arch) {
 			continue // Exact legacy compare bytes supply no missing input, native entry or backing.
+		}
+		if x86RawCOMISource(ins, arch) {
+			continue // Complete replay above binds the exact comparison, never its input or entry facts.
 		}
 		if x86RawTernaryLogicSource(ins, arch) {
 			if !boundRawTernary && (fn.x86RawReplay == nil || fn.x86RawReplay.validate(fn, arch) != nil) {
@@ -590,6 +593,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		}
 		if accepted, known := x86ResultSqrtStep(ins, state, owned, arch, true); known {
 			return accepted // The paired native opcode retains scalar/packed MXCSR effects.
+		}
+		if accepted, known := x86LoweredRawCOMIStep(ins, state, owned, arch); known {
+			return accepted // Only the bound original opcode owns this local numerical read.
 		}
 		if accepted, known := x86ResultCOMIStepWithRead(ins, state, owned, arch, true); known {
 			return accepted // The original scalar comparison retains exact read and MXCSR effects.
