@@ -304,3 +304,40 @@ func TestX86COMIRawNativeProducerCannotInventMissingInputs(t *testing.T) {
 		}
 	}
 }
+
+func TestX86COMIRawProducerPreservesIndependentSourceDomains(t *testing.T) {
+	rows := x86COMIRawProducerRows(t)
+	for _, arch := range []string{"amd64", "386"} {
+		for _, row := range rows {
+			t.Run(arch+"/"+row.op+"/"+row.encoding+"/"+row.form, func(t *testing.T) {
+				source, _ := x86COMIRawProducerProgram(row, arch, "Value", true)
+				file, err := normalizeX86RawFile(mustParseX86RawReturn(t, source), arch)
+				if err != nil || len(file.Funcs) != 1 || file.Funcs[0].x86RawReplay == nil ||
+					file.Funcs[0].x86RawReplay.validate(file.Funcs[0], arch) != nil {
+					t.Fatal("original source-domain fixture lacks its complete raw replay", err)
+				}
+				count := 0
+				for _, instruction := range file.Funcs[0].Instrs {
+					if _, known, _ := x86COMIProperties(instruction, arch); !known {
+						continue
+					}
+					count++
+					if got := x86ResultDirectionAfterSource(instruction, x86ResultDirectionBackward, arch); got != x86ResultDirectionBackward {
+						t.Error("scalar status comparison lost independent DF")
+					}
+					if !x86ResultPreservesPrivateStorage(instruction, arch) {
+						t.Error("scalar status comparison lost existing private stack or ID")
+					}
+					var before [16]bool
+					before[0], before[2], before[3], before[7] = true, true, true, true
+					if got := x86ResultCallerAddressesAfter(instruction, before, nil, arch); got != before {
+						t.Error("scalar status comparison revoked unrelated existing GP identities")
+					}
+				}
+				if count != 1 {
+					t.Fatal("ambiguous source-domain comparison inventory", count)
+				}
+			})
+		}
+	}
+}
