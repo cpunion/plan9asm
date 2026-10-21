@@ -30,6 +30,12 @@ func (c *amd64Ctx) lowerMov(op Op, ins Instr) (ok bool, terminated bool, err err
 	if known, err := c.lowerDataBPScalarMove(ins); known {
 		return true, false, err
 	}
+	if form, known, err := x86ScalarStaticStoreProperties(op, ins, c.goarch); known {
+		if err != nil {
+			return true, false, err
+		}
+		return true, false, c.lowerScalarNativeStore(form, ins)
+	}
 	if form, known, err := x86ScalarNativeLoadProperties(op, ins, c.goarch); known {
 		if err != nil {
 			return true, false, err
