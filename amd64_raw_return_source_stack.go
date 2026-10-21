@@ -37,6 +37,7 @@ type x86SourceRawInstruction struct {
 	ternaryLogic    x86RawTernaryLogicIdentity
 	// An absent mode snapshot cannot claim a legacy compare continuation.
 	legacyFloatCompare x86RawLegacyFloatCompareIdentity
+	comi               x86RawCOMIIdentity
 	floatMinMax        x86RawFloatMinMaxIdentity
 	// Neither an absent snapshot nor a low bank implies a VEX conversion.
 	scalarPrecision    x86RawScalarPrecisionIdentity

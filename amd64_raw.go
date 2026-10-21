@@ -430,6 +430,7 @@ func decodeX86RawDirectives(fn Func, goarch string) (Func, error) {
 				packedReduction:    x86PackedReductionRawIdentity(decoded[index], goarch),
 				ternaryLogic:       x86TernaryLogicRawIdentity(decoded[index], goarch),
 				legacyFloatCompare: x86LegacyFloatCompareRawIdentity(decoded[index], goarch),
+				comi:               x86COMIRawIdentity(decoded[index], goarch),
 				floatMinMax:        x86FloatMinMaxRawIdentity(decoded[index], goarch),
 				scalarPrecision:    x86ScalarPrecisionRawIdentity(decoded[index], goarch),
 				scalarFloatInteger: x86ScalarFloatIntegerRawIdentity(decoded[index], goarch),
