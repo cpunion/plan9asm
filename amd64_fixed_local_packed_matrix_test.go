@@ -156,30 +156,9 @@ func fixedLocalPackedActualObjects(t *testing.T, target, triple string, batch in
 		t.Fatal("LLVM 22 llc required")
 	}
 	t.Run(fmt.Sprintf("batch%d", batch), func(t *testing.T) {
-		pkg, request, file, options := x86CMOVFixedLocalFixture(t, assembly, declarations, target, triple)
+		pkg, request, _, options := x86CMOVFixedLocalFixture(t, assembly, declarations, target, triple)
 		fixedLocalConversionPrepareToolCache(t, request)
-		source := requireGoAMD64FrameCapture(t, pkg, request)
-		if len(source.functions) != count {
-			t.Fatal("incomplete actual original Go objects")
-		}
-		expanded, err := source.preprocess(request.AssemblyFile, []byte(assembly))
-		if err != nil {
-			t.Fatal(err)
-		}
-		file, err = Parse(ArchAMD64, expanded)
-		if err != nil {
-			t.Fatal(err)
-		}
-		// Consume this owner's actual complete CPP result. Its token
-		// formatting inserts a space before .Z; unexpanded Raw strings
-		// cannot impersonate that immutable source fingerprint.
-		ctx, cancel := runtimeOracleStageContext(t)
-		defer cancel()
-		bound, err := source.BindFixedLocal(ctx, pkg, file, options)
-		if err != nil {
-			t.Fatal(err)
-		}
-		fixedLocalAPIs(t, pkg, file, bound, func(t *testing.T, ir string, err error) {
+		fixedLocalFreshAPIs(t, pkg, request, options, []string{"Translate", "Module", "GoModule"}, func(t *testing.T, ir string, err error) {
 			if err != nil || strings.Count(ir, "%fixed_local_native = alloca") != count {
 				t.Fatalf("complete original frame inventory lost: %v", err)
 			}

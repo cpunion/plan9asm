@@ -275,15 +275,8 @@ func x86CMOVFixedLocalActualObjects(t *testing.T, target, triple string, batch i
 		fmt.Fprintf(&declarations, "func %s(a,b uint64) uint64\n", kernel.name)
 		names = append(names, "example.invalid/framefixture."+kernel.name)
 	}
-	pkg, request, file, options := x86CMOVFixedLocalFixture(t, assembly.String(), declarations.String(), target, triple)
-	observer := requireGoAMD64FrameCapture(t, pkg, request)
-	ctx, cancel := runtimeOracleStageContext(t)
-	defer cancel()
-	bound, err := observer.BindFixedLocal(ctx, pkg, file, options)
-	if err != nil {
-		t.Fatal("actual numeric CMOV source retains the existing bounded private local contract", err)
-	}
-	fixedLocalAPIs(t, pkg, file, bound, func(t *testing.T, ir string, err error) {
+	pkg, request, _, options := x86CMOVFixedLocalFixture(t, assembly.String(), declarations.String(), target, triple)
+	fixedLocalFreshAPIs(t, pkg, request, options, []string{"Translate", "Module", "GoModule"}, func(t *testing.T, ir string, err error) {
 		if err != nil || !strings.Contains(ir, "fixed_local_native") {
 			t.Fatal("exact sealed original local storage", err)
 		}

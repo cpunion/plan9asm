@@ -150,16 +150,9 @@ func fixedLocalConversionRuntime(t *testing.T, execution x86FloatCompareExecutio
 			if strings.Count(want, "\n") != (end-start)*8*32 {
 				t.Fatal("original Go numerical/status denominator changed")
 			}
-			pkg, request, file, options := x86CMOVFixedLocalFixture(t,
+			pkg, request, _, options := x86CMOVFixedLocalFixture(t,
 				assembly, declarations, runtime.GOOS+"/amd64", execution.triple)
-			source := requireGoAMD64FrameCapture(t, pkg, request)
-			ctx, cancel := runtimeOracleStageContext(t)
-			defer cancel()
-			bound, err := source.BindFixedLocal(ctx, pkg, file, options)
-			if err != nil {
-				t.Fatal(err)
-			}
-			fixedLocalAPIs(t, pkg, file, bound, func(t *testing.T, ir string, err error) {
+			fixedLocalFreshAPIs(t, pkg, request, options, []string{"Translate", "Module", "GoModule"}, func(t *testing.T, ir string, err error) {
 				if err != nil {
 					t.Fatal(err)
 				}

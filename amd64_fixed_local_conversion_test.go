@@ -441,28 +441,10 @@ func fixedLocalConversionActualObjects(t *testing.T, target, triple string, batc
 			fmt.Fprintf(&declarations, "func %s(a uint64) uint64\n", name)
 			names = append(names, "example.invalid/framefixture."+name)
 		}
-		pkg, request, file, options := x86CMOVFixedLocalFixture(t,
+		pkg, request, _, options := x86CMOVFixedLocalFixture(t,
 			assembly.String(), declarations.String(), target, triple)
 		fixedLocalConversionPrepareToolCache(t, request)
-		source := requireGoAMD64FrameCapture(t, pkg, request)
-		// Match the actual producer's complete CPP output, including
-		// spaces before opcode suffix tokens. Keep the original file
-		// unchanged; its raw text is part of the binding fingerprint.
-		expanded, err := source.preprocess(request.AssemblyFile, []byte(assembly.String()))
-		if err != nil {
-			t.Fatal(err)
-		}
-		file, err = Parse(ArchAMD64, expanded)
-		if err != nil {
-			t.Fatal(err)
-		}
-		ctx, cancel := runtimeOracleStageContext(t)
-		defer cancel()
-		bound, err := source.BindFixedLocal(ctx, pkg, file, options)
-		if err != nil {
-			t.Fatal(err)
-		}
-		fixedLocalAPIs(t, pkg, file, bound, func(t *testing.T, ir string, err error) {
+		fixedLocalFreshAPIs(t, pkg, request, options, []string{"Translate", "Module", "GoModule"}, func(t *testing.T, ir string, err error) {
 			if err != nil {
 				t.Fatal(err)
 			}
