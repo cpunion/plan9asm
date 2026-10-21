@@ -1368,7 +1368,7 @@ func TestAMD64FPMovCoverage(t *testing.T) {
 		"bitcast double",
 		"store double",
 		"store i64",
-		"store i32",
+		"store volatile i32",
 		"store i16",
 		"store i8",
 		// Native MOVAPD must retain its aligned opcode and dead-read fault;

@@ -5558,7 +5558,15 @@ func TestTranslateAMD64ConditionalBranchAliasFamilyCompleteGoAssemblerForms(t *t
 		}
 	}
 	src.WriteString("\tRET\n")
-	translateAMD64EcosystemCase(t, src.String(), "conditionalbranchaliases")
+
+	// Preserve the complete original Go object and missing-input Context.
+	// The independent initialized counterpart supplies both COMI inputs.
+	ll := x86ConditionalBranchAliasOriginalFormatObject(t, src.String(), "amd64", "x86_64-unknown-linux-gnu")
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM 22 llc not found")
+	}
+	compileLLVMToObject(t, llc, "x86_64-unknown-linux-gnu", "conditional-branch-alias-formats.ll", "conditional-branch-alias-formats.o", ll)
 }
 
 func TestTranslateX86MSRAccessFamilyCompleteGoAssemblerForms(t *testing.T) {
