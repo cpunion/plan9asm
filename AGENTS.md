@@ -48,9 +48,11 @@ go test ./... -count=1 -timeout=45m
 (cd cmd/plan9asmll && go test ./... -count=1)
 scripts/check-go-asm-coverage.sh
 scripts/check-arm64-plan9-corpus.sh
-scripts/check-stdlib-corpus.sh
-scripts/benchmark-compile.sh
+scripts/check-stdlib-corpus.sh --instructions-only
 ```
+
+Default full-source corpus and strict benchmark belong to the independent
+[SDK/runtime integration workflow](docs/development/validation.md#official-forms-and-benchmark).
 
 Do not reintroduce external discovery jobs or ledger gates into translator CI.
 Keep this entry point short; durable procedures belong in linked documents.

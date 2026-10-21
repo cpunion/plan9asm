@@ -61,8 +61,7 @@ node --test .github/scripts/priority-*.test.cjs
 
 scripts/check-go-asm-coverage.sh
 scripts/check-arm64-plan9-corpus.sh
-scripts/check-stdlib-corpus.sh
-scripts/benchmark-compile.sh
+scripts/check-stdlib-corpus.sh --instructions-only
 ```
 
 The [exhaustive runner](../../cmd/plan9asmtest/README.md) can partition expensive

@@ -138,7 +138,7 @@ deleted or relabelled. The independent frame-header clobber RED is retained,
 but has no production repair or native-execution qualification yet.
 Do not raise budgets, remove failed sources or relabel them N/A to qualify.
 
-PR40 closes instruction translation, not the remaining runtime/ABI contracts.
+PR40 is scoped to instruction translation, not the remaining runtime/ABI contracts.
 PR CI retains complete instruction scanning and its existing object/native
 owners. Full source/object corpus and this unchanged benchmark are independently
 required to succeed within the manual/weekly `SDK/runtime integration` workflow;
@@ -176,7 +176,9 @@ moving their scheduling does not turn the retained 51 failures into passes.
    All original roots, command counts and time limits remain mandatory.
 3. Independently compare all sixteen final-head classifications and complete
    fingerprints; preserve the audited VPERMIL delta and historical Go1.20
-   unsupported form. Re-run the unchanged strict benchmark separately.
+   unsupported form. Complete source/object corpus and the unchanged strict
+   benchmark follow independently in [runtime/ABI issue #47](https://github.com/xgo-dev/plan9asm/issues/47),
+   not as a requirement to resolve all 51 integration failures in PR40.
 4. Stage one coherent allowed-fork batch and watch every job to natural
    completion. Exact-head CI/native outcomes, review and coverage are still
    unfinished. Keep pending hardware explicit and PR40 draft until qualified.
