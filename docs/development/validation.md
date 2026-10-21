@@ -111,6 +111,17 @@ requires every target/batch exactly once and at most three such owners per
 Windows hash shard. A passing batch is not a complete-target receipt: require
 the exact union of all twelve, without skipped or unfinished children.
 
+Each fixed-local API captures, preprocesses, binds and consumes its own complete
+source within the original five-minute stage context, then closes that owner.
+Never reuse another API's lease or cache a mutable Verify result. Wide packed
+objects retain all340 kernels in six complete source packages per API, all three
+optimization paths and independent top-level API owners. Only compiler artifacts
+share a disposable parent-test-owned cache; initialize it even when ambient
+GOCACHE is unset. Object-only tool selection checks LLVM22 and the actual
+target SDK/headers without requiring Rosetta, QEMU or a host ISA preflight.
+Original Go compilation, C compilation/linking and native execution remain
+distinct claims; the original native owners keep their real CPU/OS checks.
+
 CMOV fixed-local objects likewise retain all384 original kernels per Linux and
 Darwin target in six independently scheduled batches. Runtime keeps all387
 CMOV/GP/SIMD kernels in seven batches, their three optimization paths and actual

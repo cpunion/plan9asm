@@ -22,21 +22,24 @@ that contribution head. The sole formal review thread is resolved, not reviewer
 approval. Retain its orphaned-IR and symlink-include regressions. Do not mark
 ready until exact-head CI, review and coverage qualify.
 
-## Latest completed online run
+## Online run and publication boundary
 
-Fork run [39462713494](https://github.com/cpunion/plan9asm/actions/runs/39462713494)
-finished naturally at `51d546835`: 117 jobs = 104 PASS + 13 FAIL, with no
-cancelled or skipped job. Of the preceding run's 27 failed Go roots, 24 now
-actually pass and three still fail. This is not a successful CI certificate.
+The active allowed-fork contribution is draft
+[PR5](https://github.com/cpunion/plan9asm/pull/5). Its formal
+[run 39535494403](https://github.com/cpunion/plan9asm/actions/runs/39535494403)
+uses frozen `2c208003`, not the subsequent local integration branch
+`codex/pr40-ci-closeout-integration-20261021`. Let that run finish naturally;
+do not cancel, rerun or publish another tracked batch while it is active.
+All ten standard-library instruction corpus owners and all six ARM scan owners
+have passed. Other owners still have software and independently observed
+hardware failures. No final CI, coverage-upload or reviewer-approval claim is
+valid until its actual completion evidence is checked.
 
-The complete raw-owner audit identifies 15 unique failed Go roots: 13 own
-CPU/XCR0 preflights report unavailable AVX512, while two are software failures.
-These were the original conformance program's SHUFPS source-effect closure and
-the original scaled-round C report's Windows CRLF assertion. The latter reports
-35,328 observations and zero mathematical failures at both optimization levels.
-A separate coverage-upload failure uses Python 3.15 beyond PyO3's supported
-maximum; its module's Go qualification passed. Aggregate failures add no new
-test root. Do not attribute these three software/infrastructure issues to ISA.
+The older naturally completed run `39462713494` at `51d546835` had 104 PASS and
+13 FAIL. Its failures and the later run's raw artifacts remain historical
+failures, even where a separately frozen local repair now passes. Repeated
+SDK/owner failures are not independent instruction defects. Read each native
+root's own allocation receipt before attributing a failure to hardware.
 
 The user deferred unavailable AVX512 execution to pending-hardware acceptance.
 This is not skip, pass, emulated native execution or whole-CI success. Original
@@ -52,6 +55,11 @@ them or turn object/portable checks into original native execution claims.
 - At `51d546835`, all 33 complete final commands pass and all sixteen official
   x86 SDK classification reports reproduce their reviewed fingerprints without
   changes. These receipts do not certify later integration heads.
+- At `2c208003`, the complete 33-command warm replay also passes: 263 Go roots
+  and 26,000 children across overlapping lanes, zero failed, skipped or
+  incomplete terminals. All sixteen official classifications have zero
+  unreviewed delta. The complete instruction matrix retains all 44 scopes and
+  144 WASM objects. These scopes are not additive and do not certify later heads.
 - The complete original bigmod now actually passes Windows in 72.80 seconds;
   the ASM digest remains `32fd0923150ddd1206a59270c4349e22cb7bbb6c82508e6fa0e1c959e0c57660`.
   This is source/archive compilation evidence, not native execution or a
@@ -84,7 +92,65 @@ them or turn object/portable checks into original native execution claims.
   Context and physical-format partition. Source closure and five-target
   objects are not original native execution or whole-CI qualification.
 
-## Latest replay repair and official classification
+## Current unpushed repair batch
+
+Each following receipt belongs only to its named snapshot. The integrated
+head still needs its own full current/minimum/race, policy and official-form
+qualification. Do not sum overlapping child counts or promote an object check
+into a native execution receipt.
+
+- Scalar FP-to-integer named/raw continuation closure at `b06b13d05` passes
+  all three lanes: 15 roots and 7,973 children per lane. Immutable raw replay,
+  native opcode/MXCSR effects and unrelated source-state domains are retained.
+- Owned static MOV and immediate encoding normalization at `1f34021b8` pass
+  current/race 24-root and minimum-Go 23-root scopes, each with 1,810 children.
+  The original 42-row relocation program retains its own writable storage;
+  an unresolved external symbol is not writable or numerical authority.
+- Mandatory isolated-Void COMI/static-MOV input proof has an independent RED.
+  The complete COMI RIP literal family has another 360-child RED, followed by
+  the minimal existing-literal-owner repair `8fe454d0c`. Its eight-root /
+  5,932-child current-Go combination passes. It retains complete original Go
+  sources, public uninitialized Context and private physical-format objects.
+  At `3b2737f32`, the exact original 252 COMI runtime-fixture kernels also
+  pass original-Go compilation, three-API Linux objects and host C linking:
+  three roots / 60 children, zero skip. Object tools no longer depend on an
+  executable x86 transport; this is not original native execution.
+  Minimum/race and original native execution remain separate obligations.
+- At `25fea2cc6`, five roots / 394 children pass for the complete 386 BMI2
+  fixture contract. The original SP-writing kernels cannot return with their
+  physical stack intact: retain them as Go-accepted Context. The unchanged C
+  comparison now executes an independent safe CX/DX companion, not those SP
+  originals. Actual Linux cross execution still needs online qualification.
+- FMA dead-source access receipts retain exact stdout and every independently
+  expected QEMU fault-child stderr line. Unknown/missing/extra diagnostics,
+  command failure and cleanup failure still fail. Current/minimum/race local
+  cohorts pass; required ordinary Linux owners also install their actual
+  AArch64 C compiler. Full Node policies pass at the isolated repair snapshot.
+- Reciprocal SIB rejection at `e0dd4feb1` binds the selected Go encoder's exact
+  diagnostic profile: historical numeric index/base fields are not operand
+  type IDs. Current/minimum seven-root / 313-child scopes pass; race is pending.
+- Go1.22 concrete Alias lacks the later immediate-RHS API. Test-only contract
+  repair `5643b7823` preserves every original row and explicitly checks Context
+  when that complete chain is unavailable; it never substitutes Underlying or
+  Unalias or skips a row. Actual Go1.22: four roots / 37 children pass.
+- Fixed-local consumers now capture an independent bounded source per API.
+  Wide compilation retains all 340 kernels in six complete source packages
+  (64 each, last 20), all three original optimization paths and separate API
+  owners. Only disposable compiler artifacts share a parent-owned cache;
+  source selection, Verify, expiry and Close remain live and independent.
+  Object tools no longer require Rosetta/CPU execution. Actual cold-cache
+  Translate at `53683ebd7` passes in 101.70s; Module at integrated `a073f2156`
+  passes in 103.40s. Each retains 30 children and 18 object paths. GoModule,
+  race, complete target unions and native 340-kernel execution are unfinished.
+
+The old combined 19-root race cohort at `2c208003` exhausted its unchanged
+five-minute command budget. It remains failed, without a race-detector report;
+validate its complete union in independently bounded commands, not by raising
+the budget or deleting roots. Unavailable Rosetta also caused an actual local
+wide-object skip before the object-tool repair; the strict verifier rejected
+that receipt. Neither is a pass.
+
+## Reviewed replay and official classification history
 
 The independent origin-only mutation scope has an actual 24-child RED at
 `dff66cd11`. Its minimal three-line production repair is `91e530f73`:

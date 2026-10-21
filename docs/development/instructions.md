@@ -728,6 +728,14 @@ The required Linux AMD64 source-alias counted-provenance runtime compares
 original Go and independent LLVM O0/O2 values, immutable lengths and full
 input/output canaries; no new loop, g or native-entry class is admitted.
 
+A scalar GP MOV to static storage needs actual module-owned writable DATA/GLOBL
+extent and every selected input byte. This is mandatory even for an isolated
+Void function; an unrelated result instruction must not accidentally supply
+the input check. Floating, pointer, physical SP/BP and unresolved external
+inputs cannot become numerical store bytes. Reuse the native-width volatile
+emitter and Go's real immediate encoding normalization, including signed imm32
+extension for wide MOV aliases; do not grant storage from an address alone.
+
 Signed packed dword-to-float conversion uses one validated whole native
 CVTDQ2PS/PD opcode, retaining ambient MXCSR rounding, precision, trapping,
 masking and embedded rounding. The same native emitter serves the complete
@@ -761,6 +769,15 @@ through a synchronous subtest. Primary references are
 (conversion instruction pages and exception classes) and the
 [LLVM 22 LangRef](https://releases.llvm.org/22.1.0/docs/LangRef.html)
 (`fptosi` poison and inline-assembly constraints), not software-value parity alone.
+
+Scalar FP-to-GP conversions likewise retain their complete typed native opcode
+and MXCSR effect. A paired native-read consumer must check all preceding inputs,
+even if the scalar result is dead. Raw continuations bind complete immutable
+producer replay, encoded operands, architecture and physical EVEX generation
+before any strict fast path. The transfer writes only the real GP destination;
+it cannot erase unrelated DF/ID, private storage or caller-address identities.
+Private format objects and initialized public companions are separate evidence
+from the unchanged original native programs.
 
 The AMD64 fixed-local observer consumes those same two typed conversion
 grammars for all 42 names, not another mnemonic list. Its complete original
@@ -796,6 +813,13 @@ VEX WIG and EVEX LLIG do not imply portable VEX.L=1 behavior: Intel's SDM
 warns of generation-dependent behavior for that encoding. Keep literal L1
 Context rather than silently emitting L0. Validate all operand/file syntax
 before returning a deferred physical-mode or memory-role Context.
+
+COMI input proof is mandatory for isolated Void instructions as well. The
+four vector names' twelve raw RIP forms use only the existing decoder-owned
+literal consumer: exact decoded relocation, complete DATA extent/payload,
+immutable whole-function replay and original raw RET binding. They still need
+every scalar register byte. Ordinary raw native-pointer reads, legacy forms,
+mode32 literals and SAE memory do not inherit this literal role.
 
 The CLI captures a private inventory at its actual package-load boundary and
 rechecks complete compiled Go sources with that load's dependency types and
