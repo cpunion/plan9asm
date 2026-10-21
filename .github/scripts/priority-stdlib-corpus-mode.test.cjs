@@ -27,9 +27,10 @@ const goFixture = [
 
 const scannerFixture = [
   '#!/usr/bin/env bash', 'set -euo pipefail', 'goos= goarch= output=',
-  'for arg in "$@"; do', '  IFS== read -r key value <<< "$arg"',
-  '  case "$key" in -goos) goos=$value ;; -goarch) goarch=$value ;; -out) output=$value ;; esac',
-  'done',
+  'while (( $# > 0 )); do', '  IFS== read -r key value <<< "$1"',
+  '  case "$key" in',
+  '    -goos) goos=$value ;; -goarch) goarch=$value ;;',
+  '    -out) shift; output=$1 ;;', '  esac', '  shift', 'done',
   'printf "scan|%s/%s|%s|%s|%s|%s|%s\\n" "$goos" "$goarch" "$GO386" "$GOAMD64" "$GOARM" "$GOARM64" "$GOWASM" >> "$CORPUS_PROTOCOL_TRACE"',
   '[[ "$CORPUS_PROTOCOL_MODE" != scanner-exit ]] || { echo protocol-scanner-failure >&2; exit 43; }',
   'if [[ "$CORPUS_PROTOCOL_MODE" == malformed ]]; then printf "{broken\\n" > "$output"; exit; fi',
