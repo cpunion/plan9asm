@@ -34,7 +34,7 @@ func TestX86ScalarReciprocalMode32FrontendAddressHasNoPhysicalPermission(t *test
 					t.Fatal("simple VEX base compatibility was incorrectly extended to SIB syntax", known, err)
 				}
 				if memory == "16(R9)(CX*2)" {
-					goAssemblerOracleOutput(t, "386", "TEXT f(SB),4,$0-0\n"+ins.Raw+"\nRET\n", "", false)
+					x86ReciprocalSIBOriginalGoRejection(t, "386", "TEXT f(SB),4,$0-0\n"+ins.Raw+"\nRET\n")
 				} else if memory == "16(AX)(R9*2)" {
 					// Actual Go 1.27 emitted this positionless stderr in the
 					// original RED, but the independent diagnostic join did not
