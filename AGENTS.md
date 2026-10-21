@@ -51,7 +51,8 @@ scripts/check-arm64-plan9-corpus.sh
 scripts/check-stdlib-corpus.sh --instructions-only
 ```
 
-Default full-source corpus and strict benchmark belong to the independent
+Instruction checks retain complete WASM source/object compilation. Default
+full-source corpus and strict benchmark belong to the independent
 [SDK/runtime integration workflow](docs/development/validation.md#official-forms-and-benchmark).
 
 Do not reintroduce external discovery jobs or ledger gates into translator CI.

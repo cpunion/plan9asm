@@ -139,8 +139,9 @@ but has no production repair or native-execution qualification yet.
 Do not raise budgets, remove failed sources or relabel them N/A to qualify.
 
 PR40 is scoped to instruction translation, not the remaining runtime/ABI contracts.
-PR CI retains complete instruction scanning and its existing object/native
-owners. Full source/object corpus and this unchanged benchmark are independently
+PR CI retains complete instruction scanning, full WASM source/object compilation
+for typed-stack/control context, and its existing object/native owners.
+The complete all-architecture source/object corpus and unchanged benchmark are independently
 required to succeed within the manual/weekly `SDK/runtime integration` workflow;
 moving their scheduling does not turn the retained 51 failures into passes.
 

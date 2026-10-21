@@ -173,7 +173,10 @@ overrides use `PLAN9ASM_BENCHMARK_TARGETS`,
 Measure before claiming a speedup or changing budgets.
 
 PR Go CI runs `check-stdlib-corpus.sh --instructions-only` with the complete
-SDK/target/profile matrix and official instruction fingerprints. Default
+SDK/target/profile matrix and official instruction fingerprints. WASM retains
+complete source translation and every LLVM object because its typed stack and
+control flow cannot be checked as isolated instructions. Other architectures
+stop after successful instruction scanning in this mode. Default
 `check-stdlib-corpus.sh` still translates complete source and compiles LLVM
 objects. That same complete matrix and the unchanged strict benchmark run in
 the separate manual/weekly `SDK/runtime integration` workflow. Its failures

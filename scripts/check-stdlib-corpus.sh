@@ -192,7 +192,8 @@ if parse_errs:
     raise SystemExit(f"{target}: parse errors remain: {top}")
 PY
 
-  if [[ "$instructions_only" == true ]]; then
+  # WASM needs complete typed-stack/control context even for instruction checks.
+  if [[ "$instructions_only" == true && "$goarch" != wasm ]]; then
     rm "$json"
     continue
   fi
