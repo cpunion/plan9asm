@@ -11,14 +11,7 @@ import (
 )
 
 func TestX86AddressSensitiveRawTextBlobReportedURootFarJump(t *testing.T) {
-	const source = `TEXT setup(SB),NOSPLIT,$0-0
-	MOVL AX, farjump64+6(SB)
-	JMP farjump64(SB)
-TEXT farjump64(SB),NOSPLIT,$0-0
-	BYTE $0xff; BYTE $0x2d; LONG $0
-	LONG $0
-	LONG $8
-`
+	const source = x86URootFarJumpOriginalSource
 	file, err := Parse(ArchAMD64, source)
 	if err != nil {
 		t.Fatal(err)
