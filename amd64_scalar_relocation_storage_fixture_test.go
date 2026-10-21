@@ -200,12 +200,29 @@ func x86ScalarRelocationRuntimeStorageWiring(source []byte) error {
 
 func TestX86ScalarAbsoluteRelocationRuntimeUsesActualOwnedStorage(t *testing.T) {
 	_, _, _, original := x86ScalarRelocationOriginalFixture(t)
-	complete := strings.Replace(string(original), "\trun(original)\n", "\trun(original)\n"+
-		"\tllvmSource, llvmReference := x86ScalarRelocationOwnedLLVMFixture(t, source.String(), x86ScalarRelocationReferenceC)\n", 1)
+	binding := "\tllvmSource, llvmReference := x86ScalarRelocationOwnedLLVMFixture(t, source.String(), x86ScalarRelocationReferenceC)\n"
+	wiredAPI := `x86AddressMemoryAPI(t, api, llvmSource, "386", "i386-unknown-linux-gnu")`
+	unwiredAPI := `x86AddressMemoryAPI(t, api, source.String(), "386", "i386-unknown-linux-gnu")`
+	wiredC := `map[string]string{input: ir, driver: llvmReference}`
+	unwiredC := `map[string]string{input: ir, driver: x86ScalarRelocationReferenceC}`
+	unwired := string(original)
+	for _, pair := range [][2]string{{binding, ""}, {wiredAPI, unwiredAPI}, {wiredC, unwiredC}} {
+		if strings.Count(unwired, pair[0]) != 1 {
+			t.Fatal("actual owner lost one exact source/storage binding", pair[0])
+		}
+		unwired = strings.Replace(unwired, pair[0], pair[1], 1)
+	}
+	if x86ScalarRelocationRuntimeStorageWiring([]byte(unwired)) == nil {
+		t.Fatal("independent unwired owner acquired an owned-storage contract")
+	}
+	complete := strings.Replace(unwired, "\trun(original)\n", "\trun(original)\n"+binding, 1)
 	complete = strings.Replace(complete, `x86AddressMemoryAPI(t, api, source.String(), "386", "i386-unknown-linux-gnu")`,
 		`x86AddressMemoryAPI(t, api, llvmSource, "386", "i386-unknown-linux-gnu")`, 1)
 	complete = strings.Replace(complete, `map[string]string{input: ir, driver: x86ScalarRelocationReferenceC}`,
 		`map[string]string{input: ir, driver: llvmReference}`, 1)
+	if complete != string(original) {
+		t.Fatal("independent binding round trip changed the actual complete runtime owner")
+	}
 	if err := x86ScalarRelocationRuntimeStorageWiring([]byte(complete)); err != nil {
 		t.Fatal("independent complete wiring control", err)
 	}
