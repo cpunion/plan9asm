@@ -31,7 +31,7 @@ actually pass and three still fail. This is not a successful CI certificate.
 
 The complete raw-owner audit identifies 15 unique failed Go roots: 13 own
 CPU/XCR0 preflights report unavailable AVX512, while two are software failures.
-These are the original conformance program's SHUFPS source-effect closure and
+These were the original conformance program's SHUFPS source-effect closure and
 the original scaled-round C report's Windows CRLF assertion. The latter reports
 35,328 observations and zero mathematical failures at both optimization levels.
 A separate coverage-upload failure uses Python 3.15 beyond PyO3's supported
@@ -64,15 +64,25 @@ them or turn object/portable checks into original native execution claims.
   do not describe the current pin as a complete patch-drift mechanism.
 - CRLF has an independent 25-child RED with exactly the legal CRLF child
   failing. The minimal repair accepts only the two exact complete LF/CRLF
-  reports; 25 format children plus the original O0/O2 mathematics pass on
-  current Go at `06d305eaf`. No trimming, extra output or reduced count is valid.
+  reports; 25 format children plus the original O0/O2 mathematics pass in
+  separate current-Go, actual minimum-Go and race receipts at `06d305eaf`.
+  No trimming, extra output or reduced count is valid.
 - Coverage-upload setup selects Python3.13 only after Go qualification and
   completion evidence. Python, PATH pip and the installed CLI are checked;
   original OIDC/files/fail-on-error inputs remain unchanged. Its independent
   RED and full 250-test Node GREEN are not a real Windows upload certificate.
-- SHUFPS/SHUFPD/VSHUFPS/VSHUFPD need one complete typed two-source family
-  repair and independent original-source regressions; do not fix only SHUFPS
-  or modify the original conformance ASM/C to bypass its proof failure.
+- Six complete typed families now cover 41 spellings: floating shuffles,
+  immediate blends, implicit mask stores, legacy integer min/max, qword
+  permutations and signed widening. Shared widening and element-permute
+  machinery replace duplicate lowerers, without borrowing raw/ABI roles.
+  Keep Type4/E4NF full accesses distinct from E5 active-lane suppression;
+  MASKMOV retains its original non-temporal opcode and MMX/EMMS owner.
+- At `1c326b4bb`, all 45 original public conformance entries independently
+  pass source closure with the complete unchanged ASM and Go declarations.
+  The same receipt's three stale test contracts still fail; preserve it.
+  Later test-only repairs retain every original row, Go object, public
+  Context and physical-format partition. Source closure and five-target
+  objects are not original native execution or whole-CI qualification.
 
 ## Latest replay repair and official classification
 
@@ -91,8 +101,13 @@ Each AMD64 SDK changes exactly 45 input-deficient forms from supported to
 Context. All 386 forms, encoder/form identities and every unrelated metric
 remain unchanged. Baseline-only `059d894ac` records those audited classifications.
 Context is not initialized-program success; do not count it as executed code.
-All sixteen final reports reproduce this reviewed baseline at `51d546835`.
-Fresh comparison remains required after subsequent translator changes.
+All sixteen reports reproduce that reviewed baseline at `51d546835`.
+The six new families have an independent unapproved diagnostic followed by a
+fresh reviewed sixteen-report audit at `06098a256`: all eight AMD64 SDKs change
+the same 134 input-deficient forms to Context, and all 386 reports are unchanged.
+Complete form/encoder identities, unsupported rows and parse metrics remain
+unchanged. Baseline-only `c6aaad048` records exactly 24 derived fields, not a
+translation or runtime pass. Fresh final-head zero-delta comparison is required.
 
 VPERMILPS/PD now share complete immediate/variable typed grammar, selected-byte
 effects and exact E4NF native reads, including dead/Void and zero-mask access
