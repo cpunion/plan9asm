@@ -68,7 +68,7 @@ function requireRuntimeIntegration(source) {
   assert.match(steps[1], /^        timeout-minutes: 14$/m);
   for (const step of steps.slice(0, 4)) assert.doesNotMatch(step, /^        if:/m);
   assert.match(steps[3], /^        run: scripts\/benchmark-compile\.sh$/m);
-  const environment = [...steps[3].matchAll(/^          ([A-Z_]+): (.+)$/gm)];
+  const environment = [...steps[3].matchAll(/^          ([A-Z0-9_]+): (.+)$/gm)];
   assert.deepEqual(environment.map(match => [match[1], match[2]]), [
     ['PLAN9ASM_BENCHMARK_MAX_TARGET_SECONDS', "'300'"],
     ['PLAN9ASM_BENCHMARK_MAX_TOTAL_SECONDS', "'900'"],
