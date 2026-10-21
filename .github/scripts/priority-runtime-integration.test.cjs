@@ -14,6 +14,11 @@ const benchmarkScript = fs.readFileSync(path.join(__dirname, '../../scripts/benc
 const diagnostic = fs.readFileSync(path.join(directory, 'pr40-owned-process-probe.yml'), 'utf8');
 const instructionJobs = ['ci_policy', 'fmt', 'build', 'stdlib-corpus', 'cross-runtime',
   'cross-runtime-verify', 'test', 'windows-module', 'arm-scan', 'race', 'coverage', 'module-completion'];
+const linuxTargets = ['linux/386', 'linux/amd64', 'linux/arm', 'linux/arm64',
+  'darwin/amd64', 'darwin/arm64', 'windows/386', 'windows/amd64', 'windows/arm64', 'js/wasm'];
+const corpusTargets = [linuxTargets,
+  ...Array.from({length: 7}, () => [...linuxTargets, 'wasip1/wasm']),
+  ['darwin/amd64', 'darwin/arm64'], ['windows/386', 'windows/amd64', 'windows/arm64']];
 
 function jobNames(source) {
   const sections = source.split('\njobs:\n');
@@ -84,6 +89,7 @@ function requireRuntimeIntegration(source) {
   assert.match(corpus, /^    name: complete stdlib source\/object corpus \(/m);
   assert.doesNotMatch(corpus, /^    if:|--instructions-only/m);
   assert.match(corpus, /^          scripts\/check-stdlib-corpus\.sh$/m);
+  requireCorpusTargets(corpus);
   // The complete matrix, tools and prebuild transport are still the original
   // corpus job. Only its instruction-only call and redundant official-table
   // step differ from the required PR instruction owner.
@@ -95,6 +101,12 @@ function corpusBody(body) {
   return body.replace(/^    name: [^\n]+\n/m, '')
     .replace('scripts/check-stdlib-corpus.sh --instructions-only', 'scripts/check-stdlib-corpus.sh')
     .split('\n      - name: Official Go assembler coverage regression\n')[0].trimEnd();
+}
+
+function requireCorpusTargets(body) {
+  const actual = [...body.matchAll(/targets: '([^']+)'/g)].map(match => match[1].split(','));
+  assert.deepEqual(actual, corpusTargets,
+    'every SDK/host lane must retain its complete, independently known OS/architecture inventory');
 }
 
 function requireInstructionOwners(source) {
@@ -112,13 +124,7 @@ function requireInstructionOwners(source) {
   assert.match(corpus, /^    name: stdlib instruction corpus \(/m);
   assert.match(corpus, /^          scripts\/check-stdlib-corpus\.sh --instructions-only$/m);
   assert.match(corpus, /scripts\/check-go-asm-coverage\.sh/);
-  const targets = [...corpus.matchAll(/targets: '([^']+)'/g)].map(match => match[1]);
-  assert.equal(targets.length, 10, 'all eight SDKs and both auxiliary hosts');
-  for (const target of targets.slice(0, 8)) {
-    for (const required of ['linux/386', 'linux/amd64', 'linux/arm', 'linux/arm64', 'js/wasm']) {
-      assert.ok(target.split(',').includes(required), required);
-    }
-  }
+  requireCorpusTargets(corpus);
   assert.match(jobBody(source, 'cross-runtime'), /scripts\/install-ci-qemu\.sh/);
   assert.match(jobBody(source, 'windows-module'), /uses: \.\/\.github\/workflows\/windows-module\.yml/);
   assert.match(jobBody(source, 'coverage'), /bash scripts\/test-module-ci\.sh coverage execute/);
@@ -252,4 +258,33 @@ test('responsibility split cannot delete or replace a required instruction owner
   await t.test('successful old benchmark identity', () => {
     assert.throws(() => requireInstructionOwners(instructionFixture + '\n  benchmark:\n    run: echo success\n'));
   });
+});
+
+test('both corpus copies independently reject every missing or duplicate OS/architecture target', async t => {
+  requireCorpusTargets(jobBody(goCI, 'stdlib-corpus'));
+  requireRuntimeIntegration(runtimeFixture);
+  requireInstructionOwners(instructionFixture);
+  function replaceTargets(source, lane, targets) {
+    const body = jobBody(source, 'stdlib-corpus');
+    const field = [...body.matchAll(/targets: '([^']+)'/g)][lane];
+    const changed = body.slice(0, field.index) + "targets: '" + targets.join(',') + "'" +
+      body.slice(field.index + field[0].length);
+    assert.notEqual(changed, body, 'target mutation must apply');
+    return source.replace(body, changed);
+  }
+  for (const [lane, targets] of corpusTargets.entries()) {
+    for (const [index, target] of targets.entries()) {
+      for (const operation of ['missing', 'duplicate']) {
+        await t.test('lane ' + lane + '/' + target + '/' + operation, () => {
+          const changed = targets.slice();
+          if (operation === 'missing') changed.splice(index, 1);
+          else changed.splice(index, 0, target);
+          // Change both copies together: cross-workflow equality alone must
+          // never make a jointly reduced or duplicated matrix acceptable.
+          assert.throws(() => requireInstructionOwners(replaceTargets(instructionFixture, lane, changed)));
+          assert.throws(() => requireRuntimeIntegration(replaceTargets(runtimeFixture, lane, changed)));
+        });
+      }
+    }
+  }
 });
