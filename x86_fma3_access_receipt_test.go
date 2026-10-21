@@ -8,9 +8,9 @@ import (
 	"testing"
 )
 
-// Preserve the old exact-output rule until the independent transport
-// regression demonstrates why expected guest-child diagnostics need a
-// separately bound observation, not a broad stderr filter.
+// The unchanged C parent validates every child's actual wait status before
+// publishing stdout. QEMU diagnostics remain a separate, counted stream:
+// neither missing children nor unrelated stderr may borrow that receipt.
 func x86FMA3PortableAccessReceipt(stdout, stderr []byte, commandErr error, want string, faults int, emulated bool) error {
 	if commandErr != nil {
 		return commandErr
@@ -18,9 +18,28 @@ func x86FMA3PortableAccessReceipt(stdout, stderr []byte, commandErr error, want 
 	if faults < 0 || faults > 6*len(x86FMA3PortableAccessCases()) {
 		return fmt.Errorf("invalid independent fault inventory")
 	}
-	combined := append(append([]byte(nil), stderr...), stdout...)
-	if !bytes.Equal(combined, []byte(want)) {
+	if !bytes.Equal(stdout, []byte(want)) {
 		return fmt.Errorf("incomplete portable access observation")
+	}
+	if !emulated {
+		if len(stderr) != 0 {
+			return fmt.Errorf("unexpected native access diagnostics")
+		}
+		return nil
+	}
+	const segmentation = "qemu: uncaught target signal 11 (Segmentation fault) - core dumped"
+	const bus = "qemu: uncaught target signal 7 (Bus error) - core dumped"
+	if len(stderr) > faults*(len(segmentation)+1) {
+		return fmt.Errorf("excess guest-child diagnostics")
+	}
+	lines := strings.Split(string(stderr), "\n")
+	if len(lines) != faults+1 || lines[len(lines)-1] != "" {
+		return fmt.Errorf("incomplete guest-child fault inventory")
+	}
+	for _, line := range lines[:faults] {
+		if line != segmentation && line != bus {
+			return fmt.Errorf("unexpected guest-child fault diagnostic")
+		}
 	}
 	return nil
 }

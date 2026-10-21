@@ -4,6 +4,7 @@ package plan9asm
 
 import (
 	"fmt"
+	"os/exec"
 	"runtime"
 	"strings"
 	"testing"
@@ -32,8 +33,11 @@ func TestCrossLinuxRuntimeMatrixX86FMA3AArch64DeadSourceAccess(t *testing.T) {
 	for _, api := range []string{"text", "module", "Go"} {
 		t.Run(api, func(t *testing.T) {
 			var source, declarations, prototypes, metadata strings.Builder
-			admitted, contexts := 0, 0
+			admitted, contexts, faults := 0, 0, 0
 			for index, row := range x86FMA3PortableAccessCases() {
+				if row.bytes != 0 {
+					faults += 3 // The independent reference's NULL and two guard probes.
+				}
 				name := fmt.Sprint("Access", index)
 				register, declaration, _ := x86FMA3PortableAccessSource(row, name+"Register", false)
 				if ir, err := x86ScalarFPBitViewAPI(t, register, declaration, "amd64", execution.triple, api); err != nil || ir == "" {
@@ -50,6 +54,9 @@ func TestCrossLinuxRuntimeMatrixX86FMA3AArch64DeadSourceAccess(t *testing.T) {
 					contexts++
 				} else {
 					admitted++
+					if row.bytes != 0 {
+						faults += 3 // The translated program's identical fault probes.
+					}
 					function = name
 					source.WriteString(program)
 					declarations.WriteString(declaration)
@@ -75,11 +82,19 @@ func TestCrossLinuxRuntimeMatrixX86FMA3AArch64DeadSourceAccess(t *testing.T) {
 					if pipeline.optimize {
 						text = x86DwordProductIROptimize(t, text)
 					}
-					output := execution.compileAndRunLLVM(t, "fma-portable-dead-access", text, main, pipeline.level)
+					executable := execution.compileLLVM(t, "fma-portable-dead-access", text, main, pipeline.level)
+					arguments := execution.command(executable)
+					ctx, cancel := runtimeOracleStageContext(t)
+					output, diagnostics, commandErr := runtimeOracleMachineOutput(ctx,
+						exec.CommandContext(ctx, arguments[0], arguments[1:]...))
+					cancel()
+					if len(diagnostics) != 0 {
+						t.Logf("complete guest-child stderr: %q", diagnostics)
+					}
 					want := fmt.Sprintf("portable FMA dead-q: admitted=%d context=%d reference=%d translated=%d\n",
 						admitted, contexts, len(x86FMA3PortableAccessCases())*7, admitted*7)
-					if string(output) != want {
-						t.Fatalf("incomplete independent volatile reference/access execution: got %q want %q", output, want)
+					if err := x86FMA3PortableAccessReceipt(output, diagnostics, commandErr, want, faults, len(execution.prefix) != 0); err != nil {
+						t.Fatalf("incomplete independent volatile reference/access execution: %v; stdout=%q stderr=%q want=%q", err, output, diagnostics, want)
 					}
 					t.Log(strings.TrimSpace(string(output)))
 				})
