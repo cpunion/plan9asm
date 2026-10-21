@@ -63,7 +63,9 @@ func parseARMIntegerSymbolForm(op string, ins Instr) (armIntegerSymbolForm, erro
 	} else if _, _, _, err := armMemoryModifiers(ins); err != nil {
 		return f, err
 	}
-	if _, _, ok := parseSBRef(f.symbol); !ok || !strings.HasSuffix(f.symbol, "(SB)") {
+	_, _, concrete := parseSBRef(f.symbol)
+	unresolved := !concrete && armSymbolOffsetNeedsContext(f.symbol)
+	if !strings.HasSuffix(f.symbol, "(SB)") || !concrete && !unresolved {
 		return f, fmt.Errorf("arm %s requires a valid symbol(SB) reference: %q", op, ins.Raw)
 	}
 	switch strings.ToUpper(strings.TrimSpace(string(f.reg))) {
@@ -79,6 +81,9 @@ func parseARMIntegerSymbolForm(op string, ins Instr) (armIntegerSymbolForm, erro
 		// R11. Reading PC in the following store therefore depends on the
 		// source instruction layout, not on an initialized virtual register.
 		return f, fmt.Errorf("%w: arm %s symbol source R15 requires source instruction layout context: %q", ErrProbeNeedsContext, op, ins.Raw)
+	}
+	if unresolved {
+		return f, fmt.Errorf("%w: arm %s symbol displacement requires generated assembler constants: %q", ErrProbeNeedsContext, op, ins.Raw)
 	}
 	return f, nil
 }
