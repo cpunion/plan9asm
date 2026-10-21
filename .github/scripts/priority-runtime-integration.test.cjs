@@ -37,13 +37,13 @@ function requireRuntimeIntegration(source) {
   assert.match(source, /^name: SDK\/runtime integration$/m);
   const triggers = source.match(/^on:\n([\s\S]*?)(?=^\S)/m);
   assert.ok(triggers, 'explicit standalone workflow triggers');
-  assert.deepEqual([...triggers[1].matchAll(/^  ([a-z_]+):\s*$/gm)].map(match => match[1]),
+  assert.deepEqual([...triggers[1].matchAll(/^  ([a-z_]+):[^\n]*$/gm)].map(match => match[1]),
     ['workflow_dispatch', 'schedule']);
   assert.match(triggers[1], /^    - cron: '17 3 \* \* 1'$/m, 'one weekly schedule');
   assert.equal([...triggers[1].matchAll(/cron:/g)].length, 1);
   assert.match(source, /^  cancel-in-progress: false$/m);
   assert.match(source, /^permissions:\n  contents: read$/m);
-  requireJobSet(source, ['ci_policy', 'benchmark']);
+  requireJobSet(source, ['ci_policy', 'benchmark', 'stdlib-corpus']);
   assert.doesNotMatch(source, /continue-on-error:|\|\|\s*true|\bexit 0\b/);
   assert.doesNotMatch(source, /PLAN9ASM_BENCHMARK_(?:TARGETS|REPORT_DIR):/);
 
@@ -78,6 +78,23 @@ function requireRuntimeIntegration(source) {
   assert.match(steps[4], /^          name: compile-benchmark$/m);
   assert.match(steps[4], /^          path: _out\/compile-benchmark$/m);
   assert.match(steps[4], /^          if-no-files-found: error$/m);
+
+  const corpus = jobBody(source, 'stdlib-corpus');
+  assert.deepEqual(jobNeeds(source, 'stdlib-corpus'), ['ci_policy']);
+  assert.match(corpus, /^    name: complete stdlib source\/object corpus \(/m);
+  assert.doesNotMatch(corpus, /^    if:|--instructions-only/m);
+  assert.match(corpus, /^          scripts\/check-stdlib-corpus\.sh$/m);
+  // The complete matrix, tools and prebuild transport are still the original
+  // corpus job. Only its instruction-only call and redundant official-table
+  // step differ from the required PR instruction owner.
+  assert.equal(corpusBody(corpus), corpusBody(jobBody(goCI, 'stdlib-corpus')),
+    'full SDK/OS/architecture-profile matrix and tool requirements must match');
+}
+
+function corpusBody(body) {
+  return body.replace(/^    name: [^\n]+\n/m, '')
+    .replace('scripts/check-stdlib-corpus.sh --instructions-only', 'scripts/check-stdlib-corpus.sh')
+    .split('\n      - name: Official Go assembler coverage regression\n')[0].trimEnd();
 }
 
 function requireInstructionOwners(source) {
@@ -92,7 +109,8 @@ function requireInstructionOwners(source) {
   assert.deepEqual(jobNeeds(source, 'module-completion'), ['test', 'race', 'coverage']);
   assert.match(jobBody(source, 'build'), /run: scripts\/check-arm64-plan9-corpus\.sh/);
   const corpus = jobBody(source, 'stdlib-corpus');
-  assert.match(corpus, /scripts\/check-stdlib-corpus\.sh/);
+  assert.match(corpus, /^    name: stdlib instruction corpus \(/m);
+  assert.match(corpus, /^          scripts\/check-stdlib-corpus\.sh --instructions-only$/m);
   assert.match(corpus, /scripts\/check-go-asm-coverage\.sh/);
   const targets = [...corpus.matchAll(/targets: '([^']+)'/g)].map(match => match[1]);
   assert.equal(targets.length, 10, 'all eight SDKs and both auxiliary hosts');
@@ -114,16 +132,22 @@ function withoutJob(source, name) {
 // The positive mutation fixture is the intended move of the real existing
 // job, not a claimed execution result. Actual workflow tests below never use
 // this fallback to hide a missing integration workflow.
-const instructionFixture = /\n  benchmark:\n/.test(goCI) ? withoutJob(goCI, 'benchmark') : goCI;
+let instructionFixture = /\n  benchmark:\n/.test(goCI) ? withoutJob(goCI, 'benchmark') : goCI;
+instructionFixture = instructionFixture.replace('name: stdlib-corpus (', 'name: stdlib instruction corpus (')
+  .replace('          scripts/check-stdlib-corpus.sh\n', '          scripts/check-stdlib-corpus.sh --instructions-only\n');
 let runtimeFixture = runtime;
 if (!runtimeFixture) {
   const policy = jobBody(goCI, 'ci_policy').replace("go-version: '1.27.1'", "go-version: '1.27.2'");
   const benchmark = jobBody(goCI, 'benchmark').replace('name: compile benchmark (Go 1.27, LLVM 22)',
     'name: complete standard-library SDK/runtime compile (Go 1.27, LLVM 22)');
+  const corpus = jobBody(goCI, 'stdlib-corpus')
+    .replace('name: stdlib-corpus (', 'name: complete stdlib source/object corpus (')
+    .split('\n      - name: Official Go assembler coverage regression\n')[0];
   runtimeFixture = "name: SDK/runtime integration\n\non:\n  workflow_dispatch:\n  schedule:\n" +
     "    - cron: '17 3 * * 1'\n\nconcurrency:\n" +
     "  group: ${{ github.workflow }}-${{ github.ref }}\n  cancel-in-progress: false\n\n" +
-    'permissions:\n  contents: read\n\njobs:\n  ci_policy:\n' + policy + '\n  benchmark:\n' + benchmark;
+    'permissions:\n  contents: read\n\njobs:\n  ci_policy:\n' + policy + '\n  benchmark:\n' + benchmark +
+    '\n  stdlib-corpus:\n' + corpus;
 }
 
 test('complete SDK/runtime integration has independent manual and weekly strict ownership', () => {
@@ -149,8 +173,12 @@ test('runtime policy rejects trigger, compiler, budget, source, report and failu
   requireRuntimeIntegration(runtimeFixture);
   const changes = [
     ['PR trigger', '  workflow_dispatch:\n', '  workflow_dispatch:\n  pull_request:\n'],
+    ['inline PR trigger', '  workflow_dispatch:\n', '  workflow_dispatch:\n  pull_request: {}\n'],
     ['push trigger', '  workflow_dispatch:\n', '  workflow_dispatch:\n  push:\n'],
+    ['inline push trigger', '  workflow_dispatch:\n', '  workflow_dispatch:\n  push: {}\n'],
     ['call trigger', '  workflow_dispatch:\n', '  workflow_dispatch:\n  workflow_call:\n'],
+    ['duplicate manual trigger', '  workflow_dispatch:\n', '  workflow_dispatch:\n  workflow_dispatch: {}\n'],
+    ['duplicate schedule trigger', '  schedule:\n', '  schedule:\n  schedule:\n'],
     ['missing manual', '  workflow_dispatch:\n', ''],
     ['daily schedule', "cron: '17 3 * * 1'", "cron: '17 3 * * *'"],
     ['cancel prior evidence', 'cancel-in-progress: false', 'cancel-in-progress: true'],
@@ -171,6 +199,9 @@ test('runtime policy rejects trigger, compiler, budget, source, report and failu
     ['lost failure report', 'if: always()', 'if: success()'],
     ['missing report', 'if-no-files-found: error', 'if-no-files-found: ignore'],
     ['wrong report', 'path: _out/compile-benchmark', 'path: _out/partial-benchmark'],
+    ['runtime corpus reduced to scanning', '          scripts/check-stdlib-corpus.sh\n', '          scripts/check-stdlib-corpus.sh --instructions-only\n'],
+    ['missing corpus target', 'linux/arm64,', ''],
+    ['missing corpus prebuild', 'go build -C cmd/plan9asm -o "$tool" .', 'echo no-tool'],
   ];
   for (const [name, before, after] of changes) {
     await t.test(name, () => {
@@ -184,6 +215,15 @@ test('runtime policy rejects trigger, compiler, budget, source, report and failu
   await t.test('duplicate benchmark owner', () => {
     assert.throws(() => requireRuntimeIntegration(runtimeFixture + '\n  benchmark:\n    run: true\n'));
   });
+  await t.test('missing full source/object corpus owner', () => {
+    assert.throws(() => requireRuntimeIntegration(withoutJob(runtimeFixture, 'stdlib-corpus')));
+  });
+  for (const line of jobBody(runtimeFixture, 'stdlib-corpus').split('\n').filter(line =>
+    /^          - \{os: /.test(line))) {
+    await t.test('missing full corpus lane ' + line.trim(), () => {
+      assert.throws(() => requireRuntimeIntegration(runtimeFixture.replace(line + '\n', '')));
+    });
+  }
 });
 
 test('responsibility split cannot delete or replace a required instruction owner', async t => {
@@ -196,6 +236,7 @@ test('responsibility split cannot delete or replace a required instruction owner
   for (const [before, after] of [
     ['scripts/check-go-asm-coverage.sh', 'echo official-coverage'],
     ['scripts/check-stdlib-corpus.sh', 'echo corpus'],
+    ['scripts/check-stdlib-corpus.sh --instructions-only', 'scripts/check-stdlib-corpus.sh'],
     ['scripts/check-arm64-plan9-corpus.sh', 'echo arm64-corpus'],
     ['linux/arm64,', ''],
     ['scripts/install-ci-qemu.sh', 'echo native'],
