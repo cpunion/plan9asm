@@ -138,6 +138,12 @@ deleted or relabelled. The independent frame-header clobber RED is retained,
 but has no production repair or native-execution qualification yet.
 Do not raise budgets, remove failed sources or relabel them N/A to qualify.
 
+PR40 closes instruction translation, not the remaining runtime/ABI contracts.
+PR CI retains complete instruction scanning and its existing object/native
+owners. Full source/object corpus and this unchanged benchmark are independently
+required to succeed within the manual/weekly `SDK/runtime integration` workflow;
+moving their scheduling does not turn the retained 51 failures into passes.
+
 ## Non-negotiable implementation boundaries
 
 - Consult full official Go/ISA rows; fix a complete typed family and formats,

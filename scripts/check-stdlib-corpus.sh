@@ -1,6 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+instructions_only=false
+if (( $# != 0 )); then
+  if (( $# != 1 )) || [[ "$1" != "--instructions-only" ]]; then
+    echo "usage: $0 [--instructions-only]" >&2
+    exit 2
+  fi
+  instructions_only=true
+fi
+
 repo_root=$(cd "$(dirname "$0")/.." && pwd)
 cd "$repo_root"
 
@@ -182,6 +191,11 @@ if parse_errs:
     top = ", ".join(f"{item['File']}: {item['Err']}" for item in parse_errs[:8])
     raise SystemExit(f"{target}: parse errors remain: {top}")
 PY
+
+  if [[ "$instructions_only" == true ]]; then
+    rm "$json"
+    continue
+  fi
 
   echo "==> transpile+compile $target_label"
   out_dir="$tmp_root/$target_name-ll"

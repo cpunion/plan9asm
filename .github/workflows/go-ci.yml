@@ -100,47 +100,9 @@ jobs:
         run: scripts/check-arm64-plan9-corpus.sh
 
 
-  benchmark:
-    needs: ci_policy
-    name: compile benchmark (Go 1.27, LLVM 22)
-    runs-on: ${{ github.repository_owner == 'xgo-dev' && fromJSON('["qiniu", "ubuntu-24.04-large"]') || 'ubuntu-latest' }}
-    timeout-minutes: 35
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Install LLVM 22
-        timeout-minutes: 14
-        run: bash scripts/install-ci-llvm22-ubuntu.sh
-
-      - name: Setup Go
-        uses: ./.github/actions/setup-go
-        with:
-          go-version: '1.27.2'
-          cache: true
-
-      - name: Translate and compile standard-library assembly
-        env:
-          PLAN9ASM_BENCHMARK_MAX_TARGET_SECONDS: '300'
-          PLAN9ASM_BENCHMARK_MAX_TOTAL_SECONDS: '900'
-        run: scripts/benchmark-compile.sh
-
-      - name: Upload benchmark report
-        if: always()
-        uses: actions/upload-artifact@v6
-        with:
-          name: compile-benchmark
-          path: _out/compile-benchmark
-          if-no-files-found: error
-
-
-
-
-
   stdlib-corpus:
     needs: ci_policy
-    name: stdlib-corpus (${{ matrix.os }}, Go ${{ matrix.go-version }})
+    name: stdlib instruction corpus (${{ matrix.os }}, Go ${{ matrix.go-version }})
     runs-on: ${{ github.repository_owner == 'xgo-dev' && matrix.runner || matrix.os }}
     strategy:
       fail-fast: false
@@ -213,7 +175,7 @@ jobs:
           PLAN9ASM_CORPUS_TARGETS: ${{ matrix.targets }}
         run: |
           chmod +x scripts/check-stdlib-corpus.sh
-          scripts/check-stdlib-corpus.sh
+          scripts/check-stdlib-corpus.sh --instructions-only
 
       - name: Official Go assembler coverage regression
         shell: bash

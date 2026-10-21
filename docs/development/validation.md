@@ -173,6 +173,15 @@ overrides use `PLAN9ASM_BENCHMARK_TARGETS`,
 `PLAN9ASM_BENCHMARK_MAX_TOTAL_SECONDS` and `PLAN9ASM_BENCHMARK_REPORT_DIR`.
 Measure before claiming a speedup or changing budgets.
 
+PR Go CI runs `check-stdlib-corpus.sh --instructions-only` with the complete
+SDK/target/profile matrix and official instruction fingerprints. Default
+`check-stdlib-corpus.sh` still translates complete source and compiles LLVM
+objects. That same complete matrix and the unchanged strict benchmark run in
+the separate manual/weekly `SDK/runtime integration` workflow. Its failures
+remain failures; this responsibility split does not qualify historical failed
+reports. Required instruction, CLI/object, native, race and coverage owners stay
+in PR CI.
+
 ## Frozen verification and PRs
 
 Commit first and keep a tested snapshot unchanged, including documentation.
