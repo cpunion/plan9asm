@@ -55,6 +55,9 @@ func heavyObjectSourceFamilies(t *testing.T) map[string]string {
 				continue
 			}
 			name := function.Name.Name
+			if family.batches == 0 && !strings.HasSuffix(name, "RegisteredConsumers") {
+				continue
+			}
 			if !expected[name] || found[name] || function.Body == nil {
 				t.Fatal("unknown, duplicate or incomplete heavy source owner", family.file, name)
 			}
