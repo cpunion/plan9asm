@@ -53,25 +53,28 @@ const translatorFixture = [
   '    -goos) goos=$value ;; -goarch) goarch=$value ;;',
   '    -dir) shift; output=$1 ;; -meta) shift; meta=$1 ;;',
   '    std) ;; *) exit 94 ;;', '  esac', '  shift', 'done',
-  'printf "transpile|%s/%s\\n" "$goos" "$goarch" >> "$CORPUS_PROTOCOL_TRACE"',
+  'printf "transpile|%s/%s|%s|%s|%s|%s|%s\\n" "$goos" "$goarch" "$GO386" "$GOAMD64" "$GOARM" "$GOARM64" "$GOWASM" >> "$CORPUS_PROTOCOL_TRACE"',
   '[[ "$CORPUS_PROTOCOL_MODE" != transpile ]] || { echo protocol-transpile-failure >&2; exit 44; }',
   'mkdir -p "$output"',
   '[[ "$CORPUS_PROTOCOL_MODE" != empty ]] || exit 0',
   'printf "; protocol fixture, not LLVM compilation evidence\\n" > "$output/protocol.ll"',
+  'if [[ "$goarch" == wasm ]]; then printf "; second protocol input, not LLVM evidence\\n" > "$output/second.ll"; fi',
   'printf "{}\\n" > "$meta"',
 ].join('\n') + '\n';
 
 const llvmFixture = [
   '#!/usr/bin/env bash', 'set -euo pipefail',
   'if [[ "$1" == --version ]]; then printf "LLVM version 22.1.8\\n"; exit; fi',
-  'triple= output= object=false',
+  'triple= output= input= object=false',
   'while (( $# > 0 )); do', '  IFS== read -r key value <<< "$1"',
   '  case "$key" in',
   '    -mtriple) triple=$value ;; -filetype) [[ "$value" == obj ]] || exit 95; object=true ;;',
-  '    -o) shift; output=$1 ;;', '  esac', '  shift', 'done',
-  '[[ "$object" == true && -n "$triple" && -n "$output" ]] || exit 96',
-  'printf "object|%s\\n" "$triple" >> "$CORPUS_PROTOCOL_TRACE"',
+  '    -o) shift; output=$1 ;; *.ll) input=$1 ;;', '  esac', '  shift', 'done',
+  '[[ "$object" == true && -n "$triple" && -n "$output" && -f "$input" ]] || exit 96',
+  'name=$(basename "$input")',
+  'printf "object|%s|%s\\n" "$triple" "$name" >> "$CORPUS_PROTOCOL_TRACE"',
   '[[ "$CORPUS_PROTOCOL_MODE" != object ]] || { echo protocol-object-failure >&2; exit 45; }',
+  'if [[ "$CORPUS_PROTOCOL_MODE" == second-object && "$name" == second.ll ]]; then echo protocol-second-object-failure >&2; exit 47; fi',
   'printf "protocol fixture only, not a real object\\n" > "$output"',
 ].join('\n') + '\n';
 
@@ -236,13 +239,29 @@ function expectedScans() {
   return rows;
 }
 
-test('instruction-only corpus scans all 44 profiles without whole-runtime calls', t => {
+function wasmScanRows() {
+  const rows = expectedScans().filter(row => /^scan\|(?:js|wasip1)\/wasm\|/.test(row));
+  assert.equal(rows.length, 8, 'complete JS/WASI plus all GOWASM profiles');
+  return rows;
+}
+
+function wasmObjectRows(scan) {
+  const triple = scan.split('|')[1] === 'js/wasm' ? 'wasm32-unknown-unknown' : 'wasm32-unknown-wasi';
+  return ['protocol.ll', 'second.ll'].map(name => 'object|' + triple + '|' + name);
+}
+
+test('instruction-only corpus scans all 44 profiles and compiles every full contextual WASM source', t => {
   const result = fixture(t).run(['--instructions-only']);
   assert.equal(result.status, 0, result.output);
   assert.deepEqual(result.rows.filter(row => row.startsWith('scan|')), expectedScans());
-  assert.deepEqual(result.rows.filter(row => row.startsWith('build|')), ['build|scanner', 'build|cli']);
-  assert.deepEqual(result.rows.filter(row => /^(transpile|object)\|/.test(row)), [],
-    'instruction scanning must not execute and then hide whole-source compilation');
+  const wasm = new Set(wasmScanRows());
+  const expected = ['build|scanner', 'build|cli'];
+  for (const scan of expectedScans()) {
+    expected.push(scan);
+    if (wasm.has(scan)) expected.push(scan.replace('scan|', 'transpile|'), ...wasmObjectRows(scan));
+  }
+  assert.deepEqual(result.rows, expected,
+    'WASM needs whole typed-stack source and every LLVM object; other architectures remain scan-only');
 });
 
 test('default corpus retains all 44 whole-source and object compilation protocols', t => {
@@ -250,8 +269,9 @@ test('default corpus retains all 44 whole-source and object compilation protocol
   assert.equal(result.status, 0, result.output);
   assert.deepEqual(result.rows.filter(row => row.startsWith('scan|')), expectedScans());
   const translations = result.rows.filter(row => row.startsWith('transpile|'));
-  assert.deepEqual(translations, expectedScans().map(row => 'transpile|' + row.split('|')[1]));
-  assert.equal(result.rows.filter(row => row.startsWith('object|')).length, 44);
+  assert.deepEqual(translations, expectedScans().map(row => row.replace('scan|', 'transpile|')));
+  assert.equal(result.rows.filter(row => row.startsWith('object|')).length, 52,
+    'all 44 targets plus the second generated file in each of eight WASM profiles');
 });
 
 test('both corpus modes keep scan and required-tool failures fatal', async t => {
@@ -288,6 +308,27 @@ test('instruction-only mode never starts a failing whole-runtime transpiler', t 
   assert.equal(result.status, 0, result.output);
   assert.deepEqual(result.rows.filter(row => row.startsWith('scan|')), ['scan|windows/arm64|||||']);
   assert.deepEqual(result.rows.filter(row => /^(transpile|object)\|/.test(row)), []);
+});
+
+test('instruction-only mode cannot hide any contextual WASM source or object failure', async t => {
+  for (const scan of wasmScanRows()) {
+    const fields = scan.split('|');
+    const target = fields[1] + (fields[6] ? '/' + fields[6].replaceAll(',', '+') : '');
+    for (const mode of ['transpile', 'empty', 'object', 'second-object']) {
+      await t.test(target + '/' + mode, t => {
+        const result = fixture(t, mode, target).run(['--instructions-only']);
+        assert.notEqual(result.status, 0, 'WASM Context was accepted without its complete source/object companion');
+        assert.match(result.output, mode === 'empty' ? /no \.ll files generated/ :
+          new RegExp('protocol-' + mode + '-failure'));
+        assert.deepEqual(result.rows.filter(row => row.startsWith('scan|')), [scan]);
+        assert.deepEqual(result.rows.filter(row => row.startsWith('transpile|')),
+          [scan.replace('scan|', 'transpile|')]);
+        if (mode === 'second-object') {
+          assert.deepEqual(result.rows.filter(row => row.startsWith('object|')), wasmObjectRows(scan));
+        }
+      });
+    }
+  }
 });
 
 test('default corpus retains transpile, empty-output and object failures', async t => {
