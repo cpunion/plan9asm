@@ -181,6 +181,10 @@ func x86TypedFPResultNeedsProof(fn Func, sig FuncSig, arch string) bool {
 			x86ResultNamedPredicateInstruction(ins) {
 			return true // Register and immediate stores retain data/address obligations, including Void.
 		}
+		if _, known, err := x86ScalarStaticStoreProperties(ins.Op, ins, arch); known && err == nil &&
+			x86ResultNamedPredicateInstruction(ins) {
+			return true // Static syntax still needs complete NUM inputs and actual writable storage for Void.
+		}
 		if form, known, err := x86GPSIMDTransferProperties(ins, arch); known && err == nil &&
 			form.memoryWrite && x86ResultNamedPredicateInstruction(ins) {
 			return true // SIMD stores need their actual source bytes and address, including Void.
