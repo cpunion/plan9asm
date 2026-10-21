@@ -174,6 +174,8 @@ func fixedLocalPackedRuntime(t *testing.T, execution x86FloatCompareExecution, a
 
 func fixedLocalPackedRuntimeAPIs(t *testing.T, execution x86FloatCompareExecution, all, execute bool, apis []string) {
 	t.Helper()
+	// Share only disposable compiler artifacts, never a source observation.
+	t.Setenv("GOCACHE", t.TempDir())
 	assembly, declarations, cases := fixedLocalPackedRuntimeProgram(all)
 	goOracle, cOracle := fixedLocalPackedRuntimeOracles(cases, execution.triple)
 	// Compile/execute the unchanged whole original before starting any API
@@ -194,6 +196,7 @@ func fixedLocalPackedRuntimeAPIs(t *testing.T, execution x86FloatCompareExecutio
 		t.Run(fmt.Sprintf("batch%d", index), func(t *testing.T) {
 			pkg, request, _, options := x86CMOVFixedLocalFixture(t, batch.assembly, batch.declarations,
 				runtime.GOOS+"/amd64", execution.triple)
+			fixedLocalConversionPrepareToolCache(t, request)
 			fixedLocalFreshAPIs(t, pkg, request, options, apis, func(t *testing.T, ir string, err error) {
 				if err != nil {
 					t.Fatal(err)
