@@ -12,10 +12,6 @@ import (
 
 func TestX86AddressSensitiveRawTextBlobReportedURootFarJump(t *testing.T) {
 	const source = x86URootFarJumpOriginalSource
-	file, err := Parse(ArchAMD64, source)
-	if err != nil {
-		t.Fatal(err)
-	}
 	for _, target := range []struct {
 		name   string
 		goarch string
@@ -28,17 +24,18 @@ func TestX86AddressSensitiveRawTextBlobReportedURootFarJump(t *testing.T) {
 		{name: "windows-386", goarch: "386", triple: "i686-pc-windows-msvc"},
 	} {
 		t.Run(target.name, func(t *testing.T) {
-			ir, err := Translate(file, Options{
-				Goarch:       target.goarch,
-				TargetTriple: target.triple,
-				Sigs: map[string]FuncSig{
-					"setup":     {Name: "setup", Ret: Void},
-					"farjump64": {Name: "farjump64", Ret: Void},
-				},
-			})
-			if err != nil {
+			file, signatures := x86UnboundVoidFormatSources(t, source, target.goarch, target.triple)
+			normalized := x86URootFarJumpNormalizedFile(t, file, target.goarch)
+
+			// The complete original setup has public Context above. This
+			// private object owns only the selected raw TEXT's physical bytes;
+			// it supplies no executable setup or writable-code contract.
+			var format strings.Builder
+			fmt.Fprintf(&format, "target triple = %q\n", target.triple)
+			if err := emitX86AddressSensitiveRawText(&format, normalized.Funcs[1], signatures["farjump64"]); err != nil {
 				t.Fatal(err)
 			}
+			ir := format.String()
 			if !strings.Contains(ir, "define void @farjump64()") ||
 				!strings.Contains(ir, "naked noinline") ||
 				!strings.Contains(ir, `.byte 255, 45, 0, 0, 0, 0, 0, 0, 0, 0, 8, 0, 0, 0`) {
