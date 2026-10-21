@@ -133,6 +133,10 @@ into a native execution receipt.
   repair `5643b7823` preserves every original row and explicitly checks Context
   when that complete chain is unavailable; it never substitutes Underlying or
   Unalias or skips a row. Actual Go1.22: four roots / 37 children pass.
+  The named type's underlying node counts separately in language identities,
+  not in scalar argument layout; preserve that original depth boundary.
+  After the independent Go1.23 RED, the corrected five-root / 37-child scope
+  passes at `09b7dbca7`, including the complete COMI mandatory-effect contract.
 - Fixed-local consumers now capture an independent bounded source per API.
   Wide compilation retains all 340 kernels in six complete source packages
   (64 each, last 20), all three original optimization paths and separate API
@@ -174,6 +178,17 @@ the same 134 input-deficient forms to Context, and all 386 reports are unchanged
 Complete form/encoder identities, unsupported rows and parse metrics remain
 unchanged. Baseline-only `c6aaad048` records exactly 24 derived fields, not a
 translation or runtime pass. Fresh final-head zero-delta comparison is required.
+
+The current batch has a separate unapproved sixteen-report diagnostic and a
+fresh independently reviewed audit at `09b7dbca7`. Each AMD64 SDK changes the
+same77 input-deficient forms: 18 COMI and 59 scalar FP-to-GP. All386 reports,
+complete form/encoder identities, unsupported forms and unrelated fields remain
+unchanged. Those small386 corpora have no observed rows for these families;
+complete five-target family tests are separate evidence. Baseline-only
+`277ae4d1b` records only eight AMD64 support/context/fingerprint triples. Require
+a fresh sixteen-report zero-delta comparison after integration. Historical
+diagnostics, the old COMI expected-effect failure and the alias depth failure
+remain failed receipts, not retroactively qualified tests.
 
 VPERMILPS/PD now share complete immediate/variable typed grammar, selected-byte
 effects and exact E4NF native reads, including dead/Void and zero-mask access
