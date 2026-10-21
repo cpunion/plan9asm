@@ -235,12 +235,21 @@ func TestX86ScalarFloatIntegerRawProducerIdentityAndMissingInputs(t *testing.T) 
 						f.Instrs[ordinal].x86ScalarFloatIntegerEVEX = !f.Instrs[ordinal].x86ScalarFloatIntegerEVEX
 					}},
 					{"operand", func(f *Func) { f.Instrs[ordinal].Args[0] = Operand{Kind: OpReg, Reg: "X0"} }},
-					{"address mode", func(f *Func) { f.Instrs[ordinal].x86AddressBits = 32 }},
+					{"address mode", func(f *Func) {
+						bits := 32
+						if f.Instrs[ordinal].x86AddressBits == bits {
+							bits = 64
+						}
+						f.Instrs[ordinal].x86AddressBits = bits
+					}},
 				} {
 					t.Run(mutation.name, func(t *testing.T) {
 						changed := fn
 						changed.Instrs = cloneX86ReplayInstrs(fn.Instrs)
 						mutation.edit(&changed)
+						if reflect.DeepEqual(changed, fn) {
+							t.Fatal("identity negative did not change the original snapshot", mutation.name)
+						}
 						if err := check(changed); !errors.Is(err, ErrProbeNeedsContext) {
 							t.Fatal("edited whole producer acquired raw conversion authority", err)
 						}
@@ -330,6 +339,80 @@ func TestX86ScalarFloatIntegerOriginalInitializedRawRuntimeObjects(t *testing.T)
 				}
 				for _, input := range []string{ir, x86MulDivRoundOptimize(t, ir)} {
 					compileLLVMToObject(t, llc, target.triple, "original-raw-scalar.ll", "original-raw-scalar.o", input)
+				}
+			})
+		}
+	}
+}
+
+func TestX86ScalarFloatIntegerRawSavedFlagsAndExactPostDomains(t *testing.T) {
+	for _, arch := range []string{"amd64", "386"} {
+		word, suffix := 8, "Q"
+		if arch == "386" {
+			word, suffix = 4, "L"
+		}
+		rows := x86ScalarIntegerRawRows(t, arch)
+		type sample struct{ source, declaration, control string }
+		var samples []sample
+		var original strings.Builder
+		for _, row := range rows {
+			if row.operand != "X1" || row.name != "CVTSS2SL" && row.name != "VCVTSS2SI" && row.name != "VCVTSS2USIL" {
+				continue
+			}
+			for _, control := range []string{"named", "raw", "missing-vector"} {
+				name := fmt.Sprintf("saved%d", len(samples))
+				body, decl := x86ScalarIntegerRawSource(arch, name, row, "")
+				code := x86RawDisplacementDirectives(row.code)
+				observed := "MOVL $3,DX\nCMPL DX,$3\nSTD\nPUSHF" + suffix + "\n" + code +
+					"POP" + suffix + " DX\nANDL $0xcd5,DX\nCLD\n"
+				body = strings.Replace(body, code, observed, 1)
+				body = strings.Replace(body, fmt.Sprintf("MOVL AX,ret+%d(FP)", 2*word), fmt.Sprintf("MOVL DX,ret+%d(FP)", 2*word), 1)
+				if control == "named" {
+					body = strings.Replace(body, code, row.name+" X1,AX\n", 1)
+				} else if control == "missing-vector" {
+					body = strings.Replace(body, "PXOR X1,X1\n", "", 1)
+				}
+				samples = append(samples, sample{body, decl, control})
+				original.WriteString(body)
+			}
+		}
+		goAssemblerOracleOutput(t, arch, original.String(), "", true)
+		for index, item := range samples {
+			for _, api := range []string{"text", "module", "Go"} {
+				t.Run(fmt.Sprintf("%s/saved-%d/%s", arch, index, api), func(t *testing.T) {
+					_, err := x86ScalarFPBitViewAPI(t, item.source, item.declaration, arch, x86AddressMemoryTargets(arch)[0], api)
+					if item.control == "missing-vector" && !errors.Is(err, ErrProbeNeedsContext) || item.control != "missing-vector" && err != nil {
+						t.Fatal("saved FLAGS/DF changed or supplied a missing conversion input", item.control, err)
+					}
+				})
+			}
+		}
+		for index, row := range rows {
+			t.Run(fmt.Sprintf("%s/post-%d", arch, index), func(t *testing.T) {
+				ins := x86RawMoveObservedInstruction(t, arch, row.code)
+				for _, direction := range []x86ResultDirection{x86ResultDirectionUnknown, x86ResultDirectionForward, x86ResultDirectionBackward, x86ResultDirectionEither} {
+					state := x86ResultState{flags: x86ByteFlagsAll, direction: direction, valueStack: &x86ResultValueStack{id: true}}
+					state.writeVector(1, 64, ^uint64(0), false)
+					state.pointerGP[3], state.gp[1] = true, 0xff
+					state.callerAddressGP[0], state.callerAddressGP[3], state.callerAddressGP[7] = true, true, true
+					push := x86ScalarLaneInstruction(t, "PUSHF"+suffix)
+					if accepted, known := x86ResultValueStackStep(push, &state, nil, 0, arch); !known || !accepted {
+						t.Fatal("independent saved FLAGS prerequisite failed")
+					}
+					before := state.clone()
+					if !x86ResultValueStackContinuation(ins, &state, arch) || x86ResultDirectionAfterSource(ins, direction, arch) != direction || x86PreservesNumericalSourceState(ins) {
+						t.Error("raw conversion lost saved bytes/ID/DF or acquired an inert data role")
+					}
+					want := before.callerAddressGP
+					want[0] = false // Every independent physical row writes AX, not BX/DI.
+					got := x86ResultCallerAddressesAfterTransfer(ins, before.callerAddressGP, before.callerAddressGP, nil, arch)
+					if got != want {
+						t.Error("raw scalar output did not revoke exactly its GP caller-address destination", got, want)
+					}
+					accepted, known := x86ResultScalarFloatIntegerStepWithRead(ins, &state, nil, 0, arch, true)
+					if !known || !accepted || state.flags != before.flags || state.direction != before.direction || !reflect.DeepEqual(state.valueStack, before.valueStack) {
+						t.Error("raw conversion altered six status flags, DF, saved bytes or ID", known, accepted)
+					}
 				}
 			})
 		}
