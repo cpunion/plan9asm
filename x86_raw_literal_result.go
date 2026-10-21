@@ -107,6 +107,18 @@ func x86RawFloatCompareLiteralForm(ins Instr, arch string) bool {
 		ins.x86RIPMemoryRead.source == form.first && ins.x86RIPMemoryRead.width == int64(form.memoryBytes)
 }
 
+// A scalar flag comparison consumes only the exact decoder-owned literal.
+// Its physical generation and scalar width do not grant a native pointer role.
+func x86RawCOMILiteralForm(ins Instr, arch string) bool {
+	if !x86RawLiteralSourceIdentity(ins, arch) {
+		return false
+	}
+	form, known, err := x86COMIProperties(ins, arch)
+	return known && err == nil && form.spec.vector && ins.Args[0].Kind == OpSym &&
+		ins.x86SourceRaw.comi.arch == arch && ins.x86SourceRaw.comi == x86COMIRawIdentity(ins, arch) &&
+		ins.x86RIPMemoryRead.source == 0 && ins.x86RIPMemoryRead.width == int64(form.spec.bits/8)
+}
+
 // Scalar SQRT and packed/scalar binary arithmetic share an exact decoded first
 // operand, not native-address authority. MIN/MAX keeps its distinct controls
 // and physical generation; FP16, packed SQRT and legacy remain separate roles.
@@ -144,7 +156,7 @@ func x86RawResultLiteralForm(ins Instr, arch string) bool {
 		x86RawByteShiftLiteralForm(ins, arch) || x86RawIntegerCompareLiteralForm(ins, arch) ||
 		x86RawArithmeticLiteralForm(ins, arch) || x86RawFloatCompareLiteralForm(ins, arch) ||
 		x86RawBinaryFloatLiteralForm(ins, arch) || x86RawFMA3LiteralForm(ins, arch) ||
-		x86RawPackedAbsLiteralForm(ins, arch)
+		x86RawPackedAbsLiteralForm(ins, arch) || x86RawCOMILiteralForm(ins, arch)
 }
 
 // This bounded source uses the ordinary typed family byte effects. It does
