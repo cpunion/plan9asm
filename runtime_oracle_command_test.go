@@ -173,6 +173,7 @@ func TestRuntimeOracleCommandConsumersRetainOwnedExecution(t *testing.T) {
 		"amd64_scalar_lane_mode32_test.go",
 		"amd64_source_integer_address_index_test.go",
 		"x86_reciprocal_sib_profile_test.go",
+		"x86_reciprocal_sib_oracle_test.go",
 		"go_translate_test.go",
 		"amd64_go_caller_lea_runtime_test.go",
 		"amd64_raw_lea_runtime_test.go",
