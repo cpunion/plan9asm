@@ -44,8 +44,9 @@ func TestCrossLinuxRuntimeMatrixX86ScalarAbsoluteRelocation(t *testing.T) {
 	original := x86OrderingHintBuildOriginal(t, t.TempDir(), "linux", "386",
 		"package main\nfunc Value()\n", source.String(), x86ScalarRelocationOriginalGo)
 	run(original)
+	llvmSource, llvmReference := x86ScalarRelocationOwnedLLVMFixture(t, source.String(), x86ScalarRelocationReferenceC)
 	for _, api := range []string{"text", "module", "go"} {
-		ir, err := x86AddressMemoryAPI(t, api, source.String(), "386", "i386-unknown-linux-gnu")
+		ir, err := x86AddressMemoryAPI(t, api, llvmSource, "386", "i386-unknown-linux-gnu")
 		if err != nil {
 			t.Fatal(api, err)
 		}
@@ -54,7 +55,7 @@ func TestCrossLinuxRuntimeMatrixX86ScalarAbsoluteRelocation(t *testing.T) {
 				dir := t.TempDir()
 				input, driver := filepath.Join(dir, "source.ll"), filepath.Join(dir, "reference.c")
 				object, executable := filepath.Join(dir, "source.o"), filepath.Join(dir, "reference")
-				for name, data := range map[string]string{input: ir, driver: x86ScalarRelocationReferenceC} {
+				for name, data := range map[string]string{input: ir, driver: llvmReference} {
 					if err := os.WriteFile(name, []byte(data), 0600); err != nil {
 						t.Fatal(err)
 					}
