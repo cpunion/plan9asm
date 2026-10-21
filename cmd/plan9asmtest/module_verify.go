@@ -193,7 +193,7 @@ func verifyModulePackage(cfg config, pkg modulePackage, covered bool) error {
 	}
 	plan := [][]string{names}
 	if !cfg.fullPackage {
-		plan, err = partition(names, cfg.Shards)
+		plan, err = partitionForFlags(names, cfg.Shards, flags)
 		if err != nil {
 			return err
 		}

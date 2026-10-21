@@ -128,7 +128,7 @@ func checkedModuleRootParts(expected moduleReport, directory string) (moduleResu
 	}
 	plan := [][]string{fresh.Names}
 	if !fresh.FullPackage {
-		plan, err = partition(fresh.Names, expected.Shards)
+		plan, err = partitionForFlags(fresh.Names, expected.Shards, expected.Flags)
 		if err != nil {
 			return moduleResult{}, err
 		}

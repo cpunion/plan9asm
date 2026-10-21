@@ -180,7 +180,7 @@ func runSuite(ctx context.Context, cfg config) error {
 	}
 	shards := [][]string{report.Names}
 	if !cfg.fullPackage {
-		shards, err = partition(report.Names, cfg.Shards)
+		shards, err = partitionForFlags(report.Names, cfg.Shards, forwarded)
 		if err != nil {
 			return fail(err)
 		}

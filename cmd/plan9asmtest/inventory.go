@@ -73,6 +73,12 @@ func parseSuiteList(data string, allowEmpty, noTestFiles bool) (string, []string
 	return pkg, names, benchmarks, nil
 }
 
+// The execution and both independent receipt readers pass their recorded
+// instrumentation flags through this boundary.
+func partitionForFlags(names []string, count int, flags []string) ([][]string, error) {
+	return partition(names, count)
+}
+
 func partition(names []string, count int) ([][]string, error) {
 	if len(names) == 0 || count < 1 || count > 1024 {
 		return nil, fmt.Errorf("nonempty inventory and 1..1024 shards required")
