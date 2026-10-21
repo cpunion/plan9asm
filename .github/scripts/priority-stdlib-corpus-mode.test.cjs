@@ -83,9 +83,13 @@ const llvmConfigFixture = [
   '  *) exit 97 ;;', 'esac',
 ].join('\n') + '\n';
 
+function runCorpusShell(args, options) {
+  return spawnSync('bash', args, options);
+}
+
 function shellPaths(names) {
   if (process.platform !== 'win32') return names;
-  const result = spawnSync('bash', ['-c',
+  const result = runCorpusShell(['-c',
     'for name in "$@"; do cygpath -u -- "$name" || exit; done', 'corpus-paths', ...names],
   {encoding: 'utf8', timeout: 5000});
   assert.ifError(result.error);
@@ -119,7 +123,7 @@ function fixture(t, mode = 'success', targets = '') {
     bin, path.join(scripts, 'check-stdlib-corpus.sh'), path.join(bin, 'scanner'),
     path.join(bin, 'translator'), trace, path.join(bin, 'llvm-config'),
   ]);
-  const shellPath = spawnSync('bash', ['-c', 'printf "%s" "$PATH"'],
+  const shellPath = runCorpusShell(['-c', 'printf "%s" "$PATH"'],
     {encoding: 'utf8', timeout: 5000});
   assert.ifError(shellPath.error);
   assert.equal(shellPath.status, 0, shellPath.stderr);
@@ -133,7 +137,7 @@ function fixture(t, mode = 'success', targets = '') {
   };
   return {
     run(args = []) {
-      const result = spawnSync('bash', [shellScript, ...args], {cwd: directory,
+      const result = runCorpusShell([shellScript, ...args], {cwd: directory,
         env: environment, encoding: 'utf8', timeout: 15000, maxBuffer: 1024 * 1024});
       assert.ifError(result.error);
       assert.equal(result.signal, null, result.stderr);
@@ -143,6 +147,46 @@ function fixture(t, mode = 'success', targets = '') {
     },
   };
 }
+
+test('corpus Bash transport uses the observed executable even when child PATH has no Bash', t => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'corpus-shell-transport-'));
+  t.after(() => fs.rmSync(directory, {recursive: true, force: true}));
+  const command = process.platform === 'win32'
+    ? 'if [[ "$BASH" == *.exe ]]; then cygpath -w -- "$BASH"; else cygpath -w -- "$BASH.exe"; fi'
+    : 'printf "%s\\n" "$BASH"';
+  // Independent prior uses the original native PATH, never the child's POSIX
+  // search list. This is process transport, not a compiler/native-ISA oracle.
+  const observed = spawnSync('bash', ['-c', command], {env: process.env,
+    encoding: 'utf8', timeout: 5000});
+  assert.ifError(observed.error);
+  assert.equal(observed.status, 0, observed.stderr);
+  const executable = observed.stdout.replace(/\r?\n$/, '');
+  assert.ok(path.isAbsolute(executable));
+  assert.doesNotMatch(executable, /[\r\n\0]/);
+  assert.ok(fs.statSync(executable).isFile());
+  fs.accessSync(executable, fs.constants.X_OK);
+
+  const options = {env: {...process.env, PATH: directory}, encoding: 'utf8', timeout: 5000};
+  const args = ['-c', 'printf "CORPUS_SHELL_TRANSPORT_PASS\\n"'];
+  const named = spawnSync('bash', args, options);
+  assert.equal(named.error && named.error.code, 'ENOENT', 'negative must fail actual command lookup');
+  const absolute = spawnSync(executable, args, options);
+  assert.ifError(absolute.error);
+  assert.equal(absolute.status, 0, absolute.stderr);
+  assert.equal(absolute.stdout, 'CORPUS_SHELL_TRANSPORT_PASS\n');
+
+  const actual = runCorpusShell(args, options);
+  assert.ifError(actual.error);
+  assert.equal(actual.status, 0, actual.stderr);
+  assert.equal(actual.stdout, absolute.stdout);
+});
+
+test('corpus rewritten-PATH consumers never resolve Bash by name', () => {
+  for (const consumer of [runCorpusShell, shellPaths, fixture]) {
+    assert.doesNotMatch(consumer.toString(), /spawnSync\(['"]bash['"]/,
+      consumer.name + ': only the original native-environment bootstrap may use a name');
+  }
+});
 
 function expectedScans() {
   const rows = [];
