@@ -27,6 +27,12 @@ func TestAMD64GoArgumentPlanAliasesPreserveConcreteIdentity(t *testing.T) {
 	for _, count := range []int{1, 2, 32} {
 		typ := amd64ArgumentAlias(types.Typ[types.Uint32], count)
 		plan, err := planAMD64GoArguments(amd64ArgumentAliasSignature(typ))
+		if !amd64ArgumentAliasHasActualRHS(typ) {
+			if plan != nil || !errors.Is(err, ErrProbeNeedsContext) {
+				t.Fatalf("opaque alias acquired a concrete argument plan at depth %d: %#v, %v", count, plan, err)
+			}
+			continue
+		}
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -43,6 +49,12 @@ func TestAMD64GoArgumentPlanAliasesPreserveConcreteIdentity(t *testing.T) {
 		types.NewField(token.NoPos, nil, "F", floating, false),
 	}, nil), 2)
 	plan, err := planAMD64GoArguments(amd64ArgumentAliasSignature(aggregate))
+	if !amd64ArgumentAliasHasActualRHS(aggregate) {
+		if plan != nil || !errors.Is(err, ErrProbeNeedsContext) {
+			t.Fatalf("opaque alias descendants acquired concrete byte kinds: %#v, %v", plan, err)
+		}
+		return
+	}
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -96,7 +108,17 @@ func TestAMD64GoArgumentIssuerAliasesRetainResultBoundary(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				if _, err := numericalSDKDeclarationLanguage(input.Declaration, types.SizesFor("gc", "amd64"), true); err != nil {
+				language, err := numericalSDKDeclarationLanguage(input.Declaration, types.SizesFor("gc", "amd64"), true)
+				if !amd64ArgumentAliasHasActualRHS(result) {
+					if language != "" || !errors.Is(err, ErrProbeNeedsContext) {
+						t.Fatal("opaque scalar result alias acquired a language identity", language, err)
+					}
+					if plan, err := amd64GoArgumentEntryPlan(input); plan != nil || !errors.Is(err, ErrProbeNeedsContext) {
+						t.Fatal("opaque scalar result alias acquired an independent transport", plan, err)
+					}
+					return
+				}
+				if err != nil {
 					t.Fatal("concrete scalar result alias lost its language identity", err)
 				}
 				if _, err := amd64GoArgumentEntryPlan(input); err != nil {
