@@ -15,7 +15,7 @@ import (
 // executing an AVX/AVX512 opcode. Linux objects, original Go linked programs
 // and the host-target C attachment have separate, explicit compilation claims.
 func TestX86COMINativeRuntimeFixturesCompileOnly(t *testing.T) {
-	execution := x86FloatCompareExecutionTools(t)
+	execution := fixedLocalPackedCompileOnlyTools(t)
 	total := 0
 	t.Run("RawNativeCompare", func(t *testing.T) {
 		source, _, driver, count := x86COMIRawNativeFixture(t)
