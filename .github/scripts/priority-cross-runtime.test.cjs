@@ -68,7 +68,7 @@ test('ARM64 execution cannot lose its unique owner, success guard or reader', ()
   assert.throws(() => requireARM64FallbackOwner(workflow + '\n      - name: Execute rich CLI ARM64 fallback oracle\n'));
 });
 
-const moduleExecutionJobs = ['test', 'nested-cli', 'race', 'coverage', 'module-completion'];
+const moduleExecutionJobs = ['test', 'nested-cli', 'nested-cli-coverage', 'race', 'coverage', 'module-completion'];
 const moduleCompilerInstall = 'bash scripts/install-ci-llvm22-ubuntu.sh ' +
   'gcc-i686-linux-gnu libc6-dev-i386-cross gcc-aarch64-linux-gnu';
 

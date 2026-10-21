@@ -16,7 +16,7 @@ function jobSection(name) {
 test('translator jobs require policy preflight, not external compatibility', () => {
   for (const name of [
     'fmt', 'build',
-    'stdlib-corpus', 'cross-runtime', 'test', 'nested-cli', 'arm-scan', 'race', 'coverage',
+    'stdlib-corpus', 'cross-runtime', 'test', 'nested-cli', 'arm-scan', 'race', 'coverage', 'nested-cli-coverage',
   ]) {
     const section = jobSection(name);
     assert.match(section, /^    needs: ci_policy$/m, name);
@@ -27,7 +27,7 @@ test('translator jobs require policy preflight, not external compatibility', () 
 });
 
 test('all translator matrix failures remain failures', () => {
-  for (const name of ['test', 'nested-cli', 'race', 'coverage', 'cross-runtime']) {
+  for (const name of ['test', 'nested-cli', 'race', 'coverage', 'nested-cli-coverage', 'cross-runtime']) {
     const job = jobSection(name);
     assert.match(job, /^      fail-fast: false$/m);
     assert.doesNotMatch(job, /continue-on-error:/);
