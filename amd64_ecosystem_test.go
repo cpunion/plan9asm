@@ -1652,7 +1652,7 @@ func TestTranslateAMD64PackedSignExtendMoveCompleteGoAssemblerForms(t *testing.T
 		}
 	}
 	src.WriteString("\tRET\n")
-	ll := translateAMD64EcosystemCase(t, src.String(), "packedsignextendmoveforms")
+	ll := x86SignExtendOriginalFormatObject(t, src.String(), "amd64", "x86_64-unknown-linux-gnu", 108, 0)
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc not found")
@@ -1682,20 +1682,7 @@ func TestTranslate386PackedSignExtendMoveCompleteGoAssemblerForms(t *testing.T) 
 		fmt.Fprintf(&src, "\t%s.Z (AX), K2, Z7\n", op)
 	}
 	src.WriteString("\tRET\n")
-	file, err := Parse(ArchAMD64, src.String())
-	if err != nil {
-		t.Fatal(err)
-	}
-	ll, err := Translate(file, Options{
-		TargetTriple: "i386-unknown-linux-gnu",
-		Goarch:       "386",
-		Sigs: map[string]FuncSig{
-			"packedsignextendmoveforms386": {Name: "packedsignextendmoveforms386", Ret: Void},
-		},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	ll := x86SignExtendOriginalFormatObject(t, src.String(), "386", "i386-unknown-linux-gnu", 18, 24)
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc not found")

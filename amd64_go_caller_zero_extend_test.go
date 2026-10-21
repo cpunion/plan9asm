@@ -43,20 +43,20 @@ func TestX86GoCallerPackedZeroExtendCompleteInitializedForms(t *testing.T) {
 
 func TestX86GoCallerPackedZeroExtendRetainsUnknownAndEnvelopeFailures(t *testing.T) {
 	for name, body := range map[string]string{
-		"unknown input":        "VPMOVZXBD X0,Y1\nVMOVSS X1,(DX)",
-		"unknown merge":        "VMOVUPS (DI),X0\nKMOVQ AX,K1\nVPMOVZXBD X0,K1,Y1\nVMOVSS X1,(DX)",
-		"unknown mask":         "VMOVUPS (DI),X0\nVPMOVZXBD.Z X0,K1,Y1\nVMOVSS X1,(DX)",
-		"pointer mask":         "VMOVUPS (DI),X0\nKMOVQ DI,K1\nVPMOVZXBD.Z X0,K1,Y1\nVMOVSS X1,(DX)",
-		"unknown base":         "VPMOVZXBD (BX),Y1\nVMOVSS X1,(DX)",
-		"private stack":        "VPMOVZXBD (SP),Y1\nVMOVSS X1,(DX)",
-		"pointer FP data":      "VPMOVZXBD a+0(FP),Y1\nVMOVSS X1,(DX)",
-		"overread length":      "VPMOVZXBW (CX),Y1\nVMOVSS X1,(DX)",
-		"zero mask envelope":   "MOVL $0,AX\nKMOVQ AX,K1\nVPMOVZXBW.Z (DX),K1,Y1\nVMOVSS X1,(DX)",
-		"source write":         "VPMOVZXBD (DI),Y1\nVMOVSS X1,(DI)",
-		"wide result":          "VPMOVZXBD (DI),Y1\nVMOVUPS Y1,(DX)",
-		"undefined CFG join":   "CMPQ AX,$0\nJE joined\nVMOVUPS (DI),X0\njoined:\nVPMOVZXBD X0,Y1\nVMOVSS X1,(DX)",
-		"unknown upper alias":  "VMOVUPS (DI),X0\nPMOVZXBD X0,X1\nVPMOVZXBW Y1,Z2\nVMOVSS X2,(DX)",
-		"signed not inherited": "VMOVUPS (DI),X0\nVPMOVSXBD X0,Y1\nVMOVSS X1,(DX)",
+		"unknown input":           "VPMOVZXBD X0,Y1\nVMOVSS X1,(DX)",
+		"unknown merge":           "VMOVUPS (DI),X0\nKMOVQ AX,K1\nVPMOVZXBD X0,K1,Y1\nVMOVSS X1,(DX)",
+		"unknown mask":            "VMOVUPS (DI),X0\nVPMOVZXBD.Z X0,K1,Y1\nVMOVSS X1,(DX)",
+		"pointer mask":            "VMOVUPS (DI),X0\nKMOVQ DI,K1\nVPMOVZXBD.Z X0,K1,Y1\nVMOVSS X1,(DX)",
+		"unknown base":            "VPMOVZXBD (BX),Y1\nVMOVSS X1,(DX)",
+		"private stack":           "VPMOVZXBD (SP),Y1\nVMOVSS X1,(DX)",
+		"pointer FP data":         "VPMOVZXBD a+0(FP),Y1\nVMOVSS X1,(DX)",
+		"overread length":         "VPMOVZXBW (CX),Y1\nVMOVSS X1,(DX)",
+		"zero mask envelope":      "MOVL $0,AX\nKMOVQ AX,K1\nVPMOVZXBW.Z (DX),K1,Y1\nVMOVSS X1,(DX)",
+		"source write":            "VPMOVZXBD (DI),Y1\nVMOVSS X1,(DI)",
+		"wide result":             "VPMOVZXBD (DI),Y1\nVMOVUPS Y1,(DX)",
+		"undefined CFG join":      "CMPQ AX,$0\nJE joined\nVMOVUPS (DI),X0\njoined:\nVPMOVZXBD X0,Y1\nVMOVSS X1,(DX)",
+		"unknown upper alias":     "VMOVUPS (DI),X0\nPMOVZXBD X0,X1\nVPMOVZXBW Y1,Z2\nVMOVSS X2,(DX)",
+		"signed sign byte absent": "PINSRB $0,AX,X0\nVPMOVSXWQ X0,X1\nPEXTRD $1,X1,AX\nMOVL AX,(DX)",
 	} {
 		t.Run(name, func(t *testing.T) {
 			assembly := strings.Replace(x86CallerFixtureAssembly, "MOVL AX,(DX)", body, 1)
