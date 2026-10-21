@@ -90,7 +90,7 @@ func independentHashShard(name string, count int) int {
 
 func heavyObjectOwners(t *testing.T, names []string, count int) ([][]string, map[string]int) {
 	t.Helper()
-	shards, err := partition(names, count)
+	shards, err := partitionForFlags(names, count, []string{"-race"})
 	if err != nil {
 		t.Fatal(err)
 	}

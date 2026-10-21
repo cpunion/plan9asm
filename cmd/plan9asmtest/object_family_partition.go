@@ -2,7 +2,7 @@ package main
 
 import "fmt"
 
-// These are complete source-object roles, not an alternative test inventory.
+// These are race-only complete source-object roles, not a test inventory.
 // Missing roles are never synthesized: the actual Go list still determines
 // every executed root. Fixed domains keep ownership independent of input
 // order, unrelated roots and subset queries. Other names retain their hash.

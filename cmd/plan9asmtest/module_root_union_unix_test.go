@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-func runRootSplitFixture(t *testing.T, binary, dir, out, inputs, profile string, owner, part, count int) {
+func runRootSplitFixture(t *testing.T, binary, dir, out, inputs, profile string, owner, part, count int, race bool) {
 	t.Helper()
 	args := []string{"-module", fmt.Sprintf("-module-root-partitions=%d", count), "-dir", dir, "-out", out,
 		"-shards=64", "-workers=2", "-timeout=2m"}
@@ -22,6 +22,9 @@ func runRootSplitFixture(t *testing.T, binary, dir, out, inputs, profile string,
 		args = append(args, fmt.Sprintf("-module-owner=%d", owner), fmt.Sprintf("-module-root-partition=%d", part))
 	}
 	args = append(args, "--", "-p=1")
+	if race {
+		args = append(args, "-race")
+	}
 	if profile != "" {
 		args = append(args, "-covermode=atomic", "-coverprofile="+profile)
 	}
@@ -60,28 +63,25 @@ func TestRaceRootPartitionActualCompleteUnionAndCoverage(t *testing.T) {
 	rootSplitCompleteUnionAndCoverage(t, 32, true)
 }
 
-func rootSplitCompleteUnionAndCoverage(t *testing.T, parts int, heavyRoles bool) {
+func rootSplitCompleteUnionAndCoverage(t *testing.T, parts int, race bool) {
 	t.Helper()
 	moduleFixtureEnvironment(t)
 	binary := parallelFixtureCLI(t)
 	dir := moduleRootPartitionFixtureForShards(t, 64)
-	wantRoots := 68
-	if heavyRoles {
-		// This is actual scheduler/receipt transport, not instruction execution.
-		// The real object owners retain their separate complete-source oracles.
-		file := filepath.Join(dir, "value_test.go")
-		source, err := os.ReadFile(file)
-		if err != nil {
-			t.Fatal(err)
-		}
-		for _, name := range heavyObjectNames(heavyObjectSourceFamilies(t)) {
-			source = append(source, []byte(fmt.Sprintf("\nfunc %s(t *testing.T) { t.Run(\"owner-child\", func(t *testing.T) { if Value() != 7 { t.Fatal(\"value\") } }) }\n", name))...)
-		}
-		if err := os.WriteFile(file, source, 0600); err != nil {
-			t.Fatal(err)
-		}
-		wantRoots += 66
+	// Both normal and race replay all 66 named scheduling roles. This is actual
+	// receipt transport, not instruction execution; those oracles stay separate.
+	file := filepath.Join(dir, "value_test.go")
+	source, err := os.ReadFile(file)
+	if err != nil {
+		t.Fatal(err)
 	}
+	for _, name := range heavyObjectNames(heavyObjectSourceFamilies(t)) {
+		source = append(source, []byte(fmt.Sprintf("\nfunc %s(t *testing.T) { t.Run(\"owner-child\", func(t *testing.T) { if Value() != 7 { t.Fatal(\"value\") } }) }\n", name))...)
+	}
+	if err := os.WriteFile(file, source, 0600); err != nil {
+		t.Fatal(err)
+	}
+	wantRoots := 134
 	inputs := t.TempDir()
 	if err := os.Mkdir(filepath.Join(inputs, "owner-0000"), 0700); err != nil {
 		t.Fatal(err)
@@ -89,17 +89,17 @@ func rootSplitCompleteUnionAndCoverage(t *testing.T, parts int, heavyRoles bool)
 	profile := filepath.Join(t.TempDir(), "whole.cover")
 	for part := 0; part < parts; part++ {
 		out := filepath.Join(inputs, "owner-0000", fmt.Sprintf("part-%04d", part))
-		runRootSplitFixture(t, binary, dir, out, "", profile, 0, part, parts)
+		runRootSplitFixture(t, binary, dir, out, "", profile, 0, part, parts, race)
 	}
 	for owner := 1; owner < moduleOwners; owner++ {
 		out := filepath.Join(inputs, fmt.Sprintf("owner-%04d", owner))
-		runRootSplitFixture(t, binary, dir, out, "", profile, owner, -1, parts)
+		runRootSplitFixture(t, binary, dir, out, "", profile, owner, -1, parts, race)
 	}
 	if _, err := os.Lstat(profile); !os.IsNotExist(err) {
 		t.Fatalf("an owner published partial uploadable module coverage: %v", err)
 	}
 	verified := filepath.Join(t.TempDir(), "aggregate")
-	runRootSplitFixture(t, binary, dir, verified, inputs, profile, -1, -1, parts)
+	runRootSplitFixture(t, binary, dir, verified, inputs, profile, -1, -1, parts, race)
 	var expected moduleReport
 	if err := ciReadJSON(filepath.Join(verified, "module.json"), &expected); err != nil {
 		t.Fatal(err)
@@ -143,6 +143,7 @@ func rootSplitCompleteUnionAndCoverage(t *testing.T, parts int, heavyRoles bool)
 		{"failed", func(r *moduleReport) { r.Status = "failed" }},
 		{"budget", func(r *moduleReport) { r.Timeout = "3m0s" }},
 		{"workers", func(r *moduleReport) { r.Workers = 3 }},
+		{"flags", func(r *moduleReport) { r.Flags = append(r.Flags, "-race=false") }},
 		{"source", func(r *moduleReport) { r.Scope.SourceSHA = strings.Repeat("0", 64) }},
 		{"sdk", func(r *moduleReport) { r.Scope.SDKSource = strings.Repeat("0", 64) }},
 		{"tools", func(r *moduleReport) { r.Scope.Tools["go"] = strings.Repeat("0", 64) }},
@@ -199,7 +200,20 @@ func rootSplitCompleteUnionAndCoverage(t *testing.T, parts int, heavyRoles bool)
 		}
 	})
 	packagePath := filepath.Join(partPath, "package-0000")
-	if heavyRoles {
+	if race {
+		t.Run("foreign-package-instrumentation", func(t *testing.T) {
+			file := filepath.Join(packagePath, "partition.json")
+			rootSplitRetainFile(t, file)
+			var changed suiteReport
+			if err := ciReadJSON(file, &changed); err != nil {
+				t.Fatal(err)
+			}
+			changed.Flags = append(changed.Flags, "-race=false")
+			if err := ciWriteJSON(file, changed); err != nil {
+				t.Fatal(err)
+			}
+			rootSplitRequireRejected(t, expected, inputs)
+		})
 		t.Run("previous-race-owner-count", func(t *testing.T) {
 			rootSplitRetainFile(t, modulePath)
 			var changed moduleReport
@@ -371,7 +385,7 @@ func BenchmarkNotRun(b *testing.B) { b.Fatal("benchmark executed") }
 			executed, empty, passedRoots := 0, 0, 0
 			for part := 0; part < 8; part++ {
 				out := filepath.Join(inputs, "owner-0000", fmt.Sprintf("part-%04d", part))
-				runRootSplitFixture(t, binary, dir, out, "", "", 0, part, 8)
+				runRootSplitFixture(t, binary, dir, out, "", "", 0, part, 8, false)
 				var suite suiteReport
 				if err := ciReadJSON(filepath.Join(out, "package-0000", "partition.json"), &suite); err != nil {
 					t.Fatal(err)
@@ -410,10 +424,10 @@ func BenchmarkNotRun(b *testing.B) { b.Fatal("benchmark executed") }
 			}
 			for owner := 1; owner < moduleOwners; owner++ {
 				out := filepath.Join(inputs, fmt.Sprintf("owner-%04d", owner))
-				runRootSplitFixture(t, binary, dir, out, "", "", owner, -1, 8)
+				runRootSplitFixture(t, binary, dir, out, "", "", owner, -1, 8, false)
 			}
 			out := filepath.Join(t.TempDir(), "aggregate")
-			runRootSplitFixture(t, binary, dir, out, inputs, "", -1, -1, 8)
+			runRootSplitFixture(t, binary, dir, out, inputs, "", -1, -1, 8, false)
 			var report moduleReport
 			if err := ciReadJSON(filepath.Join(out, "module.json"), &report); err != nil {
 				t.Fatal(err)
