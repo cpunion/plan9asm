@@ -25,7 +25,10 @@ func TestCrossLinuxRuntimeMatrixBMI2Shift386(t *testing.T) {
 		}
 	}
 
-	source, sigs, declarations, checks := x86BMI2Shift386Fixture(t, "SP")
+	// Execute the explicitly separate CX/DX companion. The historical CX/SP
+	// source remains covered by complete Go objects and public Context tests;
+	// its unrecovered physical ESP write is not a valid ABI0 return program.
+	source, sigs, declarations, checks := x86BMI2Shift386Fixture(t, "DX")
 
 	file, err := Parse(ArchAMD64, source)
 	if err != nil {
