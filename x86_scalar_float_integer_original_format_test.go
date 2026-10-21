@@ -34,7 +34,13 @@ func TestX86ScalarFloatIntegerOriginalRowsInitializedNamedCounterparts(t *testin
 				source := ins.Args[0]
 				if source.Kind == OpReg {
 					bank, _ := amd64ParseXReg(source.Reg)
-					if bank >= 16 || target.arch == "386" && bank >= 8 {
+					if target.arch == "386" && bank >= 8 {
+						// Go accepts the original row, but this mode has no
+						// independent physical producer for its high bank.
+						// Initialize only an unrelated, legal low register.
+						context = true
+						setup += "PXOR X0,X0\n"
+					} else if bank >= 16 {
 						setup += fmt.Sprintf("VPXORD Z%d,Z%d,Z%d\n", bank, bank, bank)
 					} else {
 						setup += fmt.Sprintf("PXOR %s,%s\n", source.Reg, source.Reg)
