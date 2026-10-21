@@ -78,7 +78,8 @@ func x86ResultDirectionAfterSource(ins Instr, direction x86ResultDirection, arch
 	if x86RawImmediateBlendSource(ins, arch) {
 		return direction // Exact immediate selection does not write the independent DF domain.
 	}
-	if x86RawScalarPrecisionSource(ins, arch) || x86RawPackedPrecisionSource(ins, arch) || x86RawNamedHalfSource(ins, arch) {
+	if x86RawScalarPrecisionSource(ins, arch) || x86RawScalarFloatIntegerSource(ins, arch) ||
+		x86RawPackedPrecisionSource(ins, arch) || x86RawNamedHalfSource(ins, arch) {
 		return direction // Native MXCSR effects do not alter the independent DF control.
 	}
 	if x86RawExplicitMaskMoveSource(ins, arch) {

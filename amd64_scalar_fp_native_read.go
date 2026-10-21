@@ -179,6 +179,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 			boundRawScalarPrecision = true
 			continue // Exact mode/generation retains every active, merge, mask and native input obligation.
 		}
+		if x86RawScalarFloatIntegerSource(ins, arch) {
+			continue // Whole replay above supplies no pointer, data, MXCSR or native entry fact.
+		}
 		if x86RawLegacyFloatCompareSource(ins, arch) {
 			continue // Exact legacy compare bytes supply no missing input, native entry or backing.
 		}

@@ -66,6 +66,13 @@ func x86ResultCallerAddressesAfterTransfer(ins Instr, before, transferred [16]bo
 // old provenance independently of initialized bytes or opaque pointerGP.
 // Unknown effects conservatively revoke all caller addresses, never seed one.
 func x86ResultCallerAddressesAfter(ins Instr, before [16]bool, entryFP map[int64]bool, arch string) [16]bool {
+	if x86RawScalarFloatIntegerSource(ins, arch) {
+		form, _, _ := x86ScalarFloatIntegerProperties(ins, arch)
+		if destination, _, valid := x86ResultGP(ins.Args[1].Reg, int64(form.outputBits/8), arch); valid {
+			before[destination] = false
+		}
+		return before // Only the native GP result loses its old caller-address identity.
+	}
 	if x86RawMULXSource(ins, arch) {
 		form, _, _ := x86MULXProperties(ins.Op, ins, arch)
 		for _, output := range []Operand{form.low, form.high} {
