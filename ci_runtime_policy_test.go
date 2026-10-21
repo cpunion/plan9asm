@@ -51,7 +51,7 @@ func TestCIFullSuitesInstallWASMExecutionRuntime(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"test", "nested-cli", "race", "coverage", "module-completion"} {
+	for _, name := range []string{"test", "nested-cli", "nested-cli-coverage", "race", "coverage", "module-completion"} {
 		job, found := ciWorkflowJob(string(data), name)
 		if !found {
 			t.Fatalf("full-suite job %s is missing", name)
@@ -67,7 +67,7 @@ func TestCIFullSuitesInstallIA32ExecutionToolchain(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"test", "nested-cli", "race", "coverage"} {
+	for _, name := range []string{"test", "nested-cli", "nested-cli-coverage", "race", "coverage"} {
 		t.Run(name, func(t *testing.T) {
 			job, found := ciWorkflowJob(string(data), name)
 			if !found {
@@ -78,8 +78,8 @@ func TestCIFullSuitesInstallIA32ExecutionToolchain(t *testing.T) {
 			install := "bash scripts/install-ci-llvm22-ubuntu.sh gcc-i686-linux-gnu libc6-dev-i386-cross"
 			installer := strings.Index(job, install)
 			runner := strings.Index(job, "bash scripts/test-module-ci.sh")
-			if name == "nested-cli" {
-				runner = strings.Index(job, "run: go test -timeout=30m ./...")
+			if name == "nested-cli" || name == "nested-cli-coverage" {
+				runner = strings.Index(job, "go test -timeout=30m ./...")
 			}
 			if installer < 0 || runner < 0 || installer >= runner {
 				t.Fatal("required IA32 compiler and libc must be installed before the complete module suite")
@@ -123,7 +123,7 @@ func TestCIFullSuitesInstallRequiredQEMU(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"test", "nested-cli", "race", "coverage", "module-completion"} {
+	for _, name := range []string{"test", "nested-cli", "nested-cli-coverage", "race", "coverage", "module-completion"} {
 		t.Run(name, func(t *testing.T) {
 			job, found := ciWorkflowJob(string(data), name)
 			if !found {
@@ -131,8 +131,8 @@ func TestCIFullSuitesInstallRequiredQEMU(t *testing.T) {
 			}
 			install := strings.Index(job, "bash scripts/install-ci-qemu.sh")
 			runner := strings.Index(job, "bash scripts/test-module-ci.sh")
-			if name == "nested-cli" {
-				runner = strings.Index(job, "run: go test -timeout=30m ./...")
+			if name == "nested-cli" || name == "nested-cli-coverage" {
+				runner = strings.Index(job, "go test -timeout=30m ./...")
 			}
 			if install < 0 || runner < 0 || install >= runner {
 				t.Fatal("complete Linux suites require pinned QEMU before their 386 runtime tests")

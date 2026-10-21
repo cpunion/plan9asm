@@ -143,7 +143,7 @@ test('each root part has an exact separate artifact and strict download destinat
   assert.match(step(aggregate, 'Download profile owner'), /-profile$/m);
   assert.match(step(aggregate, 'Download remaining-package owner'), /-other$/m);
   assert.doesNotMatch(aggregate, /merge-multiple:|pattern:/);
-  requireJobNeeds(workflow, 'module-completion', ['test', 'nested-cli', 'race', 'coverage']);
+  requireJobNeeds(workflow, 'module-completion', ['test', 'nested-cli', 'race', 'coverage', 'nested-cli-coverage']);
   assert.match(aggregate, /^    if: \$\{\{ !cancelled\(\) \}\}$/m);
 });
 

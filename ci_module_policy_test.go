@@ -45,7 +45,7 @@ func TestCIModuleSuitesKeepExhaustiveUnixAndWindowsRoles(t *testing.T) {
 		}
 	}
 	aggregate, found := ciWorkflowJob(string(data), "module-completion")
-	if !found || !strings.Contains(aggregate, "needs: [test, nested-cli, race, coverage]") || !strings.Contains(aggregate, "!cancelled()") ||
+	if !found || !strings.Contains(aggregate, "needs: [test, nested-cli, race, coverage, nested-cli-coverage]") || !strings.Contains(aggregate, "!cancelled()") ||
 		!strings.Contains(aggregate, "owner-0000") || !strings.Contains(aggregate, "owner-0001") || !strings.Contains(aggregate, "owner-0002") {
 		t.Error("missing mandatory complete cross-owner readback")
 	}
@@ -91,6 +91,26 @@ func TestCIModuleSuitesKeepExhaustiveUnixAndWindowsRoles(t *testing.T) {
 	coverage, _ := ciWorkflowJob(string(data), "coverage")
 	if strings.Contains(coverage, "codecov/codecov-action") || !strings.Contains(aggregate, "files: ./coverage-root.out") {
 		t.Error("coverage upload must use complete module union, never one owner's partial file")
+	}
+	nestedCoverage, found := ciWorkflowJob(string(data), "nested-cli-coverage")
+	for _, required := range []string{
+		"needs: ci_policy", "go-version: '1.27.2'", "module: [plan9asm, plan9asmll]",
+		"timeout-minutes: 60", "fail-fast: false", "working-directory: cmd/${{ matrix.module }}",
+		"go test -timeout=30m ./... -coverprofile=coverage-${{ matrix.module }}.out",
+		"go tool cover -func=coverage-${{ matrix.module }}.out | tail -n 1",
+	} {
+		if !found || !strings.Contains(nestedCoverage, required) {
+			t.Errorf("complete CLI coverage needs independent original budgets and command: %s", required)
+		}
+	}
+	if strings.Contains(coverage, "working-directory: cmd/") || strings.Contains(nestedCoverage, "module-owner") ||
+		strings.Contains(nestedCoverage, "max-parallel:") || strings.Contains(nestedCoverage, "continue-on-error:") ||
+		strings.Contains(nestedCoverage, "if:") {
+		t.Error("complete CLI coverage cannot share remaining-package budgets or mask outcomes")
+	}
+	if !strings.Contains(aggregate, "if: ${{ !cancelled() && matrix.flavor == 'coverage' }}") ||
+		!strings.Contains(aggregate, "run: test '${{ needs['nested-cli-coverage'].result }}' = success") {
+		t.Error("failed CLI coverage must fail completion after original main-module evidence collection")
 	}
 }
 

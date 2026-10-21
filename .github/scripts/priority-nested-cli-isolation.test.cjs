@@ -47,7 +47,7 @@ function requireIndependentCLI(source) {
   assert.match(executions[0], /^        working-directory: cmd\/\$\{\{ matrix\.module \}\}$/m);
   assert.doesNotMatch(executions[0], /^        if:|\|\|\s*true|(?:^|\s)-(?:run|skip|short)(?:=|\s)/m);
   assert.doesNotMatch(body, /scripts\/test-module-ci\.sh|Required exact downloaded/);
-  requireJobNeeds(source, 'module-completion', ['test', 'nested-cli', 'race', 'coverage']);
+  requireJobNeeds(source, 'module-completion', ['test', 'nested-cli', 'race', 'coverage', 'nested-cli-coverage']);
   assert.match(jobBody(source, 'module-completion'), /^    if: \$\{\{ !cancelled\(\) \}\}$/m,
     'completion must still collect original owners after a failed CLI job');
 }
@@ -134,8 +134,9 @@ test('CLI ownership rejects reduced matrices, serial scheduling and weakened suc
     assert.throws(() => requireIndependentCLI(workflow.replace(body, changed)), undefined, before);
   }
   const complete = jobBody(workflow, 'module-completion');
-  for (const gate of ['test', 'nested-cli', 'race', 'coverage']) {
-    const reduced = ['test', 'nested-cli', 'race', 'coverage'].filter(name => name !== gate);
+  const required = ['test', 'nested-cli', 'race', 'coverage', 'nested-cli-coverage'];
+  for (const gate of required) {
+    const reduced = required.filter(name => name !== gate);
     const changed = complete.replace(/^    needs:.*$/m, '    needs: [' + reduced.join(', ') + ']');
     assert.throws(() => requireIndependentCLI(workflow.replace(complete, changed)), undefined, gate);
   }

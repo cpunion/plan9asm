@@ -14,7 +14,8 @@ const matrixJobs = new Set(['stdlib-corpus', 'test', 'nested-cli', 'module-compl
 // The independent SDK/runtime integration workflow has its own exact-SDK
 // policy. These remain the required PR instruction and module owners.
 const jobs = ['fmt', 'build', 'stdlib-corpus', 'cross-runtime',
-  'cross-runtime-verify', 'test', 'nested-cli', 'arm-scan', 'race', 'coverage', 'module-completion'];
+  'cross-runtime-verify', 'test', 'nested-cli', 'nested-cli-coverage',
+  'arm-scan', 'race', 'coverage', 'module-completion'];
 
 function requireSetups(workflow) {
   for (const name of jobs) {
