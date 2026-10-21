@@ -55,6 +55,7 @@ func TestARMSymbolOffsetNeedsGeneratedConstantContext(t *testing.T) {
 		"+(OFFSET+4)", "+(OFFSET*2)", "+(OFFSET/2)", "+(OFFSET%3)",
 		"+(OFFSET<<1)", "+(OFFSET>>1)", "+(OFFSET&3)", "+(OFFSET|3)",
 		"+(OFFSET^3)", "+(~OFFSET)", "+(OFFSET+'x')",
+		"+(OFFSET/(OFFSET+1))", "+(1/(OFFSET-1))", "+(OFFSET<<OFFSET)",
 	} {
 		instructions = append(instructions, "MOVW ·memory"+expression+"(SB),R2")
 	}
@@ -113,6 +114,9 @@ func TestARMSymbolOffsetContextDoesNotHideInvalidForms(t *testing.T) {
 	}
 	instructions = append(instructions,
 		"MOVW ·memory+(OFFSET+)(SB),R2", "MOVW ·memory+(OFFSET/0)(SB),R2",
+		"MOVW ·memory+(OFFSET%0)(SB),R2", "MOVW ·memory+(OFFSET<<-1)(SB),R2",
+		"MOVW ·memory+(OFFSET<<1*2)(SB),R2", "MOVW ·memory+(OFFSET<<1<<2)(SB),R2",
+		"MOVW ·memory+((-1)/OFFSET)(SB),R2", "MOVW ·memory+((1<<63)>>OFFSET)(SB),R2",
 		"MOVW ·memory+1.5(SB),R2", "MOVW ·memory+(OFFSET==4)(SB),R2",
 		"MOVW ·memory+OFFSET(XX),R2", "MOVW ·memory+OFFSET(SB)",
 		"MOVW ·memory+OFFSET(SB),R2,R3")
