@@ -94,7 +94,13 @@ func parseARM64ScalarMemoryForm(op Op, ins Instr) (f arm64ScalarMemoryForm, hand
 		if strings.ContainsAny(f.memory.Sym, "()") && !strings.HasSuffix(f.memory.Sym, "(SB)") {
 			return invalid() // An invalid register memory is not a bare SB alias.
 		}
-		if _, _, ok := parseSBRef(f.memory.Sym); !ok || f.pre || f.post || f.store && f.data == "R27" {
+		if f.pre || f.post || f.store && f.data == "R27" {
+			return invalid()
+		}
+		if _, _, ok := parseSBRef(f.memory.Sym); !ok {
+			if sourceSymbolOffsetNeedsContext(f.memory.Sym) {
+				return f, true, fmt.Errorf("%w: arm64 %s symbol displacement requires generated assembler constants: %q", ErrProbeNeedsContext, op, ins.Raw)
+			}
 			return invalid()
 		}
 		// Native ADRP's page identity depends on the actual linked layout.

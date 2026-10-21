@@ -37,6 +37,12 @@ func (c *arm64Ctx) lowerARM64SymbolScalarMove(op Op, ins Instr) (bool, bool, err
 			if op != "MOVD" && (op != "MOVWU" || !strings.HasSuffix(strings.TrimSpace(src.Sym), "(SB)")) {
 				return true, false, fmt.Errorf("arm64 %s does not accept this address source: %q", op, ins.Raw)
 			}
+			if string(ins.Op) != string(op) || !arm64ScalarMemoryGoRegisterSpelling(ins) {
+				return true, false, fmt.Errorf("arm64 %s symbol address requires an original Go register spelling and no suffix: %q", op, ins.Raw)
+			}
+			if sourceSymbolOffsetNeedsContext(src.Sym) {
+				return true, false, fmt.Errorf("%w: arm64 %s symbol address requires generated assembler constants: %q", ErrProbeNeedsContext, op, ins.Raw)
+			}
 			value, err := c.eval64(src, false)
 			if err != nil {
 				return true, false, err
