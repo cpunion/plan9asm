@@ -10,6 +10,7 @@ import (
 type x86IsolatedVoidSample struct {
 	name, source, declaration string
 	context                   bool
+	goRejected                bool
 }
 
 // Complete stock-Go programs precede every tested API. There are deliberately
@@ -19,10 +20,19 @@ func x86CheckIsolatedVoidSamples(t *testing.T, arch string, samples []x86Isolate
 	t.Helper()
 	var original strings.Builder
 	for _, sample := range samples {
-		original.WriteString(sample.source)
+		if !sample.goRejected {
+			original.WriteString(sample.source)
+		}
 	}
 	goAssemblerOracleOutput(t, arch, original.String(), "", true)
 	for _, sample := range samples {
+		if sample.goRejected {
+			// Go386's byte-SP source is not an accepted physical SP row.
+			// Preserve its actual source-bound rejection separately instead
+			// of treating a failed prior as an input-proof defect.
+			goAssemblerOracleOutput(t, arch, sample.source, "", false)
+			continue
+		}
 		function := mustParseX86RawReturn(t, sample.source).Funcs[0]
 		setup := function
 		setup.Instrs = nil
@@ -44,7 +54,11 @@ func x86CheckIsolatedVoidSamples(t *testing.T, arch string, samples []x86Isolate
 					for _, api := range []string{"text", "module", "Go"} {
 						t.Run(api, func(t *testing.T) {
 							ir, err := x86ScalarFPBitViewAPI(t, sample.source, sample.declaration, arch, target, api)
-							if sample.context {
+							if sample.goRejected {
+								if err == nil || errors.Is(err, ErrProbeNeedsContext) {
+									t.Fatal("Go-rejected byte-SP syntax became a source-context or accepted program", err)
+								}
+							} else if sample.context {
 								if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
 									t.Fatal("isolated Void instruction acquired absent input or storage authority", err)
 								}
@@ -125,7 +139,7 @@ func TestX86COMIIsolatedVoidRetainsCompleteInputObligations(t *testing.T) {
 						extent, declaration = word, fmt.Sprintf("func %s(p *byte)\n", name)
 					}
 					source := fmt.Sprintf("TEXT ·%s(SB),4,$0-%d\n%s%sRET\n", name, extent, setup, row.operation)
-					samples = append(samples, x86IsolatedVoidSample{row.label + "/" + control, source, declaration, control != "initialized"})
+					samples = append(samples, x86IsolatedVoidSample{row.label + "/" + control, source, declaration, control != "initialized", false})
 				}
 			}
 			x86CheckIsolatedVoidSamples(t, arch, samples)
@@ -174,7 +188,8 @@ func TestX86OwnedScalarMOVIsolatedVoidRetainsInputsAndStorage(t *testing.T) {
 					source := fmt.Sprintf("%sTEXT ·%s(SB),4,$0-%d\n%s%s %s,%s\nRET\n",
 						global, name, extent, setup, row.op, input, destination)
 					samples = append(samples, x86IsolatedVoidSample{row.op + "/" + row.register + "/" + control,
-						source, declaration, control != "initialized" && control != "immediate"})
+						source, declaration, control != "initialized" && control != "immediate",
+						arch == "386" && row.width == 1 && control == "physical-SP"})
 				}
 			}
 			x86CheckIsolatedVoidSamples(t, arch, samples)
