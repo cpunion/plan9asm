@@ -169,24 +169,15 @@ int main(void) {
 
 func fixedLocalPackedRuntime(t *testing.T, execution x86FloatCompareExecution, all, execute bool) {
 	t.Helper()
+	fixedLocalPackedRuntimeAPIs(t, execution, all, execute, []string{"Translate", "Module", "GoModule"})
+}
+
+func fixedLocalPackedRuntimeAPIs(t *testing.T, execution x86FloatCompareExecution, all, execute bool, apis []string) {
+	t.Helper()
 	assembly, declarations, cases := fixedLocalPackedRuntimeProgram(all)
-	pkg, request, file, options := x86CMOVFixedLocalFixture(t, assembly, declarations, runtime.GOOS+"/amd64", execution.triple)
-	source := requireGoAMD64FrameCapture(t, pkg, request)
-	expanded, err := source.preprocess(request.AssemblyFile, []byte(assembly))
-	if err != nil {
-		t.Fatal(err)
-	}
-	file, err = Parse(ArchAMD64, expanded)
-	if err != nil {
-		t.Fatal(err)
-	}
-	ctx, cancel := runtimeOracleStageContext(t)
-	defer cancel()
-	bound, err := source.BindFixedLocal(ctx, pkg, file, options)
-	if err != nil {
-		t.Fatal(err)
-	}
 	goOracle, cOracle := fixedLocalPackedRuntimeOracles(cases, execution.triple)
+	// Compile/execute the unchanged whole original before starting any API
+	// lease. The following batches are complete independent source packages.
 	fixedLocalPackedRunOriginal(t, execution, assembly, declarations, goOracle, execute)
 	if !execute {
 		dir := t.TempDir()
@@ -198,23 +189,47 @@ func fixedLocalPackedRuntime(t *testing.T, execution x86FloatCompareExecution, a
 		command = append(command, "-O2", "-c", input, "-o", output)
 		x86FloatCompareCaptureCommand(t, exec.Command(command[0], command[1:]...))
 	}
-	fixedLocalAPIs(t, pkg, file, bound, func(t *testing.T, ir string, err error) {
-		if err != nil {
-			t.Fatal(err)
-		}
-		for _, optimize := range []bool{false, true} {
-			level, input := "-O0", ir
-			if optimize {
-				level, input = "-O2", x86MulDivRoundOptimize(t, ir)
-			}
-			if execute {
-				execution.compileAndRunLLVM(t, "packed-native-frame", input, cOracle, level)
-			} else {
-				compileLLVMToObject(t, execution.llc, execution.triple, "packed-frame-oracle.ll", "packed-frame-oracle.o", input)
-			}
-		}
-	})
-	t.Logf("cases=%d original Go + 3 APIs; execute=%v native-wide=%v", len(cases), execute, all)
+	batches := fixedLocalPackedLeaseBatches(t, all, execution.triple)
+	for index, batch := range batches {
+		t.Run(fmt.Sprintf("batch%d", index), func(t *testing.T) {
+			pkg, request, _, options := x86CMOVFixedLocalFixture(t, batch.assembly, batch.declarations,
+				runtime.GOOS+"/amd64", execution.triple)
+			fixedLocalFreshAPIs(t, pkg, request, options, apis, func(t *testing.T, ir string, err error) {
+				if err != nil {
+					t.Fatal(err)
+				}
+				var names []string
+				for member := batch.start; member < batch.end; member++ {
+					names = append(names, fmt.Sprintf("example.invalid/framefixture.Value%d", member))
+				}
+				for _, pipeline := range []struct {
+					name, level string
+					optimize    bool
+				}{
+					{"backend_O0", "-O0", false},
+					{"backend_O2", "-O2", false},
+					{"IR_O2/backend_O2", "-O2", true},
+				} {
+					t.Run(pipeline.name, func(t *testing.T) {
+						input := ir
+						if pipeline.optimize {
+							input = x86MulDivRoundOptimize(t, ir)
+						}
+						x86CompactExpandRequireAllDefinitions(t, input, names)
+						if execute {
+							execution.compileAndRunLLVM(t, "packed-native-frame", input, batch.oracle, pipeline.level)
+						} else {
+							x86PackedStringCompileObject(t, execution.llc, execution.triple, input, pipeline.level)
+						}
+						t.Logf("complete packed oracle [%d,%d): %d kernels x 6 values x 6 masks x 64 result bits; execute=%v",
+							batch.start, batch.end, batch.end-batch.start, execute)
+					})
+				}
+			})
+		})
+	}
+	t.Logf("cases=%d original Go + APIs=%v; complete source batches=%d execute=%v native-wide=%v",
+		len(cases), apis, len(batches), execute, all)
 }
 
 func TestCrossLinuxRuntimeMatrixGoAMD64FixedLocalPackedSSE(t *testing.T) {
@@ -227,7 +242,19 @@ func TestCrossLinuxRuntimeMatrixGoAMD64FixedLocalPackedSSE(t *testing.T) {
 
 func TestGoAMD64FixedLocalPackedWideRuntimeOracleCompileOnly(t *testing.T) {
 	execution := x86FloatCompareExecutionTools(t)
-	fixedLocalPackedRuntime(t, execution, true, false)
+	fixedLocalPackedRuntimeAPIs(t, execution, true, false, []string{"Translate"})
+	t.Log("full wide oracle compiled, not executed; required Linux/amd64 root owns native coverage")
+}
+
+func TestGoAMD64FixedLocalPackedWideRuntimeOracleModuleCompileOnly(t *testing.T) {
+	execution := x86FloatCompareExecutionTools(t)
+	fixedLocalPackedRuntimeAPIs(t, execution, true, false, []string{"Module"})
+	t.Log("full wide oracle compiled, not executed; required Linux/amd64 root owns native coverage")
+}
+
+func TestGoAMD64FixedLocalPackedWideRuntimeOracleGoModuleCompileOnly(t *testing.T) {
+	execution := x86FloatCompareExecutionTools(t)
+	fixedLocalPackedRuntimeAPIs(t, execution, true, false, []string{"GoModule"})
 	t.Log("full wide oracle compiled, not executed; required Linux/amd64 root owns native coverage")
 }
 
