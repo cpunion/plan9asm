@@ -1017,57 +1017,11 @@ func TestTranslate386PackedFloatShuffleRejectsArchitectureRestrictedForms(t *tes
 }
 
 func TestTranslateAMD64ImmediatePackedBlendCompleteGoAssemblerForms(t *testing.T) {
-	var src strings.Builder
-	src.WriteString("TEXT immediatepackedblendforms(SB),NOSPLIT,$0-0\n")
-	for _, op := range []string{"PBLENDW", "BLENDPS", "BLENDPD"} {
-		fmt.Fprintf(&src, "\t%s $0, X0, X1\n", op)
-		fmt.Fprintf(&src, "\t%s $255, (AX), X15\n", op)
-	}
-	for _, op := range []string{"VPBLENDW", "VPBLENDD", "VBLENDPS", "VBLENDPD"} {
-		fmt.Fprintf(&src, "\t%s $0, X0, X1, X2\n", op)
-		fmt.Fprintf(&src, "\t%s $255, (AX), X1, X15\n", op)
-		fmt.Fprintf(&src, "\t%s $1, Y0, Y1, Y2\n", op)
-		fmt.Fprintf(&src, "\t%s $254, (AX), Y1, Y15\n", op)
-	}
-	src.WriteString("\tRET\n")
-	ll := translateAMD64EcosystemCase(t, src.String(), "immediatepackedblendforms")
-	llc := findLLVM22Tool("llc")
-	if llc == "" {
-		t.Fatal("LLVM 22 llc not found")
-	}
-	compileLLVMToObject(t, llc, "x86_64-unknown-linux-gnu", "immediate-packed-blend-forms.ll", "immediate-packed-blend-forms.o", ll)
+	x86ImmediateBlendOriginalBareFormatObjects(t, "amd64", "x86_64-unknown-linux-gnu")
 }
 
 func TestTranslate386ImmediatePackedBlendCompleteGoAssemblerForms(t *testing.T) {
-	src := `
-TEXT immediatepackedblendforms386(SB),NOSPLIT,$0-0
-	PBLENDW $0, X0, X1
-	PBLENDW $255, (AX), X7
-	BLENDPS $0, X0, X1
-	BLENDPS $255, (AX), X7
-	BLENDPD $0, X0, X1
-	BLENDPD $255, (AX), X7
-	RET
-`
-	file, err := Parse(ArchAMD64, src)
-	if err != nil {
-		t.Fatal(err)
-	}
-	ll, err := Translate(file, Options{
-		TargetTriple: "i386-unknown-linux-gnu",
-		Goarch:       "386",
-		Sigs: map[string]FuncSig{
-			"immediatepackedblendforms386": {Name: "immediatepackedblendforms386", Ret: Void},
-		},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	llc := findLLVM22Tool("llc")
-	if llc == "" {
-		t.Fatal("LLVM 22 llc not found")
-	}
-	compileLLVMToObject(t, llc, "i386-unknown-linux-gnu", "immediate-packed-blend-386-forms.ll", "immediate-packed-blend-386-forms.o", ll)
+	x86ImmediateBlendOriginalBareFormatObjects(t, "386", "i386-unknown-linux-gnu")
 }
 
 func TestTranslateAMD64ImmediatePackedBlendRejectsFormsOutsideGoAssemblerTables(t *testing.T) {

@@ -72,6 +72,29 @@ func TestX86ImmediateBlendOriginalBareSourcesKeepGoObjectsAndContext(t *testing.
 	}
 }
 
+// Keep every original format in Go and LLVM objects without granting missing
+// public inputs. The independently initialized counterpart below covers each
+// original instruction through all three APIs and five physical targets.
+func x86ImmediateBlendOriginalBareFormatObjects(t *testing.T, arch, triple string) {
+	t.Helper()
+	source, _ := x86ImmediateBlendOriginalBareRows(t, arch)
+	file, signatures := x86UnboundVoidFormatSources(t, source, arch, triple)
+	ir := x86InstructionFormatObjectUnit(t, file, signatures, arch, triple, 0,
+		func(c *amd64Ctx, instruction Instr) (bool, bool, error) {
+			return c.lowerImmediatePackedBlend(instruction.Op, instruction)
+		})
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("complete original blend format objects require LLVM22")
+	}
+	optimized := x86DwordProductIROptimize(t, ir)
+	for _, pipeline := range []struct{ body, level string }{
+		{ir, "-O0"}, {ir, "-O2"}, {optimized, "-O2"},
+	} {
+		x86PackedStringCompileObject(t, llc, triple, pipeline.body, pipeline.level)
+	}
+}
+
 func x86ImmediateBlendOriginalRowInitialized(row Instr, index int, arch string) (string, string) {
 	word, move, high := 8, "MOVQ", "Y15"
 	if arch == "386" {
