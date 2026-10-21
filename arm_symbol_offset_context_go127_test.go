@@ -7,13 +7,13 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/xgo-dev/plan9asm/internal/goasmcmd"
 	"github.com/xgo-dev/plan9asm/internal/goasmoracle"
 )
 
@@ -28,15 +28,13 @@ func armSymbolOffsetActualGo(t *testing.T, source string, success bool) {
 	defer cancelStage()
 	ctx, cancel := context.WithTimeout(stage, 30*time.Second)
 	defer cancel()
-	observed, err := goasmcmd.Observe(ctx, directory,
-		append(os.Environ(), "GOTOOLCHAIN=local", "GOOS=linux", "GOARCH=arm", "GOARM=5"),
-		"go", "tool", "asm", "-p", "example.com/symbol", "-o", object, input)
-	if !observed.Waited || ctx.Err() != nil {
-		t.Fatalf("actual Go assembler did not complete: %+v %v", observed, err)
-	}
-	if failure := goasmoracle.CheckOutcome(input, object, observed.Stdout, observed.Stderr,
+	command := exec.CommandContext(ctx, "go", "tool", "asm", "-p", "example.com/symbol", "-o", object, input)
+	command.Dir = directory
+	command.Env = append(os.Environ(), "GOTOOLCHAIN=local", "GOOS=linux", "GOARCH=arm", "GOARM=5")
+	stdout, stderr, err := runtimeOracleMachineOutput(ctx, command)
+	if failure := goasmoracle.CheckOutcome(input, object, stdout, stderr,
 		err, ctx.Err(), success, 0, nil); failure != nil {
-		t.Fatalf("actual Go ARM source prior failed: %v\n%s", failure, observed.Stderr)
+		t.Fatalf("actual Go ARM source prior failed: %v\n%s", failure, stderr)
 	}
 }
 
