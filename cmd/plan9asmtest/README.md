@@ -20,7 +20,7 @@ Ordinary mode is serial by default. Add `-workers 2` for bounded parallel
 partitions; the allowed range is 1..32 and cannot exceed `-shards`. Start small
 because each process owns its own LLVM objects and compiler children. The
 report records the actual worker limit. Parallelism does not alter the actual
-inventory, hash assignment, build flags, per-child timeout or coverage checks.
+inventory, deterministic assignment, build flags, per-child timeout or coverage checks.
 Only one collector publishes reports and counts. A failed shard remains failed
 while other shards run; a failed publication cancels and waits for active owners.
 Selected cross-runtime CI owners remain serial and reject `-workers` above one.
@@ -31,9 +31,10 @@ Unix test/race/coverage CI uses `scripts/test-module-ci.sh`. Its three package
 owners share the complete actual `go list -json ./...` package inventory:
 owner zero runs the root, owner one runs `gotoolprofile`, and owner two
 runs every other package. CI splits only owner zero into eight jobs for test/
-coverage and sixteen for race. Part `p` owns global shard indices `i` where
-`i % parts == p`, retaining the original
-32-shard plan and two-worker limit. Shared-profile and other packages execute once;
+coverage and 32 for race. Part `p` owns global shard indices `i` where
+`i % parts == p`. Test/coverage keep 32 shards; race uses 64 shards so every
+race owner still executes exactly two shards with two workers. Its command
+deadline remains 60 minutes and job budget 75 minutes. Shared-profile and other packages execute once;
 they are not repeated for each root part. Every other
 package runs complete ordinary `go test` without `-run`, including packages
 with no tests or only benchmarks/TestMain. Every package has its own actual
@@ -50,18 +51,18 @@ remains strict, including PATH.
 ```sh
 # Each command is a separate CI job, not concurrent local invocations.
 bash scripts/test-module-ci.sh race execute 0 0
-# Run race root parts 1..15 as separate jobs with owner 0 and their exact number.
+# Run race root parts 1..31 as separate jobs with owner 0 and their exact number.
 bash scripts/test-module-ci.sh race execute 1 -1
 bash scripts/test-module-ci.sh race execute 2 -1
 # Download root-p artifacts into owner-0000/part-000p, and profile/rest into
-# owner-0001 and owner-0002. All eighteen race roles are required for completion;
+# owner-0001 and owner-0002. All 34 race roles are required for completion;
 # test/coverage still require their eight root parts plus profile/rest.
 bash scripts/test-module-ci.sh race complete
 ```
 
 Root fragments use schema 2 `partition.json` and the distinct
 `actual_go_complete_module_root_parts_v2` module protocol. They retain the
-complete root list and all 32 global shard entries. Unassigned shards are
+complete root list and all 32 (64 for race) global shard entries. Unassigned shards are
 `not_owned`, with no command, terminal or coverage artifact. A fragment is
 `completed_owned` or `completed_empty`, never a complete package pass. Empty
 assigned shards likewise do not receive executing-test credit.
@@ -69,7 +70,7 @@ assigned shards likewise do not receive executing-test credit.
 The completion job uses fresh source/SDK/tool/full-environment, package and
 complete root `-list=.` observations, then rereads every package's original
 inventory, exact command, raw JSON root/child terminals and coverage. It
-recomputes global ownership and requires the complete disjoint 32-shard union;
+recomputes global ownership and requires the complete disjoint 32- or 64-shard union;
 paired report/log deletions cannot shrink the fresh denominator. Artifact directories
 may move; executable/tool/source identities and environment semantics may not.
 Unknown, duplicate, missing, partial or foreign results fail. Tests that skip
@@ -147,7 +148,7 @@ Build/instrumentation flags follow `--`, for example:
 
 ```sh
 GOFLAGS= go run ./cmd/plan9asmtest \
-  -out _out/root-partitions-race-cover -shards 32 -timeout 60m -- \
+  -out _out/root-partitions-race-cover -shards 64 -timeout 60m -- \
   -race -covermode=atomic -coverprofile=coverage-root.out -p=1
 ```
 
@@ -174,9 +175,19 @@ The runner forces `-count=1`; successful cached runs cannot replace execution.
 
 ## Proof and failure behavior
 
-The sorted inventory hashes newline-separated names with SHA-256. The first
-eight bytes of each name's SHA-256, interpreted big-endian modulo the shard
-count, determine its partition. Sorting/sharding never deletes a name. Empty
+The sorted inventory hashes newline-separated names with SHA-256. Ordinary
+roots retain the first eight bytes of their name's SHA-256, interpreted
+big-endian modulo the shard count. Complete fixed-local object families use
+fixed semantic ordinals modulo the same shard count: conversion target/batches
+0–35, packed target/batches 36–47, CMOV target/batches 48–59, readonly targets
+60–62, and wide Translate/Module/GoModule object owners 63–65. Targets keep
+Linux/Darwin/Windows order (CMOV has Linux/Darwin), and batches keep numerical
+order. These roles distribute complete costly sources without moving ordinary
+roots or changing ownership when input order, unrelated roots or a subset
+changes. An independent source-AST check retains all 66 roles. This is a
+scheduling rule, not runtime qualification: exact current-head execution must
+still fit its original deadlines. No role creates a missing listed test.
+Sorting/sharding never deletes a name. Empty
 partitions are explicitly recorded; an entirely empty inventory fails.
 The exact escaped alternation selects every planned root in its partition.
 A pattern over 16,000 bytes fails and asks for more shards; it is never cut to

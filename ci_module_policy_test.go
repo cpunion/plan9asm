@@ -21,7 +21,7 @@ func TestCIModuleSuitesKeepExhaustiveUnixAndWindowsRoles(t *testing.T) {
 		parts      int
 	}{
 		{"test", "test) timeout=45m", 8},
-		{"race", "race) timeout=60m; flags=(-race); root_partitions=16", 16},
+		{"race", "race) timeout=60m; flags=(-race); root_partitions=32; shards=64", 32},
 		{"coverage", "coverage) timeout=45m; flags=(-coverprofile=coverage-root.out)", 8},
 	} {
 		job, found := ciWorkflowJob(string(data), item.job)
@@ -34,8 +34,9 @@ func TestCIModuleSuitesKeepExhaustiveUnixAndWindowsRoles(t *testing.T) {
 			roles = append(roles, fmt.Sprintf("root-%d", part))
 		}
 		roles = append(roles, "profile", "other")
+		normalizedJob := strings.Join(strings.Fields(job), " ")
 		for _, required := range []string{"module-role: [" + strings.Join(roles, ", ") + "]", "fail-fast: false", "actions/upload-artifact@v6"} {
-			if !strings.Contains(job, required) {
+			if !strings.Contains(normalizedJob, required) {
 				t.Errorf("%s missing exhaustive scheduling/artifact requirement %q", item.job, required)
 			}
 		}
@@ -48,13 +49,13 @@ func TestCIModuleSuitesKeepExhaustiveUnixAndWindowsRoles(t *testing.T) {
 		!strings.Contains(aggregate, "owner-0000") || !strings.Contains(aggregate, "owner-0001") || !strings.Contains(aggregate, "owner-0002") {
 		t.Error("missing mandatory complete cross-owner readback")
 	}
-	for part := 0; part < 16; part++ {
+	for part := 0; part < 32; part++ {
 		if !strings.Contains(aggregate, fmt.Sprintf("Download root part %d", part)) ||
 			!strings.Contains(aggregate, fmt.Sprintf("-owners/owner-0000/part-%04d", part)) {
 			t.Errorf("missing exact root part %d download", part)
 		}
 	}
-	for _, required := range []string{"-module -out=", "-shards=32 -workers=2", "root_partitions=8", "-module-root-partitions=$root_partitions", "-verify-module=_out/module-$flavor-owners", "go run ./cmd/plan9asmtest"} {
+	for _, required := range []string{"-module -out=", "-shards=$shards -workers=2", "root_partitions=8", "shards=32", "-module-root-partitions=$root_partitions", "-verify-module=_out/module-$flavor-owners", "go run ./cmd/plan9asmtest"} {
 		if !strings.Contains(string(script), required) {
 			t.Errorf("module driver changed complete inventory/scheduling: %s", required)
 		}

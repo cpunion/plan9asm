@@ -32,7 +32,7 @@ function step(body, name) {
 
 test('race uses one two-shard wave; ordinary flavors retain eight root roles', () => {
   for (const name of ['test', 'race', 'coverage']) {
-    const count = name === 'race' ? 16 : 8;
+    const count = name === 'race' ? 32 : 8;
     const roles = [
       ...Array.from({ length: count }, (_, index) => `root-${index}`),
       'profile', 'other',
@@ -59,9 +59,9 @@ test('race uses one two-shard wave; ordinary flavors retain eight root roles', (
 
 test('root job fanout retains original workers, per-command and job budgets', () => {
   assert.match(script, /test\) timeout=45m ;;/);
-  assert.match(script, /race\) timeout=60m; flags=\(-race\); root_partitions=16 ;;/);
+  assert.match(script, /race\) timeout=60m; flags=\(-race\); root_partitions=32; shards=64 ;;/);
   assert.match(script, /coverage\) timeout=45m; flags=\(-coverprofile=coverage-root\.out\) ;;/);
-  assert.match(script, /-shards=32 -workers=2/);
+  assert.match(script, /-shards=\$shards -workers=2/);
   assert.match(script, /GOMAXPROCS=2/);
   for (const [name, minutes] of [['test', 60], ['race', 75], ['coverage', 60]]) {
     assert.match(job(name), new RegExp(`^    timeout-minutes: ${minutes}$`, 'm'));
@@ -101,14 +101,14 @@ test('actual shell dispatch validates flavor-specific part bounds before launchi
     encoding: 'utf8',
     timeout: 5000,
   });
-  for (const [flavor, count] of [['test', 8], ['coverage', 8], ['race', 16]]) {
+  for (const [flavor, count, shards] of [['test', 8, 32], ['coverage', 8, 32], ['race', 32, 64]]) {
     for (const args of [['execute', '0', String(count - 1)], ['execute', '2', '-1'], ['complete']]) {
       const actual = run(flavor, ...args);
       assert.equal(actual.status, 0, actual.stderr || String(actual.error));
       const fields = actual.stdout.trim().split('\n');
       assert.equal(fields[0], 'SYNTHETIC_GO');
       assert.ok(fields.includes(`-module-root-partitions=${count}`));
-      assert.ok(fields.includes('-shards=32'));
+      assert.ok(fields.includes(`-shards=${shards}`));
       assert.ok(fields.includes('-workers=2'));
     }
     for (const part of [String(count), '-1', '01', '1+1', '999999999999999999999']) {
@@ -126,7 +126,7 @@ test('each root part has an exact separate artifact and strict download destinat
     assert.match(body, /if-no-files-found: error/);
   }
   const aggregate = job('module-completion');
-  for (let part = 0; part < 16; part++) {
+  for (let part = 0; part < 32; part++) {
     const download = step(aggregate, `Download root part ${part}`);
     assert.match(download, new RegExp(
       `^          name: module-\\$\\{\\{ matrix\\.flavor \\}\\}-\\$\\{\\{ matrix\\.go-version \\}\\}-root-${part}$`, 'm',

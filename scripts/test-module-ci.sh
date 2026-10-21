@@ -1,15 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# One actual inventory: eight root parts (sixteen for race), profile/rest once.
-# Nested CLI modules keep their independent steps; Windows does not use this.
+# One actual inventory: eight root parts (32 for race), profile/rest once.
+# Every race owner retains two shards. Nested CLIs and Windows run separately.
 flavor=${1:?test, race or coverage required}
 phase=${2:?execute or complete required}
 flags=()
 root_partitions=8
+shards=32
 case "$flavor" in
   test) timeout=45m ;;
-  race) timeout=60m; flags=(-race); root_partitions=16 ;;
+  race) timeout=60m; flags=(-race); root_partitions=32; shards=64 ;;
   coverage) timeout=45m; flags=(-coverprofile=coverage-root.out) ;;
   *) echo "unknown module suite role" >&2; exit 1 ;;
 esac
@@ -19,7 +20,7 @@ if [[ -n "${GOFLAGS:-}" ]]; then
 fi
 export GOFLAGS= GOENV=off GOWORK=off GOTOOLCHAIN=local GOMAXPROCS=2
 mkdir -p _out
-args=(-module -out="_out/module-$flavor" -shards=32 -workers=2
+args=(-module -out="_out/module-$flavor" -shards=$shards -workers=2
   "-timeout=$timeout" "-module-root-partitions=$root_partitions")
 case "$phase" in
   execute)
@@ -43,7 +44,7 @@ case "$phase" in
       echo "complete does not execute an owner" >&2
       exit 1
     fi
-    args=(-module -out="_out/module-$flavor-verified" -shards=32 -workers=2
+    args=(-module -out="_out/module-$flavor-verified" -shards=$shards -workers=2
       "-timeout=$timeout" "-module-root-partitions=$root_partitions"
       "-verify-module=_out/module-$flavor-owners")
     ;;

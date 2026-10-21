@@ -75,7 +75,7 @@ test('race layout rejects an omitted owner, four-shard owner, masked failure or 
   requireCompleteRaceDownloads(workflow);
   const race = jobBody(workflow, 'race');
   for (const [before, after] of [
-    ['root-31, profile', 'profile'],
+    ['root-31,', ''],
     ['root-partition: 31', 'root-partition: 30'],
     ['timeout-minutes: 75', 'timeout-minutes: 90'],
     ['fail-fast: false', 'fail-fast: true'],

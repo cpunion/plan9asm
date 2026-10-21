@@ -16,7 +16,7 @@ func main() {
 	flag.StringVar(&cfg.Dir, "dir", ".", "package working directory")
 	flag.StringVar(&cfg.Package, "package", ".", "one package, not a recursive pattern")
 	flag.StringVar(&cfg.Out, "out", "_out/root-suite", "new, nonexisting artifact directory")
-	flag.IntVar(&cfg.Shards, "shards", 32, "stable hash partitions")
+	flag.IntVar(&cfg.Shards, "shards", 32, "stable exhaustive partitions")
 	flag.IntVar(&cfg.Workers, "workers", 1, "bounded ordinary-suite parallelism (1..32, no more than shards)")
 	flag.DurationVar(&cfg.Timeout, "timeout", 45*time.Minute, "per-command wall deadline and Go test timeout")
 	flag.StringVar(&cfg.CISelector, "ci-selector", "", "explicit selected-CI root inventory (ordinary mode remains exhaustive)")

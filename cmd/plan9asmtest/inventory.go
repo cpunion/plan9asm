@@ -78,6 +78,7 @@ func partition(names []string, count int) ([][]string, error) {
 		return nil, fmt.Errorf("nonempty inventory and 1..1024 shards required")
 	}
 	shards := make([][]string, count)
+	objectOwners := completeObjectFamilyOwners(count)
 	seen := make(map[string]bool)
 	for _, name := range names {
 		if !validName(name) || seen[name] {
@@ -86,6 +87,9 @@ func partition(names []string, count int) ([][]string, error) {
 		seen[name] = true
 		hash := sha256.Sum256([]byte(name))
 		index := binary.BigEndian.Uint64(hash[:8]) % uint64(count)
+		if owner, exists := objectOwners[name]; exists {
+			index = uint64(owner)
+		}
 		shards[index] = append(shards[index], name)
 	}
 	for _, shard := range shards {

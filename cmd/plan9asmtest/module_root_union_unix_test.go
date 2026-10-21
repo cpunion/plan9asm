@@ -53,33 +53,59 @@ func rootSplitRequireRejected(t *testing.T, expected moduleReport, inputs string
 }
 
 func TestModuleRootPartitionActualCompleteUnionAndCoverage(t *testing.T) {
+	rootSplitCompleteUnionAndCoverage(t, 16, false)
+}
+
+func TestRaceRootPartitionActualCompleteUnionAndCoverage(t *testing.T) {
+	rootSplitCompleteUnionAndCoverage(t, 32, true)
+}
+
+func rootSplitCompleteUnionAndCoverage(t *testing.T, parts int, heavyRoles bool) {
+	t.Helper()
 	moduleFixtureEnvironment(t)
 	binary := parallelFixtureCLI(t)
 	dir := moduleRootPartitionFixtureForShards(t, 64)
+	wantRoots := 68
+	if heavyRoles {
+		// This is actual scheduler/receipt transport, not instruction execution.
+		// The real object owners retain their separate complete-source oracles.
+		file := filepath.Join(dir, "value_test.go")
+		source, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, name := range heavyObjectNames(heavyObjectSourceFamilies(t)) {
+			source = append(source, []byte(fmt.Sprintf("\nfunc %s(t *testing.T) { t.Run(\"owner-child\", func(t *testing.T) { if Value() != 7 { t.Fatal(\"value\") } }) }\n", name))...)
+		}
+		if err := os.WriteFile(file, source, 0600); err != nil {
+			t.Fatal(err)
+		}
+		wantRoots += 66
+	}
 	inputs := t.TempDir()
 	if err := os.Mkdir(filepath.Join(inputs, "owner-0000"), 0700); err != nil {
 		t.Fatal(err)
 	}
 	profile := filepath.Join(t.TempDir(), "whole.cover")
-	for part := 0; part < 16; part++ {
+	for part := 0; part < parts; part++ {
 		out := filepath.Join(inputs, "owner-0000", fmt.Sprintf("part-%04d", part))
-		runRootSplitFixture(t, binary, dir, out, "", profile, 0, part, 16)
+		runRootSplitFixture(t, binary, dir, out, "", profile, 0, part, parts)
 	}
 	for owner := 1; owner < moduleOwners; owner++ {
 		out := filepath.Join(inputs, fmt.Sprintf("owner-%04d", owner))
-		runRootSplitFixture(t, binary, dir, out, "", profile, owner, -1, 16)
+		runRootSplitFixture(t, binary, dir, out, "", profile, owner, -1, parts)
 	}
 	if _, err := os.Lstat(profile); !os.IsNotExist(err) {
 		t.Fatalf("an owner published partial uploadable module coverage: %v", err)
 	}
 	verified := filepath.Join(t.TempDir(), "aggregate")
-	runRootSplitFixture(t, binary, dir, verified, inputs, profile, -1, -1, 16)
+	runRootSplitFixture(t, binary, dir, verified, inputs, profile, -1, -1, parts)
 	var expected moduleReport
 	if err := ciReadJSON(filepath.Join(verified, "module.json"), &expected); err != nil {
 		t.Fatal(err)
 	}
-	if expected.Protocol != moduleRootPartsProtocol || expected.Status != "passed" || expected.RootPartitions != 16 ||
-		expected.RootInventory == nil || len(expected.RootInventory.Names) != 68 || len(expected.Packages) != 5 ||
+	if expected.Protocol != moduleRootPartsProtocol || expected.Status != "passed" || expected.RootPartitions != parts ||
+		expected.RootInventory == nil || len(expected.RootInventory.Names) != wantRoots || len(expected.Packages) != 5 ||
 		expected.Packages[0].Shards != 64 {
 		t.Fatalf("complete fresh denominator/package union lost: %+v", expected)
 	}
@@ -173,6 +199,40 @@ func TestModuleRootPartitionActualCompleteUnionAndCoverage(t *testing.T) {
 		}
 	})
 	packagePath := filepath.Join(partPath, "package-0000")
+	if heavyRoles {
+		t.Run("previous-race-owner-count", func(t *testing.T) {
+			rootSplitRetainFile(t, modulePath)
+			var changed moduleReport
+			if err := ciReadJSON(modulePath, &changed); err != nil {
+				t.Fatal(err)
+			}
+			changed.RootPartitions = 16
+			if err := ciWriteJSON(modulePath, changed); err != nil {
+				t.Fatal(err)
+			}
+			rootSplitRequireRejected(t, expected, inputs)
+		})
+		t.Run("previous-unbalanced-hash-plan", func(t *testing.T) {
+			file := filepath.Join(packagePath, "partition.json")
+			rootSplitRetainFile(t, file)
+			var changed suiteReport
+			if err := ciReadJSON(file, &changed); err != nil {
+				t.Fatal(err)
+			}
+			legacy := make([][]string, 64)
+			for _, name := range changed.Names {
+				index := independentHashShard(name, 64)
+				legacy[index] = append(legacy[index], name)
+			}
+			for index := range changed.Shards {
+				changed.Shards[index].Names = legacy[index]
+			}
+			if err := ciWriteJSON(file, changed); err != nil {
+				t.Fatal(err)
+			}
+			rootSplitRequireRejected(t, expected, inputs)
+		})
+	}
 	for _, suffix := range []string{"module.json", filepath.Join("package-0000", "partition.json"),
 		filepath.Join("package-0000", "shard-0000.stdout")} {
 		t.Run("trailing-EOF-"+suffix, func(t *testing.T) {
@@ -261,7 +321,7 @@ func TestModuleRootPartitionActualCompleteUnionAndCoverage(t *testing.T) {
 		})
 	}
 	t.Run("extra-part", func(t *testing.T) {
-		path := filepath.Join(inputs, "owner-0000", "part-0016")
+		path := filepath.Join(inputs, "owner-0000", fmt.Sprintf("part-%04d", parts))
 		if err := os.Mkdir(path, 0700); err != nil {
 			t.Fatal(err)
 		}
