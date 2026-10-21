@@ -279,20 +279,7 @@ func TestTranslateX86RawScalarFloatIntegerReportedEncoding(t *testing.T) {
 		"x86_64-pc-windows-msvc",
 	} {
 		t.Run(triple, func(t *testing.T) {
-			file, err := Parse(ArchAMD64, source)
-			if err != nil {
-				t.Fatal(err)
-			}
-			ir, err := Translate(file, Options{
-				Goarch:       "amd64",
-				TargetTriple: triple,
-				Sigs: map[string]FuncSig{
-					"rawScalarFloatInteger": {Name: "rawScalarFloatInteger", Ret: Void},
-				},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			ir := x86UnboundVoidRawScalarFormatObject(t, source, "amd64", triple)
 			if !strings.Contains(ir, `call i64 asm sideeffect "cvttsd2siq $1, $0"`) || strings.Contains(ir, "fptosi double") {
 				t.Fatalf("raw CVTTSD2SQ semantics missing:\n%s", ir)
 			}

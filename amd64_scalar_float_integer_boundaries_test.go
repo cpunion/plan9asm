@@ -182,23 +182,15 @@ func TestX86ScalarFloatIntegerFiveTargetsThreeAPIObjects(t *testing.T) {
 				fmt.Fprintf(&decl, "func probe%d()\n", count)
 				count++
 			}
-			goAssemblerOracleOutput(t, target.arch, source.String(), "", true)
-			for _, api := range []string{"text", "module", "Go"} {
-				t.Run(api, func(t *testing.T) {
-					ir, err := x86ScalarFPBitViewAPI(t, source.String(), decl.String(), target.arch, target.triple, api)
-					if err != nil {
-						t.Fatal(err)
-					}
-					for _, optimized := range []bool{false, true} {
-						input := ir
-						if optimized {
-							input = x86MulDivRoundOptimize(t, input)
-						}
-						compileLLVMToObject(t, llc, target.triple, "scalar-float-int.ll", "scalar-float-int.o", input)
-					}
-				})
+			ir := x86UnboundVoidRawScalarFormatObject(t, source.String(), target.arch, target.triple)
+			for _, optimized := range []bool{false, true} {
+				input := ir
+				if optimized {
+					input = x86MulDivRoundOptimize(t, input)
+				}
+				compileLLVMToObject(t, llc, target.triple, "scalar-float-int.ll", "scalar-float-int.o", input)
 			}
-			t.Logf("%d accepted original Go scalar conversion formats, 3 APIs, 2 IR pipelines", count)
+			t.Logf("%d unchanged original Go formats; 3 public APIs require input Context; 2 private emitter IR object pipelines, no initialized/native claim", count)
 		})
 	}
 }

@@ -33,11 +33,15 @@ func TestX86ScalarFloatIntegerMode32WIGOriginalGo(t *testing.T) {
 		for _, operand := range []string{"X0", "7(BX)"} {
 			t.Run(name+"/"+operand, func(t *testing.T) {
 				source := fmt.Sprintf("TEXT ·view(SB),4,$0-0\n%s %s,AX\nRET\n", name, operand)
-				requireX86GoAssemblerResult(t, "386", source, true)
-				ir, err := x86ScalarFPBitViewAPI(t, source, "func view()\n", "386", "i386-unknown-linux-gnu", "text")
-				if err != nil || ir == "" {
-					t.Fatalf("actual Go W1 form needs its non-64-bit WIG dword result: %v", err)
+				ir := x86UnboundVoidScalarFormatObject(t, source, "view", "386", "i386-unknown-linux-gnu")
+				if !strings.Contains(ir, "call i32 asm sideeffect") || strings.Contains(ir, "call i64 asm sideeffect") {
+					t.Fatal("actual Go W1 format lost its mode32 WIG dword output", ir)
 				}
+				llc := findLLVM22Tool("llc")
+				if llc == "" {
+					t.Fatal("LLVM22 llc required")
+				}
+				compileLLVMToObject(t, llc, "i386-unknown-linux-gnu", "mode32-wig.ll", "mode32-wig.o", ir)
 			})
 		}
 	}

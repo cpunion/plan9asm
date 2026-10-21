@@ -182,6 +182,7 @@ func TestRuntimeOracleCommandConsumersRetainOwnedExecution(t *testing.T) {
 		"amd64_fixed_local_original_test.go",
 		"amd64_scalar_float_integer_status_runtime_test.go",
 		"x86_scalar_float_integer_native_read_test.go",
+		"x86_scalar_float_integer_original_format_test.go",
 		"x86_result_initialization_test.go",
 		"x86_result_native_pointer_alias_test.go",
 		"x86_result_auto_runtime_test.go",
