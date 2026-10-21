@@ -201,11 +201,73 @@ func TestGoAMD64FixedLocalFrameScalarMemoryWidthsHaveExactCertificates(t *testin
 
 func fixedLocalAPIs(t *testing.T, pkg GoPackage, file *File, options Options, check func(*testing.T, string, error)) {
 	t.Helper()
-	t.Run("Translate", func(t *testing.T) {
+	for _, api := range []string{"Translate", "Module", "GoModule"} {
+		t.Run(api, func(t *testing.T) {
+			fixedLocalAPI(t, pkg, file, options, api, check)
+		})
+	}
+}
+
+// Each API consumes its own complete actual source observation. Neither the
+// compiler cache nor a previous API's options can extend or revive that lease.
+func fixedLocalFreshAPIs(t *testing.T, pkg GoPackage, request GoAMD64FrameCaptureRequest, options Options, apis []string, check func(*testing.T, string, error)) {
+	t.Helper()
+	seen := make(map[string]bool)
+	if len(apis) == 0 {
+		t.Fatal("missing fixed-local API inventory")
+	}
+	for _, api := range apis {
+		if (api != "Translate" && api != "Module" && api != "GoModule") || seen[api] {
+			t.Fatal("unknown or duplicated fixed-local API", api)
+		}
+		seen[api] = true
+	}
+	for _, api := range apis {
+		t.Run(api, func(t *testing.T) {
+			ctx, cancel := runtimeOracleStageContext(t)
+			defer cancel()
+			source, err := CaptureGoAMD64FrameSource(ctx, pkg, request)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer func() {
+				if err := source.Close(); err != nil {
+					t.Error(err)
+				}
+			}()
+			original, err := os.ReadFile(filepath.Join(request.Directory, request.AssemblyFile))
+			if err != nil {
+				t.Fatal(err)
+			}
+			// Bind consumes the exact producer's complete CPP output, including
+			// suffix formatting. The original file remains an immutable input.
+			expanded, err := source.preprocess(request.AssemblyFile, original)
+			if err != nil {
+				t.Fatal(err)
+			}
+			file, err := Parse(ArchAMD64, expanded)
+			if err != nil {
+				t.Fatal(err)
+			}
+			bound, err := source.BindFixedLocal(ctx, pkg, file, options)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(source.functions) != len(file.Funcs) {
+				t.Fatal("incomplete actual original Go object inventory")
+			}
+			fixedLocalAPI(t, pkg, file, bound, api, check)
+		})
+	}
+}
+
+func fixedLocalAPI(t *testing.T, pkg GoPackage, file *File, options Options, api string, check func(*testing.T, string, error)) {
+	t.Helper()
+	switch api {
+	case "Translate":
 		ir, err := Translate(file, options)
 		check(t, ir, err)
-	})
-	t.Run("Module", func(t *testing.T) {
+	case "Module":
 		ctx := llvm.NewContext()
 		defer ctx.Dispose()
 		module, err := TranslateModuleInContext(ctx, file, options)
@@ -215,8 +277,7 @@ func fixedLocalAPIs(t *testing.T, pkg GoPackage, file *File, options Options, ch
 			ir = module.String()
 		}
 		check(t, ir, err)
-	})
-	t.Run("GoModule", func(t *testing.T) {
+	case "GoModule":
 		var source strings.Builder
 		for _, fn := range file.Funcs {
 			for _, ins := range fn.Instrs {
@@ -242,7 +303,9 @@ func fixedLocalAPIs(t *testing.T, pkg GoPackage, file *File, options Options, ch
 			ir = translation.Module.String()
 		}
 		check(t, ir, err)
-	})
+	default:
+		t.Fatal("unknown fixed-local API", api)
+	}
 }
 
 func fixedLocalRequireContext(t *testing.T, ir string, err error) {
