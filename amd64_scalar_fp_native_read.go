@@ -391,6 +391,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		if accepted, known := x86ResultScalarPrecisionStep(ins, state, owned, arch, true); known {
 			return accepted // The paired original scalar conversion retains m32/m64 and MXCSR effects.
 		}
+		if accepted, known := x86ResultScalarFloatIntegerStepWithRead(ins, state, owned, resultOffset, arch, true); known {
+			return accepted // The whole native conversion retains exact scalar reads and MXCSR even for Void.
+		}
 		if accepted, known := x86ResultNamedHalfStep(ins, state, owned, arch, true); known {
 			return accepted // The exact original conversion/store retains MXCSR and active native accesses.
 		}
