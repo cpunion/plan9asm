@@ -226,7 +226,9 @@ func fixedLocalRequirePreparedTools(t *testing.T, filename, helper string) {
 					}
 				}
 				prepared = append(prepared, call.Pos())
-			case "requireGoAMD64FrameCapture":
+			case "fixedLocalFreshAPIs":
+				// Each selected API now captures independently inside this
+				// owner; preparation still precedes every real capture.
 				captured = append(captured, call.Pos())
 			}
 			return true
