@@ -236,6 +236,9 @@ func (c *armCtx) lowerARMFloatMove(op, cond string, ins Instr) (ok bool, termina
 	if up && memory.Kind == OpMem && memory.Mem.Off < 0 {
 		return true, false, fmt.Errorf("arm %s .U cannot be used with a negative offset: %q", op, ins.Raw)
 	}
+	if memory.Kind == OpSym && sourceSymbolOffsetNeedsContext(memory.Sym) {
+		return true, false, fmt.Errorf("%w: arm %s symbol displacement requires generated assembler constants: %q", ErrProbeNeedsContext, op, ins.Raw)
+	}
 	if cond != "" && !strings.EqualFold(cond, "AL") {
 		err := c.emitConditionalEffect(cond, func() error {
 			_, _, innerErr := c.lowerARMFloatMove(op, "", ins)

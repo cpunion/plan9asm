@@ -70,6 +70,15 @@ func (c *arm64Ctx) lowerScalarFloatMove(op Op, ins Instr) (ok bool, terminated b
 			return true, false, fmt.Errorf("arm64 %s .P/.W requires one immediate-offset register memory operand: %q", op, ins.Raw)
 		}
 	}
+	if op == "FMOVS" || op == "FMOVD" {
+		memory := src
+		if dstMem {
+			memory = dst
+		}
+		if memory.Kind == OpSym && sourceSymbolOffsetNeedsContext(memory.Sym) {
+			return true, false, fmt.Errorf("%w: arm64 %s symbol displacement requires generated assembler constants: %q", ErrProbeNeedsContext, op, ins.Raw)
+		}
+	}
 
 	var value string
 	switch {

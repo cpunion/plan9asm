@@ -211,6 +211,16 @@ func (c *arm64Ctx) lowerVec(op Op, postInc bool, ins Instr) (ok bool, terminated
 		}
 		src, dst := ins.Args[0], ins.Args[1]
 		preInc := strings.Contains(strings.ToUpper(string(ins.Op)), ".W")
+		memory, data := src, dst
+		if dst.Kind == OpSym {
+			memory, data = dst, src
+		}
+		if string(ins.Op) == "FMOVQ" && memory.Kind == OpSym && data.Kind == OpReg &&
+			!strings.HasPrefix(strings.TrimSpace(memory.Sym), "$") {
+			if _, valid := arm64ParseFReg(data.Reg); valid && sourceSymbolOffsetNeedsContext(memory.Sym) {
+				return true, false, fmt.Errorf("%w: arm64 FMOVQ symbol displacement requires generated assembler constants: %q", ErrProbeNeedsContext, ins.Raw)
+			}
+		}
 		switch {
 		case (src.Kind == OpFP || src.Kind == OpMem || src.Kind == OpSym) && dst.Kind == OpReg:
 			if _, ok := arm64ParseFReg(dst.Reg); !ok {
