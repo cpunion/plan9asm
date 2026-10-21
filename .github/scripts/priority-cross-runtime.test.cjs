@@ -68,7 +68,7 @@ test('ARM64 execution cannot lose its unique owner, success guard or reader', ()
   assert.throws(() => requireARM64FallbackOwner(workflow + '\n      - name: Execute rich CLI ARM64 fallback oracle\n'));
 });
 
-const moduleExecutionJobs = ['test', 'race', 'coverage', 'module-completion'];
+const moduleExecutionJobs = ['test', 'nested-cli', 'race', 'coverage', 'module-completion'];
 const moduleCompilerInstall = 'bash scripts/install-ci-llvm22-ubuntu.sh ' +
   'gcc-i686-linux-gnu libc6-dev-i386-cross gcc-aarch64-linux-gnu';
 
@@ -111,7 +111,9 @@ for (const name of moduleExecutionJobs) {
     ]) {
       const mutated = original.replace(before, after);
       assert.notEqual(mutated, original, `${name}: mutation changed its own job`);
-      const changed = moduleToolsFixture.replace(original, mutated);
+      // Shell regexes can contain $'; a function keeps replacement bytes literal.
+      const changed = moduleToolsFixture.replace(original, () => mutated);
+      assert.equal(job(name, changed), mutated, 'mutation must retain its exact job boundary');
       assert.throws(() => requireModuleCrossTools(changed, name), undefined,
         `${name}: reject ${before}`);
     }

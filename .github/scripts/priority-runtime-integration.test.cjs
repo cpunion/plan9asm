@@ -13,7 +13,7 @@ const runtime = fs.existsSync(runtimeFile) ? fs.readFileSync(runtimeFile, 'utf8'
 const benchmarkScript = fs.readFileSync(path.join(__dirname, '../../scripts/benchmark-compile.sh'), 'utf8');
 const diagnostic = fs.readFileSync(path.join(directory, 'pr40-owned-process-probe.yml'), 'utf8');
 const instructionJobs = ['ci_policy', 'fmt', 'build', 'stdlib-corpus', 'cross-runtime',
-  'cross-runtime-verify', 'test', 'windows-module', 'arm-scan', 'race', 'coverage', 'module-completion'];
+  'cross-runtime-verify', 'test', 'nested-cli', 'windows-module', 'arm-scan', 'race', 'coverage', 'module-completion'];
 const linuxTargets = ['linux/386', 'linux/amd64', 'linux/arm', 'linux/arm64',
   'darwin/amd64', 'darwin/arm64', 'windows/386', 'windows/amd64', 'windows/arm64', 'js/wasm'];
 const corpusTargets = [linuxTargets,
@@ -112,13 +112,13 @@ function requireCorpusTargets(body) {
 function requireInstructionOwners(source) {
   requireJobSet(source, instructionJobs);
   assert.doesNotMatch(source, /runtime-integration\.yml|scripts\/benchmark-compile\.sh/);
-  for (const name of ['fmt', 'build', 'stdlib-corpus', 'cross-runtime', 'test',
+  for (const name of ['fmt', 'build', 'stdlib-corpus', 'cross-runtime', 'test', 'nested-cli',
     'windows-module', 'arm-scan', 'race', 'coverage']) {
     assert.deepEqual(jobNeeds(source, name), ['ci_policy'], name);
     assert.doesNotMatch(jobBody(source, name), /^    if:|continue-on-error:/m, name);
   }
   assert.deepEqual(jobNeeds(source, 'cross-runtime-verify'), ['cross-runtime']);
-  assert.deepEqual(jobNeeds(source, 'module-completion'), ['test', 'race', 'coverage']);
+  assert.deepEqual(jobNeeds(source, 'module-completion'), ['test', 'nested-cli', 'race', 'coverage']);
   assert.match(jobBody(source, 'build'), /run: scripts\/check-arm64-plan9-corpus\.sh/);
   const corpus = jobBody(source, 'stdlib-corpus');
   assert.match(corpus, /^    name: stdlib instruction corpus \(/m);
@@ -247,7 +247,7 @@ test('responsibility split cannot delete or replace a required instruction owner
     ['linux/arm64,', ''],
     ['scripts/install-ci-qemu.sh', 'echo native'],
     ['files: ./coverage-root.out', 'files: ./partial-coverage.out'],
-    ['    needs: [test, race, coverage]', '    needs: [test, race]'],
+    ['    needs: [test, nested-cli, race, coverage]', '    needs: [test, nested-cli, race]'],
     ['uses: ./.github/workflows/windows-module.yml', 'uses: ./.github/workflows/runtime-integration.yml'],
   ]) {
     await t.test('replace ' + before, () => {

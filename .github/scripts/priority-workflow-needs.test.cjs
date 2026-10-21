@@ -60,7 +60,7 @@ test('duplicate, non-concrete, self, absent or borrowed dependency declarations 
 
 test('main and reusable CLI completion retain every actual owner gate', () => {
   for (const [file, name, required] of [
-    ['go-ci.yml', 'module-completion', ['test', 'race', 'coverage']],
+    ['go-ci.yml', 'module-completion', ['test', 'nested-cli', 'race', 'coverage']],
     ['windows-module.yml', 'complete', ['root-parts', 'other-owners']],
   ]) {
     const source = fs.readFileSync('.github/workflows/' + file, 'utf8');

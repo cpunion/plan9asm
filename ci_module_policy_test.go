@@ -44,7 +44,7 @@ func TestCIModuleSuitesKeepExhaustiveUnixAndWindowsRoles(t *testing.T) {
 		}
 	}
 	aggregate, found := ciWorkflowJob(string(data), "module-completion")
-	if !found || !strings.Contains(aggregate, "needs: [test, race, coverage]") || !strings.Contains(aggregate, "!cancelled()") ||
+	if !found || !strings.Contains(aggregate, "needs: [test, nested-cli, race, coverage]") || !strings.Contains(aggregate, "!cancelled()") ||
 		!strings.Contains(aggregate, "owner-0000") || !strings.Contains(aggregate, "owner-0001") || !strings.Contains(aggregate, "owner-0002") {
 		t.Error("missing mandatory complete cross-owner readback")
 	}
@@ -73,8 +73,19 @@ func TestCIModuleSuitesKeepExhaustiveUnixAndWindowsRoles(t *testing.T) {
 	if !strings.Contains(test, "| grep -Fx 'TestAMD64DownloadedFixedLocalLLVM22Numerical'") {
 		t.Error("required numerical inventory must use the provisioned fixed-line filter, not optional ripgrep")
 	}
-	if !strings.Contains(test, "!cancelled() && runner.os != 'Windows' && matrix.nested_modules && matrix.module-owner == 2") {
-		t.Error("both nested CLI roles must still execute after a main-module failure")
+	nested, found := ciWorkflowJob(string(data), "nested-cli")
+	if !found || !strings.Contains(nested, "needs: ci_policy") ||
+		!strings.Contains(nested, "go-version: ['1.24.x', '1.25.x', '1.26.x', '1.27.2']") ||
+		!strings.Contains(nested, "module: [plan9asm, plan9asmll]") ||
+		!strings.Contains(nested, "run: go test -timeout=30m ./...") ||
+		!strings.Contains(nested, "working-directory: cmd/${{ matrix.module }}") ||
+		!strings.Contains(nested, "timeout-minutes: 60") || !strings.Contains(nested, "fail-fast: false") {
+		t.Error("both complete nested CLIs need independent SDK/module job budgets and the original full command")
+	}
+	if strings.Contains(test, "nested_modules") || strings.Contains(test, "working-directory: cmd/plan9asm") ||
+		strings.Contains(nested, "module-owner") || strings.Contains(nested, "max-parallel:") ||
+		strings.Contains(nested, "continue-on-error:") || strings.Contains(nested, "if:") {
+		t.Error("nested CLI jobs must remain independent of other module failures without skipped or hidden outcomes")
 	}
 	coverage, _ := ciWorkflowJob(string(data), "coverage")
 	if strings.Contains(coverage, "codecov/codecov-action") || !strings.Contains(aggregate, "files: ./coverage-root.out") {

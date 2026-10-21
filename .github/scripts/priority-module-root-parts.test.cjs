@@ -143,19 +143,16 @@ test('each root part has an exact separate artifact and strict download destinat
   assert.match(step(aggregate, 'Download profile owner'), /-profile$/m);
   assert.match(step(aggregate, 'Download remaining-package owner'), /-other$/m);
   assert.doesNotMatch(aggregate, /merge-multiple:|pattern:/);
-  requireJobNeeds(workflow, 'module-completion', ['test', 'race', 'coverage']);
+  requireJobNeeds(workflow, 'module-completion', ['test', 'nested-cli', 'race', 'coverage']);
   assert.match(aggregate, /^    if: \$\{\{ !cancelled\(\) \}\}$/m);
 });
 
-test('owner-two side gates run once and Windows has independent complete modules', () => {
+test('owner-two numerical fixture runs once and CLIs have independent complete modules', () => {
   const body = job('test');
-  for (const title of [
-    'Required exact downloaded AMD64 numerical fixture',
-    'Go test (cmd/plan9asm, Ubuntu)',
-    'Go test (cmd/plan9asmll, Ubuntu)',
-  ]) {
-    assert.match(step(body, title), /matrix\.module-owner == 2/);
-  }
+  assert.match(step(body, 'Required exact downloaded AMD64 numerical fixture'), /matrix\.module-owner == 2/);
+  assert.doesNotMatch(body, /nested_modules|working-directory: cmd\/plan9asm/);
+  requireJobNeeds(workflow, 'nested-cli', ['ci_policy']);
+  assert.match(job('nested-cli'), /^        module: \[plan9asm, plan9asmll\]$/m);
   assert.doesNotMatch(body, /os: windows-latest/);
   assert.match(job('windows-module'), /uses: \.\/\.github\/workflows\/windows-module\.yml/);
   assert.match(body,

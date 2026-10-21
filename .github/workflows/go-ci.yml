@@ -325,11 +325,7 @@ jobs:
           - {module-role: root-7, module-owner: 0, root-partition: 7}
           - {module-role: profile, module-owner: 1, root-partition: -1}
           - {module-role: other, module-owner: 2, root-partition: -1}
-          - {os: ubuntu-latest, runner: [qiniu, ubuntu-24.04-large], nested_modules: false}
-          - {go-version: '1.24.x', nested_modules: true}
-          - {go-version: '1.25.x', nested_modules: true}
-          - {go-version: '1.26.x', nested_modules: true}
-          - {go-version: '1.27.2', nested_modules: true}
+          - {os: ubuntu-latest, runner: [qiniu, ubuntu-24.04-large]}
 
     steps:
       - name: Checkout
@@ -396,15 +392,53 @@ jobs:
           path: _out/module-test/
           if-no-files-found: error
 
-      - name: Go test (cmd/plan9asm, Ubuntu)
-        if: ${{ !cancelled() && runner.os != 'Windows' && matrix.nested_modules && matrix.module-owner == 2 }}
-        run: go test -timeout=30m ./...
-        working-directory: cmd/plan9asm
+  # Complete CLI suites need independent job budgets instead of sharing the
+  # remaining-package owner's root suite and current numerical fixture.
+  nested-cli:
+    needs: ci_policy
+    name: test (ubuntu-latest, ${{ matrix.go-version }}, ${{ matrix.module }})
+    timeout-minutes: 60
+    runs-on: ${{ github.repository_owner == 'xgo-dev' && fromJSON('["qiniu", "ubuntu-24.04-large"]') || 'ubuntu-latest' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        go-version: ['1.24.x', '1.25.x', '1.26.x', '1.27.2']
+        module: [plan9asm, plan9asmll]
 
-      - name: Go test (cmd/plan9asmll, Ubuntu)
-        if: ${{ !cancelled() && runner.os != 'Windows' && matrix.nested_modules && matrix.module-owner == 2 }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Go
+        uses: ./.github/actions/setup-go
+        with:
+          go-version: ${{ matrix.go-version }}
+          cache: true
+
+      - name: Install LLVM 22 and cross compilers
+        timeout-minutes: 14
+        run: bash scripts/install-ci-llvm22-ubuntu.sh gcc-i686-linux-gnu libc6-dev-i386-cross gcc-aarch64-linux-gnu
+
+      - name: Install required execution runtimes
+        timeout-minutes: 5
+        run: bash scripts/install-ci-qemu.sh
+
+      - name: LLVM tools info
+        shell: bash
+        run: |
+          command -v llc
+          llc --version
+          command -v clang
+          clang --version
+
+      - name: Setup required wasm execution runtime
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+
+      - name: Go test complete CLI module
         run: go test -timeout=30m ./...
-        working-directory: cmd/plan9asmll
+        working-directory: cmd/${{ matrix.module }}
 
 
   # Each module independently executes its complete inventory; only its strict
@@ -611,7 +645,7 @@ jobs:
         working-directory: cmd/plan9asmll
 
   module-completion:
-    needs: [test, race, coverage]
+    needs: [test, nested-cli, race, coverage]
     if: ${{ !cancelled() }}
     runs-on: ${{ github.repository_owner == 'xgo-dev' && fromJSON('["qiniu", "ubuntu-24.04-large"]') || 'ubuntu-latest' }}
     timeout-minutes: 30

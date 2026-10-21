@@ -10,11 +10,11 @@ const source = fs.readFileSync(path.join(__dirname, '../workflows/go-ci.yml'), '
 const exactSDK = '1.27.2';
 const minors = ['1.20.x', '1.21.x', '1.22.x', '1.23.x', '1.24.x',
   '1.25.x', '1.26.x', exactSDK];
-const matrixJobs = new Set(['stdlib-corpus', 'test', 'module-completion']);
+const matrixJobs = new Set(['stdlib-corpus', 'test', 'nested-cli', 'module-completion']);
 // The independent SDK/runtime integration workflow has its own exact-SDK
 // policy. These remain the required PR instruction and module owners.
 const jobs = ['fmt', 'build', 'stdlib-corpus', 'cross-runtime',
-  'cross-runtime-verify', 'test', 'arm-scan', 'race', 'coverage', 'module-completion'];
+  'cross-runtime-verify', 'test', 'nested-cli', 'arm-scan', 'race', 'coverage', 'module-completion'];
 
 function requireSetups(workflow) {
   for (const name of jobs) {
@@ -42,8 +42,9 @@ function requireMatrices(workflow) {
   const versions = regular.match(/^        go-version: \[(.+)\]$/m);
   assert.ok(versions, 'complete test SDK matrix required');
   assert.deepEqual([...versions[1].matchAll(/'([^']+)'/g)].map(match => match[1]), minors);
-  const nested = [...regular.matchAll(/- \{go-version: '([^']+)', nested_modules: true\}/g)];
-  assert.deepEqual(nested.map(match => match[1]), minors.slice(4));
+  const nested = jobBody(workflow, 'nested-cli').match(/^        go-version: \[(.+)\]$/m);
+  assert.ok(nested, 'complete independent CLI SDK matrix required');
+  assert.deepEqual([...nested[1].matchAll(/'([^']+)'/g)].map(match => match[1]), minors.slice(4));
 
   const corpus = [...jobBody(workflow, 'stdlib-corpus').matchAll(
     /^          - \{os: ([^,]+), .*go-version: '([^']+)', .*targets: '([^']+)'\}$/gm)];
@@ -115,7 +116,7 @@ test('every current owner rejects a foreign patch or floating selector', () => {
     for (const version of ['1.27.3', '1.27.x', '1.27', 'stable']) {
       const after = before.replaceAll(exactSDK, version);
       assert.notEqual(after, before, name + ': mutation must change the actual owner');
-      assert.throws(() => requireCurrentScope(fixture.replace(before, after)), name + ': ' + version);
+      assert.throws(() => requireCurrentScope(fixture.replace(before, () => after)), name + ': ' + version);
     }
   }
 });
