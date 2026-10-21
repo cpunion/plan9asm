@@ -10,6 +10,8 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/xgo-dev/plan9asm/internal/nativeoracle"
 )
 
 type fixedLocalPackedRuntimeCase struct {
@@ -244,21 +246,51 @@ func TestCrossLinuxRuntimeMatrixGoAMD64FixedLocalPackedSSE(t *testing.T) {
 }
 
 func TestGoAMD64FixedLocalPackedWideRuntimeOracleCompileOnly(t *testing.T) {
-	execution := x86FloatCompareExecutionTools(t)
+	execution := fixedLocalPackedCompileOnlyTools(t)
 	fixedLocalPackedRuntimeAPIs(t, execution, true, false, []string{"Translate"})
 	t.Log("full wide oracle compiled, not executed; required Linux/amd64 root owns native coverage")
 }
 
 func TestGoAMD64FixedLocalPackedWideRuntimeOracleModuleCompileOnly(t *testing.T) {
-	execution := x86FloatCompareExecutionTools(t)
+	execution := fixedLocalPackedCompileOnlyTools(t)
 	fixedLocalPackedRuntimeAPIs(t, execution, true, false, []string{"Module"})
 	t.Log("full wide oracle compiled, not executed; required Linux/amd64 root owns native coverage")
 }
 
 func TestGoAMD64FixedLocalPackedWideRuntimeOracleGoModuleCompileOnly(t *testing.T) {
-	execution := x86FloatCompareExecutionTools(t)
+	execution := fixedLocalPackedCompileOnlyTools(t)
 	fixedLocalPackedRuntimeAPIs(t, execution, true, false, []string{"GoModule"})
 	t.Log("full wide oracle compiled, not executed; required Linux/amd64 root owns native coverage")
+}
+
+// Object compilation needs a real compiler and target headers, not an x86 CPU
+// or executable transport. This value must never be used to claim execution.
+func fixedLocalPackedCompileOnlyTools(t *testing.T) x86FloatCompareExecution {
+	t.Helper()
+	llc, clang, found := findLlcAndClang(t)
+	if !found {
+		t.Fatal("LLVM22 llc/clang required for complete packed object compilation")
+	}
+	triple := testTargetTriple(runtime.GOOS, "amd64")
+	compiler := []string{clang, "-target", triple}
+	if runtime.GOOS == "darwin" {
+		ctx, cancel := runtimeOracleStageContext(t)
+		defer cancel()
+		flags, err := nativeoracle.DarwinClangFlags(ctx, os.Environ())
+		if err != nil {
+			t.Fatal(err)
+		}
+		compiler = append(compiler, flags...)
+	}
+	if runtime.GOOS == "linux" && runtime.GOARCH != "amd64" && runtime.GOARCH != "386" {
+		const root = "/usr/x86_64-linux-gnu"
+		include := filepath.Join(root, "include")
+		if info, err := os.Stat(include); err != nil || !info.IsDir() {
+			t.Fatalf("required AMD64 C target sysroot headers %s: %v", include, err)
+		}
+		compiler = append(compiler, "--sysroot="+root, "-isystem", include)
+	}
+	return x86FloatCompareExecution{llc: llc, triple: triple, compiler: compiler}
 }
 
 func TestGoAMD64FixedLocalPackedRuntimeOwnership(t *testing.T) {
