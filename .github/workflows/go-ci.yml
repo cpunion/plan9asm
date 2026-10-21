@@ -350,7 +350,7 @@ jobs:
       - name: Install LLVM 22 (Ubuntu)
         if: runner.os == 'Linux'
         timeout-minutes: 14
-        run: bash scripts/install-ci-llvm22-ubuntu.sh gcc-i686-linux-gnu libc6-dev-i386-cross
+        run: bash scripts/install-ci-llvm22-ubuntu.sh gcc-i686-linux-gnu libc6-dev-i386-cross gcc-aarch64-linux-gnu
 
       - name: Install LLVM 22 (Windows)
         if: runner.os == 'Windows'
@@ -516,7 +516,7 @@ jobs:
 
       - name: Install LLVM 22
         timeout-minutes: 14
-        run: bash scripts/install-ci-llvm22-ubuntu.sh gcc-i686-linux-gnu libc6-dev-i386-cross
+        run: bash scripts/install-ci-llvm22-ubuntu.sh gcc-i686-linux-gnu libc6-dev-i386-cross gcc-aarch64-linux-gnu
 
       - name: Install required 386 execution runtime
         timeout-minutes: 5
@@ -574,7 +574,7 @@ jobs:
 
       - name: Install LLVM 22
         timeout-minutes: 14
-        run: bash scripts/install-ci-llvm22-ubuntu.sh gcc-i686-linux-gnu libc6-dev-i386-cross
+        run: bash scripts/install-ci-llvm22-ubuntu.sh gcc-i686-linux-gnu libc6-dev-i386-cross gcc-aarch64-linux-gnu
 
       - name: Install required 386 execution runtime
         timeout-minutes: 5
@@ -642,7 +642,7 @@ jobs:
           cache: true
       - name: Install LLVM 22
         timeout-minutes: 14
-        run: bash scripts/install-ci-llvm22-ubuntu.sh gcc-i686-linux-gnu libc6-dev-i386-cross
+        run: bash scripts/install-ci-llvm22-ubuntu.sh gcc-i686-linux-gnu libc6-dev-i386-cross gcc-aarch64-linux-gnu
       - name: Install required 386 execution runtime
         timeout-minutes: 5
         run: bash scripts/install-ci-qemu.sh
