@@ -2,10 +2,10 @@ package plan9asm
 
 import "strings"
 
-// C_ADDR retains one original symbol plus a signed generated-header integer
-// expression. It is neither a different symbol name nor a zero displacement.
+// A source relocation retains one original symbol plus a signed generated-header
+// integer expression, not a different symbol name or a zero displacement.
 // Call only after the complete instruction's operand/modifier grammar checks.
-func armSymbolOffsetNeedsContext(symbol string) bool {
+func sourceSymbolOffsetNeedsContext(symbol string) bool {
 	source := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(symbol), "$"))
 	if !strings.HasSuffix(source, "(SB)") {
 		return false

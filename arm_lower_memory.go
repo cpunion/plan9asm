@@ -64,7 +64,7 @@ func parseARMIntegerSymbolForm(op string, ins Instr) (armIntegerSymbolForm, erro
 		return f, err
 	}
 	_, _, concrete := parseSBRef(f.symbol)
-	unresolved := !concrete && armSymbolOffsetNeedsContext(f.symbol)
+	unresolved := !concrete && sourceSymbolOffsetNeedsContext(f.symbol)
 	if !strings.HasSuffix(f.symbol, "(SB)") || !concrete && !unresolved {
 		return f, fmt.Errorf("arm %s requires a valid symbol(SB) reference: %q", op, ins.Raw)
 	}
