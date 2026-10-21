@@ -26,22 +26,26 @@ func TestAMD64GoArgumentAliasConsumersRequireActualRHS(t *testing.T) {
 			t.Run(fmt.Sprintf("%s/depth-%d", scalar, count), func(t *testing.T) {
 				typ := amd64ArgumentAlias(scalar, count)
 				available := amd64ArgumentAliasHasActualRHS(typ)
-				check := func(role string, complete bool, err error) {
+				check := func(role string, expectConcrete, complete bool, err error) {
 					t.Helper()
-					if available {
+					if expectConcrete {
 						if !complete || err != nil {
 							t.Fatal("actual concrete alias RHS was lost", role, complete, err)
 						}
 					} else if complete || !errors.Is(err, ErrProbeNeedsContext) {
-						t.Fatal("opaque alias acquired an unobserved RHS contract", role, complete, err)
+						t.Fatal("alias acquired an unobserved or over-depth RHS contract", role, complete, err)
 					}
 				}
 				plan, err := planAMD64GoArguments(amd64ArgumentAliasSignature(typ))
-				check("argument layout", plan != nil, err)
+				check("argument layout", available, plan != nil, err)
+				// A language identity retains the Named node and its underlying
+				// node separately. After 32 aliases, the latter is depth 33;
+				// the argument layout's scalar shape does not add that node.
+				languageAvailable := available && (scalar != named || count < 32)
 				language, err := goAMD64LanguageTypeRole(typ, sizes, true, true)
-				check("argument language", language != "", err)
+				check("argument language", languageAvailable, language != "", err)
 				language, err = goAMD64NumericalScalarLanguageType(typ, sizes, true)
-				check("ordinary numerical scalar language", language != "", err)
+				check("ordinary numerical scalar language", languageAvailable, language != "", err)
 				if scalar == types.Typ[types.Float32] || scalar == types.Typ[types.Float64] {
 					if _, err := goAMD64FrameLanguageType(typ, sizes); !errors.Is(err, ErrProbeNeedsContext) {
 						t.Fatal("alias API availability expanded the ordinary frame's floating role", err)
