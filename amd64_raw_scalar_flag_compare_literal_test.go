@@ -113,6 +113,9 @@ func TestTranslateX86RawScalarFlagCompareRIPDataObjects(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if len(sigs) != len(file.Funcs) || len(sigs) != 12 {
+		t.Fatal("complete original COMI RIP TEXT/declaration inventory changed")
+	}
 	normalized, err := normalizeX86RawFile(file, "amd64")
 	if err != nil {
 		t.Fatal(err)
@@ -129,15 +132,27 @@ func TestTranslateX86RawScalarFlagCompareRIPDataObjects(t *testing.T) {
 	if llc == "" {
 		t.Fatal("LLVM 22 llc not found")
 	}
+	// Supply only the missing X0 input in a separately named companion.
+	// Inserting before the complete original BYTE block preserves every raw
+	// byte, its RIP displacement, its terminal RET and all source-local data.
+	const header = "(SB),$0-0\n"
+	const initializedHeader = "(SB),$0-0\nPXOR X0,X0\n"
+	initialized := strings.ReplaceAll(source.String(), header, initializedHeader)
+	if strings.Count(source.String(), header) != 12 || strings.Count(initialized, "PXOR X0,X0\n") != 12 ||
+		strings.ReplaceAll(initialized, initializedHeader, header) != source.String() {
+		t.Fatal("initialized RIP companion changed more than each missing X0 producer")
+	}
+	var declarations strings.Builder
+	for _, function := range file.Funcs {
+		fmt.Fprintf(&declarations, "func %s()\n", function.Sym)
+	}
 	for _, triple := range []string{
 		"x86_64-apple-darwin", "x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc",
 	} {
 		t.Run(triple, func(t *testing.T) {
-			ir, err := Translate(file, Options{Goarch: "amd64", TargetTriple: triple, Sigs: sigs})
-			if err != nil {
-				t.Fatal(err)
-			}
-			compileLLVMToObject(t, llc, triple, "flag-compare-literal.ll", "flag-compare-literal.o", ir)
+			ir := x86COMIOriginalFormatObject(t, source.String(), "amd64", triple)
+			x86COMICompileOriginalFormatObjects(t, llc, triple, "flag-compare-literal", ir)
+			x86COMIOriginalProducerObjects(t, initialized, declarations.String(), "amd64", triple)
 		})
 	}
 }

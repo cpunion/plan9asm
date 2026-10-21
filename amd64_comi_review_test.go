@@ -92,11 +92,15 @@ func TestX86COMIRawEVEXGenerationSurvivesLowRegisters(t *testing.T) {
 	for _, target := range x86RawReturnTargets {
 		for _, api := range []string{"text", "module", "Go"} {
 			t.Run(target.triple+"/"+api, func(t *testing.T) {
-				ir, err := x86ScalarFPBitViewAPI(t, source.String(), "func view()\n", target.arch, target.triple, api)
-				if err != nil || strings.Count(ir, "{evex} v") != 4 || !strings.Contains(ir, "+avx512f") {
-					t.Fatal("low-register raw EVEX generation/feature lost", err, ir)
+				x86LEAActualTargetGoObject(t, target.arch, target.triple, source.String())
+				if ir, err := x86ScalarFPBitViewAPI(t, source.String(), "func view()\n", target.arch, target.triple, api); ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+					t.Fatal("original low-bank EVEX format invented its X inputs", err)
 				}
-				compileLLVMToObject(t, llc, target.triple, "raw-evex-comi.ll", "raw-evex-comi.o", ir)
+				ir := x86COMIOriginalFormatObject(t, source.String(), target.arch, target.triple)
+				if strings.Count(ir, "{evex} v") != 4 || !strings.Contains(ir, "+avx512f") {
+					t.Fatal("low-register raw EVEX private format lost generation/feature", ir)
+				}
+				x86COMICompileOriginalFormatObjects(t, llc, target.triple, "raw-evex-comi", ir)
 			})
 		}
 	}

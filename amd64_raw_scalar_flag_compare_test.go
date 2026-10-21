@@ -58,11 +58,13 @@ func TestX86RawScalarFlagCompareGoEncoderForms(t *testing.T) {
 				triples = []string{"i386-unknown-linux-gnu", "i686-pc-windows-msvc"}
 			}
 			for _, triple := range triples {
-				ir, err := Translate(file, Options{Goarch: arch, TargetTriple: triple, Sigs: map[string]FuncSig{"flagcompare": {Name: "flagcompare", Ret: Void}}})
-				if err != nil {
-					t.Fatal(err)
-				}
-				compileLLVMToObject(t, llc, triple, "raw-flag-compare.ll", "raw-flag-compare.o", ir)
+				// Retain the original named and byte-exact RET programs as
+				// uninitialized public Context, independently of the UD2 probe.
+				x86UnboundVoidFormatSource(t, source.String(), "flagcompare", arch, triple)
+				originalRaw := "TEXT flagcompare(SB),4,$0-0\n" + x86DwordProductDirectives(code)
+				x86UnboundVoidFormatSource(t, originalRaw, "flagcompare", arch, triple)
+				ir := x86COMIOriginalProbeFormatObject(t, file, arch, triple)
+				x86COMICompileOriginalFormatObjects(t, llc, triple, "raw-flag-compare", ir)
 			}
 			t.Logf("checked %d Go encodings", len(want)-1)
 		})

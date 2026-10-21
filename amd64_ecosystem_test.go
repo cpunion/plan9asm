@@ -4838,7 +4838,7 @@ func TestTranslateX86VectorScalarFlagCompareCompleteGoAssemblerForms(t *testing.
 			if err != nil {
 				t.Fatal(err)
 			}
-			ll, err := Translate(file, Options{
+			_, err = Translate(file, Options{
 				TargetTriple: target.triple,
 				Goarch:       target.goarch,
 				Sigs: map[string]FuncSig{
@@ -4849,18 +4849,16 @@ func TestTranslateX86VectorScalarFlagCompareCompleteGoAssemblerForms(t *testing.
 				if !errors.Is(err, ErrProbeNeedsContext) || !strings.Contains(err.Error(), "physical mode32 high-X") {
 					t.Fatalf("source-accepted high banks lack a physical 386 register binding: %v", err)
 				}
-				// The separate complete AF object matrix retains all legal
-				// physical X0-X7 formats on both 386 target platforms.
-				return
 			}
-			if err != nil {
-				t.Fatal(err)
+			if !errors.Is(err, ErrProbeNeedsContext) {
+				t.Fatal("original named COMI formats invented their missing inputs", err)
 			}
 			llc := findLLVM22Tool("llc")
 			if llc == "" {
 				t.Fatal("LLVM 22 llc not found")
 			}
-			compileLLVMToObject(t, llc, target.triple, "vector-scalar-flag-compare-"+target.goarch+".ll", "vector-scalar-flag-compare-"+target.goarch+".o", ll)
+			ir := x86COMIOriginalFormatObject(t, src.String(), target.goarch, target.triple)
+			x86COMICompileOriginalFormatObjects(t, llc, target.triple, "vector-scalar-flag-compare-"+target.goarch, ir)
 		})
 	}
 }
