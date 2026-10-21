@@ -83,8 +83,31 @@ const llvmConfigFixture = [
   '  *) exit 97 ;;', 'esac',
 ].join('\n') + '\n';
 
+function observeNativeBashExecutable() {
+  const command = process.platform === 'win32'
+    ? 'if [[ "$BASH" == *.exe ]]; then cygpath -w -- "$BASH"; else cygpath -w -- "$BASH.exe"; fi'
+    : 'printf "%s\\n" "$BASH"';
+  // Resolve only in the original native environment. Windows Node cannot
+  // resolve a command name through a child's colon-delimited MSYS PATH.
+  const result = spawnSync('bash', ['-c', command], {env: process.env,
+    encoding: 'utf8', timeout: 5000});
+  assert.ifError(result.error);
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stderr, '');
+  const line = result.stdout.match(/^([^\r\n\0]+)\r?\n$/);
+  assert.ok(line, 'one complete native Bash executable path');
+  const executable = line[1];
+  assert.equal(executable, executable.trim(), 'an unpadded executable path');
+  assert.ok(path.isAbsolute(executable), 'native absolute Bash executable');
+  assert.ok(fs.statSync(executable).isFile(), 'Bash executable must be a regular file');
+  fs.accessSync(executable, fs.constants.X_OK);
+  return executable;
+}
+
+const bashExecutable = observeNativeBashExecutable();
+
 function runCorpusShell(args, options) {
-  return spawnSync('bash', args, options);
+  return spawnSync(bashExecutable, args, options);
 }
 
 function shellPaths(names) {
