@@ -10,7 +10,7 @@ const {test} = require('node:test');
 const action = fs.readFileSync('.github/actions/setup-go/action.yml', 'utf8');
 
 test('formal Go setup has its own bounded installation deadline', () => {
-  for (const name of ['go-ci.yml', 'windows-module.yml', 'runtime-integration.yml']) {
+  for (const name of ['go-ci.yml', 'windows-module.yml', 'runtime-integration.yml', 'linux-cli-module.yml']) {
     const source = fs.readFileSync(path.join('.github/workflows', name), 'utf8');
     const steps = source.split(/(?=^      - )/m).filter(step =>
       /uses: \.\/\.github\/actions\/setup-go\n/.test(step));

@@ -53,6 +53,7 @@ function requireCLITools(source) {
     const checkout = step(body, 'Checkout');
     assert.match(checkout, /^        uses: actions\/checkout@v7$/m);
     const setup = step(body, 'Setup Go');
+    assert.match(setup, /^        timeout-minutes: 10$/m);
     assert.match(setup, /^        uses: \.\/\.github\/actions\/setup-go$/m);
     assert.match(setup, /^          go-version: \$\{\{ inputs\.go-version \}\}$/m);
     assert.match(setup, /^          cache: true$/m);

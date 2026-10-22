@@ -28,6 +28,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
       - name: Setup Go
+        timeout-minutes: 10
         uses: ./.github/actions/setup-go
         with:
           go-version: ${{ inputs.go-version }}
@@ -91,6 +92,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
       - name: Setup Go
+        timeout-minutes: 10
         uses: ./.github/actions/setup-go
         with:
           go-version: ${{ inputs.go-version }}

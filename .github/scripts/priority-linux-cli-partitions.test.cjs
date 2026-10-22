@@ -57,6 +57,7 @@ function requireRoles(source) {
     assert.doesNotMatch(body, /continue-on-error:|max-parallel:|\|\|\s*true/);
     assert.match(body, new RegExp('^    timeout-minutes: ' + (name === 'complete' ? 30 : 60) + '$', 'm'));
     const setup = step(body, 'Setup Go');
+    assert.match(setup, /^        timeout-minutes: 10$/m);
     assert.match(setup, /^        uses: \.\/\.github\/actions\/setup-go$/m);
     assert.match(setup, /^          go-version: \$\{\{ inputs\.go-version \}\}$/m);
     assert.match(setup, /^          cache: true$/m);

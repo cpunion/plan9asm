@@ -26,6 +26,9 @@ export LLVM_CONFIG="$llvm22_root/bin/llvm-config"
 
 Missing required LLVM tools, linkers or backends fail, never skip.
 Host-inapplicable execution requires its cross-runtime CI counterpart.
+CI also verifies the actual installed Go against the installer's resolved
+version and uses the shared exact Node22.23.4 action. A successful installer
+outcome without its version output is not a valid tool observation.
 
 The rich CLI's complete ARM64 fallback-frame oracle runs natively on supported
 ARM64 hosts and under pinned QEMU in the required Linux cross job. One outer
@@ -106,7 +109,11 @@ then measure the complete original CLI source before claiming a speedup.
 
 Fixed-local conversion objects keep all741 independent forms on each of three
 AMD64 targets. Twelve top-level batches per target retain64 functions each
-(37 in the last batch), all three APIs and both IR levels. The inventory policy
+(37 in the last batch), captured as two sources of at most32 functions with
+separate five-minute leases for every API. They retain all three APIs and both
+IR levels. Native execution independently owns all336 cases in seven48-case
+top-level roots with original Go, CPU/OS checks and LLVM O0/O2 execution.
+The inventory policy
 requires every target/batch exactly once and at most three such owners per
 Windows hash shard. A passing batch is not a complete-target receipt: require
 the exact union of all twelve, without skipped or unfinished children.
