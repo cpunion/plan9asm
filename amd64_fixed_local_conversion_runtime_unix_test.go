@@ -138,37 +138,58 @@ int main(void) {
 func fixedLocalConversionRuntime(t *testing.T, execution x86FloatCompareExecution, all bool) {
 	t.Helper()
 	cases := fixedLocalConversionRuntimeCases(all)
-	for start := 0; start < len(cases); start += 48 {
-		end := start + 48
-		if end > len(cases) {
-			end = len(cases)
-		}
-		t.Run(fmt.Sprintf("batch%d", start/48), func(t *testing.T) {
-			assembly, declarations, original, driver := fixedLocalConversionRuntimeProgram(cases[start:end], execution.triple)
-			helpers := "TEXT ·readCSR(SB),4,$0-4\nSTMXCSR ret+0(FP)\nRET\nTEXT ·writeCSR(SB),4,$0-4\nLDMXCSR csr+0(FP)\nRET\n"
-			want := string(x86ScalarFloatIntegerOriginalOutput(t, execution, assembly+helpers, original))
-			if strings.Count(want, "\n") != (end-start)*8*32 {
-				t.Fatal("original Go numerical/status denominator changed")
-			}
-			pkg, request, _, options := x86CMOVFixedLocalFixture(t,
-				assembly, declarations, runtime.GOOS+"/amd64", execution.triple)
-			fixedLocalFreshAPIs(t, pkg, request, options, []string{"Translate", "Module", "GoModule"}, func(t *testing.T, ir string, err error) {
-				if err != nil {
-					t.Fatal(err)
-				}
-				for _, optimize := range []bool{false, true} {
-					input, level := ir, "-O0"
-					if optimize {
-						input, level = x86MulDivRoundOptimize(t, ir), "-O2"
-					}
-					got := string(execution.compileAndRunLLVM(t, "private-conversion", input, driver, level))
-					if got != want {
-						t.Fatal("original Go and LLVM private-frame value/MXCSR/canary results differ")
-					}
-				}
-			})
-		})
+	for batch := 0; batch*48 < len(cases); batch++ {
+		fixedLocalConversionRuntimeBatch(t, execution, all, batch)
 	}
+}
+
+func fixedLocalConversionRuntimeBatchRange(total, batch int) (start, end int, ok bool) {
+	if total <= 0 || batch < 0 || batch > (total-1)/48 {
+		return 0, 0, false
+	}
+	start, end = batch*48, total
+	if total-start > 48 {
+		end = start + 48
+	}
+	return start, end, true
+}
+
+func fixedLocalConversionRuntimeBatch(t *testing.T, execution x86FloatCompareExecution, all bool, batch int) {
+	t.Helper()
+	cases := fixedLocalConversionRuntimeCases(all)
+	start, end, ok := fixedLocalConversionRuntimeBatchRange(len(cases), batch)
+	if !ok {
+		t.Fatal("invalid complete conversion runtime batch", batch, len(cases))
+	}
+	// Reuse only this batch's disposable compiler artifacts. Each API still
+	// captures, binds, consumes and closes its own complete source observation.
+	t.Setenv("GOCACHE", t.TempDir())
+	t.Run(fmt.Sprintf("batch%d", batch), func(t *testing.T) {
+		assembly, declarations, original, driver := fixedLocalConversionRuntimeProgram(cases[start:end], execution.triple)
+		helpers := "TEXT ·readCSR(SB),4,$0-4\nSTMXCSR ret+0(FP)\nRET\nTEXT ·writeCSR(SB),4,$0-4\nLDMXCSR csr+0(FP)\nRET\n"
+		want := string(x86ScalarFloatIntegerOriginalOutput(t, execution, assembly+helpers, original))
+		if strings.Count(want, "\n") != (end-start)*8*32 {
+			t.Fatal("original Go numerical/status denominator changed")
+		}
+		pkg, request, _, options := x86CMOVFixedLocalFixture(t,
+			assembly, declarations, runtime.GOOS+"/amd64", execution.triple)
+		fixedLocalConversionPrepareToolCache(t, request)
+		fixedLocalFreshAPIs(t, pkg, request, options, []string{"Translate", "Module", "GoModule"}, func(t *testing.T, ir string, err error) {
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, optimize := range []bool{false, true} {
+				input, level := ir, "-O0"
+				if optimize {
+					input, level = x86MulDivRoundOptimize(t, ir), "-O2"
+				}
+				got := string(execution.compileAndRunLLVM(t, "private-conversion", input, driver, level))
+				if got != want {
+					t.Fatal("original Go and LLVM private-frame value/MXCSR/canary results differ")
+				}
+			}
+		})
+	})
 }
 
 func TestCrossLinuxRuntimeMatrixGoAMD64FixedLocalConversionSSE(t *testing.T) {
@@ -179,6 +200,11 @@ func TestCrossLinuxRuntimeMatrixGoAMD64FixedLocalConversionSSE(t *testing.T) {
 }
 
 func TestGoAMD64FixedLocalConversionRuntimeOwnership(t *testing.T) {
+	for _, input := range [][2]int{{0, 0}, {48, -1}, {48, 1}, {336, 7}} {
+		if _, _, ok := fixedLocalConversionRuntimeBatchRange(input[0], input[1]); ok {
+			t.Fatal("invalid conversion runtime batch accepted", input)
+		}
+	}
 	for _, row := range []struct {
 		all   bool
 		count int
@@ -186,6 +212,21 @@ func TestGoAMD64FixedLocalConversionRuntimeOwnership(t *testing.T) {
 		cases := fixedLocalConversionRuntimeCases(row.all)
 		if len(cases) != row.count {
 			t.Fatalf("runtime cases all=%v: %d, want %d", row.all, len(cases), row.count)
+		}
+		seen := make([]int, len(cases))
+		for batch := 0; batch*48 < len(cases); batch++ {
+			start, end, ok := fixedLocalConversionRuntimeBatchRange(len(cases), batch)
+			if !ok || end-start != 48 {
+				t.Fatal("incomplete conversion runtime batch", batch, start, end)
+			}
+			for index := start; index < end; index++ {
+				seen[index]++
+			}
+		}
+		for index, count := range seen {
+			if count != 1 {
+				t.Fatal("missing or duplicated original runtime case", index, count)
+			}
 		}
 		names := make(map[string]int)
 		for _, entry := range cases {
@@ -225,7 +266,8 @@ func TestGoAMD64FixedLocalConversionRuntimeOwnership(t *testing.T) {
 			continue
 		}
 		owners++
-		if function.Name.Name != "TestCrossLinuxRuntimeMatrixGoAMD64FixedLocalConversionNative" || function.Body == nil || len(function.Body.List) != 1 {
+		name := fmt.Sprintf("TestCrossLinuxRuntimeMatrixGoAMD64FixedLocalConversionNativeBatch%02d", owners-1)
+		if function.Name.Name != name || function.Body == nil || len(function.Body.List) != 1 {
 			t.Fatal("native owner missing or conditional")
 		}
 		statement, ok := function.Body.List[0].(*ast.ExprStmt)
@@ -233,9 +275,13 @@ func TestGoAMD64FixedLocalConversionRuntimeOwnership(t *testing.T) {
 			t.Fatal("native runtime must execute directly")
 		}
 		call, ok := statement.X.(*ast.CallExpr)
-		if !ok || len(call.Args) != 3 || !fixedLocalConversionIdent(call.Fun, "fixedLocalConversionRuntime") ||
+		if !ok || len(call.Args) != 4 || !fixedLocalConversionIdent(call.Fun, "fixedLocalConversionRuntimeBatch") ||
 			!fixedLocalConversionIdent(call.Args[0], "t") || !fixedLocalConversionIdent(call.Args[2], "true") {
 			t.Fatal("native runtime lost its complete-family axis")
+		}
+		batch, ok := call.Args[3].(*ast.BasicLit)
+		if !ok || batch.Kind != token.INT || batch.Value != fmt.Sprint(owners-1) {
+			t.Fatal("native runtime lost an original batch")
 		}
 		tools, ok := call.Args[1].(*ast.CallExpr)
 		if !ok || len(tools.Args) != 1 || !fixedLocalConversionIdent(tools.Fun, "x86PackedDoubleDwordNativeTools") ||
@@ -243,7 +289,7 @@ func TestGoAMD64FixedLocalConversionRuntimeOwnership(t *testing.T) {
 			t.Fatal("native runtime bypassed actual CPU/OS/opcode checks")
 		}
 	}
-	if owners != 1 {
+	if owners != 7 {
 		t.Fatal("missing or ambiguous native owner", owners)
 	}
 	workflow, err := os.ReadFile(".github/workflows/go-ci.yml")

@@ -16,6 +16,63 @@ func TestFixedLocalConversionObjectsHaveIndependentTargetOwners(t *testing.T) {
 		"TestGoAMD64FixedLocalConversionActualObjects", "fixedLocalConversionActualObjects", 12)
 }
 
+func TestFixedLocalConversionNativeHasIndependentCompleteBatchOwners(t *testing.T) {
+	const prefix = "TestCrossLinuxRuntimeMatrixGoAMD64FixedLocalConversionNativeBatch"
+	syntax, err := parser.ParseFile(token.NewFileSet(),
+		filepath.Join("..", "..", "amd64_fixed_local_conversion_runtime_linux_amd64_test.go"), nil, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	seen := make(map[int]bool)
+	var roots []string
+	for _, declaration := range syntax.Decls {
+		function, ok := declaration.(*ast.FuncDecl)
+		if !ok {
+			continue
+		}
+		name := function.Name.Name
+		if !strings.HasPrefix(name, prefix) || function.Body == nil || len(function.Body.List) != 1 {
+			t.Fatal("native conversion must retain independently scheduled complete batches", name)
+		}
+		batch, err := strconv.Atoi(strings.TrimPrefix(name, prefix))
+		if err != nil || batch < 0 || batch >= 7 || seen[batch] || name != fmt.Sprintf("%s%02d", prefix, batch) {
+			t.Fatal("unknown or repeated native conversion batch", name)
+		}
+		statement, ok := function.Body.List[0].(*ast.ExprStmt)
+		if !ok {
+			t.Fatal("batch owner must call its native runtime directly", name)
+		}
+		call, ok := statement.X.(*ast.CallExpr)
+		if !ok || len(call.Args) != 4 {
+			t.Fatal("native batch lost its complete source plan", name)
+		}
+		helper, ok := call.Fun.(*ast.Ident)
+		if !ok || helper.Name != "fixedLocalConversionRuntimeBatch" {
+			t.Fatal("native batch substituted the complete runtime", name)
+		}
+		literal, ok := call.Args[3].(*ast.BasicLit)
+		if !ok || literal.Kind != token.INT || literal.Value != strconv.Itoa(batch) {
+			t.Fatal("native runtime lost its independent batch index", name)
+		}
+		seen[batch] = true
+		roots = append(roots, name)
+	}
+	if len(seen) != 7 {
+		t.Fatal("missing native conversion batches", seen)
+	}
+	for _, count := range []int{16, 32, 64} {
+		shards, err := partition(roots, count)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for index, names := range shards {
+			if len(names) > 2 {
+				t.Fatal("native conversion batches accumulate in one shard", count, index, names)
+			}
+		}
+	}
+}
+
 func TestFixedLocalPackedObjectsHaveIndependentTargetOwners(t *testing.T) {
 	fixedLocalRequireIndependentTargetOwners(t, "amd64_fixed_local_packed_matrix_test.go",
 		"TestGoAMD64FixedLocalPackedCompleteFormsActualObjects", "fixedLocalPackedActualObjects", 4)
@@ -186,6 +243,77 @@ func fixedLocalRequireOwnedObjectCache(t *testing.T, filename, plan string) {
 
 func TestFixedLocalConversionPreparesLazyToolsBeforeSourceCapture(t *testing.T) {
 	fixedLocalRequirePreparedTools(t, "amd64_fixed_local_conversion_test.go", "fixedLocalConversionActualObjects")
+}
+
+func TestFixedLocalConversionRuntimeKeepsOneOwnedCacheAndPreparedTools(t *testing.T) {
+	fixedLocalRequireOwnedObjectCache(t, "amd64_fixed_local_conversion_runtime_unix_test.go", "fixedLocalConversionRuntimeBatch")
+	fixedLocalRequirePreparedTools(t, "amd64_fixed_local_conversion_runtime_unix_test.go", "fixedLocalConversionRuntimeBatch")
+}
+
+func TestFixedLocalConversionObjectsBoundEachIndependentAPISource(t *testing.T) {
+	syntax, err := parser.ParseFile(token.NewFileSet(),
+		filepath.Join("..", "..", "amd64_fixed_local_conversion_test.go"), nil, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	chunks := 0
+	for _, declaration := range syntax.Decls {
+		function, ok := declaration.(*ast.FuncDecl)
+		if !ok || function.Name.Name != "fixedLocalConversionActualObjects" {
+			continue
+		}
+		ast.Inspect(function.Body, func(node ast.Node) bool {
+			loop, ok := node.(*ast.ForStmt)
+			if !ok {
+				return true
+			}
+			increment, ok := loop.Post.(*ast.AssignStmt)
+			if !ok || increment.Tok != token.ADD_ASSIGN || len(increment.Lhs) != 1 || len(increment.Rhs) != 1 {
+				return true
+			}
+			name, ok := increment.Lhs[0].(*ast.Ident)
+			limit, literal := increment.Rhs[0].(*ast.BasicLit)
+			if !ok || name.Name != "chunk" || !literal || limit.Kind != token.INT || limit.Value != "32" {
+				return true
+			}
+			initial, ok := loop.Init.(*ast.AssignStmt)
+			if !ok || initial.Tok != token.DEFINE || len(initial.Lhs) != 1 || len(initial.Rhs) != 1 {
+				t.Fatal("source chunks lost their complete batch start")
+			}
+			left, leftOK := initial.Lhs[0].(*ast.Ident)
+			right, rightOK := initial.Rhs[0].(*ast.Ident)
+			if !leftOK || !rightOK || left.Name != "chunk" || right.Name != "start" {
+				t.Fatal("source chunks cropped the beginning of a batch")
+			}
+			condition, ok := loop.Cond.(*ast.BinaryExpr)
+			if !ok || condition.Op != token.LSS {
+				t.Fatal("source chunks lost their complete batch boundary")
+			}
+			left, leftOK = condition.X.(*ast.Ident)
+			right, rightOK = condition.Y.(*ast.Ident)
+			if !leftOK || !rightOK || left.Name != "chunk" || right.Name != "end" {
+				t.Fatal("source chunks cropped the end of a batch")
+			}
+			captures := 0
+			ast.Inspect(loop.Body, func(node ast.Node) bool {
+				call, ok := node.(*ast.CallExpr)
+				if ok {
+					if helper, ok := call.Fun.(*ast.Ident); ok && helper.Name == "fixedLocalFreshAPIs" {
+						captures++
+					}
+				}
+				return true
+			})
+			if captures != 1 {
+				t.Fatal("each bounded source must retain all independently captured APIs", captures)
+			}
+			chunks++
+			return false
+		})
+	}
+	if chunks != 1 {
+		t.Fatal("complete conversion object owners still accumulate one unbounded API source", chunks)
+	}
 }
 
 func TestFixedLocalPackedPreparesLazyToolsBeforeSourceCapture(t *testing.T) {

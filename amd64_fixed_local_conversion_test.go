@@ -405,8 +405,27 @@ func TestGoAMD64FixedLocalConversionObjectBatchPlan(t *testing.T) {
 			seen[index]++
 		}
 	}
+	// Scheduling remains twelve complete batches. Independent source captures
+	// cover those same 741 functions exactly once in bounded 32-function units.
+	chunks, sourceSeen := 0, make([]int, len(rows))
+	for batch := 0; batch < 12; batch++ {
+		start, end, _ := fixedLocalObjectBatchRange(len(rows), batch)
+		for chunk := start; chunk < end; chunk += 32 {
+			limit := fixedLocalConversionSourceEnd(chunk, end)
+			if limit <= chunk || limit > end || limit-chunk > 32 {
+				t.Fatal("invalid independently captured conversion source", chunk, limit, end)
+			}
+			for index := chunk; index < limit; index++ {
+				sourceSeen[index]++
+			}
+			chunks++
+		}
+	}
+	if chunks != 24 {
+		t.Fatal("complete conversion source plan changed", chunks)
+	}
 	for index, count := range seen {
-		if count != 1 {
+		if count != 1 || sourceSeen[index] != 1 {
 			t.Fatal("missing or duplicated original conversion form", index, rows[index], count)
 		}
 	}
@@ -415,6 +434,13 @@ func TestGoAMD64FixedLocalConversionObjectBatchPlan(t *testing.T) {
 			t.Fatal("invalid conversion batch accepted", input)
 		}
 	}
+}
+
+func fixedLocalConversionSourceEnd(start, end int) int {
+	if end-start > 32 {
+		return start + 32
+	}
+	return end
 }
 
 func fixedLocalConversionActualObjects(t *testing.T, target, triple string, batch int) {
@@ -431,36 +457,41 @@ func fixedLocalConversionActualObjects(t *testing.T, target, triple string, batc
 	if !ok {
 		t.Fatal("invalid complete conversion object batch", batch, len(rows))
 	}
-	t.Run(fmt.Sprintf("batch%d", batch), func(t *testing.T) {
-		var assembly, declarations strings.Builder
-		var names []string
-		for index := start; index < end; index++ {
-			name := fmt.Sprintf("Value%d", index)
-			body := fixedLocalPackedAssembly(fixedLocalConversionOperation(rows[index]))
-			assembly.WriteString(strings.Replace(body, "·Value", "·"+name, 1))
-			fmt.Fprintf(&declarations, "func %s(a uint64) uint64\n", name)
-			names = append(names, "example.invalid/framefixture."+name)
-		}
-		pkg, request, _, options := x86CMOVFixedLocalFixture(t,
-			assembly.String(), declarations.String(), target, triple)
-		fixedLocalConversionPrepareToolCache(t, request)
-		fixedLocalFreshAPIs(t, pkg, request, options, []string{"Translate", "Module", "GoModule"}, func(t *testing.T, ir string, err error) {
-			if err != nil {
-				t.Fatal(err)
+	// Keep the twelve complete scheduling owners, but give each independent
+	// source proof at most 32 functions within its unchanged five-minute lease.
+	for chunk := start; chunk < end; chunk += 32 {
+		limit := fixedLocalConversionSourceEnd(chunk, end)
+		t.Run(fmt.Sprintf("batch%d/source%d", batch, (chunk-start)/32), func(t *testing.T) {
+			var assembly, declarations strings.Builder
+			var names []string
+			for index := chunk; index < limit; index++ {
+				name := fmt.Sprintf("Value%d", index)
+				body := fixedLocalPackedAssembly(fixedLocalConversionOperation(rows[index]))
+				assembly.WriteString(strings.Replace(body, "·Value", "·"+name, 1))
+				fmt.Fprintf(&declarations, "func %s(a uint64) uint64\n", name)
+				names = append(names, "example.invalid/framefixture."+name)
 			}
-			if !strings.Contains(ir, "fixed_local_native") || !strings.Contains(ir, "asm sideeffect") {
-				t.Fatal("conversion did not consume native private backing")
-			}
-			for _, optimize := range []bool{false, true} {
-				input := ir
-				if optimize {
-					input = x86MulDivRoundOptimize(t, ir)
+			pkg, request, _, options := x86CMOVFixedLocalFixture(t,
+				assembly.String(), declarations.String(), target, triple)
+			fixedLocalConversionPrepareToolCache(t, request)
+			fixedLocalFreshAPIs(t, pkg, request, options, []string{"Translate", "Module", "GoModule"}, func(t *testing.T, ir string, err error) {
+				if err != nil {
+					t.Fatal(err)
 				}
-				x86CompactExpandRequireAllDefinitions(t, input, names)
-				compileLLVMToObject(t, llc, triple, "frame-conversion.ll", "frame-conversion.o", input)
-			}
+				if !strings.Contains(ir, "fixed_local_native") || !strings.Contains(ir, "asm sideeffect") {
+					t.Fatal("conversion did not consume native private backing")
+				}
+				for _, optimize := range []bool{false, true} {
+					input := ir
+					if optimize {
+						input = x86MulDivRoundOptimize(t, ir)
+					}
+					x86CompactExpandRequireAllDefinitions(t, input, names)
+					compileLLVMToObject(t, llc, triple, "frame-conversion.ll", "frame-conversion.o", input)
+				}
+			})
 		})
-	})
+	}
 	t.Logf("%s batch%d: %d/%d forms, three LLVM APIs, O0/O2", target, batch, end-start, len(rows))
 }
 

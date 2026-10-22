@@ -101,7 +101,7 @@ func TestFixedLocalCompleteConsumersDoNotShareAPILease(t *testing.T) {
 		{"amd64_fixed_local_conversion_test.go", "fixedLocalConversionActualObjects"},
 		{"amd64_fixed_local_packed_matrix_test.go", "fixedLocalPackedActualObjects"},
 		{"amd64_cmov_fixed_local_test.go", "x86CMOVFixedLocalActualObjects"},
-		{"amd64_fixed_local_conversion_runtime_unix_test.go", "fixedLocalConversionRuntime"},
+		{"amd64_fixed_local_conversion_runtime_unix_test.go", "fixedLocalConversionRuntimeBatch"},
 		{"amd64_fixed_local_packed_runtime_test.go", "fixedLocalPackedRuntimeAPIs"},
 	} {
 		t.Run(owner.helper, func(t *testing.T) {
