@@ -19,9 +19,15 @@ func x86CMOVFixedLocalObjectSources(kernels []x86CMOVFixedLocalKernel, batch int
 	if !ok {
 		return nil, false
 	}
-	// RED baseline: the existing object owner captures one complete 64-function
-	// source. The independent contract below requires smaller source leases.
-	return []x86CMOVFixedLocalSourceUnit{x86CMOVFixedLocalSourceForRange(kernels, start, end)}, true
+	var units []x86CMOVFixedLocalSourceUnit
+	for chunk := start; chunk < end; chunk += 32 {
+		limit := chunk + 32
+		if limit > end {
+			limit = end
+		}
+		units = append(units, x86CMOVFixedLocalSourceForRange(kernels, chunk, limit))
+	}
+	return units, true
 }
 
 func x86CMOVFixedLocalSourceForRange(kernels []x86CMOVFixedLocalKernel, start, end int) x86CMOVFixedLocalSourceUnit {
@@ -43,10 +49,30 @@ func TestFixedLocalCMOVObjectSourcesPreserveCompleteOriginalUnion(t *testing.T) 
 		!reflect.DeepEqual(runtimeKernels[:len(kernels)], kernels) {
 		t.Fatal("complete CMOV grammar or original runtime GP/SIMD suffix changed")
 	}
+	// Independent axes prevent a cropped or duplicated producer table from
+	// validating its own source union merely by retaining the same count.
+	conditions := []string{
+		"CC", "CS", "EQ", "GE", "GT", "HI", "LE", "LS",
+		"LT", "MI", "NE", "OC", "OS", "PC", "PL", "PS",
+	}
+	sources := []string{
+		"AX", "8(SP)", "tmp(SP)", "UNKNOWN(SP)",
+		"tmp+0(SP)", "tmp+(0*4)(SP)", "tmp-8(SP)", "tmp-(2*4)(SP)",
+	}
+	if !reflect.DeepEqual(x86CMOVAUTOSources, sources[2:]) || len(x86CMOVOracleConditions) != len(conditions) {
+		t.Fatal("complete independent CMOV condition/source spelling inventory changed")
+	}
+	for index, condition := range x86CMOVOracleConditions {
+		if condition.name != conditions[index] {
+			t.Fatal("original CMOV condition ordering changed", index, condition)
+		}
+	}
 	var originalAssembly, originalDeclarations strings.Builder
 	for index, kernel := range kernels {
+		operation := "CMOV" + []string{"W", "L", "Q"}[index/128] + conditions[index/8%16]
 		if kernel.name != fmt.Sprintf("F%d", index) || kernel.width != []int{2, 4, 8}[index/128] ||
 			kernel.condition != index/8%16 || kernel.mode != 0 ||
+			kernel.assembly != x86CMOVFixedLocalAssembly(kernel.name, operation, sources[index%8]) ||
 			!strings.HasPrefix(kernel.assembly, "TEXT ·"+kernel.name+"(SB),4,$16-24\n") {
 			t.Fatal("original condition/width/source ordinal, symbol or ABI changed", index, kernel)
 		}

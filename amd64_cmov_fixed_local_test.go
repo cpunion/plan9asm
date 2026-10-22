@@ -264,32 +264,34 @@ func x86CMOVFixedLocalActualObjects(t *testing.T, target, triple string, batch i
 		t.Fatal("LLVM22 required")
 	}
 	kernels := x86CMOVFixedLocalKernels(false)
-	start, end, ok := fixedLocalObjectBatchRange(len(kernels), batch)
+	units, ok := x86CMOVFixedLocalObjectSources(kernels, batch)
 	if !ok {
 		t.Fatal("invalid complete CMOV object batch", batch, len(kernels))
 	}
-	var assembly, declarations strings.Builder
-	var names []string
-	for _, kernel := range kernels[start:end] {
-		assembly.WriteString(kernel.assembly)
-		fmt.Fprintf(&declarations, "func %s(a,b uint64) uint64\n", kernel.name)
-		names = append(names, "example.invalid/framefixture."+kernel.name)
+	for index, unit := range units {
+		t.Run(fmt.Sprintf("source%d", index), func(t *testing.T) {
+			pkg, request, _, options := x86CMOVFixedLocalFixture(t, unit.assembly, unit.declarations, target, triple)
+			fixedLocalFreshAPIs(t, pkg, request, options, []string{"Translate", "Module", "GoModule"}, func(t *testing.T, ir string, err error) {
+				if err != nil || !strings.Contains(ir, "fixed_local_native") {
+					t.Fatal("exact sealed original local storage", err)
+				}
+				for _, optimize := range []bool{false, true} {
+					input := ir
+					if optimize {
+						input = x86DwordProductIROptimize(t, ir)
+					}
+					x86CompactExpandRequireAllDefinitions(t, input, unit.names)
+					compileLLVMToObject(t, llc, triple, "cmov-fixed-local.ll", "cmov-fixed-local.o", input)
+				}
+			})
+		})
 	}
-	pkg, request, _, options := x86CMOVFixedLocalFixture(t, assembly.String(), declarations.String(), target, triple)
-	fixedLocalFreshAPIs(t, pkg, request, options, []string{"Translate", "Module", "GoModule"}, func(t *testing.T, ir string, err error) {
-		if err != nil || !strings.Contains(ir, "fixed_local_native") {
-			t.Fatal("exact sealed original local storage", err)
-		}
-		for _, optimize := range []bool{false, true} {
-			input := ir
-			if optimize {
-				input = x86DwordProductIROptimize(t, ir)
-			}
-			x86CompactExpandRequireAllDefinitions(t, input, names)
-			compileLLVMToObject(t, llc, triple, "cmov-fixed-local.ll", "cmov-fixed-local.o", input)
-		}
-	})
-	t.Logf("%s batch%d: %d/%d original condition/width/register/physical/AUTO kernels; three APIs, O0/O2", target, batch, end-start, len(kernels))
+	count := 0
+	for _, unit := range units {
+		count += unit.end - unit.start
+	}
+	t.Logf("%s batch%d: %d/%d original condition/width/register/physical/AUTO kernels; %d independent sources, three APIs, original/optimized IR, llc-O0",
+		target, batch, count, len(kernels), len(units))
 }
 
 func TestX86CMOVFamilyFixedLocalEveryReadAndAuthorityNegatives(t *testing.T) {
