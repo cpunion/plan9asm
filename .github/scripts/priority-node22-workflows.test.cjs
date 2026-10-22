@@ -7,7 +7,8 @@ const {jobBody} = require('./workflow-needs.cjs');
 const {requireNode22Setup} = require('./node22-setup.cjs');
 
 const roles = {
-  'go-ci.yml': ['ci_policy', 'test', 'nested-cli', 'nested-cli-coverage', 'race', 'coverage', 'module-completion'],
+  'go-ci.yml': ['ci_policy', 'cross-runtime', 'cross-runtime-verify', 'test', 'nested-cli',
+    'nested-cli-coverage', 'race', 'coverage', 'module-completion'],
   'windows-module.yml': ['root-parts', 'other-owners', 'complete'],
   'runtime-integration.yml': ['ci_policy'],
   'pr40-owned-process-probe.yml': ['sdk-priority', 'ownership', 'arm64-fallback-cross-priority',
@@ -20,7 +21,8 @@ const roles = {
 const cliWorkflow = '.github/workflows/linux-cli-module.yml';
 const usesReusableCLI = fs.existsSync(cliWorkflow);
 if (usesReusableCLI) {
-  roles['go-ci.yml'] = ['ci_policy', 'test', 'race', 'coverage', 'module-completion'];
+  roles['go-ci.yml'] = ['ci_policy', 'cross-runtime', 'cross-runtime-verify', 'test',
+    'race', 'coverage', 'module-completion'];
   roles['linux-cli-module.yml'] = ['root-parts', 'complete'];
 }
 
@@ -72,6 +74,72 @@ function nodeStep(body) {
     'another runtime cannot replace or follow the verified exact installer');
   return steps[0];
 }
+
+// Derive runtime users separately from the closed role census. A new cross or
+// complete-module consumer must not borrow ambient Node just because its name
+// was omitted from the list above.
+function requireRuntimeNodeDependencies(source) {
+  const start = source.indexOf('\njobs:\n');
+  assert.ok(start >= 0, 'a formal reusable workflow must retain its job graph');
+  const jobs = source.slice(start);
+  const observed = [];
+  for (const [, name] of jobs.matchAll(/^  ([a-zA-Z0-9_-]+):$/gm)) {
+    const body = jobBody(source, name);
+    const runtime = /PLAN9ASM_CROSS_EXEC\s*[:=]\s*['"]?1(?:['"]|\s|$)/.test(body) ||
+      /scripts\/test-(?:arm64-fallback|(?:linux-cli-|windows-)?module)-ci\.sh/.test(body) ||
+      /^ +(?:run: )?node\s/m.test(body) ||
+      /^ +run: go test\s/m.test(body);
+    if (runtime) {
+      nodeStep(body);
+      observed.push(name);
+    }
+  }
+  return observed.sort();
+}
+
+function requireFormalRuntimeDependencies(readWorkflow) {
+  const pending = ['go-ci.yml'];
+  const observed = new Map();
+  while (pending.length) {
+    const name = pending.pop();
+    if (observed.has(name)) continue;
+    const source = readWorkflow(name);
+    observed.set(name, requireRuntimeNodeDependencies(source));
+    for (const [, callee] of source.matchAll(
+      /^    uses: \.\/\.github\/workflows\/([a-zA-Z0-9_.-]+\.yml)$/gm)) {
+      pending.push(callee);
+    }
+  }
+  return observed;
+}
+
+test('actual cross-runtime and module consumers independently require verified Node', () => {
+  const workflow = fs.readFileSync('.github/workflows/go-ci.yml', 'utf8');
+  const readWorkflow = name => fs.readFileSync('.github/workflows/' + name, 'utf8');
+  const observed = requireFormalRuntimeDependencies(readWorkflow);
+  assert.deepEqual(observed.get('go-ci.yml'),
+    ['ci_policy', 'coverage', 'cross-runtime', 'cross-runtime-verify',
+      'module-completion', 'race', 'test']);
+  const added = workflow + '\n  new-cross-consumer:\n    env:\n' +
+    "      PLAN9ASM_CROSS_EXEC: '1'\n    steps:\n      - run: go run ./cmd/plan9asmtest\n";
+  assert.throws(() => requireRuntimeNodeDependencies(added),
+    'a newly added consumer cannot disappear from Node coverage');
+  assert.deepEqual(observed.get('windows-module.yml'), ['complete', 'other-owners', 'root-parts']);
+  assert.deepEqual(observed.get('linux-cli-module.yml'), ['complete', 'root-parts']);
+
+  const consumer = "name: New consumer\njobs:\n  new-cross-consumer:\n    env:\n" +
+    "      PLAN9ASM_CROSS_EXEC: '1'\n    steps:\n      - run: go run ./cmd/plan9asmtest\n";
+  const caller = workflow + '\n  new-reusable-consumer:\n' +
+    '    uses: ./.github/workflows/new-consumer.yml\n';
+  const fixture = source => name => name === 'go-ci.yml' ? caller
+    : name === 'new-consumer.yml' ? source : readWorkflow(name);
+  assert.throws(() => requireFormalRuntimeDependencies(fixture(consumer)),
+    /exactly one verified Node setup/);
+  const guarded = consumer.replace('    steps:\n', '    steps:\n' +
+    nodeStep(jobBody(workflow, 'cross-runtime')));
+  assert.deepEqual(requireFormalRuntimeDependencies(fixture(guarded)).get('new-consumer.yml'),
+    ['new-cross-consumer']);
+});
 
 for (const [file, jobs] of Object.entries(roles)) {
   const workflow = fs.readFileSync('.github/workflows/' + file, 'utf8');
