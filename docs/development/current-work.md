@@ -76,6 +76,12 @@ a signal alone or a passing object test.
   Every API keeps its original independent five-minute lease and complete
   source/object/lifetime checks. Only disposable compiler artifacts share a
   test-owned cache; no source observation, binding or Verify result is cached.
+- Cancellation regressions wait for an actual root's atomic readiness signal
+  outside observed source before starting the original cancellation window.
+  Planning keeps its existing bound; every exit cancels and joins the owner.
+  Full local runner qualification may use its existing exhaustive partitions;
+  retain the failed single-binary15m observation separately. Formal main-module
+  ordinary/coverage commands remain45m and race commands60m, unchanged.
 
 Independent REDs precede these repairs. A local policy, object or source-plan
 pass is not a required native runtime pass or a final CI certificate.

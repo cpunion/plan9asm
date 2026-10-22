@@ -72,6 +72,18 @@ first-party tests without sampling. Its actual inventory, disjoint ownership,
 raw outcomes and strict complete-module aggregate remain required. Owner 0 owns
 the root package, owner 1 `gotoolprofile`, owner 2 all remaining packages.
 Ordinary suites may use `-workers 2`; one collector owns report/coverage writes.
+The runner's own complete regression suite can use the same exhaustive mechanism:
+
+```sh
+go run ./cmd/plan9asmtest -dir=cmd/plan9asmtest -shards=8 -workers=2 \
+  -timeout=15m -out=_out/runner-suite
+```
+
+Require its fresh complete inventory, unique root/child terminals and no failed,
+skipped or incomplete tests. This is a separate partitioned qualification, not
+a pass for a previously timed-out single-binary command. Formal main-module
+ordinary/coverage commands retain45m and race commands60m.
+
 Root scheduling parts do not change the test denominator. Windows keeps all
 three modules independent: sixteen root parts for the main module over
 64 hash shards (four shards per part), four parts per CLI, and one profile/rest
