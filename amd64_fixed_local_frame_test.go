@@ -256,13 +256,16 @@ func fixedLocalFreshAPIs(t *testing.T, pkg GoPackage, request GoAMD64FrameCaptur
 			if len(source.functions) != len(file.Funcs) {
 				t.Fatal("incomplete actual original Go object inventory")
 			}
-			fixedLocalAPI(t, pkg, file, bound, api, check)
+			fixedLocalAPI(t, pkg, file, bound, api, check, expanded)
 		})
 	}
 }
 
-func fixedLocalAPI(t *testing.T, pkg GoPackage, file *File, options Options, api string, check func(*testing.T, string, error)) {
+func fixedLocalAPI(t *testing.T, pkg GoPackage, file *File, options Options, api string, check func(*testing.T, string, error), assembly ...string) {
 	t.Helper()
+	if len(assembly) > 1 || len(assembly) == 1 && assembly[0] == "" {
+		t.Fatal("expected at most one complete nonempty assembly source")
+	}
 	switch api {
 	case "Translate":
 		ir, err := Translate(file, options)
@@ -279,9 +282,15 @@ func fixedLocalAPI(t *testing.T, pkg GoPackage, file *File, options Options, api
 		check(t, ir, err)
 	case "GoModule":
 		var source strings.Builder
-		for _, fn := range file.Funcs {
-			for _, ins := range fn.Instrs {
-				source.WriteString(ins.Raw + "\n")
+		// The fresh owner supplies its exact preprocessed source, retaining
+		// DATA/GLOBL as well as every TEXT body in this independent API.
+		if len(assembly) == 1 {
+			source.WriteString(assembly[0])
+		} else {
+			for _, fn := range file.Funcs {
+				for _, ins := range fn.Instrs {
+					source.WriteString(ins.Raw + "\n")
+				}
 			}
 		}
 		goos := "linux"

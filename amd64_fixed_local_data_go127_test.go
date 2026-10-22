@@ -3,13 +3,10 @@
 package plan9asm
 
 import (
-	"go/types"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"github.com/xgo-dev/llvm"
 )
 
 const fixedLocalLiteralData = "DATA literal<>+0(SB)/8,$0x0102030405060708\n" +
@@ -46,18 +43,11 @@ func TestGoAMD64FixedLocalReadonlyDataThreeTargetObjects(t *testing.T) {
 		{"windows/amd64", "x86_64-pc-windows-msvc"},
 	} {
 		t.Run(target.name, func(t *testing.T) {
-			pkg, request, file, options, assembly := fixedLocalDataFixture(t,
+			pkg, request, _, options, assembly := fixedLocalDataFixture(t,
 				"MOVOU literal<>(SB),X0\nPADDQ 16(SP),X0", fixedLocalLiteralData)
 			request.Target, options.TargetTriple = target.name, target.triple
 			x86LEAActualTargetGoObject(t, "amd64", target.triple, assembly)
-			source := requireGoAMD64FrameCapture(t, pkg, request)
-			ctx, cancel := runtimeOracleStageContext(t)
-			defer cancel()
-			bound, err := source.BindFixedLocal(ctx, pkg, file, options)
-			if err != nil {
-				t.Fatal("original private readonly DATA cannot join the fixed-local numeric proof", err)
-			}
-			fixedLocalDataAPIs(t, pkg, file, assembly, bound, func(t *testing.T, ir string, err error) {
+			fixedLocalFreshAPIs(t, pkg, request, options, []string{"Translate", "Module", "GoModule"}, func(t *testing.T, ir string, err error) {
 				if err != nil || !strings.Contains(ir, "internal constant [32 x i8]") || !strings.Contains(ir, "fixed_local_native") {
 					t.Fatal("missing joined private DATA/frame translation", err)
 				}
@@ -70,38 +60,11 @@ func TestGoAMD64FixedLocalReadonlyDataThreeTargetObjects(t *testing.T) {
 
 func fixedLocalDataAPIs(t *testing.T, pkg GoPackage, file *File, assembly string, options Options, check func(*testing.T, string, error)) {
 	t.Helper()
-	t.Run("Translate", func(t *testing.T) {
-		ir, err := Translate(file, options)
-		check(t, ir, err)
-	})
-	t.Run("Module", func(t *testing.T) {
-		context := llvm.NewContext()
-		defer context.Dispose()
-		module, err := TranslateModuleInContext(context, file, options)
-		ir := ""
-		if !module.IsNil() {
-			defer module.Dispose()
-			ir = module.String()
-		}
-		check(t, ir, err)
-	})
-	t.Run("GoModule", func(t *testing.T) {
-		goos := "linux"
-		if strings.Contains(options.TargetTriple, "apple") {
-			goos = "darwin"
-		} else if strings.Contains(options.TargetTriple, "windows") {
-			goos = "windows"
-		}
-		translation, err := TranslateGoModule(pkg, []byte(assembly), GoModuleOptions{
-			GOOS: goos, GOARCH: "amd64", TargetTriple: options.TargetTriple,
-			Sizes: types.SizesFor("gc", "amd64"), ResolveSym: options.ResolveSym,
-			ManualSig: func(name string) (FuncSig, bool) { sig, found := options.Sigs[name]; return sig, found },
+	// Negative/mutation callers deliberately keep their supplied binding. Never
+	// renew an expired or revoked observation while testing its rejection.
+	for _, api := range []string{"Translate", "Module", "GoModule"} {
+		t.Run(api, func(t *testing.T) {
+			fixedLocalAPI(t, pkg, file, options, api, check, assembly)
 		})
-		ir := ""
-		if translation != nil && !translation.Module.IsNil() {
-			defer translation.Module.Dispose()
-			ir = translation.Module.String()
-		}
-		check(t, ir, err)
-	})
+	}
 }

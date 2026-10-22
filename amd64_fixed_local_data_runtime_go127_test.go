@@ -115,23 +115,8 @@ int main(void) {
 }
 `
 	pkg, request, _, options := x86CMOVFixedLocalFixture(t, assembly.String(), declarations.String(), runtime.GOOS+"/amd64", execution.triple)
-	source := requireGoAMD64FrameCapture(t, pkg, request)
-	expanded, err := source.preprocess(request.AssemblyFile, []byte(assembly.String()))
-	if err != nil {
-		t.Fatal(err)
-	}
-	file, err := Parse(ArchAMD64, expanded)
-	if err != nil {
-		t.Fatal(err)
-	}
-	ctx, cancel := runtimeOracleStageContext(t)
-	defer cancel()
-	bound, err := source.BindFixedLocal(ctx, pkg, file, options)
-	if err != nil {
-		t.Fatal(err)
-	}
 	fixedLocalPackedRunOriginal(t, execution, assembly.String(), declarations.String(), goOracle, true)
-	fixedLocalDataAPIs(t, pkg, file, expanded, bound, func(t *testing.T, ir string, err error) {
+	fixedLocalFreshAPIs(t, pkg, request, options, []string{"Translate", "Module", "GoModule"}, func(t *testing.T, ir string, err error) {
 		if err != nil {
 			t.Fatal(err)
 		}
