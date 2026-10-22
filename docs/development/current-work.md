@@ -88,6 +88,10 @@ a signal alone or a passing object test.
   preprocessed source, including DATA/GLOBL. Negative mutation, expiry and Close
   checks deliberately keep their supplied binding; never renew it to make a
   rejection test pass. Compiler-cache setup is separate from source authority.
+- Native-wide packed execution keeps all340 original kernels in six required
+  top-level source-batch owners. Each owns all three APIs and pipelines with
+  the unchanged actual AVX512 preflight. The six source/C batches form the exact
+  original union; each owner still executes the unchanged whole Go oracle.
 
 Independent REDs precede these repairs. A local policy, object or source-plan
 pass is not a required native runtime pass or a final CI certificate.

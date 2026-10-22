@@ -175,6 +175,16 @@ func fixedLocalPackedRuntime(t *testing.T, execution x86FloatCompareExecution, a
 }
 
 func fixedLocalPackedBatchSelection(total int, selected ...int) ([]int, error) {
+	if total <= 0 || len(selected) > 1 {
+		return nil, fmt.Errorf("packed source owner needs a nonempty inventory and at most one batch: total=%d selected=%v",
+			total, selected)
+	}
+	if len(selected) == 1 {
+		if selected[0] < 0 || selected[0] >= total {
+			return nil, fmt.Errorf("packed source batch outside complete inventory: total=%d selected=%v", total, selected)
+		}
+		return []int{selected[0]}, nil
+	}
 	var indices []int
 	for index := 0; index < total; index++ {
 		indices = append(indices, index)
@@ -182,8 +192,13 @@ func fixedLocalPackedBatchSelection(total int, selected ...int) ([]int, error) {
 	return indices, nil
 }
 
-func fixedLocalPackedRuntimeAPIs(t *testing.T, execution x86FloatCompareExecution, all, execute bool, apis []string) {
+func fixedLocalPackedRuntimeAPIs(t *testing.T, execution x86FloatCompareExecution, all, execute bool, apis []string, selected ...int) {
 	t.Helper()
+	batches := fixedLocalPackedLeaseBatches(t, all, execution.triple)
+	indices, err := fixedLocalPackedBatchSelection(len(batches), selected...)
+	if err != nil {
+		t.Fatal(err)
+	}
 	// Share only disposable compiler artifacts, never a source observation.
 	t.Setenv("GOCACHE", t.TempDir())
 	assembly, declarations, cases := fixedLocalPackedRuntimeProgram(all)
@@ -201,8 +216,8 @@ func fixedLocalPackedRuntimeAPIs(t *testing.T, execution x86FloatCompareExecutio
 		command = append(command, "-O2", "-c", input, "-o", output)
 		x86FloatCompareCaptureCommand(t, exec.Command(command[0], command[1:]...))
 	}
-	batches := fixedLocalPackedLeaseBatches(t, all, execution.triple)
-	for index, batch := range batches {
+	for _, index := range indices {
+		batch := batches[index]
 		t.Run(fmt.Sprintf("batch%d", index), func(t *testing.T) {
 			pkg, request, _, options := x86CMOVFixedLocalFixture(t, batch.assembly, batch.declarations,
 				runtime.GOOS+"/amd64", execution.triple)
@@ -241,8 +256,8 @@ func fixedLocalPackedRuntimeAPIs(t *testing.T, execution x86FloatCompareExecutio
 			})
 		})
 	}
-	t.Logf("cases=%d original Go + APIs=%v; complete source batches=%d execute=%v native-wide=%v",
-		len(cases), apis, len(batches), execute, all)
+	t.Logf("cases=%d original Go + APIs=%v; complete source batches=%d selected=%v execute=%v native-wide=%v",
+		len(cases), apis, len(batches), indices, execute, all)
 }
 
 func TestCrossLinuxRuntimeMatrixGoAMD64FixedLocalPackedSSE(t *testing.T) {
@@ -315,15 +330,7 @@ func TestGoAMD64FixedLocalPackedRuntimeOwnership(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, required := range []string{
-		"func TestCrossLinuxRuntimeMatrixGoAMD64FixedLocalPackedNativeWide(t *testing.T)",
-		"x86PackedDoubleDwordNativeTools(t)",
-		"fixedLocalPackedRuntime(t, execution, true, true)",
-	} {
-		if !strings.Contains(string(source), required) {
-			t.Fatal("missing required native AVX512 runtime owner", required)
-		}
-	}
+	fixedLocalPackedRequireNativeBatchOwners(t)
 	if strings.Contains(string(source), "t.Skip") {
 		t.Fatal("native wide runtime coverage must not silently skip")
 	}

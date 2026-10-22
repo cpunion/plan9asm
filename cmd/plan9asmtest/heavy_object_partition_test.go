@@ -201,6 +201,9 @@ func TestHeavyObjectSchedulingOrdinaryNeighborNamesKeepHashOwnership(t *testing.
 			"TestX86CMOVFamilyFixedLocalAUTOActualObjectsWindowsBatch00",
 			"TestGoAMD64FixedLocalReadonlyDataLinuxRegisteredConsumersExtra",
 			"TestGoAMD64FixedLocalPackedWideRuntimeOracleUnknownCompileOnly",
+			"TestCrossLinuxRuntimeMatrixGoAMD64FixedLocalPackedNativeWide",
+			"TestCrossLinuxRuntimeMatrixGoAMD64FixedLocalPackedNativeWideBatch06",
+			"TestCrossLinuxRuntimeMatrixGoAMD64FixedLocalPackedNativeWideBatch000",
 		} {
 			_, owners := heavyObjectOwners(t, []string{name}, count)
 			if owners[name] != independentHashShard(name, count) {

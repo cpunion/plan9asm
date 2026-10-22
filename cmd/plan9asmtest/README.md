@@ -192,7 +192,8 @@ Normal, coverage and Windows CI keep this original layout. Only when the
 recorded Go flags enable `-race` do complete fixed-local object families use
 fixed semantic ordinals modulo the same shard count: conversion target/batches
 0–35, packed target/batches 36–47, CMOV target/batches 48–59, readonly targets
-60–62, and wide Translate/Module/GoModule object owners 63–65. Targets keep
+60–62, wide Translate/Module/GoModule object owners 63–65, and native-wide
+whole-source batches 66–71. Targets keep
 Linux/Darwin/Windows order (CMOV has Linux/Darwin), and batches keep numerical
 order. These roles distribute complete costly sources without moving ordinary
 roots or changing ownership when input order, unrelated roots or a subset
@@ -201,7 +202,7 @@ Go's last-wins boolean flag semantics, including `-race=false`; flag values
 such as `-tags "-race"` never select a layout. Execution and both independent
 receipt readers derive the same plan from the strictly compared recorded
 flags, never an implicit host/environment setting.
-An independent source-AST check retains all 66 roles. This is a
+An independent source-AST check retains all 72 roles. This is a
 scheduling rule, not runtime qualification: exact current-head execution must
 still fit its original deadlines. No role creates a missing listed test.
 Sorting/sharding never deletes a name. Empty

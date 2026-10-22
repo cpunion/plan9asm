@@ -153,6 +153,14 @@ existing complete-consumer lease checks when adding a family. Negative tests for
 expired, mutated or closed observations must retain their original binding,
 not silently capture a replacement.
 
+The complete native-wide packed matrix has six required top-level source owners,
+not six children under one shard deadline. Batch selection accepts either no
+selector (the unchanged compile-only/SSE path) or one valid whole source batch;
+empty inventories, invalid indices and multiple selectors fail closed. Keep the
+340-kernel source/C union, original whole Go execution, six values/masks, all64
+result bits, three APIs and three LLVM pipelines. Splitting ownership does not
+raise an API, command or job deadline and is not local native execution proof.
+
 CMOV fixed-local objects likewise retain all384 original kernels per Linux and
 Darwin target in six independently scheduled batches. Runtime keeps all387
 CMOV/GP/SIMD kernels in seven batches, their three optimization paths and actual
