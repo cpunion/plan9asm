@@ -9,6 +9,10 @@ import (
 	"github.com/xgo-dev/plan9asm/internal/gotoolchain"
 )
 
+func x86OriginalFloatingRuntimeAllowsSkip(mode string, profile int, output []byte, err error) bool {
+	return false
+}
+
 // Diagnose this original owner's actual execution route. These observations
 // cannot authorize another runner or replace the original numerical verdict.
 func x86OriginalFloatingRuntimeRequireCPU(t *testing.T, profile, clang, triple string, prefix []string) {
