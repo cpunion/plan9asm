@@ -268,7 +268,9 @@ func x86CMOVFixedLocalActualObjects(t *testing.T, target, triple string, batch i
 	if !ok {
 		t.Fatal("invalid complete CMOV object batch", batch, len(kernels))
 	}
+	count := 0
 	for index, unit := range units {
+		count += unit.end - unit.start
 		t.Run(fmt.Sprintf("source%d", index), func(t *testing.T) {
 			pkg, request, _, options := x86CMOVFixedLocalFixture(t, unit.assembly, unit.declarations, target, triple)
 			fixedLocalFreshAPIs(t, pkg, request, options, []string{"Translate", "Module", "GoModule"}, func(t *testing.T, ir string, err error) {
@@ -285,10 +287,6 @@ func x86CMOVFixedLocalActualObjects(t *testing.T, target, triple string, batch i
 				}
 			})
 		})
-	}
-	count := 0
-	for _, unit := range units {
-		count += unit.end - unit.start
 	}
 	t.Logf("%s batch%d: %d/%d original condition/width/register/physical/AUTO kernels; %d independent sources, three APIs, original/optimized IR, llc-O0",
 		target, batch, count, len(kernels), len(units))
