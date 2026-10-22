@@ -94,12 +94,18 @@ func Parse(arch Arch, src string) (*File, error) {
 // ParseWithDefines parses assembly with the same predefined symbols cmd/go
 // supplies to cmd/asm (for example GOOS_windows or GOARM64_LSE).
 func ParseWithDefines(arch Arch, src string, defines []string) (*File, error) {
-	f := &File{Arch: arch}
-
 	pp, err := preprocessWithDefines(src, defines)
 	if err != nil {
 		return nil, err
 	}
+	return parsePreprocessedAssembly(arch, pp)
+}
+
+// parsePreprocessedAssembly consumes the caller's complete expanded source.
+// In particular it cannot silently ignore an active include or apply another
+// macro environment to identifiers left by the actual preprocessor.
+func parsePreprocessedAssembly(arch Arch, pp string) (*File, error) {
+	f := &File{Arch: arch}
 
 	sc := bufio.NewScanner(strings.NewReader(pp))
 	// A short nested macro can expand beyond 64 KiB on one logical line.

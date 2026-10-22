@@ -38,6 +38,13 @@ type GoModuleOptions struct {
 	FileName string
 	GOOS     string
 	GOARCH   string
+	// SourcePreprocessed means src is the complete output of the caller's
+	// selected package/target preprocessor, including its generated headers.
+	// Do not expand generated identifiers or apply ambient Go feature macros
+	// again. This supplies no source or native authority and cannot accompany
+	// NumericalReads, X86TLSMoves or ARM64ByteCarrierSource bindings, which
+	// retain their own complete original-source preprocessing contracts.
+	SourcePreprocessed bool
 	// Sizes is the type layout used to type-check the package. When nil,
 	// TranslateGoModule uses the standard gc layout for GOARCH. Callers with a
 	// custom data model, such as Emscripten wasm32 versus Memory64, must pass
@@ -95,6 +102,9 @@ func TranslateGoModule(pkg GoPackage, src []byte, opt GoModuleOptions) (*GoModul
 // Internal high-volume callers can own the context without changing the public
 // binding contract. Dispose the returned module before disposing ctx.
 func translateGoModuleInContext(ctx llvm.Context, pkg GoPackage, src []byte, opt GoModuleOptions) (result *GoModuleTranslation, resultErr error) {
+	if opt.SourcePreprocessed && (opt.NumericalReads != nil || opt.X86TLSMoves != nil || opt.ARM64ByteCarrierSource != nil) {
+		return nil, fmt.Errorf("%w: preprocessed Go assembly cannot replace a captured source authority", ErrProbeNeedsContext)
+	}
 	if err := rejectMixedNativeAuthorities(opt.NumericalReads, opt.ARM64ByteCarrierSource); err != nil {
 		return nil, err
 	}
@@ -228,11 +238,15 @@ func translateGoModuleInContext(ctx llvm.Context, pkg GoPackage, src []byte, opt
 		resolve = func(sym string) string { return goStripABISuffix(sym) }
 	}
 
-	if opt.NumericalReads == nil && opt.X86TLSMoves == nil {
-		src = ExpandGoAssemblySource(pkg, src, opt.GOARCH)
+	var file *File
+	if opt.SourcePreprocessed {
+		file, err = parsePreprocessedAssembly(arch, string(src))
+	} else {
+		if opt.NumericalReads == nil && opt.X86TLSMoves == nil {
+			src = ExpandGoAssemblySource(pkg, src, opt.GOARCH)
+		}
+		file, err = ParseWithDefines(arch, string(src), GoAssemblerDefines(opt.GOOS, opt.GOARCH))
 	}
-
-	file, err := ParseWithDefines(arch, string(src), GoAssemblerDefines(opt.GOOS, opt.GOARCH))
 	if err != nil {
 		return nil, fmt.Errorf("%s: parse %s: %w", pkgPath, asmName, err)
 	}
