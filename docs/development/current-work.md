@@ -55,7 +55,11 @@ a signal alone or a passing object test.
 - MSYS2's three bounded attempts retain updates, signature checks and exact
   LLVM packages. Each owns a distinct runner-temporary installation so a
   failed update's existing directory cannot make both retries fail immediately.
-  No global installation is deleted or reused.
+  The complete successful LLVM prefix moves without overwrite to one fixed
+  runner-temporary path. Absolute prefix/resource checks and a native C
+  compile/link/run must succeed there before publishing build bindings, so
+  retries cannot change strict cross-owner tool paths. Failed attempts remain;
+  no global installation is deleted or reused.
 - Go1.26.10 is explicitly registered only for the Windows-unwind producer.
   Its eight complete producer inputs are byte-identical to the audited schema.
   Unknown patches, changed sources and generic compiler archives remain rejected.
