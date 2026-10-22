@@ -31,9 +31,11 @@ MSYS2 directory collision, complete CLI package deadlines, Go1.26.10 Windows
 producer rejection, conversion execution/proof deadlines and artifact-upload
 failures. Some cancellation causes and a failed race shard's first test were not
 recoverable from the original logs. Do not turn those unknowns into hardware
-failures. Attempt2 selectively reruns race root12 to recover its missing test
-evidence; inspect its actual new job rather than granting execution credit to
-carried-forward job projections. Keep attempt1 immutable.
+failures. Attempt2's actual race root12 rerun passed259 roots and8851 children,
+with eight explicit skipped roots retained. Its only newly executed downstream
+completion still failed on the original root14 plan. This does not establish
+the missing original failure's cause or rerun carried-forward jobs. Keep both
+attempts' original receipts immutable.
 
 Windows native FMA3 and scalar-precision failures had their own unavailable
 AVX512 CPU/OS preflight receipts. Pending hardware is neither skip nor pass.
