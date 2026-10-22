@@ -141,6 +141,13 @@ target SDK/headers without requiring Rosetta, QEMU or a host ISA preflight.
 Original Go compilation, C compilation/linking and native execution remain
 distinct claims; the original native owners keep their real CPU/OS checks.
 
+This lifetime rule also covers complete readonly DATA, AES, transport and
+non-temporal consumers. Keep DATA/GLOBL in the exact preprocessed GoModule input;
+reconstructing only function instructions loses part of that source. Extend the
+existing complete-consumer lease checks when adding a family. Negative tests for
+expired, mutated or closed observations must retain their original binding,
+not silently capture a replacement.
+
 CMOV fixed-local objects likewise retain all384 original kernels per Linux and
 Darwin target in six independently scheduled batches. Runtime keeps all387
 CMOV/GP/SIMD kernels in seven batches, their three optimization paths and actual

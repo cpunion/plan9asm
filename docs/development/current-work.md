@@ -82,6 +82,12 @@ a signal alone or a passing object test.
   Full local runner qualification may use its existing exhaustive partitions;
   retain the failed single-binary15m observation separately. Formal main-module
   ordinary/coverage commands remain45m and race commands60m, unchanged.
+- Complete readonly DATA, AES, typed transport and non-temporal consumers use
+  the existing fresh owner for each API instead of sharing one five-minute
+  binding across sequential consumers. GoModule receives the complete captured
+  preprocessed source, including DATA/GLOBL. Negative mutation, expiry and Close
+  checks deliberately keep their supplied binding; never renew it to make a
+  rejection test pass. Compiler-cache setup is separate from source authority.
 
 Independent REDs precede these repairs. A local policy, object or source-plan
 pass is not a required native runtime pass or a final CI certificate.
