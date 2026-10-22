@@ -41,7 +41,7 @@ test('the shared fresh owner passes complete preprocessed DATA to the single API
 
 test('the complete literal matrix retains all original 119 operations and four source batches on every target', () => {
   const builder = matrix.slice(matrix.indexOf('func fixedLocalDataOperations('), matrix.indexOf('\nfunc TestGoAMD64FixedLocalReadonlyDataLinuxRegisteredConsumers('));
-  assert.equal(sha(builder.trimEnd()), 'e34a575231dceb014395766eba83308b6a8e078a57082b90ccc6ed92b5b3d3d9');
+  assert.equal(sha(builder), 'e34a575231dceb014395766eba83308b6a8e078a57082b90ccc6ed92b5b3d3d9');
   for (const [target, triple] of [['linux/amd64', 'x86_64-unknown-linux-gnu'], ['darwin/amd64', 'x86_64-apple-darwin'], ['windows/amd64', 'x86_64-pc-windows-msvc']]) {
     assert.ok(matrix.includes(`fixedLocalDataTargetConsumers(t, "${target}", "${triple}")`));
   }
