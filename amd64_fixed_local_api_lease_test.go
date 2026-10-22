@@ -72,7 +72,7 @@ func TestFixedLocalAPIsHaveIndependentBoundedCaptureLeases(t *testing.T) {
 			fixedLocalLeaseRequireArguments(t, call, "ctx", "pkg", "file", "options")
 		case "fixedLocalAPI":
 			consume = call.Pos()
-			fixedLocalLeaseRequireArguments(t, call, "t", "pkg", "file", "bound", "api", "check")
+			fixedLocalLeaseRequireArguments(t, call, "t", "pkg", "file", "bound", "api", "check", "expanded")
 		}
 		return true
 	})
@@ -103,6 +103,12 @@ func TestFixedLocalCompleteConsumersDoNotShareAPILease(t *testing.T) {
 		{"amd64_cmov_fixed_local_test.go", "x86CMOVFixedLocalActualObjects"},
 		{"amd64_fixed_local_conversion_runtime_unix_test.go", "fixedLocalConversionRuntimeBatch"},
 		{"amd64_fixed_local_packed_runtime_test.go", "fixedLocalPackedRuntimeAPIs"},
+		{"amd64_fixed_local_data_matrix_go127_test.go", "fixedLocalDataTargetConsumers"},
+		{"amd64_fixed_local_data_go127_test.go", "TestGoAMD64FixedLocalReadonlyDataThreeTargetObjects"},
+		{"amd64_fixed_local_data_runtime_go127_test.go", "TestCrossLinuxRuntimeMatrixGoAMD64FixedLocalReadonlyData"},
+		{"amd64_fixed_local_transport_runtime_test.go", "TestCrossLinuxRuntimeMatrixGoAMD64FixedLocalTransportByteValues"},
+		{"amd64_fixed_local_transport_test.go", "TestGoAMD64FixedLocalTransportActualObjects"},
+		{"amd64_fixed_local_nontemporal_test.go", "fixedLocalNonTemporalActualObjects"},
 	} {
 		t.Run(owner.helper, func(t *testing.T) {
 			function := fixedLocalLeaseFunctions(t, owner.filename)[owner.helper]
