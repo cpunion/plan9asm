@@ -204,16 +204,23 @@ func TestX86OriginalFloatingRuntimeBaselineObjectsAndFaultBoundary(t *testing.T)
 	if err := format.Node(&rendered, token.NewFileSet(), driver); err != nil {
 		t.Fatal(err)
 	}
-	for _, forbidden := range []string{".Skip(", ".Skipf(", "-mavx", "-march=", "x86FloatCompareRuntimeTools"} {
+	for _, forbidden := range []string{".Skip(", "-mavx", "-march=", "x86FloatCompareRuntimeTools"} {
 		if strings.Contains(string(data), forbidden) {
 			t.Fatal("actual CPU diagnostic was replaced by a skip, Linux-only owner or nonbaseline compilation", forbidden)
 		}
 	}
 	compact := strings.Join(strings.Fields(rendered.String()), "")
-	for _, required := range []string{"compileC(t,", "run(t,", "prefix:prefix", "triple:triple"} {
+	for _, required := range []string{"compileC(t,", "runtimeOracleCombinedOutput(ctx,exec.CommandContext(ctx,", "runtimeOracleStageContext(t)", "prefix:prefix", "triple:triple"} {
 		if !strings.Contains(compact, required) {
 			t.Fatal("preflight lost its original owned execution route", required)
 		}
+	}
+	// The explicit auto policy can skip only the classified capability exit.
+	// Keep every other compiler, opcode, execution and cleanup failure fatal.
+	if strings.Count(string(data), ".Skipf(") != 1 ||
+		!strings.Contains(compact, "ifx86OriginalFloatingRuntimeAllowsSkip(mode,required,output,err){t.Skipf(") ||
+		!strings.Contains(compact, "iferr!=nil{t.Fatalf(") {
+		t.Fatal("optional hardware execution bypassed its receipt or failure boundary")
 	}
 	start := strings.LastIndex(opcodes, "int main(void)")
 	if start < 0 {

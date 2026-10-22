@@ -34,6 +34,14 @@ func TestX86OptionalAVX512RuntimeRequiresMissingHardwareReceipt(t *testing.T) {
 		t.Fatal("fixture did not produce an ordinary exit78", unavailable)
 	}
 	const missing = "original-floating profile=1 SSE2=1 AVX=1 OSXSAVE=1 AVX512F=0 AVX512VL=0 FMA=1 SSSE3=1 AVX2=1 XCR0=7\n"
+	for _, code := range []int{0, 77, 79, 80, 81, 82, 255} {
+		command := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestX86OptionalAVX512ExitFixture$")
+		command.Env = append(os.Environ(), "PLAN9ASM_AVX512_EXIT_FIXTURE="+strconv.Itoa(code))
+		_, err := runtimeOracleCombinedOutput(ctx, command)
+		if x86OriginalFloatingRuntimeAllowsSkip("auto", 1, []byte(missing), err) {
+			t.Fatal("non-capability process status became a skip", code)
+		}
+	}
 	for _, profile := range []int{1, 2, 3, 4} {
 		receipt := strings.Replace(missing, "profile=1", fmt.Sprintf("profile=%d", profile), 1)
 		for _, mode := range []string{"", "required", "auto", "off", "AUTO"} {
@@ -80,5 +88,10 @@ func TestX86OptionalAVX512RuntimeRequiresMissingHardwareReceipt(t *testing.T) {
 	}
 	if !x86OriginalFloatingRuntimeAllowsSkip("auto", 1, []byte(strings.Replace(missing, "\n", "\r\n", 1)), unavailable) {
 		t.Fatal("Windows receipt line ending rejected")
+	}
+	for _, profile := range []int{0, 5} {
+		if x86OriginalFloatingRuntimeAllowsSkip("auto", profile, []byte(missing), unavailable) {
+			t.Fatal("unknown profile became optional", profile)
+		}
 	}
 }

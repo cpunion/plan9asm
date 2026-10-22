@@ -38,7 +38,11 @@ the missing original failure's cause or rerun carried-forward jobs. Keep both
 attempts' original receipts immutable.
 
 Windows native FMA3 and scalar-precision failures had their own unavailable
-AVX512 CPU/OS preflight receipts. Pending hardware is neither skip nor pass.
+AVX512 CPU/OS preflight receipts. Those historical failures remain failed.
+Windows CI now explicitly selects the optional AVX512 execution policy described
+in [validation](validation.md#native-and-cross-runtime-semantics): new runs may
+report capability-unavailable SKIP while retaining mandatory object checks.
+The default and explicit `required` mode still require native execution.
 Do not infer another owner's capabilities from those receipts, LLVM host names,
 a signal alone or a passing object test.
 

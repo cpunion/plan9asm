@@ -188,6 +188,20 @@ and generated observation inputs, not repository formatting targets.
 
 ## Native and cross-runtime semantics
 
+The original scalar-precision, unsigned-scalar, FMA-caller and packed-ABS/sign
+native tests support `PLAN9ASM_AVX512_RUNTIME=required|auto`. The default is
+`required`: missing CPU/OS capabilities fail. Windows CI explicitly uses `auto`
+for all execution and completion owners. Only a complete, matching CPUID/XCR0
+receipt with an ordinary capability-unavailable exit78 becomes a reported SKIP.
+Capable hosts still execute the original runtime test. Invalid configuration,
+missing tools, compilation errors, crashes, timeouts, cleanup errors and opcode
+or numerical failures remain failures. Other runtime owners are unchanged.
+
+Instruction-generation, LLVM22 objects and backend-ISA checks stay mandatory
+on every host, independent of this setting. Reports retain skipped roots and
+`completed_with_skips`; object success never certifies skipped native execution.
+Use `PLAN9ASM_AVX512_RUNTIME=required` on a suitable machine for native acceptance.
+
 ```sh
 go test . -run '^(TestAMD64ConformanceNativeGo|TestAMD64ConformanceLLVMRuntime)$' -count=1 -v
 PLAN9ASM_CROSS_EXEC=1 go test . \

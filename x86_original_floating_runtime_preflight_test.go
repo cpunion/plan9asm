@@ -3,20 +3,54 @@ package plan9asm
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/xgo-dev/plan9asm/internal/gotoolchain"
 )
 
 func x86OriginalFloatingRuntimeAllowsSkip(mode string, profile int, output []byte, err error) bool {
-	return false
+	// Require a plain process exit. Joined timeout, pipe or cleanup errors are
+	// failures even if one of their causes happens to be exit78.
+	status, ok := err.(*exec.ExitError)
+	if mode != "auto" || !ok || status.ExitCode() != 78 || profile < 1 || profile > 4 {
+		return false
+	}
+	const format = "original-floating profile=%d SSE2=%d AVX=%d OSXSAVE=%d AVX512F=%d AVX512VL=%d FMA=%d SSSE3=%d AVX2=%d XCR0=%x"
+	var actual int
+	var sse2, avx, osxsave, f, vl, fma, ssse3, avx2 uint
+	var xcr0 uint64
+	receipt := strings.TrimSpace(string(output))
+	n, scanErr := fmt.Sscanf(receipt, format, &actual, &sse2, &avx, &osxsave, &f, &vl, &fma, &ssse3, &avx2, &xcr0)
+	if scanErr != nil || n != 10 || actual != profile ||
+		receipt != fmt.Sprintf(format, actual, sse2, avx, osxsave, f, vl, fma, ssse3, avx2, xcr0) {
+		return false
+	}
+	for _, bit := range []uint{sse2, avx, osxsave, f, vl, fma, ssse3, avx2} {
+		if bit > 1 {
+			return false
+		}
+	}
+	capable := sse2 == 1 && avx == 1 && osxsave == 1 && f == 1 && xcr0&0xe6 == 0xe6
+	if profile == 2 {
+		capable = capable && vl == 1 && fma == 1
+	}
+	if profile == 4 {
+		capable = capable && vl == 1 && ssse3 == 1 && avx2 == 1
+	}
+	return !capable
 }
 
 // Diagnose this original owner's actual execution route. These observations
 // cannot authorize another runner or replace the original numerical verdict.
 func x86OriginalFloatingRuntimeRequireCPU(t *testing.T, profile, clang, triple string, prefix []string) {
 	t.Helper()
+	mode := os.Getenv("PLAN9ASM_AVX512_RUNTIME")
+	if mode != "" && mode != "required" && mode != "auto" {
+		t.Fatalf("invalid PLAN9ASM_AVX512_RUNTIME %q: expected required or auto", mode)
+	}
 	var required int
 	switch profile {
 	case "scalar-precision":
@@ -44,8 +78,17 @@ func x86OriginalFloatingRuntimeRequireCPU(t *testing.T, profile, clang, triple s
 		t.Fatal(err)
 	}
 	execution.compileC(t, source, executable)
-	output := execution.run(t, executable)
+	command := execution.command(executable)
+	ctx, cancel := runtimeOracleStageContext(t)
+	output, err := runtimeOracleCombinedOutput(ctx, exec.CommandContext(ctx, command[0], command[1:]...))
+	cancel()
 	t.Logf("actual original floating allocation profile=%s triple=%s prefix=%q: %s", profile, triple, prefix, output)
+	if x86OriginalFloatingRuntimeAllowsSkip(mode, required, output, err) {
+		t.Skipf("AVX512 native execution unavailable (PLAN9ASM_AVX512_RUNTIME=auto); object checks remain required, runtime not verified: %s", strings.TrimSpace(string(output)))
+	}
+	if err != nil {
+		t.Fatalf("original floating CPU/opcode preflight failed: %v\n%s", err, output)
+	}
 }
 
 // Scalar EVEX conversions require F, not packed narrow VL, DQ or BW. The

@@ -10,6 +10,9 @@ on:
 permissions:
   contents: read
 
+env:
+  PLAN9ASM_AVX512_RUNTIME: auto
+
 jobs:
   root-parts:
     runs-on: windows-latest
