@@ -298,20 +298,36 @@ func nativeInteger(s string) (uint64, bool) {
 	return parseImmExpr(strings.TrimPrefix(s, "$"))
 }
 func nativeFlags(s string, allowed ...string) (map[string]bool, error) {
-	flags := map[string]bool{}
-	for _, flag := range strings.Split(strings.TrimSpace(s), "|") {
-		flag = strings.TrimSpace(flag)
-		if flag == "0" {
-			continue
+	// cmd/asm consumes a complete integer expression after CPP expands
+	// textflag.h. Decode that same value without truncating foreign flag bits;
+	// native TEXT and DATA retain their separate, deliberately closed roles.
+	if len(s) > goIntegerExpressionMaxBytes {
+		return nil, fmt.Errorf("native flags exceed the integer expression bound")
+	}
+	bits := make(map[string]uint64, len(allowed))
+	var mask uint64
+	for _, name := range allowed {
+		bit, ok := parseImmExpr(goTextFlagValues[name])
+		if !ok {
+			return nil, fmt.Errorf("unregistered native flag %q", name)
 		}
-		ok := false
-		for _, a := range allowed {
-			ok = ok || flag == a
+		bits[name], mask = bit, mask|bit
+	}
+	expression := globlFlagName.ReplaceAllStringFunc(s, func(name string) string {
+		if value, ok := goTextFlagValues[name]; ok {
+			return value
 		}
-		if !ok || flags[flag] {
-			return nil, fmt.Errorf("unsupported native flag %q", flag)
+		return name
+	})
+	value, ok := parseImmExpr(expression)
+	if !ok || value&^mask != 0 {
+		return nil, fmt.Errorf("unsupported native flags %q", s)
+	}
+	flags := make(map[string]bool, len(allowed))
+	for name, bit := range bits {
+		if value&bit != 0 {
+			flags[name] = true
 		}
-		flags[flag] = true
 	}
 	return flags, nil
 }
