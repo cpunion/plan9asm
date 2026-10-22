@@ -184,12 +184,69 @@ func TestGiant(t *testing.T) {
 }
 
 func TestActualGoCICancellationRetainsIncompleteRoot(t *testing.T) {
-	cfg := ciFixtureConfig(t, "package fixture\nimport \"testing\"\nfunc TestGiant(t *testing.T) { select {} }\n")
+	// Readiness belongs outside the observed source tree: executing the root
+	// must not itself revoke the otherwise unchanged source observation.
+	ready := filepath.Join(t.TempDir(), "root-ready")
+	cfg := ciFixtureConfig(t, fmt.Sprintf(`package fixture
+import (
+    "os"
+    "testing"
+)
+func TestGiant(t *testing.T) {
+    if err := os.WriteFile(%q, []byte("TestGiant started\n"), 0600); err != nil { t.Fatal(err) }
+    select {}
+}
+`, ready))
 	cfg.CIOwner = 0
 	cfg.Out = filepath.Join(t.TempDir(), "cancelled")
-	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
-	defer cancel()
-	err := runCI(ctx, cfg)
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- runCI(ctx, cfg) }()
+	joined := false
+	defer func() {
+		cancel()
+		if !joined {
+			<-done
+		}
+	}()
+	// Planning and a cold SDK build are not the cancellation under test. Keep
+	// their existing command bound, then begin the original four-second window
+	// only once this exact root has actually entered its body.
+	preparation := time.NewTimer(cfg.Timeout)
+	defer preparation.Stop()
+	poll := time.NewTicker(10 * time.Millisecond)
+	defer poll.Stop()
+	for {
+		data, err := os.ReadFile(ready)
+		if err == nil {
+			if string(data) != "TestGiant started\n" {
+				t.Fatal("unexpected root readiness marker", string(data))
+			}
+			break
+		}
+		if !os.IsNotExist(err) {
+			t.Fatal(err)
+		}
+		select {
+		case err := <-done:
+			joined = true
+			t.Fatal("CI owner ended before its actual root started", err)
+		case <-preparation.C:
+			t.Fatal("actual root did not start within its original command budget")
+		case <-poll.C:
+		}
+	}
+	running := time.NewTimer(4 * time.Second)
+	defer running.Stop()
+	select {
+	case err := <-done:
+		joined = true
+		t.Fatal("actual root ended before cancellation", err)
+	case <-running.C:
+		cancel()
+	}
+	err := <-done
+	joined = true
 	if err == nil {
 		t.Fatal("cancelled child accepted")
 	}
