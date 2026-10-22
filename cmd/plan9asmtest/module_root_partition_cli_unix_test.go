@@ -67,8 +67,8 @@ func moduleRootPartitionFixture(t *testing.T) string {
 
 func moduleRootPartitionFixtureForShards(t *testing.T, shards int) string {
 	t.Helper()
-	if shards != 32 && shards != 64 {
-		t.Fatal("first-party witness fixture requires the complete 32- or 64-shard plan")
+	if shards != 8 && shards != 32 && shards != 64 {
+		t.Fatal("first-party witness fixture requires a complete 8-, 32- or 64-shard plan")
 	}
 	dir := moduleFixture(t, false)
 	path := filepath.Join(dir, "value_test.go")
@@ -102,7 +102,7 @@ func moduleRootPartitionFixtureForShards(t *testing.T, shards int) string {
 // Catch witness-generation mistakes without first executing every owner. The
 // complete CLI union below still independently lists and executes these roots.
 func TestModuleRootPartitionWitnessFixturesFillEveryShard(t *testing.T) {
-	for _, shards := range []int{32, 64} {
+	for _, shards := range []int{8, 32, 64} {
 		t.Run(fmt.Sprint(shards), func(t *testing.T) {
 			dir := moduleRootPartitionFixtureForShards(t, shards)
 			syntax, err := parser.ParseFile(token.NewFileSet(), filepath.Join(dir, "value_test.go"), nil, 0)

@@ -7,6 +7,8 @@ const test = require('node:test');
 const {jobBody, jobNeeds, requireJobNeeds} = require('./workflow-needs.cjs');
 
 const workflow = fs.readFileSync(path.join(__dirname, '../workflows/go-ci.yml'), 'utf8');
+const nested = fs.readFileSync(path.join(__dirname, '../workflows/linux-cli-module.yml'), 'utf8');
+const driver = fs.readFileSync(path.join(__dirname, '../../scripts/test-linux-cli-module-ci.sh'), 'utf8');
 const producer = 'nested-cli-coverage';
 const required = ['test', 'nested-cli', 'race', 'coverage', producer];
 const compilerInstall = 'bash scripts/install-ci-llvm22-ubuntu.sh ' +
@@ -27,60 +29,64 @@ function step(body, title) {
 function requireIndependentOwners(source) {
   const body = jobBody(source, producer);
   assert.deepEqual(jobNeeds(source, producer), ['ci_policy']);
-  assert.match(body, /^    timeout-minutes: 60$/m);
   assert.match(body, /^      fail-fast: false$/m);
-  assert.doesNotMatch(body, /^    if:|continue-on-error:|max-parallel:/m);
-  assert.ok(body.includes("    runs-on: ${{ github.repository_owner == 'xgo-dev' && " +
-    "fromJSON('[\"qiniu\", \"ubuntu-24.04-large\"]') || 'ubuntu-latest' }}\n"));
+  assert.doesNotMatch(body, /^    if:|continue-on-error:|max-parallel:|^    steps:/m);
   const axes = [...body.matchAll(/^        ([a-z-]+): \[([^\]]+)\]$/gm)];
   assert.deepEqual(axes.map(([, key, values]) => [key, values.split(',').map(value => value.trim())]),
     [['module', ['plan9asm', 'plan9asmll']]],
     'one independent current-SDK job for each complete CLI, not a serial module loop');
-  assert.doesNotMatch(body, /^        (?:include|exclude):|module-owner|root-partition/m);
+  assert.doesNotMatch(body, /^        (?:include|exclude):|\bgo test\b/m);
+  assert.match(body, /^    uses: \.\/\.github\/workflows\/linux-cli-module\.yml$/m);
+  assert.match(body, /^      module: \$\{\{ matrix\.module \}\}$/m);
+  assert.match(body, /^      go-version: '1\.27\.2'$/m);
+  assert.match(body, /^      flavor: coverage$/m);
   return body;
 }
 
 function requireCompleteCommands(source) {
-  const body = requireIndependentOwners(source);
-  const execution = step(body, 'Go test complete CLI module with coverage');
-  assert.match(execution, /^        run: \|$/m);
-  assert.ok(execution.includes('          go test -timeout=30m ./... ' +
-    '-coverprofile=coverage-${{ matrix.module }}.out\n'));
-  assert.ok(execution.includes('          go tool cover ' +
-    '-func=coverage-${{ matrix.module }}.out | tail -n 1\n'));
-  assert.match(execution, /^        working-directory: cmd\/\$\{\{ matrix\.module \}\}$/m);
-  assert.doesNotMatch(execution, /^        if:|continue-on-error:|\|\|\s*true/m);
-  assert.equal([...body.matchAll(/^\s+go test /gm)].length, 1);
-  assert.doesNotMatch(body, /scripts\/test-module-ci\.sh|coverage-root\.out|(?:^|\s)-(?:run|skip|short|list)(?:=|\s)/m);
+  requireIndependentOwners(source);
+  assert.ok(driver.includes('coverage) flags=("-coverprofile=coverage-$module.out")'));
+  assert.ok(driver.includes('-module-root-partitions=4'));
+  assert.ok(driver.includes('-verify-module=_out/linux-cli-$module-$flavor-owners'));
+  assert.ok(driver.includes('-timeout=30m'));
+  assert.doesNotMatch(driver, /(?:^|\s)-(?:run|skip|short|list)(?:=|\s)/m);
+  const complete = jobBody(nested, 'complete');
+  const summary = step(complete, 'Show complete CLI coverage');
+  assert.match(summary, /^        if: inputs\.flavor == 'coverage'$/m);
+  assert.match(summary, /^        run: go tool cover -func=coverage-\$\{\{ inputs\.module \}\}\.out \| tail -n 1$/m);
+  assert.match(summary, /^        working-directory: cmd\/\$\{\{ inputs\.module \}\}$/m);
+  assert.ok(complete.indexOf('Verify complete CLI module') < complete.indexOf(summary));
 }
 
 function requireTools(source) {
-  const body = requireIndependentOwners(source);
-  const checkout = step(body, 'Checkout');
-  assert.match(checkout, /^        uses: actions\/checkout@v7$/m);
-  const setup = step(body, 'Setup Go');
-  assert.match(setup, /^        uses: \.\/\.github\/actions\/setup-go$/m);
-  assert.match(setup, /^          go-version: '1\.27\.2'$/m);
-  assert.match(setup, /^          cache: true$/m);
-  assert.doesNotMatch(body, /uses: actions\/setup-go@|go-version-file:|check-latest:/);
-  const compiler = step(body, 'Install LLVM 22 and cross compilers');
-  assert.ok(compiler.includes('        run: ' + compilerInstall + '\n'));
-  assert.match(compiler, /^        timeout-minutes: 14$/m);
-  const qemu = step(body, 'Install required execution runtimes');
-  assert.match(qemu, /^        run: bash scripts\/install-ci-qemu\.sh$/m);
-  assert.match(qemu, /^        timeout-minutes: 5$/m);
-  const info = step(body, 'LLVM tools info');
-  for (const command of ['command -v llc', 'llc --version', 'command -v clang', 'clang --version']) {
-    assert.ok(info.includes('          ' + command + '\n'));
+  for (const name of ['root-parts', 'complete']) {
+    const body = jobBody(source, name);
+    const checkout = step(body, 'Checkout');
+    assert.match(checkout, /^        uses: actions\/checkout@v7$/m);
+    const setup = step(body, 'Setup Go');
+    assert.match(setup, /^        uses: \.\/\.github\/actions\/setup-go$/m);
+    assert.match(setup, /^          go-version: \$\{\{ inputs\.go-version \}\}$/m);
+    assert.match(setup, /^          cache: true$/m);
+    assert.doesNotMatch(body, /uses: actions\/setup-go@|go-version-file:|check-latest:/);
+    const compiler = step(body, 'Install LLVM 22 and cross compilers');
+    assert.ok(compiler.includes('        run: ' + compilerInstall + '\n'));
+    assert.match(compiler, /^        timeout-minutes: 14$/m);
+    const qemu = step(body, 'Install required execution runtimes');
+    assert.match(qemu, /^        run: bash scripts\/install-ci-qemu\.sh$/m);
+    assert.match(qemu, /^        timeout-minutes: 5$/m);
+    const info = step(body, 'LLVM tools info');
+    for (const command of ['command -v llc', 'llc --version', 'command -v clang', 'clang --version']) {
+      assert.ok(info.includes('          ' + command + '\n'));
+    }
+    const node = step(body, 'Setup required wasm execution runtime');
+    assert.match(node, /^        timeout-minutes: 10$/m);
+    assert.match(node, /^        uses: \.\/\.github\/actions\/setup-node22$/m);
+    for (const item of [checkout, setup, compiler, qemu, info, node]) {
+      assert.doesNotMatch(item, /^        if:|continue-on-error:|\|\|\s*true/m);
+      assert.ok(body.indexOf(item) < body.indexOf('        run: bash scripts/test-linux-cli-module-ci.sh '));
+    }
+    assert.ok(body.indexOf(qemu) < body.indexOf(node));
   }
-  const node = step(body, 'Setup required wasm execution runtime');
-  assert.match(node, /^        uses: actions\/setup-node@v6$/m);
-  assert.match(node, /^          node-version: '22'$/m);
-  for (const item of [checkout, setup, compiler, qemu, info, node]) {
-    assert.doesNotMatch(item, /^        if:|continue-on-error:|\|\|\s*true/m);
-    assert.ok(body.indexOf(item) < body.indexOf('      - name: Go test complete CLI module with coverage\n'));
-  }
-  assert.ok(body.indexOf(qemu) < body.indexOf(node));
 }
 
 function requireOriginalOwners(source) {
@@ -134,7 +140,8 @@ test('both complete CLI coverage modules own independent current-SDK job budgets
 });
 
 test('independent CLI coverage retains exact Go, LLVM and required execution dependencies', () => {
-  requireTools(workflow);
+  requireIndependentOwners(workflow);
+  requireTools(nested);
 });
 
 test('root coverage no longer serializes CLI coverage and race has no invented CLI matrix', () => {
@@ -155,18 +162,11 @@ test('CLI coverage policy rejects reduced, duplicated, serial, filtered or over-
     ['needs: ci_policy', 'needs: coverage'],
     ['fail-fast: false', 'fail-fast: true'],
     ['fail-fast: false', 'fail-fast: false\n      max-parallel: 1'],
-    ['timeout-minutes: 60', 'timeout-minutes: 90'],
-    ['timeout-minutes: 60', 'timeout-minutes: 60\n    continue-on-error: true'],
-    ["fromJSON('[\"qiniu\", \"ubuntu-24.04-large\"]')", "'ubuntu-latest'"],
-    ['go test -timeout=30m ./...', 'go test -timeout=45m ./...'],
-    ['go test -timeout=30m ./...', 'go test -timeout=30m -run=TestOne ./...'],
-    ['go test -timeout=30m ./...', 'go test -timeout=30m -list=. ./...'],
-    ['go test -timeout=30m ./...', 'go test -timeout=30m ./... || true'],
-    ['      - name: Go test complete CLI module with coverage\n        run: |',
-      '      - name: Go test complete CLI module with coverage\n        if: false\n        run: |'],
-    ['working-directory: cmd/${{ matrix.module }}', 'working-directory: cmd/plan9asm'],
-    ['-coverprofile=coverage-${{ matrix.module }}.out', '-coverprofile=coverage-root.out'],
-    ['go tool cover -func=', 'echo '],
+    ['needs: ci_policy', 'needs: ci_policy\n    continue-on-error: true'],
+    ['linux-cli-module.yml', 'windows-module.yml'],
+    ['module: ${{ matrix.module }}', 'module: plan9asm'],
+    ["go-version: '1.27.2'", "go-version: '1.27.x'"],
+    ['flavor: coverage', 'flavor: test'],
   ]) {
     const changed = body.replace(before, () => after);
     assert.notEqual(changed, body, before);
@@ -175,22 +175,23 @@ test('CLI coverage policy rejects reduced, duplicated, serial, filtered or over-
 });
 
 test('CLI coverage dependencies cannot borrow skipped, missing or foreign tool installations', () => {
-  requireTools(workflow);
-  const body = jobBody(workflow, producer);
-  for (const [before, after] of [
-    ["go-version: '1.27.2'", "go-version: '1.27.x'"],
-    ["go-version: '1.27.2'", "go-version: '1.27.3'"],
-    [' gcc-i686-linux-gnu', ''],
-    [' libc6-dev-i386-cross', ''],
-    [' gcc-aarch64-linux-gnu', ''],
-    ['install-ci-llvm22-ubuntu.sh', 'install-llvm23.sh'],
-    ['install-ci-qemu.sh', 'install-unpinned-qemu.sh'],
-    ["node-version: '22'", "node-version: '20'"],
-    ['        run: ' + compilerInstall, '        if: false\n        run: ' + compilerInstall],
-  ]) {
-    const changed = body.replace(before, () => after);
-    assert.notEqual(changed, body, before);
-    assert.throws(() => requireTools(workflow.replace(body, () => changed)), undefined, before);
+  requireTools(nested);
+  for (const name of ['root-parts', 'complete']) {
+    const body = jobBody(nested, name);
+    for (const [before, after] of [
+      ['go-version: ${{ inputs.go-version }}', "go-version: '1.27.2'"],
+      [' gcc-i686-linux-gnu', ''],
+      [' libc6-dev-i386-cross', ''],
+      [' gcc-aarch64-linux-gnu', ''],
+      ['install-ci-llvm22-ubuntu.sh', 'install-llvm23.sh'],
+      ['install-ci-qemu.sh', 'install-unpinned-qemu.sh'],
+      ['uses: ./.github/actions/setup-node22', 'uses: actions/setup-node@v6'],
+      ['        run: ' + compilerInstall, '        if: false\n        run: ' + compilerInstall],
+    ]) {
+      const changed = body.replace(before, () => after);
+      assert.notEqual(changed, body, before);
+      assert.throws(() => requireTools(nested.replace(body, () => changed)), undefined, before);
+    }
   }
 });
 

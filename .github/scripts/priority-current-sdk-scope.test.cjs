@@ -7,6 +7,7 @@ const test = require('node:test');
 const {jobBody} = require('./workflow-needs.cjs');
 
 const source = fs.readFileSync(path.join(__dirname, '../workflows/go-ci.yml'), 'utf8');
+const nested = fs.readFileSync(path.join(__dirname, '../workflows/linux-cli-module.yml'), 'utf8');
 const exactSDK = '1.27.2';
 const minors = ['1.20.x', '1.21.x', '1.22.x', '1.23.x', '1.24.x',
   '1.25.x', '1.26.x', exactSDK];
@@ -20,6 +21,12 @@ const jobs = ['fmt', 'build', 'stdlib-corpus', 'cross-runtime',
 function requireSetups(workflow) {
   for (const name of jobs) {
     const body = jobBody(workflow, name);
+    if (name === 'nested-cli' || name === 'nested-cli-coverage') {
+      assert.match(body, /^    uses: \.\/\.github\/workflows\/linux-cli-module\.yml$/m);
+      const expected = name === 'nested-cli' ? '${{ matrix.go-version }}' : `'${exactSDK}'`;
+      assert.ok(body.includes('      go-version: ' + expected + '\n'));
+      continue;
+    }
     const setups = body.split(/(?=^      - )/m).filter(step =>
       /^        uses: \.\/\.github\/actions\/setup-go$/m.test(step));
     assert.equal(setups.length, name === 'stdlib-corpus' ? 2 : 1,
@@ -35,6 +42,14 @@ function requireSetups(workflow) {
     assert.deepEqual(versions, name === 'stdlib-corpus' ? [`'${exactSDK}'`, expected] : [expected],
       name + ': current SDK must use the registered exact producer');
     assert.doesNotMatch(body, /uses: actions\/setup-go@/);
+  }
+  for (const name of ['root-parts', 'complete']) {
+    const body = jobBody(nested, name);
+    const setups = body.split(/(?=^      - )/m).filter(step =>
+      /^        uses: \.\/\.github\/actions\/setup-go$/m.test(step));
+    assert.equal(setups.length, 1, 'one actual reusable SDK setup: ' + name);
+    assert.match(setups[0], /^          go-version: \$\{\{ inputs\.go-version \}\}$/m);
+    assert.doesNotMatch(body, /uses: actions\/setup-go@|go-version-file:|check-latest:/);
   }
 }
 

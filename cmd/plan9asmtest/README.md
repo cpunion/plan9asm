@@ -43,6 +43,15 @@ recorded benchmarks. Nested CLI modules are not main-module packages; their
 independent complete-module workflows remain required. Windows uses the same
 strict module protocol with sixteen root parts for the main module and four for
 each CLI, preserving profile/rest ownership and the thirty-minute command budget.
+Linux CLI test and coverage jobs use `scripts/test-linux-cli-module-ci.sh` with
+the same complete eight-shard/four-part layout, two workers and thirty-minute
+commands. Each root part has its own sixty-minute job. Part zero also executes
+the actual profile/rest owners into separate reports; both CLI inventories
+currently contain only their root package, so these roles execute zero tests,
+not additional passing roots. The independent aggregate requires all four root
+fragments and both role reports, including fresh inventory and raw terminals.
+Only complete coverage aggregation creates each CLI's original profile and
+summary; CLI profiles are not merged into main-module coverage.
 The Windows driver selects a minimal Go/LLVM22/Node/Python/jq/Git/system PATH
 before either execution or verification; unrelated hosted-image search paths
 cannot change the cross-owner plan. Raw and normalized environment equality

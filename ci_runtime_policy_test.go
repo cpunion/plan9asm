@@ -12,12 +12,10 @@ func TestCIFullSuitesHaveExplicitTimeout(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	commands := 0
 	for line, command := range strings.Split(string(data), "\n") {
 		if !strings.Contains(command, "go test ") || !strings.Contains(command, "./...") {
 			continue
 		}
-		commands++
 		var timeout time.Duration
 		for _, field := range strings.Fields(command) {
 			if strings.HasPrefix(field, "-timeout=") {
@@ -31,9 +29,30 @@ func TestCIFullSuitesHaveExplicitTimeout(t *testing.T) {
 			t.Errorf("line %d: full suite requires an explicit timeout of at least 20m: %s", line+1, strings.TrimSpace(command))
 		}
 	}
-	if commands == 0 {
-		t.Fatal("no full-suite CI commands found")
+	driver, err := os.ReadFile("scripts/test-linux-cli-module-ci.sh")
+	if err != nil {
+		t.Fatal(err)
 	}
+	for _, required := range []string{"go run ./cmd/plan9asmtest -module", "-dir=cmd/$module",
+		"-shards=8 -workers=2 -timeout=30m -module-root-partitions=4", "-verify-module="} {
+		if !strings.Contains(string(driver), required) {
+			t.Errorf("complete CLI protocol lost its original command budget/inventory: %s", required)
+		}
+	}
+}
+
+// Follow the actual reusable workflow, checking each execution/reader job on
+// its own. A caller's setup cannot stand in for a missing callee dependency.
+func ciFullSuiteJob(t *testing.T, source, name string) (string, bool) {
+	t.Helper()
+	if strings.HasPrefix(name, "linux-cli-") {
+		data, err := os.ReadFile(".github/workflows/linux-cli-module.yml")
+		if err != nil {
+			t.Fatal(err)
+		}
+		return ciWorkflowJob(string(data), strings.TrimPrefix(name, "linux-cli-"))
+	}
+	return ciWorkflowJob(source, name)
 }
 
 func TestCIShellScriptsUseLFOnEveryHost(t *testing.T) {
@@ -51,12 +70,16 @@ func TestCIFullSuitesInstallWASMExecutionRuntime(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"test", "nested-cli", "nested-cli-coverage", "race", "coverage", "module-completion"} {
-		job, found := ciWorkflowJob(string(data), name)
+	for _, name := range []string{"test", "linux-cli-root-parts", "linux-cli-complete", "race", "coverage", "module-completion"} {
+		job, found := ciFullSuiteJob(t, string(data), name)
 		if !found {
 			t.Fatalf("full-suite job %s is missing", name)
 		}
-		if !strings.Contains(job, "uses: actions/setup-node@v6") || !strings.Contains(job, "node-version: '22'") {
+		runtime := strings.Contains(job, "uses: actions/setup-node@v6") && strings.Contains(job, "node-version: '22'")
+		if strings.HasPrefix(name, "linux-cli-") {
+			runtime = strings.Contains(job, "uses: ./.github/actions/setup-node22")
+		}
+		if !runtime {
 			t.Errorf("%s must install the required wasm execution runtime, not depend on a runner's incidental PATH", name)
 		}
 	}
@@ -67,9 +90,9 @@ func TestCIFullSuitesInstallIA32ExecutionToolchain(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"test", "nested-cli", "nested-cli-coverage", "race", "coverage"} {
+	for _, name := range []string{"test", "linux-cli-root-parts", "linux-cli-complete", "race", "coverage"} {
 		t.Run(name, func(t *testing.T) {
-			job, found := ciWorkflowJob(string(data), name)
+			job, found := ciFullSuiteJob(t, string(data), name)
 			if !found {
 				t.Fatalf("full-suite job %s is missing", name)
 			}
@@ -78,8 +101,8 @@ func TestCIFullSuitesInstallIA32ExecutionToolchain(t *testing.T) {
 			install := "bash scripts/install-ci-llvm22-ubuntu.sh gcc-i686-linux-gnu libc6-dev-i386-cross"
 			installer := strings.Index(job, install)
 			runner := strings.Index(job, "bash scripts/test-module-ci.sh")
-			if name == "nested-cli" || name == "nested-cli-coverage" {
-				runner = strings.Index(job, "go test -timeout=30m ./...")
+			if strings.HasPrefix(name, "linux-cli-") {
+				runner = strings.Index(job, "bash scripts/test-linux-cli-module-ci.sh")
 			}
 			if installer < 0 || runner < 0 || installer >= runner {
 				t.Fatal("required IA32 compiler and libc must be installed before the complete module suite")
@@ -123,16 +146,16 @@ func TestCIFullSuitesInstallRequiredQEMU(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"test", "nested-cli", "nested-cli-coverage", "race", "coverage", "module-completion"} {
+	for _, name := range []string{"test", "linux-cli-root-parts", "linux-cli-complete", "race", "coverage", "module-completion"} {
 		t.Run(name, func(t *testing.T) {
-			job, found := ciWorkflowJob(string(data), name)
+			job, found := ciFullSuiteJob(t, string(data), name)
 			if !found {
 				t.Fatal("missing complete suite", name)
 			}
 			install := strings.Index(job, "bash scripts/install-ci-qemu.sh")
 			runner := strings.Index(job, "bash scripts/test-module-ci.sh")
-			if name == "nested-cli" || name == "nested-cli-coverage" {
-				runner = strings.Index(job, "go test -timeout=30m ./...")
+			if strings.HasPrefix(name, "linux-cli-") {
+				runner = strings.Index(job, "bash scripts/test-linux-cli-module-ci.sh")
 			}
 			if install < 0 || runner < 0 || install >= runner {
 				t.Fatal("complete Linux suites require pinned QEMU before their 386 runtime tests")
@@ -152,7 +175,11 @@ func TestCIFullSuitesInstallRequiredQEMU(t *testing.T) {
 				condition == "" && strings.Contains(step, "if:") {
 				t.Fatal("all module owners and the aggregate need identical QEMU provisioning")
 			}
-			if node := strings.Index(job, "uses: actions/setup-node@v6"); node < 0 || install >= node {
+			nodeSetup := "uses: actions/setup-node@v6"
+			if strings.HasPrefix(name, "linux-cli-") {
+				nodeSetup = "uses: ./.github/actions/setup-node22"
+			}
+			if node := strings.Index(job, nodeSetup); node < 0 || install >= node {
 				t.Fatal("all module roles must install QEMU before Node to retain identical PATH order")
 			}
 		})

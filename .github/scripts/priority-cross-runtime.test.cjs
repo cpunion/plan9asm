@@ -3,6 +3,7 @@ const fs = require('node:fs');
 const test = require('node:test');
 
 const workflow = fs.readFileSync('.github/workflows/go-ci.yml', 'utf8');
+const nested = fs.readFileSync('.github/workflows/linux-cli-module.yml', 'utf8');
 function job(name, source = workflow) {
   const marker = `\n  ${name}:\n`;
   const start = source.indexOf(marker);
@@ -68,7 +69,10 @@ test('ARM64 execution cannot lose its unique owner, success guard or reader', ()
   assert.throws(() => requireARM64FallbackOwner(workflow + '\n      - name: Execute rich CLI ARM64 fallback oracle\n'));
 });
 
-const moduleExecutionJobs = ['test', 'nested-cli', 'nested-cli-coverage', 'race', 'coverage', 'module-completion'];
+const moduleExecutionJobs = [
+  ...['test', 'race', 'coverage', 'module-completion'].map(name => [workflow, name]),
+  ...['root-parts', 'complete'].map(name => [nested, name]),
+];
 const moduleCompilerInstall = 'bash scripts/install-ci-llvm22-ubuntu.sh ' +
   'gcc-i686-linux-gnu libc6-dev-i386-cross gcc-aarch64-linux-gnu';
 
@@ -89,13 +93,12 @@ function requireModuleCrossTools(source, name) {
 
 // The intended complete installation is an independent positive control; the
 // real workflow below must satisfy exactly the same requirement on its own.
-const moduleToolsFixture = workflow.replaceAll(
-  'bash scripts/install-ci-llvm22-ubuntu.sh gcc-i686-linux-gnu libc6-dev-i386-cross\n',
-  moduleCompilerInstall + '\n');
-
-for (const name of moduleExecutionJobs) {
+for (const [source, name] of moduleExecutionJobs) {
+  const moduleToolsFixture = source.replaceAll(
+    'bash scripts/install-ci-llvm22-ubuntu.sh gcc-i686-linux-gnu libc6-dev-i386-cross\n',
+    moduleCompilerInstall + '\n');
   test(`${name}: real module execution owns its required cross tools`, () => {
-    requireModuleCrossTools(workflow, name);
+    requireModuleCrossTools(source, name);
   });
 
   test(`${name}: complete cross tools reject missing dependencies or swallowed errors`, () => {

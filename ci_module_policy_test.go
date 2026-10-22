@@ -78,10 +78,11 @@ func TestCIModuleSuitesKeepExhaustiveUnixAndWindowsRoles(t *testing.T) {
 	if !found || !strings.Contains(nested, "needs: ci_policy") ||
 		!strings.Contains(nested, "go-version: ['1.24.x', '1.25.x', '1.26.x', '1.27.2']") ||
 		!strings.Contains(nested, "module: [plan9asm, plan9asmll]") ||
-		!strings.Contains(nested, "run: go test -timeout=30m ./...") ||
-		!strings.Contains(nested, "working-directory: cmd/${{ matrix.module }}") ||
-		!strings.Contains(nested, "timeout-minutes: 60") || !strings.Contains(nested, "fail-fast: false") {
-		t.Error("both complete nested CLIs need independent SDK/module job budgets and the original full command")
+		!strings.Contains(nested, "uses: ./.github/workflows/linux-cli-module.yml") ||
+		!strings.Contains(nested, "module: ${{ matrix.module }}") ||
+		!strings.Contains(nested, "go-version: ${{ matrix.go-version }}") ||
+		!strings.Contains(nested, "flavor: test") || !strings.Contains(nested, "fail-fast: false") {
+		t.Error("both complete nested CLIs need independent exhaustive SDK/module partition workflows")
 	}
 	if strings.Contains(test, "nested_modules") || strings.Contains(test, "working-directory: cmd/plan9asm") ||
 		strings.Contains(nested, "module-owner") || strings.Contains(nested, "max-parallel:") ||
@@ -95,9 +96,8 @@ func TestCIModuleSuitesKeepExhaustiveUnixAndWindowsRoles(t *testing.T) {
 	nestedCoverage, found := ciWorkflowJob(string(data), "nested-cli-coverage")
 	for _, required := range []string{
 		"needs: ci_policy", "go-version: '1.27.2'", "module: [plan9asm, plan9asmll]",
-		"timeout-minutes: 60", "fail-fast: false", "working-directory: cmd/${{ matrix.module }}",
-		"go test -timeout=30m ./... -coverprofile=coverage-${{ matrix.module }}.out",
-		"go tool cover -func=coverage-${{ matrix.module }}.out | tail -n 1",
+		"fail-fast: false", "uses: ./.github/workflows/linux-cli-module.yml",
+		"module: ${{ matrix.module }}", "flavor: coverage",
 	} {
 		if !found || !strings.Contains(nestedCoverage, required) {
 			t.Errorf("complete CLI coverage needs independent original budgets and command: %s", required)
@@ -111,6 +111,51 @@ func TestCIModuleSuitesKeepExhaustiveUnixAndWindowsRoles(t *testing.T) {
 	if !strings.Contains(aggregate, "if: ${{ !cancelled() && matrix.flavor == 'coverage' }}") ||
 		!strings.Contains(aggregate, "run: test '${{ needs['nested-cli-coverage'].result }}' = success") {
 		t.Error("failed CLI coverage must fail completion after original main-module evidence collection")
+	}
+}
+
+func TestCILinuxCLIModulesKeepCompleteRolesAndBudgets(t *testing.T) {
+	data, err := os.ReadFile(".github/workflows/linux-cli-module.yml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	roots, found := ciWorkflowJob(string(data), "root-parts")
+	if !found || !strings.Contains(roots, "part: [0, 1, 2, 3]") ||
+		!strings.Contains(roots, "timeout-minutes: 60") || !strings.Contains(roots, "fail-fast: false") {
+		t.Fatal("Linux CLI requires four independently budgeted exhaustive root parts")
+	}
+	for _, required := range []string{
+		"execute 0 ${{ matrix.part }}", "execute 1 -1", "execute 2 -1",
+		"!cancelled() && matrix.part == 0", "always() && matrix.part == 0",
+		"-owner-1/", "-owner-2/", "actions/upload-artifact@v6",
+	} {
+		if !strings.Contains(roots, required) {
+			t.Errorf("Linux CLI root part zero must retain actual other-owner protocol: %s", required)
+		}
+	}
+	complete, found := ciWorkflowJob(string(data), "complete")
+	if !found || !strings.Contains(complete, "needs: root-parts") ||
+		!strings.Contains(complete, "if: ${{ !cancelled() }}") ||
+		!strings.Contains(complete, "test '${{ needs.root-parts.result }}' = success") {
+		t.Fatal("Linux CLI complete reader must collect all evidence and reject failed owners")
+	}
+	for _, required := range []string{"owner-0001", "owner-0002", "part-0000", "part-0001", "part-0002", "part-0003",
+		"Verify complete CLI module", "inputs.flavor == 'coverage'",
+		"go tool cover -func=coverage-${{ inputs.module }}.out | tail -n 1"} {
+		if !strings.Contains(complete, required) {
+			t.Errorf("complete CLI union/coverage lost %s", required)
+		}
+	}
+	driver, err := os.ReadFile("scripts/test-linux-cli-module-ci.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, required := range []string{"-module", "-dir=cmd/$module", "-shards=8", "-workers=2",
+		"-timeout=30m", "-module-root-partitions=4", "-verify-module=", "GOMAXPROCS=2",
+		"test) flags=()", "coverage) flags=(\"-coverprofile=coverage-$module.out\")"} {
+		if !strings.Contains(string(driver), required) {
+			t.Errorf("Linux CLI driver changed exhaustive scope/budget: %s", required)
+		}
 	}
 }
 

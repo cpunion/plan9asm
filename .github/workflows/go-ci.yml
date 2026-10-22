@@ -405,49 +405,17 @@ jobs:
   nested-cli:
     needs: ci_policy
     name: test (ubuntu-latest, ${{ matrix.go-version }}, ${{ matrix.module }})
-    timeout-minutes: 60
-    runs-on: ${{ github.repository_owner == 'xgo-dev' && fromJSON('["qiniu", "ubuntu-24.04-large"]') || 'ubuntu-latest' }}
     strategy:
       fail-fast: false
       matrix:
         go-version: ['1.24.x', '1.25.x', '1.26.x', '1.27.2']
         module: [plan9asm, plan9asmll]
 
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Setup Go
-        timeout-minutes: 10
-        uses: ./.github/actions/setup-go
-        with:
-          go-version: ${{ matrix.go-version }}
-          cache: true
-
-      - name: Install LLVM 22 and cross compilers
-        timeout-minutes: 14
-        run: bash scripts/install-ci-llvm22-ubuntu.sh gcc-i686-linux-gnu libc6-dev-i386-cross gcc-aarch64-linux-gnu
-
-      - name: Install required execution runtimes
-        timeout-minutes: 5
-        run: bash scripts/install-ci-qemu.sh
-
-      - name: LLVM tools info
-        shell: bash
-        run: |
-          command -v llc
-          llc --version
-          command -v clang
-          clang --version
-
-      - name: Setup required wasm execution runtime
-        uses: actions/setup-node@v6
-        with:
-          node-version: '22'
-
-      - name: Go test complete CLI module
-        run: go test -timeout=30m ./...
-        working-directory: cmd/${{ matrix.module }}
+    uses: ./.github/workflows/linux-cli-module.yml
+    with:
+      module: ${{ matrix.module }}
+      go-version: ${{ matrix.go-version }}
+      flavor: test
 
 
   # Each module independently executes its complete inventory; only its strict
@@ -667,50 +635,16 @@ jobs:
   nested-cli-coverage:
     needs: ci_policy
     name: coverage (ubuntu-latest, 1.27.2, ${{ matrix.module }})
-    timeout-minutes: 60
-    runs-on: ${{ github.repository_owner == 'xgo-dev' && fromJSON('["qiniu", "ubuntu-24.04-large"]') || 'ubuntu-latest' }}
     strategy:
       fail-fast: false
       matrix:
         module: [plan9asm, plan9asmll]
 
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Setup Go
-        timeout-minutes: 10
-        uses: ./.github/actions/setup-go
-        with:
-          go-version: '1.27.2'
-          cache: true
-
-      - name: Install LLVM 22 and cross compilers
-        timeout-minutes: 14
-        run: bash scripts/install-ci-llvm22-ubuntu.sh gcc-i686-linux-gnu libc6-dev-i386-cross gcc-aarch64-linux-gnu
-
-      - name: Install required execution runtimes
-        timeout-minutes: 5
-        run: bash scripts/install-ci-qemu.sh
-
-      - name: LLVM tools info
-        shell: bash
-        run: |
-          command -v llc
-          llc --version
-          command -v clang
-          clang --version
-
-      - name: Setup required wasm execution runtime
-        uses: actions/setup-node@v6
-        with:
-          node-version: '22'
-
-      - name: Go test complete CLI module with coverage
-        run: |
-          go test -timeout=30m ./... -coverprofile=coverage-${{ matrix.module }}.out
-          go tool cover -func=coverage-${{ matrix.module }}.out | tail -n 1
-        working-directory: cmd/${{ matrix.module }}
+    uses: ./.github/workflows/linux-cli-module.yml
+    with:
+      module: ${{ matrix.module }}
+      go-version: '1.27.2'
+      flavor: coverage
 
   module-completion:
     needs: [test, nested-cli, race, coverage, nested-cli-coverage]

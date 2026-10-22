@@ -14,8 +14,13 @@ import (
 
 func runRootSplitFixture(t *testing.T, binary, dir, out, inputs, profile string, owner, part, count int, race bool) {
 	t.Helper()
+	runRootSplitFixtureWithShards(t, binary, dir, out, inputs, profile, owner, part, count, 64, race)
+}
+
+func runRootSplitFixtureWithShards(t *testing.T, binary, dir, out, inputs, profile string, owner, part, count, shards int, race bool) {
+	t.Helper()
 	args := []string{"-module", fmt.Sprintf("-module-root-partitions=%d", count), "-dir", dir, "-out", out,
-		"-shards=64", "-workers=2", "-timeout=2m"}
+		fmt.Sprintf("-shards=%d", shards), "-workers=2", "-timeout=2m"}
 	if inputs != "" {
 		args = append(args, "-verify-module", inputs)
 	} else {
@@ -31,6 +36,90 @@ func runRootSplitFixture(t *testing.T, binary, dir, out, inputs, profile string,
 	stem := filepath.Join(t.TempDir(), "cli")
 	if _, err := captureCommand(context.Background(), 3*time.Minute, ".", binary, args, stem); err != nil {
 		t.Fatal(errorsWithActualOutput(err, stem))
+	}
+}
+
+func TestLinuxCLIRootPartsActualCompleteModuleUnion(t *testing.T) {
+	for _, coverage := range []bool{false, true} {
+		t.Run(fmt.Sprintf("coverage-%t", coverage), func(t *testing.T) {
+			moduleFixtureEnvironment(t)
+			binary := parallelFixtureCLI(t)
+			dir := moduleRootPartitionFixtureForShards(t, 8)
+			inputs := t.TempDir()
+			if err := os.Mkdir(filepath.Join(inputs, "owner-0000"), 0700); err != nil {
+				t.Fatal(err)
+			}
+			profile := ""
+			if coverage {
+				profile = filepath.Join(t.TempDir(), "complete.cover")
+			}
+			for part := 0; part < 4; part++ {
+				out := filepath.Join(inputs, "owner-0000", fmt.Sprintf("part-%04d", part))
+				runRootSplitFixtureWithShards(t, binary, dir, out, "", profile, 0, part, 4, 8, false)
+			}
+			for owner := 1; owner < moduleOwners; owner++ {
+				out := filepath.Join(inputs, fmt.Sprintf("owner-%04d", owner))
+				runRootSplitFixtureWithShards(t, binary, dir, out, "", profile, owner, -1, 4, 8, false)
+			}
+			if coverage {
+				if _, err := os.Lstat(profile); !os.IsNotExist(err) {
+					t.Fatalf("fragment published incomplete module coverage: %v", err)
+				}
+			}
+			verified := filepath.Join(t.TempDir(), "verified")
+			runRootSplitFixtureWithShards(t, binary, dir, verified, inputs, profile, -1, -1, 4, 8, false)
+			var expected moduleReport
+			if err := ciReadJSON(filepath.Join(verified, "module.json"), &expected); err != nil {
+				t.Fatal(err)
+			}
+			if expected.Status != "passed" || expected.Protocol != moduleRootPartsProtocol ||
+				expected.RootPartitions != 4 || expected.Shards != 8 || expected.Workers != 2 ||
+				expected.RootInventory == nil || len(expected.RootInventory.Names) != 12 || len(expected.Packages) != 5 {
+				t.Fatalf("Linux CLI layout lost complete root/profile/rest inventory: %+v", expected)
+			}
+			if _, err := checkedModuleArtifacts(expected, inputs); err != nil {
+				t.Fatal(err)
+			}
+			if coverage {
+				data, err := os.ReadFile(profile)
+				if err != nil {
+					t.Fatal(err)
+				}
+				for _, name := range []string{"modulefixture/value.go:", "modulefixture/gotoolprofile/value.go:",
+					"modulefixture/internal/other/value.go:"} {
+					if !strings.Contains(string(data), name) {
+						t.Fatal("complete coverage lost actual module package", name)
+					}
+				}
+			}
+			for _, relative := range []string{"owner-0001", "owner-0002", "owner-0000/part-0000",
+				"owner-0000/part-0001", "owner-0000/part-0002", "owner-0000/part-0003",
+				"owner-0000/part-0000/package-0000/shard-0000.stdout"} {
+				t.Run("missing-"+relative, func(t *testing.T) {
+					original := filepath.Join(inputs, filepath.FromSlash(relative))
+					backup := filepath.Join(t.TempDir(), "retained")
+					if err := os.Rename(original, backup); err != nil {
+						t.Fatal(err)
+					}
+					t.Cleanup(func() {
+						if err := os.Rename(backup, original); err != nil {
+							t.Error(err)
+						}
+					})
+					rootSplitRequireRejected(t, expected, inputs)
+				})
+			}
+			for _, change := range []func(*moduleReport){
+				func(r *moduleReport) { r.Shards = 64 },
+				func(r *moduleReport) { r.RootPartitions = 8 },
+				func(r *moduleReport) { r.Flags = append(r.Flags, "-race") },
+				func(r *moduleReport) { r.Scope.SourceSHA = strings.Repeat("0", 64) },
+			} {
+				changed := expected
+				change(&changed)
+				rootSplitRequireRejected(t, changed, inputs)
+			}
+		})
 	}
 }
 
