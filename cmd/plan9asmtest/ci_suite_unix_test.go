@@ -193,7 +193,9 @@ import (
     "testing"
 )
 func TestGiant(t *testing.T) {
-    if err := os.WriteFile(%q, []byte("TestGiant started\n"), 0600); err != nil { t.Fatal(err) }
+    ready := %q
+    if err := os.WriteFile(ready+".pending", []byte("TestGiant started\n"), 0600); err != nil { t.Fatal(err) }
+    if err := os.Rename(ready+".pending", ready); err != nil { t.Fatal(err) }
     select {}
 }
 `, ready))
