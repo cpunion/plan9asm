@@ -57,7 +57,7 @@ test('cheap CI policy checks pass before instruction and official corpus jobs', 
   const policy = jobSection('ci_policy');
   assert.match(policy, /bash scripts\/install-ci-llvm22-ubuntu\.sh/);
   assert.match(policy, /node --test \.github\/scripts\/priority-\*\.test\.cjs/);
-  assert.match(policy, /go test \. -run '\^TestCI' -count=1/);
+  requireCompletePolicy(workflow);
   assert.doesNotMatch(policy, /^    (needs|if):/m);
   assert.ok(workflow.indexOf('\n  ci_policy:\n') <
     workflow.indexOf('\n  test:\n'));
