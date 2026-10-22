@@ -109,6 +109,7 @@ func TestFixedLocalCompleteConsumersDoNotShareAPILease(t *testing.T) {
 		{"amd64_fixed_local_transport_runtime_test.go", "TestCrossLinuxRuntimeMatrixGoAMD64FixedLocalTransportByteValues"},
 		{"amd64_fixed_local_transport_test.go", "TestGoAMD64FixedLocalTransportActualObjects"},
 		{"amd64_fixed_local_nontemporal_test.go", "fixedLocalNonTemporalActualObjects"},
+		{"amd64_aes_family_fixed_local_test.go", "TestX86AESFamilyActualBoundFixedLocalConsumers"},
 	} {
 		t.Run(owner.helper, func(t *testing.T) {
 			function := fixedLocalLeaseFunctions(t, owner.filename)[owner.helper]
