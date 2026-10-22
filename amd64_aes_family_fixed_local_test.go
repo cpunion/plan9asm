@@ -7,6 +7,7 @@ import (
 )
 
 func TestX86AESFamilyActualBoundFixedLocalConsumers(t *testing.T) {
+	t.Setenv("GOCACHE", t.TempDir())
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM22 required")
@@ -32,15 +33,8 @@ func TestX86AESFamilyActualBoundFixedLocalConsumers(t *testing.T) {
 	}
 	for _, target := range []struct{ name, triple string }{{"linux/amd64", "x86_64-unknown-linux-gnu"}, {"darwin/amd64", "x86_64-apple-darwin"}} {
 		t.Run(target.name, func(t *testing.T) {
-			pkg, request, file, options := x86CMOVFixedLocalFixture(t, assembly.String(), declarations.String(), target.name, target.triple)
-			observer := requireGoAMD64FrameCapture(t, pkg, request)
-			ctx, cancel := runtimeOracleStageContext(t)
-			defer cancel()
-			bound, err := observer.BindFixedLocal(ctx, pkg, file, options)
-			if err != nil {
-				t.Fatal("AES consumer of independently sealed fixed local native bytes", err)
-			}
-			fixedLocalAPIs(t, pkg, file, bound, func(t *testing.T, ir string, err error) {
+			pkg, request, _, options := x86CMOVFixedLocalFixture(t, assembly.String(), declarations.String(), target.name, target.triple)
+			fixedLocalFreshAPIs(t, pkg, request, options, []string{"Translate", "Module", "GoModule"}, func(t *testing.T, ir string, err error) {
 				if err != nil {
 					t.Fatal(err)
 				}
