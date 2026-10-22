@@ -44,7 +44,7 @@ function requireCalls(source) {
 }
 
 function requireRoles(source) {
-  for (const name of ['root-parts', 'other-owners', 'complete']) {
+  for (const name of ['root-parts', 'complete']) {
     const body = jobBody(source, name);
     assert.ok(body.includes('    runs-on: ' + route + '\n'), name + ': same explicit runner route');
     assert.doesNotMatch(body, /continue-on-error:|max-parallel:|\|\|\s*true/);
@@ -72,18 +72,23 @@ function requireRoles(source) {
   assert.match(roots, /^        part: \[0, 1, 2, 3\]$/m);
   assert.match(roots, /^      fail-fast: false$/m);
   assert.match(roots, /test-linux-cli-module-ci\.sh \$\{\{ inputs\.module \}\} \$\{\{ inputs\.flavor \}\} execute 0 \$\{\{ matrix\.part \}\}/);
-  const others = jobBody(source, 'other-owners');
-  assert.match(others, /^        owner: \[1, 2\]$/m);
-  assert.match(others, /^      fail-fast: false$/m);
-  assert.match(others, /test-linux-cli-module-ci\.sh \$\{\{ inputs\.module \}\} \$\{\{ inputs\.flavor \}\} execute \$\{\{ matrix\.owner \}\} -1/);
-  for (const [body, title] of [[roots, 'Retain actual root evidence'], [others, 'Retain actual package evidence']]) {
-    const retain = step(body, title);
-    assert.match(retain, /^        if: \$\{\{ always\(\) \}\}$/m);
-    assert.match(retain, /^        uses: actions\/upload-artifact@v6$/m);
-    assert.match(retain, /^          if-no-files-found: error$/m);
+  const retain = step(roots, 'Retain actual root evidence');
+  assert.match(retain, /^        if: \$\{\{ always\(\) \}\}$/m);
+  assert.match(retain, /^        uses: actions\/upload-artifact@v6$/m);
+  assert.match(retain, /^          if-no-files-found: error$/m);
+  for (const [title, owner] of [['profile', 1], ['remaining-package', 2]]) {
+    const execution = step(roots, 'Execute complete ' + title + ' owner');
+    assert.match(execution, /^        if: \$\{\{ !cancelled\(\) && matrix\.part == 0 \}\}$/m);
+    assert.ok(execution.includes('execute ' + owner + ' -1\n'));
+    const artifact = step(roots, 'Retain actual ' + title + ' evidence');
+    assert.match(artifact, /^        if: \$\{\{ always\(\) && matrix\.part == 0 \}\}$/m);
+    assert.match(artifact, /^        uses: actions\/upload-artifact@v6$/m);
+    assert.match(artifact, /^          if-no-files-found: error$/m);
+    assert.ok(artifact.includes('-owner-' + owner + '\n'));
+    assert.ok(artifact.includes('-owner-' + owner + '/\n'));
   }
   const complete = jobBody(source, 'complete');
-  assert.deepEqual(jobNeeds(source, 'complete'), ['root-parts', 'other-owners']);
+  assert.deepEqual(jobNeeds(source, 'complete'), ['root-parts']);
   assert.match(complete, /^    if: \$\{\{ !cancelled\(\) \}\}$/m);
   for (let part = 0; part < 4; part++) {
     const download = step(complete, 'Download root part ' + part);
@@ -130,8 +135,8 @@ test('closed ownership rejects missing pieces, skipped collection and borrowed c
   requireDriver(driver);
   for (const [before, after] of [
     ['part: [0, 1, 2, 3]', 'part: [0, 1, 2]'],
-    ['owner: [1, 2]', 'owner: [1]'],
-    ['needs: [root-parts, other-owners]', 'needs: root-parts'],
+    ['execute 2 -1', 'execute 1 -1'],
+    ['needs: root-parts', 'needs: unrelated'],
     ['    if: ${{ !cancelled() }}', '    if: success()'],
     ['timeout-minutes: 60', 'timeout-minutes: 90'],
     ['-root-3\n', '-root-2\n'],
