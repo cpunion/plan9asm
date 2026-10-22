@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# One actual inventory: eight root parts (32 for race), profile/rest once.
-# Every race owner retains two shards. Nested CLIs and Windows run separately.
+# One actual inventory: sixteen root parts (32 for race), profile/rest once.
+# Every root owner retains two shards. Nested CLIs and Windows run separately.
 flavor=${1:?test, race or coverage required}
 phase=${2:?execute or complete required}
 flags=()
-root_partitions=8
+root_partitions=16
 shards=32
 case "$flavor" in
   test) timeout=45m ;;

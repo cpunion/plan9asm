@@ -30,9 +30,9 @@ function step(body, name) {
   return body.slice(start, end < 0 ? body.length : end);
 }
 
-test('race uses one two-shard wave; ordinary flavors retain eight root roles', () => {
+test('every Unix root owner uses one two-shard wave with complete flavor-specific roles', () => {
   for (const name of ['test', 'race', 'coverage']) {
-    const count = name === 'race' ? 32 : 8;
+    const count = name === 'race' ? 32 : 16;
     const roles = [
       ...Array.from({ length: count }, (_, index) => `root-${index}`),
       'profile', 'other',
@@ -70,7 +70,7 @@ test('root job fanout retains original workers, per-command and job budgets', ()
 });
 
 test('executor and completion both request the same explicit root partition count', () => {
-  assert.match(script, /^root_partitions=8$/m);
+  assert.match(script, /^root_partitions=16$/m);
   assert.match(script, /-module-root-partitions=\$root_partitions/);
   assert.match(script, /-module-root-partition=\$4/);
   assert.match(script, /\[\[ \$# != 4/);
@@ -101,7 +101,7 @@ test('actual shell dispatch validates flavor-specific part bounds before launchi
     encoding: 'utf8',
     timeout: 5000,
   });
-  for (const [flavor, count, shards] of [['test', 8, 32], ['coverage', 8, 32], ['race', 32, 64]]) {
+  for (const [flavor, count, shards] of [['test', 16, 32], ['coverage', 16, 32], ['race', 32, 64]]) {
     for (const args of [['execute', '0', String(count - 1)], ['execute', '2', '-1'], ['complete']]) {
       const actual = run(flavor, ...args);
       assert.equal(actual.status, 0, actual.stderr || String(actual.error));
@@ -134,7 +134,7 @@ test('each root part has an exact separate artifact and strict download destinat
     assert.match(download, new RegExp(
       `^          path: _out/module-\\$\\{\\{ matrix\\.flavor \\}\\}-owners/owner-0000/part-${String(part).padStart(4, '0')}$`, 'm',
     ));
-    if (part >= 8) {
+    if (part >= 16) {
       assert.match(download, /if: \$\{\{ !cancelled\(\) && matrix\.flavor == 'race' \}\}/);
     } else {
       assert.doesNotMatch(download, /matrix\.flavor ==/);

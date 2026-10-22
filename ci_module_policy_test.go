@@ -20,9 +20,9 @@ func TestCIModuleSuitesKeepExhaustiveUnixAndWindowsRoles(t *testing.T) {
 		job, flags string
 		parts      int
 	}{
-		{"test", "test) timeout=45m", 8},
+		{"test", "test) timeout=45m", 16},
 		{"race", "race) timeout=60m; flags=(-race); root_partitions=32; shards=64", 32},
-		{"coverage", "coverage) timeout=45m; flags=(-coverprofile=coverage-root.out)", 8},
+		{"coverage", "coverage) timeout=45m; flags=(-coverprofile=coverage-root.out)", 16},
 	} {
 		job, found := ciWorkflowJob(string(data), item.job)
 		command := "bash scripts/test-module-ci.sh " + item.job + " execute ${{ matrix.module-owner }} ${{ matrix.root-partition }}"
@@ -54,8 +54,22 @@ func TestCIModuleSuitesKeepExhaustiveUnixAndWindowsRoles(t *testing.T) {
 			!strings.Contains(aggregate, fmt.Sprintf("-owners/owner-0000/part-%04d", part)) {
 			t.Errorf("missing exact root part %d download", part)
 		}
+		marker := fmt.Sprintf("      - name: Download root part %d\n", part)
+		_, download, ok := strings.Cut(aggregate, marker)
+		if !ok {
+			continue
+		}
+		download, _, _ = strings.Cut(download, "\n      - name:")
+		if part < 16 {
+			if strings.Contains(download, "matrix.flavor ==") ||
+				(part != 0 && !strings.Contains(download, "if: ${{ !cancelled() }}")) {
+				t.Errorf("every flavor requires original root part %d even after another owner fails", part)
+			}
+		} else if !strings.Contains(download, "if: ${{ !cancelled() && matrix.flavor == 'race' }}") {
+			t.Errorf("only race owns global root part %d", part)
+		}
 	}
-	for _, required := range []string{"-module -out=", "-shards=$shards -workers=2", "root_partitions=8", "shards=32", "-module-root-partitions=$root_partitions", "-verify-module=_out/module-$flavor-owners", "go run ./cmd/plan9asmtest"} {
+	for _, required := range []string{"-module -out=", "-shards=$shards -workers=2", "root_partitions=16", "shards=32", "-module-root-partitions=$root_partitions", "-verify-module=_out/module-$flavor-owners", "go run ./cmd/plan9asmtest"} {
 		if !strings.Contains(string(script), required) {
 			t.Errorf("module driver changed complete inventory/scheduling: %s", required)
 		}

@@ -47,7 +47,8 @@ function requireCompleteRaceDownloads(source) {
     assert.ok(download.includes('name: module-${{ matrix.flavor }}-${{ matrix.go-version }}-root-' + index + '\n'));
     assert.ok(download.includes('path: _out/module-${{ matrix.flavor }}-owners/owner-0000/part-' +
       String(index).padStart(4, '0') + '\n'));
-    if (index >= 8) assert.match(download, /^        if: \$\{\{ !cancelled\(\) && matrix\.flavor == 'race' \}\}$/m);
+    if (index >= 16) assert.match(download, /^        if: \$\{\{ !cancelled\(\) && matrix\.flavor == 'race' \}\}$/m);
+    else assert.doesNotMatch(download, /^        if:.*matrix\.flavor/m);
   }
   assert.doesNotMatch(body, /merge-multiple:|pattern:/);
 }
@@ -61,7 +62,7 @@ test('complete aggregation retains every new race owner without raising budgets'
 });
 
 test('race script selects its complete layout for execution and independent completion', () => {
-  assert.match(script, /^root_partitions=8$/m);
+  assert.match(script, /^root_partitions=16$/m);
   assert.match(script, /^shards=32$/m);
   assert.ok(script.includes('race) timeout=60m; flags=(-race); root_partitions=32; shards=64 ;;'));
   assert.equal([...script.matchAll(/-shards=\$shards -workers=2/g)].length, 2);

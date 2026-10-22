@@ -84,7 +84,12 @@ skipped or incomplete tests. This is a separate partitioned qualification, not
 a pass for a previously timed-out single-binary command. Formal main-module
 ordinary/coverage commands retain45m and race commands60m.
 
-Root scheduling parts do not change the test denominator. Windows keeps all
+Root scheduling parts do not change the test denominator.
+Unix normal and coverage suites use sixteen root parts over the same32 global
+shards; race uses32 parts over64 shards. Each Unix root job owns exactly two
+whole shards in one two-worker wave, avoiding cumulative multi-wave job limits.
+Command and job budgets are unchanged, and fresh completion requires every
+part plus the original profile/rest owners. Windows keeps all
 three modules independent: sixteen root parts for the main module over
 64 hash shards (four shards per part), four parts per CLI, and one profile/rest
 owner each. Every command retains the thirty-minute budget;
