@@ -33,6 +33,10 @@ jobs:
           go-version: '1.27.2'
           cache: true
 
+      - name: Setup verified policy runtime
+        uses: ./.github/actions/setup-node22
+        timeout-minutes: 10
+
       - name: Workflow scheduling regression tests
         run: node --test .github/scripts/priority-*.test.cjs
 

@@ -38,6 +38,10 @@ jobs:
           go-version: '1.27.1'
           cache: true
 
+      - name: Setup verified policy runtime
+        uses: ./.github/actions/setup-node22
+        timeout-minutes: 10
+
       - name: Workflow scheduling regression tests
         run: node --test .github/scripts/priority-*.test.cjs
 
@@ -374,9 +378,8 @@ jobs:
           clang --version
 
       - name: Setup required wasm execution runtime
-        uses: actions/setup-node@v6
-        with:
-          node-version: '22'
+        uses: ./.github/actions/setup-node22
+        timeout-minutes: 10
 
       - name: Go test (Ubuntu)
         if: runner.os != 'Windows'
@@ -556,9 +559,8 @@ jobs:
         run: bash scripts/install-ci-qemu.sh
 
       - name: Setup required wasm execution runtime
-        uses: actions/setup-node@v6
-        with:
-          node-version: '22'
+        uses: ./.github/actions/setup-node22
+        timeout-minutes: 10
 
       - name: Go test (race)
         run: bash scripts/test-module-ci.sh race execute ${{ matrix.module-owner }} ${{ matrix.root-partition }}
@@ -615,9 +617,8 @@ jobs:
         run: bash scripts/install-ci-qemu.sh
 
       - name: Setup required wasm execution runtime
-        uses: actions/setup-node@v6
-        with:
-          node-version: '22'
+        uses: ./.github/actions/setup-node22
+        timeout-minutes: 10
 
       - name: Go test with coverage
         run: bash scripts/test-module-ci.sh coverage execute ${{ matrix.module-owner }} ${{ matrix.root-partition }}
@@ -684,9 +685,8 @@ jobs:
         timeout-minutes: 5
         run: bash scripts/install-ci-qemu.sh
       - name: Setup required wasm execution runtime
-        uses: actions/setup-node@v6
-        with:
-          node-version: '22'
+        uses: ./.github/actions/setup-node22
+        timeout-minutes: 10
       - name: Download root part 0
         uses: actions/download-artifact@v8
         with:

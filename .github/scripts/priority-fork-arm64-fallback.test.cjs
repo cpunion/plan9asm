@@ -2,6 +2,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const test = require('node:test');
 const {jobBody, requireCompleteWindowsNeeds} = require('./workflow-needs.cjs');
+const {requireNode22Setup} = require('./node22-setup.cjs');
 
 const workflow = fs.readFileSync('.github/workflows/pr40-owned-process-probe.yml', 'utf8');
 
@@ -24,7 +25,10 @@ function requirePriority(source) {
   assert.match(body, /timeout-minutes: 14\n        run: >-\n          bash scripts\/install-ci-llvm22-ubuntu\.sh\n          gcc-i686-linux-gnu gcc-arm-linux-gnueabihf\n          gcc-aarch64-linux-gnu/);
   assert.match(body, /timeout-minutes: 5\n        run: bash scripts\/install-ci-qemu\.sh/);
   assert.match(body, /uses: \.\/\.github\/actions\/setup-go\n        with:\n          go-version: '1\.27\.2'/);
-  assert.match(body, /uses: actions\/setup-node@v6\n        with:\n          node-version: '22'/);
+  const node = body.split(/(?=^      - )/m).filter(step =>
+    step.includes('uses: ./.github/actions/setup-node22'));
+  assert.equal(node.length, 1);
+  requireNode22Setup(node[0]);
   assert.match(body, /run: \|\n          set -euo pipefail\n          mkdir -p _out\/cross-runtime-owner\n          bash scripts\/test-arm64-fallback-ci\.sh execute/);
   assert.equal((body.match(/bash scripts\/test-arm64-fallback-ci\.sh execute/g) || []).length, 1);
   assert.match(body, /if: \$\{\{ !cancelled\(\) \}\}\n        uses: actions\/upload-artifact@v6\n        with:\n          name: arm64-fallback-cross-priority\n          path: _out\/cross-runtime-owner\/arm64-fallback-cross\/\n          if-no-files-found: error/);
@@ -48,7 +52,7 @@ test('ARM64 fork priority rejects missing ownership, tools, execution, artifacts
     ['gcc-i686-linux-gnu gcc-arm-linux-gnueabihf', 'gcc-i686-linux-gnu'],
     ['install-ci-qemu.sh', 'install-system-qemu.sh'],
     ["go-version: '1.27.2'", "go-version: '1.26.2'"],
-    ["node-version: '22'", "node-version: '20'"],
+    ['uses: ./.github/actions/setup-node22', 'uses: actions/setup-node@v6'],
     ['mkdir -p _out/cross-runtime-owner', 'mkdir -p _out/foreign'],
     ['test-arm64-fallback-ci.sh execute', 'test-arm64-fallback-ci.sh complete'],
     ['if: ${{ !cancelled() }}', 'if: ${{ success() }}'],

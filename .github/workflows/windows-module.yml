@@ -26,9 +26,8 @@ jobs:
           cache: true
         timeout-minutes: 10
       - uses: ./.github/actions/setup-windows-llvm22
-      - uses: actions/setup-node@v6
-        with:
-          node-version: '22'
+      - uses: ./.github/actions/setup-node22
+        timeout-minutes: 10
       - name: Execute disjoint root assignment
         shell: bash
         run: bash scripts/test-windows-module-ci.sh ${{ inputs.module }} execute 0 ${{ matrix.part }}
@@ -55,9 +54,8 @@ jobs:
           cache: true
         timeout-minutes: 10
       - uses: ./.github/actions/setup-windows-llvm22
-      - uses: actions/setup-node@v6
-        with:
-          node-version: '22'
+      - uses: ./.github/actions/setup-node22
+        timeout-minutes: 10
       - name: Execute complete profile or remaining packages
         shell: bash
         run: bash scripts/test-windows-module-ci.sh ${{ inputs.module }} execute ${{ matrix.owner }} -1
@@ -85,9 +83,8 @@ jobs:
           cache: true
         timeout-minutes: 10
       - uses: ./.github/actions/setup-windows-llvm22
-      - uses: actions/setup-node@v6
-        with:
-          node-version: '22'
+      - uses: ./.github/actions/setup-node22
+        timeout-minutes: 10
       - name: Download root part 0
         uses: actions/download-artifact@v6
         with:

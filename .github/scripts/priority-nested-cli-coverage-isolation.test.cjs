@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
 const {jobBody, jobNeeds, requireJobNeeds} = require('./workflow-needs.cjs');
+const {requireNode22Setup} = require('./node22-setup.cjs');
 
 const workflow = fs.readFileSync(path.join(__dirname, '../workflows/go-ci.yml'), 'utf8');
 const nested = fs.readFileSync(path.join(__dirname, '../workflows/linux-cli-module.yml'), 'utf8');
@@ -80,8 +81,7 @@ function requireTools(source) {
       assert.ok(info.includes('          ' + command + '\n'));
     }
     const node = step(body, 'Setup required wasm execution runtime');
-    assert.match(node, /^        timeout-minutes: 10$/m);
-    assert.match(node, /^        uses: \.\/\.github\/actions\/setup-node22$/m);
+    requireNode22Setup(node);
     for (const item of [checkout, setup, compiler, qemu, info, node]) {
       assert.doesNotMatch(item, /^        if:|continue-on-error:|\|\|\s*true/m);
       assert.ok(body.indexOf(item) < body.indexOf('        run: bash scripts/test-linux-cli-module-ci.sh '));

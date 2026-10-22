@@ -75,11 +75,7 @@ func TestCIFullSuitesInstallWASMExecutionRuntime(t *testing.T) {
 		if !found {
 			t.Fatalf("full-suite job %s is missing", name)
 		}
-		runtime := strings.Contains(job, "uses: actions/setup-node@v6") && strings.Contains(job, "node-version: '22'")
-		if strings.HasPrefix(name, "linux-cli-") {
-			runtime = strings.Contains(job, "uses: ./.github/actions/setup-node22")
-		}
-		if !runtime {
+		if !strings.Contains(job, "uses: ./.github/actions/setup-node22") || !strings.Contains(job, "timeout-minutes: 10") {
 			t.Errorf("%s must install the required wasm execution runtime, not depend on a runner's incidental PATH", name)
 		}
 	}
@@ -175,11 +171,7 @@ func TestCIFullSuitesInstallRequiredQEMU(t *testing.T) {
 				condition == "" && strings.Contains(step, "if:") {
 				t.Fatal("all module owners and the aggregate need identical QEMU provisioning")
 			}
-			nodeSetup := "uses: actions/setup-node@v6"
-			if strings.HasPrefix(name, "linux-cli-") {
-				nodeSetup = "uses: ./.github/actions/setup-node22"
-			}
-			if node := strings.Index(job, nodeSetup); node < 0 || install >= node {
+			if node := strings.Index(job, "uses: ./.github/actions/setup-node22"); node < 0 || install >= node {
 				t.Fatal("all module roles must install QEMU before Node to retain identical PATH order")
 			}
 		})

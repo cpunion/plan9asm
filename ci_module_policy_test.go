@@ -168,7 +168,7 @@ func TestCIWindowsModulesKeepCompleteCoverageAndBudgets(t *testing.T) {
 		job, found := ciWorkflowJob(string(data), name)
 		if !found || !strings.Contains(job, "runs-on: windows-latest") ||
 			!strings.Contains(job, "uses: ./.github/actions/setup-windows-llvm22") ||
-			!strings.Contains(job, "node-version: '22'") {
+			!strings.Contains(job, "uses: ./.github/actions/setup-node22") || !strings.Contains(job, "timeout-minutes: 10") {
 			t.Fatalf("Windows %s must retain identical native tool/runtime setup", name)
 		}
 		if strings.Contains(job, "max-parallel:") || strings.Contains(job, "continue-on-error:") {

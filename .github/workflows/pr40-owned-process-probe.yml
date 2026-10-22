@@ -1260,9 +1260,8 @@ jobs:
           go-version: '1.27.2'
           cache: true
       - uses: ./.github/actions/setup-windows-llvm22
-      - uses: actions/setup-node@v6
-        with:
-          node-version: '22'
+      - uses: ./.github/actions/setup-node22
+        timeout-minutes: 10
       - name: Check shared command-path identities
         if: ${{ matrix.lane == 'llvm' }}
         shell: bash
@@ -1329,9 +1328,8 @@ jobs:
           go-version: ${{ matrix.go }}
           cache: false
       - uses: ./.github/actions/setup-windows-llvm22
-      - uses: actions/setup-node@v6
-        with:
-          node-version: '22'
+      - uses: ./.github/actions/setup-node22
+        timeout-minutes: 10
       - name: Check the previous native root failures first
         shell: bash
         env:
@@ -1441,9 +1439,8 @@ jobs:
         with:
           go-version: '1.27.2'
           cache: true
-      - uses: actions/setup-node@v6
-        with:
-          node-version: '22'
+      - uses: ./.github/actions/setup-node22
+        timeout-minutes: 10
       - name: Execute complete rich CLI ARM64 fallback oracle
         run: |
           set -euo pipefail
@@ -1539,9 +1536,8 @@ jobs:
         with:
           go-version: '1.27.2'
           cache: true
-      - uses: actions/setup-node@v6
-        with:
-          node-version: '22'
+      - uses: ./.github/actions/setup-node22
+        timeout-minutes: 10
       - name: Execute complete portable value memory-fault oracles
         env:
           GOTOOLCHAIN: local
@@ -1579,9 +1575,8 @@ jobs:
         with:
           go-version: '1.27.2'
           cache: true
-      - uses: actions/setup-node@v6
-        with:
-          node-version: '22'
+      - uses: ./.github/actions/setup-node22
+        timeout-minutes: 10
       - name: Execute original Go and LLVM x87 integer, conditional and status oracles
         run: |
           set -euo pipefail
