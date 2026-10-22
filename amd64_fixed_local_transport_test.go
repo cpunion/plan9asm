@@ -61,6 +61,7 @@ MOVB 160(BP),BX
 MOVB BX,ret+48(FP)`
 
 func TestGoAMD64FixedLocalTransportActualObjects(t *testing.T) {
+	t.Setenv("GOCACHE", t.TempDir())
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM22 required")
@@ -91,7 +92,9 @@ func TestGoAMD64FixedLocalTransportActualObjects(t *testing.T) {
 			body   string
 		}{"bool", 49, body})
 	}
+	args := make([]int, len(cases))
 	for i, test := range cases {
+		args[i] = test.args
 		name := fmt.Sprintf("Value%d", i)
 		assembly.WriteString(fixedLocalTransportAssembly(name, test.args, test.body))
 		fmt.Fprintf(&declarations, "func %s(%s) %s\n", name, fixedLocalTransportParams, test.result)
@@ -104,40 +107,9 @@ func TestGoAMD64FixedLocalTransportActualObjects(t *testing.T) {
 	} {
 		t.Run(target.name, func(t *testing.T) {
 			pkg, request, _, options := fixedLocalTransportFixture(t, assembly.String(), declarations.String(), target.name, target.triple)
-			source := requireGoAMD64FrameCapture(t, pkg, request)
-			if len(source.functions) != len(cases) {
-				t.Fatal("missing complete original object functions")
-			}
-			for i, test := range cases {
-				observed := source.functions[fmt.Sprintf("%s.Value%d", pkg.Path, i)]
-				if observed.args != int64(test.args) || observed.locals != 264 || len(observed.code) == 0 {
-					t.Fatalf("actual Go ABI0 frame differs: %+v", observed)
-				}
-				wantOffsets := []int64{0, 8, 16, 24, 32, 40}
-				if len(observed.signature.Frame.Params) != len(wantOffsets) {
-					t.Fatal("slice ABI0 component inventory changed")
-				}
-				for j, slot := range observed.signature.Frame.Params {
-					if slot.Offset != wantOffsets[j] {
-						t.Fatal("actual component offset differs", slot)
-					}
-				}
-			}
-			expanded, err := source.preprocess(request.AssemblyFile, []byte(assembly.String()))
-			if err != nil {
-				t.Fatal(err)
-			}
-			file, err := Parse(ArchAMD64, expanded)
-			if err != nil {
-				t.Fatal(err)
-			}
-			ctx, cancel := runtimeOracleStageContext(t)
-			defer cancel()
-			bound, err := source.BindFixedLocal(ctx, pkg, file, options)
-			if err != nil {
-				t.Fatal("complete first-party source lacks typed transport", err)
-			}
-			fixedLocalAPIs(t, pkg, file, bound, func(t *testing.T, ir string, err error) {
+			fixedLocalConversionPrepareToolCache(t, request)
+			fixedLocalTransportRequireOriginalFrames(t, pkg, request, args)
+			fixedLocalFreshAPIs(t, pkg, request, options, []string{"Translate", "Module", "GoModule"}, func(t *testing.T, ir string, err error) {
 				if err != nil || strings.Count(ir, "%fixed_local_native = alloca") != len(cases) {
 					t.Fatal("typed transport lost original private-frame proof", err)
 				}
@@ -145,6 +117,41 @@ func TestGoAMD64FixedLocalTransportActualObjects(t *testing.T) {
 				compileLLVMToObject(t, llc, target.triple, "transport-opt.ll", "transport-opt.o", x86MulDivRoundOptimize(t, ir))
 			})
 		})
+	}
+}
+
+// The original physical frame certificate is an independent prior. Close it
+// before any API starts; it cannot supply or extend a consumer's binding.
+func fixedLocalTransportRequireOriginalFrames(t *testing.T, pkg GoPackage, request GoAMD64FrameCaptureRequest, args []int) {
+	t.Helper()
+	ctx, cancel := runtimeOracleStageContext(t)
+	defer cancel()
+	source, err := CaptureGoAMD64FrameSource(ctx, pkg, request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := source.Close(); err != nil {
+			t.Error(err)
+		}
+	}()
+	if len(source.functions) != len(args) {
+		t.Fatal("missing complete original object functions")
+	}
+	for i, want := range args {
+		observed := source.functions[fmt.Sprintf("%s.Value%d", pkg.Path, i)]
+		if observed.args != int64(want) || observed.locals != 264 || len(observed.code) == 0 {
+			t.Fatalf("actual Go ABI0 frame differs: %+v", observed)
+		}
+		wantOffsets := []int64{0, 8, 16, 24, 32, 40}
+		if len(observed.signature.Frame.Params) != len(wantOffsets) {
+			t.Fatal("slice ABI0 component inventory changed")
+		}
+		for j, slot := range observed.signature.Frame.Params {
+			if slot.Offset != wantOffsets[j] {
+				t.Fatal("actual component offset differs", slot)
+			}
+		}
 	}
 }
 

@@ -8,6 +8,7 @@ import (
 )
 
 func TestCrossLinuxRuntimeMatrixGoAMD64FixedLocalTransportByteValues(t *testing.T) {
+	t.Setenv("GOCACHE", t.TempDir())
 	execution := x86FloatCompareRuntimeTools(t, x86FloatCompareSSE)
 	declarations := `func Bool(a []byte, p *uint64, b bool, n uint64) bool
 func Pointer(a []byte, p *uint64, b bool, n uint64) *uint64
@@ -23,14 +24,8 @@ func Slice(a []byte, p *uint64, b bool, n uint64) []byte
 	conditions, conditionDeclarations, originalObservers, observerDeclarations, goConditions, llvmConditions, cConditions := fixedLocalTransportConditionOracles()
 	assembly += conditions
 	declarations += conditionDeclarations
-	pkg, request, file, options := fixedLocalTransportFixture(t, assembly, declarations, runtime.GOOS+"/amd64", execution.triple)
-	owner := requireGoAMD64FrameCapture(t, pkg, request)
-	ctx, cancel := runtimeOracleStageContext(t)
-	defer cancel()
-	bound, err := owner.BindFixedLocal(ctx, pkg, file, options)
-	if err != nil {
-		t.Fatal(err)
-	}
+	pkg, request, _, options := fixedLocalTransportFixture(t, assembly, declarations, runtime.GOOS+"/amd64", execution.triple)
+	fixedLocalConversionPrepareToolCache(t, request)
 	goOracle := `package framefixture
 import "testing"
 func TestOriginal(t *testing.T) {
@@ -101,7 +96,7 @@ int main(void) {
     return 0;
 }
 `
-	fixedLocalAPIs(t, pkg, file, bound, func(t *testing.T, ir string, err error) {
+	fixedLocalFreshAPIs(t, pkg, request, options, []string{"Translate", "Module", "GoModule"}, func(t *testing.T, ir string, err error) {
 		if err != nil {
 			t.Fatal(err)
 		}

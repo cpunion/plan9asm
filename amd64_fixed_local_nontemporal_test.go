@@ -90,25 +90,7 @@ func fixedLocalNonTemporalActualObjects(t *testing.T, target, triple string) {
 	}
 	pkg, request, _, options := x86CMOVFixedLocalFixture(t, assembly.String(), declarations.String(), target, triple)
 	fixedLocalConversionPrepareToolCache(t, request)
-	source := requireGoAMD64FrameCapture(t, pkg, request)
-	if len(source.functions) != len(names) {
-		t.Fatal("incomplete original Go fixed-frame objects")
-	}
-	expanded, err := source.preprocess(request.AssemblyFile, []byte(assembly.String()))
-	if err != nil {
-		t.Fatal(err)
-	}
-	file, err := Parse(ArchAMD64, expanded)
-	if err != nil {
-		t.Fatal(err)
-	}
-	ctx, cancel := runtimeOracleStageContext(t)
-	defer cancel()
-	bound, err := source.BindFixedLocal(ctx, pkg, file, options)
-	if err != nil {
-		t.Fatal(err)
-	}
-	fixedLocalAPIs(t, pkg, file, bound, func(t *testing.T, ir string, err error) {
+	fixedLocalFreshAPIs(t, pkg, request, options, []string{"Translate", "Module", "GoModule"}, func(t *testing.T, ir string, err error) {
 		if err != nil || strings.Count(ir, "%fixed_local_native = alloca") != len(names) {
 			t.Fatal("original non-temporal frame inventory lost its actual binding", err)
 		}
