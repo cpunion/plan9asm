@@ -70,7 +70,7 @@ func TestCIFullSuitesInstallWASMExecutionRuntime(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"test", "linux-cli-root-parts", "linux-cli-complete", "race", "coverage", "module-completion"} {
+	for _, name := range []string{"cross-runtime", "cross-runtime-verify", "test", "linux-cli-root-parts", "linux-cli-complete", "race", "coverage", "module-completion"} {
 		job, found := ciFullSuiteJob(t, string(data), name)
 		if !found {
 			t.Fatalf("full-suite job %s is missing", name)

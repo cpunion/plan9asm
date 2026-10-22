@@ -232,6 +232,10 @@ jobs:
           go-version: '1.27.2'
           cache: true
 
+      - name: Setup required wasm execution runtime
+        timeout-minutes: 10
+        uses: ./.github/actions/setup-node22
+
       - name: Cross transpile, compile, link, and run
         run: |
           mkdir -p _out
@@ -284,6 +288,10 @@ jobs:
         with:
           go-version: '1.27.2'
           cache: true
+
+      - name: Setup required wasm execution runtime
+        timeout-minutes: 10
+        uses: ./.github/actions/setup-node22
 
       - name: Download all owner evidence
         uses: actions/download-artifact@v8
