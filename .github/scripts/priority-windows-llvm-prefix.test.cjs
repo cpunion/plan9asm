@@ -14,7 +14,7 @@ function publisher() {
 }
 
 function fixture(t, attempt = '1') {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'llvm22 prefix '));
+  const root = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'llvm22 prefix '));
   t.after(() => fs.rmSync(root, {recursive: true, force: true}));
   const source = path.join(root, 'plan9asm-msys2-attempt-' + attempt, 'msys64', 'clang64');
   for (const relative of ['bin/llvm-config.exe', 'bin/clang.exe', 'bin/clang++.exe',

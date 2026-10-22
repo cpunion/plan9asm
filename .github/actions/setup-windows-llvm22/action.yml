@@ -95,18 +95,7 @@ runs:
           exit 1
         fi
 
-        flatten() {
-          local value=$1
-          value="${value//$'\r'/}"
-          value="${value//$'\n'/ }"
-          printf '%s' "$value"
-        }
-        echo "CGO_CFLAGS=$(flatten "$(llvm-config --cflags)")" >> "$GITHUB_ENV"
-        echo "CGO_CXXFLAGS=$(flatten "$(llvm-config --cxxflags)")" >> "$GITHUB_ENV"
-        echo "CGO_LDFLAGS=$(flatten "$(llvm-config --ldflags --libs all --system-libs)")" >> "$GITHUB_ENV"
-        clang_bin="$(cygpath -w /clang64/bin)"
-        echo "CC=$clang_bin\\clang.exe" >> "$GITHUB_ENV"
-        echo "CXX=$clang_bin\\clang++.exe" >> "$GITHUB_ENV"
-        echo 'CGO_ENABLED=1' >> "$GITHUB_ENV"
-        echo 'GOFLAGS=-tags=byollvm' >> "$GITHUB_ENV"
-        echo "$clang_bin" >> "$GITHUB_PATH"
+    - name: Publish stable LLVM 22 prefix
+      uses: ./.github/actions/publish-windows-llvm22
+      with:
+        attempt: ${{ steps.msys2_attempt_1.outcome == 'success' && '1' || steps.msys2_attempt_2.outcome == 'success' && '2' || steps.msys2_attempt_3.outcome == 'success' && '3' || '' }}

@@ -109,7 +109,7 @@ test('bootstrap success short-circuits retries and exhausted bootstrap remains f
 function install(outcomes, version = '22.1.8') {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'plan9asm-llvm-install-'));
   try {
-    const installStep = action.slice(action.indexOf('    - name: Install LLVM 22'));
+    const installStep = action.slice(action.indexOf('    - name: Install LLVM 22')).split(/\n    - name:/)[0];
     const run = installStep.slice(installStep.indexOf('      run: |\n') + '      run: |\n'.length)
       .split('\n').map(line => line.startsWith('        ') ? line.slice(8) : line).join('\n');
     const script = `
@@ -159,7 +159,7 @@ test('actual installer script retries the identical pinned transaction only', ()
     assert.match(transactions[0], /llvm-22\.1\.8-2-any\.pkg\.tar\.zst/);
     assert.doesNotMatch(transactions[0], /llvm-23/);
     assert.equal((result.stdout.match(/RETRY_WAIT/g) || []).length, outcomes.length - 1);
-    assert.match(result.environment, /CGO_ENABLED=1/);
+    assert.equal(result.environment, '', 'installation alone cannot publish attempt-dependent bindings');
   }
 });
 
