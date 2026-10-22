@@ -174,6 +174,14 @@ func fixedLocalPackedRuntime(t *testing.T, execution x86FloatCompareExecution, a
 	fixedLocalPackedRuntimeAPIs(t, execution, all, execute, []string{"Translate", "Module", "GoModule"})
 }
 
+func fixedLocalPackedBatchSelection(total int, selected ...int) ([]int, error) {
+	var indices []int
+	for index := 0; index < total; index++ {
+		indices = append(indices, index)
+	}
+	return indices, nil
+}
+
 func fixedLocalPackedRuntimeAPIs(t *testing.T, execution x86FloatCompareExecution, all, execute bool, apis []string) {
 	t.Helper()
 	// Share only disposable compiler artifacts, never a source observation.

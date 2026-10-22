@@ -248,10 +248,7 @@ func TestFixedLocalWideCompileOnlyHasThreeCompleteAPIOwners(t *testing.T) {
 		}
 	}
 
-	native := fixedLocalLeaseFunctions(t, "amd64_fixed_local_packed_native_linux_amd64_test.go")["TestCrossLinuxRuntimeMatrixGoAMD64FixedLocalPackedNativeWide"]
-	if native == nil || fixedLocalLeaseCalls(native.Body)["x86PackedDoubleDwordNativeTools"] != 1 || fixedLocalLeaseCalls(native.Body)["fixedLocalPackedRuntime"] != 1 {
-		t.Fatal("native wide root lost its own actual ISA preflight or complete three-API runtime")
-	}
+	fixedLocalPackedRequireNativeBatchOwners(t)
 }
 
 func fixedLocalLeaseFunctions(t *testing.T, filename string) map[string]*ast.FuncDecl {
