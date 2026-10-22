@@ -31,10 +31,7 @@ func TestFixedLocalWideCompileOnlyOwnersDoNotRequireRuntimeTransport(t *testing.
 	if sse == nil || fixedLocalLeaseCalls(sse.Body)["x86FloatCompareRuntimeTools"] != 1 {
 		t.Error("actual SSE execution tools were weakened")
 	}
-	native := fixedLocalLeaseFunctions(t, "amd64_fixed_local_packed_native_linux_amd64_test.go")["TestCrossLinuxRuntimeMatrixGoAMD64FixedLocalPackedNativeWide"]
-	if native == nil || fixedLocalLeaseCalls(native.Body)["x86PackedDoubleDwordNativeTools"] != 1 {
-		t.Error("actual wide native CPU/OS/opcode preflight was weakened")
-	}
+	fixedLocalPackedRequireNativeBatchOwners(t)
 }
 
 func TestFixedLocalCompileOnlyToolsRetainExactLLVMAndSDKWithoutExecution(t *testing.T) {
