@@ -36,8 +36,12 @@ coverage and 32 for race. Part `p` owns global shard indices `i` where
 root owner executes exactly two shards in one two-worker wave. Test/coverage
 retain 45-minute command and 60-minute job budgets; race retains 60-minute
 commands and 75-minute jobs. Shared-profile and other packages execute once;
-they are not repeated for each root part. Every other
-package runs complete ordinary `go test` without `-run`, including packages
+they are not repeated for each root part. Only explicit owner two overlaps at
+most `-workers` complete package commands; each package keeps one shard/worker.
+Its single collector retains inventory order, records failures without stopping
+other packages, and joins active commands on cancellation without dispatching
+the remaining packages. Default whole-module/root/profile scheduling is unchanged.
+Every other package runs complete ordinary `go test` without `-run`, including packages
 with no tests or only benchmarks/TestMain. Every package has its own actual
 `-list=.` receipt, including runnable examples/fuzz targets and separately
 recorded benchmarks. Nested CLI modules are not main-module packages; their

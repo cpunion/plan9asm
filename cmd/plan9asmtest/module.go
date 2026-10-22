@@ -273,29 +273,16 @@ func runModule(ctx context.Context, cfg config) error {
 		if err != nil && report.RootPartitions == 0 {
 			return finish(err)
 		}
+	} else if cfg.ModuleOwner == 2 {
+		err = runModuleOtherPackages(ctx, cfg, &report)
 	} else {
 		var failures []error
 		for i, pkg := range report.Inventory {
 			if cfg.ModuleOwner != -1 && moduleOwner(pkg) != cfg.ModuleOwner {
 				continue
 			}
-			child := modulePackageConfig(cfg, pkg, i)
-			result := moduleResult{Package: pkg.Package, Shards: child.Shards, Workers: child.Workers, Status: "passed"}
-			if err := runSuite(ctx, child); err != nil {
-				result.Status, result.Error = "failed", err.Error()
-				failures = append(failures, fmt.Errorf("package %s: %w", pkg.Package, err))
-			}
-			var suite suiteReport
-			if err := ciReadJSON(filepath.Join(child.Out, suiteReportName(child)), &suite); err != nil {
-				result.Status, result.Error = "failed", errors.Join(errors.New(result.Error), err).Error()
-				failures = append(failures, err)
-			} else {
-				result.RootSkipped, result.ChildSkipped = suite.RootSkipped, suite.ChildSkipped
-				result.Shards, result.Workers = len(suite.Shards), suite.Workers
-				if result.Status == "passed" && child.rootPart != nil {
-					result.Status = suiteCompletionStatus(suite)
-				}
-			}
+			result, packageErr := runModulePackage(ctx, cfg, pkg, i)
+			failures = append(failures, packageErr)
 			report.Packages = append(report.Packages, result)
 			if err := ciWriteJSON(filepath.Join(cfg.Out, "module.json"), report); err != nil {
 				failures = append(failures, err)
@@ -331,6 +318,28 @@ func runModule(ctx context.Context, cfg config) error {
 	}
 	report.Status = moduleCompletionStatus(report)
 	return finish(nil)
+}
+
+func runModulePackage(ctx context.Context, cfg config, pkg modulePackage, index int) (moduleResult, error) {
+	child := modulePackageConfig(cfg, pkg, index)
+	result := moduleResult{Package: pkg.Package, Shards: child.Shards, Workers: child.Workers, Status: "passed"}
+	var failures []error
+	if err := runSuite(ctx, child); err != nil {
+		result.Status, result.Error = "failed", err.Error()
+		failures = append(failures, fmt.Errorf("package %s: %w", pkg.Package, err))
+	}
+	var suite suiteReport
+	if err := ciReadJSON(filepath.Join(child.Out, suiteReportName(child)), &suite); err != nil {
+		result.Status, result.Error = "failed", errors.Join(errors.New(result.Error), err).Error()
+		failures = append(failures, err)
+	} else {
+		result.RootSkipped, result.ChildSkipped = suite.RootSkipped, suite.ChildSkipped
+		result.Shards, result.Workers = len(suite.Shards), suite.Workers
+		if result.Status == "passed" && child.rootPart != nil {
+			result.Status = suiteCompletionStatus(suite)
+		}
+	}
+	return result, errors.Join(failures...)
 }
 
 func moduleCompletionStatus(report moduleReport) string {

@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -35,6 +37,7 @@ func TestMain(m *testing.M) {
 }
 func TestHeld(t *testing.T) {
     directory, name := %q, %q
+    if err := os.WriteFile(filepath.Join(directory, "pid-"+name), []byte(fmt.Sprint(os.Getpid())), 0600); err != nil { t.Fatal(err) }
     active := filepath.Join(directory, "active-"+name)
     if err := os.WriteFile(active, []byte(name), 0600); err != nil { t.Fatal(err) }
     defer os.Remove(active)
@@ -150,7 +153,11 @@ func TestModuleOtherWorkersActualWholePackagesAndStableUnion(t *testing.T) {
 				result := report.Packages[position]
 				position++
 				wantFailure := failing && strings.HasSuffix(pkg.Package, "/parallel/b")
-				if (result.Status == "failed") != wantFailure || result.Shards != 1 || result.Workers != 1 {
+				wantStatus := "passed"
+				if wantFailure {
+					wantStatus = "failed"
+				}
+				if result.Status != wantStatus || result.Shards != 1 || result.Workers != 1 {
 					t.Fatal("complete-package resource boundary or original failure changed", result)
 				}
 				if strings.Contains(pkg.Package, "/parallel/") {
@@ -214,6 +221,19 @@ func TestModuleOtherWorkersActualCancellationStopsDispatchAndJoins(t *testing.T)
 	if _, err := os.Stat(filepath.Join(controls, "ready-c")); !os.IsNotExist(err) {
 		t.Fatal("cancellation dispatched an unstarted package", err)
 	}
+	for _, name := range []string{"a", "b"} {
+		data, err := os.ReadFile(filepath.Join(controls, "pid-"+name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		pid, err := strconv.Atoi(string(data))
+		if err != nil || pid <= 0 {
+			t.Fatal("invalid actual package process ID", name, string(data), err)
+		}
+		if err := syscall.Kill(pid, 0); err != syscall.ESRCH {
+			t.Fatal("module returned before actual package process exited", name, pid, err)
+		}
+	}
 	var report moduleReport
 	if err := ciReadJSON(filepath.Join(cfg.Out, "module.json"), &report); err != nil {
 		t.Fatal(err)
@@ -225,6 +245,18 @@ func TestModuleOtherWorkersActualCancellationStopsDispatchAndJoins(t *testing.T)
 		if strings.HasSuffix(pkg.Package, "/parallel/c") {
 			if _, err := os.Lstat(filepath.Join(cfg.Out, fmt.Sprintf("package-%04d", index))); !os.IsNotExist(err) {
 				t.Fatal("unstarted package acquired command artifacts", err)
+			}
+			found := false
+			for _, result := range report.Packages {
+				if result.Package == pkg.Package {
+					found = true
+					if result.Status != "pending" {
+						t.Fatal("never dispatched package acquired terminal credit", result)
+					}
+				}
+			}
+			if !found {
+				t.Fatal("cancelled module erased its planned unstarted package")
 			}
 		}
 	}

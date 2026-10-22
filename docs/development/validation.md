@@ -71,6 +71,9 @@ The [exhaustive runner](../../cmd/plan9asmtest/README.md) can partition expensiv
 first-party tests without sampling. Its actual inventory, disjoint ownership,
 raw outcomes and strict complete-module aggregate remain required. Owner 0 owns
 the root package, owner 1 `gotoolprofile`, owner 2 all remaining packages.
+Only explicit owner 2 uses the existing worker limit across whole packages.
+Each package remains an unfiltered one-shard/one-worker command, and the single
+collector preserves inventory order and joins active processes on cancellation.
 Ordinary suites may use `-workers 2`; one collector owns report/coverage writes.
 The runner's own complete regression suite can use the same exhaustive mechanism:
 
