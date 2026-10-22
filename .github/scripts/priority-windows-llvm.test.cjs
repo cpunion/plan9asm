@@ -7,9 +7,52 @@ const { test } = require('node:test');
 
 const action = fs.readFileSync('.github/actions/setup-windows-llvm22/action.yml', 'utf8');
 
-test('MSYS2 bootstrap retries are bounded and the final failure remains fatal', () => {
+function bootstrapSteps() {
   const bootstrap = action.slice(action.indexOf('  steps:'), action.indexOf('    - name: Install LLVM 22'));
-  const attempts = bootstrap.split(/(?=    - name:)/).filter(step => step.includes('uses: msys2/setup-msys2@v2'));
+  return bootstrap.split(/(?=    - name:)/).filter(step => step.includes('uses: msys2/setup-msys2@v2'));
+}
+
+// Model the observed setup-msys2 implementation at ec48f7c5447b3140e2b088413ae3a55687bccb6e:
+// release installs into join(location || RUNNER_TEMP, 'msys64'), refuses an
+// existing directory, and writes the msys2 shell before updating packages.
+// A failed download/extraction/update can therefore leave the directory behind.
+function bootstrap(updateOutcomes) {
+  const runnerTemp = 'D:\\runner temp';
+  const directories = new Set();
+  const attempts = [];
+  let shellInstallation;
+  for (const [index, step] of bootstrapSteps().entries()) {
+    if (index > 0) {
+      const condition = step.match(/if: \$\{\{ (.+) \}\}/)?.[1];
+      const expected = Array.from({ length: index }, (_, prior) =>
+        `steps.msys2_attempt_${prior + 1}.outcome == 'failure'`).join(' && ');
+      assert.equal(condition, expected, 'retry only after every prior failure');
+      if (!attempts.every(attempt => attempt.outcome === 'failure')) break;
+    }
+    const location = step.match(/\n        location: (.+)/)?.[1]
+      .replace('${{ runner.temp }}', runnerTemp) || runnerTemp;
+    const installation = path.win32.join(location, 'msys64');
+    const collision = directories.has(installation);
+    let outcome = 'failure';
+    if (!collision) {
+      directories.add(installation);
+      shellInstallation = installation;
+      outcome = updateOutcomes[index] === 0 ? 'success' : 'failure';
+    }
+    attempts.push({ installation, collision, outcome });
+    if (outcome === 'success') break;
+    if (!/continue-on-error: true/.test(step)) {
+      return { attempts, directories, shellInstallation, installerMayRun: false };
+    }
+  }
+  return {
+    attempts, directories, shellInstallation,
+    installerMayRun: attempts.at(-1)?.outcome === 'success',
+  };
+}
+
+test('MSYS2 bootstrap retries are bounded and the final failure remains fatal', () => {
+  const attempts = bootstrapSteps();
   assert.equal(attempts.length, 3);
   for (const [index, step] of attempts.entries()) {
     assert.match(step, new RegExp(`id: msys2_attempt_${index + 1}`));
@@ -27,6 +70,40 @@ test('MSYS2 bootstrap retries are bounded and the final failure remains fatal', 
       }
     }
   }
+});
+
+test('a partially installed MSYS2 directory cannot poison subsequent bootstrap attempts', () => {
+  for (const outcomes of [[1, 0], [1, 1, 0]]) {
+    const result = bootstrap(outcomes);
+    assert.equal(result.installerMayRun, true, 'a later successful update must reach LLVM installation');
+    assert.equal(result.attempts.length, outcomes.length);
+    assert.ok(result.attempts.every(attempt => !attempt.collision), 'each retry must start a fresh installation');
+    assert.equal(result.directories.size, outcomes.length, 'failed bootstrap directories are retained, not deleted');
+    assert.equal(result.shellInstallation, result.attempts.at(-1).installation,
+      'the official msys2 wrapper must select the successful attempt, not the first failed installation');
+  }
+});
+
+test('all three bootstrap attempts explicitly own distinct fresh runner-temp locations', () => {
+  const locations = bootstrapSteps().map((step, index) => {
+    assert.match(step, /\n        release: true\n/);
+    const location = step.match(/\n        location: (.+)/)?.[1];
+    assert.equal(location, `\${{ runner.temp }}/plan9asm-msys2-attempt-${index + 1}`);
+    return location;
+  });
+  assert.equal(new Set(locations).size, 3);
+  assert.doesNotMatch(action, /release: false|Remove-Item|rm\s+-[rf]|SigLevel\s*=|--nosignature|--skippgpcheck/);
+});
+
+test('bootstrap success short-circuits retries and exhausted bootstrap remains fatal', () => {
+  const first = bootstrap([0]);
+  assert.equal(first.attempts.length, 1);
+  assert.equal(first.installerMayRun, true);
+  assert.equal(first.shellInstallation, first.attempts[0].installation);
+  const exhausted = bootstrap([1, 1, 1]);
+  assert.equal(exhausted.attempts.length, 3);
+  assert.ok(exhausted.attempts.every(attempt => !attempt.collision));
+  assert.equal(exhausted.installerMayRun, false, 'no LLVM transaction or build environment after final failure');
 });
 
 function install(outcomes, version = '22.1.8') {

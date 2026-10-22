@@ -11,10 +11,15 @@ runs:
       with:
         msystem: CLANG64
         path-type: inherit
+        release: true
+        location: ${{ runner.temp }}/plan9asm-msys2-attempt-1
         update: true
 
     # These are bounded installer retries, not test retries or LLVM fallbacks.
     # Only the first two bootstrap failures may proceed to another attempt.
+    # setup-msys2 refuses an existing installation, including a failed update's
+    # directory. Keep each fresh attempt separate; the action rewrites its
+    # msys2 shell wrapper to the successful installation without deleting any.
     - name: Retry MSYS2 bootstrap (2 of 3)
       id: msys2_attempt_2
       if: ${{ steps.msys2_attempt_1.outcome == 'failure' }}
@@ -23,6 +28,8 @@ runs:
       with:
         msystem: CLANG64
         path-type: inherit
+        release: true
+        location: ${{ runner.temp }}/plan9asm-msys2-attempt-2
         update: true
 
     - name: Retry MSYS2 bootstrap (3 of 3, failure is fatal)
@@ -32,6 +39,8 @@ runs:
       with:
         msystem: CLANG64
         path-type: inherit
+        release: true
+        location: ${{ runner.temp }}/plan9asm-msys2-attempt-3
         update: true
 
     - name: Install LLVM 22
