@@ -175,6 +175,21 @@ func (owner *amd64GoVirtualArguments) verify() (result error) {
 			owner.failure = result
 		}
 	}()
+	if err := owner.verifySource(); err != nil {
+		return err
+	}
+	for _, entry := range owner.entries {
+		actual, err := goFuncSigForDeclaredFunc(entry.signature.Name, entry.declaration, "amd64", owner.sizes, owner.frameSizes, true)
+		if err != nil || !reflect.DeepEqual(actual, entry.signature) {
+			return amd64GoArgumentContext("virtual declaration transport changed during consumption")
+		}
+	}
+	// Sizes is caller supplied and may execute code even at this final query.
+	// Recheck afterward using only concrete syntax/source/private-plan data.
+	return owner.verifySource()
+}
+
+func (owner *amd64GoVirtualArguments) verifySource() error {
 	fingerprint, err := x86CallerSourceFingerprint(owner.file)
 	syntax, syntaxErr := goReadOnlySyntax(owner.pkg)
 	if err != nil || syntaxErr != nil || fingerprint != owner.fingerprint ||
@@ -187,12 +202,8 @@ func (owner *amd64GoVirtualArguments) verify() (result error) {
 		}
 	}
 	for _, entry := range owner.entries {
-		if owner.pkg.Types.Scope().Lookup(entry.declaration.Name()) != entry.declaration {
+		if owner.pkg.Types.Scope().Lookup(entry.declaration.Name()) != entry.declaration || !entry.matches(entry.signature) {
 			return amd64GoArgumentContext("virtual declaration identity changed during consumption")
-		}
-		actual, err := goFuncSigForDeclaredFunc(entry.signature.Name, entry.declaration, "amd64", owner.sizes, owner.frameSizes, true)
-		if err != nil || !reflect.DeepEqual(actual, entry.signature) {
-			return amd64GoArgumentContext("virtual declaration transport changed during consumption")
 		}
 	}
 	return nil
