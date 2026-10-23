@@ -277,7 +277,9 @@ func TestTranslateARM64RawSVEContiguousByteMemoryCompleteFamily(t *testing.T) {
 		"aarch64-pc-windows-msvc",
 	} {
 		t.Run(triple, func(t *testing.T) {
-			module, err := TranslateModule(file, Options{
+			ctx := llvm.NewContext()
+			defer ctx.Dispose()
+			module, err := TranslateModuleInContext(ctx, file, Options{
 				TargetTriple: triple,
 				Goarch:       "arm64",
 				Sigs: map[string]FuncSig{
