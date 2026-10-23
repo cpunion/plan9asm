@@ -2,9 +2,10 @@ package plan9asm
 
 import (
 	"fmt"
-	"regexp"
 	"strings"
 	"testing"
+
+	"github.com/xgo-dev/llvm"
 )
 
 // These are Go's C_LIST arrangements, not a projection of the lowerer's table.
@@ -47,7 +48,6 @@ func TestARM64VectorMemoryTypedWholeTransfers(t *testing.T) {
 	// Checking source IR (before optimization) prevents relying on a backend
 	// pass to recover SIMD from dozens of independently emitted byte accesses.
 	// A transfer may not acquire alignment or read beyond its encoded 8/16 bytes.
-	scalarAccess := regexp.MustCompile(`(?m)^.*(?:load|store) i(?:8|16|32|64)[ ,].*, align 1$`)
 	for _, arrangement := range arm64VectorMemoryArrangements {
 		for count := 1; count <= 4; count++ {
 			for mode := 0; mode < 4; mode++ {
@@ -61,18 +61,7 @@ func TestARM64VectorMemoryTypedWholeTransfers(t *testing.T) {
 						loadSuffix, input, registers, storeSuffix, registers, output)
 					ir := arm64VectorMemoryTranslate(t, source, "aarch64-unknown-linux-gnu",
 						map[string]FuncSig{"vectorcopy": {Name: "vectorcopy", Ret: Void}})
-					typeName := fmt.Sprintf("<%d x i%d>", arrangement.lanes, arrangement.bits)
-					load := regexp.MustCompile(`(?m)^\s*%[^ ]+ = load ` + regexp.QuoteMeta(typeName) + `, ptr %[^,]+, align 1$`)
-					store := regexp.MustCompile(`(?m)^\s*store ` + regexp.QuoteMeta(typeName) + ` %[^,]+, ptr %[^,]+, align 1$`)
-					if got := len(load.FindAllString(ir, -1)); got != count {
-						t.Errorf("whole-list load has %d exact unaligned %s accesses, want %d", got, typeName, count)
-					}
-					if got := len(store.FindAllString(ir, -1)); got != count {
-						t.Errorf("whole-list store has %d exact unaligned %s accesses, want %d", got, typeName, count)
-					}
-					if scalarAccess.MatchString(ir) {
-						t.Errorf("whole-register transfer was scalarized before LLVM optimization: %s", scalarAccess.FindString(ir))
-					}
+					arm64VectorMemoryCheckAccesses(t, ir, "vectorcopy", arrangement.bits, arrangement.lanes, count)
 				})
 			}
 		}
@@ -91,15 +80,74 @@ func TestARM64VectorMemoryLaneAccessesStayExact(t *testing.T) {
 						suffix, input, kind, lane, suffix, kind, lane, output)
 					ir := arm64VectorMemoryTranslate(t, source, "aarch64-unknown-linux-gnu",
 						map[string]FuncSig{"vectorlane": {Name: "vectorlane", Ret: Void}})
-					for _, operation := range []string{"load", "store"} {
-						access := regexp.MustCompile(fmt.Sprintf(`(?m)^.*\b%s i%d[ ,].*, align 1$`, operation, bits))
-						if got := len(access.FindAllString(ir, -1)); got != 1 {
-							t.Fatalf("lane %s must access exactly one i%d, got %d", operation, bits, got)
-						}
-					}
+					arm64VectorMemoryCheckAccesses(t, ir, "vectorlane", bits, 0, 1)
 				})
 			}
 		}
+	}
+}
+
+func arm64VectorMemoryCheckAccesses(t *testing.T, ir, name string, bits, lanes, count int) {
+	t.Helper()
+	ctx := llvm.NewContext()
+	defer ctx.Dispose()
+	module, err := parseIRModuleInContext(ctx, ir)
+	if !module.IsNil() {
+		defer module.Dispose()
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := llvm.VerifyModule(module, llvm.ReturnStatusAction); err != nil {
+		t.Fatal(err)
+	}
+	function := module.NamedFunction(name)
+	if function.IsNil() || function.FirstBasicBlock().IsNil() {
+		t.Fatal("original memory-transfer function disappeared", name)
+	}
+	loads, stores := 0, 0
+	for block := function.FirstBasicBlock(); !block.IsNil(); block = llvm.NextBasicBlock(block) {
+		for ins := block.FirstInstruction(); !ins.IsNil(); ins = llvm.NextInstruction(ins) {
+			var pointer llvm.Value
+			var typ llvm.Type
+			switch ins.InstructionOpcode() {
+			case llvm.Load:
+				pointer, typ = ins.Operand(0), ins.Type()
+			case llvm.Store:
+				pointer, typ = ins.Operand(1), ins.Operand(0).Type()
+			default:
+				continue
+			}
+			// Register banks and FLAGS are implementation allocas, not native
+			// memory accesses. Follow only pointer-preserving derivations.
+			for depth := 0; depth < 16 && (!pointer.IsAGetElementPtrInst().IsNil() || !pointer.IsABitCastInst().IsNil()); depth++ {
+				pointer = pointer.Operand(0)
+			}
+			if pointer.IsAIntToPtrInst().IsNil() {
+				continue
+			}
+			if ins.InstructionOpcode() == llvm.Load {
+				loads++
+			} else {
+				stores++
+			}
+			if ins.Alignment() != 1 {
+				t.Errorf("native transfer acquired unsupported alignment: %s", ins.String())
+			}
+			if lanes != 0 {
+				if typ.TypeKind() != llvm.VectorTypeKind || typ.VectorSize() != lanes {
+					t.Errorf("whole transfer is not one exact %d-lane vector: %s", lanes, ins.String())
+					continue
+				}
+				typ = typ.ElementType()
+			}
+			if typ.TypeKind() != llvm.IntegerTypeKind || typ.IntTypeWidth() != bits {
+				t.Errorf("native transfer lost its exact i%d element width: %s", bits, ins.String())
+			}
+		}
+	}
+	if loads != count || stores != count {
+		t.Errorf("native accesses: loads=%d stores=%d, want %d/%d", loads, stores, count, count)
 	}
 }
 

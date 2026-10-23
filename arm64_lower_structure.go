@@ -72,6 +72,10 @@ func (c *arm64Ctx) lowerARM64StructureLoadStore(op Op, postInc bool, ins Instr) 
 				return true, false, err
 			}
 		}
+	} else if op == "VLD1" || op == "VST1" {
+		if err := c.lowerContiguousStructureTransfer(form, addr); err != nil {
+			return true, false, err
+		}
 	} else if form.load {
 		for registerIndex, reg := range registers {
 			value := "poison"
@@ -115,6 +119,42 @@ func (c *arm64Ctx) lowerARM64StructureLoadStore(op Op, postInc bool, ins Instr) 
 		}
 	}
 	return true, false, nil
+}
+
+// LD/ST1 concatenate whole registers, unlike LD/ST2-4's interleaved lanes.
+// Keep each register's exact 8/16-byte access and unaligned address contract.
+func (c *arm64Ctx) lowerContiguousStructureTransfer(form arm64StructureMemoryForm, addr string) error {
+	arrangement := form.arrangement
+	values := make([]string, len(form.registers))
+	if !form.load {
+		for i, reg := range form.registers {
+			value, err := c.loadARM64VectorInteger(reg, arrangement)
+			if err != nil {
+				return err
+			}
+			values[i] = value
+		}
+	}
+	for i, reg := range form.registers {
+		address := addr
+		if i != 0 {
+			added := c.newTmp()
+			fmt.Fprintf(c.b, "  %%%s = add i64 %s, %d\n", added, addr, i*arrangement.lanes*arrangement.elementBits/8)
+			address = "%" + added
+		}
+		pointer := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = inttoptr i64 %s to ptr\n", pointer, address)
+		if form.load {
+			value := c.newTmp()
+			fmt.Fprintf(c.b, "  %%%s = load <%d x i%d>, ptr %%%s, align 1\n", value, arrangement.lanes, arrangement.elementBits, pointer)
+			if err := c.storeARM64VectorInteger(reg, arrangement, "%"+value); err != nil {
+				return err
+			}
+		} else {
+			fmt.Fprintf(c.b, "  store <%d x i%d> %s, ptr %%%s, align 1\n", arrangement.lanes, arrangement.elementBits, values[i], pointer)
+		}
+	}
+	return nil
 }
 
 func arm64StructureElementOffset(op Op, arrangement arm64VectorArrangement, registerCount, registerIndex, lane int) int64 {
