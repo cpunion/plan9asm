@@ -92,7 +92,11 @@ func x86OrdinaryMixedBoolResultRole(fn Func, sig FuncSig, arch string) bool {
 		}
 		end, hasBool = slot.Offset+width, hasBool || slot.Type == I1
 	}
-	if !hasBool || fn.ArgSize != end || len(sig.Frame.Params) > 4096 || len(sig.Args) > 4096 {
+	// Omitted TEXT argument size is Go's unknown-size spelling, not an
+	// explicit zero-byte frame. The typed declaration still bounds every
+	// input/result, and an explicit conflicting extent remains invalid.
+	if !hasBool || fn.ArgSize != end && !x86TEXTArgumentsUnspecified(fn) ||
+		len(sig.Frame.Params) > 4096 || len(sig.Args) > 4096 {
 		return false
 	}
 	represented := make(map[int]bool)
