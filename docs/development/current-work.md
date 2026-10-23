@@ -21,16 +21,21 @@ reviewer approval.
 
 ## Last completed upstream run
 
-Published head `a5504a23c768` is running
+Published head `a5504a23c768` completed
 [run39916058698](https://github.com/xgo-dev/plan9asm/actions/runs/39916058698).
-It is not a passing or completed run. Own-job logs identify two stale test
+Its terminal outcome remained stable for225 seconds:325 jobs,290 successful
+and35 failed. Own-job logs identify two stale test
 expectations: loaded typed bool arguments are now valid, and I32Clz is now
 implemented, so its empty-stack diagnostic is underflow rather than unsupported.
 The local corrections retain upper-register/unknown-input rejection and test an
 actually unknown WASM opcode separately. Independent bool execution covers the
 real typed argument path; do not merely delete the old checks. Two runner-loss
 failures have unavailable logs and are not attributed to OOM or source errors.
-Let the run finish naturally before publishing the next verified batch.
+The35 failures comprise22 direct test owners, two lost runners and11 downstream
+completion failures. Each completion's own logs retain its failed parent or
+missing artifacts; they establish no third instruction failure. Preserve the
+lost runners' missing logs and nonterminal step observations separately from
+the completed workflow. Publish only after validating the next frozen batch.
 
 Contribution head `da6521352eb1` completed
 [run39899167605](https://github.com/xgo-dev/plan9asm/actions/runs/39899167605)
@@ -174,7 +179,9 @@ it does not normalize duplicate keys, reload packages or add a baseline-only
 restriction. CRC32's legitimate ordinary reads have an actual object positive,
 while missing-owner rejection still publishes nothing. The shared reader and
 source/profile controls pass16 roots and63 children in the repair worktree;
-rerun the complete integrated CLI before publication.
+the complete integrated CLI at `cc19ba5da` then passed389 roots and2155 children,
+with no failures or skips, in926 seconds. This does not erase the earlier failed
+complete-suite receipt or qualify later edits and other modules.
 
 The strict full-source benchmark at published `a5504a23c768` still fails:
 linux/amd6432/55 passed in280 wall seconds; linux/arm6440/47 in7 seconds.
