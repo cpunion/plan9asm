@@ -219,6 +219,16 @@ tests diverged; then enumerate and repair the entire affected rule class.
 Add a regression that still finds the defect without that external library.
 Rerun both the complete affected class and the original discovering sample.
 
+REP/REPN SCAS/CMPS does not define status FLAGS when its count is zero. A paired
+whole-source result proof may nevertheless accept a following conditional when
+both bounded zero-count successors write the same complete constant result and
+have no observable memory or call effects. Full-width exact copies can cancel;
+shared pointer origins, changed offsets and partial writes cannot. Keep the
+ordinary nonempty input/access proof, CFG joins and shared work limits intact.
+This rule never grants FLAGS to another consumer or a standalone query. CLD/STD
+always update virtual DF; only matching x86 targets emit the physical instruction.
+Check both incoming native ZF states separately from portable value execution.
+
 Keep the Go-table oracle independent of the implementation spec. Retain each
 encoding row's prefix, zcase, byte offset and opcode-specific attributes as well
 as its operand classes. A shared ytab or a name/row count is not a complete

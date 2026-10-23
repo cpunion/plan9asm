@@ -21,6 +21,27 @@ reviewer approval.
 
 ## Last completed upstream run
 
+Published head `fbb288364141` completed
+[run39936529939](https://github.com/xgo-dev/plan9asm/actions/runs/39936529939)
+naturally:325 jobs,323 successful and two failed. The Go1.20 root4 job exhausted
+its unchanged45-minute shard deadline; its own artifact retains43 incomplete
+roots. The Go1.20 completion's own log rejects that same failed/incomplete part.
+All other producers and completions passed. The local scheduling repair balances
+the existing complete heavy families in ordinary and coverage modes as well as
+race; seven native conversion owners bring the closed family inventory to79.
+The actual inventory and all deadlines remain unchanged. Full runner regression
+passed103 roots and313 children, and656 Node policy checks passed. These local
+results do not change the failed published run or qualify the next batch's CI.
+
+The next translator batch also repairs zero-iteration REP/REPN comparison
+branches. It admits only bounded source continuations whose two successors have
+the same complete constant result without observable accesses; it does not invent
+incoming FLAGS. Independent tests cover the complete SCAS/CMPS width, prefix and
+direction family, actual386 SDK IndexByte source, LLVM22 objects and portable
+values. CLD/STD retain virtual DF on portable targets and physical effects only
+on matching x86 backends. Required native Linux counterparts remain separate.
+Revalidate the integrated snapshot before publishing.
+
 Published head `a5504a23c768` completed
 [run39916058698](https://github.com/xgo-dev/plan9asm/actions/runs/39916058698).
 Its terminal outcome remained stable for225 seconds:325 jobs,290 successful
