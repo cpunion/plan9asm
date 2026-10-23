@@ -1122,7 +1122,7 @@ func translateFuncWASM(b *strings.Builder, file *File, fn Func, sig FuncSig, res
 			}
 			continue
 		}
-		if spec, ok := wasmFloatBinaryOps[op]; ok {
+		if spec, ok := wasmFloatBinaryProperties(op); ok {
 			rhs, err := pop(op)
 			if err != nil {
 				return err
@@ -1145,14 +1145,20 @@ func translateFuncWASM(b *strings.Builder, file *File, fn Func, sig FuncSig, res
 				if spec.typ == "double" {
 					bits = 64
 				}
-				// Unlike minnum/maxnum or ordered select, minimum/maximum
-				// propagate NaNs and order -0 before +0, as Wasm requires.
-				fmt.Fprintf(b, "  %%%s = call %s @llvm.%s.f%d(%s %s, %s %s)\n", name, spec.typ, spec.intrinsic, bits, spec.typ, lhs.val, spec.typ, rhs.val)
-				// LLVM may fold minimum(x,x) to x, including a signaling NaN.
-				// Wasm requires an arithmetic (quiet) NaN; choosing canonical
-				// NaN is valid for every permitted input payload. Express the
-				// final representation as integer bits so optimization cannot
-				// discard quieting as a redundant floating-point operation.
+				if spec.operation != "" {
+					// No fast-math flags: signed zero, infinities, gradual
+					// underflow and the declared rounding precision are live.
+					fmt.Fprintf(b, "  %%%s = %s %s %s, %s\n", name, spec.operation, spec.typ, lhs.val, rhs.val)
+				} else {
+					// Unlike minnum/maxnum or ordered select, minimum/maximum
+					// propagate NaNs and order -0 before +0, as Wasm requires.
+					fmt.Fprintf(b, "  %%%s = call %s @llvm.%s.f%d(%s %s, %s %s)\n", name, spec.typ, spec.intrinsic, bits, spec.typ, lhs.val, spec.typ, rhs.val)
+				}
+				// LLVM may fold minimum(x,x) or identity arithmetic to x,
+				// including a signaling NaN. Wasm requires a quiet NaN;
+				// canonical NaN is valid for every permitted input payload.
+				// Integer bits keep optimization from discarding quieting as
+				// a redundant floating-point operation.
 				signless, infinity, canonical := uint64(0x7fffffff), uint64(0x7f800000), uint64(0x7fc00000)
 				if bits == 64 {
 					signless, infinity, canonical = 0x7fffffffffffffff, 0x7ff0000000000000, 0x7ff8000000000000

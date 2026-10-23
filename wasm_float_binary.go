@@ -5,12 +5,13 @@ import (
 	"strings"
 )
 
-// Go's complete F32/F64 comparison and min/max namespace consists of pure,
-// zero-operand stack operators. Comparisons produce i32, never i1 or f64.
+// Go's scalar floating binary families share pure, zero-operand stack grammar.
+// Comparisons produce i32; arithmetic and min/max retain the operand width.
 type wasmFloatBinaryOp struct {
 	typ       LLVMType
 	predicate string
 	intrinsic string
+	operation string
 }
 
 var wasmFloatBinaryOps = map[string]wasmFloatBinaryOp{
@@ -32,6 +33,25 @@ var wasmFloatBinaryOps = map[string]wasmFloatBinaryOp{
 	"F64MAX": {typ: "double", intrinsic: "maximum"},
 }
 
+var wasmFloatArithmeticOps = map[string]wasmFloatBinaryOp{
+	"F32ADD": {typ: "float", operation: "fadd"},
+	"F32SUB": {typ: "float", operation: "fsub"},
+	"F32MUL": {typ: "float", operation: "fmul"},
+	"F32DIV": {typ: "float", operation: "fdiv"},
+	"F64ADD": {typ: "double", operation: "fadd"},
+	"F64SUB": {typ: "double", operation: "fsub"},
+	"F64MUL": {typ: "double", operation: "fmul"},
+	"F64DIV": {typ: "double", operation: "fdiv"},
+}
+
+func wasmFloatBinaryProperties(op string) (wasmFloatBinaryOp, bool) {
+	if spec, found := wasmFloatBinaryOps[op]; found {
+		return spec, true
+	}
+	spec, found := wasmFloatArithmeticOps[op]
+	return spec, found
+}
+
 func (op wasmFloatBinaryOp) resultType() LLVMType {
 	if op.predicate != "" {
 		return I32
@@ -41,7 +61,7 @@ func (op wasmFloatBinaryOp) resultType() LLVMType {
 
 func parseWASMFloatBinary(ins Instr) (wasmFloatBinaryOp, bool, error) {
 	op := normalizeInstructionOpcode(ins.Op)
-	spec, found := wasmFloatBinaryOps[op]
+	spec, found := wasmFloatBinaryProperties(op)
 	if found && (strings.ToUpper(string(ins.Op)) != op || len(ins.Args) != 0) {
 		return spec, true, fmt.Errorf("%s is a zero-operand WebAssembly stack instruction without suffixes", ins.Op)
 	}
