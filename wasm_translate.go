@@ -35,6 +35,9 @@ func translateFuncWASM(b *strings.Builder, file *File, fn Func, sig FuncSig, res
 		if _, _, err := parseWASMFloatBinary(ins); err != nil {
 			return err
 		}
+		if _, _, err := parseWASMIntegerCount(ins); err != nil {
+			return err
+		}
 	}
 	// LLVM's WebAssembly backend cannot lower blockaddress. Keep this as a
 	// lowering invariant so future control-flow or code-pointer work fails here
@@ -1088,6 +1091,23 @@ func translateFuncWASM(b *strings.Builder, file *File, fn Func, sig FuncSig, res
 			fmt.Fprintf(b, "  ; %s\n", strings.ReplaceAll(ins.Raw, "\n", " "))
 		}
 		if blockTerminated && op != "ELSE" && op != "END" && op != "LABEL" {
+			continue
+		}
+		if spec, ok := wasmIntegerCountOps[op]; ok {
+			value, err := pop(op)
+			if err != nil {
+				return err
+			}
+			if value.typ != spec.typ || value.stackAddr {
+				return fmt.Errorf("%s expects one %s stack value, got %s", ins.Op, spec.typ, value.typ)
+			}
+			name := newTmp()
+			fmt.Fprintf(b, "  %%%s = call %s @llvm.%s.%s(%s %s", name, spec.typ, spec.intrinsic, spec.typ, spec.typ, value.val)
+			if spec.intrinsic != "ctpop" {
+				b.WriteString(", i1 false") // Zero is defined, never LLVM poison.
+			}
+			b.WriteString(")\n")
+			push(wasmValue{typ: spec.typ, val: "%" + name})
 			continue
 		}
 		if spec, ok := wasmIntegerBinaryOps[op]; ok {

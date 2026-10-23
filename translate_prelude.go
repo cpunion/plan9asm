@@ -48,9 +48,13 @@ func emitWASMPrelude(b *strings.Builder, file *File, resolve func(string) string
 	want := make(map[string]bool)
 	wantFloatUnary := make(map[string]bool)
 	wantFloatBinary := make(map[string]bool)
+	wantIntegerCount := make(map[string]bool)
 	for _, fn := range file.Funcs {
 		for _, ins := range fn.Instrs {
 			op := normalizeInstructionOpcode(ins.Op)
+			if spec, ok := wasmIntegerCountOps[op]; ok {
+				wantIntegerCount[spec.intrinsic+"."+string(spec.typ)] = true
+			}
 			if spec, ok := wasmFloatUnaryOps[op]; ok && spec.intrinsic != "" {
 				wantFloatUnary[string(spec.typ)+"|"+spec.intrinsic] = true
 			}
@@ -71,6 +75,18 @@ func emitWASMPrelude(b *strings.Builder, file *File, resolve func(string) string
 	}
 	if want["memmove"] {
 		b.WriteString("declare void @llvm.memmove.p0.p0.i32(ptr, ptr, i32, i1 immarg)\n")
+	}
+	for _, typ := range []LLVMType{I32, I64} {
+		for _, intrinsic := range []string{"ctlz", "cttz", "ctpop"} {
+			name := intrinsic + "." + string(typ)
+			if wantIntegerCount[name] {
+				fmt.Fprintf(b, "declare %s @llvm.%s(%s", typ, name, typ)
+				if intrinsic != "ctpop" {
+					b.WriteString(", i1 immarg")
+				}
+				b.WriteString(")\n")
+			}
+		}
 	}
 	if want["memset"] {
 		b.WriteString("declare void @llvm.memset.p0.i32(ptr, i8, i32, i1 immarg)\n")
