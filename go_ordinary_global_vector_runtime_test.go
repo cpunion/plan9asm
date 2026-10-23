@@ -17,14 +17,35 @@ func TestCrossLinuxRuntimeMatrixGoModuleOrdinaryGlobalVectorReads(t *testing.T) 
 	})
 }
 
-func ordinaryGlobalLogicalRuntime(t *testing.T, execution x86FloatCompareExecution) {
+func ordinaryGlobalLogicalRuntimeFixtures(t *testing.T) []x86LogicalRuntimeFixture {
 	t.Helper()
 	var fixtures []x86LogicalRuntimeFixture
 	for _, fixture := range x86LogicalRuntimeFixtures(t) {
-		if !strings.Contains(fixture.assembly, "(BX)") {
+		// Register-source fixtures also load their setup value from (BX).
+		// Select the logical operation itself, never that unrelated load.
+		lines := strings.Split(fixture.assembly, "\n")
+		selected := -1
+		for index, line := range lines {
+			fields := strings.Fields(line)
+			if len(fields) != 2 {
+				continue
+			}
+			opcode := Op(strings.Split(fields[0], ".")[0])
+			if _, logical := x86PackedLogicalSpecs[opcode]; !logical || !strings.HasPrefix(fields[1], "(BX),") {
+				continue
+			}
+			if selected >= 0 {
+				t.Fatal("fixture contains more than one logical source", fixture.name)
+			}
+			selected = index
+		}
+		if selected < 0 {
 			continue
 		}
-		fixture.assembly = strings.Replace(fixture.assembly, "(BX)", "·words+64(SB)", 1)
+		lines[selected] = strings.Replace(lines[selected], "(BX)", "·words+64(SB)", 1)
+		fixture.assembly = strings.Join(lines, "\n")
+		fixture.assembly = strings.Replace(fixture.assembly,
+			"TEXT "+fixture.name+"(SB)", "TEXT ·"+fixture.name+"(SB)", 1)
 		call := "  " + fixture.name + "(output+1,a,b,mask);"
 		if strings.Count(fixture.checks, call) != 1 {
 			t.Fatal("the complete independent logical oracle call changed", fixture.name)
@@ -43,6 +64,22 @@ func ordinaryGlobalLogicalRuntime(t *testing.T, execution x86FloatCompareExecuti
 	if len(fixtures) != 308 {
 		t.Fatal("complete logical memory-source execution union changed", len(fixtures))
 	}
+	return fixtures
+}
+
+func TestGoModuleOrdinaryGlobalLogicalRuntimeFixtureSelection(t *testing.T) {
+	for _, fixture := range ordinaryGlobalLogicalRuntimeFixtures(t) {
+		if strings.Contains(fixture.assembly, "(BX)") ||
+			strings.Count(fixture.assembly, "·words+64(SB)") != 1 ||
+			!strings.HasPrefix(fixture.assembly, "TEXT ·"+fixture.name+"(SB)") {
+			t.Fatal("global runtime fixture changed setup memory or lost its Go declaration", fixture.name)
+		}
+	}
+}
+
+func ordinaryGlobalLogicalRuntime(t *testing.T, execution x86FloatCompareExecution) {
+	t.Helper()
+	fixtures := ordinaryGlobalLogicalRuntimeFixtures(t)
 	// Retain the existing independent all-byte, mask, FLAGS and alias oracle.
 	// Only its first numerical input is now the same mutable Go global across
 	// repeated calls; no source observation or SDK capability is fabricated.
