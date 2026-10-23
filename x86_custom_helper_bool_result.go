@@ -142,7 +142,7 @@ func x86CustomHelperBoolSignature(sig FuncSig) bool {
 			pointers++
 		}
 	}
-	return pointers == 1
+	return pointers != 0
 }
 
 func (tail *x86CustomHelperBoolTail) acyclicCalls() bool {
@@ -182,8 +182,9 @@ func (tail *x86CustomHelperBoolTail) acyclicCalls() bool {
 
 // A real emitted custom call carries only its declared register inputs. In
 // particular, caller FLAGS, undeclared GP bytes and vector state cannot seed
-// the independently emitted helper. Pointer transport is this exact result
-// byte only, never native backing or a numerical address.
+// the independently emitted helper. Each pointer retains its actual source
+// role: an exact result-byte alias or an opaque incoming pointer. Neither role
+// grants native backing or numerical address bits.
 func (tail *x86CustomHelperBoolTail) transport(ins Instr, state *x86ResultState, resultOffset int64, arch string) bool {
 	if ins.Op != OpJMP || len(ins.Args) != 1 || ins.Args[0].Kind != OpSym {
 		return true
@@ -200,11 +201,22 @@ func (tail *x86CustomHelperBoolTail) transport(ins Instr, state *x86ResultState,
 		state.valueStack.id = false
 	}
 	var gp, canonical [16]uint8
+	var pointers, addresses [16]bool
+	var origins [16]uint16
+	resultAlias := false
 	aliases := new([16]x86ResultSlotAddress)
 	for index, typ := range sig.Args {
 		root, _, _ := x86ResultGP(sig.ArgRegs[index], 4, arch)
 		if typ == Ptr {
 			value := state.boolFrameGP[root]
+			if !value.valid && !state.shapeOnly {
+				if !state.pointerGP[root] || !state.callerAddressGP[root] {
+					return false
+				}
+				pointers[root], addresses[root] = true, true
+				origins[root] = state.callerAddressOrigin[root]
+				continue
+			}
 			if state.shapeOnly && !value.valid {
 				value = x86ResultSlotAddress{start: resultOffset, end: resultOffset + 1, offset: resultOffset, valid: true}
 			}
@@ -212,6 +224,7 @@ func (tail *x86CustomHelperBoolTail) transport(ins Instr, state *x86ResultState,
 				return false
 			}
 			aliases[root] = value
+			resultAlias = true
 			continue
 		}
 		width := x86FrameScalarBytes(typ, arch)
@@ -222,9 +235,12 @@ func (tail *x86CustomHelperBoolTail) transport(ins Instr, state *x86ResultState,
 		}
 		gp[root], canonical[root] = mask, state.canonicalGP[root]&mask
 	}
+	if !resultAlias {
+		return false
+	}
 	state.gp, state.canonicalGP, state.boolFrameGP = gp, canonical, aliases
-	state.pointerGP, state.callerAddressGP = [16]bool{}, [16]bool{}
-	state.callerAddressOrigin = [16]uint16{}
+	state.pointerGP, state.callerAddressGP = pointers, addresses
+	state.callerAddressOrigin = origins
 	state.resultAddressGP = [16]x86ResultSlotAddress{}
 	state.xmm, state.vectorUpper, state.masks = [32]uint16{}, [32]uint64{}, [8]bool{}
 	state.flags, state.direction = 0, x86ResultDirectionUnknown
