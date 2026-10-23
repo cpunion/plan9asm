@@ -354,6 +354,7 @@ func translateAsmForPackage(pkg *packages.Package, asmPath, goos, goarch string,
 	if err != nil {
 		return translation{}, false, err
 	}
+	originalSource := src
 	imports := make(map[string]*types.Package, len(pkg.Imports))
 	for path, imported := range pkg.Imports {
 		if imported != nil && imported.Types != nil {
@@ -382,46 +383,8 @@ func translateAsmForPackage(pkg *packages.Package, asmPath, goos, goarch string,
 
 	resolve := resolveSymFunc(pkg.PkgPath)
 	if goarch == "wasm" {
-		wasmABI := plan9asm.WASMABIDirect
-		if goos == "js" || goos == "wasip1" {
-			wasmABI = plan9asm.WASMABIGo
-		}
-		tr, err := plan9asm.TranslateGoModule(plan9asm.GoPackage{
-			Path:    pkg.PkgPath,
-			Types:   pkg.Types,
-			Imports: imports,
-			Syntax:  pkg.Syntax,
-		}, src, plan9asm.GoModuleOptions{
-			FileName:       asmPath,
-			GOOS:           goos,
-			GOARCH:         goarch,
-			Sizes:          pkg.TypesSizes,
-			TargetTriple:   targetTriple(goos, goarch),
-			WASMABI:        wasmABI,
-			AnnotateSource: annotate,
-			ResolveSym:     resolve,
-		})
-		if err != nil {
-			return translation{}, false, err
-		}
-		defer tr.Module.Dispose()
-		fns := make([]functionInfo, 0, len(tr.Functions))
-		for _, fn := range tr.Functions {
-			sig := tr.Signatures[fn.ResolvedSymbol]
-			args := make([]string, len(sig.Args))
-			for i, arg := range sig.Args {
-				args[i] = string(arg)
-			}
-			ret := string(sig.Ret)
-			if ret == "" {
-				ret = string(plan9asm.Void)
-			}
-			fns = append(fns, functionInfo{
-				Symbol: fn.TextSymbol, Resolved: fn.ResolvedSymbol,
-				Args: args, Ret: ret,
-			})
-		}
-		return translation{LLVMIR: tr.Module.String(), Functions: fns}, true, nil
+		tr, err := translateLoadedGoModule(pkg, src, asmPath, goos, goarch, annotate)
+		return tr, err == nil, err
 	}
 	sigs, err := sigsForAsmFile(pkg, file, resolve, goarch)
 	if err != nil {
@@ -443,6 +406,14 @@ func translateAsmForPackage(pkg *packages.Package, asmPath, goos, goarch string,
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 			defer cancel()
 			tr, err := translateSDKSource(ctx, pkg, selected, file, asmPath, goos+"/"+goarch, annotate)
+			return tr, err == nil, err
+		}
+		if errors.Is(err, plan9asm.ErrProbeNeedsContext) && len(pkg.Syntax) != 0 &&
+			(goarch == "386" || goarch == "amd64" || goarch == "arm64") {
+			// Preserve the original successful hot path and SDK source route.
+			// This is at most one non-recursive second pass over the complete
+			// original source, using only the already-loaded typed declarations.
+			tr, err := translateLoadedGoModule(pkg, originalSource, asmPath, goos, goarch, annotate)
 			return tr, err == nil, err
 		}
 		return translation{}, false, err

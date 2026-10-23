@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"go/ast"
 	"go/types"
 	"os/exec"
 	"path/filepath"
@@ -128,10 +129,53 @@ func translateSDKSource(ctx context.Context, pkg *packages.Package, selected *sd
 
 func goPackageView(pkg *packages.Package) plan9asm.GoPackage {
 	imports := make(map[string]*types.Package, len(pkg.Imports))
+	syntax := make(map[string][]*ast.File, len(pkg.Imports))
 	for path, dependency := range pkg.Imports {
 		if dependency != nil {
 			imports[path] = dependency.Types
+			if dependency.Types != nil && len(dependency.Syntax) != 0 {
+				syntax[path] = dependency.Syntax
+			}
 		}
 	}
-	return plan9asm.GoPackage{Path: pkg.PkgPath, Types: pkg.Types, Imports: imports, Syntax: pkg.Syntax}
+	return plan9asm.GoPackage{Path: pkg.PkgPath, Types: pkg.Types, Imports: imports,
+		Syntax: pkg.Syntax, ImportSyntax: syntax}
+}
+
+// The caller owns this one complete-source consumption. Never retain the LLVM
+// module or its call-local declaration facts after copying the public result.
+func translateLoadedGoModule(pkg *packages.Package, source []byte, asmPath, goos, goarch string, annotate bool) (translation, error) {
+	wasmABI := plan9asm.WASMABIDirect
+	if goarch == "wasm" && (goos == "js" || goos == "wasip1") {
+		wasmABI = plan9asm.WASMABIGo
+	}
+	module, err := plan9asm.TranslateGoModule(goPackageView(pkg), source, plan9asm.GoModuleOptions{
+		FileName: asmPath, GOOS: goos, GOARCH: goarch, Sizes: pkg.TypesSizes,
+		TargetTriple: targetTriple(goos, goarch), WASMABI: wasmABI,
+		AnnotateSource: annotate, ResolveSym: resolveSymFunc(pkg.PkgPath),
+	})
+	if module != nil && !module.Module.IsNil() {
+		defer module.Module.Dispose()
+	}
+	if err != nil {
+		return translation{}, err
+	}
+	if module == nil || module.Module.IsNil() {
+		return translation{}, fmt.Errorf("complete GoModule translation returned no LLVM module")
+	}
+	functions := make([]functionInfo, 0, len(module.Functions))
+	for _, function := range module.Functions {
+		signature := module.Signatures[function.ResolvedSymbol]
+		arguments := make([]string, len(signature.Args))
+		for index, argument := range signature.Args {
+			arguments[index] = string(argument)
+		}
+		result := string(signature.Ret)
+		if result == "" {
+			result = string(plan9asm.Void)
+		}
+		functions = append(functions, functionInfo{Symbol: function.TextSymbol,
+			Resolved: function.ResolvedSymbol, Args: arguments, Ret: result})
+	}
+	return translation{LLVMIR: module.Module.String(), Functions: functions}, nil
 }

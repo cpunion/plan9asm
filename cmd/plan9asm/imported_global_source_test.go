@@ -4,6 +4,9 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"go/types"
 	"os"
 	"path/filepath"
@@ -177,7 +180,7 @@ func TestSimpleCLITranslateLoadedImportedGlobalFile(t *testing.T) {
 }
 
 func TestSimpleCLIImportedTypeOnlyViewHasNoDeclarationAuthority(t *testing.T) {
-	loaded, _, source := simpleImportedGlobalPackage(t, "amd64")
+	loaded, assembly, source := simpleImportedGlobalPackage(t, "amd64")
 	pkg := *loaded.Package
 	dependency := *pkg.Imports[simpleImportedStatePath]
 	dependency.Syntax = nil // Preserve the real export/type identity, but no declaration source.
@@ -185,5 +188,65 @@ func TestSimpleCLIImportedTypeOnlyViewHasNoDeclarationAuthority(t *testing.T) {
 	ir, err := simpleImportedGlobalModule(t, &pkg, source, "amd64")
 	if ir != "" || !errors.Is(err, plan9asm.ErrProbeNeedsContext) {
 		t.Fatal("a real type-only import was incorrectly treated as complete declaration evidence", err)
+	}
+	translated, text, err := translateAsmForPackage(&pkg, assembly, "linux", "amd64", false, loaded.selected)
+	if text || translated.LLVMIR != "" || !errors.Is(err, plan9asm.ErrProbeNeedsContext) {
+		t.Fatal("actual CLI fallback borrowed source declarations from a type-only import", err)
+	}
+}
+
+func TestSimpleCLIImportedGlobalDeclarationGuards(t *testing.T) {
+	for _, mutation := range []string{"missing-current-syntax", "changed-caller-import", "missing-import-types", "unselected-platform-source"} {
+		t.Run(mutation, func(t *testing.T) {
+			loaded, assembly, source := simpleImportedGlobalPackage(t, "amd64")
+			pkg := loaded.Package
+			switch mutation {
+			case "missing-current-syntax":
+				pkg.Syntax = nil
+			case "changed-caller-import":
+				// Mutate the actual loaded caller AST, leaving its old typed
+				// imports unchanged. Export identity alone must not hide this.
+				file := pkg.Syntax[0]
+				var declarations []ast.Decl
+				for _, declaration := range file.Decls {
+					if group, ok := declaration.(*ast.GenDecl); !ok || group.Tok != token.IMPORT {
+						declarations = append(declarations, declaration)
+					}
+				}
+				if len(declarations) == len(file.Decls) {
+					t.Fatal("actual caller import mutation did not apply")
+				}
+				file.Decls, file.Imports = declarations, nil
+			case "missing-import-types":
+				pkg.Imports[simpleImportedStatePath].Types = nil
+			case "unselected-platform-source":
+				dependency := pkg.Imports[simpleImportedStatePath]
+				inactive := filepath.Join(dependency.Dir, "word_other.go")
+				file, err := parser.ParseFile(token.NewFileSet(), inactive, nil, parser.ParseComments)
+				if err != nil {
+					t.Fatal(err)
+				}
+				// These are real source bytes, but not the target's selected
+				// declaration. They describe uint64, not the loaded uint32.
+				changed := 0
+				for index, name := range dependency.CompiledGoFiles {
+					if filepath.Base(name) == "word_linux.go" {
+						dependency.Syntax[index] = file
+						changed++
+					}
+				}
+				if changed != 1 {
+					t.Fatal("selected platform source mutation did not apply exactly once")
+				}
+			}
+			ir, err := simpleImportedGlobalModule(t, pkg, source, "amd64")
+			if ir != "" || !errors.Is(err, plan9asm.ErrProbeNeedsContext) {
+				t.Fatal("changed or absent original loaded declarations acquired read authority", err)
+			}
+			translated, text, err := translateAsmForPackage(pkg, assembly, "linux", "amd64", false, loaded.selected)
+			if text || translated.LLVMIR != "" || !errors.Is(err, plan9asm.ErrProbeNeedsContext) {
+				t.Fatal("actual CLI fallback borrowed changed or absent loaded declarations", err)
+			}
+		})
 	}
 }
