@@ -68,6 +68,7 @@ func TestARM64PreludeContainsOnlyUsedDeclarations(t *testing.T) {
 					t.Fatalf("generated %d declarations, want only %d used declarations (IR: %d bytes)",
 						len(declarations), len(row.want), len(ir))
 				}
+				t.Logf("%d bytes of IR, %d used declarations", len(ir), len(declarations))
 				for _, name := range row.want {
 					found := false
 					for _, declaration := range declarations {
@@ -77,6 +78,30 @@ func TestARM64PreludeContainsOnlyUsedDeclarations(t *testing.T) {
 						t.Errorf("missing used declaration %s", name)
 					}
 				}
+			})
+		}
+	}
+}
+
+func TestARM64DemandPreludeLLVM22Objects(t *testing.T) {
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM 22 llc not found")
+	}
+	row := targetBackendCase{
+		arch: ArchARM64, goarch: "arm64", result: true,
+		body: "CNTB R0\nRBIT R0, R1\nCLZW R1, R0\nMOVD R0, ret+0(FP)\nRET",
+	}
+	for _, triple := range []string{
+		"aarch64-unknown-linux-gnu", "aarch64-apple-darwin", "aarch64-pc-windows-msvc",
+	} {
+		for _, api := range []string{"text", "module", "Go"} {
+			t.Run(triple+"/"+api, func(t *testing.T) {
+				ir, err := targetBackendRequest(t, api, triple, row)
+				if err != nil {
+					t.Fatal(err)
+				}
+				compileLLVMToObject(t, llc, triple, "demand.ll", "demand.o", ir)
 			})
 		}
 	}
