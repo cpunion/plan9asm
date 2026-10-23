@@ -100,6 +100,7 @@ func (source *x86ABI0BoolCallSource) prepareTail(fn Func, sig FuncSig, byName ma
 			resolve := func(symbol string) string { return x86ABI0BoolCallResolve(source.options, symbol) }
 			consumer := newX86Ctx(new(strings.Builder), callee, calleeSig, resolve, source.signatures, arch, source.options.TargetTriple, false)
 			consumer.fpScalarData = x86LoweredScalarDataReads(source.original, resolve, source.signatures, arch)
+			consumer.goReadOnlyStorage = source.options.goReadOnlyStorage
 			if err := consumer.checkLoweredScalarFPResultInitialization(); err != nil {
 				return nil, err
 			}

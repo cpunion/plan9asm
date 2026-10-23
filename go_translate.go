@@ -250,6 +250,30 @@ func translateGoModuleInContext(ctx llvm.Context, pkg GoPackage, src []byte, opt
 	if err != nil {
 		return nil, fmt.Errorf("%s: parse %s: %w", pkgPath, asmName, err)
 	}
+	var readOnlyStorage *goReadOnlyStorage
+	if opt.NumericalReads == nil && opt.X86TLSMoves == nil && opt.ARM64ByteCarrierSource == nil {
+		storagePackage := pkg
+		storagePackage.Path = pkgPath
+		readOnlyStorage, err = bindGoReadOnlyStorage(storagePackage, file, opt.Sizes, opt.GOARCH, resolve)
+		if err != nil {
+			return nil, err
+		}
+		if readOnlyStorage != nil {
+			resolve = readOnlyStorage.resolveSymbol
+			defer func() {
+				final := readOnlyStorage.verify()
+				if sha256.Sum256(originalSource) != originalSourceDigest {
+					final = errors.Join(final, goReadOnlyContext("original Go assembly input changed during consumption"))
+				}
+				if final != nil {
+					if result != nil && !result.Module.IsNil() {
+						result.Module.Dispose()
+					}
+					result, resultErr = nil, errors.Join(resultErr, final)
+				}
+			}()
+		}
+	}
 	closureSource := *file
 	closureSource.Funcs = append([]Func(nil), file.Funcs...)
 	tailSigs, err := goBindARM64ABI0TailDeclarations(pkg, file, resolve, opt)
@@ -276,7 +300,7 @@ func translateGoModuleInContext(ctx llvm.Context, pkg GoPackage, src []byte, opt
 		}
 		request := Options{Goarch: opt.GOARCH, TargetTriple: opt.TargetTriple,
 			ResolveSym: resolve, Sigs: completeSigs, NumericalReads: opt.NumericalReads, X86TLSMoves: opt.X86TLSMoves,
-			WASMABI: opt.WASMABI, X87Mode: opt.X87Mode, AnnotateSource: opt.AnnotateSource}
+			WASMABI: opt.WASMABI, X87Mode: opt.X87Mode, AnnotateSource: opt.AnnotateSource, goReadOnlyStorage: readOnlyStorage}
 		calls, err := prepareX86ABI0BoolCalls(file, request)
 		if err != nil {
 			return nil, err
@@ -347,7 +371,7 @@ func translateGoModuleInContext(ctx llvm.Context, pkg GoPackage, src []byte, opt
 		request, signatures := file, sigs
 		defer func() {
 			final := graph.verify(request, Options{Goarch: opt.GOARCH, TargetTriple: opt.TargetTriple, ResolveSym: resolve, Sigs: signatures,
-				NumericalReads: opt.NumericalReads, WASMABI: opt.WASMABI, X87Mode: opt.X87Mode, AnnotateSource: opt.AnnotateSource})
+				NumericalReads: opt.NumericalReads, WASMABI: opt.WASMABI, X87Mode: opt.X87Mode, AnnotateSource: opt.AnnotateSource, goReadOnlyStorage: readOnlyStorage})
 			if sha256.Sum256(originalSource) != originalSourceDigest {
 				final = errors.Join(final, x86DirectTailContext("original Go assembly input changed during consumption"))
 			}
@@ -381,7 +405,7 @@ func translateGoModuleInContext(ctx llvm.Context, pkg GoPackage, src []byte, opt
 		callOriginal = completeFile
 		boolCalls = registerBoolCalls
 		if boolCalls == nil {
-			boolCalls, err = prepareX86ABI0BoolCalls(completeFile, Options{Goarch: opt.GOARCH, TargetTriple: opt.TargetTriple, ResolveSym: resolve, Sigs: sigs})
+			boolCalls, err = prepareX86ABI0BoolCalls(completeFile, Options{Goarch: opt.GOARCH, TargetTriple: opt.TargetTriple, ResolveSym: resolve, Sigs: sigs, goReadOnlyStorage: readOnlyStorage})
 			if err != nil {
 				return nil, err
 			}
@@ -403,6 +427,7 @@ func translateGoModuleInContext(ctx llvm.Context, pkg GoPackage, src []byte, opt
 		}
 	}
 	mod, err := TranslateModuleInContext(ctx, file, Options{
+		goReadOnlyStorage:      readOnlyStorage,
 		x86OriginalFile:        callOriginal,
 		x86BoolCallSource:      boolCalls,
 		TargetTriple:           opt.TargetTriple,

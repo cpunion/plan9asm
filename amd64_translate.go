@@ -535,12 +535,13 @@ func emitX86RelocationAnchor(b *strings.Builder, fn Func, sig FuncSig, resolve f
 }
 
 type x86FunctionSource struct {
-	scalarData       map[x86StaticSBAddress]int64
-	lockNamespace    string
-	bitScanNamespace string
-	boolCalls        *x86ABI0BoolCallSource
-	declaration      FuncSig
-	inferredAttrs    string
+	goReadOnlyStorage *goReadOnlyStorage
+	scalarData        map[x86StaticSBAddress]int64
+	lockNamespace     string
+	bitScanNamespace  string
+	boolCalls         *x86ABI0BoolCallSource
+	declaration       FuncSig
+	inferredAttrs     string
 
 	staticAddressValues *x86StaticAddressValues
 }
@@ -561,6 +562,7 @@ func translateFuncX86(b *strings.Builder, fn Func, sig FuncSig, resolve func(str
 
 	c := newX86Ctx(b, fn, sig, resolve, sigs, goarch, targetTriple, annotateSource)
 	if len(sources) == 1 {
+		c.goReadOnlyStorage = sources[0].goReadOnlyStorage
 		c.fpSourceSig = sources[0].declaration
 		c.fpFeatureAttrs = sources[0].inferredAttrs
 		c.lockScalarNS = sources[0].lockNamespace

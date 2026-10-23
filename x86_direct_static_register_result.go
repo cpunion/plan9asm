@@ -82,7 +82,8 @@ func (c *amd64Ctx) checkStaticIntegerResultInitialization() error {
 	}
 	transfer := func(_ int, ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string) bool {
 		state.loweredStaticReads = c.fpScalarData
-		defer func() { state.loweredStaticReads = nil }()
+		state.goReadOnlyRead = c.goReadOnlyStorage.readFor(ins, arch)
+		defer func() { state.loweredStaticReads, state.goReadOnlyRead = nil, nil }()
 		if view, bound := x86StaticIntegerResultRawView(ins, arch); bound {
 			ins = view // Local effect dispatch only; never rewrite either sealed source snapshot.
 			if accepted, known := x86ResultUnknownSBAddressStep(ins, state, arch); known {

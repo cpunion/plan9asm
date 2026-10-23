@@ -226,6 +226,7 @@ type Options struct {
 	// no source/native permission can be reconstructed through public Options.
 	x86OriginalFile   *File
 	x86BoolCallSource *x86ABI0BoolCallSource
+	goReadOnlyStorage *goReadOnlyStorage
 }
 
 // Translate converts a parsed Plan 9 asm File into LLVM IR text (`.ll`).
@@ -249,6 +250,14 @@ func translateIRText(file *File, opt Options) (resultText string, result error) 
 	if file == nil {
 		return "", fmt.Errorf("nil file")
 	}
+	if err := opt.goReadOnlyStorage.verify(); err != nil {
+		return "", err
+	}
+	defer func() {
+		if err := opt.goReadOnlyStorage.verify(); err != nil {
+			resultText, result = "", errors.Join(result, err)
+		}
+	}()
 	callOriginal := file
 	if opt.x86OriginalFile != nil {
 		callOriginal = opt.x86OriginalFile
@@ -418,7 +427,7 @@ func translateIRText(file *File, opt Options) (resultText string, result error) 
 		emitX86BitScanHelpers(&b, file, opt.Goarch, bitScanNamespace)
 	}
 
-	emitExternSBGlobals(&b, file, resolve, opt.Sigs)
+	emitExternSBGlobals(&b, file, resolve, opt.Sigs, opt.goReadOnlyStorage)
 
 	if len(file.Data) != 0 || len(file.Globl) != 0 {
 		if err := emitDataGlobalsWithSigs(&b, file, resolve, opt.Sigs, opt.WASMABI); err != nil {
@@ -528,12 +537,13 @@ func translateIRText(file *File, opt Options) (resultText string, result error) 
 		if file.Arch == ArchAMD64 {
 			if err := translateFuncX86(&b, function, sig, resolve, opt.Sigs, opt.Goarch, opt.TargetTriple, opt.X87Mode, opt.AnnotateSource,
 				x86FunctionSource{
-					inferredAttrs:    inferredAttrs,
-					scalarData:       scalarData,
-					lockNamespace:    lockScalarNamespace,
-					bitScanNamespace: bitScanNamespace,
-					boolCalls:        boolCalls,
-					declaration:      sourceSig,
+					goReadOnlyStorage: opt.goReadOnlyStorage,
+					inferredAttrs:     inferredAttrs,
+					scalarData:        scalarData,
+					lockNamespace:     lockScalarNamespace,
+					bitScanNamespace:  bitScanNamespace,
+					boolCalls:         boolCalls,
+					declaration:       sourceSig,
 
 					staticAddressValues: staticAddressValues,
 				}); err != nil {
@@ -725,7 +735,7 @@ func funcSigSymbol(resolved string, sig FuncSig) string {
 	return resolved
 }
 
-func emitExternSBGlobals(b *strings.Builder, file *File, resolve func(string) string, sigs map[string]FuncSig) {
+func emitExternSBGlobals(b *strings.Builder, file *File, resolve func(string) string, sigs map[string]FuncSig, goStorage ...*goReadOnlyStorage) {
 	resolveSBBase := func(base string) string {
 		base = strings.TrimSpace(base)
 		if base == "" {
@@ -741,6 +751,11 @@ func emitExternSBGlobals(b *strings.Builder, file *File, resolve func(string) st
 	// global variables whose address is computed via GEP in the lowering.
 	need := map[string]bool{}
 	numericalExtents := map[string]int64{}
+	if len(goStorage) == 1 && goStorage[0] != nil {
+		for _, object := range goStorage[0].objects {
+			numericalExtents[object.native] = object.size
+		}
+	}
 	defined := map[string]bool{}
 
 	// Anything in DATA/GLOBL will be defined in this module.

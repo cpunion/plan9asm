@@ -361,7 +361,8 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 	}
 	transfer := func(ordinal int, ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string) bool {
 		state.loweredStaticReads = c.fpScalarData
-		defer func() { state.loweredStaticReads = nil }()
+		state.goReadOnlyRead = c.goReadOnlyStorage.readFor(ins, arch)
+		defer func() { state.loweredStaticReads, state.goReadOnlyRead = nil, nil }()
 		keepAddressBits := false
 		defer func() {
 			if !keepAddressBits {
@@ -795,6 +796,7 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		// A reaching-state clone deliberately drops temporary readers.
 		// This isolated attempt is still inside the same lowering transfer.
 		next.loweredStaticReads = state.loweredStaticReads
+		next.goReadOnlyRead = state.goReadOnlyRead
 		if x86ScalarFPResultTransfer(ins, &next, owned, resultOffset, arch) {
 			*state = next
 			return true

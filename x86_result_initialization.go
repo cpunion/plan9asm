@@ -672,6 +672,7 @@ type x86ResultState struct {
 	// caller, raw-return, pointer or declaration-only query permission.
 	// Clear them before any state escapes into the CFG.
 	loweredStaticReads   map[x86StaticSBAddress]int64
+	goReadOnlyRead       *goReadOnlyRead
 	literalMemoryOperand *Operand
 	literalMemoryBytes   int64
 }
@@ -711,6 +712,7 @@ func (state x86ResultState) clone() x86ResultState {
 		state.continuation = &copy
 	}
 	state.loweredStaticReads = nil
+	state.goReadOnlyRead = nil
 	state.literalMemoryOperand, state.literalMemoryBytes = nil, 0
 	return state
 }
@@ -913,7 +915,7 @@ func x86ResultRead(arg Operand, width int64, state *x86ResultState, owned []bool
 		return true
 	}
 	if address, valid := x86StaticSBReadAddress(arg, arch); valid {
-		return width > 0 && state.loweredStaticReads[address] >= width
+		return width > 0 && state.loweredStaticReads[address] >= width || state.goReadOnlyRead.allows(arg, width)
 	}
 	switch arg.Kind {
 	case OpImm:

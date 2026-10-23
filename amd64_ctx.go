@@ -84,23 +84,24 @@ type amd64Ctx struct {
 	classicSize       int64
 	classicBias       int64
 
-	fpParams         map[int64]FrameSlot // off(FP) -> slot
-	fpParamAlloca    map[int64]string    // off(FP) -> mutable parameter shadow
-	fpResults        []FrameSlot
-	fpResAllocaOff   map[int64]string             // off(FP) -> alloca
-	fpResAllocaIdx   map[int]string               // result index -> alloca
-	fpResWritten     map[int]bool                 // result index -> whether written via +off(FP)
-	fpResAddrTaken   map[int]bool                 // result index -> address of fp_ret_* escaped
-	fpScalarSource   Func                         // source for all-path checks of new scalar result views
-	fpSourceSig      FuncSig                      // original request-local declaration before feature rendering
-	fpFeatureAttrs   string                       // exact compiler-rendered feature reference, never supplied attributes
-	fpBoolCallSource *x86ABI0BoolCallSource       // complete custom-helper graph, not a standalone register entry
-	fpScalarData     map[x86StaticSBAddress]int64 // exact effective SB address -> available emitted numerical bytes
-	fpScalarChecked  bool
-	fpScalarCheckErr error
-	fpScalarTrapOnly bool // Complete private logical-shadow proof: every path ends in an exact trap.
-	fpMixedBoolBytes bool // Complete ordinary tuple NUM/canonical proof passed.
-	dataBPSource     bool // Complete named leaf's private opaque-pointer holder, never physical BP.
+	fpParams          map[int64]FrameSlot // off(FP) -> slot
+	fpParamAlloca     map[int64]string    // off(FP) -> mutable parameter shadow
+	fpResults         []FrameSlot
+	fpResAllocaOff    map[int64]string             // off(FP) -> alloca
+	fpResAllocaIdx    map[int]string               // result index -> alloca
+	fpResWritten      map[int]bool                 // result index -> whether written via +off(FP)
+	fpResAddrTaken    map[int]bool                 // result index -> address of fp_ret_* escaped
+	fpScalarSource    Func                         // source for all-path checks of new scalar result views
+	fpSourceSig       FuncSig                      // original request-local declaration before feature rendering
+	fpFeatureAttrs    string                       // exact compiler-rendered feature reference, never supplied attributes
+	fpBoolCallSource  *x86ABI0BoolCallSource       // complete custom-helper graph, not a standalone register entry
+	fpScalarData      map[x86StaticSBAddress]int64 // exact effective SB address -> available emitted numerical bytes
+	goReadOnlyStorage *goReadOnlyStorage           // declaration-only numerical reads, never emitted/writable DATA
+	fpScalarChecked   bool
+	fpScalarCheckErr  error
+	fpScalarTrapOnly  bool // Complete private logical-shadow proof: every path ends in an exact trap.
+	fpMixedBoolBytes  bool // Complete ordinary tuple NUM/canonical proof passed.
+	dataBPSource      bool // Complete named leaf's private opaque-pointer holder, never physical BP.
 
 	fpStaticAddressValues *x86StaticAddressValues // No dereference capability.
 	nativeMMXRegion       *x86NativeMMXRegion     // Whole source/NUM proof paired to the actual emitted MMX region.
