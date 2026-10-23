@@ -369,10 +369,6 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		state.loweredStaticReads = c.fpScalarData
 		state.goReadOnlyRead = c.goReadOnlyStorage.readFor(ins, arch)
 		defer func() { state.loweredStaticReads, state.goReadOnlyRead = nil, nil }()
-		if operand, width, valid := x86OwnedIndexedVectorReadAt(ownedVectorReads, ordinal, ins); valid {
-			state.literalMemoryOperand, state.literalMemoryBytes = &operand, width
-			defer func() { state.literalMemoryOperand, state.literalMemoryBytes = nil, 0 }()
-		}
 		keepAddressBits := false
 		defer func() {
 			if !keepAddressBits {
@@ -384,6 +380,11 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		}
 		if accepted, known := x86ResultNumericalReadStep(ins, state, owned, resultOffset, arch); known {
 			return accepted // A checked mutable SB source keeps its own lifetime and byte effects.
+		}
+		if operand, width, valid := x86OwnedIndexedVectorReadAt(ownedVectorReads, ordinal, ins); valid {
+			// Ordinary private tables never precede complete SDK source owners.
+			state.literalMemoryOperand, state.literalMemoryBytes = &operand, width
+			defer func() { state.literalMemoryOperand, state.literalMemoryBytes = nil, 0 }()
 		}
 		if accepted, known := x86ResultImmediateBlendStep(ins, state, owned, arch, true); known {
 			return accepted // Legacy Type4 opcode or exact volatile VEX tuple retains dead reads and faults.
