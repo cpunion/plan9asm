@@ -153,9 +153,12 @@ The simple CLI now forwards loaded imported declarations and uses one bounded
 whole-source GoModule fallback only after a context failure. Its complete CLI
 suite passed38 roots and39 children without skips. The new explicit-context
 entry lets this caller dispose its LLVM module and context together, while the
-legacy API retains its existing ownership contract. The rich CLI still needs
-the equivalent selected-source bridge; its actual math/big invocation has a
-retained failing regression, not just an IR-substring fixture.
+legacy API retains its existing ownership contract. The rich CLI's bounded
+selected-source bridge now passes the actual complete math/big file and LLVM22
+object, same-package/imported declarations on386/amd64, and output-time source
+mutation controls (five roots, nine children). It adds no Go query or AST cache;
+unrelated native/source roles retain their existing route. Its broader suite
+and full-source performance must still be checked after integration.
 
 The strict full-source benchmark at published `a5504a23c768` still fails:
 linux/amd6432/55 passed in280 wall seconds; linux/arm6440/47 in7 seconds.
