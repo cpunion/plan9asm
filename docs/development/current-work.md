@@ -98,6 +98,9 @@ native ABI, spill home, closure or pointee permission and expires at return.
 Internal resolution must not repeatedly format all syntax or query all layouts:
 complete source checks remain at call boundaries, including after caller layout
 callbacks. Preserve mutation/revocation and internal-work-count regressions.
+Closing that call must also drop its package, syntax, type, plan and callback
+references. Returned signatures retain only a closed private tombstone, not the
+entire input graph. Public signatures and caller-owned LLVM modules are unchanged.
 
 LLGo PR2694 remains a separate draft at `aa438347ce34`. Its 13 workflows finished
 naturally with six successes and seven failures. The cgo-preamble, Windows UTF-8
@@ -105,10 +108,18 @@ collector and fork-provenance notice changes are published, but remaining ABI
 failures are not resolved by those changes. Local imported-source handoff and
 typed argument repairs pass the actual AMD64 compare/count/index/indexbyte
 files. Equal still needs the real hidden closure producer/transport contract;
-386 helpers also need distinct incoming-pointer and result-byte roles.
+386 helpers now distinguish incoming pointers from the canonical result-byte
+pointer and share ordinary scalar/extension and whole128 read effects. The
+complete386 equal file now reaches its varlen closure load, not a helper-read
+failure. This is still a failed whole-file observation, not runtime success.
 Publish a verified translator revision before updating the exact fork pin.
 Do not fake closure registers, relabel pointers as integers, or filter failed
 public roots to turn these integration failures into passing tests.
+LLGo's actual equality function value carries a Type pointer, whereas stock Go's
+varlen consumer expects a captured byte count after the code pointer. Connecting
+those layouts directly would read PtrBytes as a length and can report unequal
+pointer-free values equal. A real producer/transport or complete runtime-owner
+replacement belongs to the separate runtime integration work below.
 
 ## Closeout mechanisms
 
