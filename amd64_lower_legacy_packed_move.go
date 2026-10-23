@@ -5,6 +5,21 @@ import (
 	"strings"
 )
 
+// The paired native emitter preserves the exact whole128 opcode, including
+// alignment faults. Continuation defines the vector bytes but grants no
+// initialized pointee, native store or virtual-frame permission. Callers must
+// separately close the original source/physical-mode identity.
+func x86LoweredLegacyPackedMoveRead(ins Instr, state *x86ResultState, owned []bool,
+	resultOffset int64, arch string) (bool, bool) {
+	form, known, err := x86LegacyPackedMoveProperties(ins.Op, ins, arch)
+	if !known || err != nil || form.memory != 0 || form.source.Kind != OpMem ||
+		form.source.Mem.Sym != "" || !x86OrdinaryNativeMemoryOperand(form.source, arch) {
+		return false, false
+	}
+	return x86ResultIncomingPointerReadAddressIdentity(form.source, state, arch) &&
+		x86ResultStore(form.destination, 16, state, owned, resultOffset, arch), true
+}
+
 // Both floating and integer dispatch use the same whole-128-bit yxmov grammar.
 // Native operands keep the original opcode: align-1 loads lose aligned faults,
 // and ordinary LLVM loads disappear when the source result is dead.

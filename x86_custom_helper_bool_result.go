@@ -120,6 +120,9 @@ func (source *x86ABI0BoolCallSource) prepareCustomRegisterTail(plan *x86ABI0Bool
 			if accepted, known := x86LoweredScalarExtensionRead(ins, state, owned, resultOffset, arch); known {
 				return accepted
 			}
+			if accepted, known := x86LoweredLegacyPackedMoveRead(ins, state, owned, resultOffset, arch); known {
+				return accepted
+			}
 			if !x86ScalarFPResultTransfer(ins, state, owned, resultOffset, arch) {
 				return false
 			}

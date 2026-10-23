@@ -791,15 +791,8 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 			return x86ResultRead(form.source, 16, state, owned, arch) &&
 				x86ResultIncomingPointerAddressIdentity(form.destination, state, arch)
 		}
-		if known && err == nil && form.memory == 0 && form.source.Kind == OpMem &&
-			form.source.Mem.Sym == "" && x86OrdinaryNativeMemoryOperand(form.source, arch) {
-			// This same typed form selects the original sideeffect opcode
-			// in lowerLegacyPackedMove. Only reaching incoming-pointer
-			// identity and initialized numerical indexes supply an address.
-			// No native store, static symbol, virtual frame or unknown base
-			// gains a numerical input from this load-only rule.
-			return x86ResultIncomingPointerReadAddressIdentity(form.source, state, arch) &&
-				x86ResultStore(form.destination, 16, state, owned, resultOffset, arch)
+		if accepted, known := x86LoweredLegacyPackedMoveRead(ins, state, owned, resultOffset, arch); known {
+			return accepted
 		}
 		next := state.clone()
 		// A reaching-state clone deliberately drops temporary readers.
