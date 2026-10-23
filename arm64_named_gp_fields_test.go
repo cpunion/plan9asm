@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -9,19 +10,45 @@ import (
 	"testing"
 )
 
+// Go 1.20/1.21 Optab has four operand classes; Go 1.22 added a5
+// (the second destination). These two families have no second destination.
+// Normalize only that known, explicitly empty column, never arbitrary fields.
+func arm64NamedNormalizeGoRow(row string) (string, error) {
+	fields := strings.Split(strings.TrimSuffix(strings.TrimPrefix(strings.TrimSpace(row), "{"), "}"), ",")
+	for index := range fields {
+		fields[index] = strings.TrimSpace(fields[index])
+	}
+	switch len(fields) {
+	case 10:
+	case 11:
+		if fields[5] != "C_NONE" {
+			return "", errors.New("unexpected ARM64 second-destination class")
+		}
+		fields = append(fields[:5], fields[6:]...)
+	default:
+		return "", errors.New("unknown ARM64 Optab layout")
+	}
+	return "{" + strings.Join(fields, ", ") + "}", nil
+}
+
 func TestARM64NamedMoveWideAndBitfieldCompleteGoRows(t *testing.T) {
 	data, err := os.ReadFile(filepath.Join(testGOROOT(t), "src/cmd/internal/obj/arm64/asm7.go"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, family := range []struct{ root, row string }{
-		{"AMOVK", `{AMOVK, C_VCON, C_NONE, C_NONE, C_ZREG, C_NONE, 33, 4, 0, 0, 0}`},
-		{"ABFM", `{ABFM, C_VCON, C_ZREG, C_VCON, C_ZREG, C_NONE, 42, 4, 0, 0, 0}`},
+		{"AMOVK", `{AMOVK, C_VCON, C_NONE, C_NONE, C_ZREG, 33, 4, 0, 0, 0}`},
+		{"ABFM", `{ABFM, C_VCON, C_ZREG, C_VCON, C_ZREG, 42, 4, 0, 0, 0}`},
 	} {
 		source := string(data)
-		if strings.Count(source, family.row) != 1 ||
+		rows := regexp.MustCompile(`(?m)^\s*(\{`+family.root+`,[^{}]*\})\s*,`).FindAllStringSubmatch(source, -1)
+		if len(rows) != 1 ||
 			len(regexp.MustCompile(`(?m)^\s*\{`+family.root+`,`).FindAllString(source, -1)) != 1 {
 			t.Fatal("complete Go operand row changed", family.root)
+		}
+		normalized, err := arm64NamedNormalizeGoRow(rows[0][1])
+		if err != nil || normalized != family.row {
+			t.Fatal("complete Go operand fields changed", family.root, normalized, err)
 		}
 		start := strings.Index(source, "case "+family.root+":")
 		if start < 0 {
@@ -50,6 +77,27 @@ func TestARM64NamedMoveWideAndBitfieldCompleteGoRows(t *testing.T) {
 		if len(want) != 0 {
 			t.Fatal("Go family member disappeared", want)
 		}
+	}
+	for _, row := range []struct {
+		name, source string
+		valid        bool
+	}{
+		{"four-classes", `{AMOVK, C_VCON, C_NONE, C_NONE, C_ZREG, 33, 4, 0, 0, 0}`, true},
+		{"five-classes", "{ AMOVK,\tC_VCON, C_NONE, C_NONE, C_ZREG, C_NONE,\n33,4,0,0,0 }", true},
+		{"new-destination", `{AMOVK, C_VCON, C_NONE, C_NONE, C_ZREG, C_ZREG, 33, 4, 0, 0, 0}`, false},
+		{"unknown-layout", `{AMOVK, C_VCON, C_NONE, C_NONE, C_ZREG, C_NONE, C_NONE, 33, 4, 0, 0, 0}`, false},
+		{"missing-column", `{AMOVK, C_VCON, C_NONE, C_NONE, C_ZREG, 33, 4, 0, 0}`, false},
+	} {
+		t.Run(row.name, func(t *testing.T) {
+			normalized, err := arm64NamedNormalizeGoRow(row.source)
+			if row.valid {
+				if err != nil || normalized != "{AMOVK, C_VCON, C_NONE, C_NONE, C_ZREG, 33, 4, 0, 0, 0}" {
+					t.Fatal("known Go layout did not retain every field", normalized, err)
+				}
+			} else if err == nil {
+				t.Fatal("unknown Go operand-table layout accepted", normalized)
+			}
+		})
 	}
 }
 
