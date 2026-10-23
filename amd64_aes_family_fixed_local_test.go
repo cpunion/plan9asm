@@ -7,7 +7,7 @@ import (
 )
 
 func TestX86AESFamilyActualBoundFixedLocalConsumers(t *testing.T) {
-	t.Setenv("GOCACHE", t.TempDir())
+	goAMD64FramePrepareOwnedToolCache(t)
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM22 required")

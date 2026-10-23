@@ -32,7 +32,7 @@ func fixedLocalDataFixture(t *testing.T, operation, data string) (GoPackage, GoA
 }
 
 func TestGoAMD64FixedLocalReadonlyDataThreeTargetObjects(t *testing.T) {
-	t.Setenv("GOCACHE", t.TempDir())
+	goAMD64FramePrepareOwnedToolCache(t)
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc required")

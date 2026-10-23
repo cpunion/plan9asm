@@ -71,7 +71,7 @@ func TestGoAMD64FixedLocalReadonlyDataWindowsRegisteredConsumers(t *testing.T) {
 
 func fixedLocalDataTargetConsumers(t *testing.T, target, triple string) {
 	t.Helper()
-	t.Setenv("GOCACHE", t.TempDir())
+	goAMD64FramePrepareOwnedToolCache(t)
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc required")
@@ -108,7 +108,7 @@ func fixedLocalDataTargetConsumers(t *testing.T, target, triple string) {
 }
 
 func TestGoAMD64FixedLocalReadonlyDataRejectsUnownedAccesses(t *testing.T) {
-	t.Setenv("GOCACHE", t.TempDir())
+	goAMD64FramePrepareOwnedToolCache(t)
 	for _, row := range []struct{ name, operation, data string }{
 		{"past end", "MOVOU literal<>+24(SB),X0", fixedLocalLiteralData},
 		{"negative", "MOVQ literal<>-1(SB),DX", fixedLocalLiteralData},

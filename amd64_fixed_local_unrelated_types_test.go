@@ -11,7 +11,7 @@ import (
 )
 
 func TestGoAMD64FixedLocalUnrelatedGoTypesObjects(t *testing.T) {
-	t.Setenv("GOCACHE", t.TempDir())
+	goAMD64FramePrepareOwnedToolCache(t)
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc required")

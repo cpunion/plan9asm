@@ -10,7 +10,7 @@ import (
 )
 
 func TestCrossLinuxRuntimeMatrixGoAMD64FixedLocalReadonlyData(t *testing.T) {
-	t.Setenv("GOCACHE", t.TempDir())
+	goAMD64FramePrepareOwnedToolCache(t)
 	execution := x86FloatCompareRuntimeTools(t, x86FloatCompareSSE)
 	operations := []string{
 		"MOVOU literal<>(SB),X0\nPADDQ 16(SP),X0",

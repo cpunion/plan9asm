@@ -21,12 +21,10 @@ import (
 func TestGoAMD64FrameSourceCompleteOrdinaryGoDeclarations(t *testing.T) {
 	// Reuse only this root's owned compiler cache, not source identities.
 	// Every case still executes actual Go and consumes its selected export.
-	t.Setenv("GOCACHE", t.TempDir())
 	// Recent Go versions build objdump lazily, even for `go tool -n`.
 	// Prepare only the compiler artifact before any bounded source lease;
 	// each case still independently discovers and verifies the actual tool.
-	_, preparation := goAMD64FrameSourceFixture(t)
-	fixedLocalConversionPrepareToolCache(t, preparation)
+	goAMD64FramePrepareOwnedToolCache(t)
 
 	for _, fixture := range []struct {
 		name, imports, declarations string

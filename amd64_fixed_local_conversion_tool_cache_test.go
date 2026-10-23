@@ -6,6 +6,15 @@ import (
 	"testing"
 )
 
+// Own one disposable compiler cache for the complete root. Tool construction
+// precedes every source lease; the setup fixture creates no source observation.
+func goAMD64FramePrepareOwnedToolCache(t *testing.T) {
+	t.Helper()
+	t.Setenv("GOCACHE", t.TempDir())
+	_, request := goAMD64FrameSourceFixture(t)
+	fixedLocalConversionPrepareToolCache(t, request)
+}
+
 // Tool construction is setup, not a source/object observation. In particular,
 // this output cannot replace Capture's independent bounded tool query or seals.
 func fixedLocalConversionPrepareToolCache(t *testing.T, request GoAMD64FrameCaptureRequest) {

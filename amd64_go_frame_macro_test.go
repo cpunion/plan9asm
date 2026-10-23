@@ -11,7 +11,7 @@ import (
 )
 
 func TestGoAMD64FrameSourceConditionalMacrosMatchActualObjects(t *testing.T) {
-	t.Setenv("GOCACHE", t.TempDir())
+	goAMD64FramePrepareOwnedToolCache(t)
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc required")
@@ -137,7 +137,7 @@ func TestGoAMD64FrameSourceConditionalMacrosMatchActualObjects(t *testing.T) {
 }
 
 func TestGoAMD64FrameSourceConditionalMacrosGrantNoNumericEffects(t *testing.T) {
-	t.Setenv("GOCACHE", t.TempDir())
+	goAMD64FramePrepareOwnedToolCache(t)
 	pkg, request := goAMD64FrameSourceFixture(t)
 	name := filepath.Join(request.Directory, request.AssemblyFile)
 	text, err := os.ReadFile(name)

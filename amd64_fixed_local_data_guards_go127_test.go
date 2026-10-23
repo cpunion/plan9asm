@@ -11,7 +11,7 @@ import (
 )
 
 func TestGoAMD64FixedLocalReadonlyDataConsumerIdentity(t *testing.T) {
-	t.Setenv("GOCACHE", t.TempDir())
+	goAMD64FramePrepareOwnedToolCache(t)
 	pkg, request, file, options, assembly := fixedLocalDataFixture(t,
 		"MOVOU literal<>(SB),X0\nPADDQ 16(SP),X0", fixedLocalLiteralData)
 	fixedLocalDataAPIs(t, pkg, file, assembly, options, fixedLocalRequireContext)
@@ -90,7 +90,7 @@ func TestGoAMD64FixedLocalReadonlyDataConsumerIdentity(t *testing.T) {
 }
 
 func TestGoAMD64FixedLocalReadonlyDataRejectsCoalescedDefinitions(t *testing.T) {
-	t.Setenv("GOCACHE", t.TempDir())
+	goAMD64FramePrepareOwnedToolCache(t)
 	// Go's bare and qualified static names are distinct definitions. The
 	// ordinary LLVM resolver cannot fold them into one global in a binding.
 	data := fixedLocalLiteralData + "DATA ·literal<>+0(SB)/8,$99\nGLOBL ·literal<>(SB),8,$32\n"

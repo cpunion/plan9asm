@@ -17,7 +17,7 @@ func TestGoAMD64FrameSourceActualCPUProfiles(t *testing.T) {
 	// helper there; rebuilding that tool for every profile adds no coverage.
 	// Every fixture retains its own source/module/temp directories and still
 	// runs actual Go selection, export, object and post-capture verification.
-	t.Setenv("GOCACHE", t.TempDir())
+	goAMD64FramePrepareOwnedToolCache(t)
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc required")
@@ -83,7 +83,7 @@ func TestGoAMD64FrameSourceActualCPUProfiles(t *testing.T) {
 }
 
 func TestGoAMD64FrameSourceCPUProfileRevocation(t *testing.T) {
-	t.Setenv("GOCACHE", t.TempDir())
+	goAMD64FramePrepareOwnedToolCache(t)
 	for _, profile := range []string{"v1", "v2", "v3", "v4"} {
 		t.Run(profile, func(t *testing.T) {
 			pkg, request := goAMD64FrameSourceFixture(t)
@@ -109,7 +109,7 @@ func TestGoAMD64FrameSourceCPUProfileRevocation(t *testing.T) {
 }
 
 func TestGoAMD64FrameSourceCPUProfilesDoNotGrantGeneratedCPP(t *testing.T) {
-	t.Setenv("GOCACHE", t.TempDir())
+	goAMD64FramePrepareOwnedToolCache(t)
 	for _, profile := range []string{"v1", "v2", "v3", "v4"} {
 		t.Run(profile, func(t *testing.T) {
 			pkg, request := goAMD64FrameSourceFixture(t)

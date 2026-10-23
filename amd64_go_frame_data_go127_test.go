@@ -17,7 +17,7 @@ import (
 // DATA coexistence is an original-object observation, not a new memory,
 // address, native-entry or fixed-local permission.
 func TestGoAMD64FrameSourceMixedDataOriginalObjects(t *testing.T) {
-	t.Setenv("GOCACHE", t.TempDir())
+	goAMD64FramePrepareOwnedToolCache(t)
 	for _, target := range []string{"linux/amd64", "darwin/amd64", "windows/amd64"} {
 		for _, used := range []bool{false, true} {
 			name := "unused"
