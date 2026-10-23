@@ -80,6 +80,13 @@ func goReadOnlyName(pkgPath, symbol string) string {
 	return symbol
 }
 
+func goReadOnlyLocalName(pkg GoPackage, symbol string) string {
+	if name := goReadOnlyName(pkg.Path, symbol); name != "" {
+		return name
+	}
+	return goReadOnlyName(pkg.Types.Path(), symbol)
+}
+
 func goReadOnlySyntax(pkg GoPackage) ([]string, error) {
 	if len(pkg.Syntax) == 0 || len(pkg.Syntax) > 256 {
 		return nil, goReadOnlyContext("missing or excessive same-package declaration syntax")
@@ -142,7 +149,7 @@ func goReadOnlyTypedSyntax(pkg GoPackage, syntax []string, sizes types.Sizes, ob
 		}
 		files[index] = file
 	}
-	typed, err := (&types.Config{Importer: goReadOnlyImporter(pkg.Imports), Sizes: sizes}).Check(pkg.Path, set, files, nil)
+	typed, err := (&types.Config{Importer: goReadOnlyImporter(pkg.Imports), Sizes: sizes}).Check(pkg.Types.Path(), set, files, nil)
 	if err != nil {
 		return nil, goReadOnlyContext("syntax does not match a complete typed package: %v", err)
 	}
@@ -160,13 +167,28 @@ func goReadOnlyLayout(typ types.Type, sizes types.Sizes) (size int64, spans [][2
 		return 0, nil, "", goReadOnlyContext("global numerical extent is empty or excessive")
 	}
 	var description strings.Builder
+	visits := 0
 	var visit func(types.Type, int64, int) error
 	visit = func(current types.Type, base int64, depth int) error {
+		visits++
+		if visits > 4096 || description.Len() > 64<<10 {
+			return goReadOnlyContext("global layout traversal/description budget exceeded")
+		}
 		width := sizes.Sizeof(current)
 		if depth > 64 || width < 0 || base < 0 || base > size || width > size-base {
 			return goReadOnlyContext("global type layout exceeds its numerical extent")
 		}
-		fmt.Fprintf(&description, "[%s:%d:%d]", types.TypeString(current, func(p *types.Package) string { return p.Path() }), base, width)
+		fmt.Fprintf(&description, "[%T:%d:%d]", current, base, width)
+		if named, ok := current.(*types.Named); ok {
+			path := ""
+			if named.Obj().Pkg() != nil {
+				path = named.Obj().Pkg().Path()
+			}
+			if len(path) > 4096 || len(named.Obj().Name()) > 4096 || description.Len()+len(path)+len(named.Obj().Name())+32 > 64<<10 {
+				return goReadOnlyContext("global layout description budget exceeded")
+			}
+			fmt.Fprintf(&description, "named:%s:%s;", path, named.Obj().Name())
+		}
 		switch underlying := current.Underlying().(type) {
 		case *types.Basic:
 			if underlying.Info()&(types.IsInteger|types.IsFloat|types.IsBoolean) == 0 || underlying.Info()&types.IsUntyped != 0 {
@@ -182,10 +204,14 @@ func goReadOnlyLayout(typ types.Type, sizes types.Sizes) (size int64, spans [][2
 				}
 			}
 		case *types.Array:
+			fmt.Fprintf(&description, "array:%d;", underlying.Len())
 			if underlying.Len() > 1<<20 {
 				return goReadOnlyContext("global array exceeds its type bound")
 			}
 			stride := sizes.Sizeof(underlying.Elem())
+			if stride == 0 || underlying.Len() == 0 {
+				return nil // Repeated zero-width elements supply no bytes or permission.
+			}
 			for index := int64(0); index < underlying.Len(); index++ {
 				if err := visit(underlying.Elem(), base+index*stride, depth+1); err != nil {
 					return err
@@ -197,7 +223,11 @@ func goReadOnlyLayout(typ types.Type, sizes types.Sizes) (size int64, spans [][2
 				fields[index] = underlying.Field(index)
 			}
 			for index, offset := range sizes.Offsetsof(fields) {
-				fmt.Fprintf(&description, "field:%s:%d;", fields[index].Name(), offset)
+				if len(fields[index].Name()) > 4096 || len(underlying.Tag(index)) > 4096 ||
+					description.Len()+len(fields[index].Name())+6*len(underlying.Tag(index))+64 > 64<<10 {
+					return goReadOnlyContext("global layout description budget exceeded")
+				}
+				fmt.Fprintf(&description, "field:%s:%d:%q;", fields[index].Name(), offset, underlying.Tag(index))
 				if fields[index].Name() != "_" {
 					if err := visit(fields[index].Type(), base+offset, depth+1); err != nil {
 						return err
@@ -212,38 +242,73 @@ func goReadOnlyLayout(typ types.Type, sizes types.Sizes) (size int64, spans [][2
 	if err := visit(typ, 0, 0); err != nil {
 		return 0, nil, "", err
 	}
+	if description.Len() > 64<<10 {
+		return 0, nil, "", goReadOnlyContext("global layout description budget exceeded")
+	}
 	return size, spans, description.String(), nil
 }
 
 func bindGoReadOnlyStorage(pkg GoPackage, file *File, sizes types.Sizes, arch string, resolve func(string) string) (*goReadOnlyStorage, error) {
-	if file.Arch != ArchAMD64 || arch != "amd64" && arch != "386" {
+	if file == nil || file.Arch != ArchAMD64 || arch != "amd64" && arch != "386" || pkg.Types == nil || pkg.Types.Scope() == nil {
 		return nil, nil
 	}
-	if sizes == nil {
-		sizes = types.SizesFor("gc", arch)
+	// Cost-query only the newly supported complete named CMP/TEST role. Other
+	// instructions and emitted DATA/GLOBL keep their existing consumers.
+	assemblyNames := make(map[string]bool)
+	for _, global := range file.Globl {
+		assemblyNames[goReadOnlyLocalName(pkg, global.Sym)] = true
 	}
-	if sizes == nil || pkg.Types == nil || pkg.Types.Scope() == nil || pkg.Types.Path() != pkg.Path {
-		return nil, goReadOnlyContext("missing actual package types or target sizes")
+	for _, datum := range file.Data {
+		assemblyNames[goReadOnlyLocalName(pkg, datum.Sym)] = true
+	}
+	var emitted map[string]bool
+	emittedOwns := func(native string) bool {
+		if emitted == nil {
+			emitted = make(map[string]bool)
+			for _, global := range file.Globl {
+				emitted[resolveAssemblyDataSymbol(global.Sym, resolve)] = true
+			}
+			for _, datum := range file.Data {
+				emitted[resolveAssemblyDataSymbol(datum.Sym, resolve)] = true
+			}
+		}
+		return emitted[native]
 	}
 	source := &goReadOnlyStorage{pkg: pkg, sizes: sizes, file: x86DirectTailSnapshot(file), resolve: resolve,
 		objects: make(map[string]goReadOnlyObject), symbols: make(map[string]string)}
 	for _, function := range file.Funcs {
 		for _, instruction := range function.Instrs {
-			for _, operand := range instruction.Args {
-				address, valid := x86StaticSBSourceAddress(operand, arch)
-				name := goReadOnlyName(pkg.Path, address.symbol)
+			form, known, err := x86ScalarCompareProperties(instruction.Op, instruction, arch)
+			if !known || err != nil || form.memory < 0 || !x86ResultNamedPredicateInstruction(instruction) ||
+				instruction.x86Encoded || instruction.x86SourceRaw != nil || instruction.x86AddressBits != 0 || instruction.x86UnboundAddressOverride {
+				continue
+			}
+			{
+				address, valid := x86StaticSBSourceAddress(form.args[form.memory], arch)
+				name := goReadOnlyLocalName(pkg, address.symbol)
 				variable, declared := pkg.Types.Scope().Lookup(name).(*types.Var)
-				if !valid || !declared || variable.IsField() || variable.Pkg() != pkg.Types {
+				if !valid || !declared || variable.IsField() || variable.Pkg() != pkg.Types || assemblyNames[name] {
 					continue // Unknown/imported symbols never inherit another variable's type.
+				}
+				native := gosym.PackagePrefix(pkg.Path) + "." + name
+				if emittedOwns(native) {
+					continue // A resolved alias definition is still the emitted module's owner.
 				}
 				if _, present := source.objects[name]; present {
 					continue
+				}
+				if sizes == nil {
+					sizes = types.SizesFor("gc", arch)
+					source.sizes = sizes
+				}
+				if sizes == nil {
+					return nil, goReadOnlyContext("missing target sizes for a candidate read")
 				}
 				size, spans, shape, err := goReadOnlyLayout(variable.Type(), sizes)
 				if err != nil {
 					return nil, err
 				}
-				source.objects[name] = goReadOnlyObject{variable: variable, native: gosym.PackagePrefix(pkg.Path) + "." + name,
+				source.objects[name] = goReadOnlyObject{variable: variable, native: native,
 					size: size, spans: spans, shape: shape}
 			}
 		}
@@ -253,16 +318,6 @@ func bindGoReadOnlyStorage(pkg GoPackage, file *File, sizes types.Sizes, arch st
 	}
 	if len(source.objects) > 32 {
 		return nil, goReadOnlyContext("global declaration inventory exceeds its bound")
-	}
-	for _, function := range file.Funcs {
-		for _, instruction := range function.Instrs {
-			for _, operand := range instruction.Args {
-				address, valid := x86StaticSBSourceAddress(operand, arch)
-				if valid && source.objects[goReadOnlyName(pkg.Path, address.symbol)].variable != nil && source.readFor(instruction, arch) == nil {
-					return nil, goReadOnlyContext("global reference lacks its exact bounded volatile comparison read")
-				}
-			}
-		}
 	}
 	var err error
 	source.syntax, err = goReadOnlySyntax(pkg)
@@ -283,16 +338,6 @@ func bindGoReadOnlyStorage(pkg GoPackage, file *File, sizes types.Sizes, arch st
 			return nil, goReadOnlyContext("global %q type and syntax layouts differ", name)
 		}
 	}
-	for _, global := range file.Globl {
-		if source.objects[goReadOnlyName(pkg.Path, global.Sym)].variable != nil {
-			return nil, goReadOnlyContext("Go variable also has an assembly storage definition")
-		}
-	}
-	for _, datum := range file.Data {
-		if source.objects[goReadOnlyName(pkg.Path, datum.Sym)].variable != nil {
-			return nil, goReadOnlyContext("Go variable also has an assembly DATA definition")
-		}
-	}
 	source.original, err = x86CallerSourceFingerprint(file)
 	if err != nil {
 		return nil, err
@@ -301,7 +346,7 @@ func bindGoReadOnlyStorage(pkg GoPackage, file *File, sizes types.Sizes, arch st
 		for _, instruction := range function.Instrs {
 			for _, operand := range instruction.Args {
 				address, valid := x86StaticSBSourceAddress(operand, arch)
-				object := source.objects[goReadOnlyName(pkg.Path, address.symbol)]
+				object := source.objects[goReadOnlyLocalName(pkg, address.symbol)]
 				if !valid || object.variable == nil {
 					continue
 				}
@@ -373,7 +418,7 @@ func (source *goReadOnlyStorage) allows(operand Operand, width int64, arch strin
 		return false
 	}
 	address, valid := x86StaticSBReadAddress(operand, arch)
-	object := source.objects[goReadOnlyName(source.pkg.Path, address.symbol)]
+	object := source.objects[goReadOnlyLocalName(source.pkg, address.symbol)]
 	if !valid || object.variable == nil || width > object.size || address.offset > object.size-width {
 		return false
 	}

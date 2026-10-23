@@ -33,7 +33,7 @@ func (c *amd64Ctx) lowerCmpBt(op Op, ins Instr) (ok bool, terminated bool, err e
 		if index == form.memory && native {
 			if source := c.goReadOnlyStorage; source != nil {
 				address, named := x86StaticSBSourceAddress(operand, arch)
-				if named && source.objects[goReadOnlyName(source.pkg.Path, address.symbol)].variable != nil &&
+				if named && source.objects[goReadOnlyLocalName(source.pkg, address.symbol)].variable != nil &&
 					!source.allows(operand, int64(form.bits/8), arch) {
 					return true, false, goReadOnlyContext("comparison exceeds the declared numerical span")
 				}
