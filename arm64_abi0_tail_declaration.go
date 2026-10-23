@@ -93,6 +93,7 @@ type arm64ABI0TailDeclaration struct {
 	original    File
 	root        Func
 	name        string
+	symbolPath  string
 	object      *ast.Ident
 }
 
@@ -125,10 +126,23 @@ func arm64ABI0FileSnapshot(file *File) File {
 	return copyFile
 }
 
+func arm64ABI0TailPackageNamespaceMatches(pkg GoPackage, function, symbol string) bool {
+	if pkg.Types == nil {
+		return false
+	}
+	if pkg.Path == pkg.Types.Path() {
+		return true
+	}
+	// Executables use main's symbol namespace while retaining the actual
+	// typechecked source package. This is not an arbitrary package alias.
+	return pkg.Path == "main" && pkg.Types.Name() == "main" && symbol == "main."+function
+}
+
 func (d *arm64ABI0TailDeclaration) matches(sig FuncSig) bool {
 	if d == nil || !d.declaration.matches(sig) || d.file == nil ||
 		!reflect.DeepEqual(d.original, arm64ABI0FileSnapshot(d.file)) || d.packageData.Types == nil ||
-		d.packageData.Types != d.declaration.function.Pkg() || d.packageData.Path != d.packageData.Types.Path() {
+		d.packageData.Types != d.declaration.function.Pkg() || d.packageData.Path != d.symbolPath ||
+		!arm64ABI0TailPackageNamespaceMatches(d.packageData, d.declaration.function.Name(), d.name) {
 		return false
 	}
 	selection := d.packageData.SourceSelection
@@ -181,7 +195,8 @@ func BindGoARM64ABI0TailDeclarations(pkg GoPackage, file *File, resolve func(str
 		}
 		decl := sig.arm64ABI0Declaration
 		selection := pkg.SourceSelection
-		if !decl.matches(sig) || pkg.Types == nil || pkg.Path != pkg.Types.Path() || pkg.Types != decl.function.Pkg() ||
+		if !decl.matches(sig) || pkg.Types == nil || pkg.Types != decl.function.Pkg() ||
+			!arm64ABI0TailPackageNamespaceMatches(pkg, decl.function.Name(), name) ||
 			decl.function.Name() != strings.TrimPrefix(root.Sym, "·") ||
 			selection == nil || selection.Fset == nil || selection.TypesInfo == nil || selection.Sizes == nil ||
 			len(selection.SelectedGoFiles) == 0 || len(selection.SelectedGoFiles) > 256 ||
@@ -191,7 +206,7 @@ func BindGoARM64ABI0TailDeclarations(pkg GoPackage, file *File, resolve func(str
 		bound := &arm64ABI0TailDeclaration{
 			declaration: decl, packageData: pkg, sources: make(map[string][]byte),
 			selected: append([]string(nil), selection.SelectedGoFiles...), fset: selection.Fset, file: file,
-			original: arm64ABI0FileSnapshot(file), root: arm64PrivateTailSnapshot(root), name: name,
+			original: arm64ABI0FileSnapshot(file), root: arm64PrivateTailSnapshot(root), name: name, symbolPath: pkg.Path,
 		}
 		total := 0
 		for i, filename := range selection.SelectedGoFiles {
