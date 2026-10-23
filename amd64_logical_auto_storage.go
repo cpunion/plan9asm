@@ -13,6 +13,14 @@ func (c *amd64Ctx) prepareLogicalAUTOStorage() error {
 		fn.x86ContinuationFlow != nil || fn.x86BoolCalls != nil {
 		return nil
 	}
+	if _, scopedControl := x86X87ScopedControlScratchExtent(fn, c.goarch); scopedControl {
+		if c.frameSize != 0 {
+			return fmt.Errorf("%w: scoped x87 scratch lost its original zero frame", ErrProbeNeedsContext)
+		}
+		// Keep actual negative SP offsets in the existing bounded private
+		// stack object. Do not manufacture positive logical AUTO storage.
+		return nil
+	}
 	stack, err := x86ResultPrivateFlagsSource(fn, c.goarch)
 	if err != nil {
 		return err

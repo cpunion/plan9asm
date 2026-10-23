@@ -152,7 +152,10 @@ func TestRuntimeExec386CoreCompleteSourceGoAndLLVMObjects(t *testing.T) {
 	for _, api := range []string{"text", "module"} {
 		t.Run("BX-only-unbounded-scratch/"+api, func(t *testing.T) {
 			ir, err := runtime386CoreTranslate(t, corrected, api)
-			if !errors.Is(err, ErrProbeNeedsContext) || ir != "" || !strings.Contains(err.Error(), "floorValue") ||
+			// The complete save/change/restore scope in floorValue now has
+			// independent private-word proof. It supplies no incoming-SP
+			// backing to the next original uint32 conversion function.
+			if !errors.Is(err, ErrProbeNeedsContext) || ir != "" || !strings.Contains(err.Error(), "uint32ToFloat64") ||
 				!strings.Contains(err.Error(), "requires complete bounded positive original TEXT") {
 				t.Fatal("BX correction manufactured a backing frame for the original physical SP scratch", err)
 			}

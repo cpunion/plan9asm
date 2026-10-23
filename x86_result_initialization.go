@@ -157,9 +157,16 @@ func checkX86ABI0ResultInitializationWithTrapOnly(fn Func, sig FuncSig, goarch s
 		}
 		initial.valueStack = stack
 	}
-	autoExtent, autoErr := x86ResultAUTOExtentWithPrivateStack(fn, goarch, initial.valueStack != nil)
-	if autoErr != nil {
-		return autoErr
+	autoExtent, scopedControl := 0, false
+	if scalarViews {
+		autoExtent, scopedControl = x86X87ScopedControlScratchExtent(fn, goarch)
+	}
+	if !scopedControl {
+		var autoErr error
+		autoExtent, autoErr = x86ResultAUTOExtentWithPrivateStack(fn, goarch, initial.valueStack != nil)
+		if autoErr != nil {
+			return autoErr
+		}
 	}
 	initial.auto = make([]bool, autoExtent)
 	owned := make([]bool, frame)
