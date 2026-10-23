@@ -259,10 +259,14 @@ func TestGoModuleAMD64VirtualArgumentsRecheckCallbacks(t *testing.T) {
 type amd64VirtualArgumentCountingSizes struct {
 	types.Sizes
 	queries int
+	onQuery func()
 }
 
 func (sizes *amd64VirtualArgumentCountingSizes) Sizeof(typ types.Type) int64 {
 	sizes.queries++
+	if sizes.onQuery != nil {
+		sizes.onQuery()
+	}
 	return sizes.Sizes.Sizeof(typ)
 }
 
@@ -329,6 +333,43 @@ func TestGoModuleAMD64VirtualArgumentsBoundedInternalChecks(t *testing.T) {
 				if entry.valid(file.Funcs[0], sig, "amd64") {
 					t.Fatal("restoring an invalidated source revived its old call-local role")
 				}
+			}
+		})
+	}
+}
+
+func TestGoModuleAMD64VirtualArgumentsFinalLayoutCallbacks(t *testing.T) {
+	for _, mutation := range []string{"syntax", "source", "imports"} {
+		t.Run(mutation, func(t *testing.T) {
+			pkg := mustGoPackage(t, amd64VirtualArgumentsPackage, "package virtualargs\nfunc Entry(a []byte) uint64\n")
+			pkg.Imports = make(map[string]*types.Package)
+			source := []byte("TEXT ·Entry<ABIInternal>(SB),4,$0\nMOVQ BX,AX\nRET\n")
+			file, err := Parse(ArchAMD64, string(source))
+			if err != nil {
+				t.Fatal(err)
+			}
+			sizes := &amd64VirtualArgumentCountingSizes{Sizes: types.SizesFor("gc", "amd64")}
+			owner, err := bindAMD64GoVirtualArguments(pkg, file, source, sha256.Sum256(source),
+				GoModuleOptions{GOARCH: "amd64", Sizes: sizes}, testResolveSym(pkg.Path))
+			if err != nil || owner == nil {
+				t.Fatal("complete declaration boundary failed", err)
+			}
+			defer func() { owner.active = false }()
+			called := false
+			sizes.onQuery = func() {
+				sizes.onQuery = nil // Mutate in the final layout query, not during capture.
+				called = true
+				switch mutation {
+				case "syntax":
+					pkg.Syntax[0].Name.Name = "foreign"
+				case "source":
+					source[len(source)-1] = ' '
+				case "imports":
+					pkg.Imports["foreign"] = types.NewPackage("foreign", "foreign")
+				}
+			}
+			if err := owner.verify(); !called || !errors.Is(err, ErrProbeNeedsContext) {
+				t.Fatal("a final layout callback changed supplied inputs after their last observation", called, err)
 			}
 		})
 	}
