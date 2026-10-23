@@ -96,6 +96,14 @@ Minimum-Go execution requires the selected SDK's own WASM JavaScript helpers;
 auto-downloaded toolchain modules can omit them. Use the complete same-version
 official SDK, not another version's helper or a runtime skip.
 
+Named x86 integer EQ/GT comparisons propagate initialized bytes only for complete
+paired lanes. Partial result knowledge does not shorten a memory operand or
+grant another lane a value. Raw encodings, standalone queries, K results, MMX
+and immediate comparisons retain their strict input boundaries. Independent
+portable LLVM execution covers the 24 legacy/VEX register forms; the matching
+48 register/memory functions have three-target object checks. These checks do
+not certify original native x86 execution or the remaining go-hex CFG contracts.
+
 The local declaration-bound global-read extension shares the scalar ALU and
 explicit IMUL grammars, retaining exact volatile widths. Executed independent
 value/flag/canary checks found and repaired missing byte/word logical PF writes.
