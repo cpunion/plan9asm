@@ -108,6 +108,15 @@ func (c *amd64Ctx) evalIntSized(op Operand, ty LLVMType) (string, error) {
 	if err := unresolvedSymbolicImmediateErrorForArch(op, ArchAMD64); err != nil {
 		return "", err
 	}
+	if read := c.goReadOnlyOperand; read != nil && ty == LLVMType(fmt.Sprintf("i%d", read.width*8)) && read.allows(op, read.width) {
+		pointer, pointerType, _, err := c.packedVectorMemoryPointer(op)
+		if err != nil {
+			return "", err
+		}
+		value := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = load volatile %s, %s %s, align 1\n", value, ty, pointerType, pointer)
+		return "%" + value, nil
+	}
 	switch op.Kind {
 	case OpImm:
 		// LLVM will interpret the literal in the destination integer width.

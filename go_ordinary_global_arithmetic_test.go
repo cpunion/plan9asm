@@ -169,8 +169,8 @@ func TestGoModuleOrdinaryGlobalArithmeticCompleteFamily(t *testing.T) {
 						t.Fatal("typed read-only ALU/IMUL source needs no SDK capture", err)
 					}
 					count := len(ordinaryGlobalArithmeticCases(target.arch))
-					if strings.Count(ir, "load volatile i") != count {
-						t.Fatal("not every exact mutable source load remains observable", count)
+					if got := strings.Count(ir, "load volatile i"); got != count {
+						t.Fatalf("not every exact mutable source load remains observable: got %d, want %d", got, count)
 					}
 					compileLLVMToObject(t, llc, target.triple, "ordinary-arithmetic.ll", "ordinary-arithmetic.o", ir)
 				})

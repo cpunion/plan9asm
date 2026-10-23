@@ -6,6 +6,9 @@ import (
 )
 
 func (c *amd64Ctx) evalI64(op Operand) (string, error) {
+	if c.goReadOnlyOperand.allows(op, 8) {
+		return c.evalIntSized(op, I64)
+	}
 	if err := unresolvedSymbolicImmediateErrorForArch(op, ArchAMD64); err != nil {
 		return "", err
 	}

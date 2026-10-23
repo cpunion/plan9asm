@@ -66,11 +66,31 @@ func goReadOnlyOperand(ins Instr, arch string) (Operand, int64, bool) {
 	if form, known := x86ScalarStaticLoadProperties(ins, arch); known {
 		return form.source, form.bytes, true
 	}
+	if operand, width, known := goReadOnlyArithmeticOperand(ins, arch); known {
+		return operand, width, true
+	}
 	form, known, err := x86ScalarCompareProperties(ins.Op, ins, arch)
 	if !known || err != nil || form.memory < 0 {
 		return Operand{}, 0, false
 	}
 	return form.args[form.memory], int64(form.bits / 8), true
+}
+
+// Reuse the complete ALU and explicit IMUL grammars. A source declaration
+// establishes neither a memory destination nor an implicit accumulator pair.
+func goReadOnlyArithmeticOperand(ins Instr, arch string) (Operand, int64, bool) {
+	if form, known, err := x86LockScalarRMWProperties(ins.Op, ins, arch); known && err == nil &&
+		!form.spec.unary && !form.spec.bitString && form.destination.Kind == OpReg {
+		if _, valid := x86StaticSBReadAddress(form.source, arch); valid {
+			return form.source, int64(form.spec.bits / 8), true
+		}
+	}
+	if form, known, err := x86ExplicitIMULProperties(ins.Op, ins, arch); known && err == nil {
+		if _, valid := x86StaticSBReadAddress(form.source, arch); valid {
+			return form.source, int64(form.bits / 8), true
+		}
+	}
+	return Operand{}, 0, false
 }
 
 func (source *goReadOnlyStorage) readFor(ins Instr, arch string) *goReadOnlyRead {

@@ -98,6 +98,7 @@ type amd64Ctx struct {
 	fpScalarData      map[x86StaticSBAddress]int64 // exact effective SB address -> available emitted numerical bytes
 	fpShiftLiterals   map[x86StaticSBAddress]x86ShiftLiteral
 	goReadOnlyStorage *goReadOnlyStorage // declaration-only numerical reads, never emitted/writable DATA
+	goReadOnlyOperand *goReadOnlyRead    // exact current instruction; cleared before the next instruction
 	fpScalarChecked   bool
 	fpScalarCheckErr  error
 	fpScalarTrapOnly  bool // Complete private logical-shadow proof: every path ends in an exact trap.
