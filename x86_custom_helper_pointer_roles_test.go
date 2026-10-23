@@ -101,3 +101,28 @@ func TestX86CustomHelperPointerRoleBoundaries(t *testing.T) {
 		})
 	}
 }
+
+func TestX86CustomHelperWholeVectorInputPointers(t *testing.T) {
+	for _, name := range strings.Fields("MOVOU MOVOA MOVO MOVUPS MOVAPS MOVUPD MOVAPD") {
+		for _, triple := range []string{"i386-unknown-linux-gnu", "i686-pc-windows-msvc"} {
+			t.Run(triple+"/"+name, func(t *testing.T) {
+				body := fmt.Sprintf("%s (SI),X0\n%s (DI),X1\nPCMPEQB X1,X0\nPMOVMSKB X0,CX\nCMPL CX,$65535\nSETEQ (AX)", name, name)
+				declaration, source, helper := x86CustomPointerHelperSource(t, "", body)
+				goAssemblerOracleOutput(t, "386", source, "", true)
+				for _, api := range []string{"text", "module", "Go"} {
+					t.Run(api, func(t *testing.T) {
+						ir, err := x86CustomPointerHelperAPI(t, source, declaration, triple, api, helper)
+						if err != nil || ir == "" {
+							t.Fatal("complete original vector read lost its helper input pointer", err)
+						}
+						llc := findLLVM22Tool("llc")
+						if llc == "" {
+							t.Fatal("LLVM22 llc required")
+						}
+						compileLLVMToObject(t, llc, triple, "vector-helper.ll", "vector-helper.o", ir)
+					})
+				}
+			})
+		}
+	}
+}
