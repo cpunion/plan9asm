@@ -80,7 +80,10 @@ IFS=, read -r -a install_statuses <<< "$MOCK_INSTALLS"
 dpkg() {
   case "$1" in
     -s) return "$MOCK_INSTALLED" ;;
-    --print-architecture) printf '%s\\n' "$MOCK_ARCH" ;;
+    --print-architecture)
+      printf 'DPKG_ARCH\\n' >&2
+      if [[ "$MOCK_ARCH_EXIT" != 0 ]]; then return "$MOCK_ARCH_EXIT"; fi
+      printf '%s\\n' "$MOCK_ARCH" ;;
     *) return 99 ;;
   esac
 }
@@ -148,6 +151,7 @@ source "$1" gcc-i686-linux-gnu libc6-dev-i386-cross
     env: {
       ...process.env, PYTHONDONTWRITEBYTECODE: '1',
       MOCK_APT: directory, MOCK_ARCH: options.architecture || 'amd64',
+      MOCK_ARCH_EXIT: String(options.architectureExit || 0),
       MOCK_INSTALLED: options.installed ? '0' : '1',
       MOCK_UPDATES: (options.updates || [0]).join(','),
       MOCK_INSTALLS: (options.installs || [0]).join(','),
@@ -185,7 +189,7 @@ test('actual Ubuntu installer configures mirrors before strict IPv4 update and i
 test('already installed LLVM packages need no mirror change, update or download', t => {
   const result = runInstaller(t, {installed: true});
   assert.equal(result.status, 0, result.stderr);
-  assert.doesNotMatch(result.stdout + result.stderr, /CONFIGURE|APT |CURL|TIMEOUT/);
+  assert.doesNotMatch(result.stdout + result.stderr, /DPKG_ARCH|CONFIGURE|APT |CURL|TIMEOUT/);
   assert.equal(fs.readFileSync(path.join(result.directory, 'apt-mirrors.txt'), 'utf8'), badMirrors);
   assertUnchangedSources(result.directory);
   assert.match(result.environment, /^PATH=\/usr\/lib\/llvm-22\/bin:/);
@@ -236,6 +240,7 @@ test('isolated fallback uses the same official Ubuntu architecture route as the 
       assert.equal(fs.readFileSync(path.join(result.directory, 'apt-mirrors.txt'), 'utf8'), archive + '\n');
       const commands = result.stdout.split('\n').filter(line => line.startsWith('APT '));
       assert.equal(commands.length, 3);
+      assert.equal((result.stderr.match(/^DPKG_ARCH$/gm) || []).length, 1);
       assert.ok(commands[0].endsWith('<update>'));
       assert.ok(commands[1].endsWith('<update>'));
       assert.ok(commands[2].includes('<install>'));
@@ -277,6 +282,13 @@ test('invalid mirror helper output or helper failure cannot reach APT or publish
     assert.doesNotMatch(result.stdout, /APT |TIMEOUT/);
     assert.equal(result.environment, '');
   });
+});
+
+test('failed architecture query cannot silently select the ports route', t => {
+  const result = runInstaller(t, {architectureExit: 67});
+  assert.equal(result.status, 67, result.stderr);
+  assert.doesNotMatch(result.stdout + result.stderr, /CONFIGURE|APT |TIMEOUT/);
+  assert.equal(result.environment, '');
 });
 
 test('failed package installation and wrong LLVM version cannot publish success', t => {
