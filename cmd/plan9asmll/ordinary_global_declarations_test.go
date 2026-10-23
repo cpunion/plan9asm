@@ -40,7 +40,13 @@ func ordinaryGlobalCLIProfile(t *testing.T) {
 // without changing the stored package graph or starting another Go selection.
 func ordinaryGlobalCLIActualFixture(t *testing.T, arch string) ordinaryGlobalCLIFixture {
 	t.Helper()
+	return ordinaryGlobalCLIActualFixtureProfile(t, arch, "v1")
+}
+
+func ordinaryGlobalCLIActualFixtureProfile(t *testing.T, arch, profile string) ordinaryGlobalCLIFixture {
+	t.Helper()
 	ordinaryGlobalCLIProfile(t)
+	t.Setenv("GOAMD64", profile)
 	directory, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -60,6 +66,8 @@ func ordinaryGlobalCLIActualFixture(t *testing.T, arch string) ordinaryGlobalCLI
 		"state/word_linux.go":           "//go:build linux\n\npackage state\nvar Word uint32 = 0x12345678\n",
 		"state/word_other.go":           "//go:build !linux\n\npackage state\nvar Word uint64\n",
 		"consumer/consumer.go":          "package consumer\nimport state \"" + ordinaryGlobalDependency + "\"\nvar _ = state.Flags\nvar _ = state.Word\nvar Flags uint8 = 1\nfunc Local() uint32\nfunc ImportedByte() uint32\nfunc ImportedWord() uint32\n",
+		"consumer/profile_v2.go":        "//go:build amd64.v2\n\npackage consumer\nconst SelectedCPUProfile = 2\n",
+		"consumer/profile_baseline.go":  "//go:build !amd64.v2\n\npackage consumer\nconst SelectedCPUProfile = 1\n",
 		"consumer/reads_" + arch + ".s": assembly.String(),
 	}
 	sources := make(map[string][]byte, len(inputs))
@@ -306,9 +314,17 @@ func TestCompileOneOrdinaryGlobalDeclarationsPrivateTailSourceAudit(t *testing.T
 }
 
 func TestCompileOneOrdinaryGlobalDeclarationsLoadEnvironmentIdentity(t *testing.T) {
-	for _, axis := range []string{"GOAMD64=v2", "GOFLAGS=-tags=unselected", "GOROOT=unselected", "late-CPU-change"} {
+	for _, axis := range []string{"actual-v2", "GOAMD64=v2", "GOFLAGS=-tags=unselected", "GOROOT=unselected", "late-CPU-change"} {
 		t.Run(axis, func(t *testing.T) {
-			fixture := ordinaryGlobalCLIActualFixture(t, "amd64")
+			profile := "v1"
+			if axis == "actual-v2" {
+				profile = "v2"
+			}
+			fixture := ordinaryGlobalCLIActualFixtureProfile(t, "amd64", profile)
+			selectedProfile, ok := fixture.pkg.Types.Scope().Lookup("SelectedCPUProfile").(*types.Const)
+			if !ok || selectedProfile.Val().ExactString() != strings.TrimPrefix(profile, "v") {
+				t.Fatal("actual selected feature-tagged source does not match the load profile", selectedProfile)
+			}
 			fixture.config.Enabled = false
 			selected := *fixture.config.x86CallerSelections[fixture.pkg]
 			selected.env = append([]string(nil), selected.env...)
@@ -324,11 +340,22 @@ func TestCompileOneOrdinaryGlobalDeclarationsLoadEnvironmentIdentity(t *testing.
 						called = true
 						selected.env = append(selected.env, "GOAMD64=v2")
 					}}
-			} else {
+			} else if axis != "actual-v2" {
 				selected.env = append(selected.env, axis)
 			}
 			err := compileOne(fixture.pkg, plan9asm.ArchAMD64, "linux", "amd64", "x86_64-unknown-linux-gnu",
 				fixture.task, false, fixture.config)
+			if axis == "actual-v2" {
+				if err != nil {
+					t.Fatal("actual nonbaseline load was mislabeled as an invalid mutation", err)
+				}
+				output, readErr := os.ReadFile(fixture.task.OutLL)
+				if readErr != nil {
+					t.Fatal(readErr)
+				}
+				ordinaryGlobalRequireIR(t, string(output), fixture.pkg.PkgPath)
+				return
+			}
 			if axis == "late-CPU-change" && !called {
 				t.Fatal("late actual load-environment mutation was not reached", err)
 			}
