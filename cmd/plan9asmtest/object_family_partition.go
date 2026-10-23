@@ -21,6 +21,8 @@ func completeObjectFamilyOwners(shards int) map[string]int {
 		{"TestGoAMD64FixedLocalPackedWideRuntimeOracle", "CompileOnly", []string{"", "Module", "GoModule"}, 0},
 		{"TestCrossLinuxRuntimeMatrixGoAMD64FixedLocalPackedNativeWide", "", []string{""}, 6},
 		{"TestCrossLinuxRuntimeMatrixGoAMD64FixedLocalConversionNative", "", []string{""}, 7},
+		{"TestGoX86NumericalReadRevokeDuringFinalSDKCallback", "", []string{""}, 0},
+		{"TestARM64GPImmediateScratchCompleteObjects", "", []string{""}, 0},
 	} {
 		for _, role := range family.roles {
 			if family.batches == 0 {
