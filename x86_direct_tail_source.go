@@ -199,6 +199,8 @@ func PrepareX86DirectTailSource(file *File, options Options) (*File, error) {
 		}
 		c := newX86Ctx(new(strings.Builder), fn, sig, resolve, signatures, goarch, options.TargetTriple, false)
 		c.fpScalarData = x86LoweredScalarDataReads(graph.original, resolve, signatures, goarch)
+		c.fpShiftLiterals = x86LoweredShiftLiterals(graph.original, resolve,
+			x86LoweredStaticAddressValues(graph.original, resolve, signatures, goarch), goarch)
 		c.goReadOnlyStorage = options.goReadOnlyStorage
 		if err := c.checkLoweredScalarFPResultInitialization(); err != nil {
 			return nil, err

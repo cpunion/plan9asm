@@ -96,7 +96,8 @@ type amd64Ctx struct {
 	fpFeatureAttrs    string                       // exact compiler-rendered feature reference, never supplied attributes
 	fpBoolCallSource  *x86ABI0BoolCallSource       // complete custom-helper graph, not a standalone register entry
 	fpScalarData      map[x86StaticSBAddress]int64 // exact effective SB address -> available emitted numerical bytes
-	goReadOnlyStorage *goReadOnlyStorage           // declaration-only numerical reads, never emitted/writable DATA
+	fpShiftLiterals   map[x86StaticSBAddress]x86ShiftLiteral
+	goReadOnlyStorage *goReadOnlyStorage // declaration-only numerical reads, never emitted/writable DATA
 	fpScalarChecked   bool
 	fpScalarCheckErr  error
 	fpScalarTrapOnly  bool // Complete private logical-shadow proof: every path ends in an exact trap.

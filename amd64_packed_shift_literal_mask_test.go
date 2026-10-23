@@ -109,12 +109,24 @@ func TestX86PackedShiftLiteralMaskKeepsUnknownBits(t *testing.T) {
 func TestX86PackedShiftLiteralMaskKeepsSourceAndMemoryBoundaries(t *testing.T) {
 	for _, row := range x86ShiftLiteralMaskCases() {
 		source := x86ShiftLiteralMaskSource(row, "PAND", 4, 0x0f, 0)
+		logical := "PAND"
+		if row.vector {
+			logical = "VPAND"
+			if row.bank == "Z" {
+				logical += "D"
+			}
+		}
+		maskLine := logical + " mask<>(SB),"
 		for _, mutation := range []struct{ name, source string }{
 			{"unknown-native-base", strings.Replace(source, "MOVQ input+0(FP),SI\n", "", 1)},
 			{"unknown-selected-byte", strings.Replace(source, "PINSRB $0,(SI),X0\n", "", 1)},
 			{"unknown-index", strings.Replace(source, "(SI),X0", "(SI)(CX*1),X0", 1)},
 			{"unknown-literal", strings.Replace(source, " mask<>(SB),", " external(SB),", 1)},
 			{"mutable-mask", strings.Replace(source, "GLOBL mask<>(SB),8,", "GLOBL mask<>(SB),0,", 1)},
+			{"short-literal", strings.Replace(source, maskLine, logical+" mask<>+1(SB),", 1)},
+			{"intervening-nop", strings.Replace(source, maskLine, "NOP\n"+maskLine, 1)},
+			{"intervening-other-register", strings.Replace(source, maskLine, "PINSRB $0,(SI),X2\n"+maskLine, 1)},
+			{"intervening-branch", strings.Replace(source, maskLine, "JMP masked\nmasked:\n"+maskLine, 1)},
 		} {
 			for _, api := range []string{"text", "module", "Go"} {
 				t.Run(row.shift+"/"+row.bank+"/"+mutation.name+"/"+api, func(t *testing.T) {

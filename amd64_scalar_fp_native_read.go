@@ -360,6 +360,8 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		return err
 	}
 	transfer := func(ordinal int, ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string) bool {
+		shiftBits := state.shiftBits
+		state.shiftBits = x86ResultShiftBits{} // Only the immediately following instruction may consume it.
 		state.loweredStaticReads = c.fpScalarData
 		state.goReadOnlyRead = c.goReadOnlyStorage.readFor(ins, arch)
 		defer func() { state.loweredStaticReads, state.goReadOnlyRead = nil, nil }()
@@ -732,7 +734,14 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		if form, known, err := x86PackedLogicalProperties(ins, arch); known {
 			// Only the paired emitter supplies these conditional native values.
 			// Standalone queries and physical MMX keep their separate contracts.
-			return err == nil && x86ScalarFPLogicalTransferWithRead(ins, form, state, owned, arch, true)
+			if err != nil || !x86ScalarFPLogicalTransferWithRead(ins, form, state, owned, arch, true) {
+				return false
+			}
+			if extra := shiftBits.definedBytes(ins, form, c.fpShiftLiterals, arch); extra != 0 {
+				destination, _ := amd64VectorRegisterIndex(ins.Args[form.destination].Reg, form.byteWidth)
+				state.writeVector(destination, form.byteWidth, state.vectorBytes(destination)|extra, form.legacy)
+			}
+			return true
 		}
 		if accepted, recognized := x86LoweredScalarArithmeticNativeRead(ins, state, owned, resultOffset, arch); recognized {
 			return accepted

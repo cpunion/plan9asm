@@ -283,6 +283,12 @@ func checkX86ResultSourceFlowWithTrapOnly(fn Func, initial x86ResultState, owned
 		origins := state.callerAddressOrigin
 		predicate := state.predicate
 		stringCount := state.stringCount
+		ordinaryStep := false
+		defer func() {
+			if !ordinaryStep {
+				state.shiftBits = x86ResultShiftBits{} // A private-stack/control transfer cannot preserve adjacency.
+			}
+		}()
 		handled := false
 		if state.continuation != nil {
 			accepted, known := x86ContinuationResultStep(ordinal, ins, state, owned, arch)
@@ -298,13 +304,17 @@ func checkX86ResultSourceFlowWithTrapOnly(fn Func, initial x86ResultState, owned
 				defer x86ContinuationRevokeOverwrites(ins, state, arch)
 			}
 		}
-		step := originalTransfer
+		ordinary := func(ordinal int, ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string) bool {
+			ordinaryStep = true
+			return originalTransfer(ordinal, ins, state, owned, resultOffset, arch)
+		}
+		step := ordinary
 		if state.valueStack != nil && state.valueStack.correlation != nil {
 			step = func(ordinal int, ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string) bool {
 				if accepted, known := x86ResultPrivateStackXORStep(ins, popped, poppedOrigins, state, owned, resultOffset, arch); known {
 					return accepted
 				}
-				return originalTransfer(ordinal, ins, state, owned, resultOffset, arch)
+				return ordinary(ordinal, ins, state, owned, resultOffset, arch)
 			}
 		}
 		if popped.valid {
@@ -387,7 +397,8 @@ func checkX86ResultSourceFlowWithTrapOnly(fn Func, initial x86ResultState, owned
 		len(initial.boolOutgoing) + len(initial.boolOutgoingCanonical) + len(initial.gp) + len(initial.canonicalGP) +
 		8*len(initial.xmm) + len(initial.nativeMMX) + len(initial.masks) + 1 + len(initial.pointerGP) + len(initial.callerAddressGP) +
 		2*len(initial.callerAddressOrigin) + 1 + 2 + 3 + 1 + 1 // Native string counter must-fact.
-	byteState += 2 // One adjacent LEA register/byte-mask observation, never pointer/NUM bytes.
+	byteState += 2  // One adjacent LEA register/byte-mask observation, never pointer/NUM bytes.
+	byteState += 12 // One adjacent shift's input-byte bits and four typed byte fields.
 	if len(initial.resultAddressSlots) != 0 {
 		byteState += len(initial.resultAddressGP)*25 + 2
 	}
@@ -651,6 +662,7 @@ type x86ResultState struct {
 	bitScanPending       x86ResultBitScanPending
 	predicate            x86ResultPredicate
 	nativeLEAAddressBits x86NativeLEAAddressBits
+	shiftBits            x86ResultShiftBits
 
 	// Incoming pointer identities are not numerical register bytes. This is
 	// only an initialization observation, never a pointee/backing permission.
@@ -719,6 +731,9 @@ func (state x86ResultState) clone() x86ResultState {
 
 func (state x86ResultState) intersect(other x86ResultState) x86ResultState {
 	merged := state.clone()
+	if merged.shiftBits != other.shiftBits {
+		merged.shiftBits = x86ResultShiftBits{}
+	}
 	if merged.x87 == nil && other.x87 != nil {
 		merged.x87 = &x86ResultX87State{invalid: true}
 	} else if merged.x87 != nil {

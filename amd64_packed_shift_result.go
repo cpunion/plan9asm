@@ -119,5 +119,8 @@ func x86ResultPackedShiftInputs(ins Instr, form x86PackedShiftForm, state *x86Re
 	destination, _ := amd64VectorRegisterIndex(ins.Args[form.destination].Reg, form.byteWidth)
 	state.writeVector(destination, form.byteWidth,
 		x86PackedShiftDefinedBytes(form, data, counts, state.vectorBytes(destination)), form.legacy)
+	if nativeRead {
+		state.shiftBits = x86ResultShiftBitSource(ins, form, data, destination)
+	}
 	return true
 }
