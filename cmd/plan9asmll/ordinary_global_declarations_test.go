@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"go/types"
 	"os"
@@ -299,6 +300,46 @@ func TestCompileOneOrdinaryGlobalDeclarationsPrivateTailSourceAudit(t *testing.T
 				ordinaryGlobalRequireIR(t, string(output), fixture.pkg.PkgPath)
 			} else if err == nil || string(output) != retained {
 				t.Fatal("invalid private helper was dropped or published", err)
+			}
+		})
+	}
+}
+
+func TestCompileOneOrdinaryGlobalDeclarationsLoadEnvironmentIdentity(t *testing.T) {
+	for _, axis := range []string{"GOAMD64=v2", "GOFLAGS=-tags=unselected", "GOROOT=unselected", "late-CPU-change"} {
+		t.Run(axis, func(t *testing.T) {
+			fixture := ordinaryGlobalCLIActualFixture(t, "amd64")
+			fixture.config.Enabled = false
+			selected := *fixture.config.x86CallerSelections[fixture.pkg]
+			selected.env = append([]string(nil), selected.env...)
+			fixture.config.x86CallerSelections = map[*packages.Package]*x86CallerPackageSelection{fixture.pkg: &selected}
+			const retained = "previous verified output\n"
+			if err := os.WriteFile(fixture.task.OutLL, []byte(retained), 0600); err != nil {
+				t.Fatal(err)
+			}
+			called := false
+			if axis == "late-CPU-change" {
+				fixture.config.Context = &continuationOutputCallbackContext{Context: fixture.config.Context,
+					directory: filepath.Dir(fixture.task.OutLL), basename: filepath.Base(fixture.task.OutLL), callback: func() {
+						called = true
+						selected.env = append(selected.env, "GOAMD64=v2")
+					}}
+			} else {
+				selected.env = append(selected.env, axis)
+			}
+			err := compileOne(fixture.pkg, plan9asm.ArchAMD64, "linux", "amd64", "x86_64-unknown-linux-gnu",
+				fixture.task, false, fixture.config)
+			if axis == "late-CPU-change" && !called {
+				t.Fatal("late actual load-environment mutation was not reached", err)
+			}
+			if !errors.Is(err, plan9asm.ErrProbeNeedsContext) {
+				t.Fatal("changed environment borrowed the original package selection", err)
+			}
+			if _, retryable := x86SDKNumericalRetryCause(err); retryable {
+				t.Fatal("changed load environment became a retryable source exclusion", err)
+			}
+			if after, readErr := os.ReadFile(fixture.task.OutLL); readErr != nil || string(after) != retained {
+				t.Fatal("changed load environment published output", readErr)
 			}
 		})
 	}
