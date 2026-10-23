@@ -16,5 +16,5 @@ func TestCrossLinuxRuntimeMatrixGoModuleOrdinaryGlobalArithmetic386(t *testing.T
 	}
 	ordinaryGlobalArithmeticRuntime(t, "386", x86FloatCompareExecution{
 		llc: llc, triple: "i386-unknown-linux-gnu", compiler: []string{compiler, "-static", "-no-pie"},
-	})
+	}, true)
 }

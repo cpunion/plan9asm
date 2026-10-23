@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"math/bits"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -105,10 +106,19 @@ func ordinaryGlobalArithmeticExpected(row ordinaryGlobalArithmeticCase, arch str
 }
 
 func TestCrossLinuxRuntimeMatrixGoModuleOrdinaryGlobalArithmeticAMD64(t *testing.T) {
-	ordinaryGlobalArithmeticRuntime(t, "amd64", x86FloatCompareExecutionTools(t))
+	ordinaryGlobalArithmeticRuntime(t, "amd64", x86FloatCompareExecutionTools(t), true)
 }
 
-func ordinaryGlobalArithmeticRuntime(t *testing.T, arch string, execution x86FloatCompareExecution) {
+func TestGoModuleOrdinaryGlobalArithmeticPortableExecution(t *testing.T) {
+	arch := "amd64"
+	if strconv.IntSize == 32 {
+		arch = "386"
+	}
+	ordinaryGlobalArithmeticRuntime(t, arch, x86ScalarCountHostExecution(t), false)
+	t.Log("actual-host portable numerical/FLAGS/canary execution; not native original x86 execution")
+}
+
+func ordinaryGlobalArithmeticRuntime(t *testing.T, arch string, execution x86FloatCompareExecution, originalGo bool) {
 	t.Helper()
 	assembly, declarations := ordinaryGlobalArithmeticSource(arch)
 	rows := ordinaryGlobalArithmeticCases(arch)
@@ -142,10 +152,14 @@ func ordinaryGlobalArithmeticRuntime(t *testing.T, arch string, execution x86Flo
 	}
 	want := fmt.Sprintf("%d readonly arithmetic programs x %d data/FLAGS/canary patterns\n", len(rows), len(patterns))
 	driver := "package main\nimport \"fmt\"\nfunc main(){\n" + goChecks.String() + fmt.Sprintf("fmt.Print(%q)\n}\n", want)
-	original := x86OrderingHintBuildOriginal(t, t.TempDir(), runtime.GOOS, arch,
-		"package main\n"+declarations, assembly, driver)
-	if output := execution.run(t, original); string(output) != want {
-		t.Fatalf("original complete Go source disagrees with independent arithmetic: %q", output)
+	if originalGo {
+		original := x86OrderingHintBuildOriginal(t, t.TempDir(), runtime.GOOS, arch,
+			"package main\n"+declarations, assembly, driver)
+		if output := execution.run(t, original); string(output) != want {
+			t.Fatalf("original complete Go source disagrees with independent arithmetic: %q", output)
+		}
+	} else {
+		goAssemblerOracleOutput(t, arch, assembly, "", true)
 	}
 	cSource := "#include <stdint.h>\n#include <stdio.h>\n#include <string.h>\n" + cDeclarations.String() +
 		fmt.Sprintf("uint64_t storage[5] __asm__(\"%s%s.words\");\n", prefix, linkedPackage) +
