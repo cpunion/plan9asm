@@ -22,16 +22,20 @@ func (c *amd64Ctx) ownedIndexedVectorReads(fn Func, sig FuncSig, arch string) ma
 		return nil
 	}
 	literals := c.fpStaticAddressValues.numericLiterals
-	address, memory := false, false
+	address, memory, direct := false, false, false
 	for _, ins := range fn.Instrs {
+		operand, _, vector := x86OwnedIndexedVectorRead(ins, arch)
+		memory = memory || vector && ins.Args[operand].Kind == OpMem
 		for index := range ins.Args {
 			form, valid := x86SDKLiteralOperandProperties(ins, index, arch)
 			address = address || valid && form.address && literals[form.symbol] > 0
+			// Mode32 may name the table directly instead of materializing a
+			// GP base. This selects a proof candidate, not an index or extent.
+			direct = direct || vector && index == operand && valid && !form.address &&
+				form.memory.Index != "" && literals[form.symbol] > 0
 		}
-		operand, _, valid := x86OwnedIndexedVectorRead(ins, arch)
-		memory = memory || valid && ins.Args[operand].Kind == OpMem
 	}
-	if !address || !memory {
+	if !memory || !address && !direct {
 		return nil // No new proof or restriction for unrelated source domains.
 	}
 	// The existing pure CFG/range algorithm takes ordinary source, signature
