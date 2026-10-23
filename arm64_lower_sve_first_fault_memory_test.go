@@ -3,6 +3,8 @@ package plan9asm
 import (
 	"strings"
 	"testing"
+
+	"github.com/xgo-dev/llvm"
 )
 
 func arm64SVEFirstFaultMemoryCompleteGo127Forms() string {
@@ -27,6 +29,7 @@ func arm64SVEFirstFaultMemoryCompleteGo127Forms() string {
 	ZLDFF1H (Z6.D.UXTW)(R14), P4.Z, [Z13.D]
 	ZLDFF1H (Z5.D.SXTW<<1)(R12), P2.Z, [Z11.D]
 	ZLDFF1H (Z4.S.UXTW)(R3), P3.Z, [Z4.S]
+	ZLDFF1H (Z4.S.UXTW<<1)(R3), P3.Z, [Z4.S]
 	ZLDFF1H (Z9.S.SXTW<<1)(R8), P5.Z, [Z10.S]
 	ZLDFF1H (Z7.S), P4.Z, [Z13.S]
 	ZLDFF1H 62(Z7.D), P4.Z, [Z13.D]
@@ -38,6 +41,7 @@ func arm64SVEFirstFaultMemoryCompleteGo127Forms() string {
 	ZLDFF1W (Z6.D.UXTW)(R14), P4.Z, [Z13.D]
 	ZLDFF1W (Z5.D.SXTW<<2)(R12), P2.Z, [Z11.D]
 	ZLDFF1W (Z4.S.UXTW)(R3), P3.Z, [Z4.S]
+	ZLDFF1W (Z4.S.UXTW<<2)(R3), P3.Z, [Z4.S]
 	ZLDFF1W (Z9.S.SXTW<<2)(R8), P5.Z, [Z10.S]
 	ZLDFF1W (Z7.S), P4.Z, [Z13.S]
 	ZLDFF1W 124(Z7.D), P4.Z, [Z13.D]
@@ -69,6 +73,7 @@ func arm64SVEFirstFaultMemoryCompleteGo127Forms() string {
 	ZLDFF1SH (Z6.D.UXTW)(R14), P4.Z, [Z13.D]
 	ZLDFF1SH (Z5.D.SXTW<<1)(R12), P2.Z, [Z11.D]
 	ZLDFF1SH (Z4.S.UXTW)(R3), P3.Z, [Z4.S]
+	ZLDFF1SH (Z4.S.UXTW<<1)(R3), P3.Z, [Z4.S]
 	ZLDFF1SH (Z9.S.SXTW<<1)(R8), P5.Z, [Z10.S]
 	ZLDFF1SH (Z7.S), P4.Z, [Z13.S]
 	ZLDFF1SH 62(Z7.D), P4.Z, [Z13.D]
@@ -94,9 +99,66 @@ func TestTranslateARM64SVEFirstFaultMemoryCompleteGo127Family(t *testing.T) {
 	}
 	for _, triple := range []string{"aarch64-apple-darwin", "aarch64-unknown-linux-gnu", "aarch64-pc-windows-msvc"} {
 		t.Run(triple, func(t *testing.T) {
-			ll, err := Translate(file, Options{TargetTriple: triple, Goarch: "arm64", Sigs: map[string]FuncSig{"svefirstfaultmemoryforms": {Name: "svefirstfaultmemoryforms", Ret: Void}}})
+			ctx := llvm.NewContext()
+			defer ctx.Dispose()
+			module, err := TranslateModuleInContext(ctx, file, Options{
+				TargetTriple: triple, Goarch: "arm64",
+				Sigs: map[string]FuncSig{"svefirstfaultmemoryforms": {Name: "svefirstfaultmemoryforms", Ret: Void}},
+			})
 			if err != nil {
 				t.Fatal(err)
+			}
+			defer module.Dispose()
+			ll := module.String()
+			function := module.NamedFunction("svefirstfaultmemoryforms")
+			if function.IsNil() || function.FirstBasicBlock().IsNil() {
+				t.Fatal("complete first-fault memory function disappeared")
+			}
+			calls := make(map[string]int)
+			for block := function.FirstBasicBlock(); !block.IsNil(); block = llvm.NextBasicBlock(block) {
+				for ins := block.FirstInstruction(); !ins.IsNil(); ins = llvm.NextInstruction(ins) {
+					if ins.InstructionOpcode() == llvm.Call {
+						calls[ins.CalledValue().Name()]++
+					}
+				}
+			}
+			// Independently count the fixture's 68 existing source operations
+			// and the three official S-lane scaled-UXTW rows added above.
+			wantKinds := map[string]int{
+				"": 18, "gather.": 16, "gather.index.": 10,
+				"gather.uxtw.": 5, "gather.uxtw.index.": 3,
+				"gather.sxtw.": 2, "gather.sxtw.index.": 3,
+				"gather.scalar.offset.": 14,
+			}
+			kinds := make(map[string]int)
+			for name, count := range calls {
+				const prefix = "llvm.aarch64.sve.ldff1."
+				if !strings.HasPrefix(name, prefix) {
+					continue
+				}
+				suffix := strings.TrimPrefix(name, prefix)
+				at := strings.Index(suffix, "nxv")
+				if at < 0 {
+					t.Fatal("first-fault call lost its scalable vector type", name)
+				}
+				kind := suffix[:at]
+				if _, known := wantKinds[kind]; !known {
+					t.Fatal("unexpected first-fault memory call", name)
+				}
+				kinds[kind] += count
+			}
+			for kind, count := range wantKinds {
+				if kinds[kind] != count {
+					t.Errorf("first-fault %q: got %d actual calls, want %d", kind, kinds[kind], count)
+				}
+			}
+			for name, count := range map[string]int{
+				"llvm.aarch64.sve.ldff1.gather.uxtw.index.nxv4i16": 2,
+				"llvm.aarch64.sve.ldff1.gather.uxtw.index.nxv4i32": 1,
+			} {
+				if calls[name] != count {
+					t.Errorf("%s: got %d actual calls, want %d", name, calls[name], count)
+				}
 			}
 			for _, want := range []string{
 				`"target-features"="+sve"`,
