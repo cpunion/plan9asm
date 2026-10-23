@@ -24,6 +24,12 @@ func (c *arm64Ctx) lowerArith(op Op, ins Instr) (ok bool, terminated bool, err e
 	if _, handled, err := parseARM64GPDataForm(op, ins); handled && err != nil {
 		return true, false, err
 	}
+	if form, handled, err := parseARM64NamedBitfield(op, ins); handled {
+		if err != nil {
+			return true, false, err
+		}
+		return true, false, c.lowerRawBitfield(form)
+	}
 	if ok, terminated, err := c.lowerARM64DivideRemainder(op, ins); ok {
 		return ok, terminated, err
 	}

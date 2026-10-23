@@ -63,6 +63,14 @@ func (c *arm64Ctx) lowerRawMoveWide(form arm64RawMoveWide) error {
 		if err != nil {
 			return err
 		}
+		if form.width == 32 {
+			narrow, kept, result, wide := c.newTmp(), c.newTmp(), c.newTmp(), c.newTmp()
+			fmt.Fprintf(c.b, "  %%%s = trunc i64 %s to i32\n", narrow, old)
+			fmt.Fprintf(c.b, "  %%%s = and i32 %%%s, %d\n", kept, narrow, ^(uint32(0xffff) << form.shift))
+			fmt.Fprintf(c.b, "  %%%s = or i32 %%%s, %d\n", result, kept, uint32(field))
+			fmt.Fprintf(c.b, "  %%%s = zext i32 %%%s to i64\n", wide, result)
+			return c.storeReg(reg, "%"+wide)
+		}
 		preserveMask := widthMask & ^(uint64(0xffff) << form.shift)
 		preserved := c.newTmp()
 		fmt.Fprintf(c.b, "  %%%s = and i64 %s, %d\n", preserved, old, preserveMask)

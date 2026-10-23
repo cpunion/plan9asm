@@ -2,7 +2,6 @@ package plan9asm
 
 import (
 	"fmt"
-	"strings"
 )
 
 func (c *arm64Ctx) lowerData(op Op, postInc bool, ins Instr) (ok bool, terminated bool, err error) {
@@ -28,8 +27,8 @@ func (c *arm64Ctx) lowerData(op Op, postInc bool, ins Instr) (ok bool, terminate
 		return ok, terminated, err
 	}
 	switch op {
-	case "MOVK", "MOVKW":
-		return true, false, c.lowerARM64MoveKeep(op, ins)
+	case "MOVK", "MOVKW", "MOVN", "MOVNW", "MOVZ", "MOVZW":
+		return true, false, c.lowerARM64MoveWide(op, ins)
 
 	case "MOVD":
 		if len(ins.Args) != 2 {
@@ -76,56 +75,15 @@ func (c *arm64Ctx) lowerData(op Op, postInc bool, ins Instr) (ok bool, terminate
 	return false, false, nil
 }
 
-func (c *arm64Ctx) lowerARM64MoveKeep(op Op, ins Instr) error {
-	if strings.ToUpper(string(ins.Op)) != string(op) || len(ins.Args) != 2 ||
-		ins.Args[0].Kind != OpImm || ins.Args[0].ImmRaw != "" ||
-		ins.Args[1].Kind != OpReg || !isARM64GeneralOrZeroReg(ins.Args[1].Reg) {
-		return fmt.Errorf("arm64 %s expects $imm16[<<16...], dstReg: %q", op, ins.Raw)
-	}
-	if ins.Args[0].Imm == 0 {
-		return fmt.Errorf("arm64 %s cannot encode a zero immediate: %q", op, ins.Raw)
-	}
-	value := uint64(ins.Args[0].Imm)
-	width := 64
-	if op == "MOVKW" {
-		if ins.Args[0].Imm < 0 || value > uint64(^uint32(0)) {
-			return fmt.Errorf("arm64 MOVKW immediate is outside 32 bits: %q", ins.Raw)
-		}
-		width = 32
-	}
-	shift := -1
-	for candidate := 0; candidate < width; candidate += 16 {
-		fieldMask := uint64(0xffff) << candidate
-		if value & ^fieldMask == 0 {
-			shift = candidate
-			break
-		}
-	}
-	if shift < 0 {
-		return fmt.Errorf("arm64 %s immediate is not a shifted unsigned 16-bit value: %q", op, ins.Raw)
-	}
-	old, err := c.loadReg(ins.Args[1].Reg)
+func (c *arm64Ctx) lowerARM64MoveWide(op Op, ins Instr) error {
+	form, handled, err := parseARM64NamedMoveWide(op, ins)
 	if err != nil {
 		return err
 	}
-	if width == 64 {
-		keepMask := ^(uint64(0xffff) << shift)
-		kept := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = and i64 %s, %d\n", kept, old, keepMask)
-		merged := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = or i64 %%%s, %d\n", merged, kept, value)
-		return c.storeReg(ins.Args[1].Reg, "%"+merged)
+	if !handled {
+		return fmt.Errorf("arm64: unknown move-wide operation %s", op)
 	}
-	old32 := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = trunc i64 %s to i32\n", old32, old)
-	keepMask := ^(uint32(0xffff) << shift)
-	kept := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = and i32 %%%s, %d\n", kept, old32, keepMask)
-	merged := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = or i32 %%%s, %d\n", merged, kept, uint32(value))
-	wide := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = zext i32 %%%s to i64\n", wide, merged)
-	return c.storeReg(ins.Args[1].Reg, "%"+wide)
+	return c.lowerRawMoveWide(form)
 }
 
 func (c *arm64Ctx) lowerSignedNarrowLoadToWord(op Op, ins Instr, bits int, postInc bool) error {

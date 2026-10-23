@@ -18,6 +18,25 @@ type arm64GPDataForm struct {
 // lowering, continuation values and both may-frame address proofs; an opcode
 // name or a raw GP-write mask alone is never a known overwrite.
 func parseARM64GPDataForm(op Op, ins Instr) (form arm64GPDataForm, handled bool, err error) {
+	if move, handled, err := parseARM64NamedMoveWide(op, ins); handled && move.op != "MOVK" {
+		if err != nil {
+			return form, true, err
+		}
+		// MOVN/Z do not consume the old destination, unlike MOVK's existing
+		// read-modify-write contract. W also overwrites the complete X alias.
+		form.destination = ins.Args[1]
+		return form, true, nil
+	}
+	if bitfield, handled, err := parseARM64NamedBitfield(op, ins); handled {
+		if err != nil {
+			return form, true, err
+		}
+		form.inputs, form.destination = ins.Args[1:2], ins.Args[3]
+		if bitfield.op == "BFM" {
+			form.inputs = []Operand{ins.Args[1], ins.Args[3]}
+		}
+		return form, true, nil
+	}
 	if immediate, handled, err := parseARM64GPImmediateForm(op, ins); handled {
 		if err != nil {
 			return form, true, err
