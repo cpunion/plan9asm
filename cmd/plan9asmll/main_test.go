@@ -1111,7 +1111,7 @@ func TestExtractSupportedOpsFindsWASMIntegerCountFamily(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, opcode := range strings.Fields("I32CLZ I32CTZ I32POPCNT I64CLZ I64CTZ I64POPCNT") {
-		if !supported[opcode] {
+		if _, ok := supported[opcode]; !ok {
 			t.Errorf("typed Wasm count opcode missing from extraction: %s", opcode)
 		}
 	}
