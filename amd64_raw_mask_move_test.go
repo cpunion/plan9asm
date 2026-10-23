@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -68,26 +69,52 @@ func TestX86RawMaskMoveCompleteGo127Family(t *testing.T) {
 		{goarch: "386", triple: "i386-unknown-linux-gnu"},
 	} {
 		t.Run(target.goarch+"/lower", func(t *testing.T) {
-			var source strings.Builder
-			source.WriteString("TEXT raw_mask_move(SB),NOSPLIT,$0-0\n")
+			var unbound strings.Builder
+			unbound.WriteString("TEXT raw_mask_move(SB),NOSPLIT,$0-0\n")
 			for _, test := range tests[:20] {
-				for _, value := range test.code {
-					fmt.Fprintf(&source, "\tBYTE $%#02x\n", value)
-				}
+				unbound.WriteString(x86RawDisplacementDirectives(test.code))
 			}
-			source.WriteString("\tRET\n")
-			file, err := Parse(ArchAMD64, source.String())
-			if err != nil {
-				t.Fatal(err)
+			unbound.WriteString("RET\n")
+			// Preserve the original complete source as a Go-format object and
+			// public Context control. Unknown AX/K inputs are not an ABI.
+			x86UnboundVoidFormatSources(t, unbound.String(), target.goarch, target.triple)
+			for index, test := range tests[:20] {
+				t.Run(test.name, func(t *testing.T) {
+					name := fmt.Sprintf("rawMask%d", index)
+					word, move := 8, "MOVQ"
+					if target.goarch == "386" {
+						word, move = 4, "MOVL"
+					}
+					arguments, extent := "", 0
+					setup := "MOVL $21,AX\n"
+					if strings.Contains(test.want, "(AX)") {
+						arguments, extent = "p *uint64", word
+						setup = move + " p+0(FP),AX\n"
+					}
+					// Each original opcode gets an independent function: a K->AX
+					// result must never become the next row's memory address.
+					source := fmt.Sprintf("TEXT ·%s(SB),4,$0-%d\nMOVL $91,CX\nKMOVD CX,K0\nKMOVD CX,K5\n%s%sRET\n",
+						name, extent, setup, x86RawDisplacementDirectives(test.code))
+					declaration := fmt.Sprintf("func %s(%s)", name, arguments)
+					x86LEAActualTargetGoObject(t, target.goarch, target.triple, source)
+					physicalQ := target.goarch == "386" && (test.name == "q k to gp" || test.name == "q gp to k")
+					for _, api := range []string{"text", "module", "Go"} {
+						t.Run(api, func(t *testing.T) {
+							ir, err := x86ScalarFPBitViewAPI(t, source, declaration, target.goarch, target.triple, api)
+							if physicalQ {
+								if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+									t.Fatal("mode32 physical GP-qword boundary disappeared", ir != "", err)
+								}
+								return
+							}
+							if err != nil || ir == "" {
+								t.Fatal("independently initialized original raw mask-move rejected", err)
+							}
+							compileLLVMToObject(t, llc, target.triple, "raw-mask-move.ll", "raw-mask-move.o", ir)
+						})
+					}
+				})
 			}
-			ir, err := Translate(file, Options{
-				Goarch: target.goarch, TargetTriple: target.triple,
-				Sigs: map[string]FuncSig{"raw_mask_move": {Name: "raw_mask_move", Ret: Void}},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
-			compileLLVMToObject(t, llc, target.triple, "raw-mask-move-"+target.goarch+".ll", "raw-mask-move-"+target.goarch+".o", ir)
 		})
 	}
 }
