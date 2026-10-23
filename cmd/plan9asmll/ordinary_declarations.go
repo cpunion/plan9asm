@@ -243,17 +243,21 @@ func (source *ordinaryDeclarationSource) translate(ctx llvm.Context, file *plan9
 	if err != nil {
 		return llvm.Module{}, err
 	}
-	// The complete original TEXT inventory, not just the successful subset,
-	// must be represented in the one module consumed by the common writer.
-	if len(result.Functions) != len(file.Funcs) {
-		result.Module.Dispose()
-		return llvm.Module{}, fmt.Errorf("ordinary GoModule changed the complete TEXT inventory")
+	// The API above receives the complete immutable source, without KeepFunc.
+	// It audits private tails before coalescing them into public entry bodies;
+	// those source nodes intentionally have no callable/metadata entry. Public
+	// metadata is therefore not a count of consumed original TEXTs. Check only
+	// its namespace/uniqueness here, not the library's private source authority.
+	original, seen := make(map[string]bool), make(map[string]bool)
+	for _, function := range file.Funcs {
+		original[function.Sym] = true
 	}
-	for index, function := range file.Funcs {
-		if result.Functions[index].TextSymbol != function.Sym {
+	for _, function := range result.Functions {
+		if !original[function.TextSymbol] || seen[function.TextSymbol] {
 			result.Module.Dispose()
-			return llvm.Module{}, fmt.Errorf("ordinary GoModule changed an original TEXT entry")
+			return llvm.Module{}, fmt.Errorf("ordinary GoModule returned a foreign or duplicate public TEXT entry")
 		}
+		seen[function.TextSymbol] = true
 	}
 	return result.Module, nil
 }
