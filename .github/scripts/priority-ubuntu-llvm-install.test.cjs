@@ -193,7 +193,7 @@ test('two exhausted updates retain exit 124 without installation or PATH publica
 });
 
 test('fallback keeps strict network options, the identical package transaction and original budgets', t => {
-  const result = runInstaller(t, {installs: [100, 0]});
+  const result = runInstaller(t, {updates: [0, 0], installs: [100, 0]});
   assert.equal(result.status, 0, result.stderr);
   const commands = result.stdout.split('\n').filter(line => line.startsWith('APT '));
   assert.equal(commands.length, 4);
@@ -208,7 +208,7 @@ test('fallback keeps strict network options, the identical package transaction a
 });
 
 test('failed package installation and wrong LLVM version cannot publish success', t => {
-  const failed = runInstaller(t, {installs: [100, 101]});
+  const failed = runInstaller(t, {updates: [0, 0], installs: [100, 101]});
   assert.equal(failed.status, 101, failed.stderr);
   assert.equal(failed.environment, '');
   for (const installed of [false, true]) {
