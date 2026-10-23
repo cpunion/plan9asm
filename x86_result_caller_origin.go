@@ -59,20 +59,41 @@ func x86ResultCallerAddressDifferenceStep(ins Instr, state *x86ResultState, arch
 	if arch == "386" {
 		op = "SUBL"
 	}
-	if ins.Op != op || len(ins.Args) != 2 || ins.Args[0].Kind != OpReg || ins.Args[1].Kind != OpReg || state.shapeOnly {
+	if ins.Op != op || len(ins.Args) != 2 || ins.Args[1].Kind != OpReg ||
+		state.shapeOnly && ins.Args[0].Kind != OpFP {
 		return false, false
 	}
 	word := x86ResultPointerWord(arch)
-	source, _, first := x86ResultGP(ins.Args[0].Reg, word, arch)
 	destination, _, last := x86ResultGP(ins.Args[1].Reg, word, arch)
-	if !first || !last || !state.callerAddressGP[source] || !state.callerAddressGP[destination] {
+	if !last || !state.shapeOnly && !state.callerAddressGP[destination] {
+		return false, false
+	}
+	var origin uint16
+	switch source := ins.Args[0]; source.Kind {
+	case OpReg:
+		index, _, valid := x86ResultGP(source.Reg, word, arch)
+		if !valid || !state.callerAddressGP[index] {
+			return false, false
+		}
+		origin = state.callerAddressOrigin[index]
+	case OpFP:
+		// Entry parameter slots are immutable in this proof. Only the exact
+		// typed pointer field can cancel its own derived address; adjacent
+		// numeric fields and partial pointer reads cannot borrow that origin.
+		if source.FPOffset >= 0 && source.FPOffset < 4096 && state.callerAddressFP[source.FPOffset] {
+			origin = uint16(source.FPOffset + 1)
+		}
+	default:
 		return false, false
 	}
 	effect, known, err := x86TypedInstructionByteEffect(ins.Op, ins, arch)
 	if !x86ResultNamedPredicateInstruction(ins) || !known || err != nil || effect.dynamicMemory ||
-		state.callerAddressOrigin[source] == 0 || state.callerAddressOrigin[source] != state.callerAddressOrigin[destination] {
+		origin == 0 || !state.shapeOnly && origin != state.callerAddressOrigin[destination] {
 		return false, true
 	}
+	// The source-wide shape pass checks the exact typed FP field and grammar,
+	// not an origin match. Its state never reaches a CFG edge; every actual
+	// reaching transfer must independently prove the destination's origin.
 	state.gp[destination] = 0xff
 	state.canonicalGP[destination] = 0
 	state.pointerGP[destination], state.callerAddressGP[destination] = false, false
@@ -91,14 +112,14 @@ func x86ResultCallerAddressDifferenceNeedsProof(ins Instr, sig FuncSig, arch str
 		op = "SUBL"
 	}
 	if ins.Op != op || !x86ResultNamedPredicateInstruction(ins) || len(ins.Args) != 2 ||
-		ins.Args[0].Kind != OpReg || ins.Args[1].Kind != OpReg {
+		(ins.Args[0].Kind != OpReg && ins.Args[0].Kind != OpFP) || ins.Args[1].Kind != OpReg {
 		return false
 	}
 	if _, known, err := x86TypedInstructionByteEffect(ins.Op, ins, arch); !known || err != nil {
 		return false
 	}
 	for _, slot := range sig.Frame.Params {
-		if slot.Type == Ptr {
+		if slot.Type == Ptr && (ins.Args[0].Kind == OpReg || ins.Args[0].FPOffset == slot.Offset) {
 			return true
 		}
 	}

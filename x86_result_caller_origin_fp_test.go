@@ -3,7 +3,6 @@ package plan9asm
 import (
 	"errors"
 	"fmt"
-	"strings"
 	"testing"
 )
 
@@ -90,10 +89,6 @@ int main(void) {
 			ir, err := x86ScalarFPBitViewAPI(t, source, declaration, "amd64", execution.triple, api)
 			if err != nil {
 				t.Fatal(err)
-			}
-			// The test helper links the independent package name on the Go API.
-			if api == "Go" {
-				ir = strings.ReplaceAll(ir, "example.com/scalarfp.Value", "Value")
 			}
 			for _, input := range []string{ir, x86MulDivRoundOptimize(t, ir)} {
 				execution.compileAndRunLLVM(t, "pointer-difference", input, driver, "-O2")
