@@ -1,9 +1,11 @@
 package plan9asm
 
 import (
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"go/ast"
+	"go/types"
 	"strings"
 	"testing"
 
@@ -249,6 +251,84 @@ func TestGoModuleAMD64VirtualArgumentsRecheckCallbacks(t *testing.T) {
 				}
 			} else {
 				amd64VirtualArgumentsRequireContext(t, ir, err)
+			}
+		})
+	}
+}
+
+type amd64VirtualArgumentCountingSizes struct {
+	types.Sizes
+	queries int
+}
+
+func (sizes *amd64VirtualArgumentCountingSizes) Sizeof(typ types.Type) int64 {
+	sizes.queries++
+	return sizes.Sizes.Sizeof(typ)
+}
+
+func (sizes *amd64VirtualArgumentCountingSizes) Alignof(typ types.Type) int64 {
+	sizes.queries++
+	return sizes.Sizes.Alignof(typ)
+}
+
+func (sizes *amd64VirtualArgumentCountingSizes) Offsetsof(fields []*types.Var) []int64 {
+	sizes.queries++
+	return sizes.Sizes.Offsetsof(fields)
+}
+
+// Internal symbol/register operations consume the private immutable plan,
+// not repeated full-package declaration observations. Complete boundaries
+// still query the live supplied inputs and revoke the call after a mutation.
+func TestGoModuleAMD64VirtualArgumentsBoundedInternalChecks(t *testing.T) {
+	for _, mutation := range []string{"control", "syntax", "source"} {
+		t.Run(mutation, func(t *testing.T) {
+			pkg := mustGoPackage(t, amd64VirtualArgumentsPackage, "package virtualargs\nfunc Entry(a []byte) uint64\n")
+			source := []byte("TEXT ·Entry<ABIInternal>(SB),4,$0\nMOVQ BX,AX\nRET\n")
+			file, err := Parse(ArchAMD64, string(source))
+			if err != nil {
+				t.Fatal(err)
+			}
+			sizes := &amd64VirtualArgumentCountingSizes{Sizes: types.SizesFor("gc", "amd64")}
+			owner, err := bindAMD64GoVirtualArguments(pkg, file, source, sha256.Sum256(source),
+				GoModuleOptions{GOARCH: "amd64", Sizes: sizes}, testResolveSym(pkg.Path))
+			if err != nil || owner == nil || sizes.queries == 0 {
+				t.Fatal("the complete declaration boundary was not observed", err, sizes.queries)
+			}
+			defer func() { owner.active = false }()
+			entry := owner.entries[pkg.Path+".Entry"]
+			if entry == nil {
+				t.Fatal("actual declaration lost its private parameter plan")
+			}
+			sig := entry.signature
+			sig.amd64GoArguments = entry
+			sizes.queries = 0
+			for count := 0; count < 100; count++ {
+				if owner.resolveSymbol("·Entry") != sig.Name || !entry.valid(file.Funcs[0], sig, "amd64") {
+					t.Fatal("internal immutable-plan check failed", count)
+				}
+			}
+			if sizes.queries != 0 {
+				t.Fatal("internal resolution repeated whole declaration/layout observations", sizes.queries)
+			}
+			if mutation == "syntax" {
+				pkg.Syntax[0].Name.Name = "foreign"
+			} else if mutation == "source" {
+				source[len(source)-1] = ' '
+			}
+			err = owner.verify()
+			if mutation == "control" {
+				if err != nil || sizes.queries == 0 {
+					t.Fatal("final boundary did not recheck live declarations", err, sizes.queries)
+				}
+			} else {
+				if !errors.Is(err, ErrProbeNeedsContext) {
+					t.Fatal("final boundary accepted changed inputs", err)
+				}
+				pkg.Syntax[0].Name.Name = "virtualargs"
+				source[len(source)-1] = '\n'
+				if entry.valid(file.Funcs[0], sig, "amd64") {
+					t.Fatal("restoring an invalidated source revived its old call-local role")
+				}
 			}
 		})
 	}
