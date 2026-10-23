@@ -68,3 +68,34 @@ func TestX86PackedShiftLiteralBindingAndStateLifetime(t *testing.T) {
 		t.Fatal("different predecessor shifts were joined as one fact")
 	}
 }
+
+func TestX86PackedShiftRawKeepsNamedBitDependenciesSeparate(t *testing.T) {
+	pending := x86ResultShiftBits{input: 1, register: 3, width: 64, lane: 16, count: 4}
+	for _, arch := range []string{"386", "amd64"} {
+		for _, row := range x86PackedShiftRawCases() {
+			t.Run(arch+"/"+row.name(), func(t *testing.T) {
+				ins := x86RawMoveObservedInstruction(t, arch, row.code(false))
+				for _, knownBytes := range []uint64{1, ^uint64(0)} {
+					state := x86ResultState{shiftBits: pending}
+					for index := 0; index < 3; index++ {
+						state.writeVector(index, 64, knownBytes, false)
+					}
+					state.pointerGP[3], state.masks[1] = true, true
+					accepted, known := x86LoweredRawPackedShiftStep(ins, &state, nil, arch)
+					if !known || !accepted || state.shiftBits != pending {
+						t.Fatal("raw projection created or replaced a named-only bit dependency", accepted, known)
+					}
+				}
+			})
+		}
+	}
+
+	state := x86ResultState{}
+	state.writeVector(1, 16, 1, true)
+	ins := x86ScalarLaneInstruction(t, "VPSRLW $4,X1,X0")
+	accepted, known := x86ResultPackedShiftStepWithRead(ins, &state, nil, "amd64", true)
+	want := x86ResultShiftBits{input: 1, register: 0, width: 16, lane: 16, count: 4}
+	if !accepted || !known || state.shiftBits != want {
+		t.Fatal("genuine named input lost its adjacent bit dependency", accepted, known, state.shiftBits)
+	}
+}
