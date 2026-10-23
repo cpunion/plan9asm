@@ -1,6 +1,6 @@
 # PR40 closeout
 
-Updated 2026-10-22. This handoff identifies scope and required work, not a
+Updated 2026-10-23. This handoff identifies scope and required work, not a
 current-head completion certificate. Read [instruction contracts](instructions.md)
 and [validation](validation.md). Preserve original failed receipts.
 
@@ -21,12 +21,16 @@ reviewer approval.
 
 ## Last completed upstream run
 
-[Run39716083123 attempt1](https://github.com/xgo-dev/plan9asm/actions/runs/39716083123/attempts/1)
-at head8e658698 finished naturally: 213 jobs, 171 success, 34 failure and eight
-cancelled. These are job outcomes, not unique instruction or test counts.
-The older same-head fork success scopes cannot certify the upstream execution.
+[Run39882172980](https://github.com/xgo-dev/plan9asm/actions/runs/39882172980)
+at contribution head451bf650 finished naturally with all325 jobs successful.
+Its terminal state was observed unchanged for more than five minutes. This
+certifies that published revision's job outcomes, not newer local changes,
+every instruction form, unavailable native hardware, or reviewer approval.
+The patch-coverage check also succeeded. Keep the PR draft during review repairs.
 
-Own logs exposed interrupted Go/Node downloads marked successful, a non-retryable
+The failed historical run39716083123 at head8e658698 remains recorded separately:
+213 jobs, 171 success, 34 failure and eight cancelled. Its logs exposed
+interrupted Go/Node downloads marked successful, a non-retryable
 MSYS2 directory collision, complete CLI package deadlines, Go1.26.10 Windows
 producer rejection, conversion execution/proof deadlines and artifact-upload
 failures. Some cancellation causes and a failed race shard's first test were not
@@ -45,6 +49,38 @@ report capability-unavailable SKIP while retaining mandatory object checks.
 The default and explicit `required` mode still require native execution.
 Do not infer another owner's capabilities from those receipts, LLVM host names,
 a signal alone or a passing object test.
+
+## Review repair batch
+
+The review of head39e71ec61 identified real regressions as well as misleading
+coverage interpretation. Published451bf650 already includes the EXTR operand
+order and vector structure-memory repairs. Subsequent local changes add the
+ten named ARM64 move-wide/bitfield aliases, demand-selected ARM64 declarations,
+shared target checks, named SVE count feature propagation, mixed-bool frame
+roles, and bounded reads of ordinary Go globals from supplied declarations.
+Validate the actual final batch before publishing; older focused passes do
+not certify a later snapshot.
+
+Whole-file regression checks must accompany independent instruction tests.
+The math/big carry chain exposed TEST's data-independent CF/OF writes. go-hex
+also exposed omitted TEXT argument extents, packed shift/mask bit precision,
+and length-dependent initialized-byte facts across control-flow joins. Keep
+each remaining failure explicit; fixing one diagnostic is not whole-file
+success. Do not grant numerical pointer access, arbitrary global writes or
+initialized scratch bytes to make these cases pass.
+
+The scan report now separates IR-text probes, LLVM object evidence and actual
+execution. Context is not supported, registered manifests are not fresh test
+results, and WASM's isolated probe is explicitly not run. Initialized-context
+reprobes, broader386 forms, remaining WASM scalar/control/SIMD support, and
+complete-source performance still need work. External inventories stay in the
+compatibility repository; do not restore scanner jobs here.
+
+LLGo PR2694 remains a separate draft. Its published73ad6b209 run failed;
+local cgo-preamble and Windows UTF-8 collector repairs are not yet that run's
+CI successes. Publish a verified translator revision before updating its
+exact fork replacement. Runtime entry/closure contracts remain separate from
+instruction translation evidence.
 
 ## Closeout mechanisms
 
