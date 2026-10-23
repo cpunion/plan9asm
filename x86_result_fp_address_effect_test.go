@@ -170,7 +170,7 @@ func TestX86NarrowFPAddressLiveUsesAndEscapesRemainContext(t *testing.T) {
 		for _, width := range widths {
 			for _, test := range []struct{ name, use string }{
 				{"NUM result", "MOVL AX,ret+RESULT(FP)"},
-				{"compare", "TESTW AX,AX"},
+				{"compare", "TESTW AX,AX\nMOVL $0,CX\nSETEQ CL\nMOVL CX,ret+RESULT(FP)"},
 				{"native load", "MOVB (AX),CL"},
 				{"native store", "MOVB $1,(AX)"},
 				{"input escape", "MOVL AX,x+0(FP)"},

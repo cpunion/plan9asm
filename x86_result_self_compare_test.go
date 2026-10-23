@@ -74,7 +74,9 @@ func TestX86SelfCMPThreeAPIsKeepNumericalAndPhysicalBoundaries(t *testing.T) {
 				{"flags-only", fmt.Sprintf("CMP%c AX,AX\nMOVL $0,BX\nSETEQ BL\nMOVL BX,ret+RESULT(FP)", width), true},
 				{"not-NUM", fmt.Sprintf("CMP%c AX,AX\nMOVL AX,ret+RESULT(FP)", width), false},
 				{"different-inputs", fmt.Sprintf("CMP%c AX,BX\nMOVL $7,ret+RESULT(FP)", width), false},
-				{"TEST-reads-input", fmt.Sprintf("TEST%c AX,AX\nMOVL $7,ret+RESULT(FP)", width), false},
+				// TEST always clears CF, but its ZF still depends on the input.
+				{"TEST-independent-flags", fmt.Sprintf("TEST%c AX,AX\nMOVL $0,BX\nSETCS BL\nMOVL BX,ret+RESULT(FP)", width), true},
+				{"TEST-reads-input", fmt.Sprintf("TEST%c AX,AX\nMOVL $0,BX\nSETEQ BL\nMOVL BX,ret+RESULT(FP)", width), false},
 				{"SP-still-physical", fmt.Sprintf("CMP%c SP,SP\nMOVL $7,ret+RESULT(FP)", width), false},
 			}
 			if target.arch == "amd64" {

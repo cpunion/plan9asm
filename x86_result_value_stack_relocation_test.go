@@ -34,7 +34,7 @@ func TestX86PrivateStackAbsoluteRelocationBitsStayOpaque(t *testing.T) {
 func TestX86PrivateStackAbsoluteRelocationCannotSupplyValuesOrStorage(t *testing.T) {
 	for _, row := range []struct{ name, declaration, body string }{
 		{"NUM-result", "func Value() uint32", "MOVL AX,ret+0(FP)"},
-		{"comparison", "func Value()", "TESTL AX,AX"},
+		{"comparison", "func Value() uint32", "TESTL AX,AX\nMOVL $0,BX\nSETEQ BL\nMOVL BX,ret+0(FP)"},
 		{"native-load", "func Value() uint32", "MOVL (AX),BX\nMOVL BX,ret+0(FP)"},
 		{"native-store", "func Value()", "MOVL $7,(AX)"},
 		{"FLAGS", "func Value()", "PUSHL AX\nPOPFL\nSETCS BL"},
@@ -42,7 +42,7 @@ func TestX86PrivateStackAbsoluteRelocationCannotSupplyValuesOrStorage(t *testing
 		for _, api := range []string{"text", "module", "Go"} {
 			t.Run(row.name+"/"+api, func(t *testing.T) {
 				args := "0"
-				if row.name == "NUM-result" || row.name == "native-load" {
+				if row.name == "NUM-result" || row.name == "native-load" || row.name == "comparison" {
 					args = "4"
 				}
 				source := "TEXT ·Value(SB),4,$0-" + args + "\nPUSHL $·cell(SB)\nPOPL AX\n" + row.body + "\nRET\n"

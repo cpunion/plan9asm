@@ -51,7 +51,7 @@ func TestX86LEASBUnknownAddressDoesNotGrantFacts(t *testing.T) {
 		for _, width := range widths {
 			for _, test := range []struct{ name, before, after string }{
 				{"NUM-result", "", "MOVL DX,ret+RESULT(FP)"},
-				{"NUM-compare", "", "TESTW DX,DX"},
+				{"NUM-compare", "", "TESTW DX,DX\nMOVL $0,CX\nSETEQ CL\nMOVL CX,ret+RESULT(FP)"},
 				{"native-read", move + " p+0(FP),DX\n", "MOVB (DX),CL"},
 				{"native-write", move + " p+0(FP),DX\n", "MOVB $1,(DX)"},
 				{"caller-address", move + " p+0(FP),DX\n", "CMPW DX,$0"},
