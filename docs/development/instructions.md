@@ -320,6 +320,14 @@ Retain original Go objects, three-mode target objects, portable values/canaries
 and exact dead-access faults. Native x87 environment/exception execution stays
 with its required original-source runtime owners.
 
+Complete 386 x87 rounding leaves may save and restore two control words within
+one physical word below unchanged SP. The closed save/copy/change/FRNDINT/restore
+grammar changes only RC bits, preserves the original zero-frame NOSPLIT source,
+and uses the existing native control-word and byte-initialization effects.
+It grants no named AUTO frame, incoming-SP backing or ambient Software control.
+Keep the complete SDK floor source, all 70 register/control/layout cases,
+mutation boundaries and the required native original-Go/LLVM runtime owner.
+
 Mode32 zero-argument manual I8/I16/I32 returns use the existing logical AX
 transport. Share its CFG and exact-byte return obligation with the distinct
 custom-register bool checker; I1 still needs canonical zero/one. Route absent
