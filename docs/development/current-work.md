@@ -21,13 +21,16 @@ reviewer approval.
 
 ## Last completed upstream run
 
-The newer contribution head `da6521352eb1` is being checked by
-[run39899167605](https://github.com/xgo-dev/plan9asm/actions/runs/39899167605).
-It has observed failures; its incomplete outcome must not be replaced with the
-older passing run below. The current local batch fixes the raw-shift facts,
-relocation fixture budget, SVE test declaration/argument mismatches and TEST
-flag expectations found in its own logs. Revalidate the integrated snapshot
-and wait for the active run to end naturally before publishing another batch.
+Contribution head `da6521352eb1` completed
+[run39899167605](https://github.com/xgo-dev/plan9asm/actions/runs/39899167605)
+naturally: 325 jobs, 213 successful and 112 failed, stable for more than three
+minutes. The failed jobs comprise 101 direct parent shards with 13 distinct
+test roots and 11 strict aggregation failures propagating those failed parents.
+Each aggregate's plan and tool/environment observations match its failed
+parent; this is not evidence of a separate plan-identity defect. The local batch
+repairs raw-shift facts, relocation fixture budgets, SVE test declarations and
+argument mismatches, and TEST flag expectations. Revalidate the integrated
+snapshot before publishing; the old failed run remains failed.
 
 [Run39882172980](https://github.com/xgo-dev/plan9asm/actions/runs/39882172980)
 at contribution head451bf650 finished naturally with all325 jobs successful.
@@ -83,6 +86,15 @@ results, and WASM's isolated probe is explicitly not run. Initialized-context
 reprobes, broader386 forms, remaining WASM scalar/control/SIMD support, and
 complete-source performance still need work. External inventories stay in the
 compatibility repository; do not restore scanner jobs here.
+
+The typed WASM integer-count family covers all six I32/I64 CLZ, CTZ and POPCNT
+names in Go's opcode table, including defined zero-input behavior. Its independent
+oracle checks 798 inputs using original Go/WASM and LLVM-generated WASM across
+three APIs, two targets and both IR/backend optimization settings. These are
+family-specific execution checks, not evidence for other WASM opcodes or SIMD.
+Minimum-Go execution requires the selected SDK's own WASM JavaScript helpers;
+auto-downloaded toolchain modules can omit them. Use the complete same-version
+official SDK, not another version's helper or a runtime skip.
 
 The local declaration-bound global-read extension shares the scalar ALU and
 explicit IMUL grammars, retaining exact volatile widths. Executed independent
