@@ -55,6 +55,10 @@ func TestARM64PreludeContainsOnlyUsedDeclarations(t *testing.T) {
 			want: []string{"llvm.aarch64.sve.cntb"},
 		},
 	} {
+		// The current entry lowerer reads the incoming LR through this
+		// intrinsic even for an ordinary scalar leaf. It is an actual use,
+		// unlike the other 2,220 declarations formerly emitted unconditionally.
+		row.want = append(row.want, "llvm.returnaddress")
 		for _, api := range []string{"text", "module", "Go"} {
 			t.Run(row.name+"/"+api, func(t *testing.T) {
 				ir, err := targetBackendRequest(t, api, "aarch64-unknown-linux-gnu", targetBackendCase{
