@@ -21,6 +21,33 @@ reviewer approval.
 
 ## Last completed upstream run
 
+Published head `0d8676fdd233` completed
+[run39955468231](https://github.com/xgo-dev/plan9asm/actions/runs/39955468231)
+naturally: 325 Actions jobs, 322 successful and three failed. Two jobs failed
+while installing LLVM dependencies, before Go tests; the Go1.26 module
+completion then rejected the missing root10 receipts. The local installer
+repair uses official Ubuntu mirrors and treats partial index updates as errors.
+Its complete Node policy suite passed 676 tests; real installation still needs
+the next CI run. The earlier Go1.20 root4 deadline failure did not recur.
+
+The integration repair shares typed logical/AES reads of declaration-bound Go
+globals and bounded indexed reads of complete private numeric RODATA. Direct
+global reads have independent LLVM22 value/canary execution; indexed tables
+have complete-family objects and actual LLGo SDK maps archive checks, not a
+new indexed-table runtime certificate. KMOV byte effects preserve unrelated
+index ranges. Raw KMOV shares the existing exact-source replay and volatile
+native read/store path; unknown inputs and mode32 physical GP-qword forms
+remain explicit context failures, not skipped or successful forms.
+
+LLGo PR2694 remains separate and draft. Complete maps and Windows386 atomic
+objects now pass locally, and a real Go1.26.10 native smoke passes. The new
+Windows386 atomic runtime roots still need their actual CI lanes. Go1.22.2
+native smoke has exposed a further ARM64 bytealg selected-declaration failure;
+keep that failed receipt and repair the integration rather than excluding it.
+These are local checks, not a current-head CI completion certificate.
+
+## Earlier completed runs
+
 Published head `fbb288364141` completed
 [run39936529939](https://github.com/xgo-dev/plan9asm/actions/runs/39936529939)
 naturally:325 jobs,323 successful and two failed. The Go1.20 root4 job exhausted
