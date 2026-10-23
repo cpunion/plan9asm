@@ -88,7 +88,7 @@ func main() {
 	}
 	environment := []string{"GOTOOLCHAIN=local", "GOENV=off", "GOWORK=off", "CGO_ENABLED=0", "GOARCH=amd64", "GOOS=" + goos}
 	dataGlobalAlignmentCommand(t, directory, environment, "go", "build", "-p=2", "-o", original, ".")
-	if output := string(execution.run(t, original)); output != "original legacy shift masks: 36x256 PASS\n" {
+	if output := string(execution.run(t, original)); strings.TrimSpace(output) != "original legacy shift masks: 36x256 PASS" {
 		t.Fatal("missing actual original-Go oracle completion", output)
 	}
 	main := `#include <stdint.h>
@@ -133,7 +133,7 @@ int main(void) {
 		}
 		for _, level := range []string{"-O0", "-O2"} {
 			t.Run(api+"/"+level, func(t *testing.T) {
-				if output := string(execution.compileAndRunLLVM(t, "shift-literal-masks", ir, main, level)); output != "LLVM legacy shift masks: 36x256 PASS\n" {
+				if output := string(execution.compileAndRunLLVM(t, "shift-literal-masks", ir, main, level)); strings.TrimSpace(output) != "LLVM legacy shift masks: 36x256 PASS" {
 					t.Fatal("missing actual LLVM oracle completion", output)
 				}
 			})
