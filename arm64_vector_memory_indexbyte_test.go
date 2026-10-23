@@ -19,6 +19,10 @@ func TestARM64VectorMemoryStdlibIndexByteBenchmark(t *testing.T) {
 		t.Skip("throughput requires native ARM64; instruction semantics have the required cross-runtime counterpart")
 	}
 	llc, triple, compiler, _ := arm64FPPairRuntimeTools(t)
+	opt := findLLVM22Tool("opt")
+	if opt == "" {
+		t.Fatal("LLVM 22 opt not found")
+	}
 	pkg := arm64BytealgCountSDKPackage(t) // Complete actual bytealg declarations/selection, not copied signatures.
 	filename := filepath.Join(runtime.GOROOT(), "src", "internal", "bytealg", "indexbyte_arm64.s")
 	source, err := os.ReadFile(filename)
@@ -74,16 +78,31 @@ define i64 @vector_bench_index_byte(ptr %p, i64 %n, i8 %c) {
 			t.Log(strings.TrimSpace(string(output)))
 		}
 	}
-	object := filepath.Join(dir, "indexbyte.o")
-	llvmExecutable := filepath.Join(dir, "indexbyte-llvm")
+	t.Logf("temporary diagnostic IR/assembly/objects/executables: %s (automatically cleaned)", dir)
+	optimizedIR := filepath.Join(dir, "indexbyte-optimized.ll")
+	run(opt, "-passes=default<O2>", "-S", filepath.Join(dir, "indexbyte.ll"), "-o", optimizedIR)
+	var llvmExecutables []string
+	for _, pipeline := range []struct{ name, input string }{
+		{"raw-llc-O2", filepath.Join(dir, "indexbyte.ll")},
+		{"optimized-llvm-O2", optimizedIR},
+	} {
+		object := filepath.Join(dir, pipeline.name+".o")
+		executable := filepath.Join(dir, pipeline.name)
+		arguments := []string{"-mtriple=" + triple, "-relocation-model=pic", "-O=2"}
+		run(llc, append(append([]string(nil), arguments...), "-filetype=obj", pipeline.input, "-o", object)...)
+		run(llc, append(append([]string(nil), arguments...), "-filetype=asm", pipeline.input, "-o", filepath.Join(dir, pipeline.name+".s"))...)
+		linkArgs := append(append([]string(nil), compiler[1:]...), "-O2", object, filepath.Join(dir, "main.c"),
+			"-DVECTOR_BENCH_ENGINE=\""+pipeline.name+"\"", "-o", executable)
+		run(compiler[0], linkArgs...)
+		llvmExecutables = append(llvmExecutables, executable)
+	}
 	goExecutable := filepath.Join(dir, "indexbyte-go")
-	run(llc, "-mtriple="+triple, "-relocation-model=pic", "-O=2", "-filetype=obj", filepath.Join(dir, "indexbyte.ll"), "-o", object)
-	linkArgs := append(append([]string(nil), compiler[1:]...), "-O2", object, filepath.Join(dir, "main.c"), "-o", llvmExecutable)
-	run(compiler[0], linkArgs...)
 	run(filepath.Join(runtime.GOROOT(), "bin", "go"), "build", "-p=2", "-o", goExecutable, "main.go")
-	t.Logf("actual SDK=%s sourceSHA256=%x; source IR/no opt prepass; llc-O2; C-O2; sizes=1048576 iterations=1024 offsets=0,1,31", runtime.Version(), sha256.Sum256(source))
+	t.Logf("actual SDK=%s sourceSHA256=%x; raw=no IR prepass; optimized=opt default<O2>; both llc-O2/C-O2; sizes=1048576 iterations=1024 offsets=0,1,31", runtime.Version(), sha256.Sum256(source))
 	run(goExecutable)
-	run(llvmExecutable)
+	for _, executable := range llvmExecutables {
+		run(executable)
+	}
 	after, err := os.ReadFile(filename)
 	if err != nil || sha256.Sum256(after) != sha256.Sum256(source) {
 		t.Fatalf("original indexbyte source changed during observation: %v", err)
@@ -130,6 +149,9 @@ const arm64VectorMemoryIndexByteC = `
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#ifndef VECTOR_BENCH_ENGINE
+#error benchmark engine label is required
+#endif
 extern int64_t vector_bench_index_byte(const unsigned char *, int64_t, unsigned char);
 
 static int64_t nanos(void) {
@@ -162,8 +184,8 @@ int main(void) {
     }
     int64_t elapsed = nanos() - start;
     if (checksum != -(int64_t)iterations || elapsed <= 0) return 1;
-    printf("engine=translated-LLVM size=%u iterations=%u offset=%u ns=%lld checksum=%lld GB/s=%.3f\n",
-           size, iterations, off, (long long)elapsed, (long long)checksum,
+    printf("engine=%s size=%u iterations=%u offset=%u ns=%lld checksum=%lld GB/s=%.3f\n",
+           VECTOR_BENCH_ENGINE, size, iterations, off, (long long)elapsed, (long long)checksum,
            (double)size * iterations / elapsed);
   }
   free(storage);

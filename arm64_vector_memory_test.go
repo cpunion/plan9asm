@@ -167,7 +167,15 @@ func TestCrossLinuxRuntimeMatrixARM64VectorMemorySemantics(t *testing.T) {
 				registers := arm64TestVectorList(30, count, arrangement.name)
 				suffix, input := arm64VectorMemoryOperands(count*width, mode, "R0")
 				_, output := arm64VectorMemoryOperands(count*width, mode, "R1")
-				fmt.Fprintf(&source, "TEXT %s(SB),$0-0\nMOVD $%d,R7\nVLD1%s %s,%s\nVST1%s %s,%s\n", name, count*width+5, suffix, input, registers, suffix, registers, output)
+				fmt.Fprintf(&source, "TEXT %s(SB),$0-0\nMOVD $%d,R7\n", name, count*width+5)
+				if width == 8 {
+					// Seed every upper byte so preserving an old half cannot
+					// impersonate the Q=0 load's required upper-half clearing.
+					for register := 0; register < count; register++ {
+						fmt.Fprintf(&source, "VMOVI $0xa5,V%d.B16\n", (30+register)%32)
+					}
+				}
+				fmt.Fprintf(&source, "VLD1%s %s,%s\nVST1%s %s,%s\n", suffix, input, registers, suffix, registers, output)
 				fmt.Fprint(&source, "MOVD R0,0(R2)\nMOVD R1,8(R2)\nADD $16,R2,R3\n")
 				fmt.Fprintf(&source, "VST1 %s,(R3)\nRET\n", arm64TestVectorList(30, count, "B16"))
 				sigs[name] = FuncSig{Name: name, Args: []LLVMType{Ptr, Ptr, Ptr}, Ret: Void, ArgRegs: []Reg{"R0", "R1", "R2"}}
