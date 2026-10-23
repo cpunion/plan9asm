@@ -196,8 +196,11 @@ func TestX86TESTIndependentFlagsDoNotGrantDependentInputs(t *testing.T) {
 				if target.arch == "386" {
 					word, move = 4, "MOVL"
 				}
-				source := fmt.Sprintf("TEXT ·view(SB),4,$0-%d\nMOVSS seed+%d(FP),X0\n%s p+0(FP),AX\n%s\nSETCS CL\nMOVSS X0,ret+%d(FP)\nRET\n",
-					word+12, word, move, body, word+8)
+				// A genuine incoming caller address already has a separate,
+				// legal TEST predicate role. That is not NUM: even an output
+				// subsequently overwritten must not import its pointer bits.
+				source := fmt.Sprintf("TEXT ·view(SB),4,$0-%d\nMOVSS seed+%d(FP),X0\n%s p+0(FP),AX\n%s\nSETCS CL\nMOVL AX,ret+%d(FP)\nMOVSS X0,ret+%d(FP)\nRET\n",
+					word+12, word, move, body, word+8, word+8)
 				for _, api := range []string{"text", "module", "Go"} {
 					if _, err := x86ScalarFPBitViewAPI(t, source, "func view(p *uint32,seed uint64) uint32\n",
 						target.arch, target.triple, api); !errors.Is(err, ErrProbeNeedsContext) {
