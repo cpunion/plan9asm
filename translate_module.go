@@ -19,6 +19,24 @@ func TranslateModule(file *File, opt Options) (llvm.Module, error) {
 // Dispose the returned module before disposing ctx. High-volume callers should
 // create a fresh context per file so LLVM can release context-owned caches.
 func TranslateModuleInContext(ctx llvm.Context, file *File, opt Options) (result llvm.Module, resultErr error) {
+	if err := validateBackendSourceGoarch(file, opt); err != nil {
+		return llvm.Module{}, err
+	}
+	// Register first so this also checks early byte-carrier returns, after
+	// every source-owner completion guard. Never return a partial module when
+	// its actual LLVM target cannot represent the emitted operations.
+	defer func() {
+		if result.IsNil() {
+			return
+		}
+		if resultErr == nil {
+			resultErr = validateTranslatedBackend(file, opt, result)
+		}
+		if resultErr != nil {
+			result.Dispose()
+			result = llvm.Module{}
+		}
+	}()
 	callOriginal := file
 	if opt.x86OriginalFile != nil {
 		callOriginal = opt.x86OriginalFile
