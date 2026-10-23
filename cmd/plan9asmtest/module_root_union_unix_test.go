@@ -170,20 +170,21 @@ func rootSplitCompleteUnionLayout(t *testing.T, parts, shards int, race, coverag
 	moduleFixtureEnvironment(t)
 	binary := parallelFixtureCLI(t)
 	dir := moduleRootPartitionFixtureForShards(t, shards)
-	// Every layout replays all 72 named scheduling roles. This is actual
+	// Every layout replays the complete independently enumerated source roles.
 	// receipt transport, not instruction execution; those oracles stay separate.
 	file := filepath.Join(dir, "value_test.go")
 	source, err := os.ReadFile(file)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range heavyObjectNames(heavyObjectSourceFamilies(t)) {
+	heavyNames := heavyObjectNames(heavyObjectSourceFamilies(t))
+	for _, name := range heavyNames {
 		source = append(source, []byte(fmt.Sprintf("\nfunc %s(t *testing.T) { t.Run(\"owner-child\", func(t *testing.T) { if Value() != 7 { t.Fatal(\"value\") } }) }\n", name))...)
 	}
 	if err := os.WriteFile(file, source, 0600); err != nil {
 		t.Fatal(err)
 	}
-	wantRoots := shards + 76
+	wantRoots := shards + 4 + len(heavyNames)
 	inputs := t.TempDir()
 	if err := os.Mkdir(filepath.Join(inputs, "owner-0000"), 0700); err != nil {
 		t.Fatal(err)

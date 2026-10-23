@@ -189,24 +189,23 @@ The runner forces `-count=1`; successful cached runs cannot replace execution.
 
 ## Proof and failure behavior
 
-The sorted inventory hashes newline-separated names with SHA-256. Without
-effective explicit race instrumentation, every root retains the first eight
-bytes of its name's SHA-256, interpreted big-endian modulo the shard count.
-Normal, coverage and Windows CI keep this original layout. Only when the
-recorded Go flags enable `-race` do complete fixed-local object families use
-fixed semantic ordinals modulo the same shard count: conversion target/batches
+The sorted inventory hashes newline-separated names with SHA-256. Ordinary
+roots retain the first eight bytes of their name's SHA-256, interpreted
+big-endian modulo the shard count. In every instrumentation mode, complete
+fixed-local object families use fixed semantic ordinals modulo that same count:
+conversion target/batches
 0–35, packed target/batches 36–47, CMOV target/batches 48–59, readonly targets
 60–62, wide Translate/Module/GoModule object owners 63–65, and native-wide
-whole-source batches 66–71. Targets keep
+whole-source batches 66–71, and native-conversion whole-source batches 72–78. Targets keep
 Linux/Darwin/Windows order (CMOV has Linux/Darwin), and batches keep numerical
 order. These roles distribute complete costly sources without moving ordinary
 roots or changing ownership when input order, unrelated roots or a subset
-changes. Ordinary roots still keep their original hash. Selection follows
-Go's last-wins boolean flag semantics, including `-race=false`; flag values
-such as `-tags "-race"` never select a layout. Execution and both independent
-receipt readers derive the same plan from the strictly compared recorded
-flags, never an implicit host/environment setting.
-An independent source-AST check retains all 72 roles. This is a
+changes. Plain and coverage runs need the same protection against cumulative
+heavy-family collisions as race runs. Instrumentation flags remain strictly
+validated and recorded; they never change ownership. Execution and both
+independent receipt readers derive the same plan, never an implicit
+host/environment setting.
+An independent source-AST check retains all 79 roles. This is a
 scheduling rule, not runtime qualification: exact current-head execution must
 still fit its original deadlines. No role creates a missing listed test.
 Sorting/sharding never deletes a name. Empty

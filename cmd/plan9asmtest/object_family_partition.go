@@ -2,7 +2,7 @@ package main
 
 import "fmt"
 
-// These are race-only complete source object/native roles, not a test inventory.
+// These are complete source object/native roles, not a test inventory.
 // Missing roles are never synthesized: the actual Go list still determines
 // every executed root. Fixed domains keep ownership independent of input
 // order, unrelated roots and subset queries. Other names retain their hash.
@@ -20,6 +20,7 @@ func completeObjectFamilyOwners(shards int) map[string]int {
 		{"TestGoAMD64FixedLocalReadonlyData", "RegisteredConsumers", []string{"Linux", "Darwin", "Windows"}, 0},
 		{"TestGoAMD64FixedLocalPackedWideRuntimeOracle", "CompileOnly", []string{"", "Module", "GoModule"}, 0},
 		{"TestCrossLinuxRuntimeMatrixGoAMD64FixedLocalPackedNativeWide", "", []string{""}, 6},
+		{"TestCrossLinuxRuntimeMatrixGoAMD64FixedLocalConversionNative", "", []string{""}, 7},
 	} {
 		for _, role := range family.roles {
 			if family.batches == 0 {

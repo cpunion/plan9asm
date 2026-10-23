@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestHeavyObjectRaceScopeNonRaceLayoutsRetainOriginalHash(t *testing.T) {
+func TestHeavyObjectSchedulingInstrumentationIndependent(t *testing.T) {
 	names := heavyObjectNames(heavyObjectSourceFamilies(t))
 	names = append(names, "TestOrdinaryBefore", "TestOrdinaryAfter")
 	for count := 1; count <= 1024; count++ {
@@ -15,8 +15,8 @@ func TestHeavyObjectRaceScopeNonRaceLayoutsRetainOriginalHash(t *testing.T) {
 		}
 		for index, shard := range plain {
 			for _, name := range shard {
-				if index != independentHashShard(name, count) {
-					t.Fatalf("default layout changed original hash: shards=%d root=%s", count, name)
+				if (name == "TestOrdinaryBefore" || name == "TestOrdinaryAfter") && index != independentHashShard(name, count) {
+					t.Fatalf("default layout changed ordinary hash: shards=%d root=%s", count, name)
 				}
 			}
 		}
@@ -27,13 +27,15 @@ func TestHeavyObjectRaceScopeNonRaceLayoutsRetainOriginalHash(t *testing.T) {
 			{"-race=false"},
 			{"-race", "-race=false"},
 			{"-race=true", "-race=false"},
+			{"-race"},
+			{"-race=false", "-race=true"},
 			{"-tags", "-race"},
 			{"-gcflags", "-race"},
 			{"-ldflags=-race"},
 		} {
 			actual, err := partitionForFlags(names, count, flags)
 			if err != nil || !reflect.DeepEqual(actual, plain) {
-				t.Fatalf("non-race flags changed complete original ownership: shards=%d flags=%v err=%v", count, flags, err)
+				t.Fatalf("instrumentation flags changed complete ownership: shards=%d flags=%v err=%v", count, flags, err)
 			}
 		}
 	}

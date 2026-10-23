@@ -76,35 +76,19 @@ func parseSuiteList(data string, allowEmpty, noTestFiles bool) (string, []string
 // The execution and both independent receipt readers pass their recorded
 // instrumentation flags through this boundary.
 func partitionForFlags(names []string, count int, flags []string) ([][]string, error) {
-	forwarded, _, err := validateFlags(flags)
+	_, _, err := validateFlags(flags)
 	if err != nil {
 		return nil, err
 	}
-	race := false
-	for index := 0; index < len(forwarded); index++ {
-		name, value, explicit := strings.Cut(strings.TrimPrefix(forwarded[index], "-"), "=")
-		if name == "race" {
-			race = !explicit || value == "true" // Go's boolean flags are last-wins.
-		} else if !runnerBooleanFlag(name) && !explicit {
-			index++ // A value such as -tags "-race" is not instrumentation.
-		}
-	}
-	return partitionWithRaceObjects(names, count, race)
+	return partition(names, count)
 }
 
 func partition(names []string, count int) ([][]string, error) {
-	return partitionWithRaceObjects(names, count, false)
-}
-
-func partitionWithRaceObjects(names []string, count int, race bool) ([][]string, error) {
 	if len(names) == 0 || count < 1 || count > 1024 {
 		return nil, fmt.Errorf("nonempty inventory and 1..1024 shards required")
 	}
 	shards := make([][]string, count)
-	var objectOwners map[string]int
-	if race {
-		objectOwners = completeObjectFamilyOwners(count)
-	}
+	objectOwners := completeObjectFamilyOwners(count)
 	seen := make(map[string]bool)
 	for _, name := range names {
 		if !validName(name) || seen[name] {
