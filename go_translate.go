@@ -23,6 +23,11 @@ type GoPackage struct {
 	Types   *types.Package
 	Imports map[string]*types.Package
 	Syntax  []*ast.File
+	// ImportSyntax is the complete selected declaration syntax for entries in
+	// Imports, from the same load/profile as their actual types.Package values.
+	// It supplies only ordinary numerical global-read declarations, never
+	// caller, native-entry, pointer, writable storage or captured SDK authority.
+	ImportSyntax map[string][]*ast.File
 
 	// SourceSelection is the compiler's complete same-profile typed selection.
 	// Nil keeps the existing conservative raw-return pointer contract. Supplying
