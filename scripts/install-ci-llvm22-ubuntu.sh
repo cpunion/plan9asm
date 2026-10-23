@@ -17,6 +17,8 @@ for package in "${packages[@]}"; do
 done
 
 if [[ "$installed" != true ]]; then
+  script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+  sudo python3 "$script_dir/configure-ci-ubuntu-mirrors.py" /etc/apt "$(dpkg --print-architecture)"
   suite=$(lsb_release -cs)
   key=/etc/apt/trusted.gpg.d/llvm-snapshot.asc
   curl -4fsSL --connect-timeout 15 --max-time 60 --retry 2 \
@@ -24,7 +26,10 @@ if [[ "$installed" != true ]]; then
   echo "deb https://apt.llvm.org/$suite/ llvm-toolchain-$suite-22 main" |
     sudo tee /etc/apt/sources.list.d/llvm.list >/dev/null
 
-  apt_options=(-o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30)
+  apt_options=(
+    -o Acquire::ForceIPv4=true -o APT::Update::Error-Mode=any
+    -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30
+  )
   update() {
     sudo timeout -k 10s 2m apt-get "${apt_options[@]}" update
   }
