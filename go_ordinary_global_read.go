@@ -274,7 +274,7 @@ func bindGoReadOnlyStorage(pkg GoPackage, file *File, sizes types.Sizes, arch st
 		}
 		return emitted[native]
 	}
-	source := &goReadOnlyStorage{pkg: pkg, sizes: sizes, file: x86DirectTailSnapshot(file), resolve: resolve,
+	source := &goReadOnlyStorage{pkg: pkg, sizes: sizes, resolve: resolve,
 		objects: make(map[string]goReadOnlyObject), symbols: make(map[string]string)}
 	for _, function := range file.Funcs {
 		for _, instruction := range function.Instrs {
@@ -319,6 +319,7 @@ func bindGoReadOnlyStorage(pkg GoPackage, file *File, sizes types.Sizes, arch st
 	if len(source.objects) > 32 {
 		return nil, goReadOnlyContext("global declaration inventory exceeds its bound")
 	}
+	source.file = x86DirectTailSnapshot(file)
 	var err error
 	source.syntax, err = goReadOnlySyntax(pkg)
 	if err != nil {

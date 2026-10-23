@@ -189,18 +189,42 @@ func TestGoModuleOrdinaryGlobalReadKeepsLogicalNamespaceSeparate(t *testing.T) {
 }
 
 func TestGoModuleOrdinaryGlobalReadCostQueryPreservesOtherOwners(t *testing.T) {
-	for _, row := range []struct{ name, declarations, source string }{
+	for _, row := range []struct {
+		name, declarations, source string
+		unboundMOV                 bool
+	}{
 		{"ordinary-volatile-mov", "var cell uint64\nfunc view()",
-			"TEXT ·view(SB),4,$0-0\nMOVQ ·cell(SB),AX\nRET\n"},
+			"TEXT ·view(SB),4,$0-0\nMOVQ ·cell(SB),AX\nRET\n", true},
 		{"emitted-globl", "var cell uint64\nfunc view() uint32",
-			"GLOBL ·cell(SB),8,$8\n" + string(ordinaryGlobalReadAssembly("", "CMPQ ·cell(SB),$0\n"))},
+			"GLOBL ·cell(SB),8,$8\n" + string(ordinaryGlobalReadAssembly("", "CMPQ ·cell(SB),$0\n")), false},
 		{"emitted-data", "var cell uint64\nfunc view() uint32",
-			"DATA ·cell(SB)/8,$7\nGLOBL ·cell(SB),8,$8\n" + string(ordinaryGlobalReadAssembly("", "CMPQ ·cell(SB),$0\n"))},
+			"DATA ·cell(SB)/8,$7\nGLOBL ·cell(SB),8,$8\n" + string(ordinaryGlobalReadAssembly("", "CMPQ ·cell(SB),$0\n")), false},
 	} {
 		for _, api := range []string{"public", "owned-context"} {
 			t.Run(row.name+"/"+api, func(t *testing.T) {
 				pkg := mustGoPackage(t, ordinaryGlobalReadPackage, "package ordinaryglobals\n"+row.declarations+"\n")
+				if row.unboundMOV {
+					file, err := Parse(ArchAMD64, row.source)
+					if err != nil {
+						t.Fatal(err)
+					}
+					query := pkg
+					query.Syntax = nil // A noncandidate needs no new declaration audit.
+					sizes := &ordinaryGlobalReadCountingSizes{Sizes: types.SizesFor("gc", "amd64")}
+					binding, err := bindGoReadOnlyStorage(query, file, sizes, "amd64", testResolveSym(pkg.Path))
+					if binding != nil || err != nil || sizes.visits != 0 {
+						t.Fatalf("noncandidate acquired storage or inspected its layout: binding=%t visits=%d err=%v", binding != nil, sizes.visits, err)
+					}
+				}
 				ir, err := ordinaryGlobalReadRequest(t, pkg, []byte(row.source), "amd64", "x86_64-unknown-linux-gnu", api)
+				if row.unboundMOV {
+					// Native emission is not numerical-source authority. The old
+					// whole-function checker must still reject this unknown SB read.
+					if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+						t.Fatalf("cost query lent authority to an unknown MOV read: output=%t err=%v", ir != "", err)
+					}
+					return
+				}
 				if err != nil || ir == "" {
 					t.Fatalf("a noncandidate or existing storage owner was intercepted: output=%t err=%v", ir != "", err)
 				}
