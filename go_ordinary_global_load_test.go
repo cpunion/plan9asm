@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"go/types"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -143,7 +144,13 @@ func TestGoModuleOrdinaryGlobalLoadRejectsOtherAuthority(t *testing.T) {
 					"package ordinaryglobals\n"+row.declaration+"\nfunc view() uint32\n")
 				ir, err := ordinaryGlobalReadRequest(t, pkg, ordinaryGlobalLoadBoundarySource(row.body),
 					"amd64", "x86_64-unknown-linux-gnu", api)
-				if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+				rejected := errors.Is(err, ErrProbeNeedsContext)
+				if row.name == "raw" {
+					// This is invalid literal placement, rejected by the decoder
+					// before any named storage role, not missing caller context.
+					rejected = err != nil && strings.Contains(err.Error(), "RIP-relative literal [7,15) is outside directive group")
+				}
+				if ir != "" || !rejected {
 					t.Fatalf("load declaration lent other authority: output=%t err=%v", ir != "", err)
 				}
 			})
@@ -187,7 +194,7 @@ func TestGoModuleOrdinaryGlobalLoadRetainsDeclarationAndRawAPIBoundaries(t *test
 
 func TestGoModuleOrdinaryGlobalLoadBindingRemainsLive(t *testing.T) {
 	source, declarations := ordinaryGlobalLoadSource("amd64")
-	for _, mutation := range []string{"source", "syntax", "resolver", "raw-read", "write-read"} {
+	for _, mutation := range []string{"source", "syntax", "resolver", "raw-read", "write-read", "grouped-source"} {
 		t.Run(mutation, func(t *testing.T) {
 			pkg := mustGoPackage(t, ordinaryGlobalReadPackage, "package ordinaryglobals\n"+declarations)
 			file, err := Parse(ArchAMD64, source)
@@ -210,6 +217,14 @@ func TestGoModuleOrdinaryGlobalLoadBindingRemainsLive(t *testing.T) {
 				t.Fatal("exact typed source read has no per-instruction fact")
 			}
 			switch mutation {
+			case "grouped-source":
+				ins.Args = append([]Operand(nil), ins.Args...)
+				ins.Args[0] = Operand{Kind: OpMem, Mem: MemRef{Sym: "·words(SB)", Off: 1}}
+				read := binding.readFor(ins, "amd64")
+				if read == nil || !reflect.DeepEqual(read.operand, ins.Args[0]) || read.width != 1 {
+					t.Fatal("grouped SB source lost its exact operand/width")
+				}
+				return
 			case "source":
 				binding.file.Funcs[0].Instrs[2].Args[0].Sym = "·words+39(SB)"
 			case "syntax":

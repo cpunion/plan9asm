@@ -24,6 +24,9 @@ func (c *amd64Ctx) lowerMov(op Op, ins Instr) (ok bool, terminated bool, err err
 	if len(ins.Args) != 2 {
 		return true, false, fmt.Errorf("amd64 %s expects 2 operands: %q", op, ins.Raw)
 	}
+	if known, err := c.lowerGoReadOnlyLoad(ins); known {
+		return true, false, err
+	}
 	if _, ok := amd64ScalarExtensionMoveSpecs[op]; ok {
 		return true, false, c.lowerScalarExtensionMove(op, ins)
 	}

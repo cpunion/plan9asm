@@ -57,23 +57,40 @@ func (read *goReadOnlyRead) allows(operand Operand, width int64) bool {
 	return read != nil && width == read.width && reflect.DeepEqual(operand, read.operand)
 }
 
-// Only the complete named comparison grammar has the paired volatile emitter
-// here. A MOV/raw/vector operation at the same address cannot borrow this fact.
-func (source *goReadOnlyStorage) readFor(ins Instr, arch string) *goReadOnlyRead {
-	if source == nil || !x86ResultNamedPredicateInstruction(ins) || ins.x86Encoded ||
-		ins.x86SourceRaw != nil || ins.x86AddressBits != 0 || ins.x86UnboundAddressOverride {
-		return nil
+// These complete named rows have paired exact-width volatile emitters. This
+// query describes a read role only; it cannot establish storage or NUM itself.
+func goReadOnlyOperand(ins Instr, arch string) (Operand, int64, bool) {
+	if !x86ResultNamedPredicateInstruction(ins) || ins.x86NumericalRead != nil || ins.x86SDKLiteral != nil {
+		return Operand{}, 0, false
+	}
+	if form, known := x86ScalarStaticLoadProperties(ins, arch); known {
+		return form.source, form.bytes, true
 	}
 	form, known, err := x86ScalarCompareProperties(ins.Op, ins, arch)
 	if !known || err != nil || form.memory < 0 {
+		return Operand{}, 0, false
+	}
+	return form.args[form.memory], int64(form.bits / 8), true
+}
+
+func (source *goReadOnlyStorage) readFor(ins Instr, arch string) *goReadOnlyRead {
+	if source == nil {
 		return nil
 	}
-	operand, width := form.args[form.memory], int64(form.bits/8)
+	operand, width, valid := goReadOnlyOperand(ins, arch)
+	if !valid || !source.allows(operand, width, arch) {
+		return nil
+	}
 	address, _ := x86StaticSBSourceAddress(operand, arch)
-	if form.test && source.object(address.symbol).imported || !source.allows(operand, width, arch) {
+	if source.object(address.symbol).imported && !goReadOnlyImportedComparison(ins, arch) {
 		return nil
 	}
 	return &goReadOnlyRead{operand: operand, width: width}
+}
+
+func goReadOnlyImportedComparison(ins Instr, arch string) bool {
+	form, known, err := x86ScalarCompareProperties(ins.Op, ins, arch)
+	return known && err == nil && form.memory >= 0 && !form.test
 }
 
 func goReadOnlyContext(format string, args ...any) error {
@@ -321,7 +338,7 @@ func bindGoReadOnlyStorage(pkg GoPackage, file *File, sizes types.Sizes, arch st
 	if file == nil || file.Arch != ArchAMD64 || arch != "amd64" && arch != "386" || pkg.Types == nil || pkg.Types.Scope() == nil {
 		return nil, nil
 	}
-	// Cost-query only the newly supported complete named CMP/TEST role. Other
+	// Cost-query only complete named comparison/integer-load roles. Other
 	// instructions and emitted DATA/GLOBL keep their existing consumers.
 	assemblyNames := make(map[string]bool)
 	for _, global := range file.Globl {
@@ -347,13 +364,12 @@ func bindGoReadOnlyStorage(pkg GoPackage, file *File, sizes types.Sizes, arch st
 		objects: make(map[string]goReadOnlyObject), symbols: make(map[string]string)}
 	for _, function := range file.Funcs {
 		for _, instruction := range function.Instrs {
-			form, known, err := x86ScalarCompareProperties(instruction.Op, instruction, arch)
-			if !known || err != nil || form.memory < 0 || !x86ResultNamedPredicateInstruction(instruction) ||
-				instruction.x86Encoded || instruction.x86SourceRaw != nil || instruction.x86AddressBits != 0 || instruction.x86UnboundAddressOverride {
+			operand, _, known := goReadOnlyOperand(instruction, arch)
+			if !known {
 				continue
 			}
 			{
-				address, valid := x86StaticSBSourceAddress(form.args[form.memory], arch)
+				address, valid := x86StaticSBSourceAddress(operand, arch)
 				if !valid {
 					continue
 				}
@@ -361,9 +377,10 @@ func bindGoReadOnlyStorage(pkg GoPackage, file *File, sizes types.Sizes, arch st
 				name := goReadOnlyLocalName(pkg, address.symbol)
 				if name == "" {
 					path, name = goReadOnlyImportedName(address.symbol)
-					if path == "" || pkg.Imports[path] == nil || len(pkg.ImportSyntax[path]) == 0 || form.test {
+					if path == "" || pkg.Imports[path] == nil || len(pkg.ImportSyntax[path]) == 0 || !goReadOnlyImportedComparison(instruction, arch) {
 						continue // Imported storage supplies only the named CMP role.
 					}
+					var err error
 					owner, err = goReadOnlyImportedPackage(pkg, path)
 					if err != nil {
 						return nil, err

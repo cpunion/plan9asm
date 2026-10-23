@@ -191,10 +191,10 @@ func TestGoModuleOrdinaryGlobalReadKeepsLogicalNamespaceSeparate(t *testing.T) {
 func TestGoModuleOrdinaryGlobalReadCostQueryPreservesOtherOwners(t *testing.T) {
 	for _, row := range []struct {
 		name, declarations, source string
-		unboundMOV                 bool
+		unboundWrite               bool
 	}{
-		{"ordinary-volatile-mov", "var cell uint64\nfunc view()",
-			"TEXT ·view(SB),4,$0-0\nMOVQ ·cell(SB),AX\nRET\n", true},
+		{"ordinary-write", "var cell uint64\nfunc view()",
+			"TEXT ·view(SB),4,$0-0\nMOVQ $7,·cell(SB)\nRET\n", true},
 		{"emitted-globl", "var cell uint64\nfunc view() uint32",
 			"GLOBL ·cell(SB),8,$8\n" + string(ordinaryGlobalReadAssembly("", "CMPQ ·cell(SB),$0\n")), false},
 		{"emitted-data", "var cell uint64\nfunc view() uint32",
@@ -203,7 +203,7 @@ func TestGoModuleOrdinaryGlobalReadCostQueryPreservesOtherOwners(t *testing.T) {
 		for _, api := range []string{"public", "owned-context"} {
 			t.Run(row.name+"/"+api, func(t *testing.T) {
 				pkg := mustGoPackage(t, ordinaryGlobalReadPackage, "package ordinaryglobals\n"+row.declarations+"\n")
-				if row.unboundMOV {
+				if row.unboundWrite {
 					file, err := Parse(ArchAMD64, row.source)
 					if err != nil {
 						t.Fatal(err)
@@ -217,11 +217,11 @@ func TestGoModuleOrdinaryGlobalReadCostQueryPreservesOtherOwners(t *testing.T) {
 					}
 				}
 				ir, err := ordinaryGlobalReadRequest(t, pkg, []byte(row.source), "amd64", "x86_64-unknown-linux-gnu", api)
-				if row.unboundMOV {
+				if row.unboundWrite {
 					// Native emission is not numerical-source authority. The old
-					// whole-function checker must still reject this unknown SB read.
+					// whole-function checker must still reject this unowned SB write.
 					if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
-						t.Fatalf("cost query lent authority to an unknown MOV read: output=%t err=%v", ir != "", err)
+						t.Fatalf("cost query lent authority to an unowned MOV write: output=%t err=%v", ir != "", err)
 					}
 					return
 				}
