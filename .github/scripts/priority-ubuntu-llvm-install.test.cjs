@@ -35,6 +35,7 @@ function runConfigure(directory, architecture) {
   });
   assert.ifError(result.error);
   assert.equal(result.status, 0, result.stderr);
+  return result.stdout;
 }
 
 function assertUnchangedSources(directory) {
@@ -51,8 +52,8 @@ test('Ubuntu mirror configuration repairs the actual malformed runner lists only
     ['armhf', 'https://ports.ubuntu.com/ubuntu-ports/', 'https://ports.ubuntu.com/ubuntu-ports/'],
   ]) {
     const directory = fixture(t);
-    runConfigure(directory, architecture);
-    runConfigure(directory, architecture);
+    assert.equal(runConfigure(directory, architecture), archive + '\n');
+    assert.equal(runConfigure(directory, architecture), archive + '\n');
     assert.equal(fs.readFileSync(path.join(directory, 'apt-mirrors.txt'), 'utf8'), archive + '\n');
     assert.equal(fs.readFileSync(path.join(directory, 'apt-mirrors-security.txt'), 'utf8'), security + '\n');
     assertUnchangedSources(directory);
@@ -108,6 +109,7 @@ timeout() {
   "$@"
 }
 apt-get() {
+  printf 'APT_BEGIN\\n' >&2
   printf 'APT'; printf ' <%s>' "$@"; printf '\\n'
   for arg in "$@"; do
     case "$arg" in
@@ -126,8 +128,13 @@ sudo() {
     tee|timeout) "$@" ;;
     python3)
       test "$#" = 4 && test "$3" = /etc/apt || return 99
-      printf 'CONFIGURE %s\\n' "$4"
-      command python3 "$2" "$MOCK_APT" "$4" ;;
+      printf 'CONFIGURE %s\\n' "$4" >&2
+      if [[ "$MOCK_CONFIG_EXIT" != 0 ]]; then return "$MOCK_CONFIG_EXIT"; fi
+      if [[ "$MOCK_CONFIG_OUTPUT" != __actual_helper__ ]]; then
+        printf '%s' "$MOCK_CONFIG_OUTPUT"
+      else
+        command python3 "$2" "$MOCK_APT" "$4"
+      fi ;;
     *) return 99 ;;
   esac
 }
@@ -144,6 +151,9 @@ source "$1" gcc-i686-linux-gnu libc6-dev-i386-cross
       MOCK_INSTALLED: options.installed ? '0' : '1',
       MOCK_UPDATES: (options.updates || [0]).join(','),
       MOCK_INSTALLS: (options.installs || [0]).join(','),
+      MOCK_CONFIG_EXIT: String(options.configurationExit || 0),
+      MOCK_CONFIG_OUTPUT: options.configurationOutput === undefined
+        ? '__actual_helper__' : options.configurationOutput,
       MOCK_LLVM_VERSION: options.version || '22.1.8', GITHUB_ENV: environment,
     },
   });
@@ -155,8 +165,8 @@ source "$1" gcc-i686-linux-gnu libc6-dev-i386-cross
 test('actual Ubuntu installer configures mirrors before strict IPv4 update and install', t => {
   const result = runInstaller(t);
   assert.equal(result.status, 0, result.stderr);
-  assert.ok(result.stdout.indexOf('CONFIGURE amd64\n') >= 0, result.stdout);
-  assert.ok(result.stdout.indexOf('CONFIGURE amd64\n') < result.stdout.indexOf('APT '), result.stdout);
+  assert.ok(result.stderr.indexOf('CONFIGURE amd64\n') >= 0, result.stderr);
+  assert.ok(result.stderr.indexOf('CONFIGURE amd64\n') < result.stderr.indexOf('APT_BEGIN\n'), result.stderr);
   for (const command of result.stdout.split('\n').filter(line => line.startsWith('APT '))) {
     for (const option of ['Acquire::ForceIPv4=true', 'APT::Update::Error-Mode=any',
       'Acquire::Retries=2', 'Acquire::http::Timeout=30', 'Acquire::https::Timeout=30']) {
@@ -205,6 +215,68 @@ test('fallback keeps strict network options, the identical package transaction a
     commands[3].slice(commands[3].indexOf('<install>')));
   assert.equal((result.stdout.match(/^TIMEOUT 2m$/gm) || []).length, 2);
   assert.equal((result.stdout.match(/^TIMEOUT 4m$/gm) || []).length, 2);
+});
+
+test('isolated fallback uses the same official Ubuntu architecture route as the repaired mirror lists', async t => {
+  for (const [architecture, archive] of [
+    ['amd64', 'https://archive.ubuntu.com/ubuntu/'],
+    ['i386', 'https://archive.ubuntu.com/ubuntu/'],
+    ['arm64', 'https://ports.ubuntu.com/ubuntu-ports/'],
+    ['armhf', 'https://ports.ubuntu.com/ubuntu-ports/'],
+  ]) {
+    await t.test(architecture, child => {
+      const result = runInstaller(child, {architecture, updates: [124, 0]});
+      assert.equal(result.status, 0, result.stderr);
+      const key = '[signed-by=/usr/share/keyrings/ubuntu-archive-keyring.gpg]';
+      const components = 'main universe restricted multiverse';
+      assert.equal(fs.readFileSync(path.join(result.directory, 'plan9asm-ci-fallback.list'), 'utf8'),
+        `deb ${key} ${archive} noble ${components}\n` +
+        `deb ${key} ${archive} noble-updates ${components}\n` +
+        'deb https://apt.llvm.org/noble/ llvm-toolchain-noble-22 main\n');
+      assert.equal(fs.readFileSync(path.join(result.directory, 'apt-mirrors.txt'), 'utf8'), archive + '\n');
+      const commands = result.stdout.split('\n').filter(line => line.startsWith('APT '));
+      assert.equal(commands.length, 3);
+      assert.ok(commands[0].endsWith('<update>'));
+      assert.ok(commands[1].endsWith('<update>'));
+      assert.ok(commands[2].includes('<install>'));
+      assertUnchangedSources(result.directory);
+    });
+  }
+});
+
+test('failed fallback update cannot fall through to missing-package installation or publish PATH', t => {
+  const result = runInstaller(t, {updates: [124, 100]});
+  assert.equal(result.status, 100, result.stderr);
+  const commands = result.stdout.split('\n').filter(line => line.startsWith('APT '));
+  assert.equal(commands.length, 2);
+  for (const command of commands) {
+    assert.ok(command.endsWith('<update>'));
+    assert.match(command, /<APT::Update::Error-Mode=any>/);
+  }
+  assert.equal(result.environment, '');
+});
+
+test('invalid mirror helper output or helper failure cannot reach APT or publish PATH', async t => {
+  for (const [name, configurationOutput] of [
+    ['empty', ''],
+    ['foreign URL', 'https://example.invalid/ubuntu/\n'],
+    ['diagnostic prefix', 'CONFIGURE amd64\nhttps://archive.ubuntu.com/ubuntu/\n'],
+    ['extra source', 'https://archive.ubuntu.com/ubuntu/\nextra-source\n'],
+  ]) {
+    await t.test(name, child => {
+      const result = runInstaller(child, {configurationOutput});
+      assert.equal(result.status, 1, result.stderr);
+      assert.match(result.stderr, /invalid Ubuntu archive mirror/);
+      assert.doesNotMatch(result.stdout, /APT |TIMEOUT/);
+      assert.equal(result.environment, '');
+    });
+  }
+  await t.test('failure exit', child => {
+    const result = runInstaller(child, {configurationExit: 68});
+    assert.equal(result.status, 68, result.stderr);
+    assert.doesNotMatch(result.stdout, /APT |TIMEOUT/);
+    assert.equal(result.environment, '');
+  });
 });
 
 test('failed package installation and wrong LLVM version cannot publish success', t => {
