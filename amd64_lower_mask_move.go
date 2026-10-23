@@ -69,6 +69,29 @@ func amd64MaskMoveOperandsValid(ins Instr, goarch string) bool {
 		(amd64IsYrlOperand(src, goarch) || isAMD64MemoryOperand(src)) && destinationK
 }
 
+func x86TypedMaskMoveByteEffect(op Op, ins Instr, arch string) (x86TypedByteEffect, bool, error) {
+	bits, known := amd64MaskMoveSpecs[op]
+	if !known {
+		return x86TypedByteEffect{}, false, nil
+	}
+	if arch != "386" && arch != "amd64" || ins.Op != op || !amd64MaskMoveOperandsValid(ins, arch) {
+		return x86TypedByteEffect{}, true, fmt.Errorf("%s %s has no complete mask-move byte effect: %q", arch, op, ins.Raw)
+	}
+	width := int64(bits / 8)
+	first, last := ins.Args[0], ins.Args[1]
+	if arch == "386" && bits == 64 && (amd64IsYrlOperand(first, arch) || amd64IsYrlOperand(last, arch)) {
+		return x86TypedByteEffect{}, true, numericalSBContext("mode32 mask-move GP qword needs its physical register contract")
+	}
+	writeWidth := width
+	if amd64IsYrlOperand(last, arch) && writeWidth < x86ResultPointerWord(arch) {
+		writeWidth = x86ResultPointerWord(arch) // GP B/W/D writes zero-extend; memory stays exact-width.
+	}
+	return x86TypedByteEffect{requiresResultProof: true, operands: []x86TypedByteOperand{
+		{index: 0, operand: first, width: width, read: true},
+		{index: 1, operand: last, width: writeWidth, write: true},
+	}}, true, nil
+}
+
 func amd64IsKOperand(operand Operand) bool {
 	if operand.Kind != OpReg {
 		return false
