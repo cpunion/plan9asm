@@ -2,6 +2,8 @@
 
 Read the repository [rules](../../AGENTS.md) first. This guide describes the
 workflow, not a list of already completed instruction families.
+The [architecture guide](architecture.md) defines the pipeline, evidence levels
+and terms used below, including raw continuation, producer replay and native backing.
 
 ## Sources of truth
 

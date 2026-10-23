@@ -9,7 +9,7 @@ batches live in [llgo-compat/plan9asm](https://github.com/llgo-compat/plan9asm).
 
 1. Inspect `git status --short`, `git worktree list` and `git remote -v`.
    Preserve existing work and reuse a persistent idle worktree.
-2. Read [current work](docs/development/current-work.md),
+2. Read [architecture](docs/development/architecture.md), [current work](docs/development/current-work.md),
    [instruction families](docs/development/instructions.md) and
    [validation](docs/development/validation.md) for the task.
 
