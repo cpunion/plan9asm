@@ -166,6 +166,20 @@ func (owner *amd64GoVirtualArguments) live() error {
 	return owner.failure
 }
 
+// Returned signatures keep only a closed tombstone, not the call's complete
+// source/type graph or callbacks. Clearing private entries does not alter the
+// separate public signature values or the caller-owned LLVM module.
+func (owner *amd64GoVirtualArguments) close() {
+	if owner == nil {
+		return
+	}
+	owner.active = false
+	for _, entry := range owner.entries {
+		*entry = amd64GoArgumentBinding{identity: entry, virtual: owner}
+	}
+	*owner = amd64GoVirtualArguments{}
+}
+
 func (owner *amd64GoVirtualArguments) verify() (result error) {
 	if err := owner.live(); err != nil {
 		return err

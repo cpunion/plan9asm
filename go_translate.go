@@ -265,7 +265,7 @@ func translateGoModuleInContext(ctx llvm.Context, pkg GoPackage, src []byte, opt
 		resolve = virtualArguments.resolveSymbol
 		defer func() {
 			final := virtualArguments.verify()
-			virtualArguments.active = false
+			virtualArguments.close()
 			if final != nil {
 				if result != nil && !result.Module.IsNil() {
 					result.Module.Dispose()
