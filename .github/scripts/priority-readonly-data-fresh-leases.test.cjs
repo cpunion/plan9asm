@@ -19,6 +19,15 @@ function requireFreshOwner(source) {
   assert.doesNotMatch(source, /requireGoAMD64FrameCapture\(|runtimeOracleStageContext\(|source\.BindFixedLocal\(|fixedLocalDataAPIs\(/);
 }
 
+function originalCacheSetup(source, owners) {
+  // The cache-owner policy independently checks the helper's complete body.
+  // Normalize only this setup call, keeping the original numerical and
+  // mutation/Close fingerprints unchanged.
+  const prepared = '\tgoAMD64FramePrepareOwnedToolCache(t)\n';
+  assert.equal(source.split(prepared).length - 1, owners);
+  return source.replaceAll(prepared, '\tt.Setenv("GOCACHE", t.TempDir())\n');
+}
+
 test('every complete readonly DATA consumer owns a fresh lease per API', () => {
   requireFreshOwner(matrix.slice(matrix.indexOf('func fixedLocalDataTargetConsumers('), matrix.indexOf('\nfunc TestGoAMD64FixedLocalReadonlyDataRejectsUnownedAccesses(')));
   requireFreshOwner(objects.slice(objects.indexOf('func TestGoAMD64FixedLocalReadonlyDataThreeTargetObjects('), objects.indexOf('\nfunc fixedLocalDataAPIs(')));
@@ -53,9 +62,14 @@ test('the complete literal matrix retains all original 119 operations and four s
   assert.match(matrix, /compileLLVMToObject\(t, llc, triple, "literal-consumers-opt\.ll"/);
 });
 
-test('original runtime values and negative shared-binding mutation/Close controls are not renewed', () => {
-  assert.equal(sha(runtime.slice(0, runtime.indexOf('\tpkg, request,'))), '85e040739a6a7623e4ef1797241e4ee9ab93bca60203975369762e6e68b16eda');
+test('original runtime values are unchanged outside independent tool preparation', () => {
+  const original = originalCacheSetup(runtime.slice(0, runtime.indexOf('\tpkg, request,')), 1);
+  assert.equal(sha(original), '85e040739a6a7623e4ef1797241e4ee9ab93bca60203975369762e6e68b16eda');
   assert.match(runtime, /fixedLocalPackedRunOriginal\(t, execution, assembly\.String\(\), declarations\.String\(\), goOracle, true\)/);
   assert.match(runtime, /\[\]string\{"-O0", "-O2"\}/);
-  assert.equal(sha(read('amd64_fixed_local_data_guards_go127_test.go')), '3730f8eaf2f8485989658c94056002b6508f8cae74a14ba56c7c6c956f472d1a');
+});
+
+test('negative shared-binding mutation/Close controls are not renewed', () => {
+  const original = originalCacheSetup(read('amd64_fixed_local_data_guards_go127_test.go'), 2);
+  assert.equal(sha(original), '3730f8eaf2f8485989658c94056002b6508f8cae74a14ba56c7c6c956f472d1a');
 });

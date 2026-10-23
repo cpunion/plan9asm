@@ -8,7 +8,19 @@ const {test} = require('node:test');
 const source = fs.readFileSync('amd64_aes_family_fixed_local_test.go', 'utf8');
 
 test('the complete AES bound-consumer root owns one disposable compiler cache', () => {
-  assert.match(source, /func TestX86AESFamilyActualBoundFixedLocalConsumers\(t \*testing\.T\) \{\s*t\.Setenv\("GOCACHE", t\.TempDir\(\)\)/);
+  assert.match(source, /func TestX86AESFamilyActualBoundFixedLocalConsumers\(t \*testing\.T\) \{\s*goAMD64FramePrepareOwnedToolCache\(t\)/);
+});
+
+test('the cache helper owns a fresh cache and prepares tools before source leases', () => {
+  const tools = fs.readFileSync('amd64_fixed_local_conversion_tool_cache_test.go', 'utf8');
+  const helper = tools.match(/^func goAMD64FramePrepareOwnedToolCache\(t \*testing\.T\) \{\n([\s\S]*?)^\}/m);
+  assert.ok(helper, 'the real cache owner must exist');
+  assert.deepEqual(helper[1].split('\n').map(line => line.trim()).filter(Boolean), [
+    't.Helper()',
+    't.Setenv("GOCACHE", t.TempDir())',
+    '_, request := goAMD64FrameSourceFixture(t)',
+    'fixedLocalConversionPrepareToolCache(t, request)',
+  ]);
 });
 
 test('all AES targets consume independent original source leases for all three APIs', () => {
