@@ -359,12 +359,17 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 	if err != nil {
 		return err
 	}
+	ownedVectorReads := c.ownedIndexedVectorReads(fn, c.fpSourceSig, arch)
 	transfer := func(ordinal int, ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string) bool {
 		shiftBits := state.shiftBits
 		state.shiftBits = x86ResultShiftBits{} // Only the immediately following instruction may consume it.
 		state.loweredStaticReads = c.fpScalarData
 		state.goReadOnlyRead = c.goReadOnlyStorage.readFor(ins, arch)
 		defer func() { state.loweredStaticReads, state.goReadOnlyRead = nil, nil }()
+		if operand, width, valid := x86OwnedIndexedVectorReadAt(ownedVectorReads, ordinal, ins); valid {
+			state.literalMemoryOperand, state.literalMemoryBytes = &operand, width
+			defer func() { state.literalMemoryOperand, state.literalMemoryBytes = nil, 0 }()
+		}
 		keepAddressBits := false
 		defer func() {
 			if !keepAddressBits {

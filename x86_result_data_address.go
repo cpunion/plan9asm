@@ -4,11 +4,13 @@ import "strings"
 
 // This directory is private to the actual emitted module. It describes a
 // complete address value, not arbitrary relocation bytes, an incoming Go
-// pointer, a code address or permission to dereference the resulting number.
+// pointer or a code address. numericLiterals supplies extents to the separate
+// whole-source indexed-read proof; the address value itself grants no read.
 type x86StaticAddressValues struct {
-	objects  map[string]bool
-	writable map[string]bool
-	cells    map[x86StaticSBAddress]bool
+	objects         map[string]bool
+	writable        map[string]bool
+	cells           map[x86StaticSBAddress]bool
+	numericLiterals map[string]int64 // Raw private names of complete emitted readonly numeric objects.
 }
 
 func x86LoweredStaticAddressValues(file *File, resolve func(string) string, sigs map[string]FuncSig, arch string) *x86StaticAddressValues {
@@ -17,10 +19,12 @@ func x86LoweredStaticAddressValues(file *File, resolve func(string) string, sigs
 		return nil
 	}
 	type object struct {
-		raw       string
-		size, end int64
-		invalid   bool
-		readOnly  bool
+		raw                 string
+		size, end           int64
+		invalid             bool
+		readOnly            bool
+		definitions         int
+		relocated, badFlags bool
 	}
 	objects := make(map[string]object)
 	bind := func(raw string) (string, object) {
@@ -35,6 +39,8 @@ func x86LoweredStaticAddressValues(file *File, resolve func(string) string, sigs
 	for _, global := range file.Globl {
 		name, current := bind(global.Sym)
 		readOnly, err := globlReadOnly(global.Flags)
+		current.definitions++
+		current.badFlags = current.badFlags || err != nil
 		current.readOnly = current.readOnly || readOnly || err != nil
 		current.invalid = current.invalid || global.SizeRaw != "" || global.Size < 0 || global.Size > maxDataGlobalSize
 		if global.Size > current.size {
@@ -46,6 +52,7 @@ func x86LoweredStaticAddressValues(file *File, resolve func(string) string, sigs
 		name, current := bind(datum.Sym)
 		end, err := dataStmtEnd(datum)
 		current.invalid = current.invalid || err != nil || datum.Off < current.end
+		current.relocated = current.relocated || datum.Addr != ""
 		current.end = end
 		if end > current.size {
 			current.size = end
@@ -74,12 +81,16 @@ func x86LoweredStaticAddressValues(file *File, resolve func(string) string, sigs
 	}
 	values := &x86StaticAddressValues{
 		objects: make(map[string]bool), writable: make(map[string]bool),
-		cells: make(map[x86StaticSBAddress]bool),
+		cells: make(map[x86StaticSBAddress]bool), numericLiterals: make(map[string]int64),
 	}
 	for name, current := range objects {
 		if !current.invalid && !code[name] && current.size > 0 && current.size <= maxDataGlobalSize {
 			values.objects[name] = true
 			values.writable[name] = !current.readOnly
+			if current.readOnly && current.definitions == 1 && !current.badFlags && !current.relocated &&
+				strings.HasSuffix(current.raw, "<>") {
+				values.numericLiterals[current.raw] = current.size
+			}
 		}
 	}
 	word := x86ResultPointerWord(arch)

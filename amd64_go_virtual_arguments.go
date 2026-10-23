@@ -261,7 +261,8 @@ func (owner *amd64GoVirtualArguments) audit(file *File, signatures map[string]Fu
 		c := newX86Ctx(new(strings.Builder), fn, sig, resolve, signatures, "amd64", opt.TargetTriple, false)
 		c.goReadOnlyStorage = storage
 		c.fpScalarData = x86LoweredScalarDataReads(file, resolve, signatures, "amd64")
-		c.fpShiftLiterals = x86LoweredShiftLiterals(file, resolve, x86LoweredStaticAddressValues(file, resolve, signatures, "amd64"), "amd64")
+		c.fpStaticAddressValues = x86LoweredStaticAddressValues(file, resolve, signatures, "amd64")
+		c.fpShiftLiterals = x86LoweredShiftLiterals(file, resolve, c.fpStaticAddressValues, "amd64")
 		if err := c.scalarFPResultInitialized(); err != nil {
 			return err
 		}
