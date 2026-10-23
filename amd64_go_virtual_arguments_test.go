@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"go/ast"
 	"go/types"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -371,6 +372,58 @@ func TestGoModuleAMD64VirtualArgumentsFinalLayoutCallbacks(t *testing.T) {
 			if err := owner.verify(); !called || !errors.Is(err, ErrProbeNeedsContext) {
 				t.Fatal("a final layout callback changed supplied inputs after their last observation", called, err)
 			}
+		})
+	}
+}
+
+func TestGoModuleAMD64VirtualArgumentsReleaseCallInputs(t *testing.T) {
+	for _, api := range []string{"public", "owned-context"} {
+		t.Run(api, func(t *testing.T) {
+			pkg := mustGoPackage(t, amd64VirtualArgumentsPackage, "package virtualargs\nfunc Entry(a []byte) uint64\n")
+			pkg.SourceSelection = new(GoSourceSelection) // No raw caller consumes this object.
+			source := []byte("TEXT ·Entry<ABIInternal>(SB),4,$0\nMOVQ BX,AX\nRET\n")
+			options := GoModuleOptions{GOARCH: "amd64", TargetTriple: "x86_64-unknown-linux-gnu",
+				SourcePreprocessed: true, ResolveSym: testResolveSym(pkg.Path)}
+			ctx := llvm.NewContext()
+			defer ctx.Dispose()
+			var translated *GoModuleTranslation
+			var err error
+			if api == "public" {
+				translated, err = TranslateGoModule(pkg, source, options)
+			} else {
+				translated, err = translateGoModuleInContext(ctx, pkg, source, options)
+			}
+			if err != nil || translated == nil {
+				t.Fatal("complete virtual argument translation failed", err)
+			}
+			defer translated.Module.Dispose()
+			if err := llvm.VerifyModule(translated.Module, llvm.ReturnStatusAction); err != nil {
+				t.Fatal("invalid returned virtual argument module", err)
+			}
+			sig := translated.Signatures[pkg.Path+".Entry"]
+			entry := sig.amd64GoArguments
+			if entry == nil || entry.virtual == nil {
+				t.Fatal("returned signatures lost their closed private-role tombstone")
+			}
+			owner := entry.virtual
+			if owner.active || !errors.Is(owner.live(), ErrProbeNeedsContext) {
+				t.Fatal("returned signature retained an active call-local role")
+			}
+			if !reflect.DeepEqual(owner.pkg, GoPackage{}) || owner.syntax != nil || owner.imports != nil ||
+				owner.input != nil || owner.file != nil || owner.entries != nil || owner.symbols != nil ||
+				owner.resolve != nil || owner.sizes != nil || owner.frameSizes != nil || entry.plan != nil || entry.declaration != nil {
+				t.Fatal("closed signature retained owned package/types/syntax/source/plan/callback inputs")
+			}
+			if len(sig.Args) != 1 || sig.Args[0] != "{ ptr, i64, i64 }" || sig.Ret != I64 || len(sig.Frame.Params) != 3 {
+				t.Fatal("releasing private call inputs changed the returned public language signature", sig)
+			}
+			file, err := Parse(ArchAMD64, string(source))
+			if err != nil {
+				t.Fatal(err)
+			}
+			ir, err := Translate(file, Options{Goarch: "amd64", TargetTriple: options.TargetTriple,
+				ResolveSym: options.ResolveSym, Sigs: translated.Signatures})
+			amd64VirtualArgumentsRequireContext(t, ir, err)
 		})
 	}
 }
