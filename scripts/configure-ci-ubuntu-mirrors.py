@@ -20,7 +20,8 @@ def configure(apt_dir, architecture):
         path = apt_dir / name
         if path.exists():
             path.write_text(url + "\n")
+    return archive
 
 
 if __name__ == "__main__":
-    configure(pathlib.Path(sys.argv[1]), sys.argv[2])
+    print(configure(pathlib.Path(sys.argv[1]), sys.argv[2]))

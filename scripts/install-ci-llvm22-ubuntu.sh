@@ -18,7 +18,11 @@ done
 
 if [[ "$installed" != true ]]; then
   script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-  sudo python3 "$script_dir/configure-ci-ubuntu-mirrors.py" /etc/apt "$(dpkg --print-architecture)"
+  ubuntu_archive=$(sudo python3 "$script_dir/configure-ci-ubuntu-mirrors.py" /etc/apt "$(dpkg --print-architecture)")
+  case "$ubuntu_archive" in
+    https://archive.ubuntu.com/ubuntu/|https://ports.ubuntu.com/ubuntu-ports/) ;;
+    *) echo "invalid Ubuntu archive mirror from configuration helper" >&2; exit 1 ;;
+  esac
   suite=$(lsb_release -cs)
   key=/etc/apt/trusted.gpg.d/llvm-snapshot.asc
   curl -4fsSL --connect-timeout 15 --max-time 60 --retry 2 \
@@ -39,12 +43,12 @@ if [[ "$installed" != true ]]; then
   }
 
   if ! update || ! install; then
-    # Some self-hosted runners provide an unreliable apt mirrorlist. A direct
-    # Ubuntu mirror was reachable in the failing job; use it only as fallback.
+    # Isolate the fallback sources, retaining the same official architecture
+    # route rather than returning to the runner's unreliable mirror candidates.
     fallback=/etc/apt/sources.list.d/plan9asm-ci-fallback.list
     {
-      echo "deb [signed-by=/usr/share/keyrings/ubuntu-archive-keyring.gpg] https://mirrors.edge.kernel.org/ubuntu $suite main universe restricted multiverse"
-      echo "deb [signed-by=/usr/share/keyrings/ubuntu-archive-keyring.gpg] https://mirrors.edge.kernel.org/ubuntu $suite-updates main universe restricted multiverse"
+      echo "deb [signed-by=/usr/share/keyrings/ubuntu-archive-keyring.gpg] $ubuntu_archive $suite main universe restricted multiverse"
+      echo "deb [signed-by=/usr/share/keyrings/ubuntu-archive-keyring.gpg] $ubuntu_archive $suite-updates main universe restricted multiverse"
       echo "deb https://apt.llvm.org/$suite/ llvm-toolchain-$suite-22 main"
     } | sudo tee "$fallback" >/dev/null
     apt_options+=(
