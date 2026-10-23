@@ -50,7 +50,10 @@ func importedGlobalConsumer(t *testing.T, owner GoPackage, name, arch string) Go
 }
 
 func importedGlobalOperand(path, name string, offset int64) string {
-	return fmt.Sprintf("%s·%s+%d(SB)", strings.ReplaceAll(path, "/", "∕"), name, offset)
+	// Stock Go's assembler spells package-path punctuation as identifier
+	// characters; a literal dot would terminate the symbol token.
+	path = strings.NewReplacer("/", "∕", ".", "·").Replace(path)
+	return fmt.Sprintf("%s·%s+%d(SB)", path, name, offset)
 }
 
 func importedGlobalReadRequest(t *testing.T, pkg GoPackage, source []byte, arch, triple, api string, preprocessed bool,
