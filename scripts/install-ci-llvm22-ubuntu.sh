@@ -18,7 +18,8 @@ done
 
 if [[ "$installed" != true ]]; then
   script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-  ubuntu_archive=$(sudo python3 "$script_dir/configure-ci-ubuntu-mirrors.py" /etc/apt "$(dpkg --print-architecture)")
+  architecture=$(dpkg --print-architecture)
+  ubuntu_archive=$(sudo python3 "$script_dir/configure-ci-ubuntu-mirrors.py" /etc/apt "$architecture")
   case "$ubuntu_archive" in
     https://archive.ubuntu.com/ubuntu/|https://ports.ubuntu.com/ubuntu-ports/) ;;
     *) echo "invalid Ubuntu archive mirror from configuration helper" >&2; exit 1 ;;
