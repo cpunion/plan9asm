@@ -4,6 +4,7 @@ package main
 
 import (
 	"crypto/sha256"
+	"debug/elf"
 	"go/types"
 	"os"
 	"path/filepath"
@@ -159,28 +160,41 @@ func TestCompileOneOrdinaryGlobalDeclarationsSDKPrivateTailWholeFiles(t *testing
 				t.Fatal("complete original source rejected its authenticated private tail", err)
 			}
 			ir, err := os.ReadFile(output)
-			if err != nil {
-				t.Fatal(err)
+			if err != nil || len(ir) == 0 {
+				t.Fatal("complete source LLVM IR is absent", err)
 			}
-			definitions := 0
-			for _, line := range strings.Split(string(ir), "\n") {
-				if !strings.HasPrefix(line, "define ") {
+			objectName := strings.TrimSuffix(output, ".ll") + ".o"
+			if info, err := os.Lstat(objectName); err != nil || !info.Mode().IsRegular() || info.Size() == 0 {
+				t.Fatal("complete source LLVM22 object is absent", err)
+			}
+			object, err := elf.Open(objectName)
+			if err != nil {
+				t.Fatal("actual Linux/amd64 object is not ELF", err)
+			}
+			symbols, symbolErr := object.Symbols()
+			closeErr := object.Close()
+			if symbolErr != nil || closeErr != nil {
+				t.Fatalf("read actual ELF symbols: %v (close: %v)", symbolErr, closeErr)
+			}
+			// Generated local LLVM helpers are not public source entries. Use
+			// the actual backend's defined GLOBAL/FUNC binding, not IR spelling.
+			public := make(map[string]bool)
+			for _, symbol := range symbols {
+				if symbol.Section == elf.SHN_UNDEF || elf.ST_BIND(symbol.Info) != elf.STB_GLOBAL || elf.ST_TYPE(symbol.Info) != elf.STT_FUNC {
 					continue
 				}
-				definitions++
-				matched := false
-				for _, name := range test.public {
-					matched = matched || strings.Contains(line, `@"`+name+`"(`)
+				if public[symbol.Name] {
+					t.Fatal("duplicate defined public ELF function", symbol.Name)
 				}
-				if !matched {
-					t.Fatal("private helper became a callable entry or a foreign public entry appeared", line)
+				public[symbol.Name] = true
+			}
+			if len(public) != len(test.public) {
+				t.Fatal("the original public ELF function inventory changed", public)
+			}
+			for _, name := range test.public {
+				if !public[name] {
+					t.Fatal("original public entry has no defined global ELF function", name)
 				}
-			}
-			if definitions != len(test.public) {
-				t.Fatal("the original public root inventory changed", definitions)
-			}
-			if info, err := os.Lstat(strings.TrimSuffix(output, ".ll") + ".o"); err != nil || !info.Mode().IsRegular() || info.Size() == 0 {
-				t.Fatal("complete source LLVM22 object is absent", err)
 			}
 			for name, digest := range reads.Inputs {
 				data, err := os.ReadFile(name)
