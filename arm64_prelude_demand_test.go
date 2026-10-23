@@ -49,6 +49,11 @@ func TestARM64PreludeContainsOnlyUsedDeclarations(t *testing.T) {
 			body: "CNTB R0\nMOVD R0, ret+0(FP)\nRET",
 			want: []string{"llvm.aarch64.sve.cntb"},
 		},
+		{
+			name: "raw-scalable-intrinsic",
+			body: "WORD $0x0420e3ea\nMOVD R10, ret+0(FP)\nRET",
+			want: []string{"llvm.aarch64.sve.cntb"},
+		},
 	} {
 		for _, api := range []string{"text", "module", "Go"} {
 			t.Run(row.name+"/"+api, func(t *testing.T) {
