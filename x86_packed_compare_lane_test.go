@@ -225,3 +225,37 @@ func TestX86PackedCompareLaneMemoryNeedsWholeTuple(t *testing.T) {
 		}
 	}
 }
+
+func TestX86PackedCompareLaneProbeDoesNotProveResult(t *testing.T) {
+	count := 0
+	for _, row := range x86CompareLaneCases() {
+		if row.legacy {
+			continue
+		}
+		count++
+		t.Run(row.op+"/"+row.bank, func(t *testing.T) {
+			ins := x86ScalarLaneInstruction(t, row.instruction(row.bank+"0"))
+			// The isolated void probe discards its result. Accepting that
+			// IR does not initialize either operand or any low result lane.
+			if err := ProbeInstruction(ArchAMD64, "amd64", ins); err != nil {
+				t.Fatal("unused vector result cannot be retained in IR", err)
+			}
+			memory := x86ScalarLaneInstruction(t, row.instruction("(SI)"))
+			if err := ProbeInstruction(ArchAMD64, "amd64", memory); !errors.Is(err, ErrProbeNeedsContext) {
+				t.Fatal("discarding a result invented its memory address", err)
+			}
+			source := "TEXT ·query(SB),4,$0-4\n" + ins.Raw + "\n" +
+				"PEXTRB $0,X2,AX\nMOVL AX,ret+0(FP)\nRET\n"
+			for _, api := range []string{"text", "module", "Go"} {
+				ir, err := x86PackedIntegerCompareAPI(t, source, "func query() uint32\n",
+					"amd64", "x86_64-unknown-linux-gnu", api)
+				if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+					t.Fatal("IR-only probe lent initialized bytes to a real result", api, err)
+				}
+			}
+		})
+	}
+	if count != 16 {
+		t.Fatal("complete X/Y comparison probe family changed", count)
+	}
+}

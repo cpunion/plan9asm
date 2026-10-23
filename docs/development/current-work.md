@@ -103,6 +103,11 @@ and immediate comparisons retain their strict input boundaries. Independent
 portable LLVM execution covers the 24 legacy/VEX register forms; the matching
 48 register/memory functions have three-target object checks. These checks do
 not certify original native x86 execution or the remaining go-hex CFG contracts.
+For all eight SDK classification snapshots, precisely sixteen VEX X/Y register
+forms now permit an unused result in the isolated void IR probe. Their result
+bytes remain unknown: extracting a returned value or using an unbound memory
+address still fails. This reviewed classification delta is not new runtime
+evidence; preserve the independent probe/result boundary regression.
 
 The local declaration-bound global-read extension shares the scalar ALU and
 explicit IMUL grammars, retaining exact volatile widths. Executed independent
