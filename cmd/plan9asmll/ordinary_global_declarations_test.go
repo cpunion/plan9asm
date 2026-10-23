@@ -121,8 +121,7 @@ func TestCompileOneOrdinaryGlobalDeclarationsCompleteSource(t *testing.T) {
 		t.Run(arch, func(t *testing.T) {
 			fixture := ordinaryGlobalCLIActualFixture(t, arch)
 			originalType, importedType := fixture.pkg.Types, fixture.dependency.Types
-			// These limits would split the original source into three modules
-			// on the old path. Declaration binding must retain the whole source.
+			// Retained object compilation must keep the complete source.
 			fixture.config.MaxFunctions, fixture.config.MaxInstructions = 1, 1
 			if err := compileOne(fixture.pkg, plan9asm.ArchAMD64, "linux", arch, targetTriple("linux", arch),
 				fixture.task, false, fixture.config); err != nil {
@@ -144,6 +143,23 @@ func TestCompileOneOrdinaryGlobalDeclarationsCompleteSource(t *testing.T) {
 			if fixture.pkg.Types != originalType || fixture.dependency.Types != importedType ||
 				len(fixture.pkg.Syntax) != 0 || len(fixture.dependency.Syntax) != 0 {
 				t.Fatal("one candidate changed the actual light-load types or retained source ASTs")
+			}
+			// The validation-only path would normally split at these limits.
+			// It must independently bind and emit the same complete GoModule.
+			fixture.config.KeepObj = false
+			fixture.task.OutLL = filepath.Join(filepath.Dir(fixture.task.OutLL), "validation-only.ll")
+			if err := compileOne(fixture.pkg, plan9asm.ArchAMD64, "linux", arch, targetTriple("linux", arch),
+				fixture.task, false, fixture.config); err != nil {
+				t.Fatal("ordinary declarations were split on the validation-only path", err)
+			}
+			ir, err = os.ReadFile(fixture.task.OutLL)
+			if err != nil {
+				t.Fatal(err)
+			}
+			ordinaryGlobalRequireIR(t, string(ir), fixture.pkg.PkgPath)
+			parts, err = filepath.Glob(strings.TrimSuffix(fixture.task.OutLL, ".ll") + ".part-*")
+			if err != nil || len(parts) != 0 {
+				t.Fatal("validation-only ordinary declarations emitted cropped source chunks", parts, err)
 			}
 			for name, expected := range fixture.sources {
 				actual, err := os.ReadFile(name)
@@ -202,7 +218,7 @@ func TestCompileOneOrdinaryGlobalDeclarationsSelectionGuards(t *testing.T) {
 }
 
 func TestCompileOneOrdinaryGlobalDeclarationsLateGuard(t *testing.T) {
-	for _, mutation := range []string{"same-size-bytes", "equal-byte-node"} {
+	for _, mutation := range []string{"same-size-bytes", "equal-byte-node", "same-package-bytes"} {
 		t.Run(mutation, func(t *testing.T) {
 			fixture := ordinaryGlobalCLIActualFixture(t, "amd64")
 			fixture.config.Enabled = false
@@ -215,6 +231,9 @@ func TestCompileOneOrdinaryGlobalDeclarationsLateGuard(t *testing.T) {
 				directory: filepath.Dir(fixture.task.OutLL), basename: filepath.Base(fixture.task.OutLL), callback: func() {
 					called = true
 					file := filepath.Join(fixture.dependency.Dir, "state.go")
+					if mutation == "same-package-bytes" {
+						file = filepath.Join(fixture.pkg.Dir, "consumer.go")
+					}
 					original := fixture.sources[file]
 					if mutation == "equal-byte-node" {
 						if err := os.Rename(file, filepath.Join(t.TempDir(), "retained-original.go")); err != nil {

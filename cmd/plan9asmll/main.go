@@ -130,18 +130,19 @@ type compileConfig struct {
 	// MaxInstructions also bounds generated-source-heavy modules whose few
 	// functions each contain thousands of assembly instructions. A single
 	// oversized function stays intact and is checked on its own.
-	MaxInstructions     int
-	X86TailGroups       []plan9asm.X86TailGroup
-	Feature             *featureConsumer
-	FeaturePath         string
-	Context             context.Context
-	emptyAssembly       *gotoolprofile.EmptyAssemblyProof
-	nativeListingMode   *instrumentationMetadataConsumer
-	SignatureQuery      *gotoolprofile.SignatureQueryProof
-	x86CallerSelections map[*packages.Package]*x86CallerPackageSelection
-	numericalOptions    *plan9asm.Options
-	acquireSDKNumerical bool
-	diagnostics         *instructionDiagnostics
+	MaxInstructions      int
+	X86TailGroups        []plan9asm.X86TailGroup
+	Feature              *featureConsumer
+	FeaturePath          string
+	Context              context.Context
+	emptyAssembly        *gotoolprofile.EmptyAssemblyProof
+	nativeListingMode    *instrumentationMetadataConsumer
+	SignatureQuery       *gotoolprofile.SignatureQueryProof
+	x86CallerSelections  map[*packages.Package]*x86CallerPackageSelection
+	numericalOptions     *plan9asm.Options
+	ordinaryDeclarations *ordinaryDeclarationSource
+	acquireSDKNumerical  bool
+	diagnostics          *instructionDiagnostics
 }
 
 func main() {
@@ -686,6 +687,7 @@ func compileOneAttempt(pkg *packages.Package, arch plan9asm.Arch, goos, goarch, 
 	var cppProof *featureCPPProof
 	var src []byte
 	var originalInputs []string
+	var originalReads *plan9asm.GoAssemblySourceReadReport
 	var originalSearchMisses []string
 	if ccfg.Feature != nil {
 		if ccfg.Feature.Observed == nil || ccfg.Feature.Observed.Target != goos+"/"+goarch || ccfg.Feature.ID != gotoolprofile.ProfileID(ccfg.Feature.Observed) {
@@ -741,7 +743,9 @@ func compileOneAttempt(pkg *packages.Package, arch plan9asm.Arch, goos, goarch, 
 			originalInputs = append(originalInputs, filename)
 		}
 		originalSearchMisses = inputs.SearchMisses
+		originalReads = inputs
 	}
+	originalSource := append([]byte(nil), src...)
 	if cppProof != nil {
 		cppProof.ExpandedSHA256 = featureBytesSHA256(src)
 	}
@@ -935,6 +939,21 @@ func compileOneAttempt(pkg *packages.Package, arch plan9asm.Arch, goos, goarch, 
 		ccfg.numericalOptions = &options
 		sigs = options.Sigs
 	}
+	// Ordinary declarations grant only the GoModule frontend's existing typed
+	// read roles. Do not mix them with independently owned native/source roles.
+	if ccfg.Feature == nil && !ccfg.acquireSDKNumerical && numericalSource == nil && tailSource == nil &&
+		callerSource == nil && continuationSource == nil && fixedLocalSource == nil && scratchSource == nil && len(ccfg.X86TailGroups) == 0 {
+		ccfg.ordinaryDeclarations, err = captureOrdinaryDeclarations(pkg, file, originalSource, originalReads, goos, goarch, ccfg)
+		if err != nil {
+			return fmt.Errorf("ordinary declarations: %w", err)
+		}
+		if source := ccfg.ordinaryDeclarations; source != nil {
+			defer func() {
+				compileErr = errors.Join(compileErr, source.verify(ccfg.Context))
+				source.close()
+			}()
+		}
+	}
 	maxFunctions := ccfg.MaxFunctions
 	if maxFunctions <= 0 {
 		maxFunctions = 128
@@ -956,7 +975,7 @@ func compileOneAttempt(pkg *packages.Package, arch plan9asm.Arch, goos, goarch, 
 	}
 	// A continuation and the initializer taking its block address must remain
 	// in one LLVM module, just as an oversized ordinary function stays intact.
-	if ccfg.Enabled && !ccfg.KeepObj && len(ccfg.X86TailGroups) == 0 && fixedLocalSource == nil && scratchSource == nil && numericalSource == nil &&
+	if ccfg.Enabled && !ccfg.KeepObj && len(ccfg.X86TailGroups) == 0 && fixedLocalSource == nil && scratchSource == nil && numericalSource == nil && ccfg.ordinaryDeclarations == nil &&
 		(len(file.Funcs) > maxFunctions || instructionCount > maxInstructions) {
 		// A complete pass is necessary before splitting: an x86 function may
 		// take the byte-exact address of raw TEXT in a different chunk.
@@ -1040,6 +1059,8 @@ func translateAndCompileModule(file *plan9asm.File, triple, goarch string, t asm
 		// this CLI's actual successful Go object/listing check grants this.
 		mod = ctx.NewModule("plan9asm-empty-assembly")
 		mod.SetTarget(triple)
+	} else if ccfg.ordinaryDeclarations != nil {
+		mod, err = ccfg.ordinaryDeclarations.translate(ctx, file, triple, goarch, annotate, resolve)
 	} else {
 		options := compileTranslationOptions(triple, goarch, annotate, ccfg, resolve, sigs)
 		if ccfg.numericalOptions != nil {
