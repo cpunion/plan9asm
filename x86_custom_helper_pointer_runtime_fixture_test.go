@@ -204,32 +204,36 @@ func x86CustomPointerRuntimeDrivers(t *testing.T, start int) (goDriver, driver, 
 	var goCalls, prototypes, cCalls, wrappers strings.Builder
 	for index := start; index < start+4; index++ {
 		form := x86CustomPointerRuntimeForms()[index]
-		fmt.Fprintf(&goCalls, "run(%q,%d,%t,Value%d,Observe%d)\n", form.name, form.scalar, form.aligned, index, index)
+		fmt.Fprintf(&goCalls, "\trun(%q, %d, %t, Value%d, Observe%d)\n", form.name, form.scalar, form.aligned, index, index)
 		aligned := 0
 		if form.aligned {
 			aligned = 1
 		}
-		fmt.Fprintf(&prototypes, "extern uint32_t Probe%d(uint8_t*,uint8_t*,uint32_t);\nextern uint64_t Raw%d(uint8_t*,uint8_t*,uint32_t);\n", index, index)
-		fmt.Fprintf(&cCalls, "run(\"%s\",%d,%d,Probe%d,Raw%d);\n", form.name, form.scalar, aligned, index, index)
+		fmt.Fprintf(&prototypes, "extern uint32_t Probe%d(uint8_t *, uint8_t *, uint32_t);\n"+
+			"extern uint64_t Raw%d(uint8_t *, uint8_t *, uint32_t);\n", index, index)
+		fmt.Fprintf(&cCalls, "    run(\"%s\", %d, %d, Probe%d, Raw%d);\n", form.name, form.scalar, aligned, index, index)
 		fmt.Fprintf(&wrappers, `
-define i32 @Probe%d(ptr %%p,ptr %%q,i32 %%n) {
- %%v=call i1 @Value%d(ptr %%p,ptr %%q,i32 %%n)
- %%r=zext i1 %%v to i32
- ret i32 %%r
+define i32 @Probe%d(ptr %%p, ptr %%q, i32 %%n) {
+  %%v = call i1 @Value%d(ptr %%p, ptr %%q, i32 %%n)
+  %%r = zext i1 %%v to i32
+  ret i32 %%r
 }
-define i64 @Raw%d(ptr %%p,ptr %%q,i32 %%n) {
- %%out=alloca i64,align 8
- store i64 1234605616519600730,ptr %%out,align 8
- call void @pointerbody%d(ptr %%p,ptr %%q,i32 %%n,ptr %%out)
- %%r=load i64,ptr %%out,align 8
- ret i64 %%r
+
+define i64 @Raw%d(ptr %%p, ptr %%q, i32 %%n) {
+  %%out = alloca i64, align 8
+  store i64 1234605616519600730, ptr %%out, align 8
+  call void @pointerbody%d(ptr %%p, ptr %%q, i32 %%n, ptr %%out)
+  %%r = load i64, ptr %%out, align 8
+  ret i64 %%r
 }
 `, index, index, index, index)
 	}
-	goDriver = "package main\nimport(\"fmt\";\"unsafe\")\n" + declarations + observerDecl +
-		x86CustomPointerRuntimeGoDriver + "\nfunc main(){\n" + goCalls.String() + "fmt.Printf(\"original386 pointer-role checks: %d\\n\",checks)}\n"
-	driver = "#include <stdint.h>\n#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n" + prototypes.String() +
-		x86CustomPointerRuntimeCDriver + "\nint main(void){\n" + cCalls.String() + "printf(\"LLVM386 pointer-role checks: %u\\n\",checks);return 0;}\n"
+	goDriver = "package main\n\nimport (\n\t\"fmt\"\n\t\"unsafe\"\n)\n\n" + declarations + observerDecl +
+		x86CustomPointerRuntimeGoDriver + "\nfunc main() {\n" + goCalls.String() +
+		"\tfmt.Printf(\"original386 pointer-role checks: %d\\n\", checks)\n}\n"
+	driver = "#include <stdint.h>\n#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n\n" + prototypes.String() +
+		x86CustomPointerRuntimeCDriver + "\nint main(void) {\n" + cCalls.String() +
+		"    printf(\"LLVM386 pointer-role checks: %u\\n\", checks);\n    return 0;\n}\n"
 	return goDriver, driver, wrappers.String()
 }
 
@@ -259,106 +263,201 @@ func x86CustomPointerRuntimeOriginal(t *testing.T, start int) string {
 // equality toggles each one of the sixteen input bytes in turn.
 const x86CustomPointerRuntimeGoDriver = `
 var checks int
-func view(kind int,b []byte,old uint32) uint32 {
- u16:=uint16(b[0])|uint16(b[1])<<8
- u32:=uint32(u16)|uint32(b[2])<<16|uint32(b[3])<<24
- switch kind {
- case 0:return old&0xffffff00|uint32(b[0])
- case 1:return old&0xffff0000|uint32(u16)
- case 2:return u32
- case 3:return old&0xffff0000|uint32(uint16(int16(int8(b[0]))))
- case 4:return old&0xffff0000|uint32(b[0])
- case 5:return uint32(int32(int8(b[0])))
- case 6:return uint32(b[0])
- case 7:return uint32(int32(int16(u16)))
- case 8:return uint32(u16)
- };panic("unknown scalar reference")
+
+func view(kind int, b []byte, old uint32) uint32 {
+	u16 := uint16(b[0]) | uint16(b[1])<<8
+	u32 := uint32(u16) | uint32(b[2])<<16 | uint32(b[3])<<24
+	switch kind {
+	case 0:
+		return old&0xffffff00 | uint32(b[0])
+	case 1:
+		return old&0xffff0000 | uint32(u16)
+	case 2:
+		return u32
+	case 3:
+		return old&0xffff0000 | uint32(uint16(int16(int8(b[0]))))
+	case 4:
+		return old&0xffff0000 | uint32(b[0])
+	case 5:
+		return uint32(int32(int8(b[0])))
+	case 6:
+		return uint32(b[0])
+	case 7:
+		return uint32(int32(int16(u16)))
+	case 8:
+		return uint32(u16)
+	}
+	panic("unknown scalar reference")
 }
-func run(name string,kind int,aligned bool,logical func(*byte,*byte,uint32)bool,raw func(*byte,*byte,uint32)uint64) {
- values:=[...]uint32{0,1,0x7f,0x80,0x8001,0x7fffffff,0x80000000,0xffffffff}
- offsets:=[]int{0,1,3};if aligned{offsets=[]int{0}}
- for _,off:=range offsets {
-  count:=17;if kind>=0{count=64}
-  for sample:=0;sample<count;sample++ {
-   var p,q [64]byte
-   for i:=range p{p[i]=byte(17*i+0x91);q[i]=byte(29*i+0x43)}
-   pi:=16+int((-uintptr(unsafe.Pointer(&p[16])))&15)+off
-   qi:=16+int((-uintptr(unsafe.Pointer(&q[16])))&15)+off
-   if kind>=0 {
-    a,b:=values[sample/8],values[sample%8]
-    for k:=0;k<4;k++{p[pi+k]=byte(a>>uint(8*k));q[qi+k]=byte(b>>uint(8*k))}
-   }else{
-    for k:=0;k<16;k++{p[pi+k]=byte(31*k+0x80);q[qi+k]=p[pi+k]}
-    if sample<16{q[qi+sample]^=0x81}
-   }
-   savedP,savedQ:=p,q
-   expected:=uint32(0);variants:=1
-   if kind>=0{expected=view(kind,p[pi:],0x9632a5c7)^view(kind,q[qi:],0x5a87bc91);variants=2}
-   for variant:=0;variant<variants;variant++ {
-    n:=expected^uint32(variant);want:=sample==16
-    if kind>=0{want=variant==0}
-    byteWant:=uint64(0);if want{byteWant=1}
-    if got:=logical(&p[pi],&q[qi],n);got!=want{panic(fmt.Sprintf("%s offset=%d sample=%d variant=%d logical=%t want=%t",name,off,sample,variant,got,want))}
-    checks++
-    if p!=savedP||q!=savedQ{panic("logical call mutated input/canaries: "+name)}
-    if got:=raw(&p[pi],&q[qi],n);got!=0x112233445a5a5a00|byteWant{panic(fmt.Sprintf("%s offset=%d sample=%d variant=%d raw=%x",name,off,sample,variant,got))}
-    checks++
-    if p!=savedP||q!=savedQ{panic("raw call mutated input/canaries: "+name)}
-   }
-  }
- }
+
+func run(name string, kind int, aligned bool,
+	logical func(*byte, *byte, uint32) bool,
+	raw func(*byte, *byte, uint32) uint64) {
+	values := [...]uint32{0, 1, 0x7f, 0x80, 0x8001, 0x7fffffff, 0x80000000, 0xffffffff}
+	offsets := []int{0, 1, 3}
+	if aligned {
+		offsets = []int{0}
+	}
+
+	for _, off := range offsets {
+		count := 17
+		if kind >= 0 {
+			count = 64
+		}
+		for sample := 0; sample < count; sample++ {
+			var p, q [64]byte
+			for i := range p {
+				p[i] = byte(17*i + 0x91)
+				q[i] = byte(29*i + 0x43)
+			}
+			pi := 16 + int((-uintptr(unsafe.Pointer(&p[16])))&15) + off
+			qi := 16 + int((-uintptr(unsafe.Pointer(&q[16])))&15) + off
+			if kind >= 0 {
+				a, b := values[sample/8], values[sample%8]
+				for k := 0; k < 4; k++ {
+					p[pi+k] = byte(a >> uint(8*k))
+					q[qi+k] = byte(b >> uint(8*k))
+				}
+			} else {
+				for k := 0; k < 16; k++ {
+					p[pi+k] = byte(31*k + 0x80)
+					q[qi+k] = p[pi+k]
+				}
+				if sample < 16 {
+					q[qi+sample] ^= 0x81
+				}
+			}
+
+			savedP, savedQ := p, q
+			expected := uint32(0)
+			variants := 1
+			if kind >= 0 {
+				expected = view(kind, p[pi:], 0x9632a5c7) ^ view(kind, q[qi:], 0x5a87bc91)
+				variants = 2
+			}
+			for variant := 0; variant < variants; variant++ {
+				n := expected ^ uint32(variant)
+				want := sample == 16
+				if kind >= 0 {
+					want = variant == 0
+				}
+				byteWant := uint64(0)
+				if want {
+					byteWant = 1
+				}
+
+				if got := logical(&p[pi], &q[qi], n); got != want {
+					panic(fmt.Sprintf("%s offset=%d sample=%d variant=%d logical=%t want=%t",
+						name, off, sample, variant, got, want))
+				}
+				checks++
+				if p != savedP || q != savedQ {
+					panic("logical call mutated input/canaries: " + name)
+				}
+
+				if got := raw(&p[pi], &q[qi], n); got != 0x112233445a5a5a00|byteWant {
+					panic(fmt.Sprintf("%s offset=%d sample=%d variant=%d raw=%x",
+						name, off, sample, variant, got))
+				}
+				checks++
+				if p != savedP || q != savedQ {
+					panic("raw call mutated input/canaries: " + name)
+				}
+			}
+		}
+	}
 }
 `
 
 const x86CustomPointerRuntimeCDriver = `
 static unsigned checks;
-static uint32_t view(int kind,const uint8_t *b,uint32_t old) {
- uint16_t u16=(uint16_t)b[0]|(uint16_t)b[1]<<8;
- uint32_t u32=(uint32_t)u16|(uint32_t)b[2]<<16|(uint32_t)b[3]<<24;
- switch(kind) {
- case 0:return (old&UINT32_C(0xffffff00))|b[0];
- case 1:return (old&UINT32_C(0xffff0000))|u16;
- case 2:return u32;
- case 3:return (old&UINT32_C(0xffff0000))|(uint16_t)(int16_t)(int8_t)b[0];
- case 4:return (old&UINT32_C(0xffff0000))|b[0];
- case 5:return (uint32_t)(int32_t)(int8_t)b[0];
- case 6:return b[0];
- case 7:return (uint32_t)(int32_t)(int16_t)u16;
- case 8:return u16;
- }fputs("unknown scalar reference\n",stderr);exit(1);
+
+static uint32_t view(int kind, const uint8_t *b, uint32_t old) {
+    uint16_t u16 = (uint16_t)b[0] | (uint16_t)b[1] << 8;
+    uint32_t u32 = (uint32_t)u16 | (uint32_t)b[2] << 16 | (uint32_t)b[3] << 24;
+    switch (kind) {
+    case 0:
+        return (old & UINT32_C(0xffffff00)) | b[0];
+    case 1:
+        return (old & UINT32_C(0xffff0000)) | u16;
+    case 2:
+        return u32;
+    case 3:
+        return (old & UINT32_C(0xffff0000)) | (uint16_t)(int16_t)(int8_t)b[0];
+    case 4:
+        return (old & UINT32_C(0xffff0000)) | b[0];
+    case 5:
+        return (uint32_t)(int32_t)(int8_t)b[0];
+    case 6:
+        return b[0];
+    case 7:
+        return (uint32_t)(int32_t)(int16_t)u16;
+    case 8:
+        return u16;
+    }
+    fputs("unknown scalar reference\n", stderr);
+    exit(1);
 }
-static void run(const char *name,int kind,int aligned,
- uint32_t (*logical)(uint8_t*,uint8_t*,uint32_t),uint64_t (*raw)(uint8_t*,uint8_t*,uint32_t)) {
- static const uint32_t values[]={0,1,0x7f,0x80,0x8001,0x7fffffff,0x80000000,0xffffffff};
- static const unsigned offsets[]={0,1,3};
- for(unsigned oi=0;oi<(aligned?1u:3u);oi++) {
-  unsigned off=offsets[oi],count=kind>=0?64:17;
-  for(unsigned sample=0;sample<count;sample++) {
-   _Alignas(16) uint8_t p[64],q[64],savedP[64],savedQ[64];
-   unsigned pi=16+off,qi=16+off;
-   for(unsigned i=0;i<64;i++){p[i]=(uint8_t)(17*i+0x91);q[i]=(uint8_t)(29*i+0x43);}
-   if(kind>=0) {
-    uint32_t a=values[sample/8],b=values[sample%8];
-    for(unsigned k=0;k<4;k++){p[pi+k]=(uint8_t)(a>>(8*k));q[qi+k]=(uint8_t)(b>>(8*k));}
-   }else{
-    for(unsigned k=0;k<16;k++){p[pi+k]=(uint8_t)(31*k+0x80);q[qi+k]=p[pi+k];}
-    if(sample<16)q[qi+sample]^=0x81;
-   }
-   memcpy(savedP,p,64);memcpy(savedQ,q,64);
-   uint32_t expected=0;unsigned variants=1;
-   if(kind>=0){expected=view(kind,p+pi,0x9632a5c7)^view(kind,q+qi,0x5a87bc91);variants=2;}
-   for(unsigned variant=0;variant<variants;variant++) {
-    uint32_t n=expected^variant,want=kind>=0?variant==0:sample==16;
-    uint32_t got=logical(p+pi,q+qi,n);checks++;
-    if(got!=want||memcmp(p,savedP,64)||memcmp(q,savedQ,64)){
-     fprintf(stderr,"%s offset=%u sample=%u variant=%u logical=%u want=%u or input/canary mutation\n",name,off,sample,variant,got,want);exit(1);
+
+static void run(const char *name, int kind, int aligned,
+    uint32_t (*logical)(uint8_t *, uint8_t *, uint32_t),
+    uint64_t (*raw)(uint8_t *, uint8_t *, uint32_t)) {
+    static const uint32_t values[] = {0, 1, 0x7f, 0x80, 0x8001, 0x7fffffff, 0x80000000, 0xffffffff};
+    static const unsigned offsets[] = {0, 1, 3};
+
+    for (unsigned oi = 0; oi < (aligned ? 1u : 3u); oi++) {
+        unsigned off = offsets[oi], count = kind >= 0 ? 64 : 17;
+        for (unsigned sample = 0; sample < count; sample++) {
+            _Alignas(16) uint8_t p[64], q[64], savedP[64], savedQ[64];
+            unsigned pi = 16 + off, qi = 16 + off;
+            for (unsigned i = 0; i < 64; i++) {
+                p[i] = (uint8_t)(17*i + 0x91);
+                q[i] = (uint8_t)(29*i + 0x43);
+            }
+            if (kind >= 0) {
+                uint32_t a = values[sample/8], b = values[sample%8];
+                for (unsigned k = 0; k < 4; k++) {
+                    p[pi+k] = (uint8_t)(a >> (8*k));
+                    q[qi+k] = (uint8_t)(b >> (8*k));
+                }
+            } else {
+                for (unsigned k = 0; k < 16; k++) {
+                    p[pi+k] = (uint8_t)(31*k + 0x80);
+                    q[qi+k] = p[pi+k];
+                }
+                if (sample < 16) {
+                    q[qi+sample] ^= 0x81;
+                }
+            }
+
+            memcpy(savedP, p, 64);
+            memcpy(savedQ, q, 64);
+            uint32_t expected = 0;
+            unsigned variants = 1;
+            if (kind >= 0) {
+                expected = view(kind, p+pi, 0x9632a5c7) ^ view(kind, q+qi, 0x5a87bc91);
+                variants = 2;
+            }
+            for (unsigned variant = 0; variant < variants; variant++) {
+                uint32_t n = expected ^ variant, want = kind >= 0 ? variant == 0 : sample == 16;
+                uint32_t got = logical(p+pi, q+qi, n);
+                checks++;
+                if (got != want || memcmp(p, savedP, 64) || memcmp(q, savedQ, 64)) {
+                    fprintf(stderr, "%s offset=%u sample=%u variant=%u logical=%u want=%u or input/canary mutation\n",
+                        name, off, sample, variant, got, want);
+                    exit(1);
+                }
+
+                uint64_t observed = raw(p+pi, q+qi, n);
+                checks++;
+                if (observed != (UINT64_C(0x112233445a5a5a00) | want) ||
+                    memcmp(p, savedP, 64) || memcmp(q, savedQ, 64)) {
+                    fprintf(stderr, "%s offset=%u sample=%u variant=%u raw=%llx or input/canary mutation\n",
+                        name, off, sample, variant, (unsigned long long)observed);
+                    exit(1);
+                }
+            }
+        }
     }
-    uint64_t observed=raw(p+pi,q+qi,n);checks++;
-    if(observed!=(UINT64_C(0x112233445a5a5a00)|want)||memcmp(p,savedP,64)||memcmp(q,savedQ,64)){
-     fprintf(stderr,"%s offset=%u sample=%u variant=%u raw=%llx or input/canary mutation\n",name,off,sample,variant,(unsigned long long)observed);exit(1);
-    }
-   }
-  }
- }
 }
 `
