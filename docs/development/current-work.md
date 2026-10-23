@@ -1,6 +1,6 @@
 # PR40 closeout
 
-Updated 2026-10-23. This handoff identifies scope and required work, not a
+Updated 2026-10-24. This handoff identifies scope and required work, not a
 current-head completion certificate. Read [instruction contracts](instructions.md)
 and [validation](validation.md). Preserve original failed receipts.
 
@@ -19,7 +19,27 @@ and staging [PR5](https://github.com/cpunion/plan9asm/pull/5) draft until actual
 current-head tests, CI, review and coverage qualify. Resolved threads are not
 reviewer approval.
 
-## Last completed upstream run
+## Current CI repairs
+
+Published head `6a39cdd831e3` is still under validation in
+[run39999357637](https://github.com/xgo-dev/plan9asm/actions/runs/39999357637).
+Its race31 receipt records the internal 3600-second command deadline, not an
+instruction assertion or proven OOM. Three already-passed complete roots used
+47 minutes in that shard. The local repair distributes the complete numerical
+revocation and ARM64 immediate-scratch owners alongside the existing79 owners;
+it preserves every root/API/target and the original deadlines. The full runner
+regression and679 Node policy tests pass locally; current-head CI remains required.
+
+LLGo PR2694 separately exposed complete386 SDK math rounding rejection, Linux
+self-host OOM and a WASM worker finalizer timeout. The closed x87 control-word
+scope now passes all70 register/control/layout cases, the complete SDK source
+on three targets, Go1.20 regressions and LLGo's complete Windows386 math archive
+locally. Native original-Go/LLVM execution is required in the dedicated x87 job;
+object success is not that execution certificate. Preserve all failed receipts.
+The Linux memory and WASM finalizer failures remain separate LLGo work, not
+reasons to exclude assembly sources or claim CI completion.
+
+## Earlier integration baseline
 
 Published head `0d8676fdd233` completed
 [run39955468231](https://github.com/xgo-dev/plan9asm/actions/runs/39955468231)
