@@ -254,6 +254,7 @@ func checkX86ResultSourceFlow(fn Func, initial x86ResultState, owned []bool, res
 func checkX86ResultSourceFlowWithTrapOnly(fn Func, initial x86ResultState, owned []bool, resultOffset int64, goarch string,
 	transfer x86ResultSourceTransfer, checkReturn func(x86ResultState, int) error, trapOnly bool) error {
 	originalTransfer := transfer
+	var repeatEmptyBranch func(int, Instr, *x86ResultState) bool
 	transfer = func(ordinal int, ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string) bool {
 		if !x86ResultValueStackContinuation(ins, state, arch) {
 			return false
@@ -306,6 +307,9 @@ func checkX86ResultSourceFlowWithTrapOnly(fn Func, initial x86ResultState, owned
 		}
 		ordinary := func(ordinal int, ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string) bool {
 			ordinaryStep = true
+			if repeatEmptyBranch != nil && repeatEmptyBranch(ordinal, ins, state) {
+				return true // Same empty result on both edges, never invented FLAGS.
+			}
 			return originalTransfer(ordinal, ins, state, owned, resultOffset, arch)
 		}
 		step := ordinary
@@ -475,7 +479,9 @@ func checkX86ResultSourceFlowWithTrapOnly(fn Func, initial x86ResultState, owned
 	}
 	top.flags = x86ByteFlagsAll
 	edges := make([][]int, len(instructions))
+	hasRepeat := false
 	for pc, ins := range instructions {
+		hasRepeat = hasRepeat || ins.Op == "REP" || ins.Op == "REPN"
 		if ins.Op == OpRET {
 			if len(ins.Args) != 0 {
 				return fail("nonordinary return")
@@ -539,6 +545,42 @@ func checkX86ResultSourceFlowWithTrapOnly(fn Func, initial x86ResultState, owned
 	returned := false
 	trapped := false
 	visits, sourceWork := 0, byteWork
+	repeatEmptyUsed := false
+	if hasRepeat && fn.x86DirectTailRoot == nil && fn.x86ContinuationFlow == nil {
+		positions, previous := make(map[int]int), make([]int, len(instructions))
+		for pc, ordinal := range ordinals {
+			positions[ordinal], previous[pc] = pc, -1
+		}
+		for from, successors := range edges {
+			for _, to := range successors {
+				if previous[to] == -1 {
+					previous[to] = from
+				} else if previous[to] != from {
+					previous[to] = -2
+				}
+			}
+		}
+		repeatEmptyBranch = func(ordinal int, ins Instr, state *x86ResultState) bool {
+			required := x86ByteBranchFlags(ins.Op)
+			if required == 0 || state.flags&required == required || state.shapeOnly ||
+				state.valueStack != nil || state.x87 != nil || !isAMD64ConditionalBranch(ins.Op) {
+				return false
+			}
+			pc, found := positions[ordinal]
+			if !found {
+				return false
+			}
+			accepted, steps := x86ResultRepeatEmptyBranch(instructions, edges, previous, pc, owned, resultOffset, goarch)
+			visits, sourceWork = visits+steps, sourceWork+steps*byteState
+			if budget := fn.x86ResultFlowBudget; budget != nil {
+				budget.visits, budget.bytes = budget.visits+steps, budget.bytes+steps*byteState
+				accepted = accepted && budget.visits < 16384 && budget.bytes <= byteWorkLimit
+			}
+			accepted = accepted && visits < 16384 && sourceWork <= byteWorkLimit
+			repeatEmptyUsed = repeatEmptyUsed || accepted
+			return accepted
+		}
+	}
 	for ; len(queue) != 0; visits++ {
 		if visits >= 16384 {
 			return fail("must-defined fixed-point budget exhausted")
@@ -553,6 +595,9 @@ func checkX86ResultSourceFlowWithTrapOnly(fn Func, initial x86ResultState, owned
 		// A later dead-external-input proof shares this function's actual
 		// visits and byte work, including normally unbounded scalar views.
 		sourceWork += 8 * byteState
+		if repeatEmptyUsed && sourceWork > byteWorkLimit {
+			return fail("empty-repeat source-CFG byte budget exhausted")
+		}
 		if boundedWork {
 			byteWork += 8 * byteState // conservative bound for copies and joins
 			if byteWork > byteWorkLimit {
