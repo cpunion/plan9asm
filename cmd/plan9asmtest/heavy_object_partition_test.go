@@ -30,6 +30,7 @@ func heavyObjectSourceFamilies(t *testing.T) map[string]string {
 		{"amd64_fixed_local_data_matrix_go127_test.go", "TestGoAMD64FixedLocalReadonlyData", []string{"Linux", "Darwin", "Windows"}, 0},
 		{"amd64_fixed_local_packed_runtime_test.go", "TestGoAMD64FixedLocalPackedWideRuntimeOracle", []string{"", "Module", "GoModule"}, -1},
 		{"amd64_fixed_local_packed_native_linux_amd64_test.go", "TestCrossLinuxRuntimeMatrixGoAMD64FixedLocalPackedNativeWide", []string{""}, 6},
+		{"amd64_fixed_local_conversion_runtime_linux_amd64_test.go", "TestCrossLinuxRuntimeMatrixGoAMD64FixedLocalConversionNative", []string{""}, 7},
 	} {
 		expected := make(map[string]bool)
 		for _, target := range family.targets {
@@ -69,7 +70,7 @@ func heavyObjectSourceFamilies(t *testing.T) map[string]string {
 			t.Fatal("complete heavy source family changed", family.file, found, expected)
 		}
 	}
-	if len(want) != 72 {
+	if len(want) != 79 {
 		t.Fatal("complete independent heavy object denominator changed", len(want))
 	}
 	return want
@@ -204,6 +205,8 @@ func TestHeavyObjectSchedulingOrdinaryNeighborNamesKeepHashOwnership(t *testing.
 			"TestCrossLinuxRuntimeMatrixGoAMD64FixedLocalPackedNativeWide",
 			"TestCrossLinuxRuntimeMatrixGoAMD64FixedLocalPackedNativeWideBatch06",
 			"TestCrossLinuxRuntimeMatrixGoAMD64FixedLocalPackedNativeWideBatch000",
+			"TestCrossLinuxRuntimeMatrixGoAMD64FixedLocalConversionNativeBatch07",
+			"TestCrossLinuxRuntimeMatrixGoAMD64FixedLocalConversionNativeBatch000",
 		} {
 			_, owners := heavyObjectOwners(t, []string{name}, count)
 			if owners[name] != independentHashShard(name, count) {
