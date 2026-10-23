@@ -119,7 +119,7 @@ func initializedReprobeTestFixture(t *testing.T) (string, pkgJSON, map[string]pl
 		fmt.Fprintf(&source, "TEXT ·Case%02d(SB),4,$0-0\n\t%s\n\tRET\n\n", i, instruction)
 	}
 	// An unrelated context-required family is not initialized by this profile.
-	source.WriteString("TEXT ·Other(SB),4,$0-0\n\tPSLLW X1,X0\n\tRET\n")
+	source.WriteString("TEXT ·Other(SB),4,$0-0\n\tDIVL BX\n\tRET\n")
 	// Same-source constants already have sufficient numerical inputs. A mixed
 	// form-level classification must not hide its other context-required cases.
 	source.WriteString("TEXT ·Constant(SB),4,$0-0\n\tKXORQ K1,K1,K3\n\tRET\n")
@@ -129,6 +129,12 @@ func initializedReprobeTestFixture(t *testing.T) (string, pkgJSON, map[string]pl
 	}
 	if len(file.Funcs) != len(instructions)+2 {
 		t.Fatal("fixture lost a complete source owner", len(file.Funcs))
+	}
+	for _, arch := range []string{"386", "amd64"} {
+		other := file.Funcs[len(instructions)].Instrs[1]
+		if err := plan9asm.ProbeInstruction(plan9asm.ArchAMD64, arch, other); !errors.Is(err, plan9asm.ErrProbeNeedsContext) {
+			t.Fatalf("unregistered fixture must need initialized division inputs on %s: %v", arch, err)
+		}
 	}
 	want := make(map[string]plan9asm.Instr)
 	for _, fn := range file.Funcs[:len(instructions)] {
@@ -260,7 +266,7 @@ func TestInitializedContextReprobeMaskLogicalExactSourcesAndObjects(t *testing.T
 				t.Fatal("unregistered precise context source was discarded", evidence.UnregisteredCases)
 			}
 			other := evidence.UnregisteredCases[0]
-			wantOther := compactProbeInstructions(t, "PSLLW X1,X0")[0]
+			wantOther := compactProbeInstructions(t, "DIVL BX")[0]
 			if other.Source.File != "maskfixture/fixture.s" || other.Source.Function != "·Other" || other.Source.InstructionIndex != 1 ||
 				!reflect.DeepEqual(other.OriginalInstruction, wantOther) || other.OriginalStatus != "context-required" || len(other.Initialization) != 0 {
 				t.Fatalf("unregistered context acquired synthetic input authority: %+v", other)
