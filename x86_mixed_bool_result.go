@@ -97,7 +97,10 @@ func x86OrdinaryMixedBoolResultRole(fn Func, sig FuncSig, arch string) bool {
 	}
 	represented := make(map[int]bool)
 	for _, slot := range sig.Frame.Params {
-		if _, valid := x86ResultParameterRole(sig.Args, slot); !valid || x86ResultScalarBytes(slot.Type, arch) == 0 {
+		// Parameters include opaque pointer leaves, including slice/string
+		// data. Occupancy is a frame role, not numerical result authority;
+		// the complete flow checker keeps pointer and NUM bytes separate.
+		if _, valid := x86ResultParameterRole(sig.Args, slot); !valid || x86FrameScalarBytes(slot.Type, arch) == 0 {
 			return false
 		}
 		represented[slot.Index] = true
