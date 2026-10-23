@@ -2,6 +2,8 @@ package plan9asm
 
 import (
 	"errors"
+	"go/parser"
+	"go/token"
 	"go/types"
 	"os"
 	"os/exec"
@@ -111,7 +113,27 @@ func TestGoModuleOrdinaryGlobalLineMapRetainsOwnerBoundaries(t *testing.T) {
 			case "filename-as-symbol":
 				operand = "foreign·Flags(SB)"
 			case "invalid-line":
-				owner.Syntax[0].Comments[0].List[0].Text = "//line imaginary/foreign.go:0"
+				comment := owner.Syntax[0].Comments[0].List[0]
+				comment.Text = "//line imaginary/foreign.go:0"
+				formatted, err := goReadOnlySyntax(owner)
+				if err != nil {
+					t.Fatal(err)
+				}
+				_, parseErr := parser.ParseFile(token.NewFileSet(), "snapshot.go", formatted[0], parser.ParseComments)
+				t.Logf("post-parse slash comment: formatted=%q parse error=%v", formatted[0], parseErr)
+				// An AST comment has no retained physical line coordinates here:
+				// a formatted //line may no longer start a line. The block form
+				// remains a directive at any position; prove the actual snapshot
+				// is invalid before asking the binder to reject it.
+				comment.Text = "/*line imaginary/foreign.go:0*/"
+				formatted, err = goReadOnlySyntax(owner)
+				if err != nil {
+					t.Fatal(err)
+				}
+				_, parseErr = parser.ParseFile(token.NewFileSet(), "snapshot.go", formatted[0], parser.ParseComments)
+				if parseErr == nil || !strings.Contains(parseErr.Error(), "invalid line number: 0") {
+					t.Fatalf("negative snapshot lacks an active invalid directive: %q: %v", formatted[0], parseErr)
+				}
 			}
 			assembly := ordinaryGlobalReadAssembly("", "CMPB "+operand+",$0\n")
 			ir, err := importedGlobalReadRequest(t, pkg, assembly, "amd64", "x86_64-unknown-linux-gnu", "owned-context", true,
@@ -128,6 +150,20 @@ func TestGoModuleOrdinaryGlobalLineMapRetainsOwnerBoundaries(t *testing.T) {
 				})
 			if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
 				t.Fatal("line mapping lent alias, import, layout or symbol authority", err)
+			}
+		})
+	}
+}
+
+func TestGoModuleOrdinaryGlobalLineMapInvalidOriginalSource(t *testing.T) {
+	for name, directive := range map[string]string{"slash": "//line imaginary/foreign.go:0\n", "block": "/*line imaginary/foreign.go:0*/"} {
+		t.Run(name, func(t *testing.T) {
+			// Original invalid directives fail before a typed package exists;
+			// this is distinct from a subsequently mutated AST comment.
+			source := "package state\n" + directive + "var Flags bool\n"
+			_, err := parser.ParseFile(token.NewFileSet(), "original.go", source, parser.ParseComments)
+			if err == nil || !strings.Contains(err.Error(), "invalid line number: 0") {
+				t.Fatal("original source parser accepted an invalid line directive", err)
 			}
 		})
 	}
