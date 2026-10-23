@@ -9,6 +9,37 @@ import (
 	"testing"
 )
 
+func TestX86DirectionControlBackendSeparation(t *testing.T) {
+	for _, arch := range []string{"386", "amd64"} {
+		for _, triple := range []string{
+			"i386-unknown-linux-gnu", "x86_64-unknown-linux-gnu",
+			"aarch64-unknown-linux-gnu", "armv7-unknown-linux-gnueabihf", "wasm32-unknown-unknown", "",
+		} {
+			for _, direction := range []string{"CLD", "STD"} {
+				t.Run(arch+"/"+triple+"/"+direction, func(t *testing.T) {
+					var output strings.Builder
+					context := newX86Ctx(&output, Func{}, FuncSig{Ret: Void}, nil, nil, arch, triple, false)
+					context.directionSlot = "%direction"
+					if known, err := context.lowerDirectionControl(x86ScalarLaneInstruction(t, direction)); !known || err != nil {
+						t.Fatal("valid direction control rejected", err)
+					}
+					want := fmt.Sprintf("  store i1 %t, ptr %%direction\n", direction == "STD")
+					// Independent exact mode/backend directory, not the production
+					// target predicate. No status-FLAGS store is part of this effect.
+					native := arch == "386" && triple == "i386-unknown-linux-gnu" ||
+						arch == "amd64" && triple == "x86_64-unknown-linux-gnu"
+					if native {
+						want += fmt.Sprintf("  call void asm sideeffect %q, \"~{dirflag}\"()\n", strings.ToLower(direction))
+					}
+					if output.String() != want {
+						t.Fatalf("virtual/native DF boundary changed: got=%q want=%q", output.String(), want)
+					}
+				})
+			}
+		}
+	}
+}
+
 func TestX86DirectionControlNumericalAndCallerThreeAPIs(t *testing.T) {
 	for _, arch := range []string{"amd64", "386"} {
 		word, move, typ := 8, "MOVQ", "uint64"

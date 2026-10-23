@@ -132,6 +132,40 @@ func TestX86RepeatEmptyGuardCompleteLLVM22Objects(t *testing.T) {
 	}
 }
 
+func TestX86RepeatEmptyGuardPortableLLVM22Objects(t *testing.T) {
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM22 llc required")
+	}
+	for _, arch := range []string{"386", "amd64"} {
+		source, declarations, count := repeatEmptyGuardCompleteSource(t, arch, false)
+		for _, triple := range []string{"aarch64-unknown-linux-gnu", "armv7-unknown-linux-gnueabihf", "wasm32-unknown-unknown"} {
+			for _, api := range []string{"text", "module", "Go"} {
+				t.Run(arch+"/"+triple+"/"+api, func(t *testing.T) {
+					ir, err := x86ScalarFPBitViewAPI(t, source, declarations, arch, triple, api)
+					if err != nil || ir == "" {
+						t.Fatal("complete source lost portable numerical translation", err)
+					}
+					if strings.Contains(ir, "asm sideeffect") {
+						t.Fatal("portable strings retained an x86-only direction instruction")
+					}
+					for index := 0; index < count; index++ {
+						body := x86StringMemoryFunction(t, ir, fmt.Sprint("RepeatEmpty", index))
+						for _, flag := range []string{"z", "slt", "cf", "pf", "af", "of"} {
+							// These implementation defaults prevent LLVM poison/undef;
+							// they are never entry FLAGS facts in the source proof.
+							if !strings.Contains(body, "store i1 false, ptr %flags_"+flag) {
+								t.Fatal("old status value has no concrete initialization", index, flag)
+							}
+						}
+					}
+					compileLLVMToObject(t, llc, triple, "portable-repeat.ll", "portable-repeat.o", ir)
+				})
+			}
+		}
+	}
+}
+
 func repeatEmptyExecuteLLVM(t *testing.T, arch string, execution x86FloatCompareExecution) {
 	t.Helper()
 	source, declarations, count := repeatEmptyGuardCompleteSource(t, arch, false)

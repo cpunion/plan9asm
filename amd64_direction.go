@@ -40,6 +40,11 @@ func (c *amd64Ctx) lowerDirectionControl(ins Instr) (bool, error) {
 	if c.directionSlot != "" {
 		fmt.Fprintf(c.b, "  store i1 %t, ptr %s\n", spec.backward, c.directionSlot)
 	}
-	fmt.Fprintf(c.b, "  call void asm sideeffect %q, \"~{dirflag}\"()\n", strings.ToLower(string(ins.Op)))
+	// Every target consumes virtual DF in the exact string helpers. Only a
+	// matching x86 backend also owns the physical direction-flag side effect;
+	// embedding CLD/STD in an ARM/WASM module is not portable emulation.
+	if x86ScalarFloatIntegerNativeTarget(c.goarch, c.targetTriple) {
+		fmt.Fprintf(c.b, "  call void asm sideeffect %q, \"~{dirflag}\"()\n", strings.ToLower(string(ins.Op)))
+	}
 	return true, nil
 }

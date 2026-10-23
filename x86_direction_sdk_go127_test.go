@@ -14,7 +14,7 @@ import (
 	"testing"
 )
 
-func TestX86DirectionOriginalSDKIndexByte386ThreeAPIsNextContext(t *testing.T) {
+func TestX86DirectionOriginalSDKIndexByte386ThreeAPIsCompleteSource(t *testing.T) {
 	root := runtime.GOROOT()
 	dir := filepath.Join(root, "src", "internal", "bytealg")
 	declaration, err := os.ReadFile(filepath.Join(dir, "indexbyte_native.go"))
@@ -62,16 +62,17 @@ func TestX86DirectionOriginalSDKIndexByte386ThreeAPIsNextContext(t *testing.T) {
 	for _, api := range []string{"text", "module", "Go"} {
 		t.Run(api, func(t *testing.T) {
 			ir, err := x86ScalarFPBitViewPackageAPI(t, string(source), pkg, "386", "i386-unknown-linux-gnu", api)
-			// This is complete unchanged source/declaration numerical observation,
-			// not a compiler graph/native-memory grant or a whole-file pass. The
-			// PC edges now bind, but zero-iteration SCAS preserves incoming
-			// ZF. The paired continuation cannot invent that predicate for
-			// JZ, even though both original Go paths compute -1 for length0.
-			if !errors.Is(err, ErrProbeNeedsContext) || ir != "" ||
-				!strings.Contains(err.Error(), "result initialization: unknown effect or undefined input at instruction 7: JZ 3(PC)") {
-				t.Fatal("complete source invented the independent zero-count branch predicate", err)
+			// The unpaired queries above still cannot borrow native repeat
+			// semantics. With that exact continuation, both complete source
+			// entries return -1 on either empty-count edge without inventing ZF.
+			if err != nil || ir == "" {
+				t.Fatal("complete source lost its paired empty-repeat result proof", err)
 			}
-			t.Log(err)
+			for _, name := range []string{"IndexByte", "IndexByteString"} {
+				if !strings.Contains(ir, "internal/bytealg."+name) {
+					t.Fatal("complete original source lost its public entry", name)
+				}
+			}
 		})
 	}
 }

@@ -17,24 +17,36 @@ const (
 // isolating the former for the non-x86 companion; never project DF out of the
 // original source, packed FLAGS observation or independent C expectation.
 func x86NativeLEAWCheckLogicalDFBody(body string) error {
+	return x86NativeLEAWCheckTargetDFBody(body, true)
+}
+
+func x86NativeLEAWCheckTargetDFBody(body string, native bool) error {
 	initial := "store i1 false, ptr %direction_backward"
 	backward := "store i1 true, ptr %direction_backward"
 	load := "load i1, ptr %direction_backward"
+	nativeCount := 0
+	if native {
+		nativeCount = 1
+	}
 	for text, count := range map[string]int{
 		"%direction_backward = alloca i1": 1,
 		initial:                           2,
 		backward:                          1,
 		load:                              1,
-		x86NativeLEAWSTDCall:              1,
-		x86NativeLEAWCLDCall:              1,
-		"asm sideeffect":                  2,
+		x86NativeLEAWSTDCall:              nativeCount,
+		x86NativeLEAWCLDCall:              nativeCount,
+		"asm sideeffect":                  2 * nativeCount,
 	} {
 		if actual := strings.Count(body, text); actual != count {
 			return fmt.Errorf("DF observation %q count=%d, want %d", text, actual, count)
 		}
 	}
 	previous := -1
-	for _, marker := range []string{initial, backward, x86NativeLEAWSTDCall, load} {
+	markers := []string{initial, backward}
+	if native {
+		markers = append(markers, x86NativeLEAWSTDCall)
+	}
+	for _, marker := range append(markers, load) {
 		position := strings.Index(body, marker)
 		if position <= previous {
 			return fmt.Errorf("DF initial/STD/packed observation reordered at %q", marker)
@@ -42,7 +54,7 @@ func x86NativeLEAWCheckLogicalDFBody(body string) error {
 		previous = position
 	}
 	clear := strings.LastIndex(body, initial)
-	if clear <= previous || strings.Index(body, x86NativeLEAWCLDCall) <= clear {
+	if clear <= previous || native && strings.Index(body, x86NativeLEAWCLDCall) <= clear {
 		return fmt.Errorf("DF clear is not after its packed observation")
 	}
 	return nil

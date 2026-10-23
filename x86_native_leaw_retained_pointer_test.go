@@ -182,7 +182,12 @@ func TestX86NativeLEAWRetainedPointerPortableValuesStatusAndCanaries(t *testing.
 			if err != nil || ir == "" {
 				t.Fatal("retained typed-pointer program rejected before independent value/status/canary execution", err)
 			}
-			ir = x86NativeLEAWRetainedPointerLogicalDF(t, ir, runtime.GOARCH != "amd64" && runtime.GOARCH != "386")
+			native := x86ScalarFloatIntegerNativeTarget(arch, triple)
+			for _, variant := range []string{"Direct", "Copied", "Alias"} {
+				if err := x86NativeLEAWCheckTargetDFBody(x86StringMemoryFunction(t, ir, "Retain"+variant), native); err != nil {
+					t.Fatal("actual target lost its virtual/native direction lifecycle", variant, err)
+				}
+			}
 			for _, pipeline := range []struct {
 				text  string
 				level int
@@ -191,5 +196,5 @@ func TestX86NativeLEAWRetainedPointerPortableValuesStatusAndCanaries(t *testing.
 			}
 		})
 	}
-	t.Log("300 input triples x 3 APIs x 3 pipelines; non-x86 hosts execute logical-DF/value instrumentation excluding only the checked native STD/CLD calls, not the unmodified LLVM program or native x86 DF")
+	t.Log("300 input triples x 3 APIs x 3 pipelines; unmodified actual-target LLVM executes virtual DF, pointer values, status and canaries; physical DF remains separate matching-x86 execution")
 }
