@@ -167,6 +167,14 @@ root failed, with no skips. Its two CRC32 negative checks now unexpectedly
 succeed through the ordinary declaration route. Determine whether those inputs
 are legitimate ordinary reads or a mismatched selection before changing the
 assertions; retain the failed complete-suite receipt.
+The follow-up independent RED separates a genuinely loaded v2 profile, which
+passes, from four mutations of the captured environment, which wrongly pass.
+The fix includes the exact ordered environment in the existing selection hash;
+it does not normalize duplicate keys, reload packages or add a baseline-only
+restriction. CRC32's legitimate ordinary reads have an actual object positive,
+while missing-owner rejection still publishes nothing. The shared reader and
+source/profile controls pass16 roots and63 children in the repair worktree;
+rerun the complete integrated CLI before publication.
 
 The strict full-source benchmark at published `a5504a23c768` still fails:
 linux/amd6432/55 passed in280 wall seconds; linux/arm6440/47 in7 seconds.
@@ -184,6 +192,11 @@ pin to translator `a5504a23c768`. Its latest106 visible checks are terminal:
 42 failed, including41 own-log varlen closure failures and one lost runner;
 three cancelled and11 skipped checks are not successes. The separately reviewed
 runtime-owner candidate still needs actual compilation and execution checks.
+Its producer checks now pass for four target profiles, but both real execution
+fixtures stop during compilation at ARM64 atomic Or32's result-tail write.
+Do not drop those observable native bytes to make the test run: the existing
+native-caller boundary remains intact. This is still failed runtime integration,
+not successful execution or new instruction coverage.
 Its previous `aa438347ce34` run finished naturally with six successes and seven
 failures; that is historical evidence only. The cgo-preamble, Windows UTF-8
 collector and fork-provenance notice changes are published, but remaining ABI
