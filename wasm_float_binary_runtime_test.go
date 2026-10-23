@@ -94,12 +94,23 @@ type wasmFloatBinaryRuntimeRow struct {
 
 func wasmFloatBinaryRuntimeFixture(t *testing.T) (string, string, map[string]FuncSig, string, string, []byte) {
 	t.Helper()
+	return wasmFloatRuntimeFixture(t, wasmFloatBinaryGoNames(t), wasmFloatBinaryTestTypes,
+		wasmFloatBinarySamples, wasmFloatBinaryReferenceValue)
+}
+
+// Share the actual ABI adapter, bounded execution and NaN-set checkers across
+// floating families. Each caller supplies its independent full opcode/input
+// inventory and reference; the existing comparison/minmax denominator is fixed.
+func wasmFloatRuntimeFixture(t *testing.T, names []string,
+	types func(string) (LLVMType, LLVMType, Reg, Reg), samples func(int) []uint64,
+	reference func(string, uint64, uint64) (uint64, int)) (string, string, map[string]FuncSig, string, string, []byte) {
+	t.Helper()
 	var source, original, wrapper, goSource strings.Builder
 	goSource.WriteString("package main\nimport (\"encoding/json\";\"fmt\";\"strconv\")\n")
 	sigs := make(map[string]FuncSig)
 	var rows []wasmFloatBinaryRuntimeRow
-	for _, opcode := range wasmFloatBinaryGoNames(t) {
-		typ, result, _, _ := wasmFloatBinaryTestTypes(opcode)
+	for _, opcode := range names {
+		typ, result, _, _ := types(opcode)
 		bits, base := 32, 0
 		if typ == "double" {
 			bits, base = 64, 16
@@ -170,13 +181,13 @@ func wasmFloatBinaryRuntimeFixture(t *testing.T) (string, string, map[string]Fun
 					fmt.Fprintf(&wrapper, "ret i64 %s\n}\n", value)
 				}
 				row := wasmFloatBinaryRuntimeRow{Name: name, Bits: bits}
-				for _, a := range wasmFloatBinarySamples(bits) {
-					for _, b := range wasmFloatBinarySamples(bits) {
+				for _, a := range samples(bits) {
+					for _, b := range samples(bits) {
 						rhs := b
 						if alias {
 							rhs = a
 						}
-						want, nan := wasmFloatBinaryReferenceValue(opcode, a, rhs)
+						want, nan := reference(opcode, a, rhs)
 						if dead {
 							want, nan = 0, 0
 						}
@@ -252,6 +263,11 @@ func main() {
 
 func TestWASMFloatBinaryOriginalGoRuntime(t *testing.T) {
 	_, source, _, _, goSource, _ := wasmFloatBinaryRuntimeFixture(t)
+	wasmFloatRunOriginal(t, source, goSource, 25600)
+}
+
+func wasmFloatRunOriginal(t *testing.T, source, goSource string, count int) {
+	t.Helper()
 	dir := t.TempDir()
 	for name, data := range map[string]string{"go.mod": "module float_binary_oracle\ngo 1.20\n", "main.go": goSource, "oracle_wasm.s": source} {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(data), 0600); err != nil {
@@ -271,7 +287,7 @@ func TestWASMFloatBinaryOriginalGoRuntime(t *testing.T) {
 		t.Fatal(err)
 	}
 	output, err := runtimeOracleCombinedOutput(ctx, cmd)
-	if err != nil || strings.TrimSpace(string(output)) != "actual Go Wasm float binary PASS 25600" {
+	if err != nil || strings.TrimSpace(string(output)) != fmt.Sprintf("actual Go Wasm float binary PASS %d", count) {
 		t.Fatalf("original Go runtime: %v\n%s", err, output)
 	}
 	t.Log(strings.TrimSpace(string(output)))
@@ -290,6 +306,11 @@ func wasmFloatBinaryCommand(t *testing.T, command string, arguments ...string) s
 
 func TestWASMFloatBinaryThreeAPIsFourOptimizationAxesRuntime(t *testing.T) {
 	source, _, sigs, wrappers, _, inputs := wasmFloatBinaryRuntimeFixture(t)
+	wasmFloatRunLLVM(t, source, sigs, wrappers, inputs, 25600)
+}
+
+func wasmFloatRunLLVM(t *testing.T, source string, sigs map[string]FuncSig, wrappers string, inputs []byte, count int) {
+	t.Helper()
 	file, err := Parse(ArchWASM, source)
 	if err != nil {
 		t.Fatal(err)
@@ -328,7 +349,7 @@ func TestWASMFloatBinaryThreeAPIsFourOptimizationAxesRuntime(t *testing.T) {
 							t.Fatal(err)
 						}
 						output := wasmFloatBinaryCommand(t, wasmPackedNode(t), "-e", wasmFloatBinaryNodeCheck, binary, inputJSON)
-						if strings.TrimSpace(output) != "LLVM Wasm float binary PASS 25600" {
+						if strings.TrimSpace(output) != fmt.Sprintf("LLVM Wasm float binary PASS %d", count) {
 							t.Fatalf("runtime failed to consume complete matrix: %s", output)
 						}
 						t.Log(strings.TrimSpace(output))

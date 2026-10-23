@@ -1101,6 +1101,22 @@ func TestExtractSupportedOpsFindsCompleteMOVQSourceAliasRegistry(t *testing.T) {
 	}
 }
 
+func TestExtractSupportedOpsFindsWASMFloatArithmeticFamily(t *testing.T) {
+	repoRoot, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	supported, err := extractSupportedOps(repoRoot, "wasm")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, opcode := range strings.Fields("F32ADD F32SUB F32MUL F32DIV F64ADD F64SUB F64MUL F64DIV") {
+		if _, ok := supported[opcode]; !ok {
+			t.Errorf("typed Wasm arithmetic opcode missing from extraction: %s", opcode)
+		}
+	}
+}
+
 func TestExtractSupportedOpsFindsWASMIntegerCountFamily(t *testing.T) {
 	repoRoot, err := filepath.Abs(filepath.Join("..", ".."))
 	if err != nil {
