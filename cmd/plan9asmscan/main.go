@@ -54,27 +54,28 @@ type parseErr struct {
 }
 
 type report struct {
-	Corpus               string `json:"corpus"`
-	GoVersion            string `json:"go_version"`
-	Goos                 string `json:"goos"`
-	Goarch               string `json:"goarch"`
-	StdPkgs              int    `json:"std_pkgs"`
-	StdPkgsWithSFile     int    `json:"std_pkgs_with_sfile"`
-	AsmFiles             int    `json:"asm_files"`
-	UniqueOps            int    `json:"unique_ops"`
-	ParseErrCount        int    `json:"parse_err_count"`
-	UniqueForms          int    `json:"unique_forms"`
-	SupportedForms       int    `json:"supported_forms"`
-	ContextForms         int    `json:"context_forms"`
-	UnsupportedForms     int    `json:"unsupported_forms"`
-	OfficialOpcodes      int    `json:"official_opcodes"`
-	RuntimeVerifiedForms int    `json:"runtime_verified_forms"`
-	CompileOnlyForms     int    `json:"compile_only_forms,omitempty"`
-	EncoderOpcodes       int    `json:"encoder_opcodes"`
-	EncoderForms         int    `json:"encoder_forms"`
-	EncoderOpsObserved   int    `json:"encoder_opcodes_observed_in_corpus"`
-	CoverageFingerprint  string `json:"coverage_fingerprint"`
-	EncoderFingerprint   string `json:"encoder_fingerprint"`
+	Corpus               string       `json:"corpus"`
+	GoVersion            string       `json:"go_version"`
+	Goos                 string       `json:"goos"`
+	Goarch               string       `json:"goarch"`
+	StdPkgs              int          `json:"std_pkgs"`
+	StdPkgsWithSFile     int          `json:"std_pkgs_with_sfile"`
+	AsmFiles             int          `json:"asm_files"`
+	UniqueOps            int          `json:"unique_ops"`
+	ParseErrCount        int          `json:"parse_err_count"`
+	UniqueForms          int          `json:"unique_forms"`
+	SupportedForms       int          `json:"supported_forms"`
+	ContextForms         int          `json:"context_forms"`
+	UnsupportedForms     int          `json:"unsupported_forms"`
+	OfficialOpcodes      int          `json:"official_opcodes"`
+	RuntimeVerifiedForms int          `json:"runtime_verified_forms"`
+	CompileOnlyForms     int          `json:"compile_only_forms,omitempty"`
+	EncoderOpcodes       int          `json:"encoder_opcodes"`
+	EncoderForms         int          `json:"encoder_forms"`
+	EncoderOpsObserved   int          `json:"encoder_opcodes_observed_in_corpus"`
+	CoverageFingerprint  string       `json:"coverage_fingerprint"`
+	EncoderFingerprint   string       `json:"encoder_fingerprint"`
+	EvidenceLevels       scanEvidence `json:"evidence_levels"`
 	// These fields count/fingerprint only retained encoding rules, currently
 	// x86 AVX. They do not certify all encoder tables or executed coverage.
 	EncoderRules           int    `json:"encoder_rules,omitempty"`
@@ -91,6 +92,29 @@ type report struct {
 	EncoderCatalog    []encoderFormReport   `json:"encoder_form_catalog,omitempty"`
 	FrontendInventory *frontendInventory    `json:"frontend_inventory,omitempty"`
 	ParseErrs         []parseErr            `json:"parse_errs,omitempty"`
+}
+
+// The scanner runs text-lowering probes, not LLVM object or execution tests.
+// The legacy runtime_verified/compile_only fields above are manifest matches,
+// not receipts for this invocation. Keep them for report compatibility.
+type scanEvidence struct {
+	IRTextGeneration      scanEvidenceStage `json:"ir_text_generation"`
+	LLVMObjectCompilation scanEvidenceStage `json:"llvm_object_compilation"`
+	RuntimeExecution      scanEvidenceStage `json:"runtime_execution"`
+}
+
+type scanEvidenceStage struct {
+	Status string `json:"status"`
+	Forms  *int   `json:"forms"` // null means not measured, rather than zero passes.
+}
+
+func probeEvidence(goarch string, accepted int) scanEvidence {
+	notRun := scanEvidenceStage{Status: "not_run"}
+	ir := scanEvidenceStage{Status: "probe", Forms: &accepted}
+	if goarch == "wasm" {
+		ir = notRun // WASM's isolated probe deliberately requires whole functions.
+	}
+	return scanEvidence{ir, notRun, notRun}
 }
 
 type opReport struct {
@@ -1220,6 +1244,7 @@ func buildReport(
 	}
 	sort.Strings(fingerprintEntries)
 	rep.CoverageFingerprint = fmt.Sprintf("%x", sha256.Sum256([]byte(strings.Join(fingerprintEntries, "\n"))))
+	rep.EvidenceLevels = probeEvidence(goarch, rep.SupportedForms)
 	return rep
 }
 
@@ -1233,11 +1258,11 @@ func renderMarkdown(rep report) []byte {
 	fmt.Fprintf(&b, "- asm files scanned: `%d`\n", rep.AsmFiles)
 	fmt.Fprintf(&b, "- unique ops: `%d`\n", rep.UniqueOps)
 	fmt.Fprintf(&b, "- unique operand forms: `%d`\n", rep.UniqueForms)
-	fmt.Fprintf(&b, "- form lowering: `%d` supported, `%d` context-required, `%d` unsupported\n",
+	fmt.Fprintf(&b, "- form probe classification: `%d` accepted, `%d` context-required, `%d` unsupported\n",
 		rep.SupportedForms, rep.ContextForms, rep.UnsupportedForms)
-	fmt.Fprintf(&b, "- executable conformance forms observed in this corpus: `%d`\n", rep.RuntimeVerifiedForms)
+	fmt.Fprintf(&b, "- manifest-registered runtime forms observed in this corpus: `%d` (not executed by this scan)\n", rep.RuntimeVerifiedForms)
 	if rep.CompileOnlyForms > 0 {
-		fmt.Fprintf(&b, "- explicit compile-only forms observed in this corpus: `%d`\n", rep.CompileOnlyForms)
+		fmt.Fprintf(&b, "- manifest-registered compile-only forms observed in this corpus: `%d` (not compiled by this scan)\n", rep.CompileOnlyForms)
 	}
 	if rep.EncoderForms > 0 {
 		if rep.Goarch == "wasm" {
@@ -1252,6 +1277,16 @@ func renderMarkdown(rep report) []byte {
 		fmt.Fprintf(&b, "- official opcode names: `%d`\n", rep.OfficialOpcodes)
 	}
 	fmt.Fprintf(&b, "- parser failures: `%d`\n\n", rep.ParseErrCount)
+	b.WriteString("## Evidence Levels\n\n")
+	b.WriteString("| level | result in this scan |\n|---|---|\n")
+	if rep.Goarch == "wasm" {
+		b.WriteString("| IR text generation | not run by this scanner: isolated WASM probes require whole functions |\n")
+	} else {
+		fmt.Fprintf(&b, "| IR text generation | %d accepted form probes; not LLVM module verification |\n", rep.SupportedForms)
+	}
+	b.WriteString("| LLVM 22 object compilation | not run by this scanner |\n")
+	b.WriteString("| Runtime execution | not run by this scanner |\n\n")
+	b.WriteString("Context is not successful translation. Zero observed unsupported forms does not prove complete instruction, object or runtime coverage. Manifest associations require separate current-head test receipts.\n\n")
 
 	if len(rep.OpcodeCatalog) > 0 {
 		type catalogSummary struct {
