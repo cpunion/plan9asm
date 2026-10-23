@@ -156,13 +156,25 @@ func bindAMD64GoVirtualArguments(pkg GoPackage, file *File, input []byte, inputS
 	return owner, nil
 }
 
-func (owner *amd64GoVirtualArguments) verify() error {
+// Internal lowering consumes only the private plan/source copies. This check
+// observes call lifetime and permanent revocation, not a cached successful
+// source query. Complete attach/audit/publication boundaries call verify.
+func (owner *amd64GoVirtualArguments) live() error {
 	if owner == nil || !owner.active {
 		return amd64GoArgumentContext("virtual argument call has ended")
 	}
-	if owner.failure != nil {
-		return owner.failure
+	return owner.failure
+}
+
+func (owner *amd64GoVirtualArguments) verify() (result error) {
+	if err := owner.live(); err != nil {
+		return err
 	}
+	defer func() {
+		if result != nil {
+			owner.failure = result
+		}
+	}()
 	fingerprint, err := x86CallerSourceFingerprint(owner.file)
 	syntax, syntaxErr := goReadOnlySyntax(owner.pkg)
 	if err != nil || syntaxErr != nil || fingerprint != owner.fingerprint ||
@@ -190,9 +202,6 @@ func (owner *amd64GoVirtualArguments) resolveSymbol(symbol string) string {
 	actual := owner.resolve(symbol)
 	if expected, known := owner.symbols[goTextSymbolForResolution(symbol)]; known && actual != expected {
 		owner.failure = amd64GoArgumentContext("virtual entry resolver changed during consumption")
-	}
-	if err := owner.verify(); err != nil {
-		owner.failure = err
 	}
 	return actual
 }

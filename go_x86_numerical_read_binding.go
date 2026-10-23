@@ -493,7 +493,7 @@ type x86NumericalReadCertificate struct {
 func verifyNumericalReadInputs(file *File, options Options) (result error) {
 	for _, sig := range options.Sigs {
 		if entry := sig.amd64GoArguments; entry != nil && entry.virtual != nil {
-			if entry.owner != nil || entry.virtual.entries[sig.Name] != entry || entry.virtual.verify() != nil {
+			if entry.owner != nil || entry.virtual.entries[sig.Name] != entry || entry.virtual.live() != nil {
 				return amd64GoArgumentContext("virtual arguments require their live GoModule call")
 			}
 			continue

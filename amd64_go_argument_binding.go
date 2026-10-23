@@ -44,7 +44,7 @@ func (entry *amd64GoArgumentBinding) digest() ([32]byte, error) {
 func (entry *amd64GoArgumentBinding) valid(fn Func, sig FuncSig, arch string) bool {
 	if entry != nil && entry.virtual != nil {
 		if entry.identity != entry || entry.owner != nil || entry.declaration == nil || entry.plan == nil || entry.virtual.entries[sig.Name] != entry ||
-			entry.virtual.verify() != nil || arch != "amd64" || fn.Sym != entry.symbol || fn.FrameSize != 0 ||
+			entry.virtual.live() != nil || arch != "amd64" || fn.Sym != entry.symbol || fn.FrameSize != 0 ||
 			len(fn.X86RawText) != 0 || fn.x86FixedLocal != nil || fn.x86SourceStack != nil {
 			return false
 		}
@@ -90,7 +90,7 @@ func (entry *amd64GoArgumentBinding) matches(sig FuncSig) bool {
 	}
 	digest, err := entry.digest()
 	if entry.virtual != nil {
-		return err == nil && digest == entry.seal && entry.virtual.verify() == nil
+		return err == nil && digest == entry.seal && entry.virtual.live() == nil
 	}
 	source := entry.owner.source
 	source.mu.Lock()
