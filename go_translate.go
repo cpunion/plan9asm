@@ -104,6 +104,13 @@ func TranslateGoModule(pkg GoPackage, src []byte, opt GoModuleOptions) (*GoModul
 	return translateGoModuleInContext(llvm.GlobalContext(), pkg, src, opt)
 }
 
+// TranslateGoModuleInContext binds and translates the complete Go assembly
+// source in the supplied LLVM context. The caller retains context ownership,
+// including on error, and must dispose a successful module before its context.
+func TranslateGoModuleInContext(ctx llvm.Context, pkg GoPackage, src []byte, opt GoModuleOptions) (*GoModuleTranslation, error) {
+	return translateGoModuleInContext(ctx, pkg, src, opt)
+}
+
 // Internal high-volume callers can own the context without changing the public
 // binding contract. Dispose the returned module before disposing ctx.
 func translateGoModuleInContext(ctx llvm.Context, pkg GoPackage, src []byte, opt GoModuleOptions) (result *GoModuleTranslation, resultErr error) {

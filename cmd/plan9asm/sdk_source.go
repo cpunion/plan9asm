@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/xgo-dev/llvm"
 	"github.com/xgo-dev/plan9asm"
 	"github.com/xgo-dev/plan9asm/internal/sdkfrontend"
 	"github.com/xgo-dev/plan9asm/internal/sourcepath"
@@ -149,7 +150,9 @@ func translateLoadedGoModule(pkg *packages.Package, source []byte, asmPath, goos
 	if goarch == "wasm" && (goos == "js" || goos == "wasip1") {
 		wasmABI = plan9asm.WASMABIGo
 	}
-	module, err := plan9asm.TranslateGoModule(goPackageView(pkg), source, plan9asm.GoModuleOptions{
+	ctx := llvm.NewContext()
+	defer ctx.Dispose()
+	module, err := plan9asm.TranslateGoModuleInContext(ctx, goPackageView(pkg), source, plan9asm.GoModuleOptions{
 		FileName: asmPath, GOOS: goos, GOARCH: goarch, Sizes: pkg.TypesSizes,
 		TargetTriple: targetTriple(goos, goarch), WASMABI: wasmABI,
 		AnnotateSource: annotate, ResolveSym: resolveSymFunc(pkg.PkgPath),
