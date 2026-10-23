@@ -69,6 +69,9 @@ func goReadOnlyOperand(ins Instr, arch string) (Operand, int64, bool) {
 	if operand, width, known := goReadOnlyArithmeticOperand(ins, arch); known {
 		return operand, width, true
 	}
+	if form, known := x86NumericalSBVectorReadProperties(ins, arch); known {
+		return ins.Args[form.operand], form.spec.sourceBytes, true
+	}
 	form, known, err := x86ScalarCompareProperties(ins.Op, ins, arch)
 	if !known || err != nil || form.memory < 0 {
 		return Operand{}, 0, false
@@ -358,7 +361,7 @@ func bindGoReadOnlyStorage(pkg GoPackage, file *File, sizes types.Sizes, arch st
 	if file == nil || file.Arch != ArchAMD64 || arch != "amd64" && arch != "386" || pkg.Types == nil || pkg.Types.Scope() == nil {
 		return nil, nil
 	}
-	// Cost-query only complete named comparison/integer-load roles. Other
+	// Cost-query only complete named numerical-read roles. Other
 	// instructions and emitted DATA/GLOBL keep their existing consumers.
 	assemblyNames := make(map[string]bool)
 	for _, global := range file.Globl {

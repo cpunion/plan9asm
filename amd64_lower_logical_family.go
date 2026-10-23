@@ -85,7 +85,7 @@ func (c *amd64Ctx) lowerPackedLogicalFamily(op Op, ins Instr) (bool, bool, error
 		// Native reads remain observable with dead results. EVEX inactive
 		// lanes alone suppress their accesses, including scalar broadcasts.
 		var a string
-		if ins.x86NumericalRead != nil ||
+		if ins.x86NumericalRead != nil || c.goReadOnlyOperand.allows(first, int64(form.memoryBytes)) ||
 			first.Kind == OpMem && x86OrdinaryNativeMemoryOperand(first, c.goarch) {
 			a, err = c.loadX86PackedShiftLanes(first, form.byteWidth, form.spec.laneBits, form.broadcast, mask)
 		} else {

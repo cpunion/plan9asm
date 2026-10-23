@@ -235,3 +235,44 @@ func TestGoModuleOrdinaryGlobalVectorReadRejectsRawAndStaleBindings(t *testing.T
 		})
 	}
 }
+
+func TestGoModuleOrdinaryGlobalVectorReadObservableSources(t *testing.T) {
+	for _, test := range []struct {
+		instruction, bank, access string
+		loads                     int
+		masked                    bool
+	}{
+		{"PXOR ·words+16(SB),X2", "X", `asm sideeffect "pxor `, 1, false},
+		{"AESENC ·words+16(SB),X2", "X", `asm sideeffect "aesenc `, 1, false},
+		{"VPXOR ·words+16(SB),Y1,Y2", "Y", "load volatile <32 x i8>", 1, false},
+		{"VXORPD.BCST ·words+16(SB),Z1,Z2", "Z", "load volatile <8 x i8>", 1, false},
+		{"VPXORD ·words+16(SB),Z1,K1,Z2", "Z", "load volatile i32", 16, true},
+		{"VPXORD.BCST.Z ·words+16(SB),Z1,K1,Z2", "Z", "load volatile i32", 1, true},
+		{"VAESENC ·words+16(SB),Z1,Z2", "Z", "load volatile <64 x i8>", 1, false},
+	} {
+		t.Run(test.instruction, func(t *testing.T) {
+			source, declarations := ordinaryGlobalVectorSource([]ordinaryGlobalVectorCase{{test.instruction, test.bank, 2}})
+			// Discard the numerical result. Observable native reads must not
+			// disappear merely because an independent scalar value is returned.
+			source = strings.Replace(source, "MOVL AX,ret+0(FP)", "MOVL $7,ret+0(FP)", 1)
+			pkg := mustGoPackage(t, ordinaryGlobalReadPackage, "package ordinaryglobals\n"+declarations)
+			ir, err := ordinaryGlobalReadRequest(t, pkg, []byte(source), "amd64", "x86_64-unknown-linux-gnu", "public")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := strings.Count(ir, test.access); got != test.loads {
+				t.Fatalf("source access changed: got %d %q, want %d", got, test.access, test.loads)
+			}
+			if test.masked && !strings.Contains(ir, "br i1") {
+				t.Fatal("masked source lost its actual conditional access")
+			}
+			if strings.Contains(test.access, "asm sideeffect") && !strings.Contains(ir, "~{memory}") {
+				t.Fatal("legacy native memory opcode lost its observable access")
+			}
+			optimized := x86MulDivRoundOptimize(t, ir)
+			if !strings.Contains(optimized, test.access) {
+				t.Fatal("IR optimization removed the dead-result native/volatile source access")
+			}
+		})
+	}
+}

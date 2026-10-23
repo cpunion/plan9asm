@@ -208,6 +208,8 @@ func TestRuntimeOracleCommandConsumersRetainOwnedExecution(t *testing.T) {
 		"amd64_fixed_local_frame_test.go",
 		"go_x86_numerical_read_owned_role_test.go",
 		"go_x86_numerical_read_family_test.go",
+		"go_ordinary_global_vector_read_test.go",
+		"go_ordinary_global_vector_runtime_test.go",
 		"go_x86_tls_move_runtime_linux_amd64_go127_test.go",
 		"x86_direct_tail_runtime_linux_amd64_test.go",
 		"x86_direct_tail_386_runtime_linux_amd64_test.go",
