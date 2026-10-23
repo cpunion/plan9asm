@@ -2,7 +2,6 @@ package plan9asm
 
 import (
 	"errors"
-	"fmt"
 	"go/types"
 	"strings"
 	"testing"
@@ -85,8 +84,17 @@ func TestAMD64RegisterBoolDoesNotInitializeUpperGPBytes(t *testing.T) {
 	}
 	for _, declaration := range []string{"func view(a bool) bool\n", "func view(a uint64) (bool,bool)\n"} {
 		for _, api := range []string{"text", "module", "Go"} {
-			if _, err := x86ScalarFPBitViewAPI(t, amd64RegisterBoolSource("MOVB $1,AX"), declaration, "amd64", "x86_64-unknown-linux-gnu", api); !errors.Is(err, ErrProbeNeedsContext) {
-				t.Error(fmt.Sprintf("%s: independent bool argument/aggregate transport was inferred: %v", api, err))
+			_, err := x86ScalarFPBitViewAPI(t, amd64RegisterBoolSource("MOVB $1,AX"), declaration, "amd64", "x86_64-unknown-linux-gnu", api)
+			if api == "Go" && declaration == "func view(a bool) bool\n" {
+				// A complete GoModule now supplies its own call-local typed
+				// argument plan. It initializes only the declared low byte;
+				// the raw APIs and multiple-result boundary remain unchanged.
+				// VirtualBoolPortableValues separately executes both bool values.
+				if err != nil {
+					t.Errorf("complete typed bool argument lost its declaration binding: %v", err)
+				}
+			} else if !errors.Is(err, ErrProbeNeedsContext) {
+				t.Errorf("%s: unbound bool argument/aggregate result was inferred: %v", api, err)
 			}
 		}
 	}
