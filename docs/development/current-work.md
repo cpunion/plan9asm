@@ -21,6 +21,17 @@ reviewer approval.
 
 ## Last completed upstream run
 
+Published head `a5504a23c768` is running
+[run39916058698](https://github.com/xgo-dev/plan9asm/actions/runs/39916058698).
+It is not a passing or completed run. Own-job logs identify two stale test
+expectations: loaded typed bool arguments are now valid, and I32Clz is now
+implemented, so its empty-stack diagnostic is underflow rather than unsupported.
+The local corrections retain upper-register/unknown-input rejection and test an
+actually unknown WASM opcode separately. Independent bool execution covers the
+real typed argument path; do not merely delete the old checks. Two runner-loss
+failures have unavailable logs and are not attributed to OOM or source errors.
+Let the run finish naturally before publishing the next verified batch.
+
 Contribution head `da6521352eb1` completed
 [run39899167605](https://github.com/xgo-dev/plan9asm/actions/runs/39899167605)
 naturally: 325 jobs, 213 successful and 112 failed, stable for more than three
@@ -83,7 +94,12 @@ initialized scratch bytes to make these cases pass.
 The scan report now separates IR-text probes, LLVM object evidence and actual
 execution. Context is not supported, registered manifests are not fresh test
 results, and WASM's isolated probe is explicitly not run. Initialized-context
-reprobes, broader386 forms, remaining WASM scalar/control/SIMD support, and
+reprobes now have an explicit `mask-logical` profile: all32 typed opcodes and
+214 concrete occurrences from Go1.27.2's official amd64 corpus passed IR and
+LLVM22 object compilation with synthetic initialized inputs. Original source
+classification and fingerprints remain unchanged. Runtime is still `not_run`;
+unregistered context occurrences retain their exact sources without credit.
+Other initialized-context families, broader386 forms, remaining WASM control/SIMD support, and
 complete-source performance still need work. External inventories stay in the
 compatibility repository; do not restore scanner jobs here.
 
@@ -95,6 +111,12 @@ family-specific execution checks, not evidence for other WASM opcodes or SIMD.
 Minimum-Go execution requires the selected SDK's own WASM JavaScript helpers;
 auto-downloaded toolchain modules can omit them. Use the complete same-version
 official SDK, not another version's helper or a runtime skip.
+
+The complete eight-op WASM F32/F64 Add/Sub/Mul/Div family shares the typed binary
+grammar and quiet-NaN handling without fast-math. Independent original-Go and
+translated-WASM checks cover25088 input pairs, three APIs, two targets and both
+IR/backend optimization axes. Current and official minimum Go passed the same
+13 roots and238 children. This is not evidence for BrTable or SIMD.
 
 Named x86 integer EQ/GT comparisons propagate initialized bytes only for complete
 paired lanes. Partial result knowledge does not shorten a memory operand or
@@ -127,8 +149,25 @@ Closing that call must also drop its package, syntax, type, plan and callback
 references. Returned signatures retain only a closed private tombstone, not the
 entire input graph. Public signatures and caller-owned LLVM modules are unchanged.
 
-LLGo PR2694 remains a separate draft at `aa438347ce34`. Its 13 workflows finished
-naturally with six successes and seven failures. The cgo-preamble, Windows UTF-8
+The simple CLI now forwards loaded imported declarations and uses one bounded
+whole-source GoModule fallback only after a context failure. Its complete CLI
+suite passed38 roots and39 children without skips. The new explicit-context
+entry lets this caller dispose its LLVM module and context together, while the
+legacy API retains its existing ownership contract. The rich CLI still needs
+the equivalent selected-source bridge; its actual math/big invocation has a
+retained failing regression, not just an IR-substring fixture.
+
+The strict full-source benchmark at published `a5504a23c768` still fails:
+linux/amd6432/55 passed in280 wall seconds; linux/arm6440/47 in7 seconds.
+All102 files were attempted and30 failed. This includes ordinary declaration,
+frame and private-helper regressions as well as separate runtime contracts;
+do not classify all failures as runtime exclusions or call the performance fixed.
+
+LLGo PR2694 remains a separate draft at `684bb1a0e524`, with an exact public fork
+pin to translator `a5504a23c768`. Its current CI is still running and failing;
+own-job logs on both x86 and ARM64 identify the varlen closure context below.
+Its previous `aa438347ce34` run finished naturally with six successes and seven
+failures; that is historical evidence only. The cgo-preamble, Windows UTF-8
 collector and fork-provenance notice changes are published, but remaining ABI
 failures are not resolved by those changes. Local imported-source handoff and
 typed argument repairs pass the actual AMD64 compare/count/index/indexbyte
