@@ -21,6 +21,14 @@ reviewer approval.
 
 ## Last completed upstream run
 
+The newer contribution head `da6521352eb1` is being checked by
+[run39899167605](https://github.com/xgo-dev/plan9asm/actions/runs/39899167605).
+It has observed failures; its incomplete outcome must not be replaced with the
+older passing run below. The current local batch fixes the raw-shift facts,
+relocation fixture budget, SVE test declaration/argument mismatches and TEST
+flag expectations found in its own logs. Revalidate the integrated snapshot
+and wait for the active run to end naturally before publishing another batch.
+
 [Run39882172980](https://github.com/xgo-dev/plan9asm/actions/runs/39882172980)
 at contribution head451bf650 finished naturally with all325 jobs successful.
 Its terminal state was observed unchanged for more than five minutes. This
@@ -76,11 +84,31 @@ reprobes, broader386 forms, remaining WASM scalar/control/SIMD support, and
 complete-source performance still need work. External inventories stay in the
 compatibility repository; do not restore scanner jobs here.
 
-LLGo PR2694 remains a separate draft. Its published73ad6b209 run failed;
-local cgo-preamble and Windows UTF-8 collector repairs are not yet that run's
-CI successes. Publish a verified translator revision before updating its
-exact fork replacement. Runtime entry/closure contracts remain separate from
-instruction translation evidence.
+The local declaration-bound global-read extension shares the scalar ALU and
+explicit IMUL grammars, retaining exact volatile widths. Executed independent
+value/flag/canary checks found and repaired missing byte/word logical PF writes.
+Same-origin pointer subtraction now also recognizes the original typed FP
+parameter, without granting unrelated pointers numerical or dereference roles.
+The actual xxhash assembly file translates and compiles to an LLVM22 object;
+this is not an ecosystem ledger or original native execution certificate.
+
+Loaded GoModule declarations now use the existing AMD64 typed argument planner
+for virtual aggregate/FP argument leaves. The call-local role supplies no
+native ABI, spill home, closure or pointee permission and expires at return.
+Internal resolution must not repeatedly format all syntax or query all layouts:
+complete source checks remain at call boundaries, including after caller layout
+callbacks. Preserve mutation/revocation and internal-work-count regressions.
+
+LLGo PR2694 remains a separate draft at `aa438347ce34`. Its 13 workflows finished
+naturally with six successes and seven failures. The cgo-preamble, Windows UTF-8
+collector and fork-provenance notice changes are published, but remaining ABI
+failures are not resolved by those changes. Local imported-source handoff and
+typed argument repairs pass the actual AMD64 compare/count/index/indexbyte
+files. Equal still needs the real hidden closure producer/transport contract;
+386 helpers also need distinct incoming-pointer and result-byte roles.
+Publish a verified translator revision before updating the exact fork pin.
+Do not fake closure registers, relabel pointers as integers, or filter failed
+public roots to turn these integration failures into passing tests.
 
 ## Closeout mechanisms
 
