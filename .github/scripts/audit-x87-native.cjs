@@ -8,6 +8,7 @@ const roots = [
   'TestAMD64X87ConditionalMoveRuntimeConditions',
   'TestX86RawX87ClearExceptionRuntimeSemantics',
   'TestX86RawX87SoftwareClearPreservesAllStatusFields',
+  'TestCrossLinuxRuntimeMatrixX86X87ScopedRoundingOriginalGoAndLLVM',
 ];
 const children = [];
 for (const arch of ['amd64', '386']) {
@@ -17,6 +18,13 @@ for (const arch of ['amd64', '386']) {
     for (const optimized of [false, true]) {
       for (const backend of [0, 2]) children.push(`${parent}/${api}/IR_O2=${optimized}/backend-O${backend}`);
     }
+  }
+}
+for (const api of ['text', 'module', 'Go']) {
+  const parent = `${roots[4]}/${api}`;
+  children.push(parent);
+  for (const optimized of [false, true]) {
+    for (const backend of [0, 2]) children.push(`${parent}/IR_O2=${optimized}/backend-O${backend}`);
   }
 }
 

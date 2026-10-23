@@ -97,28 +97,30 @@ func TestCrossLinuxRuntimeMatrixX86X87ScopedRoundingOriginalGoAndLLVM(t *testing
 	}
 	want := fmt.Sprintf("scoped rounding original-Go/LLVM checks=%d\n", len(rows)*4*len(x86ScopedRoundingInputs))
 	for _, api := range []string{"text", "module", "Go"} {
-		ir, err := x86X87InitializedWordAPI(t, source, declarations, "386", execution.triple, api, X87Hardware)
-		if err != nil || ir == "" {
-			t.Fatal("complete original scoped-rounding source cannot translate", api, err)
-		}
-		for _, optimized := range []bool{false, true} {
-			input := ir
-			if optimized {
-				input = x86MulDivRoundOptimize(t, input)
+		t.Run(api, func(t *testing.T) {
+			ir, err := x86X87InitializedWordAPI(t, source, declarations, "386", execution.triple, api, X87Hardware)
+			if err != nil || ir == "" {
+				t.Fatal("complete original scoped-rounding source cannot translate", api, err)
 			}
-			for _, level := range []string{"-O0", "-O2"} {
-				t.Run(fmt.Sprintf("%s/IR_O2=%t/backend%s", api, optimized, level), func(t *testing.T) {
-					executable := execution.compileLLVM(t, "scoped-rounding", input, x86ScopedRoundingNativeDriver(), level)
-					verifySource()
-					verifyRecords()
-					if actual := run(executable, reference); string(actual) != want {
-						t.Fatal("scoped rounding values, CW, SP or complete inventory differ", string(actual))
-					}
-					verifyRecords()
-					verifySource()
-				})
+			for _, optimized := range []bool{false, true} {
+				input := ir
+				if optimized {
+					input = x86MulDivRoundOptimize(t, input)
+				}
+				for _, level := range []string{"-O0", "-O2"} {
+					t.Run(fmt.Sprintf("IR_O2=%t/backend%s", optimized, level), func(t *testing.T) {
+						executable := execution.compileLLVM(t, "scoped-rounding", input, x86ScopedRoundingNativeDriver(), level)
+						verifySource()
+						verifyRecords()
+						if actual := run(executable, reference); string(actual) != want {
+							t.Fatal("scoped rounding values, CW, SP or complete inventory differ", string(actual))
+						}
+						verifyRecords()
+						verifySource()
+					})
+				}
 			}
-		}
+		})
 	}
 	x87IA32RequireNativeHost(t)
 }

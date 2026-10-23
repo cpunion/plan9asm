@@ -1577,7 +1577,7 @@ jobs:
           cache: true
       - uses: ./.github/actions/setup-node22
         timeout-minutes: 10
-      - name: Execute original Go and LLVM x87 integer, conditional and status oracles
+      - name: Execute original Go and LLVM x87 integer, rounding, conditional and status oracles
         run: |
           set -euo pipefail
           mkdir -p _out/native-x87
@@ -1585,6 +1585,7 @@ jobs:
           roots+='|TestAMD64X87ConditionalMoveRuntimeConditions'
           roots+='|TestX86RawX87ClearExceptionRuntimeSemantics'
           roots+='|TestX86RawX87SoftwareClearPreservesAllStatusFields'
+          roots+='|TestCrossLinuxRuntimeMatrixX86X87ScopedRoundingOriginalGoAndLLVM'
           go test -p=1 . -list "^($roots)$" > _out/native-x87/inventory.log
           go test -p=1 . -run "^($roots)$" -count=1 -timeout=5m -json \
             2> _out/native-x87/stderr.log | tee _out/native-x87/raw.jsonl
