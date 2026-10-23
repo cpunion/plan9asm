@@ -17,6 +17,9 @@ func x86LoweredNumericalProducerReplay(fn Func, arch string) error {
 			if ins.x86SourceRaw == nil {
 				continue
 			}
+			if _, known := amd64MaskMoveSpecs[ins.Op]; known {
+				return true // Exact raw KMOV access cannot survive erased or edited producer identity.
+			}
 			if form, known, _ := x86ScalarShiftProperties(ins.Op, ins, arch); known && !form.bmi2 {
 				return true
 			}

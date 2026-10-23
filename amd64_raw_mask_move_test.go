@@ -110,11 +110,92 @@ func TestX86RawMaskMoveCompleteGo127Family(t *testing.T) {
 							if err != nil || ir == "" {
 								t.Fatal("independently initialized original raw mask-move rejected", err)
 							}
-							compileLLVMToObject(t, llc, target.triple, "raw-mask-move.ll", "raw-mask-move.o", ir)
+							for _, body := range []string{ir, x86DwordProductIROptimize(t, ir)} {
+								if arguments != "" {
+									bits := []int{8, 16, 32, 64}[index/5]
+									operation := "load"
+									if strings.Contains(test.name, "k to memory") {
+										operation = "store"
+									}
+									if !strings.Contains(body, fmt.Sprintf("%s volatile i%d", operation, bits)) {
+										t.Fatal("dead raw mask access lost its exact volatile width after optimization", operation, bits)
+									}
+								}
+								compileLLVMToObject(t, llc, target.triple, "raw-mask-move.ll", "raw-mask-move.o", body)
+							}
 						})
 					}
 				})
 			}
 		})
+	}
+}
+
+func TestX86RawMaskMoveWholeProducerIdentity(t *testing.T) {
+	for _, arch := range []string{"amd64", "386"} {
+		word, move := 8, "MOVQ"
+		if arch == "386" {
+			word, move = 4, "MOVL"
+		}
+		for _, store := range []bool{false, true} {
+			code := []byte{0xc4, 0xe1, 0xf8, 0x90, 0x08} // KMOVQ 0(AX),K1.
+			if store {
+				code[3], code[4] = 0x91, 0x00 // KMOVQ K0,0(AX).
+			}
+			source := fmt.Sprintf("TEXT ·Value(SB),4,$0-%d\nMOVL $91,CX\nKMOVD CX,K0\n%s p+0(FP),AX\n%sRET\n",
+				word, move, x86RawDisplacementDirectives(code))
+			check := x86LegacyFloatReplayCheck(t, arch, source, "func Value(p *uint64)")
+			file, err := normalizeX86RawFile(mustParseX86RawReturn(t, source), arch)
+			if err != nil {
+				t.Fatal(err)
+			}
+			original := file.Funcs[0]
+			ordinal := len(original.Instrs) - 2
+			for _, mutation := range []string{
+				"valid", "origin", "missing-replay", "producer", "opcode", "operand", "original-bytes", "snapshot",
+			} {
+				t.Run(fmt.Sprintf("%s/store=%t/%s", arch, store, mutation), func(t *testing.T) {
+					candidate := original
+					candidate.Instrs = cloneX86ReplayInstrs(original.Instrs)
+					ins := &candidate.Instrs[ordinal]
+					switch mutation {
+					case "origin":
+						ins.x86SourceRaw = nil
+					case "missing-replay":
+						candidate.x86RawReplay = nil
+					case "producer":
+						candidate.Instrs[1].Raw += " changed"
+					case "opcode":
+						ins.Op = "KMOVW"
+					case "operand":
+						index := 0
+						if store {
+							index = 1
+						}
+						ins.Args[index].Mem.Off = 1
+					case "original-bytes", "snapshot":
+						replay := *original.x86RawReplay
+						if mutation == "original-bytes" {
+							replay.source = strings.Replace(replay.source, "BYTE $", "BYTE $1+", 1)
+						} else {
+							replay.normalized = cloneX86ReplayInstrs(replay.normalized)
+							replay.normalized[ordinal].Raw += " changed"
+						}
+						candidate.x86RawReplay = &replay
+					}
+					err := check(candidate)
+					if mutation == "valid" {
+						if err != nil {
+							t.Fatal("initialized original mask source lost its native continuation", err)
+						}
+					} else if !errors.Is(err, ErrProbeNeedsContext) {
+						t.Fatal("edited original raw mask source acquired native access", err)
+					}
+					if err := original.x86RawReplay.validate(original, arch); err != nil {
+						t.Fatal("mutation damaged the unchanged original producer", err)
+					}
+				})
+			}
+		}
 	}
 }

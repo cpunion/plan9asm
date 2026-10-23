@@ -121,6 +121,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 	boundRawZeroExtend := false
 	boundRawPackedPrecision := false
 	for _, ins := range fn.Instrs {
+		if x86RawMaskMoveSource(ins, arch) {
+			continue // Exact mask data retains independent input, native-address and width checks.
+		}
 		if x86RawNamedHalfSource(ins, arch) {
 			continue // One whole-producer replay above; no new value, address or entry fact.
 		}
