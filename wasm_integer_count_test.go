@@ -8,6 +8,8 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/xgo-dev/llvm"
 )
 
 func wasmIntegerCountGoNames(t *testing.T) []string {
@@ -35,6 +37,9 @@ func wasmIntegerCountBody(name, reg string) string {
 }
 
 func TestWASMIntegerCountCompleteGoNamespace(t *testing.T) {
+	if len(wasmIntegerCountOps) != len(wasmIntegerCountGoNames(t)) {
+		t.Fatal("typed count family is not the exact Go namespace")
+	}
 	var source strings.Builder
 	sigs := make(map[string]FuncSig)
 	for _, name := range wasmIntegerCountGoNames(t) {
@@ -68,6 +73,36 @@ func TestWASMIntegerCountCompleteGoNamespace(t *testing.T) {
 			}
 			compileLLVMToObject(t, wasmDataTool(t, "llc"), "wasm32-unknown-unknown", "counts.ll", "counts.o", ir)
 		})
+	}
+}
+
+func TestWASMIntegerCountTypedGoEntry(t *testing.T) {
+	var source, declarations strings.Builder
+	declarations.WriteString("package integercount\n")
+	for index, name := range wasmIntegerCountGoNames(t) {
+		fmt.Fprintf(&declarations, "func operation%d()\n", index)
+		fmt.Fprintf(&source, "TEXT ·operation%d(SB),4,$0-0\n%sConst $0\n%s\nDrop\nRET\n", index, name[:3], name)
+	}
+	pkg := mustGoPackage(t, "integercount", declarations.String())
+	context := llvm.NewContext()
+	defer context.Dispose()
+	options := GoModuleOptions{GOOS: "js", GOARCH: "wasm", TargetTriple: "wasm32-unknown-unknown", ResolveSym: testResolveSym("integercount")}
+	translated, err := translateGoModuleInContext(context, pkg, []byte(source.String()), options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ir := translated.Module.String()
+	translated.Module.Dispose()
+	compileLLVMToObject(t, wasmDataTool(t, "llc"), "wasm32-unknown-unknown", "typed-count.ll", "typed-count.o", ir)
+	for _, name := range wasmIntegerCountGoNames(t) {
+		malformed := fmt.Sprintf("TEXT ·operation0(SB),4,$0-0\nRET\n%s $1\nRET\n", name)
+		translated, err := translateGoModuleInContext(context, pkg, []byte(malformed), options)
+		if translated != nil {
+			translated.Module.Dispose()
+		}
+		if err == nil || translated != nil {
+			t.Fatalf("typed Go accepted malformed dead %s: %v", name, err)
+		}
 	}
 }
 

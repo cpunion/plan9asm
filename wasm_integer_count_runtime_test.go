@@ -20,7 +20,7 @@ type wasmIntegerCountRow struct {
 func wasmIntegerCountFixture(t *testing.T) (string, string, string, map[string]FuncSig, []byte, int) {
 	t.Helper()
 	var source, original, goSource strings.Builder
-	goSource.WriteString("package main\nimport (\"fmt\";\"math/bits\")\n")
+	goSource.WriteString("package main\n\nimport \"fmt\"\n\n")
 	var rows []wasmIntegerCountRow
 	sigs := make(map[string]FuncSig)
 	count := 0
@@ -52,13 +52,17 @@ func wasmIntegerCountFixture(t *testing.T) (string, string, string, map[string]F
 		}
 		rows = append(rows, row)
 	}
-	goSource.WriteString("func main(){ count:=0\n")
+	goSource.WriteString("\nfunc main() {\n\tcount := 0\n")
 	for _, row := range rows {
 		for _, sample := range row.Cases {
-			fmt.Fprintf(&goSource, "if got:=%s(%s);got!=%s { panic(fmt.Sprintf(\"%s/%s: %%d\",got)) };count++\n", row.Name, sample[0], sample[1], row.Name, sample[0])
+			fmt.Fprintf(&goSource, "\tif got := %s(%s); got != %s {\n\t\tpanic(fmt.Sprintf(\"%s/%s: %%d\", got))\n\t}\n\tcount++\n",
+				row.Name, sample[0], sample[1], row.Name, sample[0])
 		}
 	}
-	goSource.WriteString("fmt.Printf(\"integer-count PASS %d\\n\",count)\n}\nvar _ = bits.UintSize\n")
+	goSource.WriteString("\tfmt.Printf(\"integer-count PASS %d\\n\", count)\n}\n")
+	if len(rows) != 6 || count != 798 {
+		t.Fatal("complete six-opcode, zero/boundary/every-bit runtime inventory changed", len(rows), count)
+	}
 	data, err := json.Marshal(rows)
 	if err != nil {
 		t.Fatal(err)
