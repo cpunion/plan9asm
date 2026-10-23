@@ -6,6 +6,8 @@ import (
 	"go/ast"
 	"strings"
 	"testing"
+
+	"github.com/xgo-dev/llvm"
 )
 
 const amd64VirtualArgumentsPackage = "example.com/virtualargs"
@@ -175,13 +177,38 @@ func TestGoModuleAMD64VirtualArgumentsNeedActualDeclarations(t *testing.T) {
 
 func TestGoModuleAMD64VirtualArgumentsCannotLendToRawAPI(t *testing.T) {
 	pkg := mustGoPackage(t, amd64VirtualArgumentsPackage, "package virtualargs\nfunc Entry(a []byte) uint64\n")
-	source := "TEXT ·Entry<ABIInternal>(SB),4,$0\nMOVQ BX,AX\nRET\n"
+	// Raw APIs still accept their existing low-level register model. This
+	// independent scalar/SIMD observation invokes its complete byte proof,
+	// where a grouped shape alone cannot initialize BX as a slice length.
+	source := "TEXT ·Entry<ABIInternal>(SB),4,$0\nMOVQ BX,AX\nMOVQ AX,X15\nMOVQ X15,AX\nRET\n"
 	for _, api := range []string{"text", "module"} {
 		t.Run(api, func(t *testing.T) {
 			ir, err := x86ScalarFPBitViewPackageAPI(t, source, pkg, "amd64", "x86_64-unknown-linux-gnu", api)
 			amd64VirtualArgumentsRequireContext(t, ir, err)
 		})
 	}
+	t.Run("returned-signatures", func(t *testing.T) {
+		ctx := llvm.NewContext()
+		defer ctx.Dispose()
+		resolve := testResolveSym(pkg.Path)
+		translated, err := translateGoModuleInContext(ctx, pkg, []byte(source), GoModuleOptions{
+			GOARCH: "amd64", TargetTriple: "x86_64-unknown-linux-gnu", SourcePreprocessed: true, ResolveSym: resolve,
+		})
+		if err != nil || translated == nil {
+			t.Fatal("complete GoModule source failed before the borrowing control", err)
+		}
+		defer translated.Module.Dispose()
+		if err := llvm.VerifyModule(translated.Module, llvm.ReturnStatusAction); err != nil {
+			t.Fatal("invalid virtual argument module", err)
+		}
+		file, err := Parse(ArchAMD64, source)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ir, err := Translate(file, Options{Goarch: "amd64", TargetTriple: "x86_64-unknown-linux-gnu",
+			ResolveSym: resolve, Sigs: translated.Signatures})
+		amd64VirtualArgumentsRequireContext(t, ir, err)
+	})
 }
 
 func TestGoModuleAMD64VirtualArgumentsRecheckCallbacks(t *testing.T) {

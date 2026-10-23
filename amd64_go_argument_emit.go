@@ -7,6 +7,11 @@ import (
 
 func (c *amd64Ctx) emitAMD64GoArguments() error {
 	entry := c.sig.amd64GoArguments
+	if entry != nil && entry.virtual != nil {
+		if err := c.scalarFPResultInitialized(); err != nil {
+			return err
+		}
+	}
 	if entry == nil || !entry.valid(c.fpScalarSource, c.sig, c.goarch) || !c.fpScalarChecked || c.fpScalarCheckErr != nil {
 		return amd64GoArgumentContext("entry emission lacks its complete live source-byte proof")
 	}

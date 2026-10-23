@@ -7,12 +7,14 @@ import (
 	"reflect"
 )
 
-// Only the existing complete numerical source binder creates this private
-// token. It authenticates declared argument carriers, not physical stack,
-// closure, caller, call target, pointer extent or result transport permissions.
+// Only a complete numerical source binder or the call-local GoModule issuer
+// creates this private token. It authenticates declared argument carriers,
+// not physical stack, closure, caller, call target, pointer extent or result
+// transport permissions.
 type amd64GoArgumentBinding struct {
 	identity    *amd64GoArgumentBinding
 	owner       *GoX86NumericalReadBinding
+	virtual     *amd64GoVirtualArguments
 	declaration *types.Func
 	symbol      string
 	signature   FuncSig
@@ -40,6 +42,14 @@ func (entry *amd64GoArgumentBinding) digest() ([32]byte, error) {
 }
 
 func (entry *amd64GoArgumentBinding) valid(fn Func, sig FuncSig, arch string) bool {
+	if entry != nil && entry.virtual != nil {
+		if entry.identity != entry || entry.owner != nil || entry.declaration == nil || entry.plan == nil || entry.virtual.entries[sig.Name] != entry ||
+			entry.virtual.verify() != nil || arch != "amd64" || fn.Sym != entry.symbol || fn.FrameSize != 0 ||
+			len(fn.X86RawText) != 0 || fn.x86FixedLocal != nil || fn.x86SourceStack != nil {
+			return false
+		}
+		return entry.matches(sig)
+	}
 	if entry == nil || entry.identity != entry || entry.owner == nil || arch != "amd64" || fn.Sym != entry.symbol ||
 		entry.owner.originalBinding != entry.owner || entry.owner.source == nil || entry.owner.source != entry.owner.originalSource ||
 		entry.declaration == nil || entry.plan == nil || entry.owner.originalTypes == nil ||
@@ -54,6 +64,10 @@ func (entry *amd64GoArgumentBinding) valid(fn Func, sig FuncSig, arch string) bo
 	if !ready || fn.FrameSize != 0 || len(fn.X86RawText) != 0 || fn.x86FixedLocal != nil || fn.x86SourceStack != nil {
 		return false
 	}
+	return entry.matches(sig)
+}
+
+func (entry *amd64GoArgumentBinding) matches(sig FuncSig) bool {
 	// Feature references are rendered after the complete public options check.
 	// They are not part of a language argument's physical carrier assignment.
 	shape := numericalSignatureShape(sig)
@@ -75,8 +89,12 @@ func (entry *amd64GoArgumentBinding) valid(fn Func, sig FuncSig, arch string) bo
 		}
 	}
 	digest, err := entry.digest()
+	if entry.virtual != nil {
+		return err == nil && digest == entry.seal && entry.virtual.verify() == nil
+	}
+	source := entry.owner.source
 	source.mu.Lock()
-	ready = source.identity == source && source.ready && !source.revoked.Load()
+	ready := source.identity == source && source.ready && !source.revoked.Load()
 	source.mu.Unlock()
 	return err == nil && digest == entry.seal && ready
 }

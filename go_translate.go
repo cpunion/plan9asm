@@ -255,6 +255,25 @@ func translateGoModuleInContext(ctx llvm.Context, pkg GoPackage, src []byte, opt
 	if err != nil {
 		return nil, fmt.Errorf("%s: parse %s: %w", pkgPath, asmName, err)
 	}
+	virtualPackage := pkg
+	virtualPackage.Path = pkgPath
+	virtualArguments, err := bindAMD64GoVirtualArguments(virtualPackage, file, originalSource, originalSourceDigest, opt, resolve)
+	if err != nil {
+		return nil, err
+	}
+	if virtualArguments != nil {
+		resolve = virtualArguments.resolveSymbol
+		defer func() {
+			final := virtualArguments.verify()
+			virtualArguments.active = false
+			if final != nil {
+				if result != nil && !result.Module.IsNil() {
+					result.Module.Dispose()
+				}
+				result, resultErr = nil, errors.Join(resultErr, final)
+			}
+		}()
+	}
 	var readOnlyStorage *goReadOnlyStorage
 	if opt.NumericalReads == nil && opt.X86TLSMoves == nil && opt.ARM64ByteCarrierSource == nil {
 		storagePackage := pkg
@@ -289,10 +308,23 @@ func translateGoModuleInContext(ctx llvm.Context, pkg GoPackage, src []byte, opt
 	if err != nil {
 		return nil, fmt.Errorf("%s: private source contract %s: %w", pkgPath, asmName, err)
 	}
+	var virtualSignatures map[string]FuncSig
+	if virtualArguments != nil {
+		virtualSignatures, err = goSigsForAsmFile(pkg, file, resolve, opt.GOARCH, opt.Sizes, opt.FrameSizes, opt.ManualSig)
+		if err != nil {
+			return nil, err
+		}
+		if err := virtualArguments.attach(virtualSignatures); err != nil {
+			return nil, err
+		}
+	}
 	var registerBoolCalls *x86ABI0BoolCallSource
 	if (opt.GOARCH == "amd64" || opt.GOARCH == "386") && x86DirectTailSourceNeeded(file) {
 		completeSigs, err := goSigsForAsmFile(pkg, file, resolve, opt.GOARCH, opt.Sizes, opt.FrameSizes, opt.ManualSig)
 		if err != nil {
+			return nil, err
+		}
+		if err := virtualArguments.attach(completeSigs); err != nil {
 			return nil, err
 		}
 		if binding := opt.NumericalReads; binding != nil {
@@ -319,10 +351,13 @@ func translateGoModuleInContext(ctx llvm.Context, pkg GoPackage, src []byte, opt
 			return nil, err
 		}
 	}
+	if err := virtualArguments.audit(file, virtualSignatures, opt, resolve, readOnlyStorage); err != nil {
+		return nil, err
+	}
 	completeFile := file
 	potentialBoolCalls := x86ABI0BoolCallsNeeded(completeFile, opt.GOARCH)
 	boolCallSource := false
-	if file.x86DirectTails != nil || potentialBoolCalls {
+	if file.x86DirectTails != nil || potentialBoolCalls || virtualArguments != nil {
 		filtered := *file
 		file = &filtered // KeepFunc cannot crop the complete graph origin/signatures.
 	}
@@ -338,7 +373,7 @@ func translateGoModuleInContext(ctx llvm.Context, pkg GoPackage, src []byte, opt
 	}
 
 	signatureFile := file
-	if file.x86DirectTails != nil || registerBoolCalls != nil {
+	if file.x86DirectTails != nil || registerBoolCalls != nil || virtualArguments != nil {
 		signatureFile = completeFile // Recheck every root after caller callbacks.
 	}
 	sigs, err := goSigsForAsmFile(pkg, signatureFile, resolve, opt.GOARCH, opt.Sizes, opt.FrameSizes, opt.ManualSig)
@@ -371,6 +406,9 @@ func translateGoModuleInContext(ctx llvm.Context, pkg GoPackage, src []byte, opt
 		if err != nil {
 			return nil, err
 		}
+	}
+	if err := virtualArguments.attach(sigs); err != nil {
+		return nil, err
 	}
 	if graph := file.x86DirectTails; graph != nil {
 		request, signatures := file, sigs
