@@ -226,9 +226,9 @@ func goReadOnlyTypedSyntax(pkg GoPackage, syntax []string, sizes types.Sizes, ob
 		}
 		for _, comments := range file.Comments {
 			for _, comment := range comments.List {
-				if strings.HasPrefix(comment.Text, "//line ") {
-					return nil, goReadOnlyContext("aliased or source-remapped declarations need their own binding")
-				}
+				// Line directives change diagnostic positions, not package or
+				// linker identity. Retain them in the complete syntax snapshot
+				// and parser/type check; linkname aliases remain separate below.
 				words := strings.Fields(comment.Text)
 				if len(words) >= 2 && words[0] == "//go:linkname" {
 					if objects[words[1]].variable != nil {
