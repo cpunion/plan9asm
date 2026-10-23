@@ -17,4 +17,5 @@ const x86IndependentResultBasePayload = 16 + // GP initialized-byte masks
 	3 + // Predicate fact
 	1 + // Direction flag
 	1 + // Native string counter
-	2 // Adjacent LEA register identity and byte mask, not pointer or NUM facts
+	2 + // Adjacent LEA register identity and byte mask, not pointer or NUM facts
+	12 // Adjacent shift: eight input-byte mask bytes and four typed byte fields

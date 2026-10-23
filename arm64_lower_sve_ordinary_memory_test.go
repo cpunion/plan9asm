@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+
+	"github.com/xgo-dev/llvm"
 )
 
 func arm64SVEOrdinaryMemoryCompleteGo127Forms() string {
@@ -275,7 +277,7 @@ func TestTranslateARM64RawSVEContiguousByteMemoryCompleteFamily(t *testing.T) {
 		"aarch64-pc-windows-msvc",
 	} {
 		t.Run(triple, func(t *testing.T) {
-			ll, err := Translate(file, Options{
+			module, err := TranslateModule(file, Options{
 				TargetTriple: triple,
 				Goarch:       "arm64",
 				Sigs: map[string]FuncSig{
@@ -285,15 +287,43 @@ func TestTranslateARM64RawSVEContiguousByteMemoryCompleteFamily(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			for _, want := range []string{
-				`"target-features"="+sve"`,
-				"@llvm.masked.load.nxv",
-				"@llvm.aarch64.sve.ld1.nxv",
-				"@llvm.aarch64.sve.st1.nxv",
-			} {
-				if !strings.Contains(ll, want) {
-					t.Fatalf("%s raw byte memory IR omitted %q", triple, want)
+			defer module.Dispose()
+			ll := module.String()
+			if !strings.Contains(ll, `"target-features"="+sve"`) {
+				t.Fatal("raw byte memory lost its required SVE feature")
+			}
+			// Count real call instructions, not declarations in the prelude.
+			// The raw fixture owns four loads/stores per arrangement plus its
+			// three observed words: one B load, one B store and one H store.
+			wantCalls := map[string]int{
+				"llvm.aarch64.sve.ld1.nxv16i8": 5,
+				"llvm.aarch64.sve.ld1.nxv8i8":  4,
+				"llvm.aarch64.sve.ld1.nxv4i8":  4,
+				"llvm.aarch64.sve.ld1.nxv2i8":  4,
+				"llvm.aarch64.sve.st1.nxv16i8": 5,
+				"llvm.aarch64.sve.st1.nxv8i8":  5,
+				"llvm.aarch64.sve.st1.nxv4i8":  4,
+				"llvm.aarch64.sve.st1.nxv2i8":  4,
+			}
+			calls := make(map[string]int)
+			function := module.NamedFunction("rawSVEContiguousByteMemory")
+			if function.IsNil() || function.FirstBasicBlock().IsNil() {
+				t.Fatal("complete raw byte memory function disappeared")
+			}
+			for block := function.FirstBasicBlock(); !block.IsNil(); block = llvm.NextBasicBlock(block) {
+				for ins := block.FirstInstruction(); !ins.IsNil(); ins = llvm.NextInstruction(ins) {
+					if ins.InstructionOpcode() == llvm.Call {
+						calls[ins.CalledValue().Name()]++
+					}
 				}
+			}
+			for name, count := range wantCalls {
+				if calls[name] != count {
+					t.Errorf("%s: got %d actual calls, want %d", name, calls[name], count)
+				}
+			}
+			if strings.Contains(ll, "@llvm.masked.load.") {
+				t.Error("ordinary SVE byte loads retained an unused generic masked-load declaration")
 			}
 			llc := findLLVM22Tool("llc")
 			if llc == "" {
