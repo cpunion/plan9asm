@@ -1002,10 +1002,11 @@ func (c *arm64Ctx) lowerArith(op Op, ins Instr) (ok bool, terminated bool, err e
 		return true, false, c.storeReg(dstReg, "%"+t)
 
 	case "EXTR", "EXTRW":
-		// EXTR shift, hi, lo, dst
+		// Plan 9: EXTR $shift, lo, hi, dst. Arm's encoded Rn is the
+		// third operand (hi); Rm is the second (lo). Extract from hi:lo.
 		if strings.ToUpper(string(ins.Op)) != string(op) || len(ins.Args) != 4 ||
 			ins.Args[0].Kind != OpImm || ins.Args[0].ImmRaw != "" {
-			return true, false, fmt.Errorf("arm64 %s expects $shift, hi, lo, dstReg: %q", op, ins.Raw)
+			return true, false, fmt.Errorf("arm64 %s expects $shift, lo, hi, dstReg: %q", op, ins.Raw)
 		}
 		for _, operand := range ins.Args[1:] {
 			if operand.Kind != OpReg || !isARM64GeneralOrZeroReg(operand.Reg) {
@@ -1021,11 +1022,11 @@ func (c *arm64Ctx) lowerArith(op Op, ins Instr) (ok bool, terminated bool, err e
 			return true, false, fmt.Errorf("arm64 %s shift must be in [0,%d): %q", op, width, ins.Raw)
 		}
 		if op == "EXTRW" {
-			hi, err := c.eval32(ins.Args[1])
+			lo, err := c.eval32(ins.Args[1])
 			if err != nil {
 				return true, false, err
 			}
-			lo, err := c.eval32(ins.Args[2])
+			hi, err := c.eval32(ins.Args[2])
 			if err != nil {
 				return true, false, err
 			}
@@ -1043,11 +1044,11 @@ func (c *arm64Ctx) lowerArith(op Op, ins Instr) (ok bool, terminated bool, err e
 			fmt.Fprintf(c.b, "  %%%s = zext i32 %s to i64\n", wide, result)
 			return true, false, c.storeReg(ins.Args[3].Reg, "%"+wide)
 		}
-		hi, err := c.eval64(ins.Args[1], false)
+		lo, err := c.eval64(ins.Args[1], false)
 		if err != nil {
 			return true, false, err
 		}
-		lo, err := c.eval64(ins.Args[2], false)
+		hi, err := c.eval64(ins.Args[2], false)
 		if err != nil {
 			return true, false, err
 		}
