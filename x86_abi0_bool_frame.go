@@ -184,6 +184,7 @@ func x86ABI0BoolFrameTransfer(ordinal int, original Instr, state *x86ResultState
 	}
 	local := original
 	local.Args = append([]Operand(nil), original.Args...)
+	projected := false
 	for index, arg := range ins.Args {
 		if arg.Kind == OpMem {
 			value := alias(Operand{Kind: OpReg, Reg: arg.Mem.Base})
@@ -235,13 +236,27 @@ func x86ABI0BoolFrameTransfer(ordinal int, original Instr, state *x86ResultState
 				return false
 			}
 			local.Args[index] = Operand{Kind: OpFP, FPOffset: value.offset}
+			projected = true
 		}
 		if alias(arg).valid && !x86ResultSlotOverwrite(ins, index, arch) {
 			return false // No numerical observation, address return or escape.
 		}
 	}
 	beforeFP, beforeGP := append([]bool(nil), state.canonicalFP...), state.canonicalGP
+	var unprojected x86ResultState
+	if state.shapeOnly && projected {
+		unprojected = state.clone()
+	}
 	if !x86ABI0BoolFrameNUMTransfer(ordinal, local, state, owned, resultOffset, arch, transfer) {
+		// A shape-only unknown base can be a logical alias or an incoming
+		// pointer. If no logical slot represents its width, validate the
+		// original instruction through the supplied transfer instead. This
+		// disposable state never reaches a CFG edge; an actual alias still
+		// requires its exact FP projection and cannot take this alternative.
+		if unprojected.shapeOnly && transfer(ordinal, original, &unprojected, owned, resultOffset, arch) {
+			*state = unprojected
+			return true
+		}
 		return false
 	}
 	state.canonicalFP, state.canonicalGP = x86ABI0CanonicalBytesAfter(local, beforeFP, beforeGP, arch)
