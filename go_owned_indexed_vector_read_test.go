@@ -71,6 +71,47 @@ func ownedIndexedVectorSource(t *testing.T, rows []ordinaryGlobalVectorCase, arc
 	return source.String(), declarations.String()
 }
 
+func TestGoModuleOwnedReadonlyIndexedVectorSourceFacts(t *testing.T) {
+	for _, arch := range []string{"386", "amd64"} {
+		t.Run(arch, func(t *testing.T) {
+			source, _ := ownedIndexedVectorSource(t,
+				[]ordinaryGlobalVectorCase{{"ANDNPD ·words+16(SB),X2", "X", 2}}, arch)
+			file, err := Parse(ArchAMD64, source)
+			if err != nil {
+				t.Fatal(err)
+			}
+			resolve := testResolveSym(ordinaryGlobalReadPackage)
+			values := x86LoweredStaticAddressValues(file, resolve, nil, arch)
+			if values == nil || values.numericLiterals["numericBytes<>"] != 256 {
+				t.Fatal("complete private RODATA directory missing", values)
+			}
+			typ := I64
+			if arch == "386" {
+				typ = I32
+			}
+			word := x86ResultPointerWord(arch)
+			sig := FuncSig{Name: resolve(file.Funcs[0].Sym), Args: []LLVMType{typ}, Ret: typ,
+				Frame: FrameLayout{
+					Params:  []FrameSlot{{Offset: 0, Type: typ, Index: 0, Field: -1}},
+					Results: []FrameSlot{{Offset: word, Type: typ, Index: 0, Field: -1}},
+				}}
+			facts, err := proveX86SDKLiteralAccesses(file.Funcs[0], sig, arch, values.numericLiterals)
+			if err != nil {
+				t.Fatal("bounded typed source lost its range proof", err)
+			}
+			if len(facts) != 2 || !facts[0].Address || facts[1].Address ||
+				facts[1].Width != 16 || facts[1].Minimum != 0 || facts[1].Maximum != 240 {
+				t.Fatal("complete exact source range changed", facts)
+			}
+			c := &amd64Ctx{fpStaticAddressValues: values}
+			reads := c.ownedIndexedVectorReads(file.Funcs[0], sig, arch)
+			if len(reads) != 1 {
+				t.Fatal("proved exact indexed operand was not handed off", facts, reads)
+			}
+		})
+	}
+}
+
 func TestGoModuleOwnedReadonlyIndexedVectorCompleteFamilies(t *testing.T) {
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
