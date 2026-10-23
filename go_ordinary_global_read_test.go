@@ -31,7 +31,7 @@ done:
 func ordinaryGlobalReadRequest(t *testing.T, pkg GoPackage, assembly []byte, arch, triple, api string) (string, error) {
 	t.Helper()
 	options := GoModuleOptions{GOOS: "linux", GOARCH: arch, Sizes: types.SizesFor("gc", arch),
-		TargetTriple: triple, ResolveSym: testResolveSym(ordinaryGlobalReadPackage)}
+		TargetTriple: triple, ResolveSym: testResolveSym(pkg.Path)}
 	var translated *GoModuleTranslation
 	var err error
 	if api == "public" {
@@ -163,5 +163,76 @@ func TestGoModuleOrdinaryGlobalReadDoesNotLendToRawAPI(t *testing.T) {
 				t.Fatalf("raw API borrowed a GoModule storage declaration: output=%t err=%v", ir != "", err)
 			}
 		})
+	}
+}
+
+func TestGoModuleOrdinaryGlobalReadKeepsLogicalNamespaceSeparate(t *testing.T) {
+	for _, candidate := range []bool{false, true} {
+		for _, api := range []string{"public", "owned-context"} {
+			name := "no-global-candidate"
+			assembly := []byte("TEXT ·view(SB),4,$0-4\nMOVL $7,AX\nMOVL AX,ret+0(FP)\nRET\n")
+			if candidate {
+				name = "typed-global-candidate"
+				assembly = ordinaryGlobalReadAssembly("", "CMPB ·hasADX(SB),$0\n")
+			}
+			t.Run(name+"/"+api, func(t *testing.T) {
+				pkg := mustGoPackage(t, ordinaryGlobalReadPackage,
+					"package ordinaryglobals\nvar hasADX bool\nfunc view() uint32\n")
+				pkg.Path = "main" // LLGo's linked namespace, not Types.Path().
+				ir, err := ordinaryGlobalReadRequest(t, pkg, assembly, "amd64", "x86_64-unknown-linux-gnu", api)
+				if err != nil || ir == "" || !strings.Contains(ir, "@main.view(") {
+					t.Fatalf("typed package ownership was confused with its linked namespace: output=%t err=%v", ir != "", err)
+				}
+			})
+		}
+	}
+}
+
+func TestGoModuleOrdinaryGlobalReadCostQueryPreservesOtherOwners(t *testing.T) {
+	for _, row := range []struct{ name, declarations, source string }{
+		{"ordinary-volatile-mov", "var cell uint64\nfunc view()",
+			"TEXT ·view(SB),4,$0-0\nMOVQ ·cell(SB),AX\nRET\n"},
+		{"emitted-globl", "var cell uint64\nfunc view() uint32",
+			"GLOBL ·cell(SB),8,$8\n" + string(ordinaryGlobalReadAssembly("", "CMPQ ·cell(SB),$0\n"))},
+		{"emitted-data", "var cell uint64\nfunc view() uint32",
+			"DATA ·cell(SB)/8,$7\nGLOBL ·cell(SB),8,$8\n" + string(ordinaryGlobalReadAssembly("", "CMPQ ·cell(SB),$0\n"))},
+	} {
+		for _, api := range []string{"public", "owned-context"} {
+			t.Run(row.name+"/"+api, func(t *testing.T) {
+				pkg := mustGoPackage(t, ordinaryGlobalReadPackage, "package ordinaryglobals\n"+row.declarations+"\n")
+				ir, err := ordinaryGlobalReadRequest(t, pkg, []byte(row.source), "amd64", "x86_64-unknown-linux-gnu", api)
+				if err != nil || ir == "" {
+					t.Fatalf("a noncandidate or existing storage owner was intercepted: output=%t err=%v", ir != "", err)
+				}
+			})
+		}
+	}
+}
+
+type ordinaryGlobalReadCountingSizes struct {
+	types.Sizes
+	visits int
+}
+
+func (sizes *ordinaryGlobalReadCountingSizes) Sizeof(typ types.Type) int64 {
+	sizes.visits++
+	if sizes.visits > 256 {
+		panic("test stopped an unbounded layout traversal")
+	}
+	return sizes.Sizes.Sizeof(typ)
+}
+
+func TestGoModuleOrdinaryGlobalReadZeroWidthLayoutIsBounded(t *testing.T) {
+	// The physical object is one byte. Traversing each zero-width element
+	// would take 2^40 visits; the counting Sizes stops the old implementation
+	// deterministically without turning this regression into a timeout test.
+	typ := types.NewStruct([]*types.Var{
+		types.NewVar(0, nil, "Z", types.NewArray(types.NewArray(types.NewStruct(nil, nil), 1<<20), 1<<20)),
+		types.NewVar(0, nil, "Flag", types.Typ[types.Bool]),
+	}, nil)
+	sizes := &ordinaryGlobalReadCountingSizes{Sizes: types.SizesFor("gc", "amd64")}
+	size, spans, _, err := goReadOnlyLayout(typ, sizes)
+	if err != nil || size != 1 || len(spans) != 1 || spans[0] != [2]int64{0, 1} || sizes.visits > 128 {
+		t.Fatalf("zero-width repetitions were expanded: size=%d spans=%v visits=%d err=%v", size, spans, sizes.visits, err)
 	}
 }
