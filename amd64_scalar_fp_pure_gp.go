@@ -19,6 +19,31 @@ func x86LoweredPureGPUnknownTransfer(ins Instr, state *x86ResultState, arch stri
 			return false
 		}
 	}
+	if form, known, err := x86ScalarCompareProperties(ins.Op, ins, arch); known {
+		if err != nil || !form.test || form.memory >= 0 {
+			return false
+		}
+		unknown := false
+		for _, operand := range form.args {
+			if operand.Kind == OpImm {
+				continue
+			}
+			index, mask, valid := x86ResultGP(operand.Reg, int64(form.bits/8), arch)
+			if operand.Kind != OpReg || !valid || state.pointerGP[index] {
+				return false
+			}
+			unknown = unknown || state.gp[index]&mask != mask
+		}
+		if !unknown {
+			return false // Preserve the ordinary fully numerical transfer.
+		}
+		// The paired TEST emitter always clears CF/OF, independently of
+		// its scratch bits. ZF/SF/PF still depend on those bits, AF is
+		// undefined, and no numerical register/pointer fact is produced.
+		// Memory is excluded: its faulting read must never be skipped.
+		state.flags = x86ByteFlagCF | x86ByteFlagOF
+		return true
+	}
 
 	// Keep the nontrapping domain explicit. Future additions to the general
 	// effect directory (e.g. division or a native effect) cannot opt in merely
