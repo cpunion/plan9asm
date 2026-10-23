@@ -1,9 +1,29 @@
 package plan9asm
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 )
+
+func TestLLVMTextGlobalNames(t *testing.T) {
+	const text = `; @not.a.use()
+@"global;name" = constant [14 x i8] c"@not.a.use()\00"
+define void @body() {
+  %x = call i32 @llvm.ctlz.i32(i32 7, i1 false)
+  %y = call i64 @"llvm.bitreverse\2Ei64"(i64 7)
+  call void @prefix.longer()
+  ret void ; @also.not.a.use
+}
+`
+	want := map[string]bool{
+		"global;name": true, "body": true, "llvm.ctlz.i32": true,
+		"llvm.bitreverse.i64": true, "prefix.longer": true,
+	}
+	if got := llvmTextGlobalNames(text); !reflect.DeepEqual(got, want) {
+		t.Fatalf("LLVM global names = %v, want %v", got, want)
+	}
+}
 
 func TestARM64PreludeContainsOnlyUsedDeclarations(t *testing.T) {
 	for _, row := range []struct {

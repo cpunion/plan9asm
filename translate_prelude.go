@@ -10,7 +10,7 @@ func emitArchPrelude(b *strings.Builder, file *File, resolve func(string) string
 	case ArchARM:
 		emitARMPrelude(b)
 	case ArchARM64:
-		emitARM64Prelude(b)
+		// Emit only referenced declarations after lowering the complete body.
 	case ArchAMD64:
 		// Keep historical gating to avoid injecting x86-only prelude when
 		// parsing x86 syntax for unrelated targets in tests.

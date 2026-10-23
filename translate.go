@@ -558,6 +558,9 @@ func translateIRText(file *File, opt Options) (resultText string, result error) 
 	if fileUsesX86NonTemporalMetadata(file) {
 		b.WriteString("!0 = !{i32 1}\n\n")
 	}
+	if file.Arch == ArchARM64 {
+		emitUsedARM64Prelude(&b)
+	}
 	return b.String(), nil
 }
 
