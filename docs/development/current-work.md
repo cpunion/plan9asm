@@ -161,18 +161,29 @@ The latter exposed and fixed an incorrect raw-TEXT/public-metadata count check:
 validated private tails are consumed before public entries are returned. Exact
 defined global ELF function symbols, not textual IR quoting or internal helper
 counts, now check the public inventory. It adds no Go query or AST cache;
-unrelated native/source roles retain their existing route. Its broader suite
-and full-source performance must still be checked after integration.
+unrelated native/source roles retain their existing route. The integrated full
+rich-CLI suite at `5a8bbb8c8` failed after1035 seconds:387 roots passed and one
+root failed, with no skips. Its two CRC32 negative checks now unexpectedly
+succeed through the ordinary declaration route. Determine whether those inputs
+are legitimate ordinary reads or a mismatched selection before changing the
+assertions; retain the failed complete-suite receipt.
 
 The strict full-source benchmark at published `a5504a23c768` still fails:
 linux/amd6432/55 passed in280 wall seconds; linux/arm6440/47 in7 seconds.
-All102 files were attempted and30 failed. This includes ordinary declaration,
-frame and private-helper regressions as well as separate runtime contracts;
-do not classify all failures as runtime exclusions or call the performance fixed.
+All102 files were attempted and30 failed. The integrated rerun at `5a8bbb8c8`
+passed33/55 amd64 files in64 wall seconds and40/47 arm64 files in5 seconds.
+All102 files were attempted,29 failed and none were N/A. The math/big file now
+passes and the four bytealg private-tail sources retain their original success.
+This is an improvement, not a passing benchmark or a claim to main's speed.
+Five ordinary crypto failures need physical private-frame storage, byte
+initialization and alias handling; they are not runtime-entry exclusions.
+Other private-helper and runtime contracts remain separate failed observations.
 
 LLGo PR2694 remains a separate draft at `684bb1a0e524`, with an exact public fork
-pin to translator `a5504a23c768`. Its current CI is still running and failing;
-own-job logs on both x86 and ARM64 identify the varlen closure context below.
+pin to translator `a5504a23c768`. Its latest106 visible checks are terminal:
+42 failed, including41 own-log varlen closure failures and one lost runner;
+three cancelled and11 skipped checks are not successes. The separately reviewed
+runtime-owner candidate still needs actual compilation and execution checks.
 Its previous `aa438347ce34` run finished naturally with six successes and seven
 failures; that is historical evidence only. The cgo-preamble, Windows UTF-8
 collector and fork-provenance notice changes are published, but remaining ABI
