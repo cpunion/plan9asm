@@ -30,6 +30,7 @@ func TestX86DirectionOriginalSDKIndexByte386ThreeAPIsCompleteSource(t *testing.T
 	if err != nil || len(file.Funcs) != 2 {
 		t.Fatal("complete original SDK member changed", err)
 	}
+	var entries []string
 	for _, function := range file.Funcs {
 		branches := 0
 		for _, instruction := range function.Instrs {
@@ -43,7 +44,10 @@ func TestX86DirectionOriginalSDKIndexByte386ThreeAPIsCompleteSource(t *testing.T
 		if branches != 1 {
 			t.Fatal("complete original TEXT lost its PC-relative conditional branch", function.Sym)
 		}
-		name := strings.TrimPrefix(function.Sym, "·")
+		// This is the exact source resolver used by the three-API fixture,
+		// not the package-qualified resolver of importedGlobalReadRequest.
+		name := strings.TrimPrefix(goStripABISuffix(function.Sym), "·")
+		entries = append(entries, name)
 		declaration := pkg.Types.Scope().Lookup(name)
 		if declaration == nil {
 			t.Fatal("complete original declaration disappeared", name)
@@ -68,11 +72,9 @@ func TestX86DirectionOriginalSDKIndexByte386ThreeAPIsCompleteSource(t *testing.T
 			if err != nil || ir == "" {
 				t.Fatal("complete source lost its paired empty-repeat result proof", err)
 			}
-			for _, name := range []string{"IndexByte", "IndexByteString"} {
-				if !strings.Contains(ir, "internal/bytealg."+name) {
-					t.Fatal("complete original source lost its public entry", name)
-				}
-			}
+			// LLVM's symbol index checks both actual non-declaration bodies,
+			// including nonempty basic blocks, independent of quote rendering.
+			x86StringMemoryFunctions(t, ir, entries)
 		})
 	}
 }
