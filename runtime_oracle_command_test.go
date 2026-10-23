@@ -213,6 +213,8 @@ func TestRuntimeOracleCommandConsumersRetainOwnedExecution(t *testing.T) {
 		"x86_direct_tail_followup_runtime_linux_amd64_test.go",
 		"x86_continuation_runtime_linux_amd64_test.go",
 		"x86_abi0_bool_runtime_linux_amd64_test.go",
+		"x86_custom_helper_pointer_runtime_linux_amd64_test.go",
+		"x86_custom_helper_pointer_runtime_fixture_test.go",
 		"x86_direct_tail_object_test.go",
 		"x86_direct_tail_followup_object_test.go",
 		"amd64_tls_move_source_banks_test.go",
