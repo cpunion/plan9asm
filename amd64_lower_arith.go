@@ -821,6 +821,7 @@ func (c *amd64Ctx) lowerArith(op Op, ins Instr) (ok bool, terminated bool, err e
 		sf := c.newTmp()
 		fmt.Fprintf(c.b, "  %%%s = icmp slt i8 %%%s, 0\n", sf, x)
 		fmt.Fprintf(c.b, "  store i1 %%%s, ptr %s\n", sf, c.flagsSltSlot)
+		c.setParityFlagSized(I8, "%"+x)
 		return true, false, nil
 
 	case "ANDW", "ORW", "XORW", "ADDW", "SUBW":
@@ -875,6 +876,7 @@ func (c *amd64Ctx) lowerArith(op Op, ins Instr) (ok bool, terminated bool, err e
 			fmt.Fprintf(c.b, "  store i1 false, ptr %s\n", c.flagsCFSlot)
 		}
 		fmt.Fprintf(c.b, "  store i1 false, ptr %s\n", c.flagsOFSlot)
+		c.setParityFlagSized(I16, "%"+out)
 		return true, false, nil
 
 	case "INCQ", "DECQ":
