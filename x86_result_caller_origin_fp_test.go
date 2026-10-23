@@ -53,6 +53,7 @@ func TestX86ResultCallerAddressDifferenceFPBoundary(t *testing.T) {
 		"unbound field":           "SUBQ absent+32(FP),SI",
 		"partial destination":     "MOVB $0,SI\nSUBQ p+0(FP),SI",
 		"result is not a pointer": "SUBQ p+0(FP),SI\nMOVQ (SI),SI",
+		"origin is consumed":      "SUBQ p+0(FP),SI\nSUBQ p+0(FP),SI",
 	} {
 		t.Run(name, func(t *testing.T) {
 			declaration := "func Value(p,q *byte,n uint64) uint64"
