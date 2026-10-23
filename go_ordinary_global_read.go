@@ -18,20 +18,31 @@ import (
 // variables. It is deliberately separate from emitted DATA, writable objects,
 // address values and the SDK's native compiler-record/source capabilities.
 type goReadOnlyStorage struct {
-	pkg      GoPackage
-	sizes    types.Sizes
-	file     *File
-	original [32]byte
-	syntax   []string
-	objects  map[string]goReadOnlyObject
-	symbols  map[string]string
-	resolve  func(string) string
-	failure  error
+	pkg          GoPackage
+	sizes        types.Sizes
+	file         *File
+	original     [32]byte
+	declarations map[string]*goReadOnlyDeclaration
+	objects      map[string]goReadOnlyObject
+	symbols      map[string]string
+	resolve      func(string) string
+	failure      error
+}
+
+// An empty path denotes the current package; other keys are its actual direct
+// imports. Each translation rechecks these declarations without capturing an
+// SDK, reloading a package, or retaining observations beyond this call.
+type goReadOnlyDeclaration struct {
+	path    string
+	pkg     GoPackage
+	syntax  []string
+	objects map[string]goReadOnlyObject
 }
 
 type goReadOnlyObject struct {
 	variable *types.Var
 	native   string
+	imported bool
 	size     int64
 	spans    [][2]int64 // half-open numerical byte intervals; padding is absent
 	shape    string
@@ -58,7 +69,8 @@ func (source *goReadOnlyStorage) readFor(ins Instr, arch string) *goReadOnlyRead
 		return nil
 	}
 	operand, width := form.args[form.memory], int64(form.bits/8)
-	if !source.allows(operand, width, arch) {
+	address, _ := x86StaticSBSourceAddress(operand, arch)
+	if form.test && source.object(address.symbol).imported || !source.allows(operand, width, arch) {
 		return nil
 	}
 	return &goReadOnlyRead{operand: operand, width: width}
@@ -87,9 +99,53 @@ func goReadOnlyLocalName(pkg GoPackage, symbol string) string {
 	return goReadOnlyName(pkg.Types.Path(), symbol)
 }
 
+func goReadOnlyImportedName(symbol string) (path, name string) {
+	symbol = strings.ReplaceAll(strings.ReplaceAll(symbol, "∕", "/"), "·", ".")
+	separator := strings.LastIndexByte(symbol, '.')
+	if separator <= 0 || !token.IsIdentifier(symbol[separator+1:]) || symbol[separator+1:] == "_" {
+		return "", ""
+	}
+	return symbol[:separator], symbol[separator+1:]
+}
+
+func goReadOnlyImportedPackage(pkg GoPackage, path string) (GoPackage, error) {
+	dependency := pkg.Imports[path]
+	if dependency == nil || dependency == pkg.Types || dependency.Path() != path || !dependency.Complete() || dependency.Scope() == nil {
+		return GoPackage{}, goReadOnlyContext("missing complete typed import %q", path)
+	}
+	found := false
+	for _, actual := range pkg.Types.Imports() {
+		if actual == dependency {
+			found = true
+		}
+	}
+	if !found {
+		return GoPackage{}, goReadOnlyContext("import %q differs from the actual typed dependency", path)
+	}
+	imports := make(map[string]*types.Package)
+	for _, actual := range dependency.Imports() {
+		if actual == nil || !actual.Complete() || actual.Scope() == nil || actual.Path() == "" || imports[actual.Path()] != nil {
+			return GoPackage{}, goReadOnlyContext("import %q has incomplete or duplicate dependencies", path)
+		}
+		imports[actual.Path()] = actual
+	}
+	return GoPackage{Path: path, Types: dependency, Imports: imports, Syntax: pkg.ImportSyntax[path]}, nil
+}
+
+func (source *goReadOnlyStorage) object(symbol string) goReadOnlyObject {
+	if name := goReadOnlyLocalName(source.pkg, symbol); name != "" {
+		return source.objects[gosym.PackagePrefix(source.pkg.Path)+"."+name]
+	}
+	path, name := goReadOnlyImportedName(symbol)
+	if path != "" && source.declarations[path] != nil {
+		return source.objects[gosym.PackagePrefix(path)+"."+name]
+	}
+	return goReadOnlyObject{}
+}
+
 func goReadOnlySyntax(pkg GoPackage) ([]string, error) {
 	if len(pkg.Syntax) == 0 || len(pkg.Syntax) > 256 {
-		return nil, goReadOnlyContext("missing or excessive same-package declaration syntax")
+		return nil, goReadOnlyContext("missing or excessive declaration syntax")
 	}
 	result := make([]string, len(pkg.Syntax))
 	for index, file := range pkg.Syntax {
@@ -122,6 +178,7 @@ func (imports goReadOnlyImporter) Import(path string) (*types.Package, error) {
 func goReadOnlyTypedSyntax(pkg GoPackage, syntax []string, sizes types.Sizes, objects map[string]goReadOnlyObject) (*types.Package, error) {
 	set := token.NewFileSet()
 	files := make([]*ast.File, len(syntax))
+	selfLinknames := make(map[string]bool)
 	for index, source := range syntax {
 		file, err := parser.ParseFile(set, fmt.Sprintf("global-source-%d.go", index), source, parser.ParseComments)
 		if err != nil {
@@ -135,7 +192,10 @@ func goReadOnlyTypedSyntax(pkg GoPackage, syntax []string, sizes types.Sizes, ob
 				words := strings.Fields(comment.Text)
 				if len(words) >= 2 && words[0] == "//go:linkname" {
 					if objects[words[1]].variable != nil {
-						return nil, goReadOnlyContext("aliased global declaration needs its own binding")
+						if len(words) != 2 || selfLinknames[words[1]] {
+							return nil, goReadOnlyContext("aliased or duplicate global declaration needs its own binding")
+						}
+						selfLinknames[words[1]] = true
 					}
 					if len(words) >= 3 {
 						for _, object := range objects {
@@ -152,6 +212,15 @@ func goReadOnlyTypedSyntax(pkg GoPackage, syntax []string, sizes types.Sizes, ob
 	typed, err := (&types.Config{Importer: goReadOnlyImporter(pkg.Imports), Sizes: sizes}).Check(pkg.Types.Path(), set, files, nil)
 	if err != nil {
 		return nil, goReadOnlyContext("syntax does not match a complete typed package: %v", err)
+	}
+	if len(selfLinknames) != 0 {
+		unsafeImported := false
+		for _, dependency := range typed.Imports() {
+			unsafeImported = unsafeImported || dependency == types.Unsafe
+		}
+		if !unsafeImported {
+			return nil, goReadOnlyContext("self-linkname declaration lacks its actual unsafe import")
+		}
 	}
 	return typed, nil
 }
@@ -274,7 +343,7 @@ func bindGoReadOnlyStorage(pkg GoPackage, file *File, sizes types.Sizes, arch st
 		}
 		return emitted[native]
 	}
-	source := &goReadOnlyStorage{pkg: pkg, sizes: sizes, resolve: resolve,
+	source := &goReadOnlyStorage{pkg: pkg, sizes: sizes, resolve: resolve, declarations: make(map[string]*goReadOnlyDeclaration),
 		objects: make(map[string]goReadOnlyObject), symbols: make(map[string]string)}
 	for _, function := range file.Funcs {
 		for _, instruction := range function.Instrs {
@@ -285,16 +354,33 @@ func bindGoReadOnlyStorage(pkg GoPackage, file *File, sizes types.Sizes, arch st
 			}
 			{
 				address, valid := x86StaticSBSourceAddress(form.args[form.memory], arch)
-				name := goReadOnlyLocalName(pkg, address.symbol)
-				variable, declared := pkg.Types.Scope().Lookup(name).(*types.Var)
-				if !valid || !declared || variable.IsField() || variable.Pkg() != pkg.Types || assemblyNames[name] {
-					continue // Unknown/imported symbols never inherit another variable's type.
+				if !valid {
+					continue
 				}
-				native := gosym.PackagePrefix(pkg.Path) + "." + name
+				owner, path := pkg, ""
+				name := goReadOnlyLocalName(pkg, address.symbol)
+				if name == "" {
+					path, name = goReadOnlyImportedName(address.symbol)
+					if path == "" || pkg.Imports[path] == nil || len(pkg.ImportSyntax[path]) == 0 || form.test {
+						continue // Imported storage supplies only the named CMP role.
+					}
+					owner, err = goReadOnlyImportedPackage(pkg, path)
+					if err != nil {
+						return nil, err
+					}
+				}
+				variable, declared := owner.Types.Scope().Lookup(name).(*types.Var)
+				if !declared || variable.IsField() || variable.Pkg() != owner.Types || path == "" && assemblyNames[name] {
+					continue // Unknown symbols never inherit another variable's type.
+				}
+				native := gosym.PackagePrefix(owner.Path) + "." + name
 				if emittedOwns(native) {
 					continue // A resolved alias definition is still the emitted module's owner.
 				}
-				if _, present := source.objects[name]; present {
+				if object, present := source.objects[native]; present {
+					if object.variable != variable {
+						return nil, goReadOnlyContext("different declarations share a native global")
+					}
 					continue
 				}
 				if sizes == nil {
@@ -308,8 +394,21 @@ func bindGoReadOnlyStorage(pkg GoPackage, file *File, sizes types.Sizes, arch st
 				if err != nil {
 					return nil, err
 				}
-				source.objects[name] = goReadOnlyObject{variable: variable, native: native,
+				object := goReadOnlyObject{variable: variable, native: native, imported: path != "",
 					size: size, spans: spans, shape: shape}
+				source.objects[native] = object
+				declarations := source.declarations[path]
+				if declarations == nil {
+					// Snapshot maps rather than retaining aliases to caller mutations.
+					imports := make(map[string]*types.Package, len(owner.Imports))
+					for path, dependency := range owner.Imports {
+						imports[path] = dependency
+					}
+					owner.Imports = imports
+					declarations = &goReadOnlyDeclaration{path: path, pkg: owner, objects: make(map[string]goReadOnlyObject)}
+					source.declarations[path] = declarations
+				}
+				declarations.objects[name] = object
 			}
 		}
 	}
@@ -321,22 +420,24 @@ func bindGoReadOnlyStorage(pkg GoPackage, file *File, sizes types.Sizes, arch st
 	}
 	source.file = x86DirectTailSnapshot(file)
 	var err error
-	source.syntax, err = goReadOnlySyntax(pkg)
-	if err != nil {
-		return nil, err
-	}
-	typed, err := goReadOnlyTypedSyntax(pkg, source.syntax, sizes, source.objects)
-	if err != nil {
-		return nil, err
-	}
-	for name, object := range source.objects {
-		actual, present := typed.Scope().Lookup(name).(*types.Var)
-		if !present {
-			return nil, goReadOnlyContext("global %q has no actual variable declaration", name)
+	for _, declarations := range source.declarations {
+		declarations.syntax, err = goReadOnlySyntax(declarations.pkg)
+		if err != nil {
+			return nil, err
 		}
-		size, spans, shape, err := goReadOnlyLayout(actual.Type(), sizes)
-		if err != nil || size != object.size || shape != object.shape || !reflect.DeepEqual(spans, object.spans) {
-			return nil, goReadOnlyContext("global %q type and syntax layouts differ", name)
+		typed, err := goReadOnlyTypedSyntax(declarations.pkg, declarations.syntax, sizes, declarations.objects)
+		if err != nil {
+			return nil, err
+		}
+		for name, object := range declarations.objects {
+			actual, present := typed.Scope().Lookup(name).(*types.Var)
+			if !present {
+				return nil, goReadOnlyContext("global %q has no actual variable declaration", name)
+			}
+			size, spans, shape, err := goReadOnlyLayout(actual.Type(), sizes)
+			if err != nil || size != object.size || shape != object.shape || !reflect.DeepEqual(spans, object.spans) {
+				return nil, goReadOnlyContext("global %q type and syntax layouts differ", name)
+			}
 		}
 	}
 	source.original, err = x86CallerSourceFingerprint(file)
@@ -347,11 +448,11 @@ func bindGoReadOnlyStorage(pkg GoPackage, file *File, sizes types.Sizes, arch st
 		for _, instruction := range function.Instrs {
 			for _, operand := range instruction.Args {
 				address, valid := x86StaticSBSourceAddress(operand, arch)
-				object := source.objects[goReadOnlyLocalName(pkg, address.symbol)]
+				object := source.object(address.symbol)
 				if !valid || object.variable == nil {
 					continue
 				}
-				// Match the exact same-package native symbol, not an arbitrary
+				// Match the exact declaration's native symbol, not an arbitrary
 				// resolver alias with a conveniently named Go declaration.
 				symbol := address.symbol
 				if !strings.ContainsAny(symbol, "·./") {
@@ -379,18 +480,35 @@ func (source *goReadOnlyStorage) verify() error {
 		if err != nil || actual != source.original {
 			return goReadOnlyContext("original assembly changed during binding")
 		}
-		syntax, err := goReadOnlySyntax(source.pkg)
-		if err != nil || !reflect.DeepEqual(syntax, source.syntax) {
-			return goReadOnlyContext("declaration syntax changed during binding")
-		}
-		for name, object := range source.objects {
-			variable, _ := source.pkg.Types.Scope().Lookup(name).(*types.Var)
-			if variable != object.variable {
-				return goReadOnlyContext("global declaration identity changed during binding")
+		for _, declarations := range source.declarations {
+			pkg := source.pkg
+			if declarations.path != "" {
+				pkg, err = goReadOnlyImportedPackage(source.pkg, declarations.path)
+				if err != nil || pkg.Types != declarations.pkg.Types {
+					return goReadOnlyContext("actual typed import changed during binding")
+				}
 			}
-			size, spans, shape, err := goReadOnlyLayout(variable.Type(), source.sizes)
-			if err != nil || size != object.size || shape != object.shape || !reflect.DeepEqual(spans, object.spans) {
-				return goReadOnlyContext("global target layout changed during binding")
+			if len(pkg.Imports) != len(declarations.pkg.Imports) {
+				return goReadOnlyContext("typed declaration dependencies changed during binding")
+			}
+			for path, dependency := range declarations.pkg.Imports {
+				if pkg.Imports[path] != dependency {
+					return goReadOnlyContext("actual typed declaration dependency changed during binding")
+				}
+			}
+			syntax, err := goReadOnlySyntax(pkg)
+			if err != nil || !reflect.DeepEqual(syntax, declarations.syntax) {
+				return goReadOnlyContext("declaration syntax changed during binding")
+			}
+			for name, object := range declarations.objects {
+				variable, _ := pkg.Types.Scope().Lookup(name).(*types.Var)
+				if variable != object.variable {
+					return goReadOnlyContext("global declaration identity changed during binding")
+				}
+				size, spans, shape, err := goReadOnlyLayout(variable.Type(), source.sizes)
+				if err != nil || size != object.size || shape != object.shape || !reflect.DeepEqual(spans, object.spans) {
+					return goReadOnlyContext("global target layout changed during binding")
+				}
 			}
 		}
 		return nil
@@ -400,7 +518,7 @@ func (source *goReadOnlyStorage) verify() error {
 	}
 	for symbol, expected := range source.symbols {
 		if source.resolve(symbol) != expected {
-			return goReadOnlyContext("global resolver differs from its same-package declaration")
+			return goReadOnlyContext("global resolver differs from its actual declaration")
 		}
 	}
 	return check() // Resolvers are user callbacks and may have changed source.
@@ -419,7 +537,7 @@ func (source *goReadOnlyStorage) allows(operand Operand, width int64, arch strin
 		return false
 	}
 	address, valid := x86StaticSBReadAddress(operand, arch)
-	object := source.objects[goReadOnlyLocalName(source.pkg, address.symbol)]
+	object := source.object(address.symbol)
 	if !valid || object.variable == nil || width > object.size || address.offset > object.size-width {
 		return false
 	}

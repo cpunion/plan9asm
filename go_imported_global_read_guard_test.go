@@ -19,7 +19,7 @@ func TestGoModuleImportedGlobalReadNeedsActualDeclarations(t *testing.T) {
 	for _, mutation := range []string{
 		"missing-syntax", "wrong-syntax-key", "nil-file", "missing-import", "foreign-import-pointer",
 		"incomplete-import", "wrong-package", "missing-variable", "different-type", "missing-type-file",
-		"external-alias", "duplicate-self-linkname", "other-aliases-native", "malformed-linkname",
+		"external-alias", "duplicate-self-linkname", "other-aliases-native", "malformed-linkname", "self-linkname-without-unsafe",
 	} {
 		t.Run(mutation, func(t *testing.T) {
 			owner := importedGlobalPackage(t, "example.com/state", "amd64", []string{
@@ -44,15 +44,16 @@ func TestGoModuleImportedGlobalReadNeedsActualDeclarations(t *testing.T) {
 			case "incomplete-import":
 				pkg.Imports[owner.Path] = types.NewPackage(owner.Path, "state")
 			case "wrong-package", "missing-variable", "different-type", "external-alias",
-				"duplicate-self-linkname", "other-aliases-native", "malformed-linkname":
+				"duplicate-self-linkname", "other-aliases-native", "malformed-linkname", "self-linkname-without-unsafe":
 				source := map[string]string{
-					"wrong-package":           "package foreign\ntype Bit bool\nvar Flags Bit\n",
-					"missing-variable":        "package state\ntype Bit bool\n",
-					"different-type":          "package state\ntype Bit uint64\nvar Flags Bit\n",
-					"external-alias":          "package state\nimport _ \"unsafe\"\ntype Bit bool\n//go:linkname Flags foreign.Flags\nvar Flags Bit\n",
-					"duplicate-self-linkname": "package state\nimport _ \"unsafe\"\ntype Bit bool\n//go:linkname Flags\n//go:linkname Flags\nvar Flags Bit\n",
-					"other-aliases-native":    "package state\nimport _ \"unsafe\"\ntype Bit bool\nvar Flags Bit\n//go:linkname Shadow example.com/state.Flags\nvar Shadow Bit\n",
-					"malformed-linkname":      "package state\nimport _ \"unsafe\"\ntype Bit bool\n//go:linkname Flags example.com/state.Flags extra\nvar Flags Bit\n",
+					"wrong-package":                "package foreign\ntype Bit bool\nvar Flags Bit\n",
+					"missing-variable":             "package state\ntype Bit bool\n",
+					"different-type":               "package state\ntype Bit uint64\nvar Flags Bit\n",
+					"external-alias":               "package state\nimport _ \"unsafe\"\ntype Bit bool\n//go:linkname Flags foreign.Flags\nvar Flags Bit\n",
+					"duplicate-self-linkname":      "package state\nimport _ \"unsafe\"\ntype Bit bool\n//go:linkname Flags\n//go:linkname Flags\nvar Flags Bit\n",
+					"other-aliases-native":         "package state\nimport _ \"unsafe\"\ntype Bit bool\nvar Flags Bit\n//go:linkname Shadow example.com/state.Flags\nvar Shadow Bit\n",
+					"malformed-linkname":           "package state\nimport _ \"unsafe\"\ntype Bit bool\n//go:linkname Flags example.com/state.Flags extra\nvar Flags Bit\n",
+					"self-linkname-without-unsafe": "package state\ntype Bit bool\n//go:linkname Flags\nvar Flags Bit\n",
 				}[mutation]
 				other := importedGlobalPackage(t, owner.Path, "amd64", []string{source}, map[string]*types.Package{"unsafe": types.Unsafe})
 				pkg.ImportSyntax[owner.Path] = other.Syntax
@@ -79,6 +80,7 @@ func TestGoModuleImportedGlobalReadDoesNotLendOtherStorage(t *testing.T) {
 		{"padding", "var Flags struct { Ready bool; Word uint64 }", "", "CMPB %s+1(SB),$0\n"},
 		{"cross-padding", "var Flags struct { Ready bool; Word uint64 }", "", "CMPW %s,$0\n"},
 		{"mov-not-compare", "var Flags bool", "MOVB %s,CL\n", "CMPB %s,$0\n"},
+		{"test-not-cmp", "var Flags bool", "TESTB $1,%s\n", "CMPB %s,$0\n"},
 		{"write-not-read", "var Flags bool", "MOVB $1,%s\n", "CMPB %s,$0\n"},
 		{"rmw-not-read", "var Flags bool", "INCB %s\n", "CMPB %s,$0\n"},
 		{"address-not-pointer", "var Flags bool", "LEAQ %s,DX\nMOVB (DX),CL\n", "CMPB %s,$0\n"},
@@ -115,7 +117,7 @@ func TestGoModuleImportedGlobalReadCannotLendToRawAPI(t *testing.T) {
 }
 
 func TestGoModuleImportedGlobalReadRechecksAfterCallbacks(t *testing.T) {
-	for _, mutation := range []string{"control", "syntax", "imports", "import-syntax-map", "resolver", "original-assembly"} {
+	for _, mutation := range []string{"control", "syntax", "imports", "typed-dependencies", "import-syntax-map", "resolver", "original-assembly"} {
 		t.Run(mutation, func(t *testing.T) {
 			owner := importedGlobalPackage(t, "example.com/state", "amd64", []string{"package state\nvar Flags bool\n"}, nil)
 			pkg := importedGlobalConsumer(t, owner, "Flags", "amd64")
@@ -143,6 +145,8 @@ func TestGoModuleImportedGlobalReadRechecksAfterCallbacks(t *testing.T) {
 						})
 					case "imports":
 						pkg.Imports[owner.Path] = other.Types
+					case "typed-dependencies":
+						owner.Types.SetImports([]*types.Package{types.Unsafe})
 					case "import-syntax-map":
 						delete(pkg.ImportSyntax, owner.Path)
 					case "original-assembly":

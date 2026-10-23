@@ -120,7 +120,14 @@ func importedGlobalSelectedCPU(t *testing.T) GoPackage {
 	t.Helper()
 	context := build.Default
 	context.GOROOT, context.GOOS, context.GOARCH = runtime.GOROOT(), "linux", "amd64"
-	context.CgoEnabled, context.BuildTags, context.ToolTags = false, nil, nil
+	context.CgoEnabled = false
+	context.ToolTags = nil
+	for _, tag := range build.Default.ToolTags {
+		if !strings.HasPrefix(tag, build.Default.GOARCH+".") && !strings.HasPrefix(tag, "amd64.") {
+			context.ToolTags = append(context.ToolTags, tag) // Preserve selected Go experiments and other non-ISA tags.
+		}
+	}
+	context.ToolTags = append(context.ToolTags, "amd64.v1")
 	directory := filepath.Join(context.GOROOT, "src", "internal", "cpu")
 	selected, err := context.ImportDir(directory, 0)
 	if err != nil || len(selected.GoFiles) == 0 {
