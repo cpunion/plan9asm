@@ -261,3 +261,45 @@ func TestCompileOneOrdinaryGlobalDeclarationsLateGuard(t *testing.T) {
 		})
 	}
 }
+
+func TestCompileOneOrdinaryGlobalDeclarationsPrivateTailSourceAudit(t *testing.T) {
+	for _, mutation := range []string{"complete", "unknown-helper-input", "unreferenced-helper-escape"} {
+		t.Run(mutation, func(t *testing.T) {
+			fixture := ordinaryGlobalCLIActualFixture(t, "amd64")
+			fixture.config.Enabled = false
+			original := string(fixture.sources[fixture.task.AsmFile])
+			body := "CMPB ·Flags(SB),$1\nJNE different\nMOVL $1,ret+0(FP)\nRET\ndifferent:\nMOVL $0,ret+0(FP)\nRET\n"
+			if strings.Count(original, body) != 1 {
+				t.Fatal("local root body must be replaced exactly once")
+			}
+			helper := "TEXT value<>(SB),4,$0-0\nJNE different\nMOVL $1,ret+0(FP)\nRET\ndifferent:\nMOVL $0,ret+0(FP)\nRET\n"
+			source := strings.Replace(original, body, "CMPB ·Flags(SB),$1\nJMP value<>(SB)\n", 1) + helper
+			if mutation == "unknown-helper-input" {
+				source = strings.TrimSuffix(source, helper) + strings.Replace(helper, "MOVL $1,ret+0(FP)", "MOVL R15,ret+0(FP)", 1)
+			} else if mutation == "unreferenced-helper-escape" {
+				source += "TEXT unused<>(SB),4,$0-0\nCALL foreign(SB)\nRET\n"
+			}
+			if err := os.WriteFile(fixture.task.AsmFile, []byte(source), 0600); err != nil {
+				t.Fatal(err)
+			}
+			const retained = "previous verified output\n"
+			if err := os.WriteFile(fixture.task.OutLL, []byte(retained), 0600); err != nil {
+				t.Fatal(err)
+			}
+			err := compileOneAttempt(fixture.pkg, plan9asm.ArchAMD64, "linux", "amd64", "x86_64-unknown-linux-gnu",
+				fixture.task, false, fixture.config)
+			output, readErr := os.ReadFile(fixture.task.OutLL)
+			if readErr != nil {
+				t.Fatal(readErr)
+			}
+			if mutation == "complete" {
+				if err != nil {
+					t.Fatal("complete private tail source was not consumed", err)
+				}
+				ordinaryGlobalRequireIR(t, string(output), fixture.pkg.PkgPath)
+			} else if err == nil || string(output) != retained {
+				t.Fatal("invalid private helper was dropped or published", err)
+			}
+		})
+	}
+}

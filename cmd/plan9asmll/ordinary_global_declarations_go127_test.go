@@ -106,3 +106,88 @@ func TestCompileOneOrdinaryGlobalDeclarationsSDKMathBigWholeFile(t *testing.T) {
 		t.Fatal("the original SDK arithmetic source changed", err)
 	}
 }
+
+// A complete GoModule consumes private tail TEXTs as source graph nodes, not
+// callable/public metadata entries. All four real files formerly passed the
+// raw CLI path; declaration forwarding must preserve their actual objects.
+func TestCompileOneOrdinaryGlobalDeclarationsSDKPrivateTailWholeFiles(t *testing.T) {
+	setX86SDKNumericalCLIProfile(t, "explicit")
+	t.Setenv("GOROOT", runtime.GOROOT())
+	t.Chdir(filepath.Join(runtime.GOROOT(), "src", "internal", "bytealg"))
+	ctx := arm64PrivateCLIContext(t)
+	selected, environment, err := loadPkgsInEnvironment("linux", "amd64", []string{"."}, nil, "", true, false, nil)
+	if err != nil || len(selected) != 1 || selected[0].PkgPath != "internal/bytealg" {
+		t.Fatalf("actual selected SDK bytealg load failed: %v %+v", err, selected)
+	}
+	pkg := selected[0]
+	config, err := resolveCompileConfig(true, "", true, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	config.Context = ctx
+	config.x86CallerSelections = captureX86CallerSelectionsInEnvironment(selected, "linux/amd64", environment)
+	for _, test := range []struct {
+		file, helper string
+		public       []string
+	}{
+		{"compare_amd64.s", "cmpbody<>", []string{"internal/bytealg.Compare", "runtime.cmpstring"}},
+		{"count_amd64.s", "countbody<>", []string{"internal/bytealg.Count", "internal/bytealg.CountString"}},
+		{"index_amd64.s", "indexbody<>", []string{"internal/bytealg.Index", "internal/bytealg.IndexString"}},
+		{"indexbyte_amd64.s", "indexbytebody<>", []string{"internal/bytealg.IndexByte", "internal/bytealg.IndexByteString"}},
+	} {
+		t.Run(test.file, func(t *testing.T) {
+			input := ""
+			for _, name := range pkg.OtherFiles {
+				if filepath.Base(name) == test.file {
+					if input != "" {
+						t.Fatal("duplicate original SDK assembly member")
+					}
+					input = name
+				}
+			}
+			if input == "" {
+				t.Fatal("selected SDK assembly file missing")
+			}
+			source, reads, err := plan9asm.ReadGoAssemblySourceWithReport(input, pkg.Dir)
+			if err != nil || !strings.Contains(string(source), "TEXT "+test.helper) &&
+				!strings.Contains(string(source), "TEXT\t"+test.helper) {
+				t.Fatal("original complete source lost its private tail TEXT", err)
+			}
+			output := filepath.Join(t.TempDir(), "complete.ll")
+			if err := compileOneAttempt(pkg, plan9asm.ArchAMD64, "linux", "amd64", "x86_64-unknown-linux-gnu",
+				asmTask{PkgPath: pkg.PkgPath, AsmFile: input, OutLL: output}, false, config); err != nil {
+				t.Fatal("complete original source rejected its authenticated private tail", err)
+			}
+			ir, err := os.ReadFile(output)
+			if err != nil {
+				t.Fatal(err)
+			}
+			definitions := 0
+			for _, line := range strings.Split(string(ir), "\n") {
+				if !strings.HasPrefix(line, "define ") {
+					continue
+				}
+				definitions++
+				matched := false
+				for _, name := range test.public {
+					matched = matched || strings.Contains(line, `@"`+name+`"(`)
+				}
+				if !matched {
+					t.Fatal("private helper became a callable entry or a foreign public entry appeared", line)
+				}
+			}
+			if definitions != len(test.public) {
+				t.Fatal("the original public root inventory changed", definitions)
+			}
+			if info, err := os.Lstat(strings.TrimSuffix(output, ".ll") + ".o"); err != nil || !info.Mode().IsRegular() || info.Size() == 0 {
+				t.Fatal("complete source LLVM22 object is absent", err)
+			}
+			for name, digest := range reads.Inputs {
+				data, err := os.ReadFile(name)
+				if err != nil || featureBytesSHA256(data) != digest {
+					t.Fatal("original SDK source/header changed", name, err)
+				}
+			}
+		})
+	}
+}
