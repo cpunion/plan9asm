@@ -186,7 +186,7 @@ func (source *continuationReferenceSource) verifyInventory() error {
 		return continuationSourceError()
 	}
 	selection, pkg := source.selected.selection, source.pkg
-	if selection.identity != x86CallerSelectionIdentity(pkg) || selection.types != pkg.Types ||
+	if selection.identity != x86CallerSelectionIdentity(pkg, selection.env) || selection.types != pkg.Types ||
 		!reflect.DeepEqual(selection.sizes, x86CallerSizes(pkg.TypesSizes)) || len(selection.imports) != len(pkg.Imports) {
 		return continuationSourceError()
 	}

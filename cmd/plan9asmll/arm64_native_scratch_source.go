@@ -21,7 +21,7 @@ func prepareARM64NativeScratchSource(pkg *packages.Package, file *plan9asm.File,
 	}
 	selected := config.x86CallerSelections[pkg]
 	if pkg == nil || selected == nil || !selected.ready || selected.target != target || selected.mode != nil ||
-		selected.types != pkg.Types || selected.identity == "" || selected.identity != x86CallerSelectionIdentity(pkg) ||
+		selected.types != pkg.Types || selected.identity == "" || selected.identity != x86CallerSelectionIdentity(pkg, selected.env) ||
 		!reflect.DeepEqual(selected.sizes, x86CallerSizes(pkg.TypesSizes)) {
 		return nil, nil, fmt.Errorf("%w: native scratch closure needs unchanged ordinary actual package-load identity", plan9asm.ErrProbeNeedsContext)
 	}

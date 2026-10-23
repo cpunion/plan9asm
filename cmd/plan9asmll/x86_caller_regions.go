@@ -46,7 +46,7 @@ type x86CallerTypedPackage struct {
 	member    *actualAssemblyMember
 }
 
-func x86CallerSelectionIdentity(pkg *packages.Package) string {
+func x86CallerSelectionIdentity(pkg *packages.Package, environment []string) string {
 	canonical := func(files []string) []string {
 		result := append([]string(nil), files...)
 		sort.Strings(result)
@@ -63,11 +63,14 @@ func x86CallerSelectionIdentity(pkg *packages.Package) string {
 		}
 		selection.Imports[name] = dep.PkgPath
 	}
+	// Preserve the exact ordered load environment, including duplicate keys.
+	// A later profile/flag edit cannot borrow the original selected types/files.
 	encoded, err := json.Marshal(struct {
-		ID        string
-		Dir       string
-		Selection generatedHeaderLoadSelection
-	}{ID: pkg.ID, Dir: pkg.Dir, Selection: selection})
+		ID          string
+		Dir         string
+		Selection   generatedHeaderLoadSelection
+		Environment []string
+	}{ID: pkg.ID, Dir: pkg.Dir, Selection: selection, Environment: environment})
 	if err != nil {
 		return ""
 	}
@@ -132,7 +135,7 @@ func captureX86CallerSelectionsInEnvironment(pkgs []*packages.Package, target st
 			}
 		}
 		result[pkg] = &x86CallerPackageSelection{
-			identity: x86CallerSelectionIdentity(pkg), target: target,
+			identity: x86CallerSelectionIdentity(pkg, env), target: target,
 			types: pkg.Types, sizes: x86CallerSizes(pkg.TypesSizes),
 			imports: imports, env: env, ready: ready,
 		}
@@ -362,7 +365,7 @@ func loadX86ActualSelectedAssembly(pkg *packages.Package, target, asm string, de
 ) (*x86CallerTypedPackage, error) {
 	selection := config.x86CallerSelections[pkg]
 	if pkg == nil || selection == nil || !selection.ready || selection.target != target || selection.identity == "" ||
-		selection.types != pkg.Types || selection.identity != x86CallerSelectionIdentity(pkg) ||
+		selection.types != pkg.Types || selection.identity != x86CallerSelectionIdentity(pkg, selection.env) ||
 		!reflect.DeepEqual(selection.sizes, x86CallerSizes(pkg.TypesSizes)) {
 		return nil, fmt.Errorf("%w: proof needs unchanged actual-load source role, inventory and layout", plan9asm.ErrProbeNeedsContext)
 	}

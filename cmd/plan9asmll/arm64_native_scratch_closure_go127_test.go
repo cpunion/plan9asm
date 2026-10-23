@@ -71,8 +71,7 @@ func arm64NativeScratchClosureFixture(t *testing.T, source, declarations string)
 		t.Fatal(err)
 	}
 	config.Context = context
-	config.x86CallerSelections = captureX86CallerSelections(selected, "linux/arm64", nil)
-	config.x86CallerSelections[selected[0]].env = environment
+	config.x86CallerSelections = captureX86CallerSelectionsInEnvironment(selected, "linux/arm64", environment)
 	input := filepath.Join(directory, "value_arm64.s")
 	object := filepath.Join(directory, "original.o")
 	listing, stderr, err := gotoolprofile.RunBounded(context, directory, environment, "go",

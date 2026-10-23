@@ -38,7 +38,7 @@ func (source *arm64ABI0TailTypedSource) verify(ctx context.Context, defines []st
 	}
 	defer func() { result = errors.Join(result, source.member.verify()) }()
 	selection, pkg := source.selection, source.original
-	if selection == nil || selection.identity == "" || selection.identity != x86CallerSelectionIdentity(pkg) ||
+	if selection == nil || selection.identity == "" || selection.identity != x86CallerSelectionIdentity(pkg, selection.env) ||
 		selection.types != pkg.Types || !reflect.DeepEqual(selection.sizes, x86CallerSizes(pkg.TypesSizes)) ||
 		len(selection.imports) != len(pkg.Imports) {
 		return fmt.Errorf("%w: ABI0 continuation changed its actual-load selection/layout", plan9asm.ErrProbeNeedsContext)

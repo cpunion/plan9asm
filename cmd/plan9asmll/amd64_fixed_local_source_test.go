@@ -107,8 +107,7 @@ func amd64FixedLocalCLICompleteFixture(t *testing.T, operation, declaration stri
 		t.Fatal(err)
 	}
 	config.Context = ctx
-	config.x86CallerSelections = captureX86CallerSelections(pkgs, "linux/amd64", nil)
-	config.x86CallerSelections[pkgs[0]].env = env
+	config.x86CallerSelections = captureX86CallerSelectionsInEnvironment(pkgs, "linux/amd64", env)
 	input := filepath.Join(dir, "value_amd64.s")
 	// Bind the independent actual Go prologue/object before asserting the CLI.
 	stdout, stderr, err := gotoolprofile.RunBounded(ctx, dir, env, "go",

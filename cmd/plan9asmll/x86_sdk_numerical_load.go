@@ -70,9 +70,10 @@ func loadX86SDKNumericalPackage(ctx context.Context, binary string, pkg *package
 	for path, dependency := range reloaded.Imports {
 		imports[path] = dependency.Types
 	}
+	environment := snapshot.Environment()
 	actual := &x86CallerPackageSelection{
-		identity: x86CallerSelectionIdentity(reloaded), target: selected.target, types: reloaded.Types,
-		sizes: x86CallerSizes(reloaded.TypesSizes), imports: imports, env: snapshot.Environment(),
+		identity: x86CallerSelectionIdentity(reloaded, environment), target: selected.target, types: reloaded.Types,
+		sizes: x86CallerSizes(reloaded.TypesSizes), imports: imports, env: environment,
 		ready: reflect.DeepEqual(reloaded.GoFiles, reloaded.CompiledGoFiles),
 	}
 	return reloaded, actual, close, nil

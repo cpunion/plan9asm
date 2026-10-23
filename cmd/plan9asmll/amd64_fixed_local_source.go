@@ -73,7 +73,7 @@ func (source *amd64FixedLocalCLISource) verify(ctx context.Context) (result erro
 func verifyAMD64FixedLocalSelection(pkg *packages.Package, selected *x86CallerPackageSelection, target string) error {
 	if pkg == nil || selected == nil || !selected.ready || selected.types != pkg.Types ||
 		selected.target != target || pkg.Types == nil || pkg.TypesSizes == nil || pkg.IllTyped || len(pkg.Errors) != 0 ||
-		selected.identity == "" || selected.identity != x86CallerSelectionIdentity(pkg) ||
+		selected.identity == "" || selected.identity != x86CallerSelectionIdentity(pkg, selected.env) ||
 		!reflect.DeepEqual(selected.sizes, x86CallerSizes(pkg.TypesSizes)) || len(selected.imports) != len(pkg.Imports) {
 		return fmt.Errorf("%w: fixed-local actual-load identity changed", plan9asm.ErrProbeNeedsContext)
 	}

@@ -97,14 +97,36 @@ func compileX86SDKOriginalCRC32NumericalDataJoin(t *testing.T, profile string) {
 	if profile == "explicit" {
 		t.Run("ordinary-proof-failure-publishes-nothing", func(t *testing.T) {
 			folder := t.TempDir()
+			// Complete actual declarations now legitimately bind these CMP
+			// reads without an SDK reload. A genuinely missing load owner must
+			// still fail before publishing and must not become a source retry.
+			unbound := config
+			unbound.x86CallerSelections = nil
 			err := compileOneAttempt(pkgs[0], plan9asm.ArchAMD64, "linux", "amd64", "x86_64-unknown-linux-gnu",
-				asmTask{PkgPath: pkgs[0].PkgPath, AsmFile: input, OutLL: filepath.Join(folder, "ordinary.ll")}, false, config)
-			if _, retryable := x86SDKNumericalRetryCause(err); !retryable || !errors.Is(err, plan9asm.ErrProbeNeedsContext) {
-				t.Fatalf("ordinary unbound source did not reach the exact pre-publication seam: %v", err)
+				asmTask{PkgPath: pkgs[0].PkgPath, AsmFile: input, OutLL: filepath.Join(folder, "ordinary.ll")}, false, unbound)
+			if _, retryable := x86SDKNumericalRetryCause(err); retryable || !errors.Is(err, plan9asm.ErrProbeNeedsContext) {
+				t.Fatalf("missing actual declaration owner bypassed its pre-publication guard: %v", err)
 			}
 			artifacts, err := os.ReadDir(folder)
 			if err != nil || len(artifacts) != 0 {
 				t.Fatalf("ordinary proof rejection published output: %v, %v", artifacts, err)
+			}
+		})
+		t.Run("ordinary-declarations-complete-object-without-reload", func(t *testing.T) {
+			output := filepath.Join(t.TempDir(), "ordinary.ll")
+			// This one attempt has acquireSDKNumerical=false. Success cannot
+			// borrow compileOne's separate guarded SDK retry or its observations.
+			if err := compileOneAttempt(pkgs[0], plan9asm.ArchAMD64, "linux", "amd64", "x86_64-unknown-linux-gnu",
+				asmTask{PkgPath: pkgs[0].PkgPath, AsmFile: input, OutLL: output}, false, config); err != nil {
+				t.Fatal("complete actual CRC32 declarations still require SDK source authority", err)
+			}
+			ir, err := os.ReadFile(output)
+			if err != nil || !strings.Contains(string(ir), "load volatile i8") ||
+				!strings.Contains(string(ir), `@"internal/cpu.X86" = external global `) {
+				t.Fatal("ordinary CPU declaration lost its real external byte-read role", err)
+			}
+			if object, err := os.Lstat(strings.TrimSuffix(output, ".ll") + ".o"); err != nil || !object.Mode().IsRegular() || object.Size() == 0 {
+				t.Fatal("ordinary complete-source LLVM22 object is missing", err)
 			}
 		})
 		t.Run("actual-reload-has-distinct-types-and-owned-roots", func(t *testing.T) {
