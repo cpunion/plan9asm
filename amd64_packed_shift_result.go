@@ -80,7 +80,21 @@ func x86ResultPackedShiftStepWithRead(ins Instr, state *x86ResultState, owned []
 	// This is the existing independent same-source DATA role, not ordinary
 	// native continuation. Its full tuple still needs loweredStaticReads;
 	// leaving the raw origin intact prevents an incoming-pointer fallback.
-	return x86ResultPackedShiftInputs(ins, form, state, owned, arch, nativeRead), true
+	var pending x86ResultShiftBits
+	if nativeRead && ins.Args[form.data].Kind == OpReg {
+		input, _ := amd64VectorRegisterIndex(ins.Args[form.data].Reg, form.byteWidth)
+		destination, _ := amd64VectorRegisterIndex(ins.Args[form.destination].Reg, form.byteWidth)
+		pending = x86ResultShiftBitSource(ins, form, state.vectorBytes(input), destination)
+	}
+	if !x86ResultPackedShiftInputs(ins, form, state, owned, arch, nativeRead) {
+		return false, true
+	}
+	if nativeRead {
+		// Record only at the original named entry. The raw consumer shares
+		// byte effects through a local projection, not this named-only fact.
+		state.shiftBits = pending
+	}
+	return true, true
 }
 
 func x86ResultPackedShiftInputs(ins Instr, form x86PackedShiftForm, state *x86ResultState, owned []bool, arch string, nativeRead bool) bool {
@@ -119,8 +133,5 @@ func x86ResultPackedShiftInputs(ins Instr, form x86PackedShiftForm, state *x86Re
 	destination, _ := amd64VectorRegisterIndex(ins.Args[form.destination].Reg, form.byteWidth)
 	state.writeVector(destination, form.byteWidth,
 		x86PackedShiftDefinedBytes(form, data, counts, state.vectorBytes(destination)), form.legacy)
-	if nativeRead {
-		state.shiftBits = x86ResultShiftBitSource(ins, form, data, destination)
-	}
 	return true
 }
