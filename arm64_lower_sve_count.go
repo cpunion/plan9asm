@@ -15,6 +15,34 @@ type arm64RawSVECnt struct {
 	vector      bool
 }
 
+type arm64NamedSVECnt struct {
+	elementBits int
+	destination Reg
+}
+
+// Named counts retain the existing single-GP-destination form. Pattern and
+// multiplier operands belong to the independently decoded WORD forms.
+func parseARM64SVECnt(op Op, ins Instr) (form arm64NamedSVECnt, handled bool, err error) {
+	switch op {
+	case "CNTB":
+		form.elementBits = 8
+	case "CNTH":
+		form.elementBits = 16
+	case "CNTW":
+		form.elementBits = 32
+	case "CNTD":
+		form.elementBits = 64
+	default:
+		return form, false, nil
+	}
+	if strings.ToUpper(string(ins.Op)) != string(op) || len(ins.Args) != 1 ||
+		ins.Args[0].Kind != OpReg || !isARM64GeneralOrZeroReg(ins.Args[0].Reg) || ins.Args[0].Reg == ZR {
+		return form, true, fmt.Errorf("arm64 %s expects one general destination register: %q", op, ins.Raw)
+	}
+	form.destination = ins.Args[0].Reg
+	return form, true, nil
+}
+
 func decodeARM64RawSVECnt(word uint32) (arm64RawSVECnt, bool) {
 	const variable = uint32(3<<22 | 15<<16 | 31<<5 | 31)
 	operation := ""
@@ -100,12 +128,9 @@ func (c *arm64Ctx) lowerARM64SVEElementCount(reg Reg, bits, pattern, multiplier 
 }
 
 func (c *arm64Ctx) lowerARM64SVECnt(op Op, ins Instr) (ok bool, terminated bool, err error) {
-	multiplier, handled := map[Op]int{"CNTB": 16, "CNTH": 8, "CNTW": 4, "CNTD": 2}[op]
-	if !handled {
-		return false, false, nil
+	form, handled, err := parseARM64SVECnt(op, ins)
+	if !handled || err != nil {
+		return handled, false, err
 	}
-	if strings.ToUpper(string(ins.Op)) != string(op) || len(ins.Args) != 1 || ins.Args[0].Kind != OpReg || !isARM64GeneralOrZeroReg(ins.Args[0].Reg) || ins.Args[0].Reg == ZR {
-		return true, false, fmt.Errorf("arm64 %s expects one general destination register: %q", op, ins.Raw)
-	}
-	return true, false, c.lowerARM64SVEElementCount(ins.Args[0].Reg, 128/multiplier, 31, 1, "")
+	return true, false, c.lowerARM64SVEElementCount(form.destination, form.elementBits, 31, 1, "")
 }

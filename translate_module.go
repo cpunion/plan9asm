@@ -29,6 +29,9 @@ func TranslateModuleInContext(ctx llvm.Context, file *File, opt Options) (result
 		if result.IsNil() {
 			return
 		}
+		if resultErr == nil && file != nil && file.Arch == ArchARM64 {
+			resultErr = completeARM64SVECountFeatures(result)
+		}
 		if resultErr == nil {
 			resultErr = validateTranslatedBackend(file, opt, result)
 		}

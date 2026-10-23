@@ -647,6 +647,9 @@ func inferFuncTargetFeaturesForGOARCH(arch Arch, goarch string, fn Func) string 
 				add("+aes")
 			}
 		case ArchARM64:
+			if _, matched, err := parseARM64SVECnt(arm64ControlOp(ins), ins); matched && err == nil {
+				add("+sve")
+			}
 			if _, matched, err := parseARM64RNDR(ins); matched && err == nil {
 				add("+rand")
 			}
