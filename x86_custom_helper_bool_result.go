@@ -111,6 +111,15 @@ func (source *x86ABI0BoolCallSource) prepareCustomRegisterTail(plan *x86ABI0Bool
 	}
 	if err := checkX86ABI0ResultInitializationAtSource(fn, plan.signature, "386",
 		func(_ int, ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string) bool {
+			// These complete scalar load/extension families use the existing
+			// exact-width volatile emitters. A continued read defines only its
+			// numerical result, never pointee extent or a reusable memory role.
+			if accepted, known := x86LoweredScalarNativeLoad(ins, state, owned, resultOffset, arch); known {
+				return accepted
+			}
+			if accepted, known := x86LoweredScalarExtensionRead(ins, state, owned, resultOffset, arch); known {
+				return accepted
+			}
 			if !x86ScalarFPResultTransfer(ins, state, owned, resultOffset, arch) {
 				return false
 			}

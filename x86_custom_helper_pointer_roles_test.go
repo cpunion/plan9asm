@@ -2,6 +2,7 @@ package plan9asm
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -29,12 +30,28 @@ func x86CustomPointerHelperAPI(t *testing.T, source, declaration, triple, api st
 }
 
 func TestX86CustomHelperDistinctPointerRoles(t *testing.T) {
+	bodies := map[string]string{
+		"unused-inputs": "CMPL BX,$0\nSETEQ (AX)",
+		"identity":      "CMPL SI,DI\nSETEQ (AX)",
+	}
+	// Complete ordinary scalar load/extension widths in physical 32-bit mode;
+	// the wider Q forms remain independently rejected by the shared grammar.
+	for _, row := range []struct{ move, compare, left, right string }{
+		{"MOVB", "CMPB", "CL", "DL"},
+		{"MOVW", "CMPW", "CX", "DX"},
+		{"MOVL", "CMPL", "CX", "DX"},
+		{"MOVBWSX", "CMPW", "CX", "DX"},
+		{"MOVBWZX", "CMPW", "CX", "DX"},
+		{"MOVBLSX", "CMPL", "CX", "DX"},
+		{"MOVBLZX", "CMPL", "CX", "DX"},
+		{"MOVWLSX", "CMPL", "CX", "DX"},
+		{"MOVWLZX", "CMPL", "CX", "DX"},
+	} {
+		bodies[row.move] = fmt.Sprintf("%s (SI),%s\n%s (DI),%s\n%s %s,%s\nSETEQ (AX)",
+			row.move, row.left, row.move, row.right, row.compare, row.left, row.right)
+	}
 	for _, triple := range []string{"i386-unknown-linux-gnu", "i686-pc-windows-msvc"} {
-		for name, body := range map[string]string{
-			"unused-inputs": "CMPL BX,$0\nSETEQ (AX)",
-			"identity":      "CMPL SI,DI\nSETEQ (AX)",
-			"byte-reads":    "MOVBLZX (SI),CX\nMOVBLZX (DI),DX\nCMPL CX,DX\nSETEQ (AX)",
-		} {
+		for name, body := range bodies {
 			t.Run(triple+"/"+name, func(t *testing.T) {
 				declaration, source, helper := x86CustomPointerHelperSource(t, "", body)
 				goAssemblerOracleOutput(t, "386", source, "", true)
