@@ -38,10 +38,10 @@ func TestARMParserFlagAndHelperEdges(t *testing.T) {
 	if regs, ok := expandRegRange("R7-R4"); !ok || len(regs) != 4 || regs[0] != "R7" || regs[3] != "R4" {
 		t.Fatalf("expandRegRange(desc) = (%v, %v)", regs, ok)
 	}
-	if p, idx, ok := regRangeParts("F12"); !ok || p != "F" || idx != 12 {
+	if p, idx, suffix, ok := regRangeParts("F12"); !ok || p != "F" || idx != 12 || suffix != "" {
 		t.Fatalf("regRangeParts(F12) = (%q, %d, %v)", p, idx, ok)
 	}
-	if _, _, ok := regRangeParts("SP"); ok {
+	if _, _, _, ok := regRangeParts("SP"); ok {
 		t.Fatalf("regRangeParts(SP) unexpectedly succeeded")
 	}
 	if got := absInt(-9); got != 9 {
@@ -65,6 +65,9 @@ func TestARMParserFlagAndHelperEdges(t *testing.T) {
 		t.Fatalf("storeFlagCond(AL) error = %v", err)
 	}
 	c.flagsWritten = true
+	if err := c.storeFlagCond("EQ", c.flagsZSlot, "true"); err != nil {
+		t.Fatalf("single-flag storeFlagCond(EQ) error = %v", err)
+	}
 	for _, cond := range []string{"EQ", "NE", "CS", "CC", "HI", "LS", "LT", "GE", "GT", "LE", "MI", "PL", "VS", "VC", "AL"} {
 		if got, err := c.condValue(cond); err != nil || got == "" {
 			t.Fatalf("condValue(%s) = (%q, %v)", cond, got, err)
@@ -88,7 +91,7 @@ func TestARMParserFlagAndHelperEdges(t *testing.T) {
 	}
 
 	out := b.String()
-	for _, want := range []string{"store i1 true", "select i1", "icmp eq i1", "xor i1", "or i1"} {
+	for _, want := range []string{"store i1 true", "select i1", "br i1", "icmp eq i1", "xor i1", "or i1"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("missing %q in output:\n%s", want, out)
 		}
@@ -140,6 +143,14 @@ func TestARMAtomicMovmAndInstrEdges(t *testing.T) {
 	}
 	if ok, _, err := c.lowerData("MOVD", "", false, Instr{Raw: "MOVD R0, R1", Args: []Operand{{Kind: OpReg, Reg: "R0"}, {Kind: OpReg, Reg: "R1"}}}); !ok || err == nil {
 		t.Fatalf("lowerData(MOVD invalid) = (%v, %v), want error", ok, err)
+	}
+	for _, ins := range []Instr{
+		{Op: "MOVH", Raw: "MOVH R0, 2(R1)", Args: []Operand{{Kind: OpReg, Reg: "R0"}, {Kind: OpMem, Mem: MemRef{Base: "R1", Off: 2}}}},
+		{Op: "MOVH", Raw: "MOVH R0, half<>(SB)", Args: []Operand{{Kind: OpReg, Reg: "R0"}, {Kind: OpSym, Sym: "half<>(SB)"}}},
+	} {
+		if ok, term, err := c.lowerData("MOVH", "", false, ins); !ok || term || err != nil {
+			t.Fatalf("lowerData(%q) = (%v, %v, %v)", ins.Raw, ok, term, err)
+		}
 	}
 
 	emitBr := func(string) {}

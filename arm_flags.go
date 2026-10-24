@@ -9,6 +9,61 @@ func (c *armCtx) storeFlag(slot string, v string) {
 	fmt.Fprintf(c.b, "  store i1 %s, ptr %s\n", v, slot)
 }
 
+// captureHardwareFlags records the APSR condition flags immediately after an
+// out-of-line call. ARM assembly is allowed to branch on flags produced by the
+// callee (the Linux kuser CAS helper does this), while an LLVM call has no flag
+// result in its type. Reading APSR keeps that machine-level contract explicit.
+func (c *armCtx) captureHardwareFlags() {
+	status := c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = call i32 asm sideeffect %q, %q()\n", status, "mrs $0, apsr", "=r,~{memory}")
+	c.storeFlagsFromStatus("%" + status)
+}
+
+func (c *armCtx) storeFlagsFromStatus(status string) {
+	for _, item := range []struct {
+		shift int
+		slot  string
+	}{
+		{31, c.flagsNSlot},
+		{30, c.flagsZSlot},
+		{29, c.flagsCSlot},
+		{28, c.flagsVSlot},
+	} {
+		shifted := c.newTmp()
+		flag := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = lshr i32 %s, %d\n", shifted, status, item.shift)
+		fmt.Fprintf(c.b, "  %%%s = trunc i32 %%%s to i1\n", flag, shifted)
+		c.storeFlag(item.slot, "%"+flag)
+	}
+	c.flagsWritten = true
+}
+
+// LLVM arithmetic does not carry Plan 9's modeled NZCV in physical APSR.
+// Keep the physical non-NZCV status bits, but read the same condition state
+// used by source predicates after a source flags write or typed native call.
+func (c *armCtx) statusWithModeledNZCV(status string) string {
+	if !c.flagsWritten {
+		return status
+	}
+	result := c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = and i32 %s, 268435455\n", result, status)
+	for _, item := range []struct {
+		shift int
+		slot  string
+	}{
+		{31, c.flagsNSlot}, {30, c.flagsZSlot},
+		{29, c.flagsCSlot}, {28, c.flagsVSlot},
+	} {
+		flag, wide, shifted, merged := c.newTmp(), c.newTmp(), c.newTmp(), c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = load i1, ptr %s\n", flag, item.slot)
+		fmt.Fprintf(c.b, "  %%%s = zext i1 %%%s to i32\n", wide, flag)
+		fmt.Fprintf(c.b, "  %%%s = shl i32 %%%s, %d\n", shifted, wide, item.shift)
+		fmt.Fprintf(c.b, "  %%%s = or i32 %%%s, %%%s\n", merged, result, shifted)
+		result = merged
+	}
+	return "%" + result
+}
+
 func (c *armCtx) storeFlagCond(cond, slot, v string) error {
 	if cond == "" || strings.EqualFold(cond, "AL") {
 		c.storeFlag(slot, v)
@@ -27,6 +82,11 @@ func (c *armCtx) storeFlagCond(cond, slot, v string) error {
 }
 
 func (c *armCtx) setFlagsSub(cond, dst, src, res string) error {
+	if cond != "" && !strings.EqualFold(cond, "AL") {
+		return c.emitConditionalEffect(cond, func() error {
+			return c.setFlagsSub("", dst, src, res)
+		})
+	}
 	c.flagsWritten = true
 	z := c.newTmp()
 	n := c.newTmp()
@@ -55,6 +115,11 @@ func (c *armCtx) setFlagsSub(cond, dst, src, res string) error {
 }
 
 func (c *armCtx) setFlagsAdd(cond, dst, src, res string) error {
+	if cond != "" && !strings.EqualFold(cond, "AL") {
+		return c.emitConditionalEffect(cond, func() error {
+			return c.setFlagsAdd("", dst, src, res)
+		})
+	}
 	c.flagsWritten = true
 	z := c.newTmp()
 	n := c.newTmp()
@@ -85,6 +150,11 @@ func (c *armCtx) setFlagsAdd(cond, dst, src, res string) error {
 }
 
 func (c *armCtx) setFlagsLogic(cond, res string) error {
+	if cond != "" && !strings.EqualFold(cond, "AL") {
+		return c.emitConditionalEffect(cond, func() error {
+			return c.setFlagsLogic("", res)
+		})
+	}
 	c.flagsWritten = true
 	z := c.newTmp()
 	n := c.newTmp()
@@ -96,9 +166,45 @@ func (c *armCtx) setFlagsLogic(cond, res string) error {
 	return c.storeFlagCond(cond, c.flagsNSlot, "%"+n)
 }
 
+// Go's ARM C_RCON row encodes an eight-bit immediate rotated right by an
+// even count. A nonzero rotation supplies C from bit 31; an unshifted register
+// (including a materialized large constant) preserves C. AND's C_NCON row
+// instead uses BIC with the complemented immediate (asm5 encoder type 114).
+func armLogicalImmediateCarry(op string, source Operand) string {
+	if source.Kind != OpImm || source.ImmRaw != "" {
+		return ""
+	}
+	value := uint32(source.Imm)
+	if op == "AND" && !armRotatedImmediateEncodable(value) && armRotatedImmediateEncodable(^value) {
+		value = ^value
+	}
+	if value <= 255 || !armRotatedImmediateEncodable(value) {
+		return ""
+	}
+	if value&(1<<31) != 0 {
+		return "true"
+	}
+	return "false"
+}
+
+func (c *armCtx) setARMLogicalFlags(condition, result, carry string) error {
+	if condition != "" && !strings.EqualFold(condition, "AL") {
+		return c.emitConditionalEffect(condition, func() error {
+			return c.setARMLogicalFlags("", result, carry)
+		})
+	}
+	if err := c.setFlagsLogic("", result); err != nil {
+		return err
+	}
+	if carry != "" {
+		c.storeFlag(c.flagsCSlot, carry)
+	}
+	return nil
+}
+
 func (c *armCtx) condValue(cond string) (string, error) {
 	if !c.flagsWritten {
-		return "", fmt.Errorf("arm: condition %s without any prior flags write", cond)
+		return "", fmt.Errorf("%w: arm condition %s has no prior flags write", ErrProbeNeedsContext, cond)
 	}
 	ldN := c.newTmp()
 	ldZ := c.newTmp()

@@ -27,8 +27,42 @@ func TestToPlan9Arch(t *testing.T) {
 	if got, err := toPlan9Arch("arm64"); err != nil || got != plan9asm.ArchARM64 {
 		t.Fatalf("toPlan9Arch(arm64) = (%q, %v)", got, err)
 	}
-	if _, err := toPlan9Arch("wasm"); err == nil {
-		t.Fatalf("expected unsupported arch error")
+	if got, err := toPlan9Arch("wasm"); err != nil || got != plan9asm.ArchWASM {
+		t.Fatalf("toPlan9Arch(wasm) = (%q, %v)", got, err)
+	}
+}
+
+func TestValidateCorpusTarget(t *testing.T) {
+	for _, test := range []struct {
+		corpus string
+		goarch string
+	}{
+		{corpus: "std", goarch: "wasm"},
+		{corpus: "go-asm", goarch: "amd64"},
+		{corpus: "go-asm", goarch: "wasm"},
+		{corpus: "arm64-plan9", goarch: "arm64"},
+	} {
+		if err := validateCorpusTarget(test.corpus, test.goarch); err != nil {
+			t.Fatalf("validateCorpusTarget(%q, %q) = %v", test.corpus, test.goarch, err)
+		}
+	}
+	if err := validateCorpusTarget("arm64-plan9", "amd64"); err == nil || !strings.Contains(err.Error(), "requires -goarch arm64") {
+		t.Fatalf("validateCorpusTarget(arm64-plan9, amd64) = %v", err)
+	}
+}
+
+func TestScanARM64Plan9Cases(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "plan9cases.txt")
+	src := "00000000| BFI $8, R1, $16, R2\ninvalid line\n00000000| RET\n00000000| BFI [Z22.B-Z23.B]\n"
+	if err := os.WriteFile(path, []byte(src), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	ops, forms, parseErrs, files, err := scanARM64Plan9Cases(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if files != 1 || ops["BFI"].Count != 2 || len(forms) != 2 || len(parseErrs) != 0 {
+		t.Fatalf("scanARM64Plan9Cases() = ops=%#v forms=%#v parseErrs=%#v files=%d", ops, forms, parseErrs, files)
 	}
 }
 
@@ -49,7 +83,7 @@ func TestNormalizeOpAndDirectiveHelpers(t *testing.T) {
 		}
 	}
 
-	if !isDirective("TEXT") || !isDirective("DATA") {
+	if !isDirective("TEXT") || !isDirective("DATA") || !isDirective("PCALIGN") || !isDirective("PCALIGNMAX") {
 		t.Fatalf("expected directive recognition")
 	}
 	if isDirective("MOVD") {
@@ -93,16 +127,16 @@ func TestClusterOfAndTopFiles(t *testing.T) {
 func TestShortStdPath(t *testing.T) {
 	goroot := runtime.GOROOT()
 	if goroot == "" {
-		t.Skip("GOROOT not available")
+		t.Fatal("GOROOT not available")
 	}
 
 	inRoot := filepath.Join(goroot, "src", "runtime", "sys_arm64.s")
-	if got := shortStdPath(inRoot); got != "runtime/sys_arm64.s" {
+	if got := shortStdPath(inRoot, goroot); got != "runtime/sys_arm64.s" {
 		t.Fatalf("shortStdPath(inRoot) = %q", got)
 	}
 
 	outside := filepath.Join(t.TempDir(), "local.s")
-	if got := shortStdPath(outside); got != filepath.ToSlash(outside) {
+	if got := shortStdPath(outside, goroot); got != filepath.ToSlash(outside) {
 		t.Fatalf("shortStdPath(outside) = %q", got)
 	}
 }
@@ -130,7 +164,7 @@ func lowerOp(op any) {
 	if err != nil {
 		t.Fatalf("extractSupportedOps: %v", err)
 	}
-	want := []string{"VPXORQ", "VMOVDQU64", "AESENC", "MOVQ", "RET"}
+	want := []string{"VPXORQ", "VMOVDQU64", "AESENC", "MOVQ", "RET", "PCALIGN", "PCALIGNMAX", "PCDATA", "FUNCDATA"}
 	got := make([]string, 0, len(want))
 	for _, op := range want {
 		if _, ok := supported[op]; ok {
@@ -188,6 +222,19 @@ func TestListStdPackages(t *testing.T) {
 	}
 	if !foundRuntime {
 		t.Fatalf("listStdPackages() missing runtime package")
+	}
+}
+
+func TestListStdPackagesAtGOROOT(t *testing.T) {
+	pkgs, err := listStdPackagesAtGOROOT(runtime.GOOS, runtime.GOARCH, runtime.GOROOT())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(pkgs) == 0 {
+		t.Fatal("listStdPackagesAtGOROOT returned no packages")
+	}
+	if _, err := listStdPackagesAtGOROOT("js", "wasm", t.TempDir()); err == nil || !strings.Contains(err.Error(), "Go command for GOROOT") {
+		t.Fatalf("missing Go command error = %v", err)
 	}
 }
 
@@ -278,7 +325,7 @@ GLOBL foo(SB), RODATA, $8
 		Dir:        dir,
 		SFiles:     []string{"good.s", "bad.s", "data.s"},
 	}}
-	ops, parseErrs, pkgsWithS, asmFiles, err := scanPackages(pkgs, plan9asm.ArchAMD64)
+	ops, forms, parseErrs, pkgsWithS, asmFiles, err := scanPackages(pkgs, plan9asm.ArchAMD64, "amd64", runtime.GOROOT())
 	if err != nil {
 		t.Fatalf("scanPackages() error = %v", err)
 	}
@@ -297,10 +344,12 @@ GLOBL foo(SB), RODATA, $8
 		}
 	}
 
-	rep := buildReport("linux", "amd64", 10, pkgsWithS, asmFiles, ops, map[string]struct{}{
+	rep := buildReport("std", "go1.test", "linux", "amd64", 10, pkgsWithS, asmFiles, ops, forms, map[string]struct{}{
 		"RET":  {},
 		"MOVQ": {},
-	}, parseErrs)
+	}, nil, map[string]struct{}{
+		"amd64\x00MOVQ immediate,gpr64": {},
+	}, map[string]struct{}{}, parseErrs)
 	if rep.Goos != "linux" || rep.Goarch != "amd64" {
 		t.Fatalf("buildReport() wrong target: %#v", rep)
 	}
@@ -312,6 +361,9 @@ GLOBL foo(SB), RODATA, $8
 	}
 	if len(rep.ClusterStats) == 0 || len(rep.FamilyStats) == 0 {
 		t.Fatalf("buildReport() expected cluster/family stats")
+	}
+	if rep.RuntimeVerifiedForms != 1 {
+		t.Fatalf("RuntimeVerifiedForms = %d, want 1", rep.RuntimeVerifiedForms)
 	}
 
 	md := string(renderMarkdown(rep))
@@ -327,13 +379,238 @@ GLOBL foo(SB), RODATA, $8
 	}
 }
 
+func TestScanPackagesProbesContiguousX86RawDirectiveGroups(t *testing.T) {
+	t.Run("complete stream", func(t *testing.T) {
+		dir := t.TempDir()
+		src := `TEXT ·f(SB),NOSPLIT,$0-0
+	BYTE $0xEB
+	BYTE $0x00
+	RET
+`
+		if err := os.WriteFile(filepath.Join(dir, "raw.s"), []byte(src), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		_, forms, parseErrs, _, _, err := scanPackages([]pkgJSON{{
+			ImportPath: "example/raw",
+			Dir:        dir,
+			SFiles:     []string{"raw.s"},
+		}}, plan9asm.ArchAMD64, "amd64", runtime.GOROOT())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(parseErrs) != 0 {
+			t.Fatalf("parse errors = %#v", parseErrs)
+		}
+		stat := forms["BYTE immediate"]
+		if stat == nil {
+			t.Fatalf("missing BYTE immediate form in %#v", forms)
+		}
+		if stat.Count != 2 || stat.SupportedCount != 1 || stat.UnsupportedCount != 0 {
+			t.Fatalf("BYTE stream stats = count %d, supported %d, unsupported %d; want 2, 1, 0",
+				stat.Count, stat.SupportedCount, stat.UnsupportedCount)
+		}
+	})
+
+	t.Run("truncated stream", func(t *testing.T) {
+		dir := t.TempDir()
+		src := `TEXT ·f(SB),NOSPLIT,$0-0
+	BYTE $0xEB
+	RET
+`
+		if err := os.WriteFile(filepath.Join(dir, "raw.s"), []byte(src), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		_, forms, _, _, _, err := scanPackages([]pkgJSON{{
+			ImportPath: "example/raw",
+			Dir:        dir,
+			SFiles:     []string{"raw.s"},
+		}}, plan9asm.ArchAMD64, "amd64", runtime.GOROOT())
+		if err != nil {
+			t.Fatal(err)
+		}
+		stat := forms["BYTE immediate"]
+		if stat == nil || stat.UnsupportedCount != 1 {
+			t.Fatalf("truncated BYTE stream stats = %#v; want one unsupported probe", stat)
+		}
+	})
+}
+
+func TestScanPackagesProbesARMRawUndefinedInstruction(t *testing.T) {
+	dir := t.TempDir()
+	src := `TEXT ·f(SB),NOSPLIT,$0-0
+	WORD $0xe7f001f0
+`
+	if err := os.WriteFile(filepath.Join(dir, "raw.s"), []byte(src), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, forms, parseErrs, _, _, err := scanPackages([]pkgJSON{{
+		ImportPath: "example/raw",
+		Dir:        dir,
+		SFiles:     []string{"raw.s"},
+	}}, plan9asm.ArchARM, "arm", runtime.GOROOT())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(parseErrs) != 0 {
+		t.Fatalf("parse errors = %#v", parseErrs)
+	}
+	stat := forms["WORD immediate"]
+	if stat == nil || stat.Count != 1 || stat.SupportedCount != 1 || stat.UnsupportedCount != 0 {
+		t.Fatalf("ARM WORD stats = %#v; want one supported probe", stat)
+	}
+}
+
+func TestAddFormStatCachesConcreteInstructionsWithoutCollapsingValues(t *testing.T) {
+	forms := map[string]*formStat{}
+	for _, imm := range []int64{1, 256, 256} {
+		addFormStat(forms, plan9asm.ArchAMD64, "amd64", plan9asm.Instr{
+			Op:  "PALIGNR",
+			Raw: "PALIGNR immediate, X0, X1",
+			Args: []plan9asm.Operand{
+				{Kind: plan9asm.OpImm, Imm: imm},
+				{Kind: plan9asm.OpReg, Reg: "X0"},
+				{Kind: plan9asm.OpReg, Reg: "X1"},
+			},
+		}, "fixture.s")
+	}
+	if len(forms) != 1 {
+		t.Fatalf("forms = %d, want 1", len(forms))
+	}
+	for _, stat := range forms {
+		if stat.SupportedCount != 1 || stat.UnsupportedCount != 1 {
+			t.Fatalf("probe classifications = supported %d, unsupported %d; want 1 and 1", stat.SupportedCount, stat.UnsupportedCount)
+		}
+		if len(stat.ProbeKeys) != 2 {
+			t.Fatalf("probe cache entries = %d, want 2", len(stat.ProbeKeys))
+		}
+	}
+}
+
+func TestBuildOpcodeCatalogIncludesGeneratedTables(t *testing.T) {
+	goroot := t.TempDir()
+	dir := filepath.Join(goroot, "src", "cmd", "internal", "obj", "arm64")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "anames.go"), []byte("package arm64\nvar Anames = []string{\n\"ADD\",\n\"LAST\",\n}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "anames_gen.go"), []byte("package arm64\nvar sveAnames = []string{\n\"ZADD\",\n}\nfunc init() { Anames = append(Anames, sveAnames...) }\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	ops := map[string]*opStat{"ADD": {Count: 1}}
+	catalog, err := buildOpcodeCatalog(goroot, plan9asm.ArchARM64, "arm64", ops, map[string]*formStat{}, map[string]struct{}{"ADD": {}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(catalog) != 2 || catalog[0].Opcode != "ADD" || catalog[1].Opcode != "ZADD" {
+		t.Fatalf("catalog = %#v", catalog)
+	}
+	if !catalog[0].Observed || !catalog[0].NameClaimed {
+		t.Fatalf("ADD catalog flags = %#v", catalog[0])
+	}
+	if catalog[1].Family != "sve" {
+		t.Fatalf("ZADD family = %q, want sve", catalog[1].Family)
+	}
+}
+
+func TestExtractSupportedOpsFindsPackageLevelSpecTableWithoutOpcodeName(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "amd64_table.go"), []byte(`package sample
+var packedFamilySpecs = map[string]int{
+	"VTABLEOP": 1,
+}
+`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "parser.go"), []byte("package sample\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	supported, err := extractSupportedOps(dir, "amd64")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := supported["VTABLEOP"]; !ok {
+		t.Fatal("package-level table-driven opcode was not extracted")
+	}
+}
+
+func TestExtractSupportedOpsFindsSingleFamilyOpcodeComparison(t *testing.T) {
+	dir := t.TempDir()
+	src := `package sample
+
+func lowerSingleFamily(op string, unrelated string) bool {
+	if op != "VEXT" {
+		return false
+	}
+	if "PRFM" == op {
+		return true
+	}
+	return unrelated == "NOT_AN_OPCODE"
+}
+`
+	if err := os.WriteFile(filepath.Join(dir, "arm64_lower_single.go"), []byte(src), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	supported, err := extractSupportedOps(dir, "arm64")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, op := range []string{"VEXT", "PRFM"} {
+		if _, ok := supported[op]; !ok {
+			t.Errorf("single-family opcode comparison omitted %s", op)
+		}
+	}
+	if _, ok := supported["NOT_AN_OPCODE"]; ok {
+		t.Fatal("unrelated string comparison was advertised as an opcode")
+	}
+}
+
+func TestBuildWASMOpcodeCatalogNormalizesOfficialNames(t *testing.T) {
+	goroot := t.TempDir()
+	dir := filepath.Join(goroot, "src", "cmd", "internal", "obj", "wasm")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "anames.go"), []byte("package wasm\nvar Anames = []string{\n\"I32Add\",\n\"ReservedFD01\",\n\"LAST\",\n}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	catalog, err := buildOpcodeCatalog(goroot, plan9asm.ArchWASM, "wasm", map[string]*opStat{"I32ADD": {Count: 1}}, nil, map[string]struct{}{"I32ADD": {}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(catalog) != 1 || catalog[0].Opcode != "I32ADD" || !catalog[0].Observed || !catalog[0].NameClaimed {
+		t.Fatalf("wasm catalog = %#v", catalog)
+	}
+}
+
+func TestRenderMarkdownWASMOpcodeInventory(t *testing.T) {
+	md := string(renderMarkdown(report{Goos: "js", Goarch: "wasm", EncoderForms: 3, EncoderOpcodes: 3, EncoderOpsObserved: 2}))
+	if !strings.Contains(md, "official wasm opcode entries: `3` (`2` observed in the official GOROOT corpus)") {
+		t.Fatalf("wasm report has the wrong inventory description:\n%s", md)
+	}
+}
+
+func TestGoAsmInstructionLine(t *testing.T) {
+	for _, line := range []string{"XORB SI, (AX)", "  PUNPCKLQDQ X0, X0 // encoding", "RET"} {
+		if !goAsmInstructionLine(line) {
+			t.Errorf("goAsmInstructionLine(%q) = false", line)
+		}
+	}
+	for _, line := range []string{"", "// comment", "#include \"textflag.h\"", "TEXT f(SB),$0", "label:"} {
+		if goAsmInstructionLine(line) {
+			t.Errorf("goAsmInstructionLine(%q) = true", line)
+		}
+	}
+}
+
 func TestBuildReportAndJSONShape(t *testing.T) {
 	ops := map[string]*opStat{
 		"CALL":   {Count: 3, Files: map[string]int{"a.s": 2}, Pkgs: map[string]int{"p": 3}},
 		"VPXORQ": {Count: 5, Files: map[string]int{"b.s": 5}, Pkgs: map[string]int{"p": 5}},
 		"DATA":   {Count: 1, Files: map[string]int{"c.s": 1}, Pkgs: map[string]int{"p": 1}},
 	}
-	rep := buildReport("linux", "amd64", 3, 1, 2, ops, map[string]struct{}{"CALL": {}}, []parseErr{{File: "bad.s", Err: "boom"}})
+	rep := buildReport("std", "go1.test", "linux", "amd64", 3, 1, 2, ops, map[string]*formStat{}, map[string]struct{}{"CALL": {}}, nil, map[string]struct{}{}, map[string]struct{}{}, []parseErr{{File: "bad.s", Err: "boom"}})
 	if rep.UniqueOps != 3 {
 		t.Fatalf("UniqueOps = %d, want 3", rep.UniqueOps)
 	}
@@ -352,6 +629,35 @@ func TestBuildReportAndJSONShape(t *testing.T) {
 	}
 	if !strings.Contains(string(js), `"goarch":"amd64"`) {
 		t.Fatalf("json output missing goarch: %s", js)
+	}
+}
+
+func TestBuildReportStableFamilyExampleSelection(t *testing.T) {
+	ops := []string{"ADDQ", "ANDQ", "CMPQ", "DIVQ", "IDIVQ", "ORQ", "SUBQ", "XORQ"}
+	want := append([]string(nil), ops[:6]...)
+	var previous []byte
+	for rotation := 0; rotation < 32; rotation++ {
+		inventory := make(map[string]*opStat, len(ops))
+		for i := range ops {
+			index := (i + rotation) % len(ops)
+			inventory[ops[index]] = &opStat{Count: index + 1,
+				Files: map[string]int{"fixture.s": index + 1},
+				Pkgs:  map[string]int{"fixture": index + 1}}
+		}
+		rep := buildReport("std", "go1.test", "linux", "amd64", 1, 1, 1,
+			inventory, nil, nil, nil, nil, nil, nil)
+		if len(rep.FamilyStats) != 1 || rep.FamilyStats[0].UniqueOps != len(ops) ||
+			rep.FamilyStats[0].Hits != 36 || !reflect.DeepEqual(rep.FamilyStats[0].Examples, want) {
+			t.Fatalf("rotation %d: unstable family sample: %+v; want %v", rotation, rep.FamilyStats, want)
+		}
+		encoded, err := json.Marshal(rep)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if previous != nil && string(encoded) != string(previous) {
+			t.Fatalf("rotation %d: unchanged input produced different JSON", rotation)
+		}
+		previous = encoded
 	}
 }
 
@@ -453,6 +759,27 @@ func TestMainAndFatalfSubprocess(t *testing.T) {
 	main()
 	if data, err := os.ReadFile(outPath); err != nil || !strings.Contains(string(data), `"goarch": "amd64"`) {
 		t.Fatalf("main() output = (%q, %v)", string(data), err)
+	}
+
+	wasmOut := filepath.Join(t.TempDir(), "wasm-report.json")
+	flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ContinueOnError)
+	os.Args = []string{
+		"plan9asmscan",
+		"-corpus=go-asm",
+		"-goos=js",
+		"-goarch=wasm",
+		"-format=json",
+		"-repo-root=../..",
+		"-out=" + wasmOut,
+	}
+	main()
+	data, err := os.ReadFile(wasmOut)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var wasmReport report
+	if err := json.Unmarshal(data, &wasmReport); err != nil || wasmReport.Goarch != "wasm" || wasmReport.OfficialOpcodes < 100 {
+		t.Fatalf("wasm main() output = (%q, %v)", string(data), err)
 	}
 
 	cmd := exec.Command(testBin, "-test.run=TestMainAndFatalfSubprocess")

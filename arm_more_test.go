@@ -75,7 +75,7 @@ func TestTranslateARMExtendedArithmetic(t *testing.T) {
 		"mul i64",
 		"select i1",
 		"call i32 @llvm.ctlz.i32",
-		`asm sideeffect "mrc p15, 0, $0, 1, 0, 0"`,
+		`asm sideeffect "mrc p15, #0, $0, c1, c0, #0"`,
 	} {
 		if !strings.Contains(ll, want) {
 			t.Fatalf("missing %q in output:\n%s", want, ll)
@@ -149,8 +149,8 @@ func TestARMHelperCoverage(t *testing.T) {
 		}
 
 		fn := Func{Instrs: []Instr{{Args: []Operand{{Kind: OpImm, ImmRaw: "$(sym)"}}}}}
-		if err := validateResolvedImmediates(ArchAMD64, fn); err != nil {
-			t.Fatalf("validateResolvedImmediates(amd64) error = %v", err)
+		if err := validateResolvedImmediates(ArchAMD64, fn); err == nil {
+			t.Fatal("validateResolvedImmediates(amd64) accepted an unresolved constant")
 		}
 		if err := validateResolvedImmediates(ArchARM, fn); err == nil {
 			t.Fatalf("validateResolvedImmediates(arm) unexpectedly succeeded")
@@ -179,7 +179,7 @@ func TestARMHelperCoverage(t *testing.T) {
 		if err := c.storeARMValue(Operand{Kind: OpMem, Mem: MemRef{Base: "R3", Off: 4}}, "55", 8, "", false, "MOVB R0, 4(R3)"); err != nil {
 			t.Fatalf("storeARMValue(mem) error = %v", err)
 		}
-		if err := c.storeARMValue(Operand{Kind: OpSym, Sym: "ignore<>(SB)"}, "1", 32, "", false, "MOVW R0, ignore<>(SB)"); err != nil {
+		if err := c.storeARMValue(Operand{Kind: OpSym, Sym: "global<>(SB)"}, "1", 32, "", false, "MOVW R0, global<>(SB)"); err != nil {
 			t.Fatalf("storeARMValue(sym) error = %v", err)
 		}
 		if err := c.storeARMValue(Operand{Kind: OpMem, Mem: MemRef{Base: "R3"}}, "1", 32, "EQ", false, "MOVW.EQ R0, (R3)"); err == nil {
@@ -207,6 +207,7 @@ func TestARMHelperCoverage(t *testing.T) {
 			"select i1",
 			"trunc i32 42 to i16",
 			"store i8",
+			`store i32 1, ptr @"example.global"`,
 			`getelementptr i8, ptr @"runtime.main", i32 8`,
 			"inttoptr i32",
 			"zext i32",
@@ -347,11 +348,27 @@ TEXT ·tail(SB),NOSPLIT,$0-0
 		"lshr i32",
 		"ashr i32",
 		"call i32 @llvm.fshr.i32",
-		"ret i16 0",
+		"trunc i32",
+		"ret i16",
 	} {
 		if !strings.Contains(ll, want) {
 			t.Fatalf("missing %q in output:\n%s", want, ll)
 		}
+	}
+}
+
+func TestTranslateARMTailCallAdaptsIntegerReturnWidths(t *testing.T) {
+	ll := translateARMForTest(t, `TEXT ·boolTail(SB),NOSPLIT,$0-0
+	B ·wide(SB)
+
+TEXT ·wide(SB),NOSPLIT,$0-0
+	RET
+`, map[string]FuncSig{
+		"example.boolTail": {Name: "example.boolTail", Ret: I1},
+		"example.wide":     {Name: "example.wide", Ret: I64},
+	})
+	if !strings.Contains(ll, "trunc i64 %") || !strings.Contains(ll, " to i1") {
+		t.Fatalf("ARM integer tailcall did not adapt i64 to i1:\n%s", ll)
 	}
 }
 

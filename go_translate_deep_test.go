@@ -1,11 +1,13 @@
 package plan9asm
 
 import (
+	"errors"
 	"go/ast"
 	"go/constant"
 	"go/parser"
 	"go/token"
 	"go/types"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -133,8 +135,9 @@ func TestGoTranslateTypeCoverage(t *testing.T) {
 		{types.NewInterfaceType(nil, nil), "amd64", LLVMType("{ ptr, ptr }"), true},
 		{named, "amd64", I32, true},
 		{alias, "arm64", I64, true},
-		{types.Typ[types.Complex64], "amd64", "", false},
-		{types.NewStruct(nil, nil), "amd64", "", false},
+		{types.Typ[types.Complex64], "amd64", "{ float, float }", true},
+		{types.NewStruct(nil, nil), "amd64", LLVMType("[0 x i8]"), true},
+		{types.NewStruct([]*types.Var{types.NewVar(token.NoPos, nil, "x", types.Typ[types.Int])}, nil), "amd64", "{ i64 }", true},
 	} {
 		got, err := goLLVMTypeForType(tc.typ, tc.goarch)
 		if (err == nil) != tc.ok || got != tc.want {
@@ -161,11 +164,11 @@ func TestGoTranslateTypeCoverage(t *testing.T) {
 		types.NewVar(token.NoPos, nil, "n", types.Typ[types.Int32]),
 	)
 	sz := types.SizesFor("gc", "arm64")
-	args, slots, next, err := goLLVMArgsAndFrameSlotsForTuple(tup, "arm64", sz, 8, false)
+	args, slots, next, err := goLLVMArgsAndFrameSlotsForTuple(tup, "arm64", sz, sz, 8, false)
 	if err != nil || len(args) != 3 || len(slots) != 6 || next <= 8 {
 		t.Fatalf("goLLVMArgsAndFrameSlotsForTuple(flat=false) = (%v, %v, %d, %v)", args, slots, next, err)
 	}
-	args, slots, next, err = goLLVMArgsAndFrameSlotsForTuple(tup, "arm64", sz, 8, true)
+	args, slots, next, err = goLLVMArgsAndFrameSlotsForTuple(tup, "arm64", sz, sz, 8, true)
 	if err != nil || len(args) != 6 || len(slots) != 6 || next <= 8 {
 		t.Fatalf("goLLVMArgsAndFrameSlotsForTuple(flat=true) = (%v, %v, %d, %v)", args, slots, next, err)
 	}
@@ -175,6 +178,56 @@ func TestGoTranslateTypeCoverage(t *testing.T) {
 	}
 	if got := goAlignOff(5, 4); got != 8 {
 		t.Fatalf("goAlignOff(5,4) = %d", got)
+	}
+}
+
+func TestModerncUint128ABI0Signature(t *testing.T) {
+	pkg := mustGoPackageWithImports(t, "modernc.org/libc", map[string]string{
+		"abi0_linux_amd64.go": `package libc
+			type TLS struct{}
+			type Uint128 struct { Lo, Hi uint64 }
+			func Y__builtin_mul_overflowUint128(t *TLS, a, b Uint128, res uintptr) (result int32)`,
+	})
+	fn, ok := pkg.Types.Scope().Lookup("Y__builtin_mul_overflowUint128").(*types.Func)
+	if !ok {
+		t.Fatal("missing assembly declaration")
+	}
+	sizes := types.SizesFor("gc", "amd64")
+	sig, err := goFuncSigForDeclaredFunc("modernc.org/libc.Y__builtin_mul_overflowUint128", fn, "amd64", sizes, sizes, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := sig.Args, []LLVMType{Ptr, "{ i64, i64 }", "{ i64, i64 }", I64}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("Args = %v, want %v", got, want)
+	}
+	if sig.Ret != I32 {
+		t.Fatalf("Ret = %s, want %s", sig.Ret, I32)
+	}
+	for _, slot := range []struct {
+		index  int
+		offset int64
+		field  int
+	}{
+		{0, 0, -1},
+		{1, 8, 0},
+		{1, 16, 1},
+		{2, 24, 0},
+		{2, 32, 1},
+		{3, 40, -1},
+	} {
+		found := false
+		for _, got := range sig.Frame.Params {
+			if got.Index == slot.index && got.Offset == slot.offset && got.Field == slot.field {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("missing ABI0 parameter slot %+v in %+v", slot, sig.Frame.Params)
+		}
+	}
+	if len(sig.Frame.Results) != 1 || sig.Frame.Results[0].Offset != 48 {
+		t.Fatalf("Results = %+v, want one slot at offset 48", sig.Frame.Results)
 	}
 }
 
@@ -190,43 +243,74 @@ func cmp(a, b int) int { return a }
 `)
 	scope := pkg.Types.Scope()
 	plain := scope.Lookup("Plain").(*types.Func)
-	sig, err := goFuncSigForDeclaredFunc("test/pkg.Plain", plain, "arm64", types.SizesFor("gc", "arm64"), true)
+	sz := types.SizesFor("gc", "arm64")
+	sig, err := goFuncSigForDeclaredFunc("test/pkg.Plain", plain, "arm64", sz, sz, true)
 	if err != nil || sig.Ret == Void || len(sig.Frame.Params) == 0 || len(sig.Frame.Results) == 0 {
 		t.Fatalf("goFuncSigForDeclaredFunc(Plain) = (%v, %v)", sig, err)
 	}
 	variadic := scope.Lookup("Variadic").(*types.Func)
-	if _, err := goFuncSigForDeclaredFunc("test/pkg.Variadic", variadic, "amd64", types.SizesFor("gc", "amd64"), false); err == nil {
+	sz = types.SizesFor("gc", "amd64")
+	if _, err := goFuncSigForDeclaredFunc("test/pkg.Variadic", variadic, "amd64", sz, sz, false); err == nil {
 		t.Fatalf("goFuncSigForDeclaredFunc(Variadic) unexpectedly succeeded")
 	}
 	named := scope.Lookup("S").Type().(*types.Named)
-	if _, err := goFuncSigForDeclaredFunc("test/pkg.Method", named.Method(0), "amd64", types.SizesFor("gc", "amd64"), false); err == nil {
+	if _, err := goFuncSigForDeclaredFunc("test/pkg.Method", named.Method(0), "amd64", sz, sz, false); err == nil {
 		t.Fatalf("goFuncSigForDeclaredFunc(Method) unexpectedly succeeded")
 	}
 
 	file := &File{
 		Arch: ArchARM64,
 		Funcs: []Func{
-			{Sym: "·Plain", Instrs: []Instr{{Op: OpTEXT}, {Op: "CALL", Args: []Operand{{Kind: OpSym, Sym: "runtime·cmp(SB)"}}}, {Op: "CALL", Args: []Operand{{Kind: OpSym, Sym: "undeclared_call(SB)"}}}, {Op: "B", Args: []Operand{{Kind: OpSym, Sym: "localtarget<>(SB)"}}}, {Op: OpRET}}},
-			{Sym: "localhelper<>", Instrs: []Instr{{Op: OpTEXT}, {Op: "B", Args: []Operand{{Kind: OpSym, Sym: "helper<>(SB)"}}}, {Op: OpRET}}},
+			{
+				Sym: "·Plain",
+				Instrs: []Instr{
+					{Op: OpTEXT},
+					{Op: "CALL", Args: []Operand{{Kind: OpSym, Sym: "runtime·cmp(SB)"}}},
+					{Op: "CALL", Args: []Operand{{Kind: OpSym, Sym: "undeclared_call(SB)"}}},
+					{Op: "B", Args: []Operand{{Kind: OpSym, Sym: "localtarget<>(SB)"}}},
+					{Op: OpRET},
+				},
+			},
+			{
+				Sym: "localhelper<>",
+				Instrs: []Instr{
+					{Op: OpTEXT},
+					{Op: "B", Args: []Operand{{Kind: OpSym, Sym: "helper<>(SB)"}}},
+					{Op: OpRET},
+				},
+			},
 			{Sym: "localtarget<>"},
 		},
 	}
-	sigs, err := goSigsForAsmFile(pkg, file, testResolveSym("test/pkg"), "arm64", func(resolved string) (FuncSig, bool) {
+	manual := func(resolved string) (FuncSig, bool) {
 		if resolved == "test/pkg.localhelper" {
 			return FuncSig{Name: resolved, Args: []LLVMType{I64}, Ret: I64}, true
 		}
 		return FuncSig{}, false
-	})
+	}
+	if _, err := goSigsForAsmFile(pkg, file, testResolveSym("test/pkg"), "arm64", nil, nil, manual); !errors.Is(err, ErrProbeNeedsContext) ||
+		!strings.Contains(err.Error(), "no declaration or explicit register transport") {
+		t.Fatalf("unbound private tail inherited its caller's signature: %v", err)
+	}
+
+	// Ordinary unresolved calls remain untyped. Changing the query fixture's
+	// edge does not supply a declaration, register ABI or executable contract.
+	file.Funcs[0].Instrs[3].Op = "CALL"
+	file.Funcs = file.Funcs[:2]
+	sigs, err := goSigsForAsmFile(pkg, file, testResolveSym("test/pkg"), "arm64", nil, nil, manual)
 	if err != nil {
 		t.Fatalf("goSigsForAsmFile() error = %v", err)
 	}
-	for _, want := range []string{"test/pkg.Plain", "runtime.cmp", "test/pkg.localhelper", "test/pkg.localtarget"} {
+	for _, want := range []string{"test/pkg.Plain", "runtime.cmp", "test/pkg.localhelper"} {
 		if _, ok := sigs[want]; !ok {
 			t.Fatalf("missing signature %q", want)
 		}
 	}
 	if _, ok := sigs["test/pkg.undeclared_call"]; ok {
 		t.Fatalf("ordinary unresolved CALL unexpectedly received a synthesized signature")
+	}
+	if _, ok := sigs["test/pkg.localtarget"]; ok {
+		t.Fatal("unresolved local helper CALL unexpectedly received a synthesized signature")
 	}
 
 	builder := goSigBuilder{
@@ -281,7 +365,7 @@ var helper int
 	if err := nilLocalBuilder.addDeclaredFuncSigs(&File{Funcs: []Func{{Sym: "missing_local<>"}}}); err != nil {
 		t.Fatalf("addDeclaredFuncSigs(local with nil map) error = %v", err)
 	}
-	if _, err := goSigsForAsmFile(pkg, file, testResolveSym("test/pkg"), "madeup", nil); err == nil {
+	if _, err := goSigsForAsmFile(pkg, file, testResolveSym("test/pkg"), "madeup", nil, nil, nil); err == nil {
 		t.Fatalf("goSigsForAsmFile(madeup) unexpectedly succeeded")
 	}
 }
@@ -347,19 +431,14 @@ func TestTranslateGoModuleUndeclaredLocalTrampoline(t *testing.T) {
 	pkg := mustGoPackage(t, "test/pkg", `package testpkg
 func F() {}
 `)
-	tr, err := TranslateGoModule(pkg, []byte(`TEXT local_trampoline<>(SB),NOSPLIT,$0-0
+	_, err := TranslateGoModule(pkg, []byte(`TEXT local_trampoline<>(SB),NOSPLIT,$0-0
 JMP external_symbol(SB)
 `), GoModuleOptions{
 		GOARCH:       "arm64",
 		TargetTriple: "aarch64-unknown-linux-gnu",
 		ResolveSym:   testResolveSym("test/pkg"),
 	})
-	if err != nil {
-		t.Fatalf("TranslateGoModule(undeclared local trampoline) error = %v", err)
-	}
-	defer tr.Module.Dispose()
-	sig, ok := tr.Signatures["test/pkg.local_trampoline"]
-	if !ok || sig.Ret != Void || len(sig.Args) != 0 {
-		t.Fatalf("local trampoline signature = %#v, want void()", sig)
+	if err == nil || !strings.Contains(err.Error(), "missing signature for file-local assembly") {
+		t.Fatalf("undeclared trampoline must not receive a guessed void signature: %v", err)
 	}
 }

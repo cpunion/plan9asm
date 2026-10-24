@@ -29,8 +29,8 @@ func armDecodeMOVM(raw string) (mode string, writeback bool) {
 
 func armRegListAllGPR(regs []Reg) bool {
 	for _, r := range regs {
-		p, _, ok := regRangeParts(r)
-		if !ok || p != "R" {
+		p, _, suffix, ok := regRangeParts(r)
+		if !ok || p != "R" || suffix != "" {
 			return false
 		}
 	}

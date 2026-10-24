@@ -1,122 +1,285 @@
-# Plan9 Asm Corpus And Instruction Clusters
+# Plan 9 assembly instruction coverage
 
-This document defines what "complete Plan9 asm support" means for llgo.
+This document defines the path to complete support for the Go assembler's Plan
+9 syntax. Coverage is measured by architecture, instruction family, opcode,
+and operand form. An opcode name by itself is not a support claim.
 
-We intentionally do **not** aim to implement the full historical Plan 9
-assembler language. Instead, we target:
+The library targets 386, amd64, arm, arm64, and wasm, which is the complete set
+of independent Go architectures consumed by LLGo's Plan 9 assembly path. Named
+embedded targets may use other physical LLVM backends, but they borrow an arm
+or wasm GOARCH for source selection and are not additional Go Plan 9 assembly
+instruction sets. The cross-version official inventory and semantic gates
+cover all five architectures. The 386 and amd64 lowerers share x86
+implementation code, but their registers, address widths, valid opcodes, and
+runtime ABI differ. ARM and ARM64 are separate instruction sets. ARM64 also
+distinguishes scalar, NEON, and SVE families.
 
-- the subset of lower-case Go stdlib `.s` files selected by `go list -json`
-  for a given `GOOS/GOARCH` (that is, Plan 9 asm sources, not GCC-style
-  `.S` files), and
-- the operand/addressing forms those files actually use.
+## Sources of truth
 
-## Workflow
+There is no version-independent "Plan 9 instruction set" that can be imported
+as a complete oracle. Go's assembler uses Plan 9 syntax for a distinct,
+semi-abstract instruction set, and its accepted language evolves with the Go
+toolchain. Coverage therefore uses the union of Go 1.20 through the latest
+supported release, through these increasingly strong layers:
 
-1. Scan the corpus with:
+1. Architecture-specific opcode namespace
+   - `cmd/internal/obj/x86/anames*.go`
+   - `cmd/internal/obj/arm/anames*.go`
+   - `cmd/internal/obj/arm64/anames*.go`
+   - `cmd/internal/obj/wasm/anames*.go`
+   - `official_opcodes` counts only normalized names in the registered `Anames`
+     arrays (including the registered ARM64 supplement), not operand classes,
+     portable `obj.Anames`, frontend aliases, or parser pseudo directives
+2. Official architecture encoder tables
+   - x86 `optab`, `ytab`, `ymovtab`, and generated AVX/EVEX tables
+   - ARM and ARM64 `optab` rows and their alias mappings
+   - generated ARM64 instruction encoders, including SVE
+   - these tables are the authority for legal abstract operand classes
+   - wasm is emitted directly by `wasmobj.go` and has no equivalent operand-
+     class table, so its inventory rows are explicitly opcode-only
+   - reference tree: <https://github.com/golang/go/tree/go1.27.1/src/cmd/internal/obj>
+3. Official positive assembler testdata
+   - `cmd/asm/internal/asm/testdata`
+   - this supplies concrete, architecture-valid operand forms
+   - Go has no wasm file in this directory, so the wasm positive corpus is the
+     official `.s` set selected from GOROOT for `js/wasm`
+   - reference tree: <https://github.com/golang/go/tree/go1.27.1/src/cmd/asm/internal/asm/testdata>
+4. Go architecture decoder corpora
+   - `golang.org/x/arch/<arch>/<arch>asm/testdata`
+   - these contain a substantially larger encoding-to-Plan-9-printing corpus
+     than the compiler's positive assembler tests
+   - decoder output is supplemental rather than syntax authority, so every
+     candidate form must first pass the matching native `go tool asm`
+   - pinned reference: <https://github.com/golang/arch/tree/v0.31.0/arm64/arm64asm/testdata>
+5. Selected standard-library assembly
+   - lower-case `.s` files selected by `go list -json std` for each
+     GOOS/GOARCH
+6. Reduced real-world issue and pull-request regressions
+   - each case links back to its report in the conformance manifest
+   - the reduced instruction must first be accepted by the native Go assembler
+7. Reduced public Go module ecosystem regressions
+   - independent instruction-family cases retain their original report/source
+     provenance here, rather than requiring an external module download
+   - module discovery, version policy, ledgers and complete external-package
+     compatibility batches belong to
+     [llgo-compat/plan9asm](https://github.com/llgo-compat/plan9asm)
+8. Executable semantic conformance cases
+   - `testdata/conformance`
+   - the same assembly is run once with the native Go assembler and once after
+     plan9asm-to-LLVM translation
 
-   ```sh
-   go run ./cmd/plan9asmscan -goos linux -goarch amd64 -format md -out /tmp/scan-linux-amd64.md
-   go run ./cmd/plan9asmscan -goos linux -goarch arm64 -format md -out /tmp/scan-linux-arm64.md
-   go run ./cmd/plan9asmscan -goos darwin -goarch amd64 -format md -out /tmp/scan-darwin-amd64.md
-   go run ./cmd/plan9asmscan -goos darwin -goarch arm64 -format md -out /tmp/scan-darwin-arm64.md
-   ```
+The x86 opcode and encoder tables are shared by 386 and amd64 and are therefore
+a common inventory, not proof that every listed form is legal in both modes.
+Native assembly of generated concrete cases supplies that mode check. Positive
+testdata is useful but not complete: for example, the Go 1.27 386 corpus
+observes only 21 opcodes from the shared 1,600-name x86 namespace.
 
-2. Compile the corpus with:
+The scanner's separate `frontend_inventory` records exact, case-sensitive
+spellings from portable and architecture name arrays, the selected `arch.Set`
+constructor's aliases, and `Parser.pseudo`. Entries carry `common`, `arch`,
+`alias`, `pseudo`, and explicit `sentinel` origins, numeric `obj.As` identities
+(null for directives without one), canonical namespaces, source positions and
+source hashes. WASM `Call` and portable `CALL`, for example, remain distinct.
+Unknown registration patterns fail closed. This is source enumeration only:
+neither presence nor a non-sentinel entry proves operand legality, lowering,
+LLVM object compilation, linking, or execution. Existing form baselines are
+independent of this inventory.
 
-   ```sh
-   scripts/check-stdlib-corpus.sh
-   ```
+`x/arch` is deliberately not treated as a second assembler specification. Its
+Plan 9 case files originate from instruction decoding and formatting, and can
+therefore contain reserved encodings or printed operands that the Go assembler
+correctly rejects. The ARM64 supplemental gate scans the complete pinned
+decoder corpus, then separately filters the completed scalar families through
+Go's native assembler before requiring plan9asm lowering support.
 
-3. Group opcodes into clusters. A cluster is considered **complete** only when:
+## Coverage states
 
-- parser accepts every file in the corpus for that cluster
-- translator can emit `.ll` for those functions
-- generated objects link and the relevant std tests pass on:
-  - host
-  - `dev/docker.sh amd64`
-  - `dev/docker.sh arm64`
+- name claimed: a lowerer contains the opcode name; this is informational only
+- supported form: an instruction with this operand shape passes the real
+  lowering pipeline
+- context required: the instruction depends on a frame slot, a preceding flag
+  write, a REP successor, or a function-local PC target and must be judged by
+  full-file compilation
+- unsupported form: parsing succeeded but the real lowerer rejected it
+- runtime verified: a manifest case is compiled and run through both the Go
+  assembler and plan9asm/LLVM with identical expected results
+- compile-only policy: privileged, trapping, or environment-dependent
+  instructions; these require parser, lowering, and object compilation checks
+  but are never executed merely for coverage
 
-## Initial Clusters (expected for `internal/bytealg`)
+The scanner reports name, encoder-table, form-lowering, context-required,
+unsupported, and runtime-verified coverage separately. Compile-only is an
+execution policy recorded by conformance metadata rather than a lowering
+status. In particular, `XORB reg,reg` does not imply `XORB reg,mem`.
 
-These are the clusters we already know we need for `internal/bytealg` on
-`linux/amd64` and `linux/arm64`.
+## Definition of complete
 
-### x86-64 Scalar + Control Flow
+A runnable user-mode operand form is complete only when:
 
-Includes:
+1. the Go assembler accepts its conformance source;
+2. plan9asm parses and lowers it;
+3. LLVM compiles the emitted IR;
+4. both native Go assembly and the LLVM object execute and produce the same
+   checked result; and
+5. the form is listed in `testdata/conformance/manifest.json`.
 
-- register moves and arithmetic (`MOV*`, `ADD*`, `SUB*`, `AND*`, `OR*`, `XOR*`)
-- comparisons and tests (`CMP*`, `TEST*`)
-- shifts and bit ops (`SHL*`, `SHR*`, `SAR*`, `BSF*`, `BSR*`, `BSWAP*`)
-- conditional set/move (`SET*`, `CMOV*`)
-- branches (`J*`, `JMP`, `RET`) and labels
-- pseudo alignment (`PCALIGN`)
+A context-dependent form must additionally pass the full standard-library or
+package corpus compiler. A compile-only form must have an explicit reason and
+must pass object compilation where the target supports it.
 
-### x86 SIMD (SSE2)
+Complete architecture support means every encoder-table operand class in the
+Go 1.20-to-latest union has at least one native-Go-accepted concrete case, zero
+unexpected parser failures, and zero unsupported runnable forms. Every safe
+user-mode form must compile, link, and execute against the native Go oracle;
+compile-only forms must carry an explicit reason and still compile and link.
+The complete opcode and encoder-form catalogs remain visible even where
+implementation or concrete-case generation is still pending.
 
-Includes:
+## Commands
 
-- XMM register loads/stores (`MOVOU`)
-- vector compare/bitwise (`PCMPEQB`, `PAND`)
-- mask extraction (`PMOVMSKB`)
-- shuffles/unpacks (`PSHUFL`, `PUNPCKLBW`)
+Generate a complete JSON opcode, encoder-table form, and observed concrete-form
+report:
 
-### x86 SIMD (SSE4.2)
+    go run ./cmd/plan9asmscan \
+      -corpus go-asm \
+      -goroot "$(go env GOROOT)" \
+      -goos linux \
+      -goarch amd64 \
+      -repo-root . \
+      -format json \
+      -out /tmp/go-asm-amd64.json
 
-Includes:
+Generate the human-readable family summary by changing `-format` to
+`md`. Repeat with `386`, `arm`, `arm64`, and `wasm`; use `-goos js` for wasm.
 
-- substring compare instruction used by stdlib (`PCMPESTRI`)
+Run the cross-version regression gate:
 
-### x86 SIMD (AVX2)
+    scripts/check-go-asm-coverage.sh
 
-Includes:
+Run the selected standard-library corpus through parser, form-level lowering,
+whole-file translation, and LLVM object compilation:
 
-- YMM loads/stores (`VMOVDQU`)
-- vector compare/bitwise (`VPCMPEQB`, `VPAND`)
-- broadcasts/tests (`VPBROADCASTB`, `VPTEST`)
-- mask extraction (`VPMOVMSKB`)
-- state management (`VZEROUPPER`)
+    scripts/check-stdlib-corpus.sh
 
-### arm64 Scalar + Control Flow
+Run the pinned, complete `x/arch` ARM64 Plan 9 decoder corpus and the
+native-Go-accepted family subset:
 
-Includes:
+    scripts/check-arm64-plan9-corpus.sh
 
-- moves/arithmetic (`MOV*`, `ADD`, `SUB`, `SUBS`, `ADDS`, `EOR`, `AND`, `ANDS`, `BIC`)
-- comparisons (`CMP`, `CMPW`)
-- shifts (`LSL`, `LSR`)
-- branches (`B*`, `CBZ/CBNZ`, `TBZ`, `RET`) and labels
-- conditional select/negate/inc (`CSEL`, `CSET`, `CNEG`, `CINC`)
-- bit ops (`RBIT`, `CLZ`, `NEG`)
-- pseudo alignment (`PCALIGN`)
+External module discovery, inventory and compatibility batches are maintained
+in [llgo-compat/plan9asm](https://github.com/llgo-compat/plan9asm). Its ledger and
+external-library CI are independent of these official instruction gates.
 
-### arm64 SIMD (NEON)
+Select an explicit cross-target subset with `PLAN9ASM_CORPUS_TARGETS`, for
+example:
 
-Includes:
+    PLAN9ASM_CORPUS_TARGETS=linux/386,linux/amd64,linux/arm,linux/arm64 \
+      scripts/check-stdlib-corpus.sh
 
-- vector loads (`VLD1.P`)
-- vector compares/bitwise (`VCMEQ`, `VAND`, `VORR`, `VEOR`)
-- horizontal reductions (`VADDP`, `VUADDLV`)
-- register moves/extract (`VMOV`, lane forms like `V?.D[0]`)
+An unversioned Linux architecture expands to every Go architecture setting
+supported by the selected toolchain. The authoritative level matrix covers
+`GO386={sse2,softfloat}`, `GOAMD64=v1..v4`, `GOARM=5/6/7` plus each available
+hardfloat/softfloat counterpart, `GOARM64=v8.0..v8.9` and `v9.0..v9.5` plus
+the `lse` and `crypto` extension boundaries, and all four combinations of
+`GOWASM={satconv,signext}` for both `js/wasm` and `wasip1/wasm`. Go 1.20 and
+Go 1.21 use their implicit ARM64 v8.0 baseline; GOARM64 became configurable in
+Go 1.23, while GOARM float suffixes became configurable in Go 1.22.
 
-## Current Scan Snapshot
+Run the executable semantic cases:
 
-Generated reports are tracked in:
+    go test . -run 'Test.*Conformance' -count=1
 
-- `doc/runtime/plan9asm-scan/linux-amd64.md`
-- `doc/runtime/plan9asm-scan/linux-arm64.md`
-- `doc/runtime/plan9asm-scan/darwin-amd64.md`
-- `doc/runtime/plan9asm-scan/darwin-arm64.md`
+On Linux/amd64, the opt-in cross-execution smoke translates for all four native
+conformance architectures, emits target objects with LLVM, links them with the
+matching Linux cross compiler, and executes 386/ARM/ARM64 through QEMU:
 
-Priority clusters inferred from current scan:
+    PLAN9ASM_CROSS_EXEC=1 \
+      go test . -run '^TestCrossLinuxRuntimeMatrix$' -count=1 -v
 
-1. `amd64` scalar+bit rounds for crypto:
-   `ADCQ/SBBQ`, `RORQ/RORL/ROLQ`, `MULQ/MULXQ`, `CMOVQ*`.
-2. `amd64` SIMD crypto set:
-   `AESENC/AESENCLAST/AESDEC/AESKEYGENASSIST`, `VPXOR/VPADDD/VPALIGNR`,
-   `VMOVDQA`, `PSHUFD/PSHUFB`, `VPSRLQ/VPSLLQ`.
-3. `arm64` crypto scalar set:
-   `AESE/AESMC/AESD/AESIMC`, `SHA1*`, `SHA256*`, `STP/LDP*`, `ADCS`.
-4. `arm64` NEON set:
-   `VST1`, `VREV32/VREV64`, `VLD4R` (already identified in `internal/chacha8rand`).
-5. Cross-cutting runtime/syscall stubs:
-   `JMP/CALL/BL` paths that appear in small trampoline files.
+CI treats Linux as the authoritative coverage host. Go 1.20 through Go 1.27
+each scan, translate, and object-compile the complete Linux architecture-level,
+Darwin, Windows, `js/wasm`, and `wasip1/wasm` target matrix from Linux. Every
+supported Go version runs the root compile/link/run conformance suite and its
+official architecture inventory. The latest Go additionally runs the four-
+architecture Linux link/execution smoke. macOS and Windows jobs on the latest
+Go release are auxiliary host-integration checks, not the only source of
+target coverage.
+Cross object compilation and cross execution are reported separately:
+successful `.o` generation alone is not an executable conformance claim.
+
+## Go 1.20 through Go 1.27 differences
+
+The checked baseline stores a fingerprint for every Go minor version and
+architecture. It detects any form changing among supported, context-required,
+unsupported, or parser-failed states.
+
+This version range describes the union of official namespaces, encoder tables,
+and assembler source corpora. The executable conformance cases are shared when
+Go versions accept the same form; they are not duplicated once per Go release.
+Linux/amd64 CI compiles, links, and runs the root conformance suite with every
+Go version from 1.20 through 1.27. `cmd/plan9asm` and `cmd/plan9asmll` retain
+their own Go 1.24 module requirement, so older validation lanes build the
+package-oriented tool once with the latest Go and then run it against the
+selected older GOROOT.
+
+The encoder-table union across Go 1.20 through Go 1.27 is:
+
+| GOARCH | encoder opcodes | encoder operand forms |
+|---|---:|---:|
+| 386 | 1603 shared x86 opcodes | 4998 shared x86 forms |
+| amd64 | 1603 shared x86 opcodes | 4998 shared x86 forms |
+| arm | 144 | 528 |
+| arm64 | 1255 | 4396 |
+| wasm | 464 opcode names | 464 opcode-only inventory rows |
+
+These are abstract encoder forms, not runtime support claims. The larger ARM64
+union is intentional: operand-class names and generated SVE encoders evolve
+between releases, so using only the newest tree would lose forms that existed
+in earlier supported releases.
+
+The Go 1.27 snapshot currently reports:
+
+| GOARCH | official names | encoder forms | observed ops | observed forms | supported | context | unsupported | runtime verified | parse failures |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 386 | 1600 shared x86 names | 4997 shared x86 forms | 21 | 60 | 41 | 6 | 13 | 0 | 0 |
+| amd64 | 1600 shared x86 names | 4997 shared x86 forms | 1456 | 6742 | 804 | 6 | 5932 | 51 | 0 |
+| arm | 181 | 528 | 135 | 500 | 312 | 34 | 154 | 0 | 0 |
+| arm64 | 1417 including SVE | 2964 | 1281 | 1980 | 457 | 47 | 1476 | 62 | 0 |
+| wasm | 463 | 463 opcode-only rows | 71 | 120 | 0 | 120 | 0 | 0 | 0 |
+
+These numbers describe current implementation progress, not completion.
+Encoder forms use Go's internal operand classes and are a complete machine-
+readable inventory of the encoder rows; the wasm count is deliberately an
+opcode-only inventory because its Go backend has no such table. Observed forms
+use plan9asm's concrete shape classification and can outnumber encoder rows
+because generated testdata varies registers, address shapes, and concrete
+encodings. The large amd64 gap is mostly the exhaustive legacy/SIMD/AVX test
+matrix. Go 1.27 adds the ARM64 SVE corpus and encoder tables; SVE register
+lists are parsed and every currently unsupported lowering form is reported
+explicitly instead of being hidden as a parse failure.
+
+The machine-readable cross-version snapshots are in
+`testdata/coverage/go-asm-baseline.json`. A CI mismatch is blocking and
+must be investigated at form level before the snapshot is intentionally
+updated.
+
+## Adding or changing an instruction
+
+1. Locate the opcode and operand classes in the official encoder inventory.
+2. Locate or generate native-Go-accepted concrete cases for every relevant
+   operand class and classify the opcode family.
+3. Add parser and lowering unit tests.
+4. Add or extend a runnable conformance routine and manifest entry.
+5. Run the native Go and plan9asm/LLVM semantic checks.
+6. Run the standard-library corpus gate.
+7. Generate all five architecture reports and inspect changes.
+8. Update the cross-version fingerprint only after the change is understood.
+
+For third-party failures, first reduce the source to its official operand form,
+record the issue URL in the conformance manifest, and verify that the native Go
+assembler accepts it. The Go encoder tables and official tests define the
+family and permitted forms; the third-party project is only a final regression
+consumer. Fix the instruction family once and add a semantic conformance case
+rather than adding a project-specific workaround. The `xgo-dev/llgo#2464`
+regression for `XORB reg,mem` and `PUNPCKLQDQ` is the first case tracked this
+way.

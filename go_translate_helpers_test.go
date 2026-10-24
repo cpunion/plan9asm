@@ -51,8 +51,8 @@ func TestGoHelperArchTupleAndSymParsing(t *testing.T) {
 	if got, err := goArchFor("arm64"); err != nil || got != ArchARM64 {
 		t.Fatalf("goArchFor arm64 = (%q, %v), want %q", got, err, ArchARM64)
 	}
-	if _, err := goArchFor("wasm"); err == nil {
-		t.Fatalf("expected unsupported arch error")
+	if got, err := goArchFor("wasm"); err != nil || got != ArchWASM {
+		t.Fatalf("goArchFor wasm = (%q, %v), want %q", got, err, ArchWASM)
 	}
 
 	if got := goTupleRetType(nil); got != Void {
@@ -141,6 +141,14 @@ MOVD $const_Bool, R5
 
 func TestGoAsmHeaderDataConstants(t *testing.T) {
 	pkg := types.NewPackage("test/pkg", "pkg")
+	genericName := types.NewTypeName(token.NoPos, pkg, "generic", nil)
+	typeParamName := types.NewTypeName(token.NoPos, pkg, "T", nil)
+	typeParam := types.NewTypeParam(typeParamName, types.NewInterfaceType(nil, nil).Complete())
+	generic := types.NewNamed(genericName, types.NewStruct([]*types.Var{
+		types.NewField(token.NoPos, pkg, "value", typeParam, false),
+	}, nil), nil)
+	generic.SetTypeParams([]*types.TypeParam{typeParam})
+	pkg.Scope().Insert(genericName)
 	pkg.Scope().Insert(types.NewConst(token.NoPos, pkg, "smallInt", types.Typ[types.UntypedInt], constant.MakeInt64(42)))
 	pkg.Scope().Insert(types.NewConst(token.NoPos, pkg, "bigInt", types.Typ[types.UntypedInt], constant.MakeUint64(^uint64(0))))
 	pkg.Scope().Insert(types.NewConst(token.NoPos, pkg, "stringVal", types.Typ[types.UntypedString], constant.MakeString("test")))
@@ -165,6 +173,10 @@ func TestGoAsmHeaderDataConstants(t *testing.T) {
 	}
 	if got := goExpandAsmHeaderTypes(unchanged, pkg, "unsupported"); !bytes.Equal(got, unchanged) {
 		t.Fatalf("unsupported-arch expansion changed source: %q", got)
+	}
+	genericRef := []byte("MOVD $generic__size, R0")
+	if got := goExpandAsmHeaderTypes(genericRef, pkg, "arm64"); !bytes.Equal(got, genericRef) {
+		t.Fatalf("uninstantiated generic struct macro unexpectedly expanded: %q", got)
 	}
 	nonStructPkg := types.NewPackage("test/nonstruct", "nonstruct")
 	nonStructPkg.Scope().Insert(types.NewVar(token.NoPos, nonStructPkg, "value", types.Typ[types.Int]))
@@ -266,8 +278,8 @@ func TestGoLLVMHelpers(t *testing.T) {
 		}
 	}
 
-	if _, err := goLLVMTypeForType(types.NewMap(types.Typ[types.String], types.Typ[types.Int]), "arm64"); err == nil {
-		t.Fatalf("expected unsupported type error")
+	if got, err := goLLVMTypeForType(types.NewMap(types.Typ[types.String], types.Typ[types.Int]), "arm64"); err != nil || got != Ptr {
+		t.Fatalf("map handle type = (%q, %v), want ptr", got, err)
 	}
 
 	sz := types.SizesFor("gc", "arm64")
@@ -277,7 +289,7 @@ func TestGoLLVMHelpers(t *testing.T) {
 		types.NewVar(token.NoPos, nil, "v", iface),
 	)
 
-	args, slots, next, err := goLLVMArgsAndFrameSlotsForTuple(tup, "arm64", sz, 0, false)
+	args, slots, next, err := goLLVMArgsAndFrameSlotsForTuple(tup, "arm64", sz, sz, 0, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -294,7 +306,7 @@ func TestGoLLVMHelpers(t *testing.T) {
 		t.Fatalf("unexpected slot field mapping: %#v", slots[:3])
 	}
 
-	args, slots, next, err = goLLVMArgsAndFrameSlotsForTuple(tup, "arm64", sz, 0, true)
+	args, slots, next, err = goLLVMArgsAndFrameSlotsForTuple(tup, "arm64", sz, sz, 0, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -316,7 +328,7 @@ func TestGoFuncSigForDeclaredFuncRejectsUnsupportedForms(t *testing.T) {
 
 	methodSig := types.NewSignature(recv, types.NewTuple(), types.NewTuple(), false)
 	method := types.NewFunc(token.NoPos, nil, "Method", methodSig)
-	if _, err := goFuncSigForDeclaredFunc("pkg.Method", method, "arm64", sz, true); err == nil || !strings.Contains(err.Error(), "methods in asm not supported") {
+	if _, err := goFuncSigForDeclaredFunc("pkg.Method", method, "arm64", sz, sz, true); err == nil || !strings.Contains(err.Error(), "methods in asm not supported") {
 		t.Fatalf("expected method rejection, got %v", err)
 	}
 
@@ -327,7 +339,7 @@ func TestGoFuncSigForDeclaredFuncRejectsUnsupportedForms(t *testing.T) {
 		true,
 	)
 	variadic := types.NewFunc(token.NoPos, nil, "Variadic", variadicSig)
-	if _, err := goFuncSigForDeclaredFunc("pkg.Variadic", variadic, "arm64", sz, true); err == nil || !strings.Contains(err.Error(), "variadic asm not supported") {
+	if _, err := goFuncSigForDeclaredFunc("pkg.Variadic", variadic, "arm64", sz, sz, true); err == nil || !strings.Contains(err.Error(), "variadic asm not supported") {
 		t.Fatalf("expected variadic rejection, got %v", err)
 	}
 }

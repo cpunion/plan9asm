@@ -20,6 +20,7 @@ func TestTypeHelperCoverage(t *testing.T) {
 		{Operand{Kind: OpLabel, Sym: "loop"}, "loop:"},
 		{Operand{Kind: OpMem, Mem: MemRef{Base: SI, Off: 8}}, "8(SI)"},
 		{Operand{Kind: OpMem, Mem: MemRef{Base: BX, Off: -4, Index: CX, Scale: 2}}, "-4(BX)(CX*2)"},
+		{Operand{Kind: OpMem, Mem: MemRef{Base: "R1", Index: "R2", IndexExt: ExtendUXTW, Scale: 4}}, "0(R1)(R2.UXTW<<2)"},
 		{Operand{Kind: OpMem, Mem: MemRef{Base: BX, Index: CX, Segment: GS}}, "0(BX)(CX)(GS)"},
 		{Operand{Kind: OpMem, Mem: MemRef{Sym: "table<>(SB)", Index: BX}}, "table<>(SB)(BX)"},
 		{Operand{Kind: OpMem, Mem: MemRef{Off: 0x30, Segment: GS}}, "48(GS)"},
@@ -63,6 +64,11 @@ func TestTypeHelperCoverage(t *testing.T) {
 		{"8(SI)", true},
 		{"-4(BX)(CX*2)", true},
 		{"(AX)(BX)", true},
+		{"(R1)(R2<<3)", true},
+		{"(R1)(R2.UXTW<<2)", true},
+		{"(R1)(R2.SXTW)", true},
+		{"(R1)(R2.UXTB)", false},
+		{"(R1)(R2.UXTW<<5)", false},
 		{"-1(AX*2)", true},
 		{"(0*8)(R8)(BX*8)", true},
 		{"(symSize)(R14)", true},
@@ -75,6 +81,9 @@ func TestTypeHelperCoverage(t *testing.T) {
 		if ok != tc.want {
 			t.Fatalf("parseMem(%q) ok = %v, want %v", tc.in, ok, tc.want)
 		}
+	}
+	if mem, ok := parseMem("(R1)(R2.SXTW<<2)"); !ok || mem.Base != "R1" || mem.Index != "R2" || mem.IndexExt != ExtendSXTW || mem.Scale != 4 {
+		t.Fatalf("parseMem(extended index) = (%#v, %v)", mem, ok)
 	}
 
 	for _, tc := range []struct {
@@ -90,7 +99,9 @@ func TestTypeHelperCoverage(t *testing.T) {
 		{"7&3", 3, true},
 		{"7|8", 15, true},
 		{"7^3", 4, true},
-		{"7&^3", 4, true},
+		// cmd/asm has unary ~, not Go's &^ operator. The independent
+		// integer-grammar oracle retains 7&^3 as an actual Go rejection.
+		{"7&~3", 4, true},
 		{"~1", ^uint64(1), true},
 		{"1/0", 0, false},
 	} {
@@ -147,6 +158,7 @@ func TestTypeParserEdgeCoverage(t *testing.T) {
 		valid bool
 	}{
 		{"$0xffffffffffffffff", -1, false, true},
+		{"$64-31", 33, false, true},
 		{"$1.25", 4608308318706860032, false, true},
 		{"$(16 + callbackArgs__size)", 0, true, true},
 		{"$()", 0, false, false},
@@ -168,9 +180,11 @@ func TestTypeParserEdgeCoverage(t *testing.T) {
 		want bool
 	}{
 		{"arg+8(FP)", true},
+		{"arg(FP)", true},
+		{"arg-8(FP)", true},
 		{"arg+8(SP)", false},
 		{"$ret+16(FP)", true},
-		{"$ret(FP)", false},
+		{"$ret(FP)", true},
 	} {
 		if _, _, ok := parseFP(tc.in); ok != tc.want && tc.in[0] != '$' {
 			t.Fatalf("parseFP(%q) ok = %v, want %v", tc.in, ok, tc.want)
@@ -204,8 +218,17 @@ func TestTypeParserEdgeCoverage(t *testing.T) {
 	if _, ok := expandRegRange("R1-V3"); ok {
 		t.Fatalf("expandRegRange(mixed) unexpectedly succeeded")
 	}
-	if _, _, ok := regRangeParts("SP"); ok {
+	if _, _, _, ok := regRangeParts("SP"); ok {
 		t.Fatalf("regRangeParts(SP) unexpectedly succeeded")
+	}
+	if regs, ok := expandRegRange("Z22.B-Z23.B"); !ok || len(regs) != 2 || regs[0] != "Z22.B" || regs[1] != "Z23.B" {
+		t.Fatalf("expandRegRange(SVE vectors) = (%v, %v)", regs, ok)
+	}
+	if regs, ok := expandRegRange("P10.H"); !ok || len(regs) != 1 || regs[0] != "P10.H" {
+		t.Fatalf("expandRegRange(SVE predicate) = (%v, %v)", regs, ok)
+	}
+	if _, ok := expandRegRange("Z22.B-Z23.H"); ok {
+		t.Fatalf("expandRegRange(mixed SVE lane widths) unexpectedly succeeded")
 	}
 
 	for _, tc := range []struct {
@@ -213,6 +236,8 @@ func TestTypeParserEdgeCoverage(t *testing.T) {
 		want OperandKind
 	}{
 		{"[R0-R2, R5]", OpRegList},
+		{"[Z22.B-Z23.B]", OpRegList},
+		{"[P10.H, P11.H]", OpRegList},
 		{"(R0, R1)", OpRegList},
 		{"MIDR_EL1", OpIdent},
 		{"helper<>(SB)", OpSym},
@@ -223,6 +248,14 @@ func TestTypeParserEdgeCoverage(t *testing.T) {
 		if err != nil || op.Kind != tc.want {
 			t.Fatalf("parseOperand(%q) = (%v, %v), want kind %v", tc.in, err, op.Kind, tc.want)
 		}
+	}
+	rangeOperand, err := parseOperand("[Z4.Q-Z5.Q]")
+	if err != nil || !rangeOperand.RegListRange {
+		t.Fatalf("parseOperand(SVE range) = (%+v, %v), want range provenance", rangeOperand, err)
+	}
+	listOperand, err := parseOperand("[Z4.Q, Z5.Q]")
+	if err != nil || listOperand.RegListRange {
+		t.Fatalf("parseOperand(SVE list) = (%+v, %v), want non-range provenance", listOperand, err)
 	}
 	if reg, ext, ok := parseRegExtend("r3.sxtw"); !ok || reg != "R3" || ext != ExtendSXTW {
 		t.Fatalf("parseRegExtend(r3.sxtw) = (%q, %q, %v)", reg, ext, ok)
