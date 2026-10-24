@@ -13,10 +13,23 @@ import (
 // LLVM/C calls the translated typed entry. Equal executed answers do not mean
 // those binary calling conventions are interchangeable.
 func TestX86TypedCodeEntryExecutedGoAndLLVM(t *testing.T) {
+	x86TypedCodeExecuteOracles(t, false)
+}
+
+func TestX86TypedCodePointerBridgeExecutedGoAndLLVM(t *testing.T) {
+	x86TypedCodeExecuteOracles(t, true)
+}
+
+func x86TypedCodeExecuteOracles(t *testing.T, pointers bool) {
+	t.Helper()
+	assembly, declarations := x86TypedCodeCallbackAssembly, x86TypedCodeCallbackDeclarations
+	if pointers {
+		assembly, declarations = x86TypedCodePointerAssembly(t), x86TypedCodePointerDeclarations
+	}
 	dir := t.TempDir()
-	goOracle := "package entry\nimport \"testing\"\n" + x86TypedCodeCallbackDeclarations + `
+	goOracle := "package entry\nimport (\"testing\"; \"runtime\")\n" + declarations + `
 func TestOriginal(t *testing.T) {
-    values := []int64{-44, -2, 0, 7, 7, 31}
+    values := []int64{31, -2, 7, 0, 7, -44}
     var tls uint64 = 0x1122334455667788
     for repeat := 0; repeat < 20; repeat++ {
         for i := range values {
@@ -34,15 +47,21 @@ func TestOriginal(t *testing.T) {
                 }
             }
         }
+        runtime.GC()
     }
+    runtime.KeepAlive(values)
     if tls != 0x1122334455667788 {
         t.Fatal("TLS canary changed")
     }
 }
 `
+	if pointers {
+		goOracle = strings.Replace(goOracle, "import (", "import (\"unsafe\"; ", 1)
+		goOracle = strings.Replace(goOracle, "uintptr(values[i]), uintptr(values[j])", "uintptr(unsafe.Pointer(&values[i])), uintptr(unsafe.Pointer(&values[j]))", 1)
+	}
 	for name, source := range map[string]string{
 		"go.mod":        "module entry\n\ngo 1.20\n",
-		"entry_amd64.s": x86TypedCodeCallbackAssembly,
+		"entry_amd64.s": assembly,
 		"entry_test.go": goOracle,
 	} {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(source), 0600); err != nil {
@@ -66,9 +85,9 @@ func TestOriginal(t *testing.T) {
 	ctx, cancel = runtimeOracleStageContext(t)
 	compiler := runtimeOracleNativeCCommand(t, ctx, clang).Args
 	cancel()
-	pkg := mustGoPackage(t, "entry", "package entry\n"+x86TypedCodeCallbackDeclarations)
+	pkg := mustGoPackage(t, "entry", "package entry\n"+declarations)
 	triple := testTargetTriple(runtime.GOOS, "amd64")
-	result, err := TranslateGoModule(pkg, []byte(x86TypedCodeCallbackAssembly), GoModuleOptions{
+	result, err := TranslateGoModule(pkg, []byte(assembly), GoModuleOptions{
 		GOARCH: "amd64", TargetTriple: triple,
 		ResolveSym: func(symbol string) string { return strings.TrimPrefix(symbol, "·") },
 	})
@@ -77,12 +96,12 @@ func TestOriginal(t *testing.T) {
 	}
 	ir := result.Module.String()
 	result.Module.Dispose()
-	const driver = `#include <stdint.h>
+	driver := `#include <stdint.h>
 extern uintptr_t PC(void);
 extern int32_t Target(uint64_t*, uintptr_t, uintptr_t);
 extern int32_t Forward(uint64_t*, uintptr_t, uintptr_t, uintptr_t);
 int main(void) {
-    int64_t values[] = {-44, -2, 0, 7, 7, 31};
+    int64_t values[] = {31, -2, 7, 0, 7, -44};
     uint64_t tls = UINT64_C(0x1122334455667788);
     uintptr_t pc = PC();
     if (pc != (uintptr_t)&Target) return 1; /* actual code, never a funcval box */
@@ -97,6 +116,9 @@ int main(void) {
     return tls != UINT64_C(0x1122334455667788);
 }
 `
+	if pointers {
+		driver = strings.Replace(driver, "(uintptr_t)values[i], right = (uintptr_t)values[j]", "(uintptr_t)&values[i], right = (uintptr_t)&values[j]", 1)
+	}
 	for _, level := range []int{0, 2} {
 		compileAndRunRuntimeTestWithCompiler(t, llc, compiler, "typed-code-entry", triple, ir, driver, nil, level)
 	}

@@ -57,6 +57,9 @@ same typed signature; this does not authorize arbitrary native ABI0 callers,
 aggregate ABI conversion, captured environments or integer-pointer memory reads.
 The independent amd64 oracle executes original Go ABI0 and translated LLVM/C
 calls separately. Object checks also cover 386; object success is not execution.
+The pointer-data oracle adds an explicit ABI0 direct-call bridge from the
+integer callback signature to a separately declared pointer callee. It does not
+reclassify a `uintptr` parameter as a pointer or change the indirect-call ABI.
 
 ## Evidence levels
 

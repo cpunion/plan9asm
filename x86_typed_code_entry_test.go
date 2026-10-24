@@ -114,6 +114,78 @@ func TestX86TypedCodeEntryMatchesIndirectForwarder(t *testing.T) {
 	}
 }
 
+func TestX86TypedCodePointerBridgeTranslation(t *testing.T) {
+	pkg := mustGoPackage(t, "entry", "package entry\n"+x86TypedCodePointerDeclarations)
+	assembly := x86TypedCodePointerAssembly(t)
+	goAssemblerOracleOutput(t, "amd64", assembly, "", true)
+	result, err := TranslateGoModule(pkg, []byte(assembly), GoModuleOptions{
+		GOARCH: "amd64", TargetTriple: "x86_64-unknown-linux-gnu", ResolveSym: testResolveSym("entry"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer result.Module.Dispose()
+	if want := []LLVMType{Ptr, I64, I64}; !reflect.DeepEqual(result.Signatures["entry.Target"].Args, want) {
+		t.Fatal("code-address entry lost the indirect caller's exact integer transport")
+	}
+	if want := []LLVMType{Ptr, Ptr, Ptr}; !reflect.DeepEqual(result.Signatures["entry.TypedCompare"].Args, want) {
+		t.Fatal("direct callee lost its actual pointer declaration")
+	}
+	ir := result.Module.String()
+	calledWithPointers := false
+	for _, line := range strings.Split(ir, "\n") {
+		if strings.Contains(line, "call i32 @entry.TypedCompare(") {
+			calledWithPointers = strings.Count(line, "ptr ") == 3
+		}
+	}
+	if !calledWithPointers || strings.Count(ir, "load volatile i64") != 2 {
+		t.Fatal("bridge lacks its typed direct call or exact two native pointer reads")
+	}
+}
+
+func TestX86TypedCodePointerBridgeCannotInventPointerInputs(t *testing.T) {
+	declarations := strings.Replace(x86TypedCodePointerDeclarations, "left, right *int64", "left, right uintptr", 1)
+	pkg := mustGoPackage(t, "entry", "package entry\n"+declarations)
+	result, err := TranslateGoModule(pkg, []byte(x86TypedCodePointerAssembly(t)), GoModuleOptions{
+		GOARCH: "amd64", TargetTriple: "x86_64-unknown-linux-gnu", ResolveSym: testResolveSym("entry"),
+	})
+	if result != nil {
+		result.Module.Dispose()
+	}
+	if err == nil {
+		t.Fatal("direct-call bridge manufactured pointer provenance for a uintptr declaration")
+	}
+}
+
+const x86TypedCodePointerDeclarations = x86TypedCodeCallbackDeclarations + `
+func TypedCompare(tls *uint64, left, right *int64) int32
+`
+
+// Keep the original indirect consumer unchanged. Only the address-taken
+// callback inserts a declared direct-call bridge: identical ABI0 word slots,
+// explicitly loaded as Ptr by the typed callee, not a mismatched indirect call.
+func x86TypedCodePointerAssembly(t *testing.T) string {
+	t.Helper()
+	const target = "TEXT ·Target(SB), 4, $0-28"
+	const compare = "\tCMPQ AX, CX"
+	if strings.Count(x86TypedCodeCallbackAssembly, target) != 1 || strings.Count(x86TypedCodeCallbackAssembly, compare) != 1 {
+		t.Fatal("pointer oracle lost its exact numeric callback source")
+	}
+	assembly := strings.Replace(x86TypedCodeCallbackAssembly, target, `TEXT ·Target(SB), 0, $40-28
+	MOVQ tls+0(FP), AX
+	MOVQ AX, 0(SP)
+	MOVQ left+8(FP), AX
+	MOVQ AX, 8(SP)
+	MOVQ right+16(FP), AX
+	MOVQ AX, 16(SP)
+	CALL ·TypedCompare(SB)
+	MOVL 24(SP), AX
+	MOVL AX, ret+24(FP)
+	RET
+TEXT ·TypedCompare(SB), 4, $0-28`, 1)
+	return strings.Replace(assembly, compare, "\tMOVQ (AX), AX\n\tMOVQ (CX), CX\n"+compare, 1)
+}
+
 const x86TypedCodeCallbackDeclarations = `
 func PC() uintptr
 func Target(tls *uint64, left, right uintptr) int32
