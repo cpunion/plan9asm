@@ -225,7 +225,7 @@ func (input *ppGoInput) include(origin ppGoToken) error {
 	}
 	reader.include = true
 	if event := input.observedEvent(); event != nil {
-		event.Included = file
+		event.Included = input.observer.sources[file].File
 		reader.includeEvent = event.Ordinal
 	}
 	if err := input.push(reader); err != nil {

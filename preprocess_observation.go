@@ -3,6 +3,7 @@ package plan9asm
 import (
 	"crypto/sha256"
 	"fmt"
+	"strings"
 )
 
 // AssemblyCPPObservation describes one actual preprocessing execution. It is
@@ -110,6 +111,7 @@ const (
 type ppGoObservation struct {
 	result                     AssemblyCPPObservation
 	sources                    map[string]AssemblyCPPObservedSource
+	files                      map[string]string
 	active, tokens, tokenBytes int
 	eventLimit                 int
 	positions                  *sdkCPPPositionObservation
@@ -121,12 +123,16 @@ func (observer *ppGoObservation) emitOutput(token ppGoToken, start, end int) err
 	if !observer.retainOutput {
 		return nil
 	}
-	if err := observer.chargeToken(len(token.text) + len(token.file)); err != nil {
+	file, err := observer.internFile(token.file)
+	if err != nil {
+		return err
+	}
+	if err := observer.chargeToken(len(token.text)); err != nil {
 		return err
 	}
 	observer.outputTokens = append(observer.outputTokens, AssemblyCPPOutputToken{
 		Kind: token.kind, Text: token.text, Start: start, End: end,
-		Position:  AssemblyCPPObservedPosition{File: token.file, Line: token.line},
+		Position:  AssemblyCPPObservedPosition{File: file, Line: token.line},
 		Expansion: token.expansion, Include: token.includeEvent,
 	})
 	return nil
@@ -135,6 +141,7 @@ func (observer *ppGoObservation) emitOutput(token ppGoToken, start, end int) err
 func newPPGoObservation() *ppGoObservation {
 	return &ppGoObservation{
 		sources: make(map[string]AssemblyCPPObservedSource), active: -1,
+		files:      make(map[string]string),
 		eventLimit: ppGoObservationEvents,
 	}
 }
@@ -152,7 +159,12 @@ func (observer *ppGoObservation) source(file, source string) error {
 	if len(observer.sources) >= ppGoObservationFiles {
 		return fmt.Errorf("CPP observation exceeds the explicit %d-source bound", ppGoObservationFiles)
 	}
-	observer.sources[file] = identity
+	var err error
+	identity.File, err = observer.internFile(file)
+	if err != nil {
+		return err
+	}
+	observer.sources[identity.File] = identity
 	observer.result.Sources = append(observer.result.Sources, identity)
 	return nil
 }
@@ -168,10 +180,14 @@ func (input *ppGoInput) beginObservation(kind string, origin ppGoToken) (int, er
 	if observer.active != -1 {
 		return -1, input.errorf("CPP observation has overlapping raw-token captures")
 	}
+	file, err := observer.internFile(origin.file)
+	if err != nil {
+		return -1, err
+	}
 	index := len(observer.result.Events)
 	observer.result.Events = append(observer.result.Events, AssemblyCPPEvent{
 		Ordinal: index + 1, Kind: kind, Expansion: origin.expansion, Include: origin.includeEvent,
-		Position:      AssemblyCPPObservedPosition{File: origin.file, Line: origin.line},
+		Position:      AssemblyCPPObservedPosition{File: file, Line: origin.line},
 		EnabledBefore: input.enabled(), DepthBefore: len(input.conditions),
 	})
 	observer.active = index
@@ -198,24 +214,61 @@ func (observer *ppGoObservation) capture(token ppGoToken) error {
 	if observer.active < 0 {
 		return nil
 	}
-	if err := observer.chargeToken(len(token.text) + len(token.value) + len(token.file)); err != nil {
+	file, err := observer.internFile(token.file)
+	if err != nil {
+		return err
+	}
+	if err := observer.chargeToken(len(token.text) + len(token.value)); err != nil {
 		return err
 	}
 	event := &observer.result.Events[observer.active]
 	event.Tokens = append(event.Tokens, AssemblyCPPObservedToken{
 		Kind: token.kind, Text: token.text, RecordedValue: token.value,
-		Position: AssemblyCPPObservedPosition{File: token.file, Line: token.line},
+		Position: AssemblyCPPObservedPosition{File: file, Line: token.line},
 	})
 	return nil
 }
 
 func (observer *ppGoObservation) chargeToken(bytes int) error {
-	if observer.tokens >= ppGoObservationTokens || bytes > ppGoObservationBytes-observer.tokenBytes {
+	if observer.tokens >= ppGoObservationTokens {
 		return fmt.Errorf("CPP observation exceeds its explicit token/byte bound")
 	}
+	if err := observer.chargeBytes(bytes); err != nil {
+		return err
+	}
 	observer.tokens++
+	return nil
+}
+
+func (observer *ppGoObservation) chargeBytes(bytes int) error {
+	if bytes > ppGoObservationBytes-observer.tokenBytes {
+		return fmt.Errorf("CPP observation exceeds its explicit token/byte bound")
+	}
 	observer.tokenBytes += bytes
 	return nil
+}
+
+// Positions share immutable physical/logical origin names, not copies of those
+// bytes per token. Charge each retained name once in the same byte budget as
+// token payloads; keep its descriptor count bounded separately. Clone the first
+// spelling so a short substring cannot retain an uncharged, larger allocation.
+// This also covers token-free sources, empty predefines and SDK #line names.
+func (observer *ppGoObservation) internFile(file string) (string, error) {
+	if file == "" {
+		return "", nil
+	}
+	if previous, exists := observer.files[file]; exists {
+		return previous, nil
+	}
+	if len(observer.files) >= ppGoObservationFiles {
+		return "", fmt.Errorf("CPP observation exceeds the explicit %d-origin bound", ppGoObservationFiles)
+	}
+	if err := observer.chargeBytes(len(file)); err != nil {
+		return "", err
+	}
+	file = strings.Clone(file)
+	observer.files[file] = file
+	return file, nil
 }
 
 func ppGoCopyParameters(parameters []string) []string {
