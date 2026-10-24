@@ -16,6 +16,9 @@ import (
 // result. In particular, this never creates a caller-memory or raw-RET token.
 func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 	fn, sig, arch := c.fpScalarSource, c.sig, c.goarch
+	if selected, err := c.checkTypedCodeReturn(); selected {
+		return err
+	}
 	rawPermute128 := x86Permute128RawReplayRequired(fn, arch)
 	if x86COMIRawReplayRequired(fn, arch) || x86FloatMinMaxRawReplayRequired(fn, arch) || x86ScalarPrecisionRawReplayRequired(fn, arch) ||
 		x86ExplicitMaskMoveRawReplayRequired(fn, arch) || x86PackedShiftRawReplayRequired(fn, arch) ||

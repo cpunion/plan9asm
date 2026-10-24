@@ -42,6 +42,22 @@ caller facts must not be cached merely to hide repeated subprocess cost. Move
 capture outside repeated translation when its owner and lifetime can be made
 explicit; measure complete-source performance and retain invalidation tests.
 
+## Translated code addresses
+
+`x86_typed_code_entry.go` binds a closed native-word MOV/LEA, GP-copy and
+`uintptr`-return producer to an actual bodyless Go declaration and a retained,
+successfully emitted ordinary TEXT in the same module. Its scalar signature
+must remain identical after normalization. External/manual-only signatures,
+filtered or raw entries, nonzero offsets and partial-register copies cannot
+create this binding. Code addresses do not become NUM, DATA or readable memory.
+
+The resulting address names the typed LLVM function, not a Go funcval and not
+a physical Go ABI0 machine entry. A translated indirect forwarder must use the
+same typed signature; this does not authorize arbitrary native ABI0 callers,
+aggregate ABI conversion, captured environments or integer-pointer memory reads.
+The independent amd64 oracle executes original Go ABI0 and translated LLVM/C
+calls separately. Object checks also cover 386; object success is not execution.
+
 ## Evidence levels
 
 | Evidence | What it establishes | What it does not establish |

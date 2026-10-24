@@ -477,6 +477,7 @@ func translateGoModuleInContext(ctx llvm.Context, pkg GoPackage, src []byte, opt
 		}
 	}
 	mod, err := TranslateModuleInContext(ctx, file, Options{
+		x86TypedCodeReturns:    bindGoX86TypedCodeReturns(pkg, file, sigs, opt, resolve),
 		goReadOnlyStorage:      readOnlyStorage,
 		x86OriginalFile:        callOriginal,
 		x86BoolCallSource:      boolCalls,

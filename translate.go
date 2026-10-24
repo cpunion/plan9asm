@@ -227,6 +227,9 @@ type Options struct {
 	x86OriginalFile   *File
 	x86BoolCallSource *x86ABI0BoolCallSource
 	goReadOnlyStorage *goReadOnlyStorage
+
+	// Same-module retained typed entries, created only by the Go binding.
+	x86TypedCodeReturns map[string]*x86TypedCodeReturn
 }
 
 // Translate converts a parsed Plan 9 asm File into LLVM IR text (`.ll`).
@@ -443,6 +446,16 @@ func translateIRText(file *File, opt Options) (resultText string, result error) 
 	// the global/signature scan for each TEXT would be quadratic in a corpus.
 	scalarData := x86LoweredScalarDataReads(file, resolve, opt.Sigs, opt.Goarch)
 	staticAddressValues := x86LoweredStaticAddressValues(file, resolve, opt.Sigs, opt.Goarch)
+	if err := validateX86TypedCodeReturns(file, opt, resolve); err != nil {
+		return "", err
+	}
+	if len(opt.x86TypedCodeReturns) != 0 {
+		defer func() {
+			if err := validateX86TypedCodeReturns(file, opt, resolve); err != nil {
+				resultText, result = "", errors.Join(result, err)
+			}
+		}()
+	}
 	shiftLiterals := x86LoweredShiftLiterals(file, resolve, staticAddressValues, opt.Goarch)
 	continuationBudget := &x86ResultFlowBudget{}
 	for i := range file.Funcs {
@@ -548,6 +561,7 @@ func translateIRText(file *File, opt Options) (resultText string, result error) 
 					declaration:       sourceSig,
 
 					staticAddressValues: staticAddressValues,
+					typedCodeReturn:     opt.x86TypedCodeReturns[name],
 				}); err != nil {
 				return "", fmt.Errorf("%s: %w", name, err)
 			}

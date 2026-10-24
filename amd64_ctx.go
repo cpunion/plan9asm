@@ -106,6 +106,7 @@ type amd64Ctx struct {
 	dataBPSource      bool // Complete named leaf's private opaque-pointer holder, never physical BP.
 
 	fpStaticAddressValues *x86StaticAddressValues // No dereference capability.
+	fpTypedCodeReturn     *x86TypedCodeReturn     // Complete emitted code-address producer; never NUM or memory.
 	nativeMMXRegion       *x86NativeMMXRegion     // Whole source/NUM proof paired to the actual emitted MMX region.
 }
 
