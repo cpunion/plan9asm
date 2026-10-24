@@ -50,6 +50,11 @@ successfully emitted ordinary TEXT in the same module. Its scalar signature
 must remain identical after normalization. External/manual-only signatures,
 filtered or raw entries, nonzero offsets and partial-register copies cannot
 create this binding. Code addresses do not become NUM, DATA or readable memory.
+The original Go declaration must contain only non-bool scalar or pointer
+parameters and at most one such result; a flattened aggregate or runtime handle
+is not a scalar contract. The exact target must match one of the five existing
+`x86CodeAddressTargetProfile` configurations. Unknown/default targets, x32 and
+cross-pointer-width targets cannot acquire this code-address role.
 
 The resulting address names the typed LLVM function, not a Go funcval and not
 a physical Go ABI0 machine entry. A translated indirect forwarder must use the

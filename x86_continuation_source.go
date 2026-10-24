@@ -69,11 +69,7 @@ func sealX86Continuations(original, prepared *File, opt Options) (*File, error) 
 	// Unlike numerical portable IR, an actual block address stored in a native
 	// word needs its source mode and the physical target's pointer width bound.
 	// In particular wasm must never receive blockaddress through an x86 route.
-	profile := map[string]string{
-		"x86_64-apple-darwin": "amd64", "x86_64-unknown-linux-gnu": "amd64", "x86_64-pc-windows-msvc": "amd64",
-		"i386-unknown-linux-gnu": "386", "i686-pc-windows-msvc": "386",
-	}
-	if profile[opt.TargetTriple] != opt.Goarch || opt.Goarch == "" {
+	if !x86CodeAddressTargetProfile(opt.Goarch, opt.TargetTriple) {
 		return nil, x86ContinuationContext("code/table addresses require a matching explicit x86 pointer-width target")
 	}
 	if opt.NumericalReads != nil || opt.X86TLSMoves != nil || opt.ARM64ByteCarrierSource != nil ||

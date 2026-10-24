@@ -59,13 +59,18 @@ func TestX86TypedCodeEntryRequiresSameRetainedModule(t *testing.T) {
 		if len(entries) != 1 {
 			t.Fatal("original complete source did not bind")
 		}
-		for _, mutation := range []string{"source", "target", "signature", "filtered", "coalesced", "continuation"} {
+		original := Options{Goarch: arch, TargetTriple: options.TargetTriple, Sigs: sigs,
+			ResolveSym: options.ResolveSym, x86TypedCodeReturns: entries}
+		if err := validateX86TypedCodeReturns(file, original, options.ResolveSym); err != nil {
+			t.Fatalf("unmodified source/signature/target binding failed: %v", err)
+		}
+		for _, mutation := range []string{"source", "target", "signature", "filtered", "coalesced", "continuation", "target-profile", "same-width-target-profile"} {
 			t.Run(arch+"/"+mutation, func(t *testing.T) {
 				changed, err := Parse(ArchAMD64, source)
 				if err != nil {
 					t.Fatal(err)
 				}
-				request := Options{Goarch: arch, Sigs: sigs, ResolveSym: options.ResolveSym, x86TypedCodeReturns: entries}
+				request := original
 				switch mutation {
 				case "source":
 					changed.Funcs[0].Instrs[1].Args[0].Sym = "$·Target+1(SB)"
@@ -85,6 +90,16 @@ func TestX86TypedCodeEntryRequiresSameRetainedModule(t *testing.T) {
 					changed.Funcs = append(changed.Funcs, changed.Funcs[1])
 				case "continuation":
 					changed.Funcs[1].x86ContinuationAddresses = map[string]x86Continuation{"·Target": {}}
+				case "target-profile":
+					request.TargetTriple = "i386-unknown-linux-gnu"
+					if arch == "386" {
+						request.TargetTriple = "x86_64-unknown-linux-gnu"
+					}
+				case "same-width-target-profile":
+					request.TargetTriple = "x86_64-pc-windows-msvc"
+					if arch == "386" {
+						request.TargetTriple = "i686-pc-windows-msvc"
+					}
 				}
 				if err := validateX86TypedCodeReturns(changed, request, options.ResolveSym); err == nil {
 					t.Fatal("changed module reused its original code-entry binding")

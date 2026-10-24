@@ -14,9 +14,9 @@ import (
 // The address denotes the emitted typed LLVM entry: a consumer must have that
 // same signature. It is NOT a physical Go ABI0 machine-code entry.
 type x86TypedCodeReturn struct {
-	arch, target, symbol string
-	producer, callee     [32]byte
-	signature, targetSig FuncSig
+	arch, triple, target, symbol string
+	producer, callee             [32]byte
+	signature, targetSig         FuncSig
 }
 
 func x86OrdinaryTypedCodeText(fn Func) bool {
@@ -120,6 +120,21 @@ func goX86TypedCodeDeclaration(pkg GoPackage, fn Func, name string, options GoMo
 	if !declared {
 		return nil, FuncSig{}, false
 	}
+	declaration := object.Type().(*types.Signature)
+	if declaration.Results().Len() > 1 {
+		return nil, FuncSig{}, false
+	}
+	// Check original Go types before ABI0 result flattening can turn a
+	// one-field aggregate (or an aggregate plus zero-sized results) into i64.
+	// Function/map/channel handles are not an ordinary typed pointer contract
+	// either. Named scalars and pointers to aggregates keep their exact types.
+	for _, tuple := range []*types.Tuple{declaration.Params(), declaration.Results()} {
+		for index := 0; index < tuple.Len(); index++ {
+			if !goX86TypedCodeScalarType(tuple.At(index).Type()) {
+				return nil, FuncSig{}, false
+			}
+		}
+	}
 	sig, err := goFuncSigForDeclaredFunc(name, object, options.GOARCH, options.Sizes, options.FrameSizes, true)
 	if err != nil {
 		return nil, FuncSig{}, false
@@ -133,11 +148,26 @@ func goX86TypedCodeDeclaration(pkg GoPackage, fn Func, name string, options GoMo
 			return nil, FuncSig{}, false
 		}
 	}
-	return object.Type().(*types.Signature), sig, true
+	return declaration, sig, true
+}
+
+func goX86TypedCodeScalarType(typ types.Type) bool {
+	switch underlying := typ.Underlying().(type) {
+	case *types.Pointer:
+		return true
+	case *types.Basic:
+		switch underlying.Kind() {
+		case types.Int, types.Int8, types.Int16, types.Int32, types.Int64,
+			types.Uint, types.Uint8, types.Uint16, types.Uint32, types.Uint64, types.Uintptr,
+			types.Float32, types.Float64, types.UnsafePointer:
+			return true
+		}
+	}
+	return false
 }
 
 func bindGoX86TypedCodeReturns(pkg GoPackage, file *File, sigs map[string]FuncSig, options GoModuleOptions, resolve func(string) string) map[string]*x86TypedCodeReturn {
-	if options.GOARCH != "amd64" && options.GOARCH != "386" {
+	if !x86CodeAddressTargetProfile(options.GOARCH, options.TargetTriple) {
 		return nil
 	}
 	byName := make(map[string]Func, len(file.Funcs))
@@ -179,7 +209,7 @@ func bindGoX86TypedCodeReturns(pkg GoPackage, file *File, sigs map[string]FuncSi
 		if returns == nil {
 			returns = make(map[string]*x86TypedCodeReturn)
 		}
-		returns[name] = &x86TypedCodeReturn{arch: options.GOARCH, target: target, symbol: symbol,
+		returns[name] = &x86TypedCodeReturn{arch: options.GOARCH, triple: options.TargetTriple, target: target, symbol: symbol,
 			producer: producer, callee: body, signature: signature, targetSig: targetSig}
 	}
 	return returns
@@ -203,7 +233,8 @@ func validateX86TypedCodeReturns(file *File, options Options, resolve func(strin
 		fn, target := functions[name], functions[entry.symbol]
 		producer, producerErr := x86CallerSourceFingerprint(fn)
 		callee, calleeErr := x86CallerSourceFingerprint(target)
-		if entry.arch != options.Goarch || counts[name] != 1 || counts[entry.symbol] != 1 ||
+		if entry.arch != options.Goarch || entry.triple != options.TargetTriple ||
+			!x86CodeAddressTargetProfile(options.Goarch, options.TargetTriple) || counts[name] != 1 || counts[entry.symbol] != 1 ||
 			!x86OrdinaryTypedCodeText(fn) || !x86OrdinaryTypedCodeText(target) ||
 			file.x86DirectTailHelper(target.Sym) || amd64IsRelocationAnchor(target, options.Sigs[entry.symbol]) ||
 			resolve(entry.target) != entry.symbol || resolveAssemblyDataSymbol(entry.target, resolve) != entry.symbol ||
@@ -222,7 +253,8 @@ func (c *amd64Ctx) checkTypedCodeReturn() (bool, error) {
 	}
 	target, valid := x86TypedCodeReturnTarget(c.fpScalarSource, c.goarch)
 	producer, err := x86CallerSourceFingerprint(c.fpScalarSource)
-	if !valid || target != entry.target || err != nil || producer != entry.producer ||
+	if !valid || entry.arch != c.goarch || entry.triple != c.targetTriple ||
+		!x86CodeAddressTargetProfile(c.goarch, c.targetTriple) || target != entry.target || err != nil || producer != entry.producer ||
 		c.resolve(target) != entry.symbol || resolveAssemblyDataSymbol(target, c.resolve) != entry.symbol ||
 		!reflect.DeepEqual(c.fpSourceSig, entry.signature) || !reflect.DeepEqual(c.sigs[entry.symbol], entry.targetSig) {
 		return true, fmt.Errorf("%w: typed code return lost its exact producer or target", ErrProbeNeedsContext)
