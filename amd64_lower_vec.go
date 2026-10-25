@@ -2251,27 +2251,33 @@ func amd64ApplyI32LaneMask(c *amd64Ctx, lanes int, computed, old, mask string, z
 }
 
 func amd64ApplyIntegerLaneMask(c *amd64Ctx, lanes, bits int, computed, old, mask string, zeroing bool) string {
-	result := old
+	fallback := old
 	if zeroing {
-		result = "zeroinitializer"
+		fallback = "zeroinitializer"
 	}
+	if lanes <= 0 {
+		return fallback
+	}
+
+	// Each predicate lane selects its own numerical mask bit. A scalar-to-
+	// vector bitcast would instead depend on the target's byte order. Typed
+	// callers supply at most 64 lanes, so every logical shift is below 64.
+	splat := amd64SplatInteger(c, lanes, 64, mask)
+	shifted := c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = lshr <%d x i64> %s, <", shifted, lanes, splat)
 	for lane := 0; lane < lanes; lane++ {
-		bit := amd64MaskBitI1(c, mask, lane)
-		value := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = extractelement <%d x i%d> %s, i32 %d\n", value, lanes, bits, computed, lane)
-		fallback := "0"
-		if !zeroing {
-			oldValue := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = extractelement <%d x i%d> %s, i32 %d\n", oldValue, lanes, bits, old, lane)
-			fallback = "%" + oldValue
+		if lane != 0 {
+			c.b.WriteString(", ")
 		}
-		selected := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = select i1 %s, i%d %%%s, i%d %s\n", selected, bit, bits, value, bits, fallback)
-		inserted := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = insertelement <%d x i%d> %s, i%d %%%s, i32 %d\n", inserted, lanes, bits, result, bits, selected, lane)
-		result = "%" + inserted
+		fmt.Fprintf(c.b, "i64 %d", lane)
 	}
-	return result
+	c.b.WriteString(">\n")
+	predicate := c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = trunc <%d x i64> %%%s to <%d x i1>\n", predicate, lanes, shifted, lanes)
+	selected := c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = select <%d x i1> %%%s, <%d x i%d> %s, <%d x i%d> %s\n",
+		selected, lanes, predicate, lanes, bits, computed, lanes, bits, fallback)
+	return "%" + selected
 }
 
 func amd64PackI1x8ToI64(c *amd64Ctx, pred string) string {

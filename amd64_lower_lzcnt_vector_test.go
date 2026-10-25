@@ -83,7 +83,9 @@ func TestTranslateX86PackedLeadingZeroCountCompleteGoFormsAcrossTargets(t *testi
 				func(consumer *amd64Ctx, instruction Instr) (bool, bool, error) {
 					return consumer.lowerPackedBitCount(instruction.Op, instruction)
 				})
-			for _, want := range []string{"@llvm.ctlz.v4i32", "@llvm.ctlz.v8i64", "select i1"} {
+			for _, want := range []string{
+				"@llvm.ctlz.v4i32", "@llvm.ctlz.v8i64", "select <16 x i1>", "select <8 x i1>",
+			} {
 				if !strings.Contains(ir, want) {
 					t.Fatalf("packed-LZCNT lowering omitted %q:\n%s", want, ir)
 				}
