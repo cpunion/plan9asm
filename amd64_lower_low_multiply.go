@@ -10,7 +10,7 @@ func (c *amd64Ctx) lowerPackedLowMultiply(op Op, ins Instr) (bool, bool, error) 
 	if !known || err != nil {
 		return known, false, err
 	}
-	first, second, destination := ins.Args[form.first], ins.Args[form.second], ins.Args[form.destination]
+	first := ins.Args[form.first]
 	if form.legacy && form.memory >= 0 {
 		virtual := first.Kind == OpFP
 		if first.Kind == OpMem && !x86CallerMemoryCertified(ins, form.memory) && !c.fixedLocalMemoryCertified(ins, form.memory) {
@@ -26,52 +26,13 @@ func (c *amd64Ctx) lowerPackedLowMultiply(op Op, ins Instr) (bool, bool, error) 
 		}
 	}
 	bits := form.spec.laneBits
-	lanes := form.byteWidth * 8 / bits
-	b, err := c.loadPackedCompareLanes(second, form.byteWidth, bits, false)
-	if err != nil {
-		return true, false, err
-	}
-	var mask, value string
-	if form.mask >= 0 {
-		mask, err = c.loadK(ins.Args[form.mask].Reg)
-		if err != nil {
-			return true, false, err
-		}
-	}
-	if form.legacy && form.memory >= 0 {
-		// Keep the original SSE4.1 opcode and its alignment/fault behavior,
-		// including a dead result. An align-1 portable load is not equivalent.
-		value, err = c.emitPackedBinaryNativeMemory(first, bits, b, "pmulld")
-	} else {
-		// Intel's E4 class suppresses inactive source lanes. The caller still
-		// proves the entire possible read envelope independently of the mask.
-		a, loadErr := c.loadX86PackedShiftLanes(first, form.byteWidth, bits, form.broadcast, mask)
-		err = loadErr
-		if err == nil {
+	err = c.emitPackedBinaryE4(ins, form.x86PackedBinaryForm, bits, "pmulld",
+		func(lanes, bits int, first, second string) string {
 			product := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = mul <%d x i%d> %s, %s\n", product, lanes, bits, b, a)
-			value = "%" + product
-		}
-	}
-	if err != nil {
-		return true, false, err
-	}
-	if form.mask >= 0 {
-		old := "zeroinitializer"
-		if !form.zeroing {
-			old, err = c.loadPackedCompareLanes(destination, form.byteWidth, bits, false)
-			if err != nil {
-				return true, false, err
-			}
-		}
-		value = amd64ApplyIntegerLaneMask(c, lanes, bits, value, old, mask, form.zeroing)
-	}
-	out := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i%d> %s to <%d x i8>\n", out, lanes, bits, value, form.byteWidth)
-	if form.legacy {
-		return true, false, c.storeLegacyPackedLogical(destination, "%"+out)
-	}
-	return true, false, c.storePackedMoveOperand(destination, form.byteWidth, "%"+out)
+			fmt.Fprintf(c.b, "  %%%s = mul <%d x i%d> %s, %s\n", product, lanes, bits, second, first)
+			return "%" + product
+		})
+	return true, false, err
 }
 
 func isAMD64MemoryOperand(op Operand) bool {

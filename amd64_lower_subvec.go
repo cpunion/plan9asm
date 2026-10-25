@@ -46,53 +46,18 @@ func (c *amd64Ctx) lowerPackedIntegerSubtract(op Op, ins Instr) (ok bool, termin
 		}
 	}
 	bits := form.laneBits
-	lanes := form.byteWidth * 8 / bits
-	second, err := c.loadPackedCompareLanes(ins.Args[form.second], form.byteWidth, bits, false)
-	if err != nil {
-		return true, false, err
-	}
-	var mask, value string
-	if form.mask >= 0 {
-		mask, err = c.loadK(ins.Args[form.mask].Reg)
-		if err != nil {
-			return true, false, err
-		}
-	}
+	mnemonic := ""
 	if form.legacy && form.memory >= 0 {
-		mnemonic := strings.ToLower(base)
+		mnemonic = strings.ToLower(base)
 		if base == "PSUBL" {
 			mnemonic = "psubd"
 		}
-		value, err = c.emitPackedBinaryNativeMemory(first, bits, second, mnemonic)
-	} else {
-		// Go's EVEX subtract rows are E4, not E4NF. Preserve every active
-		// source access even for dead outputs, and suppress inactive lanes.
-		input, loadErr := c.loadX86PackedShiftLanes(first, form.byteWidth, bits, form.broadcast, mask)
-		err = loadErr
-		if err == nil {
-			value = c.emitPackedIntegerSubtract(lanes, bits, input, second, form.mode)
-		}
 	}
-	if err != nil {
-		return true, false, err
-	}
-	destination := ins.Args[form.destination]
-	if form.mask >= 0 {
-		old := "zeroinitializer"
-		if !form.zeroing {
-			old, err = c.loadPackedCompareLanes(destination, form.byteWidth, bits, false)
-			if err != nil {
-				return true, false, err
-			}
-		}
-		value = amd64ApplyIntegerLaneMask(c, lanes, bits, value, old, mask, form.zeroing)
-	}
-	out := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i%d> %s to <%d x i8>\n", out, lanes, bits, value, form.byteWidth)
-	if form.legacy {
-		return true, false, c.storeLegacyPackedLogical(destination, "%"+out)
-	}
-	return true, false, c.storePackedMoveOperand(destination, form.byteWidth, "%"+out)
+	err = c.emitPackedBinaryE4(ins, form.x86PackedBinaryForm, bits, mnemonic,
+		func(lanes, bits int, first, second string) string {
+			return c.emitPackedIntegerSubtract(lanes, bits, first, second, form.mode)
+		})
+	return true, false, err
 }
 
 func amd64PackedSubtractProperties(op string) (laneBits int, mode amd64PackedSubtractMode, vector, ok bool) {

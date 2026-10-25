@@ -58,55 +58,18 @@ func (c *amd64Ctx) lowerPackedIntegerAddForm(op Op, ins Instr) (bool, bool, erro
 		fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i%d> %s to i64\n", out, lanes, bits, value)
 		return true, false, c.storeReg(destination.Reg, "%"+out)
 	}
-	b, err := c.loadPackedCompareLanes(second, form.byteWidth, bits, false)
-	if err != nil {
-		return true, false, err
-	}
-	var mask, value string
-	if form.mask >= 0 {
-		mask, err = c.loadK(ins.Args[form.mask].Reg)
-		if err != nil {
-			return true, false, err
-		}
-	}
+	mnemonic := ""
 	if form.legacy && form.memory >= 0 {
-		mnemonic := strings.ToLower(string(form.spec.canonical))
+		mnemonic = strings.ToLower(string(form.spec.canonical))
 		if mnemonic == "paddl" {
 			mnemonic = "paddd"
 		}
-		value, err = c.emitPackedBinaryNativeMemory(first, bits, b, mnemonic)
-	} else {
-		// PADD's EVEX E4/E4.nb suppresses inactive native source lanes,
-		// unlike PMADDWD's E4NF. Virtual FP still needs its complete span.
-		// This shared bit reader keeps native active-lane accesses volatile
-		// even when outputs are dead, while suppressing exactly inactive E4
-		// lanes. It also reads broadcasts across independent checked FP bytes.
-		// The shift family's count/arithmetic effects are not reused.
-		a, loadErr := c.loadX86PackedShiftLanes(first, form.byteWidth, bits, form.broadcast, mask)
-		err = loadErr
-		if err == nil {
-			value = c.emitPackedIntegerAdd(lanes, bits, a, b, form.spec.mode)
-		}
 	}
-	if err != nil {
-		return true, false, err
-	}
-	if form.mask >= 0 {
-		old := "zeroinitializer"
-		if !form.zeroing {
-			old, err = c.loadPackedCompareLanes(destination, form.byteWidth, bits, false)
-			if err != nil {
-				return true, false, err
-			}
-		}
-		value = amd64ApplyIntegerLaneMask(c, lanes, bits, value, old, mask, form.zeroing)
-	}
-	out := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i%d> %s to <%d x i8>\n", out, lanes, bits, value, form.byteWidth)
-	if form.legacy {
-		return true, false, c.storeLegacyPackedLogical(destination, "%"+out)
-	}
-	return true, false, c.storePackedMoveOperand(destination, form.byteWidth, "%"+out)
+	err = c.emitPackedBinaryE4(ins, form.x86PackedBinaryForm, bits, mnemonic,
+		func(lanes, bits int, first, second string) string {
+			return c.emitPackedIntegerAdd(lanes, bits, first, second, form.spec.mode)
+		})
+	return true, false, err
 }
 
 // The caller supplies a registered legacy mnemonic. Keeping its memory form
