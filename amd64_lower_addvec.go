@@ -2,7 +2,7 @@ package plan9asm
 
 import (
 	"fmt"
-	"strings"
+	"strconv"
 )
 
 type amd64PackedAddMode uint8
@@ -128,14 +128,5 @@ func (c *amd64Ctx) emitPackedIntegerAdd(lanes, laneBits int, first, second strin
 }
 
 func llvmSplatSignedInteger(lanes, bits int, value int64) string {
-	var b strings.Builder
-	b.WriteByte('<')
-	for lane := 0; lane < lanes; lane++ {
-		if lane != 0 {
-			b.WriteString(", ")
-		}
-		fmt.Fprintf(&b, "i%d %d", bits, value)
-	}
-	b.WriteByte('>')
-	return b.String()
+	return llvmSplatIntegerText(lanes, bits, strconv.FormatInt(value, 10))
 }

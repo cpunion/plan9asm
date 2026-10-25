@@ -2,6 +2,7 @@ package plan9asm
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -2137,13 +2138,23 @@ func llvmRepeatI8Mask(chunk, width int) string {
 }
 
 func llvmSplatInteger(lanes, bits int, value uint64) string {
+	return llvmSplatIntegerText(lanes, bits, strconv.FormatUint(value, 10))
+}
+
+func llvmSplatIntegerText(lanes, bits int, value string) string {
+	if lanes <= 0 {
+		return "<>"
+	}
+	element := "i" + strconv.Itoa(bits) + " " + value
 	var b strings.Builder
+	// The two brackets replace the separator omitted before the first lane.
+	b.Grow(lanes * (len(element) + 2))
 	b.WriteByte('<')
 	for lane := 0; lane < lanes; lane++ {
 		if lane != 0 {
 			b.WriteString(", ")
 		}
-		fmt.Fprintf(&b, "i%d %d", bits, value)
+		b.WriteString(element)
 	}
 	b.WriteByte('>')
 	return b.String()
