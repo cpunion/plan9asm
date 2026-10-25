@@ -83,6 +83,8 @@ type report struct {
 	EncoderRules           int    `json:"encoder_rules,omitempty"`
 	EncoderRuleFingerprint string `json:"encoder_rule_fingerprint,omitempty"`
 
+	LegacyEncoder *legacyEncoderReport `json:"legacy_encoder,omitempty"`
+
 	OpsByFreq                 []opReport                `json:"ops_by_freq"`
 	ClusterStats              []clusterReport           `json:"cluster_stats"`
 	FamilyStats               []familyReport            `json:"unsupported_family_stats"`
@@ -295,6 +297,9 @@ func main() {
 	}
 	rep := buildReport(*corpus, goVersion(*goroot), *goos, *goarch, len(pkgs), pkgWithSFiles, asmFiles, ops, forms, supported, catalog, verified, compileOnly, parseErrs)
 	attachEncoderCatalog(&rep, ops, encoderCatalog)
+	if err := attachLegacyEncoderCatalog(&rep, *goroot); err != nil {
+		fatalf("load Go legacy encoder inventory: %v", err)
+	}
 	rep.FrontendInventory = frontend
 	var reprobeErr error
 	if *reprobe != "" {
@@ -1335,6 +1340,10 @@ func renderMarkdown(rep report) []byte {
 			fmt.Fprintf(&b, "- official encoder-table forms: `%d` across `%d` opcodes (`%d` opcodes observed in positive testdata)\n",
 				rep.EncoderForms, rep.EncoderOpcodes, rep.EncoderOpsObserved)
 		}
+	}
+	if legacy := rep.LegacyEncoder; legacy != nil {
+		fmt.Fprintf(&b, "- legacy encoding inventory: `%d` operand rows, `%d` move rows, `%d` special entries (not translation or execution evidence; mode applicability is not yet resolved)\n",
+			legacy.OperandRows, legacy.MoveRows, legacy.SpecialEntries)
 	}
 	if rep.OfficialOpcodes > 0 {
 		fmt.Fprintf(&b, "- official opcode names: `%d`\n", rep.OfficialOpcodes)

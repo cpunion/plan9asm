@@ -11,7 +11,7 @@ Preserve shared 386 and existing other-architecture tests. The review baseline
 is `728520def`: ordinary whole-source regressions, repeated family parsing and
 incomplete initialized official-form coverage remain despite green PR checks.
 The first batch repairs bounded unaligned private-scratch selection, pilots
-shared packed subtract/low-multiply lowering and completes independent legacy
+shared packed add/subtract/low-multiply lowering and completes independent legacy
 rule inventory. These are work items, not claims that all crypto source,
 official forms or native execution already pass. Keep subsequent measurements
 and exact revision receipts distinct from the historical CI chronology below.

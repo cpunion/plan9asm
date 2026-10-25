@@ -69,7 +69,7 @@ and explicit memory contracts. Delete replaced code in the same coherent batch.
 ## Work order and measurements
 
 1. Reproduce and repair ordinary-source regressions with independent tests.
-2. Pilot shared packed subtract/low-multiply lowering, retaining the complete
+2. Pilot shared packed add/subtract/low-multiply lowering, retaining the complete
    widths, masks, memory behavior and aliases. Extend only after the pilot
    demonstrates a smaller implementation and unchanged observations.
 3. Complete the independent rule inventory and initialized-form joins; migrate
@@ -91,3 +91,22 @@ Benchmark identical inputs before and after, with repeated samples and unchanged
 tools. Preserve vector IR and independently check generated-program performance.
 Do not clear global compiler caches. Batch LLVM tests with bounded modules and
 prompt disposal; batching must preserve every test case, not sample the suite.
+
+## Independent rule inventory
+
+The official scanner includes the selected SDK's ordered `asm6.go` `optab` and
+`ymovtab` under `legacy_encoder` for both amd64 and 386. It retains duplicate
+operand rows, nil-ytab special entries, sentinels, full opcode payloads and
+symbolic attributes separately from the existing AVX inventory. This is a
+declaration inventory, not proof of mode applicability or selected encoding.
+
+```sh
+go run ./cmd/plan9asmscan -corpus=go-asm -goos=linux -goarch=amd64 \
+  -format=json -out=_out/amd64-official-rules.json
+```
+
+`table_row_fingerprint` hashes normalized retained table rows. It deliberately
+does not claim to hash constant definitions or all assembler selection logic.
+No original corpus classifications or AVX fingerprints change when this
+inventory is added. Row-to-initialized-form joins and original-byte selection
+witnesses remain separate work; do not count inventory rows as passing tests.
