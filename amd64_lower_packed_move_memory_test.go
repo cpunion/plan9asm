@@ -12,9 +12,11 @@ func TestX86PackedMoveMaskedMemoryRuntime(t *testing.T) {
 
 func x86PackedMoveMaskedMemoryRuntime(t *testing.T, native bool) {
 	t.Helper()
-	execution := x86FloatCompareExecutionTools(t)
+	var execution x86FloatCompareExecution
 	if native {
 		execution = x86FloatCompareRuntimeTools(t, x86FloatCompareEVEX)
+	} else {
+		execution = x86ScalarCountHostExecution(t)
 	}
 	var source, declarations, checks strings.Builder
 	sigs := make(map[string]FuncSig)
@@ -39,10 +41,7 @@ func x86PackedMoveMaskedMemoryRuntime(t *testing.T, native bool) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ir, err := Translate(file, Options{Goarch: "amd64", TargetTriple: execution.triple, Sigs: sigs})
-	if err != nil {
-		t.Fatal(err)
-	}
+	ir := x86PackedMoveRuntimeIR(t, file, execution, sigs, native, "packed-move-masked-memory")
 	mainC := `#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -75,9 +74,11 @@ func TestX86PackedMoveRegisterViewsRuntime(t *testing.T) {
 
 func x86PackedMoveRegisterViewsRuntime(t *testing.T, native bool) {
 	t.Helper()
-	execution := x86FloatCompareExecutionTools(t)
+	var execution x86FloatCompareExecution
 	if native {
 		execution = x86FloatCompareRuntimeTools(t, x86FloatCompareEVEX)
+	} else {
+		execution = x86ScalarCountHostExecution(t)
 	}
 	var source, declarations, checks strings.Builder
 	sigs := make(map[string]FuncSig)
@@ -116,10 +117,7 @@ func x86PackedMoveRegisterViewsRuntime(t *testing.T, native bool) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ir, err := Translate(file, Options{Goarch: "amd64", TargetTriple: execution.triple, Sigs: sigs})
-	if err != nil {
-		t.Fatal(err)
-	}
+	ir := x86PackedMoveRuntimeIR(t, file, execution, sigs, native, "packed-move-views")
 	mainC := `#include <stdint.h>
 #include <stdio.h>
 ` + declarations.String() + `
@@ -141,4 +139,46 @@ static int check(void (*fn)(const void *,const void *,void *,uint64_t),int bytes
 int main(void) {
 ` + checks.String() + "return 0;\n}\n"
 	execution.compileAndRunLLVM(t, "packed-move-views", ir, mainC, "-O2")
+}
+
+func x86PackedMoveRuntimeIR(t *testing.T, file *File, execution x86FloatCompareExecution, sigs map[string]FuncSig, native bool, name string) string {
+	t.Helper()
+	options := Options{Goarch: "amd64", TargetTriple: execution.triple, Sigs: sigs}
+	ir, err := Translate(file, options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if native {
+		return ir // Native memory faults and original ISA attributes stay intact.
+	}
+	profiles := make(map[string]string, len(file.Funcs))
+	for _, function := range file.Funcs {
+		profile := ""
+		if x86ScalarFloatIntegerNativeTarget("amd64", execution.triple) ||
+			x86ScalarFloatIntegerNativeTarget("386", execution.triple) {
+			profile = inferFuncTargetFeaturesForGOARCH(ArchAMD64, "amd64", function)
+		}
+		profiles[function.Sym] = profile
+	}
+	// On every host, including ARM64, reject native bodies. On x86 also remove
+	// only each complete function's exact checked ISA attributes for this
+	// numerical oracle; a Z-register spelling must not require an AVX512 host.
+	portable, err := x86PackedShiftPortableFeatureProjection(ir, profiles)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Run("amd64-object", func(t *testing.T) {
+		const triple = "x86_64-unknown-linux-gnu"
+		original := ir
+		if execution.triple != triple {
+			options.TargetTriple = triple
+			original, err = Translate(file, options)
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+		// Compile the unprojected public module with its original features.
+		x86ResultInitializationObject(t, execution.llc, triple, original, name)
+	})
+	return portable
 }

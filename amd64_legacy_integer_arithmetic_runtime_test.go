@@ -345,8 +345,9 @@ func TestOriginal(t *testing.T) {
 
 func TestX86LegacyIntegerArithmeticWiderSoftwareAliasPreservation(t *testing.T) {
 	// A directly initialized software shadow, not native Go Z-register code.
-	execution := x86FloatCompareExecutionTools(t)
+	execution := x86ScalarCountHostExecution(t)
 	var ir, reference, checks strings.Builder
+	profiles := make(map[string]string)
 	ir.WriteString("target triple = \"" + execution.triple + "\"\n")
 	reference.WriteString("#include <stdint.h>\n#include <stdio.h>\n#include <string.h>\n" + x86LegacyIntegerArithmeticCMath)
 	constant := func(multiplier, addend int) string {
@@ -357,6 +358,7 @@ func TestX86LegacyIntegerArithmeticWiderSoftwareAliasPreservation(t *testing.T) 
 		return "<" + strings.Join(values, ",") + ">"
 	}
 	for index, op := range x86LegacyIntegerArithmeticTestNames {
+		profiles[op+"Shadow"] = ""
 		ins := Instr{Op: Op(op), Args: []Operand{{Kind: OpReg, Reg: "X1"}, {Kind: OpReg, Reg: "X0"}}}
 		fn := Func{Instrs: []Instr{{Op: "VMOVUPS", Args: []Operand{{Kind: OpReg, Reg: "Z0"}, {Kind: OpReg, Reg: "Z1"}}}, ins}}
 		ctx, output := newAMD64CtxWithFuncForTest(t, fn, FuncSig{Ret: Void}, nil)
@@ -399,9 +401,22 @@ func TestX86LegacyIntegerArithmeticWiderSoftwareAliasPreservation(t *testing.T) 
 `, op, x86LegacyIntegerArithmeticTestBytes[index], x86LegacyIntegerArithmeticTestBytes[index], x86LegacyIntegerArithmeticTestBytes[index], x86LegacyIntegerArithmeticTestBytes[index], x86LegacyIntegerArithmeticTestModes[index], x86FloatAddSubBoolInt(index >= 9), x86LegacyIntegerArithmeticTestBytes[index], op)
 	}
 	reference.WriteString("int main(void){uint8_t out[160];\n" + checks.String() + "return 0;}\n")
+	// The private shadow has no ISA attributes. Use the same strict body guard
+	// as public portable oracles so new native effects cannot silently enter it.
+	text, err := x86PackedShiftPortableFeatureProjection(ir.String(), profiles)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Run("amd64-object", func(t *testing.T) {
+		const triple = "x86_64-unknown-linux-gnu"
+		crossIR := strings.Replace(text, "target triple = \""+execution.triple+"\"\n",
+			"target triple = \""+triple+"\"\n", 1)
+		x86ResultInitializationObject(t, execution.llc, triple, crossIR, "legacy-integer-arithmetic-alias")
+	})
 	for _, level := range []string{"-O0", "-O2"} {
 		t.Run(level, func(t *testing.T) {
-			execution.compileAndRunLLVM(t, "legacy-integer-arithmetic-alias", ir.String(), reference.String(), level)
+			execution.compileAndRunLLVM(t, "legacy-integer-arithmetic-alias", text, reference.String(), level)
 		})
 	}
+	t.Log("17 historical software-shadow operations retain all 128 alias bytes and canaries; host execution and AMD64 object, not public/native opcode execution")
 }
