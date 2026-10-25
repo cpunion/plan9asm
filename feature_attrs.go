@@ -72,6 +72,33 @@ func inferFuncTargetFeaturesForGOARCH(arch Arch, goarch string, fn Func) string 
 			if moveArch == "" {
 				moveArch = "amd64"
 			}
+			// These disjoint typed families completely own their feature needs.
+			// Only valid forms bypass unrelated probes; errors keep the original
+			// raw/special-opcode fallback below.
+			if form, known, err := x86PackedLogicalProperties(ins, goarch); known && err == nil {
+				if form.legacy && !form.mmx && form.memory >= 0 && ins.Args[form.memory].Kind != OpFP {
+					// Only the validated native opcode needs the private XMM carrier.
+					if form.spec.encoding == x86PackedLogicalLegacyFP && form.spec.laneBits == 32 {
+						add("+sse")
+					} else {
+						add("+sse2")
+					}
+				}
+				continue
+			}
+			if form, known, err := amd64PackedVectorMoveProperties(ins, moveArch); known && err == nil {
+				if form.spec.aligned && form.memory >= 0 && !form.undefinedOpcode() {
+					if form.nativeEVEX(ins) {
+						add("+avx512f")
+						if form.byteWidth < 64 {
+							add("+avx512vl")
+						}
+					} else {
+						add("+avx")
+					}
+				}
+				continue
+			}
 			if form, known, err := x86FourSourceProperties(ins.Op, ins, moveArch); known && err == nil {
 				add("+avx512f") // Exact physical carriers, including scalar SS and isolated mode32.
 				if form.spec.mode == amd64FourSourceFMA {
@@ -267,17 +294,6 @@ func inferFuncTargetFeaturesForGOARCH(arch Arch, goarch string, fn Func) string 
 					add("+sse")
 				}
 			}
-			if form, known, err := amd64PackedVectorMoveProperties(ins, moveArch); known && err == nil &&
-				form.spec.aligned && form.memory >= 0 && !form.undefinedOpcode() {
-				if form.nativeEVEX(ins) {
-					add("+avx512f")
-					if form.byteWidth < 64 {
-						add("+avx512vl")
-					}
-				} else {
-					add("+avx")
-				}
-			}
 			if spec, known, err := x86ImplicitMaskMoveProperties(ins.Op, ins, moveArch); known && err == nil {
 				switch {
 				case spec.byteWidth == 8:
@@ -325,15 +341,6 @@ func inferFuncTargetFeaturesForGOARCH(arch Arch, goarch string, fn Func) string 
 				// SSSE3 carrier on i386 as well. Portable register/VEX arithmetic
 				// does not acquire a native ISA or caller permission.
 				add("+sse2", "+ssse3")
-			}
-			if form, known, err := x86PackedLogicalProperties(ins, goarch); known && err == nil &&
-				form.legacy && !form.mmx && form.memory >= 0 && ins.Args[form.memory].Kind != OpFP {
-				// Only the validated native opcode needs the private XMM carrier.
-				if form.spec.encoding == x86PackedLogicalLegacyFP && form.spec.laneBits == 32 {
-					add("+sse")
-				} else {
-					add("+sse2")
-				}
 			}
 			if form, known, err := x86ImmediateShuffleProperties(ins, goarch); known && err == nil &&
 				form.spec.legacy && !form.spec.mmx && form.memory >= 0 && form.source.Kind != OpFP {
