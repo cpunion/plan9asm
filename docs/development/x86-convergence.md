@@ -110,3 +110,36 @@ does not claim to hash constant definitions or all assembler selection logic.
 No original corpus classifications or AVX fingerprints change when this
 inventory is added. Row-to-initialized-form joins and original-byte selection
 witnesses remain separate work; do not count inventory rows as passing tests.
+
+## First pipeline pilot and next gate
+
+The shared E4 pipeline retains family-specific parsing and storage checks, then
+handles operand reads, arithmetic, masking and encoding-aware writeback once.
+Legacy memory still uses its original faulting opcode. MMX and word low-product
+multiplication retain separate owners. The three migrated lowering files plus
+their helper shrink from 403 to 346 lines; this is not the whole PR's line delta.
+
+The selected Go 1.27.2 tables contain the following independent pilot rows:
+
+| Family | Legacy XMM | AVX | Total |
+|---|---:|---:|---:|
+| Wrapping/saturating add | 8 | 64 | 72 |
+| Wrapping/saturating subtract | 8 | 64 | 72 |
+| D/Q low product | 1 | 14 | 15 |
+| Pilot | 17 | 142 | 159 |
+
+Seven PADD MMX rows and ten PMULLW/VPMULLW rows are outside this migration,
+not unsupported or newly verified. PADDD's frontend alias adds no encoder row.
+The next gate must retain row identity rather than deduplicate instruction text.
+Force AMD64 EVEX X/Y encoding with high registers, and independently check the
+actual Go instruction bytes before associating a witness with that row. Reuse
+the existing witness grammar and public three-API object harness in bounded
+32-function batches. Initialized source, matching encoding, public IR, objects
+and runtime remain separate outcomes; no inventory count is a passing outcome.
+
+The new result-mask helper emits five vector IR instructions instead of a
+lane-wise sequence. This is not a five-machine-instruction or constant-runtime
+claim: LLVM may split its predicate vectors. Shared splat formatting has constant
+allocation count but necessarily linear output size. Keep the independent
+runtime oracles and measure generated-program performance on actual AMD64
+hardware before claiming that whole-axis improvement.

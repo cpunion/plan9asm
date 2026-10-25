@@ -10,11 +10,32 @@ Follow [x86 convergence](x86-convergence.md) before expanding other architecture
 Preserve shared 386 and existing other-architecture tests. The review baseline
 is `728520def`: ordinary whole-source regressions, repeated family parsing and
 incomplete initialized official-form coverage remain despite green PR checks.
-The first batch repairs bounded unaligned private-scratch selection, pilots
-shared packed add/subtract/low-multiply lowering and completes independent legacy
-rule inventory. These are work items, not claims that all crypto source,
-official forms or native execution already pass. Keep subsequent measurements
-and exact revision receipts distinct from the historical CI chronology below.
+Local batch `b71e2e46f` repairs ten unaligned private-scratch transport forms,
+shares the packed add/subtract/D-Q low-multiply pipeline, retains the independent
+legacy rule inventory, and reduces splat/mask IR construction cost. MMX and
+word low-multiply retain their separate lowerers. These changes do not restore
+every ordinary crypto source or qualify every official form/native instruction.
+
+Frozen local receipts use LLVM22.1.8; counts below exclude skipped roots:
+
+| Snapshot / gate | Go | Passed roots / children | Skipped roots |
+|---|---|---:|---:|
+| `b71e2e46f` expanded x86 regression | 1.27.3 | 74 / 4,840 | 3 |
+| `b71e2e46f` complete transport CLI sources | 1.27.3 | 3 / 19 | 0 |
+| `b71e2e46f` focused minimum-SDK regression | 1.20.14 | 8 / 376 | 0 |
+| `b71e2e46f` complete rule reader and scanner | 1.20.14 | 115 / 2,231 | 0 |
+
+The three skips are existing AMD64 software-counterpart launch requirements,
+not successful execution or AVX512 capability results. Original failed reports
+remain unchanged. An initial minimum-SDK command used an unsupported `-p1`
+spelling and did not run tests; the successful receipt uses `-p=1`.
+None of these local receipts certifies a later revision or a fresh CI run.
+
+Next: close initialized official-row joins with original encoding identity;
+repair ordinary whole-source scratch/CFG regressions using shared typed effects;
+then remove repeated family parsing and measure complete-source translation.
+Do not add another per-proof opcode whitelist or generalize to another arch.
+The CI chronology below is historical, not the current local batch's status.
 
 ## Scope and authority
 
@@ -31,7 +52,7 @@ and staging [PR5](https://github.com/cpunion/plan9asm/pull/5) draft until actual
 current-head tests, CI, review and coverage qualify. Resolved threads are not
 reviewer approval.
 
-## Current CI repairs
+## Historical CI repairs
 
 Published head `6a39cdd831e3` is still under validation in
 [run39999357637](https://github.com/xgo-dev/plan9asm/actions/runs/39999357637).
