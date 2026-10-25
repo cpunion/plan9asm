@@ -45,7 +45,7 @@ func (source *GoX86SDKASMDataSource) retainSDKFrameListingBytes(bytes int) error
 // This only decodes actual listing metadata. Independently complete original,
 // mapped and compiler objects authenticate its native TEXT inventory and code;
 // none of these fields is a local backing or source-entry transport permission.
-var sdkAMD64FrameNativeHeader = regexp.MustCompile(`^(\S+) STEXT(?: (static))?(?: (nosplit))?(?: (asm))? size=([0-9]+) (?:align=0x[0-9a-f]+ )?args=0x([0-9a-f]+) locals=0x([0-9a-f]+)(?: funcid=0x[0-9a-f]+)?(?: align=0x[0-9a-f]+)?$`)
+var sdkAMD64FrameNativeHeader = regexp.MustCompile(`^(\S+) (STEXT|STEXTFIPS)(?: (static))?(?: (nosplit))?(?: (asm))? size=([0-9]+) (?:align=0x[0-9a-f]+ )?args=0x([0-9a-f]+) locals=0x([0-9a-f]+)(?: funcid=0x[0-9a-f]+)?(?: align=0x[0-9a-f]+)?$`)
 
 func sdkAMD64FrameNativeRecords(listing []byte, texts []gostaticstorage.TextRecord) ([]sdkAMD64FrameNativeRecord, error) {
 	return sdkAMD64FrameNativeRecordsInOrder(listing, texts, nil)
@@ -81,30 +81,36 @@ func sdkAMD64FrameNativeRecordsInOrder(listing []byte, texts []gostaticstorage.T
 	scanner.Buffer(nil, 4<<20)
 	for scanner.Scan() {
 		line := scanner.Text()
-		if !strings.Contains(line, " STEXT ") {
+		if !strings.Contains(line, " STEXT ") && !strings.Contains(line, " STEXTFIPS ") {
 			continue // Complete native objects validate every other record.
 		}
 		header := sdkAMD64FrameNativeHeader.FindStringSubmatch(line)
 		if header == nil || len(records) >= len(texts) {
 			return nil, sdkASMDataContext("SDK-primary native frame header has an unbound role or inventory")
 		}
-		size, sizeErr := strconv.ParseUint(header[5], 10, 64)
-		args, argsErr := strconv.ParseUint(header[6], 16, 64)
-		locals, localsErr := strconv.ParseUint(header[7], 16, 32)
+		// The current SDK emits both IsText kinds. Preserve the exact kind
+		// from the complete object, not a package-name or FIPS heuristic.
+		kind := uint8(1) // STEXT in the independently pinned current schema.
+		if header[2] == "STEXTFIPS" {
+			kind = 2
+		}
+		size, sizeErr := strconv.ParseUint(header[6], 10, 64)
+		args, argsErr := strconv.ParseUint(header[7], 16, 64)
+		locals, localsErr := strconv.ParseUint(header[8], 16, 32)
 		index := len(records)
 		if indices != nil {
 			index = indices[index]
 		}
 		text := texts[index]
 		if sizeErr != nil || argsErr != nil || localsErr != nil || text.Size < 0 ||
-			header[1] != text.Name || size != uint64(text.Size) || size != uint64(len(text.Code)) ||
+			header[1] != text.Name || kind != text.Kind || size != uint64(text.Size) || size != uint64(len(text.Code)) ||
 			int64(args) < 0 && int64(args) != -0x80000000 {
 			return nil, sdkASMDataContext("SDK-primary complete native frame/object TEXT differs")
 		}
-		if indices != nil && (header[2] != "") != (text.ABI == 65535) {
+		if indices != nil && (header[3] != "") != (text.ABI == 65535) {
 			return nil, sdkASMDataContext("SDK-primary native listing static/ABI source role differs")
 		}
-		records = append(records, sdkAMD64FrameNativeRecord{Symbol: header[1], Static: header[2] != "", NoSplit: header[3] != "", ASM: header[4] != "",
+		records = append(records, sdkAMD64FrameNativeRecord{Symbol: header[1], Static: header[3] != "", NoSplit: header[4] != "", ASM: header[5] != "",
 			Size: size, Args: int64(args), Locals: locals, ArgsKnown: int64(args) != -0x80000000})
 	}
 	if err := scanner.Err(); err != nil || len(records) != len(texts) {

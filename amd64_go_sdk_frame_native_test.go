@@ -2,13 +2,15 @@ package plan9asm
 
 import (
 	"errors"
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/xgo-dev/plan9asm/internal/gostaticstorage"
 )
 
 func TestSDKAMD64OriginalFrameNativeCompleteMetadata(t *testing.T) {
-	texts := []gostaticstorage.TextRecord{{Name: "private", Size: 1, Code: []byte{0xc3}}, {Name: "sdk.Entry", Size: 1, Code: []byte{0xc3}}}
+	texts := []gostaticstorage.TextRecord{{Name: "private", Kind: 1, Size: 1, Code: []byte{0xc3}}, {Name: "sdk.Entry", Kind: 1, Size: 1, Code: []byte{0xc3}}}
 	listing := []byte("private STEXT static nosplit asm size=1 align=0x0 args=0xffffffff80000000 locals=0x0 funcid=0x0\n" +
 		"sdk.Entry STEXT asm size=1 align=0x0 args=0x61 locals=0x128 funcid=0x0\n")
 	records, err := sdkAMD64FrameNativeRecords(listing, texts)
@@ -26,6 +28,52 @@ func TestSDKAMD64OriginalFrameNativeCompleteMetadata(t *testing.T) {
 		if _, err := sdkAMD64FrameNativeRecords([]byte(raw), texts); !errors.Is(err, ErrProbeNeedsContext) {
 			t.Fatal("partial, reordered, foreign or duplicate native frame inventory survived", raw, err)
 		}
+	}
+}
+
+func TestSDKAMD64NativeFrameTextKindsKeepExactObjectIdentity(t *testing.T) {
+	for _, kinds := range [][]uint8{{1, 1}, {2, 2}, {1, 2}, {2, 1}} {
+		t.Run(fmt.Sprint(kinds), func(t *testing.T) {
+			var listing strings.Builder
+			var texts []gostaticstorage.TextRecord
+			for index, kind := range kinds {
+				name := fmt.Sprintf("fixture.Entry%d", index)
+				label := "STEXT"
+				if kind == 2 {
+					label = "STEXTFIPS"
+				}
+				fmt.Fprintf(&listing, "%s %s nosplit asm size=1 align=0x0 args=0x0 locals=0x0 funcid=0x0\n", name, label)
+				texts = append(texts, gostaticstorage.TextRecord{Name: name, Kind: kind, Size: 1, Code: []byte{0xc3}})
+			}
+			raw := []byte(listing.String())
+			records, err := sdkAMD64FrameNativeRecords(raw, texts)
+			if err != nil || len(records) != len(texts) {
+				t.Fatal("complete ordinary/FIPS TEXT listing lost native frames", records, err)
+			}
+			for index, record := range records {
+				if record.Symbol != texts[index].Name || !record.NoSplit || !record.ASM || !record.ArgsKnown {
+					t.Fatal("native frame identity or attributes changed", record)
+				}
+				for _, wrongKind := range []uint8{0, 3 - texts[index].Kind, 3} {
+					changed := append([]gostaticstorage.TextRecord(nil), texts...)
+					changed[index].Kind = wrongKind
+					if _, err := sdkAMD64FrameNativeRecords(raw, changed); !errors.Is(err, ErrProbeNeedsContext) {
+						t.Fatal("listing borrowed a different object TEXT/storage kind", index, wrongKind, err)
+					}
+				}
+			}
+			for _, changed := range []string{
+				strings.SplitAfter(listing.String(), "\n")[0],
+				listing.String() + listing.String(),
+				strings.Replace(listing.String(), " nosplit", " foreign", 1),
+				strings.Replace(listing.String(), " asm", " dupok asm", 1),
+				strings.Replace(listing.String(), "STEXT", "STEXTFOREIGN", 1),
+			} {
+				if _, err := sdkAMD64FrameNativeRecords([]byte(changed), texts); !errors.Is(err, ErrProbeNeedsContext) {
+					t.Fatal("incomplete, duplicate or unobserved listing acquired native frames", changed, err)
+				}
+			}
+		})
 	}
 }
 
