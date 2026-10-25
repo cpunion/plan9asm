@@ -12,7 +12,14 @@ import (
 // Frontend architecture restrictions are likewise checked by the actual Go
 // assembler, never silently pruned here.
 func X86PackedBinarySyntaxWitnesses(rule X86AVXRule) ([]string, error) {
-	if rule.Ytab != "_yvandnpd" || rule.Prefix != "Pavx" {
+	if rule.Ytab != "_yvandnpd" {
+		return nil, fmt.Errorf("%s is outside the audited packed binary table grammar", rule.Opcode)
+	}
+	return x86PackedBinarySyntaxWitnesses(rule)
+}
+
+func x86PackedBinarySyntaxWitnesses(rule X86AVXRule) ([]string, error) {
+	if (rule.Ytab != "_yvandnpd" && rule.Ytab != "_yvblendmpd") || rule.Prefix != "Pavx" {
 		return nil, fmt.Errorf("%s is outside the audited packed binary table grammar", rule.Opcode)
 	}
 	masked := rule.ZCase == "Zevex_rm_v_k_r"

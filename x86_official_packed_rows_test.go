@@ -1,0 +1,288 @@
+package plan9asm
+
+import (
+	"bytes"
+	"fmt"
+	"regexp"
+	"runtime"
+	"strconv"
+	"strings"
+	"testing"
+
+	"github.com/xgo-dev/plan9asm/internal/goasmrules"
+)
+
+type x86OfficialPackedCase struct {
+	row, symbol string
+	line        int
+	witness     goasmrules.X86PackedBinaryWitness
+}
+
+// This joins official table ownership to physical Go bytes and initialized
+// public API translation. It is object coverage, not executed semantics.
+// Existing independent family runtime oracles remain a separate gate.
+func TestX86OfficialPackedRowsInitializedThreeAPIsObjects(t *testing.T) {
+	legacy, err := goasmrules.LoadX86LegacyRules(runtime.GOROOT())
+	if err != nil {
+		t.Fatal(err)
+	}
+	avx, err := goasmrules.LoadX86AVXRules(runtime.GOROOT())
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows, err := goasmrules.X86PackedBinaryPilotRows(legacy, avx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cases, aliases []x86OfficialPackedCase
+	for _, row := range rows {
+		for _, witness := range row.Witnesses {
+			cases = append(cases, x86OfficialPackedCase{row: row.ID, witness: witness})
+			if row.Opcode == "PADDL" {
+				witness.Instruction = strings.Replace(witness.Instruction, "PADDL ", "PADDD ", 1)
+				aliases = append(aliases, x86OfficialPackedCase{row: "alias/PADDD/" + row.ID, witness: witness})
+			}
+		}
+	}
+	if len(rows) != 159 || len(cases) != 480 || len(aliases) != 2 {
+		t.Fatalf("official pilot denominator drift: rows=%d canonical=%d aliases=%d", len(rows), len(cases), len(aliases))
+	}
+	cases = append(cases, aliases...)
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM 22 llc is required")
+	}
+	_, driverHash := x86LEAActualSDKDriver(t)
+	t.Logf("row-owned oracle SDK=%s driverSHA=%x; amd64 only, MMX and PMULLW/VPMULLW excluded", runtime.Version(), driverHash)
+	passed := 0
+	for start := 0; start < len(cases); start += 32 {
+		end := start + 32
+		if end > len(cases) {
+			end = len(cases)
+		}
+		batch := cases[start:end]
+		if t.Run(fmt.Sprintf("batch%02d", start/32), func(t *testing.T) {
+			source, declaration := x86OfficialPackedAssembly(batch)
+			listing, err := x86ScalarLiteralGoListing(t, "amd64", source)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := x86OfficialPackedVerifyListing(listing, batch); err != nil {
+				t.Fatalf("original Go encoding identity: %v\n%s", err, listing)
+			}
+			for _, api := range []string{"text", "module", "Go"} {
+				t.Run(api, func(t *testing.T) {
+					ir, err := x86ScalarFPBitViewAPI(t, source, declaration, "amd64", "x86_64-unknown-linux-gnu", api)
+					if err != nil {
+						t.Fatal(err)
+					}
+					x86ResultInitializationObject(t, llc, "x86_64-unknown-linux-gnu", ir, api)
+				})
+			}
+		}) {
+			passed += len(batch)
+		}
+	}
+	if passed != len(cases) {
+		t.Fatalf("only %d/%d row-owned formats passed all original-encoding/public-API/object gates", passed, len(cases))
+	}
+	t.Log("159 canonical rows / 480 legal format witnesses plus 2 aliases: original Go encoding and all three initialized public APIs + LLVM22 objects passed; no runtime claim")
+}
+
+func x86OfficialPackedAssembly(cases []x86OfficialPackedCase) (string, string) {
+	var source, declaration strings.Builder
+	line := 1
+	for index := range cases {
+		fixture := &cases[index]
+		fixture.symbol = fmt.Sprintf("Row%d", index)
+		w := fixture.witness
+		fmt.Fprintf(&declaration, "func %s(out,a,b *byte,mask uint64)\n", fixture.symbol)
+		prefix := fmt.Sprintf("TEXT ·%s(SB),4,$0-32\nMOVQ out+0(FP),DX\nMOVQ a+8(FP),AX\nMOVQ b+16(FP),BX\n", fixture.symbol)
+		move := "VMOVUPS"
+		if w.Generation == "legacy" {
+			move = "MOVOU"
+		}
+		if !w.Memory {
+			prefix += fmt.Sprintf("%s (AX),%s\n", move, w.First)
+		}
+		prefix += fmt.Sprintf("%s (BX),%s\n", move, w.Second)
+		if w.Masked {
+			prefix += "MOVQ mask+24(FP),CX\nKMOVQ CX,K1\n"
+			if !w.Zeroing {
+				prefix += fmt.Sprintf("%s (BX),%s\n", move, w.Destination)
+			}
+		}
+		fixture.line = line + strings.Count(prefix, "\n")
+		body := prefix + w.Instruction + fmt.Sprintf("\n%s %s,(DX)\nRET\n", move, w.Destination)
+		source.WriteString(body)
+		line += strings.Count(body, "\n")
+	}
+	return source.String(), declaration.String()
+}
+
+var x86OfficialPackedListingInstruction = regexp.MustCompile(`^\s*0x([0-9a-f]+)\s+([0-9]+)\s+\(.*:([0-9]+)\)\s+([A-Z0-9.]+)(?:\s|$)`)
+
+func x86OfficialPackedVerifyListing(listing string, cases []x86OfficialPackedCase) error {
+	owners := map[string]x86OfficialPackedCase{}
+	for _, fixture := range cases {
+		owners[fixture.symbol] = fixture
+	}
+	type instruction struct {
+		pc, line int
+		op       string
+	}
+	seen := map[string]bool{}
+	var owner string
+	var code []byte
+	var instructions []instruction
+	size := 0
+	finish := func() error {
+		if owner == "" {
+			return nil
+		}
+		fixture := owners[owner]
+		if len(instructions) < 2 || len(code) != size || size == 0 || code[size-1] != 0xc3 ||
+			instructions[len(instructions)-1].op != "RET" || instructions[len(instructions)-1].pc != size-1 {
+			return fmt.Errorf("%s has incomplete Go instruction/byte boundaries", fixture.row)
+		}
+		matches := 0
+		for index, ins := range instructions {
+			if ins.line != fixture.line {
+				continue
+			}
+			matches++
+			name := strings.Split(strings.Fields(fixture.witness.Instruction)[0], ".")[0]
+			if name == "PADDD" {
+				name = "PADDL" // Go's frontend alias must retain canonical bytes.
+			}
+			if strings.Split(ins.op, ".")[0] != name || index+1 == len(instructions) {
+				return fmt.Errorf("%s has changed/missing original source instruction", fixture.row)
+			}
+			end := instructions[index+1].pc
+			if ins.pc < 0 || end > len(code) || !bytes.Equal(code[ins.pc:end], fixture.witness.Encoding) {
+				return fmt.Errorf("%s %s: original bytes at %d:%d differ from %x", fixture.row,
+					fixture.witness.Instruction, ins.pc, end, fixture.witness.Encoding)
+			}
+		}
+		if matches != 1 {
+			return fmt.Errorf("%s has %d original source-row matches", fixture.row, matches)
+		}
+		seen[owner] = true
+		return nil
+	}
+	for _, line := range strings.Split(listing, "\n") {
+		fields := strings.Fields(line)
+		if len(fields) >= 2 && strings.HasPrefix(fields[1], "STEXT") {
+			if err := finish(); err != nil {
+				return err
+			}
+			symbol := strings.TrimPrefix(fields[0], "literal.")
+			// Historical Go prints an empty local package even with -p.
+			// Accept only these two observed owners, never arbitrary packages.
+			if symbol == fields[0] {
+				symbol = strings.TrimPrefix(fields[0], `"".`)
+			}
+			if fields[1] != "STEXT" && fields[1] != "STEXTFIPS" {
+				return fmt.Errorf("unknown Go text symbol kind %s", fields[1])
+			}
+			if _, ok := owners[symbol]; !ok || seen[symbol] || symbol == fields[0] {
+				return fmt.Errorf("unowned or duplicate Go function %s", fields[0])
+			}
+			owner, code, instructions, size = symbol, nil, nil, 0
+			for _, field := range fields[2:] {
+				if strings.HasPrefix(field, "size=") {
+					value, err := strconv.Atoi(strings.TrimPrefix(field, "size="))
+					if err != nil || value <= 0 || size != 0 {
+						return fmt.Errorf("invalid Go function size: %s", line)
+					}
+					size = value
+				}
+			}
+			continue
+		}
+		// Other object symbols have their own byte columns, not function code.
+		if len(fields) >= 2 && strings.HasPrefix(fields[1], "S") && !strings.HasPrefix(fields[0], "0x") {
+			if err := finish(); err != nil {
+				return err
+			}
+			owner = ""
+		}
+		if owner == "" {
+			continue
+		}
+		if encoded := x86InsertExtractListedBytes(line); len(encoded) != 0 {
+			pc, err := strconv.ParseUint(strings.TrimPrefix(fields[0], "0x"), 16, 32)
+			if err != nil || int(pc) != len(code) {
+				return fmt.Errorf("noncontiguous original Go byte columns: %s", line)
+			}
+			code = append(code, encoded...)
+			continue
+		}
+		match := x86OfficialPackedListingInstruction.FindStringSubmatch(line)
+		if match == nil {
+			continue
+		}
+		pc, pcErr := strconv.ParseUint(match[1], 16, 32)
+		decimal, decimalErr := strconv.ParseUint(match[2], 10, 32)
+		sourceLine, lineErr := strconv.Atoi(match[3])
+		if pcErr != nil || decimalErr != nil || lineErr != nil || pc != decimal || int(pc) >= size {
+			return fmt.Errorf("invalid original Go PC/source row: %s", line)
+		}
+		if match[4] == "TEXT" || match[4] == "FUNCDATA" || match[4] == "PCDATA" {
+			continue
+		}
+		if len(instructions) == 0 && pc != 0 || len(instructions) != 0 && int(pc) <= instructions[len(instructions)-1].pc {
+			return fmt.Errorf("non-increasing original Go instruction PCs: %s", line)
+		}
+		instructions = append(instructions, instruction{int(pc), sourceLine, match[4]})
+	}
+	if err := finish(); err != nil {
+		return err
+	}
+	if len(seen) != len(cases) {
+		return fmt.Errorf("only %d/%d original Go functions verified", len(seen), len(cases))
+	}
+	return nil
+}
+
+func TestX86OfficialPackedRowListingRejectsFalseIdentity(t *testing.T) {
+	cases := []x86OfficialPackedCase{{row: "avx/fixture", symbol: "Row0", line: 2,
+		witness: goasmrules.X86PackedBinaryWitness{Instruction: "VPADDD X16,X17,X18", Encoding: []byte{0x62, 0xa1, 0x75, 0, 0xfe, 0xd0}}}}
+	const listing = `literal.Row0 STEXT nosplit asm size=7 align=0x0 args=0x0 locals=0x0
+  0x0000 00000 (literal.s:1) TEXT literal.Row0(SB), NOSPLIT|NOFRAME, $0-0
+  0x0000 00000 (literal.s:1) FUNCDATA $0, gclocals(SB)
+  0x0000 00000 (literal.s:2) VPADDD X16, X17, X18
+  0x0006 00006 (literal.s:3) RET
+  0x0000 62 a1 75 00 fe d0 c3
+`
+	if err := x86OfficialPackedVerifyListing(listing, cases); err != nil {
+		t.Fatal(err)
+	}
+	for _, compatible := range []string{
+		strings.ReplaceAll(listing, "literal.Row0", `"".Row0`),
+		strings.Replace(listing, "STEXT ", "STEXTFIPS ", 1),
+	} {
+		if err := x86OfficialPackedVerifyListing(compatible, cases); err != nil {
+			t.Fatal("known SDK listing spelling lost row ownership", err)
+		}
+	}
+	for name, changed := range map[string]string{
+		"unknown text kind":   strings.Replace(listing, "STEXT ", "STEXTFOREIGN ", 1),
+		"VEX instead of EVEX": strings.Replace(listing, "62 a1", "c5 f1", 1),
+		"register extension":  strings.Replace(listing, "a1 75", "e1 75", 1),
+		"partial instruction": strings.Replace(listing, "0x0006 00006", "0x0005 00005", 1),
+		"wrong source row":    strings.Replace(listing, "literal.s:2", "literal.s:4", 1),
+		"wrong owner":         strings.ReplaceAll(listing, "literal.Row0", "literal.Row1"),
+		"missing owner":       "",
+		"duplicate owner":     listing + listing,
+		"truncated bytes":     strings.Replace(listing, "fe d0 c3", "fe d0", 1),
+		"trailing bytes":      strings.Replace(listing, "fe d0 c3", "fe d0 c3 90", 1),
+		"byte gap":            strings.Replace(listing, "0x0000 62", "0x0001 62", 1),
+	} {
+		t.Run(name, func(t *testing.T) {
+			if err := x86OfficialPackedVerifyListing(changed, cases); err == nil {
+				t.Fatal("unverified official row identity accepted")
+			}
+		})
+	}
+}
