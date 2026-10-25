@@ -10,7 +10,7 @@ Follow [x86 convergence](x86-convergence.md) before expanding other architecture
 Preserve shared 386 and existing other-architecture tests. The review baseline
 is `728520def`: ordinary whole-source regressions, repeated family parsing and
 incomplete initialized official-form coverage remain despite green PR checks.
-Local batch `b71e2e46f` repairs ten unaligned private-scratch transport forms,
+Local batch `d324dda54` repairs ten unaligned private-scratch transport forms,
 shares the packed add/subtract/D-Q low-multiply pipeline, retains the independent
 legacy rule inventory, and reduces splat/mask IR construction cost. MMX and
 word low-multiply retain their separate lowerers. These changes do not restore
@@ -20,20 +20,33 @@ Frozen local receipts use LLVM22.1.8; counts below exclude skipped roots:
 
 | Snapshot / gate | Go | Passed roots / children | Skipped roots |
 |---|---|---:|---:|
-| `b71e2e46f` expanded x86 regression | 1.27.3 | 74 / 4,840 | 3 |
+| `d324dda54` expanded x86 regression | 1.27.3 | 81 / 4,875 | 0 |
 | `b71e2e46f` complete transport CLI sources | 1.27.3 | 3 / 19 | 0 |
 | `b71e2e46f` focused minimum-SDK regression | 1.20.14 | 8 / 376 | 0 |
 | `b71e2e46f` complete rule reader and scanner | 1.20.14 | 115 / 2,231 | 0 |
 
-The three skips are existing AMD64 software-counterpart launch requirements,
-not successful execution or AVX512 capability results. Original failed reports
-remain unchanged. An initial minimum-SDK command used an unsupported `-p1`
-spelling and did not run tests; the successful receipt uses `-p=1`.
+At `b71e2e46f` three software oracles were skipped by an unrelated AMD64 launcher
+requirement. The test-only follow-up now executes all 17 shadow operations,
+18 masked-memory and 144 register-view cases on the host, retaining AMD64
+objects and the separate native EVEX paths. Its current/minimum-SDK patch
+receipts each pass 7 roots and 35 children without skips. The frozen integrated
+result above includes those oracles; neither receipt qualifies native AVX512.
+Original failed reports remain unchanged. An initial minimum-SDK command used
+an unsupported `-p1` spelling and did not run tests; the successful receipt uses
+`-p=1`.
 None of these local receipts certifies a later revision or a fresh CI run.
 
-Next: close initialized official-row joins with original encoding identity;
-repair ordinary whole-source scratch/CFG regressions using shared typed effects;
-then remove repeated family parsing and measure complete-source translation.
+The full Linux/amd64 standard-library object benchmark at `d324dda54` still
+fails: Go 1.27.2 / LLVM 22 compiled 33 of 55 files, with 22 failures, no N/A and
+none unattempted. The file inventory and failed-file set match the review
+baseline. It took 35 wall seconds; this one warm observation does not establish
+a performance improvement. An earlier run with GOFLAGS set failed source-profile
+checks and cannot supply a translation performance measurement.
+
+Next: repair ordinary whole-source scratch/CFG regressions using shared typed
+effects, and close initialized official-row joins with original encoding
+identity. Then remove repeated family parsing and measure complete-source
+translation and native generated-program performance.
 Do not add another per-proof opcode whitelist or generalize to another arch.
 The CI chronology below is historical, not the current local batch's status.
 
