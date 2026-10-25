@@ -3,6 +3,10 @@
 This is a navigation guide, not a coverage certificate. Start with the
 [family workflow](instructions.md) and [validation commands](validation.md).
 
+The current development order is [amd64 architecture convergence](x86-convergence.md):
+finish one architecture's implementation, efficiency and independent coverage
+before expanding another. Existing cross-architecture regression gates remain.
+
 ## Translation path
 
 1. Parsing/preprocessing retains assembly instructions, labels, DATA/GLOBL and

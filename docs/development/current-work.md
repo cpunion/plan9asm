@@ -1,8 +1,20 @@
 # PR40 closeout
 
-Updated 2026-10-24. This handoff identifies scope and required work, not a
+Updated 2026-10-25. This handoff identifies scope and required work, not a
 current-head completion certificate. Read [instruction contracts](instructions.md)
 and [validation](validation.md). Preserve original failed receipts.
+
+## Current priority: finish amd64 first
+
+Follow [x86 convergence](x86-convergence.md) before expanding other architectures.
+Preserve shared 386 and existing other-architecture tests. The review baseline
+is `728520def`: ordinary whole-source regressions, repeated family parsing and
+incomplete initialized official-form coverage remain despite green PR checks.
+The first batch repairs bounded unaligned private-scratch selection, pilots
+shared packed subtract/low-multiply lowering and completes independent legacy
+rule inventory. These are work items, not claims that all crypto source,
+official forms or native execution already pass. Keep subsequent measurements
+and exact revision receipts distinct from the historical CI chronology below.
 
 ## Scope and authority
 
