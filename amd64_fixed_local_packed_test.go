@@ -79,10 +79,9 @@ func TestGoAMD64FixedLocalPackedMoveTypedFamilyProof(t *testing.T) {
 				count++
 				t.Run(name, func(t *testing.T) {
 					pkg, _, file, options := fixedLocalPackedFixture(t, operation)
-					aligned := row.name == "VMOVDQA" || row.name == "VMOVAPD" || row.name == "VMOVAPS" ||
-						row.name == "VMOVDQA32" || row.name == "VMOVDQA64"
-					if GoAMD64FixedLocalFrameBindingNeeded(file, "amd64") != aligned {
-						t.Error("query must request alignment proof without hijacking ordinary unaligned moves")
+					if !GoAMD64FixedLocalFrameBindingNeeded(file, "amd64") ||
+						GoAMD64FixedLocalFrameBindingNeeded(file, "386") {
+						t.Error("physical private-frame transport needs its original backing regardless of alignment")
 					}
 					if _, err := proveX86FixedLocal(file.Funcs[0], options.Sigs[pkg.Path+".Value"]); err != nil {
 						t.Fatalf("initialized pure numeric packed-frame proof: %v", err)
