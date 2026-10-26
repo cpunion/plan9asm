@@ -41,14 +41,15 @@ and command/physical-root mutation controls. Other SDK and numerical observation
 roles retain their own stricter entry contracts; this repair does not qualify
 every alias in every observer.
 
-The final combined source `04f11d7f6` passes 84 roots / 1,900 children on
-Go1.27.3 and 80 / 1,853 on Go1.20.14, with zero failures/skips. The four absent
-minimum-SDK roots each have an explicit Go1.27 build constraint. Both SDKs also
-pass all 17 rule-reader roots / 48 children. Root/CLI builds, root vet, all
-5,011 tracked Go files' formatting, actionlint and all five official corpus
-baselines pass; Node22.23.4 passes 573 policy tests. Later documentation-only
-changes preserve these tested Go/module sources. A new complete PR CI run and
-current-head coverage/review remain required. Published head `bdbefa7e4` is
+The combined parser/routing/row-coverage source `8f8b6b0da` passes 211 roots /
+12,794 children on Go1.27.3 and 208 / 12,769 on Go1.20.14, with zero
+failures/skips. The three absent minimum-SDK roots each have an explicit Go1.27
+build constraint. Both SDKs also pass all 19 rule-reader roots / 58 children.
+Root/CLI builds, root vet, all 5,015 tracked Go files' formatting, actionlint
+and all five official corpus baselines pass; Node22.23.4 passes 573 policy
+tests. Later documentation-only changes preserve these tested Go/module sources.
+A new complete PR CI run and current-head coverage/review remain required.
+Published head `bdbefa7e4` is
 [running full CI](https://github.com/xgo-dev/plan9asm/actions/runs/40366498164).
 Its initial CLI failures reproduce a new private-CALL routing regression:
 `TestCompileOneInfersVoidABI0LocalHelperAtTargetWordSize` must retain the
