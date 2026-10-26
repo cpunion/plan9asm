@@ -40,7 +40,7 @@ func TestWindowsFeatureEnvironmentNormalizationProbe(t *testing.T) {
 	if err := json.Unmarshal(output, &actual); err != nil {
 		t.Fatal(err)
 	}
-	normalized, err := ordinaryPackageEnvironment("linux", "amd64", raw)
+	normalized, err := featurePackageEnvironment("linux", "amd64", raw)
 	if err != nil {
 		t.Fatal(err)
 	}

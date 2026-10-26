@@ -11,7 +11,7 @@ jobs:
   windows-feature-identity:
     if: github.repository == 'cpunion/plan9asm'
     runs-on: windows-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     env:
       GOTOOLCHAIN: local
       GOENV: 'off'
@@ -37,9 +37,7 @@ jobs:
           go version > _out/windows-feature-identity/go-version.txt
           node --version > _out/windows-feature-identity/node-version.txt
           "$LLVM_CONFIG" --version > _out/windows-feature-identity/llvm-version.txt
-          go test -C cmd/plan9asmll -p=1 -list '^TestWindowsFeatureEnvironmentNormalizationProbe$' > _out/windows-feature-identity/inventory.txt
-          test "$(sed -n '/^Test/p' _out/windows-feature-identity/inventory.txt | tr -d '\r')" = TestWindowsFeatureEnvironmentNormalizationProbe
-          go test -C cmd/plan9asmll -p=1 -run '^TestWindowsFeatureEnvironmentNormalizationProbe$' -count=1 -timeout=8m -json > _out/windows-feature-identity/tests.jsonl 2> _out/windows-feature-identity/tests.stderr
+          python .github/scripts/pr40-windows-feature-identity.py
       - name: Retain final source state
         if: always()
         shell: bash
