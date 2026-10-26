@@ -306,7 +306,7 @@ func TestX86PackedStringStrictMalformedOperands(t *testing.T) {
 				if err != nil {
 					return
 				}
-				ir, err := Translate(file, Options{Goarch: "amd64", ResolveSym: func(symbol string) string {
+				ir, err := Translate(file, Options{Goarch: "amd64", TargetTriple: "x86_64-unknown-linux-gnu", ResolveSym: func(symbol string) string {
 					return strings.TrimPrefix(symbol, "·")
 				}, Sigs: map[string]FuncSig{"query": {Name: "query", Ret: Void}}})
 				if err == nil || ir != "" {
@@ -333,7 +333,7 @@ func TestX86PackedStringMode32HighBankNeedsPhysicalContext(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				ir, err := Translate(file, Options{Goarch: "386", ResolveSym: resolve, Sigs: sigs})
+				ir, err := Translate(file, Options{Goarch: "386", TargetTriple: "i386-unknown-linux-gnu", ResolveSym: resolve, Sigs: sigs})
 				if !errors.Is(err, ErrProbeNeedsContext) || ir != "" {
 					t.Fatalf("frontend high spelling acquired a physical mode32 vector binding: %v", err)
 				}
@@ -400,7 +400,7 @@ func TestX86PackedStringIndependentFPFieldsRequireEveryByte(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			options := Options{Goarch: "amd64", ResolveSym: resolve, Sigs: sigs}
+			options := Options{Goarch: "amd64", TargetTriple: "x86_64-unknown-linux-gnu", ResolveSym: resolve, Sigs: sigs}
 			if _, err := Translate(file, options); err != nil {
 				t.Fatalf("complete independent logical FP fields: %v", err)
 			}

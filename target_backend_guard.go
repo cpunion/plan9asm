@@ -43,9 +43,18 @@ func validateTranslatedBackend(file *File, options Options, module llvm.Module) 
 		goarch = "amd64" // The same source-mode default as translateIR.
 	}
 	if !x86ScalarFloatIntegerNativeTarget(goarch, triple) {
+		mxcsrTarget := x86ScalarFloatIntegerNativeTarget("amd64", triple) ||
+			x86ScalarFloatIntegerNativeTarget("386", triple)
 		for function := module.FirstFunction(); !function.IsNil(); function = llvm.NextFunction(function) {
 			if function.IntrinsicID() != 0 && !function.FirstUse().IsNil() &&
 				strings.HasPrefix(function.Name(), "llvm.x86.") {
+				// LLVM 22 maps these two intrinsics to an i32 memory operand
+				// in either x86 mode (X86InstrSSE.td). Source pointer width
+				// does not constrain the control register; other families do.
+				if mxcsrTarget && (function.Name() == "llvm.x86.sse.ldmxcsr" ||
+					function.Name() == "llvm.x86.sse.stmxcsr") {
+					continue
+				}
 				return fmt.Errorf("%w: x86 intrinsic %q requires its matching x86 LLVM target, got %q",
 					ErrProbeNeedsContext, function.Name(), triple)
 			}

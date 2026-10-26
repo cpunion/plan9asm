@@ -42,6 +42,31 @@ func TestTargetBackendX86IntrinsicPublicAPIs(t *testing.T) {
 	}
 }
 
+func TestTargetBackendPackedStringInitializedPublicAPIs(t *testing.T) {
+	for _, arch := range []string{"amd64", "386"} {
+		matching := testTargetTriple("linux", arch)
+		for _, row := range go127PackedStringCompareSpecs() {
+			source := "TEXT ·Probe(SB),4,$0-0\nPXOR X0,X0\nPXOR X1,X1\nMOVL $16,AX\nMOVL $16,DX\n" +
+				row.op + " $8,X0,X1\nRET\n"
+			goAssemblerOracleOutput(t, arch, source, "", true)
+			for _, triple := range []string{matching, "", "aarch64-unknown-linux-gnu"} {
+				for _, api := range []string{"text", "module", "Go"} {
+					t.Run(arch+"/"+row.op+"/"+triple+"/"+api, func(t *testing.T) {
+						ir, err := x86ScalarFPBitViewAPI(t, source, "func Probe()", arch, triple, api)
+						if triple == matching {
+							if err != nil || !strings.Contains(ir, "call ") || !strings.Contains(ir, "@llvm.x86.sse42.pcmp") {
+								t.Fatal("initialized packed-string family lost its explicit native target", err)
+							}
+						} else if ir != "" || !errors.Is(err, ErrProbeNeedsContext) || !strings.Contains(err.Error(), "intrinsic") {
+							t.Fatal("missing or mismatched target published initialized native-intrinsic IR", len(ir), err)
+						}
+					})
+				}
+			}
+		}
+	}
+}
+
 func TestTargetBackendX86IntrinsicDefaultModeAndModuleCleanup(t *testing.T) {
 	source := x86BackendMantissaSource("amd64")
 	file, err := Parse(ArchAMD64, source)
@@ -146,8 +171,54 @@ func TestTargetBackendX86IntrinsicNamespaceAndUses(t *testing.T) {
 					}
 					err = validateTranslatedBackend(&File{Arch: ArchAMD64}, Options{Goarch: target.mode}, module)
 					wantReject := used && row.x86Intrinsic && !x86ScalarFloatIntegerNativeTarget(target.mode, target.triple)
+					if (row.name == "llvm.x86.sse.ldmxcsr" || row.name == "llvm.x86.sse.stmxcsr") &&
+						strings.HasPrefix(target.triple, "x86_64-") {
+						wantReject = false // The i32 MXCSR memory operand is independent of source pointer width.
+					}
 					if wantReject != errors.Is(err, ErrProbeNeedsContext) {
 						t.Fatal("intrinsic identity/use or source/backend mode classification changed", wantReject, err)
+					}
+				})
+			}
+		}
+	}
+}
+
+func TestTargetBackendMXCSRWidthIndependentIntrinsicBoundary(t *testing.T) {
+	for _, row := range []struct {
+		name, declaration, call string
+		widthIndependent        bool
+	}{
+		{"llvm.x86.sse.ldmxcsr", "declare void @llvm.x86.sse.ldmxcsr(ptr)", "call void @llvm.x86.sse.ldmxcsr(ptr null)", true},
+		{"llvm.x86.sse.stmxcsr", "declare void @llvm.x86.sse.stmxcsr(ptr)", "call void @llvm.x86.sse.stmxcsr(ptr null)", true},
+		{"llvm.x86.rdrand.64", "declare {i64,i32} @llvm.x86.rdrand.64()", "%random = call {i64,i32} @llvm.x86.rdrand.64()", false},
+		{"llvm.x86.rdseed.64", "declare {i64,i32} @llvm.x86.rdseed.64()", "%random = call {i64,i32} @llvm.x86.rdseed.64()", false},
+	} {
+		for _, triple := range []string{
+			"x86_64-unknown-linux-gnu", "i386-unknown-linux-gnu", "i686-pc-windows-msvc",
+			"aarch64-unknown-linux-gnu", "wasm32-unknown-unknown", "",
+		} {
+			for _, used := range []bool{false, true} {
+				t.Run(fmt.Sprintf("%s/%s/used%t", row.name, triple, used), func(t *testing.T) {
+					ctx := llvm.NewContext()
+					defer ctx.Dispose()
+					body := ""
+					if used {
+						body = row.call
+					}
+					module, err := parseIRModuleInContext(ctx, fmt.Sprintf("target triple = %q\n%s\ndefine void @caller() {\n%s\nret void\n}\n", triple, row.declaration, body))
+					if err != nil {
+						t.Fatal(err)
+					}
+					defer module.Dispose()
+					if module.NamedFunction(row.name).IntrinsicID() == 0 {
+						t.Fatal("mode boundary fixture is not an actual LLVM intrinsic")
+					}
+					err = validateTranslatedBackend(&File{Arch: ArchAMD64}, Options{Goarch: "amd64"}, module)
+					native := triple == "x86_64-unknown-linux-gnu" || row.widthIndependent &&
+						(triple == "i386-unknown-linux-gnu" || triple == "i686-pc-windows-msvc")
+					if wantReject := used && !native; wantReject != errors.Is(err, ErrProbeNeedsContext) {
+						t.Fatal("MXCSR width independence changed another intrinsic's mode boundary", wantReject, err)
 					}
 				})
 			}
