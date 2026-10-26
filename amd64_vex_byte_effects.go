@@ -112,18 +112,41 @@ func x86UnmaskedVEXShiftEffect(ins Instr, form x86PackedShiftForm, err error) (x
 		form.countOperand.Kind == OpImm && form.memory == form.data {
 		return x86TypedByteEffect{}, true, goAMD64FrameContext("shift effect requires its separate non-VEX consumer: %s", ins.Op)
 	}
+	return x86PackedShiftDependencyEffect(ins, form), true, nil
+}
+
+// Numerical register dependencies and native access widths are separate axes.
+// Reuse the result model for the union of bytes needed by every output byte;
+// a uniform register count ignores its upper qword, but memory still reads m128.
+func x86PackedShiftDependencyEffect(ins Instr, form x86PackedShiftForm) x86TypedByteEffect {
 	width, countWidth := int64(form.byteWidth), int64(form.byteWidth)
 	if form.countOperand.Kind == OpImm {
 		countWidth = 1
 	} else if form.countMode == x86PackedShiftUniform {
 		countWidth = 16 // The full m128 access is observable, not just its low qword.
 	}
-	return x86TypedByteEffect{
-		vector: x86TypedVectorEffect{x86TypedVectorUpperZero, 1},
+	var dataBytes, countBytes uint64
+	for output := 0; output < form.byteWidth; output++ {
+		data, count := x86PackedShiftByteInputs(form, output)
+		dataBytes, countBytes = dataBytes|data, countBytes|count
+	}
+	vector := x86TypedVectorEffect{x86TypedVectorUpperZero, 1}
+	if form.legacy {
+		vector = x86TypedVectorEffect{x86TypedVectorUpperPreserve, 16}
+	}
+	effect := x86TypedByteEffect{
+		vector: vector,
 		operands: []x86TypedByteOperand{
 			{index: form.count, operand: form.countOperand, width: countWidth, read: true},
-			{index: form.data, operand: ins.Args[form.data], width: width, read: true},
+			{index: form.data, operand: ins.Args[form.data], width: width, read: dataBytes != 0 || ins.Args[form.data].Kind != OpReg},
 			{index: form.destination, operand: ins.Args[form.destination], width: width, write: true},
 		},
-	}, true, nil
+	}
+	if form.countOperand.Kind == OpReg {
+		effect.operands[0].requiredBytes = countBytes
+	}
+	if ins.Args[form.data].Kind == OpReg {
+		effect.operands[1].requiredBytes = dataBytes
+	}
+	return effect
 }

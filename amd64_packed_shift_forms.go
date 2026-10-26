@@ -24,6 +24,14 @@ type x86PackedShiftForm struct {
 	countOperand                           Operand
 }
 
+func x86TypedLegacyPackedShiftByteEffect(op Op, ins Instr, arch string) (x86TypedByteEffect, bool, error) {
+	form, known, err := x86PackedShiftProperties(op, ins, arch)
+	if !known || err != nil || !form.legacy || form.mmx {
+		return x86TypedByteEffect{}, known && (err != nil || form.legacy && !form.mmx), err
+	}
+	return x86PackedShiftDependencyEffect(ins, form), true, nil
+}
+
 // Properties establish encoding and access shape only, never initialized
 // data, pointer bounds, alignment or permission to return through raw bytes.
 func x86PackedShiftProperties(op Op, ins Instr, goarch string) (x86PackedShiftForm, bool, error) {
