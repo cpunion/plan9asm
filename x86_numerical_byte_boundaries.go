@@ -29,6 +29,11 @@ func x86NumericalNativeBoundaries(code []byte, mode int) ([]x86NumericalNativeBo
 			if err != nil {
 				return nil, nil, numericalSBContext("whole native vector boundary at %d: %v", pc, err)
 			}
+		} else if _, shaLength, known, err := decodedX86SHAInstructionWithMemory(remaining, mode, x86RawMemoryDecoder{physicalPC: true}); known || err != nil {
+			if err != nil {
+				return nil, nil, numericalSBContext("whole native SHA boundary at %d: %v", pc, err)
+			}
+			length = shaLength
 		} else if _, adxLength, _, known, err := decodeX86RawADXWithMemory(remaining, 0, mode, x86RawMemoryDecoder{physicalPC: true}); known || err != nil {
 			if err != nil {
 				return nil, nil, numericalSBContext("whole native ADX boundary at %d: %v", pc, err)

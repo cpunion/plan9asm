@@ -9998,6 +9998,10 @@ vex:
 // SHA1NEXTE, SHA1MSG1/2, SHA1RNDS4, SHA256MSG1/2, and SHA256RNDS2. Older
 // x/arch decoders reject some raw 0F38 encodings used by minio/sha256-simd.
 func decodedX86SHAInstruction(code []byte, mode int) (instruction Instr, length int, ok bool, err error) {
+	return decodedX86SHAInstructionWithMemory(code, mode, x86RawMemoryDecoder{})
+}
+
+func decodedX86SHAInstructionWithMemory(code []byte, mode int, memory x86RawMemoryDecoder) (instruction Instr, length int, ok bool, err error) {
 	if mode != 32 && mode != 64 {
 		return Instr{}, 0, false, nil
 	}
@@ -10031,31 +10035,20 @@ rex:
 	}
 
 	op := Op("")
-	immediate := false
-	switch {
-	case code[i+1] == 0x38:
-		switch code[i+2] {
-		case 0xc8:
-			op = "SHA1NEXTE"
-		case 0xc9:
-			op = "SHA1MSG1"
-		case 0xca:
-			op = "SHA1MSG2"
-		case 0xcb:
-			op = "SHA256RNDS2"
-		case 0xcc:
-			op = "SHA256MSG1"
-		case 0xcd:
-			op = "SHA256MSG2"
-		default:
-			return Instr{}, 0, false, nil
+	encoding := uint16(code[i+1])<<8 | uint16(code[i+2])
+	if encoding < 0x38c8 || encoding > 0x38cd && encoding != 0x3acc {
+		return Instr{}, 0, false, nil // Negative filter; the shared table owns recognition.
+	}
+	for name, candidate := range x86SHAEncodings {
+		if encoding == candidate {
+			op = name
+			break
 		}
-	case code[i+1] == 0x3a && code[i+2] == 0xcc:
-		op = "SHA1RNDS4"
-		immediate = true
-	default:
+	}
+	if op == "" {
 		return Instr{}, 0, false, nil
 	}
+	immediate := encoding == 0x3acc
 	ok = true
 	if addressOverride {
 		return Instr{}, 0, true, fmt.Errorf("address-size override is not source-layout safe")
@@ -10083,7 +10076,7 @@ rex:
 		consumed = 1
 	} else {
 		var decodeErr error
-		source, consumed, decodeErr = decodedX86RMSource(code[modRMIndex:], mode, bExt, xExt, segment, 1)
+		source, consumed, decodeErr = memory.scalar(code[modRMIndex:], mode, bExt, xExt, segment, 1)
 		if decodeErr != nil {
 			return Instr{}, 0, true, decodeErr
 		}

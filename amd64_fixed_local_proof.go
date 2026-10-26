@@ -272,6 +272,9 @@ func fixedLocalInstructionShape(ins Instr) bool {
 	if effect, known, err := fixedLocalGPByteEffect(ins); known {
 		return err == nil && !effect.dynamicMemory
 	}
+	if _, known, err := x86SHAProperties(ins.Op, ins, "amd64"); known {
+		return err == nil
+	}
 	if form, known, err := x86AESProperties(ins.Op, ins, "amd64"); known {
 		return err == nil && form.byteWidth == 16
 	}
@@ -807,6 +810,9 @@ func fixedLocalStep(ins *Instr, state *x86FixedLocalState, sig FuncSig, proof *x
 			state.comparison = comparison
 		}
 		return nil
+	}
+	if known, err := fixedLocalSHAStep(ins, state, proof, residue); known {
+		return err
 	}
 	if known, err := fixedLocalAESByteStep(ins, state, proof, residue); known {
 		return err

@@ -178,6 +178,9 @@ func x86TypedInstructionByteEffect(op Op, ins Instr, arch string) (x86TypedByteE
 	if effect, known, err := x86TypedScalarFloatIntegerByteEffect(op, ins, arch); known {
 		return effect, known, err
 	}
+	if effect, known, err := x86TypedSHAByteEffect(op, ins, arch); known {
+		return effect, known, err
+	}
 	if effect, known, err := x86TypedAESByteEffect(op, ins, arch); known {
 		return effect, known, err
 	}

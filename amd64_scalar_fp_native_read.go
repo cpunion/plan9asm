@@ -268,6 +268,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		if x86RawFMA3Source(ins, arch) {
 			continue // Whole producer replay and native FMA preserve all three input obligations.
 		}
+		if x86RawSHASource(ins, arch) {
+			continue // Exact SHA bytes retain all source/state and native m128 obligations.
+		}
 		if x86RawAESSource(ins, arch) {
 			continue // Exact integer-crypto data keeps every source and state-byte obligation.
 		}
@@ -695,6 +698,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		}
 		if accepted, known := x86ResultSADStep(ins, state, owned, arch, true); known {
 			return accepted // The same SAD emitter retains the full tuple and legacy m128 opcode.
+		}
+		if accepted, known := x86ResultSHAStep(ins, state, owned, arch, true); known {
+			return accepted // Native m128 keeps the original opcode, including dead-result faults.
 		}
 		if accepted, known := x86LoweredAESResultStep(ins, state, owned, arch); known {
 			return accepted // Exact legacy opcodes and vector volatile reads retain the full source tuple.

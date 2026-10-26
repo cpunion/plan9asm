@@ -647,6 +647,8 @@ func inferFuncTargetFeaturesForGOARCH(arch Arch, goarch string, fn Func) string 
 				add("+sse2")
 			case strings.HasPrefix(op, "MOVBE"):
 				add("+movbe")
+			case x86SHAEncodings[Op(op)] != 0:
+				add("+sha", "+sse2")
 			case op == "PCLMULQDQ" || op == "VPCLMULQDQ":
 				add("+pclmul", "+sse4.1")
 			case op == "AESENC" || op == "AESENCLAST" || op == "AESDEC" || op == "AESDECLAST" || op == "AESIMC" || op == "AESKEYGENASSIST" ||

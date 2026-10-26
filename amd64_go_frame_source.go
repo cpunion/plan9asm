@@ -1683,6 +1683,11 @@ func goAMD64FrameMachineShape(fn goAMD64FrameFunction, frame int64) error {
 			// Exact boundaries only: these cannot impersonate the scalar
 			// automatic prologue, epilogue, native CALL or return below.
 			ins.Len = length
+		} else if _, length, known, err := decodedX86SHAInstructionWithMemory(fn.code[pc:], 64, x86RawMemoryDecoder{physicalPC: true}); known || err != nil {
+			if err != nil || length <= 0 {
+				return goAMD64FrameContext("unbound original SHA machine instruction at PC %d: %v", pc+fn.prologue, err)
+			}
+			ins.Len = length // No scalar prologue, epilogue or branch authority.
 		} else {
 			var err error
 			ins, err = x86asm.Decode(fn.code[pc:], 64)

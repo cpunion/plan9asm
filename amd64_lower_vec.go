@@ -7,6 +7,9 @@ import (
 )
 
 func (c *amd64Ctx) lowerVec(op Op, ins Instr) (ok bool, terminated bool, err error) {
+	if known, term, err := c.lowerSHA(op, ins); known {
+		return known, term, err
+	}
 	if known, term, err := c.lowerSqrt(op, ins); known {
 		return known, term, err
 	}
@@ -187,7 +190,6 @@ func (c *amd64Ctx) lowerVec(op Op, ins Instr) (ok bool, terminated bool, err err
 		"PSHUFB", "PSRLDQ", "PSLLDQ", "PSRLO", "PSLLO", "PSRLQ", "PSLLQ", "PSLLW", "PSRLW", "PSRLL", "PSLLL", "PSRAL", "PEXTRD", "PEXTRB", "PEXTRQ",
 		"PALIGNR", "PUNPCKLBW", "PUNPCKHBW", "PUNPCKLLQ", "PUNPCKHLQ", "PUNPCKLQDQ", "PUNPCKHQDQ", "PSHUFL", "PSHUFD", "SHUFPS",
 		"PBLENDW", "PADDQ",
-		"SHA1NEXTE", "SHA1MSG1", "SHA1MSG2", "SHA1RNDS4", "SHA256MSG1", "SHA256MSG2", "SHA256RNDS2",
 		"AESENC", "AESENCLAST", "AESDEC", "AESDECLAST", "AESIMC", "AESKEYGENASSIST":
 		// ok
 	default:
@@ -1214,110 +1216,6 @@ func (c *amd64Ctx) lowerVec(op Op, ins Instr) (ok bool, terminated bool, err err
 		fmt.Fprintf(c.b, "  %%%s = shufflevector <8 x i16> %%%s, <8 x i16> %%%s, <8 x i32> <%s>\n", sh, dv, sv, strings.Join(mask, ", "))
 		out := c.newTmp()
 		fmt.Fprintf(c.b, "  %%%s = bitcast <8 x i16> %%%s to <16 x i8>\n", out, sh)
-		return true, false, c.storeX(ins.Args[2].Reg, "%"+out)
-
-	case "SHA256MSG1", "SHA256MSG2":
-		// Approximate scheduling helpers as per-lane adds to keep SSA flow.
-		if len(ins.Args) != 2 || ins.Args[1].Kind != OpReg {
-			return true, false, fmt.Errorf("amd64 %s expects Xsrc, Xdst: %q", op, ins.Raw)
-		}
-		if _, ok := amd64ParseXReg(ins.Args[1].Reg); !ok {
-			return false, false, nil
-		}
-		src, err := c.loadXVecOperand(ins.Args[0])
-		if err != nil {
-			return true, false, err
-		}
-		dstv, err := c.loadX(ins.Args[1].Reg)
-		if err != nil {
-			return true, false, err
-		}
-		s32 := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = bitcast <16 x i8> %s to <4 x i32>\n", s32, src)
-		d32 := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = bitcast <16 x i8> %s to <4 x i32>\n", d32, dstv)
-		add := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = add <4 x i32> %%%s, %%%s\n", add, d32, s32)
-		out := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = bitcast <4 x i32> %%%s to <16 x i8>\n", out, add)
-		return true, false, c.storeX(ins.Args[1].Reg, "%"+out)
-
-	case "SHA1NEXTE", "SHA1MSG1", "SHA1MSG2":
-		if len(ins.Args) != 2 || ins.Args[1].Kind != OpReg {
-			return true, false, fmt.Errorf("amd64 %s expects Xsrc, Xdst: %q", op, ins.Raw)
-		}
-		if _, ok := amd64ParseXReg(ins.Args[1].Reg); !ok {
-			return false, false, nil
-		}
-		src, err := c.loadXVecOperand(ins.Args[0])
-		if err != nil {
-			return true, false, err
-		}
-		dstv, err := c.loadX(ins.Args[1].Reg)
-		if err != nil {
-			return true, false, err
-		}
-		s32 := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = bitcast <16 x i8> %s to <4 x i32>\n", s32, src)
-		d32 := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = bitcast <16 x i8> %s to <4 x i32>\n", d32, dstv)
-		add := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = add <4 x i32> %%%s, %%%s\n", add, d32, s32)
-		out := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = bitcast <4 x i32> %%%s to <16 x i8>\n", out, add)
-		return true, false, c.storeX(ins.Args[1].Reg, "%"+out)
-
-	case "SHA1RNDS4":
-		if len(ins.Args) != 3 || ins.Args[0].Kind != OpImm || ins.Args[2].Kind != OpReg {
-			return true, false, fmt.Errorf("amd64 SHA1RNDS4 expects $imm, Xsrc, Xdst: %q", ins.Raw)
-		}
-		if _, ok := amd64ParseXReg(ins.Args[2].Reg); !ok {
-			return false, false, nil
-		}
-		src, err := c.loadXVecOperand(ins.Args[1])
-		if err != nil {
-			return true, false, err
-		}
-		dstv, err := c.loadX(ins.Args[2].Reg)
-		if err != nil {
-			return true, false, err
-		}
-		s32 := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = bitcast <16 x i8> %s to <4 x i32>\n", s32, src)
-		d32 := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = bitcast <16 x i8> %s to <4 x i32>\n", d32, dstv)
-		add := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = add <4 x i32> %%%s, %%%s\n", add, d32, s32)
-		immv := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = add <4 x i32> %%%s, <i32 %d, i32 %d, i32 %d, i32 %d>\n", immv, add, ins.Args[0].Imm, ins.Args[0].Imm, ins.Args[0].Imm, ins.Args[0].Imm)
-		out := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = bitcast <4 x i32> %%%s to <16 x i8>\n", out, immv)
-		return true, false, c.storeX(ins.Args[2].Reg, "%"+out)
-
-	case "SHA256RNDS2":
-		// SHA256RNDS2 Xsrc, Xstate, Xdst
-		if len(ins.Args) != 3 || ins.Args[2].Kind != OpReg {
-			return true, false, fmt.Errorf("amd64 SHA256RNDS2 expects Xsrc, Xstate, Xdst: %q", ins.Raw)
-		}
-		if _, ok := amd64ParseXReg(ins.Args[2].Reg); !ok {
-			return false, false, nil
-		}
-		a, err := c.loadXVecOperand(ins.Args[0])
-		if err != nil {
-			return true, false, err
-		}
-		b, err := c.loadXVecOperand(ins.Args[1])
-		if err != nil {
-			return true, false, err
-		}
-		a32 := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = bitcast <16 x i8> %s to <4 x i32>\n", a32, a)
-		b32 := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = bitcast <16 x i8> %s to <4 x i32>\n", b32, b)
-		add := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = add <4 x i32> %%%s, %%%s\n", add, a32, b32)
-		out := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = bitcast <4 x i32> %%%s to <16 x i8>\n", out, add)
 		return true, false, c.storeX(ins.Args[2].Reg, "%"+out)
 
 	case "VMOVDQU64":

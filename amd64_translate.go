@@ -9,6 +9,7 @@ type amd64EmitBr func(target string)
 type amd64EmitCondBr func(cond string, target string, fall string) error
 
 func emitAMD64Prelude(b *strings.Builder, goarch string, file *File) {
+	emitX86SHADeclarations(b, file)
 	b.WriteString("declare i64 @syscall(i64, i64, i64, i64, i64, i64, i64)\n")
 	b.WriteString("declare i32 @cliteErrno()\n")
 	// Generic LLVM intrinsics used by amd64 lowering.

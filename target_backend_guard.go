@@ -36,6 +36,22 @@ func validateBackendSourceGoarch(file *File, options Options) error {
 func validateTranslatedBackend(file *File, options Options, module llvm.Module) error {
 	triple := module.Target()
 	architecture, _, _ := strings.Cut(triple, "-")
+	// SHA lowering uses native x86 instructions, including its implicit X0.
+	// Inspect actual uses so declarations alone do not constrain portability.
+	goarch := options.Goarch
+	if goarch == "" && file != nil && file.Arch == ArchAMD64 {
+		goarch = "amd64" // The same source-mode default as translateIR.
+	}
+	if !x86ScalarFloatIntegerNativeTarget(goarch, triple) {
+		for function := module.FirstFunction(); !function.IsNil(); function = llvm.NextFunction(function) {
+			name := function.Name()
+			if strings.HasPrefix(name, "llvm.x86.sha") && !function.FirstUse().IsNil() &&
+				x86SHAEncodings[Op(strings.ToUpper(strings.TrimPrefix(name, "llvm.x86.")))] != 0 {
+				return fmt.Errorf("%w: SHA intrinsic %q requires its matching x86 LLVM target, got %q",
+					ErrProbeNeedsContext, name, triple)
+			}
+		}
+	}
 	if architecture == "wasm32" || architecture == "wasm64" {
 		for function := module.FirstFunction(); !function.IsNil(); function = llvm.NextFunction(function) {
 			for block := function.FirstBasicBlock(); !block.IsNil(); block = llvm.NextBasicBlock(block) {
