@@ -23,8 +23,9 @@ type goAMD64SDKFrameOrigin struct {
 // CaptureGoAMD64SDKFrameSource is a distinct actual SDK-primary typed ABI0
 // native frame factory. It authenticates the whole selected source/profile,
 // compiler graph and all TEXTs, without relabeling SDK source as owned-main.
-// Initial entries must all be Go-declared, NOSPLIT, nonzero fixed frames with
-// exact logical/native names, layout, source PCs and automatic BP/SP shapes.
+// Entries must all be Go-declared and NOSPLIT with exact logical/native names,
+// layout and source PCs. Nonzero frames also require automatic BP/SP shapes;
+// zero-frame siblings retain their ordinary ABI0 path without local backing.
 // Private helpers, native callers, split stacks, ABI selectors and SDK DATA
 // composition require separate contracts. BindFixedLocal still proves every
 // full-source access/initialization/CFG requirement before granting local bytes.
@@ -101,6 +102,7 @@ func (source *GoAMD64FrameSource) sdkFrameRecords() (map[string]goAMD64FrameFunc
 	}
 	functions := make(map[string]goAMD64FrameFunction)
 	found := false
+	withFrame := false
 	for ordinal, input := range data.observation.ObjectInputs.Sources {
 		found = found || input.Name == source.request.AssemblyFile
 		if ordinal >= len(data.observation.CPP) || ordinal >= len(data.observation.Frames) || ordinal >= len(data.observation.Objects.Sources) {
@@ -131,9 +133,10 @@ func (source *GoAMD64FrameSource) sdkFrameRecords() (map[string]goAMD64FrameFunc
 			if !record.NoSplit {
 				return nil, nil, goAMD64FrameContext("SDK-primary split-stack TEXT needs an independent entry/storage contract: %s", fn.Sym)
 			}
-			if fn.FrameSize <= 0 || fn.FrameSize > 64<<10 || fn.FrameSize%8 != 0 || record.Locals != uint64(fn.FrameSize+8) || record.Args != fn.ArgSize {
+			if fn.FrameSize < 0 || fn.FrameSize > 64<<10 || fn.FrameSize%8 != 0 || record.Locals != uint64(goAMD64FrameNativeLocals(fn.FrameSize)) || record.Args != fn.ArgSize {
 				return nil, nil, goAMD64FrameContext("SDK-primary original declaration/native fixed-frame layout differs: %s", fn.Sym)
 			}
+			withFrame = withFrame || fn.FrameSize > 0
 		}
 		if len(file.Data)+len(file.Globl) != 0 {
 			return nil, nil, goAMD64FrameContext("SDK-primary frame/literal DATA composition needs a separate owner handoff")
@@ -161,6 +164,9 @@ func (source *GoAMD64FrameSource) sdkFrameRecords() (map[string]goAMD64FrameFunc
 	}
 	if !found {
 		return nil, nil, goAMD64FrameContext("SDK-primary requested assembly is absent from complete selection")
+	}
+	if !withFrame {
+		return nil, nil, goAMD64FrameContext("SDK-primary complete source has no nonzero native frame")
 	}
 	return functions, declarations, nil
 }

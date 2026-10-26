@@ -22,6 +22,7 @@ type x86FixedLocalBinding struct {
 	target         string
 	inputs         map[string][32]byte
 	signatures     map[string]FuncSig
+	frames         map[string]bool // Only entries whose complete local proof succeeded.
 	symbols        map[string]string
 	declarations   map[string]goAMD64FrameDeclaration
 	numericalReads *GoX86NumericalReadBinding
@@ -163,6 +164,7 @@ func (source *GoAMD64FrameSource) bindFixedLocalLocked(ctx context.Context, life
 		target:         options.TargetTriple,
 		inputs:         make(map[string][32]byte, len(source.inputs)),
 		signatures:     make(map[string]FuncSig),
+		frames:         make(map[string]bool),
 		symbols:        make(map[string]string),
 		declarations:   make(map[string]goAMD64FrameDeclaration),
 		numericalReads: options.NumericalReads,
@@ -199,15 +201,19 @@ func (source *GoAMD64FrameSource) bindFixedLocalLocked(ctx context.Context, life
 		expectedName := pkg.Path + "." + strings.TrimPrefix(fn.Sym, "·")
 		sig, supplied := options.Sigs[name]
 		if !found || !supplied || name != expectedName || len(observed.code) == 0 ||
-			observed.locals != fn.FrameSize+8 || observed.args != fn.ArgSize ||
+			observed.locals != goAMD64FrameNativeLocals(fn.FrameSize) || observed.args != fn.ArgSize ||
 			!reflect.DeepEqual(sig, observed.signature) || !declared ||
 			!source.matchesFixedLocalDeclaration(name, declaration) {
 			return Options{}, goAMD64FrameContext("fixed local actual declaration/object/symbol mismatch: %s", fn.Sym)
 		}
-		proofSig := sig
-		proofSig.x86FixedLocal = binding
-		if _, err := proveX86FixedLocal(fn, proofSig); err != nil {
-			return Options{}, err
+		if fn.FrameSize > 0 {
+			proofSig := sig
+			proofSig.x86FixedLocal = binding
+			if _, err := proveX86FixedLocal(fn, proofSig); err != nil {
+				return Options{}, err
+			}
+			binding.frames[name] = true
+			sig.x86FixedLocal = binding
 		}
 		binding.signatures[name] = actualSignatures[name]
 		// Preserve the independently re-typechecked language identity, not
@@ -216,8 +222,10 @@ func (source *GoAMD64FrameSource) bindFixedLocalLocked(ctx context.Context, life
 		declaration.signature = actualSignatures[name]
 		binding.declarations[name] = declaration
 		binding.symbols[fn.Sym] = name
-		sig.x86FixedLocal = binding
 		options.Sigs[name] = sig
+	}
+	if len(binding.frames) == 0 {
+		return Options{}, goAMD64FrameContext("complete source has no private fixed frame to bind")
 	}
 	return options, nil
 }
@@ -240,7 +248,9 @@ func freezeX86FixedLocalOptions(options Options, bindings []*x86FixedLocalBindin
 			return Options{}, err
 		}
 		for name, sig := range signatures {
-			sig.x86FixedLocal = binding
+			if binding.frames[name] {
+				sig.x86FixedLocal = binding
+			}
 			options.Sigs[name] = sig
 		}
 	}
@@ -325,9 +335,13 @@ func verifyX86FixedLocalBindings(file *File, options Options) ([]*x86FixedLocalB
 			name := options.ResolveSym(fn.Sym)
 			actual, found := options.Sigs[name]
 			expected, declared := binding.signatures[name]
+			var frame *x86FixedLocalBinding
+			if binding.frames[name] {
+				frame = binding
+			}
 			actual.x86FixedLocal = nil
 			if !found || !declared || name != binding.symbols[fn.Sym] || !reflect.DeepEqual(actual, expected) ||
-				options.Sigs[name].x86FixedLocal != binding {
+				options.Sigs[name].x86FixedLocal != frame {
 				return nil, goAMD64FrameContext("fixed local consumer declaration or unique symbol binding changed")
 			}
 		}
@@ -354,13 +368,14 @@ func (binding *x86FixedLocalBinding) verify() error {
 	if !binding.source.ready || !reflect.DeepEqual(binding.inputs, binding.source.inputs) {
 		return goAMD64FrameContext("fixed local observer identity changed or was revoked")
 	}
-	if len(binding.declarations) != len(binding.signatures) {
+	if len(binding.declarations) != len(binding.signatures) || len(binding.frames) == 0 {
 		return goAMD64FrameContext("fixed local typed language witnesses are incomplete")
 	}
 	for name, signature := range binding.signatures {
 		declaration, found := binding.declarations[name]
 		if !found || !reflect.DeepEqual(signature, declaration.signature) ||
-			!binding.source.matchesFixedLocalDeclaration(name, declaration) {
+			!binding.source.matchesFixedLocalDeclaration(name, declaration) ||
+			binding.frames[name] != (binding.source.functions[name].locals > 0) {
 			return goAMD64FrameContext("fixed local typed language/object identity changed: %s", name)
 		}
 	}

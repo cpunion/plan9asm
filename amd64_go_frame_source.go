@@ -419,6 +419,13 @@ func captureGoAMD64FrameSource(ctx context.Context, pkg GoPackage, request GoAMD
 	if !found {
 		return nil, goAMD64FrameContext("requested assembly is absent from actual complete selection")
 	}
+	withFrame := false
+	for _, fn := range source.functions {
+		withFrame = withFrame || fn.locals > 0
+	}
+	if !withFrame {
+		return nil, goAMD64FrameContext("complete source has no nonzero native frame")
+	}
 	source.ready = true
 	source.numericalCapturing = false
 	if err := source.Verify(ctx); err != nil {
@@ -1339,6 +1346,15 @@ func (source *GoAMD64FrameSource) preprocess(name string, original []byte) (stri
 var goAMD64FrameHeader = regexp.MustCompile(`^(\S+) STEXT nosplit(?: asm)? size=([0-9]+) (?:align=0x[0-9a-f]+ )?args=0x([0-9a-f]+) locals=0x([0-9a-f]+)(?: funcid=0x[0-9a-f]+)?(?: align=0x[0-9a-f]+)?$`)
 var goAMD64FrameRow = regexp.MustCompile(`^\s*0x([0-9a-f]+) [0-9]+ \((.+)\)\s+(.+)$`)
 
+// Zero-frame ordinary entries have no automatic saved-BP slot. They remain
+// in the complete source inventory without acquiring private local backing.
+func goAMD64FrameNativeLocals(frame int64) int64 {
+	if frame == 0 {
+		return 0
+	}
+	return frame + 8
+}
+
 func goAMD64FrameListing(listing []byte, file *File, pkg GoPackage, origins map[string]int) (map[string]goAMD64FrameFunction, error) {
 	return goAMD64FrameListingWithObservations(listing, file, pkg, origins, nil, nil)
 }
@@ -1536,7 +1552,7 @@ func goAMD64FrameListingRecords(listing []byte, file *File, pkg GoPackage, origi
 			fn, exists = functions[observed]
 		}
 		declaration, declared := pkg.Types.Scope().Lookup(strings.TrimPrefix(original.Sym, "·")).(*types.Func)
-		if !exists || !declared || original.FrameSize <= 0 || original.FrameSize%8 != 0 || fn.locals != original.FrameSize+8 || fn.args != original.ArgSize || strings.Contains(original.Sym, "<") {
+		if !exists || !declared || original.FrameSize < 0 || original.FrameSize%8 != 0 || fn.locals != goAMD64FrameNativeLocals(original.FrameSize) || fn.args != original.ArgSize || strings.Contains(original.Sym, "<") {
 			return nil, goAMD64FrameContext("original ABI0 TEXT/declaration/frame identity mismatch")
 		}
 		var err error
@@ -1563,8 +1579,10 @@ func goAMD64FrameListingRecords(listing []byte, file *File, pkg GoPackage, origi
 				}
 			}
 		}
-		if err := goAMD64FrameMachineShape(fn, original.FrameSize); err != nil {
-			return nil, err
+		if original.FrameSize > 0 {
+			if err := goAMD64FrameMachineShape(fn, original.FrameSize); err != nil {
+				return nil, err
+			}
 		}
 		fn.listingSymbol, fn.objectSymbol = observed, symbol
 		bound[symbol] = fn
