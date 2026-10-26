@@ -217,7 +217,7 @@ func TestX86MOVQSourceAliasesOtherScalarKnowledgeConsumers(t *testing.T) {
 				instruction := x86PureGPUnknownInstruction(t, alias+" "+row)
 				original, canonical := instruction, instruction
 				canonical.Op = "MOVQ"
-				state := x86FixedLocalState{pointers: map[Reg]int64{}, opaque: map[Reg]int64{},
+				state := x86FixedLocalState{pointers: map[Reg]int64{}, opaque: map[Reg]x86FixedLocalOrigin{},
 					booleans: map[Reg]uint8{AX: 0xaa}, constants: map[Reg]int64{AX: 1<<32 + 1}, known: map[Reg]uint8{AX: 0xff}}
 				got, want := cloneFixedLocalState(state), cloneFixedLocalState(state)
 				err := fixedLocalStep(&instruction, &got, FuncSig{}, nil, 0)

@@ -10,7 +10,7 @@ func fixedLocalInputAddressStep(ins *Instr, state *x86FixedLocalState, proof *x8
 	fail := func() (bool, error) {
 		return true, goAMD64FrameContext("fixed local affine input lacks a unique pointer and numerical offset: %s", ins.Op)
 	}
-	write := func(destination Operand, origin int64, killed, defined uint8) (bool, error) {
+	write := func(destination Operand, origin x86FixedLocalOrigin, killed, defined uint8) (bool, error) {
 		root, valid := x86CallerGP(destination.Reg)
 		if destination.Kind != OpReg || !valid || root != destination.Reg || root == SP {
 			return fail()
@@ -105,16 +105,16 @@ func fixedLocalInputAddressStep(ins *Instr, state *x86FixedLocalState, proof *x8
 	return true, nil
 }
 
-func fixedLocalOpaqueRegister(operand Operand, state *x86FixedLocalState) (int64, bool) {
+func fixedLocalOpaqueRegister(operand Operand, state *x86FixedLocalState) (x86FixedLocalOrigin, bool) {
 	root, valid := x86CallerGP(operand.Reg)
 	if operand.Kind != OpReg || !valid || root != operand.Reg {
-		return 0, false
+		return x86FixedLocalOrigin{}, false
 	}
 	origin, found := state.opaque[root]
 	return origin, found
 }
 
-func intersectFixedLocalOrigins[K comparable](previous, current map[K]int64) bool {
+func intersectFixedLocalOrigins[K, V comparable](previous, current map[K]V) bool {
 	changed := false
 	for key, value := range previous {
 		if incoming, found := current[key]; !found || incoming != value {

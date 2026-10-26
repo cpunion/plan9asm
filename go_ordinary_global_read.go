@@ -218,12 +218,28 @@ func (imports goReadOnlyImporter) Import(path string) (*types.Package, error) {
 func goReadOnlyTypedSyntax(pkg GoPackage, syntax []string, sizes types.Sizes, objects map[string]goReadOnlyObject) (*types.Package, error) {
 	set := token.NewFileSet()
 	files := make([]*ast.File, len(syntax))
-	selfLinknames := make(map[string]bool)
 	for index, source := range syntax {
 		file, err := parser.ParseFile(set, fmt.Sprintf("global-source-%d.go", index), source, parser.ParseComments)
 		if err != nil {
 			return nil, goReadOnlyContext("declaration syntax cannot be rechecked")
 		}
+		files[index] = file
+	}
+	typed, err := (&types.Config{Importer: goReadOnlyImporter(pkg.Imports), Sizes: sizes}).Check(pkg.Types.Path(), set, files, nil)
+	if err != nil {
+		return nil, goReadOnlyContext("syntax does not match a complete typed package: %v", err)
+	}
+	if err := goReadOnlyCheckAliases(files, typed, objects); err != nil {
+		return nil, err
+	}
+	return typed, nil
+}
+
+// This source-only identity check is shared with the actual frame typecheck;
+// reusing it must not trigger a second package typecheck or tool invocation.
+func goReadOnlyCheckAliases(files []*ast.File, typed *types.Package, objects map[string]goReadOnlyObject) error {
+	selfLinknames := make(map[string]bool)
+	for _, file := range files {
 		for _, comments := range file.Comments {
 			for _, comment := range comments.List {
 				// Line directives change diagnostic positions, not package or
@@ -233,25 +249,20 @@ func goReadOnlyTypedSyntax(pkg GoPackage, syntax []string, sizes types.Sizes, ob
 				if len(words) >= 2 && words[0] == "//go:linkname" {
 					if objects[words[1]].variable != nil {
 						if len(words) != 2 || selfLinknames[words[1]] {
-							return nil, goReadOnlyContext("aliased or duplicate global declaration needs its own binding")
+							return goReadOnlyContext("aliased or duplicate global declaration needs its own binding")
 						}
 						selfLinknames[words[1]] = true
 					}
 					if len(words) >= 3 {
 						for _, object := range objects {
 							if words[2] == object.native {
-								return nil, goReadOnlyContext("another declaration aliases the requested global")
+								return goReadOnlyContext("another declaration aliases the requested global")
 							}
 						}
 					}
 				}
 			}
 		}
-		files[index] = file
-	}
-	typed, err := (&types.Config{Importer: goReadOnlyImporter(pkg.Imports), Sizes: sizes}).Check(pkg.Types.Path(), set, files, nil)
-	if err != nil {
-		return nil, goReadOnlyContext("syntax does not match a complete typed package: %v", err)
 	}
 	if len(selfLinknames) != 0 {
 		unsafeImported := false
@@ -259,10 +270,10 @@ func goReadOnlyTypedSyntax(pkg GoPackage, syntax []string, sizes types.Sizes, ob
 			unsafeImported = unsafeImported || dependency == types.Unsafe
 		}
 		if !unsafeImported {
-			return nil, goReadOnlyContext("self-linkname declaration lacks its actual unsafe import")
+			return goReadOnlyContext("self-linkname declaration lacks its actual unsafe import")
 		}
 	}
-	return typed, nil
+	return nil
 }
 
 func goReadOnlyLayout(typ types.Type, sizes types.Sizes) (size int64, spans [][2]int64, shape string, resultErr error) {

@@ -27,7 +27,7 @@ TEXT ·Value(SB),4,$16-16
 	RET
 `
 	pkg, request, file, options := fixedLocalTransportFixture(t, assembly,
-		"var Global uint64\nfunc Value(a uint64) uint64\n", "linux/amd64", "x86_64-unknown-linux-gnu")
+		"func Global() {}\nfunc Value(a uint64) uint64\n", "linux/amd64", "x86_64-unknown-linux-gnu")
 	source := requireGoAMD64FrameCapture(t, pkg, request)
 	ctx, cancel := runtimeOracleStageContext(t)
 	defer cancel()
@@ -35,7 +35,7 @@ TEXT ·Value(SB),4,$16-16
 		t.Fatal("complete original DATA and ordinary reference", err)
 	}
 	if _, err := source.BindFixedLocal(ctx, pkg, file, options); !errors.Is(err, ErrProbeNeedsContext) {
-		t.Fatal("observing an ordinary reference granted a global address role", err)
+		t.Fatal("observing an ordinary code reference granted a variable address role", err)
 	}
 }
 

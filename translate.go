@@ -763,6 +763,13 @@ func emitExternSBGlobals(b *strings.Builder, file *File, resolve func(string) st
 			numericalExtents[object.native] = object.size
 		}
 	}
+	for _, sig := range sigs {
+		if binding := sig.x86FixedLocal; binding != nil {
+			for _, object := range binding.globals {
+				numericalExtents[object.native] = object.size
+			}
+		}
+	}
 	defined := map[string]bool{}
 
 	// Anything in DATA/GLOBL will be defined in this module.

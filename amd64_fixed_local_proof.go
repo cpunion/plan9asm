@@ -21,15 +21,15 @@ type x86FixedLocalAccess struct {
 	shape       [32]byte
 	width       int64
 	write       bool
-	nativeInput bool // Typed FP pointer, not a private extent/alignment proof.
+	nativeInput bool // Typed source address, not a private extent/alignment proof.
 	offset      [8]int64
 	ordinal     int
 }
 
 type x86FixedLocalState struct {
 	pointers     map[Reg]int64
-	opaque       map[Reg]int64
-	opaqueCells  map[int64]int64
+	opaque       map[Reg]x86FixedLocalOrigin
+	opaqueCells  map[int64]x86FixedLocalOrigin
 	booleans     map[Reg]uint8
 	booleanBytes []bool
 	constants    map[Reg]int64
@@ -45,8 +45,8 @@ type x86FixedLocalState struct {
 func cloneFixedLocalState(input x86FixedLocalState) x86FixedLocalState {
 	clone := input
 	clone.pointers = make(map[Reg]int64, len(input.pointers))
-	clone.opaque = make(map[Reg]int64, len(input.opaque))
-	clone.opaqueCells = make(map[int64]int64, len(input.opaqueCells))
+	clone.opaque = make(map[Reg]x86FixedLocalOrigin, len(input.opaque))
+	clone.opaqueCells = make(map[int64]x86FixedLocalOrigin, len(input.opaqueCells))
 	clone.booleans = x86CloneCallerKnown(input.booleans)
 	clone.booleanBytes = append([]bool(nil), input.booleanBytes...)
 	clone.constants = make(map[Reg]int64, len(input.constants))
@@ -355,7 +355,7 @@ func replayX86FixedLocal(fn *Func, sig FuncSig, proof *x86FixedLocalProof, resid
 	}
 	state := x86FixedLocalState{
 		pointers: map[Reg]int64{SP: 0}, constants: make(map[Reg]int64), known: make(map[Reg]uint8),
-		opaque: make(map[Reg]int64), opaqueCells: make(map[int64]int64), booleans: make(map[Reg]uint8),
+		opaque: make(map[Reg]x86FixedLocalOrigin), opaqueCells: make(map[int64]x86FixedLocalOrigin), booleans: make(map[Reg]uint8),
 		booleanBytes: make([]bool, proof.frame),
 		vectors:      make(map[Reg]uint64), masks: make(map[Reg]bool),
 		bytes: make([]bool, proof.frame), addresses: make(map[int64]int64), results: make(map[int]bool),
@@ -527,9 +527,9 @@ func fixedLocalMemoryAccess(ins *Instr, index int, state *x86FixedLocalState, pr
 	residue int, width, alignment int64, write, pointer bool) (int64, x86FixedLocalMemoryRole, error) {
 	if index >= 0 && index < len(ins.Args) && ins.Args[index].Kind == OpMem {
 		memory := ins.Args[index].Mem
-		if _, input := state.opaque[memory.Base]; input {
+		if origin, input := state.opaque[memory.Base]; input {
 			root, valid := x86CallerGP(memory.Base)
-			if !valid || root != memory.Base || root == SP || width <= 0 || alignment <= 0 || pointer ||
+			if !valid || root != memory.Base || root == SP || width <= 0 || alignment <= 0 || pointer || write && origin.global != "" ||
 				memory.OffRaw != "" || memory.Sym != "" || memory.Segment != "" ||
 				memory.Index != "" || memory.Scale != 0 || memory.IndexExt != "" {
 				return 0, x86FixedLocalNativeInput, goAMD64FrameContext("fixed local native input requires a plain typed base and displacement")
@@ -704,7 +704,7 @@ func fixedLocalMove(ins *Instr, state *x86FixedLocalState, sig FuncSig, proof *x
 	var address int64
 	var pointer bool
 	var opaque bool
-	var identity int64
+	var identity x86FixedLocalOrigin
 	var booleans uint8
 	var constant int64
 	var constantKnown bool
@@ -743,12 +743,21 @@ func fixedLocalMove(ins *Instr, state *x86FixedLocalState, sig FuncSig, proof *x
 			return fail()
 		}
 		if slot.Type == Ptr {
-			opaque, identity = true, slot.Offset
+			opaque, identity = true, x86FixedLocalOrigin{parameter: slot.Offset}
 		} else if slot.Type == I1 {
 			booleans = 1
 		}
 	case OpSym:
-		if _, _, err := fixedLocalReadMemory(ins, 0, state, proof, residue, width, 1); err != nil {
+		if address, valid := fixedLocalGlobalAddress(*ins); valid {
+			if proof.binding == nil {
+				return fail()
+			}
+			object, found := proof.binding.globals[fixedLocalGlobalSymbol(address.symbol)]
+			if !found || object.variable == nil || object.native == "" {
+				return fail()
+			}
+			opaque, identity = true, x86FixedLocalOrigin{global: object.native}
+		} else if _, _, err := fixedLocalReadMemory(ins, 0, state, proof, residue, width, 1); err != nil {
 			return err
 		}
 	case OpMem:

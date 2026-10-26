@@ -27,6 +27,7 @@ type x86FixedLocalBinding struct {
 	declarations   map[string]goAMD64FrameDeclaration
 	numericalReads *GoX86NumericalReadBinding
 	literalData    map[string]x86FixedLocalData
+	globals        map[string]goReadOnlyObject
 }
 
 // BindFixedLocal binds a complete original typed ABI0 file to its actual Go
@@ -67,6 +68,9 @@ func (source *GoAMD64FrameSource) BindFixedLocal(ctx context.Context, pkg GoPack
 		if name, valid := fixedLocalDataSymbol(global.Sym); valid {
 			resolved[name] = options.ResolveSym(name)
 		}
+	}
+	for symbol := range fixedLocalGlobalSymbols(file) {
+		resolved[symbol] = options.ResolveSym(symbol)
 	}
 	options.ResolveSym = func(symbol string) string { return resolved[symbol] }
 	if numerical != nil {
@@ -128,10 +132,6 @@ func (source *GoAMD64FrameSource) bindFixedLocalLocked(ctx context.Context, life
 		len(file.UnlinkedPrelude)+len(options.X86TailGroups) != 0 {
 		return Options{}, goAMD64FrameContext("fixed local binding target or complete source roles disagree")
 	}
-	declarations, err := source.typedDeclarations(pkg, false)
-	if err != nil {
-		return Options{}, err
-	}
 	original, err := goAMD64FrameRead(filepath.Join(source.request.Directory, source.request.AssemblyFile))
 	if err != nil {
 		return Options{}, err
@@ -156,6 +156,14 @@ func (source *GoAMD64FrameSource) bindFixedLocalLocked(ctx context.Context, life
 	if resolve == nil {
 		return Options{}, goAMD64FrameContext("fixed local binding needs actual package symbol resolution")
 	}
+	globals, err := fixedLocalGlobalRequests(pkg, actual, resolve)
+	if err != nil {
+		return Options{}, err
+	}
+	declarations, err := source.typedDeclarationsForSourceRole(pkg, false, "amd64", false, nil, false, globals)
+	if err != nil {
+		return Options{}, err
+	}
 	binding := &x86FixedLocalBinding{
 		source:         source,
 		context:        lifetime,
@@ -168,6 +176,7 @@ func (source *GoAMD64FrameSource) bindFixedLocalLocked(ctx context.Context, life
 		symbols:        make(map[string]string),
 		declarations:   make(map[string]goAMD64FrameDeclaration),
 		numericalReads: options.NumericalReads,
+		globals:        globals,
 	}
 	binding.identity = binding
 	literalData, dataSymbols, err := source.fixedLocalData(actual, expanded, resolve)
@@ -177,6 +186,9 @@ func (source *GoAMD64FrameSource) bindFixedLocalLocked(ctx context.Context, life
 	binding.literalData = literalData
 	for symbol, name := range dataSymbols {
 		binding.symbols[symbol] = name
+	}
+	for symbol, object := range globals {
+		binding.symbols[symbol] = object.native
 	}
 	if options.NumericalReads != nil {
 		if err := joinNumericalReadCertificates(actual, options); err != nil {
@@ -349,6 +361,11 @@ func verifyX86FixedLocalBindings(file *File, options Options) ([]*x86FixedLocalB
 			name, private := fixedLocalDataSymbol(global.Sym)
 			if !private || options.ResolveSym(name) != binding.symbols[name] {
 				return nil, goAMD64FrameContext("fixed local consumer literal symbol resolution changed")
+			}
+		}
+		for symbol, object := range binding.globals {
+			if options.ResolveSym(symbol) != object.native {
+				return nil, goAMD64FrameContext("fixed local consumer Go variable resolution changed")
 			}
 		}
 		bindings = append(bindings, binding)

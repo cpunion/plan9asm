@@ -914,8 +914,11 @@ func (source *GoAMD64FrameSource) typedNumericalDeclarationsForArchRole(pkg GoPa
 }
 
 func (source *GoAMD64FrameSource) typedDeclarationsForSourceRole(pkg GoPackage, numericOnly bool, arch string,
-	opaqueUnsafePointer bool, entries map[string]bool, floatingScalars bool,
+	opaqueUnsafePointer bool, entries map[string]bool, floatingScalars bool, globals ...map[string]goReadOnlyObject,
 ) (map[string]goAMD64FrameDeclaration, error) {
+	if len(globals) > 1 {
+		return nil, goAMD64FrameContext("ambiguous original Go variable inventory")
+	}
 	fset := token.NewFileSet()
 	var syntax []*ast.File
 	var compiled []string
@@ -990,6 +993,11 @@ func (source *GoAMD64FrameSource) typedDeclarationsForSourceRole(pkg GoPackage, 
 	}
 	if !reflect.DeepEqual(typed.Scope().Names(), pkg.Types.Scope().Names()) {
 		return nil, goAMD64FrameContext("actual selected declarations differ from supplied types")
+	}
+	if len(globals) == 1 {
+		if err := joinFixedLocalGlobalDeclarations(typed, pkg.Types, syntax, sizes, globals[0]); err != nil {
+			return nil, err
+		}
 	}
 	languageType := goAMD64FrameLanguageTypeRole
 	if floatingScalars {
