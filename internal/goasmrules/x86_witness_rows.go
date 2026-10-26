@@ -75,6 +75,12 @@ func X86PackedPerLaneShiftRows(legacy X86LegacyCatalog, avx []X86AVXRule) ([]X86
 		VPSLLVW VPSLLVD VPSLLVQ VPSRLVW VPSRLVD VPSRLVQ VPSRAVW VPSRAVD VPSRAVQ`)
 }
 
+// X86PackedSignRows retains all B/W/D conditional-sign rows. Go's legacy
+// table is XMM-only; VEX adds X/Y forms, without MMX, EVEX or broadcast.
+func X86PackedSignRows(legacy X86LegacyCatalog, avx []X86AVXRule) ([]X86PackedBinaryRow, error) {
+	return x86PackedBinaryRows(legacy, avx, `PSIGNB PSIGNW PSIGND VPSIGNB VPSIGNW VPSIGND`)
+}
+
 // X86PackedBinaryPilotRows covers the shared packed add/subtract and D/Q
 // low-multiply pilot. MMX and the separate W multiply family are not included.
 // PADDD is a frontend alias, not an additional official encoder row.

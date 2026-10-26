@@ -1,6 +1,7 @@
 package goasmrules
 
 import (
+	"bytes"
 	"regexp"
 	"runtime"
 	"strings"
@@ -11,6 +12,31 @@ type x86PackedRowCounts struct {
 	names, mmx, broadcast int
 	rows, formats         [3]int // Legacy, VEX, EVEX.
 	widths                [3]int // 128, 256, 512 bits.
+}
+
+type x86PackedEncodingAnchor struct {
+	instruction string
+	encoding    []byte
+}
+
+func x86CheckPackedEncodingAnchors(t *testing.T, rows []X86PackedBinaryRow, anchors []x86PackedEncodingAnchor) {
+	t.Helper()
+	observed := map[string][]byte{}
+	for _, row := range rows {
+		for _, witness := range row.Witnesses {
+			if _, exists := observed[witness.Instruction]; exists {
+				t.Fatal("distinct official rows lost their physical witness identity", witness.Instruction)
+			}
+			observed[witness.Instruction] = witness.Encoding
+		}
+	}
+	for _, row := range anchors {
+		t.Run(row.instruction, func(t *testing.T) {
+			if got := observed[row.instruction]; !bytes.Equal(got, row.encoding) {
+				t.Fatalf("official encoding is %x, want %x", got, row.encoding)
+			}
+		})
+	}
 }
 
 type x86PackedRowInventory struct {
