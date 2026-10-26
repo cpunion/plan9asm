@@ -71,6 +71,15 @@ Twelve new positive combinations compile LLVM22 objects and 27 negative controls
 remain rejected. The repair is in published `5406c2756`. Let that complete run
 finish naturally before the next batch push.
 
+The next local candidate `6eb0b953b` combines the pack join/parser changes below
+with the shared F128/I128 broadcast byte-boundary repair. That repair delegates
+to the existing complete decoder and preserves its source-memory restrictions;
+it adds no second opcode table. Combined Go1.27.3 qualification passes 41 roots /
+630 children and four CLI roots / 12 children; Go1.20.14 passes 36 / 630.
+All have zero failures/skips, and the five official corpus baselines remain
+exact. The five SDK-specific roots are explicitly Go1.27-only. The larger
+conditional-pointer and framed-leaf experiments remain on isolated branches.
+
 ## Current functional evidence
 
 | Scope | Qualified result | Limit |
