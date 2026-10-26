@@ -4,6 +4,8 @@ package plan9asm
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
@@ -293,6 +295,77 @@ func TestGoAMD64FixedLocalShuffleRuntimeObjects(t *testing.T) {
 		t.Fatal("legacy and VEX shuffle runtime inventory changed", len(kernels))
 	}
 	fixedLocalVectorRuntime(t, fixedLocalPackedCompileOnlyTools(t), false, kernels)
+}
+
+func fixedLocalCLMULRuntimeKernels(t *testing.T) []fixedLocalVEXRuntimeKernel {
+	t.Helper()
+	var kernels []fixedLocalVEXRuntimeKernel
+	operations := 0
+	for _, kind := range []string{"legacy", "X", "Y"} {
+		for _, selector := range []int{0, 1, 16, 17, 238, 255} {
+			var rows []string
+			if kind == "legacy" {
+				for _, source := range []string{"X1", "X2", "64(BP)", "(SI)"} {
+					rows = append(rows, fmt.Sprintf("PCLMULQDQ $%d,%s,X2", selector, source))
+				}
+			} else {
+				for _, source := range []string{kind + "1", "64(BP)", "(SI)", "65(BP)", "1(SI)"} {
+					rows = append(rows, fmt.Sprintf("VPCLMULQDQ $%d,%s,%s2,%s3", selector, source, kind, kind))
+				}
+				for _, destination := range []string{kind + "1", kind + "2"} {
+					rows = append(rows, fmt.Sprintf("VPCLMULQDQ $%d,%s1,%s2,%s", selector, kind, kind, destination))
+				}
+				for _, destination := range []string{kind + "3", kind + "2"} {
+					rows = append(rows, fmt.Sprintf("VPCLMULQDQ $%d,%s2,%s2,%s", selector, kind, kind, destination))
+				}
+			}
+			kernels = append(kernels, fixedLocalVEXRuntimeKernel{shape: rows[0], operations: rows})
+			operations += len(rows)
+		}
+	}
+	if len(kernels) != 18 || operations != 132 {
+		t.Fatal("CLMUL original-execution inventory changed", len(kernels), operations)
+	}
+	return kernels
+}
+
+// AVX2 does not imply VPCLMULQDQ's Y-width instruction. The native owner
+// checks both features and executes actual legacy/X and VEX/Y instructions;
+// compile-only hosts build this preflight without claiming CPU availability.
+func fixedLocalCLMULRuntimePreflight(t *testing.T, execution x86FloatCompareExecution) string {
+	t.Helper()
+	directory := t.TempDir()
+	source, executable := filepath.Join(directory, "clmul.c"), filepath.Join(directory, "clmul")
+	const program = `#include <stdio.h>
+__attribute__((target("avx2,pclmul,vpclmulqdq"))) static int original_clmul(void) {
+    unsigned legacy, wide;
+    __asm__ volatile("pxor %%xmm0,%%xmm0; "
+                     "pclmulqdq $0,%%xmm0,%%xmm0; pmovmskb %%xmm0,%0; "
+                     "vpxor %%ymm0,%%ymm0,%%ymm0; "
+                     "vpclmulqdq $0,%%ymm0,%%ymm0,%%ymm0; "
+                     "vpmovmskb %%ymm0,%1; vzeroupper"
+                     : "=r"(legacy), "=r"(wide) :: "ymm0");
+    return legacy==0 && wide==0;
+}
+int main(void) {
+    __builtin_cpu_init();
+    int pclmul=!!__builtin_cpu_supports("pclmul");
+    int vpclmul=!!__builtin_cpu_supports("vpclmulqdq");
+    printf("fixed-frame native PCLMUL=%d VPCLMULQDQ=%d\n",pclmul,vpclmul);
+    return pclmul && vpclmul && original_clmul() ? 0 : 1;
+}
+`
+	if err := os.WriteFile(source, []byte(program), 0600); err != nil {
+		t.Fatal(err)
+	}
+	execution.compileC(t, source, executable)
+	return executable
+}
+
+func TestGoAMD64FixedLocalCLMULRuntimeObjects(t *testing.T) {
+	execution := fixedLocalPackedCompileOnlyTools(t)
+	fixedLocalCLMULRuntimePreflight(t, execution)
+	fixedLocalVectorRuntime(t, execution, false, fixedLocalCLMULRuntimeKernels(t))
 }
 
 func TestGoAMD64FixedLocalVEXRuntimeObjects(t *testing.T) {
