@@ -26,7 +26,9 @@ func TestGoAMD64FrameAutomaticSplitLayout(t *testing.T) {
 		{"darwin/amd64", "x86_64-apple-darwin"},
 		{"windows/amd64", "x86_64-pc-windows-msvc"},
 	} {
-		for _, frame := range []int{64, 160} {
+		// Go's ADJSP encoder flips ADD/SUB at the signed-byte boundary.
+		// Exercise both sides, with and without generated stack checks.
+		for _, frame := range []int{64, 120, 128, 160, 256} {
 			for _, nosplit := range []bool{false, true} {
 				t.Run(fmt.Sprintf("%s/frame%d/nosplit%t", target.name, frame, nosplit), func(t *testing.T) {
 					pkg, request := goAMD64FrameSourceFixture(t)
@@ -42,7 +44,7 @@ func TestGoAMD64FrameAutomaticSplitLayout(t *testing.T) {
 					// The original assembler decides whether a source-level split
 					// flag actually generates a stack check (small leaves do not).
 					listing := x86InsertExtractGoListing(t, "amd64", assembly)
-					wantSplit := !nosplit && frame == 160
+					wantSplit := !nosplit && frame+8 >= 128
 					if strings.Contains(string(listing), "CALL\truntime.morestack_noctxt") != wantSplit {
 						t.Fatal("independent Go prologue did not match the frame/flag case", listing)
 					}

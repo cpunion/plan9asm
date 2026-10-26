@@ -1716,9 +1716,9 @@ func goAMD64FrameMachineShape(fn goAMD64FrameFunction, frame int64) error {
 	first, second, third := instructions[0], instructions[1], instructions[2]
 	push := first.Op == x86asm.PUSH && first.Args[0] == x86asm.RBP &&
 		second.Op == x86asm.MOV && second.Args[0] == x86asm.RBP && second.Args[1] == x86asm.RSP &&
-		third.Op == x86asm.SUB && third.Args[0] == x86asm.RSP && third.Args[1] == x86asm.Imm(frame)
+		goAMD64FrameStackAdjustment(third, -frame)
 	slot := x86asm.Mem{Base: x86asm.RSP, Scale: 1, Disp: frame}
-	stored := first.Op == x86asm.SUB && first.Args[0] == x86asm.RSP && first.Args[1] == x86asm.Imm(frame+8) &&
+	stored := goAMD64FrameStackAdjustment(first, -frame-8) &&
 		second.Op == x86asm.MOV && second.Args[0] == slot && second.Args[1] == x86asm.RBP && second.DataSize == 64 &&
 		third.Op == x86asm.LEA && third.Args[0] == x86asm.RBP && third.Args[1] == slot && third.DataSize == 64
 	if !push && !stored {
@@ -1733,9 +1733,9 @@ func goAMD64FrameMachineShape(fn goAMD64FrameFunction, frame int64) error {
 			}
 			penultimate, previous := instructions[i-2], instructions[i-1]
 			pushReturn := push && previous.Op == x86asm.POP && previous.Args[0] == x86asm.RBP &&
-				penultimate.Op == x86asm.ADD && penultimate.Args[0] == x86asm.RSP && penultimate.Args[1] == x86asm.Imm(frame)
+				goAMD64FrameStackAdjustment(penultimate, frame)
 			storedReturn := stored && penultimate.Op == x86asm.MOV && penultimate.Args[0] == x86asm.RBP && penultimate.Args[1] == slot && penultimate.DataSize == 64 &&
-				previous.Op == x86asm.ADD && previous.Args[0] == x86asm.RSP && previous.Args[1] == x86asm.Imm(frame+8)
+				goAMD64FrameStackAdjustment(previous, frame+8)
 			if !pushReturn && !storedReturn {
 				return goAMD64FrameContext("unrecognized original RET epilogue")
 			}
@@ -1745,6 +1745,18 @@ func goAMD64FrameMachineShape(fn goAMD64FrameFunction, frame int64) error {
 		return goAMD64FrameContext("original frame has no conventional RET")
 	}
 	return nil
+}
+
+// Go's ADJSP encoder chooses ADD/SUB and a signed immediate together. At
+// 128 bytes the opposite operation with -128 has the shorter encoding.
+// Validate the exact 64-bit stack delta, not one spelling of that delta.
+func goAMD64FrameStackAdjustment(ins x86asm.Inst, delta int64) bool {
+	if ins.DataSize != 64 || ins.Args[0] != x86asm.RSP || ins.Args[2] != nil || ins.Args[3] != nil {
+		return false
+	}
+	amount, immediate := ins.Args[1].(x86asm.Imm)
+	return immediate && (ins.Op == x86asm.ADD && int64(amount) == delta ||
+		ins.Op == x86asm.SUB && int64(amount) == -delta)
 }
 
 func (source *GoAMD64FrameSource) verifyObjectListing(ctx context.Context, object string, wanted map[string]goAMD64FrameFunction) error {
