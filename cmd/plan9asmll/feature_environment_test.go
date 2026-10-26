@@ -10,6 +10,26 @@ import (
 	"time"
 )
 
+func TestFeatureConsumerFixturePreparesSelectedCache(t *testing.T) {
+	cache := filepath.Join(t.TempDir(), "new-cache")
+	t.Setenv("GOENV", "off")
+	t.Setenv("GOCACHE", cache)
+	if _, err := os.Stat(cache); !os.IsNotExist(err) {
+		t.Fatalf("cache fixture already exists: %v", err)
+	}
+	before := os.Environ()
+	input, _ := featureConsumerFixture(t)
+	if input.Observed == nil {
+		t.Fatal("fixture omitted its actual Go observation")
+	}
+	if info, err := os.Stat(cache); err != nil || !info.IsDir() {
+		t.Fatalf("actual selected cache was not prepared: %v", err)
+	}
+	if !reflect.DeepEqual(before, os.Environ()) {
+		t.Fatal("fixture changed the producer's original environment")
+	}
+}
+
 func TestFeatureConsumerResolvesOrdinaryEnvironmentBeforeSelection(t *testing.T) {
 	t.Setenv("GOENV", "off")
 	for _, key := range []string{"GOCACHE", "GOMODCACHE", "GOPATH", "TMPDIR", "GOTMPDIR"} {

@@ -19,6 +19,77 @@ import (
 	"golang.org/x/tools/go/packages"
 )
 
+func TestAMD64FixedLocalSourceRoleQueryDoesNotBindSymbols(t *testing.T) {
+	pkg := &packages.Package{PkgPath: "example.invalid/query"}
+	forward := "CALL ·Callee(SB)\nMOVQ 0(SP),AX\nMOVQ AX,ret+0(FP)\nRET"
+	floatForward := "CALL ·Callee(SB)\nMOVSD 0(SP),X0\nMOVSD X0,ret+0(FP)\nRET"
+	for _, test := range []struct {
+		name, symbol, body string
+		result             plan9asm.LLVMType
+		forwarder          bool
+	}{
+		{"complete outgoing", "·Caller", forward, plan9asm.I64, true},
+		{"escaped package name", "example.invalid∕query·Caller", forward, plan9asm.I64, true},
+		{"linked caller needs binding", "·CallerAlias", forward, plan9asm.I64, false},
+		{"linked callee needs binding", "·Caller", strings.Replace(forward, "·Callee", "·CalleeAlias", 1), plan9asm.I64, false},
+		{"private without call", "·Caller", "MOVQ $1,0(SP)\nRET", plan9asm.I64, false},
+		{"private with call", "·Caller", strings.Replace(forward, "RET", "MOVQ $1,0(SP)\nRET", 1), plan9asm.I64, false},
+		// These scalar-lane sources already use the original untyped route.
+		{"legacy float linked caller", "·CallerAlias", floatForward, "double", true},
+		{"legacy float linked callee", "·Caller", strings.Replace(floatForward, "·Callee", "·CalleeAlias", 1), "double", true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			sigs := make(map[string]plan9asm.FuncSig)
+			resultType := types.Typ[types.Uint64]
+			if test.result == "double" {
+				resultType = types.Typ[types.Float64]
+			}
+			for _, name := range []string{"Caller", "Callee", "linkedCaller", "linkedCallee"} {
+				resolved := pkg.PkgPath + "." + name
+				declaration := types.NewFunc(0, nil, name, types.NewSignatureType(nil, nil, nil, nil,
+					types.NewTuple(types.NewVar(0, nil, "", resultType)), false))
+				sig, err := plan9asm.DeriveGoFuncABI0Signature(resolved, declaration, "amd64", types.SizesFor("gc", "amd64"))
+				if err != nil {
+					t.Fatal(err)
+				}
+				sigs[resolved] = sig
+			}
+			file, err := plan9asm.Parse(plan9asm.ArchAMD64, "TEXT "+test.symbol+"(SB),4,$8-8\n"+test.body+"\n")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !test.forwarder && !plan9asm.GoAMD64FixedLocalFrameBindingNeeded(file, "amd64") {
+				t.Fatal("negative control does not require the original private-frame candidate")
+			}
+			if test.result == "double" && plan9asm.GoAMD64FixedLocalFrameBindingNeeded(file, "amd64") {
+				t.Fatal("legacy scalar-lane control lost its original untyped route")
+			}
+			calls := 0
+			resolve := func(name string) string {
+				calls++
+				name = strings.Replace(name, "CallerAlias", "linkedCaller", 1)
+				name = strings.Replace(name, "CalleeAlias", "linkedCallee", 1)
+				return resolveSymFunc(pkg.PkgPath)(name)
+			}
+			bound, source, err := prepareAMD64FixedLocalSource(pkg, file, "", "linux/amd64",
+				targetTriple("linux", "amd64"), "amd64", compileConfig{}, resolve, sigs)
+			if calls != 0 {
+				t.Fatalf("source-role query invoked the binding callback %d times before source capture", calls)
+			}
+			if source != nil {
+				t.Fatal("query created an uncaptured source owner")
+			}
+			if test.forwarder {
+				if err != nil || !reflect.DeepEqual(bound, sigs) {
+					t.Fatalf("complete outgoing source lost its existing route: %v", err)
+				}
+			} else if bound != nil || !errors.Is(err, plan9asm.ErrProbeNeedsContext) {
+				t.Fatalf("uncaptured private source acquired authority: %v", err)
+			}
+		})
+	}
+}
+
 // The original numeric ABI0 fixture has a real automatic Go frame, explicit
 // complete initialization and restoration. Its local addresses are neither
 // incoming slice extents nor contiguous virtual FP shadow storage.
