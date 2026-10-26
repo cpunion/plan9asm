@@ -247,6 +247,10 @@ func Translate(file *File, opt Options) (string, error) {
 
 // translateIRText builds textual LLVM IR prior to module parsing.
 func translateIRText(file *File, opt Options) (resultText string, result error) {
+	return translateIRTextWithFixedLocalResult(file, opt, nil)
+}
+
+func translateIRTextWithFixedLocalResult(file *File, opt Options, fixedLocalResult *x86FixedLocalResultSnapshot) (resultText string, result error) {
 	if file == nil {
 		return "", fmt.Errorf("nil file")
 	}
@@ -540,6 +544,7 @@ func translateIRText(file *File, opt Options) (resultText string, result error) 
 				x86FunctionSource{
 					goReadOnlyStorage: opt.goReadOnlyStorage,
 					inferredAttrs:     inferredAttrs,
+					fixedLocalResult:  fixedLocalResult,
 					scalarData:        scalarData,
 					shiftLiterals:     shiftLiterals,
 					lockNamespace:     lockScalarNamespace,

@@ -94,6 +94,7 @@ type amd64Ctx struct {
 	fpScalarSource    Func                         // source for all-path checks of new scalar result views
 	fpSourceSig       FuncSig                      // original request-local declaration before feature rendering
 	fpFeatureAttrs    string                       // exact compiler-rendered feature reference, never supplied attributes
+	fixedLocalResult  *x86FixedLocalResultSnapshot // pure per-call source index; live module guards remain separate
 	fpBoolCallSource  *x86ABI0BoolCallSource       // complete custom-helper graph, not a standalone register entry
 	fpScalarData      map[x86StaticSBAddress]int64 // exact effective SB address -> available emitted numerical bytes
 	fpShiftLiterals   map[x86StaticSBAddress]x86ShiftLiteral

@@ -7,6 +7,12 @@ import (
 	"testing"
 )
 
+func fixedLocalResultFeatureAttrs(file *File, binding *x86FixedLocalBinding, name, arch string) (string, string, bool) {
+	functions, valid := fixedLocalResultFunctions(file, binding, arch)
+	function, found := functions[name]
+	return function.attributes, function.inferred, valid && found
+}
+
 func TestX86FixedLocalFeatureProjectionUsesCompleteSourceOrder(t *testing.T) {
 	file, err := Parse(ArchAMD64, "TEXT ·First(SB),4,$0\nAESENC X0,X1\nRET\nTEXT ·Second(SB),4,$0\nPSHUFB X0,X1\nRET")
 	if err != nil {
@@ -55,6 +61,10 @@ func TestGoAMD64FixedLocalResultConsumerExactProofHandoff(t *testing.T) {
 	if !valid {
 		t.Fatal("actual complete renderer inventory precondition")
 	}
+	snapshot, err := newX86FixedLocalResultSnapshot(sig.x86FixedLocal, "amd64")
+	if err != nil || snapshot == nil || len(snapshot.functions) != 1 {
+		t.Fatal("independent call-local original source index", err)
+	}
 	create := func(fn Func) *amd64Ctx {
 		var output strings.Builder
 		lower := newX86Ctx(&output, fn, sig, bound.ResolveSym, bound.Sigs, "amd64", bound.TargetTriple, false)
@@ -63,6 +73,11 @@ func TestGoAMD64FixedLocalResultConsumerExactProofHandoff(t *testing.T) {
 	}
 	if err := create(fn).checkLoweredScalarFPResultInitialization(); err != nil {
 		t.Fatal("exact existing fixed-local result proof was stolen by logical AUTO replay", err)
+	}
+	scoped := create(fn)
+	scoped.fixedLocalResult = snapshot
+	if err := scoped.checkLoweredScalarFPResultInitialization(); err != nil {
+		t.Fatal("call-local original source index changed result proof", err)
 	}
 	if err := checkX86ScalarFPResultInitialization(fn, sig, "amd64"); !errors.Is(err, ErrProbeNeedsContext) {
 		t.Fatal("private source query gained physical-frame permission", err)
@@ -80,6 +95,16 @@ func TestGoAMD64FixedLocalResultConsumerExactProofHandoff(t *testing.T) {
 		"changed emitter frame":  func(c *amd64Ctx) { c.frameSize += 8 },
 		"changed raw role":       func(c *amd64Ctx) { c.fpScalarSource.Instrs[1].x86Encoded = true },
 		"unknown literal role":   func(c *amd64Ctx) { c.fpScalarSource.Instrs[1].x86SDKLiteral = &x86SDKLiteralCertificate{} },
+		"foreign snapshot binding": func(c *amd64Ctx) {
+			copy, foreign := *snapshot, *snapshot.binding
+			copy.binding = &foreign
+			c.fixedLocalResult = &copy
+		},
+		"foreign snapshot file": func(c *amd64Ctx) {
+			copy := *snapshot
+			copy.file[0] ^= 1
+			c.fixedLocalResult = &copy
+		},
 		"changed complete source": func(c *amd64Ctx) {
 			last := len(c.fpScalarSource.Instrs) - 1
 			c.fpScalarSource.Instrs[last] = Instr{Op: "NOP", Raw: "NOP"}
@@ -109,12 +134,17 @@ func TestGoAMD64FixedLocalResultConsumerExactProofHandoff(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			copy := fn
-			copy.Instrs = append([]Instr(nil), fn.Instrs...)
-			lower := create(copy)
-			mutate(lower)
-			if err := lower.checkFixedLocalResultInitialization(); !errors.Is(err, ErrProbeNeedsContext) {
-				t.Fatal("changed native/source/private role borrowed original result proof", err)
+			for _, scoped := range []bool{false, true} {
+				copy := fn
+				copy.Instrs = append([]Instr(nil), fn.Instrs...)
+				lower := create(copy)
+				if scoped {
+					lower.fixedLocalResult = snapshot
+				}
+				mutate(lower)
+				if err := lower.checkFixedLocalResultInitialization(); !errors.Is(err, ErrProbeNeedsContext) {
+					t.Fatal("changed native/source/private role borrowed original result proof", scoped, err)
+				}
 			}
 		})
 	}

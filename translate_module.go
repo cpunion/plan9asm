@@ -206,7 +206,17 @@ func TranslateModuleInContext(ctx llvm.Context, file *File, opt Options) (result
 		return llvm.Module{}, err
 	}
 
-	ir, err := translateIRText(file, opt)
+	var fixedLocalResult *x86FixedLocalResultSnapshot
+	if len(bindings) == 1 {
+		// Share only pure original-source calculations within this call. The
+		// live module completion guard above still runs after every consumer.
+		// freezeX86FixedLocalFile already rejects multiple source owners.
+		fixedLocalResult, err = newX86FixedLocalResultSnapshot(bindings[0], opt.Goarch)
+		if err != nil {
+			return llvm.Module{}, err
+		}
+	}
+	ir, err := translateIRTextWithFixedLocalResult(file, opt, fixedLocalResult)
 	if err != nil {
 		return llvm.Module{}, err
 	}

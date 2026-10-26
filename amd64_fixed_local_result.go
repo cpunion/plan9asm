@@ -17,8 +17,10 @@ func (c *amd64Ctx) checkFixedLocalResultInitialization() error {
 		c.goarch != "amd64" || c.targetTriple != binding.target || fn.FrameSize != proof.frame || c.frameSize != fn.FrameSize {
 		return fail("source/proof/target/frame role differs")
 	}
-	if err := binding.verify(); err != nil {
-		return err
+	if c.fixedLocalResult == nil {
+		if err := binding.verify(); err != nil {
+			return err
+		}
 	}
 	emitted := c.sig
 	emitted.Attrs = sig.Attrs // Checked against the actual complete renderer inventory below.
@@ -31,32 +33,22 @@ func (c *amd64Ctx) checkFixedLocalResultInitialization() error {
 		return fail("actual declaration/signature differs")
 	}
 	sig.x86FixedLocal = binding
-	// Replay the actual guarded CPP, not a mutually consistent replacement of
-	// the binding's private assembly and fingerprint. No caller callback runs
-	// under the source mutex; the complete live Verify guards surround this.
-	binding.source.mu.Lock()
-	original, err := binding.source.read(filepath.Join(binding.source.request.Directory, binding.source.request.AssemblyFile))
-	var expanded string
-	if err == nil {
-		expanded, err = binding.source.preprocess(binding.source.request.AssemblyFile, original)
+	snapshot := c.fixedLocalResult
+	if snapshot == nil {
+		var err error
+		snapshot, err = newX86FixedLocalResultSnapshot(binding, c.goarch)
+		if err != nil {
+			return err
+		}
 	}
-	binding.source.mu.Unlock()
-	if err != nil || expanded != binding.assembly {
-		return fail("expanded assembly differs from the actual guarded source")
+	if snapshot.binding != binding || snapshot.file != binding.file {
+		return fail("complete source snapshot belongs to a different binding")
 	}
-	actual, err := Parse(ArchAMD64, expanded)
-	if err != nil {
-		return fail("complete original assembly cannot be parsed")
-	}
-	fingerprint, err := x86CallerSourceFingerprint(actual)
-	if err != nil || fingerprint != binding.file {
-		return fail("complete original assembly fingerprint differs")
-	}
-	attributes, inferred, valid := fixedLocalResultFeatureAttrs(actual, binding, sig.Name, c.goarch)
-	if !valid || c.sig.Attrs != attributes || c.fpFeatureAttrs != inferred {
+	original, valid := snapshot.functions[sig.Name]
+	if !valid || c.sig.Attrs != original.attributes || c.fpFeatureAttrs != original.inferred {
 		return fail("emitted attributes are not the exact complete-source renderer projection")
 	}
-	fingerprint, err = x86CallerSourceFingerprint(fn)
+	fingerprint, err := x86CallerSourceFingerprint(fn)
 	if err != nil || fingerprint != proof.function {
 		return fail("complete normalized function fingerprint differs")
 	}
@@ -83,18 +75,9 @@ func (c *amd64Ctx) checkFixedLocalResultInitialization() error {
 	if err != nil {
 		return err
 	}
-	matches := 0
-	for _, original := range actual.Funcs {
-		if original.Sym == fn.Sym {
-			if original.FrameSize != fn.FrameSize || original.ArgSize != fn.ArgSize ||
-				!reflect.DeepEqual(original.Instrs, instructions) {
-				return fail("original TEXT/source instruction roles differ")
-			}
-			matches++
-		}
-	}
-	if matches != 1 {
-		return fail("original TEXT is missing or ambiguous")
+	if original.function.Sym != fn.Sym || original.function.FrameSize != fn.FrameSize ||
+		original.function.ArgSize != fn.ArgSize || !reflect.DeepEqual(original.function.Instrs, instructions) {
+		return fail("original TEXT/source instruction roles differ")
 	}
 	replayed, err := proveX86FixedLocal(plain, sig)
 	if err != nil {
@@ -115,33 +98,88 @@ func (c *amd64Ctx) checkFixedLocalResultInitialization() error {
 	if len(proof.accesses) != len(replayed.x86FixedLocal.accesses) {
 		return fail("recomputed function access inventory differs")
 	}
-	return binding.verify()
+	if c.fixedLocalResult == nil {
+		return binding.verify()
+	}
+	return nil
 }
 
-// Reproduce the renderer's complete source-order feature allocation. The
+// A module-call-local index of independently parsed source, not a live source
+// verification result or a new permission. Only the module's existing complete
+// pre/post guards permit sharing it between function consumers. Standalone
+// consumers construct their own index inside the original live guards.
+type x86FixedLocalResultSnapshot struct {
+	binding   *x86FixedLocalBinding
+	file      [32]byte
+	functions map[string]x86FixedLocalResultFunction
+}
+
+type x86FixedLocalResultFunction struct {
+	function   Func
+	attributes string
+	inferred   string
+}
+
+func newX86FixedLocalResultSnapshot(binding *x86FixedLocalBinding, arch string) (*x86FixedLocalResultSnapshot, error) {
+	fail := func(reason string) (*x86FixedLocalResultSnapshot, error) {
+		return nil, goAMD64FrameContext("fixed local result consumer: %s", reason)
+	}
+	if binding == nil || binding.source == nil {
+		return fail("missing complete original source binding")
+	}
+	// Replay actual guarded CPP, not a mutually consistent replacement of the
+	// binding's private assembly/fingerprint. No caller callback runs under mu.
+	binding.source.mu.Lock()
+	if !binding.source.ready {
+		binding.source.mu.Unlock()
+		return fail("original source is closed or revoked")
+	}
+	original, err := binding.source.read(filepath.Join(binding.source.request.Directory, binding.source.request.AssemblyFile))
+	var expanded string
+	if err == nil {
+		expanded, err = binding.source.preprocess(binding.source.request.AssemblyFile, original)
+	}
+	binding.source.mu.Unlock()
+	if err != nil || expanded != binding.assembly {
+		return fail("expanded assembly differs from the actual guarded source")
+	}
+	actual, err := Parse(ArchAMD64, expanded)
+	if err != nil {
+		return fail("complete original assembly cannot be parsed")
+	}
+	fingerprint, err := x86CallerSourceFingerprint(actual)
+	if err != nil || fingerprint != binding.file {
+		return fail("complete original assembly fingerprint differs")
+	}
+	functions, valid := fixedLocalResultFunctions(actual, binding, arch)
+	if !valid {
+		return fail("complete source feature inventory is missing or ambiguous")
+	}
+	return &x86FixedLocalResultSnapshot{binding: binding, file: fingerprint, functions: functions}, nil
+}
+
+// Reproduce the renderer's complete source-order feature allocation once. The
 // reference spelling alone is not proof, and supplied attributes never pass
 // through the inference registry or become a removable source difference.
-func fixedLocalResultFeatureAttrs(file *File, binding *x86FixedLocalBinding, name, arch string) (string, string, bool) {
+func fixedLocalResultFunctions(file *File, binding *x86FixedLocalBinding, arch string) (map[string]x86FixedLocalResultFunction, bool) {
 	registry := newFeatureAttrRegistry()
-	var attributes, inferred string
-	matches := 0
+	functions := make(map[string]x86FixedLocalResultFunction, len(file.Funcs))
 	for _, fn := range file.Funcs {
 		resolved, found := binding.symbols[fn.Sym]
 		sig, declared := binding.signatures[resolved]
-		if !found || !declared || len(fn.X86RawText) != 0 || amd64IsRelocationAnchor(fn, sig) || file.x86DirectTailHelper(fn.Sym) {
-			return "", "", false
+		_, duplicate := functions[resolved]
+		if !found || !declared || duplicate || len(fn.X86RawText) != 0 || amd64IsRelocationAnchor(fn, sig) || file.x86DirectTailHelper(fn.Sym) {
+			return nil, false
 		}
 		derived := ""
 		if sig.Attrs == "" {
 			derived = registry.ref(inferFuncTargetFeaturesForGOARCH(file.Arch, arch, fn))
 		}
-		if resolved == name {
-			attributes, inferred = sig.Attrs, derived
-			if attributes == "" {
-				attributes = derived
-			}
-			matches++
+		attributes := sig.Attrs
+		if attributes == "" {
+			attributes = derived
 		}
+		functions[resolved] = x86FixedLocalResultFunction{function: fn, attributes: attributes, inferred: derived}
 	}
-	return attributes, inferred, matches == 1
+	return functions, true
 }

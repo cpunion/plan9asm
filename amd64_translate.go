@@ -543,6 +543,7 @@ type x86FunctionSource struct {
 	boolCalls         *x86ABI0BoolCallSource
 	declaration       FuncSig
 	inferredAttrs     string
+	fixedLocalResult  *x86FixedLocalResultSnapshot
 
 	staticAddressValues *x86StaticAddressValues
 }
@@ -566,6 +567,7 @@ func translateFuncX86(b *strings.Builder, fn Func, sig FuncSig, resolve func(str
 		c.goReadOnlyStorage = sources[0].goReadOnlyStorage
 		c.fpSourceSig = sources[0].declaration
 		c.fpFeatureAttrs = sources[0].inferredAttrs
+		c.fixedLocalResult = sources[0].fixedLocalResult
 		c.lockScalarNS = sources[0].lockNamespace
 		c.bitScanNS = sources[0].bitScanNamespace
 		c.fpScalarData = sources[0].scalarData
