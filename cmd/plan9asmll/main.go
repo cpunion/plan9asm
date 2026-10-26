@@ -764,7 +764,7 @@ func compileOneAttempt(pkg *packages.Package, arch plan9asm.Arch, goos, goarch, 
 		cppProof.TypedExpandedSHA256 = featureBytesSHA256(src)
 		ccfg.Feature.Proof.CPP = append(ccfg.Feature.Proof.CPP, *cppProof)
 	}
-	file, err := plan9asm.ParseWithDefines(arch, string(src), defines)
+	file, err := parseCompleteCLIAssembly(arch, string(src), defines, goarch)
 	if err != nil {
 		if err.Error() == "no TEXT directive found" {
 			proof, err := proveEmptyAssembly(pkg, t, goos+"/"+goarch, defines, ccfg)

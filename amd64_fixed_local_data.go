@@ -25,6 +25,14 @@ func fixedLocalDataSymbol(symbol string) (string, bool) {
 	return "·" + name, true
 }
 
+// Library callers preserve the private <> spelling; the ordinary CLIs render
+// it as $local. Both describe the same source-local LLVM namespace, not the
+// original Go object's name/ABI. Never accept an arbitrary caller renaming.
+func fixedLocalDataEmissionMatches(symbol, packagePath, emitted string) bool {
+	canonical := numericalNativeName(symbol, packagePath)
+	return emitted == canonical || emitted == strings.TrimSuffix(canonical, "<>")+"$local"
+}
+
 // Called under the original source lock after its whole parsed file has been
 // matched. Private literal definitions cannot be replaced by a Go variable,
 // linker winner, mutable global, address initializer or caller-supplied extent.
@@ -41,17 +49,31 @@ func (source *GoAMD64FrameSource) fixedLocalData(file *File, expanded string, re
 	}
 	data := make(map[string]x86FixedLocalData)
 	symbols := make(map[string]string)
+	// BindFixedLocal has already frozen the resolver outside the source lock.
+	// Keep every emitted definition injective, including the complete TEXT set.
+	used := make(map[string]bool, len(file.Funcs)+len(file.Globl))
+	for _, fn := range file.Funcs {
+		name := resolve(fn.Sym)
+		if name == "" || used[name] {
+			return nil, nil, goAMD64FrameContext("fixed local emitted function identities are empty or collapsed")
+		}
+		used[name] = true
+	}
 	var total int64
 	for index, global := range file.Globl {
 		layout := observed.Layouts[index]
 		definition := layout.Definition
 		name, private := fixedLocalDataSymbol(global.Sym)
-		expected := source.selection.ImportPath + "." + strings.TrimPrefix(name, "·")
+		emitted := resolve(name)
 		if _, duplicate := symbols[name]; duplicate {
 			return nil, nil, goAMD64FrameContext("fixed local DATA definitions collapse to the same translated identity")
 		}
+		if !private || !fixedLocalDataEmissionMatches(name, source.selection.ImportPath, emitted) || used[emitted] {
+			return nil, nil, goAMD64FrameContext("fixed local DATA resolver changed or collapsed its private emitted identity")
+		}
+		used[emitted] = true
 		total += int64(definition.Size)
-		if !private || resolve(name) != expected || !layout.Static || layout.ABI != 65535 ||
+		if !layout.Static || layout.ABI != 65535 ||
 			layout.Flags != 8 && layout.Flags != 24 || definition.Kind != 3 && definition.Kind != 4 || definition.Flags != 0 ||
 			definition.Flags2 != 0 || len(definition.Relocations) != 0 || global.SizeRaw != "" ||
 			definition.Size == 0 || definition.Size > 64<<10 || total > 1<<20 || len(definition.Data) > int(definition.Size) {
@@ -80,7 +102,7 @@ func (source *GoAMD64FrameSource) fixedLocalData(file *File, expanded string, re
 			return nil, nil, goAMD64FrameContext("fixed local translated DATA differs from the original Go initialized extent")
 		}
 		data[global.Sym] = x86FixedLocalData{size, goAssemblyDataAlignment(ArchAMD64, size)}
-		symbols[name] = expected
+		symbols[name] = emitted
 	}
 	return data, symbols, nil
 }

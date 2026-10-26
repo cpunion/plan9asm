@@ -31,6 +31,18 @@ func fixedLocalDataFixture(t *testing.T, operation, data string) (GoPackage, GoA
 	return pkg, request, file, options, assembly
 }
 
+func fixedLocalDataCLIOptions(options Options) Options {
+	resolve := options.ResolveSym
+	options.ResolveSym = func(symbol string) string {
+		name := resolve(symbol)
+		if strings.HasSuffix(symbol, "<>") {
+			return strings.TrimSuffix(name, "<>") + "$local"
+		}
+		return name
+	}
+	return options
+}
+
 func TestGoAMD64FixedLocalReadonlyDataThreeTargetObjects(t *testing.T) {
 	goAMD64FramePrepareOwnedToolCache(t)
 	llc := findLLVM22Tool("llc")
@@ -43,17 +55,24 @@ func TestGoAMD64FixedLocalReadonlyDataThreeTargetObjects(t *testing.T) {
 		{"windows/amd64", "x86_64-pc-windows-msvc"},
 	} {
 		t.Run(target.name, func(t *testing.T) {
-			pkg, request, _, options, assembly := fixedLocalDataFixture(t,
-				"MOVOU literal<>(SB),X0\nPADDQ 16(SP),X0", fixedLocalLiteralData)
-			request.Target, options.TargetTriple = target.name, target.triple
-			x86LEAActualTargetGoObject(t, "amd64", target.triple, assembly)
-			fixedLocalFreshAPIs(t, pkg, request, options, []string{"Translate", "Module", "GoModule"}, func(t *testing.T, ir string, err error) {
-				if err != nil || !strings.Contains(ir, "internal constant [32 x i8]") || !strings.Contains(ir, "fixed_local_native") {
-					t.Fatal("missing joined private DATA/frame translation", err)
-				}
-				compileLLVMToObject(t, llc, target.triple, "data-frame.ll", "data-frame.o", ir)
-				compileLLVMToObject(t, llc, target.triple, "data-frame-opt.ll", "data-frame-opt.o", x86MulDivRoundOptimize(t, ir))
-			})
+			for _, spelling := range []string{"source", "CLI"} {
+				t.Run(spelling, func(t *testing.T) {
+					pkg, request, _, options, assembly := fixedLocalDataFixture(t,
+						"MOVOU literal<>(SB),X0\nPADDQ 16(SP),X0", fixedLocalLiteralData)
+					request.Target, options.TargetTriple = target.name, target.triple
+					if spelling == "CLI" {
+						options = fixedLocalDataCLIOptions(options)
+					}
+					x86LEAActualTargetGoObject(t, "amd64", target.triple, assembly)
+					fixedLocalFreshAPIs(t, pkg, request, options, []string{"Translate", "Module", "GoModule"}, func(t *testing.T, ir string, err error) {
+						if err != nil || !strings.Contains(ir, "internal constant [32 x i8]") || !strings.Contains(ir, "fixed_local_native") {
+							t.Fatal("missing joined private DATA/frame translation", err)
+						}
+						compileLLVMToObject(t, llc, target.triple, "data-frame.ll", "data-frame.o", ir)
+						compileLLVMToObject(t, llc, target.triple, "data-frame-opt.ll", "data-frame-opt.o", x86MulDivRoundOptimize(t, ir))
+					})
+				})
+			}
 		})
 	}
 }

@@ -263,6 +263,52 @@ func TestCompileOneAMD64FixedLocalOriginalSource(t *testing.T) {
 	}
 }
 
+func TestParseCompleteCLIAssemblyKeepsSourceRoles(t *testing.T) {
+	const body = "MOVQ   a+0(FP), AX\nMOVOU   0(SP), X0\nlabel:\nMOVQ X0, AX\nRET\n"
+	const data = "DATA literal<>+0(SB)/8, $7\nGLOBL literal<>(SB), 8, $8\n"
+	defines := plan9asm.GoAssemblerDefines("linux", "amd64")
+	for _, frame := range []string{"0", "32"} {
+		source := "TEXT ·Value(SB), 4, $" + frame + "-8\n" + body + data
+		legacy, err := plan9asm.ParseWithDefines(plan9asm.ArchAMD64, source, defines)
+		if err != nil {
+			t.Fatal(err)
+		}
+		actual, err := parseCompleteCLIAssembly(plan9asm.ArchAMD64, source, defines, "amd64")
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := legacy
+		if frame == "32" {
+			expanded, err := plan9asm.PreprocessAssemblySource(source, plan9asm.AssemblyPreprocessOptions{Defines: defines})
+			if err != nil {
+				t.Fatal(err)
+			}
+			want, err = plan9asm.Parse(plan9asm.ArchAMD64, expanded)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if want.Funcs[0].Instrs[1].Raw == legacy.Funcs[0].Instrs[1].Raw {
+				t.Fatal("fixture did not distinguish historical and canonical CPP spelling")
+			}
+		}
+		gotJSON, err := json.Marshal(actual)
+		if err != nil {
+			t.Fatal(err)
+		}
+		wantJSON, err := json.Marshal(want)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(gotJSON) != string(wantJSON) || len(actual.Funcs[0].Instrs) != 6 || len(actual.Data) != 1 || len(actual.Globl) != 1 {
+			t.Fatalf("frame=%s changed its complete source representation", frame)
+		}
+	}
+	missing := "#include \"go_asm.h\"\nTEXT ·Value(SB),4,$32-8\n" + body
+	if file, err := parseCompleteCLIAssembly(plan9asm.ArchAMD64, missing, defines, "amd64"); err == nil || file != nil {
+		t.Fatal("unresolved active include was silently discarded", err)
+	}
+}
+
 func TestCompileOneAMD64FixedLocalDoesNotHijackOrdinaryNativeSources(t *testing.T) {
 	for _, variant := range []string{"static-data", "incoming-native"} {
 		t.Run(variant, func(t *testing.T) {

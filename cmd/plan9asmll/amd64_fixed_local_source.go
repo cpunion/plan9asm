@@ -120,6 +120,22 @@ func (source *amd64FixedLocalCLISource) close() error {
 	return source.observation.Close()
 }
 
+// Fixed-frame owners independently parse the complete canonical Go CPP output.
+// Use that same representation before any signatures or source contracts are
+// built, once per candidate file rather than once per function. This preserves
+// Raw, DATA and labels in the exact fingerprint; it grants no frame permission.
+func parseCompleteCLIAssembly(arch plan9asm.Arch, source string, defines []string, goarch string) (*plan9asm.File, error) {
+	file, err := plan9asm.ParseWithDefines(arch, source, defines)
+	if err != nil || !plan9asm.GoAMD64FixedLocalFrameBindingNeeded(file, goarch) {
+		return file, err
+	}
+	expanded, err := plan9asm.PreprocessAssemblySource(source, plan9asm.AssemblyPreprocessOptions{Defines: defines})
+	if err != nil {
+		return nil, fmt.Errorf("fixed-local complete source CPP: %w", err)
+	}
+	return plan9asm.Parse(arch, expanded)
+}
+
 // This complete-file seam precedes splitting. The source-role query supplies
 // no permission; the existing independently captured object and numeric-only
 // binder must close the full source, source/normalized CFG and every access.
