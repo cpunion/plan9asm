@@ -3,6 +3,7 @@ package plan9asm
 import (
 	"errors"
 	"go/ast"
+	"go/constant"
 	"go/parser"
 	"go/token"
 	"go/types"
@@ -106,6 +107,82 @@ TEXT ·asmcall(SB),NOSPLIT,$0-0
 	}
 	if _, err := ParseWithDefines(ArchAMD64, string(expanded), GoAssemblerDefines("linux", "amd64")); err != nil {
 		t.Fatalf("ParseWithDefines(expanded) error = %v\n%s", err, expanded)
+	}
+}
+
+func TestExpandGoAssemblySourcePreservesDirectiveOperands(t *testing.T) {
+	pkg := mustGoPackage(t, "example/directives", `package directives
+const Count = 16
+const Free = 7
+type frame struct { value uintptr }
+`)
+	for _, row := range []struct{ source, want string }{
+		{"#ifdef const_Count\n", "#ifdef const_Count\n"},
+		{"/* lead */ #ifdef const_Count\n", "/* lead */ #ifdef const_Count\n"},
+		{"/* lead\n*/ #ifdef const_Count\n", "/* lead\n*/ #ifdef const_Count\n"},
+		{"#ifndef frame__size\n", "#ifndef frame__size\n"},
+		{"#undef const_Count\n", "#undef const_Count\n"},
+		{"#include \"const_Count/frame__size.h\"\n", "#include \"const_Count/frame__size.h\"\n"},
+		{"#line 17 \"const_Count.s\"\n", "#line 17 \"const_Count.s\"\n"},
+		{"#else\n#endif\n", "#else\n#endif\n"},
+		// These controls are not supported by Go's assembler. Leave their
+		// syntax intact for the preprocessor to reject, including defined().
+		{"#if defined(const_Count)\n", "#if defined(const_Count)\n"},
+		{"#if const_Count\n", "#if const_Count\n"},
+		{"#elif frame__size\n", "#elif frame__size\n"},
+		{"#define const_Count const_Free\n", "#define const_Count 7\n"},
+		{" \t# define frame__size const_Free\n", " \t# define frame__size 7\n"},
+		{"# /* keyword */ define const_Count const_Free\n", "# /* keyword */ define const_Count 7\n"},
+		{"#define /* name */ VALUE const_Free\n", "#define /* name */ VALUE 7\n"},
+		{"#define /* name\n*/ const_Count const_Free\n", "#define /* name\n*/ const_Count 7\n"},
+		{"#define F(const_Count/* ) */,frame__size) MOVQ $const_Count,AX; MOVQ $frame__size,BX\n",
+			"#define F(const_Count/* ) */,frame__size) MOVQ $const_Count,AX; MOVQ $frame__size,BX\n"},
+		{"#define F(const_Count /* )\n*/,frame__size) MOVQ $const_Count,AX; MOVQ $frame__size,BX\n",
+			"#define F(const_Count /* )\n*/,frame__size) MOVQ $const_Count,AX; MOVQ $frame__size,BX\n"},
+		{"#define F(const_Count) MOVQ $const_Count,AX /* body\n*/; MOVQ $const_Count,BX; MOVQ $const_Free,CX\n",
+			"#define F(const_Count) MOVQ $const_Count,AX /* body\n*/; MOVQ $const_Count,BX; MOVQ $7,CX\n"},
+		{"#define F(const_Count,frame__size) MOVQ $const_Count,AX; MOVQ $frame__size,BX; MOVQ $const_Free,CX\n",
+			"#define F(const_Count,frame__size) MOVQ $const_Count,AX; MOVQ $frame__size,BX; MOVQ $7,CX\n"},
+		{"#define F(const_Count) MOVQ $const_Count,AX; \\\nMOVQ $const_Count,BX; MOVQ $const_Free,CX\n",
+			"#define F(const_Count) MOVQ $const_Count,AX; \\\nMOVQ $const_Count,BX; MOVQ $7,CX\n"},
+		{"#define F(const_Count) MOVQ $const_Count,AX; \\ \t\nMOVQ $const_Count,BX; MOVQ $const_Free,CX\n",
+			"#define F(const_Count) MOVQ $const_Count,AX; \\ \t\nMOVQ $const_Count,BX; MOVQ $7,CX\n"},
+		{"#define F(const_Count) MOVQ $const_Count,AX; \\ // continued\nMOVQ $const_Count,BX\n",
+			"#define F(const_Count) MOVQ $const_Count,AX; \\ // continued\nMOVQ $const_Count,BX\n"},
+		{"#define F(const_Count) \\ /* pair */ \\\nMOVQ $const_Count,BX\n",
+			"#define F(const_Count) \\ /* pair */ \\\nMOVQ $16,BX\n"},
+		{"MOVQ $const_Count,AX; MOVQ $frame__size,BX\n", "MOVQ $16,AX; MOVQ $8,BX\n"},
+		{"MOVQ $const_Count,AX // # is not a directive\n", "MOVQ $16,AX // # is not a directive\n"},
+	} {
+		t.Run(strings.TrimSpace(row.source), func(t *testing.T) {
+			// Keep the existing generated-type expansion path active.
+			prefix := "// #include \"go_asm.h\"\n"
+			got := ExpandGoAssemblySource(pkg, []byte(prefix+row.source), "amd64")
+			if string(got) != prefix+row.want {
+				t.Fatalf("expanded %q, want %q", got, prefix+row.want)
+			}
+		})
+	}
+}
+
+func BenchmarkExpandGoAssemblySource(b *testing.B) {
+	typed := types.NewPackage("example/expand", "expand")
+	typed.Scope().Insert(types.NewConst(token.NoPos, typed, "Value", types.Typ[types.UntypedInt], constant.MakeInt64(7)))
+	pkg := GoPackage{Path: typed.Path(), Types: typed}
+	for _, row := range []struct{ name, source string }{
+		{"plain", strings.Repeat("MOVQ $const_Value,AX\n", 256)},
+		{"directives", "#define LOAD(const_Value) MOVQ $const_Value,AX\n" + strings.Repeat("LOAD(const_Value)\n", 256)},
+	} {
+		b.Run(row.name, func(b *testing.B) {
+			source := []byte(row.source)
+			b.SetBytes(int64(len(source)))
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				if len(ExpandGoAssemblySource(pkg, source, "amd64")) == 0 {
+					b.Fatal("generated assembly disappeared")
+				}
+			}
+		})
 	}
 }
 

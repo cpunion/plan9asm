@@ -9,6 +9,8 @@ import (
 	"go/types"
 	"os"
 	"path/filepath"
+	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -278,7 +280,7 @@ func TestParseCompleteCLIAssemblyKeepsSourceRoles(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		actual, err := parseCompleteCLIAssembly(plan9asm.ArchAMD64, source, defines, "amd64")
+		actual, err := parseCompleteCLIAssembly(plan9asm.ArchAMD64, source, defines, "amd64", nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -309,8 +311,71 @@ func TestParseCompleteCLIAssemblyKeepsSourceRoles(t *testing.T) {
 		}
 	}
 	missing := "#include \"go_asm.h\"\nTEXT ·Value(SB),4,$32-8\n" + body
-	if file, err := parseCompleteCLIAssembly(plan9asm.ArchAMD64, missing, defines, "amd64"); err == nil || file != nil {
+	if file, err := parseCompleteCLIAssembly(plan9asm.ArchAMD64, missing, defines, "amd64", nil); err == nil || file != nil {
 		t.Fatal("unresolved active include was silently discarded", err)
+	}
+}
+
+func TestParseCompleteCLIAssemblySelectedGeneratedHeader(t *testing.T) {
+	const source = `#include "textflag.h"
+#include "go_asm.h"
+TEXT ·Value(SB),NOSPLIT,$32-16
+MOVQ a+0(FP),AX
+MOVQ AX,0(SP)
+#ifdef const_Offset
+MOVQ $const_Offset,CX
+#else
+MOVQ $0,CX
+#endif
+#ifdef Layout__size
+MOVQ $Layout__size,BX
+MOVQ $Layout_Value,DX
+#else
+MOVQ $0,BX
+MOVQ $0,DX
+#endif
+#ifdef const_Fraction
+MOVQ $1,BX
+#endif
+MOVQ AX,ret+8(FP)
+RET
+`
+	declaration := "package fixedlocal\nconst Offset = 16\nconst Fraction = 0.5\n" +
+		"type Layout struct { First uint8; Value uint64 }\nfunc Value(a uint64) uint64\n"
+	// Go's initial -gensymabis pass uses an empty bootstrap header. Keep its
+	// fallback legal; the final complete CPP must select the nonzero values.
+	pkg, input, _ := amd64FixedLocalCLISourceFixture(t, source, declaration)
+	read, err := readAsmSource(input, pkg.Dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	selected := plan9asm.GoPackage{Path: pkg.PkgPath, Types: pkg.Types}
+	expanded := plan9asm.ExpandGoAssemblySource(selected, read, "amd64")
+	defines := plan9asm.GoAssemblerDefines("linux", "amd64")
+	actual, err := parseCompleteCLIAssembly(plan9asm.ArchAMD64, string(expanded), defines, "amd64", &selected)
+	if err != nil {
+		t.Fatal("actual original Go export succeeded but complete CPP failed", err)
+	}
+	wantSource := "TEXT ·Value(SB),4,$32-16\nMOVQ a+0(FP),AX\nMOVQ AX,0(SP)\n" +
+		"MOVQ $16,CX\nMOVQ $16,BX\nMOVQ $8,DX\nMOVQ AX,ret+8(FP)\nRET\n"
+	wantCPP, err := plan9asm.PreprocessAssemblySource(wantSource, plan9asm.AssemblyPreprocessOptions{Defines: defines})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, err := plan9asm.Parse(plan9asm.ArchAMD64, wantCPP)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(actual, want) {
+		t.Fatalf("constant presence, struct size or field offset changed: %+v\nwant %+v", actual, want)
+	}
+	for _, name := range []string{"./go_asm.h", "../go_asm.h", "missing.h"} {
+		t.Run(name, func(t *testing.T) {
+			changed := strings.Replace(string(expanded), "\"go_asm.h\"", strconv.Quote(name), 1)
+			if file, err := parseCompleteCLIAssembly(plan9asm.ArchAMD64, changed, defines, "amd64", &selected); err == nil || file != nil {
+				t.Fatal("generated-header resolver acquired another include identity", err)
+			}
+		})
 	}
 }
 

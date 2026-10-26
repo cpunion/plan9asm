@@ -57,7 +57,31 @@ func TestReflectDynamicStubNativeObjectsRetainContext(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			listing := reflectDynamicStubGoObject(t, pkg.Types, sourcePath, goarch)
+			listing, actualHeader := reflectDynamicStubGoObject(t, pkg.Types, sourcePath, goarch)
+			if goarch == "amd64" {
+				selected := plan9asm.GoPackage{Path: pkg.PkgPath, Types: pkg.Types, Imports: imports}
+				canonical, err := parseCompleteCLIAssembly(arch, string(source),
+					plan9asm.GoAssemblerDefines("linux", goarch), goarch, &selected)
+				if err != nil {
+					t.Fatal("selected generated header did not reach complete CPP", err)
+				}
+				expanded, err := plan9asm.PreprocessAssemblySource(string(source), plan9asm.AssemblyPreprocessOptions{
+					Defines: plan9asm.GoAssemblerDefines("linux", goarch),
+					ReadInclude: func(_ string, name string) (string, []byte, error) {
+						if name != "go_asm.h" {
+							return "", nil, fmt.Errorf("unexpected remaining SDK include %q", name)
+						}
+						return "actual/go_asm.h", actualHeader, nil
+					},
+				})
+				if err != nil {
+					t.Fatal(err)
+				}
+				original, err := plan9asm.Parse(arch, expanded)
+				if err != nil || !reflect.DeepEqual(canonical, original) {
+					t.Fatal("selected CPP differs from the real compiler-generated header", err)
+				}
+			}
 			unknown := pkg.Imports["internal/abi"].Types.Scope().Lookup("ArgsSizeUnknown").(*types.Const)
 			unknownSize, ok := constant.Int64Val(unknown.Val())
 			if !ok {
@@ -115,8 +139,10 @@ func TestReflectDynamicStubNativeObjectsRetainContext(t *testing.T) {
 				!strings.Contains(err.Error(), "TEXT argument size is unspecified") {
 				t.Fatalf("actual-source failure lost its dynamic-entry diagnostic: %v", err)
 			}
-			if _, err := os.Stat(out); !os.IsNotExist(err) {
-				t.Fatalf("failed whole-source translation published an IR artifact: %v", err)
+			for _, artifact := range []string{out, strings.TrimSuffix(out, ".ll") + ".o"} {
+				if _, err := os.Stat(artifact); !os.IsNotExist(err) {
+					t.Fatalf("failed whole-source translation published an artifact: %v", err)
+				}
 			}
 			repoRoot, err := filepath.Abs("../..")
 			if err != nil {
@@ -137,7 +163,7 @@ func TestReflectDynamicStubNativeObjectsRetainContext(t *testing.T) {
 	}
 }
 
-func reflectDynamicStubGoObject(t *testing.T, pkg *types.Package, source, goarch string) string {
+func reflectDynamicStubGoObject(t *testing.T, pkg *types.Package, source, goarch string) (string, []byte) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
@@ -242,7 +268,7 @@ func reflectDynamicStubGoObject(t *testing.T, pkg *types.Package, source, goarch
 	}
 	t.Logf("actual Go linux/%s object=%d bytes; original source sha256=%s; real generated header sha256=%s\n%s\n%s",
 		goarch, info.Size(), mustReflectContractFileSHA(t, source), featureBytesSHA256(actualHeader), nativeABIs, listing)
-	return string(listing)
+	return string(listing), actualHeader
 }
 
 func reflectDynamicStubCheckArgsSize(t *testing.T, listing, symbol string, unknown int64) {

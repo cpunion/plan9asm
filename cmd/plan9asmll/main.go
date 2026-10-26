@@ -755,16 +755,17 @@ func compileOneAttempt(pkg *packages.Package, arch plan9asm.Arch, goos, goarch, 
 			imports[path] = imported.Types
 		}
 	}
-	src = plan9asm.ExpandGoAssemblySource(plan9asm.GoPackage{
+	goPackage := plan9asm.GoPackage{
 		Path:    pkg.PkgPath,
 		Types:   pkg.Types,
 		Imports: imports,
-	}, src, goarch)
+	}
+	src = plan9asm.ExpandGoAssemblySource(goPackage, src, goarch)
 	if cppProof != nil {
 		cppProof.TypedExpandedSHA256 = featureBytesSHA256(src)
 		ccfg.Feature.Proof.CPP = append(ccfg.Feature.Proof.CPP, *cppProof)
 	}
-	file, err := parseCompleteCLIAssembly(arch, string(src), defines, goarch)
+	file, err := parseCompleteCLIAssembly(arch, string(src), defines, goarch, &goPackage)
 	if err != nil {
 		if err.Error() == "no TEXT directive found" {
 			proof, err := proveEmptyAssembly(pkg, t, goos+"/"+goarch, defines, ccfg)
@@ -904,6 +905,12 @@ func compileOneAttempt(pkg *packages.Package, arch plan9asm.Arch, goos, goarch, 
 			}
 			compileErr = errors.Join(compileErr, continuationSource.verify(ctx, defines, ccfg.Feature))
 		}()
+	}
+	if ccfg.ordinaryDeclarations == nil && ccfg.numericalOptions == nil {
+		options := compileTranslationOptions(triple, goarch, annotate, ccfg, resolve, sigs)
+		if err := rejectUnboundCallerFrame(file, options, declaredArgSizes); err != nil {
+			return err
+		}
 	}
 	sigs, fixedLocalSource, err := prepareAMD64FixedLocalSource(pkg, file, t.AsmFile, goos+"/"+goarch,
 		triple, goarch, ccfg, resolve, sigs)

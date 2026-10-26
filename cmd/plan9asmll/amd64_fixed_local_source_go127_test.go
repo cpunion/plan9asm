@@ -46,7 +46,7 @@ GLOBL literal<>(SB), RODATA, $8`
 	if err != nil {
 		t.Fatal(err)
 	}
-	file, err := parseCompleteCLIAssembly(plan9asm.ArchAMD64, string(read), plan9asm.GoAssemblerDefines("linux", "amd64"), "amd64")
+	file, err := parseCompleteCLIAssembly(plan9asm.ArchAMD64, string(read), plan9asm.GoAssemblerDefines("linux", "amd64"), "amd64", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,7 +67,7 @@ GLOBL literal<>(SB), RODATA, $8`
 	}()
 	for _, mutation := range []string{"instruction deleted", "instruction changed", "DATA deleted"} {
 		t.Run(mutation, func(t *testing.T) {
-			changed, err := parseCompleteCLIAssembly(plan9asm.ArchAMD64, string(read), plan9asm.GoAssemblerDefines("linux", "amd64"), "amd64")
+			changed, err := parseCompleteCLIAssembly(plan9asm.ArchAMD64, string(read), plan9asm.GoAssemblerDefines("linux", "amd64"), "amd64", nil)
 			if err != nil {
 				t.Fatal(err)
 			}

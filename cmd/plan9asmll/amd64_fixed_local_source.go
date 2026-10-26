@@ -124,12 +124,27 @@ func (source *amd64FixedLocalCLISource) close() error {
 // Use that same representation before any signatures or source contracts are
 // built, once per candidate file rather than once per function. This preserves
 // Raw, DATA and labels in the exact fingerprint; it grants no frame permission.
-func parseCompleteCLIAssembly(arch plan9asm.Arch, source string, defines []string, goarch string) (*plan9asm.File, error) {
+func parseCompleteCLIAssembly(arch plan9asm.Arch, source string, defines []string, goarch string,
+	pkg *plan9asm.GoPackage,
+) (*plan9asm.File, error) {
 	file, err := plan9asm.ParseWithDefines(arch, source, defines)
 	if err != nil || !plan9asm.GoAMD64FixedLocalFrameBindingNeeded(file, goarch) {
 		return file, err
 	}
-	expanded, err := plan9asm.PreprocessAssemblySource(source, plan9asm.AssemblyPreprocessOptions{Defines: defines})
+	options := plan9asm.AssemblyPreprocessOptions{Defines: defines}
+	if pkg != nil {
+		// This supplies syntax from the same selected declarations already used
+		// by ExpandGoAssemblySource. It does not qualify generated CPP for a
+		// frame owner: that owner still verifies its actual source and object.
+		options.ReadInclude = func(_ string, name string) (string, []byte, error) {
+			if name != "go_asm.h" {
+				return "", nil, fmt.Errorf("unresolved active assembly include %q", name)
+			}
+			header, err := plan9asm.GoAssemblyHeader(*pkg, goarch)
+			return "generated/" + pkg.Path + "/go_asm.h", header, err
+		}
+	}
+	expanded, err := plan9asm.PreprocessAssemblySource(source, options)
 	if err != nil {
 		return nil, fmt.Errorf("fixed-local complete source CPP: %w", err)
 	}

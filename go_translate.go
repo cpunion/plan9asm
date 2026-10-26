@@ -12,6 +12,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"text/scanner"
 
 	"github.com/xgo-dev/llvm"
 )
@@ -1305,60 +1306,79 @@ func goTypeHasUnboundTypeParams(typ types.Type) bool {
 	return ok && generic.TypeParams().Len() != 0 && generic.TypeArgs().Len() == 0
 }
 
-// goExpandAssemblyMacroUses applies a generated-header expansion everywhere
-// except the name and formal-parameter list of a #define directive. Package
-// assembly may include a real generated header (for example ffi.h) alongside
-// Go's virtual go_asm.h. Rewriting the definition name would turn a valid
-// directive such as "#define const_type64 0" into "#define 0 0" before the
-// ordinary preprocessor has a chance to consume it.
+// Keep CPP control operands and macro parameters as identifiers. Only free
+// replacement-list references and ordinary assembly use generated values.
+// The preprocessor still owns directive validity and conditional evaluation.
 func goExpandAssemblyMacroUses(src []byte, expand func([]byte) []byte) []byte {
-	var out bytes.Buffer
-	for _, line := range bytes.SplitAfter(src, []byte{'\n'}) {
-		protected := goAssemblyDefinePrefixLen(line)
-		out.Write(line[:protected])
-		out.Write(expand(line[protected:]))
+	lastControl := bytes.LastIndexByte(src, '#')
+	if lastControl < 0 {
+		return expand(src)
 	}
-	return out.Bytes()
-}
-
-func goAssemblyDefinePrefixLen(line []byte) int {
-	i := 0
-	for i < len(line) && (line[i] == ' ' || line[i] == '\t') {
-		i++
-	}
-	const directive = "#define"
-	if !bytes.HasPrefix(line[i:], []byte(directive)) {
-		return 0
-	}
-	i += len(directive)
-	if i >= len(line) || line[i] != ' ' && line[i] != '\t' {
-		return 0
-	}
-	for i < len(line) && (line[i] == ' ' || line[i] == '\t') {
-		i++
-	}
-	if i >= len(line) || !isIdentStart(line[i]) {
-		return 0
-	}
-	for i < len(line) && isIdentPart(line[i]) {
-		i++
-	}
-	if i >= len(line) || line[i] != '(' {
-		return i
-	}
-	depth := 0
-	for ; i < len(line); i++ {
-		switch line[i] {
-		case '(':
-			depth++
-		case ')':
-			depth--
-			if depth == 0 {
-				return i + 1
+	reader := newPPGoReader("<generated-header-expansion>", string(src))
+	var tokens []AssemblyCPPToken
+	readLine := func() error {
+		for {
+			physical, err := reader.next()
+			if err != nil {
+				return err
+			}
+			tokens = append(tokens, assemblyCPPPhysicalToken(reader, physical))
+			if physical.kind == '\n' || physical.kind == scanner.EOF {
+				return nil
 			}
 		}
 	}
-	return len(line)
+	var out bytes.Buffer
+	start := 0
+	finish := func() []byte {
+		out.Write(expand(src[start:]))
+		return out.Bytes()
+	}
+	for {
+		tokens = tokens[:0]
+		if err := readLine(); err != nil {
+			return finish()
+		}
+		directive := len(tokens) > 1 && tokens[0].Text == "#"
+		definition := directive && tokens[1].Kind == "identifier" && tokens[1].Text == "define"
+		for definition && assemblyCPPContinuedLine(tokens) {
+			if err := readLine(); err != nil {
+				return finish()
+			}
+		}
+		last := tokens[len(tokens)-1]
+		if directive {
+			out.Write(expand(src[start:tokens[0].Start]))
+			protected := last.End
+			var macro *AssemblyCPPMacroDefinition
+			if definition {
+				macro, _ = assemblyCPPPhysicalDefinition(tokens)
+				if macro != nil && len(macro.Replacement) != 0 {
+					protected = macro.Replacement[0].Start
+				}
+			}
+			out.Write(src[tokens[0].Start:protected])
+			start = protected
+			if macro != nil && len(macro.Parameters) != 0 {
+				parameters := make(map[string]bool, len(macro.Parameters))
+				for _, name := range macro.Parameters {
+					parameters[name] = true
+				}
+				for _, token := range macro.Replacement {
+					if token.Kind == "identifier" && parameters[token.Text] {
+						out.Write(expand(src[start:token.Start]))
+						out.Write(src[token.Start:token.End])
+						start = token.End
+					}
+				}
+			}
+			out.Write(expand(src[start:last.End]))
+			start = last.End
+		}
+		if last.Kind == "eof" || last.End > lastControl {
+			return finish()
+		}
+	}
 }
 
 func goLLVMTypeForType(t types.Type, goarch string) (LLVMType, error) {
