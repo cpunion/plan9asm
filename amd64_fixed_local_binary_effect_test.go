@@ -207,12 +207,17 @@ func TestGoAMD64FixedLocalTypedBinaryObjects(t *testing.T) {
 // differential test. Observe both result halves and a separate input canary.
 func fixedLocalBinaryRuntimeProgram(t *testing.T, triple string) (string, string, string, string) {
 	t.Helper()
+	return fixedLocalBinaryRuntimeProgramForNames(t, triple, fixedLocalBinaryEffectNames())
+}
+
+func fixedLocalBinaryRuntimeProgramForNames(t *testing.T, triple string, names []string) (string, string, string, string) {
+	t.Helper()
 	var assembly, declarations, goRows, cRows, cDeclarations strings.Builder
 	prefix := ""
 	if strings.Contains(triple, "apple") {
 		prefix = "_"
 	}
-	for index, name := range fixedLocalBinaryEffectNames() {
+	for index, name := range names {
 		source, _, _ := x86PrivateAlignedFrameAuditFixture(t, name+" 16(SP),X0")
 		source = strings.Replace(source, "$160-40", "$160-48", 1)
 		source = strings.Replace(source, "MOVQ SP,R11", "MOVQ mode+32(FP),R8\nMOVQ SP,R11", 1)

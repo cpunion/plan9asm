@@ -37,6 +37,9 @@ type x86PackedBinaryEffectForm struct {
 // Keep the existing family parsers as the only opcode/form authority. This
 // grouping adds no VEX, mask, broadcast, initialized input or memory backing.
 func x86PackedBinaryByteEffect(op Op, ins Instr, arch string) (x86TypedByteEffect, bool, error) {
+	if effect, known, err := x86TypedLegacyLogicalByteEffect(op, ins, arch); known {
+		return effect, true, err
+	}
 	form, known, err := x86PackedBinaryEffectProperties(op, ins, arch)
 	if !known || err != nil || !form.legacy {
 		return x86TypedByteEffect{}, known && (err != nil || form.legacy), err

@@ -9,12 +9,24 @@ import (
 )
 
 func TestCrossLinuxRuntimeMatrixGoAMD64FixedLocalTypedBinary(t *testing.T) {
+	fixedLocalBinaryRuntime(t, fixedLocalBinaryEffectNames(), 28)
+}
+
+func TestCrossLinuxRuntimeMatrixGoAMD64FixedLocalTypedLogical(t *testing.T) {
+	fixedLocalBinaryRuntime(t, x86LegacyLogicalMemoryNames, 12)
+}
+
+func fixedLocalBinaryRuntime(t *testing.T, names []string, count int) {
+	t.Helper()
+	if len(names) != count {
+		t.Fatalf("independent runtime kernel inventory: %d, want %d", len(names), count)
+	}
 	execution := x86FloatCompareRuntimeTools(t, x86FloatCompareSSE)
 	t.Setenv("GOCACHE", t.TempDir())
-	assembly, declarations, original, driver := fixedLocalBinaryRuntimeProgram(t, execution.triple)
+	assembly, declarations, original, driver := fixedLocalBinaryRuntimeProgramForNames(t, execution.triple, names)
 	want := strings.Split(strings.TrimSpace(string(x86ScalarFloatIntegerOriginalOutput(t, execution, assembly, original))), "\n")
-	if len(want) != 28*10*3 {
-		t.Fatalf("original Go produced %d rows, want 28 kernels x 10 values x 3 observations", len(want))
+	if len(want) != count*10*3 {
+		t.Fatalf("original Go produced %d rows, want %d kernels x 10 values x 3 observations", len(want), count)
 	}
 	pkg, request, _, options := fixedLocalTransportFixture(t,
 		assembly, declarations, runtime.GOOS+"/amd64", execution.triple)

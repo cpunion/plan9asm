@@ -84,6 +84,28 @@ func x86PackedLogicalDefinedBytes(ins Instr, form x86PackedLogicalForm, first, s
 	return known
 }
 
+// Reuse the complete logical grammar and its numerical zero identity. A
+// legacy XMM operation preserves upper aliases and requires aligned m128;
+// neither the descriptor nor a same-register zero grants memory authority.
+func x86TypedLegacyLogicalByteEffect(op Op, ins Instr, arch string) (x86TypedByteEffect, bool, error) {
+	local := ins
+	local.Op = op
+	form, known, err := x86PackedLogicalProperties(local, arch)
+	if known && ins.Op != "" && !strings.EqualFold(string(ins.Op), string(op)) {
+		return x86TypedByteEffect{}, true, fmt.Errorf("packed logical dispatch/source opcode mismatch: %s/%s", op, ins.Op)
+	}
+	if !known || err != nil || !form.legacy || form.mmx {
+		return x86TypedByteEffect{}, known && (err != nil || form.legacy && !form.mmx), err
+	}
+	effect := x86PackedBinaryDependencyEffect(ins, form.x86PackedBinaryForm, form.source)
+	if x86PackedLogicalDefinedBytes(ins, form, 0, 0, 0) != 0 {
+		for index := range effect.operands {
+			effect.operands[index].read = false
+		}
+	}
+	return effect, true, nil
+}
+
 // These fields describe only an operand grammar. Arithmetic, interleave and
 // bitwise effects remain in their own typed operation specs and consumers.
 type x86PackedBinarySpec struct {
