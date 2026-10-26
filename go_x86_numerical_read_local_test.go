@@ -303,13 +303,20 @@ func numericalLocalFactoryWithContext(t *testing.T, wrap func(context.Context) c
 }
 
 func TestGoX86NumericalSBReadFrameProducerExactObjectJoin(t *testing.T) {
-	ctx, pkg, request, _, bound, numerical, _ := numericalLocalFactory(t)
+	ctx, pkg, request, file, bound, numerical, _ := numericalLocalFactory(t)
 	unbound, err := CaptureGoAMD64FrameSource(ctx, pkg, request)
-	if unbound != nil {
-		unbound.Close()
+	if err != nil || unbound == nil {
+		t.Fatal("complete original relocation observation was rejected", err)
 	}
-	if unbound != nil || !errors.Is(err, ErrProbeNeedsContext) {
-		t.Fatal("default frame observation acquired numerical relocations", err)
+	defer unbound.Close()
+	// Recording original bytes/relocations does not bind their numerical
+	// consumer. Keep both the missing-owner and foreign-owner boundaries.
+	withoutNumerical := bound
+	withoutNumerical.NumericalReads = nil
+	for _, options := range []Options{withoutNumerical, bound} {
+		if _, err := unbound.BindFixedLocal(ctx, pkg, file, options); !errors.Is(err, ErrProbeNeedsContext) {
+			t.Fatal("default frame observation acquired a numerical read binding", err)
+		}
 	}
 	request.NumericalReads = bound.NumericalReads
 	frame, err := CaptureGoAMD64FrameSource(ctx, pkg, request)

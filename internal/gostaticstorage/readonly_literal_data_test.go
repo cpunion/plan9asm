@@ -188,12 +188,14 @@ func TestReadonlyLiteralDataAggregateZeroTailBudget(t *testing.T) {
 
 func TestReadonlyLiteralDataDefinitionRoleNegatives(t *testing.T) {
 	for name, mutate := range map[string]func(*ASMDataDefinition){
-		"named-link-visible":      func(d *ASMDataDefinition) { d.ABI = 0 },
-		"hashed64":                func(d *ASMDataDefinition) { d.Namespace = TextSymbolHashed64 },
-		"hashed":                  func(d *ASMDataDefinition) { d.Namespace = TextSymbolHashed },
-		"nonpkg-definition":       func(d *ASMDataDefinition) { d.Namespace = TextSymbolNonpkgDefinition },
-		"nonpkg-reference":        func(d *ASMDataDefinition) { d.Namespace = TextSymbolNonpkgReference },
-		"FIPS-not-literal-role":   func(d *ASMDataDefinition) { d.Kind = 4 },
+		"named-link-visible": func(d *ASMDataDefinition) { d.ABI = 0 },
+		"hashed64":           func(d *ASMDataDefinition) { d.Namespace = TextSymbolHashed64 },
+		"hashed":             func(d *ASMDataDefinition) { d.Namespace = TextSymbolHashed },
+		"nonpkg-definition":  func(d *ASMDataDefinition) { d.Namespace = TextSymbolNonpkgDefinition },
+		"nonpkg-reference":   func(d *ASMDataDefinition) { d.Namespace = TextSymbolNonpkgReference },
+		// Kind 4 retains its positive whole-object case above. FIPS tagging
+		// does not turn mutable NOPTR storage into a readonly initializer.
+		"mutable-NOPTR-FIPS":      func(d *ASMDataDefinition) { d.Kind = 6 },
 		"mutable-NOPTR":           func(d *ASMDataDefinition) { d.Kind = 5 },
 		"mutable-DATA":            func(d *ASMDataDefinition) { d.Kind = 7 },
 		"BSS":                     func(d *ASMDataDefinition) { d.Kind = 9 },

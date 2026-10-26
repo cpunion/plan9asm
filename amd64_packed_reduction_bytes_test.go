@@ -158,7 +158,7 @@ func TestX86PackedReductionGoListingKeepsWholeBoundaries(t *testing.T) {
   0x0000 00000 (extension.s:2) VDPPS $255, X0, X1, X2
   0x0006 00006 (extension.s:3) VHADDPD Y0, Y1, Y2
   0x000a 00010 (extension.s:4) RET
-  0x0000 c4 e3 71 40 d0 ff c5 f5 7c d0 c3
+  0x0000 c4 e3 71 40 d0 ff c5 f5 7c d0 c3                 ..q@....|..
 `
 	raw, err := x86PackedReductionRawRowsFromGoListing(listing, rows)
 	if err != nil || len(raw) != 2 {
@@ -168,11 +168,12 @@ func TestX86PackedReductionGoListingKeepsWholeBoundaries(t *testing.T) {
 		"partial VEX boundary": strings.Replace(listing, "0x0006 00006", "0x0002 00002", 1),
 		"source row changed":   strings.Replace(listing, "extension.s:3", "extension.s:5", 1),
 		"opcode changed":       strings.Replace(listing, ") VHADDPD", ") VHSUBPD", 1),
-		"physical opcode":      strings.Replace(listing, "71 40 d0", "71 41 d0", 1),
+		"physical opcode":      strings.Replace(strings.Replace(listing, "71 40 d0", "71 41 d0", 1), "..q@", "..qA", 1),
 		"physical vector L":    strings.Replace(listing, "c5 f5", "c5 f1", 1),
 		"missing RET":          strings.Replace(listing, "  0x000a 00010 (extension.s:4) RET\n", "", 1),
 		"byte gap":             strings.Replace(listing, "0x0000 c4", "0x0001 c4", 1),
-		"trailing bytes":       strings.Replace(listing, "7c d0 c3", "7c d0 c3 90", 1),
+		"trailing bytes":       strings.Replace(listing, "c3                 ..q@....|..", "c3 90              ..q@....|...", 1),
+		"abbreviated bytes":    strings.Replace(listing, "                 ..q@....|..", "", 1),
 	} {
 		t.Run(name, func(t *testing.T) {
 			if _, err := x86PackedReductionRawRowsFromGoListing(changed, rows); err == nil {

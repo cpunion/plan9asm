@@ -138,36 +138,53 @@ func TestGoAMD64FrameSourceConditionalMacrosMatchActualObjects(t *testing.T) {
 
 func TestGoAMD64FrameSourceConditionalMacrosGrantNoNumericEffects(t *testing.T) {
 	goAMD64FramePrepareOwnedToolCache(t)
-	pkg, request := goAMD64FrameSourceFixture(t)
-	name := filepath.Join(request.Directory, request.AssemblyFile)
-	text, err := os.ReadFile(name)
-	if err != nil {
-		t.Fatal(err)
-	}
-	// Macro registration closes only source selection. The fixed-local
-	// consumer still has no complete ordinary numeric ADDQ effect family.
-	body := "#ifdef GOARCH_amd64\n" + strings.Replace(string(text), "MOVQ AX,ret+8(FP)", "ADDQ $7,AX\nMOVQ AX,ret+8(FP)", 1) + "#endif\n"
-	if err := os.WriteFile(name, []byte(body), 0600); err != nil {
-		t.Fatal(err)
-	}
-	source := requireGoAMD64FrameCapture(t, pkg, request)
-	expanded, err := source.preprocess(request.AssemblyFile, []byte(body))
-	if err != nil {
-		t.Fatal(err)
-	}
-	file, err := Parse(ArchAMD64, expanded)
-	if err != nil {
-		t.Fatal(err)
-	}
-	sig := source.functions[pkg.Path+".Value"].signature
-	options := Options{Goarch: "amd64", TargetTriple: "x86_64-unknown-linux-gnu",
-		ResolveSym: func(symbol string) string { return strings.Replace(symbol, "·", pkg.Path+".", 1) },
-		Sigs:       map[string]FuncSig{sig.Name: sig},
-	}
-	ctx, cancel := runtimeOracleStageContext(t)
-	defer cancel()
-	if _, err := source.BindFixedLocal(ctx, pkg, file, options); !errors.Is(err, ErrProbeNeedsContext) || !strings.Contains(err.Error(), "effect: ADDQ") {
-		t.Fatal("conditional macro observation created a numerical frame effect", err)
+	for _, operand := range []string{"$7", "R11"} {
+		t.Run(operand, func(t *testing.T) {
+			pkg, request := goAMD64FrameSourceFixture(t)
+			name := filepath.Join(request.Directory, request.AssemblyFile)
+			text, err := os.ReadFile(name)
+			if err != nil {
+				t.Fatal(err)
+			}
+			// Retain the original ADDQ $7 source as a positive now that its
+			// typed family is implemented. Macro selection still cannot supply
+			// the missing numerical bytes of an uninitialized register.
+			body := "#ifdef GOARCH_amd64\n" + strings.Replace(string(text), "MOVQ AX,ret+8(FP)",
+				"ADDQ "+operand+",AX\nMOVQ AX,ret+8(FP)", 1) + "#endif\n"
+			if err := os.WriteFile(name, []byte(body), 0600); err != nil {
+				t.Fatal(err)
+			}
+			source := requireGoAMD64FrameCapture(t, pkg, request)
+			expanded, err := source.preprocess(request.AssemblyFile, []byte(body))
+			if err != nil {
+				t.Fatal(err)
+			}
+			file, err := Parse(ArchAMD64, expanded)
+			if err != nil {
+				t.Fatal(err)
+			}
+			sig := source.functions[pkg.Path+".Value"].signature
+			options := Options{Goarch: "amd64", TargetTriple: "x86_64-unknown-linux-gnu",
+				ResolveSym: func(symbol string) string { return strings.Replace(symbol, "·", pkg.Path+".", 1) },
+				Sigs:       map[string]FuncSig{sig.Name: sig},
+			}
+			ctx, cancel := runtimeOracleStageContext(t)
+			defer cancel()
+			bound, err := source.BindFixedLocal(ctx, pkg, file, options)
+			if operand == "R11" {
+				if !errors.Is(err, ErrProbeNeedsContext) || !strings.Contains(err.Error(), "ADDQ") {
+					t.Fatal("macro selection supplied missing ADDQ input bytes", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal("initialized ADDQ frame binding failed", err)
+			}
+			ir, err := Translate(file, bound)
+			if err != nil || ir == "" {
+				t.Fatal("original initialized ADDQ lost its independently bound translation", err)
+			}
+		})
 	}
 }
 
