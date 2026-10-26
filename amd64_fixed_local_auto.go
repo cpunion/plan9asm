@@ -120,48 +120,31 @@ func x86ConditionalMoveOffsetKnown(memory MemRef) bool {
 }
 
 func fixedLocalConditionalMoveStep(ins *Instr, state *x86FixedLocalState, proof *x86FixedLocalProof, residue int) (bool, error) {
-	effect, known, err := x86TypedConditionalMoveByteEffect(ins.Op, *ins, "amd64")
+	form, known, err := x86ConditionalMoveProperties(ins.Op, *ins, "amd64")
 	if !known {
 		return false, nil
 	}
 	fail := func() (bool, error) {
-		return true, goAMD64FrameContext("fixed local CMOV flags or potential numerical source bytes are not defined")
+		return true, goAMD64FrameContext("fixed local CMOV flags or conditional value roles are not defined")
 	}
-	if err != nil || state.flags&effect.flagsRead != effect.flagsRead || len(effect.operands) != 2 {
+	required := x86ByteConditionFlags(form.condition)
+	if err != nil || required == 0 || state.flags&required != required {
 		return fail()
 	}
-	source, destination := effect.operands[0], effect.operands[1]
-	if !fixedLocalNumericRead(destination.operand, destination.width, state) {
+	width := int64(form.bits / 8)
+	old, err := fixedLocalReadValue(ins, 1, state, FuncSig{}, proof, residue, width, false)
+	if err != nil {
+		return true, err
+	}
+	// Both potential values remain mandatory. In particular memory is read
+	// unconditionally; selecting it never grants logical FP pointer imports.
+	value, err := fixedLocalReadValue(ins, 0, state, FuncSig{}, proof, residue, width, false)
+	if err != nil {
+		return true, err
+	}
+	value, valid := mergeFixedLocalScalarValues(value, old)
+	if !valid {
 		return fail()
 	}
-	role := x86FixedLocalPrivateMemory
-	if source.operand.Kind == OpMem || source.operand.Kind == OpSym {
-		var err error
-		_, role, err = fixedLocalReadMemory(ins, source.index, state, proof, residue, source.width, 1)
-		if err != nil {
-			return true, err
-		}
-	} else if !fixedLocalNumericRead(source.operand, source.width, state) {
-		return fail() // FP/caller slots and private pointer bits are not imports.
-	}
-	root, _ := x86CallerGP(destination.operand.Reg)
-	booleans := fixedLocalBooleanRead(destination.operand, destination.width, state)
-	if source.operand.Kind == OpReg {
-		booleans &= fixedLocalBooleanRead(source.operand, source.width, state)
-	} else if role != x86FixedLocalPrivateMemory {
-		booleans = 0 // Numerical input/literal bytes are not a boolean proof.
-	} else {
-		// The source read was proved above; its actual private offset is
-		// retained in this same residue's instruction-bound certificate.
-		access := ins.x86FixedLocalMemory[source.index]
-		booleans &= fixedLocalMemoryBooleans(state, access.offset[residue], source.width)
-	}
-	fixedLocalWriteBooleans(state, destination.operand.Reg, destination.width, booleans)
-	mask := x86CallerByteMask(destination.operand.Reg, destination.width)
-	if destination.width == 4 {
-		mask = 255 // False CMOVL still zero-defines the upper half.
-	}
-	state.known[root] |= mask
-	delete(state.constants, root) // Flags are unchanged, but selected values are not constants.
-	return true, nil
+	return true, fixedLocalWriteValue(ins, 1, 0, value, state, FuncSig{}, proof, residue, width)
 }

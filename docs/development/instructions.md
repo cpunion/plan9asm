@@ -31,6 +31,11 @@ the existing implicit-lock emitter, faults and ordering, without new extent or
 alignment permission. Narrow writes revoke whole-word facts, while Go's AX/AX
 opcode 90 remains a true NOP. Keep independent original-Go execution alongside
 width/alias proofs and objects; object success alone is not execution evidence.
+CMOV reuses the same scalar values and complete conditional-move grammar.
+Both alternatives and the unconditional memory read remain required. Selection
+preserves identical pointer identities and constants, intersects canonical bytes,
+and takes the hull of known numerical ranges; differing origins stay Context.
+W/L writes retain their architectural upper-byte rules and preserve FLAGS.
 
 ANDNL/Q and PDEPL/Q/PEXTL/Q share Go's complete `_yandnl` operand grammar
 and ordered two-input/one-output byte effect, not their numerical or FLAGS

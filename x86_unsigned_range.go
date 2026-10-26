@@ -6,6 +6,16 @@ import "math"
 // storage provenance. Excluding an interior value retains its convex hull.
 type x86UnsignedRange struct{ minimum, maximum uint64 }
 
+func (value x86UnsignedRange) hull(other x86UnsignedRange) x86UnsignedRange {
+	if other.minimum < value.minimum {
+		value.minimum = other.minimum
+	}
+	if other.maximum > value.maximum {
+		value.maximum = other.maximum
+	}
+	return value
+}
+
 func (value x86UnsignedRange) refine(op Op, taken bool, bound uint64) (x86UnsignedRange, bool) {
 	less, equal, greater := true, true, true
 	switch x86BranchCondition(op) {

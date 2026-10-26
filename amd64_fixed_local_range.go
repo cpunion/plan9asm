@@ -91,12 +91,7 @@ func mergeFixedLocalRanges(previous *x86FixedLocalState, current x86FixedLocalSt
 			changed = true
 			continue
 		}
-		if value.minimum > old.minimum {
-			value.minimum = old.minimum
-		}
-		if value.maximum < old.maximum {
-			value.maximum = old.maximum
-		}
+		value = value.hull(old)
 		previous.ranges[reg] = value
 		changed = changed || value != old
 	}

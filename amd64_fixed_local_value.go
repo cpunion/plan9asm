@@ -1,7 +1,7 @@
 package plan9asm
 
 // Scalar transport carries one complete typed value, never additional memory
-// permission. MOV and XCHG share the same read/write boundaries; exchanges
+// permission. MOV, CMOV and XCHG share the same read/write boundaries; exchanges
 // snapshot both operands before changing any register or private spill.
 type fixedLocalScalarValue struct {
 	address         int64
@@ -12,6 +12,23 @@ type fixedLocalScalarValue struct {
 	constantKnown   bool
 	bounds          x86UnsignedRange
 	bounded         bool
+}
+
+// Selection retains only facts true of both possible values. Pointer identity
+// never becomes NUM; distinct private offsets or opaque origins need their own
+// bounded alternative-origin contract before they can be consumed.
+func mergeFixedLocalScalarValues(first, last fixedLocalScalarValue) (fixedLocalScalarValue, bool) {
+	if first.pointer != last.pointer || first.opaque != last.opaque ||
+		first.pointer && first.address != last.address || first.opaque && first.identity != last.identity {
+		return fixedLocalScalarValue{}, false
+	}
+	first.booleans &= last.booleans
+	first.constantKnown = first.constantKnown && last.constantKnown && first.constant == last.constant
+	first.bounded = first.bounded && last.bounded
+	if first.bounded {
+		first.bounds = first.bounds.hull(last.bounds)
+	}
+	return first, true
 }
 
 func fixedLocalReadValue(ins *Instr, index int, state *x86FixedLocalState, sig FuncSig,
