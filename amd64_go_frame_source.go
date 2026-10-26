@@ -789,6 +789,14 @@ func (source *GoAMD64FrameSource) observe(ctx context.Context) error {
 	if err := json.Unmarshal(data, &env); err != nil {
 		return err
 	}
+	// Commands must keep their observed SDK spelling: changing it can rebuild
+	// builtin tools with different bytes. File reads and driver ownership use
+	// the independently resolved physical SDK. Verify compares both identities.
+	root, err := sourcepath.Resolve(env["GOROOT"])
+	if err != nil || !filepath.IsAbs(env["GOROOT"]) {
+		return goAMD64FrameContext("actual SDK root is not an accessible absolute directory: %v", err)
+	}
+	env["command/GOROOT"], env["GOROOT"] = env["GOROOT"], root
 	if env["GOOS"]+"/"+env["GOARCH"] != source.request.Target || env["GOFLAGS"] != "" || env["GOEXPERIMENT"] != "" ||
 		filepath.Join(env["GOROOT"], "bin", gotoolchain.HostExecutable("go")) != source.request.GoBinary {
 		return goAMD64FrameContext("actual driver/target/CPU/source routing needs a separate audited contract")
