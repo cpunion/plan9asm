@@ -146,7 +146,8 @@ minimum Go 1.20.14 both pass the following Linux/amd64 LLVM22 object scopes:
 | Signed/unsigned integer min/max | 132 | 432 |
 | Rounded average, products and multiply-add | 90 | 258 |
 | Integer and PS/PD logical | 132 | 504 |
-| Total | 513 | 1,674 |
+| Integer and PS/PD unpack, low/high | 108 | 360 |
+| Total | 621 | 2,034 |
 
 Two PADDD alias witnesses are separate from the canonical counts. Min/max
 includes 48 non-Q, unmasked, narrow EVEX forms; low-register VEX objects cannot
@@ -162,6 +163,12 @@ Its 32 names need 19 additional implementation lines, not 504 separate rules.
 The seven average/product and four logical MMX rows keep separate region owners.
 The residual dword-product dispatcher also loses 40 unreachable production lines;
 its original direct fixtures now invoke the same typed owner as public lowering.
+
+The unpack join covers 24 names through the same row grammar and driver, adding
+ten scope-selection lines and no translator rule. All original Go bytes and
+initialized objects pass on both supported endpoint SDKs. Six MMX rows retain
+their independent region owner; this join does not expand native execution
+claims or weaken low-MMX m32 versus high-MMX m64 memory-width distinctions.
 
 Fixed-frame GP analysis now consumes the existing typed byte/FLAGS effects
 instead of a second arithmetic opcode list. Its bounded worklist intersects

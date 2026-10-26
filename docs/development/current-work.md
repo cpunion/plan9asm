@@ -99,7 +99,8 @@ actual original Go bytes must match before any public API/object result counts.
 | Signed/unsigned integer min/max | 132 | 432 |
 | Rounded average, word products, multiply-add and widened products | 90 | 258 |
 | Integer and PS/PD packed logical | 132 | 504 |
-| Total | **513** | **1,674** |
+| Integer and PS/PD unpack, low/high | 108 | 360 |
+| Total | **621** | **2,034** |
 
 Two PADDD alias witnesses are separate. MMX rows retain their independent
 region/EMMS owners. These counts do not represent every official x86 row,
@@ -118,6 +119,12 @@ Go1.27.3 and Go1.20.14 each pass 123 roots / 10,776 children without skips.
 All 40 parser microbenchmarks remove one allocation; per-case median time falls
 15–33% across five samples. This does not measure whole-source performance;
 native execution of the refactor still requires the next complete CI.
+
+The unpack join at `eed7b44df` reuses the existing grammar and object driver:
+24 names require ten scope-selection lines, with no translator or grammar rule
+added. Current/minimum SDKs each pass 25 roots / 337 children without skips,
+including every earlier initialized row. Its six MMX rows retain their separate
+region owner; the new join does not claim additional native execution.
 
 Earlier analysis benchmarks reduced allocations by 65–88% through bounded CFG
 replay. Do not claim that as whole-source translation speed or cache mutable
