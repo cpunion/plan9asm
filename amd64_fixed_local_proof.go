@@ -85,7 +85,7 @@ func proveX86FixedLocal(fn Func, sig FuncSig) (Func, error) {
 	voidReturn := sig.Ret == Void && len(sig.Frame.Results) == 0
 	valueReturn := sig.Ret != "" && sig.Ret != Void && len(sig.Frame.Results) > 0 && len(sig.Frame.Results) <= 4096
 	if fn.FrameSize <= 0 || fn.FrameSize > 64<<10 || fn.FrameSize%8 != 0 ||
-		len(fn.Instrs) == 0 || len(fn.Instrs) > 8192 || fn.FrameSize > (1<<20)/int64(len(fn.Instrs)) ||
+		len(fn.Instrs) == 0 || len(fn.Instrs) > 8192 ||
 		len(fn.X86RawText) != 0 || len(sig.ArgRegs) != 0 || sig.ARMEntry != nil ||
 		sig.ARM64GoRegisterABI != nil || sig.x86CallerRegions != nil || !voidReturn && !valueReturn {
 		return fn, goAMD64FrameContext("fixed local source has an unbound frame or entry contract")
@@ -411,6 +411,9 @@ func fixedLocalLinearEdges(fn Func, edges map[int][]int, instructions []int) []b
 func replayX86FixedLocalCFG(fn *Func, sig FuncSig, proof *x86FixedLocalProof, residue int, budget *x86FixedLocalBudget,
 	effects map[int]x86TypedByteEffect, edges map[int][]int, instructions []int, linear []bool,
 	loops map[int]x86FixedLocalCountedLoop) error {
+	if proof.frame <= 0 || proof.frame > 1<<20 {
+		return goAMD64FrameContext("fixed local retained state storage budget exceeded")
+	}
 	state := x86FixedLocalState{
 		pointers: map[Reg]int64{SP: 0}, constants: make(map[Reg]int64), known: make(map[Reg]uint8),
 		opaque: make(map[Reg]x86FixedLocalOrigin), opaqueCells: make(map[int64]x86FixedLocalOrigin), booleans: make(map[Reg]uint8),
@@ -521,6 +524,12 @@ func replayX86FixedLocalCFG(fn *Func, sig FuncSig, proof *x86FixedLocalProof, re
 				}
 				states[target] = previous
 			} else {
+				// Only control-flow boundaries retain complete frame states.
+				// Keep the original frame-state product cap on actual storage;
+				// the independent per-instruction work budgets remain unchanged.
+				if proof.frame > (1<<20)/int64(len(states)+1) {
+					return goAMD64FrameContext("fixed local retained state storage budget exceeded")
+				}
 				states[target] = cloneFixedLocalState(next)
 			}
 			if changed && !queued[target] {

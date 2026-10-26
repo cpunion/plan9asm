@@ -673,13 +673,12 @@ func TestGoAMD64FixedLocalFrameAllPathInitializationAndResourceBounds(t *testing
 	if _, err := proveX86FixedLocal(tooLarge, sig); !errors.Is(err, ErrProbeNeedsContext) {
 		t.Fatal("oversized physical frame was admitted")
 	}
-	tooLarge.FrameSize = 64 << 10
-	tooLarge.Instrs = append([]Instr(nil), tooLarge.Instrs...)
-	for len(tooLarge.Instrs) <= 32 {
-		tooLarge.Instrs = append(tooLarge.Instrs, Instr{Op: "MOVQ", Args: []Operand{{Kind: OpImm, Imm: 1}, {Kind: OpReg, Reg: AX}}})
-	}
-	if _, err := proveX86FixedLocal(tooLarge, sig); !errors.Is(err, ErrProbeNeedsContext) {
-		t.Fatal("byte-state product budget was ignored")
+	// A long straight block no longer retains one state per instruction.
+	// Exercise the unchanged storage cap with actual control-flow boundaries.
+	tooLarge, largeSig := fixedLocalRetainedStateBudgetFixture(t)
+	if _, err := proveX86FixedLocal(tooLarge, largeSig); !errors.Is(err, ErrProbeNeedsContext) ||
+		!strings.Contains(err.Error(), "state storage budget") {
+		t.Fatal("retained frame-state storage budget was ignored", err)
 	}
 }
 
