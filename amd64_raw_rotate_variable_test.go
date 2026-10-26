@@ -180,18 +180,7 @@ func TestTranslateX86RawVariableRotateLLVM22Objects(t *testing.T) {
 				}
 			}
 			source.WriteString("\tRET\n")
-			requireX86GoAssemblerResult(t, target.goarch, source.String(), true)
-			file, err := Parse(ArchAMD64, source.String())
-			if err != nil {
-				t.Fatal(err)
-			}
-			ir, err := Translate(file, Options{
-				Goarch: target.goarch, TargetTriple: target.triple,
-				Sigs: map[string]FuncSig{"rawVariableRotate": {Name: "rawVariableRotate", Ret: Void}},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			ir := x86PackedRotateUnboundFormatObject(t, source.String(), target.goarch, target.triple, 36, 0)
 			compileLLVMToObject(t, llc, target.triple, "raw-variable-rotate.ll", "raw-variable-rotate.o", ir)
 		})
 	}

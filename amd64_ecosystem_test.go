@@ -6692,20 +6692,11 @@ func TestTranslateX86PackedRotateCompleteGo127Forms(t *testing.T) {
 			}
 			src.WriteString("\tRET\n")
 
-			file, err := Parse(ArchAMD64, src.String())
-			if err != nil {
-				t.Fatal(err)
+			physical, contextual := 680, 0
+			if target.goarch == "386" {
+				physical, contextual = 592, 16
 			}
-			ll, err := Translate(file, Options{
-				TargetTriple: target.triple,
-				Goarch:       target.goarch,
-				Sigs: map[string]FuncSig{
-					"packed_rotate_forms": {Name: "packed_rotate_forms", Ret: Void},
-				},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			ll := x86PackedRotateUnboundFormatObject(t, src.String(), target.goarch, target.triple, physical, contextual)
 			compileLLVMToObject(t, llc, target.triple, "packed-rotate-"+target.name+".ll", "packed-rotate-"+target.name+".o", ll)
 		})
 	}
