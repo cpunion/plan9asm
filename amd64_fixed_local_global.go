@@ -14,6 +14,7 @@ import (
 type x86FixedLocalOrigin struct {
 	parameter int64
 	global    string
+	literal   x86StaticSBAddress
 }
 
 func fixedLocalGlobalSymbol(symbol string) string {
@@ -23,15 +24,20 @@ func fixedLocalGlobalSymbol(symbol string) string {
 	return symbol
 }
 
-func fixedLocalGlobalAddress(ins Instr) (x86StaticSBAddress, bool) {
+func fixedLocalStaticAddress(ins Instr) (x86StaticSBAddress, bool) {
 	ins = x86GoMOVQSourceInstruction(ins)
-	if !x86ResultNamedPredicateInstruction(ins) || x86RawReturnScalarMoveBytes(ins.Op) != 8 ||
-		len(ins.Args) != 2 || ins.Args[1].Kind != OpReg {
+	if ins.Op != "LEAQ" && x86RawReturnScalarMoveBytes(ins.Op) != 8 ||
+		!x86ResultNamedPredicateInstruction(ins) || len(ins.Args) != 2 || ins.Args[1].Kind != OpReg {
 		return x86StaticSBAddress{}, false
 	}
 	root, valid := x86CallerGP(ins.Args[1].Reg)
 	if !valid || root != ins.Args[1].Reg || root == SP {
 		return x86StaticSBAddress{}, false
+	}
+	if ins.Op == "LEAQ" {
+		width, err := x86LEAOperandWidth(ins, "amd64")
+		address, valid := x86StaticSBSourceAddress(ins.Args[0], "amd64")
+		return address, err == nil && width == 8 && valid
 	}
 	address, immediate, valid := x86StaticAddressValueSource(ins.Args[0], "amd64")
 	return address, valid && immediate
@@ -41,8 +47,8 @@ func fixedLocalGlobalSymbols(file *File) map[string]bool {
 	var symbols map[string]bool
 	for _, fn := range file.Funcs {
 		for _, ins := range fn.Instrs {
-			address, valid := fixedLocalGlobalAddress(ins)
-			if !valid {
+			address, valid := fixedLocalStaticAddress(ins)
+			if !valid || ins.Op == "LEAQ" {
 				continue
 			}
 			if symbols == nil {

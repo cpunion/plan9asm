@@ -116,7 +116,7 @@ func TestGoAMD64FixedLocalReadonlyDataRejectsUnownedAccesses(t *testing.T) {
 		{"wide alignment", "VMOVDQA64 literal<>(SB),Z0", strings.Replace(fixedLocalLiteralData, "$32", "$64", 1)},
 		{"zero mask cannot hide extent", "MOVQ $0,AX\nKMOVQ AX,K1\nVMOVDQU64.Z literal<>(SB),K1,Z0", fixedLocalLiteralData},
 		{"write", "MOVOU X0,literal<>(SB)", fixedLocalLiteralData},
-		{"address", "LEAQ literal<>(SB),DX", fixedLocalLiteralData},
+		{"address past end", "LEAQ literal<>(SB),DX\nADDQ $40,DX\nMOVQ (DX),DX", fixedLocalLiteralData},
 		{"mutable", "MOVOU literal<>(SB),X0", strings.Replace(fixedLocalLiteralData, ",8,$32", ",16,$32", 1)},
 		{"nonprivate", "MOVOU literal(SB),X0", strings.ReplaceAll(fixedLocalLiteralData, "literal<>", "literal")},
 		{"address initializer", "MOVOU literal<>(SB),X0", fixedLocalLiteralData + "DATA pointer<>(SB)/8,$literal<>(SB)\nGLOBL pointer<>(SB),8,$8\n"},

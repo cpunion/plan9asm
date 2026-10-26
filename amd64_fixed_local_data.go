@@ -117,12 +117,69 @@ func fixedLocalReadMemory(ins *Instr, index int, state *x86FixedLocalState, proo
 			return 0, x86FixedLocalLiteralMemory, goAMD64FrameContext("fixed local DATA read has no original literal owner")
 		}
 		name, offset, valid := parseSBRef(ins.Args[index].Sym)
-		data, found := proof.binding.literalData[name]
-		if !valid || !found || offset < 0 || width > data.size || offset > data.size-width ||
-			alignment > data.alignment || offset%alignment != 0 {
+		if !valid || !fixedLocalLiteralRange(proof.binding, x86StaticSBAddress{name, offset}, width, alignment) {
 			return 0, x86FixedLocalLiteralMemory, goAMD64FrameContext("fixed local DATA read exceeds original identity, extent or alignment")
 		}
 		return offset, x86FixedLocalLiteralMemory, nil
 	}
 	return fixedLocalMemoryAccess(ins, index, state, proof, residue, width, alignment, false, false)
+}
+
+func fixedLocalLiteralRange(binding *x86FixedLocalBinding, address x86StaticSBAddress, width, alignment int64) bool {
+	if binding == nil || width <= 0 || alignment <= 0 {
+		return false
+	}
+	data, found := binding.literalData[address.symbol]
+	return found && address.offset >= 0 && width <= data.size && address.offset <= data.size-width &&
+		alignment <= data.alignment && address.offset%alignment == 0
+}
+
+// A literal retains its exact source-local identity and a bounded offset, not
+// an arbitrary native pointee. LLVM may place separate constants differently;
+// crossing into another object's address must never acquire its bytes.
+func fixedLocalShiftLiteral(origin x86FixedLocalOrigin, delta int64, proof *x86FixedLocalProof) (x86FixedLocalOrigin, bool) {
+	if proof == nil || proof.binding == nil {
+		return origin, false
+	}
+	data, found := proof.binding.literalData[origin.literal.symbol]
+	if !found || origin.literal.offset < 0 || origin.literal.offset > data.size ||
+		delta < -origin.literal.offset || delta > data.size-origin.literal.offset {
+		return origin, false
+	}
+	origin.literal.offset += delta
+	return origin, true
+}
+
+func fixedLocalStaticAddressStep(ins Instr, state *x86FixedLocalState, proof *x86FixedLocalProof) (bool, error) {
+	address, valid := fixedLocalStaticAddress(ins)
+	if !valid {
+		return false, nil
+	}
+	fail := func() (bool, error) {
+		return true, goAMD64FrameContext("fixed local address has no matching original storage: %s", ins.Op)
+	}
+	if proof == nil || proof.binding == nil {
+		return fail()
+	}
+	var origin x86FixedLocalOrigin
+	if _, literal := proof.binding.literalData[address.symbol]; literal {
+		origin.literal = address
+		if _, valid := fixedLocalShiftLiteral(origin, 0, proof); !valid {
+			return fail()
+		}
+	} else {
+		object, found := proof.binding.globals[fixedLocalGlobalSymbol(address.symbol)]
+		if ins.Op == "LEAQ" || !found || object.variable == nil || object.native == "" {
+			return fail()
+		}
+		origin.global = object.native
+	}
+	writeFixedLocalOrigin(state, ins.Args[1].Reg, origin)
+	return true, nil
+}
+
+func writeFixedLocalOrigin(state *x86FixedLocalState, destination Reg, origin x86FixedLocalOrigin) {
+	delete(state.pointers, destination)
+	delete(state.constants, destination)
+	state.opaque[destination], state.known[destination], state.booleans[destination] = origin, 0, 0
 }

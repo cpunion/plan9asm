@@ -255,6 +255,9 @@ func fixedLocalInstructionShape(ins Instr) bool {
 	if x86RawReturnScalarMoveBytes(x86GoMOVQSourceInstruction(ins).Op) != 0 {
 		return len(ins.Args) == 2
 	}
+	if _, address := fixedLocalStaticAddress(ins); address {
+		return true
+	}
 	if effect, known, err := fixedLocalGPByteEffect(ins); known {
 		return err == nil && !effect.dynamicMemory
 	}
@@ -534,6 +537,12 @@ func fixedLocalMemoryAccess(ins *Instr, index int, state *x86FixedLocalState, pr
 				memory.Index != "" || memory.Scale != 0 || memory.IndexExt != "" {
 				return 0, x86FixedLocalNativeInput, goAMD64FrameContext("fixed local native input requires a plain typed base and displacement")
 			}
+			if origin.literal.symbol != "" {
+				shifted, valid := fixedLocalShiftLiteral(origin, memory.Off, proof)
+				if write || !valid || !fixedLocalLiteralRange(proof.binding, shifted.literal, width, alignment) {
+					return 0, x86FixedLocalLiteralMemory, goAMD64FrameContext("fixed local indirect DATA read exceeds readonly identity, extent or alignment")
+				}
+			}
 			return 0, x86FixedLocalNativeInput, fixedLocalRecordAccess(ins, index, proof, residue, width, write, true, 0)
 		}
 	}
@@ -602,6 +611,9 @@ func fixedLocalStep(ins *Instr, state *x86FixedLocalState, sig FuncSig, proof *x
 		return nil
 	}
 	if known, err := fixedLocalNumericalReadStep(ins, state, proof, residue); known {
+		return err
+	}
+	if known, err := fixedLocalStaticAddressStep(*ins, state, proof); known {
 		return err
 	}
 	if width := x86RawReturnScalarMoveBytes(x86GoMOVQSourceInstruction(*ins).Op); width != 0 {
@@ -748,16 +760,7 @@ func fixedLocalMove(ins *Instr, state *x86FixedLocalState, sig FuncSig, proof *x
 			booleans = 1
 		}
 	case OpSym:
-		if address, valid := fixedLocalGlobalAddress(*ins); valid {
-			if proof.binding == nil {
-				return fail()
-			}
-			object, found := proof.binding.globals[fixedLocalGlobalSymbol(address.symbol)]
-			if !found || object.variable == nil || object.native == "" {
-				return fail()
-			}
-			opaque, identity = true, x86FixedLocalOrigin{global: object.native}
-		} else if _, _, err := fixedLocalReadMemory(ins, 0, state, proof, residue, width, 1); err != nil {
+		if _, _, err := fixedLocalReadMemory(ins, 0, state, proof, residue, width, 1); err != nil {
 			return err
 		}
 	case OpMem:
@@ -846,7 +849,7 @@ func fixedLocalMove(ins *Instr, state *x86FixedLocalState, sig FuncSig, proof *x
 	case OpFP:
 		sp, original := state.pointers[SP]
 		slot, index, found := fixedLocalTransportSlot(destination.FPOffset, width, sig.Frame.Results)
-		if !original || sp != 0 || pointer || !found || source.Kind != OpReg && source.Kind != OpImm ||
+		if !original || sp != 0 || pointer || identity.literal.symbol != "" || !found || source.Kind != OpReg && source.Kind != OpImm ||
 			opaque != (slot.Type == Ptr) || slot.Type == I1 && booleans&1 == 0 {
 			return fail()
 		}
