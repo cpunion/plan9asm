@@ -87,9 +87,15 @@ The integrated Go 1.27.3 / LLVM 22 receipt at `4cd3b05bb` passes 6 roots / 27
 children, with no failures or skips, including all 32 GP kernels through three
 APIs and O0/O2 objects. That object root takes 8.5 seconds versus 58.05 in the
 earlier local receipt. This is a single observation, not a repeated benchmark
-or a native execution certificate. The separate fork-only Linux native probe
-tests values, FLAGS and fault behavior against original Go; its results are
-not yet qualified here. Its diagnostic workflow must not enter PR40.
+or a native execution certificate. The separate fork-only Linux native
+[probe](https://github.com/cpunion/plan9asm/actions/runs/40256528274) qualifies
+the same source head: 4 roots / 30 children pass with no failures or skips under
+Go 1.27.3 and LLVM/clang 22.1.8. It executes the 32 GP kernels against original
+Go through three APIs at O0/O2, plus the 112/84 scalar arithmetic value/fault
+and FLAGS/alias kernels. The first diagnostic run failed before testing because
+of a shallow-checkout revision query; keep it failed. The passing diagnostic
+commit differs from `4cd3b05bb` only in its workflow, which must not enter PR40.
+These baseline tests do not qualify the separately pending AVX512 execution.
 
 Complete-source results have **not** improved: Go 1.27.2 / LLVM 22 still reports
 33/55 passes and 22 failures, no N/A/unattempted. The frozen before/after source
@@ -99,7 +105,7 @@ at the CLI handoff; AES/GCM and SHA256 still need split+DATA composition.
 
 Next: repair the complete CLI source representation and split+DATA handoff,
 then rerun ordinary crypto sources before implementing any further address
-roles. Complete the GP native oracle, minimum-SDK integrated checks and remaining
+roles. Complete minimum-SDK integrated checks and remaining
 initialized official-family joins. Keep source-written CALL/TLS and private
 helpers distinct from assembler-generated entry machinery. Do not add another
 per-proof opcode whitelist or generalize to another arch.
