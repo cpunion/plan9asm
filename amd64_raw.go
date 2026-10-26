@@ -7629,6 +7629,10 @@ func decodedX86EVEXPackedFloatShuffleInstruction(code []byte, i, mode int, segme
 // Weaviate into a relative branch, so recover the family before consulting
 // the generic decoder.
 func decodedX86PackedShuffleInstruction(code []byte, mode int) (instruction Instr, length int, ok bool, err error) {
+	return decodedX86PackedShuffleInstructionWithMemory(code, mode, x86RawMemoryDecoder{})
+}
+
+func decodedX86PackedShuffleInstructionWithMemory(code []byte, mode int, memory x86RawMemoryDecoder) (instruction Instr, length int, ok bool, err error) {
 	i := 0
 	segment := Reg("")
 	addressOverride := false
@@ -7653,7 +7657,7 @@ vectorPrefix:
 		return Instr{}, 0, false, nil
 	}
 	if len(code) > i && code[i] == 0x62 {
-		return decodedX86EVEXPackedShuffleInstruction(code, i, mode, segment, addressOverride)
+		return decodedX86EVEXPackedShuffleInstruction(code, i, mode, segment, addressOverride, memory)
 	}
 
 	var vexLength, rExt, xExt, bExt int
@@ -7697,7 +7701,7 @@ vectorPrefix:
 	if mode == 32 && (rExt != 0 || xExt != 0 || bExt != 0 || destinationNumber >= 8) {
 		return Instr{}, 0, true, fmt.Errorf("extended register in 32-bit mode")
 	}
-	source, consumed, decodeErr := decodedX86VEXVectorRMOperand(code[modRMIndex:], mode, bExt, xExt, segment, vectorName)
+	source, consumed, decodeErr := memory.vex(code[modRMIndex:], mode, bExt, xExt, segment, vectorName)
 	if decodeErr != nil {
 		return Instr{}, 0, true, decodeErr
 	}
@@ -7715,7 +7719,7 @@ vectorPrefix:
 	return instruction, immediateIndex + 1, true, nil
 }
 
-func decodedX86EVEXPackedShuffleInstruction(code []byte, i, mode int, segment Reg, addressOverride bool) (instruction Instr, length int, ok bool, err error) {
+func decodedX86EVEXPackedShuffleInstruction(code []byte, i, mode int, segment Reg, addressOverride bool, memory x86RawMemoryDecoder) (instruction Instr, length int, ok bool, err error) {
 	if len(code) < i+5 {
 		return Instr{}, 0, false, nil
 	}
@@ -7773,7 +7777,7 @@ func decodedX86EVEXPackedShuffleInstruction(code []byte, i, mode int, segment Re
 	if mode == 32 && (destinationNumber >= 8 || modRM>>6 == 3 && int(modRM&7)+bExt*8+xExt*16 >= 8) {
 		return Instr{}, 0, true, fmt.Errorf("extended vector register in 32-bit mode")
 	}
-	source, consumed, decodeErr := decodedX86EVEXRMOperand(code[modRMIndex:], mode, bExt, xExt, segment, vectorName, disp8Scale)
+	source, consumed, decodeErr := memory.evex(code[modRMIndex:], mode, bExt, xExt, segment, vectorName, disp8Scale)
 	if decodeErr != nil {
 		return Instr{}, 0, true, decodeErr
 	}
