@@ -5,7 +5,7 @@ import "strings"
 // This is a typed dependency adapter, not a source/storage authority or an
 // opcode whitelist. Each family retains its complete existing operand parser.
 // The current consumer explicitly closes only non-masked VEX; EVEX storage,
-// writemasks and broadcasts remain with their separately validated owners.
+// writemasks and EVEX broadcasts remain with their separately validated owners.
 func x86UnmaskedVEXByteEffect(op Op, ins Instr, arch string) (x86TypedByteEffect, bool, error) {
 	if !strings.HasPrefix(strings.ToUpper(string(op)), "V") {
 		return x86TypedByteEffect{}, false, nil
@@ -87,6 +87,27 @@ func x86UnmaskedVEXByteEffect(op Op, ins Instr, arch string) (x86TypedByteEffect
 	}
 	if form, known, err := x86PackedShiftProperties(op, ins, arch); known {
 		return x86UnmaskedVEXShiftEffect(ins, form, err)
+	}
+	if form, known, err := x86BroadcastProperties(op, ins, arch); known {
+		if err != nil {
+			return x86TypedByteEffect{}, true, err
+		}
+		if !form.vex || form.mask >= 0 || form.zeroing || !x86LowVEXVectorOperands(ins) || ins.Args[0].Kind == OpImm {
+			return x86TypedByteEffect{}, true, goAMD64FrameContext("broadcast effect requires its separate non-VEX consumer: %s", ins.Op)
+		}
+		source := x86TypedByteOperand{index: 0, operand: ins.Args[0], width: int64(form.sourceBytes), read: true}
+		if source.operand.Kind == OpReg {
+			// Register storage keeps its complete X alias, but only the
+			// repeated scalar bytes are inputs. Memory reads the exact tuple.
+			source.width, source.requiredBytes = 16, x86CallerVectorByteMask(int64(form.sourceBytes))
+		}
+		return x86TypedByteEffect{
+			vector: x86TypedVectorEffect{x86TypedVectorUpperZero, 1},
+			operands: []x86TypedByteOperand{
+				source,
+				{index: form.destination, operand: ins.Args[form.destination], width: int64(form.byteWidth), write: true},
+			},
+		}, true, nil
 	}
 	return x86TypedByteEffect{}, false, nil
 }

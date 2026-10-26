@@ -30,6 +30,10 @@ var x86RawBlockBroadcastForms = map[[2]int]x86RawBlockBroadcastForm{
 // decodedX86RawBlockBroadcastInstruction decodes every EVEX block-broadcast
 // shape, including register-backed X2 sources and K merge/zero masking.
 func decodedX86RawBlockBroadcastInstruction(code []byte, mode int) (Instr, int, bool, error) {
+	return decodedX86RawBlockBroadcastInstructionWithMemory(code, mode, x86RawMemoryDecoder{})
+}
+
+func decodedX86RawBlockBroadcastInstructionWithMemory(code []byte, mode int, memory x86RawMemoryDecoder) (Instr, int, bool, error) {
 	p, matched := decodeX86RawVectorEncoding(code)
 	if !matched || !p.evex || p.mapNumber != 2 || p.pp != 1 {
 		return Instr{}, 0, false, nil
@@ -67,7 +71,7 @@ func decodedX86RawBlockBroadcastInstruction(code []byte, mode int) (Instr, int, 
 		return fail("386 Z-register exceeds the Go assembler frontend's register class")
 	}
 	vector := [...]string{"X", "Y", "Z"}[p.vectorLength]
-	source, consumed, err := decodedX86EVEXRMOperand(
+	source, consumed, err := memory.evex(
 		code[p.modRM:], mode, p.b, p.x, p.segment, "X", form.sourceBytes,
 	)
 	if err != nil {

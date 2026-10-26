@@ -6,6 +6,10 @@ import "fmt"
 // prefix grammar. The scalar input width, output width and mask are separate
 // axes: SD has no 128-bit destination, and disp8 scales by scalar input size.
 func decodedX86ScalarBroadcastInstruction(code []byte, mode int) (Instr, int, bool, error) {
+	return decodedX86ScalarBroadcastInstructionWithMemory(code, mode, x86RawMemoryDecoder{})
+}
+
+func decodedX86ScalarBroadcastInstructionWithMemory(code []byte, mode int, memory x86RawMemoryDecoder) (Instr, int, bool, error) {
 	p, matched := decodeX86RawVectorEncoding(code)
 	if !matched || p.mapNumber != 2 || (p.opcode != 0x18 && p.opcode != 0x19) {
 		return Instr{}, 0, false, nil
@@ -50,9 +54,9 @@ func decodedX86ScalarBroadcastInstruction(code []byte, mode int) (Instr, int, bo
 	var size int
 	var err error
 	if p.evex {
-		source, size, err = decodedX86EVEXRMOperand(code[p.modRM:], mode, p.b, p.x, p.segment, "X", bytes)
+		source, size, err = memory.evex(code[p.modRM:], mode, p.b, p.x, p.segment, "X", bytes)
 	} else {
-		source, size, err = decodedX86VEXVectorRMOperand(code[p.modRM:], mode, p.b, p.x, p.segment, "X")
+		source, size, err = memory.vex(code[p.modRM:], mode, p.b, p.x, p.segment, "X")
 	}
 	if err != nil {
 		return Instr{}, 0, true, err

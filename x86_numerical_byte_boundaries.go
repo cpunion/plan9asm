@@ -109,7 +109,7 @@ func x86NumericalVectorBoundary(code []byte, mode int) (int, error) {
 		decodedX86EVEXPackedInsertInstructionWithMemory,
 		decodedX86VEXTRACT128InstructionWithMemory,
 		decodedX86Permute128InstructionWithMemory,
-		decodedX86VEXPackedBroadcastInstructionWithMemory,
+		decodedX86NumericalBroadcastBoundary,
 		decodedX86PackedIntegerCompareInstructionWithMemory,
 		decodedX86PackedIntegerArithmeticInstructionWithMemory,
 		decodedX86PackedAverageInstructionWithMemory,
@@ -158,6 +158,19 @@ func x86NumericalVectorBoundary(code []byte, mode int) (int, error) {
 		return length, err
 	}
 	return 0, numericalSBContext("unregistered or truncated whole native VEX/EVEX encoding")
+}
+
+// Keep the original raw-source dispatch order: EVEX 19/W0 is F32X2, not
+// scalar SD/W1, and 59/W0 is I32X2, not integer Q/W1. The specialized source
+// decoders retain their own reserved-encoding contracts and memory policy.
+func decodedX86NumericalBroadcastBoundary(code []byte, mode int, memory x86RawMemoryDecoder) (Instr, int, bool, error) {
+	if ins, length, known, err := decodedX86RawBlockBroadcastInstructionWithMemory(code, mode, memory); known || err != nil {
+		return ins, length, known, err
+	}
+	if ins, length, known, err := decodedX86ScalarBroadcastInstructionWithMemory(code, mode, memory); known || err != nil {
+		return ins, length, known, err
+	}
+	return decodedX86VEXPackedBroadcastInstructionWithMemory(code, mode, memory)
 }
 
 func decodedX86NumericalConversionBoundary(code []byte, mode int, memory x86RawMemoryDecoder) (Instr, int, bool, error) {
