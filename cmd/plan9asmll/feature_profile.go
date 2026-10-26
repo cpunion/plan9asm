@@ -110,6 +110,14 @@ func loadFeatureConsumer(ctx context.Context, filename, output, target, module s
 		return nil, err
 	}
 	env := featureEnvironment(os.Environ(), input.Observed.Environment)
+	// Resolve actual cache/config/temp paths before both reobservation and
+	// package selection. Source observers retain this same environment and
+	// own their separate temporary children until their existing Close calls.
+	goos, goarch, _ := strings.Cut(target, "/")
+	env, err = ordinaryPackageEnvironment(goos, goarch, env)
+	if err != nil {
+		return nil, err
+	}
 	binary, err := exec.LookPath("go")
 	if err != nil {
 		return nil, err

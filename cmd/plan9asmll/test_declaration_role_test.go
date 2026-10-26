@@ -261,6 +261,11 @@ TEXT ·EchoF64(SB),4,$0-16
 }
 
 func TestSupplementalTestCalleeDeclarationsAcrossSourceFiles(t *testing.T) {
+	// Hosted machines need not export temporary roots. Exercise the production
+	// environment setup rather than borrowing a developer's TMPDIR.
+	t.Setenv("GOENV", "off")
+	t.Setenv("TMPDIR", "")
+	t.Setenv("GOTMPDIR", "")
 	repo, err := filepath.Abs("../..")
 	if err != nil {
 		t.Fatal(err)
