@@ -82,8 +82,14 @@ func CaptureGoX86SDKLiteralAlignment(ctx context.Context, owner *GoX86SDKReadonl
 	owner.mu.Lock()
 	source, generation, seal := owner.source, owner.generation, owner.seal
 	owner.mu.Unlock()
-	if source == nil || source.identity != source || source.guard.env["GOVERSION"] != "go1.27.2" {
-		return nil, sdkASMDataContext("minimum alignment requires the registered original Go 1.27.2 SDK")
+	if source == nil || source.identity != source {
+		return nil, sdkASMDataContext("minimum alignment requires its original SDK source")
+	}
+	// The selected linker/layout inputs are byte-identical in these patches.
+	// Actual input, compiler, linker and image checks below remain mandatory.
+	version := source.guard.env["GOVERSION"]
+	if version != "go1.27.2" && version != "go1.27.3" {
+		return nil, sdkASMDataContext("minimum alignment requires the registered original Go 1.27.2 or Go 1.27.3 SDK")
 	}
 	request := source.request
 	guard := newGoOriginalInputGuard(GoAMD64FrameCaptureRequest{GoBinary: request.GoBinary,
