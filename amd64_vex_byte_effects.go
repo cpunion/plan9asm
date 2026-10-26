@@ -23,8 +23,12 @@ func x86UnmaskedVEXByteEffect(op Op, ins Instr, arch string) (x86TypedByteEffect
 		return x86UnmaskedVEXBinaryEffect(ins, form.x86PackedBinaryForm, form.spec.laneBits <= 32, err)
 	}
 	if form, known, err := x86PackedLogicalProperties(ins, arch); known {
-		return x86UnmaskedVEXBinaryEffect(ins, form.x86PackedBinaryForm,
+		effect, known, err := x86UnmaskedVEXBinaryEffect(ins, form.x86PackedBinaryForm,
 			form.spec.encoding != x86PackedLogicalEVEX, err)
+		if err == nil {
+			effect = x86PackedLogicalZeroDependencies(ins, form, effect)
+		}
+		return effect, known, err
 	}
 	if form, known, err := x86ByteShuffleProperties(op, ins, arch); known {
 		return x86UnmaskedVEXBinaryEffect(ins, form, true, err)

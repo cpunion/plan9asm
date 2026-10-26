@@ -98,12 +98,18 @@ func x86TypedLegacyLogicalByteEffect(op Op, ins Instr, arch string) (x86TypedByt
 		return x86TypedByteEffect{}, known && (err != nil || form.legacy && !form.mmx), err
 	}
 	effect := x86PackedBinaryDependencyEffect(ins, form.x86PackedBinaryForm, form.source)
+	return x86PackedLogicalZeroDependencies(ins, form, effect), true, nil
+}
+
+// Apply the shared numerical identity only after the consumer has validated
+// its encoding and storage roles. A memory operand never becomes a zero idiom.
+func x86PackedLogicalZeroDependencies(ins Instr, form x86PackedLogicalForm, effect x86TypedByteEffect) x86TypedByteEffect {
 	if x86PackedLogicalDefinedBytes(ins, form, 0, 0, 0) != 0 {
 		for index := range effect.operands {
 			effect.operands[index].read = false
 		}
 	}
-	return effect, true, nil
+	return effect
 }
 
 // These fields describe only an operand grammar. Arithmetic, interleave and
