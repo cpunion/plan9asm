@@ -1,6 +1,9 @@
 package plan9asm
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestTranslateAMD64PEXTRDToMemory(t *testing.T) {
 	src := `
@@ -79,11 +82,30 @@ func TestAMD64VectorLoweringBranchCoverage(t *testing.T) {
 	check("broadcast-q-gpr", "VPBROADCASTQ", Instr{Args: []Operand{reg("AX"), reg("X1")}}, false, true)
 	check("broadcast-q-immediate", "VPBROADCASTQ", Instr{Args: []Operand{imm(1), reg("X1")}}, false, false)
 	check("broadcast-q-address", "VPBROADCASTQ", Instr{Args: []Operand{sym("$value(SB)"), reg("X1")}}, false, false)
-	check("pmululq-args", "PMULULQ", Instr{Args: []Operand{reg("X0")}}, true, true)
-	check("pmululq-dst", "PMULULQ", Instr{Args: []Operand{reg("X0"), reg("Y1")}}, false, false)
-	check("pmululq-src", "PMULULQ", Instr{Args: []Operand{reg("Y0"), reg("X1")}}, false, false)
-	check("pmululq-source-error", "PMULULQ", Instr{Args: []Operand{ident("bad"), reg("X1")}}, true, true)
-	check("pmululq-memory", "PMULULQ", Instr{Args: []Operand{mem("AX"), reg("X1")}}, false, true)
+
+	checkDwordProduct := func(name string, ins Instr, wantErr bool) {
+		t.Helper()
+		typed, output := newAMD64CtxWithFuncForTest(t, Func{}, FuncSig{Ret: Void}, nil)
+		typed.targetTriple = "x86_64-unknown-linux-gnu"
+		before, temporary := output.String(), typed.tmp
+		known, terminated, err := typed.lowerDwordToQwordMultiply("PMULULQ", ins)
+		if !known || terminated || (err != nil) != wantErr {
+			t.Fatalf("%s: typed dword product = (%v, %v, %v)", name, known, terminated, err)
+		}
+		if wantErr && (output.String() != before || typed.tmp != temporary) {
+			t.Fatalf("%s: invalid dword product mutated IR or temporary state", name)
+		}
+		if !wantErr && !strings.Contains(output.String(), "pmuludq") {
+			t.Fatalf("%s: original native m128 product opcode was lost", name)
+		}
+	}
+
+	checkDwordProduct("pmululq-args", Instr{Args: []Operand{reg("X0")}}, true)
+	checkDwordProduct("pmululq-dst", Instr{Args: []Operand{reg("X0"), reg("Y1")}}, true)
+	checkDwordProduct("pmululq-src", Instr{Args: []Operand{reg("Y0"), reg("X1")}}, true)
+	checkDwordProduct("pmululq-source-error", Instr{Args: []Operand{ident("bad"), reg("X1")}}, true)
+	checkDwordProduct("pmululq-memory", Instr{Args: []Operand{mem("AX"), reg("X1")}}, false)
+
 	check("punpckllq-args", "PUNPCKLLQ", Instr{Args: []Operand{reg("X0")}}, true, true)
 	check("punpckhlq-dst", "PUNPCKHLQ", Instr{Args: []Operand{reg("X0"), reg("Y1")}}, false, false)
 	check("punpckllq-src", "PUNPCKLLQ", Instr{Args: []Operand{reg("Y0"), reg("X1")}}, false, false)

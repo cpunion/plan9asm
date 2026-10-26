@@ -185,7 +185,7 @@ func (c *amd64Ctx) lowerVec(op Op, ins Instr) (ok bool, terminated bool, err err
 		"VBROADCASTF32X2", "VBROADCASTSD",
 		"VPSHUFB", "VPSHUFD", "VPSLLD", "VPSLLQ", "VPSLLW", "VPSRAD", "VPSRAW", "VPSRLD", "VPSRLQ", "VPSRLW", "VPSRLDQ", "VPSLLDQ", "VPUNPCKLBW", "VPUNPCKHBW", "VPUNPCKLDQ", "VPUNPCKHDQ", "VPUNPCKLQDQ", "VPUNPCKHQDQ",
 		"VPALIGNR", "VPERM2I128", "VPERM2F128", "VINSERTI128", "VPBLENDD",
-		"PXOR", "POR", "PAND", "PADDB", "PADDD", "PADDL", "PSUBB", "PSUBL", "PSUBUSB", "PMULLW", "PMULULQ", "PCLMULQDQ", "PCMPEQB", "PCMPEQW", "PCMPEQL", "PCMPGTB", "PABSD", "PTEST", "PMOVMSKB",
+		"PXOR", "POR", "PAND", "PADDB", "PADDD", "PADDL", "PSUBB", "PSUBL", "PSUBUSB", "PMULLW", "PCLMULQDQ", "PCMPEQB", "PCMPEQW", "PCMPEQL", "PCMPGTB", "PABSD", "PTEST", "PMOVMSKB",
 		"PMINUB", "PMINSB", "PMINUW", "PMINSW", "PMINUD", "PMINSD", "PMAXUB", "PMAXSB", "PMAXUW", "PMAXSW", "PMAXUD", "PMAXSD",
 		"PSHUFB", "PSRLDQ", "PSLLDQ", "PSRLO", "PSLLO", "PSRLQ", "PSLLQ", "PSLLW", "PSRLW", "PSRLL", "PSLLL", "PSRAL", "PEXTRD", "PEXTRB", "PEXTRQ",
 		"PALIGNR", "PUNPCKLBW", "PUNPCKHBW", "PUNPCKLLQ", "PUNPCKHLQ", "PUNPCKLQDQ", "PUNPCKHQDQ", "PSHUFL", "PSHUFD", "SHUFPS",
@@ -885,46 +885,6 @@ func (c *amd64Ctx) lowerVec(op Op, ins Instr) (ok bool, terminated bool, err err
 		sh := c.newTmp()
 		fmt.Fprintf(c.b, "  %%%s = shufflevector <16 x i8> %s, <16 x i8> %s, %s\n", sh, dstv, src, mask)
 		return true, false, c.storeX(ins.Args[1].Reg, "%"+sh)
-
-	case "PMULULQ":
-		// PMULULQ Xsrc/m128, Xdst multiplies the unsigned even-numbered
-		// 32-bit lanes and writes the two 64-bit products.
-		if len(ins.Args) != 2 || ins.Args[1].Kind != OpReg {
-			return true, false, fmt.Errorf("amd64 PMULULQ expects Xsrc/m128, Xdst: %q", ins.Raw)
-		}
-		if _, ok := amd64ParseXReg(ins.Args[1].Reg); !ok {
-			return false, false, nil
-		}
-		if ins.Args[0].Kind == OpReg {
-			if _, ok := amd64ParseXReg(ins.Args[0].Reg); !ok {
-				return false, false, nil
-			}
-		}
-		src, err := c.loadXVecOperand(ins.Args[0])
-		if err != nil {
-			return true, false, err
-		}
-		dstv, err := c.loadX(ins.Args[1].Reg)
-		if err != nil {
-			return true, false, err
-		}
-		dst32 := c.newTmp()
-		src32 := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = bitcast <16 x i8> %s to <4 x i32>\n", dst32, dstv)
-		fmt.Fprintf(c.b, "  %%%s = bitcast <16 x i8> %s to <4 x i32>\n", src32, src)
-		dstEven := c.newTmp()
-		srcEven := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = shufflevector <4 x i32> %%%s, <4 x i32> zeroinitializer, <2 x i32> <i32 0, i32 2>\n", dstEven, dst32)
-		fmt.Fprintf(c.b, "  %%%s = shufflevector <4 x i32> %%%s, <4 x i32> zeroinitializer, <2 x i32> <i32 0, i32 2>\n", srcEven, src32)
-		dst64 := c.newTmp()
-		src64 := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = zext <2 x i32> %%%s to <2 x i64>\n", dst64, dstEven)
-		fmt.Fprintf(c.b, "  %%%s = zext <2 x i32> %%%s to <2 x i64>\n", src64, srcEven)
-		product := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = mul <2 x i64> %%%s, %%%s\n", product, dst64, src64)
-		out := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = bitcast <2 x i64> %%%s to <16 x i8>\n", out, product)
-		return true, false, c.storeX(ins.Args[1].Reg, "%"+out)
 
 	case "PUNPCKLLQ", "PUNPCKHLQ":
 		// PUNPCKL/H LQ interleaves the low/high pair of 32-bit lanes.
