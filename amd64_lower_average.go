@@ -14,10 +14,10 @@ func (c *amd64Ctx) lowerPackedUnsignedAverage(op Op, ins Instr) (bool, bool, err
 	first, second, destination := form.source, ins.Args[form.second], ins.Args[form.destination]
 	if form.legacy && !form.mmx && form.memory >= 0 {
 		// A virtual FP/SP/BP view is not the source's native aligned m128.
-		// This family does not add a caller or fixed-local backing permission.
+		// Only the existing exact fixed-local certificate supplies that backing.
 		virtual := first.Kind == OpFP
 		if first.Kind == OpMem {
-			virtual = !x86OrdinaryNativeMemoryOperand(first, c.goarch)
+			virtual = !x86OrdinaryNativeMemoryOperand(first, c.goarch) && !c.fixedLocalMemoryCertified(ins, form.memory)
 		}
 		if virtual {
 			return true, false, fmt.Errorf("%w: legacy packed average m128 needs original native storage, not virtual FP/SP/BP alignment", ErrProbeNeedsContext)

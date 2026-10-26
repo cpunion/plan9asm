@@ -49,11 +49,7 @@ func x86TypedLegacyIntegerArithmeticByteEffect(op Op, ins Instr, arch string) (x
 	if !recognized || err != nil {
 		return x86TypedByteEffect{}, recognized, err
 	}
-	width := int64(form.byteWidth)
-	return x86TypedByteEffect{operands: []x86TypedByteOperand{
-		{index: 0, operand: form.source, width: width, read: true},
-		{index: 1, operand: form.destination, width: width, read: true, write: true},
-	}}, true, nil
+	return x86LegacyPackedBinaryByteEffect(ins, form.x86PackedBinaryForm, form.source), true, nil
 }
 
 func x86LegacyIntegerArithmeticEmitterContext(form x86LegacyIntegerArithmeticForm, ins Instr) error {

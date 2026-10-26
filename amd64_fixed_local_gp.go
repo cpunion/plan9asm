@@ -43,13 +43,20 @@ func fixedLocalGPAddressOnly(ins Instr, index int) bool {
 	return true
 }
 
-func fixedLocalGPByteStep(ins *Instr, state *x86FixedLocalState, proof *x86FixedLocalProof, residue int,
+func fixedLocalTypedByteStep(ins *Instr, state *x86FixedLocalState, proof *x86FixedLocalProof, residue int,
 	effect x86TypedByteEffect) error {
 	fail := func() error {
-		return goAMD64FrameContext("fixed local typed GP effect lacks numerical bytes, FLAGS or private storage: %s", ins.Op)
+		return goAMD64FrameContext("fixed local typed effect lacks numerical bytes, FLAGS or private storage: %s", ins.Op)
 	}
 	if effect.dynamicMemory || state.flags&effect.flagsRead != effect.flagsRead {
 		return fail()
+	}
+	alignment := int64(1)
+	if effect.vector.upperWrite != x86TypedVectorUpperUnknown {
+		if effect.vector.upperWrite != x86TypedVectorUpperPreserve || effect.vector.memoryAlignment <= 0 {
+			return fail()
+		}
+		alignment = effect.vector.memoryAlignment
 	}
 	// Read all inputs before any write, including aliased outputs. RMW receives
 	// one write-capable access certificate only after its old bytes are proved.
@@ -58,18 +65,26 @@ func fixedLocalGPByteStep(ins *Instr, state *x86FixedLocalState, proof *x86Fixed
 			continue
 		}
 		if operand.operand.Kind != OpMem && operand.operand.Kind != OpSym {
+			if operand.operand.Kind == OpReg && amd64VectorByteWidth(operand.operand.Reg) != 0 {
+				mask := x86CallerVectorByteMask(operand.width)
+				if effect.vector.upperWrite == x86TypedVectorUpperUnknown || mask == 0 ||
+					state.vectors[x86CallerVectorRoot(operand.operand.Reg)]&mask != mask {
+					return fail()
+				}
+				continue
+			}
 			if !fixedLocalNumericRead(operand.operand, operand.width, state) {
 				return fail()
 			}
 			continue
 		}
 		if !operand.write {
-			if _, _, err := fixedLocalReadMemory(ins, operand.index, state, proof, residue, operand.width, 1); err != nil {
+			if _, _, err := fixedLocalReadMemory(ins, operand.index, state, proof, residue, operand.width, alignment); err != nil {
 				return err
 			}
 			continue
 		}
-		offset, role, err := fixedLocalMemoryAccess(ins, operand.index, state, proof, residue, operand.width, 1, true, false)
+		offset, role, err := fixedLocalMemoryAccess(ins, operand.index, state, proof, residue, operand.width, alignment, true, false)
 		if err != nil {
 			return err
 		}
@@ -88,7 +103,7 @@ func fixedLocalGPByteStep(ins *Instr, state *x86FixedLocalState, proof *x86Fixed
 		}
 		switch operand.operand.Kind {
 		case OpMem:
-			offset, role, err := fixedLocalMemoryAccess(ins, operand.index, state, proof, residue, operand.width, 1, true, false)
+			offset, role, err := fixedLocalMemoryAccess(ins, operand.index, state, proof, residue, operand.width, alignment, true, false)
 			if err != nil {
 				return err
 			}
@@ -96,6 +111,14 @@ func fixedLocalGPByteStep(ins *Instr, state *x86FixedLocalState, proof *x86Fixed
 				fixedLocalNumericalStore(state, offset, operand.width, true)
 			}
 		case OpReg:
+			if amd64VectorByteWidth(operand.operand.Reg) != 0 {
+				mask := x86CallerVectorByteMask(operand.width)
+				if effect.vector.upperWrite != x86TypedVectorUpperPreserve || mask == 0 {
+					return fail()
+				}
+				state.vectors[x86CallerVectorRoot(operand.operand.Reg)] |= mask
+				continue
+			}
 			root, valid := x86CallerGP(operand.operand.Reg)
 			mask := x86CallerByteMask(operand.operand.Reg, operand.width)
 			_, private := state.pointers[root]

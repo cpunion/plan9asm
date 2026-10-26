@@ -226,25 +226,10 @@ func x86TypedInstructionByteEffect(op Op, ins Instr, arch string) (x86TypedByteE
 	if effect, known, err := x86TypedCRC32ByteEffect(op, ins, arch); known {
 		return effect, known, err
 	}
-	if effect, recognized, err := x86TypedLegacyIntegerArithmeticByteEffect(op, ins, arch); recognized {
-		return effect, recognized, err
-	}
-	if effect, recognized, err := x86TypedPackedLowMultiplyByteEffect(op, ins, arch); recognized {
-		return effect, recognized, err
-	}
-	if effect, recognized, err := x86TypedPackedWordMultiplyByteEffect(op, ins, arch); recognized {
-		return effect, recognized, err
-	}
-	if effect, recognized, err := x86TypedDwordProductByteEffect(op, ins, arch); recognized {
-		return effect, recognized, err
-	}
-	if effect, recognized, err := x86TypedPackedAverageByteEffect(op, ins, arch); recognized {
+	if effect, recognized, err := x86PackedBinaryByteEffect(op, ins, arch); recognized {
 		return effect, recognized, err
 	}
 	if effect, recognized, err := x86TypedPackedIntegerCompareByteEffect(op, ins, arch); recognized {
-		return effect, recognized, err
-	}
-	if effect, recognized, err := x86TypedPackedMultiplyAddByteEffect(op, ins, arch); recognized {
 		return effect, recognized, err
 	}
 	return x86TypedLegacyPackedMoveByteEffect(op, ins, arch)

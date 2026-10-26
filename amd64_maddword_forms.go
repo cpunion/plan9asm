@@ -92,8 +92,5 @@ func x86TypedPackedMultiplyAddByteEffect(op Op, ins Instr, arch string) (x86Type
 	if !known || err != nil || !form.legacy {
 		return x86TypedByteEffect{}, known && (err != nil || form.legacy), err
 	}
-	return x86TypedByteEffect{operands: []x86TypedByteOperand{
-		{index: form.first, operand: form.source, width: int64(form.byteWidth), read: true},
-		{index: form.destination, operand: ins.Args[form.destination], width: int64(form.byteWidth), read: true, write: true},
-	}}, true, nil
+	return x86LegacyPackedBinaryByteEffect(ins, form.x86PackedBinaryForm, form.source), true, nil
 }

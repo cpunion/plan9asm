@@ -58,8 +58,5 @@ func x86TypedPackedLowMultiplyByteEffect(op Op, ins Instr, arch string) (x86Type
 	if !known || err != nil || !form.legacy {
 		return x86TypedByteEffect{}, known && (err != nil || form.legacy), err
 	}
-	return x86TypedByteEffect{operands: []x86TypedByteOperand{
-		{index: form.first, operand: ins.Args[form.first], width: int64(form.byteWidth), read: true},
-		{index: form.destination, operand: ins.Args[form.destination], width: int64(form.byteWidth), read: true, write: true},
-	}}, true, nil
+	return x86LegacyPackedBinaryByteEffect(ins, form.x86PackedBinaryForm, ins.Args[form.first]), true, nil
 }

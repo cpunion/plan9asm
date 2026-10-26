@@ -92,16 +92,13 @@ func proveX86FixedLocal(fn Func, sig FuncSig) (Func, error) {
 	for index := range copyFn.Instrs {
 		copyFn.Instrs[index].Args = append([]Operand(nil), fn.Instrs[index].Args...)
 		copyFn.Instrs[index].x86FixedLocalMemory = nil
-		ins := copyFn.Instrs[index]
-		if ins.x86Encoded || ins.x86SourceRaw != nil || ins.x86AddressBits != 0 || ins.x86SegmentPrefix != 0 || x86SourceGOperand(ins) {
-			return fn, goAMD64FrameContext("fixed local source contains raw/native/g effects")
-		}
-		if !fixedLocalInstructionShape(ins) {
-			return fn, goAMD64FrameContext("fixed local complete source has an unregistered instruction shape: %s", ins.Op)
-		}
+	}
+	effects, err := fixedLocalEffectPlan(copyFn)
+	if err != nil {
+		return fn, err
 	}
 	for residue := 0; residue < 8; residue++ {
-		if err := replayX86FixedLocal(&copyFn, sig, proof, residue, &budget); err != nil {
+		if err := replayX86FixedLocal(&copyFn, sig, proof, residue, &budget, effects); err != nil {
 			return fn, err
 		}
 	}
@@ -112,8 +109,12 @@ func proveX86FixedLocal(fn Func, sig FuncSig) (Func, error) {
 	for index := range final.Instrs {
 		final.Instrs[index].x86FixedLocalMemory = nil
 	}
+	effects, err = fixedLocalEffectPlan(final)
+	if err != nil {
+		return fn, err
+	}
 	for residue := 0; residue < 8; residue++ {
-		if err := replayX86FixedLocal(&final, sig, proof, residue, &budget); err != nil {
+		if err := replayX86FixedLocal(&final, sig, proof, residue, &budget, effects); err != nil {
 			return fn, err
 		}
 	}
@@ -131,13 +132,37 @@ func proveX86FixedLocal(fn Func, sig FuncSig) (Func, error) {
 	if err := fixedLocalRelocationAliases(proof.accesses); err != nil {
 		return fn, err
 	}
-	var err error
 	proof.function, err = x86CallerSourceFingerprint(final)
 	if err != nil {
 		return fn, goAMD64FrameContext("fixed local normalized function cannot be bound: %v", err)
 	}
 	final.x86FixedLocal = proof
 	return final, nil
+}
+
+// This call-local plan holds immutable syntax effects, never a proof result.
+// Original ordinals bind it to the private function copy. Each independent
+// eight-residue replay builds its own plan, avoiding repeated family parsing
+// in a loop without caching any input, storage or source authority.
+func fixedLocalEffectPlan(fn Func) (map[int]x86TypedByteEffect, error) {
+	var effects map[int]x86TypedByteEffect
+	for index, ins := range fn.Instrs {
+		if ins.x86Encoded || ins.x86SourceRaw != nil || ins.x86AddressBits != 0 || ins.x86SegmentPrefix != 0 || x86SourceGOperand(ins) {
+			return nil, goAMD64FrameContext("fixed local source contains raw/native/g effects")
+		}
+		if effect, known, err := fixedLocalVectorByteEffect(ins); known {
+			if err != nil {
+				return nil, err
+			}
+			if effects == nil {
+				effects = make(map[int]x86TypedByteEffect)
+			}
+			effects[index] = effect
+		} else if !fixedLocalInstructionShape(ins) {
+			return nil, goAMD64FrameContext("fixed local complete source has an unregistered instruction shape: %s", ins.Op)
+		}
+	}
+	return effects, nil
 }
 
 // Every reachable access, including initialization stores and private address
@@ -233,11 +258,8 @@ func fixedLocalInstructionShape(ins Instr) bool {
 	if form, known, err := x86AESProperties(ins.Op, ins, "amd64"); known {
 		return err == nil && form.byteWidth == 16
 	}
-	if form, known, err := x86PackedWrappingAddProperties(ins, "amd64"); known {
-		return err == nil && form.legacy && !form.mmx && form.byteWidth == 16
-	}
-	if form, known, err := x86WordMultiplyAddProperties(ins, "amd64"); known {
-		return err == nil && form.legacy && !form.mmx && form.byteWidth == 16
+	if _, known, err := fixedLocalVectorByteEffect(ins); known {
+		return err == nil
 	}
 	if form, known, err := x86FloatCompareProperties(ins, "amd64"); known {
 		return err == nil && form.legacy && !form.scalar && form.byteWidth == 16
@@ -322,7 +344,8 @@ func (budget *x86FixedLocalBudget) consume(frame int64) error {
 	return nil
 }
 
-func replayX86FixedLocal(fn *Func, sig FuncSig, proof *x86FixedLocalProof, residue int, budget *x86FixedLocalBudget) error {
+func replayX86FixedLocal(fn *Func, sig FuncSig, proof *x86FixedLocalProof, residue int, budget *x86FixedLocalBudget,
+	effects map[int]x86TypedByteEffect) error {
 	edges, instructions, err := fixedLocalEdges(*fn)
 	if err != nil {
 		return err
@@ -354,7 +377,12 @@ func replayX86FixedLocal(fn *Func, sig FuncSig, proof *x86FixedLocalProof, resid
 		ins := fn.Instrs[instructions[pc]]
 		ins.x86FixedLocalMemory = nil
 		proof.ordinal = instructions[pc]
-		if err := fixedLocalStep(&ins, &current, sig, proof, residue); err != nil {
+		if effect, found := effects[instructions[pc]]; found {
+			err = fixedLocalTypedByteStep(&ins, &current, proof, residue, effect)
+		} else {
+			err = fixedLocalStep(&ins, &current, sig, proof, residue)
+		}
+		if err != nil {
 			return fmt.Errorf("%s: %q: %w", fn.Sym, ins.Raw, err)
 		}
 		accesses[pc] = ins.x86FixedLocalMemory
@@ -623,7 +651,7 @@ func fixedLocalStep(ins *Instr, state *x86FixedLocalState, sig FuncSig, proof *x
 		if err != nil {
 			return err
 		}
-		return fixedLocalGPByteStep(ins, state, proof, residue, effect)
+		return fixedLocalTypedByteStep(ins, state, proof, residue, effect)
 	}
 	if known, err := fixedLocalAESByteStep(ins, state, proof, residue); known {
 		return err
@@ -808,19 +836,15 @@ func fixedLocalMove(ins *Instr, state *x86FixedLocalState, sig FuncSig, proof *x
 }
 
 func fixedLocalVectorStep(ins *Instr, state *x86FixedLocalState, proof *x86FixedLocalProof, residue int) error {
+	if effect, known, err := fixedLocalVectorByteEffect(*ins); known {
+		if err != nil {
+			return err
+		}
+		return fixedLocalTypedByteStep(ins, state, proof, residue, effect)
+	}
 	width := uint64(65535)
 	first, second, destination, memory := 0, 1, 1, -1
-	if form, known, err := x86PackedWrappingAddProperties(*ins, "amd64"); known {
-		if err != nil || !form.legacy || form.mmx || form.byteWidth != 16 {
-			return goAMD64FrameContext("fixed local packed add shape is not closed")
-		}
-		first, second, destination, memory = form.first, form.second, form.destination, form.memory
-	} else if form, known, err := x86WordMultiplyAddProperties(*ins, "amd64"); known {
-		if err != nil || !form.legacy || form.mmx || form.byteWidth != 16 {
-			return goAMD64FrameContext("fixed local multiply-add shape is not closed")
-		}
-		first, second, destination, memory = form.first, form.second, form.destination, form.memory
-	} else if form, known, err := x86FloatCompareProperties(*ins, "amd64"); known {
+	if form, known, err := x86FloatCompareProperties(*ins, "amd64"); known {
 		if err != nil || !form.legacy || form.scalar || form.byteWidth != 16 {
 			return goAMD64FrameContext("fixed local compare shape is not closed")
 		}

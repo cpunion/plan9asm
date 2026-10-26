@@ -26,10 +26,13 @@ func GoAMD64FixedLocalFrameBindingNeeded(file *File, goarch string) bool {
 				physicalOnly = !form.aligned
 			} else if form, known, err := x86AESProperties(ins.Op, ins, goarch); known {
 				memory, eligible = form.memory, err == nil && form.byteWidth == 16
-			} else if form, known, err := x86PackedWrappingAddProperties(ins, goarch); known {
-				memory, eligible = form.memory, err == nil && form.legacy && !form.mmx && form.byteWidth == 16
-			} else if form, known, err := x86WordMultiplyAddProperties(ins, goarch); known {
-				memory, eligible = form.memory, err == nil && form.legacy && !form.mmx && form.byteWidth == 16
+			} else if effect, known, err := fixedLocalVectorByteEffect(ins); known {
+				eligible = err == nil
+				for _, operand := range effect.operands {
+					if operand.operand.Kind == OpMem {
+						memory = operand.index
+					}
+				}
 			} else if form, known, err := x86FloatCompareProperties(ins, goarch); known {
 				memory, eligible = form.memory, err == nil && form.legacy && !form.scalar && form.byteWidth == 16
 			} else if form, known, err := x86ConditionalMoveProperties(ins.Op, ins, goarch); known {

@@ -19,12 +19,27 @@ type x86TypedByteOperand struct {
 
 type x86TypedByteEffect struct {
 	operands            []x86TypedByteOperand
+	vector              x86TypedVectorEffect
 	flagsRead           uint8
 	flagsDefined        uint8
 	flagsKilled         uint8
 	dynamicMemory       bool // A register-indexed bit string has no fixed base span.
 	requiresResultProof bool // Mandatory NUM/result obligation, independent of cost-only storage routing.
 }
+
+// Zero is deliberately unknown: an existing operand dependency alone does
+// not establish memory alignment or what happens to the upper vector alias.
+type x86TypedVectorEffect struct {
+	upperWrite      x86TypedVectorUpperWrite
+	memoryAlignment int64
+}
+
+type x86TypedVectorUpperWrite uint8
+
+const (
+	x86TypedVectorUpperUnknown x86TypedVectorUpperWrite = iota
+	x86TypedVectorUpperPreserve
+)
 
 const (
 	x86ByteFlagCF uint8 = 1 << iota
