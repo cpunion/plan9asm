@@ -224,6 +224,31 @@ func x86ResultCallerAddressesAfter(ins Instr, before [16]bool, entryFP map[int64
 		return before // Neither the X0 result nor FLAGS write any other GP.
 	}
 	word := x86ResultPointerWord(arch)
+	if form, width, known, err := x86SwapProperties(ins, arch); known {
+		if err != nil {
+			return [16]bool{}
+		}
+		if form.nop {
+			return before
+		}
+		first, _, valid := x86ResultGP(form.register.Reg, width, arch)
+		if !valid {
+			return [16]bool{}
+		}
+		if form.other.Kind == OpReg {
+			last, _, valid := x86ResultGP(form.other.Reg, width, arch)
+			if !valid {
+				return [16]bool{}
+			}
+			if width == word {
+				before[first], before[last] = before[last], before[first]
+				return before
+			}
+			before[last] = false
+		}
+		before[first] = false
+		return before // A partial or memory overwrite never imports a caller identity.
+	}
 	move, lea, add, sub := Op("MOVQ"), Op("LEAQ"), Op("ADDQ"), Op("SUBQ")
 	if arch == "386" {
 		move, lea, add, sub = "MOVL", "LEAL", "ADDL", "SUBL"

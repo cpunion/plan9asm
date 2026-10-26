@@ -160,8 +160,8 @@ func TestGoAMD64FixedLocalTransportAuthorityNegatives(t *testing.T) {
 	declaration := "func Value(" + fixedLocalTransportParams + ") bool"
 	for name, body := range map[string]string{
 		"incoming index":         strings.Replace(fixedLocalTransportBoolBody, "MOVQ p+24(FP),R8", "MOVQ (DX)(AX*2),AX", 1),
-		"incoming arithmetic":    strings.Replace(fixedLocalTransportBoolBody, "MOVQ p+24(FP),R8", "ADDQ $8,DX", 1),
-		"incoming comparison":    strings.Replace(fixedLocalTransportBoolBody, "MOVQ p+24(FP),R8", "CMPQ DX,$0", 1),
+		"incoming arithmetic":    strings.Replace(fixedLocalTransportBoolBody, "MOVQ p+24(FP),R8", "ADDQ CX,DX", 1),
+		"incoming comparison":    strings.Replace(fixedLocalTransportBoolBody, "MOVQ p+24(FP),R8", "CMPQ DX,R8", 1),
 		"incoming mask":          strings.Replace(fixedLocalTransportBoolBody, "MOVQ p+24(FP),R8", "KMOVQ DX,K1", 1),
 		"incoming partial":       strings.Replace(fixedLocalTransportBoolBody, "MOVQ 128(BP),DX", "MOVL 128(BP),DX", 1),
 		"incoming numeric spill": strings.Replace(fixedLocalTransportBoolBody, "MOVQ p+24(FP),R8", "VMOVDQA 128(BP),Y0", 1),
@@ -190,7 +190,7 @@ func TestGoAMD64FixedLocalTransportPartialWritesAndJoins(t *testing.T) {
 		"opaque SP replacement":  strings.Replace(fixedLocalTransportBoolBody, "MOVQ 128(BP),DX", "MOVQ 128(BP),SP", 1),
 		"opaque BP replacement":  strings.Replace(fixedLocalTransportBoolBody, "MOVQ 128(BP),DX", "MOVQ 128(BP),BP", 1),
 		"opaque narrow GP":       strings.Replace(fixedLocalTransportBoolBody, "MOVQ 128(BP),DX", "MOVQ 128(BP),DX\nMOVB DX,AX", 1),
-		"different pointer join": strings.Replace(fixedLocalTransportBoolBody, "MOVQ p+24(FP),R8", "CMPQ AX,$0\nJE join\nMOVQ p+24(FP),DX\njoin:", 1),
+		"different pointer join": strings.Replace(fixedLocalTransportBoolBody, "MOVQ p+24(FP),R8", "CMPQ AX,$0\nJE join\nMOVQ p+24(FP),DX\njoin:\nMOVQ (DX),AX", 1),
 		"bool lost in CMOV":      strings.Replace(fixedLocalTransportBoolBody, "MOVB BX,ret+48(FP)", "MOVQ $0,BX\nCMPQ AX,$0\nCMOVQEQ AX,BX\nMOVB BX,ret+48(FP)", 1),
 		"bool unknown join":      strings.Replace(fixedLocalTransportBoolBody, "MOVB BX,ret+48(FP)", "CMPQ AX,$0\nJE join\nMOVB AX,BX\njoin:\nMOVB BX,ret+48(FP)", 1),
 	}
@@ -211,6 +211,29 @@ func TestGoAMD64FixedLocalTransportPartialWritesAndJoins(t *testing.T) {
 			pkg, _, file, options := fixedLocalTransportFixture(t, assembly, decl, "linux/amd64", "x86_64-unknown-linux-gnu")
 			if _, err := proveX86FixedLocal(file.Funcs[0], options.Sigs[pkg.Path+".Value"]); !errors.Is(err, ErrProbeNeedsContext) {
 				t.Fatal("overwritten or conflicting typed transport survived", err)
+			}
+		})
+	}
+}
+
+func TestGoAMD64FixedLocalTransportDerivedAndUnusedPointers(t *testing.T) {
+	// These sources used to be negative fixtures before affine inputs and
+	// unused differing-origin joins were supported. Retain their exact bodies
+	// as positive controls; the negative siblings now consume a real missing
+	// NUM operand, unknown comparison input or unresolved pointer identity.
+	for name, replacement := range map[string]string{
+		"incoming arithmetic": "ADDQ $8,DX",
+		"incoming comparison": "CMPQ DX,$0",
+		"unused pointer join": "CMPQ AX,$0\nJE join\nMOVQ p+24(FP),DX\njoin:",
+	} {
+		t.Run(name, func(t *testing.T) {
+			body := strings.Replace(fixedLocalTransportBoolBody, "MOVQ p+24(FP),R8", replacement, 1)
+			assembly := fixedLocalTransportAssembly("Value", 49, body)
+			declaration := "func Value(" + fixedLocalTransportParams + ") bool"
+			pkg, _, file, options := fixedLocalTransportFixture(t, assembly, declaration, "linux/amd64", "x86_64-unknown-linux-gnu")
+			requireX86GoAssemblerResult(t, "amd64", assembly, true)
+			if _, err := proveX86FixedLocal(file.Funcs[0], options.Sigs[pkg.Path+".Value"]); err != nil {
+				t.Fatal("safe derived or unused pointer source regressed", err)
 			}
 		})
 	}

@@ -21,6 +21,17 @@ and terms used below, including raw continuation, producer replay and native bac
 
 ## Instruction-family workflow
 
+XCHG B/W/L/Q uses the emitter's complete exchange grammar in fixed-frame,
+caller-origin and canonical-byte observers. Scalar MOV and XCHG share value
+reads and writes: snapshot both inputs, preserve full-word pointer identities,
+constants and ranges, and never reinterpret a pointer as NUM. Memory exchanges
+write their original address before changing an aliased base register; private
+RMW requires initialized bytes or an exact pointer spill. Native memory retains
+the existing implicit-lock emitter, faults and ordering, without new extent or
+alignment permission. Narrow writes revoke whole-word facts, while Go's AX/AX
+opcode 90 remains a true NOP. Keep independent original-Go execution alongside
+width/alias proofs and objects; object success alone is not execution evidence.
+
 ANDNL/Q and PDEPL/Q/PEXTL/Q share Go's complete `_yandnl` operand grammar
 and ordered two-input/one-output byte effect, not their numerical or FLAGS
 operation. Mode32 ignores VEX.W, including Q memory widths. ANDN defines only

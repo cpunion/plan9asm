@@ -20,6 +20,18 @@ func x86ResultCallerOriginsAfter(original Instr, before [16]uint16, after [16]bo
 		return next
 	}
 	word := x86ResultPointerWord(arch)
+	if form, width, known, err := x86SwapProperties(ins, arch); known && err == nil &&
+		width == word && form.other.Kind == OpReg {
+		first, _, _ := x86ResultGP(form.register.Reg, width, arch)
+		last, _, _ := x86ResultGP(form.other.Reg, width, arch)
+		if after[first] {
+			next[first] = before[last]
+		}
+		if after[last] {
+			next[last] = before[first]
+		}
+		return next
+	}
 	destination, _, valid := x86ResultGP(ins.Args[1].Reg, word, arch)
 	if !valid || !after[destination] {
 		return next

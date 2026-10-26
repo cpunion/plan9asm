@@ -1,25 +1,19 @@
 package plan9asm
 
-import "strings"
-
 // x86ResultSwapStep shares the existing Go exchange grammar between result
 // observers, but admits only register/register byte effects. Memory exchanges
 // still need their independent FP, AUTO, native or caller authority.
 func x86ResultSwapStep(ins Instr, state *x86ResultState, arch string) (bool, bool) {
-	name := strings.ToUpper(string(ins.Op))
-	base := strings.SplitN(name, ".", 2)[0]
-	spec, known := amd64ExchangeSpecs[Op(base)]
-	if !known || spec.kind != amd64ExchangeSwap {
+	form, width, known, err := x86SwapProperties(ins, arch)
+	if !known {
 		return false, false
 	}
-	form, err := parseAMD64ExchangeForm(arch, Op(name), spec, ins)
 	if err != nil || form.register.Kind != OpReg || form.other.Kind != OpReg {
 		return false, true
 	}
 	if form.nop {
 		return true, true // Preserve even undefined bytes and opaque identities.
 	}
-	width := int64(spec.bits / 8)
 	first, firstMask, firstValid := x86ResultGP(form.register.Reg, width, arch)
 	last, lastMask, lastValid := x86ResultGP(form.other.Reg, width, arch)
 	if !firstValid || !lastValid {

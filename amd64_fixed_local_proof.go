@@ -214,6 +214,9 @@ func fixedLocalRelocationAliases(accesses map[int]map[int]x86FixedLocalAccess) e
 }
 
 func fixedLocalInstructionShape(ins Instr) bool {
+	if _, _, known, err := x86SwapProperties(ins, "amd64"); known {
+		return err == nil
+	}
 	if form, known, err := fixedLocalConversionProperties(ins); known {
 		return err == nil && !form.mmx
 	}
@@ -754,6 +757,9 @@ func fixedLocalStep(ins *Instr, state *x86FixedLocalState, sig FuncSig, proof *x
 	if width := x86RawReturnScalarMoveBytes(x86GoMOVQSourceInstruction(*ins).Op); width != 0 {
 		return fixedLocalMove(ins, state, sig, proof, residue, width)
 	}
+	if known, err := fixedLocalExchangeStep(ins, state, sig, proof, residue); known {
+		return err
+	}
 	if known, err := fixedLocalConditionalSetStep(ins, state, sig, proof, residue); known {
 		return err
 	}
@@ -856,163 +862,14 @@ func fixedLocalNumericRead(operand Operand, width int64, state *x86FixedLocalSta
 }
 
 func fixedLocalMove(ins *Instr, state *x86FixedLocalState, sig FuncSig, proof *x86FixedLocalProof, residue int, width int64) error {
-	fail := func() error { return goAMD64FrameContext("unproved fixed local scalar move") }
 	if len(ins.Args) != 2 {
-		return fail()
+		return goAMD64FrameContext("unproved fixed local scalar move")
 	}
-	source, destination := ins.Args[0], ins.Args[1]
-	var address int64
-	var pointer bool
-	var opaque bool
-	var identity x86FixedLocalOrigin
-	var booleans uint8
-	var constant int64
-	var constantKnown bool
-	var bounds x86UnsignedRange
-	var bounded bool
-	switch source.Kind {
-	case OpReg:
-		address, pointer = state.pointers[source.Reg]
-		identity, opaque = state.opaque[source.Reg]
-		if pointer || opaque {
-			if width != 8 {
-				return fail()
-			}
-		} else if amd64VectorByteWidth(source.Reg) == 16 {
-			if width != 8 || state.vectors[x86CallerVectorRoot(source.Reg)]&255 != 255 {
-				return fail()
-			}
-		} else {
-			if !fixedLocalNumericRead(source, width, state) {
-				return fail()
-			}
-			constant, constantKnown = state.constants[source.Reg]
-			// Narrow moves truncate or preserve a destination's old upper
-			// bytes. They cannot transport a complete 64-bit address mask.
-			constantKnown = constantKnown && width == 8
-			bounds, bounded = state.ranges[source.Reg]
-			bounded = bounded && width == 8
-			booleans = fixedLocalBooleanRead(source, width, state)
-		}
-	case OpImm:
-		if !fixedLocalNumericRead(source, width, state) {
-			return fail()
-		}
-		constant, constantKnown = source.Imm, width == 8
-		booleans = fixedLocalBooleanRead(source, width, state)
-	case OpFP:
-		sp, original := state.pointers[SP]
-		slot, _, found := fixedLocalTransportSlot(source.FPOffset, width, sig.Frame.Params)
-		if !original || sp != 0 || !found {
-			return fail()
-		}
-		if slot.Type == Ptr {
-			opaque, identity = true, x86FixedLocalOrigin{parameter: slot.Offset}
-		} else if slot.Type == I1 {
-			booleans = 1
-		}
-	case OpSym:
-		if _, _, err := fixedLocalReadMemory(ins, 0, state, proof, residue, width, 1); err != nil {
-			return err
-		}
-	case OpMem:
-		memory, err := fixedLocalMemoryAddress(*ins, 0, proof.frame)
-		if err != nil {
-			return err
-		}
-		offset, found := fixedLocalPrivateOffset(memory, state)
-		if found {
-			address, pointer = state.addresses[offset]
-			identity, opaque = state.opaqueCells[offset]
-		}
-		if (pointer || opaque) && width != 8 {
-			return fail()
-		}
-		offset, role, err := fixedLocalMemoryAccess(ins, 0, state, proof, residue, width, 1, false, pointer || opaque)
-		if err != nil {
-			return err
-		}
-		if role == x86FixedLocalPrivateMemory && !pointer && !opaque {
-			booleans = fixedLocalMemoryBooleans(state, offset, width)
-		}
-	default:
-		return fail()
+	value, err := fixedLocalReadValue(ins, 0, state, sig, proof, residue, width, false)
+	if err != nil {
+		return err
 	}
-	switch destination.Kind {
-	case OpReg:
-		root, valid := x86CallerGP(destination.Reg)
-		if !valid || (pointer || opaque) && (width != 8 || destination.Reg != root) {
-			return fail()
-		}
-		if root == SP && !pointer {
-			return fail()
-		}
-		if _, oldPointer := state.pointers[root]; oldPointer && width != 8 {
-			return fail()
-		}
-		delete(state.pointers, root)
-		delete(state.opaque, root)
-		delete(state.constants, root)
-		fixedLocalWriteBooleans(state, destination.Reg, width, booleans)
-		if pointer {
-			state.pointers[root] = address
-			state.known[root] = 0
-		} else if opaque {
-			state.opaque[root] = identity
-			state.known[root] = 0
-		} else {
-			mask := x86CallerByteMask(destination.Reg, width)
-			if mask == 0 {
-				return fail()
-			}
-			if width == 4 {
-				mask = 255
-			}
-			state.known[root] |= mask
-			if constantKnown {
-				state.constants[root] = constant
-			}
-			if bounded {
-				state.setRange(root, bounds)
-			}
-		}
-	case OpMem:
-		if source.Kind == OpMem {
-			return fail()
-		}
-		offset, role, err := fixedLocalMemoryAccess(ins, 1, state, proof, residue, width, 1, true, false)
-		if err != nil {
-			return err
-		}
-		if role == x86FixedLocalNativeInput {
-			if pointer || opaque {
-				return fail() // Neither private nor input pointers escape as bytes.
-			}
-			return nil
-		}
-		fixedLocalRevokeSpillRoles(state, offset, width)
-		for index := offset; index < offset+width; index++ {
-			state.bytes[index] = !pointer && !opaque
-			state.booleanBytes[index] = booleans&(1<<uint(index-offset)) != 0
-		}
-		if pointer {
-			state.addresses[offset] = address
-		}
-		if opaque {
-			state.opaqueCells[offset] = identity
-		}
-	case OpFP:
-		sp, original := state.pointers[SP]
-		slot, index, found := fixedLocalTransportSlot(destination.FPOffset, width, sig.Frame.Results)
-		if !original || sp != 0 || pointer || identity.literal.symbol != "" || !found || source.Kind != OpReg && source.Kind != OpImm ||
-			opaque != (slot.Type == Ptr) || slot.Type == I1 && booleans&1 == 0 {
-			return fail()
-		}
-		state.results[index] = true
-	default:
-		return fail()
-	}
-	return nil
+	return fixedLocalWriteValue(ins, 1, 0, value, state, sig, proof, residue, width)
 }
 
 func fixedLocalVectorStep(ins *Instr, state *x86FixedLocalState, proof *x86FixedLocalProof, residue int) error {

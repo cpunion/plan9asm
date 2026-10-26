@@ -28,7 +28,14 @@ func GoAMD64FixedLocalFrameBindingNeeded(file *File, goarch string) bool {
 			}
 			memory, eligible := -1, false
 			physicalOnly := false
-			if _, known, err := x86ScalarRegisterLoadProperties(ins.Op, ins, goarch); known {
+			if _, _, known, err := x86SwapProperties(ins, goarch); known {
+				eligible, physicalOnly = err == nil, true
+				for index, operand := range ins.Args {
+					if operand.Kind == OpMem {
+						memory = index
+					}
+				}
+			} else if _, known, err := x86ScalarRegisterLoadProperties(ins.Op, ins, goarch); known {
 				memory, eligible, physicalOnly = 0, err == nil, true
 			} else if _, known, err := x86ScalarRegisterStoreProperties(ins.Op, ins, goarch); known {
 				memory, eligible, physicalOnly = 1, err == nil, true
@@ -117,6 +124,17 @@ func (bases fixedLocalCandidateBaseSet) has(memory MemRef) bool {
 func fixedLocalCandidateBases(fn Func) fixedLocalCandidateBaseSet {
 	var dependencies [16]fixedLocalCandidateBaseSet
 	for _, ins := range fn.Instrs {
+		if form, width, known, err := x86SwapProperties(ins, "amd64"); known {
+			if err == nil && width == 8 && form.other.Kind == OpReg {
+				first, firstValid := fixedLocalCandidateRegister(form.register.Reg)
+				last, lastValid := fixedLocalCandidateRegister(form.other.Reg)
+				if firstValid && lastValid {
+					dependencies[first] |= 1 << uint(last)
+					dependencies[last] |= 1 << uint(first)
+				}
+			}
+			continue
+		}
 		op := x86GoMOVQSourceInstruction(ins).Op
 		if op != "MOVQ" && op != "LEAQ" {
 			continue

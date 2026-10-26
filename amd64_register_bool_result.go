@@ -53,6 +53,19 @@ func x86RegisterCanonicalBytesAfter(original Instr, before [16]uint8, arch strin
 		}
 		next[root] = next[root]&^mask | canonical&mask
 	}
+	if form, width, known, err := x86SwapProperties(ins, arch); known {
+		if err != nil || !x86ResultNamedPredicateInstruction(ins) {
+			return [16]uint8{}
+		}
+		if form.nop {
+			return next
+		}
+		write(form.register.Reg, width, read(form.other, width))
+		if form.other.Kind == OpReg {
+			write(form.other.Reg, width, read(form.register, width))
+		}
+		return next // Reads use the original array, including overlapping AH/AL.
+	}
 	if bits, known, err := x86ByteSwapProperties(ins.Op, ins, arch); known {
 		if err != nil {
 			return [16]uint8{}

@@ -36,6 +36,20 @@ type amd64ExchangeForm struct {
 	nop      bool
 }
 
+// The swap consumers use the same complete Go grammar as the emitter. Width
+// and operand symmetry come from the existing exchange family, not a second
+// opcode directory in each provenance or byte observer.
+func x86SwapProperties(ins Instr, arch string) (amd64ExchangeForm, int64, bool, error) {
+	name := strings.ToUpper(string(ins.Op))
+	base, _, _ := strings.Cut(name, ".")
+	spec, known := amd64ExchangeSpecs[Op(base)]
+	if !known || spec.kind != amd64ExchangeSwap {
+		return amd64ExchangeForm{}, 0, false, nil
+	}
+	form, err := parseAMD64ExchangeForm(arch, Op(name), spec, ins)
+	return form, int64(spec.bits / 8), true, err
+}
+
 func parseAMD64ExchangeForm(goarch string, op Op, spec amd64ExchangeSpec, ins Instr) (amd64ExchangeForm, error) {
 	invalid := func(reason string) (amd64ExchangeForm, error) {
 		return amd64ExchangeForm{}, fmt.Errorf("%s %s %s: %q", goarch, op, reason, ins.Raw)
