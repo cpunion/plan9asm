@@ -231,7 +231,11 @@ func TestModuleOtherWorkersActualCancellationStopsDispatchAndJoins(t *testing.T)
 			t.Fatal("invalid actual package process ID", name, string(data), err)
 		}
 		if err := syscall.Kill(pid, 0); err != syscall.ESRCH {
-			t.Fatal("module returned before actual package process exited", name, pid, err)
+			if evidence, terminal := moduleWorkerKernelTerminal(pid); terminal {
+				t.Logf("actual package exited; its outside-group parent retains a zombie: %s", evidence)
+			} else {
+				t.Fatal("module returned before actual package process exited", name, pid, err, evidence)
+			}
 		}
 	}
 	var report moduleReport
