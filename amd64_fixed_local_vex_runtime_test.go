@@ -314,3 +314,33 @@ func TestGoAMD64FixedLocalVEXRuntimeInventory(t *testing.T) {
 	t.Logf("540 official source witnesses grouped into %d real shape kernels, %d original-Go VEX operations including destination aliases",
 		len(kernels), len(witnesses))
 }
+
+func fixedLocalShiftRuntimeKernels(t *testing.T) []fixedLocalVEXRuntimeKernel {
+	t.Helper()
+	var kernels []fixedLocalVEXRuntimeKernel
+	operations := 0
+	for index, name := range fixedLocalLegacyShiftNames() {
+		for _, count := range []int{0, 1, 15, 127} {
+			operation := fmt.Sprintf("%s $%d,X2", name, count)
+			kernels = append(kernels, fixedLocalVEXRuntimeKernel{shape: operation, operations: []string{operation}})
+			operations++
+		}
+		if index >= 8 {
+			continue // Whole-byte shifts have only an immediate count.
+		}
+		var rows []string
+		for _, count := range []string{"X0", "X2", "64(BP)", "(SI)"} {
+			rows = append(rows, name+" "+count+",X2")
+		}
+		kernels = append(kernels, fixedLocalVEXRuntimeKernel{shape: rows[0], operations: rows})
+		operations += len(rows)
+	}
+	if len(kernels) != 56 || operations != 80 {
+		t.Fatal("complete legacy shift runtime inventory changed", len(kernels), operations)
+	}
+	return kernels
+}
+
+func TestGoAMD64FixedLocalShiftRuntimeObjects(t *testing.T) {
+	fixedLocalVectorRuntime(t, fixedLocalPackedCompileOnlyTools(t), false, fixedLocalShiftRuntimeKernels(t))
+}

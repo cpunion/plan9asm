@@ -22,6 +22,11 @@ func TestCrossLinuxRuntimeMatrixGoAMD64FixedLocalShuffle(t *testing.T) {
 	x87IA32RequireNativeHost(t)
 }
 
+func TestCrossLinuxRuntimeMatrixGoAMD64FixedLocalShift(t *testing.T) {
+	fixedLocalVectorRuntime(t, fixedLocalVEXNativeTools(t), true, fixedLocalShiftRuntimeKernels(t))
+	x87IA32RequireNativeHost(t)
+}
+
 func fixedLocalVEXNativeTools(t *testing.T) x86FloatCompareExecution {
 	t.Helper()
 	x87IA32RequireNativeHost(t)
