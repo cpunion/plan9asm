@@ -81,6 +81,12 @@ func X86PackedSignRows(legacy X86LegacyCatalog, avx []X86AVXRule) ([]X86PackedBi
 	return x86PackedBinaryRows(legacy, avx, `PSIGNB PSIGNW PSIGND VPSIGNB VPSIGNW VPSIGND`)
 }
 
+// X86PackedByteShuffleRows retains byte-indexed vector permutations. The
+// separate VPSHUFBITQMB bit-to-mask family does not share this operand grammar.
+func X86PackedByteShuffleRows(legacy X86LegacyCatalog, avx []X86AVXRule) ([]X86PackedBinaryRow, error) {
+	return x86PackedBinaryRows(legacy, avx, `PSHUFB VPSHUFB`)
+}
+
 // X86PackedBinaryPilotRows covers the shared packed add/subtract and D/Q
 // low-multiply pilot. MMX and the separate W multiply family are not included.
 // PADDD is a frontend alias, not an additional official encoder row.
@@ -274,7 +280,7 @@ func x86PackedLegacyRowWitnesses(entry X86LegacyOpcode, row X86LegacyOperand) ([
 	if entry.Kind != "encoding" || entry.EscapeAdjustment != 0 || strings.Join(row.Classes, ",") != "Yxm,Yxr" {
 		return nil, fmt.Errorf("unmodeled legacy packed operand row")
 	}
-	prefix, offset := []byte{0x66, 0x0f}, 0
+	prefix, offset, opcodeBytes := []byte{0x66, 0x0f}, 0, 1
 	switch {
 	case entry.Ytab == "ymm" && entry.Prefix == "Py1" && row.RowIndex == 1 && row.ZCase == "Zm_r_xm" && row.ZOffset == 2 && row.UnmatchedOffset == 1:
 		if len(entry.OpBytes) != 3 || entry.OpBytes[1] != "Pe" || entry.OpBytes[0] != entry.OpBytes[2] {
@@ -288,15 +294,23 @@ func x86PackedLegacyRowWitnesses(entry X86LegacyOpcode, row X86LegacyOperand) ([
 		}
 	case entry.Ytab == "yxm_q4" && entry.Prefix == "Pq4" && row.RowIndex == 0 && row.ZCase == "Zm_r" && row.ZOffset == 1 && row.UnmatchedOffset == 0:
 		prefix = append(prefix, 0x38)
+	case entry.Ytab == "ymshufb" && entry.Prefix == "Pq" && row.RowIndex == 0 && row.ZCase == "Zm2_r" && row.ZOffset == 2 && row.UnmatchedOffset == 0:
+		// Go's Zm2_r emits two selected opcode bytes before ModRM. They
+		// are payload, not another mandatory prefix or a mnemonic lookup.
+		opcodeBytes = 2
 	default:
 		return nil, fmt.Errorf("unmodeled legacy packed prefix/offset rule")
 	}
-	if len(entry.OpBytes) != offset+1 {
+	if len(entry.OpBytes) != offset+opcodeBytes {
 		return nil, fmt.Errorf("unmodeled legacy packed opcode payload")
 	}
-	opcode, err := strconv.ParseUint(entry.OpBytes[offset], 0, 8)
-	if err != nil {
-		return nil, fmt.Errorf("legacy packed opcode is not a byte literal")
+	encoding := prefix
+	for _, value := range entry.OpBytes[offset:] {
+		opcode, err := strconv.ParseUint(value, 0, 8)
+		if err != nil {
+			return nil, fmt.Errorf("legacy packed opcode is not a byte literal")
+		}
+		encoding = append(encoding, byte(opcode))
 	}
 	var witnesses []X86PackedBinaryWitness
 	for _, first := range []string{"X0", "(AX)"} {
@@ -307,7 +321,7 @@ func x86PackedLegacyRowWitnesses(entry X86LegacyOpcode, row X86LegacyOperand) ([
 		witnesses = append(witnesses, X86PackedBinaryWitness{
 			Instruction: entry.Opcode + " " + first + ",X1", Generation: "legacy", Width: 128,
 			First: first, Second: "X1", Destination: "X1", Memory: first == "(AX)",
-			Encoding: append(append([]byte(nil), prefix...), byte(opcode), modrm),
+			Encoding: append(append([]byte(nil), encoding...), modrm),
 		})
 	}
 	return witnesses, nil
