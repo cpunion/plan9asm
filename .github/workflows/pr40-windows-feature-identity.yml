@@ -1,0 +1,58 @@
+name: PR40 Windows feature identity probe
+
+on:
+  push:
+    branches: [codex/pr40-windows-feature-identity-20261026]
+
+permissions:
+  contents: read
+
+jobs:
+  windows-feature-identity:
+    if: github.repository == 'cpunion/plan9asm'
+    runs-on: windows-latest
+    timeout-minutes: 30
+    env:
+      GOTOOLCHAIN: local
+      GOENV: 'off'
+      GOWORK: 'off'
+      GOMAXPROCS: '2'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-go
+        with:
+          go-version: '1.27.2'
+          cache: true
+      - uses: ./.github/actions/setup-windows-llvm22
+      - uses: ./.github/actions/setup-node22
+      - name: Observe original and normalized SDK identities
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p _out/windows-feature-identity
+          git rev-parse HEAD > _out/windows-feature-identity/head.txt
+          git status --porcelain > _out/windows-feature-identity/status-before.txt
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test ! -s _out/windows-feature-identity/status-before.txt
+          go version > _out/windows-feature-identity/go-version.txt
+          node --version > _out/windows-feature-identity/node-version.txt
+          "$LLVM_CONFIG" --version > _out/windows-feature-identity/llvm-version.txt
+          go test -C cmd/plan9asmll -p=1 -list '^TestWindowsFeatureEnvironmentNormalizationProbe$' > _out/windows-feature-identity/inventory.txt
+          test "$(sed -n '/^Test/p' _out/windows-feature-identity/inventory.txt | tr -d '\r')" = TestWindowsFeatureEnvironmentNormalizationProbe
+          go test -C cmd/plan9asmll -p=1 -run '^TestWindowsFeatureEnvironmentNormalizationProbe$' -count=1 -timeout=8m -json > _out/windows-feature-identity/tests.jsonl 2> _out/windows-feature-identity/tests.stderr
+      - name: Retain final source state
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p _out/windows-feature-identity
+          git rev-parse HEAD > _out/windows-feature-identity/head-after.txt
+          git status --porcelain > _out/windows-feature-identity/status-after.txt
+          test ! -s _out/windows-feature-identity/status-after.txt
+      - name: Retain raw diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: windows-feature-identity-${{ github.run_id }}
+          path: _out/windows-feature-identity/
+          if-no-files-found: error
+          retention-days: 14
