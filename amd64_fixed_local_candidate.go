@@ -11,14 +11,14 @@ func GoAMD64FixedLocalFrameBindingNeeded(file *File, goarch string) bool {
 		if fn.FrameSize <= 0 {
 			continue
 		}
+		bases := fixedLocalCandidateBases(fn)
 		for _, ins := range fn.Instrs {
-			// The final candidate role requires original SP/BP memory. Avoid
+			// The final candidate role requires possible physical-frame memory. Avoid
 			// parsing allocating effects for register-only or unrelated inputs;
 			// this negative filter grants neither grammar nor storage permission.
 			localMemory := false
 			for _, operand := range ins.Args {
-				if operand.Kind == OpMem && (operand.Mem.Base == SP || operand.Mem.Base == BP ||
-					operand.Mem.Index == SP || operand.Mem.Index == BP) {
+				if operand.Kind == OpMem && bases.has(operand.Mem) {
 					localMemory = true
 					break
 				}
@@ -69,8 +69,7 @@ func GoAMD64FixedLocalFrameBindingNeeded(file *File, goarch string) bool {
 				source := ins.Args[memory]
 				// Static SB and incoming native GP addresses keep their existing
 				// contracts. Virtual FP is not original local native storage.
-				if source.Kind == OpMem && (source.Mem.Base == SP || source.Mem.Base == BP ||
-					source.Mem.Index == SP || source.Mem.Index == BP) {
+				if source.Kind == OpMem && bases.has(source.Mem) {
 					if physicalOnly {
 						// Scalar and unaligned transport can use logical AUTO. Only
 						// physical SP/BP needs this additional source observer; the
@@ -86,4 +85,74 @@ func GoAMD64FixedLocalFrameBindingNeeded(file *File, goarch string) bool {
 		}
 	}
 	return false
+}
+
+type fixedLocalCandidateBaseSet uint16
+
+func fixedLocalCandidateRegister(reg Reg) (int, bool) {
+	if reg == SP {
+		return 4, true
+	}
+	if reg == BP {
+		return 5, true
+	}
+	index, _, valid := x86ResultGP(reg, 8, "amd64")
+	return index, valid
+}
+
+func (bases fixedLocalCandidateBaseSet) has(memory MemRef) bool {
+	for _, reg := range []Reg{memory.Base, memory.Index} {
+		if index, valid := fixedLocalCandidateRegister(reg); valid && bases&(1<<uint(index)) != 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// This small syntactic closure only selects the independent frame observer.
+// It is deliberately insensitive to CFG order and overwrites: reaching values,
+// bounds and every actual access must still pass the complete frame proof.
+func fixedLocalCandidateBases(fn Func) fixedLocalCandidateBaseSet {
+	var dependencies [16]fixedLocalCandidateBaseSet
+	for _, ins := range fn.Instrs {
+		op := x86GoMOVQSourceInstruction(ins).Op
+		if op != "MOVQ" && op != "LEAQ" {
+			continue
+		}
+		if len(ins.Args) != 2 || ins.Args[1].Kind != OpReg {
+			continue
+		}
+		destination, valid := fixedLocalCandidateRegister(ins.Args[1].Reg)
+		if !valid {
+			continue
+		}
+		var sources [2]Reg
+		if op == "MOVQ" && ins.Args[0].Kind == OpReg {
+			sources[0] = ins.Args[0].Reg
+		} else if ins.Op == "LEAQ" && ins.Args[0].Kind == OpMem {
+			width, err := x86LEAOperandWidth(ins, "amd64")
+			address, addressErr := fixedLocalMemoryAddress(ins, 0, fn.FrameSize)
+			if err != nil || width != 8 || addressErr != nil || address != ins.Args[0].Mem {
+				continue
+			}
+			sources = [2]Reg{address.Base, address.Index}
+		}
+		for _, reg := range sources {
+			if source, valid := fixedLocalCandidateRegister(reg); valid {
+				dependencies[destination] |= 1 << uint(source)
+			}
+		}
+	}
+	bases := fixedLocalCandidateBaseSet(1<<4 | 1<<5)
+	for {
+		previous := bases
+		for destination, sources := range dependencies {
+			if sources&bases != 0 {
+				bases |= 1 << uint(destination)
+			}
+		}
+		if bases == previous {
+			return bases
+		}
+	}
 }

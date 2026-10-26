@@ -763,6 +763,9 @@ func fixedLocalStep(ins *Instr, state *x86FixedLocalState, sig FuncSig, proof *x
 	if known, err := fixedLocalConditionalMoveStep(ins, state, proof, residue); known {
 		return err
 	}
+	if known, err := fixedLocalPrivateAddressStep(*ins, state, proof); known {
+		return err
+	}
 	if known, err := fixedLocalInputAddressStep(ins, state, proof, residue); known {
 		return err
 	}

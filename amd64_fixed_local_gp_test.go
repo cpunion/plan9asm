@@ -208,7 +208,7 @@ func TestGoAMD64FixedLocalTypedGPAddressIsNotAccess(t *testing.T) {
 		{"LEAL 7(AX),CX", true},
 		{"NOPL 8(SP)", true},
 		{"NOPW (AX)", true},
-		{"LEAQ 8(SP),AX", false},
+		{"LEAQ 8(SP),AX", true}, // Address-only grammar does not grant private backing or NUM.
 		{"LEAQ.Z (AX),CX", false},
 		{"MOVQ (AX),CX", false},
 		{"CMPQ (AX),CX", false},

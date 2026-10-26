@@ -5,11 +5,6 @@ package plan9asm
 // address origin and write. CMP/TEST retain their opposite immediate roles.
 func fixedLocalGPByteEffect(ins Instr) (x86TypedByteEffect, bool, error) {
 	if effect, known, err := x86NamedLEAByteEffect(ins.Op, ins, "amd64"); known {
-		for _, operand := range effect.operands {
-			if operand.operand.Reg == SP {
-				return x86TypedByteEffect{}, false, nil // Private SP arithmetic retains its separate role.
-			}
-		}
 		return effect, true, err
 	}
 	if effect, known, err := x86TypedGPByteEffect(ins.Op, ins, "amd64"); known {
