@@ -370,6 +370,11 @@ func featureConsumerFixture(t *testing.T) (*featureInput, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Discovery requires existing actual cache directories. Prepare them, but
+	// retain the producer's original environment to test consumer reobservation.
+	if _, err := ordinaryPackageEnvironment("linux", "amd64", os.Environ()); err != nil {
+		t.Fatal(err)
+	}
 	input.Observed, err = gotoolprofile.Capture(context.Background(), binary, t.TempDir(), os.Environ(), "linux/amd64", map[string]string{"GOAMD64": "v3"}, gotoolprofile.RunBounded)
 	if err != nil {
 		t.Fatal(err)

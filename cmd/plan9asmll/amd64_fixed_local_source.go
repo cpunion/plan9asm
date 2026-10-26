@@ -157,8 +157,15 @@ func parseCompleteCLIAssembly(arch plan9asm.Arch, source string, defines []strin
 func prepareAMD64FixedLocalSource(pkg *packages.Package, file *plan9asm.File, asm, target, triple, goarch string,
 	config compileConfig, resolve func(string) string, sigs map[string]plan9asm.FuncSig,
 ) (_ map[string]plan9asm.FuncSig, _ *amd64FixedLocalCLISource, result error) {
+	// This preliminary role query uses only the CLI's package-name mapping.
+	// The binding callback runs after source capture: calling it here could
+	// mutate an input before the owner records its original identity.
+	var queryResolve func(string) string
+	if pkg != nil {
+		queryResolve = resolveSymFunc(pkg.PkgPath)
+	}
 	if !plan9asm.GoAMD64FixedLocalFrameBindingNeeded(file, goarch, plan9asm.Options{
-		Goarch: goarch, ResolveSym: resolve, Sigs: sigs,
+		Goarch: goarch, ResolveSym: queryResolve, Sigs: sigs,
 	}) {
 		return sigs, nil, nil
 	}
