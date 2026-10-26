@@ -149,7 +149,8 @@ minimum Go 1.20.14 both pass the following Linux/amd64 LLVM22 object scopes:
 | Integer and PS/PD unpack, low/high | 108 | 360 |
 | Signed/unsigned saturating pack | 36 | 114 |
 | Per-lane logical/arithmetic shifts | 64 | 236 |
-| Total | 721 | 2,384 |
+| Conditional sign, B/W/D | 9 | 18 |
+| Total | 730 | 2,402 |
 
 Two PADDD alias witnesses are separate from the canonical counts. Min/max
 includes 48 non-Q, unmasked, narrow EVEX forms; low-register VEX objects cannot
@@ -192,6 +193,14 @@ repeated family loops while preserving independent official membership, literal
 encoding anchors, unique row IDs, width/encoding axes and separate MMX owners.
 The complete batch removes 126 net lines. Its 54 broadcast witnesses and narrow
 EVEX forms are object evidence, not new native execution acceptance.
+
+Conditional sign at `2c2c98295` adds all six B/W/D names: three legacy and six
+VEX rows, 18 register/memory witnesses and six independent byte anchors. Go has
+no MMX, EVEX or broadcast row for this family. Sharing the anchor assertion loop
+with UNPACK and per-lane shifts preserves their original 19 byte anchors. The
+complete rule reader, new object owner and listing-identity negative pass on
+both endpoint SDKs: 25 roots / 88 children each. This adds 17 net lines across
+six files, with no translator rule or new native execution claim.
 
 Fixed-frame GP analysis now consumes the existing typed byte/FLAGS effects
 instead of a second arithmetic opcode list. Its bounded worklist intersects

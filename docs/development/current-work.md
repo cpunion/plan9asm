@@ -8,7 +8,7 @@ certificate. Read [architecture](architecture.md),
 
 ## Publication and CI
 
-PR40 remains draft. Published head `5406c2756`
+PR40 remains draft. The last fully qualified publication, `5406c2756`,
 [completed full CI naturally](https://github.com/xgo-dev/plan9asm/actions/runs/40383917481):
 **325 jobs, all successful**, including race, cross-runtime, complete inventories
 and coverage aggregation. Its main statement coverage is **88.0%**. This run
@@ -90,6 +90,13 @@ with zero failures/skips. The retained first failed test-helper attempt is not
 a passing receipt. This batch removes 126 net lines while adding no translator
 rule; current full CI still tests published `5406c2756`.
 
+Local `2c2c98295` additionally joins all six PSIGN names through the same driver.
+Its source matches tested `d543fb22a` outside documentation. Go1.27.3 and
+Go1.20.14 each pass the complete rule reader, new public object owner and listing
+identity negative: 25 roots / 88 children, zero failures/skips. All earlier
+UNPACK and shift byte anchors remain; sharing their assertion helper keeps this
+six-file batch to 17 net lines. These local additions need a new complete CI.
+
 ## Current functional evidence
 
 | Scope | Qualified result | Limit |
@@ -128,7 +135,8 @@ actual original Go bytes must match before any public API/object result counts.
 | Integer and PS/PD unpack, low/high | 108 | 360 |
 | Signed/unsigned saturating pack | 36 | 114 |
 | Per-lane logical/arithmetic shifts | 64 | 236 |
-| Total | **721** | **2,384** |
+| Conditional sign, B/W/D | 9 | 18 |
+| Total | **730** | **2,402** |
 
 Two PADDD alias witnesses are separate. MMX rows retain their independent
 region/EMMS owners. These counts do not represent every official x86 row,
