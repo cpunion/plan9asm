@@ -417,3 +417,40 @@ func fixedLocalShiftRuntimeKernels(t *testing.T) []fixedLocalVEXRuntimeKernel {
 func TestGoAMD64FixedLocalShiftRuntimeObjects(t *testing.T) {
 	fixedLocalVectorRuntime(t, fixedLocalPackedCompileOnlyTools(t), false, fixedLocalShiftRuntimeKernels(t))
 }
+
+func fixedLocalScalarLaneRuntimeKernels(t *testing.T) []fixedLocalVEXRuntimeKernel {
+	t.Helper()
+	rows := fixedLocalScalarLaneCases()
+	var kernels []fixedLocalVEXRuntimeKernel
+	owners := make(map[string]int)
+	for _, row := range rows {
+		first, _, _ := strings.Cut(row, "\n")
+		name, operands, _ := strings.Cut(first, " ")
+		index, exists := owners[name]
+		if !exists {
+			index, owners[name] = len(kernels), len(kernels)
+			kernels = append(kernels, fixedLocalVEXRuntimeKernel{shape: name})
+		}
+		operation := "MOVQ (SI),AX\n" + row
+		if strings.Contains(name, "INSR") {
+			args := strings.Split(operands, ",")
+			extract := strings.Replace(name, "INSR", "EXTR", 1)
+			operation += fmt.Sprintf("\n%s %s,%s,AX", extract, args[0], args[len(args)-1])
+		}
+		// The existing scratch observation includes this separate full-GP
+		// result slot. It exposes the high zeros of byte/word/dword extracts.
+		// Y0 immediately observes native stores; Y1/Y2 retain the insert's
+		// lane and upper-alias effects. Private transfers use bytes 65..72,
+		// so neither the GP slot nor its surrounding canaries overlap them.
+		operation += "\nMOVQ AX,88(BP)\nVMOVDQU (SI),Y0"
+		kernels[index].operations = append(kernels[index].operations, operation)
+	}
+	if len(rows) != 132 || len(kernels) != 16 {
+		t.Fatal("complete scalar-lane original-execution inventory changed", len(rows), len(kernels))
+	}
+	return kernels
+}
+
+func TestGoAMD64FixedLocalScalarLaneRuntimeObjects(t *testing.T) {
+	fixedLocalVectorRuntime(t, fixedLocalPackedCompileOnlyTools(t), false, fixedLocalScalarLaneRuntimeKernels(t))
+}
