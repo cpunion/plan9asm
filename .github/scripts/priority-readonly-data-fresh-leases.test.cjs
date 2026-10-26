@@ -70,6 +70,12 @@ test('original runtime values are unchanged outside independent tool preparation
 });
 
 test('negative shared-binding mutation/Close controls are not renewed', () => {
-  const original = originalCacheSetup(read('amd64_fixed_local_data_guards_go127_test.go'), 2);
+  const guards = read('amd64_fixed_local_data_guards_go127_test.go');
+  const additional = guards.indexOf('\nfunc TestGoAMD64FixedLocalReadonlyDataCLIEmissionIdentity(');
+  assert.ok(additional > 0, 'the independent emission-identity regression must remain present');
+  // Appending another independent owner must not change the original controls'
+  // fingerprint or require pretending it shares their cache/observation.
+  const original = originalCacheSetup(guards.slice(0, additional), 2);
   assert.equal(sha(original), '3730f8eaf2f8485989658c94056002b6508f8cae74a14ba56c7c6c956f472d1a');
+  originalCacheSetup(guards.slice(additional), 1);
 });
