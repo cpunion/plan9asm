@@ -866,7 +866,7 @@ func (b *goSigBuilder) addReferencedFuncSigs(file *File) error {
 			if !ok {
 				continue
 			}
-			if b.directTail && tailJump && strings.HasSuffix(base, "<>") {
+			if b.directTail && strings.HasSuffix(base, "<>") {
 				continue // Bound only by complete source nodes and root must-state.
 			}
 			if err := b.addGoDeclSig(base); err != nil {

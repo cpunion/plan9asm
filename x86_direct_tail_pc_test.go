@@ -109,7 +109,7 @@ last:
 		t.Fatal(err)
 	}
 	graph := &x86DirectTailGraph{original: file, goarch: "amd64", helpers: map[string]bool{"body<>": true}}
-	view, err := graph.root(0, map[string]int{"·First": 0, "body<>": 1})
+	view, err := graph.root(0, map[string]int{"·First": 0, "body<>": 1}, 4096, false)
 	if err != nil {
 		t.Fatal(err)
 	}

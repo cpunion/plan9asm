@@ -740,6 +740,13 @@ func (c *amd64Ctx) lowerInstr(bi int, ii int, ins Instr, emitBr amd64EmitBr, emi
 	case OpBYTE, OpWORD, "LONG", "QUAD":
 		return false, fmt.Errorf("%s %s cannot be lowered safely as opaque machine code: %q", c.goarch, op, ins.Raw)
 	case OpRET:
+		if c.directTail.privateCallTransition(bi) {
+			if ii != 0 || len(ins.Args) != 0 || c.directTail.instructions[bi].Op != OpRET {
+				return true, x86DirectTailContext("private RET lost its original source point")
+			}
+			emitBr(c.blocks[c.directTail.edges[bi][0]].name)
+			return true, nil
+		}
 		if len(ins.Args) == 1 && ins.Args[0].Kind == OpSym && strings.HasSuffix(ins.Args[0].Sym, "(SB)") {
 			return true, c.tailCallAndRet(ins.Args[0])
 		}

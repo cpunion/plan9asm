@@ -55,8 +55,8 @@ func x86DirectTailSnapshot(file *File) *File {
 	return copy
 }
 
-// A cost predicate, never a source/entry/state permission. Other private CALL
-// and native/raw consumers retain their independently registered routes.
+// A cost predicate, never a source/entry/state permission. Private source CALL
+// and tail edges share this graph; native/raw calls keep their own consumers.
 func x86DirectTailSourceNeeded(file *File) bool {
 	if file == nil || file.Arch != ArchAMD64 {
 		return false
@@ -71,7 +71,7 @@ func x86DirectTailSourceNeeded(file *File) bool {
 
 func x86DirectTailRootNeeded(fn Func) bool {
 	for _, ins := range fn.Instrs {
-		if ins.Op != OpJMP || len(ins.Args) != 1 {
+		if ins.Op != OpJMP && ins.Op != OpCALL || len(ins.Args) != 1 {
 			continue
 		}
 		arg := ins.Args[0]
@@ -91,6 +91,7 @@ func x86DirectTailRootNeeded(fn Func) bool {
 // or module partition. Only request-local copies receive its private graph.
 // The existing actual root signature supplies its logical state/RET contract;
 // a helper signature, zero arguments or matching returns supplies nothing.
+// Private CALL additionally requires a closed helper prologue/return context.
 // Native raw/stack/closure/entry and numerical-source composition stay separate.
 func PrepareX86DirectTailSource(file *File, options Options) (*File, error) {
 	if file == nil {
@@ -160,7 +161,7 @@ func PrepareX86DirectTailSource(file *File, options Options) (*File, error) {
 		if helpers[fn.Sym] || !x86DirectTailRootNeeded(fn) {
 			continue
 		}
-		view, err := graph.root(index, byName)
+		view, err := graph.root(index, byName, 4096-combined, true)
 		if err != nil {
 			return nil, err
 		}
@@ -286,7 +287,7 @@ func (graph *x86DirectTailGraph) auditReferences() error {
 				if !valid || !graph.helpers[base] {
 					continue
 				}
-				if ins.Op != OpJMP || len(ins.Args) != 1 || arg.Kind != OpSym || offset != 0 || strings.HasPrefix(text, "$") {
+				if ins.Op != OpJMP && ins.Op != OpCALL || len(ins.Args) != 1 || arg.Kind != OpSym || offset != 0 || strings.HasPrefix(text, "$") {
 					return x86DirectTailContext("helper address/call/offset escape in %s: %s", fn.Sym, ins.Raw)
 				}
 			}

@@ -40,10 +40,13 @@ func numericalDirectTailRoles(file *File) (map[x86DirectTailPoint]string, error)
 	}
 	for text, fn := range file.Funcs {
 		for ordinal, ins := range fn.Instrs {
-			if ins.Op != OpJMP || len(ins.Args) != 1 || ins.Args[0].Kind != OpSym {
+			if ins.Op != OpJMP && ins.Op != OpCALL || len(ins.Args) != 1 || ins.Args[0].Kind != OpSym {
 				continue
 			}
 			name, offset, valid := parseSBRef(ins.Args[0].Sym)
+			if ins.Op == OpCALL && !helpers[name] {
+				continue // Ordinary external calls retain their separate declaration/ABI owner.
+			}
 			if !valid || offset != 0 || strings.ContainsAny(name, "<>") && !helpers[name] {
 				return nil, numericalSBContext("continuation has an unknown/offset/selector terminal")
 			}

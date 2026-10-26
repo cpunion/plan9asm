@@ -54,16 +54,13 @@ func (source *x86ABI0BoolCallSource) prepareCustomRegisterTail(plan *x86ABI0Bool
 	if !found {
 		return fail("root is absent from the original graph")
 	}
-	view, err := graph.root(root, byName)
-	if err != nil {
-		return err
-	}
-	combined := len(view.points)
+	combined := 0
 	for _, prior := range graph.roots {
 		combined += len(prior.points)
 	}
-	if combined > 4096 {
-		return fail("combined source/continuation instruction budget exhausted")
+	view, err := graph.root(root, byName, 4096-combined, false)
+	if err != nil {
+		return err
 	}
 	tail := &x86CustomHelperBoolTail{view: view, helpers: make(map[string]FuncSig)}
 	for _, point := range view.points {
