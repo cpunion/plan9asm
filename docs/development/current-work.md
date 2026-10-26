@@ -6,6 +6,25 @@ and [validation](validation.md). Preserve original failed receipts.
 
 ## Current priority: finish amd64 first
 
+Latest integrated snapshot: `5018ab7d5`. The complete Go 1.27.2 / LLVM22
+Linux/amd64 object benchmark now passes **34/55**, with 21 failures and zero
+N/A/unattempted cases. Complete SHA512 is newly passing; GCM advances past
+the frame128 encoding check to missing legacy vector effects. Wall time is
+44 seconds (41.824 tool seconds), not an established end-to-end speedup.
+The frozen Go 1.20.14 / LLVM22 integrated family receipt passes 26 roots /
+1,700 children in 81.708 seconds, with zero failures/skips, including all 540
+VEX source witnesses through three APIs and O0/O2 objects. The newest native
+receipt remains `ea3915207`; mutable-global and VEX execution are still pending.
+
+Next independent batches: legacy logical/shuffle/shift effects shared with VEX,
+bounded private-DATA address origins, and original-Go AVX2 execution. SHA256's
+indexed private scratch also needs a justified bounded-loop/index model; merely
+accepting its DATA address will not qualify that whole file. Keep runtime-entry
+contracts, hardware qualification and ordinary-source failures distinct.
+
+The receipt chronology below retains earlier failures and narrower evidence;
+it does not replace this latest snapshot or certify a later source revision.
+
 Follow [x86 convergence](x86-convergence.md) before expanding other architectures.
 Preserve shared 386 and existing other-architecture tests. The review baseline
 is `728520def`: ordinary whole-source regressions, repeated family parsing and
