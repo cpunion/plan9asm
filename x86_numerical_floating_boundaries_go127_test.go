@@ -19,18 +19,35 @@ import (
 // branch, after valid scalar instructions and several original returns. A
 // cropped live path or text assembled from a replacement fixture misses it.
 func TestX86NumericalNativeBoundariesOriginalCompleteSDKMathExp(t *testing.T) {
-	ctx, request := sdkASMDataRequest(t, "amd64", "math")
+	x86CheckCompleteSDKNativeBoundaries(t, "math", "exp_amd64.s", "math.archExp", []string{
+		"VFNMADD231SD X2, X1, X0", "VFMADD213SD exprodata<>+56(SB), X0, X1", "VADDSD exprodata<>+16(SB), X0, X1",
+	})
+}
+
+func TestX86NumericalNativeBoundariesOriginalCompleteSDKSHA512(t *testing.T) {
+	const pkg = "crypto/internal/fips140/sha512"
+	x86CheckCompleteSDKNativeBoundaries(t, pkg, "sha512block_amd64.s", pkg+".blockAVX2", []string{
+		"VPSHUFB", "VPADDQ", "VPSRLQ", "VPSLLQ", "VPALIGNR", "VPERM2F128",
+	})
+}
+
+func x86CheckCompleteSDKNativeBoundaries(t *testing.T, pkg, filename, symbol string, required []string) {
+	t.Helper()
+	ctx, request := sdkASMDataRequest(t, "amd64", pkg)
 	root := filepath.Dir(filepath.Dir(request.GoBinary))
-	path := filepath.Join(request.Directory, "exp_amd64.s")
+	path := filepath.Join(request.Directory, filename)
 	original, err := os.ReadFile(path)
-	if err != nil || !strings.Contains(string(original), "VFNMADD231SD X2, X1, X0") ||
-		!strings.Contains(string(original), "VFMADD213SD exprodata<>+56(SB), X0, X1") ||
-		!strings.Contains(string(original), "VADDSD exprodata<>+16(SB), X0, X1") {
-		t.Fatal("complete original SDK floating source is absent", err)
+	if err != nil {
+		t.Fatal("complete original SDK source is absent", err)
 	}
-	object := filepath.Join(t.TempDir(), "original-exp.o")
+	for _, instruction := range required {
+		if !strings.Contains(string(original), instruction) {
+			t.Fatal("complete original SDK instruction is absent", instruction)
+		}
+	}
+	object := filepath.Join(t.TempDir(), "original.o")
 	listing, err := goasmcmd.Run(ctx, request.Directory, request.Environment, request.GoBinary,
-		"tool", "asm", "-S", "-p", "math", "-I", filepath.Join(root, "pkg", "include"), "-o", object, path)
+		"tool", "asm", "-S", "-p", pkg, "-I", filepath.Join(root, "pkg", "include"), "-o", object, path)
 	if err != nil {
 		t.Fatal("actual Go rejected the complete original SDK source", err)
 	}
@@ -43,7 +60,7 @@ func TestX86NumericalNativeBoundariesOriginalCompleteSDKMathExp(t *testing.T) {
 		t.Fatal(err)
 	}
 	texts, err := gostaticstorage.ObserveX86AssemblyText(objectBytes, builtins, request.Target)
-	if err != nil || len(texts) != 1 || texts[0].Name != "math.archExp" ||
+	if err != nil || len(texts) != 1 || texts[0].Name != symbol ||
 		len(texts[0].Code) == 0 || texts[0].Size != int64(len(texts[0].Code)) {
 		t.Fatal("independent whole original object/TEXT prerequisite failed", err, texts)
 	}
@@ -52,7 +69,7 @@ func TestX86NumericalNativeBoundariesOriginalCompleteSDKMathExp(t *testing.T) {
 	var listed []byte
 	inText := false
 	for _, line := range strings.Split(string(listing), "\n") {
-		if strings.HasPrefix(line, "math.archExp STEXT ") {
+		if strings.HasPrefix(line, symbol+" STEXT ") || strings.HasPrefix(line, symbol+" STEXTFIPS ") {
 			if inText {
 				t.Fatal("duplicate original TEXT listing")
 			}
@@ -95,7 +112,7 @@ func TestX86NumericalNativeBoundariesOriginalCompleteSDKMathExp(t *testing.T) {
 		sha256.Sum256(original), sha256.Sum256(objectBytes), len(code), len(pcs))
 	boundaries, scalar, err := x86NumericalNativeBoundaries(code, 64)
 	if err != nil {
-		t.Fatal("original Go object lost its complete floating instruction boundaries", err)
+		t.Fatal("original Go object lost its complete instruction boundaries", err)
 	}
 	if len(boundaries) != len(pcs) {
 		t.Fatal("whole original source boundary count differs", len(boundaries), len(pcs))
@@ -111,12 +128,12 @@ func TestX86NumericalNativeBoundariesOriginalCompleteSDKMathExp(t *testing.T) {
 		}
 		if x86NumericalVectorPrefix(code[boundary.PC:end], 64) {
 			if _, exists := scalar[boundary.PC]; exists {
-				t.Fatal("original floating opcode acquired a scalar NUM read", boundary)
+				t.Fatal("original vector opcode acquired a scalar NUM read", boundary)
 			}
 			vectorCount++
 		}
 	}
 	if vectorCount == 0 || len(scalar)+vectorCount != len(boundaries) {
-		t.Fatal("complete original FMA/native-vector branch was omitted", vectorCount, len(scalar), len(boundaries))
+		t.Fatal("complete original native-vector branch was omitted", vectorCount, len(scalar), len(boundaries))
 	}
 }
