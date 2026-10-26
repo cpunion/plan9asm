@@ -2,6 +2,7 @@ package plan9asm
 
 import (
 	"encoding/hex"
+	"fmt"
 	"regexp"
 	"sort"
 	"strings"
@@ -37,6 +38,8 @@ func x86PackedAbsSignRuntimeOpcodeWithinProfile(op string, code []byte) bool {
 		}
 		for _, member := range strings.Fields(`
 vpabsd vpabsq vpaddd vpaddq vpsubd vpsubq
+vpmovsxbd vpmovsxbq vpmovsxwd vpmovsxwq vpmovsxdq
+vpmovzxbd vpmovzxbq vpmovzxwd vpmovzxwq vpmovzxdq
 vpcmpd vpcmpq vpcmpud vpcmpuq vpcmpeqd vpcmpeqq vpcmpgtd vpcmpgtq
 vpblendmd vpblendmq vpbroadcastd vpbroadcastq vptestmd vptestmq vptestnmd vptestnmq`) {
 			if op == member {
@@ -96,6 +99,65 @@ func TestX86PackedAbsSignRuntimeISAProfileAliases(t *testing.T) {
 			if !x86PackedAbsSignRuntimeOpcodeWithinProfile(op, []byte{0xc4, 0xe3, 0x79, 0x16, 0xc8, 1}) ||
 				x86PackedAbsSignRuntimeOpcodeWithinProfile(op, evex) {
 				t.Fatal("VEX GP lane transport borrowed its separate EVEX BW/DQ encoding", op)
+			}
+		})
+	}
+}
+
+func TestX86PackedAbsSignRuntimeISAExtensionFamily(t *testing.T) {
+	// LLVM 22's avx512_pmovx_{bd,bq,wd,wq,dq} use F, plus VL for
+	// X/Y destinations. Only bw needs BW; the input element width alone
+	// does not imply that feature. Keep signed and unsigned extensions.
+	// https://github.com/llvm/llvm-project/blob/llvmorg-22.1.8/llvm/lib/Target/X86/X86InstrAVX512.td
+	type witness struct {
+		source, opcode string
+		withinProfile  bool
+	}
+	var cases []witness
+	var source strings.Builder
+	for _, sign := range []string{"S", "Z"} {
+		for _, ratio := range []string{"BW", "BD", "BQ", "WD", "WQ", "DQ"} {
+			op := "VPMOV" + sign + "X" + ratio
+			for _, bank := range []string{"X", "Y", "Z"} {
+				input := "X0"
+				if bank == "Z" && (ratio == "BW" || ratio == "WD" || ratio == "DQ") {
+					input = "Y0"
+				}
+				for _, operand := range []string{input, "8(AX)"} {
+					for _, mask := range []string{"", "merge", "zero"} {
+						name, args := op, operand
+						if mask != "" {
+							args += ",K3"
+						}
+						if mask == "zero" {
+							name += ".Z"
+						}
+						// High destinations select actual EVEX even without a mask.
+						row := name + " " + args + "," + bank + "16"
+						cases = append(cases, witness{row, strings.ToLower(op), ratio != "BW"})
+						fmt.Fprintln(&source, row)
+					}
+				}
+			}
+		}
+	}
+	if len(cases) != 216 {
+		t.Fatal("extension family inventory changed", len(cases))
+	}
+	source.WriteString("RET\n")
+	code, pcs := x86NumericalBoundaryGoBytes(t, "amd64", source.String())
+	if len(pcs) != len(cases)+1 || code[pcs[len(cases)]] != 0xc3 {
+		t.Fatal("original Go object lost its complete extension inventory")
+	}
+	x86NumericalNativeRequireMC(t, code, 64, len(pcs), "+avx512f,+avx512vl,+avx512bw")
+	for index, row := range cases {
+		t.Run(row.source, func(t *testing.T) {
+			encoded := code[pcs[index]:pcs[index+1]]
+			if len(encoded) < 6 || encoded[0] != 0x62 {
+				t.Fatal("original source did not select complete EVEX", encoded)
+			}
+			if got := x86PackedAbsSignRuntimeOpcodeWithinProfile(row.opcode, encoded); got != row.withinProfile {
+				t.Fatalf("actual extension changed its F/VL versus BW requirement: %x: got %t", encoded, got)
 			}
 		})
 	}
