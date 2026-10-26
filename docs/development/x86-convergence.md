@@ -156,9 +156,14 @@ All eight original SP residues and the independent final replay remain checked;
 provisional loop accesses are published only after convergence. Numerical LEA
 and sized NOP addresses are not mislabeled as actual memory accesses. Ordinary
 typed-input base/displacement reads now compose with private scratch through
-the existing exact-width faulting scalar path. This grants neither a private
-extent for the input nor pointer arithmetic, indexed address or memory-write
-permission. Full-source and native tests remain separate gates.
+the existing exact-width faulting scalar path. Full-word affine operations can
+now retain that input's origin without converting its representation to NUM or
+granting a pointee extent. Indexed private scratch retains its separate limits.
+BP/R14 entry bytes stay unknown; a defined value may use the complete GP bank.
+Named LEA and scalar MOV share machine grammar with ordinary consumers, while
+source-role filtering stays separate. An exact native-input access selects the
+fault-preserving scalar emitter even through BP; it is never a private-frame
+certificate. Full-source and native tests remain separate gates.
 
 Fixed-local result consumers now share a call-local independently parsed
 original file and complete ordered feature index. Public module entry/exit

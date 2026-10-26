@@ -110,12 +110,34 @@ projection observations take 40s at `98033e8e8` and 44s at `4cd3b05bb`; do not
 claim an end-to-end speedup. SHA512 now reaches an exact parsed-source mismatch
 at the CLI handoff; AES/GCM and SHA256 still need split+DATA composition.
 
-Next: repair the complete CLI source representation and split+DATA handoff,
-then rerun ordinary crypto sources before implementing any further address
-roles. Complete minimum-SDK integrated checks and remaining
-initialized official-family joins. Keep source-written CALL/TLS and private
-helpers distinct from assembler-generated entry machinery. Do not add another
-per-proof opcode whitelist or generalize to another arch.
+The subsequent integrated code batch ends at `ea3915207`:
+
+| Scope | Evidence and remaining limit |
+|---|---|
+| Complete CLI input (`f5ea05e03`) | Canonical preprocessing precedes source/signature binding. Private DATA accepts the existing injective `<>` or `$local` renderer without weakening original identity. Focused current-SDK source/object checks pass; complete SHA512 next reaches an unregistered VEX effect. |
+| Input origins (`4a069268b`) | Full-word affine arithmetic and comparisons preserve an explicitly typed input origin, not numerical address bits or pointee extent. Control-flow joins intersect origins instead of requiring dead spill facts on every path. |
+| Shared legacy effects (`5d5d0e0df`) | Six packed families share typed byte/alias/alignment effects and a call-local immutable syntax plan. The agent receipt passes 18 roots / 1,486 children. Production grows by 110 lines; full-proof allocation counts decrease, but noisy timings do not establish a speedup. |
+| Physical shuffle and split+DATA (`6b35e55fb`, `04bdd25ac`) | Complete shuffle boundary decoding and exact generated-entry/body relocation partitions compose. Current-SDK agent receipt passes 16 roots / 320 children, including 246 original Go forms, 36 objects and complete SHA256 source capture. Capture is not whole-file translation or execution. |
+| Defined GP bank (`ea3915207`) | BP/R14 remain unknown at entry but may hold explicitly defined values. LEA and scalar MOV reuse complete machine grammar with separate source roles. The independent O2 fault RED exposed a dropped dead BP read; native-input MOV now uses the existing exact-width volatile load/store paths. Private-stack and incoming-g permissions are unchanged. |
+
+The frozen integrated minimum-SDK receipt for `ea3915207` passes 58 roots /
+2,082 children in 83.509 seconds under Go1.20.14 / LLVM22, with no failures or
+skips. It includes 92 GP object kernels, 28 legacy binary kernels, all 291
+official packed/min-max rows, five-target LEA and scalar-move regressions,
+source revocation and 22 actual-host scalar fault kernels through three APIs
+at O0/O2. The last host oracle is not original AMD64 execution. Earlier current
+receipts retain the genuine BP-role and dead-access failures; a later broad
+current receipt still failed one SP address-only classification, repaired before
+this minimum-SDK run. Original Go/LLVM execution of the new 92 GP, 28 binary and
+14 affine kernels is a separate current-SDK fork-native gate, still pending.
+
+Next: finish VEX effects and their independent original-byte boundary joins,
+then rerun the complete 55-file benchmark. Compose ordinary mutable Go global
+addresses with existing captured declaration identities; never reclassify a
+Go variable as private readonly assembly DATA. Complete current/minimum-SDK
+integrated checks and initialized official-family joins. Keep source-written
+CALL/TLS and private helpers distinct from assembler-generated entry machinery.
+Do not add another per-proof opcode whitelist or generalize to another arch.
 The CI chronology below is historical, not the current local batch's status.
 
 ## Scope and authority
