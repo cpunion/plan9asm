@@ -3,7 +3,6 @@ package plan9asm
 import (
 	"bytes"
 	"path/filepath"
-	"strconv"
 	"strings"
 
 	"github.com/xgo-dev/plan9asm/internal/gostaticstorage"
@@ -34,28 +33,8 @@ func (source *GoAMD64FrameSource) observeWindowsUnwind(object []byte) (gostatics
 }
 
 func goAMD64WindowsUnwindByteRow(line string, offset int, expected []byte) ([]byte, error) {
-	fields := strings.Fields(line)
-	if len(expected) != 12 || offset != 0 || len(fields) != 14 || fields[0] != "0x0000" {
-		return nil, goAMD64FrameContext("unknown Windows unwind listing byte/relocation/extent record")
-	}
-	actual := make([]byte, 12)
-	var ascii strings.Builder
-	for index := range actual {
-		if len(fields[index+1]) != 2 {
-			return nil, goAMD64FrameContext("Windows unwind listing has an incomplete byte record")
-		}
-		value, err := strconv.ParseUint(fields[index+1], 16, 8)
-		if err != nil {
-			return nil, goAMD64FrameContext("Windows unwind listing byte is invalid")
-		}
-		actual[index] = byte(value)
-		printed := byte('.')
-		if actual[index] >= ' ' && actual[index] <= 0x7e {
-			printed = actual[index]
-		}
-		ascii.WriteByte(printed)
-	}
-	if !bytes.Equal(actual, expected) || fields[13] != ascii.String() {
+	pc, actual, err := goAssemblyListingByteRow(line)
+	if err != nil || len(expected) != 12 || offset != 0 || pc != 0 || !bytes.Equal(actual, expected) {
 		return nil, goAMD64FrameContext("Windows unwind listing differs from complete original binary bytes")
 	}
 	return actual, nil
@@ -105,15 +84,25 @@ func goAMD64FrameWindowsUnwindFunctions(functions map[string]goAMD64FrameFunctio
 			fn.prologue+first.Len+second.Len != int(metadata.PrologueEnd) {
 			return goAMD64FrameContext("Windows unwind frame end differs from actual automatic prologue")
 		}
-		if err := goAMD64WindowsUnwindSourcePCs(text, fn, directory, origins); err != nil {
+		if err := goAMD64FrameSourcePCs(text, fn, directory, origins, ""); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func goAMD64WindowsUnwindSourcePCs(text gostaticstorage.TextRecord, fn goAMD64FrameFunction, directory string, origins map[string]int) error {
+func goAMD64FrameSourcePCs(text gostaticstorage.TextRecord, fn goAMD64FrameFunction, directory string, origins map[string]int, root string) error {
 	normalize := func(name string) string {
+		if strings.HasPrefix(name, "$GOROOT/") {
+			if root == "" {
+				return ""
+			}
+			actual, valid := originalGoObjectSourcePath(name, root)
+			if !valid {
+				return ""
+			}
+			return actual
+		}
 		if !filepath.IsAbs(name) {
 			name = filepath.Join(directory, filepath.FromSlash(name))
 		}
@@ -122,12 +111,17 @@ func goAMD64WindowsUnwindSourcePCs(text gostaticstorage.TextRecord, fn goAMD64Fr
 	// Go object file tables use slash paths on Windows, while captured
 	// origins retain host paths and the command's relative source spelling.
 	// Compare their already-bound paths consistently with the listing join;
-	// aliases must still agree on the complete original source extent.
+	// aliases must still agree on the complete original source extent. SDK
+	// metadata additionally uses only the captured root's strict path spelling;
+	// resolving it never adds an input to this complete original inventory.
 	linesByPath := make(map[string]int, len(origins))
 	for name, lines := range origins {
 		path := normalize(name)
+		if path == "" {
+			return goAMD64FrameContext("source origin has an unbound SDK path")
+		}
 		if previous, found := linesByPath[path]; found && previous != lines {
-			return goAMD64FrameContext("Windows source origin aliases disagree on their original extent")
+			return goAMD64FrameContext("source origin aliases disagree on their original extent")
 		}
 		linesByPath[path] = lines
 	}
@@ -135,12 +129,13 @@ func goAMD64WindowsUnwindSourcePCs(text gostaticstorage.TextRecord, fn goAMD64Fr
 	for _, span := range text.Positions {
 		if span.File == "" || span.Line <= 0 || int(span.Line) > linesByPath[normalize(span.File)] || span.Start < 0 ||
 			span.Start != previous || span.End <= span.Start || span.End > int64(len(fn.code)) {
-			return goAMD64FrameContext("Windows object source-PC interval lacks its original file/line/extent")
+			return goAMD64FrameContext("object source-PC interval lacks its original file/line/extent: %s %s:%d [%d,%d)",
+				text.Name, span.File, span.Line, span.Start, span.End)
 		}
 		previous = span.End
 	}
 	if previous != int64(len(fn.code)) {
-		return goAMD64FrameContext("Windows source-PC intervals do not cover the complete physical TEXT")
+		return goAMD64FrameContext("source-PC intervals do not cover the complete physical TEXT")
 	}
 	for pc, positions := range fn.sourcePositions {
 		matched := false
@@ -155,7 +150,7 @@ func goAMD64WindowsUnwindSourcePCs(text gostaticstorage.TextRecord, fn goAMD64Fr
 			}
 		}
 		if !matched {
-			return goAMD64FrameContext("Windows object/listing source-PC file/line witness differs")
+			return goAMD64FrameContext("object/listing source-PC file/line witness differs")
 		}
 	}
 	return nil

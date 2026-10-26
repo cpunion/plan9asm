@@ -112,7 +112,7 @@ func goAMD64WindowsUnwindCompleteObjectListingJoinGuards(t *testing.T) {
 				origins[request.AssemblyFile] = source.origins[request.AssemblyFile] + 1
 			}
 			for _, text := range observed.Texts {
-				err := goAMD64WindowsUnwindSourcePCs(text, functions[text.Name], request.Directory, origins)
+				err := goAMD64FrameSourcePCs(text, functions[text.Name], request.Directory, origins, "")
 				if spelling == "conflicting extent" || spelling == "foreign directory" {
 					if !errors.Is(err, ErrProbeNeedsContext) {
 						t.Fatal("unbound or contradictory source origin acquired a PC witness", err)

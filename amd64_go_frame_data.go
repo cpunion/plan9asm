@@ -27,6 +27,41 @@ func (source *GoAMD64FrameSource) frameDataObject(expanded string, object []byte
 	return &observed, nil
 }
 
+// The SDK owner has already joined every original/expanded object to its actual
+// compiler archive. Reuse that same observation, not a new standalone object
+// with different producer flags. As with preprocessSDKFrame, these immutable
+// fields remain covered by the enclosing live source verification.
+func (source *GoAMD64FrameSource) fixedLocalDataObservation(name, expanded string) (*gostaticstorage.AMD64AssemblyData, error) {
+	if origin := source.sdkFrame; origin != nil {
+		if origin.identity != source || origin.owner == nil || origin.owner.source == nil {
+			return nil, goAMD64FrameContext("fixed local DATA has a foreign SDK source")
+		}
+		observation := &origin.owner.source.observation
+		for ordinal, input := range observation.ObjectInputs.Sources {
+			if input.Name != name {
+				continue
+			}
+			if observation.Objects == nil || ordinal >= len(observation.Objects.Sources) ||
+				ordinal >= len(observation.CPP) || string(input.Expanded) != expanded || observation.CPP[ordinal].Output != expanded {
+				return nil, goAMD64FrameContext("fixed local DATA lost its complete SDK source/object pairing")
+			}
+			object := observation.Objects.Sources[ordinal]
+			if object.Name != input.Name {
+				return nil, goAMD64FrameContext("fixed local DATA SDK object order changed")
+			}
+			return &gostaticstorage.AMD64AssemblyData{
+				Member: object.Original, Layouts: object.ExpandedLayouts, TextOrder: object.TextOrder,
+			}, nil
+		}
+		return nil, goAMD64FrameContext("fixed local DATA is absent from the complete SDK selection")
+	}
+	object, err := source.read(filepath.Join(source.owned, name+".o"))
+	if err != nil {
+		return nil, err
+	}
+	return source.frameDataObject(expanded, object)
+}
+
 // Consume exact complete DATA blocks, never arbitrary listing lines. TEXT and
 // Windows metadata remain in the original order for their independent parser.
 // This observation grants no permission to use a DATA address or load its bytes.
@@ -130,27 +165,38 @@ func goAMD64FrameDataRelocationLine(relocation gostaticstorage.TextRelocation, o
 	}
 	for _, layout := range observed.Layouts {
 		definition := layout.Definition
-		if definition.Name == relocation.Target.Name && definition.ABI == relocation.Target.ABI &&
+		if definition.Name != relocation.Target.Name {
+			continue
+		}
+		if definition.ABI == relocation.Target.ABI &&
 			packageIndices[definition.Namespace] == relocation.Target.PackageIndex &&
 			definition.Relative == relocation.Target.SymbolIndex {
 			return fmt.Sprintf("rel %d+%d t=R_PCREL %s+%d",
 				relocation.Offset, relocation.Size, relocation.Target.Name, relocation.Add)
 		}
+		return "" // A mismatched private definition cannot become an external role.
+	}
+	if relocation.Target.ABI == 0 && relocation.Target.Name != "" {
+		// Preserve ordinary references in the complete original TEXT inventory.
+		// This is only its exact object/listing spelling, not numerical access or
+		// address permission. Such a target is never added to private literalData.
+		return fmt.Sprintf("rel %d+%d t=R_PCREL %s+%d",
+			relocation.Offset, relocation.Size, relocation.Target.Name, relocation.Add)
 	}
 	return ""
 }
 
 func goAMD64FrameDataTextJoin(functions map[string]goAMD64FrameFunction, observed *gostaticstorage.AMD64AssemblyData,
-	directory string, origins map[string]int) error {
+	directory string, origins map[string]int, root string) error {
 	if len(functions) != len(observed.Member.Texts) {
 		return goAMD64FrameContext("mixed DATA object/listing complete TEXT inventories differ")
 	}
 	for _, text := range observed.Member.Texts {
 		fn, found := functions[text.Name]
-		if !found || text.ABI != 0 || text.Kind != 1 || text.Flags != fn.nativeFlags() || text.Flags2 != 0 || !bytes.Equal(text.Code, fn.code) {
+		if !found || text.ABI != 0 || text.Kind != 1 && text.Kind != 2 || text.Flags != fn.nativeFlags() || text.Flags2 != 0 || !bytes.Equal(text.Code, fn.code) {
 			return goAMD64FrameContext("mixed DATA object/listing TEXT ABI, flags or complete bytes differ")
 		}
-		if err := goAMD64WindowsUnwindSourcePCs(text, fn, directory, origins); err != nil {
+		if err := goAMD64FrameSourcePCs(text, fn, directory, origins, root); err != nil {
 			return err
 		}
 	}

@@ -14,6 +14,31 @@ import (
 	"github.com/xgo-dev/plan9asm/internal/gostaticstorage"
 )
 
+func TestGoAMD64FrameDataOrdinaryReferenceIsNotPermission(t *testing.T) {
+	const assembly = `DATA literal<>+0(SB)/8,$7
+GLOBL literal<>(SB),8,$8
+TEXT ·Value(SB),4,$16-16
+	MOVQ a+0(FP),AX
+	MOVQ AX,0(SP)
+	MOVQ literal<>(SB),CX
+	MOVQ $·Global(SB),BX
+	MOVQ 0(SP),AX
+	MOVQ AX,ret+8(FP)
+	RET
+`
+	pkg, request, file, options := fixedLocalTransportFixture(t, assembly,
+		"var Global uint64\nfunc Value(a uint64) uint64\n", "linux/amd64", "x86_64-unknown-linux-gnu")
+	source := requireGoAMD64FrameCapture(t, pkg, request)
+	ctx, cancel := runtimeOracleStageContext(t)
+	defer cancel()
+	if err := source.Verify(ctx); err != nil {
+		t.Fatal("complete original DATA and ordinary reference", err)
+	}
+	if _, err := source.BindFixedLocal(ctx, pkg, file, options); !errors.Is(err, ErrProbeNeedsContext) {
+		t.Fatal("observing an ordinary reference granted a global address role", err)
+	}
+}
+
 // DATA coexistence is an original-object observation, not a new memory,
 // address, native-entry or fixed-local permission.
 func TestGoAMD64FrameSourceMixedDataOriginalObjects(t *testing.T) {
@@ -126,7 +151,7 @@ func goAMD64FrameMixedDataJoinGuards(t *testing.T, pkg GoPackage, source *GoAMD6
 		if err != nil {
 			return err
 		}
-		return goAMD64FrameDataTextJoin(functions, observed, source.request.Directory, source.origins)
+		return goAMD64FrameDataTextJoin(functions, observed, source.request.Directory, source.origins, "")
 	}
 	if err := check(listing); err != nil {
 		t.Fatal("complete unmodified source/object/listing control", err)

@@ -2,7 +2,6 @@ package plan9asm
 
 import (
 	"bytes"
-	"path/filepath"
 	"strings"
 )
 
@@ -33,11 +32,7 @@ func (source *GoAMD64FrameSource) fixedLocalData(file *File, expanded string, re
 	if len(file.Data)+len(file.Globl) == 0 {
 		return nil, nil, nil
 	}
-	object, err := source.read(filepath.Join(source.owned, source.request.AssemblyFile+".o"))
-	if err != nil {
-		return nil, nil, err
-	}
-	observed, err := source.frameDataObject(expanded, object)
+	observed, err := source.fixedLocalDataObservation(source.request.AssemblyFile, expanded)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -57,7 +52,7 @@ func (source *GoAMD64FrameSource) fixedLocalData(file *File, expanded string, re
 		}
 		total += int64(definition.Size)
 		if !private || resolve(name) != expected || !layout.Static || layout.ABI != 65535 ||
-			layout.Flags != 8 && layout.Flags != 24 || definition.Kind != 3 || definition.Flags != 0 ||
+			layout.Flags != 8 && layout.Flags != 24 || definition.Kind != 3 && definition.Kind != 4 || definition.Flags != 0 ||
 			definition.Flags2 != 0 || len(definition.Relocations) != 0 || global.SizeRaw != "" ||
 			definition.Size == 0 || definition.Size > 64<<10 || total > 1<<20 || len(definition.Data) > int(definition.Size) {
 			return nil, nil, goAMD64FrameContext("fixed local DATA requires bounded private relocation-free readonly storage")

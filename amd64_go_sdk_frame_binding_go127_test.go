@@ -11,6 +11,54 @@ import (
 	"testing"
 )
 
+func TestGoAMD64SDKFrameReadonlyDataComposition(t *testing.T) {
+	ctx, request := sdkASMDataRequest(t, "amd64", "crypto/internal/fips140/sha512")
+	observed, err := CaptureGoAMD64SDKFrameObservation(ctx, request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer observed.Close()
+	pkg := sdkAMD64FrameActualPackage(t, observed.source)
+	source, err := CaptureGoAMD64SDKFrameSource(ctx, pkg, GoAMD64FrameCaptureRequest{
+		GoBinary: request.GoBinary, Directory: request.Directory, AssemblyFile: "sha512block_amd64.s",
+		Target: request.Target, Environment: request.Environment,
+	})
+	if err != nil {
+		t.Fatal("complete original frame and readonly DATA observation", err)
+	}
+	defer source.Close()
+	expanded := source.sdkFrame.owner.source.observation.CPP[0].Output
+	file, err := Parse(ArchAMD64, expanded)
+	if err != nil || len(file.Globl) == 0 || len(file.Funcs) != len(source.functions) {
+		t.Fatal("complete original source inventory", err)
+	}
+	resolve := func(symbol string) string { return pkg.Path + "." + strings.TrimPrefix(symbol, "·") }
+	source.mu.Lock()
+	data, names, err := source.fixedLocalData(file, expanded, resolve)
+	source.mu.Unlock()
+	if err != nil || len(data) != len(file.Globl) || len(names) != len(file.Globl) {
+		t.Fatal("readonly DATA lost its same-source extent/symbol projection", err)
+	}
+	for _, changed := range []struct{ name, expanded string }{
+		{"missing_amd64.s", expanded},
+		{source.request.AssemblyFile, expanded + "\n"},
+	} {
+		if _, err := source.fixedLocalDataObservation(changed.name, changed.expanded); !errors.Is(err, ErrProbeNeedsContext) {
+			t.Fatal("unmatched source borrowed the complete SDK DATA observation", err)
+		}
+	}
+	if err := source.Verify(ctx); err != nil {
+		t.Fatal("complete live frame/DATA source", err)
+	}
+	if err := source.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := source.Verify(ctx); !errors.Is(err, ErrProbeNeedsContext) {
+		t.Fatal("closed frame/DATA source revived", err)
+	}
+	t.Logf("%d complete source functions and %d readonly definitions; not a full translation result", len(file.Funcs), len(data))
+}
+
 func TestGoAMD64SDKFrameOriginalSourceCapture(t *testing.T) {
 	ctx, request := sdkASMDataRequest(t, "amd64", "crypto/md5")
 	observed, err := CaptureGoAMD64SDKFrameObservation(ctx, request)
@@ -47,15 +95,11 @@ func TestGoAMD64SDKFrameOriginalSourceCapture(t *testing.T) {
 	if err := source.Verify(ctx); err != nil {
 		t.Fatal("copied SDK frame revoked the authentic original", err)
 	}
-	file, err := Parse(ArchAMD64, source.sdkFrame.owner.source.observation.CPP[0].Output)
-	if err != nil {
-		t.Fatal(err)
-	}
-	options := Options{Goarch: "amd64", TargetTriple: "x86_64-unknown-linux-gnu",
-		ResolveSym: func(symbol string) string { return request.PackagePath + "." + strings.TrimPrefix(symbol, "·") },
-		Sigs:       map[string]FuncSig{request.PackagePath + ".block": fn.signature}}
-	if _, err := source.BindFixedLocal(ctx, pkg, file, options); !errors.Is(err, ErrProbeNeedsContext) || !strings.Contains(err.Error(), "SHRQ") {
-		t.Fatal("authentic frame supplied unrelated full body/caller permissions", err)
+	// Capture supplies source/layout facts, not a completed body proof. Do not
+	// freeze an obsolete unsupported-op diagnostic as a successful observation:
+	// valid new typed families may subsequently make BindFixedLocal succeed.
+	if fn.signature.x86FixedLocal != nil {
+		t.Fatal("capturing a frame implicitly supplied a complete body proof")
 	}
 	original := observed.source.observation.ObjectInputs.Sources[0].Original
 	after, err := os.ReadFile(filepath.Join(request.Directory, assembly))

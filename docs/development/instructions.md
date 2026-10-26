@@ -1511,20 +1511,32 @@ names and local type/alias roles remain bound. Unrelated ordinary types cannot
 create assembly signatures or bypass signedness, alias RHS, pointee or field
 checks on a real assembly signature. By-value aggregates,
 recursive/generic types, noninteger/nonboolean elements and nonordinary roles remain Context.
-Opaque incoming pointers may only be copied through full-width GP/private cells
-and pointer results. They never become numerical bytes, private-SP addresses,
-pointee extents or caller memory permission. Every overlapping store revokes
+Opaque incoming pointers may be copied through full-width GP/private cells
+and pointer results. The separate native-input access role accepts typed FP
+pointer bases with plain displacements and exact typed access widths. It grants
+no pointee extent, alignment or private-frame certificate; preserve native
+accesses and faults even when numerical results are dead. Pointer arithmetic,
+indexed/TLS addresses and pointer escape require their own proven contracts.
+Pointers never become numerical bytes or private-SP addresses. Every overlapping store revokes
 their cell identity, including an unknown or zero mask. Slice data/len/cap and
 multiple results require every exact ABI0 component to be initialized. A bool
 occupies one physical byte but returns LLVM i1: only proved zero/one bytes,
 including complete SETcc and canonical CMOV alternatives, may enter that slot.
-The eight mod64 residues, independent byte-alias replay and complete DAG remain
-mandatory. Loops, helpers, stack splitting and input-buffer access do not gain
-any new permission from this transport contract.
+The eight mod64 residues and independent byte-alias replay remain mandatory.
+The complete CFG uses a bounded fixed-point worklist; provisional memory facts
+are published only after convergence. An ordinary same-function branch is not
+an external tail call. Go-generated split-entry checks are recognized from
+exact original code, source positions and relocations; only the ordinary body
+layout is projected. Source-written CALL/TLS and private helpers receive no
+permission from that observation. Keep these contracts distinct from component
+transport and from native-input access.
 Mixed TEXT/DATA requires a separate complete current-Go source/object/listing
 observation on each AMD64 OS. Bind every DATA definition, byte, zero tail,
 relocation and original TEXT position; Windows unwind retains its independent
 complete-object join. Observing mutable/BSS/address DATA grants no memory use.
+SDK DATA reuses the same live complete source/object observation rather than
+recapturing it with standalone producer flags. Ordinary ABI0 global references
+can remain in that inventory without becoming private literals or address roles.
 The fixed-local consumer separately admits bounded private, relocation-free
 readonly literals whose actual Go bytes equal the entire LLVM initializer.
 Retain exact symbol identity, native extent/alignment and live source guards;

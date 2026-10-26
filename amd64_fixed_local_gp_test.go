@@ -116,6 +116,7 @@ func TestGoAMD64FixedLocalTypedGPActualObjects(t *testing.T) {
 		"MOVQ AX,CX\nLEAQ 7(AX)(CX*2),AX\nNOPL 8(SP)",
 		"MOVQ $3,CX\nagain:\nADDQ CX,AX\nSUBQ $1,CX\nJNE again",
 		"MOVQ $3,8(SP)\nagain:\nADDQ $1,AX\nSUBQ $1,8(SP)\nJNE again",
+		"CMPQ AX,$1\nJEQ left\nMOVQ $2,CX\nJMP join\nleft:\nMOVQ $3,CX\njoin:\nADDQ CX,AX",
 	} {
 		_, _, source := fixedLocalGPFixture(t, body)
 		assembly.WriteString(strings.Replace(source, "·Value", fmt.Sprintf("·Value%d", index), 1))
@@ -135,6 +136,36 @@ func TestGoAMD64FixedLocalTypedGPActualObjects(t *testing.T) {
 					}
 					compileLLVMToObject(t, llc, target.triple, "typed-gp.ll", "typed-gp.o", ir)
 				})
+		})
+	}
+}
+
+func TestGoAMD64FrameSourceLocalBranches(t *testing.T) {
+	for _, row := range []struct {
+		name, body string
+		valid      bool
+	}{
+		{"forward", "JMP done\ndone:\nRET", true},
+		{"backward", "again:\nSUBQ $1,AX\nJNE done\nJMP again\ndone:\nRET", true},
+		{"missing", "JMP absent\nRET", false},
+		{"past end", "JMP done\nRET\ndone:", false},
+		{"external", "JMP ·Other(SB)\nRET", false},
+		{"indirect", "JMP AX\nRET", false},
+		{"relative", "JMP 2(PC)\nRET", false},
+		{"call", "CALL ·Other(SB)\nRET", false},
+		{"tail return", "RET ·Other(SB)", false},
+		{"raw", "BYTE $0xc3\nRET", false},
+		{"alignment", "PCALIGN $16\nRET", false},
+	} {
+		t.Run(row.name, func(t *testing.T) {
+			file, err := Parse(ArchAMD64, "TEXT ·Value(SB),4,$16-0\n"+row.body+"\n")
+			if err != nil || len(file.Funcs) != 1 {
+				t.Fatalf("parse original source: %v", err)
+			}
+			err = goAMD64FrameSourceInstructions(file.Funcs[0])
+			if (err == nil) != row.valid {
+				t.Fatalf("valid=%v: %v", row.valid, err)
+			}
 		})
 	}
 }

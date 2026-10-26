@@ -292,8 +292,8 @@ func fixedLocalEdges(fn Func) (map[int][]int, []int, error) {
 				return nil, nil, goAMD64FrameContext("fixed local branch needs a complete named target")
 			}
 			target, found := labels[label]
-			if !found {
-				return nil, nil, goAMD64FrameContext("fixed local branch target is missing")
+			if !found || target >= len(instructions) {
+				return nil, nil, goAMD64FrameContext("fixed local branch target is missing an instruction")
 			}
 			if ins.Op == OpJMP {
 				next = []int{target}

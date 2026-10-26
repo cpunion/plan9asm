@@ -383,7 +383,7 @@ func captureGoAMD64FrameSource(ctx context.Context, pkg GoPackage, request GoAMD
 			}
 			functions, err = goAMD64FrameListingWithDataObject(filtered, file, pkg, source.origins, observed, unwind)
 			if err == nil {
-				err = goAMD64FrameDataTextJoin(functions, observed, source.request.Directory, source.origins)
+				err = goAMD64FrameDataTextJoin(functions, observed, source.request.Directory, source.origins, "")
 			}
 			if err == nil && unwind != nil {
 				err = goAMD64FrameWindowsUnwindFunctions(functions, source.origins, source.request.Directory, *unwind)
@@ -405,7 +405,7 @@ func captureGoAMD64FrameSource(ctx context.Context, pkg GoPackage, request GoAMD
 				functions, err = goAMD64FrameListingWithSplitObject(listing, file, pkg, source.origins,
 					observed.Member.Texts, nil, source.request.Target, source.request.Directory)
 				if err == nil {
-					err = goAMD64FrameDataTextJoin(functions, observed, source.request.Directory, source.origins)
+					err = goAMD64FrameDataTextJoin(functions, observed, source.request.Directory, source.origins, "")
 				}
 			} else {
 				functions, err = goAMD64FrameListingWithNumericalObject(listing, file, pkg, source.origins, texts)
@@ -1546,29 +1546,11 @@ func goAMD64FrameListingRecords(listing []byte, file *File, pkg GoPackage, origi
 			fn.sourcePositions[int(pc)] = append(fn.sourcePositions[int(pc)],
 				goAMD64FrameSourcePosition{row[2][:separator], line})
 		} else {
-			fields := strings.Fields(line)
-			if len(fields) < 2 || !strings.HasPrefix(fields[0], "0x") {
-				return nil, goAMD64FrameContext("unknown native listing/relocation record: %s", line)
+			pc, code, err := goAssemblyListingByteRow(line)
+			if err != nil || pc != len(fn.code) || int64(pc+len(code)) > expected {
+				return nil, goAMD64FrameContext("invalid native byte record or gap/overlap: %v", err)
 			}
-			pc, err := strconv.ParseInt(strings.TrimPrefix(fields[0], "0x"), 16, 32)
-			if err != nil || pc != int64(len(fn.code)) {
-				return nil, goAMD64FrameContext("native byte gap/overlap")
-			}
-			count := 0
-			for _, word := range fields[1:] {
-				if len(word) != 2 {
-					break
-				}
-				value, err := hex.DecodeString(word)
-				if err != nil {
-					break
-				}
-				fn.code = append(fn.code, value[0])
-				count++
-			}
-			if count == 0 || count > 16 || int64(len(fn.code)) > expected {
-				return nil, goAMD64FrameContext("invalid native byte record")
-			}
+			fn.code = append(fn.code, code...)
 		}
 		functions[name] = fn
 	}
@@ -1617,15 +1599,8 @@ func goAMD64FrameListingRecords(listing []byte, file *File, pkg GoPackage, origi
 		if !goabi.MatchesABI0TextSize("amd64", fn.args, end) {
 			return nil, goAMD64FrameContext("original TEXT args disagree with actual declaration")
 		}
-		for _, ins := range original.Instrs {
-			switch ins.Op {
-			case "BYTE", "WORD", "LONG", "QUAD", OpCALL, "JMP", "PCALIGN", "PCALIGNMAX":
-				return nil, goAMD64FrameContext("raw, calling or address-sensitive original frame requires a later source contract")
-			case OpRET:
-				if len(ins.Args) != 0 {
-					return nil, goAMD64FrameContext("nonordinary original RET transport")
-				}
-			}
+		if err := goAMD64FrameSourceInstructions(original); err != nil {
+			return nil, err
 		}
 		if original.FrameSize > 0 {
 			shape := fn
@@ -1649,6 +1624,29 @@ func goAMD64FrameListingRecords(listing []byte, file *File, pkg GoPackage, origi
 		bound[symbol] = fn
 	}
 	return bound, nil
+}
+
+func goAMD64FrameSourceInstructions(fn Func) error {
+	localJump := false
+	for _, ins := range fn.Instrs {
+		switch ins.Op {
+		case "BYTE", "WORD", "LONG", "QUAD", OpCALL, "PCALIGN", "PCALIGNMAX":
+			return goAMD64FrameContext("raw, calling or address-sensitive original frame requires a later source contract")
+		case OpJMP:
+			localJump = true
+		case OpRET:
+			if len(ins.Args) != 0 {
+				return goAMD64FrameContext("nonordinary original RET transport")
+			}
+		}
+	}
+	if localJump {
+		// Share the complete local-label inventory with the fixed-frame CFG.
+		// A named branch within this TEXT is not an external tail-call contract.
+		_, _, err := fixedLocalEdges(fn)
+		return err
+	}
+	return nil
 }
 
 func goAMD64FrameMachineShape(fn goAMD64FrameFunction, frame int64) error {

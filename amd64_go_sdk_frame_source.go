@@ -27,7 +27,7 @@ type goAMD64SDKFrameOrigin struct {
 // layout and source PCs. Nonzero frames also require automatic BP/SP shapes;
 // zero-frame siblings retain their ordinary ABI0 path without local backing.
 // Generated split checks are observed separately from the source body.
-// Private helpers, native callers, ABI selectors and SDK DATA
+// Private helpers, native callers and ABI selectors
 // composition require separate contracts. BindFixedLocal still proves every
 // full-source access/initialization/CFG requirement before granting local bytes.
 func CaptureGoAMD64SDKFrameSource(ctx context.Context, pkg GoPackage, request GoAMD64FrameCaptureRequest) (_ *GoAMD64FrameSource, result error) {
@@ -136,9 +136,6 @@ func (source *GoAMD64FrameSource) sdkFrameRecords() (map[string]goAMD64FrameFunc
 			}
 			withFrame = withFrame || fn.FrameSize > 0
 		}
-		if len(file.Data)+len(file.Globl) != 0 {
-			return nil, nil, goAMD64FrameContext("SDK-primary frame/literal DATA composition needs a separate owner handoff")
-		}
 		for _, observed := range cpp.Sources {
 			expected, captured := source.inputs[observed.File]
 			bytes, err := goAMD64FrameRead(observed.File)
@@ -148,7 +145,20 @@ func (source *GoAMD64FrameSource) sdkFrameRecords() (map[string]goAMD64FrameFunc
 			source.origins[observed.File] = strings.Count(string(bytes), "\n") + 1
 		}
 		var observed map[string]goAMD64FrameFunction
-		if goAMD64FrameSplitListing(native.OriginalListing) {
+		if len(file.Data)+len(file.Globl) != 0 {
+			data, readErr := source.fixedLocalDataObservation(input.Name, cpp.Output)
+			if readErr != nil {
+				return nil, nil, readErr
+			}
+			listing, readErr := goAMD64FrameDataListing(native.OriginalListing, data)
+			if readErr != nil {
+				return nil, nil, readErr
+			}
+			observed, err = goAMD64FrameListingWithDataObject(listing, file, origin.pkg, source.origins, data, nil)
+			if err == nil {
+				err = goAMD64FrameDataTextJoin(observed, data, source.request.Directory, source.origins, source.env["GOROOT"])
+			}
+		} else if goAMD64FrameSplitListing(native.OriginalListing) {
 			observed, err = goAMD64FrameListingWithSplitObject(native.OriginalListing, file, origin.pkg, source.origins, texts, nil, source.request.Target, source.request.Directory)
 		} else {
 			observed, err = goAMD64FrameListingWithNumericalObject(native.OriginalListing, file, origin.pkg, source.origins, texts)
