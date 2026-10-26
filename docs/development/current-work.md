@@ -15,18 +15,22 @@ address and an incoming pointer. Its whole-file failure remains unresolved.
 Ordinary private helper calls remain separate unresolved work, not runtime
 entry exclusions.
 
-The integrated Go 1.27.3 / LLVM22 receipt at `3791b7d46` passes
-**132 roots / 5,507 children**, zero failures/skips, in 170.647 seconds.
+The integrated Go 1.27.3 / LLVM22 receipt at `698edc367` passes
+**244 roots / 11,064 children**, zero failures/skips, in 315.957 seconds.
 Every root and child ran and terminated exactly once. It includes exact SHA,
 VEX block transfers and logical zero dependencies, packed rotate inputs and
-writeback, commuted pointer addition, and actual retained frame-state budgets.
+writeback, commuted pointer addition, XCHG, readonly arithmetic, target guards,
+and actual retained frame-state budgets.
 The packed rotate implementation replaces its duplicate parser with the shared
 typed grammar (production net +10 lines); commuted ADD adds 29 production lines.
 The original frame-state storage and work limits remain unchanged: only actual
-CFG boundary states count toward storage. Go 1.20.14 passes the same
-132 roots / 5,507 children at the documentation-only successor `10e841d83`,
-zero failures/skips, in 132.275 seconds. Later batches need independent
-qualification.
+CFG boundary states count toward storage. Go 1.20.14 passes
+241 roots / 11,025 children at the same source, zero failures/skips, in
+200.611 seconds. Its three absent roots each have an explicit Go 1.27 build
+constraint; none was skipped during execution. Root build/vet, formatting,
+actionlint, all five official-corpus baselines and the full 679-test Node22.23.4
+policy suite also pass on this source. Later production batches require their
+own qualification; documentation-only successors preserve the tested Go files.
 
 The 16 selected Go 1.20–1.27 x86 reports at `9f649eebd` change only 78 amd64
 classifications: 71 rotate forms and seven SHA forms now require their missing
@@ -54,16 +58,21 @@ portable LLVM execution does not qualify native AVX512.
 
 The XCHG batch shares scalar value reads/writes with MOV and retains the complete
 width/alias grammar. Its final focused receipt passes 12 roots / 1,084 children;
-the earlier wider failed receipt remains failed. Owned readonly arithmetic
+the earlier wider failed receipt remains failed, and the complete integrated
+receipt above now covers its corrected tests. Owned readonly arithmetic
 retains 19 legacy forms and exact typed-state loop convergence, restoring the
 complete SHA256 file. The uniform used-intrinsic target guard passes 20 roots /
-576 children. These isolated receipts require a new integrated qualification.
+576 children and is included in the integrated receipt above.
 The audited Go 1.27.3 literal-alignment registration at `fdbec8c79` passes
 19 roots / 68 children with no failures/skips; all 15 selected linker/layout
 source files match Go 1.27.2 byte for byte. Unknown patches remain rejected.
+The remaining four producer registrations independently audit 41 unique SDK
+sources and pass 25 roots / 231 children. The new XCHG and readonly-arithmetic
+native roots are selected exactly once by required Linux CI owners 4 and 14.
+Local object compilation is not their original-Go native execution certificate.
 
-Public PR40 remains draft at `728520def`; its earlier green checks do not
-certify these local batches. LLGo PR2694 is separately draft at `2e820f5c2`
+Public PR40 remains draft; its earlier green checks at `728520def` do not
+certify this publication. LLGo PR2694 is separately draft at `2e820f5c2`
 with 131 passing checks and two release skips as of this checkpoint. Update its
 exact translator pin only after publishing a verified fork revision.
 
@@ -123,9 +132,7 @@ Twelve analysis benchmarks, each with five samples, reduce allocation counts
 set and all failure diagnostics remain identical. One wall observation falls
 97 to 65 seconds; it is not a repeated end-to-end speedup measurement.
 
-Next: qualify the integrated XCHG, readonly arithmetic, vector/scalar writeback,
-target guard and SDK registrations on current and minimum SDKs. Recheck the
-official inventory, publish one coherent fork batch and watch current-head CI.
+Next: publish the qualified batch and watch current-head CI and coverage.
 Continue conditional value joins for complete SHA1 after the shared scalar
 transfer is validated; retain every alternative's memory and origin contract.
 Ordinary helper call continuations still need independent implementation and
