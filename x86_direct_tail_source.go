@@ -70,6 +70,10 @@ func x86DirectTailSourceNeeded(file *File) bool {
 }
 
 func x86DirectTailRootNeeded(fn Func) bool {
+	return x86DirectTailRootNeededExceptCalls(fn, nil)
+}
+
+func x86DirectTailRootNeededExceptCalls(fn Func, ordinary map[string]bool) bool {
 	for _, ins := range fn.Instrs {
 		if ins.Op != OpJMP && ins.Op != OpCALL || len(ins.Args) != 1 {
 			continue
@@ -79,8 +83,11 @@ func x86DirectTailRootNeeded(fn Func) bool {
 		if arg.Kind == OpMem {
 			text = arg.Mem.Sym
 		}
-		base, _, valid := parseSBRef(strings.TrimPrefix(text, "$"))
+		base, offset, valid := parseSBRef(strings.TrimPrefix(text, "$"))
 		if valid && strings.HasSuffix(base, "<>") {
+			if ins.Op == OpCALL && arg.Kind == OpSym && offset == 0 && ordinary[base] {
+				continue
+			}
 			return true
 		}
 	}
@@ -151,6 +158,10 @@ func PrepareX86DirectTailSource(file *File, options Options) (*File, error) {
 	if err != nil {
 		return nil, err
 	}
+	ordinary := graph.ordinaryABI0Calls()
+	for helper := range ordinary {
+		delete(helpers, helper)
+	}
 	signatures, resolve := graph.signatures, options.ResolveSym
 	if resolve == nil {
 		resolve = func(symbol string) string { return symbol }
@@ -158,7 +169,7 @@ func PrepareX86DirectTailSource(file *File, options Options) (*File, error) {
 	reached := make(map[string]bool)
 	combined := 0
 	for index, fn := range graph.original.Funcs {
-		if helpers[fn.Sym] || !x86DirectTailRootNeeded(fn) {
+		if helpers[fn.Sym] || !x86DirectTailRootNeededExceptCalls(fn, ordinary) {
 			continue
 		}
 		view, err := graph.root(index, byName, 4096-combined, true)
@@ -219,6 +230,47 @@ func PrepareX86DirectTailSource(file *File, options Options) (*File, error) {
 		return nil, err
 	}
 	return request, nil
+}
+
+// Routing only: an already declared bounded Void ABI0 callee retains its own
+// ordinary lowering checks. No declaration is inferred for register helpers.
+// Inspect the captured source/symbols so a resolver cannot change the source
+// before the graph's identity checks. Non-CALL references keep the old graph.
+func (graph *x86DirectTailGraph) ordinaryABI0Calls() map[string]bool {
+	ordinary := make(map[string]bool)
+	for _, fn := range graph.original.Funcs {
+		name := graph.symbols[fn.Sym]
+		sig, found := graph.signatures[name]
+		if graph.helpers[fn.Sym] && found && (sig.Name == "" || sig.Name == name) &&
+			x86BoundedVoidABI0Declaration(fn, sig, graph.goarch) {
+			ordinary[fn.Sym] = true
+		}
+	}
+	for _, fn := range graph.original.Funcs {
+		for _, ins := range fn.Instrs {
+			if ins.Op == OpTEXT || ins.Op == OpCALL {
+				continue // auditReferences already checked exact CALL operands.
+			}
+			for _, arg := range ins.Args {
+				if name, _, valid := parseSBRef(arg.Sym); valid {
+					delete(ordinary, name)
+				}
+			}
+		}
+	}
+	return ordinary
+}
+
+func x86BoundedVoidABI0Declaration(fn Func, sig FuncSig, arch string) bool {
+	if arch != "amd64" && arch != "386" || sig.Ret != Void || len(sig.Args) == 0 ||
+		len(sig.Frame.Params) == 0 || sig.WASMNative || sig.x86BorrowedBoolTail ||
+		fn.ArgSize <= 0 || fn.ArgSize > 4096 || len(fn.Instrs) == 0 || fn.Instrs[0].Op != OpTEXT {
+		return false
+	}
+	op, rest := splitOpcode(fn.Instrs[0].Raw)
+	frame, err := parseTEXTFrameSpec(strings.Split(rest, ","))
+	return strings.EqualFold(op, "TEXT") && err == nil && frame.argsSpecified &&
+		frame.frameSize == fn.FrameSize && frame.argSize == fn.ArgSize && x86ABI0FrameLayout(sig, fn.ArgSize, arch)
 }
 
 // Both continuation emission and a separately sealed custom-register result

@@ -86,6 +86,10 @@ func x86ABI0OutgoingForwarder(fn Func, options Options) bool {
 }
 
 func x86ABI0ForwardLayout(sig FuncSig, limit int64) bool {
+	return x86ABI0FrameLayout(sig, limit, "amd64")
+}
+
+func x86ABI0FrameLayout(sig FuncSig, limit int64, arch string) bool {
 	if len(sig.ArgRegs) != 0 || sig.ARMEntry != nil || sig.WASMContext != "" ||
 		sig.ARM64GoRegisterABI != nil || sig.ARM64ClosureABI != nil ||
 		len(sig.Frame.Params)+len(sig.Frame.Results) > 4096 {
@@ -104,7 +108,7 @@ func x86ABI0ForwardLayout(sig FuncSig, limit int64) bool {
 	roles := make(map[string]bool)
 	for group, slots := range [][]FrameSlot{sig.Frame.Params, sig.Frame.Results} {
 		for index, slot := range slots {
-			width := x86FrameScalarBytes(slot.Type, "amd64")
+			width := x86FrameScalarBytes(slot.Type, arch)
 			if width == 0 || slot.Offset < end || slot.Offset > limit-width {
 				return false
 			}

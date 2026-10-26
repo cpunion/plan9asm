@@ -746,6 +746,11 @@ func (b *goSigBuilder) addDeclaredFuncSigs(file *File) error {
 		sym := goStripABISuffix(textSym)
 		resolved := b.resolve(goTextSymbolForResolution(textSym))
 		if b.directTail && strings.HasSuffix(textSym, "<>") {
+			if sig, found := goLookupManualSig(b.manualSig, resolved); found &&
+				x86BoundedVoidABI0Declaration(file.Funcs[i], sig, b.goarch) {
+				b.sigs[resolved] = sig
+				continue // Keep this real bounded ABI; never invent one for a graph node.
+			}
 			b.localSigs[resolved] = true
 			continue // No ManualSig/zero-arg/caller signature becomes a helper ABI.
 		}
