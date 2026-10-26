@@ -8,7 +8,7 @@ certificate. Read [architecture](architecture.md),
 
 ## Publication and CI
 
-PR40 remains draft. Published head `3f634d936`
+PR40 remains draft. The last completed full run at `3f634d936`
 [completed its full CI](https://github.com/xgo-dev/plan9asm/actions/runs/40343133972)
 naturally: **325 jobs, 284 successful, 41 failed**. The 24 failed test jobs share
 four causes; 17 completion jobs reject their failed prerequisites.
@@ -39,8 +39,16 @@ Local source `cfdcd58d5` passes 15 roots / 79 children on Go1.27.3 and
 12 / 37 on Go1.20.14, with no failures/skips, including the actual SDK alias
 and command/physical-root mutation controls. Other SDK and numerical observation
 roles retain their own stricter entry contracts; this repair does not qualify
-every alias in every observer. The final combined source still needs its
-integration gate and a new complete PR CI run.
+every alias in every observer.
+
+The final combined source `04f11d7f6` passes 84 roots / 1,900 children on
+Go1.27.3 and 80 / 1,853 on Go1.20.14, with zero failures/skips. The four absent
+minimum-SDK roots each have an explicit Go1.27 build constraint. Both SDKs also
+pass all 17 rule-reader roots / 48 children. Root/CLI builds, root vet, all
+5,011 tracked Go files' formatting, actionlint and all five official corpus
+baselines pass; Node22.23.4 passes 573 policy tests. Later documentation-only
+changes preserve these tested Go/module sources. A new complete PR CI run and
+current-head coverage/review remain required.
 
 ## Current functional evidence
 
@@ -96,8 +104,7 @@ source verification to hide subprocess costs.
 
 ## Remaining work, in order
 
-1. Finish the combined current/minimum-SDK checks, publish one allowed-fork batch
-   and watch the new complete CI. Retain
+1. Watch the next published batch's complete CI and fix any new failure. Retain
    draft until current-head CI, coverage and external review pass.
 2. Restore the three ordinary ABI0 crypto failures: SHA1's conditional choice
    between readonly DATA and an incoming pointer; P256's private helper graph
