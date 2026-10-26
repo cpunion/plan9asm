@@ -44,6 +44,8 @@ func fixedLocalSHARuntimePreflight(t *testing.T, execution x86FloatCompareExecut
 	directory := t.TempDir()
 	source, executable := filepath.Join(directory, "sha.c"), filepath.Join(directory, "sha")
 	const program = `#include <stdio.h>
+#include <string.h>
+#include <cpuid.h>
 __attribute__((target("sha,sse2"))) static int original_sha(void) {
     unsigned bits;
     __asm__ volatile("pxor %%xmm0,%%xmm0; sha1msg1 %%xmm0,%%xmm0; pmovmskb %%xmm0,%0"
@@ -53,7 +55,14 @@ __attribute__((target("sha,sse2"))) static int original_sha(void) {
 int main(void) {
     __builtin_cpu_init();
     int sha=!!__builtin_cpu_supports("sha");
-    printf("fixed-frame native SHA=%d\n",sha);
+    unsigned a, b, c, d, signature;
+    char vendor[13]={0};
+    __cpuid(0,a,b,c,d);
+    memcpy(vendor,&b,4);
+    memcpy(vendor+4,&d,4);
+    memcpy(vendor+8,&c,4);
+    __cpuid(1,signature,b,c,d);
+    printf("fixed-frame native SHA=%d vendor=%s signature=%08x\n",sha,vendor,signature);
     return sha && original_sha() ? 0 : 1;
 }
 `
@@ -105,12 +114,23 @@ func fixedLocalSHAFaultRuntime(t *testing.T, execution x86FloatCompareExecution,
 			fmt.Fprintf(&rows, "{%s,%s,16,1},\n", name, original)
 		}
 	}
+	if count != 14 {
+		t.Fatal("complete SHA live/dead fault inventory changed", count)
+	}
 	goAssemblerOracleOutput(t, "amd64", source.String(), "", true)
 	ir := x86NarrowOracleIR(t, source.String(), declarations.String(), execution.triple)
-	// Reuse the existing guarded-page, alignment and core-disabled child
-	// harness. These fault observations are independent of output canaries.
-	driver := "#define NATIVE_ALIGNMENT 1\n" + fmt.Sprintf(x86AESFaultC, prototypes.String(), originals.String(), rows.String())
+	// Intel XED marks SHA m128 REQUIRES_ALIGNMENT, but original Go opcodes
+	// execute unaligned on some native CPUs. Observe both unaligned addresses
+	// independently per original opcode and require exact translated agreement.
+	// All other full-width/guard-page/dead-read expectations remain fixed; this
+	// does not relax the separate private-frame alignment proof or AES owner.
+	// https://github.com/intelxed/xed/blob/main/datafiles/sha/sha-isa.xed.txt
+	const alignment = `#define NATIVE_ALIGNMENT 0
+#define ALIGNMENT_OBSERVED(k,a,f) printf("sha alignment kernel%u address%u fault%d\n",k,a,f)
+`
+	driver := alignment + fmt.Sprintf(x86AESFaultC, prototypes.String(), originals.String(), rows.String())
 	driver = strings.ReplaceAll(driver, "aes live/dead", "sha live/dead")
+	driver = strings.ReplaceAll(driver, "AES kernel", "SHA kernel")
 	for _, level := range []string{"-O0", "-O2"} {
 		t.Run(level, func(t *testing.T) {
 			input := ir
@@ -123,9 +143,10 @@ func fixedLocalSHAFaultRuntime(t *testing.T, execution x86FloatCompareExecution,
 			}
 			output := execution.compileAndRunLLVM(t, "sha-fault", input, driver, level)
 			want := fmt.Sprintf("sha live/dead kernels %d exact fault outcomes %d tripwires 4 failures 0\n", count, count*18)
-			if string(output) != want {
+			if !strings.HasSuffix(string(output), want) || strings.Count(string(output), "sha alignment kernel") != count*2 {
 				t.Fatal("original SHA live/dead m128 fault comparison", string(output))
 			}
+			t.Log(strings.TrimSpace(string(output)))
 		})
 	}
 }

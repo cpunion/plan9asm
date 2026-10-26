@@ -88,6 +88,9 @@ const x86AESFaultC = `
 #include <sys/mman.h>
 #include <sys/resource.h>
 #include <sys/wait.h>
+#ifndef ALIGNMENT_OBSERVED
+#define ALIGNMENT_OBSERVED(kernel,address,fault) ((void)0)
+#endif
 %s
 %s
 typedef void(*Program)(const uint8_t*,uint8_t*);
@@ -129,7 +132,9 @@ int main(void){unsigned count=0;
   for(int original=1;original>=0;original--){if(original&&!k.original)continue;
    int got=observe(original?k.original:k.translated,k.width,a);count++;
    // Diagnostic hosts still require exact original/translated agreement.
-   if(original&&unaligned&&!NATIVE_ALIGNMENT&&(got==0||got==1))want=got;
+   if(original&&unaligned&&!NATIVE_ALIGNMENT&&(got==0||got==1)){
+    want=got;ALIGNMENT_OBSERVED(i,a,got);
+   }
    if(got!=want){fprintf(stderr,"AES kernel%%u width%%u address%%u original%%d got%%d want%%d\n",i,k.width,a,original,got,want);return 1;}
   }
  }
