@@ -31,48 +31,59 @@ func fixedLocalCountedLoops(fn Func, edges map[int][]int, instructions []int) ma
 		if header <= 0 || header > latch-2 || end[header] != latch {
 			continue // Full predecessor counts exclude side entries and nested branches.
 		}
-		update := fn.Instrs[instructions[latch-2]]
-		form, recognized, err := x86LockScalarRMWProperties(update.Op, update, "amd64")
-		if !recognized || err != nil || form.spec.bits != 64 || form.destination.Kind != OpReg {
-			continue
-		}
-		counter, valid := x86CallerGP(form.destination.Reg)
-		if !valid || counter != form.destination.Reg || counter == SP {
-			continue
-		}
-		var delta int64
-		switch form.spec.stem {
-		case "ADD", "SUB":
-			if form.source.Kind != OpImm {
-				continue
-			}
-			delta = form.source.Imm // The shared grammar has applied encoded imm32 sign extension.
-			if form.spec.stem == "SUB" {
-				delta = -delta
-			}
-		case "INC":
-			delta = 1
-		case "DEC":
-			delta = -1
-		default:
-			continue
-		}
 		condition := x86BranchCondition(fn.Instrs[instructions[latch]].Op)
-		if delta == 0 || delta > 0 && condition != "CS" || delta < 0 && condition != "HI" {
+		if condition != "CS" && condition != "HI" {
 			continue
 		}
 		compare := fn.Instrs[instructions[latch-1]]
 		cmp, recognized, err := x86ScalarCompareProperties(compare.Op, compare, "amd64")
 		if !recognized || err != nil || cmp.test || cmp.bits != 64 ||
-			cmp.args[0].Kind != OpReg || cmp.args[0].Reg != counter || cmp.args[1].Kind != OpImm {
+			cmp.args[0].Kind != OpReg || cmp.args[1].Kind != OpImm {
 			continue
 		}
-		if loops == nil {
-			loops = make(map[int]x86FixedLocalCountedLoop)
+		counter, valid := x86CallerGP(cmp.args[0].Reg)
+		if !valid || counter != cmp.args[0].Reg || counter == SP {
+			continue
 		}
-		loops[header] = x86FixedLocalCountedLoop{header, latch - 2, latch, counter, delta, uint64(cmp.args[1].Imm)}
+		// These straight-line bodies cannot overlap: another latch would
+		// terminate end[header]. Their combined backwards scan stays O(N).
+		// Replay checks that every other typed transfer preserves the counter.
+		for update := latch - 2; update >= header; update-- {
+			delta := fixedLocalCountedDelta(fn.Instrs[instructions[update]], counter)
+			if delta == 0 || delta > 0 && condition != "CS" || delta < 0 && condition != "HI" {
+				continue
+			}
+			if loops == nil {
+				loops = make(map[int]x86FixedLocalCountedLoop)
+			}
+			loops[header] = x86FixedLocalCountedLoop{header, update, latch, counter, delta, uint64(cmp.args[1].Imm)}
+			break
+		}
 	}
 	return loops
+}
+
+func fixedLocalCountedDelta(ins Instr, counter Reg) int64 {
+	form, recognized, err := x86LockScalarRMWProperties(ins.Op, ins, "amd64")
+	if !recognized || err != nil || form.spec.bits != 64 ||
+		form.destination.Kind != OpReg || form.destination.Reg != counter {
+		return 0
+	}
+	switch form.spec.stem {
+	case "ADD", "SUB":
+		if form.source.Kind == OpImm {
+			delta := form.source.Imm // The shared grammar applies encoded imm32 sign extension.
+			if form.spec.stem == "SUB" {
+				delta = -delta
+			}
+			return delta
+		}
+	case "INC":
+		return 1
+	case "DEC":
+		return -1
+	}
+	return 0
 }
 
 func (loop x86FixedLocalCountedLoop) number(state *x86FixedLocalState) (uint64, bool) {
