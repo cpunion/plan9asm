@@ -413,19 +413,14 @@ func replayX86FixedLocal(fn *Func, sig FuncSig, proof *x86FixedLocalProof, resid
 }
 
 func mergeFixedLocalState(previous *x86FixedLocalState, current x86FixedLocalState) (bool, error) {
-	// Losing a numerical constant is safe. Losing an address identity is not:
-	// it must never turn a pointer or a pointer spill into numerical bytes.
-	if !reflect.DeepEqual(previous.pointers, current.pointers) || !reflect.DeepEqual(previous.addresses, current.addresses) ||
-		!reflect.DeepEqual(previous.opaque, current.opaque) || !reflect.DeepEqual(previous.opaqueCells, current.opaqueCells) {
+	// Private relocation identities must agree. Incoming origins are a separate
+	// must-domain: losing one leaves unknown bytes, never numerical knowledge.
+	if !reflect.DeepEqual(previous.pointers, current.pointers) || !reflect.DeepEqual(previous.addresses, current.addresses) {
 		return false, goAMD64FrameContext("fixed local CFG address identity disagrees")
 	}
-	changed := false
-	for reg, value := range previous.constants {
-		if incoming, found := current.constants[reg]; !found || incoming != value {
-			delete(previous.constants, reg)
-			changed = true
-		}
-	}
+	changed := intersectFixedLocalOrigins(previous.constants, current.constants)
+	changed = intersectFixedLocalOrigins(previous.opaque, current.opaque) || changed
+	changed = intersectFixedLocalOrigins(previous.opaqueCells, current.opaqueCells) || changed
 	flags := previous.flags & current.flags
 	changed = changed || flags != previous.flags
 	previous.flags = flags
@@ -619,6 +614,9 @@ func fixedLocalStep(ins *Instr, state *x86FixedLocalState, sig FuncSig, proof *x
 		}
 	}
 	if known, err := fixedLocalConditionalMoveStep(ins, state, proof, residue); known {
+		return err
+	}
+	if known, err := fixedLocalInputAddressStep(ins, state, proof, residue); known {
 		return err
 	}
 	if effect, known, err := fixedLocalGPByteEffect(*ins); known {

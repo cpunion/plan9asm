@@ -69,8 +69,8 @@ func TestGoAMD64FixedLocalInputMemoryProvenance(t *testing.T) {
 		{"private pointer escape", "MOVQ SP,CX\nMOVQ CX,(DI)", false},
 		{"opaque pointer store", "MOVQ SI,(DI)", false},
 		{"private pointer arithmetic", "ADDQ SI,AX", false},
-		{"input pointer arithmetic", "ADDQ $8,SI\nMOVQ (SI),AX", false},
-		{"input pointer LEA", "LEAQ 8(SI),CX\nMOVQ (CX),AX", false},
+		{"input pointer arithmetic", "ADDQ $8,SI\nMOVQ (SI),AX", true},
+		{"input pointer LEA", "LEAQ 8(SI),CX\nMOVQ (CX),AX", true},
 		{"input pointer partial write", "MOVB $0,SI\nMOVQ (SI),AX", false},
 		{"input pointer partial spill", "MOVQ SI,8(SP)\nMOVB $0,8(SP)\nMOVQ 8(SP),CX\nMOVQ (CX),AX", false},
 		{"mixed index", "MOVQ (SI)(AX*2),CX", false},
@@ -103,6 +103,14 @@ func TestGoAMD64FixedLocalInputMemoryActualObjects(t *testing.T) {
 		"MOVO (SI),X0\nMOVOU X0,16(SP)\nMOVOU X0,(DI)\nMOVQ 16(SP),AX",
 		"KMOVQ AX,K1\nVMOVDQU8.Z (SI),K1,Z0\nVMOVDQU8 Z0,0(SP)\nVMOVDQU8 Z0,K1,(DI)\nMOVQ 0(SP),AX",
 		"MOVQ SI,8(SP)\nMOVQ 8(SP),CX\nMOVQ (CX),AX\nMOVQ $0,AX",
+		"ADDQ AX,SI\nMOVQ (SI),AX",
+		"ADDQ SI,AX\nMOVQ (AX),AX",
+		"SUBQ AX,SI\nMOVQ (SI),AX",
+		"LEAQ -64(SI)(AX*8),CX\nMOVQ (CX),AX",
+		"INCQ SI\nDECQ SI\nMOVQ (SI),AX",
+		"MOVQ SI,8(SP)\nCMPQ DI,8(SP)\nSETCS AL",
+		"MOVQ SI,8(SP)\nCMPQ 8(SP),DI\nSETCS AL",
+		"CMPQ AX,$0\nJEQ join\nMOVQ SI,8(SP)\njoin:",
 	} {
 		_, _, source := fixedLocalInputFixture(t, body)
 		assembly.WriteString(strings.Replace(source, "·Value", fmt.Sprintf("·Value%d", index), 1))
