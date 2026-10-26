@@ -356,6 +356,36 @@ func replayX86FixedLocal(fn *Func, sig FuncSig, proof *x86FixedLocalProof, resid
 	if err != nil {
 		return err
 	}
+	return replayX86FixedLocalCFG(fn, sig, proof, residue, budget, effects, edges, instructions,
+		fixedLocalLinearEdges(*fn, edges, instructions))
+}
+
+// Keep states at control-flow boundaries. A sole fallthrough predecessor has
+// no meet: its private transfer state can flow directly to the next instruction.
+// Count all CFG predecessors, including unreachable edges and repeated targets;
+// branch destinations and PC zero retain their independent entry state.
+func fixedLocalLinearEdges(fn Func, edges map[int][]int, instructions []int) []bool {
+	predecessors := make([]int, len(instructions))
+	for _, targets := range edges {
+		for _, target := range targets {
+			if target >= 0 && target < len(predecessors) {
+				predecessors[target]++
+			}
+		}
+	}
+	linear := make([]bool, len(instructions))
+	for pc, targets := range edges {
+		op := fn.Instrs[instructions[pc]].Op
+		linear[pc] = op != OpJMP && op != OpRET && !isAMD64ConditionalBranch(op) &&
+			len(targets) == 1 && targets[0] == pc+1 && pc+1 < len(instructions) && predecessors[pc+1] == 1
+	}
+	return linear
+}
+
+// A nil linear mask retains the all-instruction reference schedule. Both paths
+// use the same transfer, meet, work budgets and final access publication.
+func replayX86FixedLocalCFG(fn *Func, sig FuncSig, proof *x86FixedLocalProof, residue int, budget *x86FixedLocalBudget,
+	effects map[int]x86TypedByteEffect, edges map[int][]int, instructions []int, linear []bool) error {
 	state := x86FixedLocalState{
 		pointers: map[Reg]int64{SP: 0}, constants: make(map[Reg]int64), known: make(map[Reg]uint8),
 		opaque: make(map[Reg]x86FixedLocalOrigin), opaqueCells: make(map[int64]x86FixedLocalOrigin), booleans: make(map[Reg]uint8),
@@ -373,36 +403,44 @@ func replayX86FixedLocal(fn *Func, sig FuncSig, proof *x86FixedLocalProof, resid
 	accesses := make(map[int]map[int]x86FixedLocalAccess)
 	returned := false
 	for head := 0; head < len(work); head++ {
-		if err := budget.consume(proof.frame); err != nil {
-			return err
-		}
 		pc := work[head]
 		queued[pc] = false
 		if pc < 0 || pc >= len(instructions) {
 			return goAMD64FrameContext("fixed local fallthrough lacks a source return")
 		}
 		current := cloneFixedLocalState(states[pc])
-		// Transfer a private instruction copy: provisional loop states must
-		// never publish accesses, including certificates from another residue.
-		ins := fn.Instrs[instructions[pc]]
-		ins.x86FixedLocalMemory = nil
-		proof.ordinal = instructions[pc]
-		if effect, found := effects[instructions[pc]]; found {
-			err = fixedLocalTypedByteStep(&ins, &current, proof, residue, effect)
-		} else {
-			err = fixedLocalStep(&ins, &current, sig, proof, residue)
+		for {
+			if err := budget.consume(proof.frame); err != nil {
+				return err
+			}
+			// Transfer a private instruction copy: provisional loop states must
+			// never publish accesses, including certificates from another residue.
+			ins := fn.Instrs[instructions[pc]]
+			ins.x86FixedLocalMemory = nil
+			proof.ordinal = instructions[pc]
+			var err error
+			if effect, found := effects[instructions[pc]]; found {
+				err = fixedLocalTypedByteStep(&ins, &current, proof, residue, effect)
+			} else {
+				err = fixedLocalStep(&ins, &current, sig, proof, residue)
+			}
+			if err != nil {
+				return fmt.Errorf("%s: %q: %w", fn.Sym, ins.Raw, err)
+			}
+			accesses[pc] = ins.x86FixedLocalMemory
+			returned = returned || ins.Op == OpRET
+			if linear == nil || !linear[pc] {
+				break
+			}
+			pc++
 		}
-		if err != nil {
-			return fmt.Errorf("%s: %q: %w", fn.Sym, ins.Raw, err)
-		}
-		accesses[pc] = ins.x86FixedLocalMemory
-		returned = returned || ins.Op == OpRET
 		for _, target := range edges[pc] {
 			if target < 0 || target >= len(instructions) {
 				return goAMD64FrameContext("fixed local fallthrough lacks a source return")
 			}
 			changed := true
 			if previous, found := states[target]; found {
+				var err error
 				changed, err = mergeFixedLocalState(&previous, current)
 				if err != nil {
 					return err
