@@ -76,15 +76,48 @@ func x86CLMULProperties(op Op, ins Instr, arch string) (x86CLMULForm, bool, erro
 	return f, true, nil
 }
 
+func x86TypedLegacyCLMULByteEffect(op Op, ins Instr, arch string) (x86TypedByteEffect, bool, error) {
+	form, known, err := x86CLMULProperties(op, ins, arch)
+	if !known || err != nil || !form.legacy {
+		return x86TypedByteEffect{}, known && (err != nil || form.legacy), err
+	}
+	return x86CLMULDependencyEffect(ins, form), true, nil
+}
+
+func x86CLMULDependencyEffect(ins Instr, form x86CLMULForm) x86TypedByteEffect {
+	binary := x86PackedBinaryForm{
+		byteWidth: form.byteWidth, first: form.source, second: form.second, destination: form.destination,
+		legacy: form.legacy, mask: -1, memory: form.memory, memoryBytes: form.byteWidth,
+	}
+	effect := x86PackedBinaryDependencyEffect(ins, binary, ins.Args[form.source])
+	source, second := x86CLMULSelectedBytes(form)
+	if ins.Args[form.source].Kind == OpReg {
+		effect.operands[0].requiredBytes = source
+	}
+	effect.operands[1].requiredBytes = second
+	return effect
+}
+
+// Selection controls numerical register inputs, never the physical memory
+// tuple. Each lane consumes one qword from each of the two source operands.
+func x86CLMULSelectedBytes(f x86CLMULForm) (source, second uint64) {
+	for lane := 0; lane < f.byteWidth; lane += 16 {
+		source |= uint64(255) << uint(lane+int(f.immediate>>4&1)*8)
+		second |= uint64(255) << uint(lane+int(f.immediate&1)*8)
+	}
+	return
+}
+
 // Each product requires all bytes of exactly two selected qwords. No mask,
 // unselected qword, destination alias or numerical zero supplies a missing input.
 func x86CLMULDefinedBytes(f x86CLMULForm, source, second uint64) uint64 {
 	var known uint64
+	sourceBytes, secondBytes := x86CLMULSelectedBytes(f)
 	for lane := 0; lane < f.byteWidth; lane += 16 {
-		sourceMask := uint64(255) << uint(lane+int(f.immediate>>4&1)*8)
-		secondMask := uint64(255) << uint(lane+int(f.immediate&1)*8)
+		laneMask := uint64(65535) << uint(lane)
+		sourceMask, secondMask := sourceBytes&laneMask, secondBytes&laneMask
 		if source&sourceMask == sourceMask && second&secondMask == secondMask {
-			known |= uint64(65535) << uint(lane)
+			known |= laneMask
 		}
 	}
 	return known

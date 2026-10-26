@@ -29,6 +29,15 @@ func x86UnmaskedVEXByteEffect(op Op, ins Instr, arch string) (x86TypedByteEffect
 	if form, known, err := x86ByteShuffleProperties(op, ins, arch); known {
 		return x86UnmaskedVEXBinaryEffect(ins, form, true, err)
 	}
+	if form, known, err := x86CLMULProperties(op, ins, arch); known {
+		if err != nil {
+			return x86TypedByteEffect{}, true, err
+		}
+		if form.legacy || !x86LowVEXVectorOperands(ins) {
+			return x86TypedByteEffect{}, true, goAMD64FrameContext("carryless-multiply effect requires its separate non-VEX consumer: %s", ins.Op)
+		}
+		return x86CLMULDependencyEffect(ins, form), true, nil
+	}
 	local := ins
 	local.Op = op
 	if form, known, err := x86ImmediateShuffleProperties(local, arch); known {

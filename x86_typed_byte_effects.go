@@ -10,11 +10,12 @@ import (
 // numerical input nor a native memory/frame/source capability can be obtained
 // from this record. Consumers must independently prove every required byte.
 type x86TypedByteOperand struct {
-	index   int
-	operand Operand
-	width   int64
-	read    bool
-	write   bool
+	index         int
+	operand       Operand
+	width         int64
+	read          bool
+	write         bool
+	requiredBytes uint64 // Optional vector-register read mask; zero requires the full width.
 }
 
 type x86TypedByteEffect struct {
