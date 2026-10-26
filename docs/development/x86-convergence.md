@@ -148,7 +148,8 @@ minimum Go 1.20.14 both pass the following Linux/amd64 LLVM22 object scopes:
 | Integer and PS/PD logical | 132 | 504 |
 | Integer and PS/PD unpack, low/high | 108 | 360 |
 | Signed/unsigned saturating pack | 36 | 114 |
-| Total | 657 | 2,148 |
+| Per-lane logical/arithmetic shifts | 64 | 236 |
+| Total | 721 | 2,384 |
 
 Two PADDD alias witnesses are separate from the canonical counts. Min/max
 includes 48 non-Q, unmasked, narrow EVEX forms; low-register VEX objects cannot
@@ -183,6 +184,14 @@ error classification, MMX operand ownership and E4NF memory behavior. Current
 and minimum SDKs each pass 33 roots / 1,211 children; sixteen parser benchmarks
 each remove one allocation and show 9–31% lower median time over five samples.
 This measures parsing, not complete-source translation or native instruction speed.
+
+The per-lane shift join at `376a9f4d0` adds nine names, 64 rows and 236 witnesses
+through the existing binary grammar and object driver, with no translator rule.
+Both endpoint SDKs pass 30 roots / 394 children. A shared test inventory removes
+repeated family loops while preserving independent official membership, literal
+encoding anchors, unique row IDs, width/encoding axes and separate MMX owners.
+The complete batch removes 126 net lines. Its 54 broadcast witnesses and narrow
+EVEX forms are object evidence, not new native execution acceptance.
 
 Fixed-frame GP analysis now consumes the existing typed byte/FLAGS effects
 instead of a second arithmetic opcode list. Its bounded worklist intersects

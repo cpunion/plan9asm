@@ -80,6 +80,13 @@ All have zero failures/skips, and the five official corpus baselines remain
 exact. The five SDK-specific roots are explicitly Go1.27-only. The larger
 conditional-pointer and framed-leaf experiments remain on isolated branches.
 
+Local `376a9f4d0` adds the initialized per-lane shift join and shares the
+independent test inventory across families. Its Go/module sources are identical
+to tested `d06b138dd`: Go1.27.3 and Go1.20.14 each pass 30 roots / 394 children,
+with zero failures/skips. The retained first failed test-helper attempt is not
+a passing receipt. This batch removes 126 net lines while adding no translator
+rule; current full CI still tests published `5406c2756`.
+
 ## Current functional evidence
 
 | Scope | Qualified result | Limit |
@@ -117,7 +124,8 @@ actual original Go bytes must match before any public API/object result counts.
 | Integer and PS/PD packed logical | 132 | 504 |
 | Integer and PS/PD unpack, low/high | 108 | 360 |
 | Signed/unsigned saturating pack | 36 | 114 |
-| Total | **657** | **2,148** |
+| Per-lane logical/arithmetic shifts | 64 | 236 |
+| Total | **721** | **2,384** |
 
 Two PADDD alias witnesses are separate. MMX rows retain their independent
 region/EMMS owners. These counts do not represent every official x86 row,
@@ -160,6 +168,13 @@ including portable values/faults, named/raw forms, five-target objects and calle
 permissions. Sixteen parser benchmarks, five samples each, have 9–31% lower
 median time. Whole-source speed and the separate Linux native owners are not
 qualified by these local results; wait for the next complete CI after publication.
+
+The nine per-lane shift names retain ten VEX and 54 EVEX rows, including narrow
+high-register encodings and 54 broadcast witnesses. Nine independent literal
+encoding anchors remain alongside the shared inventory helper. The helper
+retains each family's independent official-row membership, unique row IDs,
+widths, encoding generation and MMX separation; it does not derive coverage
+from the production registry. This expands initialized object evidence only.
 
 Earlier analysis benchmarks reduced allocations by 65–88% through bounded CFG
 replay. Do not claim that as whole-source translation speed or cache mutable
