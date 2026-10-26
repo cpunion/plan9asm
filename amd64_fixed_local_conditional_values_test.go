@@ -65,7 +65,8 @@ func TestGoAMD64FixedLocalConditionalPointerIdentity(t *testing.T) {
 					if row.name == "private" {
 						state.pointers[AX], state.pointers[BX], state.addresses[8] = 24, 24, 24
 					} else {
-						state.opaque[AX], state.opaque[BX], state.opaqueCells[8] = row.origin, row.origin, row.origin
+						origin := fixedLocalOrigin(row.origin)
+						state.opaque[AX], state.opaque[BX], state.opaqueCells[8] = origin, origin, origin
 					}
 					before := cloneFixedLocalState(state)
 					ins := x86ScalarLaneInstruction(t, "CMOVQ"+condition.name+" "+source+",BX")
@@ -83,6 +84,23 @@ func TestGoAMD64FixedLocalConditionalPointerIdentity(t *testing.T) {
 }
 
 func TestGoAMD64FixedLocalConditionalRangeAndAuthority(t *testing.T) {
+	t.Run("different inputs", func(t *testing.T) {
+		state := fixedLocalExchangeState()
+		state.opaque[SI] = fixedLocalOrigin(x86FixedLocalOrigin{parameter: 0})
+		state.opaque[DI] = fixedLocalOrigin(x86FixedLocalOrigin{parameter: 8})
+		ins := x86ScalarLaneInstruction(t, "CMOVQEQ SI,DI")
+		proof := &x86FixedLocalProof{frame: 64}
+		if err := fixedLocalStep(&ins, &state, FuncSig{}, proof, 0); err != nil {
+			t.Fatal("two bounded native alternatives rejected", err)
+		}
+		if state.opaque[DI].count != 2 || fixedLocalNumericRead(Operand{Kind: OpReg, Reg: DI}, 8, &state) {
+			t.Fatal("conditional input origins collapsed or acquired numerical bytes")
+		}
+		read := x86ScalarLaneInstruction(t, "MOVQ (DI),AX")
+		if err := fixedLocalStep(&read, &state, FuncSig{}, proof, 0); err != nil {
+			t.Fatal("native alternatives lost their existing faulting read", err)
+		}
+	})
 	for _, bounds := range []struct {
 		name              string
 		left, right, want x86UnsignedRange
@@ -109,7 +127,7 @@ func TestGoAMD64FixedLocalConditionalRangeAndAuthority(t *testing.T) {
 			if bounds.both && bounds.right.minimum == bounds.right.maximum {
 				state.constants[BX] = int64(bounds.right.minimum)
 			}
-			state.comparison = x86FixedLocalComparison{BX, 31}
+			state.comparison = x86FixedLocalComparison{register: BX, constant: 31}
 			ins := x86ScalarLaneInstruction(t, "CMOVQEQ AX,BX")
 			if err := fixedLocalStep(&ins, &state, FuncSig{}, &x86FixedLocalProof{frame: 64}, 0); err != nil {
 				t.Fatal(err)
@@ -126,7 +144,6 @@ func TestGoAMD64FixedLocalConditionalRangeAndAuthority(t *testing.T) {
 	}
 	for _, row := range []struct{ name, body string }{
 		{"different private offsets", "LEAQ 8(SP),CX\nLEAQ 24(SP),DX\nCMOVQEQ CX,DX"},
-		{"different inputs", "CMOVQEQ SI,DI"},
 		{"input and NUM", "CMOVQEQ SI,AX"},
 		{"NUM and input", "CMOVQEQ AX,SI"},
 		{"private and input", "LEAQ 8(SP),CX\nCMOVQEQ CX,SI"},
@@ -145,13 +162,34 @@ func TestGoAMD64FixedLocalConditionalRangeAndAuthority(t *testing.T) {
 	for _, operands := range []string{"AX,BX", "BX,AX"} {
 		t.Run("literal-input/"+operands, func(t *testing.T) {
 			state := fixedLocalExchangeState()
-			state.opaque[AX] = x86FixedLocalOrigin{parameter: 0}
-			state.opaque[BX] = x86FixedLocalOrigin{literal: x86StaticSBAddress{"table<>", 16}}
+			state.opaque[AX] = fixedLocalOrigin(x86FixedLocalOrigin{parameter: 0})
+			state.opaque[BX] = fixedLocalOrigin(x86FixedLocalOrigin{literal: x86StaticSBAddress{"table<>", 16}})
 			before := cloneFixedLocalState(state)
 			ins := x86ScalarLaneInstruction(t, "CMOVQEQ "+operands)
 			if err := fixedLocalStep(&ins, &state, FuncSig{}, &x86FixedLocalProof{frame: 64}, 0); !errors.Is(err, ErrProbeNeedsContext) ||
 				!reflect.DeepEqual(state, before) {
 				t.Fatal("readonly/native selection widened authority or changed rejected state", err)
+			}
+		})
+		t.Run("bound-literal-input/"+operands, func(t *testing.T) {
+			state := fixedLocalExchangeState()
+			state.opaque[AX] = fixedLocalOrigin(x86FixedLocalOrigin{parameter: 0})
+			state.opaque[BX] = fixedLocalOrigin(x86FixedLocalOrigin{literal: x86StaticSBAddress{"table<>", 16}})
+			proof := &x86FixedLocalProof{frame: 64, binding: &x86FixedLocalBinding{
+				literalData: map[string]x86FixedLocalData{"table<>": {size: 32, alignment: 16}},
+			}}
+			ins := x86ScalarLaneInstruction(t, "CMOVQEQ "+operands)
+			if err := fixedLocalStep(&ins, &state, FuncSig{}, proof, 0); err != nil {
+				t.Fatal("bounded readonly/native alternatives rejected", err)
+			}
+			destination := ins.Args[1].Reg
+			read := x86ScalarLaneInstruction(t, fmt.Sprintf("MOVQ (%s),CX", destination))
+			if err := fixedLocalStep(&read, &state, FuncSig{}, proof, 0); err != nil {
+				t.Fatal("complete readonly/native read rejected", err)
+			}
+			write := x86ScalarLaneInstruction(t, fmt.Sprintf("MOVQ $1,(%s)", destination))
+			if err := fixedLocalStep(&write, &state, FuncSig{}, proof, 0); !errors.Is(err, ErrProbeNeedsContext) {
+				t.Fatal("readonly alternative acquired write permission", err)
 			}
 		})
 	}

@@ -96,7 +96,8 @@ func TestGoAMD64FixedLocalReadonlyDataAddressGuards(t *testing.T) {
 		{"unknown affine offset", acquire + "ADDQ CX,SI\nMOVQ (SI),DX"},
 		{"unknown index", acquire + "MOVQ (SI)(CX*1),DX"},
 		{"offset overflow", acquire + "MOVQ $9223372036854775807,R8\nADDQ R8,SI\nINCQ SI\nMOVQ (SI),DX"},
-		{"different offsets at join", acquire + "CMPQ CX,$0\nJEQ joined\nADDQ $8,SI\njoined:\nMOVQ (SI),DX"},
+		{"joined offset past end", acquire + "CMPQ CX,$0\nJEQ joined\nADDQ $32,SI\njoined:\nMOVQ (SI),DX"},
+		{"joined readonly write", acquire + "CMPQ CX,$0\nJEQ joined\nADDQ $8,SI\njoined:\nMOVQ DX,(SI)"},
 		{"partial spill", acquire + "MOVL SI,8(SP)\nMOVQ 8(SP),SI\nMOVQ (SI),DX"},
 		{"write", acquire + "MOVQ DX,(SI)"},
 		{"write after spill", acquire + "MOVQ SI,8(SP)\nMOVQ 8(SP),BP\nMOVQ DX,(BP)"},
@@ -118,6 +119,24 @@ func TestGoAMD64FixedLocalReadonlyDataAddressGuards(t *testing.T) {
 			}
 		})
 	}
+	t.Run("different bounded offsets at join", func(t *testing.T) {
+		assembly := fixedLocalAddressData + fixedLocalDataAddressFunction("Value",
+			acquire+"CMPQ CX,$0\nJEQ joined\nADDQ $8,SI\njoined:\nMOVQ (SI),DX")
+		pkg, request, _, options := fixedLocalTransportFixture(t, assembly,
+			"func Value(a uint64) uint64\n", "linux/amd64", "x86_64-unknown-linux-gnu")
+		llc := findLLVM22Tool("llc")
+		if llc == "" {
+			t.Fatal("LLVM 22 llc required")
+		}
+		fixedLocalFreshAPIs(t, pkg, request, options, []string{"Translate", "Module", "GoModule"},
+			func(t *testing.T, ir string, err error) {
+				if err != nil {
+					t.Fatal("both readonly alternatives must retain their bounded read", err)
+				}
+				compileLLVMToObject(t, llc, options.TargetTriple, "joined-data.ll", "joined-data.o", ir)
+				compileLLVMToObject(t, llc, options.TargetTriple, "joined-data-opt.ll", "joined-data-opt.o", x86MulDivRoundOptimize(t, ir))
+			})
+	})
 	t.Run("pointer result cannot escape its bounds", func(t *testing.T) {
 		assembly := fixedLocalAddressData + "TEXT ·Value(SB),4,$32-8\n" + acquire + "MOVQ SI,ret+0(FP)\nRET\n"
 		pkg, request, file, options := fixedLocalTransportFixture(t, assembly,

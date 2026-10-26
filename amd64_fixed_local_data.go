@@ -174,11 +174,11 @@ func fixedLocalStaticAddressStep(ins Instr, state *x86FixedLocalState, proof *x8
 		}
 		origin.global = object.native
 	}
-	writeFixedLocalOrigin(state, ins.Args[1].Reg, origin)
+	writeFixedLocalOrigin(state, ins.Args[1].Reg, fixedLocalOrigin(origin))
 	return true, nil
 }
 
-func writeFixedLocalOrigin(state *x86FixedLocalState, destination Reg, origin x86FixedLocalOrigin) {
+func writeFixedLocalOrigin(state *x86FixedLocalState, destination Reg, origin x86FixedLocalOrigins) {
 	state.revokeRange(destination)
 	delete(state.pointers, destination)
 	delete(state.constants, destination)

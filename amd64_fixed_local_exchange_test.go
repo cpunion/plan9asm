@@ -10,8 +10,8 @@ import (
 
 func fixedLocalExchangeState() x86FixedLocalState {
 	return x86FixedLocalState{
-		pointers: map[Reg]int64{SP: 0}, opaque: make(map[Reg]x86FixedLocalOrigin),
-		opaqueCells: make(map[int64]x86FixedLocalOrigin), addresses: make(map[int64]int64),
+		pointers: map[Reg]int64{SP: 0}, opaque: make(map[Reg]x86FixedLocalOrigins),
+		opaqueCells: make(map[int64]x86FixedLocalOrigins), addresses: make(map[int64]int64),
 		known: make(map[Reg]uint8), constants: make(map[Reg]int64),
 		booleans: make(map[Reg]uint8), vectors: make(map[Reg]uint64),
 		masks: make(map[Reg]bool), results: make(map[int]bool),
@@ -111,8 +111,8 @@ func TestGoAMD64FixedLocalExchangeByteAliasesAndValues(t *testing.T) {
 	for _, width := range []string{"W", "L", "Q"} {
 		t.Run("accumulator NOP/"+width, func(t *testing.T) {
 			state := fixedLocalExchangeState()
-			state.opaque[AX] = x86FixedLocalOrigin{parameter: 8}
-			state.comparison = x86FixedLocalComparison{AX, 7}
+			state.opaque[AX] = fixedLocalOrigin(x86FixedLocalOrigin{parameter: 8})
+			state.comparison = x86FixedLocalComparison{register: AX, constant: 7}
 			before := cloneFixedLocalState(state)
 			ins := x86ScalarLaneInstruction(t, "XCHG"+width+" AX,AX")
 			if err := fixedLocalStep(&ins, &state, FuncSig{}, &x86FixedLocalProof{frame: 64}, 0); err != nil || !reflect.DeepEqual(state, before) {
@@ -136,14 +136,14 @@ func TestGoAMD64FixedLocalExchangeValueDomains(t *testing.T) {
 					case "private":
 						state.pointers[reg] = value
 					case "incoming":
-						state.opaque[reg] = x86FixedLocalOrigin{parameter: value}
+						state.opaque[reg] = fixedLocalOrigin(x86FixedLocalOrigin{parameter: value})
 					case "readonly":
-						state.opaque[reg] = x86FixedLocalOrigin{literal: x86StaticSBAddress{symbol: "table<>(SB)", offset: value}}
+						state.opaque[reg] = fixedLocalOrigin(x86FixedLocalOrigin{literal: x86StaticSBAddress{symbol: "table<>(SB)", offset: value}})
 					}
 				}
 				seed(AX, first, 8)
 				seed(BX, last, 24)
-				state.comparison = x86FixedLocalComparison{AX, 31}
+				state.comparison = x86FixedLocalComparison{register: AX, constant: 31}
 				before := cloneFixedLocalState(state)
 				ins := x86ScalarLaneInstruction(t, "XCHGQ AX,BX")
 				if err := fixedLocalStep(&ins, &state, FuncSig{}, &x86FixedLocalProof{frame: 64}, 0); err != nil {
@@ -157,7 +157,7 @@ func TestGoAMD64FixedLocalExchangeValueDomains(t *testing.T) {
 						t.Fatal("exchange lost a complete typed value or retained an old value", to, state, before)
 					}
 				}
-				if state.comparison != (x86FixedLocalComparison{BX, 31}) || state.flags != before.flags {
+				if state.comparison != (x86FixedLocalComparison{register: BX, constant: 31}) || state.flags != before.flags {
 					t.Fatal("FLAGS must follow the same compared value after a full-word exchange", state.comparison)
 				}
 			})

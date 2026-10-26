@@ -105,19 +105,41 @@ func TestGoAMD64FixedLocalGlobalAddressGuards(t *testing.T) {
 			}
 		})
 	}
-	t.Run("global is not FP slot zero", func(t *testing.T) {
+	t.Run("global and FP slot zero remain typed alternatives", func(t *testing.T) {
 		assembly := strings.Replace(fixedLocalGlobalAssembly, "$32-16", "$32-24", 1)
 		assembly = strings.Replace(assembly, "a+0(FP)", "a+8(FP)", 1)
 		assembly = strings.Replace(assembly, "ret+8(FP)", "ret+16(FP)", 1)
 		assembly = strings.Replace(assembly, "MOVQ SI,8(SP)",
 			"MOVQ p+0(FP),DI\nCMPQ AX,$0\nJEQ joined\nMOVQ DI,SI\njoined:\nMOVQ SI,8(SP)", 1)
+		declarations := "var Table [4]uint64\nfunc Value(p *uint64, a uint64) uint64\n"
+		pkg, request, _, options := fixedLocalTransportFixture(t, assembly,
+			declarations, "linux/amd64", "x86_64-unknown-linux-gnu")
+		llc := findLLVM22Tool("llc")
+		if llc == "" {
+			t.Fatal("LLVM 22 llc required")
+		}
+		fixedLocalFreshAPIs(t, pkg, request, options, []string{"Translate", "Module", "GoModule"},
+			func(t *testing.T, ir string, err error) {
+				if err != nil {
+					t.Fatal("distinct global/input alternatives lost their native read", err)
+				}
+				fixedLocalGlobalCheckExternal(t, ir)
+				compileLLVMToObject(t, llc, options.TargetTriple, "joined-global.ll", "joined-global.o", ir)
+				compileLLVMToObject(t, llc, options.TargetTriple, "joined-global-opt.ll", "joined-global-opt.o", x86MulDivRoundOptimize(t, ir))
+			})
+
+		changed := strings.Replace(assembly, "joined:\nMOVQ SI,8(SP)", "joined:\nXORQ SI,AX\nMOVQ SI,8(SP)", 1)
+		if changed == assembly {
+			t.Fatal("global/input negative did not consume the joined pointer as NUM")
+		}
+		assembly = changed
 		pkg, request, file, options := fixedLocalTransportFixture(t, assembly,
 			"var Table [4]uint64\nfunc Value(p *uint64, a uint64) uint64\n", "linux/amd64", "x86_64-unknown-linux-gnu")
 		source := requireGoAMD64FrameCapture(t, pkg, request)
 		ctx, cancel := runtimeOracleStageContext(t)
 		defer cancel()
 		if _, err := source.BindFixedLocal(ctx, pkg, file, options); !errors.Is(err, ErrProbeNeedsContext) {
-			t.Fatal("different native origins collapsed at a CFG join", err)
+			t.Fatal("global/input alternatives acquired numerical permission", err)
 		}
 	})
 	t.Run("bound symbol and lifetime", func(t *testing.T) {
