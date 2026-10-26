@@ -57,6 +57,10 @@ func TestX86OfficialIntegerCompareRowsInitializedThreeAPIsObjects(t *testing.T) 
 	x86OfficialPackedRowsObjects(t, goasmrules.X86PackedIntegerCompareRows, 72, 168, 0)
 }
 
+func TestX86OfficialMaskBlendRowsInitializedThreeAPIsObjects(t *testing.T) {
+	x86OfficialPackedRowsObjects(t, goasmrules.X86PackedMaskBlendRows, 36, 144, 0)
+}
+
 func TestX86OfficialMinMaxRowsInitializedThreeAPIsObjects(t *testing.T) {
 	verified := x86OfficialPackedRowsObjects(t, goasmrules.X86PackedIntegerMinMaxRows, 132, 432, 0)
 	narrowEVEX := 0

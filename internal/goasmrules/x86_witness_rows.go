@@ -96,6 +96,12 @@ func X86PackedIntegerCompareRows(legacy X86LegacyCatalog, avx []X86AVXRule) ([]X
 		VPCMPEQB VPCMPEQW VPCMPEQD VPCMPEQQ VPCMPGTB VPCMPGTW VPCMPGTD VPCMPGTQ`)
 }
 
+// X86PackedMaskBlendRows retains the floating-point and integer mask-blend
+// families. Only the PS/PD/D/Q members permit scalar-memory broadcast.
+func X86PackedMaskBlendRows(legacy X86LegacyCatalog, avx []X86AVXRule) ([]X86PackedBinaryRow, error) {
+	return x86PackedBinaryRows(legacy, avx, `VBLENDMPS VBLENDMPD VPBLENDMB VPBLENDMW VPBLENDMD VPBLENDMQ`)
+}
+
 // X86PackedBinaryPilotRows covers the shared packed add/subtract and D/Q
 // low-multiply pilot. MMX and the separate W multiply family are not included.
 // PADDD is a frontend alias, not an additional official encoder row.
