@@ -6,16 +6,16 @@ and [validation](validation.md). Preserve original failed receipts.
 
 ## Current priority: finish amd64 first
 
-The complete Go 1.27.2 / LLVM22 Linux/amd64 object benchmark at `3791b7d46`
-passes **36/55**, with 19 failures and zero N/A/unattempted cases. GCM,
-SHA512 and SHA3 remain restored, with no previously passing file regressing.
-Wall time is 66 seconds (64.238 tool seconds); this is not a repeated speedup
-measurement. SHA256 now reaches legacy packed arithmetic through a RODATA
-address; SHA1 reaches fixed-frame XCHG. Both remain whole-file failures.
+The complete Go 1.27.2 / LLVM22 Linux/amd64 object benchmark at `bd10bd410`
+passes **37/55**, with 18 failures and zero N/A/unattempted cases. SHA256 is
+restored alongside GCM, SHA512 and SHA3; no previously passing file regresses.
+Wall time is 68 seconds (66.883 tool seconds); this is not a repeated speedup
+measurement. SHA1 now reaches conditional selection between a readonly DATA
+address and an incoming pointer. Its whole-file failure remains unresolved.
 Ordinary private helper calls remain separate unresolved work, not runtime
 entry exclusions.
 
-The integrated Go 1.27.3 / LLVM22 receipt at the same revision passes
+The integrated Go 1.27.3 / LLVM22 receipt at `3791b7d46` passes
 **132 roots / 5,507 children**, zero failures/skips, in 170.647 seconds.
 Every root and child ran and terminated exactly once. It includes exact SHA,
 VEX block transfers and logical zero dependencies, packed rotate inputs and
@@ -39,15 +39,28 @@ receipts above remain separate. The full Node22.23.4 policy gate passes679 tests
 after retaining the original readonly negative-control fingerprint separately
 from an appended independent test owner; its earlier 678/679 failure is retained.
 
-The latest original-Go Linux native [receipt](https://github.com/cpunion/plan9asm/actions/runs/40298037413)
-qualifies `76437761b`: **33 roots / 428 children**, zero failures/skips, in
-336.451 seconds. Source identity and the complete unique inventory were checked.
+The latest Linux native [receipt](https://github.com/cpunion/plan9asm/actions/runs/40305171644)
+qualifies `44fe11785`: **35 roots / 430 children**, zero failures/skips, in
+511.625 seconds. Source identity and the complete unique inventory were checked.
 It includes all seven SHA instructions, SHA live/dead memory faults, VEX block
-transfers and logical self-zeroing. SHA's unaligned behavior is compared with
+transfers, logical self-zeroing and commuted pointer addition against original
+Go. The added AVX2 encoding-writeback check executes LLVM against an independent
+register-bank oracle; it does not use original Go as its oracle.
+SHA's unaligned behavior is compared with
 the original Go opcode on the actual CPU; it does not assume AES's alignment
 fault or relax the private-frame contract. The preceding SHA fault receipt
-remains failed. This native receipt predates rotate, commuted ADD and the frame
-state budget repair; portable LLVM execution does not qualify native AVX512.
+remains failed. This native receipt predates XCHG and owned readonly arithmetic;
+portable LLVM execution does not qualify native AVX512.
+
+The XCHG batch shares scalar value reads/writes with MOV and retains the complete
+width/alias grammar. Its final focused receipt passes 12 roots / 1,084 children;
+the earlier wider failed receipt remains failed. Owned readonly arithmetic
+retains 19 legacy forms and exact typed-state loop convergence, restoring the
+complete SHA256 file. The uniform used-intrinsic target guard passes 20 roots /
+576 children. These isolated receipts require a new integrated qualification.
+The audited Go 1.27.3 literal-alignment registration at `fdbec8c79` passes
+19 roots / 68 children with no failures/skips; all 15 selected linker/layout
+source files match Go 1.27.2 byte for byte. Unknown patches remain rejected.
 
 Public PR40 remains draft at `728520def`; its earlier green checks do not
 certify these local batches. LLGo PR2694 is separately draft at `2e820f5c2`
@@ -110,10 +123,11 @@ Twelve analysis benchmarks, each with five samples, reduce allocation counts
 set and all failure diagnostics remain identical. One wall observation falls
 97 to 65 seconds; it is not a repeated end-to-end speedup measurement.
 
-Next: finish typed XCHG frame effects and bounded RODATA arithmetic, then
-re-run complete SHA sources. Repair encoding-aware vector/scalar writeback
-across the remaining writer paths. Qualify the integrated minimum SDK and
-official inventory, publish one coherent fork batch, and watch current-head CI.
+Next: qualify the integrated XCHG, readonly arithmetic, vector/scalar writeback,
+target guard and SDK registrations on current and minimum SDKs. Recheck the
+official inventory, publish one coherent fork batch and watch current-head CI.
+Continue conditional value joins for complete SHA1 after the shared scalar
+transfer is validated; retain every alternative's memory and origin contract.
 Ordinary helper call continuations still need independent implementation and
 execution tests. Retain each failed receipt until its complete replacement
 passes; do not relabel an unresolved source as a runtime exclusion.
