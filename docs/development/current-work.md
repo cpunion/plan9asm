@@ -23,8 +23,21 @@ writeback, commuted pointer addition, and actual retained frame-state budgets.
 The packed rotate implementation replaces its duplicate parser with the shared
 typed grammar (production net +10 lines); commuted ADD adds 29 production lines.
 The original frame-state storage and work limits remain unchanged: only actual
-CFG boundary states count toward storage. The expanded minimum-SDK gate and
-later batches still need independent qualification.
+CFG boundary states count toward storage. Go 1.20.14 passes the same
+132 roots / 5,507 children at the documentation-only successor `10e841d83`,
+zero failures/skips, in 132.275 seconds. Later batches need independent
+qualification.
+
+The 16 selected Go 1.20–1.27 x86 reports at `9f649eebd` change only 78 amd64
+classifications: 71 rotate forms and seven SHA forms now require their missing
+input/target context. Restoring just those 78 statuses reconstructs each prior
+coverage fingerprint exactly. All encoder inventories/fingerprints and all386
+classifications remain unchanged. The current-SDK five-target report agrees
+with the reviewed baseline: amd64 has 2,072 IR probes and 4,664 context forms,
+not 100% initialized/object/runtime coverage. Initialized family and native
+receipts above remain separate. The full Node22.23.4 policy gate passes679 tests
+after retaining the original readonly negative-control fingerprint separately
+from an appended independent test owner; its earlier 678/679 failure is retained.
 
 The latest original-Go Linux native [receipt](https://github.com/cpunion/plan9asm/actions/runs/40298037413)
 qualifies `76437761b`: **33 roots / 428 children**, zero failures/skips, in
