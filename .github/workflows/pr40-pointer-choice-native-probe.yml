@@ -1,0 +1,149 @@
+name: Pointer-choice native Linux probe
+
+on:
+  push:
+    branches:
+      - codex/pr40-pointer-choice-native-probe-20261027
+
+permissions:
+  contents: read
+
+jobs:
+  pointer_choices:
+    if: github.repository == 'cpunion/plan9asm'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GOTOOLCHAIN: local
+      GOENV: 'off'
+      GOWORK: 'off'
+      GOFLAGS: ''
+      GOMAXPROCS: '4'
+      GOOS: linux
+      GOARCH: amd64
+      LLVM_CONFIG: llvm-config-22
+      SOURCE_COMMIT: 6d0f167bca547600ec0461aaac06fc6da6585317
+      NATIVE_ROOT: TestCrossLinuxRuntimeMatrixGoAMD64FixedLocalPointerChoices
+      EVIDENCE: _out/pointer-choice-native
+
+    steps:
+      - name: Checkout exact diagnostic commit
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
+
+      - name: Bind the unchanged source and actual host
+        run: |
+          set -euo pipefail
+          mkdir -p "$EVIDENCE"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git rev-parse HEAD^)" = "$SOURCE_COMMIT"
+          test "$(git diff --name-only "$SOURCE_COMMIT" HEAD)" = '.github/workflows/pr40-pointer-choice-native-probe.yml'
+          test -z "$(git status --porcelain)"
+          test "$(uname -s)" = Linux
+          test "$(uname -m)" = x86_64
+          git rev-parse HEAD > "$EVIDENCE/head.txt"
+          git rev-parse HEAD^ > "$EVIDENCE/source.txt"
+          git ls-files -z | xargs -0 sha256sum > "$EVIDENCE/checkout.sha256"
+          uname -a > "$EVIDENCE/host.txt"
+          lscpu --json > "$EVIDENCE/cpu.json"
+
+      - name: Setup exact Go
+        uses: ./.github/actions/setup-go
+        with:
+          go-version: '1.27.3'
+          cache: true
+
+      - name: Install LLVM 22
+        timeout-minutes: 14
+        run: bash scripts/install-ci-llvm22-ubuntu.sh
+
+      - name: Setup existing evidence auditor runtime
+        uses: ./.github/actions/setup-node22
+
+      - name: Record and verify actual compiler identities
+        run: |
+          set -euo pipefail
+          test "$(go env GOVERSION)" = go1.27.3
+          test "$(go env GOHOSTOS)" = linux
+          test "$(go env GOHOSTARCH)" = amd64
+          go version > "$EVIDENCE/go-version.txt"
+          go env -json GOVERSION GOROOT GOHOSTOS GOHOSTARCH GOOS GOARCH GOCACHE > "$EVIDENCE/go-env.json"
+          : > "$EVIDENCE/tools.sha256"
+          for tool in go node llvm-config-22 llc-22 clang-22 opt-22; do
+            binary=$(readlink -f "$(command -v "$tool")")
+            sha256sum "$binary" >> "$EVIDENCE/tools.sha256"
+          done
+          for tool in compile asm link objdump nm; do
+            binary=$(go tool -n "$tool")
+            sha256sum "$binary" >> "$EVIDENCE/tools.sha256"
+          done
+          test "$(readlink -f "$(command -v llc)")" = "$(readlink -f "$(command -v llc-22)")"
+          test "$(readlink -f "$(command -v clang)")" = "$(readlink -f "$(command -v clang-22)")"
+          test "$(readlink -f "$(command -v opt)")" = "$(readlink -f "$(command -v opt-22)")"
+          llvm-config-22 --version > "$EVIDENCE/llvm-config-version.txt"
+          grep -Eq '^22\.' "$EVIDENCE/llvm-config-version.txt"
+          for tool in llc-22 clang-22 opt-22; do
+            "$tool" --version > "$EVIDENCE/$tool-version.txt"
+            grep -Eq 'version 22\.' "$EVIDENCE/$tool-version.txt"
+          done
+
+      - name: Discover the one actual test owner
+        run: |
+          set -euo pipefail
+          go test -p=1 . -list "^${NATIVE_ROOT}$" > "$EVIDENCE/inventory.log" 2> "$EVIDENCE/inventory.stderr"
+          test "$(grep '^Test' "$EVIDENCE/inventory.log")" = "$NATIVE_ROOT"
+
+      - name: Execute original Go and all six LLVM pipelines
+        run: |
+          set -uo pipefail
+          set +e
+          go test -p=1 . -json -run "^${NATIVE_ROOT}$" -count=1 -timeout=10m > "$EVIDENCE/raw.jsonl" 2> "$EVIDENCE/native.stderr"
+          status=$?
+          printf '%s\n' "$status" > "$EVIDENCE/exit.txt"
+          exit "$status"
+
+      - name: Audit actual native execution and unchanged identities
+        if: always()
+        run: |
+          set -euo pipefail
+          sha256sum --check "$EVIDENCE/checkout.sha256" > "$EVIDENCE/checkout-after.log"
+          sha256sum --check "$EVIDENCE/tools.sha256" > "$EVIDENCE/tools-after.log"
+          node <<'NODE' > "$EVIDENCE/audit.json"
+          const assert = require('node:assert/strict');
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const {auditNativeOwners} = require('./.github/scripts/audit-native-owners.cjs');
+          const read = name => fs.readFileSync(path.join(process.env.EVIDENCE, name), 'utf8');
+          const root = 'TestCrossLinuxRuntimeMatrixGoAMD64FixedLocalPointerChoices';
+          const children = ['Translate', 'Module', 'GoModule'].flatMap(api =>
+            [root + '/' + api, root + '/' + api + '/-O0', root + '/' + api + '/-O2']);
+          assert.equal(read('exit.txt').trim(), '0', 'native command did not succeed');
+          assert.equal(read('source.txt').trim(), '6d0f167bca547600ec0461aaac06fc6da6585317');
+          assert.equal(read('head.txt').trim(), process.env.GITHUB_SHA);
+          const result = auditNativeOwners(read('inventory.log'), read('raw.jsonl'), [root], children);
+          const events = read('raw.jsonl').trim().split(/\r?\n/).map(JSON.parse);
+          const output = events.filter(event => event.Test === root && event.Action === 'output')
+            .map(event => event.Output).join('');
+          assert.match(output, /axis=1 SSE2=1 /, 'actual native CPU preflight missing');
+          const functions = [...output.matchAll(/complete function example\.invalid\/framefixture\.Value(\d+):/g)]
+            .map(match => Number(match[1]));
+          assert.deepEqual(functions, Array.from({length: 23}, (_, index) => index));
+          const assembly = 'functions=23 sha256=5bb592798328202ac19e4827d70bd45d991f10fdbd220ea2e6462f43e60f020f';
+          assert.equal(output.split(assembly).length - 1, 1, 'complete original source identity differs');
+          const summary = '23 complete functions, 16 input patterns, two pointer alias relations, return and both 128-byte buffers; execute=true';
+          assert.equal(output.split(summary).length - 1, 1, '736-observation runtime did not finish');
+          process.stdout.write(JSON.stringify({...result, source: read('source.txt').trim(),
+            head: read('head.txt').trim(), platform: 'native linux/amd64',
+            functions: 23, inputs: 16, aliasRelations: 2, observationsPerPipeline: 736,
+            llvmPipelines: 6, originalGoPipelines: 1}, null, 2) + '\n');
+          NODE
+
+      - name: Retain raw failures and complete qualification evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: pointer-choice-native-${{ github.run_id }}-${{ github.run_attempt }}
+          path: _out/pointer-choice-native/
+          if-no-files-found: error
+          retention-days: 7
