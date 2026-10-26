@@ -7,6 +7,71 @@ import (
 	"testing"
 )
 
+func TestX86PackedNarrowRowsShareBinaryWitnesses(t *testing.T) {
+	legacy, err := LoadX86LegacyRules(runtime.GOROOT())
+	if err != nil {
+		t.Fatal(err)
+	}
+	avx, err := LoadX86AVXRules(runtime.GOROOT())
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows, err := X86PackedNarrowRows(legacy, avx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ids, names := map[string]bool{}, map[string]bool{}
+	generations, widths := map[string]int{}, map[int]int{}
+	formats, broadcast := 0, 0
+	for _, row := range rows {
+		if row.ID == "" || ids[row.ID] || len(row.Witnesses) < 2 {
+			t.Fatal("lost original narrow row or register/memory witness", row.ID)
+		}
+		ids[row.ID], names[row.Opcode] = true, true
+		generations[row.Witnesses[0].Generation]++
+		for _, witness := range row.Witnesses {
+			formats++
+			widths[witness.Width]++
+			if witness.Generation == "evex" && (witness.Encoding[0] != 0x62 ||
+				!strings.HasSuffix(witness.Second, "17") || !strings.HasSuffix(witness.Destination, "18")) {
+				t.Fatal("EVEX narrow row could select VEX", row.ID)
+			}
+			if witness.Broadcast {
+				broadcast++
+				if !witness.Memory || witness.Generation != "evex" || !strings.HasSuffix(row.Opcode, "DW") {
+					t.Fatal("only EVEX dword-input memory packs admit broadcast", row.ID)
+				}
+			}
+		}
+	}
+	if len(rows) != 36 || len(names) != 8 || generations["legacy"] != 4 ||
+		generations["vex"] != 8 || generations["evex"] != 24 || formats != 114 ||
+		widths[128] != 46 || widths[256] != 38 || widths[512] != 30 || broadcast != 18 {
+		t.Fatalf("narrow denominator drift: rows=%d names=%d generations=%v formats=%d widths=%v broadcast=%d",
+			len(rows), len(names), generations, formats, widths, broadcast)
+	}
+	check := func(name string) {
+		if strings.HasPrefix(strings.TrimPrefix(name, "V"), "PACK") && !names[name] {
+			t.Fatal("official pack family member omitted", name)
+		}
+	}
+	mmx := 0
+	for _, entry := range legacy.Optab {
+		check(entry.Opcode)
+		for _, row := range entry.Rows {
+			if names[entry.Opcode] && strings.Join(row.Classes, ",") == "Ymm,Ymr" {
+				mmx++
+			}
+		}
+	}
+	for _, row := range avx {
+		check(row.Opcode)
+	}
+	if mmx != 3 {
+		t.Fatal("separate MMX pack region inventory drift", mmx)
+	}
+}
+
 func TestX86PackedAverageMultiplyRowsShareBinaryWitnesses(t *testing.T) {
 	legacy, err := LoadX86LegacyRules(runtime.GOROOT())
 	if err != nil {

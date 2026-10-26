@@ -61,6 +61,13 @@ func X86PackedUnpackRows(legacy X86LegacyCatalog, avx []X86AVXRule) ([]X86Packed
 		VUNPCKLPS VUNPCKHPS VUNPCKLPD VUNPCKHPD`)
 }
 
+// X86PackedNarrowRows retains signed/unsigned saturating dword-to-word and
+// word-to-byte packs. The three MMX rows keep their separate region owner.
+func X86PackedNarrowRows(legacy X86LegacyCatalog, avx []X86AVXRule) ([]X86PackedBinaryRow, error) {
+	return x86PackedBinaryRows(legacy, avx, `
+		PACKSSLW PACKSSWB PACKUSDW PACKUSWB VPACKSSDW VPACKSSWB VPACKUSDW VPACKUSWB`)
+}
+
 // X86PackedBinaryPilotRows covers the shared packed add/subtract and D/Q
 // low-multiply pilot. MMX and the separate W multiply family are not included.
 // PADDD is a frontend alias, not an additional official encoder row.
