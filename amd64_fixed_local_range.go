@@ -5,6 +5,7 @@ import "math"
 type x86FixedLocalComparison struct {
 	register Reg
 	constant uint64
+	literal  x86StaticSBAddress
 }
 
 func cloneFixedLocalRanges(input map[Reg]x86UnsignedRange) map[Reg]x86UnsignedRange {
@@ -42,10 +43,10 @@ func fixedLocalRangeEffect(ins Instr, effect x86TypedByteEffect, state *x86Fixed
 			first, second := form.args[0], form.args[1]
 			if first.Kind == OpReg && fixedLocalNumericRead(first, 8, state) {
 				if !form.test && second.Kind == OpImm {
-					return "", x86UnsignedRange{}, x86FixedLocalComparison{first.Reg, uint64(second.Imm)}
+					return "", x86UnsignedRange{}, x86FixedLocalComparison{register: first.Reg, constant: uint64(second.Imm)}
 				}
 				if form.test && second.Kind == OpReg && first.Reg == second.Reg {
-					return "", x86UnsignedRange{}, x86FixedLocalComparison{first.Reg, 0}
+					return "", x86UnsignedRange{}, x86FixedLocalComparison{register: first.Reg}
 				}
 			}
 		}
@@ -68,6 +69,9 @@ func fixedLocalRangeEdge(state x86FixedLocalState, op Op, taken bool) (x86FixedL
 	comparison := state.comparison
 	if comparison.register == "" {
 		return state, true
+	}
+	if comparison.literal.symbol != "" {
+		return fixedLocalLiteralEdge(state, op, taken)
 	}
 	value, bounded := state.ranges[comparison.register]
 	if !bounded {

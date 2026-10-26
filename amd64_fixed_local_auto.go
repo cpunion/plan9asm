@@ -143,7 +143,7 @@ func fixedLocalConditionalMoveStep(ins *Instr, state *x86FixedLocalState, proof 
 		return true, err
 	}
 	value, valid := mergeFixedLocalScalarValues(value, old)
-	if !valid {
+	if !valid || value.opaque && value.identity.count > 1 && !fixedLocalOriginOwners(value.identity, proof) {
 		return fail()
 	}
 	return true, fixedLocalWriteValue(ins, 1, 0, value, state, FuncSig{}, proof, residue, width)

@@ -224,11 +224,11 @@ func TestGoAMD64FixedLocalReadonlyRangeWriteRevocation(t *testing.T) {
 	} {
 		t.Run(row, func(t *testing.T) {
 			state := x86FixedLocalState{
-				pointers: map[Reg]int64{SP: 0}, opaque: make(map[Reg]x86FixedLocalOrigin),
+				pointers: map[Reg]int64{SP: 0}, opaque: make(map[Reg]x86FixedLocalOrigins),
 				constants: map[Reg]int64{AX: 7, "R9": 3}, booleans: make(map[Reg]uint8),
 				known: map[Reg]uint8{AX: 255, "R9": 255}, vectors: map[Reg]uint64{"Z0": ^uint64(0)},
 				masks: map[Reg]bool{"K1": true}, flags: x86ByteFlagsAll,
-				ranges: map[Reg]x86UnsignedRange{"R9": {1, 15}}, comparison: x86FixedLocalComparison{"R9", 16},
+				ranges: map[Reg]x86UnsignedRange{"R9": {1, 15}}, comparison: x86FixedLocalComparison{register: "R9", constant: 16},
 			}
 			proof := &x86FixedLocalProof{frame: 64, binding: &x86FixedLocalBinding{
 				literalData: map[string]x86FixedLocalData{"literal<>": {240, 16}},

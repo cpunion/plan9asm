@@ -178,7 +178,7 @@ func TestGoAMD64FixedLocalScalarLaneExactMemory(t *testing.T) {
 				t.Run(row, func(t *testing.T) {
 					ins := x86ScalarLaneInstruction(t, row)
 					native := x86FixedLocalState{
-						opaque: map[Reg]x86FixedLocalOrigin{BP: {}}, vectors: map[Reg]uint64{"Z1": 0xffff},
+						opaque: map[Reg]x86FixedLocalOrigins{BP: fixedLocalOrigin(x86FixedLocalOrigin{})}, vectors: map[Reg]uint64{"Z1": 0xffff},
 						bytes: make([]bool, 32), flags: x86ByteFlagsAll,
 					}
 					proof := &x86FixedLocalProof{frame: 32}

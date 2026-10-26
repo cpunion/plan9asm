@@ -38,7 +38,8 @@ func TestGoAMD64FixedLocalInputAffineAddresses(t *testing.T) {
 		{"unknown index", "LEAQ (SI)(R8*2),CX\nMOVQ (CX),AX", false},
 		{"numerical compare is not address", "CMPQ SI,AX\nSETCS AL", false},
 		{"uninitialized spill compare", "CMPQ SI,8(SP)\nSETCS AL", false},
-		{"different origin consumed", "CMPQ AX,$0\nJEQ left\nMOVQ SI,CX\nJMP join\nleft:\nMOVQ DI,CX\njoin:\nMOVQ (CX),AX", false},
+		{"different origin consumed", "CMPQ AX,$0\nJEQ left\nMOVQ SI,CX\nJMP join\nleft:\nMOVQ DI,CX\njoin:\nMOVQ (CX),AX", true},
+		{"pointer and number join", "CMPQ AX,$0\nJEQ left\nMOVQ SI,CX\nJMP join\nleft:\nMOVQ AX,CX\njoin:\nMOVQ (CX),AX", false},
 		{"conditional spill consumed", "CMPQ AX,$0\nJEQ join\nMOVQ SI,8(SP)\njoin:\nMOVQ 8(SP),CX\nMOVQ (CX),AX", false},
 	} {
 		t.Run(row.name, func(t *testing.T) {

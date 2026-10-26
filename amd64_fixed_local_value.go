@@ -6,7 +6,7 @@ package plan9asm
 type fixedLocalScalarValue struct {
 	address         int64
 	pointer, opaque bool
-	identity        x86FixedLocalOrigin
+	identity        x86FixedLocalOrigins
 	booleans        uint8
 	constant        int64
 	constantKnown   bool
@@ -14,13 +14,20 @@ type fixedLocalScalarValue struct {
 	bounded         bool
 }
 
-// Selection retains only facts true of both possible values. Pointer identity
-// never becomes NUM; distinct private offsets or opaque origins need their own
-// bounded alternative-origin contract before they can be consumed.
+// Selection retains only facts true of both possible values. Private offsets
+// must agree. Opaque addresses form a bounded alternative-origin set; each
+// later memory use checks every member, and no pointer becomes NUM.
 func mergeFixedLocalScalarValues(first, last fixedLocalScalarValue) (fixedLocalScalarValue, bool) {
 	if first.pointer != last.pointer || first.opaque != last.opaque ||
-		first.pointer && first.address != last.address || first.opaque && first.identity != last.identity {
+		first.pointer && first.address != last.address {
 		return fixedLocalScalarValue{}, false
+	}
+	if first.opaque {
+		var valid bool
+		first.identity, valid = first.identity.union(last.identity)
+		if !valid {
+			return fixedLocalScalarValue{}, false
+		}
 	}
 	first.booleans &= last.booleans
 	first.constantKnown = first.constantKnown && last.constantKnown && first.constant == last.constant
@@ -40,6 +47,9 @@ func fixedLocalReadValue(ins *Instr, index int, state *x86FixedLocalState, sig F
 	case OpReg:
 		value.address, value.pointer = state.pointers[source.Reg]
 		value.identity, value.opaque = state.opaque[source.Reg]
+		if value.opaque && !value.identity.valid() {
+			return value, fail()
+		}
 		if value.pointer || value.opaque {
 			if width != 8 {
 				return value, fail()
@@ -73,7 +83,7 @@ func fixedLocalReadValue(ins *Instr, index int, state *x86FixedLocalState, sig F
 			return value, fail()
 		}
 		if slot.Type == Ptr {
-			value.opaque, value.identity = true, x86FixedLocalOrigin{parameter: slot.Offset}
+			value.opaque, value.identity = true, fixedLocalOrigin(x86FixedLocalOrigin{parameter: slot.Offset})
 		} else if slot.Type == I1 {
 			value.booleans = 1
 		}
@@ -93,6 +103,9 @@ func fixedLocalReadValue(ins *Instr, index int, state *x86FixedLocalState, sig F
 		if found {
 			value.address, value.pointer = state.addresses[offset]
 			value.identity, value.opaque = state.opaqueCells[offset]
+		}
+		if value.opaque && !value.identity.valid() {
+			return value, fail()
 		}
 		if (value.pointer || value.opaque) && width != 8 {
 			return value, fail()
@@ -187,7 +200,7 @@ func fixedLocalWriteValue(ins *Instr, index, sourceIndex int, value fixedLocalSc
 	case OpFP:
 		sp, original := state.pointers[SP]
 		slot, index, found := fixedLocalTransportSlot(destination.FPOffset, width, sig.Frame.Results)
-		if !original || sp != 0 || value.pointer || value.identity.literal.symbol != "" || !found || source.Kind != OpReg && source.Kind != OpImm ||
+		if !original || sp != 0 || value.pointer || value.identity.hasLiteral() || !found || source.Kind != OpReg && source.Kind != OpImm ||
 			value.opaque != (slot.Type == Ptr) || slot.Type == I1 && value.booleans&1 == 0 {
 			return fail()
 		}

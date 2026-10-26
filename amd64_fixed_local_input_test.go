@@ -76,7 +76,8 @@ func TestGoAMD64FixedLocalInputMemoryProvenance(t *testing.T) {
 		{"mixed index", "MOVQ (SI)(AX*2),CX", false},
 		{"private index", "MOVQ (SI)(SP*1),CX", false},
 		{"segment", "MOVQ (SI)(FS*1),CX", false},
-		{"different input join", "CMPQ AX,$1\nJEQ left\nMOVQ SI,CX\nJMP join\nleft:\nMOVQ DI,CX\njoin:\nMOVQ (CX),AX", false},
+		{"different input join", "CMPQ AX,$1\nJEQ left\nMOVQ SI,CX\nJMP join\nleft:\nMOVQ DI,CX\njoin:\nMOVQ (CX),AX", true},
+		{"pointer and number join", "CMPQ AX,$1\nJEQ left\nMOVQ SI,CX\nJMP join\nleft:\nMOVQ AX,CX\njoin:\nMOVQ (CX),AX", false},
 		{"private missing byte", "MOVQ (SI),AX\nADDQ $1,8(SP)", false},
 		{"private crossing frame", "MOVQ (SI),AX\nMOVQ AX,60(SP)", false},
 	} {

@@ -41,13 +41,13 @@ func fixedLocalInputAddressStep(ins *Instr, state *x86FixedLocalState, proof *x8
 	fail := func() (bool, error) {
 		return true, goAMD64FrameContext("fixed local affine input lacks a unique pointer and numerical offset: %s", ins.Op)
 	}
-	write := func(destination Operand, origin x86FixedLocalOrigin, killed, defined uint8) (bool, error) {
+	write := func(destination Operand, origin x86FixedLocalOrigins, killed, defined uint8) (bool, error) {
 		root, valid := x86CallerGP(destination.Reg)
 		if destination.Kind != OpReg || !valid || root != destination.Reg || root == SP {
 			return fail()
 		}
 		writeFixedLocalOrigin(state, root, origin)
-		if origin.literal.symbol != "" {
+		if origin.hasLiteral() {
 			defined = 0 // Relocated DATA addresses do not establish numerical FLAGS.
 		}
 		state.flags = state.flags&^killed | defined
@@ -56,21 +56,37 @@ func fixedLocalInputAddressStep(ins *Instr, state *x86FixedLocalState, proof *x8
 		}
 		return true, nil
 	}
-	shift := func(origin x86FixedLocalOrigin, operand Operand, subtract bool) (x86FixedLocalOrigin, bool) {
-		if origin.literal.symbol == "" {
-			return origin, true // Existing native input/global offsets have no inferred extent.
+	shift := func(origins x86FixedLocalOrigins, operand Operand, subtract bool) (x86FixedLocalOrigins, bool) {
+		if !origins.hasLiteral() {
+			return origins, true // Existing native input/global offsets have no inferred extent.
 		}
 		delta, known := operand.Imm, operand.Kind == OpImm && operand.ImmRaw == "" && !operand.ImmIsFloat
 		if operand.Kind == OpReg {
 			delta, known = state.constants[operand.Reg]
 		}
 		if !known || subtract && delta == math.MinInt64 {
-			return origin, false
+			return origins, false
 		}
 		if subtract {
 			delta = -delta
 		}
-		return fixedLocalShiftLiteral(origin, delta, proof)
+		if delta == 0 {
+			return origins, fixedLocalOriginOwners(origins, proof)
+		}
+		var entries [4]x86FixedLocalOrigin
+		for index := uint8(0); index < origins.count; index++ {
+			origin := origins.at(index)
+			entries[index] = origin
+			if origin.literal.symbol == "" {
+				continue
+			}
+			shifted, valid := fixedLocalShiftLiteral(origin, delta, proof)
+			if !valid {
+				return origins, false
+			}
+			entries[index] = shifted
+		}
+		return fixedLocalOriginSet(entries, origins.count), true
 	}
 	if !x86ResultNamedPredicateInstruction(*ins) {
 		return false, nil
@@ -114,7 +130,7 @@ func fixedLocalInputAddressStep(ins *Instr, state *x86FixedLocalState, proof *x8
 	if effect, known, err := x86NamedLEAByteEffect(ins.Op, *ins, "amd64"); known && err == nil && x86LEAWidth(ins.Op, "amd64") == 8 {
 		memory := ins.Args[0].Mem
 		origin, pointer := state.opaque[memory.Base]
-		if pointer {
+		if pointer && origin.valid() {
 			for _, input := range effect.operands {
 				if input.read && input.operand.Reg != memory.Base && !fixedLocalNumericRead(input.operand, input.width, state) {
 					return fail()
@@ -125,9 +141,9 @@ func fixedLocalInputAddressStep(ins *Instr, state *x86FixedLocalState, proof *x8
 			if _, secondPointer := state.opaque[memory.Index]; secondPointer {
 				return fail()
 			}
-			if origin.literal.symbol != "" {
+			if origin.hasLiteral() {
 				var valid bool
-				origin, valid = fixedLocalShiftLiteral(origin, memory.Off, proof)
+				origin, valid = shift(origin, Operand{Kind: OpImm, Imm: memory.Off}, false)
 				if !valid || memory.Index != "" {
 					return fail()
 				}
@@ -139,11 +155,11 @@ func fixedLocalInputAddressStep(ins *Instr, state *x86FixedLocalState, proof *x8
 	if !known || err != nil || form.test || form.bits != 64 {
 		return false, nil
 	}
-	literal := false
+	values := [2]x86FixedLocalOrigins{}
 	opaque := func(index int) bool {
 		operand := form.args[index]
 		if origin, found := fixedLocalOpaqueRegister(operand, state); found {
-			literal = literal || origin.literal.symbol != ""
+			values[index] = origin
 			return true
 		}
 		if operand.Kind != OpMem || proof == nil {
@@ -158,15 +174,12 @@ func fixedLocalInputAddressStep(ins *Instr, state *x86FixedLocalState, proof *x8
 			return false
 		}
 		origin, found := state.opaqueCells[offset]
-		literal = literal || found && origin.literal.symbol != ""
-		return found
+		values[index] = origin
+		return found && origin.valid()
 	}
 	pointers := [2]bool{opaque(0), opaque(1)}
 	if !pointers[0] && !pointers[1] {
 		return false, nil
-	}
-	if literal {
-		return fail() // No independent proof of placement-invariant address comparisons.
 	}
 	for index, operand := range form.args {
 		if !pointers[index] {
@@ -181,18 +194,33 @@ func fixedLocalInputAddressStep(ins *Instr, state *x86FixedLocalState, proof *x8
 			}
 		}
 	}
-	state.flags = x86ByteFlagsAll
-	state.comparison = x86FixedLocalComparison{}
+	flags := uint8(x86ByteFlagsAll)
+	comparison := x86FixedLocalComparison{}
+	if values[0].hasLiteral() || values[1].hasLiteral() {
+		if !pointers[0] || !pointers[1] || !fixedLocalOriginOwners(values[0], proof) || !fixedLocalOriginOwners(values[1], proof) {
+			return fail()
+		}
+		// Equality observes actual address identity, never placement-dependent
+		// ordering. Keep both native/literal alias possibilities at this CMP.
+		flags = x86ByteFlagZF
+		for index, value := range values {
+			if literal, single := value.literal(); single && form.args[1-index].Kind == OpReg {
+				comparison = x86FixedLocalComparison{register: form.args[1-index].Reg, literal: literal}
+				break
+			}
+		}
+	}
+	state.flags, state.comparison = flags, comparison
 	return true, nil
 }
 
-func fixedLocalOpaqueRegister(operand Operand, state *x86FixedLocalState) (x86FixedLocalOrigin, bool) {
+func fixedLocalOpaqueRegister(operand Operand, state *x86FixedLocalState) (x86FixedLocalOrigins, bool) {
 	root, valid := x86CallerGP(operand.Reg)
 	if operand.Kind != OpReg || !valid || root != operand.Reg {
-		return x86FixedLocalOrigin{}, false
+		return x86FixedLocalOrigins{}, false
 	}
 	origin, found := state.opaque[root]
-	return origin, found
+	return origin, found && origin.valid()
 }
 
 func intersectFixedLocalOrigins[K, V comparable](previous, current map[K]V) bool {
