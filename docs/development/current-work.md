@@ -6,15 +6,18 @@ and [validation](validation.md). Preserve original failed receipts.
 
 ## Current priority: finish amd64 first
 
-The complete Go 1.27.2 / LLVM22 Linux/amd64 object benchmark at `2713a7cfc`
+The complete Go 1.27.2 / LLVM22 Linux/amd64 object benchmark at `b2f3f0c81`
 passes **35/55**, with 20 failures and zero N/A/unattempted cases. Complete
-SHA512 and SHA3 are restored. Wall time is 53 seconds (51.541 tool seconds);
+SHA512 and SHA3 are restored. Wall time is 57 seconds (55.677 tool seconds);
 this is not a repeated end-to-end speedup measurement. GCM has passed the
-CLMUL/shift shape checks and now needs scalar-lane insertion/extraction and
-bounded dynamic DATA indices. SHA256 needs bounded indexed loops. Ordinary helper calls
-remain unresolved independently of runtime-entry contracts.
+scalar-lane checks and now needs bounded dynamic DATA indices. SHA256 needs
+loop updates separated from their comparisons. SHA1 now reaches original-frame
+capture, which incorrectly requires the last instruction to be RET even when
+the source ends in an internal backedge. Ordinary helper calls remain unresolved
+independently of runtime-entry contracts. None of these diagnostic advances is
+an additional complete-file pass.
 
-The latest original-Go Linux native [receipt](https://github.com/cpunion/plan9asm/actions/runs/40274466633)
+The earlier original-Go Linux native [receipt](https://github.com/cpunion/plan9asm/actions/runs/40274466633)
 qualifies `c2eeeda34`: 19 roots / 294 children, zero failures/skips, in
 316.992 seconds. It retains the earlier 176 VEX shape kernels and adds
 logical, 41 shuffle kernels, readonly DATA and constant-index execution.
@@ -23,9 +26,23 @@ focused receipt passes 25 roots / 708 children, zero failures/skips, in
 74.720 seconds. Neither receipt certifies later source revisions.
 The newer `d62b84c22` minimum-SDK receipt passes 29 roots / 646 children,
 zero failures/skips, in 50.523 seconds, including CLMUL, packed shifts,
-numerical constant propagation and block replay. Its expanded 22-root native
-[gate](https://github.com/cpunion/plan9asm/actions/runs/40280464705) is pending;
-object compilation and the older native receipt cannot certify that execution.
+numerical constant propagation and block replay. Its expanded original-Go native
+[gate](https://github.com/cpunion/plan9asm/actions/runs/40280464705) passes
+22 roots / 333 children in 346.604 seconds, zero failures/skips. The complete
+artifact was independently checked against its source revision and manifest.
+The next [native batch](https://github.com/cpunion/plan9asm/actions/runs/40285422731)
+is pending at `e6c475a9f`: 26 roots / 370 children, adding counted loops,
+overlapping iterations, scalar lanes and GP-aliased private frame addresses.
+Earlier execution and object receipts cannot certify this later execution.
+
+The integrated `b2f3f0c81` focused receipt passes 31 roots / 1,240 children,
+zero failures/skips, in 85.176 seconds. It includes whole scalar-lane functions,
+counted loops, full GP/FLAGS regressions and three-OS three-API O0/O2 objects.
+Candidate discovery now follows possible full-word frame-address copies; the
+existing independent proof still checks reaching values and every access.
+Private LEA retains checked offsets without turning pointer bytes into NUM.
+Earlier failed receipts retain the missed LEA transfer and the subsequently
+fixed nil-proof panic in standalone transfer tests.
 The constant-index batch `74998514d` retains 120 address combinations and
 30 original Go functions; its isolated receipt has 16 roots / 269 children,
 zero failures/skips, across three OSes and three APIs at O0/O2.
