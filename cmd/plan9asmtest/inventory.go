@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"go/token"
 	"regexp"
+	"regexp/syntax"
 	"sort"
 	"strings"
 )
@@ -114,8 +115,18 @@ func runPattern(names []string) (string, error) {
 		quoted[i] = regexp.QuoteMeta(name)
 	}
 	pattern := "^(" + strings.Join(quoted, "|") + ")$"
+	if len(pattern) > 16000 {
+		// Factor the same finite literal union with Go's own regexp parser.
+		// Keep short selectors unchanged; sort a copy for deterministic output.
+		sort.Strings(quoted)
+		expression, err := syntax.Parse("^("+strings.Join(quoted, "|")+")$", syntax.Perl)
+		if err != nil {
+			return "", fmt.Errorf("factor exact run pattern: %w", err)
+		}
+		pattern = expression.Simplify().String()
+	}
 	// Conservative even on Unix: never truncate a regex to fit a platform's
-	// command-line limit. More shards are required instead.
+	// command-line limit. Irreducible unions still require more shards.
 	if len(names) == 0 || len(pattern) > 16000 {
 		return "", fmt.Errorf("empty/oversized exact run pattern (%d bytes); increase -shards", len(pattern))
 	}
