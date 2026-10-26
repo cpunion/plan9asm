@@ -366,44 +366,9 @@ func x86SDKLiteralRefineEdge(op Op, taken bool, state *x86SDKLiteralState) bool 
 		return true
 	}
 	value := &state.gp[state.comparison]
-	bound := state.constant
-	less, equal, greater := true, true, true
-	switch op {
-	case "JB", "JCS":
-		equal, greater = false, false
-	case "JBE", "JLS":
-		greater = false
-	case "JA", "JHI":
-		less, equal = false, false
-	case "JAE", "JCC":
-		less = false
-	case "JE", "JEQ":
-		less, greater = false, false
-	default:
-		return true
-	}
-	if !taken {
-		less, equal, greater = !less, !equal, !greater
-	}
-	if !less && value.minimum < bound {
-		value.minimum = bound
-	}
-	if !equal && !less && value.minimum <= bound {
-		if bound == math.MaxUint64 {
-			return false
-		}
-		value.minimum = bound + 1
-	}
-	if !greater && value.maximum > bound {
-		value.maximum = bound
-	}
-	if !equal && !greater && value.maximum >= bound {
-		if bound == 0 {
-			return false
-		}
-		value.maximum = bound - 1
-	}
-	return value.minimum <= value.maximum
+	next, feasible := (x86UnsignedRange{value.minimum, value.maximum}).refine(op, taken, state.constant)
+	value.minimum, value.maximum = next.minimum, next.maximum
+	return feasible
 }
 
 func x86SDKLiteralTransfer(ins Instr, state *x86SDKLiteralState, sig FuncSig, arch string, literalRead *x86SDKLiteralAccess) error {

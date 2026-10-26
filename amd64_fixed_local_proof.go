@@ -35,6 +35,8 @@ type x86FixedLocalState struct {
 	booleans     map[Reg]uint8
 	booleanBytes []bool
 	constants    map[Reg]int64
+	ranges       map[Reg]x86UnsignedRange
+	comparison   x86FixedLocalComparison
 	known        map[Reg]uint8
 	vectors      map[Reg]uint64
 	masks        map[Reg]bool
@@ -52,6 +54,7 @@ func cloneFixedLocalState(input x86FixedLocalState) x86FixedLocalState {
 	clone.booleans = x86CloneCallerKnown(input.booleans)
 	clone.booleanBytes = append([]bool(nil), input.booleanBytes...)
 	clone.constants = make(map[Reg]int64, len(input.constants))
+	clone.ranges = cloneFixedLocalRanges(input.ranges)
 	clone.addresses = make(map[int64]int64, len(input.addresses))
 	clone.results = make(map[int]bool, len(input.results))
 	for key, value := range input.pointers {
@@ -494,20 +497,28 @@ func replayX86FixedLocalCFG(fn *Func, sig FuncSig, proof *x86FixedLocalProof, re
 		if targets == nil {
 			targets = edges[pc]
 		}
-		for _, target := range targets {
+		for edge, target := range targets {
 			if target < 0 || target >= len(instructions) {
 				return goAMD64FrameContext("fixed local fallthrough lacks a source return")
+			}
+			next := current
+			if isAMD64ConditionalBranch(fn.Instrs[instructions[pc]].Op) {
+				var feasible bool
+				next, feasible = fixedLocalRangeEdge(current, fn.Instrs[instructions[pc]].Op, edge == 1)
+				if !feasible {
+					continue
+				}
 			}
 			changed := true
 			if previous, found := states[target]; found {
 				var err error
-				changed, err = mergeFixedLocalState(&previous, current)
+				changed, err = mergeFixedLocalState(&previous, next)
 				if err != nil {
 					return err
 				}
 				states[target] = previous
 			} else {
-				states[target] = cloneFixedLocalState(current)
+				states[target] = cloneFixedLocalState(next)
 			}
 			if changed && !queued[target] {
 				queued[target] = true
@@ -562,6 +573,7 @@ func mergeFixedLocalState(previous *x86FixedLocalState, current x86FixedLocalSta
 		return false, goAMD64FrameContext("fixed local CFG address identity disagrees")
 	}
 	changed := intersectFixedLocalOrigins(previous.constants, current.constants)
+	changed = mergeFixedLocalRanges(previous, current) || changed
 	changed = intersectFixedLocalOrigins(previous.opaque, current.opaque) || changed
 	changed = intersectFixedLocalOrigins(previous.opaqueCells, current.opaqueCells) || changed
 	flags := previous.flags & current.flags
@@ -643,7 +655,12 @@ func fixedLocalMemoryAccess(ins *Instr, index int, state *x86FixedLocalState, pr
 			if origin.literal.symbol != "" {
 				displacement, known := fixedLocalConstantDisplacement(memory, state)
 				shifted, valid := fixedLocalShiftLiteral(origin, displacement, proof)
-				if write || !known || !valid || !fixedLocalLiteralRange(proof.binding, shifted.literal, width, alignment) {
+				if !known {
+					valid = fixedLocalLiteralEnvelope(memory, origin, state, proof, width, alignment)
+				} else {
+					valid = valid && fixedLocalLiteralRange(proof.binding, shifted.literal, width, alignment)
+				}
+				if write || !valid {
 					return 0, x86FixedLocalLiteralMemory, goAMD64FrameContext("fixed local indirect DATA read exceeds readonly identity, extent or alignment")
 				}
 			} else if memory.Index != "" || memory.Scale != 0 {
@@ -757,6 +774,7 @@ func fixedLocalStep(ins *Instr, state *x86FixedLocalState, sig FuncSig, proof *x
 			}
 			state.pointers[reg] = offset
 			state.flags = 0 // Relocated pointer arithmetic flags are opaque.
+			state.comparison = x86FixedLocalComparison{}
 			return nil
 		}
 	}
@@ -774,12 +792,19 @@ func fixedLocalStep(ins *Instr, state *x86FixedLocalState, sig FuncSig, proof *x
 			return err
 		}
 		root, value, constant := fixedLocalConstantArithmetic(*ins, effect, state)
+		rangeReg, bounds, comparison := fixedLocalRangeEffect(*ins, effect, state)
 		if err := fixedLocalTypedByteStep(ins, state, proof, residue, effect); err != nil {
 			return err
 		}
 		if constant {
 			state.constants[root] = value
 			fixedLocalWriteBooleans(state, root, 8, fixedLocalConstantBooleans(value, 8))
+		}
+		if rangeReg != "" {
+			state.setRange(rangeReg, bounds)
+		}
+		if comparison.register != "" {
+			state.comparison = comparison
 		}
 		return nil
 	}
@@ -828,6 +853,8 @@ func fixedLocalMove(ins *Instr, state *x86FixedLocalState, sig FuncSig, proof *x
 	var booleans uint8
 	var constant int64
 	var constantKnown bool
+	var bounds x86UnsignedRange
+	var bounded bool
 	switch source.Kind {
 	case OpReg:
 		address, pointer = state.pointers[source.Reg]
@@ -848,6 +875,8 @@ func fixedLocalMove(ins *Instr, state *x86FixedLocalState, sig FuncSig, proof *x
 			// Narrow moves truncate or preserve a destination's old upper
 			// bytes. They cannot transport a complete 64-bit address mask.
 			constantKnown = constantKnown && width == 8
+			bounds, bounded = state.ranges[source.Reg]
+			bounded = bounded && width == 8
 			booleans = fixedLocalBooleanRead(source, width, state)
 		}
 	case OpImm:
@@ -927,6 +956,9 @@ func fixedLocalMove(ins *Instr, state *x86FixedLocalState, sig FuncSig, proof *x
 			state.known[root] |= mask
 			if constantKnown {
 				state.constants[root] = constant
+			}
+			if bounded {
+				state.setRange(root, bounds)
 			}
 		}
 	case OpMem:

@@ -179,6 +179,7 @@ func fixedLocalStaticAddressStep(ins Instr, state *x86FixedLocalState, proof *x8
 }
 
 func writeFixedLocalOrigin(state *x86FixedLocalState, destination Reg, origin x86FixedLocalOrigin) {
+	state.revokeRange(destination)
 	delete(state.pointers, destination)
 	delete(state.constants, destination)
 	state.opaque[destination], state.known[destination], state.booleans[destination] = origin, 0, 0

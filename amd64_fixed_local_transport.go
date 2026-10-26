@@ -63,6 +63,7 @@ func fixedLocalMemoryBooleans(state *x86FixedLocalState, offset, width int64) ui
 
 func fixedLocalWriteBooleans(state *x86FixedLocalState, reg Reg, width int64, values uint8) {
 	root, _ := x86CallerGP(reg)
+	state.revokeRange(root) // Every GP write, including partial aliases, invalidates its old value.
 	mask := x86CallerByteMask(reg, width)
 	values <<= fixedLocalBooleanShift(reg)
 	if width == 4 {

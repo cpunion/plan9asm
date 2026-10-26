@@ -25,6 +25,7 @@ func fixedLocalPrivateAddressStep(ins Instr, state *x86FixedLocalState, proof *x
 	delete(state.opaque, destination)
 	delete(state.constants, destination)
 	delete(state.booleans, destination)
+	state.revokeRange(destination)
 	state.known[destination] = 0
 	state.pointers[destination] = offset
 	return true, nil
@@ -50,6 +51,9 @@ func fixedLocalInputAddressStep(ins *Instr, state *x86FixedLocalState, proof *x8
 			defined = 0 // Relocated DATA addresses do not establish numerical FLAGS.
 		}
 		state.flags = state.flags&^killed | defined
+		if killed|defined != 0 {
+			state.comparison = x86FixedLocalComparison{}
+		}
 		return true, nil
 	}
 	shift := func(origin x86FixedLocalOrigin, operand Operand, subtract bool) (x86FixedLocalOrigin, bool) {
@@ -178,6 +182,7 @@ func fixedLocalInputAddressStep(ins *Instr, state *x86FixedLocalState, proof *x8
 		}
 	}
 	state.flags = x86ByteFlagsAll
+	state.comparison = x86FixedLocalComparison{}
 	return true, nil
 }
 

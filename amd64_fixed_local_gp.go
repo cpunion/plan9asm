@@ -219,5 +219,8 @@ func fixedLocalTypedByteStep(ins *Instr, state *x86FixedLocalState, proof *x86Fi
 		}
 	}
 	state.flags = state.flags&^effect.flagsKilled | effect.flagsDefined
+	if effect.flagsKilled|effect.flagsDefined != 0 {
+		state.comparison = x86FixedLocalComparison{}
+	}
 	return nil
 }
