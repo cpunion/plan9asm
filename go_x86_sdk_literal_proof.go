@@ -40,9 +40,9 @@ type x86SDKLiteralState struct {
 }
 
 // This is a path-sensitive, literal-only proof. It neither runs a caller proof
-// nor invents an invariant for a cycle. A cycle with no literal carrier and no
-// future literal operation can be left to the independent whole-source result
-// proof; a cycle which could participate in literal use remains Context.
+// nor invents an invariant for a cycle. A literal loop closes only when its
+// complete typed state repeats at the same active label. Other literal cycles
+// remain Context; cycles unrelated to literals belong to the result proof.
 func proveX86SDKLiteralAccesses(fn Func, sig FuncSig, arch string, literals map[string]int64) ([]x86SDKLiteralAccess, error) {
 	return proveX86SDKLiteralAccessesAtMinimum(fn, sig, arch, literals, nil)
 }
@@ -146,6 +146,7 @@ func proveX86SDKLiteralAccessesAtMinimumRequest(fn Func, sig FuncSig, arch strin
 	facts := make(map[int]x86SDKLiteralAccess)
 	nonliteral := make(map[int]bool)
 	path := make([]bool, n)
+	entries := make(map[int]x86SDKLiteralState, len(labels))
 	visits := 0
 	var walk func(int, x86SDKLiteralState) error
 	walk = func(pc int, state x86SDKLiteralState) error {
@@ -154,6 +155,16 @@ func proveX86SDKLiteralAccessesAtMinimumRequest(fn Func, sig FuncSig, arch strin
 			return numericalSBContext("private literal source path budget exhausted")
 		}
 		if path[pc] {
+			if entry, present := entries[pc]; present {
+				if entry == state {
+					return nil
+				}
+				for _, value := range entry.gp {
+					if value.symbol != "" {
+						return numericalSBContext("private literal cyclic carrier changed its entry state")
+					}
+				}
+			}
 			for _, value := range state.gp {
 				if value.symbol != "" {
 					return numericalSBContext("private literal cyclic carrier needs its separate loop contract")
@@ -167,6 +178,12 @@ func proveX86SDKLiteralAccessesAtMinimumRequest(fn Func, sig FuncSig, arch strin
 		path[pc] = true
 		defer func() { path[pc] = false }()
 		ins := fn.Instrs[pc]
+		if ins.Op == OpLABEL {
+			// One snapshot per active label, charged to the same path budget.
+			// No historical branch state or weakened range can close a cycle.
+			entries[pc] = state
+			defer delete(entries, pc)
+		}
 		if minima != nil && state.opaqueFlags&x86SDKLiteralFlagReads(ins, arch) != 0 {
 			return numericalSBContext("private literal FLAG reader observes uncovered linked address bits: %s", ins.Raw)
 		}
@@ -564,6 +581,24 @@ func x86SDKLiteralTransfer(ins Instr, state *x86SDKLiteralState, sig FuncSig, ar
 	if x86SDKLiteralVectorOnlyEffect(ins, arch) {
 		return nil // Shared complete forms prove there are no GP/FLAGS outputs.
 	}
+	store := ins
+	if len(ins.Args) == 2 && ins.Args[1].Kind == OpFP {
+		// Project only the logical destination to check the existing machine
+		// row. This observes register effects, never FP or native ownership.
+		store.Args = []Operand{ins.Args[0], {Kind: OpMem, Mem: MemRef{Base: AX}}}
+	}
+	if form, known, err := x86ScalarRegisterStoreProperties(store.Op, store, arch); known {
+		if err != nil {
+			return numericalSBContext("private literal scalar store has an invalid typed form")
+		}
+		if form.source.Kind == OpReg {
+			root, _, valid := x86ResultGP(form.source.Reg, form.bytes, arch)
+			if valid && state.gp[root].symbol != "" {
+				return numericalSBContext("private literal address escapes through a scalar store")
+			}
+		}
+		return nil // No GP/FLAGS output; every memory role is proved separately.
+	}
 	effect, known, err := x86TypedInstructionByteEffect(ins.Op, ins, arch)
 	if !known || err != nil {
 		for _, value := range state.gp {
@@ -620,6 +655,8 @@ func x86SDKLiteralVectorOnlyEffect(ins Instr, arch string) bool {
 		valid = err == nil
 	} else if _, known, err := x86LegacyPackedMoveProperties(ins.Op, ins, arch); known {
 		valid = err == nil
+	} else if form, known, err := amd64PackedVectorMoveProperties(ins, arch); known {
+		valid = err == nil && !form.undefinedOpcode()
 	}
 	if !valid {
 		return false

@@ -14,6 +14,16 @@ func x86OwnedIndexedVectorRead(ins Instr, arch string) (int, int64, bool) {
 	if form, known, err := x86ByteShuffleProperties(ins.Op, ins, arch); known {
 		return form.memory, int64(form.memoryBytes), err == nil && form.memory >= 0
 	}
+	if form, known, err := x86LegacyIntegerArithmeticProperties(ins.Op, ins, arch); known {
+		return form.memory, int64(form.memoryBytes), err == nil && !form.mmx && form.memory >= 0
+	}
+	if form, known, err := x86PackedLowMultiplyProperties(ins.Op, ins, arch); known {
+		return form.memory, int64(form.memoryBytes), err == nil && form.legacy && form.memory >= 0
+	}
+	if form, known, err := x86PackedWordMultiplyProperties(ins.Op, ins, arch); known {
+		return form.memory, int64(form.memoryBytes), err == nil && form.legacy && !form.mmx &&
+			form.spec.mode == amd64PackedWordMultiplyLow && form.memory >= 0
+	}
 	return 0, 0, false
 }
 
