@@ -1,9 +1,6 @@
 package plan9asm
 
-import (
-	"fmt"
-	"strings"
-)
+import "strings"
 
 type x86PackedWordMultiplySpec struct {
 	mode     amd64PackedWordMultiplyMode
@@ -36,42 +33,12 @@ func x86PackedWordMultiplyProperties(op Op, ins Instr, arch string) (x86PackedWo
 	if !recognized {
 		return x86PackedWordMultiplyForm{}, false, nil
 	}
-	if ins.Op != "" && !strings.EqualFold(string(ins.Op), string(op)) {
-		return x86PackedWordMultiplyForm{}, true, fmt.Errorf("packed word multiply dispatch/source opcode mismatch: %s/%s", op, ins.Op)
+	grammar := x86PackedBinarySpec{encoding: spec.encoding, zeroing: spec.encoding == x86PackedLogicalVEXOrEVEX}
+	binary, source, started, err := x86PackedBinaryPhysicalSource(op, ins, arch, grammar, "packed word multiply")
+	if !started {
+		return x86PackedWordMultiplyForm{}, true, err
 	}
-	local := ins
-	local.Op = op
-	local.Args = append([]Operand(nil), ins.Args...)
-	if spec.encoding == x86PackedLogicalLegacyInteger {
-		var err error
-		local, err = x86LegacyMMXReadInstruction(local, arch)
-		if err != nil {
-			return x86PackedWordMultiplyForm{}, true, err
-		}
-	}
-	grammarArch := arch
-	// Only the actual physical decoder sets this private marker. A physical
-	// mode32 EVEX instruction is not subject to Go's named 3-operand limit.
-	if arch == "386" && local.x86Encoded && spec.encoding == x86PackedLogicalVEXOrEVEX {
-		grammarArch = "amd64"
-	}
-	binary, err := x86PackedBinaryProperties(local, grammarArch, x86PackedBinarySpec{
-		encoding: spec.encoding, zeroing: spec.encoding == x86PackedLogicalVEXOrEVEX,
-	})
-	form := x86PackedWordMultiplyForm{x86PackedBinaryForm: binary, spec: spec}
-	if err == nil {
-		form.source = local.Args[binary.first]
-		if arch == "386" && grammarArch != arch && binary.memory >= 0 && !x86PackedShiftMemoryValid(form.source, arch) {
-			err = fmt.Errorf("386 %s physical source has an unbound address", op)
-		}
-		if err == nil {
-			err = x86Mode32VectorRegisterContext(local, arch)
-		}
-		if err == nil && binary.memory >= 0 && (ins.x86AddressBits != 0 || ins.x86UnboundAddressOverride) {
-			err = fmt.Errorf("%w: packed word multiply has no bound address-size override", ErrProbeNeedsContext)
-		}
-	}
-	return form, true, err
+	return x86PackedWordMultiplyForm{binary, spec, source}, true, err
 }
 
 func x86ResultPackedWordMultiplyStep(ins Instr, state *x86ResultState, owned []bool, arch string) (bool, bool) {

@@ -1,9 +1,6 @@
 package plan9asm
 
-import (
-	"fmt"
-	"strings"
-)
+import "strings"
 
 type x86PackedAverageSpec struct {
 	x86PackedBinarySpec
@@ -33,38 +30,11 @@ func x86PackedAverageProperties(op Op, ins Instr, arch string) (x86PackedAverage
 	if !known {
 		return x86PackedAverageForm{}, false, nil
 	}
-	if ins.Op != "" && !strings.EqualFold(string(ins.Op), string(op)) {
-		return x86PackedAverageForm{}, true, fmt.Errorf("packed average dispatch/source opcode mismatch: %s/%s", op, ins.Op)
+	binary, source, started, err := x86PackedBinaryPhysicalSource(op, ins, arch, spec.x86PackedBinarySpec, "packed average")
+	if !started {
+		return x86PackedAverageForm{}, true, err
 	}
-	local := ins
-	local.Op = op
-	local.Args = append([]Operand(nil), ins.Args...)
-	if spec.encoding == x86PackedLogicalLegacyInteger {
-		var err error
-		local, err = x86LegacyMMXReadInstruction(local, arch)
-		if err != nil {
-			return x86PackedAverageForm{}, true, err
-		}
-	}
-	grammarArch := arch
-	if arch == "386" && local.x86Encoded && spec.encoding == x86PackedLogicalVEXOrEVEX {
-		grammarArch = "amd64" // Only the complete physical decoder sets this.
-	}
-	binary, err := x86PackedBinaryProperties(local, grammarArch, spec.x86PackedBinarySpec)
-	form := x86PackedAverageForm{x86PackedBinaryForm: binary, spec: spec}
-	if err == nil {
-		form.source = local.Args[binary.first]
-		if arch == "386" && grammarArch != arch && binary.memory >= 0 && !x86PackedShiftMemoryValid(form.source, arch) {
-			err = fmt.Errorf("386 %s physical source has an unbound address", op)
-		}
-		if err == nil {
-			err = x86Mode32VectorRegisterContext(local, arch)
-		}
-		if err == nil && binary.memory >= 0 && (ins.x86AddressBits != 0 || ins.x86UnboundAddressOverride) {
-			err = fmt.Errorf("%w: packed average has no bound address-size override", ErrProbeNeedsContext)
-		}
-	}
-	return form, true, err
+	return x86PackedAverageForm{binary, spec, source}, true, err
 }
 
 func x86ResultPackedAverageStep(ins Instr, state *x86ResultState, owned []bool, arch string) (bool, bool) {
