@@ -8,19 +8,26 @@ func fixedLocalVectorByteEffect(ins Instr) (x86TypedByteEffect, bool, error) {
 	}
 	effect, known, err := x86PackedBinaryByteEffect(ins.Op, ins, "amd64")
 	if !known {
+		effect, known, err = x86UnmaskedVEXByteEffect(ins.Op, ins, "amd64")
+	}
+	if !known {
 		return effect, false, nil
 	}
 	if err != nil {
 		return x86TypedByteEffect{}, true, goAMD64FrameContext("fixed local vector form is not closed: %v", err)
 	}
-	valid := effect.vector.upperWrite == x86TypedVectorUpperPreserve && effect.vector.memoryAlignment == 16
+	valid := effect.vector.upperWrite == x86TypedVectorUpperPreserve && effect.vector.memoryAlignment == 16 ||
+		effect.vector.upperWrite == x86TypedVectorUpperZero && effect.vector.memoryAlignment == 1
 	for _, operand := range effect.operands {
-		valid = valid && operand.width == 16
 		switch operand.operand.Kind {
 		case OpReg:
-			index, xmm := amd64VectorRegisterIndex(operand.operand.Reg, 16)
-			valid = valid && xmm && index < 16
+			width := amd64VectorByteWidth(operand.operand.Reg)
+			index, vector := amd64VectorRegisterIndex(operand.operand.Reg, width)
+			valid = valid && vector && index < 16 && operand.width == int64(width)
 		case OpMem, OpSym:
+			valid = valid && operand.width > 0
+		case OpImm:
+			valid = valid && operand.read && !operand.write && fixedLocalNumericRead(operand.operand, operand.width, nil)
 		default:
 			valid = false
 		}

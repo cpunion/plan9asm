@@ -108,6 +108,8 @@ func x86NumericalVectorBoundary(code []byte, mode int) (int, error) {
 		decodedX86PackedIntegerCompareInstructionWithMemory,
 		decodedX86PackedIntegerArithmeticInstructionWithMemory,
 		decodedX86PackedUniformShiftInstructionWithMemory,
+		decodedX86PerLaneVariableShiftInstructionWithMemory,
+		decodedX86RawVectorByteShiftInstructionWithMemory,
 		decodedX86VPSHUFBInstructionWithMemory,
 		decodedX86PackedShuffleInstructionWithMemory,
 		decodedX86PackedAlignRightInstructionWithMemory,

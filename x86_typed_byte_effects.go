@@ -39,6 +39,7 @@ type x86TypedVectorUpperWrite uint8
 const (
 	x86TypedVectorUpperUnknown x86TypedVectorUpperWrite = iota
 	x86TypedVectorUpperPreserve
+	x86TypedVectorUpperZero
 )
 
 const (

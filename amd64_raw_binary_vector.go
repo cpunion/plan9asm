@@ -9,6 +9,10 @@ import (
 // its operation and validated generation/W. The memory source is first in
 // Plan 9 order; EVEX masks and broadcast retain their typed semantics.
 func decodedX86BinaryVectorOperands(code []byte, p x86RawVectorEncoding, mode int, op Op, laneBits int) (Instr, int, bool, error) {
+	return decodedX86BinaryVectorOperandsWithMemory(code, p, mode, op, laneBits, x86RawMemoryDecoder{})
+}
+
+func decodedX86BinaryVectorOperandsWithMemory(code []byte, p x86RawVectorEncoding, mode int, op Op, laneBits int, memory x86RawMemoryDecoder) (Instr, int, bool, error) {
 	fail := func(message string) (Instr, int, bool, error) {
 		return Instr{}, 0, true, fmt.Errorf("%s: %s", op, message)
 	}
@@ -48,9 +52,9 @@ func decodedX86BinaryVectorOperands(code []byte, p x86RawVectorEncoding, mode in
 	var size int
 	var err error
 	if p.evex {
-		source, size, err = decodedX86EVEXRMOperand(code[p.modRM:], mode, p.b, p.x, p.segment, width, scale)
+		source, size, err = memory.evex(code[p.modRM:], mode, p.b, p.x, p.segment, width, scale)
 	} else {
-		source, size, err = decodedX86VEXVectorRMOperand(code[p.modRM:], mode, p.b, p.x, p.segment, width)
+		source, size, err = memory.vex(code[p.modRM:], mode, p.b, p.x, p.segment, width)
 	}
 	if err != nil {
 		return Instr{}, 0, true, err

@@ -85,10 +85,16 @@ func (c *amd64Ctx) lowerVectorZero(op Op, ins Instr) (bool, bool, error) {
 }
 
 func x86CallerVectorZeroStep(form x86VectorZeroForm, state *x86SourceStackState) bool {
+	x86VectorZeroDefinedBytes(form, state.vectors)
+	return true
+}
+
+// Numerical register facts only. Source permissions and executable lowering
+// remain with each consumer; neither an input nor a memory byte is supplied.
+func x86VectorZeroDefinedBytes(form x86VectorZeroForm, vectors map[Reg]uint64) {
 	zeroed := ^x86CallerVectorByteMask(int64(form.spec.firstByte))
 	for register := 0; register < form.registers; register++ {
 		root := Reg(fmt.Sprintf("Z%d", register))
-		state.vectors[root] |= zeroed
+		vectors[root] |= zeroed
 	}
-	return true
 }

@@ -225,6 +225,9 @@ func fixedLocalInstructionShape(ins Instr) bool {
 	if _, known, err := x86OrderingHintProperties(ins.Op, ins, "amd64"); known {
 		return err == nil
 	}
+	if _, known, err := x86VectorZeroProperties(ins, "amd64"); known {
+		return err == nil
+	}
 	if _, known, err := x86LegacyPackedMoveProperties(ins.Op, ins, "amd64"); known {
 		return err == nil
 	}
@@ -568,6 +571,13 @@ func fixedLocalStep(ins *Instr, state *x86FixedLocalState, sig FuncSig, proof *x
 	}
 	if _, known, err := x86OrderingHintProperties(ins.Op, *ins, "amd64"); known {
 		return err // Exact native fences change no byte, pointer or FLAGS facts.
+	}
+	if form, known, err := x86VectorZeroProperties(*ins, "amd64"); known {
+		if err != nil {
+			return err
+		}
+		x86VectorZeroDefinedBytes(form, state.vectors)
+		return nil
 	}
 	if ins.Op == OpRET {
 		sp, found := state.pointers[SP]

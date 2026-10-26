@@ -44,7 +44,7 @@ func x86NumericalPackedBoundaryRows(arch string) []string {
 		}
 	}
 	for _, row := range x86PackedShiftRawCases() {
-		if row.member.mode != "uniform" || arch == "386" && row.mask != 0 {
+		if arch == "386" && row.mask != 0 {
 			continue
 		}
 		instruction := row.instruction()
@@ -102,6 +102,10 @@ func TestX86NumericalPackedPhysicalMemoryDoesNotGrantRawSource(t *testing.T) {
 		{"VPALIGNR.Z $255,table-17(SB),Z17,K1,Z18", decodedX86PackedAlignRightInstruction},
 		{"VPSRLQ table+17(SB),Y1,Y2", decodedX86PackedUniformShiftInstruction},
 		{"VPSRAQ.BCST.Z $255,table-17(SB),K1,Z18", decodedX86PackedUniformShiftInstruction},
+		{"VPSLLVQ table+17(SB),Y1,Y2", decodedX86PerLaneVariableShiftInstruction},
+		{"VPSRAVD.BCST.Z table-17(SB),Z17,K1,Z18", decodedX86PerLaneVariableShiftInstruction},
+		{"VPSLLDQ $255,table+17(SB),X18", decodedX86RawVectorByteShiftInstruction},
+		{"VPSRLDQ $255,table-17(SB),Z18", decodedX86RawVectorByteShiftInstruction},
 		{"VPBLENDD $255,table+17(SB),Y1,Y2", decodedX86ImmediatePackedBlendInstruction},
 		{"VBLENDPD $255,table-17(SB),X1,X2", decodedX86ImmediatePackedBlendInstruction},
 	} {

@@ -5,6 +5,10 @@ import "fmt"
 // Go has five VEX+EVEX D/Q members and four EVEX-only W/Q members.
 // All use per-element counts, not the scalar count of VPSLL/PSRL/PSRA.
 func decodedX86PerLaneVariableShiftInstruction(code []byte, mode int) (Instr, int, bool, error) {
+	return decodedX86PerLaneVariableShiftInstructionWithMemory(code, mode, x86RawMemoryDecoder{})
+}
+
+func decodedX86PerLaneVariableShiftInstructionWithMemory(code []byte, mode int, memory x86RawMemoryDecoder) (Instr, int, bool, error) {
 	p, matched := decodeX86RawVectorEncoding(code)
 	// F3.0F38 opcodes 10-12 are single-source narrowing instructions,
 	// not a malformed 66.0F38 per-lane shift. Other wrong prefixes remain
@@ -38,7 +42,7 @@ func decodedX86PerLaneVariableShiftInstruction(code []byte, mode int) (Instr, in
 		return fail("instruction requires EVEX encoding")
 	}
 
-	ins, consumed, known, err := decodedX86BinaryVectorOperands(code, p, mode, op, spec.laneBits)
+	ins, consumed, known, err := decodedX86BinaryVectorOperandsWithMemory(code, p, mode, op, spec.laneBits, memory)
 	if known && err == nil {
 		ins.x86PackedShiftEncoding = x86RawPackedShiftVEX
 		if p.evex {

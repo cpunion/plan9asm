@@ -12,6 +12,20 @@ func GoAMD64FixedLocalFrameBindingNeeded(file *File, goarch string) bool {
 			continue
 		}
 		for _, ins := range fn.Instrs {
+			// The final candidate role requires original SP/BP memory. Avoid
+			// parsing allocating effects for register-only or unrelated inputs;
+			// this negative filter grants neither grammar nor storage permission.
+			localMemory := false
+			for _, operand := range ins.Args {
+				if operand.Kind == OpMem && (operand.Mem.Base == SP || operand.Mem.Base == BP ||
+					operand.Mem.Index == SP || operand.Mem.Index == BP) {
+					localMemory = true
+					break
+				}
+			}
+			if !localMemory {
+				continue
+			}
 			memory, eligible := -1, false
 			physicalOnly := false
 			if form, known, err := fixedLocalConversionProperties(ins); known {
