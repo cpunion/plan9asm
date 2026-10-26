@@ -234,18 +234,16 @@ func x86ResultCallerAddressesAfter(ins Instr, before [16]bool, entryFP map[int64
 			first := ins.Args[0]
 			switch ins.Op {
 			case move:
-				caller := first.Kind == OpFP && entryFP[first.FPOffset]
-				if first.Kind == OpReg {
-					source, _, valid := x86ResultGP(first.Reg, word, arch)
-					caller = valid && before[source]
-				}
-				before[destination] = caller
+				before[destination] = x86ResultPointerOperand(first, before, entryFP, arch)
 				return before
 			case lea:
 				base, _, valid := x86ResultGP(first.Mem.Base, word, arch)
 				before[destination] = first.Kind == OpMem && first.Mem.Sym == "" && valid && before[base]
 				return before // Numerical index/complete address checked by the original transfer.
 			case add, sub:
+				if ins.Op == add && !before[destination] {
+					before[destination] = x86ResultPointerOperand(first, before, entryFP, arch)
+				}
 				if ins.Op == sub && first.Kind == OpFP && entryFP[first.FPOffset] {
 					before[destination] = false // Canceling an actual input pointer consumes its address role.
 				}

@@ -24,13 +24,16 @@ func x86ResultCallerOriginsAfter(original Instr, before [16]uint16, after [16]bo
 	if !valid || !after[destination] {
 		return next
 	}
-	move, lea := Op("MOVQ"), Op("LEAQ")
+	move, lea, add := Op("MOVQ"), Op("LEAQ"), Op("ADDQ")
 	if arch == "386" {
-		move, lea = "MOVL", "LEAL"
+		move, lea, add = "MOVL", "LEAL", "ADDL"
 	}
 	first := ins.Args[0]
 	switch ins.Op {
-	case move:
+	case move, add:
+		if ins.Op == add && before[destination] != 0 {
+			return next // The ordinary pointer-destination order retains its origin.
+		}
 		next[destination] = 0
 		if first.Kind == OpFP && first.FPOffset >= 0 && first.FPOffset < 4096 && entryFP[first.FPOffset] {
 			next[destination] = uint16(first.FPOffset + 1)

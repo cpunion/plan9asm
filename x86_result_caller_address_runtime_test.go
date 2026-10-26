@@ -68,9 +68,14 @@ func TestX86ResultCallerAddressThreeTargetOriginalAndLLVMObjects(t *testing.T) {
 }
 
 func TestCrossLinuxRuntimeMatrixX86CallerAddressInstructionBytesAndLLVM(t *testing.T) {
+	x86CallerAddressRuntime(t, x86CallerAddressRuntimeRows())
+}
+
+func x86CallerAddressRuntime(t *testing.T, rows []x86CallerAddressRuntimeRow) {
+	t.Helper()
 	execution := x86FloatCompareRuntimeTools(t, x86FloatCompareSSE)
 	var source, declarations, originals, wrappers, prototypes, checks strings.Builder
-	for index, row := range x86CallerAddressRuntimeRows() {
+	for index, row := range rows {
 		name := fmt.Sprintf("Address%d", index)
 		original := strings.ReplaceAll(x86CallerAddressRegisterSource(row.body), "·view", "·"+name)
 		source.WriteString(original)

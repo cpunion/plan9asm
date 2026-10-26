@@ -12,6 +12,16 @@ func x86ResultPointerWord(arch string) int64 {
 	return 8
 }
 
+// Select an existing whole-word role, never numerical address bits or memory
+// contents. The caller supplies its own independent pointer/provenance domain.
+func x86ResultPointerOperand(arg Operand, gp [16]bool, fp map[int64]bool, arch string) bool {
+	if arg.Kind == OpFP {
+		return fp[arg.FPOffset]
+	}
+	index, _, valid := x86ResultGP(arg.Reg, x86ResultPointerWord(arch), arch)
+	return arg.Kind == OpReg && valid && gp[index]
+}
+
 func x86ResultIncomingPointerAddressIdentity(arg Operand, state *x86ResultState, arch string) bool {
 	return x86ResultIncomingPointerAddress(arg, state, arch, false)
 }
@@ -71,6 +81,7 @@ func x86ResultIncomingPointerTransfer(ins Instr, state *x86ResultState, owned []
 		index, _, valid := x86ResultGP(last.Reg, word, arch)
 		if valid {
 			state.pointerGP[index], state.gp[index] = true, 0
+			state.canonicalGP[index] = 0
 		}
 		return valid
 	}
@@ -104,15 +115,32 @@ func x86ResultIncomingPointerTransfer(ins Instr, state *x86ResultState, owned []
 		// prove every actual register input instead of treating it as a pointer.
 		return false, false
 	}
-	if (ins.Op == add || ins.Op == sub) && last.Kind == OpReg && !state.shapeOnly {
+	if (ins.Op == add || ins.Op == sub) && last.Kind == OpReg {
 		index, _, valid := x86ResultGP(last.Reg, word, arch)
-		if !valid || !state.pointerGP[index] {
+		if !valid {
 			return false, false
+		}
+		commuted := !state.pointerGP[index] && ins.Op == add &&
+			x86ResultPointerOperand(first, state.pointerGP, state.pointerFP, arch)
+		// The shape pass must recognize a declared pointer FP source too.
+		// Its top state supplies no reaching identity or numerical permission.
+		if !commuted && (!state.pointerGP[index] || state.shapeOnly) {
+			return false, false
+		}
+		number := first
+		if commuted {
+			if !x86ResultNamedPredicateInstruction(ins) {
+				return false, true
+			}
+			number = last // ADD alone may exchange its pointer and NUM inputs.
 		}
 		effect, recognized, err := x86TypedInstructionByteEffect(ins.Op, ins, arch)
 		if !recognized || err != nil || effect.dynamicMemory ||
-			!x86ResultRead(first, word, state, owned, arch) {
+			!x86ResultRead(number, word, state, owned, arch) {
 			return false, true
+		}
+		if commuted {
+			writePointer() // Revoke the old NUM/canonical result, not the source role.
 		}
 		state.flags = state.flags&^effect.flagsKilled | effect.flagsDefined
 		return true, true
