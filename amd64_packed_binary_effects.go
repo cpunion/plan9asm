@@ -40,6 +40,12 @@ func x86PackedBinaryByteEffect(op Op, ins Instr, arch string) (x86TypedByteEffec
 	if effect, known, err := x86TypedLegacyLogicalByteEffect(op, ins, arch); known {
 		return effect, true, err
 	}
+	if effect, known, err := x86TypedByteShuffleEffect(op, ins, arch); known {
+		return effect, true, err
+	}
+	if effect, known, err := x86TypedImmediateShuffleByteEffect(op, ins, arch); known {
+		return effect, true, err
+	}
 	form, known, err := x86PackedBinaryEffectProperties(op, ins, arch)
 	if !known || err != nil || !form.legacy {
 		return x86TypedByteEffect{}, known && (err != nil || form.legacy), err

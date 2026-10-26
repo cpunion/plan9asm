@@ -32,6 +32,28 @@ type x86ImmediateShuffleForm struct {
 	broadcast, zeroing        bool
 }
 
+// Immediate shuffles read one complete source, including the word half left
+// in place. Unlike PSHUFB, the old destination is never an input unless it
+// aliases that source. Memory extent/alignment remain separate obligations.
+func x86TypedImmediateShuffleByteEffect(op Op, ins Instr, arch string) (x86TypedByteEffect, bool, error) {
+	local := ins
+	local.Op = op
+	form, known, err := x86ImmediateShuffleProperties(local, arch)
+	if known && ins.Op != "" && !strings.EqualFold(string(ins.Op), string(op)) {
+		return x86TypedByteEffect{}, true, fmt.Errorf("immediate-shuffle dispatch/source mismatch: %s/%s", op, ins.Op)
+	}
+	if !known || err != nil || !form.spec.legacy || form.spec.mmx {
+		return x86TypedByteEffect{}, known && (err != nil || form.spec.legacy && !form.spec.mmx), err
+	}
+	return x86TypedByteEffect{
+		vector: x86TypedVectorEffect{x86TypedVectorUpperPreserve, 16},
+		operands: []x86TypedByteOperand{
+			{index: 1, operand: form.source, width: int64(form.byteWidth), read: true},
+			{index: form.destination, operand: ins.Args[form.destination], width: int64(form.byteWidth), write: true},
+		},
+	}, true, nil
+}
+
 // This supplies encoding, native access extent and byte selectors, not source
 // values, original pointer/alignment backing or permission to borrow an ABI.
 func x86ImmediateShuffleProperties(ins Instr, arch string) (x86ImmediateShuffleForm, bool, error) {

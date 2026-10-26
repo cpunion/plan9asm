@@ -170,14 +170,19 @@ func TestGoAMD64FixedLocalLogicalBoundaries(t *testing.T) {
 }
 
 func TestGoAMD64FixedLocalLogicalObjects(t *testing.T) {
+	assembly, declarations, count := fixedLocalLogicalProgram(t)
+	if count != 42 {
+		t.Fatal("complete-source logical denominator changed", count)
+	}
+	fixedLocalCompleteVectorObjects(t, assembly, declarations, count)
+}
+
+func fixedLocalCompleteVectorObjects(t *testing.T, assembly, declarations string, count int) {
+	t.Helper()
 	goAMD64FramePrepareOwnedToolCache(t)
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc required")
-	}
-	assembly, declarations, count := fixedLocalLogicalProgram(t)
-	if count != 42 {
-		t.Fatal("complete-source logical denominator changed", count)
 	}
 	for _, target := range []struct{ name, triple string }{
 		{"linux/amd64", "x86_64-unknown-linux-gnu"},
@@ -189,15 +194,15 @@ func TestGoAMD64FixedLocalLogicalObjects(t *testing.T) {
 			fixedLocalFreshAPIs(t, pkg, request, options, []string{"Translate", "Module", "GoModule"},
 				func(t *testing.T, ir string, err error) {
 					if err != nil {
-						t.Fatal("ordinary logical/private-frame source failed complete translation", err)
+						t.Fatal("ordinary vector/private-frame source failed complete translation", err)
 					}
 					var names []string
 					for index := 0; index < count; index++ {
 						names = append(names, fmt.Sprintf("%s.Value%d", pkg.Path, index))
 					}
 					x86CompactExpandRequireAllDefinitions(t, ir, names)
-					compileLLVMToObject(t, llc, target.triple, "private-logical.ll", "private-logical.o", ir)
-					compileLLVMToObject(t, llc, target.triple, "private-logical-opt.ll", "private-logical-opt.o", x86MulDivRoundOptimize(t, ir))
+					compileLLVMToObject(t, llc, target.triple, "private-vector.ll", "private-vector.o", ir)
+					compileLLVMToObject(t, llc, target.triple, "private-vector-opt.ll", "private-vector-opt.o", x86MulDivRoundOptimize(t, ir))
 				})
 		})
 	}

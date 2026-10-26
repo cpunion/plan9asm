@@ -59,8 +59,5 @@ func x86TypedByteShuffleEffect(op Op, ins Instr, arch string) (x86TypedByteEffec
 	if !known || err != nil || !form.legacy {
 		return x86TypedByteEffect{}, known && (err != nil || form.legacy), err
 	}
-	return x86TypedByteEffect{operands: []x86TypedByteOperand{
-		{index: form.first, operand: ins.Args[form.first], width: 16, read: true},
-		{index: form.destination, operand: ins.Args[form.destination], width: 16, read: true, write: true},
-	}}, true, nil
+	return x86PackedBinaryDependencyEffect(ins, form, ins.Args[form.first]), true, nil
 }
