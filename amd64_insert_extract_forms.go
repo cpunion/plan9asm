@@ -46,6 +46,17 @@ type x86InsertExtractForm struct {
 	zeroing, memoryWrite                    bool
 }
 
+// Block transfers read the inserted/selected chunk and, for insertion, only
+// the retained base bytes. This describes numerical inputs, not memory extent.
+func (form x86InsertExtractForm) blockInputBytes() (source, base uint64) {
+	chunk := x86CallerVectorByteMask(int64(form.spec.chunk))
+	selected := chunk << uint(form.offset)
+	if form.spec.insert {
+		return chunk, x86CallerVectorByteMask(int64(form.width)) &^ selected
+	}
+	return selected, 0
+}
+
 func x86InsertExtractProperties(ins Instr, goarch string) (x86InsertExtractForm, bool, error) {
 	op, suffix, dotted := strings.Cut(strings.ToUpper(string(ins.Op)), ".")
 	spec, recognized := x86InsertExtractSpecs[Op(op)]

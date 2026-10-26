@@ -57,11 +57,13 @@ func x86ResultBlockTransferWithNativeMemory(ins Instr, form x86InsertExtractForm
 		}
 		source = state.vectorBytes(index)
 	}
-	known := source >> uint(form.offset) & chunk
+	inputBytes, baseBytes := form.blockInputBytes()
+	known := source & inputBytes
 	if form.spec.insert {
 		index, _ := amd64VectorRegisterIndex(ins.Args[form.base].Reg, form.width)
-		mask := chunk << uint(form.offset)
-		known = state.vectorBytes(index)&^mask | (source&chunk)<<uint(form.offset)
+		known = state.vectorBytes(index)&baseBytes | known<<uint(form.offset)
+	} else {
+		known >>= uint(form.offset)
 	}
 	destination := ins.Args[form.destination]
 	if form.memoryWrite {

@@ -44,6 +44,18 @@ func x86UnmaskedVEXByteEffect(op Op, ins Instr, arch string) (x86TypedByteEffect
 	}
 	local := ins
 	local.Op = op
+	if form, known, err := x86InsertExtractProperties(local, arch); known && !form.spec.scalar {
+		if ins.Op != "" && !strings.EqualFold(string(ins.Op), string(op)) {
+			return x86TypedByteEffect{}, true, goAMD64FrameContext("block-transfer dispatch/source mismatch: %s/%s", op, ins.Op)
+		}
+		if err != nil {
+			return x86TypedByteEffect{}, true, err
+		}
+		if !form.spec.vex || !x86LowVEXVectorOperands(ins) {
+			return x86TypedByteEffect{}, true, goAMD64FrameContext("block-transfer effect requires its separate non-VEX consumer: %s", ins.Op)
+		}
+		return x86BlockTransferDependencyEffect(ins, form), true, nil
+	}
 	if form, known, err := x86ImmediateShuffleProperties(local, arch); known {
 		if ins.Op != "" && !strings.EqualFold(string(ins.Op), string(op)) {
 			return x86TypedByteEffect{}, true, goAMD64FrameContext("immediate-shuffle dispatch/source mismatch: %s/%s", op, ins.Op)
@@ -77,6 +89,32 @@ func x86UnmaskedVEXByteEffect(op Op, ins Instr, arch string) (x86TypedByteEffect
 		return x86UnmaskedVEXShiftEffect(ins, form, err)
 	}
 	return x86TypedByteEffect{}, false, nil
+}
+
+func x86BlockTransferDependencyEffect(ins Instr, form x86InsertExtractForm) x86TypedByteEffect {
+	inputBytes, baseBytes := form.blockInputBytes()
+	width := form.width
+	if form.spec.insert {
+		width = form.spec.chunk
+	}
+	source := x86TypedByteOperand{index: form.source, operand: ins.Args[form.source], width: int64(width), read: true}
+	if source.operand.Kind == OpReg {
+		source.requiredBytes = inputBytes
+	}
+	effect := x86TypedByteEffect{
+		vector:   x86TypedVectorEffect{x86TypedVectorUpperZero, 1},
+		operands: make([]x86TypedByteOperand, 0, 3),
+	}
+	effect.operands = append(effect.operands, source)
+	if form.spec.insert {
+		effect.operands = append(effect.operands, x86TypedByteOperand{
+			index: form.base, operand: ins.Args[form.base], width: int64(form.width), read: true, requiredBytes: baseBytes,
+		})
+	}
+	effect.operands = append(effect.operands, x86TypedByteOperand{
+		index: form.destination, operand: ins.Args[form.destination], width: int64(form.output), write: true,
+	})
+	return effect
 }
 
 // VEX has only the low physical X/Y bank. This check does not infer an
