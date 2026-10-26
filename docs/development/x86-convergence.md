@@ -150,7 +150,16 @@ minimum Go 1.20.14 both pass the following Linux/amd64 LLVM22 object scopes:
 | Signed/unsigned saturating pack | 36 | 114 |
 | Per-lane logical/arithmetic shifts | 64 | 236 |
 | Conditional sign, B/W/D | 9 | 18 |
-| Total | 730 | 2,402 |
+| Byte-indexed shuffle | 9 | 24 |
+| Local total | 739 | 2,426 |
+
+Published `55831306c` has the first 730 rows / 2,402 witnesses. The nine
+PSHUFB/VPSHUFB rows are qualified at isolated `9c2923dd9` and integrated in
+local `d56ba5926`, pending combined qualification and publication. The shared
+encoder consumes the selected legacy two-byte opcode payload; the existing
+translator needs no additional instruction rule. Both endpoint SDKs pass all
+nine initialized object owners and the complete rule reader: 38 roots / 432
+children, zero failures/skips.
 
 Two PADDD alias witnesses are separate from the canonical counts. Min/max
 includes 48 non-Q, unmasked, narrow EVEX forms; low-register VEX objects cannot

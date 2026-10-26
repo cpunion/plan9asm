@@ -6,6 +6,16 @@ This page identifies current evidence and remaining work, not a completion
 certificate. Read [architecture](architecture.md),
 [x86 convergence](x86-convergence.md) and [validation](validation.md).
 
+Current publication: `55831306c`, with
+[full CI still running](https://github.com/xgo-dev/plan9asm/actions/runs/40402863391).
+Do not substitute the previous green run for this head. LLGo PR2694 now pins
+that exact fork version at `85759e6ff`; its new CI is also incomplete.
+The README's two moved library links are repaired in local LLGo `dfb322859`
+(102 links checked, no errors). A separate Fedora installer failure reached
+all shell assertions before a kernel `D`/`flush_` wait; identical source,
+image and fish version passed earlier. Preserve the failure and rerun after
+the complete round instead of weakening shell tests.
+
 ## Publication and CI
 
 PR40 remains draft. The last fully qualified publication, `5406c2756`,
@@ -88,14 +98,20 @@ independent test inventory across families. Its Go/module sources are identical
 to tested `d06b138dd`: Go1.27.3 and Go1.20.14 each pass 30 roots / 394 children,
 with zero failures/skips. The retained first failed test-helper attempt is not
 a passing receipt. This batch removes 126 net lines while adding no translator
-rule; current full CI still tests published `5406c2756`.
+rule. It is in the currently running `55831306c` publication.
 
 Local `2c2c98295` additionally joins all six PSIGN names through the same driver.
 Its source matches tested `d543fb22a` outside documentation. Go1.27.3 and
 Go1.20.14 each pass the complete rule reader, new public object owner and listing
 identity negative: 25 roots / 88 children, zero failures/skips. All earlier
 UNPACK and shift byte anchors remain; sharing their assertion helper keeps this
-six-file batch to 17 net lines. These local additions need a new complete CI.
+six-file batch to 17 net lines. These additions are in published `55831306c`;
+its complete CI has not finished.
+
+The next local candidate `d56ba5926` adds the bounded conditional-pointer
+analysis and its native execution owner, plus the official PSHUFB join.
+These changes have independent branch qualification below; integration into
+this candidate still needs current/minimum-SDK checks and fresh complete CI.
 
 ## Current functional evidence
 
@@ -106,6 +122,7 @@ six-file batch to 17 net lines. These local additions need a new complete CI.
 | Private CALL local regression at `f358a4918` | 62 roots / 1,328 children, zero skips | Objects, source/return identity, negative controls and shared graph regressions. |
 | Complete Linux/amd64 standard-library objects | `fff470ab9`: 37/55; `fc4daae9a`: **38/55** | All files attempted; 17 failures, zero N/A. AES is the only newly passing file; all old passes remain. |
 | Current/minimum official-row join at `1927d1cae` | Each 16 roots / 240 children, zero skips | Original Go encoding plus three-API LLVM22 objects; runtime remains separate. |
+| Conditional pointers at `6d0f167bc` | [Native Linux run](https://github.com/cpunion/plan9asm/actions/runs/40407417050): 23 complete programs, 736 observations per pipeline, six LLVM pipelines, zero test skips | Original Go versus three APIs at O0/O2; return values and both 128-byte buffers compared. This does not qualify the complete SHA1 file. |
 | Current public integrated regression at `48f14c4cf` | 387 roots / 22,198 children, zero skips | Historical qualification of that source, not later edits. |
 | CI policy at `fff470ab9` | Node22.23.4: 573 tests, zero skips; actionlint passed | Later changes require appropriate checks. |
 
@@ -136,11 +153,17 @@ actual original Go bytes must match before any public API/object result counts.
 | Signed/unsigned saturating pack | 36 | 114 |
 | Per-lane logical/arithmetic shifts | 64 | 236 |
 | Conditional sign, B/W/D | 9 | 18 |
-| Total | **730** | **2,402** |
+| Byte-indexed shuffle (next local candidate) | 9 | 24 |
+| Local total | **739** | **2,426** |
 
 Two PADDD alias witnesses are separate. MMX rows retain their independent
 region/EMMS owners. These counts do not represent every official x86 row,
 386 mode applicability, raw decoding or native execution.
+Published `55831306c` retains 730 rows / 2,402 witnesses; the nine shuffle rows
+await the next publication. Both SDKs pass all nine initialized object owners
+and the complete rule reader at isolated `9c2923dd9`: 38 roots / 432 children,
+zero failures/skips. The shared legacy encoder now consumes the original
+two-byte opcode payload; no translator rule or mnemonic opcode table was added.
 
 The logical family reuses the same grammar, original-byte verifier and
 32-function object batches. Its encoding/scope implementation grows by 19 net
@@ -168,8 +191,8 @@ translator or grammar rules. Its eight names retain all 36 original non-MMX
 rows, including overlapping VEX/EVEX encodings and 18 dword broadcast forms.
 Current/minimum SDKs each pass 27 roots / 353 children without skips, including
 all earlier initialized joins and the complete rule reader. Three MMX rows
-retain their separate region owner. This tested local commit is queued for the
-next batch; it is not part of the completed published CI.
+retain their separate region owner. This change is in `55831306c`, whose
+complete CI remains pending.
 
 Local `25555b5f0` also reuses the shared physical operand adapter for the complete
 pack family, removing 20 production lines and one allocation per parsed form.
@@ -197,7 +220,8 @@ source verification to hide subprocess costs.
 1. Watch the next published batch's complete CI and fix any new failure. Retain
    draft until current-head CI, coverage and external review pass.
 2. Restore the three ordinary ABI0 crypto failures: SHA1's conditional choice
-   between readonly DATA and an incoming pointer; P256's private helper graph
+   between readonly DATA and an incoming pointer, including the original Go
+   caller's length and trailing-storage contract; P256's private helper graph
    including actual nonzero helper frames; chacha20poly1305's helpers accessing
    a caller-owned aligned private frame. Each needs a shared rule-class repair,
    complete original sources and independent execution tests.
@@ -216,9 +240,12 @@ source verification to hide subprocess costs.
 6. Keep the 271 ARM64 decoder forms and remaining WASM control/SIMD work explicit.
    Native AVX512 acceptance awaits capable hardware; portable/object passes
    cannot close that item.
-7. Update the exact translator pin in [LLGo PR2694](https://github.com/xgo-dev/llgo/pull/2694)
-   after publishing a qualified revision. Its separate draft head `2e820f5c2`
-   had 131 successful checks and two release skips. Complete runtime-entry
+7. Qualify the updated translator pin in [LLGo PR2694](https://github.com/xgo-dev/llgo/pull/2694).
+   Head `85759e6ff` pins `55831306c`; local adapter tests pass 41 roots / 131
+   children, with 21 build roots / 23 children also passing. These are adapter
+   and cross-object checks, not native AMD64 execution on this development host.
+   Previous head `2e820f5c2` had 131 successful checks and two release skips.
+   Complete runtime-entry
    integration continues in [issue47](https://github.com/xgo-dev/plan9asm/issues/47).
 
 External discovery, ledgers and compatibility batches belong to
