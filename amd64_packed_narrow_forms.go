@@ -1,9 +1,6 @@
 package plan9asm
 
-import (
-	"fmt"
-	"strings"
-)
+import "strings"
 
 type x86PackedNarrowSpec struct {
 	x86PackedBinarySpec
@@ -66,34 +63,17 @@ func x86PackedNarrowProperties(ins Instr, goarch string) (x86PackedNarrowForm, b
 	if !known {
 		return x86PackedNarrowForm{}, false, nil
 	}
-	local := ins
-	local.Args = append([]Operand(nil), ins.Args...)
-	if spec.encoding == x86PackedLogicalLegacyInteger {
-		var err error
-		local, err = x86LegacyMMXReadInstruction(local, goarch)
-		if err != nil {
-			return x86PackedNarrowForm{}, true, err
+	binary, source, started, err := x86PackedBinaryPhysicalSource(ins.Op, ins, goarch, spec.x86PackedBinarySpec, "packed narrow")
+	if !started {
+		return x86PackedNarrowForm{}, true, err
+	}
+	if err != nil && source.Kind != OpInvalid {
+		// Keep the prior mode32 Context precedence when both a register and
+		// physical address are invalid. Rejected forms never expose a source.
+		if modeErr := x86Mode32VectorRegisterContext(ins, goarch); modeErr != nil {
+			err = modeErr
 		}
+		source = Operand{}
 	}
-	grammarArch := goarch
-	if goarch == "386" && ins.x86Encoded && spec.encoding == x86PackedLogicalVEXOrEVEX {
-		// Validated physical bytes may have masks which Go's mode32 named
-		// frontend rejects. The private marker is not JSON-exportable.
-		grammarArch = "amd64"
-	}
-	form, err := x86PackedBinaryProperties(local, grammarArch, spec.x86PackedBinarySpec)
-	if err == nil {
-		err = x86Mode32VectorRegisterContext(ins, goarch)
-	}
-	if err == nil && grammarArch != goarch && form.memory >= 0 && !x86PackedShiftMemoryValid(local.Args[form.memory], goarch) {
-		err = fmt.Errorf("386 %s physical source has an unbound address", ins.Op)
-	}
-	if err == nil && form.memory >= 0 && (ins.x86AddressBits != 0 || ins.x86UnboundAddressOverride) {
-		err = fmt.Errorf("%w: packed narrow has no bound address-size override", ErrProbeNeedsContext)
-	}
-	result := x86PackedNarrowForm{x86PackedBinaryForm: form, spec: spec}
-	if err == nil {
-		result.source = local.Args[form.first]
-	}
-	return result, true, err
+	return x86PackedNarrowForm{binary, spec, source}, true, err
 }

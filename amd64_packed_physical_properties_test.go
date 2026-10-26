@@ -187,3 +187,83 @@ func BenchmarkX86PackedPhysicalProperties(b *testing.B) {
 		}
 	}
 }
+
+const x86PackedNarrowPhysicalNames = "PACKSSLW PACKSSWB PACKUSDW PACKUSWB VPACKSSDW VPACKSSWB VPACKUSDW VPACKUSWB"
+
+func TestX86PackedNarrowPhysicalRejectionContract(t *testing.T) {
+	for _, row := range []struct {
+		instruction string
+		context     bool
+		width       int
+	}{
+		{"VPACKSSDW (R8),X1,X8", true, 16},
+		{"VPACKSSDW (AX),X1,X8", true, 16},
+		{"VPACKSSDW (R8),X1,X2", false, 16},
+		{"PACKSSWB X0,M1", false, 0},
+	} {
+		t.Run(row.instruction, func(t *testing.T) {
+			file, err := Parse(ArchAMD64, "TEXT f(SB),4,$0-0\n"+row.instruction+"\nRET\n")
+			if err != nil {
+				t.Fatal(err)
+			}
+			ins := file.Funcs[0].Instrs[1]
+			ins.x86Encoded = true
+			before := append([]Operand(nil), ins.Args...)
+			form, known, err := x86PackedNarrowProperties(ins, "386")
+			if !known || err == nil || errors.Is(err, ErrProbeNeedsContext) != row.context ||
+				form.byteWidth != row.width || !reflect.DeepEqual(form.source, Operand{}) {
+				t.Fatal("rejected physical form changed its classification or retained a source", form, known, err)
+			}
+			if row.width == 0 && !reflect.DeepEqual(form, x86PackedNarrowForm{}) {
+				t.Fatal("early MMX failure retained a partial form")
+			}
+			if !reflect.DeepEqual(ins.Args, before) {
+				t.Fatal("rejected physical source was modified")
+			}
+		})
+	}
+}
+
+func TestX86PackedNarrowPropertiesAvoidRedundantCopies(t *testing.T) {
+	for _, name := range strings.Fields(x86PackedNarrowPhysicalNames) {
+		t.Run(name, func(t *testing.T) {
+			for _, memory := range []bool{false, true} {
+				ins := x86PackedPhysicalTestInstruction(name, memory)
+				_, known, err := x86PackedNarrowProperties(ins, "amd64")
+				if !known || err != nil {
+					t.Fatal("allocation fixture must be accepted", err)
+				}
+				allocations := testing.AllocsPerRun(100, func() {
+					_, known, err = x86PackedNarrowProperties(ins, "amd64")
+				})
+				limit := 0.0
+				if !strings.HasPrefix(name, "V") && name != "PACKUSDW" {
+					limit = 1 // Existing MMX bank adapter owns its projection.
+				}
+				if !known || err != nil || allocations > limit {
+					t.Errorf("memory=%v: %.0f allocations, want at most %.0f; known=%v err=%v", memory, allocations, limit, known, err)
+				}
+			}
+		})
+	}
+}
+
+func BenchmarkX86PackedNarrowProperties(b *testing.B) {
+	for _, name := range strings.Fields(x86PackedNarrowPhysicalNames) {
+		for _, memory := range []bool{false, true} {
+			kind := "register"
+			if memory {
+				kind = "memory"
+			}
+			ins := x86PackedPhysicalTestInstruction(name, memory)
+			b.Run(name+"/"+kind, func(b *testing.B) {
+				b.ReportAllocs()
+				for n := 0; n < b.N; n++ {
+					if _, known, err := x86PackedNarrowProperties(ins, "amd64"); !known || err != nil {
+						b.Fatal("allocation benchmark rejected its input", err)
+					}
+				}
+			})
+		}
+	}
+}
