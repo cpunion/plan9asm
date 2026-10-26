@@ -155,8 +155,18 @@ numerical definedness across loops while retaining exact address identities.
 All eight original SP residues and the independent final replay remain checked;
 provisional loop accesses are published only after convergence. Numerical LEA
 and sized NOP addresses are not mislabeled as actual memory accesses. Ordinary
-input-pointer memory and private scratch still need a separate composition
-repair; a successful numerical-loop test does not qualify that role.
+typed-input base/displacement reads now compose with private scratch through
+the existing exact-width faulting scalar path. This grants neither a private
+extent for the input nor pointer arithmetic, indexed address or memory-write
+permission. Full-source and native tests remain separate gates.
+
+Fixed-local result consumers now share a call-local independently parsed
+original file and complete ordered feature index. Public module entry/exit
+still perform live source verification; standalone internal consumers retain
+their original guards. This reduces repeated source/tool work without caching
+mutable verification or removing per-function proof replay. The measured
+one/four-function API fixtures keep exactly two verification rounds; complete
+standard-library translation has not yet shown a speedup.
 
 The new result-mask helper emits five vector IR instructions instead of a
 lane-wise sequence. This is not a five-machine-instruction or constant-runtime

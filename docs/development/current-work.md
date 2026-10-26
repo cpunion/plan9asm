@@ -73,12 +73,36 @@ dispatch. The 23,168-row before/after feature outputs match; the two targeted
 inference microkernels improve about 81–84%, with zero allocations unchanged.
 That narrow result does not establish end-to-end translation improvement.
 
-Next: finish automatic entry-layout, ordinary typed-pointer/private-scratch and
-readonly DATA composition, then rerun complete sources. Keep source-written
-CALL/TLS and private helpers distinct from assembler-generated entry machinery.
-Complete the GP execution oracle and remaining initialized official family joins,
-then remove repeated parsing and measure whole-source/generated-program cost.
-Do not add another per-proof opcode whitelist or generalize to another arch.
+The next integrated batch ends at `4cd3b05bb`:
+
+| Scope | Evidence and remaining limit |
+|---|---|
+| Automatic split entries (`a69fd4b7b`) | Exact generated TLS/stack-growth machinery is separate from source-written CALL/TLS. Three OSes, two frame sizes and two source flags retain actual Go objects; split entries combined with DATA still need work. |
+| Native-input/private-frame composition (`ed6a9fe56`) | Typed input addresses retain faulting reads alongside private scratch. Logical arithmetic and IMUL reuse the existing scalar memory path; this does not authorize pointer arithmetic or arbitrary memory writes. |
+| Packed byte boundaries (`b8dd81caa`) | Five existing raw families share physical-memory decoding: 2,067 actual Go forms, complete SHA512 880-PC and math 101-PC inventories. These are boundary observations, not translation or execution certificates. |
+| SDK frame/DATA (`98033e8e8`) | Complete original DATA and source-PC observations compose under the same owner. SDK metadata resolves only against the captured root and original inputs. The focused final receipt passes 4 roots / 12 children without skips. |
+| Call-local source projection (`4cd3b05bb`) | Three APIs retain exactly two live verification rounds for both one and four functions. Independent source parsing and ordered feature inference run once per call; per-function access/CFG replay and final revocation remain. |
+
+The integrated Go 1.27.3 / LLVM 22 receipt at `4cd3b05bb` passes 6 roots / 27
+children, with no failures or skips, including all 32 GP kernels through three
+APIs and O0/O2 objects. That object root takes 8.5 seconds versus 58.05 in the
+earlier local receipt. This is a single observation, not a repeated benchmark
+or a native execution certificate. The separate fork-only Linux native probe
+tests values, FLAGS and fault behavior against original Go; its results are
+not yet qualified here. Its diagnostic workflow must not enter PR40.
+
+Complete-source results have **not** improved: Go 1.27.2 / LLVM 22 still reports
+33/55 passes and 22 failures, no N/A/unattempted. The frozen before/after source
+projection observations take 40s at `98033e8e8` and 44s at `4cd3b05bb`; do not
+claim an end-to-end speedup. SHA512 now reaches an exact parsed-source mismatch
+at the CLI handoff; AES/GCM and SHA256 still need split+DATA composition.
+
+Next: repair the complete CLI source representation and split+DATA handoff,
+then rerun ordinary crypto sources before implementing any further address
+roles. Complete the GP native oracle, minimum-SDK integrated checks and remaining
+initialized official-family joins. Keep source-written CALL/TLS and private
+helpers distinct from assembler-generated entry machinery. Do not add another
+per-proof opcode whitelist or generalize to another arch.
 The CI chronology below is historical, not the current local batch's status.
 
 ## Scope and authority
