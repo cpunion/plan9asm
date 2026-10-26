@@ -117,6 +117,15 @@ func TestOrdinaryEnvironmentActualCommandPathIdentity(t *testing.T) {
 }
 
 func TestOrdinaryEnvironmentCommandPathRejectionPreservesInputs(t *testing.T) {
+	checkCommandPathRejectionPreservesInputs(t, OrdinaryEnvironment)
+}
+
+func TestFeatureEnvironmentCommandPathRejectionPreservesInputs(t *testing.T) {
+	checkCommandPathRejectionPreservesInputs(t, FeatureEnvironment)
+}
+
+func checkCommandPathRejectionPreservesInputs(t *testing.T, prepare func(string, string, []string) ([]string, error)) {
+	t.Helper()
 	for _, key := range []string{"GOROOT", "GOCACHE", "GOMODCACHE", "GOPATH", "TMPDIR", "GOTMPDIR"} {
 		t.Run(key, func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "original-not-directory")
@@ -125,7 +134,7 @@ func TestOrdinaryEnvironmentCommandPathRejectionPreservesInputs(t *testing.T) {
 				t.Fatal(err)
 			}
 			input := append(os.Environ(), "GOENV=off", "GOWORK=off", "GOTOOLCHAIN=local", key+"="+path)
-			if output, err := OrdinaryEnvironment("linux", "amd64", input); err == nil || len(output) != 0 {
+			if output, err := prepare("linux", "amd64", input); err == nil || len(output) != 0 {
 				t.Fatalf("non-directory %s supplied a command/source profile: %v", key, err)
 			}
 			if data, err := os.ReadFile(path); err != nil || string(data) != original {
@@ -137,7 +146,7 @@ func TestOrdinaryEnvironmentCommandPathRejectionPreservesInputs(t *testing.T) {
 		t.Run("missing-"+key, func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "missing")
 			input := append(os.Environ(), "GOENV=off", "GOWORK=off", "GOTOOLCHAIN=local", key+"="+path)
-			if output, err := OrdinaryEnvironment("linux", "amd64", input); err == nil || len(output) != 0 {
+			if output, err := prepare("linux", "amd64", input); err == nil || len(output) != 0 {
 				t.Fatalf("missing selected %s was silently substituted: %v", key, err)
 			}
 			if _, err := os.Stat(path); !os.IsNotExist(err) {

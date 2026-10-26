@@ -15,11 +15,21 @@ import (
 	"github.com/xgo-dev/plan9asm/internal/sourcepath"
 )
 
+// FeatureEnvironment prepares a compiler consumer's command directories while
+// retaining the already observed Go tool invocation.
+func FeatureEnvironment(goos, goarch string, input []string) ([]string, error) {
+	return commandEnvironment(goos, goarch, input, true)
+}
+
 // Resolve the ordinary load environment before packages.Load. Its later source
 // observers receive this exact environment, never defaults reconstructed from
 // the process after selection. Explicit nonordinary settings remain visible
 // and cannot acquire an ordinary source proof.
 func OrdinaryEnvironment(goos, goarch string, input []string) ([]string, error) {
+	return commandEnvironment(goos, goarch, input, false)
+}
+
+func commandEnvironment(goos, goarch string, input []string, retainGOROOT bool) ([]string, error) {
 	values := make(map[string]string)
 	for _, item := range input {
 		key, value, ok := strings.Cut(item, "=")
@@ -114,7 +124,14 @@ func OrdinaryEnvironment(goos, goarch string, input []string) ([]string, error) 
 				return nil, fmt.Errorf("package-load %s is not its actual directory", key)
 			}
 		}
-		values[key] = strings.Join(paths, string(filepath.ListSeparator))
+		if key == "GOROOT" && retainGOROOT {
+			// The physical directory was validated above. Changing this
+			// command spelling can rebuild builtin Go tools with different
+			// bytes/routes, invalidating an already captured feature profile.
+			values[key] = actual[key]
+		} else {
+			values[key] = strings.Join(paths, string(filepath.ListSeparator))
+		}
 	}
 	for _, key := range []string{"TMPDIR", "GOTMPDIR"} {
 		if values[key] == "" {
