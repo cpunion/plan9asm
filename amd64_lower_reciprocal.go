@@ -127,7 +127,7 @@ func (c *amd64Ctx) lowerPackedReciprocal14(baseOp string, spec amd64Reciprocal14
 	fmt.Fprintf(c.b, "  %%%s = call %s @%s(%s %s, %s %s, i%d %s)\n", result, llvmType, intrinsic, llvmType, sourceValue, llvmType, passthrough, maskBits, mask)
 	out := c.newTmp()
 	fmt.Fprintf(c.b, "  %%%s = bitcast %s %%%s to <%d x i8>\n", out, llvmType, result, byteWidth)
-	return true, false, c.storeVectorBytes(destination.Reg, byteWidth, "%"+out)
+	return true, false, c.storePackedMoveOperand(destination, byteWidth, "%"+out)
 }
 
 func (c *amd64Ctx) lowerScalarReciprocal14(baseOp string, spec amd64Reciprocal14Spec, properties amd64BinaryFloatingSuffix, ins Instr) (bool, bool, error) {
@@ -194,7 +194,7 @@ func (c *amd64Ctx) lowerScalarReciprocal14(baseOp string, spec amd64Reciprocal14
 	fmt.Fprintf(c.b, "  %%%s = call %s @%s(%s %s, %s %%%s, %s %s, i8 %s)\n", result, llvmType, intrinsic, llvmType, passthrough, llvmType, sourceValue, llvmType, merge, mask)
 	out := c.newTmp()
 	fmt.Fprintf(c.b, "  %%%s = bitcast %s %%%s to <16 x i8>\n", out, llvmType, result)
-	return true, false, c.storeVectorBytes(destination.Reg, 16, "%"+out)
+	return true, false, c.storePackedMoveOperand(destination, 16, "%"+out)
 }
 
 func (c *amd64Ctx) truncateReciprocal14Mask(mask string, bits int) string {
@@ -272,7 +272,10 @@ func (c *amd64Ctx) lowerReciprocalEstimate(rawOp Op, ins Instr) (ok bool, termin
 	fmt.Fprintf(c.b, "  %%%s = call %s @%s(%s %s)\n", result, vectorType, intrinsic, vectorType, value)
 	bytesValue := c.newTmp()
 	fmt.Fprintf(c.b, "  %%%s = bitcast %s %%%s to <%d x i8>\n", bytesValue, vectorType, result, byteWidth)
-	return true, false, c.storeVectorBytes(destination.Reg, byteWidth, "%"+bytesValue)
+	if legacy {
+		return true, false, c.storeX(destination.Reg, "%"+bytesValue)
+	}
+	return true, false, c.storePackedMoveOperand(destination, byteWidth, "%"+bytesValue)
 }
 
 func (c *amd64Ctx) lowerScalarReciprocalEstimate(base string, ins Instr) (bool, bool, error) {

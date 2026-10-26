@@ -157,7 +157,7 @@ func (c *amd64Ctx) storeSingleSourceNarrowRegister(destination Reg, destinationB
 	}
 	out := c.newTmp()
 	fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i%d> %s to <%d x i8>\n", out, physicalLanes, outputBits, result, destinationBytes)
-	return c.storeVectorBytes(destination, destinationBytes, "%"+out)
+	return c.storePackedMoveOperand(Operand{Kind: OpReg, Reg: destination}, destinationBytes, "%"+out)
 }
 
 func (c *amd64Ctx) storeSingleSourceNarrowMemory(destination Operand, outputBytes, lanes, outputBits int, narrowed, mask string, zeroing bool) error {

@@ -90,7 +90,7 @@ func (c *amd64Ctx) lowerVectorAlternatingFloatingAddSubtract(baseOp string, lane
 	result := c.emitAlternatingFloatingAddSubtract(byteWidth, laneBits, first, second)
 	out := c.newTmp()
 	fmt.Fprintf(c.b, "  %%%s = bitcast %s %s to <%d x i8>\n", out, amd64FMA3LLVMType(byteWidth*8/laneBits, laneBits), result, byteWidth)
-	return true, false, c.storeVectorBytes(ins.Args[2].Reg, byteWidth, "%"+out)
+	return true, false, c.storePackedMoveOperand(ins.Args[2], byteWidth, "%"+out)
 }
 
 func (c *amd64Ctx) emitAlternatingFloatingAddSubtract(byteWidth, laneBits int, first, second string) string {

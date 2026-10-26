@@ -81,7 +81,7 @@ func (c *amd64Ctx) lowerPackedScaledRound(spec amd64ScaledRoundSpec, properties 
 	}
 	out := c.newTmp()
 	fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i%d> %s to <%d x i8>\n", out, lanes, spec.laneBits, result, byteWidth)
-	return true, false, c.storeVectorBytes(destination.Reg, byteWidth, "%"+out)
+	return true, false, c.storePackedMoveOperand(destination, byteWidth, "%"+out)
 }
 
 func (c *amd64Ctx) lowerScalarScaledRound(spec amd64ScaledRoundSpec, properties amd64BinaryFloatingSuffix, source, passthrough, destination Operand, mask, daz, roundingMode string, immediate uint8) (bool, bool, error) {
@@ -99,7 +99,7 @@ func (c *amd64Ctx) lowerScalarScaledRound(spec amd64ScaledRoundSpec, properties 
 		return true, false, err
 	}
 	base := c.bitcastVectorBytesToIntegerLanes(16, 128/spec.laneBits, spec.laneBits, passthroughBytes)
-	return true, false, c.storeVectorScalarRegister(destination.Reg, spec.laneBits, "%"+low, base, mask, properties.zeroing)
+	return true, false, c.storeScalarMoveRegister(destination.Reg, spec.laneBits, "%"+low, base, mask, properties.zeroing)
 }
 
 func (c *amd64Ctx) emitScaledRoundBits(lanes, laneBits int, input, daz, roundingMode string, scale uint8, mode amd64ScaledRoundMode) string {

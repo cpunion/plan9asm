@@ -115,6 +115,9 @@ func (c *amd64Ctx) lowerScalarRound(spec amd64RoundSpec, ins Instr, destination 
 		return true, false, err
 	}
 	base := c.bitcastVectorBytesToIntegerLanes(16, 128/spec.laneBits, spec.laneBits, baseBytes)
+	if spec.vector {
+		return true, false, c.storeScalarMoveRegister(destination.Reg, spec.laneBits, "%"+bits, base, "", false)
+	}
 	return true, false, c.storeVectorScalarRegister(destination.Reg, spec.laneBits, "%"+bits, base, "", false)
 }
 
@@ -138,7 +141,10 @@ func (c *amd64Ctx) lowerPackedRound(spec amd64RoundSpec, source, destination Ope
 	}
 	out := c.newTmp()
 	fmt.Fprintf(c.b, "  %%%s = bitcast %s %s to <%d x i8>\n", out, floatingType, result, byteWidth)
-	return true, false, c.storeVectorBytes(destination.Reg, byteWidth, "%"+out)
+	if spec.vector {
+		return true, false, c.storePackedMoveOperand(destination, byteWidth, "%"+out)
+	}
+	return true, false, c.storeX(destination.Reg, "%"+out)
 }
 
 func (c *amd64Ctx) emitScalarFloatRound(value string, bits int, intrinsic string) string {

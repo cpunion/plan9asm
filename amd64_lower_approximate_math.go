@@ -224,7 +224,7 @@ func (c *amd64Ctx) lowerScalarApproximateMath(spec amd64ApproximateMathSpec, for
 	}
 	bytes := c.newTmp()
 	fmt.Fprintf(c.b, "  %%%s = bitcast %s %%%s to <16 x i8>\n", bytes, typ, result)
-	return true, false, c.storeVectorBytes(form.destination.Reg, 16, "%"+bytes)
+	return true, false, c.storePackedMoveOperand(form.destination, 16, "%"+bytes)
 }
 
 func approximateMathAssembly(spec amd64ApproximateMathSpec, sae, masked, zeroing bool) string {

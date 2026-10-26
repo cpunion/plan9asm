@@ -63,7 +63,7 @@ func (c *amd64Ctx) lowerPackedFixupImmediate(spec amd64FixupImmediateSpec, form 
 	}
 	out := c.newTmp()
 	fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i%d> %s to <%d x i8>\n", out, lanes, spec.laneBits, result, form.byteWidth)
-	return true, false, c.storeVectorBytes(form.destination.Reg, form.byteWidth, "%"+out)
+	return true, false, c.storePackedMoveOperand(form.destination, form.byteWidth, "%"+out)
 }
 
 func (c *amd64Ctx) lowerScalarFixupImmediate(spec amd64FixupImmediateSpec, form amd64UnaryImmediateFloatingForm, daz string) (bool, bool, error) {
@@ -89,7 +89,7 @@ func (c *amd64Ctx) lowerScalarFixupImmediate(spec amd64FixupImmediateSpec, form 
 	result := c.emitFixupImmediateBits(1, spec.laneBits, "%"+classifiedOne, "%"+tableVector, "%"+oldVector, daz)
 	low := c.newTmp()
 	fmt.Fprintf(c.b, "  %%%s = extractelement <1 x i%d> %s, i32 0\n", low, spec.laneBits, result)
-	return true, false, c.storeVectorScalarRegister(form.destination.Reg, spec.laneBits, "%"+low, classifiedVector, form.mask, form.properties.zeroing)
+	return true, false, c.storeScalarMoveRegister(form.destination.Reg, spec.laneBits, "%"+low, classifiedVector, form.mask, form.properties.zeroing)
 }
 
 // emitFixupImmediateBits implements the data-result portion of Intel's

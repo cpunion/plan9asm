@@ -116,7 +116,7 @@ func (c *amd64Ctx) lowerPackedGetExp(spec amd64GetExpSpec, properties amd64Binar
 	}
 	out := c.newTmp()
 	fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i%d> %s to <%d x i8>\n", out, lanes, spec.laneBits, result, byteWidth)
-	return true, false, c.storeVectorBytes(destination.Reg, byteWidth, "%"+out)
+	return true, false, c.storePackedMoveOperand(destination, byteWidth, "%"+out)
 }
 
 func (c *amd64Ctx) lowerScalarGetExp(spec amd64GetExpSpec, properties amd64BinaryFloatingSuffix, source, passthrough, destination Operand, mask, daz string) (bool, bool, error) {
@@ -134,7 +134,7 @@ func (c *amd64Ctx) lowerScalarGetExp(spec amd64GetExpSpec, properties amd64Binar
 		return true, false, err
 	}
 	base := c.bitcastVectorBytesToIntegerLanes(16, 128/spec.laneBits, spec.laneBits, passthroughBytes)
-	return true, false, c.storeVectorScalarRegister(destination.Reg, spec.laneBits, "%"+low, base, mask, properties.zeroing)
+	return true, false, c.storeScalarMoveRegister(destination.Reg, spec.laneBits, "%"+low, base, mask, properties.zeroing)
 }
 
 func (c *amd64Ctx) emitGetExpBits(lanes, laneBits int, input, daz string) string {

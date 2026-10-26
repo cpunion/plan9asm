@@ -286,10 +286,7 @@ func (c *amd64Ctx) lowerPackedBinaryFloating(spec amd64BinaryFloatingSpec, prope
 	}
 	out := c.newTmp()
 	fmt.Fprintf(c.b, "  %%%s = bitcast %s %s to <%d x i8>\n", out, llvmType, computed, byteWidth)
-	if spec.rawOnly {
-		return true, false, c.storePackedMoveOperand(destination, byteWidth, "%"+out)
-	}
-	return true, false, c.storeVectorBytes(destination.Reg, byteWidth, "%"+out)
+	return true, false, c.storePackedMoveOperand(destination, byteWidth, "%"+out)
 }
 
 func (c *amd64Ctx) lowerScalarBinaryFloating(spec amd64BinaryFloatingSpec, properties amd64BinaryFloatingSuffix, ins Instr, destination Operand, mask string) (bool, bool, error) {
@@ -339,10 +336,7 @@ func (c *amd64Ctx) lowerScalarBinaryFloating(spec amd64BinaryFloatingSpec, prope
 		return true, false, err
 	}
 	base := c.bitcastVectorBytesToIntegerLanes(16, 128/spec.laneBits, spec.laneBits, secondBytes)
-	if spec.rawOnly {
-		return true, false, c.storeScalarMoveRegister(destination.Reg, spec.laneBits, "%"+computedBits, base, mask, properties.zeroing)
-	}
-	return true, false, c.storeVectorScalarRegister(destination.Reg, spec.laneBits, "%"+computedBits, base, mask, properties.zeroing)
+	return true, false, c.storeScalarMoveRegister(destination.Reg, spec.laneBits, "%"+computedBits, base, mask, properties.zeroing)
 }
 
 func (c *amd64Ctx) emitBinaryFloating(spec amd64BinaryFloatingSpec, llvmType string, lanes int, left, right, rounding string) string {

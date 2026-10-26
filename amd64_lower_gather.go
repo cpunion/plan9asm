@@ -326,13 +326,13 @@ func (c *amd64Ctx) emitGather(spec amd64GatherSpec, memory MemRef, mask Operand,
 
 	bytesResult := c.newTmp()
 	fmt.Fprintf(c.b, "  %%%s = bitcast %s %s to <%d x i8>\n", bytesResult, destinationType, result, destinationBytes)
-	if err := c.storeVectorBytes(destination, destinationBytes, "%"+bytesResult); err != nil {
+	if err := c.storePackedMoveOperand(Operand{Kind: OpReg, Reg: destination}, destinationBytes, "%"+bytesResult); err != nil {
 		return err
 	}
 	if evex {
 		return c.storeK(mask.Reg, "0")
 	}
-	return c.storeVectorBytes(mask.Reg, destinationBytes, "zeroinitializer")
+	return c.storePackedMoveOperand(mask, destinationBytes, "zeroinitializer")
 }
 
 func (c *amd64Ctx) loadGatherVector(register Reg, byteWidth int) (string, error) {
