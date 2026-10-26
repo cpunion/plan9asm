@@ -37,7 +37,7 @@ func fixedLocalMemoryAddress(ins Instr, index int, frame int64) (MemRef, error) 
 	}
 	literal := x86ResultAUTOLiteral.FindStringSubmatch(strings.TrimSpace(literals[index]))
 	if literal == nil {
-		// Indexing/segment/symbol roles are independently excluded by the
+		// Indexing/segment/symbol roles are independently validated by the
 		// native observer; none may be relabeled as a named local offset.
 		if memory.OffRaw != "" {
 			return fail()
@@ -61,6 +61,46 @@ func fixedLocalMemoryAddress(ins Instr, index int, frame int64) (MemRef, error) 
 	memory.Off += frame
 	memory.OffRaw = ""
 	return memory, nil
+}
+
+// This query resolves only a complete numerical constant index. It neither
+// changes the emitted address nor supplies a memory origin, extent or access.
+// All arithmetic is checked before an original private/literal bound is used.
+func fixedLocalConstantDisplacement(memory MemRef, state *x86FixedLocalState) (int64, bool) {
+	if memory.OffRaw != "" || memory.Sym != "" || memory.Segment != "" || memory.IndexExt != "" {
+		return 0, false
+	}
+	if memory.Index == "" {
+		return memory.Off, memory.Scale == 0
+	}
+	root, valid := x86CallerGP(memory.Index)
+	value, known := state.constants[root]
+	scale := memory.Scale
+	if !valid || root != memory.Index || !known ||
+		!fixedLocalNumericRead(Operand{Kind: OpReg, Reg: root}, 8, state) ||
+		scale != 1 && scale != 2 && scale != 4 && scale != 8 {
+		return 0, false
+	}
+	if value > math.MaxInt64/scale || value < math.MinInt64/scale {
+		return 0, false
+	}
+	delta := value * scale
+	if delta > 0 && memory.Off > math.MaxInt64-delta || delta < 0 && memory.Off < math.MinInt64-delta {
+		return 0, false
+	}
+	return memory.Off + delta, true
+}
+
+// Reads, writes and complete pointer-spill lookups use the same resolved
+// byte address. An indexed read must not borrow the unindexed slot's role.
+func fixedLocalPrivateOffset(memory MemRef, state *x86FixedLocalState) (int64, bool) {
+	base, private := state.pointers[memory.Base]
+	displacement, known := fixedLocalConstantDisplacement(memory, state)
+	if !private || !known || displacement > 0 && base > math.MaxInt64-displacement ||
+		displacement < 0 && base < math.MinInt64-displacement {
+		return 0, false
+	}
+	return base + displacement, true
 }
 
 // Descriptive bare NAME_AUTO is offset zero, not an undefined preprocessor

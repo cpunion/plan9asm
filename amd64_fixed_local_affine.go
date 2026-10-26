@@ -118,14 +118,14 @@ func fixedLocalInputAddressStep(ins *Instr, state *x86FixedLocalState, proof *x8
 			return false
 		}
 		address, err := fixedLocalMemoryAddress(*ins, index, proof.frame)
-		if err != nil || address.Index != "" || address.Sym != "" || address.Segment != "" {
+		if err != nil {
 			return false
 		}
-		base, found := state.pointers[address.Base]
-		if !found || address.Off < -proof.frame || address.Off > proof.frame {
+		offset, found := fixedLocalPrivateOffset(address, state)
+		if !found {
 			return false
 		}
-		origin, found := state.opaqueCells[base+address.Off]
+		origin, found := state.opaqueCells[offset]
 		literal = literal || found && origin.literal.symbol != ""
 		return found
 	}

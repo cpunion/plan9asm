@@ -504,12 +504,10 @@ func fixedLocalMemory(ins *Instr, index int, state *x86FixedLocalState, proof *x
 	if err != nil {
 		return 0, err
 	}
-	base, found := state.pointers[memory.Base]
-	if !found || memory.Sym != "" || memory.Segment != "" || memory.Index != "" ||
-		memory.Off > 0 && base > math.MaxInt64-memory.Off || memory.Off < 0 && base < math.MinInt64-memory.Off {
+	offset, found := fixedLocalPrivateOffset(memory, state)
+	if !found {
 		return 0, goAMD64FrameContext("fixed local access has unknown/escaping address provenance")
 	}
-	offset := base + memory.Off
 	if offset < 0 || offset > proof.frame || width > proof.frame-offset || alignment <= 0 ||
 		(int64(residue*8)+offset)%alignment != 0 {
 		return 0, goAMD64FrameContext("fixed local access crosses storage or has residue-dependent native alignment")
@@ -534,14 +532,17 @@ func fixedLocalMemoryAccess(ins *Instr, index int, state *x86FixedLocalState, pr
 			root, valid := x86CallerGP(memory.Base)
 			if !valid || root != memory.Base || root == SP || width <= 0 || alignment <= 0 || pointer || write && origin.global != "" ||
 				memory.OffRaw != "" || memory.Sym != "" || memory.Segment != "" ||
-				memory.Index != "" || memory.Scale != 0 || memory.IndexExt != "" {
+				memory.IndexExt != "" {
 				return 0, x86FixedLocalNativeInput, goAMD64FrameContext("fixed local native input requires a plain typed base and displacement")
 			}
 			if origin.literal.symbol != "" {
-				shifted, valid := fixedLocalShiftLiteral(origin, memory.Off, proof)
-				if write || !valid || !fixedLocalLiteralRange(proof.binding, shifted.literal, width, alignment) {
+				displacement, known := fixedLocalConstantDisplacement(memory, state)
+				shifted, valid := fixedLocalShiftLiteral(origin, displacement, proof)
+				if write || !known || !valid || !fixedLocalLiteralRange(proof.binding, shifted.literal, width, alignment) {
 					return 0, x86FixedLocalLiteralMemory, goAMD64FrameContext("fixed local indirect DATA read exceeds readonly identity, extent or alignment")
 				}
+			} else if memory.Index != "" || memory.Scale != 0 {
+				return 0, x86FixedLocalNativeInput, goAMD64FrameContext("fixed local native input requires a plain typed base and displacement")
 			}
 			return 0, x86FixedLocalNativeInput, fixedLocalRecordAccess(ins, index, proof, residue, width, write, true, 0)
 		}
@@ -768,10 +769,10 @@ func fixedLocalMove(ins *Instr, state *x86FixedLocalState, sig FuncSig, proof *x
 		if err != nil {
 			return err
 		}
-		base, found := state.pointers[memory.Base]
-		if found && memory.Off >= -proof.frame && memory.Off <= proof.frame {
-			address, pointer = state.addresses[base+memory.Off]
-			identity, opaque = state.opaqueCells[base+memory.Off]
+		offset, found := fixedLocalPrivateOffset(memory, state)
+		if found {
+			address, pointer = state.addresses[offset]
+			identity, opaque = state.opaqueCells[offset]
 		}
 		if (pointer || opaque) && width != 8 {
 			return fail()
