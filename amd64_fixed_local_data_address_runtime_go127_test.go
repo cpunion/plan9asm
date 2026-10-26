@@ -97,32 +97,66 @@ func fixedLocalResultsRuntimeISA(t *testing.T, assembly, declarations string, in
 	}
 	driver := "#include <stdint.h>\n#include <stdio.h>\n" + runtimeCAsmLabelPreamble +
 		cDeclarations.String() + "int main(void) {\n" + cCalls.String() + "return 0;\n}\n"
-	pkg, request, _, options := fixedLocalTransportFixture(t, assembly, declarations, runtime.GOOS+"/amd64", execution.triple)
-	fixedLocalFreshAPIs(t, pkg, request, options, []string{"Translate", "Module", "GoModule"},
-		func(t *testing.T, ir string, err error) {
-			if err != nil {
-				t.Fatal(err)
-			}
-			for _, level := range []string{"-O0", "-O2"} {
-				t.Run(level, func(t *testing.T) {
-					input := ir
-					if level == "-O2" {
-						input = x86MulDivRoundOptimize(t, ir)
+	pkg, request, file, options := fixedLocalTransportFixture(t, assembly, declarations, runtime.GOOS+"/amd64", execution.triple)
+	check := func(t *testing.T, ir string, err error) {
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, level := range []string{"-O0", "-O2"} {
+			t.Run(level, func(t *testing.T) {
+				input := ir
+				if level == "-O2" {
+					input = x86MulDivRoundOptimize(t, ir)
+				}
+				output := execution.compileAndRunLLVM(t, "fixed-local-results", input, driver, level)
+				got := strings.Split(strings.TrimSpace(string(output)), "\n")
+				if len(got) != len(want) {
+					t.Fatal("LLVM fixed-local output inventory changed", len(got), len(want))
+				}
+				for index := range want {
+					if got[index] != want[index] {
+						t.Fatalf("fixed-local kernel %d input %#x: original %s, LLVM %s", index%count, inputs[index/count], want[index], got[index])
 					}
-					output := execution.compileAndRunLLVM(t, "fixed-local-results", input, driver, level)
-					got := strings.Split(strings.TrimSpace(string(output)), "\n")
-					if len(got) != len(want) {
-						t.Fatal("LLVM fixed-local output inventory changed", len(got), len(want))
-					}
-					for index := range want {
-						if got[index] != want[index] {
-							t.Fatalf("fixed-local kernel %d input %#x: original %s, LLVM %s", index%count, inputs[index/count], want[index], got[index])
-						}
-					}
-				})
-			}
-		})
+				}
+			})
+		}
+	}
+	fixedLocalResultsRuntimeAPIs(t, pkg, request, file, options, assembly, check)
 	if runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" {
 		t.Log("original Go and LLVM amd64 execute through Rosetta, not native x86 hardware")
 	}
+}
+
+func fixedLocalResultsRuntimeAPIs(t *testing.T, pkg GoPackage, request GoAMD64FrameCaptureRequest,
+	file *File, options Options, assembly string, check func(*testing.T, string, error)) {
+	t.Helper()
+	apis := []string{"Translate", "Module", "GoModule"}
+	if fixedLocalResultsRuntimeNeedsBinding(file, options) {
+		fixedLocalFreshAPIs(t, pkg, request, options, apis, check)
+	} else {
+		// Ordinary sources require no private-frame observation or permission.
+		// Reuse the independent original Go and C drivers with their own APIs.
+		for _, api := range apis {
+			t.Run(api, func(t *testing.T) {
+				fixedLocalAPI(t, pkg, file, options, api, check, assembly)
+			})
+		}
+	}
+}
+
+func fixedLocalResultsRuntimeNeedsBinding(file *File, options Options) bool {
+	if file == nil || file.Arch != ArchAMD64 || len(file.Funcs) == 0 || options.NumericalReads != nil {
+		return true
+	}
+	for _, fn := range file.Funcs {
+		if fn.FrameSize != 0 || fn.x86FixedLocal != nil || fn.x86SourceStack != nil {
+			return true
+		}
+	}
+	for _, sig := range options.Sigs {
+		if sig.x86FixedLocal != nil {
+			return true
+		}
+	}
+	return false
 }
