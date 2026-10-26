@@ -1,7 +1,6 @@
 'use strict';
 
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
 const test = require('node:test');
 const {auditFloatingHelpers} = require('./audit-floating-helpers.cjs');
 
@@ -88,17 +87,4 @@ test('native helper audit rejects changed inventories, foreign paths and printed
     [event('run', owners[0] + '/sample'), ...completeEvents()],
     [...completeEvents(), event('pass')],
   ]) assert.throws(() => auditFloatingHelpers(inventory, serialize(changed)));
-});
-
-test('native helper CI retains the real EVEX owner and strict full inventory audit', () => {
-  const workflow = fs.readFileSync('.github/workflows/pr40-owned-process-probe.yml', 'utf8');
-  const begin = workflow.indexOf('  native-x86-oracles:\n');
-  const end = workflow.indexOf('\n  ', workflow.indexOf('\n          path: _out/native-x86-oracles/', begin));
-  const nativeOwner = workflow.slice(begin, end < 0 ? undefined : end);
-  assert.ok(nativeOwner.includes('runs-on: ubuntu-latest'));
-  assert.ok(nativeOwner.includes('directory=_out/native-x86-oracles/floating-helpers'));
-  for (const owner of owners) assert.equal(nativeOwner.split(owner).length - 1, 1, owner);
-  assert.ok(nativeOwner.includes('go test . -list "^($roots)$"'));
-  assert.ok(nativeOwner.includes('go test . -run "^($roots)$" -count=1 -timeout=5m -json'));
-  assert.ok(nativeOwner.includes('node .github/scripts/audit-floating-helpers.cjs "$directory"'));
 });

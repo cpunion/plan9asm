@@ -3,7 +3,6 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const test = require('node:test');
-const {jobBody} = require('./workflow-needs.cjs');
 
 const root = 'TestCrossLinuxRuntimeMatrixX86LeavePrivateEmitterWidthsAndFlags';
 const architectures = ['amd64', '386'];
@@ -98,29 +97,4 @@ test('private LEAVE binds actual host SDK static ELF hash and every complete exe
   const borrowed = completeEvents().map(value => value.Test === root + '/386/backend_O0' && value.Output
     ? {...value, Test: root + '/386'} : value);
   assert.throws(() => audit(borrowed), 'a parent cannot replace a leaf execution');
-});
-
-function requireCI(workflow) {
-  const job = jobBody(workflow, 'native-x86-oracles');
-  const title = '      - name: Execute private LEAVE width mathematics on actual AMD64 and IA32';
-  assert.equal(job.split(title).length - 1, 1, 'private LEAVE must have exactly one required owner');
-  const start = job.indexOf(title);
-  const block = job.slice(start, job.indexOf('      - name:', start + 1));
-  assert.equal(block.split(root).length - 1, 1, 'private LEAVE actual root missing or duplicated');
-  for (const command of ['set -euo pipefail', 'directory=_out/native-x86-oracles/private-leave',
-    "if: ${{ !cancelled() && steps.native_toolchain.outcome == 'success' && steps.native_go.outcome == 'success' }}",
-    'go test . -list "^($root)$" > "$directory/inventory.log"', 'grep -Fx "$root" "$directory/inventory.log"',
-    'go test . -run "^($root)$" -count=1 -timeout=5m -json > "$directory/raw.jsonl" 2> "$directory/stderr.log"',
-    'node .github/scripts/audit-private-leave-native.cjs "$directory"']) assert.ok(block.includes(command), command);
-  assert.doesNotMatch(block, /continue-on-error|\|\| true|qemu|objects-only|OriginalGo/);
-  assert.ok(start < job.indexOf('      - name: Execute original complete floating programs with actual EVEX DQ state'),
-    'private integer widths must not be hidden by AVX512 hardware failure');
-}
-
-test('private LEAVE has a mandatory isolated CI owner before the hardware-dependent floating step', () => {
-  const workflow = fs.readFileSync('.github/workflows/pr40-owned-process-probe.yml', 'utf8');
-  requireCI(workflow);
-  for (const needle of [root, 'audit-private-leave-native.cjs', 'Execute private LEAVE width mathematics on actual AMD64 and IA32']) {
-    assert.throws(() => requireCI(workflow.replace(needle, 'removed')));
-  }
 });

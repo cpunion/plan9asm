@@ -1,33 +1,17 @@
 'use strict';
 
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
+const test = require('node:test');
 const path = require('node:path');
 const {spawnSync} = require('node:child_process');
-const test = require('node:test');
-const {jobBody, jobNeeds, windowsSchedulingNeeds, finalRequiredNeeds} = require('./workflow-needs.cjs');
 
-const workflow = fs.readFileSync('.github/workflows/pr40-owned-process-probe.yml', 'utf8');
-const allNeeds = finalRequiredNeeds.slice();
-const condition = '    if: ${{ !cancelled() }}';
-
-function requireSchedule(source) {
-  assert.deepEqual(jobNeeds(source, 'complete-windows').slice().sort(),
-    windowsSchedulingNeeds.slice().sort());
-  const windows = jobBody(source, 'complete-windows');
-  assert.deepEqual(windows.split('\n').filter(line => /^    if:/.test(line)), [condition],
-    'Windows execution must wait for terminal dependencies, not require their success');
-  assert.match(windows, /^    uses: \.\/\.github\/workflows\/windows-module\.yml$/m);
-}
-
-function requireQualification(source) {
-  assert.deepEqual(jobNeeds(source, 'diagnostic-qualification').slice().sort(), allNeeds.slice().sort(),
-    'final qualification must own all original gates and actual Windows completion');
-  const final = jobBody(source, 'diagnostic-qualification');
-  assert.deepEqual(final.split('\n').filter(line => /^    if:/.test(line)), [condition]);
-  assert.match(final, /      - name: Require all original gates and complete Windows\n        env:\n          DIAGNOSTIC_NEEDS_JSON: \$\{\{ toJSON\(needs\) \}\}\n        run: node \.github\/scripts\/diagnostic-qualification\.cjs(?:\n|$)/);
-  assert.doesNotMatch(final, /continue-on-error|\|\|\s*true/);
-}
+// Independent inventory for auditing historical diagnostic receipts.
+const {qualifyDiagnosticNeeds} = require('./diagnostic-qualification.cjs');
+const allNeeds = [
+  'ownership', 'native-x86-oracles', 'sdk-priority', 'arm64-fallback-cross-priority',
+  'lock-native-priority', 'unlocked-rmw-native-priority', 'vector-value-fault-priority',
+  'packed-conversion-native-complete', 'packed-reduction-native-complete', 'complete-windows',
+];
 
 function successfulNeeds() {
   return Object.fromEntries(allNeeds.map(name => [name, {result: 'success', outputs: {}}]));
@@ -36,44 +20,6 @@ function successfulNeeds() {
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
 }
-
-test('Windows execution waits only for ownership and is not hidden by its failure', () => {
-  assert.deepEqual(windowsSchedulingNeeds, ['ownership']);
-  assert.equal(finalRequiredNeeds.length, 10);
-  requireSchedule(workflow);
-});
-
-test('an independent final diagnostic qualification still requires every actual success', () => {
-  requireQualification(workflow);
-});
-
-test('qualification policy rejects removed gates, success-only scheduling and unbound observations', () => {
-  requireSchedule(workflow);
-  requireQualification(workflow);
-  for (const name of ['complete-windows', 'diagnostic-qualification']) {
-    const body = jobBody(workflow, name);
-    for (const replacement of ['', '    if: ${{ success() }}', '    if: ${{ always() }}']) {
-      const changed = workflow.replace(body, body.replace(condition, replacement));
-      assert.throws(() => name === 'complete-windows' ? requireSchedule(changed) : requireQualification(changed));
-    }
-    const expected = name === 'complete-windows' ? windowsSchedulingNeeds : allNeeds;
-    for (const missing of expected) {
-      const changed = workflow.replace(body, body.replace(/^    needs:.*$/m,
-        '    needs: [' + expected.filter(value => value !== missing).join(', ') + ']'));
-      assert.throws(() => name === 'complete-windows' ? requireSchedule(changed) : requireQualification(changed),
-        undefined, 'omitted required gate: ' + missing);
-    }
-    const duplicate = workflow.replace(body, body.replace(/^    needs:.*$/m,
-      '    needs: [' + [...expected, expected[0]].join(', ') + ']'));
-    assert.throws(() => name === 'complete-windows' ? requireSchedule(duplicate) : requireQualification(duplicate));
-  }
-  for (const changed of [
-    workflow.replace('DIAGNOSTIC_NEEDS_JSON: ${{ toJSON(needs) }}', 'DIAGNOSTIC_NEEDS_JSON: \'{}\''),
-    workflow.replace('run: node .github/scripts/diagnostic-qualification.cjs', 'run: echo qualification passed'),
-    workflow.replace('run: node .github/scripts/diagnostic-qualification.cjs',
-      'run: node .github/scripts/diagnostic-qualification.cjs || true'),
-  ]) assert.throws(() => requireQualification(changed));
-});
 
 test('only all ten genuine success results qualify; Windows cannot replace an original gate', () => {
   const {qualifyDiagnosticNeeds} = require('./diagnostic-qualification.cjs');
@@ -134,5 +80,20 @@ test('the actual qualification command exits nonzero for failed, skipped, absent
   }
   for (const input of [undefined, '', '{', 'null', '[]', '{}']) {
     rejects(input, 'malformed actual context: ' + input);
+  }
+});
+
+test('early Windows completion cannot qualify a pending failed or absent original owner', () => {
+  const successful = () => Object.fromEntries(allNeeds.map(name => [name, {result: 'success', outputs: {}}]));
+  assert.deepEqual(qualifyDiagnosticNeeds(successful()), {schema: 1, successfulJobs: allNeeds});
+  for (const name of allNeeds) {
+    for (const result of ['failure', 'cancelled', 'skipped', 'queued', 'in_progress']) {
+      const changed = successful();
+      changed[name] = {result, outputs: {result: 'success', qualification: 'success'}};
+      assert.throws(() => qualifyDiagnosticNeeds(changed), undefined, name + '/' + result);
+    }
+    const changed = successful();
+    delete changed[name];
+    assert.throws(() => qualifyDiagnosticNeeds(changed), undefined, 'absent ' + name);
   }
 });

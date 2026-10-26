@@ -3,7 +3,6 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const test = require('node:test');
-const {jobBody} = require('./workflow-needs.cjs');
 
 // Independent execution denominator, not imported from the auditor.
 const roots = ['TestCrossLinuxRuntimeMatrixX86LegacyAbsSignOriginalAlignmentFaultsAMD64',
@@ -150,37 +149,4 @@ test('legacy ABS/sign every mode32 axis binds a complete static native image bef
     late.splice(at + 2, 0, observation);
     assert.throws(() => audit(late), 'IA32 image cannot be first inspected after execution');
   }
-});
-
-function checkCI(workflow) {
-  const job = jobBody(workflow, 'native-x86-oracles');
-  assert.match(job, /runs-on: ubuntu-latest/);
-  assert.match(job, /install-ci-llvm22-ubuntu\.sh gcc-i686-linux-gnu libc6-dev-i386-cross/);
-  const title = '      - name: Execute original legacy ABS sign alignment faults';
-  assert.equal(job.split(title).length - 1, 1, 'legacy alignment faults need one required explicit execution step');
-  const start = job.indexOf(title);
-  const end = job.indexOf('      - name:', start + title.length);
-  const block = job.slice(start, end);
-  for (const root of roots) assert.equal(block.split(root).length - 1, 1, root);
-  for (const command of ['set -euo pipefail', 'directory=_out/native-x86-oracles/legacy-abs-sign',
-    'go test . -list "^($roots)$" > "$directory/inventory.log"', 'grep -Fx "$root" "$directory/inventory.log"',
-    'go test . -run "^($roots)$" -count=1 -timeout=5m -json > "$directory/raw.jsonl" 2> "$directory/stderr.log"',
-    'node .github/scripts/audit-legacy-abs-sign-native.cjs "$directory"',
-    "if: ${{ !cancelled() && steps.native_toolchain.outcome == 'success' && steps.native_go.outcome == 'success' }}"])
-    assert.ok(block.includes(command), command);
-  assert.ok(start < job.indexOf('      - name: Execute original complete floating programs with actual EVEX DQ state'),
-    'SSSE3 alignment owner must not be hidden behind AVX512 prerequisites');
-  assert.doesNotMatch(block, /continue-on-error|\|\| true|qemu|objects-only/);
-}
-
-test('legacy ABS/sign native faults are explicitly owned with strict setup gates and unchanged five-minute budget', () => {
-  const workflow = fs.readFileSync('.github/workflows/pr40-owned-process-probe.yml', 'utf8');
-  checkCI(workflow);
-  for (const needle of [...roots, 'node .github/scripts/audit-legacy-abs-sign-native.cjs "$directory"']) {
-    assert.throws(() => checkCI(workflow.replace(needle, 'removed')), 'removed required owner component: ' + needle);
-  }
-  for (const mutation of [
-    workflow.replace('directory=_out/native-x86-oracles/legacy-abs-sign', 'directory=_out/unbound'),
-    workflow.replace('Execute original legacy ABS sign alignment faults', 'unowned alignment faults'),
-  ]) assert.throws(() => checkCI(mutation));
 });

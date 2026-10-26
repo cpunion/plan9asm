@@ -1,32 +1,8 @@
 'use strict';
 
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
 const test = require('node:test');
 const {auditMMXStreaming, roots, children} = require('./audit-mmx-streaming.cjs');
-const workflow = fs.readFileSync('.github/workflows/pr40-owned-process-probe.yml', 'utf8');
-const block = `      - name: Execute original Go and LLVM native MMX streaming stores
-        if: \${{ !cancelled() && steps.native_toolchain.outcome == 'success' && steps.native_go.outcome == 'success' }}
-        env:
-          GOTOOLCHAIN: local
-        run: |
-          set -euo pipefail
-          directory=_out/native-x86-oracles/mmx-streaming
-          mkdir -p "$directory"
-          root='${roots[0]}'
-          go test . -list "^($root)$" > "$directory/inventory.log"
-          grep -Fx "$root" "$directory/inventory.log"
-          go test . -run "^($root)$" -count=1 -timeout=5m -json > "$directory/raw.jsonl" 2> "$directory/stderr.log"
-          node .github/scripts/audit-mmx-streaming.cjs "$directory"
-`;
-
-test('MMX streaming executes original Go and every native LLVM backend axis before modules', () => {
-  assert.ok(workflow.includes(block));
-  assert.equal(workflow.split(block).length, 2);
-  const job = workflow.slice(workflow.indexOf('  native-x86-oracles:'), workflow.indexOf('\n  ownership:'));
-  assert.ok(job.includes(block));
-  assert.match(job, /runs-on: ubuntu-latest/);
-});
 
 test('MMX streaming audit rejects omitted, skipped or substituted original/backend execution', () => {
   const event = (Action, Test) => ({Action, Package: 'github.com/xgo-dev/plan9asm', ...(Test ? {Test} : {})});

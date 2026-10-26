@@ -6,51 +6,6 @@ const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
 const auditor = require('./audit-packed-conversion-native.cjs');
-const {jobBody, jobNeeds, requireJobNeeds} = require('./workflow-needs.cjs');
-
-function job(source, name) {
-  const begin = source.indexOf('\n  ' + name + ':\n');
-  assert.ok(begin >= 0, 'missing required complete native conversion job: ' + name);
-  const end = source.slice(begin + 1).search(/\n  [a-z][a-z0-9-]*:\n/);
-  return source.slice(begin, end < 0 ? undefined : begin + 1 + end);
-}
-
-function requireCompleteNativeBarrier(source) {
-  requireJobNeeds(source, 'diagnostic-qualification', ['packed-conversion-native-complete']);
-}
-
-test('final qualification cannot bypass the complete native conversion barrier', () => {
-  const workflow = fs.readFileSync('.github/workflows/pr40-owned-process-probe.yml', 'utf8');
-  requireCompleteNativeBarrier(workflow);
-  const complete = jobBody(workflow, 'diagnostic-qualification');
-  const others = jobNeeds(workflow, 'diagnostic-qualification').filter(name =>
-    name !== 'packed-conversion-native-complete');
-  for (const replacement of [[], ['packed-conversion-native-priority'],
-    ['packed-conversion-native-complete', 'packed-conversion-native-complete']]) {
-    const changed = workflow.replace(complete, complete.replace(/^    needs:.*$/m,
-      '    needs: [' + [...others, ...replacement].join(', ') + ']'));
-    assert.notEqual(changed, workflow, 'each negative must edit its actual dependency');
-    assert.throws(() => requireCompleteNativeBarrier(changed));
-  }
-});
-
-test('complete native conversions have eight non-cancelling real Linux execution owners', () => {
-  const workflow = fs.readFileSync('.github/workflows/pr40-owned-process-probe.yml', 'utf8');
-  const native = job(workflow, 'packed-conversion-native-priority');
-  assert.match(native, /runs-on: ubuntu-latest/);
-  assert.match(native, /fail-fast: false/);
-  assert.match(native, /owner: \[0, 1, 2, 3, 4, 5, 6, 7\]/);
-  assert.ok(!/continue-on-error|qemu|sde|rosetta/i.test(native), 'native execution cannot be replaced or ignored');
-  assert.ok(native.includes('go test . -list "^($roots)$"'));
-  assert.ok(native.includes('go test . -run "^($roots)$" -count=1'));
-  assert.ok(native.includes('-json'));
-  assert.ok(native.includes('node .github/scripts/audit-packed-conversion-native.cjs owner'));
-  assert.ok(native.includes('if-no-files-found: error'));
-  const aggregate = job(workflow, 'packed-conversion-native-complete');
-  assert.match(aggregate, /needs: packed-conversion-native-priority/);
-  assert.ok(aggregate.includes('node .github/scripts/audit-packed-conversion-native.cjs complete'));
-  assert.ok(aggregate.includes('if-no-files-found: error'));
-});
 
 test('native conversion receipts require a strict current-head owner and complete-union auditor', () => {
   const path = '.github/scripts/audit-packed-conversion-native.cjs';

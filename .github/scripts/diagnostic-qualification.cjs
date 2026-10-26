@@ -1,7 +1,12 @@
 'use strict';
 
 const assert = require('node:assert/strict');
-const {finalRequiredNeeds} = require('./workflow-needs.cjs');
+// Retained to audit receipts from the retired fork diagnostic workflow.
+const finalRequiredNeeds = [
+  'ownership', 'native-x86-oracles', 'sdk-priority', 'arm64-fallback-cross-priority',
+  'lock-native-priority', 'unlocked-rmw-native-priority', 'vector-value-fault-priority',
+  'packed-conversion-native-complete', 'packed-reduction-native-complete', 'complete-windows',
+];
 
 // Scheduling Windows after a failed predecessor discovers its real failures;
 // it cannot supply success for that predecessor. GitHub's current-run needs

@@ -1,9 +1,7 @@
 'use strict';
 
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
 const test = require('node:test');
-const {requireCompleteWindowsNeeds} = require('./workflow-needs.cjs');
 const {auditIntegerNativeFamilies} = require('./audit-integer-native-families.cjs');
 
 // Independent owner/axis inventory: do not import the auditor's denominator.
@@ -242,44 +240,4 @@ test('division IA32 requires actual static and direct images in every axis and o
   const forged = completeEvents().map(value => value.Output
     ? {...value, Output: value.Output.replaceAll('IA32 direct ELF', 'QEMU translated ELF')} : value);
   assert.throws(() => auditIntegerNativeFamilies(inventory, serialize(forged)));
-});
-
-function requireIntegerNativeWorkflow(workflow) {
-  const job = workflow.slice(workflow.indexOf('  native-x86-oracles:'), workflow.indexOf('\n  complete-windows:'));
-  assert.match(job, /runs-on: ubuntu-latest/);
-  assert.match(job, /install-ci-llvm22-ubuntu\.sh gcc-i686-linux-gnu libc6-dev-i386-cross/);
-  const start = job.indexOf('      - name: Execute original native integer stores align and division');
-  assert.ok(start >= 0, 'required native families need a dedicated complete owner');
-  const block = job.slice(start, job.indexOf('      - name:', start + 1));
-  for (const owner of owners) assert.equal(block.split(owner).length - 1, 1, owner);
-  assert.ok(block.includes('directory=_out/native-x86-oracles/integer-families'));
-  assert.ok(block.includes('set -euo pipefail'));
-  assert.ok(block.includes('go test . -list "^($roots)$" > "$directory/inventory.log"'));
-  assert.ok(block.includes('grep -Fx "$root" "$directory/inventory.log"'));
-  assert.ok(block.includes('go test . -run "^($roots)$" -count=1 -timeout=5m -json > "$directory/raw.jsonl" 2> "$directory/stderr.log"'));
-  assert.ok(block.includes('node .github/scripts/audit-integer-native-families.cjs "$directory"'));
-  assert.doesNotMatch(block, /continue-on-error|\|\| true|qemu|objects-only/);
-  assert.ok(block.includes("if: ${{ !cancelled() && steps.native_toolchain.outcome == 'success' && steps.native_go.outcome == 'success' }}"));
-  requireCompleteWindowsNeeds(workflow);
-  assert.match(job, /path: _out\/native-x86-oracles\//);
-}
-
-test('native integer CI is a required exact Linux owner with retained raw observations', () => {
-  requireIntegerNativeWorkflow(fs.readFileSync('.github/workflows/pr40-owned-process-probe.yml', 'utf8'));
-});
-
-test('logical FP owners cannot disappear duplicate or substitute partial objects in CI', () => {
-  const workflow = fs.readFileSync('.github/workflows/pr40-owned-process-probe.yml', 'utf8');
-  for (const owner of owners.filter(name => name.includes('LogicalFP'))) {
-    for (const replacement of ['', owner + '|' + owner, owner.replace('LogicalFP', 'RegisterOnly')]) {
-      assert.throws(() => requireIntegerNativeWorkflow(workflow.replace(owner, replacement)), owner);
-    }
-  }
-  for (const [old, replacement] of [
-    ['-run "^($roots)$" -count=1 -timeout=5m', '-run "partial-only" -count=1 -timeout=5m'],
-    ['-run "^($roots)$" -count=1 -timeout=5m', '-run "^($roots)$" -count=1 -timeout=10m'],
-    ['node .github/scripts/audit-integer-native-families.cjs "$directory"', 'true'],
-  ]) {
-    assert.throws(() => requireIntegerNativeWorkflow(workflow.replaceAll(old, replacement)), old);
-  }
 });

@@ -3,7 +3,6 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const test = require('node:test');
-const {jobBody, requireCompleteWindowsNeeds, requireJobNeeds} = require('./workflow-needs.cjs');
 
 // Independent of the auditor and production instruction maps.
 const roots = ['TestCrossLinuxRuntimeMatrixX86BlendMinposOriginalFaultsAMD64',
@@ -185,75 +184,4 @@ test('blend/minimum fixed leaves retain their own package and live root/axis lif
   const foreign = completeEvents();
   foreign.splice(4, 0, event('run', parents[0] + '/unknown/opcode'));
   assert.throws(() => audit(foreign), 'unknown leaf cannot evade fixed ancestry');
-});
-
-function checkWorkflow(workflow) {
-  const job = jobBody(workflow, 'native-x86-oracles');
-  assert.match(job, /runs-on: ubuntu-latest/);
-  assert.match(job, /timeout-minutes: 25/);
-  assert.doesNotMatch(job, /continue-on-error:/, 'native owner failure must remain a failed job');
-  assert.match(job, /install-ci-llvm22-ubuntu\.sh gcc-i686-linux-gnu libc6-dev-i386-cross/);
-  assert.ok(job.includes("go-version: '1.27.2'"));
-  const title = '      - name: Execute original blend minimum alignment and zero-mask faults';
-  assert.equal(job.split(title).length - 1, 1, 'exactly one explicit required blend/minimum owner');
-  const start = job.indexOf(title), end = job.indexOf('      - name:', start + title.length);
-  const block = job.slice(start, end);
-  for (const root of roots) assert.equal(block.split(root).length - 1, 1, root);
-  for (const command of ['set -euo pipefail', 'directory=_out/native-x86-oracles/blend-minpos',
-    'go test . -list "^($roots)$" > "$directory/inventory.log"', 'grep -Fx "$root" "$directory/inventory.log"',
-    'go test . -run "^($roots)$" -count=1 -timeout=5m -json > "$directory/raw.jsonl" 2> "$directory/stderr.log"',
-    'node .github/scripts/audit-blend-minpos-native.cjs "$directory"',
-    "if: ${{ !cancelled() && steps.native_toolchain.outcome == 'success' && steps.native_go.outcome == 'success' }}"]) {
-    assert.ok(block.includes(command), command);
-  }
-  assert.ok(start < job.indexOf('      - name: Execute original complete floating programs with actual EVEX DQ state'),
-    'AVX2 owner must not inherit an AVX512 prerequisite');
-  assert.doesNotMatch(block, /continue-on-error|\|\| true|qemu|objects-only|success\(\)/);
-  const integer = job.slice(job.indexOf('      - name: Execute original native integer stores align and division'));
-  for (const root of ['TestCrossLinuxRuntimeMatrixX86MOVNTIOriginalFlagsAndFaults',
-    'TestCrossLinuxRuntimeMatrixX86PackedAlignLegacyNativeFaults',
-    'TestCrossLinuxRuntimeMatrixX86ImplicitDivideOriginalGoAndNativeAMD64',
-    'TestCrossLinuxRuntimeMatrixX86ImplicitDivideOriginalGoAndNative386',
-    'TestCrossLinuxRuntimeMatrixX86SegmentQueryOriginalFlagsAliasesAndFaults',
-    'TestCrossLinuxRuntimeMatrixX86MoveHalfOriginalGoFlagsDFAliases',
-    'TestCrossLinuxRuntimeMatrixX86ImplicitDivideLogicalFPOriginalGoAndNativeAMD64',
-    'TestCrossLinuxRuntimeMatrixX86ImplicitDivideLogicalFPOriginalGoAndNative386']) {
-    assert.equal(integer.split(root).length - 1, 1, 'old integer owner disappeared: ' + root);
-  }
-  requireCompleteWindowsNeeds(workflow);
-  requireJobNeeds(workflow, 'diagnostic-qualification', ['native-x86-oracles', 'complete-windows']);
-  const aggregate = jobBody(workflow, 'diagnostic-qualification');
-  assert.ok(aggregate.includes('DIAGNOSTIC_NEEDS_JSON: ${{ toJSON(needs) }}'));
-  assert.ok(aggregate.includes('run: node .github/scripts/diagnostic-qualification.cjs'));
-}
-
-test('blend/minimum CI is a separate required scope without shrinking old eight-root obligations', () => {
-  const workflow = fs.readFileSync('.github/workflows/pr40-owned-process-probe.yml', 'utf8');
-  checkWorkflow(workflow);
-  for (const needle of [...roots, 'node .github/scripts/audit-blend-minpos-native.cjs "$directory"']) {
-    assert.throws(() => checkWorkflow(workflow.replace(needle, 'removed')), 'removed owner component: ' + needle);
-  }
-  for (const [old, replacement] of [
-    ['directory=_out/native-x86-oracles/blend-minpos', 'directory=_out/unbound'],
-    ['Execute original blend minimum alignment and zero-mask faults', 'unowned math only'],
-  ]) assert.throws(() => checkWorkflow(workflow.replace(old, replacement)));
-  const title = '      - name: Execute original blend minimum alignment and zero-mask faults';
-  const start = workflow.indexOf(title), end = workflow.indexOf('      - name:', start + title.length);
-  const block = workflow.slice(start, end);
-  for (const [old, replacement] of [
-    ['-timeout=5m', '-timeout=10m'],
-    ['-run "^($roots)$"', '-run "^TestObjectsOnly$"'],
-    ['!cancelled()', 'success()'],
-    ["steps.native_toolchain.outcome == 'success'", 'true'],
-    ["steps.native_go.outcome == 'success'", 'true'],
-    ['        env:', '        continue-on-error: true\n        env:'],
-  ]) {
-    assert.ok(block.includes(old));
-    assert.throws(() => checkWorkflow(workflow.replace(block, block.replace(old, replacement))), old);
-  }
-  assert.throws(() => checkWorkflow(workflow.replace('    timeout-minutes: 25', '    timeout-minutes: 30')));
-  assert.throws(() => checkWorkflow(workflow.replace('      - name: Execute original native integer stores align and division',
-    '      - name: Execute original native integer stores align and division\n        continue-on-error: true')));
-  assert.throws(() => checkWorkflow(workflow.replace('DIAGNOSTIC_NEEDS_JSON: ${{ toJSON(needs) }}',
-    'DIAGNOSTIC_NEEDS_JSON: untrusted')));
 });

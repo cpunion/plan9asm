@@ -4,14 +4,13 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
-const {jobBody, jobNeeds, requireCompleteWindowsNeeds} = require('./workflow-needs.cjs');
+const {jobBody, jobNeeds} = require('./workflow-needs.cjs');
 
 const directory = path.join(__dirname, '../workflows');
 const goCI = fs.readFileSync(path.join(directory, 'go-ci.yml'), 'utf8');
 const runtimeFile = path.join(directory, 'runtime-integration.yml');
 const runtime = fs.existsSync(runtimeFile) ? fs.readFileSync(runtimeFile, 'utf8') : '';
 const benchmarkScript = fs.readFileSync(path.join(__dirname, '../../scripts/benchmark-compile.sh'), 'utf8');
-const diagnostic = fs.readFileSync(path.join(directory, 'pr40-owned-process-probe.yml'), 'utf8');
 const instructionJobs = ['ci_policy', 'fmt', 'build', 'stdlib-corpus', 'cross-runtime',
   'cross-runtime-verify', 'test', 'nested-cli', 'windows-module', 'arm-scan',
   'race', 'coverage', 'nested-cli-coverage', 'module-completion'];
@@ -164,7 +163,6 @@ test('complete SDK/runtime integration has independent manual and weekly strict 
 
 test('PR Go CI retains every instruction owner without a successful runtime placeholder', () => {
   requireInstructionOwners(goCI);
-  requireCompleteWindowsNeeds(diagnostic);
 });
 
 test('the unchanged strict benchmark still requires full five-target whole-source compilation', () => {

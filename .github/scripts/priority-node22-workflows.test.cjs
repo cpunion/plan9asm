@@ -11,8 +11,6 @@ const roles = {
     'nested-cli-coverage', 'race', 'coverage', 'module-completion'],
   'windows-module.yml': ['root-parts', 'other-owners', 'complete'],
   'runtime-integration.yml': ['ci_policy'],
-  'pr40-owned-process-probe.yml': ['sdk-priority', 'ownership', 'arm64-fallback-cross-priority',
-    'vector-value-fault-priority', 'x87-native-priority'],
 };
 
 // Both complete layouts retain the same two CLI installation obligations.

@@ -1,7 +1,6 @@
 'use strict';
 
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
 const test = require('node:test');
 const {auditDuplicateNativeFamilies} = require('./audit-duplicate-native-families.cjs');
 
@@ -155,22 +154,6 @@ test('duplicate original Go requires actual SDK and 386 direct image identity in
       ? {...value, Output: value.Output.replace(directImage(args), directImage(args).replace(imageHash, hash))} : value);
     assert.throws(() => auditDuplicateNativeFamilies(inventory, serialize(changedImage)), 'changed actual image');
   }
-});
-
-test('duplicate native CI is a separate exact Linux owner retaining original raw execution', () => {
-  const workflow = fs.readFileSync('.github/workflows/pr40-owned-process-probe.yml', 'utf8');
-  const job = workflow.slice(workflow.indexOf('  native-x86-oracles:'), workflow.indexOf('\n  complete-windows:'));
-  const start = job.indexOf('      - name: Execute original native duplicate moves and whole-vector effects');
-  assert.ok(start >= 0, 'duplicate moves require their independent native owner');
-  const block = job.slice(start, job.indexOf('      - name:', start + 1));
-  for (const root of roots) assert.equal(block.split(root).length - 1, 1, root);
-  assert.ok(block.includes('directory=_out/native-x86-oracles/duplicate-moves'));
-  assert.ok(block.includes('set -euo pipefail'));
-  assert.ok(block.includes('go test . -list "^($roots)$" > "$directory/inventory.log"'));
-  assert.ok(block.includes('grep -Fx "$root" "$directory/inventory.log"'));
-  assert.ok(block.includes('go test . -run "^($roots)$" -count=1 -timeout=5m -json > "$directory/raw.jsonl" 2> "$directory/stderr.log"'));
-  assert.ok(block.includes('node .github/scripts/audit-duplicate-native-families.cjs "$directory"'));
-  assert.doesNotMatch(block, /continue-on-error|\|\| true|qemu|objects-only/);
 });
 
 test('duplicate actual executable receipts retain precise pipeline and original Go roles', () => {

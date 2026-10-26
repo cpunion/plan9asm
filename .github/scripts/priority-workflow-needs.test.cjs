@@ -1,19 +1,9 @@
 'use strict';
 
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
 const test = require('node:test');
-const {jobBody, jobNeeds, requireJobNeeds, requireCompleteWindowsNeeds} = require('./workflow-needs.cjs');
-
-const workflow = fs.readFileSync('.github/workflows/pr40-owned-process-probe.yml', 'utf8');
-// Independent complete gate list: adding a gate to the implementation helper
-// cannot replace an original success barrier or silently change this oracle.
-const gates = [
-  'ownership', 'native-x86-oracles', 'sdk-priority', 'arm64-fallback-cross-priority',
-  'lock-native-priority', 'unlocked-rmw-native-priority', 'vector-value-fault-priority',
-  'packed-conversion-native-complete', 'packed-reduction-native-complete',
-];
-const finalGates = [...gates, 'complete-windows'];
+const fs = require('node:fs');
+const {jobBody, jobNeeds, requireJobNeeds} = require('./workflow-needs.cjs');
 
 function replaceNeeds(source, name, declaration) {
   const body = jobBody(source, name);
@@ -22,40 +12,23 @@ function replaceNeeds(source, name, declaration) {
   return source.replace(body, changed);
 }
 
-test('Windows scheduling and final qualification have distinct parsed dependency sets', () => {
-  assert.deepEqual(jobNeeds(workflow, 'complete-windows'), ['ownership']);
-  assert.deepEqual(jobNeeds(workflow, 'diagnostic-qualification').slice().sort(), finalGates.slice().sort());
-  requireCompleteWindowsNeeds(workflow);
-  const reversed = replaceNeeds(workflow, 'diagnostic-qualification', '[' + finalGates.slice().reverse().join(', ') + ']');
-  requireCompleteWindowsNeeds(reversed);
-  const quotes = replaceNeeds(workflow, 'diagnostic-qualification', JSON.stringify(finalGates));
-  requireCompleteWindowsNeeds(quotes);
-  requireCompleteWindowsNeeds(replaceNeeds(workflow, 'complete-windows', '["ownership"]'));
-  const extended = reversed + '\n  additional-required-gate:\n    runs-on: ubuntu-latest\n';
-  assert.throws(() => requireCompleteWindowsNeeds(replaceNeeds(extended, 'diagnostic-qualification',
-    '[' + [...finalGates, 'additional-required-gate'].join(', ') + ']')));
-});
-
-test('omitting any original final gate or complete Windows still fails', () => {
-  for (const gate of finalGates) {
-    const reduced = '[' + finalGates.filter(name => name !== gate).join(', ') + ']';
-    assert.throws(() => requireCompleteWindowsNeeds(replaceNeeds(workflow, 'diagnostic-qualification', reduced)),
-      undefined, 'missing gate must fail: ' + gate);
-  }
-});
-
-test('duplicate, non-concrete, self, absent or borrowed dependency declarations fail', () => {
+test('concrete dependencies reject duplicates, expressions, self references and absent jobs', () => {
+  const source = 'jobs:\n  first:\n    runs-on: ubuntu-latest\n' +
+    '  second:\n    runs-on: ubuntu-latest\n' +
+    '  complete:\n    needs: [first, second]\n';
+  const requireComplete = value => requireJobNeeds(value, 'complete', ['first', 'second']);
+  assert.deepEqual(requireComplete(source), ['first', 'second']);
+  assert.deepEqual(requireComplete(replaceNeeds(source, 'complete', '["second", "first"]')), ['second', 'first']);
   for (const declaration of [
-    '[ownership, ownership]', '[ownership, not-a-real-job]', '[ownership, complete-windows]',
-    '${{ needs.from_another_job }}', '[]', '[ownership,]',
-  ]) assert.throws(() => requireCompleteWindowsNeeds(replaceNeeds(workflow, 'complete-windows', declaration)));
-  const body = jobBody(workflow, 'complete-windows');
-  assert.throws(() => requireCompleteWindowsNeeds(workflow.replace(body,
-    body.replace(/^    needs:.*$/m, '    needs: ownership\n    needs: sdk-priority'))));
-  assert.throws(() => requireCompleteWindowsNeeds(workflow.replace(body,
-    body.replace(/^    needs:.*\n/m, ''))));
-  assert.throws(() => requireCompleteWindowsNeeds(workflow + '\n  complete-windows:\n'));
-  assert.throws(() => requireCompleteWindowsNeeds(workflow.replace('\n  ownership:\n', '\n  missing-ownership:\n')));
+    '[first, first]', '[first, absent]', '[first, complete]',
+    '${{ needs.from_another_job }}', '[]', '[first,]', '[first]', '[second]',
+  ]) assert.throws(() => requireComplete(replaceNeeds(source, 'complete', declaration)));
+  const body = jobBody(source, 'complete');
+  assert.throws(() => requireComplete(source.replace(body,
+    body.replace(/^    needs:.*$/m, '    needs: first\n    needs: second'))));
+  assert.throws(() => requireComplete(source.replace(body, body.replace(/^    needs:.*\n/m, ''))));
+  assert.throws(() => requireComplete(source + '\n  complete:\n'));
+  assert.throws(() => requireComplete(source.replace('\n  first:\n', '\n  absent:\n')));
 });
 
 test('main and reusable CLI completion retain every actual owner gate', () => {

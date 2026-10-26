@@ -1,35 +1,8 @@
 'use strict';
 
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
 const test = require('node:test');
 const {auditFloatingCompare, roots, children} = require('./audit-floating-compare.cjs');
-const workflow = fs.readFileSync('.github/workflows/pr40-owned-process-probe.yml', 'utf8');
-const block = `      - name: Execute LLVM floating comparison results and native FP effects
-        if: \${{ !cancelled() && steps.native_toolchain.outcome == 'success' && steps.native_go.outcome == 'success' }}
-        env:
-          GOTOOLCHAIN: local
-        run: |
-          set -euo pipefail
-          directory=_out/native-x86-oracles/floating-compare
-          mkdir -p "$directory"
-          roots='${roots[0]}'
-${roots.slice(1).map(root => `          roots+='|${root}'`).join('\n')}
-          go test . -list "^($roots)$" > "$directory/inventory.log"
-          for root in \${roots//|/ }; do
-            grep -Fx "$root" "$directory/inventory.log"
-          done
-          go test . -run "^($roots)$" -count=1 -timeout=5m -json > "$directory/raw.jsonl" 2> "$directory/stderr.log"
-          node .github/scripts/audit-floating-compare.cjs "$directory"
-`;
-
-test('floating comparison must execute translated source, not just original Go/C opcodes', () => {
-  assert.ok(workflow.includes(block));
-  assert.equal(workflow.split(block).length, 2);
-  const job = workflow.slice(workflow.indexOf('  native-x86-oracles:'), workflow.indexOf('\n  complete-windows:'));
-  assert.ok(job.includes(block));
-  assert.match(job, /runs-on: ubuntu-latest/);
-});
 
 test('floating execution auditing retains all result, dead, FP-field, alias and backend owners', () => {
   const event = (Action, Test) => ({Action, Package: 'github.com/xgo-dev/plan9asm', ...(Test ? {Test} : {})});

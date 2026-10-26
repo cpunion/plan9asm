@@ -49,10 +49,9 @@ test('shared Windows execution and fresh completion pin one exact SDK', () => {
   requireExactSDK(source);
 });
 
-test('both Windows callers keep the same shared executor and aggregate scope', () => {
+test('main Windows caller retains the shared executor and aggregate scope', () => {
   for (const [file, name] of [
     ['go-ci.yml', 'windows-module'],
-    ['pr40-owned-process-probe.yml', 'complete-windows'],
   ]) {
     const workflow = fs.readFileSync(path.join(__dirname, '../workflows', file), 'utf8');
     const body = jobBody(workflow, name);

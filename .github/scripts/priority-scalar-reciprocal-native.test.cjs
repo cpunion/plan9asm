@@ -127,20 +127,6 @@ test('scalar estimates require real host brackets AVX OS permission SDK identiti
   assert.throws(() => audit(earlier), 'actual Go cannot precede a finished native axis');
 });
 
-test('scalar estimates have a separate required native CI owner, not an AVX512 or object-only substitute', () => {
-  const workflow = fs.readFileSync('.github/workflows/pr40-owned-process-probe.yml', 'utf8');
-  const job = workflow.slice(workflow.indexOf('  native-x86-oracles:'), workflow.indexOf('\n  packed-conversion-native-priority:'));
-  const start = job.indexOf('      - name: Execute original native scalar reciprocal estimates');
-  assert.ok(start >= 0, 'four scalar estimates are absent from required native CI ownership');
-  const block = job.slice(start, job.indexOf('      - name:', start + 1));
-  for (const root of roots) assert.equal(block.split(root).length - 1, 1, root);
-  for (const command of ['set -euo pipefail', 'directory=_out/native-x86-oracles/scalar-reciprocal',
-    'go test . -list "^($roots)$" > "$directory/inventory.log"', 'grep -Fx "$root" "$directory/inventory.log"',
-    'go test . -run "^($roots)$" -count=1 -timeout=5m -json > "$directory/raw.jsonl" 2> "$directory/stderr.log"',
-    'node .github/scripts/audit-scalar-reciprocal-native.cjs "$directory"']) assert.ok(block.includes(command), command);
-  assert.doesNotMatch(block, /continue-on-error|\|\| true|qemu|objects-only|avx512/i);
-});
-
 test('scalar estimate executable receipts cannot replace or escape original Go ownership', () => {
   audit();
   for (const axis of axes) {

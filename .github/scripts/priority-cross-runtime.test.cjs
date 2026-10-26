@@ -122,3 +122,20 @@ for (const [source, name] of moduleExecutionJobs) {
     }
   });
 }
+
+test('ARM64 main driver retains the complete strict oracle and its four mandatory children', () => {
+  const driver = fs.readFileSync('scripts/test-arm64-fallback-ci.sh', 'utf8');
+  assert.match(driver, /root=TestFallbackARM64WideFrameCompilesWithLLVM22\n/);
+  assert.match(driver, /-dir cmd\/plan9asmll/);
+  assert.match(driver, /-ci-selector "\^\$\{root\}\$" -ci-isolate-root "\$root"/);
+  assert.match(driver, /-shards 2 -timeout 5m/);
+  assert.match(driver, /for owner in 0 1; do/);
+  assert.match(driver, /-verify-ci-partitions "\$base\/owners"/);
+  assert.match(driver, /node \.github\/scripts\/audit-arm64-fallback\.cjs/);
+  const auditor = fs.readFileSync('.github/scripts/audit-arm64-fallback.cjs', 'utf8');
+  assert.match(auditor, /\['darwin', 'linux', 'windows', 'native_complete-argument_oracle'\]/);
+  assert.match(auditor, /roots: 1, children: 4, passed: 5, skipped: 0, incomplete: 0/);
+  const qemu = fs.readFileSync('scripts/install-ci-qemu.sh', 'utf8');
+  assert.match(qemu, /^version=10\.2\.3$/m);
+  assert.match(qemu, /sha256sum --check --status/);
+});
