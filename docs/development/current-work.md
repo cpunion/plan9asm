@@ -56,11 +56,19 @@ existing ordinary ABI0 helper with an explicit target-word parameter extent.
 The isolated zero-argument helper graph must not claim this distinct call role.
 Keep the original positive and omitted-extent negative tests unchanged.
 
+Repair `85685440d` (integrated as `9d6817224`) preserves that bounded ordinary
+call through the shared ABI0 layout validator. Complete CLI passes are
+335 roots / 1,703 children on Go1.25.14 and 398 / 2,186 on Go1.27.3;
+104 related root tests / 2,018 children also pass. All have zero failures/skips.
+Twelve new positive combinations compile LLVM22 objects and 27 negative controls
+remain rejected. This is local qualification; the published CI still runs the
+pre-repair source. Wait for its natural completion before the next batch push.
+
 ## Current functional evidence
 
 | Scope | Qualified result | Limit |
 |---|---|---|
-| Current public Linux cross-runtime owners | 16 owners; 561 roots / 4,577 children, zero failures/JSON skips | Individual scopes include portable LLVM oracles; this is not native AVX512 acceptance. |
+| Public `bdbefa7e4` Linux cross-runtime owners | 16 owners; 562 roots / 4,586 children, zero failures/JSON skips | Fresh artifacts retain every previous case and add private CALL. Individual scopes include portable LLVM oracles; this is not native AVX512 acceptance. |
 | Private helper CALL at `fc4daae9a` | [Official Linux run](https://github.com/cpunion/plan9asm/actions/runs/40358527392): 7 roots / 96 children, zero skips | 11 kernels × 8 inputs, original Go versus three APIs at O0/O2; not full AES execution. |
 | Private CALL local regression at `f358a4918` | 62 roots / 1,328 children, zero skips | Objects, source/return identity, negative controls and shared graph regressions. |
 | Complete Linux/amd64 standard-library objects | `fff470ab9`: 37/55; `fc4daae9a`: **38/55** | All files attempted; 17 failures, zero N/A. AES is the only newly passing file; all old passes remain. |
