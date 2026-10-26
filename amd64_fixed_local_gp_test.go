@@ -63,6 +63,9 @@ func TestGoAMD64FixedLocalTypedGPFlagsAndProvenance(t *testing.T) {
 		valid      bool
 	}{
 		{"carry only", "STC\nADCQ $1,AX", true},
+		{"NOP preserves carry", "STC\nNOP\nADCQ $1,AX", true},
+		{"NOP does not define carry", "NOP\nADCQ $1,AX", false},
+		{"NOP does not define registers", "NOP\nADDQ CX,AX", false},
 		{"carry branch", "STC\nJCS done\ndone:", true},
 		{"carry is not zero", "STC\nJEQ done\ndone:", false},
 		{"carry is not set zero", "STC\nSETEQ CL", false},
@@ -107,6 +110,7 @@ func TestGoAMD64FixedLocalTypedGPActualObjects(t *testing.T) {
 	}
 	var assembly, declarations strings.Builder
 	for index, body := range []string{
+		"STC\nNOP\nADCQ $1,AX",
 		"ADDQ $1,AX\nSUBW $1,0(SP)\nMOVQ 0(SP),AX",
 		"STC\nADCQ $1,AX\nSBBL $1,0(SP)\nMOVQ 0(SP),AX",
 		"NOTQ AX\nNEGB 0(SP)\nINCW 0(SP)\nDECL 0(SP)\nMOVQ 0(SP),AX",
