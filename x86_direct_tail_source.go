@@ -24,6 +24,7 @@ type x86DirectTailGraph struct {
 	helpers         map[string]bool
 	roots           map[string]*x86DirectTailRoot
 	numerical       *GoX86NumericalReadBinding
+	fixedLocal      *x86FixedLocalBinding
 }
 
 type x86DirectTailRoot struct {
@@ -74,6 +75,10 @@ func x86DirectTailRootNeeded(fn Func) bool {
 }
 
 func x86DirectTailRootNeededExceptCalls(fn Func, ordinary map[string]bool) bool {
+	return x86DirectTailRootTargets(fn, nil, ordinary)
+}
+
+func x86DirectTailRootTargets(fn Func, helpers, ordinary map[string]bool) bool {
 	for _, ins := range fn.Instrs {
 		if ins.Op != OpJMP && ins.Op != OpCALL || len(ins.Args) != 1 {
 			continue
@@ -84,7 +89,7 @@ func x86DirectTailRootNeededExceptCalls(fn Func, ordinary map[string]bool) bool 
 			text = arg.Mem.Sym
 		}
 		base, offset, valid := parseSBRef(strings.TrimPrefix(text, "$"))
-		if valid && strings.HasSuffix(base, "<>") {
+		if valid && (helpers == nil && strings.HasSuffix(base, "<>") || helpers[base]) {
 			if ins.Op == OpCALL && arg.Kind == OpSym && offset == 0 && ordinary[base] {
 				continue
 			}
@@ -103,6 +108,9 @@ func x86DirectTailRootNeededExceptCalls(fn Func, ordinary map[string]bool) bool 
 func PrepareX86DirectTailSource(file *File, options Options) (*File, error) {
 	if file == nil {
 		return file, nil
+	}
+	if prepared, handled, err := prepareX86FixedLocalLeafSource(file, options); handled {
+		return prepared, err
 	}
 	calls := options.x86BoolCallSource
 	if calls == nil {
@@ -397,12 +405,19 @@ func (graph *x86DirectTailGraph) verify(file *File, options Options) (result err
 			return x86DirectTailContext("duplicate selected original TEXT")
 		}
 		seen[fn.Sym] = true
+		public := arm64PrivateTailSnapshot(fn)
+		if graph.fixedLocal != nil {
+			if public.x86FixedLocal != nil && public.x86FixedLocal.binding != graph.fixedLocal ||
+				public.x86DirectTailRoot != nil && public.x86DirectTailRoot.graph != graph {
+				return x86DirectTailContext("normalized frame belongs to another source graph")
+			}
+			public.x86FixedLocal, public.x86DirectTailRoot, public.x86RawReplay = nil, nil, nil
+		}
+		for ordinal := range public.Instrs {
+			public.Instrs[ordinal] = x86DirectTailInstructionSnapshot(public.Instrs[ordinal])
+		}
 		found := false
 		for _, original := range graph.original.Funcs {
-			public := arm64PrivateTailSnapshot(fn)
-			for ordinal := range public.Instrs {
-				public.Instrs[ordinal] = x86DirectTailInstructionSnapshot(public.Instrs[ordinal])
-			}
 			if fn.Sym == original.Sym && reflect.DeepEqual(public, original) {
 				found = true
 			}

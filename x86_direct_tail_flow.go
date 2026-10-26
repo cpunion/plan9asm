@@ -6,6 +6,7 @@ import (
 )
 
 func (graph *x86DirectTailGraph) root(root int, byName map[string]int, limit int, allowPrivateCalls bool) (*x86DirectTailRoot, error) {
+	framed := graph.fixedLocal != nil && graph.fixedLocal.frames[graph.symbols[graph.original.Funcs[root].Sym]]
 	members := map[int]bool{root: true}
 	queue := []int{root}
 	hasCalls := false
@@ -16,7 +17,7 @@ func (graph *x86DirectTailGraph) root(root int, byName map[string]int, limit int
 		if graph.goarch == "386" && strings.HasSuffix(fn.Sym, "<ABIInternal>") {
 			return nil, x86DirectTailContext("386 source has no AMD64 register-entry contract")
 		}
-		if fn.FrameSize != 0 || len(fn.X86RawText) != 0 || fn.x86SourceStack != nil || fn.x86FixedLocal != nil ||
+		if fn.FrameSize != 0 && !(framed && at == root) || len(fn.X86RawText) != 0 || fn.x86SourceStack != nil || fn.x86FixedLocal != nil ||
 			fn.x86RawReplay != nil || len(fn.x86ContinuationAddresses) != 0 || len(fn.x86IndirectLabels) != 0 ||
 			graph.helpers[fn.Sym] && fn.ArgSize != 0 {
 			return nil, x86DirectTailContext("native/frame/helper argument role is not closed: %s", fn.Sym)
@@ -32,11 +33,11 @@ func (graph *x86DirectTailGraph) root(root int, byName map[string]int, limit int
 				return nil, x86DirectTailContext("raw/call/native effect has no continuation role: %s", ins.Raw)
 			}
 			for _, arg := range ins.Args {
-				if arg.Kind == OpReg && x86LogicalSourceFrameRegister(arg.Reg, graph.goarch) ||
+				if !framed && (arg.Kind == OpReg && x86LogicalSourceFrameRegister(arg.Reg, graph.goarch) ||
 					arg.Kind == OpMem && (x86LogicalSourceFrameRegister(arg.Mem.Base, graph.goarch) ||
 						x86LogicalSourceFrameRegister(arg.Mem.Index, graph.goarch) ||
 						arg.Mem.Base == "PC" && !x86DirectTailPCBranch(ins)) ||
-					arg.Kind == OpFPAddr {
+					arg.Kind == OpFPAddr) {
 					return nil, x86DirectTailContext("physical SP/BP/PC/frame address has no continuation role: %s", ins.Raw)
 				}
 			}

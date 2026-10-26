@@ -155,7 +155,7 @@ func parseCompleteCLIAssembly(arch plan9asm.Arch, source string, defines []strin
 // no permission; the existing independently captured object and numeric-only
 // binder must close the full source, source/normalized CFG and every access.
 func prepareAMD64FixedLocalSource(pkg *packages.Package, file *plan9asm.File, asm, target, triple, goarch string,
-	config compileConfig, resolve func(string) string, sigs map[string]plan9asm.FuncSig,
+	config compileConfig, resolve func(string) string, sigs, registerFallbacks map[string]plan9asm.FuncSig,
 ) (_ map[string]plan9asm.FuncSig, _ *amd64FixedLocalCLISource, result error) {
 	// This preliminary role query uses only the CLI's package-name mapping.
 	// The binding callback runs after source capture: calling it here could
@@ -239,6 +239,10 @@ func prepareAMD64FixedLocalSource(pkg *packages.Package, file *plan9asm.File, as
 				result = errors.Join(result, frame.Close())
 			}
 		}()
+		sigs, err = fixedLocalCapturedSignatures(sigs, registerFallbacks)
+		if err != nil {
+			return nil, nil, err
+		}
 		bound, err := frame.BindFixedLocal(ctx, plan9asm.GoPackage{Path: pkg.PkgPath, Types: pkg.Types, Syntax: syntax}, file,
 			plan9asm.Options{Goarch: goarch, TargetTriple: triple, ResolveSym: resolve, Sigs: sigs})
 		if err != nil {
@@ -283,6 +287,10 @@ func prepareAMD64FixedLocalSource(pkg *packages.Package, file *plan9asm.File, as
 			}
 		}
 	}()
+	sigs, err = fixedLocalCapturedSignatures(sigs, registerFallbacks)
+	if err != nil {
+		return nil, nil, err
+	}
 	bind := observed.BindFixedLocal
 	if downloaded != nil {
 		bind = observed.BindDownloadedFixedLocal
@@ -301,4 +309,26 @@ func prepareAMD64FixedLocalSource(pkg *packages.Package, file *plan9asm.File, as
 		return nil, nil, err
 	}
 	return bound.Sigs, source, nil
+}
+
+// Only after actual source capture may this CLI discard its own unchanged
+// register-only guesses. Actual declarations and every unrecorded signature
+// remain intact; the public binder still rejects supplied private helper ABIs.
+func fixedLocalCapturedSignatures(sigs, registerFallbacks map[string]plan9asm.FuncSig) (map[string]plan9asm.FuncSig, error) {
+	if len(registerFallbacks) == 0 {
+		return sigs, nil
+	}
+	for name, original := range registerFallbacks {
+		current, present := sigs[name]
+		if !present || !reflect.DeepEqual(current, original) {
+			return nil, fmt.Errorf("%w: CLI inferred entry changed before original frame binding", plan9asm.ErrProbeNeedsContext)
+		}
+	}
+	declared := make(map[string]plan9asm.FuncSig, len(sigs)-len(registerFallbacks))
+	for name, sig := range sigs {
+		if _, inferred := registerFallbacks[name]; !inferred {
+			declared[name] = sig
+		}
+	}
+	return declared, nil
 }

@@ -22,7 +22,8 @@ type x86FixedLocalBinding struct {
 	target         string
 	inputs         map[string][32]byte
 	signatures     map[string]FuncSig
-	frames         map[string]bool // Only entries whose complete local proof succeeded.
+	frames         map[string]bool   // Only entries whose complete local proof succeeded.
+	leaves         map[string]string // Original source symbol to observed native TEXT, never a signature.
 	symbols        map[string]string
 	declarations   map[string]goAMD64FrameDeclaration
 	numericalReads *GoX86NumericalReadBinding
@@ -149,7 +150,7 @@ func (source *GoAMD64FrameSource) bindFixedLocalLocked(ctx context.Context, life
 		return Options{}, err
 	}
 	provided, err := x86CallerSourceFingerprint(file)
-	if err != nil || provided != fingerprint || len(options.Sigs) != len(actual.Funcs) {
+	if err != nil || provided != fingerprint {
 		return Options{}, goAMD64FrameContext("fixed local binding requires the exact full original parsed file")
 	}
 	resolve := options.ResolveSym
@@ -173,6 +174,7 @@ func (source *GoAMD64FrameSource) bindFixedLocalLocked(ctx context.Context, life
 		inputs:         make(map[string][32]byte, len(source.inputs)),
 		signatures:     make(map[string]FuncSig),
 		frames:         make(map[string]bool),
+		leaves:         make(map[string]string),
 		symbols:        make(map[string]string),
 		declarations:   make(map[string]goAMD64FrameDeclaration),
 		numericalReads: options.NumericalReads,
@@ -206,8 +208,21 @@ func (source *GoAMD64FrameSource) bindFixedLocalLocked(ctx context.Context, life
 	if err != nil {
 		return Options{}, err
 	}
+	leafSources := make(map[string]string)
+	for name, observed := range source.functions {
+		if observed.privateLeaf {
+			leafSources[observed.sourceSymbol] = name
+		}
+	}
 	for _, fn := range actual.Funcs {
 		name := resolve(fn.Sym)
+		if native, leaf := leafSources[fn.Sym]; leaf {
+			if _, supplied := options.Sigs[name]; supplied || name == "" {
+				return Options{}, goAMD64FrameContext("private leaf cannot acquire a supplied callable signature")
+			}
+			binding.leaves[fn.Sym], binding.symbols[fn.Sym] = native, name
+			continue
+		}
 		observed, found := source.functions[name]
 		declaration, declared := declarations[name]
 		expectedName := pkg.Path + "." + strings.TrimPrefix(fn.Sym, "·")
@@ -219,11 +234,6 @@ func (source *GoAMD64FrameSource) bindFixedLocalLocked(ctx context.Context, life
 			return Options{}, goAMD64FrameContext("fixed local actual declaration/object/symbol mismatch: %s", fn.Sym)
 		}
 		if fn.FrameSize > 0 {
-			proofSig := sig
-			proofSig.x86FixedLocal = binding
-			if _, err := proveX86FixedLocal(fn, proofSig); err != nil {
-				return Options{}, err
-			}
 			binding.frames[name] = true
 			sig.x86FixedLocal = binding
 		}
@@ -236,8 +246,27 @@ func (source *GoAMD64FrameSource) bindFixedLocalLocked(ctx context.Context, life
 		binding.symbols[fn.Sym] = name
 		options.Sigs[name] = sig
 	}
+	if len(options.Sigs)+len(binding.leaves) != len(actual.Funcs) {
+		return Options{}, goAMD64FrameContext("fixed local complete entry/leaf signature inventory differs")
+	}
 	if len(binding.frames) == 0 {
 		return Options{}, goAMD64FrameContext("complete source has no private fixed frame to bind")
+	}
+	graph, err := newX86FixedLocalLeafGraph(actual, options, binding)
+	if err != nil {
+		return Options{}, err
+	}
+	for _, fn := range actual.Funcs {
+		name := binding.symbols[fn.Sym]
+		if !binding.frames[name] {
+			continue
+		}
+		if graph != nil {
+			fn.x86DirectTailRoot = graph.roots[fn.Sym]
+		}
+		if _, err := proveX86FixedLocal(fn, options.Sigs[name]); err != nil {
+			return Options{}, err
+		}
 	}
 	return options, nil
 }
@@ -301,6 +330,9 @@ func freezeX86FixedLocalFile(file *File, bindings []*x86FixedLocalBinding) (*Fil
 	if err != nil || fingerprint != binding.file {
 		return nil, goAMD64FrameContext("fixed local sealed source snapshot changed")
 	}
+	if graph := file.x86DirectTails; graph != nil && graph.fixedLocal == binding {
+		actual.x86DirectTails = graph // Same verified complete source, fresh instruction slices.
+	}
 	return actual, nil
 }
 
@@ -345,6 +377,12 @@ func verifyX86FixedLocalBindings(file *File, options Options) ([]*x86FixedLocalB
 		}
 		for _, fn := range file.Funcs {
 			name := options.ResolveSym(fn.Sym)
+			if _, leaf := binding.leaves[fn.Sym]; leaf {
+				if _, supplied := options.Sigs[name]; supplied || name != binding.symbols[fn.Sym] {
+					return nil, goAMD64FrameContext("private leaf consumer changed its non-callable identity")
+				}
+				continue
+			}
 			actual, found := options.Sigs[name]
 			expected, declared := binding.signatures[name]
 			var frame *x86FixedLocalBinding
@@ -394,6 +432,12 @@ func (binding *x86FixedLocalBinding) verify() error {
 			!binding.source.matchesFixedLocalDeclaration(name, declaration) ||
 			binding.frames[name] != (binding.source.functions[name].locals > 0) {
 			return goAMD64FrameContext("fixed local typed language/object identity changed: %s", name)
+		}
+	}
+	for symbol, native := range binding.leaves {
+		fn, found := binding.source.functions[native]
+		if !found || !fn.privateLeaf || fn.sourceSymbol != symbol || fn.signature.Name != "" {
+			return goAMD64FrameContext("private leaf original machine identity changed")
 		}
 	}
 	return nil

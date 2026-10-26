@@ -102,6 +102,9 @@ type goAMD64FrameDeclaration struct {
 
 type goAMD64FrameFunction struct {
 	objectSymbol, listingSymbol string
+	sourceSymbol                string
+	privateLeaf                 bool
+	nativeABI                   uint16
 	locals, args                int64
 	split                       bool
 	prologue                    int // original byte offset, after any generated stack check
@@ -436,7 +439,11 @@ func captureGoAMD64FrameSource(ctx context.Context, pkg GoPackage, request GoAMD
 				return nil, goAMD64FrameContext("duplicate original TEXT symbol")
 			}
 			declaration, exists := source.declarations[symbol]
-			if !exists || !reflect.DeepEqual(fn.signature, declaration.signature) {
+			if fn.privateLeaf {
+				if exists {
+					return nil, goAMD64FrameContext("private leaf acquired a Go declaration")
+				}
+			} else if !exists || !reflect.DeepEqual(fn.signature, declaration.signature) {
 				return nil, goAMD64FrameContext("object lacks its independently checked declaration/layout")
 			}
 			fn.transport, fn.languageType = declaration.transport, declaration.languageType
@@ -1386,7 +1393,7 @@ func (source *GoAMD64FrameSource) preprocess(name string, original []byte) (stri
 	return expand(name, original)
 }
 
-var goAMD64FrameHeader = regexp.MustCompile(`^(\S+) (STEXT(?:FIPS)?)( nosplit)?(?: asm)? size=([0-9]+) (?:align=0x[0-9a-f]+ )?args=0x([0-9a-f]+) locals=0x([0-9a-f]+)(?: funcid=0x[0-9a-f]+)?(?: align=0x[0-9a-f]+)?$`)
+var goAMD64FrameHeader = sdkAMD64FrameNativeHeader
 var goAMD64FrameRow = regexp.MustCompile(`^\s*0x([0-9a-f]+) [0-9]+ \((.+)\)\s+(.+)$`)
 
 // Zero-frame ordinary entries have no automatic saved-BP slot. They remain
@@ -1425,10 +1432,30 @@ func goAMD64FrameListingWithDataObject(listing []byte, file *File, pkg GoPackage
 	if data == nil || unwind != nil && !reflect.DeepEqual(data.Member.Texts, unwind.Texts) {
 		return nil, goAMD64FrameContext("mixed DATA/Windows complete object TEXT observations differ")
 	}
-	return goAMD64FrameListingRecords(listing, file, pkg, origins, data.Member.Texts, unwind, data, target, directory, root)
+	texts, err := goAMD64FrameSourceTexts(listing, data)
+	if err != nil {
+		return nil, err
+	}
+	return goAMD64FrameListingRecords(listing, file, pkg, origins, texts, unwind, data, target, directory, root)
 }
 
 func goAMD64FrameListingRecords(listing []byte, file *File, pkg GoPackage, origins map[string]int, texts []gostaticstorage.TextRecord, unwind *gostaticstorage.WindowsAMD64AssemblyUnwind, data *gostaticstorage.AMD64AssemblyData, splitTarget, splitDirectory, splitRoot string) (map[string]goAMD64FrameFunction, error) {
+	leaves, err := goAMD64FramePrivateLeaves(file, pkg)
+	if err != nil {
+		return nil, err
+	}
+	if len(leaves) != 0 && data == nil {
+		return nil, goAMD64FrameContext("private leaf requires complete original source/object association")
+	}
+	names := make(map[string]string)
+	if data != nil {
+		if len(data.TextOrder) != len(file.Funcs) {
+			return nil, goAMD64FrameContext("complete parsed/source-object TEXT counts differ")
+		}
+		for index, fn := range file.Funcs {
+			names[fn.Sym] = data.TextOrder[index].Name
+		}
+	}
 	functions := make(map[string]goAMD64FrameFunction)
 	objects := make(map[string]gostaticstorage.TextRecord)
 	metadata := make(map[string][]byte)
@@ -1463,7 +1490,7 @@ func goAMD64FrameListingRecords(listing []byte, file *File, pkg GoPackage, origi
 	for scanner.Scan() {
 		line := scanner.Text()
 		if header := goAMD64FrameHeader.FindStringSubmatch(line); header != nil {
-			if header[3] == "" && (splitTarget == "" || texts == nil) {
+			if header[4] == "" && (splitTarget == "" || texts == nil) {
 				return nil, goAMD64FrameContext("automatic split layout requires its complete original object")
 			}
 			if metadataName != "" {
@@ -1482,11 +1509,15 @@ func goAMD64FrameListingRecords(listing []byte, file *File, pkg GoPackage, origi
 				if header[2] == "STEXTFIPS" {
 					kind = 2
 				}
-				if texts[textIndex].Kind != kind || texts[textIndex].ABI != 0 {
+				abi := uint16(0)
+				if header[3] != "" {
+					abi = 65535
+				}
+				if texts[textIndex].Kind != kind || texts[textIndex].ABI != abi {
 					return nil, goAMD64FrameContext("complete object/listing TEXT kind or ABI differs")
 				}
 				flags := uint8(0)
-				if header[3] != "" {
+				if header[4] != "" {
 					flags = 16
 				}
 				if splitTarget != "" && texts[textIndex].Flags != flags {
@@ -1503,10 +1534,13 @@ func goAMD64FrameListingRecords(listing []byte, file *File, pkg GoPackage, origi
 			if _, duplicate := functions[name]; duplicate {
 				return nil, goAMD64FrameContext("duplicate native TEXT")
 			}
-			expected, _ = strconv.ParseInt(header[4], 10, 64)
-			args, _ := strconv.ParseInt(header[5], 16, 64)
-			locals, _ := strconv.ParseInt(header[6], 16, 64)
-			functions[name] = goAMD64FrameFunction{locals: locals, args: args, split: header[3] == "", positions: make(map[int]string), sourcePositions: make(map[int][]goAMD64FrameSourcePosition)}
+			expected, _ = strconv.ParseInt(header[6], 10, 64)
+			args, argsErr := strconv.ParseUint(header[7], 16, 64)
+			locals, _ := strconv.ParseInt(header[8], 16, 64)
+			if argsErr != nil || int64(args) < 0 && int64(args) != -0x80000000 {
+				return nil, goAMD64FrameContext("invalid original native argument-size observation")
+			}
+			functions[name] = goAMD64FrameFunction{locals: locals, args: int64(args), split: header[4] == "", positions: make(map[int]string), sourcePositions: make(map[int][]goAMD64FrameSourcePosition)}
 			continue
 		}
 		if header, exists := metadataHeaders[line]; exists {
@@ -1597,6 +1631,9 @@ func goAMD64FrameListingRecords(listing []byte, file *File, pkg GoPackage, origi
 	bound := make(map[string]goAMD64FrameFunction)
 	for _, original := range file.Funcs {
 		symbol := pkg.Path + "." + strings.TrimPrefix(original.Sym, "·")
+		if leaves[original.Sym] {
+			symbol = names[original.Sym]
+		}
 		observed := symbol
 		fn, exists := functions[observed]
 		if !exists {
@@ -1607,24 +1644,34 @@ func goAMD64FrameListingRecords(listing []byte, file *File, pkg GoPackage, origi
 			fn, exists = functions[observed]
 		}
 		declaration, declared := pkg.Types.Scope().Lookup(strings.TrimPrefix(original.Sym, "·")).(*types.Func)
-		if !exists || !declared || original.FrameSize < 0 || original.FrameSize%8 != 0 || fn.locals != goAMD64FrameNativeLocals(original.FrameSize) || fn.args != original.ArgSize || strings.Contains(original.Sym, "<") {
+		fn.sourceSymbol, fn.privateLeaf = original.Sym, leaves[original.Sym]
+		if text, found := objects[observed]; found {
+			fn.nativeABI = text.ABI
+		}
+		if fn.privateLeaf {
+			if !exists || declared || fn.split || fn.locals != 0 || fn.args != 0 && fn.args != -0x80000000 {
+				return nil, goAMD64FrameContext("original private leaf/native zero-frame identity differs")
+			}
+		} else if !exists || !declared || original.FrameSize < 0 || original.FrameSize%8 != 0 || fn.locals != goAMD64FrameNativeLocals(original.FrameSize) || fn.args != original.ArgSize || strings.Contains(original.Sym, "<") {
 			return nil, goAMD64FrameContext("original ABI0 TEXT/declaration/frame identity mismatch")
 		}
 		var err error
-		fn.signature, err = DeriveGoFuncABI0Signature(symbol, declaration, "amd64", types.SizesFor("gc", "amd64"))
-		if err != nil {
-			return nil, err
-		}
-		var end int64
-		for _, slot := range append(append([]FrameSlot(nil), fn.signature.Frame.Params...), fn.signature.Frame.Results...) {
-			if next := slot.Offset + frameTypeSize(slot.Type, 8); next > end {
-				end = next
+		if !fn.privateLeaf {
+			fn.signature, err = DeriveGoFuncABI0Signature(symbol, declaration, "amd64", types.SizesFor("gc", "amd64"))
+			if err != nil {
+				return nil, err
+			}
+			var end int64
+			for _, slot := range append(append([]FrameSlot(nil), fn.signature.Frame.Params...), fn.signature.Frame.Results...) {
+				if next := slot.Offset + frameTypeSize(slot.Type, 8); next > end {
+					end = next
+				}
+			}
+			if !goabi.MatchesABI0TextSize("amd64", fn.args, end) {
+				return nil, goAMD64FrameContext("original TEXT args disagree with actual declaration")
 			}
 		}
-		if !goabi.MatchesABI0TextSize("amd64", fn.args, end) {
-			return nil, goAMD64FrameContext("original TEXT args disagree with actual declaration")
-		}
-		if err := goAMD64FrameSourceInstructions(original); err != nil {
+		if err := goAMD64FrameSourceInstructions(original, leaves); err != nil {
 			return nil, err
 		}
 		if original.FrameSize > 0 {
@@ -1636,7 +1683,15 @@ func goAMD64FrameListingRecords(listing []byte, file *File, pkg GoPackage, origi
 				}
 				fn.prologue = shape.prologue
 			}
-			if err := goAMD64FrameMachineShape(shape, original.FrameSize); err != nil {
+			calls, err := goAMD64FramePrivateCallPCs(shape, original, objects[observed], leaves, names)
+			if err != nil {
+				return nil, err
+			}
+			if err := goAMD64FrameMachineShapeWithCalls(shape, original.FrameSize, calls); err != nil {
+				return nil, err
+			}
+		} else if fn.privateLeaf {
+			if err := goAMD64FrameMachineShapeWithCalls(fn, 0, nil); err != nil {
 				return nil, err
 			}
 		} else if fn.split {
@@ -1651,11 +1706,19 @@ func goAMD64FrameListingRecords(listing []byte, file *File, pkg GoPackage, origi
 	return bound, nil
 }
 
-func goAMD64FrameSourceInstructions(fn Func) error {
+func goAMD64FrameSourceInstructions(fn Func, privateLeaves ...map[string]bool) error {
 	localJump := false
 	for _, ins := range fn.Instrs {
 		switch ins.Op {
-		case "BYTE", "WORD", "LONG", "QUAD", OpCALL, "PCALIGN", "PCALIGNMAX":
+		case OpCALL:
+			if len(privateLeaves) != 1 || len(ins.Args) != 1 || ins.Args[0].Kind != OpSym {
+				return goAMD64FrameContext("original CALL needs its complete same-source leaf")
+			}
+			name, offset, valid := parseSBRef(ins.Args[0].Sym)
+			if !valid || offset != 0 || !privateLeaves[0][name] {
+				return goAMD64FrameContext("original CALL needs its complete same-source leaf")
+			}
+		case "BYTE", "WORD", "LONG", "QUAD", "PCALIGN", "PCALIGNMAX":
 			return goAMD64FrameContext("raw, calling or address-sensitive original frame requires a later source contract")
 		case OpJMP:
 			localJump = true
@@ -1675,6 +1738,10 @@ func goAMD64FrameSourceInstructions(fn Func) error {
 }
 
 func goAMD64FrameMachineShape(fn goAMD64FrameFunction, frame int64) error {
+	return goAMD64FrameMachineShapeWithCalls(fn, frame, nil)
+}
+
+func goAMD64FrameMachineShapeWithCalls(fn goAMD64FrameFunction, frame int64, calls map[int]bool) error {
 	var instructions []x86asm.Inst
 	starts := make(map[int]bool)
 	for pc := 0; pc < len(fn.code); {
@@ -1699,7 +1766,8 @@ func goAMD64FrameMachineShape(fn goAMD64FrameFunction, frame int64) error {
 		} else {
 			var err error
 			ins, err = x86asm.Decode(fn.code[pc:], 64)
-			if err != nil || ins.Len == 0 || ins.Op == 0 || ins.Op == x86asm.CALL || ins.Op == x86asm.LCALL {
+			if err != nil || ins.Len == 0 || ins.Op == 0 || ins.Op == x86asm.LCALL ||
+				ins.Op == x86asm.CALL && (!calls[pc] || ins.Len != 5) {
 				return goAMD64FrameContext("unknown or calling original machine instruction")
 			}
 		}
@@ -1708,7 +1776,7 @@ func goAMD64FrameMachineShape(fn goAMD64FrameFunction, frame int64) error {
 		}
 		// A projected source body must not jump back into the discarded
 		// automatic stack check or forward into its runtime retry tail.
-		if relative, ok := ins.Args[0].(x86asm.Rel); ok && fn.split {
+		if relative, ok := ins.Args[0].(x86asm.Rel); ok && fn.split && ins.Op != x86asm.CALL {
 			destination := pc + ins.Len + int(relative)
 			if destination < 0 || destination >= len(fn.code) {
 				return goAMD64FrameContext("source branch enters an automatic split region")
@@ -1722,6 +1790,29 @@ func goAMD64FrameMachineShape(fn goAMD64FrameFunction, frame int64) error {
 		if !starts[pc] {
 			return goAMD64FrameContext("original source position is not a machine instruction boundary")
 		}
+	}
+	if frame == 0 {
+		returns := 0
+		for _, ins := range instructions {
+			if ins.Op == x86asm.PUSH || ins.Op == x86asm.POP {
+				return goAMD64FrameContext("private leaf acquired an implicit native BP/SP frame")
+			}
+			for _, arg := range ins.Args {
+				if reg, ok := arg.(x86asm.Reg); ok && (reg == x86asm.RSP || reg == x86asm.ESP || reg == x86asm.SP || reg == x86asm.SPB) {
+					return goAMD64FrameContext("private leaf machine instruction observes its physical SP")
+				}
+				if memory, ok := arg.(x86asm.Mem); ok && (memory.Base == x86asm.RSP || memory.Index == x86asm.RSP) {
+					return goAMD64FrameContext("private leaf machine memory observes its physical SP")
+				}
+			}
+			if ins.Op == x86asm.RET {
+				returns++
+			}
+		}
+		if returns == 0 {
+			return goAMD64FrameContext("private leaf has no original native return")
+		}
+		return goAMD64FrameMachineBranches(instructions, starts)
 	}
 	if len(instructions) < 6 {
 		return goAMD64FrameContext("partial automatic BP/SP frame")
@@ -1765,9 +1856,16 @@ func goAMD64FrameMachineShape(fn goAMD64FrameFunction, frame int64) error {
 	if returns == 0 || last.Op != x86asm.RET && last.Op != x86asm.JMP {
 		return goAMD64FrameContext("original frame has no conventional RET")
 	}
-	pc = 0
+	return goAMD64FrameMachineBranches(instructions, starts)
+}
+
+func goAMD64FrameMachineBranches(instructions []x86asm.Inst, starts map[int]bool) error {
+	pc := 0
 	for _, ins := range instructions {
 		pc += ins.Len
+		if ins.Op == x86asm.CALL {
+			continue // Exact source/relocation target, not a local body branch.
+		}
 		relative, direct := ins.Args[0].(x86asm.Rel)
 		if ins.Op == x86asm.JMP && !direct || direct && !starts[pc+int(relative)] {
 			return goAMD64FrameContext("original branch leaves the source body or enters an automatic frame interior")
@@ -1833,7 +1931,13 @@ func goAMD64FrameObjectBytes(data []byte, wanted map[string]goAMD64FrameFunction
 		return goAMD64FrameContext("object/listing symbol inventories differ")
 	}
 	for _, fn := range wanted {
-		if !bytes.Equal(actual[fn.objectSymbol], fn.code) {
+		name := fn.objectSymbol
+		if fn.privateLeaf && fn.nativeABI == 65535 {
+			// cmd/internal/objfile.goobjName renders the actual static ABI
+			// bank as version 1. Do not strip arbitrary symbol suffixes.
+			name += "<1>"
+		}
+		if !bytes.Equal(actual[name], fn.code) {
 			return goAMD64FrameContext("object/listing physical bytes differ for %s", fn.objectSymbol)
 		}
 	}

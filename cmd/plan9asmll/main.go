@@ -834,6 +834,7 @@ func compileOneAttempt(pkg *packages.Package, arch plan9asm.Arch, goos, goarch, 
 	}
 	var sigs map[string]plan9asm.FuncSig
 	var declaredArgSizes map[string]int64
+	registerFallbacks := make(map[string]plan9asm.FuncSig)
 	if numericalSource != nil {
 		sigs, declaredArgSizes, _, err = x86SDKDirectTailDeclarationInventory(numericalSource.goPackage, file,
 			plan9asm.Options{Goarch: goarch, ResolveSym: resolve})
@@ -842,7 +843,7 @@ func compileOneAttempt(pkg *packages.Package, arch plan9asm.Arch, goos, goarch, 
 		}
 	}
 	if sigs == nil {
-		sigs, declaredArgSizes, err = sigsForAsmFileWithDeclarations(signaturePackage, file, resolve, goarch, testDeclarations)
+		sigs, declaredArgSizes, err = inferSigsForAsmFile(signaturePackage, file, resolve, goarch, testDeclarations, registerFallbacks)
 		if err != nil {
 			return fmt.Errorf("infer signatures: %w", err)
 		}
@@ -913,7 +914,7 @@ func compileOneAttempt(pkg *packages.Package, arch plan9asm.Arch, goos, goarch, 
 		}
 	}
 	sigs, fixedLocalSource, err := prepareAMD64FixedLocalSource(pkg, file, t.AsmFile, goos+"/"+goarch,
-		triple, goarch, ccfg, resolve, sigs)
+		triple, goarch, ccfg, resolve, sigs, registerFallbacks)
 	if err != nil {
 		return fmt.Errorf("prove original fixed local backing: %w", err)
 	}
@@ -1532,6 +1533,12 @@ func sigsForAsmFile(pkg *packages.Package, file *plan9asm.File, resolve func(str
 }
 
 func sigsForAsmFileWithDeclarations(pkg *packages.Package, file *plan9asm.File, resolve func(string) string, goarch string, declarations asmDeclarationLookup) (map[string]plan9asm.FuncSig, map[string]int64, error) {
+	return inferSigsForAsmFile(pkg, file, resolve, goarch, declarations, nil)
+}
+
+func inferSigsForAsmFile(pkg *packages.Package, file *plan9asm.File, resolve func(string) string, goarch string,
+	declarations asmDeclarationLookup, registerFallbacks map[string]plan9asm.FuncSig,
+) (map[string]plan9asm.FuncSig, map[string]int64, error) {
 	sigs := map[string]plan9asm.FuncSig{}
 	declaredArgSizes := map[string]int64{}
 	declaredSigs := map[string]bool{}
@@ -1811,6 +1818,14 @@ func sigsForAsmFileWithDeclarations(pkg *packages.Package, file *plan9asm.File, 
 		if fallbackAsmSigs[name] && !knownABISigs[name] {
 			if err := validateInferredX86FrameExtent(fn, sigs[name], goarch); err != nil {
 				return nil, nil, err
+			}
+			// Record only this producer's plain register-entry guesses. The
+			// value has no mutable slices or source capabilities to borrow.
+			sig := sigs[name]
+			plain := plan9asm.FuncSig{Name: name, Ret: sig.Ret, Args: sig.Args, Frame: sig.Frame}
+			if registerFallbacks != nil && goarch == "amd64" && len(sig.Args)+len(sig.Frame.Params)+len(sig.Frame.Results) == 0 &&
+				reflect.DeepEqual(sig, plain) {
+				registerFallbacks[name] = plain
 			}
 		}
 	}

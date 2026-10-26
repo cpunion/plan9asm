@@ -56,7 +56,7 @@ GLOBL literal<>(SB), RODATA, $8`
 		t.Fatal(err)
 	}
 	sigs, owner, err := prepareAMD64FixedLocalSource(pkg, file, input, "linux/amd64", "x86_64-unknown-linux-gnu",
-		"amd64", config, resolve, sigs)
+		"amd64", config, resolve, sigs, nil)
 	if err != nil || owner == nil {
 		t.Fatal("complete unchanged source did not retain its actual owner", err)
 	}

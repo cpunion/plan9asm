@@ -76,6 +76,23 @@ func cloneFixedLocalState(input x86FixedLocalState) x86FixedLocalState {
 }
 
 func proveX86FixedLocal(fn Func, sig FuncSig) (Func, error) {
+	if view := fn.x86DirectTailRoot; view != nil {
+		if view.graph.fixedLocal != sig.x86FixedLocal || view.graph.roots[fn.Sym] == nil {
+			return fn, goAMD64FrameContext("private leaf CFG has a foreign root/frame owner")
+		}
+		proven, err := proveX86FixedLocalBody(fixedLocalProofFunction(fn), sig)
+		if err != nil {
+			return fn, err
+		}
+		copy := *view
+		copy.instructions = proven.Instrs
+		fn.x86DirectTailRoot, fn.x86FixedLocal = &copy, proven.x86FixedLocal
+		return fn, nil
+	}
+	return proveX86FixedLocalBody(fn, sig)
+}
+
+func proveX86FixedLocalBody(fn Func, sig FuncSig) (Func, error) {
 	voidReturn := sig.Ret == Void && len(sig.Frame.Results) == 0
 	valueReturn := sig.Ret != "" && sig.Ret != Void && len(sig.Frame.Results) > 0 && len(sig.Frame.Results) <= 4096
 	if fn.FrameSize <= 0 || fn.FrameSize > 64<<10 || fn.FrameSize%8 != 0 ||
@@ -145,6 +162,9 @@ func fixedLocalEffectPlan(fn Func) (map[int]x86TypedByteEffect, error) {
 	for index, ins := range fn.Instrs {
 		if ins.x86Encoded || ins.x86SourceRaw != nil || ins.x86AddressBits != 0 || ins.x86SegmentPrefix != 0 {
 			return nil, goAMD64FrameContext("fixed local source contains raw/native effects")
+		}
+		if fn.x86DirectTailRoot.privateCallTransition(index) {
+			continue // Complete private source graph owns only this control edge.
 		}
 		if effect, known, err := fixedLocalVectorByteEffect(ins); known {
 			if err != nil {
@@ -299,6 +319,16 @@ func fixedLocalBranchLabel(ins Instr) (string, bool) {
 }
 
 func fixedLocalEdges(fn Func) (map[int][]int, []int, error) {
+	if view := fn.x86DirectTailRoot; view != nil {
+		if len(fn.Instrs) != len(view.points) || len(view.edges) != len(view.points) {
+			return nil, nil, goAMD64FrameContext("private leaf CFG instruction inventory differs")
+		}
+		edges, instructions := make(map[int][]int, len(view.edges)), make([]int, len(view.points))
+		for pc, targets := range view.edges {
+			instructions[pc], edges[pc] = pc, targets
+		}
+		return edges, instructions, nil
+	}
 	labels := make(map[string]int)
 	var instructions []int
 	for index, ins := range fn.Instrs {
@@ -418,7 +448,7 @@ func fixedLocalLinearEdges(fn Func, edges map[int][]int, instructions []int) []b
 	linear := make([]bool, len(instructions))
 	for pc, targets := range edges {
 		op := fn.Instrs[instructions[pc]].Op
-		linear[pc] = op != OpJMP && op != OpRET && !isAMD64ConditionalBranch(op) &&
+		linear[pc] = op != OpJMP && op != OpRET && op != OpCALL && !isAMD64ConditionalBranch(op) &&
 			len(targets) == 1 && targets[0] == pc+1 && pc+1 < len(instructions) && predecessors[pc+1] == 1
 	}
 	return linear
@@ -480,7 +510,11 @@ func replayX86FixedLocalCFG(fn *Func, sig FuncSig, proof *x86FixedLocalProof, re
 			ins.x86FixedLocalMemory = nil
 			proof.ordinal = instructions[pc]
 			var err error
-			if effect, found := effects[instructions[pc]]; found {
+			transition := fn.x86DirectTailRoot.privateCallTransition(pc)
+			if transition {
+				// CALL/RET preserve all source-visible bytes and FLAGS in an
+				// observed zero-frame leaf. Its actual body performs every write.
+			} else if effect, found := effects[instructions[pc]]; found {
 				err = fixedLocalTypedByteStep(&ins, &current, proof, residue, effect)
 			} else {
 				err = fixedLocalStep(&ins, &current, sig, proof, residue)
@@ -503,7 +537,7 @@ func replayX86FixedLocalCFG(fn *Func, sig FuncSig, proof *x86FixedLocalProof, re
 				}
 			}
 			accesses[pc] = ins.x86FixedLocalMemory
-			returned = returned || ins.Op == OpRET
+			returned = returned || ins.Op == OpRET && !transition
 			if active != nil {
 				if pc == active.latch {
 					if active.continues(number) {

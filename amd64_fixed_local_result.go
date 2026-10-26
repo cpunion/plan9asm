@@ -17,6 +17,7 @@ func (c *amd64Ctx) checkFixedLocalResultInitialization() error {
 		c.goarch != "amd64" || c.targetTriple != binding.target || fn.FrameSize != proof.frame || c.frameSize != fn.FrameSize {
 		return fail("source/proof/target/frame role differs")
 	}
+	fn = fixedLocalProofFunction(fn)
 	if c.fixedLocalResult == nil {
 		if err := binding.verify(); err != nil {
 			return err
@@ -162,14 +163,41 @@ func newX86FixedLocalResultSnapshot(binding *x86FixedLocalBinding, arch string) 
 // reference spelling alone is not proof, and supplied attributes never pass
 // through the inference registry or become a removable source difference.
 func fixedLocalResultFunctions(file *File, binding *x86FixedLocalBinding, arch string) (map[string]x86FixedLocalResultFunction, bool) {
+	if len(binding.leaves) != 0 {
+		signatures, err := cloneFixedLocalSigs(binding.signatures)
+		if err != nil {
+			return nil, false
+		}
+		for name, sig := range signatures {
+			if binding.frames[name] {
+				sig.x86FixedLocal = binding
+				signatures[name] = sig
+			}
+		}
+		options := Options{Goarch: arch, Sigs: signatures,
+			ResolveSym: func(symbol string) string { return binding.symbols[symbol] }}
+		graph, err := newX86FixedLocalLeafGraph(file, options, binding)
+		if err != nil {
+			return nil, false
+		}
+		copy := *file
+		copy.x86DirectTails = graph
+		file = &copy
+	}
 	registry := newFeatureAttrRegistry()
 	functions := make(map[string]x86FixedLocalResultFunction, len(file.Funcs))
 	for _, fn := range file.Funcs {
+		if file.x86DirectTailHelper(fn.Sym) {
+			continue
+		}
 		resolved, found := binding.symbols[fn.Sym]
 		sig, declared := binding.signatures[resolved]
 		_, duplicate := functions[resolved]
-		if !found || !declared || duplicate || len(fn.X86RawText) != 0 || amd64IsRelocationAnchor(fn, sig) || file.x86DirectTailHelper(fn.Sym) {
+		if !found || !declared || duplicate || len(fn.X86RawText) != 0 || amd64IsRelocationAnchor(fn, sig) {
 			return nil, false
+		}
+		if view := file.x86DirectTailView(fn.Sym); view != nil {
+			fn = view.features()
 		}
 		derived := ""
 		if sig.Attrs == "" {

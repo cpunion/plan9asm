@@ -302,7 +302,7 @@ func testAMD64DownloadedFixedLocalIdentityControls(t *testing.T, goos string, mi
 				consumer.Input.SourceModule = "example.invalid/other"
 			}
 			bound, source, err := prepareAMD64FixedLocalSource(pkg, file, assembly, target,
-				triple, "amd64", config, resolve, sigs)
+				triple, "amd64", config, resolve, sigs, nil)
 			if source != nil {
 				if closeErr := source.close(); closeErr != nil {
 					t.Error(closeErr)

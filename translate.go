@@ -458,7 +458,7 @@ func translateIRTextWithFixedLocalResult(file *File, opt Options, fixedLocalResu
 		if function.x86ContinuationFlow != nil {
 			function.x86ResultFlowBudget = continuationBudget
 		}
-		if view := file.x86DirectTailView(fn.Sym); view != nil {
+		if view := file.x86DirectTailView(fn.Sym); view != nil && function.x86FixedLocal == nil {
 			function.x86DirectTailRoot = view
 		}
 		name := resolve(fn.Sym)

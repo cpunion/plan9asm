@@ -92,10 +92,12 @@ func runSDKFixedLocalDefaultProfile(t *testing.T, commandPaths bool) {
 				t.Fatalf("complete actual SDK source failure disappeared: %v; %+v", err, report)
 			}
 			failure := report.Fails[0].Err
-			if !strings.Contains(failure, "SDK-primary frame requires an exact Go-declared logical ABI0 entry") ||
-				!strings.Contains(failure, "polyHashADInternal<>") || !strings.Contains(failure, "declared=false") ||
+			// Complete capture now distinguishes the original non-callable
+			// leaf. The unchanged whole source still exceeds the combined
+			// continuation budget; this is not a translation success.
+			if !strings.Contains(failure, "empty/oversized source continuation instruction budget") ||
 				strings.Contains(failure, "ordinary observation requires exact GOENV") || strings.Contains(failure, "owned main") {
-				t.Fatalf("default profile/SDK source was mislabeled, or helper acquired frame authority: %s", failure)
+				t.Fatalf("default profile/SDK source did not reach its complete graph budget boundary: %s", failure)
 			}
 			if err := filepath.WalkDir(output, func(name string, entry os.DirEntry, err error) error {
 				if err == nil && !entry.IsDir() {

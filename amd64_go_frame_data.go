@@ -154,6 +154,9 @@ func goAMD64FrameDataBlock(layout gostaticstorage.ASMGlobalLayout) ([]string, er
 }
 
 func goAMD64FrameDataRelocationLine(relocation gostaticstorage.TextRelocation, observed *gostaticstorage.AMD64AssemblyData) string {
+	if line := goAMD64FramePrivateCallRelocation(relocation, observed); line != "" {
+		return line // Exact local TEXT identity only; the caller validates its leaf role.
+	}
 	if relocation.Type != 14 || relocation.Size != 4 || !relocation.Target.ABIKnown {
 		return ""
 	}
@@ -193,7 +196,7 @@ func goAMD64FrameDataTextJoin(functions map[string]goAMD64FrameFunction, observe
 	}
 	for _, text := range observed.Member.Texts {
 		fn, found := functions[text.Name]
-		if !found || text.ABI != 0 || text.Kind != 1 && text.Kind != 2 || text.Flags != fn.nativeFlags() || text.Flags2 != 0 || !bytes.Equal(text.Code, fn.code) {
+		if !found || text.ABI != fn.nativeABI || text.Kind != 1 && text.Kind != 2 || text.Flags != fn.nativeFlags() || text.Flags2 != 0 || !bytes.Equal(text.Code, fn.code) {
 			return goAMD64FrameContext("mixed DATA object/listing TEXT ABI, flags or complete bytes differ")
 		}
 		if err := goAMD64FrameSourcePCs(text, fn, directory, origins, root); err != nil {

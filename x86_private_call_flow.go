@@ -2,7 +2,8 @@ package plan9asm
 
 import "strings"
 
-// CALL is a source-control edge only inside this complete zero-frame graph.
+// CALL is a source-control edge only inside this complete source graph. A
+// nonzero root needs its independent original-frame owner; helpers stay zero.
 // The original instruction/relocation coordinates stay unchanged. Each static
 // callsite gets its own return context; a tail edge keeps that context.
 func (view *x86DirectTailRoot) expandPrivateCalls(limit int) (*x86DirectTailRoot, error) {
@@ -37,14 +38,20 @@ func (view *x86DirectTailRoot) expandPrivateCalls(limit int) (*x86DirectTailRoot
 	}
 	for text, span := range ranges {
 		fn := view.graph.original.Funcs[text]
+		framedRoot := view.graph.fixedLocal != nil && text == view.text &&
+			view.graph.fixedLocal.frames[view.graph.symbols[fn.Sym]]
 		_, header := splitOpcode(fn.Instrs[0].Raw)
 		parts := strings.Split(header, ",")
-		if len(parts) != 3 {
+		if len(parts) != 3 && !framedRoot {
 			return nil, x86DirectTailContext("private CALL needs explicit zero-frame source flags")
 		}
-		flags, err := nativeFlags(parts[1], "NOSPLIT", "NOFRAME", "DUPOK")
+		flags := map[string]bool{}
+		var err error
+		if len(parts) == 3 {
+			flags, err = nativeFlags(parts[1], "NOSPLIT", "NOFRAME", "DUPOK")
+		}
 		frame, args, frameErr := parseTEXTFrame(parts)
-		if err != nil || !flags["NOSPLIT"] || frameErr != nil || frame != fn.FrameSize || args != fn.ArgSize {
+		if err != nil || !flags["NOSPLIT"] && !framedRoot || frameErr != nil || frame != fn.FrameSize || args != fn.ArgSize {
 			return nil, x86DirectTailContext("private CALL source prologue/frame is not closed: %s", fn.Sym)
 		}
 		hasCall, hasTail := false, false

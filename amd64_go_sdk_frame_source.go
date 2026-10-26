@@ -23,12 +23,13 @@ type goAMD64SDKFrameOrigin struct {
 // CaptureGoAMD64SDKFrameSource is a distinct actual SDK-primary typed ABI0
 // native frame factory. It authenticates the whole selected source/profile,
 // compiler graph and all TEXTs, without relabeling SDK source as owned-main.
-// Entries must all be Go-declared with exact logical/native names,
-// layout and source PCs. Nonzero frames also require automatic BP/SP shapes;
+// Entries must be Go-declared with exact logical/native names, layout and
+// source PCs. Same-source zero-frame leaf helpers retain no Go signature.
+// Nonzero frames also require automatic BP/SP shapes;
 // zero-frame siblings retain their ordinary ABI0 path without local backing.
 // Generated split checks are observed separately from the source body.
-// Private helpers, native callers and ABI selectors
-// composition require separate contracts. BindFixedLocal still proves every
+// Native callers, nonzero helper frames and ABI selectors require separate
+// contracts. BindFixedLocal still proves every
 // full-source access/initialization/CFG requirement before granting local bytes.
 func CaptureGoAMD64SDKFrameSource(ctx context.Context, pkg GoPackage, request GoAMD64FrameCaptureRequest) (_ *GoAMD64FrameSource, result error) {
 	if pkg.Types == nil || pkg.Path != pkg.Types.Path() || request.NumericalReads != nil ||
@@ -115,14 +116,30 @@ func (source *GoAMD64FrameSource) sdkFrameRecords() (map[string]goAMD64FrameFunc
 			return nil, nil, goAMD64FrameContext("SDK-primary original assembly identity changed: %v", err)
 		}
 		file, err := ParseWithDefines(ArchAMD64, cpp.Output, nil)
-		texts := data.observation.Objects.Sources[ordinal].Original.Texts
+		object := data.observation.Objects.Sources[ordinal]
+		texts := object.Original.Texts
 		if err != nil || len(file.Funcs) == 0 || len(file.UnlinkedPrelude) != 0 || len(file.Funcs) != len(native.Records) || len(file.Funcs) != len(texts) {
 			return nil, nil, goAMD64FrameContext("SDK-primary complete parsed/native TEXT inventory differs: %v", err)
+		}
+		leaves, err := goAMD64FramePrivateLeaves(file, origin.pkg)
+		if err != nil {
+			return nil, nil, err
 		}
 		for index, fn := range file.Funcs {
 			name := source.selection.ImportPath + "." + strings.TrimPrefix(fn.Sym, "·")
 			_, declared := declarations[name]
-			record, text := native.Records[index], texts[index]
+			if index >= len(object.TextOrder) || object.TextOrder[index].SourceOrdinal != index ||
+				object.TextOrder[index].ObjectOrdinal < 0 || object.TextOrder[index].ObjectOrdinal >= len(texts) {
+				return nil, nil, goAMD64FrameContext("SDK-primary complete source/TEXT association differs")
+			}
+			record, text := native.Records[index], texts[object.TextOrder[index].ObjectOrdinal]
+			if leaves[fn.Sym] {
+				if declared || record.Symbol != text.Name || record.Locals != 0 || !record.NoSplit ||
+					record.ArgsKnown && record.Args != 0 || record.Static != strings.HasSuffix(fn.Sym, "<>") {
+					return nil, nil, goAMD64FrameContext("SDK-primary private leaf/native identity differs: %s", fn.Sym)
+				}
+				continue // All original bytes/PCs/relocations are still consumed below.
+			}
 			// Real -std assembler objects retain qualified ABI0 declarations
 			// in the non-package definition block. Its role is authenticated by
 			// the complete same-source/compiler archive join, not by the name.
@@ -173,7 +190,8 @@ func (source *GoAMD64FrameSource) sdkFrameRecords() (map[string]goAMD64FrameFunc
 		}
 		for name, fn := range observed {
 			declaration, declared := declarations[name]
-			if _, duplicate := functions[name]; duplicate || !declared || !reflect.DeepEqual(fn.signature, declaration.signature) {
+			if _, duplicate := functions[name]; duplicate || fn.privateLeaf && declared ||
+				!fn.privateLeaf && (!declared || !reflect.DeepEqual(fn.signature, declaration.signature)) {
 				return nil, nil, goAMD64FrameContext("SDK-primary complete native/declaration frame identity differs")
 			}
 			fn.transport, fn.languageType = declaration.transport, declaration.languageType

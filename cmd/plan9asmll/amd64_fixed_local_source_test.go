@@ -72,7 +72,7 @@ func TestAMD64FixedLocalSourceRoleQueryDoesNotBindSymbols(t *testing.T) {
 				return resolveSymFunc(pkg.PkgPath)(name)
 			}
 			bound, source, err := prepareAMD64FixedLocalSource(pkg, file, "", "linux/amd64",
-				targetTriple("linux", "amd64"), "amd64", compileConfig{}, resolve, sigs)
+				targetTriple("linux", "amd64"), "amd64", compileConfig{}, resolve, sigs, nil)
 			if calls != 0 {
 				t.Fatalf("source-role query invoked the binding callback %d times before source capture", calls)
 			}
@@ -284,7 +284,7 @@ func TestAMD64FixedLocalCompleteSourceRetainsActualLoadIdentity(t *testing.T) {
 				t.Fatal(err)
 			}
 			_, source, err := prepareAMD64FixedLocalSource(pkg, file, input, "linux/amd64",
-				"x86_64-unknown-linux-gnu", "amd64", config, resolve, sigs)
+				"x86_64-unknown-linux-gnu", "amd64", config, resolve, sigs, nil)
 			if err != nil || source == nil {
 				t.Fatalf("actual original full-source binding failed: %v", err)
 			}

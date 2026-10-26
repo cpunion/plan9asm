@@ -327,7 +327,8 @@ func translateGoModuleInContext(ctx llvm.Context, pkg GoPackage, src []byte, opt
 		}
 	}
 	var registerBoolCalls *x86ABI0BoolCallSource
-	if (opt.GOARCH == "amd64" || opt.GOARCH == "386") && x86DirectTailSourceNeeded(file) {
+	if (opt.GOARCH == "amd64" || opt.GOARCH == "386") &&
+		(x86DirectTailSourceNeeded(file) || len(goFixedLocalLeafSymbols(file, resolve, opt.ManualSig)) != 0) {
 		completeSigs, err := goSigsForAsmFile(pkg, file, resolve, opt.GOARCH, opt.Sizes, opt.FrameSizes, opt.ManualSig)
 		if err != nil {
 			return nil, err
@@ -626,6 +627,10 @@ func goSigsForAsmFile(pkg GoPackage, file *File, resolve func(sym string) string
 		manualSig:  manualSig,
 		directTail: (goarch == "amd64" || goarch == "386") && x86DirectTailSourceNeeded(file),
 	}
+	if goarch == "amd64" {
+		b.fixedLocalLeaves = goFixedLocalLeafSymbols(file, resolve, manualSig)
+		b.directTail = b.directTail || len(b.fixedLocalLeaves) != 0
+	}
 	if b.pkgPath == "" {
 		b.pkgPath = pkg.Types.Path()
 	}
@@ -727,17 +732,18 @@ func WASMAssemblyUsesNativeReturn(fn Func) bool {
 }
 
 type goSigBuilder struct {
-	sigs       map[string]FuncSig
-	localSigs  map[string]bool
-	scope      *types.Scope
-	sz         types.Sizes
-	frameSz    types.Sizes
-	linknames  map[string]string
-	pkgPath    string
-	resolve    func(sym string) string
-	goarch     string
-	manualSig  func(string) (FuncSig, bool)
-	directTail bool // source-cost detection only; the graph must prove every node
+	sigs             map[string]FuncSig
+	localSigs        map[string]bool
+	scope            *types.Scope
+	sz               types.Sizes
+	frameSz          types.Sizes
+	linknames        map[string]string
+	pkgPath          string
+	resolve          func(sym string) string
+	goarch           string
+	manualSig        func(string) (FuncSig, bool)
+	directTail       bool            // source-cost detection only; the graph must prove every node
+	fixedLocalLeaves map[string]bool // Observed non-callable source roles, not helper signatures.
 }
 
 func (b *goSigBuilder) addDeclaredFuncSigs(file *File) error {
@@ -745,11 +751,13 @@ func (b *goSigBuilder) addDeclaredFuncSigs(file *File) error {
 		textSym := file.Funcs[i].Sym
 		sym := goStripABISuffix(textSym)
 		resolved := b.resolve(goTextSymbolForResolution(textSym))
-		if b.directTail && strings.HasSuffix(textSym, "<>") {
-			if sig, found := goLookupManualSig(b.manualSig, resolved); found &&
-				x86BoundedVoidABI0Declaration(file.Funcs[i], sig, b.goarch) {
-				b.sigs[resolved] = sig
-				continue // Keep this real bounded ABI; never invent one for a graph node.
+		if b.directTail && (strings.HasSuffix(textSym, "<>") || b.fixedLocalLeaves[textSym]) {
+			if !b.fixedLocalLeaves[textSym] {
+				if sig, found := goLookupManualSig(b.manualSig, resolved); found &&
+					x86BoundedVoidABI0Declaration(file.Funcs[i], sig, b.goarch) {
+					b.sigs[resolved] = sig
+					continue // Keep this real bounded ABI; never invent one for a graph node.
+				}
 			}
 			b.localSigs[resolved] = true
 			continue // No ManualSig/zero-arg/caller signature becomes a helper ABI.
@@ -871,7 +879,7 @@ func (b *goSigBuilder) addReferencedFuncSigs(file *File) error {
 			if !ok {
 				continue
 			}
-			if b.directTail && strings.HasSuffix(base, "<>") {
+			if b.directTail && (strings.HasSuffix(base, "<>") || b.fixedLocalLeaves[base]) {
 				continue // Bound only by complete source nodes and root must-state.
 			}
 			if err := b.addGoDeclSig(base); err != nil {

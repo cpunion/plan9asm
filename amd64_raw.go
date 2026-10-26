@@ -149,6 +149,7 @@ func normalizeX86RawFile(file *File, goarch string, translationOptions ...Option
 		if opt.ResolveSym != nil {
 			sig := opt.Sigs[opt.ResolveSym(fn.Sym)]
 			if sig.x86FixedLocal != nil {
+				fn.x86DirectTailRoot = file.x86DirectTailView(fn.Sym)
 				fn, err = proveX86FixedLocal(fn, sig)
 				if err != nil {
 					return nil, err
