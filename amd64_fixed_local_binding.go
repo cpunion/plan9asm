@@ -261,10 +261,10 @@ func (source *GoAMD64FrameSource) bindFixedLocalLocked(ctx context.Context, life
 		if !binding.frames[name] {
 			continue
 		}
-		if graph != nil {
-			fn.x86DirectTailRoot = graph.roots[fn.Sym]
+		if err := ctx.Err(); err != nil {
+			return Options{}, err
 		}
-		if _, err := proveX86FixedLocal(fn, options.Sigs[name]); err != nil {
+		if _, err := proveX86FixedLocalRoot(fn, options.Sigs[name], graph); err != nil {
 			return Options{}, err
 		}
 	}

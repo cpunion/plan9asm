@@ -475,6 +475,18 @@ func translateIRTextWithFixedLocalResult(file *File, opt Options, fixedLocalResu
 		if sig.Ret == "" {
 			return "", fmt.Errorf("missing return type for %q", name)
 		}
+		if graph := file.x86DirectTails; graph != nil && graph.fixedLocal != nil && sig.x86FixedLocal != nil {
+			if sig.x86FixedLocal.context == nil {
+				return "", goAMD64FrameContext("deferred private root lacks its original context")
+			}
+			if err := sig.x86FixedLocal.context.Err(); err != nil {
+				return "", err
+			}
+			function, err = proveX86FixedLocalRoot(function, sig, graph)
+			if err != nil {
+				return "", err
+			}
+		}
 		if file.Arch == ArchAMD64 && fn.X86RawText != nil {
 			if err := emitX86AddressSensitiveRawText(&b, *fn, sig); err != nil {
 				return "", fmt.Errorf("%s: %w", name, err)

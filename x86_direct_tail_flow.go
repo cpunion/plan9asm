@@ -2,6 +2,7 @@ package plan9asm
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 )
 
@@ -59,7 +60,7 @@ func (graph *x86DirectTailGraph) root(root int, byName map[string]int, limit int
 				continue
 			}
 			index, found := byName[name]
-			if !found {
+			if !found || index < 0 || index >= len(graph.original.Funcs) || graph.original.Funcs[index].Sym != name {
 				return nil, x86DirectTailContext("tail target is not an original source TEXT")
 			}
 			if !members[index] {
@@ -72,11 +73,12 @@ func (graph *x86DirectTailGraph) root(root int, byName map[string]int, limit int
 	starts := make(map[int]int)
 	labels := make(map[int]map[string]int)
 	order := []int{root}
-	for index := range graph.original.Funcs {
-		if index != root && members[index] {
+	for index := range members {
+		if index != root {
 			order = append(order, index)
 		}
 	}
+	sort.Ints(order[1:]) // Original source order without rescanning unrelated TEXTs.
 	for _, index := range order {
 		count := 0
 		for _, ins := range graph.original.Funcs[index].Instrs {
@@ -224,7 +226,7 @@ func (file *File) x86DirectTailHelper(symbol string) bool {
 }
 
 func (file *File) x86DirectTailView(symbol string) *x86DirectTailRoot {
-	if file.x86DirectTails == nil {
+	if file.x86DirectTails == nil || file.x86DirectTails.fixedLocal != nil {
 		return nil
 	}
 	return file.x86DirectTails.roots[symbol]

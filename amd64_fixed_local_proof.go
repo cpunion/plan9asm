@@ -77,7 +77,11 @@ func cloneFixedLocalState(input x86FixedLocalState) x86FixedLocalState {
 
 func proveX86FixedLocal(fn Func, sig FuncSig) (Func, error) {
 	if view := fn.x86DirectTailRoot; view != nil {
-		if view.graph.fixedLocal != sig.x86FixedLocal || view.graph.roots[fn.Sym] == nil {
+		if view.graph == nil || view.graph.revoked.Load() || view.graph.fixedLocal != sig.x86FixedLocal {
+			return fn, goAMD64FrameContext("private leaf CFG has a foreign root/frame owner")
+		}
+		root := view.graph.roots[fn.Sym]
+		if root == nil || root.graph != view.graph || root.text != view.text {
 			return fn, goAMD64FrameContext("private leaf CFG has a foreign root/frame owner")
 		}
 		proven, err := proveX86FixedLocalBody(fixedLocalProofFunction(fn), sig)

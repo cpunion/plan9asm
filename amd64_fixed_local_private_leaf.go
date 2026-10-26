@@ -1,8 +1,9 @@
 package plan9asm
 
-// Both consumers share the source graph, callsite expansion and resource
-// limits. The observed frame changes only entry admission; memory and result
-// facts still come from the existing fixed-local transfer and replay.
+// Both consumers share the source graph, callsite expansion and per-root
+// limits. Total work may span more roots; the authenticated source inventory
+// and each proof's work bounds remain unchanged. Memory and result facts still
+// come from the existing fixed-local transfer and replay.
 func newX86FixedLocalLeafGraph(file *File, options Options, binding *x86FixedLocalBinding) (*x86DirectTailGraph, error) {
 	if len(binding.leaves) == 0 {
 		return nil, nil
@@ -16,7 +17,6 @@ func newX86FixedLocalLeafGraph(file *File, options Options, binding *x86FixedLoc
 		return nil, err
 	}
 	graph.fixedLocal = binding
-	combined := 0
 	reached := make(map[string]bool)
 	for index, fn := range graph.original.Funcs {
 		if helpers[fn.Sym] || !x86DirectTailRootTargets(fn, helpers, nil) {
@@ -25,12 +25,13 @@ func newX86FixedLocalLeafGraph(file *File, options Options, binding *x86FixedLoc
 		if !binding.frames[graph.symbols[fn.Sym]] {
 			return nil, goAMD64FrameContext("private leaf caller lacks its independently observed nonzero root frame")
 		}
-		view, err := graph.root(index, byName, 4096-combined, true)
+		view, err := graph.root(index, byName, 4096, true)
 		if err != nil {
 			return nil, err
 		}
-		combined += len(view.points)
-		graph.roots[fn.Sym] = view
+		// Keep only the original root identity. Each consumer expands one root
+		// in its own function scope; the complete source is never cropped.
+		graph.roots[fn.Sym] = &x86DirectTailRoot{graph: graph, text: index}
 		for _, point := range view.points {
 			reached[graph.original.Funcs[point.text].Sym] = true
 		}
@@ -41,6 +42,33 @@ func newX86FixedLocalLeafGraph(file *File, options Options, binding *x86FixedLoc
 		}
 	}
 	return graph, nil
+}
+
+// The shared constructor still checks the 4096-node limit before allocating.
+// Its returned view is local to one proof/renderer/reference operation, never
+// installed in the complete file or retained in the graph's root directory.
+func (graph *x86DirectTailGraph) fixedLocalRoot(symbol string) (*x86DirectTailRoot, error) {
+	if graph == nil || graph.fixedLocal == nil {
+		return nil, nil
+	}
+	root := graph.roots[symbol]
+	if root == nil {
+		return nil, nil
+	}
+	if graph.revoked.Load() || root.graph != graph || root.text < 0 || root.text >= len(graph.original.Funcs) ||
+		graph.original.Funcs[root.text].Sym != symbol {
+		return nil, goAMD64FrameContext("private leaf original root identity changed")
+	}
+	return graph.root(root.text, graph.texts, 4096, true)
+}
+
+func proveX86FixedLocalRoot(fn Func, sig FuncSig, graph *x86DirectTailGraph) (Func, error) {
+	view, err := graph.fixedLocalRoot(fn.Sym)
+	if err != nil {
+		return fn, err
+	}
+	fn.x86DirectTailRoot = view
+	return proveX86FixedLocal(fn, sig)
 }
 
 func prepareX86FixedLocalLeafSource(file *File, options Options) (*File, bool, error) {

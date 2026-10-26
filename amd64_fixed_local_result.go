@@ -76,8 +76,24 @@ func (c *amd64Ctx) checkFixedLocalResultInitialization() error {
 	if err != nil {
 		return err
 	}
-	if original.function.Sym != fn.Sym || original.function.FrameSize != fn.FrameSize ||
-		original.function.ArgSize != fn.ArgSize || !reflect.DeepEqual(original.function.Instrs, instructions) {
+	reference := original.function
+	view, err := original.graph.fixedLocalRoot(reference.Sym)
+	if err != nil {
+		return err
+	}
+	if view != nil {
+		actual := fn.x86DirectTailRoot
+		if actual == nil || view.text != actual.text || !reflect.DeepEqual(view.points, actual.points) ||
+			!reflect.DeepEqual(view.ordinals, actual.ordinals) || !reflect.DeepEqual(view.edges, actual.edges) ||
+			!reflect.DeepEqual(view.externalTails, actual.externalTails) {
+			return fail("original private root control/source coordinates differ")
+		}
+		reference = view.features()
+	} else if fn.x86DirectTailRoot != nil {
+		return fail("ordinary source acquired a private root view")
+	}
+	if reference.Sym != fn.Sym || reference.FrameSize != fn.FrameSize ||
+		reference.ArgSize != fn.ArgSize || !reflect.DeepEqual(reference.Instrs, instructions) {
 		return fail("original TEXT/source instruction roles differ")
 	}
 	replayed, err := proveX86FixedLocal(plain, sig)
@@ -117,6 +133,7 @@ type x86FixedLocalResultSnapshot struct {
 
 type x86FixedLocalResultFunction struct {
 	function   Func
+	graph      *x86DirectTailGraph // Original source/indices only; no retained expansion.
 	attributes string
 	inferred   string
 }
@@ -196,18 +213,25 @@ func fixedLocalResultFunctions(file *File, binding *x86FixedLocalBinding, arch s
 		if !found || !declared || duplicate || len(fn.X86RawText) != 0 || amd64IsRelocationAnchor(fn, sig) {
 			return nil, false
 		}
-		if view := file.x86DirectTailView(fn.Sym); view != nil {
-			fn = view.features()
+		features := fn
+		view, err := file.x86DirectTails.fixedLocalRoot(fn.Sym)
+		if err != nil {
+			return nil, false
+		}
+		if view != nil {
+			features = view.features()
 		}
 		derived := ""
 		if sig.Attrs == "" {
-			derived = registry.ref(inferFuncTargetFeaturesForGOARCH(file.Arch, arch, fn))
+			derived = registry.ref(inferFuncTargetFeaturesForGOARCH(file.Arch, arch, features))
 		}
 		attributes := sig.Attrs
 		if attributes == "" {
 			attributes = derived
 		}
-		functions[resolved] = x86FixedLocalResultFunction{function: fn, attributes: attributes, inferred: derived}
+		functions[resolved] = x86FixedLocalResultFunction{
+			function: fn, graph: file.x86DirectTails, attributes: attributes, inferred: derived,
+		}
 	}
 	return functions, true
 }

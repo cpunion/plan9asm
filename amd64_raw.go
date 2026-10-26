@@ -148,7 +148,13 @@ func normalizeX86RawFile(file *File, goarch string, translationOptions ...Option
 		fn = normalizeX86RawReturnSourceStack(fn, opt, len(translationOptions) != 0, normalized.Funcs[i])
 		if opt.ResolveSym != nil {
 			sig := opt.Sigs[opt.ResolveSym(fn.Sym)]
-			if sig.x86FixedLocal != nil {
+			// Observed private CALL roots are proved in the renderer's current
+			// function scope, not retained for every function in this directory.
+			deferred := file.x86DirectTails != nil && file.x86DirectTails.fixedLocal != nil
+			if sig.x86FixedLocal != nil && deferred && sig.x86FixedLocal != file.x86DirectTails.fixedLocal {
+				return nil, goAMD64FrameContext("deferred private root belongs to another source owner")
+			}
+			if sig.x86FixedLocal != nil && !deferred {
 				fn.x86DirectTailRoot = file.x86DirectTailView(fn.Sym)
 				fn, err = proveX86FixedLocal(fn, sig)
 				if err != nil {

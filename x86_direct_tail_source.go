@@ -23,6 +23,7 @@ type x86DirectTailGraph struct {
 	externalSymbols map[string]string
 	helpers         map[string]bool
 	roots           map[string]*x86DirectTailRoot
+	texts           map[string]int // Immutable original TEXT lookup; no expanded views.
 	numerical       *GoX86NumericalReadBinding
 	fixedLocal      *x86FixedLocalBinding
 }
@@ -296,6 +297,7 @@ func newX86DirectTailGraph(file *File, options Options, helpers map[string]bool,
 	}
 	graph.signatures = signatures
 	byName := make(map[string]int)
+	graph.texts = byName
 	resolved := make(map[string]bool)
 	for index, fn := range graph.original.Funcs {
 		name := resolve(fn.Sym)
