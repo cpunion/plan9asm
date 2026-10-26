@@ -19,6 +19,7 @@ type X86PackedBinaryWitness struct {
 	Width                      int
 	Memory, Masked, Zeroing    bool
 	Broadcast                  bool
+	MaskResult                 bool
 	Encoding                   []byte
 }
 
@@ -85,6 +86,14 @@ func X86PackedSignRows(legacy X86LegacyCatalog, avx []X86AVXRule) ([]X86PackedBi
 // separate VPSHUFBITQMB bit-to-mask family does not share this operand grammar.
 func X86PackedByteShuffleRows(legacy X86LegacyCatalog, avx []X86AVXRule) ([]X86PackedBinaryRow, error) {
 	return x86PackedBinaryRows(legacy, avx, `PSHUFB VPSHUFB`)
+}
+
+// X86PackedIntegerCompareRows retains both vector and mask results. MMX's
+// six legacy rows retain their separate region and EMMS contract.
+func X86PackedIntegerCompareRows(legacy X86LegacyCatalog, avx []X86AVXRule) ([]X86PackedBinaryRow, error) {
+	return x86PackedBinaryRows(legacy, avx, `
+		PCMPEQB PCMPEQW PCMPEQL PCMPEQQ PCMPGTB PCMPGTW PCMPGTL PCMPGTQ
+		VPCMPEQB VPCMPEQW VPCMPEQD VPCMPEQQ VPCMPGTB VPCMPGTW VPCMPGTD VPCMPGTQ`)
 }
 
 // X86PackedBinaryPilotRows covers the shared packed add/subtract and D/Q
@@ -160,7 +169,8 @@ func x86PackedAVXRowWitnesses(rule X86AVXRule) ([]X86PackedBinaryWitness, error)
 	if strings.HasPrefix(rule.ZCase, "Zevex_") {
 		kind, stride = "evex", 3
 	}
-	bank := syntax[0][strings.LastIndex(syntax[0], ",")+1 : len(syntax[0])-1]
+	// Vector input width is independent of whether the result is vector or K.
+	bank := strings.Split(strings.Fields(syntax[0])[1], ",")[1][:1]
 	if bank == "Y" {
 		width = 256
 	} else if bank == "Z" {
@@ -225,6 +235,7 @@ func x86PackedAVXRowWitnesses(rule X86AVXRule) ([]X86PackedBinaryWitness, error)
 			First: operands[0], Second: operands[1], Destination: operands[len(operands)-1],
 			Memory: operands[0] == "(AX)", Masked: masked,
 			Zeroing: strings.HasSuffix(fields[0], ".Z"), Broadcast: strings.Contains(fields[0], ".BCST"),
+			MaskResult: rule.Classes[len(rule.Classes)-1] == "Yk",
 		}
 		modrm := byte(0xd0) // destination 2/18, r/m register 0/16.
 		if witness.Memory {
@@ -234,6 +245,9 @@ func x86PackedAVXRowWitnesses(rule X86AVXRule) ([]X86PackedBinaryWitness, error)
 			p0, p2 := byte(0xa0)|mapByte, length<<5
 			if witness.Memory {
 				p0 = 0xe0 | mapByte
+			}
+			if witness.MaskResult {
+				p0 |= 0x10 // K2 has no destination bit 4, unlike vector 18.
 			}
 			if masked {
 				p2 |= 1 // K1; V' is zero because the second source is 17.

@@ -88,8 +88,15 @@ func x86CheckPackedRowInventory(t *testing.T,
 			}
 			got.formats[g]++
 			got.widths[w]++
+			if witness.MaskResult != strings.HasPrefix(witness.Destination, "K") {
+				t.Fatal("official result class differs from its witness", row.ID)
+			}
+			destination := strings.HasSuffix(witness.Destination, "18")
+			if witness.MaskResult {
+				destination = witness.Destination == "K2"
+			}
 			if kind == "evex" && (witness.Encoding[0] != 0x62 ||
-				!strings.HasSuffix(witness.Second, "17") || !strings.HasSuffix(witness.Destination, "18")) {
+				!strings.HasSuffix(witness.Second, "17") || !destination) {
 				t.Fatal("official EVEX identity can fall back to VEX", row.ID)
 			}
 			if witness.Broadcast {

@@ -19,11 +19,14 @@ func X86PackedBinarySyntaxWitnesses(rule X86AVXRule) ([]string, error) {
 }
 
 func x86PackedBinarySyntaxWitnesses(rule X86AVXRule) ([]string, error) {
-	if (rule.Ytab != "_yvandnpd" && rule.Ytab != "_yvblendmpd" && rule.Ytab != "_yvaddsubpd") || rule.Prefix != "Pavx" {
+	binaryTable := rule.Ytab == "_yvandnpd" || rule.Ytab == "_yvblendmpd" ||
+		rule.Ytab == "_yvaddsubpd" || rule.Ytab == "_yvpcmpeqb"
+	if !binaryTable || rule.Prefix != "Pavx" {
 		return nil, fmt.Errorf("%s is outside the audited packed binary table grammar", rule.Opcode)
 	}
 	masked := rule.ZCase == "Zevex_rm_v_k_r"
 	evex := masked || rule.ZCase == "Zevex_rm_v_r"
+	maskResult := rule.Ytab == "_yvpcmpeqb" && evex
 	if rule.Ytab == "_yvaddsubpd" && evex {
 		return nil, fmt.Errorf("%s VEX-only packed binary table acquired EVEX", rule.Opcode)
 	}
@@ -47,8 +50,12 @@ func x86PackedBinarySyntaxWitnesses(rule X86AVXRule) ([]string, error) {
 		{"YymEvex", "YyrEvex", "Y"},
 		{"Yzm", "Yzr", "Z"},
 	} {
+		resultClass := candidate.register
+		if maskResult {
+			resultClass = "Yk"
+		}
 		if rule.Classes[0] == candidate.memory && rule.Classes[1] == candidate.register &&
-			rule.Classes[count-1] == candidate.register {
+			rule.Classes[count-1] == resultClass {
 			bank = candidate.bank
 			break
 		}
@@ -79,13 +86,20 @@ func x86PackedBinarySyntaxWitnesses(rule X86AVXRule) ([]string, error) {
 	if hasEncodingTerm(features, "evexRoundingEnabled") || hasEncodingTerm(features, "evexSaeEnabled") {
 		return nil, fmt.Errorf("%s adds unaudited rounding/SAE to the packed binary grammar", rule.Opcode)
 	}
+	if maskResult && hasEncodingTerm(features, "evexZeroingEnabled") {
+		return nil, fmt.Errorf("%s adds vector zeroing to a mask result", rule.Opcode)
+	}
+	destination := bank + "2"
+	if maskResult {
+		destination = "K2"
+	}
 	var witnesses []string
 	emit := func(source, suffix string) {
 		operands := []string{source, bank + "1"}
 		if masked {
 			operands = append(operands, "K1")
 		}
-		operands = append(operands, bank+"2")
+		operands = append(operands, destination)
 		witnesses = append(witnesses, rule.Opcode+suffix+" "+strings.Join(operands, ","))
 	}
 	for _, source := range []string{bank + "0", "(AX)"} {

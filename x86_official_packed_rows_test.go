@@ -53,6 +53,10 @@ func TestX86OfficialByteShuffleRowsInitializedThreeAPIsObjects(t *testing.T) {
 	x86OfficialPackedRowsObjects(t, goasmrules.X86PackedByteShuffleRows, 9, 24, 0)
 }
 
+func TestX86OfficialIntegerCompareRowsInitializedThreeAPIsObjects(t *testing.T) {
+	x86OfficialPackedRowsObjects(t, goasmrules.X86PackedIntegerCompareRows, 72, 168, 0)
+}
+
 func TestX86OfficialMinMaxRowsInitializedThreeAPIsObjects(t *testing.T) {
 	verified := x86OfficialPackedRowsObjects(t, goasmrules.X86PackedIntegerMinMaxRows, 132, 432, 0)
 	narrowEVEX := 0
@@ -161,12 +165,18 @@ func x86OfficialPackedAssembly(cases []x86OfficialPackedCase) (string, string) {
 		prefix += fmt.Sprintf("%s (BX),%s\n", move, w.Second)
 		if w.Masked {
 			prefix += "MOVQ mask+24(FP),CX\nKMOVQ CX,K1\n"
-			if !w.Zeroing {
+			// A masked K result writes zero for disabled lanes; it never
+			// merges an old destination as a masked vector result does.
+			if !w.Zeroing && !w.MaskResult {
 				prefix += fmt.Sprintf("%s (BX),%s\n", move, w.Destination)
 			}
 		}
 		fixture.line = line + strings.Count(prefix, "\n")
-		body := prefix + w.Instruction + fmt.Sprintf("\n%s %s,(DX)\nRET\n", move, w.Destination)
+		store := move
+		if w.MaskResult {
+			store = "KMOVQ"
+		}
+		body := prefix + w.Instruction + fmt.Sprintf("\n%s %s,(DX)\nRET\n", store, w.Destination)
 		source.WriteString(body)
 		line += strings.Count(body, "\n")
 	}
