@@ -31,7 +31,9 @@ func x86GoPanicTerminalCompilerSourceRoles() map[string]string {
 }
 
 func x86GoPanicTerminalCompilerSources(env map[string]string, read func(string) ([]byte, error)) error {
-	if env["GOVERSION"] != "go1.27.1" && env["GOVERSION"] != "go1.27.2" || env["GOOS"] != "linux" || env["GOARCH"] != "386" ||
+	version := env["GOVERSION"]
+	if version != "go1.27.1" && version != "go1.27.2" && version != "go1.27.3" ||
+		env["GOOS"] != "linux" || env["GOARCH"] != "386" ||
 		env["GO386"] != "sse2" || env["GOEXPERIMENT"] != "" || read == nil {
 		return sdkASMDataContext("panic association lacks its selected non-regabi386 source/profile")
 	}

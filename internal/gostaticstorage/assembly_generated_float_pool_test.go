@@ -119,7 +119,7 @@ func TestASMGeneratedFloatPoolFloatExpressionGrammar(t *testing.T) {
 }
 
 func TestASMGeneratedFloatPoolProducerSourcesFailClosed(t *testing.T) {
-	for _, version := range []string{"", "go1.20.14", "go1.26.2", "go1.27.3"} {
+	for _, version := range []string{"", "go1.20.14", "go1.26.2", "go1.27.4"} {
 		called := false
 		err := GeneratedFloatPoolSources(version, func(string) ([]byte, error) { called = true; return nil, nil })
 		if !errors.Is(err, ErrContext) || called {

@@ -104,13 +104,14 @@ func ValidateNativeHeaderSourceRules(proof *NativeHeaderSourceRules, version str
 }
 
 func nativeHeaderSourceHashes(version string) map[string]string {
-	if version != "go1.27.2" {
+	if version != "go1.27.2" && version != "go1.27.3" {
 		return nativeHeaderSourceRegistration[version]
 	}
-	// The patch adds method-order fields to unified export data. It changes
-	// neither these header layout rules nor their complete source inventory.
-	// Keep the two changed files pinned separately instead of duplicating the
-	// unchanged registration or treating every future patch as compatible.
+	// Go 1.27.2 adds method-order fields to unified export data without changing
+	// these header layout rules or their complete source inventory.
+	// Go 1.27.3 has byte-identical sources for all 22 registered rules. Keep
+	// the two changes from 1.27.1 pinned separately, without admitting future
+	// unaudited patches or duplicating the unchanged source registration.
 	result := make(map[string]string, len(nativeHeaderSourceRegistration["go1.27.1"]))
 	for name, hash := range nativeHeaderSourceRegistration["go1.27.1"] {
 		result[name] = hash
