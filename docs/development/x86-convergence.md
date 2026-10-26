@@ -147,7 +147,8 @@ minimum Go 1.20.14 both pass the following Linux/amd64 LLVM22 object scopes:
 | Rounded average, products and multiply-add | 90 | 258 |
 | Integer and PS/PD logical | 132 | 504 |
 | Integer and PS/PD unpack, low/high | 108 | 360 |
-| Total | 621 | 2,034 |
+| Signed/unsigned saturating pack | 36 | 114 |
+| Total | 657 | 2,148 |
 
 Two PADDD alias witnesses are separate from the canonical counts. Min/max
 includes 48 non-Q, unmasked, narrow EVEX forms; low-register VEX objects cannot
@@ -169,6 +170,12 @@ ten scope-selection lines and no translator rule. All original Go bytes and
 initialized objects pass on both supported endpoint SDKs. Six MMX rows retain
 their independent region owner; this join does not expand native execution
 claims or weaken low-MMX m32 versus high-MMX m64 memory-width distinctions.
+
+Saturating pack reuses that same grammar and driver for eight names, 36 rows
+and 114 witnesses, adding seven scope-selection lines. Dword inputs alone
+admit its 18 broadcast witnesses; three MMX rows remain independent. Both
+endpoint SDKs pass the complete initialized join and rule-reader regression
+at `d17e46d5d`, without expanding the translator or native execution claims.
 
 Fixed-frame GP analysis now consumes the existing typed byte/FLAGS effects
 instead of a second arithmetic opcode list. Its bounded worklist intersects

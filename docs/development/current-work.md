@@ -8,11 +8,19 @@ certificate. Read [architecture](architecture.md),
 
 ## Publication and CI
 
-PR40 remains draft. The last completed full run at `3f634d936`
-[completed its full CI](https://github.com/xgo-dev/plan9asm/actions/runs/40343133972)
-naturally: **325 jobs, 284 successful, 41 failed**. The 24 failed test jobs share
-four causes; 17 completion jobs reject their failed prerequisites.
-Keep the failed receipts. Resolved review threads do not constitute approval.
+PR40 remains draft. Published head `5406c2756` is
+[running full CI](https://github.com/xgo-dev/plan9asm/actions/runs/40383917481).
+The preceding run at `bdbefa7e4`
+[completed naturally](https://github.com/xgo-dev/plan9asm/actions/runs/40366498164):
+**325 jobs, 312 successful, 13 failed**. Six CLI test jobs shared one ordinary
+ABI0 CALL regression; seven completion jobs correctly rejected their failed
+prerequisites. All six test jobs now have independent passing receipts in the
+new run, including Windows. Remaining jobs still need their own final outcomes.
+The preceding run's main statement coverage was 88.0%; its coverage completion
+failed on the CLI prerequisite, not the main coverage calculation or upload.
+Keep those failed receipts. Both review threads are resolved; no reviewer has
+approved the contribution. Neither resolved threads nor earlier passing jobs
+qualify an unfinished current run.
 
 The published repair batch addresses:
 
@@ -48,10 +56,8 @@ build constraint. Both SDKs also pass all 19 rule-reader roots / 58 children.
 Root/CLI builds, root vet, all 5,015 tracked Go files' formatting, actionlint
 and all five official corpus baselines pass; Node22.23.4 passes 573 policy
 tests. Later documentation-only changes preserve these tested Go/module sources.
-A new complete PR CI run and current-head coverage/review remain required.
-Published head `bdbefa7e4` is
-[running full CI](https://github.com/xgo-dev/plan9asm/actions/runs/40366498164).
-Its initial CLI failures reproduce a new private-CALL routing regression:
+A complete current-head CI run, coverage and review remain required.
+The preceding run's CLI failure exposed a private-CALL routing regression:
 `TestCompileOneInfersVoidABI0LocalHelperAtTargetWordSize` must retain the
 existing ordinary ABI0 helper with an explicit target-word parameter extent.
 The isolated zero-argument helper graph must not claim this distinct call role.
@@ -62,8 +68,8 @@ call through the shared ABI0 layout validator. Complete CLI passes are
 335 roots / 1,703 children on Go1.25.14 and 398 / 2,186 on Go1.27.3;
 104 related root tests / 2,018 children also pass. All have zero failures/skips.
 Twelve new positive combinations compile LLVM22 objects and 27 negative controls
-remain rejected. This is local qualification; the published CI still runs the
-pre-repair source. Wait for its natural completion before the next batch push.
+remain rejected. The repair is in published `5406c2756`. Let that complete run
+finish naturally before the next batch push.
 
 ## Current functional evidence
 
@@ -101,7 +107,8 @@ actual original Go bytes must match before any public API/object result counts.
 | Rounded average, word products, multiply-add and widened products | 90 | 258 |
 | Integer and PS/PD packed logical | 132 | 504 |
 | Integer and PS/PD unpack, low/high | 108 | 360 |
-| Total | **621** | **2,034** |
+| Signed/unsigned saturating pack | 36 | 114 |
+| Total | **657** | **2,148** |
 
 Two PADDD alias witnesses are separate. MMX rows retain their independent
 region/EMMS owners. These counts do not represent every official x86 row,
@@ -126,6 +133,14 @@ The unpack join at `eed7b44df` reuses the existing grammar and object driver:
 added. Current/minimum SDKs each pass 25 roots / 337 children without skips,
 including every earlier initialized row. Its six MMX rows retain their separate
 region owner; the new join does not claim additional native execution.
+
+The pack join at local `d17e46d5d` adds seven scope-selection lines and no new
+translator or grammar rules. Its eight names retain all 36 original non-MMX
+rows, including overlapping VEX/EVEX encodings and 18 dword broadcast forms.
+Current/minimum SDKs each pass 27 roots / 353 children without skips, including
+all earlier initialized joins and the complete rule reader. Three MMX rows
+retain their separate region owner. This tested local commit is queued for the
+next batch; it is not part of the currently running published CI.
 
 Earlier analysis benchmarks reduced allocations by 65–88% through bounded CFG
 replay. Do not claim that as whole-source translation speed or cache mutable
