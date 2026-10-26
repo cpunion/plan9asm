@@ -108,10 +108,14 @@ UNPACK and shift byte anchors remain; sharing their assertion helper keeps this
 six-file batch to 17 net lines. These additions are in published `55831306c`;
 its complete CI has not finished.
 
-The next local candidate `d56ba5926` adds the bounded conditional-pointer
+The next local candidate `a5354ca1a` adds the bounded conditional-pointer
 analysis and its native execution owner, plus the official PSHUFB join.
-These changes have independent branch qualification below; integration into
-this candidate still needs current/minimum-SDK checks and fresh complete CI.
+Combined qualification passes 58 roots / 1,051 children on Go1.27.3 and
+55 / 998 on Go1.20.14, with zero failures/skips, exact selected inventories,
+unique terminals and unchanged source/tools. These checks include all nine
+initialized object owners and the complete rule reader. The native receipt
+below remains tied to its isolated source; the combined candidate still needs
+fresh complete CI and native execution there.
 
 ## Current functional evidence
 

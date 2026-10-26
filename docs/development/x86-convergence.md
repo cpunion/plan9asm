@@ -155,7 +155,8 @@ minimum Go 1.20.14 both pass the following Linux/amd64 LLVM22 object scopes:
 
 Published `55831306c` has the first 730 rows / 2,402 witnesses. The nine
 PSHUFB/VPSHUFB rows are qualified at isolated `9c2923dd9` and integrated in
-local `d56ba5926`, pending combined qualification and publication. The shared
+local `a5354ca1a`, whose combined current/minimum checks pass; publication and
+complete CI remain pending. The shared
 encoder consumes the selected legacy two-byte opcode payload; the existing
 translator needs no additional instruction rule. Both endpoint SDKs pass all
 nine initialized object owners and the complete rule reader: 38 roots / 432
