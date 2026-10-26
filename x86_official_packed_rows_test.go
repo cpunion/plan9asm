@@ -29,6 +29,10 @@ func TestX86OfficialAverageMultiplyRowsInitializedThreeAPIsObjects(t *testing.T)
 	x86OfficialPackedRowsObjects(t, goasmrules.X86PackedAverageMultiplyRows, 90, 258, 0)
 }
 
+func TestX86OfficialLogicalRowsInitializedThreeAPIsObjects(t *testing.T) {
+	x86OfficialPackedRowsObjects(t, goasmrules.X86PackedLogicalRows, 132, 504, 0)
+}
+
 func TestX86OfficialMinMaxRowsInitializedThreeAPIsObjects(t *testing.T) {
 	verified := x86OfficialPackedRowsObjects(t, goasmrules.X86PackedIntegerMinMaxRows, 132, 432, 0)
 	narrowEVEX := 0

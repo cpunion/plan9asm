@@ -19,11 +19,14 @@ func X86PackedBinarySyntaxWitnesses(rule X86AVXRule) ([]string, error) {
 }
 
 func x86PackedBinarySyntaxWitnesses(rule X86AVXRule) ([]string, error) {
-	if (rule.Ytab != "_yvandnpd" && rule.Ytab != "_yvblendmpd") || rule.Prefix != "Pavx" {
+	if (rule.Ytab != "_yvandnpd" && rule.Ytab != "_yvblendmpd" && rule.Ytab != "_yvaddsubpd") || rule.Prefix != "Pavx" {
 		return nil, fmt.Errorf("%s is outside the audited packed binary table grammar", rule.Opcode)
 	}
 	masked := rule.ZCase == "Zevex_rm_v_k_r"
 	evex := masked || rule.ZCase == "Zevex_rm_v_r"
+	if rule.Ytab == "_yvaddsubpd" && evex {
+		return nil, fmt.Errorf("%s VEX-only packed binary table acquired EVEX", rule.Opcode)
+	}
 	if !evex && rule.ZCase != "Zvex_rm_v_r" {
 		return nil, fmt.Errorf("%s has an unmodeled packed binary zcase %s", rule.Opcode, rule.ZCase)
 	}
@@ -50,7 +53,7 @@ func x86PackedBinarySyntaxWitnesses(rule X86AVXRule) ([]string, error) {
 			break
 		}
 	}
-	if bank == "" || masked && rule.Classes[2] != "Yknot0" {
+	if bank == "" || !evex && bank == "Z" || masked && rule.Classes[2] != "Yknot0" {
 		return nil, fmt.Errorf("%s has unmodeled packed binary operand classes %v", rule.Opcode, rule.Classes)
 	}
 	stride := 2

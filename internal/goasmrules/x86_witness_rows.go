@@ -42,6 +42,15 @@ func X86PackedAverageMultiplyRows(legacy X86LegacyCatalog, avx []X86AVXRule) ([]
 		PMULDQ PMULULQ VPMULDQ VPMULUDQ`)
 }
 
+// X86PackedLogicalRows retains packed integer and PS/PD bitwise families,
+// including the separate EVEX D/Q names. MMX regions remain a separate owner.
+func X86PackedLogicalRows(legacy X86LegacyCatalog, avx []X86AVXRule) ([]X86PackedBinaryRow, error) {
+	return x86PackedBinaryRows(legacy, avx, `
+		PAND PANDN POR PXOR ANDPS ANDPD ANDNPS ANDNPD ORPS ORPD XORPS XORPD
+		VPAND VPANDN VPOR VPXOR VANDPS VANDPD VANDNPS VANDNPD VORPS VORPD VXORPS VXORPD
+		VPANDD VPANDQ VPANDND VPANDNQ VPORD VPORQ VPXORD VPXORQ`)
+}
+
 // X86PackedBinaryPilotRows covers the shared packed add/subtract and D/Q
 // low-multiply pilot. MMX and the separate W multiply family are not included.
 // PADDD is a frontend alias, not an additional official encoder row.
@@ -134,12 +143,15 @@ func x86PackedAVXRowWitnesses(rule X86AVXRule) ([]X86PackedBinaryWitness, error)
 	}
 	header := rule.OpBytes[rule.EncodingOffset]
 	atoms, err := x86PackedEncodingAtoms(header, []string{
-		"avxEscape", kind + strconv.Itoa(width), kind + "66",
-	}, []string{kind + "0F", kind + "0F38", kind + "W0", kind + "W1"})
+		"avxEscape", kind + strconv.Itoa(width),
+	}, []string{kind + "66", kind + "0F", kind + "0F38", kind + "W0", kind + "W1"})
 	if err != nil || atoms[kind+"0F"] == atoms[kind+"0F38"] || atoms[kind+"W0"] == atoms[kind+"W1"] {
 		return nil, fmt.Errorf("unmodeled packed encoding header %q", header)
 	}
-	mapByte, wBit, length := byte(1), byte(0), byte(0)
+	mapByte, wBit, length, pp := byte(1), byte(0), byte(0), byte(0)
+	if atoms[kind+"66"] {
+		pp = 1
+	}
 	if atoms[kind+"0F38"] {
 		mapByte = 2
 	}
@@ -196,11 +208,11 @@ func x86PackedAVXRowWitnesses(rule X86AVXRule) ([]X86PackedBinaryWitness, error)
 			if witness.Broadcast {
 				p2 |= 0x10
 			}
-			witness.Encoding = []byte{0x62, p0, wBit | 0x75, p2, byte(opcode), modrm}
+			witness.Encoding = []byte{0x62, p0, wBit | 0x74 | pp, p2, byte(opcode), modrm}
 		} else if mapByte == 1 && wBit == 0 {
-			witness.Encoding = []byte{0xc5, 0xf1 | length<<2, byte(opcode), modrm}
+			witness.Encoding = []byte{0xc5, 0xf0 | pp | length<<2, byte(opcode), modrm}
 		} else {
-			witness.Encoding = []byte{0xc4, 0xe0 | mapByte, wBit | 0x71 | length<<2, byte(opcode), modrm}
+			witness.Encoding = []byte{0xc4, 0xe0 | mapByte, wBit | 0x70 | pp | length<<2, byte(opcode), modrm}
 		}
 		witnesses = append(witnesses, witness)
 	}
@@ -239,7 +251,11 @@ func x86PackedLegacyRowWitnesses(entry X86LegacyOpcode, row X86LegacyOperand) ([
 			return nil, fmt.Errorf("unmodeled Py1 XMM opcode payload")
 		}
 		offset = 2 // Py1 consumes the Pe at offset 1 before the opcode.
-	case entry.Ytab == "yxm" && entry.Prefix == "Pe" && row.RowIndex == 0 && row.ZCase == "Zm_r_xm" && row.ZOffset == 1 && row.UnmatchedOffset == 0:
+	case entry.Ytab == "yxm" && (entry.Prefix == "Pe" || entry.Prefix == "Pq" || entry.Prefix == "Pm") &&
+		row.RowIndex == 0 && row.ZCase == "Zm_r_xm" && row.ZOffset == 1 && row.UnmatchedOffset == 0:
+		if entry.Prefix == "Pm" {
+			prefix = []byte{0x0f}
+		}
 	case entry.Ytab == "yxm_q4" && entry.Prefix == "Pq4" && row.RowIndex == 0 && row.ZCase == "Zm_r" && row.ZOffset == 1 && row.UnmatchedOffset == 0:
 		prefix = append(prefix, 0x38)
 	default:
