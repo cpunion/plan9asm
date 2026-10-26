@@ -8,6 +8,13 @@ import (
 func (c *amd64Ctx) lowerBranch(bi int, ii int, op Op, ins Instr, emitBr amd64EmitBr, emitCondBr amd64EmitCondBr) (ok bool, terminated bool, err error) {
 	switch op {
 	case "CALL":
+		if c.directTail.privateCallTransition(bi) {
+			if ii != 0 || c.directTail.instructions[bi].Op != OpCALL {
+				return true, false, x86DirectTailContext("CALL lost its original source point")
+			}
+			emitBr(c.blocks[c.directTail.edges[bi][0]].name)
+			return true, true, nil
+		}
 		if len(ins.Args) != 1 {
 			return true, false, fmt.Errorf("amd64 CALL expects 1 operand: %q", ins.Raw)
 		}

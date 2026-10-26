@@ -489,14 +489,15 @@ func checkX86ResultSourceFlowWithTrapOnly(fn Func, initial x86ResultState, owned
 	hasRepeat := false
 	for pc, ins := range instructions {
 		hasRepeat = hasRepeat || ins.Op == "REP" || ins.Op == "REPN"
-		if ins.Op == OpRET {
+		control := fn.x86DirectTailRoot.privateCallTransition(pc)
+		if ins.Op == OpRET && !control {
 			if len(ins.Args) != 0 {
 				return fail("nonordinary return")
 			}
 			continue
 		}
 		shape := top.clone()
-		if !transfer(ordinals[pc], ins, &shape, owned, resultOffset, goarch) {
+		if !control && !transfer(ordinals[pc], ins, &shape, owned, resultOffset, goarch) {
 			return fail(fmt.Sprintf("unclosed source effect at instruction %d: %s", pc, ins.Raw))
 		}
 		next := []int{pc + 1}
@@ -625,14 +626,21 @@ func checkX86ResultSourceFlowWithTrapOnly(fn Func, initial x86ResultState, owned
 			returned = true
 			continue // Exact independent callee return, no invented root FP bytes.
 		}
-		if ins.Op == OpRET {
+		control := fn.x86DirectTailRoot.privateCallTransition(pc)
+		if ins.Op == OpRET && !control {
 			if len(ins.Args) != 0 {
 				return fail("nonordinary return")
 			}
 			returned = true
 			continue // Check results after the complete fixed point, never early.
 		}
-		if !transfer(ordinals[pc], ins, &state, owned, resultOffset, goarch) {
+		if control {
+			// Real registers/FLAGS flow through the original helper body. These
+			// source-adjacency observations cannot cross CALL or its private RET.
+			state.shiftBits = x86ResultShiftBits{}
+			state.bitScanPending = x86ResultBitScanPending{}
+			state.nativeLEAAddressBits = x86NativeLEAAddressBits{}
+		} else if !transfer(ordinals[pc], ins, &state, owned, resultOffset, goarch) {
 			return fail(fmt.Sprintf("unknown effect or undefined input at instruction %d: %s", pc, ins.Raw))
 		}
 		if _, known, err := x86UndefinedTrapProperties(ins.Op, ins, goarch); trapOnly && known && err == nil {
@@ -663,7 +671,7 @@ func checkX86ResultSourceFlowWithTrapOnly(fn Func, initial x86ResultState, owned
 		return fail("no ordinary reachable RET")
 	}
 	for pc, state := range states {
-		if instructions[pc].Op != OpRET {
+		if instructions[pc].Op != OpRET || fn.x86DirectTailRoot.privateCallTransition(pc) {
 			continue
 		}
 		if state.valueStack != nil && (state.valueStack.invalid || len(state.valueStack.bytes) != 0) {

@@ -26,7 +26,7 @@ func TestGoX86NumericalDirectTailTypedInventoryKeepsHelperSeparate(t *testing.T)
 			strings.Replace(source, "JMP helper<>(SB)", "JMP missing<>(SB)", 1),
 			strings.Replace(source, "JMP helper<>(SB)", "JMP helper<>+1(SB)", 1),
 			strings.Replace(source, "JMP ·ordinary(SB)", "JMP ·ordinary+1(SB)", 1),
-			strings.Replace(source, "JMP ·ordinary(SB)", "CALL helper<>(SB)\nRET", 1),
+			strings.Replace(source, "JMP ·ordinary(SB)", "CALL helper<>+1(SB)\nRET", 1),
 			strings.Replace(source, "JMP ·ordinary(SB)", "MOVQ $helper<>(SB),AX\nRET", 1),
 			source + "TEXT helper<>(SB),4,$0\nRET\n",
 			source + "DATA escape<>+0(SB)/8,$helper<>(SB)\nGLOBL escape<>(SB),8,$8\n",
@@ -39,6 +39,38 @@ func TestGoX86NumericalDirectTailTypedInventoryKeepsHelperSeparate(t *testing.T)
 				t.Fatal("unknown/escaped/duplicate original helper acquired a source entry", arch, changed, entries, terminals, err)
 			}
 		}
+	}
+}
+
+func TestGoX86NumericalPrivateCallSourceRolesRemainObservationOnly(t *testing.T) {
+	// Retain the earlier self-CALL source: its original control relocation can
+	// now be associated, but neither a helper declaration nor a recursive
+	// continuation is thereby authorized.
+	const source = "TEXT ·entry(SB),4,$0-0\nJMP helper<>(SB)\nTEXT helper<>(SB),4,$0\nCALL helper<>(SB)\nRET\n"
+	for _, arch := range []string{"386", "amd64"} {
+		t.Run(arch, func(t *testing.T) {
+			file, err := Parse(ArchAMD64, source)
+			if err != nil {
+				t.Fatal(err)
+			}
+			entries, terminals, err := numericalTypedSourceEntries(file, "example", arch, numericalSBSDKSource)
+			if err != nil || !reflect.DeepEqual(entries, map[string]bool{"entry": true}) || len(terminals) != 0 {
+				t.Fatal("CALL source association invented a private helper declaration", entries, terminals, err)
+			}
+			roles, err := numericalDirectTailRoles(file)
+			if err != nil || len(roles) != 2 || roles[x86DirectTailPoint{1, 1}] != "helper<>" {
+				t.Fatal("CALL did not retain its actual original TEXT/ordinal association", roles, err)
+			}
+			resolve := testResolveSym("example")
+			pkg := mustGoPackage(t, "example", "package p\nfunc entry()")
+			sigs, err := goSigsForAsmFile(pkg, file, resolve, arch, nil, nil, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if prepared, err := PrepareX86DirectTailSource(file, Options{Goarch: arch, ResolveSym: resolve, Sigs: sigs}); prepared != nil || !errors.Is(err, ErrProbeNeedsContext) || !strings.Contains(err.Error(), "recursive") {
+				t.Fatal("observed private CALL supplied recursive execution authority", err)
+			}
+		})
 	}
 }
 

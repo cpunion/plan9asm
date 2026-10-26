@@ -5,9 +5,10 @@ import (
 	"strings"
 )
 
-func (graph *x86DirectTailGraph) root(root int, byName map[string]int) (*x86DirectTailRoot, error) {
+func (graph *x86DirectTailGraph) root(root int, byName map[string]int, limit int, allowPrivateCalls bool) (*x86DirectTailRoot, error) {
 	members := map[int]bool{root: true}
 	queue := []int{root}
+	hasCalls := false
 	for len(queue) != 0 {
 		at := queue[0]
 		queue = queue[1:]
@@ -21,11 +22,13 @@ func (graph *x86DirectTailGraph) root(root int, byName map[string]int) (*x86Dire
 			return nil, x86DirectTailContext("native/frame/helper argument role is not closed: %s", fn.Sym)
 		}
 		for _, ins := range fn.Instrs {
+			if ins.Op == OpCALL && !allowPrivateCalls {
+				return nil, x86DirectTailContext("custom CALL retains its independent declaration/ABI owner")
+			}
 			if isX86RawDirective(ins) || ins.x86Encoded || ins.x86SourceRaw != nil || ins.x86RawNearReturn != nil ||
 				ins.x86AddressBits != 0 || ins.x86UnboundAddressOverride || ins.x86SegmentPrefix != 0 ||
 				len(ins.x86SourceStackFP) != 0 || len(ins.x86CallerMemory) != 0 || len(ins.x86FixedLocalMemory) != 0 ||
-				ins.x86NumericalRead != nil || ins.x86SDKLiteral != nil ||
-				ins.Op == "CALL" {
+				ins.x86NumericalRead != nil || ins.x86SDKLiteral != nil {
 				return nil, x86DirectTailContext("raw/call/native effect has no continuation role: %s", ins.Raw)
 			}
 			for _, arg := range ins.Args {
@@ -37,15 +40,19 @@ func (graph *x86DirectTailGraph) root(root int, byName map[string]int) (*x86Dire
 					return nil, x86DirectTailContext("physical SP/BP/PC/frame address has no continuation role: %s", ins.Raw)
 				}
 			}
-			if ins.Op != OpJMP || len(ins.Args) != 1 || ins.Args[0].Kind != OpSym {
+			if ins.Op == OpCALL && (len(ins.Args) != 1 || ins.Args[0].Kind != OpSym) {
+				return nil, x86DirectTailContext("CALL lacks one original private source target")
+			}
+			if ins.Op != OpJMP && ins.Op != OpCALL || len(ins.Args) != 1 || ins.Args[0].Kind != OpSym {
 				continue
 			}
+			hasCalls = hasCalls || ins.Op == OpCALL
 			name, offset, valid := parseSBRef(ins.Args[0].Sym)
 			if !valid || offset != 0 {
 				return nil, x86DirectTailContext("indirect/external/missing/offset tail target: %s", ins.Raw)
 			}
 			if !graph.helpers[name] {
-				if !graph.ordinaryExternalTail(root, name) {
+				if ins.Op == OpCALL || !graph.ordinaryExternalTail(root, name) {
 					return nil, x86DirectTailContext("external terminal lacks identical ordinary root ABI0 roles: %s", ins.Raw)
 				}
 				continue
@@ -70,6 +77,15 @@ func (graph *x86DirectTailGraph) root(root int, byName map[string]int) (*x86Dire
 		}
 	}
 	for _, index := range order {
+		count := 0
+		for _, ins := range graph.original.Funcs[index].Instrs {
+			if ins.Op != OpTEXT && ins.Op != OpLABEL {
+				count++
+			}
+		}
+		if count == 0 || count > limit-len(view.points) {
+			return nil, x86DirectTailContext("empty/oversized source continuation instruction budget")
+		}
 		starts[index] = len(view.points)
 		labels[index] = make(map[string]int)
 		for ordinal, ins := range graph.original.Funcs[index].Instrs {
@@ -91,9 +107,6 @@ func (graph *x86DirectTailGraph) root(root int, byName map[string]int) (*x86Dire
 			view.instructions = append(view.instructions, ins)
 			view.ordinals = append(view.ordinals, ordinal)
 		}
-		if starts[index] == len(view.points) || len(view.points) > 4096 {
-			return nil, x86DirectTailContext("empty/oversized source continuation")
-		}
 	}
 	view.edges = make([][]int, len(view.points))
 	view.externalTails = make([]bool, len(view.points))
@@ -105,7 +118,7 @@ func (graph *x86DirectTailGraph) root(root int, byName map[string]int) (*x86Dire
 			continue
 		}
 		next := []int{pc + 1}
-		if ins.Op == OpJMP || isAMD64ConditionalBranch(ins.Op) {
+		if ins.Op == OpJMP || ins.Op == OpCALL || isAMD64ConditionalBranch(ins.Op) {
 			args := x86DirectTailBranchArgs(ins)
 			if len(args) != 1 {
 				return nil, x86DirectTailContext("unbound source branch operands")
@@ -130,9 +143,9 @@ func (graph *x86DirectTailGraph) root(root int, byName map[string]int) (*x86Dire
 				}
 				target, found = pc+int(offset), true
 			}
-			if ins.Op == OpJMP && arg.Kind == OpSym {
+			if (ins.Op == OpJMP || ins.Op == OpCALL) && arg.Kind == OpSym {
 				name, offset, valid := parseSBRef(arg.Sym)
-				if valid && offset == 0 && !graph.helpers[name] && graph.ordinaryExternalTail(root, name) {
+				if ins.Op == OpJMP && valid && offset == 0 && !graph.helpers[name] && graph.ordinaryExternalTail(root, name) {
 					view.externalTails[pc] = true
 					continue // No graph successor: ordinary typed call+return.
 				}
@@ -143,21 +156,24 @@ func (graph *x86DirectTailGraph) root(root int, byName map[string]int) (*x86Dire
 				target, found = starts[index], true
 			}
 			if !found || target >= len(view.points) || view.points[target].text != view.points[pc].text &&
-				!(ins.Op == OpJMP && arg.Kind == OpSym) {
+				!((ins.Op == OpJMP || ins.Op == OpCALL) && arg.Kind == OpSym) {
 				return nil, x86DirectTailContext("indirect/external/missing source branch")
 			}
-			if ins.Op == OpJMP {
+			if ins.Op == OpJMP || ins.Op == OpCALL {
 				next = []int{target}
 			} else {
 				next = append(next, target)
 			}
 		}
 		for index, target := range next {
-			if target < 0 || target >= len(view.points) || index == 0 && ins.Op != OpJMP && view.points[target].text != view.points[pc].text {
+			if target < 0 || target >= len(view.points) || index == 0 && ins.Op != OpJMP && ins.Op != OpCALL && view.points[target].text != view.points[pc].text {
 				return nil, x86DirectTailContext("source falls outside its original TEXT continuation")
 			}
 		}
 		view.edges[pc] = next
+	}
+	if hasCalls {
+		return view.expandPrivateCalls(limit)
 	}
 	return view, nil
 }
@@ -190,7 +206,7 @@ func x86DirectTailPCBranch(ins Instr) bool {
 func (view *x86DirectTailRoot) blocks() []amd64Block {
 	blocks := make([]amd64Block, len(view.points))
 	for pc, point := range view.points {
-		blocks[pc] = amd64Block{name: fmt.Sprintf("p9_tail_%d_%d", point.text, point.instruction),
+		blocks[pc] = amd64Block{name: fmt.Sprintf("p9_tail_%d_%d_%d", point.text, point.instruction, pc),
 			instrs: []Instr{view.instructions[pc]}, synthetic: true}
 	}
 	return blocks
