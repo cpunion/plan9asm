@@ -27,6 +27,11 @@ The same process fix has an independently audited Linux
 44 children, Go1.27.2, LLVM22.1.8 and Node22.23.4, including the actual failed
 module cancellation test. Its fork-only diagnostic files are not part of PR40.
 These results still require the complete new public CI run before qualification.
+Go1.20.14 additionally passes the affected 64 roots / 2,716 children with no
+failures/skips; one planned root is explicitly Go1.27-only. Builds, root vet,
+all five official baselines, the ARM64 reference-family gate, tracked-source
+formatting and actionlint pass. Later diagnostic/doc-only commits leave the
+qualified Go source and module files unchanged.
 
 The retired dated-branch diagnostic workflow and its scheduling-only policies
 are removed, reducing the patch by 4,157 lines. All 79 semantic auditor tests
