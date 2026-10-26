@@ -6,6 +6,10 @@ func ordinaryPackageEnvironment(goos, goarch string, input []string) ([]string, 
 	return sdkfrontend.OrdinaryEnvironment(goos, goarch, input)
 }
 
+func featurePackageEnvironment(goos, goarch string, input []string) ([]string, error) {
+	return sdkfrontend.FeatureEnvironment(goos, goarch, input)
+}
+
 func ordinaryGoEnvFile(requested, actual string) (string, error) {
 	return sdkfrontend.GoEnvFile(requested, actual)
 }

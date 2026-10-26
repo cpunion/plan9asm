@@ -114,7 +114,7 @@ func loadFeatureConsumer(ctx context.Context, filename, output, target, module s
 	// package selection. Source observers retain this same environment and
 	// own their separate temporary children until their existing Close calls.
 	goos, goarch, _ := strings.Cut(target, "/")
-	env, err = ordinaryPackageEnvironment(goos, goarch, env)
+	env, err = featurePackageEnvironment(goos, goarch, env)
 	if err != nil {
 		return nil, err
 	}
