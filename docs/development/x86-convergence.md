@@ -118,6 +118,10 @@ handles operand reads, arithmetic, masking and encoding-aware writeback once.
 Legacy memory still uses its original faulting opcode. MMX and word low-product
 multiplication retain separate owners. The three migrated lowering files plus
 their helper shrink from 403 to 346 lines; this is not the whole PR's line delta.
+The subsequent cleanup removes another 143 lines of unreachable packed
+arithmetic from the residual vector dispatcher. Its original fixtures now call
+the same typed owners as public lowering; 66 roots / 4,506 children passed with
+no skips at `481291b93`. This is code reduction, not a measured speedup.
 
 The selected Go 1.27.2 tables contain the following independent pilot rows:
 

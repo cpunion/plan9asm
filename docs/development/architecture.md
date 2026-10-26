@@ -28,7 +28,8 @@ before expanding another. Existing cross-architecture regression gates remain.
 `Goarch` selects source encoding/ABI rules. `TargetTriple` selects the LLVM
 backend. They need not be identical for portable operations. Backend-specific
 requirements remain explicit: SVE needs AArch64; wasm cannot use blockaddress.
-Used LLVM `llvm.x86.*` intrinsics require a matching x86 source mode and target.
+Used LLVM `llvm.x86.*` intrinsics require a matching x86 source mode and target,
+except MXCSR load/store, whose i32 memory operand works in either x86 mode.
 The guard checks LLVM intrinsic IDs, not an opcode list; unused declarations,
 ordinary functions and generic portable intrinsics impose no such restriction.
 

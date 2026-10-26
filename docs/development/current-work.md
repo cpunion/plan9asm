@@ -6,6 +6,16 @@ and [validation](validation.md). Preserve original failed receipts.
 
 ## Current priority: finish amd64 first
 
+The public `f2e6a88b5` [CI run](https://github.com/xgo-dev/plan9asm/actions/runs/40317000859)
+has failures and is being allowed to finish before another batch is published.
+The local batch fixes oversized exact test selectors without changing the
+8,941-root inventory or shard ownership, restores cross-width MXCSR targets,
+and resolves feature-consumer cache/config/temp paths before package selection.
+Four stale boundary tests retain their original positive sources and independent
+rejection controls; 19 roots / 283 children pass, with no skips. Generated-header
+CPP, ordinary ABI0 outgoing call slots and native ISA checks remain under repair.
+These focused results do not qualify the complete integrated head.
+
 The complete Go 1.27.2 / LLVM22 Linux/amd64 object benchmark at `bd10bd410`
 passes **37/55**, with 18 failures and zero N/A/unattempted cases. SHA256 is
 restored alongside GCM, SHA512 and SHA3; no previously passing file regresses.
@@ -43,7 +53,16 @@ receipts above remain separate. The full Node22.23.4 policy gate passes679 tests
 after retaining the original readonly negative-control fingerprint separately
 from an appended independent test owner; its earlier 678/679 failure is retained.
 
-The latest Linux native [receipt](https://github.com/cpunion/plan9asm/actions/runs/40305171644)
+The public CI's Linux native owners 4 and 14 now pass at the actual PR merge
+checkout `e9c9fd902` (contribution head `f2e6a88b5`), Go 1.27.2 / LLVM22.
+Their complete disjoint inventories contain 46 roots / 283 children and
+36 roots / 474 children, respectively, with no failures/skips. XCHG checks
+21 kernels over four inputs; readonly packed arithmetic checks 38 kernels over
+four inputs. Both compare original Go execution with all three APIs at O0/O2.
+Actual CPU and opcode checks passed. This qualifies these native families,
+not the failed CI run as a whole or native AVX512 execution.
+
+The earlier Linux native [receipt](https://github.com/cpunion/plan9asm/actions/runs/40305171644)
 qualifies `44fe11785`: **35 roots / 430 children**, zero failures/skips, in
 511.625 seconds. Source identity and the complete unique inventory were checked.
 It includes all seven SHA instructions, SHA live/dead memory faults, VEX block
@@ -53,7 +72,7 @@ register-bank oracle; it does not use original Go as its oracle.
 SHA's unaligned behavior is compared with
 the original Go opcode on the actual CPU; it does not assume AES's alignment
 fault or relax the private-frame contract. The preceding SHA fault receipt
-remains failed. This native receipt predates XCHG and owned readonly arithmetic;
+remains failed. That earlier native receipt predates XCHG and owned readonly arithmetic;
 portable LLVM execution does not qualify native AVX512.
 
 The XCHG batch shares scalar value reads/writes with MOV and retains the complete
