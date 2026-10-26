@@ -1724,7 +1724,12 @@ func goAMD64FrameMachineShape(fn goAMD64FrameFunction, frame int64) error {
 	if !push && !stored {
 		return goAMD64FrameContext("unrecognized automatic BP/SP prologue")
 	}
+	// Source control flow may return before the physical end of TEXT, then
+	// close the final block with a local backedge. No source edge may enter an
+	// automatic prologue or skip part of a return's automatic stack restoration.
+	starts[0], starts[first.Len], starts[first.Len+second.Len] = false, false, false
 	returns := 0
+	pc := 0
 	for i, ins := range instructions {
 		if ins.Op == x86asm.RET {
 			returns++
@@ -1739,10 +1744,21 @@ func goAMD64FrameMachineShape(fn goAMD64FrameFunction, frame int64) error {
 			if !pushReturn && !storedReturn {
 				return goAMD64FrameContext("unrecognized original RET epilogue")
 			}
+			starts[pc], starts[pc-previous.Len] = false, false
 		}
+		pc += ins.Len
 	}
-	if returns == 0 || instructions[len(instructions)-1].Op != x86asm.RET {
+	last := instructions[len(instructions)-1]
+	if returns == 0 || last.Op != x86asm.RET && last.Op != x86asm.JMP {
 		return goAMD64FrameContext("original frame has no conventional RET")
+	}
+	pc = 0
+	for _, ins := range instructions {
+		pc += ins.Len
+		relative, direct := ins.Args[0].(x86asm.Rel)
+		if ins.Op == x86asm.JMP && !direct || direct && !starts[pc+int(relative)] {
+			return goAMD64FrameContext("original branch leaves the source body or enters an automatic frame interior")
+		}
 	}
 	return nil
 }
