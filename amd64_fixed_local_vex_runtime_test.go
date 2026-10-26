@@ -189,8 +189,12 @@ int main(void) {
 
 func fixedLocalVEXRuntime(t *testing.T, execution x86FloatCompareExecution, execute bool) {
 	t.Helper()
+	fixedLocalVectorRuntime(t, execution, execute, fixedLocalVEXRuntimeKernels(t))
+}
+
+func fixedLocalVectorRuntime(t *testing.T, execution x86FloatCompareExecution, execute bool, kernels []fixedLocalVEXRuntimeKernel) {
+	t.Helper()
 	goAMD64FramePrepareOwnedToolCache(t)
-	kernels := fixedLocalVEXRuntimeKernels(t)
 	for start := 0; start < len(kernels); start += 32 {
 		end := start + 32
 		if end > len(kernels) {
@@ -243,7 +247,52 @@ func fixedLocalVEXRuntime(t *testing.T, execution x86FloatCompareExecution, exec
 				})
 		})
 	}
-	t.Logf("%d independent official VEX shape kernels, 16 input patterns; original Go and three LLVM APIs execute=%v", len(kernels), execute)
+	t.Logf("%d vector shape kernels, 16 input patterns; original Go and three LLVM APIs execute=%v", len(kernels), execute)
+}
+
+// Immediate-domain tests cover all selectors separately. These kernels compare
+// original execution for four distinct selector patterns, both widths, memory and
+// alias forms, and preserved/zeroed upper bytes. Memory canaries remain visible.
+func fixedLocalShuffleRuntimeKernels() []fixedLocalVEXRuntimeKernel {
+	var kernels []fixedLocalVEXRuntimeKernel
+	names := []string{"PSHUFB", "PSHUFD", "PSHUFL", "PSHUFHW", "PSHUFLW", "VPSHUFD", "VPSHUFHW", "VPSHUFLW"}
+	for _, name := range names {
+		banks := []string{"X"}
+		if strings.HasPrefix(name, "V") {
+			banks = append(banks, "Y")
+		}
+		selectors := []string{"0", "27", "78", "255"}
+		if name == "PSHUFB" {
+			selectors = []string{""}
+		}
+		for _, bank := range banks {
+			for _, selector := range selectors {
+				prefix := name + " "
+				if selector != "" {
+					prefix += "$" + selector + ","
+				}
+				operations := []string{
+					prefix + bank + "0," + bank + "2",
+					prefix + bank + "0," + bank + "0",
+					prefix + "64(BP)," + bank + "2",
+					prefix + "0(SI)," + bank + "2",
+				}
+				if strings.HasPrefix(name, "V") {
+					operations = append(operations, prefix+"65(BP),"+bank+"2", prefix+"1(SI),"+bank+"2")
+				}
+				kernels = append(kernels, fixedLocalVEXRuntimeKernel{shape: operations[0], operations: operations})
+			}
+		}
+	}
+	return kernels
+}
+
+func TestGoAMD64FixedLocalShuffleRuntimeObjects(t *testing.T) {
+	kernels := fixedLocalShuffleRuntimeKernels()
+	if len(kernels) != 41 {
+		t.Fatal("legacy and VEX shuffle runtime inventory changed", len(kernels))
+	}
+	fixedLocalVectorRuntime(t, fixedLocalPackedCompileOnlyTools(t), false, kernels)
 }
 
 func TestGoAMD64FixedLocalVEXRuntimeObjects(t *testing.T) {

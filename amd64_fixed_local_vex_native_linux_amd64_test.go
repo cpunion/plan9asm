@@ -9,6 +9,21 @@ import (
 // This required native owner is never registered on a Windows/macOS host.
 // Objects from those hosts cannot substitute for original Go execution.
 func TestCrossLinuxRuntimeMatrixGoAMD64FixedLocalVEX(t *testing.T) {
+	fixedLocalVEXRuntime(t, fixedLocalVEXNativeTools(t), true)
+	x87IA32RequireNativeHost(t)
+}
+
+func TestCrossLinuxRuntimeMatrixGoAMD64FixedLocalShuffle(t *testing.T) {
+	kernels := fixedLocalShuffleRuntimeKernels()
+	if len(kernels) != 41 {
+		t.Fatal("legacy and VEX shuffle runtime inventory changed", len(kernels))
+	}
+	fixedLocalVectorRuntime(t, fixedLocalVEXNativeTools(t), true, kernels)
+	x87IA32RequireNativeHost(t)
+}
+
+func fixedLocalVEXNativeTools(t *testing.T) x86FloatCompareExecution {
+	t.Helper()
 	x87IA32RequireNativeHost(t)
 	execution := x86FloatCompareExecutionTools(t)
 	if len(execution.prefix) != 0 || execution.preserveArgv0 {
@@ -37,6 +52,5 @@ int main(void) {
 	}
 	execution.compileC(t, source, executable)
 	t.Logf("%s", execution.run(t, executable))
-	fixedLocalVEXRuntime(t, execution, true)
-	x87IA32RequireNativeHost(t)
+	return execution
 }
