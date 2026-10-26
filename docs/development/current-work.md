@@ -6,16 +6,16 @@ and [validation](validation.md). Preserve original failed receipts.
 
 ## Current priority: finish amd64 first
 
-The complete Go 1.27.2 / LLVM22 Linux/amd64 object benchmark at `b2f3f0c81`
-passes **35/55**, with 20 failures and zero N/A/unattempted cases. Complete
-SHA512 and SHA3 are restored. Wall time is 57 seconds (55.677 tool seconds);
-this is not a repeated end-to-end speedup measurement. GCM has passed the
-scalar-lane checks and now needs bounded dynamic DATA indices. SHA256 needs
-loop updates separated from their comparisons. SHA1 now reaches original-frame
-capture, which incorrectly requires the last instruction to be RET even when
-the source ends in an internal backedge. Ordinary helper calls remain unresolved
-independently of runtime-entry contracts. None of these diagnostic advances is
-an additional complete-file pass.
+The complete Go 1.27.2 / LLVM22 Linux/amd64 object benchmark at `a5c817d58`
+passes **36/55**, with 19 failures and zero N/A/unattempted cases. Complete
+GCM joins the restored SHA512 and SHA3 files; no previously passing file
+regresses. Wall time is 64 seconds (61.895 tool seconds); this is not a repeated
+end-to-end speedup measurement. SHA256 now reaches SHA256RNDS2 result analysis;
+SHA1 reaches an unrecognized original machine boundary. These two remain
+whole-file failures. Inspection also found approximate SHA lowering, so the
+seven-instruction SHA family needs exact semantics and independent execution,
+not just effect registration. Ordinary helper calls remain unresolved
+independently of runtime-entry contracts.
 
 The earlier original-Go Linux native [receipt](https://github.com/cpunion/plan9asm/actions/runs/40274466633)
 qualifies `c2eeeda34`: 19 roots / 294 children, zero failures/skips, in
@@ -30,10 +30,21 @@ numerical constant propagation and block replay. Its expanded original-Go native
 [gate](https://github.com/cpunion/plan9asm/actions/runs/40280464705) passes
 22 roots / 333 children in 346.604 seconds, zero failures/skips. The complete
 artifact was independently checked against its source revision and manifest.
-The next [native batch](https://github.com/cpunion/plan9asm/actions/runs/40285422731)
-is pending at `e6c475a9f`: 26 roots / 370 children, adding counted loops,
-overlapping iterations, scalar lanes and GP-aliased private frame addresses.
+The newer [native batch](https://github.com/cpunion/plan9asm/actions/runs/40285422731)
+passes at `e6c475a9f`: 26 roots / 370 children, zero failures/skips, in
+405.035 seconds. It adds counted loops, overlapping iterations, scalar lanes
+and GP-aliased private frame addresses. Its complete artifact was checked
+against the exact source and manifest. The [next native batch](https://github.com/cpunion/plan9asm/actions/runs/40289414541)
+is pending at `fae1aa8bc`: 29 roots / 397 children, additionally covering
+bounded DATA indices, early returns and separated counter updates.
 Earlier execution and object receipts cannot certify this later execution.
+
+The integrated Go 1.20.14 / LLVM22 receipt at `fae1aa8bc` passes 63 roots /
+2,341 children in 79.946 seconds, zero failures/skips. The exact root inventory
+and every root/child terminal were checked. It includes range refinement and
+revocation, loop updates, private aliases, machine return boundaries, scalar
+lanes and the earlier CLMUL/shift/GP/replay regressions. Current-SDK-only source
+oracles and Linux native execution are separate gates.
 
 The integrated `b2f3f0c81` focused receipt passes 31 roots / 1,240 children,
 zero failures/skips, in 85.176 seconds. It includes whole scalar-lane functions,
@@ -59,10 +70,10 @@ Twelve analysis benchmarks, each with five samples, reduce allocation counts
 set and all failure diagnostics remain identical. One wall observation falls
 97 to 65 seconds; it is not a repeated end-to-end speedup measurement.
 
-Next: share remaining family dependencies without per-proof opcode lists,
-preserve each bounded-loop iteration's byte/alias obligations, and run the integrated native and
-minimum-SDK gates for the newer replay and family changes. Retain the
-whole-file failures until new complete-source runs actually pass them.
+Next: correct the complete legacy SHA family through shared typed grammar and
+exact numerical semantics; verify the pending native batch; then re-run the
+complete source benchmark and address ordinary helper contracts. Retain each
+failed receipt and whole-file failure until its complete replacement passes.
 
 The receipt chronology below retains earlier failures and narrower evidence;
 it does not replace this latest snapshot or certify a later source revision.
