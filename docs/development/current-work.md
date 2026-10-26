@@ -6,21 +6,31 @@ and [validation](validation.md). Preserve original failed receipts.
 
 ## Current priority: finish amd64 first
 
-Latest integrated snapshot: `5018ab7d5`. The complete Go 1.27.2 / LLVM22
-Linux/amd64 object benchmark now passes **34/55**, with 21 failures and zero
-N/A/unattempted cases. Complete SHA512 is newly passing; GCM advances past
-the frame128 encoding check to missing legacy vector effects. Wall time is
-44 seconds (41.824 tool seconds), not an established end-to-end speedup.
-The frozen Go 1.20.14 / LLVM22 integrated family receipt passes 26 roots /
-1,700 children in 81.708 seconds, with zero failures/skips, including all 540
-VEX source witnesses through three APIs and O0/O2 objects. The newest native
-receipt remains `ea3915207`; mutable-global and VEX execution are still pending.
+The complete Go 1.27.2 / LLVM22 Linux/amd64 object benchmark at `14ebac865`
+passes **35/55**, with 20 failures and zero N/A/unattempted cases. Complete
+SHA512 and SHA3 are restored. Wall time is 97 seconds (95.290 tool seconds),
+so no end-to-end speedup is established. GCM still needs shared CLMUL effects;
+SHA256 needs shuffle effects and bounded indexed loops. Ordinary helper calls
+remain unresolved independently of runtime-entry contracts.
 
-Next independent batches: legacy logical/shuffle/shift effects shared with VEX,
-bounded private-DATA address origins, and original-Go AVX2 execution. SHA256's
-indexed private scratch also needs a justified bounded-loop/index model; merely
-accepting its DATA address will not qualify that whole file. Keep runtime-entry
-contracts, hardware qualification and ordinary-source failures distinct.
+The latest original-Go Linux native [receipt](https://github.com/cpunion/plan9asm/actions/runs/40268896042)
+qualifies `4777c5433`: 15 roots / 247 children, zero failures/skips, including
+mutable globals and all 176 VEX shape kernels through three APIs at O0/O2.
+It does not certify later logical, shuffle, DATA or constant-index changes.
+Their object/guard tests pass separately; new native oracles await execution.
+The constant-index batch `74998514d` retains 120 address combinations and
+30 original Go functions; its isolated receipt has 16 roots / 269 children,
+zero failures/skips, across three OSes and three APIs at O0/O2.
+The shared VEX shuffle batch `0a319cd38` has a separate 37-root / 946-child
+receipt with zero failures/skips, including legacy/MMX/386 regressions. Its
+42 complete source functions retain both X/Y widths and unaligned memory.
+
+Next: share remaining family dependencies without per-proof opcode lists,
+preserve each bounded-loop iteration's byte/alias obligations, reduce state
+cloning at straight-line CFG interiors, and run the integrated native and
+minimum-SDK gates. The last minimum-SDK receipt is still `5018ab7d5`
+(26 roots / 1,700 children); it does not certify newer source. Retain the
+whole-file failures until new complete-source runs actually pass them.
 
 The receipt chronology below retains earlier failures and narrower evidence;
 it does not replace this latest snapshot or certify a later source revision.
