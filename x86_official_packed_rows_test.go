@@ -273,13 +273,16 @@ func x86OfficialPackedVerifyListing(listing string, cases []x86OfficialPackedCas
 func TestX86OfficialPackedRowListingRejectsFalseIdentity(t *testing.T) {
 	cases := []x86OfficialPackedCase{{row: "avx/fixture", symbol: "Row0", line: 2,
 		witness: goasmrules.X86PackedBinaryWitness{Instruction: "VPADDD X16,X17,X18", Encoding: []byte{0x62, 0xa1, 0x75, 0, 0xfe, 0xd0}}}}
-	const listing = `literal.Row0 STEXT nosplit asm size=7 align=0x0 args=0x0 locals=0x0
+	byteRow := func(hex, ascii string) string {
+		return fmt.Sprintf("  0x0000%-48s  %s\n", " "+hex, ascii)
+	}
+	originalBytes := byteRow("62 a1 75 00 fe d0 c3", "b.u....")
+	listing := `literal.Row0 STEXT nosplit asm size=7 align=0x0 args=0x0 locals=0x0
   0x0000 00000 (literal.s:1) TEXT literal.Row0(SB), NOSPLIT|NOFRAME, $0-0
   0x0000 00000 (literal.s:1) FUNCDATA $0, gclocals(SB)
   0x0000 00000 (literal.s:2) VPADDD X16, X17, X18
   0x0006 00006 (literal.s:3) RET
-  0x0000 62 a1 75 00 fe d0 c3
-`
+` + originalBytes
 	if err := x86OfficialPackedVerifyListing(listing, cases); err != nil {
 		t.Fatal(err)
 	}
@@ -293,15 +296,15 @@ func TestX86OfficialPackedRowListingRejectsFalseIdentity(t *testing.T) {
 	}
 	for name, changed := range map[string]string{
 		"unknown text kind":   strings.Replace(listing, "STEXT ", "STEXTFOREIGN ", 1),
-		"VEX instead of EVEX": strings.Replace(listing, "62 a1", "c5 f1", 1),
+		"VEX instead of EVEX": strings.Replace(listing, originalBytes, byteRow("c5 f1 75 00 fe d0 c3", "..u...."), 1),
 		"register extension":  strings.Replace(listing, "a1 75", "e1 75", 1),
 		"partial instruction": strings.Replace(listing, "0x0006 00006", "0x0005 00005", 1),
 		"wrong source row":    strings.Replace(listing, "literal.s:2", "literal.s:4", 1),
 		"wrong owner":         strings.ReplaceAll(listing, "literal.Row0", "literal.Row1"),
 		"missing owner":       "",
 		"duplicate owner":     listing + listing,
-		"truncated bytes":     strings.Replace(listing, "fe d0 c3", "fe d0", 1),
-		"trailing bytes":      strings.Replace(listing, "fe d0 c3", "fe d0 c3 90", 1),
+		"truncated bytes":     strings.Replace(listing, originalBytes, byteRow("62 a1 75 00 fe d0", "b.u..."), 1),
+		"trailing bytes":      strings.Replace(listing, originalBytes, byteRow("62 a1 75 00 fe d0 c3 90", "b.u....."), 1),
 		"byte gap":            strings.Replace(listing, "0x0000 62", "0x0001 62", 1),
 	} {
 		t.Run(name, func(t *testing.T) {

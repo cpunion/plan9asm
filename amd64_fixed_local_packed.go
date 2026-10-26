@@ -1,8 +1,8 @@
 package plan9asm
 
 // Reuse the complete source grammars and their byte effects. This adapter adds
-// independently replayed private-frame memory and separately bound literal
-// reads; it never supplies a caller, FP, incoming-pointer or raw capability.
+// independently replayed private-frame memory, typed native input addresses
+// and separately bound literal reads; it never supplies caller or raw access.
 func fixedLocalPackedMoveStep(ins *Instr, state *x86FixedLocalState, proof *x86FixedLocalProof, residue int) (bool, error) {
 	form, known, err := amd64PackedVectorMoveProperties(*ins, "amd64")
 	legacy := false
@@ -54,13 +54,15 @@ func fixedLocalPackedMoveStep(ins *Instr, state *x86FixedLocalState, proof *x86F
 		if numerical != widthMask {
 			return true, goAMD64FrameContext("fixed local packed store has undefined source bytes")
 		}
-		offset, err := fixedLocalMemory(ins, form.memory, state, proof, residue, width, alignment, true, false)
+		offset, role, err := fixedLocalMemoryAccess(ins, form.memory, state, proof, residue, width, alignment, true, false)
 		if err != nil {
 			return true, err
 		}
 		// A runtime mask is not an all-one mask. A partial store may invalidate
 		// a private pointer spill, but cannot initialize its retained bytes.
-		fixedLocalNumericalStore(state, offset, width, form.mask < 0)
+		if role == x86FixedLocalPrivateMemory {
+			fixedLocalNumericalStore(state, offset, width, form.mask < 0)
+		}
 		return true, nil
 	}
 	destination := x86CallerVectorRoot(ins.Args[form.destination].Reg)
@@ -111,11 +113,13 @@ func fixedLocalMaskMoveStep(ins *Instr, state *x86FixedLocalState, proof *x86Fix
 		return fail()
 	}
 	if destination.Kind == OpMem {
-		offset, err := fixedLocalMemory(ins, 1, state, proof, residue, width, 1, true, false)
+		offset, role, err := fixedLocalMemoryAccess(ins, 1, state, proof, residue, width, 1, true, false)
 		if err != nil {
 			return true, err
 		}
-		fixedLocalNumericalStore(state, offset, width, true)
+		if role == x86FixedLocalPrivateMemory {
+			fixedLocalNumericalStore(state, offset, width, true)
+		}
 		return true, nil
 	}
 	if amd64IsKOperand(destination) {

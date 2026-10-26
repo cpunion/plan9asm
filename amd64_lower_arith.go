@@ -432,21 +432,21 @@ func (c *amd64Ctx) lowerArith(op Op, ins Instr) (ok bool, terminated bool, err e
 		if len(ins.Args) != 2 {
 			return true, false, fmt.Errorf("amd64 %s expects src, dst: %q", op, ins.Raw)
 		}
-		src, err := c.evalI64(ins.Args[0])
+		src, destination, err := c.evalScalarArithmeticSource(ins, I64)
 		if err != nil {
 			return true, false, err
 		}
 		loadDst := func() (string, func(string) error, error) {
-			switch ins.Args[1].Kind {
+			switch destination.Kind {
 			case OpReg:
-				dst := ins.Args[1].Reg
+				dst := destination.Reg
 				dv, err := c.loadReg(dst)
 				if err != nil {
 					return "", nil, err
 				}
 				return dv, func(v string) error { return c.storeReg(dst, v) }, nil
 			case OpMem:
-				addr, err := c.addrFromMem(ins.Args[1].Mem)
+				addr, err := c.addrFromMem(destination.Mem)
 				if err != nil {
 					return "", nil, err
 				}
@@ -709,11 +709,11 @@ func (c *amd64Ctx) lowerArith(op Op, ins Instr) (ok bool, terminated bool, err e
 		if len(ins.Args) != 2 {
 			return true, false, fmt.Errorf("amd64 %s expects src, dst: %q", op, ins.Raw)
 		}
-		s32, err := c.evalIntSized(ins.Args[0], I32)
+		s32, destination, err := c.evalScalarArithmeticSource(ins, I32)
 		if err != nil {
 			return true, false, err
 		}
-		dtr, storeDst, err := c.loadIntDestination(ins.Args[1], I32)
+		dtr, storeDst, err := c.loadIntDestination(destination, I32)
 		if err != nil {
 			return true, false, err
 		}
@@ -755,11 +755,11 @@ func (c *amd64Ctx) lowerArith(op Op, ins Instr) (ok bool, terminated bool, err e
 		if len(ins.Args) != 2 {
 			return true, false, fmt.Errorf("amd64 %s expects src, dst: %q", op, ins.Raw)
 		}
-		d8, storeDst, err := c.loadIntDestination(ins.Args[1], I8)
+		s8, destination, err := c.evalScalarArithmeticSource(ins, I8)
 		if err != nil {
 			return true, false, err
 		}
-		s8, err := c.evalIntSized(ins.Args[0], I8)
+		d8, storeDst, err := c.loadIntDestination(destination, I8)
 		if err != nil {
 			return true, false, err
 		}
@@ -828,11 +828,11 @@ func (c *amd64Ctx) lowerArith(op Op, ins Instr) (ok bool, terminated bool, err e
 		if len(ins.Args) != 2 {
 			return true, false, fmt.Errorf("amd64 %s expects src, dst: %q", op, ins.Raw)
 		}
-		src, err := c.evalIntSized(ins.Args[0], I16)
+		src, destination, err := c.evalScalarArithmeticSource(ins, I16)
 		if err != nil {
 			return true, false, err
 		}
-		dst, storeDst, err := c.loadIntDestination(ins.Args[1], I16)
+		dst, storeDst, err := c.loadIntDestination(destination, I16)
 		if err != nil {
 			return true, false, err
 		}

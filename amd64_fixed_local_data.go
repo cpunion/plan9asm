@@ -10,6 +10,14 @@ type x86FixedLocalData struct {
 	size, alignment int64
 }
 
+type x86FixedLocalMemoryRole uint8
+
+const (
+	x86FixedLocalPrivateMemory x86FixedLocalMemoryRole = iota
+	x86FixedLocalLiteralMemory
+	x86FixedLocalNativeInput
+)
+
 func fixedLocalDataSymbol(symbol string) (string, bool) {
 	name := strings.TrimPrefix(symbol, "·")
 	if !strings.HasSuffix(name, "<>") || len(name) <= 2 || strings.ContainsAny(name, "·/.") {
@@ -86,19 +94,18 @@ func (source *GoAMD64FrameSource) fixedLocalData(file *File, expanded string, re
 // The only consumer is an already registered numerical memory operand. The
 // complete original file and immutable symbol resolution own its LLVM global.
 func fixedLocalReadMemory(ins *Instr, index int, state *x86FixedLocalState, proof *x86FixedLocalProof,
-	residue int, width, alignment int64) (offset int64, literal bool, err error) {
+	residue int, width, alignment int64) (offset int64, role x86FixedLocalMemoryRole, err error) {
 	if index >= 0 && index < len(ins.Args) && ins.Args[index].Kind == OpSym {
 		if proof.binding == nil || width <= 0 || alignment <= 0 {
-			return 0, false, goAMD64FrameContext("fixed local DATA read has no original literal owner")
+			return 0, x86FixedLocalLiteralMemory, goAMD64FrameContext("fixed local DATA read has no original literal owner")
 		}
 		name, offset, valid := parseSBRef(ins.Args[index].Sym)
 		data, found := proof.binding.literalData[name]
 		if !valid || !found || offset < 0 || width > data.size || offset > data.size-width ||
 			alignment > data.alignment || offset%alignment != 0 {
-			return 0, false, goAMD64FrameContext("fixed local DATA read exceeds original identity, extent or alignment")
+			return 0, x86FixedLocalLiteralMemory, goAMD64FrameContext("fixed local DATA read exceeds original identity, extent or alignment")
 		}
-		return offset, true, nil
+		return offset, x86FixedLocalLiteralMemory, nil
 	}
-	offset, err = fixedLocalMemory(ins, index, state, proof, residue, width, alignment, false, false)
-	return offset, false, err
+	return fixedLocalMemoryAccess(ins, index, state, proof, residue, width, alignment, false, false)
 }

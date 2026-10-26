@@ -17,12 +17,13 @@ type x86FixedLocalProof struct {
 }
 
 type x86FixedLocalAccess struct {
-	owner   *x86FixedLocalProof
-	shape   [32]byte
-	width   int64
-	write   bool
-	offset  [8]int64
-	ordinal int
+	owner       *x86FixedLocalProof
+	shape       [32]byte
+	width       int64
+	write       bool
+	nativeInput bool // Typed FP pointer, not a private extent/alignment proof.
+	offset      [8]int64
+	ordinal     int
 }
 
 type x86FixedLocalState struct {
@@ -157,6 +158,9 @@ func fixedLocalRelocationAliases(accesses map[int]map[int]x86FixedLocalAccess) e
 				return goAMD64FrameContext("fixed local complete access-byte budget exceeded")
 			}
 			total += access.width
+			if access.nativeInput {
+				continue // Native input addresses are never relocated.
+			}
 			for byteIndex := int64(0); byteIndex < access.width; byteIndex++ {
 				original := access.offset[0] + byteIndex
 				for residue := range forward {
@@ -397,7 +401,7 @@ func replayX86FixedLocal(fn *Func, sig FuncSig, proof *x86FixedLocalProof, resid
 			}
 			prior, found := previous[operand]
 			if !found || prior.owner != access.owner || prior.shape != access.shape || prior.width != access.width ||
-				prior.write != access.write || prior.ordinal != access.ordinal {
+				prior.write != access.write || prior.nativeInput != access.nativeInput || prior.ordinal != access.ordinal {
 				return goAMD64FrameContext("fixed local access shape depends on original SP residue")
 			}
 			prior.offset[residue] = access.offset[residue]
@@ -484,23 +488,49 @@ func fixedLocalMemory(ins *Instr, index int, state *x86FixedLocalState, proof *x
 			}
 		}
 	}
+	return offset, fixedLocalRecordAccess(ins, index, proof, residue, width, write, false, offset)
+}
+
+// Native input addresses retain ordinary faulting memory semantics. Their Go
+// pointer type proves only provenance, never a pointee extent or alignment.
+func fixedLocalMemoryAccess(ins *Instr, index int, state *x86FixedLocalState, proof *x86FixedLocalProof,
+	residue int, width, alignment int64, write, pointer bool) (int64, x86FixedLocalMemoryRole, error) {
+	if index >= 0 && index < len(ins.Args) && ins.Args[index].Kind == OpMem {
+		memory := ins.Args[index].Mem
+		if _, input := state.opaque[memory.Base]; input {
+			root, valid := x86CallerGP(memory.Base)
+			if !valid || root != memory.Base || width <= 0 || alignment <= 0 || pointer ||
+				!x86OrdinaryNativeMemoryOperand(ins.Args[index], "amd64") ||
+				memory.OffRaw != "" || memory.Sym != "" || memory.Segment != "" ||
+				memory.Index != "" || memory.Scale != 0 || memory.IndexExt != "" {
+				return 0, x86FixedLocalNativeInput, goAMD64FrameContext("fixed local native input requires a plain typed base and displacement")
+			}
+			return 0, x86FixedLocalNativeInput, fixedLocalRecordAccess(ins, index, proof, residue, width, write, true, 0)
+		}
+	}
+	offset, err := fixedLocalMemory(ins, index, state, proof, residue, width, alignment, write, pointer)
+	return offset, x86FixedLocalPrivateMemory, err
+}
+
+func fixedLocalRecordAccess(ins *Instr, index int, proof *x86FixedLocalProof, residue int,
+	width int64, write, nativeInput bool, offset int64) error {
 	if ins.x86FixedLocalMemory == nil {
 		ins.x86FixedLocalMemory = make(map[int]x86FixedLocalAccess)
 	}
 	shape, err := fixedLocalInstructionDigest(*ins)
 	if err != nil {
-		return 0, err
+		return err
 	}
 	access, found := ins.x86FixedLocalMemory[index]
 	if !found {
-		access = x86FixedLocalAccess{owner: proof, shape: shape, width: width, write: write, ordinal: proof.ordinal}
+		access = x86FixedLocalAccess{owner: proof, shape: shape, width: width, write: write, nativeInput: nativeInput, ordinal: proof.ordinal}
 	}
-	if access.owner != proof || access.shape != shape || access.width != width || access.write != write {
-		return 0, goAMD64FrameContext("fixed local access shape changed")
+	if access.owner != proof || access.shape != shape || access.width != width || access.write != write || access.nativeInput != nativeInput {
+		return goAMD64FrameContext("fixed local access shape changed")
 	}
 	access.offset[residue] = offset
 	ins.x86FixedLocalMemory[index] = access
-	return offset, nil
+	return nil
 }
 
 func fixedLocalStep(ins *Instr, state *x86FixedLocalState, sig FuncSig, proof *x86FixedLocalProof, residue int) error {
@@ -695,11 +725,11 @@ func fixedLocalMove(ins *Instr, state *x86FixedLocalState, sig FuncSig, proof *x
 		if (pointer || opaque) && width != 8 {
 			return fail()
 		}
-		offset, err := fixedLocalMemory(ins, 0, state, proof, residue, width, 1, false, pointer || opaque)
+		offset, role, err := fixedLocalMemoryAccess(ins, 0, state, proof, residue, width, 1, false, pointer || opaque)
 		if err != nil {
 			return err
 		}
-		if !pointer && !opaque {
+		if role == x86FixedLocalPrivateMemory && !pointer && !opaque {
 			booleans = fixedLocalMemoryBooleans(state, offset, width)
 		}
 	default:
@@ -744,9 +774,15 @@ func fixedLocalMove(ins *Instr, state *x86FixedLocalState, sig FuncSig, proof *x
 		if source.Kind == OpMem {
 			return fail()
 		}
-		offset, err := fixedLocalMemory(ins, 1, state, proof, residue, width, 1, true, false)
+		offset, role, err := fixedLocalMemoryAccess(ins, 1, state, proof, residue, width, 1, true, false)
 		if err != nil {
 			return err
+		}
+		if role == x86FixedLocalNativeInput {
+			if pointer || opaque {
+				return fail() // Neither private nor input pointers escape as bytes.
+			}
+			return nil
 		}
 		fixedLocalRevokeSpillRoles(state, offset, width)
 		for index := offset; index < offset+width; index++ {
@@ -809,13 +845,18 @@ func fixedLocalVectorStep(ins *Instr, state *x86FixedLocalState, proof *x86Fixed
 }
 
 func (c *amd64Ctx) fixedLocalMemoryCertified(ins Instr, index int) bool {
+	access, valid := c.fixedLocalMemoryAccess(ins, index)
+	return valid && !access.nativeInput
+}
+
+func (c *amd64Ctx) fixedLocalMemoryAccess(ins Instr, index int) (x86FixedLocalAccess, bool) {
 	access, found := ins.x86FixedLocalMemory[index]
 	shape, err := fixedLocalInstructionDigest(ins)
 	if !found || c.fixedLocal == nil || access.owner != c.fixedLocal || ins.x86Encoded ||
 		ins.x86SourceRaw != nil || ins.x86AddressBits != 0 || ins.x86SegmentPrefix != 0 ||
 		err != nil || access.shape != shape || access.width <= 0 {
-		return false
+		return x86FixedLocalAccess{}, false
 	}
 	expected, bound := c.fixedLocal.accesses[access.ordinal][index]
-	return bound && reflect.DeepEqual(access, expected)
+	return access, bound && reflect.DeepEqual(access, expected)
 }

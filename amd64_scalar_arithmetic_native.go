@@ -4,7 +4,7 @@ import "fmt"
 
 // The existing whole Go-table grammar supplies operand width, encoded byte
 // aliases and carry roles. This query selects only its memory-to-register
-// add/subtract rows; it supplies no memory or entry capability.
+// arithmetic/logical rows; it supplies no memory or entry capability.
 func x86ScalarArithmeticNativeReadProperties(ins Instr, arch string) (x86LockScalarRMWForm, bool, error) {
 	form, known, err := x86LockScalarRMWProperties(ins.Op, ins, arch)
 	if !known {
@@ -14,7 +14,7 @@ func x86ScalarArithmeticNativeReadProperties(ins Instr, arch string) (x86LockSca
 		return form, true, err
 	}
 	switch form.spec.stem {
-	case "ADD", "SUB", "ADC", "SBB":
+	case "ADD", "SUB", "ADC", "SBB", "AND", "OR", "XOR":
 	default:
 		return form, false, nil
 	}

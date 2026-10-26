@@ -39,6 +39,13 @@ func x86InsertExtractListedBytes(line string) []byte {
 	if len(fields) < 2 || !strings.HasPrefix(fields[0], "0x") && !strings.HasSuffix(fields[0], ":") {
 		return nil
 	}
+	if strings.HasPrefix(fields[0], "0x") {
+		_, code, err := goAssemblyListingByteRow(line)
+		if err != nil {
+			return nil
+		}
+		return code
+	}
 	var result []byte
 	for _, field := range fields[1:] {
 		if len(field) != 2 {

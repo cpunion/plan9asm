@@ -237,7 +237,7 @@ func (c *amd64Ctx) emitX86ExplicitIMUL(bits int, immediate, source, destination 
 	if source.Kind == OpImm {
 		right = x86IMULImmediateValue(source.Imm, bits)
 	} else {
-		right, err = c.evalIntSized(source, typ)
+		right, err = c.evalSizedNativeGPSource(source, typ, 0)
 		if err != nil {
 			return err
 		}

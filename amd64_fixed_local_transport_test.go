@@ -159,7 +159,7 @@ func TestGoAMD64FixedLocalTransportAuthorityNegatives(t *testing.T) {
 	base := fixedLocalTransportAssembly("Value", 49, fixedLocalTransportBoolBody)
 	declaration := "func Value(" + fixedLocalTransportParams + ") bool"
 	for name, body := range map[string]string{
-		"incoming dereference":   strings.Replace(fixedLocalTransportBoolBody, "MOVQ p+24(FP),R8", "MOVQ (DX),AX", 1),
+		"incoming index":         strings.Replace(fixedLocalTransportBoolBody, "MOVQ p+24(FP),R8", "MOVQ (DX)(AX*2),AX", 1),
 		"incoming arithmetic":    strings.Replace(fixedLocalTransportBoolBody, "MOVQ p+24(FP),R8", "ADDQ $8,DX", 1),
 		"incoming comparison":    strings.Replace(fixedLocalTransportBoolBody, "MOVQ p+24(FP),R8", "CMPQ DX,$0", 1),
 		"incoming mask":          strings.Replace(fixedLocalTransportBoolBody, "MOVQ p+24(FP),R8", "KMOVQ DX,K1", 1),

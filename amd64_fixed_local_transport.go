@@ -114,12 +114,14 @@ func fixedLocalConditionalSetStep(ins *Instr, state *x86FixedLocalState, sig Fun
 		state.known[root] |= x86CallerByteMask(destination.Reg, 1)
 		fixedLocalWriteBooleans(state, destination.Reg, 1, 1)
 	case OpMem:
-		offset, err := fixedLocalMemory(ins, 0, state, proof, residue, 1, 1, true, false)
+		offset, role, err := fixedLocalMemoryAccess(ins, 0, state, proof, residue, 1, 1, true, false)
 		if err != nil {
 			return true, err
 		}
-		fixedLocalNumericalStore(state, offset, 1, true)
-		state.booleanBytes[offset] = true
+		if role == x86FixedLocalPrivateMemory {
+			fixedLocalNumericalStore(state, offset, 1, true)
+			state.booleanBytes[offset] = true
+		}
 	case OpFP:
 		sp, original := state.pointers[SP]
 		_, index, found := fixedLocalTransportSlot(destination.FPOffset, 1, sig.Frame.Results)

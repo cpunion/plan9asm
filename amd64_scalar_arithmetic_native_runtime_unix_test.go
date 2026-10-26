@@ -63,9 +63,15 @@ func x86ScalarArithmeticNativeRuntime(t *testing.T, flagsAndAliases bool) {
 		}
 		fmt.Fprintf(&originals, "__asm__(%q);\n", ".text\n.globl "+symbol+"\n"+symbol+":\n.byte "+strings.Join(bytes, ",")+"\n")
 		fmt.Fprintf(&prototypes, "extern uint64_t %s(const uint8_t*);\nextern uint64_t %s(const uint8_t*);\n", name, original)
-		subtract, discarded := 0, 0
+		operation, discarded := 0, 0
 		if strings.HasPrefix(op, "SUB") || strings.HasPrefix(op, "SBB") {
-			subtract = 1
+			operation = 1
+		} else if strings.HasPrefix(op, "AND") {
+			operation = 2
+		} else if strings.HasPrefix(op, "OR") {
+			operation = 3
+		} else if strings.HasPrefix(op, "XOR") {
+			operation = 4
 		}
 		if dead {
 			discarded = 1
@@ -74,7 +80,7 @@ func x86ScalarArithmeticNativeRuntime(t *testing.T, flagsAndAliases bool) {
 		if strings.HasPrefix(op, "ADC") || strings.HasPrefix(op, "SBB") {
 			effectiveCarry = carry
 		}
-		fmt.Fprintf(&rows, "{%s,%s,%d,%d,%d,%d,%d},\n", name, original, width, subtract, effectiveCarry, discarded, mode)
+		fmt.Fprintf(&rows, "{%s,%s,%d,%d,%d,%d,%d},\n", name, original, width, operation, effectiveCarry, discarded, mode)
 		count++
 	}
 	for _, op := range x86ScalarArithmeticNativeNames {
@@ -94,9 +100,9 @@ func x86ScalarArithmeticNativeRuntime(t *testing.T, flagsAndAliases bool) {
 			}
 		}
 	}
-	wantCount := 64
+	wantCount := 112
 	if flagsAndAliases {
-		wantCount = 48
+		wantCount = 84
 	}
 	if count != wantCount {
 		t.Fatal("incomplete arithmetic/native state matrix", count, wantCount)
@@ -111,7 +117,7 @@ func x86ScalarArithmeticNativeRuntime(t *testing.T, flagsAndAliases bool) {
 	}
 	driverTemplate := x86ExtensionNativeRuntimeC[:start] + x86ScalarArithmeticNativeReferenceC + "\n" + x86ExtensionNativeRuntimeC[end:]
 	driverTemplate = strings.NewReplacer(
-		"unsigned width, destination, sign, dead;", "unsigned width, subtract, carry, dead, flags;",
+		"unsigned width, destination, sign, dead;", "unsigned width, operation, carry, dead, flags;",
 		"uint8_t bytes[8];", "uint8_t bytes[16];",
 		"const uint8_t *p=bytes+(pattern&1);", `
             uint8_t *p=bytes+(pattern&1);
@@ -177,11 +183,22 @@ static uint64_t reference(Kernel k, const uint8_t *p) {
     unsigned bits=k.width*8;
     uint64_t mask=bits==64?UINT64_MAX:(UINT64_C(1)<<bits)-1;
     uint64_t a=seed&mask, sign=UINT64_C(1)<<(bits-1);
-    uint64_t value=(k.subtract?a-input-k.carry:a+input+k.carry)&mask;
+    uint64_t value;
+    switch(k.operation) {
+    case 0: value=a+input+k.carry; break;
+    case 1: value=a-input-k.carry; break;
+    case 2: value=a&input; break;
+    case 3: value=a|input; break;
+    default: value=a^input; break;
+    }
+    value&=mask;
     if(k.flags) {
-        unsigned cf=k.subtract?(a<input || (k.carry && a==input)):
-            (value<a || (k.carry && value==a));
-        unsigned of=(((k.subtract?(a^input):~(a^input))&(a^value)&sign)!=0);
+        unsigned cf=0, of=0;
+        if(k.operation<2) {
+            cf=k.operation==1?(a<input || (k.carry && a==input)):
+                (value<a || (k.carry && value==a));
+            of=(((k.operation==1?(a^input):~(a^input))&(a^value)&sign)!=0);
+        }
         unsigned ones=0;
         for(unsigned bit=0;bit<8;bit++) ones+=(value>>bit)&1;
         return cf|((value==0)<<1)|(((value&sign)!=0)<<2)|(of<<3)|((ones%%2==0)<<4);

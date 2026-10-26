@@ -67,7 +67,8 @@ func (c *amd64Ctx) checkFixedLocalResultInitialization() error {
 			return fail("instruction access inventory differs")
 		}
 		for operand, access := range ins.x86FixedLocalMemory {
-			if access.ordinal != ordinal || !c.fixedLocalMemoryCertified(ins, operand) {
+			_, valid := c.fixedLocalMemoryAccess(ins, operand)
+			if access.ordinal != ordinal || !valid {
 				return fail("instruction access owner/shape/ordinal differs")
 			}
 		}

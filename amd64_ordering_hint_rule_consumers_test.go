@@ -8,7 +8,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -48,20 +47,11 @@ func x86OrderingHintGoBytes(t *testing.T, arch, source string) []byte {
 		if len(fields) < 2 || !strings.HasPrefix(fields[0], "0x") || len(fields[1]) != 2 {
 			continue
 		}
-		offset, err := strconv.ParseUint(fields[0][2:], 16, 32)
-		if err != nil || int(offset) != len(code) {
+		offset, encoded, err := goAssemblyListingByteRow(line)
+		if err != nil || offset != len(code) {
 			t.Fatalf("noncontiguous original object listing: %s", line)
 		}
-		for index, field := range fields[1:] {
-			if index == 16 || len(field) != 2 {
-				break
-			}
-			value, err := strconv.ParseUint(field, 16, 8)
-			if err != nil {
-				break
-			}
-			code = append(code, byte(value))
-		}
+		code = append(code, encoded...)
 	}
 	if len(code) == 0 {
 		t.Fatal("actual original object listing lacks complete bytes")

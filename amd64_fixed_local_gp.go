@@ -69,9 +69,12 @@ func fixedLocalGPByteStep(ins *Instr, state *x86FixedLocalState, proof *x86Fixed
 			}
 			continue
 		}
-		offset, err := fixedLocalMemory(ins, operand.index, state, proof, residue, operand.width, 1, true, false)
+		offset, role, err := fixedLocalMemoryAccess(ins, operand.index, state, proof, residue, operand.width, 1, true, false)
 		if err != nil {
 			return err
+		}
+		if role == x86FixedLocalNativeInput {
+			continue
 		}
 		for index := offset; index < offset+operand.width; index++ {
 			if !state.bytes[index] {
@@ -85,11 +88,13 @@ func fixedLocalGPByteStep(ins *Instr, state *x86FixedLocalState, proof *x86Fixed
 		}
 		switch operand.operand.Kind {
 		case OpMem:
-			offset, err := fixedLocalMemory(ins, operand.index, state, proof, residue, operand.width, 1, true, false)
+			offset, role, err := fixedLocalMemoryAccess(ins, operand.index, state, proof, residue, operand.width, 1, true, false)
 			if err != nil {
 				return err
 			}
-			fixedLocalNumericalStore(state, offset, operand.width, true)
+			if role == x86FixedLocalPrivateMemory {
+				fixedLocalNumericalStore(state, offset, operand.width, true)
+			}
 		case OpReg:
 			root, valid := x86CallerGP(operand.operand.Reg)
 			mask := x86CallerByteMask(operand.operand.Reg, operand.width)

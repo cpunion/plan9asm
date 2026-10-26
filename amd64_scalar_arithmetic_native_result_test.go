@@ -9,12 +9,15 @@ import (
 )
 
 // Keep this inventory independent of the production descriptors. These are
-// all four widths of Go's add/subtract and carry/borrow families.
+// all four widths of Go's add/subtract, carry/borrow and logical families.
 var x86ScalarArithmeticNativeNames = []string{
 	"ADDB", "ADDW", "ADDL", "ADDQ",
 	"SUBB", "SUBW", "SUBL", "SUBQ",
 	"ADCB", "ADCW", "ADCL", "ADCQ",
 	"SBBB", "SBBW", "SBBL", "SBBQ",
+	"ANDB", "ANDW", "ANDL", "ANDQ",
+	"ORB", "ORW", "ORL", "ORQ",
+	"XORB", "XORW", "XORL", "XORQ",
 }
 
 func TestX86ScalarArithmeticNativeSparseBytesFlagsAndOrigins(t *testing.T) {
@@ -38,6 +41,9 @@ func TestX86ScalarArithmeticNativeSparseBytesFlagsAndOrigins(t *testing.T) {
 							(!strings.HasPrefix(op, "ADC") && !strings.HasPrefix(op, "SBB") || flags&x86ByteFlagCF != 0)
 						if accepted {
 							want.flags = x86ByteFlagsAll
+							if strings.HasPrefix(op, "AND") || strings.HasPrefix(op, "OR") || strings.HasPrefix(op, "XOR") {
+								want.flags &^= x86ByteFlagAF // Logical AF is undefined, not preserved.
+							}
 							if width == 4 {
 								want.gp[destination] = 0xff
 							}
@@ -81,7 +87,8 @@ func TestX86ScalarArithmeticNativeOriginalREXByteAliases(t *testing.T) {
 	for _, row := range []struct {
 		op   string
 		byte byte
-	}{{"ADDB", 0x02}, {"SUBB", 0x2a}, {"ADCB", 0x12}, {"SBBB", 0x1a}} {
+	}{{"ADDB", 0x02}, {"SUBB", 0x2a}, {"ADCB", 0x12}, {"SBBB", 0x1a},
+		{"ANDB", 0x22}, {"ORB", 0x0a}, {"XORB", 0x32}} {
 		for ordinal, reg := range []string{"AH", "CH", "DH", "BH"} {
 			for _, address := range []string{"(DX)", "(R8)", "(DX)(R9*2)"} {
 				instruction := row.op + " " + address + "," + reg
