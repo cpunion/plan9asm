@@ -52,6 +52,11 @@ func fixedLocalConstantResultsRuntime(t *testing.T, assembly, declarations strin
 
 func fixedLocalResultsRuntime(t *testing.T, assembly, declarations string, inputs []uint64, expected [][]string) {
 	t.Helper()
+	fixedLocalResultsRuntimeISA(t, assembly, declarations, inputs, expected, x86FloatCompareSSE)
+}
+
+func fixedLocalResultsRuntimeISA(t *testing.T, assembly, declarations string, inputs []uint64, expected [][]string, axis x86FloatCompareRuntimeISA) {
+	t.Helper()
 	if len(inputs) == 0 || len(expected) != len(inputs) || len(expected[0]) == 0 {
 		t.Fatal("invalid fixed-local runtime input/result inventory")
 	}
@@ -63,7 +68,7 @@ func fixedLocalResultsRuntime(t *testing.T, assembly, declarations string, input
 		}
 		values = append(values, row...)
 	}
-	execution := x86FloatCompareRuntimeTools(t, x86FloatCompareSSE)
+	execution := x86FloatCompareRuntimeTools(t, axis)
 	goAMD64FramePrepareOwnedToolCache(t)
 	prefix := ""
 	if strings.Contains(execution.triple, "apple") {
