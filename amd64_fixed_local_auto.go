@@ -87,7 +87,7 @@ func fixedLocalConditionalMoveStep(ins *Instr, state *x86FixedLocalState, proof 
 	fail := func() (bool, error) {
 		return true, goAMD64FrameContext("fixed local CMOV flags or potential numerical source bytes are not defined")
 	}
-	if err != nil || !state.flags || len(effect.operands) != 2 {
+	if err != nil || state.flags&effect.flagsRead != effect.flagsRead || len(effect.operands) != 2 {
 		return fail()
 	}
 	source, destination := effect.operands[0], effect.operands[1]

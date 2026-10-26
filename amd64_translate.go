@@ -679,6 +679,9 @@ func (c *amd64Ctx) lowerInstr(bi int, ii int, ins Instr, emitBr amd64EmitBr, emi
 		defer func() { c.fixedMemRoles = nil }()
 		for index, operand := range ins.Args {
 			if operand.Kind == OpMem && !c.fixedLocalMemoryCertified(ins, index) {
+				if fixedLocalGPAddressOnly(ins, index) {
+					continue
+				}
 				return false, goAMD64FrameContext("fixed local storage consumer lacks an exact native access certificate")
 			}
 			if operand.Kind == OpMem {

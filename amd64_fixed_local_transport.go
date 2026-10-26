@@ -95,7 +95,8 @@ func fixedLocalConditionalSetStep(ins *Instr, state *x86FixedLocalState, sig Fun
 	fail := func() (bool, error) {
 		return true, goAMD64FrameContext("fixed local SETcc lacks initialized flags or typed destination")
 	}
-	if err != nil || !state.flags {
+	needed := x86ByteConditionFlags(form.condition)
+	if err != nil || needed == 0 || state.flags&needed != needed {
 		return fail()
 	}
 	destination := form.destination

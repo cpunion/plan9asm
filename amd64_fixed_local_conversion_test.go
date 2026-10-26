@@ -130,7 +130,7 @@ func TestGoAMD64FixedLocalConversionSparseByteEffects(t *testing.T) {
 				return x86FixedLocalState{
 					vectors: map[Reg]uint64{source: ^uint64(0), destination: ^uint64(0)},
 					masks:   map[Reg]bool{"K1": true},
-					flags:   true,
+					flags:   x86ByteFlagsAll,
 				}
 			}
 			check := func(state *x86FixedLocalState, accepted bool) {
@@ -157,7 +157,7 @@ func TestGoAMD64FixedLocalConversionSparseByteEffects(t *testing.T) {
 				if row.legacy && missing >= 16 {
 					want &^= uint64(1) << uint(missing)
 				}
-				if state.vectors[destination] != want || !state.flags {
+				if state.vectors[destination] != want || state.flags != x86ByteFlagsAll {
 					t.Fatalf("byte %d: alias/zero padding/FLAGS changed: %+v", missing, state)
 				}
 			}
@@ -217,7 +217,7 @@ func TestGoAMD64FixedLocalConversionExactMemoryTuples(t *testing.T) {
 				}
 				if accepted {
 					access := ins.x86FixedLocalMemory[0]
-					if access.owner != proof || access.width != int64(row.width) || access.write || state.flags {
+					if access.owner != proof || access.width != int64(row.width) || access.write || state.flags != 0 {
 						t.Fatal("wrong native memory tuple, write permission or invented FLAGS", access)
 					}
 				}

@@ -111,7 +111,7 @@ func TestGoAMD64FixedLocalVoidAllPathMemoryAndReturnNegatives(t *testing.T) {
 		"raw instruction":      strings.Replace(base, "PADDQ", "BYTE $0x90\nPADDQ", 1),
 		"unknown native call":  strings.Replace(base, "PADDQ", "CALL ·Other(SB)\nPADDQ", 1),
 		"unknown dead effect":  base + "SYSCALL\n",
-		"loop":                 strings.Replace(base, "MOVQ AX,16(SP)", "again:\nCMPQ AX,CX\nJNE again\nMOVQ AX,16(SP)", 1),
+		"loop unknown input":   strings.Replace(base, "MOVQ AX,16(SP)", "again:\nCMPQ AX,R10\nJNE again\nMOVQ AX,16(SP)", 1),
 		"overflow address":     strings.Replace(base, "ADDQ $32,SP", "ADDQ $9223372036854775807,SP", 1),
 	}
 	for missing := 0; missing < 16; missing++ {

@@ -38,7 +38,7 @@ type x86FixedLocalState struct {
 	bytes        []bool
 	addresses    map[int64]int64
 	results      map[int]bool
-	flags        bool
+	flags        uint8
 }
 
 func cloneFixedLocalState(input x86FixedLocalState) x86FixedLocalState {
@@ -87,6 +87,7 @@ func proveX86FixedLocal(fn Func, sig FuncSig) (Func, error) {
 	copyFn := fn
 	copyFn.Instrs = append([]Instr(nil), fn.Instrs...)
 	proof := &x86FixedLocalProof{binding: sig.x86FixedLocal, frame: fn.FrameSize, accesses: make(map[int]map[int]x86FixedLocalAccess)}
+	budget := x86FixedLocalBudget{steps: 1 << 18, bytes: 64 << 20}
 	for index := range copyFn.Instrs {
 		copyFn.Instrs[index].Args = append([]Operand(nil), fn.Instrs[index].Args...)
 		copyFn.Instrs[index].x86FixedLocalMemory = nil
@@ -99,7 +100,7 @@ func proveX86FixedLocal(fn Func, sig FuncSig) (Func, error) {
 		}
 	}
 	for residue := 0; residue < 8; residue++ {
-		if err := replayX86FixedLocal(&copyFn, sig, proof, residue); err != nil {
+		if err := replayX86FixedLocal(&copyFn, sig, proof, residue, &budget); err != nil {
 			return fn, err
 		}
 	}
@@ -111,7 +112,7 @@ func proveX86FixedLocal(fn Func, sig FuncSig) (Func, error) {
 		final.Instrs[index].x86FixedLocalMemory = nil
 	}
 	for residue := 0; residue < 8; residue++ {
-		if err := replayX86FixedLocal(&final, sig, proof, residue); err != nil {
+		if err := replayX86FixedLocal(&final, sig, proof, residue, &budget); err != nil {
 			return fn, err
 		}
 	}
@@ -222,14 +223,8 @@ func fixedLocalInstructionShape(ins Instr) bool {
 	if x86RawReturnScalarMoveBytes(x86GoMOVQSourceInstruction(ins).Op) != 0 {
 		return len(ins.Args) == 2
 	}
-	if ins.Op == "NOTQ" {
-		return len(ins.Args) == 1 && ins.Args[0].Kind == OpReg
-	}
-	if ins.Op == "ANDQ" || ins.Op == "ADDQ" || ins.Op == "CMPQ" {
-		return len(ins.Args) == 2
-	}
-	if _, known, err := x86TypedConditionalMoveByteEffect(ins.Op, ins, "amd64"); known {
-		return err == nil
+	if effect, known, err := fixedLocalGPByteEffect(ins); known {
+		return err == nil && !effect.dynamicMemory
 	}
 	if form, known, err := x86AESProperties(ins.Op, ins, "amd64"); known {
 		return err == nil && form.byteWidth == 16
@@ -277,8 +272,8 @@ func fixedLocalEdges(fn Func) (map[int][]int, []int, error) {
 			instructions = append(instructions, index)
 		}
 	}
-	if !x86CallerReachableAcyclic(fn, instructions, labels) {
-		return nil, nil, goAMD64FrameContext("fixed local CFG is not a closed reachable DAG")
+	if len(instructions) == 0 || len(instructions) > 8192 {
+		return nil, nil, goAMD64FrameContext("fixed local CFG lacks a bounded instruction inventory")
 	}
 	edges := make(map[int][]int)
 	for pc, index := range instructions {
@@ -307,7 +302,23 @@ func fixedLocalEdges(fn Func) (map[int][]int, []int, error) {
 	return edges, instructions, nil
 }
 
-func replayX86FixedLocal(fn *Func, sig FuncSig, proof *x86FixedLocalProof, residue int) error {
+// All congruence classes and the independent final replay share these limits.
+// A cyclic source cannot obtain an unbounded analysis or a partial certificate.
+type x86FixedLocalBudget struct {
+	steps int
+	bytes int64
+}
+
+func (budget *x86FixedLocalBudget) consume(frame int64) error {
+	if budget.steps <= 0 || frame > budget.bytes {
+		return goAMD64FrameContext("fixed local CFG work/byte bound exceeded")
+	}
+	budget.steps--
+	budget.bytes -= frame
+	return nil
+}
+
+func replayX86FixedLocal(fn *Func, sig FuncSig, proof *x86FixedLocalProof, residue int, budget *x86FixedLocalBudget) error {
 	edges, instructions, err := fixedLocalEdges(*fn)
 	if err != nil {
 		return err
@@ -320,82 +331,46 @@ func replayX86FixedLocal(fn *Func, sig FuncSig, proof *x86FixedLocalProof, resid
 		bytes: make([]bool, proof.frame), addresses: make(map[int64]int64), results: make(map[int]bool),
 	}
 	states := map[int]x86FixedLocalState{0: state}
-	// Wait for every reachable predecessor before transferring a block. This
-	// topological DAG replay creates no provisional initialization certificate,
-	// visits each instruction once, and keeps total byte-state storage bounded.
-	reachable := map[int]bool{}
-	find := []int{0}
-	for len(find) != 0 {
-		pc := find[0]
-		find = find[1:]
-		if reachable[pc] {
-			continue
-		}
-		reachable[pc] = true
-		find = append(find, edges[pc]...)
-	}
-	pending := make(map[int]int)
-	for pc := range reachable {
-		for _, target := range edges[pc] {
-			pending[target]++
-		}
-	}
 	work := []int{0}
+	queued := map[int]bool{0: true}
+	accesses := make(map[int]map[int]x86FixedLocalAccess)
 	returned := false
-	for visits := 0; len(work) != 0; visits++ {
-		if visits >= len(instructions) {
-			return goAMD64FrameContext("fixed local CFG work bound exceeded")
+	for head := 0; head < len(work); head++ {
+		if err := budget.consume(proof.frame); err != nil {
+			return err
 		}
-		pc := work[0]
-		work = work[1:]
+		pc := work[head]
+		queued[pc] = false
 		if pc < 0 || pc >= len(instructions) {
 			return goAMD64FrameContext("fixed local fallthrough lacks a source return")
 		}
 		current := cloneFixedLocalState(states[pc])
-		ins := &fn.Instrs[instructions[pc]]
+		// Transfer a private instruction copy: provisional loop states must
+		// never publish accesses, including certificates from another residue.
+		ins := fn.Instrs[instructions[pc]]
+		ins.x86FixedLocalMemory = nil
 		proof.ordinal = instructions[pc]
-		if err := fixedLocalStep(ins, &current, sig, proof, residue); err != nil {
+		if err := fixedLocalStep(&ins, &current, sig, proof, residue); err != nil {
 			return fmt.Errorf("%s: %q: %w", fn.Sym, ins.Raw, err)
 		}
-		if ins.Op == OpRET {
-			returned = true
-			continue
-		}
+		accesses[pc] = ins.x86FixedLocalMemory
+		returned = returned || ins.Op == OpRET
 		for _, target := range edges[pc] {
+			if target < 0 || target >= len(instructions) {
+				return goAMD64FrameContext("fixed local fallthrough lacks a source return")
+			}
+			changed := true
 			if previous, found := states[target]; found {
-				// Acyclic replay permits only all-path initialization to decrease.
-				// Address identity and saved private pointer cells remain exact.
-				if !reflect.DeepEqual(previous.pointers, current.pointers) || !reflect.DeepEqual(previous.addresses, current.addresses) ||
-					!reflect.DeepEqual(previous.opaque, current.opaque) || !reflect.DeepEqual(previous.opaqueCells, current.opaqueCells) ||
-					!reflect.DeepEqual(previous.constants, current.constants) || previous.flags != current.flags {
-					return goAMD64FrameContext("fixed local CFG address/constant/flags identity disagrees")
+				changed, err = mergeFixedLocalState(&previous, current)
+				if err != nil {
+					return err
 				}
-				merged := cloneFixedLocalState(previous)
-				for reg, bits := range merged.known {
-					merged.known[reg] = bits & current.known[reg]
-				}
-				for reg, bits := range merged.booleans {
-					merged.booleans[reg] = bits & current.booleans[reg]
-				}
-				for reg, bits := range merged.vectors {
-					merged.vectors[reg] = bits & current.vectors[reg]
-				}
-				for reg, known := range merged.masks {
-					merged.masks[reg] = known && current.masks[reg]
-				}
-				for index := range merged.bytes {
-					merged.bytes[index] = merged.bytes[index] && current.bytes[index]
-					merged.booleanBytes[index] = merged.booleanBytes[index] && current.booleanBytes[index]
-				}
-				for index, written := range merged.results {
-					merged.results[index] = written && current.results[index]
-				}
-				states[target] = merged
+				states[target] = previous
 			} else {
 				states[target] = cloneFixedLocalState(current)
 			}
-			pending[target]--
-			if pending[target] == 0 {
+			if changed && !queued[target] {
+				queued[target] = true
 				work = append(work, target)
 			}
 		}
@@ -403,7 +378,85 @@ func replayX86FixedLocal(fn *Func, sig FuncSig, proof *x86FixedLocalProof, resid
 	if !returned {
 		return goAMD64FrameContext("fixed local source has no reachable return")
 	}
+	// An empty worklist means each retained transfer consumed the final input
+	// state: every changed meet requeued its consumer. Publish those local
+	// annotations only now, without repeating every instruction in a DAG.
+	// Entry state remains a predecessor of PC zero, including backedges.
+	for pc, index := range instructions {
+		current, reachable := accesses[pc]
+		if !reachable {
+			continue
+		}
+		previous := fn.Instrs[index].x86FixedLocalMemory
+		if residue != 0 && len(previous) != len(current) {
+			return goAMD64FrameContext("fixed local access inventory depends on original SP residue")
+		}
+		for operand, access := range current {
+			if residue == 0 {
+				continue
+			}
+			prior, found := previous[operand]
+			if !found || prior.owner != access.owner || prior.shape != access.shape || prior.width != access.width ||
+				prior.write != access.write || prior.ordinal != access.ordinal {
+				return goAMD64FrameContext("fixed local access shape depends on original SP residue")
+			}
+			prior.offset[residue] = access.offset[residue]
+			current[operand] = prior
+		}
+		fn.Instrs[index].x86FixedLocalMemory = current
+	}
 	return nil
+}
+
+func mergeFixedLocalState(previous *x86FixedLocalState, current x86FixedLocalState) (bool, error) {
+	// Losing a numerical constant is safe. Losing an address identity is not:
+	// it must never turn a pointer or a pointer spill into numerical bytes.
+	if !reflect.DeepEqual(previous.pointers, current.pointers) || !reflect.DeepEqual(previous.addresses, current.addresses) ||
+		!reflect.DeepEqual(previous.opaque, current.opaque) || !reflect.DeepEqual(previous.opaqueCells, current.opaqueCells) {
+		return false, goAMD64FrameContext("fixed local CFG address identity disagrees")
+	}
+	changed := false
+	for reg, value := range previous.constants {
+		if incoming, found := current.constants[reg]; !found || incoming != value {
+			delete(previous.constants, reg)
+			changed = true
+		}
+	}
+	flags := previous.flags & current.flags
+	changed = changed || flags != previous.flags
+	previous.flags = flags
+	for reg, bits := range previous.known {
+		value := bits & current.known[reg]
+		changed = changed || value != bits
+		previous.known[reg] = value
+	}
+	for reg, bits := range previous.booleans {
+		value := bits & current.booleans[reg]
+		changed = changed || value != bits
+		previous.booleans[reg] = value
+	}
+	for reg, bits := range previous.vectors {
+		value := bits & current.vectors[reg]
+		changed = changed || value != bits
+		previous.vectors[reg] = value
+	}
+	for reg, known := range previous.masks {
+		value := known && current.masks[reg]
+		changed = changed || value != known
+		previous.masks[reg] = value
+	}
+	for index, known := range previous.bytes {
+		value := known && current.bytes[index]
+		boolean := previous.booleanBytes[index] && current.booleanBytes[index]
+		changed = changed || value != known || boolean != previous.booleanBytes[index]
+		previous.bytes[index], previous.booleanBytes[index] = value, boolean
+	}
+	for index, written := range previous.results {
+		value := written && current.results[index]
+		changed = changed || value != written
+		previous.results[index] = value
+	}
+	return changed, nil
 }
 
 func fixedLocalMemory(ins *Instr, index int, state *x86FixedLocalState, proof *x86FixedLocalProof, residue int, width, alignment int64, write, pointer bool) (int64, error) {
@@ -473,7 +526,8 @@ func fixedLocalStep(ins *Instr, state *x86FixedLocalState, sig FuncSig, proof *x
 		return nil
 	}
 	if isAMD64ConditionalBranch(ins.Op) {
-		if !state.flags || isAMD64CounterZeroBranch(ins.Op) {
+		needed := x86ByteBranchFlags(ins.Op)
+		if needed == 0 || state.flags&needed != needed {
 			return fail()
 		}
 		return nil
@@ -481,7 +535,7 @@ func fixedLocalStep(ins *Instr, state *x86FixedLocalState, sig FuncSig, proof *x
 	if ins.Op == OpJMP {
 		return nil
 	}
-	if known, err := fixedLocalNumericalReadStep(*ins, state); known {
+	if known, err := fixedLocalNumericalReadStep(ins, state, proof, residue); known {
 		return err
 	}
 	if width := x86RawReturnScalarMoveBytes(x86GoMOVQSourceInstruction(*ins).Op); width != 0 {
@@ -496,12 +550,11 @@ func fixedLocalStep(ins *Instr, state *x86FixedLocalState, sig FuncSig, proof *x
 			return fail()
 		}
 		value, known := state.constants[reg]
-		if !known {
-			return fail()
+		if known {
+			state.constants[reg] = ^value
+			fixedLocalWriteBooleans(state, reg, 8, fixedLocalConstantBooleans(^value, 8))
+			return nil
 		}
-		state.constants[reg] = ^value
-		fixedLocalWriteBooleans(state, reg, 8, fixedLocalConstantBooleans(^value, 8))
-		return nil
 	}
 	if (ins.Op == "ADDQ" || ins.Op == "ANDQ") && len(ins.Args) == 2 && ins.Args[1].Kind == OpReg {
 		reg := ins.Args[1].Reg
@@ -510,10 +563,10 @@ func fixedLocalStep(ins *Instr, state *x86FixedLocalState, sig FuncSig, proof *x
 		if ins.Args[0].Kind == OpReg {
 			value, known = state.constants[ins.Args[0].Reg]
 		}
-		if !known {
-			return fail()
-		}
 		if offset, pointer := state.pointers[reg]; pointer {
+			if !known {
+				return fail()
+			}
 			if ins.Op == "ANDQ" {
 				// Only an exact power-of-two residue projection preserves the
 				// same private address origin. No pointer bit becomes numeric.
@@ -531,22 +584,18 @@ func fixedLocalStep(ins *Instr, state *x86FixedLocalState, sig FuncSig, proof *x
 				return fail()
 			}
 			state.pointers[reg] = offset
-			state.flags = false // Relocated pointer arithmetic flags are opaque.
+			state.flags = 0 // Relocated pointer arithmetic flags are opaque.
 			return nil
 		}
-		return fail() // Ordinary numeric arithmetic needs its complete family.
-	}
-	if ins.Op == "CMPQ" && len(ins.Args) == 2 {
-		for _, operand := range ins.Args {
-			if !fixedLocalNumericRead(operand, 8, state) {
-				return fail()
-			}
-		}
-		state.flags = true
-		return nil
 	}
 	if known, err := fixedLocalConditionalMoveStep(ins, state, proof, residue); known {
 		return err
+	}
+	if effect, known, err := fixedLocalGPByteEffect(*ins); known {
+		if err != nil {
+			return err
+		}
+		return fixedLocalGPByteStep(ins, state, proof, residue, effect)
 	}
 	if known, err := fixedLocalAESByteStep(ins, state, proof, residue); known {
 		return err

@@ -654,7 +654,7 @@ func TestGoAMD64FixedLocalFrameAllPathInitializationAndResourceBounds(t *testing
 	for name, source := range map[string]string{
 		"one predecessor uninitialized": strings.Replace(branch, "MOVQ CX,24(SP)\nCMPQ", "CMPQ", 1),
 		"stale pointer flags":           strings.Replace(branch, "CMPQ AX,CX", "ADDQ $0,SP", 1),
-		"loop":                          strings.Replace(branch, "JEQ joined", "before:\nJEQ before", 1),
+		"loop loses flags":              strings.Replace(branch, "JEQ joined", "before:\nJEQ joined\nIMULQ $3,AX\nJMP before", 1),
 		"different address join":        strings.Replace(branch, "JEQ joined\nMOVQ CX,24(SP)", "JEQ joined\nADDQ $8,SP\nMOVQ CX,24(SP)", 1),
 		"fallthrough":                   strings.TrimSuffix(base, "RET\n"),
 	} {
