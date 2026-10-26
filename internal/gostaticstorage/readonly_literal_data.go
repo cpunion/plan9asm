@@ -82,7 +82,7 @@ func ReadonlyLiteralDataInitializers(observation *SDKASMDataObservation) ([]Read
 			}
 			lastGlobal, used[key] = layout.Ordinal, true
 			if !layout.Static || layout.ABI != 65535 || layout.Name == "" || definition.Name != layout.Name || definition.ABI != layout.ABI ||
-				layout.Flags != 8 && layout.Flags != 24 || definition.Namespace != TextSymbolSelf || definition.Kind != 3 ||
+				layout.Flags != 8 && layout.Flags != 24 || definition.Namespace != TextSymbolSelf || asmDataBaseKind(definition.Kind) != 3 ||
 				definition.Flags != 0 || definition.Flags2 != 0 || len(definition.Hash) != 0 || len(definition.Relocations) != 0 {
 				return nil, contextError("DATA is not one private relocation-free readonly literal definition")
 			}

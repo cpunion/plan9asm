@@ -48,6 +48,24 @@ func TestReadonlyLiteralDataModelAndOwnership(t *testing.T) {
 	}
 }
 
+func TestReadonlyLiteralDataOrdinaryAndFIPSKinds(t *testing.T) {
+	for _, kind := range []uint8{1, 2, 3, 4, 5, 6, 7, 8, 9, 25} {
+		observation := readonlyLiteralClone(t, readonlyLiteralModel())
+		observation.Members[2].Definitions[0].Kind = kind
+		observation.Sources[0].Original.Definitions[0].Kind = kind
+		observation.Sources[0].Expanded.Definitions[0].Kind = kind
+		observation.Sources[0].ExpandedLayouts[0].Definition.Kind = kind
+		images, err := ReadonlyLiteralDataInitializers(observation)
+		if kind == 3 || kind == 4 {
+			if err != nil || len(images) != 1 || images[0].Definition.Kind != kind || images[0].Initial[1] != 255 {
+				t.Fatalf("readonly kind %d lost original kind or bytes: %v", kind, err)
+			}
+		} else if !errors.Is(err, ErrContext) || images != nil {
+			t.Fatalf("non-readonly kind %d acquired a literal initializer: %v", kind, err)
+		}
+	}
+}
+
 func TestReadonlyLiteralDataRoleAndIdentityNegatives(t *testing.T) {
 	cases := map[string]func(*SDKASMDataObservation){
 		"protocol":             func(o *SDKASMDataObservation) { o.Protocol = "public-json" },

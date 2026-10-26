@@ -126,3 +126,29 @@ func TestSDKAMD64NativeFrameFIPSCompleteOriginalSource(t *testing.T) {
 		})
 	}
 }
+
+func TestSDKAMD64ReadonlyLiteralFIPSCompleteOriginalSource(t *testing.T) {
+	ctx, request := sdkASMDataRequest(t, "amd64", "crypto/internal/fips140/sha512")
+	observed, err := CaptureGoAMD64SDKFrameObservation(ctx, request)
+	if err != nil {
+		t.Fatal("complete original SDK source/object observation", err)
+	}
+	defer observed.Close()
+	images, err := gostaticstorage.ReadonlyLiteralDataInitializers(observed.source.observation.Objects)
+	if err != nil {
+		t.Fatal("actual FIPS readonly literal definitions", err)
+	}
+	fips := 0
+	for _, image := range images {
+		if image.Definition.Kind == 4 {
+			fips++
+		}
+	}
+	if fips == 0 {
+		t.Fatal("actual Go object did not supply the FIPS readonly prior")
+	}
+	if err := observed.Verify(ctx); err != nil {
+		t.Fatal("live original source verification", err)
+	}
+	t.Logf("%d literal images, %d FIPS; source/object bytes, not program execution", len(images), fips)
+}
