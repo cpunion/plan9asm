@@ -31,6 +31,68 @@ func fixedLocalGPByteEffect(ins Instr) (x86TypedByteEffect, bool, error) {
 	return effect, true, nil
 }
 
+// Preserve a full numerical word only after the ordinary typed transfer has
+// succeeded. These are machine-word values with wraparound, not checked pointer
+// offsets or termination facts. The existing family owns grammar and immediates;
+// partial writes and numerical values depending on unknown carry stay unknown.
+func fixedLocalConstantArithmetic(ins Instr, effect x86TypedByteEffect, state *x86FixedLocalState) (Reg, int64, bool) {
+	spec, recognized := x86LockScalarRMWSpecs[ins.Op]
+	if !recognized || spec.bits != 64 || len(effect.operands) == 0 {
+		return "", 0, false
+	}
+	destination := effect.operands[len(effect.operands)-1]
+	root, valid := x86CallerGP(destination.operand.Reg)
+	old, known := state.constants[root]
+	if destination.operand.Kind != OpReg || destination.width != 8 || !destination.write ||
+		!valid || root != destination.operand.Reg || root == SP ||
+		!known && spec.stem != "XOR" {
+		return "", 0, false
+	}
+	// The shared typed family already resolved aliases and encoded immediates.
+	// Its input-free XOR descriptor is the existing self-XOR zero rule.
+	if spec.stem == "XOR" && !effect.operands[0].read && !destination.read {
+		return root, 0, true
+	}
+	if !known || !fixedLocalNumericRead(destination.operand, 8, state) {
+		return "", 0, false
+	}
+	value, input := uint64(old), uint64(0)
+	if !spec.unary {
+		operand := effect.operands[0].operand
+		source, constant := operand.Imm, operand.Kind == OpImm
+		if operand.Kind == OpReg {
+			source, constant = state.constants[operand.Reg]
+		}
+		if !constant || !fixedLocalNumericRead(operand, 8, state) {
+			return "", 0, false
+		}
+		input = uint64(source)
+	}
+	switch spec.stem {
+	case "ADD":
+		value += input
+	case "SUB":
+		value -= input
+	case "AND":
+		value &= input
+	case "OR":
+		value |= input
+	case "XOR":
+		value ^= input
+	case "INC":
+		value++
+	case "DEC":
+		value--
+	case "NEG":
+		value = -value
+	case "NOT":
+		value = ^value
+	default:
+		return "", 0, false
+	}
+	return root, int64(value), true
+}
+
 // A parsed address is not necessarily a memory access. Numerical LEA and
 // sized NOP use the same syntax without loading/storing it. Query the validated
 // effect rather than granting them a fabricated private-storage certificate.

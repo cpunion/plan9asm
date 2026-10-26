@@ -661,18 +661,6 @@ func fixedLocalStep(ins *Instr, state *x86FixedLocalState, sig FuncSig, proof *x
 	if known, err := fixedLocalConditionalSetStep(ins, state, sig, proof, residue); known {
 		return err
 	}
-	if ins.Op == "NOTQ" && len(ins.Args) == 1 && ins.Args[0].Kind == OpReg {
-		reg := ins.Args[0].Reg
-		if _, pointer := state.pointers[reg]; pointer {
-			return fail()
-		}
-		value, known := state.constants[reg]
-		if known {
-			state.constants[reg] = ^value
-			fixedLocalWriteBooleans(state, reg, 8, fixedLocalConstantBooleans(^value, 8))
-			return nil
-		}
-	}
 	if (ins.Op == "ADDQ" || ins.Op == "ANDQ") && len(ins.Args) == 2 && ins.Args[1].Kind == OpReg {
 		reg := ins.Args[1].Reg
 		value := ins.Args[0].Imm
@@ -715,7 +703,15 @@ func fixedLocalStep(ins *Instr, state *x86FixedLocalState, sig FuncSig, proof *x
 		if err != nil {
 			return err
 		}
-		return fixedLocalTypedByteStep(ins, state, proof, residue, effect)
+		root, value, constant := fixedLocalConstantArithmetic(*ins, effect, state)
+		if err := fixedLocalTypedByteStep(ins, state, proof, residue, effect); err != nil {
+			return err
+		}
+		if constant {
+			state.constants[root] = value
+			fixedLocalWriteBooleans(state, root, 8, fixedLocalConstantBooleans(value, 8))
+		}
+		return nil
 	}
 	if known, err := fixedLocalAESByteStep(ins, state, proof, residue); known {
 		return err
