@@ -51,6 +51,16 @@ func X86PackedLogicalRows(legacy X86LegacyCatalog, avx []X86AVXRule) ([]X86Packe
 		VPANDD VPANDQ VPANDND VPANDNQ VPORD VPORQ VPXORD VPXORQ`)
 }
 
+// X86PackedUnpackRows retains integer and PS/PD low/high interleave families.
+// The six MMX rows retain their separate region and memory-access contracts.
+func X86PackedUnpackRows(legacy X86LegacyCatalog, avx []X86AVXRule) ([]X86PackedBinaryRow, error) {
+	return x86PackedBinaryRows(legacy, avx, `
+		PUNPCKLBW PUNPCKHBW PUNPCKLWL PUNPCKHWL PUNPCKLLQ PUNPCKHLQ PUNPCKLQDQ PUNPCKHQDQ
+		UNPCKLPS UNPCKHPS UNPCKLPD UNPCKHPD
+		VPUNPCKLBW VPUNPCKHBW VPUNPCKLWD VPUNPCKHWD VPUNPCKLDQ VPUNPCKHDQ VPUNPCKLQDQ VPUNPCKHQDQ
+		VUNPCKLPS VUNPCKHPS VUNPCKLPD VUNPCKHPD`)
+}
+
 // X86PackedBinaryPilotRows covers the shared packed add/subtract and D/Q
 // low-multiply pilot. MMX and the separate W multiply family are not included.
 // PADDD is a frontend alias, not an additional official encoder row.
