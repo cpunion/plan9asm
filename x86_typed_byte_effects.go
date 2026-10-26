@@ -254,23 +254,5 @@ func x86ByteConditionFlags(condition string) uint8 {
 }
 
 func x86ByteBranchFlags(op Op) uint8 {
-	switch op {
-	case "JE", "JEQ", "JZ", "JNE", "JNZ":
-		return x86ByteFlagZF
-	case "JL", "JLT", "JNGE", "JGE", "JNL":
-		return x86ByteFlagSF | x86ByteFlagOF
-	case "JLE", "JNG", "JG", "JGT", "JNLE":
-		return x86ByteFlagSF | x86ByteFlagOF | x86ByteFlagZF
-	case "JS", "JMI", "JNS", "JPL":
-		return x86ByteFlagSF
-	case "JA", "JHI", "JNBE", "JBE", "JLS", "JNA":
-		return x86ByteFlagCF | x86ByteFlagZF
-	case "JAE", "JHS", "JNB", "JB", "JLO", "JNAE", "JC", "JCS", "JNC", "JCC":
-		return x86ByteFlagCF
-	case "JO", "JOS", "JNO", "JOC":
-		return x86ByteFlagOF
-	case "JP", "JPE", "JPS", "JNP", "JPO", "JPC":
-		return x86ByteFlagPF
-	}
-	return 0
+	return x86ByteConditionFlags(x86BranchCondition(op))
 }

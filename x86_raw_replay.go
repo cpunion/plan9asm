@@ -130,6 +130,7 @@ func cloneX86ReplayFixedLocalMemory(input map[int]x86FixedLocalAccess) map[int]x
 	}
 	output := make(map[int]x86FixedLocalAccess, len(input))
 	for key, value := range input {
+		value.iterationOffsets = append([][8]int64(nil), value.iterationOffsets...)
 		output[key] = value
 	}
 	return output

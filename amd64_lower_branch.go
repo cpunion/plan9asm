@@ -253,40 +253,12 @@ func (c *amd64Ctx) lowerBranch(bi int, ii int, op Op, ins Instr, emitBr amd64Emi
 		test := c.newTmp()
 		fmt.Fprintf(c.b, "  %%%s = icmp eq i%d %s, 0\n", test, bits, value)
 		cond = "%" + test
-	case "JE", "JEQ", "JZ":
-		cond, err = c.x86Condition("EQ")
-	case "JNE", "JNZ":
-		cond, err = c.x86Condition("NE")
-	case "JL", "JLT", "JNGE":
-		cond, err = c.x86Condition("LT")
-	case "JGE", "JNL":
-		cond, err = c.x86Condition("GE")
-	case "JS", "JMI":
-		cond, err = c.x86Condition("MI")
-	case "JNS", "JPL":
-		cond, err = c.x86Condition("PL")
-	case "JLE", "JNG":
-		cond, err = c.x86Condition("LE")
-	case "JG", "JGT", "JNLE":
-		cond, err = c.x86Condition("GT")
-	case "JB", "JLO", "JC", "JCS", "JNAE":
-		cond, err = c.x86Condition("CS")
-	case "JNC", "JCC", "JAE", "JHS", "JNB":
-		cond, err = c.x86Condition("CC")
-	case "JBE", "JLS", "JNA":
-		cond, err = c.x86Condition("LS")
-	case "JA", "JHI", "JNBE":
-		cond, err = c.x86Condition("HI")
-	case "JO", "JOS":
-		cond, err = c.x86Condition("OS")
-	case "JNO", "JOC":
-		cond, err = c.x86Condition("OC")
-	case "JP", "JPE", "JPS":
-		cond, err = c.x86Condition("PS")
-	case "JNP", "JPO", "JPC":
-		cond, err = c.x86Condition("PC")
 	default:
-		return true, false, fmt.Errorf("amd64: unsupported branch %s", op)
+		condition := x86BranchCondition(op)
+		if condition == "" {
+			return true, false, fmt.Errorf("amd64: unsupported branch %s", op)
+		}
+		cond, err = c.x86Condition(condition)
 	}
 	if err != nil {
 		return true, false, err

@@ -21,9 +21,11 @@ type x86FixedLocalAccess struct {
 	shape       [32]byte
 	width       int64
 	write       bool
-	nativeInput bool // Typed source address, not a private extent/alignment proof.
-	offset      [8]int64
+	nativeInput bool     // Typed source address, not a private extent/alignment proof.
+	offset      [8]int64 // The first access; a counted loop retains its complete series below.
 	ordinal     int
+	// Only counted-loop accesses need a series; ordinary accesses stay inline.
+	iterationOffsets [][8]int64
 }
 
 type x86FixedLocalState struct {
@@ -123,10 +125,7 @@ func proveX86FixedLocal(fn Func, sig FuncSig) (Func, error) {
 			return fn, goAMD64FrameContext("fixed local final access replay changed")
 		}
 		if len(final.Instrs[index].x86FixedLocalMemory) != 0 {
-			proof.accesses[index] = make(map[int]x86FixedLocalAccess)
-			for operand, access := range final.Instrs[index].x86FixedLocalMemory {
-				proof.accesses[index][operand] = access
-			}
+			proof.accesses[index] = cloneX86ReplayFixedLocalMemory(final.Instrs[index].x86FixedLocalMemory)
 		}
 	}
 	if err := fixedLocalRelocationAliases(proof.accesses); err != nil {
@@ -179,25 +178,31 @@ func fixedLocalRelocationAliases(accesses map[int]map[int]x86FixedLocalAccess) e
 	var total int64
 	for _, operands := range accesses {
 		for _, access := range operands {
-			if access.width <= 0 || access.width > (1<<20)-total {
+			offsets := access.iterationOffsets
+			if len(offsets) == 0 {
+				offsets = [][8]int64{access.offset}
+			}
+			if access.width <= 0 || access.width > ((1<<20)-total)/int64(len(offsets)) {
 				return goAMD64FrameContext("fixed local complete access-byte budget exceeded")
 			}
-			total += access.width
+			total += access.width * int64(len(offsets))
 			if access.nativeInput {
 				continue // Native input addresses are never relocated.
 			}
-			for byteIndex := int64(0); byteIndex < access.width; byteIndex++ {
-				original := access.offset[0] + byteIndex
-				for residue := range forward {
-					current := access.offset[residue] + byteIndex
-					if mapped, found := forward[residue][original]; found && mapped != current {
-						return goAMD64FrameContext("fixed local overlapping-byte identity depends on original SP residue")
+			for _, offset := range offsets {
+				for byteIndex := int64(0); byteIndex < access.width; byteIndex++ {
+					original := offset[0] + byteIndex
+					for residue := range forward {
+						current := offset[residue] + byteIndex
+						if mapped, found := forward[residue][original]; found && mapped != current {
+							return goAMD64FrameContext("fixed local overlapping-byte identity depends on original SP residue")
+						}
+						if mapped, found := reverse[residue][current]; found && mapped != original {
+							return goAMD64FrameContext("fixed local distinct-byte identity depends on original SP residue")
+						}
+						forward[residue][original] = current
+						reverse[residue][current] = original
 					}
-					if mapped, found := reverse[residue][current]; found && mapped != original {
-						return goAMD64FrameContext("fixed local distinct-byte identity depends on original SP residue")
-					}
-					forward[residue][original] = current
-					reverse[residue][current] = original
 				}
 			}
 		}
@@ -356,8 +361,18 @@ func replayX86FixedLocal(fn *Func, sig FuncSig, proof *x86FixedLocalProof, resid
 	if err != nil {
 		return err
 	}
-	return replayX86FixedLocalCFG(fn, sig, proof, residue, budget, effects, edges, instructions,
-		fixedLocalLinearEdges(*fn, edges, instructions))
+	linear := fixedLocalLinearEdges(*fn, edges, instructions)
+	err = replayX86FixedLocalCFG(fn, sig, proof, residue, budget, effects, edges, instructions, linear, nil)
+	if err == nil {
+		return nil // A stronger loop model must not reject existing generic CFG proofs.
+	}
+	loops := fixedLocalCountedLoops(*fn, edges, instructions)
+	if len(loops) == 0 {
+		return err
+	}
+	// Failed attempts publish no access annotations. Reuse the original source,
+	// transfer and remaining budget; this is not recursive translation or caching.
+	return replayX86FixedLocalCFG(fn, sig, proof, residue, budget, effects, edges, instructions, linear, loops)
 }
 
 // Keep states at control-flow boundaries. A sole fallthrough predecessor has
@@ -385,7 +400,8 @@ func fixedLocalLinearEdges(fn Func, edges map[int][]int, instructions []int) []b
 // A nil linear mask retains the all-instruction reference schedule. Both paths
 // use the same transfer, meet, work budgets and final access publication.
 func replayX86FixedLocalCFG(fn *Func, sig FuncSig, proof *x86FixedLocalProof, residue int, budget *x86FixedLocalBudget,
-	effects map[int]x86TypedByteEffect, edges map[int][]int, instructions []int, linear []bool) error {
+	effects map[int]x86TypedByteEffect, edges map[int][]int, instructions []int, linear []bool,
+	loops map[int]x86FixedLocalCountedLoop) error {
 	state := x86FixedLocalState{
 		pointers: map[Reg]int64{SP: 0}, constants: make(map[Reg]int64), known: make(map[Reg]uint8),
 		opaque: make(map[Reg]x86FixedLocalOrigin), opaqueCells: make(map[int64]x86FixedLocalOrigin), booleans: make(map[Reg]uint8),
@@ -409,9 +425,20 @@ func replayX86FixedLocalCFG(fn *Func, sig FuncSig, proof *x86FixedLocalProof, re
 			return goAMD64FrameContext("fixed local fallthrough lacks a source return")
 		}
 		current := cloneFixedLocalState(states[pc])
+		var active *x86FixedLocalCountedLoop
+		var number uint64
+		iteration := 0
+		var targets []int
 		for {
 			if err := budget.consume(proof.frame); err != nil {
 				return err
+			}
+			if active == nil {
+				if loop, found := loops[pc]; found {
+					if value, known := loop.number(&current); known {
+						active, number = &loop, value
+					}
+				}
 			}
 			// Transfer a private instruction copy: provisional loop states must
 			// never publish accesses, including certificates from another residue.
@@ -427,14 +454,44 @@ func replayX86FixedLocalCFG(fn *Func, sig FuncSig, proof *x86FixedLocalProof, re
 			if err != nil {
 				return fmt.Errorf("%s: %q: %w", fn.Sym, ins.Raw, err)
 			}
+			if active != nil {
+				if pc == active.update {
+					number, err = active.next(number)
+					if err != nil {
+						return err
+					}
+				}
+				if value, known := active.number(&current); !known || value != number {
+					return goAMD64FrameContext("fixed local counted-loop counter changed outside its unique update")
+				}
+				if err := fixedLocalCountedAccesses(accesses[pc], ins.x86FixedLocalMemory, iteration); err != nil {
+					return err
+				}
+			}
 			accesses[pc] = ins.x86FixedLocalMemory
 			returned = returned || ins.Op == OpRET
+			if active != nil {
+				if pc == active.latch {
+					if active.continues(number) {
+						iteration++
+						pc = active.header
+						continue
+					}
+					targets = edges[pc][:1] // The actual known comparison has reached the false latch.
+					break
+				}
+				pc++
+				continue
+			}
 			if linear == nil || !linear[pc] {
 				break
 			}
 			pc++
 		}
-		for _, target := range edges[pc] {
+		if targets == nil {
+			targets = edges[pc]
+		}
+		for _, target := range targets {
 			if target < 0 || target >= len(instructions) {
 				return goAMD64FrameContext("fixed local fallthrough lacks a source return")
 			}
@@ -477,13 +534,20 @@ func replayX86FixedLocalCFG(fn *Func, sig FuncSig, proof *x86FixedLocalProof, re
 			}
 			prior, found := previous[operand]
 			if !found || prior.owner != access.owner || prior.shape != access.shape || prior.width != access.width ||
-				prior.write != access.write || prior.nativeInput != access.nativeInput || prior.ordinal != access.ordinal {
+				prior.write != access.write || prior.nativeInput != access.nativeInput || prior.ordinal != access.ordinal ||
+				len(prior.iterationOffsets) != len(access.iterationOffsets) {
 				return goAMD64FrameContext("fixed local access shape depends on original SP residue")
 			}
 			prior.offset[residue] = access.offset[residue]
+			prior.iterationOffsets = append([][8]int64(nil), prior.iterationOffsets...)
+			for index, offset := range access.iterationOffsets {
+				prior.iterationOffsets[index][residue] = offset[residue]
+			}
 			current[operand] = prior
 		}
-		fn.Instrs[index].x86FixedLocalMemory = current
+	}
+	for pc, current := range accesses {
+		fn.Instrs[instructions[pc]].x86FixedLocalMemory = current
 	}
 	return nil
 }

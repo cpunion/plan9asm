@@ -12,18 +12,52 @@ type amd64Block struct {
 }
 
 func isAMD64ConditionalBranch(op Op) bool {
-	switch Op(strings.ToUpper(string(op))) {
+	op = Op(strings.ToUpper(string(op)))
+	switch op {
 	case "JCXZW", "JCXZL", "JCXZQ":
 		return true
-	case "JE", "JEQ", "JZ", "JNE", "JNZ",
-		"JL", "JLT", "JNGE", "JLE", "JNG", "JG", "JGT", "JNLE", "JGE", "JNL", "JS", "JMI", "JNS", "JPL",
-		"JA", "JHI", "JNBE", "JAE", "JHS", "JNB", "JB", "JLO", "JNAE", "JBE", "JLS", "JNA",
-		"JC", "JCS", "JNC", "JCC",
-		"JO", "JOS", "JNO", "JOC", "JP", "JPE", "JPS", "JNP", "JPO", "JPC":
-		return true
-	default:
-		return false
 	}
+	return x86BranchCondition(op) != ""
+}
+
+// Branch lowering, byte dependencies and closed-loop predicates share the
+// complete condition-alias family. Counter-zero branches have a different role.
+func x86BranchCondition(op Op) string {
+	switch op {
+	case "JE", "JEQ", "JZ":
+		return "EQ"
+	case "JNE", "JNZ":
+		return "NE"
+	case "JL", "JLT", "JNGE":
+		return "LT"
+	case "JGE", "JNL":
+		return "GE"
+	case "JS", "JMI":
+		return "MI"
+	case "JNS", "JPL":
+		return "PL"
+	case "JLE", "JNG":
+		return "LE"
+	case "JG", "JGT", "JNLE":
+		return "GT"
+	case "JB", "JLO", "JC", "JCS", "JNAE":
+		return "CS"
+	case "JNC", "JCC", "JAE", "JHS", "JNB":
+		return "CC"
+	case "JBE", "JLS", "JNA":
+		return "LS"
+	case "JA", "JHI", "JNBE":
+		return "HI"
+	case "JO", "JOS":
+		return "OS"
+	case "JNO", "JOC":
+		return "OC"
+	case "JP", "JPE", "JPS":
+		return "PS"
+	case "JNP", "JPO", "JPC":
+		return "PC"
+	}
+	return ""
 }
 
 func isAMD64CounterZeroBranch(op Op) bool {

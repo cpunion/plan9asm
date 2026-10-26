@@ -195,7 +195,7 @@ func TestGoAMD64FixedLocalReplayMatchesInstructionSchedule(t *testing.T) {
 				}
 				budget := x86FixedLocalBudget{steps: 1 << 18, bytes: 64 << 20}
 				for residue := 0; residue < 8; residue++ {
-					err = replayX86FixedLocalCFG(&current, sig, proof, residue, &budget, effects, edges, instructions, linear)
+					err = replayX86FixedLocalCFG(&current, sig, proof, residue, &budget, effects, edges, instructions, linear, nil)
 					if (err == nil) != row.valid {
 						t.Fatalf("schedule=%d residue=%d valid=%v: %v", schedule, residue, row.valid, err)
 					}
@@ -231,7 +231,7 @@ func TestGoAMD64FixedLocalReplayAllocations(t *testing.T) {
 			current.Instrs = append([]Instr(nil), fn.Instrs...)
 			proof := &x86FixedLocalProof{frame: fn.FrameSize}
 			budget := x86FixedLocalBudget{steps: 1 << 18, bytes: 64 << 20}
-			if err := replayX86FixedLocalCFG(&current, sig, proof, 0, &budget, effects, edges, instructions, linear); err != nil {
+			if err := replayX86FixedLocalCFG(&current, sig, proof, 0, &budget, effects, edges, instructions, linear, nil); err != nil {
 				t.Fatal(err)
 			}
 		})
