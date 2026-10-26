@@ -3870,6 +3870,11 @@ func decodedX86VEXPackedBroadcastInstruction(code []byte, mode int) (instruction
 }
 
 func decodedX86VEXPackedBroadcastInstructionWithMemory(code []byte, mode int, memory x86RawMemoryDecoder) (instruction Instr, length int, ok bool, err error) {
+	// Original native observers use this shared broadcast-family entry.
+	// The block form keeps the same decoder and memory policy as raw source.
+	if instruction, length, ok, err = decodedX86VBROADCAST128InstructionWithMemory(code, mode, memory); ok || err != nil {
+		return
+	}
 	i := 0
 	segment := Reg("")
 	addressOverride := false
@@ -9933,6 +9938,10 @@ func decodedX86RandomInstruction(code []byte, mode int) (syntax string, length i
 // opcodes as legacy scalar instructions, so recover every ModRM/SIB memory
 // form before consulting the generic decoder.
 func decodedX86VBROADCAST128Instruction(code []byte, mode int) (instruction Instr, length int, ok bool, err error) {
+	return decodedX86VBROADCAST128InstructionWithMemory(code, mode, x86RawMemoryDecoder{})
+}
+
+func decodedX86VBROADCAST128InstructionWithMemory(code []byte, mode int, memory x86RawMemoryDecoder) (instruction Instr, length int, ok bool, err error) {
 	i := 0
 	segment := Reg("")
 	addressOverride := false
@@ -9974,7 +9983,7 @@ vex:
 	if addressOverride {
 		return Instr{}, 0, true, fmt.Errorf("address-size override is not source-layout safe")
 	}
-	source, consumed, err := decodedX86VEXRMSource(code[i+4:], mode, bExt, xExt, segment)
+	source, consumed, err := memory.scalar(code[i+4:], mode, bExt, xExt, segment, 1)
 	if err != nil {
 		return Instr{}, 0, true, err
 	}
