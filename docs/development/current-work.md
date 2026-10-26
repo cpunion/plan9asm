@@ -87,7 +87,14 @@ The integrated Go 1.27.3 / LLVM 22 receipt at `4cd3b05bb` passes 6 roots / 27
 children, with no failures or skips, including all 32 GP kernels through three
 APIs and O0/O2 objects. That object root takes 8.5 seconds versus 58.05 in the
 earlier local receipt. This is a single observation, not a repeated benchmark
-or a native execution certificate. The separate fork-only Linux native
+or a native execution certificate. The integrated minimum-SDK receipt at
+`5223375ef` passes 13 roots / 220 children in 31.235 seconds under Go 1.20.14
+and LLVM 22, with no failures or skips. It retains the snapshot revocation and
+work-count checks, GP/native-input objects, physical packed boundaries, source
+paths and all 291 official packed/min-max rows (912 formats plus aliases).
+Darwin's linker emitted its existing `-ld_classic` warning; the original
+combined output is retained separately from the parsed test events.
+The separate fork-only Linux native
 [probe](https://github.com/cpunion/plan9asm/actions/runs/40256528274) qualifies
 the same source head: 4 roots / 30 children pass with no failures or skips under
 Go 1.27.3 and LLVM/clang 22.1.8. It executes the 32 GP kernels against original
