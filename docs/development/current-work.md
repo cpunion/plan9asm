@@ -128,11 +128,33 @@ source revocation and 22 actual-host scalar fault kernels through three APIs
 at O0/O2. The last host oracle is not original AMD64 execution. Earlier current
 receipts retain the genuine BP-role and dead-access failures; a later broad
 current receipt still failed one SP address-only classification, repaired before
-this minimum-SDK run. Original Go/LLVM execution of the new 92 GP, 28 binary and
-14 affine kernels is a separate current-SDK fork-native gate, still pending.
+this minimum-SDK run. The separate current-SDK Linux native
+[gate](https://github.com/cpunion/plan9asm/actions/runs/40264352972) now passes
+13 roots / 178 children, with no failures or skips, at source `ea3915207`.
+It compares the 92 GP, 28 binary and 14 affine kernels with original Go through
+three APIs at O0/O2 (4,140, 840 and 56 rows respectively). Go 1.27.3 and
+LLVM/clang 22.1.8 were used; AVX512 and later VEX changes are not qualified.
 
-Next: finish VEX effects and their independent original-byte boundary joins,
-then rerun the complete 55-file benchmark. Compose ordinary mutable Go global
+The VEX batch at `6015b1be7` shares existing family parsers with the fixed-frame
+effect consumer, including upper-zero byte semantics and exact memory widths.
+Its independent current-SDK receipt passes 32 roots / 1,385 children, with zero
+failures/skips: 146 official Zvex rows produce 354 original-Go source witnesses
+and three-API O0/O2 objects. This is not exact encoder-row selection or native
+execution evidence. Candidate detection remains allocation-free; its focused
+median improves from 34.704 to 8.071 microseconds, not an end-to-end speedup.
+Production grows by 166 lines; counterpart-family compaction remains pending.
+
+The complete 55-file benchmark at `6015b1be7` still passes **33/55**, with
+22 failures and no N/A/unattempted cases (39 wall seconds; 37.130 tool seconds).
+SHA512 has advanced from a missing VEX effect to ordinary Go `_K` address
+binding; SHA256 still lacks private-DATA address composition. GCM reaches the
+automatic frame machine-shape check. The no-DATA ordinary-relocation capture
+prerequisite at `84163349c` observes complete original objects on three OSes;
+it does not grant global address or memory permissions.
+
+Next: finish VEX counterpart effects and their independent original-byte joins,
+repair complete-source frame boundaries, then rerun the 55-file benchmark.
+Compose ordinary mutable Go global
 addresses with existing captured declaration identities; never reclassify a
 Go variable as private readonly assembly DATA. Complete current/minimum-SDK
 integrated checks and initialized official-family joins. Keep source-written
