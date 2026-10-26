@@ -1,0 +1,47 @@
+name: Private CALL native diagnostic
+
+on:
+  push:
+    branches: [codex/pr40-private-call-native-20261027]
+
+permissions:
+  contents: read
+
+jobs:
+  native:
+    if: github.repository == 'cpunion/plan9asm'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      GOMAXPROCS: '4'
+      GOFLAGS: ''
+      GOENV: 'off'
+      GOTOOLCHAIN: local
+      LLVM_CONFIG: /usr/bin/llvm-config-22
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Install exact LLVM family
+        run: bash scripts/install-ci-llvm22-ubuntu.sh
+        timeout-minutes: 14
+      - uses: ./.github/actions/setup-go
+        with:
+          go-version: '1.27.2'
+          cache: true
+        timeout-minutes: 10
+      - uses: ./.github/actions/setup-node22
+        timeout-minutes: 10
+      - name: Observe source, tools and complete actual inventory; execute
+        run: node .github/scripts/private-call-native-probe.cjs run _out/private-call-native
+        timeout-minutes: 20
+      - name: Audit exact source and every native owner
+        if: always()
+        run: node .github/scripts/private-call-native-probe.cjs audit _out/private-call-native
+      - name: Retain raw evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: private-call-native-${{ github.sha }}
+          path: _out/private-call-native/
+          if-no-files-found: error
