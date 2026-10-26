@@ -97,7 +97,7 @@ func TestWindowsUnwindCurrentPatchProducerSchema(t *testing.T) {
 			}
 		})
 	}
-	object := []byte("go object windows amd64 go1.27.3\n!\n\x00go120ld")
+	object := []byte("go object windows amd64 go1.27.4\n!\n\x00go120ld")
 	if _, err := objectBody(object, "windows/amd64"); !errors.Is(err, ErrContext) {
 		t.Fatal("Windows observation registered an unaudited generic object format", err)
 	}

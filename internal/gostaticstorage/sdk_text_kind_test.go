@@ -174,7 +174,7 @@ func TestSDKCurrentTextKindsKeepStorageAndNamespaceBoundaries(t *testing.T) {
 func TestSDKCurrentTextKindDoesNotRegisterHistoricalObjects(t *testing.T) {
 	// Go 1.20 used 2 for SRODATA. The binary magic alone did not change. A
 	// current-kind collision fix must not expand the authenticated producer set.
-	for _, version := range []string{"go1.20.14", "go1.23.12", "go1.26.9", "go1.27.3"} {
+	for _, version := range []string{"go1.20.14", "go1.23.12", "go1.26.9", "go1.27.4"} {
 		for _, arch := range []string{"386", "amd64"} {
 			t.Run(version+"/"+arch, func(t *testing.T) {
 				object := []byte("go object linux " + arch + " " + version + "\n!\n\x00go120ld")
