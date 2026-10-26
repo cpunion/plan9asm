@@ -47,28 +47,47 @@ func TestCrossLinuxRuntimeMatrixGoAMD64FixedLocalConstantIndex(t *testing.T) {
 
 func fixedLocalConstantResultsRuntime(t *testing.T, assembly, declarations string, expected []string) {
 	t.Helper()
+	fixedLocalResultsRuntime(t, assembly, declarations, []uint64{^uint64(0)}, [][]string{expected})
+}
+
+func fixedLocalResultsRuntime(t *testing.T, assembly, declarations string, inputs []uint64, expected [][]string) {
+	t.Helper()
+	if len(inputs) == 0 || len(expected) != len(inputs) || len(expected[0]) == 0 {
+		t.Fatal("invalid fixed-local runtime input/result inventory")
+	}
+	count := len(expected[0])
+	var values []string
+	for index, row := range expected {
+		if len(row) != count {
+			t.Fatal("inconsistent fixed-local runtime result count", index, len(row), count)
+		}
+		values = append(values, row...)
+	}
 	execution := x86FloatCompareRuntimeTools(t, x86FloatCompareSSE)
 	goAMD64FramePrepareOwnedToolCache(t)
-	count := len(expected)
 	prefix := ""
 	if strings.Contains(execution.triple, "apple") {
 		prefix = "_"
 	}
 	var goCalls, cDeclarations, cCalls strings.Builder
 	for index := 0; index < count; index++ {
-		fmt.Fprintf(&goCalls, "fmt.Printf(\"%%016x\\n\",Value%d(^uint64(0)))\n", index)
 		label := runtimeCAsmLabel(prefix + fmt.Sprintf("example.invalid/framefixture.Value%d", index))
 		fmt.Fprintf(&cDeclarations, "extern uint64_t value%d(uint64_t) __asm__(%s);\n", index, label)
-		fmt.Fprintf(&cCalls, "printf(\"%%016llx\\n\",(unsigned long long)value%d(UINT64_MAX));\n", index)
+	}
+	for _, input := range inputs {
+		for index := 0; index < count; index++ {
+			fmt.Fprintf(&goCalls, "fmt.Printf(\"%%016x\\n\",Value%d(uint64(0x%x)))\n", index, input)
+			fmt.Fprintf(&cCalls, "printf(\"%%016llx\\n\",(unsigned long long)value%d(UINT64_C(0x%x)));\n", index, input)
+		}
 	}
 	original := "package main\nimport \"fmt\"\n" + declarations + "func main() {\n" + goCalls.String() + "}\n"
 	want := strings.Split(strings.TrimSpace(string(x86ScalarFloatIntegerOriginalOutput(t, execution, assembly, original))), "\n")
-	if len(want) != count {
-		t.Fatal("original Go DATA address output inventory changed", len(want), count)
+	if len(want) != len(values) {
+		t.Fatal("original Go fixed-local output inventory changed", len(want), len(values))
 	}
 	for index, value := range want {
-		if value != expected[index] {
-			t.Fatalf("original Go kernel %d returned %s, want %s", index, value, expected[index])
+		if value != values[index] {
+			t.Fatalf("original Go kernel %d input %#x returned %s, want %s", index%count, inputs[index/count], value, values[index])
 		}
 	}
 	driver := "#include <stdint.h>\n#include <stdio.h>\n" + runtimeCAsmLabelPreamble +
@@ -85,14 +104,14 @@ func fixedLocalConstantResultsRuntime(t *testing.T, assembly, declarations strin
 					if level == "-O2" {
 						input = x86MulDivRoundOptimize(t, ir)
 					}
-					output := execution.compileAndRunLLVM(t, "readonly-data-address", input, driver, level)
+					output := execution.compileAndRunLLVM(t, "fixed-local-results", input, driver, level)
 					got := strings.Split(strings.TrimSpace(string(output)), "\n")
 					if len(got) != len(want) {
-						t.Fatal("LLVM DATA address output inventory changed", len(got), len(want))
+						t.Fatal("LLVM fixed-local output inventory changed", len(got), len(want))
 					}
 					for index := range want {
 						if got[index] != want[index] {
-							t.Fatalf("DATA address kernel %d: original %s, LLVM %s", index, want[index], got[index])
+							t.Fatalf("fixed-local kernel %d input %#x: original %s, LLVM %s", index%count, inputs[index/count], want[index], got[index])
 						}
 					}
 				})

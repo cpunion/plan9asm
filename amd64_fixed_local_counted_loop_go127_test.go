@@ -43,14 +43,19 @@ func fixedLocalCountedLiteralBody(descending bool) string {
 }
 
 func TestGoAMD64FixedLocalCountedLoopObjects(t *testing.T) {
+	assembly, declarations, expected := fixedLocalCountedLoopProgram(t)
+	if len(expected) != 38 {
+		t.Fatal("counted-loop object inventory changed", len(expected))
+	}
+	fixedLocalCountedLoopObjects(t, assembly, declarations, len(expected))
+}
+
+func fixedLocalCountedLoopObjects(t *testing.T, assembly, declarations string, count int) {
+	t.Helper()
 	goAMD64FramePrepareOwnedToolCache(t)
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc required")
-	}
-	assembly, declarations, expected := fixedLocalCountedLoopProgram(t)
-	if len(expected) != 38 {
-		t.Fatal("counted-loop object inventory changed", len(expected))
 	}
 	for _, target := range []struct{ name, triple string }{
 		{"linux/amd64", "x86_64-unknown-linux-gnu"},
@@ -60,7 +65,7 @@ func TestGoAMD64FixedLocalCountedLoopObjects(t *testing.T) {
 		t.Run(target.name, func(t *testing.T) {
 			pkg, request, _, options := fixedLocalTransportFixture(t, assembly, declarations, target.name, target.triple)
 			var names []string
-			for index := range expected {
+			for index := 0; index < count; index++ {
 				names = append(names, fmt.Sprintf("%s.Value%d", pkg.Path, index))
 			}
 			fixedLocalFreshAPIs(t, pkg, request, options, []string{"Translate", "Module", "GoModule"},
