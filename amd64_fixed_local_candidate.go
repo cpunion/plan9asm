@@ -34,6 +34,8 @@ func GoAMD64FixedLocalFrameBindingNeeded(file *File, goarch string) bool {
 				memory, eligible, physicalOnly = 1, err == nil, true
 			} else if form, known, err := fixedLocalConversionProperties(ins); known {
 				memory, eligible = form.memory, err == nil && !form.mmx
+			} else if form, known, err := fixedLocalScalarLaneProperties(ins); known {
+				memory, eligible = form.memory, err == nil
 			} else if form, known, err := amd64PackedVectorMoveProperties(ins, goarch); known {
 				memory, eligible = form.memory, err == nil && !form.undefinedOpcode()
 				physicalOnly = !form.spec.aligned

@@ -6,6 +6,10 @@ import "fmt"
 // VEX forms use decodedX86VPINSRInstruction; the EVEX row extends X
 // base/destination registers to X31 and scales disp8 by the scalar width.
 func decodedX86EVEXVPINSRInstruction(code []byte, mode int) (Instr, int, bool, error) {
+	return decodedX86EVEXVPINSRInstructionWithMemory(code, mode, x86RawMemoryDecoder{})
+}
+
+func decodedX86EVEXVPINSRInstructionWithMemory(code []byte, mode int, memory x86RawMemoryDecoder) (Instr, int, bool, error) {
 	p, matched := decodeX86RawVectorEncoding(code)
 	if !matched || !p.evex || p.pp != 1 {
 		return Instr{}, 0, false, nil
@@ -40,7 +44,7 @@ func decodedX86EVEXVPINSRInstruction(code []byte, mode int) (Instr, int, bool, e
 		return fail("missing ModRM byte")
 	}
 	modRM := code[p.modRM]
-	source, consumed, err := decodedX86RMSource(
+	source, consumed, err := memory.scalar(
 		code[p.modRM:], mode, p.b, p.x, p.segment, laneBytes,
 	)
 	if err != nil {

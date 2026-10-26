@@ -4557,6 +4557,10 @@ encoding:
 // bytes after other scalar extracts as instructions or PC-relative operands,
 // so recover the complete family before consulting the generic decoder.
 func decodedX86PackedScalarExtractInstruction(code []byte, mode int) (instruction Instr, length int, ok bool, err error) {
+	return decodedX86PackedScalarExtractInstructionWithMemory(code, mode, x86RawMemoryDecoder{})
+}
+
+func decodedX86PackedScalarExtractInstructionWithMemory(code []byte, mode int, memory x86RawMemoryDecoder) (instruction Instr, length int, ok bool, err error) {
 	if mode != 32 && mode != 64 {
 		return Instr{}, 0, false, nil
 	}
@@ -4681,7 +4685,7 @@ prefix:
 	if mode == 32 && sourceNumber >= 8 {
 		return Instr{}, 0, true, fmt.Errorf("extended source register in 32-bit mode")
 	}
-	destination, consumed, decodeErr := decodedX86RMSource(code[modRMIndex:], mode, bExt, xExt, segment, disp8Scale)
+	destination, consumed, decodeErr := memory.scalar(code[modRMIndex:], mode, bExt, xExt, segment, disp8Scale)
 	if decodeErr != nil {
 		return Instr{}, 0, true, decodeErr
 	}
@@ -9451,6 +9455,10 @@ func decodedX86QwordLookupInstruction(code []byte, mode int) (Instr, int, bool, 
 // every ModRM/SIB source. x/arch v0.14 rejects some extended-register VPINSRQ
 // forms used by generated crypto assembly. EVEX forms continue through x/arch.
 func decodedX86VPINSRInstruction(code []byte, mode int) (instruction Instr, length int, ok bool, err error) {
+	return decodedX86VPINSRInstructionWithMemory(code, mode, x86RawMemoryDecoder{})
+}
+
+func decodedX86VPINSRInstructionWithMemory(code []byte, mode int, memory x86RawMemoryDecoder) (instruction Instr, length int, ok bool, err error) {
 	i := 0
 	segment := Reg("")
 	addressOverride := false
@@ -9534,7 +9542,7 @@ vex:
 	if mode == 32 && (op == "VPINSRQ" || rExt != 0 || xExt != 0 || bExt != 0 || firstVectorNumber >= 8 || destinationNumber >= 8) {
 		return Instr{}, 0, true, fmt.Errorf("64-bit width or extended register in 32-bit mode")
 	}
-	scalar, consumed, err := decodedX86VEXRMSource(code[modRMIndex:], mode, bExt, xExt, segment)
+	scalar, consumed, err := memory.scalar(code[modRMIndex:], mode, bExt, xExt, segment, 1)
 	if err != nil {
 		return Instr{}, 0, true, err
 	}
