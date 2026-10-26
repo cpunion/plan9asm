@@ -6,11 +6,12 @@ and [validation](validation.md). Preserve original failed receipts.
 
 ## Current priority: finish amd64 first
 
-The complete Go 1.27.2 / LLVM22 Linux/amd64 object benchmark at `14ebac865`
+The complete Go 1.27.2 / LLVM22 Linux/amd64 object benchmark at `2713a7cfc`
 passes **35/55**, with 20 failures and zero N/A/unattempted cases. Complete
-SHA512 and SHA3 are restored. Wall time is 97 seconds (95.290 tool seconds),
-so no end-to-end speedup is established. GCM still needs shared CLMUL effects;
-SHA256 needs shuffle effects and bounded indexed loops. Ordinary helper calls
+SHA512 and SHA3 are restored. Wall time is 53 seconds (51.541 tool seconds);
+this is not a repeated end-to-end speedup measurement. GCM has passed the
+CLMUL/shift shape checks and now needs scalar-lane insertion/extraction and
+bounded dynamic DATA indices. SHA256 needs bounded indexed loops. Ordinary helper calls
 remain unresolved independently of runtime-entry contracts.
 
 The latest original-Go Linux native [receipt](https://github.com/cpunion/plan9asm/actions/runs/40274466633)
@@ -20,6 +21,11 @@ logical, 41 shuffle kernels, readonly DATA and constant-index execution.
 Every comparison uses three APIs at O0/O2. The same source's Go 1.20.14
 focused receipt passes 25 roots / 708 children, zero failures/skips, in
 74.720 seconds. Neither receipt certifies later source revisions.
+The newer `d62b84c22` minimum-SDK receipt passes 29 roots / 646 children,
+zero failures/skips, in 50.523 seconds, including CLMUL, packed shifts,
+numerical constant propagation and block replay. Its expanded 22-root native
+[gate](https://github.com/cpunion/plan9asm/actions/runs/40280464705) is pending;
+object compilation and the older native receipt cannot certify that execution.
 The constant-index batch `74998514d` retains 120 address combinations and
 30 original Go functions; its isolated receipt has 16 roots / 269 children,
 zero failures/skips, across three OSes and three APIs at O0/O2.
