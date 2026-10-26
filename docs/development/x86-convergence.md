@@ -130,12 +130,33 @@ The selected Go 1.27.2 tables contain the following independent pilot rows:
 
 Seven PADD MMX rows and ten PMULLW/VPMULLW rows are outside this migration,
 not unsupported or newly verified. PADDD's frontend alias adds no encoder row.
-The next gate must retain row identity rather than deduplicate instruction text.
-Force AMD64 EVEX X/Y encoding with high registers, and independently check the
-actual Go instruction bytes before associating a witness with that row. Reuse
-the existing witness grammar and public three-API object harness in bounded
-32-function batches. Initialized source, matching encoding, public IR, objects
-and runtime remain separate outcomes; no inventory count is a passing outcome.
+The initialized join now retains row identity, not deduplicated instruction
+text. High AMD64 registers force EVEX X/Y encoding; the independent original
+Go bytes must match the selected official row. The shared encoder and public
+three-API harness use bounded batches of 32 functions. Current Go 1.27.3 and
+minimum Go 1.20.14 both pass the following Linux/amd64 LLVM22 object scopes:
+
+| Scope | Official rows | Concrete format witnesses |
+|---|---:|---:|
+| Add/subtract/D-Q low product | 159 | 480 |
+| Signed/unsigned integer min/max | 132 | 432 |
+| Total | 291 | 912 |
+
+Two PADDD alias witnesses are separate from the canonical counts. Min/max
+includes 48 non-Q, unmasked, narrow EVEX forms; low-register VEX objects cannot
+substitute for them. These are initialized named-source/object checks, not raw
+decoder or executed-semantic coverage of every row. Complete legacy/AVX mode
+applicability and remaining family joins are still required; do not divide this
+pilot by unfiltered encoding-table rows to claim an architecture percentage.
+
+Fixed-frame GP analysis now consumes the existing typed byte/FLAGS effects
+instead of a second arithmetic opcode list. Its bounded worklist intersects
+numerical definedness across loops while retaining exact address identities.
+All eight original SP residues and the independent final replay remain checked;
+provisional loop accesses are published only after convergence. Numerical LEA
+and sized NOP addresses are not mislabeled as actual memory accesses. Ordinary
+input-pointer memory and private scratch still need a separate composition
+repair; a successful numerical-loop test does not qualify that role.
 
 The new result-mask helper emits five vector IR instructions instead of a
 lane-wise sequence. This is not a five-machine-instruction or constant-runtime

@@ -1,6 +1,6 @@
 # PR40 closeout
 
-Updated 2026-10-25. This handoff identifies scope and required work, not a
+Updated 2026-10-26. This handoff identifies scope and required work, not a
 current-head completion certificate. Read [instruction contracts](instructions.md)
 and [validation](validation.md). Preserve original failed receipts.
 
@@ -43,10 +43,41 @@ baseline. It took 35 wall seconds; this one warm observation does not establish
 a performance improvement. An earlier run with GOFLAGS set failed source-profile
 checks and cannot supply a translation performance measurement.
 
-Next: repair ordinary whole-source scratch/CFG regressions using shared typed
-effects, and close initialized official-row joins with original encoding
-identity. Then remove repeated family parsing and measure complete-source
-translation and native generated-program performance.
+Follow-up commits retain exact STEXT/STEXTFIPS identity (`266edb094`), separate
+zero-frame siblings from nonzero private-frame permissions (`9afd76c39`), and
+register the independently hash-matched Go 1.27.3 Windows unwind sources
+(`6d587c49d`). They do not grant private helper, native pointer or runtime roles.
+Official initialized joins (`86daf969e`, `c02a8adc3`) cover 291 canonical rows
+and 912 formats plus two aliases through all three APIs and LLVM22 objects on
+Linux/amd64, under Go 1.27.3 and 1.20.14. This is a bounded family scope, not
+whole-architecture completion or an execution certificate.
+
+`95278dfd6` reuses typed GP effects for all arithmetic widths and replaces the
+DAG-only private-frame analysis with a bounded fixed-point worklist. Numerical
+LEA and sized NOP operands no longer require fabricated memory certificates.
+Its Go 1.27.3 focused receipt passes 13 roots / 1,160 children; Go 1.20.14 passes
+16 roots / 1,175 children, additionally covering the mixed-frame source batch.
+Both have zero skips and failures. Actual objects include three target OSes
+and independently captured Translate/Module/GoModule paths. Execution comparison
+for this new batch remains pending; preserve the earlier failed receipts.
+
+The complete Go 1.27.2 / LLVM22 Linux/amd64 benchmark at `95278dfd6` still has
+33/55 passes and 22 failures, zero N/A/unattempted, with 41 wall seconds and
+39.714 seconds reported tool duration. Diagnostic progress is not a file pass:
+gcm/sha256 now reach automatic split-entry checks, p256 reaches private helpers,
+and sha512 reaches frame/DATA composition. The complete failed set is retained.
+Do not report this single run as a speedup over the earlier 35-second result.
+
+`f0a32f004` finishes feature inference after validated logical/vector-move family
+dispatch. The 23,168-row before/after feature outputs match; the two targeted
+inference microkernels improve about 81–84%, with zero allocations unchanged.
+That narrow result does not establish end-to-end translation improvement.
+
+Next: finish automatic entry-layout, ordinary typed-pointer/private-scratch and
+readonly DATA composition, then rerun complete sources. Keep source-written
+CALL/TLS and private helpers distinct from assembler-generated entry machinery.
+Complete the GP execution oracle and remaining initialized official family joins,
+then remove repeated parsing and measure whole-source/generated-program cost.
 Do not add another per-proof opcode whitelist or generalize to another arch.
 The CI chronology below is historical, not the current local batch's status.
 
