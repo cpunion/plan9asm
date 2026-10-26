@@ -3,12 +3,18 @@ package plan9asm
 // GoAMD64FixedLocalFrameBindingNeeded is a source-role query, not a frame or
 // memory certificate. The complete actual-object factory and fixed-local
 // proof must independently succeed before any instruction gains backing.
-func GoAMD64FixedLocalFrameBindingNeeded(file *File, goarch string) bool {
+// One optional typed declaration set keeps complete ABI0 forwarding adapters
+// on their existing call route. Missing or ambiguous options retain the query's
+// original conservative behavior and grant no source or translation permission.
+func GoAMD64FixedLocalFrameBindingNeeded(file *File, goarch string, options ...Options) bool {
 	if file == nil || file.Arch != ArchAMD64 || goarch != "amd64" {
 		return false
 	}
 	for _, fn := range file.Funcs {
 		if fn.FrameSize <= 0 {
+			continue
+		}
+		if len(options) == 1 && x86ABI0OutgoingForwarder(fn, options[0]) {
 			continue
 		}
 		bases := fixedLocalCandidateBases(fn)

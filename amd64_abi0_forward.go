@@ -27,14 +27,7 @@ func inferX86ABI0Forwarder(fn Func, sig FuncSig, goarch string) *FuncSig {
 		return nil
 	}
 
-	var instructions []Instr
-	for _, ins := range fn.Instrs {
-		switch ins.Op {
-		case "TEXT", "PCDATA", "FUNCDATA", "GO_ARGS", "NO_LOCAL_POINTERS":
-			continue
-		}
-		instructions = append(instructions, ins)
-	}
+	instructions := x86ABI0ForwardInstructions(fn)
 	// Two instructions per copied slot, code-pointer load, CALL, then RET.
 	if len(instructions) != 2*len(params)+2*len(sig.Frame.Results)+3 {
 		return nil
@@ -78,25 +71,13 @@ func inferX86ABI0Forwarder(fn Func, sig FuncSig, goarch string) *FuncSig {
 }
 
 func x86ABI0ForwardCopy(load, store Instr, slot FrameSlot, incoming bool) bool {
-	if len(load.Args) != 2 || len(store.Args) != 2 || load.Op != store.Op ||
+	if len(load.Args) != 2 || len(store.Args) != 2 ||
 		load.Args[1].Kind != OpReg || store.Args[0].Kind != OpReg ||
-		load.Args[1].Reg != store.Args[0].Reg {
+		load.Args[1].Reg != store.Args[0].Reg || load.Args[1].Reg == SP || load.Args[1].Reg == BP {
 		return false
 	}
-	var width int64
-	switch load.Op {
-	case "MOVB":
-		width = 1
-	case "MOVW":
-		width = 2
-	case "MOVL", "MOVSS":
-		width = 4
-	case "MOVQ", "MOVSD":
-		width = 8
-	default:
-		return false
-	}
-	if width != frameTypeSize(slot.Type, 8) {
+	width := x86ABI0ForwardMoveBytes(load, 0)
+	if width == 0 || width != x86ABI0ForwardMoveBytes(store, 1) || width != frameTypeSize(slot.Type, 8) {
 		return false
 	}
 	fp, sp := load.Args[0], store.Args[1]
@@ -104,5 +85,45 @@ func x86ABI0ForwardCopy(load, store Instr, slot FrameSlot, incoming bool) bool {
 		fp, sp = store.Args[1], load.Args[0]
 	}
 	return fp.Kind == OpFP && fp.FPOffset == slot.Offset &&
-		sp.Kind == OpMem && sp.Mem.Base == SP && sp.Mem.Index == "" && sp.Mem.Sym == ""
+		sp.Kind == OpMem && sp.Mem.Base == SP && sp.Mem.Index == "" && sp.Mem.Sym == "" &&
+		sp.Mem.OffRaw == "" && sp.Mem.IndexExt == "" && sp.Mem.Segment == "" && sp.Mem.Scale == 0
+}
+
+func x86ABI0ForwardInstructions(fn Func) []Instr {
+	var instructions []Instr
+	for _, ins := range fn.Instrs {
+		switch ins.Op {
+		case "TEXT", "PCDATA", "FUNCDATA", "GO_ARGS", "NO_LOCAL_POINTERS":
+			continue
+		}
+		instructions = append(instructions, ins)
+	}
+	return instructions
+}
+
+// Widening MOVs retain their low source bytes. Only copying those exact bytes
+// back is forwarding; arithmetic, masks and partial-width stores do not qualify.
+func x86ABI0ForwardMoveBytes(ins Instr, index int) int64 {
+	if len(ins.Args) != 2 || !x86ResultNamedPredicateInstruction(ins) {
+		return 0
+	}
+	if x86RawReturnScalarMoveBytes(x86GoMOVQSourceInstruction(ins).Op) == 0 {
+		if form, known, err := amd64ScalarVectorMoveProperties(ins, "amd64"); known {
+			if err != nil || form.mask >= 0 || form.memory != index || form.spec.rawOnly {
+				return 0
+			}
+		} else if _, known, err := x86ScalarExtensionProperties(ins.Op, ins, "amd64"); index != 0 || !known || err != nil {
+			return 0
+		}
+	}
+	// This temporary projection queries the shared width grammar only. It is
+	// never emitted and cannot create a logical FP or native storage role.
+	projected := ins
+	projected.Args = append([]Operand(nil), ins.Args...)
+	projected.Args[index] = Operand{Kind: OpFP}
+	width, write, known := X86FPAccessBytes(projected, index, "amd64")
+	if !known || write != (index == 1) {
+		return 0
+	}
+	return width
 }

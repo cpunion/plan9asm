@@ -34,6 +34,12 @@ func arm64GoABIContext(format string, args ...any) error {
 // values that are wholly register assigned. Arrays longer than one and a bank
 // overflow require stack-ABI context; do not flatten them into guessed registers.
 func arm64GoABILeaves(typ LLVMType, path []int, visit func(LLVMType, []int) error) error {
+	return goLLVMScalarLeaves(typ, path, 1, visit)
+}
+
+// ABI consumers share the aggregate grammar, but supply their own array bound
+// and leaf callback. A larger bound does not assign registers or frame roles.
+func goLLVMScalarLeaves(typ LLVMType, path []int, arrayLimit uint64, visit func(LLVMType, []int) error) error {
 	if len(path) > 64 {
 		return arm64GoABIContext("aggregate nesting exceeds the bounded contract")
 	}
@@ -68,16 +74,22 @@ func arm64GoABILeaves(typ LLVMType, path []int, visit func(LLVMType, []int) erro
 	} else if strings.HasPrefix(s, "[") && strings.HasSuffix(s, "]") {
 		count, elem, found := strings.Cut(strings.TrimSpace(s[1:len(s)-1]), " x ")
 		n, err := strconv.ParseUint(count, 10, 64)
-		if !found || err != nil || n != 1 {
+		if !found || err != nil || n == 0 || n > arrayLimit {
 			return arm64GoABIContext("array %s needs a stack/zero-size contract", typ)
 		}
-		children = []LLVMType{LLVMType(strings.TrimSpace(elem))}
+		for index := uint64(0); index < n; index++ {
+			next := append(append([]int(nil), path...), int(index))
+			if err := goLLVMScalarLeaves(LLVMType(strings.TrimSpace(elem)), next, arrayLimit, visit); err != nil {
+				return err
+			}
+		}
+		return nil
 	} else {
 		return arm64GoABIContext("unrecognized scalar/aggregate type %s", typ)
 	}
 	for i, child := range children {
 		next := append(append([]int(nil), path...), i)
-		if err := arm64GoABILeaves(child, next, visit); err != nil {
+		if err := goLLVMScalarLeaves(child, next, arrayLimit, visit); err != nil {
 			return err
 		}
 	}
