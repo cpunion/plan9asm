@@ -41,6 +41,10 @@ func TestX86OfficialNarrowRowsInitializedThreeAPIsObjects(t *testing.T) {
 	x86OfficialPackedRowsObjects(t, goasmrules.X86PackedNarrowRows, 36, 114, 0)
 }
 
+func TestX86OfficialPerLaneShiftRowsInitializedThreeAPIsObjects(t *testing.T) {
+	x86OfficialPackedRowsObjects(t, goasmrules.X86PackedPerLaneShiftRows, 64, 236, 0)
+}
+
 func TestX86OfficialMinMaxRowsInitializedThreeAPIsObjects(t *testing.T) {
 	verified := x86OfficialPackedRowsObjects(t, goasmrules.X86PackedIntegerMinMaxRows, 132, 432, 0)
 	narrowEVEX := 0

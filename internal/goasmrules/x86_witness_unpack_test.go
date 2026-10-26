@@ -2,80 +2,17 @@ package goasmrules
 
 import (
 	"bytes"
-	"regexp"
 	"runtime"
-	"strings"
 	"testing"
 )
 
 func TestX86PackedUnpackRowsShareBinaryWitnesses(t *testing.T) {
-	legacy, err := LoadX86LegacyRules(runtime.GOROOT())
-	if err != nil {
-		t.Fatal(err)
-	}
-	avx, err := LoadX86AVXRules(runtime.GOROOT())
-	if err != nil {
-		t.Fatal(err)
-	}
-	rows, err := X86PackedUnpackRows(legacy, avx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	ids, names := map[string]bool{}, map[string]bool{}
-	generationRows, formats := map[string]int{}, map[string]int{}
-	widths := map[int]int{}
-	broadcast := 0
-	for _, row := range rows {
-		if row.ID == "" || ids[row.ID] || len(row.Witnesses) < 2 {
-			t.Fatal("lost official row or register/memory witness", row.ID)
-		}
-		ids[row.ID], names[row.Opcode] = true, true
-		generationRows[row.Witnesses[0].Generation]++
-		for _, witness := range row.Witnesses {
-			formats[witness.Generation]++
-			widths[witness.Width]++
-			if witness.Generation == "evex" && (witness.Encoding[0] != 0x62 ||
-				!strings.HasSuffix(witness.Second, "17") || !strings.HasSuffix(witness.Destination, "18")) {
-				t.Fatal("EVEX row could silently select VEX", row.ID)
-			}
-			if witness.Broadcast {
-				broadcast++
-				if !witness.Memory || witness.Generation != "evex" ||
-					!(strings.HasSuffix(row.Opcode, "DQ") || strings.HasSuffix(row.Opcode, "PS") || strings.HasSuffix(row.Opcode, "PD")) {
-					t.Fatal("broadcast escaped its official D/Q/PS/PD memory rows", row.ID)
-				}
-			}
-		}
-	}
-	if len(rows) != 108 || len(names) != 24 || generationRows["legacy"] != 12 ||
-		generationRows["vex"] != 24 || generationRows["evex"] != 72 ||
-		formats["legacy"] != 24 || formats["vex"] != 48 || formats["evex"] != 288 ||
-		widths[128] != 144 || widths[256] != 120 || widths[512] != 96 || broadcast != 72 {
-		t.Fatalf("unpack denominator drift: rows=%d names=%d generations=%v formats=%v widths=%v broadcast=%d",
-			len(rows), len(names), generationRows, formats, widths, broadcast)
-	}
-	member := regexp.MustCompile(`^V?P?UNPCK[HL](BW|WL|LQ|WD|DQ|QDQ|PS|PD)$`)
-	check := func(name string) {
-		if member.MatchString(name) && !names[name] {
-			t.Fatal("official unpack family member omitted", name)
-		}
-	}
-	mmx := 0
-	for _, entry := range legacy.Optab {
-		check(entry.Opcode)
-		for _, row := range entry.Rows {
-			if names[entry.Opcode] && strings.Join(row.Classes, ",") == "Ymm,Ymr" {
-				mmx++
-			}
-		}
-	}
-	for _, row := range avx {
-		check(row.Opcode)
-	}
-	if mmx != 6 {
-		t.Fatal("separate MMX region inventory drift", mmx)
-	}
-	t.Logf("%s: 108 original rows / 360 expectations; six MMX rows separate, no translation/runtime claim", runtime.Version())
+	x86CheckPackedRowInventory(t, X86PackedUnpackRows,
+		`^V?P?UNPCK[HL](BW|WL|LQ|WD|DQ|QDQ|PS|PD)$`,
+		`(DQ|PS|PD)$`, x86PackedRowCounts{
+			names: 24, mmx: 6, broadcast: 72,
+			rows: [3]int{12, 24, 72}, formats: [3]int{24, 48, 288}, widths: [3]int{144, 120, 96},
+		})
 }
 
 func TestX86PackedUnpackEncodingAxes(t *testing.T) {

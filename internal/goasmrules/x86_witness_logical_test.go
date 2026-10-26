@@ -2,73 +2,18 @@ package goasmrules
 
 import (
 	"bytes"
-	"regexp"
 	"runtime"
 	"strconv"
-	"strings"
 	"testing"
 )
 
 func TestX86PackedLogicalRowsShareBinaryWitnesses(t *testing.T) {
-	legacy, err := LoadX86LegacyRules(runtime.GOROOT())
-	if err != nil {
-		t.Fatal(err)
-	}
-	avx, err := LoadX86AVXRules(runtime.GOROOT())
-	if err != nil {
-		t.Fatal(err)
-	}
-	rows, err := X86PackedLogicalRows(legacy, avx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	ids, names := map[string]bool{}, map[string]bool{}
-	generationRows, formats := map[string]int{}, map[string]int{}
-	widths := map[int]int{}
-	for _, row := range rows {
-		if row.ID == "" || ids[row.ID] || len(row.Witnesses) < 2 {
-			t.Fatal("lost official row or register/memory witness", row.ID)
-		}
-		ids[row.ID], names[row.Opcode] = true, true
-		generationRows[row.Witnesses[0].Generation]++
-		for _, witness := range row.Witnesses {
-			formats[witness.Generation]++
-			widths[witness.Width]++
-			if witness.Generation == "evex" && (witness.Encoding[0] != 0x62 ||
-				!strings.HasSuffix(witness.Second, "17") || !strings.HasSuffix(witness.Destination, "18")) {
-				t.Fatal("EVEX row could silently select VEX", row.ID)
-			}
-		}
-	}
-	if len(rows) != 132 || len(names) != 32 || generationRows["legacy"] != 12 ||
-		generationRows["vex"] != 24 || generationRows["evex"] != 96 ||
-		formats["legacy"] != 24 || formats["vex"] != 48 || formats["evex"] != 432 ||
-		widths[128] != 192 || widths[256] != 168 || widths[512] != 144 {
-		t.Fatalf("logical denominator drift: rows=%d names=%d generations=%v formats=%v widths=%v",
-			len(rows), len(names), generationRows, formats, widths)
-	}
-	member := regexp.MustCompile(`^(V?P(ANDN?|OR|XOR)(D|Q)?|V?(ANDN?|OR|XOR)(PS|PD))$`)
-	check := func(name string) {
-		if member.MatchString(name) && !names[name] {
-			t.Fatal("official logical family member omitted", name)
-		}
-	}
-	mmx := 0
-	for _, entry := range legacy.Optab {
-		check(entry.Opcode)
-		for _, row := range entry.Rows {
-			if names[entry.Opcode] && strings.Join(row.Classes, ",") == "Ymm,Ymr" {
-				mmx++
-			}
-		}
-	}
-	for _, row := range avx {
-		check(row.Opcode)
-	}
-	if mmx != 4 {
-		t.Fatal("separate MMX region inventory drift", mmx)
-	}
-	t.Logf("%s: 132 original rows / 504 expectations; four MMX rows separate, no translation/runtime claim", runtime.Version())
+	x86CheckPackedRowInventory(t, X86PackedLogicalRows,
+		`^(V?P(ANDN?|OR|XOR)(D|Q)?|V?(ANDN?|OR|XOR)(PS|PD))$`,
+		`(D|Q|PS|PD)$`, x86PackedRowCounts{
+			names: 32, mmx: 4, broadcast: 144,
+			rows: [3]int{12, 24, 96}, formats: [3]int{24, 48, 432}, widths: [3]int{192, 168, 144},
+		})
 }
 
 func TestX86PackedLogicalLegacyPrefixAxes(t *testing.T) {

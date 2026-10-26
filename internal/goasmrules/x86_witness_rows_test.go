@@ -2,198 +2,59 @@ package goasmrules
 
 import (
 	"bytes"
-	"runtime"
 	"strings"
 	"testing"
 )
 
 func TestX86PackedNarrowRowsShareBinaryWitnesses(t *testing.T) {
-	legacy, err := LoadX86LegacyRules(runtime.GOROOT())
-	if err != nil {
-		t.Fatal(err)
-	}
-	avx, err := LoadX86AVXRules(runtime.GOROOT())
-	if err != nil {
-		t.Fatal(err)
-	}
-	rows, err := X86PackedNarrowRows(legacy, avx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	ids, names := map[string]bool{}, map[string]bool{}
-	generations, widths := map[string]int{}, map[int]int{}
-	formats, broadcast := 0, 0
-	for _, row := range rows {
-		if row.ID == "" || ids[row.ID] || len(row.Witnesses) < 2 {
-			t.Fatal("lost original narrow row or register/memory witness", row.ID)
-		}
-		ids[row.ID], names[row.Opcode] = true, true
-		generations[row.Witnesses[0].Generation]++
-		for _, witness := range row.Witnesses {
-			formats++
-			widths[witness.Width]++
-			if witness.Generation == "evex" && (witness.Encoding[0] != 0x62 ||
-				!strings.HasSuffix(witness.Second, "17") || !strings.HasSuffix(witness.Destination, "18")) {
-				t.Fatal("EVEX narrow row could select VEX", row.ID)
-			}
-			if witness.Broadcast {
-				broadcast++
-				if !witness.Memory || witness.Generation != "evex" || !strings.HasSuffix(row.Opcode, "DW") {
-					t.Fatal("only EVEX dword-input memory packs admit broadcast", row.ID)
-				}
-			}
-		}
-	}
-	if len(rows) != 36 || len(names) != 8 || generations["legacy"] != 4 ||
-		generations["vex"] != 8 || generations["evex"] != 24 || formats != 114 ||
-		widths[128] != 46 || widths[256] != 38 || widths[512] != 30 || broadcast != 18 {
-		t.Fatalf("narrow denominator drift: rows=%d names=%d generations=%v formats=%d widths=%v broadcast=%d",
-			len(rows), len(names), generations, formats, widths, broadcast)
-	}
-	check := func(name string) {
-		if strings.HasPrefix(strings.TrimPrefix(name, "V"), "PACK") && !names[name] {
-			t.Fatal("official pack family member omitted", name)
-		}
-	}
-	mmx := 0
-	for _, entry := range legacy.Optab {
-		check(entry.Opcode)
-		for _, row := range entry.Rows {
-			if names[entry.Opcode] && strings.Join(row.Classes, ",") == "Ymm,Ymr" {
-				mmx++
-			}
-		}
-	}
-	for _, row := range avx {
-		check(row.Opcode)
-	}
-	if mmx != 3 {
-		t.Fatal("separate MMX pack region inventory drift", mmx)
-	}
+	x86CheckPackedRowInventory(t, X86PackedNarrowRows, `^V?PACK`, `DW$`, x86PackedRowCounts{
+		names: 8, mmx: 3, broadcast: 18,
+		rows: [3]int{4, 8, 24}, formats: [3]int{8, 16, 90}, widths: [3]int{46, 38, 30},
+	})
 }
 
 func TestX86PackedAverageMultiplyRowsShareBinaryWitnesses(t *testing.T) {
-	legacy, err := LoadX86LegacyRules(runtime.GOROOT())
-	if err != nil {
-		t.Fatal(err)
-	}
-	avx, err := LoadX86AVXRules(runtime.GOROOT())
-	if err != nil {
-		t.Fatal(err)
-	}
-	rows, err := X86PackedAverageMultiplyRows(legacy, avx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	ids, names := map[string]bool{}, map[string]bool{}
-	generationRows, generationFormats := map[string]int{}, map[string]int{}
-	widthFormats := map[int]int{}
-	for _, row := range rows {
-		if row.ID == "" || ids[row.ID] || len(row.Witnesses) < 2 {
-			t.Fatal("missing original row identity or register/memory witness", row.ID)
-		}
-		ids[row.ID], names[row.Opcode] = true, true
-		generationRows[row.Witnesses[0].Generation]++
-		for _, witness := range row.Witnesses {
-			generationFormats[witness.Generation]++
-			widthFormats[witness.Width]++
-			if witness.Generation == "evex" && (witness.Encoding[0] != 0x62 ||
-				!strings.HasSuffix(witness.Second, "17") || !strings.HasSuffix(witness.Destination, "18")) {
-				t.Fatal("official EVEX identity can fall back to VEX", row.ID)
-			}
-		}
-	}
-	if len(rows) != 90 || len(names) != 20 || generationRows["legacy"] != 10 ||
-		generationRows["vex"] != 20 || generationRows["evex"] != 60 ||
-		generationFormats["legacy"] != 20 || generationFormats["vex"] != 40 || generationFormats["evex"] != 198 ||
-		widthFormats[128] != 106 || widthFormats[256] != 86 || widthFormats[512] != 66 {
-		t.Fatalf("average/multiply denominator drift: rows=%d names=%d generations=%v formats=%v widths=%v",
-			len(rows), len(names), generationRows, generationFormats, widthFormats)
-	}
-	mmx := 0
-	for _, entry := range legacy.Optab {
-		if !names[entry.Opcode] {
-			continue
-		}
-		for _, row := range entry.Rows {
-			if strings.Join(row.Classes, ",") == "Ymm,Ymr" {
-				mmx++
-			}
-		}
-	}
-	if mmx != 7 {
-		t.Fatalf("separate MMX region inventory drift: %d", mmx)
-	}
-	t.Logf("%s: 90 canonical rows / 258 register, memory, width and mask expectations; seven MMX rows remain outside this scope, no translation/runtime claim", runtime.Version())
+	x86CheckPackedRowInventory(t, X86PackedAverageMultiplyRows,
+		`^V?(PAVG[BW]|PMUL(LW|HW|HUW|HRSW|DQ|ULQ|UDQ)|PMADD(UBSW|WL|WD))$`,
+		`^VPMUL(DQ|UDQ)$`, x86PackedRowCounts{
+			names: 20, mmx: 7, broadcast: 18,
+			rows: [3]int{10, 20, 60}, formats: [3]int{20, 40, 198}, widths: [3]int{106, 86, 66},
+		})
 }
 
 func TestX86PackedBinaryPilotRows(t *testing.T) {
-	legacy, err := LoadX86LegacyRules(runtime.GOROOT())
-	if err != nil {
-		t.Fatal(err)
-	}
-	avx, err := LoadX86AVXRules(runtime.GOROOT())
-	if err != nil {
-		t.Fatal(err)
-	}
-	rows, err := X86PackedBinaryPilotRows(legacy, avx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	seen, names := map[string]bool{}, map[string]bool{}
-	legacyRows, avxRows, witnesses := 0, 0, 0
-	for _, row := range rows {
-		if seen[row.ID] || row.ID == "" {
-			t.Fatalf("lost distinct official row identity: %q", row.ID)
-		}
-		seen[row.ID], names[row.Opcode] = true, true
-		if strings.HasPrefix(row.ID, "optab/") {
-			legacyRows++
-		} else {
-			avxRows++
-		}
-		if len(row.Witnesses) < 2 {
-			t.Fatalf("%s lacks register/memory witnesses", row.ID)
-		}
+	inventory := x86CheckPackedRowInventory(t, X86PackedBinaryPilotRows,
+		`^V?(P(ADD|SUB)(B|W|L|D|Q|SB|SW|USB|USW)|PMULL[DQ])$`,
+		`[DQ]$`, x86PackedRowCounts{
+			names: 35, mmx: 7, broadcast: 54,
+			rows: [3]int{17, 34, 108}, formats: [3]int{34, 68, 378}, widths: [3]int{194, 160, 126},
+		})
+	for _, row := range inventory.rows {
 		for _, witness := range row.Witnesses {
-			witnesses++
-			if len(witness.Encoding) < 4 || witness.Instruction == "" {
-				t.Fatalf("%s has an incomplete witness: %+v", row.ID, witness)
-			}
-			if witness.Generation == "evex" && (!strings.HasSuffix(witness.Second, "17") ||
-				!strings.HasSuffix(witness.Destination, "18") || witness.Encoding[0] != 0x62) {
-				t.Fatalf("%s can accidentally select VEX: %+v", row.ID, witness)
+			if len(witness.Encoding) < 4 {
+				t.Fatal("integer pilot lost its mandatory prefix or vector encoding", row.ID, witness)
 			}
 		}
-	}
-	if legacyRows != 17 || avxRows != 142 || len(names) != 35 || witnesses != 480 {
-		t.Fatalf("pilot denominator changed: legacy=%d avx=%d names=%d witnesses=%d", legacyRows, avxRows, len(names), witnesses)
 	}
 	for _, name := range []string{"PADDD", "PMULLW", "VPMULLW"} {
-		if names[name] {
+		if inventory.names[name] {
 			t.Fatalf("alias or unmodified word multiply entered pilot: %s", name)
 		}
 	}
-	mmx, wordMultiply := 0, 0
-	for _, entry := range legacy.Optab {
-		for _, row := range entry.Rows {
-			if names[entry.Opcode] && strings.Join(row.Classes, ",") == "Ymm,Ymr" {
-				mmx++
-			}
-			if entry.Opcode == "PMULLW" {
-				wordMultiply++
-			}
+	wordMultiply := 0
+	for _, entry := range inventory.legacy.Optab {
+		if entry.Opcode == "PMULLW" {
+			wordMultiply += len(entry.Rows)
 		}
 	}
-	for _, row := range avx {
+	for _, row := range inventory.avx {
 		if row.Opcode == "VPMULLW" {
 			wordMultiply++
 		}
 	}
-	if mmx != 7 || wordMultiply != 10 {
-		t.Fatalf("outside-pilot inventory changed: MMX add=%d, word multiply=%d", mmx, wordMultiply)
+	if wordMultiply != 10 {
+		t.Fatal("outside-pilot word multiply inventory changed", wordMultiply)
 	}
-	t.Logf("%s: 159 original rows, 35 canonical opcodes, 480 syntax/encoding expectations; not translation coverage", runtime.Version())
 }
 
 func TestX86PackedBinaryRowEncodingAndFailClosed(t *testing.T) {
@@ -256,53 +117,21 @@ func TestX86PackedBinaryLegacyRowUsesSelectedPrefixOffset(t *testing.T) {
 }
 
 func TestX86PackedIntegerMinMaxRowsShareBinaryWitnesses(t *testing.T) {
-	legacy, err := LoadX86LegacyRules(runtime.GOROOT())
-	if err != nil {
-		t.Fatal(err)
-	}
-	avx, err := LoadX86AVXRules(runtime.GOROOT())
-	if err != nil {
-		t.Fatal(err)
-	}
-	rows, err := X86PackedIntegerMinMaxRows(legacy, avx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	names, ids := map[string]bool{}, map[string]bool{}
-	legacyRows, formats, narrowEVEX := 0, 0, 0
-	for _, row := range rows {
-		if row.ID == "" || ids[row.ID] {
-			t.Fatal("missing or duplicate original min/max row", row.ID)
-		}
-		ids[row.ID], names[row.Opcode] = true, true
-		if strings.HasPrefix(row.ID, "optab/") {
-			legacyRows++
-		}
+	inventory := x86CheckPackedRowInventory(t, X86PackedIntegerMinMaxRows,
+		`^V?P(MIN|MAX)`, `[DQ]$`, x86PackedRowCounts{
+			names: 28, broadcast: 72,
+			rows: [3]int{12, 24, 96}, formats: [3]int{24, 48, 360}, widths: [3]int{168, 144, 120},
+		})
+	narrowEVEX := 0
+	for _, row := range inventory.rows {
 		for _, witness := range row.Witnesses {
-			formats++
 			if witness.Generation == "evex" && witness.Width < 512 && !witness.Masked &&
 				!witness.Broadcast && !strings.HasSuffix(row.Opcode, "Q") {
 				narrowEVEX++
-				if witness.Encoding[0] != 0x62 || !strings.HasSuffix(witness.Second, "17") {
-					t.Fatal("unmasked narrow EVEX row can fall back to VEX", row.ID)
-				}
 			}
 		}
 	}
-	if len(rows) != 132 || legacyRows != 12 || len(names) != 28 || formats != 432 || narrowEVEX != 48 {
-		t.Fatalf("min/max inventory drift: rows=%d legacy=%d names=%d formats=%d narrowEVEX=%d",
-			len(rows), legacyRows, len(names), formats, narrowEVEX)
-	}
-	checkMember := func(opcode string) {
-		base := strings.TrimPrefix(opcode, "V")
-		if (strings.HasPrefix(base, "PMIN") || strings.HasPrefix(base, "PMAX")) && !names[opcode] {
-			t.Fatalf("new official min/max member is absent from the independent scope: %s", opcode)
-		}
-	}
-	for _, entry := range legacy.Optab {
-		checkMember(entry.Opcode)
-	}
-	for _, row := range avx {
-		checkMember(row.Opcode)
+	if narrowEVEX != 48 {
+		t.Fatal("unmasked narrow non-Q EVEX inventory drift", narrowEVEX)
 	}
 }
