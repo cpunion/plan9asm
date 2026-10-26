@@ -7,14 +7,33 @@ and [validation](validation.md). Preserve original failed receipts.
 ## Current priority: finish amd64 first
 
 The public `f2e6a88b5` [CI run](https://github.com/xgo-dev/plan9asm/actions/runs/40317000859)
-has failures and is being allowed to finish before another batch is published.
-The local batch fixes oversized exact test selectors without changing the
-8,941-root inventory or shard ownership, restores cross-width MXCSR targets,
-and resolves feature-consumer cache/config/temp paths before package selection.
-Four stale boundary tests retain their original positive sources and independent
-rejection controls; 19 roots / 283 children pass, with no skips. Generated-header
-CPP, ordinary ABI0 outgoing call slots and native ISA checks remain under repair.
-These focused results do not qualify the complete integrated head.
+finished naturally: 325 jobs, 247 successful and 78 failed. All failures are
+accounted for: 57 jobs share ten failed test roots, four exceed the exact-selector
+argument limit, and 17 completion jobs correctly reject failed prerequisite parts.
+The local repair batch preserves exact shard membership and the argument limit,
+restores cross-width MXCSR targets, retains generated CPP and dynamic-frame
+diagnostics, resolves physical source paths, and routes complete typed ABI0
+forwarders through their existing call lowering. LLVM22's actual EVEX extension
+families now drive the native ISA checker. Original positive source witnesses
+and genuine rejection controls remain; no failed receipt was relabeled.
+
+The integrated production source `48f14c4cf` passes 387 root-package roots /
+22,198 children with zero failures/skips in 805.401 seconds. Separate current-SDK
+checks pass shared preprocessing (9 roots / 31 children), CLI integration
+(35 / 205), source profiles (6 / 45), readonly storage (6 / 65), owned processes
+(12 / 47), and actual runner/selector tests (6 / 4), all with zero failures/skips.
+The same process fix has an independently audited Linux
+[receipt](https://github.com/cpunion/plan9asm/actions/runs/40339136434): 11 roots /
+44 children, Go1.27.2, LLVM22.1.8 and Node22.23.4, including the actual failed
+module cancellation test. Its fork-only diagnostic files are not part of PR40.
+These results still require the complete new public CI run before qualification.
+
+The retired dated-branch diagnostic workflow and its scheduling-only policies
+are removed, reducing the patch by 4,157 lines. All 79 semantic auditor tests
+remain, as do the main/reusable CI workflows and Go tests. Node22.23.4 passes all
+573 remaining policy tests with no skips. Historical receipts remain auditable
+from the fork history; its extra Windows Go1.20 stress profile is not claimed as
+an equivalent current main-CI run.
 
 The complete Go 1.27.2 / LLVM22 Linux/amd64 object benchmark at `bd10bd410`
 passes **37/55**, with 18 failures and zero N/A/unattempted cases. SHA256 is
