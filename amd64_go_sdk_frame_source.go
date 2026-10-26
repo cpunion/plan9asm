@@ -145,14 +145,17 @@ func (source *GoAMD64FrameSource) sdkFrameRecords() (map[string]goAMD64FrameFunc
 			source.origins[observed.File] = strings.Count(string(bytes), "\n") + 1
 		}
 		var observed map[string]goAMD64FrameFunction
-		if len(file.Data)+len(file.Globl) != 0 {
+		if len(file.Data)+len(file.Globl) != 0 || bytes.Contains(native.OriginalListing, []byte("\trel ")) {
 			data, readErr := source.fixedLocalDataObservation(input.Name, cpp.Output)
 			if readErr != nil {
 				return nil, nil, readErr
 			}
-			listing, readErr := goAMD64FrameDataListing(native.OriginalListing, data)
-			if readErr != nil {
-				return nil, nil, readErr
+			listing := native.OriginalListing
+			if len(data.Layouts) != 0 {
+				listing, readErr = goAMD64FrameDataListing(listing, data)
+				if readErr != nil {
+					return nil, nil, readErr
+				}
 			}
 			observed, err = goAMD64FrameListingWithDataObject(listing, file, origin.pkg, source.origins, data, nil,
 				source.request.Target, source.request.Directory, source.env["GOROOT"])

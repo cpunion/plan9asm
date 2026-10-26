@@ -364,14 +364,19 @@ func captureGoAMD64FrameSource(ctx context.Context, pkg GoPackage, request GoAMD
 			}
 		}
 		var functions map[string]goAMD64FrameFunction
-		if len(file.Data)+len(file.Globl) != 0 {
+		// An ordinary symbolic reference also needs its complete original
+		// relocation inventory, even when this source defines no ASM DATA.
+		if len(file.Data)+len(file.Globl) != 0 || source.numericalBinding == nil && bytes.Contains(listing, []byte("\trel ")) {
 			observed, readErr := source.frameDataObject(expanded, objectBytes)
 			if readErr != nil {
 				return nil, readErr
 			}
-			filtered, readErr := goAMD64FrameDataListing(listing, observed)
-			if readErr != nil {
-				return nil, readErr
+			filtered := listing
+			if len(observed.Layouts) != 0 {
+				filtered, readErr = goAMD64FrameDataListing(listing, observed)
+				if readErr != nil {
+					return nil, readErr
+				}
 			}
 			var unwind *gostaticstorage.WindowsAMD64AssemblyUnwind
 			if source.request.Target == "windows/amd64" {
