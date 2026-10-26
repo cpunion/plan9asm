@@ -6,16 +6,42 @@ and [validation](validation.md). Preserve original failed receipts.
 
 ## Current priority: finish amd64 first
 
-The complete Go 1.27.2 / LLVM22 Linux/amd64 object benchmark at `a5c817d58`
-passes **36/55**, with 19 failures and zero N/A/unattempted cases. Complete
-GCM joins the restored SHA512 and SHA3 files; no previously passing file
-regresses. Wall time is 64 seconds (61.895 tool seconds); this is not a repeated
-end-to-end speedup measurement. SHA256 now reaches SHA256RNDS2 result analysis;
-SHA1 reaches an unrecognized original machine boundary. These two remain
-whole-file failures. Inspection also found approximate SHA lowering, so the
-seven-instruction SHA family needs exact semantics and independent execution,
-not just effect registration. Ordinary helper calls remain unresolved
-independently of runtime-entry contracts.
+The complete Go 1.27.2 / LLVM22 Linux/amd64 object benchmark at `3791b7d46`
+passes **36/55**, with 19 failures and zero N/A/unattempted cases. GCM,
+SHA512 and SHA3 remain restored, with no previously passing file regressing.
+Wall time is 66 seconds (64.238 tool seconds); this is not a repeated speedup
+measurement. SHA256 now reaches legacy packed arithmetic through a RODATA
+address; SHA1 reaches fixed-frame XCHG. Both remain whole-file failures.
+Ordinary private helper calls remain separate unresolved work, not runtime
+entry exclusions.
+
+The integrated Go 1.27.3 / LLVM22 receipt at the same revision passes
+**132 roots / 5,507 children**, zero failures/skips, in 170.647 seconds.
+Every root and child ran and terminated exactly once. It includes exact SHA,
+VEX block transfers and logical zero dependencies, packed rotate inputs and
+writeback, commuted pointer addition, and actual retained frame-state budgets.
+The packed rotate implementation replaces its duplicate parser with the shared
+typed grammar (production net +10 lines); commuted ADD adds 29 production lines.
+The original frame-state storage and work limits remain unchanged: only actual
+CFG boundary states count toward storage. The expanded minimum-SDK gate and
+later batches still need independent qualification.
+
+The latest original-Go Linux native [receipt](https://github.com/cpunion/plan9asm/actions/runs/40298037413)
+qualifies `76437761b`: **33 roots / 428 children**, zero failures/skips, in
+336.451 seconds. Source identity and the complete unique inventory were checked.
+It includes all seven SHA instructions, SHA live/dead memory faults, VEX block
+transfers and logical self-zeroing. SHA's unaligned behavior is compared with
+the original Go opcode on the actual CPU; it does not assume AES's alignment
+fault or relax the private-frame contract. The preceding SHA fault receipt
+remains failed. This native receipt predates rotate, commuted ADD and the frame
+state budget repair; portable LLVM execution does not qualify native AVX512.
+
+Public PR40 remains draft at `728520def`; its earlier green checks do not
+certify these local batches. LLGo PR2694 is separately draft at `2e820f5c2`
+with 131 passing checks and two release skips as of this checkpoint. Update its
+exact translator pin only after publishing a verified fork revision.
+
+### Earlier receipts
 
 The earlier original-Go Linux native [receipt](https://github.com/cpunion/plan9asm/actions/runs/40274466633)
 qualifies `c2eeeda34`: 19 roots / 294 children, zero failures/skips, in
@@ -35,9 +61,10 @@ passes at `e6c475a9f`: 26 roots / 370 children, zero failures/skips, in
 405.035 seconds. It adds counted loops, overlapping iterations, scalar lanes
 and GP-aliased private frame addresses. Its complete artifact was checked
 against the exact source and manifest. The [next native batch](https://github.com/cpunion/plan9asm/actions/runs/40289414541)
-is pending at `fae1aa8bc`: 29 roots / 397 children, additionally covering
+passes at `fae1aa8bc`: 29 roots / 397 children, additionally covering
 bounded DATA indices, early returns and separated counter updates.
-Earlier execution and object receipts cannot certify this later execution.
+The exact artifact passed independent source/inventory checks, with no
+failures/skips, in 449.777 seconds. It cannot certify later source revisions.
 
 The integrated Go 1.20.14 / LLVM22 receipt at `fae1aa8bc` passes 63 roots /
 2,341 children in 79.946 seconds, zero failures/skips. The exact root inventory
@@ -70,10 +97,13 @@ Twelve analysis benchmarks, each with five samples, reduce allocation counts
 set and all failure diagnostics remain identical. One wall observation falls
 97 to 65 seconds; it is not a repeated end-to-end speedup measurement.
 
-Next: correct the complete legacy SHA family through shared typed grammar and
-exact numerical semantics; verify the pending native batch; then re-run the
-complete source benchmark and address ordinary helper contracts. Retain each
-failed receipt and whole-file failure until its complete replacement passes.
+Next: finish typed XCHG frame effects and bounded RODATA arithmetic, then
+re-run complete SHA sources. Repair encoding-aware vector/scalar writeback
+across the remaining writer paths. Qualify the integrated minimum SDK and
+official inventory, publish one coherent fork batch, and watch current-head CI.
+Ordinary helper call continuations still need independent implementation and
+execution tests. Retain each failed receipt until its complete replacement
+passes; do not relabel an unresolved source as a runtime exclusion.
 
 The receipt chronology below retains earlier failures and narrower evidence;
 it does not replace this latest snapshot or certify a later source revision.
