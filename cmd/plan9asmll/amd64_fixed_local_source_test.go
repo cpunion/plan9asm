@@ -55,6 +55,11 @@ func amd64FixedLocalCLIFixture(t *testing.T, operation string) (*packages.Packag
 
 func amd64FixedLocalCLICompleteFixture(t *testing.T, operation, declaration string) (*packages.Package, string, compileConfig) {
 	t.Helper()
+	return amd64FixedLocalCLISourceFixture(t, amd64FixedLocalCLIAssembly(operation), declaration)
+}
+
+func amd64FixedLocalCLISourceFixture(t *testing.T, assembly, declaration string) (*packages.Package, string, compileConfig) {
+	t.Helper()
 	dir, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -62,7 +67,7 @@ func amd64FixedLocalCLICompleteFixture(t *testing.T, operation, declaration stri
 	for name, source := range map[string]string{
 		"go.mod":        "module example.invalid/fixedlocal\n\ngo 1.20\n",
 		"value.go":      declaration,
-		"value_amd64.s": amd64FixedLocalCLIAssembly(operation),
+		"value_amd64.s": assembly,
 	} {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(source), 0600); err != nil {
 			t.Fatal(err)
@@ -115,7 +120,7 @@ func amd64FixedLocalCLICompleteFixture(t *testing.T, operation, declaration stri
 	if err != nil || len(stderr) != 0 {
 		t.Fatalf("actual original export: %v\n%s%s", err, stdout, stderr)
 	}
-	t.Logf("original source SHA=%x; actual Go export:\n%s", sha256.Sum256([]byte(amd64FixedLocalCLIAssembly(operation))), stdout)
+	t.Logf("original source SHA=%x; actual Go export:\n%s", sha256.Sum256([]byte(assembly)), stdout)
 	return pkgs[0], input, config
 }
 

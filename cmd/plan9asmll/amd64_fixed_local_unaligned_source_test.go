@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -8,6 +9,39 @@ import (
 
 	"github.com/xgo-dev/plan9asm"
 )
+
+func TestCompileOneAMD64FixedLocalScalarSource(t *testing.T) {
+	t.Setenv("GOCACHE", t.TempDir())
+	for _, width := range []string{"B", "W", "L", "Q"} {
+		t.Run(width, func(t *testing.T) {
+			var assembly strings.Builder
+			assembly.WriteString("TEXT ·Value(SB),4,$64-16\nMOVQ a+0(FP),AX\nMOVQ AX,8(SP)\n")
+			for _, operation := range []string{
+				"MOV%s AX,8(SP)", "MOV%s 8(SP),AX", "MOV%s $1,8(SP)",
+				"ADD%s $1,8(SP)", "XOR%s AX,8(SP)", "NOT%s 8(SP)",
+				"ROL%s $1,8(SP)", "CMP%s 8(SP),AX",
+			} {
+				fmt.Fprintf(&assembly, operation+"\n", width)
+			}
+			assembly.WriteString("MOVQ 8(SP),AX\nMOVQ AX,ret+8(FP)\nRET\n")
+			pkg, input, config := amd64FixedLocalCLISourceFixture(t, assembly.String(),
+				"package fixedlocal\nfunc Value(a uint64) uint64\n")
+			output := filepath.Join(t.TempDir(), "scalar.ll")
+			if err := compileOne(pkg, plan9asm.ArchAMD64, "linux", "amd64", "x86_64-unknown-linux-gnu",
+				asmTask{PkgPath: pkg.PkgPath, AsmFile: input, OutLL: output}, false, config); err != nil {
+				t.Fatalf("original Go scalar-only scratch source failed: %v", err)
+			}
+			ir, err := os.ReadFile(output)
+			if err != nil || !strings.Contains(string(ir), "fixed_local_native") {
+				t.Fatalf("scalar-only source lost original private-frame backing: %v", err)
+			}
+			info, err := os.Stat(strings.TrimSuffix(output, ".ll") + ".o")
+			if err != nil || !info.Mode().IsRegular() || info.Size() == 0 {
+				t.Fatalf("LLVM22 scalar-only source object missing: %v", err)
+			}
+		})
+	}
+}
 
 // These are ordinary complete source programs, not injected frame tokens.
 // The fixture first compiles the original Go assembly; compileOne must then

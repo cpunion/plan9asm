@@ -28,7 +28,11 @@ func GoAMD64FixedLocalFrameBindingNeeded(file *File, goarch string) bool {
 			}
 			memory, eligible := -1, false
 			physicalOnly := false
-			if form, known, err := fixedLocalConversionProperties(ins); known {
+			if _, known, err := x86ScalarRegisterLoadProperties(ins.Op, ins, goarch); known {
+				memory, eligible, physicalOnly = 0, err == nil, true
+			} else if _, known, err := x86ScalarRegisterStoreProperties(ins.Op, ins, goarch); known {
+				memory, eligible, physicalOnly = 1, err == nil, true
+			} else if form, known, err := fixedLocalConversionProperties(ins); known {
 				memory, eligible = form.memory, err == nil && !form.mmx
 			} else if form, known, err := amd64PackedVectorMoveProperties(ins, goarch); known {
 				memory, eligible = form.memory, err == nil && !form.undefinedOpcode()
@@ -51,6 +55,13 @@ func GoAMD64FixedLocalFrameBindingNeeded(file *File, goarch string) bool {
 				memory, eligible = form.memory, err == nil && form.legacy && !form.scalar && form.byteWidth == 16
 			} else if form, known, err := x86ConditionalMoveProperties(ins.Op, ins, goarch); known {
 				memory, eligible = 0, err == nil && form.source.Kind == OpMem
+			} else if effect, known, err := fixedLocalGPByteEffect(ins); known {
+				eligible, physicalOnly = err == nil && !effect.dynamicMemory, true
+				for _, operand := range effect.operands {
+					if operand.operand.Kind == OpMem && (operand.read || operand.write) {
+						memory = operand.index
+					}
+				}
 			}
 			if eligible && memory >= 0 && memory < len(ins.Args) {
 				source := ins.Args[memory]
@@ -59,7 +70,7 @@ func GoAMD64FixedLocalFrameBindingNeeded(file *File, goarch string) bool {
 				if source.Kind == OpMem && (source.Mem.Base == SP || source.Mem.Base == BP ||
 					source.Mem.Index == SP || source.Mem.Index == BP) {
 					if physicalOnly {
-						// Unaligned transport can use ordinary logical AUTO. Only
+						// Scalar and unaligned transport can use logical AUTO. Only
 						// physical SP/BP needs this additional source observer; the
 						// existing parser retains the distinct named displacement.
 						address, err := fixedLocalMemoryAddress(ins, memory, fn.FrameSize)

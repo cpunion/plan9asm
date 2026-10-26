@@ -350,9 +350,10 @@ func fixedLocalCheckVEXObjects(t *testing.T, witnesses []fixedLocalVEXWitness) {
 
 func BenchmarkGoAMD64FixedLocalVEXCandidate(b *testing.B) {
 	// This is the candidate query, not successful source proof, LLVM or
-	// native execution. Keep it stable across the RED and GREEN snapshots.
-	source := fixedLocalPackedAssembly(strings.Repeat("VPADDQ Y0,Y0,Y1\n", 32) +
-		"VMOVDQU 64(BP),Y0\n")
+	// native execution. No earlier scalar scratch store may short-circuit
+	// the register-only negative filter this benchmark measures.
+	source := "TEXT ·Value(SB),4,$256-0\n" + strings.Repeat("VPADDQ Y0,Y0,Y1\n", 32) +
+		"VMOVDQU 64(BP),Y0\nRET\n"
 	file, err := Parse(ArchAMD64, source)
 	if err != nil {
 		b.Fatal(err)
@@ -367,8 +368,8 @@ func BenchmarkGoAMD64FixedLocalVEXCandidate(b *testing.B) {
 }
 
 func TestGoAMD64FixedLocalVEXCandidateAllocations(t *testing.T) {
-	source := fixedLocalPackedAssembly(strings.Repeat("VPADDQ Y0,Y0,Y1\n", 32) +
-		"VMOVDQU 64(BP),Y0\n")
+	source := "TEXT ·Value(SB),4,$256-0\n" + strings.Repeat("VPADDQ Y0,Y0,Y1\n", 32) +
+		"VMOVDQU 64(BP),Y0\nRET\n"
 	file, err := Parse(ArchAMD64, source)
 	if err != nil {
 		t.Fatal(err)
