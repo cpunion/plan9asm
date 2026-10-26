@@ -14,8 +14,11 @@ jobs:
     env:
       GOMAXPROCS: '4'
       GOTOOLCHAIN: local
+      SOURCE_HEAD: '4cd3b05bbc10426bfa2a463b7d092dacab09b17d'
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 3
       - name: Install LLVM 22
         timeout-minutes: 14
         run: bash scripts/install-ci-llvm22-ubuntu.sh
@@ -32,7 +35,10 @@ jobs:
           ulimit -c 0
           mkdir -p _out/amd64-gp-native
           git rev-parse HEAD > _out/amd64-gp-native/head.txt
-          git rev-parse HEAD^ > _out/amd64-gp-native/source-head.txt
+          git rev-parse HEAD^ > _out/amd64-gp-native/parent-head.txt
+          git rev-parse "$SOURCE_HEAD" > _out/amd64-gp-native/source-head.txt
+          git diff --exit-code "$SOURCE_HEAD" HEAD -- . \
+            ':(exclude).github/workflows/pr40-owned-process-probe.yml'
           test "$(uname -m)" = x86_64
           test "$(go env GOARCH)" = amd64
           go version > _out/amd64-gp-native/go-version.txt
