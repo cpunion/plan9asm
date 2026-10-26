@@ -8,19 +8,21 @@ certificate. Read [architecture](architecture.md),
 
 ## Publication and CI
 
-PR40 remains draft. Published head `5406c2756` is
-[running full CI](https://github.com/xgo-dev/plan9asm/actions/runs/40383917481).
+PR40 remains draft. Published head `5406c2756`
+[completed full CI naturally](https://github.com/xgo-dev/plan9asm/actions/runs/40383917481):
+**325 jobs, all successful**, including race, cross-runtime, complete inventories
+and coverage aggregation. Its main statement coverage is **88.0%**. This run
+was not cancelled or rerun; later local changes need their own qualification.
 The preceding run at `bdbefa7e4`
 [completed naturally](https://github.com/xgo-dev/plan9asm/actions/runs/40366498164):
 **325 jobs, 312 successful, 13 failed**. Six CLI test jobs shared one ordinary
 ABI0 CALL regression; seven completion jobs correctly rejected their failed
 prerequisites. All six test jobs now have independent passing receipts in the
-new run, including Windows. Remaining jobs still need their own final outcomes.
-The preceding run's main statement coverage was 88.0%; its coverage completion
-failed on the CLI prerequisite, not the main coverage calculation or upload.
+new run, including Windows. The preceding coverage completion failed on the
+CLI prerequisite, not the main coverage calculation or upload.
 Keep those failed receipts. Both review threads are resolved; no reviewer has
-approved the contribution. Neither resolved threads nor earlier passing jobs
-qualify an unfinished current run.
+approved the contribution. Passing CI and resolved threads do not establish
+complete architecture coverage or external review approval.
 
 The published repair batch addresses:
 
@@ -56,7 +58,8 @@ build constraint. Both SDKs also pass all 19 rule-reader roots / 58 children.
 Root/CLI builds, root vet, all 5,015 tracked Go files' formatting, actionlint
 and all five official corpus baselines pass; Node22.23.4 passes 573 policy
 tests. Later documentation-only changes preserve these tested Go/module sources.
-A complete current-head CI run, coverage and review remain required.
+That published source now has complete passing CI and coverage; external review
+and qualification of subsequent local changes remain required.
 The preceding run's CLI failure exposed a private-CALL routing regression:
 `TestCompileOneInfersVoidABI0LocalHelperAtTargetWordSize` must retain the
 existing ordinary ABI0 helper with an explicit target-word parameter extent.
@@ -68,8 +71,8 @@ call through the shared ABI0 layout validator. Complete CLI passes are
 335 roots / 1,703 children on Go1.25.14 and 398 / 2,186 on Go1.27.3;
 104 related root tests / 2,018 children also pass. All have zero failures/skips.
 Twelve new positive combinations compile LLVM22 objects and 27 negative controls
-remain rejected. The repair is in published `5406c2756`. Let that complete run
-finish naturally before the next batch push.
+remain rejected. The repair is in published `5406c2756`, whose complete run
+finished naturally before any subsequent batch push.
 
 The next local candidate `6eb0b953b` combines the pack join/parser changes below
 with the shared F128/I128 broadcast byte-boundary repair. That repair delegates
@@ -91,7 +94,7 @@ rule; current full CI still tests published `5406c2756`.
 
 | Scope | Qualified result | Limit |
 |---|---|---|
-| Public `bdbefa7e4` Linux cross-runtime owners | 16 owners; 562 roots / 4,586 children, zero failures/JSON skips | Fresh artifacts retain every previous case and add private CALL. Individual scopes include portable LLVM oracles; this is not native AVX512 acceptance. |
+| Public `5406c2756` Linux cross-runtime owners | 16 owners; 562 roots / 4,586 children, zero failures/JSON skips | Fresh artifacts retain every previous case, including private CALL. Individual scopes include portable LLVM oracles; this is not native AVX512 acceptance. |
 | Private helper CALL at `fc4daae9a` | [Official Linux run](https://github.com/cpunion/plan9asm/actions/runs/40358527392): 7 roots / 96 children, zero skips | 11 kernels × 8 inputs, original Go versus three APIs at O0/O2; not full AES execution. |
 | Private CALL local regression at `f358a4918` | 62 roots / 1,328 children, zero skips | Objects, source/return identity, negative controls and shared graph regressions. |
 | Complete Linux/amd64 standard-library objects | `fff470ab9`: 37/55; `fc4daae9a`: **38/55** | All files attempted; 17 failures, zero N/A. AES is the only newly passing file; all old passes remain. |
@@ -143,7 +146,8 @@ The four packed average/product families now share physical normalization in
 Go1.27.3 and Go1.20.14 each pass 123 roots / 10,776 children without skips.
 All 40 parser microbenchmarks remove one allocation; per-case median time falls
 15–33% across five samples. This does not measure whole-source performance;
-native execution of the refactor still requires the next complete CI.
+the existing execution owners subsequently pass in complete CI at `5406c2756`.
+Native AVX512 hardware acceptance remains separate.
 
 The unpack join at `eed7b44df` reuses the existing grammar and object driver:
 24 names require ten scope-selection lines, with no translator or grammar rule
@@ -157,7 +161,7 @@ rows, including overlapping VEX/EVEX encodings and 18 dword broadcast forms.
 Current/minimum SDKs each pass 27 roots / 353 children without skips, including
 all earlier initialized joins and the complete rule reader. Three MMX rows
 retain their separate region owner. This tested local commit is queued for the
-next batch; it is not part of the currently running published CI.
+next batch; it is not part of the completed published CI.
 
 Local `25555b5f0` also reuses the shared physical operand adapter for the complete
 pack family, removing 20 production lines and one allocation per parsed form.
