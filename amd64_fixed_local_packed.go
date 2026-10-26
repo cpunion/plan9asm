@@ -127,7 +127,7 @@ func fixedLocalMaskMoveStep(ins *Instr, state *x86FixedLocalState, proof *x86Fix
 		return true, nil
 	}
 	root, valid := x86CallerGP(destination.Reg)
-	if !valid || root == SP || root == BP || x86SourceGRegister(root) {
+	if !valid || root == SP {
 		return fail()
 	}
 	// Every KMOV GP destination zero-extends to the full architectural word.

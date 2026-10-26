@@ -15,6 +15,13 @@ type x86ScalarNativeStoreForm struct {
 }
 
 func x86ScalarNativeStoreProperties(op Op, ins Instr, arch string) (x86ScalarNativeStoreForm, bool, error) {
+	if len(ins.Args) != 2 || !x86OrdinaryNativeMemoryOperand(ins.Args[1], arch) {
+		return x86ScalarNativeStoreForm{}, false, nil
+	}
+	return x86ScalarRegisterStoreProperties(op, ins, arch)
+}
+
+func x86ScalarRegisterStoreProperties(op Op, ins Instr, arch string) (x86ScalarNativeStoreForm, bool, error) {
 	if len(ins.Args) != 2 || (ins.Args[0].Kind != OpReg && ins.Args[0].Kind != OpImm) || ins.Args[1].Kind != OpMem ||
 		ins.Args[1].Mem.Sym != "" || ins.Args[1].Mem.Segment != "" ||
 		ins.Args[1].Mem.Index == FS || ins.Args[1].Mem.Index == GS {
@@ -27,7 +34,7 @@ func x86ScalarNativeStoreProperties(op Op, ins Instr, arch string) (x86ScalarNat
 		register = Operand{Kind: OpReg, Reg: AX} // Validate only the shared native address/width row.
 	}
 	projected.Args = []Operand{ins.Args[1], register}
-	form, known, err := x86ScalarNativeLoadProperties(op, projected, arch)
+	form, known, err := x86ScalarRegisterLoadProperties(op, projected, arch)
 	if !known || err != nil {
 		return x86ScalarNativeStoreForm{}, known, err
 	}
@@ -41,6 +48,15 @@ func x86ScalarNativeStoreProperties(op Op, ins Instr, arch string) (x86ScalarNat
 		source.Reg = form.destination // Preserve the actual Go byte/REX interpretation.
 	}
 	return x86ScalarNativeStoreForm{source, form.source, form.bytes}, true, nil
+}
+
+func (c *amd64Ctx) scalarNativeStoreProperties(op Op, ins Instr) (x86ScalarNativeStoreForm, bool, error) {
+	if c.fixedLocal != nil {
+		if access, valid := c.fixedLocalMemoryAccess(ins, 1); valid && access.nativeInput {
+			return x86ScalarRegisterStoreProperties(op, ins, c.goarch)
+		}
+	}
+	return x86ScalarNativeStoreProperties(op, ins, c.goarch)
 }
 
 func (c *amd64Ctx) lowerScalarNativeStore(form x86ScalarNativeStoreForm, ins Instr) error {

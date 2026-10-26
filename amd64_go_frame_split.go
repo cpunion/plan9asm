@@ -113,7 +113,7 @@ func goAMD64FrameSplitProjection(fn goAMD64FrameFunction, text gostaticstorage.T
 		return true
 	}
 	// The exact ABI0 TLS materialization differs by OS. None of these reads
-	// is source-visible or grants the body permission to use TLS or R14.
+	// is source-visible or grants the body permission to read TLS or entry R14.
 	phase = "generated TLS load"
 	tlsOffset := int64(5)
 	segment := x86asm.FS

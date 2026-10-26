@@ -27,6 +27,11 @@ func fixedLocalGPRuntimeProgram(triple string) (string, string, string, string) 
 	} {
 		bodies = append(bodies, body+"MOVQ AX,0(SP)\n")
 	}
+	for _, register := range []string{"AX", "BX", "CX", "DX", "SI", "DI", "BP", "R8", "R9", "R10", "R11", "R12", "R13", "R14", "R15"} {
+		for _, width := range []string{"B", "W", "L", "Q"} {
+			bodies = append(bodies, fmt.Sprintf("MOVQ AX,%s\nADD%s $1,%s\nMOVQ %s,AX\nMOVQ AX,0(SP)\n", register, width, register, register))
+		}
+	}
 
 	var assembly, declarations, goRows, cRows, cDeclarations strings.Builder
 	prefix := ""
@@ -148,7 +153,7 @@ func TestGoAMD64FixedLocalTypedGPRuntimeObjects(t *testing.T) {
 	pkg, request, _, options := fixedLocalTransportFixture(t,
 		assembly, declarations, "linux/amd64", triple)
 	var names []string
-	for index := 0; index < 32; index++ {
+	for index := 0; index < 92; index++ {
 		names = append(names, fmt.Sprintf("%s.Value%d", pkg.Path, index))
 	}
 	fixedLocalFreshAPIs(t, pkg, request, options, []string{"Translate", "Module", "GoModule"},
@@ -174,8 +179,8 @@ func TestCrossLinuxRuntimeMatrixGoAMD64FixedLocalTypedGP(t *testing.T) {
 	t.Setenv("GOCACHE", t.TempDir())
 	assembly, declarations, original, driver := fixedLocalGPRuntimeProgram(execution.triple)
 	want := strings.Split(strings.TrimSpace(string(x86ScalarFloatIntegerOriginalOutput(t, execution, assembly, original))), "\n")
-	if len(want) != 32*15*3 {
-		t.Fatalf("original Go produced %d rows, want 32 kernels x 15 values x 3 observations", len(want))
+	if len(want) != 92*15*3 {
+		t.Fatalf("original Go produced %d rows, want 92 kernels x 15 values x 3 observations", len(want))
 	}
 	pkg, request, _, options := fixedLocalTransportFixture(t,
 		assembly, declarations, runtime.GOOS+"/amd64", execution.triple)

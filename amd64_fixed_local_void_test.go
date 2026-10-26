@@ -95,8 +95,8 @@ func TestGoAMD64FixedLocalVoidAllPathMemoryAndReturnNegatives(t *testing.T) {
 	base, sig := fixedLocalVoidAssembly(file), options.Sigs[pkg.Path+".Value"]
 	mutations := map[string]string{
 		"SP not restored":      strings.Replace(base, "MOVQ R11,SP", "MOVQ $0,R10", 1),
-		"BP write":             strings.Replace(base, "MOVQ AX,16(SP)", "MOVQ AX,BP\nMOVQ AX,16(SP)", 1),
-		"g write":              strings.Replace(base, "MOVQ AX,16(SP)", "MOVQ AX,R14\nMOVQ AX,16(SP)", 1),
+		"incoming BP read":     strings.Replace(base, "MOVQ AX,16(SP)", "MOVQ BP,AX\nMOVQ AX,16(SP)", 1),
+		"incoming R14 read":    strings.Replace(base, "MOVQ AX,16(SP)", "MOVQ R14,AX\nMOVQ AX,16(SP)", 1),
 		"input FP store":       strings.Replace(base, "MOVQ X0,AX", "MOVQ AX,a+0(FP)", 1),
 		"private FP escape":    strings.Replace(base, "MOVQ X0,AX", "MOVQ R11,a+0(FP)", 1),
 		"restored input store": strings.Replace(base, "MOVQ R11,SP\nRET", "MOVQ R11,SP\nMOVQ AX,a+0(FP)\nRET", 1),

@@ -12,7 +12,7 @@ func fixedLocalInputAddressStep(ins *Instr, state *x86FixedLocalState, proof *x8
 	}
 	write := func(destination Operand, origin int64, killed, defined uint8) (bool, error) {
 		root, valid := x86CallerGP(destination.Reg)
-		if destination.Kind != OpReg || !valid || root != destination.Reg || root == SP || root == BP || x86SourceGRegister(root) {
+		if destination.Kind != OpReg || !valid || root != destination.Reg || root == SP {
 			return fail()
 		}
 		delete(state.pointers, root)
@@ -45,7 +45,7 @@ func fixedLocalInputAddressStep(ins *Instr, state *x86FixedLocalState, proof *x8
 			}
 		}
 	}
-	if effect, known, err := x86TypedLEAByteEffect(ins.Op, *ins, "amd64"); known && err == nil && x86LEAWidth(ins.Op, "amd64") == 8 {
+	if effect, known, err := x86NamedLEAByteEffect(ins.Op, *ins, "amd64"); known && err == nil && x86LEAWidth(ins.Op, "amd64") == 8 {
 		memory := ins.Args[0].Mem
 		origin, pointer := state.opaque[memory.Base]
 		if pointer {

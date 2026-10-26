@@ -4,6 +4,14 @@ package plan9asm
 // FLAGS dependencies; this consumer must still establish every private read,
 // address origin and write. CMP/TEST retain their opposite immediate roles.
 func fixedLocalGPByteEffect(ins Instr) (x86TypedByteEffect, bool, error) {
+	if effect, known, err := x86NamedLEAByteEffect(ins.Op, ins, "amd64"); known {
+		for _, operand := range effect.operands {
+			if operand.operand.Reg == SP {
+				return x86TypedByteEffect{}, false, nil // Private SP arithmetic retains its separate role.
+			}
+		}
+		return effect, true, err
+	}
 	if effect, known, err := x86TypedGPByteEffect(ins.Op, ins, "amd64"); known {
 		return effect, true, err
 	}
@@ -123,7 +131,7 @@ func fixedLocalTypedByteStep(ins *Instr, state *x86FixedLocalState, proof *x86Fi
 			mask := x86CallerByteMask(operand.operand.Reg, operand.width)
 			_, private := state.pointers[root]
 			_, opaque := state.opaque[root]
-			if !valid || root == SP || root == BP || x86SourceGRegister(root) || mask == 0 ||
+			if !valid || root == SP || mask == 0 ||
 				(private || opaque) && operand.width != 8 {
 				return fail()
 			}

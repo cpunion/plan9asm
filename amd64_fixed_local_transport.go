@@ -103,7 +103,7 @@ func fixedLocalConditionalSetStep(ins *Instr, state *x86FixedLocalState, sig Fun
 	switch destination.Kind {
 	case OpReg:
 		root, valid := x86CallerGP(destination.Reg)
-		if !valid || root == SP || root == BP || x86SourceGRegister(root) {
+		if !valid || root == SP {
 			return fail()
 		}
 		if _, private := state.pointers[root]; private {

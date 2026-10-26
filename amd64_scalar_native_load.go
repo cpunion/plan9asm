@@ -13,6 +13,20 @@ type x86ScalarNativeLoadForm struct {
 }
 
 func x86ScalarNativeLoadProperties(op Op, ins Instr, arch string) (x86ScalarNativeLoadForm, bool, error) {
+	form, known, err := x86ScalarRegisterLoadProperties(op, ins, arch)
+	if !known || err != nil {
+		return form, known, err
+	}
+	if !x86OrdinaryNativeMemoryOperand(form.source, arch) {
+		return x86ScalarNativeLoadForm{}, false, nil
+	}
+	return form, true, nil
+}
+
+// The machine grammar is independent of whether BP denotes an ordinary
+// native input, a private frame, or an unavailable physical entry register.
+// Each consumer must select that role before calling the common emitter.
+func x86ScalarRegisterLoadProperties(op Op, ins Instr, arch string) (x86ScalarNativeLoadForm, bool, error) {
 	local := ins
 	local.Op = op
 	canonical := x86GoMOVQSourceInstruction(local).Op
@@ -34,7 +48,7 @@ func x86ScalarNativeLoadProperties(op Op, ins Instr, arch string) (x86ScalarNati
 	if width == 1 {
 		validRegister = isGoYmbRegisterForArch(destination, arch)
 	}
-	if !validRegister || !x86OrdinaryNativeMemoryOperand(source, arch) {
+	if !validRegister {
 		return x86ScalarNativeLoadForm{}, false, nil
 	}
 	if arch == "386" && width == 8 || !x86PackedShiftMemoryValid(source, arch) {
@@ -50,6 +64,15 @@ func x86ScalarNativeLoadProperties(op Op, ins Instr, arch string) (x86ScalarNati
 		}
 	}
 	return x86ScalarNativeLoadForm{source, destination, width}, true, nil
+}
+
+func (c *amd64Ctx) scalarNativeLoadProperties(op Op, ins Instr) (x86ScalarNativeLoadForm, bool, error) {
+	if c.fixedLocal != nil {
+		if access, valid := c.fixedLocalMemoryAccess(ins, 0); valid && access.nativeInput {
+			return x86ScalarRegisterLoadProperties(op, ins, c.goarch)
+		}
+	}
+	return x86ScalarNativeLoadProperties(op, ins, c.goarch)
 }
 
 func (c *amd64Ctx) lowerScalarNativeLoad(form x86ScalarNativeLoadForm, ins Instr) error {

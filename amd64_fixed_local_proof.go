@@ -147,8 +147,8 @@ func proveX86FixedLocal(fn Func, sig FuncSig) (Func, error) {
 func fixedLocalEffectPlan(fn Func) (map[int]x86TypedByteEffect, error) {
 	var effects map[int]x86TypedByteEffect
 	for index, ins := range fn.Instrs {
-		if ins.x86Encoded || ins.x86SourceRaw != nil || ins.x86AddressBits != 0 || ins.x86SegmentPrefix != 0 || x86SourceGOperand(ins) {
-			return nil, goAMD64FrameContext("fixed local source contains raw/native/g effects")
+		if ins.x86Encoded || ins.x86SourceRaw != nil || ins.x86AddressBits != 0 || ins.x86SegmentPrefix != 0 {
+			return nil, goAMD64FrameContext("fixed local source contains raw/native effects")
 		}
 		if effect, known, err := fixedLocalVectorByteEffect(ins); known {
 			if err != nil {
@@ -357,6 +357,10 @@ func replayX86FixedLocal(fn *Func, sig FuncSig, proof *x86FixedLocalProof, resid
 		vectors:      make(map[Reg]uint64), masks: make(map[Reg]bool),
 		bytes: make([]bool, proof.frame), addresses: make(map[int64]int64), results: make(map[int]bool),
 	}
+	// All GP entry bytes except the private SP origin remain unknown. ABI0
+	// does not supply an initialized R14/g value; the observed nonzero-frame
+	// prologue/epilogue independently preserves BP. Explicit definitions may
+	// use either register without importing its entry value or native role.
 	states := map[int]x86FixedLocalState{0: state}
 	work := []int{0}
 	queued := map[int]bool{0: true}
@@ -522,8 +526,7 @@ func fixedLocalMemoryAccess(ins *Instr, index int, state *x86FixedLocalState, pr
 		memory := ins.Args[index].Mem
 		if _, input := state.opaque[memory.Base]; input {
 			root, valid := x86CallerGP(memory.Base)
-			if !valid || root != memory.Base || width <= 0 || alignment <= 0 || pointer ||
-				!x86OrdinaryNativeMemoryOperand(ins.Args[index], "amd64") ||
+			if !valid || root != memory.Base || root == SP || width <= 0 || alignment <= 0 || pointer ||
 				memory.OffRaw != "" || memory.Sym != "" || memory.Segment != "" ||
 				memory.Index != "" || memory.Scale != 0 || memory.IndexExt != "" {
 				return 0, x86FixedLocalNativeInput, goAMD64FrameContext("fixed local native input requires a plain typed base and displacement")
@@ -679,7 +682,7 @@ func fixedLocalNumericRead(operand Operand, width int64, state *x86FixedLocalSta
 	_, pointer := state.pointers[root]
 	_, opaque := state.opaque[root]
 	mask := x86CallerByteMask(operand.Reg, width)
-	return valid && root != SP && root != BP && !pointer && !opaque && mask != 0 && state.known[root]&mask == mask
+	return valid && root != SP && !pointer && !opaque && mask != 0 && state.known[root]&mask == mask
 }
 
 func fixedLocalMove(ins *Instr, state *x86FixedLocalState, sig FuncSig, proof *x86FixedLocalProof, residue int, width int64) error {
@@ -764,7 +767,7 @@ func fixedLocalMove(ins *Instr, state *x86FixedLocalState, sig FuncSig, proof *x
 	switch destination.Kind {
 	case OpReg:
 		root, valid := x86CallerGP(destination.Reg)
-		if !valid || root == BP && !pointer || x86SourceGRegister(root) || (pointer || opaque) && (width != 8 || destination.Reg != root) {
+		if !valid || (pointer || opaque) && (width != 8 || destination.Reg != root) {
 			return fail()
 		}
 		if root == SP && !pointer {

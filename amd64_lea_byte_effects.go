@@ -12,6 +12,22 @@ import (
 // the other bytes, while L clears upper32 through the existing write consumer.
 // Actual initialization and pointer exclusion remain consumers' obligations.
 func x86TypedLEAByteEffect(op Op, original Instr, arch string) (x86TypedByteEffect, bool, error) {
+	effect, known, err := x86NamedLEAByteEffect(op, original, arch)
+	if !known || err != nil {
+		return effect, known, err
+	}
+	// Ordinary source consumers leave physical frame registers to their
+	// independently bound stack route. This is a role constraint, not part
+	// of the complete encoding grammar used by fixed-frame consumers.
+	for _, operand := range effect.operands {
+		if x86LogicalSourceFrameRegister(operand.operand.Reg, arch) {
+			return x86TypedByteEffect{}, false, nil
+		}
+	}
+	return effect, true, nil
+}
+
+func x86NamedLEAByteEffect(op Op, original Instr, arch string) (x86TypedByteEffect, bool, error) {
 	name, _, dotted := strings.Cut(strings.ToUpper(string(op)), ".")
 	if name != "LEAW" && name != "LEAL" && name != "LEAQ" {
 		return x86TypedByteEffect{}, false, nil
@@ -23,7 +39,7 @@ func x86TypedLEAByteEffect(op Op, original Instr, arch string) (x86TypedByteEffe
 		return x86TypedByteEffect{}, false, nil
 	}
 	fail := func() (x86TypedByteEffect, bool, error) {
-		return x86TypedByteEffect{}, true, fmt.Errorf("%w: %s %s needs a pure numerical Go effective address: %q", ErrProbeNeedsContext, arch, op, original.Raw)
+		return x86TypedByteEffect{}, true, fmt.Errorf("%w: %s %s needs a named Go effective-address form: %q", ErrProbeNeedsContext, arch, op, original.Raw)
 	}
 	if arch != "amd64" && arch != "386" || dotted ||
 		original.Op != "" && !strings.EqualFold(string(original.Op), name) {
@@ -44,24 +60,10 @@ func x86TypedLEAByteEffect(op Op, original Instr, arch string) (x86TypedByteEffe
 		memory.Index == "" && memory.Scale != 0 {
 		return fail()
 	}
-	// A syntactically valid physical stack address may already have an exact
-	// source-stack consumer. Leave it to that independent role; the numerical
-	// effect must neither steal its FLAGS handling nor grant any stack fact.
-	for _, register := range []Reg{memory.Base, memory.Index, ins.Args[1].Reg} {
-		if register == SP || register == BP && arch != "386" {
-			return x86TypedByteEffect{}, false, nil
-		}
-	}
-	if _, _, valid := x86ResultGP(ins.Args[1].Reg, width, arch); !valid {
-		return fail()
-	}
 	effect := x86TypedByteEffect{}
 	for _, register := range []Reg{memory.Base, memory.Index} {
 		if register == "" {
 			continue
-		}
-		if _, _, valid := x86ResultGP(register, width, arch); !valid {
-			return fail()
 		}
 		effect.operands = append(effect.operands, x86TypedByteOperand{
 			index: 0, operand: Operand{Kind: OpReg, Reg: register}, width: width, read: true,

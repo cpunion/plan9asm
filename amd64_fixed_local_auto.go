@@ -91,7 +91,7 @@ func fixedLocalConditionalMoveStep(ins *Instr, state *x86FixedLocalState, proof 
 		return fail()
 	}
 	source, destination := effect.operands[0], effect.operands[1]
-	if !fixedLocalNumericRead(destination.operand, destination.width, state) || x86SourceGRegister(destination.operand.Reg) {
+	if !fixedLocalNumericRead(destination.operand, destination.width, state) {
 		return fail()
 	}
 	role := x86FixedLocalPrivateMemory
