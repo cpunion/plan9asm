@@ -13,11 +13,13 @@ so no end-to-end speedup is established. GCM still needs shared CLMUL effects;
 SHA256 needs shuffle effects and bounded indexed loops. Ordinary helper calls
 remain unresolved independently of runtime-entry contracts.
 
-The latest original-Go Linux native [receipt](https://github.com/cpunion/plan9asm/actions/runs/40268896042)
-qualifies `4777c5433`: 15 roots / 247 children, zero failures/skips, including
-mutable globals and all 176 VEX shape kernels through three APIs at O0/O2.
-It does not certify later logical, shuffle, DATA or constant-index changes.
-Their object/guard tests pass separately; new native oracles await execution.
+The latest original-Go Linux native [receipt](https://github.com/cpunion/plan9asm/actions/runs/40274466633)
+qualifies `c2eeeda34`: 19 roots / 294 children, zero failures/skips, in
+316.992 seconds. It retains the earlier 176 VEX shape kernels and adds
+logical, 41 shuffle kernels, readonly DATA and constant-index execution.
+Every comparison uses three APIs at O0/O2. The same source's Go 1.20.14
+focused receipt passes 25 roots / 708 children, zero failures/skips, in
+74.720 seconds. Neither receipt certifies later source revisions.
 The constant-index batch `74998514d` retains 120 address combinations and
 30 original Go functions; its isolated receipt has 16 roots / 269 children,
 zero failures/skips, across three OSes and three APIs at O0/O2.
@@ -25,11 +27,18 @@ The shared VEX shuffle batch `0a319cd38` has a separate 37-root / 946-child
 receipt with zero failures/skips, including legacy/MMX/386 regressions. Its
 42 complete source functions retain both X/Y widths and unaligned memory.
 
+The subsequent block-replay optimization `544aece11` adds 38 production lines
+while preserving instruction budgets, CFG meets, eight SP residues and final
+independent replay. Its isolated receipt passes 26 roots / 603 children.
+Twelve analysis benchmarks, each with five samples, reduce allocation counts
+65.1–88.4%; the 5,000-instruction loop median changes from 514 to 105 ms and
+471 to 63 MB. On the same `14ebac865` source baseline, the full 55-file pass
+set and all failure diagnostics remain identical. One wall observation falls
+97 to 65 seconds; it is not a repeated end-to-end speedup measurement.
+
 Next: share remaining family dependencies without per-proof opcode lists,
-preserve each bounded-loop iteration's byte/alias obligations, reduce state
-cloning at straight-line CFG interiors, and run the integrated native and
-minimum-SDK gates. The last minimum-SDK receipt is still `5018ab7d5`
-(26 roots / 1,700 children); it does not certify newer source. Retain the
+preserve each bounded-loop iteration's byte/alias obligations, and run the integrated native and
+minimum-SDK gates for the newer replay and family changes. Retain the
 whole-file failures until new complete-source runs actually pass them.
 
 The receipt chronology below retains earlier failures and narrower evidence;
