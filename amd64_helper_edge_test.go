@@ -904,6 +904,21 @@ func TestAMD64ADCBUsesCarryFlag(t *testing.T) {
 	}
 }
 
+// Exercise the actual typed owners before the residual vector dispatcher, in
+// the same order as lowerInstr. The old fixtures remain emitter-only checks.
+func lowerAMD64PackedArithmeticOrVectorForTest(c *amd64Ctx, op Op, ins Instr) (bool, bool, error) {
+	if known, terminated, err := c.lowerPackedWordMultiply(op, ins); known {
+		return known, terminated, err
+	}
+	if known, terminated, err := c.lowerPackedIntegerAdd(op, ins); known {
+		return known, terminated, err
+	}
+	if known, terminated, err := c.lowerPackedIntegerSubtract(op, ins); known {
+		return known, terminated, err
+	}
+	return c.lowerVec(op, ins)
+}
+
 func TestAMD64VectorCoverage(t *testing.T) {
 	fn := Func{
 		Instrs: []Instr{
@@ -927,8 +942,8 @@ func TestAMD64VectorCoverage(t *testing.T) {
 	c.targetTriple = "x86_64-unknown-linux-gnu"
 	mustLower := func(op Op, ins Instr) {
 		t.Helper()
-		if ok, term, err := c.lowerVec(op, ins); !ok || term || err != nil {
-			t.Fatalf("lowerVec(%s) = (%v, %v, %v)", op, ok, term, err)
+		if ok, term, err := lowerAMD64PackedArithmeticOrVectorForTest(c, op, ins); !ok || term || err != nil {
+			t.Fatalf("typed vector lowering(%s) = (%v, %v, %v)", op, ok, term, err)
 		}
 	}
 	mustLowerTransfer := func(op Op, ins Instr) {
@@ -2086,7 +2101,7 @@ func TestAMD64VectorAliasAndErrorCoverage(t *testing.T) {
 		{"MOVOU", Instr{Raw: "MOVOU AX, X0", Args: []Operand{{Kind: OpReg, Reg: AX}, {Kind: OpReg, Reg: Reg("X0")}}}, "wrong src class", true},
 		{"MOVOU", Instr{Raw: "MOVOU X0, AX", Args: []Operand{{Kind: OpReg, Reg: Reg("X0")}, {Kind: OpReg, Reg: AX}}}, "wrong dst class", false},
 		{"PXOR", Instr{Raw: "PXOR X0", Args: []Operand{{Kind: OpReg, Reg: Reg("X0")}}}, "short form", true},
-		{"PADDL", Instr{Raw: "PADDL X0, AX", Args: []Operand{{Kind: OpReg, Reg: Reg("X0")}, {Kind: OpReg, Reg: AX}}}, "wrong dst class", false},
+		{"PADDL", Instr{Raw: "PADDL X0, AX", Args: []Operand{{Kind: OpReg, Reg: Reg("X0")}, {Kind: OpReg, Reg: AX}}}, "wrong dst class", true},
 		{"PSLLL", Instr{Raw: "PSLLL AX, X0", Args: []Operand{{Kind: OpReg, Reg: AX}, {Kind: OpReg, Reg: Reg("X0")}}}, "non-imm shift", true},
 		{"PCMPEQL", Instr{Raw: "PCMPEQL Y0, X0", Args: []Operand{{Kind: OpReg, Reg: Reg("Y0")}, {Kind: OpReg, Reg: Reg("X0")}}}, "wrong src class", false},
 		{"VPCLMULQDQ", Instr{Raw: "VPCLMULQDQ $1, Z0, Z1, X0", Args: []Operand{{Kind: OpImm, Imm: 1}, {Kind: OpReg, Reg: Reg("Z0")}, {Kind: OpReg, Reg: Reg("Z1")}, {Kind: OpReg, Reg: Reg("X0")}}}, "wrong dst class", true},
@@ -2108,7 +2123,7 @@ func TestAMD64VectorAliasAndErrorCoverage(t *testing.T) {
 		{"PEXTRD", Instr{Raw: "PEXTRD $1, X0, label", Args: []Operand{{Kind: OpImm, Imm: 1}, {Kind: OpReg, Reg: Reg("X0")}, {Kind: OpIdent, Ident: "label"}}}, "bad dst kind", true},
 	} {
 		before := b.String()
-		ok, term, err := c.lowerVec(tc.op, tc.ins)
+		ok, term, err := lowerAMD64PackedArithmeticOrVectorForTest(c, tc.op, tc.ins)
 		if _, typed := x86InsertExtractSpecs[tc.op]; typed {
 			goAssemblerOracleOutput(t, "amd64", "TEXT f(SB),4,$0-0\n"+tc.ins.Raw+"\nRET\n", "", false)
 			if !ok || term || err == nil || b.String() != before {
@@ -2147,7 +2162,7 @@ func TestAMD64RejectedLegacyVectorDestinationDoesNotMutateIR(t *testing.T) {
 		op      Op
 		handled bool
 	}{
-		{op: "PSUBUSB"},
+		{op: "PSUBUSB", handled: true},
 		{op: "PABSD"},
 		{op: "PTEST", handled: true},
 	} {
@@ -2158,7 +2173,7 @@ func TestAMD64RejectedLegacyVectorDestinationDoesNotMutateIR(t *testing.T) {
 			}
 			c, b := newAMD64CtxWithFuncForTest(t, Func{Instrs: []Instr{ins}}, FuncSig{Ret: Void}, nil)
 			beforeIR, beforeTmp := b.String(), c.tmp
-			ok, term, err := c.lowerVec(test.op, ins)
+			ok, term, err := lowerAMD64PackedArithmeticOrVectorForTest(c, test.op, ins)
 			if test.handled {
 				if !ok || term || err == nil {
 					t.Fatalf("lowerVec(%s) = (%v, %v, %v), want handled rejection", test.op, ok, term, err)
