@@ -29,6 +29,20 @@ func x86UnmaskedVEXByteEffect(op Op, ins Instr, arch string) (x86TypedByteEffect
 	if form, known, err := x86ByteShuffleProperties(op, ins, arch); known {
 		return x86UnmaskedVEXBinaryEffect(ins, form, true, err)
 	}
+	local := ins
+	local.Op = op
+	if form, known, err := x86ImmediateShuffleProperties(local, arch); known {
+		if ins.Op != "" && !strings.EqualFold(string(ins.Op), string(op)) {
+			return x86TypedByteEffect{}, true, goAMD64FrameContext("immediate-shuffle dispatch/source mismatch: %s/%s", op, ins.Op)
+		}
+		if err != nil {
+			return x86TypedByteEffect{}, true, err
+		}
+		if form.spec.legacy || form.spec.mmx || form.mask >= 0 || form.broadcast || form.zeroing || !x86LowVEXVectorOperands(ins) {
+			return x86TypedByteEffect{}, true, goAMD64FrameContext("shuffle effect requires its separate non-VEX consumer: %s", ins.Op)
+		}
+		return x86ImmediateShuffleDependencyEffect(ins, form), true, nil
+	}
 	if form, known, err := x86PackedAlignProperties(op, ins, arch); known {
 		return x86UnmaskedVEXBinaryEffect(ins, form.x86PackedBinaryForm,
 			form.spec.encoding != x86PackedLogicalEVEX, err)

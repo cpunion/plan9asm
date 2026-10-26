@@ -45,13 +45,23 @@ func x86TypedImmediateShuffleByteEffect(op Op, ins Instr, arch string) (x86Typed
 	if !known || err != nil || !form.spec.legacy || form.spec.mmx {
 		return x86TypedByteEffect{}, known && (err != nil || form.spec.legacy && !form.spec.mmx), err
 	}
+	return x86ImmediateShuffleDependencyEffect(ins, form), true, nil
+}
+
+// The admitted encoding chooses upper writes and memory alignment; both use
+// one source-only dependency shape. This descriptor does not admit a form.
+func x86ImmediateShuffleDependencyEffect(ins Instr, form x86ImmediateShuffleForm) x86TypedByteEffect {
+	vector := x86TypedVectorEffect{x86TypedVectorUpperPreserve, 16}
+	if !form.spec.legacy {
+		vector = x86TypedVectorEffect{x86TypedVectorUpperZero, 1}
+	}
 	return x86TypedByteEffect{
-		vector: x86TypedVectorEffect{x86TypedVectorUpperPreserve, 16},
+		vector: vector,
 		operands: []x86TypedByteOperand{
 			{index: 1, operand: form.source, width: int64(form.byteWidth), read: true},
 			{index: form.destination, operand: ins.Args[form.destination], width: int64(form.byteWidth), write: true},
 		},
-	}, true, nil
+	}
 }
 
 // This supplies encoding, native access extent and byte selectors, not source
