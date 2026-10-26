@@ -6177,6 +6177,10 @@ evex:
 // every register and ModRM/SIB memory form before the generic decoder, which
 // can split raw VPMADDWD bytes emitted by ecosystem assembly.
 func decodedX86VEXPackedMADDInstruction(code []byte, mode int) (instruction Instr, length int, ok bool, err error) {
+	return decodedX86VEXPackedMADDInstructionWithMemory(code, mode, x86RawMemoryDecoder{})
+}
+
+func decodedX86VEXPackedMADDInstructionWithMemory(code []byte, mode int, memory x86RawMemoryDecoder) (instruction Instr, length int, ok bool, err error) {
 	i := 0
 	segment := Reg("")
 	addressOverride := false
@@ -6249,7 +6253,7 @@ vex:
 	if mode == 32 && (rExt != 0 || xExt != 0 || bExt != 0 || secondSourceNumber >= 8 || destinationNumber >= 8) {
 		return Instr{}, 0, true, fmt.Errorf("extended register in 32-bit mode")
 	}
-	firstSource, consumed, decodeErr := decodedX86VEXVectorRMOperand(code[modRMIndex:], mode, bExt, xExt, segment, vectorPrefix)
+	firstSource, consumed, decodeErr := memory.vex(code[modRMIndex:], mode, bExt, xExt, segment, vectorPrefix)
 	if decodeErr != nil {
 		return Instr{}, 0, true, decodeErr
 	}

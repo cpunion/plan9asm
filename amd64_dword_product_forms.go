@@ -69,11 +69,3 @@ func x86DwordProductProperties(op Op, ins Instr, arch string) (x86DwordProductFo
 	}
 	return form, true, err
 }
-
-func x86TypedDwordProductByteEffect(op Op, ins Instr, arch string) (x86TypedByteEffect, bool, error) {
-	form, known, err := x86DwordProductProperties(op, ins, arch)
-	if !known || err != nil || !form.legacy {
-		return x86TypedByteEffect{}, known && (err != nil || form.legacy), err
-	}
-	return x86LegacyPackedBinaryByteEffect(ins, form.x86PackedBinaryForm, form.source), true, nil
-}

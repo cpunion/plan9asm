@@ -11,7 +11,11 @@ import (
 // this test's members. Legal encoding, width and mask axes stay constrained.
 func x86NumericalPackedBoundaryRows(arch string) []string {
 	names := strings.Fields("VPADDB VPADDW VPADDD VPADDQ VPADDSB VPADDSW VPADDUSB VPADDUSW " +
-		"VPSUBB VPSUBW VPSUBD VPSUBQ VPSUBSB VPSUBSW VPSUBUSB VPSUBUSW VPSHUFB")
+		"VPSUBB VPSUBW VPSUBD VPSUBQ VPSUBSB VPSUBSW VPSUBUSB VPSUBUSW VPSHUFB " +
+		"VPMULLD VPMULLQ VPMULLW VPMULHW VPMULHUW VPMULHRSW VPMULDQ VPMULUDQ " +
+		"VPAVGB VPAVGW VPMADDWD VPMADDUBSW " +
+		"VPMINSB VPMINUB VPMINSW VPMINUW VPMINSD VPMINUD VPMINSQ VPMINUQ " +
+		"VPMAXSB VPMAXUB VPMAXSW VPMAXUW VPMAXSD VPMAXUD VPMAXSQ VPMAXUQ")
 	if arch == "amd64" {
 		names = append(names, "VPALIGNR") // Go's 386 frontend has no four-operand form.
 	}
@@ -37,7 +41,11 @@ func x86NumericalPackedBoundaryRows(arch string) []string {
 						rows = append(rows, strings.NewReplacer(bank+"0", bank+"16", bank+"1", bank+"17", bank+"2", bank+"18").Replace(row))
 					}
 				}
-				if name == "VPADDD" || name == "VPADDQ" || name == "VPSUBD" || name == "VPSUBQ" {
+				minmax := strings.HasPrefix(name, "VPMIN") || strings.HasPrefix(name, "VPMAX")
+				broadcast := name == "VPADDD" || name == "VPADDQ" || name == "VPSUBD" || name == "VPSUBQ" ||
+					name == "VPMULLD" || name == "VPMULLQ" || name == "VPMULDQ" || name == "VPMULUDQ" ||
+					minmax && (strings.HasSuffix(name, "D") || strings.HasSuffix(name, "Q"))
+				if broadcast {
 					rows = append(rows, fmt.Sprintf("%s.BCST%s table+17(SB),%s1,%s%s2", name, suffix, bank, mask, bank))
 				}
 			}
@@ -106,6 +114,16 @@ func TestX86NumericalPackedPhysicalMemoryDoesNotGrantRawSource(t *testing.T) {
 		{"VPSRAVD.BCST.Z table-17(SB),Z17,K1,Z18", decodedX86PerLaneVariableShiftInstruction},
 		{"VPSLLDQ $255,table+17(SB),X18", decodedX86RawVectorByteShiftInstruction},
 		{"VPSRLDQ $255,table-17(SB),Z18", decodedX86RawVectorByteShiftInstruction},
+		{"VPAVGB table+17(SB),Y1,Y2", decodedX86PackedAverageInstruction},
+		{"VPAVGW.Z table-17(SB),Z17,K1,Z18", decodedX86PackedAverageInstruction},
+		{"VPMINSD table+17(SB),Y1,Y2", decodedX86PackedIntegerMinMaxInstruction},
+		{"VPMAXUQ.BCST.Z table-17(SB),Z17,K1,Z18", decodedX86PackedIntegerMinMaxInstruction},
+		{"VPMULHW table+17(SB),Y1,Y2", decodedX86PackedMultiplyInstruction},
+		{"VPMULLQ.BCST.Z table-17(SB),Z17,K1,Z18", decodedX86PackedMultiplyInstruction},
+		{"VPMULDQ table+17(SB),Y1,Y2", decodedX86DwordToQwordMultiplyInstruction},
+		{"VPMULUDQ.BCST.Z table-17(SB),Z17,K1,Z18", decodedX86DwordToQwordMultiplyInstruction},
+		{"VPMADDWD table+17(SB),Y1,Y2", decodedX86VEXPackedMADDInstruction},
+		{"VPMADDUBSW.Z table-17(SB),Z17,K1,Z18", decodedX86EVEXPackedMADDInstruction},
 		{"VPBLENDD $255,table+17(SB),Y1,Y2", decodedX86ImmediatePackedBlendInstruction},
 		{"VBLENDPD $255,table-17(SB),X1,X2", decodedX86ImmediatePackedBlendInstruction},
 	} {

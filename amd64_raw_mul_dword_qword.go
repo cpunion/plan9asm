@@ -10,6 +10,10 @@ import (
 // v0.14 does not decode these encodings, so raw BYTE/LONG directive users
 // need the complete X/Y/Z, memory, mask, zeroing, and broadcast family here.
 func decodedX86DwordToQwordMultiplyInstruction(code []byte, mode int) (instruction Instr, length int, ok bool, err error) {
+	return decodedX86DwordToQwordMultiplyInstructionWithMemory(code, mode, x86RawMemoryDecoder{})
+}
+
+func decodedX86DwordToQwordMultiplyInstructionWithMemory(code []byte, mode int, memory x86RawMemoryDecoder) (instruction Instr, length int, ok bool, err error) {
 	if mode != 32 && mode != 64 {
 		return Instr{}, 0, false, nil
 	}
@@ -171,7 +175,13 @@ vex:
 			disp8Scale = 8
 		}
 	}
-	first, consumed, err := decodedX86VectorRMSource(code[modRMIndex:], mode, bExt, xExt, rmHigh, width, segment, disp8Scale)
+	var first Operand
+	var consumed int
+	if memory.physicalPC && modRM>>6 != 3 {
+		first, consumed, err = memory.scalar(code[modRMIndex:], mode, bExt, xExt, segment, disp8Scale)
+	} else {
+		first, consumed, err = decodedX86VectorRMSource(code[modRMIndex:], mode, bExt, xExt, rmHigh, width, segment, disp8Scale)
+	}
 	if err != nil {
 		return Instr{}, 0, true, err
 	}

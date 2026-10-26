@@ -1,15 +1,18 @@
 package plan9asm
 
+import "strings"
+
 // Only descriptors with explicit vector storage/alias metadata participate.
 // MMX, unregistered upper writes and wider banks keep their separate owners.
 func fixedLocalVectorByteEffect(ins Instr) (x86TypedByteEffect, bool, error) {
 	if ins.x86NumericalRead != nil {
 		return x86TypedByteEffect{}, false, nil // Preserve the existing owner-specific consumer.
 	}
-	effect, known, err := x86PackedBinaryByteEffect(ins.Op, ins, "amd64")
-	if !known {
-		effect, known, err = x86UnmaskedVEXByteEffect(ins.Op, ins, "amd64")
+	parse := x86PackedBinaryByteEffect
+	if strings.HasPrefix(strings.ToUpper(string(ins.Op)), "V") {
+		parse = x86UnmaskedVEXByteEffect
 	}
+	effect, known, err := parse(ins.Op, ins, "amd64")
 	if !known {
 		return effect, false, nil
 	}

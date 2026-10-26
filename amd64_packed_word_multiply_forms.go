@@ -74,14 +74,6 @@ func x86PackedWordMultiplyProperties(op Op, ins Instr, arch string) (x86PackedWo
 	return form, true, err
 }
 
-func x86TypedPackedWordMultiplyByteEffect(op Op, ins Instr, arch string) (x86TypedByteEffect, bool, error) {
-	form, recognized, err := x86PackedWordMultiplyProperties(op, ins, arch)
-	if !recognized || err != nil || !form.legacy {
-		return x86TypedByteEffect{}, recognized && (err != nil || form.legacy), err
-	}
-	return x86LegacyPackedBinaryByteEffect(ins, form.x86PackedBinaryForm, form.source), true, nil
-}
-
 func x86ResultPackedWordMultiplyStep(ins Instr, state *x86ResultState, owned []bool, arch string) (bool, bool) {
 	form, known, err := x86PackedWordMultiplyProperties(ins.Op, ins, arch)
 	if !known || err != nil {

@@ -19,12 +19,24 @@ type fixedLocalVEXWitness struct {
 // original VEX row, including overlapping signed/unsigned immediate classes.
 // EVEX rows are inventoried separately and do not acquire permission here.
 func fixedLocalVEXWitnesses(t *testing.T) []fixedLocalVEXWitness {
+	return fixedLocalVEXFamilyWitnesses(t,
+		`^(VPADD(B|W|D|Q|SB|SW|USB|USW)|VPALIGNR|V(BLENDP[DS]|PBLEND[WD])|V(ANDN?|OR|XOR)P[DS]|VP(ANDN?|OR|XOR)|VMOV(AP[DS]|UP[DS]|DQ[AU])|VPERM2[FI]128|VPS(LL|RL|RA)(W|D|Q|V[WDQ]|DQ)|VPSHUFB|VZERO(UPPER|ALL))$`,
+		146, 354)
+}
+
+func fixedLocalVEXBinaryWitnesses(t *testing.T) []fixedLocalVEXWitness {
+	return fixedLocalVEXFamilyWitnesses(t,
+		`^VP(SUB(B|W|D|Q|SB|SW|USB|USW)|MUL(LD|LQ|LW|HW|HUW|HRSW|DQ|UDQ)|AVG(B|W)|MADD(WD|UBSW)|(MIN|MAX)[SU][BWDQ])$`,
+		62, 186)
+}
+
+func fixedLocalVEXFamilyWitnesses(t *testing.T, pattern string, wantRows, wantWitnesses int) []fixedLocalVEXWitness {
 	t.Helper()
 	rules, err := goasmrules.LoadX86AVXRules(runtime.GOROOT())
 	if err != nil {
 		t.Fatal(err)
 	}
-	family := regexp.MustCompile(`^(VPADD(B|W|D|Q|SB|SW|USB|USW)|VPALIGNR|V(BLENDP[DS]|PBLEND[WD])|V(ANDN?|OR|XOR)P[DS]|VP(ANDN?|OR|XOR)|VMOV(AP[DS]|UP[DS]|DQ[AU])|VPERM2[FI]128|VPS(LL|RL|RA)(W|D|Q|V[WDQ]|DQ)|VPSHUFB|VZERO(UPPER|ALL))$`)
+	family := regexp.MustCompile(pattern)
 	var witnesses []fixedLocalVEXWitness
 	rows := 0
 	for _, rule := range rules {
@@ -73,8 +85,8 @@ func fixedLocalVEXWitnesses(t *testing.T) []fixedLocalVEXWitness {
 			})
 		}
 	}
-	if rows != 146 || len(witnesses) != 354 {
-		t.Fatalf("official non-masked VEX inventory changed: rows=%d witnesses=%d, want 146/354", rows, len(witnesses))
+	if rows != wantRows || len(witnesses) != wantWitnesses {
+		t.Fatalf("official non-masked VEX inventory changed: rows=%d witnesses=%d, want %d/%d", rows, len(witnesses), wantRows, wantWitnesses)
 	}
 	return witnesses
 }
@@ -102,7 +114,15 @@ func fixedLocalVEXAssembly(operation string) string {
 }
 
 func TestGoAMD64FixedLocalVEXOfficialEncodings(t *testing.T) {
-	witnesses := fixedLocalVEXWitnesses(t)
+	fixedLocalCheckVEXEncodings(t, fixedLocalVEXWitnesses(t))
+}
+
+func TestGoAMD64FixedLocalVEXBinaryOfficialEncodings(t *testing.T) {
+	fixedLocalCheckVEXEncodings(t, fixedLocalVEXBinaryWitnesses(t))
+}
+
+func fixedLocalCheckVEXEncodings(t *testing.T, witnesses []fixedLocalVEXWitness) {
+	t.Helper()
 	rows := make([]string, len(witnesses))
 	for index, row := range witnesses {
 		rows[index] = row.source
@@ -117,11 +137,20 @@ func TestGoAMD64FixedLocalVEXOfficialEncodings(t *testing.T) {
 			t.Fatalf("%s selected non-VEX bytes %x", row.owner, instruction)
 		}
 	}
-	t.Log("146 original VEX rows / 354 legal source witnesses; generation check, not exact row-encoding or execution proof")
+	t.Logf("%d legal original Go source witnesses; VEX generation check, not exact row-encoding or execution proof", len(witnesses))
 }
 
 func TestGoAMD64FixedLocalVEXCompleteFamilies(t *testing.T) {
-	for _, row := range fixedLocalVEXWitnesses(t) {
+	fixedLocalCheckVEXFamilies(t, fixedLocalVEXWitnesses(t))
+}
+
+func TestGoAMD64FixedLocalVEXBinaryCompleteFamilies(t *testing.T) {
+	fixedLocalCheckVEXFamilies(t, fixedLocalVEXBinaryWitnesses(t))
+}
+
+func fixedLocalCheckVEXFamilies(t *testing.T, witnesses []fixedLocalVEXWitness) {
+	t.Helper()
+	for _, row := range witnesses {
 		t.Run(row.owner, func(t *testing.T) {
 			fn, sig, _ := fixedLocalVEXFixture(t, row.source)
 			if _, err := proveX86FixedLocal(fn, sig); err != nil {
@@ -132,7 +161,15 @@ func TestGoAMD64FixedLocalVEXCompleteFamilies(t *testing.T) {
 }
 
 func TestGoAMD64FixedLocalVEXPhysicalBoundaries(t *testing.T) {
-	witnesses := fixedLocalVEXWitnesses(t)
+	fixedLocalCheckVEXPhysicalBoundaries(t, fixedLocalVEXWitnesses(t))
+}
+
+func TestGoAMD64FixedLocalVEXBinaryPhysicalBoundaries(t *testing.T) {
+	fixedLocalCheckVEXPhysicalBoundaries(t, fixedLocalVEXBinaryWitnesses(t))
+}
+
+func fixedLocalCheckVEXPhysicalBoundaries(t *testing.T, witnesses []fixedLocalVEXWitness) {
+	t.Helper()
 	rows := make([]string, len(witnesses))
 	for index, row := range witnesses {
 		rows[index] = row.source
@@ -214,13 +251,70 @@ func TestGoAMD64FixedLocalVEXUpperAliases(t *testing.T) {
 	}
 }
 
+func TestGoAMD64FixedLocalVEXBinaryInputAndAliasEffects(t *testing.T) {
+	names := make(map[string]bool)
+	for _, row := range fixedLocalVEXBinaryWitnesses(t) {
+		names[strings.Fields(row.source)[0]] = true
+	}
+	if len(names) != 31 {
+		t.Fatalf("official VEX binary members=%d, want 31", len(names))
+	}
+	for name := range names {
+		for width, bank := range map[int]string{16: "X", 32: "Y"} {
+			t.Run(name+"/"+bank, func(t *testing.T) {
+				ins := x86ScalarLaneInstruction(t, fmt.Sprintf("%s %s0,%s1,%s2", name, bank, bank, bank))
+				mask := x86CallerVectorByteMask(int64(width))
+				state := x86FixedLocalState{vectors: map[Reg]uint64{"Z0": mask, "Z1": mask}, flags: x86ByteFlagCF}
+				if err := fixedLocalVectorStep(&ins, &state, nil, 0); err != nil {
+					t.Fatal("complete VEX inputs rejected", err)
+				}
+				if state.vectors["Z2"] != ^uint64(0) || state.vectors["Z0"] != mask ||
+					state.vectors["Z1"] != mask || state.flags != x86ByteFlagCF {
+					t.Fatal("VEX did not read inputs before defining result/upper zeros", state)
+				}
+				state.vectors["Z0"] &^= uint64(1) << (width - 1)
+				state.vectors["Z2"] = 0
+				if err := fixedLocalVectorStep(&ins, &state, nil, 0); !errors.Is(err, ErrProbeNeedsContext) ||
+					state.vectors["Z2"] != 0 {
+					t.Fatal("missing input byte published VEX result or upper-zero knowledge", err, state)
+				}
+			})
+		}
+	}
+	for _, operation := range []string{
+		"VPMULLQ X0,X1,X2", "VPMINSQ X0,X1,X2", "VPMINUQ Y0,Y1,Y2",
+		"VPMAXSQ X0,X1,X2", "VPMAXUQ Y0,Y1,Y2",
+		"VPSUBW Z0,Z1,Z2", "VPMULHW X16,X1,X2", "VPAVGB X0,X1,K1,X2",
+		"VPMADDWD.Z X0,X1,K1,X2", "VPMINSD.BCST (SI),X1,X2",
+	} {
+		t.Run(operation, func(t *testing.T) {
+			ins := x86ScalarLaneInstruction(t, operation)
+			if _, known, err := fixedLocalVectorByteEffect(ins); known && err == nil {
+				t.Fatal("separate EVEX form acquired a VEX effect before input checks")
+			}
+			fn, sig, _ := fixedLocalVEXFixture(t, operation)
+			if _, err := proveX86FixedLocal(fn, sig); !errors.Is(err, ErrProbeNeedsContext) {
+				t.Fatal("separate EVEX width/mask/broadcast acquired VEX permission", err)
+			}
+		})
+	}
+}
+
 func TestGoAMD64FixedLocalVEXCompleteObjects(t *testing.T) {
+	fixedLocalCheckVEXObjects(t, fixedLocalVEXWitnesses(t))
+}
+
+func TestGoAMD64FixedLocalVEXBinaryCompleteObjects(t *testing.T) {
+	fixedLocalCheckVEXObjects(t, fixedLocalVEXBinaryWitnesses(t))
+}
+
+func fixedLocalCheckVEXObjects(t *testing.T, witnesses []fixedLocalVEXWitness) {
+	t.Helper()
 	goAMD64FramePrepareOwnedToolCache(t)
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc required")
 	}
-	witnesses := fixedLocalVEXWitnesses(t)
 	passed := 0
 	for start := 0; start < len(witnesses); start += 32 {
 		end := start + 32

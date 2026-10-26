@@ -8,6 +8,10 @@ import (
 // _yvandnpd optab shared by VPMADDUBSW and VPMADDWD. Neither row permits
 // EVEX.b broadcasting, but both permit K masks and zeroing at X/Y/Z widths.
 func decodedX86EVEXPackedMADDInstruction(code []byte, mode int) (Instr, int, bool, error) {
+	return decodedX86EVEXPackedMADDInstructionWithMemory(code, mode, x86RawMemoryDecoder{})
+}
+
+func decodedX86EVEXPackedMADDInstructionWithMemory(code []byte, mode int, memory x86RawMemoryDecoder) (Instr, int, bool, error) {
 	p, matched := decodeX86RawVectorEncoding(code)
 	if !matched || !p.evex || p.pp != 1 {
 		return Instr{}, 0, false, nil
@@ -30,5 +34,5 @@ func decodedX86EVEXPackedMADDInstruction(code []byte, mode int) (Instr, int, boo
 	}
 	// Both opcode-specific ISA rows are WIG. Full validated physical bytes,
 	// including mode32 masks, use the common private decoder producer.
-	return decodedX86BinaryVectorOperands(code, p, mode, op, 16)
+	return decodedX86BinaryVectorOperandsWithMemory(code, p, mode, op, 16, memory)
 }

@@ -164,13 +164,7 @@ func TestX86YMMSelectorReusableDescriptorBanks(t *testing.T) {
 				form.source.Reg != Reg(fmt.Sprintf("M%d", index&7)) {
 				t.Fatal("complete selector lost physical source bank", row, form, known, err)
 			}
-			var effect x86TypedByteEffect
-			if effect, known, err = x86TypedLegacyIntegerArithmeticByteEffect(ins.Op, ins, "amd64"); !known {
-				effect, known, err = x86TypedPackedWordMultiplyByteEffect(ins.Op, ins, "amd64")
-			}
-			if !known {
-				effect, known, err = x86TypedPackedMultiplyAddByteEffect(ins.Op, ins, "amd64")
-			}
+			effect, known, err := x86PackedBinaryByteEffect(ins.Op, ins, "amd64")
 			if known {
 				if err != nil || len(effect.operands) != 2 || effect.operands[0].operand.Reg != form.source.Reg ||
 					effect.operands[0].width != 8 || !effect.operands[0].read || effect.operands[0].write {

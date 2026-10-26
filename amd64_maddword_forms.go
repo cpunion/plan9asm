@@ -86,11 +86,3 @@ func x86WordMultiplyAddProperties(ins Instr, goarch string) (x86PackedBinaryForm
 	form, known, err := x86PackedMultiplyAddProperties(ins.Op, ins, goarch)
 	return form.x86PackedBinaryForm, known, err
 }
-
-func x86TypedPackedMultiplyAddByteEffect(op Op, ins Instr, arch string) (x86TypedByteEffect, bool, error) {
-	form, known, err := x86PackedMultiplyAddProperties(op, ins, arch)
-	if !known || err != nil || !form.legacy {
-		return x86TypedByteEffect{}, known && (err != nil || form.legacy), err
-	}
-	return x86LegacyPackedBinaryByteEffect(ins, form.x86PackedBinaryForm, form.source), true, nil
-}

@@ -44,14 +44,6 @@ func x86LegacyIntegerArithmeticProperties(op Op, ins Instr, arch string) (x86Leg
 	return result, true, err
 }
 
-func x86TypedLegacyIntegerArithmeticByteEffect(op Op, ins Instr, arch string) (x86TypedByteEffect, bool, error) {
-	form, recognized, err := x86LegacyIntegerArithmeticProperties(op, ins, arch)
-	if !recognized || err != nil {
-		return x86TypedByteEffect{}, recognized, err
-	}
-	return x86LegacyPackedBinaryByteEffect(ins, form.x86PackedBinaryForm, form.source), true, nil
-}
-
 func x86LegacyIntegerArithmeticEmitterContext(form x86LegacyIntegerArithmeticForm, ins Instr) error {
 	if form.mmx && ins.Args[0].Kind == OpReg && ins.Args[0].Reg != form.source.Reg {
 		return fmt.Errorf("%w: legacy integer arithmetic GP spelling encodes an MMX source without its physical bank transport", ErrProbeNeedsContext)

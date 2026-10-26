@@ -13,6 +13,15 @@ func x86UnmaskedVEXByteEffect(op Op, ins Instr, arch string) (x86TypedByteEffect
 	if form, known, err := x86PackedIntegerAddProperties(ins, arch); known {
 		return x86UnmaskedVEXBinaryEffect(ins, form.x86PackedBinaryForm, true, err)
 	}
+	if form, known, err := x86PackedSubtractProperties(ins, arch); known {
+		return x86UnmaskedVEXBinaryEffect(ins, form.x86PackedBinaryForm, true, err)
+	}
+	if form, known, err := x86PackedBinaryEffectProperties(op, ins, arch); known {
+		return x86UnmaskedVEXBinaryEffect(ins, form.x86PackedBinaryForm, form.vex, err)
+	}
+	if form, known, err := x86IntegerMinMaxProperties(op, ins, arch); known {
+		return x86UnmaskedVEXBinaryEffect(ins, form.x86PackedBinaryForm, form.spec.laneBits <= 32, err)
+	}
 	if form, known, err := x86PackedLogicalProperties(ins, arch); known {
 		return x86UnmaskedVEXBinaryEffect(ins, form.x86PackedBinaryForm,
 			form.spec.encoding != x86PackedLogicalEVEX, err)
@@ -66,18 +75,7 @@ func x86UnmaskedVEXBinaryEffect(ins Instr, form x86PackedBinaryForm, vex bool, e
 	if !vex || form.legacy || form.mmx || form.mask >= 0 || form.broadcast || form.zeroing || !x86LowVEXVectorOperands(ins) {
 		return x86TypedByteEffect{}, true, goAMD64FrameContext("vector effect requires its separate non-VEX consumer: %s", ins.Op)
 	}
-	width, sourceWidth := int64(form.byteWidth), int64(form.byteWidth)
-	if form.memory >= 0 {
-		sourceWidth = int64(form.memoryBytes)
-	}
-	return x86TypedByteEffect{
-		vector: x86TypedVectorEffect{x86TypedVectorUpperZero, 1},
-		operands: []x86TypedByteOperand{
-			{index: form.first, operand: ins.Args[form.first], width: sourceWidth, read: true},
-			{index: form.second, operand: ins.Args[form.second], width: width, read: true},
-			{index: form.destination, operand: ins.Args[form.destination], width: width, write: true},
-		},
-	}, true, nil
+	return x86PackedBinaryDependencyEffect(ins, form, ins.Args[form.first]), true, nil
 }
 
 func x86UnmaskedVEXShiftEffect(ins Instr, form x86PackedShiftForm, err error) (x86TypedByteEffect, bool, error) {

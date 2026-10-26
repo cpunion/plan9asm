@@ -47,6 +47,10 @@ func decodedX86PackedMultiplyLowInstruction(code []byte, mode int) (instruction 
 }
 
 func decodedX86PackedMultiplyInstruction(code []byte, mode int) (instruction Instr, length int, ok bool, err error) {
+	return decodedX86PackedMultiplyInstructionWithMemory(code, mode, x86RawMemoryDecoder{})
+}
+
+func decodedX86PackedMultiplyInstructionWithMemory(code []byte, mode int, memory x86RawMemoryDecoder) (instruction Instr, length int, ok bool, err error) {
 	if mode != 32 && mode != 64 {
 		return Instr{}, 0, false, nil
 	}
@@ -55,8 +59,8 @@ func decodedX86PackedMultiplyInstruction(code []byte, mode int) (instruction Ins
 		return Instr{}, 0, false, nil
 	}
 	if p.evex {
-		return decodedX86EVEXPackedMultiplyInstruction(
-			code, p.modRM-5, mode, p.segment, p.addressOverride,
+		return decodedX86EVEXPackedMultiplyInstructionWithMemory(
+			code, p.modRM-5, mode, p.segment, p.addressOverride, memory,
 		)
 	}
 	if p.pp != 1 {
@@ -84,7 +88,7 @@ func decodedX86PackedMultiplyInstruction(code []byte, mode int) (instruction Ins
 		code[modRMIndex]>>6 == 3 && int(code[modRMIndex]&7)+p.b*8 >= 8) {
 		return Instr{}, 0, true, fmt.Errorf("extended vector register in 32-bit mode")
 	}
-	firstSource, consumed, decodeErr := decodedX86VEXVectorRMOperand(
+	firstSource, consumed, decodeErr := memory.vex(
 		code[modRMIndex:], mode, p.b, p.x, p.segment, vectorName,
 	)
 	if decodeErr != nil {
@@ -102,6 +106,10 @@ func decodedX86PackedMultiplyInstruction(code []byte, mode int) (instruction Ins
 }
 
 func decodedX86EVEXPackedMultiplyInstruction(code []byte, i, mode int, segment Reg, addressOverride bool) (instruction Instr, length int, ok bool, err error) {
+	return decodedX86EVEXPackedMultiplyInstructionWithMemory(code, i, mode, segment, addressOverride, x86RawMemoryDecoder{})
+}
+
+func decodedX86EVEXPackedMultiplyInstructionWithMemory(code []byte, i, mode int, segment Reg, addressOverride bool, memory x86RawMemoryDecoder) (instruction Instr, length int, ok bool, err error) {
 	if len(code) < i+5 {
 		return Instr{}, 0, false, nil
 	}
@@ -164,7 +172,7 @@ func decodedX86EVEXPackedMultiplyInstruction(code []byte, i, mode int, segment R
 	if broadcast {
 		disp8Scale = laneBytes
 	}
-	firstSource, consumed, decodeErr := decodedX86EVEXRMOperand(code[modRMIndex:], mode, bExt, xExt, segment, vectorName, disp8Scale)
+	firstSource, consumed, decodeErr := memory.evex(code[modRMIndex:], mode, bExt, xExt, segment, vectorName, disp8Scale)
 	if decodeErr != nil {
 		return Instr{}, 0, true, decodeErr
 	}

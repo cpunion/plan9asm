@@ -67,14 +67,6 @@ func x86PackedAverageProperties(op Op, ins Instr, arch string) (x86PackedAverage
 	return form, true, err
 }
 
-func x86TypedPackedAverageByteEffect(op Op, ins Instr, arch string) (x86TypedByteEffect, bool, error) {
-	form, known, err := x86PackedAverageProperties(op, ins, arch)
-	if !known || err != nil || !form.legacy {
-		return x86TypedByteEffect{}, known && (err != nil || form.legacy), err
-	}
-	return x86LegacyPackedBinaryByteEffect(ins, form.x86PackedBinaryForm, form.source), true, nil
-}
-
 func x86ResultPackedAverageStep(ins Instr, state *x86ResultState, owned []bool, arch string) (bool, bool) {
 	form, known, err := x86PackedAverageProperties(ins.Op, ins, arch)
 	if !known || err != nil {

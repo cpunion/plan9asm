@@ -4,6 +4,10 @@ package plan9asm
 // fixed W0/W1, and Q has no VEX encoding. The remaining operand grammar is
 // shared with per-lane shifts, not inferred from the legacy disassembler.
 func decodedX86PackedIntegerMinMaxInstruction(code []byte, mode int) (Instr, int, bool, error) {
+	return decodedX86PackedIntegerMinMaxInstructionWithMemory(code, mode, x86RawMemoryDecoder{})
+}
+
+func decodedX86PackedIntegerMinMaxInstructionWithMemory(code []byte, mode int, memory x86RawMemoryDecoder) (Instr, int, bool, error) {
 	p, matched := decodeX86RawVectorEncoding(code)
 	if !matched {
 		return Instr{}, 0, false, nil
@@ -20,7 +24,7 @@ func decodedX86PackedIntegerMinMaxInstruction(code []byte, mode int) (Instr, int
 			continue
 		}
 
-		return decodedX86BinaryVectorOperands(code, p, mode, Op(name), spec.laneBits)
+		return decodedX86BinaryVectorOperandsWithMemory(code, p, mode, Op(name), spec.laneBits, memory)
 	}
 	return Instr{}, 0, false, nil
 }
