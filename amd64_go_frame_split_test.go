@@ -97,7 +97,7 @@ func TestGoAMD64FrameAutomaticSplitRejectsChangedObservation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	projection, err := goAMD64FrameSplitProjection(fn, text, 160, request.Target, request.Directory)
+	projection, err := goAMD64FrameSplitProjection(fn, text, 160, request.Target, request.Directory, "", nil)
 	if err != nil || projection.prologue <= 0 || len(projection.code) >= len(fn.code) {
 		t.Fatal("missing generated layout projection", err)
 	}
@@ -121,7 +121,7 @@ func TestGoAMD64FrameAutomaticSplitRejectsChangedObservation(t *testing.T) {
 				changed.Kind = 0
 			}
 			_, err := goAMD64FrameListingWithSplitObject(header, file, pkg, source.origins,
-				[]gostaticstorage.TextRecord{changed}, nil, request.Target, request.Directory)
+				[]gostaticstorage.TextRecord{changed}, nil, request.Target, request.Directory, "")
 			if !errors.Is(err, ErrProbeNeedsContext) {
 				t.Fatal("listing silently changed the complete object TEXT kind", err)
 			}
@@ -177,7 +177,7 @@ func TestGoAMD64FrameAutomaticSplitRejectsChangedObservation(t *testing.T) {
 			if mutation != "object bytes" {
 				changedFn.code = changed.Code
 			}
-			shape, err := goAMD64FrameSplitProjection(changedFn, changed, 160, request.Target, request.Directory)
+			shape, err := goAMD64FrameSplitProjection(changedFn, changed, 160, request.Target, request.Directory, "", nil)
 			if err == nil {
 				err = goAMD64FrameMachineShape(shape, 160)
 			}

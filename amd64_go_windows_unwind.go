@@ -43,7 +43,7 @@ func goAMD64WindowsUnwindByteRow(line string, offset int, expected []byte) ([]by
 // This private join consumes the factory's independently read whole object.
 // A public offline observation is never itself an authorization input.
 func goAMD64FrameWindowsUnwindListing(listing []byte, file *File, pkg GoPackage, origins map[string]int, directory string, observed gostaticstorage.WindowsAMD64AssemblyUnwind) (map[string]goAMD64FrameFunction, error) {
-	functions, err := goAMD64FrameListingWithSplitObject(listing, file, pkg, origins, observed.Texts, &observed, "windows/amd64", directory)
+	functions, err := goAMD64FrameListingWithSplitObject(listing, file, pkg, origins, observed.Texts, &observed, "windows/amd64", directory, "")
 	if err != nil {
 		return nil, err
 	}
@@ -91,23 +91,25 @@ func goAMD64FrameWindowsUnwindFunctions(functions map[string]goAMD64FrameFunctio
 	return nil
 }
 
-func goAMD64FrameSourcePCs(text gostaticstorage.TextRecord, fn goAMD64FrameFunction, directory string, origins map[string]int, root string) error {
-	normalize := func(name string) string {
-		if strings.HasPrefix(name, "$GOROOT/") {
-			if root == "" {
-				return ""
-			}
-			actual, valid := originalGoObjectSourcePath(name, root)
-			if !valid {
-				return ""
-			}
-			return actual
+func goAMD64FrameSourcePath(name, directory, root string) string {
+	if strings.HasPrefix(name, "$GOROOT/") {
+		if root == "" {
+			return ""
 		}
-		if !filepath.IsAbs(name) {
-			name = filepath.Join(directory, filepath.FromSlash(name))
+		actual, valid := originalGoObjectSourcePath(name, root)
+		if !valid {
+			return ""
 		}
-		return filepath.Clean(name)
+		return actual
 	}
+	if !filepath.IsAbs(name) {
+		name = filepath.Join(directory, filepath.FromSlash(name))
+	}
+	return filepath.Clean(name)
+}
+
+func goAMD64FrameSourcePCs(text gostaticstorage.TextRecord, fn goAMD64FrameFunction, directory string, origins map[string]int, root string) error {
+	normalize := func(name string) string { return goAMD64FrameSourcePath(name, directory, root) }
 	// Go object file tables use slash paths on Windows, while captured
 	// origins retain host paths and the command's relative source spelling.
 	// Compare their already-bound paths consistently with the listing join;

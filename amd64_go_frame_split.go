@@ -3,7 +3,6 @@ package plan9asm
 import (
 	"bytes"
 	"fmt"
-	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -26,11 +25,11 @@ func goAMD64FrameSplitListing(listing []byte) bool {
 }
 
 func goAMD64FrameListingWithSplitObject(listing []byte, file *File, pkg GoPackage, origins map[string]int,
-	texts []gostaticstorage.TextRecord, unwind *gostaticstorage.WindowsAMD64AssemblyUnwind, target, directory string) (map[string]goAMD64FrameFunction, error) {
+	texts []gostaticstorage.TextRecord, unwind *gostaticstorage.WindowsAMD64AssemblyUnwind, target, directory, root string) (map[string]goAMD64FrameFunction, error) {
 	if len(texts) == 0 || target != "linux/amd64" && target != "darwin/amd64" && target != "windows/amd64" {
 		return nil, goAMD64FrameContext("automatic split layout lacks its complete object/target")
 	}
-	return goAMD64FrameListingRecords(listing, file, pkg, origins, texts, unwind, nil, target, directory)
+	return goAMD64FrameListingRecords(listing, file, pkg, origins, texts, unwind, nil, target, directory, root)
 }
 
 // Listing identity is necessary but not sufficient: the complete relocation
@@ -60,14 +59,17 @@ func goAMD64FrameSplitRelocationLine(r gostaticstorage.TextRelocation, target st
 // After either entry path, private bytes are SP+[0,frame), saved BP is at frame,
 // return PC at frame+8 and FP arguments at frame+16. Generated R12/R14/FLAGS
 // values are not supplied to the source body's existing typed input proof.
-func goAMD64FrameSplitProjection(fn goAMD64FrameFunction, text gostaticstorage.TextRecord, frame int64, target, directory string) (goAMD64FrameFunction, error) {
+func goAMD64FrameSplitProjection(fn goAMD64FrameFunction, text gostaticstorage.TextRecord, frame int64,
+	target, directory, root string, data *gostaticstorage.AMD64AssemblyData) (goAMD64FrameFunction, error) {
+	phase := "entry identity"
 	fail := func() (goAMD64FrameFunction, error) {
-		return goAMD64FrameFunction{}, goAMD64FrameContext("unrecognized original automatic split layout/source/relocation")
+		return goAMD64FrameFunction{}, goAMD64FrameContext("unrecognized original automatic split layout/source/relocation: %s", phase)
 	}
 	if !fn.split || text.ABI != 0 || text.Flags != fn.nativeFlags() || !bytes.Equal(fn.code, text.Code) ||
-		len(text.Relocations) != 2 || frame <= 0 || frame > 4096-8 {
+		frame <= 0 || frame > 4096-8 {
 		return fail()
 	}
+	phase = "TEXT source position"
 	entry := goAMD64FrameSourcePosition{}
 	for _, row := range strings.Split(fn.positions[0], "\n") {
 		position, instruction, ok := strings.Cut(row, "\t")
@@ -84,11 +86,9 @@ func goAMD64FrameSplitProjection(fn goAMD64FrameFunction, text gostaticstorage.T
 	if entry.file == "" || entry.line <= 0 {
 		return fail()
 	}
-	normalize := func(name string) string {
-		if !filepath.IsAbs(name) {
-			name = filepath.Join(directory, filepath.FromSlash(name))
-		}
-		return filepath.Clean(name)
+	entryPath := goAMD64FrameSourcePath(entry.file, directory, root)
+	if entryPath == "" {
+		return fail()
 	}
 	pc := 0
 	read := func(op x86asm.Op, args ...x86asm.Arg) bool {
@@ -98,6 +98,11 @@ func goAMD64FrameSplitProjection(fn goAMD64FrameFunction, text gostaticstorage.T
 		ins, err := x86asm.Decode(fn.code[pc:], 64)
 		if err != nil || ins.Len <= 0 || ins.Op != op {
 			return false
+		}
+		if ins.Op == x86asm.LEA && ins.AddrSize == 64 {
+			// x/arch retains disp32 as unsigned, unlike disp8. Share the
+			// decoder's physical-field normalization before exact RSP matching.
+			ins = normalizeDecodedX86MemoryDisplacements(ins)
 		}
 		for index, arg := range args {
 			if ins.Args[index] != arg {
@@ -109,6 +114,7 @@ func goAMD64FrameSplitProjection(fn goAMD64FrameFunction, text gostaticstorage.T
 	}
 	// The exact ABI0 TLS materialization differs by OS. None of these reads
 	// is source-visible or grants the body permission to use TLS or R14.
+	phase = "generated TLS load"
 	tlsOffset := int64(5)
 	segment := x86asm.FS
 	if target == "darwin/amd64" {
@@ -125,6 +131,7 @@ func goAMD64FrameSplitProjection(fn goAMD64FrameFunction, text gostaticstorage.T
 		!read(x86asm.MOV, x86asm.R14, x86asm.Mem{Segment: segment, Scale: 1}) {
 		return fail()
 	}
+	phase = "generated stack comparison"
 	compare := x86asm.RSP
 	if frame+8 > 128 {
 		if !read(x86asm.LEA, x86asm.R12, x86asm.Mem{Base: x86asm.RSP, Scale: 1, Disp: 128 - frame - 8}) {
@@ -135,6 +142,7 @@ func goAMD64FrameSplitProjection(fn goAMD64FrameFunction, text gostaticstorage.T
 	if !read(x86asm.CMP, compare, x86asm.Mem{Base: x86asm.R14, Disp: 16}) {
 		return fail()
 	}
+	phase = "generated slow-path branch"
 	if pc >= len(fn.code) {
 		return fail()
 	}
@@ -148,21 +156,48 @@ func goAMD64FrameSplitProjection(fn goAMD64FrameFunction, text gostaticstorage.T
 	if end <= start || end+5 >= len(fn.code) || fn.code[end] != 0xe8 || !bytes.Equal(fn.code[end+1:end+5], make([]byte, 4)) {
 		return fail()
 	}
+	phase = "generated runtime retry"
 	pc = end + 5
 	retry, err := x86asm.Decode(fn.code[pc:], 64)
 	relative, ok := retry.Args[0].(x86asm.Rel)
 	if err != nil || retry.Op != x86asm.JMP || !ok || pc+retry.Len != len(fn.code) || pc+retry.Len+int(relative) != 0 {
 		return fail()
 	}
-	for index, offset := range []int64{tlsOffset, int64(end + 1)} {
-		r := text.Relocations[index]
-		if r.Offset != offset || goAMD64FrameSplitRelocationLine(r, target) == "" ||
-			index == 0 && r.Type == 7 || index == 1 && r.Type != 7 {
+	// Generated fields take precedence over ordinary DATA references, including
+	// Windows' ABI0 R_PCREL runtime.tls_g. Every other field must belong wholly
+	// to the body and retain the same complete DATA object's identity rules.
+	phase = "generated/body relocation partition"
+	generated := 0
+	var previousRelocationEnd int64
+	for _, relocation := range text.Relocations {
+		if relocation.Size != 4 || relocation.Offset < previousRelocationEnd || relocation.Offset > int64(len(fn.code))-relocation.Size {
 			return fail()
 		}
+		previousRelocationEnd = relocation.Offset + relocation.Size
+		switch relocation.Offset {
+		case tlsOffset:
+			if relocation.Type == 7 || goAMD64FrameSplitRelocationLine(relocation, target) == "" {
+				return fail()
+			}
+			generated |= 1
+		case int64(end + 1):
+			if relocation.Type != 7 || goAMD64FrameSplitRelocationLine(relocation, target) == "" {
+				return fail()
+			}
+			generated |= 2
+		default:
+			if data == nil || relocation.Offset < int64(start) || relocation.Offset > int64(end)-relocation.Size ||
+				goAMD64FrameDataRelocationLine(relocation, data) == "" {
+				return fail()
+			}
+		}
+	}
+	if generated != 3 {
+		return fail()
 	}
 	// Actual object PC intervals, not just printed instruction names, bind
 	// every generated byte to the original TEXT directive's source position.
+	phase = "generated source-PC intervals"
 	var previous int64
 	for _, span := range text.Positions {
 		if span.Start != previous || span.End <= span.Start || span.End > int64(len(fn.code)) {
@@ -170,7 +205,7 @@ func goAMD64FrameSplitProjection(fn goAMD64FrameFunction, text gostaticstorage.T
 		}
 		previous = span.End
 		if span.Start < int64(start) || span.End > int64(end) {
-			if normalize(span.File) != normalize(entry.file) || int(span.Line) != entry.line {
+			if goAMD64FrameSourcePath(span.File, directory, root) != entryPath || int(span.Line) != entry.line {
 				return fail()
 			}
 		}

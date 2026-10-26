@@ -154,12 +154,14 @@ func (source *GoAMD64FrameSource) sdkFrameRecords() (map[string]goAMD64FrameFunc
 			if readErr != nil {
 				return nil, nil, readErr
 			}
-			observed, err = goAMD64FrameListingWithDataObject(listing, file, origin.pkg, source.origins, data, nil)
+			observed, err = goAMD64FrameListingWithDataObject(listing, file, origin.pkg, source.origins, data, nil,
+				source.request.Target, source.request.Directory, source.env["GOROOT"])
 			if err == nil {
 				err = goAMD64FrameDataTextJoin(observed, data, source.request.Directory, source.origins, source.env["GOROOT"])
 			}
 		} else if goAMD64FrameSplitListing(native.OriginalListing) {
-			observed, err = goAMD64FrameListingWithSplitObject(native.OriginalListing, file, origin.pkg, source.origins, texts, nil, source.request.Target, source.request.Directory)
+			observed, err = goAMD64FrameListingWithSplitObject(native.OriginalListing, file, origin.pkg, source.origins, texts, nil,
+				source.request.Target, source.request.Directory, source.env["GOROOT"])
 		} else {
 			observed, err = goAMD64FrameListingWithNumericalObject(native.OriginalListing, file, origin.pkg, source.origins, texts)
 		}

@@ -147,7 +147,8 @@ func goAMD64FrameMixedDataJoinGuards(t *testing.T, pkg GoPackage, source *GoAMD6
 		if err != nil {
 			return err
 		}
-		functions, err := goAMD64FrameListingWithDataObject(filtered, file, pkg, source.origins, observed, unwind)
+		functions, err := goAMD64FrameListingWithDataObject(filtered, file, pkg, source.origins, observed, unwind,
+			source.request.Target, source.request.Directory, "")
 		if err != nil {
 			return err
 		}

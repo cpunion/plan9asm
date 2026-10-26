@@ -381,7 +381,8 @@ func captureGoAMD64FrameSource(ctx context.Context, pkg GoPackage, request GoAMD
 				}
 				unwind = &value
 			}
-			functions, err = goAMD64FrameListingWithDataObject(filtered, file, pkg, source.origins, observed, unwind)
+			functions, err = goAMD64FrameListingWithDataObject(filtered, file, pkg, source.origins, observed, unwind,
+				source.request.Target, source.request.Directory, "")
 			if err == nil {
 				err = goAMD64FrameDataTextJoin(functions, observed, source.request.Directory, source.origins, "")
 			}
@@ -403,7 +404,7 @@ func captureGoAMD64FrameSource(ctx context.Context, pkg GoPackage, request GoAMD
 					return nil, readErr
 				}
 				functions, err = goAMD64FrameListingWithSplitObject(listing, file, pkg, source.origins,
-					observed.Member.Texts, nil, source.request.Target, source.request.Directory)
+					observed.Member.Texts, nil, source.request.Target, source.request.Directory, "")
 				if err == nil {
 					err = goAMD64FrameDataTextJoin(functions, observed, source.request.Directory, source.origins, "")
 				}
@@ -1395,17 +1396,18 @@ func goAMD64FrameListingWithObservations(listing []byte, file *File, pkg GoPacka
 	if texts != nil && unwind != nil {
 		return nil, goAMD64FrameContext("mixed target-specific object observation roles")
 	}
-	return goAMD64FrameListingRecords(listing, file, pkg, origins, texts, unwind, nil, "", "")
+	return goAMD64FrameListingRecords(listing, file, pkg, origins, texts, unwind, nil, "", "", "")
 }
 
-func goAMD64FrameListingWithDataObject(listing []byte, file *File, pkg GoPackage, origins map[string]int, data *gostaticstorage.AMD64AssemblyData, unwind *gostaticstorage.WindowsAMD64AssemblyUnwind) (map[string]goAMD64FrameFunction, error) {
+func goAMD64FrameListingWithDataObject(listing []byte, file *File, pkg GoPackage, origins map[string]int,
+	data *gostaticstorage.AMD64AssemblyData, unwind *gostaticstorage.WindowsAMD64AssemblyUnwind, target, directory, root string) (map[string]goAMD64FrameFunction, error) {
 	if data == nil || unwind != nil && !reflect.DeepEqual(data.Member.Texts, unwind.Texts) {
 		return nil, goAMD64FrameContext("mixed DATA/Windows complete object TEXT observations differ")
 	}
-	return goAMD64FrameListingRecords(listing, file, pkg, origins, data.Member.Texts, unwind, data, "", "")
+	return goAMD64FrameListingRecords(listing, file, pkg, origins, data.Member.Texts, unwind, data, target, directory, root)
 }
 
-func goAMD64FrameListingRecords(listing []byte, file *File, pkg GoPackage, origins map[string]int, texts []gostaticstorage.TextRecord, unwind *gostaticstorage.WindowsAMD64AssemblyUnwind, data *gostaticstorage.AMD64AssemblyData, splitTarget, splitDirectory string) (map[string]goAMD64FrameFunction, error) {
+func goAMD64FrameListingRecords(listing []byte, file *File, pkg GoPackage, origins map[string]int, texts []gostaticstorage.TextRecord, unwind *gostaticstorage.WindowsAMD64AssemblyUnwind, data *gostaticstorage.AMD64AssemblyData, splitTarget, splitDirectory, splitRoot string) (map[string]goAMD64FrameFunction, error) {
 	functions := make(map[string]goAMD64FrameFunction)
 	objects := make(map[string]gostaticstorage.TextRecord)
 	metadata := make(map[string][]byte)
@@ -1516,12 +1518,14 @@ func goAMD64FrameListingRecords(listing []byte, file *File, pkg GoPackage, origi
 			expectedLine := goAMD64FrameNumericalRelocationLine(relocations[relocationIndex])
 			if splitTarget != "" {
 				expectedLine = ""
-				if fn.split {
-					expectedLine = goAMD64FrameSplitRelocationLine(relocations[relocationIndex], splitTarget)
-				}
 			}
 			if data != nil {
 				expectedLine = goAMD64FrameDataRelocationLine(relocations[relocationIndex], data)
+			}
+			if fn.split && splitTarget != "" {
+				if generated := goAMD64FrameSplitRelocationLine(relocations[relocationIndex], splitTarget); generated != "" {
+					expectedLine = generated
+				}
 			}
 			if expectedLine == "" || strings.Join(strings.Fields(line), " ") != expectedLine {
 				return nil, goAMD64FrameContext("foreign, duplicate or reordered actual object/listing relocation")
@@ -1605,7 +1609,7 @@ func goAMD64FrameListingRecords(listing []byte, file *File, pkg GoPackage, origi
 		if original.FrameSize > 0 {
 			shape := fn
 			if fn.split {
-				shape, err = goAMD64FrameSplitProjection(fn, objects[observed], original.FrameSize, splitTarget, splitDirectory)
+				shape, err = goAMD64FrameSplitProjection(fn, objects[observed], original.FrameSize, splitTarget, splitDirectory, splitRoot, data)
 				if err != nil {
 					return nil, err
 				}
@@ -1657,7 +1661,11 @@ func goAMD64FrameMachineShape(fn goAMD64FrameFunction, frame int64) error {
 		if x86NumericalVectorPrefix(fn.code[pc:], 64) {
 			length, err := x86NumericalVectorBoundary(fn.code[pc:], 64)
 			if err != nil || length <= 0 {
-				return goAMD64FrameContext("unbound original vector machine instruction: %v", err)
+				end := pc + 15
+				if end > len(fn.code) {
+					end = len(fn.code)
+				}
+				return goAMD64FrameContext("unbound original vector machine instruction at PC %d (%x): %v", pc+fn.prologue, fn.code[pc:end], err)
 			}
 			// Exact boundaries only: these cannot impersonate the scalar
 			// automatic prologue, epilogue, native CALL or return below.
