@@ -10,6 +10,7 @@ import (
 	"go/token"
 	"os"
 	"os/exec"
+	"strconv"
 	"testing"
 	"time"
 
@@ -373,37 +374,93 @@ func TestRuntimeOracleCommandConsumersRetainOwnedExecution(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			consumers := 0
-			ast.Inspect(file, func(node ast.Node) bool {
-				call, ok := node.(*ast.CallExpr)
-				if !ok {
-					return true
-				}
-				if function, ok := call.Fun.(*ast.Ident); ok {
-					switch function.Name {
-					case "runtimeOracleCombinedOutput", "runtimeOracleMachineOutput", "goAssemblerOracleOutput", "x86FloatCompareCaptureCommand", "numericalLocalRuntimeCommand":
-						consumers++
-						return true
-					}
-				}
-				method, ok := call.Fun.(*ast.SelectorExpr)
-				if !ok {
-					return true
-				}
-				switch method.Sel.Name {
-				case "CombinedOutput", "Output", "Start", "Run":
-				default:
-					return true
-				}
-				if receiver, ok := method.X.(*ast.Ident); ok && receiver.Name == "t" {
-					return true
-				}
-				t.Errorf("runtime command bypasses its owned lifecycle: %s", method.Sel.Name)
-				return true
-			})
+			consumers, unowned := runtimeOracleCommandConsumers(file)
+			for _, method := range unowned {
+				t.Errorf("runtime command bypasses its owned lifecycle: %s", method)
+			}
 			if consumers == 0 {
 				t.Fatal("native oracle has no bounded command consumer")
 			}
 		})
 	}
+}
+
+func runtimeOracleCommandConsumers(file *ast.File) (consumers int, unowned []string) {
+	testingImports := make(map[string]bool)
+	for _, spec := range file.Imports {
+		path, err := strconv.Unquote(spec.Path.Value)
+		if err != nil || path != "testing" {
+			continue
+		}
+		name := "testing"
+		if spec.Name != nil {
+			name = spec.Name.Name
+		}
+		if name != "." && name != "_" {
+			testingImports[name] = true
+		}
+	}
+
+	ast.Inspect(file, func(node ast.Node) bool {
+		call, ok := node.(*ast.CallExpr)
+		if !ok {
+			return true
+		}
+		if function, ok := call.Fun.(*ast.Ident); ok {
+			switch function.Name {
+			case "runtimeOracleCombinedOutput", "runtimeOracleMachineOutput", "goAssemblerOracleOutput", "x86FloatCompareCaptureCommand", "numericalLocalRuntimeCommand":
+				consumers++
+				return true
+			}
+		}
+		method, ok := call.Fun.(*ast.SelectorExpr)
+		if !ok {
+			return true
+		}
+		switch method.Sel.Name {
+		case "CombinedOutput", "Output", "Start", "Run":
+		default:
+			return true
+		}
+		if runtimeOracleTestingRun(method, testingImports) {
+			return true
+		}
+		unowned = append(unowned, method.Sel.Name)
+		return true
+	})
+	return consumers, unowned
+}
+
+func runtimeOracleTestingRun(method *ast.SelectorExpr, testingImports map[string]bool) bool {
+	if method.Sel.Name != "Run" {
+		return false
+	}
+	receiver := method.X
+	for {
+		paren, ok := receiver.(*ast.ParenExpr)
+		if !ok {
+			break
+		}
+		receiver = paren.X
+	}
+	ident, ok := receiver.(*ast.Ident)
+	if !ok || ident.Obj == nil || ident.Obj.Kind != ast.Var {
+		return false
+	}
+	// ParseFile resolves lexical objects, so a command shadowing a testing
+	// parameter cannot inherit the parameter's exemption merely by its name.
+	parameter, ok := ident.Obj.Decl.(*ast.Field)
+	if !ok {
+		return false
+	}
+	pointer, ok := parameter.Type.(*ast.StarExpr)
+	if !ok {
+		return false
+	}
+	typ, ok := pointer.X.(*ast.SelectorExpr)
+	if !ok || (typ.Sel.Name != "T" && typ.Sel.Name != "B") {
+		return false
+	}
+	pkg, ok := typ.X.(*ast.Ident)
+	return ok && pkg.Obj == nil && testingImports[pkg.Name]
 }

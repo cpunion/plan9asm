@@ -46,7 +46,7 @@ jobs:
         run: node --test .github/scripts/priority-*.test.cjs
 
       - name: CI policy tests
-        run: go test . -run '^(TestCI|TestFixedLocal|TestGoAMD64FixedLocalPackedRuntimeOwnership)' -count=1
+        run: go test . -run '^(TestCI|TestFixedLocal|TestGoAMD64FixedLocalPackedRuntimeOwnership|TestRuntimeOracleCommand(ConsumersRetainOwnedExecution|AuditDistinguishesTestingRun)$)' -count=1
 
 
   fmt:

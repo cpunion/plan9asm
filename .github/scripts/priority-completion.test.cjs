@@ -22,7 +22,7 @@ function policySelector(source) {
 
 function requireCompletePolicy(source) {
   assert.equal(policySelector(source),
-    '^(TestCI|TestFixedLocal|TestGoAMD64FixedLocalPackedRuntimeOwnership)',
+    '^(TestCI|TestFixedLocal|TestGoAMD64FixedLocalPackedRuntimeOwnership|TestRuntimeOracleCommand(ConsumersRetainOwnedExecution|AuditDistinguishesTestingRun)$)',
     'preflight must select complete static-contract prefixes, not a manually enumerated subset');
   const policy = jobSection('ci_policy', source);
   assert.match(policy, /^    timeout-minutes: 20$/m);
@@ -69,13 +69,15 @@ test('PR preflight selects every existing CI and FixedLocal static contract', ()
   const root = path.join(__dirname, '../..');
   const names = fs.readdirSync(root).filter(file => file.endsWith('_test.go')).flatMap(file =>
     [...fs.readFileSync(path.join(root, file), 'utf8').matchAll(
-      /^func (Test(?:CI|FixedLocal)[A-Za-z0-9_]+|TestGoAMD64FixedLocalPackedRuntimeOwnership)\(t \*testing\.T\)/gm,
+      /^func (Test(?:CI|FixedLocal)[A-Za-z0-9_]+|TestGoAMD64FixedLocalPackedRuntimeOwnership|TestRuntimeOracleCommand(?:ConsumersRetainOwnedExecution|AuditDistinguishesTestingRun))\(t \*testing\.T\)/gm,
     )].map(match => match[1]));
   for (const guard of [
     'TestFixedLocalWideCompileOnlyOwnersDoNotRequireRuntimeTransport',
     'TestFixedLocalCompileOnlyToolsRetainExactLLVMAndSDKWithoutExecution',
     'TestFixedLocalSharedHelpersBuildOnAllHosts',
     'TestGoAMD64FixedLocalPackedRuntimeOwnership',
+    'TestRuntimeOracleCommandConsumersRetainOwnedExecution',
+    'TestRuntimeOracleCommandAuditDistinguishesTestingRun',
   ]) assert.ok(names.includes(guard), 'independently required source guard missing: ' + guard);
   for (const name of names) assert.ok(selected.test(name), 'preflight omitted existing static contract: ' + name);
 });
@@ -93,6 +95,9 @@ test('preflight includes future static contracts without selecting expensive exe
     'TestGoAMD64FixedLocalConversionActualObjectsLinuxBatch00',
     'TestGoAMD64FixedLocalReadonlyDataWindowsRegisteredConsumers',
     'TestX86AESFamilyActualBoundFixedLocalConsumers',
+    'TestRuntimeOracleCommandRequiresBoundContextAndOutput',
+    'TestRuntimeOracleCommandConsumersRetainOwnedExecutionNative',
+    'TestRuntimeOracleCommandAuditDistinguishesTestingRunNative',
   ]) assert.ok(!selected.test(name), 'cheap preflight acquired an actual native/object owner: ' + name);
 });
 
@@ -104,6 +109,7 @@ test('preflight rejects stale suffix allowlists, missing contract families and f
     '^(TestCI|TestFixedLocal(APIsHaveIndependentBoundedCaptureLeases|WideCompileOnlyHasThreeCompleteAPIOwners)|TestGoAMD64FixedLocalPackedRuntimeOwnership)',
     '^(TestFixedLocal|TestGoAMD64FixedLocalPackedRuntimeOwnership)',
     '^(TestCI|TestFixedLocal)',
+    '^(TestCI|TestFixedLocal|TestGoAMD64FixedLocalPackedRuntimeOwnership)',
     '^Test',
   ]) assert.throws(() => requireCompletePolicy(workflow.replace(command,
     () => "run: go test . -run '" + selector + "' -count=1")));
