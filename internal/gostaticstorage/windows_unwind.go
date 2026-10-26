@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/binary"
+	"reflect"
 	"strings"
 )
 
@@ -28,8 +29,11 @@ type WindowsAMD64AssemblyUnwind struct {
 // ObserveWindowsAMD64AssemblyUnwind is a read-only, bounded object observation.
 // A live source factory must independently bind original source, actual tools,
 // the pinned producer/schema, full listing and physical prologue/source PCs.
-func ObserveWindowsAMD64AssemblyUnwind(data, builtinSource []byte) (WindowsAMD64AssemblyUnwind, error) {
+func ObserveWindowsAMD64AssemblyUnwind(data, builtinSource []byte, privateLeaves ...[]TextRecord) (WindowsAMD64AssemblyUnwind, error) {
 	var result WindowsAMD64AssemblyUnwind
+	if len(privateLeaves) > 1 {
+		return result, contextError("Windows metadata has multiple private source-role inventories")
+	}
 	if len(data) == 0 || len(data) > archiveLimit {
 		return result, contextError("Windows assembly object exceeds its byte bound")
 	}
@@ -81,6 +85,22 @@ func ObserveWindowsAMD64AssemblyUnwind(data, builtinSource []byte) (WindowsAMD64
 	}
 	if len(texts) == 0 {
 		return result, contextError("Windows metadata lacks its complete TEXT inventory")
+	}
+	var leaves map[uint32]TextRecord
+	if len(privateLeaves) == 1 && len(privateLeaves[0]) != 0 {
+		if len(privateLeaves[0]) > len(texts) {
+			return result, contextError("Windows private source-role inventory exceeds its complete object")
+		}
+		leaves = make(map[uint32]TextRecord, len(privateLeaves[0]))
+		for _, text := range privateLeaves[0] {
+			_, duplicate := leaves[text.Index]
+			if duplicate || text.Name == "" || text.Kind != 1 || text.Flags != 16 ||
+				!(text.Namespace == TextSymbolSelf && text.ABI == 65535 ||
+					text.Namespace == TextSymbolNonpkgDefinition && text.ABI == 0) {
+				return result, contextError("Windows private source-role inventory has an invalid TEXT identity")
+			}
+			leaves[text.Index] = text
+		}
 	}
 	block := object.block
 	counts := [4]int{}
@@ -141,7 +161,11 @@ func ObserveWindowsAMD64AssemblyUnwind(data, builtinSource []byte) (WindowsAMD64
 	used := make(map[uint32]bool)
 	textNames := make(map[string]bool)
 	for _, text := range texts {
-		if text.Name == "" || textNames[text.Name] || text.Kind != 1 || text.ABI != 0 ||
+		leaf, private := leaves[text.Index]
+		if private && !reflect.DeepEqual(leaf, text) {
+			return WindowsAMD64AssemblyUnwind{}, contextError("Windows private TEXT differs from its complete source/object association")
+		}
+		if text.Name == "" || textNames[text.Name] || text.Kind != 1 || !private && text.ABI != 0 ||
 			text.Flags&^16 != 0 || text.Flags2 != schema.flag2 {
 			return WindowsAMD64AssemblyUnwind{}, contextError("Windows closed-local metadata needs complete distinct ABI0 TEXTs")
 		}
@@ -163,9 +187,17 @@ func ObserveWindowsAMD64AssemblyUnwind(data, builtinSource []byte) (WindowsAMD64
 			}
 			used[index] = true
 		}
-		if links != 1 {
+		expectedLinks := 1
+		if private {
+			expectedLinks = 0 // Go's actual zero-frame leaf has no SEH prologue.
+			delete(leaves, text.Index)
+		}
+		if links != expectedLinks {
 			return WindowsAMD64AssemblyUnwind{}, contextError("Windows TEXT has missing or duplicate SEH auxiliary ownership")
 		}
+	}
+	if len(leaves) != 0 {
+		return WindowsAMD64AssemblyUnwind{}, contextError("Windows private source-role inventory has a foreign TEXT")
 	}
 	if len(used) != len(byIndex) {
 		return WindowsAMD64AssemblyUnwind{}, contextError("Windows unwind inventory has an orphan definition")

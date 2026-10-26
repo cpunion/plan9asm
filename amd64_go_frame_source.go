@@ -383,7 +383,11 @@ func captureGoAMD64FrameSource(ctx context.Context, pkg GoPackage, request GoAMD
 			}
 			var unwind *gostaticstorage.WindowsAMD64AssemblyUnwind
 			if source.request.Target == "windows/amd64" {
-				value, readErr := source.observeWindowsUnwind(objectBytes)
+				leaves, readErr := goAMD64WindowsPrivateLeafTexts(file, pkg, listing, observed)
+				if readErr != nil {
+					return nil, readErr
+				}
+				value, readErr := source.observeWindowsUnwind(objectBytes, leaves)
 				if readErr != nil {
 					return nil, readErr
 				}
