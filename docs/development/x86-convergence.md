@@ -144,7 +144,9 @@ minimum Go 1.20.14 both pass the following Linux/amd64 LLVM22 object scopes:
 |---|---:|---:|
 | Add/subtract/D-Q low product | 159 | 480 |
 | Signed/unsigned integer min/max | 132 | 432 |
-| Total | 291 | 912 |
+| Rounded average, products and multiply-add | 90 | 258 |
+| Integer and PS/PD logical | 132 | 504 |
+| Total | 513 | 1,674 |
 
 Two PADDD alias witnesses are separate from the canonical counts. Min/max
 includes 48 non-Q, unmasked, narrow EVEX forms; low-register VEX objects cannot
@@ -152,6 +154,14 @@ substitute for them. These are initialized named-source/object checks, not raw
 decoder or executed-semantic coverage of every row. Complete legacy/AVX mode
 applicability and remaining family joins are still required; do not divide this
 pilot by unfiltered encoding-table rows to claim an architecture percentage.
+
+The logical join shares the existing row grammar, original-byte verifier and
+three-API object driver. Prefix, carrier width and VEX/EVEX identity are
+orthogonal encoding axes; impossible VEX512 and conflicting prefix forms fail.
+Its 32 names need 19 additional implementation lines, not 504 separate rules.
+The seven average/product and four logical MMX rows keep separate region owners.
+The residual dword-product dispatcher also loses 40 unreachable production lines;
+its original direct fixtures now invoke the same typed owner as public lowering.
 
 Fixed-frame GP analysis now consumes the existing typed byte/FLAGS effects
 instead of a second arithmetic opcode list. Its bounded worklist intersects
