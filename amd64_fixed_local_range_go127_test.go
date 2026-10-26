@@ -8,27 +8,42 @@ import (
 	"testing"
 )
 
+func fixedLocalReadonlyRangeProgram(t *testing.T) (string, string, []fixedLocalRangeCase) {
+	t.Helper()
+	var assembly, declarations strings.Builder
+	for offset := 0; offset < 240; offset += 8 {
+		// Each source qword advances all eight bytes independently. Runtime
+		// expectations construct a byte array instead of parsing these DATA.
+		word := uint64(0x0807060504030201) + uint64(offset)*0x0101010101010101
+		fmt.Fprintf(&assembly, "DATA literal<>+%d(SB)/8,$0x%016x\n", offset, word)
+	}
+	assembly.WriteString("GLOBL literal<>(SB),8,$240\n")
+	rows := fixedLocalRangeCases()
+	if len(rows) != 48 {
+		t.Fatal("complete readonly range source inventory changed", len(rows))
+	}
+	for index, row := range rows {
+		name := fmt.Sprintf("Value%d", index)
+		assembly.WriteString(fixedLocalConstantIndexFunction(name, row.body))
+		fmt.Fprintf(&declarations, "func %s(a uint64) uint64\n", name)
+	}
+	return assembly.String(), declarations.String(), rows
+}
+
 func TestGoAMD64FixedLocalReadonlyRangeObjects(t *testing.T) {
 	goAMD64FramePrepareOwnedToolCache(t)
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc required")
 	}
-	var assembly, declarations strings.Builder
-	assembly.WriteString(fixedLocalRangeData)
-	rows := fixedLocalRangeCases()
-	for index, row := range rows {
-		name := fmt.Sprintf("Value%d", index)
-		assembly.WriteString(fixedLocalConstantIndexFunction(name, row.body))
-		fmt.Fprintf(&declarations, "func %s(a uint64) uint64\n", name)
-	}
+	assembly, declarations, rows := fixedLocalReadonlyRangeProgram(t)
 	for _, target := range []struct{ name, triple string }{
 		{"linux/amd64", "x86_64-unknown-linux-gnu"},
 		{"darwin/amd64", "x86_64-apple-darwin"},
 		{"windows/amd64", "x86_64-pc-windows-msvc"},
 	} {
 		t.Run(target.name, func(t *testing.T) {
-			pkg, request, _, options := fixedLocalTransportFixture(t, assembly.String(), declarations.String(), target.name, target.triple)
+			pkg, request, _, options := fixedLocalTransportFixture(t, assembly, declarations, target.name, target.triple)
 			var names []string
 			for index := range rows {
 				names = append(names, fmt.Sprintf("%s.Value%d", pkg.Path, index))
