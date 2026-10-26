@@ -64,14 +64,9 @@ func goAMD64WindowsUnwindByteRow(line string, offset int, expected []byte) ([]by
 // This private join consumes the factory's independently read whole object.
 // A public offline observation is never itself an authorization input.
 func goAMD64FrameWindowsUnwindListing(listing []byte, file *File, pkg GoPackage, origins map[string]int, directory string, observed gostaticstorage.WindowsAMD64AssemblyUnwind) (map[string]goAMD64FrameFunction, error) {
-	functions, err := goAMD64FrameListingWithWindowsUnwind(listing, file, pkg, origins, &observed)
+	functions, err := goAMD64FrameListingWithSplitObject(listing, file, pkg, origins, observed.Texts, &observed, "windows/amd64", directory)
 	if err != nil {
 		return nil, err
-	}
-	for _, text := range observed.Texts {
-		if len(text.Relocations) != 0 {
-			return nil, goAMD64FrameContext("Windows object/listing TEXT relocation requires its separate complete observer")
-		}
 	}
 	if err := goAMD64FrameWindowsUnwindFunctions(functions, origins, directory, observed); err != nil {
 		return nil, err
@@ -90,8 +85,8 @@ func goAMD64FrameWindowsUnwindFunctions(functions map[string]goAMD64FrameFunctio
 	seen := make(map[string]bool)
 	for _, text := range observed.Texts {
 		fn, exists := functions[text.Name]
-		if !exists || seen[text.Name] || text.ABI != 0 || text.Kind != 1 || text.Flags != 16 || text.Flags2 != observed.TextFlags2 ||
-			!bytes.Equal(text.Code, fn.code) {
+		if !exists || seen[text.Name] || text.ABI != 0 || text.Kind != 1 || text.Flags != fn.nativeFlags() || text.Flags2 != observed.TextFlags2 ||
+			!bytes.Equal(text.Code, fn.code) || fn.prologue < 0 || fn.prologue >= len(fn.code) {
 			return goAMD64FrameContext("Windows object/listing TEXT name/ABI/code role differs")
 		}
 		seen[text.Name] = true
@@ -101,13 +96,13 @@ func goAMD64FrameWindowsUnwindFunctions(functions map[string]goAMD64FrameFunctio
 				metadata = unwind[aux.Target.Name]
 			}
 		}
-		first, err := x86asm.Decode(fn.code, 64)
-		if err != nil || first.Op != x86asm.PUSH || first.Args[0] != x86asm.RBP || first.Len != int(metadata.PushEnd) {
+		first, err := x86asm.Decode(fn.code[fn.prologue:], 64)
+		if err != nil || first.Op != x86asm.PUSH || first.Args[0] != x86asm.RBP || fn.prologue+first.Len != int(metadata.PushEnd) {
 			return goAMD64FrameContext("Windows unwind push end differs from actual automatic prologue")
 		}
-		second, err := x86asm.Decode(fn.code[first.Len:], 64)
+		second, err := x86asm.Decode(fn.code[fn.prologue+first.Len:], 64)
 		if err != nil || second.Op != x86asm.MOV || second.Args[0] != x86asm.RBP || second.Args[1] != x86asm.RSP ||
-			first.Len+second.Len != int(metadata.PrologueEnd) {
+			fn.prologue+first.Len+second.Len != int(metadata.PrologueEnd) {
 			return goAMD64FrameContext("Windows unwind frame end differs from actual automatic prologue")
 		}
 		if err := goAMD64WindowsUnwindSourcePCs(text, fn, directory, origins); err != nil {

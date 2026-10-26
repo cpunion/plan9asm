@@ -23,10 +23,11 @@ type goAMD64SDKFrameOrigin struct {
 // CaptureGoAMD64SDKFrameSource is a distinct actual SDK-primary typed ABI0
 // native frame factory. It authenticates the whole selected source/profile,
 // compiler graph and all TEXTs, without relabeling SDK source as owned-main.
-// Entries must all be Go-declared and NOSPLIT with exact logical/native names,
+// Entries must all be Go-declared with exact logical/native names,
 // layout and source PCs. Nonzero frames also require automatic BP/SP shapes;
 // zero-frame siblings retain their ordinary ABI0 path without local backing.
-// Private helpers, native callers, split stacks, ABI selectors and SDK DATA
+// Generated split checks are observed separately from the source body.
+// Private helpers, native callers, ABI selectors and SDK DATA
 // composition require separate contracts. BindFixedLocal still proves every
 // full-source access/initialization/CFG requirement before granting local bytes.
 func CaptureGoAMD64SDKFrameSource(ctx context.Context, pkg GoPackage, request GoAMD64FrameCaptureRequest) (_ *GoAMD64FrameSource, result error) {
@@ -130,9 +131,6 @@ func (source *GoAMD64FrameSource) sdkFrameRecords() (map[string]goAMD64FrameFunc
 				!defined || text.ABI != 0 || name != record.Symbol || name != text.Name {
 				return nil, nil, goAMD64FrameContext("SDK-primary frame requires an exact Go-declared logical ABI0 entry; private/native helper has no role: %s (declared=%t native=%s namespace=%d ABI=%d static=%t args-known=%t)", fn.Sym, declared, record.Symbol, text.Namespace, text.ABI, record.Static, record.ArgsKnown)
 			}
-			if !record.NoSplit {
-				return nil, nil, goAMD64FrameContext("SDK-primary split-stack TEXT needs an independent entry/storage contract: %s", fn.Sym)
-			}
 			if fn.FrameSize < 0 || fn.FrameSize > 64<<10 || fn.FrameSize%8 != 0 || record.Locals != uint64(goAMD64FrameNativeLocals(fn.FrameSize)) || record.Args != fn.ArgSize {
 				return nil, nil, goAMD64FrameContext("SDK-primary original declaration/native fixed-frame layout differs: %s", fn.Sym)
 			}
@@ -149,7 +147,12 @@ func (source *GoAMD64FrameSource) sdkFrameRecords() (map[string]goAMD64FrameFunc
 			}
 			source.origins[observed.File] = strings.Count(string(bytes), "\n") + 1
 		}
-		observed, err := goAMD64FrameListingWithNumericalObject(native.OriginalListing, file, origin.pkg, source.origins, texts)
+		var observed map[string]goAMD64FrameFunction
+		if goAMD64FrameSplitListing(native.OriginalListing) {
+			observed, err = goAMD64FrameListingWithSplitObject(native.OriginalListing, file, origin.pkg, source.origins, texts, nil, source.request.Target, source.request.Directory)
+		} else {
+			observed, err = goAMD64FrameListingWithNumericalObject(native.OriginalListing, file, origin.pkg, source.origins, texts)
+		}
 		if err != nil {
 			return nil, nil, err
 		}

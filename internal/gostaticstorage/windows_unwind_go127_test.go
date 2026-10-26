@@ -103,6 +103,7 @@ func TestGoStaticStorageWindowsUnwindCompleteSchemaAndGuards(t *testing.T) {
 		return 0
 	}
 	aux := metadataAux(observed.Texts[0])
+	textSymbol := offset(3) + int(observed.Texts[0].Index)*21
 	mutations := map[string]func([]byte) []byte{
 		"wrong target":          func(v []byte) []byte { return bytes.Replace(v, []byte("windows amd64"), []byte("linuxxx amd64"), 1) },
 		"extra EOF":             func(v []byte) []byte { return append(v, 0) },
@@ -112,6 +113,7 @@ func TestGoStaticStorageWindowsUnwindCompleteSchemaAndGuards(t *testing.T) {
 		"wrong ABI":             func(v []byte) []byte { v[metadataSymbol+8] = 1; return v },
 		"missing local flag":    func(v []byte) []byte { v[metadataSymbol+11] = 1; return v },
 		"extra symbol flag":     func(v []byte) []byte { v[metadataSymbol+11] |= 4; return v },
+		"extra TEXT flag":       func(v []byte) []byte { v[textSymbol+11] |= 1; return v },
 		"extra flag2":           func(v []byte) []byte { v[metadataSymbol+12] = 1; return v },
 		"wrong size":            func(v []byte) []byte { v[metadataSymbol+13] = 13; return v },
 		"wrong alignment":       func(v []byte) []byte { v[metadataSymbol+17] = 8; return v },

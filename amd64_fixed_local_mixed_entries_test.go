@@ -144,11 +144,11 @@ func TestGoAMD64FixedLocalMixedEntryInventoryAndRevocation(t *testing.T) {
 
 func TestGoAMD64FixedLocalMixedEntryRejectsUnclosedRoles(t *testing.T) {
 	goAMD64FramePrepareOwnedToolCache(t)
-	for _, role := range []string{"split frame", "private helper"} {
+	for _, role := range []string{"source call", "private helper"} {
 		t.Run(role, func(t *testing.T) {
 			pkg, request, _, _, assembly := fixedLocalMixedEntriesFixture(t, false)
-			if role == "split frame" {
-				assembly = strings.Replace(assembly, "TEXT ·Value(SB),4,$160-40", "TEXT ·Value(SB),$160-40", 1)
+			if role == "source call" {
+				assembly = strings.Replace(assembly, "TEXT ·Value(SB),4,$160-40", "TEXT ·Value(SB),$160-40\nCALL runtime·morestack_noctxt(SB)", 1)
 			} else {
 				assembly += "TEXT helper<>(SB),4,$0-0\nRET\n"
 			}
@@ -162,7 +162,7 @@ func TestGoAMD64FixedLocalMixedEntryRejectsUnclosedRoles(t *testing.T) {
 				source.Close()
 			}
 			if source != nil || !errors.Is(err, ErrProbeNeedsContext) {
-				t.Fatal("ordinary sibling invented a split-stack or private-entry contract", err)
+				t.Fatal("ordinary sibling invented a source-call or private-entry contract", err)
 			}
 		})
 	}

@@ -147,7 +147,7 @@ func goAMD64FrameDataTextJoin(functions map[string]goAMD64FrameFunction, observe
 	}
 	for _, text := range observed.Member.Texts {
 		fn, found := functions[text.Name]
-		if !found || text.ABI != 0 || text.Kind != 1 || text.Flags != 16 || text.Flags2 != 0 || !bytes.Equal(text.Code, fn.code) {
+		if !found || text.ABI != 0 || text.Kind != 1 || text.Flags != fn.nativeFlags() || text.Flags2 != 0 || !bytes.Equal(text.Code, fn.code) {
 			return goAMD64FrameContext("mixed DATA object/listing TEXT ABI, flags or complete bytes differ")
 		}
 		if err := goAMD64WindowsUnwindSourcePCs(text, fn, directory, origins); err != nil {

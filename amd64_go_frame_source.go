@@ -103,12 +103,21 @@ type goAMD64FrameDeclaration struct {
 type goAMD64FrameFunction struct {
 	objectSymbol, listingSymbol string
 	locals, args                int64
+	split                       bool
+	prologue                    int // original byte offset, after any generated stack check
 	code                        []byte
 	positions                   map[int]string
 	sourcePositions             map[int][]goAMD64FrameSourcePosition
 	signature                   FuncSig
 	transport                   goAMD64FrameTransport
 	languageType                string
+}
+
+func (fn goAMD64FrameFunction) nativeFlags() uint8 {
+	if fn.split {
+		return 0
+	}
+	return 16 // goobj.SymFlagNoSplit, not an assembly-origin flag.
 }
 
 type goAMD64FrameSourcePosition struct {
@@ -388,7 +397,19 @@ func captureGoAMD64FrameSource(ctx context.Context, pkg GoPackage, request GoAMD
 			functions, err = goAMD64FrameWindowsUnwindListing(listing, file, pkg, source.origins,
 				source.request.Directory, unwind)
 		} else {
-			functions, err = goAMD64FrameListingWithNumericalObject(listing, file, pkg, source.origins, texts)
+			if source.numericalBinding == nil && goAMD64FrameSplitListing(listing) {
+				observed, readErr := source.frameDataObject(expanded, objectBytes)
+				if readErr != nil {
+					return nil, readErr
+				}
+				functions, err = goAMD64FrameListingWithSplitObject(listing, file, pkg, source.origins,
+					observed.Member.Texts, nil, source.request.Target, source.request.Directory)
+				if err == nil {
+					err = goAMD64FrameDataTextJoin(functions, observed, source.request.Directory, source.origins)
+				}
+			} else {
+				functions, err = goAMD64FrameListingWithNumericalObject(listing, file, pkg, source.origins, texts)
+			}
 		}
 		if err != nil {
 			return nil, err
@@ -1343,7 +1364,7 @@ func (source *GoAMD64FrameSource) preprocess(name string, original []byte) (stri
 	return expand(name, original)
 }
 
-var goAMD64FrameHeader = regexp.MustCompile(`^(\S+) STEXT nosplit(?: asm)? size=([0-9]+) (?:align=0x[0-9a-f]+ )?args=0x([0-9a-f]+) locals=0x([0-9a-f]+)(?: funcid=0x[0-9a-f]+)?(?: align=0x[0-9a-f]+)?$`)
+var goAMD64FrameHeader = regexp.MustCompile(`^(\S+) (STEXT(?:FIPS)?)( nosplit)?(?: asm)? size=([0-9]+) (?:align=0x[0-9a-f]+ )?args=0x([0-9a-f]+) locals=0x([0-9a-f]+)(?: funcid=0x[0-9a-f]+)?(?: align=0x[0-9a-f]+)?$`)
 var goAMD64FrameRow = regexp.MustCompile(`^\s*0x([0-9a-f]+) [0-9]+ \((.+)\)\s+(.+)$`)
 
 // Zero-frame ordinary entries have no automatic saved-BP slot. They remain
@@ -1374,18 +1395,19 @@ func goAMD64FrameListingWithObservations(listing []byte, file *File, pkg GoPacka
 	if texts != nil && unwind != nil {
 		return nil, goAMD64FrameContext("mixed target-specific object observation roles")
 	}
-	return goAMD64FrameListingRecords(listing, file, pkg, origins, texts, unwind, nil)
+	return goAMD64FrameListingRecords(listing, file, pkg, origins, texts, unwind, nil, "", "")
 }
 
 func goAMD64FrameListingWithDataObject(listing []byte, file *File, pkg GoPackage, origins map[string]int, data *gostaticstorage.AMD64AssemblyData, unwind *gostaticstorage.WindowsAMD64AssemblyUnwind) (map[string]goAMD64FrameFunction, error) {
 	if data == nil || unwind != nil && !reflect.DeepEqual(data.Member.Texts, unwind.Texts) {
 		return nil, goAMD64FrameContext("mixed DATA/Windows complete object TEXT observations differ")
 	}
-	return goAMD64FrameListingRecords(listing, file, pkg, origins, data.Member.Texts, unwind, data)
+	return goAMD64FrameListingRecords(listing, file, pkg, origins, data.Member.Texts, unwind, data, "", "")
 }
 
-func goAMD64FrameListingRecords(listing []byte, file *File, pkg GoPackage, origins map[string]int, texts []gostaticstorage.TextRecord, unwind *gostaticstorage.WindowsAMD64AssemblyUnwind, data *gostaticstorage.AMD64AssemblyData) (map[string]goAMD64FrameFunction, error) {
+func goAMD64FrameListingRecords(listing []byte, file *File, pkg GoPackage, origins map[string]int, texts []gostaticstorage.TextRecord, unwind *gostaticstorage.WindowsAMD64AssemblyUnwind, data *gostaticstorage.AMD64AssemblyData, splitTarget, splitDirectory string) (map[string]goAMD64FrameFunction, error) {
 	functions := make(map[string]goAMD64FrameFunction)
+	objects := make(map[string]gostaticstorage.TextRecord)
 	metadata := make(map[string][]byte)
 	metadataHeaders := make(map[string]string)
 	seenMetadata := make(map[string]bool)
@@ -1418,6 +1440,9 @@ func goAMD64FrameListingRecords(listing []byte, file *File, pkg GoPackage, origi
 	for scanner.Scan() {
 		line := scanner.Text()
 		if header := goAMD64FrameHeader.FindStringSubmatch(line); header != nil {
+			if header[3] == "" && (splitTarget == "" || texts == nil) {
+				return nil, goAMD64FrameContext("automatic split layout requires its complete original object")
+			}
 			if metadataName != "" {
 				return nil, goAMD64FrameContext("Windows listing TEXT follows its metadata inventory")
 			}
@@ -1430,6 +1455,23 @@ func goAMD64FrameListingRecords(listing []byte, file *File, pkg GoPackage, origi
 				if textIndex >= len(texts) || texts[textIndex].Name != header[1] {
 					return nil, goAMD64FrameContext("reordered or foreign complete object/listing TEXT")
 				}
+				kind := uint8(1)
+				if header[2] == "STEXTFIPS" {
+					kind = 2
+				}
+				if texts[textIndex].Kind != kind || texts[textIndex].ABI != 0 {
+					return nil, goAMD64FrameContext("complete object/listing TEXT kind or ABI differs")
+				}
+				flags := uint8(0)
+				if header[3] != "" {
+					flags = 16
+				}
+				if splitTarget != "" && texts[textIndex].Flags != flags {
+					return nil, goAMD64FrameContext("complete object/listing TEXT NOSPLIT flags differ")
+				}
+				objects[header[1]] = texts[textIndex]
+			} else if header[2] != "STEXT" {
+				return nil, goAMD64FrameContext("FIPS TEXT needs its complete original object kind")
 			}
 			if name != "" && int64(len(functions[name].code)) != expected {
 				return nil, goAMD64FrameContext("partial native symbol bytes")
@@ -1438,10 +1480,10 @@ func goAMD64FrameListingRecords(listing []byte, file *File, pkg GoPackage, origi
 			if _, duplicate := functions[name]; duplicate {
 				return nil, goAMD64FrameContext("duplicate native TEXT")
 			}
-			expected, _ = strconv.ParseInt(header[2], 10, 64)
-			args, _ := strconv.ParseInt(header[3], 16, 64)
-			locals, _ := strconv.ParseInt(header[4], 16, 64)
-			functions[name] = goAMD64FrameFunction{locals: locals, args: args, positions: make(map[int]string), sourcePositions: make(map[int][]goAMD64FrameSourcePosition)}
+			expected, _ = strconv.ParseInt(header[4], 10, 64)
+			args, _ := strconv.ParseInt(header[5], 16, 64)
+			locals, _ := strconv.ParseInt(header[6], 16, 64)
+			functions[name] = goAMD64FrameFunction{locals: locals, args: args, split: header[3] == "", positions: make(map[int]string), sourcePositions: make(map[int][]goAMD64FrameSourcePosition)}
 			continue
 		}
 		if header, exists := metadataHeaders[line]; exists {
@@ -1472,6 +1514,12 @@ func goAMD64FrameListingRecords(listing []byte, file *File, pkg GoPackage, origi
 				return nil, goAMD64FrameContext("extra actual object/listing relocation")
 			}
 			expectedLine := goAMD64FrameNumericalRelocationLine(relocations[relocationIndex])
+			if splitTarget != "" {
+				expectedLine = ""
+				if fn.split {
+					expectedLine = goAMD64FrameSplitRelocationLine(relocations[relocationIndex], splitTarget)
+				}
+			}
 			if data != nil {
 				expectedLine = goAMD64FrameDataRelocationLine(relocations[relocationIndex], data)
 			}
@@ -1580,9 +1628,22 @@ func goAMD64FrameListingRecords(listing []byte, file *File, pkg GoPackage, origi
 			}
 		}
 		if original.FrameSize > 0 {
-			if err := goAMD64FrameMachineShape(fn, original.FrameSize); err != nil {
+			shape := fn
+			if fn.split {
+				shape, err = goAMD64FrameSplitProjection(fn, objects[observed], original.FrameSize, splitTarget, splitDirectory)
+				if err != nil {
+					return nil, err
+				}
+				fn.prologue = shape.prologue
+			}
+			if err := goAMD64FrameMachineShape(shape, original.FrameSize); err != nil {
 				return nil, err
 			}
+		} else if fn.split {
+			return nil, goAMD64FrameContext("zero-frame split entry needs its separate native layout")
+		}
+		if text, exists := objects[observed]; exists && !bytes.Equal(text.Code, fn.code) {
+			return nil, goAMD64FrameContext("complete original object/listing TEXT bytes differ")
 		}
 		fn.listingSymbol, fn.objectSymbol = observed, symbol
 		bound[symbol] = fn
@@ -1612,6 +1673,14 @@ func goAMD64FrameMachineShape(fn goAMD64FrameFunction, frame int64) error {
 		}
 		if len(fn.positions[pc]) == 0 {
 			return goAMD64FrameContext("machine instruction lacks its original source position")
+		}
+		// A projected source body must not jump back into the discarded
+		// automatic stack check or forward into its runtime retry tail.
+		if relative, ok := ins.Args[0].(x86asm.Rel); ok && fn.split {
+			destination := pc + ins.Len + int(relative)
+			if destination < 0 || destination >= len(fn.code) {
+				return goAMD64FrameContext("source branch enters an automatic split region")
+			}
 		}
 		starts[pc] = true
 		instructions = append(instructions, ins)

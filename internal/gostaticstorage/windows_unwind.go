@@ -142,7 +142,7 @@ func ObserveWindowsAMD64AssemblyUnwind(data, builtinSource []byte) (WindowsAMD64
 	textNames := make(map[string]bool)
 	for _, text := range texts {
 		if text.Name == "" || textNames[text.Name] || text.Kind != 1 || text.ABI != 0 ||
-			text.Flags != 16 || text.Flags2 != schema.flag2 {
+			text.Flags&^16 != 0 || text.Flags2 != schema.flag2 {
 			return WindowsAMD64AssemblyUnwind{}, contextError("Windows closed-local metadata needs complete distinct ABI0 TEXTs")
 		}
 		textNames[text.Name] = true
