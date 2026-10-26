@@ -152,6 +152,27 @@ automatic frame machine-shape check. The no-DATA ordinary-relocation capture
 prerequisite at `84163349c` observes complete original objects on three OSes;
 it does not grant global address or memory permissions.
 
+Subsequent verified batches (not yet a new complete-source or native receipt):
+
+- `ff15c4d8b` binds ordinary Go variable addresses through the existing actual
+  typecheck, layout and alias checks. Mutable globals stay external, never
+  private constant DATA. The agent receipt passes 11 roots / 192 children,
+  including 54 three-platform LLVM objects. Its mutable-global native oracle
+  is compiled but not yet executed.
+- `43fc0e320` validates the signed 64-bit ADJSP delta rather than only positive
+  ADD/SUB immediates. Actual Go frame128 failed on all three OSes before the
+  fix; the integrated stack/global receipt passes 10 roots / 270 children in
+  122.199 seconds, with zero failures/skips and altered-width/register/delta
+  rejection retained.
+- `71472ce1d` adds 31 VEX counterpart members (62 official rows / 186 source
+  forms) through the shared legacy/VEX binary effect builder. The original
+  354 forms remain, for 540 original-Go witnesses with three-API O0/O2 objects.
+  The agent receipt passes 38 roots / 1,878 children in 115.170 seconds, plus
+  three min/max roots / five children. Six duplicate wrappers are removed;
+  typed effect code shrinks by 21 lines, total production grows by 19 lines
+  including physical decoder adapters. Neither count is native execution or
+  exact encoder-row-selection evidence.
+
 Next: finish VEX counterpart effects and their independent original-byte joins,
 repair complete-source frame boundaries, then rerun the 55-file benchmark.
 Compose ordinary mutable Go global
