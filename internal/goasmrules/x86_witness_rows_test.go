@@ -7,6 +7,61 @@ import (
 	"testing"
 )
 
+func TestX86PackedAverageMultiplyRowsShareBinaryWitnesses(t *testing.T) {
+	legacy, err := LoadX86LegacyRules(runtime.GOROOT())
+	if err != nil {
+		t.Fatal(err)
+	}
+	avx, err := LoadX86AVXRules(runtime.GOROOT())
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows, err := X86PackedAverageMultiplyRows(legacy, avx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ids, names := map[string]bool{}, map[string]bool{}
+	generationRows, generationFormats := map[string]int{}, map[string]int{}
+	widthFormats := map[int]int{}
+	for _, row := range rows {
+		if row.ID == "" || ids[row.ID] || len(row.Witnesses) < 2 {
+			t.Fatal("missing original row identity or register/memory witness", row.ID)
+		}
+		ids[row.ID], names[row.Opcode] = true, true
+		generationRows[row.Witnesses[0].Generation]++
+		for _, witness := range row.Witnesses {
+			generationFormats[witness.Generation]++
+			widthFormats[witness.Width]++
+			if witness.Generation == "evex" && (witness.Encoding[0] != 0x62 ||
+				!strings.HasSuffix(witness.Second, "17") || !strings.HasSuffix(witness.Destination, "18")) {
+				t.Fatal("official EVEX identity can fall back to VEX", row.ID)
+			}
+		}
+	}
+	if len(rows) != 90 || len(names) != 20 || generationRows["legacy"] != 10 ||
+		generationRows["vex"] != 20 || generationRows["evex"] != 60 ||
+		generationFormats["legacy"] != 20 || generationFormats["vex"] != 40 || generationFormats["evex"] != 198 ||
+		widthFormats[128] != 106 || widthFormats[256] != 86 || widthFormats[512] != 66 {
+		t.Fatalf("average/multiply denominator drift: rows=%d names=%d generations=%v formats=%v widths=%v",
+			len(rows), len(names), generationRows, generationFormats, widthFormats)
+	}
+	mmx := 0
+	for _, entry := range legacy.Optab {
+		if !names[entry.Opcode] {
+			continue
+		}
+		for _, row := range entry.Rows {
+			if strings.Join(row.Classes, ",") == "Ymm,Ymr" {
+				mmx++
+			}
+		}
+	}
+	if mmx != 7 {
+		t.Fatalf("separate MMX region inventory drift: %d", mmx)
+	}
+	t.Logf("%s: 90 canonical rows / 258 register, memory, width and mask expectations; seven MMX rows remain outside this scope, no translation/runtime claim", runtime.Version())
+}
+
 func TestX86PackedBinaryPilotRows(t *testing.T) {
 	legacy, err := LoadX86LegacyRules(runtime.GOROOT())
 	if err != nil {

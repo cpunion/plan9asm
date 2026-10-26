@@ -25,6 +25,10 @@ func TestX86OfficialPackedRowsInitializedThreeAPIsObjects(t *testing.T) {
 	x86OfficialPackedRowsObjects(t, goasmrules.X86PackedBinaryPilotRows, 159, 480, 2)
 }
 
+func TestX86OfficialAverageMultiplyRowsInitializedThreeAPIsObjects(t *testing.T) {
+	x86OfficialPackedRowsObjects(t, goasmrules.X86PackedAverageMultiplyRows, 90, 258, 0)
+}
+
 func TestX86OfficialMinMaxRowsInitializedThreeAPIsObjects(t *testing.T) {
 	verified := x86OfficialPackedRowsObjects(t, goasmrules.X86PackedIntegerMinMaxRows, 132, 432, 0)
 	narrowEVEX := 0
@@ -76,7 +80,7 @@ func x86OfficialPackedRowsObjects(t *testing.T,
 		t.Fatal("LLVM 22 llc is required")
 	}
 	_, driverHash := x86LEAActualSDKDriver(t)
-	t.Logf("row-owned oracle SDK=%s driverSHA=%x; amd64 only, MMX and PMULLW/VPMULLW excluded", runtime.Version(), driverHash)
+	t.Logf("row-owned oracle SDK=%s driverSHA=%x; amd64 only, MMX excluded", runtime.Version(), driverHash)
 	passed := 0
 	for start := 0; start < len(cases); start += 32 {
 		end := start + 32

@@ -31,6 +31,17 @@ func X86PackedIntegerMinMaxRows(legacy X86LegacyCatalog, avx []X86AVXRule) ([]X8
 		VPMINSB VPMINSW VPMINSD VPMINSQ VPMINUB VPMINUW VPMINUD VPMINUQ`)
 }
 
+// X86PackedAverageMultiplyRows retains the XMM/VEX/EVEX rounded-average,
+// word-product, adjacent multiply-add and widened dword-product families.
+// MMX rows keep their separate region/EMMS contract and are not included.
+func X86PackedAverageMultiplyRows(legacy X86LegacyCatalog, avx []X86AVXRule) ([]X86PackedBinaryRow, error) {
+	return x86PackedBinaryRows(legacy, avx, `
+		PAVGB PAVGW VPAVGB VPAVGW
+		PMULLW PMULHW PMULHUW PMULHRSW VPMULLW VPMULHW VPMULHUW VPMULHRSW
+		PMADDUBSW PMADDWL VPMADDUBSW VPMADDWD
+		PMULDQ PMULULQ VPMULDQ VPMULUDQ`)
+}
+
 // X86PackedBinaryPilotRows covers the shared packed add/subtract and D/Q
 // low-multiply pilot. MMX and the separate W multiply family are not included.
 // PADDD is a frontend alias, not an additional official encoder row.
@@ -59,7 +70,7 @@ func x86PackedBinaryRows(legacy X86LegacyCatalog, avx []X86AVXRule, names string
 			if entry.Ytab == "ymm" && operand.RowIndex == 0 &&
 				strings.Join(operand.Classes, ",") == "Ymm,Ymr" && operand.ZCase == "Zm_r_xm" &&
 				operand.ZOffset == 1 && operand.UnmatchedOffset == 0 {
-				continue // The seven MMX add rows belong to an unchanged lowerer.
+				continue // MMX regions have a separate owner and EMMS contract.
 			}
 			witnesses, err := x86PackedLegacyRowWitnesses(entry, operand)
 			if err != nil {
