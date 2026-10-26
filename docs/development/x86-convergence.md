@@ -177,6 +177,13 @@ admit its 18 broadcast witnesses; three MMX rows remain independent. Both
 endpoint SDKs pass the complete initialized join and rule-reader regression
 at `d17e46d5d`, without expanding the translator or native execution claims.
 
+The pack parser at `25555b5f0` also shares physical normalization with the four
+average/product families, removing 20 production lines. It preserves mode32
+error classification, MMX operand ownership and E4NF memory behavior. Current
+and minimum SDKs each pass 33 roots / 1,211 children; sixteen parser benchmarks
+each remove one allocation and show 9–31% lower median time over five samples.
+This measures parsing, not complete-source translation or native instruction speed.
+
 Fixed-frame GP analysis now consumes the existing typed byte/FLAGS effects
 instead of a second arithmetic opcode list. Its bounded worklist intersects
 numerical definedness across loops while retaining exact address identities.

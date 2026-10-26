@@ -142,6 +142,16 @@ all earlier initialized joins and the complete rule reader. Three MMX rows
 retain their separate region owner. This tested local commit is queued for the
 next batch; it is not part of the currently running published CI.
 
+Local `25555b5f0` also reuses the shared physical operand adapter for the complete
+pack family, removing 20 production lines and one allocation per parsed form.
+The original allocation regression failed all eight opcodes; four rejection
+controls preserve the previous mode32 Context precedence and zero-source
+contract. Current/minimum SDKs each pass 33 roots / 1,211 children without skips,
+including portable values/faults, named/raw forms, five-target objects and caller
+permissions. Sixteen parser benchmarks, five samples each, have 9–31% lower
+median time. Whole-source speed and the separate Linux native owners are not
+qualified by these local results; wait for the next complete CI after publication.
+
 Earlier analysis benchmarks reduced allocations by 65–88% through bounded CFG
 replay. Do not claim that as whole-source translation speed or cache mutable
 source verification to hide subprocess costs.
