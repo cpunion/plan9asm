@@ -14,7 +14,7 @@ naturally: **325 jobs, 284 successful, 41 failed**. The 24 failed test jobs shar
 four causes; 17 completion jobs reject their failed prerequisites.
 Keep the failed receipts. Resolved review threads do not constitute approval.
 
-The staged repair batch addresses:
+The published repair batch addresses:
 
 - Missing default cache directories in actual feature-profile fixtures.
 - A preliminary fixed-local role query invoking a mutating symbol resolver
@@ -48,7 +48,13 @@ pass all 17 rule-reader roots / 48 children. Root/CLI builds, root vet, all
 5,011 tracked Go files' formatting, actionlint and all five official corpus
 baselines pass; Node22.23.4 passes 573 policy tests. Later documentation-only
 changes preserve these tested Go/module sources. A new complete PR CI run and
-current-head coverage/review remain required.
+current-head coverage/review remain required. Published head `bdbefa7e4` is
+[running full CI](https://github.com/xgo-dev/plan9asm/actions/runs/40366498164).
+Its initial CLI failures reproduce a new private-CALL routing regression:
+`TestCompileOneInfersVoidABI0LocalHelperAtTargetWordSize` must retain the
+existing ordinary ABI0 helper with an explicit target-word parameter extent.
+The isolated zero-argument helper graph must not claim this distinct call role.
+Keep the original positive and omitted-extent negative tests unchanged.
 
 ## Current functional evidence
 
@@ -97,6 +103,13 @@ lines, with no new translator lowerer. The shared arithmetic pilot shrank from
 403 to 346 lines; later cleanups removed 143 shadowed arithmetic lines and
 40 shadowed dword-product lines. The retired diagnostic workflow/policies
 removed another 4,157 lines while retaining all 79 semantic auditor tests.
+
+The four packed average/product families now share physical normalization in
+`e6f7f4fc8` (integrated as `c76820997`): production code shrinks by 77 lines.
+Go1.27.3 and Go1.20.14 each pass 123 roots / 10,776 children without skips.
+All 40 parser microbenchmarks remove one allocation; per-case median time falls
+15–33% across five samples. This does not measure whole-source performance;
+native execution of the refactor still requires the next complete CI.
 
 Earlier analysis benchmarks reduced allocations by 65–88% through bounded CFG
 replay. Do not claim that as whole-source translation speed or cache mutable
