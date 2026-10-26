@@ -22,6 +22,29 @@ type x86OfficialPackedCase struct {
 // public API translation. It is object coverage, not executed semantics.
 // Existing independent family runtime oracles remain a separate gate.
 func TestX86OfficialPackedRowsInitializedThreeAPIsObjects(t *testing.T) {
+	x86OfficialPackedRowsObjects(t, goasmrules.X86PackedBinaryPilotRows, 159, 480, 2)
+}
+
+func TestX86OfficialMinMaxRowsInitializedThreeAPIsObjects(t *testing.T) {
+	verified := x86OfficialPackedRowsObjects(t, goasmrules.X86PackedIntegerMinMaxRows, 132, 432, 0)
+	narrowEVEX := 0
+	for _, fixture := range verified {
+		w := fixture.witness
+		name := strings.Fields(w.Instruction)[0]
+		if w.Generation == "evex" && w.Width < 512 && !w.Masked && !w.Broadcast && !strings.HasSuffix(name, "Q") {
+			narrowEVEX++
+		}
+	}
+	if narrowEVEX != 48 {
+		t.Fatalf("only %d/48 original unmasked non-Q EVEX X/Y witnesses verified", narrowEVEX)
+	}
+	t.Log("48 non-Q unmasked EVEX X/Y register/memory forms retain their actual Go EVEX bytes through initialized APIs and LLVM objects; low-bank VEX success is not substituted")
+}
+
+func x86OfficialPackedRowsObjects(t *testing.T,
+	buildRows func(goasmrules.X86LegacyCatalog, []goasmrules.X86AVXRule) ([]goasmrules.X86PackedBinaryRow, error),
+	wantRows, wantFormats, wantAliases int) []x86OfficialPackedCase {
+	t.Helper()
 	legacy, err := goasmrules.LoadX86LegacyRules(runtime.GOROOT())
 	if err != nil {
 		t.Fatal(err)
@@ -30,7 +53,7 @@ func TestX86OfficialPackedRowsInitializedThreeAPIsObjects(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rows, err := goasmrules.X86PackedBinaryPilotRows(legacy, avx)
+	rows, err := buildRows(legacy, avx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -44,8 +67,8 @@ func TestX86OfficialPackedRowsInitializedThreeAPIsObjects(t *testing.T) {
 			}
 		}
 	}
-	if len(rows) != 159 || len(cases) != 480 || len(aliases) != 2 {
-		t.Fatalf("official pilot denominator drift: rows=%d canonical=%d aliases=%d", len(rows), len(cases), len(aliases))
+	if len(rows) != wantRows || len(cases) != wantFormats || len(aliases) != wantAliases {
+		t.Fatalf("official binary denominator drift: rows=%d canonical=%d aliases=%d", len(rows), len(cases), len(aliases))
 	}
 	cases = append(cases, aliases...)
 	llc := findLLVM22Tool("llc")
@@ -86,7 +109,9 @@ func TestX86OfficialPackedRowsInitializedThreeAPIsObjects(t *testing.T) {
 	if passed != len(cases) {
 		t.Fatalf("only %d/%d row-owned formats passed all original-encoding/public-API/object gates", passed, len(cases))
 	}
-	t.Log("159 canonical rows / 480 legal format witnesses plus 2 aliases: original Go encoding and all three initialized public APIs + LLVM22 objects passed; no runtime claim")
+	t.Logf("%d canonical rows / %d legal format witnesses plus %d aliases: original Go encoding and all three initialized public APIs + LLVM22 objects passed; no runtime claim",
+		wantRows, wantFormats, wantAliases)
+	return cases
 }
 
 func x86OfficialPackedAssembly(cases []x86OfficialPackedCase) (string, string) {

@@ -134,3 +134,55 @@ func TestX86PackedBinaryLegacyRowUsesSelectedPrefixOffset(t *testing.T) {
 		t.Fatal("changed legacy mandatory prefix was ignored")
 	}
 }
+
+func TestX86PackedIntegerMinMaxRowsShareBinaryWitnesses(t *testing.T) {
+	legacy, err := LoadX86LegacyRules(runtime.GOROOT())
+	if err != nil {
+		t.Fatal(err)
+	}
+	avx, err := LoadX86AVXRules(runtime.GOROOT())
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows, err := X86PackedIntegerMinMaxRows(legacy, avx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	names, ids := map[string]bool{}, map[string]bool{}
+	legacyRows, formats, narrowEVEX := 0, 0, 0
+	for _, row := range rows {
+		if row.ID == "" || ids[row.ID] {
+			t.Fatal("missing or duplicate original min/max row", row.ID)
+		}
+		ids[row.ID], names[row.Opcode] = true, true
+		if strings.HasPrefix(row.ID, "optab/") {
+			legacyRows++
+		}
+		for _, witness := range row.Witnesses {
+			formats++
+			if witness.Generation == "evex" && witness.Width < 512 && !witness.Masked &&
+				!witness.Broadcast && !strings.HasSuffix(row.Opcode, "Q") {
+				narrowEVEX++
+				if witness.Encoding[0] != 0x62 || !strings.HasSuffix(witness.Second, "17") {
+					t.Fatal("unmasked narrow EVEX row can fall back to VEX", row.ID)
+				}
+			}
+		}
+	}
+	if len(rows) != 132 || legacyRows != 12 || len(names) != 28 || formats != 432 || narrowEVEX != 48 {
+		t.Fatalf("min/max inventory drift: rows=%d legacy=%d names=%d formats=%d narrowEVEX=%d",
+			len(rows), legacyRows, len(names), formats, narrowEVEX)
+	}
+	checkMember := func(opcode string) {
+		base := strings.TrimPrefix(opcode, "V")
+		if (strings.HasPrefix(base, "PMIN") || strings.HasPrefix(base, "PMAX")) && !names[opcode] {
+			t.Fatalf("new official min/max member is absent from the independent scope: %s", opcode)
+		}
+	}
+	for _, entry := range legacy.Optab {
+		checkMember(entry.Opcode)
+	}
+	for _, row := range avx {
+		checkMember(row.Opcode)
+	}
+}

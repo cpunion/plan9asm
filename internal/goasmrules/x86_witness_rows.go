@@ -22,18 +22,32 @@ type X86PackedBinaryWitness struct {
 	Encoding                   []byte
 }
 
+// X86PackedIntegerMinMaxRows retains all amd64 legacy and AVX min/max rows.
+func X86PackedIntegerMinMaxRows(legacy X86LegacyCatalog, avx []X86AVXRule) ([]X86PackedBinaryRow, error) {
+	return x86PackedBinaryRows(legacy, avx, `
+		PMAXSB PMAXSW PMAXSD PMAXUB PMAXUW PMAXUD
+		PMINSB PMINSW PMINSD PMINUB PMINUW PMINUD
+		VPMAXSB VPMAXSW VPMAXSD VPMAXSQ VPMAXUB VPMAXUW VPMAXUD VPMAXUQ
+		VPMINSB VPMINSW VPMINSD VPMINSQ VPMINUB VPMINUW VPMINUD VPMINUQ`)
+}
+
 // X86PackedBinaryPilotRows covers the shared packed add/subtract and D/Q
 // low-multiply pilot. MMX and the separate W multiply family are not included.
 // PADDD is a frontend alias, not an additional official encoder row.
 func X86PackedBinaryPilotRows(legacy X86LegacyCatalog, avx []X86AVXRule) ([]X86PackedBinaryRow, error) {
-	// This scope is deliberately independent of the translator's registry.
-	selected := map[string]bool{}
-	for _, name := range strings.Fields(`
+	return x86PackedBinaryRows(legacy, avx, `
 		PADDB PADDW PADDL PADDQ PADDSB PADDSW PADDUSB PADDUSW
 		VPADDB VPADDW VPADDD VPADDQ VPADDSB VPADDSW VPADDUSB VPADDUSW
 		PSUBB PSUBW PSUBL PSUBQ PSUBSB PSUBSW PSUBUSB PSUBUSW
 		VPSUBB VPSUBW VPSUBD VPSUBQ VPSUBSB VPSUBSW VPSUBUSB VPSUBUSW
-		PMULLD VPMULLD VPMULLQ`) {
+		PMULLD VPMULLD VPMULLQ`)
+}
+
+func x86PackedBinaryRows(legacy X86LegacyCatalog, avx []X86AVXRule, names string) ([]X86PackedBinaryRow, error) {
+	// Scope names are independent of the translator's registry. All operand,
+	// width, suffix and encoding axes still come from the original Go rows.
+	selected := map[string]bool{}
+	for _, name := range strings.Fields(names) {
 		selected[name] = false
 	}
 	var rows []X86PackedBinaryRow
@@ -74,7 +88,7 @@ func X86PackedBinaryPilotRows(legacy X86LegacyCatalog, avx []X86AVXRule) ([]X86P
 	}
 	for name, found := range selected {
 		if !found {
-			return nil, fmt.Errorf("official packed pilot opcode %s has no retained row", name)
+			return nil, fmt.Errorf("official packed opcode %s has no retained row", name)
 		}
 	}
 	return rows, nil
