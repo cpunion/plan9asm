@@ -8,8 +8,11 @@ history; this page records the current candidate and its limits.
 
 ## Publication and CI
 
-PR40 remains draft. The next publication carries integrated code `7f7d3bfbd`;
-complete current-head CI, coverage and external approval remain pending.
+PR40 remains draft. The next publication carries integrated code `f862b6be7`.
+The [published round at `f87062c5d`](https://github.com/xgo-dev/plan9asm/actions/runs/40461906541)
+finished naturally: 325/325 successful jobs, zero failures/cancellations and
+88.0% main statement coverage. This result does not certify the next publication;
+its current-head CI and external approval remain pending.
 The preceding [round at `57ebe257d`](https://github.com/xgo-dev/plan9asm/actions/runs/40446787035)
 failed complete chacha translation in the rich CLI on Linux and Windows,
 with dependent completion failures. The repair now produces an actual object.
@@ -22,7 +25,9 @@ table, README dependency description and variadic internal ABI-mode parameter
 noted in review are corrected.
 
 [LLGo PR2694](https://github.com/xgo-dev/llgo/pull/2694), head `cdca51fc4`, still
-pins `v0.0.0-20261026211521-55831306c713`. Its current CI is unfinished.
+pins `v0.0.0-20261026211521-55831306c713`. Its current CI finished naturally:
+13 successful workflows, 130 successful jobs and two release-condition skips.
+Those skips are not test passes, and this result does not qualify a newer pin.
 The documentation-link and native-command timeout repairs passed focused
 checks; a host timeout does not establish that a guest runtime hang is fixed.
 Update the dependency after qualifying this publication. Official upstream
@@ -50,6 +55,16 @@ Do not merge or push upstream directly.
   1,408-byte frame and 131,760 to 17,072 bytes for 64KiB. Complete replay
   times vary: linear -1.96%, diamond +4.73%, loop +0.03%. These are not
   whole-translation speedup claims.
+- Ordinary terminal RET validates each incoming state before discarding dead
+  private identities. Private helper transitions keep their existing checks:
+  14 added production lines, no new state or larger budget.
+- SDK numerical Verify reads its root from the same fresh dependency query.
+  Complete root metadata, physical exports, source changes and lifetime still
+  validate; no mutable result is cached. Actual process observations fall from
+  two queries per Verify to one: 44 added production lines.
+- Opt-in tests share only process-owned compiler artifacts. Each source lease
+  remains independent; TestMain verifies directory identity and removes the
+  owned cache. Concurrent acquisition/cleanup and Windows lifetime are tested.
 
 The four-family packed normalization pilot removes 65 production lines; the
 shared feature projection removes 11 more. A full-form function cache was
@@ -62,15 +77,21 @@ semantic rules without an expensive cross-stage cache or another interpreter.
 | Scope | Result | Boundary |
 |---|---|---|
 | Integrated Go1.27.3 / LLVM22 at `c78f24658` | 142 roots / 11,548 children PASS; zero failures/skips | Byte-state, machine-bit, private-frame, compare and GP/X union |
-| [Linux execution at `c78f24658`](https://github.com/cpunion/plan9asm/actions/runs/40459995914) | 10 roots / 117 children PASS; artifacts independently audited | Original Go and three LLVM APIs at O0/O2 where specified |
+| [Linux execution at `299a647be`](https://github.com/cpunion/plan9asm/actions/runs/40467018016) | 11 roots / 126 children PASS; artifacts independently audited | Original Go and three LLVM APIs at O0/O2 where specified; Windows separately passes 3 / 4 lifecycle checks |
 | SDK assertion repair at `7f7d3bfbd` | 7 roots / 50 children PASS | Only two test files differ from `c78f24658`; production and native execution logic unchanged |
 | Final Go1.27.2 CLI checks | Small CLI 2 roots / 2 children; rich CLI 9 / 8; all PASS | Both former chacha failures now check actual AMD64 ELF |
-| Complete original Linux/amd64 SDK objects | **40/55**, 15 failures, zero N/A/unattempted | Same 55 Go1.27.2 source hashes; all previous 39 passes retained; P256 is new |
-| Five-architecture official-corpus gate | PASS at `7f7d3bfbd`, no baseline mismatch or parse errors | Classification is not initialized-form or runtime coverage |
+| Terminal-return repair | Current SDK 33 roots / 273 children; minimum SDK 19 / 158; all PASS | Role, result, initialization and stack-restoration controls retained |
+| SDK single-query verification | Current SDK 41 roots / 157 children; minimum SDK 8 / 39; all PASS | Uninstrumented qualification; process counts observed separately using a diagnostic overlay |
+| Cache concurrency at integrated source | 3 roots / 5 children PASS with race detection; same scope PASS on Go1.20 | Adds a concurrent-close child after the Windows 3 / 4 receipt |
+| Complete original Linux/amd64 SDK objects | **40/55** at `f862b6be7`, 15 failures, zero N/A/unattempted | Same 55 Go1.27.2 source hashes; all previous passes retained |
+| Five-architecture official-corpus gate | PASS at `f862b6be7`, no baseline mismatch or parse errors | Classification is not initialized-form or runtime coverage |
 | Isolated minimum-SDK checks | Bitset 39 / 2,869; GP/X 28 / 1,502; compare 59 / 6,980; all PASS | Constituent snapshots, not a combined final minimum-SDK run |
 
-The full SDK command correctly exits nonzero for 15 failures. Its 97-second
-duration including driver build is one observation, not a speedup claim.
+The full SDK command correctly exits nonzero for 15 failures. Its latest
+139-second duration including driver build and the preceding 97-second run
+are not a controlled performance comparison. A separate three-root compiler
+cache A/B decreased test-process time from 40.960 to 24.676 seconds; this is
+one sample, not an overall CI or translator speedup.
 Chacha20poly1305 became an object pass in the previous 39/55 run. Complete P256
 retains all 14 TEXTs, emitting ten public definitions and incorporating four
 private helpers through the observed CFG. Whole-file execution is not claimed.
@@ -83,7 +104,8 @@ uninitialized bytes, source mutation and missing SEH still reject. Failed
 receipts remain failed; no skip or cropped input substitutes for success.
 
 The native scope includes 253 machine-bit programs, 48 pointer programs,
-24 integer-compare kernels and six GP/X kernels. GP/X observes 96 original Go
+24 integer-compare kernels, six GP/X kernels and two terminal-return kernels.
+GP/X observes 96 original Go
 runs and 576 LLVM comparisons. Memory/view checks compare LLVM with C, not
 original AVX512; physical-frame FLAGS checks are original-Go only. Native AVX512
 remains pending hardware. Later SDK test edits are not another native receipt.
@@ -113,12 +135,13 @@ and zero unsupported classifications do not establish successful translation.
 
 ## Remaining work, in order
 
-1. Publish the qualified batch through the allowed fork after the previous CI
-   round finishes. Watch complete current-head CI and repair failures. Update
+1. Publish the qualified batch through the allowed fork; the preceding full CI
+   round has finished. Watch complete current-head CI and repair failures. Update
    LLGo's exact dependency and obtain review; retain draft meanwhile.
 2. Restore ordinary SHA1 with bounded shared private-layout analysis, reusing
    the CFG and typed effects. Do not add an opcode interpreter, library whitelist,
-   zero-initialization assumption or a larger budget.
+   zero-initialization assumption or a larger budget. The unintegrated layout
+   prototype must first preserve ordinary CFG acceptance at the old state limit.
 3. Keep four implicit-entry, two GC-scan and eight system/runtime/test-hook
    failures individually diagnosed in [issue47](https://github.com/xgo-dev/plan9asm/issues/47).
    They are not automatically exclusions. Object success does not prove runtime ABI.
