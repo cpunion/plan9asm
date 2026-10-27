@@ -14,6 +14,9 @@ func fixedLocalVectorByteEffect(ins Instr) (x86TypedByteEffect, bool, error) {
 	}
 	effect, known, err := parse(ins.Op, ins, "amd64")
 	if !known {
+		effect, known, err = x86TypedPackedIntegerCompareByteEffect(ins.Op, ins, "amd64")
+	}
+	if !known {
 		return effect, false, nil
 	}
 	if err != nil {

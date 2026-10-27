@@ -180,5 +180,14 @@ func x86TypedPackedIntegerCompareByteEffect(op Op, ins Instr, arch string) (x86T
 	operands = append(operands, x86TypedByteOperand{
 		index: form.destination, operand: ins.Args[form.destination], width: int64(width), write: true,
 	})
-	return x86TypedByteEffect{operands: operands, requiresResultProof: immediateFamily}, true, nil
+	effect := x86TypedByteEffect{operands: operands, requiresResultProof: immediateFamily}
+	if !form.mmx && !form.maskResult {
+		effect.vector.upperWrite = x86TypedVectorUpperZero
+		effect.vector.memoryAlignment = 1
+		if form.spec.legacy {
+			effect.vector.upperWrite = x86TypedVectorUpperPreserve
+			effect.vector.memoryAlignment = 16
+		}
+	}
+	return effect, true, nil
 }
