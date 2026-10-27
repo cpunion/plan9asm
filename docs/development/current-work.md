@@ -10,21 +10,20 @@ this page records the current candidate and its limits.
 
 PR40 remains draft. Published `1c54c530e` carries the qualified translation
 repairs below; its [complete CI round](https://github.com/xgo-dev/plan9asm/actions/runs/40505530452)
-is recovering from self-hosted runner communication failures. The first failed
-attempt and missing-producer artifact failures are retained; only failed jobs
-and their dependents are rerun on the same source. Previous `ab68a6ecc` completed its
-[full CI round](https://github.com/xgo-dev/plan9asm/actions/runs/40477411915)
-naturally: **325/325 successful jobs**, no failed/cancelled/skipped jobs and
-**88.0%** main statement coverage. This qualifies that revision, not the next
-publication. Both inline threads are resolved; external approval is outstanding.
+now passes **325/325 jobs**, including 315 source jobs and ten completion gates.
+Codecov also passes, for 326 successful checks and **88.0%** main statement
+coverage. Attempts 1 and 2 retain runner-communication and missing-artifact
+failures; targeted reruns on the same source recovered attempt 3. Host-specific
+test skips remain recorded, and native AVX512 acceptance remains pending.
+This qualifies that revision, not the next publication. Both inline threads are
+resolved; external approval is outstanding.
 
 The next batch adds ABS, FMA3, AVX moves and ordinary floating binary official-row
 joins without changing translator production code or native fixture inventories.
 Integrated `ff2f14caa` passes both endpoint SDK family scopes, the complete
 preflight and the five-architecture gate. It includes the tested
-current/minimum-first CI creation order. Batch the publication after the current
-CI recovery finishes; full new-head CI remains required. Creation order is not
-a guarantee of external runner scheduling priority.
+current/minimum-first CI creation order. Full new-head CI remains required.
+Creation order is not a guarantee of external runner scheduling priority.
 The failed `004da9f44` cache-policy round and earlier failures retain their
 original outcomes. Its stale Node assertion was repaired without removing
 the actual Go lifecycle, ownership or cleanup checks.

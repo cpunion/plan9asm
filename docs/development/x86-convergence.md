@@ -179,8 +179,8 @@ minimum Go 1.20.14 both pass the following Linux/amd64 LLVM22 object scopes:
 | Local total | 1,534 | 5,900 |
 
 Published `1c54c530e` contains 865 rows / 2,774 witnesses, including all eighteen
-horizontal integer rows. Its complete CI is running; the prior `ab68a6ecc`
-round completed 325/325 jobs successfully. The combined local batch adds ABS
+horizontal integer rows. Its complete CI now passes 325/325 jobs and Codecov,
+with 88.0% main statement coverage. The combined local batch adds ABS
 and FMA3 without changing translator production code. Both endpoint SDKs pass
 all prior joins, existing initialized/negative owners and the new complete-row
 objects: current 112 roots / 9,018 children, minimum 111 / 9,018, no failures/skips.
