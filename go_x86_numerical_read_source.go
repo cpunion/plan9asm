@@ -506,16 +506,17 @@ func (source *GoX86NumericalReadSource) verifyNumericalSource(ctx context.Contex
 			return fail(numericalSBContext("joined read owner identity changed"))
 		}
 	}
-	selected, raw, err := source.guard.loadWithRawPackage(ctx, source.packageQuery())
-	if err != nil {
-		return fail(err)
-	}
-	if !reflect.DeepEqual(selected, source.guard.selection) || !numericalSameRawSelection(source.rawSelection, raw) {
-		return fail(numericalSBContext("actual consumer selection/export changed"))
-	}
 	if source.role == numericalSBSDKSource {
 		if err := source.verifySDKObservation(ctx); err != nil {
 			return fail(err)
+		}
+	} else {
+		selected, raw, err := source.guard.loadWithRawPackage(ctx, source.packageQuery())
+		if err != nil {
+			return fail(err)
+		}
+		if !reflect.DeepEqual(selected, source.guard.selection) || !numericalSameRawSelection(source.rawSelection, raw) {
+			return fail(numericalSBContext("actual consumer selection/export changed"))
 		}
 	}
 	if err := source.guard.verifyInputs(); err != nil {

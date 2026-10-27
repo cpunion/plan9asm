@@ -869,11 +869,17 @@ func (source *GoAMD64FrameSource) loadWithRaw(ctx context.Context) (goAMD64Frame
 }
 
 func (source *GoAMD64FrameSource) loadWithRawPackage(ctx context.Context, packageQuery string) (goAMD64FrameSelection, []byte, error) {
-	var selected goAMD64FrameSelection
 	data, err := source.run(ctx, "list", "-json", "-compiled", "-export", "-mod=readonly", packageQuery)
 	if err != nil {
-		return selected, data, err
+		return goAMD64FrameSelection{}, data, err
 	}
+	return source.readRawPackageSelection(data)
+}
+
+// Both root-only and dependency queries retain the same complete root record
+// and physical export read. This does not authenticate a caller-supplied JSON.
+func (source *GoAMD64FrameSource) readRawPackageSelection(data []byte) (goAMD64FrameSelection, []byte, error) {
+	var selected goAMD64FrameSelection
 	decoder := json.NewDecoder(bytes.NewReader(data))
 	if err := decoder.Decode(&selected); err != nil {
 		return selected, data, err
@@ -885,7 +891,8 @@ func (source *GoAMD64FrameSource) loadWithRawPackage(ctx context.Context, packag
 	if selected.Export == "" {
 		return selected, data, goAMD64FrameContext("actual package has no compiled export")
 	}
-	selected.Export, err = sourcepath.Resolve(selected.Export)
+	export, err := sourcepath.Resolve(selected.Export)
+	selected.Export = export
 	cache, cacheErr := sourcepath.Resolve(source.env["GOCACHE"])
 	if err != nil || cacheErr != nil || !goAssemblyPathWithinRoot(cache, selected.Export) {
 		return selected, data, goAMD64FrameContext("compiled export is outside the actual build cache")

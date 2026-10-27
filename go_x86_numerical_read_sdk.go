@@ -243,6 +243,17 @@ func (source *GoX86NumericalReadSource) verifySDKObservation(ctx context.Context
 	if err != nil {
 		return err
 	}
+	raw, err := numericalSDKGraphRoot(graph, source.request.PackagePath)
+	if err != nil {
+		return err
+	}
+	selected, _, err := source.guard.readRawPackageSelection(raw)
+	if err != nil {
+		return err
+	}
+	if !reflect.DeepEqual(selected, source.guard.selection) || !numericalSameRawSelection(source.rawSelection, raw) {
+		return numericalSBContext("actual consumer selection/export changed")
+	}
 	imports, err := source.guard.bindOriginalDeclarationImports(graph)
 	if err != nil {
 		return numericalSBContext("complete SDK source/export graph cannot be rebound: %v", err)
@@ -283,25 +294,50 @@ func (source *GoX86NumericalReadSource) verifySDKCaptureContext() error {
 	return nil
 }
 
-func numericalSameRawSDKGraph(first, second []byte) bool {
-	decode := func(data []byte) ([]json.RawMessage, bool) {
-		if len(data) == 0 || len(data) > 16<<20 {
+func numericalRawSDKGraph(data []byte) ([]json.RawMessage, bool) {
+	if len(data) == 0 || len(data) > 16<<20 {
+		return nil, false
+	}
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	var values []json.RawMessage
+	for {
+		var value json.RawMessage
+		if err := decoder.Decode(&value); err == io.EOF {
+			return values, len(values) != 0
+		} else if err != nil || len(values) >= 4096 {
 			return nil, false
 		}
-		decoder := json.NewDecoder(bytes.NewReader(data))
-		var values []json.RawMessage
-		for {
-			var value json.RawMessage
-			if err := decoder.Decode(&value); err == io.EOF {
-				return values, len(values) != 0
-			} else if err != nil || len(values) >= 4096 {
-				return nil, false
+		values = append(values, value)
+	}
+}
+
+func numericalSDKGraphRoot(graph []byte, path string) ([]byte, error) {
+	values, valid := numericalRawSDKGraph(graph)
+	if !valid {
+		return nil, numericalSBContext("incomplete or oversized SDK selection graph")
+	}
+	var root json.RawMessage
+	for _, raw := range values {
+		var selected struct{ ImportPath string }
+		if json.Unmarshal(raw, &selected) != nil {
+			return nil, numericalSBContext("malformed SDK selection graph record")
+		}
+		if selected.ImportPath == path {
+			if root != nil {
+				return nil, numericalSBContext("SDK selection graph repeats the original root")
 			}
-			values = append(values, value)
+			root = raw
 		}
 	}
-	a, validA := decode(first)
-	b, validB := decode(second)
+	if root == nil {
+		return nil, numericalSBContext("SDK selection graph omitted the original root")
+	}
+	return root, nil
+}
+
+func numericalSameRawSDKGraph(first, second []byte) bool {
+	a, validA := numericalRawSDKGraph(first)
+	b, validB := numericalRawSDKGraph(second)
 	if !validA || !validB || len(a) != len(b) {
 		return false
 	}

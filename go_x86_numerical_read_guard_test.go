@@ -199,7 +199,7 @@ func TestGoX86NumericalSBReadSealedOwnerOrderAndJoinMutations(t *testing.T) {
 }
 
 func TestGoX86NumericalSBReadOriginalInputAndDirectoryMutations(t *testing.T) {
-	for _, kind := range []string{"assembly bytes", "active header bytes", "preferred include miss", "physical directory"} {
+	for _, kind := range []string{"assembly bytes", "active header bytes", "preferred include miss", "selected Go addition", "physical directory"} {
 		t.Run(kind, func(t *testing.T) {
 			ownerRequest, readRequest := numericalMutableFixture(t, "386", "MOVB DATA+0(SB),AL")
 			ctx, cancel := runtimeOracleStageContext(t)
@@ -234,9 +234,14 @@ func TestGoX86NumericalSBReadOriginalInputAndDirectoryMutations(t *testing.T) {
 						t.Fatal(err)
 					}
 				}
-			case "preferred include miss":
+			case "preferred include miss", "selected Go addition":
 				name := filepath.Join(readRequest.Directory, "textflag.h")
-				if err := os.WriteFile(name, []byte("#define NOSPLIT 4\n"), 0600); err != nil {
+				data := []byte("#define NOSPLIT 4\n")
+				if kind == "selected Go addition" {
+					name = filepath.Join(readRequest.Directory, "added.go")
+					data = []byte("package consumer\nvar Added byte\n")
+				}
+				if err := os.WriteFile(name, data, 0600); err != nil {
 					t.Fatal(err)
 				}
 				restore = func() {
