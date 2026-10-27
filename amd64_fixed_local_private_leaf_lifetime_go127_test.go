@@ -122,8 +122,9 @@ func TestGoAMD64FixedLocalPrivateLeafPreservesPerRootWorkBudget(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
+				var layouts x86FixedLocalLayoutGraph
 				for residue := 0; residue < 8; residue++ {
-					if err := replayX86FixedLocal(&current, sig, proof, residue, &budget, effects); err != nil {
+					if err := replayX86FixedLocal(&current, sig, proof, residue, &budget, effects, &layouts); err != nil {
 						t.Fatal("unchanged per-proof work bound rejected the old source", err)
 					}
 				}
