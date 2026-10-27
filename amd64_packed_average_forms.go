@@ -1,7 +1,5 @@
 package plan9asm
 
-import "strings"
-
 type x86PackedAverageSpec struct {
 	x86PackedBinarySpec
 	laneBits int
@@ -16,25 +14,12 @@ var x86PackedAverageSpecs = map[Op]x86PackedAverageSpec{
 	"VPAVGW": {x86PackedBinarySpec{encoding: x86PackedLogicalVEXOrEVEX, zeroing: true}, 16},
 }
 
-type x86PackedAverageForm struct {
-	x86PackedBinaryForm
-	spec   x86PackedAverageSpec
-	source Operand
-}
+type x86PackedAverageForm = x86PackedPhysicalForm
 
 // A shape/effect observation supplies no input initialization, caller, frame
 // or native storage authority. All consumers retain their own proof gates.
 func x86PackedAverageProperties(op Op, ins Instr, arch string) (x86PackedAverageForm, bool, error) {
-	base, _, _ := strings.Cut(strings.ToUpper(string(op)), ".")
-	spec, known := x86PackedAverageSpecs[Op(base)]
-	if !known {
-		return x86PackedAverageForm{}, false, nil
-	}
-	binary, source, started, err := x86PackedBinaryPhysicalSource(op, ins, arch, spec.x86PackedBinarySpec, "packed average")
-	if !started {
-		return x86PackedAverageForm{}, true, err
-	}
-	return x86PackedAverageForm{binary, spec, source}, true, err
+	return x86PackedPhysicalProperties(op, ins, arch, x86PackedAverage)
 }
 
 func x86ResultPackedAverageStep(ins Instr, state *x86ResultState, owned []bool, arch string) (bool, bool) {

@@ -4,11 +4,7 @@ import (
 	"fmt"
 )
 
-func (c *amd64Ctx) lowerWordMultiplyAddFamily(op Op, ins Instr) (bool, bool, error) {
-	form, recognized, err := x86PackedMultiplyAddProperties(op, ins, c.goarch)
-	if err != nil || !recognized {
-		return recognized, false, err
-	}
+func (c *amd64Ctx) lowerWordMultiplyAddForm(op Op, ins Instr, form x86PackedPhysicalForm) (bool, bool, error) {
 	first, second, destination := form.source, ins.Args[form.second], ins.Args[form.destination]
 	if form.legacy && !form.mmx && form.memory >= 0 {
 		virtual := first.Kind == OpFP
@@ -29,6 +25,7 @@ func (c *amd64Ctx) lowerWordMultiplyAddFamily(op Op, ins Instr) (bool, bool, err
 			return true, false, fmt.Errorf("%w: %s GP spelling encodes a separate MMX source bank", ErrProbeNeedsContext, op)
 		}
 		var a string
+		var err error
 		if form.memory < 0 {
 			a, err = c.loadReg(first.Reg)
 		} else {
@@ -95,7 +92,7 @@ func (c *amd64Ctx) lowerWordMultiplyAddFamily(op Op, ins Instr) (bool, bool, err
 	return true, false, c.storePackedMoveOperand(destination, form.byteWidth, "%"+out)
 }
 
-func (c *amd64Ctx) emitMultiplyAddNativeMemory(source Operand, data string, spec x86PackedMultiplyAddSpec) (string, error) {
+func (c *amd64Ctx) emitMultiplyAddNativeMemory(source Operand, data string, spec x86PackedPhysicalSpec) (string, error) {
 	pointer, pointerType, _, err := c.packedVectorMemoryPointer(source)
 	if err != nil {
 		return "", err

@@ -3,10 +3,11 @@ package plan9asm
 import "fmt"
 
 func (c *amd64Ctx) lowerDwordToQwordMultiply(op Op, ins Instr) (bool, bool, error) {
-	form, known, err := x86DwordProductProperties(op, ins, c.goarch)
-	if !known || err != nil {
-		return known, false, err
-	}
+	return c.lowerPackedPhysical(op, ins, x86PackedDwordProduct)
+}
+
+func (c *amd64Ctx) lowerDwordToQwordMultiplyForm(op Op, ins Instr, form x86PackedPhysicalForm) (bool, bool, error) {
+	var err error
 	first, second, destination := form.source, ins.Args[form.second], ins.Args[form.destination]
 	if form.legacy && !form.mmx && form.memory >= 0 {
 		virtual := first.Kind == OpFP
@@ -71,9 +72,9 @@ func (c *amd64Ctx) lowerDwordToQwordMultiply(op Op, ins Instr) (bool, bool, erro
 		// EVEX E4 uses qword fault-suppression lanes, including m64bcst;
 		// only each qword's low dword participates in the multiplication.
 		var a, b string
-		a, err = c.loadDwordMultiplyEvenLanes(first, form.byteWidth, form.broadcast, mask)
+		a, err = c.loadDwordMultiplyEvenLanes(first, form.byteWidth, form.spec.memoryBits, form.broadcast, mask)
 		if err == nil {
-			b, err = c.loadDwordMultiplyEvenLanes(second, form.byteWidth, false, "")
+			b, err = c.loadDwordMultiplyEvenLanes(second, form.byteWidth, form.spec.memoryBits, false, "")
 		}
 		if err == nil {
 			a = c.extendDwordMultiplyLanes(a, lanes, form.spec.signed)
@@ -108,9 +109,9 @@ func isAMD64XRegOperand(op Operand) bool {
 	return op.Kind == OpReg && isAMD64XReg(op.Reg)
 }
 
-func (c *amd64Ctx) loadDwordMultiplyEvenLanes(op Operand, byteWidth int, broadcast bool, mask string) (string, error) {
+func (c *amd64Ctx) loadDwordMultiplyEvenLanes(op Operand, byteWidth, memoryBits int, broadcast bool, mask string) (string, error) {
 	lanes := byteWidth / 8
-	qwords, err := c.loadX86PackedShiftLanes(op, byteWidth, 64, broadcast, mask)
+	qwords, err := c.loadX86PackedShiftLanes(op, byteWidth, memoryBits, broadcast, mask)
 	if err != nil {
 		return "", err
 	}

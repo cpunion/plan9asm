@@ -72,8 +72,9 @@ func x86TypedFPResultNeedsProof(fn Func, sig FuncSig, arch string) bool {
 		if _, known, err := x86ImplicitDivideProperties(ins.Op, ins, arch); known && err == nil {
 			return true // Trapping division still needs its divisor and complete AX or DX:AX even for Void.
 		}
-		if _, known, err := x86DwordProductProperties(ins.Op, ins, arch); known && err == nil {
-			return true // Named/raw dead products retain numerical input and mask obligations.
+		if form, known, err := x86PackedPhysicalProperties(ins.Op, ins, arch, ""); known && err == nil &&
+			(form.spec.family == x86PackedDwordProduct || x86ResultNamedPredicateInstruction(ins)) {
+			return true // Dword products also retain the existing raw-input obligation.
 		}
 		if _, known, err := x86FP16BinaryProperties(ins, arch); known && err == nil {
 			return true // Dead raw arithmetic still needs source, merge and mask inputs.
@@ -197,7 +198,7 @@ func x86TypedFPResultNeedsProof(fn Func, sig FuncSig, arch string) bool {
 			!form.insert && form.memory >= 0 && x86ResultNamedPredicateInstruction(ins) {
 			return true // All B/W/D/Q extraction stores retain their selected input bytes, including Void.
 		}
-		if _, _, known, err := x86FixedVectorValueProperties(ins, arch); known && err == nil && x86ResultNamedPredicateInstruction(ins) {
+		if _, _, known, err := x86OtherFixedVectorValueProperties(ins, arch); known && err == nil && x86ResultNamedPredicateInstruction(ins) {
 			return true // Complete value inputs and native addresses stay required without results or masks.
 		}
 		if _, known, err := x86ConditionalSetProperties(ins.Op, ins, arch); known && err == nil &&

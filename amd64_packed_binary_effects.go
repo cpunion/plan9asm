@@ -74,15 +74,6 @@ func x86PackedBinaryEffectProperties(op Op, ins Instr, arch string) (x86PackedBi
 		}
 		return x86PackedBinaryEffectForm{form.x86PackedBinaryForm, source, form.spec.encoding != x86PackedLogicalEVEX}, true, err
 	}
-	if form, known, err := x86PackedWordMultiplyProperties(op, ins, arch); known {
-		return x86PackedBinaryEffectForm{form.x86PackedBinaryForm, form.source, true}, true, err
-	}
-	if form, known, err := x86DwordProductProperties(op, ins, arch); known {
-		return x86PackedBinaryEffectForm{form.x86PackedBinaryForm, form.source, true}, true, err
-	}
-	if form, known, err := x86PackedAverageProperties(op, ins, arch); known {
-		return x86PackedBinaryEffectForm{form.x86PackedBinaryForm, form.source, true}, true, err
-	}
-	form, known, err := x86PackedMultiplyAddProperties(op, ins, arch)
+	form, known, err := x86PackedPhysicalProperties(op, ins, arch, "")
 	return x86PackedBinaryEffectForm{form.x86PackedBinaryForm, form.source, true}, known, err
 }

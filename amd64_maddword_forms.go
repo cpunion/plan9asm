@@ -24,26 +24,13 @@ var x86PackedMultiplyAddSpecs = map[Op]x86PackedMultiplyAddSpec{
 		8, 16, ""},
 }
 
-type x86PackedMultiplyAddForm struct {
-	x86PackedBinaryForm
-	spec   x86PackedMultiplyAddSpec
-	source Operand
-}
+type x86PackedMultiplyAddForm = x86PackedPhysicalForm
 
 // This describes Go's actual ymm/yxm_q4/_yvandnpd operand rows only. WIG
 // and the decoder's private physical marker do not grant a native address,
 // initialized input, caller frame, or a new MMX transport.
 func x86PackedMultiplyAddProperties(op Op, ins Instr, arch string) (x86PackedMultiplyAddForm, bool, error) {
-	base, _, _ := strings.Cut(strings.ToUpper(string(op)), ".")
-	spec, known := x86PackedMultiplyAddSpecs[Op(base)]
-	if !known {
-		return x86PackedMultiplyAddForm{}, false, nil
-	}
-	binary, source, started, err := x86PackedBinaryPhysicalSource(op, ins, arch, spec.x86PackedBinarySpec, "packed multiply-add")
-	if !started {
-		return x86PackedMultiplyAddForm{}, true, err
-	}
-	return x86PackedMultiplyAddForm{binary, spec, source}, true, err
+	return x86PackedPhysicalProperties(op, ins, arch, x86PackedMultiplyAdd)
 }
 
 func x86WordMultiplyAddProperties(ins Instr, goarch string) (x86PackedBinaryForm, bool, error) {

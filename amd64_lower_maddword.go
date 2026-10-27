@@ -5,7 +5,7 @@ import "fmt"
 // Both Go packed multiply-add families share the same ordered operand,
 // memory and write-generation contract.
 func (c *amd64Ctx) lowerPackedWordMultiplyAdd(op Op, ins Instr) (bool, bool, error) {
-	return c.lowerWordMultiplyAddFamily(op, ins)
+	return c.lowerPackedPhysical(op, ins, x86PackedMultiplyAdd)
 }
 
 func (c *amd64Ctx) emitPackedWordMultiplyAdd(wordLanes int, first, second string) string {

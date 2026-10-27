@@ -1,7 +1,5 @@
 package plan9asm
 
-import "strings"
-
 type x86DwordProductSpec struct {
 	x86PackedBinarySpec
 	signed       bool
@@ -18,24 +16,11 @@ var x86DwordProductSpecs = map[Op]x86DwordProductSpec{
 	"VPMULUDQ": {x86PackedBinarySpec{encoding: x86PackedLogicalVEXOrEVEX, broadcastBytes: 8, zeroing: true}, false, ""},
 }
 
-type x86DwordProductForm struct {
-	x86PackedBinaryForm
-	spec   x86DwordProductSpec
-	source Operand
-}
+type x86DwordProductForm = x86PackedPhysicalForm
 
 // The operand model grants no initialized bank, native extent or caller role.
 // In particular a GP spelling admitted to Ymm still names the physical MMX
 // bank, and a named high mode32 vector still needs its physical binding.
 func x86DwordProductProperties(op Op, ins Instr, arch string) (x86DwordProductForm, bool, error) {
-	base, _, _ := strings.Cut(strings.ToUpper(string(op)), ".")
-	spec, known := x86DwordProductSpecs[Op(base)]
-	if !known {
-		return x86DwordProductForm{}, false, nil
-	}
-	binary, source, started, err := x86PackedBinaryPhysicalSource(op, ins, arch, spec.x86PackedBinarySpec, "dword product")
-	if !started {
-		return x86DwordProductForm{}, true, err
-	}
-	return x86DwordProductForm{binary, spec, source}, true, err
+	return x86PackedPhysicalProperties(op, ins, arch, x86PackedDwordProduct)
 }

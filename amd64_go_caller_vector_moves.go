@@ -442,14 +442,9 @@ func x86InstructionMemoryShape(ins Instr, index int, arch string) (width int64, 
 	if form, known, err := x86PackedLowMultiplyProperties(ins.Op, ins, arch); known {
 		return int64(form.memoryBytes), false, err == nil && form.memory == index
 	}
-	if form, known, err := x86PackedWordMultiplyProperties(ins.Op, ins, arch); known {
-		return int64(form.memoryBytes), false, err == nil && !form.mmx && form.memory == index
-	}
-	if form, known, err := x86DwordProductProperties(ins.Op, ins, arch); known {
-		return int64(form.memoryBytes), false, err == nil && !form.mmx && form.memory == index
-	}
-	if form, known, err := x86PackedAverageProperties(ins.Op, ins, arch); known {
-		return int64(form.memoryBytes), false, err == nil && form.memory == index
+	if form, known, err := x86PackedPhysicalProperties(ins.Op, ins, arch, ""); known {
+		return int64(form.memoryBytes), false, err == nil && form.memory == index &&
+			(!form.mmx || form.spec.family == x86PackedAverage)
 	}
 	if form, known, err := x86PackedIntegerCompareProperties(ins.Op, ins, arch); known {
 		return int64(form.memoryBytes), false, err == nil && !form.mmx && form.memory == index
@@ -467,9 +462,6 @@ func x86InstructionMemoryShape(ins Instr, index int, arch string) (width int64, 
 		return int64(form.memoryBytes), false, err == nil && form.memory == index
 	}
 	if form, known, err := x86PackedWrappingAddProperties(ins, arch); known {
-		return int64(form.memoryBytes), false, err == nil && !form.mmx && form.memory == index
-	}
-	if form, known, err := x86PackedMultiplyAddProperties(ins.Op, ins, arch); known {
 		return int64(form.memoryBytes), false, err == nil && !form.mmx && form.memory == index
 	}
 	if f, known, err := x86PackedConversionProperties(ins, arch); known {

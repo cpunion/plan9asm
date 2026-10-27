@@ -45,6 +45,13 @@ func x86ResultFixedVectorInputsWithRead(ins Instr, form x86PackedBinaryForm, old
 // Share only the complete family grammar and old-destination input role.
 // This description grants no numerical, memory, frame or declaration authority.
 func x86FixedVectorValueProperties(ins Instr, arch string) (x86PackedBinaryForm, bool, bool, error) {
+	if parsed, known, err := x86PackedPhysicalProperties(ins.Op, ins, arch, ""); known {
+		return parsed.x86PackedBinaryForm, false, known, err
+	}
+	return x86OtherFixedVectorValueProperties(ins, arch)
+}
+
+func x86OtherFixedVectorValueProperties(ins Instr, arch string) (x86PackedBinaryForm, bool, bool, error) {
 	if parsed, known, err := x86PackedRotateProperties(ins.Op, ins, arch); known {
 		return parsed.x86PackedBinaryForm, false, known, err
 	}
@@ -63,18 +70,6 @@ func x86FixedVectorValueProperties(ins Instr, arch string) (x86PackedBinaryForm,
 			memory: parsed.memory, memoryBytes: parsed.byteWidth, byteWidth: parsed.byteWidth,
 			mask: -1, legacy: !parsed.spec.vector, mmx: parsed.mmx,
 		}, false, true, err
-	}
-	if parsed, known, err := x86PackedAverageProperties(ins.Op, ins, arch); known {
-		return parsed.x86PackedBinaryForm, false, known, err
-	}
-	if parsed, known, err := x86PackedWordMultiplyProperties(ins.Op, ins, arch); known {
-		return parsed.x86PackedBinaryForm, false, known, err
-	}
-	if parsed, known, err := x86PackedMultiplyAddProperties(ins.Op, ins, arch); known {
-		return parsed.x86PackedBinaryForm, false, known, err
-	}
-	if parsed, known, err := x86DwordProductProperties(ins.Op, ins, arch); known {
-		return parsed.x86PackedBinaryForm, false, known, err
 	}
 	if parsed, spec, recognized, parseErr := x86IndexedPermuteProperties(ins.Op, ins, arch); recognized {
 		return parsed, spec.mode != amd64IndexedPermuteSingle, recognized, parseErr

@@ -1,7 +1,5 @@
 package plan9asm
 
-import "strings"
-
 type x86PackedWordMultiplySpec struct {
 	mode     amd64PackedWordMultiplyMode
 	encoding x86PackedLogicalEncoding
@@ -19,26 +17,12 @@ var x86PackedWordMultiplySpecs = map[Op]x86PackedWordMultiplySpec{
 		x86PackedLogicalVEXOrEVEX},
 }
 
-type x86PackedWordMultiplyForm struct {
-	x86PackedBinaryForm
-	spec   x86PackedWordMultiplySpec
-	source Operand // Actual encoded bank, not a new initialized input.
-}
+type x86PackedWordMultiplyForm = x86PackedPhysicalForm
 
 // This shared grammar records the real native read/modify/write shape only.
 // It grants neither input initialization nor native backing/caller authority.
 func x86PackedWordMultiplyProperties(op Op, ins Instr, arch string) (x86PackedWordMultiplyForm, bool, error) {
-	base, _, _ := strings.Cut(strings.ToUpper(string(op)), ".")
-	spec, recognized := x86PackedWordMultiplySpecs[Op(base)]
-	if !recognized {
-		return x86PackedWordMultiplyForm{}, false, nil
-	}
-	grammar := x86PackedBinarySpec{encoding: spec.encoding, zeroing: spec.encoding == x86PackedLogicalVEXOrEVEX}
-	binary, source, started, err := x86PackedBinaryPhysicalSource(op, ins, arch, grammar, "packed word multiply")
-	if !started {
-		return x86PackedWordMultiplyForm{}, true, err
-	}
-	return x86PackedWordMultiplyForm{binary, spec, source}, true, err
+	return x86PackedPhysicalProperties(op, ins, arch, x86PackedWordProduct)
 }
 
 func x86ResultPackedWordMultiplyStep(ins Instr, state *x86ResultState, owned []bool, arch string) (bool, bool) {

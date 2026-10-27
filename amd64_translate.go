@@ -888,22 +888,13 @@ func (c *amd64Ctx) lowerInstr(bi int, ii int, ins Instr, emitBr amd64EmitBr, emi
 	if ok, term, err := c.lowerPackedLowMultiply(Op(op), ins); ok {
 		return term, err
 	}
-	if ok, term, err := c.lowerDwordToQwordMultiply(Op(op), ins); ok {
-		return term, err
-	}
-	if ok, term, err := c.lowerPackedWordMultiply(Op(op), ins); ok {
-		return term, err
-	}
-	if ok, term, err := c.lowerPackedWordMultiplyAdd(Op(op), ins); ok {
+	if ok, term, err := c.lowerPackedPhysical(Op(op), ins, ""); ok {
 		return term, err
 	}
 	if ok, term, err := c.lowerPackedDotProduct(Op(op), ins); ok {
 		return term, err
 	}
 	if ok, term, err := c.lowerPackedIntegerMinMax(Op(op), ins); ok {
-		return term, err
-	}
-	if ok, term, err := c.lowerPackedUnsignedAverage(Op(op), ins); ok {
 		return term, err
 	}
 	if ok, term, err := c.lowerHorizontalInteger(Op(op), ins); ok {

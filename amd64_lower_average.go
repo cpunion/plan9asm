@@ -3,10 +3,10 @@ package plan9asm
 import "fmt"
 
 func (c *amd64Ctx) lowerPackedUnsignedAverage(op Op, ins Instr) (bool, bool, error) {
-	form, known, err := x86PackedAverageProperties(op, ins, c.goarch)
-	if !known || err != nil {
-		return known, false, err
-	}
+	return c.lowerPackedPhysical(op, ins, x86PackedAverage)
+}
+
+func (c *amd64Ctx) lowerPackedAverageForm(op Op, ins Instr, form x86PackedPhysicalForm) (bool, bool, error) {
 	ins.Op = op
 	if err := x86LegacyMMXReadEmitterContext(ins, c.goarch); err != nil {
 		return true, false, err
@@ -28,10 +28,11 @@ func (c *amd64Ctx) lowerPackedUnsignedAverage(op Op, ins Instr) (bool, bool, err
 			return true, false, err
 		}
 	}
-	bits := form.spec.laneBits
+	bits := form.spec.outputBits
 	lanes := form.byteWidth * 8 / bits
 	if form.mmx {
 		var a string
+		var err error
 		if first.Kind == OpReg {
 			a, err = c.loadReg(first.Reg)
 		} else {
@@ -51,50 +52,12 @@ func (c *amd64Ctx) lowerPackedUnsignedAverage(op Op, ins Instr) (bool, bool, err
 		fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i%d> %s to i64\n", out, lanes, bits, value)
 		return true, false, c.storeReg(destination.Reg, "%"+out)
 	}
-	b, err := c.loadPackedCompareLanes(second, form.byteWidth, bits, false)
-	if err != nil {
-		return true, false, err
+	mnemonic := "pavgb"
+	if bits == 16 {
+		mnemonic = "pavgw"
 	}
-	var mask, value string
-	if form.mask >= 0 {
-		mask, err = c.loadK(ins.Args[form.mask].Reg)
-		if err != nil {
-			return true, false, err
-		}
-	}
-	if form.legacy && form.memory >= 0 {
-		mnemonic := map[int]string{8: "pavgb", 16: "pavgw"}[bits]
-		// Keep the original single native m128 instruction, alignment fault
-		// and segment. Portable arithmetic must not erase these effects.
-		value, err = c.emitPackedBinaryNativeMemory(first, bits, b, mnemonic)
-	} else {
-		// E4.nb memory suppresses inactive byte/word faults. Active loads stay
-		// volatile if the result is dead; virtual FP needs its full span first.
-		a, loadErr := c.loadX86PackedShiftLanes(first, form.byteWidth, bits, false, mask)
-		err = loadErr
-		if err == nil {
-			value = c.emitPackedUnsignedAverage(lanes, bits, a, b)
-		}
-	}
-	if err != nil {
-		return true, false, err
-	}
-	if form.mask >= 0 {
-		old := "zeroinitializer"
-		if !form.zeroing {
-			old, err = c.loadPackedCompareLanes(destination, form.byteWidth, bits, false)
-			if err != nil {
-				return true, false, err
-			}
-		}
-		value = amd64ApplyIntegerLaneMask(c, lanes, bits, value, old, mask, form.zeroing)
-	}
-	out := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i%d> %s to <%d x i8>\n", out, lanes, bits, value, form.byteWidth)
-	if form.legacy {
-		return true, false, c.storeLegacyPackedLogical(destination, "%"+out)
-	}
-	return true, false, c.storePackedMoveOperand(destination, form.byteWidth, "%"+out)
+	return true, false, c.emitPackedBinaryE4(ins, form.x86PackedBinaryForm, form.spec.memoryBits,
+		mnemonic, c.emitPackedUnsignedAverage)
 }
 
 func (c *amd64Ctx) emitPackedUnsignedAverage(lanes, laneBits int, first, second string) string {

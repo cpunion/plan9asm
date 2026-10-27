@@ -15,10 +15,10 @@ const (
 )
 
 func (c *amd64Ctx) lowerPackedWordMultiply(op Op, ins Instr) (bool, bool, error) {
-	form, recognized, err := x86PackedWordMultiplyProperties(op, ins, c.goarch)
-	if !recognized || err != nil {
-		return recognized, false, err
-	}
+	return c.lowerPackedPhysical(op, ins, x86PackedWordProduct)
+}
+
+func (c *amd64Ctx) lowerPackedWordMultiplyForm(op Op, ins Instr, form x86PackedPhysicalForm) (bool, bool, error) {
 	first, second, destination := form.source, ins.Args[form.second], ins.Args[form.destination]
 	if form.legacy && !form.mmx && form.memory >= 0 {
 		virtual := first.Kind == OpFP
@@ -42,6 +42,7 @@ func (c *amd64Ctx) lowerPackedWordMultiply(op Op, ins Instr) (bool, bool, error)
 			return true, false, fmt.Errorf("%w: Go GP-spelled packed multiply source names the MMX bank", ErrProbeNeedsContext)
 		}
 		var a string
+		var err error
 		if first.Kind == OpReg {
 			a, err = c.loadReg(first.Reg)
 		} else {
@@ -59,48 +60,14 @@ func (c *amd64Ctx) lowerPackedWordMultiply(op Op, ins Instr) (bool, bool, error)
 		fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i16> %s to i64\n", out, lanes, value)
 		return true, false, c.storeReg(destination.Reg, "%"+out)
 	}
-	b, err := c.loadPackedCompareLanes(second, form.byteWidth, 16, false)
-	if err != nil {
-		return true, false, err
-	}
-	var mask, value string
-	if form.mask >= 0 {
-		mask, err = c.loadK(ins.Args[form.mask].Reg)
-		if err != nil {
-			return true, false, err
-		}
-	}
+	mnemonic := ""
 	if form.legacy && form.memory >= 0 {
-		value, err = c.emitPackedBinaryNativeMemory(first, 16, b, strings.ToLower(string(op)))
-	} else {
-		// These four EVEX opcodes are E4.nb: masked-off word lanes do not
-		// read native memory. The full possible envelope still belongs to
-		// the independent source/caller proof, never to the mask value.
-		a, loadErr := c.loadX86PackedShiftLanes(first, form.byteWidth, 16, false, mask)
-		err = loadErr
-		if err == nil {
-			value = c.emitPackedWordMultiply(lanes, a, b, form.spec.mode)
-		}
+		mnemonic = strings.ToLower(string(op))
 	}
-	if err != nil {
-		return true, false, err
-	}
-	if form.mask >= 0 {
-		old := "zeroinitializer"
-		if !form.zeroing {
-			old, err = c.loadPackedCompareLanes(destination, form.byteWidth, 16, false)
-			if err != nil {
-				return true, false, err
-			}
-		}
-		value = amd64ApplyIntegerLaneMask(c, lanes, 16, value, old, mask, form.zeroing)
-	}
-	out := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i16> %s to <%d x i8>\n", out, lanes, value, form.byteWidth)
-	if form.legacy {
-		return true, false, c.storeLegacyPackedLogical(destination, "%"+out)
-	}
-	return true, false, c.storePackedMoveOperand(destination, form.byteWidth, "%"+out)
+	return true, false, c.emitPackedBinaryE4(ins, form.x86PackedBinaryForm, form.spec.memoryBits,
+		mnemonic, func(lanes, bits int, first, second string) string {
+			return c.emitPackedWordMultiply(lanes, first, second, form.spec.mode)
+		})
 }
 
 func (c *amd64Ctx) emitPackedWordMultiply(lanes int, first, second string, mode amd64PackedWordMultiplyMode) string {
