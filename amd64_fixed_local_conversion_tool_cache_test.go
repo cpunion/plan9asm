@@ -6,11 +6,15 @@ import (
 	"testing"
 )
 
-// Own one disposable compiler cache for the complete root. Tool construction
-// precedes every source lease; the setup fixture creates no source observation.
+// Share only this test process's disposable compiler artifacts. Each source
+// lease and command workspace remains independently owned by its fixture.
 func goAMD64FramePrepareOwnedToolCache(t *testing.T) {
 	t.Helper()
-	t.Setenv("GOCACHE", t.TempDir())
+	cache, err := fixedLocalProcessToolCache.directory()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("GOCACHE", cache)
 	_, request := goAMD64FrameSourceFixture(t)
 	fixedLocalConversionPrepareToolCache(t, request)
 }
