@@ -71,6 +71,57 @@ func TestTestToolCacheLazyLifetime(t *testing.T) {
 	if data, err := os.ReadFile(marker); err != nil || string(data) != "retain" {
 		t.Fatalf("test cache changed the caller's artifacts: %q %v", data, err)
 	}
+
+	t.Run("concurrent close", func(t *testing.T) {
+		var cache testToolCache
+		t.Cleanup(func() {
+			if err := cache.close(); err != nil {
+				t.Error(err)
+			}
+		})
+		path, err := cache.directory()
+		if err != nil {
+			t.Fatal(err)
+		}
+		start := make(chan struct{})
+		type result struct {
+			path string
+			err  error
+		}
+		results := make(chan result, callers)
+		closed := make(chan error, 1)
+		for index := 0; index < callers; index++ {
+			go func() {
+				<-start
+				path, err := cache.directory()
+				results <- result{path, err}
+			}()
+		}
+		go func() {
+			<-start
+			closed <- cache.close()
+		}()
+		close(start)
+		for index := 0; index < callers; index++ {
+			got := <-results
+			if got.err != nil {
+				if !strings.Contains(got.err.Error(), "test compiler cache is closed") || got.path != "" {
+					t.Errorf("unexpected acquisition result: %q %v", got.path, got.err)
+				}
+			} else if got.path != path {
+				t.Errorf("concurrent acquisition changed the owned cache: %q, %q", path, got.path)
+			}
+		}
+		if err := <-closed; err != nil {
+			t.Fatal(err)
+		}
+		if _, err := cache.directory(); err == nil {
+			t.Fatal("concurrent close allowed the cache to reopen")
+		}
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Fatalf("concurrent close retained its cache: %v", err)
+		}
+	})
 }
 
 func TestTestToolCacheProcessCleanup(t *testing.T) {
