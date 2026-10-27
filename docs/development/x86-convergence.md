@@ -148,6 +148,22 @@ arithmetic from the residual vector dispatcher. Its original fixtures now call
 the same typed owners as public lowering; 66 roots / 4,506 children passed with
 no skips at `481291b93`. This is code reduction, not a measured speedup.
 
+Integer min/max now reuses that E4 pipeline and removes another 39 production
+lines. Both endpoint SDKs retain all 34 original owners / 743 children and the
+full rule suite. The initial eager mnemonic conversion added allocations and
+was withdrawn; the accepted version converts only actual legacy memory forms.
+Paired timing directions remain mixed, so no acceleration is claimed.
+
+Uniform and per-128-bit byte shifts extend the existing byte grammar with two
+transport axes: immediate opcode-extension literals use vvvv for destination,
+while uniform counts keep X/m128 independent of data width. The immediate
+rotate family reuses that transport without gaining uniform-count forms. All
+bytes still derive from original SDK payloads; numerical lowerers and memory
+permissions do not follow from these test-format capabilities. The unique local
+union reaches 1,980 rows / 7,459 witnesses, with overlapping rotate views
+deduplicated. This is initialized-source/object ownership, not complete amd64
+implementation or native execution coverage.
+
 The selected Go 1.27.2 tables contain the following independent pilot rows:
 
 | Family | Legacy XMM | AVX | Total |

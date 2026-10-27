@@ -8,23 +8,22 @@ this page records the current candidate and its limits.
 
 ## Publication and review
 
-PR40 remains draft. Publication `9fede619c` completed its
-[full round](https://github.com/xgo-dev/plan9asm/actions/runs/40567452192)
-with 236 successful and 89 failed checks. Repeated SDK failures and derived
-completion failures are not separate instruction defects. The repair batch
-keeps the original failed reports and requires new-head CI acceptance.
-The preceding publication `01955e42e` passes its
-[complete CI round](https://github.com/xgo-dev/plan9asm/actions/runs/40536640591)
-on attempt 1: **325/325 Go checks plus Codecov**, with **88.0%** main statement
-coverage. Its complete named inventory matches the preceding 325-job round.
+PR40 remains draft. Publication `4c8f9300f` passes its
+[complete CI round](https://github.com/xgo-dev/plan9asm/actions/runs/40587011686)
+on attempt 1: **325/325 Go checks**. Its named inventory exactly matches the
+preceding 325-job round. All 78 failed source jobs from `9fede619c` were
+independently audited and mapped to the five repaired classes; that round's
+236 successful and 89 failed checks retain their original outcomes.
 Host-specific skips remain recorded; native AVX512 acceptance and external
-approval remain outstanding. Both inline threads are resolved. The preceding
-`1c54c530e` round also passes; its original infrastructure failures are retained.
+approval remain outstanding. Resolved inline threads are not external approval.
+The preceding `01955e42e` and `1c54c530e` rounds also pass; their receipts and
+original infrastructure failures remain retained.
 
-That publication adds ABS, FMA3, AVX moves and ordinary floating binary row
-joins and removes 121 unreachable legacy floating lines. It preserves all SDKs
-and test owners while creating current/minimum jobs first; creation order does
-not guarantee external runner scheduling priority.
+The next qualified batch adds complete bit-count/conflict, uniform/byte-shift
+and rotate row ownership, and removes 39 integer min/max lowering lines by
+reusing the existing E4 pipeline. Rotate's variable forms were already owned:
+only its 24 new immediate rows count toward the unique union. Shared syntax and
+byte encoding remain distinct from numerical lowering and memory permissions.
 
 The declaration-demand batch was qualified at `fe97b6d53`, then published as
 `9fede619c`. It adds 186 official
@@ -40,16 +39,17 @@ The failed `004da9f44` cache-policy round and earlier failures retain their
 original outcomes. Its stale Node assertion was repaired without removing
 the actual Go lifecycle, ownership or cleanup checks.
 
-[LLGo PR2694](https://github.com/xgo-dev/llgo/pull/2694), head `74c767490`, is
-rebased onto `854634f22` and pins the downloaded public
-`v0.0.0-20261027190827-9fede619cf05`. Adapter tests pass 41 roots / 131 children,
-assembly-build checks 21 / 23, and complete CI policies 160/160, with zero
-failures/skips. Earlier rebase layout controls retain their original receipts. Current-head cloud
-CI completes with 13 successful workflows and 130 successful jobs; only the two
-conditional release/submission jobs are skipped. The exact public module ZIP,
-all 5,037 included file blobs and the bundled license match the pinned source.
-Earlier pins and their preparation timeout retain their original outcomes;
-they do not qualify this pin. Its P1 dependency-provenance requirement remains
+[LLGo PR2694](https://github.com/xgo-dev/llgo/pull/2694), head `86a8278b8`, is
+rebased onto `748cf1811` and pins the downloaded public
+`v0.0.0-20261027212152-4c8f9300fab0`. All 117 contribution patches survive the
+rebase unchanged; the final tree equals an independent three-way merge.
+Fresh adapter tests pass 41 roots / 131 children, assembly-build checks 21 / 23,
+rebase-affected Go owners 53 / 118 and complete CI policies 160/160, with zero
+failures/skips. The public ZIP's 5,041 files match exact Git blobs and the
+bundled license. Current-head CI remains required: one macOS job completed tests
+but failed artifact upload with DNS ENOTFOUND; retain that infrastructure failure
+and rerun only after the round finishes. Earlier pins retain their own outcomes.
+The P1 dependency-provenance requirement remains
 open until an official upstream version replaces the temporary fork pin.
 Never push or merge upstream directly.
 
@@ -169,6 +169,10 @@ are mixed (+4.58% / -0.39%), so no complete-SDK speedup is claimed.
 | Normalized backend/WASM scope at `c5f1492a1` | Current **58 / 1,245**; minimum **57 / 1,245 PASS** | New five roots / 60 children include 21 actual WASM objects; one Go1.21-only source root is absent on minimum |
 | Actual LLVM consumer fixtures at `c71c7cdd0` | Both SDKs **4 / 16 PASS** | Four original Unix failures reproduced first; Windows test binary cross-compiles, without claiming local Windows execution |
 | Complete LOCK/CMPXCHG host scope at `5d84ab6a3` | Both SDKs **58 / 8,075 PASS**, zero failures/skips | Original 63-root run retains five real native-execution skips; Linux owners remain required in CI; original FP15 controls plus 24 backend negatives |
+| Integer min/max E4 reuse at `5d6de821e` | Each SDK **34 / 743**; full rules **46 / 223 PASS** | Production net -39; existing three benchmark inputs retained, with no acceleration claim |
+| Bit-count/conflict ownership at `d56a1b125` | Each SDK new **2 / 40**; full rules **47 / 231 PASS** | 48 rows / 198 witnesses; translator, grammar and initializer unchanged |
+| Uniform/byte-shift formats at `d2364cd20` | Each SDK new **1 / 64**, old groups **18 / 906**, related semantics **109 / 10,991 PASS** | New 188 rows / 488 witnesses; real baseline RED; rules **53 / 449** and policies pass; native inapplicability remains separate |
+| Complete rotate family at `41ac31285` | Each SDK new **1 / 28**; full rules **55 / 463 PASS** | All eight members, 48 rows / 216 witnesses; unique addition 24 / 108; old 19 groups and 241 generated batches unchanged |
 
 The joint native scope executes 45 logical kernels over all 256 byte values
 with separate and overlapping buffers, 36 original shifted-literal kernels
@@ -206,9 +210,15 @@ Neither file is cropped or substituted with an instruction-only fixture.
 | AVX whole-vector moves | 144 | 306 |
 | Ordinary AVX floating binary | 132 | 684 |
 | Remaining EVEX binary families | 186 | 765 |
-| Local candidate total | **1,720** | **6,665** |
+| Bit-count and conflict | 48 | 198 |
+| Uniform and per-128-bit byte shifts | 188 | 488 |
+| Complete rotate view (24 rows already in EVEX binary group) | 48 | 216 |
+| Local candidate unique union | **1,980** | **7,459** |
 
-These joins retain independent ordered Go rows and actual Go bytes, then compile
+The union contains 1,874 AVX rows of 3,568 (52.5%) and 106 legacy rows. The
+complete rotate view overlaps 24 existing rows / 108 witnesses and is deduplicated.
+The 7,459 witnesses include the existing 30 terminal trap controls, not 7,459
+normal executions. These joins retain independent ordered Go rows and actual Go bytes, then compile
 initialized functions through three APIs with LLVM22. Two PADDD aliases are
 separate. High banks force narrow EVEX; MMX has separate region/EMMS owners.
 This is neither all x86 rows nor an architecture percentage. Context and zero
@@ -274,11 +284,13 @@ showed regression; no acceleration is claimed for the accepted cleanup.
 
 ## Remaining work, in order
 
-1. Finish the five CI repair classes, publish through the allowed fork and
-   finish new-head CI/coverage. Repin LLGo to that exact public revision and qualify it. Obtain
+1. Publish the next qualified family batch through the allowed fork and finish
+   new-head CI/coverage. Recover LLGo's upload failure, then repin to the exact
+   public revision and qualify it after its current round finishes. Obtain
    external review and retain draft status meanwhile.
-   Next local reductions are integer min/max reuse of the existing E4 pipeline
-   and the next independent unary row join. Their static proposals are not passes.
+   Next is complete duplicate-shuffle ownership, including legacy forms; its
+   static proposal is not a pass. Keep the complete RCP14 family typed-effect
+   and active-memory-fault questions for a real class-level TDD investigation.
 2. Complete amd64 official-row ownership, 386 applicability and independent
    semantics. Extend existing family/object/native owners instead of creating
    another opcode registry or enumerating unrelated source/target products.
