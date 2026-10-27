@@ -4,6 +4,7 @@ package main
 
 import (
 	"bytes"
+	"debug/elf"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -87,25 +88,24 @@ func runSDKFixedLocalDefaultProfile(t *testing.T, commandPaths bool) {
 			output := t.TempDir()
 			report, _, err := runOneTarget(targetSpec{Goos: "linux", Goarch: "amd64"},
 				[]string{path}, nil, nil, "", output, false, 0, false, false, true, "../..", config)
-			if err != nil || report.TotalAsm != 1 || len(report.AsmFiles) != 1 || report.Success != 0 ||
-				report.Failed != 1 || report.NotApplicable != 0 || len(report.Fails) != 1 {
-				t.Fatalf("complete actual SDK source failure disappeared: %v; %+v", err, report)
+			if err != nil || report.TotalAsm != 1 || len(report.AsmFiles) != 1 || report.Success != 1 ||
+				report.Failed != 0 || report.NotApplicable != 0 || len(report.Fails) != 0 {
+				t.Fatalf("complete actual SDK source failed: %v; %+v", err, report)
 			}
-			failure := report.Fails[0].Err
-			// Complete capture now distinguishes the original non-callable
-			// leaf. The unchanged whole source still exceeds the combined
-			// continuation budget; this is not a translation success.
-			if !strings.Contains(failure, "empty/oversized source continuation instruction budget") ||
-				strings.Contains(failure, "ordinary observation requires exact GOENV") || strings.Contains(failure, "owned main") {
-				t.Fatalf("default profile/SDK source did not reach its complete graph budget boundary: %s", failure)
+			irPath := filepath.Join(output, filepath.FromSlash(path), filepath.Base(input)+".ll")
+			ir, err := os.ReadFile(irPath)
+			if err != nil || !bytes.Contains(ir, []byte("define ")) ||
+				!bytes.Contains(ir, []byte(`target triple = "x86_64-unknown-linux-gnu"`)) {
+				t.Fatal("complete original SDK source omitted target LLVM definitions", err)
 			}
-			if err := filepath.WalkDir(output, func(name string, entry os.DirEntry, err error) error {
-				if err == nil && !entry.IsDir() {
-					t.Errorf("rejected complete SDK source published an artifact: %s", name)
-				}
-				return err
-			}); err != nil {
+			object, err := elf.Open(strings.TrimSuffix(irPath, ".ll") + ".o")
+			if err != nil {
 				t.Fatal(err)
+			}
+			defer object.Close()
+			if object.Machine != elf.EM_X86_64 || object.Type != elf.ET_REL ||
+				object.Section(".text") == nil || object.Section(".text").Size == 0 {
+				t.Fatal("complete original SDK source omitted AMD64 ELF text")
 			}
 			after, err := os.ReadFile(input)
 			if err != nil || !bytes.Equal(after, original) {

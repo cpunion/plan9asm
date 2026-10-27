@@ -34,8 +34,11 @@ func fixedLocalPrivateAddressStep(ins Instr, state *x86FixedLocalState, proof *x
 // Full-word affine operations preserve an actual typed input's identity, not
 // numerical pointer bytes, pointee bounds or private-frame ownership. Grammar,
 // widths and FLAGS come from the same typed forms as ordinary GP lowering.
-func fixedLocalInputAddressStep(ins *Instr, state *x86FixedLocalState, proof *x86FixedLocalProof, residue int) (bool, error) {
-	if len(state.opaque) == 0 && len(state.opaqueCells) == 0 {
+func fixedLocalInputAddressStep(ins *Instr, state *x86FixedLocalState, sig FuncSig, proof *x86FixedLocalProof, residue int) (bool, error) {
+	// A typed FP source can introduce the first native address. Otherwise no
+	// address operation is possible before a register or spill carries one.
+	if len(state.opaque) == 0 && len(state.opaqueCells) == 0 &&
+		(len(ins.Args) == 0 || ins.Args[0].Kind != OpFP) {
 		return false, nil
 	}
 	fail := func() (bool, error) {
@@ -79,29 +82,42 @@ func fixedLocalInputAddressStep(ins *Instr, state *x86FixedLocalState, proof *x8
 	}
 	if form, known, err := x86LockScalarRMWProperties(ins.Op, *ins, "amd64"); known && err == nil && form.spec.bits == 64 {
 		origin, pointer := fixedLocalOpaqueRegister(form.destination, state)
-		sourceOrigin, sourcePointer := fixedLocalOpaqueRegister(form.source, state)
 		switch form.spec.stem {
-		case "ADD", "SUB":
-			if !pointer && !sourcePointer {
+		case "ADD", "SUB", "ADC", "SBB":
+			if form.destination.Kind != OpReg {
 				return false, nil
 			}
-			if pointer && !sourcePointer && fixedLocalNumericRead(form.source, 8, state) {
+			carry := form.spec.carryInput
+			if carry && state.flags&x86ByteFlagCF == 0 {
+				return fail()
+			}
+			subtract := form.spec.stem == "SUB" || form.spec.stem == "SBB"
+			value, err := fixedLocalReadValue(ins, 0, state, sig, proof, residue, 8, false)
+			if err != nil || value.pointer {
+				return false, nil // The shared machine reader reports invalid inputs.
+			}
+			if pointer && !value.opaque {
 				var valid bool
-				origin, valid = shift(origin, form.source, form.spec.stem == "SUB")
+				origin, valid = shift(origin, form.source, subtract)
 				if !valid {
 					return fail()
+				}
+				if carry {
+					origin.address = x86StaticSBAddress{} // Defined CF need not be constant.
 				}
 				return write(form.destination, origin, form.spec.flagsKilled, form.spec.flagsDefined)
 			}
-			if form.spec.stem == "ADD" && sourcePointer && !pointer && fixedLocalNumericRead(form.destination, 8, state) {
-				var valid bool
-				sourceOrigin, valid = shift(sourceOrigin, form.destination, false)
+			if !subtract && value.opaque && !pointer && fixedLocalNumericRead(form.destination, 8, state) {
+				sourceOrigin, valid := shift(value.identity, form.destination, false)
 				if !valid {
 					return fail()
 				}
+				if carry {
+					sourceOrigin.address = x86StaticSBAddress{}
+				}
 				return write(form.destination, sourceOrigin, form.spec.flagsKilled, form.spec.flagsDefined)
 			}
-			return fail()
+			return false, nil // Other arithmetic results are bits, not addresses.
 		case "INC", "DEC":
 			if pointer {
 				var valid bool
@@ -168,14 +184,11 @@ func fixedLocalInputAddressStep(ins *Instr, state *x86FixedLocalState, proof *x8
 		return found && origin.valid()
 	}
 	pointers := [2]bool{opaque(0), opaque(1)}
-	if !pointers[0] && !pointers[1] {
+	if !pointers[0] || !pointers[1] {
 		return false, nil
 	}
 	for index, operand := range form.args {
-		if !pointers[index] {
-			if operand.Kind == OpImm && fixedLocalNumericRead(operand, 8, state) {
-				continue
-			}
+		if !fixedLocalOriginOwners(values[index], proof) {
 			return fail()
 		}
 		if operand.Kind == OpMem {

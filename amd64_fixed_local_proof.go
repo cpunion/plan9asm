@@ -853,13 +853,13 @@ func fixedLocalStep(ins *Instr, state *x86FixedLocalState, sig FuncSig, proof *x
 			return nil
 		}
 	}
-	if known, err := fixedLocalConditionalMoveStep(ins, state, proof, residue); known {
+	if known, err := fixedLocalConditionalMoveStep(ins, state, sig, proof, residue); known {
 		return err
 	}
 	if known, err := fixedLocalPrivateAddressStep(*ins, state, proof); known {
 		return err
 	}
-	if known, err := fixedLocalInputAddressStep(ins, state, proof, residue); known {
+	if known, err := fixedLocalInputAddressStep(ins, state, sig, proof, residue); known {
 		return err
 	}
 	if effect, known, err := fixedLocalGPByteEffect(*ins); known {

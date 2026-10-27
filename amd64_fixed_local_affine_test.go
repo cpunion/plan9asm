@@ -36,7 +36,7 @@ func TestGoAMD64FixedLocalInputAffineAddresses(t *testing.T) {
 		{"pointer index", "LEAQ (SI)(DI*2),CX\nMOVQ (CX),AX", false},
 		{"aliased pointer index", "LEAQ (SI)(SI*1),CX\nMOVQ (CX),AX", false},
 		{"unknown index", "LEAQ (SI)(R8*2),CX\nMOVQ (CX),AX", false},
-		{"numerical compare is not address", "CMPQ SI,AX\nSETCS AL", false},
+		{"native and numerical comparison", "CMPQ SI,AX\nSETCS AL", true},
 		{"uninitialized spill compare", "CMPQ SI,8(SP)\nSETCS AL", false},
 		{"different origin consumed", "CMPQ AX,$0\nJEQ left\nMOVQ SI,CX\nJMP join\nleft:\nMOVQ DI,CX\njoin:\nMOVQ (CX),AX", true},
 		{"pointer and number join", "CMPQ AX,$0\nJEQ left\nMOVQ SI,CX\nJMP join\nleft:\nMOVQ AX,CX\njoin:\nMOVQ (CX),AX", false},

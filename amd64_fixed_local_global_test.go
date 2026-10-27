@@ -130,7 +130,7 @@ func TestGoAMD64FixedLocalGlobalAddressGuards(t *testing.T) {
 
 		changed := strings.Replace(assembly, "joined:\nMOVQ SI,8(SP)", "joined:\nXORQ SI,AX\nMOVQ SI,8(SP)", 1)
 		if changed == assembly {
-			t.Fatal("global/input negative did not consume the joined pointer as NUM")
+			t.Fatal("machine-bit fixture lost its joined address operand")
 		}
 		assembly = changed
 		pkg, request, file, options := fixedLocalTransportFixture(t, assembly,
@@ -138,9 +138,16 @@ func TestGoAMD64FixedLocalGlobalAddressGuards(t *testing.T) {
 		source := requireGoAMD64FrameCapture(t, pkg, request)
 		ctx, cancel := runtimeOracleStageContext(t)
 		defer cancel()
-		if _, err := source.BindFixedLocal(ctx, pkg, file, options); !errors.Is(err, ErrProbeNeedsContext) {
-			t.Fatal("global/input alternatives acquired numerical permission", err)
+		if _, err := source.BindFixedLocal(ctx, pkg, file, options); err != nil {
+			t.Fatal("original global/input machine-bit arithmetic rejected", err)
 		}
+		fixedLocalFreshAPIs(t, pkg, request, options, []string{"Translate", "Module", "GoModule"},
+			func(t *testing.T, ir string, err error) {
+				if err != nil {
+					t.Fatal(err)
+				}
+				compileLLVMToObject(t, llc, options.TargetTriple, "global-bits.ll", "global-bits.o", ir)
+			})
 	})
 	t.Run("bound symbol and lifetime", func(t *testing.T) {
 		pkg, request, file, options := fixedLocalTransportFixture(t, fixedLocalGlobalAssembly,

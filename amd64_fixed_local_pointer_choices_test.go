@@ -87,13 +87,18 @@ func TestGoAMD64FixedLocalPointerChoicesCompleteSources(t *testing.T) {
 }
 
 func TestGoAMD64FixedLocalPointerChoicesRetainBoundaries(t *testing.T) {
+	t.Run("native pointer bits are numerical", func(t *testing.T) {
+		fn, sig, _ := fixedLocalPointerChoiceFixture(t, fixedLocalChoicePrefix+"XORQ CX,AX")
+		if _, err := proveX86FixedLocal(fn, sig); err != nil {
+			t.Fatal("complete native arithmetic source rejected", err)
+		}
+	})
 	for _, row := range []fixedLocalPointerChoiceCase{
 		{"exact address exceeds extent", "LEAQ choice<>(SB),CX\nMOVQ 64(CX),AX"},
 		{"exact vector access crosses extent", "LEAQ choice<>(SB),CX\nMOVOU 56(CX),X0\nMOVQ X0,AX"},
 		{"one candidate is readonly", fixedLocalChoicePrefix + "MOVQ AX,(CX)"},
 		{"partial pointer read", fixedLocalChoicePrefix + "MOVL CX,DX\nMOVQ (DX),AX"},
 		{"partial pointer spill overwrite", fixedLocalChoicePrefix + "MOVQ CX,8(SP)\nMOVB $1,9(SP)\nMOVQ 8(SP),DX\nMOVQ (DX),AX"},
-		{"pointer is not NUM", fixedLocalChoicePrefix + "XORQ CX,AX"},
 		{"private relocation is separate", "LEAQ 8(SP),CX\nCMPQ AX,$0\nCMOVQEQ SI,CX\nMOVQ (CX),AX"},
 		{"unknown value is not parameter zero", "CMPQ AX,$0\nCMOVQEQ SI,R12\nMOVQ (R12),AX"},
 		{"stale equality flags", fixedLocalChoicePrefix + "CMPQ CX,R8\nCMPQ AX,$1\nJE done\nMOVQ AX,(CX)\ndone:"},

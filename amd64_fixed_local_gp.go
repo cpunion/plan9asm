@@ -138,13 +138,6 @@ func fixedLocalTypedByteStep(ins *Instr, state *x86FixedLocalState, sig FuncSig,
 		if !operand.read {
 			continue
 		}
-		if operand.operand.Kind == OpFP {
-			value, err := fixedLocalReadValue(ins, operand.index, state, sig, proof, residue, operand.width, false)
-			if err != nil || value.pointer || value.opaque {
-				return fail()
-			}
-			continue
-		}
 		if operand.operand.Kind != OpMem && operand.operand.Kind != OpSym {
 			if operand.operand.Kind == OpReg && amd64VectorByteWidth(operand.operand.Reg) != 0 {
 				mask := x86CallerVectorByteMask(operand.width)
@@ -157,28 +150,13 @@ func fixedLocalTypedByteStep(ins *Instr, state *x86FixedLocalState, sig FuncSig,
 				}
 				continue
 			}
-			if !fixedLocalNumericRead(operand.operand, operand.width, state) {
+			if !fixedLocalMachineRead(ins, operand, state, sig, proof, residue) {
 				return fail()
 			}
 			continue
 		}
-		if !operand.write {
-			if _, _, err := fixedLocalReadMemory(ins, operand.index, state, proof, residue, operand.width, alignment); err != nil {
-				return err
-			}
-			continue
-		}
-		offset, role, err := fixedLocalMemoryAccess(ins, operand.index, state, proof, residue, operand.width, alignment, true, false)
-		if err != nil {
+		if err := fixedLocalMachineMemory(ins, operand, state, proof, residue, alignment); err != nil {
 			return err
-		}
-		if role == x86FixedLocalNativeInput {
-			continue
-		}
-		for index := offset; index < offset+operand.width; index++ {
-			if !state.bytes[index] {
-				return fail()
-			}
 		}
 	}
 	for _, operand := range effect.operands {
@@ -192,6 +170,19 @@ func fixedLocalTypedByteStep(ins *Instr, state *x86FixedLocalState, sig FuncSig,
 				return err
 			}
 			if role == x86FixedLocalPrivateMemory {
+				// An integer RMW drops an overlapping native-address role,
+				// but its untouched actual machine bytes remain initialized.
+				for start := offset - 7; start < offset+operand.width; start++ {
+					origin, found := state.opaqueCells[start]
+					if found && fixedLocalOriginOwners(origin, proof) {
+						if start < 0 || start > int64(len(state.bytes))-8 {
+							return fail()
+						}
+						for index := start; index < start+8; index++ {
+							state.bytes[index] = true
+						}
+					}
+				}
 				fixedLocalNumericalStore(state, offset, operand.width, true)
 			}
 		case OpReg:
@@ -211,10 +202,13 @@ func fixedLocalTypedByteStep(ins *Instr, state *x86FixedLocalState, sig FuncSig,
 			root, valid := x86CallerGP(operand.operand.Reg)
 			mask := x86CallerByteMask(operand.operand.Reg, operand.width)
 			_, private := state.pointers[root]
-			_, opaque := state.opaque[root]
+			origin, opaque := state.opaque[root]
 			if !valid || root == SP || mask == 0 ||
-				(private || opaque) && operand.width != 8 {
+				private && operand.width != 8 {
 				return fail()
+			}
+			if opaque && fixedLocalOriginOwners(origin, proof) {
+				state.known[root] = 255 // Narrow writes preserve defined native upper bits.
 			}
 			if operand.width == 4 {
 				mask = 255 // Architectural dword writes define the upper half.
@@ -231,6 +225,64 @@ func fixedLocalTypedByteStep(ins *Instr, state *x86FixedLocalState, sig FuncSig,
 	state.flags = state.flags&^effect.flagsKilled | effect.flagsDefined
 	if effect.flagsKilled|effect.flagsDefined != 0 {
 		state.comparison = x86FixedLocalComparison{}
+	}
+	return nil
+}
+
+// Integer effects consume machine bits. Native addresses have all eight bytes;
+// relocated private-frame identities do not. This does not change the stricter
+// address-index, scalar transport or result-ABI predicates.
+func fixedLocalMachineRead(ins *Instr, operand x86TypedByteOperand, state *x86FixedLocalState,
+	sig FuncSig, proof *x86FixedLocalProof, residue int) bool {
+	if operand.operand.Kind == OpFP {
+		value, err := fixedLocalReadValue(ins, operand.index, state, sig, proof, residue, operand.width, false)
+		return err == nil && !value.pointer && (!value.opaque || fixedLocalOriginOwners(value.identity, proof))
+	}
+	if fixedLocalNumericRead(operand.operand, operand.width, state) {
+		return true
+	}
+	root, valid := x86CallerGP(operand.operand.Reg)
+	origin, native := state.opaque[root]
+	_, private := state.pointers[root]
+	return operand.operand.Kind == OpReg && valid && root != SP && !private && native &&
+		x86CallerByteMask(operand.operand.Reg, operand.width) != 0 && fixedLocalOriginOwners(origin, proof)
+}
+
+func fixedLocalMachineMemory(ins *Instr, operand x86TypedByteOperand, state *x86FixedLocalState,
+	proof *x86FixedLocalProof, residue int, alignment int64) error {
+	if operand.operand.Kind == OpSym {
+		_, _, err := fixedLocalReadMemory(ins, operand.index, state, proof, residue, operand.width, alignment)
+		return err
+	}
+	address, err := fixedLocalMemoryAddress(*ins, operand.index, proof.frame)
+	if err != nil {
+		return err
+	}
+	offset, private := fixedLocalPrivateOffset(address, state)
+	if !private {
+		_, _, err := fixedLocalMemoryAccess(ins, operand.index, state, proof, residue, operand.width, alignment, operand.write, false)
+		return err
+	}
+	if _, err := fixedLocalMemory(ins, operand.index, state, proof, residue, operand.width, alignment, operand.write, true); err != nil {
+		return err
+	}
+	for index := offset; index < offset+operand.width; index++ {
+		if state.bytes[index] {
+			continue
+		}
+		defined := false
+		// Full pointer spills need not be aligned. Exactly eight possible
+		// starting offsets can contain a byte, independent of frame size.
+		for start := index - 7; start <= index; start++ {
+			origin, found := state.opaqueCells[start]
+			if found && start >= 0 && start <= int64(len(state.bytes))-8 && fixedLocalOriginOwners(origin, proof) {
+				defined = true
+				break
+			}
+		}
+		if !defined {
+			return goAMD64FrameContext("fixed local machine read contains undefined or relocated private bytes")
+		}
 	}
 	return nil
 }

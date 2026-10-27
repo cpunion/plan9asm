@@ -50,6 +50,12 @@ func TestGoAMD64FixedLocalNativeAddressCompleteSources(t *testing.T) {
 }
 
 func TestGoAMD64FixedLocalNativeAddressRetainsBoundaries(t *testing.T) {
+	t.Run("native address has machine bits", func(t *testing.T) {
+		fn, sig, _ := fixedLocalPointerChoiceFixture(t, fixedLocalChoicePrefix+"XORQ CX,AX")
+		if _, err := proveX86FixedLocal(fn, sig); err != nil {
+			t.Fatal("complete native arithmetic source rejected", err)
+		}
+	})
 	for _, row := range []fixedLocalPointerChoiceCase{
 		{"known literal read exceeds object", "LEAQ choice<>(SB),CX\nMOVQ 64(CX),AX"},
 		{"known literal vector crosses object", "LEAQ choice<>(SB),CX\nMOVOU 56(CX),X0\nMOVQ X0,AX"},
@@ -58,7 +64,6 @@ func TestGoAMD64FixedLocalNativeAddressRetainsBoundaries(t *testing.T) {
 		{"readonly alternative does not grant write", fixedLocalChoicePrefix + "MOVQ AX,(CX)"},
 		{"other object does not establish adjacency", "LEAQ choice<>+64(SB),CX\nLEAQ other<>(SB),DX\nMOVQ (CX),AX"},
 		{"private address cannot merge with native", "LEAQ 8(SP),CX\nCMPQ AX,$0\nCMOVQEQ SI,CX\nMOVQ (CX),AX"},
-		{"address is not NUM", fixedLocalChoicePrefix + "XORQ CX,AX"},
 		{"partial register address is undefined", fixedLocalChoicePrefix + "MOVL CX,DX\nMOVQ (DX),AX"},
 		{"partial spilled address is undefined", fixedLocalChoicePrefix + "MOVQ CX,8(SP)\nMOVB $1,9(SP)\nMOVQ 8(SP),DX\nMOVQ (DX),AX"},
 		{"unknown input is not an address", "CMPQ AX,$0\nCMOVQEQ SI,R12\nMOVQ (R12),AX"},

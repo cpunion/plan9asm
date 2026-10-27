@@ -168,7 +168,13 @@ func fixedLocalAddressFlagsRuntime(t *testing.T, execution x86FloatCompareExecut
 }
 
 func TestCrossLinuxRuntimeMatrixGoAMD64FixedLocalAddressFlags(t *testing.T) {
-	fixedLocalAddressFlagsRuntime(t, x86FloatCompareRuntimeTools(t, x86FloatCompareSSE), true)
+	execution := x86FloatCompareRuntimeTools(t, x86FloatCompareSSE)
+	t.Run("address-flags", func(t *testing.T) {
+		fixedLocalAddressFlagsRuntime(t, execution, true)
+	})
+	t.Run("machine-bits", func(t *testing.T) {
+		fixedLocalMachineBitsRuntime(t, execution, true)
+	})
 }
 
 func TestGoAMD64FixedLocalAddressFlagsRuntimeObjects(t *testing.T) {

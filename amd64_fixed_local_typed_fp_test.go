@@ -107,12 +107,17 @@ func TestGoAMD64FixedLocalTypedFPReads(t *testing.T) {
 }
 
 func TestGoAMD64FixedLocalTypedFPBoundaries(t *testing.T) {
+	t.Run("pointer machine bits multiply", func(t *testing.T) {
+		fn, sig, _ := fixedLocalTypedFPFixture(t, "*uint64", "MULQ x+0(FP)")
+		if _, err := proveX86FixedLocal(fn, sig); err != nil {
+			t.Fatal("complete typed pointer machine multiply rejected", err)
+		}
+	})
 	for _, row := range []struct {
 		name, typ, body string
 	}{
 		{"pointer is not NUM", "*uint64", "ADDQ x+0(FP),AX"},
 		{"pointer is not conditional NUM", "*uint64", "CMPQ AX,AX\nCMOVQEQ x+0(FP),AX"},
-		{"pointer is not multiply NUM", "*uint64", "MULQ x+0(FP)"},
 		{"partial pointer", "*uint64", "ADDL x+0(FP),AX"},
 		{"partial numerical slot", "uint64", "ADDL x+0(FP),AX"},
 		{"interior numerical slot", "uint64", "ADDL x+4(FP),AX"},

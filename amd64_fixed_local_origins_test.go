@@ -129,7 +129,7 @@ func TestGoAMD64FixedLocalOriginSetValueSemantics(t *testing.T) {
 			known:  make(map[Reg]uint8), booleans: make(map[Reg]uint8),
 		}
 		ins := Instr{Op: "ADDQ", Args: []Operand{{Kind: OpImm, Imm: 8}, {Kind: OpReg, Reg: AX}}}
-		if handled, err := fixedLocalInputAddressStep(&ins, &state, proof, 0); err != nil || !handled {
+		if handled, err := fixedLocalInputAddressStep(&ins, &state, sig, proof, 0); err != nil || !handled {
 			t.Fatal("exact affine write rejected", handled, err)
 		}
 		if !reflect.DeepEqual(original, set(8)) || !reflect.DeepEqual(state.opaque[AX], set(16)) {

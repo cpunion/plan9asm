@@ -12,7 +12,8 @@ import (
 func fixedLocalPointerChoiceRuntimeProgram(t *testing.T, triple string) (assembly, declarations, original, driver string) {
 	t.Helper()
 	rows := append(fixedLocalPointerChoiceAllPositiveCases(), fixedLocalNativeAddressCases()...)
-	if len(rows) != 42 {
+	rows = append(rows, fixedLocalMachineAddressCases()...)
+	if len(rows) != 48 {
 		t.Fatal("complete pointer-choice runtime inventory changed", len(rows))
 	}
 	assembly, declarations = fixedLocalPointerChoiceProgram(t, fixedLocalChoiceData, rows)
@@ -100,7 +101,7 @@ func fixedLocalPointerChoiceRuntime(t *testing.T, execution x86FloatCompareExecu
 	if execute {
 		output := x86ScalarFloatIntegerOriginalOutput(t, execution, assembly, original)
 		want = strings.Split(strings.TrimSpace(string(output)), "\n")
-		if len(want) != 42*16*2 {
+		if len(want) != 48*16*2 {
 			t.Fatal("original Go pointer-choice runtime output inventory changed", len(want))
 		}
 	} else {
@@ -139,7 +140,7 @@ func fixedLocalPointerChoiceRuntime(t *testing.T, execution x86FloatCompareExecu
 				})
 			}
 		})
-	t.Logf("42 complete functions, 16 input patterns, two pointer alias relations, return and both 256-byte buffers; execute=%v", execute)
+	t.Logf("48 complete functions, 16 input patterns, two pointer alias relations, return and both 256-byte buffers; execute=%v", execute)
 }
 
 func TestCrossLinuxRuntimeMatrixGoAMD64FixedLocalPointerChoices(t *testing.T) {

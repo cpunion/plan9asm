@@ -236,8 +236,8 @@ func TestGoAMD64FixedLocalReadonlyDataAddressLayoutFlags(t *testing.T) {
 		{"INC zero", acquire + "INCQ SI\nSETEQ DL", true},
 		{"DEC zero", acquire + "ADDQ $8,SI\nDECQ SI\nSETEQ DL", true},
 		{"cross literal comparison", acquire + "LEAQ other<>(SB),DI\nCMPQ SI,DI\nSETCS DL", true},
-		{"literal numerical comparison", acquire + "CMPQ SI,$1234\nSETCS DL", false},
-		{"spilled literal comparison", acquire + "MOVQ SI,8(SP)\nCMPQ 8(SP),$0\nSETEQ DL", false},
+		{"literal numerical comparison", acquire + "CMPQ SI,$1234\nSETCS DL", true},
+		{"spilled literal comparison", acquire + "MOVQ SI,8(SP)\nCMPQ 8(SP),$0\nSETEQ DL", true},
 	} {
 		t.Run(row.name, func(t *testing.T) {
 			assembly := fixedLocalAddressData + other + fixedLocalDataAddressFunction("Value", row.body)

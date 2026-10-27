@@ -119,7 +119,7 @@ func x86ConditionalMoveOffsetKnown(memory MemRef) bool {
 	return bare && memory.Off == 0
 }
 
-func fixedLocalConditionalMoveStep(ins *Instr, state *x86FixedLocalState, proof *x86FixedLocalProof, residue int) (bool, error) {
+func fixedLocalConditionalMoveStep(ins *Instr, state *x86FixedLocalState, sig FuncSig, proof *x86FixedLocalProof, residue int) (bool, error) {
 	form, known, err := x86ConditionalMoveProperties(ins.Op, *ins, "amd64")
 	if !known {
 		return false, nil
@@ -134,6 +134,14 @@ func fixedLocalConditionalMoveStep(ins *Instr, state *x86FixedLocalState, proof 
 	if ins.Args[0].Kind == OpFP {
 		// Declared numerical FP inputs use the shared GP effect. This value
 		// transport path retains its existing pointer and private-spill roles.
+		value, err := fixedLocalReadValue(ins, 0, state, sig, proof, residue, int64(form.bits/8), false)
+		if err != nil || value.pointer || value.opaque {
+			return fail()
+		}
+		old, err := fixedLocalReadValue(ins, 1, state, sig, proof, residue, int64(form.bits/8), false)
+		if err != nil || old.pointer || old.opaque {
+			return fail()
+		}
 		return false, nil
 	}
 	width := int64(form.bits / 8)
