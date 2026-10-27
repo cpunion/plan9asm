@@ -168,11 +168,12 @@ minimum Go 1.20.14 both pass the following Linux/amd64 LLVM22 object scopes:
 | Signed/unsigned saturating pack | 36 | 114 |
 | Per-lane logical/arithmetic shifts | 64 | 236 |
 | Conditional sign, B/W/D | 9 | 18 |
+| Packed absolute value, B/W/D/Q | 33 | 108 |
 | Byte-indexed shuffle | 9 | 24 |
 | Integer EQ/GT compare | 72 | 168 |
 | Mask blend | 36 | 144 |
 | Horizontal integer add/subtract | 18 | 36 |
-| Local total | 865 | 2,774 |
+| Local total | 898 | 2,882 |
 
 Published `ab68a6ecc` contains the first 847 rows / 2,738 witnesses and completed
 all 325 CI jobs successfully. The next batch adds all eighteen horizontal
@@ -232,6 +233,18 @@ with UNPACK and per-lane shifts preserves their original 19 byte anchors. The
 complete rule reader, new object owner and listing-identity negative pass on
 both endpoint SDKs: 25 roots / 88 children each. This adds 17 net lines across
 six files, with no translator rule or new native execution claim.
+
+Packed ABS adds all seven named members, 33 original rows and 108 witnesses.
+The unary adapter retains reserved VEX.vvvv/EVEX.V', width, broadcast, masks and
+zeroing, while typed effects retain the independent old-destination reads.
+It reuses the original ABS/sign initialized source and the bounded byte/API/
+object driver, without changing translator production code or native fixtures.
+At `b5ca7da71`, the full affected scope passes 60 roots / 1,048 children on
+Go1.27.3 and 59 / 1,048 on Go1.20.14, zero failures/skips. The syntax-metadata
+follow-up `65ef2b9bf` passes 4 roots / 43 children on each endpoint SDK and the
+complete Node/Go preflight. Every field of the previous 865 rows / 2,774
+witnesses and the two PADDD aliases remains identical on both SDKs. Existing
+portable numerical execution remains separate from original x86 native evidence.
 
 Fixed-frame GP analysis now consumes the existing typed byte/FLAGS effects
 instead of a second arithmetic opcode list. Its bounded worklist intersects

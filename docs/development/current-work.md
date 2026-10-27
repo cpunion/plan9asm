@@ -79,6 +79,7 @@ with allocation-byte differences +0.22% and +0.56%. Flat cases vary -0.05% to
 | Complete original SDK objects | **41/55 PASS**, 14 failures, zero N/A/unattempted | Go1.27.2 Linux/amd64; identical 55 original hashes; SHA1 newly passes, no prior pass lost |
 | Five-architecture official corpus at `d2784db04` | PASS | Go1.27.3; no baseline mismatch or parse error; classifications are not initialized/runtime coverage |
 | Horizontal integer official join | 56 roots / 685 children PASS on each endpoint SDK | Independent rows, original Go bytes and LLVM22 O0 objects through three APIs |
+| Packed ABS join and affected regressions at `b5ca7da71` | Go1.27.3: 60 roots / 1,048 children; Go1.20.14: 59 / 1,048 PASS | Full rule reader, every existing row join, original ABS/sign five-target objects and portable values; zero failures/skips |
 
 The joint native scope executes 45 logical kernels over all 256 byte values
 with separate and overlapping buffers, 36 original shifted-literal kernels
@@ -107,17 +108,29 @@ Neither file is cropped or substituted with an instruction-only fixture.
 | Saturating pack | 36 | 114 |
 | Per-lane shifts | 64 | 236 |
 | Conditional sign | 9 | 18 |
+| Packed absolute value | 33 | 108 |
 | Byte-indexed shuffle | 9 | 24 |
 | Integer EQ/GT compare | 72 | 168 |
 | Mask blend | 36 | 144 |
 | Horizontal integer | 18 | 36 |
-| Total | **865** | **2,774** |
+| Total | **898** | **2,882** |
 
 These joins retain independent ordered Go rows and actual Go bytes, then compile
 initialized functions through three APIs with LLVM22. Two PADDD aliases are
 separate. High banks force narrow EVEX; MMX has separate region/EMMS owners.
 This is neither all x86 rows nor an architecture percentage. Context and zero
 unsupported classifications never establish complete translation.
+
+The ABS join adds only a unary format adapter and reuses the existing ABS/sign
+initializer, original Go byte verifier and bounded three-API object driver.
+Translator production code and native semantic fixtures are unchanged. The
+follow-up `65ef2b9bf` only clarifies syntax metadata and strengthens its inventory
+assertion: both endpoint SDKs pass its focused 4 roots / 43 children. All 865
+previous rows / 2,774 witnesses and both PADDD aliases retain identical IDs,
+instructions, bytes and axes on both SDKs. That follow-up also passes all 573
+Node policies and the exact Go preflight's 26 roots / 299 children. These are
+local object and existing portable-value receipts, not new original-native
+execution or current-head CI acceptance.
 
 ## Remaining work, in order
 
