@@ -144,38 +144,52 @@ func TestGoAMD64FixedLocalLayoutPartitionFrozenEdges(t *testing.T) {
 			for index := range before {
 				before[index].x86FixedLocalMemory = cloneX86ReplayFixedLocalMemory(before[index].x86FixedLocalMemory)
 			}
+			current := fn
+			current.Instrs = append([]Instr(nil), fn.Instrs...)
 			budget := x86FixedLocalBudget{steps: 1 << 18, bytes: 64 << 20}
-			err := replayX86FixedLocal(&fn, sig, proof, 1, &budget, nil, &changed)
-			if err == nil && mutation == "other layout" {
-				t.Logf("original graph: %+v", layouts.nodes)
-				t.Logf("tampered graph: %+v", changed.nodes)
+			err := replayX86FixedLocal(&current, sig, proof, 1, &budget, nil, &changed)
+			if mutation == "other layout" {
+				if err != nil {
+					t.Fatal("one residue can establish the relabeled cycle locally", err)
+				}
+				// Relabeling a cycle is locally consistent. Its complete byte
+				// correspondence and independent final graph are the consumers
+				// that must reject a different layout relative to the prefix.
 				for residue := 2; residue < 8; residue++ {
-					if err := replayX86FixedLocal(&fn, sig, proof, residue, &budget, nil, &changed); err != nil {
-						t.Fatal("diagnostic complete-residue replay", err)
+					if err := replayX86FixedLocal(&current, sig, proof, residue, &budget, nil, &changed); err != nil {
+						t.Fatal("complete-residue replay", err)
 					}
 				}
 				accesses := make(map[int]map[int]x86FixedLocalAccess)
-				for index, instruction := range fn.Instrs {
+				anchors, mismatches := 0, 0
+				for index, instruction := range current.Instrs {
 					if len(instruction.x86FixedLocalMemory) != 0 {
 						accesses[index] = instruction.x86FixedLocalMemory
 						for _, access := range instruction.x86FixedLocalMemory {
-							t.Logf("tampered access %d %q: first=%v series=%v", index, instruction.Raw, access.offset, access.iterationOffsets)
+							if instruction.Raw == "MOVQ $1,(R14)" && access.offset[0] == 16 && access.offset[1] == 16 {
+								anchors++
+							}
+							if instruction.Raw == "MOVQ (R14),AX" && len(access.iterationOffsets) == 2 &&
+								access.iterationOffsets[0][0] == 16 && access.iterationOffsets[0][1] == 24 {
+								mismatches++
+							}
 						}
 					}
 				}
-				t.Logf("complete tampered alias outcome: %v", fixedLocalRelocationAliases(accesses))
-				baseline, baselineErr := proveX86FixedLocal(file.Funcs[0], sig)
-				t.Logf("complete original proof outcome: %v", baselineErr)
-				for index, instruction := range baseline.Instrs {
-					for _, access := range instruction.x86FixedLocalMemory {
-						t.Logf("original access %d %q: first=%v series=%v", index, instruction.Raw, access.offset, access.iterationOffsets)
-					}
+				if anchors != 1 || mismatches != 2 || current.x86FixedLocal != nil {
+					t.Fatal("fixture lost its 16-to-16 prefix versus 16-to-24 reads, or published an unfinished proof")
+				}
+				if err := fixedLocalRelocationAliases(accesses); !errors.Is(err, ErrProbeNeedsContext) {
+					t.Fatal("one original byte acquired two relocated identities", err)
 				}
 				freshFile, parseErr := Parse(ArchAMD64, assembly)
 				if parseErr != nil {
 					t.Fatal(parseErr)
 				}
 				fresh := freshFile.Funcs[0]
+				if _, err := proveX86FixedLocal(fresh, sig); err != nil {
+					t.Fatal("the unchanged complete source must still succeed", err)
+				}
 				freshProof := &x86FixedLocalProof{frame: fresh.FrameSize}
 				freshBudget := x86FixedLocalBudget{steps: 1 << 18, bytes: 64 << 20}
 				var freshGraph x86FixedLocalLayoutGraph
@@ -184,12 +198,15 @@ func TestGoAMD64FixedLocalLayoutPartitionFrozenEdges(t *testing.T) {
 						t.Fatal("independent final graph rebuild", err)
 					}
 				}
-				t.Logf("fresh final graph: %+v; matches tampered: %v", freshGraph.nodes, reflect.DeepEqual(freshGraph.nodes, changed.nodes))
+				if !reflect.DeepEqual(freshGraph.nodes, layouts.nodes) || reflect.DeepEqual(freshGraph.nodes, changed.nodes) {
+					t.Fatal("independent final replay accepted the changed prefix/layout correspondence")
+				}
+				return
 			}
 			if !errors.Is(err, ErrProbeNeedsContext) {
 				t.Fatal("a different residue acquired changed layout correspondence", err)
 			}
-			if !reflect.DeepEqual(before, fn.Instrs) {
+			if !reflect.DeepEqual(before, current.Instrs) {
 				t.Fatal("failed layout replay published a provisional observation")
 			}
 		})
