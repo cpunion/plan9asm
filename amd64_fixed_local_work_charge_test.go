@@ -155,7 +155,7 @@ func TestGoAMD64FixedLocalPartitionVectorWorkProjection(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	effects, err := fixedLocalEffectPlan(file.Funcs[0])
+	effects, err := fixedLocalEffectPlan(file.Funcs[0], nil)
 	if err != nil || len(effects) != 1 {
 		t.Fatal("complete vector grammar did not select the single effect", err)
 	}
