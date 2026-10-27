@@ -179,8 +179,8 @@ func TestGoAMD64FixedLocalImplicitMultiplyBoundaries(t *testing.T) {
 						body = "MOVQ SI,AX\n" + name + " 0(SP)"
 					}
 					fn, sig, _ := fixedLocalInputFixture(t, body)
-					if _, err := proveX86FixedLocal(fn, sig); !errors.Is(err, ErrProbeNeedsContext) {
-						t.Fatal("opaque pointer became a numerical multiply input", err)
+					if _, err := proveX86FixedLocal(fn, sig); err != nil {
+						t.Fatal("complete native machine bits were rejected as multiply input", err)
 					}
 				})
 			}

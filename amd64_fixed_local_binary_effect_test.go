@@ -165,8 +165,8 @@ func TestGoAMD64FixedLocalTypedBinaryBoundaries(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if _, err := proveX86FixedLocal(file.Funcs[0], sig); !errors.Is(err, ErrProbeNeedsContext) {
-				t.Fatal("opaque input pointer became numerical vector bytes", err)
+			if _, err := proveX86FixedLocal(file.Funcs[0], sig); err != nil {
+				t.Fatal("complete native spill bits were rejected as vector input", err)
 			}
 		})
 	}

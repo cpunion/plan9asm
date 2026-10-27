@@ -175,6 +175,11 @@ func TestCrossLinuxRuntimeMatrixGoAMD64FixedLocalAddressFlags(t *testing.T) {
 	t.Run("machine-bits", func(t *testing.T) {
 		fixedLocalMachineBitsRuntime(t, execution, true)
 	})
+	for _, scope := range []string{"auxiliary", "vector spill", "multiply"} {
+		t.Run(scope, func(t *testing.T) {
+			fixedLocalMachineRuntime(t, execution, true, scope)
+		})
+	}
 }
 
 func TestGoAMD64FixedLocalAddressFlagsRuntimeObjects(t *testing.T) {

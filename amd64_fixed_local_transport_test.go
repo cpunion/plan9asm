@@ -160,9 +160,16 @@ func fixedLocalTransportRequireOriginalFrames(t *testing.T, pkg GoPackage, reque
 func TestGoAMD64FixedLocalTransportAuthorityNegatives(t *testing.T) {
 	base := fixedLocalTransportAssembly("Value", 49, fixedLocalTransportBoolBody)
 	declaration := "func Value(" + fixedLocalTransportParams + ") bool"
+	t.Run("incoming arithmetic", func(t *testing.T) {
+		body := strings.Replace(fixedLocalTransportBoolBody, "MOVQ p+24(FP),R8", "ADDQ CX,DX", 1)
+		assembly := strings.Replace(base, fixedLocalTransportBoolBody, body, 1)
+		pkg, _, file, options := fixedLocalTransportFixture(t, assembly, declaration, "linux/amd64", "x86_64-unknown-linux-gnu")
+		if _, err := proveX86FixedLocal(file.Funcs[0], options.Sigs[pkg.Path+".Value"]); err != nil {
+			t.Fatal("unused native-address arithmetic changed canonical bool transport", err)
+		}
+	})
 	for name, body := range map[string]string{
 		"undefined incoming index": strings.Replace(fixedLocalTransportBoolBody, "MOVQ p+24(FP),R8", "MOVQ (DX)(R9*2),AX", 1),
-		"incoming arithmetic":      strings.Replace(fixedLocalTransportBoolBody, "MOVQ p+24(FP),R8", "ADDQ CX,DX", 1),
 		"incoming comparison":      strings.Replace(fixedLocalTransportBoolBody, "MOVQ p+24(FP),R8", "CMPQ DX,R8", 1),
 		"incoming mask":            strings.Replace(fixedLocalTransportBoolBody, "MOVQ p+24(FP),R8", "KMOVQ DX,K1", 1),
 		"incoming partial":         strings.Replace(fixedLocalTransportBoolBody, "MOVQ 128(BP),DX", "MOVL 128(BP),DX", 1),
