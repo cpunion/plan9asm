@@ -172,24 +172,3 @@ func TestGoAMD64SDKFrameRejectsChangedNativeWitness(t *testing.T) {
 		t.Fatal("restoring native metadata revived a revoked frame", err)
 	}
 }
-
-func TestGoAMD64SDKFrameRejectsWholeOriginalPrivateHelper(t *testing.T) {
-	// The zero-frame chacha leaf has its own full-source positive regression.
-	// A nonzero private helper still needs an independent frame/call contract.
-	ctx, request := sdkASMDataRequest(t, "amd64", "crypto/internal/fips140/nistec")
-	observed, err := CaptureGoAMD64SDKFrameObservation(ctx, request)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer observed.Close()
-	pkg := sdkAMD64FrameActualPackage(t, observed.source)
-	source, err := CaptureGoAMD64SDKFrameSource(ctx, pkg, GoAMD64FrameCaptureRequest{GoBinary: request.GoBinary,
-		Directory: request.Directory, AssemblyFile: "p256_asm_amd64.s", Target: request.Target, Environment: request.Environment})
-	if source != nil {
-		source.Close()
-	}
-	if source != nil || !errors.Is(err, ErrProbeNeedsContext) || !strings.Contains(err.Error(), "p256MulInternal") ||
-		!strings.Contains(err.Error(), "zero-frame leaf") {
-		t.Fatal("unknown original helper became a Go-declared frame or whole source was cropped", err)
-	}
-}

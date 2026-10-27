@@ -244,6 +244,14 @@ func TestGoAMD64SDKFramedLeafWholeOriginalSource(t *testing.T) {
 		t.Fatal("complete SDK source lost its independently observed helper frames", err)
 	}
 	defer owner.Close()
+	// This supersedes the former whole-source rejection: automatic private
+	// frames now have an observed contract. Keep every original TEXT and the
+	// native-identity negatives below; cropping the helper is not acceptance.
+	expanded := owner.sdkFrame.owner.source.observation.CPP[0].Output
+	file, err := Parse(ArchAMD64, expanded)
+	if err != nil || len(file.Funcs) != len(owner.functions) {
+		t.Fatal("complete original SDK TEXT inventory changed", err)
+	}
 	for _, name := range []string{"p256MulInternal", "p256SqrInternal"} {
 		fn, found := owner.functions[name]
 		if !found || !fn.privateLeaf || fn.locals != 16 || fn.signature.Name != "" || len(fn.code) == 0 {
