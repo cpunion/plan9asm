@@ -20,7 +20,8 @@ function requireFreshOwner(source) {
 }
 
 function originalCacheSetup(source, owners) {
-  // The cache-owner policy independently checks the helper's complete body.
+  // Cache policy checks owner selection and preparation order; Go lifecycle
+  // tests exercise the process-owned cache and independent source workspaces.
   // Normalize only this setup call, keeping the original numerical and
   // mutation/Close fingerprints unchanged.
   const prepared = '\tgoAMD64FramePrepareOwnedToolCache(t)\n';

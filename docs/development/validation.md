@@ -143,7 +143,7 @@ source within the original five-minute stage context, then closes that owner.
 Never reuse another API's lease or cache a mutable Verify result. Wide packed
 objects retain all340 kernels in six complete source packages per API, all three
 optimization paths and independent top-level API owners. Only compiler artifacts
-share a disposable parent-test-owned cache; initialize it even when ambient
+share a disposable test-process-owned cache; initialize it even when ambient
 GOCACHE is unset. Object-only tool selection checks LLVM22 and the actual
 target SDK/headers without requiring Rosetta, QEMU or a host ISA preflight.
 Original Go compilation, C compilation/linking and native execution remain

@@ -7,20 +7,28 @@ const {test} = require('node:test');
 
 const source = fs.readFileSync('amd64_aes_family_fixed_local_test.go', 'utf8');
 
-test('the complete AES bound-consumer root owns one disposable compiler cache', () => {
+test('the complete AES bound-consumer root prepares the process-owned compiler cache', () => {
   assert.match(source, /func TestX86AESFamilyActualBoundFixedLocalConsumers\(t \*testing\.T\) \{\s*goAMD64FramePrepareOwnedToolCache\(t\)/);
 });
 
-test('the cache helper owns a fresh cache and prepares tools before source leases', () => {
+test('the cache helper selects owned artifacts and prepares tools before source leases', () => {
   const tools = fs.readFileSync('amd64_fixed_local_conversion_tool_cache_test.go', 'utf8');
   const helper = tools.match(/^func goAMD64FramePrepareOwnedToolCache\(t \*testing\.T\) \{\n([\s\S]*?)^\}/m);
   assert.ok(helper, 'the real cache owner must exist');
-  assert.deepEqual(helper[1].split('\n').map(line => line.trim()).filter(Boolean), [
-    't.Helper()',
-    't.Setenv("GOCACHE", t.TempDir())',
-    '_, request := goAMD64FrameSourceFixture(t)',
+  // Check the preparation boundary. Actual ownership, cleanup, source
+  // independence and concurrent close are exercised by the Go lifecycle tests.
+  let previous = -1;
+  for (const call of [
+    'fixedLocalProcessToolCache.directory()',
+    't.Setenv("GOCACHE", cache)',
+    'goAMD64FrameSourceFixture(t)',
     'fixedLocalConversionPrepareToolCache(t, request)',
-  ]);
+  ]) {
+    const offset = helper[1].indexOf(call);
+    assert.ok(offset > previous, `missing or reordered preparation: ${call}`);
+    previous = offset;
+  }
+  assert.match(helper[1], /cache, err := fixedLocalProcessToolCache\.directory\(\)\s*if err != nil \{\s*t\.Fatal\(err\)\s*\}/);
 });
 
 test('all AES targets consume independent original source leases for all three APIs', () => {
