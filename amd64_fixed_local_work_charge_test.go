@@ -9,7 +9,7 @@ import (
 )
 
 func TestGoAMD64FixedLocalOrdinaryFullWorkBoundary(t *testing.T) {
-	fn, sig := fixedLocalReplayFixture(t, "MOVQ $0,CX\n"+strings.Repeat("NOP\n", 55))
+	fn, sig := fixedLocalReplayFixture(t, strings.Repeat("NOP\n", 55))
 	fn.FrameSize = 64 << 10
 	_, instructions, err := fixedLocalEdges(fn)
 	if err != nil || len(instructions) != 64 {
