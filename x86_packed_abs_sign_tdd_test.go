@@ -217,14 +217,19 @@ func TestX86PackedAbsSignUnknownBytesAliasesAndUnchangedState(t *testing.T) {
 }
 
 func x86PackedAbsSignInitializedSource(index int, row x86PackedAbsSignOracleRow, arch string) (string, string) {
+	return x86PackedAbsSignInitializedInstruction(index, row.instruction(), arch, [3]int{0, 1, 2})
+}
+
+func x86PackedAbsSignInitializedInstruction(index int, instruction, arch string, registers [3]int) (string, string) {
 	word, move := 8, "MOVQ"
 	if arch == "386" {
 		word, move = 4, "MOVL"
 	}
 	name := fmt.Sprint("AbsSign", index)
 	source := fmt.Sprintf("TEXT ·%s(SB),4,$0-%d\n%s out+0(FP),DI\n%s input+%d(FP),AX\n%s control+%d(FP),BX\n%s old+%d(FP),CX\n"+
-		"VMOVDQU64 (AX),Z0\nVMOVDQU64 (BX),Z1\nVMOVDQU64 (CX),Z2\nKMOVQ mask+%d(FP),K1\nSTC\n%s\nVMOVDQU64 Z2,(DI)\nSETCS 64(DI)\nRET\n",
-		name, 4*word+8, move, move, word, move, 2*word, move, 3*word, 4*word, row.instruction())
+		"VMOVDQU64 (AX),Z%d\nVMOVDQU64 (BX),Z%d\nVMOVDQU64 (CX),Z%d\nKMOVQ mask+%d(FP),K1\nSTC\n%s\nVMOVDQU64 Z%d,(DI)\nSETCS 64(DI)\nRET\n",
+		name, 4*word+8, move, move, word, move, 2*word, move, 3*word,
+		registers[0], registers[1], registers[2], 4*word, instruction, registers[2])
 	return source, fmt.Sprintf("func %s(out *[80]byte,input,control,old *[64]byte,mask uint64)\n", name)
 }
 

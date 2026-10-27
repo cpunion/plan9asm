@@ -13,6 +13,8 @@ type X86PackedBinaryRow struct {
 	Witnesses  []X86PackedBinaryWitness
 }
 
+// Unary row witnesses leave Second empty. Mask and old-destination reads are
+// governed by their original row attributes, independently of the data source.
 type X86PackedBinaryWitness struct {
 	Instruction, Generation    string
 	First, Second, Destination string
@@ -80,6 +82,12 @@ func X86PackedPerLaneShiftRows(legacy X86LegacyCatalog, avx []X86AVXRule) ([]X86
 // table is XMM-only; VEX adds X/Y forms, without MMX, EVEX or broadcast.
 func X86PackedSignRows(legacy X86LegacyCatalog, avx []X86AVXRule) ([]X86PackedBinaryRow, error) {
 	return x86PackedBinaryRows(legacy, avx, `PSIGNB PSIGNW PSIGND VPSIGNB VPSIGNW VPSIGND`)
+}
+
+// X86PackedAbsRows retains all unary B/W/D/Q ABS rows, including each
+// overlapping VEX/EVEX row and the original mask/broadcast attributes.
+func X86PackedAbsRows(legacy X86LegacyCatalog, avx []X86AVXRule) ([]X86PackedBinaryRow, error) {
+	return x86PackedBinaryRows(legacy, avx, `PABSB PABSW PABSD VPABSB VPABSW VPABSD VPABSQ`)
 }
 
 // X86PackedHorizontalIntegerRows retains the XMM and VEX horizontal add/sub
@@ -175,17 +183,19 @@ func x86PackedBinaryRows(legacy X86LegacyCatalog, avx []X86AVXRule, names string
 }
 
 func x86PackedAVXRowWitnesses(rule X86AVXRule) ([]X86PackedBinaryWitness, error) {
-	syntax, err := x86PackedBinarySyntaxWitnesses(rule)
+	unary := rule.Ytab == "_yvmovddup" || rule.Ytab == "_yvexpandpd"
+	syntax, err := x86PackedSyntaxWitnesses(rule, unary)
 	if err != nil {
 		return nil, err
 	}
-	masked := rule.ZCase == "Zevex_rm_v_k_r"
+	masked := rule.ZCase == "Zevex_rm_v_k_r" || rule.ZCase == "Zevex_rm_k_r"
 	kind, stride, width := "vex", 2, 128
 	if strings.HasPrefix(rule.ZCase, "Zevex_") {
 		kind, stride = "evex", 3
 	}
-	// Vector input width is independent of whether the result is vector or K.
-	bank := strings.Split(strings.Fields(syntax[0])[1], ",")[1][:1]
+	// The validated official source class owns vector width, independently
+	// of register/memory witnesses and vector versus K result classes.
+	bank := strings.ToUpper(rule.Classes[0][1:2])
 	if bank == "Y" {
 		width = 256
 	} else if bank == "Z" {
@@ -245,9 +255,15 @@ func x86PackedAVXRowWitnesses(rule X86AVXRule) ([]X86PackedBinaryWitness, error)
 		}
 		fields := strings.Fields(instruction)
 		operands := strings.Split(fields[1], ",")
+		second, vvvv, vprime := operands[1], byte(0x70), byte(0)
+		if unary {
+			// Unary encodings reserve VEX.vvvv and EVEX.V' as ones;
+			// the mask and merging destination remain separate inputs.
+			second, vvvv, vprime = "", 0x78, 0x08
+		}
 		witness := X86PackedBinaryWitness{
 			Instruction: instruction, Generation: kind, Width: width,
-			First: operands[0], Second: operands[1], Destination: operands[len(operands)-1],
+			First: operands[0], Second: second, Destination: operands[len(operands)-1],
 			Memory: operands[0] == "(AX)", Masked: masked,
 			Zeroing: strings.HasSuffix(fields[0], ".Z"), Broadcast: strings.Contains(fields[0], ".BCST"),
 			MaskResult: rule.Classes[len(rule.Classes)-1] == "Yk",
@@ -257,7 +273,7 @@ func x86PackedAVXRowWitnesses(rule X86AVXRule) ([]X86PackedBinaryWitness, error)
 			modrm = 0x10 // the only memory witness is the undisturbed (AX).
 		}
 		if kind == "evex" {
-			p0, p2 := byte(0xa0)|mapByte, length<<5
+			p0, p2 := byte(0xa0)|mapByte, length<<5|vprime
 			if witness.Memory {
 				p0 = 0xe0 | mapByte
 			}
@@ -265,7 +281,7 @@ func x86PackedAVXRowWitnesses(rule X86AVXRule) ([]X86PackedBinaryWitness, error)
 				p0 |= 0x10 // K2 has no destination bit 4, unlike vector 18.
 			}
 			if masked {
-				p2 |= 1 // K1; V' is zero because the second source is 17.
+				p2 |= 1 // K1; binary V' is zero for the second source 17.
 			}
 			if witness.Zeroing {
 				p2 |= 0x80
@@ -273,11 +289,11 @@ func x86PackedAVXRowWitnesses(rule X86AVXRule) ([]X86PackedBinaryWitness, error)
 			if witness.Broadcast {
 				p2 |= 0x10
 			}
-			witness.Encoding = []byte{0x62, p0, wBit | 0x74 | pp, p2, byte(opcode), modrm}
+			witness.Encoding = []byte{0x62, p0, wBit | vvvv | 0x04 | pp, p2, byte(opcode), modrm}
 		} else if mapByte == 1 && wBit == 0 {
-			witness.Encoding = []byte{0xc5, 0xf0 | pp | length<<2, byte(opcode), modrm}
+			witness.Encoding = []byte{0xc5, 0x80 | vvvv | pp | length<<2, byte(opcode), modrm}
 		} else {
-			witness.Encoding = []byte{0xc4, 0xe0 | mapByte, wBit | 0x70 | pp | length<<2, byte(opcode), modrm}
+			witness.Encoding = []byte{0xc4, 0xe0 | mapByte, wBit | vvvv | pp | length<<2, byte(opcode), modrm}
 		}
 		witnesses = append(witnesses, witness)
 	}

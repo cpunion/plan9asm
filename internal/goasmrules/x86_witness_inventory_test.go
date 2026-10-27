@@ -96,7 +96,7 @@ func x86CheckPackedRowInventory(t *testing.T,
 				destination = witness.Destination == "K2"
 			}
 			if kind == "evex" && (witness.Encoding[0] != 0x62 ||
-				!strings.HasSuffix(witness.Second, "17") || !destination) {
+				(witness.Second != "" && !strings.HasSuffix(witness.Second, "17")) || !destination) {
 				t.Fatal("official EVEX identity can fall back to VEX", row.ID)
 			}
 			if witness.Broadcast {

@@ -49,6 +49,10 @@ func TestX86OfficialSignRowsInitializedThreeAPIsObjects(t *testing.T) {
 	x86OfficialPackedRowsObjects(t, goasmrules.X86PackedSignRows, 9, 18, 0)
 }
 
+func TestX86OfficialAbsRowsInitializedThreeAPIsObjects(t *testing.T) {
+	x86OfficialPackedRowsObjectsUsing(t, goasmrules.X86PackedAbsRows, 33, 108, 0, x86OfficialAbsAssembly)
+}
+
 func TestX86OfficialHorizontalIntegerRowsInitializedThreeAPIsObjects(t *testing.T) {
 	x86OfficialPackedRowsObjects(t, goasmrules.X86PackedHorizontalIntegerRows, 18, 36, 0)
 }
@@ -84,6 +88,14 @@ func TestX86OfficialMinMaxRowsInitializedThreeAPIsObjects(t *testing.T) {
 func x86OfficialPackedRowsObjects(t *testing.T,
 	buildRows func(goasmrules.X86LegacyCatalog, []goasmrules.X86AVXRule) ([]goasmrules.X86PackedBinaryRow, error),
 	wantRows, wantFormats, wantAliases int) []x86OfficialPackedCase {
+	t.Helper()
+	return x86OfficialPackedRowsObjectsUsing(t, buildRows, wantRows, wantFormats, wantAliases, x86OfficialPackedAssembly)
+}
+
+func x86OfficialPackedRowsObjectsUsing(t *testing.T,
+	buildRows func(goasmrules.X86LegacyCatalog, []goasmrules.X86AVXRule) ([]goasmrules.X86PackedBinaryRow, error),
+	wantRows, wantFormats, wantAliases int,
+	assembly func([]x86OfficialPackedCase) (string, string)) []x86OfficialPackedCase {
 	t.Helper()
 	legacy, err := goasmrules.LoadX86LegacyRules(runtime.GOROOT())
 	if err != nil {
@@ -125,7 +137,7 @@ func x86OfficialPackedRowsObjects(t *testing.T,
 		}
 		batch := cases[start:end]
 		if t.Run(fmt.Sprintf("batch%02d", start/32), func(t *testing.T) {
-			source, declaration := x86OfficialPackedAssembly(batch)
+			source, declaration := assembly(batch)
 			listing, err := x86ScalarLiteralGoListing(t, "amd64", source)
 			if err != nil {
 				t.Fatal(err)
@@ -152,6 +164,31 @@ func x86OfficialPackedRowsObjects(t *testing.T,
 	t.Logf("%d canonical rows / %d legal format witnesses plus %d aliases: original Go encoding and all three initialized public APIs + LLVM22 objects passed; no runtime claim",
 		wantRows, wantFormats, wantAliases)
 	return cases
+}
+
+func x86OfficialAbsAssembly(cases []x86OfficialPackedCase) (string, string) {
+	var source, declarations strings.Builder
+	line := 1
+	for index := range cases {
+		fixture := &cases[index]
+		w := fixture.witness
+		registers := [3]int{0, 1, 0}
+		if !w.Memory {
+			registers[0], _ = strconv.Atoi(w.First[1:])
+		}
+		registers[2], _ = strconv.Atoi(w.Destination[1:])
+		body, declaration := x86PackedAbsSignInitializedInstruction(index, w.Instruction, "amd64", registers)
+		fixture.symbol = fmt.Sprint("AbsSign", index)
+		for offset, instruction := range strings.Split(body, "\n") {
+			if instruction == w.Instruction {
+				fixture.line = line + offset
+			}
+		}
+		source.WriteString(body)
+		declarations.WriteString(declaration)
+		line += strings.Count(body, "\n")
+	}
+	return source.String(), declarations.String()
 }
 
 func x86OfficialPackedAssembly(cases []x86OfficialPackedCase) (string, string) {
