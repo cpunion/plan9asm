@@ -141,6 +141,26 @@ func TestGoAMD64FixedLocalTypedFPBoundaries(t *testing.T) {
 	}
 }
 
+func TestGoAMD64FixedLocalTypedFPLogicalInputs(t *testing.T) {
+	for _, row := range []struct{ declaration, body string }{
+		{"func Value(x bool) uint64", "MOVQ $0,AX\nTESTB $1,x+0(FP)\nSETNE AL\nMOVQ AX,ret+8(FP)\nRET"},
+		{"func Value(prefix uint64,x []byte) uint64", "MOVQ prefix+0(FP),AX\nADDQ x_len+16(FP),AX\nADCQ x_cap+24(FP),AX\nMOVQ AX,ret+32(FP)\nRET"},
+	} {
+		t.Run(row.declaration, func(t *testing.T) {
+			_, _, sig, source := x86ResultInitializationFixture(t, "amd64", row.declaration, row.body)
+			source = strings.Replace(source, "$0-", "$64-", 1)
+			file, err := Parse(ArchAMD64, source)
+			if err != nil {
+				t.Fatal(err)
+			}
+			requireX86GoAssemblerResult(t, "amd64", source, true)
+			if _, err := proveX86FixedLocal(file.Funcs[0], sig); err != nil {
+				t.Fatal("logical numeric component lost its declared FP input", err)
+			}
+		})
+	}
+}
+
 func TestGoAMD64FixedLocalTypedFPCompleteObjects(t *testing.T) {
 	rows := fixedLocalTypedFPCases()
 	var assembly, declarations strings.Builder
