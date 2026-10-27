@@ -19,7 +19,7 @@ func windowsModuleDependencyFixture(t *testing.T) (config, string) {
 	t.Setenv("GOTOOLCHAIN", "local")
 	dir := t.TempDir()
 	for name, source := range map[string]string{
-		"go.mod": "module example.org/windows-llvm-consumer\n\ngo 1.20\nrequire github.com/xgo-dev/llvm v0.9.9\n",
+		"go.mod": moduleLLVMFixtureGoMod(t, "example.org/windows-llvm-consumer"),
 		"consumer.go": `package consumer
 import "github.com/xgo-dev/llvm"
 func Context() llvm.Context { return llvm.NewContext() }

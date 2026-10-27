@@ -193,7 +193,7 @@ func moduleLLVMConsumerFixture(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
 	for name, source := range map[string]string{
-		"go.mod":      "module example.org/llvmconsumer\n\ngo 1.20\nrequire github.com/xgo-dev/llvm v0.9.9\n",
+		"go.mod":      moduleLLVMFixtureGoMod(t, "example.org/llvmconsumer"),
 		"consumer.go": "package consumer\nimport \"github.com/xgo-dev/llvm\"\nfunc Context() llvm.Context { return llvm.NewContext() }\n",
 	} {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(source), 0600); err != nil {
