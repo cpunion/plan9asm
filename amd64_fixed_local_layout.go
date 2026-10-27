@@ -45,6 +45,9 @@ func (layouts *x86FixedLocalLayouts) target(states map[int]x86FixedLocalState, f
 	match := -1
 	for _, index := range layouts.at[pc] {
 		prior, found := states[index]
+		if err := budget.consumeOrigins(64 + 2*fixedLocalStateWork(prior) + fixedLocalStateWork(next)); err != nil {
+			return 0, err
+		}
 		if !found {
 			continue
 		}

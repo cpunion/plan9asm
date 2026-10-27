@@ -112,3 +112,77 @@ func TestGoAMD64FixedLocalPartitionCandidateWork(t *testing.T) {
 		}
 	}
 }
+
+func TestGoAMD64FixedLocalPartitionUnboundCandidateWork(t *testing.T) {
+	state := x86FixedLocalState{pointers: map[Reg]int64{SP: 0}, known: map[Reg]uint8{AX: 255}}
+	layouts := x86FixedLocalLayouts{
+		at: map[int][]int{5: {0, 1}}, nodes: []x86FixedLocalLayoutNode{{pc: 5}, {pc: 5}},
+	}
+	// One bound candidate costs 64+3*128, one missing state 64+128.
+	budget := x86FixedLocalBudget{steps: 10, bytes: 640}
+	target, err := layouts.target(map[int]x86FixedLocalState{0: state}, 0, 0, 5, state, &budget)
+	if err != nil || target != 0 || budget.bytes != 0 || budget.steps != 10 {
+		t.Fatal("missing candidates still require lookup and incoming-state work", target, budget, err)
+	}
+}
+
+func TestGoAMD64FixedLocalPartitionStatePayload(t *testing.T) {
+	state := x86FixedLocalState{
+		bytes: make(x86FixedLocalByteSet, 2), booleanBytes: make(x86FixedLocalByteSet, 3),
+		pointers: map[Reg]int64{SP: 0}, opaque: map[Reg]x86FixedLocalOrigins{AX: {}},
+		opaqueCells: map[int64]x86FixedLocalOrigins{0: {}}, booleans: map[Reg]uint8{BX: 1},
+		constants: map[Reg]int64{CX: 0}, ranges: map[Reg]x86UnsignedRange{DX: {}},
+		known: map[Reg]uint8{SI: 255}, vectors: map[Reg]uint64{"X0": 255}, masks: map[Reg]bool{"K1": true},
+		addresses: map[int64]int64{8: 0}, results: map[int]bool{0: true}, savedBP: &x86FixedLocalSavedBP{},
+	}
+	if got := fixedLocalStateWork(state); got != 5*8+11*64+128 {
+		t.Fatal("both bitmaps, all eleven maps and saved BP must be counted", got)
+	}
+	if got := fixedLocalStateWork(x86FixedLocalState{}); got != 0 {
+		t.Fatal("an absent state has no payload", got)
+	}
+	// A single bounded allocation exercises saturation before multiplication.
+	large := x86FixedLocalState{bytes: make(x86FixedLocalByteSet, (64<<20)/8+1)}
+	if got := fixedLocalStateWork(large); got != (64<<20)+1 {
+		t.Fatal("oversized state work must saturate above the unchanged cap", got)
+	}
+}
+
+func TestGoAMD64FixedLocalPartitionVectorWorkProjection(t *testing.T) {
+	file, err := Parse(ArchAMD64, "TEXT ·Value(SB),4,$64-0\nPADDQ X0,X0\nRET\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	effects, err := fixedLocalEffectPlan(file.Funcs[0])
+	if err != nil || len(effects) != 1 {
+		t.Fatal("complete vector grammar did not select the single effect", err)
+	}
+	var original x86TypedByteEffect
+	for _, effect := range effects {
+		original = effect
+	}
+	for _, kind := range []OperandKind{OpReg, OpImm, OpMem, OpSym, OpFP} {
+		effect := original
+		effect.operands = append([]x86TypedByteOperand(nil), original.operands...)
+		effect.operands[0].operand.Kind = kind
+		if got := fixedLocalVectorRegisterWork(effect); got != (kind == OpReg || kind == OpImm) {
+			t.Fatal("only the register/immediate projection has bounded register work", kind, got)
+		}
+	}
+	for _, contract := range []string{"dynamic", "unknown upper", "invalid upper", "missing alignment"} {
+		effect := original
+		switch contract {
+		case "dynamic":
+			effect.dynamicMemory = true
+		case "unknown upper":
+			effect.vector.upperWrite = x86TypedVectorUpperUnknown
+		case "invalid upper":
+			effect.vector.upperWrite = 255
+		case "missing alignment":
+			effect.vector.memoryAlignment = 0
+		}
+		if fixedLocalVectorRegisterWork(effect) {
+			t.Fatal("an open or memory effect acquired the register-only discount", contract)
+		}
+	}
+}

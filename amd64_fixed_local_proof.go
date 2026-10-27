@@ -432,6 +432,48 @@ func (budget *x86FixedLocalBudget) consumeOrigins(bytes int64) error {
 	return nil
 }
 
+// Partitioned replay charges actual state payload at copies and meets. This
+// saturating logical charge includes map entries, not allocator/RSS overhead.
+func fixedLocalStateWork(state x86FixedLocalState) int64 {
+	const limit int64 = 64 << 20
+	var bytes int64
+	if state.savedBP != nil {
+		bytes = 128
+	}
+	for _, group := range []struct {
+		unit   int64
+		counts []int
+	}{
+		{8, []int{len(state.bytes), len(state.booleanBytes)}},
+		{64, []int{len(state.pointers), len(state.opaque), len(state.opaqueCells), len(state.booleans),
+			len(state.constants), len(state.ranges), len(state.known), len(state.vectors), len(state.masks),
+			len(state.addresses), len(state.results)}},
+	} {
+		for _, count := range group.counts {
+			if int64(count) > (limit-bytes)/group.unit {
+				return limit + 1
+			}
+			bytes += int64(count) * group.unit
+		}
+	}
+	return bytes
+}
+
+// Only the existing closed vector plan calls this cost projection. The step
+// debit remains mandatory; this grants no input or storage permission.
+func fixedLocalVectorRegisterWork(effect x86TypedByteEffect) bool {
+	if effect.dynamicMemory || effect.vector.memoryAlignment <= 0 ||
+		effect.vector.upperWrite != x86TypedVectorUpperPreserve && effect.vector.upperWrite != x86TypedVectorUpperZero {
+		return false
+	}
+	for _, operand := range effect.operands {
+		if operand.operand.Kind != OpReg && operand.operand.Kind != OpImm {
+			return false
+		}
+	}
+	return true
+}
+
 func replayX86FixedLocal(fn *Func, sig FuncSig, proof *x86FixedLocalProof, residue int, budget *x86FixedLocalBudget,
 	effects map[int]x86TypedByteEffect, layouts *x86FixedLocalLayoutGraph) error {
 	edges, instructions, err := fixedLocalEdges(*fn)
@@ -527,7 +569,11 @@ func replayX86FixedLocalCFG(fn *Func, sig FuncSig, proof *x86FixedLocalProof, re
 		if pc < 0 || pc >= len(instructions) {
 			return goAMD64FrameContext("fixed local fallthrough lacks a source return")
 		}
-		if err := budget.consumeOrigins(fixedLocalOriginStorage(states[node])); err != nil {
+		copyWork := fixedLocalOriginStorage(states[node])
+		if layouts != nil {
+			copyWork = 2 * fixedLocalStateWork(states[node])
+		}
+		if err := budget.consumeOrigins(copyWork); err != nil {
 			return err
 		}
 		current := cloneFixedLocalState(states[node])
@@ -536,7 +582,12 @@ func replayX86FixedLocalCFG(fn *Func, sig FuncSig, proof *x86FixedLocalProof, re
 		iteration := 0
 		var targets []int
 		for {
-			if err := budget.consume(proof.frame); err != nil {
+			effect, planned := effects[instructions[pc]]
+			workBytes := proof.frame
+			if layouts != nil && planned && fixedLocalVectorRegisterWork(effect) {
+				workBytes = 0
+			}
+			if err := budget.consume(workBytes); err != nil {
 				return err
 			}
 			if active == nil {
@@ -555,7 +606,7 @@ func replayX86FixedLocalCFG(fn *Func, sig FuncSig, proof *x86FixedLocalProof, re
 			transition := fn.x86DirectTailRoot.privateCallTransition(pc)
 			if transition {
 				err = fixedLocalFrameTransition(fn.x86DirectTailRoot, pc, &current)
-			} else if effect, found := effects[instructions[pc]]; found {
+			} else if planned {
 				err = fixedLocalTypedByteStep(&ins, &current, FuncSig{}, proof, residue, effect)
 			} else {
 				err = fixedLocalStep(&ins, &current, sig, proof, residue)
@@ -664,6 +715,11 @@ func replayX86FixedLocalCFG(fn *Func, sig FuncSig, proof *x86FixedLocalProof, re
 			}
 			changed := true
 			if previous, found := states[target]; found {
+				if layouts != nil {
+					if err := budget.consumeOrigins(2*fixedLocalStateWork(previous) + fixedLocalStateWork(next)); err != nil {
+						return err
+					}
+				}
 				var err error
 				changed, err = mergeFixedLocalState(&previous, next)
 				if err != nil {
@@ -679,7 +735,11 @@ func replayX86FixedLocalCFG(fn *Func, sig FuncSig, proof *x86FixedLocalProof, re
 					return goAMD64FrameContext("fixed local retained state storage budget exceeded")
 				}
 				retainedBytes += proof.frame + originBytes
-				if err := budget.consumeOrigins(originBytes); err != nil {
+				copyWork := originBytes
+				if layouts != nil {
+					copyWork = 2 * fixedLocalStateWork(next)
+				}
+				if err := budget.consumeOrigins(copyWork); err != nil {
 					return err
 				}
 				states[target] = cloneFixedLocalState(next)
