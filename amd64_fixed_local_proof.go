@@ -474,6 +474,29 @@ func fixedLocalVectorRegisterWork(effect x86TypedByteEffect) bool {
 	return true
 }
 
+// Cost only: the ordinary transfer still owns pointer, FLAGS and input facts.
+// Keep original address syntax conservative even if its effect becomes Regs.
+func fixedLocalGPRegisterWork(ins Instr) bool {
+	if !x86ResultNamedPredicateInstruction(ins) || ins.x86NumericalRead != nil {
+		return false
+	}
+	for _, operand := range ins.Args {
+		if operand.Kind != OpReg && operand.Kind != OpImm {
+			return false
+		}
+	}
+	effect, known, err := fixedLocalGPByteEffect(ins)
+	if !known || err != nil || effect.dynamicMemory {
+		return false
+	}
+	for _, operand := range effect.operands {
+		if operand.operand.Kind != OpReg && operand.operand.Kind != OpImm {
+			return false
+		}
+	}
+	return true
+}
+
 func replayX86FixedLocal(fn *Func, sig FuncSig, proof *x86FixedLocalProof, residue int, budget *x86FixedLocalBudget,
 	effects map[int]x86TypedByteEffect, layouts *x86FixedLocalLayoutGraph) error {
 	edges, instructions, err := fixedLocalEdges(*fn)
@@ -585,6 +608,8 @@ func replayX86FixedLocalCFG(fn *Func, sig FuncSig, proof *x86FixedLocalProof, re
 			effect, planned := effects[instructions[pc]]
 			workBytes := proof.frame
 			if layouts != nil && planned && fixedLocalVectorRegisterWork(effect) {
+				workBytes = 0
+			} else if layouts != nil && !planned && fixedLocalGPRegisterWork(fn.Instrs[instructions[pc]]) {
 				workBytes = 0
 			}
 			if err := budget.consume(workBytes); err != nil {

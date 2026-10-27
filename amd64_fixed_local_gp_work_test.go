@@ -90,6 +90,55 @@ func TestGoAMD64FixedLocalPartitionGPRouting(t *testing.T) {
 	}
 }
 
+func TestGoAMD64FixedLocalPartitionGPWorkProjection(t *testing.T) {
+	rows := []struct {
+		source string
+		cheap  bool
+	}{
+		{"ADDB $1,AX", true}, {"ADDW $1,AX", true}, {"ADDL $1,AX", true}, {"ADDQ $1,AX", true},
+		{"ANDQ $-16,AX", true}, {"ADCQ BX,AX", true}, {"SBBQ BX,AX", true}, {"CMPQ AX,$0", true},
+		{"MULB BX", true}, {"MULW BX", true}, {"MULL BX", true}, {"MULQ BX", true},
+		{"IMULQ BX", true}, {"MULXQ BX,AX,SI", true}, {"CMOVQEQ BX,AX", true},
+		{"ADDQ (SP),AX", false}, {"MULQ (SP)", false}, {"ADDQ a+0(FP),AX", false},
+		{"ADDQ value(SB),AX", false}, {"LEAQ (AX)(BX*8),CX", false}, {"BTQ AX,(BX)", false},
+		{"PUSHQ AX", false}, {"POPQ AX", false}, {"CALL helper(SB)", false}, {"RET", false},
+		{"REP", false}, {"JMP done", false}, {"ADDQ AX", false}, {"UNKNOWN AX", false},
+	}
+	for _, row := range rows {
+		t.Run(row.source, func(t *testing.T) {
+			file, err := Parse(ArchAMD64, "TEXT ·Value(SB),4,$64-16\n"+row.source+"\n")
+			if err != nil {
+				t.Fatal(err)
+			}
+			ins := file.Funcs[0].Instrs[len(file.Funcs[0].Instrs)-1]
+			if got := fixedLocalGPRegisterWork(ins); got != row.cheap {
+				t.Fatal("conservative source/effect work projection changed", got)
+			}
+			if !row.cheap {
+				return
+			}
+			for _, metadata := range []string{"encoded", "raw", "address", "segment", "numerical"} {
+				changed := ins
+				switch metadata {
+				case "encoded":
+					changed.x86Encoded = true
+				case "raw":
+					changed.x86SourceRaw = &x86SourceRawInstruction{}
+				case "address":
+					changed.x86AddressBits = 32
+				case "segment":
+					changed.x86SegmentPrefix = 0x64
+				case "numerical":
+					changed.x86NumericalRead = &x86NumericalReadCertificate{}
+				}
+				if fixedLocalGPRegisterWork(changed) {
+					t.Fatal("source/native or numerical-read metadata received a register discount", metadata)
+				}
+			}
+		})
+	}
+}
+
 func BenchmarkFixedLocalGPWorkProjection(b *testing.B) {
 	for _, partitioned := range []bool{false, true} {
 		for _, memory := range []bool{false, true} {
