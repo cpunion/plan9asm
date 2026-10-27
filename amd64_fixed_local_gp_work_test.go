@@ -111,8 +111,12 @@ func TestGoAMD64FixedLocalPartitionGPWorkProjection(t *testing.T) {
 				t.Fatal(err)
 			}
 			ins := file.Funcs[0].Instrs[len(file.Funcs[0].Instrs)-1]
-			if got := fixedLocalGPRegisterWork(ins); got != row.cheap {
+			effect, got := fixedLocalGPRegisterWork(ins)
+			if got != row.cheap {
 				t.Fatal("conservative source/effect work projection changed", got)
+			}
+			if !got && !reflect.DeepEqual(effect, x86TypedByteEffect{}) {
+				t.Fatal("failed cost query retained a partial descriptor")
 			}
 			if !row.cheap {
 				return
@@ -131,7 +135,7 @@ func TestGoAMD64FixedLocalPartitionGPWorkProjection(t *testing.T) {
 				case "numerical":
 					changed.x86NumericalRead = &x86NumericalReadCertificate{}
 				}
-				if fixedLocalGPRegisterWork(changed) {
+				if effect, cheap := fixedLocalGPRegisterWork(changed); cheap || !reflect.DeepEqual(effect, x86TypedByteEffect{}) {
 					t.Fatal("source/native or numerical-read metadata received a register discount", metadata)
 				}
 			}

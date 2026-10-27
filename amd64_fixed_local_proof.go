@@ -476,25 +476,25 @@ func fixedLocalVectorRegisterWork(effect x86TypedByteEffect) bool {
 
 // Cost only: the ordinary transfer still owns pointer, FLAGS and input facts.
 // Keep original address syntax conservative even if its effect becomes Regs.
-func fixedLocalGPRegisterWork(ins Instr) bool {
+func fixedLocalGPRegisterWork(ins Instr) (x86TypedByteEffect, bool) {
 	if !x86ResultNamedPredicateInstruction(ins) || ins.x86NumericalRead != nil {
-		return false
+		return x86TypedByteEffect{}, false
 	}
 	for _, operand := range ins.Args {
 		if operand.Kind != OpReg && operand.Kind != OpImm {
-			return false
+			return x86TypedByteEffect{}, false
 		}
 	}
 	effect, known, err := fixedLocalGPByteEffect(ins)
 	if !known || err != nil || effect.dynamicMemory {
-		return false
+		return x86TypedByteEffect{}, false
 	}
 	for _, operand := range effect.operands {
 		if operand.operand.Kind != OpReg && operand.operand.Kind != OpImm {
-			return false
+			return x86TypedByteEffect{}, false
 		}
 	}
-	return true
+	return effect, true
 }
 
 func replayX86FixedLocal(fn *Func, sig FuncSig, proof *x86FixedLocalProof, residue int, budget *x86FixedLocalBudget,
@@ -606,11 +606,14 @@ func replayX86FixedLocalCFG(fn *Func, sig FuncSig, proof *x86FixedLocalProof, re
 		var targets []int
 		for {
 			effect, planned := effects[instructions[pc]]
+			var gp *x86TypedByteEffect
 			workBytes := proof.frame
 			if layouts != nil && planned && fixedLocalVectorRegisterWork(effect) {
 				workBytes = 0
-			} else if layouts != nil && !planned && fixedLocalGPRegisterWork(fn.Instrs[instructions[pc]]) {
-				workBytes = 0
+			} else if layouts != nil && !planned {
+				if parsed, cheap := fixedLocalGPRegisterWork(fn.Instrs[instructions[pc]]); cheap {
+					workBytes, gp = 0, &parsed
+				}
 			}
 			if err := budget.consume(workBytes); err != nil {
 				return err
@@ -634,7 +637,7 @@ func replayX86FixedLocalCFG(fn *Func, sig FuncSig, proof *x86FixedLocalProof, re
 			} else if planned {
 				err = fixedLocalTypedByteStep(&ins, &current, FuncSig{}, proof, residue, effect)
 			} else {
-				err = fixedLocalStep(&ins, &current, sig, proof, residue)
+				err = fixedLocalStepWithGP(&ins, &current, sig, proof, residue, gp)
 			}
 			if err != nil {
 				return fmt.Errorf("%s: %q: %w", fn.Sym, ins.Raw, err)
@@ -962,6 +965,11 @@ func fixedLocalRecordAccess(ins *Instr, index int, proof *x86FixedLocalProof, re
 }
 
 func fixedLocalStep(ins *Instr, state *x86FixedLocalState, sig FuncSig, proof *x86FixedLocalProof, residue int) error {
+	return fixedLocalStepWithGP(ins, state, sig, proof, residue, nil)
+}
+
+func fixedLocalStepWithGP(ins *Instr, state *x86FixedLocalState, sig FuncSig, proof *x86FixedLocalProof, residue int,
+	gp *x86TypedByteEffect) error {
 	fail := func() error {
 		return goAMD64FrameContext("unproved fixed local width/initialization/address/control effect: %s", ins.Op)
 	}
@@ -1060,7 +1068,15 @@ func fixedLocalStep(ins *Instr, state *x86FixedLocalState, sig FuncSig, proof *x
 	if known, err := fixedLocalInputAddressStep(ins, state, sig, proof, residue); known {
 		return err
 	}
-	if effect, known, err := fixedLocalGPByteEffect(*ins); known {
+	var effect x86TypedByteEffect
+	var err error
+	known := gp != nil
+	if known {
+		effect = *gp
+	} else {
+		effect, known, err = fixedLocalGPByteEffect(*ins)
+	}
+	if known {
 		if err != nil {
 			return err
 		}
