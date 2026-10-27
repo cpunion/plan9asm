@@ -8,7 +8,9 @@ from local work; neither is a complete architecture coverage certificate.
 
 ## Publication and CI
 
-PR40 remains draft. Published head `55831306c`
+PR40 remains draft. The new publication carries integrated code `cb23f48a5`
+and the qualification recorded below. Its complete CI round is pending;
+the previous green round does not certify it. Previous publication `55831306c`
 [finished its complete CI round](https://github.com/xgo-dev/plan9asm/actions/runs/40402863391):
 **325 jobs, all successful**, main statement coverage **88.0%**. The round
 finished naturally, without cancellation or reruns. Its cross-runtime
@@ -42,7 +44,7 @@ upstream Plan9asm version.
 
 ## Local candidate and evidence
 
-Current integrated code is `cb23f48a5`, not yet published. It adds pointer
+This publication's integrated code is `cb23f48a5`. It adds pointer
 choices, complete framed roots with observed zero-frame private leaves,
 Windows leaf observation, broadcast boundaries, implicit MUL routing and
 three initialized official-family joins. It also integrates the smaller
@@ -118,9 +120,9 @@ runtime coverage or an architecture percentage.
 | Mask blend | 36 | 144 |
 | Local total | **847** | **2,738** |
 
-Published `55831306c` contains the first 730 rows / 2,402 witnesses.
-The final three joins are locally qualified on both endpoint SDKs; publication
-is pending. Two PADDD alias witnesses are separate. MMX has independent
+Previous publication `55831306c` contains the first 730 rows / 2,402 witnesses.
+This batch adds the final three joins, locally qualified on both endpoint SDKs.
+Two PADDD alias witnesses are separate. MMX has independent
 region/EMMS owners. Complete x86 row ownership, 386 applicability and raw/native
 coverage remain unfinished.
 

@@ -169,13 +169,14 @@ minimum Go 1.20.14 both pass the following Linux/amd64 LLVM22 object scopes:
 | Mask blend | 36 | 144 |
 | Local total | 847 | 2,738 |
 
-Published `55831306c` has the first 730 rows / 2,402 witnesses. The nine
+Previous publication `55831306c` has the first 730 rows / 2,402 witnesses. The nine
 PSHUFB/VPSHUFB rows are qualified at isolated `9c2923dd9` and integrated in
 local `a5354ca1a`, whose combined current/minimum checks pass. The compare and
 mask-blend joins each pass both endpoint SDKs and are integrated in local
-`2c19ef128`. That complete local candidate still needs joint qualification
-and publication. Published `55831306c` has since finished all 325 CI jobs
-successfully; its evidence does not qualify later local changes. The shared
+`2c19ef128`. The subsequent `cb23f48a5` batch has joint current-SDK and Linux
+runtime qualification recorded in current work; its complete CI remains
+pending. Previous publication `55831306c` finished all 325 CI jobs
+successfully; its evidence does not qualify later changes. The shared
 encoder consumes the selected legacy two-byte opcode payload; the existing
 translator needs no additional instruction rule. Both endpoint SDKs pass all
 nine shuffle rows and the complete rule reader: 38 roots / 432 children,
