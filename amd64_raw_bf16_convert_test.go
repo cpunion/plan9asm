@@ -72,6 +72,15 @@ func TestDecodedX86RawBF16ConvertCompleteLLVM22Forms(t *testing.T) {
 						if !memory && got.Args[0].String() != fmt.Sprintf("%s20", names.source) {
 							t.Fatalf("decode %x source = %s, want %s20", code, got.Args[0], names.source)
 						}
+						if memory {
+							accessBytes := 16 << vectorBits
+							if broadcast {
+								accessBytes = 4
+							}
+							if want := fmt.Sprintf("%d(AX)", 7*accessBytes); got.Args[0].String() != want {
+								t.Fatalf("decode %x source = %s, want exact tuple %s", code, got.Args[0], want)
+							}
+						}
 						if masked && (len(got.Args) != 3 || got.Args[1].String() != "K3") {
 							t.Fatalf("decode %x lost K3: %+v", code, got)
 						}
@@ -110,9 +119,14 @@ func TestTranslateRawBF16ConvertMaskAndBroadcastTargets(t *testing.T) {
 	source.WriteString("TEXT rawBF16ConvertForms(SB),$0-0\n")
 	for vectorBits := 0; vectorBits < 3; vectorBits++ {
 		for _, memory := range []bool{false, true} {
-			code := encodeX86RawBF16Convert(vectorBits, 1, 2, 3, true, memory, memory)
-			for _, value := range code {
-				fmt.Fprintf(&source, "\tBYTE $%#02x\n", value)
+			for _, broadcast := range []bool{false, true} {
+				if broadcast && !memory {
+					continue
+				}
+				code := encodeX86RawBF16Convert(vectorBits, 1, 2, 3, true, broadcast, memory)
+				for _, value := range code {
+					fmt.Fprintf(&source, "\tBYTE $%#02x\n", value)
+				}
 			}
 		}
 	}
@@ -140,14 +154,25 @@ func TestTranslateRawBF16ConvertMaskAndBroadcastTargets(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			for _, want := range []string{
-				"llvm.x86.vcvtneps2bf16128",
-				"llvm.x86.vcvtneps2bf16256",
-				"llvm.x86.avx512bf16.cvtneps2bf16.512",
-				"llvm.masked.load.v16i32",
+			body := x86StringMemoryFunction(t, ir, "rawBF16ConvertForms")
+			// Count actual instructions inside the function. The original
+			// register/BCST rows never used a full-vector masked load; an
+			// unconditional unused declaration formerly hid that gap.
+			for _, want := range []struct {
+				text  string
+				count int
+			}{
+				{" = call <8 x bfloat> @llvm.x86.vcvtneps2bf16128(", 3},
+				{" = call <8 x bfloat> @llvm.x86.vcvtneps2bf16256(", 3},
+				{" = call <16 x bfloat> @llvm.x86.avx512bf16.cvtneps2bf16.512(", 3},
+				{" = call <4 x i32> @llvm.masked.load.v4i32.p0(", 1},
+				{" = call <8 x i32> @llvm.masked.load.v8i32.p0(", 1},
+				{" = call <16 x i32> @llvm.masked.load.v16i32.p0(", 1},
+				{" = load volatile i32, ", 3},
+				{" = phi i32 ", 3},
 			} {
-				if !strings.Contains(ir, want) {
-					t.Fatalf("BF16 lowering omitted %q", want)
+				if count := strings.Count(body, want.text); count != want.count {
+					t.Fatalf("BF16 lowering emitted %d uses of %q, want %d", count, want.text, want.count)
 				}
 			}
 			compileLLVMToObject(t, llc, triple, "amd64-raw-bf16-convert-forms.ll", "amd64-raw-bf16-convert-forms.o", ir)
