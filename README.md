@@ -40,8 +40,9 @@ Plan 9 assembly parser and LLVM IR translator, extracted as an independent modul
   releases are intentionally rejected instead of used as fallbacks.
 - `TranslateModule` builds an in-memory `llvm.Module` (`github.com/xgo-dev/llvm`).
 - `Translate` keeps compatibility and returns textual IR from that module.
-- Root module dependency stays small (`goplus/llvm`).
-- `golang.org/x/tools/go/packages` is used only in `cmd/plan9asmll` submodule.
+- The root module uses `github.com/xgo-dev/llvm` for LLVM bindings.
+- Both `cmd/plan9asm` and `cmd/plan9asmll` use `golang.org/x/tools/go/packages`
+  in their separate modules.
 - `cmd/plan9asm` does not depend on `llgo/internal/build` or `llgo/internal/packages`.
 
 ## Quick test

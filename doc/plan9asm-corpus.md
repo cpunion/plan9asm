@@ -237,15 +237,16 @@ union is intentional: operand-class names and generated SVE encoders evolve
 between releases, so using only the newest tree would lose forms that existed
 in earlier supported releases.
 
-The Go 1.27 snapshot currently reports:
+The committed `go1.27` snapshot in
+`testdata/coverage/go-asm-baseline.json` reports:
 
 | GOARCH | official names | encoder forms | observed ops | observed forms | supported | context | unsupported | runtime verified | parse failures |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| 386 | 1600 shared x86 names | 4997 shared x86 forms | 21 | 60 | 41 | 6 | 13 | 0 | 0 |
-| amd64 | 1600 shared x86 names | 4997 shared x86 forms | 1456 | 6742 | 804 | 6 | 5932 | 51 | 0 |
-| arm | 181 | 528 | 135 | 500 | 312 | 34 | 154 | 0 | 0 |
-| arm64 | 1417 including SVE | 2964 | 1281 | 1980 | 457 | 47 | 1476 | 62 | 0 |
-| wasm | 463 | 463 opcode-only rows | 71 | 120 | 0 | 120 | 0 | 0 | 0 |
+| 386 | 1600 shared x86 names | 4997 shared x86 forms | 21 | 57 | 28 | 29 | 0 | 0 | 0 |
+| amd64 | 1600 shared x86 names | 4997 shared x86 forms | 1456 | 6736 | 2072 | 4664 | 0 | 51 | 0 |
+| arm | 137 | 528 | 135 | 499 | 455 | 44 | 0 | 0 | 0 |
+| arm64 | 1342 including SVE | 2964 | 1281 | 2048 | 1979 | 69 | 0 | 64 | 0 |
+| wasm | 463 | 463 opcode-only rows | 72 | 121 | 0 | 121 | 0 | 0 | 0 |
 
 These numbers describe current implementation progress, not completion.
 Encoder forms use Go's internal operand classes and are a complete machine-
@@ -253,10 +254,13 @@ readable inventory of the encoder rows; the wasm count is deliberately an
 opcode-only inventory because its Go backend has no such table. Observed forms
 use plan9asm's concrete shape classification and can outnumber encoder rows
 because generated testdata varies registers, address shapes, and concrete
-encodings. The large amd64 gap is mostly the exhaustive legacy/SIMD/AVX test
-matrix. Go 1.27 adds the ARM64 SVE corpus and encoder tables; SVE register
-lists are parsed and every currently unsupported lowering form is reported
-explicitly instead of being hidden as a parse failure.
+encodings. `supported` records IR generation for the supplied probe inputs;
+it does not establish LLVM object compilation or correct execution. `context`
+forms remain unproven until tested with justified initialized inputs. The
+absence of `unsupported` classifications does not establish complete coverage.
+The WASM probe's context-only result requires its separate complete-source
+and object tests. Go 1.27 also adds the ARM64 SVE corpus and encoder tables;
+parsing an SVE form is distinct from compiling and executing it.
 
 The machine-readable cross-version snapshots are in
 `testdata/coverage/go-asm-baseline.json`. A CI mismatch is blocking and
