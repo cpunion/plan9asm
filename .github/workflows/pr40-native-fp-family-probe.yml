@@ -1,0 +1,532 @@
+name: FP and family Linux execution probe
+
+on:
+  push:
+    branches:
+      - codex/pr40-native-fp-family-probe-20261027
+
+permissions:
+  contents: read
+
+jobs:
+  native_and_portable:
+    if: github.repository == 'cpunion/plan9asm'
+    strategy:
+      fail-fast: false
+      matrix:
+        scope: [fixed, families]
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      GOTOOLCHAIN: local
+      GOENV: 'off'
+      GOWORK: 'off'
+      GOFLAGS: ''
+      GOMAXPROCS: '4'
+      GOOS: linux
+      GOARCH: amd64
+      LLVM_CONFIG: llvm-config-22
+      SOURCE_COMMIT: cb23f48a524b94656729c823378be1c95a37ee5b
+      NATIVE_SCOPE: ${{ matrix.scope }}
+      OWNER_SPECS: |
+        {
+          "fixed": [
+            {
+              "test": "TestCrossLinuxRuntimeMatrixGoAMD64FixedLocalAddressFlags",
+              "source": "amd64_fixed_local_address_flags_runtime_go127_test.go",
+              "children": [
+                "Translate",
+                "Translate/-O0",
+                "Translate/-O2",
+                "Module",
+                "Module/-O0",
+                "Module/-O2",
+                "GoModule",
+                "GoModule/-O0",
+                "GoModule/-O2"
+              ],
+              "evidence": "original Go and translated LLVM"
+            },
+            {
+              "test": "TestCrossLinuxRuntimeMatrixGoAMD64FixedLocalImplicitMultiply",
+              "source": "amd64_fixed_local_implicit_multiply_runtime_go127_test.go",
+              "children": [
+                "Translate",
+                "Translate/-O0",
+                "Translate/-O2",
+                "Module",
+                "Module/-O0",
+                "Module/-O2",
+                "GoModule",
+                "GoModule/-O0",
+                "GoModule/-O2"
+              ],
+              "evidence": "original Go and translated LLVM"
+            },
+            {
+              "test": "TestCrossLinuxRuntimeMatrixGoAMD64FixedLocalPointerChoices",
+              "source": "amd64_fixed_local_pointer_choice_runtime_go127_test.go",
+              "children": [
+                "Translate",
+                "Translate/-O0",
+                "Translate/-O2",
+                "Module",
+                "Module/-O0",
+                "Module/-O2",
+                "GoModule",
+                "GoModule/-O0",
+                "GoModule/-O2"
+              ],
+              "evidence": "original Go and translated LLVM"
+            },
+            {
+              "test": "TestCrossLinuxRuntimeMatrixGoAMD64FixedLocalTypedGP",
+              "source": "amd64_fixed_local_gp_runtime_test.go",
+              "children": [
+                "Translate",
+                "Translate/-O0",
+                "Translate/-O2",
+                "Module",
+                "Module/-O0",
+                "Module/-O2",
+                "GoModule",
+                "GoModule/-O0",
+                "GoModule/-O2"
+              ],
+              "evidence": "original Go and translated LLVM"
+            }
+          ],
+          "families": [
+            {
+              "test": "TestCrossLinuxRuntimeMatrixX86DwordProductDeadResultFaultEnvelopes",
+              "source": "amd64_dword_product_fault_runtime_unix_test.go",
+              "scope": "native-ci",
+              "build_constraints": [
+                "//go:build unix"
+              ],
+              "children": [
+                "backend_O0",
+                "backend_O2",
+                "IR_O2/backend_O2"
+              ],
+              "evidence": "original SSE plus portable LLVM",
+              "requires_native_avx512": false
+            },
+            {
+              "test": "TestCrossLinuxRuntimeMatrixX86DwordProductIndependentWholeBytes",
+              "source": "amd64_dword_product_runtime_test.go",
+              "scope": "native-ci",
+              "build_constraints": [],
+              "children": [
+                "-O0",
+                "-O2",
+                "IR_O2/backend_O2"
+              ],
+              "evidence": "portable LLVM",
+              "requires_native_avx512": false
+            },
+            {
+              "test": "TestCrossLinuxRuntimeMatrixX86DwordProductOriginalGoSSE",
+              "source": "amd64_dword_product_runtime_test.go",
+              "scope": "native-ci",
+              "build_constraints": [],
+              "children": [],
+              "evidence": "original SSE/MMX/VEX",
+              "requires_native_avx512": false
+            },
+            {
+              "test": "TestCrossLinuxRuntimeMatrixX86WordMultiplyAddActualTypedCaller",
+              "source": "amd64_go_caller_maddword_runtime_test.go",
+              "scope": "native-ci",
+              "build_constraints": [],
+              "children": [
+                "O2=false",
+                "O2=true"
+              ],
+              "evidence": "original SSE plus portable LLVM",
+              "requires_native_avx512": false
+            },
+            {
+              "test": "TestCrossLinuxRuntimeMatrixX86WordMultiplyAddNativeMemoryStatus",
+              "source": "amd64_maddword_fault_runtime_test.go",
+              "scope": "native-ci",
+              "build_constraints": [
+                "//go:build unix"
+              ],
+              "children": [
+                "O2=false",
+                "O2=true"
+              ],
+              "evidence": "original SSE plus portable LLVM",
+              "requires_native_avx512": false
+            },
+            {
+              "test": "TestCrossLinuxRuntimeMatrixX86WordMultiplyAddOriginalGoBits",
+              "source": "amd64_maddword_go_oracle_test.go",
+              "scope": "native-ci",
+              "build_constraints": [],
+              "children": [],
+              "evidence": "original SSE/MMX/VEX",
+              "requires_native_avx512": false
+            },
+            {
+              "test": "TestCrossLinuxRuntimeMatrixX86WordMultiplyAddCompleteSemantics",
+              "source": "amd64_maddword_runtime_test.go",
+              "scope": "native-ci",
+              "build_constraints": [],
+              "children": [
+                "O2=false",
+                "O2=true"
+              ],
+              "evidence": "portable LLVM",
+              "requires_native_avx512": false
+            },
+            {
+              "test": "TestCrossLinuxRuntimeMatrixX86WordMultiplyAddLogicalFPFields",
+              "source": "amd64_maddword_runtime_test.go",
+              "scope": "native-ci",
+              "build_constraints": [],
+              "children": [
+                "O2=false",
+                "O2=true"
+              ],
+              "evidence": "portable LLVM",
+              "requires_native_avx512": false
+            },
+            {
+              "test": "TestCrossLinuxRuntimeMatrixX86PackedAverageOriginalGo",
+              "source": "amd64_packed_average_original_go_test.go",
+              "scope": "native-ci",
+              "build_constraints": [],
+              "children": [],
+              "evidence": "original SSE/MMX/VEX",
+              "requires_native_avx512": false
+            },
+            {
+              "test": "TestCrossLinuxRuntimeMatrixX86PackedAverageOriginalVEXAliases",
+              "source": "amd64_packed_average_original_linux_test.go",
+              "scope": "native-ci",
+              "build_constraints": [
+                "//go:build linux"
+              ],
+              "children": [],
+              "evidence": "original SSE/MMX/VEX",
+              "requires_native_avx512": false
+            },
+            {
+              "test": "TestCrossLinuxRuntimeMatrixX86PackedAverageIndependentBytes",
+              "source": "amd64_packed_average_runtime_test.go",
+              "scope": "native-ci",
+              "build_constraints": [],
+              "children": [
+                "-O0",
+                "-O2"
+              ],
+              "evidence": "portable LLVM",
+              "requires_native_avx512": false
+            },
+            {
+              "test": "TestCrossLinuxRuntimeMatrixX86PackedAverageInactiveMemory",
+              "source": "amd64_packed_average_runtime_test.go",
+              "scope": "native-ci",
+              "build_constraints": [],
+              "children": [
+                "-O0",
+                "-O2"
+              ],
+              "evidence": "portable LLVM",
+              "requires_native_avx512": false
+            },
+            {
+              "test": "TestCrossLinuxRuntimeMatrixX86PackedWordMultiplyOriginalVEX",
+              "source": "amd64_packed_word_multiply_native_linux_amd64_test.go",
+              "scope": "native-ci",
+              "build_constraints": [],
+              "children": [],
+              "evidence": "original SSE/MMX/VEX",
+              "requires_native_avx512": false
+            },
+            {
+              "test": "TestCrossLinuxRuntimeMatrixX86PackedWordMultiplyOriginalGo",
+              "source": "amd64_packed_word_multiply_runtime_test.go",
+              "scope": "native-ci",
+              "build_constraints": [],
+              "children": [],
+              "evidence": "original SSE/MMX/VEX",
+              "requires_native_avx512": false
+            },
+            {
+              "test": "TestCrossLinuxRuntimeMatrixX86PackedWordMultiplySoftwareAllWidths",
+              "source": "amd64_packed_word_multiply_runtime_test.go",
+              "scope": "native-ci",
+              "build_constraints": [],
+              "children": [
+                "-O0",
+                "-O2"
+              ],
+              "evidence": "portable LLVM",
+              "requires_native_avx512": false
+            },
+            {
+              "test": "TestCrossLinuxRuntimeMatrixX86PackedWordMultiplySoftwareMaskedMemory",
+              "source": "amd64_packed_word_multiply_runtime_test.go",
+              "scope": "native-ci",
+              "build_constraints": [],
+              "children": [
+                "-O0",
+                "-O2"
+              ],
+              "evidence": "portable LLVM",
+              "requires_native_avx512": false
+            }
+          ]
+        }
+      EVIDENCE: _out/fp-family-execution
+
+    steps:
+      - name: Checkout exact diagnostic commit
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
+
+      - name: Bind the unchanged source and actual host
+        run: |
+          set -euo pipefail
+          mkdir -p "$EVIDENCE"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git rev-parse HEAD^)" = "$SOURCE_COMMIT"
+          test "$(git diff --name-only "$SOURCE_COMMIT" HEAD)" = '.github/workflows/pr40-native-fp-family-probe.yml'
+          test -z "$(git status --porcelain)"
+          test "$(uname -s)" = Linux
+          test "$(uname -m)" = x86_64
+          git rev-parse HEAD > "$EVIDENCE/head.txt"
+          git rev-parse HEAD^ > "$EVIDENCE/source.txt"
+          git ls-files -z | xargs -0 sha256sum > "$EVIDENCE/checkout.sha256"
+          uname -a > "$EVIDENCE/host.txt"
+          lscpu --json > "$EVIDENCE/cpu.json"
+
+      - name: Setup exact Go
+        uses: ./.github/actions/setup-go
+        with:
+          go-version: '1.27.3'
+          cache: true
+
+      - name: Install LLVM 22
+        timeout-minutes: 14
+        run: bash scripts/install-ci-llvm22-ubuntu.sh
+
+      - name: Setup existing evidence auditor runtime
+        uses: ./.github/actions/setup-node22
+
+      - name: Record and verify actual compiler identities
+        run: |
+          set -euo pipefail
+          test "$(go env GOVERSION)" = go1.27.3
+          test "$(go env GOHOSTOS)" = linux
+          test "$(go env GOHOSTARCH)" = amd64
+          go version > "$EVIDENCE/go-version.txt"
+          go env -json GOVERSION GOROOT GOHOSTOS GOHOSTARCH GOOS GOARCH GOCACHE > "$EVIDENCE/go-env.json"
+          : > "$EVIDENCE/tools.sha256"
+          for tool in go node llvm-config-22 llc-22 clang-22 opt-22; do
+            binary=$(readlink -f "$(command -v "$tool")")
+            sha256sum "$binary" >> "$EVIDENCE/tools.sha256"
+          done
+          for tool in compile asm link objdump nm; do
+            binary=$(go tool -n "$tool")
+            sha256sum "$binary" >> "$EVIDENCE/tools.sha256"
+          done
+          test "$(readlink -f "$(command -v llc)")" = "$(readlink -f "$(command -v llc-22)")"
+          test "$(readlink -f "$(command -v clang)")" = "$(readlink -f "$(command -v clang-22)")"
+          test "$(readlink -f "$(command -v opt)")" = "$(readlink -f "$(command -v opt-22)")"
+          llvm-config-22 --version > "$EVIDENCE/llvm-config-version.txt"
+          grep -Eq '^22\.' "$EVIDENCE/llvm-config-version.txt"
+          for tool in llc-22 clang-22 opt-22; do
+            "$tool" --version > "$EVIDENCE/$tool-version.txt"
+            grep -Eq 'version 22\.' "$EVIDENCE/$tool-version.txt"
+          done
+
+      - name: Require the actual native ISA
+        run: |
+          set -euo pipefail
+          cat > "$EVIDENCE/isa.c" <<'C'
+          #include <stdio.h>
+          int main(int argc, char **argv) {
+            (void)argv;
+            __builtin_cpu_init();
+            int sse2 = !!__builtin_cpu_supports("sse2");
+            int ssse3 = !!__builtin_cpu_supports("ssse3");
+            int sse41 = !!__builtin_cpu_supports("sse4.1");
+            int avx = !!__builtin_cpu_supports("avx");
+            int avx2 = !!__builtin_cpu_supports("avx2");
+            printf("native ISA SSE2=%d SSSE3=%d SSE41=%d AVX=%d AVX2=%d\n",
+                   sse2, ssse3, sse41, avx, avx2);
+            return !(sse2 && (argc == 1 || (ssse3 && sse41 && avx && avx2)));
+          }
+          C
+          clang-22 -O2 "$EVIDENCE/isa.c" -o "$EVIDENCE/isa"
+          if [ "$NATIVE_SCOPE" = families ]; then
+            "$EVIDENCE/isa" require-avx2 > "$EVIDENCE/isa.log"
+          else
+            "$EVIDENCE/isa" > "$EVIDENCE/isa.log"
+          fi
+          sha256sum "$EVIDENCE/isa" >> "$EVIDENCE/tools.sha256"
+
+      - name: Discover the exact selected test owners
+        run: |
+          set -euo pipefail
+          node <<'NODE' > "$EVIDENCE/pattern.txt"
+          const rows = JSON.parse(process.env.OWNER_SPECS)[process.env.NATIVE_SCOPE];
+          process.stdout.write('^(' + rows.map(row => row.test).join('|') + ')$');
+          NODE
+          pattern=$(cat "$EVIDENCE/pattern.txt")
+          go test -p=1 . -list "$pattern" > "$EVIDENCE/inventory.log" 2> "$EVIDENCE/inventory.stderr"
+
+      - name: Execute every selected owner and retain its real terminal
+        run: |
+          set -uo pipefail
+          set +e
+          pattern=$(cat "$EVIDENCE/pattern.txt")
+          go test -p=1 . -json -run "$pattern" -count=1 -timeout=25m > "$EVIDENCE/raw.jsonl" 2> "$EVIDENCE/native.stderr"
+          status=$?
+          printf '%s\n' "$status" > "$EVIDENCE/exit.txt"
+          exit "$status"
+
+      - name: Audit actual native execution and unchanged identities
+        if: always()
+        run: |
+          set -euo pipefail
+          sha256sum --check "$EVIDENCE/checkout.sha256" > "$EVIDENCE/checkout-after.log"
+          sha256sum --check "$EVIDENCE/tools.sha256" > "$EVIDENCE/tools-after.log"
+          node <<'NODE' > "$EVIDENCE/audit.json"
+          const assert = require('node:assert/strict');
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const {auditNativeOwners} = require('./.github/scripts/audit-native-owners.cjs');
+          const read = name => fs.readFileSync(path.join(process.env.EVIDENCE, name), 'utf8');
+          const prefix = 'TestCrossLinuxRuntimeMatrixGoAMD64FixedLocal';
+          const scope = process.env.NATIVE_SCOPE;
+          const owners = JSON.parse(process.env.OWNER_SPECS)[scope];
+          const roots = owners.map(owner => owner.test);
+          const children = owners.flatMap(owner => owner.children.map(child => owner.test + '/' + child));
+          assert.equal(read('exit.txt').trim(), '0', 'native command did not succeed');
+          assert.equal(read('source.txt').trim(), process.env.SOURCE_COMMIT);
+          assert.equal(read('head.txt').trim(), process.env.GITHUB_SHA);
+          const result = auditNativeOwners(read('inventory.log'), read('raw.jsonl'), roots, children);
+          const events = read('raw.jsonl').trim().split(/\r?\n/).map(JSON.parse);
+          const output = root => events.filter(event => event.Test === root && event.Action === 'output')
+            .map(event => event.Output).join('');
+          let cases;
+          if (scope === 'fixed') {
+          for (const root of roots) {
+            assert.match(output(root), /axis=1 SSE2=1 /, root + ': actual native CPU preflight missing');
+            assert.doesNotMatch(output(root), /Rosetta|explicit authenticated guest transport/,
+              root + ': guest execution cannot qualify this native job');
+          }
+          const pointerOutput = output(prefix + 'PointerChoices');
+          const functions = [...pointerOutput.matchAll(/complete function example\.invalid\/framefixture\.Value(\d+):/g)]
+            .map(match => Number(match[1]));
+          assert.deepEqual(functions, Array.from({length: 42}, (_, index) => index));
+          const assembly = [...pointerOutput.matchAll(/complete assembly: functions=42 sha256=([0-9a-f]{64})/g)];
+          assert.equal(assembly.length, 1, 'complete pointer source identity absent or duplicated');
+          const pointerSummary = '42 complete functions, 16 input patterns, two pointer alias relations, return and both 256-byte buffers; execute=true';
+          assert.equal(pointerOutput.split(pointerSummary).length - 1, 1, '1344-observation runtime did not finish');
+          const flagsSummary = "5 complete functions, 10 deltas from each backend's own addresses, independent arithmetic references and 64-byte global canaries; execute=true";
+          assert.equal(output(prefix + 'AddressFlags').split(flagsSummary).length - 1, 1,
+            '50-observation address FLAGS runtime did not finish');
+          // This unchanged owner has no summary logger: require its live API/O0/O2
+          // terminals plus the frozen source's actual execution and row assertions.
+          // Do not present the retained test-event journal as raw program stdout.
+          const multiplyOwner = fs.readFileSync('amd64_fixed_local_implicit_multiply_runtime_go127_test.go', 'utf8');
+          assert.match(multiplyOwner, /func TestCrossLinuxRuntimeMatrixGoAMD64FixedLocalImplicitMultiply\(t \*testing\.T\)/);
+          assert.match(multiplyOwner, /fixedLocalImplicitMultiplyProgram\(execution\.triple, true\)/);
+          assert.match(multiplyOwner, /x86ScalarFloatIntegerOriginalOutput\(t, execution, assembly, original\)/);
+          assert.match(multiplyOwner, /len\(want\) != 36\*16\*5/);
+          assert.match(multiplyOwner, /execution\.compileAndRunLLVM\(t, "private-implicit-multiply", input, driver, level\)/);
+          assert.match(multiplyOwner, /len\(got\) != len\(want\)/);
+          assert.match(multiplyOwner, /got\[index\] != want\[index\]/);
+          const program = fs.readFileSync('amd64_fixed_local_implicit_multiply_objects_test.go', 'utf8');
+          assert.match(program, /\[\]string\{"MUL", "IMUL"\}/);
+          assert.match(program, /\[\]string\{"B", "W", "L", "Q"\}/);
+          assert.match(program, /\[\]string\{"CX", "AX", "DX", "8\(SP\)"\}/);
+          assert.match(program, /inputs = append\(inputs, "AH"\)/);
+          assert.match(program, /inputs = append\(inputs, "\(DX\)"\)/);
+          const gpOwner = fs.readFileSync('amd64_fixed_local_gp_runtime_test.go', 'utf8');
+          assert.match(gpOwner, /fixedLocalGPRuntimeProgram\(execution\.triple\)/);
+          assert.match(gpOwner, /x86ScalarFloatIntegerOriginalOutput\(t, execution, assembly, original\)/);
+          assert.match(gpOwner, /len\(want\) != 121\*15\*3/);
+          assert.match(gpOwner, /execution\.compileAndRunLLVM\(t, "private-gp", input, driver, level\)/);
+          assert.match(gpOwner, /got\[index\] != want\[index\]/);
+          cases = {
+            pointerChoices: {functions: 42, inputs: 16, aliasRelations: 2,
+              observationsPerPipeline: 1344, assemblySHA256: assembly[0][1]},
+            addressFlags: {functions: 5, backendRelativeDeltas: 10, observationsPerPipeline: 50},
+            implicitMultiply: {kernels: 36, privateHelpers: 2, inputs: 16,
+              observationsPerInput: 5, observationsPerPipeline: 2880},
+            typedGP: {kernels: 121, directFPKernels: 29, inputs: 15,
+              observationsPerInput: 3, observationsPerPipeline: 5445},
+          };
+          } else {
+            assert.equal(scope, 'families');
+            assert.match(read('isa.log'), /SSE2=1 SSSE3=1 SSE41=1 AVX=1 AVX2=1/);
+            const family = suffix => 'TestCrossLinuxRuntimeMatrixX86' + suffix;
+            const summaries = [
+              ['DwordProductIndependentWholeBytes', '382 LLVM kernels ×97 initialized samples ×2 six-flag seeds ×4 masks'],
+              ['DwordProductOriginalGoSSE', '6 actual original Go SSE kernels ×97 samples ×2 seeds'],
+              ['WordMultiplyAddOriginalGoBits', '3 actual original SSE/MMX Go functions × 256'],
+              ['WordMultiplyAddCompleteSemantics', '56 opcode/width/memory/mask/alias programs × 32'],
+              ['WordMultiplyAddLogicalFPFields', '10 logical FP programs × 64'],
+              ['PackedAverageOriginalGo', '8 original Go kernels × 257 patterns × 2 flag seeds; wide=false'],
+              ['PackedAverageOriginalVEXAliases', '32 original Go kernels × 257 patterns × 2 flag seeds; wide=true'],
+              ['PackedAverageIndependentBytes', '116 programs × 257 patterns × 2 flags × 4 masks'],
+              ['PackedWordMultiplyOriginalVEX', '48 actual original VEX X/Y kernels ×257 samples ×2 six-flag seeds'],
+              ['PackedWordMultiplyOriginalGo', '27 actual original SSE/MMX kernels ×257 initialized samples ×2 all-six-flag seeds'],
+              ['PackedWordMultiplySoftwareAllWidths', '160 initialized LLVM software kernels ×257 samples ×2 seeds ×4 masks'],
+              ['PackedWordMultiplySoftwareMaskedMemory', '24 software EVEX kernels: inactive NULL'],
+            ];
+            for (const [suffix, summary] of summaries) {
+              assert.equal(output(family(suffix)).split(summary).length - 1, 1,
+                suffix + ': independent complete execution summary missing');
+            }
+            const faultOwner = family('DwordProductDeadResultFaultEnvelopes');
+            const faultOutputs = events.filter(event => event.Test?.startsWith(faultOwner + '/') && event.Action === 'output')
+              .map(event => event.Output).join('');
+            const faultSummary = 'dword-product fault outcomes 4400 original SSE outcomes 80 alignment deviations 0 failures 0';
+            assert.equal(faultOutputs.split(faultSummary).length - 1, 3,
+              'all three strict native fault pipelines must finish');
+            cases = {owners: owners.map(owner => ({root: owner.test, evidence: owner.evidence})),
+              nativeOriginalOnlyOwners: 6, nativeOriginalAndPortableOwners: 3, portableOnlyOwners: 7,
+              nativeAVX512Owners: 0, originalSSEFaultObservationsPerPipeline: 80};
+          }
+          const sourceFiles = [
+            'amd64_fixed_local_pointer_choice_runtime_go127_test.go',
+            'amd64_fixed_local_pointer_choice_objects_test.go',
+            'amd64_fixed_local_pointer_choices_test.go',
+            'amd64_fixed_local_pointer_choice_dead_test.go',
+            'amd64_fixed_local_native_address_test.go',
+            'amd64_fixed_local_address_flags_runtime_go127_test.go',
+            'amd64_fixed_local_implicit_multiply_runtime_go127_test.go',
+            'amd64_fixed_local_implicit_multiply_objects_test.go',
+            'amd64_fixed_local_gp_runtime_test.go',
+            ...owners.map(owner => owner.source),
+          ];
+          const crypto = require('node:crypto');
+          const sourceHashes = Object.fromEntries(sourceFiles.map(file =>
+            [file, crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex')]));
+          process.stdout.write(JSON.stringify({...result, source: read('source.txt').trim(),
+            head: read('head.txt').trim(), platform: 'native linux/amd64', execute: true,
+            scope, cases, ownerInventory: owners, sourceHashes,
+            limits: ['Only the selected roots and complete observed children qualify',
+              'Family portable LLVM execution is not original native AVX512 evidence',
+              'No complete standard-library, SHA1, chacha or P256 claim',
+              'Program stdout is checked by the unchanged tests, not retained separately'],
+          }, null, 2) + '\n');
+          NODE
+
+      - name: Retain raw failures and complete qualification evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: fp-family-${{ matrix.scope }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: _out/fp-family-execution/
+          if-no-files-found: error
+          retention-days: 7
