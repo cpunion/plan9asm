@@ -233,6 +233,9 @@ func fixedLocalRelocationAliases(accesses map[int]map[int]x86FixedLocalAccess) e
 }
 
 func fixedLocalInstructionShape(ins Instr) bool {
+	if form, known, err := x86GPSIMDTransferProperties(ins, "amd64"); known {
+		return err == nil && !form.mmx && !form.spec.rawOnly
+	}
 	if _, _, known, err := x86SwapProperties(ins, "amd64"); known {
 		return err == nil
 	}
@@ -807,6 +810,9 @@ func fixedLocalStep(ins *Instr, state *x86FixedLocalState, sig FuncSig, proof *x
 		return err
 	}
 	if known, err := fixedLocalStaticAddressStep(*ins, state, proof); known {
+		return err
+	}
+	if known, err := fixedLocalGPSIMDTransferStep(ins, state, sig, proof, residue); known {
 		return err
 	}
 	if width := x86RawReturnScalarMoveBytes(x86GoMOVQSourceInstruction(*ins).Op); width != 0 {

@@ -41,10 +41,8 @@ func x86ResultGPSIMDTransferWithNativeMemory(ins Instr, form x86GPSIMDTransferFo
 		if !valid {
 			return false
 		}
-		// Each valid GP/X move writes its low 32/64 bits and clears the
-		// remainder of X. The encoding chooses preservation or clearing of
-		// the wider physical aliases, independently of their previous state.
-		state.writeVector(index, 16, uint64(known|0xffff&^lowMask), form.spec.legacy)
+		state.writeVector(index, 16,
+			form.definedVectorBytes(uint64(known), state.vectorBytes(index)), form.spec.legacy)
 		return true
 	}
 	if ins.Args[1].Kind == OpReg {

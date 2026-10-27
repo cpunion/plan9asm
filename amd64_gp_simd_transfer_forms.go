@@ -29,6 +29,18 @@ type x86GPSIMDTransferForm struct {
 	memoryWrite                bool
 }
 
+// A scalar transfer replaces its low X bytes, zeroes the rest of X, and
+// preserves or clears wider aliases according to its original encoding.
+// Numerical availability does not supply a pointer or memory access role.
+func (f x86GPSIMDTransferForm) definedVectorBytes(source, previous uint64) uint64 {
+	low := x86CallerVectorByteMask(int64(f.bits / 8))
+	upper := ^uint64(0xffff)
+	if f.spec.legacy {
+		upper &= previous
+	}
+	return upper | (0xffff &^ low) | (source & low)
+}
+
 // Encoding/width selection grants neither initialized data nor memory backing.
 // In mode32 VEX.W is ignored for GP transfers, but Q memory/X copies stay 64-bit.
 func x86GPSIMDTransferProperties(ins Instr, arch string) (x86GPSIMDTransferForm, bool, error) {

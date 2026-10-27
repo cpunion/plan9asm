@@ -27,12 +27,7 @@ func x86CallerGPSIMDTransferStep(ins *Instr, f x86GPSIMDTransferForm, state *x86
 	}
 	if f.destinationX {
 		root := x86CallerVectorRoot(ins.Args[1].Reg)
-		if f.spec.legacy {
-			state.vectors[root] = state.vectors[root]&^x86CallerVectorByteMask(16) |
-				(x86CallerVectorByteMask(16) &^ lowMask) | known
-		} else {
-			state.vectors[root] = ^lowMask | known
-		}
+		state.vectors[root] = f.definedVectorBytes(known, state.vectors[root])
 		return true
 	}
 	if f.memoryWrite {
