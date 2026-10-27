@@ -187,7 +187,7 @@ func captureInstrumentationDeclarations(input *gotoolprofile.InstrumentationCons
 	result := make([]gotoolprofile.InstrumentationDeclarationProof, 0, len(file.Funcs))
 	for _, function := range file.Funcs {
 		symbol := resolve(function.Sym)
-		derived, _, found, err := tryDeclSig(pkg.Types.Scope(), function.Sym, symbol, nil, goarch, pkg.TypesSizes)
+		derived, _, found, err := tryDeclSig(pkg.Types.Scope(), function.Sym, symbol, nil, goarch, pkg.TypesSizes, false)
 		if err != nil || !found || strings.Contains(function.Sym, "<") || !reflect.DeepEqual(derived, sigs[symbol]) {
 			return nil, fmt.Errorf("mode entry requires its actual ordinary typed Go declaration: %s: %v", symbol, err)
 		}
@@ -247,7 +247,7 @@ func captureInstrumentationPackageDeclarations(input *gotoolprofile.Instrumentat
 				continue
 			}
 			sym := "·" + fn.Name.Name
-			derived, _, found, err := tryDeclSig(pkg.Types.Scope(), sym, resolve(sym), nil, goarch, pkg.TypesSizes)
+			derived, _, found, err := tryDeclSig(pkg.Types.Scope(), sym, resolve(sym), nil, goarch, pkg.TypesSizes, false)
 			if err != nil || !found {
 				return nil, fmt.Errorf("actual mode declaration has an unproved native/variadic layout: %s: %v", name, err)
 			}

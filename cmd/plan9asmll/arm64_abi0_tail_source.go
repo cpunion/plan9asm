@@ -185,7 +185,7 @@ func prepareARM64ABI0TailSource(pkg *packages.Package, file *plan9asm.File, asm 
 			continue
 		}
 		name := resolve(stripABISuffix(fn.Sym))
-		sig, _, present, err := tryDeclSig(source.actual.Types.Scope(), fn.Sym, name, nil, "arm64", source.actual.TypesSizes)
+		sig, _, present, err := tryDeclSig(source.actual.Types.Scope(), fn.Sym, name, nil, "arm64", source.actual.TypesSizes, false)
 		if err != nil {
 			return nil, nil, nil, err
 		}

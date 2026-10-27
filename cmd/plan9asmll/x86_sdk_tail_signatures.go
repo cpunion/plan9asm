@@ -85,7 +85,7 @@ func x86SDKDirectTailDeclarationOptions(pkg plan9asm.GoPackage, file *plan9asm.F
 		if name == "" {
 			return contextError("empty original declaration identity")
 		}
-		actual, _, present, err := tryDeclSig(pkg.Types.Scope(), logical, name, linknames, options.Goarch, sizes)
+		actual, _, present, err := tryDeclSig(pkg.Types.Scope(), logical, name, linknames, options.Goarch, sizes, false)
 		if err != nil || !present {
 			return contextError("root/ordinary terminal lacks its actual Go declaration: " + logical)
 		}

@@ -31,7 +31,7 @@ func TestX86DeclaredSignatureRetainsCanonicalABI0ResultNames(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			actual, found, err := tryDeclSig(pkg.Scope(), "·Probe", want.Name, nil, arch, sizes)
+			actual, found, err := tryDeclSig(pkg.Scope(), "·Probe", want.Name, nil, arch, sizes, false)
 			if err != nil || !found || !reflect.DeepEqual(actual, want) {
 				t.Fatalf("actual declaration layout differs from the shared ABI0 builder: %v\nactual=%+v\nwant=%+v", err, actual, want)
 			}

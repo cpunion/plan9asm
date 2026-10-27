@@ -253,6 +253,7 @@ func TestTryDeclSigResolvesSamePackageQualifiedPlan9Symbol(t *testing.T) {
 		nil,
 		"386",
 		types.SizesFor("gc", "386"),
+		false,
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -278,6 +279,7 @@ func TestTryDeclSigUsesOfficialWASMFrameWordSize(t *testing.T) {
 		map[string]string{"runtime.cmpstring": "abigen_runtime_cmpstring"},
 		"wasm",
 		types.SizesFor("gc", "wasm"),
+		false,
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -973,7 +975,7 @@ func TestTryDeclSigDoesNotPadVoidArgumentFrame(t *testing.T) {
 			}
 			sig := types.NewSignatureType(nil, nil, nil, vars(test.params), vars(test.results), false)
 			pkg.Scope().Insert(types.NewFunc(token.NoPos, pkg, "frame", sig))
-			_, got, ok, err := tryDeclSig(pkg.Scope(), "·frame", pkg.Path()+".frame", nil, test.goarch, types.SizesFor("gc", test.goarch))
+			_, got, ok, err := tryDeclSig(pkg.Scope(), "·frame", pkg.Path()+".frame", nil, test.goarch, types.SizesFor("gc", test.goarch), false)
 			if err != nil {
 				t.Fatal(err)
 			}

@@ -64,7 +64,7 @@ func TestSigsForAsmFileARM64PaddingCannotChangeZeroSizedTransport(t *testing.T) 
 		t.Fatal(err)
 	}
 	resolve := resolveSymFunc(typed.Path())
-	sig, _, found, err := tryDeclSig(typed.Scope(), "·Narrow", typed.Path()+".Narrow", nil, "arm64", sizes)
+	sig, _, found, err := tryDeclSig(typed.Scope(), "·Narrow", typed.Path()+".Narrow", nil, "arm64", sizes, false)
 	if err != nil || !found || len(sig.Args) != 1 || sig.Args[0] != plan9asm.I16 {
 		t.Fatalf("read certificate changed existing zero-size transport: %#v; %v", sig, err)
 	}

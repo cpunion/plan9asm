@@ -2016,7 +2016,7 @@ func sortOffsets(m map[int64]struct{}) []int64 {
 	return out
 }
 
-func tryDeclSig(scope *types.Scope, sym, resolved string, linknames map[string]string, goarch string, sz types.Sizes, internal ...bool) (plan9asm.FuncSig, int64, bool, error) {
+func tryDeclSig(scope *types.Scope, sym, resolved string, linknames map[string]string, goarch string, sz types.Sizes, internal bool) (plan9asm.FuncSig, int64, bool, error) {
 	declName := strings.TrimPrefix(sym, "·")
 	if strings.ContainsRune(declName, '·') {
 		key := strings.ReplaceAll(sym, "∕", "/")
@@ -2073,7 +2073,7 @@ func tryDeclSig(scope *types.Scope, sym, resolved string, linknames map[string]s
 			Results: frameResults,
 		},
 	}
-	if goarch == "arm64" && len(internal) != 0 && internal[0] {
+	if goarch == "arm64" && internal {
 		fs.ARM64GoRegisterABI, err = plan9asm.DeriveARM64GoRegisterABI(fn, fs)
 		if err != nil {
 			return plan9asm.FuncSig{}, 0, false, err

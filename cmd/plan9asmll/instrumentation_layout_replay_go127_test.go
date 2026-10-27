@@ -120,7 +120,7 @@ func TestInstrumentationZeroSizedParameterOriginalGoAcceptedButConsumerUnclosed(
 	if _, err := gotoolprofile.FileSHA256(actual.ExportFile); err != nil {
 		t.Fatal(err)
 	}
-	derived, _, found, err := tryDeclSig(actual.Types.Scope(), "·Probe", input.Plan.PackagePath+".Probe", nil, "arm64", actual.TypesSizes)
+	derived, _, found, err := tryDeclSig(actual.Types.Scope(), "·Probe", input.Plan.PackagePath+".Probe", nil, "arm64", actual.TypesSizes, false)
 	if err != nil || !found || len(derived.Args) != 0 || len(derived.Frame.Params) != 0 {
 		t.Fatalf("actual CLI ABI0 builder did not omit the zero-sized parameter: %#v: %v", derived, err)
 	}
