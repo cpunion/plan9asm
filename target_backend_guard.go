@@ -60,6 +60,9 @@ func validateTranslatedBackend(file *File, options Options, module llvm.Module) 
 			}
 		}
 	}
+	if err := validateTranslatedInlineAsmBackend(file, goarch, module); err != nil {
+		return err
+	}
 	if architecture == "wasm32" || architecture == "wasm64" {
 		for function := module.FirstFunction(); !function.IsNil(); function = llvm.NextFunction(function) {
 			for block := function.FirstBasicBlock(); !block.IsNil(); block = llvm.NextBasicBlock(block) {
@@ -103,6 +106,61 @@ func validateTranslatedBackend(file *File, options Options, module llvm.Module) 
 		if strings.HasPrefix(function.Name(), "llvm.aarch64.sve.") && !function.FirstUse().IsNil() {
 			return fmt.Errorf("%w: used ARM64 SVE intrinsic %q requires an AArch64 LLVM target, got %q",
 				ErrProbeNeedsContext, function.Name(), triple)
+		}
+	}
+	return nil
+}
+
+func validateTranslatedInlineAsmBackend(file *File, goarch string, module llvm.Module) error {
+	triple := module.Target()
+	if file != nil {
+		// Normal native requests need no instruction walk. Reuse the same
+		// source-mode and endian boundaries as the typed family validators.
+		switch file.Arch {
+		case ArchAMD64:
+			if x86ScalarFloatIntegerNativeTarget(goarch, triple) {
+				return nil
+			}
+		case ArchARM:
+			if armWordFloatNativeTarget(triple) {
+				return nil
+			}
+		case ArchARM64:
+			if arm64ScalarConversionNativeTarget(triple) {
+				return nil
+			}
+		case ArchWASM:
+			parts := strings.Split(triple, "-")
+			if len(parts) >= 3 && parts[0] == "wasm32" {
+				return nil
+			}
+		}
+	}
+	if llvmModuleHasAssembly(module) {
+		return fmt.Errorf("%w: used module assembly requires its matching source LLVM target, got %q",
+			ErrProbeNeedsContext, triple)
+	}
+	for function := module.FirstFunction(); !function.IsNil(); function = llvm.NextFunction(function) {
+		for block := function.FirstBasicBlock(); !block.IsNil(); block = llvm.NextBasicBlock(block) {
+			for instruction := block.FirstInstruction(); !instruction.IsNil(); instruction = llvm.NextInstruction(instruction) {
+				for index := 0; index < instruction.OperandsCount(); index++ {
+					assembly := instruction.Operand(index).IsAInlineAsm()
+					if assembly.IsNil() {
+						continue
+					}
+					info := assembly.InlineAsmInfo()
+					if info.Assembly == "" {
+						// Existing memory and generic-register compiler barriers
+						// compile on x86, ARM64 and WASM without source registers.
+						switch info.Constraints {
+						case "", "~{memory}", "r", "=r,0":
+							continue
+						}
+					}
+					return fmt.Errorf("%w: used native inline assembly in %q requires its matching source LLVM target, got %q",
+						ErrProbeNeedsContext, function.Name(), triple)
+				}
+			}
 		}
 	}
 	return nil
