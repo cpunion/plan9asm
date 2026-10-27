@@ -140,9 +140,22 @@ per-pair variation under unrelated host load. Allocation gates pass, but neither
 acceleration nor a precise performance bound has been established. Preserve
 the earlier slower short measurement rather than discarding it.
 
-Next, retain normalized records across immutable function representations;
-do not add a cache to mutable instructions or another opcode registry.
-See the normalization boundary in [architecture](architecture.md).
+The next experiment retained full forms in a function-local table for feature
+inference, register discovery and lowering. It was rejected before integration:
+the prototype added 73 production lines, retained about 488 bytes per matching
+instruction, and increased allocation bytes in 18/20 cases. Its short adjacent
+ABBA comparison was about 5.7% slower overall; this is evidence against that
+prototype, not a universal performance bound. The patch and receipts remain
+under ignored `_out/`, outside commit history.
+
+Instead, local `ae2bda686` shares the existing four-family feature projection,
+removing 11 production lines without another type, cache or lifetime. Current
+and minimum SDKs each pass 19 roots / 122 children, with zero skips/failures,
+on the isolated source-identical Go code. Short complete-translation benchmarks
+show no material allocation increase; no speedup is claimed. Lifecycle and
+error-precedence regressions remain. Future cross-stage reuse must justify its
+retained data and complexity; it is not a prerequisite for sharing semantic
+rules. See [architecture](architecture.md).
 
 ## Remaining work, in order
 

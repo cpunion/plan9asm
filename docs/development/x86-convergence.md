@@ -91,8 +91,12 @@ memory granules; MADD retains full-tuple reads, distinct from E4 mask suppressio
 Average and word multiply reuse the existing E4 pipeline. Production shrinks by
 65 lines. Both endpoint SDKs pass 101 roots / 10,098 children without skips.
 Paired benchmarks under unrelated host load do not establish acceleration.
-Do not call this whole-translation parse-once completion or add a fifth family
-before qualifying the shared function-representation lifetime.
+Do not call this whole-translation parse-once completion. A subsequent
+function-local full-form table increased retained memory and slowed the short
+translation comparison, so it was withdrawn before integration. The accepted
+follow-up shares the feature projection without a cache and removes another
+11 production lines. Cross-stage reuse must reduce total complexity and cost;
+do not expand the family scope to justify retaining an unsuccessful abstraction.
 
 For each batch record the exact revision, SDK, LLVM version, source fixture,
 successful/failed counts, production/test line delta and retained case IDs.
