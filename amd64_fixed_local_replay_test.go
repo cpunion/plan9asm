@@ -8,14 +8,17 @@ import (
 	"testing"
 )
 
+func fixedLocalReplaySource(body string) string {
+	return "TEXT ·Value(SB),4,$64-16\nMOVQ a+0(FP),AX\n" +
+		"MOVQ AX,0(SP)\nMOVQ AX,8(SP)\nMOVOU 0(SP),X0\nMOVOU X0,X1\n" +
+		body + "\nMOVQ X0,AX\nMOVQ AX,ret+8(FP)\nRET\n"
+}
+
 // These analysis-only fixtures deliberately exclude source capture, subprocesses
 // and LLVM construction. Their complete proof must succeed before timing starts.
 func fixedLocalReplayFixture(t testing.TB, body string) (Func, FuncSig) {
 	t.Helper()
-	source := "TEXT ·Value(SB),4,$64-16\nMOVQ a+0(FP),AX\n" +
-		"MOVQ AX,0(SP)\nMOVQ AX,8(SP)\nMOVOU 0(SP),X0\nMOVOU X0,X1\n" +
-		body + "\nMOVQ X0,AX\nMOVQ AX,ret+8(FP)\nRET\n"
-	file, err := Parse(ArchAMD64, source)
+	file, err := Parse(ArchAMD64, fixedLocalReplaySource(body))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -114,7 +117,7 @@ func fixedLocalReplayControlCases() []struct {
 		{"two returns", "CMPQ AX,AX\nJEQ other\nMOVQ AX,ret+8(FP)\nRET\nother:\nPADDQ X1,X0", true},
 		{"unreachable read", "JMP done\nMOVQ 24(SP),AX\ndone:\nPADDQ X1,X0", true},
 		{"equal private origins", "MOVQ SP,BX\nCMPQ AX,AX\nJEQ left\nADDQ $8,BX\nJMP joined\nleft:\nADDQ $8,BX\njoined:\nNOP", true},
-		{"different private origins", "MOVQ SP,BX\nCMPQ AX,AX\nJEQ left\nADDQ $8,BX\nJMP joined\nleft:\nADDQ $16,BX\njoined:\nNOP", false},
+		{"different private origins", "MOVQ SP,BX\nCMPQ AX,AX\nJEQ left\nADDQ $8,BX\nJMP joined\nleft:\nADDQ $16,BX\njoined:\nNOP", true},
 		{"different address cells", "MOVQ SP,BX\nMOVQ BX,24(SP)\nCMPQ AX,AX\nJEQ joined\nMOVQ $0,24(SP)\njoined:\nNOP", false},
 		{"missing predecessor bytes", "CMPQ AX,AX\nJEQ joined\nMOVQ AX,24(SP)\njoined:\nMOVQ 24(SP),AX", false},
 		{"missing first iteration", "again:\nPADDQ X2,X0\nMOVOU X1,X2\nCMPQ AX,AX\nJNE again", false},
@@ -138,6 +141,44 @@ func TestGoAMD64FixedLocalReplayControlFlow(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestGoAMD64FixedLocalReplayDistinctPrivateLayoutsObjects(t *testing.T) {
+	goAMD64FramePrepareOwnedToolCache(t)
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM 22 llc required")
+	}
+	for _, row := range fixedLocalReplayControlCases() {
+		if row.name != "different private origins" {
+			continue
+		}
+		// Both paths keep BX private, and its different offsets are dead at
+		// the join. Retain the original stores, vector load and ABI0 result.
+		source := fixedLocalReplaySource(row.body)
+		goAssemblerOracleOutput(t, "amd64", source, "", true)
+		for _, target := range []struct{ name, triple string }{
+			{"linux/amd64", "x86_64-unknown-linux-gnu"},
+			{"darwin/amd64", "x86_64-apple-darwin"},
+			{"windows/amd64", "x86_64-pc-windows-msvc"},
+		} {
+			t.Run(target.name, func(t *testing.T) {
+				pkg, request, _, options := fixedLocalTransportFixture(t, source,
+					"func Value(a uint64) uint64\n", target.name, target.triple)
+				fixedLocalFreshAPIs(t, pkg, request, options, []string{"Translate", "Module", "GoModule"},
+					func(t *testing.T, ir string, err error) {
+						if err != nil {
+							t.Fatal("complete private-layout source failed", err)
+						}
+						x86CompactExpandRequireAllDefinitions(t, ir, []string{pkg.Path + ".Value"})
+						compileLLVMToObject(t, llc, target.triple, "layout.ll", "layout.o", ir)
+						compileLLVMToObject(t, llc, target.triple, "layout-opt.ll", "layout-opt.o", x86MulDivRoundOptimize(t, ir))
+					})
+			})
+		}
+		return
+	}
+	t.Fatal("original distinct-private-layout source is missing")
 }
 
 func TestGoAMD64FixedLocalReplayLinearBoundaries(t *testing.T) {
