@@ -126,7 +126,7 @@ func TestX86NamedLockDetachedAndSplitPrefixDoesNotBorrowAtomicBody(t *testing.T)
 		} {
 			t.Run(arch+"/"+body, func(t *testing.T) {
 				ir, err := x86OrderingHintTranslateAPI(t, "text", x86NamedLockOracleSource(arch, body),
-					"package ordering\nfunc locked(p *[16]byte)\n", arch, "")
+					"package ordering\nfunc locked(p *[16]byte)\n", arch, testTargetTriple("linux", arch))
 				if !errors.Is(err, ErrProbeNeedsContext) || ir != "" {
 					t.Fatal("unbound or split prefix borrowed a following operation", err)
 				}

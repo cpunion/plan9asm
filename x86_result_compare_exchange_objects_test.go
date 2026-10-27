@@ -69,7 +69,7 @@ func TestX86CompareExchangeResultOriginalGoBoundaries(t *testing.T) {
 				source = strings.Replace(source, row.from, row.to, 1)
 				requireLEANativeGoObject(t, arch, source, true)
 				for _, api := range []string{"text", "module", "Go"} {
-					if ir, err := x86ScalarFPBitViewAPI(t, source, declaration, arch, "", api); ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+					if ir, err := x86ScalarFPBitViewAPI(t, source, declaration, arch, testTargetTriple("linux", arch), api); ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
 						t.Fatal("Go-valid source acquired an unbound prefix or effect", api, err)
 					}
 				}

@@ -59,7 +59,7 @@ func TestX86LockScalarRMWTypedRolesAgreeWithoutMemoryPermission(t *testing.T) {
 					x86LockScalarOriginalInstruction(t, arch, source)
 					for _, api := range []string{"text", "module", "Go"} {
 						ir, err := x86OrderingHintTranslateAPI(t, api, source,
-							"package ordering\nfunc locked(p *[16]byte)\n", arch, "")
+							"package ordering\nfunc locked(p *[16]byte)\n", arch, testTargetTriple("linux", arch))
 						if !errors.Is(err, ErrProbeNeedsContext) || ir != "" {
 							t.Fatal("pure effect borrowed virtual FP/AUTO native backing", api, address, err)
 						}
@@ -122,7 +122,7 @@ func TestX86LockScalarRMWMalformedSourceAndDispatchRejectBeforeIR(t *testing.T) 
 				goAssemblerOracleOutput(t, arch, source, "", false)
 				for _, api := range []string{"text", "module", "Go"} {
 					ir, err := x86OrderingHintTranslateAPI(t, api, source,
-						"package ordering\nfunc locked(p *[16]byte)\n", arch, "")
+						"package ordering\nfunc locked(p *[16]byte)\n", arch, testTargetTriple("linux", arch))
 					if err == nil || ir != "" {
 						t.Fatal("malformed complete source emitted IR", api, err)
 					}
@@ -148,7 +148,7 @@ func TestX86LockScalarRMWCarryDoesNotAuthorizeFrameReads(t *testing.T) {
 				x86LockScalarOriginalInstruction(t, arch, source)
 				for _, api := range []string{"text", "module", "Go"} {
 					ir, err := x86OrderingHintTranslateAPI(t, api, source,
-						"package ordering\nfunc locked(p *[16]byte)\n", arch, "")
+						"package ordering\nfunc locked(p *[16]byte)\n", arch, testTargetTriple("linux", arch))
 					if !errors.Is(err, ErrProbeNeedsContext) || ir != "" {
 						t.Fatal("CF observation borrowed an unproved stack/frame read", api, err)
 					}

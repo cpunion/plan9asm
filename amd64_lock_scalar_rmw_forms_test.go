@@ -169,7 +169,7 @@ func TestX86LockScalarRMWRawWholeInstructionRetainsContext(t *testing.T) {
 					t.Run(api, func(t *testing.T) {
 						ir, err := x86OrderingHintTranslateAPI(t, api,
 							x86NamedLockOracleSource(arch, "CMPL AX,AX\n\t"+body.String()),
-							"package ordering\nfunc locked(p *[16]byte)\n", arch, "")
+							"package ordering\nfunc locked(p *[16]byte)\n", arch, testTargetTriple("linux", arch))
 						if !errors.Is(err, ErrProbeNeedsContext) || ir != "" {
 							t.Fatal("raw LOCK lost its unresolved whole physical-prefix contract", err)
 						}

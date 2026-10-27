@@ -27,7 +27,7 @@ func TestX86LockScalarRMWUnknownIncomingCarryNeedsContext(t *testing.T) {
 					for _, api := range []string{"text", "module", "Go"} {
 						t.Run(api, func(t *testing.T) {
 							ir, err := x86OrderingHintTranslateAPI(t, api, source,
-								"package ordering\nfunc locked(p *[16]byte)\n", arch, "")
+								"package ordering\nfunc locked(p *[16]byte)\n", arch, testTargetTriple("linux", arch))
 							if !errors.Is(err, ErrProbeNeedsContext) || ir != "" ||
 								!strings.Contains(err.Error(), "carry") {
 								t.Fatalf("native carry-dependent memory effect borrowed an undefined entry flag: %v", err)
@@ -87,10 +87,7 @@ func TestX86LockScalarRMWCarryCFGAndStackSources(t *testing.T) {
 				}
 				// The public proof may reject an earlier undefined stack value
 				// before reaching LOCK. Its phase is not the carry-only contract.
-				triple := ""
-				if control.known {
-					triple = testTargetTriple("linux", arch)
-				}
+				triple := testTargetTriple("linux", arch)
 				for _, api := range []string{"text", "module", "Go"} {
 					t.Run(api, func(t *testing.T) {
 						ir, err := x86OrderingHintTranslateAPI(t, api, source,

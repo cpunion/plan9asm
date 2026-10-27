@@ -61,7 +61,7 @@ func TestX86CMPXCHGByteEncoderViewsCannotInventSourceAliases(t *testing.T) {
 			t.Logf("original first physical opcode=%s; full sequence=%x", x86asm.GoSyntax(physical, 0, nil), row.encoded)
 			for _, api := range []string{"text", "module", "Go"} {
 				ir, err := x86OrderingHintTranslateAPI(t, api, source,
-					"package ordering\nfunc locked(p *[32]byte)\n", row.arch, "")
+					"package ordering\nfunc locked(p *[32]byte)\n", row.arch, testTargetTriple("linux", row.arch))
 				if !errors.Is(err, ErrProbeNeedsContext) || ir != "" {
 					t.Fatalf("Go encoder view/implicit accumulator rewrite acquired a false source effect: %s/%v", api, err)
 				}
@@ -165,7 +165,7 @@ func TestX86CMPXCHGPairRegisterDoesNotInventSoftwareCAS(t *testing.T) {
 					t.Logf("Go-accepted pair-register #UD object bytes=%x; not a numerical oracle", actual)
 					for _, api := range []string{"text", "module", "Go"} {
 						ir, err := x86OrderingHintTranslateAPI(t, api, source,
-							"package ordering\nfunc locked(p *[32]byte)\n", arch, "")
+							"package ordering\nfunc locked(p *[32]byte)\n", arch, testTargetTriple("linux", arch))
 						if !errors.Is(err, ErrProbeNeedsContext) || ir != "" {
 							t.Fatalf("pair-register #UD became a normal software CAS in %s: %v", api, err)
 						}

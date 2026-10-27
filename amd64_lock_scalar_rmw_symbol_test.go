@@ -26,7 +26,7 @@ func TestX86LockScalarRMWAddressLiteralIsNotMemory(t *testing.T) {
 				}
 				for _, api := range []string{"text", "module", "Go"} {
 					ir, err := x86OrderingHintTranslateAPI(t, api, source,
-						"package ordering\nfunc locked(p *[16]byte)\n", arch, "")
+						"package ordering\nfunc locked(p *[16]byte)\n", arch, testTargetTriple("linux", arch))
 					if err == nil || ir != "" {
 						t.Error("address literal became a locked memory object", api, err)
 					}

@@ -39,10 +39,7 @@ func TestX86LockScalarRMWByteSourcePhysicalBank(t *testing.T) {
 					if physical.Args[1] != want {
 						t.Fatalf("actual source physical bank=%v, want %v", physical.Args[1], want)
 					}
-					triple := ""
-					if !address.rex {
-						triple = "x86_64-unknown-linux-gnu"
-					}
+					triple := "x86_64-unknown-linux-gnu"
 					for _, api := range []string{"text", "module", "Go"} {
 						t.Run(api, func(t *testing.T) {
 							ir, err := x86OrderingHintTranslateAPI(t, api, assembly,

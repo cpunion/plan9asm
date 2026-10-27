@@ -43,7 +43,7 @@ func TestX86LockScalarRMWCarryStackAliasesAndIdentityStayContext(t *testing.T) {
 					for _, api := range []string{"text", "module", "Go"} {
 						t.Run(api, func(t *testing.T) {
 							ir, err := x86OrderingHintTranslateAPI(t, api, source,
-								"package ordering\nfunc locked(p *[16]byte)\n", arch, "")
+								"package ordering\nfunc locked(p *[16]byte)\n", arch, testTargetTriple("linux", arch))
 							if !errors.Is(err, ErrProbeNeedsContext) || ir != "" {
 								t.Fatal("a stale stack value or replaced SP authorized carry", err)
 							}

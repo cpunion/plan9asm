@@ -27,10 +27,7 @@ func TestX86LockScalarRMWCarryStackDoesNotInventWholeFlagsWord(t *testing.T) {
 				t.Run(arch+"/"+suffix+"/"+control.name, func(t *testing.T) {
 					source := x86NamedLockOracleSource(arch, control.body+"\nLOCK\nADCL CX,(SI)")
 					x86LockScalarOriginalInstruction(t, arch, source)
-					triple := ""
-					if control.known {
-						triple = testTargetTriple("linux", arch)
-					}
+					triple := testTargetTriple("linux", arch)
 					for _, api := range []string{"text", "module", "Go"} {
 						t.Run(api, func(t *testing.T) {
 							ir, err := x86OrderingHintTranslateAPI(t, api, source,
