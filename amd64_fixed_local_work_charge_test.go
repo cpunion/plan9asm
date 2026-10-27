@@ -33,7 +33,7 @@ func TestGoAMD64FixedLocalOrdinaryFullWorkBoundary(t *testing.T) {
 func TestGoAMD64FixedLocalPartitionVectorWork(t *testing.T) {
 	body := strings.Replace(fixedLocalLayoutPingPong, "ret+16(FP)", "ret+8(FP)", 1)
 	body = strings.Replace(body, "loop:\n", "loop:\n"+strings.Repeat("PADDQ X0,X0\n", 1024), 1)
-	source := "TEXT ·Value(SB),4,$65536-16\nMOVQ a+0(FP),CX\nMOVQ $0,AX\n" +
+	source := "TEXT ·Value(SB),4,$4096-16\nMOVQ a+0(FP),CX\nMOVQ $0,AX\n" +
 		"MOVQ AX,0(SP)\nMOVQ AX,8(SP)\nMOVOU 0(SP),X0\n" + body
 	goAssemblerOracleOutput(t, "amd64", source, "", true)
 	file, err := Parse(ArchAMD64, source)

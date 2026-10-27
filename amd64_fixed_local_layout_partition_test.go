@@ -82,21 +82,32 @@ func TestGoAMD64FixedLocalLayoutPartitionStorageBound(t *testing.T) {
 		fmt.Fprintf(&body, "XCHGQ R%d,R%d\n", index, index+1)
 	}
 	body.WriteString("count:\nSUBQ $1,AX\nJNZ loop\n")
-	fn, sig := fixedLocalReplayFixture(t, body.String())
-	proof := &x86FixedLocalProof{frame: fn.FrameSize}
-	budget := x86FixedLocalBudget{steps: 1 << 18, bytes: 64 << 20}
-	var layouts x86FixedLocalLayoutGraph
-	err := replayX86FixedLocal(&fn, sig, proof, 0, &budget, nil, &layouts)
-	if !errors.Is(err, ErrProbeNeedsContext) || !strings.Contains(err.Error(), "state storage budget") {
-		t.Fatal("small frames with many private layouts exceeded retained storage", err)
-	}
-	if budget.steps <= 0 || budget.bytes <= 0 {
-		t.Fatal("layout storage must remain independent of instruction/work bounds")
-	}
-	for _, ins := range fn.Instrs {
-		if len(ins.x86FixedLocalMemory) != 0 {
-			t.Fatal("layout storage failure published provisional accesses")
-		}
+	for _, frame := range []int64{64, 32 << 10} {
+		t.Run(fmt.Sprint(frame), func(t *testing.T) {
+			fn, sig := fixedLocalReplayFixture(t, body.String())
+			fn.FrameSize = frame
+			proof := &x86FixedLocalProof{frame: frame}
+			budget := x86FixedLocalBudget{steps: 1 << 18, bytes: 64 << 20}
+			var layouts x86FixedLocalLayoutGraph
+			err := replayX86FixedLocal(&fn, sig, proof, 0, &budget, nil, &layouts)
+			failure := "state storage budget"
+			if frame == 64 {
+				// The original small-frame stress now pays for its candidate
+				// comparisons first. Larger frames isolate the retained cap.
+				failure = "state byte bound"
+			}
+			if !errors.Is(err, ErrProbeNeedsContext) || !strings.Contains(err.Error(), failure) {
+				t.Fatal("independent work/retained layout limit was not enforced", err)
+			}
+			if budget.steps <= 0 || budget.bytes <= 0 {
+				t.Fatal("layout bounds must reject before instruction/work counters underflow")
+			}
+			for _, ins := range fn.Instrs {
+				if len(ins.x86FixedLocalMemory) != 0 {
+					t.Fatal("layout storage failure published provisional accesses")
+				}
+			}
+		})
 	}
 }
 
