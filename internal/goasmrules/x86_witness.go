@@ -22,12 +22,22 @@ func x86PackedBinarySyntaxWitnesses(rule X86AVXRule) ([]string, error) {
 	return x86PackedSyntaxWitnesses(rule, false)
 }
 
+func x86PackedMoveTable(table string) bool {
+	return table == "_yvmovdqa" || table == "_yvmovapd" || table == "_yvmovdqa32"
+}
+
+func x86PackedMoveStoreRow(rule X86AVXRule) bool {
+	return x86PackedMoveTable(rule.Ytab) && (rule.ZCase == "Zvex_r_v_rm" ||
+		rule.ZCase == "Zevex_r_v_rm" || rule.ZCase == "Zevex_r_k_rm")
+}
+
 func x86PackedSyntaxWitnesses(rule X86AVXRule, unary bool) ([]string, error) {
+	move, store := x86PackedMoveTable(rule.Ytab), x86PackedMoveStoreRow(rule)
 	floating := rule.Ytab == "_yvaddpd" || rule.Ytab == "_yvaddsd"
 	scalar := rule.Ytab == "_yvaddsd"
 	binaryTable := rule.Ytab == "_yvandnpd" || rule.Ytab == "_yvblendmpd" ||
 		rule.Ytab == "_yvaddsubpd" || rule.Ytab == "_yvpcmpeqb" || floating
-	unaryTable := rule.Ytab == "_yvmovddup" || rule.Ytab == "_yvexpandpd"
+	unaryTable := rule.Ytab == "_yvmovddup" || rule.Ytab == "_yvexpandpd" || move
 	if (!unary && !binaryTable || unary && !unaryTable) || rule.Prefix != "Pavx" {
 		return nil, fmt.Errorf("%s is outside the audited packed vector table grammar", rule.Opcode)
 	}
@@ -35,13 +45,17 @@ func x86PackedSyntaxWitnesses(rule X86AVXRule, unary bool) ([]string, error) {
 	if unary {
 		maskCase = "Zevex_rm_k_r"
 	}
+	if store {
+		maskCase = "Zevex_r_k_rm"
+	}
 	masked := rule.ZCase == maskCase
-	evex := masked || rule.ZCase == "Zevex_rm_v_r"
+	evex := masked || rule.ZCase == "Zevex_rm_v_r" || store && rule.ZCase == "Zevex_r_v_rm"
 	maskResult := rule.Ytab == "_yvpcmpeqb" && evex
-	if rule.Ytab == "_yvaddsubpd" && evex || rule.Ytab == "_yvexpandpd" && !evex {
+	if (rule.Ytab == "_yvaddsubpd" || rule.Ytab == "_yvmovdqa") && evex ||
+		(rule.Ytab == "_yvexpandpd" || rule.Ytab == "_yvmovdqa32") && !evex {
 		return nil, fmt.Errorf("%s encoding generation differs from its packed table", rule.Opcode)
 	}
-	if !evex && rule.ZCase != "Zvex_rm_v_r" {
+	if !evex && rule.ZCase != "Zvex_rm_v_r" && !(store && rule.ZCase == "Zvex_r_v_rm") {
 		return nil, fmt.Errorf("%s has an unmodeled packed vector zcase %s", rule.Opcode, rule.ZCase)
 	}
 	count := 3
@@ -68,7 +82,11 @@ func x86PackedSyntaxWitnesses(rule X86AVXRule, unary bool) ([]string, error) {
 		if maskResult {
 			resultClass = "Yk"
 		}
-		if rule.Classes[0] == candidate.memory && (unary || rule.Classes[1] == candidate.register) &&
+		firstClass := candidate.memory
+		if store {
+			firstClass, resultClass = candidate.register, candidate.memory
+		}
+		if rule.Classes[0] == firstClass && (unary || rule.Classes[1] == candidate.register) &&
 			rule.Classes[count-1] == resultClass {
 			bank = candidate.bank
 			break
@@ -110,6 +128,10 @@ func x86PackedSyntaxWitnesses(rule X86AVXRule, unary bool) ([]string, error) {
 	}
 	var witnesses []string
 	emit := func(source, suffix string) {
+		last := destination
+		if store {
+			source, last = bank+"0", source
+		}
 		operands := []string{source}
 		if !unary {
 			operands = append(operands, bank+"1")
@@ -117,10 +139,17 @@ func x86PackedSyntaxWitnesses(rule X86AVXRule, unary bool) ([]string, error) {
 		if masked {
 			operands = append(operands, "K1")
 		}
-		operands = append(operands, destination)
+		operands = append(operands, last)
 		witnesses = append(witnesses, rule.Opcode+suffix+" "+strings.Join(operands, ","))
 	}
-	for _, source := range []string{bank + "0", "(AX)"} {
+	sources := []string{bank + "0", "(AX)"}
+	if store {
+		sources[0] = destination
+	}
+	for _, source := range sources {
+		if move && !store && source != "(AX)" {
+			continue // Register alternatives select the earlier store row.
+		}
 		emit(source, "")
 		if masked && hasEncodingTerm(features, "evexZeroingEnabled") {
 			emit(source, ".Z")

@@ -23,6 +23,10 @@ var x86PackedZeroStoreOpcodes = []string{
 	"VCOMPRESSPS", "VCOMPRESSPD", "VPCOMPRESSB", "VPCOMPRESSW", "VPCOMPRESSD", "VPCOMPRESSQ",
 }
 
+func x86PackedZeroStoreInstruction(name, instruction string) string {
+	return fmt.Sprintf("TEXT %s(SB),4,$0-0\n%s\nRET\n", name, instruction)
+}
+
 func x86PackedZeroStoreSource() (string, map[string]FuncSig, []string) {
 	var source strings.Builder
 	sigs := make(map[string]FuncSig)
@@ -30,7 +34,7 @@ func x86PackedZeroStoreSource() (string, map[string]FuncSig, []string) {
 	for _, opcode := range x86PackedZeroStoreOpcodes {
 		for _, bank := range []string{"X", "Y", "Z"} {
 			name := "fault" + opcode + bank
-			fmt.Fprintf(&source, "TEXT %s(SB),4,$0-0\n%s.Z %s0,K1,(AX)\nRET\n", name, opcode, bank)
+			source.WriteString(x86PackedZeroStoreInstruction(name, fmt.Sprintf("%s.Z %s0,K1,(AX)", opcode, bank)))
 			sigs[name] = FuncSig{Name: name, Ret: Void}
 			names = append(names, name)
 		}

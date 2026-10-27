@@ -91,6 +91,13 @@ func X86PackedAbsRows(legacy X86LegacyCatalog, avx []X86AVXRule) ([]X86PackedBin
 	return x86PackedBinaryRows(legacy, avx, `PABSB PABSW PABSD VPABSB VPABSW VPABSD VPABSQ`)
 }
 
+// X86PackedMoveRows retains the twelve AVX whole-vector move names. Legacy
+// moves are separate; register alternatives belong to the first store rows.
+func X86PackedMoveRows(legacy X86LegacyCatalog, avx []X86AVXRule) ([]X86PackedBinaryRow, error) {
+	return x86PackedBinaryRows(legacy, avx, `VMOVDQA VMOVDQU VMOVAPD VMOVAPS VMOVUPD VMOVUPS
+		VMOVDQA32 VMOVDQA64 VMOVDQU8 VMOVDQU16 VMOVDQU32 VMOVDQU64`)
+}
+
 // X86PackedHorizontalIntegerRows retains the XMM and VEX horizontal add/sub
 // rows. PHADDD's distinct MMX row keeps its independent region/EMMS owner.
 func X86PackedHorizontalIntegerRows(legacy X86LegacyCatalog, avx []X86AVXRule) ([]X86PackedBinaryRow, error) {
@@ -196,12 +203,13 @@ func x86PackedBinaryRows(legacy X86LegacyCatalog, avx []X86AVXRule, names string
 }
 
 func x86PackedAVXRowWitnesses(rule X86AVXRule) ([]X86PackedBinaryWitness, error) {
-	unary := rule.Ytab == "_yvmovddup" || rule.Ytab == "_yvexpandpd"
+	move, store := x86PackedMoveTable(rule.Ytab), x86PackedMoveStoreRow(rule)
+	unary := rule.Ytab == "_yvmovddup" || rule.Ytab == "_yvexpandpd" || move
 	syntax, err := x86PackedSyntaxWitnesses(rule, unary)
 	if err != nil {
 		return nil, err
 	}
-	masked := rule.ZCase == "Zevex_rm_v_k_r" || rule.ZCase == "Zevex_rm_k_r"
+	masked := rule.ZCase == "Zevex_rm_v_k_r" || rule.ZCase == "Zevex_rm_k_r" || store && rule.ZCase == "Zevex_r_k_rm"
 	kind, stride, width := "vex", 2, 128
 	if strings.HasPrefix(rule.ZCase, "Zevex_") {
 		kind, stride = "evex", 3
@@ -222,19 +230,32 @@ func x86PackedAVXRowWitnesses(rule X86AVXRule) ([]X86PackedBinaryWitness, error)
 	if kind == "evex" && !masked {
 		wantOffset = 0
 	}
-	if rule.Classes[0] != wantClass || rule.ZOffset != wantOffset {
+	memoryClass := rule.Classes[0]
+	if store {
+		memoryClass = rule.Classes[len(rule.Classes)-1]
+	}
+	if memoryClass != wantClass || rule.ZOffset != wantOffset {
 		return nil, fmt.Errorf("generation/class/row stride mismatch")
 	}
 	header := rule.OpBytes[rule.EncodingOffset]
+	optional := []string{kind + "66", kind + "0F", kind + "0F38", kind + "W0", kind + "W1"}
+	if move {
+		optional = append(optional, kind+"F2", kind+"F3")
+	}
 	atoms, err := x86PackedEncodingAtoms(header, []string{
 		"avxEscape", kind + strconv.Itoa(width),
-	}, []string{kind + "66", kind + "0F", kind + "0F38", kind + "W0", kind + "W1"})
+	}, optional)
 	if err != nil || atoms[kind+"0F"] == atoms[kind+"0F38"] || atoms[kind+"W0"] == atoms[kind+"W1"] {
 		return nil, fmt.Errorf("unmodeled packed encoding header %q", header)
 	}
 	mapByte, wBit, length, pp := byte(1), byte(0), byte(0), byte(0)
-	if atoms[kind+"66"] {
-		pp = 1
+	for index, prefix := range []string{"66", "F3", "F2"} {
+		if atoms[kind+prefix] {
+			if pp != 0 {
+				return nil, fmt.Errorf("conflicting packed mandatory prefixes")
+			}
+			pp = byte(index + 1)
+		}
 	}
 	if atoms[kind+"0F38"] {
 		mapByte = 2
@@ -251,6 +272,9 @@ func x86PackedAVXRowWitnesses(rule X86AVXRule) ([]X86PackedBinaryWitness, error)
 		features := rule.OpBytes[rule.EncodingOffset+1]
 		tuple := width / 8
 		optional := []string{"evexZeroingEnabled", "evexBcstN4", "evexBcstN8"}
+		if move {
+			optional = []string{"evexZeroingEnabled"}
+		}
 		if rule.Ytab == "_yvaddsd" {
 			tuple = 4
 			if wBit != 0 {
@@ -293,12 +317,19 @@ func x86PackedAVXRowWitnesses(rule X86AVXRule) ([]X86PackedBinaryWitness, error)
 			MaskResult: rule.Classes[len(rule.Classes)-1] == "Yk",
 		}
 		modrm := byte(0xd0) // destination 2/18, r/m register 0/16.
-		if witness.Memory {
+		memory := witness.Memory || store && witness.Destination == "(AX)"
+		if store {
+			modrm = 0xc2 // source 0/16 owns ModRM.reg; destination 2/18 is r/m.
+		}
+		if memory {
 			modrm = 0x10 // the only memory witness is the undisturbed (AX).
+			if store {
+				modrm = 0x00
+			}
 		}
 		if kind == "evex" {
 			p0, p2 := byte(0xa0)|mapByte, length<<5|vprime
-			if witness.Memory {
+			if memory {
 				p0 = 0xe0 | mapByte
 			}
 			if witness.MaskResult {

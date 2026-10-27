@@ -97,6 +97,16 @@ func x86OfficialPackedRowsObjectsUsing(t *testing.T,
 	wantRows, wantFormats, wantAliases int,
 	assembly func([]x86OfficialPackedCase) (string, string)) []x86OfficialPackedCase {
 	t.Helper()
+	return x86OfficialPackedRowsObjectsInspect(t, buildRows, wantRows, wantFormats, wantAliases, assembly,
+		func(*testing.T, string, []x86OfficialPackedCase) {})
+}
+
+func x86OfficialPackedRowsObjectsInspect(t *testing.T,
+	buildRows func(goasmrules.X86LegacyCatalog, []goasmrules.X86AVXRule) ([]goasmrules.X86PackedBinaryRow, error),
+	wantRows, wantFormats, wantAliases int,
+	assembly func([]x86OfficialPackedCase) (string, string),
+	inspect func(*testing.T, string, []x86OfficialPackedCase)) []x86OfficialPackedCase {
+	t.Helper()
 	legacy, err := goasmrules.LoadX86LegacyRules(runtime.GOROOT())
 	if err != nil {
 		t.Fatal(err)
@@ -151,6 +161,7 @@ func x86OfficialPackedRowsObjectsUsing(t *testing.T,
 					if err != nil {
 						t.Fatal(err)
 					}
+					inspect(t, ir, batch)
 					x86ResultInitializationObject(t, llc, "x86_64-unknown-linux-gnu", ir, api)
 				})
 			}
@@ -161,7 +172,7 @@ func x86OfficialPackedRowsObjectsUsing(t *testing.T,
 	if passed != len(cases) {
 		t.Fatalf("only %d/%d row-owned formats passed all original-encoding/public-API/object gates", passed, len(cases))
 	}
-	t.Logf("%d canonical rows / %d legal format witnesses plus %d aliases: original Go encoding and all three initialized public APIs + LLVM22 objects passed; no runtime claim",
+	t.Logf("%d canonical rows / %d legal format witnesses plus %d aliases: original Go encoding and row-owned functions through all three public APIs + LLVM22 objects passed; no runtime claim",
 		wantRows, wantFormats, wantAliases)
 	return cases
 }

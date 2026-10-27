@@ -304,6 +304,16 @@ func TestX86PackedMoveResultSourceBoundaries(t *testing.T) {
 	}
 }
 
+func x86PackedMoveInitializedInstruction(name, arch, initialization, instruction, observation string) (string, string) {
+	word, move := 8, "MOVQ"
+	if arch == "386" {
+		word, move = 4, "MOVL"
+	}
+	source := fmt.Sprintf("TEXT ·%s(SB),4,$0-%d\n%s p+0(FP),AX\nMOVL $7,CX\nKMOVD CX,K1\n%s%s\n"+
+		"%s\nMOVL CX,ret+%d(FP)\nRET\n", name, word+4, move, initialization, instruction, observation, word)
+	return source, fmt.Sprintf("func %s(p *[64]byte) uint32\n", name)
+}
+
 func TestX86PackedMoveInitializedNativeStoresWholeFamily(t *testing.T) {
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
@@ -311,10 +321,6 @@ func TestX86PackedMoveInitializedNativeStoresWholeFamily(t *testing.T) {
 	}
 	for _, target := range x86RawReturnTargets {
 		t.Run(target.triple, func(t *testing.T) {
-			word, move := 8, "MOVQ"
-			if target.arch == "386" {
-				word, move = 4, "MOVL"
-			}
 			var source, declarations strings.Builder
 			var names []string
 			for _, row := range x86PackedMoveResultOracle {
@@ -335,11 +341,10 @@ func TestX86PackedMoveInitializedNativeStoresWholeFamily(t *testing.T) {
 						// Keep the original initialized load/store pair, including
 						// native alignment effects. Its result is independent of the
 						// store and cannot be supplied by a fresh logical allocation.
-						fmt.Fprintf(&source, "TEXT ·%s(SB),4,$0-%d\n%s p+0(FP),AX\n"+
-							"MOVL $7,CX\nKMOVD CX,K1\n%s (AX),%s1\n%s %s1,%s(AX)\n"+
-							"PEXTRD $0,X1,CX\nMOVL CX,ret+%d(FP)\nRET\n",
-							name, word+4, move, row.name, bank, row.name, bank, predicate, word)
-						fmt.Fprintf(&declarations, "func %s(p *[64]byte) uint32\n", name)
+						body, declaration := x86PackedMoveInitializedInstruction(name, target.arch,
+							fmt.Sprintf("%s (AX),%s1\n", row.name, bank), fmt.Sprintf("%s %s1,%s(AX)", row.name, bank, predicate), "PEXTRD $0,X1,CX")
+						source.WriteString(body)
+						declarations.WriteString(declaration)
 					}
 				}
 			}
