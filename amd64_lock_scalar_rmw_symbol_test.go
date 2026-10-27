@@ -35,7 +35,7 @@ func TestX86LockScalarRMWAddressLiteralIsNotMemory(t *testing.T) {
 				x86LockScalarOriginalInstruction(t, arch, ordinary)
 				for _, api := range []string{"text", "module", "Go"} {
 					ir, err := x86OrderingHintTranslateAPI(t, api, ordinary,
-						"package ordering\nfunc locked(p *[16]byte)\n", arch, "")
+						"package ordering\nfunc locked(p *[16]byte)\n", arch, testTargetTriple("linux", arch))
 					if err != nil || !strings.Contains(ir, "lock; ") {
 						t.Error("ordinary bound SB memory lost its existing atomic effect", api, err)
 					}

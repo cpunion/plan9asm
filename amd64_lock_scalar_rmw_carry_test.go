@@ -87,10 +87,14 @@ func TestX86LockScalarRMWCarryCFGAndStackSources(t *testing.T) {
 				}
 				// The public proof may reject an earlier undefined stack value
 				// before reaching LOCK. Its phase is not the carry-only contract.
+				triple := ""
+				if control.known {
+					triple = testTargetTriple("linux", arch)
+				}
 				for _, api := range []string{"text", "module", "Go"} {
 					t.Run(api, func(t *testing.T) {
 						ir, err := x86OrderingHintTranslateAPI(t, api, source,
-							"package ordering\nfunc locked(p *[16]byte)\nfunc other()\n", arch, "")
+							"package ordering\nfunc locked(p *[16]byte)\nfunc other()\n", arch, triple)
 						if control.known {
 							if err != nil || !strings.Contains(ir, "lock; adcl") {
 								t.Fatal("independent defined carry was not retained", err)
