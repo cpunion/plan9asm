@@ -49,6 +49,10 @@ func TestX86OfficialSignRowsInitializedThreeAPIsObjects(t *testing.T) {
 	x86OfficialPackedRowsObjects(t, goasmrules.X86PackedSignRows, 9, 18, 0)
 }
 
+func TestX86OfficialHorizontalIntegerRowsInitializedThreeAPIsObjects(t *testing.T) {
+	x86OfficialPackedRowsObjects(t, goasmrules.X86PackedHorizontalIntegerRows, 18, 36, 0)
+}
+
 func TestX86OfficialByteShuffleRowsInitializedThreeAPIsObjects(t *testing.T) {
 	x86OfficialPackedRowsObjects(t, goasmrules.X86PackedByteShuffleRows, 9, 24, 0)
 }
