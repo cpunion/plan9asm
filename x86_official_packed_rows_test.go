@@ -215,10 +215,12 @@ func x86OfficialPackedAssembly(cases []x86OfficialPackedCase) (string, string) {
 		if w.Generation == "legacy" {
 			move = "MOVOU"
 		}
-		if !w.Memory {
+		if !w.Memory && w.First != "" {
 			prefix += fmt.Sprintf("%s (AX),%s\n", move, w.First)
 		}
-		prefix += fmt.Sprintf("%s (BX),%s\n", move, w.Second)
+		if w.Second != "" {
+			prefix += fmt.Sprintf("%s (BX),%s\n", move, w.Second)
+		}
 		if w.Masked {
 			prefix += "MOVQ mask+24(FP),CX\nKMOVQ CX,K1\n"
 			// A masked K result writes zero for disabled lanes; it never

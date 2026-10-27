@@ -31,17 +31,32 @@ func x86PackedMoveStoreRow(rule X86AVXRule) bool {
 		rule.ZCase == "Zevex_r_v_rm" || rule.ZCase == "Zevex_r_k_rm")
 }
 
+// These three original ytabs share count transport, independently of mnemonic,
+// lane width and numerical shift semantics. Encoding values remain in OpBytes.
+func x86PackedUniformShiftTable(table string) bool {
+	return table == "_yvpslld" || table == "_yvpsraq" || table == "_yvpslldq"
+}
+
+func x86PackedImmediateExtensionRow(rule X86AVXRule) bool {
+	return x86PackedUniformShiftTable(rule.Ytab) && (rule.ZCase == "Zvex_i_rm_vo" ||
+		rule.ZCase == "Zevex_i_rm_vo" || rule.ZCase == "Zevex_i_rm_k_vo")
+}
+
 func x86PackedSyntaxWitnesses(rule X86AVXRule, unary bool) ([]string, error) {
 	move, store := x86PackedMoveTable(rule.Ytab), x86PackedMoveStoreRow(rule)
+	shift, immediate := x86PackedUniformShiftTable(rule.Ytab), x86PackedImmediateExtensionRow(rule)
 	floating := rule.Ytab == "_yvaddpd" || rule.Ytab == "_yvaddsd"
 	scalar := rule.Ytab == "_yvaddsd"
 	binaryTable := rule.Ytab == "_yvandnpd" || rule.Ytab == "_yvblendmpd" ||
-		rule.Ytab == "_yvaddsubpd" || rule.Ytab == "_yvpcmpeqb" || floating
+		rule.Ytab == "_yvaddsubpd" || rule.Ytab == "_yvpcmpeqb" || floating || shift
 	unaryTable := rule.Ytab == "_yvmovddup" || rule.Ytab == "_yvexpandpd" || move
 	if (!unary && !binaryTable || unary && !unaryTable) || rule.Prefix != "Pavx" {
 		return nil, fmt.Errorf("%s is outside the audited packed vector table grammar", rule.Opcode)
 	}
 	maskCase := "Zevex_rm_v_k_r"
+	if immediate {
+		maskCase = "Zevex_i_rm_k_vo"
+	}
 	if unary {
 		maskCase = "Zevex_rm_k_r"
 	}
@@ -49,13 +64,18 @@ func x86PackedSyntaxWitnesses(rule X86AVXRule, unary bool) ([]string, error) {
 		maskCase = "Zevex_r_k_rm"
 	}
 	masked := rule.ZCase == maskCase
-	evex := masked || rule.ZCase == "Zevex_rm_v_r" || store && rule.ZCase == "Zevex_r_v_rm"
+	evex := masked || rule.ZCase == "Zevex_rm_v_r" || store && rule.ZCase == "Zevex_r_v_rm" ||
+		immediate && rule.ZCase == "Zevex_i_rm_vo"
+	if rule.Ytab == "_yvpslldq" && (!immediate || masked) {
+		return nil, fmt.Errorf("per-128-bit byte shifts require an unmasked immediate format")
+	}
 	maskResult := rule.Ytab == "_yvpcmpeqb" && evex
 	if (rule.Ytab == "_yvaddsubpd" || rule.Ytab == "_yvmovdqa") && evex ||
-		(rule.Ytab == "_yvexpandpd" || rule.Ytab == "_yvmovdqa32") && !evex {
+		(rule.Ytab == "_yvexpandpd" || rule.Ytab == "_yvmovdqa32" || rule.Ytab == "_yvpsraq") && !evex {
 		return nil, fmt.Errorf("%s encoding generation differs from its packed table", rule.Opcode)
 	}
-	if !evex && rule.ZCase != "Zvex_rm_v_r" && !(store && rule.ZCase == "Zvex_r_v_rm") {
+	if !evex && rule.ZCase != "Zvex_rm_v_r" && !(store && rule.ZCase == "Zvex_r_v_rm") &&
+		!(immediate && rule.ZCase == "Zvex_i_rm_vo") {
 		return nil, fmt.Errorf("%s has an unmodeled packed vector zcase %s", rule.Opcode, rule.ZCase)
 	}
 	count := 3
@@ -82,11 +102,27 @@ func x86PackedSyntaxWitnesses(rule X86AVXRule, unary bool) ([]string, error) {
 		if maskResult {
 			resultClass = "Yk"
 		}
-		firstClass := candidate.memory
+		firstClass, secondClass := candidate.memory, candidate.register
+		if shift {
+			// Register/m128 counts retain X even when data/result is Y/Z.
+			firstClass = "Yxm"
+			if evex {
+				firstClass += "Evex"
+			}
+			if immediate {
+				firstClass, secondClass = "Yu8", candidate.memory
+				if !evex {
+					secondClass = candidate.register
+					if rule.Classes[0] == "Yi8" {
+						firstClass = "Yi8"
+					}
+				}
+			}
+		}
 		if store {
 			firstClass, resultClass = candidate.register, candidate.memory
 		}
-		if rule.Classes[0] == firstClass && (unary || rule.Classes[1] == candidate.register) &&
+		if rule.Classes[0] == firstClass && (unary || rule.Classes[1] == secondClass) &&
 			rule.Classes[count-1] == resultClass {
 			bank = candidate.bank
 			break
@@ -98,6 +134,9 @@ func x86PackedSyntaxWitnesses(rule X86AVXRule, unary bool) ([]string, error) {
 	stride := 2
 	if evex {
 		stride = 3
+	}
+	if immediate {
+		stride++ // The selected opcode is followed by a literal ModRM /digit.
 	}
 	if rule.EncodingOffset < 0 || rule.EncodingOffset+stride > len(rule.OpBytes) {
 		return nil, fmt.Errorf("%s encoding offset %d is outside its complete opBytes", rule.Opcode, rule.EncodingOffset)
@@ -134,7 +173,13 @@ func x86PackedSyntaxWitnesses(rule X86AVXRule, unary bool) ([]string, error) {
 			source, last = bank+"0", source
 		}
 		operands := []string{source}
-		if !unary {
+		if immediate {
+			literal := "$7"
+			if rule.Classes[0] == "Yi8" {
+				literal = "$-1"
+			}
+			operands = []string{literal, source}
+		} else if !unary {
 			operands = append(operands, bank+"1")
 		}
 		if masked {
@@ -144,6 +189,12 @@ func x86PackedSyntaxWitnesses(rule X86AVXRule, unary bool) ([]string, error) {
 		witnesses = append(witnesses, rule.Opcode+suffix+" "+strings.Join(operands, ","))
 	}
 	sources := []string{bank + "0", "(AX)"}
+	if shift && !immediate {
+		sources[0] = "X0"
+	}
+	if immediate && !evex {
+		sources = sources[:1] // VEX immediate rows are register-only.
+	}
 	if store {
 		sources[0] = destination
 	}

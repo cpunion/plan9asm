@@ -13,9 +13,9 @@ type X86PackedBinaryRow struct {
 	Witnesses  []X86PackedBinaryWitness
 }
 
-// Unary AVX rows leave Second empty; legacy rows retain their literal second
-// operand even when it is destination-only. These syntax fields do not certify
-// semantic reads: typed effects own mask and old-destination dependencies.
+// Unary and immediate-extension AVX rows leave Second empty; legacy immediate
+// rows leave First empty and retain their RMW data/destination in Second.
+// Syntax fields do not certify reads: typed effects own mask and old bytes.
 type X86PackedBinaryWitness struct {
 	Instruction, Generation    string
 	First, Second, Destination string
@@ -77,6 +77,14 @@ func X86PackedNarrowRows(legacy X86LegacyCatalog, avx []X86AVXRule) ([]X86Packed
 func X86PackedPerLaneShiftRows(legacy X86LegacyCatalog, avx []X86AVXRule) ([]X86PackedBinaryRow, error) {
 	return x86PackedBinaryRows(legacy, avx, `
 		VPSLLVW VPSLLVD VPSLLVQ VPSRLVW VPSRLVD VPSRLVQ VPSRAVW VPSRAVD VPSRAVQ`)
+}
+
+// X86PackedUniformByteShiftRows retains complete XMM and AVX uniform lane
+// shifts and per-128-bit byte shifts. MMX regions keep their separate owner.
+func X86PackedUniformByteShiftRows(legacy X86LegacyCatalog, avx []X86AVXRule) ([]X86PackedBinaryRow, error) {
+	return x86PackedBinaryRows(legacy, avx, `
+		PSLLW PSLLL PSLLQ PSRLW PSRLL PSRLQ PSRAW PSRAL PSLLO PSRLO
+		VPSLLW VPSLLD VPSLLQ VPSRLW VPSRLD VPSRLQ VPSRAW VPSRAD VPSRAQ VPSLLDQ VPSRLDQ`)
 }
 
 // X86PackedSignRows retains all B/W/D conditional-sign rows. Go's legacy
@@ -187,6 +195,12 @@ func x86PackedBinaryRows(legacy X86LegacyCatalog, avx []X86AVXRule, names string
 			continue
 		}
 		for _, operand := range entry.Rows {
+			classes := strings.Join(operand.Classes, ",")
+			if entry.Ytab == "yps" && entry.Prefix == "Py3" && entry.EscapeAdjustment == 0 &&
+				(operand.RowIndex == 0 && classes == "Ymm,Ymr" && operand.ZCase == "Zm_r_xm" && operand.ZOffset == 1 && operand.UnmatchedOffset == 0 ||
+					operand.RowIndex == 1 && classes == "Yi8,Ymr" && operand.ZCase == "Zibo_m_xm" && operand.ZOffset == 2 && operand.UnmatchedOffset == 1) {
+				continue // The sixteen original MMX rows need their region/EMMS owner.
+			}
 			if operand.RowIndex == 0 && strings.Join(operand.Classes, ",") == "Ymm,Ymr" && operand.UnmatchedOffset == 0 &&
 				(entry.Ytab == "ymm" && operand.ZCase == "Zm_r_xm" && operand.ZOffset == 1 ||
 					entry.Ytab == "ymmxmm0f38" && entry.Prefix == "Px" && entry.EscapeAdjustment == 1 &&
@@ -228,19 +242,28 @@ func x86PackedBinaryRows(legacy X86LegacyCatalog, avx []X86AVXRule, names string
 
 func x86PackedAVXRowWitnesses(rule X86AVXRule) ([]X86PackedBinaryWitness, error) {
 	move, store := x86PackedMoveTable(rule.Ytab), x86PackedMoveStoreRow(rule)
+	shift, immediate := x86PackedUniformShiftTable(rule.Ytab), x86PackedImmediateExtensionRow(rule)
 	unary := rule.Ytab == "_yvmovddup" || rule.Ytab == "_yvexpandpd" || move
 	syntax, err := x86PackedSyntaxWitnesses(rule, unary)
 	if err != nil {
 		return nil, err
 	}
-	masked := rule.ZCase == "Zevex_rm_v_k_r" || rule.ZCase == "Zevex_rm_k_r" || store && rule.ZCase == "Zevex_r_k_rm"
+	masked := rule.ZCase == "Zevex_rm_v_k_r" || rule.ZCase == "Zevex_rm_k_r" ||
+		rule.ZCase == "Zevex_i_rm_k_vo" || store && rule.ZCase == "Zevex_r_k_rm"
 	kind, stride, width := "vex", 2, 128
 	if strings.HasPrefix(rule.ZCase, "Zevex_") {
 		kind, stride = "evex", 3
 	}
+	if immediate {
+		stride++
+	}
 	// The validated official source class owns vector width, independently
 	// of register/memory witnesses and vector versus K result classes.
-	bank := strings.ToUpper(rule.Classes[0][1:2])
+	dataClass := rule.Classes[0]
+	if shift {
+		dataClass = rule.Classes[1]
+	}
+	bank := strings.ToUpper(dataClass[1:2])
 	if bank == "Y" {
 		width = 256
 	} else if bank == "Z" {
@@ -250,11 +273,24 @@ func x86PackedAVXRowWitnesses(rule X86AVXRule) ([]X86PackedBinaryWitness, error)
 	if kind == "evex" && bank != "Z" {
 		wantClass += "Evex"
 	}
+	if shift && !immediate {
+		wantClass = "Yxm"
+		if kind == "evex" {
+			wantClass += "Evex"
+		}
+	}
+	if immediate && kind == "vex" {
+		wantClass = "Y" + strings.ToLower(bank) + "r"
+	}
 	wantOffset := stride
-	if kind == "evex" && !masked {
+	if kind == "evex" && !masked && rule.Ytab != "_yvpslldq" ||
+		kind == "vex" && immediate && rule.Classes[0] == "Yu8" {
 		wantOffset = 0
 	}
 	memoryClass := rule.Classes[0]
+	if immediate {
+		memoryClass = rule.Classes[1]
+	}
 	if store {
 		memoryClass = rule.Classes[len(rule.Classes)-1]
 	}
@@ -271,6 +307,10 @@ func x86PackedAVXRowWitnesses(rule X86AVXRule) ([]X86PackedBinaryWitness, error)
 	}, optional)
 	if err != nil || atoms[kind+"0F"] == atoms[kind+"0F38"] || atoms[kind+"W0"] == atoms[kind+"W1"] {
 		return nil, fmt.Errorf("unmodeled packed encoding header %q", header)
+	}
+	if shift && (!atoms[kind+"66"] || !atoms[kind+"0F"] ||
+		(kind == "vex" || rule.Ytab == "_yvpslldq") && !atoms[kind+"W0"]) {
+		return nil, fmt.Errorf("shift prefix or W mode differs from its official transport")
 	}
 	mapByte, wBit, length, pp := byte(1), byte(0), byte(0), byte(0)
 	for index, prefix := range []string{"66", "F3", "F2"} {
@@ -296,7 +336,10 @@ func x86PackedAVXRowWitnesses(rule X86AVXRule) ([]X86PackedBinaryWitness, error)
 		features := rule.OpBytes[rule.EncodingOffset+1]
 		tuple := width / 8
 		optional := []string{"evexZeroingEnabled", "evexBcstN4", "evexBcstN8"}
-		if move {
+		if shift && !immediate {
+			tuple = 16 // Uniform count access stays m128 for X/Y/Z data.
+		}
+		if move || shift && (!immediate || rule.Ytab == "_yvpslldq") {
 			optional = []string{"evexZeroingEnabled"}
 		}
 		if rule.Ytab == "_yvaddsd" {
@@ -309,14 +352,28 @@ func x86PackedAVXRowWitnesses(rule X86AVXRule) ([]X86PackedBinaryWitness, error)
 		if rule.Ytab == "_yvaddpd" && width == 512 || rule.Ytab == "_yvaddsd" {
 			optional = append(optional, "evexRoundingEnabled", "evexSaeEnabled")
 		}
+		if rule.Ytab == "_yvpslldq" {
+			optional = nil // Per-128-bit byte shifts have neither mask nor BCST.
+		}
 		flags, err := x86PackedEncodingAtoms(features, []string{"evexN" + strconv.Itoa(tuple)}, optional)
 		if err != nil || flags["evexBcstN4"] && flags["evexBcstN8"] {
 			return nil, fmt.Errorf("unmodeled packed encoding features %q", features)
 		}
 	}
-	opcode, err := strconv.ParseUint(rule.OpBytes[rule.EncodingOffset+stride-1], 0, 8)
+	opcodeIndex := rule.EncodingOffset + stride - 1
+	if immediate {
+		opcodeIndex--
+	}
+	opcode, err := strconv.ParseUint(rule.OpBytes[opcodeIndex], 0, 8)
 	if err != nil {
 		return nil, fmt.Errorf("packed opcode is not a byte literal")
+	}
+	var extension uint64
+	if immediate {
+		extension, err = strconv.ParseUint(rule.OpBytes[opcodeIndex+1], 0, 8)
+		if err != nil || extension > 7 {
+			return nil, fmt.Errorf("immediate opcode extension is not a three-bit literal")
+		}
 	}
 	var witnesses []X86PackedBinaryWitness
 	for _, instruction := range syntax {
@@ -325,9 +382,16 @@ func x86PackedAVXRowWitnesses(rule X86AVXRule) ([]X86PackedBinaryWitness, error)
 			// syntax alone cannot identify overlapping VEX/EVEX rows.
 			instruction = strings.NewReplacer(bank+"0", bank+"16", bank+"1", bank+"17", bank+"2", bank+"18").Replace(instruction)
 		}
+		if kind == "evex" && shift && !immediate {
+			instruction = strings.ReplaceAll(instruction, "X0", "X16")
+		}
 		fields := strings.Fields(instruction)
 		operands := strings.Split(fields[1], ",")
 		second, vvvv, vprime := operands[1], byte(0x70), byte(0)
+		first := operands[0]
+		if immediate {
+			first, second, vvvv = operands[1], "", 0x68 // Destination 2/18 is vvvv/V'.
+		}
 		if unary {
 			// Unary encodings reserve VEX.vvvv and EVEX.V' as ones;
 			// the mask and merging destination remain separate inputs.
@@ -335,8 +399,8 @@ func x86PackedAVXRowWitnesses(rule X86AVXRule) ([]X86PackedBinaryWitness, error)
 		}
 		witness := X86PackedBinaryWitness{
 			Instruction: instruction, Generation: kind, Width: width,
-			First: operands[0], Second: second, Destination: operands[len(operands)-1],
-			Memory: operands[0] == "(AX)", Masked: masked,
+			First: first, Second: second, Destination: operands[len(operands)-1],
+			Memory: first == "(AX)", Masked: masked,
 			Zeroing: strings.HasSuffix(fields[0], ".Z"), Broadcast: strings.Contains(fields[0], ".BCST"),
 			MaskResult: rule.Classes[len(rule.Classes)-1] == "Yk",
 		}
@@ -351,10 +415,19 @@ func x86PackedAVXRowWitnesses(rule X86AVXRule) ([]X86PackedBinaryWitness, error)
 				modrm = 0x00
 			}
 		}
+		if immediate {
+			modrm = 0xc0 | byte(extension)<<3
+			if memory {
+				modrm = byte(extension) << 3
+			}
+		}
 		if kind == "evex" {
 			p0, p2 := byte(0xa0)|mapByte, length<<5|vprime
 			if memory {
 				p0 = 0xe0 | mapByte
+			}
+			if immediate {
+				p0 |= 0x10 // ModRM.reg is /digit, not destination register 18.
 			}
 			if witness.MaskResult {
 				p0 |= 0x10 // K2 has no destination bit 4, unlike vector 18.
@@ -381,6 +454,13 @@ func x86PackedAVXRowWitnesses(rule X86AVXRule) ([]X86PackedBinaryWitness, error)
 			witness.Encoding = []byte{0xc5, 0x80 | vvvv | pp | length<<2, byte(opcode), modrm}
 		} else {
 			witness.Encoding = []byte{0xc4, 0xe0 | mapByte, wBit | vvvv | pp | length<<2, byte(opcode), modrm}
+		}
+		if immediate {
+			value, err := strconv.ParseInt(strings.TrimPrefix(operands[0], "$"), 0, 16)
+			if err != nil || value < -128 || value > 255 {
+				return nil, fmt.Errorf("shift witness has no byte immediate")
+			}
+			witness.Encoding = append(witness.Encoding, byte(value))
 		}
 		witnesses = append(witnesses, witness)
 	}
@@ -411,12 +491,29 @@ func x86PackedEncodingAtoms(expression string, required, optional []string) (map
 func x86PackedLegacyRowWitnesses(entry X86LegacyOpcode, row X86LegacyOperand) ([]X86PackedBinaryWitness, error) {
 	literal := entry.Ytab == "ymmxmm0f38" && entry.Prefix == "Px" && entry.EscapeAdjustment == 1 &&
 		row.RowIndex == 1 && row.ZCase == "Zlitm_r" && row.ZOffset == 5 && row.UnmatchedOffset == 4
-	if entry.Kind != "encoding" || entry.EscapeAdjustment != 0 && !literal || strings.Join(row.Classes, ",") != "Yxm,Yxr" {
+	shift := entry.Ytab == "yps" || entry.Ytab == "ypsdq"
+	immediate := shift && strings.Join(row.Classes, ",") == "Yi8,Yxr"
+	if entry.Kind != "encoding" || entry.EscapeAdjustment != 0 && !literal ||
+		strings.Join(row.Classes, ",") != "Yxm,Yxr" && !immediate {
 		return nil, fmt.Errorf("unmodeled legacy packed operand row")
 	}
 	prefix, offset, opcodeBytes := []byte{0x66, 0x0f}, 0, 1
 	terminator := 0
 	switch {
+	case entry.Ytab == "yps" && entry.Prefix == "Py3" && entry.EscapeAdjustment == 0:
+		if len(entry.OpBytes) != 8 || entry.OpBytes[3] != "Pe" || entry.OpBytes[5] != "Pe" ||
+			entry.OpBytes[0] != entry.OpBytes[4] || entry.OpBytes[1] != entry.OpBytes[6] || entry.OpBytes[2] != entry.OpBytes[7] {
+			return nil, fmt.Errorf("unmodeled complete Py3 shift payload")
+		}
+		if !immediate && row.RowIndex == 2 && row.ZCase == "Zm_r_xm" && row.ZOffset == 2 && row.UnmatchedOffset == 3 {
+			offset = 4
+		} else if immediate && row.RowIndex == 3 && row.ZCase == "Zibo_m_xm" && row.ZOffset == 3 && row.UnmatchedOffset == 5 {
+			offset = 6
+		} else {
+			return nil, fmt.Errorf("unmodeled Py3 XMM shift row")
+		}
+	case entry.Ytab == "ypsdq" && entry.Prefix == "Pq" && immediate && row.RowIndex == 0 &&
+		row.ZCase == "Zibo_m" && row.ZOffset == 2 && row.UnmatchedOffset == 0 && len(entry.OpBytes) == 2:
 	case literal:
 		// Zlitm_r emits the selected zero-terminated sequence verbatim,
 		// including its mandatory prefix and opcode-map bytes.
@@ -444,7 +541,7 @@ func x86PackedLegacyRowWitnesses(entry X86LegacyOpcode, row X86LegacyOperand) ([
 	default:
 		return nil, fmt.Errorf("unmodeled legacy packed prefix/offset rule")
 	}
-	if len(entry.OpBytes) != offset+opcodeBytes+terminator {
+	if !shift && len(entry.OpBytes) != offset+opcodeBytes+terminator {
 		return nil, fmt.Errorf("unmodeled legacy packed opcode payload")
 	}
 	encoding := prefix
@@ -455,16 +552,31 @@ func x86PackedLegacyRowWitnesses(entry X86LegacyOpcode, row X86LegacyOperand) ([
 		}
 		encoding = append(encoding, byte(opcode))
 	}
+	sources, extension := []string{"X0", "(AX)"}, uint64(0)
+	if immediate {
+		var err error
+		extension, err = strconv.ParseUint(entry.OpBytes[offset+1], 0, 8)
+		if err != nil || extension > 7 {
+			return nil, fmt.Errorf("legacy shift opcode extension is not a three-bit literal")
+		}
+		sources = []string{""}
+	}
 	var witnesses []X86PackedBinaryWitness
-	for _, first := range []string{"X0", "(AX)"} {
+	for _, first := range sources {
 		modrm := byte(0xc8)
 		if first == "(AX)" {
 			modrm = 0x08
 		}
+		instruction := entry.Opcode + " " + first + ",X1"
+		encoded := append(append([]byte(nil), encoding...), modrm)
+		if immediate {
+			instruction = entry.Opcode + " $-1,X1"
+			encoded = append(append([]byte(nil), encoding...), 0xc1|byte(extension)<<3, 255)
+		}
 		witnesses = append(witnesses, X86PackedBinaryWitness{
-			Instruction: entry.Opcode + " " + first + ",X1", Generation: "legacy", Width: 128,
+			Instruction: instruction, Generation: "legacy", Width: 128,
 			First: first, Second: "X1", Destination: "X1", Memory: first == "(AX)",
-			Encoding: append(append([]byte(nil), encoding...), modrm),
+			Encoding: encoded,
 		})
 	}
 	return witnesses, nil
