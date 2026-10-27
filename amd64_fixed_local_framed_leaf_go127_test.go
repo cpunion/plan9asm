@@ -193,6 +193,14 @@ func TestGoAMD64FixedLocalFramedLeafBoundaries(t *testing.T) {
 		{"partial_caller_bp", "MOVB $11,BP\n CALL leaf<>(SB)\n MOVQ BP,AX", "MOVQ $7,BP", 24},
 		{"incoming_flags", "CMPQ AX,BX\n CALL leaf<>(SB)", "SETCS CL\n MOVBLZX CL,AX", 32},
 		{"returned_flags", "CALL leaf<>(SB)\n SETCS CL\n MOVBLZX CL,AX", "CMPQ AX,BX", 128},
+		{"different_saved_private_bp", `LEAQ 16(SP),BP
+ LEAQ 24(SP),R8
+ MOVQ $3,SI
+again:
+ CALL leaf<>(SB)
+ XCHGQ BP,R8
+ DECQ SI
+ JNZ again`, "MOVQ $7,BP\n ADDQ BP,AX", 8},
 		{"no_automatic_bp", "MOVQ $11,BP\n CALL leaf<>(SB)\n ADDQ BP,AX", "MOVQ $7,BP\n ADDQ BP,AX", 8},
 	} {
 		t.Run(row.name, func(t *testing.T) {

@@ -124,8 +124,7 @@ func fixedLocalCountedAccesses(previous, current map[int]x86FixedLocalAccess, it
 			access.iterationOffsets = [][8]int64{access.offset}
 		} else {
 			prior, found := previous[operand]
-			if !found || prior.owner != access.owner || prior.shape != access.shape || prior.width != access.width ||
-				prior.write != access.write || prior.nativeInput != access.nativeInput || prior.ordinal != access.ordinal ||
+			if !found || !fixedLocalAccessShapeEqual(prior, access) ||
 				len(prior.iterationOffsets) != iteration {
 				return goAMD64FrameContext("fixed local counted-loop access role changed")
 			}

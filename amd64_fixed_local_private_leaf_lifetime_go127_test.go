@@ -123,7 +123,7 @@ func TestGoAMD64FixedLocalPrivateLeafPreservesPerRootWorkBudget(t *testing.T) {
 					t.Fatal(err)
 				}
 				for residue := 0; residue < 8; residue++ {
-					if err := replayX86FixedLocal(&current, sig, proof, residue, &budget, effects); err != nil {
+					if err := replayX86FixedLocal(&current, sig, proof, residue, &budget, effects, nil); err != nil {
 						t.Fatal("unchanged per-proof work bound rejected the old source", err)
 					}
 				}

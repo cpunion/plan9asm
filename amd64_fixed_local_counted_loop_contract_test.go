@@ -129,7 +129,7 @@ func TestGoAMD64FixedLocalCountedLoopBudgetIsAtomic(t *testing.T) {
 	fn, sig, _ := fixedLocalCountedLoopFixture(t, body)
 	for _, budget := range []x86FixedLocalBudget{{steps: 9, bytes: 64 << 20}, {steps: 1 << 18, bytes: 9 * fn.FrameSize}} {
 		proof := &x86FixedLocalProof{frame: fn.FrameSize}
-		if err := replayX86FixedLocal(&fn, sig, proof, 0, &budget, nil); err == nil {
+		if err := replayX86FixedLocal(&fn, sig, proof, 0, &budget, nil, nil); err == nil {
 			t.Fatal("partial counted-loop execution exhausted its budget but succeeded")
 		}
 		for _, instruction := range fn.Instrs {
@@ -159,7 +159,7 @@ func TestGoAMD64FixedLocalCountedLoopPreservesGenericCFG(t *testing.T) {
 			proof := &x86FixedLocalProof{frame: fn.FrameSize}
 			budget := x86FixedLocalBudget{steps: 1 << 18, bytes: 64 << 20}
 			for residue := 0; residue < 8; residue++ {
-				if err := replayX86FixedLocalCFG(&plain, sig, proof, residue, &budget, nil, edges, instructions, nil, nil); err != nil {
+				if err := replayX86FixedLocalCFG(&plain, sig, proof, residue, &budget, nil, edges, instructions, nil, nil, nil); err != nil {
 					t.Fatal("the original generic CFG must independently establish this fixture", err)
 				}
 			}
@@ -176,7 +176,7 @@ func TestGoAMD64FixedLocalReplayLateResidueFailureIsAtomic(t *testing.T) {
 	requireX86GoAssemblerResult(t, "amd64", source, true)
 	proof := &x86FixedLocalProof{frame: fn.FrameSize}
 	budget := x86FixedLocalBudget{steps: 1 << 18, bytes: 64 << 20}
-	if err := replayX86FixedLocal(&fn, sig, proof, 0, &budget, nil); err != nil {
+	if err := replayX86FixedLocal(&fn, sig, proof, 0, &budget, nil, nil); err != nil {
 		t.Fatal(err)
 	}
 	last := -1
@@ -196,7 +196,7 @@ func TestGoAMD64FixedLocalReplayLateResidueFailureIsAtomic(t *testing.T) {
 	for index, instruction := range fn.Instrs {
 		before[index] = cloneX86ReplayFixedLocalMemory(instruction.x86FixedLocalMemory)
 	}
-	if err := replayX86FixedLocal(&fn, sig, proof, 1, &budget, nil); err == nil {
+	if err := replayX86FixedLocal(&fn, sig, proof, 1, &budget, nil, nil); err == nil {
 		t.Fatal("late cross-residue shape mismatch was accepted")
 	}
 	for index, instruction := range fn.Instrs {

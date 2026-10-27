@@ -37,7 +37,7 @@ func TestGoAMD64FixedLocalRetainedStateBudgetIsAtomic(t *testing.T) {
 	fn, sig := fixedLocalRetainedStateBudgetFixture(t)
 	proof := &x86FixedLocalProof{frame: fn.FrameSize}
 	budget := x86FixedLocalBudget{steps: 1 << 18, bytes: 64 << 20}
-	err := replayX86FixedLocal(&fn, sig, proof, 0, &budget, nil)
+	err := replayX86FixedLocal(&fn, sig, proof, 0, &budget, nil, nil)
 	if !errors.Is(err, ErrProbeNeedsContext) || !strings.Contains(err.Error(), "state storage budget") {
 		t.Fatal("actual retained frame states exceeded the storage cap", err)
 	}

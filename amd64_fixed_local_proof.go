@@ -1,10 +1,13 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"reflect"
 )
+
+var errFixedLocalLayoutJoin = goAMD64FrameContext("fixed local CFG address identity disagrees")
 
 // Local offsets are from the observed post-prologue Go SP, not incoming FP,
 // saved BP/return slots, a caller allocation or an arbitrary native address.
@@ -24,7 +27,7 @@ type x86FixedLocalAccess struct {
 	nativeInput bool     // Typed source address, not a private extent/alignment proof.
 	offset      [8]int64 // The first access; a counted loop retains its complete series below.
 	ordinal     int
-	// Only counted-loop accesses need a series; ordinary accesses stay inline.
+	// Counted iterations and private layouts retain a complete stable series.
 	iterationOffsets [][8]int64
 }
 
@@ -106,10 +109,20 @@ func proveX86FixedLocalBody(fn Func, sig FuncSig) (Func, error) {
 		sig.ARM64GoRegisterABI != nil || sig.x86CallerRegions != nil || !voidReturn && !valueReturn {
 		return fn, goAMD64FrameContext("fixed local source has an unbound frame or entry contract")
 	}
+	budget := x86FixedLocalBudget{steps: 1 << 18, bytes: 64 << 20}
+	proven, err := proveX86FixedLocalAttempt(fn, sig, &budget, false)
+	if errors.Is(err, errFixedLocalLayoutJoin) {
+		return proveX86FixedLocalAttempt(fn, sig, &budget, true)
+	}
+	return proven, err
+}
+
+// Only a private-layout join retries the complete residue/final replay, once,
+// with the remaining budget. Ordinary sources retain their original schedule.
+func proveX86FixedLocalAttempt(fn Func, sig FuncSig, budget *x86FixedLocalBudget, partitioned bool) (Func, error) {
 	copyFn := fn
 	copyFn.Instrs = append([]Instr(nil), fn.Instrs...)
 	proof := &x86FixedLocalProof{binding: sig.x86FixedLocal, frame: fn.FrameSize, accesses: make(map[int]map[int]x86FixedLocalAccess)}
-	budget := x86FixedLocalBudget{steps: 1 << 18, bytes: 64 << 20}
 	for index := range copyFn.Instrs {
 		copyFn.Instrs[index].Args = append([]Operand(nil), fn.Instrs[index].Args...)
 		copyFn.Instrs[index].x86FixedLocalMemory = nil
@@ -118,8 +131,12 @@ func proveX86FixedLocalBody(fn Func, sig FuncSig) (Func, error) {
 	if err != nil {
 		return fn, err
 	}
+	var layouts *x86FixedLocalLayoutGraph
+	if partitioned {
+		layouts = &x86FixedLocalLayoutGraph{}
+	}
 	for residue := 0; residue < 8; residue++ {
-		if err := replayX86FixedLocal(&copyFn, sig, proof, residue, &budget, effects); err != nil {
+		if err := replayX86FixedLocal(&copyFn, sig, proof, residue, budget, effects, layouts); err != nil {
 			return fn, err
 		}
 	}
@@ -134,10 +151,18 @@ func proveX86FixedLocalBody(fn Func, sig FuncSig) (Func, error) {
 	if err != nil {
 		return fn, err
 	}
+	var firstLayouts []x86FixedLocalLayoutNode
+	if layouts != nil {
+		firstLayouts = layouts.nodes
+		*layouts = x86FixedLocalLayoutGraph{retained: int64(cap(firstLayouts))*32 + layouts.series}
+	}
 	for residue := 0; residue < 8; residue++ {
-		if err := replayX86FixedLocal(&final, sig, proof, residue, &budget, effects); err != nil {
+		if err := replayX86FixedLocal(&final, sig, proof, residue, budget, effects, layouts); err != nil {
 			return fn, err
 		}
+	}
+	if layouts != nil && !reflect.DeepEqual(firstLayouts, layouts.nodes) {
+		return fn, goAMD64FrameContext("fixed local final layout replay changed")
 	}
 	for index := range final.Instrs {
 		if !reflect.DeepEqual(final.Instrs[index].x86FixedLocalMemory, copyFn.Instrs[index].x86FixedLocalMemory) {
@@ -408,13 +433,13 @@ func (budget *x86FixedLocalBudget) consumeOrigins(bytes int64) error {
 }
 
 func replayX86FixedLocal(fn *Func, sig FuncSig, proof *x86FixedLocalProof, residue int, budget *x86FixedLocalBudget,
-	effects map[int]x86TypedByteEffect) error {
+	effects map[int]x86TypedByteEffect, layouts *x86FixedLocalLayoutGraph) error {
 	edges, instructions, err := fixedLocalEdges(*fn)
 	if err != nil {
 		return err
 	}
 	linear := fixedLocalLinearEdges(*fn, edges, instructions)
-	err = replayX86FixedLocalCFG(fn, sig, proof, residue, budget, effects, edges, instructions, linear, nil)
+	err = replayX86FixedLocalCFG(fn, sig, proof, residue, budget, effects, edges, instructions, linear, nil, layouts)
 	if err == nil {
 		return nil // A stronger loop model must not reject existing generic CFG proofs.
 	}
@@ -424,7 +449,11 @@ func replayX86FixedLocal(fn *Func, sig FuncSig, proof *x86FixedLocalProof, resid
 	}
 	// Failed attempts publish no access annotations. Reuse the original source,
 	// transfer and remaining budget; this is not recursive translation or caching.
-	return replayX86FixedLocalCFG(fn, sig, proof, residue, budget, effects, edges, instructions, linear, loops)
+	countedErr := replayX86FixedLocalCFG(fn, sig, proof, residue, budget, effects, edges, instructions, linear, loops, layouts)
+	if layouts == nil && errors.Is(err, errFixedLocalLayoutJoin) && countedErr != nil {
+		return fmt.Errorf("%w; counted replay: %v", err, countedErr)
+	}
+	return countedErr
 }
 
 // Keep states at control-flow boundaries. A sole fallthrough predecessor has
@@ -453,7 +482,7 @@ func fixedLocalLinearEdges(fn Func, edges map[int][]int, instructions []int) []b
 // use the same transfer, meet, work budgets and final access publication.
 func replayX86FixedLocalCFG(fn *Func, sig FuncSig, proof *x86FixedLocalProof, residue int, budget *x86FixedLocalBudget,
 	effects map[int]x86TypedByteEffect, edges map[int][]int, instructions []int, linear []bool,
-	loops map[int]x86FixedLocalCountedLoop) error {
+	loops map[int]x86FixedLocalCountedLoop, graph *x86FixedLocalLayoutGraph) error {
 	if proof.frame <= 0 || proof.frame > 1<<20 {
 		return goAMD64FrameContext("fixed local retained state storage budget exceeded")
 	}
@@ -472,18 +501,36 @@ func replayX86FixedLocalCFG(fn *Func, sig FuncSig, proof *x86FixedLocalProof, re
 	work := []int{0}
 	queued := map[int]bool{0: true}
 	accesses := make(map[int]map[int]x86FixedLocalAccess)
+	var layouts *x86FixedLocalLayouts
+	var observations map[int]map[int]map[int]x86FixedLocalAccess
 	returned := false
 	retainedBytes := proof.frame
+	if graph != nil {
+		current := newFixedLocalLayouts(graph.nodes)
+		layouts = &current
+		observations = make(map[int]map[int]map[int]x86FixedLocalAccess)
+		retainedBytes += graph.retained + graph.series + int64(len(layouts.nodes))*fixedLocalLayoutNodeBytes
+	}
+	if retainedBytes > 1<<20 {
+		return goAMD64FrameContext("fixed local retained state storage budget exceeded")
+	}
 	for head := 0; head < len(work); head++ {
-		pc := work[head]
-		queued[pc] = false
+		node := work[head]
+		pc, alternative := node, false
+		currentAccesses := accesses
+		if layouts != nil {
+			pc = layouts.nodes[node].pc
+			alternative = node != layouts.at[pc][0]
+			currentAccesses = make(map[int]map[int]x86FixedLocalAccess)
+		}
+		queued[node] = false
 		if pc < 0 || pc >= len(instructions) {
 			return goAMD64FrameContext("fixed local fallthrough lacks a source return")
 		}
-		if err := budget.consumeOrigins(fixedLocalOriginStorage(states[pc])); err != nil {
+		if err := budget.consumeOrigins(fixedLocalOriginStorage(states[node])); err != nil {
 			return err
 		}
-		current := cloneFixedLocalState(states[pc])
+		current := cloneFixedLocalState(states[node])
 		var active *x86FixedLocalCountedLoop
 		var number uint64
 		iteration := 0
@@ -526,11 +573,19 @@ func replayX86FixedLocalCFG(fn *Func, sig FuncSig, proof *x86FixedLocalProof, re
 				if value, known := active.number(&current); !known || value != number {
 					return goAMD64FrameContext("fixed local counted-loop counter changed outside its unique update")
 				}
-				if err := fixedLocalCountedAccesses(accesses[pc], ins.x86FixedLocalMemory, iteration); err != nil {
+				if err := fixedLocalCountedAccesses(currentAccesses[pc], ins.x86FixedLocalMemory, iteration); err != nil {
 					return err
 				}
 			}
-			accesses[pc] = ins.x86FixedLocalMemory
+			if alternative {
+				retainedBytes += fixedLocalLayoutAccessBytes(ins.x86FixedLocalMemory) - fixedLocalLayoutAccessBytes(currentAccesses[pc])
+				if retainedBytes > 1<<20 {
+					return goAMD64FrameContext("fixed local retained state storage budget exceeded")
+				}
+			}
+			if layouts == nil || len(ins.x86FixedLocalMemory) != 0 {
+				currentAccesses[pc] = ins.x86FixedLocalMemory
+			}
 			returned = returned || ins.Op == OpRET && !transition
 			if active != nil {
 				if pc == active.latch {
@@ -553,8 +608,18 @@ func replayX86FixedLocalCFG(fn *Func, sig FuncSig, proof *x86FixedLocalProof, re
 		if targets == nil {
 			targets = edges[pc]
 		}
+		if alternative {
+			for _, old := range observations[node] {
+				retainedBytes -= fixedLocalLayoutAccessBytes(old)
+			}
+		}
+		if layouts != nil {
+			observations[node] = currentAccesses
+			layouts.nodes[node].end = pc
+			layouts.nodes[node].targets = [2]int{-1, -1}
+		}
 		for edge, target := range targets {
-			if target < 0 || target >= len(instructions) {
+			if edge >= 2 || target < 0 || target >= len(instructions) {
 				return goAMD64FrameContext("fixed local fallthrough lacks a source return")
 			}
 			next := current
@@ -583,7 +648,19 @@ func replayX86FixedLocalCFG(fn *Func, sig FuncSig, proof *x86FixedLocalProof, re
 					return fmt.Errorf("%s: %q: %w", fn.Sym, terminal.Raw, err)
 				}
 				returned = true
+				if layouts != nil {
+					layouts.nodes[node].targets[edge] = -2
+				}
 				continue
+			}
+			if layouts != nil {
+				previousNodes := len(layouts.nodes)
+				var err error
+				target, err = layouts.target(states, node, edge, target, next)
+				if err != nil {
+					return err
+				}
+				retainedBytes += int64(len(layouts.nodes)-previousNodes) * fixedLocalLayoutNodeBytes
 			}
 			changed := true
 			if previous, found := states[target]; found {
@@ -616,6 +693,19 @@ func replayX86FixedLocalCFG(fn *Func, sig FuncSig, proof *x86FixedLocalProof, re
 	if !returned {
 		return goAMD64FrameContext("fixed local source has no reachable return")
 	}
+	// Each node contributes only its final transfer, in frozen edge identity
+	// order. Counted iterations remain ordered within that node's observations.
+	var seriesBytes int64
+	if layouts != nil {
+		if err := layouts.finish(); err != nil {
+			return err
+		}
+		var err error
+		accesses, seriesBytes, err = collectFixedLocalLayoutAccesses(len(layouts.nodes), observations, (1<<20)-retainedBytes)
+		if err != nil {
+			return err
+		}
+	}
 	// An empty worklist means each retained transfer consumed the final input
 	// state: every changed meet requeued its consumer. Publish those local
 	// annotations only now, without repeating every instruction in a DAG.
@@ -634,8 +724,7 @@ func replayX86FixedLocalCFG(fn *Func, sig FuncSig, proof *x86FixedLocalProof, re
 				continue
 			}
 			prior, found := previous[operand]
-			if !found || prior.owner != access.owner || prior.shape != access.shape || prior.width != access.width ||
-				prior.write != access.write || prior.nativeInput != access.nativeInput || prior.ordinal != access.ordinal ||
+			if !found || !fixedLocalAccessShapeEqual(prior, access) ||
 				len(prior.iterationOffsets) != len(access.iterationOffsets) {
 				return goAMD64FrameContext("fixed local access shape depends on original SP residue")
 			}
@@ -650,6 +739,9 @@ func replayX86FixedLocalCFG(fn *Func, sig FuncSig, proof *x86FixedLocalProof, re
 	for pc, current := range accesses {
 		fn.Instrs[instructions[pc]].x86FixedLocalMemory = current
 	}
+	if graph != nil {
+		graph.nodes, graph.series = layouts.nodes, seriesBytes
+	}
 	return nil
 }
 
@@ -657,7 +749,10 @@ func mergeFixedLocalState(previous *x86FixedLocalState, current x86FixedLocalSta
 	// Private relocation identities must agree. Incoming origins are a separate
 	// must-domain: losing one leaves unknown bytes, never numerical knowledge.
 	if !reflect.DeepEqual(previous.pointers, current.pointers) || !reflect.DeepEqual(previous.addresses, current.addresses) {
-		return false, goAMD64FrameContext("fixed local CFG address identity disagrees")
+		if err := fixedLocalLayoutRoles(*previous, current); err != nil {
+			return false, err
+		}
+		return false, errFixedLocalLayoutJoin
 	}
 	changed, err := mergeFixedLocalSavedBP(previous, current)
 	if err != nil {
