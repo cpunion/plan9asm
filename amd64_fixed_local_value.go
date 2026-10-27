@@ -15,8 +15,8 @@ type fixedLocalScalarValue struct {
 }
 
 // Selection retains only facts true of both possible values. Private offsets
-// must agree. Opaque addresses form a bounded alternative-origin set; each
-// later memory use checks every member, and no pointer becomes NUM.
+// must agree. Opaque addresses share the same machine-address domain;
+// joining them never supplies a numerical value or private-frame permission.
 func mergeFixedLocalScalarValues(first, last fixedLocalScalarValue) (fixedLocalScalarValue, bool) {
 	if first.pointer != last.pointer || first.opaque != last.opaque ||
 		first.pointer && first.address != last.address {

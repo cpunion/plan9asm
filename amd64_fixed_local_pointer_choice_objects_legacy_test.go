@@ -10,8 +10,8 @@ import (
 
 func TestGoAMD64FixedLocalPointerChoicesNeedAuditedDATAProducer(t *testing.T) {
 	goAMD64FramePrepareOwnedToolCache(t)
-	rows := fixedLocalPointerChoiceAllPositiveCases()
-	if len(rows) != 23 {
+	rows := append(fixedLocalPointerChoiceAllPositiveCases(), fixedLocalNativeAddressCases()...)
+	if len(rows) != 42 {
 		t.Fatal("complete mixed-DATA source inventory changed", len(rows))
 	}
 	assembly, declarations := fixedLocalPointerChoiceProgram(t, fixedLocalChoiceData, rows)

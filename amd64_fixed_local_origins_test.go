@@ -2,106 +2,79 @@ package plan9asm
 
 import (
 	"errors"
+	"fmt"
 	"reflect"
 	"testing"
 	"unsafe"
 )
 
-func TestGoAMD64FixedLocalOriginJoinStorageBudget(t *testing.T) {
-	t.Run("invalid second map retains prior allocation cost", func(t *testing.T) {
-		full := fixedLocalOriginSet([4]x86FixedLocalOrigin{
-			{parameter: 0}, {parameter: 8}, {parameter: 16}, {parameter: 24},
-		}, 4)
-		previous := x86FixedLocalState{
+var fixedLocalOriginBenchmarkState x86FixedLocalState
+
+func BenchmarkFixedLocalOriginState(b *testing.B) {
+	for _, entries := range []int{1, 8, 32} {
+		state := x86FixedLocalState{
 			pointers: make(map[Reg]int64), addresses: make(map[int64]int64),
-			opaque:      map[Reg]x86FixedLocalOrigins{AX: fixedLocalOrigin(x86FixedLocalOrigin{parameter: 0})},
-			opaqueCells: map[int64]x86FixedLocalOrigins{0: full},
+			opaqueCells: make(map[int64]x86FixedLocalOrigins),
 		}
-		current := cloneFixedLocalState(previous)
-		current.opaque[AX] = fixedLocalOrigin(x86FixedLocalOrigin{parameter: 8})
-		current.opaqueCells[0] = x86FixedLocalOrigins{}
-		oldBytes := fixedLocalOriginStorage(previous)
-		_, work, err := mergeFixedLocalState(&previous, current)
-		if !errors.Is(err, ErrProbeNeedsContext) || work != 144 {
-			t.Fatal("failed later union lost the completed allocation charge", work, err)
+		for index := 0; index < entries; index++ {
+			state.opaqueCells[int64(index)*8] = fixedLocalOrigin(x86FixedLocalOrigin{parameter: int64(index) * 8})
 		}
-		retained, budget := int64(0), x86FixedLocalBudget{bytes: 144}
-		if err := budget.retainOriginGrowth(fixedLocalOriginStorage(previous)-oldBytes, work, &retained); err != nil || budget.bytes != 0 {
-			t.Fatal("failed attempt became free for later replay", err)
-		}
-	})
-	for _, row := range []struct {
-		name           string
-		retained, work int64
-		fails          bool
-	}{
-		{"exact retained and work capacity", (1 << 20) - 144, 144, false},
-		{"retained tail exceeds capacity", (1 << 20) - 143, 144, true},
-		{"working tail exceeds capacity", 0, 143, true},
-	} {
-		t.Run(row.name, func(t *testing.T) {
-			previous := x86FixedLocalState{
-				pointers: make(map[Reg]int64), addresses: make(map[int64]int64),
-				opaque: map[Reg]x86FixedLocalOrigins{AX: fixedLocalOrigin(x86FixedLocalOrigin{parameter: 0})},
-			}
-			current := cloneFixedLocalState(previous)
-			current.opaque[AX] = fixedLocalOrigin(x86FixedLocalOrigin{parameter: 8})
-			oldBytes := fixedLocalOriginStorage(previous)
-			changed, work, err := mergeFixedLocalState(&previous, current)
-			if err != nil || !changed || work != 144 {
-				t.Fatal("two singleton predecessors must create one bounded union", changed, err)
-			}
-			growth := fixedLocalOriginStorage(previous) - oldBytes
-			if growth != 144 {
-				t.Fatal("join did not account for its complete immutable tail", growth)
-			}
-			retained, budget := row.retained, x86FixedLocalBudget{bytes: row.work}
-			err = budget.retainOriginGrowth(growth, work, &retained)
-			if errors.Is(err, ErrProbeNeedsContext) != row.fails || !row.fails && err != nil {
-				t.Fatal("join exceeded its retained/work bound", err)
-			}
-			if row.fails && (retained != row.retained || budget.bytes != row.work) {
-				t.Fatal("failed accounting partially consumed its budget")
+		b.Run(fmt.Sprintf("clone/%d", entries), func(b *testing.B) {
+			b.ReportAllocs()
+			for index := 0; index < b.N; index++ {
+				fixedLocalOriginBenchmarkState = cloneFixedLocalState(state)
 			}
 		})
-	}
-	for _, replaceTail := range []bool{false, true} {
-		name, wantGrowth := "new tail plus removed singleton", int64(80)
-		if replaceTail {
-			name, wantGrowth = "two to three candidates", 0
-		}
-		t.Run(name, func(t *testing.T) {
-			previous := x86FixedLocalState{
-				pointers: make(map[Reg]int64), addresses: make(map[int64]int64),
-				opaque: map[Reg]x86FixedLocalOrigins{AX: fixedLocalOrigin(x86FixedLocalOrigin{parameter: 0})},
+		b.Run(fmt.Sprintf("join/%d", entries), func(b *testing.B) {
+			previous := cloneFixedLocalState(state)
+			b.ReportAllocs()
+			b.ResetTimer()
+			for index := 0; index < b.N; index++ {
+				if changed, err := mergeFixedLocalState(&previous, state); err != nil || changed {
+					b.Fatal("identical singleton states must be unchanged", changed, err)
+				}
 			}
-			if replaceTail {
-				previous.opaque[AX], _ = previous.opaque[AX].union(fixedLocalOrigin(x86FixedLocalOrigin{parameter: 8}))
-			} else {
-				previous.opaque[BX] = fixedLocalOrigin(x86FixedLocalOrigin{parameter: 8})
-			}
-			current := cloneFixedLocalState(previous)
-			current.opaque[AX] = fixedLocalOrigin(x86FixedLocalOrigin{parameter: 16})
-			delete(current.opaque, BX)
-			oldBytes := fixedLocalOriginStorage(previous)
-			changed, work, err := mergeFixedLocalState(&previous, current)
-			growth := fixedLocalOriginStorage(previous) - oldBytes
-			if err != nil || !changed || work != 144 || growth != wantGrowth {
-				t.Fatal("live storage and newly allocated tail work were conflated", changed, work, growth, err)
-			}
-			retained, budget := int64(0), x86FixedLocalBudget{bytes: 143}
-			if err := budget.retainOriginGrowth(growth, work, &retained); !errors.Is(err, ErrProbeNeedsContext) || retained != 0 || budget.bytes != 143 {
-				t.Fatal("tail replacement bypassed its independent work budget", err)
-			}
+			fixedLocalOriginBenchmarkState = previous
 		})
 	}
 }
 
+func TestGoAMD64FixedLocalOriginJoinStorageBudget(t *testing.T) {
+	previous := map[Reg]x86FixedLocalOrigins{AX: fixedLocalOrigin(x86FixedLocalOrigin{})}
+	current := map[Reg]x86FixedLocalOrigins{AX: fixedLocalOrigin(x86FixedLocalOrigin{
+		literal: x86StaticSBAddress{symbol: "choice<>"},
+	})}
+	before := fixedLocalOriginMapStorage(previous)
+	if changed, err := mergeFixedLocalOrigins(previous, current); err != nil || !changed {
+		t.Fatal("actual address join failed", changed, err)
+	}
+	if bytes := fixedLocalOriginMapStorage(previous); bytes != before || bytes != 64 {
+		t.Fatal("fixed-size address join changed the conservative per-entry charge", bytes)
+	}
+	for _, capacity := range []int64{63, 64} {
+		budget := x86FixedLocalBudget{bytes: capacity}
+		err := budget.consumeOrigins(before)
+		if errors.Is(err, ErrProbeNeedsContext) != (capacity < before) {
+			t.Fatal("cloning addresses bypassed its unchanged work bound", capacity, err)
+		}
+		if capacity < before && budget.bytes != capacity {
+			t.Fatal("failed work accounting partially consumed its budget")
+		}
+	}
+	allocations := testing.AllocsPerRun(10, func() {
+		previous[AX] = fixedLocalOrigin(x86FixedLocalOrigin{})
+		if _, err := mergeFixedLocalOrigins(previous, current); err != nil {
+			panic(err)
+		}
+	})
+	if allocations != 0 {
+		t.Fatal("address join allocated alternative-set storage", allocations)
+	}
+}
+
 func TestGoAMD64FixedLocalOriginValueStorage(t *testing.T) {
-	// Go stores map values above 128 bytes indirectly. The common singleton
-	// must not require an additional allocation for every state-map entry.
-	if size := unsafe.Sizeof(x86FixedLocalOrigins{}); size > 128 {
-		t.Fatalf("opaque map value is %d bytes, exceeding the inline threshold", size)
+	if size := unsafe.Sizeof(x86FixedLocalOrigins{}); size > uintptr(fixedLocalOriginPayloadBytes) || size > 128 {
+		t.Fatalf("address value is %d bytes, exceeding its charge or inline map threshold", size)
 	}
 }
 
@@ -112,16 +85,18 @@ func TestGoAMD64FixedLocalOriginSetValueSemantics(t *testing.T) {
 			var valid bool
 			value, valid = value.union(fixedLocalOrigin(x86FixedLocalOrigin{literal: x86StaticSBAddress{symbol: "choice<>", offset: offset}}))
 			if !valid {
-				t.Fatal("bounded set rejected")
+				t.Fatal("complete native address join rejected")
 			}
 		}
 		return value
 	}
 	t.Run("invalid equal values remain unknown", func(t *testing.T) {
-		for _, value := range []x86FixedLocalOrigins{{}, {count: 2}, {count: 5, tail: &[3]x86FixedLocalOrigin{}}} {
+		for _, value := range []x86FixedLocalOrigins{{}, {roles: 0x80}, {
+			roles: fixedLocalNativeAddress, address: x86StaticSBAddress{symbol: "foreign<>"},
+		}} {
 			previous := map[Reg]x86FixedLocalOrigins{AX: value}
-			if _, _, err := mergeFixedLocalOrigins(previous, map[Reg]x86FixedLocalOrigins{AX: value}); !errors.Is(err, ErrProbeNeedsContext) {
-				t.Fatal("equal fast path granted an invalid origin", err)
+			if _, err := mergeFixedLocalOrigins(previous, map[Reg]x86FixedLocalOrigins{AX: value}); !errors.Is(err, ErrProbeNeedsContext) {
+				t.Fatal("equal fast path granted an invalid address", err)
 			}
 		}
 	})
@@ -129,36 +104,36 @@ func TestGoAMD64FixedLocalOriginSetValueSemantics(t *testing.T) {
 		for _, offsets := range [][]int64{{0, 8, 16}, {16, 0, 8}, {8, 16, 8, 0, 16}} {
 			first, second := set(0, 8, 16), set(offsets...)
 			previous := map[Reg]x86FixedLocalOrigins{AX: first}
-			if changed, work, err := mergeFixedLocalOrigins(previous, map[Reg]x86FixedLocalOrigins{AX: second}); err != nil || changed || work != 0 {
-				t.Fatal("equal address sets must converge independently of allocation/order", changed, err)
+			if changed, err := mergeFixedLocalOrigins(previous, map[Reg]x86FixedLocalOrigins{AX: second}); err != nil || changed {
+				t.Fatal("address join did not converge independently of order", changed, err)
 			}
-			if !reflect.DeepEqual(first, second) || !reflect.DeepEqual(previous[AX], first) {
-				t.Fatal("canonical value content changed")
+			if first != second || previous[AX] != first || !first.readonly() {
+				t.Fatal("joining addresses lost readonly storage or changed a canonical value")
 			}
 		}
 	})
 	t.Run("union does not change either input", func(t *testing.T) {
-		first, second := set(0, 8), set(16, 24)
+		first, second := set(0), fixedLocalOrigin(x86FixedLocalOrigin{})
 		merged, valid := first.union(second)
-		if !valid || !reflect.DeepEqual(merged, set(0, 8, 16, 24)) ||
-			!reflect.DeepEqual(first, set(0, 8)) || !reflect.DeepEqual(second, set(16, 24)) {
-			t.Fatal("union mutated a shared immutable input")
+		if !valid || !merged.hasLiteral() || merged.roles&fixedLocalNativeAddress == 0 ||
+			first != set(0) || second.hasLiteral() {
+			t.Fatal("union mutated an input or lost an address role")
 		}
 	})
 	t.Run("affine write does not change prior state", func(t *testing.T) {
 		fn, sig, _ := fixedLocalPointerChoiceFixture(t, "MOVQ (SI),AX")
 		proof := &x86FixedLocalProof{frame: fn.FrameSize, binding: sig.x86FixedLocal}
-		original := set(0, 8)
+		original := set(8)
 		state := x86FixedLocalState{
 			opaque: map[Reg]x86FixedLocalOrigins{AX: original},
 			known:  make(map[Reg]uint8), booleans: make(map[Reg]uint8),
 		}
 		ins := Instr{Op: "ADDQ", Args: []Operand{{Kind: OpImm, Imm: 8}, {Kind: OpReg, Reg: AX}}}
 		if handled, err := fixedLocalInputAddressStep(&ins, &state, proof, 0); err != nil || !handled {
-			t.Fatal("bounded affine write rejected", handled, err)
+			t.Fatal("exact affine write rejected", handled, err)
 		}
-		if !reflect.DeepEqual(original, set(0, 8)) || !reflect.DeepEqual(state.opaque[AX], set(8, 16)) {
-			t.Fatal("affine write mutated the prior immutable set")
+		if !reflect.DeepEqual(original, set(8)) || !reflect.DeepEqual(state.opaque[AX], set(16)) {
+			t.Fatal("affine write changed the prior address value")
 		}
 	})
 }

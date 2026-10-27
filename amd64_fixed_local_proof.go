@@ -403,19 +403,6 @@ func (budget *x86FixedLocalBudget) consumeOrigins(bytes int64) error {
 	return nil
 }
 
-func (budget *x86FixedLocalBudget) retainOriginGrowth(bytes, work int64, retained *int64) error {
-	if bytes > 0 && bytes > (1<<20)-*retained {
-		return goAMD64FrameContext("fixed local retained state storage budget exceeded")
-	}
-	if err := budget.consumeOrigins(work); err != nil {
-		return err
-	}
-	if bytes > 0 {
-		*retained += bytes // Removed entries do not refund prior storage charges.
-	}
-	return nil
-}
-
 func replayX86FixedLocal(fn *Func, sig FuncSig, proof *x86FixedLocalProof, residue int, budget *x86FixedLocalBudget,
 	effects map[int]x86TypedByteEffect) error {
 	edges, instructions, err := fixedLocalEdges(*fn)
@@ -583,13 +570,8 @@ func replayX86FixedLocalCFG(fn *Func, sig FuncSig, proof *x86FixedLocalProof, re
 			}
 			changed := true
 			if previous, found := states[target]; found {
-				originBytes := fixedLocalOriginStorage(previous)
 				var err error
-				var originWork int64
-				changed, originWork, err = mergeFixedLocalState(&previous, next)
-				if err := budget.retainOriginGrowth(fixedLocalOriginStorage(previous)-originBytes, originWork, &retainedBytes); err != nil {
-					return err
-				}
+				changed, err = mergeFixedLocalState(&previous, next)
 				if err != nil {
 					return err
 				}
@@ -654,23 +636,22 @@ func replayX86FixedLocalCFG(fn *Func, sig FuncSig, proof *x86FixedLocalProof, re
 	return nil
 }
 
-func mergeFixedLocalState(previous *x86FixedLocalState, current x86FixedLocalState) (bool, int64, error) {
+func mergeFixedLocalState(previous *x86FixedLocalState, current x86FixedLocalState) (bool, error) {
 	// Private relocation identities must agree. Incoming origins are a separate
 	// must-domain: losing one leaves unknown bytes, never numerical knowledge.
 	if !reflect.DeepEqual(previous.pointers, current.pointers) || !reflect.DeepEqual(previous.addresses, current.addresses) {
-		return false, 0, goAMD64FrameContext("fixed local CFG address identity disagrees")
+		return false, goAMD64FrameContext("fixed local CFG address identity disagrees")
 	}
 	changed := intersectFixedLocalOrigins(previous.constants, current.constants)
 	changed = mergeFixedLocalRanges(previous, current) || changed
-	merged, work, err := mergeFixedLocalOrigins(previous.opaque, current.opaque)
+	merged, err := mergeFixedLocalOrigins(previous.opaque, current.opaque)
 	if err != nil {
-		return false, work, err
+		return false, err
 	}
 	changed = changed || merged
-	merged, cellWork, err := mergeFixedLocalOrigins(previous.opaqueCells, current.opaqueCells)
-	work += cellWork
+	merged, err = mergeFixedLocalOrigins(previous.opaqueCells, current.opaqueCells)
 	if err != nil {
-		return false, work, err
+		return false, err
 	}
 	changed = changed || merged
 	flags := previous.flags & current.flags
@@ -707,7 +688,7 @@ func mergeFixedLocalState(previous *x86FixedLocalState, current x86FixedLocalSta
 		changed = changed || value != written
 		previous.results[index] = value
 	}
-	return changed, work, nil
+	return changed, nil
 }
 
 func fixedLocalMemory(ins *Instr, index int, state *x86FixedLocalState, proof *x86FixedLocalProof, residue int, width, alignment int64, write, pointer bool) (int64, error) {
@@ -744,29 +725,17 @@ func fixedLocalMemoryAccess(ins *Instr, index int, state *x86FixedLocalState, pr
 		memory := ins.Args[index].Mem
 		if origins, input := state.opaque[memory.Base]; input {
 			root, valid := x86CallerGP(memory.Base)
-			if !valid || !origins.valid() || root != memory.Base || root == SP || width <= 0 || alignment <= 0 || pointer ||
-				memory.OffRaw != "" || memory.Sym != "" || memory.Segment != "" ||
-				memory.IndexExt != "" {
-				return 0, x86FixedLocalNativeInput, goAMD64FrameContext("fixed local native input requires a plain typed base and displacement")
+			displacement, known, numerical := fixedLocalNativeDisplacement(memory, state)
+			if !valid || !origins.valid() || root != memory.Base || root == SP || width <= 0 || alignment <= 0 || pointer || !numerical {
+				return 0, x86FixedLocalNativeInput, goAMD64FrameContext("fixed local native address requires a full typed base and numerical index")
 			}
-			for index := uint8(0); index < origins.count; index++ {
-				origin := origins.at(index)
-				if write && origin.global != "" {
-					return 0, x86FixedLocalNativeInput, goAMD64FrameContext("fixed local Go variable address is readonly")
-				}
-				if origin.literal.symbol != "" {
-					displacement, known := fixedLocalConstantDisplacement(memory, state)
-					shifted, valid := fixedLocalShiftLiteral(origin, displacement, proof)
-					if !known {
-						valid = fixedLocalLiteralEnvelope(memory, origin, state, proof, width, alignment)
-					} else {
-						valid = valid && fixedLocalLiteralRange(proof.binding, shifted.literal, width, alignment)
-					}
-					if write || !valid {
-						return 0, x86FixedLocalLiteralMemory, goAMD64FrameContext("fixed local indirect DATA read exceeds readonly identity, extent or alignment")
-					}
-				} else if memory.Index != "" || memory.Scale != 0 {
-					return 0, x86FixedLocalNativeInput, goAMD64FrameContext("fixed local native input requires a plain typed base and displacement")
+			if !fixedLocalOriginOwners(origins, proof) || write && origins.readonly() {
+				return 0, x86FixedLocalNativeInput, goAMD64FrameContext("fixed local native address lacks its original storage or write role")
+			}
+			if literal, exact := origins.literal(); exact && known {
+				literal.offset += displacement
+				if !fixedLocalLiteralRange(proof.binding, literal, width, alignment) {
+					return 0, x86FixedLocalLiteralMemory, goAMD64FrameContext("fixed local exact DATA read exceeds original identity, extent or alignment")
 				}
 			}
 			return 0, x86FixedLocalNativeInput, fixedLocalRecordAccess(ins, index, proof, residue, width, write, true, 0)

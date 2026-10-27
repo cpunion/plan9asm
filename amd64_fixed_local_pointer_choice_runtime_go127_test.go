@@ -11,8 +11,8 @@ import (
 
 func fixedLocalPointerChoiceRuntimeProgram(t *testing.T, triple string) (assembly, declarations, original, driver string) {
 	t.Helper()
-	rows := fixedLocalPointerChoiceAllPositiveCases()
-	if len(rows) != 23 {
+	rows := append(fixedLocalPointerChoiceAllPositiveCases(), fixedLocalNativeAddressCases()...)
+	if len(rows) != 42 {
 		t.Fatal("complete pointer-choice runtime inventory changed", len(rows))
 	}
 	assembly, declarations = fixedLocalPointerChoiceProgram(t, fixedLocalChoiceData, rows)
@@ -38,7 +38,7 @@ var inputs = []uint64{` + goInputs.String() + `}
 func check(index int, fn func(*uint64, *uint64, uint64) uint64) {
     for sample, input := range inputs {
         for alias := 0; alias < 2; alias++ {
-            var left, right [16]uint64
+            var left, right [32]uint64
             for i := range left {
                 left[i] = uint64(i+1)*0x0102030405060708 ^ input
                 right[i] = ^left[i] ^ 0x96a5b4c3d2e1f087
@@ -51,7 +51,7 @@ func check(index int, fn func(*uint64, *uint64, uint64) uint64) {
             value := fn(p, q, input)
 
             fmt.Printf("%d %d %d %016x", index, sample, alias, value)
-            for _, buffer := range [2][16]uint64{left, right} {
+            for _, buffer := range [2][32]uint64{left, right} {
                 for _, value := range buffer {
                     fmt.Printf(" %016x", value)
                 }
@@ -67,8 +67,8 @@ static void check(int index, uint64_t (*fn)(uint64_t *, uint64_t *, uint64_t)) {
     for (unsigned sample = 0; sample < 16; sample++) {
         uint64_t input = inputs[sample];
         for (unsigned alias = 0; alias < 2; alias++) {
-            uint64_t left[16], right[16];
-            for (unsigned i = 0; i < 16; i++) {
+            uint64_t left[32], right[32];
+            for (unsigned i = 0; i < 32; i++) {
                 left[i] = (uint64_t)(i+1)*UINT64_C(0x0102030405060708)^input;
                 right[i] = ~left[i]^UINT64_C(0x96a5b4c3d2e1f087);
             }
@@ -77,10 +77,10 @@ static void check(int index, uint64_t (*fn)(uint64_t *, uint64_t *, uint64_t)) {
             uint64_t value = fn(p, q, input);
 
             printf("%d %u %u %016llx", index, sample, alias, (unsigned long long)value);
-            for (unsigned i = 0; i < 16; i++) {
+            for (unsigned i = 0; i < 32; i++) {
                 printf(" %016llx", (unsigned long long)left[i]);
             }
-            for (unsigned i = 0; i < 16; i++) {
+            for (unsigned i = 0; i < 32; i++) {
                 printf(" %016llx", (unsigned long long)right[i]);
             }
             putchar('\n');
@@ -100,7 +100,7 @@ func fixedLocalPointerChoiceRuntime(t *testing.T, execution x86FloatCompareExecu
 	if execute {
 		output := x86ScalarFloatIntegerOriginalOutput(t, execution, assembly, original)
 		want = strings.Split(strings.TrimSpace(string(output)), "\n")
-		if len(want) != 23*16*2 {
+		if len(want) != 42*16*2 {
 			t.Fatal("original Go pointer-choice runtime output inventory changed", len(want))
 		}
 	} else {
@@ -139,7 +139,7 @@ func fixedLocalPointerChoiceRuntime(t *testing.T, execution x86FloatCompareExecu
 				})
 			}
 		})
-	t.Logf("23 complete functions, 16 input patterns, two pointer alias relations, return and both 128-byte buffers; execute=%v", execute)
+	t.Logf("42 complete functions, 16 input patterns, two pointer alias relations, return and both 256-byte buffers; execute=%v", execute)
 }
 
 func TestCrossLinuxRuntimeMatrixGoAMD64FixedLocalPointerChoices(t *testing.T) {

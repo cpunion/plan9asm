@@ -142,6 +142,16 @@ func TestGoAMD64FixedLocalReadonlyRangeGuards(t *testing.T) {
 	}
 	var original strings.Builder
 	original.WriteString(fixedLocalRangeData + "GLOBL other<>(SB),8,$240\n")
+	// Dynamic native reads retain their original effective address. Their
+	// translation does not assert that every possible caller index is safe.
+	// Private relocation, initialization and storage ownership remain required.
+	rejected := map[string]bool{
+		"private base is not literal":       true,
+		"pointer cannot be numerical index": true,
+		"missing upper numerical bytes":     true,
+		"foreign readonly owner":            true,
+		"readonly write":                    true,
+	}
 	for index, row := range rows {
 		if row.name == "unbounded incoming path" {
 			row.body = strings.Replace(row.body, "MOVQ R9,R11", "unchecked:\nMOVQ R9,R11", 1)
@@ -152,8 +162,15 @@ func TestGoAMD64FixedLocalReadonlyRangeGuards(t *testing.T) {
 		fn, sig, source := fixedLocalRangeFixture(t, row.body)
 		original.WriteString(strings.Replace(source, "·Value", fmt.Sprintf("·Value%d", index), 1))
 		t.Run(row.name, func(t *testing.T) {
-			if _, err := proveX86FixedLocal(fn, sig); !errors.Is(err, ErrProbeNeedsContext) {
-				t.Fatal("unproved range, source owner or full access acquired permission", err)
+			_, err := proveX86FixedLocal(fn, sig)
+			if !rejected[row.name] {
+				if err != nil {
+					t.Fatal("dynamic machine address incorrectly required a caller bounds proof", err)
+				}
+				return
+			}
+			if !errors.Is(err, ErrProbeNeedsContext) {
+				t.Fatal("private, undefined or readonly storage acquired permission", err)
 			}
 			for _, instruction := range fn.Instrs {
 				if len(instruction.x86FixedLocalMemory) != 0 {

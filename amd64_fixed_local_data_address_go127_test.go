@@ -86,6 +86,13 @@ func TestGoAMD64FixedLocalReadonlyDataAddressObjects(t *testing.T) {
 func TestGoAMD64FixedLocalReadonlyDataAddressGuards(t *testing.T) {
 	goAMD64FramePrepareOwnedToolCache(t)
 	const acquire = "LEAQ literal<>(SB),SI\n"
+	// These complete machine addresses need their original storage, but not a
+	// universal bound for every possible invocation. This is translation only.
+	dynamic := map[string]bool{
+		"unknown affine offset":  true,
+		"unknown index":          true,
+		"joined offset past end": true,
+	}
 	for _, row := range []struct{ name, body string }{
 		{"past end", acquire + "MOVQ 25(SI),DX"},
 		{"negative", acquire + "MOVQ -1(SI),DX"},
@@ -114,7 +121,14 @@ func TestGoAMD64FixedLocalReadonlyDataAddressGuards(t *testing.T) {
 			source := requireGoAMD64FrameCapture(t, pkg, request)
 			ctx, cancel := runtimeOracleStageContext(t)
 			defer cancel()
-			if _, err := source.BindFixedLocal(ctx, pkg, file, options); !errors.Is(err, ErrProbeNeedsContext) {
+			_, err := source.BindFixedLocal(ctx, pkg, file, options)
+			if dynamic[row.name] {
+				if err != nil {
+					t.Fatal("dynamic native address incorrectly required a caller bounds proof", err)
+				}
+				return
+			}
+			if !errors.Is(err, ErrProbeNeedsContext) {
 				t.Fatal("readonly address acquired unknown bytes, alignment, mutable or numerical permission", err)
 			}
 		})
@@ -207,26 +221,48 @@ func TestGoAMD64FixedLocalReadonlyDataAddressBinding(t *testing.T) {
 
 func TestGoAMD64FixedLocalReadonlyDataAddressLayoutFlags(t *testing.T) {
 	goAMD64FramePrepareOwnedToolCache(t)
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM 22 llc required")
+	}
 	const acquire = "LEAQ literal<>(SB),SI\n"
 	const other = "DATA other<>+0(SB)/8,$77\nGLOBL other<>(SB),8,$32\n"
-	for _, row := range []struct{ name, body string }{
-		{"ADD carry", acquire + "ADDQ $8,SI\nSETCS DL"},
-		{"SUB carry", acquire + "ADDQ $8,SI\nSUBQ $8,SI\nSETCS DL"},
-		{"INC zero", acquire + "INCQ SI\nSETEQ DL"},
-		{"DEC zero", acquire + "ADDQ $8,SI\nDECQ SI\nSETEQ DL"},
-		{"cross literal comparison", acquire + "LEAQ other<>(SB),DI\nCMPQ SI,DI\nSETCS DL"},
-		{"literal numerical comparison", acquire + "CMPQ SI,$1234\nSETCS DL"},
-		{"spilled literal comparison", acquire + "MOVQ SI,8(SP)\nCMPQ 8(SP),$0\nSETEQ DL"},
+	for _, row := range []struct {
+		name, body string
+		emit       bool
+	}{
+		{"ADD carry", acquire + "ADDQ $8,SI\nSETCS DL", true},
+		{"SUB carry", acquire + "ADDQ $8,SI\nSUBQ $8,SI\nSETCS DL", true},
+		{"INC zero", acquire + "INCQ SI\nSETEQ DL", true},
+		{"DEC zero", acquire + "ADDQ $8,SI\nDECQ SI\nSETEQ DL", true},
+		{"cross literal comparison", acquire + "LEAQ other<>(SB),DI\nCMPQ SI,DI\nSETCS DL", true},
+		{"literal numerical comparison", acquire + "CMPQ SI,$1234\nSETCS DL", false},
+		{"spilled literal comparison", acquire + "MOVQ SI,8(SP)\nCMPQ 8(SP),$0\nSETEQ DL", false},
 	} {
 		t.Run(row.name, func(t *testing.T) {
 			assembly := fixedLocalAddressData + other + fixedLocalDataAddressFunction("Value", row.body)
 			pkg, request, file, options := fixedLocalTransportFixture(t, assembly,
 				"func Value(a uint64) uint64\n", "linux/amd64", "x86_64-unknown-linux-gnu")
+			if row.emit {
+				// Preserve the actual machine operation. Compiling independent
+				// globals does not promise Go's final linked addresses, relative
+				// ordering or cross-object adjacency; this is object evidence.
+				fixedLocalFreshAPIs(t, pkg, request, options, []string{"Translate", "Module", "GoModule"},
+					func(t *testing.T, ir string, err error) {
+						if err != nil {
+							t.Fatal("complete native address FLAGS source rejected", err)
+						}
+						x86CompactExpandRequireAllDefinitions(t, ir, []string{pkg.Path + ".Value"})
+						compileLLVMToObject(t, llc, options.TargetTriple, "address-flags.ll", "address-flags.o", ir)
+						compileLLVMToObject(t, llc, options.TargetTriple, "address-flags-opt.ll", "address-flags-opt.o", x86MulDivRoundOptimize(t, ir))
+					})
+				return
+			}
 			source := requireGoAMD64FrameCapture(t, pkg, request)
 			ctx, cancel := runtimeOracleStageContext(t)
 			defer cancel()
 			if _, err := source.BindFixedLocal(ctx, pkg, file, options); !errors.Is(err, ErrProbeNeedsContext) {
-				t.Fatal("LLVM DATA placement became observable as numeric address FLAGS", err)
+				t.Fatal("unsupported literal/immediate comparator acquired an address role", err)
 			}
 		})
 	}

@@ -88,22 +88,21 @@ func TestGoAMD64FixedLocalPointerChoicesCompleteSources(t *testing.T) {
 
 func TestGoAMD64FixedLocalPointerChoicesRetainBoundaries(t *testing.T) {
 	for _, row := range []fixedLocalPointerChoiceCase{
-		{"fifth alternative exceeds budget", fixedLocalChoiceCountBody(5)},
-		{"one candidate exceeds extent", fixedLocalChoicePrefix + "MOVQ 64(CX),AX"},
-		{"full vector access crosses extent", fixedLocalChoicePrefix + "MOVOU 56(CX),X0\nMOVQ X0,AX"},
+		{"exact address exceeds extent", "LEAQ choice<>(SB),CX\nMOVQ 64(CX),AX"},
+		{"exact vector access crosses extent", "LEAQ choice<>(SB),CX\nMOVOU 56(CX),X0\nMOVQ X0,AX"},
 		{"one candidate is readonly", fixedLocalChoicePrefix + "MOVQ AX,(CX)"},
 		{"partial pointer read", fixedLocalChoicePrefix + "MOVL CX,DX\nMOVQ (DX),AX"},
 		{"partial pointer spill overwrite", fixedLocalChoicePrefix + "MOVQ CX,8(SP)\nMOVB $1,9(SP)\nMOVQ 8(SP),DX\nMOVQ (DX),AX"},
 		{"pointer is not NUM", fixedLocalChoicePrefix + "XORQ CX,AX"},
 		{"private relocation is separate", "LEAQ 8(SP),CX\nCMPQ AX,$0\nCMOVQEQ SI,CX\nMOVQ (CX),AX"},
 		{"unknown value is not parameter zero", "CMPQ AX,$0\nCMOVQEQ SI,R12\nMOVQ (R12),AX"},
-		{"stale equality flags", fixedLocalChoicePrefix + "CMPQ CX,R8\nCMPQ AX,$1\nJE done\nMOVQ 64(CX),AX\ndone:"},
+		{"stale equality flags", fixedLocalChoicePrefix + "CMPQ CX,R8\nCMPQ AX,$1\nJE done\nMOVQ AX,(CX)\ndone:"},
 		{"compared register overwritten", fixedLocalChoicePrefix + "CMPQ CX,R8\nMOVQ R8,CX\nJE done\nMOVQ 64(CX),AX\ndone:"},
-		{"ordered literal comparison", fixedLocalChoicePrefix + "CMPQ CX,R8\nJAE done\nMOVQ 64(CX),AX\ndone:"},
-		{"other literal cannot remove candidate", fixedLocalChoicePrefix + "LEAQ other<>(SB),R9\nCMPQ CX,R9\nJE done\nMOVQ 64(CX),AX\ndone:"},
-		{"other offset cannot remove candidate", fixedLocalChoicePrefix + "LEAQ choice<>+8(SB),R9\nCMPQ CX,R9\nJE done\nMOVQ 64(CX),AX\ndone:"},
+		{"ordered literal comparison", fixedLocalChoicePrefix + "CMPQ CX,R8\nJAE done\nMOVQ AX,(CX)\ndone:"},
+		{"other literal cannot remove candidate", fixedLocalChoicePrefix + "LEAQ other<>(SB),R9\nCMPQ CX,R9\nJE done\nMOVQ AX,(CX)\ndone:"},
+		{"other offset cannot remove candidate", fixedLocalChoicePrefix + "LEAQ choice<>+8(SB),R9\nCMPQ CX,R9\nJE done\nMOVQ AX,(CX)\ndone:"},
 		{"equality does not grant readonly write", fixedLocalChoicePrefix + "CMPQ CX,R8\nJNE done\nMOVQ AX,(CX)\ndone:"},
-		{"label does not prove identity", fixedLocalChoicePrefix + "native:\nJNE done\nMOVQ 64(CX),AX\ndone:"},
+		{"label does not prove identity", fixedLocalChoicePrefix + "native:\nJNE done\nMOVQ AX,(CX)\ndone:"},
 		{"loop reintroduces literal", "LEAQ choice<>(SB),R8\nMOVQ SI,CX\nagain:\nCMPQ CX,R8\nJE done\nMOVQ R8,CX\nMOVQ 64(CX),AX\nJMP again\ndone:"},
 	} {
 		t.Run(row.name, func(t *testing.T) {

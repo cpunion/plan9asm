@@ -105,26 +105,3 @@ func mergeFixedLocalRanges(previous *x86FixedLocalState, current x86FixedLocalSt
 	}
 	return changed
 }
-
-// This envelope grants only a complete unaligned read of the same captured
-// readonly object. Dynamic private/native indices and writes stay separate.
-func fixedLocalLiteralEnvelope(memory MemRef, origin x86FixedLocalOrigin, state *x86FixedLocalState,
-	proof *x86FixedLocalProof, width, alignment int64) bool {
-	value, bounded := state.ranges[memory.Index]
-	if !bounded || alignment != 1 || !fixedLocalNumericRead(Operand{Kind: OpReg, Reg: memory.Index}, 8, state) ||
-		memory.Scale != 1 && memory.Scale != 2 && memory.Scale != 4 && memory.Scale != 8 ||
-		value.maximum > math.MaxInt64/uint64(memory.Scale) {
-		return false
-	}
-	for _, endpoint := range []uint64{value.minimum, value.maximum} {
-		delta := int64(endpoint * uint64(memory.Scale))
-		if memory.Off > math.MaxInt64-delta {
-			return false
-		}
-		shifted, valid := fixedLocalShiftLiteral(origin, memory.Off+delta, proof)
-		if !valid || !fixedLocalLiteralRange(proof.binding, shifted.literal, width, alignment) {
-			return false
-		}
-	}
-	return true
-}

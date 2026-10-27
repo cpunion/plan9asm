@@ -161,18 +161,18 @@ func TestGoAMD64FixedLocalTransportAuthorityNegatives(t *testing.T) {
 	base := fixedLocalTransportAssembly("Value", 49, fixedLocalTransportBoolBody)
 	declaration := "func Value(" + fixedLocalTransportParams + ") bool"
 	for name, body := range map[string]string{
-		"incoming index":         strings.Replace(fixedLocalTransportBoolBody, "MOVQ p+24(FP),R8", "MOVQ (DX)(AX*2),AX", 1),
-		"incoming arithmetic":    strings.Replace(fixedLocalTransportBoolBody, "MOVQ p+24(FP),R8", "ADDQ CX,DX", 1),
-		"incoming comparison":    strings.Replace(fixedLocalTransportBoolBody, "MOVQ p+24(FP),R8", "CMPQ DX,R8", 1),
-		"incoming mask":          strings.Replace(fixedLocalTransportBoolBody, "MOVQ p+24(FP),R8", "KMOVQ DX,K1", 1),
-		"incoming partial":       strings.Replace(fixedLocalTransportBoolBody, "MOVQ 128(BP),DX", "MOVL 128(BP),DX", 1),
-		"incoming numeric spill": strings.Replace(fixedLocalTransportBoolBody, "MOVQ p+24(FP),R8", "VMOVDQA 128(BP),Y0", 1),
-		"bool noncanonical":      strings.Replace(fixedLocalTransportBoolBody, "MOVB BX,ret+48(FP)", "MOVB $2,BX\nMOVB BX,ret+48(FP)", 1),
-		"bool unknown":           strings.Replace(fixedLocalTransportBoolBody, "MOVB BX,ret+48(FP)", "MOVB AX,ret+48(FP)", 1),
-		"bool wide FP":           strings.Replace(fixedLocalTransportBoolBody, "MOVB b+32(FP),BX", "MOVQ b+32(FP),BX", 1),
-		"missing result":         strings.Replace(fixedLocalTransportBoolBody, "MOVB BX,ret+48(FP)", "", 1),
-		"private pointer result": "MOVQ BP,ret+48(FP)",
-		"false SET flags":        "SETEQ BX\nMOVB BX,ret+48(FP)",
+		"undefined incoming index": strings.Replace(fixedLocalTransportBoolBody, "MOVQ p+24(FP),R8", "MOVQ (DX)(R9*2),AX", 1),
+		"incoming arithmetic":      strings.Replace(fixedLocalTransportBoolBody, "MOVQ p+24(FP),R8", "ADDQ CX,DX", 1),
+		"incoming comparison":      strings.Replace(fixedLocalTransportBoolBody, "MOVQ p+24(FP),R8", "CMPQ DX,R8", 1),
+		"incoming mask":            strings.Replace(fixedLocalTransportBoolBody, "MOVQ p+24(FP),R8", "KMOVQ DX,K1", 1),
+		"incoming partial":         strings.Replace(fixedLocalTransportBoolBody, "MOVQ 128(BP),DX", "MOVL 128(BP),DX", 1),
+		"incoming numeric spill":   strings.Replace(fixedLocalTransportBoolBody, "MOVQ p+24(FP),R8", "VMOVDQA 128(BP),Y0", 1),
+		"bool noncanonical":        strings.Replace(fixedLocalTransportBoolBody, "MOVB BX,ret+48(FP)", "MOVB $2,BX\nMOVB BX,ret+48(FP)", 1),
+		"bool unknown":             strings.Replace(fixedLocalTransportBoolBody, "MOVB BX,ret+48(FP)", "MOVB AX,ret+48(FP)", 1),
+		"bool wide FP":             strings.Replace(fixedLocalTransportBoolBody, "MOVB b+32(FP),BX", "MOVQ b+32(FP),BX", 1),
+		"missing result":           strings.Replace(fixedLocalTransportBoolBody, "MOVB BX,ret+48(FP)", "", 1),
+		"private pointer result":   "MOVQ BP,ret+48(FP)",
+		"false SET flags":          "SETEQ BX\nMOVB BX,ret+48(FP)",
 	} {
 		t.Run(name, func(t *testing.T) {
 			assembly := strings.Replace(base, fixedLocalTransportBoolBody, body, 1)
@@ -224,10 +224,11 @@ func TestGoAMD64FixedLocalTransportDerivedAndUnusedPointers(t *testing.T) {
 	// as positive controls; the negative siblings now consume a real missing
 	// NUM operand, unknown comparison input or unresolved pointer identity.
 	for name, replacement := range map[string]string{
-		"incoming arithmetic":    "ADDQ $8,DX",
-		"incoming comparison":    "CMPQ DX,$0",
-		"unused pointer join":    "CMPQ AX,$0\nJE join\nMOVQ p+24(FP),DX\njoin:",
-		"different pointer join": "CMPQ AX,$0\nJE join\nMOVQ p+24(FP),DX\njoin:\nMOVQ (DX),AX",
+		"incoming numerical index": "MOVQ (DX)(AX*2),AX",
+		"incoming arithmetic":      "ADDQ $8,DX",
+		"incoming comparison":      "CMPQ DX,$0",
+		"unused pointer join":      "CMPQ AX,$0\nJE join\nMOVQ p+24(FP),DX\njoin:",
+		"different pointer join":   "CMPQ AX,$0\nJE join\nMOVQ p+24(FP),DX\njoin:\nMOVQ (DX),AX",
 	} {
 		t.Run(name, func(t *testing.T) {
 			body := strings.Replace(fixedLocalTransportBoolBody, "MOVQ p+24(FP),R8", replacement, 1)

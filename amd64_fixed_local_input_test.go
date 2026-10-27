@@ -73,7 +73,7 @@ func TestGoAMD64FixedLocalInputMemoryProvenance(t *testing.T) {
 		{"input pointer LEA", "LEAQ 8(SI),CX\nMOVQ (CX),AX", true},
 		{"input pointer partial write", "MOVB $0,SI\nMOVQ (SI),AX", false},
 		{"input pointer partial spill", "MOVQ SI,8(SP)\nMOVB $0,8(SP)\nMOVQ 8(SP),CX\nMOVQ (CX),AX", false},
-		{"mixed index", "MOVQ (SI)(AX*2),CX", false},
+		{"numerical index", "MOVQ (SI)(AX*2),CX", true},
 		{"private index", "MOVQ (SI)(SP*1),CX", false},
 		{"segment", "MOVQ (SI)(FS*1),CX", false},
 		{"different input join", "CMPQ AX,$1\nJEQ left\nMOVQ SI,CX\nJMP join\nleft:\nMOVQ DI,CX\njoin:\nMOVQ (CX),AX", true},

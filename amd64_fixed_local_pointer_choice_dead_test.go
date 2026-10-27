@@ -34,11 +34,11 @@ func fixedLocalPointerChoiceCFGCases() []fixedLocalPointerChoiceCFGCase {
 		{"dead address", "", false, false},
 		{"fully overwritten address", "MOVQ $99,CX\nMOVQ CX,AX", false, false},
 		{"unknown address is not NUM", "MOVQ CX,AX", false, true},
-		{"unknown address is not readable", "MOVQ (CX),AX", false, true},
+		{"more than four addresses remain readable", "MOVQ (CX),AX", false, false},
 		{"dead pointer spill", "", true, false},
 		{"fully overwritten spill", "MOVQ $99,8(SP)\nMOVQ 8(SP),AX", true, false},
 		{"unknown spill is not NUM", "MOVQ 8(SP),AX", true, true},
-		{"unknown spill cannot restore an address", "MOVQ 8(SP),CX\nMOVQ (CX),AX", true, true},
+		{"more than four spilled addresses remain readable", "MOVQ 8(SP),CX\nMOVQ (CX),AX", true, false},
 	}
 }
 
@@ -62,7 +62,7 @@ func TestGoAMD64FixedLocalPointerChoiceDeadCFGOrigins(t *testing.T) {
 			_, err := proveX86FixedLocal(fn, sig)
 			if row.fails {
 				if !errors.Is(err, ErrProbeNeedsContext) {
-					t.Fatal("overflowed CFG address acquired a value/read role", err)
+					t.Fatal("CFG address acquired a numerical value", err)
 				}
 			} else if err != nil {
 				t.Fatal("unused or overwritten CFG address became a new rejection", err)

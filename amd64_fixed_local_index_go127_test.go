@@ -78,17 +78,17 @@ func TestGoAMD64FixedLocalConstantIndexGuards(t *testing.T) {
 			{"indexed full spill round trip", "MOVQ DI,16(SP)\nMOVQ $2,SI\nMOVQ (SP)(SI*8),R8\nMOVQ (R8),AX", true},
 			{"before allocation", "MOVQ $-1,SI\nMOVQ (DI)(SI*1),AX", false},
 			{"past allocation", fmt.Sprintf("MOVQ $%d,SI\nMOVQ 1(DI)(SI*8),AX", size/8-1), false},
-			{"positive multiply overflow", "MOVQ $9223372036854775807,SI\nMOVQ 2(DI)(SI*2),AX", false},
-			{"negative multiply overflow", "MOVQ $-9223372036854775808,SI\nMOVQ (DI)(SI*2),AX", false},
+			{"positive multiply wraps to base", "MOVQ $9223372036854775807,SI\nMOVQ 2(DI)(SI*2),AX", literal},
+			{"negative multiply wraps to base", "MOVQ $-9223372036854775808,SI\nMOVQ (DI)(SI*2),AX", literal},
 			{"displacement overflow", "MOVQ $9223372036854775807,SI\nMOVQ 1(DI)(SI*1),AX", false},
 			{"unaligned vector", "MOVQ $1,SI\nMOVO (DI)(SI*1),X0", false},
-			{"unknown numerical index", "MOVQ a+0(FP),SI\nMOVQ (DI)(SI*1),AX", false},
+			{"dynamic numerical index", "MOVQ a+0(FP),SI\nMOVQ (DI)(SI*1),AX", literal},
 			{"unknown upper index bytes", "MOVW $0,SI\nMOVQ (DI)(SI*1),AX", false},
-			{"partial index overwrite", "MOVQ $0,SI\nMOVB $1,SI\nMOVQ (DI)(SI*1),AX", false},
+			{"defined partial index overwrite", "MOVQ $0,SI\nMOVB $1,SI\nMOVQ (DI)(SI*1),AX", literal},
 			{"pointer used as index", "MOVQ DI,SI\nMOVQ (DI)(SI*1),AX", false},
 			{"numeric base loses origin", "MOVQ $0,DI\nMOVQ $0,SI\nMOVQ (DI)(SI*1),AX", false},
-			{"different constants at join", "MOVQ $77,8(SP)\nMOVQ $0,SI\nCMPQ AX,$0\nJEQ joined\nMOVQ $1,SI\njoined:\nMOVQ (DI)(SI*8),AX", false},
-			{"loaded index is not constant", "MOVQ $0,SI\nMOVQ (DI)(SI*1),SI\nMOVQ (DI)(SI*1),AX", false},
+			{"different constants at join", "MOVQ $77,8(SP)\nMOVQ $0,SI\nCMPQ AX,$0\nJEQ joined\nMOVQ $1,SI\njoined:\nMOVQ (DI)(SI*8),AX", literal},
+			{"loaded numerical index", "MOVQ $0,SI\nMOVQ (DI)(SI*1),SI\nMOVQ (DI)(SI*1),AX", literal},
 		} {
 			t.Run(name+"/"+row.name, func(t *testing.T) {
 				body := "MOVQ $77,48(SP)\nMOVQ $77,56(SP)\n" + acquire + row.body

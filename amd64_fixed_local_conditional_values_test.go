@@ -93,8 +93,8 @@ func TestGoAMD64FixedLocalConditionalRangeAndAuthority(t *testing.T) {
 		if err := fixedLocalStep(&ins, &state, FuncSig{}, proof, 0); err != nil {
 			t.Fatal("two bounded native alternatives rejected", err)
 		}
-		if state.opaque[DI].count != 2 || fixedLocalNumericRead(Operand{Kind: OpReg, Reg: DI}, 8, &state) {
-			t.Fatal("conditional input origins collapsed or acquired numerical bytes")
+		if !state.opaque[DI].valid() || state.opaque[DI].readonly() || fixedLocalNumericRead(Operand{Kind: OpReg, Reg: DI}, 8, &state) {
+			t.Fatal("conditional input address was lost or acquired an unrelated role")
 		}
 		read := x86ScalarLaneInstruction(t, "MOVQ (DI),AX")
 		if err := fixedLocalStep(&read, &state, FuncSig{}, proof, 0); err != nil {

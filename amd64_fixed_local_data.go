@@ -134,22 +134,6 @@ func fixedLocalLiteralRange(binding *x86FixedLocalBinding, address x86StaticSBAd
 		alignment <= data.alignment && address.offset%alignment == 0
 }
 
-// A literal retains its exact source-local identity and a bounded offset, not
-// an arbitrary native pointee. LLVM may place separate constants differently;
-// crossing into another object's address must never acquire its bytes.
-func fixedLocalShiftLiteral(origin x86FixedLocalOrigin, delta int64, proof *x86FixedLocalProof) (x86FixedLocalOrigin, bool) {
-	if proof == nil || proof.binding == nil {
-		return origin, false
-	}
-	data, found := proof.binding.literalData[origin.literal.symbol]
-	if !found || origin.literal.offset < 0 || origin.literal.offset > data.size ||
-		delta < -origin.literal.offset || delta > data.size-origin.literal.offset {
-		return origin, false
-	}
-	origin.literal.offset += delta
-	return origin, true
-}
-
 func fixedLocalStaticAddressStep(ins Instr, state *x86FixedLocalState, proof *x86FixedLocalProof) (bool, error) {
 	address, valid := fixedLocalStaticAddress(ins)
 	if !valid {
@@ -163,10 +147,9 @@ func fixedLocalStaticAddressStep(ins Instr, state *x86FixedLocalState, proof *x8
 	}
 	var origin x86FixedLocalOrigin
 	if _, literal := proof.binding.literalData[address.symbol]; literal {
+		// Address computation may leave an object before returning. A later
+		// exact access owns its bounds diagnostic, never adjacent storage.
 		origin.literal = address
-		if _, valid := fixedLocalShiftLiteral(origin, 0, proof); !valid {
-			return fail()
-		}
 	} else {
 		object, found := proof.binding.globals[fixedLocalGlobalSymbol(address.symbol)]
 		if ins.Op == "LEAQ" || !found || object.variable == nil || object.native == "" {

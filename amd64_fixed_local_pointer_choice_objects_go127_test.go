@@ -8,8 +8,8 @@ import "testing"
 // retain the native-only object gate and an explicit producer rejection test.
 func TestGoAMD64FixedLocalPointerChoiceObjects(t *testing.T) {
 	rows := fixedLocalPointerChoiceAllPositiveCases()
-	if len(rows) != 23 {
-		t.Fatal("expected 19 bounded-alternative and 4 dead/overwritten CFG functions", len(rows))
+	if len(rows) != 25 {
+		t.Fatal("expected 19 address-choice and 6 complete CFG functions", len(rows))
 	}
 	assembly, declarations := fixedLocalPointerChoiceProgram(t, fixedLocalChoiceData, rows)
 	fixedLocalCompleteVectorObjects(t, assembly, declarations, len(rows))

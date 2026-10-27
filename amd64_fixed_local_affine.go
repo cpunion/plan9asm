@@ -47,9 +47,6 @@ func fixedLocalInputAddressStep(ins *Instr, state *x86FixedLocalState, proof *x8
 			return fail()
 		}
 		writeFixedLocalOrigin(state, root, origin)
-		if origin.hasLiteral() {
-			defined = 0 // Relocated DATA addresses do not establish numerical FLAGS.
-		}
 		state.flags = state.flags&^killed | defined
 		if killed|defined != 0 {
 			state.comparison = x86FixedLocalComparison{}
@@ -57,36 +54,25 @@ func fixedLocalInputAddressStep(ins *Instr, state *x86FixedLocalState, proof *x8
 		return true, nil
 	}
 	shift := func(origins x86FixedLocalOrigins, operand Operand, subtract bool) (x86FixedLocalOrigins, bool) {
-		if !origins.hasLiteral() {
-			return origins, true // Existing native input/global offsets have no inferred extent.
+		if !fixedLocalOriginOwners(origins, proof) {
+			return origins, false
+		}
+		if origins.address.symbol == "" {
+			return origins, true // Actual native arithmetic supplies no pointee bound.
 		}
 		delta, known := operand.Imm, operand.Kind == OpImm && operand.ImmRaw == "" && !operand.ImmIsFloat
 		if operand.Kind == OpReg {
 			delta, known = state.constants[operand.Reg]
 		}
 		if !known || subtract && delta == math.MinInt64 {
-			return origins, false
+			origins.address = x86StaticSBAddress{}
+			return origins, true
 		}
 		if subtract {
 			delta = -delta
 		}
-		if delta == 0 {
-			return origins, fixedLocalOriginOwners(origins, proof)
-		}
-		var entries [4]x86FixedLocalOrigin
-		for index := uint8(0); index < origins.count; index++ {
-			origin := origins.at(index)
-			entries[index] = origin
-			if origin.literal.symbol == "" {
-				continue
-			}
-			shifted, valid := fixedLocalShiftLiteral(origin, delta, proof)
-			if !valid {
-				return origins, false
-			}
-			entries[index] = shifted
-		}
-		return fixedLocalOriginSet(entries, origins.count), true
+		origins.address.offset += delta // Match the emitted wrapping i64 address arithmetic.
+		return origins, true
 	}
 	if !x86ResultNamedPredicateInstruction(*ins) {
 		return false, nil
@@ -141,11 +127,15 @@ func fixedLocalInputAddressStep(ins *Instr, state *x86FixedLocalState, proof *x8
 			if _, secondPointer := state.opaque[memory.Index]; secondPointer {
 				return fail()
 			}
-			if origin.hasLiteral() {
-				var valid bool
-				origin, valid = shift(origin, Operand{Kind: OpImm, Imm: memory.Off}, false)
-				if !valid || memory.Index != "" {
-					return fail()
+			displacement, known, valid := fixedLocalNativeDisplacement(memory, state)
+			if !valid || !fixedLocalOriginOwners(origin, proof) {
+				return fail()
+			}
+			if origin.address.symbol != "" {
+				if known {
+					origin.address.offset += displacement
+				} else {
+					origin.address = x86StaticSBAddress{}
 				}
 			}
 			return write(ins.Args[1], origin, effect.flagsKilled, effect.flagsDefined)
@@ -200,9 +190,8 @@ func fixedLocalInputAddressStep(ins *Instr, state *x86FixedLocalState, proof *x8
 		if !pointers[0] || !pointers[1] || !fixedLocalOriginOwners(values[0], proof) || !fixedLocalOriginOwners(values[1], proof) {
 			return fail()
 		}
-		// Equality observes actual address identity, never placement-dependent
-		// ordering. Keep both native/literal alias possibilities at this CMP.
-		flags = x86ByteFlagZF
+		// The actual CMP preserves every architectural flag. Its optional
+		// literal equality fact is narrower than that emitted operation.
 		for index, value := range values {
 			if literal, single := value.literal(); single && form.args[1-index].Kind == OpReg {
 				comparison = x86FixedLocalComparison{register: form.args[1-index].Reg, literal: literal}
@@ -221,6 +210,23 @@ func fixedLocalOpaqueRegister(operand Operand, state *x86FixedLocalState) (x86Fi
 	}
 	origin, found := state.opaque[root]
 	return origin, found && origin.valid()
+}
+
+// Native effective addresses use wrapping machine arithmetic, unlike relocated
+// private-frame offsets. A complete NUM index needs no caller bounds proof.
+func fixedLocalNativeDisplacement(memory MemRef, state *x86FixedLocalState) (offset int64, known, valid bool) {
+	if memory.OffRaw != "" || memory.Sym != "" || memory.Segment != "" || memory.IndexExt != "" {
+		return 0, false, false
+	}
+	if memory.Index == "" {
+		return memory.Off, true, memory.Scale == 0
+	}
+	if !fixedLocalNumericRead(Operand{Kind: OpReg, Reg: memory.Index}, 8, state) ||
+		memory.Scale != 1 && memory.Scale != 2 && memory.Scale != 4 && memory.Scale != 8 {
+		return 0, false, false
+	}
+	index, known := state.constants[memory.Index]
+	return memory.Off + index*memory.Scale, known, true
 }
 
 func intersectFixedLocalOrigins[K, V comparable](previous, current map[K]V) bool {
