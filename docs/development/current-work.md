@@ -18,13 +18,13 @@ naturally: **325/325 successful jobs**, no failed/cancelled/skipped jobs and
 **88.0%** main statement coverage. This qualifies that revision, not the next
 publication. Both inline threads are resolved; external approval is outstanding.
 
-The next batch adds ABS, FMA3 and AVX move official-row joins without changing
-translator production code or native fixture inventories. Integrated `824f9375b`
-matches qualified move code `72e765098`, with only documentation and the tested
-current/minimum-first CI creation order differing. Its fresh preflight and
-five-architecture gate pass. Batch the publication after the current CI recovery
-finishes; full new-head CI remains required. Creation order is not a guarantee
-of external runner scheduling priority.
+The next batch adds ABS, FMA3, AVX moves and ordinary floating binary official-row
+joins without changing translator production code or native fixture inventories.
+Integrated `ff2f14caa` passes both endpoint SDK family scopes, the complete
+preflight and the five-architecture gate. It includes the tested
+current/minimum-first CI creation order. Batch the publication after the current
+CI recovery finishes; full new-head CI remains required. Creation order is not
+a guarantee of external runner scheduling priority.
 The failed `004da9f44` cache-policy round and earlier failures retain their
 original outcomes. Its stale Node assertion was repaired without removing
 the actual Go lifecycle, ownership or cleanup checks.
@@ -95,6 +95,8 @@ with allocation-byte differences +0.22% and +0.56%. Flat cases vary -0.05% to
 | Integrated `6ca5e4a9d` preflight | **573 Node policies; 26 Go roots / 299 children; five-architecture gate PASS** | Code identical to the qualified combined join; source/tools frozen |
 | AVX move join at `72e765098` | Both endpoint SDKs: **114 roots / 1,765 children PASS**, zero failures/skips | Host-applicable scope; two x86 execution owners remain with required Linux counterparts |
 | Final integrated `824f9375b` preflight | **573 Node policies; 26 Go roots / 300 children; five-architecture gate PASS** | Exact tools, frozen source; current/minimum-first creation order preserves every SDK and owner |
+| Ordinary AVX floating binary at `ff2f14caa` | Both endpoint SDKs: **114 roots / 2,004 children PASS**, zero failures/skips | Complete previous row joins and existing floating grammar, raw and input owners; focused controls pass 5 / 54 per SDK |
+| Integrated `ff2f14caa` preflight | **573 Node policies; 26 Go roots / 300 children; five-architecture gate PASS** | Frozen source/tools; no translator production changes |
 
 The joint native scope executes 45 logical kernels over all 256 byte values
 with separate and overlapping buffers, 36 original shifted-literal kernels
@@ -130,7 +132,8 @@ Neither file is cropped or substituted with an instruction-only fixture.
 | Horizontal integer | 18 | 36 |
 | FMA3 | 360 | 2,028 |
 | AVX whole-vector moves | 144 | 306 |
-| Total | **1,402** | **5,216** |
+| Ordinary AVX floating binary | 132 | 684 |
+| Total | **1,534** | **5,900** |
 
 These joins retain independent ordered Go rows and actual Go bytes, then compile
 initialized functions through three APIs with LLVM22. Two PADDD aliases are
@@ -161,7 +164,7 @@ failed receipt is retained. Only that diagnostic comparison uses `-vet=off`;
 the complete family and CI gates retain their original default vet behavior.
 
 Move witnesses are **276 ordinary initialized forms and 30 terminal #UD
-controls**, so the total contains 5,186 ordinary forms and 30 faults. Each fault
+controls**, so the total contains 5,870 ordinary forms and 30 faults. Each fault
 function, through each of three APIs, must independently contain one UD2 and
 unreachable with no input reads before LLVM object compilation. Both SDKs retain
 90 per-function/API body receipts. This is not successful normal-value execution.
@@ -177,6 +180,16 @@ without requiring Rosetta. A new frame object owner preserves the original four
 target objects independently of host execution. The two remaining host-native
 roots are explicitly outside the final local scope and retain their required
 Linux runtime owners; their partial objects are not reported as runtime passes.
+
+Ordinary floating ADD/SUB/MUL/DIV/MIN/MAX reuses the existing binary initializer
+and row driver for all 24 PS/PD/SS/SD members. The 132 rows include 192 rounding,
+24 SAE and 108 broadcast witnesses. Register-only SAE preserves EVEX vector
+length; embedded rounding replaces those bits. Scalar mandatory prefixes do not
+widen integer grammars. The shared harness grows by 18 lines; independent tests
+retain actual Go byte anchors and missing-source/merge controls. All previous
+1,402 rows / 5,216 witnesses and aliases remain identical on both SDKs. Original
+F32/F64 MIN/MAX execution over NaNs, signed zero, MXCSR and faults remains an
+explicit gap; successful objects do not close it.
 
 ## Remaining work, in order
 

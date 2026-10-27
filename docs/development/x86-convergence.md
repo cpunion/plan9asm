@@ -175,7 +175,8 @@ minimum Go 1.20.14 both pass the following Linux/amd64 LLVM22 object scopes:
 | Horizontal integer add/subtract | 18 | 36 |
 | FMA3 | 360 | 2,028 |
 | AVX whole-vector moves | 144 | 306 |
-| Local total | 1,402 | 5,216 |
+| Ordinary AVX floating binary | 132 | 684 |
+| Local total | 1,534 | 5,900 |
 
 Published `1c54c530e` contains 865 rows / 2,774 witnesses, including all eighteen
 horizontal integer rows. Its complete CI is running; the prior `ab68a6ecc`
@@ -193,6 +194,14 @@ pass 114 host-applicable roots / 1,765 children without failures/skips. The
 102 load-register alternatives shadowed by preceding store rows retain explicit
 selection mappings; they reference existing regcopy byte checks and are not
 double-counted. Legacy moves and native execution remain separate owners.
+
+The ordinary AVX floating join at `ff2f14caa` adds all 24 PS/PD/SS/SD
+ADD/SUB/MUL/DIV/MIN/MAX members through the same initializer and object driver.
+It adds 18 shared harness lines for scalar prefixes and register-only SAE;
+no translator rule or native framework changes. Both SDKs pass the complete
+affected scope, 114 roots / 2,004 children, without failures/skips. Previous
+row fields remain identical. Original MIN/MAX NaN, signed-zero, MXCSR and fault
+execution remains separate unfinished work.
 
 Two PADDD alias witnesses are separate from the canonical counts. Min/max
 includes 48 non-Q, unmasked, narrow EVEX forms; low-register VEX objects cannot
