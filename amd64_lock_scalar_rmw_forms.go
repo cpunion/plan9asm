@@ -76,7 +76,7 @@ var x86LockScalarRMWSpecs = func() map[Op]x86LockScalarRMWSpec {
 
 func x86LockScalarRMWProperties(op Op, ins Instr, arch string) (x86LockScalarRMWForm, bool, error) {
 	name := strings.ToUpper(string(op))
-	base := strings.SplitN(name, ".", 2)[0]
+	base, _, _ := strings.Cut(name, ".")
 	spec, recognized := x86LockScalarRMWSpecs[Op(base)]
 	if !recognized {
 		return x86LockScalarRMWForm{}, false, nil

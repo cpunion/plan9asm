@@ -99,6 +99,9 @@ func inferFuncTargetFeaturesForGOARCH(arch Arch, goarch string, fn Func) string 
 				}
 				continue
 			}
+			if x86BaselineGPFeatureInstruction(Op(op), &ins, moveArch) {
+				continue
+			}
 			if form, known, err := x86FourSourceProperties(ins.Op, ins, moveArch); known && err == nil {
 				add("+avx512f") // Exact physical carriers, including scalar SS and isolated mode32.
 				if form.spec.mode == amd64FourSourceFMA {
@@ -1631,6 +1634,34 @@ func inferFuncTargetFeaturesForGOARCH(arch Arch, goarch string, fn Func) string 
 	}
 	sort.Strings(featureSet)
 	return strings.Join(featureSet, ",")
+}
+
+// These existing families need no extra ISA. This query supplies no input,
+// storage or source permission; physical forms retain their original route.
+func x86BaselineGPFeatureInstruction(op Op, ins *Instr, arch string) bool {
+	if arch != "amd64" && arch != "386" || ins.Op != op || !x86ResultNamedPredicateInstruction(*ins) {
+		return false
+	}
+	if _, known := x86LockScalarRMWSpecs[op]; known {
+		_, _, err := x86LockScalarRMWProperties(op, *ins, arch)
+		return err == nil
+	}
+	if x86LEAWidth(op, arch) != 0 {
+		_, err := x86LEAOperandWidth(*ins, arch)
+		return err == nil
+	}
+	if !isX86DirectControlTransfer(op) || isAMD64CounterZeroBranch(op) {
+		return false
+	}
+	if op == OpRET {
+		return len(ins.Args) == 0
+	}
+	// Only existing named/PC branch roles qualify. Indirect and external
+	// targets keep the original path; the CFG still owns target binding.
+	branch := *ins
+	branch.Args = x86DirectTailBranchArgs(branch)
+	_, named := fixedLocalBranchLabel(branch)
+	return named || x86DirectTailPCBranch(*ins)
 }
 
 func isAMD64RawFP16Op(op string) bool {
