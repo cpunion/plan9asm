@@ -119,6 +119,18 @@ func X86PackedMaskBlendRows(legacy X86LegacyCatalog, avx []X86AVXRule) ([]X86Pac
 	return x86PackedBinaryRows(legacy, avx, `VBLENDMPS VBLENDMPD VPBLENDMB VPBLENDMW VPBLENDMD VPBLENDMQ`)
 }
 
+// X86FMA3Rows retains the original named fused floating-point rows. The
+// official table owns each member, order, precision and physical encoding.
+func X86FMA3Rows(legacy X86LegacyCatalog, avx []X86AVXRule) ([]X86PackedBinaryRow, error) {
+	var names []string
+	for _, rule := range avx {
+		if strings.HasPrefix(rule.Opcode, "VFM") || strings.HasPrefix(rule.Opcode, "VFNM") {
+			names = append(names, rule.Opcode)
+		}
+	}
+	return x86PackedBinaryRows(legacy, avx, strings.Join(names, " "))
+}
+
 // X86PackedBinaryPilotRows covers the shared packed add/subtract and D/Q
 // low-multiply pilot. MMX and the separate W multiply family are not included.
 // PADDD is a frontend alias, not an additional official encoder row.
@@ -237,8 +249,19 @@ func x86PackedAVXRowWitnesses(rule X86AVXRule) ([]X86PackedBinaryWitness, error)
 	}
 	if kind == "evex" {
 		features := rule.OpBytes[rule.EncodingOffset+1]
-		flags, err := x86PackedEncodingAtoms(features, []string{"evexN" + strconv.Itoa(width/8)},
-			[]string{"evexZeroingEnabled", "evexBcstN4", "evexBcstN8"})
+		tuple := width / 8
+		optional := []string{"evexZeroingEnabled", "evexBcstN4", "evexBcstN8"}
+		if rule.Ytab == "_yvaddsd" {
+			tuple = 4
+			if wBit != 0 {
+				tuple = 8
+			}
+			optional = []string{"evexZeroingEnabled"}
+		}
+		if rule.Ytab == "_yvaddpd" && width == 512 || rule.Ytab == "_yvaddsd" {
+			optional = append(optional, "evexRoundingEnabled")
+		}
+		flags, err := x86PackedEncodingAtoms(features, []string{"evexN" + strconv.Itoa(tuple)}, optional)
 		if err != nil || flags["evexBcstN4"] && flags["evexBcstN8"] {
 			return nil, fmt.Errorf("unmodeled packed encoding features %q", features)
 		}
@@ -289,6 +312,11 @@ func x86PackedAVXRowWitnesses(rule X86AVXRule) ([]X86PackedBinaryWitness, error)
 			}
 			if witness.Broadcast {
 				p2 |= 0x10
+			}
+			for control, suffix := range []string{"RN_SAE", "RD_SAE", "RU_SAE", "RZ_SAE"} {
+				if strings.Contains(fields[0], "."+suffix) {
+					p2 = p2&^0x60 | byte(control)<<5 | 0x10
+				}
 			}
 			witness.Encoding = []byte{0x62, p0, wBit | vvvv | 0x04 | pp, p2, byte(opcode), modrm}
 		} else if mapByte == 1 && wBit == 0 {

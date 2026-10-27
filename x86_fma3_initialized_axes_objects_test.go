@@ -2,6 +2,7 @@ package plan9asm
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -44,24 +45,32 @@ func x86FMA3InitializedAxisRows(arch string) []string {
 }
 
 func x86FMA3InitializedAxisSource(arch, name, row string) (string, string) {
-	low := strings.NewReplacer(
-		"X28", "X0", "X29", "X1", "X30", "X2",
-		"Y28", "Y0", "Y29", "Y1", "Y30", "Y2",
-		"Z28", "Z0", "Z29", "Z1", "Z30", "Z2").Replace(row)
+	operands := strings.Split(strings.Fields(row)[1], ",")
+	destination := operands[len(operands)-1]
+	index, _ := strconv.Atoi(destination[1:])
+	// Both owners use consecutive arithmetic registers: 0/1/2, 16/17/18
+	// for official physical rows, or 28/29/30 for the existing axis owner.
+	var lower, raise []string
+	for _, bank := range []string{"X", "Y", "Z"} {
+		for register := 0; register < 3; register++ {
+			original := fmt.Sprintf("%s%d", bank, index-2+register)
+			canonical := fmt.Sprintf("%s%d", bank, register)
+			lower = append(lower, original, canonical)
+			raise = append(raise, canonical, original)
+		}
+	}
+	low := strings.NewReplacer(lower...).Replace(row)
 	source, declaration := x86FMA3InitializedSource(arch, name, low, false)
 	if !strings.Contains(row, "K1") {
 		// A plain VEX witness must not borrow an unrelated mask's AVX512 ISA.
 		source = strings.Replace(source, "MOVL $85,CX\nKMOVW CX,K1\n", "", 1)
 	}
 	if low != row {
-		source = strings.NewReplacer(
-			"X0", "X28", "X1", "X29", "X2", "X30",
-			"Y0", "Y28", "Y1", "Y29", "Y2", "Y30",
-			"Z0", "Z28", "Z1", "Z29", "Z2", "Z30").Replace(source)
+		source = strings.NewReplacer(raise...).Replace(source)
 		// High X registers need the original EVEX input/output transports,
 		// not an impossible legacy SSE MOVUPS/MOVD encoding.
 		source = strings.ReplaceAll(source, "\nMOVUPS ", "\nVMOVUPS ")
-		source = strings.Replace(source, "MOVL X30,AX\n", "VMOVD X30,AX\n", 1)
+		source = strings.Replace(source, fmt.Sprintf("MOVL X%d,AX\n", index), fmt.Sprintf("VMOVD X%d,AX\n", index), 1)
 	}
 	return source, declaration
 }

@@ -23,8 +23,10 @@ func x86PackedBinarySyntaxWitnesses(rule X86AVXRule) ([]string, error) {
 }
 
 func x86PackedSyntaxWitnesses(rule X86AVXRule, unary bool) ([]string, error) {
+	floating := rule.Ytab == "_yvaddpd" || rule.Ytab == "_yvaddsd"
+	scalar := rule.Ytab == "_yvaddsd"
 	binaryTable := rule.Ytab == "_yvandnpd" || rule.Ytab == "_yvblendmpd" ||
-		rule.Ytab == "_yvaddsubpd" || rule.Ytab == "_yvpcmpeqb"
+		rule.Ytab == "_yvaddsubpd" || rule.Ytab == "_yvpcmpeqb" || floating
 	unaryTable := rule.Ytab == "_yvmovddup" || rule.Ytab == "_yvexpandpd"
 	if (!unary && !binaryTable || unary && !unaryTable) || rule.Prefix != "Pavx" {
 		return nil, fmt.Errorf("%s is outside the audited packed vector table grammar", rule.Opcode)
@@ -72,7 +74,7 @@ func x86PackedSyntaxWitnesses(rule X86AVXRule, unary bool) ([]string, error) {
 			break
 		}
 	}
-	if bank == "" || !evex && bank == "Z" || masked && rule.Classes[count-2] != "Yknot0" {
+	if bank == "" || !evex && bank == "Z" || scalar && bank != "X" || masked && rule.Classes[count-2] != "Yknot0" {
 		return nil, fmt.Errorf("%s has unmodeled packed vector operand classes %v", rule.Opcode, rule.Classes)
 	}
 	stride := 2
@@ -95,7 +97,8 @@ func x86PackedSyntaxWitnesses(rule X86AVXRule, unary bool) ([]string, error) {
 	if evex {
 		features = rule.OpBytes[rule.EncodingOffset+1]
 	}
-	if hasEncodingTerm(features, "evexRoundingEnabled") || hasEncodingTerm(features, "evexSaeEnabled") {
+	rounding := hasEncodingTerm(features, "evexRoundingEnabled")
+	if hasEncodingTerm(features, "evexSaeEnabled") || rounding && (!floating || !scalar && bank != "Z") {
 		return nil, fmt.Errorf("%s adds unaudited rounding/SAE to the packed binary grammar", rule.Opcode)
 	}
 	if maskResult && hasEncodingTerm(features, "evexZeroingEnabled") {
@@ -127,6 +130,14 @@ func x86PackedSyntaxWitnesses(rule X86AVXRule, unary bool) ([]string, error) {
 		emit("(AX)", ".BCST")
 		if masked && hasEncodingTerm(features, "evexZeroingEnabled") {
 			emit("(AX)", ".BCST.Z")
+		}
+	}
+	if rounding {
+		for _, control := range []string{"RN_SAE", "RD_SAE", "RU_SAE", "RZ_SAE"} {
+			emit(bank+"0", "."+control)
+			if masked && hasEncodingTerm(features, "evexZeroingEnabled") {
+				emit(bank+"0", "."+control+".Z")
+			}
 		}
 	}
 	return witnesses, nil

@@ -228,7 +228,7 @@ func x86OfficialPackedAssembly(cases []x86OfficialPackedCase) (string, string) {
 	return source.String(), declaration.String()
 }
 
-var x86OfficialPackedListingInstruction = regexp.MustCompile(`^\s*0x([0-9a-f]+)\s+([0-9]+)\s+\(.*:([0-9]+)\)\s+([A-Z0-9.]+)(?:\s|$)`)
+var x86OfficialPackedListingInstruction = regexp.MustCompile(`^\s*0x([0-9a-f]+)\s+([0-9]+)\s+\(.*:([0-9]+)\)\s+([A-Z0-9._]+)(?:\s|$)`)
 
 func x86OfficialPackedVerifyListing(listing string, cases []x86OfficialPackedCase) error {
 	owners := map[string]x86OfficialPackedCase{}
