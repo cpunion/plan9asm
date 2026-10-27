@@ -179,7 +179,7 @@ func TestGoAMD64FixedLocalScalarLaneExactMemory(t *testing.T) {
 					ins := x86ScalarLaneInstruction(t, row)
 					native := x86FixedLocalState{
 						opaque: map[Reg]x86FixedLocalOrigins{BP: fixedLocalOrigin(x86FixedLocalOrigin{})}, vectors: map[Reg]uint64{"Z1": 0xffff},
-						bytes: make([]bool, 32), flags: x86ByteFlagsAll,
+						bytes: newFixedLocalByteSet(32), flags: x86ByteFlagsAll,
 					}
 					proof := &x86FixedLocalProof{frame: 32}
 					if err := fixedLocalStep(&ins, &native, FuncSig{}, proof, 0); err != nil {
@@ -189,8 +189,8 @@ func TestGoAMD64FixedLocalScalarLaneExactMemory(t *testing.T) {
 					if access.owner != proof || access.width != int64(width) || access.write == insert || !access.nativeInput || native.flags != x86ByteFlagsAll {
 						t.Fatal("native scalar role became private extent or wrong width", access)
 					}
-					for _, known := range native.bytes {
-						if known {
+					for index := int64(0); index < 32; index++ {
+						if native.bytes.has(index) {
 							t.Fatal("native access acquired private initialized bytes")
 						}
 					}
@@ -199,10 +199,10 @@ func TestGoAMD64FixedLocalScalarLaneExactMemory(t *testing.T) {
 							ins := x86ScalarLaneInstruction(t, row)
 							state := x86FixedLocalState{
 								pointers: map[Reg]int64{BP: int64(offset)}, vectors: map[Reg]uint64{"Z1": 0xffff},
-								bytes: make([]bool, 32), booleanBytes: make([]bool, 32), flags: x86ByteFlagsAll,
+								bytes: newFixedLocalByteSet(32), booleanBytes: newFixedLocalByteSet(32), flags: x86ByteFlagsAll,
 							}
-							for index := range state.bytes {
-								state.bytes[index] = index != missing
+							for index := 0; index < 32; index++ {
+								state.bytes.set(int64(index), index != missing)
 							}
 							proof := &x86FixedLocalProof{frame: 32}
 							err := fixedLocalStep(&ins, &state, FuncSig{}, proof, 0)
@@ -216,7 +216,7 @@ func TestGoAMD64FixedLocalScalarLaneExactMemory(t *testing.T) {
 									t.Fatal("scalar memory certificate widened or changed FLAGS", access)
 								}
 							}
-							if missing >= 0 && state.bytes[missing] != (wantPass && !insert && missing >= offset && missing < offset+width) {
+							if missing >= 0 && state.bytes.has(int64(missing)) != (wantPass && !insert && missing >= offset && missing < offset+width) {
 								t.Fatal("unrelated private byte initialized", offset, missing, err)
 							}
 						}

@@ -329,10 +329,10 @@ func TestX86CMOVFamilyFixedLocalEveryReadAndAuthorityNegatives(t *testing.T) {
 				state := x86FixedLocalState{
 					pointers: map[Reg]int64{SP: -16},
 					known:    map[Reg]uint8{AX: 255, BX: 255 &^ (1 << uint(missing))},
-					bytes:    make([]bool, 16), flags: x86ByteFlagsAll,
+					bytes:    newFixedLocalByteSet(16), flags: x86ByteFlagsAll,
 				}
-				for index := range state.bytes {
-					state.bytes[index] = true
+				for index := int64(0); index < 16; index++ {
+					state.bytes.set(index, true)
 				}
 				for _, ins := range changed.Funcs[0].Instrs {
 					if ins.Op == Op(op) {

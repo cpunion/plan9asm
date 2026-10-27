@@ -175,12 +175,10 @@ func fixedLocalTypedByteStep(ins *Instr, state *x86FixedLocalState, sig FuncSig,
 				for start := offset - 7; start < offset+operand.width; start++ {
 					origin, found := state.opaqueCells[start]
 					if found && fixedLocalOriginOwners(origin, proof) {
-						if start < 0 || start > int64(len(state.bytes))-8 {
+						if start < 0 || start > proof.frame-8 {
 							return fail()
 						}
-						for index := start; index < start+8; index++ {
-							state.bytes[index] = true
-						}
+						state.bytes.setRange(start, 8, true)
 					}
 				}
 				fixedLocalNumericalStore(state, offset, operand.width, true)
@@ -267,7 +265,7 @@ func fixedLocalMachineMemory(ins *Instr, operand x86TypedByteOperand, state *x86
 		return err
 	}
 	for index := offset; index < offset+operand.width; index++ {
-		if state.bytes[index] {
+		if state.bytes.has(index) {
 			continue
 		}
 		defined := false
@@ -275,7 +273,7 @@ func fixedLocalMachineMemory(ins *Instr, operand x86TypedByteOperand, state *x86
 		// starting offsets can contain a byte, independent of frame size.
 		for start := index - 7; start <= index; start++ {
 			origin, found := state.opaqueCells[start]
-			if found && start >= 0 && start <= int64(len(state.bytes))-8 && fixedLocalOriginOwners(origin, proof) {
+			if found && start >= 0 && start <= proof.frame-8 && fixedLocalOriginOwners(origin, proof) {
 				defined = true
 				break
 			}

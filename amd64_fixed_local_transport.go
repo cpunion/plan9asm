@@ -54,7 +54,7 @@ func fixedLocalBooleanRead(operand Operand, width int64, state *x86FixedLocalSta
 func fixedLocalMemoryBooleans(state *x86FixedLocalState, offset, width int64) uint8 {
 	var mask uint8
 	for index := int64(0); index < width; index++ {
-		if state.booleanBytes[offset+index] {
+		if state.booleanBytes.has(offset + index) {
 			mask |= 1 << uint(index)
 		}
 	}
@@ -83,9 +83,7 @@ func fixedLocalRevokeSpillRoles(state *x86FixedLocalState, offset, width int64) 
 			delete(state.opaqueCells, start)
 		}
 	}
-	for index := offset; index < offset+width; index++ {
-		state.booleanBytes[index] = false
-	}
+	state.booleanBytes.setRange(offset, width, false)
 }
 
 func fixedLocalConditionalSetStep(ins *Instr, state *x86FixedLocalState, sig FuncSig, proof *x86FixedLocalProof, residue int) (bool, error) {
@@ -121,7 +119,7 @@ func fixedLocalConditionalSetStep(ins *Instr, state *x86FixedLocalState, sig Fun
 		}
 		if role == x86FixedLocalPrivateMemory {
 			fixedLocalNumericalStore(state, offset, 1, true)
-			state.booleanBytes[offset] = true
+			state.booleanBytes.set(offset, true)
 		}
 	case OpFP:
 		sp, original := state.pointers[SP]

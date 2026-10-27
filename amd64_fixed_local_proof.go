@@ -33,14 +33,14 @@ type x86FixedLocalState struct {
 	opaque       map[Reg]x86FixedLocalOrigins
 	opaqueCells  map[int64]x86FixedLocalOrigins
 	booleans     map[Reg]uint8
-	booleanBytes []bool
+	booleanBytes x86FixedLocalByteSet
 	constants    map[Reg]int64
 	ranges       map[Reg]x86UnsignedRange
 	comparison   x86FixedLocalComparison
 	known        map[Reg]uint8
 	vectors      map[Reg]uint64
 	masks        map[Reg]bool
-	bytes        []bool
+	bytes        x86FixedLocalByteSet
 	addresses    map[int64]int64
 	results      map[int]bool
 	flags        uint8
@@ -53,7 +53,7 @@ func cloneFixedLocalState(input x86FixedLocalState) x86FixedLocalState {
 	clone.opaque = cloneFixedLocalOrigins(input.opaque)
 	clone.opaqueCells = cloneFixedLocalOrigins(input.opaqueCells)
 	clone.booleans = x86CloneCallerKnown(input.booleans)
-	clone.booleanBytes = append([]bool(nil), input.booleanBytes...)
+	clone.booleanBytes = append(x86FixedLocalByteSet(nil), input.booleanBytes...)
 	clone.constants = make(map[Reg]int64, len(input.constants))
 	clone.ranges = cloneFixedLocalRanges(input.ranges)
 	clone.addresses = make(map[int64]int64, len(input.addresses))
@@ -72,7 +72,7 @@ func cloneFixedLocalState(input x86FixedLocalState) x86FixedLocalState {
 	}
 	clone.known = x86CloneCallerKnown(input.known)
 	clone.vectors, clone.masks = x86CloneCallerVectorState(input.vectors, input.masks)
-	clone.bytes = append([]bool(nil), input.bytes...)
+	clone.bytes = append(x86FixedLocalByteSet(nil), input.bytes...)
 	return clone
 }
 
@@ -457,9 +457,9 @@ func replayX86FixedLocalCFG(fn *Func, sig FuncSig, proof *x86FixedLocalProof, re
 	state := x86FixedLocalState{
 		pointers: map[Reg]int64{SP: 0}, constants: make(map[Reg]int64), known: make(map[Reg]uint8),
 		opaque: make(map[Reg]x86FixedLocalOrigins), opaqueCells: make(map[int64]x86FixedLocalOrigins), booleans: make(map[Reg]uint8),
-		booleanBytes: make([]bool, proof.frame),
+		booleanBytes: newFixedLocalByteSet(proof.frame),
 		vectors:      make(map[Reg]uint64), masks: make(map[Reg]bool),
-		bytes: make([]bool, proof.frame), addresses: make(map[int64]int64), results: make(map[int]bool),
+		bytes: newFixedLocalByteSet(proof.frame), addresses: make(map[int64]int64), results: make(map[int]bool),
 	}
 	// All GP entry bytes except the private SP origin remain unknown. ABI0
 	// does not supply an initialized R14/g value; the observed nonzero-frame
@@ -681,12 +681,8 @@ func mergeFixedLocalState(previous *x86FixedLocalState, current x86FixedLocalSta
 		changed = changed || value != known
 		previous.masks[reg] = value
 	}
-	for index, known := range previous.bytes {
-		value := known && current.bytes[index]
-		boolean := previous.booleanBytes[index] && current.booleanBytes[index]
-		changed = changed || value != known || boolean != previous.booleanBytes[index]
-		previous.bytes[index], previous.booleanBytes[index] = value, boolean
-	}
+	changed = previous.bytes.intersect(current.bytes) || changed
+	changed = previous.booleanBytes.intersect(current.booleanBytes) || changed
 	for index, written := range previous.results {
 		value := written && current.results[index]
 		changed = changed || value != written
@@ -712,10 +708,8 @@ func fixedLocalMemory(ins *Instr, index int, state *x86FixedLocalState, proof *x
 		return 0, goAMD64FrameContext("fixed local access crosses storage or has residue-dependent native alignment")
 	}
 	if !write && !pointer {
-		for byteIndex := offset; byteIndex < offset+width; byteIndex++ {
-			if !state.bytes[byteIndex] {
-				return 0, goAMD64FrameContext("fixed local native read contains uninitialized or address bytes")
-			}
+		if !state.bytes.all(offset, width) {
+			return 0, goAMD64FrameContext("fixed local native read contains uninitialized or address bytes")
 		}
 	}
 	return offset, fixedLocalRecordAccess(ins, index, proof, residue, width, write, false, offset)

@@ -15,7 +15,7 @@ func fixedLocalExchangeState() x86FixedLocalState {
 		known: make(map[Reg]uint8), constants: make(map[Reg]int64),
 		booleans: make(map[Reg]uint8), vectors: make(map[Reg]uint64),
 		masks: make(map[Reg]bool), results: make(map[int]bool),
-		bytes: make([]bool, 64), booleanBytes: make([]bool, 64),
+		bytes: newFixedLocalByteSet(64), booleanBytes: newFixedLocalByteSet(64),
 		flags: x86ByteFlagsAll,
 	}
 }

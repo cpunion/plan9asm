@@ -205,10 +205,10 @@ func TestGoAMD64FixedLocalConversionExactMemoryTuples(t *testing.T) {
 					pointers: map[Reg]int64{BP: int64(offset)},
 					vectors:  map[Reg]uint64{destination: ^uint64(0)},
 					masks:    map[Reg]bool{"K1": true},
-					bytes:    make([]bool, 128),
+					bytes:    newFixedLocalByteSet(128),
 				}
-				for index := range state.bytes {
-					state.bytes[index] = index != missing
+				for index := 0; index < 128; index++ {
+					state.bytes.set(int64(index), index != missing)
 				}
 				proof := &x86FixedLocalProof{frame: 128}
 				known, err := fixedLocalConversionStep(&ins, &state, proof, 0)
@@ -221,7 +221,7 @@ func TestGoAMD64FixedLocalConversionExactMemoryTuples(t *testing.T) {
 						t.Fatal("wrong native memory tuple, write permission or invented FLAGS", access)
 					}
 				}
-				if missing >= 0 && state.bytes[missing] {
+				if missing >= 0 && state.bytes.has(int64(missing)) {
 					t.Fatal("conversion manufactured initialized memory")
 				}
 			}

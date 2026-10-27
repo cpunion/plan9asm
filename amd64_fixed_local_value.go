@@ -116,10 +116,8 @@ func fixedLocalReadValue(ins *Instr, index int, state *x86FixedLocalState, sig F
 		}
 		if role == x86FixedLocalPrivateMemory && !value.pointer && !value.opaque {
 			if write {
-				for byteIndex := offset; byteIndex < offset+width; byteIndex++ {
-					if !state.bytes[byteIndex] {
-						return value, fail()
-					}
+				if !state.bytes.all(offset, width) {
+					return value, fail()
 				}
 			}
 			value.booleans = fixedLocalMemoryBooleans(state, offset, width)
@@ -187,9 +185,9 @@ func fixedLocalWriteValue(ins *Instr, index, sourceIndex int, value fixedLocalSc
 			return nil
 		}
 		fixedLocalRevokeSpillRoles(state, offset, width)
+		state.bytes.setRange(offset, width, !value.pointer && !value.opaque)
 		for index := offset; index < offset+width; index++ {
-			state.bytes[index] = !value.pointer && !value.opaque
-			state.booleanBytes[index] = value.booleans&(1<<uint(index-offset)) != 0
+			state.booleanBytes.set(index, value.booleans&(1<<uint(index-offset)) != 0)
 		}
 		if value.pointer {
 			state.addresses[offset] = value.address

@@ -79,9 +79,7 @@ func fixedLocalPackedMoveStep(ins *Instr, state *x86FixedLocalState, proof *x86F
 func fixedLocalNumericalStore(state *x86FixedLocalState, offset, width int64, complete bool) {
 	fixedLocalRevokeSpillRoles(state, offset, width)
 	if complete {
-		for index := offset; index < offset+width; index++ {
-			state.bytes[index] = true
-		}
+		state.bytes.setRange(offset, width, true)
 	}
 }
 

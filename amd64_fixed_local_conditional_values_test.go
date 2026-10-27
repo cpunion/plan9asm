@@ -21,8 +21,8 @@ func TestGoAMD64FixedLocalConditionalTypedValues(t *testing.T) {
 					state.known[AX], state.known[BX] = 255, 255
 					state.booleans[AX], state.booleans[BX] = 0x55, 0xaa
 					for i := int64(0); i < 8; i++ {
-						state.bytes[8+i] = true
-						state.booleanBytes[8+i] = 0x55&(1<<uint(i)) != 0
+						state.bytes.set(8+i, true)
+						state.booleanBytes.set(8+i, 0x55&(1<<uint(i)) != 0)
 					}
 					ins := x86ScalarLaneInstruction(t, text)
 					if err := fixedLocalStep(&ins, &state, FuncSig{}, &x86FixedLocalProof{frame: 64}, 0); err != nil {
