@@ -8,7 +8,12 @@ this page records the current candidate and its limits.
 
 ## Publication and review
 
-PR40 remains draft. The preceding publication `01955e42e` passes its
+PR40 remains draft. Publication `9fede619c` completed its
+[full round](https://github.com/xgo-dev/plan9asm/actions/runs/40567452192)
+with 236 successful and 89 failed checks. Repeated SDK failures and derived
+completion failures are not separate instruction defects. The repair batch
+keeps the original failed reports and requires new-head CI acceptance.
+The preceding publication `01955e42e` passes its
 [complete CI round](https://github.com/xgo-dev/plan9asm/actions/runs/40536640591)
 on attempt 1: **325/325 Go checks plus Codecov**, with **88.0%** main statement
 coverage. Its complete named inventory matches the preceding 325-job round.
@@ -21,7 +26,8 @@ joins and removes 121 unreachable legacy floating lines. It preserves all SDKs
 and test owners while creating current/minimum jobs first; creation order does
 not guarantee external runner scheduling priority.
 
-The new local candidate is qualified at `fe97b6d53`, before publication. It adds 186 official
+The declaration-demand batch was qualified at `fe97b6d53`, then published as
+`9fede619c`. It adds 186 official
 rows / 765 witnesses, avoids unnecessary SIMD feature queries for baseline GP
 forms, and validates actual native inline/module assembly against the source
 backend, then selects amd64/386 LLVM declarations from actual generated uses.
@@ -34,17 +40,16 @@ The failed `004da9f44` cache-policy round and earlier failures retain their
 original outcomes. Its stale Node assertion was repaired without removing
 the actual Go lifecycle, ownership or cleanup checks.
 
-[LLGo PR2694](https://github.com/xgo-dev/llgo/pull/2694), head `9ccc923f8`, is
+[LLGo PR2694](https://github.com/xgo-dev/llgo/pull/2694), head `74c767490`, is
 rebased onto `854634f22` and pins the downloaded public
-`v0.0.0-20261027123924-1c54c530ed3d`. Adapter tests pass 41 roots / 131 children,
+`v0.0.0-20261027190827-9fede619cf05`. Adapter tests pass 41 roots / 131 children,
 assembly-build checks 21 / 23, and complete CI policies 160/160, with zero
-failures/skips. Rebase layout/initializer controls also pass. Current-head cloud
+failures/skips. Earlier rebase layout controls retain their original receipts. Current-head cloud
 CI completes with 13 successful workflows and 130 successful jobs; only the two
-conditional release/submission jobs are skipped. A preparation timeout occurred
-before any steps and was retained; rerunning that preparation and its dependents
-restored the Go workflow.
-Previous `cdca51fc4` completed 13 workflows / 130 jobs with two release-condition
-job skips; those do not qualify this pin. Its P1 dependency-provenance requirement remains
+conditional release/submission jobs are skipped. The exact public module ZIP,
+all 5,037 included file blobs and the bundled license match the pinned source.
+Earlier pins and their preparation timeout retain their original outcomes;
+they do not qualify this pin. Its P1 dependency-provenance requirement remains
 open until an official upstream version replaces the temporary fork pin.
 Never push or merge upstream directly.
 
@@ -92,6 +97,19 @@ Never push or merge upstream directly.
   and source-dependent SHA/string/rounding helpers retain their owners. Direct
   module success adds no lookup or scan. This adds 68 net production lines,
   without another signature table, opcode registry or source/caller cache.
+- Backend checks normalize target triples with LLVM22 once, including short
+  WASI triples and reordered architecture aliases. All guards use the same
+  normalized observation; the emitted module target and original input remain
+  unchanged. The small C bridge releases both owned strings.
+- Native LOCK/CMPXCHG tests bind their original instructions to matching
+  backends. Backend rejection controls remain separate from extent, FLAGS,
+  alias and malformed-source negatives, so an early target error cannot mask
+  a semantic acceptance regression. Production admission is not weakened.
+- BF16 tests inspect actual conversion and masked-load calls, with the six
+  original rows plus three full-memory forms. Unused declarations are not
+  evidence of an emitted memory operation. Real consumer module fixtures query
+  the selected LLVM binding and replacement instead of pinning another version
+  while copying the repository checksum file.
 
 The final GP descriptor reuse avoids the rejected eager-query overhead.
 Measured replay ABBA differences against the same partition implementation
@@ -146,6 +164,10 @@ are mixed (+4.58% / -0.39%), so no complete-SDK speedup is claimed.
 | Declaration demand at `72dd692a2` | Current **70 / 3,141**; minimum **68 / 2,799 PASS**, zero failures/skips | All baseline case IDs retained; new declaration and helper-closure controls; two current-only roots are absent on minimum |
 | Declaration race and preflight | Current race **6 / 72**; Go policy **26 / 300**; Node **573 PASS** | Frozen source/tools; integrated `fe97b6d53` differs only in documentation and passes the five-architecture gate |
 | Complete SDK objects at `fe97b6d53` | **41/55 PASS; 14 FAIL**, zero N/A or unattempted | All original Go1.27.2 source hashes and all 14 failure diagnostics match the preceding baseline; raw command exits 1 |
+| BF16 used-memory regression at `1b34ab922` | Both SDKs **10 roots / 13 children PASS** | Original six rows retained; three full-memory rows added; both Go encoders and original object owners retained |
+| LOCK target contracts at `f97cb7e42` | Both SDKs **26 / 5,374 PASS**, zero failures/skips | Original native forms retained; backend rejection is separate from numerical/FLAGS ownership |
+| Normalized backend/WASM scope at `c5f1492a1` | Current **58 / 1,245**; minimum **57 / 1,245 PASS** | New five roots / 60 children include 21 actual WASM objects; one Go1.21-only source root is absent on minimum |
+| Actual LLVM consumer fixtures at `c71c7cdd0` | Both SDKs **4 / 16 PASS** | Four original Unix failures reproduced first; Windows test binary cross-compiles, without claiming local Windows execution |
 
 The joint native scope executes 45 logical kernels over all 256 byte values
 with separate and overlapping buffers, 36 original shifted-literal kernels
@@ -251,8 +273,8 @@ showed regression; no acceleration is claimed for the accepted cleanup.
 
 ## Remaining work, in order
 
-1. Publish the qualified local candidate through the allowed fork and finish its new-head
-   CI/coverage. Repin LLGo to that exact public revision and qualify it. Obtain
+1. Finish the five CI repair classes, publish through the allowed fork and
+   finish new-head CI/coverage. Repin LLGo to that exact public revision and qualify it. Obtain
    external review and retain draft status meanwhile.
    Next local reductions are integer min/max reuse of the existing E4 pipeline
    and the next independent unary row join. Their static proposals are not passes.
@@ -266,6 +288,9 @@ showed regression; no acceleration is claimed for the accepted cleanup.
 4. Preserve other architecture gates while finishing amd64. The 271 ARM64
    decoder forms, remaining WASM control/SIMD and native AVX512 acceptance remain
    explicit gaps before claiming complete architecture coverage.
+   ARM64-to-WASM portable IR also has an actual `llvm.returnaddress` object
+   compilation failure. BF16 optimized dead-result active-memory fault behavior
+   still needs an independent runtime owner; masked-load IR alone is insufficient.
 
 External discovery, ledgers and compatibility batches belong to
 [llgo-compat/plan9asm](https://github.com/llgo-compat/plan9asm). Do not run inventory
