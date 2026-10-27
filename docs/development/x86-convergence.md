@@ -80,14 +80,19 @@ and explicit memory contracts. Delete replaced code in the same coherent batch.
 5. Finish all amd64 families and whole-source gates before generalizing the
    architecture to ARM, ARM64 or WASM.
 
-The next normalization batch is bounded to four existing packed binary
-families: average, word multiply, multiply-add and dword product (20 names).
-They already share physical operand normalization. Retain input/result widths,
-pair reductions and even-lane products explicitly, and use the same parsed
-record for effects, memory queries and lowering. Remove the replaced consumer
-selectors together; do not add a fifth family before measuring this batch.
-The existing E4 pipeline can also replace duplicated non-MMX average/word-product
-loading, masking and writeback. That deletion alone is not parse-once completion.
+The first normalization batch covers four existing packed binary families:
+average, word multiply, multiply-add and dword product (20 names). One typed
+spec/form now feeds effects, memory queries, result routing and lowering;
+the replaced consumer selectors are removed. Lowering retains the parsed form,
+while separate analysis invocations still normalize independently. No cache is
+attached to mutable instructions. Input/result widths, pair reductions and
+even-lane products remain explicit: DQ arithmetic uses 32-bit inputs but 64-bit
+memory granules; MADD retains full-tuple reads, distinct from E4 mask suppression.
+Average and word multiply reuse the existing E4 pipeline. Production shrinks by
+65 lines. Both endpoint SDKs pass 101 roots / 10,098 children without skips.
+Paired benchmarks under unrelated host load do not establish acceleration.
+Do not call this whole-translation parse-once completion or add a fifth family
+before qualifying the shared function-representation lifetime.
 
 For each batch record the exact revision, SDK, LLVM version, source fixture,
 successful/failed counts, production/test line delta and retained case IDs.

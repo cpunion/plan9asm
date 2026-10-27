@@ -42,12 +42,17 @@ upstream Plan9asm version.
 
 ## Local candidate and evidence
 
-Current integrated code is `511029b0d`, not yet published. It adds pointer
+Current integrated code is `cb23f48a5`, not yet published. It adds pointer
 choices, complete framed roots with observed zero-frame private leaves,
 Windows leaf observation, broadcast boundaries, implicit MUL routing and
 three initialized official-family joins. It also integrates the smaller
-native-address domain described below. The whole candidate still needs
-joint regression qualification and fresh complete CI.
+native-address domain described below, the four-family normalization pilot and
+shared FP numerical reads. Current-SDK joint qualification passes **186 roots /
+12,670 children**, zero failures/skips: 157 main-package roots plus all 29
+rule-reader roots. The exact union includes the changed families, frame/FP
+consumers, private-leaf boundaries and the complete 90-row / 258-witness
+official average/product join. Fresh complete CI remains pending. Minimum-SDK
+receipts belong to the individual batches, not a combined run at this head.
 
 | Scope | Evidence | Limit |
 |---|---|---|
@@ -56,6 +61,7 @@ joint regression qualification and fresh complete CI.
 | Windows zero-frame leaf observation | Current root/profile: 13 / 161 and 6 / 109; historical Go1.23.12: 4 / 67 and 4 / 68 | Exact observed leaf only; framed-root SEH requirements remain |
 | Implicit MUL/IMUL fixed-local adapter | Go1.27.3: 38 / 4,086; Go1.20.14: 36 / 4,043; zero skips/failures | Native execution is separately qualified below |
 | Native execution at `511029b0d` | [Linux run](https://github.com/cpunion/plan9asm/actions/runs/40434110395): 3 roots / 27 children, zero skips/failures; original Go and three APIs at O0/O2 | 42 pointer programs (1,344 observations/pipeline), 5 address/FLAGS programs (50), 36 MUL kernels plus 2 helpers (2,880); not whole crypto files or native AVX512 |
+| Integrated runtime at `cb23f48a5` | [Linux run](https://github.com/cpunion/plan9asm/actions/runs/40441342032): 4 complete-function roots / 36 children plus 16 packed-family roots / 22 children, zero failures/skips | Includes 121 TypedGP kernels with 29 direct FP formats; packed-family owners distinguish original SSE/MMX/VEX execution from portable LLVM, not native AVX512 |
 | Complete Linux/amd64 SDK objects at `511029b0d` | **38/55**, 17 failures, zero N/A/unattempted | Same 55 Go1.27.2 source hashes and exact same pass set as the previous 38/55; no regression or new pass |
 
 The integrated native-address refactor removes the four-origin enumeration cap
@@ -81,6 +87,14 @@ thirteen did not. These are separate format/binding gaps, not four new opcodes.
 The target took 99 seconds versus the older single observation of 68 seconds;
 neither proves a stable performance change, and earlier rejection is not a
 speedup. Do not add a library-specific relational interpreter.
+
+The subsequent FP batch reuses the existing typed-slot reader for 174 legal GP
+input forms and the existing ADX decoder in original-frame observation. It adds
+18 production lines, not a new per-opcode proof. Current/minimum scopes pass
+46 roots / 1,640 and 1,628 children; private-leaf boundary controls pass 3 / 22.
+The full original chacha source now reaches native address subtraction
+(`SUBQ SI,BX`), which still lacks its address-to-number transfer rule. Do not
+count it as a whole-file pass or increase 38/55 without a complete rerun.
 
 ## Official rows and implementation
 
@@ -113,9 +127,19 @@ coverage remain unfinished.
 The existing packed E4 pipeline already shares operand loading, mask handling
 and writeback. Earlier measured parser refactors removed allocations and
 production lines; those measurements do not establish whole-source speed.
-The new architectural focus is to retain a normalized family form through
-effects, memory-shape queries and lowering, removing the replaced selectors.
-Do not add another dispatch table or just cache the same duplicated decisions.
+The four-family pilot shares one typed spec/form across effects, memory-shape,
+result routing and lowering, removing the replaced selectors. Its lowerers
+consume the already parsed form; other analysis invocations still parse
+independently. This is not whole-translation parse-once completion. Production
+code shrinks by 65 lines while preserving all existing tests. Each endpoint SDK
+passes 101 roots / 10,098 children; five related fallback roots add 728 children.
+Adjacent ABBA measurements across all 20 names average about +1.1%, with large
+per-pair variation under unrelated host load. Allocation gates pass, but neither
+acceleration nor a precise performance bound has been established. Preserve
+the earlier slower short measurement rather than discarding it.
+
+Next, retain normalized records across immutable function representations;
+do not add a cache to mutable instructions or another opcode registry.
 See the normalization boundary in [architecture](architecture.md).
 
 ## Remaining work, in order
