@@ -36,7 +36,7 @@ func fixedLocalTypedFPCases() []fixedLocalTypedFPCase {
 		}
 		if width.suffix != "B" {
 			add("IMUL" + width.suffix + " x+0(FP),AX")
-			add("IMUL" + width.suffix + " $3,x+0(FP),AX")
+			add("IMUL3" + width.suffix + " $3,x+0(FP),AX")
 			for _, stem := range []string{"POPCNT", "LZCNT", "TZCNT"} {
 				add(stem + width.suffix + " x+0(FP),AX")
 			}
