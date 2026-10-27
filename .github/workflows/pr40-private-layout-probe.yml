@@ -1,0 +1,288 @@
+name: Private layout native execution probe
+
+on:
+  push:
+    branches:
+      - codex/pr40-private-layout-native-20261027
+
+permissions:
+  contents: read
+
+jobs:
+  native_and_portable:
+    if: github.repository == 'cpunion/plan9asm'
+    strategy:
+      fail-fast: false
+      matrix:
+        scope: [frames]
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      GOTOOLCHAIN: local
+      GOENV: 'off'
+      GOWORK: 'off'
+      GOFLAGS: ''
+      GOMAXPROCS: '4'
+      GOOS: linux
+      GOARCH: amd64
+      LLVM_CONFIG: llvm-config-22
+      SOURCE_COMMIT: 89e53140fa7af3abebe744de8fa11b402cc30e74
+      NATIVE_SCOPE: ${{ matrix.scope }}
+      OWNER_SPECS: |
+        {
+          "frames": [
+            {
+              "test": "TestCrossLinuxRuntimeMatrixGoAMD64FixedLocalFramedLeaf",
+              "source": "amd64_fixed_local_framed_leaf_runtime_go127_test.go",
+              "children": [
+                "Translate",
+                "Translate/-O0",
+                "Translate/-O2",
+                "Module",
+                "Module/-O0",
+                "Module/-O2",
+                "GoModule",
+                "GoModule/-O0",
+                "GoModule/-O2"
+              ]
+            },
+            {
+              "test": "TestCrossLinuxRuntimeMatrixGoAMD64FramedLeafIncomingAddress",
+              "source": "amd64_fixed_local_framed_leaf_runtime_go127_test.go",
+              "children": [
+                "Translate",
+                "Translate/-O0",
+                "Translate/-O2",
+                "Module",
+                "Module/-O0",
+                "Module/-O2",
+                "GoModule",
+                "GoModule/-O0",
+                "GoModule/-O2"
+              ]
+            },
+            {
+              "test": "TestCrossLinuxRuntimeMatrixGoAMD64FramedLeafPhysicalFlags",
+              "source": "amd64_fixed_local_framed_leaf_runtime_go127_test.go",
+              "children": []
+            },
+            {
+              "test": "TestCrossLinuxRuntimeMatrixGoAMD64FixedLocalTerminalReturns",
+              "source": "amd64_fixed_local_terminal_native_linux_amd64_test.go",
+              "children": [
+                "Translate",
+                "Translate/-O0",
+                "Translate/-O2",
+                "Module",
+                "Module/-O0",
+                "Module/-O2",
+                "GoModule",
+                "GoModule/-O0",
+                "GoModule/-O2"
+              ]
+            },
+            {
+              "test": "TestCrossLinuxRuntimeMatrixGoAMD64FixedLocalLayoutPartitions",
+              "source": "amd64_fixed_local_terminal_native_linux_amd64_test.go",
+              "children": [
+                "Translate",
+                "Translate/-O0",
+                "Translate/-O2",
+                "Module",
+                "Module/-O0",
+                "Module/-O2",
+                "GoModule",
+                "GoModule/-O0",
+                "GoModule/-O2"
+              ]
+            }
+          ]
+        }
+      EVIDENCE: _out/private-layout-execution
+
+    steps:
+      - name: Checkout exact diagnostic commit
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
+
+      - name: Bind the unchanged source and actual host
+        run: |
+          set -euo pipefail
+          mkdir -p "$EVIDENCE"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git rev-parse HEAD^)" = "$SOURCE_COMMIT"
+          test "$(git diff --name-only "$SOURCE_COMMIT" HEAD)" = '.github/workflows/pr40-private-layout-probe.yml'
+          test -z "$(git status --porcelain)"
+          test "$(uname -s)" = Linux
+          test "$(uname -m)" = x86_64
+          git rev-parse HEAD > "$EVIDENCE/head.txt"
+          git rev-parse HEAD^ > "$EVIDENCE/source.txt"
+          git ls-files -z | xargs -0 sha256sum > "$EVIDENCE/checkout.sha256"
+          uname -a > "$EVIDENCE/host.txt"
+          lscpu --json > "$EVIDENCE/cpu.json"
+
+      - name: Setup exact Go
+        uses: ./.github/actions/setup-go
+        with:
+          go-version: '1.27.3'
+          cache: true
+
+      - name: Install LLVM 22
+        timeout-minutes: 14
+        run: bash scripts/install-ci-llvm22-ubuntu.sh
+
+      - name: Setup existing evidence auditor runtime
+        uses: ./.github/actions/setup-node22
+
+      - name: Record and verify actual compiler identities
+        run: |
+          set -euo pipefail
+          test "$(go env GOVERSION)" = go1.27.3
+          test "$(go env GOHOSTOS)" = linux
+          test "$(go env GOHOSTARCH)" = amd64
+          go version > "$EVIDENCE/go-version.txt"
+          go env -json GOVERSION GOROOT GOHOSTOS GOHOSTARCH GOOS GOARCH GOCACHE > "$EVIDENCE/go-env.json"
+          : > "$EVIDENCE/tools.sha256"
+          for tool in go node llvm-config-22 llc-22 clang-22 opt-22; do
+            binary=$(readlink -f "$(command -v "$tool")")
+            sha256sum "$binary" >> "$EVIDENCE/tools.sha256"
+          done
+          for tool in compile asm link objdump nm; do
+            binary=$(go tool -n "$tool")
+            sha256sum "$binary" >> "$EVIDENCE/tools.sha256"
+          done
+          test "$(readlink -f "$(command -v llc)")" = "$(readlink -f "$(command -v llc-22)")"
+          test "$(readlink -f "$(command -v clang)")" = "$(readlink -f "$(command -v clang-22)")"
+          test "$(readlink -f "$(command -v opt)")" = "$(readlink -f "$(command -v opt-22)")"
+          llvm-config-22 --version > "$EVIDENCE/llvm-config-version.txt"
+          grep -Eq '^22\.' "$EVIDENCE/llvm-config-version.txt"
+          for tool in llc-22 clang-22 opt-22; do
+            "$tool" --version > "$EVIDENCE/$tool-version.txt"
+            grep -Eq 'version 22\.' "$EVIDENCE/$tool-version.txt"
+          done
+
+      - name: Require the actual native ISA
+        run: |
+          set -euo pipefail
+          cat > "$EVIDENCE/isa.c" <<'C'
+          #include <stdio.h>
+          int main(int argc, char **argv) {
+            (void)argv;
+            __builtin_cpu_init();
+            int sse2 = !!__builtin_cpu_supports("sse2");
+            int avx2 = !!__builtin_cpu_supports("avx2");
+            printf("native ISA SSE2=%d AVX2=%d\n", sse2, avx2);
+            return !(sse2 && (argc == 1 || avx2));
+          }
+          C
+          clang-22 -O2 "$EVIDENCE/isa.c" -o "$EVIDENCE/isa"
+          if [ "$NATIVE_SCOPE" = fixed ]; then
+            "$EVIDENCE/isa" require-avx2 > "$EVIDENCE/isa.log"
+          else
+            "$EVIDENCE/isa" > "$EVIDENCE/isa.log"
+          fi
+          sha256sum "$EVIDENCE/isa" >> "$EVIDENCE/tools.sha256"
+
+      - name: Discover the exact selected test owners
+        run: |
+          set -euo pipefail
+          node <<'NODE' > "$EVIDENCE/pattern.txt"
+          const rows = JSON.parse(process.env.OWNER_SPECS)[process.env.NATIVE_SCOPE];
+          process.stdout.write('^(' + rows.map(row => row.test).join('|') + ')$');
+          NODE
+          pattern=$(cat "$EVIDENCE/pattern.txt")
+          go test -p=1 . -list "$pattern" > "$EVIDENCE/inventory.log" 2> "$EVIDENCE/inventory.stderr"
+
+      - name: Execute every selected owner and retain its real terminal
+        run: |
+          set -uo pipefail
+          set +e
+          pattern=$(cat "$EVIDENCE/pattern.txt")
+          go test -p=1 . -json -run "$pattern" -count=1 -timeout=25m > "$EVIDENCE/raw.jsonl" 2> "$EVIDENCE/native.stderr"
+          status=$?
+          printf '%s\n' "$status" > "$EVIDENCE/exit.txt"
+          exit "$status"
+
+      - name: Audit actual native execution and unchanged identities
+        if: always()
+        run: |
+          set -euo pipefail
+          sha256sum --check "$EVIDENCE/checkout.sha256" > "$EVIDENCE/checkout-after.log"
+          sha256sum --check "$EVIDENCE/tools.sha256" > "$EVIDENCE/tools-after.log"
+          node <<'NODE' > "$EVIDENCE/audit.json"
+          const assert = require('node:assert/strict');
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const {auditNativeOwners} = require('./.github/scripts/audit-native-owners.cjs');
+          const read = name => fs.readFileSync(path.join(process.env.EVIDENCE, name), 'utf8');
+          const scope = process.env.NATIVE_SCOPE;
+          const owners = JSON.parse(process.env.OWNER_SPECS)[scope];
+          const roots = owners.map(owner => owner.test);
+          const children = owners.flatMap(owner => owner.children.map(child => owner.test + '/' + child));
+          assert.equal(read('exit.txt').trim(), '0', 'native command did not succeed');
+          assert.equal(read('source.txt').trim(), process.env.SOURCE_COMMIT);
+          assert.equal(read('head.txt').trim(), process.env.GITHUB_SHA);
+          const result = auditNativeOwners(read('inventory.log'), read('raw.jsonl'), roots, children);
+          const events = read('raw.jsonl').trim().split(/\r?\n/).map(JSON.parse);
+          const output = root => events.filter(event => event.Test === root && event.Action === 'output')
+            .map(event => event.Output).join('');
+          for (const root of roots) {
+            if (root === 'TestX86PackedCompareMemoryAndViewsRuntime') continue;
+            const preflight = /FixedLocal(IntegerCompare|GPSIMD)$/.test(root)
+              ? /fixed-frame native AVX=1 AVX2=1/ : /axis=1 SSE2=1 /;
+            assert.match(output(root), preflight, root + ': actual native CPU preflight missing');
+            assert.doesNotMatch(output(root), /Rosetta|explicit authenticated guest transport/,
+              root + ': guest execution cannot qualify this native job');
+          }
+          const once = (test, summary) => assert.equal(output(test).split(summary).length - 1, 1,
+            test + ': complete runtime summary absent or duplicated');
+          const prefix = 'TestCrossLinuxRuntimeMatrixGoAMD64';
+          let cases;
+          assert.equal(scope, 'frames');
+          once(prefix + 'FixedLocalFramedLeaf', 'FRAMED_LEAF_NATIVE_COMPLETE functions=8 inputs_per_function=8 APIs=3 LLVM_levels=O0,O2 original_observations=64 LLVM_comparisons=384');
+          once(prefix + 'FramedLeafIncomingAddress', 'FRAMED_LEAF_NATIVE_ADDRESS functions=1 inputs_per_function=5 APIs=3 LLVM_levels=O0,O2 original_observations=5 LLVM_comparisons=30');
+          once(prefix + 'FramedLeafPhysicalFlags', 'FRAMED_LEAF_PHYSICAL_FLAGS original_only=true functions=6 inputs_per_function=2 original_observations=12 LLVM_comparisons=0');
+          once(prefix + 'FixedLocalTerminalReturns', 'native terminal inventory: functions=2 inputs=4 observations_per_program=8 APIs=3 optimizations=2 execute=true');
+          once(prefix + 'FixedLocalLayoutPartitions', 'native private-layout inventory: functions=3 inputs=7 observations_per_program=21 APIs=3 optimizations=2 execute=true');
+          cases = {
+            layoutPartitions: {functions: 3, inputs: 7, originalAndLLVM: true},
+            terminalReturns: {functions: 2, inputs: 4, originalAndLLVM: true},
+            framedLeaf: {functions: 8, inputs: 8, originalAndLLVM: true},
+            incomingAddress: {functions: 1, inputs: 5, originalAndLLVM: true},
+            physicalFlags: {functions: 6, inputs: 2, originalOnly: true},
+          };
+          const sourceFiles = [...new Set([
+            ...owners.map(owner => owner.source),
+            'amd64_fixed_local_machine_bits_runtime_go127_test.go',
+            'amd64_fixed_local_integer_compare_runtime_test.go',
+            'amd64_fixed_local_vex_runtime_test.go',
+            'amd64_fixed_local_framed_leaf_go127_test.go',
+            'amd64_fixed_local_data_address_runtime_go127_test.go',
+            'amd64_fixed_local_pointer_choice_objects_test.go',
+            'amd64_fixed_local_input_test.go',
+            'amd64_fixed_local_layout_partition_test.go',
+            'amd64_fixed_local_layout.go',
+            'amd64_fixed_local_proof.go',
+          ])];
+          const crypto = require('node:crypto');
+          const sourceHashes = Object.fromEntries(sourceFiles.map(file =>
+            [file, crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex')]));
+          process.stdout.write(JSON.stringify({...result, source: read('source.txt').trim(),
+            head: read('head.txt').trim(), platform: 'native linux/amd64', execute: true,
+            scope, cases, ownerInventory: owners, sourceHashes,
+            limits: ['Only the selected roots and complete observed children qualify',
+              'This SSE2 native probe does not establish native AVX512 acceptance',
+              'Private-frame kernels do not establish complete P256 or standard-library execution',
+              'Program stdout is checked by the frozen tests, not retained separately'],
+          }, null, 2) + '\n');
+          NODE
+
+      - name: Retain raw failures and complete qualification evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: private-layout-${{ matrix.scope }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: _out/private-layout-execution/
+          if-no-files-found: error
+          retention-days: 7
