@@ -656,7 +656,7 @@ func replayX86FixedLocalCFG(fn *Func, sig FuncSig, proof *x86FixedLocalProof, re
 			if layouts != nil {
 				previousNodes := len(layouts.nodes)
 				var err error
-				target, err = layouts.target(states, node, edge, target, next)
+				target, err = layouts.target(states, node, edge, target, next, budget)
 				if err != nil {
 					return err
 				}

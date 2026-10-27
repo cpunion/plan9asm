@@ -40,7 +40,8 @@ func newFixedLocalLayouts(reference []x86FixedLocalLayoutNode) x86FixedLocalLayo
 	return result
 }
 
-func (layouts *x86FixedLocalLayouts) target(states map[int]x86FixedLocalState, from, edge, pc int, next x86FixedLocalState) (int, error) {
+func (layouts *x86FixedLocalLayouts) target(states map[int]x86FixedLocalState, from, edge, pc int, next x86FixedLocalState,
+	budget *x86FixedLocalBudget) (int, error) {
 	match := -1
 	for _, index := range layouts.at[pc] {
 		prior, found := states[index]
