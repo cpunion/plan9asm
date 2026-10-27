@@ -8,8 +8,13 @@ history; this page records the current candidate and its limits.
 
 ## Publication and CI
 
-PR40 remains draft. The next publication carries integrated code `f862b6be7`.
-The [published round at `f87062c5d`](https://github.com/xgo-dev/plan9asm/actions/runs/40461906541)
+PR40 remains draft. Integrated instruction code remains `f862b6be7`.
+Publication `004da9f44` failed preflight because a Node policy still required
+the old per-root cache helper body. Repair `aaa8efacd` checks cache selection
+and preparation order, leaving lifecycle behavior to the actual Go tests.
+It passes all 573 Node policies and the complete Go preflight selector
+(26 roots / 299 children), with zero failures/skips.
+The [earlier round at `f87062c5d`](https://github.com/xgo-dev/plan9asm/actions/runs/40461906541)
 finished naturally: 325/325 successful jobs, zero failures/cancellations and
 88.0% main statement coverage. This result does not certify the next publication;
 its current-head CI and external approval remain pending.
@@ -135,7 +140,7 @@ and zero unsupported classifications do not establish successful translation.
 
 ## Remaining work, in order
 
-1. Publish the qualified batch through the allowed fork; the preceding full CI
+1. Publish the qualified policy repair through the allowed fork; the failed
    round has finished. Watch complete current-head CI and repair failures. Update
    LLGo's exact dependency and obtain review; retain draft meanwhile.
 2. Restore ordinary SHA1 with bounded shared private-layout analysis, reusing
