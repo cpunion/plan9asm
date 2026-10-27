@@ -162,15 +162,17 @@ func TestX86StringRepeatCFGPortGrammarRemainsIndependent(t *testing.T) {
 	for _, arch := range []string{"386", "amd64"} {
 		for _, prefix := range []string{"REP", "REPN"} {
 			for _, op := range []string{"INSB", "INSW", "INSL", "OUTSB", "OUTSW", "OUTSL"} {
+				sourceForShape := func(shape string) string {
+					return "TEXT port(SB),4,$0-0\nMOVL $3,CX\nMOVL $0,DX\nCLD\n" +
+						x86StringRepeatCFGBody(op, prefix, shape) + "RET\n"
+				}
 				for _, shape := range []string{"adjacent", "fallthrough-label-chain", "branch-to-prefix", "conditional-bypass"} {
 					t.Run(arch+"/"+prefix+"/"+op+"/"+shape, func(t *testing.T) {
-						source := "TEXT port(SB),4,$0-0\nMOVL $3,CX\nMOVL $0,DX\nCLD\n" +
-							x86StringRepeatCFGBody(op, prefix, shape) + "RET\n"
-						file, err := Parse(ArchAMD64, source)
+						file, err := Parse(ArchAMD64, sourceForShape(shape))
 						if err != nil {
 							t.Fatal(err)
 						}
-						ir, err := Translate(file, Options{Goarch: arch,
+						ir, err := Translate(file, Options{Goarch: arch, TargetTriple: testTargetTriple("linux", arch),
 							Sigs: map[string]FuncSig{"port": {Name: "port", Ret: Void}}})
 						if shape == "conditional-bypass" {
 							if !errors.Is(err, ErrProbeNeedsContext) {
@@ -184,6 +186,19 @@ func TestX86StringRepeatCFGPortGrammarRemainsIndependent(t *testing.T) {
 						}
 					})
 				}
+				if prefix == "REP" {
+					t.Run(arch+"/"+op+"/unspecified-target", func(t *testing.T) {
+						file, err := Parse(ArchAMD64, sourceForShape("adjacent"))
+						if err != nil {
+							t.Fatal(err)
+						}
+						ir, err := Translate(file, Options{Goarch: arch,
+							Sigs: map[string]FuncSig{"port": {Name: "port", Ret: Void}}})
+						if ir != "" || !errors.Is(err, ErrProbeNeedsContext) || !strings.Contains(err.Error(), "native inline assembly") {
+							t.Fatal("native port-I/O escaped its explicit target requirement", ir != "", err)
+						}
+					})
+				}
 			}
 			for _, follower := range []string{"REP", "REPN", "NOP", "INB", "OUTL", "INSB AX", "OUTSL $1"} {
 				source := "TEXT bad(SB),4,$0-0\nJMP done\n" + prefix + "\n" + follower + "\ndone:\nRET\n"
@@ -191,7 +206,7 @@ func TestX86StringRepeatCFGPortGrammarRemainsIndependent(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				if _, err := Translate(file, Options{Goarch: arch,
+				if _, err := Translate(file, Options{Goarch: arch, TargetTriple: testTargetTriple("linux", arch),
 					Sigs: map[string]FuncSig{"bad": {Name: "bad", Ret: Void}}}); err == nil {
 					t.Fatal("dead or malformed nonstring follower was silently skipped", arch, prefix, follower)
 				}

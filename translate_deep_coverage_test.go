@@ -447,6 +447,7 @@ func TestTranslateModuleDirectAndFallbackCoverage(t *testing.T) {
 	initialized.Funcs[0].Instrs = instructions
 	initialized.Funcs[0].ArgSize = 8
 	initializedOptions := options
+	initializedOptions.TargetTriple = "x86_64-unknown-linux-gnu"
 	initializedOptions.Sigs = make(map[string]FuncSig)
 	for name, signature := range options.Sigs {
 		initializedOptions.Sigs[name] = signature
@@ -506,6 +507,7 @@ func TestTranslateModuleDirectAndFallbackCoverage(t *testing.T) {
 	} else if !errors.Is(err, errDirectModuleUnsupported) {
 		t.Fatalf("ARM64 direct path must request checked fallback: %v", err)
 	}
+	armOptions.TargetTriple = "aarch64-unknown-linux-gnu"
 	armMod, err := TranslateModule(arm64File, armOptions)
 	if err != nil {
 		t.Fatalf("TranslateModule(arm64 checked fallback) error = %v", err)

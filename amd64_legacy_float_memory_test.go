@@ -46,7 +46,8 @@ func TestX86LegacyPackedFloatingMemoryRetainsOriginalOpcode(t *testing.T) {
 					if err != nil {
 						t.Fatal(err)
 					}
-					ir, err := Translate(file, Options{Goarch: arch, Sigs: map[string]FuncSig{"f": {Name: "f", Ret: Void}}})
+					ir, err := Translate(file, Options{Goarch: arch, TargetTriple: testTargetTriple("linux", arch),
+						Sigs: map[string]FuncSig{"f": {Name: "f", Ret: Void}}})
 					if err != nil {
 						t.Fatal(err)
 					}

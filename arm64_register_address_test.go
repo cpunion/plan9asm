@@ -115,9 +115,14 @@ func TestARM64RegisterAddressZeroBaseConstantGoForms(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ir, err := Translate(file, Options{Goarch: "arm64", Sigs: map[string]FuncSig{
+	options := Options{Goarch: "arm64", Sigs: map[string]FuncSig{
 		"zeroAddress": {Name: "zeroAddress", Ret: Void},
-	}})
+	}}
+	if ir, err := Translate(file, options); ir != "" || !errors.Is(err, ErrProbeNeedsContext) || !strings.Contains(err.Error(), "native inline assembly") {
+		t.Fatal("native zero-base branch escaped its explicit target requirement", ir != "", err)
+	}
+	options.TargetTriple = "aarch64-unknown-linux-gnu"
+	ir, err := Translate(file, options)
 	if err != nil {
 		t.Fatal(err)
 	}
