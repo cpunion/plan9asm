@@ -168,6 +168,7 @@ are mixed (+4.58% / -0.39%), so no complete-SDK speedup is claimed.
 | LOCK target contracts at `f97cb7e42` | Both SDKs **26 / 5,374 PASS**, zero failures/skips | Original native forms retained; backend rejection is separate from numerical/FLAGS ownership |
 | Normalized backend/WASM scope at `c5f1492a1` | Current **58 / 1,245**; minimum **57 / 1,245 PASS** | New five roots / 60 children include 21 actual WASM objects; one Go1.21-only source root is absent on minimum |
 | Actual LLVM consumer fixtures at `c71c7cdd0` | Both SDKs **4 / 16 PASS** | Four original Unix failures reproduced first; Windows test binary cross-compiles, without claiming local Windows execution |
+| Complete LOCK/CMPXCHG host scope at `5d84ab6a3` | Both SDKs **58 / 8,075 PASS**, zero failures/skips | Original 63-root run retains five real native-execution skips; Linux owners remain required in CI; original FP15 controls plus 24 backend negatives |
 
 The joint native scope executes 45 logical kernels over all 256 byte values
 with separate and overlapping buffers, 36 original shifted-literal kernels
