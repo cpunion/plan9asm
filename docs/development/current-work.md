@@ -42,34 +42,45 @@ upstream Plan9asm version.
 
 ## Local candidate and evidence
 
-Current integrated code is `2c19ef128`, not yet published. It adds pointer
+Current integrated code is `511029b0d`, not yet published. It adds pointer
 choices, complete framed roots with observed zero-frame private leaves,
 Windows leaf observation, broadcast boundaries, implicit MUL routing and
-three initialized official-family joins. The whole candidate still needs
-joint qualification and fresh complete CI.
+three initialized official-family joins. It also integrates the smaller
+native-address domain described below. The whole candidate still needs
+joint regression qualification and fresh complete CI.
 
 | Scope | Evidence | Limit |
 |---|---|---|
 | Pointer/shuffle integration at `a5354ca1a` | Go1.27.3: 58 roots / 1,051 children; Go1.20.14: 55 / 998; zero skips/failures | Earlier integrated subset, not every later local change |
 | Observed private leaves | Current and minimum SDK partitions passed; source/ownership and budget controls retained | A preceding single-command timeout remains failed; partitioned passes are separate receipts |
 | Windows zero-frame leaf observation | Current root/profile: 13 / 161 and 6 / 109; historical Go1.23.12: 4 / 67 and 4 / 68 | Exact observed leaf only; framed-root SEH requirements remain |
-| Implicit MUL/IMUL fixed-local adapter | Go1.27.3: 38 / 4,086; Go1.20.14: 36 / 4,043; zero skips/failures | Native owner is prepared but not executed |
-| Conditional-pointer native owner at `6d0f167bc` | [Linux run](https://github.com/cpunion/plan9asm/actions/runs/40407417050): 23 programs, 736 observations per pipeline, six LLVM pipelines | Certifies that older source only, not the expanded domain or complete SHA1 |
-| Complete Linux/amd64 SDK objects | Latest complete Go1.27.2 inventory remains **38/55**, 17 failures, zero N/A | No later single-file attempt changes this denominator |
+| Implicit MUL/IMUL fixed-local adapter | Go1.27.3: 38 / 4,086; Go1.20.14: 36 / 4,043; zero skips/failures | Native execution is separately qualified below |
+| Native execution at `511029b0d` | [Linux run](https://github.com/cpunion/plan9asm/actions/runs/40434110395): 3 roots / 27 children, zero skips/failures; original Go and three APIs at O0/O2 | 42 pointer programs (1,344 observations/pipeline), 5 address/FLAGS programs (50), 36 MUL kernels plus 2 helpers (2,880); not whole crypto files or native AVX512 |
+| Complete Linux/amd64 SDK objects at `511029b0d` | **38/55**, 17 failures, zero N/A/unattempted | Same 55 Go1.27.2 source hashes and exact same pass set as the previous 38/55; no regression or new pass |
 
-An isolated native-address refactor removes the four-origin enumeration cap
+The integrated native-address refactor removes the four-origin enumeration cap
 and redundant dynamic DATA bounds analysis while retaining private/frame,
 readonly-store, source-lifetime and known constant-bound checks. Its first
 frozen related run completed 84 roots / 2,491 children: 82 roots passed,
 two failed on six old rejection expectations. Those failures are retained.
 After preserving the original source bodies, the corrected expectations and
 independent address/FLAGS driver pass 6 roots / 94 children on the current SDK,
-with zero skips. The full minimum-SDK qualification remains in progress.
-The expanded 42-program and new FLAGS native owners have not executed.
+with zero skips.
+The complete minimum-SDK scope subsequently passed 66 roots / 2,131 children,
+with zero skips/failures. These are composite receipts, not a single successful
+final current-SDK 84-root run. The new native owners passed on the integrated
+source as recorded above. Production code shrinks by 134 lines. State clone
+storage falls from 1,120/1,120/5,384 to 832/832/3,208 bytes for 1/8/32 entries;
+allocation counts remain 11/11/13, and joins remain allocation-free.
 
 Complete Go1.27.3 SHA1 was attempted with that refactor and still fails at
-private CFG address identity. Clearing its earlier DATA-extent refusal is not
-a whole-file pass. Do not add a library-specific relational interpreter.
+private CFG address identity. The complete 55-file rerun also identifies P256's
+nonzero-frame private helper, chacha8's register-ABI entry and chacha20poly1305's
+ordinary FP operand in the shared GP-effect consumer. Four diagnostics changed;
+thirteen did not. These are separate format/binding gaps, not four new opcodes.
+The target took 99 seconds versus the older single observation of 68 seconds;
+neither proves a stable performance change, and earlier rejection is not a
+speedup. Do not add a library-specific relational interpreter.
 
 ## Official rows and implementation
 
