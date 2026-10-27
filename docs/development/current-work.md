@@ -134,10 +134,28 @@ certified by a complete CI round:
   parameter cleanup requested in review. The documentation snapshot and
   dependency descriptions are also corrected.
 
+`1764c6a5d` subsequently connects the existing packed integer compare effects
+to the fixed-local vector consumer, adding 12 production lines. The independent
+RED run fails all 168 accepted source functions and 144 alias/FLAGS checks;
+the same 3 roots / 518 children then pass without skips. MMX and K-result
+forms retain their separate storage requirements. Object and related-family
+qualification is still running.
+
+The complete original Go1.27.2 Linux/amd64 inventory at `1764c6a5d` is now
+**39/55**, with 16 failures, zero N/A and zero unattempted files. All 55 source
+hashes match the earlier inventory, and all previous 38 successes remain.
+Chacha20poly1305 is the sole new whole-file object success. P256 now reaches
+`MOVL BX,X6`, whose GP/vector transfer lacks the fixed-local consumer; SHA1
+still fails on private CFG identity. The target takes 89 seconds; one sample
+does not establish acceleration. The command correctly exits nonzero for its
+remaining failures. A separate report-reader error assumed `patterns` was a
+string rather than the recorded string array; a fresh reader verified the
+unchanged source, tools and complete report without rerunning or relabeling
+the failed benchmark command.
+
 New native execution remains pending. The prepared Linux scope includes the
 253 machine-bit functions, 48 pointer programs and framed-helper oracles;
-object compilation alone does not qualify their execution. Re-run the complete
-55-file original inventory before changing its last recorded 38/55 result.
+object compilation alone does not qualify their execution.
 
 ## Official rows and implementation
 
@@ -207,9 +225,9 @@ rules. See [architecture](architecture.md).
    legal forms and meaningful rejection controls, independent runtime oracles,
    production line delta and separate parsing/whole-translation measurements.
 3. Restore ordinary-source SHA1 and P256 through shared rules; qualify the
-   new chacha20poly1305 object success in the complete inventory.
+   new chacha20poly1305 object success with independent executed semantics.
    Keep real ABI/layout requirements separate from extra source-safety analysis.
-   Re-run the complete original SDK inventory before updating 38/55.
+   Re-run the complete original SDK inventory before updating 39/55.
 4. Keep the four implicit-entry cases, two GC-scan cases and eight
    system/runtime/test-hook failures separately diagnosed. These are not
    automatically all runtime exclusions. Integration continues in
