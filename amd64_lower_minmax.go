@@ -32,38 +32,6 @@ func (c *amd64Ctx) lowerPackedIntegerMinMax(op Op, ins Instr) (ok bool, terminat
 		return true, false, fmt.Errorf("%w: legacy integer min/max m128 needs its original native storage/target", ErrProbeNeedsContext)
 	}
 	spec := form.spec
-	destination := ins.Args[form.destination]
-	byteWidth := form.byteWidth
-	lanes := byteWidth * 8 / spec.laneBits
-	if form.legacy && form.memory >= 0 {
-		old, err := c.loadPackedCompareLanes(ins.Args[form.second], 16, spec.laneBits, false)
-		if err != nil {
-			return true, false, err
-		}
-		value, err := c.emitPackedBinaryNativeMemory(first, spec.laneBits, old, strings.ToLower(string(op)))
-		if err != nil {
-			return true, false, err
-		}
-		bytes := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i%d> %s to <16 x i8>\n", bytes, lanes, spec.laneBits, value)
-		return true, false, c.storeLegacyPackedLogical(destination, "%"+bytes)
-	}
-	masked := form.mask >= 0
-	mask := ""
-	if masked {
-		mask, err = c.loadK(ins.Args[form.mask].Reg)
-		if err != nil {
-			return true, false, err
-		}
-	}
-	firstValue, err := c.loadX86PackedShiftLanes(ins.Args[form.first], byteWidth, spec.laneBits, form.broadcast, mask)
-	if err != nil {
-		return true, false, err
-	}
-	secondValue, err := c.loadPackedCompareLanes(ins.Args[form.second], byteWidth, spec.laneBits, false)
-	if err != nil {
-		return true, false, err
-	}
 	predicate := "ult"
 	if spec.signed {
 		predicate = "slt"
@@ -71,25 +39,18 @@ func (c *amd64Ctx) lowerPackedIntegerMinMax(op Op, ins Instr) (ok bool, terminat
 	if !spec.minimum {
 		predicate = strings.Replace(predicate, "lt", "gt", 1)
 	}
-	compared := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = icmp %s <%d x i%d> %s, %s\n", compared, predicate, lanes, spec.laneBits, secondValue, firstValue)
-	computed := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = select <%d x i1> %%%s, <%d x i%d> %s, <%d x i%d> %s\n", computed, lanes, compared, lanes, spec.laneBits, secondValue, lanes, spec.laneBits, firstValue)
-	result := "%" + computed
-	if masked {
-		oldBytes, err := c.loadPackedCompareBytes(destination, byteWidth)
-		if err != nil {
-			return true, false, err
-		}
-		old := c.bitcastVectorBytesToIntegerLanes(byteWidth, lanes, spec.laneBits, oldBytes)
-		result = amd64ApplyIntegerLaneMask(c, lanes, spec.laneBits, result, old, mask, form.zeroing)
+	legacyMnemonic := ""
+	if form.legacy && form.memory >= 0 {
+		legacyMnemonic = strings.ToLower(string(op))
 	}
-	out := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i%d> %s to <%d x i8>\n", out, lanes, spec.laneBits, result, byteWidth)
-	if form.legacy {
-		return true, false, c.storeLegacyPackedLogical(destination, "%"+out)
-	}
-	return true, false, c.storePackedMoveOperand(destination, byteWidth, "%"+out)
+	err = c.emitPackedBinaryE4(ins, form.x86PackedBinaryForm, spec.laneBits, legacyMnemonic,
+		func(lanes, bits int, first, second string) string {
+			compared, computed := c.newTmp(), c.newTmp()
+			fmt.Fprintf(c.b, "  %%%s = icmp %s <%d x i%d> %s, %s\n", compared, predicate, lanes, bits, second, first)
+			fmt.Fprintf(c.b, "  %%%s = select <%d x i1> %%%s, <%d x i%d> %s, <%d x i%d> %s\n", computed, lanes, compared, lanes, bits, second, lanes, bits, first)
+			return "%" + computed
+		})
+	return true, false, err
 }
 
 var amd64PackedIntegerMinMaxSpecs = map[string]amd64PackedIntegerMinMaxSpec{
