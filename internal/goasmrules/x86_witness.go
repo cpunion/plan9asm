@@ -38,7 +38,7 @@ func x86PackedUniformShiftTable(table string) bool {
 }
 
 func x86PackedImmediateExtensionRow(rule X86AVXRule) bool {
-	return x86PackedUniformShiftTable(rule.Ytab) && (rule.ZCase == "Zvex_i_rm_vo" ||
+	return (x86PackedUniformShiftTable(rule.Ytab) || rule.Ytab == "_yvprold") && (rule.ZCase == "Zvex_i_rm_vo" ||
 		rule.ZCase == "Zevex_i_rm_vo" || rule.ZCase == "Zevex_i_rm_k_vo")
 }
 
@@ -48,7 +48,7 @@ func x86PackedSyntaxWitnesses(rule X86AVXRule, unary bool) ([]string, error) {
 	floating := rule.Ytab == "_yvaddpd" || rule.Ytab == "_yvaddsd"
 	scalar := rule.Ytab == "_yvaddsd"
 	binaryTable := rule.Ytab == "_yvandnpd" || rule.Ytab == "_yvblendmpd" ||
-		rule.Ytab == "_yvaddsubpd" || rule.Ytab == "_yvpcmpeqb" || floating || shift
+		rule.Ytab == "_yvaddsubpd" || rule.Ytab == "_yvpcmpeqb" || rule.Ytab == "_yvprold" || floating || shift
 	unaryTable := rule.Ytab == "_yvmovddup" || rule.Ytab == "_yvexpandpd" || move
 	if (!unary && !binaryTable || unary && !unaryTable) || rule.Prefix != "Pavx" {
 		return nil, fmt.Errorf("%s is outside the audited packed vector table grammar", rule.Opcode)
@@ -66,6 +66,9 @@ func x86PackedSyntaxWitnesses(rule X86AVXRule, unary bool) ([]string, error) {
 	masked := rule.ZCase == maskCase
 	evex := masked || rule.ZCase == "Zevex_rm_v_r" || store && rule.ZCase == "Zevex_r_v_rm" ||
 		immediate && rule.ZCase == "Zevex_i_rm_vo"
+	if rule.Ytab == "_yvprold" && (!immediate || !evex) {
+		return nil, fmt.Errorf("packed immediate rotates require an EVEX immediate format")
+	}
 	if rule.Ytab == "_yvpslldq" && (!immediate || masked) {
 		return nil, fmt.Errorf("per-128-bit byte shifts require an unmasked immediate format")
 	}
@@ -103,19 +106,19 @@ func x86PackedSyntaxWitnesses(rule X86AVXRule, unary bool) ([]string, error) {
 			resultClass = "Yk"
 		}
 		firstClass, secondClass := candidate.memory, candidate.register
-		if shift {
+		if shift && !immediate {
 			// Register/m128 counts retain X even when data/result is Y/Z.
 			firstClass = "Yxm"
 			if evex {
 				firstClass += "Evex"
 			}
-			if immediate {
-				firstClass, secondClass = "Yu8", candidate.memory
-				if !evex {
-					secondClass = candidate.register
-					if rule.Classes[0] == "Yi8" {
-						firstClass = "Yi8"
-					}
+		}
+		if immediate {
+			firstClass, secondClass = "Yu8", candidate.memory
+			if !evex {
+				secondClass = candidate.register
+				if rule.Classes[0] == "Yi8" {
+					firstClass = "Yi8"
 				}
 			}
 		}

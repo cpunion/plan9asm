@@ -106,6 +106,13 @@ func X86PackedBitCountConflictRows(legacy X86LegacyCatalog, avx []X86AVXRule) ([
 		VPCONFLICTD VPCONFLICTQ`)
 }
 
+// X86PackedRotateRows retains the complete immediate and per-lane D/Q rotate family.
+// Variable members remain independently owned by the EVEX binary remainder scope.
+func X86PackedRotateRows(legacy X86LegacyCatalog, avx []X86AVXRule) ([]X86PackedBinaryRow, error) {
+	return x86PackedBinaryRows(legacy, avx, `VPROLD VPROLQ VPRORD VPRORQ
+		VPROLVD VPROLVQ VPRORVD VPRORVQ`)
+}
+
 // X86PackedMoveRows retains the twelve AVX whole-vector move names. Legacy
 // moves are separate; register alternatives belong to the first store rows.
 func X86PackedMoveRows(legacy X86LegacyCatalog, avx []X86AVXRule) ([]X86PackedBinaryRow, error) {
@@ -260,7 +267,7 @@ func x86PackedAVXRowWitnesses(rule X86AVXRule) ([]X86PackedBinaryWitness, error)
 	// The validated official source class owns vector width, independently
 	// of register/memory witnesses and vector versus K result classes.
 	dataClass := rule.Classes[0]
-	if shift {
+	if shift || immediate {
 		dataClass = rule.Classes[1]
 	}
 	bank := strings.ToUpper(dataClass[1:2])
@@ -308,7 +315,7 @@ func x86PackedAVXRowWitnesses(rule X86AVXRule) ([]X86PackedBinaryWitness, error)
 	if err != nil || atoms[kind+"0F"] == atoms[kind+"0F38"] || atoms[kind+"W0"] == atoms[kind+"W1"] {
 		return nil, fmt.Errorf("unmodeled packed encoding header %q", header)
 	}
-	if shift && (!atoms[kind+"66"] || !atoms[kind+"0F"] ||
+	if (shift || immediate) && (!atoms[kind+"66"] || !atoms[kind+"0F"] ||
 		(kind == "vex" || rule.Ytab == "_yvpslldq") && !atoms[kind+"W0"]) {
 		return nil, fmt.Errorf("shift prefix or W mode differs from its official transport")
 	}
