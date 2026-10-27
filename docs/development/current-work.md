@@ -8,7 +8,7 @@ this page records the current candidate and its limits.
 
 ## Publication and review
 
-PR40 remains draft. Published `01955e42e` passes its
+PR40 remains draft. The preceding publication `01955e42e` passes its
 [complete CI round](https://github.com/xgo-dev/plan9asm/actions/runs/40536640591)
 on attempt 1: **325/325 Go checks plus Codecov**, with **88.0%** main statement
 coverage. Its complete named inventory matches the preceding 325-job round.
@@ -21,13 +21,15 @@ joins and removes 121 unreachable legacy floating lines. It preserves all SDKs
 and test owners while creating current/minimum jobs first; creation order does
 not guarantee external runner scheduling priority.
 
-The next local candidate is `537be28b8`, not yet published. It adds 186 official
+The new local candidate is qualified at `fe97b6d53`, before publication. It adds 186 official
 rows / 765 witnesses, avoids unnecessary SIMD feature queries for baseline GP
 forms, and validates actual native inline/module assembly against the source
-backend. Its five-architecture gate passes on frozen source/tools. Backend
-qualification includes both endpoint SDKs and both complete CLI suites below.
-The following declaration-demand work is still under TDD; its initial real RED
-is retained and is not a completed optimization.
+backend, then selects amd64/386 LLVM declarations from actual generated uses.
+Its five-architecture gate passes on frozen source/tools. Complete original SDK
+objects retain 41/55 passes and all 14 previous failure diagnostics. Backend
+qualification includes both endpoint SDKs and both complete CLI suites below;
+the later declaration change has its own scoped qualification. New-head cloud
+CI remains required after publication.
 The failed `004da9f44` cache-policy round and earlier failures retain their
 original outcomes. Its stale Node assertion was repaired without removing
 the actual Go lifecycle, ownership or cleanup checks.
@@ -85,6 +87,11 @@ Never push or merge upstream directly.
   LLVM binding is v0.10.1 in all three modules. Its missing module-assembly
   getter uses a 23-line LLVM22 C API length bridge, without parsing IR or adding
   linker flags. The repair adds 81 net production lines.
+- AMD64/386 declaration selection derives immutable catalogs from the original
+  emitter and reuses the ARM64 global-name scanner. Six ordinary declarations
+  and source-dependent SHA/string/rounding helpers retain their owners. Direct
+  module success adds no lookup or scan. This adds 68 net production lines,
+  without another signature table, opcode registry or source/caller cache.
 
 The final GP descriptor reuse avoids the rejected eager-query overhead.
 Measured replay ABBA differences against the same partition implementation
@@ -99,6 +106,16 @@ The complete original P256 workload is mixed (+4.17% / -1.64%); its 35,079
 source bytes, 14 TEXTs, ten public definitions and four internal helpers remain
 intact, with equivalent IR/attributes and LLVM22 objects. These results do not
 establish a whole-SDK speedup or generated-program acceleration.
+
+Declaration selection is measured separately, using uninstrumented ABBA runs
+with 12 unchanged-input cases and ten samples per variant/case/SDK. Across both
+SDKs, the nine packed translation cases improve approximately 28–29%, GP CFG
+13–17%, and annotated text fallback 46–48%. Direct control varies below 1%, with
+unchanged allocations. Immutable catalog construction costs about 0.19–0.23ms
+and 224–230KB once per source mode; that is not complete cold-API startup cost.
+Full P256 loses about 67KB of unused declarations; its function bodies,
+attributes and ELF execution sections remain equivalent. Its wall-time results
+are mixed (+4.58% / -0.39%), so no complete-SDK speedup is claimed.
 
 ## Qualification of this batch
 
@@ -125,6 +142,10 @@ establish a whole-SDK speedup or generated-program acceleration.
 | Baseline GP feature projection at `da3e6029b` | Both endpoint SDKs **47 roots / 2,183 children PASS**, zero failures/skips | Existing grammar and all prior benchmark inputs retained; 573 Node policies and 26 / 300 Go policy checks pass |
 | Actual native-assembly backend guard at `537be28b8` | Each endpoint SDK **89 roots / 5,188 children PASS**, zero failures/skips | All five source families, three public APIs, actual LLVM22 native/portable objects and retained foreign-target REDs |
 | Complete CLI and policy qualification at `537be28b8` | Simple CLI **38 / 39**; rich CLI **401 / 2,198**; Go policy **26 / 300**; Node **573 PASS** | Zero failures/skips; one Linux-only rich CLI source root is absent on Darwin, not skipped; root five-architecture gate also passes |
+| Native-target test contracts at `3e03de05d` | Each endpoint SDK **29 roots / 1,733 children PASS**, zero failures/skips | All old cases retained; native positives name their actual target and unspecified-target negatives remain required |
+| Declaration demand at `72dd692a2` | Current **70 / 3,141**; minimum **68 / 2,799 PASS**, zero failures/skips | All baseline case IDs retained; new declaration and helper-closure controls; two current-only roots are absent on minimum |
+| Declaration race and preflight | Current race **6 / 72**; Go policy **26 / 300**; Node **573 PASS** | Frozen source/tools; integrated `fe97b6d53` differs only in documentation and passes the five-architecture gate |
+| Complete SDK objects at `fe97b6d53` | **41/55 PASS; 14 FAIL**, zero N/A or unattempted | All original Go1.27.2 source hashes and all 14 failure diagnostics match the preceding baseline; raw command exits 1 |
 
 The joint native scope executes 45 logical kernels over all 256 byte values
 with separate and overlapping buffers, 36 original shifted-literal kernels
@@ -230,10 +251,11 @@ showed regression; no acceleration is claimed for the accepted cleanup.
 
 ## Remaining work, in order
 
-1. Complete and measure the amd64 declaration-demand batch, then publish the
-   qualified local candidate through the allowed fork and finish its new-head
+1. Publish the qualified local candidate through the allowed fork and finish its new-head
    CI/coverage. Repin LLGo to that exact public revision and qualify it. Obtain
    external review and retain draft status meanwhile.
+   Next local reductions are integer min/max reuse of the existing E4 pipeline
+   and the next independent unary row join. Their static proposals are not passes.
 2. Complete amd64 official-row ownership, 386 applicability and independent
    semantics. Extend existing family/object/native owners instead of creating
    another opcode registry or enumerating unrelated source/target products.

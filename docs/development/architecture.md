@@ -18,9 +18,11 @@ before expanding another. Existing cross-architecture regression gates remain.
 3. Architecture-local typed parsers validate complete operand forms. Named and
    raw-encoded forms should converge on the same numerical lowerer and effects.
    Effects describe reads, writes, widths, flags and preserved register aliases.
-4. Lowerers emit LLVM IR. ARM64 declarations are selected from an immutable
-   catalog by the generated module's actual global references, not a second
+4. Lowerers emit LLVM IR. ARM64 and x86 fallback declarations are selected from
+   immutable catalogs by the generated module's actual global references, not a second
    opcode-to-intrinsic table. Comments and string data do not select declarations.
+   X86 keeps ordinary declarations and source helpers on their existing path;
+   direct module success needs no catalog lookup or text scan.
 5. The shared module return path checks backend restrictions for every API,
    including special early returns, and disposes rejected modules. The caller
    owns a successful module and must dispose it before its LLVM context.
