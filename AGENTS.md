@@ -36,6 +36,8 @@ batches live in [llgo-compat/plan9asm](https://github.com/llgo-compat/plan9asm).
   running snapshot or reuse its report to certify a changed revision.
 - Commit verified batches promptly. Stage repairs in the allowed fork; retain
   draft status until current-head tests, CI, review and coverage pass.
+- Before publishing test-helper or workflow changes, run the complete Node
+  policy suite and the Go `ci_policy` selector described in validation.
 
 ## Commands
 

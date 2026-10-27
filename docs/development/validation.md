@@ -67,6 +67,11 @@ scripts/check-arm64-plan9-corpus.sh
 scripts/check-stdlib-corpus.sh --instructions-only
 ```
 
+Changes to test helpers, resource ownership or workflows require the complete
+Node policy suite above and the exact Go selector in the `ci_policy` job of
+[go-ci.yml](../../.github/workflows/go-ci.yml) before publication. Use Node22.23.4;
+focused instruction or lifecycle tests do not check these static contracts.
+
 The [exhaustive runner](../../cmd/plan9asmtest/README.md) can partition expensive
 first-party tests without sampling. Its actual inventory, disjoint ownership,
 raw outcomes and strict complete-module aggregate remain required. Owner 0 owns
