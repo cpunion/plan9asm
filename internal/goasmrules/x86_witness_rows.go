@@ -138,6 +138,14 @@ func X86FMA3Rows(legacy X86LegacyCatalog, avx []X86AVXRule) ([]X86PackedBinaryRo
 	return x86PackedBinaryRows(legacy, avx, strings.Join(names, " "))
 }
 
+// X86AVXFloatBinaryRows retains the ordinary PS/PD/SS/SD arithmetic rows;
+// legacy, horizontal, alternating and raw FP16 families have separate owners.
+func X86AVXFloatBinaryRows(legacy X86LegacyCatalog, avx []X86AVXRule) ([]X86PackedBinaryRow, error) {
+	return x86PackedBinaryRows(legacy, avx, `VADDPS VADDPD VADDSS VADDSD VSUBPS VSUBPD VSUBSS VSUBSD
+		VMULPS VMULPD VMULSS VMULSD VDIVPS VDIVPD VDIVSS VDIVSD
+		VMINPS VMINPD VMINSS VMINSD VMAXPS VMAXPD VMAXSS VMAXSD`)
+}
+
 // X86PackedBinaryPilotRows covers the shared packed add/subtract and D/Q
 // low-multiply pilot. MMX and the separate W multiply family are not included.
 // PADDD is a frontend alias, not an additional official encoder row.
@@ -239,7 +247,7 @@ func x86PackedAVXRowWitnesses(rule X86AVXRule) ([]X86PackedBinaryWitness, error)
 	}
 	header := rule.OpBytes[rule.EncodingOffset]
 	optional := []string{kind + "66", kind + "0F", kind + "0F38", kind + "W0", kind + "W1"}
-	if move {
+	if move || rule.Ytab == "_yvaddsd" {
 		optional = append(optional, kind+"F2", kind+"F3")
 	}
 	atoms, err := x86PackedEncodingAtoms(header, []string{
@@ -283,7 +291,7 @@ func x86PackedAVXRowWitnesses(rule X86AVXRule) ([]X86PackedBinaryWitness, error)
 			optional = []string{"evexZeroingEnabled"}
 		}
 		if rule.Ytab == "_yvaddpd" && width == 512 || rule.Ytab == "_yvaddsd" {
-			optional = append(optional, "evexRoundingEnabled")
+			optional = append(optional, "evexRoundingEnabled", "evexSaeEnabled")
 		}
 		flags, err := x86PackedEncodingAtoms(features, []string{"evexN" + strconv.Itoa(tuple)}, optional)
 		if err != nil || flags["evexBcstN4"] && flags["evexBcstN8"] {
@@ -343,6 +351,9 @@ func x86PackedAVXRowWitnesses(rule X86AVXRule) ([]X86PackedBinaryWitness, error)
 			}
 			if witness.Broadcast {
 				p2 |= 0x10
+			}
+			if strings.Contains(fields[0], ".SAE") {
+				p2 |= 0x10 // SAE keeps LL; embedded rounding replaces it below.
 			}
 			for control, suffix := range []string{"RN_SAE", "RD_SAE", "RU_SAE", "RZ_SAE"} {
 				if strings.Contains(fields[0], "."+suffix) {

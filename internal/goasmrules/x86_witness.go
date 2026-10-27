@@ -116,7 +116,8 @@ func x86PackedSyntaxWitnesses(rule X86AVXRule, unary bool) ([]string, error) {
 		features = rule.OpBytes[rule.EncodingOffset+1]
 	}
 	rounding := hasEncodingTerm(features, "evexRoundingEnabled")
-	if hasEncodingTerm(features, "evexSaeEnabled") || rounding && (!floating || !scalar && bank != "Z") {
+	sae := hasEncodingTerm(features, "evexSaeEnabled")
+	if rounding && sae || (rounding || sae) && (!floating || !scalar && bank != "Z") {
 		return nil, fmt.Errorf("%s adds unaudited rounding/SAE to the packed binary grammar", rule.Opcode)
 	}
 	if maskResult && hasEncodingTerm(features, "evexZeroingEnabled") {
@@ -167,6 +168,12 @@ func x86PackedSyntaxWitnesses(rule X86AVXRule, unary bool) ([]string, error) {
 			if masked && hasEncodingTerm(features, "evexZeroingEnabled") {
 				emit(bank+"0", "."+control+".Z")
 			}
+		}
+	}
+	if sae {
+		emit(bank+"0", ".SAE")
+		if masked && hasEncodingTerm(features, "evexZeroingEnabled") {
+			emit(bank+"0", ".SAE.Z")
 		}
 	}
 	return witnesses, nil
