@@ -174,7 +174,8 @@ minimum Go 1.20.14 both pass the following Linux/amd64 LLVM22 object scopes:
 | Mask blend | 36 | 144 |
 | Horizontal integer add/subtract | 18 | 36 |
 | FMA3 | 360 | 2,028 |
-| Local total | 1,258 | 4,910 |
+| AVX whole-vector moves | 144 | 306 |
+| Local total | 1,402 | 5,216 |
 
 Published `1c54c530e` contains 865 rows / 2,774 witnesses, including all eighteen
 horizontal integer rows. Its complete CI is running; the prior `ab68a6ecc`
@@ -185,6 +186,13 @@ objects: current 112 roots / 9,018 children, minimum 111 / 9,018, no failures/sk
 Previous witness fields and initialized FMA axis sources remain identical.
 See [current work](current-work.md) for exact revisions, native boundaries and
 publication status.
+
+The subsequent AVX move join adds 144 ordered rows and 306 witnesses: 276
+ordinary initialized forms and 30 early terminal faults. Both endpoint SDKs
+pass 114 host-applicable roots / 1,765 children without failures/skips. The
+102 load-register alternatives shadowed by preceding store rows retain explicit
+selection mappings; they reference existing regcopy byte checks and are not
+double-counted. Legacy moves and native execution remain separate owners.
 
 Two PADDD alias witnesses are separate from the canonical counts. Min/max
 includes 48 non-Q, unmasked, narrow EVEX forms; low-register VEX objects cannot

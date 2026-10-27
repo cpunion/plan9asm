@@ -10,17 +10,21 @@ this page records the current candidate and its limits.
 
 PR40 remains draft. Published `1c54c530e` carries the qualified translation
 repairs below; its [complete CI round](https://github.com/xgo-dev/plan9asm/actions/runs/40505530452)
-is running. Previous `ab68a6ecc` completed its
+is recovering from self-hosted runner communication failures. The first failed
+attempt and missing-producer artifact failures are retained; only failed jobs
+and their dependents are rerun on the same source. Previous `ab68a6ecc` completed its
 [full CI round](https://github.com/xgo-dev/plan9asm/actions/runs/40477411915)
 naturally: **325/325 successful jobs**, no failed/cancelled/skipped jobs and
 **88.0%** main statement coverage. This qualifies that revision, not the next
 publication. Both inline threads are resolved; external approval is outstanding.
 
-The next batch adds ABS and FMA3 official-row joins without changing translator
-production code or native fixture inventories. Integrated `6ca5e4a9d` is
-byte-identical to qualified `d21fb3c8f` except two documentation files. Its
-fresh publication preflight and five-architecture gate pass. Batch the next
-publication after the current CI finishes; full new-head CI remains required.
+The next batch adds ABS, FMA3 and AVX move official-row joins without changing
+translator production code or native fixture inventories. Integrated `824f9375b`
+matches qualified move code `72e765098`, with only documentation and the tested
+current/minimum-first CI creation order differing. Its fresh preflight and
+five-architecture gate pass. Batch the publication after the current CI recovery
+finishes; full new-head CI remains required. Creation order is not a guarantee
+of external runner scheduling priority.
 The failed `004da9f44` cache-policy round and earlier failures retain their
 original outcomes. Its stale Node assertion was repaired without removing
 the actual Go lifecycle, ownership or cleanup checks.
@@ -89,6 +93,8 @@ with allocation-byte differences +0.22% and +0.56%. Flat cases vary -0.05% to
 | Packed ABS join and affected regressions at `b5ca7da71` | Go1.27.3: 60 roots / 1,048 children; Go1.20.14: 59 / 1,048 PASS | Full rule reader, every existing row join, original ABS/sign five-target objects and portable values; zero failures/skips |
 | Combined ABS/FMA3 join at `d21fb3c8f` | Go1.27.3: **112 roots / 9,018 children**; Go1.20.14: **111 / 9,018 PASS** | All prior row joins, 178 initialized FMA axes, full named formats, raw/undefined-input controls and existing portable owners; zero failures/skips |
 | Integrated `6ca5e4a9d` preflight | **573 Node policies; 26 Go roots / 299 children; five-architecture gate PASS** | Code identical to the qualified combined join; source/tools frozen |
+| AVX move join at `72e765098` | Both endpoint SDKs: **114 roots / 1,765 children PASS**, zero failures/skips | Host-applicable scope; two x86 execution owners remain with required Linux counterparts |
+| Final integrated `824f9375b` preflight | **573 Node policies; 26 Go roots / 300 children; five-architecture gate PASS** | Exact tools, frozen source; current/minimum-first creation order preserves every SDK and owner |
 
 The joint native scope executes 45 logical kernels over all 256 byte values
 with separate and overlapping buffers, 36 original shifted-literal kernels
@@ -123,7 +129,8 @@ Neither file is cropped or substituted with an instruction-only fixture.
 | Mask blend | 36 | 144 |
 | Horizontal integer | 18 | 36 |
 | FMA3 | 360 | 2,028 |
-| Total | **1,258** | **4,910** |
+| AVX whole-vector moves | 144 | 306 |
+| Total | **1,402** | **5,216** |
 
 These joins retain independent ordered Go rows and actual Go bytes, then compile
 initialized functions through three APIs with LLVM22. Two PADDD aliases are
@@ -152,6 +159,24 @@ initializer adds nine. No new translator rule or runtime matrix is introduced.
 An ignored Go1.20 overlay snapshot probe hit a vet virtual-file defect; its
 failed receipt is retained. Only that diagnostic comparison uses `-vet=off`;
 the complete family and CI gates retain their original default vet behavior.
+
+Move witnesses are **276 ordinary initialized forms and 30 terminal #UD
+controls**, so the total contains 5,186 ordinary forms and 30 faults. Each fault
+function, through each of three APIs, must independently contain one UD2 and
+unreachable with no input reads before LLVM object compilation. Both SDKs retain
+90 per-function/API body receipts. This is not successful normal-value execution.
+All 144 rows have original Go memory witnesses. A further 102 load-register
+alternatives select earlier store rows; their selection mappings reference
+already-counted regcopy bytes instead of inventing another row hit.
+
+The original 188/64/30 move kernel directories retain all 45 observed source and
+declaration hashes, and the previous 1,258 rows / 4,910 witnesses remain identical.
+The initial 115-root run retained three real skips. A compile-only owner was
+incorrectly using an execution selector; it now compiles all 90 aligned cases
+without requiring Rosetta. A new frame object owner preserves the original four
+target objects independently of host execution. The two remaining host-native
+roots are explicitly outside the final local scope and retain their required
+Linux runtime owners; their partial objects are not reported as runtime passes.
 
 ## Remaining work, in order
 
