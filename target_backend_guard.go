@@ -34,7 +34,10 @@ func validateBackendSourceGoarch(file *File, options Options) error {
 // validateTranslatedBackend checks the actual returned module, including early
 // native-source returns. Keep target-independent source lowering portable.
 func validateTranslatedBackend(file *File, options Options, module llvm.Module) error {
-	triple := module.Target()
+	requestedTriple := module.Target()
+	// Match the backend LLVM22 will actually select, including omitted or
+	// reordered fields. Keep the request and source-owner options unchanged.
+	triple := llvmNormalizedTargetTriple(requestedTriple)
 	architecture, _, _ := strings.Cut(triple, "-")
 	// LLVM's x86 intrinsic namespace is target-specific. Check intrinsic IDs
 	// and actual uses: ordinary names and unused declarations stay portable.
@@ -56,11 +59,11 @@ func validateTranslatedBackend(file *File, options Options, module llvm.Module) 
 					continue
 				}
 				return fmt.Errorf("%w: x86 intrinsic %q requires its matching x86 LLVM target, got %q",
-					ErrProbeNeedsContext, function.Name(), triple)
+					ErrProbeNeedsContext, function.Name(), requestedTriple)
 			}
 		}
 	}
-	if err := validateTranslatedInlineAsmBackend(file, goarch, module); err != nil {
+	if err := validateTranslatedInlineAsmBackend(file, goarch, triple, module); err != nil {
 		return err
 	}
 	if architecture == "wasm32" || architecture == "wasm64" {
@@ -74,7 +77,7 @@ func validateTranslatedBackend(file *File, options Options, module llvm.Module) 
 				for use := block.AsValue().FirstUse(); !use.IsNil(); use = use.NextUse() {
 					if !use.User().IsAConstant().IsNil() {
 						return fmt.Errorf("%w: LLVM target %q cannot represent blockaddress in %q",
-							ErrProbeNeedsContext, triple, function.Name())
+							ErrProbeNeedsContext, requestedTriple, function.Name())
 					}
 				}
 			}
@@ -94,7 +97,7 @@ func validateTranslatedBackend(file *File, options Options, module llvm.Module) 
 			for _, feature := range strings.Split(features, ",") {
 				if strings.HasPrefix(feature, "+sve") {
 					return fmt.Errorf("%w: ARM64 SVE requires an explicit AArch64 LLVM target, got %q",
-						ErrProbeNeedsContext, triple)
+						ErrProbeNeedsContext, requestedTriple)
 				}
 			}
 		}
@@ -105,14 +108,13 @@ func validateTranslatedBackend(file *File, options Options, module llvm.Module) 
 	for function := module.FirstFunction(); !function.IsNil(); function = llvm.NextFunction(function) {
 		if strings.HasPrefix(function.Name(), "llvm.aarch64.sve.") && !function.FirstUse().IsNil() {
 			return fmt.Errorf("%w: used ARM64 SVE intrinsic %q requires an AArch64 LLVM target, got %q",
-				ErrProbeNeedsContext, function.Name(), triple)
+				ErrProbeNeedsContext, function.Name(), requestedTriple)
 		}
 	}
 	return nil
 }
 
-func validateTranslatedInlineAsmBackend(file *File, goarch string, module llvm.Module) error {
-	triple := module.Target()
+func validateTranslatedInlineAsmBackend(file *File, goarch, triple string, module llvm.Module) error {
 	if file != nil {
 		// Normal native requests need no instruction walk. Reuse the same
 		// source-mode and endian boundaries as the typed family validators.
@@ -130,15 +132,15 @@ func validateTranslatedInlineAsmBackend(file *File, goarch string, module llvm.M
 				return nil
 			}
 		case ArchWASM:
-			parts := strings.Split(triple, "-")
-			if len(parts) >= 3 && parts[0] == "wasm32" {
+			architecture, _, _ := strings.Cut(triple, "-")
+			if architecture == "wasm32" {
 				return nil
 			}
 		}
 	}
 	if llvmModuleHasAssembly(module) {
 		return fmt.Errorf("%w: used module assembly requires its matching source LLVM target, got %q",
-			ErrProbeNeedsContext, triple)
+			ErrProbeNeedsContext, module.Target())
 	}
 	for function := module.FirstFunction(); !function.IsNil(); function = llvm.NextFunction(function) {
 		for block := function.FirstBasicBlock(); !block.IsNil(); block = llvm.NextBasicBlock(block) {
@@ -158,7 +160,7 @@ func validateTranslatedInlineAsmBackend(file *File, goarch string, module llvm.M
 						}
 					}
 					return fmt.Errorf("%w: used native inline assembly in %q requires its matching source LLVM target, got %q",
-						ErrProbeNeedsContext, function.Name(), triple)
+						ErrProbeNeedsContext, function.Name(), module.Target())
 				}
 			}
 		}
