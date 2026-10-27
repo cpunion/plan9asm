@@ -13,8 +13,9 @@ type X86PackedBinaryRow struct {
 	Witnesses  []X86PackedBinaryWitness
 }
 
-// Unary row witnesses leave Second empty. Mask and old-destination reads are
-// governed by their original row attributes, independently of the data source.
+// Unary AVX rows leave Second empty; legacy rows retain their literal second
+// operand even when it is destination-only. These syntax fields do not certify
+// semantic reads: typed effects own mask and old-destination dependencies.
 type X86PackedBinaryWitness struct {
 	Instruction, Generation    string
 	First, Second, Destination string

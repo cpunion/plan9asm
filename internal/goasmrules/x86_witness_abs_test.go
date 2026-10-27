@@ -14,8 +14,9 @@ func TestX86PackedAbsRowsShareUnaryWitnesses(t *testing.T) {
 		})
 	for _, row := range inventory.rows {
 		for _, witness := range row.Witnesses {
-			if witness.Generation != "legacy" && witness.Second != "" {
-				t.Fatal("unary ABS acquired a second data source", row.ID, witness)
+			if witness.Generation == "legacy" && witness.Second != witness.Destination ||
+				witness.Generation != "legacy" && witness.Second != "" {
+				t.Fatal("unary ABS syntax confused its destination and a second source", row.ID, witness)
 			}
 			if witness.Generation == "evex" && !witness.Memory && !strings.HasSuffix(witness.First, "16") {
 				t.Fatal("unary source can lose its original EVEX row", row.ID, witness)
