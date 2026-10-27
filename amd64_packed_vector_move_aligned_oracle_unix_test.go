@@ -12,7 +12,7 @@ import (
 // Every host compiles the actual Go-byte original/LLVM oracle. Only the required
 // Linux/amd64 runtime root executes it; this test is not native ISA evidence.
 func TestX86PackedMoveAlignedOriginalGoOracleCompileOnly(t *testing.T) {
-	execution := x86FloatCompareExecutionTools(t)
+	execution := fixedLocalPackedCompileOnlyTools(t)
 	ir, main, count := x86PackedMoveObservableFixture(t, true, true, execution.triple)
 	compileLLVMToObject(t, execution.llc, execution.triple, "aligned-oracle.ll", "aligned-oracle.o", ir)
 	dir := t.TempDir()

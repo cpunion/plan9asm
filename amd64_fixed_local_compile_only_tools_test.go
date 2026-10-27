@@ -25,6 +25,16 @@ func TestFixedLocalWideCompileOnlyOwnersDoNotRequireRuntimeTransport(t *testing.
 			}
 		})
 	}
+	t.Run("whole-vector move", func(t *testing.T) {
+		move := fixedLocalLeaseFunctions(t, "amd64_packed_vector_move_aligned_oracle_unix_test.go")["TestX86PackedMoveAlignedOriginalGoOracleCompileOnly"]
+		if move == nil {
+			t.Fatal("missing original-Go aligned move object owner")
+		}
+		calls := fixedLocalLeaseCalls(move.Body)
+		if calls["fixedLocalPackedCompileOnlyTools"] != 1 || calls["x86FloatCompareExecutionTools"] != 0 {
+			t.Error("move object compilation must select LLVM22/SDK without execution capability")
+		}
+	})
 	// Keep the actual execution roles separate, including their real CPU/OS
 	// checks. Object compilation cannot certify the original native programs.
 	sse := functions["TestCrossLinuxRuntimeMatrixGoAMD64FixedLocalPackedSSE"]

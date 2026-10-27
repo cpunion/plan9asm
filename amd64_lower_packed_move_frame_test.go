@@ -30,6 +30,15 @@ func TestX86PackedMoveFrameRejectsUndeclaredSlots(t *testing.T) {
 }
 
 func TestX86PackedMoveFrameSlotsRuntime(t *testing.T) {
+	x86PackedMoveFrameSlots(t, true)
+}
+
+func TestX86PackedMoveFrameSlotsObjects(t *testing.T) {
+	x86PackedMoveFrameSlots(t, false)
+}
+
+func x86PackedMoveFrameSlots(t *testing.T, execute bool) {
+	t.Helper()
 	llc, clang, ok := findLlcAndClang(t)
 	if !ok {
 		t.Fatal("LLVM 22 llc/clang not found")
@@ -69,6 +78,10 @@ func TestX86PackedMoveFrameSlotsRuntime(t *testing.T) {
 			t.Fatal(err)
 		}
 		compileLLVMToObject(t, llc, triple, "packed-frame.ll", "packed-frame.o", ir)
+	}
+	if !execute {
+		t.Log("complete original frame source compiled for all four targets; native execution has its separate runtime owner")
+		return
 	}
 	crossRosetta := runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" && rosettaAvailable()
 	if runtime.GOARCH != "amd64" && !crossRosetta {

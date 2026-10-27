@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"go/ast"
 	"os"
 	"strings"
 	"testing"
@@ -28,6 +29,23 @@ func x86PackedMoveRuntimeNativeRow(op string, memory bool) bool {
 }
 
 func TestX86PackedMoveRuntimePartitionIsComplete(t *testing.T) {
+	frameFunctions := fixedLocalLeaseFunctions(t, "amd64_lower_packed_move_frame_test.go")
+	for name, execute := range map[string]string{
+		"TestX86PackedMoveFrameSlotsObjects": "false", "TestX86PackedMoveFrameSlotsRuntime": "true",
+	} {
+		function := frameFunctions[name]
+		if function == nil || fixedLocalLeaseCalls(function.Body)["x86PackedMoveFrameSlots"] != 1 {
+			t.Fatal("missing original frame objects or native runtime owner", name)
+		}
+		ast.Inspect(function.Body, func(node ast.Node) bool {
+			if call, ok := node.(*ast.CallExpr); ok && fixedLocalLeaseCallName(call) == "x86PackedMoveFrameSlots" {
+				if len(call.Args) != 2 || !fixedLocalLeaseIdent(call.Args[1], execute) {
+					t.Error("frame object compilation changed its role or weakened native execution", name)
+				}
+			}
+			return true
+		})
+	}
 	// These are the exact historical rows, independent of the implementation
 	// registry. Every old row must have one owner, never an execution skip.
 	oldRows := map[string]int{"VMOVAPS": 32, "VMOVAPD": 64, "VMOVUPS": 32, "VMOVUPD": 64, "VMOVDQA32": 32, "VMOVDQA64": 64, "VMOVDQU8": 8, "VMOVDQU16": 16, "VMOVDQU32": 32, "VMOVDQU64": 64}
