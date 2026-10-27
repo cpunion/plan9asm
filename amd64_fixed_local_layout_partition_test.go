@@ -154,3 +154,28 @@ func TestGoAMD64FixedLocalLayoutPartitionFrozenEdges(t *testing.T) {
 		})
 	}
 }
+
+func TestGoAMD64FixedLocalLayoutPartitionLateResidue(t *testing.T) {
+	fn, sig := fixedLocalReplayFixture(t, `LEAQ 16(SP),BX
+CMPQ AX,$0
+JEQ unchanged
+ANDQ $-16,BX
+unchanged:
+MOVQ AX,(BX)`)
+	original := fn
+	original.Instrs = append([]Instr(nil), fn.Instrs...)
+	proof := &x86FixedLocalProof{frame: fn.FrameSize}
+	budget := x86FixedLocalBudget{steps: 1 << 18, bytes: 64 << 20}
+	if err := replayX86FixedLocal(&fn, sig, proof, 0, &budget, nil, nil); err != nil {
+		t.Fatal("residue zero has a single private layout", err)
+	}
+	if err := replayX86FixedLocal(&fn, sig, proof, 1, &budget, nil, nil); !errors.Is(err, errFixedLocalLayoutJoin) {
+		t.Fatal("a later residue must expose the distinct private layouts", err)
+	}
+	// A fresh partition attempt still cannot match this source's differing
+	// residue graphs. It must not mix earlier flat and later partition records.
+	got, err := proveX86FixedLocal(original, sig)
+	if !errors.Is(err, ErrProbeNeedsContext) || !reflect.DeepEqual(got, original) {
+		t.Fatal("late partition failure published an incomplete source proof", err)
+	}
+}

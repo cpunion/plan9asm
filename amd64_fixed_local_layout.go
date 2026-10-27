@@ -47,20 +47,7 @@ func (layouts *x86FixedLocalLayouts) target(states map[int]x86FixedLocalState, f
 		if !found {
 			continue
 		}
-		if len(prior.pointers) != len(next.pointers) || len(prior.addresses) != len(next.addresses) || prior.pointers[SP] != next.pointers[SP] {
-			return 0, goAMD64FrameContext("fixed local CFG private roles disagree")
-		}
-		for reg := range prior.pointers {
-			if _, found := next.pointers[reg]; !found {
-				return 0, goAMD64FrameContext("fixed local CFG private roles disagree")
-			}
-		}
-		for offset := range prior.addresses {
-			if _, found := next.addresses[offset]; !found {
-				return 0, goAMD64FrameContext("fixed local CFG private spill roles disagree")
-			}
-		}
-		if _, err := mergeFixedLocalSavedBP(&prior, next); err != nil {
+		if err := fixedLocalLayoutRoles(prior, next); err != nil {
 			return 0, err
 		}
 		if reflect.DeepEqual(prior.pointers, next.pointers) && reflect.DeepEqual(prior.addresses, next.addresses) {
@@ -81,6 +68,24 @@ func (layouts *x86FixedLocalLayouts) target(states map[int]x86FixedLocalState, f
 	}
 	layouts.nodes[from].targets[edge] = match
 	return match, nil
+}
+
+func fixedLocalLayoutRoles(first, last x86FixedLocalState) error {
+	if len(first.pointers) != len(last.pointers) || len(first.addresses) != len(last.addresses) || first.pointers[SP] != last.pointers[SP] {
+		return goAMD64FrameContext("fixed local CFG private roles disagree")
+	}
+	for reg := range first.pointers {
+		if _, found := last.pointers[reg]; !found {
+			return goAMD64FrameContext("fixed local CFG private roles disagree")
+		}
+	}
+	for offset := range first.addresses {
+		if _, found := last.addresses[offset]; !found {
+			return goAMD64FrameContext("fixed local CFG private spill roles disagree")
+		}
+	}
+	_, err := mergeFixedLocalSavedBP(&first, last)
+	return err
 }
 
 func (layouts *x86FixedLocalLayouts) finish() error {

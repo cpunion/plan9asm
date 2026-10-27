@@ -241,8 +241,7 @@ func TestGoAMD64FixedLocalTypedGPCFGBudgetIsAtomic(t *testing.T) {
 		{steps: 1 << 18, bytes: fn.FrameSize - 1},
 	} {
 		proof := &x86FixedLocalProof{frame: fn.FrameSize}
-		var layouts x86FixedLocalLayoutGraph
-		if err := replayX86FixedLocal(&fn, sig, proof, 0, &budget, nil, &layouts); err == nil {
+		if err := replayX86FixedLocal(&fn, sig, proof, 0, &budget, nil, nil); err == nil {
 			t.Fatal("exhausted analysis budget was accepted")
 		}
 		for _, ins := range fn.Instrs {

@@ -68,8 +68,7 @@ func TestGoAMD64FixedLocalReplayInstructionBudget(t *testing.T) {
 					if deficit == "byte" {
 						budget.bytes--
 					}
-					var layouts x86FixedLocalLayoutGraph
-					err := replayX86FixedLocal(&current, sig, proof, 0, &budget, effects, &layouts)
+					err := replayX86FixedLocal(&current, sig, proof, 0, &budget, effects, nil)
 					if deficit == "none" {
 						if err != nil || budget.steps != 0 || budget.bytes != 0 {
 							t.Fatalf("complete transfer: budget=%+v, error=%v", budget, err)
@@ -233,8 +232,7 @@ func TestGoAMD64FixedLocalReplayAllocations(t *testing.T) {
 			current.Instrs = append([]Instr(nil), fn.Instrs...)
 			proof := &x86FixedLocalProof{frame: fn.FrameSize}
 			budget := x86FixedLocalBudget{steps: 1 << 18, bytes: 64 << 20}
-			var layouts x86FixedLocalLayoutGraph
-			if err := replayX86FixedLocalCFG(&current, sig, proof, 0, &budget, effects, edges, instructions, linear, nil, &layouts); err != nil {
+			if err := replayX86FixedLocalCFG(&current, sig, proof, 0, &budget, effects, edges, instructions, linear, nil, nil); err != nil {
 				t.Fatal(err)
 			}
 		})
