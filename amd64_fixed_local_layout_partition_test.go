@@ -145,7 +145,34 @@ func TestGoAMD64FixedLocalLayoutPartitionFrozenEdges(t *testing.T) {
 				before[index].x86FixedLocalMemory = cloneX86ReplayFixedLocalMemory(before[index].x86FixedLocalMemory)
 			}
 			budget := x86FixedLocalBudget{steps: 1 << 18, bytes: 64 << 20}
-			if err := replayX86FixedLocal(&fn, sig, proof, 1, &budget, nil, &changed); !errors.Is(err, ErrProbeNeedsContext) {
+			err := replayX86FixedLocal(&fn, sig, proof, 1, &budget, nil, &changed)
+			if err == nil && mutation == "other layout" {
+				t.Logf("original graph: %+v", layouts.nodes)
+				t.Logf("tampered graph: %+v", changed.nodes)
+				for residue := 2; residue < 8; residue++ {
+					if err := replayX86FixedLocal(&fn, sig, proof, residue, &budget, nil, &changed); err != nil {
+						t.Fatal("diagnostic complete-residue replay", err)
+					}
+				}
+				accesses := make(map[int]map[int]x86FixedLocalAccess)
+				for index, instruction := range fn.Instrs {
+					if len(instruction.x86FixedLocalMemory) != 0 {
+						accesses[index] = instruction.x86FixedLocalMemory
+						for _, access := range instruction.x86FixedLocalMemory {
+							t.Logf("tampered access %d %q: first=%v series=%v", index, instruction.Raw, access.offset, access.iterationOffsets)
+						}
+					}
+				}
+				t.Logf("complete tampered alias outcome: %v", fixedLocalRelocationAliases(accesses))
+				baseline, baselineErr := proveX86FixedLocal(file.Funcs[0], sig)
+				t.Logf("complete original proof outcome: %v", baselineErr)
+				for index, instruction := range baseline.Instrs {
+					for _, access := range instruction.x86FixedLocalMemory {
+						t.Logf("original access %d %q: first=%v series=%v", index, instruction.Raw, access.offset, access.iterationOffsets)
+					}
+				}
+			}
+			if !errors.Is(err, ErrProbeNeedsContext) {
 				t.Fatal("a different residue acquired changed layout correspondence", err)
 			}
 			if !reflect.DeepEqual(before, fn.Instrs) {
