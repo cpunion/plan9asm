@@ -44,6 +44,7 @@ type x86FixedLocalState struct {
 	addresses    map[int64]int64
 	results      map[int]bool
 	flags        uint8
+	savedBP      *x86FixedLocalSavedBP // Immutable facts for the active observed leaf call.
 }
 
 func cloneFixedLocalState(input x86FixedLocalState) x86FixedLocalState {
@@ -503,8 +504,7 @@ func replayX86FixedLocalCFG(fn *Func, sig FuncSig, proof *x86FixedLocalProof, re
 			var err error
 			transition := fn.x86DirectTailRoot.privateCallTransition(pc)
 			if transition {
-				// CALL/RET preserve all source-visible bytes and FLAGS in an
-				// observed zero-frame leaf. Its actual body performs every write.
+				err = fixedLocalFrameTransition(fn.x86DirectTailRoot, pc, &current)
 			} else if effect, found := effects[instructions[pc]]; found {
 				err = fixedLocalTypedByteStep(&ins, &current, FuncSig{}, proof, residue, effect)
 			} else {
@@ -642,7 +642,11 @@ func mergeFixedLocalState(previous *x86FixedLocalState, current x86FixedLocalSta
 	if !reflect.DeepEqual(previous.pointers, current.pointers) || !reflect.DeepEqual(previous.addresses, current.addresses) {
 		return false, goAMD64FrameContext("fixed local CFG address identity disagrees")
 	}
-	changed := intersectFixedLocalOrigins(previous.constants, current.constants)
+	changed, err := mergeFixedLocalSavedBP(previous, current)
+	if err != nil {
+		return false, err
+	}
+	changed = intersectFixedLocalOrigins(previous.constants, current.constants) || changed
 	changed = mergeFixedLocalRanges(previous, current) || changed
 	merged, err := mergeFixedLocalOrigins(previous.opaque, current.opaque)
 	if err != nil {

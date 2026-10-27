@@ -24,13 +24,14 @@ type goAMD64SDKFrameOrigin struct {
 // native frame factory. It authenticates the whole selected source/profile,
 // compiler graph and all TEXTs, without relabeling SDK source as owned-main.
 // Entries must be Go-declared with exact logical/native names, layout and
-// source PCs. Same-source zero-frame leaf helpers retain no Go signature.
+// source PCs. Same-source frame-unobserving leaf helpers retain no Go signature.
 // Nonzero frames also require automatic BP/SP shapes;
 // zero-frame siblings retain their ordinary ABI0 path without local backing.
 // Generated split checks are observed separately from the source body.
-// Native callers, nonzero helper frames and ABI selectors require separate
-// contracts. BindFixedLocal still proves every
-// full-source access/initialization/CFG requirement before granting local bytes.
+// Native callers and ABI selectors require separate contracts. BindFixedLocal
+// also accounts for the observed private leaf's automatic BP/FLAGS effects and
+// proves every full-source access/initialization/CFG requirement before granting
+// local bytes.
 func CaptureGoAMD64SDKFrameSource(ctx context.Context, pkg GoPackage, request GoAMD64FrameCaptureRequest) (_ *GoAMD64FrameSource, result error) {
 	if pkg.Types == nil || pkg.Path != pkg.Types.Path() || request.NumericalReads != nil ||
 		filepath.Base(request.AssemblyFile) != request.AssemblyFile || filepath.Ext(request.AssemblyFile) != ".s" {
@@ -134,7 +135,7 @@ func (source *GoAMD64FrameSource) sdkFrameRecords() (map[string]goAMD64FrameFunc
 			}
 			record, text := native.Records[index], texts[object.TextOrder[index].ObjectOrdinal]
 			if leaves[fn.Sym] {
-				if declared || record.Symbol != text.Name || record.Locals != 0 || !record.NoSplit ||
+				if declared || record.Symbol != text.Name || record.Locals != uint64(goAMD64FrameNativeLocals(fn.FrameSize)) || !record.NoSplit ||
 					record.ArgsKnown && record.Args != 0 || record.Static != strings.HasSuffix(fn.Sym, "<>") {
 					return nil, nil, goAMD64FrameContext("SDK-primary private leaf/native identity differs: %s", fn.Sym)
 				}

@@ -44,8 +44,8 @@ func goAMD64WindowsPrivateLeafTexts(file *File, pkg GoPackage, listing []byte,
 	if data == nil {
 		return nil, goAMD64FrameContext("Windows private leaf requires its original source/object association")
 	}
-	texts, err := goAMD64FrameSourceTexts(listing, data)
-	if err != nil || len(texts) != len(file.Funcs) {
+	records, err := sdkAMD64FrameNativeRecordsForSource(listing, data.Member.Texts, data.TextOrder)
+	if err != nil || len(records) != len(file.Funcs) {
 		return nil, goAMD64FrameContext("Windows private leaf lacks a complete source/object TEXT association: %v", err)
 	}
 	var result []gostaticstorage.TextRecord
@@ -53,12 +53,13 @@ func goAMD64WindowsPrivateLeafTexts(file *File, pkg GoPackage, listing []byte,
 		if !leaves[fn.Sym] {
 			continue
 		}
-		text := texts[index]
+		text := data.Member.Texts[data.TextOrder[index].ObjectOrdinal]
 		abi, namespace := uint16(0), gostaticstorage.TextSymbolNonpkgDefinition
 		if strings.HasSuffix(fn.Sym, "<>") {
 			abi, namespace = 65535, gostaticstorage.TextSymbolSelf
 		}
-		if text.Name != strings.TrimSuffix(fn.Sym, "<>") || text.ABI != abi || text.Namespace != namespace {
+		if text.Name != strings.TrimSuffix(fn.Sym, "<>") || text.ABI != abi || text.Namespace != namespace ||
+			records[index].Locals != uint64(goAMD64FrameNativeLocals(fn.FrameSize)) {
 			return nil, goAMD64FrameContext("Windows private leaf changed its exact source symbol/ABI/namespace")
 		}
 		result = append(result, text)
@@ -113,8 +114,8 @@ func goAMD64FrameWindowsUnwindFunctions(functions map[string]goAMD64FrameFunctio
 				metadata = unwind[aux.Target.Name]
 			}
 		}
-		if fn.privateLeaf {
-			if metadata.Name != "" || fn.locals != 0 || fn.prologue != 0 || fn.split {
+		if fn.privateLeaf && fn.locals == 0 {
+			if metadata.Name != "" || fn.prologue != 0 || fn.split {
 				return goAMD64FrameContext("Windows private leaf acquired an automatic frame or SEH prologue")
 			}
 			if err := goAMD64FrameMachineShapeWithCalls(fn, 0, nil); err != nil {

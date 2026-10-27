@@ -18,7 +18,8 @@ func (graph *x86DirectTailGraph) root(root int, byName map[string]int, limit int
 		if graph.goarch == "386" && strings.HasSuffix(fn.Sym, "<ABIInternal>") {
 			return nil, x86DirectTailContext("386 source has no AMD64 register-entry contract")
 		}
-		if fn.FrameSize != 0 && !(framed && at == root) || len(fn.X86RawText) != 0 || fn.x86SourceStack != nil || fn.x86FixedLocal != nil ||
+		observedLeaf := framed && graph.helpers[fn.Sym] && graph.fixedLocal.leaves[fn.Sym] != ""
+		if fn.FrameSize != 0 && !(framed && at == root || observedLeaf) || len(fn.X86RawText) != 0 || fn.x86SourceStack != nil || fn.x86FixedLocal != nil ||
 			fn.x86RawReplay != nil || len(fn.x86ContinuationAddresses) != 0 || len(fn.x86IndirectLabels) != 0 ||
 			graph.helpers[fn.Sym] && fn.ArgSize != 0 {
 			return nil, x86DirectTailContext("native/frame/helper argument role is not closed: %s", fn.Sym)

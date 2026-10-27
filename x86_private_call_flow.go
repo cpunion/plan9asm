@@ -2,8 +2,8 @@ package plan9asm
 
 import "strings"
 
-// CALL is a source-control edge only inside this complete source graph. A
-// nonzero root needs its independent original-frame owner; helpers stay zero.
+// CALL is a source-control edge only inside this complete source graph.
+// Nonzero roots and frame-unobserving leaves need the original-frame owner.
 // The original instruction/relocation coordinates stay unchanged. Each static
 // callsite gets its own return context; a tail edge keeps that context.
 func (view *x86DirectTailRoot) expandPrivateCalls(limit int) (*x86DirectTailRoot, error) {

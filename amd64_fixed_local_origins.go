@@ -21,7 +21,11 @@ const (
 const fixedLocalOriginPayloadBytes int64 = 64
 
 func fixedLocalOriginStorage(state x86FixedLocalState) int64 {
-	return fixedLocalOriginMapStorage(state.opaque) + fixedLocalOriginMapStorage(state.opaqueCells)
+	bytes := fixedLocalOriginMapStorage(state.opaque) + fixedLocalOriginMapStorage(state.opaqueCells)
+	if state.savedBP != nil {
+		bytes += 2 * fixedLocalOriginPayloadBytes // Includes the immutable saved register facts.
+	}
+	return bytes
 }
 
 func fixedLocalOriginMapStorage[K comparable](values map[K]x86FixedLocalOrigins) int64 {

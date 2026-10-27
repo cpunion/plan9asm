@@ -1653,8 +1653,9 @@ func goAMD64FrameListingRecords(listing []byte, file *File, pkg GoPackage, origi
 			fn.nativeABI = text.ABI
 		}
 		if fn.privateLeaf {
-			if !exists || declared || fn.split || fn.locals != 0 || fn.args != 0 && fn.args != -0x80000000 {
-				return nil, goAMD64FrameContext("original private leaf/native zero-frame identity differs")
+			if !exists || declared || fn.split || fn.locals != goAMD64FrameNativeLocals(original.FrameSize) ||
+				fn.args != 0 && fn.args != -0x80000000 {
+				return nil, goAMD64FrameContext("original private leaf/native frame identity differs")
 			}
 		} else if !exists || !declared || original.FrameSize < 0 || original.FrameSize%8 != 0 || fn.locals != goAMD64FrameNativeLocals(original.FrameSize) || fn.args != original.ArgSize || strings.Contains(original.Sym, "<") {
 			return nil, goAMD64FrameContext("original ABI0 TEXT/declaration/frame identity mismatch")

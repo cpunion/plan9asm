@@ -12,6 +12,9 @@ func (c *amd64Ctx) lowerBranch(bi int, ii int, op Op, ins Instr, emitBr amd64Emi
 			if ii != 0 || c.directTail.instructions[bi].Op != OpCALL {
 				return true, false, x86DirectTailContext("CALL lost its original source point")
 			}
+			if err := c.lowerPrivateFrameTransition(bi); err != nil {
+				return true, false, err
+			}
 			emitBr(c.blocks[c.directTail.edges[bi][0]].name)
 			return true, true, nil
 		}

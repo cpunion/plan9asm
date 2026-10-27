@@ -187,12 +187,15 @@ func ObserveWindowsAMD64AssemblyUnwind(data, builtinSource []byte, privateLeaves
 			}
 			used[index] = true
 		}
-		expectedLinks := 1
+		minimumLinks := 1
 		if private {
-			expectedLinks = 0 // Go's actual zero-frame leaf has no SEH prologue.
+			// The original-source join checks whether this leaf has an
+			// automatic frame. Observe either valid object shape here; only
+			// the independently bound zero-frame source can omit SEH.
+			minimumLinks = 0
 			delete(leaves, text.Index)
 		}
-		if links != expectedLinks {
+		if links < minimumLinks || links > 1 {
 			return WindowsAMD64AssemblyUnwind{}, contextError("Windows TEXT has missing or duplicate SEH auxiliary ownership")
 		}
 	}

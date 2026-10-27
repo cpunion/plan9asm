@@ -473,6 +473,15 @@ func (c *amd64Ctx) emitEntryAllocas() error {
 	if c.sourceStack != nil || c.fixedLocal != nil {
 		c.usedRegs[SP] = true
 	}
+	var framedCalls []int
+	if c.directTail != nil {
+		for pc, ins := range c.directTail.instructions {
+			if call, framed := c.directTail.privateFramedCall(pc); framed && ins.Op == OpCALL {
+				framedCalls = append(framedCalls, call)
+				c.usedRegs[BP] = true
+			}
+		}
+	}
 
 	regs := make([]string, 0, len(c.usedRegs))
 	for r := range c.usedRegs {
@@ -487,6 +496,9 @@ func (c *amd64Ctx) emitEntryAllocas() error {
 		c.regSlot[r] = name
 		fmt.Fprintf(c.b, "  %s = alloca i64\n", name)
 		fmt.Fprintf(c.b, "  store i64 0, ptr %s\n", name)
+	}
+	for _, call := range framedCalls {
+		fmt.Fprintf(c.b, "  %%private_call_bp_%d = alloca i64\n", call)
 	}
 	if spSlot, ok := c.regSlot[SP]; ok {
 		if c.fixedLocal != nil {

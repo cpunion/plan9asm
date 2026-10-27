@@ -744,6 +744,9 @@ func (c *amd64Ctx) lowerInstr(bi int, ii int, ins Instr, emitBr amd64EmitBr, emi
 			if ii != 0 || len(ins.Args) != 0 || c.directTail.instructions[bi].Op != OpRET {
 				return true, x86DirectTailContext("private RET lost its original source point")
 			}
+			if err := c.lowerPrivateFrameTransition(bi); err != nil {
+				return true, err
+			}
 			emitBr(c.blocks[c.directTail.edges[bi][0]].name)
 			return true, nil
 		}

@@ -10,8 +10,8 @@ import (
 )
 
 // This classifies original source nodes, not callable ABIs or initialized
-// inputs. A leaf has no incoming frame and cannot observe CALL's stack change.
-// BP and other registers retain whatever typed values its real caller proves.
+// inputs. A leaf cannot observe its physical frame or CALL's stack change.
+// A nonzero frame's automatic BP/FLAGS effects are checked independently.
 func goAMD64FramePrivateLeaves(file *File, pkg GoPackage) (map[string]bool, error) {
 	if file == nil || pkg.Types == nil {
 		return nil, goAMD64FrameContext("private source roles need complete parsed source and actual types")
@@ -22,8 +22,9 @@ func goAMD64FramePrivateLeaves(file *File, pkg GoPackage) (map[string]bool, erro
 			continue
 		}
 		name := strings.TrimSuffix(fn.Sym, "<>")
-		if name == "" || strings.ContainsAny(name, "·./<>") || fn.FrameSize != 0 || fn.ArgSize != 0 || len(fn.Instrs) == 0 {
-			return nil, goAMD64FrameContext("undeclared TEXT is not a same-source zero-frame leaf: %s", fn.Sym)
+		if name == "" || strings.ContainsAny(name, "·./<>") || fn.FrameSize < 0 || fn.FrameSize > 64<<10 ||
+			fn.FrameSize%8 != 0 || fn.ArgSize != 0 || len(fn.Instrs) == 0 {
+			return nil, goAMD64FrameContext("undeclared TEXT is not a bounded same-source leaf: %s", fn.Sym)
 		}
 		_, header := splitOpcode(fn.Instrs[0].Raw)
 		parts := strings.Split(header, ",")
