@@ -44,6 +44,7 @@ func TestGoAMD64FixedLocalPartitionVectorWork(t *testing.T) {
 	_, sig := fixedLocalReplayFixture(t, "")
 	budget := x86FixedLocalBudget{steps: 1 << 18, bytes: 64 << 20}
 	proven, err := proveX86FixedLocalAttempt(fn, sig, &budget, true)
+	t.Logf("partitioned vector replay: remaining_steps=%d remaining_bytes=%d error=%v", budget.steps, budget.bytes, err)
 	if err != nil || proven.x86FixedLocal == nil {
 		t.Fatal("initialized register work must not scan a whole frame per instruction", err)
 	}
@@ -53,6 +54,7 @@ func TestGoAMD64FixedLocalPartitionVectorWork(t *testing.T) {
 	}
 	budget = x86FixedLocalBudget{steps: used - 1, bytes: 64 << 20}
 	proven, err = proveX86FixedLocalAttempt(fn, sig, &budget, true)
+	t.Logf("partitioned step deficit: remaining_steps=%d remaining_bytes=%d error=%v", budget.steps, budget.bytes, err)
 	if !errors.Is(err, ErrProbeNeedsContext) || budget.steps != 0 || !reflect.DeepEqual(proven, fn) {
 		t.Fatal("register-only work still requires every step, with atomic failure", budget, err)
 	}

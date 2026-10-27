@@ -90,6 +90,7 @@ func TestGoAMD64FixedLocalLayoutPartitionStorageBound(t *testing.T) {
 			budget := x86FixedLocalBudget{steps: 1 << 18, bytes: 64 << 20}
 			var layouts x86FixedLocalLayoutGraph
 			err := replayX86FixedLocal(&fn, sig, proof, 0, &budget, nil, &layouts)
+			t.Logf("frame=%d remaining_steps=%d remaining_bytes=%d error=%v", frame, budget.steps, budget.bytes, err)
 			failure := "state storage budget"
 			if frame == 64 {
 				// The original small-frame stress now pays for its candidate
