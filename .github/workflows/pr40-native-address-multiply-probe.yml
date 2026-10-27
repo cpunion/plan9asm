@@ -1,0 +1,197 @@
+name: Address and multiply native Linux probe
+
+on:
+  push:
+    branches:
+      - codex/pr40-native-address-multiply-probe-20261027
+
+permissions:
+  contents: read
+
+jobs:
+  native_address_multiply:
+    if: github.repository == 'cpunion/plan9asm'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      GOTOOLCHAIN: local
+      GOENV: 'off'
+      GOWORK: 'off'
+      GOFLAGS: ''
+      GOMAXPROCS: '4'
+      GOOS: linux
+      GOARCH: amd64
+      LLVM_CONFIG: llvm-config-22
+      SOURCE_COMMIT: 511029b0dc92ff9261d9c061afee7f0d284e450f
+      NATIVE_PATTERN: '^TestCrossLinuxRuntimeMatrixGoAMD64FixedLocal(PointerChoices|AddressFlags|ImplicitMultiply)$'
+      EVIDENCE: _out/address-multiply-native
+
+    steps:
+      - name: Checkout exact diagnostic commit
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
+
+      - name: Bind the unchanged source and actual host
+        run: |
+          set -euo pipefail
+          mkdir -p "$EVIDENCE"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git rev-parse HEAD^)" = "$SOURCE_COMMIT"
+          test "$(git diff --name-only "$SOURCE_COMMIT" HEAD)" = '.github/workflows/pr40-native-address-multiply-probe.yml'
+          test -z "$(git status --porcelain)"
+          test "$(uname -s)" = Linux
+          test "$(uname -m)" = x86_64
+          git rev-parse HEAD > "$EVIDENCE/head.txt"
+          git rev-parse HEAD^ > "$EVIDENCE/source.txt"
+          git ls-files -z | xargs -0 sha256sum > "$EVIDENCE/checkout.sha256"
+          uname -a > "$EVIDENCE/host.txt"
+          lscpu --json > "$EVIDENCE/cpu.json"
+
+      - name: Setup exact Go
+        uses: ./.github/actions/setup-go
+        with:
+          go-version: '1.27.3'
+          cache: true
+
+      - name: Install LLVM 22
+        timeout-minutes: 14
+        run: bash scripts/install-ci-llvm22-ubuntu.sh
+
+      - name: Setup existing evidence auditor runtime
+        uses: ./.github/actions/setup-node22
+
+      - name: Record and verify actual compiler identities
+        run: |
+          set -euo pipefail
+          test "$(go env GOVERSION)" = go1.27.3
+          test "$(go env GOHOSTOS)" = linux
+          test "$(go env GOHOSTARCH)" = amd64
+          go version > "$EVIDENCE/go-version.txt"
+          go env -json GOVERSION GOROOT GOHOSTOS GOHOSTARCH GOOS GOARCH GOCACHE > "$EVIDENCE/go-env.json"
+          : > "$EVIDENCE/tools.sha256"
+          for tool in go node llvm-config-22 llc-22 clang-22 opt-22; do
+            binary=$(readlink -f "$(command -v "$tool")")
+            sha256sum "$binary" >> "$EVIDENCE/tools.sha256"
+          done
+          for tool in compile asm link objdump nm; do
+            binary=$(go tool -n "$tool")
+            sha256sum "$binary" >> "$EVIDENCE/tools.sha256"
+          done
+          test "$(readlink -f "$(command -v llc)")" = "$(readlink -f "$(command -v llc-22)")"
+          test "$(readlink -f "$(command -v clang)")" = "$(readlink -f "$(command -v clang-22)")"
+          test "$(readlink -f "$(command -v opt)")" = "$(readlink -f "$(command -v opt-22)")"
+          llvm-config-22 --version > "$EVIDENCE/llvm-config-version.txt"
+          grep -Eq '^22\.' "$EVIDENCE/llvm-config-version.txt"
+          for tool in llc-22 clang-22 opt-22; do
+            "$tool" --version > "$EVIDENCE/$tool-version.txt"
+            grep -Eq 'version 22\.' "$EVIDENCE/$tool-version.txt"
+          done
+
+      - name: Discover exactly three actual test owners
+        run: |
+          set -euo pipefail
+          go test -p=1 . -list "$NATIVE_PATTERN" > "$EVIDENCE/inventory.log" 2> "$EVIDENCE/inventory.stderr"
+
+      - name: Execute three original Go programs and eighteen LLVM pipelines
+        run: |
+          set -uo pipefail
+          set +e
+          go test -p=1 . -json -run "$NATIVE_PATTERN" -count=1 -timeout=20m > "$EVIDENCE/raw.jsonl" 2> "$EVIDENCE/native.stderr"
+          status=$?
+          printf '%s\n' "$status" > "$EVIDENCE/exit.txt"
+          exit "$status"
+
+      - name: Audit actual native execution and unchanged identities
+        if: always()
+        run: |
+          set -euo pipefail
+          sha256sum --check "$EVIDENCE/checkout.sha256" > "$EVIDENCE/checkout-after.log"
+          sha256sum --check "$EVIDENCE/tools.sha256" > "$EVIDENCE/tools-after.log"
+          node <<'NODE' > "$EVIDENCE/audit.json"
+          const assert = require('node:assert/strict');
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const {auditNativeOwners} = require('./.github/scripts/audit-native-owners.cjs');
+          const read = name => fs.readFileSync(path.join(process.env.EVIDENCE, name), 'utf8');
+          const prefix = 'TestCrossLinuxRuntimeMatrixGoAMD64FixedLocal';
+          const roots = ['AddressFlags', 'ImplicitMultiply', 'PointerChoices'].map(name => prefix + name);
+          const children = roots.flatMap(root => ['Translate', 'Module', 'GoModule'].flatMap(api =>
+            [root + '/' + api, root + '/' + api + '/-O0', root + '/' + api + '/-O2']));
+          assert.equal(read('exit.txt').trim(), '0', 'native command did not succeed');
+          assert.equal(read('source.txt').trim(), process.env.SOURCE_COMMIT);
+          assert.equal(read('head.txt').trim(), process.env.GITHUB_SHA);
+          const result = auditNativeOwners(read('inventory.log'), read('raw.jsonl'), roots, children);
+          const events = read('raw.jsonl').trim().split(/\r?\n/).map(JSON.parse);
+          const output = root => events.filter(event => event.Test === root && event.Action === 'output')
+            .map(event => event.Output).join('');
+          for (const root of roots) {
+            assert.match(output(root), /axis=1 SSE2=1 /, root + ': actual native CPU preflight missing');
+            assert.doesNotMatch(output(root), /Rosetta|explicit authenticated guest transport/,
+              root + ': guest execution cannot qualify this native job');
+          }
+          const pointerOutput = output(prefix + 'PointerChoices');
+          const functions = [...pointerOutput.matchAll(/complete function example\.invalid\/framefixture\.Value(\d+):/g)]
+            .map(match => Number(match[1]));
+          assert.deepEqual(functions, Array.from({length: 42}, (_, index) => index));
+          const assembly = [...pointerOutput.matchAll(/complete assembly: functions=42 sha256=([0-9a-f]{64})/g)];
+          assert.equal(assembly.length, 1, 'complete pointer source identity absent or duplicated');
+          const pointerSummary = '42 complete functions, 16 input patterns, two pointer alias relations, return and both 256-byte buffers; execute=true';
+          assert.equal(pointerOutput.split(pointerSummary).length - 1, 1, '1344-observation runtime did not finish');
+          const flagsSummary = "5 complete functions, 10 deltas from each backend's own addresses, independent arithmetic references and 64-byte global canaries; execute=true";
+          assert.equal(output(prefix + 'AddressFlags').split(flagsSummary).length - 1, 1,
+            '50-observation address FLAGS runtime did not finish');
+          // This unchanged owner has no summary logger: require its live API/O0/O2
+          // terminals plus the frozen source's actual execution and row assertions.
+          // Do not present the retained test-event journal as raw program stdout.
+          const multiplyOwner = fs.readFileSync('amd64_fixed_local_implicit_multiply_runtime_go127_test.go', 'utf8');
+          assert.match(multiplyOwner, /func TestCrossLinuxRuntimeMatrixGoAMD64FixedLocalImplicitMultiply\(t \*testing\.T\)/);
+          assert.match(multiplyOwner, /fixedLocalImplicitMultiplyProgram\(execution\.triple, true\)/);
+          assert.match(multiplyOwner, /x86ScalarFloatIntegerOriginalOutput\(t, execution, assembly, original\)/);
+          assert.match(multiplyOwner, /len\(want\) != 36\*16\*5/);
+          assert.match(multiplyOwner, /execution\.compileAndRunLLVM\(t, "private-implicit-multiply", input, driver, level\)/);
+          assert.match(multiplyOwner, /len\(got\) != len\(want\)/);
+          assert.match(multiplyOwner, /got\[index\] != want\[index\]/);
+          const program = fs.readFileSync('amd64_fixed_local_implicit_multiply_objects_test.go', 'utf8');
+          assert.match(program, /\[\]string\{"MUL", "IMUL"\}/);
+          assert.match(program, /\[\]string\{"B", "W", "L", "Q"\}/);
+          assert.match(program, /\[\]string\{"CX", "AX", "DX", "8\(SP\)"\}/);
+          assert.match(program, /inputs = append\(inputs, "AH"\)/);
+          assert.match(program, /inputs = append\(inputs, "\(DX\)"\)/);
+          const sourceFiles = [
+            'amd64_fixed_local_pointer_choice_runtime_go127_test.go',
+            'amd64_fixed_local_pointer_choice_objects_test.go',
+            'amd64_fixed_local_pointer_choices_test.go',
+            'amd64_fixed_local_pointer_choice_dead_test.go',
+            'amd64_fixed_local_native_address_test.go',
+            'amd64_fixed_local_address_flags_runtime_go127_test.go',
+            'amd64_fixed_local_implicit_multiply_runtime_go127_test.go',
+            'amd64_fixed_local_implicit_multiply_objects_test.go',
+          ];
+          const crypto = require('node:crypto');
+          const sourceHashes = Object.fromEntries(sourceFiles.map(file =>
+            [file, crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex')]));
+          process.stdout.write(JSON.stringify({...result, source: read('source.txt').trim(),
+            head: read('head.txt').trim(), platform: 'native linux/amd64', execute: true,
+            cases: {
+              pointerChoices: {functions: 42, inputs: 16, aliasRelations: 2,
+                observationsPerPipeline: 1344, assemblySHA256: assembly[0][1]},
+              addressFlags: {functions: 5, backendRelativeDeltas: 10, observationsPerPipeline: 50},
+              implicitMultiply: {kernels: 36, privateHelpers: 2, inputs: 16, observationsPerInput: 5,
+                observationsPerPipeline: 2880, evidence: 'unchanged owner row assertions and all live terminals'},
+            },
+            llvmPipelinesPerOwner: 6, originalGoPipelinesPerOwner: 1, sourceHashes,
+            limits: ['Only these three complete native owners qualify',
+              'No AVX512, full standard-library, full SHA1, chacha or P256 claim',
+              'Program stdout is checked by the unchanged tests, not retained as a separate artifact'],
+          }, null, 2) + '\n');
+          NODE
+
+      - name: Retain raw failures and complete qualification evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: address-multiply-native-${{ github.run_id }}-${{ github.run_attempt }}
+          path: _out/address-multiply-native/
+          if-no-files-found: error
+          retention-days: 7
