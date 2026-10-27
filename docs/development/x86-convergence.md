@@ -171,21 +171,17 @@ minimum Go 1.20.14 both pass the following Linux/amd64 LLVM22 object scopes:
 | Byte-indexed shuffle | 9 | 24 |
 | Integer EQ/GT compare | 72 | 168 |
 | Mask blend | 36 | 144 |
-| Local total | 847 | 2,738 |
+| Horizontal integer add/subtract | 18 | 36 |
+| Local total | 865 | 2,774 |
 
-Previous publication `55831306c` has the first 730 rows / 2,402 witnesses. The nine
-PSHUFB/VPSHUFB rows are qualified at isolated `9c2923dd9` and integrated in
-local `a5354ca1a`, whose combined current/minimum checks pass. The compare and
-mask-blend joins each pass both endpoint SDKs and are integrated in local
-`2c19ef128`. The subsequent `cb23f48a5` batch has joint current-SDK and Linux
-runtime qualification recorded in current work; its complete CI remains
-pending. Previous publication `55831306c` finished all 325 CI jobs
-successfully; its evidence does not qualify later changes. The shared
-encoder consumes the selected legacy two-byte opcode payload; the existing
-translator needs no additional instruction rule. Both endpoint SDKs pass all
-nine shuffle rows and the complete rule reader: 38 roots / 432 children,
-zero failures/skips. The later compare scope passes 42 roots / 482 children;
-mask blend passes 46 / 514, both with zero failures/skips on each SDK.
+Published `ab68a6ecc` contains the first 847 rows / 2,738 witnesses and completed
+all 325 CI jobs successfully. The next batch adds all eighteen horizontal
+integer rows through the existing binary grammar and object driver, with no
+translator rule. Go1.27.3 and Go1.20.14 each pass 56 roots / 685 children, zero
+failures/skips. This adds twenty net harness lines and independent row tests;
+one MMX row retains its separate region owner. The shared encoder consumes the
+selected legacy two-byte opcode payload. See [current work](current-work.md)
+for the combined candidate's qualification and current-head CI status.
 
 Two PADDD alias witnesses are separate from the canonical counts. Min/max
 includes 48 non-Q, unmasked, narrow EVEX forms; low-register VEX objects cannot
