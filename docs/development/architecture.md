@@ -33,6 +33,49 @@ except MXCSR load/store, whose i32 memory operand works in either x86 mode.
 The guard checks LLVM intrinsic IDs, not an opcode list; unused declarations,
 ordinary functions and generic portable intrinsics impose no such restriction.
 
+## Family and format normalization
+
+The implementation should scale with the **sum of legal format groups per
+source family, plus lowering strategies per semantic family**. It must not
+enumerate source opcodes times destination opcodes times operand formats.
+LLVM selects destination instructions for portable IR. Target-specific
+intrinsics or exact native instructions are explicit exceptions.
+
+| Layer | Shared representation | Separate concerns |
+|---|---|---|
+| Source grammar | Semantic operation, legal operand group and original encoding | Named/raw source identity and mode restrictions |
+| Format | Operand roles; element, carrier, active, memory and result widths; immediate interpretation | Only combinations admitted by the official encoder |
+| Machine effects | Ordered inputs/outputs, FLAGS, alias writes, masks, memory access and ordering | Alignment faults, inactive-lane suppression and FP exceptions |
+| Source binding | ABI entry/results, frame layout, actual storage and source lifetime | These facts are not granted by parsing a legal instruction |
+| LLVM lowering | Scalar/vector arithmetic, comparisons, shuffles, conversions, memory/control or intrinsics | Native-only operations require a compatible target |
+
+Widths are parameters, but not interchangeable: a broadcast can read four
+bytes into a 64-byte vector, and an extract can write fewer bytes than its
+register carrier. Likewise, merging a masked result reads the old destination;
+zeroing does not. Represent these distinctions once instead of rediscovering
+them in each consumer. Floating-point and machine-state operations must retain
+their special semantics rather than being grouped solely by operand count.
+
+Use small typed records for semantic groups, reusing existing forms such as
+`x86PackedBinaryForm` and `x86FloatBinaryForm`. Keep the parsed form through
+effect analysis and lowering. A translation-local plan may retain immutable
+syntax; it must not cache mutable source permissions or retain stale operands.
+Do not build a universal optional-field structure, another LLVM-like IR, or a
+second opcode registry beside the existing grammar.
+
+The first complete migration should use a packed binary group: normalize its
+format once, feed effects, memory shape and lowering from that record, then
+delete those families' old consumer selectors in the same batch. Adding a GP
+effect cache alone does not complete this migration. In particular, a numeric
+LEA analyzer may reject a static-symbol LEA accepted by source binding; eager
+analysis must not turn that distinction into a translation regression.
+
+Validate independent official rows and initialized functions, preserve previous
+acceptances and meaningful rejections, compile LLVM 22 objects and retain runtime
+oracles. Measure production line delta, parse/analysis allocations and complete
+translation time separately. Neither a faster rejection nor smaller test scope
+counts as an efficiency improvement.
+
 ## Terms used in family notes
 
 | Term | Meaning and limit |

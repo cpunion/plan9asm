@@ -80,6 +80,15 @@ and explicit memory contracts. Delete replaced code in the same coherent batch.
 5. Finish all amd64 families and whole-source gates before generalizing the
    architecture to ARM, ARM64 or WASM.
 
+The next normalization batch is bounded to four existing packed binary
+families: average, word multiply, multiply-add and dword product (20 names).
+They already share physical operand normalization. Retain input/result widths,
+pair reductions and even-lane products explicitly, and use the same parsed
+record for effects, memory queries and lowering. Remove the replaced consumer
+selectors together; do not add a fifth family before measuring this batch.
+The existing E4 pipeline can also replace duplicated non-MMX average/word-product
+loading, masking and writeback. That deletion alone is not parse-once completion.
+
 For each batch record the exact revision, SDK, LLVM version, source fixture,
 successful/failed counts, production/test line delta and retained case IDs.
 Measure parsing, analysis, feature inference, IR generation and public
@@ -151,16 +160,22 @@ minimum Go 1.20.14 both pass the following Linux/amd64 LLVM22 object scopes:
 | Per-lane logical/arithmetic shifts | 64 | 236 |
 | Conditional sign, B/W/D | 9 | 18 |
 | Byte-indexed shuffle | 9 | 24 |
-| Local total | 739 | 2,426 |
+| Integer EQ/GT compare | 72 | 168 |
+| Mask blend | 36 | 144 |
+| Local total | 847 | 2,738 |
 
 Published `55831306c` has the first 730 rows / 2,402 witnesses. The nine
 PSHUFB/VPSHUFB rows are qualified at isolated `9c2923dd9` and integrated in
-local `a5354ca1a`, whose combined current/minimum checks pass; publication and
-complete CI remain pending. The shared
+local `a5354ca1a`, whose combined current/minimum checks pass. The compare and
+mask-blend joins each pass both endpoint SDKs and are integrated in local
+`2c19ef128`. That complete local candidate still needs joint qualification
+and publication. Published `55831306c` has since finished all 325 CI jobs
+successfully; its evidence does not qualify later local changes. The shared
 encoder consumes the selected legacy two-byte opcode payload; the existing
 translator needs no additional instruction rule. Both endpoint SDKs pass all
-nine initialized object owners and the complete rule reader: 38 roots / 432
-children, zero failures/skips.
+nine shuffle rows and the complete rule reader: 38 roots / 432 children,
+zero failures/skips. The later compare scope passes 42 roots / 482 children;
+mask blend passes 46 / 514, both with zero failures/skips on each SDK.
 
 Two PADDD alias witnesses are separate from the canonical counts. Min/max
 includes 48 non-Q, unmasked, narrow EVEX forms; low-register VEX objects cannot
