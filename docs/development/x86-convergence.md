@@ -98,6 +98,13 @@ follow-up shares the feature projection without a cache and removes another
 11 production lines. Cross-stage reuse must reduce total complexity and cost;
 do not expand the family scope to justify retaining an unsuccessful abstraction.
 
+The legacy floating dispatcher now loses another 121 unreachable lines after
+its typed owners; FP16 portable lowering remains live and unchanged. Current
+and minimum SDKs pass 168/167 roots and 5,173 children without failures/skips,
+with the Linux/amd64 software-alias runtime owner retained separately. A proposed
+26-line result-routing cleanup regressed paired minimum-SDK measurements and
+was withdrawn. Smaller source alone does not establish faster translation.
+
 For each batch record the exact revision, SDK, LLVM version, source fixture,
 successful/failed counts, production/test line delta and retained case IDs.
 Measure parsing, analysis, feature inference, IR generation and public

@@ -19,10 +19,11 @@ This qualifies that revision, not the next publication. Both inline threads are
 resolved; external approval is outstanding.
 
 The next batch adds ABS, FMA3, AVX moves and ordinary floating binary official-row
-joins without changing translator production code or native fixture inventories.
-Integrated `ff2f14caa` passes both endpoint SDK family scopes, the complete
-preflight and the five-architecture gate. It includes the tested
-current/minimum-first CI creation order. Full new-head CI remains required.
+joins while retaining translator rules and native fixture inventories. It also
+removes 121 lines of unreachable legacy floating dispatch. Integrated `c1e4206f2`
+matches qualified cleanup `a1f3cdb6a` except for documentation; both endpoint SDK
+scopes, the complete preflight and the five-architecture gate pass. It includes
+the tested current/minimum-first CI creation order. Full new-head CI remains required.
 Creation order is not a guarantee of external runner scheduling priority.
 The failed `004da9f44` cache-policy round and earlier failures retain their
 original outcomes. Its stale Node assertion was repaired without removing
@@ -96,6 +97,8 @@ with allocation-byte differences +0.22% and +0.56%. Flat cases vary -0.05% to
 | Final integrated `824f9375b` preflight | **573 Node policies; 26 Go roots / 300 children; five-architecture gate PASS** | Exact tools, frozen source; current/minimum-first creation order preserves every SDK and owner |
 | Ordinary AVX floating binary at `ff2f14caa` | Both endpoint SDKs: **114 roots / 2,004 children PASS**, zero failures/skips | Complete previous row joins and existing floating grammar, raw and input owners; focused controls pass 5 / 54 per SDK |
 | Integrated `ff2f14caa` preflight | **573 Node policies; 26 Go roots / 300 children; five-architecture gate PASS** | Frozen source/tools; no translator production changes |
+| Legacy floating cleanup at `a1f3cdb6a` | Current SDK **168 roots / 5,173 children**; minimum **167 / 5,173 PASS**, zero failures/skips | Existing floating, precision, sqrt, raw FP16 and row owners; one Go1.27 source owner is absent on the minimum SDK |
+| Final integrated `c1e4206f2` preflight | **573 Node policies; 26 Go roots / 300 children; five-architecture gate PASS** | Code identical to qualified cleanup; documentation differs |
 
 The joint native scope executes 45 logical kernels over all 256 byte values
 with separate and overlapping buffers, 36 original shifted-literal kernels
@@ -189,6 +192,14 @@ retain actual Go byte anchors and missing-source/merge controls. All previous
 1,402 rows / 5,216 witnesses and aliases remain identical on both SDKs. Original
 F32/F64 MIN/MAX execution over NaNs, signed zero, MXCSR and faults remains an
 explicit gap; successful objects do not close it.
+
+The cleanup deletes sixteen legacy MUL/DIV/MIN/MAX bodies, four redundant
+precision delegations and their dead allowlist entries after the typed owners.
+Live typed owners and the shared FP16 portable path remain byte-identical.
+The software-alias runtime owner remains required on Linux/amd64 and is outside
+the final local scope. Its initial local skip is retained. A separate 26-line
+result-routing reduction was withdrawn after minimum-SDK paired benchmarks
+showed regression; no acceleration is claimed for the accepted cleanup.
 
 ## Remaining work, in order
 
