@@ -571,6 +571,20 @@ func replayX86FixedLocalCFG(fn *Func, sig FuncSig, proof *x86FixedLocalProof, re
 					}
 				}
 			}
+			terminal := fn.Instrs[instructions[target]]
+			if terminal.Op == OpRET && !fn.x86DirectTailRoot.privateCallTransition(target) {
+				// A final return has no successor that could consume dead local
+				// identities. Check every incoming SP/result state independently;
+				// a helper return still resumes its caller through the usual CFG.
+				if err := budget.consume(proof.frame); err != nil {
+					return err
+				}
+				if err := fixedLocalStep(&terminal, &next, sig, proof, residue); err != nil {
+					return fmt.Errorf("%s: %q: %w", fn.Sym, terminal.Raw, err)
+				}
+				returned = true
+				continue
+			}
 			changed := true
 			if previous, found := states[target]; found {
 				var err error
