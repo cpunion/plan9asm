@@ -91,6 +91,13 @@ func X86PackedAbsRows(legacy X86LegacyCatalog, avx []X86AVXRule) ([]X86PackedBin
 	return x86PackedBinaryRows(legacy, avx, `PABSB PABSW PABSD VPABSB VPABSW VPABSD VPABSQ`)
 }
 
+// X86PackedBitCountConflictRows retains all EVEX unary bit-count/conflict rows.
+// Their shared encoding grammar does not combine the independent semantic owners.
+func X86PackedBitCountConflictRows(legacy X86LegacyCatalog, avx []X86AVXRule) ([]X86PackedBinaryRow, error) {
+	return x86PackedBinaryRows(legacy, avx, `VPOPCNTB VPOPCNTW VPOPCNTD VPOPCNTQ VPLZCNTD VPLZCNTQ
+		VPCONFLICTD VPCONFLICTQ`)
+}
+
 // X86PackedMoveRows retains the twelve AVX whole-vector move names. Legacy
 // moves are separate; register alternatives belong to the first store rows.
 func X86PackedMoveRows(legacy X86LegacyCatalog, avx []X86AVXRule) ([]X86PackedBinaryRow, error) {
