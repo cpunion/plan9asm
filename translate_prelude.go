@@ -15,7 +15,7 @@ func emitArchPrelude(b *strings.Builder, file *File, resolve func(string) string
 		// Keep historical gating to avoid injecting x86-only prelude when
 		// parsing x86 syntax for unrelated targets in tests.
 		if goarch == "amd64" || goarch == "386" {
-			emitAMD64Prelude(b, goarch, file)
+			emitAMD64SourcePrelude(b, file, goarch)
 		}
 	case ArchWASM:
 		emitWASMPrelude(b, file, resolve, wasmABI)

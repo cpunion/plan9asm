@@ -590,6 +590,9 @@ func translateIRTextWithFixedLocalResult(file *File, opt Options, fixedLocalResu
 	if file.Arch == ArchARM64 {
 		emitUsedARM64Prelude(&b)
 	}
+	if file.Arch == ArchAMD64 && (opt.Goarch == "amd64" || opt.Goarch == "386") {
+		emitUsedAMD64Prelude(&b, opt.Goarch)
+	}
 	return b.String(), nil
 }
 

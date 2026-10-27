@@ -18,27 +18,35 @@ func emitUsedARM64Prelude(b *strings.Builder) {
 	arm64PreludeCatalog.once.Do(func() {
 		var catalog strings.Builder
 		emitARM64Prelude(&catalog)
-		declarations := make(map[string]string)
-		for _, line := range strings.Split(catalog.String(), "\n") {
-			if !strings.HasPrefix(line, "declare ") {
-				continue
-			}
-			start := strings.IndexByte(line, '@') + 1
-			end := strings.IndexByte(line[start:], '(') + start
-			declarations[line[start:end]] = line
-		}
-		arm64PreludeCatalog.declarations = declarations
+		arm64PreludeCatalog.declarations = llvmPreludeDeclarations(catalog.String())
 	})
+	emitUsedLLVMPrelude(b, arm64PreludeCatalog.declarations)
+}
 
+// The input is the compiler's existing declaration emitter, not source IR.
+func llvmPreludeDeclarations(text string) map[string]string {
+	declarations := make(map[string]string)
+	for _, line := range strings.Split(text, "\n") {
+		if !strings.HasPrefix(line, "declare ") {
+			continue
+		}
+		start := strings.IndexByte(line, '@') + 1
+		end := strings.IndexByte(line[start:], '(') + start
+		declarations[line[start:end]] = line
+	}
+	return declarations
+}
+
+func emitUsedLLVMPrelude(b *strings.Builder, declarations map[string]string) {
 	var names []string
 	for name := range llvmTextGlobalNames(b.String()) {
-		if _, ok := arm64PreludeCatalog.declarations[name]; ok {
+		if _, ok := declarations[name]; ok {
 			names = append(names, name)
 		}
 	}
 	sort.Strings(names)
 	for _, name := range names {
-		b.WriteString(arm64PreludeCatalog.declarations[name])
+		b.WriteString(declarations[name])
 		b.WriteByte('\n')
 	}
 }
