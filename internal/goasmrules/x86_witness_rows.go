@@ -146,6 +146,15 @@ func X86AVXFloatBinaryRows(legacy X86LegacyCatalog, avx []X86AVXRule) ([]X86Pack
 		VMINPS VMINPD VMINSS VMINSD VMAXPS VMAXPD VMAXSS VMAXSD`)
 }
 
+// X86PackedEVEXBinaryRemainderRows retains the remaining _yvblendmpd members.
+// Their common encoding grammar does not imply common old-destination reads.
+func X86PackedEVEXBinaryRemainderRows(legacy X86LegacyCatalog, avx []X86AVXRule) ([]X86PackedBinaryRow, error) {
+	return x86PackedBinaryRows(legacy, avx, `VPDPBUSD VPDPBUSDS VPDPWSSD VPDPWSSDS VPMADD52HUQ VPMADD52LUQ
+		VPERMB VPERMW VPERMI2B VPERMI2W VPERMI2D VPERMI2Q VPERMI2PS VPERMI2PD
+		VPERMT2B VPERMT2W VPERMT2D VPERMT2Q VPERMT2PS VPERMT2PD VPMULTISHIFTQB
+		VPROLVD VPROLVQ VPRORVD VPRORVQ VPSHLDVW VPSHLDVD VPSHLDVQ VPSHRDVW VPSHRDVD VPSHRDVQ`)
+}
+
 // X86PackedBinaryPilotRows covers the shared packed add/subtract and D/Q
 // low-multiply pilot. MMX and the separate W multiply family are not included.
 // PADDD is a frontend alias, not an additional official encoder row.
