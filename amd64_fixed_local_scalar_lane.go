@@ -73,5 +73,5 @@ func fixedLocalScalarLaneStep(ins *Instr, state *x86FixedLocalState, proof *x86F
 		index: form.destination, operand: Operand{Kind: OpReg, Reg: form.transferReg},
 		width: int64(form.gpBits / 8), write: true,
 	}}}
-	return true, fixedLocalTypedByteStep(ins, state, proof, residue, effect)
+	return true, fixedLocalTypedByteStep(ins, state, FuncSig{}, proof, residue, effect)
 }

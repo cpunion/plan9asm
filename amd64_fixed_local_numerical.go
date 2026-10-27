@@ -16,5 +16,5 @@ func fixedLocalNumericalReadStep(ins *Instr, state *x86FixedLocalState, proof *x
 	if !valid {
 		return true, goAMD64FrameContext("fixed local numerical read certificate changed")
 	}
-	return true, fixedLocalTypedByteStep(ins, state, proof, residue, effect)
+	return true, fixedLocalTypedByteStep(ins, state, FuncSig{}, proof, residue, effect)
 }

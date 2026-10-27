@@ -158,7 +158,7 @@ func TestGoAMD64FixedLocalRequiredVectorBytesBoundaries(t *testing.T) {
 				}},
 			}
 			state := x86FixedLocalState{vectors: map[Reg]uint64{"Z1": row.known}, known: map[Reg]uint8{AX: 255}}
-			err := fixedLocalTypedByteStep(&ins, &state, nil, 0, effect)
+			err := fixedLocalTypedByteStep(&ins, &state, FuncSig{}, nil, 0, effect)
 			if (err == nil) != row.wantPass {
 				t.Fatal("required vector bytes changed their width/storage domain", err)
 			}

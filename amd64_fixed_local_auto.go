@@ -131,6 +131,11 @@ func fixedLocalConditionalMoveStep(ins *Instr, state *x86FixedLocalState, proof 
 	if err != nil || required == 0 || state.flags&required != required {
 		return fail()
 	}
+	if ins.Args[0].Kind == OpFP {
+		// Declared numerical FP inputs use the shared GP effect. This value
+		// transport path retains its existing pointer and private-spill roles.
+		return false, nil
+	}
 	width := int64(form.bits / 8)
 	old, err := fixedLocalReadValue(ins, 1, state, FuncSig{}, proof, residue, width, false)
 	if err != nil {

@@ -111,7 +111,7 @@ func fixedLocalGPAddressOnly(ins Instr, index int) bool {
 	return true
 }
 
-func fixedLocalTypedByteStep(ins *Instr, state *x86FixedLocalState, proof *x86FixedLocalProof, residue int,
+func fixedLocalTypedByteStep(ins *Instr, state *x86FixedLocalState, sig FuncSig, proof *x86FixedLocalProof, residue int,
 	effect x86TypedByteEffect) error {
 	fail := func() error {
 		return goAMD64FrameContext("fixed local typed effect lacks numerical bytes, FLAGS or private storage: %s", ins.Op)
@@ -136,6 +136,13 @@ func fixedLocalTypedByteStep(ins *Instr, state *x86FixedLocalState, proof *x86Fi
 			return fail()
 		}
 		if !operand.read {
+			continue
+		}
+		if operand.operand.Kind == OpFP {
+			value, err := fixedLocalReadValue(ins, operand.index, state, sig, proof, residue, operand.width, false)
+			if err != nil || value.pointer || value.opaque {
+				return fail()
+			}
 			continue
 		}
 		if operand.operand.Kind != OpMem && operand.operand.Kind != OpSym {

@@ -19,6 +19,22 @@ func fixedLocalGPRuntimeProgram(triple string) (string, string, string, string) 
 			bodies = append(bodies, "STC\n"+stem+width+" $1,0(SP)\n")
 		}
 	}
+	for _, stem := range []string{"ADD", "SUB", "AND", "OR", "XOR", "ADC", "SBB"} {
+		bodies = append(bodies, "STC\n"+stem+"Q a+0(FP),AX\nMOVQ AX,0(SP)\n")
+	}
+	for _, operation := range []string{
+		"CMPQ a+0(FP),AX", "CMPQ AX,a+0(FP)", "CMPQ a+0(FP),$1",
+		"TESTQ a+0(FP),AX", "TESTQ AX,a+0(FP)", "TESTQ $1,a+0(FP)",
+	} {
+		bodies = append(bodies, operation+"\n")
+	}
+	for _, condition := range []string{
+		"CC", "CS", "EQ", "GE", "GT", "HI", "LE", "LS",
+		"LT", "MI", "NE", "OC", "OS", "PC", "PL", "PS",
+	} {
+		bodies = append(bodies, "MOVQ $42,CX\nCMPQ a+0(FP),$1\nCMOVQ"+condition+
+			" a+0(FP),CX\nMOVQ CX,0(SP)\n")
+	}
 	for _, body := range []string{
 		"MOVQ $3,CX\nagain:\nADDQ CX,AX\nSUBQ $1,CX\nJNE again\n",
 		"MOVQ $3,16(SP)\nagain:\nADDQ $1,AX\nSUBQ $1,16(SP)\nJNE again\n",
@@ -153,7 +169,7 @@ func TestGoAMD64FixedLocalTypedGPRuntimeObjects(t *testing.T) {
 	pkg, request, _, options := fixedLocalTransportFixture(t,
 		assembly, declarations, "linux/amd64", triple)
 	var names []string
-	for index := 0; index < 92; index++ {
+	for index := 0; index < 121; index++ {
 		names = append(names, fmt.Sprintf("%s.Value%d", pkg.Path, index))
 	}
 	fixedLocalFreshAPIs(t, pkg, request, options, []string{"Translate", "Module", "GoModule"},
@@ -179,8 +195,8 @@ func TestCrossLinuxRuntimeMatrixGoAMD64FixedLocalTypedGP(t *testing.T) {
 	t.Setenv("GOCACHE", t.TempDir())
 	assembly, declarations, original, driver := fixedLocalGPRuntimeProgram(execution.triple)
 	want := strings.Split(strings.TrimSpace(string(x86ScalarFloatIntegerOriginalOutput(t, execution, assembly, original))), "\n")
-	if len(want) != 92*15*3 {
-		t.Fatalf("original Go produced %d rows, want 92 kernels x 15 values x 3 observations", len(want))
+	if len(want) != 121*15*3 {
+		t.Fatalf("original Go produced %d rows, want 121 kernels x 15 values x 3 observations", len(want))
 	}
 	pkg, request, _, options := fixedLocalTransportFixture(t,
 		assembly, declarations, runtime.GOOS+"/amd64", execution.triple)

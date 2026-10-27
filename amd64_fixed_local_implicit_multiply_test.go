@@ -115,7 +115,7 @@ func TestGoAMD64FixedLocalImplicitMultiplyByteEffects(t *testing.T) {
 						want.known[DX] |= width.output
 					}
 					want.flags = x86ByteFlagCF | x86ByteFlagOF
-					if err := fixedLocalTypedByteStep(&ins, &state, nil, 0, effect); err != nil ||
+					if err := fixedLocalTypedByteStep(&ins, &state, FuncSig{}, nil, 0, effect); err != nil ||
 						!reflect.DeepEqual(state.known, want.known) || state.flags != want.flags {
 						t.Fatal("implicit accumulator/output width or FLAGS changed", state, want, err)
 					}
@@ -129,7 +129,7 @@ func TestGoAMD64FixedLocalImplicitMultiplyByteEffects(t *testing.T) {
 							}
 							missing := cloneFixedLocalState(before)
 							missing.known[input.root] &^= bit
-							if err := fixedLocalTypedByteStep(&ins, &missing, nil, 0, effect); !errors.Is(err, ErrProbeNeedsContext) {
+							if err := fixedLocalTypedByteStep(&ins, &missing, FuncSig{}, nil, 0, effect); !errors.Is(err, ErrProbeNeedsContext) {
 								t.Fatal("unknown input byte acquired a numerical result", input, bit, err)
 							}
 						}

@@ -112,7 +112,7 @@ func TestGoAMD64FixedLocalTypedBinaryMetadata(t *testing.T) {
 		state := x86FixedLocalState{vectors: map[Reg]uint64{
 			x86CallerVectorRoot("X0"): ^uint64(0), x86CallerVectorRoot("X1"): ^uint64(0),
 		}}
-		if err := fixedLocalTypedByteStep(&ins, &state, nil, 0, effect); !errors.Is(err, ErrProbeNeedsContext) {
+		if err := fixedLocalTypedByteStep(&ins, &state, FuncSig{}, nil, 0, effect); !errors.Is(err, ErrProbeNeedsContext) {
 			t.Fatal("unregistered default metadata authorized a vector effect", name, err)
 		}
 	}

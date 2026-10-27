@@ -506,7 +506,7 @@ func replayX86FixedLocalCFG(fn *Func, sig FuncSig, proof *x86FixedLocalProof, re
 				// CALL/RET preserve all source-visible bytes and FLAGS in an
 				// observed zero-frame leaf. Its actual body performs every write.
 			} else if effect, found := effects[instructions[pc]]; found {
-				err = fixedLocalTypedByteStep(&ins, &current, proof, residue, effect)
+				err = fixedLocalTypedByteStep(&ins, &current, FuncSig{}, proof, residue, effect)
 			} else {
 				err = fixedLocalStep(&ins, &current, sig, proof, residue)
 			}
@@ -868,7 +868,7 @@ func fixedLocalStep(ins *Instr, state *x86FixedLocalState, sig FuncSig, proof *x
 		}
 		root, value, constant := fixedLocalConstantArithmetic(*ins, effect, state)
 		rangeReg, bounds, comparison := fixedLocalRangeEffect(*ins, effect, state)
-		if err := fixedLocalTypedByteStep(ins, state, proof, residue, effect); err != nil {
+		if err := fixedLocalTypedByteStep(ins, state, sig, proof, residue, effect); err != nil {
 			return err
 		}
 		if constant {
@@ -934,7 +934,7 @@ func fixedLocalVectorStep(ins *Instr, state *x86FixedLocalState, proof *x86Fixed
 		if err != nil {
 			return err
 		}
-		return fixedLocalTypedByteStep(ins, state, proof, residue, effect)
+		return fixedLocalTypedByteStep(ins, state, FuncSig{}, proof, residue, effect)
 	}
 	width := uint64(65535)
 	first, second, destination, memory := 0, 1, 1, -1
