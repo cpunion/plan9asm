@@ -173,16 +173,18 @@ minimum Go 1.20.14 both pass the following Linux/amd64 LLVM22 object scopes:
 | Integer EQ/GT compare | 72 | 168 |
 | Mask blend | 36 | 144 |
 | Horizontal integer add/subtract | 18 | 36 |
-| Local total | 898 | 2,882 |
+| FMA3 | 360 | 2,028 |
+| Local total | 1,258 | 4,910 |
 
-Published `ab68a6ecc` contains the first 847 rows / 2,738 witnesses and completed
-all 325 CI jobs successfully. The next batch adds all eighteen horizontal
-integer rows through the existing binary grammar and object driver, with no
-translator rule. Go1.27.3 and Go1.20.14 each pass 56 roots / 685 children, zero
-failures/skips. This adds twenty net harness lines and independent row tests;
-one MMX row retains its separate region owner. The shared encoder consumes the
-selected legacy two-byte opcode payload. See [current work](current-work.md)
-for the combined candidate's qualification and current-head CI status.
+Published `1c54c530e` contains 865 rows / 2,774 witnesses, including all eighteen
+horizontal integer rows. Its complete CI is running; the prior `ab68a6ecc`
+round completed 325/325 jobs successfully. The combined local batch adds ABS
+and FMA3 without changing translator production code. Both endpoint SDKs pass
+all prior joins, existing initialized/negative owners and the new complete-row
+objects: current 112 roots / 9,018 children, minimum 111 / 9,018, no failures/skips.
+Previous witness fields and initialized FMA axis sources remain identical.
+See [current work](current-work.md) for exact revisions, native boundaries and
+publication status.
 
 Two PADDD alias witnesses are separate from the canonical counts. Min/max
 includes 48 non-Q, unmasked, narrow EVEX forms; low-register VEX objects cannot

@@ -8,25 +8,32 @@ this page records the current candidate and its limits.
 
 ## Publication and review
 
-PR40 remains draft. Published `ab68a6ecc` completed its
+PR40 remains draft. Published `1c54c530e` carries the qualified translation
+repairs below; its [complete CI round](https://github.com/xgo-dev/plan9asm/actions/runs/40505530452)
+is running. Previous `ab68a6ecc` completed its
 [full CI round](https://github.com/xgo-dev/plan9asm/actions/runs/40477411915)
 naturally: **325/325 successful jobs**, no failed/cancelled/skipped jobs and
 **88.0%** main statement coverage. This qualifies that revision, not the next
 publication. Both inline threads are resolved; external approval is outstanding.
 
-The next batch's code and tests are frozen at `d2784db04`. Its local and native
-qualification is below; the following documentation-only commit must retain
-identical code. Full CI must finish for the new publication before acceptance.
+The next batch adds ABS and FMA3 official-row joins without changing translator
+production code or native fixture inventories. Integrated `6ca5e4a9d` is
+byte-identical to qualified `d21fb3c8f` except two documentation files. Its
+fresh publication preflight and five-architecture gate pass. Batch the next
+publication after the current CI finishes; full new-head CI remains required.
 The failed `004da9f44` cache-policy round and earlier failures retain their
 original outcomes. Its stale Node assertion was repaired without removing
 the actual Go lifecycle, ownership or cleanup checks.
 
-[LLGo PR2694](https://github.com/xgo-dev/llgo/pull/2694) at `cdca51fc4` still
-pins `v0.0.0-20261026211521-55831306c713`. That compiler revision completed
-13 workflows and 130 jobs successfully, with two release-condition job skips.
-Those skips are not test passes, and the result does not qualify a new pin.
-Rebase onto current main and update the exact public dependency after this
-translator batch is published. Its P1 dependency-provenance requirement remains
+[LLGo PR2694](https://github.com/xgo-dev/llgo/pull/2694), head `9ccc923f8`, is
+rebased onto `854634f22` and pins the downloaded public
+`v0.0.0-20261027123924-1c54c530ed3d`. Adapter tests pass 41 roots / 131 children,
+assembly-build checks 21 / 23, and complete CI policies 160/160, with zero
+failures/skips. Rebase layout/initializer controls also pass. Current-head cloud
+CI is running. A preparation timeout occurred before any steps and was retained;
+rerunning that preparation and its dependents restored the Go workflow.
+Previous `cdca51fc4` completed 13 workflows / 130 jobs with two release-condition
+job skips; those do not qualify this pin. Its P1 dependency-provenance requirement remains
 open until an official upstream version replaces the temporary fork pin.
 Never push or merge upstream directly.
 
@@ -80,6 +87,8 @@ with allocation-byte differences +0.22% and +0.56%. Flat cases vary -0.05% to
 | Five-architecture official corpus at `d2784db04` | PASS | Go1.27.3; no baseline mismatch or parse error; classifications are not initialized/runtime coverage |
 | Horizontal integer official join | 56 roots / 685 children PASS on each endpoint SDK | Independent rows, original Go bytes and LLVM22 O0 objects through three APIs |
 | Packed ABS join and affected regressions at `b5ca7da71` | Go1.27.3: 60 roots / 1,048 children; Go1.20.14: 59 / 1,048 PASS | Full rule reader, every existing row join, original ABS/sign five-target objects and portable values; zero failures/skips |
+| Combined ABS/FMA3 join at `d21fb3c8f` | Go1.27.3: **112 roots / 9,018 children**; Go1.20.14: **111 / 9,018 PASS** | All prior row joins, 178 initialized FMA axes, full named formats, raw/undefined-input controls and existing portable owners; zero failures/skips |
+| Integrated `6ca5e4a9d` preflight | **573 Node policies; 26 Go roots / 299 children; five-architecture gate PASS** | Code identical to the qualified combined join; source/tools frozen |
 
 The joint native scope executes 45 logical kernels over all 256 byte values
 with separate and overlapping buffers, 36 original shifted-literal kernels
@@ -113,7 +122,8 @@ Neither file is cropped or substituted with an instruction-only fixture.
 | Integer EQ/GT compare | 72 | 168 |
 | Mask blend | 36 | 144 |
 | Horizontal integer | 18 | 36 |
-| Total | **898** | **2,882** |
+| FMA3 | 360 | 2,028 |
+| Total | **1,258** | **4,910** |
 
 These joins retain independent ordered Go rows and actual Go bytes, then compile
 initialized functions through three APIs with LLVM22. Two PADDD aliases are
@@ -132,11 +142,22 @@ Node policies and the exact Go preflight's 26 roots / 299 children. These are
 local object and existing portable-value receipts, not new original-native
 execution or current-head CI acceptance.
 
+FMA3 retains all 60 official members and every ordered row. Its 2,028 witnesses
+include scalar N4/N8 tuples, 324 broadcasts, 720 register-only rounding controls
+and 612 zeroing forms. Arithmetic always reads the old destination, even with
+`.Z`. Existing 178 amd64 and 94 386 axis source/declaration pairs remain
+byte-identical; both SDKs retain every previous 898-row / 2,882-witness field.
+The shared format/encoding extension adds 39 net harness lines and the existing
+initializer adds nine. No new translator rule or runtime matrix is introduced.
+An ignored Go1.20 overlay snapshot probe hit a vet virtual-file defect; its
+failed receipt is retained. Only that diagnostic comparison uses `-vet=off`;
+the complete family and CI gates retain their original default vet behavior.
+
 ## Remaining work, in order
 
-1. Publish this qualified batch through the allowed fork, finish current-head
-   CI/coverage and obtain external review. Update LLGo's exact dependency and
-   qualify the rebased compiler. Retain draft status meanwhile.
+1. Finish both published revisions' CI/coverage and obtain external review.
+   Publish the qualified row-join batch through the allowed fork after the
+   active round completes. Retain draft status meanwhile.
 2. Complete amd64 official-row ownership, 386 applicability and independent
    semantics. Extend existing family/object/native owners instead of creating
    another opcode registry or enumerating unrelated source/target products.
