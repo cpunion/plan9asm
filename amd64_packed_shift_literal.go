@@ -39,10 +39,7 @@ func (pending x86ResultShiftBits) definedBytes(ins Instr, form x86PackedLogicalF
 	}
 	var known uint64
 	for at := 0; at < form.byteWidth; at++ {
-		mask := literal.bytes[at%form.memoryBytes]
-		if form.spec.mode == amd64PackedLogicalOr {
-			mask = ^mask // An OR one, like an AND zero, kills dependence.
-		}
+		mask := x86PackedLogicalSecondBits(form.spec.mode, literal.bytes[at%form.memoryBytes])
 		defined := true
 		for bit := 0; bit < 8; bit++ {
 			if mask&(1<<uint(bit)) == 0 {
@@ -63,6 +60,31 @@ func (pending x86ResultShiftBits) definedBytes(ins Instr, form x86PackedLogicalF
 		}
 	}
 	return known
+}
+
+// Requests describe source tuples only. Each consumer must obtain their bytes
+// from its own validated immutable storage, with no permission transferred here.
+func x86PackedLogicalLiteralRequests(file *File, arch string) map[string]map[int64]int {
+	requests := make(map[string]map[int64]int)
+	for _, function := range file.Funcs {
+		for _, ins := range function.Instrs {
+			form, known, err := x86PackedLogicalProperties(ins, arch)
+			if !known || err != nil || form.mmx || form.memory < 0 || form.memoryBytes <= 0 || form.memoryBytes > 64 {
+				continue
+			}
+			address, valid := x86StaticSBReadAddress(form.source, arch)
+			if !valid || address.offset > maxDataGlobalSize-int64(form.memoryBytes) {
+				continue
+			}
+			if requests[address.symbol] == nil {
+				requests[address.symbol] = make(map[int64]int)
+			}
+			if requests[address.symbol][address.offset] < form.memoryBytes {
+				requests[address.symbol][address.offset] = form.memoryBytes
+			}
+		}
+	}
+	return requests
 }
 
 // Snapshot only requested tuples (at most one Z register), never a large global
@@ -108,23 +130,16 @@ func x86LoweredShiftLiterals(file *File, resolve func(string) string, values *x8
 		current.data = append(current.data, datum)
 	}
 	literals := make(map[x86StaticSBAddress]x86ShiftLiteral)
-	for _, function := range file.Funcs {
-		for _, ins := range function.Instrs {
-			form, known, err := x86PackedLogicalProperties(ins, arch)
-			if !known || err != nil || form.mmx || form.memory < 0 || form.memoryBytes <= 0 || form.memoryBytes > 64 {
-				continue
-			}
-			address, valid := x86StaticSBReadAddress(form.source, arch)
-			if !valid || address.offset > maxDataGlobalSize-int64(form.memoryBytes) {
-				continue
-			}
-			current := objects[resolveAssemblyDataSymbol(address.symbol, resolve)]
-			if current == nil || !current.literal || current.globals != 1 || int(literals[address].width) >= form.memoryBytes {
-				continue
-			}
-			literal := x86ShiftLiteral{width: uint8(form.memoryBytes)}
+	for symbol, offsets := range x86PackedLogicalLiteralRequests(file, arch) {
+		current := objects[resolveAssemblyDataSymbol(symbol, resolve)]
+		if current == nil || !current.literal || current.globals != 1 {
+			continue
+		}
+		for offset, width := range offsets {
+			address := x86StaticSBAddress{symbol, offset}
+			literal := x86ShiftLiteral{width: uint8(width)}
 			for _, datum := range current.data {
-				for at := 0; at < form.memoryBytes; at++ {
+				for at := 0; at < width; at++ {
 					offset := address.offset + int64(at) - datum.Off
 					if offset < 0 || offset >= datum.Width {
 						continue

@@ -67,6 +67,20 @@ type x86PackedLogicalForm struct {
 	source Operand
 }
 
+// The first input is known; these bits still depend on the second input.
+// ANDNOT is first & ^second in Go operand order, so it has AND's dependency.
+// This numerical projection neither removes the first read nor grants storage.
+func x86PackedLogicalSecondBits(mode amd64PackedLogicalMode, first byte) byte {
+	switch mode {
+	case amd64PackedLogicalAnd, amd64PackedLogicalAndNot:
+		return first
+	case amd64PackedLogicalOr:
+		return ^first
+	default:
+		return 255 // XOR cannot remove an unknown input bit.
+	}
+}
+
 // This is a pure numerical-byte dependency, shared by independent consumers.
 // A validated form and initialized mask are prerequisites; the result grants
 // no memory, frame, source-selection or caller permission. Higher physical

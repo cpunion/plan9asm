@@ -127,7 +127,7 @@ func proveX86FixedLocalAttempt(fn Func, sig FuncSig, budget *x86FixedLocalBudget
 		copyFn.Instrs[index].Args = append([]Operand(nil), fn.Instrs[index].Args...)
 		copyFn.Instrs[index].x86FixedLocalMemory = nil
 	}
-	effects, err := fixedLocalEffectPlan(copyFn)
+	effects, err := fixedLocalEffectPlan(copyFn, proof.binding)
 	if err != nil {
 		return fn, err
 	}
@@ -147,7 +147,7 @@ func proveX86FixedLocalAttempt(fn Func, sig FuncSig, budget *x86FixedLocalBudget
 	for index := range final.Instrs {
 		final.Instrs[index].x86FixedLocalMemory = nil
 	}
-	effects, err = fixedLocalEffectPlan(final)
+	effects, err = fixedLocalEffectPlan(final, proof.binding)
 	if err != nil {
 		return fn, err
 	}
@@ -183,11 +183,10 @@ func proveX86FixedLocalAttempt(fn Func, sig FuncSig, budget *x86FixedLocalBudget
 	return final, nil
 }
 
-// This call-local plan holds immutable syntax effects, never a proof result.
-// Original ordinals bind it to the private function copy. Each independent
-// eight-residue replay builds its own plan, avoiding repeated family parsing
-// in a loop without caching any input, storage or source authority.
-func fixedLocalEffectPlan(fn Func) (map[int]x86TypedByteEffect, error) {
+// This call-local plan holds forms and immutable DATA byte dependencies, never
+// a live source verification result. Each independent eight-residue replay
+// constructs its own plan under the original binding's complete lifetime guards.
+func fixedLocalEffectPlan(fn Func, binding *x86FixedLocalBinding) (map[int]x86TypedByteEffect, error) {
 	var effects map[int]x86TypedByteEffect
 	for index, ins := range fn.Instrs {
 		if ins.x86Encoded || ins.x86SourceRaw != nil || ins.x86AddressBits != 0 || ins.x86SegmentPrefix != 0 {
@@ -203,7 +202,7 @@ func fixedLocalEffectPlan(fn Func) (map[int]x86TypedByteEffect, error) {
 			if effects == nil {
 				effects = make(map[int]x86TypedByteEffect)
 			}
-			effects[index] = effect
+			effects[index] = fixedLocalLogicalLiteralEffect(ins, effect, binding)
 		} else if !fixedLocalInstructionShape(ins) {
 			return nil, goAMD64FrameContext("fixed local complete source has an unregistered instruction shape: %s", ins.Op)
 		}

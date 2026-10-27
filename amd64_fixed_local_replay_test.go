@@ -50,7 +50,7 @@ func TestGoAMD64FixedLocalReplayInstructionBudget(t *testing.T) {
 	for _, length := range []int{8, 128, 1024, 5000} {
 		t.Run(fmt.Sprint(length), func(t *testing.T) {
 			fn, sig := fixedLocalReplayFixture(t, fixedLocalReplayBody("linear", length))
-			effects, err := fixedLocalEffectPlan(fn)
+			effects, err := fixedLocalEffectPlan(fn, nil)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -221,7 +221,7 @@ func TestGoAMD64FixedLocalReplayMatchesInstructionSchedule(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			effects, err := fixedLocalEffectPlan(fn)
+			effects, err := fixedLocalEffectPlan(fn, nil)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -263,7 +263,7 @@ func TestGoAMD64FixedLocalReplayAllocations(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	effects, err := fixedLocalEffectPlan(fn)
+	effects, err := fixedLocalEffectPlan(fn, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -7,6 +7,7 @@ import (
 
 type x86FixedLocalData struct {
 	size, alignment int64
+	literals        map[int64]x86ShiftLiteral
 }
 
 type x86FixedLocalMemoryRole uint8
@@ -48,6 +49,7 @@ func (source *GoAMD64FrameSource) fixedLocalData(file *File, expanded string, re
 		return nil, nil, goAMD64FrameContext("fixed local DATA lacks its whole original definition inventory")
 	}
 	data := make(map[string]x86FixedLocalData)
+	requests := x86PackedLogicalLiteralRequests(file, "amd64")
 	symbols := make(map[string]string)
 	// BindFixedLocal has already frozen the resolver outside the source lock.
 	// Keep every emitted definition injective, including the complete TEXT set.
@@ -101,10 +103,57 @@ func (source *GoAMD64FrameSource) fixedLocalData(file *File, expanded string, re
 			!bytes.Equal(image[len(definition.Data):], make([]byte, len(image)-len(definition.Data))) {
 			return nil, nil, goAMD64FrameContext("fixed local translated DATA differs from the original Go initialized extent")
 		}
-		data[global.Sym] = x86FixedLocalData{size, goAssemblyDataAlignment(ArchAMD64, size)}
+		literal := x86FixedLocalData{size: size, alignment: goAssemblyDataAlignment(ArchAMD64, size)}
+		for offset, width := range requests[global.Sym] {
+			if offset > size-int64(width) {
+				continue // The ordinary full access check owns this rejection.
+			}
+			if literal.literals == nil {
+				literal.literals = make(map[int64]x86ShiftLiteral)
+			}
+			tuple := x86ShiftLiteral{width: uint8(width)}
+			copy(tuple.bytes[:], image[offset:offset+int64(width)])
+			literal.literals[offset] = tuple
+		}
+		data[global.Sym] = literal
 		symbols[name] = emitted
 	}
 	return data, symbols, nil
+}
+
+// Project only immutable original DATA facts while constructing the local
+// effect plan. The full memory read and its bounds/alignment remain unchanged.
+func fixedLocalLogicalLiteralEffect(ins Instr, effect x86TypedByteEffect, binding *x86FixedLocalBinding) x86TypedByteEffect {
+	if binding == nil || len(ins.Args) == 0 || ins.Args[0].Kind != OpSym {
+		return effect
+	}
+	form, known, err := x86PackedLogicalProperties(ins, "amd64")
+	if !known || err != nil || form.memory != form.first || form.memoryBytes <= 0 {
+		return effect
+	}
+	address, valid := x86StaticSBReadAddress(form.source, "amd64")
+	literal := binding.literalData[address.symbol].literals[address.offset]
+	if !valid || int(literal.width) < form.memoryBytes {
+		return effect
+	}
+	var required uint64
+	for index := 0; index < form.byteWidth; index++ {
+		if x86PackedLogicalSecondBits(form.spec.mode, literal.bytes[index%form.memoryBytes]) != 0 {
+			required |= uint64(1) << uint(index)
+		}
+	}
+	if required == x86CallerVectorByteMask(int64(form.byteWidth)) {
+		return effect
+	}
+	effect.operands = append([]x86TypedByteOperand(nil), effect.operands...)
+	for index := range effect.operands {
+		operand := &effect.operands[index]
+		if operand.index == form.second && operand.operand.Kind == OpReg {
+			// requiredBytes zero otherwise means the ordinary full-width read.
+			operand.read, operand.requiredBytes = required != 0, required
+		}
+	}
+	return effect
 }
 
 // Readonly DATA never receives a frame offset or a native-frame certificate.

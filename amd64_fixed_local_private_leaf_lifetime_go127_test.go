@@ -118,7 +118,7 @@ func TestGoAMD64FixedLocalPrivateLeafPreservesPerRootWorkBudget(t *testing.T) {
 			for phase := 0; phase < 2; phase++ {
 				current := fn
 				current.Instrs = append([]Instr(nil), fn.Instrs...)
-				effects, err := fixedLocalEffectPlan(current)
+				effects, err := fixedLocalEffectPlan(current, sig.x86FixedLocal)
 				if err != nil {
 					t.Fatal(err)
 				}

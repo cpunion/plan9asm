@@ -248,7 +248,7 @@ func TestGoAMD64FixedLocalReadonlyRangeWriteRevocation(t *testing.T) {
 				ranges: map[Reg]x86UnsignedRange{"R9": {1, 15}}, comparison: x86FixedLocalComparison{register: "R9", constant: 16},
 			}
 			proof := &x86FixedLocalProof{frame: 64, binding: &x86FixedLocalBinding{
-				literalData: map[string]x86FixedLocalData{"literal<>": {240, 16}},
+				literalData: map[string]x86FixedLocalData{"literal<>": {size: 240, alignment: 16}},
 			}}
 			ins := x86ScalarLaneInstruction(t, row)
 			if err := fixedLocalStep(&ins, &state, FuncSig{}, proof, 0); err != nil {
