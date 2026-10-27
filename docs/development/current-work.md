@@ -18,6 +18,10 @@ completion artifact reports a passing aggregate with 16 owners and 562 selected
 roots. Portable oracles in that scope do not establish native AVX512 acceptance.
 
 Both review threads are resolved; no reviewer has approved the contribution.
+The current round at `57ebe257d` has failed the rich CLI's complete chacha
+checks on Linux and Windows; completion jobs consequently fail too. The local
+repair below produces an actual object. Let this round finish before publishing
+the next batch; do not reuse the earlier green round as its certificate.
 The previous green run at `5406c2756` and earlier failed receipts remain
 historical evidence. They must not certify subsequent local changes.
 
@@ -98,6 +102,43 @@ The full original chacha source now reaches native address subtraction
 (`SUBQ SI,BX`), which still lacks its address-to-number transfer rule. Do not
 count it as a whole-file pass or increase 38/55 without a complete rerun.
 
+## Subsequent local repairs
+
+The following changes are integrated locally through `eb81c31ee`, not yet
+certified by a complete CI round:
+
+- `303e7c718` separates defined native machine bits from address capabilities
+  in the existing typed effects. Arithmetic can consume native pointer bits;
+  an integer result does not automatically become a dereferenceable pointer.
+  Private relocated addresses, readonly storage, undefined bytes and source
+  lifetime retain their checks. The change adds 73 production lines without
+  another opcode registry or proof state.
+- Its first wider current-SDK run retained 113 roots, with two failures on old
+  rejection expectations. `9dfc82d6e` keeps those original source bodies and
+  corrects the expectations, adding actual objects and independent arithmetic,
+  AF, vector-spill and multiply oracles. The final affected scope passes
+  8 roots / 364 children. These receipts jointly cover 118 distinct roots;
+  they are not a single 118-root test command. The final minimum-SDK run is a
+  complete 97 roots / 4,397 children, zero failures/skips.
+- `5dd3ea254` uses the existing private-call CFG for observed automatic helper
+  frames. It saves/restores BP facts and invalidates frame-adjustment FLAGS;
+  helpers cannot observe SP/FP or nest calls. Source/native frame identity and
+  Windows SEH remain required. The isolated Go1.27.3 scope passes 17 roots /
+  226 children, zero failures/skips. Complete original P256 now reaches a
+  missing packed-compare effect entry; it still fails as a whole file.
+- The full original Go1.27.2 chacha source now produces an LLVM22 object.
+  Its two CLI regressions check an actual AMD64 relocatable ELF object and
+  unchanged original SDK bytes. The integrated CLI qualification at
+  `eb81c31ee` passes 2 roots / 2 children in the small CLI and 9 / 8 in the
+  rich CLI, with zero failures/skips. It includes the explicit ABI-mode
+  parameter cleanup requested in review. The documentation snapshot and
+  dependency descriptions are also corrected.
+
+New native execution remains pending. The prepared Linux scope includes the
+253 machine-bit functions, 48 pointer programs and framed-helper oracles;
+object compilation alone does not qualify their execution. Re-run the complete
+55-file original inventory before changing its last recorded 38/55 result.
+
 ## Official rows and implementation
 
 Each official join retains original ordered encoding rows and compares actual
@@ -165,7 +206,8 @@ rules. See [architecture](architecture.md).
 2. Finish the first complete packed binary normalization group, with unchanged
    legal forms and meaningful rejection controls, independent runtime oracles,
    production line delta and separate parsing/whole-translation measurements.
-3. Restore ordinary-source SHA1, P256 and chacha20poly1305 through shared rules.
+3. Restore ordinary-source SHA1 and P256 through shared rules; qualify the
+   new chacha20poly1305 object success in the complete inventory.
    Keep real ABI/layout requirements separate from extra source-safety analysis.
    Re-run the complete original SDK inventory before updating 38/55.
 4. Keep the four implicit-entry cases, two GC-scan cases and eight
