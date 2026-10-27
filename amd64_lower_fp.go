@@ -111,27 +111,16 @@ func (c *amd64Ctx) lowerFP(op Op, ins Instr) (ok bool, terminated bool, err erro
 	}
 	switch op {
 	case "MOVSS", "MOVSD", "MOVAPD", "MOVUPD",
-		"MULSS", "DIVSS", "MAXSS", "MINSS", "SQRTSS",
-		"MULPS", "DIVPS", "MAXPS", "MINPS",
-		"MULPD", "DIVPD", "MAXPD", "MINPD",
-		"SQRTPS", "SQRTPD",
 		"MOVLHPS", "MOVHLPS", "MOVLPS", "MOVHPS", "MOVLPD", "MOVHPD",
 		"VMOVLPS", "VMOVHPS", "VMOVLPD", "VMOVHPD", "SHUFPD", "UNPCKLPS", "UNPCKHPD",
-		"MULSD", "DIVSD", "MAXSD", "MINSD", "SQRTSD",
 		"COMISS", "UCOMISS", "COMISD", "UCOMISD", "CMPSD",
-		"CVTSS2SD", "VCVTSS2SD", "CVTSD2SS", "VCVTSD2SS", "CVTSL2SD", "CVTSQ2SD":
+		"CVTSL2SD", "CVTSQ2SD":
 		// handled below
 	default:
 		return false, false, nil
 	}
 
 	switch op {
-	case "VCVTSS2SD":
-		return c.lowerScalarPrecisionConvert(op, ins)
-
-	case "VCVTSD2SS":
-		return c.lowerScalarPrecisionConvert(op, ins)
-
 	case "MOVSS":
 		if len(ins.Args) != 2 {
 			return true, false, fmt.Errorf("amd64 MOVSS expects src, dst: %q", ins.Raw)
@@ -165,81 +154,6 @@ func (c *amd64Ctx) lowerFP(op Op, ins Instr) (ok bool, terminated bool, err erro
 		default:
 			return true, false, fmt.Errorf("amd64 MOVSS unsupported destination: %q", ins.Raw)
 		}
-
-	case "MULSS", "DIVSS", "MAXSS", "MINSS":
-		if len(ins.Args) != 2 || ins.Args[1].Kind != OpReg {
-			return true, false, fmt.Errorf("amd64 %s expects src, Xdst: %q", op, ins.Raw)
-		}
-		if _, ok := amd64ParseXReg(ins.Args[1].Reg); !ok {
-			return false, false, nil
-		}
-		src, err := c.evalF32(ins.Args[0])
-		if err != nil {
-			return true, false, err
-		}
-		dst, err := c.loadXLowF32(ins.Args[1].Reg)
-		if err != nil {
-			return true, false, err
-		}
-		value := c.newTmp()
-		switch op {
-		case "MULSS":
-			fmt.Fprintf(c.b, "  %%%s = fmul float %s, %s\n", value, dst, src)
-		case "DIVSS":
-			fmt.Fprintf(c.b, "  %%%s = fdiv float %s, %s\n", value, dst, src)
-		case "MAXSS", "MINSS":
-			cmp := c.newTmp()
-			pred := "ogt"
-			if op == "MINSS" {
-				pred = "olt"
-			}
-			fmt.Fprintf(c.b, "  %%%s = fcmp %s float %s, %s\n", cmp, pred, dst, src)
-			fmt.Fprintf(c.b, "  %%%s = select i1 %%%s, float %s, float %s\n", value, cmp, dst, src)
-		}
-		return true, false, c.storeXLowF32(ins.Args[1].Reg, "%"+value)
-
-	case "MULPS", "DIVPS", "MAXPS", "MINPS",
-		"MULPD", "DIVPD", "MAXPD", "MINPD":
-		if len(ins.Args) != 2 || ins.Args[1].Kind != OpReg {
-			return true, false, fmt.Errorf("amd64 %s expects src, Xdst: %q", op, ins.Raw)
-		}
-		if _, ok := amd64ParseXReg(ins.Args[1].Reg); !ok {
-			return false, false, nil
-		}
-		vectorType := "<4 x float>"
-		if strings.HasSuffix(string(op), "PD") {
-			vectorType = "<2 x double>"
-		}
-		src, err := c.loadXTypedVectorOperand(ins.Args[0], vectorType)
-		if err != nil {
-			return true, false, err
-		}
-		dst, err := c.loadXTypedVectorOperand(ins.Args[1], vectorType)
-		if err != nil {
-			return true, false, err
-		}
-		value := c.newTmp()
-		switch {
-		case strings.HasPrefix(string(op), "MUL"):
-			fmt.Fprintf(c.b, "  %%%s = fmul %s %s, %s\n", value, vectorType, dst, src)
-		case strings.HasPrefix(string(op), "DIV"):
-			fmt.Fprintf(c.b, "  %%%s = fdiv %s %s, %s\n", value, vectorType, dst, src)
-		default:
-			cmp := c.newTmp()
-			pred := "ogt"
-			if strings.HasPrefix(string(op), "MIN") {
-				pred = "olt"
-			}
-			lanes := 4
-			if vectorType == "<2 x double>" {
-				lanes = 2
-			}
-			fmt.Fprintf(c.b, "  %%%s = fcmp %s %s %s, %s\n", cmp, pred, vectorType, dst, src)
-			fmt.Fprintf(c.b, "  %%%s = select <%d x i1> %%%s, %s %s, %s %s\n", value, lanes, cmp, vectorType, dst, vectorType, src)
-		}
-		bytesValue := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = bitcast %s %%%s to <16 x i8>\n", bytesValue, vectorType, value)
-		return true, false, c.storeX(ins.Args[1].Reg, "%"+bytesValue)
 
 	case "MOVLHPS", "MOVHLPS":
 		if len(ins.Args) != 2 || ins.Args[0].Kind != OpReg || ins.Args[1].Kind != OpReg {
@@ -346,38 +260,6 @@ func (c *amd64Ctx) lowerFP(op Op, ins Instr) (ok bool, terminated bool, err erro
 			return true, false, fmt.Errorf("amd64 MOVSD unsupported destination: %q", ins.Raw)
 		}
 
-	case "MULSD", "DIVSD", "MAXSD", "MINSD":
-		if len(ins.Args) != 2 || ins.Args[1].Kind != OpReg {
-			return true, false, fmt.Errorf("amd64 %s expects src, Xdst: %q", op, ins.Raw)
-		}
-		if _, ok := amd64ParseXReg(ins.Args[1].Reg); !ok {
-			return false, false, nil
-		}
-		src, err := c.evalF64(ins.Args[0])
-		if err != nil {
-			return true, false, err
-		}
-		dst, err := c.loadXLowF64(ins.Args[1].Reg)
-		if err != nil {
-			return true, false, err
-		}
-		t := c.newTmp()
-		switch op {
-		case "MULSD":
-			fmt.Fprintf(c.b, "  %%%s = fmul double %s, %s\n", t, dst, src)
-		case "DIVSD":
-			fmt.Fprintf(c.b, "  %%%s = fdiv double %s, %s\n", t, dst, src)
-		case "MAXSD":
-			cmp := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = fcmp ogt double %s, %s\n", cmp, dst, src)
-			fmt.Fprintf(c.b, "  %%%s = select i1 %%%s, double %s, double %s\n", t, cmp, dst, src)
-		case "MINSD":
-			cmp := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = fcmp olt double %s, %s\n", cmp, dst, src)
-			fmt.Fprintf(c.b, "  %%%s = select i1 %%%s, double %s, double %s\n", t, cmp, dst, src)
-		}
-		return true, false, c.storeXLowF64(ins.Args[1].Reg, "%"+t)
-
 	case "COMISS", "UCOMISS", "COMISD", "UCOMISD":
 		return c.lowerVectorScalarFlagCompare(op, ins)
 
@@ -432,9 +314,6 @@ func (c *amd64Ctx) lowerFP(op Op, ins Instr) (ok bool, terminated bool, err erro
 		mask := c.newTmp()
 		fmt.Fprintf(c.b, "  %%%s = select i1 %%%s, i64 -1, i64 0\n", mask, cmp)
 		return true, false, c.storeXLowI64(ins.Args[1].Reg, "%"+mask)
-
-	case "CVTSS2SD", "CVTSD2SS":
-		return c.lowerScalarPrecisionConvert(op, ins)
 
 	}
 	return false, false, nil
