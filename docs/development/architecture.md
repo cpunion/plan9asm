@@ -41,6 +41,30 @@ enumerate source opcodes times destination opcodes times operand formats.
 LLVM selects destination instructions for portable IR. Target-specific
 intrinsics or exact native instructions are explicit exceptions.
 
+The existing amd64 implementation can be inventoried by the following groups.
+These are design groups, not a count of supported opcodes or encoding rows.
+
+| Source semantic group | Shared format axes | Existing representation |
+|---|---|---|
+| Scalar integer, bit operations and conditions | Operand width, explicit/implicit roles, immediate interpretation, FLAGS | GP typed forms and `x86TypedByteEffect` |
+| Packed integer arithmetic and comparisons | Element/input/result widths, vector width, saturation, encoding, masks | `x86PackedBinaryForm`; four-family `x86PackedPhysicalForm` |
+| Shifts, shuffles and permutations | Count kind, lane boundaries, selection indices, old destination | Family forms with common vector input/effect records |
+| Floating point and conversions | Input/output kinds, scalar/packed shape, rounding and exceptions | `x86FloatBinaryForm` and conversion forms |
+| Moves and memory operations | Direction, access width, alignment, masked access, alias writes | Move forms and typed memory/effect projections |
+| Control flow and machine state | Branch inputs, implicit registers, ordering, x87/MMX state | Dedicated forms and the existing function CFG |
+
+Inventory the destination by **emission strategy**, not target opcode names:
+ordinary LLVM IR, portable/constrained intrinsics, target intrinsics and exact
+native assembly. A family can share arithmetic across strategies while retaining
+an explicit memory or machine-state contract. Target instruction selection is
+LLVM's job; a new backend should not duplicate every source-format rule.
+
+The work therefore scales with shared format grammars, family-specific semantics
+and exceptional lowering contracts. It need not even be a complete
+family-by-format product: each family declares which shared formats are legal.
+Keep the independent official-row inventory exhaustive for tests, including
+overlapping rows; compact implementation is not a reason to sample away rows.
+
 | Layer | Shared representation | Separate concerns |
 |---|---|---|
 | Source grammar | Semantic operation, legal operand group and original encoding | Named/raw source identity and mode restrictions |
