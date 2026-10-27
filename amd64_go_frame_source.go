@@ -1767,12 +1767,18 @@ func goAMD64FrameMachineShapeWithCalls(fn goAMD64FrameFunction, frame int64, cal
 				return goAMD64FrameContext("unbound original SHA machine instruction at PC %d: %v", pc+fn.prologue, err)
 			}
 			ins.Len = length // No scalar prologue, epilogue or branch authority.
+		} else if _, length, _, known, err := decodeX86RawADXWithMemory(fn.code[pc:], 0, 64, x86RawMemoryDecoder{physicalPC: true}); known || err != nil {
+			if err != nil || length <= 0 {
+				return goAMD64FrameContext("unbound original ADX machine instruction at PC %d: %v", pc+fn.prologue, err)
+			}
+			ins.Len = length // The numerical boundary decoder grants no scalar frame role.
 		} else {
 			var err error
 			ins, err = x86asm.Decode(fn.code[pc:], 64)
 			if err != nil || ins.Len == 0 || ins.Op == 0 || ins.Op == x86asm.LCALL ||
 				ins.Op == x86asm.CALL && (!calls[pc] || ins.Len != 5) {
-				return goAMD64FrameContext("unknown or calling original machine instruction")
+				return goAMD64FrameContext("unknown or calling original machine instruction in %s at PC %d (%s): %v",
+					fn.sourceSymbol, pc+fn.prologue, fn.positions[pc], err)
 			}
 		}
 		if len(fn.positions[pc]) == 0 {
