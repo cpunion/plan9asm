@@ -156,7 +156,7 @@ test('owner-two numerical fixture runs once and CLIs have independent complete m
   assert.doesNotMatch(body, /os: windows-latest/);
   assert.match(job('windows-module'), /uses: \.\/\.github\/workflows\/windows-module\.yml/);
   assert.match(body,
-    /go-version: \['1\.20\.x', '1\.21\.x', '1\.22\.x', '1\.23\.x', '1\.24\.x', '1\.25\.x', '1\.26\.x', '1\.27\.2'\]/);
+    /go-version: \['1\.27\.2', '1\.20\.x', '1\.26\.x', '1\.25\.x', '1\.24\.x', '1\.23\.x', '1\.22\.x', '1\.21\.x'\]/);
 });
 
 test('selected native CI remains a separate sixteen-owner serial protocol', () => {

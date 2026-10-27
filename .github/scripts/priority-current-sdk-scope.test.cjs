@@ -11,6 +11,7 @@ const nested = fs.readFileSync(path.join(__dirname, '../workflows/linux-cli-modu
 const exactSDK = '1.27.2';
 const minors = ['1.20.x', '1.21.x', '1.22.x', '1.23.x', '1.24.x',
   '1.25.x', '1.26.x', exactSDK];
+const testCreationOrder = [exactSDK, minors[0], ...minors.slice(1, -1).reverse()];
 const matrixJobs = new Set(['stdlib-corpus', 'test', 'nested-cli', 'module-completion']);
 // The independent SDK/runtime integration workflow has its own exact-SDK
 // policy. These remain the required PR instruction and module owners.
@@ -57,7 +58,7 @@ function requireMatrices(workflow) {
   const regular = jobBody(workflow, 'test');
   const versions = regular.match(/^        go-version: \[(.+)\]$/m);
   assert.ok(versions, 'complete test SDK matrix required');
-  assert.deepEqual([...versions[1].matchAll(/'([^']+)'/g)].map(match => match[1]), minors);
+  assert.deepEqual([...versions[1].matchAll(/'([^']+)'/g)].map(match => match[1]), testCreationOrder);
   const nested = jobBody(workflow, 'nested-cli').match(/^        go-version: \[(.+)\]$/m);
   assert.ok(nested, 'complete independent CLI SDK matrix required');
   assert.deepEqual([...nested[1].matchAll(/'([^']+)'/g)].map(match => match[1]), minors.slice(4));
