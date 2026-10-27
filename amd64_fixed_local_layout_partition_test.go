@@ -171,6 +171,20 @@ func TestGoAMD64FixedLocalLayoutPartitionFrozenEdges(t *testing.T) {
 						t.Logf("original access %d %q: first=%v series=%v", index, instruction.Raw, access.offset, access.iterationOffsets)
 					}
 				}
+				freshFile, parseErr := Parse(ArchAMD64, assembly)
+				if parseErr != nil {
+					t.Fatal(parseErr)
+				}
+				fresh := freshFile.Funcs[0]
+				freshProof := &x86FixedLocalProof{frame: fresh.FrameSize}
+				freshBudget := x86FixedLocalBudget{steps: 1 << 18, bytes: 64 << 20}
+				var freshGraph x86FixedLocalLayoutGraph
+				for residue := 0; residue < 8; residue++ {
+					if err := replayX86FixedLocal(&fresh, sig, freshProof, residue, &freshBudget, nil, &freshGraph); err != nil {
+						t.Fatal("independent final graph rebuild", err)
+					}
+				}
+				t.Logf("fresh final graph: %+v; matches tampered: %v", freshGraph.nodes, reflect.DeepEqual(freshGraph.nodes, changed.nodes))
 			}
 			if !errors.Is(err, ErrProbeNeedsContext) {
 				t.Fatal("a different residue acquired changed layout correspondence", err)
