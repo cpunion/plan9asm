@@ -32,6 +32,11 @@ Used LLVM `llvm.x86.*` intrinsics require a matching x86 source mode and target,
 except MXCSR load/store, whose i32 memory operand works in either x86 mode.
 The guard checks LLVM intrinsic IDs, not an opcode list; unused declarations,
 ordinary functions and generic portable intrinsics impose no such restriction.
+Actual native inline-assembly uses and nonempty module assembly also require
+the matching source backend. The guard follows LLVM values rather than source
+mnemonics, comments or unused constants. Empty portable compiler barriers retain
+their independently compiled generic constraints. Matching native requests avoid
+the additional instruction walk.
 
 ## Family and format normalization
 

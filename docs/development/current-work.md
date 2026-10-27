@@ -1,6 +1,6 @@
 # PR40 closeout
 
-Updated 2026-10-27. Finish **amd64 correctness, shared typed families and
+Updated 2026-10-28. Finish **amd64 correctness, shared typed families and
 translation efficiency first**, preserving all five architecture gates.
 Read [architecture](architecture.md), [x86 convergence](x86-convergence.md)
 and [validation](validation.md). Historical receipts remain in git history;
@@ -8,23 +8,26 @@ this page records the current candidate and its limits.
 
 ## Publication and review
 
-PR40 remains draft. Published `1c54c530e` carries the qualified translation
-repairs below; its [complete CI round](https://github.com/xgo-dev/plan9asm/actions/runs/40505530452)
-now passes **325/325 jobs**, including 315 source jobs and ten completion gates.
-Codecov also passes, for 326 successful checks and **88.0%** main statement
-coverage. Attempts 1 and 2 retain runner-communication and missing-artifact
-failures; targeted reruns on the same source recovered attempt 3. Host-specific
-test skips remain recorded, and native AVX512 acceptance remains pending.
-This qualifies that revision, not the next publication. Both inline threads are
-resolved; external approval is outstanding.
+PR40 remains draft. Published `01955e42e` passes its
+[complete CI round](https://github.com/xgo-dev/plan9asm/actions/runs/40536640591)
+on attempt 1: **325/325 Go checks plus Codecov**, with **88.0%** main statement
+coverage. Its complete named inventory matches the preceding 325-job round.
+Host-specific skips remain recorded; native AVX512 acceptance and external
+approval remain outstanding. Both inline threads are resolved. The preceding
+`1c54c530e` round also passes; its original infrastructure failures are retained.
 
-The next batch adds ABS, FMA3, AVX moves and ordinary floating binary official-row
-joins while retaining translator rules and native fixture inventories. It also
-removes 121 lines of unreachable legacy floating dispatch. Integrated `c1e4206f2`
-matches qualified cleanup `a1f3cdb6a` except for documentation; both endpoint SDK
-scopes, the complete preflight and the five-architecture gate pass. It includes
-the tested current/minimum-first CI creation order. Full new-head CI remains required.
-Creation order is not a guarantee of external runner scheduling priority.
+That publication adds ABS, FMA3, AVX moves and ordinary floating binary row
+joins and removes 121 unreachable legacy floating lines. It preserves all SDKs
+and test owners while creating current/minimum jobs first; creation order does
+not guarantee external runner scheduling priority.
+
+The next local candidate is `537be28b8`, not yet published. It adds 186 official
+rows / 765 witnesses, avoids unnecessary SIMD feature queries for baseline GP
+forms, and validates actual native inline/module assembly against the source
+backend. Its five-architecture gate passes on frozen source/tools. Backend
+qualification includes both endpoint SDKs and both complete CLI suites below.
+The following declaration-demand work is still under TDD; its initial real RED
+is retained and is not a completed optimization.
 The failed `004da9f44` cache-policy round and earlier failures retain their
 original outcomes. Its stale Node assertion was repaired without removing
 the actual Go lifecycle, ownership or cleanup checks.
@@ -34,8 +37,10 @@ rebased onto `854634f22` and pins the downloaded public
 `v0.0.0-20261027123924-1c54c530ed3d`. Adapter tests pass 41 roots / 131 children,
 assembly-build checks 21 / 23, and complete CI policies 160/160, with zero
 failures/skips. Rebase layout/initializer controls also pass. Current-head cloud
-CI is running. A preparation timeout occurred before any steps and was retained;
-rerunning that preparation and its dependents restored the Go workflow.
+CI completes with 13 successful workflows and 130 successful jobs; only the two
+conditional release/submission jobs are skipped. A preparation timeout occurred
+before any steps and was retained; rerunning that preparation and its dependents
+restored the Go workflow.
 Previous `cdca51fc4` completed 13 workflows / 130 jobs with two release-condition
 job skips; those do not qualify this pin. Its P1 dependency-provenance requirement remains
 open until an official upstream version replaces the temporary fork pin.
@@ -71,12 +76,29 @@ Never push or merge upstream directly.
   reuses its fresh dependency query, reducing two subprocess queries to one.
   Test-owned compiler artifacts are shared with independent source leases and
   bounded cleanup; user-global caches are never cleared.
+- Baseline GP feature inference reuses existing RMW, LEA and direct-branch
+  grammars after logical/vector routing. Physical forms and separately bound
+  targets retain their paths. No source permission or mutable cache is added.
+- Backend validation follows actual inline-assembly operands and actual
+  nonempty module assembly, including WASM relocations. Matching source modes
+  take a fast path; portable empty compiler barriers remain legal. The official
+  LLVM binding is v0.10.1 in all three modules. Its missing module-assembly
+  getter uses a 23-line LLVM22 C API length bridge, without parsing IR or adding
+  linker flags. The repair adds 81 net production lines.
 
 The final GP descriptor reuse avoids the rejected eager-query overhead.
 Measured replay ABBA differences against the same partition implementation
 before eager analysis are +4.0% time for register work and +2.4% for mixed work,
 with allocation-byte differences +0.22% and +0.56%. Flat cases vary -0.05% to
 +1.62%. These are residual local costs, not a whole-translator speedup.
+
+The later baseline GP feature query removes allocations in six isolated
+inference cases and reduces their time by approximately 86–88%. Complete GP
+translation improves by 2.58–5.30% across paired blocks and endpoint SDKs.
+The complete original P256 workload is mixed (+4.17% / -1.64%); its 35,079
+source bytes, 14 TEXTs, ten public definitions and four internal helpers remain
+intact, with equivalent IR/attributes and LLVM22 objects. These results do not
+establish a whole-SDK speedup or generated-program acceleration.
 
 ## Qualification of this batch
 
@@ -99,6 +121,10 @@ with allocation-byte differences +0.22% and +0.56%. Flat cases vary -0.05% to
 | Integrated `ff2f14caa` preflight | **573 Node policies; 26 Go roots / 300 children; five-architecture gate PASS** | Frozen source/tools; no translator production changes |
 | Legacy floating cleanup at `a1f3cdb6a` | Current SDK **168 roots / 5,173 children**; minimum **167 / 5,173 PASS**, zero failures/skips | Existing floating, precision, sqrt, raw FP16 and row owners; one Go1.27 source owner is absent on the minimum SDK |
 | Final integrated `c1e4206f2` preflight | **573 Node policies; 26 Go roots / 300 children; five-architecture gate PASS** | Code identical to qualified cleanup; documentation differs |
+| Complete remaining EVEX binary join at `70e1aad95` | Both endpoint SDKs **203 roots / 4,794 children PASS**, zero failures/skips | 31 members / 186 rows / 765 witnesses; old 16 groups retain every field and output hash |
+| Baseline GP feature projection at `da3e6029b` | Both endpoint SDKs **47 roots / 2,183 children PASS**, zero failures/skips | Existing grammar and all prior benchmark inputs retained; 573 Node policies and 26 / 300 Go policy checks pass |
+| Actual native-assembly backend guard at `537be28b8` | Each endpoint SDK **89 roots / 5,188 children PASS**, zero failures/skips | All five source families, three public APIs, actual LLVM22 native/portable objects and retained foreign-target REDs |
+| Complete CLI and policy qualification at `537be28b8` | Simple CLI **38 / 39**; rich CLI **401 / 2,198**; Go policy **26 / 300**; Node **573 PASS** | Zero failures/skips; one Linux-only rich CLI source root is absent on Darwin, not skipped; root five-architecture gate also passes |
 
 The joint native scope executes 45 logical kernels over all 256 byte values
 with separate and overlapping buffers, 36 original shifted-literal kernels
@@ -135,7 +161,8 @@ Neither file is cropped or substituted with an instruction-only fixture.
 | FMA3 | 360 | 2,028 |
 | AVX whole-vector moves | 144 | 306 |
 | Ordinary AVX floating binary | 132 | 684 |
-| Total | **1,534** | **5,900** |
+| Remaining EVEX binary families | 186 | 765 |
+| Local candidate total | **1,720** | **6,665** |
 
 These joins retain independent ordered Go rows and actual Go bytes, then compile
 initialized functions through three APIs with LLVM22. Two PADDD aliases are
@@ -166,7 +193,7 @@ failed receipt is retained. Only that diagnostic comparison uses `-vet=off`;
 the complete family and CI gates retain their original default vet behavior.
 
 Move witnesses are **276 ordinary initialized forms and 30 terminal #UD
-controls**, so the total contains 5,870 ordinary forms and 30 faults. Each fault
+controls**, so the local total contains 6,635 ordinary forms and 30 faults. Each fault
 function, through each of three APIs, must independently contain one UD2 and
 unreachable with no input reads before LLVM object compilation. Both SDKs retain
 90 per-function/API body receipts. This is not successful normal-value execution.
@@ -203,9 +230,10 @@ showed regression; no acceleration is claimed for the accepted cleanup.
 
 ## Remaining work, in order
 
-1. Finish both published revisions' CI/coverage and obtain external review.
-   Publish the qualified row-join batch through the allowed fork after the
-   active round completes. Retain draft status meanwhile.
+1. Complete and measure the amd64 declaration-demand batch, then publish the
+   qualified local candidate through the allowed fork and finish its new-head
+   CI/coverage. Repin LLGo to that exact public revision and qualify it. Obtain
+   external review and retain draft status meanwhile.
 2. Complete amd64 official-row ownership, 386 applicability and independent
    semantics. Extend existing family/object/native owners instead of creating
    another opcode registry or enumerating unrelated source/target products.
