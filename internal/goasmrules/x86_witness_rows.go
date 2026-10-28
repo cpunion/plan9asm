@@ -26,6 +26,13 @@ type X86PackedBinaryWitness struct {
 	Encoding                   []byte
 }
 
+// X86LeadingImmediateVectorRows retains four distinct numerical families on
+// the original shared immediate/two-vector/vector-result encoding grammar.
+func X86LeadingImmediateVectorRows(legacy X86LegacyCatalog, avx []X86AVXRule) ([]X86PackedBinaryRow, error) {
+	return x86PackedBinaryRows(legacy, avx, `VALIGND VALIGNQ
+		VPSHLDW VPSHLDD VPSHLDQ VPSHRDW VPSHRDD VPSHRDQ VPTERNLOGD VPTERNLOGQ VDBPSADBW`)
+}
+
 // X86GFNIRows retains all named Go multiply and affine/inverse GFNI rows.
 // Matrix qword broadcast is independent from byte-granular result masking.
 func X86GFNIRows(legacy X86LegacyCatalog, avx []X86AVXRule) ([]X86PackedBinaryRow, error) {
@@ -332,6 +339,9 @@ func x86PackedBinaryRows(legacy X86LegacyCatalog, avx []X86AVXRule, names string
 }
 
 func x86PackedAVXRowWitnesses(rule X86AVXRule) ([]X86PackedBinaryWitness, error) {
+	if rule.Ytab == "_yvalignd" {
+		return x86LeadingImmediateVectorRowWitnesses(rule)
+	}
 	if rule.Ytab == "_yvgf2p8affineinvqb" {
 		return x86GFNIRowWitnesses(rule)
 	}
