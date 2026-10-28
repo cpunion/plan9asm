@@ -149,7 +149,7 @@ func moduleOwner(pkg modulePackage) int {
 	if pkg.Directory == "." {
 		return 0
 	}
-	if pkg.Directory == "gotoolprofile" {
+	if pkg.Directory == "gotoolprofile" || pkg.Directory == "internal/sdkfrontend" {
 		return 1
 	}
 	return 2

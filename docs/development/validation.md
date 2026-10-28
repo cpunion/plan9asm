@@ -95,7 +95,11 @@ focused instruction or lifecycle tests do not check these static contracts.
 The [exhaustive runner](../../cmd/plan9asmtest/README.md) can partition expensive
 first-party tests without sampling. Its actual inventory, disjoint ownership,
 raw outcomes and strict complete-module aggregate remain required. Owner 0 owns
-the root package, owner 1 `gotoolprofile`, owner 2 all remaining packages.
+the root package, owner 1 `gotoolprofile` and `internal/sdkfrontend`, owner 2
+all remaining packages. The SDK frontend's independent original-source roots
+use the same exhaustive partitions and two-worker bound as the profile package,
+so their repeated captures do not accumulate in one unfiltered race command.
+Both owner-1 packages run serially, with no nested package-worker pool.
 Only explicit owner 2 uses the existing worker limit across whole packages.
 Each package remains an unfiltered one-shard/one-worker command, and the single
 collector preserves inventory order and joins active processes on cancellation.

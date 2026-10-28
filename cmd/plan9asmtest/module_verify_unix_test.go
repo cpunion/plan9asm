@@ -18,10 +18,29 @@ func TestModuleThreeOwnersActualGoAndStrictAggregate(t *testing.T) {
 	moduleFixtureEnvironment(t)
 	binary := parallelFixtureCLI(t)
 	dir := moduleFixture(t, false)
+	frontend := filepath.Join(dir, "internal", "sdkfrontend")
+	if err := os.MkdirAll(frontend, 0700); err != nil {
+		t.Fatal(err)
+	}
+	for name, source := range map[string]string{
+		"value.go": "package frontend\nfunc Value() int { return 19 }\n",
+		"value_test.go": `package frontend
+import ("fmt"; "testing")
+func TestCaptureAlpha(t *testing.T) { t.Run("child", func(t *testing.T) { if Value()!=19 { t.Fatal("value") } }) }
+func TestCaptureBeta(t *testing.T) { if Value()!=19 { t.Fatal("value") } }
+func ExampleValue() { fmt.Println(Value()); /* Output: 19 */ }
+func FuzzValue(f *testing.F) { f.Add(19); f.Fuzz(func(t *testing.T, n int) { if Value()!=n { t.Fatal(n) } }) }
+`,
+	} {
+		if err := os.WriteFile(filepath.Join(frontend, name), []byte(source), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
 	container := t.TempDir()
 	profile := filepath.Join(t.TempDir(), "whole-module.cover")
 	flags := []string{"-race", "-covermode=atomic", "-coverprofile=" + profile, "-p=2"}
 	var expected moduleReport
+	frontendIndex := -1
 	for owner := 0; owner < moduleOwners; owner++ {
 		out := filepath.Join(container, fmt.Sprintf("owner-%04d", owner))
 		stem := filepath.Join(t.TempDir(), "owner")
@@ -38,8 +57,30 @@ func TestModuleThreeOwnersActualGoAndStrictAggregate(t *testing.T) {
 			expected = report
 			expected.Owner = -1
 		}
-		if len(report.Inventory) != 5 || report.Status != "passed" {
+		if len(report.Inventory) != 6 || report.Status != "passed" {
 			t.Fatalf("owner lost actual whole-module inventory: %+v", report)
+		}
+		for index, pkg := range report.Inventory {
+			if pkg.Directory != "internal/sdkfrontend" {
+				continue
+			}
+			frontendIndex = index
+			if moduleOwner(pkg) != 1 {
+				t.Fatal("actual SDK frontend remained a serial whole-package owner")
+			}
+			if owner != 1 {
+				continue
+			}
+			var suite suiteReport
+			packageOut := filepath.Join(out, fmt.Sprintf("package-%04d", index))
+			if err := ciReadJSON(filepath.Join(packageOut, "report.json"), &suite); err != nil {
+				t.Fatal(err)
+			}
+			if suite.FullPackage || suite.Workers != 2 || len(suite.Shards) != 2 ||
+				len(suite.Names) != 4 || suite.RootPassed != 4 || suite.ChildPassed != 2 ||
+				suite.RootSkipped != 0 || suite.ChildSkipped != 0 {
+				t.Fatalf("SDK frontend lost complete Test/Example/Fuzz roots and children: %+v", suite)
+			}
 		}
 	}
 	if _, err := os.Lstat(profile); !os.IsNotExist(err) {
@@ -61,7 +102,9 @@ func TestModuleThreeOwnersActualGoAndStrictAggregate(t *testing.T) {
 		t.Fatal(errorsWithActualOutput(err, stem))
 	}
 	data, err := os.ReadFile(profile)
-	if err != nil || !strings.Contains(string(data), "modulefixture/internal/other/value.go:") || !strings.Contains(string(data), "modulefixture/gotoolprofile/value.go:") {
+	if err != nil || !strings.Contains(string(data), "modulefixture/internal/other/value.go:") ||
+		!strings.Contains(string(data), "modulefixture/gotoolprofile/value.go:") ||
+		!strings.Contains(string(data), "modulefixture/internal/sdkfrontend/value.go:") {
 		t.Fatalf("checked cross-owner coverage lost packages: %v\n%s", err, data)
 	}
 
@@ -173,6 +216,34 @@ func TestModuleThreeOwnersActualGoAndStrictAggregate(t *testing.T) {
 			})
 			if err := verifyModuleArtifacts(expected, relocated); err == nil {
 				t.Fatal("missing/foreign raw execution or coverage became complete")
+			}
+		})
+	}
+	frontendOut := filepath.Join(relocated, "owner-0001", fmt.Sprintf("package-%04d", frontendIndex))
+	logs, err := filepath.Glob(filepath.Join(frontendOut, "shard-*.stdout"))
+	if err != nil || len(logs) == 0 {
+		t.Fatal("SDK frontend has no actual executing Go JSON", err)
+	}
+	for _, name := range []string{"sdk-raw-incomplete", "sdk-raw-duplicate"} {
+		t.Run(name, func(t *testing.T) {
+			data, err := os.ReadFile(logs[0])
+			if err != nil {
+				t.Fatal(err)
+			}
+			var changed []byte
+			if name == "sdk-raw-duplicate" {
+				changed = append(append([]byte(nil), data...), data...)
+			}
+			if err := os.WriteFile(logs[0], changed, 0600); err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() {
+				if err := os.WriteFile(logs[0], data, 0600); err != nil {
+					t.Error(err)
+				}
+			})
+			if err := verifyModuleArtifacts(expected, relocated); err == nil {
+				t.Fatal("missing or repeated SDK frontend execution became complete")
 			}
 		})
 	}

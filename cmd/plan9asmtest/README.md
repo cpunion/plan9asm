@@ -29,8 +29,12 @@ Selected cross-runtime CI owners remain serial and reject `-workers` above one.
 
 Unix test/race/coverage CI uses `scripts/test-module-ci.sh`. Its three package
 owners share the complete actual `go list -json ./...` package inventory:
-owner zero runs the root, owner one runs `gotoolprofile`, and owner two
-runs every other package. CI splits only owner zero into sixteen jobs for test/
+owner zero runs the root, owner one runs `gotoolprofile` and `internal/sdkfrontend`,
+and owner two runs every other package. The two owner-one packages run serially;
+each uses the same exhaustive root partitions and at most two active commands.
+Independent SDK source captures retain their own original budgets and lifetimes,
+while no longer accumulating in a single unfiltered race command.
+CI splits only owner zero into sixteen jobs for test/
 coverage and 32 for race. Part `p` owns global shard indices `i` where
 `i % parts == p`. Test/coverage keep 32 shards; race uses 64 shards. Every
 root owner executes exactly two shards in one two-worker wave. Test/coverage
@@ -40,7 +44,7 @@ they are not repeated for each root part. Only explicit owner two overlaps at
 most `-workers` complete package commands; each package keeps one shard/worker.
 Its single collector retains inventory order, records failures without stopping
 other packages, and joins active commands on cancellation without dispatching
-the remaining packages. Default whole-module/root/profile scheduling is unchanged.
+the remaining packages. The worker and command/job budgets are unchanged.
 Every other package runs complete ordinary `go test` without `-run`, including packages
 with no tests or only benchmarks/TestMain. Every package has its own actual
 `-list=.` receipt, including runnable examples/fuzz targets and separately
