@@ -127,24 +127,34 @@ The failed `004da9f44` cache-policy round and earlier failures retain their
 original outcomes. Its stale Node assertion was repaired without removing
 the actual Go lifecycle, ownership or cleanup checks.
 
-[LLGo PR2694](https://github.com/xgo-dev/llgo/pull/2694), publication `ca022c520`,
-is rebased onto `748cf1811` and pins the qualified public
-`v0.0.0-20261028164338-bebc7092d11c`. The 117 rebased contribution patches remain;
-this dependency update changes only `go.mod` and `go.sum`. All 5,106 module ZIP
+[LLGo PR2694](https://github.com/xgo-dev/llgo/pull/2694), publication `b6871f8f0`,
+is rebased onto `b2e1d4e84` and pins the qualified public
+`v0.0.0-20261028164338-bebc7092d11c`. All 126 contribution commits remain:
+124 patches match and two documented resolutions retain both the typed equality
+bridge/runtime-name guard and shared CDP transport cancellation. All 5,106 module ZIP
 files match the exact Git snapshot and the bundled license text. Actual Go module
 download, SumDB and module verification pass. New-pin host qualification passes
 the complete adapter 41 / 131, assembly-build controls 21 / 23 and timeout
-controls 11 / 8. Its own cloud round is required; prior CI does not certify it.
+controls 11 / 8. The fresh rebased host run additionally verifies equality
+selectors, browser control, runtime source/audit/equality owners and all affected
+static-byte-array/compiler roots: eight scopes total 157 / 303, with no skips.
+All 5,093 source files and ten tools remain frozen. Its thirteen new-head cloud
+workflows have started; completion and coverage remain required.
 
-A fresh compiler built from all 5,077 archived LLGo source files with Go1.27.0
+A fresh compiler built from all 5,093 archived LLGo source files with Go1.27.0
 and LLVM22.1.8 passes CRC32 v1.3.0 and libc v1.75.7 ABI0 probes using Go1.27.3
 sources. Both cases select actual assembly, verify symabis and final text
-symbols, link and execute with no inapplicable result. This is local emulated
+symbols, link and execute with no inapplicable result. The same actual LLGo
+binary passes three float-bit-conversion roots and complex division's root /
+23 children. This is local emulated
 Linux/amd64 Docker execution, not native cloud acceptance. The local compatibility
 runner fixes successful download diagnostics contaminating JSON; its real RED,
 12-root / 12-child GREEN and original failed report are retained separately.
 Neither these two cases nor the temporary dependency resolves every runtime/ABI
-issue, full SQLite, purego, callback or system-stack contract.
+issue, full SQLite, purego, callback or system-stack contract. The previous
+`ca022c520` triggered no CI because actual main had advanced while the PR API
+still exposed its old base; no CI job was canceled. Check actual Git main before
+publication, then confirm mergeability and exact-head workflow creation.
 
 All ten WASM suites passed at `df6f5eeb2` after splitting original stdlib
 targets and caller profiles into independent jobs. Original cases, flags,
