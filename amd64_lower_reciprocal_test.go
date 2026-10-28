@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -47,16 +48,28 @@ func TestTranslateX86PackedReciprocalCompleteGoAssemblerForms(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			ll, err := Translate(file, Options{
-				TargetTriple: target.triple,
-				Goarch:       target.goarch,
-				Sigs: map[string]FuncSig{
-					"packedreciprocalforms": {Name: "packedreciprocalforms", Ret: Void},
-				},
-			})
-			if err != nil {
-				t.Fatal(err)
+			for _, api := range []string{"text", "module", "Go"} {
+				ir, err := x86ScalarFPBitViewAPI(t, source.String(), "func packedreciprocalforms()\n", target.goarch, target.triple, api)
+				if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+					t.Fatal("bare original formats acquired a native pointer or physical entry value", api, err)
+				}
 			}
+			// Keep every original Go shape and its actual LLVM object. The
+			// private format compiler supplies no public entry/storage proof;
+			// mode32 VEX high-register spellings remain frontend-only shapes.
+			ll := x86InstructionFormatObjectUnit(t, file,
+				map[string]FuncSig{"packedreciprocalforms": {Name: "packedreciprocalforms", Ret: Void}},
+				target.goarch, target.triple, 0, func(c *amd64Ctx, ins Instr) (bool, bool, error) {
+					grammarArch := target.goarch
+					if strings.HasPrefix(string(ins.Op), "V") {
+						grammarArch = "amd64"
+					}
+					form, known, err := x86PackedReciprocalProperties(ins.Op, ins, grammarArch)
+					if !known || err != nil {
+						return known, false, err
+					}
+					return true, false, c.emitPackedReciprocalEstimate(ins, form)
+				})
 			for _, intrinsic := range []string{"@llvm.x86.sse.rcp.ps", "@llvm.x86.sse.rsqrt.ps", "@llvm.x86.avx.rcp.ps.256", "@llvm.x86.avx.rsqrt.ps.256"} {
 				if !strings.Contains(ll, intrinsic) {
 					t.Fatalf("translation omitted %s:\n%s", intrinsic, ll)

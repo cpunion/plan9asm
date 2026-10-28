@@ -59,20 +59,8 @@ func x86ScalarReciprocalProperties(op Op, ins Instr, arch string) (x86ScalarReci
 	}
 	source := ins.Args[0]
 	if !vector(source) {
-		// Go's non-SIB asmandsz branch accepts an extended base spelling
-		// before physical mode32 binding. asmidx explicitly rejects extended
-		// base/index SIB forms, so this compatibility is not interchangeable.
-		if spec.vector && arch == "386" && source.Kind == OpMem && source.Mem.Index == "" && source.Mem.Base != "R12" &&
-			!x86MemoryRegistersValidForArch(source.Mem, arch) {
-			frontend := source
-			if frontend.Mem.Off == int64(uint32(frontend.Mem.Off)) {
-				// asmandsz admits a uint32 displacement in mode32. Normalize
-				// only this grammar check; no original operand or value changes.
-				frontend.Mem.Off = int64(int32(frontend.Mem.Off))
-			}
-			if x86PackedShiftMemoryValid(frontend, "amd64") && x86NamedMultiplyMemoryError(frontend, "amd64") == nil {
-				return form, true, fmt.Errorf("%w: 386 %s extended source base has no physical address binding", ErrProbeNeedsContext, op)
-			}
+		if spec.vector && x86Mode32UnboundVEXMemorySource(source, arch) {
+			return form, true, fmt.Errorf("%w: 386 %s extended source base has no physical address binding", ErrProbeNeedsContext, op)
 		}
 		if !isAMD64MemoryOperand(source) || !x86PackedShiftMemoryValid(source, arch) {
 			return fail()
@@ -85,6 +73,22 @@ func x86ScalarReciprocalProperties(op Op, ins Instr, arch string) (x86ScalarReci
 		return form, true, err
 	}
 	return form, true, nil
+}
+
+// Go's non-SIB asmandsz branch accepts an extended base spelling before
+// physical mode32 binding. asmidx rejects extended base/index SIB forms.
+// This recognizes frontend syntax only; it supplies no address permission.
+func x86Mode32UnboundVEXMemorySource(source Operand, arch string) bool {
+	if arch != "386" || source.Kind != OpMem || source.Mem.Index != "" || source.Mem.Base == "R12" ||
+		x86MemoryRegistersValidForArch(source.Mem, arch) {
+		return false
+	}
+	frontend := source
+	if frontend.Mem.Off == int64(uint32(frontend.Mem.Off)) {
+		// Normalize only this grammar check, never the original operand.
+		frontend.Mem.Off = int64(int32(frontend.Mem.Off))
+	}
+	return x86PackedShiftMemoryValid(frontend, "amd64") && x86NamedMultiplyMemoryError(frontend, "amd64") == nil
 }
 
 func x86TypedScalarReciprocalByteEffect(op Op, ins Instr, arch string) (x86TypedByteEffect, bool, error) {

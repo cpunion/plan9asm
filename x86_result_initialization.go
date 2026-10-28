@@ -1105,6 +1105,9 @@ func x86ResultTransfer(ins Instr, state *x86ResultState, owned []bool, resultOff
 	if accepted, known := x86ResultScalarReciprocalStep(ins, state, owned, arch, false); known {
 		return accepted
 	}
+	if accepted, known := x86ResultPackedReciprocalStep(ins, state, owned, arch, false); known {
+		return accepted
+	}
 	if accepted, known := x86ResultUnalignedLoadStep(ins, state, owned, arch, false); known {
 		return accepted
 	}

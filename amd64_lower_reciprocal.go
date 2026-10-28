@@ -35,78 +35,69 @@ func (c *amd64Ctx) lowerReciprocal14(op Op, ins Instr) (bool, bool, error) {
 }
 
 // lowerReciprocalEstimate implements the complete Go 1.27 legacy and VEX
-// RCP/RSQRT estimate family: packed RCPPS/RSQRTPS/VRCPPS/VRSQRTPS plus scalar
-// RCPSS/RSQRTSS/VRCPSS/VRSQRTSS. Packed estimates retain their target
-// intrinsics; scalar estimates preserve their complete source opcode,
-// approximation, native m32 access and independent copied upper lanes.
+// RCP/RSQRT estimate family. Pure packed register estimates retain their
+// intrinsics and legal CSE; memory estimates preserve their original opcode,
+// full native access and legacy alignment fault even with a dead result.
 func (c *amd64Ctx) lowerReciprocalEstimate(rawOp Op, ins Instr) (ok bool, terminated bool, err error) {
 	raw := strings.ToUpper(string(rawOp))
-	base := raw
-	if dot := strings.IndexByte(raw, '.'); dot >= 0 {
-		base = raw[:dot]
-	}
-	switch base {
-	case "RCPPS", "RSQRTPS", "VRCPPS", "VRSQRTPS",
-		"RCPSS", "RSQRTSS", "VRCPSS", "VRSQRTSS":
-	default:
-		return false, false, nil
-	}
-	if raw != base {
-		return true, false, fmt.Errorf("%s %s has no suffixed form in Go 1.27: %q", c.goarch, base, ins.Raw)
-	}
-	if strings.HasSuffix(base, "SS") {
+	base, _, _ := strings.Cut(raw, ".")
+	if _, scalar := x86ScalarReciprocalSpecs[Op(base)]; scalar {
+		if raw != base {
+			return true, false, fmt.Errorf("%s %s has no suffixed form in Go 1.27: %q", c.goarch, base, ins.Raw)
+		}
 		return c.lowerScalarReciprocalEstimate(base, ins)
 	}
-	if len(ins.Args) != 2 {
-		return true, false, fmt.Errorf("%s %s expects vector-or-memory source and vector destination: %q", c.goarch, base, ins.Raw)
+	form, known, err := x86PackedReciprocalProperties(rawOp, ins, c.goarch)
+	if !known || err != nil {
+		return known, false, err
 	}
+	return true, false, c.emitPackedReciprocalEstimate(ins, form)
+}
 
+func (c *amd64Ctx) emitPackedReciprocalEstimate(ins Instr, form x86PackedReciprocalForm) error {
+	if ins.x86AddressBits != 0 {
+		return fmt.Errorf("%w: %s needs its original address-size binding", ErrProbeNeedsContext, ins.Op)
+	}
 	source, destination := ins.Args[0], ins.Args[1]
-	byteWidth := amd64VectorByteWidth(destination.Reg)
-	legacy := base == "RCPPS" || base == "RSQRTPS"
-	if legacy {
-		if destination.Kind != OpReg || byteWidth != 16 || !c.isGoLegacyXReg(destination.Reg) {
-			return true, false, fmt.Errorf("%s %s destination is outside Go 1.27's legacy X register class: %q", c.goarch, base, ins.Raw)
-		}
-		if source.Kind == OpReg && !c.isGoLegacyXReg(source.Reg) {
-			return true, false, fmt.Errorf("%s %s source must be an in-range X register or memory: %q", c.goarch, base, ins.Raw)
-		}
-	} else {
-		if destination.Kind != OpReg || byteWidth != 16 && byteWidth != 32 || !amd64VEXVectorRegister(destination, byteWidth) {
-			return true, false, fmt.Errorf("%s %s destination is outside Go 1.27's VEX X/Y register classes: %q", c.goarch, base, ins.Raw)
-		}
-		if source.Kind == OpReg && !amd64VEXVectorRegister(source, byteWidth) {
-			return true, false, fmt.Errorf("%s %s source must match the destination width: %q", c.goarch, base, ins.Raw)
-		}
-	}
-	if source.Kind != OpReg && !isAMD64MemoryOperand(source) {
-		return true, false, fmt.Errorf("%s %s source must be a matching vector register or memory: %q", c.goarch, base, ins.Raw)
-	}
-
+	byteWidth := form.byteWidth
 	lanes := byteWidth / 4
-	value, err := c.loadPackedReciprocalSource(source, byteWidth, lanes)
-	if err != nil {
-		return true, false, err
-	}
-	intrinsic := "llvm.x86.sse.rcp.ps"
-	if strings.Contains(base, "RSQRT") {
-		intrinsic = "llvm.x86.sse.rsqrt.ps"
-	}
-	if byteWidth == 32 {
-		intrinsic = "llvm.x86.avx.rcp.ps.256"
-		if strings.Contains(base, "RSQRT") {
-			intrinsic = "llvm.x86.avx.rsqrt.ps.256"
-		}
-	}
 	vectorType := fmt.Sprintf("<%d x float>", lanes)
 	result := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = call %s @%s(%s %s)\n", result, vectorType, intrinsic, vectorType, value)
+	if source.Kind != OpReg && source.Kind != OpFP {
+		pointer, pointerType, _, err := c.packedVectorMemoryPointer(source)
+		if err != nil {
+			return err
+		}
+		segment := ""
+		if source.Kind == OpMem && source.Mem.Segment != "" {
+			segment = "%" + strings.ToLower(string(source.Mem.Segment)) + ":"
+		}
+		assembly := strings.ToLower(string(form.op)) + " " + segment + "$1, $0"
+		fmt.Fprintf(c.b, "  %%%s = call %s asm sideeffect %q, %q(%s elementtype([%d x i8]) %s)\n",
+			result, vectorType, assembly, "=x,*m,~{memory}", pointerType, byteWidth, pointer)
+	} else {
+		value, err := c.loadFloatingVectorOperand(source, byteWidth, lanes, 32)
+		if err != nil {
+			return err
+		}
+		intrinsic := "llvm.x86.sse.rcp.ps"
+		if strings.Contains(string(form.op), "RSQRT") {
+			intrinsic = "llvm.x86.sse.rsqrt.ps"
+		}
+		if byteWidth == 32 {
+			intrinsic = "llvm.x86.avx.rcp.ps.256"
+			if strings.Contains(string(form.op), "RSQRT") {
+				intrinsic = "llvm.x86.avx.rsqrt.ps.256"
+			}
+		}
+		fmt.Fprintf(c.b, "  %%%s = call %s @%s(%s %s)\n", result, vectorType, intrinsic, vectorType, value)
+	}
 	bytesValue := c.newTmp()
 	fmt.Fprintf(c.b, "  %%%s = bitcast %s %%%s to <%d x i8>\n", bytesValue, vectorType, result, byteWidth)
-	if legacy {
-		return true, false, c.storeX(destination.Reg, "%"+bytesValue)
+	if form.legacy {
+		return c.storeLegacyXViews(destination.Reg, "%"+bytesValue)
 	}
-	return true, false, c.storePackedMoveOperand(destination, byteWidth, "%"+bytesValue)
+	return c.storePackedMoveOperand(destination, byteWidth, "%"+bytesValue)
 }
 
 func (c *amd64Ctx) lowerScalarReciprocalEstimate(base string, ins Instr) (bool, bool, error) {
@@ -178,19 +169,4 @@ func (c *amd64Ctx) scalarReciprocalNativeSource(source Operand) (value, typ, con
 		segment = "%" + strings.ToLower(string(source.Mem.Segment)) + ":"
 	}
 	return pointer, pointerType + " elementtype([4 x i8])", "*m", segment + "$1", nil
-}
-
-func (c *amd64Ctx) loadPackedReciprocalSource(source Operand, byteWidth, lanes int) (string, error) {
-	if source.Kind == OpSym {
-		// As in Go's x86 assembler, a bare integer is an absolute memory
-		// operand. '$' is required for an immediate.
-		if address, parseErr := parseInt(source.Sym); parseErr == nil {
-			bytesValue := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = load <%d x i8>, ptr %s, align 1\n", bytesValue, byteWidth, c.ptrFromAddrI64(fmt.Sprintf("%d", address)))
-			value := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i8> %%%s to <%d x float>\n", value, byteWidth, bytesValue, lanes)
-			return "%" + value, nil
-		}
-	}
-	return c.loadFloatingVectorOperand(source, byteWidth, lanes, 32)
 }

@@ -164,6 +164,7 @@ func TestRuntimeOracleCommandConsumersRetainOwnedExecution(t *testing.T) {
 		"x86_named_half_fault_tdd_test.go",
 		"x86_named_half_raw_tdd_test.go",
 		"x86_scalar_reciprocal_physical_test.go",
+		"x86_packed_reciprocal_native_read_test.go",
 		"x86_unsigned_scalar_integer_float_physical_test.go",
 		"x86_unsigned_scalar_integer_float_named_tuple_test.go",
 		"amd64_raw_packed_sign_test.go",
