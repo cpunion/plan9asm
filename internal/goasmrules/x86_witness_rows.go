@@ -32,6 +32,13 @@ func X86ImmediateIntegerCompareRows(legacy X86LegacyCatalog, avx []X86AVXRule) (
 	return x86PackedBinaryRows(legacy, avx, `VPCMPB VPCMPUB VPCMPW VPCMPUW VPCMPD VPCMPUD VPCMPQ VPCMPUQ`)
 }
 
+// X86IntegerTestMaskRows retains only the eight integer AND/nonzero/zero
+// tests. The bit-shuffle opcode on their shared ytab has its own semantics.
+func X86IntegerTestMaskRows(legacy X86LegacyCatalog, avx []X86AVXRule) ([]X86PackedBinaryRow, error) {
+	return x86PackedBinaryRows(legacy, avx, `VPTESTMB VPTESTMW VPTESTMD VPTESTMQ
+		VPTESTNMB VPTESTNMW VPTESTNMD VPTESTNMQ`)
+}
+
 // X86PackedNumericConversionRows retains ordinary packed FP/integer numeric
 // conversions. The six original MMX rows keep their separate region owner.
 func X86PackedNumericConversionRows(legacy X86LegacyCatalog, avx []X86AVXRule) ([]X86PackedBinaryRow, error) {
@@ -319,8 +326,8 @@ func x86PackedBinaryRows(legacy X86LegacyCatalog, avx []X86AVXRule, names string
 }
 
 func x86PackedAVXRowWitnesses(rule X86AVXRule) ([]X86PackedBinaryWitness, error) {
-	if rule.Ytab == "_yvpcmpb" {
-		return x86ImmediateIntegerCompareRowWitnesses(rule)
+	if rule.Ytab == "_yvpcmpb" || rule.Ytab == "_yvpshufbitqmb" {
+		return x86IntegerMaskResultRowWitnesses(rule)
 	}
 	if strings.HasPrefix(rule.Ytab, "_yvcvt") && x86PackedWideningRatio(rule) == 0 {
 		return x86PackedNumericConversionRowWitnesses(rule)

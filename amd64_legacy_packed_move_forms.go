@@ -244,6 +244,9 @@ func x86TypedInstructionByteEffect(op Op, ins Instr, arch string) (x86TypedByteE
 	if effect, recognized, err := x86TypedPackedIntegerCompareByteEffect(op, ins, arch); recognized {
 		return effect, recognized, err
 	}
+	if effect, known, err := x86TypedPackedTestMaskByteEffect(op, ins, arch); known {
+		return effect, known, err
+	}
 	return x86TypedLegacyPackedMoveByteEffect(op, ins, arch)
 }
 

@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -68,9 +69,29 @@ func TestTranslateX86PackedTestMaskCompleteGoAssemblerForms(t *testing.T) {
 					"packedtestmaskforms": {Name: "packedtestmaskforms", Ret: Void},
 				},
 			})
-			if err != nil {
-				t.Fatal(err)
+			if ll != "" || !errors.Is(err, ErrProbeNeedsContext) {
+				t.Fatal("bare test-to-mask formats invented numerical entry inputs", err)
 			}
+			want, count := 96, 0
+			if target.goarch == "386" {
+				want = 68
+			}
+			for _, ins := range file.Funcs[0].Instrs {
+				if ins.Op != OpTEXT && ins.Op != OpRET {
+					count++
+				}
+			}
+			if count != want {
+				t.Fatal("original Go forms disappeared", count, want)
+			}
+			// Keep the original Go-encoded operands as emitter-only objects.
+			// Independent initialized API/value/fault owners supply the proof
+			// that these formats execute correctly with actual input facts.
+			ll = x86InstructionFormatObjectUnit(t, file, map[string]FuncSig{
+				"packedtestmaskforms": {Name: "packedtestmaskforms", Ret: Void},
+			}, target.goarch, target.triple, 0, func(c *amd64Ctx, ins Instr) (bool, bool, error) {
+				return c.lowerPackedTestMask(ins.Op, ins)
+			})
 			for _, want := range []string{"icmp ne", "icmp eq", "store i64"} {
 				if !strings.Contains(ll, want) {
 					t.Fatalf("translation omitted %q:\n%s", want, ll)

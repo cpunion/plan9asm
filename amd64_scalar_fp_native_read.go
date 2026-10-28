@@ -741,6 +741,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		if accepted, known := x86ResultVectorCompareStepWithRead(ins, state, owned, arch, true); known {
 			return accepted // Complete vector/K-result compares retain their exact native source accesses.
 		}
+		if accepted, known := x86ResultPackedTestMaskStep(ins, state, owned, arch, true); known {
+			return accepted // Only the paired original E4 accesses supply memory-derived K values.
+		}
 		if accepted, known := x86LoweredRawBroadcastStep(ins, state, owned, arch); known {
 			return accepted // Exact raw scalar/block/K-data forms share only their paired typed E6 effects.
 		}

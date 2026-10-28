@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -45,9 +46,19 @@ func TestTranslateRawPackedTestMaskGorseRegression(t *testing.T) {
 		TargetTriple: "x86_64-unknown-linux-gnu",
 		Sigs:         map[string]FuncSig{"rawPackedTestMask": {Name: "rawPackedTestMask", Ret: Void}},
 	})
+	if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+		t.Fatal("original raw test-to-mask invented native entry inputs", err)
+	}
+	decoded, err := decodeX86RawDirectives(file.Funcs[0], "amd64")
 	if err != nil {
 		t.Fatal(err)
 	}
+	file.Funcs[0] = decoded
+	ir = x86InstructionFormatObjectUnit(t, file, map[string]FuncSig{
+		"rawPackedTestMask": {Name: "rawPackedTestMask", Ret: Void},
+	}, "amd64", "x86_64-unknown-linux-gnu", 0, func(c *amd64Ctx, ins Instr) (bool, bool, error) {
+		return c.lowerPackedTestMask(ins.Op, ins)
+	})
 	if !strings.Contains(ir, "icmp ne") {
 		t.Fatalf("raw VPTESTMB omitted per-lane mask test:\n%s", ir)
 	}
@@ -186,9 +197,22 @@ func TestTranslateRawPackedTestMaskLLVM22Targets(t *testing.T) {
 				TargetTriple: target.triple,
 				Sigs:         map[string]FuncSig{"rawPackedTestMaskFamily": {Name: "rawPackedTestMaskFamily", Ret: Void}},
 			})
+			if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+				t.Fatal("bare physical test-to-mask formats invented source/mask values", err)
+			}
+			decoded, err := decodeX86RawDirectives(file.Funcs[0], target.goarch)
 			if err != nil {
 				t.Fatal(err)
 			}
+			file.Funcs[0] = decoded
+			if len(decoded.Instrs) != 50 {
+				t.Fatal("original 48 raw forms lost TEXT/RET or an instruction", len(decoded.Instrs))
+			}
+			ir = x86InstructionFormatObjectUnit(t, file, map[string]FuncSig{
+				"rawPackedTestMaskFamily": {Name: "rawPackedTestMaskFamily", Ret: Void},
+			}, target.goarch, target.triple, 0, func(c *amd64Ctx, ins Instr) (bool, bool, error) {
+				return c.lowerPackedTestMask(ins.Op, ins)
+			})
 			compileLLVMToObject(t, llc, target.triple, "raw-packed-test-mask.ll", "raw-packed-test-mask.o", ir)
 		})
 	}

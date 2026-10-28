@@ -8,31 +8,45 @@ import (
 
 // Vector input width/tuple and K result/writemask are independent roles.
 // Matching this physical format grants no input, memory or numeric authority.
-type x86ImmediateIntegerCompareFormat struct {
-	width, broadcast int
-	masked           bool
-	encoding         x86PackedAVXOpcode
+type x86IntegerMaskResultFormat struct {
+	width, broadcast  int
+	masked, immediate bool
+	encoding          x86PackedAVXOpcode
 }
 
-func x86ImmediateIntegerCompareFormatForRule(rule X86AVXRule) (x86ImmediateIntegerCompareFormat, error) {
-	f := x86ImmediateIntegerCompareFormat{masked: rule.ZCase == "Zevex_i_rm_v_k_r"}
-	fail := func() (x86ImmediateIntegerCompareFormat, error) {
-		return f, fmt.Errorf("immediate integer compare input/tuple/K-result differs from its official format")
+func x86IntegerMaskResultFormatForRule(rule X86AVXRule) (x86IntegerMaskResultFormat, error) {
+	f := x86IntegerMaskResultFormat{immediate: rule.Ytab == "_yvpcmpb"}
+	fail := func() (x86IntegerMaskResultFormat, error) {
+		return f, fmt.Errorf("integer mask-result input/tuple/K roles differ from their official format")
 	}
-	count := 4
+	first, plain, masked := 0, "Zevex_rm_v_r", "Zevex_rm_v_k_r"
+	if f.immediate {
+		first, plain, masked = 1, "Zevex_i_rm_v_r", "Zevex_i_rm_v_k_r"
+	}
+	f.masked = rule.ZCase == masked
+	count := first + 3
 	if f.masked {
 		count++
 	}
-	if rule.Ytab != "_yvpcmpb" || rule.Prefix != "Pavx" || rule.ZCase != "Zevex_i_rm_v_r" && !f.masked ||
-		len(rule.Classes) != count || rule.Classes[0] != "Yu8" || rule.Classes[count-1] != "Yk" ||
-		f.masked && rule.Classes[3] != "Yknot0" {
+	if rule.Ytab != "_yvpcmpb" && rule.Ytab != "_yvpshufbitqmb" || rule.Prefix != "Pavx" || rule.ZCase != plain && !f.masked ||
+		len(rule.Classes) != count || f.immediate && rule.Classes[0] != "Yu8" || rule.Classes[count-1] != "Yk" ||
+		f.masked && rule.Classes[first+2] != "Yknot0" {
 		return fail()
 	}
-	f.width = map[string]int{"YxmEvex": 128, "YymEvex": 256, "Yzm": 512}[rule.Classes[1]]
+	f.width = map[string]int{"YxmEvex": 128, "YymEvex": 256, "Yzm": 512}[rule.Classes[first]]
 	second := map[int]string{128: "YxrEvex", 256: "YyrEvex", 512: "Yzr"}[f.width]
 	member, valid := strings.CutPrefix(rule.Opcode, "VPCMP")
 	member = strings.TrimPrefix(member, "U")
-	if !valid || len(member) != 1 || f.width == 0 || rule.Classes[2] != second {
+	pp, opcodeMap, mapByte := "66", "0F3A", byte(3)
+	if !f.immediate {
+		member, valid = strings.CutPrefix(rule.Opcode, "VPTESTM")
+		if !valid {
+			member, valid = strings.CutPrefix(rule.Opcode, "VPTESTNM")
+			pp = "F3"
+		}
+		opcodeMap, mapByte = "0F38", 2
+	}
+	if !valid || len(member) != 1 || f.width == 0 || rule.Classes[first+1] != second {
 		return fail()
 	}
 	bits := map[byte]int{'B': 8, 'W': 16, 'D': 32, 'Q': 64}[member[0]]
@@ -54,7 +68,7 @@ func x86ImmediateIntegerCompareFormatForRule(rule X86AVXRule) (x86ImmediateInteg
 	}
 	offset := rule.EncodingOffset
 	if _, err := x86PackedEncodingAtoms(rule.OpBytes[offset], []string{
-		"avxEscape", "evex" + strconv.Itoa(f.width), "evex66", "evex0F3A", "evex" + w,
+		"avxEscape", "evex" + strconv.Itoa(f.width), "evex" + pp, "evex" + opcodeMap, "evex" + w,
 	}, nil); err != nil {
 		return fail()
 	}
@@ -70,15 +84,27 @@ func x86ImmediateIntegerCompareFormatForRule(rule X86AVXRule) (x86ImmediateInteg
 	if err != nil {
 		return fail()
 	}
-	f.encoding = x86PackedAVXOpcode{kind: "evex", mapByte: 3, pp: 1, length: byte(widthIndex), opcode: byte(opcode)}
+	if !f.immediate {
+		want := uint64(0x26)
+		if bits >= 32 {
+			want++
+		}
+		if opcode != want {
+			return fail() // The shared ytab also has a distinct VPSHUFBITQMB opcode.
+		}
+	}
+	f.encoding = x86PackedAVXOpcode{kind: "evex", mapByte: mapByte, pp: 1, length: byte(widthIndex), opcode: byte(opcode)}
+	if pp == "F3" {
+		f.encoding.pp = 2
+	}
 	if w == "W1" {
 		f.encoding.wBit = 0x80
 	}
 	return f, nil
 }
 
-func x86ImmediateIntegerCompareRowWitnesses(rule X86AVXRule) ([]X86PackedBinaryWitness, error) {
-	f, err := x86ImmediateIntegerCompareFormatForRule(rule)
+func x86IntegerMaskResultRowWitnesses(rule X86AVXRule) ([]X86PackedBinaryWitness, error) {
+	f, err := x86IntegerMaskResultFormatForRule(rule)
 	if err != nil {
 		return nil, err
 	}
@@ -86,7 +112,10 @@ func x86ImmediateIntegerCompareRowWitnesses(rule X86AVXRule) ([]X86PackedBinaryW
 	var witnesses []X86PackedBinaryWitness
 	add := func(first string, destination byte, broadcast bool) {
 		result, suffix := "K"+strconv.Itoa(int(destination)), ""
-		operands, p0, p2, modrm := "$7,"+first+","+bank+"17", byte(0xb0), f.encoding.length<<5, byte(0xc0)|destination<<3
+		operands, p0, p2, modrm := first+","+bank+"17", byte(0xb0), f.encoding.length<<5, byte(0xc0)|destination<<3
+		if f.immediate {
+			operands = "$7," + operands
+		}
 		if first == "(AX)" {
 			p0, modrm = 0xf0, destination<<3
 		}
@@ -96,11 +125,15 @@ func x86ImmediateIntegerCompareRowWitnesses(rule X86AVXRule) ([]X86PackedBinaryW
 		if broadcast {
 			suffix, p2 = ".BCST", p2|0x10
 		}
+		encoding := f.encoding.bytes(0x70, p0, p2, modrm)
+		if f.immediate {
+			encoding = append(encoding, 7)
+		}
 		witnesses = append(witnesses, X86PackedBinaryWitness{
 			Instruction: rule.Opcode + suffix + " " + operands + "," + result, Generation: "evex",
 			First: first, Second: bank + "17", Destination: result, Width: f.width,
 			Memory: first == "(AX)", Masked: f.masked, Broadcast: broadcast, MaskResult: true,
-			Encoding: append(f.encoding.bytes(0x70, p0, p2, modrm), 7),
+			Encoding: encoding,
 		})
 	}
 	// K0 is legal data output, independently of the nonzero-only writemask.

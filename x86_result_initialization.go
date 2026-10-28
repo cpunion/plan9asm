@@ -1261,6 +1261,9 @@ func x86ResultTransfer(ins Instr, state *x86ResultState, owned []bool, resultOff
 	if accepted, known := x86ResultVectorCompareStep(ins, state, owned, arch); known {
 		return accepted
 	}
+	if accepted, known := x86ResultPackedTestMaskStep(ins, state, owned, arch, false); known {
+		return accepted
+	}
 	if form, known, err := x86VectorZeroProperties(ins, arch); known {
 		if err != nil {
 			return false
