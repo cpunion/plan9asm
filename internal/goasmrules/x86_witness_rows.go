@@ -26,6 +26,19 @@ type X86PackedBinaryWitness struct {
 	Encoding                   []byte
 }
 
+// X86PackedNumericConversionRows retains ordinary packed FP/integer numeric
+// conversions. The six original MMX rows keep their separate region owner.
+func X86PackedNumericConversionRows(legacy X86LegacyCatalog, avx []X86AVXRule) ([]X86PackedBinaryRow, error) {
+	return x86PackedBinaryRows(legacy, avx, `
+		CVTPS2PL CVTTPS2PL CVTPD2PL CVTTPD2PL CVTPL2PS CVTPL2PD
+		VCVTPS2DQ VCVTTPS2DQ VCVTPD2DQX VCVTPD2DQY VCVTTPD2DQX VCVTTPD2DQY VCVTPD2DQ VCVTTPD2DQ
+		VCVTPD2QQ VCVTPD2UQQ VCVTTPD2QQ VCVTTPD2UQQ VCVTPS2UDQ VCVTTPS2UDQ VCVTUDQ2PS
+		VCVTQQ2PD VCVTUQQ2PD VCVTPS2QQ VCVTPS2UQQ VCVTTPS2QQ VCVTTPS2UQQ VCVTUDQ2PD
+		VCVTPD2UDQX VCVTTPD2UDQX VCVTQQ2PSX VCVTUQQ2PSX
+		VCVTPD2UDQY VCVTTPD2UDQY VCVTQQ2PSY VCVTUQQ2PSY
+		VCVTPD2UDQ VCVTTPD2UDQ VCVTQQ2PS VCVTUQQ2PS VCVTDQ2PS VCVTDQ2PD`)
+}
+
 // X86PackedIntegerMinMaxRows retains all amd64 legacy and AVX min/max rows.
 func X86PackedIntegerMinMaxRows(legacy X86LegacyCatalog, avx []X86AVXRule) ([]X86PackedBinaryRow, error) {
 	return x86PackedBinaryRows(legacy, avx, `
@@ -251,6 +264,10 @@ func x86PackedBinaryRows(legacy X86LegacyCatalog, avx []X86AVXRule, names string
 		}
 		for _, operand := range entry.Rows {
 			classes := strings.Join(operand.Classes, ",")
+			if (entry.Ytab == "yxcvm1" && classes == "Yxm,Ymr" || entry.Ytab == "yxcvm2" && classes == "Ymm,Yxr") &&
+				operand.RowIndex == 1 && operand.ZCase == "Zm_r_xm" && operand.ZOffset == 2 && operand.UnmatchedOffset == 2 {
+				continue // Original MMX conversions require a separate physical region.
+			}
 			if entry.Ytab == "yps" && entry.Prefix == "Py3" && entry.EscapeAdjustment == 0 &&
 				(operand.RowIndex == 0 && classes == "Ymm,Ymr" && operand.ZCase == "Zm_r_xm" && operand.ZOffset == 1 && operand.UnmatchedOffset == 0 ||
 					operand.RowIndex == 1 && classes == "Yi8,Ymr" && operand.ZCase == "Zibo_m_xm" && operand.ZOffset == 2 && operand.UnmatchedOffset == 1) {
@@ -296,6 +313,9 @@ func x86PackedBinaryRows(legacy X86LegacyCatalog, avx []X86AVXRule, names string
 }
 
 func x86PackedAVXRowWitnesses(rule X86AVXRule) ([]X86PackedBinaryWitness, error) {
+	if strings.HasPrefix(rule.Ytab, "_yvcvt") && x86PackedWideningRatio(rule) == 0 {
+		return x86PackedNumericConversionRowWitnesses(rule)
+	}
 	if rule.Ytab == "_yvpmovdb" || rule.Ytab == "_yvpmovdw" {
 		return x86PackedSingleSourceNarrowRowWitnesses(rule)
 	}
@@ -601,6 +621,7 @@ func x86PackedLegacyRowWitnesses(entry X86LegacyOpcode, row X86LegacyOperand) ([
 	shift := entry.Ytab == "yps" || entry.Ytab == "ypsdq"
 	immediate := shift && strings.Join(row.Classes, ",") == "Yi8,Yxr"
 	shuffle := entry.Ytab == "yxshuf" && strings.Join(row.Classes, ",") == "Yu8,Yxm,Yxr"
+	conversion := entry.Ytab == "yxcvm1" || entry.Ytab == "yxcvm2"
 	if entry.Kind != "encoding" || entry.EscapeAdjustment != 0 && !literal ||
 		strings.Join(row.Classes, ",") != "Yxm,Yxr" && !immediate && !shuffle {
 		return nil, fmt.Errorf("unmodeled legacy packed operand row")
@@ -608,6 +629,18 @@ func x86PackedLegacyRowWitnesses(entry X86LegacyOpcode, row X86LegacyOperand) ([
 	prefix, offset, opcodeBytes := []byte{0x66, 0x0f}, 0, 1
 	terminator := 0
 	switch {
+	case conversion && row.RowIndex == 0 && row.ZCase == "Zm_r_xm" && row.ZOffset == 2 && row.UnmatchedOffset == 0 && len(entry.OpBytes) == 4:
+		if entry.Prefix == "Px" && (entry.OpBytes[2] == "Pe" || entry.OpBytes[2] == "Pm") {
+			mandatory := map[string]byte{"Pe": 0x66, "Pf2": 0xf2, "Pf3": 0xf3}[entry.OpBytes[0]]
+			if mandatory == 0 {
+				return nil, fmt.Errorf("unmodeled packed conversion mandatory prefix")
+			}
+			prefix, offset = []byte{mandatory, 0x0f}, 1
+		} else if entry.Ytab == "yxcvm2" && entry.Prefix == "Pm" && entry.OpBytes[1] == "0" && entry.OpBytes[3] == "0" {
+			prefix = []byte{0x0f}
+		} else {
+			return nil, fmt.Errorf("unmodeled packed conversion complete prefix payload")
+		}
 	case entry.Ytab == "yps" && entry.Prefix == "Py3" && entry.EscapeAdjustment == 0:
 		if len(entry.OpBytes) != 8 || entry.OpBytes[3] != "Pe" || entry.OpBytes[5] != "Pe" ||
 			entry.OpBytes[0] != entry.OpBytes[4] || entry.OpBytes[1] != entry.OpBytes[6] || entry.OpBytes[2] != entry.OpBytes[7] {
@@ -668,7 +701,7 @@ func x86PackedLegacyRowWitnesses(entry X86LegacyOpcode, row X86LegacyOperand) ([
 	default:
 		return nil, fmt.Errorf("unmodeled legacy packed prefix/offset rule")
 	}
-	if !shift && !shuffle && len(entry.OpBytes) != offset+opcodeBytes+terminator {
+	if !shift && !shuffle && !conversion && len(entry.OpBytes) != offset+opcodeBytes+terminator {
 		return nil, fmt.Errorf("unmodeled legacy packed opcode payload")
 	}
 	encoding := prefix
